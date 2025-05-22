@@ -26,62 +26,8 @@
 
 #include "User.hpp"
 
-/* Local inclusions. */
-#include "Settings.hpp"
-#include "Tracer.hpp"
-
 namespace EmEn
 {
-	const size_t User::ClassUID{getClassUID(ClassId)};
-
-	User::User (PrimaryServices & primaryServices) noexcept
-		: ServiceInterface(ClassId), m_primaryServices(primaryServices)
-	{
-
-	}
-
-	size_t
-	User::classUID () const noexcept
-	{
-		return ClassUID;
-	}
-
-	bool
-	User::is (size_t classUID) const noexcept
-	{
-		return classUID == ClassUID;
-	}
-
-	bool
-	User::usable () const noexcept
-	{
-		return m_flags[ServiceInitialized];
-	}
-
-	void
-	User::setUserID (uint64_t identifier) noexcept
-	{
-		m_userID = identifier;
-	}
-
-	void
-	User::setUsername (const std::string & username) noexcept
-	{
-		m_username = username;
-	}
-
-	uint64_t
-	User::userID () const noexcept
-	{
-		return m_userID;
-	}
-
-	const std::string &
-	User::username () const noexcept
-	{
-		return m_username;
-	}
-
 	bool
 	User::onInitialize () noexcept
 	{

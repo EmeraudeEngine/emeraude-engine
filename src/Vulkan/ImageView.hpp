@@ -31,12 +31,7 @@
 
 /* Local inclusions for inheritances. */
 #include "AbstractDeviceDependentObject.hpp"
-
-/* Forward declarations. */
-namespace EmEn::Vulkan
-{
-	class Image;
-}
+#include "Image.hpp"
 
 namespace EmEn::Vulkan
 {
@@ -59,14 +54,32 @@ namespace EmEn::Vulkan
 			 * @param components Default unchanged.
 			 * @param createFlags The createInfo flags. Default none.
 			 */
-			ImageView (const std::shared_ptr< Image > & image, VkImageViewType viewType, VkImageSubresourceRange subresourceRange, VkComponentMapping components = {VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY}, VkImageViewCreateFlags createFlags = 0) noexcept;
+			ImageView (const std::shared_ptr< Image > & image, VkImageViewType viewType, VkImageSubresourceRange subresourceRange, VkComponentMapping components = {VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY}, VkImageViewCreateFlags createFlags = 0) noexcept
+				: AbstractDeviceDependentObject{image->device()},
+				m_image{image}
+			{
+				m_createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+				m_createInfo.pNext = nullptr;
+				m_createInfo.flags = createFlags;
+				m_createInfo.image = VK_NULL_HANDLE;
+				m_createInfo.viewType = viewType;
+				m_createInfo.format = VK_FORMAT_UNDEFINED;
+				m_createInfo.components = components;
+				m_createInfo.subresourceRange = subresourceRange;
+			}
 
 			/**
 			 * @brief Constructs an image view with a createInfo.
 			 * @param image A reference to an image smart pointer.
 			 * @param createInfo A reference to a createInfo.
 			 */
-			ImageView (const std::shared_ptr< Image > & image, const VkImageViewCreateInfo & createInfo) noexcept;
+			ImageView (const std::shared_ptr< Image > & image, const VkImageViewCreateInfo & createInfo) noexcept
+				: AbstractDeviceDependentObject{image->device()},
+				m_createInfo{createInfo},
+				m_image{image}
+			{
+
+			}
 
 			/**
 			 * @brief Copy constructor.
@@ -95,7 +108,10 @@ namespace EmEn::Vulkan
 			/**
 			 * @brief Destructs the image view.
 			 */
-			~ImageView () override;
+			~ImageView () override
+			{
+				this->destroyFromHardware();
+			}
 
 			/** @copydoc EmEn::Vulkan::AbstractDeviceDependentObject::createOnHardware() */
 			bool createOnHardware () noexcept override;
@@ -115,7 +131,7 @@ namespace EmEn::Vulkan
 			}
 
 			/**
-			 * @brief Returns the image view create info.
+			 * @brief Returns the image view createInfo.
 			 * @return const VkImageViewCreateInfo &
 			 */
 			[[nodiscard]]

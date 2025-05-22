@@ -28,11 +28,7 @@
 
 /* Local inclusions for inheritances. */
 #include "Vulkan/AbstractObject.hpp"
-
-namespace EmEn::Vulkan
-{
-	class Buffer;
-}
+#include "Vulkan/Buffer.hpp"
 
 namespace EmEn::Vulkan::Sync
 {
@@ -53,7 +49,20 @@ namespace EmEn::Vulkan::Sync
 			 * @param srcAccessMask A bitmask of VkAccessFlagBits specifying a source access mask.
 			 * @param dstAccessMask A bitmask of VkAccessFlagBits specifying a destination access mask.
 			 */
-			BufferMemoryBarrier (const Buffer & buffer, VkAccessFlags srcAccessMask, VkAccessFlags dstAccessMask) noexcept;
+			BufferMemoryBarrier (const Buffer & buffer, VkAccessFlags srcAccessMask, VkAccessFlags dstAccessMask) noexcept
+			{
+				m_barrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+				m_barrier.pNext = nullptr;
+				m_barrier.srcAccessMask = srcAccessMask;
+				m_barrier.dstAccessMask = dstAccessMask;
+				m_barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+				m_barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+				m_barrier.buffer = buffer.handle();
+				m_barrier.offset = 0;
+				m_barrier.size = VK_WHOLE_SIZE;
+
+				this->setCreated();
+			}
 
 			/**
 			 * @brief Copy constructor.
@@ -82,11 +91,14 @@ namespace EmEn::Vulkan::Sync
 			/**
 			 * @brief Destructs the buffer memory barrier.
 			 */
-			~BufferMemoryBarrier () override;
+			~BufferMemoryBarrier () override
+			{
+				this->setDestroyed();
+			}
 
 			/**
 			 * @brief Returns a reference to the buffer memory barrier vulkan structure.
-			 * @param const VkImageMemoryBarrier &
+			 * @return const VkImageMemoryBarrier &
 			 */
 			[[nodiscard]]
 			const VkBufferMemoryBarrier &

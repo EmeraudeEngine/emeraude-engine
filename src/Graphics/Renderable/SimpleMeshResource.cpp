@@ -27,6 +27,8 @@
 #include "SimpleMeshResource.hpp"
 
 /* Local inclusions. */
+#include "Graphics/Geometry/VertexResource.hpp"
+#include "Graphics/Material/BasicResource.hpp"
 #include "Resources/Manager.hpp"
 
 /* Defining the resource manager class id. */
@@ -44,82 +46,6 @@ namespace EmEn::Graphics::Renderable
 
 	const size_t SimpleMeshResource::ClassUID{getClassUID(ClassId)};
 
-	SimpleMeshResource::SimpleMeshResource (const std::string & name, uint32_t resourceFlagBits) noexcept
-		: Interface(name, resourceFlagBits)
-	{
-
-	}
-
-	size_t
-	SimpleMeshResource::classUID () const noexcept
-	{
-		return ClassUID;
-	}
-
-	bool
-	SimpleMeshResource::is (size_t classUID) const noexcept
-	{
-		return classUID == ClassUID;
-	}
-
-	size_t
-	SimpleMeshResource::layerCount () const noexcept
-	{
-		return 1;
-	}
-
-	bool
-	SimpleMeshResource::isOpaque (size_t /*layerIndex*/) const noexcept
-	{
-		return true;
-	}
-
-	const Geometry::Interface *
-	SimpleMeshResource::geometry () const noexcept
-	{
-		return m_geometry.get();
-	}
-
-	const Material::Interface *
-	SimpleMeshResource::material (size_t /*layerIndex*/) const noexcept
-	{
-		return m_material.get();
-	}
-
-	const RasterizationOptions *
-	SimpleMeshResource::layerRasterizationOptions (size_t /*layerIndex*/) const noexcept
-	{
-		return nullptr;
-	}
-
-	const Cuboid< float > &
-	SimpleMeshResource::boundingBox () const noexcept
-	{
-		if ( m_geometry == nullptr )
-		{
-			return NullBoundingBox;
-		}
-
-		return m_geometry->boundingBox();
-	}
-
-	const Sphere< float > &
-	SimpleMeshResource::boundingSphere () const noexcept
-	{
-		if ( m_geometry == nullptr )
-		{
-			return NullBoundingSphere;
-		}
-
-		return m_geometry->boundingSphere();
-	}
-
-	const char *
-	SimpleMeshResource::classLabel () const noexcept
-	{
-		return ClassId;
-	}
-
 	bool
 	SimpleMeshResource::load () noexcept
 	{
@@ -128,12 +54,14 @@ namespace EmEn::Graphics::Renderable
 			return false;
 		}
 
-		if ( !this->setGeometry(Geometry::VertexResource::getDefault()) )
+		auto * manager = Resources::Manager::instance();
+
+		if ( !this->setGeometry(manager->container< Geometry::VertexResource >()->getRandomResource()) )
 		{
 			return this->setLoadSuccess(false);
 		}
 
-		if ( !this->setMaterial(Material::BasicResource::getDefault()) )
+		if ( !this->setMaterial(manager->container< Material::BasicResource >()->getRandomResource()) )
 		{
 			return this->setLoadSuccess(false);
 		}
@@ -194,7 +122,7 @@ namespace EmEn::Graphics::Renderable
 
 		m_geometry = geometryResource;
 
-		return this->addDependency(m_geometry.get());
+		return this->addDependency(m_geometry);
 	}
 
 	bool
@@ -213,19 +141,7 @@ namespace EmEn::Graphics::Renderable
 
 		m_material = materialResource;
 
-		return this->addDependency(m_material.get());
-	}
-
-	std::shared_ptr< SimpleMeshResource >
-	SimpleMeshResource::get (const std::string & resourceName, bool directLoad) noexcept
-	{
-		return Resources::Manager::instance()->simpleMeshes().getResource(resourceName, !directLoad);
-	}
-
-	std::shared_ptr< SimpleMeshResource >
-	SimpleMeshResource::getDefault () noexcept
-	{
-		return Resources::Manager::instance()->simpleMeshes().getDefaultResource();
+		return this->addDependency(m_material);
 	}
 
 	std::shared_ptr< SimpleMeshResource >
@@ -236,7 +152,7 @@ namespace EmEn::Graphics::Renderable
 			resourceName = (std::stringstream{} << "Mesh(" << geometryResource->name() << ',' << materialResource->name() << ')').str();
 		}
 
-		return Resources::Manager::instance()->simpleMeshes().getOrCreateResource(resourceName, [&geometryResource, &materialResource] (SimpleMeshResource & newMesh) {
+		return Resources::Manager::instance()->container< SimpleMeshResource >()->getOrCreateResource(resourceName, [&geometryResource, &materialResource] (SimpleMeshResource & newMesh) {
 			return newMesh.load(geometryResource, materialResource);
 		});
 	}

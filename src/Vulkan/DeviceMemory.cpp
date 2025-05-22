@@ -35,17 +35,6 @@ namespace EmEn::Vulkan
 {
 	using namespace EmEn::Libs;
 
-	DeviceMemory::DeviceMemory (const std::shared_ptr< Device > & device, const VkMemoryRequirements & memoryRequirement, VkMemoryPropertyFlags memoryPropertyFlags) noexcept
-		: AbstractDeviceDependentObject(device), m_memoryRequirement(memoryRequirement), m_memoryPropertyFlags(memoryPropertyFlags)
-	{
-
-	}
-
-	DeviceMemory::~DeviceMemory ()
-	{
-		this->destroyFromHardware();
-	}
-
 	bool
 	DeviceMemory::createOnHardware () noexcept
 	{
@@ -59,15 +48,15 @@ namespace EmEn::Vulkan
 		VkMemoryAllocateInfo allocateInfo{};
 		allocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
 		allocateInfo.pNext = nullptr;
-		allocateInfo.allocationSize = m_memoryRequirement.size;
-		allocateInfo.memoryTypeIndex = this->device()->findMemoryType(m_memoryRequirement.memoryTypeBits, m_memoryPropertyFlags);
+		allocateInfo.allocationSize = m_requirement.size;
+		allocateInfo.memoryTypeIndex = this->device()->findMemoryType(m_requirement.memoryTypeBits, m_propertyFlags);
 
 		const auto result = vkAllocateMemory(this->device()->handle(), &allocateInfo, nullptr, &m_handle);
 
 		if ( result != VK_SUCCESS )
 		{
 			TraceError{ClassId} <<
-				"Unable to allocate " << m_memoryRequirement.size << " bytes (alignment:" << m_memoryRequirement.alignment << " bytes) "
+				"Unable to allocate " << m_requirement.size << " bytes (alignment:" << m_requirement.alignment << " bytes) "
 				"in the device memory " << m_handle << " : " << vkResultToCString(result) << " !";
 
 			return false;
@@ -105,21 +94,22 @@ namespace EmEn::Vulkan
 	void *
 	DeviceMemory::mapMemory (VkDeviceSize offset, VkDeviceSize size) const noexcept
 	{
-#ifdef DEBUG
-		if ( !this->hasDevice() )
+		if constexpr ( IsDebug )
 		{
-			Tracer::error(ClassId, "There is no device !");
+			if ( !this->hasDevice() )
+			{
+				Tracer::error(ClassId, "There is no device !");
 
-			return nullptr;
+				return nullptr;
+			}
+
+			if ( m_handle == VK_NULL_HANDLE )
+			{
+				Tracer::error(ClassId, "The device memory is not allocated !");
+
+				return nullptr;
+			}
 		}
-
-		if ( m_handle == VK_NULL_HANDLE )
-		{
-			Tracer::error(ClassId, "The device memory is not allocated !");
-
-			return nullptr;
-		}
-#endif
 
 		void * pointer = nullptr;
 
@@ -138,21 +128,22 @@ namespace EmEn::Vulkan
 	void
 	DeviceMemory::unmapMemory () const noexcept
 	{
-#ifdef DEBUG
-		if ( !this->hasDevice() )
+		if constexpr ( IsDebug )
 		{
-			Tracer::error(ClassId, "There is no device !");
+			if ( !this->hasDevice() )
+			{
+				Tracer::error(ClassId, "There is no device !");
 
-			return;
+				return;
+			}
+
+			if ( m_handle == VK_NULL_HANDLE )
+			{
+				Tracer::error(ClassId, "The device memory is not allocated !");
+
+				return;
+			}
 		}
-
-		if ( m_handle == VK_NULL_HANDLE )
-		{
-			Tracer::error(ClassId, "The device memory is not allocated !");
-
-			return;
-		}
-#endif
 
 		vkUnmapMemory(this->device()->handle(), m_handle);
 	}

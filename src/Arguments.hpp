@@ -32,9 +32,9 @@
 #include <map>
 #include <vector>
 #include <string>
+#include <sstream>
 #include <algorithm>
 #include <filesystem>
-#include <ranges>
 
 /* Local inclusions for inheritances. */
 #include "ServiceInterface.hpp"
@@ -55,74 +55,29 @@ namespace EmEn
 			/** @brief Class identifier. */
 			static constexpr auto ClassId{"ArgumentsService"};
 
-			/** @brief Observable class unique identifier. */
-			static const size_t ClassUID;
-
 			/**
-			 * @brief Constructs the arguments service.
+			 * @brief Constructs the argument service.
 			 * @param argc The argument count from the standard C/C++ main() function.
-			 * @param argv The argument values from the standard C/C++ main() function.
+			 * @param argv The argument value from the standard C/C++ main() function.
 			 * @param childProcess Declares a child process.
 			 */
 			Arguments (int argc, char * * argv, bool childProcess) noexcept;
 
 #if IS_WINDOWS
 			/**
-			 * @brief Constructs the arguments service.
+			 * @brief Constructs the argument service.
 			 * @note Windows version.
 			 * @param argc The argument count from the standard C/C++ main() function.
-			 * @param wargv The argument values from the standard C/C++ main() function.
+			 * @param wargv The argument value from the standard C/C++ main() function.
 			 * @param childProcess Declares a child process.
 			 */
 			Arguments (int argc, wchar_t * * wargv, bool childProcess) noexcept;
 #endif
 
 			/**
-			 * @brief Copy constructor.
-			 * @param copy A reference to the copied instance.
-			 */
-			Arguments (const Arguments & copy) noexcept = delete;
-
-			/**
-			 * @brief Move constructor.
-			 * @param copy A reference to the copied instance.
-			 */
-			Arguments (Arguments && copy) noexcept = delete;
-
-			/**
-			 * @brief Copy assignment.
-			 * @param copy A reference to the copied instance.
-			 * @return Arguments &
-			 */
-			Arguments & operator= (const Arguments & copy) noexcept = delete;
-
-			/**
-			 * @brief Move assignment.
-			 * @param copy A reference to the copied instance.
-			 * @return Arguments &
-			 */
-			Arguments & operator= (Arguments && copy) noexcept = delete;
-
-			/**
-			 * @brief Destructs the application arguments service.
+			 * @brief Destructs the argument service.
 			 */
 			~Arguments () override;
-
-			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
-			[[nodiscard]]
-			size_t
-			classUID () const noexcept override
-			{
-				return ClassUID;
-			}
-
-			/** @copydoc EmEn::Libs::ObservableTrait::is() const */
-			[[nodiscard]]
-			bool
-			is (size_t classUID) const noexcept override
-			{
-				return classUID == ClassUID;
-			}
 
 			/** @copydoc EmEn::ServiceInterface::usable() */
 			[[nodiscard]]
@@ -186,7 +141,7 @@ namespace EmEn
 			Argument get (const std::string & name) const noexcept;
 
 			/**
-			 * @brief Returns a parsed argument from the command line. The name an is short version.
+			 * @brief Returns a parsed argument from the command line. The name is short version.
 			 * @param name A reference to a string defining the argument name from the command line.
 			 * @param alternateName A reference to a string for an alternate name.
 			 * @return Argument
@@ -195,7 +150,7 @@ namespace EmEn
 			Argument get (const std::string & name, const std::string & alternateName) const noexcept;
 
 			/**
-			 * @brief Returns a parsed argument from the command line. Multiple name version.
+			 * @brief Returns a parsed argument from the command line. Multiple name versions.
 			 * @param namesList A reference to a vector of string defining all possible argument names from the command line.
 			 * @return Argument
 			 */
@@ -231,33 +186,6 @@ namespace EmEn
 				return m_binaryFilepath;
 			}
 
-			/**
-			 * @brief Returns the instance of the argument manager.
-			 * @return Arguments *
-			 */
-			[[nodiscard]]
-			static
-			Arguments *
-			instance () noexcept
-			{
-				return s_instance;
-			}
-
-			/**
-			 * @brief STL streams printable object.
-			 * @param out A reference to the stream output.
-			 * @param obj A reference to the object to print.
-			 * @return std::ostream &
-			 */
-			friend std::ostream & operator<< (std::ostream & out, const Arguments & obj);
-
-			/**
-			 * @brief Stringifies the object.
-			 * @param obj A reference to the object to print.
-			 * @return std::string
-			 */
-			friend std::string to_string (const Arguments & obj) noexcept;
-
 		private:
 
 			/** @copydoc EmEn::ServiceInterface::onInitialize() */
@@ -267,18 +195,23 @@ namespace EmEn
 			bool onTerminate () noexcept override;
 
 			/**
-			 * @brief Recreates argc and argv from main parameters after modifications.
+			 * @brief Recreates argc and argv from the main parameters after modifications.
 			 * @return void
 			 */
 			void recreateRawArguments () const noexcept;
+
+			/**
+			 * @brief STL streams printable object.
+			 * @param out A reference to the stream output.
+			 * @param obj A reference to the object to print.
+			 * @return std::ostream &
+			 */
+			friend std::ostream & operator<< (std::ostream & out, const Arguments & obj);
 
 			/* Flag names */
 			static constexpr auto ServiceInitialized{0UL};
 			static constexpr auto ChildProcess{1UL};
 			static constexpr auto ShowInformation{2UL};
-
-			/** @brief Singleton pointer. */
-			static Arguments * s_instance;
 
 			std::vector< std::string > m_rawArguments;
 			mutable int m_argc{0};
@@ -296,4 +229,46 @@ namespace EmEn
 				false/*UNUSED*/
 			};
 	};
+
+	inline
+	std::ostream &
+	operator<< (std::ostream & out, const Arguments & obj)
+	{
+		if ( obj.m_arguments.empty() )
+		{
+			return out << "Executable arguments : NONE" "\n";
+		}
+
+		out << "Executable arguments :" "\n";
+
+		for ( const auto & [name, argument] : obj.m_arguments )
+		{
+			if ( argument.isSwitch() )
+			{
+				out << name << '\n';
+			}
+			else
+			{
+				out << name << " = " << argument << '\n';
+			}
+		}
+
+		return out;
+	}
+
+	/**
+	 * @brief Stringifies the object.
+	 * @param obj A reference to the object to print.
+	 * @return std::string
+	 */
+	inline
+	std::string
+	to_string (const Arguments & obj) noexcept
+	{
+		std::stringstream output;
+
+		output << obj;
+
+		return output.str();
+	}
 }

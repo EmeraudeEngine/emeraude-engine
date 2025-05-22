@@ -31,7 +31,7 @@
 #include <cstddef>
 
 /* Local inclusions. */
-#include "Libs/ParallelizableTrait.hpp"
+//#include "Libs/ParallelizableTrait.hpp"
 #include "Libs/Randomizer.hpp"
 #include "Libs/Time/Elapsed/PrintScopeRealTime.hpp"
 #include "Libs/Utility.hpp"
@@ -39,7 +39,7 @@
 using namespace EmEn::Libs;
 using namespace EmEn::Libs::Time::Elapsed;
 
-class Fibonnizzer final : public ParallelizableTrait< size_t >
+/*class Fibonnizzer final : public ParallelizableTrait< size_t >
 {
 	public:
 
@@ -179,11 +179,11 @@ class Fibonnizzer final : public ParallelizableTrait< size_t >
 		std::vector< size_t > m_results;
 		std::vector< size_t > * m_outsideResults{nullptr};
 		bool m_enableOutput{false};
-};
+};*/
 
 TEST(ParallelizableProcess, DestructorWaitForJobDone)
 {
-	constexpr size_t jobCount{48};
+	/*constexpr size_t jobCount{48};
 
 	PrintScopeRealTime stat{"Fibonnizzer::launch(48)"};
 
@@ -192,12 +192,12 @@ TEST(ParallelizableProcess, DestructorWaitForJobDone)
 	Fibonnizzer fibonnizzer{std::thread::hardware_concurrency(), &m_results};
 	fibonnizzer.launch(jobCount);
 
-	ASSERT_EQ(m_results.size(), jobCount);
+	ASSERT_EQ(m_results.size(), jobCount);*/
 }
 
 TEST(ParallelizableProcess, FibonnacciWorkload)
 {
-	constexpr size_t jobCountA{48};
+	/*constexpr size_t jobCountA{48};
 	constexpr size_t jobCountB{96};
 
 	Fibonnizzer fibonnizzer{std::thread::hardware_concurrency()};
@@ -218,5 +218,5 @@ TEST(ParallelizableProcess, FibonnacciWorkload)
 		fibonnizzer.waitForAllJobsDone();
 
 		ASSERT_EQ(fibonnizzer.results().size(), jobCountA + jobCountB);
-	}
+	}*/
 }

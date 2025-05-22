@@ -26,63 +26,11 @@
 
 #include "Microphone.hpp"
 
-/* STL inclusions. */
-#include <string>
-#include <ostream>
-#include <array>
-
-/* Local inclusions. */
-#include "Scenes/AbstractEntity.hpp"
-
 namespace EmEn::Scenes::Component
 {
 	using namespace EmEn::Libs;
 	using namespace EmEn::Libs::Math;
-	using namespace Animations;
-	using namespace Audio;
-
-	Microphone::Microphone (const std::string & name, const AbstractEntity & parentEntity) noexcept
-		: Abstract(name, parentEntity),
-		AbstractVirtualDevice(name, AVConsole::DeviceType::Audio, AVConsole::ConnexionType::Output)
-	{
-
-	}
-
-	const char *
-	Microphone::getComponentType () const noexcept
-	{
-		return ClassId;
-	}
-
-	const Cuboid< float > &
-	Microphone::boundingBox () const noexcept
-	{
-		return NullBoundingBox;
-	}
-
-	const Sphere< float > &
-	Microphone::boundingSphere () const noexcept
-	{
-		return NullBoundingSphere;
-	}
-
-	void
-	Microphone::move (const CartesianFrame< float > & worldCoordinates) noexcept
-	{
-		this->updateDeviceFromCoordinates(worldCoordinates, this->getWorldVelocity());
-	}
-
-	void
-	Microphone::processLogics (const Scene & /*scene*/) noexcept
-	{
-
-	}
-
-	bool
-	Microphone::shouldRemove () const noexcept
-	{
-		return false;
-	}
+	using namespace EmEn::Animations;
 
 	void
 	Microphone::updateDeviceFromCoordinates (const CartesianFrame< float > & worldCoordinates, const Vector< 3, float > & worldVelocity) noexcept
@@ -98,41 +46,9 @@ namespace EmEn::Scenes::Component
 		}
 	}
 
-	void
-	Microphone::onTargetConnected (AbstractVirtualDevice * targetDevice) noexcept
-	{
-		/* Initialize the target device with coordinates. */
-		targetDevice->updateDeviceFromCoordinates(this->getWorldCoordinates(), this->getWorldVelocity());
-	}
-
 	bool
 	Microphone::playAnimation (uint8_t /*animationID*/, const Variant & /*value*/, size_t /*cycle*/) noexcept
 	{
 		return false;
-	}
-
-	std::ostream &
-	operator<< (std::ostream & out, const Microphone & /*microphone*/)
-	{
-		std::array< ALfloat, 12 > properties{0};
-
-		Manager::instance()->listenerProperties(properties);
-
-		return out <<
-			"Audio Listener information" "\n"
-			"Position: " << properties[0] << ", " << properties[1] << ", " << properties[2] << "\n"
-			"Forward: " << properties[3] << ", " << properties[4] << ", " << properties[5] << "\n"
-			"Upward: " << properties[6] << ", " << properties[7] << ", " << properties[8] << "\n"
-			"Velocity: " << properties[9] << ", " << properties[10] << ", " << properties[11] << '\n';
-	}
-
-	std::string
-	to_string (const Microphone & obj) noexcept
-	{
-		std::stringstream output;
-
-		output << obj;
-
-		return output.str();
 	}
 }

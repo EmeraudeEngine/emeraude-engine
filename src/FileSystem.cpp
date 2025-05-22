@@ -26,20 +26,12 @@
 
 #include "FileSystem.hpp"
 
-/* STL inclusions. */
-#include <cstddef>
-#include <array>
-#include <vector>
-#include <string>
-#include <iostream>
-#include <exception>
+/* Emeraude-Engine configuration. */
+#include "emeraude_config.hpp"
 
 /* Local inclusion. */
 #include "Libs/IO/IO.hpp"
-#include "platform.hpp"
-#include "PlatformSpecific/UserInfo.hpp"
 #include "PlatformSpecific/SystemInfo.hpp"
-#include "Identification.hpp"
 #include "Arguments.hpp"
 #include "Tracer.hpp"
 
@@ -47,33 +39,7 @@ namespace EmEn
 {
 	using namespace EmEn::Libs;
 
-	const size_t FileSystem::ClassUID{getClassUID(ClassId)};
 	FileSystem * FileSystem::s_instance{nullptr};
-
-	FileSystem::FileSystem (const Arguments & arguments, const PlatformSpecific::UserInfo & userInfo, const Identification & identification, bool childProcess) noexcept
-		: ServiceInterface(ClassId),
-		m_arguments(arguments),
-		m_userInfo(userInfo),
-		m_organizationName(identification.applicationOrganization()),
-		m_applicationName(identification.applicationName()),
-		m_applicationReverseId(identification.applicationReverseId())
-	{
-		if ( s_instance != nullptr )
-		{
-			std::cerr << __PRETTY_FUNCTION__ << ", constructor called twice !" "\n";
-
-			std::terminate();
-		}
-
-		s_instance = this;
-
-		m_flags[ChildProcess] = childProcess;
-	}
-
-	FileSystem::~FileSystem ()
-	{
-		s_instance = nullptr;
-	}
 
 	bool
 	FileSystem::onInitialize () noexcept
@@ -548,36 +514,5 @@ namespace EmEn
 		}
 
 		return {};
-	}
-
-	std::ostream &
-	operator<< (std::ostream & out, const FileSystem & obj)
-	{
-		out <<
-			"File system information :" "\n" <<
-			" - Binary name : " << obj.m_binaryName << "\n"
-			" - Binary directory : " << obj.m_binaryDirectory.string() << "\n"
-			" - User home directory : " << obj.m_userDirectory.string() << "\n"
-			" - Config directory : " << obj.m_configDirectory.string() << "\n"
-			" - Data (Writable) directory : " << obj.m_userDataDirectory.string() << "\n"
-			" - Cache directory : " << obj.m_cacheDirectory.string() << "\n"
-			" - Data (Read-only) directories :" "\n";
-
-		for ( const auto & directory : obj.m_dataDirectories )
-		{
-			out << '\t' << directory.string() << '\n';
-		}
-
-		return out;
-	}
-
-	std::string
-	to_string (const FileSystem & obj) noexcept
-	{
-		std::stringstream output;
-
-		output << obj;
-
-		return output.str();
 	}
 }

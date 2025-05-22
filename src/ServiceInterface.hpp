@@ -30,6 +30,7 @@
 #include "emeraude_config.hpp"
 
 /* STL inclusions. */
+#include <iostream>
 #include <string>
 #include <vector>
 
@@ -42,12 +43,14 @@ namespace EmEn
 	/**
 	 * @brief The service interface.
 	 * @note A service cannot be duplicated and should act like a singleton.
-	 * @extends EmEn::Libs::NameableTrait Each service have a name.
-	 * @extends EmEn::Libs::ObservableTrait Each service should be observable.
+	 * @extends EmEn::Libs::NameableTrait Each service has a name.
 	 */
-	class ServiceInterface : public Libs::NameableTrait, public Libs::ObservableTrait
+	class ServiceInterface : public Libs::NameableTrait
 	{
 		public:
+
+			/** @brief Tracer tag for print. */
+			static constexpr auto TracerTag{"ServiceInterface"};
 
 			/**
 			 * @brief Copy constructor.
@@ -88,25 +91,56 @@ namespace EmEn
 			 * @brief Starts the service.
 			 * @return bool.
 			 */
-			bool initialize () noexcept;
+			[[nodiscard]]
+			bool
+			initialize () noexcept
+			{
+				if ( this->usable() )
+				{
+					/* NOTE: This should never happen ! */
+					std::cerr <<
+						"The service '" << this->name() << "' looks like already initialized !" "\n"
+						"The method ServiceInterface::usable() must dynamically report if the service has been initialized and usable !" "\n";
+
+					return false;
+				}
+
+				return this->onInitialize();
+			}
 
 			/**
 			 * @brief Starts the service and register the pointer into a service list.
-			 * @note This version ensure each service in order for an automatic cleaning.
+			 * @note This version ensures each service in order for an automatic cleaning.
 			 * @param services A reference to auto register the service for shutdown.
 			 * @return bool.
 			 */
-			bool initialize (std::vector< ServiceInterface * > & services) noexcept;
+			[[nodiscard]]
+			bool
+			initialize (std::vector< ServiceInterface * > & services) noexcept
+			{
+				if ( !this->initialize() )
+				{
+					return false;
+				}
+
+				services.emplace_back(this);
+
+				return true;
+			}
 
 			/**
 			 * @brief Terminates the service.
 			 * @return bool.
 			 */
-			bool terminate () noexcept;
+			bool
+			terminate () noexcept
+			{
+				return this->onTerminate();
+			}
 
 			/**
 			 * @brief Returns whether the service is up and available.
-			 * @warning This function must reflect the method ServiceInterface::onInitialize() has been called !
+			 * @warning This function must reflect the method ServiceInterface::onInitialize() has been called!
 			 * @return bool.
 			 */
 			[[nodiscard]]
@@ -115,10 +149,15 @@ namespace EmEn
 		protected:
 
 			/**
-			 * @brief Constructs a service.
-			 * @param serviceInstanceName The name of the service for print information.
+			 * @brief Constructs a service interface.
+			 * @param serviceName A reference to a string [std::move].
 			 */
-			explicit ServiceInterface (const std::string & serviceInstanceName) noexcept;
+			explicit
+			ServiceInterface (std::string serviceName) noexcept
+				: NameableTrait{std::move(serviceName)}
+			{
+
+			}
 
 			/**
 			 * @brief This method must be overridden by the final service on initialization.

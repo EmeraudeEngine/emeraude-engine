@@ -33,11 +33,11 @@
 
 /* Local inclusions for inheritances. */
 #include "AbstractObject.hpp"
+#include "Instance.hpp"
 
 /* Forward declarations. */
 namespace EmEn::Vulkan
 {
-	class Instance;
 	class PhysicalDevice;
 	class Device;
 };
@@ -45,7 +45,7 @@ namespace EmEn::Vulkan
 namespace EmEn::Vulkan
 {
 	/**
-	 * @brief Defines the surface where the final image will be draw and presented to the screen.
+	 * @brief Defines the surface where the final image will be drawn and presented to the screen.
 	 * @extends EmEn::Vulkan::AbstractObject This is a Vulkan API object.
 	 */
 	class Surface final : public AbstractObject
@@ -56,11 +56,17 @@ namespace EmEn::Vulkan
 			static constexpr auto ClassId{"VulkanSurface"};
 
 			/**
-			 * @brief Constructs a surface info.
+			 * @brief Constructs a surface.
 			 * @param instance A reference to a vulkan instance.
 			 * @param surface A vulkan surface handle.
 			 */
-			Surface (const Instance & instance, const VkSurfaceKHR & surface) noexcept;
+			Surface (const Instance & instance, const VkSurfaceKHR & surface) noexcept
+				: m_instance{instance},
+				m_handle{surface}
+			{
+				/* NOTE: This is a resource given "as is" from the OS. */
+				this->setCreated();
+			}
 
 			/**
 			 * @brief Copy constructor.
@@ -89,7 +95,22 @@ namespace EmEn::Vulkan
 			/**
 			 * @brief Destructs the surface.
 			 */
-			~Surface () override;
+			~Surface () override
+			{
+				if ( !m_instance.usable() )
+				{
+					return;
+				}
+
+				if ( m_handle != VK_NULL_HANDLE )
+				{
+					vkDestroySurfaceKHR(m_instance.handle(), m_handle, nullptr);
+
+					m_handle = VK_NULL_HANDLE;
+
+					this->setDestroyed();
+				}
+			}
 
 			/**
 			 * @brief Updates surface information with a physical device.

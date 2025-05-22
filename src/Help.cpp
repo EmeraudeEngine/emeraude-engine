@@ -31,12 +31,6 @@
 
 namespace EmEn
 {
-	Help::Help (const std::string & name) noexcept
-		: NameableTrait(name)
-	{
-
-	}
-
 	std::string
 	Help::argumentDocsString () const noexcept
 	{

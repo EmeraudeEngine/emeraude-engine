@@ -29,7 +29,6 @@
 /* STL inclusions. */
 #include <cstddef>
 #include <cstdint>
-#include <ostream>
 #include <string>
 
 /* Local inclusions for inheritances. */
@@ -52,7 +51,7 @@ namespace EmEn::Graphics
 	};
 
 	/**
-	 * @brief Describes the data inside a vertex attribute binding. How many elements and the primitive used.
+	 * @brief Describes the data inside a vertex attribute binding. How many elements and the used primitive.
 	 * @extends EmEn::Libs::FlagTrait
 	 */
 	class VertexBufferBinding final : public Libs::FlagTrait< uint32_t >
@@ -63,25 +62,59 @@ namespace EmEn::Graphics
 			static constexpr auto ClassId{"VertexBufferBinding"};
 
 			/**
-			 * @brief Constructs a VBO binding format to describes how to use it.
+			 * @brief Constructs a VBO binding format to describe how to use it.
 			 * @param binding The binding index.
 			 * @param elementCount The element count to make a vertex.
 			 * @param topology The type of primitive.
 			 * @param bufferFlags The buffer flags.
 			 */
-			VertexBufferBinding (uint32_t binding, size_t elementCount, Topology topology, uint32_t bufferFlags) noexcept;
+			VertexBufferBinding (uint32_t binding, size_t elementCount, Topology topology, uint32_t bufferFlags) noexcept
+				: FlagTrait{bufferFlags},
+				m_binding{binding},
+				m_elementCount{elementCount},
+				m_topology{topology}
+			{
+
+			}
 
 			/**
 			 * @brief Equality operator.
-			 * @param operand A reference to an other VertexBufferBinding.
+			 * @param operand A reference to another vertex buffer binding.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool operator== (const VertexBufferBinding & operand) const noexcept;
+			bool
+			operator== (const VertexBufferBinding & operand) const noexcept
+			{
+				if ( this != &operand )
+				{
+					if ( m_binding != operand.m_binding )
+					{
+						return false;
+					}
+
+					if ( m_elementCount != operand.m_elementCount )
+					{
+						return false;
+					}
+
+					if ( m_topology != operand.m_topology )
+					{
+						return false;
+					}
+
+					if ( this->flags() != operand.flags() )
+					{
+						return false;
+					}
+				}
+
+				return true;
+			}
 
 			/**
 			 * @brief Different operator.
-			 * @param operand A reference to an other VertexBufferBinding.
+			 * @param operand A reference to another vertex buffer binding.
 			 * @return bool
 			 */
 			[[nodiscard]]
@@ -92,7 +125,7 @@ namespace EmEn::Graphics
 			}
 
 			/**
-			 * @brief Returns the element count to make a vertex.
+			 * @brief Returns the elements count to make a vertex.
 			 * @return size_t
 			 */
 			[[nodiscard]]
@@ -105,7 +138,7 @@ namespace EmEn::Graphics
 			/**
 			 * @brief Returns the vertex size in bytes at a specific binding point.
 			 * @note Same as VertexBufferFormat::elementCount() * sizeof(float).
-			 * @param size_t
+			 * @return size_t
 			 */
 			[[nodiscard]]
 			size_t
@@ -169,6 +202,8 @@ namespace EmEn::Graphics
 				return this->isFlagEnabled(IsDynamicVertexBuffer);
 			}
 
+		private:
+
 			/**
 			 * @brief STL streams printable object.
 			 * @param out A reference to the stream output.
@@ -177,17 +212,38 @@ namespace EmEn::Graphics
 			 */
 			friend std::ostream & operator<< (std::ostream & out, const VertexBufferBinding & obj);
 
-			/**
-			 * @brief Stringify the object.
-			 * @param obj A reference to the object to print.
-			 * @return std::string
-			 */
-			friend std::string to_string (const VertexBufferBinding & obj) noexcept;
-
-		private:
-
 			uint32_t m_binding;
 			size_t m_elementCount;
 			Topology m_topology;
 	};
+
+	inline
+	std::ostream &
+	operator<< (std::ostream & out, const VertexBufferBinding & obj)
+	{
+		return out << VertexBufferBinding::ClassId << ". "
+			"Binding: " << obj.m_binding << ", "
+			"Element count: " << obj.m_elementCount << ", "
+			"Topology: " << to_string(obj.m_topology) << ", "
+			"Per instance: " << ( obj.perInstance() ? "yes" : "no" ) << ", "
+			"Request primitive restart: " << ( obj.requestPrimitiveRestart() ? "yes" : "no" ) << ", "
+			"Is position absolute: " << ( obj.isPositionAbsolute() ? "yes" : "no" ) << ", "
+			"Is dynamic vertex buffer: " << ( obj.isDynamicVertexBuffer() ? "yes" : "no" );
+	}
+
+	/**
+	 * @brief Stringify the object.
+	 * @param obj A reference to the object to print.
+	 * @return std::string
+	 */
+	inline
+	std::string
+	to_string (const VertexBufferBinding & obj) noexcept
+	{
+		std::stringstream output;
+
+		output << obj;
+
+		return output.str();
+	}
 }

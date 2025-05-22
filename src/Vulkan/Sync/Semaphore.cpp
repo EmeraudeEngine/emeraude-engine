@@ -33,25 +33,6 @@
 
 namespace EmEn::Vulkan::Sync
 {
-	Semaphore::Semaphore (const std::shared_ptr< Device > & device, VkSemaphoreCreateFlags createFlags) noexcept
-		: AbstractDeviceDependentObject(device)
-	{
-		m_createInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-		m_createInfo.pNext = nullptr;
-		m_createInfo.flags = createFlags;
-	}
-
-	Semaphore::Semaphore (const std::shared_ptr< Device > & device, const VkSemaphoreCreateInfo & createInfo) noexcept
-		: AbstractDeviceDependentObject(device), m_createInfo(createInfo)
-	{
-
-	}
-
-	Semaphore::~Semaphore ()
-	{
-		this->destroyFromHardware();
-	}
-
 	bool
 	Semaphore::createOnHardware () noexcept
 	{

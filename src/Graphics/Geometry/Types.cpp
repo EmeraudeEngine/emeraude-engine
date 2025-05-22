@@ -34,7 +34,7 @@ namespace EmEn::Graphics::Geometry
 	uint32_t
 	getElementCountFromFlags (uint32_t geometryFlagBits) noexcept
 	{
-		/* NOTE: Position are always present ! */
+		/* NOTE: Position is always present! */
 		uint32_t elementCount = 3;
 
 		if ( (geometryFlagBits & EnableTangentSpace) != 0U )

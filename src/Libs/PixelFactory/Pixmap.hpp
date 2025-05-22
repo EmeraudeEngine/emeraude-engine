@@ -43,13 +43,11 @@
 #include <functional>
 #include <limits>
 #include <type_traits>
-#ifdef DEBUG
 #include <iostream>
-#endif
 
 /* Local inclusions for usage. */
 #include "Libs/Algorithms/PerlinNoise.hpp"
-#include "Libs/Math/Rectangle.hpp"
+#include "Libs/Math/Space2D/AARectangle.hpp"
 #include "Color.hpp"
 #include "Gradient.hpp"
 #include "Types.hpp"
@@ -102,14 +100,17 @@ namespace EmEn::Libs::PixelFactory
 			{
 				m_data.resize(this->elementCount());
 
-#ifdef DEBUG
-				if ( !this->initAlphaChannel() )
+				if constexpr ( IsDebug )
 				{
-					std::cerr << "Unable to check alpha channel initialization !" "\n";
+					if ( !this->initAlphaChannel() )
+					{
+						std::cerr << "Unable to check alpha channel initialization !" "\n";
+					}
 				}
-#else
-				this->initAlphaChannel();
-#endif
+				else
+				{
+					this->initAlphaChannel();
+				}
 			}
 
 			/**
@@ -128,14 +129,17 @@ namespace EmEn::Libs::PixelFactory
 			{
 				m_data.resize(this->elementCount());
 
-#ifdef DEBUG
-				if ( !this->fill(color) )
+				if constexpr ( IsDebug )
 				{
-					std::cerr << "Unable to initialize color !" "\n";
+					if ( !this->fill(color) )
+					{
+						std::cerr << "Unable to initialize color !" "\n";
+					}
 				}
-#else
-				this->fill(color);
-#endif
+				else
+				{
+					this->fill(color);
+				}
 			}
 
 			/**
@@ -150,9 +154,10 @@ namespace EmEn::Libs::PixelFactory
 			{
 				if ( width == 0 || height == 0 )
 				{
-#ifdef DEBUG
-					std::cerr << "Invalid pixmap dimensions !" "\n";
-#endif
+					if constexpr ( IsDebug )
+					{
+						std::cerr << "Invalid pixmap dimensions !" "\n";
+					}
 
 					return false;
 				}
@@ -381,11 +386,11 @@ namespace EmEn::Libs::PixelFactory
 			 * @tparam rectangle_data_t The type of rectangle data. Default int32_t.
 			 * @param offsetX Set an offset in X to the rectangle. Default 0.
 			 * @param offsetY Set an offset in Y to the rectangle. Default 0.
-			 * @return Math::Rectangle< rectangle_data_t >
+			 * @return Math::Space2D::AARectangle< rectangle_data_t >
 			 */
 			template< typename rectangle_data_t = int32_t >
 			[[nodiscard]]
-			Math::Rectangle< rectangle_data_t >
+			Math::Space2D::AARectangle< rectangle_data_t >
 			rectangle (rectangle_data_t offsetX = 0, rectangle_data_t offsetY = 0) const noexcept
 			{
 				return {offsetX, offsetY, static_cast< rectangle_data_t >(this->width()), static_cast< rectangle_data_t >(this->height())};
@@ -656,7 +661,10 @@ namespace EmEn::Libs::PixelFactory
 
 				if ( m_flags[UpdatedRegionMarkerEnabled] )
 				{
-					this->markPixelUpdated(pixelIndex % m_width, pixelIndex / m_width);
+					this->markPixelUpdated(
+						static_cast< dimension_t >(pixelIndex) % m_width,
+						static_cast< dimension_t >(pixelIndex) / m_width
+					);
 				}
 			}
 
@@ -999,7 +1007,7 @@ namespace EmEn::Libs::PixelFactory
 
 			/**
 			 * @brief Returns a sampled pixel using the nearest algorithm.
-			 * @note Will returns a black color when outside the pixmap and UVWrappingEnabled turned off.
+			 * @note Will return a black color when outside the pixmap and UVWrappingEnabled turned off.
 			 * @tparam color_data_t The color data type. Default float.
 			 * @tparam uv_t The UV coordinates data type. Default float.
 			 * @param u The X coordinate of the pixel.
@@ -1045,7 +1053,7 @@ namespace EmEn::Libs::PixelFactory
 
 			/**
 			 * @brief Returns a sampled pixel using the linear algorithm.
-			 * @note Will returns a black color when outside the pixmap and UVWrappingEnabled turned off.
+			 * @note Will return a black color when outside the pixmap and UVWrappingEnabled turned off.
 			 * @tparam color_data_t The color data type. Default float.
 			 * @tparam uv_t The UV coordinates data type. Default float.
 			 * @param u The X coordinate of the pixel.
@@ -1099,7 +1107,7 @@ namespace EmEn::Libs::PixelFactory
 
 			/**
 			 * @brief Returns a sampled pixel using the cosine algorithm.
-			 * @note Will returns a black color when outside the pixmap and UVWrappingEnabled turned off.
+			 * @note Will return a black color when outside the pixmap and UVWrappingEnabled turned off.
 			 * @tparam color_data_t The color data type. Default float.
 			 * @tparam uv_t The UV coordinates data type. Default float.
 			 * @param u The X coordinate of the pixel.
@@ -1153,7 +1161,7 @@ namespace EmEn::Libs::PixelFactory
 
 			/**
 			 * @brief Returns a sampled pixel using the cubic algorithm.
-			 * @note Will returns a black color when outside the pixmap and UVWrappingEnabled turned off.
+			 * @note Will return a black color when outside the pixmap and UVWrappingEnabled turned off.
 			 * @tparam color_data_t The color data type. Default float.
 			 * @tparam uv_t The UV coordinates data type. Default float.
 			 * @param u The X coordinate of the pixel.
@@ -1434,10 +1442,10 @@ namespace EmEn::Libs::PixelFactory
 			/**
 			 * @brief Returns the region of the pixmap where changes have been made since the last marker reset.
 			 * @note Remember to call Pixmap::resetUpdatedRegionMarker() when you are done with the rectangle for the next update.
-			 * @return const Math::Rectangle< dimension_t > &
+			 * @return const Math::Space2D::AARectangle< dimension_t > &
 			 */
 			[[nodiscard]]
-			const Math::Rectangle< dimension_t > &
+			const Math::Space2D::AARectangle< dimension_t > &
 			updatedRegion () const noexcept
 			{
 				return m_lastUpdatedRegion;
@@ -1488,7 +1496,7 @@ namespace EmEn::Libs::PixelFactory
 			 * @return void
 			 */
 			void
-			markRectangleUpdated (const Math::Rectangle< dimension_t > & rectangle) noexcept
+			markRectangleUpdated (const Math::Space2D::AARectangle< dimension_t > & rectangle) noexcept
 			{
 				if ( m_flags[UpdatedRegionMarkerEnabled] )
 				{
@@ -1497,7 +1505,7 @@ namespace EmEn::Libs::PixelFactory
 			}
 
 			/**
-			 * @brief Updates the whole the updated region marker.
+			 * @brief Updates whole the updated region marker.
 			 * @return void
 			 */
 			void
@@ -2385,7 +2393,7 @@ namespace EmEn::Libs::PixelFactory
 			}
 
 			/**
-			 * @brief Applies a function on every pixel in columns order (X^Y loops).
+			 * @brief Applies a function on every pixel in column order (X^Y loops).
 			 * @note Returning false will skip the pixel.
 			 * @warning This method is slow.
 			 * @tparam color_data_t The color data type. Default float.
@@ -2578,7 +2586,7 @@ namespace EmEn::Libs::PixelFactory
 			dimension_t m_height{0};
 			ChannelMode m_channelMode{ChannelMode::RGB};
 			std::vector< pixel_data_t > m_data{};
-			Math::Rectangle< dimension_t > m_lastUpdatedRegion;
+			Math::Space2D::AARectangle< dimension_t > m_lastUpdatedRegion;
 			std::array< bool, 8 > m_flags{
 				true/*UVWrappingEnabled*/,
 				true/*UpdatedRegionMarkerEnabled*/,

@@ -28,7 +28,7 @@
 
 /* Local inclusions. */
 #include "Tracer.hpp"
-#include <Audio/OpenAL.EFX.hpp>
+#include "Audio/OpenAL.EFX.hpp"
 #include "Audio/Utility.hpp"
 
 namespace EmEn::Audio::Effects
@@ -36,22 +36,27 @@ namespace EmEn::Audio::Effects
 	using namespace EmEn::Libs;
 
 	FrequencyShifter::FrequencyShifter () noexcept
-		: Abstract()
 	{
 		if ( this->identifier() == 0 )
+		{
 			return;
+		}
 
 		EFX::alEffecti(this->identifier(), AL_EFFECT_TYPE, AL_EFFECT_FREQUENCY_SHIFTER);
 
 		if ( alGetErrors("alEffecti()", __FILE__, __LINE__) )
+		{
 			Tracer::error(ClassId, "Unable to generate OpenAL Frequency Shifter effect !");
+		}
 	}
 
 	void
 	FrequencyShifter::resetProperties () noexcept
 	{
 		if ( !EFX::isAvailable() )
+		{
 			return;
+		}
 
 		EFX::alEffectf(this->identifier(), AL_FREQUENCY_SHIFTER_FREQUENCY, AL_FREQUENCY_SHIFTER_DEFAULT_FREQUENCY);
 		EFX::alEffecti(this->identifier(), AL_FREQUENCY_SHIFTER_LEFT_DIRECTION, AL_FREQUENCY_SHIFTER_DEFAULT_LEFT_DIRECTION);
@@ -62,11 +67,13 @@ namespace EmEn::Audio::Effects
 	FrequencyShifter::setFrequency (float value) noexcept
 	{
 		if ( !EFX::isAvailable() )
+		{
 			return;
+		}
 
 		if ( value < AL_FREQUENCY_SHIFTER_MIN_FREQUENCY || value > AL_FREQUENCY_SHIFTER_MAX_FREQUENCY )
 		{
-			Tracer::warning(ClassId, BlobTrait() << "Frequency must be between " << AL_FREQUENCY_SHIFTER_MIN_FREQUENCY << " and " << AL_FREQUENCY_SHIFTER_MAX_FREQUENCY << ".");
+			TraceWarning{ClassId} << "Frequency must be between " << AL_FREQUENCY_SHIFTER_MIN_FREQUENCY << " and " << AL_FREQUENCY_SHIFTER_MAX_FREQUENCY << '.';
 
 			return;
 		}
@@ -78,9 +85,11 @@ namespace EmEn::Audio::Effects
 	FrequencyShifter::setLeftDirection (Direction value) noexcept
 	{
 		if ( !EFX::isAvailable() )
+		{
 			return;
+		}
 
-		ALint def;
+		ALint def = 0;
 
 		switch ( value )
 		{
@@ -104,9 +113,11 @@ namespace EmEn::Audio::Effects
 	FrequencyShifter::setRightDirection (Direction value) noexcept
 	{
 		if ( !EFX::isAvailable() )
+		{
 			return;
+		}
 
-		ALint def;
+		ALint def = 0;
 
 		switch ( value )
 		{
@@ -129,12 +140,12 @@ namespace EmEn::Audio::Effects
 	float
 	FrequencyShifter::frequency () const noexcept
 	{
-		if ( !EFX::isAvailable() )
-			return 0.0F;
+		ALfloat value = 0.0F;
 
-		ALfloat value;
-
-		EFX::alGetEffectf(this->identifier(), AL_FREQUENCY_SHIFTER_FREQUENCY, &value);
+		if ( EFX::isAvailable() )
+		{
+			EFX::alGetEffectf(this->identifier(), AL_FREQUENCY_SHIFTER_FREQUENCY, &value);
+		}
 
 		return value;
 	}
@@ -143,49 +154,51 @@ namespace EmEn::Audio::Effects
 	FrequencyShifter::leftDirection () const noexcept
 	{
 		if ( !EFX::isAvailable() )
+		{
 			return Direction::Down;
+		}
 
-		ALint value;
+		ALint value = 0;
 
 		EFX::alGetEffecti(this->identifier(), AL_FREQUENCY_SHIFTER_LEFT_DIRECTION, &value);
 
 		switch ( value )
 		{
-			case AL_FREQUENCY_SHIFTER_DIRECTION_DOWN :
-				return Direction::Down;
-
 			case AL_FREQUENCY_SHIFTER_DIRECTION_UP :
 				return Direction::Up;
 
 			case AL_FREQUENCY_SHIFTER_DIRECTION_OFF :
 				return Direction::Off;
-		}
 
-		return Direction::Down;
+			case AL_FREQUENCY_SHIFTER_DIRECTION_DOWN :
+			default :
+				return Direction::Down;
+		}
 	}
 
 	FrequencyShifter::Direction
 	FrequencyShifter::rightDirection () const noexcept
 	{
 		if ( !EFX::isAvailable() )
+		{
 			return Direction::Down;
+		}
 
-		ALint value;
+		ALint value = 0;
 
 		EFX::alGetEffecti(this->identifier(), AL_FREQUENCY_SHIFTER_RIGHT_DIRECTION, &value);
 
 		switch ( value )
 		{
-			case AL_FREQUENCY_SHIFTER_DIRECTION_DOWN :
-				return Direction::Down;
-
 			case AL_FREQUENCY_SHIFTER_DIRECTION_UP :
 				return Direction::Up;
 
 			case AL_FREQUENCY_SHIFTER_DIRECTION_OFF :
 				return Direction::Off;
-		}
 
-		return Direction::Down;
+			case AL_FREQUENCY_SHIFTER_DIRECTION_DOWN :
+			default :
+				return Direction::Down;
+		}
 	}
 }

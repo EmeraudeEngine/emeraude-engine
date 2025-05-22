@@ -39,42 +39,6 @@ namespace EmEn::Scenes::Component
 	using namespace EmEn::Libs;
 	using namespace EmEn::Libs::Math;
 
-	Weight::Weight (const std::string & name, const AbstractEntity & parentEntity) noexcept
-		: Abstract(name, parentEntity)
-	{
-
-	}
-
-	Weight::Weight (const std::string & name, const AbstractEntity & parentEntity, const Physics::PhysicalObjectProperties & initialProperties) noexcept
-		: Abstract(name, parentEntity)
-	{
-		this->physicalObjectProperties().setProperties(initialProperties);
-	}
-
-	const char *
-	Weight::getComponentType () const noexcept
-	{
-		return ClassId;
-	}
-
-	const Cuboid< float > &
-	Weight::boundingBox () const noexcept
-	{
-		return m_boundingBox;
-	}
-
-	const Sphere< float > &
-	Weight::boundingSphere () const noexcept
-	{
-		return m_boundingSphere;
-	}
-
-	void
-	Weight::move (const CartesianFrame< float > & /*worldCoordinates*/) noexcept
-	{
-
-	}
-
 	void
 	Weight::processLogics (const Scene & scene) noexcept
 	{
@@ -82,13 +46,7 @@ namespace EmEn::Scenes::Component
 	}
 
 	bool
-	Weight::shouldRemove () const noexcept
-	{
-		return false;
-	}
-
-	bool
-	Weight::playAnimation (uint8_t animationID, const Variant & value, size_t cycle) noexcept
+	Weight::playAnimation (uint8_t animationID, const Variant & value, size_t /*cycle*/) noexcept
 	{
 		switch ( animationID )
 		{
@@ -115,29 +73,5 @@ namespace EmEn::Scenes::Component
 			default :
 				return false;
 		}
-	}
-
-	void
-	Weight::setRadius (float radius) noexcept
-	{
-		m_boundingSphere.setRadius(radius);
-
-		this->notify(ComponentContentModified);
-	}
-
-	void
-	Weight::setBoxSize (float size) noexcept
-	{
-		m_boundingBox.set(size * 0.5F);
-
-		this->notify(ComponentContentModified);
-	}
-
-	void
-	Weight::setBoxSize (float xSize, float ySize, float zSize) noexcept
-	{
-		m_boundingBox.set({xSize * 0.5F, ySize * 0.5F, zSize * 0.5F}, {-xSize * 0.5F, -ySize * 0.5F, -zSize * 0.5F});
-
-		this->notify(ComponentContentModified);
 	}
 }

@@ -32,7 +32,7 @@
 #include <vector>
 
 /* Local inclusions for usages. */
-#include "../Types.hpp"
+#include "../Types.hpp" // Global types
 
 namespace EmEn::Console
 {
@@ -51,14 +51,24 @@ namespace EmEn::Console
 			 * @param severity The message severity.
 			 * @param message A string [std::move].
 			 */
-			Output (Severity severity, std::string message) noexcept;
+			Output (Severity severity, std::string message) noexcept
+				: m_severity{severity},
+				m_message{std::move(message)}
+			{
+
+			}
 
 			/**
 			 * @brief Constructs a console return message.
 			 * @param severity The message severity.
 			 * @param message A reference to a string stream.
 			 */
-			Output (Severity severity, const std::stringstream & message) noexcept;
+			Output (Severity severity, const std::stringstream & message) noexcept
+				: m_severity{severity},
+				m_message{message.str()}
+			{
+
+			}
 
 			/**
 			 * @brief Returns the message severity.

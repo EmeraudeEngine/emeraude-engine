@@ -27,10 +27,6 @@
 #pragma once
 
 /* STL inclusions. */
-#include <cstddef>
-#include <cstdint>
-#include <string>
-#include <vector>
 #include <memory>
 
 /* Local inclusions for inheritances. */
@@ -44,7 +40,7 @@
 namespace EmEn::Graphics::Geometry
 {
 	/**
-	 * @brief Defines a geometry using a VBO and an IBO to produce a grid with LOD adapted to the point of view.
+	 * @brief Defines a geometry using a VBO and an IBO to produce a grid with LOD adapted from the point of view.
 	 * @extends EmEn::Graphics::Geometry::Interface The common base for all geometry types.
 	 */
 	class AdaptiveVertexGridResource final : public Interface
@@ -61,12 +57,20 @@ namespace EmEn::Graphics::Geometry
 			/** @brief Observable class unique identifier. */
 			static const size_t ClassUID;
 
+			/** @brief Defines the resource dependency complexity. */
+			static constexpr auto Complexity{Resources::DepComplexity::One};
+
 			/**
 			 * @brief Constructs an adaptive grid geometry resource.
 			 * @param name A reference to a string for the resource name.
 			 * @param geometryFlagBits The geometry resource flag bits, See EmEn::Graphics::Geometry::GeometryFlagBits. Default EnablePrimitiveRestart.
 			 */
-			explicit AdaptiveVertexGridResource (const std::string & name, uint32_t geometryFlagBits = EnablePrimitiveRestart) noexcept;
+			explicit
+			AdaptiveVertexGridResource (const std::string & name, uint32_t geometryFlagBits = EnablePrimitiveRestart) noexcept
+				: Interface{name, geometryFlagBits}
+			{
+
+			}
 
 			/**
 			 * @brief Copy constructor.
@@ -95,7 +99,10 @@ namespace EmEn::Graphics::Geometry
 			/**
 			 * @brief Destructs the adaptive grid geometry resource.
 			 */
-			~AdaptiveVertexGridResource () override;
+			~AdaptiveVertexGridResource () override
+			{
+				this->destroyFromHardware(true);
+			}
 
 			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
 			[[nodiscard]]
@@ -141,7 +148,7 @@ namespace EmEn::Graphics::Geometry
 
 			/** @copydoc EmEn::Graphics::Geometry::Interface::subGeometryCount() */
 			[[nodiscard]]
-			size_t
+			uint32_t
 			subGeometryCount () const noexcept override
 			{
 				return 1;
@@ -150,14 +157,14 @@ namespace EmEn::Graphics::Geometry
 			/** @copydoc EmEn::Graphics::Geometry::Interface::subGeometryRange() */
 			[[nodiscard]]
 			std::array< uint32_t, 2 >
-			subGeometryRange (size_t /*subGeometryIndex*/ = 0) const noexcept override
+			subGeometryRange (uint32_t /*subGeometryIndex*/ = 0) const noexcept override
 			{
-				return {0, static_cast< uint32_t >(m_indexBufferObject->indexCount())};
+				return {0, m_indexBufferObject->indexCount()};
 			}
 
 			/** @copydoc EmEn::Graphics::Geometry::Interface::boundingBox() */
 			[[nodiscard]]
-			const Libs::Math::Cuboid< float > &
+			const Libs::Math::Space3D::AACuboid< float > &
 			boundingBox () const noexcept override
 			{
 				return m_boundingBox;
@@ -165,7 +172,7 @@ namespace EmEn::Graphics::Geometry
 
 			/** @copydoc EmEn::Graphics::Geometry::Interface::boundingSphere() */
 			[[nodiscard]]
-			const Libs::Math::Sphere< float > &
+			const Libs::Math::Space3D::Sphere< float > &
 			boundingSphere () const noexcept override
 			{
 				return m_boundingSphere;
@@ -192,21 +199,22 @@ namespace EmEn::Graphics::Geometry
 			bool
 			useIndexBuffer () const noexcept override
 			{
-#ifdef DEBUG
-				return m_indexBufferObject != nullptr;
-#else
+				if constexpr ( IsDebug )
+				{
+					return m_indexBufferObject != nullptr;
+				}
+
 				return true;
-#endif
 			}
 
-			/** @copydoc EmEn::Graphics::Geometry::Interface::create() */
-			bool create () noexcept override;
+			/** @copydoc EmEn::Graphics::Geometry::Interface::createOnHardware() noexcept */
+			bool createOnHardware (Vulkan::TransferManager & transferManager) noexcept override;
 
-			/** @copydoc EmEn::Graphics::Geometry::Interface::update() */
-			bool update () noexcept override;
+			/** @copydoc EmEn::Graphics::Geometry::Interface::updateVideoMemory() noexcept */
+			bool updateVideoMemory () noexcept override;
 
-			/** @copydoc EmEn::Graphics::Geometry::Interface::destroy() */
-			void destroy (bool clearLocalData) noexcept override;
+			/** @copydoc EmEn::Graphics::Geometry::Interface::destroyFromHardware(bool) noexcept */
+			void destroyFromHardware (bool clearLocalData) noexcept override;
 
 			/** @copydoc EmEn::Resources::ResourceTrait::classLabel() const */
 			[[nodiscard]]
@@ -222,14 +230,23 @@ namespace EmEn::Graphics::Geometry
 			/** @copydoc EmEn::Resources::ResourceTrait::load(const Json::Value &) */
 			bool load (const Json::Value & data) noexcept override;
 
+			/** @copydoc EmEn::Resources::ResourceTrait::memoryOccupied() const noexcept */
+			[[nodiscard]]
+			size_t
+			memoryOccupied () const noexcept override
+			{
+				// TODO ...
+				return 0;
+			}
+
 			/**
-			 * @brief Prepares a grid ready to go on video memory with create() method from a position and a number of quads (lesser the the whole grid).
+			 * @brief Prepares a grid ready to go on video memory with create() method from a position and a number of quads (lesser the whole grid).
 			 * @param baseGrid
 			 * @param quadCount
 			 * @param position
 			 * @return bool
 			 */
-			bool load (const Libs::VertexFactory::Grid< float > & baseGrid, size_t quadCount, const Libs::Math::Vector< 3, float > & position) noexcept;
+			bool load (const Libs::VertexFactory::Grid< float > & baseGrid, uint32_t quadCount, const Libs::Math::Vector< 3, float > & position) noexcept;
 
 			/**
 			 * @brief This will rewrite the vertices buffer from the grid and the new position.
@@ -258,7 +275,7 @@ namespace EmEn::Graphics::Geometry
 
 			/**
 			 * @brief Enables the use of vertex color.
-			 * @param vertexColorMap A reference to a image smart pointer.
+			 * @param vertexColorMap A reference to an image smart pointer.
 			 */
 			void enableVertexColor (const std::shared_ptr< ImageResource > & vertexColorMap) noexcept;
 
@@ -273,32 +290,16 @@ namespace EmEn::Graphics::Geometry
 				return m_vertexColorMap != nullptr;
 			}
 
-			/**
-			 * @brief Returns an adaptive vertex grid resource by its name.
-			 * @param resourceName A reference to a string.
-			 * @param directLoad Use the direct loading mode. Default false.
-			 * @return std::shared_ptr< AdaptiveVertexGridResource >
-			 */
-			[[nodiscard]]
-			static std::shared_ptr< AdaptiveVertexGridResource > get (const std::string & resourceName, bool directLoad = false) noexcept;
-
-			/**
-			 * @brief Returns the default adaptive vertex grid resource.
-			 * @return std::shared_ptr< AdaptiveVertexGridResource >
-			 */
-			[[nodiscard]]
-			static std::shared_ptr< AdaptiveVertexGridResource > getDefault () noexcept;
-
 		private:
 
 			/**
 			 * @brief Returns The first offset from base grid to build the adaptive grid.
 			 * @param baseGrid A reference to the base grid.
 			 * @param position A reference to a vector for the position.
-			 * @return size_t
+			 * @return uint32_t
 			 */
 			[[nodiscard]]
-			size_t findStartingOffset (const Libs::VertexFactory::Grid< float > & baseGrid, const Libs::Math::Vector< 3, float > & position) const noexcept;
+			uint32_t findStartingOffset (const Libs::VertexFactory::Grid< float > & baseGrid, const Libs::Math::Vector< 3, float > & position) const noexcept;
 
 			/**
 			 * @brief Generates the indices buffer once for all.
@@ -312,23 +313,23 @@ namespace EmEn::Graphics::Geometry
 			 * @param index The index of the current point in the grid
 			 * @return void
 			 */
-			void addGridPointToVertexAttributes (const Libs::VertexFactory::Grid< float > & grid, size_t index) noexcept;
+			void addGridPointToVertexAttributes (const Libs::VertexFactory::Grid< float > & grid, uint32_t index) noexcept;
 
 			static constexpr auto DefaultMinimalUpdateDistance{1024.0F};
 
 			std::unique_ptr< Vulkan::VertexBufferObject > m_vertexBufferObject;
 			std::unique_ptr< Vulkan::IndexBufferObject > m_indexBufferObject;
 			std::vector< float > m_localData;
-			std::vector< unsigned int > m_indices;
-			Libs::Math::Cuboid< float > m_boundingBox;
-			Libs::Math::Sphere< float > m_boundingSphere;
+			std::vector< uint32_t > m_indices;
+			Libs::Math::Space3D::AACuboid< float > m_boundingBox;
+			Libs::Math::Space3D::Sphere< float > m_boundingSphere;
 			float m_minimalUpdateDistance{DefaultMinimalUpdateDistance};
 			/* Contains the number of quads in on dimension. Grids are always square. */
-			size_t m_squareQuadCount{0};
-			size_t m_quadCount{0};
+			uint32_t m_squareQuadCount{0};
+			uint32_t m_quadCount{0};
 			/* NOTE: m_squareQuads + 1 */
-			size_t m_squarePointCount{0};
-			size_t m_pointCount{0};
+			uint32_t m_squarePointCount{0};
+			uint32_t m_pointCount{0};
 			std::shared_ptr< ImageResource > m_vertexColorMap{};
 	};
 }

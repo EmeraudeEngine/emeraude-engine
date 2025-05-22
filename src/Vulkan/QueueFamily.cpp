@@ -33,12 +33,6 @@
 
 namespace EmEn::Vulkan
 {
-	QueueFamily::QueueFamily (uint32_t index, size_t maxQueueCount) noexcept
-		: m_queueFamilyIndex(index), m_maxQueueCount(maxQueueCount)
-	{
-
-	}
-
 	bool
 	QueueFamily::declareQueueStructure (const std::vector< std::pair< QueueJob, float > > & structure) noexcept
 	{

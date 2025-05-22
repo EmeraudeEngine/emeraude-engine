@@ -47,6 +47,7 @@ namespace EmEn::Physics
 {
 	/**
 	 * @brief Class defining physical properties of an object.
+	 * @note [OBS][SHARED-OBSERVABLE]
 	 * @extends EmEn::Libs::ObservableTrait This notifies each physical property changes.
 	 */
 	class PhysicalObjectProperties final : public Libs::ObservableTrait
@@ -99,15 +100,32 @@ namespace EmEn::Physics
 			 * @param bounciness A scalar of the bounciness of the object when hitting something. Default 50%.
 			 * @param stickiness A scalar of the stickiness of the object when hitting something. Default 50%.
 			 */
-			explicit PhysicalObjectProperties (float mass, float surface, float dragCoefficient, float bounciness = DefaultBounciness, float stickiness = DefaultStickiness) noexcept;
+			explicit PhysicalObjectProperties (float mass, float surface, float dragCoefficient, float bounciness = DefaultBounciness, float stickiness = DefaultStickiness) noexcept
+				: m_mass{mass},
+				m_inverseMass{1.0F / m_mass},
+				m_surface{surface},
+				m_dragCoefficient{dragCoefficient},
+				m_bounciness{bounciness},
+				m_stickiness{stickiness}
+			{
+
+			}
 
 			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
 			[[nodiscard]]
-			size_t classUID () const noexcept override;
+			size_t
+			classUID () const noexcept override
+			{
+				return ClassUID;
+			}
 
 			/** @copydoc EmEn::Libs::ObservableTrait::is() const */
 			[[nodiscard]]
-			bool is (size_t classUID) const noexcept override;
+			bool
+			is (size_t classUID) const noexcept override
+			{
+				return classUID == ClassUID;
+			}
 
 			/**
 			 * @brief Sets the mass of the object.
@@ -267,7 +285,18 @@ namespace EmEn::Physics
 			void merge (const PhysicalObjectProperties & other) noexcept;
 
 			/** @brief Resets properties to zero. */
-			void reset () noexcept;
+			void
+			reset () noexcept
+			{
+				m_mass = DefaultMass;
+				m_inverseMass = 0.0F;
+				m_surface = DefaultSurface;
+				m_dragCoefficient = DefaultDragCoefficient;
+				m_bounciness = DefaultBounciness;
+				m_stickiness = DefaultStickiness;
+			}
+
+		private:
 
 			/**
 			 * @brief STL streams printable object.
@@ -277,15 +306,6 @@ namespace EmEn::Physics
 			 */
 			friend std::ostream & operator<< (std::ostream & out, const PhysicalObjectProperties & obj);
 
-			/**
-			 * @brief Stringifies the object.
-			 * @param obj A reference to the object to print.
-			 * @return std::string
-			 */
-			friend std::string to_string (const PhysicalObjectProperties & obj) noexcept;
-
-		private:
-
 			float m_mass{DefaultMass};
 			float m_inverseMass{0.0F};
 			float m_surface{DefaultSurface};
@@ -293,4 +313,32 @@ namespace EmEn::Physics
 			float m_bounciness{DefaultBounciness};
 			float m_stickiness{DefaultStickiness};
 	};
+
+	inline
+	std::ostream &
+	operator<< (std::ostream & out, const PhysicalObjectProperties & obj)
+	{
+		return out << "Physical object properties :" "\n"
+			"Mass : " << obj.m_mass << " Kg (Inverse: " << obj.m_inverseMass << ")" << '\n' <<
+			"Surface : " << obj.m_surface << " m²" << '\n' <<
+			"Drag Coefficient : " << obj.m_dragCoefficient << '\n' <<
+			"Bounciness : " << obj.m_bounciness << '\n' <<
+			"Stickiness : " << obj.m_stickiness << '\n';
+	}
+
+	/**
+	 * @brief Stringifies the object.
+	 * @param obj A reference to the object to print.
+	 * @return std::string
+	 */
+	inline
+	std::string
+	to_string (const PhysicalObjectProperties & obj) noexcept
+	{
+		std::stringstream output;
+
+		output << obj;
+
+		return output.str();
+	}
 }

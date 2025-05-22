@@ -42,17 +42,6 @@ namespace EmEn::Vulkan
 {
 	using namespace EmEn::Libs;
 
-	DescriptorSet::DescriptorSet (const std::shared_ptr< DescriptorPool > & descriptorPool, const std::shared_ptr< DescriptorSetLayout > & descriptorSetLayout) noexcept
-		: m_descriptorPool(descriptorPool), m_descriptorSetLayout(descriptorSetLayout)
-	{
-
-	}
-
-	DescriptorSet::~DescriptorSet ()
-	{
-		this->destroy();
-	}
-
 	bool
 	DescriptorSet::create () noexcept
 	{

@@ -27,9 +27,9 @@
 #include "Collider.hpp"
 
 /* Local inclusions. */
+#include "Libs/Math/Space3D/Collisions/SamePrimitive.hpp"
 #include "Libs/Math/CartesianFrame.hpp"
 #include "Libs/Math/OrientedCuboid.hpp"
-#include "Libs/Math/Sphere.hpp"
 #include "Scenes/AbstractEntity.hpp"
 #include "Physics/MovableTrait.hpp"
 
@@ -42,50 +42,51 @@ namespace EmEn::Physics
 	bool
 	Collider::checkCollisionAgainstMovable (AbstractEntity & movableEntityA, AbstractEntity & movableEntityB) noexcept
 	{
-#ifdef DEBUG
-		if ( &movableEntityA ==  &movableEntityB )
+		if constexpr ( IsDebug )
 		{
-			Tracer::error(ClassId, "Collision search on the same entity detected !");
-			return false;
-		}
-#endif
+			if ( &movableEntityA == &movableEntityB )
+			{
+				Tracer::error(ClassId, "Collision search on the same entity detected !");
 
-		Vector< 3, float > collisionDirection;
+				return false;
+			}
+		}
+
+		Vector< 3, float > minimalTranslationVector;
 		auto collisionOverflow = 0.0F;
 
-		/* TODO: Add sphere against box collision. */
+		/* TODO: Add sphere <> box collision. */
 		if ( movableEntityA.sphereCollisionIsEnabled() && movableEntityB.sphereCollisionIsEnabled() )
 		{
-			if ( !isSphereCollisionWith(movableEntityB, movableEntityA, collisionOverflow, collisionDirection) )
+			const auto sphereA = movableEntityA.getWorldBoundingSphere();
+			const auto sphereB = movableEntityB.getWorldBoundingSphere();
+
+			if ( !Space3D::isColliding(sphereA, sphereB, minimalTranslationVector) )
 			{
 				return false;
 			}
+
+			TraceDebug{ClassId} << "Sphere (" << movableEntityB.name() << ") to sphere (" << movableEntityA.name() << ") collision !\nMTV : " << minimalTranslationVector;
+
+			movableEntityA.move(-minimalTranslationVector, TransformSpace::World);
 		}
 		else
 		{
-			if ( !isBoxCollisionWith(movableEntityB, movableEntityA, collisionOverflow, collisionDirection) )
+			if ( !isBoxCollisionWith(movableEntityB, movableEntityA, collisionOverflow, minimalTranslationVector) )
 			{
 				return false;
 			}
+
+			TraceDebug{ClassId} << "Box (" << movableEntityB.name() << ") to box (" << movableEntityA.name() << ") collision !\nMTV : " << minimalTranslationVector;
 		}
 
-		/* NOTE: Location correction. */
-		{
-			/* TODO: Use a ratio between node speed to avoid moving back an inert entity with location correction. */
-			const auto halfway = collisionDirection.scaled(collisionOverflow * 0.5F);
-
-			/* NOTE: We move the two entities back halfway. */
-			movableEntityA.move(halfway, TransformSpace::World);
-			movableEntityB.move(-halfway, TransformSpace::World);
-		}
-
-		/* NOTE: Collision declaration. */
+		/* NOTE: Collision mid-point must be done after the move back! */
 		const auto collisionPosition = Vector< 3, float >::midPoint(
 			movableEntityA.getWorldCoordinates().position(),
 			movableEntityB.getWorldCoordinates().position()
 		);
 
-		this->addCollision(CollisionType::MovableEntity, &movableEntityB, collisionPosition, collisionDirection);
+		this->addCollision(CollisionType::StaticEntity, &movableEntityB, collisionPosition, -minimalTranslationVector.normalize());
 		
 		return true;
 	}
@@ -99,6 +100,8 @@ namespace EmEn::Physics
 		/* TODO: Add sphere <> box collision. */
 		if ( movableEntityA.sphereCollisionIsEnabled() && staticEntityB.sphereCollisionIsEnabled() )
 		{
+			//TraceDebug{ClassId} << "Sphere (" << staticEntityB.name() << ") to sphere (" << movableEntityA.name() << ") collision ...";
+
 			if ( !isSphereCollisionWith(staticEntityB, movableEntityA, collisionOverflow, collisionDirection) )
 			{
 				return false;
@@ -106,6 +109,8 @@ namespace EmEn::Physics
 		}
 		else
 		{
+			//TraceDebug{ClassId} << "Box (" << staticEntityB.name() << ") to box (" << movableEntityA.name() << ") collision ...";
+
 			if ( !isBoxCollisionWith(staticEntityB, movableEntityA, collisionOverflow, collisionDirection) )
 			{
 				return false;
@@ -204,14 +209,19 @@ namespace EmEn::Physics
 		const auto sphereA = sphereEntityA.getWorldBoundingSphere();
 		const auto sphereB = sphereEntityB.getWorldBoundingSphere();
 
-		overflow = Sphere< float >::getIntersectionOverlap(sphereA, sphereB);
+		if ( !Space3D::isColliding(sphereA, sphereB, direction) )
+		{
+			return false;
+		}
+
+		/*overflow = Space3D::Sphere< float >::getIntersectionOverlap(sphereA, sphereB);
 
 		if ( overflow <= 0.0F )
 		{
 			return false;
 		}
 
-		direction = (sphereB.position() - sphereA.position()).normalize();
+		direction = (sphereB.position() - sphereA.position()).normalize();*/
 
 		return true;
 	}
@@ -220,7 +230,7 @@ namespace EmEn::Physics
 	Collider::isBoxCollisionWith (const AbstractEntity & boxEntityA, const AbstractEntity & boxEntityB, float & overflow, Vector< 3, float > & direction) noexcept
 	{
 		/* NOTE: We check first with axis-aligned bounding box ... */
-		if ( !boxEntityA.getWorldBoundingBox().isCollidingWith(boxEntityB.getWorldBoundingBox()) )
+		if ( !Space3D::isColliding(boxEntityA.getWorldBoundingBox(), boxEntityB.getWorldBoundingBox()) )
 		{
 			return false;
 		}
@@ -238,12 +248,7 @@ namespace EmEn::Physics
 	bool
 	Collider::isBoxSphereCollisionWith (const AbstractEntity & /*boxEntity*/, const AbstractEntity & /*sphereEntity*/, float & /*overflow*/, Vector< 3, float > & /*direction*/) noexcept
 	{
-		/*const auto box = boxEntity.getWorldBoundingBox();
-		const auto sphere = sphereEntity.getWorldBoundingSphere();
-
-		overflow = Cuboid< float >::getIntersectionOverlap(box, sphere);
-
-		return overflow > 0.0F;*/
+		// TODO ...
 
 		return false;
 	}

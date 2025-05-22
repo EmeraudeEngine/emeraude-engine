@@ -264,7 +264,7 @@ namespace EmEn::Vulkan
 			 * @return uint32_t
 			 */
 			[[nodiscard]]
-			std::optional< uint32_t > getFamilyQueueIndex (VkQueueFlagBits type) noexcept;
+			std::optional< uint32_t > getFamilyQueueIndex (VkQueueFlagBits type) const noexcept;
 
 			/**
 			 * @brief Returns prefetched physical device tool properties.

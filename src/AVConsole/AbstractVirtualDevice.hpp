@@ -100,7 +100,7 @@ namespace EmEn::AVConsole
 			}
 
 			/**
-			 * @brief Returns the device allowed connexion type.
+			 * @brief Returns the device allowed a connexion type.
 			 * @return ConnexionType
 			 */
 			[[nodiscard]]
@@ -174,34 +174,47 @@ namespace EmEn::AVConsole
 			/**
 			 * @brief Connects a virtual device to output.
 			 * @note this[Output] -> target[Input]
+			 * @param managers A reference to the audio video managers.
 			 * @param targetDevice A reference to a virtual device smart pointer.
 			 * @param quietly Do not fire connexion event. Default false.
 			 * @return bool
 			 */
-			bool connect (const std::shared_ptr< AbstractVirtualDevice > & targetDevice, bool quietly = false) noexcept;
+			bool connect (AVManagers & managers, const std::shared_ptr< AbstractVirtualDevice > & targetDevice, bool quietly = false) noexcept;
 
 			/**
-			 * @brief Interconnects a virtual device between existing output.
+			 * @brief Interconnects a virtual device between an existing output.
 			 * @note this[Output] -> target[Input]
+			 * @param managers A reference to the audio video managers.
 			 * @param targetDevice A reference to a virtual device smart pointer.
-			 * @param filterDevice This will only target one device by its name. Default All.
 			 * @return bool
 			 */
-			bool interconnect (const std::shared_ptr< AbstractVirtualDevice > & targetDevice, const std::string & filterDevice = {}) noexcept;
+			bool interconnect (AVManagers & managers, const std::shared_ptr< AbstractVirtualDevice > & targetDevice) noexcept;
+
+			/**
+			 * @brief Interconnects a virtual device between all existing outputs.
+			 * @note this[Output] -> target[Input]
+			 * @param managers A reference to the audio video managers.
+			 * @param targetDevice A reference to a virtual device smart pointer.
+			 * @param outputDeviceName A reference to a string.
+			 * @return bool
+			 */
+			bool interconnect (AVManagers & managers, const std::shared_ptr< AbstractVirtualDevice > & targetDevice, const std::string & outputDeviceName) noexcept;
 
 			/**
 			 * @brief Disconnects the output of this virtual device from the input of a virtual device.
+			 * @param managers A reference to the audio video managers.
 			 * @param targetDevice A reference to a virtual device smart pointer.
 			 * @param quietly Do not fire disconnection event. Default false.
 			 * @return bool
 			 */
-			bool disconnect (const std::shared_ptr< AbstractVirtualDevice > & targetDevice, bool quietly = false) noexcept;
+			bool disconnect (AVManagers & managers, const std::shared_ptr< AbstractVirtualDevice > & targetDevice, bool quietly = false) noexcept;
 
 			/**
 			 * @brief Disconnects the device from everything.
+			 * @param managers A reference to the audio video managers.
 			 * @return void
 			 */
-			void disconnectFromAll () noexcept;
+			void disconnectFromAll (AVManagers & managers) noexcept;
 
 			/**
 			 * @brief Returns a printable state of connexions.
@@ -229,7 +242,7 @@ namespace EmEn::AVConsole
 			VideoType
 			videoType () const noexcept
 			{
-				/* NOTE: A video device should override this method ! */
+				/* NOTE: A video device should override this method! */
 				assert(m_type == DeviceType::Audio);
 
 				return VideoType::NotVideoDevice;
@@ -246,19 +259,22 @@ namespace EmEn::AVConsole
 			 */
 			virtual
 			void
-			updateProperties (bool isPerspectiveProjection, float distance, float fovOrNear) noexcept
+			updateProperties (bool /*isPerspectiveProjection*/, float /*distance*/, float /*fovOrNear*/) noexcept
 			{
-				/* NOTE: A video device should override this method ! */
+				/* NOTE: A video device should override this method! */
 				assert(m_type == DeviceType::Audio);
 			}
 
 			/**
 			 * @brief Event fired when a virtual device is connected to input.
 			 * @note This method uses a pointer instead of reference to ease the dynamic cast. It will never be null.
+			 * @param managers A reference to the audio video managers.
 			 * @param sourceDevice A pointer to the virtual device.
 			 * @return void
 			 */
-			virtual void onSourceConnected (AbstractVirtualDevice * sourceDevice) noexcept
+			virtual
+			void
+			onSourceConnected (AVManagers & /*managers*/, AbstractVirtualDevice * /*sourceDevice*/) noexcept
 			{
 
 			}
@@ -266,10 +282,13 @@ namespace EmEn::AVConsole
 			/**
 			 * @brief Event fired when a virtual device is connected to output.
 			 * @note This method uses a pointer instead of reference to ease the dynamic cast. It will never be null.
+			 * @param managers A reference to the audio video managers.
 			 * @param targetDevice A pointer to the virtual device.
 			 * @return void
 			 */
-			virtual void onTargetConnected (AbstractVirtualDevice * targetDevice) noexcept
+			virtual
+			void
+			onTargetConnected (AVManagers & /*managers*/, AbstractVirtualDevice * /*targetDevice*/) noexcept
 			{
 
 			}
@@ -277,10 +296,13 @@ namespace EmEn::AVConsole
 			/**
 			 * @brief Event fired when a virtual device is disconnected to input.
 			 * @note This method uses a pointer instead of reference to ease the dynamic cast. It will never be null.
+			 * @param managers A reference to the audio video managers.
 			 * @param sourceDevice A pointer to the virtual device.
 			 * @return void
 			 */
-			virtual void onSourceDisconnected (AbstractVirtualDevice * sourceDevice) noexcept
+			virtual
+			void
+			onSourceDisconnected (AVManagers & /*managers*/, AbstractVirtualDevice * /*sourceDevice*/) noexcept
 			{
 
 			}
@@ -288,10 +310,13 @@ namespace EmEn::AVConsole
 			/**
 			 * @brief Event fired when a virtual device is disconnected to output.
 			 * @note This method uses a pointer instead of reference to ease the dynamic cast. It will never be null.
+			 * @param managers A reference to the audio video managers.
 			 * @param targetDevice A pointer to the virtual device.
 			 * @return void
 			 */
-			virtual void onTargetDisconnected (AbstractVirtualDevice * targetDevice) noexcept
+			virtual
+			void
+			onTargetDisconnected (AVManagers & /*managers*/, AbstractVirtualDevice * /*targetDevice*/) noexcept
 			{
 
 			}
@@ -304,9 +329,34 @@ namespace EmEn::AVConsole
 			 * @param type The type of the device.
 			 * @param allowedConnexionType The type of connexion this virtual device allows.
 			 */
-			explicit AbstractVirtualDevice (const std::string & name, DeviceType type, ConnexionType allowedConnexionType) noexcept;
+			explicit
+			AbstractVirtualDevice (const std::string & name, DeviceType type, ConnexionType allowedConnexionType) noexcept
+				: m_id{buildDeviceId(name)},
+				  m_type{type},
+				  m_allowedConnexionType{allowedConnexionType}
+			{
+
+			}
 
 		private:
+
+			/**
+			 * @brief Connects back a connected virtual device.
+			 * @param managers A reference to the audio video managers.
+			 * @param sourceDevice A reference to a virtual device smart pointer.
+			 * @param quietly Do not fire connexion event. Default false.
+			 * @return bool
+			 */
+			bool connectBack (AVManagers & managers, const std::shared_ptr< AbstractVirtualDevice > & sourceDevice, bool quietly) noexcept;
+
+			/**
+			 * @brief Disconnects back a connected virtual device.
+			 * @param managers A reference to the audio video managers.
+			 * @param sourceDevice A reference to a virtual device smart pointer.
+			 * @param quietly Do not fire disconnection event. Default false.
+			 * @return bool
+			 */
+			bool disconnectBack (AVManagers & managers, const std::shared_ptr< AbstractVirtualDevice > & sourceDevice, bool quietly) noexcept;
 
 			/**
 			 * @brief Builds a device id.
@@ -314,23 +364,16 @@ namespace EmEn::AVConsole
 			 * @return std::string
 			 */
 			[[nodiscard]]
-			static std::string buildDeviceId (const std::string & name) noexcept;
+			static
+			std::string
+			buildDeviceId (const std::string & name) noexcept
+			{
+				std::stringstream deviceId;
 
-			/**
-			 * @brief Connects back a connected virtual device.
-			 * @param sourceDevice A reference to a virtual device smart pointer.
-			 * @param quietly Do not fire connexion event. Default false.
-			 * @return bool
-			 */
-			bool connectBack (const std::shared_ptr< AbstractVirtualDevice > & sourceDevice, bool quietly) noexcept;
+				deviceId << name << '_' << s_deviceCount++;
 
-			/**
-			 * @brief Disconnects back a connected virtual device.
-			 * @param sourceDevice A reference to a virtual device smart pointer.
-			 * @param quietly Do not fire disconnection event. Default false.
-			 * @return bool
-			 */
-			bool disconnectBack (const std::shared_ptr< AbstractVirtualDevice > & sourceDevice, bool quietly) noexcept;
+				return deviceId.str();
+			}
 
 			static size_t s_deviceCount;
 

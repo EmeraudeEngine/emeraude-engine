@@ -70,9 +70,6 @@ namespace EmEn::Audio
 	LPALGETAUXILIARYEFFECTSLOTF EFX::alGetAuxiliaryEffectSlotf{nullptr};
 	LPALGETAUXILIARYEFFECTSLOTFV EFX::alGetAuxiliaryEffectSlotfv{nullptr};
 
-	bool EFX::s_isAvailable = false;
-	ALint EFX::s_maxAuxiliarySends = 0;
-
 	EFX::EFX (ALCdevice * device) noexcept
 		: m_device(device)
 	{

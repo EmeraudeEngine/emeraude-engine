@@ -26,10 +26,6 @@
 
 #pragma once
 
-/* STL inclusions. */
-#include <cstdint>
-#include <string>
-
 /* Local inclusions for inheritances. */
 #include "Interface.hpp"
 
@@ -44,37 +40,6 @@ namespace EmEn::Graphics::Renderable
 		public:
 
 			/**
-			 * @brief Copy constructor.
-			 * @param copy A reference to the copied instance.
-			 */
-			SceneAreaInterface (const SceneAreaInterface & copy) noexcept = delete;
-
-			/**
-			 * @brief Move constructor.
-			 * @param copy A reference to the copied instance.
-			 */
-			SceneAreaInterface (SceneAreaInterface && copy) noexcept = delete;
-
-			/**
-			 * @brief Copy assignment.
-			 * @param copy A reference to the copied instance.
-			 * @return SceneAreaInterface &
-			 */
-			SceneAreaInterface & operator= (const SceneAreaInterface & copy) noexcept = delete;
-
-			/**
-			 * @brief Move assignment.
-			 * @param copy A reference to the copied instance.
-			 * @return SceneAreaInterface &
-			 */
-			SceneAreaInterface & operator= (SceneAreaInterface && copy) noexcept = delete;
-
-			/**
-			 * @brief Destructs the abstract scene area.
-			 */
-			~SceneAreaInterface () override = default;
-
-			/**
 			 * @brief Returns the ground level under the given position.
 			 * @param worldPosition An absolute position.
 			 * @return float
@@ -86,11 +51,11 @@ namespace EmEn::Graphics::Renderable
 			 * @brief Returns a position where Y is completed by the level at X,Z position.
 			 * @param positionX The X coordinates.
 			 * @param positionZ The Z coordinates.
-			 * @param deltaY A difference value to add to the height. Default 0.0F.
+			 * @param deltaY A difference value to add to the height.
 			 * @return Vector< 3, float >
 			 */
 			[[nodiscard]]
-			virtual Libs::Math::Vector< 3, float > getLevelAt (float positionX, float positionZ, float deltaY = 0.0F) const noexcept = 0;
+			virtual Libs::Math::Vector< 3, float > getLevelAt (float positionX, float positionZ, float deltaY) const noexcept = 0;
 
 			/**
 			 * @brief Returns the normal vector under the given position.
@@ -103,10 +68,15 @@ namespace EmEn::Graphics::Renderable
 		protected:
 
 			/**
-			 * @brief Constructs a renderable scene area.
-			 * @param name A reference to a string for the resource name.
-			 * @param resourceFlagBits The resource flag bits.
+			 * @brief Constructs a renderable scene area interface.
+			 * @param sceneAreaName A string for the scene area resource name [std::move].
+			 * @param renderableFlags The resource flag bits.
 			 */
-			explicit SceneAreaInterface (const std::string & name, uint32_t resourceFlagBits) noexcept;
+			explicit
+			SceneAreaInterface (std::string sceneAreaName, uint32_t renderableFlags) noexcept
+				: Interface{std::move(sceneAreaName), renderableFlags}
+			{
+
+			}
 	};
 }

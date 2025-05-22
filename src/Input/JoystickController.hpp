@@ -70,15 +70,27 @@ namespace EmEn::Input
 			JoystickController () noexcept = default;
 
 			/** @copydoc EmEn::Input::ControllerInterface::disable() */
-			void disable (bool state) noexcept override;
+			void
+			disable (bool state) noexcept override
+			{
+				m_disabled = state;
+			}
 
 			/** @copydoc EmEn::Input::ControllerInterface::disabled() */
 			[[nodiscard]]
-			bool disabled () const noexcept override;
+			bool
+			disabled () const noexcept override
+			{
+				return m_disabled;
+			}
 
 			/** @copydoc EmEn::Input::ControllerInterface::isConnected() */
 			[[nodiscard]]
-			bool isConnected () const noexcept override;
+			bool
+			isConnected () const noexcept override
+			{
+				return m_deviceID > -1 && m_deviceID <= DeviceCount;
+			}
 
 			/** @copydoc EmEn::Input::ControllerInterface::getRawState() */
 			[[nodiscard]]
@@ -89,7 +101,11 @@ namespace EmEn::Input
 			 * @return int32_t
 			 */
 			[[nodiscard]]
-			int32_t deviceID () const noexcept;
+			int32_t
+			deviceID () const noexcept
+			{
+				return m_deviceID;
+			}
 
 			/**
 			 * @brief Attaches the device identifier.
@@ -109,30 +125,48 @@ namespace EmEn::Input
 			}
 
 			/**
-			 * @brief setAxisThreshold
-			 * @param value
+			 * @brief Sets the axis threshold before it fires events.
+			 * @param value A value.
+			 * @return void
 			 */
-			void setAxisThreshold (float value) noexcept;
+			void
+			setAxisThreshold (float value) noexcept
+			{
+				m_threshold = std::abs(value);
+			}
 
 			/**
-			 * @brief setAxisSensitivity
-			 * @param multiplier
+			 * @brief Sets the axis sensitivity with a multiplier.
+			 * @param multiplier A value.
+			 * @return void
 			 */
-			void setAxisSensitivity (float multiplier) noexcept;
+			void
+			setAxisSensitivity (float multiplier) noexcept
+			{
+				m_multiplier = std::abs(multiplier);
+			}
 
 			/**
-			 * @brief axisThreshold
+			 * @brief Returns the axis threshold.
 			 * @return float
 			 */
 			[[nodiscard]]
-			float axisThreshold () const noexcept;
+			float
+			axisThreshold () const noexcept
+			{
+				return m_threshold;
+			}
 
 			/**
-			 * @brief axisSensitivity
+			 * @brief Returns the axis sensitivity multiplier.
 			 * @return float
 			 */
 			[[nodiscard]]
-			float axisSensitivity () const noexcept;
+			float
+			axisSensitivity () const noexcept
+			{
+				return m_multiplier;
+			}
 
 			/**
 			 * @brief axeValue

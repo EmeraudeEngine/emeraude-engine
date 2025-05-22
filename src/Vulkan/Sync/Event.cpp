@@ -52,25 +52,6 @@ namespace EmEn::Vulkan::Sync
 		}
 	}
 
-	Event::Event (const std::shared_ptr< Device > & device, VkEventCreateFlags createFlags) noexcept
-		: AbstractDeviceDependentObject(device)
-	{
-		m_createInfo.sType = VK_STRUCTURE_TYPE_EVENT_CREATE_INFO;
-		m_createInfo.pNext = nullptr;
-		m_createInfo.flags = createFlags;
-	}
-
-	Event::Event (const std::shared_ptr< Device > & device, const VkEventCreateInfo & createInfo) noexcept
-		: AbstractDeviceDependentObject(device), m_createInfo(createInfo)
-	{
-
-	}
-
-	Event::~Event ()
-	{
-		this->destroyFromHardware();
-	}
-
 	bool
 	Event::createOnHardware () noexcept
 	{

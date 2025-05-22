@@ -26,13 +26,19 @@
 
 #pragma once
 
-/* Project configuration files. */
-#include "platform.hpp"
+/* Emeraude-Engine configuration. */
+#include "emeraude_config.hpp"
 
 /* STL inclusions. */
 #include <cstdint>
 #include <string>
 #include <filesystem>
+
+/* Forward declarations. */
+namespace EmEn
+{
+	class Window;
+}
 
 namespace EmEn::PlatformSpecific::Desktop
 {
@@ -91,10 +97,11 @@ namespace EmEn::PlatformSpecific::Desktop
 
 	/**
 	 * @brief Makes the taskbar icon of the application flashing to alert the user.
+	 * @param window A reference to the window.
 	 * @param state The flashing state.
 	 * @return void
 	 */
-	void flashTaskbarIcon (bool state) noexcept;
+	void flashTaskbarIcon (const Window & window, bool state) noexcept;
 
 	/**
 	 * @brief Sets a progression inside the taskbar icon of the application.

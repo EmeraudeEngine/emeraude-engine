@@ -26,8 +26,8 @@
 
 #include "HTTPRequest.hpp"
 
-/* Application configuration */
-#include "platform.hpp"
+/* Emeraude-Engine configuration. */
+#include "emeraude_config.hpp"
 
 /* Local inclusions. */
 #include "Libs/String.hpp"

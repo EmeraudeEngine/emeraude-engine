@@ -29,7 +29,10 @@
 namespace EmEn::PlatformSpecific::Desktop::Dialog
 {
 	Message::Message (const std::string & title, std::string message, ButtonLayout buttonLayout, MessageType messageType) noexcept
-		: Abstract(title), m_message(std::move(message)), m_buttonLayout(buttonLayout), m_messageType(messageType)
+		: Abstract(title),
+		m_message(std::move(message)),
+		m_buttonLayout(buttonLayout),
+		m_messageType(messageType)
 	{
 
 	}

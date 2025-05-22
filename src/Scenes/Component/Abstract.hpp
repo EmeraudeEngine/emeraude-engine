@@ -41,7 +41,8 @@
 #include "Animations/AnimatableInterface.hpp"
 
 /* Local inclusions for usages. */
-#include "Libs/Math/Cuboid.hpp"
+#include "Libs/Math/Space3D/AACuboid.hpp"
+#include "Libs/Math/Space3D/Sphere.hpp"
 #include "Physics/MovableTrait.hpp"
 
 /* Forward declarations. */
@@ -71,6 +72,7 @@ namespace EmEn::Scenes::Component
 {
 	/**
 	 * @brief Class that hold the base of every component that can be attached to an entity.
+	 * @note [OBS][SHARED-OBSERVABLE]
 	 * @extends EmEn::Libs::NameableTrait Each component is named.
 	 * @extends EmEn::Libs::FlagArrayTrait Each component has 8 flags, 2 are used by this base class.
 	 * @extends EmEn::Libs::ObservableTrait To transfer physical properties changes. FIXME: Observable is kept for future features.
@@ -90,6 +92,9 @@ namespace EmEn::Scenes::Component
 			/** @brief Observable class unique identifier. */
 			static const size_t ClassUID;
 
+			static constexpr Libs::Math::Space3D::AACuboid< float > NullBoundingBox{};
+			static constexpr Libs::Math::Space3D::Sphere< float > NullBoundingSphere{};
+
 			/**
 			 * @brief Copy constructor.
 			 * @param copy A reference to the copied instance.
@@ -105,12 +110,14 @@ namespace EmEn::Scenes::Component
 			/**
 			 * @brief Copy assignment.
 			 * @param copy A reference to the copied instance.
+			 * @return Abstract &
 			 */
 			Abstract & operator= (const Abstract & copy) noexcept = delete;
 
 			/**
 			 * @brief Move assignment.
 			 * @param copy A reference to the copied instance.
+			 * @return Abstract &
 			 */
 			Abstract & operator= (Abstract && copy) noexcept = delete;
 
@@ -189,7 +196,7 @@ namespace EmEn::Scenes::Component
 
 			/**
 			 * @brief Returns to the renderable, if component is visual.
-			 * @warning Can be null !
+			 * @warning Can be a null pointer!
 			 * @return const Graphics::Renderable::Interface *
 			 */
 			[[nodiscard]]
@@ -218,14 +225,14 @@ namespace EmEn::Scenes::Component
 			}
 
 			/**
-			 * @brief Returns the absolute coordinates of this component using parent node.
+			 * @brief Returns the absolute coordinates of this component using the parent node.
 			 * @return Libs::Math::Coordinates< float >
 			 */
 			[[nodiscard]]
 			Libs::Math::CartesianFrame< float > getWorldCoordinates () const noexcept;
 
 			/**
-			 * @brief Returns the absolute velocity of this component using parent node.
+			 * @brief Returns the absolute velocity of this component using the parent node.
 			 * @return Libs::Math::Vector< 3, float >
 			 */
 			[[nodiscard]]
@@ -240,7 +247,7 @@ namespace EmEn::Scenes::Component
 
 			/**
 			 * @brief Returns to the renderable instance, if component is visual.
-			 * @warning Can be null !
+			 * @warning Can be a null pointer!
 			 * @return std::shared_ptr< Graphics::RenderableInstance::Abstract >
 			 */
 			[[nodiscard]]
@@ -252,6 +259,30 @@ namespace EmEn::Scenes::Component
 			}
 
 			/**
+			 * @brief Returns the local bounding box of this component.
+			 * @note Can be invalid. On non-overridden method, this will return a null bounding box.
+			 * @return const Libs::Math::Space3D::AACuboid< float > &
+			 */
+			[[nodiscard]]
+			virtual const Libs::Math::Space3D::AACuboid< float > &
+			boundingBox () const noexcept
+			{
+				return NullBoundingBox;
+			}
+
+			/**
+			 * @brief Returns the local bounding sphere of this component.
+			 * @note Can be invalid. On non-overridden method, this will return a null bounding sphere.
+			 * @return const Libs::Math::Space3D::Sphere< float > &
+			 */
+			[[nodiscard]]
+			virtual const Libs::Math::Space3D::Sphere< float > &
+			boundingSphere () const noexcept
+			{
+				return NullBoundingSphere;
+			}
+
+			/**
 			 * @brief Returns the type of component.
 			 * @return const char *
 			 */
@@ -259,20 +290,12 @@ namespace EmEn::Scenes::Component
 			virtual const char * getComponentType () const noexcept = 0;
 
 			/**
-			 * @brief Returns the local bounding box of this component.
-			 * @note Can be invalid.
-			 * @return const Libs::Math::Cuboid< float > &
+			 * @brief Checks the type of the current component.
+			 * @param classID A C-string.
+			 * @return bool
 			 */
 			[[nodiscard]]
-			virtual const Libs::Math::Cuboid< float > & boundingBox () const noexcept = 0;
-
-			/**
-			 * @brief Returns the local bounding sphere of this component.
-			 * @note Can be invalid.
-			 * @return const Libs::Math::Sphere< float > &
-			 */
-			[[nodiscard]]
-			virtual const Libs::Math::Sphere< float > & boundingSphere () const noexcept = 0;
+			virtual bool isComponent (const char * classID) const noexcept = 0;
 
 			/**
 			 * @brief This method is called when the entity is updated by the core logic every cycle.
@@ -294,10 +317,7 @@ namespace EmEn::Scenes::Component
 			 * @return bool
 			 */
 			[[nodiscard]]
-			virtual bool shouldRemove () const noexcept = 0;
-
-			static const Libs::Math::Cuboid< float > NullBoundingBox;
-			static const Libs::Math::Sphere< float > NullBoundingSphere;
+			virtual bool shouldBeRemoved () const noexcept = 0;
 
 		protected:
 
@@ -307,10 +327,15 @@ namespace EmEn::Scenes::Component
 
 			/**
 			 * @brief Constructs an abstract entity component.
-			 * @param name The name of the component.
+			 * @param name The name of the component [std::move].
 			 * @param parentEntity A reference to the parent entity.
 			 */
-			Abstract (const std::string & name, const AbstractEntity & parentEntity) noexcept;
+			Abstract (std::string name, const AbstractEntity & parentEntity) noexcept
+				: NameableTrait{std::move(name)},
+				m_parentEntity{parentEntity}
+			{
+
+			}
 
 		private:
 

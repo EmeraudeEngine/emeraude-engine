@@ -35,12 +35,6 @@ namespace EmEn::Tool
 {
 	using namespace EmEn::Libs;
 
-	ShowVulkanInformation::ShowVulkanInformation (const Arguments & arguments, const Vulkan::Instance & vulkanInstance) noexcept
-		: m_arguments(arguments), m_vulkanInstance(vulkanInstance)
-	{
-
-	}
-
 	bool
 	ShowVulkanInformation::execute () noexcept
 	{
@@ -64,7 +58,7 @@ namespace EmEn::Tool
 			info << "\n" << "No physical device available !" << "\n";
 		}
 
-		Tracer::instance()->enableTracing(false);
+		Tracer::instance().disableTracer(true);
 
 		return true;
 	}

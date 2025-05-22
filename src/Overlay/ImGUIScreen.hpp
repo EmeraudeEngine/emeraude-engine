@@ -60,10 +60,15 @@ namespace EmEn::Overlay
 
 			/**
 			 * @brief Constructs an ImGUI screen.
-			 * @param name A reference to a string.
+			 * @param name A string [std::move].
 			 * @param drawFunction A reference to a function.
 			 */
-			ImGUIScreen (const std::string & name, const std::function< void () > & drawFunction) noexcept;
+			ImGUIScreen (const std::string & name, const std::function< void () > & drawFunction) noexcept
+				: NameableTrait{std::move(name)},
+				m_drawFunction{drawFunction}
+			{
+
+			}
 
 			/**
 			 * @brief Sets the UI screen visibility.

@@ -29,117 +29,88 @@
 #if IS_LINUX
 
 /* Third-party inclusions. */
-#ifdef GTK3_ENABLED
-	#include <gtk/gtk.h>
-#endif
+#include "portable-file-dialogs.h"
 
 /* Local inclusions. */
 #include "Window.hpp"
 
 namespace EmEn::PlatformSpecific::Desktop::Dialog
 {
-#ifdef GTK3_ENABLED
-	GtkMessageType
+	pfd::icon
 	getMessageType (MessageType messageType) noexcept
 	{
 		switch ( messageType )
 		{
 			case MessageType::Info:
-				return GTK_MESSAGE_INFO;
+				return pfd::icon::info;
 
 			case MessageType::Warning:
-				return GTK_MESSAGE_WARNING;
+				return pfd::icon::warning;
 
 			case MessageType::Error:
-				return GTK_MESSAGE_ERROR;
+				return pfd::icon::error;
 
 			case MessageType::Question:
-				return GTK_MESSAGE_QUESTION;
+				return pfd::icon::question;
 
 			default:
-				return GTK_MESSAGE_OTHER;
+				return pfd::icon::info;
 		}
 	}
 
-	GtkButtonsType
+	pfd::choice
 	getButtonLayout (ButtonLayout buttonLayout) noexcept
 	{
 		switch ( buttonLayout )
 		{
-			case ButtonLayout::OK :
-				return GTK_BUTTONS_OK;
-
 			case ButtonLayout::OKCancel :
-				return GTK_BUTTONS_OK_CANCEL;
+				return pfd::choice::ok_cancel;
 
 			case ButtonLayout::YesNo :
-				return GTK_BUTTONS_YES_NO;
+				return pfd::choice::yes_no;
 
+			case ButtonLayout::OK :
 			case ButtonLayout::Quit :
-				return GTK_BUTTONS_CLOSE;
-
 			case ButtonLayout::NoButton :
-				return GTK_BUTTONS_NONE;
-
 			default:
-				return GTK_BUTTONS_OK;
+				return pfd::choice::ok;
 		}
 	}
 
-	bool
-	Message::execute (Window * window) noexcept
-	{
-		GtkWidget * dialog = gtk_message_dialog_new(
-			window ? window->getGtkWindow() : nullptr,
-			GTK_DIALOG_MODAL,
-			getMessageType(m_messageType),
-			getButtonLayout(m_buttonLayout),
-			"%s",
-			m_message.data()
-		);
-
-		if ( dialog == nullptr )
-		{
-			return false;
-		}
-
-		gtk_window_set_title(GTK_WINDOW(dialog), this->title().data());
-
-		switch ( gtk_dialog_run(GTK_DIALOG(dialog)) )
-		{
-			case GTK_RESPONSE_OK:
-				m_userAnswer = Answer::OK;
-				break;
-
-			case GTK_RESPONSE_CANCEL:
-				m_userAnswer = Answer::Cancel;
-				break;
-
-				case GTK_RESPONSE_YES:
-				m_userAnswer = Answer::Yes;
-				break;
-
-			case GTK_RESPONSE_NO:
-				m_userAnswer = Answer::No;
-				break;
-
-			default:
-				break;
-		}
-
-		gtk_widget_destroy(GTK_WIDGET(dialog));
-
-		return true;
-	}
-#else
 	bool
 	Message::execute (Window * /*window*/) noexcept
 	{
-		std::cerr << "Native GUI disabled !" "\n";
+		auto output = pfd::message{
+			this->title(),
+			m_message,
+			getButtonLayout(m_buttonLayout),
+			getMessageType(m_messageType)
+		};
 
-		return false;
+		switch ( output.result() )
+		{
+			case pfd::button::cancel :
+			case pfd::button::abort :
+			case pfd::button::ignore :
+			case pfd::button::retry :
+				m_userAnswer = Answer::Cancel;
+				break;
+
+			case pfd::button::ok :
+				m_userAnswer = Answer::OK;
+				break;
+
+			case pfd::button::yes :
+				m_userAnswer = Answer::Yes;
+				break;
+
+			case pfd::button::no :
+				m_userAnswer = Answer::No;
+				break;
+		}
+
+		return true;
 	}
-#endif
 }
 
 #endif

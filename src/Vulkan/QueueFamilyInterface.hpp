@@ -116,7 +116,7 @@ namespace EmEn::Vulkan
 			virtual bool declareQueueStructure (const std::vector< std::pair< QueueJob, float > > & structure) noexcept = 0;
 
 			/**
-			 * @brief Returns the create info to build the queue family setup on the device.
+			 * @brief Returns the createInfo to build the queue family setup on the device.
 			 * @param createFlag The flag for queue creation.
 			 * @return void
 			 */

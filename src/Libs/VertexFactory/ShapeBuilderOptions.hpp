@@ -43,10 +43,10 @@ namespace EmEn::Libs::VertexFactory
 {
 	/**
 	 * @brief The shape builder options.
-	 * @tparam float_t The type of floating point number. Default float.
+	 * @tparam vertex_data_t The type of floating point number. Default float.
 	 */
-	template< typename float_t = float >
-	requires (std::is_floating_point_v< float_t >)
+	template< typename vertex_data_t = float >
+	requires (std::is_floating_point_v< vertex_data_t >)
 	class ShapeBuilderOptions final
 	{
 		public:
@@ -130,7 +130,7 @@ namespace EmEn::Libs::VertexFactory
 			 * @return void
 			 */
 			void
-			enableGlobalNormal (const Math::Vector< 3, float_t > & normal) noexcept
+			enableGlobalNormal (const Math::Vector< 3, vertex_data_t > & normal) noexcept
 			{
 				m_flags[NormalsEnabled] = true;
 				m_flags[GlobalNormalEnabled] = true;
@@ -152,10 +152,10 @@ namespace EmEn::Libs::VertexFactory
 
 			/**
 			 * @brief Returns the global vertex color.
-			 * @return const Math::Vector< 3, type_t > &
+			 * @return const Math::Vector< 3, vertex_data_t > &
 			 */
 			[[nodiscard]]
-			const Math::Vector< 3, float_t > &
+			const Math::Vector< 3, vertex_data_t > &
 			globalNormal () const noexcept
 			{
 				return m_globalNormal;
@@ -214,7 +214,7 @@ namespace EmEn::Libs::VertexFactory
 			 * @return void
 			 */
 			void
-			enableGlobalVertexColor (const Math::Vector< 4, float_t > & vertexColor) noexcept
+			enableGlobalVertexColor (const Math::Vector< 4, vertex_data_t > & vertexColor) noexcept
 			{
 				m_flags[TextureCoordinatesEnabled] = true;
 				m_flags[GlobalVertexColorEnabled] = true;
@@ -232,7 +232,7 @@ namespace EmEn::Libs::VertexFactory
 			void
 			enableGlobalVertexColor (const PixelFactory::Color< float > & vertexColor) noexcept
 			{
-				this->enableGlobalVertexColor(vertexColor.toVector4< float_t >());
+				this->enableGlobalVertexColor(vertexColor.toVector4< vertex_data_t >());
 			}
 
 			/**
@@ -248,10 +248,10 @@ namespace EmEn::Libs::VertexFactory
 
 			/**
 			 * @brief Returns the global vertex color.
-			 * @return const Math::Vector< 4, type_t > &
+			 * @return const Math::Vector< 4, vertex_data_t > &
 			 */
 			[[nodiscard]]
-			const Math::Vector< 4, float_t > &
+			const Math::Vector< 4, vertex_data_t > &
 			globalVertexColor () const noexcept
 			{
 				return m_globalVertexColor;
@@ -300,7 +300,7 @@ namespace EmEn::Libs::VertexFactory
 			 * @return void
 			 */
 			void
-			setTextureCoordinatesMultiplier (float_t xMultiplier, float_t yMultiplier = 0, float_t zMultiplier = 0) noexcept
+			setTextureCoordinatesMultiplier (vertex_data_t xMultiplier, vertex_data_t yMultiplier = 0, vertex_data_t zMultiplier = 0) noexcept
 			{
 				m_textureCoordinatesMultiplier[Math::X] = std::abs(xMultiplier);
 				m_textureCoordinatesMultiplier[Math::Y] = Utility::isZero(yMultiplier) ? m_textureCoordinatesMultiplier[Math::X] : std::abs(yMultiplier);
@@ -313,7 +313,7 @@ namespace EmEn::Libs::VertexFactory
 			 * @return void
 			 */
 			void
-			setTextureCoordinatesMultiplier (const Math::Vector< 2, float_t > & multiplier) noexcept
+			setTextureCoordinatesMultiplier (const Math::Vector< 2, vertex_data_t > & multiplier) noexcept
 			{
 				this->setTextureCoordinatesMultiplier(multiplier[Math::X], multiplier[Math::Y]);
 			}
@@ -324,17 +324,17 @@ namespace EmEn::Libs::VertexFactory
 			 * @return void
 			 */
 			void
-			setTextureCoordinatesMultiplier (const Math::Vector< 3, float_t > & multiplier) noexcept
+			setTextureCoordinatesMultiplier (const Math::Vector< 3, vertex_data_t > & multiplier) noexcept
 			{
 				this->setTextureCoordinatesMultiplier(multiplier[Math::X], multiplier[Math::Y], multiplier[Math::Z]);
 			}
 
 			/**
 			 * @brief Returns the texture coordinates multiplier.
-			 * @return const Math::Vector< 3, type_t > &
+			 * @return const Math::Vector< 3, vertex_data_t > &
 			 */
 			[[nodiscard]]
-			const Math::Vector< 3, float_t > &
+			const Math::Vector< 3, vertex_data_t > &
 			textureCoordinatesMultiplier () const noexcept
 			{
 				return m_textureCoordinatesMultiplier;
@@ -498,9 +498,9 @@ namespace EmEn::Libs::VertexFactory
 			static constexpr auto UniformTextureCoordinates{12UL};
 			static constexpr auto FlipGeometry{13UL};
 
-			Math::Vector< 4, float_t > m_globalVertexColor{0.5, 0.5, 0.5, 1.0};
-			Math::Vector< 3, float_t > m_globalNormal{0.0, 0.0, -1.0};
-			Math::Vector< 3, float_t > m_textureCoordinatesMultiplier{1.0, 1.0, 1.0};
+			Math::Vector< 4, vertex_data_t > m_globalVertexColor{0.5, 0.5, 0.5, 1.0};
+			Math::Vector< 3, vertex_data_t > m_globalNormal{0.0, 0.0, -1.0};
+			Math::Vector< 3, vertex_data_t > m_textureCoordinatesMultiplier{1.0, 1.0, 1.0};
 			std::array< bool, 16 > m_flags{
 				false/*NormalsEnabled*/,
 				false/*TextureCoordinatesEnabled*/,

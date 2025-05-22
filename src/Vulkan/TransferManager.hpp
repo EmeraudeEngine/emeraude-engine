@@ -73,60 +73,38 @@ namespace EmEn::Vulkan
 			/** @brief Class identifier. */
 			static constexpr auto ClassId{"VulkanTransferManagerService"};
 
-			/** @brief Observable class unique identifier. */
-			static const size_t ClassUID;
-
 			/**
 			 * @brief Constructs the transfer manager.
 			 * @param type The GPU work type.
 			 */
-			explicit TransferManager (GPUWorkType type) noexcept;
+			explicit
+			TransferManager (GPUWorkType type) noexcept
+				: ServiceInterface{ClassId}
+			{
+				if ( s_instances.at(static_cast< size_t >(type)) != nullptr )
+				{
+					std::cerr << __PRETTY_FUNCTION__ << ", constructor called twice !" "\n";
 
-			/**
-			 * @brief Copy constructor.
-			 * @param copy A reference to the copied instance.
-			 */
-			TransferManager (const TransferManager & copy) noexcept = delete;
+					std::terminate();
+				}
 
-			/**
-			 * @brief Move constructor.
-			 * @param copy A reference to the copied instance.
-			 */
-			TransferManager (TransferManager && copy) noexcept = delete;
-
-			/**
-			 * @brief Copy assignment.
-			 * @param copy A reference to the copied instance.
-			 * @return TransferManager &
-			 */
-			TransferManager & operator= (const TransferManager & copy) noexcept = delete;
-
-			/**
-			 * @brief Move assignment.
-			 * @param copy A reference to the copied instance.
-			 * @return TransferManager &
-			 */
-			TransferManager & operator= (TransferManager && copy) noexcept = delete;
+				s_instances.at(static_cast< size_t >(type)) = this;
+			}
 
 			/**
 			 * @brief Destructs the transfer manager.
 			 */
-			~TransferManager () override;
-
-			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
-			[[nodiscard]]
-			size_t
-			classUID () const noexcept override
+			~TransferManager () override
 			{
-				return ClassUID;
-			}
+				for ( auto & pointer : s_instances )
+				{
+					if ( pointer == this )
+					{
+						pointer = nullptr;
 
-			/** @copydoc EmEn::Libs::ObservableTrait::is() const */
-			[[nodiscard]]
-			bool
-			is (size_t classUID) const noexcept override
-			{
-				return classUID == ClassUID;
+						break;
+					}
+				}
 			}
 
 			/** @copydoc EmEn::ServiceInterface::usable() */
@@ -162,6 +140,7 @@ namespace EmEn::Vulkan
 			 * @brief Returns the command pool.
 			 * @return std::shared_ptr< CommandPool >
 			 */
+			[[nodiscard]]
 			std::shared_ptr< CommandPool >
 			commandPool () const noexcept
 			{
@@ -206,15 +185,17 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Returns the instance of the transfer manager.
+			 * @todo This method must be removed!
 			 * @param type The transfer work type.
 			 * @return TransferManager *
 			 */
+			//[[deprecated("This method must be removed !")]]
 			[[nodiscard]]
 			static
 			TransferManager *
 			instance (GPUWorkType type) noexcept
 			{
-				return s_instances.at(static_cast< size_t >(type));
+				return s_instances.at(static_cast< size_t >(type)); // FIXME: Remove this
 			}
 
 		private:
@@ -234,7 +215,7 @@ namespace EmEn::Vulkan
 			std::shared_ptr< StagingBuffer > createStagingBuffer (size_t bytes) const noexcept;
 
 			/**
-			 * @brief Returns a free staging buffer from previous one or nullptr if no buffer is available.
+			 * @brief Returns a free staging buffer from a previous one or nullptr if no buffer is available.
 			 * @param bytes The size in bytes of the buffer.
 			 * @return std::shared_ptr< StagingBuffer >
 			 */

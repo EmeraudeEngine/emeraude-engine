@@ -43,6 +43,7 @@ namespace EmEn::Scenes::Component
 {
 	/**
 	 * @brief Defines a renderable instance suitable for the scene node tree.
+	 * @note [OBS][SHARED-OBSERVER]
 	 * @extends EmEn::Scenes::Component::Abstract The base class for each entity component.
 	 * @extends EmEn::Libs::ObserverTrait This class must dispatch modifications from renderable instance to the entity.
 	 */
@@ -55,12 +56,18 @@ namespace EmEn::Scenes::Component
 
 			/**
 			 * @brief Constructs a multiple visuals component.
-			 * @param name The name of the renderable instance.
+			 * @param name The name of the renderable instance [std::move].
 			 * @param parentEntity A reference to the parent entity.
 			 * @param renderable A reference to a renderable smart pointer.
-			 * @param coordinates A list of sub-coordinates.
+			 * @param coordinates A list of sub-coordinates [std::move].
 			 */
-			MultipleVisuals (const std::string & name, const AbstractEntity & parentEntity, const std::shared_ptr< Graphics::Renderable::Interface > & renderable, const std::vector< Libs::Math::CartesianFrame< float > > & coordinates) noexcept;
+			MultipleVisuals (std::string name, const AbstractEntity & parentEntity, const std::shared_ptr< Graphics::Renderable::Interface > & renderable, std::vector< Libs::Math::CartesianFrame< float > > coordinates) noexcept
+				: Abstract{std::move(name), parentEntity},
+				m_renderableInstance{std::make_shared< Graphics::RenderableInstance::Multiple >(renderable, coordinates, renderable->isSprite() ? Graphics::RenderableInstance::FacingCamera : Graphics::RenderableInstance::None)},
+				m_coordinates{std::move(coordinates)}
+			{
+				this->observe(m_renderableInstance.get());
+			}
 
 			/** @copydoc EmEn::Scenes::Component::Abstract::getRenderableInstance() const */
 			[[nodiscard]]
@@ -78,20 +85,28 @@ namespace EmEn::Scenes::Component
 				return ClassId;
 			}
 
+			/** @copydoc EmEn::Scenes::Component::Abstract::isComponent() */
+			[[nodiscard]]
+			bool
+			isComponent (const char * classID) const noexcept override
+			{
+				return strcmp(ClassId, classID) == 0;
+			}
+
 			/** @copydoc EmEn::Scenes::Component::Abstract::boundingBox() const */
 			[[nodiscard]]
-			const Libs::Math::Cuboid< float > &
+			const Libs::Math::Space3D::AACuboid< float > &
 			boundingBox () const noexcept override
 			{
-				return NullBoundingBox;
+				return m_renderableInstance->renderable()->boundingBox();
 			}
 
 			/** @copydoc EmEn::Scenes::Component::Abstract::boundingSphere() const */
 			[[nodiscard]]
-			const Libs::Math::Sphere< float > &
+			const Libs::Math::Space3D::Sphere< float > &
 			boundingSphere () const noexcept override
 			{
-				return NullBoundingSphere;
+				return m_renderableInstance->renderable()->boundingSphere();
 			}
 
 			/** @copydoc EmEn::Scenes::Component::Abstract::move() */
@@ -100,8 +115,13 @@ namespace EmEn::Scenes::Component
 			/** @copydoc EmEn::Scenes::Component::Abstract::processLogics() */
 			void processLogics (const Scene & scene) noexcept override;
 
-			/** @copydoc EmEn::Scenes::Component::Abstract::shouldRemove() */
-			bool shouldRemove () const noexcept override;
+			/** @copydoc EmEn::Scenes::Component::Abstract::shouldBeRemoved() */
+			[[nodiscard]]
+			bool
+			shouldBeRemoved () const noexcept override
+			{
+				return m_renderableInstance->isBroken();
+			}
 
 		private:
 

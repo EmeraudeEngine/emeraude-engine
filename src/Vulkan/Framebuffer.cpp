@@ -36,39 +36,6 @@ namespace EmEn::Vulkan
 {
 	using namespace EmEn::Libs;
 
-	Framebuffer::Framebuffer (const std::shared_ptr< const RenderPass > & renderPass, const VkExtent2D & extent, uint32_t layerCount, VkFramebufferCreateFlags createFlags) noexcept
-		: AbstractDeviceDependentObject(renderPass->device()), m_renderPass(renderPass)
-	{
-		m_createInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-		m_createInfo.pNext = nullptr;
-		m_createInfo.flags = createFlags;
-		m_createInfo.renderPass = VK_NULL_HANDLE;
-		m_createInfo.attachmentCount = 0;
-		m_createInfo.pAttachments = nullptr;
-		m_createInfo.width = extent.width;
-		m_createInfo.height = extent.height;
-		m_createInfo.layers = layerCount;
-
-		m_attachments.reserve(3);
-	}
-
-	Framebuffer::Framebuffer (const std::shared_ptr< const RenderPass > & renderPass, const VkExtent3D & extent, VkFramebufferCreateFlags createFlags) noexcept
-		: Framebuffer(renderPass, VkExtent2D{extent.width, extent.height}, extent.depth, createFlags)
-	{
-
-	}
-
-	Framebuffer::Framebuffer (const std::shared_ptr< const RenderPass > & renderPass, const VkFramebufferCreateInfo & createInfo) noexcept
-		: AbstractDeviceDependentObject(renderPass->device()), m_createInfo(createInfo), m_renderPass(renderPass)
-	{
-
-	}
-
-	Framebuffer::~Framebuffer ()
-	{
-		this->destroyFromHardware();
-	}
-
 	bool
 	Framebuffer::createOnHardware () noexcept
 	{

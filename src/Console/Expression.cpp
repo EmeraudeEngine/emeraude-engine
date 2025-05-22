@@ -230,14 +230,4 @@ namespace EmEn::Console
 
 		return out;
 	}
-
-	std::string
-	to_string (const Expression & obj) noexcept
-	{
-		std::stringstream output;
-
-		output << obj;
-
-		return output.str();
-	}
 }

@@ -34,8 +34,9 @@
 #include <type_traits>
 
 /* Local inclusions. */
-#include "Libs/Math/Circle.hpp"
-#include "Libs/Math/Segment.hpp"
+#include "Libs/Math/Space2D/Intersections/LineLine.hpp"
+#include "Libs/Math/Space2D/Segment.hpp"
+#include "Libs/Math/Space2D/Circle.hpp"
 #include "Pixmap.hpp"
 
 namespace EmEn::Libs::PixelFactory
@@ -169,12 +170,12 @@ namespace EmEn::Libs::PixelFactory
 					return false;
 				}
 
-				if ( !this->clampSegmentPoint(pointA, pointB) )
+				if ( !this->clampSegmentFirstPoint(pointA, pointB) )
 				{
 					return false;
 				}
 
-				if ( !this->clampSegmentPoint(pointB, pointA) )
+				if ( !this->clampSegmentFirstPoint(pointB, pointA) )
 				{
 					return false;
 				}
@@ -233,7 +234,7 @@ namespace EmEn::Libs::PixelFactory
 			 */
 			template< typename segment_data_t = int32_t, typename color_data_t = float >
 			bool
-			drawSegment (const Math::Segment< segment_data_t > & segment, const Color< color_data_t > & color, DrawPixelMode mode = DrawPixelMode::Replace) noexcept requires (std::is_floating_point_v< segment_data_t >)
+			drawSegment (const Math::Space2D::Segment< segment_data_t > & segment, const Color< color_data_t > & color, DrawPixelMode mode = DrawPixelMode::Replace) noexcept requires (std::is_floating_point_v< segment_data_t >)
 			{
 				return this->drawSegment(segment.start(), segment.end(), color, mode);
 			}
@@ -316,7 +317,7 @@ namespace EmEn::Libs::PixelFactory
 			 */
 			template< typename color_data_t = float >
 			bool
-			drawCircle (const Math::Circle< float > & circle, const Color< color_data_t > & color, DrawPixelMode mode = DrawPixelMode::Replace) noexcept requires (std::is_floating_point_v< color_data_t >)
+			drawCircle (const Math::Space2D::Circle< float > & circle, const Color< color_data_t > & color, DrawPixelMode mode = DrawPixelMode::Replace) noexcept requires (std::is_floating_point_v< color_data_t >)
 			{
 				return this->drawCircle(circle.position(), static_cast< size_t >(circle.radius()), color, mode);
 			}
@@ -331,7 +332,7 @@ namespace EmEn::Libs::PixelFactory
 			 */
 			template< typename color_data_t = float >
 			bool
-			drawSquare (const Math::Rectangle< int32_t > & rectangle, const Color< color_data_t > & color, DrawPixelMode mode = DrawPixelMode::Replace) noexcept requires (std::is_floating_point_v< color_data_t >)
+			drawSquare (const Math::Space2D::AARectangle< int32_t > & rectangle, const Color< color_data_t > & color, DrawPixelMode mode = DrawPixelMode::Replace) noexcept requires (std::is_floating_point_v< color_data_t >)
 			{
 				if ( !this->checkPixmapClipping(m_target, rectangle) )
 				{
@@ -356,7 +357,7 @@ namespace EmEn::Libs::PixelFactory
 			 */
 			template< typename color_data_t = float >
 			bool
-			drawCross (const Math::Rectangle< int32_t > & rectangle, const Color< color_data_t > & color, DrawPixelMode mode = DrawPixelMode::Replace) noexcept requires (std::is_floating_point_v< color_data_t >)
+			drawCross (const Math::Space2D::AARectangle< int32_t > & rectangle, const Color< color_data_t > & color, DrawPixelMode mode = DrawPixelMode::Replace) noexcept requires (std::is_floating_point_v< color_data_t >)
 			{
 				if ( !this->checkPixmapClipping(m_target, rectangle) )
 				{
@@ -379,7 +380,7 @@ namespace EmEn::Libs::PixelFactory
 			 */
 			template< typename color_data_t = float >
 			bool
-			drawStraightCross (const Math::Rectangle< int32_t > & rectangle, const Color< color_data_t > & color, DrawPixelMode mode = DrawPixelMode::Replace) noexcept requires (std::is_floating_point_v< color_data_t >)
+			drawStraightCross (const Math::Space2D::AARectangle< int32_t > & rectangle, const Color< color_data_t > & color, DrawPixelMode mode = DrawPixelMode::Replace) noexcept requires (std::is_floating_point_v< color_data_t >)
 			{
 				if ( !this->checkPixmapClipping(m_target, rectangle) )
 				{
@@ -603,7 +604,7 @@ namespace EmEn::Libs::PixelFactory
 			 * @return bool
 			 */
 			bool
-			blit (const Pixmap< pixel_data_t, dimension_t > & source, const Math::Rectangle< dimension_t > & sourceClip, const Math::Rectangle< dimension_t > & destinationClip) const noexcept
+			blit (const Pixmap< pixel_data_t, dimension_t > & source, const Math::Space2D::AARectangle< dimension_t > & sourceClip, const Math::Space2D::AARectangle< dimension_t > & destinationClip) const noexcept
 			{
 				if ( !Processor::checkPixmapClipping(source, sourceClip) && !Processor::checkPixmapClipping(m_target, destinationClip) )
 				{
@@ -652,7 +653,7 @@ namespace EmEn::Libs::PixelFactory
 			 * @return bool
 			 */
 			bool
-			blit (const Pixmap< pixel_data_t, dimension_t > & source, const Math::Rectangle< dimension_t > & destinationClip) const noexcept
+			blit (const Pixmap< pixel_data_t, dimension_t > & source, const Math::Space2D::AARectangle< dimension_t > & destinationClip) const noexcept
 			{
 				return this->blit(source, {source.width(), source.height()}, destinationClip);
 			}
@@ -666,13 +667,14 @@ namespace EmEn::Libs::PixelFactory
 			 * @return bool
 			 */
 			bool
-			blit (const RawPixmapData< pixel_data_t > & rawData, const Math::Rectangle< dimension_t > & sourceClip, const Math::Rectangle< dimension_t > & destinationClip) const noexcept
+			blit (const RawPixmapData< pixel_data_t > & rawData, const Math::Space2D::AARectangle< dimension_t > & sourceClip, const Math::Space2D::AARectangle< dimension_t > & destinationClip) const noexcept
 			{
 				if ( sourceClip.isOutside(rawData.width, rawData.height) )
 				{
-#ifdef DEBUG
-					std::cerr << "The clipping area is outside the pixmap !" "\n";
-#endif
+					if constexpr ( IsDebug )
+					{
+						std::cerr << "The clipping area is outside the pixmap !" "\n";
+					}
 
 					return false;
 				}
@@ -712,7 +714,7 @@ namespace EmEn::Libs::PixelFactory
 			 * @return bool
 			 */
 			bool
-			blit (const RawPixmapData< pixel_data_t > & rawData, const Math::Rectangle< dimension_t > & clip) const noexcept
+			blit (const RawPixmapData< pixel_data_t > & rawData, const Math::Space2D::AARectangle< dimension_t > & clip) const noexcept
 			{
 				return this->blit(rawData, clip, clip);
 			}
@@ -727,7 +729,7 @@ namespace EmEn::Libs::PixelFactory
 			 * @return bool
 			 */
 			bool
-			copy (const Pixmap< pixel_data_t, dimension_t > & source, Math::Rectangle< dimension_t > sourceClip, Math::Rectangle< dimension_t > destinationClip, DrawPixelMode mode = DrawPixelMode::Replace, float opacity = 1.0F) const noexcept
+			copy (const Pixmap< pixel_data_t, dimension_t > & source, Math::Space2D::AARectangle< dimension_t > sourceClip, Math::Space2D::AARectangle< dimension_t > destinationClip, DrawPixelMode mode = DrawPixelMode::Replace, float opacity = 1.0F) const noexcept
 			{
 				/* NOTE: Check if we can replace the copy operation with a blit operation (much faster). */
 				if (
@@ -790,7 +792,7 @@ namespace EmEn::Libs::PixelFactory
 			 * @return bool
 			 */
 			bool
-			copy (const Pixmap< pixel_data_t, dimension_t > & source, const Math::Rectangle< dimension_t > & destinationClip, DrawPixelMode mode = DrawPixelMode::Replace, float opacity = 1.0F) const noexcept
+			copy (const Pixmap< pixel_data_t, dimension_t > & source, const Math::Space2D::AARectangle< dimension_t > & destinationClip, DrawPixelMode mode = DrawPixelMode::Replace, float opacity = 1.0F) const noexcept
 			{
 				return this->copy(source, source.area(), destinationClip, mode, opacity);
 			}
@@ -808,8 +810,8 @@ namespace EmEn::Libs::PixelFactory
 			bool
 			copy (const Pixmap< pixel_data_t, dimension_t > & source, int32_t xPosition, int32_t yPosition, DrawPixelMode mode = DrawPixelMode::Replace, float opacity = 1.0F) const noexcept
 			{
-				Math::Rectangle< dimension_t > sourceClip;
-				Math::Rectangle< dimension_t > destinationClip;
+				Math::Space2D::AARectangle< dimension_t > sourceClip;
+				Math::Space2D::AARectangle< dimension_t > destinationClip;
 
 				if ( xPosition < 0 )
 				{
@@ -817,9 +819,10 @@ namespace EmEn::Libs::PixelFactory
 
 					if ( shiftSize >= source.width() )
 					{
-#ifdef DEBUG
-						std::cerr << "The source pixmap do not lie in target pixmap on X axis !" "\n";
-#endif
+						if constexpr ( IsDebug )
+						{
+							std::cerr << "The source pixmap do not lie in target pixmap on X axis !" "\n";
+						}
 
 						return false;
 					}
@@ -845,9 +848,10 @@ namespace EmEn::Libs::PixelFactory
 
 					if ( shiftSize >= source.height() )
 					{
-#ifdef DEBUG
-						std::cerr << "The source pixmap do not lie in target pixmap on Y axis !" "\n";
-#endif
+						if constexpr ( IsDebug )
+						{
+							std::cerr << "The source pixmap do not lie in target pixmap on Y axis !" "\n";
+						}
 
 						return false;
 					}
@@ -896,18 +900,18 @@ namespace EmEn::Libs::PixelFactory
 			 */
 			template< typename color_data_t = float >
 			bool
-			copy (const Color< color_data_t > & color, const Math::Rectangle< dimension_t > & clip, DrawPixelMode mode = DrawPixelMode::Replace, float opacity = 1.0F) const noexcept
+			copy (const Color< color_data_t > & color, const Math::Space2D::AARectangle< dimension_t > & clip, DrawPixelMode mode = DrawPixelMode::Replace, float opacity = 1.0F) const noexcept
 			{
 				if ( !Processor::checkPixmapClipping(m_target, clip) )
 				{
 					return false;
 				}
 
-				for ( size_t y = 0; y < clip.height(); y++ )
+				for ( dimension_t y = 0; y < clip.height(); ++y )
 				{
 					const auto destinationY = clip.top() + y;
 
-					for ( size_t x = 0; x < clip.width(); x++ )
+					for ( dimension_t x = 0; x < clip.width(); ++x )
 					{
 						const auto destinationX = clip.left() + x;
 
@@ -932,9 +936,9 @@ namespace EmEn::Libs::PixelFactory
 			 * @return bool
 			 */
 			bool
-			stencil (const Pixmap< pixel_data_t, dimension_t > & source, Math::Rectangle< dimension_t > sourceClip, Math::Rectangle< dimension_t > destinationClip, const Pixmap< pixel_data_t, dimension_t > & mask, DrawPixelMode mode = DrawPixelMode::Replace) const noexcept
+			stencil (const Pixmap< pixel_data_t, dimension_t > & source, Math::Space2D::AARectangle< dimension_t > sourceClip, Math::Space2D::AARectangle< dimension_t > destinationClip, const Pixmap< pixel_data_t, dimension_t > & mask, DrawPixelMode mode = DrawPixelMode::Replace) const noexcept
 			{
-				if ( !mask.isValid() || !mask.isGrayScale() || !Processor::checkPixmapClipping(source, sourceClip) && !Processor::checkPixmapClipping(m_target, destinationClip) )
+				if ( !mask.isValid() || !mask.isGrayScale() || (!Processor::checkPixmapClipping(source, sourceClip) && !Processor::checkPixmapClipping(m_target, destinationClip)) )
 				{
 					return false;
 				}
@@ -970,7 +974,7 @@ namespace EmEn::Libs::PixelFactory
 			 * @return bool
 			 */
 			bool
-			stencil (const Pixmap< pixel_data_t, dimension_t > & source, const Math::Rectangle< dimension_t > & clip, const Pixmap< pixel_data_t, dimension_t > & mask, DrawPixelMode mode = DrawPixelMode::Replace, float opacity = 1.0F) const noexcept
+			stencil (const Pixmap< pixel_data_t, dimension_t > & source, const Math::Space2D::AARectangle< dimension_t > & clip, const Pixmap< pixel_data_t, dimension_t > & mask, DrawPixelMode mode = DrawPixelMode::Replace, float opacity = 1.0F) const noexcept
 			{
 				return this->stencil(source, {source.width(), source.height()}, clip, mask, mode, opacity);
 			}
@@ -987,7 +991,7 @@ namespace EmEn::Libs::PixelFactory
 			 */
 			template< typename color_data_t = float >
 			bool
-			stencil (const Color< color_data_t > & color, const Math::Rectangle< dimension_t > & clip, const Pixmap< pixel_data_t, dimension_t > & mask, DrawPixelMode mode = DrawPixelMode::Replace, float opacity = 1.0F) const noexcept
+			stencil (const Color< color_data_t > & /*color*/, const Math::Space2D::AARectangle< dimension_t > & /*clip*/, const Pixmap< pixel_data_t, dimension_t > & /*mask*/, DrawPixelMode /*mode = DrawPixelMode::Replace*/, float /*opacity = 1.0F*/) const noexcept
 			{
 				// TODO ...
 
@@ -1123,7 +1127,7 @@ namespace EmEn::Libs::PixelFactory
 			[[nodiscard]]
 			static
 			bool
-			crop (const Pixmap< pixel_data_t, dimension_t > & source, const Math::Rectangle< dimension_t > & rectangle, Pixmap< pixel_data_t, dimension_t > & destination) noexcept
+			crop (const Pixmap< pixel_data_t, dimension_t > & source, const Math::Space2D::AARectangle< dimension_t > & rectangle, Pixmap< pixel_data_t, dimension_t > & destination) noexcept
 			{
 				if ( !source.isValid() || !rectangle.isValid() || !rectangle.isIntersect(source.width(), source.height()) )
 				{
@@ -1159,7 +1163,7 @@ namespace EmEn::Libs::PixelFactory
 			[[nodiscard]]
 			static
 			Pixmap< pixel_data_t, dimension_t >
-			crop (const Pixmap< pixel_data_t, dimension_t > & source, const Math::Rectangle< dimension_t > & rectangle) noexcept
+			crop (const Pixmap< pixel_data_t, dimension_t > & source, const Math::Space2D::AARectangle< dimension_t > & rectangle) noexcept
 			{
 				Pixmap< pixel_data_t, dimension_t > output;
 
@@ -2143,31 +2147,34 @@ namespace EmEn::Libs::PixelFactory
 			[[nodiscard]]
 			static
 			bool
-			checkPixmapClipping (const Pixmap< pixel_data_t, dimension_t > & pixmap, const Math::Rectangle< rectangle_data_t > & clip) noexcept
+			checkPixmapClipping (const Pixmap< pixel_data_t, dimension_t > & pixmap, const Math::Space2D::AARectangle< rectangle_data_t > & clip) noexcept
 			{
 				if ( !pixmap.isValid() )
 				{
-#ifdef DEBUG
-					std::cerr << "Target pixmap is invalid !" "\n";
-#endif
+					if constexpr ( IsDebug )
+					{
+						std::cerr << "Target pixmap is invalid !" "\n";
+					}
 
 					return false;
 				}
 
 				if ( !clip.isValid() )
 				{
-#ifdef DEBUG
-					std::cerr << "The clipping area is invalid !" "\n";
-#endif
+					if constexpr ( IsDebug )
+					{
+						std::cerr << "The clipping area is invalid !" "\n";
+					}
 
 					return false;
 				}
 
 				if ( clip.isOutside(pixmap.width(), pixmap.height()) )
 				{
-#ifdef DEBUG
-					std::cerr << "The clipping area is outside the pixmap !" "\n";
-#endif
+					if constexpr ( IsDebug )
+					{
+						std::cerr << "The clipping area is outside the pixmap !" "\n";
+					}
 
 					return false;
 				}
@@ -2186,31 +2193,34 @@ namespace EmEn::Libs::PixelFactory
 			[[nodiscard]]
 			static
 			bool
-			checkPixmapClipping (const Pixmap< pixel_data_t, dimension_t > & pixmap, Math::Rectangle< rectangle_data_t > & clip) noexcept
+			checkPixmapClipping (const Pixmap< pixel_data_t, dimension_t > & pixmap, Math::Space2D::AARectangle< rectangle_data_t > & clip) noexcept
 			{
 				if ( !pixmap.isValid() )
 				{
-#ifdef DEBUG
-					std::cerr << "Target pixmap is invalid !" "\n";
-#endif
+					if constexpr ( IsDebug )
+					{
+						std::cerr << "Target pixmap is invalid !" "\n";
+					}
 
 					return false;
 				}
 
 				if ( !clip.isValid() )
 				{
-#ifdef DEBUG
-					std::cerr << "The clipping area is invalid !" "\n";
-#endif
+					if constexpr ( IsDebug )
+					{
+						std::cerr << "The clipping area is invalid !" "\n";
+					}
 
 					return false;
 				}
 
 				if ( clip.isOutside(pixmap.width(), pixmap.height()) )
 				{
-#ifdef DEBUG
-					std::cerr << "The clipping area is outside the pixmap !" "\n";
-#endif
+					if constexpr ( IsDebug )
+					{
+						std::cerr << "The clipping area is outside the pixmap !" "\n";
+					}
 
 					return false;
 				}
@@ -2221,94 +2231,117 @@ namespace EmEn::Libs::PixelFactory
 			}
 
 			/**
-			 * @brief Clamps the segment to the pixmap boundaries.
+			 * @brief Clamps the first point of a segment into the pixmap boundaries.
+			 * @todo This method can be simplified by using findIntersection() using segments instead of lines.
 			 * @param pointA A reference to the first point of the segment.
 			 * @param pointB A reference to the second point of the segment.
 			 * @return bool
 			 */
 			bool
-			clampSegmentPoint (Math::Vector< 2, int32_t > & pointA, const Math::Vector< 2, int32_t > & pointB) const noexcept
+			clampSegmentFirstPoint (Math::Vector< 2, int32_t > & pointA, const Math::Vector< 2, int32_t > & pointB) const noexcept
 			{
 				const auto width = static_cast< int32_t >(m_target.width());
 				const auto height = static_cast< int32_t >(m_target.height());
 
+				/* NOTE: If the first point is outside the pixmap from left side or bottom. */
 				if ( pointA[Math::X] < 0 || pointA[Math::Y] < 0 )
 				{
-					auto intersection = Math::Segment< float >::findIntersection(
+					Math::Vector< 2, float > intersectionPoint;
+
+					auto intersect = Math::Space2D::isIntersecting(
 						0.0F, 0.0F,
 						0.0F, height - 1.0F,
 						static_cast< float >(pointA[Math::X]), static_cast< float >(pointA[Math::Y]),
-						static_cast< float >(pointB[Math::X]), static_cast< float >(pointB[Math::Y])
+						static_cast< float >(pointB[Math::X]), static_cast< float >(pointB[Math::Y]),
+						intersectionPoint
 					);
 
-					auto x = static_cast< int32_t >(std::roundf(intersection[Math::X]));
-					auto y = static_cast< int32_t >(std::roundf(intersection[Math::Y]));
-
-					if ( x >= 0 && y >= 0 && x < width && y < height )
+					if ( intersect )
 					{
-						pointA[Math::X] = x;
-						pointA[Math::Y] = y;
+						const auto x = static_cast< int32_t >(std::roundf(intersectionPoint[Math::X]));
+						const auto y = static_cast< int32_t >(std::roundf(intersectionPoint[Math::Y]));
 
-						return true;
+						if ( x >= 0 && y >= 0 && x < width && y < height )
+						{
+							pointA[Math::X] = x;
+							pointA[Math::Y] = y;
+
+							return true;
+						}
 					}
 
-					intersection = Math::Segment< float >::findIntersection(
+					intersect = Math::Space2D::isIntersecting(
 						0.0F, 0.0F,
 						width - 1.0F, 0.0F,
 						static_cast< float >(pointA[Math::X]), static_cast< float >(pointA[Math::Y]),
-						static_cast< float >(pointB[Math::X]), static_cast< float >(pointB[Math::Y])
+						static_cast< float >(pointB[Math::X]), static_cast< float >(pointB[Math::Y]),
+						intersectionPoint
 					);
 
-					x = static_cast< int32_t >(std::roundf(intersection[Math::X]));
-					y = static_cast< int32_t >(std::roundf(intersection[Math::Y]));
-
-					if ( x >= 0 && y >= 0 && x < width && y < height )
+					if ( intersect )
 					{
-						pointA[Math::X] = x;
-						pointA[Math::Y] = y;
+						const auto x = static_cast< int32_t >(std::roundf(intersectionPoint[Math::X]));
+						const auto y = static_cast< int32_t >(std::roundf(intersectionPoint[Math::Y]));
 
-						return true;
+						if ( x >= 0 && y >= 0 && x < width && y < height )
+						{
+							pointA[Math::X] = x;
+							pointA[Math::Y] = y;
+
+							return true;
+						}
 					}
 
 					return false;
 				}
 
+				/* NOTE: If the first point is outside the pixmap from right side or top. */
 				if ( pointA[Math::X] > width || pointA[Math::Y] > height )
 				{
-					auto intersection = Math::Segment< float >::findIntersection(
+					Math::Vector< 2, float > intersectionPoint;
+
+					auto intersect = Math::Space2D::isIntersecting(
 						0.0F, height - 1.0F,
 						width - 1.0F, height - 1.0F,
 						static_cast< float >(pointA[Math::X]), static_cast< float >(pointA[Math::Y]),
-						static_cast< float >(pointB[Math::X]), static_cast< float >(pointB[Math::Y])
+						static_cast< float >(pointB[Math::X]), static_cast< float >(pointB[Math::Y]),
+						intersectionPoint
 					);
 
-					auto x = static_cast< int32_t >(std::roundf(intersection[Math::X]));
-					auto y = static_cast< int32_t >(std::roundf(intersection[Math::Y]));
-
-					if ( x >= 0 && y >= 0 && x < width && y < height )
+					if ( intersect )
 					{
-						pointA[Math::X] = x;
-						pointA[Math::Y] = y;
+						const auto x = static_cast< int32_t >(std::roundf(intersectionPoint[Math::X]));
+						const auto y = static_cast< int32_t >(std::roundf(intersectionPoint[Math::Y]));
 
-						return true;
+						if ( x >= 0 && y >= 0 && x < width && y < height )
+						{
+							pointA[Math::X] = x;
+							pointA[Math::Y] = y;
+
+							return true;
+						}
 					}
 
-					intersection = Math::Segment< float >::findIntersection(
+					intersect = Math::Space2D::isIntersecting(
 						width - 1.0F, 0.0F,
 						width - 1.0F, height - 1.0F,
 						static_cast< float >(pointA[Math::X]), static_cast< float >(pointA[Math::Y]),
-						static_cast< float >(pointB[Math::X]), static_cast< float >(pointB[Math::Y])
+						static_cast< float >(pointB[Math::X]), static_cast< float >(pointB[Math::Y]),
+						intersectionPoint
 					);
 
-					x = static_cast< int32_t >(std::roundf(intersection[Math::X]));
-					y = static_cast< int32_t >(std::roundf(intersection[Math::Y]));
-
-					if ( x >= 0 && y >= 0 && x < width && y < height )
+					if ( intersect )
 					{
-						pointA[Math::X] = x;
-						pointA[Math::Y] = y;
+						const auto x = static_cast< int32_t >(std::roundf(intersectionPoint[Math::X]));
+						const auto y = static_cast< int32_t >(std::roundf(intersectionPoint[Math::Y]));
 
-						return true;
+						if ( x >= 0 && y >= 0 && x < width && y < height )
+						{
+							pointA[Math::X] = x;
+							pointA[Math::Y] = y;
+
+							return true;
+						}
 					}
 
 					return false;
@@ -2542,7 +2575,7 @@ namespace EmEn::Libs::PixelFactory
 				const auto xRatio = static_cast< float >(source.width() - 1) / static_cast< float >(width);
 				const auto yRatio = static_cast< float >(source.height() - 1) / static_cast< float >(height);
 
-				const auto & sourceData = source.data();
+				//const auto & sourceData = source.data();
 				auto & targetData = target.data();
 
 				size_t dstIndex = 0;
@@ -2561,7 +2594,7 @@ namespace EmEn::Libs::PixelFactory
 
 						std::array< float, 4 > interpolatedValues{0.0F, 0.0F, 0.0F, 0.0F};
 
-						const auto numChannels = static_cast< size_t >(source.colorCount());
+						const auto numChannels = static_cast< size_t >(colorCount);
 
 						for ( size_t channel = 0; channel < numChannels; ++channel )
 						{

@@ -38,13 +38,7 @@
 
 namespace EmEn::Overlay
 {
-	using namespace Vulkan;
-
-	ImGUIScreen::ImGUIScreen (const std::string & name, const std::function< void () > & drawFunction) noexcept
-		: NameableTrait(name), m_drawFunction(drawFunction)
-	{
-
-	}
+	using namespace EmEn::Vulkan;
 
 	void
 	ImGUIScreen::render (const CommandBuffer & commandBuffer) const noexcept

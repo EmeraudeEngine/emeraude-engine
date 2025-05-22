@@ -47,7 +47,7 @@ namespace EmEn::Graphics::Material
 	using namespace EmEn::Saphir;
 	using namespace EmEn::Saphir::Keys;
 
-	static constexpr auto TracerTag{"MaterialHelpers"};
+	constexpr auto TracerTag{"MaterialHelpers"};
 
 	bool
 	checkPrimaryTextureCoordinates (Generator::Abstract & generator, VertexShader & vertexShader, const Interface & material, const Geometry::Interface & geometry) noexcept

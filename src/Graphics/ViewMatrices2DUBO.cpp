@@ -39,7 +39,7 @@ namespace EmEn::Graphics
 {
 	using namespace EmEn::Libs;
 	using namespace EmEn::Libs::Math;
-	using namespace Vulkan;
+	using namespace EmEn::Vulkan;
 
 	void
 	ViewMatrices2DUBO::updatePerspectiveViewProperties (float width, float height, float distance, float fov) noexcept
@@ -69,15 +69,18 @@ namespace EmEn::Graphics
 
 		std::memcpy(&m_bufferData[ProjectionMatrixOffset], m_projection.data(), Matrix4Alignment * sizeof(float));
 
-		this->updateVideoMemory();
+		if ( !this->updateVideoMemory() )
+		{
+			Tracer::error(ClassId, "Unable to update video memory !");
+		}
 	}
 
 	void
-	ViewMatrices2DUBO::updateOrthographicViewProperties (float width, float height, float distance, float near) noexcept
+	ViewMatrices2DUBO::updateOrthographicViewProperties (float width, float height, float farDistance, float nearDistance) noexcept
 	{
 		if ( width * height <= 0.0 )
 		{
-			TraceError{ClassId} << "The view size is invalid ! Width: " << width << ", height: " << height << ", distance: " << distance << ", near: " << near;
+			TraceError{ClassId} << "The view size is invalid ! Width: " << width << ", height: " << height << ", farDistance: " << farDistance << ", nearDistance: " << nearDistance;
 
 			return;
 		}
@@ -86,8 +89,8 @@ namespace EmEn::Graphics
 
 		m_bufferData[ViewWidthOffset] = width;
 		m_bufferData[ViewHeightOffset] = height;
-		m_bufferData[ViewNearOffset] = near;
-		m_bufferData[ViewDistanceOffset] = distance;
+		m_bufferData[ViewNearOffset] = nearDistance;
+		m_bufferData[ViewDistanceOffset] = farDistance;
 
 		m_projection = Matrix< 4, float >::orthographicProjection(
 			-side, side,
@@ -97,7 +100,10 @@ namespace EmEn::Graphics
 
 		std::memcpy(&m_bufferData[ProjectionMatrixOffset], m_projection.data(), Matrix4Alignment * sizeof(float));
 
-		this->updateVideoMemory();
+		if ( !this->updateVideoMemory() )
+		{
+			Tracer::error(ClassId, "Unable to update video memory !");
+		}
 	}
 
 	void
@@ -127,13 +133,16 @@ namespace EmEn::Graphics
 
 		m_bufferData[AmbientLightIntensityOffset] = intensity;
 
-		this->updateVideoMemory();
+		if ( !this->updateVideoMemory() )
+		{
+			Tracer::error(ClassId, "Unable to update video memory !");
+		}
 	}
 
 	bool
 	ViewMatrices2DUBO::create (Renderer & renderer, const std::string & instanceID) noexcept
 	{
-		auto descriptorSetLayout = this->getDescriptorSetLayout();
+		auto descriptorSetLayout = ViewMatricesInterface::getDescriptorSetLayout(renderer.layoutManager());
 
 		if ( descriptorSetLayout == nullptr )
 		{
@@ -178,14 +187,15 @@ namespace EmEn::Graphics
 	bool
 	ViewMatrices2DUBO::updateVideoMemory () const noexcept
 	{
-#ifdef DEBUG
-		if ( m_uniformBufferObject == nullptr )
+		if constexpr ( IsDebug )
 		{
-			Tracer::error(ClassId, "The view uniform buffer object is not initialized !");
+			if ( m_uniformBufferObject == nullptr )
+			{
+				Tracer::error(ClassId, "The view uniform buffer object is not initialized !");
 
-			return false;
+				return false;
+			}
 		}
-#endif
 
 		/* NOTE: Lock between updateVideoMemory() and destroy(). */
 		const std::lock_guard< std::mutex > lockGuard{m_GPUBufferAccessLock};
@@ -202,35 +212,5 @@ namespace EmEn::Graphics
 		m_uniformBufferObject->unmapMemory();
 
 		return true;
-	}
-
-	std::ostream &
-	operator<< (std::ostream & out, const ViewMatrices2DUBO & obj)
-	{
-		out <<
-			"2D View matrices data : " "\n"
-			"World position " << obj.m_position << "\n"
-			"Projection " << obj.m_projection <<
-			"View " << obj.m_view <<
-			"Infinity view " << obj.m_infinityView <<
-			obj.m_frustum <<
-			"Buffer data for GPU : " "\n";
-
-		for ( size_t index = 0; index < obj.m_bufferData.size(); index += 4 )
-		{
-			out << '[' << obj.m_bufferData[index+0] << ", " << obj.m_bufferData[index+1] << ", " << obj.m_bufferData[index+2] << ", " << obj.m_bufferData[index+3] << "]" "\n";
-		}
-
-		return out;
-	}
-
-	std::string
-	to_string (const ViewMatrices2DUBO & obj) noexcept
-	{
-		std::stringstream output;
-
-		output << obj;
-
-		return output.str();
 	}
 }

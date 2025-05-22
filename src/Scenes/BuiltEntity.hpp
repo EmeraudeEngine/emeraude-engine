@@ -27,10 +27,9 @@
 #pragma once
 
 /* STL inclusions. */
-#include <array>
 #include <memory>
-#include <type_traits>
 #include <utility>
+#include <type_traits>
 
 /* Local inclusions for usage. */
 #include "AbstractEntity.hpp"
@@ -63,7 +62,8 @@ namespace EmEn::Scenes
 		 * @param component A smart pointer over the build component.
 		 */
 		BuiltEntity (std::shared_ptr< entity_t > entity, std::shared_ptr< component_t > component) noexcept
-			: m_entity(std::move(entity)), m_component(std::move(component))
+			: m_entity{std::move(entity)},
+			m_component{std::move(component)}
 		{
 
 		}
@@ -103,7 +103,7 @@ namespace EmEn::Scenes
 
 		private:
 
-		std::shared_ptr< entity_t > m_entity{};
-		std::shared_ptr< component_t > m_component{};
+		std::shared_ptr< entity_t > m_entity;
+		std::shared_ptr< component_t > m_component;
 	};
 }

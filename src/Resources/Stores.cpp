@@ -27,51 +27,17 @@
 #include "Stores.hpp"
 
 /* STL inclusions. */
-#include <cstddef>
-#include <fstream>
-#include <vector>
-#include <filesystem>
 #include <regex>
 
 /* Local inclusions. */
 #include "Libs/FastJSON.hpp"
-#include "Libs/Utility.hpp"
 #include "Libs/IO/IO.hpp"
 #include "PrimaryServices.hpp"
-#include "BaseInformation.hpp"
-#include "SettingKeys.hpp"
+#include "Tracer.hpp"
 
 namespace EmEn::Resources
 {
 	using namespace EmEn::Libs;
-
-	const size_t Stores::ClassUID{getClassUID(ClassId)};
-	bool Stores::s_operationVerboseEnabled{false};
-	bool Stores::s_downloadEnabled{true};
-
-	Stores::Stores (PrimaryServices & primaryServices) noexcept
-		: ServiceInterface(ClassId), m_primaryServices(primaryServices)
-	{
-
-	}
-
-	size_t
-	Stores::classUID () const noexcept
-	{
-		return ClassUID;
-	}
-
-	bool
-	Stores::is (size_t classUID) const noexcept
-	{
-		return classUID == ClassUID;
-	}
-
-	bool
-	Stores::usable () const noexcept
-	{
-		return m_flags[ServiceInitialized];
-	}
 
 	const Stores::Store &
 	Stores::store (const std::string & storeName) const noexcept
@@ -96,22 +62,19 @@ namespace EmEn::Resources
 	}
 
 	bool
-	Stores::onInitialize () noexcept
+	Stores::initialize (const FileSystem & fileSystem, bool verbose) noexcept
 	{
-		s_operationVerboseEnabled = m_primaryServices.settings().get< bool >(ResourcesShowInformationKey, DefaultResourcesShowInformation);
-		s_downloadEnabled = m_primaryServices.settings().get< bool >(ResourcesDownloadEnabledKey, DefaultCoreResourcesDownloadEnabled);
-
-		const auto indexes = this->getResourcesIndexFiles();
+		const auto indexes = Stores::getResourcesIndexFiles(fileSystem);
 
 		if ( indexes.empty() )
 		{
-			std::stringstream message{};
+			std::stringstream message;
 
 			message <<
 				"No resources index available !" "\n"
 				"Checked directories :" "\n";
 
-			for ( auto directory : m_primaryServices.fileSystem().dataDirectories() )
+			for ( auto directory : fileSystem.dataDirectories() )
 			{
 				message << directory.append(DataStores).string() << "\n";
 			}
@@ -121,15 +84,13 @@ namespace EmEn::Resources
 			return false;
 		}
 
-		const auto verbose = m_primaryServices.settings().get< bool >(ResourcesShowInformationKey, DefaultResourcesShowInformation);
-
 		m_registeredResources = 0;
 
 		for ( const auto & filepath : indexes )
 		{
 			TraceInfo{ClassId} << "Loading resource index from file '" << filepath << "' ...";
 
-			/* 1. Get raw JSON data from file */
+			/* 1. Get raw JSON data from a file. */
 			Json::Value root;
 
 			if ( !FastJSON::getRootFromFile(filepath, root) )
@@ -163,28 +124,12 @@ namespace EmEn::Resources
 			m_registeredResources += resourcesRead;
 		}
 
-		m_flags[ServiceInitialized] = true;
-
-		return true;
-	}
-
-	bool
-	Stores::onTerminate () noexcept
-	{
-		m_flags[ServiceInitialized] = false;
-
-		m_defaultStore.clear();
-
-		m_stores.clear();
-
 		return true;
 	}
 
 	void
-	Stores::update (const Json::Value & root, const std::string & name) noexcept
+	Stores::update (const Json::Value & root, bool verbose) noexcept
 	{
-		const auto verbose = m_primaryServices.settings().get< bool >(ResourcesShowInformationKey, DefaultResourcesShowInformation);
-
 		if ( !root.isObject() )
 		{
 			Tracer::warning(ClassId, "It must be a JSON object to check for additional stores !");
@@ -204,11 +149,6 @@ namespace EmEn::Resources
 			TraceError{ClassId} << "'" << StoresKey << "' key must be a JSON object !";
 
 			return;
-		}
-
-		if ( verbose )
-		{
-			TraceInfo{ClassId} << "A '" << StoresKey << "' key is present in '" << name << "', adding new resources ...";
 		}
 
 		m_registeredResources += this->parseStores(stores, verbose);
@@ -231,14 +171,14 @@ namespace EmEn::Resources
 	}
 
 	std::vector< std::string >
-	Stores::getResourcesIndexFiles () const noexcept
+	Stores::getResourcesIndexFiles (const FileSystem & fileSystem) noexcept
 	{
 		std::vector< std::string > indexes{};
 
 		const std::regex indexMatchRule("ResourcesIndex.([0-9]{3}).json",std::regex_constants::ECMAScript);
 
 		/* NOTE: For each data directory pointed by the file system, we will look for resource index files. */
-		for ( auto dataStoreDirectory : m_primaryServices.fileSystem().dataDirectories() )
+		for ( auto dataStoreDirectory : fileSystem.dataDirectories() )
 		{
 			dataStoreDirectory.append(DataStores);
 
@@ -301,7 +241,7 @@ namespace EmEn::Resources
 				}
 			}
 
-			/* Crawling in resources definition. */
+			/* Crawling in resource definition. */
 			for ( const auto & resourceDefinition : *storeIt )
 			{
 				/* Checks the data source to load it. */
@@ -347,33 +287,5 @@ namespace EmEn::Resources
 		}
 
 		return resourcesRegistered;
-	}
-
-	std::ostream &
-	operator<< (std::ostream & out, const Stores & obj)
-	{
-		if ( obj.m_stores.empty() )
-		{
-			return out << "There is no available resource store !" "\n";
-		}
-
-		out << "Resources stores :" "\n";
-
-		for ( const auto & [name, store] : obj.m_stores )
-		{
-			out << " - " << name << " (" << store.size() << " resources)" << '\n';
-		}
-
-		return out;
-	}
-
-	std::string
-	to_string (const Stores & obj) noexcept
-	{
-		std::stringstream output;
-
-		output << obj;
-
-		return output.str();
 	}
 }

@@ -61,14 +61,41 @@ namespace EmEn::Vulkan
 			 * @param enableCBReset Enables the command buffer to be reset into initial state.
 			 * @param enableProtectCB Enables the protected memory (Request protectedMemory feature and Vulkan 1.1).
 			 */
-			CommandPool (const std::shared_ptr< Device > & device, uint32_t queueFamilyIndex, bool transientCB, bool enableCBReset, bool enableProtectCB) noexcept;
+			CommandPool (const std::shared_ptr< Device > & device, uint32_t queueFamilyIndex, bool transientCB, bool enableCBReset, bool enableProtectCB) noexcept
+				: AbstractDeviceDependentObject{device}
+			{
+				m_createInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+				m_createInfo.pNext = nullptr;
+				m_createInfo.flags = 0;
+				m_createInfo.queueFamilyIndex = queueFamilyIndex;
+
+				if ( transientCB )
+				{
+					m_createInfo.flags |= VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
+				}
+
+				if ( enableCBReset )
+				{
+					m_createInfo.flags |= VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+				}
+
+				if ( enableProtectCB )
+				{
+					m_createInfo.flags |= VK_COMMAND_POOL_CREATE_PROTECTED_BIT;
+				}
+			}
 
 			/**
 			 * @brief Constructs a command pool with createInfo.
 			 * @param device A reference to a smart pointer of a device.
 			 * @param createInfo A reference to a createInfo.
 			 */
-			CommandPool (const std::shared_ptr< Device > & device, const VkCommandPoolCreateInfo & createInfo) noexcept;
+			CommandPool (const std::shared_ptr< Device > & device, const VkCommandPoolCreateInfo & createInfo) noexcept
+				: AbstractDeviceDependentObject{device},
+				m_createInfo{createInfo}
+			{
+
+			}
 
 			/**
 			 * @brief Copy constructor.
@@ -97,7 +124,10 @@ namespace EmEn::Vulkan
 			/**
 			 * @brief Destructs the command pool.
 			 */
-			~CommandPool () override;
+			~CommandPool () override
+			{
+				this->destroyFromHardware();
+			}
 
 			/** @copydoc EmEn::Vulkan::AbstractDeviceDependentObject::createOnHardware() */
 			bool createOnHardware () noexcept override;
@@ -117,7 +147,7 @@ namespace EmEn::Vulkan
 			}
 
 			/**
-			 * @brief Returns the command pool create info.
+			 * @brief Returns the command pool createInfo.
 			 * @return const VkCommandPoolCreateInfo &
 			 */
 			[[nodiscard]]

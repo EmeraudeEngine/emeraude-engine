@@ -37,92 +37,14 @@ namespace EmEn::Graphics::Renderable
 	using namespace EmEn::Libs::PixelFactory;
 	using namespace EmEn::Libs::VertexFactory;
 
-	AbstractBackground::AbstractBackground (const std::string & name, uint32_t resourceFlagBits) noexcept
-		: Interface(name, resourceFlagBits)
-	{
-
-	}
-
-	const Cuboid< float > &
-	AbstractBackground::boundingBox () const noexcept
-	{
-		return NullBoundingBox;
-	}
-
-	const Sphere< float > &
-	AbstractBackground::boundingSphere () const noexcept
-	{
-		return NullBoundingSphere;
-	}
-
-	void
-	AbstractBackground::setAverageColor (const Color< float > & color) noexcept
-	{
-		m_averageColor = color;
-	}
-
-	void
-	AbstractBackground::setLightPosition (const Vector< 3, float > & position) noexcept
-	{
-		m_lightPosition = position;
-	}
-
-	void
-	AbstractBackground::setLightAmbientColor (const Color< float > & color) noexcept
-	{
-		m_lightAmbientColor = color;
-	}
-
-	void
-	AbstractBackground::setLightDiffuseColor (const Color< float > & color) noexcept
-	{
-		m_lightDiffuseColor = color;
-	}
-
-	void
-	AbstractBackground::setLightSpecularColor (const Color< float > & color) noexcept
-	{
-		m_lightSpecularColor = color;
-	}
-
-	const Color< float > &
-	AbstractBackground::averageColor () const noexcept
-	{
-		return m_averageColor;
-	}
-
-	const Vector< 3, float > &
-	AbstractBackground::lightPosition () const noexcept
-	{
-		return m_lightPosition;
-	}
-
-	const Color< float > &
-	AbstractBackground::lightAmbientColor () const noexcept
-	{
-		return m_lightAmbientColor;
-	}
-
-	const Color< float > &
-	AbstractBackground::lightDiffuseColor () const noexcept
-	{
-		return m_lightDiffuseColor;
-	}
-
-	const Color< float > &
-	AbstractBackground::lightSpecularColor () const noexcept
-	{
-		return m_lightSpecularColor;
-	}
-
 	std::shared_ptr< Geometry::IndexedVertexResource >
 	AbstractBackground::getSkyBoxGeometry () noexcept
 	{
-		auto & geometries = Resources::Manager::instance()->indexedVertexGeometries();
+		auto * geometries = Resources::Manager::instance()->container< Geometry::IndexedVertexResource >();
 
-		if ( geometries.isResourceLoaded(SkyBoxGeometryName) )
+		if ( geometries->isResourceLoaded(SkyBoxGeometryName) )
 		{
-			return geometries.getResource(SkyBoxGeometryName);
+			return geometries->getResource(SkyBoxGeometryName);
 		}
 
 		ShapeBuilderOptions< float > options{};
@@ -137,7 +59,7 @@ namespace EmEn::Graphics::Renderable
 			return nullptr;
 		}
 
-		geometries.addResource(geometry);
+		geometries->addResource(geometry);
 
 		return geometry;
 	}
@@ -145,17 +67,17 @@ namespace EmEn::Graphics::Renderable
 	std::shared_ptr< Geometry::IndexedVertexResource >
 	AbstractBackground::getSkyDomeGeometry () noexcept
 	{
-		auto & geometries = Resources::Manager::instance()->indexedVertexGeometries();
+		auto * geometries = Resources::Manager::instance()->container< Geometry::IndexedVertexResource >();
 
-		if ( geometries.isResourceLoaded(SkyDomeGeometryName) )
+		if ( geometries->isResourceLoaded(SkyDomeGeometryName) )
 		{
-			return geometries.getResource(SkyDomeGeometryName);
+			return geometries->getResource(SkyDomeGeometryName);
 		}
 
 		ShapeBuilderOptions< float > options{};
 		options.enableGeometryFlipping(true);
 
-		const auto shape = ShapeGenerator::generateSphere(SkySize, 16, 16, options);
+		const auto shape = ShapeGenerator::generateSphere< float, uint32_t >(SkySize, 16, 16, options);
 
 		auto geometry = std::make_shared< Geometry::IndexedVertexResource >(SkyBoxGeometryName);
 
@@ -164,7 +86,7 @@ namespace EmEn::Graphics::Renderable
 			return nullptr;
 		}
 
-		geometries.addResource(geometry);
+		geometries->addResource(geometry);
 
 		return geometry;
 	}

@@ -29,10 +29,7 @@
 /* Local inclusions. */
 #include "Libs/VertexFactory/ShapeGenerator.hpp"
 #include "Libs/VertexFactory/FileIO.hpp"
-#include "Resources/Manager.hpp"
 #include "Vulkan/TransferManager.hpp"
-#include "Vulkan/VertexBufferObject.hpp"
-#include "Tracer.hpp"
 
 /* Defining the resource manager class id. */
 template<>
@@ -48,23 +45,12 @@ namespace EmEn::Graphics::Geometry
 	using namespace EmEn::Libs::Math;
 	using namespace EmEn::Libs::VertexFactory;
 	using namespace EmEn::Libs::PixelFactory;
-	using namespace Vulkan;
+	using namespace EmEn::Vulkan;
 
 	const size_t VertexResource::ClassUID{getClassUID(ClassId)};
 
-	VertexResource::VertexResource (const std::string & name, uint32_t geometryFlagBits) noexcept
-		: Interface(name, geometryFlagBits)
-	{
-
-	}
-
-	VertexResource::~VertexResource ()
-	{
-		this->destroy(true);
-	}
-
 	bool
-	VertexResource::create () noexcept
+	VertexResource::createOnHardware (TransferManager & transferManager) noexcept
 	{
 		if ( this->isCreated() )
 		{
@@ -91,7 +77,7 @@ namespace EmEn::Graphics::Geometry
 		}
 
 		/* Create the vertex buffer local data. */
-		std::vector< float > vertexAttributes{};
+		std::vector< float > vertexAttributes;
 
 		const auto vertexElementCount = m_localData.createVertexBuffer(
 			vertexAttributes,
@@ -100,13 +86,11 @@ namespace EmEn::Graphics::Geometry
 			this->vertexColorEnabled() ? VertexColorType::RGBA : VertexColorType::None
 		);
 
-#ifdef DEBUG
 		TraceDebug{ClassId} <<
 			"Buffer statistics." "\n"
 			"Vertex count : " << m_localData.vertexCount() << "\n"
 			"Vertex buffer (VBO) size : " << vertexAttributes.size() << "\n"
 			"Vertex element count : " << vertexElementCount;
-#endif
 
 		if ( vertexAttributes.empty() || vertexElementCount == 0 )
 		{
@@ -116,18 +100,16 @@ namespace EmEn::Graphics::Geometry
 		}
 
 		/* Create hardware buffers from local data. */
-		return this->createVideoMemoryBuffers(vertexAttributes, m_localData.vertexCount(), vertexElementCount);
+		return this->createVideoMemoryBuffers(transferManager, vertexAttributes, m_localData.vertexCount(), vertexElementCount);
 	}
 
 	bool
-	VertexResource::createVideoMemoryBuffers (const std::vector< float > & vertexAttributes, size_t vertexCount, size_t vertexElementCount) noexcept
+	VertexResource::createVideoMemoryBuffers (TransferManager & transferManager, const std::vector< float > & vertexAttributes, uint32_t vertexCount, uint32_t vertexElementCount) noexcept
 	{
-		auto * transferManager = Vulkan::TransferManager::instance(GPUWorkType::Graphics);
-
-		m_vertexBufferObject = std::make_unique< VertexBufferObject >(transferManager->device(), vertexCount, vertexElementCount);
+		m_vertexBufferObject = std::make_unique< VertexBufferObject >(transferManager.device(), vertexCount, vertexElementCount);
 		m_vertexBufferObject->setIdentifier(this->name() + "-VBO-VertexBufferObject");
 
-		if ( !m_vertexBufferObject->create(*transferManager, vertexAttributes) )
+		if ( !m_vertexBufferObject->create(transferManager, vertexAttributes) )
 		{
 			Tracer::error(ClassId, "Unable to create the vertex buffer object (VBO) !");
 
@@ -140,7 +122,7 @@ namespace EmEn::Graphics::Geometry
 	}
 
 	bool
-	VertexResource::update () noexcept
+	VertexResource::updateVideoMemory () noexcept
 	{
 		if ( !this->isCreated() )
 		{
@@ -166,7 +148,7 @@ namespace EmEn::Graphics::Geometry
 	}
 
 	void
-	VertexResource::destroy (bool clearLocalData) noexcept
+	VertexResource::destroyFromHardware (bool clearLocalData) noexcept
 	{
 		if ( m_vertexBufferObject != nullptr )
 		{
@@ -176,7 +158,7 @@ namespace EmEn::Graphics::Geometry
 
 		if ( clearLocalData )
 		{
-			this->resetFlagBits();
+			this->resetFlags();
 			m_localData.clear();
 			m_subGeometries.clear();
 		}
@@ -250,17 +232,5 @@ namespace EmEn::Graphics::Geometry
 		m_localData = shape;
 
 		return this->setLoadSuccess(true);
-	}
-
-	std::shared_ptr< VertexResource >
-	VertexResource::get (const std::string & resourceName, bool directLoad) noexcept
-	{
-		return Resources::Manager::instance()->vertexGeometries().getResource(resourceName, !directLoad);
-	}
-
-	std::shared_ptr< VertexResource >
-	VertexResource::getDefault () noexcept
-	{
-		return Resources::Manager::instance()->vertexGeometries().getDefaultResource();
 	}
 }

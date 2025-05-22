@@ -27,9 +27,9 @@
 #pragma once
 
 /* STL inclusions. */
-#include <ostream>
 #include <string>
 #include <vector>
+#include <sstream>
 
 /* Local inclusions for inheritances. */
 #include "AbstractDoc.hpp"
@@ -51,7 +51,14 @@ namespace EmEn
 			 * @param shortName A char for the short name. Default none.
 			 * @param options A reference to a string vector as options for the argument. Default none.
 			 */
-			ArgumentDoc (std::string description, std::string longName, char shortName = 0, const std::vector< std::string > & options = {}) noexcept;
+			ArgumentDoc (std::string description, std::string longName, char shortName = 0, const std::vector< std::string > & options = {}) noexcept
+				: AbstractDoc{std::move(description)},
+				m_longName{std::move(longName)},
+				m_shortName{shortName},
+				m_options{options}
+			{
+
+			}
 
 			/**
 			 * @brief Returns the argument long name.
@@ -86,6 +93,8 @@ namespace EmEn
 				return m_options;
 			}
 
+		private:
+
 			/**
 			 * @brief STL streams printable object.
 			 * @param out A reference to the stream output.
@@ -94,17 +103,61 @@ namespace EmEn
 			 */
 			friend std::ostream & operator<< (std::ostream & out, const ArgumentDoc & obj);
 
-			/**
-			 * @brief Stringifies the object.
-			 * @param obj A reference to the object to print.
-			 * @return std::string
-			 */
-			friend std::string to_string (const ArgumentDoc & obj) noexcept;
-
-		private:
-
 			std::string m_longName;
 			char m_shortName;
 			std::vector< std::string > m_options;
 	};
+
+	inline
+	std::ostream &
+	operator<< (std::ostream & out, const ArgumentDoc & obj)
+	{
+		const auto shortPresent = obj.shortName() != 0;
+		const auto longPresent = !obj.longName().empty();
+
+		if ( shortPresent )
+		{
+			out << '-' << obj.shortName();
+		}
+		else
+		{
+			out << '\t';
+		}
+
+		if ( longPresent )
+		{
+			if ( shortPresent )
+			{
+				out << ", ";
+			}
+
+			out << "--" << obj.longName();
+		}
+
+		if ( !obj.options().empty() )
+		{
+			for ( const auto &option: obj.options() )
+			{
+				out << " [" << option << "]";
+			}
+		}
+
+		return out << " : " << obj.description();
+	}
+
+	/**
+	 * @brief Stringifies the object.
+	 * @param obj A reference to the object to print.
+	 * @return std::string
+	 */
+	inline
+	std::string
+	to_string (const ArgumentDoc & obj) noexcept
+	{
+		std::stringstream output;
+
+		output << obj;
+
+		return output.str();
+	}
 }

@@ -27,12 +27,7 @@
 #include "MovieResource.hpp"
 
 /* STL inclusions. */
-#include <cstdint>
-#include <cstddef>
-#include <vector>
 #include <array>
-#include <string>
-#include <memory>
 #include <algorithm>
 #include <numeric>
 #include <ranges>
@@ -41,16 +36,9 @@
 #include "json/json.h"
 
 /* Local inclusions. */
-#include "Libs/PixelFactory/Pixmap.hpp"
-#include "Libs/PixelFactory/Types.hpp"
-#include "Libs/PixelFactory/Color.hpp"
-#include "Libs/ObservableTrait.hpp"
 #include "Libs/FastJSON.hpp"
-#include "Libs/String.hpp"
-#include "Resources/Container.hpp"
 #include "Resources/Manager.hpp"
-#include "Resources/ResourceTrait.hpp"
-#include "Tracer.hpp"
+#include "ImageResource.hpp"
 
 /* Defining the resource manager class id. */
 template<>
@@ -76,12 +64,6 @@ namespace EmEn::Graphics
 	constexpr auto JKFrames{"Frames"};
 	constexpr auto JKDuration{"Duration"};
 	constexpr auto JKImage{"Image"};
-
-	MovieResource::MovieResource (const std::string & name, uint32_t resourceFlagBits) noexcept
-		: ResourceTrait(name, resourceFlagBits)
-	{
-
-	}
 
 	bool
 	MovieResource::load () noexcept
@@ -130,11 +112,11 @@ namespace EmEn::Graphics
 		/* Check for a JSON file. */
 		if ( IO::getFileExtension(filepath) == "json" )
 		{
-			return Resources::ResourceTrait::load(filepath);
+			return ResourceTrait::load(filepath);
 		}
 
 		/* Tries to read a movie (mp4, mpg, avi, ...) file. */
-		Tracer::debug(ClassId, "Reading movie file is not available yet !");
+		TraceDebug{ClassId} << "Reading movie file is not available yet !";
 
 		if ( !this->beginLoading() )
 		{
@@ -152,7 +134,7 @@ namespace EmEn::Graphics
 			return false;
 		}
 
-		/* Checks the load with the parametric way. */
+		/* Checks the load in the parametric way. */
 		if ( data.isMember(JKBaseFrameName) )
 		{
 			if ( !this->loadParametric(data) )
@@ -162,7 +144,7 @@ namespace EmEn::Graphics
 				return this->setLoadSuccess(false);
 			}
 		}
-		/* Checks the load with the manual way. */
+		/* Checks the load in the manual way. */
 		else if ( data.isMember(JKFrames) )
 		{
 			if ( !this->loadManual(data) )
@@ -190,8 +172,8 @@ namespace EmEn::Graphics
 		return this->setLoadSuccess(true);
 	}
 
-	size_t
-	MovieResource::extractFrameDuration (const Json::Value & data, size_t frameCount) noexcept
+	uint32_t
+	MovieResource::extractFrameDuration (const Json::Value & data, uint32_t frameCount) noexcept
 	{
 		const auto fps = FastJSON::getNumber< uint32_t >(data, JKFrameRate, 0);
 
@@ -258,14 +240,14 @@ namespace EmEn::Graphics
 		m_looping = FastJSON::getBoolean(data, JKIsLooping, true);
 
 		/* Gets all frames images. */
-		auto & images = Resources::Manager::instance()->images();
+		auto * imageContainer = Resources::Manager::instance()->container< ImageResource >();
 
-		for ( size_t frameIndex = 0; frameIndex < frameCount; frameIndex++ )
+		for ( uint32_t frameIndex = 0; frameIndex < frameCount; frameIndex++ )
 		{
 			/* Sets the number as a string. */
 			const auto filename = String::replace(replaceKey, pad(std::to_string(frameIndex + 1), nWidth, '0', String::Side::Left), basename);
 
-			const auto imageResource = images.getResource(filename, false);
+			const auto imageResource = imageContainer->getResource(filename, false);
 
 			if ( imageResource == nullptr )
 			{
@@ -291,7 +273,7 @@ namespace EmEn::Graphics
 			return false;
 		}
 
-		auto & images = Resources::Manager::instance()->images();
+		auto * images = Resources::Manager::instance()->container< ImageResource >();
 
 		for ( const auto & frame : data[JKFrames] )
 		{
@@ -307,9 +289,15 @@ namespace EmEn::Graphics
 			}
 
 			/* NOTE: The image must be loaded synchronously here. */
-			const auto imageResource = images.getResource(imageName, false);
+			const auto imageResource = images->getResource(imageName, false);
+			const auto duration = FastJSON::getNumber< uint32_t >(frame, JKDuration, DefaultFrameDuration);
 
-			m_frames.emplace_back(imageResource->data(), FastJSON::getNumber< uint32_t >(frame, JKDuration, DefaultFrameDuration));
+			if ( !imageResource->isLoaded() )
+			{
+				return false;
+			}
+
+			m_frames.emplace_back(imageResource->data(), duration);
 		}
 
 		return true;
@@ -326,21 +314,9 @@ namespace EmEn::Graphics
 	void
 	MovieResource::updateDuration () noexcept
 	{
-		m_duration = std::accumulate(m_frames.cbegin(), m_frames.cend(), 0, [] (auto duration, const auto & frame) {
+		m_duration = std::accumulate(m_frames.cbegin(), m_frames.cend(), 0U, [] (uint32_t duration, const auto & frame) {
 			return duration + frame.second;
 		});
-	}
-
-	std::shared_ptr< MovieResource >
-	MovieResource::get (const std::string & resourceName, bool directLoad) noexcept
-	{
-		return Resources::Manager::instance()->movies().getResource(resourceName, !directLoad);
-	}
-
-	std::shared_ptr< MovieResource >
-	MovieResource::getDefault () noexcept
-	{
-		return Resources::Manager::instance()->movies().getDefaultResource();
 	}
 
 	const PixelFactory::Pixmap< uint8_t > &
@@ -395,33 +371,35 @@ namespace EmEn::Graphics
 		return {red, green, blue, 1.0F};
 	}
 
-	size_t
+	uint32_t
 	MovieResource::frameIndexAt (uint32_t timePoint) const noexcept
 	{
 		if ( m_duration > 0 )
 		{
+			const auto frameCount = static_cast< uint32_t >(m_frames.size());
+
 			auto time = timePoint % m_duration;
 
 			if ( !m_looping && timePoint >= m_duration )
 			{
-				return m_frames.size() - 1;
+				return frameCount - 1;
 			}
 
-			for ( size_t index = 0; index < m_frames.size(); index++ )
+			for ( uint32_t index = 0; index < frameCount; index++ )
 			{
 				if ( m_frames[index].second >= time )
 				{
 					return index;
 				}
 
-				time -= static_cast< uint32_t >(m_frames[index].second);
+				time -= m_frames[index].second;
 			}
 		}
 
 		return 0;
 	}
 
-	size_t
+	uint32_t
 	MovieResource::extractCountWidth (const std::string & basename, std::string & replaceKey) noexcept
 	{
 		const auto params = String::extractTags(basename, {'{', '}'}, true);

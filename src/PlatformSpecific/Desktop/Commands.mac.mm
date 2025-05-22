@@ -41,7 +41,7 @@
 
 namespace EmEn::PlatformSpecific::Desktop
 {
-	static constexpr auto TracerTag{"Commands"};
+	constexpr auto TracerTag{"Commands"};
 
 	bool
 	runDesktopApplication (const std::string & argument) noexcept
@@ -73,7 +73,7 @@ namespace EmEn::PlatformSpecific::Desktop
 	}
 
 	void
-	flashTaskbarIcon (bool state) noexcept
+	flashTaskbarIcon (const Window & window, bool state) noexcept
 	{
 		if ( !state )
 		{
@@ -94,7 +94,7 @@ namespace EmEn::PlatformSpecific::Desktop
 	}
 
 	void
-	setTaskbarIconProgression (float progress, ProgressMode /*mode*/) noexcept
+	setTaskbarIconProgression (float /*progress*/, ProgressMode /*mode*/) noexcept
 	{
 
 	}

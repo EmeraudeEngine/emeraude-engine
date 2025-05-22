@@ -44,6 +44,7 @@
 
 /* Local inclusions for inheritances. */
 #include "ServiceInterface.hpp"
+#include "Libs/ObservableTrait.hpp"
 
 /* Local inclusions for usages. */
 #include "Vulkan/Types.hpp"
@@ -80,9 +81,11 @@ namespace EmEn::Saphir
 
 	/**
 	 * @brief The shader manager service class.
+	 * @note [OBS][STATIC-OBSERVABLE]
 	 * @extends EmEn::ServiceInterface This is a service.
+	 * @extends EmEn::Libs::ObservableTrait This service is observable.
 	 */
-	class ShaderManager final : public ServiceInterface
+	class ShaderManager final : public ServiceInterface, public Libs::ObservableTrait
 	{
 		public:
 
@@ -104,40 +107,14 @@ namespace EmEn::Saphir
 			/**
 			 * @brief Constructs the shader manager.
 			 * @param primaryServices A reference to the primary services.
-			 * @param type The GPU work type.
 			 */
-			ShaderManager (PrimaryServices & primaryServices, Vulkan::GPUWorkType type) noexcept;
+			explicit
+			ShaderManager (PrimaryServices & primaryServices) noexcept
+				: ServiceInterface{ClassId},
+				m_primaryServices{primaryServices}
+			{
 
-			/**
-			 * @brief Copy constructor.
-			 * @param copy A reference to the copied instance.
-			 */
-			ShaderManager (const ShaderManager & copy) noexcept = delete;
-
-			/**
-			 * @brief Move constructor.
-			 * @param copy A reference to the copied instance.
-			 */
-			ShaderManager (ShaderManager && copy) noexcept = delete;
-
-			/**
-			 * @brief Copy assignment.
-			 * @param copy A reference to the copied instance.
-			 * @return ShaderManager &
-			 */
-			ShaderManager & operator= (const ShaderManager & copy) noexcept = delete;
-
-			/**
-			 * @brief Move assignment.
-			 * @param copy A reference to the copied instance.
-			 * @return ShaderManager &
-			 */
-			ShaderManager & operator= (ShaderManager && copy) noexcept = delete;
-
-			/**
-			 * @brief Destructs the shader manager.
-			 */
-			~ShaderManager () override;
+			}
 
 			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
 			[[nodiscard]]
@@ -202,18 +179,6 @@ namespace EmEn::Saphir
 			 */
 			[[nodiscard]]
 			std::vector< std::shared_ptr< Vulkan::ShaderModule > > getShaderModules (const std::shared_ptr< Vulkan::Device > & device, const std::shared_ptr< Program > & program) noexcept;
-
-			/**
-			 * @brief Returns the instance of the shader manager.
-			 * @param type The transfer work type.
-			 * @return ShaderManager *
-			 */
-			[[nodiscard]]
-			static ShaderManager *
-			instance (Vulkan::GPUWorkType type) noexcept
-			{
-				return s_instances.at(static_cast< size_t >(type));
-			}
 
 		private:
 
@@ -341,7 +306,7 @@ namespace EmEn::Saphir
 			static EShLanguage GLSLangShaderType (ShaderType shaderType) noexcept;
 
 			/**
-			 * @brief Converts shader type from saphir to Vulkan type.
+			 * @brief Converts a shader type from saphir to Vulkan type.
 			 * @param shaderType The Saphir shader type.
 			 * @return VkShaderStageFlagBits
 			 */
@@ -359,8 +324,6 @@ namespace EmEn::Saphir
 
 			static constexpr auto ShaderSourcesDirectoryName{"shader-sources"};
 			static constexpr auto ShaderBinariesDirectoryName{"shader-binaries"};
-
-			static std::array< ShaderManager *, 2 > s_instances;
 
 			PrimaryServices & m_primaryServices;
 			std::map< size_t, std::shared_ptr< Vulkan::ShaderModule > > m_shaderModules;

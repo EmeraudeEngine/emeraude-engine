@@ -37,6 +37,7 @@
 
 /* Local inclusions for usages. */
 #include "Libs/PixelFactory/Pixmap.hpp"
+#include "DeviceMemory.hpp"
 
 #if IS_WINDOWS
 #undef min
@@ -54,7 +55,6 @@ namespace EmEn
 
 	namespace Vulkan
 	{
-		class DeviceMemory;
 		class MemoryRegion;
 	}
 }
@@ -64,8 +64,8 @@ namespace EmEn::Vulkan
 	class TransferManager;
 
 	/**
-	 * @brief The vulkan image specific buffer class.
-	 * @extends std::enable_shared_from_this Adds to ability to self replicate the smart pointer.
+	 * @brief The vulkan image-specific buffer class.
+	 * @extends std::enable_shared_from_this Adds the ability to self replicate the smart pointer.
 	 * @extends EmEn::Vulkan::AbstractDeviceDependentObject This object needs a device.
 	 */
 	class Image final : public AbstractDeviceDependentObject
@@ -84,19 +84,42 @@ namespace EmEn::Vulkan
 			 * @param usageFlags The usage purpose of the image.
 			 * @param imageLayout The layout of the image.
 			 * @param createFlags The creation info flags. Default none.
-			 * @param mipLevels The number of mip level. Default 1.
+			 * @param mipLevels The number of mip-levels. Default 1.
 			 * @param arrayLayers The number of array levels. Default 1.
-			 * @param samples The number of sample (multisampling). Default VK_SAMPLE_COUNT_1_BIT.
+			 * @param samples The number of samples (multisampling). Default VK_SAMPLE_COUNT_1_BIT.
 			 * @param imageTiling The image tiling (memory layout). Default VK_IMAGE_TILING_OPTIMAL.
 			 */
-			Image (const std::shared_ptr< Device > & device, VkImageType imageType, VkFormat format, const VkExtent3D & extent, VkImageUsageFlags usageFlags, VkImageLayout imageLayout, VkImageCreateFlags createFlags = 0, uint32_t mipLevels = 1, uint32_t arrayLayers = 1, VkSampleCountFlagBits samples = VK_SAMPLE_COUNT_1_BIT, VkImageTiling imageTiling = VK_IMAGE_TILING_OPTIMAL) noexcept;
+			Image (const std::shared_ptr< Device > & device, VkImageType imageType, VkFormat format, const VkExtent3D & extent, VkImageUsageFlags usageFlags, VkImageLayout imageLayout, VkImageCreateFlags createFlags = 0, uint32_t mipLevels = 1, uint32_t arrayLayers = 1, VkSampleCountFlagBits samples = VK_SAMPLE_COUNT_1_BIT, VkImageTiling imageTiling = VK_IMAGE_TILING_OPTIMAL) noexcept
+				: AbstractDeviceDependentObject{device}
+			{
+				m_createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+				m_createInfo.pNext = nullptr;
+				m_createInfo.flags = createFlags;
+				m_createInfo.imageType = imageType;
+				m_createInfo.format = format;
+				m_createInfo.extent = extent;
+				m_createInfo.mipLevels = mipLevels;
+				m_createInfo.arrayLayers = arrayLayers;
+				m_createInfo.samples = samples;
+				m_createInfo.tiling = imageTiling;
+				m_createInfo.usage = usageFlags;
+				m_createInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+				m_createInfo.queueFamilyIndexCount = 0;
+				m_createInfo.pQueueFamilyIndices = nullptr;
+				m_createInfo.initialLayout = imageLayout;
+			}
 
 			/**
-			 * @brief Constructs an image with a creation info.
+			 * @brief Constructs an image with a createInfo.
 			 * @param device A reference to a smart pointer of the device.
-			 * @param createInfo A reference to the creation info.
+			 * @param createInfo A reference to the createInfo.
 			 */
-			Image (const std::shared_ptr< Device > & device, const VkImageCreateInfo & createInfo) noexcept;
+			Image (const std::shared_ptr< Device > & device, const VkImageCreateInfo & createInfo) noexcept
+				: AbstractDeviceDependentObject{device},
+				m_createInfo{createInfo}
+			{
+
+			}
 
 			/**
 			 * @brief Copy constructor.
@@ -125,7 +148,10 @@ namespace EmEn::Vulkan
 			/**
 			 * @brief Destructs the image.
 			 */
-			~Image () override;
+			~Image () override
+			{
+				this->destroyFromHardware();
+			}
 
 			/** @copydoc EmEn::Vulkan::AbstractDeviceDependentObject::createOnHardware() */
 			bool createOnHardware () noexcept override;
@@ -145,7 +171,7 @@ namespace EmEn::Vulkan
 			}
 
 			/**
-			 * @brief Returns the image create info.
+			 * @brief Returns the image createInfo.
 			 * @return const VkImageCreateInfo &
 			 */
 			[[nodiscard]]
@@ -212,7 +238,7 @@ namespace EmEn::Vulkan
 			}
 
 			/**
-			 * @brief Returns the number of color.
+			 * @brief Returns the color count.
 			 * @return uint32_t
 			 */
 			[[nodiscard]]
@@ -315,7 +341,7 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Returns the image size in bytes.
-			 * @warning This information come from the creation info with no mipmap, not the device memory.
+			 * @warning This information comes from the creation info with no mipmap, not the device memory.
 			 * @return VkDeviceSize
 			 */
 			[[nodiscard]]
@@ -385,9 +411,9 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Returns the vulkan image format suitable for this pixmap.
-			 * @warngin This method do not handle packed pixel format.
+			 * @warngin This method does not handle a packed pixel format.
 			 * @tparam precision_t The pixel data precision.
-			 * @param colorCount The number of color.
+			 * @param colorCount The color count.
 			 * @return VkFormat
 			 */
 			template< typename precision_t >
@@ -413,7 +439,7 @@ namespace EmEn::Vulkan
 				/* NOTE: Floating point value. */
 				if constexpr ( std::is_floating_point_v< precision_t > )
 				{
-					/* NOTE : float (4 bytes) */
+					/* NOTE: float (4 bytes) */
 					if constexpr ( sizeof(precision_t) == 4 )
 					{
 						switch ( colorCount )
@@ -434,7 +460,7 @@ namespace EmEn::Vulkan
 								return VK_FORMAT_UNDEFINED;
 						}
 					}
-					/* NOTE : double (8 bytes) */
+					/* NOTE: double (8 bytes) */
 					else if constexpr ( sizeof(precision_t) == 8 )
 					{
 						switch ( colorCount )

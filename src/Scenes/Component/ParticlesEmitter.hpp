@@ -44,6 +44,7 @@ namespace EmEn::Scenes::Component
 {
 	/**
 	 * @brief A class that build a particles generator with mesh or sprite instance.
+	 * @note [OBS][SHARED-OBSERVER]
 	 * @extends EmEn::Scenes::Component::Abstract The base class for each entity component.
 	 * @extends EmEn::Libs::ObserverTrait This class must dispatch modifications from renderable instance to the entity.
 	 */
@@ -69,12 +70,21 @@ namespace EmEn::Scenes::Component
 
 			/**
 			 * @brief Construct a ParticlesEmitter resource.
-			 * @param name The resource name.
+			 * @param name The resource name [std::move].
 			 * @param parentEntity A reference to the parent entity.
 			 * @param renderable The rendered object by this particle emitter.
 			 * @param instanceCount A fixed instance count.
 			 */
-			ParticlesEmitter (const std::string & name, const AbstractEntity & parentEntity, const std::shared_ptr< Graphics::Renderable::Interface > & renderable, uint32_t instanceCount) noexcept;
+			ParticlesEmitter (std::string name, const AbstractEntity & parentEntity, const std::shared_ptr< Graphics::Renderable::Interface > & renderable, uint32_t instanceCount) noexcept
+				: Abstract{std::move(name), parentEntity},
+				m_renderableInstance{std::make_shared< Graphics::RenderableInstance::Multiple >(renderable, instanceCount, renderable->isSprite() ? Graphics::RenderableInstance::FacingCamera : Graphics::RenderableInstance::None)},
+				m_particleLimit{instanceCount}
+			{
+				/* NOTE: Prepare local data at the fixed size. */
+				m_particles.resize(m_particleLimit);
+
+				this->observe(m_renderableInstance.get());
+			}
 
 			/** @copydoc EmEn::Scenes::Component::Abstract::getRenderableInstance() const */
 			[[nodiscard]]
@@ -92,34 +102,31 @@ namespace EmEn::Scenes::Component
 				return ClassId;
 			}
 
-			/** @copydoc EmEn::Scenes::Component::Abstract::boundingBox() const */
+			/** @copydoc EmEn::Scenes::Component::Abstract::isComponent() */
 			[[nodiscard]]
-			const Libs::Math::Cuboid< float > &
-			boundingBox () const noexcept override
+			bool
+			isComponent (const char * classID) const noexcept override
 			{
-				return NullBoundingBox;
-			}
-
-			/** @copydoc EmEn::Scenes::Component::Abstract::boundingSphere() const */
-			[[nodiscard]]
-			const Libs::Math::Sphere< float > &
-			boundingSphere () const noexcept override
-			{
-				return NullBoundingSphere;
+				return strcmp(ClassId, classID) == 0;
 			}
 
 			/** @copydoc EmEn::Scenes::Component::Abstract::move() */
 			void
-			move (const Libs::Math::CartesianFrame< float > & worldCoordinates) noexcept override
+			move (const Libs::Math::CartesianFrame< float > & /*worldCoordinates*/) noexcept override
 			{
-				// FIXME: Check the particles coordinates
+				// FIXME: Check the particle coordinates
 			}
 
 			/** @copydoc EmEn::Scenes::Component::Abstract::processLogics() */
 			void processLogics (const Scene & scene) noexcept override;
 
-			/** @copydoc EmEn::Scenes::Component::Abstract::shouldRemove() */
-			bool shouldRemove () const noexcept override;
+			/** @copydoc EmEn::Scenes::Component::Abstract::shouldBeRemoved() */
+			[[nodiscard]]
+			bool
+			shouldBeRemoved () const noexcept override
+			{
+				return m_renderableInstance->isBroken();
+			}
 
 			/**
 			 * @brief Returns the particle limit.
@@ -235,7 +242,12 @@ namespace EmEn::Scenes::Component
 			 * @param size The initial size of a new particle.
 			 * @return void
 			 */
-			void setParticleSize (float size) noexcept;
+			void
+			setParticleSize (float size) noexcept
+			{
+				m_minimumParticleSize = size;
+				m_maximumParticleSize = size;
+			}
 
 			/**
 			 * @brief Sets the initial particle randomized lifetime in engine cycles.
@@ -243,7 +255,20 @@ namespace EmEn::Scenes::Component
 			 * @param maximumSize The initial maximum size of a new particle.
 			 * @return void
 			 */
-			void setParticleSize (float minimumSize, float maximumSize) noexcept;
+			void
+			setParticleSize (float minimumSize, float maximumSize) noexcept
+			{
+				if ( minimumSize < maximumSize )
+				{
+					m_minimumParticleSize = minimumSize;
+					m_maximumParticleSize = maximumSize;
+				}
+				else
+				{
+					m_minimumParticleSize = maximumSize;
+					m_maximumParticleSize = minimumSize;
+				}
+			}
 
 			/**
 			 * @brief Returns the initial particle minimum size.
@@ -376,7 +401,11 @@ namespace EmEn::Scenes::Component
 			void start (uint32_t duration = 0) noexcept;
 
 			/** @brief Stops the particle emission. */
-			void stop () noexcept;
+			void
+			stop () noexcept
+			{
+				this->disableFlag(IsEmitting);
+			}
 
 			/**
 			 * @brief Returns the state of particle emission.
@@ -388,21 +417,6 @@ namespace EmEn::Scenes::Component
 			{
 				return this->isFlagEnabled(IsEmitting);
 			}
-
-			/**
-			 * @brief STL streams printable object.
-			 * @param out A reference to the stream output.
-			 * @param obj A reference to the object to print.
-			 * @return std::ostream &
-			 */
-			friend std::ostream & operator<< (std::ostream & out, const ParticlesEmitter & obj);
-
-			/**
-			 * @brief Stringifies the object.
-			 * @param obj A reference to the object to print.
-			 * @return std::string
-			 */
-			friend std::string to_string (const ParticlesEmitter & obj) noexcept;
 
 		private:
 
@@ -445,6 +459,14 @@ namespace EmEn::Scenes::Component
 				return Libs::Utility::quickRandom(m_minimumParticleSize, m_maximumParticleSize);
 			}
 
+			/**
+			 * @brief STL streams printable object.
+			 * @param out A reference to the stream output.
+			 * @param obj A reference to the object to print.
+			 * @return std::ostream &
+			 */
+			friend std::ostream & operator<< (std::ostream & out, const ParticlesEmitter & obj);
+
 			/* Flag names */
 			static constexpr auto IsEmitting{UnusedFlag + 0UL};
 			static constexpr auto GravityEnabled{UnusedFlag + 1UL};
@@ -477,4 +499,39 @@ namespace EmEn::Scenes::Component
 			float m_chaosMagnitude{0.0F};
 			PhysicsSimulationFunction m_physicsSimulationFunction{PhysicsSimulationFunction::Default};
 	};
+
+	inline
+	std::ostream &
+	operator<< (std::ostream & out, const ParticlesEmitter & obj)
+	{
+		return out <<
+			"Particles Generator data :\n"
+			"Enabled : " << ( obj.isEmitting() ? "yes" : "no" ) << "\n"
+			"Particles generated per cycle : " << obj.m_particleGeneratedPerCycle << "\n"
+			"Particles limit : " << obj.m_particleLimit << "\n"
+			"Particles min life : " << obj.m_minimumParticleLifetime << "\n"
+			"Particles max life : " << obj.m_maximumParticleLifetime << "\n"
+			"Particles min size : " << obj.m_minimumParticleSize << "\n"
+			"Particles max size : " << obj.m_maximumParticleSize << "\n"
+			"Particles size processLogics factor : " << obj.m_particleSizeDeltaPerCycle << "\n"
+			"Spreading : " << obj.m_spreadingRadius << "\n"
+			"Chaos magnitude : " << obj.m_chaosMagnitude << "\n"
+			"Living particles : " << obj.m_particles.size() << '\n';
+	}
+
+	/**
+	 * @brief Stringifies the object.
+	 * @param obj A reference to the object to print.
+	 * @return std::string
+	 */
+	inline
+	std::string
+	to_string (const ParticlesEmitter & obj) noexcept
+	{
+		std::stringstream output;
+
+		output << obj;
+
+		return output.str();
+	}
 }

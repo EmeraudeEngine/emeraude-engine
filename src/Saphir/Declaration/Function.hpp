@@ -52,19 +52,37 @@ namespace EmEn::Saphir::Declaration
 			 * @param name A C-string to set the name of the function.
 			 * @param returnType A C-string to set the type of the uniform. Use one of Keys::GLSL::* keyword.
 			 */
-			explicit Function (Key name, Key returnType = Keys::GLSL::Void) noexcept;
+			explicit
+			Function (Key name, Key returnType = Keys::GLSL::Void) noexcept
+				: m_name{name},
+				m_returnType{returnType}
+			{
+
+			}
 
 			/** @copydoc EmEn::Saphir::Declaration::Interface::isValid() */
 			[[nodiscard]]
-			bool isValid () const noexcept override;
+			bool
+			isValid () const noexcept override
+			{
+				return m_name != nullptr;
+			}
 
 			/** @copydoc EmEn::Saphir::Declaration::Interface::name() */
 			[[nodiscard]]
-			Key name () const noexcept override;
+			Key
+			name () const noexcept override
+			{
+				return m_name;
+			}
 
 			/** @copydoc EmEn::Saphir::Declaration::Interface::bytes() */
 			[[nodiscard]]
-			size_t bytes () const noexcept override;
+			uint32_t
+			bytes () const noexcept override
+			{
+				return 0;
+			}
 
 			/** @copydoc EmEn::Saphir::Declaration::Interface::sourceCode() */
 			[[nodiscard]]
@@ -75,14 +93,22 @@ namespace EmEn::Saphir::Declaration
 			 * @return Key
 			 */
 			[[nodiscard]]
-			Key returnType () const noexcept;
+			Key
+			returnType () const noexcept
+			{
+				return m_returnType;
+			}
 
 			/**
 			 * @brief parameters
 			 * @return const std::vector< std::string > &
 			 */
 			[[nodiscard]]
-			const std::vector< std::string > & parameters () const noexcept;
+			const std::vector< std::string > &
+			parameters () const noexcept
+			{
+				return m_parameters;
+			}
 
 			/**
 			 * @brief Adds an input parameter to the function signature.
@@ -97,14 +123,22 @@ namespace EmEn::Saphir::Declaration
 			 * @param type The type of the parameter.
 			 * @param name The name of the parameter.
 			 */
-			void addOutParameter (Key type, Key name) noexcept;
+			void
+			addOutParameter (Key type, Key name) noexcept
+			{
+				m_parameters.emplace_back((std::stringstream{} << Keys::GLSL::Out << ' ' << type << ' ' << name).str());
+			}
 
 			/**
 			 * @brief Adds a reference parameter to the function signature.
 			 * @param type The type of the parameter.
 			 * @param name The name of the parameter.
 			 */
-			void addInOutParameter (Key type, Key name) noexcept;
+			void
+			addInOutParameter (Key type, Key name) noexcept
+			{
+				m_parameters.emplace_back((std::stringstream{} << Keys::GLSL::InOut << ' ' << type << ' ' << name).str());
+			}
 
 			/**
 			 * @brief Generates the call code.
@@ -134,6 +168,6 @@ namespace EmEn::Saphir::Declaration
 
 			Key m_name;
 			Key m_returnType;
-			std::vector< std::string > m_parameters{};
+			std::vector< std::string > m_parameters;
 	};
 }

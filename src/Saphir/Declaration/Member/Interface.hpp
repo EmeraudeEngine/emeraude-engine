@@ -27,6 +27,7 @@
 #pragma once
 
 /* STL inclusions. */
+#include <cstdint>
 #include <string>
 
 /* Local inclusions for usages. */
@@ -88,11 +89,11 @@ namespace EmEn::Saphir::Declaration::Member
 			virtual Key name () const noexcept = 0;
 
 			/**
-			 * @brief Returns the size in bytes of the member taking in account the alignement.
-			 * @return size_t
+			 * @brief Returns the size in bytes of the member taking in account the alignment.
+			 * @return uint32_t
 			 */
 			[[nodiscard]]
-			virtual size_t bytes () const noexcept = 0;
+			virtual uint32_t bytes () const noexcept = 0;
 
 			/**
 			 * @brief Returns the GLSL source code for the member.

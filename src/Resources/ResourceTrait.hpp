@@ -29,9 +29,9 @@
 /* STL inclusions. */
 #include <cstddef>
 #include <cstdint>
-#include <array>
-#include <set>
 #include <string>
+#include <vector>
+#include <memory>
 #include <mutex>
 #include <filesystem>
 
@@ -52,12 +52,14 @@
 namespace EmEn::Resources
 {
 	/**
-	 * @brief This class describe a loadable resource with dependencies.
+	 * @brief This class describes a loadable resource with dependencies.
+	 * @note [OBS][SHARED-OBSERVABLE]
+	 * @extends std::enable_shared_from_this A resource should self-replicate its smart-pointer.
 	 * @extends EmEn::Libs::NameableTrait A resource is always named.
-	 * @extends EmEn::Libs::FlagTrait A resource needs flags to change behavior of resource construction.
+	 * @extends EmEn::Libs::FlagTrait A resource needs flags to change the behavior of resource construction.
 	 * @extends EmEn::Libs::ObservableTrait A resource is observable to keep track of loading states.
 	 */
-	class ResourceTrait : public Libs::NameableTrait, public Libs::FlagTrait< uint32_t >, public Libs::ObservableTrait
+	class ResourceTrait : public std::enable_shared_from_this< ResourceTrait >, public Libs::NameableTrait, public Libs::FlagTrait< uint32_t >, public Libs::ObservableTrait
 	{
 		public:
 
@@ -69,6 +71,11 @@ namespace EmEn::Resources
 				/* Enumeration boundary. */
 				MaxEnum
 			};
+
+			/** @brief Enables resource information in the terminal. */
+			inline static bool s_verboseEnabled{false};
+			/** @brief Enables the resources conversion warning messages in the console. */
+			inline static bool s_quietConversion{true};
 
 			/**
 			 * @brief Copy constructor.
@@ -102,14 +109,14 @@ namespace EmEn::Resources
 			~ResourceTrait () override;
 
 			/**
-			 * @brief Returns whether the resource is the top of the loadable chain of objects.
+			 * @brief Returns whether the resource is the top of a loadable object chain.
 			 * @return bool
 			 */
 			[[nodiscard]]
 			bool
 			isTopResource () const noexcept
 			{
-				return m_parents.empty();
+				return m_parentsToNotify.empty();
 			}
 
 			/**
@@ -120,11 +127,11 @@ namespace EmEn::Resources
 			size_t
 			dependencyCount () const noexcept
 			{
-				return m_dependencies.size();
+				return m_dependenciesToWaitFor.size();
 			}
 
 			/**
-			 * @brief Returns whether this resource object is newly created and no loading is currently occurs.
+			 * @brief Returns whether this resource object is newly created and no loading is currently occurring.
 			 * @note This method is useful when using Container::getOrCreate() with a resource.
 			 * @warning If you want to know if the resource is not yet loaded, use "!AbstractChainableLoading::isLoaded()".
 			 * @return bool
@@ -194,7 +201,7 @@ namespace EmEn::Resources
 			void
 			setDirectLoadingHint () noexcept
 			{
-				m_flags[DirectLoading] = true;
+				this->enableFlag(DirectLoading);
 			}
 
 			/**
@@ -225,14 +232,31 @@ namespace EmEn::Resources
 			 */
 			virtual bool load (const Json::Value & data) noexcept = 0;
 
+			/**
+			 * @brief When the resource is loaded in memory, this method returns the size in bytes occupied in RAM.
+			 * @return size_t
+			 */
+			[[nodiscard]]
+			virtual
+			size_t
+			memoryOccupied () const noexcept
+			{
+				return sizeof(*this);
+			}
+
 		protected:
 
 			/**
-			 * @brief Constructs a resource.
-			 * @param resourceName A reference to a string.
-			 * @param initialResourceFlagBits The initial resource flag bits.
+			 * @brief Constructs an abstract resource.
+			 * @param resourceName A string for the resource name [std::move].
+			 * @param initialResourceFlags The initial resource flags.
 			 */
-			ResourceTrait (const std::string & resourceName, uint32_t initialResourceFlagBits) noexcept;
+			ResourceTrait (std::string resourceName, uint32_t initialResourceFlags) noexcept
+				: NameableTrait{std::move(resourceName)},
+				FlagTrait{initialResourceFlags}
+			{
+
+			}
 
 			/**
 			 * @brief Returns whether the resource use direct loading mode from manager.
@@ -242,7 +266,7 @@ namespace EmEn::Resources
 			bool
 			isDirectLoading () const noexcept
 			{
-				return m_flags[DirectLoading];
+				return this->isFlagEnabled(DirectLoading);
 			}
 
 			/**
@@ -265,7 +289,7 @@ namespace EmEn::Resources
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool addDependency (ResourceTrait * dependency) noexcept;
+			bool addDependency (const std::shared_ptr< ResourceTrait > & dependency) noexcept;
 
 			/**
 			 * @brief Sets the current status of loading by the inherited class.
@@ -277,11 +301,17 @@ namespace EmEn::Resources
 			bool setLoadSuccess (bool status) noexcept;
 
 			/**
-			 * @brief This event is called when every dependency are loaded.
+			 * @brief This event is called when every dependency is loaded.
+			 * @note This method should be overridden if something special has to be done when loaded.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			virtual bool onDependenciesLoaded () noexcept = 0;
+			virtual
+			bool
+			onDependenciesLoaded () noexcept
+			{
+				return true;
+			}
 
 			/**
 			 * @brief Extracts the resource name from a file path.
@@ -296,45 +326,34 @@ namespace EmEn::Resources
 		private:
 
 			/**
-			 * @brief This private method is called from a child resource through m_parents
-			 * set to relaunch the parent resource dependencies check.
+			 * @brief This private method is called from a child resource through m_parents set to relaunch the parent resource dependencies check.
 			 * @param dependency A pointer to the loaded dependency. Suitable to unlink the resource from dependency set.
 			 * @return void
 			 */
-			void dependencyLoaded (ResourceTrait * dependency) noexcept;
+			void dependencyLoaded (const std::shared_ptr< ResourceTrait > & dependency) noexcept;
 
 			/**
-			 * @brief Checks this resource for every dependency below it. If everything is loaded, the method launch
-			 * a parent check or if this resource is a top level, the final call to AbstractChainableLoading::onDependenciesLoaded()
+			 * @brief Checks this resource for every dependency below it. If everything is loaded, the method launches
+			 * a parent check, or if this resource is a top level, the final call to AbstractChainableLoading::onDependenciesLoaded()
 			 * to notice the resource is available.
 			 * @return void
 			 */
 			void checkDependencies () noexcept;
 
 			/**
-			 * @brief This is the real method that begin the first stage of resource loading.
-			 * @param manual Boolean that denote if the status will be Enqueuing or ManualEnqueuing.
+			 * @brief This is the real method that begins the first stage of resource loading.
+			 * @param manual Boolean that denotes if the status is Enqueuing or ManualEnqueuing.
 			 * @return bool
 			 */
 			[[nodiscard]]
 			bool initializeEnqueuing (bool manual) noexcept;
 
 			/* Flag names. */
-			static constexpr auto DirectLoading{0UL};
+			static constexpr uint32_t DirectLoading = 1U << 31;
 
-			std::set< ResourceTrait * > m_parents;
-			std::set< ResourceTrait * > m_dependencies;
+			std::vector< std::shared_ptr< ResourceTrait > > m_parentsToNotify;
+			std::vector< std::shared_ptr< ResourceTrait > > m_dependenciesToWaitFor;
 			Status m_status{Status::Unloaded};
-			mutable std::mutex m_checkAccess;
-			std::array< bool, 8 > m_flags{
-				false/*DirectLoading*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/
-			};
+			mutable std::mutex m_dependenciesAccess;
 	};
 }

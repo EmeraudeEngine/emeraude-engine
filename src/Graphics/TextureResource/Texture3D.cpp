@@ -26,23 +26,12 @@
 
 #include "Texture3D.hpp"
 
-/* STL inclusions. */
-#include <cstddef>
-#include <cstdint>
-#include <memory>
-#include <string>
-
 /* Local inclusions. */
-#include "Abstract.hpp"
-#include "Graphics/ImageResource.hpp"
-#include "Graphics/Renderer.hpp"
-#include "Libs/PixelFactory/Color.hpp"
-#include "Resources/Container.hpp"
 #include "Resources/Manager.hpp"
-#include "Tracer.hpp"
 #include "Vulkan/Image.hpp"
 #include "Vulkan/ImageView.hpp"
 #include "Vulkan/Sampler.hpp"
+#include "Graphics/Renderer.hpp"
 
 /* Defining the resource manager class id. */
 template<>
@@ -55,20 +44,9 @@ const size_t EmEn::Resources::Container< EmEn::Graphics::TextureResource::Textur
 namespace EmEn::Graphics::TextureResource
 {
 	using namespace EmEn::Libs;
-	using namespace Vulkan;
+	using namespace EmEn::Vulkan;
 
 	const size_t Texture3D::ClassUID{getClassUID(ClassId)};
-
-	Texture3D::Texture3D (const std::string & name, uint32_t resourceFlagBits) noexcept
-		: Abstract(name, resourceFlagBits)
-	{
-
-	}
-
-	Texture3D::~Texture3D ()
-	{
-		this->destroyFromHardware();
-	}
 
 	bool
 	Texture3D::isCreated () const noexcept
@@ -123,24 +101,6 @@ namespace EmEn::Graphics::TextureResource
 		return true;
 	}
 
-	size_t
-	Texture3D::classUID () const noexcept
-	{
-		return ClassUID;
-	}
-
-	bool
-	Texture3D::is (size_t classUID) const noexcept
-	{
-		return classUID == ClassUID;
-	}
-
-	Type
-	Texture3D::type () const noexcept
-	{
-		return Type::Texture3D;
-	}
-
 	bool
 	Texture3D::isGrayScale () const noexcept
 	{
@@ -155,71 +115,6 @@ namespace EmEn::Graphics::TextureResource
 		return PixelFactory::Black;
 	}
 
-	uint32_t
-	Texture3D::dimensions () const noexcept
-	{
-		return 3;
-	}
-
-	bool
-	Texture3D::isCubemapTexture () const noexcept
-	{
-		return false;
-	}
-
-	uint32_t
-	Texture3D::frameCount () const noexcept
-	{
-		if ( !this->isLoaded() )
-		{
-			return 0;
-		}
-
-		return 1;
-	}
-
-	uint32_t
-	Texture3D::duration () const noexcept
-	{
-		return 0;
-	}
-
-	size_t
-	Texture3D::frameIndexAt (uint32_t /*sceneTime*/) const noexcept
-	{
-		return 0;
-	}
-
-	std::shared_ptr< Image >
-	Texture3D::image () const noexcept
-	{
-		return m_image;
-	}
-
-	std::shared_ptr< ImageView >
-	Texture3D::imageView () const noexcept
-	{
-		return m_imageView;
-	}
-
-	std::shared_ptr< Sampler >
-	Texture3D::sampler () const noexcept
-	{
-		return m_sampler;
-	}
-
-	bool
-	Texture3D::request3DTextureCoordinates () const noexcept
-	{
-		return true;
-	}
-
-	const char *
-	Texture3D::classLabel () const noexcept
-	{
-		return ClassId;
-	}
-
 	bool
 	Texture3D::load () noexcept
 	{
@@ -232,11 +127,11 @@ namespace EmEn::Graphics::TextureResource
 
 		m_localData.resize(size * size * size * 4);
 
-		for ( size_t xIndex = 0; xIndex < size; xIndex++ )
+		for ( uint32_t xIndex = 0; xIndex < size; xIndex++ )
 		{
-			for ( size_t yIndex = 0; yIndex < size; yIndex++ )
+			for ( uint32_t yIndex = 0; yIndex < size; yIndex++ )
 			{
-				for ( size_t zIndex = 0; zIndex < size; zIndex++ )
+				for ( uint32_t zIndex = 0; zIndex < size; zIndex++ )
 				{
 					const auto index = (xIndex * yIndex * size) * zIndex;
 
@@ -254,14 +149,14 @@ namespace EmEn::Graphics::TextureResource
 	bool
 	Texture3D::load (const std::filesystem::path & filepath) noexcept
 	{
-		return this->load(ImageResource::get(getResourceNameFromFilepath(filepath, "Images"), true));
+		return this->load(Resources::Manager::instance()->container< ImageResource >()->getResource(getResourceNameFromFilepath(filepath, "Images"), true));
 	}
 
 	bool
 	Texture3D::load (const Json::Value & /*data*/) noexcept
 	{
 		/* NOTE: This resource has no local store,
-		 * so this method won't be called from a resource container ! */
+		 * so this method won't be called from a resource container! */
 		Tracer::error(ClassId, "This type of resource is not intended to be loaded this way !");
 
 		return false;
@@ -286,7 +181,7 @@ namespace EmEn::Graphics::TextureResource
 
 		/*m_localData = imageResource;
 
-		if ( !this->addDependency(m_localData.get()) )
+		if ( !this->addDependency(m_localData) )
 		{
 			TraceError{ClassId} << "Unable to add the image '" << imageResource->name() << "' as dependency !";
 
@@ -294,17 +189,5 @@ namespace EmEn::Graphics::TextureResource
 		}*/
 
 		return this->setLoadSuccess(true);
-	}
-
-	std::shared_ptr< Texture3D >
-	Texture3D::get (const std::string & resourceName, bool directLoad) noexcept
-	{
-		return Resources::Manager::instance()->texture3Ds().getResource(resourceName, !directLoad);
-	}
-
-	std::shared_ptr< Texture3D >
-	Texture3D::getDefault () noexcept
-	{
-		return Resources::Manager::instance()->texture3Ds().getDefaultResource();
 	}
 }

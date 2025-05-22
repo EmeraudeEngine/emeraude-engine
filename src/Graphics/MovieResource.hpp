@@ -27,20 +27,17 @@
 #pragma once
 
 /* STL inclusions. */
-#include <cstddef>
-#include <cstdint>
-#include <string>
 #include <utility>
-#include <vector>
-#include <memory>
 
 /* Third-Party inclusions. */
 #include "json/json.h"
 
+/* Local inclusions for inheritances. */
+#include "Resources/ResourceTrait.hpp"
+
 /* Local inclusions. */
 #include "Libs/PixelFactory/Color.hpp"
 #include "Libs/PixelFactory/Pixmap.hpp"
-#include "Resources/ResourceTrait.hpp"
 #include "Resources/Container.hpp"
 
 namespace EmEn::Graphics
@@ -58,7 +55,7 @@ namespace EmEn::Graphics
 		public:
 
 			/** @brief A frame from the movie with duration in milliseconds. */
-			using Frame = std::pair< Libs::PixelFactory::Pixmap< uint8_t >, size_t >;
+			using Frame = std::pair< Libs::PixelFactory::Pixmap< uint8_t >, uint32_t >;
 
 			/** @brief Class identifier. */
 			static constexpr auto ClassId{"MovieResource"};
@@ -66,12 +63,20 @@ namespace EmEn::Graphics
 			/** @brief Observable class unique identifier. */
 			static const size_t ClassUID;
 
+			/** @brief Defines the resource dependency complexity. */
+			static constexpr auto Complexity{Resources::DepComplexity::None};
+
 			/**
 			 * @brief Constructs a movie resource.
-			 * @param name The name of the resource.
-			 * @param resourceFlagBits The resource flag bits. Default none. (Unused yet)
+			 * @param name A string for the resource name [std::move].
+			 * @param resourceFlags The resource flag bits. Default none. (Unused yet)
 			 */
-			explicit MovieResource (const std::string & name, uint32_t resourceFlagBits = 0) noexcept;
+			explicit
+			MovieResource (std::string name, uint32_t resourceFlags = 0) noexcept
+				: ResourceTrait{std::move(name), resourceFlags}
+			{
+
+			}
 
 			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
 			[[nodiscard]]
@@ -105,6 +110,21 @@ namespace EmEn::Graphics
 
 			/** @copydoc EmEn::Resources::ResourceTrait::load(const Json::Value &) */
 			bool load (const Json::Value & data) noexcept override;
+
+			/** @copydoc EmEn::Resources::ResourceTrait::memoryOccupied() const noexcept */
+			[[nodiscard]]
+			size_t
+			memoryOccupied () const noexcept override
+			{
+				size_t bytes = sizeof(*this);
+
+				for ( const auto & pixmap : m_frames | std::views::keys )
+				{
+					bytes += pixmap.bytes< size_t >();
+				}
+
+				return bytes;
+			}
 
 			/**
 			 * @brief Returns the pixmap.
@@ -175,7 +195,7 @@ namespace EmEn::Graphics
 			}
 
 			/**
-			 * @brief Returns the number of frame.
+			 * @brief Returns the number of frames.
 			 * @return size_t
 			 */
 			[[nodiscard]]
@@ -186,12 +206,12 @@ namespace EmEn::Graphics
 			}
 
 			/**
-			 * @brief Returns the index of the frame at specific time.
+			 * @brief Returns the index of the frame at a specific time.
 			 * @param timePoint A time point in milliseconds.
-			 * @return size_t
+			 * @return uint32_t
 			 */
 			[[nodiscard]]
-			size_t frameIndexAt (uint32_t timePoint) const noexcept;
+			uint32_t frameIndexAt (uint32_t timePoint) const noexcept;
 
 			/**
 			 * @brief Sets whether the animation is looping.
@@ -215,22 +235,6 @@ namespace EmEn::Graphics
 				return m_looping;
 			}
 
-			/**
-			 * @brief Returns a movie resource by its name.
-			 * @param resourceName A reference to a string.
-			 * @param directLoad Use the direct loading mode. Default false.
-			 * @return std::shared_ptr< MovieResource >
-			 */
-			[[nodiscard]]
-			static std::shared_ptr< MovieResource > get (const std::string & resourceName, bool directLoad = false) noexcept;
-
-			/**
-			 * @brief Returns the default movie resource.
-			 * @return std::shared_ptr< MovieResource >
-			 */
-			[[nodiscard]]
-			static std::shared_ptr< MovieResource > getDefault () noexcept;
-
 		private:
 
 			/** @copydoc EmEn::Resources::ResourceTrait::onDependenciesLoaded() */
@@ -239,14 +243,14 @@ namespace EmEn::Graphics
 
 			/**
 			 * @brief Loads a movie based on a numerical sequence of files.
-			 * @param data A reference to a Json value.
+			 * @param data A reference to a JSON value.
 			 * @return bool
 			 */
 			bool loadParametric (const Json::Value & data) noexcept;
 
 			/**
 			 * @brief Loads a manual version of a movie.
-			 * @param data A reference to a Json value.
+			 * @param data A reference to a JSON value.
 			 * @return bool
 			 */
 			bool loadManual (const Json::Value & data) noexcept;
@@ -258,21 +262,21 @@ namespace EmEn::Graphics
 			void updateDuration () noexcept;
 
 			/**
-			 * @brief Returns the frame duration from the json resource description.
-			 * @param data A reference to a json node.
+			 * @brief Returns the frame duration from the JSON resource description.
+			 * @param data A reference to a JSON node.
 			 * @param frameCount The animation frame count for calculation.
-			 * @return size_t
+			 * @return uint32_t
 			 */
 			[[nodiscard]]
-			static size_t extractFrameDuration (const Json::Value & data, size_t frameCount) noexcept;
+			static uint32_t extractFrameDuration (const Json::Value & data, uint32_t frameCount) noexcept;
 
 			/**
 			 * @brief extractCountWidth
 			 * @param basename
 			 * @param replaceKey
-			 * @return size_t
+			 * @return uint32_t
 			 */
-			static size_t extractCountWidth (const std::string & basename, std::string & replaceKey) noexcept;
+			static uint32_t extractCountWidth (const std::string & basename, std::string & replaceKey) noexcept;
 
 			static constexpr uint32_t BaseTime{1000};
 			static constexpr uint32_t DefaultFrameDuration{BaseTime / 30};

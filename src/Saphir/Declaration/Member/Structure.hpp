@@ -47,23 +47,48 @@ namespace EmEn::Saphir::Declaration::Member
 			 * @param type A C-string to set the type of the member. Use one of Keys::GLSL::* keyword.
 			 * @param name A C-string to set the name of the member.
 			 */
-			Structure (VariableType type, Key name) noexcept;
+			Structure (VariableType type, Key name) noexcept
+				: m_type{type},
+				m_name{name}
+			{
+
+			}
 
 			/** @copydoc EmEn::Saphir::Declaration::Member::Interface::type() */
 			[[nodiscard]]
-			VariableType type () const noexcept override;
+			VariableType
+			type () const noexcept override
+			{
+				return m_type;
+			}
 
 			/** @copydoc EmEn::Saphir::Declaration::Member::Interface::name() */
 			[[nodiscard]]
-			Key name () const noexcept override;
+			Key
+			name () const noexcept override
+			{
+				return m_name;
+			}
 
 			/** @copydoc EmEn::Saphir::Declaration::Member::Interface::bytes() */
 			[[nodiscard]]
-			size_t bytes () const noexcept override;
+			uint32_t
+			bytes () const noexcept override
+			{
+				return size_bytes(m_type);
+			}
 
 			/** @copydoc EmEn::Saphir::Declaration::Member::Interface::sourceCode() */
 			[[nodiscard]]
-			std::string sourceCode () const noexcept override;
+			std::string
+			sourceCode () const noexcept override
+			{
+				std::stringstream code;
+
+				code << to_cstring(m_type) << ' ' << m_name << ";" "\n";
+
+				return code.str();
+			}
 
 		private:
 

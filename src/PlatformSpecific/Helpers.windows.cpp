@@ -41,7 +41,7 @@
 
 namespace EmEn::PlatformSpecific
 {
-	static constexpr auto TracerTag{"Helpers"};
+	constexpr auto TracerTag{"Helpers"};
 
 	std::wstring
 	getStringValueFromHKLM (const std::wstring & regSubKey, const std::wstring & regValue)

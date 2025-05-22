@@ -32,6 +32,7 @@
 
 /* Local inclusions for inheritances */
 #include "Libs/FlagTrait.hpp"
+#include "Types.hpp"
 
 namespace EmEn::Graphics::Geometry
 {
@@ -49,7 +50,13 @@ namespace EmEn::Graphics::Geometry
 			 * @param length Sets the length in VBO or IBO.
 			 * @param enableDoubleSidedFaces Enable double sided faces. Default false.
 			 */
-			explicit SubGeometry (uint32_t offset, uint32_t length, bool enableDoubleSidedFaces = false) noexcept;
+			explicit
+			SubGeometry (uint32_t offset, uint32_t length, bool enableDoubleSidedFaces = false) noexcept
+				: FlagTrait{enableDoubleSidedFaces ? EnableDoubleSidedFaces : Regular},
+				m_range{offset, length}
+			{
+
+			}
 
 			/**
 			 * @brief Returns where to execute in the VBO or IBO to draw the geometry.

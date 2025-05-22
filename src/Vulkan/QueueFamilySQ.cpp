@@ -31,12 +31,6 @@
 
 namespace EmEn::Vulkan
 {
-	QueueFamilySQ::QueueFamilySQ (uint32_t index) noexcept
-		: m_queueFamilyIndex(index)
-	{
-
-	}
-
 	VkDeviceQueueCreateInfo
 	QueueFamilySQ::getCreateInfo (VkDeviceQueueCreateFlags createFlag) const noexcept
 	{

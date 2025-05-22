@@ -70,7 +70,7 @@ namespace EmEn::Console
 			Controllable & operator= (Controllable && copy) noexcept = default;
 
 			/**
-			 * @brief The destructor auto remove this object from the console.
+			 * @brief The destructor auto removes this object from the console.
 			 */
 			virtual ~Controllable ();
 
@@ -116,13 +116,18 @@ namespace EmEn::Console
 			 * @brief Constructor that identifies by a name the new controllable object.
 			 * @param consoleIdentifier A string to for the name of the object [std::move].
 			 */
-			explicit Controllable (std::string consoleIdentifier) noexcept;
+			explicit
+			Controllable (std::string consoleIdentifier) noexcept
+				: m_identifier{std::move(consoleIdentifier)}
+			{
+
+			}
 
 			/**
 			 * @brief Register a command for this console controllable object.
 			 * @param commandNames The way of calling the command inside the console.
 			 * @param binding The binding to execute in the command.
-			 * @param help A way to explain that command. By default, "NoHelp" will be display.
+			 * @param help A way to explain that command. By default, "NoHelp" will be displayed.
 			 */
 			void bindCommand (const std::string & commandNames, const Binding & binding, const std::string & help = {"No help"}) noexcept;
 

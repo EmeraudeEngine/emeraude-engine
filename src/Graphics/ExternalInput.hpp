@@ -36,6 +36,7 @@ namespace EmEn::Graphics
 {
 	/**
 	 * @brief Class that define a device to grab video from outside the engine like a webcam.
+	 * @todo WIP. Use a cross-platform library to gain access to a webcam.
 	 * @extends EmEn::ServiceInterface This is a service.
 	 */
 	class ExternalInput final : public ServiceInterface
@@ -45,25 +46,22 @@ namespace EmEn::Graphics
 			/** @brief Class identifier. */
 			static constexpr auto ClassId{"GraphicsExternalInputService"};
 
-			/** @brief Observable class unique identifier. */
-			static const size_t ClassUID;
-
 			/**
 			 * @brief Constructs the external video input.
 			 */
-			ExternalInput () noexcept;
+			ExternalInput () noexcept
+				: ServiceInterface{ClassId}
+			{
 
-			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
-			[[nodiscard]]
-			size_t classUID () const noexcept override;
-
-			/** @copydoc EmEn::Libs::ObservableTrait::is() const */
-			[[nodiscard]]
-			bool is (size_t classUID) const noexcept override;
+			}
 
 			/** @copydoc EmEn::ServiceInterface::usable() */
 			[[nodiscard]]
-			bool usable () const noexcept override;
+			bool
+			usable () const noexcept override
+			{
+				return m_flags[ServiceInitialized];
+			}
 
 		private:
 

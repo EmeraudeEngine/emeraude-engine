@@ -47,7 +47,7 @@ namespace EmEn::Physics
 		/**
 		 * @brief Convenient helper to express values in kilometers.
 		 * @tparam precision_t The precision of floating point number.
-		 * @param n The number of unit.
+		 * @param n The number of units.
 		 * @return precision_t
 		 */
 		template< typename precision_t = float >
@@ -68,7 +68,7 @@ namespace EmEn::Physics
 		/**
 		 * @brief Convenient helper to express values in meters.
 		 * @tparam precision_t The precision of floating point number.
-		 * @param n The number of unit.
+		 * @param n The number of units.
 		 * @return precision_t
 		 */
 		template< typename precision_t = float >
@@ -89,7 +89,7 @@ namespace EmEn::Physics
 		/**
 		 * @brief Convenient helper to express values in centimeters.
 		 * @tparam precision_t The precision of floating point number.
-		 * @param n The number of unit.
+		 * @param n The number of units.
 		 * @return precision_t
 		 */
 		template< typename precision_t = float >
@@ -110,7 +110,7 @@ namespace EmEn::Physics
 		/**
 		 * @brief Convenient helper to express values in millimeters.
 		 * @tparam precision_t The precision of floating point number.
-		 * @param n The number of unit.
+		 * @param n The number of units.
 		 * @return precision_t
 		 */
 		template< typename precision_t = float >
@@ -131,7 +131,7 @@ namespace EmEn::Physics
 		/**
 		 * @brief Convenient helper to express values in tonnes.
 		 * @tparam precision_t The precision of floating point number.
-		 * @param n The number of unit.
+		 * @param n The number of units.
 		 * @return precision_t
 		 */
 		template< typename precision_t = float >
@@ -152,7 +152,7 @@ namespace EmEn::Physics
 		/**
 		 * @brief Convenient helper to express values in kilograms.
 		 * @tparam precision_t The precision of floating point number.
-		 * @param n The number of unit.
+		 * @param n The number of units.
 		 * @return precision_t
 		 */
 		template< typename precision_t = float >
@@ -173,7 +173,7 @@ namespace EmEn::Physics
 		/**
 		 * @brief Convenient helper to express values in grams.
 		 * @tparam precision_t The precision of floating point number.
-		 * @param n The number of unit.
+		 * @param n The number of units.
 		 * @return precision_t
 		 */
 		template< typename precision_t = float >
@@ -194,7 +194,7 @@ namespace EmEn::Physics
 		/**
 		 * @brief Convenient helper to express values in milligrams.
 		 * @tparam precision_t The precision of floating point number.
-		 * @param n The number of unit.
+		 * @param n The number of units.
 		 * @return precision_t
 		 */
 		template< typename precision_t = float >
@@ -215,7 +215,7 @@ namespace EmEn::Physics
 		/**
 		 * @brief Convenient helper to express values in hours.
 		 * @tparam precision_t The precision of floating point number.
-		 * @param n The number of unit.
+		 * @param n The number of units.
 		 * @return precision_t
 		 */
 		template< typename precision_t = float >
@@ -236,7 +236,7 @@ namespace EmEn::Physics
 		/**
 		 * @brief Convenient helper to express values in minutes.
 		 * @tparam precision_t The precision of floating point number.
-		 * @param n The number of unit.
+		 * @param n The number of units.
 		 * @return precision_t
 		 */
 		template< typename precision_t = float >
@@ -257,7 +257,7 @@ namespace EmEn::Physics
 		/**
 		 * @brief Convenient helper to express values in seconds.
 		 * @tparam precision_t The precision of floating point number.
-		 * @param n The number of unit.
+		 * @param n The number of units.
 		 * @return precision_t
 		 */
 		template< typename precision_t = float >
@@ -278,7 +278,7 @@ namespace EmEn::Physics
 		/**
 		 * @brief Convenient helper to express values in milliseconds.
 		 * @tparam precision_t The precision of floating point number.
-		 * @param n The number of unit.
+		 * @param n The number of units.
 		 * @return precision_t
 		 */
 		template< typename precision_t = float >
@@ -299,7 +299,7 @@ namespace EmEn::Physics
 		/**
 		 * @brief Convenient helper to express values in microseconds.
 		 * @tparam precision_t The precision of floating point number.
-		 * @param n The number of unit.
+		 * @param n The number of units.
 		 * @return precision_t
 		 */
 		template< typename precision_t = float >
@@ -320,7 +320,7 @@ namespace EmEn::Physics
 		/**
 		 * @brief Convenient helper to express values in nanoseconds.
 		 * @tparam precision_t The precision of floating point number.
-		 * @param n The number of unit.
+		 * @param n The number of units.
 		 * @return precision_t
 		 */
 		template< typename precision_t = float >

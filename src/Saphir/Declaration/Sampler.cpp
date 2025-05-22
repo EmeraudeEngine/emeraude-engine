@@ -31,27 +31,12 @@
 
 namespace EmEn::Saphir::Declaration
 {
-	using namespace Keys;
-
-	Sampler::Sampler (uint32_t set, uint32_t binding, Key type, Key name, size_t arraySize) noexcept
-		: m_set(set), m_binding(binding), m_type(type), m_name(name), m_arraySize(arraySize)
-	{
-
-	}
-
-	bool
-	Sampler::isValid () const noexcept
-	{
-		if ( m_type == nullptr || m_name == nullptr )
-			return false;
-
-		return true;
-	}
+	using namespace EmEn::Saphir::Keys;
 
 	std::string
 	Sampler::sourceCode () const noexcept
 	{
-		std::stringstream code{};
+		std::stringstream code;
 
 		code <<
 			GLSL::Layout << "(" << GLSL::Set << " = " << m_set << ", " << GLSL::Binding << " = " << m_binding << ") " <<
@@ -65,41 +50,5 @@ namespace EmEn::Saphir::Declaration
 		code << ";" "\n";
 
 		return code.str();
-	}
-
-	Key
-	Sampler::name () const noexcept
-	{
-		return m_name;
-	}
-
-	size_t
-	Sampler::bytes () const noexcept
-	{
-		return 0;
-	}
-
-	Key
-	Sampler::type () const noexcept
-	{
-		return m_type;
-	}
-
-	size_t
-	Sampler::arraySize () const noexcept
-	{
-		return m_arraySize;
-	}
-
-	uint32_t
-	Sampler::set () const noexcept
-	{
-		return m_set;
-	}
-
-	uint32_t
-	Sampler::binding () const noexcept
-	{
-		return m_binding;
 	}
 }

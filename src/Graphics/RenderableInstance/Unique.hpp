@@ -40,7 +40,7 @@
 namespace EmEn::Graphics::RenderableInstance
 {
 	/**
-	 * @brief This is a renderable object that use an UBO to determine the location of the renderable object.
+	 * @brief This is a renderable object that uses an UBO to determine the location of the renderable object.
 	 * @extends EmEn::Graphics::RenderableInstance::Abstract It needs the base of a renderable instance.
 	 */
 	class Unique final : public Abstract
@@ -56,7 +56,13 @@ namespace EmEn::Graphics::RenderableInstance
 			 * @param location A reference to a coordinates for the initial location. Default origin.
 			 * @param flagBits The multiple renderable instance level flags. Default 0.
 			 */
-			explicit Unique (const std::shared_ptr< Renderable::Interface > & renderable, const Libs::Math::CartesianFrame< float > & location = {}, uint32_t flagBits = 0) noexcept;
+			explicit
+			Unique (const std::shared_ptr< Renderable::Interface > & renderable, const Libs::Math::CartesianFrame< float > & location = {}, uint32_t flagBits = 0) noexcept
+				: Abstract{renderable, flagBits},
+				m_cartesianFrame{location}
+			{
+				this->observe(renderable.get());
+			}
 
 			/** @copydoc EmEn::Graphics::RenderableInstance::Abstract::isModelMatricesCreated() const */
 			[[nodiscard]]
@@ -116,14 +122,14 @@ namespace EmEn::Graphics::RenderableInstance
 
 			/** @copydoc EmEn::Graphics::RenderableInstance::Abstract::instanceCount() */
 			[[nodiscard]]
-			size_t
+			uint32_t
 			instanceCount () const noexcept override
 			{
 				return 1;
 			}
 
 			/** @copydoc EmEn::Graphics::RenderableInstance::Abstract::bindInstanceModelLayer() */
-			void bindInstanceModelLayer (const Vulkan::CommandBuffer & commandBuffer, size_t layerIndex) const noexcept override;
+			void bindInstanceModelLayer (const Vulkan::CommandBuffer & commandBuffer, uint32_t layerIndex) const noexcept override;
 
 			Libs::Math::CartesianFrame< float > m_cartesianFrame;
 	};

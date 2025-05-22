@@ -54,7 +54,17 @@ namespace EmEn::Vulkan
 			 * @param binaryCode A reference to a binary data vector.
 			 * @param createFlags The createInfo flags. Default none.
 			 */
-			ShaderModule (const std::shared_ptr< Device > & device, VkShaderStageFlagBits shaderType, const std::vector< uint32_t > & binaryCode, VkShaderModuleCreateFlags createFlags = 0) noexcept;
+			ShaderModule (const std::shared_ptr< Device > & device, VkShaderStageFlagBits shaderType, const std::vector< uint32_t > & binaryCode, VkShaderModuleCreateFlags createFlags = 0) noexcept
+				: AbstractDeviceDependentObject{device},
+				m_shaderType{shaderType},
+				m_binaryCode{binaryCode}
+			{
+				m_createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+				m_createInfo.pNext = nullptr;
+				m_createInfo.flags = createFlags;
+				m_createInfo.codeSize = 0;
+				m_createInfo.pCode = nullptr;
+			}
 
 			/**
 			 * @brief Constructs a shader module with a createInfo.
@@ -63,7 +73,14 @@ namespace EmEn::Vulkan
 			 * @param shaderType The vulkan shader type.
 			 * @param binaryCode A reference to a binary data vector.
 			 */
-			ShaderModule (const std::shared_ptr< Device > & device, const VkShaderModuleCreateInfo & createInfo, VkShaderStageFlagBits shaderType, const std::vector< uint32_t > & binaryCode) noexcept;
+			ShaderModule (const std::shared_ptr< Device > & device, const VkShaderModuleCreateInfo & createInfo, VkShaderStageFlagBits shaderType, const std::vector< uint32_t > & binaryCode) noexcept
+				: AbstractDeviceDependentObject{device},
+				m_createInfo{createInfo},
+				m_shaderType{shaderType},
+				m_binaryCode{binaryCode}
+			{
+
+			}
 
 			/**
 			 * @brief Copy constructor.
@@ -92,7 +109,10 @@ namespace EmEn::Vulkan
 			/**
 			 * @brief Destructs a shader module.
 			 */
-			~ShaderModule () override;
+			~ShaderModule () override
+			{
+				this->destroyFromHardware();
+			}
 
 			/** @copydoc EmEn::Vulkan::AbstractDeviceDependentObject::createOnHardware() */
 			bool createOnHardware () noexcept override;
@@ -112,7 +132,7 @@ namespace EmEn::Vulkan
 			}
 
 			/**
-			 * @brief Returns the shader module create info.
+			 * @brief Returns the shader module createInfo.
 			 * @return const VkShaderModuleCreateInfo &
 			 */
 			[[nodiscard]]
@@ -123,7 +143,7 @@ namespace EmEn::Vulkan
 			}
 
 			/**
-			 * @brief Returns the pipeline shader stage create info.
+			 * @brief Returns the pipeline shader stage createInfo.
 			 * @return const VkPipelineShaderStageCreateInfo &
 			 */
 			[[nodiscard]]
@@ -136,7 +156,7 @@ namespace EmEn::Vulkan
 		private:
 
 			/**
-			 * @brief Prepares the pipeline shader create info.
+			 * @brief Prepares the pipeline shader createInfo.
 			 * @return bool
 			 */
 			bool preparePipelineShaderStageCreateInfo () noexcept;

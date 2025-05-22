@@ -33,12 +33,6 @@
 
 namespace EmEn::Vulkan
 {
-	UniformBufferObject::UniformBufferObject (const std::shared_ptr< Device > & device, VkDeviceSize size, uint32_t blockAlignedSize) noexcept
-		: AbstractHostBuffer(device, 0, size, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT), m_blockAlignedSize(blockAlignedSize)
-	{
-
-	}
-
 	uint32_t
 	UniformBufferObject::maxElementCount () const noexcept
 	{

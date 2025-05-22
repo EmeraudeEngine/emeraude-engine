@@ -66,9 +66,6 @@ namespace EmEn
 			/** @brief Class identifier. */
 			static constexpr auto ClassId{"SettingsService"};
 
-			/** @brief Observable class unique identifier. */
-			static const size_t ClassUID;
-
 			static constexpr auto Filename{"settings.json"};
 			static constexpr auto VersionKey{"WrittenByAppVersion"};
 			static constexpr auto DateKey{"WrittenAtDate"};
@@ -79,51 +76,34 @@ namespace EmEn
 			 * @param fileSystem A reference to file system.
 			 * @param childProcess Declares a child process.
 			 */
-			Settings (const Arguments & arguments, const FileSystem & fileSystem, bool childProcess) noexcept;
+			Settings (const Arguments & arguments, const FileSystem & fileSystem, bool childProcess) noexcept
+				: ServiceInterface{ClassId},
+				m_arguments{arguments},
+				m_fileSystem{fileSystem}
+			{
+				if ( s_instance != nullptr )
+				{
+					std::cerr << __PRETTY_FUNCTION__ << ", constructor called twice !" "\n";
 
-			/**
-			 * @brief Copy constructor.
-			 * @param copy A reference to the copied instance.
-			 */
-			Settings (const Settings & copy) noexcept = delete;
+					std::terminate();
+				}
 
-			/**
-			 * @brief Move constructor.
-			 * @param copy A reference to the copied instance.
-			 */
-			Settings (Settings && copy) noexcept = delete;
+				s_instance = this;
 
-			/**
-			 * @brief Copy assignment.
-			 * @param copy A reference to the copied instance.
-			 */
-			Settings & operator= (const Settings & copy) noexcept = delete;
+				m_flags[ChildProcess] = childProcess;
 
-			/**
-			 * @brief Move assignment.
-			 * @param copy A reference to the copied instance.
-			 */
-			Settings & operator= (Settings && copy) noexcept = delete;
+				if ( !m_flags[ChildProcess] )
+				{
+					m_flags[SaveAtExit] = true;
+				}
+			}
 
 			/**
 			 * @brief Destructs the settings manager.
 			 */
-			~Settings () override;
-
-			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
-			[[nodiscard]]
-			size_t
-			classUID () const noexcept override
+			~Settings () override
 			{
-				return ClassUID;
-			}
-
-			/** @copydoc EmEn::Libs::ObservableTrait::is() const */
-			[[nodiscard]]
-			bool
-			is (size_t classUID) const noexcept override
-			{
-				return classUID == ClassUID;
+				s_instance = nullptr;
 			}
 
 			/** @copydoc EmEn::ServiceInterface::usable() */
@@ -867,21 +847,6 @@ namespace EmEn
 				return s_instance;
 			}
 
-			/**
-			 * @brief STL streams printable object.
-			 * @param out A reference to the stream output.
-			 * @param obj A reference to the object to print.
-			 * @return std::ostream &
-			 */
-			friend std::ostream & operator<< (std::ostream & out, const Settings & obj);
-
-			/**
-			 * @brief Stringifies the object.
-			 * @param obj A reference to the object to print.
-			 * @return std::string
-			 */
-			friend std::string to_string (const Settings & obj) noexcept;
-
 		private:
 
 			/** @copydoc EmEn::ServiceInterface::onInitialize() */
@@ -899,7 +864,7 @@ namespace EmEn
 			std::any get (const std::string & key) const noexcept;
 
 			/**
-			 * @brief Reads a sub-level of the settings file.
+			 * @brief Reads a sublevel of the settings file.
 			 * @param data A reference to the JSON node for the level to read.
 			 * @param store A reference to the setting store.
 			 * @return bool
@@ -916,7 +881,7 @@ namespace EmEn
 			bool readFile (const std::filesystem::path & filepath) noexcept;
 
 			/**
-			 * @brief Writes a sub-level to a settings file.
+			 * @brief Writes a sublevel to a settings file.
 			 * @param store A reference to the current store.
 			 * @param data A reference to the JSON node being written.
 			 * @return bool
@@ -953,6 +918,14 @@ namespace EmEn
 			[[nodiscard]]
 			SettingStore * parseKey (const std::string & key, std::string & variableName) noexcept;
 
+			/**
+			 * @brief STL streams printable object.
+			 * @param out A reference to the stream output.
+			 * @param obj A reference to the object to print.
+			 * @return std::ostream &
+			 */
+			friend std::ostream & operator<< (std::ostream & out, const Settings & obj);
+
 			static Settings * s_instance;
 
 			/* Flag names. */
@@ -976,4 +949,20 @@ namespace EmEn
 				false/*UNUSED*/
 			};
 	};
+
+	/**
+	 * @brief Stringifies the object.
+	 * @param obj A reference to the object to print.
+	 * @return std::string
+	 */
+	inline
+	std::string
+	to_string (const Settings & obj) noexcept
+	{
+		std::stringstream output;
+
+		output << obj;
+
+		return output.str();
+	}
 }

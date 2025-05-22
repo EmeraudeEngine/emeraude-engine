@@ -61,9 +61,15 @@ namespace EmEn::Saphir
 
 			/**
 			 * @brief Constructs a tesselation evaluation shader.
-			 * @param name The name of the shader for identification.
+			 * @param name The name of the shader for identification [std::move].
+			 * @param GLSLVersion A reference to a string [std::move].
+			 * @param GLSLProfile A reference to a string [std::move].
 			 */
-			TesselationEvaluationShader (const std::string & name, const std::string & GLSLVersion, const std::string & GLSLProfile) noexcept;
+			TesselationEvaluationShader (std::string name, std::string GLSLVersion, std::string GLSLProfile) noexcept
+				: AbstractShader{std::move(name), std::move(GLSLVersion), std::move(GLSLProfile)}
+			{
+
+			}
 
 			/** @copydoc EmEn::Saphir::AbstractShader::type() */
 			[[nodiscard]]

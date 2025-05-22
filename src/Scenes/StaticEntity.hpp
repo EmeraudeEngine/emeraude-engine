@@ -95,7 +95,12 @@ namespace EmEn::Scenes
 			 * @param sceneTimeMS The scene current time in milliseconds.
 			 * @param coordinates The location of the static entity. Default origin.
 			 */
-			StaticEntity (const std::string & name, uint32_t sceneTimeMS, const Libs::Math::CartesianFrame< float > & coordinates = {}) noexcept;
+			StaticEntity (const std::string & name, uint32_t sceneTimeMS, const Libs::Math::CartesianFrame< float > & coordinates = {}) noexcept
+				: AbstractEntity{name, sceneTimeMS},
+				m_cartesianFrame{coordinates}
+			{
+
+			}
 
 			/**
 			 * @brief Copy constructor.
@@ -321,7 +326,7 @@ namespace EmEn::Scenes
 
 			/** @copydoc EmEn::Scenes::LocatableInterface::getWorldBoundingBox() const */
 			[[nodiscard]]
-			Libs::Math::Cuboid< float >
+			Libs::Math::Space3D::AACuboid< float >
 			getWorldBoundingBox () const noexcept override
 			{
 				return Libs::Math::OrientedCuboid< float >{this->localBoundingBox(), m_cartesianFrame}.getAxisAlignedBox();
@@ -329,7 +334,7 @@ namespace EmEn::Scenes
 
 			/** @copydoc EmEn::Scenes::LocatableInterface::getWorldBoundingSphere() const */
 			[[nodiscard]]
-			Libs::Math::Sphere< float >
+			Libs::Math::Space3D::Sphere< float >
 			getWorldBoundingSphere () const noexcept override
 			{
 				return {
@@ -418,7 +423,7 @@ namespace EmEn::Scenes
 			 */
 			[[nodiscard]]
 			Libs::Math::Matrix< 4, float >
-			getViewMatrix (bool rotateOnly = false) const noexcept
+			getViewMatrix () const noexcept
 			{
 				return m_cartesianFrame.getViewMatrix();
 			}

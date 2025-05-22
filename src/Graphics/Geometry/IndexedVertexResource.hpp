@@ -27,10 +27,6 @@
 #pragma once
 
 /* STL inclusions. */
-#include <cstddef>
-#include <cstdint>
-#include <string>
-#include <vector>
 #include <memory>
 
 /* Local inclusions for inheritances. */
@@ -59,12 +55,20 @@ namespace EmEn::Graphics::Geometry
 			/** @brief Observable class unique identifier. */
 			static const size_t ClassUID;
 
+			/** @brief Defines the resource dependency complexity. */
+			static constexpr auto Complexity{Resources::DepComplexity::One};
+
 			/**
 			 * @brief Constructs a vertex indexed geometry resource.
 			 * @param name A reference to a string for the resource name.
-			 * @param geometryFlagBits The geometry resource flag bits, See EmEn::Graphics::Geometry::GeometryFlagBits. Default none.
+			 * @param geometryFlags The geometry resource flag bits, See EmEn::Graphics::Geometry::GeometryFlagBits. Default none.
 			 */
-			explicit IndexedVertexResource (const std::string & name, uint32_t geometryFlagBits = 0) noexcept;
+			explicit
+			IndexedVertexResource (const std::string & name, uint32_t geometryFlags = 0) noexcept
+				: Interface{name, geometryFlags}
+			{
+
+			}
 
 			/**
 			 * @brief Copy constructor.
@@ -93,7 +97,10 @@ namespace EmEn::Graphics::Geometry
 			/**
 			 * @brief Destructs the vertex indexed geometry resource.
 			 */
-			~IndexedVertexResource () override;
+			~IndexedVertexResource () override
+			{
+				this->destroyFromHardware(true);
+			}
 
 			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
 			[[nodiscard]]
@@ -139,24 +146,24 @@ namespace EmEn::Graphics::Geometry
 
 			/** @copydoc EmEn::Graphics::Geometry::Interface::subGeometryCount() */
 			[[nodiscard]]
-			size_t
+			uint32_t
 			subGeometryCount () const noexcept override
 			{
-				/* If sub-geometry mechanism is not used, we return 1. */
+				/* If a sub-geometry mechanism is not used, we return 1. */
 				if ( m_subGeometries.empty() )
 				{
 					return 1;
 				}
 
-				return m_subGeometries.size();
+				return static_cast< uint32_t >(m_subGeometries.size());
 			}
 
 			/** @copydoc EmEn::Graphics::Geometry::Interface::subGeometryRange() */
 			[[nodiscard]]
 			std::array< uint32_t, 2 >
-			subGeometryRange (size_t subGeometryIndex) const noexcept override
+			subGeometryRange (uint32_t subGeometryIndex) const noexcept override
 			{
-				/* If sub-geometry mechanism is not used, we return 0 as offset. */
+				/* If a sub-geometry mechanism is not used, we return 0 as offset. */
 				if ( m_subGeometries.empty() )
 				{
 					return {0, static_cast< uint32_t >(m_indexBufferObject->indexCount())};
@@ -172,7 +179,7 @@ namespace EmEn::Graphics::Geometry
 
 			/** @copydoc EmEn::Graphics::Geometry::Interface::boundingBox() */
 			[[nodiscard]]
-			const Libs::Math::Cuboid< float > &
+			const Libs::Math::Space3D::AACuboid< float > &
 			boundingBox () const noexcept override
 			{
 				return m_localData.boundingBox();
@@ -180,7 +187,7 @@ namespace EmEn::Graphics::Geometry
 
 			/** @copydoc EmEn::Graphics::Geometry::Interface::boundingSphere() */
 			[[nodiscard]]
-			const Libs::Math::Sphere< float > &
+			const Libs::Math::Space3D::Sphere< float > &
 			boundingSphere () const noexcept override
 			{
 				return m_localData.boundingSphere();
@@ -207,21 +214,22 @@ namespace EmEn::Graphics::Geometry
 			bool
 			useIndexBuffer () const noexcept override
 			{
-#ifdef DEBUG
-				return m_indexBufferObject != nullptr;
-#else
+				if constexpr ( IsDebug )
+				{
+					return m_indexBufferObject != nullptr;
+				}
+
 				return true;
-#endif
 			}
 
-			/** @copydoc EmEn::Graphics::Geometry::Interface::create() */
-			bool create () noexcept override;
+			/** @copydoc EmEn::Graphics::Geometry::Interface::createOnHardware() noexcept */
+			bool createOnHardware (Vulkan::TransferManager & transferManager) noexcept override;
 
-			/** @copydoc EmEn::Graphics::Geometry::Interface::update() */
-			bool update () noexcept override;
+			/** @copydoc EmEn::Graphics::Geometry::Interface::updateVideoMemory() noexcept */
+			bool updateVideoMemory () noexcept override;
 
-			/** @copydoc EmEn::Graphics::Geometry::Interface::destroy() */
-			void destroy (bool clearLocalData) noexcept override;
+			/** @copydoc EmEn::Graphics::Geometry::Interface::destroyFromHardware(bool) noexcept */
+			void destroyFromHardware (bool clearLocalData) noexcept override;
 
 			/** @copydoc EmEn::Resources::ResourceTrait::classLabel() const */
 			[[nodiscard]]
@@ -240,8 +248,17 @@ namespace EmEn::Graphics::Geometry
 			/** @copydoc EmEn::Resources::ResourceTrait::load(const Json::Value &) */
 			bool load (const Json::Value & data) noexcept override;
 
+			/** @copydoc EmEn::Resources::ResourceTrait::memoryOccupied() const noexcept */
+			[[nodiscard]]
+			size_t
+			memoryOccupied () const noexcept override
+			{
+				// TODO ...
+				return 0;
+			}
+
 			/**
-			 * @brief This load a geometry from a parametric object.
+			 * @brief This loads a geometry from a parametric object.
 			 * @note This only local data and not pushing it to the video RAM.
 			 * @param shape A reference to a geometry from vertexFactory library.
 			 * @return bool
@@ -270,26 +287,11 @@ namespace EmEn::Graphics::Geometry
 				return m_localData;
 			}
 
-			/**
-			 * @brief Returns an indexed vertex resource by its name.
-			 * @param resourceName A reference to a string.
-			 * @param directLoad Use the direct loading mode. Default false.
-			 * @return std::shared_ptr< IndexedVertexResource >
-			 */
-			[[nodiscard]]
-			static std::shared_ptr< IndexedVertexResource > get (const std::string & resourceName, bool directLoad = false) noexcept;
-
-			/**
-			 * @brief Returns the default indexed vertex resource.
-			 * @return std::shared_ptr< IndexedVertexResource >
-			 */
-			[[nodiscard]]
-			static std::shared_ptr< IndexedVertexResource > getDefault () noexcept;
-
 		private:
 
 			/**
 			 * @brief Creates a hardware buffer on the device.
+			 * @param transferManager A reference to the transfer manager.
 			 * @param vertexAttributes A reference to a vertex attribute vector.
 			 * @param vertexCount The number of vertices.
 			 * @param vertexElementCount The number of elements composing a vertex.
@@ -297,11 +299,11 @@ namespace EmEn::Graphics::Geometry
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool createVideoMemoryBuffers (const std::vector< float > & vertexAttributes, size_t vertexCount, size_t vertexElementCount, const std::vector< uint32_t > & indices) noexcept;
+			bool createVideoMemoryBuffers (Vulkan::TransferManager & transferManager, const std::vector< float > & vertexAttributes, uint32_t vertexCount, uint32_t vertexElementCount, const std::vector< uint32_t > & indices) noexcept;
 
 			std::unique_ptr< Vulkan::VertexBufferObject > m_vertexBufferObject;
 			std::unique_ptr< Vulkan::IndexBufferObject > m_indexBufferObject;
-			Libs::VertexFactory::Shape< float > m_localData;
+			Libs::VertexFactory::Shape< float, uint32_t > m_localData;
 			std::vector< SubGeometry > m_subGeometries;
 	};
 }

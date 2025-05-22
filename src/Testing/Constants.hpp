@@ -26,24 +26,21 @@
 
 #pragma once
 
-#ifdef DEBUG
-	#define RES_BASE_PATH "./"
-#else
-	#define RES_BASE_PATH "./"
-#endif
+/* STL inclusions. */
+#include <filesystem>
 
 /* NOTE: Source images. */
-static const std::filesystem::path FixedFont{RES_BASE_PATH "/test-assets/fixed-font.tga"};
-static const std::filesystem::path TrueTypeFont{RES_BASE_PATH "/test-assets/Joystick.Bold.ttf"};
-static const std::filesystem::path LargeRGB{RES_BASE_PATH "/test-assets/1200x800-RBG.jpg"};
-static const std::filesystem::path ExtraLargeRGB{RES_BASE_PATH "/test-assets/8160x6144-RBG.jpg"};
-static const std::filesystem::path MediumGrayscale{RES_BASE_PATH "/test-assets/512x512-Grayscale.png"};
-static const std::filesystem::path MediumGrayscaleAlpha{RES_BASE_PATH "/test-assets/512x512-GrayscaleAlpha.png"};
-static const std::filesystem::path MediumPalette{RES_BASE_PATH "/test-assets/512x512-Palette.png"};
-static const std::filesystem::path MediumRGB{RES_BASE_PATH "/test-assets/512x512-RGB.png"};
-static const std::filesystem::path MediumRGBA{RES_BASE_PATH "/test-assets/512x512-RGBA.png"};
-static const std::filesystem::path SmallPatternRBG_1{RES_BASE_PATH "/test-assets/126x126-RGB_pattern001.png"};
-static const std::filesystem::path SmallPatternRBG_2{RES_BASE_PATH "/test-assets/126x126-RGB_pattern002.png"};
-static const std::filesystem::path SmallPatternRBG_3{RES_BASE_PATH "/test-assets/126x126-RGB_pattern003.png"};
-static const std::filesystem::path MediumPatternRBG_1{RES_BASE_PATH "/test-assets/256x256-RGB_pattern001.png"};
-static const std::filesystem::path SmallRGBA{RES_BASE_PATH "/test-assets/64x64-RGBA.png"};
+static const std::filesystem::path FixedFont{"./test-assets/fixed-font.tga"};
+static const std::filesystem::path TrueTypeFont{"./test-assets/Joystick.Bold.ttf"};
+static const std::filesystem::path LargeRGB{"./test-assets/1200x800-RBG.jpg"};
+static const std::filesystem::path ExtraLargeRGB{"./test-assets/8160x6144-RBG.jpg"};
+static const std::filesystem::path MediumGrayscale{"./test-assets/512x512-Grayscale.png"};
+static const std::filesystem::path MediumGrayscaleAlpha{"./test-assets/512x512-GrayscaleAlpha.png"};
+static const std::filesystem::path MediumPalette{"./test-assets/512x512-Palette.png"};
+static const std::filesystem::path MediumRGB{"./test-assets/512x512-RGB.png"};
+static const std::filesystem::path MediumRGBA{"./test-assets/512x512-RGBA.png"};
+static const std::filesystem::path SmallPatternRBG_1{"./test-assets/126x126-RGB_pattern001.png"};
+static const std::filesystem::path SmallPatternRBG_2{"./test-assets/126x126-RGB_pattern002.png"};
+static const std::filesystem::path SmallPatternRBG_3{"./test-assets/126x126-RGB_pattern003.png"};
+static const std::filesystem::path MediumPatternRBG_1{"./test-assets/256x256-RGB_pattern001.png"};
+static const std::filesystem::path SmallRGBA{"./test-assets/64x64-RGBA.png"};

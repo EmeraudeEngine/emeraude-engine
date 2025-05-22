@@ -29,7 +29,9 @@
 /* STL inclusions. */
 #include <cstdint>
 #include <vector>
-#include <fstream>
+#include <string>
+#include <sstream>
+#include <algorithm>
 
 namespace EmEn::Saphir
 {
@@ -67,7 +69,16 @@ namespace EmEn::Saphir
 			 * @param setType The type of set.
 			 * @return void
 			 */
-			void enableSet (SetType setType) noexcept;
+			void
+			enableSet (SetType setType) noexcept
+			{
+				if ( this->isSetEnabled(setType) )
+				{
+					return;
+				}
+
+				m_setTypes.emplace_back(setType);
+			}
 
 			/**
 			 * @brief Returns whether a set is enabled.
@@ -75,7 +86,13 @@ namespace EmEn::Saphir
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool isSetEnabled (SetType setType) const noexcept;
+			bool
+			isSetEnabled (SetType setType) const noexcept
+			{
+				return std::ranges::any_of(m_setTypes, [setType] (const auto & currentDescriptorSetType) {
+					return currentDescriptorSetType == setType;
+				});
+			}
 
 			/**
 			 * @brief Returns the index of a set.
@@ -85,6 +102,8 @@ namespace EmEn::Saphir
 			[[nodiscard]]
 			uint32_t set (SetType setType) const noexcept;
 
+		private:
+
 			/**
 			 * @brief STL streams printable object.
 			 * @param out A reference to the stream output.
@@ -93,15 +112,32 @@ namespace EmEn::Saphir
 			 */
 			friend std::ostream & operator<< (std::ostream & out, const SetIndexes & obj);
 
-			/**
-			 * @brief Stringifies the object.
-			 * @param obj A reference to the object to print.
-			 * @return std::string
-			 */
-			friend std::string to_string (const SetIndexes & obj) noexcept;
-
-		private:
-
-			std::vector< SetType > m_setTypes{};
+			std::vector< SetType > m_setTypes;
 	};
+
+	inline
+	std::ostream &
+	operator<< (std::ostream & out, const SetIndexes & obj)
+	{
+		return out << SetIndexes::ClassId << " data :" "\n"
+			"Set per view : " << obj.set(SetType::PerView) << "\n"
+			"Set per light : " << obj.set(SetType::PerLight) << "\n"
+			"Set per model layer : " << obj.set(SetType::PerModelLayer) << "\n";
+	}
+
+	/**
+	 * @brief Stringifies the object.
+	 * @param obj A reference to the object to print.
+	 * @return std::string
+	 */
+	inline
+	std::string
+	to_string (const SetIndexes & obj) noexcept
+	{
+		std::stringstream output;
+
+		output << obj;
+
+		return output.str();
+	}
 }

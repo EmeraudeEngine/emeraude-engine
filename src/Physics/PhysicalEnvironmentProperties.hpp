@@ -47,7 +47,14 @@ namespace EmEn::Physics
 			 * @param atmosphericDensity The atmospheric density expressed in kg/m³.
 			 * @param planetRadius The radius of the planet environment in m.
 			 */
-			PhysicalEnvironmentProperties (float surfaceGravity, float atmosphericDensity, float planetRadius) noexcept;
+			PhysicalEnvironmentProperties (float surfaceGravity, float atmosphericDensity, float planetRadius) noexcept
+				: m_surfaceGravity{surfaceGravity},
+				m_steppedSurfaceGravity{surfaceGravity * EngineUpdateCycleDurationS< float >},
+				m_atmosphericDensity{atmosphericDensity},
+				m_planetRadius{planetRadius}
+			{
+
+			}
 
 			/**
 			 * @brief Returns the surface gravity in m/s².
@@ -78,7 +85,7 @@ namespace EmEn::Physics
 			 */
 			[[nodiscard]]
 			float
-			gravity (float altitude) const noexcept
+			gravity (float /*altitude*/) const noexcept
 			{
 				// FIXME: TODO ...
 
@@ -179,6 +186,8 @@ namespace EmEn::Physics
 				return {0.0F, 0.0F, 0.0F};
 			}
 
+		private:
+
 			/**
 			 * @brief STL streams printable object.
 			 * @param out A reference to the stream output.
@@ -187,18 +196,36 @@ namespace EmEn::Physics
 			 */
 			friend std::ostream & operator<< (std::ostream & out, const PhysicalEnvironmentProperties & obj);
 
-			/**
-			 * @brief Stringifies the object.
-			 * @param obj A reference to the object to print.
-			 * @return std::string
-			 */
-			friend std::string to_string (const PhysicalEnvironmentProperties & obj) noexcept;
-
-		private:
-
 			float m_surfaceGravity;
 			float m_steppedSurfaceGravity;
 			float m_atmosphericDensity;
 			float m_planetRadius;
 	};
+
+	inline
+	std::ostream &
+	operator<< (std::ostream & out, const PhysicalEnvironmentProperties & obj)
+	{
+		return out <<
+			"Physical environment properties :" "\n"
+			"Surface gravity : " << obj.m_surfaceGravity << " m/s² (" << obj.m_steppedSurfaceGravity << " m/s² per update)" "\n"
+			"Atmospheric density : " << obj.m_atmosphericDensity << " kg/m³" "\n"
+			"Planet radius : " << obj.m_planetRadius << " m" "\n";
+	}
+
+	/**
+	 * @brief Stringifies the object.
+	 * @param obj A reference to the object to print.
+	 * @return std::string
+	 */
+	inline
+	std::string
+	to_string (const PhysicalEnvironmentProperties & obj) noexcept
+	{
+		std::stringstream output;
+
+		output << obj;
+
+		return output.str();
+	}
 }

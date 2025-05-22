@@ -52,16 +52,34 @@ namespace EmEn::Vulkan
 			/**
 			 * @brief Constructs a render pass.
 			 * @param device A reference to a smart pointer to device where the render pass will be performed.
-			 * @param createFlags The create info flags. Default none.
+			 * @param createFlags The createInfo flags. Default none.
 			 */
-			explicit RenderPass (const std::shared_ptr< Device > & device, VkRenderPassCreateFlags createFlags = 0) noexcept;
+			explicit
+			RenderPass (const std::shared_ptr< Device > & device, VkRenderPassCreateFlags createFlags = 0) noexcept
+				: AbstractDeviceDependentObject{device}
+			{
+				m_createInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+				m_createInfo.pNext = nullptr;
+				m_createInfo.flags = createFlags;
+				m_createInfo.attachmentCount = 0;
+				m_createInfo.pAttachments = nullptr;
+				m_createInfo.subpassCount = 0;
+				m_createInfo.pSubpasses = nullptr;
+				m_createInfo.dependencyCount = 0;
+				m_createInfo.pDependencies = nullptr;
+			}
 
 			/**
-			 * @brief Constructs a render pass with create info.
+			 * @brief Constructs a render pass with createInfo.
 			 * @param device A reference to a smart pointer to device where the render pass will be performed.
-			 * @param createInfo A reference to a create info.
+			 * @param createInfo A reference to a createInfo.
 			 */
-			RenderPass (const std::shared_ptr< Device > & device, const VkRenderPassCreateInfo & createInfo) noexcept;
+			RenderPass (const std::shared_ptr< Device > & device, const VkRenderPassCreateInfo & createInfo) noexcept
+				: AbstractDeviceDependentObject{device},
+				m_createInfo{createInfo}
+			{
+
+			}
 
 			/**
 			 * @brief Copy constructor.
@@ -90,7 +108,10 @@ namespace EmEn::Vulkan
 			/**
 			 * @brief Destructs the render pass.
 			 */
-			~RenderPass () override;
+			~RenderPass () override
+			{
+				this->destroyFromHardware();
+			}
 
 			/** @copydoc EmEn::Vulkan::AbstractDeviceDependentObject::createOnHardware() */
 			bool createOnHardware () noexcept override;
@@ -143,7 +164,7 @@ namespace EmEn::Vulkan
 			}
 
 			/**
-			 * @brief Returns the render-pass create info.
+			 * @brief Returns the render-pass createInfo.
 			 * @return VkRenderPassCreateInfo
 			 */
 			[[nodiscard]]

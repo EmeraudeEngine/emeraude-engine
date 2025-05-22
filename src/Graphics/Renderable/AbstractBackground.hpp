@@ -26,11 +26,6 @@
 
 #pragma once
 
-/* STL inclusions. */
-#include <cstdint>
-#include <memory>
-#include <string>
-
 /* Local inclusions for inheritances. */
 #include "Interface.hpp"
 
@@ -81,81 +76,129 @@ namespace EmEn::Graphics::Renderable
 
 			/** @copydoc EmEn::Graphics::Renderable::Interface::boundingBox() */
 			[[nodiscard]]
-			const Libs::Math::Cuboid< float > & boundingBox () const noexcept final;
+			const Libs::Math::Space3D::AACuboid< float > &
+			boundingBox () const noexcept final
+			{
+				return NullBoundingBox;
+			}
 
 			/** @copydoc EmEn::Graphics::Renderable::Interface::boundingSphere() */
 			[[nodiscard]]
-			const Libs::Math::Sphere< float > & boundingSphere () const noexcept final;
+			const Libs::Math::Space3D::Sphere< float > &
+			boundingSphere () const noexcept final
+			{
+				return NullBoundingSphere;
+			}
 
 			/**
 			 * @brief Sets the average color to represent the background.
 			 * @param color A reference to a color.
 			 * @return void
 			 */
-			void setAverageColor (const Libs::PixelFactory::Color< float > & color) noexcept;
+			void
+			setAverageColor (const Libs::PixelFactory::Color< float > & color) noexcept
+			{
+				m_averageColor = color;
+			}
 
 			/**
 			 * @brief Sets the light position.
 			 * @param position A reference to a position vector.
 			 * @return void
 			 */
-			void setLightPosition (const Libs::Math::Vector< 3, float > & position) noexcept;
+			void
+			setLightPosition (const Libs::Math::Vector< 3, float > & position) noexcept
+			{
+				m_lightPosition = position;
+			}
 
 			/**
 			 * @brief Sets the light ambient color.
 			 * @param color A reference to a color.
 			 * @return void
 			 */
-			void setLightAmbientColor (const Libs::PixelFactory::Color< float > & color) noexcept;
+			void
+			setLightAmbientColor (const Libs::PixelFactory::Color< float > & color) noexcept
+			{
+				m_lightAmbientColor = color;
+			}
 
 			/**
 			 * @brief Sets the light diffuse color.
 			 * @param color A reference to a color.
 			 * @return void
 			 */
-			void setLightDiffuseColor (const Libs::PixelFactory::Color< float > & color) noexcept;
+			void
+			setLightDiffuseColor (const Libs::PixelFactory::Color< float > & color) noexcept
+			{
+				m_lightDiffuseColor = color;
+			}
 
 			/**
 			 * @brief Sets the light specular color.
 			 * @param color A reference to a color.
 			 * @return void
 			 */
-			void setLightSpecularColor (const Libs::PixelFactory::Color< float > & color) noexcept;
+			void
+			setLightSpecularColor (const Libs::PixelFactory::Color< float > & color) noexcept
+			{
+				m_lightSpecularColor = color;
+			}
 
 			/**
 			 * @brief Returns the average color of the background.
 			 * @return const Libraries::PixelFactory::Color< float > &
 			 */
 			[[nodiscard]]
-			const Libs::PixelFactory::Color< float > & averageColor () const noexcept;
+			const Libs::PixelFactory::Color< float > &
+			averageColor () const noexcept
+			{
+				return m_averageColor;
+			}
 
 			/**
 			 * @brief Returns the light position.
 			 * @return const Libs::Math::Vector< 3, float > &
 			 */
 			[[nodiscard]]
-			const Libs::Math::Vector< 3, float > & lightPosition () const noexcept;
+			const Libs::Math::Vector< 3, float > &
+			lightPosition () const noexcept
+			{
+				return m_lightPosition;
+			}
 
 			/**
 			 * @brief Returns the light ambient color.
 			 * @return const Libraries::PixelFactory::Color< float > &
 			 */
 			[[nodiscard]]
-			const Libs::PixelFactory::Color< float > & lightAmbientColor () const noexcept;
+			const Libs::PixelFactory::Color< float > &
+			lightAmbientColor () const noexcept
+			{
+				return m_lightAmbientColor;
+			}
 
 			/**
 			 * @brief Returns the light diffuse color.
 			 * @return const Libraries::PixelFactory::Color< float > &
 			 */
 			[[nodiscard]]
-			const Libs::PixelFactory::Color< float > & lightDiffuseColor () const noexcept;
+			const Libs::PixelFactory::Color< float > &
+			lightDiffuseColor () const noexcept
+			{
+				return m_lightDiffuseColor;
+			}
 
 			/**
 			 * @brief Returns the light specular color.
 			 * @return const Libraries::PixelFactory::Color< float > &
 			 */
 			[[nodiscard]]
-			const Libs::PixelFactory::Color< float > & lightSpecularColor () const noexcept;
+			const Libs::PixelFactory::Color< float > &
+			lightSpecularColor () const noexcept
+			{
+				return m_lightSpecularColor;
+			}
 
 			/**
 			 * @brief Creates and/or returns a sky box (cube) geometry.
@@ -174,11 +217,16 @@ namespace EmEn::Graphics::Renderable
 		protected:
 
 			/**
-			 * @brief Constructs a renderable background.
-			 * @param name A reference to a string for the resource name.
-			 * @param resourceFlagBits The resource flag bits.
+			 * @brief Constructs an abstract renderable background.
+			 * @param name A reference to a string for the resource name [std::move].
+			 * @param renderableFlags The resource flag bits.
 			 */
-			explicit AbstractBackground (const std::string & name, uint32_t resourceFlagBits) noexcept;
+			explicit
+			AbstractBackground (std::string name, uint32_t renderableFlags) noexcept
+				: Interface{std::move(name), renderableFlags}
+			{
+
+			}
 
 		private:
 

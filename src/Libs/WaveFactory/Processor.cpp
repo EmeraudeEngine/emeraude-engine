@@ -114,7 +114,7 @@ namespace EmEn::Libs::WaveFactory
 		const auto ratio = static_cast< double >(frequency) / static_cast< double >(m_wave.frequency());
 
 		/* Reserve a temporary buffer. */
-		const auto newSampleCount = static_cast< size_t >(std::ceil(static_cast< double >(m_wave.samplesCount()) * ratio));
+		const auto newSampleCount = static_cast< size_t >(std::ceil(static_cast< double >(m_wave.sampleCount()) * ratio));
 
 		std::vector< float > temporaryBuffer(newSampleCount * static_cast< size_t >(m_wave.channels()), 0.0F);
 
@@ -122,10 +122,10 @@ namespace EmEn::Libs::WaveFactory
 		/* A pointer to the input data samples. */
 		data.data_in = m_wave.data();
 		/* The number of frames of data pointed to by data_in. */
-		data.input_frames = static_cast< long >(m_wave.samplesCount());
+		data.input_frames = static_cast< long >(m_wave.sampleCount());
 		/* A pointer to the output data samples. */
 		data.data_out = temporaryBuffer.data();
-		/* Maximum number of frames pointer to "data_out". */
+		/* Maximum number of frame pointers to "data_out". */
 		data.output_frames = static_cast< long >(newSampleCount);
 		/* Equal to output_sample_rate / input_sample_rate. */
 		data.src_ratio = ratio;

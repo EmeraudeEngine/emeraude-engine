@@ -66,7 +66,14 @@ namespace EmEn::Saphir
 			 * @param type The code location type. Default main instruction.
 			 * @param depth The indentation depth. Default 1.
 			 */
-			explicit Code (CodeGeneratorInterface & generator, Location type = Location::Main, size_t depth = 1) noexcept;
+			explicit
+			Code (CodeGeneratorInterface & generator, Location type = Location::Main, size_t depth = 1) noexcept
+				: m_generator{generator},
+				m_type{type},
+				m_indent(depth, '\t')
+			{
+				m_code << m_indent;
+			}
 
 			/**
 			 * @brief Copy constructor.
@@ -94,16 +101,51 @@ namespace EmEn::Saphir
 
 			/**
 			 * @brief Destructs the code.
-			 * @note This will generates the code inside the generator.
+			 * @note This will generate the code inside the generator.
 			 */
-			~Code ();
+			~Code ()
+			{
+				m_code << '\n';
+
+				switch ( m_type )
+				{
+					case Location::Top:
+						m_generator.addTopInstruction(m_code.str());
+						break;
+
+					case Location::Main:
+						m_generator.addInstruction(m_code.str());
+						break;
+
+					case Location::Output:
+						m_generator.addOutputInstruction(m_code.str());
+						break;
+				}
+			}
 
 			/**
 			 * @brief Adds a line control token.
 			 * @param value The token.
 			 * @return Code &
 			 */
-			Code & operator<< (const Line & value) noexcept;
+			Code &
+			operator<< (const Line & value) noexcept
+			{
+				switch ( value )
+				{
+					/* NOTE: End of the line char + new indent. */
+					case Line::End :
+						m_code << '\n' << m_indent;
+						break;
+
+						/* NOTE: Double end of the line chars + new indent. */
+					case Line::Blank :
+						m_code << "\n\n" << m_indent;
+						break;
+				}
+
+				return *this;
+			}
 
 			/**
 			 * @brief Adds a vector 2 to the code content.
@@ -177,6 +219,6 @@ namespace EmEn::Saphir
 			CodeGeneratorInterface & m_generator;
 			Location m_type;
 			std::string m_indent;
-			std::stringstream m_code{};
+			std::stringstream m_code;
 	};
 }

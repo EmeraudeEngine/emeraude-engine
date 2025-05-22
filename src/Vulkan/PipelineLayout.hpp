@@ -61,19 +61,41 @@ namespace EmEn::Vulkan
 			 * @param UUID A reference to a string [std::move].
 			 * @param descriptorSetLayouts A reference to a list of descriptor set layouts. Default empty.
 			 * @param pushConstantRanges A reference to a list of push constant ranges. Default empty.
-			 * @param createFlags The create info flags. Default none.
+			 * @param createFlags The createInfo flags. Default none.
 			 */
-			explicit PipelineLayout (const std::shared_ptr< Device > & device, std::string UUID, const std::vector< std::shared_ptr< DescriptorSetLayout > > & descriptorSetLayouts = {}, const std::vector< VkPushConstantRange > & pushConstantRanges = {}, VkPipelineLayoutCreateFlags createFlags = 0) noexcept;
+			explicit
+			PipelineLayout (const std::shared_ptr< Device > & device, std::string UUID, const std::vector< std::shared_ptr< DescriptorSetLayout > > & descriptorSetLayouts = {}, const std::vector< VkPushConstantRange > & pushConstantRanges = {}, VkPipelineLayoutCreateFlags createFlags = 0) noexcept
+				: AbstractDeviceDependentObject{device},
+				m_UUID{std::move(UUID)},
+				m_descriptorSetLayouts{descriptorSetLayouts},
+				m_pushConstantRanges{pushConstantRanges}
+			{
+				m_createInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+				m_createInfo.pNext = nullptr;
+				m_createInfo.flags = createFlags;
+				m_createInfo.setLayoutCount = 0;
+				m_createInfo.pSetLayouts = nullptr;
+				m_createInfo.pushConstantRangeCount = 0;
+				m_createInfo.pPushConstantRanges = nullptr;
+			}
 
 			/**
-			 * @brief Constructs a pipeline layout with create info.
+			 * @brief Constructs a pipeline layout with createInfo.
 			 * @param device A reference to a smart pointer of a device.
 			 * @param UUID A reference to a string [std::move].
-			 * @param createInfo A reference to a create info.
+			 * @param createInfo A reference to a createInfo.
 			 * @param descriptorSetLayouts A reference to a list of descriptor set layouts. Default empty.
 			 * @param pushConstantRanges A reference to a list of push constant ranges. Default empty.
 			 */
-			PipelineLayout (const std::shared_ptr< Device > & device, std::string UUID, const VkPipelineLayoutCreateInfo & createInfo, const std::vector< std::shared_ptr< DescriptorSetLayout > > & descriptorSetLayouts = {}, const std::vector< VkPushConstantRange > & pushConstantRanges = {}) noexcept;
+			PipelineLayout (const std::shared_ptr< Device > & device, std::string UUID, const VkPipelineLayoutCreateInfo & createInfo, const std::vector< std::shared_ptr< DescriptorSetLayout > > & descriptorSetLayouts = {}, const std::vector< VkPushConstantRange > & pushConstantRanges = {}) noexcept
+				: AbstractDeviceDependentObject{device},
+				m_createInfo{createInfo},
+				m_UUID{std::move(UUID)},
+				m_descriptorSetLayouts{descriptorSetLayouts},
+				m_pushConstantRanges{pushConstantRanges}
+			{
+
+			}
 
 			/**
 			 * @brief Copy constructor.
@@ -102,11 +124,14 @@ namespace EmEn::Vulkan
 			/**
 			 * @brief Destructs the pipeline layout.
 			 */
-			~PipelineLayout () override;
+			~PipelineLayout () override
+			{
+				this->destroyFromHardware();
+			}
 
 			/**
 			 * @brief Performs an equality comparison between pipeline layouts.
-			 * @param operand A reference to an other pipeline layout.
+			 * @param operand A reference to another pipeline layout.
 			 * @return bool
 			 */
 			[[nodiscard]]
@@ -114,7 +139,7 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Performs an inequality comparison between pipeline layouts.
-			 * @param operand A reference to an other pipeline layout.
+			 * @param operand A reference to another pipeline layout.
 			 * @return bool
 			 */
 			[[nodiscard]]
@@ -153,7 +178,7 @@ namespace EmEn::Vulkan
 			}
 
 			/**
-			 * @brief Returns the pipeline layout create info.
+			 * @brief Returns the pipeline layout createInfo.
 			 * @return const VkPipelineLayoutCreateInfo &
 			 */
 			[[nodiscard]]
@@ -165,7 +190,7 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Returns the list of descriptor set layouts associated to this pipeline layout.
-			 * @param const vector< shared_ptr< DescriptorSetLayout > > &
+			 * @return const vector< shared_ptr< DescriptorSetLayout > > &
 			 */
 			[[nodiscard]]
 			const std::vector< std::shared_ptr< DescriptorSetLayout > > &
@@ -204,7 +229,7 @@ namespace EmEn::Vulkan
 			 * @brief Returns a hash for a pipeline layout according to constructor params.
 			 * @param descriptorSetLayouts A reference to a list of descriptor set layouts.
 			 * @param pushConstantRanges A reference to a list of push constant ranges.
-			 * @param flags Flags for the create info.
+			 * @param flags Flags for the createInfo.
 			 * @return size_t
 			 */
 			[[nodiscard]]

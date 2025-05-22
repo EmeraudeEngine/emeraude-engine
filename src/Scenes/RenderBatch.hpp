@@ -28,7 +28,6 @@
 
 /* STL inclusions. */
 #include <cstdint>
-#include <cstddef>
 #include <memory>
 #include <map>
 
@@ -51,7 +50,13 @@ namespace EmEn::Scenes
 			 * @param renderableInstance A reference to a renderable instance smart pointer.
 			 * @param subGeometryIndex The layer index of the renderable. Default 0.
 			 */
-			explicit RenderBatch (const std::shared_ptr< const Graphics::RenderableInstance::Abstract > & renderableInstance, size_t subGeometryIndex = 0) noexcept;
+			explicit
+			RenderBatch (const std::shared_ptr< const Graphics::RenderableInstance::Abstract > & renderableInstance, uint32_t subGeometryIndex = 0) noexcept
+				: m_renderableInstance{renderableInstance},
+				m_subGeometryIndex{subGeometryIndex}
+			{
+
+			}
 
 			/**
 			 * @brief Returns the renderable instance pointer.
@@ -66,10 +71,10 @@ namespace EmEn::Scenes
 
 			/**
 			 * @brief Returns the batch index of the renderable.
-			 * @return size_t
+			 * @return uint32_t
 			 */
 			[[nodiscard]]
-			size_t
+			uint32_t
 			subGeometryIndex () const noexcept
 			{
 				return m_subGeometryIndex;
@@ -85,7 +90,7 @@ namespace EmEn::Scenes
 			 */
 			static
 			void
-			create (List & renderList, float distance, const std::shared_ptr< Graphics::RenderableInstance::Abstract > & renderableInstance, size_t subGeometryIndex = 0UL) noexcept
+			create (List & renderList, float distance, const std::shared_ptr< Graphics::RenderableInstance::Abstract > & renderableInstance, uint32_t subGeometryIndex = 0UL) noexcept
 			{
 				renderList.emplace(
 					std::piecewise_construct,
@@ -99,6 +104,6 @@ namespace EmEn::Scenes
 			static constexpr auto DistanceMultiplier{1000UL};
 
 			std::shared_ptr< const Graphics::RenderableInstance::Abstract > m_renderableInstance;
-			size_t m_subGeometryIndex;
+			uint32_t m_subGeometryIndex;
 	};
 }

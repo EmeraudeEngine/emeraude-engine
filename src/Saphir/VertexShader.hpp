@@ -27,12 +27,12 @@
 #pragma once
 
 /* STL inclusions. */
-#include <array>
 #include <cstdint>
-#include <set>
 #include <string>
-#include <utility>
 #include <vector>
+#include <set>
+#include <array>
+#include <utility>
 
 /* Local inclusions for inheritances. */
 #include "AbstractShader.hpp"
@@ -73,11 +73,15 @@ namespace EmEn::Saphir
 
 			/**
 			 * @brief Constructs a vertex shader.
-			 * @param name The name of the shader for identification.
-			 * @param GLSLVersion The GLSL version used for this code.
-			 * @param GLSLProfile The GLSL profile used for this code.
+			 * @param name The name of the shader for identification [std::move].
+			 * @param GLSLVersion A reference to a string [std::move].
+			 * @param GLSLProfile A reference to a string [std::move].
 			 */
-			VertexShader (const std::string & name, const std::string & GLSLVersion, const std::string & GLSLProfile) noexcept;
+			VertexShader (std::string name, std::string GLSLVersion, std::string GLSLProfile) noexcept
+				: AbstractShader{std::move(name), std::move(GLSLVersion), std::move(GLSLProfile)}
+			{
+
+			}
 
 			/** @copydoc EmEn::Saphir::AbstractShader::type() */
 			[[nodiscard]]
@@ -104,7 +108,7 @@ namespace EmEn::Saphir
 
 			/**
 			 * @brief Declares an output block to be used in the shader.
-			 * @param declaration A reference to a OutputBlock.
+			 * @param declaration A reference to an OutputBlock.
 			 * @return bool
 			 */
 			bool declare (const Declaration::OutputBlock & declaration) noexcept;
@@ -143,7 +147,7 @@ namespace EmEn::Saphir
 			}
 
 			/**
-			 * @brief Requests a synthesize instruction in a vertex shader.
+			 * @brief Requests to synthesize an instruction in the vertex shader.
 			 * @warning This function is recursive for the variable "PositionTextureSpace".
 			 * @param variableName The variable name to synthesize. This should be a key from Keys::ShaderVariables namespace.
 			 * @param scope Set the variable scope in the vertex shader. Default VariableScope::ToNextStage.
@@ -374,7 +378,7 @@ namespace EmEn::Saphir
 			bool synthesizeViewTBNMatrix (Generator::Abstract & generator, std::string & topInstructions, std::string & outputInstructions, VariableScope scope) noexcept;
 
 			/**
-			 * @brief Synthesizes the matrix to get the vertex normal in world space from normal map.
+			 * @brief Synthesizes the matrix to get the vertex normal in world space from a normal map.
 			 * @param generator A reference to the shader generator.
 			 * @param topInstructions Every instruction that should be on the top of the main() function.
 			 * @param outputInstructions Every instruction that should be at the end of the main() function.

@@ -154,7 +154,7 @@ namespace EmEn::PlatformSpecific
 			"Operating System :" "\n"
 			" - System name : " << obj.m_OSInformation.systemName << "\n"
 			" - System version : " << obj.m_OSInformation.systemVersion << "\n"
-			" - Computer name : " << obj.m_OSInformation.computerName << "\n\n"
+			" - Computer name : " << obj.m_OSInformation.computerName << "\n"
 			" - Machine UUID : " << obj.m_OSInformation.machineUUID << "\n\n"
 
 			"CPU :" "\n"

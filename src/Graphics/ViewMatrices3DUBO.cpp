@@ -29,7 +29,6 @@
 /* STL inclusions. */
 #include <cmath>
 #include <cstring>
-#include <ostream>
 
 /* Local inclusions. */
 #include "Graphics/Renderer.hpp"
@@ -39,7 +38,7 @@ namespace EmEn::Graphics
 {
 	using namespace EmEn::Libs;
 	using namespace EmEn::Libs::Math;
-	using namespace Vulkan;
+	using namespace EmEn::Vulkan;
 
 	const std::array< Matrix< 4, float >, CubemapFaceIndexes.size() > ViewMatrices3DUBO::CubemapOrientation{
 		Matrix< 4, float >::lookAt(Vector< 3, float >{0.0F, 0.0F, 0.0F}, Vector< 3, float >{ 1.0F,  0.0F,  0.0F}, Vector< 3, float >{ 0.0F, -1.0F,  0.0F}), // X+
@@ -73,16 +72,19 @@ namespace EmEn::Graphics
 
 		std::memcpy(&m_bufferData[ProjectionMatrixOffset], m_projection.data(), Matrix4Alignment * sizeof(float));
 
-		this->updateVideoMemory();
+		if ( !this->updateVideoMemory() )
+		{
+			Tracer::error(ClassId, "Unable to update video memory !");
+		}
 	}
 
 	void
-	ViewMatrices3DUBO::updateOrthographicViewProperties (float width, float height, float distance, float near) noexcept
+	ViewMatrices3DUBO::updateOrthographicViewProperties (float width, float height, float farDistance, float nearDistance) noexcept
 	{
 		m_bufferData[ViewWidthOffset] = width;
 		m_bufferData[ViewHeightOffset] = height;
-		m_bufferData[ViewNearOffset] = near;
-		m_bufferData[ViewDistanceOffset] = distance;
+		m_bufferData[ViewNearOffset] = nearDistance;
+		m_bufferData[ViewDistanceOffset] = farDistance;
 
 		m_projection = Matrix< 4, float >::orthographicProjection(
 			-m_bufferData[ViewDistanceOffset], m_bufferData[ViewDistanceOffset],
@@ -92,7 +94,10 @@ namespace EmEn::Graphics
 
 		std::memcpy(&m_bufferData[ProjectionMatrixOffset], m_projection.data(), Matrix4Alignment * sizeof(float));
 
-		this->updateVideoMemory();
+		if ( !this->updateVideoMemory() )
+		{
+			Tracer::error(ClassId, "Unable to update video memory !");
+		}
 	}
 
 	void
@@ -128,13 +133,16 @@ namespace EmEn::Graphics
 
 		m_bufferData[AmbientLightIntensityOffset] = intensity;
 
-		this->updateVideoMemory();
+		if ( !this->updateVideoMemory() )
+		{
+			Tracer::error(ClassId, "Unable to update video memory !");
+		}
 	}
 
 	bool
 	ViewMatrices3DUBO::create (Renderer & renderer, const std::string & instanceID) noexcept
 	{
-		const auto descriptorSetLayout = this->getDescriptorSetLayout();
+		const auto descriptorSetLayout = ViewMatricesInterface::getDescriptorSetLayout(renderer.layoutManager());
 
 		if ( descriptorSetLayout == nullptr )
 		{
@@ -153,7 +161,7 @@ namespace EmEn::Graphics
 			return false;
 		}
 
-		m_descriptorSet = std::make_unique< DescriptorSet >(renderer.descriptorPool(), this->getDescriptorSetLayout());
+		m_descriptorSet = std::make_unique< DescriptorSet >(renderer.descriptorPool(), ViewMatricesInterface::getDescriptorSetLayout(renderer.layoutManager()));
 		m_descriptorSet->setIdentifier(ClassId, instanceID, "DescriptorSet");
 
 		if ( !m_descriptorSet->create() )
@@ -179,14 +187,15 @@ namespace EmEn::Graphics
 	bool
 	ViewMatrices3DUBO::updateVideoMemory () const noexcept
 	{
-#ifdef DEBUG
-		if ( m_uniformBufferObject == nullptr )
+		if constexpr ( IsDebug )
 		{
-			Tracer::error(ClassId, "The uniform buffer object is uninitialized !");
+			if ( m_uniformBufferObject == nullptr )
+			{
+				Tracer::error(ClassId, "The uniform buffer object is uninitialized !");
 
-			return false;
+				return false;
+			}
 		}
-#endif
 
 		/* NOTE: Lock between updateVideoMemory() and destroy(). */
 		const std::lock_guard< std::mutex > lockGuard{m_GPUBufferAccessLock};
@@ -203,21 +212,5 @@ namespace EmEn::Graphics
 		m_uniformBufferObject->unmapMemory();
 
 		return true;
-	}
-
-	std::ostream &
-	operator<< (std::ostream & out, const ViewMatrices3DUBO & /*obj*/)
-	{
-		return out << "NOT YET";
-	}
-
-	std::string
-	to_string (const ViewMatrices3DUBO & obj) noexcept
-	{
-		std::stringstream output;
-
-		output << obj;
-
-		return output.str();
 	}
 }

@@ -332,11 +332,17 @@ namespace EmEn::Saphir
 
 			/**
 			 * @brief Constructs an abstract shader.
-			 * @param name The name of the shader for identification.
+			 * @param name The name of the shader for identification [std::move].
 			 * @param GLSLVersion The GLSL version in use [std::move].
 			 * @param GLSLProfile The GLSL profile in use [std::move].
 			 */
-			AbstractShader (const std::string & name, std::string GLSLVersion, std::string GLSLProfile) noexcept;
+			AbstractShader (std::string name, std::string GLSLVersion, std::string GLSLProfile) noexcept
+				: NameableTrait{std::move(name)},
+				m_GLSLVersion{std::move(GLSLVersion)},
+				m_GLSLProfile{std::move(GLSLProfile)}
+			{
+
+			}
 
 			/**
 			 * @brief Generates the shader file header.

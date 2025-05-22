@@ -51,9 +51,14 @@ namespace EmEn::Animations
 
 			/**
 			 * @brief Constructs a constant value with a next value [std::move].
-			 * @param getNextValue The next value.
+			 * @param value The next value.
 			 */
-			explicit ConstantValue (Libs::Variant getNextValue) noexcept;
+			explicit
+			ConstantValue (Libs::Variant value) noexcept
+				: m_value{std::move(value)}
+			{
+
+			}
 
 			/** @copydoc EmEn::Animations::AnimationInterface::getNextValue() */
 			Libs::Variant

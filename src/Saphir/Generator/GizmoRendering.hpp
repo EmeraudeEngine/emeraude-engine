@@ -26,17 +26,13 @@
 
 #pragma once
 
-/* STL inclusions. */
-#include <vector>
-#include <memory>
-
 /* Local inclusions for inheritances. */
 #include "Abstract.hpp"
 
 namespace EmEn::Saphir::Generator
 {
 	/**
-	 * @brief This generator create the pipeline to draw simple "gizmo" inside the 3D rendering for debugging.
+	 * @brief This generator creates the pipeline to draw simple "gizmo" inside the 3D rendering for debugging.
 	 * @extends EmEn::Saphir::Generator::Abstract This a generator.
 	 */
 	class GizmoRendering final : public Abstract
@@ -48,33 +44,13 @@ namespace EmEn::Saphir::Generator
 
 			/**
 			 * @brief Constructs a graphics shader generator for a geometry.
-			 * @param settings A reference to the core settings.
 			 * @param renderTarget A reference to a render target smart pointer.
 			 */
-			GizmoRendering (Settings & settings, const std::shared_ptr< const Graphics::RenderTarget::Abstract > & renderTarget) noexcept;
-
-			/** @copydoc EmEn::Saphir::Generator::Abstract::materialEnabled() const */
-			[[nodiscard]]
-			bool
-			materialEnabled () const noexcept override
+			explicit
+			GizmoRendering (const std::shared_ptr< const Graphics::RenderTarget::Abstract > & renderTarget) noexcept
+				: Abstract{ClassId, renderTarget}
 			{
-				return false;
-			}
 
-			/** @copydoc EmEn::Saphir::Generator::Abstract::material() const */
-			[[nodiscard]]
-			const Graphics::Material::Interface *
-			material () const noexcept override
-			{
-				return nullptr;
-			}
-
-			/** @copydoc EmEn::Saphir::Generator::Abstract::geometry() const */
-			[[nodiscard]]
-			const Graphics::Geometry::Interface *
-			geometry () const noexcept override
-			{
-				return nullptr;
 			}
 
 		private:
@@ -82,13 +58,13 @@ namespace EmEn::Saphir::Generator
 			/** @copydoc EmEn::Saphir::Generator::Abstract::prepareUniformSets() */
 			void prepareUniformSets (SetIndexes & setIndexes) noexcept override;
 
-			/** @copydoc EmEn::Saphir::Generator::Abstract::onGenerateProgram() */
+			/** @copydoc EmEn::Saphir::Generator::Abstract::onGenerateShadersCode() */
 			[[nodiscard]]
-			bool onGenerateProgram (Program & program) noexcept override;
+			bool onGenerateShadersCode (Program & program) noexcept override;
 
-			/** @copydoc EmEn::Saphir::Generator::Abstract::onGenerateProgramLayout() */
+			/** @copydoc EmEn::Saphir::Generator::Abstract::onCreateDataLayouts() */
 			[[nodiscard]]
-			bool onGenerateProgramLayout (const SetIndexes & setIndexes, std::vector< std::shared_ptr< Vulkan::DescriptorSetLayout > > & descriptorSetLayouts, std::vector< VkPushConstantRange > & pushConstantRanges) noexcept override;
+			bool onCreateDataLayouts (Graphics::Renderer & renderer, const SetIndexes & setIndexes, std::vector< std::shared_ptr< Vulkan::DescriptorSetLayout > > & descriptorSetLayouts, std::vector< VkPushConstantRange > & pushConstantRanges) noexcept override;
 
 			/** @copydoc EmEn::Saphir::Generator::Abstract::onGraphicsPipelineConfiguration() */
 			[[nodiscard]]

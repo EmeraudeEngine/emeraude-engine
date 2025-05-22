@@ -40,12 +40,6 @@ namespace EmEn::Graphics::Geometry
 	using namespace EmEn::Libs::PixelFactory;
 	using namespace EmEn::Libs::VertexFactory;
 
-	GenerationParameters::GenerationParameters (uint32_t geometryFlagBits) noexcept
-		: FlagTrait(geometryFlagBits)
-	{
-
-	}
-
 	std::string
 	GenerationParameters::uniqueIdentifier () const noexcept
 	{
@@ -53,7 +47,7 @@ namespace EmEn::Graphics::Geometry
 			m_globalVertexColor << ',' <<
 			m_transformMatrix << ',' <<
 			m_textureCoordinatesMultiplier << ',' <<
-			this->flagBits() << ',' <<
+			this->flags() << ',' <<
 			m_flags[CenterAtBottom] << ',' <<
 			m_flags[FlipGeometry] << ',' <<
 			m_flags[GlobalVertexColorSet]

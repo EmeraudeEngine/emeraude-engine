@@ -35,41 +35,6 @@ namespace EmEn::Vulkan
 {
 	using namespace EmEn::Libs;
 
-	CommandPool::CommandPool (const std::shared_ptr< Device > & device, uint32_t queueFamilyIndex, bool transientCB, bool enableCBReset, bool enableProtectCB) noexcept
-		: AbstractDeviceDependentObject(device)
-	{
-		m_createInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-		m_createInfo.pNext = nullptr;
-		m_createInfo.flags = 0;
-		m_createInfo.queueFamilyIndex = queueFamilyIndex;
-
-		if ( transientCB )
-		{
-			m_createInfo.flags |= VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
-		}
-
-		if ( enableCBReset )
-		{
-			m_createInfo.flags |= VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-		}
-
-		if ( enableProtectCB )
-		{
-			m_createInfo.flags |= VK_COMMAND_POOL_CREATE_PROTECTED_BIT;
-		}
-	}
-
-	CommandPool::CommandPool (const std::shared_ptr< Device > & device, const VkCommandPoolCreateInfo & createInfo) noexcept
-		: AbstractDeviceDependentObject(device), m_createInfo(createInfo)
-	{
-
-	}
-
-	CommandPool::~CommandPool ()
-	{
-		this->destroyFromHardware();
-	}
-
 	bool
 	CommandPool::createOnHardware () noexcept
 	{
@@ -84,7 +49,7 @@ namespace EmEn::Vulkan
 
 		if ( result != VK_SUCCESS )
 		{
-			Tracer::error(ClassId, BlobTrait() << "Unable to create command pool : " << vkResultToCString(result) << " !");
+			TraceError{ClassId} << "Unable to create command pool : " << vkResultToCString(result) << " !";
 
 			return false;
 		}

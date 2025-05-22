@@ -32,12 +32,7 @@
 
 /* Local inclusions for inheritances. */
 #include "AbstractDeviceDependentObject.hpp"
-
-/* Forward declarations. */
-namespace EmEn::Vulkan
-{
-	class PipelineLayout;
-}
+#include "PipelineLayout.hpp"
 
 namespace EmEn::Vulkan
 {
@@ -55,16 +50,34 @@ namespace EmEn::Vulkan
 			/**
 			 * @brief Constructs a compute pipeline.
 			 * @param pipelineLayout A reference to pipeline layout smart pointer.
-			 * @param createFlags The create info flags. Default none.
+			 * @param createFlags The createInfo flags. Default none.
 			 */
-			explicit ComputePipeline (const std::shared_ptr< PipelineLayout > & pipelineLayout, VkPipelineCreateFlags createFlags = 0) noexcept;
+			explicit
+			ComputePipeline (const std::shared_ptr< PipelineLayout > & pipelineLayout, VkPipelineCreateFlags createFlags = 0) noexcept
+				: AbstractDeviceDependentObject(pipelineLayout->device()), m_pipelineLayout(pipelineLayout)
+			{
+				/* FIXME: The compute pipeline is not developed yet. */
+				m_createInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+				m_createInfo.pNext = nullptr;
+				m_createInfo.flags = createFlags;
+				m_createInfo.stage = VkPipelineShaderStageCreateInfo{};
+				m_createInfo.layout = m_pipelineLayout->handle();
+				m_createInfo.basePipelineHandle = nullptr; // VkPipeline
+				m_createInfo.basePipelineIndex = 0;
+			}
 
 			/**
-			 * @brief Constructs a compute pipeline with a create info.
+			 * @brief Constructs a compute pipeline with a createInfo.
 			 * @param pipelineLayout A reference to pipeline layout smart pointer.
-			 * @param createInfo A reference to a create info.
+			 * @param createInfo A reference to a createInfo.
 			 */
-			ComputePipeline (const std::shared_ptr< PipelineLayout > & pipelineLayout, const VkComputePipelineCreateInfo & createInfo) noexcept;
+			ComputePipeline (const std::shared_ptr< PipelineLayout > & pipelineLayout, const VkComputePipelineCreateInfo & createInfo) noexcept
+				: AbstractDeviceDependentObject{pipelineLayout->device()},
+				m_createInfo{createInfo},
+				m_pipelineLayout{pipelineLayout}
+			{
+
+			}
 
 			/**
 			 * @brief Copy constructor.
@@ -93,7 +106,10 @@ namespace EmEn::Vulkan
 			/**
 			 * @brief Destructs the compute pipeline.
 			 */
-			~ComputePipeline () override;
+			~ComputePipeline () override
+			{
+				this->destroyFromHardware();
+			}
 
 			/** @copydoc EmEn::Vulkan::AbstractDeviceDependentObject::createOnHardware() */
 			bool createOnHardware () noexcept override;
@@ -113,7 +129,7 @@ namespace EmEn::Vulkan
 			}
 
 			/**
-			 * @brief Returns the pipeline create info.
+			 * @brief Returns the pipeline createInfo.
 			 * @return const VkComputePipelineCreateInfo &
 			 */
 			[[nodiscard]]

@@ -35,32 +35,6 @@ namespace EmEn::Vulkan
 {
 	using namespace EmEn::Libs;
 
-	ShaderModule::ShaderModule (const std::shared_ptr< Device > & device, VkShaderStageFlagBits shaderType, const std::vector< uint32_t > & binaryCode, VkShaderModuleCreateFlags createFlags) noexcept
-		: AbstractDeviceDependentObject(device),
-		m_shaderType(shaderType),
-		m_binaryCode(binaryCode)
-	{
-		m_createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-		m_createInfo.pNext = nullptr;
-		m_createInfo.flags = createFlags;
-		m_createInfo.codeSize = 0;
-		m_createInfo.pCode = nullptr;
-	}
-
-	ShaderModule::ShaderModule (const std::shared_ptr< Device > & device, const VkShaderModuleCreateInfo & createInfo, VkShaderStageFlagBits shaderType, const std::vector< uint32_t > & binaryCode) noexcept
-		: AbstractDeviceDependentObject(device),
-		m_createInfo(createInfo),
-		m_shaderType(shaderType),
-		m_binaryCode(binaryCode)
-	{
-
-	}
-
-	ShaderModule::~ShaderModule ()
-	{
-		this->destroyFromHardware();
-	}
-
 	bool
 	ShaderModule::createOnHardware () noexcept
 	{
@@ -92,7 +66,7 @@ namespace EmEn::Vulkan
 
 		if ( !this->preparePipelineShaderStageCreateInfo() )
 		{
-			Tracer::error(ClassId, "Unable to prepare the pipeline shader stage create info !");
+			Tracer::error(ClassId, "Unable to prepare the pipeline shader stage createInfo !");
 
 			return false;
 		}

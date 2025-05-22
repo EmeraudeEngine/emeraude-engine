@@ -37,10 +37,13 @@
 
 /* Local inclusions for inheritances. */
 #include "ServiceInterface.hpp"
+#include "Libs/ObservableTrait.hpp"
 #include "Console/Controllable.hpp"
 
 /* Local inclusions for usages. */
 #include "Libs/WaveFactory/Types.hpp"
+#include "Audio/TrackMixer.hpp"
+#include "Audio/ExternalInput.hpp"
 #include "SettingKeys.hpp"
 #include "Source.hpp" // FIXME
 #include "SoundEnvironmentProperties.hpp"
@@ -68,10 +71,12 @@ namespace EmEn::Audio
 
 	/**
 	 * @brief The audio manager service class.
+	 * @note [OBS][STATIC-OBSERVABLE]
 	 * @extends EmEn::ServiceInterface This is a service.
-	 * @extends EmEn::Console::Controllable The audio manager can be controlled by the console.
+	 * @extends EmEn::Libs::ObservableTrait This service is observable.
+	 * @extends EmEn::Console::Controllable The console can control the audio manager.
 	 */
-	class Manager final : public ServiceInterface, public Console::Controllable
+	class Manager final : public ServiceInterface, public Libs::ObservableTrait, public Console::Controllable
 	{
 		public:
 
@@ -95,44 +100,45 @@ namespace EmEn::Audio
 			 * @param primaryServices A reference to primary services.
 			 * @param resourceManager A reference to the resource manager.
 			 */
-			Manager (PrimaryServices & primaryServices, Resources::Manager & resourceManager) noexcept;
+			Manager (PrimaryServices & primaryServices, Resources::Manager & resourceManager) noexcept
+				: ServiceInterface{ClassId},
+				Controllable{ClassId},
+				m_primaryServices{primaryServices},
+				m_resourceManager{resourceManager}
+			{
+				if ( s_instance != nullptr )
+				{
+					std::cerr << __PRETTY_FUNCTION__ << ", constructor called twice !" "\n";
 
-			/**
-			 * @brief Copy constructor.
-			 * @param copy A reference to the copied instance.
-			 */
-			Manager (const Manager & copy) noexcept = delete;
+					std::terminate();
+				}
 
-			/**
-			 * @brief Move constructor.
-			 * @param copy A reference to the copied instance.
-			 */
-			Manager (Manager && copy) noexcept = delete;
-
-			/**
-			 * @brief Copy assignment.
-			 * @param copy A reference to the copied instance.
-			 */
-			Manager & operator= (const Manager & copy) noexcept = delete;
-
-			/**
-			 * @brief Move assignment.
-			 * @param copy A reference to the copied instance.
-			 */
-			Manager & operator= (Manager && copy) noexcept = delete;
+				s_instance = this;
+			}
 
 			/**
 			 * @brief Destructs the audio manager.
 			 */
-			~Manager () override;
+			~Manager () override
+			{
+				s_instance = nullptr;
+			}
 
 			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
 			[[nodiscard]]
-			size_t classUID () const noexcept override;
+			size_t
+			classUID () const noexcept override
+			{
+				return ClassUID;
+			}
 
 			/** @copydoc EmEn::Libs::ObservableTrait::is() const */
 			[[nodiscard]]
-			bool is (size_t classUID) const noexcept override;
+			bool
+			is (size_t classUID) const noexcept override
+			{
+				return classUID == ClassUID;
+			}
 
 			/** @copydoc EmEn::ServiceInterface::usable() */
 			[[nodiscard]]
@@ -140,6 +146,50 @@ namespace EmEn::Audio
 			usable () const noexcept override
 			{
 				return m_flags[ServiceInitialized];
+			}
+
+			/**
+			 * @brief Returns the reference to the track mixer service.
+			 * @return Audio::TrackMixer &
+			 */
+			[[nodiscard]]
+			Audio::TrackMixer &
+			trackMixer () noexcept
+			{
+				return m_trackMixer;
+			}
+
+			/**
+			 * @brief Returns the reference to the track mixer service.
+			 * @return const Audio::TrackMixer &
+			 */
+			[[nodiscard]]
+			const Audio::TrackMixer &
+			trackMixer () const noexcept
+			{
+				return m_trackMixer;
+			}
+
+			/**
+			 * @brief Returns the reference to the audio external input service.
+			 * @return ExternalInput &
+			 */
+			[[nodiscard]]
+			ExternalInput &
+			externalInput () noexcept
+			{
+				return m_externalInput;
+			}
+
+			/**
+			 * @brief Returns the reference to the audio external input service.
+			 * @return const ExternalInput &
+			 */
+			[[nodiscard]]
+			const ExternalInput &
+			externalInput () const noexcept
+			{
+				return m_externalInput;
 			}
 
 			/**
@@ -154,21 +204,33 @@ namespace EmEn::Audio
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool isAudioEnabled () const noexcept;
+			bool
+			isAudioEnabled () const noexcept
+			{
+				return m_flags[Enabled];
+			}
 
 			/**
 			 * @brief Returns the EFX extension checker.
 			 * @return std::shared_ptr< EFX >
 			 */
 			[[nodiscard]]
-			std::shared_ptr< EFX > getEFX () noexcept;
+			std::shared_ptr< EFX >
+			getEFX () noexcept
+			{
+				return m_EFX;
+			}
 
 			/**
 			 * @brief Returns the default Source.
 			 * @return std::shared_ptr< Source >
 			 */
 			[[nodiscard]]
-			std::shared_ptr< Source > defaultSource () const noexcept;
+			std::shared_ptr< Source >
+			defaultSource () const noexcept
+			{
+				return m_defaultSource;
+			}
 
 			/**
 			 * @brief Plays a sound on the default source.
@@ -176,7 +238,12 @@ namespace EmEn::Audio
 			 * @param mode The play mode. Default Once.
 			 * @param gain The gain of the channel to play the sound.
 			 */
-			void play (const std::shared_ptr< PlayableInterface > & playable, Source::PlayMode mode = Source::PlayMode::Once, float gain = 1.0F) const noexcept;
+			void
+			play (const std::shared_ptr< PlayableInterface > & playable, Source::PlayMode mode = Source::PlayMode::Once, float gain = 1.0F) const noexcept
+			{
+				m_defaultSource->setGain(gain);
+				m_defaultSource->play(playable, mode);
+			}
 
 			/**
 			 * @brief Plays a sound on the default source.
@@ -198,14 +265,22 @@ namespace EmEn::Audio
 			 * @return Frequency
 			 */
 			[[nodiscard]]
-			Libs::WaveFactory::Frequency frequencyPlayback () const noexcept;
+			Libs::WaveFactory::Frequency
+			frequencyPlayback () const noexcept
+			{
+				return m_playbackFrequency;
+			}
 
 			/**
 			 * @brief Returns the music chunk size for streaming.
 			 * @return size_t
 			 */
 			[[nodiscard]]
-			size_t musicChunkSize () const noexcept;
+			size_t
+			musicChunkSize () const noexcept
+			{
+				return m_musicChunkSize;
+			}
 
 			/**
 			 * @brief Sets the master volume.
@@ -237,14 +312,14 @@ namespace EmEn::Audio
 			/**
 			 * @brief Sets the listener properties.
 			 * @param properties An array of parameters. The first 3 floats are for position,
-			 * the next 3 floats are for orientation and the 3 lasts for velocity.
+			 * the next 3 floats are for orientation, and the 3 last for velocity.
 			 */
 			void setListenerProperties (const std::array< ALfloat, 12 > & properties) noexcept;
 
 			/**
 			 * @brief Returns the listener properties by reference.
 			 * @param properties An array of parameters. The first 3 floats are for position,
-			 * the next 3 floats are for orientation and the 3 lasts for velocity.
+			 * the next 3 floats are for orientation, and the 3 last for velocity.
 			 */
 			void listenerProperties (std::array< ALfloat, 12 > & properties) const noexcept;
 
@@ -278,7 +353,7 @@ namespace EmEn::Audio
 			std::string getEFXVersionString () const noexcept;
 
 			/**
-			 * @brief Returns the number of available audio source.
+			 * @brief Returns the number of available audio sources.
 			 * @return size_t.
 			 */
 			[[nodiscard]]
@@ -291,12 +366,27 @@ namespace EmEn::Audio
 			[[nodiscard]]
 			std::shared_ptr< Source > requestSource () const noexcept;
 
+			[[nodiscard]]
+			static
+			bool
+			audioDisabled () noexcept
+			{
+				return s_audioDisabled;
+			}
+
 			/**
 			 * @brief Returns the instance of the audio manager.
+			 * @todo This method must be removed!
 			 * @return Manager *
 			 */
+			//[[deprecated("This method must be removed !")]]
 			[[nodiscard]]
-			static Manager * instance () noexcept;
+			static
+			Manager *
+			instance () noexcept
+			{
+				return s_instance; // FIXME: Remove this
+			}
 
 		private:
 
@@ -308,6 +398,13 @@ namespace EmEn::Audio
 
 			/** @copydoc EmEn::Console::Controllable::onRegisterToConsole. */
 			void onRegisterToConsole () noexcept override;
+
+			/**
+			 * @brief Initialize all sub services of the renderer.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool initializeSubServices () noexcept;
 
 			/**
 			 * @brief Sets the doppler effect factor.
@@ -381,9 +478,13 @@ namespace EmEn::Audio
 			static constexpr auto Enabled{3UL};
 
 			static Manager * s_instance;
+			static bool s_audioDisabled;
 
 			PrimaryServices & m_primaryServices;
 			Resources::Manager & m_resourceManager;
+			TrackMixer m_trackMixer{m_primaryServices, m_resourceManager, *this};
+			ExternalInput m_externalInput{m_primaryServices};
+			std::vector< ServiceInterface * > m_subServicesEnabled;
 			ALCdevice * m_device{nullptr};
 			ALCcontext * m_context{nullptr};
 			std::vector< std::string > m_availableAudioDevices;

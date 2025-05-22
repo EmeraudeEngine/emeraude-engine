@@ -46,18 +46,30 @@ namespace EmEn::Vulkan::Sync
 			static constexpr auto ClassId{"VulkanSemaphore"};
 
 			/**
-			 * @brief Constructs a semaphore.
+			 * @brief Constructs semaphore.
 			 * @param device A reference to a smart pointer of the device.
-			 * @param createFlags The create info flags. Default none.
+			 * @param createFlags The createInfo flags. Default none.
 			 */
-			explicit Semaphore (const std::shared_ptr< Device > & device, VkSemaphoreCreateFlags createFlags = 0) noexcept;
+			explicit
+			Semaphore (const std::shared_ptr< Device > & device, VkSemaphoreCreateFlags createFlags = 0) noexcept
+				: AbstractDeviceDependentObject{device}
+			{
+				m_createInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+				m_createInfo.pNext = nullptr;
+				m_createInfo.flags = createFlags;
+			}
 
 			/**
-			 * @brief Constructs a semaphore with a create info.
+			 * @brief Constructs a semaphore with a createInfo.
 			 * @param device A reference to a smart pointer of the device.
-			 * @param createInfo A reference to the create info.
+			 * @param createInfo A reference to the createInfo.
 			 */
-			Semaphore (const std::shared_ptr< Device > & device, const VkSemaphoreCreateInfo & createInfo) noexcept;
+			Semaphore (const std::shared_ptr< Device > & device, const VkSemaphoreCreateInfo & createInfo) noexcept
+				: AbstractDeviceDependentObject{device},
+				m_createInfo{createInfo}
+			{
+
+			}
 
 			/**
 			 * @brief Copy constructor.
@@ -86,7 +98,10 @@ namespace EmEn::Vulkan::Sync
 			/**
 			 * @brief Destructs the semaphore.
 			 */
-			~Semaphore () override;
+			~Semaphore () override
+			{
+				this->destroyFromHardware();
+			}
 
 			/** @copydoc EmEn::Vulkan::AbstractDeviceDependentObject::createOnHardware() */
 			bool createOnHardware () noexcept override;
@@ -106,7 +121,7 @@ namespace EmEn::Vulkan::Sync
 			}
 
 			/**
-			 * @brief Returns the semaphore create info.
+			 * @brief Returns the semaphore createInfo.
 			 * @return const VkSemaphoreCreateInfo &
 			 */
 			[[nodiscard]]

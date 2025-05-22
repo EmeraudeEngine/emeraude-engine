@@ -49,15 +49,9 @@ namespace EmEn::Scenes
 	using namespace EmEn::Libs::Math;
 	using namespace EmEn::Libs::PixelFactory;
 	using namespace EmEn::Libs::VertexFactory;
-	using namespace Graphics;
+	using namespace EmEn::Graphics;
 
 	size_t Toolkit::s_autoEntityCount{0};
-
-	Toolkit::Toolkit (const std::shared_ptr< Scene > & scene) noexcept
-		: m_scene(scene)
-	{
-
-	}
 
 	std::shared_ptr< Node >
 	Toolkit::generateNode (const std::string & entityName, GenPolicy genPolicy, bool movable) noexcept

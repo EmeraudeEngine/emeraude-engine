@@ -28,6 +28,7 @@
 
 /* STL inclusions. */
 #include <cstddef>
+#include <cstdint>
 
 /* Local inclusions for usages. */
 #include "Saphir/Keys.hpp"
@@ -232,10 +233,10 @@ namespace EmEn::Saphir::Declaration
 	/**
 	 * @brief Returns the size in bytes from a GLSL type.
 	 * @param type The variable type.
-	 * @return size_t
+	 * @return uint32_t
 	 */
 	[[nodiscard]]
-	size_t size_bytes (VariableType type) noexcept;
+	uint32_t size_bytes (VariableType type) noexcept;
 
 	/**
 	 * @brief The GLSL memory layout enumeration.

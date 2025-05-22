@@ -32,8 +32,6 @@
 
 /* Local inclusions. */
 #include "Libs/Math/Matrix.hpp"
-#include "Libs/Math/Cuboid.hpp"
-#include "Libs/Math/Sphere.hpp"
 
 namespace EmEn::Graphics
 {
@@ -118,7 +116,7 @@ namespace EmEn::Graphics
 	}
 
 	Frustum::Result
-	Frustum::isCollidingWith (const Sphere< float > & sphere) const noexcept
+	Frustum::isCollidingWith (const Space3D::Sphere< float > & sphere) const noexcept
 	{
 		if ( !s_enableFrustumTest )
 		{
@@ -155,7 +153,7 @@ namespace EmEn::Graphics
 	}
 
 	Frustum::Result
-	Frustum::isCollidingWith (const Cuboid< float > & box) const noexcept
+	Frustum::isCollidingWith (const Space3D::AACuboid< float > & box) const noexcept
 	{
 		if ( !s_enableFrustumTest )
 		{

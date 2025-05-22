@@ -44,15 +44,23 @@ namespace EmEn::Libs::Time::Elapsed
 		public:
 
 			/**
-			 * @brief Constructs a timer.
+			 * @brief Constructs an elapsed CPU time structure.
 			 */
 			CPUTime () noexcept = default;
 
 			/** @copydoc EmEn::Libs::Time::Elapsed::Abstract::start() */
-			void start () noexcept override;
+			void
+			start () noexcept override
+			{
+				m_startTime = std::clock();
+			}
 
 			/** @copydoc EmEn::Libs::Time::Elapsed::Abstract::stop() */
-			void stop () noexcept override;
+			void
+			stop () noexcept override
+			{
+				this->setDuration(std::clock() - m_startTime);
+			}
 
 		private:
 

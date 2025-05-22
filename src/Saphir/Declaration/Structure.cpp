@@ -36,49 +36,7 @@
 namespace EmEn::Saphir::Declaration
 {
 	using namespace EmEn::Libs;
-	using namespace Keys;
-
-	Structure::Structure (Key name, Key instanceName) noexcept
-		: m_name(name), m_instanceName(instanceName)
-	{
-
-	}
-
-	bool
-	Structure::isValid () const noexcept
-	{
-		if ( m_name == nullptr )
-			return false;
-
-		if ( m_members.empty() )
-			return false;
-
-		return true;
-	}
-
-	Key
-	Structure::name () const noexcept
-	{
-		return m_name;
-	}
-
-	size_t
-	Structure::bytes () const noexcept
-	{
-		return 0;
-	}
-
-	const std::string &
-	Structure::instanceName () const noexcept
-	{
-		return m_instanceName;
-	}
-
-	const std::vector< std::pair< Key, Member::Structure > > &
-	Structure::members () const noexcept
-	{
-		return m_members;
-	}
+	using namespace EmEn::Saphir::Keys;
 
 	bool
 	Structure::addMember (VariableType type, Key name) noexcept

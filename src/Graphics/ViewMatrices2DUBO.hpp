@@ -37,6 +37,7 @@
 
 /* Local inclusions for usages. */
 #include "Vulkan/UniformBufferObject.hpp"
+#include "Graphics/Types.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::Graphics
@@ -120,7 +121,7 @@ namespace EmEn::Graphics
 			void updatePerspectiveViewProperties (float width, float height, float distance, float fov) noexcept override;
 
 			/** @copydoc EmEn::Graphics::ViewMatricesInterface::updateOrthographicViewProperties() */
-			void updateOrthographicViewProperties (float width, float height, float distance, float near) noexcept override;
+			void updateOrthographicViewProperties (float width, float height, float farDistance, float nearDistance) noexcept override;
 
 			/** @copydoc EmEn::Graphics::ViewMatricesInterface::updateViewCoordinates() */
 			void updateViewCoordinates (const Libs::Math::CartesianFrame< float > & coordinates, const Libs::Math::Vector< 3, float > & velocity) noexcept override;
@@ -153,6 +154,8 @@ namespace EmEn::Graphics
 				return m_descriptorSet.get();
 			}
 
+		private:
+
 			/**
 			 * @brief STL streams printable object.
 			 * @param out A reference to the stream output.
@@ -160,15 +163,6 @@ namespace EmEn::Graphics
 			 * @return std::ostream &
 			 */
 			friend std::ostream & operator<< (std::ostream & out, const ViewMatrices2DUBO & obj);
-
-			/**
-			 * @brief Stringifies the object.
-			 * @param obj A reference to the object to print.
-			 * @return std::string
-			 */
-			friend std::string to_string (const ViewMatrices2DUBO & obj) noexcept;
-
-		private:
 
 			static constexpr auto ViewUBOElementCount = Matrix4Alignment + (5 * VectorAlignment);
 			static constexpr auto ViewUBOSize = ViewUBOElementCount * sizeof(float);
@@ -210,4 +204,41 @@ namespace EmEn::Graphics
 			std::unique_ptr< Vulkan::DescriptorSet > m_descriptorSet;
 			mutable std::mutex m_GPUBufferAccessLock;
 	};
+
+	inline
+	std::ostream &
+	operator<< (std::ostream & out, const ViewMatrices2DUBO & obj)
+	{
+		out <<
+			"2D View matrices data : " "\n"
+			"World position " << obj.m_position << "\n"
+			"Projection " << obj.m_projection <<
+			"View " << obj.m_view <<
+			"Infinity view " << obj.m_infinityView <<
+			obj.m_frustum <<
+			"Buffer data for GPU : " "\n";
+
+		for ( size_t index = 0; index < obj.m_bufferData.size(); index += 4 )
+		{
+			out << '[' << obj.m_bufferData[index+0] << ", " << obj.m_bufferData[index+1] << ", " << obj.m_bufferData[index+2] << ", " << obj.m_bufferData[index+3] << "]" "\n";
+		}
+
+		return out;
+	}
+
+	/**
+	 * @brief Stringifies the object.
+	 * @param obj A reference to the object to print.
+	 * @return std::string
+	 */
+	inline
+	std::string
+	to_string (const ViewMatrices2DUBO & obj) noexcept
+	{
+		std::stringstream output;
+
+		output << obj;
+
+		return output.str();
+	}
 }

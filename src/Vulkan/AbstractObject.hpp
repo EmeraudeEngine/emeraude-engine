@@ -30,15 +30,17 @@
 #include "emeraude_config.hpp"
 
 /* STL inclusions. */
-#include <array>
-#include <string>
+#include <iostream>
 #include <sstream>
-#ifdef VK_TRACKING_ENABLED
+#include <string>
+#include <array>
 #include <map>
-#endif
 
 /* Third-party inclusions. */
 #include <vulkan/vulkan.h>
+
+/* Local inclusions for inheritances. */
+#include "Tracer.hpp"
 
 namespace EmEn::Vulkan
 {
@@ -78,17 +80,40 @@ namespace EmEn::Vulkan
 			/**
 			 * @brief Destructs a base vulkan object.
 			 */
-			virtual ~AbstractObject ();
+			virtual
+			~AbstractObject ()
+			{
+				if constexpr ( VulkanTrackingDebugEnabled )
+				{
+					const auto * identifier = m_identifier.empty() ? "***UNIDENTIFIED***" : m_identifier.data();
 
-#ifdef VK_TRACKING_ENABLED
+					if ( !m_flags[Created] )
+					{
+						TraceError{"VulkanObject"} << "A Vulkan object ('" << identifier << "' " << this << ") was not correctly constructed !";
+					}
 
-			/**
-			 * @brief Sets an identifier to the vulkan to ease the debugging.
-			 * @return void
-			 */
-			void setIdentifier (const std::string & identifier) noexcept;
+					if ( !m_flags[Destroyed] )
+					{
+						TraceError{"VulkanObject"} << "A Vulkan object ('" << identifier << "' " << this << ") is not correctly destroyed !";
+					}
 
-#else
+					std::cout << "[DEBUG:VK_TRACKING] A Vulkan object ('" << identifier << "' @" << this << ") destructed !" "\n";
+
+					s_tracking.erase(this);
+				}
+				else
+				{
+					if ( !m_flags[Created] )
+					{
+						TraceError{"VulkanObject"} << "A Vulkan object (" << m_identifier << ") was not correctly constructed !";
+					}
+
+					if ( !m_flags[Destroyed] )
+					{
+						TraceError{"VulkanObject"} << "A Vulkan object (" << m_identifier << ") is not correctly destroyed !";
+					}
+				}
+			}
 
 			/**
 			 * @brief Sets an identifier to the vulkan to ease the debugging.
@@ -98,9 +123,14 @@ namespace EmEn::Vulkan
 			setIdentifier (const std::string & identifier) noexcept
 			{
 				m_identifier = identifier;
-			}
 
-#endif
+				if constexpr ( VulkanTrackingDebugEnabled )
+				{
+					s_tracking[this] = m_identifier;
+
+					std::cout << "[DEBUG:VK_TRACKING] A Vulkan object ('" << m_identifier << "', @" << this << ") is marked !" "\n";
+				}
+			}
 
 			/**
 			 * @brief Sets an identifier to the vulkan to ease the debugging.
@@ -112,7 +142,11 @@ namespace EmEn::Vulkan
 			void
 			setIdentifier (const char * classId, const std::string & instanceId, const char * vulkanObjectName) noexcept
 			{
-				this->setIdentifier((std::stringstream{} << classId << '-' << instanceId << '-' << vulkanObjectName).str());
+				std::stringstream identifier;
+
+				identifier << classId << '-' << instanceId << '-' << vulkanObjectName;
+
+				this->setIdentifier(identifier.str());
 			}
 
 			/**
@@ -137,23 +171,22 @@ namespace EmEn::Vulkan
 				return m_flags[Created];
 			}
 
-#ifdef VK_TRACKING_ENABLED
 			static std::map< void *, std::string > s_tracking;
-#endif
 
 		protected:
 
-#ifdef VK_TRACKING_ENABLED
 			/**
 			 * @brief Constructs a base vulkan object.
 			 */
-			AbstractObject () noexcept;
-#else
-			/**
-			 * @brief Constructs a base vulkan object.
-			 */
-			AbstractObject () noexcept = default;
-#endif
+			AbstractObject () noexcept
+			{
+				if constexpr ( VulkanTrackingDebugEnabled )
+				{
+					s_tracking[this] = "";
+
+					std::cout << "[DEBUG:VK_TRACKING] A Vulkan object (@" << this << ") constructed !" "\n";
+				}
+			}
 
 			/**
 			 * @brief For development purpose, this should be called by the child class constructor if everything is OK.

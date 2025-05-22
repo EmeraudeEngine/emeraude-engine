@@ -52,15 +52,39 @@ namespace EmEn::Saphir::Declaration
 			 * @param name A C-string to set the name of the block.
 			 * @param instanceName A C-string to set the name of the instance of the block. Default nullptr.
 			 */
-			explicit PushConstantBlock (Key name, Key instanceName = nullptr) noexcept;
+			explicit
+			PushConstantBlock (Key name, Key instanceName = nullptr) noexcept
+				: BlockInterface{name, instanceName}
+			{
+
+			}
 
 			/** @copydoc EmEn::Saphir::Declaration::BlockInterface::isValid() */
 			[[nodiscard]]
-			bool isValid () const noexcept override;
+			bool
+			isValid () const noexcept override
+			{
+				if ( this->name() == nullptr )
+				{
+					return false;
+				}
+
+				if ( this->instanceName().empty() )
+				{
+					return false;
+				}
+
+				if ( m_members.empty() )
+				{
+					return false;
+				}
+
+				return true;
+			}
 
 			/** @copydoc EmEn::Saphir::Declaration::BlockInterface::bytes() */
 			[[nodiscard]]
-			size_t bytes () const noexcept override;
+			uint32_t bytes () const noexcept override;
 
 			/** @copydoc EmEn::Saphir::Declaration::BlockInterface::sourceCode() */
 			[[nodiscard]]
@@ -79,17 +103,21 @@ namespace EmEn::Saphir::Declaration
 			 * @param name A C-string to set the name of the member.
 			 * @param arraySize The size of the array.
 			 */
-			bool addArrayMember (VariableType type, Key name, size_t arraySize) noexcept;
+			bool addArrayMember (VariableType type, Key name, uint32_t arraySize) noexcept;
 
 			/**
 			 * @brief Returns the list of members.
 			 * @return const std::vector< std::pair< Key, Member::PushConstant > > &
 			 */
 			[[nodiscard]]
-			const std::vector< std::pair< Key, Member::PushConstant > > & members () const noexcept;
+			const std::vector< std::pair< Key, Member::PushConstant > > &
+			members () const noexcept
+			{
+				return m_members;
+			}
 
 		private:
 
-			std::vector< std::pair< Key, Member::PushConstant > > m_members{};
+			std::vector< std::pair< Key, Member::PushConstant > > m_members;
 	};
 }

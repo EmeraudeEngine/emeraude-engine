@@ -35,19 +35,7 @@
 namespace EmEn::Saphir::Declaration
 {
 	using namespace EmEn::Libs;
-	using namespace Keys;
-
-	Function::Function (Key name, Key returnType) noexcept
-		: m_name(name),  m_returnType(returnType)
-	{
-
-	}
-
-	bool
-	Function::isValid () const noexcept
-	{
-		return m_name != nullptr;
-	}
+	using namespace EmEn::Saphir::Keys;
 
 	std::string
 	Function::sourceCode () const noexcept
@@ -63,34 +51,10 @@ namespace EmEn::Saphir::Declaration
 		return code.str();
 	}
 
-	Key
-	Function::name () const noexcept
-	{
-		return m_name;
-	}
-
-	size_t
-	Function::bytes () const noexcept
-	{
-		return 0;
-	}
-
-	Key
-	Function::returnType () const noexcept
-	{
-		return m_returnType;
-	}
-
-	const std::vector< std::string > &
-	Function::parameters () const noexcept
-	{
-		return m_parameters;
-	}
-
 	void
 	Function::addInParameter (Key type, Key name, bool isConstant) noexcept
 	{
-		std::stringstream code{};
+		std::stringstream code;
 
 		if ( isConstant )
 		{
@@ -102,22 +66,14 @@ namespace EmEn::Saphir::Declaration
 		m_parameters.emplace_back(code.str());
 	}
 
-	void
-	Function::addOutParameter (Key type, Key name) noexcept
-	{
-		m_parameters.emplace_back((std::stringstream{} << GLSL::Out << ' ' << type << ' ' << name).str());
-	}
-
-	void
-	Function::addInOutParameter (Key type, Key name) noexcept
-	{
-		m_parameters.emplace_back((std::stringstream{} << GLSL::InOut << ' ' << type << ' ' << name).str());
-	}
-
 	std::string
 	Function::callCode (const std::string & parameters) const noexcept
 	{
-		return (std::stringstream{} << m_name << '(' << parameters << ')').str();
+		std::stringstream code;
+
+		code << m_name << '(' << parameters << ')';
+
+		return code.str();
 	}
 
 	std::string
@@ -127,7 +83,7 @@ namespace EmEn::Saphir::Declaration
 	}
 
 	std::string
-	Function::callCode (const Libs::BlobTrait & parameters) const noexcept
+	Function::callCode (const BlobTrait & parameters) const noexcept
 	{
 		return this->callCode(parameters.get());
 	}

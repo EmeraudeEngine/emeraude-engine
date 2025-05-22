@@ -26,17 +26,12 @@
 
 #pragma once
 
-/* STL inclusions. */
-#include <vector>
-#include <string>
-#include <memory>
-
 /* Local inclusions for inheritances. */
 #include "Abstract.hpp"
 
 /* Local inclusions for usages. */
-#include "Graphics/RenderableInstance/Abstract.hpp"
 #include "Saphir/LightGenerator.hpp"
+#include "SettingKeys.hpp"
 
 /* Forward declarations. */
 namespace EmEn::Scenes
@@ -59,38 +54,34 @@ namespace EmEn::Saphir::Generator
 
 			/**
 			 * @brief Constructs a graphics shader generator for a geometry.
-			 * @param settings A reference to the core settings.
-			 * @param name A reference to a string for the program name.
-			 * @param renderPassType The render pass type to know which kind of render is implied.
+			 * @param shaderProgramName A reference to a string.
 			 * @param renderTarget A reference to the render target smart pointer.
 			 * @param renderableInstance A reference to the renderable instance smart pointer.
 			 * @param layerIndex The renderable instance layer.
 			 * @param scene A reference to a scene.
+			 * @param renderPassType The render pass type to know which kind of render is implied.
+			 * @param settings A reference to the core settings.
 			 */
-			SceneRendering (Settings & settings, const std::string & name, const std::shared_ptr< const Graphics::RenderTarget::Abstract > & renderTarget, const std::shared_ptr< const Graphics::RenderableInstance::Abstract > & renderableInstance, size_t layerIndex, Graphics::RenderPassType renderPassType, const Scenes::Scene & scene) noexcept;
-
-			/** @copydoc EmEn::Saphir::Generator::Abstract::materialEnabled() const */
-			[[nodiscard]]
-			bool
-			materialEnabled () const noexcept override
+			SceneRendering (const std::string & shaderProgramName, const std::shared_ptr< const Graphics::RenderTarget::Abstract > & renderTarget, const std::shared_ptr< const Graphics::RenderableInstance::Abstract > & renderableInstance, uint32_t layerIndex, const Scenes::Scene & scene, Graphics::RenderPassType renderPassType, Settings & settings) noexcept
+				: Abstract(shaderProgramName, renderTarget, renderableInstance, layerIndex),
+				m_renderPassType(renderPassType),
+				m_lightGenerator(settings, renderPassType),
+				m_scene(&scene)
 			{
-				return this->material() != nullptr;
-			}
+				if ( settings.get< bool >(NormalMappingEnabledKey, DefaultNormalMappingEnabled) )
+				{
+					this->enableFlag(NormalMappingEnabled);
+				}
 
-			/** @copydoc EmEn::Saphir::Generator::Abstract::material() const */
-			[[nodiscard]]
-			const Graphics::Material::Interface *
-			material () const noexcept override
-			{
-				return m_renderableInstance->renderable()->material(m_layerIndex);
-			}
+				if ( settings.get< bool >(HighQualityLightEnabledKey, DefaultHighQualityLightEnabled) )
+				{
+					this->enableFlag(HighQualityLightEnabled);
+				}
 
-			/** @copydoc EmEn::Saphir::Generator::Abstract::geometry() const */
-			[[nodiscard]]
-			const Graphics::Geometry::Interface *
-			geometry () const noexcept override
-			{
-				return m_renderableInstance->renderable()->geometry();
+				if ( settings.get< bool >(HighQualityReflectionEnabledKey, DefaultHighQualityReflectionEnabled) )
+				{
+					this->enableFlag(HighQualityReflectionEnabled);
+				}
 			}
 
 			/**
@@ -109,13 +100,13 @@ namespace EmEn::Saphir::Generator
 			/** @copydoc EmEn::Saphir::Generator::Abstract::prepareUniformSets() */
 			void prepareUniformSets (SetIndexes & setIndexes) noexcept override;
 
-			/** @copydoc EmEn::Saphir::Generator::Abstract::onGenerateProgram() */
+			/** @copydoc EmEn::Saphir::Generator::Abstract::onGenerateShadersCode() */
 			[[nodiscard]]
-			bool onGenerateProgram (Program & program) noexcept override;
+			bool onGenerateShadersCode (Program & program) noexcept override;
 
-			/** @copydoc EmEn::Saphir::Generator::Abstract::onGenerateProgramLayout() */
+			/** @copydoc EmEn::Saphir::Generator::Abstract::onCreateDataLayouts() */
 			[[nodiscard]]
-			bool onGenerateProgramLayout (const SetIndexes & setIndexes, std::vector< std::shared_ptr< Vulkan::DescriptorSetLayout > > & descriptorSetLayouts, std::vector< VkPushConstantRange > & pushConstantRanges) noexcept override;
+			bool onCreateDataLayouts (Graphics::Renderer & renderer, const SetIndexes & setIndexes, std::vector< std::shared_ptr< Vulkan::DescriptorSetLayout > > & descriptorSetLayouts, std::vector< VkPushConstantRange > & pushConstantRanges) noexcept override;
 
 			/** @copydoc EmEn::Saphir::Generator::Abstract::onGraphicsPipelineConfiguration() */
 			[[nodiscard]]
@@ -146,8 +137,6 @@ namespace EmEn::Saphir::Generator
 
 			Graphics::RenderPassType m_renderPassType;
 			LightGenerator m_lightGenerator;
-			std::shared_ptr< const Graphics::RenderableInstance::Abstract > m_renderableInstance;
-			size_t m_layerIndex;
 			const Scenes::Scene * m_scene{nullptr};
 	};
 }

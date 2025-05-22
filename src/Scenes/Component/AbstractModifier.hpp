@@ -203,7 +203,7 @@ namespace EmEn::Scenes::Component
 			 * @param worldBoundingSphere A reference to a sphere.
 			 * @return Libs::Math::Vector< 3, float >
 			 */
-			virtual Libs::Math::Vector< 3, float > getForceAppliedToEntity (const Libs::Math::CartesianFrame< float > & worldCoordinates, const Libs::Math::Sphere< float > & worldBoundingSphere) const noexcept = 0;
+			virtual Libs::Math::Vector< 3, float > getForceAppliedToEntity (const Libs::Math::CartesianFrame< float > & worldCoordinates, const Libs::Math::Space3D::Sphere< float > & worldBoundingSphere) const noexcept = 0;
 
 			/**
 			 * @brief Returns the force applied to an entity.
@@ -211,17 +211,21 @@ namespace EmEn::Scenes::Component
 			 * @param worldBoundingBox A reference to a sphere.
 			 * @return Libs::Math::Vector< 3, float >
 			 */
-			virtual Libs::Math::Vector< 3, float > getForceAppliedToEntity (const Libs::Math::CartesianFrame< float > & worldCoordinates, const Libs::Math::Cuboid< float > & worldBoundingBox) const noexcept = 0;
+			virtual Libs::Math::Vector< 3, float > getForceAppliedToEntity (const Libs::Math::CartesianFrame< float > & worldCoordinates, const Libs::Math::Space3D::AACuboid< float > & worldBoundingBox) const noexcept = 0;
 
 		protected:
 
 			/**
 			 * @brief Constructs a modifier.
-			 * @param name The name of the modifier.
+			 * @param name The name of the modifier [std::move].
 			 * @param parentEntity A reference to the parent entity.
 			 */
-			AbstractModifier (const std::string & name, const AbstractEntity & parentEntity) noexcept;
-			
+			AbstractModifier (std::string name, const AbstractEntity & parentEntity) noexcept
+				: Abstract{std::move(name), parentEntity}
+			{
+				this->enable(true);
+			}
+
 			/**
 			 * @brief Adds an influence area to limit the modifier.
 			 * @param influenceArea A reference to an influence area interface smart pointer.

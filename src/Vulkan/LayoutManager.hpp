@@ -62,62 +62,18 @@ namespace EmEn::Vulkan
 		public:
 
 			/** @brief Class identifier. */
-			static constexpr auto ClassId{"LayoutManager"};
-
-			/** @brief Observable class unique identifier. */
-			static const size_t ClassUID;
+			static constexpr auto ClassId{"LayoutManagerService"};
 
 			/**
 			 * @brief Constructs a descriptor set layout manager service.
 			 * @param type The GPU work type.
 			 */
-			explicit LayoutManager (GPUWorkType type) noexcept;
-
-			/**
-			 * @brief Copy constructor.
-			 * @param copy A reference to the copied instance.
-			 */
-			LayoutManager (const LayoutManager & copy) noexcept = delete;
-
-			/**
-			 * @brief Move constructor.
-			 * @param copy A reference to the copied instance.
-			 */
-			LayoutManager (LayoutManager && copy) noexcept = delete;
-
-			/**
-			 * @brief Copy assignment.
-			 * @param copy A reference to the copied instance.
-			 * @return LayoutManager &
-			 */
-			LayoutManager & operator= (const LayoutManager & copy) noexcept = delete;
-
-			/**
-			 * @brief Move assignment.
-			 * @param copy A reference to the copied instance.
-			 * @return TransferManager &
-			 */
-			LayoutManager & operator= (LayoutManager && copy) noexcept = delete;
-
-			/**
-			 * @brief Destructs the descriptor set layout manager service.
-			 */
-			~LayoutManager () override;
-
-			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
-			[[nodiscard]]
-			size_t
-			classUID () const noexcept override
+			explicit
+			LayoutManager (GPUWorkType type) noexcept
+				: ServiceInterface{ClassId},
+				m_type{type}
 			{
-				return ClassUID;
-			}
 
-			/** @copydoc EmEn::Libs::ObservableTrait::is() const */
-			[[nodiscard]]
-			bool
-			is (size_t classUID) const noexcept override
-			{
-				return classUID == ClassUID;
 			}
 
 			/** @copydoc EmEn::ServiceInterface::usable() */
@@ -174,24 +130,12 @@ namespace EmEn::Vulkan
 			/**
 			 * @brief Returns an existing pipeline layout or create a new one corresponding to parameters.
 			 * @param descriptorSetLayouts A reference to a list of descriptor set layout.
-			 * @param pushConstantRanges A reference to push constant range list.
+			 * @param pushConstantRanges A reference to push-constant range list.
 			 * @param createFlags The Vulkan flag at pipeline layout creation. Default None.
 			 * @return std::shared_ptr< PipelineLayout >
 			 */
 			[[nodiscard]]
 			std::shared_ptr< PipelineLayout > getPipelineLayout (const std::vector< std::shared_ptr< DescriptorSetLayout > > & descriptorSetLayouts, const std::vector< VkPushConstantRange > & pushConstantRanges = {}, VkPipelineLayoutCreateFlags createFlags = 0) noexcept;
-
-			/**
-			 * @brief Returns the instance of the transfer manager.
-			 * @param type The layout manager work type.
-			 * @return LayoutManager *
-			 */
-			[[nodiscard]]
-			static LayoutManager *
-			instance (GPUWorkType type) noexcept
-			{
-				return s_instances.at(static_cast< size_t >(type));
-			}
 
 		private:
 
@@ -201,14 +145,13 @@ namespace EmEn::Vulkan
 			/** @copydoc EmEn::ServiceInterface::onTerminate() */
 			bool onTerminate () noexcept override;
 
-			static std::array< LayoutManager *, 2 > s_instances;
-
 			/* Flag names */
 			static constexpr auto ServiceInitialized{0UL};
 
 			std::shared_ptr< Device > m_device;
 			std::map< std::string, std::shared_ptr< DescriptorSetLayout > > m_descriptorSetLayouts;
 			std::map< std::string, std::shared_ptr< PipelineLayout > > m_pipelineLayouts;
+			GPUWorkType m_type;
 			std::array< bool, 8 > m_flags{
 				false/*ServiceInitialized*/,
 				false/*UNUSED*/,

@@ -26,7 +26,7 @@
 
 #pragma once
 
-/* Local inclusions for ineritances. */
+/* Local inclusions for inheritances. */
 #include "Abstract.hpp"
 
 namespace EmEn::Audio::Effects

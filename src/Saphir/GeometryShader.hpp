@@ -62,11 +62,19 @@ namespace EmEn::Saphir
 
 			/**
 			 * @brief Constructs a geometry shader.
-			 * @param name The name of the shader for identification.
+			 * @param name The name of the shader for identification [std::move].
 			 * @param inputPrimitive An input primitive declaration [std::move].
 			 * @param outputPrimitive An output primitive declaration [std::move].
+			 * @param GLSLVersion The GLSL version in use [std::move].
+			 * @param GLSLProfile The GLSL profile in use [std::move].
 			 */
-			GeometryShader (const std::string & name, Declaration::InputPrimitive inputPrimitive, Declaration::OutputPrimitive outputPrimitive, const std::string & GLSLVersion, const std::string & GLSLProfile) noexcept;
+			GeometryShader (std::string name, Declaration::InputPrimitive inputPrimitive, Declaration::OutputPrimitive outputPrimitive, std::string GLSLVersion, std::string GLSLProfile) noexcept
+				: AbstractShader(std::move(name), std::move(GLSLVersion), std::move(GLSLProfile)),
+				m_inputPrimitive(std::move(inputPrimitive)),
+				m_outputPrimitive(std::move(outputPrimitive))
+			{
+
+			}
 
 			/** @copydoc EmEn::Saphir::AbstractShader::type() */
 			[[nodiscard]]
@@ -91,7 +99,7 @@ namespace EmEn::Saphir
 			bool declare (const Declaration::InputBlock & declaration) noexcept;
 
 			/**
-			 * @brief Declares an stage output variable to be used in the shader.
+			 * @brief Declares a stage output variable to be used in the shader.
 			 * @param declaration A reference to a ShaderStageOutput.
 			 * @return bool
 			 */
@@ -197,9 +205,9 @@ namespace EmEn::Saphir
 
 			Declaration::InputPrimitive m_inputPrimitive;
 			Declaration::OutputPrimitive m_outputPrimitive;
-			std::vector< Declaration::StageInput > m_stageInputs{};
-			std::vector< Declaration::InputBlock > m_inputBlocks{};
-			std::vector< Declaration::StageOutput > m_stageOutputs{};
-			std::vector< Declaration::OutputBlock > m_outputBlocks{};
+			std::vector< Declaration::StageInput > m_stageInputs;
+			std::vector< Declaration::InputBlock > m_inputBlocks;
+			std::vector< Declaration::StageOutput > m_stageOutputs;
+			std::vector< Declaration::OutputBlock > m_outputBlocks;
 	};
 }

@@ -26,15 +26,12 @@
 
 #pragma once
 
-/* STL inclusions. */
-#include <cstdint>
-#include <memory>
-#include <string>
-
 /* Local inclusions for inheritances. */
 #include "Resources/ResourceTrait.hpp"
 
 /* Local inclusions for usages. */
+#include "Vulkan/DescriptorSetLayout.hpp"
+#include "Vulkan/DescriptorSet.hpp"
 #include "Graphics/Types.hpp" // BlendingMode
 
 /* Forward declaration */
@@ -42,11 +39,7 @@ namespace EmEn
 {
 	namespace Vulkan
 	{
-		class DescriptorSet;
-		class DescriptorSetLayout;
 		class LayoutManager;
-		class UniformBufferObject;
-		class SharedUniformBuffer;
 	}
 
 	namespace Physics
@@ -74,6 +67,7 @@ namespace EmEn
 	namespace Graphics
 	{
 		class Renderer;
+		class SharedUniformBuffer;
 	}
 }
 
@@ -109,11 +103,6 @@ namespace EmEn::Graphics::Material
 		public:
 
 			/**
-			 * @brief Destructs the material interface.
-			 */
-			~Interface () override = default;
-
-			/**
 			 * @brief Copy constructor.
 			 * @param copy A reference to the copied instance.
 			 */
@@ -128,14 +117,21 @@ namespace EmEn::Graphics::Material
 			/**
 			 * @brief Copy assignment.
 			 * @param copy A reference to the copied instance.
+			 * @return Interface &
 			 */
 			Interface & operator= (const Interface & copy) noexcept = delete;
 
 			/**
 			 * @brief Move assignment.
 			 * @param copy A reference to the copied instance.
+			 * @return Interface &
 			 */
 			Interface & operator= (Interface && copy) noexcept = delete;
+
+			/**
+			 * @brief Destructs the material interface.
+			 */
+			~Interface () override = default;
 
 			/**
 			 * @brief Returns whether the material is animated.
@@ -308,7 +304,7 @@ namespace EmEn::Graphics::Material
 
 			/**
 			 * @brief Enables the blending mode using json data.
-			 * @param data A reference to a json value.
+			 * @param data A reference to a JSON value.
 			 * @return void
 			 */
 			void enableBlendingFromJson (const Json::Value & data) noexcept;
@@ -318,13 +314,13 @@ namespace EmEn::Graphics::Material
 			 * @param renderer A reference to the graphics renderer.
 			 * @return bool
 			 */
-			virtual bool create (Renderer & renderer) noexcept = 0;
+			virtual bool createOnHardware (Renderer & renderer) noexcept = 0;
 
 			/**
 			 * @brief Releases the material from the video memory.
 			 * @return void
 			 */
-			virtual void destroy () noexcept = 0;
+			virtual void destroyFromHardware () noexcept = 0;
 
 			/**
 			 * @brief Returns whether the material is usable.
@@ -382,8 +378,8 @@ namespace EmEn::Graphics::Material
 			virtual Physics::PhysicalSurfaceProperties & physicalSurfaceProperties () noexcept = 0;
 
 			/**
-			 * @brief Returns the number of frame.
-			 * @note If underlying texture is not animated, it returns 1.
+			 * @brief Returns the number of frames.
+			 * @note If the underlying texture is not animated, it returns 1.
 			 * @return uint32_t
 			 */
 			[[nodiscard]]
@@ -391,7 +387,7 @@ namespace EmEn::Graphics::Material
 
 			/**
 			 * @brief Returns the duration in milliseconds.
-			 * @note If underlying texture is not animated, it returns 0.
+			 * @note If the underlying texture is not animated, it returns 0.
 			 * @return uint32_t
 			 */
 			[[nodiscard]]
@@ -403,7 +399,7 @@ namespace EmEn::Graphics::Material
 			 * @return size_t
 			 */
 			[[nodiscard]]
-			virtual size_t frameIndexAt (uint32_t sceneTime) const noexcept = 0;
+			virtual uint32_t frameIndexAt (uint32_t sceneTime) const noexcept = 0;
 
 			/**
 			 * @brief Enables a blending and set the desired mode.
@@ -421,7 +417,7 @@ namespace EmEn::Graphics::Material
 
 			/**
 			 * @brief Returns the variables or the code to get the fragment color produced by this material.
-			 * @note This is used for the final color without further effect application such as lighting.
+			 * @note This is used for the final color without a further effect application such as lighting.
 			 * @return std::string
 			 */
 			[[nodiscard]]
@@ -467,7 +463,6 @@ namespace EmEn::Graphics::Material
 			 * @brief Returns the uniform block explaining how the material works.
 			 * @param set The set index.
 			 * @param binding The binding point in the set.
-			 * @return Saphir::Declaration::UniformBlock
 			 */
 			[[nodiscard]]
 			virtual Saphir::Declaration::UniformBlock getUniformBlock (uint32_t set, uint32_t binding) const noexcept = 0;
@@ -477,18 +472,23 @@ namespace EmEn::Graphics::Material
 			/**
 			 * @brief Constructs a material interface.
 			 * @param name The name of the resource.
-			 * @param resourceFlagBits The resource flag bits.
+			 * @param resourceFlags The resource flag bits.
 			 */
-			explicit Interface (const std::string & name, uint32_t resourceFlagBits) noexcept;
+			explicit
+			Interface (const std::string & name, uint32_t resourceFlags) noexcept
+				: ResourceTrait{name, resourceFlags}
+			{
+
+			}
 
 			/**
 			 * @brief Returns the shared uniform buffer corresponding to this material.
 			 * @param renderer A reference to the graphics renderer.
 			 * @param identifier A reference to a string.
-			 * @return std::shared_ptr< Vulkan::SharedUniformBuffer >
+			 * @return std::shared_ptr< SharedUniformBuffer >
 			 */
 			[[nodiscard]]
-			std::shared_ptr< Vulkan::SharedUniformBuffer > getSharedUniformBuffer (Renderer & renderer, const std::string & identifier) const noexcept;
+			std::shared_ptr< SharedUniformBuffer > getSharedUniformBuffer (Renderer & renderer, const std::string & identifier) const noexcept;
 
 			/**
 			 * @brief Returns the shared uniform buffer identifier corresponding to this material.

@@ -36,7 +36,7 @@ namespace EmEn
 {
 	/**
 	 * @brief The memory allocator service class.
-	 * @TODO Make a way to allocate huge part of memory to share between local usage in the engine.
+	 * @TODO [WIP] Make a way to allocate huge part of memory to share between local usage in the engine.
 	 * @extends EmEn::ServiceInterface This is a service.
 	 */
 	class MemoryAllocator final : public ServiceInterface
@@ -46,25 +46,22 @@ namespace EmEn
 			/** @brief Class identifier. */
 			static constexpr auto ClassId{"VulkanMemoryAllocatorService"};
 
-			/** @brief Observable class unique identifier. */
-			static const size_t ClassUID;
-
 			/** 
 			 * @brief Constructs the memory allocator.
 			 */
-			MemoryAllocator () noexcept;
+			MemoryAllocator () noexcept
+				: ServiceInterface{ClassId}
+			{
 
-			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
-			[[nodiscard]]
-			size_t classUID () const noexcept override;
-
-			/** @copydoc EmEn::Libs::ObservableTrait::is() const */
-			[[nodiscard]]
-			bool is (size_t classUID) const noexcept override;
+			}
 
 			/** @copydoc EmEn::ServiceInterface::usable() */
 			[[nodiscard]]
-			bool usable () const noexcept override;
+			bool
+			usable () const noexcept override
+			{
+				return m_flags[ServiceInitialized];
+			}
 
 		private:
 

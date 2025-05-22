@@ -48,10 +48,14 @@ namespace EmEn::Scenes::Component
 
 			/**
 			 * @brief Constructs a spherical push modifier.
-			 * @param name The name of the modifier.
+			 * @param name The name of the modifier [std::move].
 			 * @param parentEntity A reference to the parent entity.
 			 */
-			SphericalPushModifier (const std::string & name, const AbstractEntity & parentEntity) noexcept;
+			SphericalPushModifier (std::string name, const AbstractEntity & parentEntity) noexcept
+				: AbstractModifier{std::move(name), parentEntity}
+			{
+
+			}
 
 			/** @copydoc EmEn::Scenes::Component::Abstract::getComponentType() */
 			[[nodiscard]]
@@ -61,20 +65,12 @@ namespace EmEn::Scenes::Component
 				return ClassId;
 			}
 
-			/** @copydoc EmEn::Scenes::Component::Abstract::boundingBox() const */
+			/** @copydoc EmEn::Scenes::Component::Abstract::isComponent() */
 			[[nodiscard]]
-			const Libs::Math::Cuboid< float > &
-			boundingBox () const noexcept override
+			bool
+			isComponent (const char * classID) const noexcept override
 			{
-				return NullBoundingBox;
-			}
-
-			/** @copydoc EmEn::Scenes::Component::Abstract::boundingSphere() const */
-			[[nodiscard]]
-			const Libs::Math::Sphere< float > &
-			boundingSphere () const noexcept override
-			{
-				return NullBoundingSphere;
+				return strcmp(ClassId, classID) == 0;
 			}
 
 			/** @copydoc EmEn::Scenes::Component::Abstract::processLogics() */
@@ -83,14 +79,21 @@ namespace EmEn::Scenes::Component
 			/** @copydoc EmEn::Scenes::Component::Abstract::move() */
 			void move (const Libs::Math::CartesianFrame< float > & worldCoordinates) noexcept override;
 
-			/** @copydoc EmEn::Scenes::Component::Abstract::shouldRemove() */
-			bool shouldRemove () const noexcept override;
+			/** @copydoc EmEn::Scenes::Component::Abstract::shouldBeRemoved() */
+			[[nodiscard]]
+			bool
+			shouldBeRemoved () const noexcept override
+			{
+				return false;
+			}
 
-			/** @copydoc EmEn::Scenes::Component::AbstractModifier::getForceAppliedToEntity(const Libs::Math::CartesianFrame< float > &, const Libs::Math::Sphere< float > &) */
-			Libs::Math::Vector< 3, float > getForceAppliedToEntity (const Libs::Math::CartesianFrame< float > & worldCoordinates, const Libs::Math::Sphere< float > & worldBoundingSphere) const noexcept override;
+			/** @copydoc EmEn::Scenes::Component::AbstractModifier::getForceAppliedToEntity(const Libs::Math::CartesianFrame< float > &, const Libs::Math::Space3D::Sphere< float > &) */
+			[[nodiscard]]
+			Libs::Math::Vector< 3, float > getForceAppliedToEntity (const Libs::Math::CartesianFrame< float > & worldCoordinates, const Libs::Math::Space3D::Sphere< float > & worldBoundingSphere) const noexcept override;
 
-			/** @copydoc EmEn::Scenes::Component::AbstractModifier::getForceAppliedToEntity(const Libs::Math::CartesianFrame< float > &, const Libs::Math::Cuboid< float > &) */
-			Libs::Math::Vector< 3, float > getForceAppliedToEntity (const Libs::Math::CartesianFrame< float > & worldCoordinates, const Libs::Math::Cuboid< float > & worldBoundingBox) const noexcept override;
+			/** @copydoc EmEn::Scenes::Component::AbstractModifier::getForceAppliedToEntity(const Libs::Math::CartesianFrame< float > &, const Libs::Math::Space3D::AACuboid< float > &) */
+			[[nodiscard]]
+			Libs::Math::Vector< 3, float > getForceAppliedToEntity (const Libs::Math::CartesianFrame< float > & worldCoordinates, const Libs::Math::Space3D::AACuboid< float > & worldBoundingBox) const noexcept override;
 
 			/**
 			 * @brief Sets the constant push magnitude.

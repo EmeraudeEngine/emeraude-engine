@@ -34,34 +34,6 @@
 
 namespace EmEn::Console
 {
-	Argument::Argument (bool value) noexcept
-		: m_type(ArgumentType::Boolean),
-		m_value(value)
-	{
-
-	}
-
-	Argument::Argument (int32_t value) noexcept
-		: m_type(ArgumentType::Integer),
-		m_value(value)
-	{
-
-	}
-
-	Argument::Argument (float value) noexcept
-		: m_type(ArgumentType::Float),
-		m_value(value)
-	{
-
-	}
-
-	Argument::Argument (std::string value) noexcept
-		: m_type(ArgumentType::String),
-		m_value(std::move(value))
-	{
-
-	}
-
 	bool
 	Argument::asBoolean () const noexcept
 	{

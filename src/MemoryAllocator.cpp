@@ -31,32 +31,6 @@
 
 namespace EmEn
 {
-	const size_t MemoryAllocator::ClassUID{getClassUID(ClassId)};
-
-	MemoryAllocator::MemoryAllocator () noexcept
-		: ServiceInterface(ClassId)
-	{
-
-	}
-
-	size_t
-	MemoryAllocator::classUID () const noexcept
-	{
-		return ClassUID;
-	}
-
-	bool
-	MemoryAllocator::is (size_t classUID) const noexcept
-	{
-		return classUID == ClassUID;
-	}
-
-	bool
-	MemoryAllocator::usable () const noexcept
-	{
-		return m_flags[ServiceInitialized];
-	}
-
 	bool
 	MemoryAllocator::onInitialize () noexcept
 	{

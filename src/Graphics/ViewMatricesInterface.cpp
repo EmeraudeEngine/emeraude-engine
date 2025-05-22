@@ -27,17 +27,15 @@
 #include "ViewMatricesInterface.hpp"
 
 /* Local inclusions. */
-#include "Graphics/Renderer.hpp"
+#include "Vulkan/DescriptorSetLayout.hpp"
 
 namespace EmEn::Graphics
 {
-	static constexpr auto TracerTag{"ViewMatricesInterface"};
+	constexpr auto TracerTag{"ViewMatricesInterface"};
 
 	std::shared_ptr< Vulkan::DescriptorSetLayout >
-	ViewMatricesInterface::getDescriptorSetLayout () const noexcept
+	ViewMatricesInterface::getDescriptorSetLayout (Vulkan::LayoutManager & layoutManager) noexcept
 	{
-		auto & layoutManager = Renderer::instance()->layoutManager();
-
 		/* NOTE: Create a unique identifier for the descriptor set layout. */
 		const std::string UUID{TracerTag};
 

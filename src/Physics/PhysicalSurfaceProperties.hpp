@@ -45,12 +45,18 @@ namespace EmEn::Physics
 
 			/**
 			 * @brief Constructs a physical surface properties.
+			 * @param density The material density.
 			 */
-			PhysicalSurfaceProperties () noexcept = default;
+			explicit
+			PhysicalSurfaceProperties (float density = DefaultDensity) noexcept
+				: m_density{density}
+			{
+
+			}
 
 			/**
 			 * @brief Sets the density of the material.
-			 * @param density The density.
+			 * @param density The material density.
 			 */
 			void
 			setDensity (float density) noexcept
@@ -73,10 +79,14 @@ namespace EmEn::Physics
 			 * @brief Resets properties to defaults.
 			 * @return void
 			 */
-			void reset () noexcept;
+			void
+			reset () noexcept
+			{
+				m_density = DefaultDensity;
+			}
 
 		private:
 
-			float m_density{DefaultDensity};
+			float m_density;
 	};
 }

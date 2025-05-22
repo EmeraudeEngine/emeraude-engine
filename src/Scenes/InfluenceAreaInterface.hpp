@@ -28,8 +28,8 @@
 
 /* Local inclusions. */
 #include "Libs/Math/CartesianFrame.hpp"
-#include "Libs/Math/Cuboid.hpp"
-#include "Libs/Math/Sphere.hpp"
+#include "Libs/Math/Space3D/AACuboid.hpp"
+#include "Libs/Math/Space3D/Sphere.hpp"
 
 namespace EmEn::Scenes
 {
@@ -79,7 +79,7 @@ namespace EmEn::Scenes
 			 * @return bool
 			 */
 			[[nodiscard]]
-			virtual bool isUnderInfluence (const Libs::Math::CartesianFrame< float > & worldCoordinates, const Libs::Math::Sphere< float > & worldBoundingSphere) const noexcept = 0;
+			virtual bool isUnderInfluence (const Libs::Math::CartesianFrame< float > & worldCoordinates, const Libs::Math::Space3D::Sphere< float > & worldBoundingSphere) const noexcept = 0;
 
 			/**
 			 * @brief Returns the strength of influence to a scene entity from this area.
@@ -88,7 +88,7 @@ namespace EmEn::Scenes
 			 * @return float
 			 */
 			[[nodiscard]]
-			virtual float influenceStrength (const Libs::Math::CartesianFrame< float > & worldCoordinates, const Libs::Math::Sphere< float > & worldBoundingSphere) const noexcept = 0;
+			virtual float influenceStrength (const Libs::Math::CartesianFrame< float > & worldCoordinates, const Libs::Math::Space3D::Sphere< float > & worldBoundingSphere) const noexcept = 0;
 
 			/**
 			 * @brief Returns whether a scene entity is under the influence of this area.
@@ -97,7 +97,7 @@ namespace EmEn::Scenes
 			 * @return bool
 			 */
 			[[nodiscard]]
-			virtual bool isUnderInfluence (const Libs::Math::CartesianFrame< float > & worldCoordinates, const Libs::Math::Cuboid< float > & worldBoundingBox) const noexcept = 0;
+			virtual bool isUnderInfluence (const Libs::Math::CartesianFrame< float > & worldCoordinates, const Libs::Math::Space3D::AACuboid< float > & worldBoundingBox) const noexcept = 0;
 
 			/**
 			 * @brief Returns the strength of influence to a scene entity from this area.
@@ -106,7 +106,7 @@ namespace EmEn::Scenes
 			 * @return float
 			 */
 			[[nodiscard]]
-			virtual float influenceStrength (const Libs::Math::CartesianFrame< float > & worldCoordinates, const Libs::Math::Cuboid< float > & worldBoundingBox) const noexcept = 0;
+			virtual float influenceStrength (const Libs::Math::CartesianFrame< float > & worldCoordinates, const Libs::Math::Space3D::AACuboid< float > & worldBoundingBox) const noexcept = 0;
 
 		protected:
 

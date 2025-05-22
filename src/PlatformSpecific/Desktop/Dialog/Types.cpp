@@ -26,8 +26,8 @@
 
 #include "Types.hpp"
 
-/* Project configuration. */
-#include "platform.hpp"
+/* Emeraude-Engine configuration. */
+#include "emeraude_config.hpp"
 
 /* STL inclusions. */
 #include <iostream>
@@ -163,6 +163,9 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 			case Answer::No :
 				return NoString;
 
+			case Answer::DialogFailure :
+				return DialogFailureString;
+
 			default:
 				return nullptr;
 		}
@@ -194,6 +197,11 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 		if ( value == NoString )
 		{
 			return Answer::No;
+		}
+
+		if ( value == DialogFailureString )
+		{
+			return Answer::DialogFailure;
 		}
 
 		std::cerr << __PRETTY_FUNCTION__ << " : Unknown '" << value << "' type ! Returning 'None' by default." << "\n";

@@ -26,41 +26,9 @@
 
 #include "ExternalInput.hpp"
 
-/* Local inclusions. */
-#include "Arguments.hpp"
-#include "Graphics/Renderer.hpp"
-#include "Settings.hpp"
-#include "Tracer.hpp"
-
 namespace EmEn::Graphics
 {
 	using namespace EmEn::Libs;
-
-	const size_t ExternalInput::ClassUID{getClassUID(ClassId)};
-
-	ExternalInput::ExternalInput () noexcept
-		: ServiceInterface(ClassId)
-	{
-
-	}
-
-	bool
-	ExternalInput::usable () const noexcept
-	{
-		return m_flags[ServiceInitialized];
-	}
-
-	size_t
-	ExternalInput::classUID () const noexcept
-	{
-		return ClassUID;
-	}
-
-	bool
-	ExternalInput::is (size_t classUID) const noexcept
-	{
-		return classUID == ClassUID;
-	}
 
 	bool
 	ExternalInput::onInitialize () noexcept

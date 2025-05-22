@@ -52,7 +52,7 @@ namespace EmEn
 			SettingStore () noexcept = default;
 
 			/**
-			 * @brief Sets an "any" variable variable in store.
+			 * @brief Sets an "any" variable in store.
 			 * @param name A reference to a string for the variable name.
 			 * @param value A reference to a std::any.
 			 * @return void

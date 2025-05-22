@@ -45,7 +45,8 @@ namespace EmEn::Scenes
 			 * @brief Constructs a crawler from a sector.
 			 * @param baseSector From which sector to execute the crawling.
 			 */
-			explicit OctreeSectorCrawler (const std::shared_ptr< octree_t > & baseSector) noexcept
+			explicit
+			OctreeSectorCrawler (const std::shared_ptr< octree_t > & baseSector) noexcept
 			{
 				this->populateStack(baseSector);
 			}
@@ -107,6 +108,6 @@ namespace EmEn::Scenes
 				}
 			}
 
-			std::stack< std::shared_ptr< octree_t > > m_sectors{};
+			std::stack< std::shared_ptr< octree_t > > m_sectors;
 	};
 }

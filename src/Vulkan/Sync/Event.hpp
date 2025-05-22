@@ -81,16 +81,28 @@ namespace EmEn::Vulkan::Sync
 			/**
 			 * @brief Constructs an event.
 			 * @param device A reference to a smart pointer of the device.
-			 * @param createFlags The create info flags. Default none.
+			 * @param createFlags The createInfo flags. Default none.
 			 */
-			explicit Event (const std::shared_ptr< Device > & device, VkEventCreateFlags createFlags = 0) noexcept;
+			explicit
+			Event (const std::shared_ptr< Device > & device, VkEventCreateFlags createFlags = 0) noexcept
+				: AbstractDeviceDependentObject{device}
+			{
+				m_createInfo.sType = VK_STRUCTURE_TYPE_EVENT_CREATE_INFO;
+				m_createInfo.pNext = nullptr;
+				m_createInfo.flags = createFlags;
+			}
 
 			/**
-			 * @brief Constructs an event with a create info.
+			 * @brief Constructs an event with a createInfo.
 			 * @param device A reference to a smart pointer of the device.
-			 * @param createInfo A reference to the create info.
+			 * @param createInfo A reference to the createInfo.
 			 */
-			Event (const std::shared_ptr< Device > & device, const VkEventCreateInfo & createInfo) noexcept;
+			Event (const std::shared_ptr< Device > & device, const VkEventCreateInfo & createInfo) noexcept
+				: AbstractDeviceDependentObject{device},
+				m_createInfo{createInfo}
+			{
+
+			}
 
 			/**
 			 * @brief Copy constructor.
@@ -119,7 +131,10 @@ namespace EmEn::Vulkan::Sync
 			/**
 			 * @brief Destructs the event.
 			 */
-			~Event () override;
+			~Event () override
+			{
+				this->destroyFromHardware();
+			}
 
 			/** @copydoc EmEn::Vulkan::AbstractDeviceDependentObject::createOnHardware() */
 			bool createOnHardware () noexcept override;
@@ -139,7 +154,7 @@ namespace EmEn::Vulkan::Sync
 			}
 
 			/**
-			 * @brief Returns the event create info.
+			 * @brief Returns the event createInfo.
 			 * @return const VkEventCreateInfo &
 			 */
 			[[nodiscard]]

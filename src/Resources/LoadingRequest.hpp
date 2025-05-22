@@ -36,9 +36,8 @@
 #include "Libs/String.hpp"
 #include "BaseInformation.hpp"
 #include "FileSystem.hpp"
-#include "Tracer.hpp"
 #include "ResourceTrait.hpp"
-#include "Types.hpp"
+#include "Tracer.hpp"
 
 namespace EmEn::Resources
 {
@@ -52,7 +51,8 @@ namespace EmEn::Resources
 	{
 		public:
 
-			static constexpr auto TracerTag{"LoadingRequest"};
+			/** @brief Class identifier. */
+			static constexpr auto ClassId{"LoadingRequest"};
 
 			/**
 			 * @brief Constructs a loading request.
@@ -60,14 +60,15 @@ namespace EmEn::Resources
 			 * @param resource A reference to the final resource smart pointer.
 			 */
 			LoadingRequest (BaseInformation baseInformation, const std::shared_ptr< resource_t > & resource) noexcept
-				: m_baseInformation(std::move(baseInformation)), m_resource(resource)
+				: m_baseInformation{std::move(baseInformation)},
+				m_resource{resource}
 			{
 				using namespace EmEn::Libs;
 
 				switch ( m_baseInformation.sourceType() )
 				{
 					case SourceType::Undefined :
-						Tracer::error(TracerTag, "Undefined type for resource request !");
+						Tracer::error(ClassId, "Undefined type for resource request !");
 						break;
 
 					case SourceType::LocalData :
@@ -83,7 +84,7 @@ namespace EmEn::Resources
 						}
 						else
 						{
-							TraceError{TracerTag} << "'" << resourceUrl << "' is not a valid URL ! Download cancelled ...";
+							TraceError{ClassId} << "'" << resourceUrl << "' is not a valid URL ! Download cancelled ...";
 
 							m_downloadTicket = DownloadError;
 						}
@@ -161,7 +162,7 @@ namespace EmEn::Resources
 			{
 				if ( m_baseInformation.sourceType() != SourceType::ExternalData )
 				{
-					Tracer::error(TracerTag, "This request is not external !");
+					Tracer::error(ClassId, "This request is not external !");
 
 					return false;
 				}
@@ -170,7 +171,7 @@ namespace EmEn::Resources
 			}
 
 			/**
-			 * @brief Returns whether the request download url.
+			 * @brief Returns whether the request downloads url.
 			 * @return Libraries::Network::URL
 			 */
 			[[nodiscard]]
@@ -195,7 +196,7 @@ namespace EmEn::Resources
 			{
 				if ( m_baseInformation.sourceType() != SourceType::ExternalData )
 				{
-					Tracer::error(TracerTag, "This request is not external !");
+					Tracer::error(ClassId, "This request is not external !");
 
 					return false;
 				}
@@ -221,14 +222,14 @@ namespace EmEn::Resources
 			{
 				if ( m_baseInformation.sourceType() != SourceType::ExternalData )
 				{
-					Tracer::error(TracerTag, "This request is not external !");
+					Tracer::error(ClassId, "This request is not external !");
 
 					return;
 				}
 
 				if ( m_downloadTicket != DownloadPending )
 				{
-					Tracer::error(TracerTag, "Cannot set a ticket to a request which is not in 'DownloadPending' status !");
+					Tracer::error(ClassId, "Cannot set a ticket to a request which is not in 'DownloadPending' status !");
 
 					return;
 				}
@@ -246,7 +247,7 @@ namespace EmEn::Resources
 			{
 				if ( m_baseInformation.sourceType() != SourceType::ExternalData )
 				{
-					Tracer::error(TracerTag, "This request is not external !");
+					Tracer::error(ClassId, "This request is not external !");
 
 					return;
 				}

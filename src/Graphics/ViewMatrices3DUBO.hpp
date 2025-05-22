@@ -37,6 +37,7 @@
 
 /* Local inclusions for usages. */
 #include "Vulkan/UniformBufferObject.hpp"
+#include "Graphics/Types.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::Graphics
@@ -127,7 +128,7 @@ namespace EmEn::Graphics
 			void updatePerspectiveViewProperties (float width, float height, float distance, float fov) noexcept override;
 
 			/** @copydoc EmEn::Graphics::ViewMatricesInterface::updateOrthographicViewProperties() */
-			void updateOrthographicViewProperties (float width, float height, float distance, float near) noexcept override;
+			void updateOrthographicViewProperties (float width, float height, float farDistance, float nearDistance) noexcept override;
 
 			/** @copydoc EmEn::Graphics::ViewMatricesInterface::updateViewCoordinates() */
 			void updateViewCoordinates (const Libs::Math::CartesianFrame< float > & coordinates, const Libs::Math::Vector< 3, float > & velocity) noexcept override;
@@ -160,6 +161,8 @@ namespace EmEn::Graphics
 				return m_descriptorSet.get();
 			}
 
+		private:
+
 			/**
 			 * @brief STL streams printable object.
 			 * @param out A reference to the stream output.
@@ -167,15 +170,6 @@ namespace EmEn::Graphics
 			 * @return std::ostream &
 			 */
 			friend std::ostream & operator<< (std::ostream & out, const ViewMatrices3DUBO & obj);
-
-			/**
-			 * @brief Stringifies the object.
-			 * @param obj A reference to the object to print.
-			 * @return std::string
-			 */
-			friend std::string to_string (const ViewMatrices3DUBO & obj) noexcept;
-
-		private:
 
 			static constexpr auto ViewUBOElementCount = Matrix4Alignment + (5 * VectorAlignment);
 			static constexpr auto ViewUBOSize = ViewUBOElementCount * sizeof(float);
@@ -220,4 +214,27 @@ namespace EmEn::Graphics
 			std::unique_ptr< Vulkan::DescriptorSet > m_descriptorSet;
 			mutable std::mutex m_GPUBufferAccessLock;
 	};
+
+	inline
+	std::ostream &
+	operator<< (std::ostream & out, const ViewMatrices3DUBO & /*obj*/)
+	{
+		return out << "NOT YET";
+	}
+
+	/**
+	 * @brief Stringifies the object.
+	 * @param obj A reference to the object to print.
+	 * @return std::string
+	 */
+	inline
+	std::string
+	to_string (const ViewMatrices3DUBO & obj) noexcept
+	{
+		std::stringstream output;
+
+		output << obj;
+
+		return output.str();
+	}
 }

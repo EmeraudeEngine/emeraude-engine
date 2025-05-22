@@ -671,7 +671,7 @@ namespace EmEn::Libs::Math
 	 */
 	template< typename integral_t = uint32_t >
 	[[nodiscard]]
-	size_t
+	integral_t
 	alignCount (integral_t value, integral_t alignment) requires (std::is_integral_v< integral_t >)
 	{
 		return std::ceil(static_cast< float >(value) / static_cast< float >(alignment));

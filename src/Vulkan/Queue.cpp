@@ -39,17 +39,6 @@ namespace EmEn::Vulkan
 
 	std::mutex Queue::s_mutex{};
 
-	Queue::Queue (VkQueue queue, uint32_t familyQueueIndex) noexcept
-			: m_handle(queue), m_familyQueueIndex(familyQueueIndex)
-	{
-		this->setCreated();
-	}
-
-	Queue::~Queue ()
-	{
-		this->setDestroyed();
-	}
-
 	bool
 	Queue::submit (const VkSubmitInfo & submitInfo, VkFence fence) const noexcept
 	{

@@ -27,7 +27,7 @@
 #pragma once
 
 /* STL inclusions. */
-#include <ostream>
+#include <sstream>
 #include <string>
 
 namespace EmEn
@@ -43,13 +43,23 @@ namespace EmEn
 			 * @brief Constructs a argument.
 			 * @param noValue Set to true for simple argument with no value.
 			 */
-			explicit Argument (bool noValue = false) noexcept;
+			explicit
+			Argument (bool noValue = false) noexcept
+				: m_isSwitch{noValue}
+			{
+
+			}
 
 			/**
 			 * @brief Constructs an argument with a value.
 			 * @param value A reference to a string [std::move].
 			 */
-			explicit Argument (std::string value) noexcept;
+			explicit
+			Argument (std::string value) noexcept
+				: m_value{std::move(value)}
+			{
+
+			}
 
 			/**
 			 * @brief Returns whether the argument is a simple switch with no value.
@@ -90,6 +100,8 @@ namespace EmEn
 				return m_value;
 			}
 
+		private:
+
 			/**
 			 * @brief STL streams printable object.
 			 * @param out A reference to the stream output.
@@ -98,16 +110,30 @@ namespace EmEn
 			 */
 			friend std::ostream & operator<< (std::ostream & out, const Argument & obj);
 
-			/**
-			 * @brief Stringifies the object.
-			 * @param obj A reference to the object to print.
-			 * @return std::string
-			 */
-			friend std::string to_string (const Argument & obj) noexcept;
-
-		private:
-
 			std::string m_value;
 			bool m_isSwitch{false};
 	};
+
+	inline
+	std::ostream &
+	operator<< (std::ostream & out, const Argument & obj)
+	{
+		return out << ( obj.value().empty() ? "{NO_VALUE}" : obj.value() );
+	}
+
+	/**
+	 * @brief Stringifies the object.
+	 * @param obj A reference to the object to print.
+	 * @return std::string
+	 */
+	inline
+	std::string
+	to_string (const Argument & obj) noexcept
+	{
+		std::stringstream output;
+
+		output << obj;
+
+		return output.str();
+	}
 }

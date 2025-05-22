@@ -36,33 +36,6 @@ namespace EmEn::Vulkan
 {
 	using namespace EmEn::Libs;
 
-	ImageView::ImageView (const std::shared_ptr< Image > & image, VkImageViewType viewType, VkImageSubresourceRange subresourceRange, VkComponentMapping components, VkImageViewCreateFlags createFlags) noexcept
-		: AbstractDeviceDependentObject(image->device()),
-		m_image(image)
-	{
-		m_createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-		m_createInfo.pNext = nullptr;
-		m_createInfo.flags = createFlags;
-		m_createInfo.image = VK_NULL_HANDLE;
-		m_createInfo.viewType = viewType;
-		m_createInfo.format = VK_FORMAT_UNDEFINED;
-		m_createInfo.components = components;
-		m_createInfo.subresourceRange = subresourceRange;
-	}
-
-	ImageView::ImageView (const std::shared_ptr< Image > & image, const VkImageViewCreateInfo & createInfo) noexcept
-		: AbstractDeviceDependentObject(image->device()),
-		m_createInfo(createInfo),
-		m_image(image)
-	{
-
-	}
-
-	ImageView::~ImageView ()
-	{
-		this->destroyFromHardware();
-	}
-
 	bool
 	ImageView::createOnHardware () noexcept
 	{

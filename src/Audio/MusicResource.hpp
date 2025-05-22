@@ -26,13 +26,6 @@
 
 #pragma once
 
-/* STL inclusions. */
-#include <cstddef>
-#include <cstdint>
-#include <memory>
-#include <string>
-#include <vector>
-
 /* Local inclusions for inheritances. */
 #include "PlayableInterface.hpp"
 #include "Resources/ResourceTrait.hpp"
@@ -59,12 +52,15 @@ namespace EmEn::Audio
 			/** @brief Observable class unique identifier. */
 			static const size_t ClassUID;
 
+			/** @brief Defines the resource dependency complexity. */
+			static constexpr auto Complexity{Resources::DepComplexity::None};
+
 			/**
 			 * @brief Constructs a music resource.
 			 * @param name The name of the resource.
-			 * @param resourceFlagBits The resource flag bits. Default none. (Unused yet)
+			 * @param resourceFlags The resource flag bits. Default none. (Unused yet)
 			 */
-			explicit MusicResource (const std::string & name, uint32_t resourceFlagBits = 0) noexcept;
+			explicit MusicResource (const std::string & name, uint32_t resourceFlags = 0) noexcept;
 
 			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
 			[[nodiscard]]
@@ -115,6 +111,14 @@ namespace EmEn::Audio
 			/** @copydoc EmEn::Resources::ResourceTrait::load(const Json::Value &) */
 			bool load (const Json::Value & data) noexcept override;
 
+			/** @copydoc EmEn::Resources::ResourceTrait::memoryOccupied() const noexcept */
+			[[nodiscard]]
+			size_t
+			memoryOccupied () const noexcept override
+			{
+				return sizeof(*this) + m_localData.bytes< size_t >();
+			}
+
 			/**
 			 * @brief Returns the local data.
 			 * @return const Libraries::WaveFactory::Wave< int16_t > &
@@ -157,22 +161,6 @@ namespace EmEn::Audio
 			{
 				return m_artist;
 			}
-
-			/**
-			 * @brief Returns a music resource by its name.
-			 * @param resourceName A reference to a string.
-			 * @param directLoad Use the direct loading mode. Default false.
-			 * @return std::shared_ptr< MusicResource >
-			 */
-			[[nodiscard]]
-			static std::shared_ptr< MusicResource > get (const std::string & resourceName, bool directLoad = false) noexcept;
-
-			/**
-			 * @brief Returns the default music resource.
-			 * @return std::shared_ptr< MusicResource >
-			 */
-			[[nodiscard]]
-			static std::shared_ptr< MusicResource > getDefault () noexcept;
 
 		private:
 

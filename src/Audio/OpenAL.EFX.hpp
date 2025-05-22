@@ -112,9 +112,9 @@ namespace EmEn::Audio
 
 		private:
 
-			static bool s_isAvailable;
-			static ALint s_maxAuxiliarySends;
+			inline static bool s_isAvailable{false};
+			inline static ALint s_maxAuxiliarySends{0};
 
-			ALCdevice * m_device = nullptr;
+			ALCdevice * m_device{nullptr};
 	};
 }

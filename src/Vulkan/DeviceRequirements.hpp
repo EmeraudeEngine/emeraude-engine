@@ -28,7 +28,7 @@
 
 /* STL inclusions. */
 #include <cstddef>
-#include <ostream>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -54,7 +54,12 @@ namespace EmEn::Vulkan
 			 * @brief Constructs a device requirements.
 			 * @param deviceJobHint A hint for the device main job.
 			 */
-			explicit DeviceRequirements (DeviceJobHint deviceJobHint) noexcept;
+			explicit
+			DeviceRequirements (DeviceJobHint deviceJobHint) noexcept
+				: m_deviceJobHint{deviceJobHint}
+			{
+
+			}
 
 			/**
 			 * @brief Returns the main job of the device to help at queue creation decision.
@@ -79,7 +84,7 @@ namespace EmEn::Vulkan
 			}
 
 			/**
-			 * @brief Returns the device feature for the create info.
+			 * @brief Returns the device feature for the createInfo.
 			 * @return const VkPhysicalDeviceFeatures &
 			 */
 			[[nodiscard]]
@@ -286,6 +291,8 @@ namespace EmEn::Vulkan
 				return false;
 			}
 
+		private:
+
 			/**
 			 * @brief STL streams printable object.
 			 * @param out A reference to the stream output.
@@ -293,15 +300,6 @@ namespace EmEn::Vulkan
 			 * @return std::ostream &
 			 */
 			friend std::ostream & operator<< (std::ostream & out, const DeviceRequirements & obj);
-
-			/**
-			 * @brief Stringifies the object.
-			 * @param obj A reference to the object to print.
-			 * @return std::string
-			 */
-			friend std::string to_string (const DeviceRequirements & obj) noexcept;
-
-		private:
 
 			DeviceJobHint m_deviceJobHint;
 			VkPhysicalDeviceFeatures m_deviceFeatures{};
@@ -314,4 +312,20 @@ namespace EmEn::Vulkan
 			VkSurfaceKHR m_surface{VK_NULL_HANDLE};
 			bool m_presentationSeparated{false};
 	};
+
+	/**
+	 * @brief Stringifies the object.
+	 * @param obj A reference to the object to print.
+	 * @return std::string
+	 */
+	inline
+	std::string
+	to_string (const DeviceRequirements & obj) noexcept
+	{
+		std::stringstream output;
+
+		output << obj;
+
+		return output.str();
+	}
 }

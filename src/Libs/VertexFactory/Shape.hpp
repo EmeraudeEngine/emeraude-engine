@@ -30,10 +30,9 @@
 #include "emeraude_config.hpp"
 
 /* STL inclusions. */
+#include <cstdint>
 #include <algorithm>
 #include <array>
-#include <cstddef>
-#include <cstdint>
 #include <iostream>
 #include <limits>
 #include <sstream>
@@ -44,9 +43,9 @@
 #include <set>
 
 /* Local inclusions for usages. */
-#include "Libs/Math/Cuboid.hpp"
+#include "Libs/Math/Space3D/AACuboid.hpp"
+#include "Libs/Math/Space3D/Sphere.hpp"
 #include "Libs/Math/Matrix.hpp"
-#include "Libs/Math/Sphere.hpp"
 #include "Libs/Math/Vector.hpp"
 #include "Libs/PixelFactory/Color.hpp"
 #include "ShapeEdge.hpp"
@@ -59,10 +58,11 @@ namespace EmEn::Libs::VertexFactory
 {
 	/**
 	 * @brief The shape class for defining a complete geometry.
-	 * @tparam data_t The precision type of vertex data. Default float.
+	 * @tparam vertex_data_t The precision type of vertex data. Default float.
+	 * @tparam index_data_t The precision type of index data. Default uint32_t.
 	 */
-	template< typename data_t = float >
-	requires (std::is_floating_point_v< data_t >)
+	template< typename vertex_data_t = float, typename index_data_t = uint32_t >
+	requires (std::is_floating_point_v< vertex_data_t > && std::is_unsigned_v< index_data_t > )
 	class Shape final
 	{
 		public:
@@ -77,30 +77,30 @@ namespace EmEn::Libs::VertexFactory
 			 * @param triangleCount The possible number of triangles to reserve.
 			 */
 			explicit
-			Shape (size_t triangleCount) noexcept
+			Shape (index_data_t triangleCount) noexcept
 			{
 				this->reserveData(triangleCount);
 			}
 
 			/**
 			 * @brief Constructs a shape and reserve space from vertex attributes count.
-			 * @param positionsCount The possible number of position to reserve.
-			 * @param vertexColorsCount The possible number of color vertex to reserve.
-			 * @param facesCount The possible number of face to reserve.
-			 * @param edgesCount The possible number of edge to reserve. Default 0.
+			 * @param positionsCount The possible number of positions to reserve.
+			 * @param vertexColorsCount The possible number of color vertices to reserve.
+			 * @param facesCount The possible number of faces to reserve.
+			 * @param edgesCount The possible number of edges to reserve. Default 0.
 			 */
-			Shape (size_t positionsCount, size_t vertexColorsCount, size_t facesCount, size_t edgesCount = 0) noexcept
+			Shape (index_data_t positionsCount, index_data_t vertexColorsCount, index_data_t facesCount, index_data_t edgesCount = 0) noexcept
 			{
 				this->resizeData(positionsCount, vertexColorsCount, facesCount, edgesCount);
 			}
 
 			/**
 			 * @brief Reserves data for geometry construction to avoid multiple re-allocations.
-			 * @param triangleCount The possible number of triangle to reserve.
+			 * @param triangleCount The possible number of triangles to reserve.
 			 * @return void
 			 */
 			void
-			reserveData (size_t triangleCount) noexcept
+			reserveData (index_data_t triangleCount) noexcept
 			{
 				if ( triangleCount == 0 )
 				{
@@ -117,14 +117,14 @@ namespace EmEn::Libs::VertexFactory
 
 			/**
 			 * @brief Reserves data vectors for geometry construction to avoid multiple re-allocations. Finer version.
-			 * @param positionsCount The possible number of position to reserve.
-			 * @param vertexColorsCount The possible number of color vertex to reserve.
-			 * @param facesCount The possible number of face to reserve.
-			 * @param edgesCount The possible number of edge to reserve. Default 0.
+			 * @param positionsCount The possible number of positions to reserve.
+			 * @param vertexColorsCount The possible number of color vertices to reserve.
+			 * @param facesCount The possible number of faces to reserve.
+			 * @param edgesCount The possible number of edges to reserve. Default 0.
 			 * @return void
 			 */
 			void
-			reserveData (size_t positionsCount, size_t vertexColorsCount, size_t facesCount, size_t edgesCount = 0) noexcept
+			reserveData (index_data_t positionsCount, index_data_t vertexColorsCount, index_data_t facesCount, index_data_t edgesCount = 0) noexcept
 			{
 				auto somethingReserved = false;
 
@@ -164,14 +164,14 @@ namespace EmEn::Libs::VertexFactory
 
 			/**
 			 * @brief Resizes data vectors for geometry construction to avoid multiple re-allocations. Finer version.
-			 * @param positionsCount The possible number of position to reserve.
-			 * @param vertexColorsCount The possible number of color vertex to reserve.
-			 * @param facesCount The possible number of face to reserve.
-			 * @param edgesCount The possible number of edge to reserve. Default 0.
+			 * @param positionsCount The possible number of positions to reserve.
+			 * @param vertexColorsCount The possible number of color vertices to reserve.
+			 * @param facesCount The possible number of faces to reserve.
+			 * @param edgesCount The possible number of edges to reserve. Default 0.
 			 * @return void
 			 */
 			void
-			resizeData (size_t positionsCount, size_t vertexColorsCount, size_t facesCount, size_t edgesCount = 0) noexcept
+			resizeData (index_data_t positionsCount, index_data_t vertexColorsCount, index_data_t facesCount, index_data_t edgesCount = 0) noexcept
 			{
 				m_vertices.resize(positionsCount);
 				m_vertexColors.resize(vertexColorsCount);
@@ -199,22 +199,22 @@ namespace EmEn::Libs::VertexFactory
 			}
 
 			/**
-			 * @brief Returns the number of vertex.
-			 * @return size_t
+			 * @brief Returns the number of vertices.
+			 * @return index_data_t
 			 */
 			[[nodiscard]]
-			size_t
+			index_data_t
 			vertexCount () const noexcept
 			{
-				return m_vertices.size();
+				return static_cast< index_data_t >(m_vertices.size());
 			}
 
 			/**
 			 * @brief Gives access to the vertices list.
-			 * @return const std::vector< ShapeVertex< data_t > > &
+			 * @return const std::vector< ShapeVertex< vertex_data_t > > &
 			 */
 			[[nodiscard]]
-			const std::vector< ShapeVertex< data_t > > &
+			const std::vector< ShapeVertex< vertex_data_t > > &
 			vertices () const noexcept
 			{
 				return m_vertices;
@@ -222,21 +222,21 @@ namespace EmEn::Libs::VertexFactory
 
 			/**
 			 * @brief Gives access to the vertex colors list.
-			 * @return const std::vector< Math::Vector< 4, data_t > > &
+			 * @return const std::vector< Math::Vector< 4, vertex_data_t > > &
 			 */
 			[[nodiscard]]
-			const std::vector< Math::Vector< 4, data_t > > &
+			const std::vector< Math::Vector< 4, vertex_data_t > > &
 			vertexColors () const noexcept
 			{
 				return m_vertexColors;
 			}
 
 			/**
-			 * @brief Gives access to the triangles list.
-			 * @return const std::vector< ShapeTriangle< data_t > > &
+			 * @brief Gives access to the triangle list.
+			 * @return const std::vector< ShapeTriangle< vertex_data_t > > &
 			 */
 			[[nodiscard]]
-			const std::vector< ShapeTriangle< data_t > > &
+			const std::vector< ShapeTriangle< vertex_data_t > > &
 			triangles () const noexcept
 			{
 				return m_triangles;
@@ -245,11 +245,11 @@ namespace EmEn::Libs::VertexFactory
 			/**
 			 * @brief Returns a vertex from the list.
 			 * @param index The index of the vertex in the list. You should get it from a ShapeTriangle.
-			 * @return const ShapeVertex< data_t > &
+			 * @return const ShapeVertex< vertex_data_t > &
 			 */
 			[[nodiscard]]
-			const ShapeVertex< data_t > &
-			vertex (size_t index) const noexcept
+			const ShapeVertex< vertex_data_t > &
+			vertex (index_data_t index) const noexcept
 			{
 				return m_vertices[index];
 			}
@@ -257,21 +257,21 @@ namespace EmEn::Libs::VertexFactory
 			/**
 			 * @brief Returns a vertex color from the list.
 			 * @param index The index of the vertex color in the list. You should get it from a ShapeTriangle.
-			 * @return const Math::Vector< 4, data_t > &
+			 * @return const Math::Vector< 4, vertex_data_t > &
 			 */
 			[[nodiscard]]
-			const Math::Vector< 4, data_t > &
-			vertexColor (size_t index) const noexcept
+			const Math::Vector< 4, vertex_data_t > &
+			vertexColor (index_data_t index) const noexcept
 			{
 				return m_vertexColors[index];
 			}
 
 			/**
-			 * @brief Gives access to the edges list.
-			 * @return const std::vector< ShapeEdge > &
+			 * @brief Gives access to the edge list.
+			 * @return const std::vector< ShapeEdge< index_data_t > > &
 			 */
 			[[nodiscard]]
-			const std::vector< ShapeEdge > &
+			const std::vector< ShapeEdge< index_data_t > > &
 			edges () const noexcept
 			{
 				return m_edges;
@@ -279,10 +279,10 @@ namespace EmEn::Libs::VertexFactory
 
 			/**
 			 * @brief Gives access to the bounding box.
-			 * @return const Math::Cuboid< data_t > &
+			 * @return const Math::Space3D::AACuboid< vertex_data_t > &
 			 */
 			[[nodiscard]]
-			const Math::Cuboid< data_t > &
+			const Math::Space3D::AACuboid< vertex_data_t > &
 			boundingBox () const noexcept
 			{
 				return m_boundingBox;
@@ -290,17 +290,17 @@ namespace EmEn::Libs::VertexFactory
 
 			/**
 			 * @brief Gives access to the bounding sphere.
-			 * @return const Math::Sphere< data_t > &
+			 * @return const Math::Space3D::Sphere< vertex_data_t > &
 			 */
 			[[nodiscard]]
-			const Math::Sphere< data_t > &
+			const Math::Space3D::Sphere< vertex_data_t > &
 			boundingSphere () const noexcept
 			{
 				return m_boundingSphere;
 			}
 
 			/**
-			 * @brief Returns whether the geometry is composed of group.
+			 * @brief Returns whether the geometry is composed of groups.
 			 * @return bool
 			 */
 			[[nodiscard]]
@@ -311,22 +311,22 @@ namespace EmEn::Libs::VertexFactory
 			}
 
 			/**
-			 * @brief Returns the number of group the geometry is composed of.
-			 * @return size_t
+			 * @brief Returns the number of groups the geometry is composed of.
+			 * @return index_data_t
 			 */
 			[[nodiscard]]
-			size_t
+			index_data_t
 			groupCount () const noexcept
 			{
-				return m_groups.size();
+				return static_cast< index_data_t >(m_groups.size());
 			}
 
 			/**
 			 * @brief Returns the group list the geometry is composed of.
-			 * @return std::vector< std::pair< size_t, size_t > > &
+			 * @return std::vector< std::pair< index_data_t, index_data_t > > &
 			 */
 			[[nodiscard]]
-			const std::vector< std::pair< size_t, size_t > > &
+			const std::vector< std::pair< index_data_t, index_data_t > > &
 			groups () const noexcept
 			{
 				return m_groups;
@@ -334,10 +334,10 @@ namespace EmEn::Libs::VertexFactory
 
 			/**
 			 * @brief Returns the average center of the geometry.
-			 * @return const Math::Vector< 3, data_t > &
+			 * @return const Math::Vector< 3, vertex_data_t > &
 			 */
 			[[nodiscard]]
-			const Math::Vector< 3, data_t > &
+			const Math::Vector< 3, vertex_data_t > &
 			centroid () const noexcept
 			{
 				return m_boundingSphere.position();
@@ -345,10 +345,10 @@ namespace EmEn::Libs::VertexFactory
 
 			/**
 			 * @brief Returns the distance of the farthest vertex from the origin (0, 0, 0).
-			 * @return data_t
+			 * @return vertex_data_t
 			 */
 			[[nodiscard]]
-			data_t
+			vertex_data_t
 			farthestDistance () const noexcept
 			{
 				return m_farthestDistance;
@@ -385,7 +385,7 @@ namespace EmEn::Libs::VertexFactory
 			bool
 			isOpen () const noexcept
 			{
-				/* NOTE : if only one edge is not shared, then the geometry is open. */
+				/* NOTE: if only one edge is not shared, then the geometry is open. */
 				return std::ranges::any_of(m_edges, [] (const auto & edge) {
 					return !edge.isShared();
 				});
@@ -421,7 +421,7 @@ namespace EmEn::Libs::VertexFactory
 			 * @return bool
 			 */
 			bool
-			generateTextureCoordinates (data_t uScale = 1, data_t vScale = 1, data_t wScale = 1) noexcept
+			generateTextureCoordinates (vertex_data_t uScale = 1, vertex_data_t vScale = 1, vertex_data_t wScale = 1) noexcept
 			{
 				if ( m_triangles.empty() || m_vertices.empty() )
 				{
@@ -433,7 +433,7 @@ namespace EmEn::Libs::VertexFactory
 				#pragma omp parallel for default(none) shared(uScale, vScale, wScale)
 				for ( const auto & triangle : m_triangles )
 				{
-					for ( size_t vertexIndex = 0; vertexIndex < 3; ++vertexIndex )
+					for ( index_data_t vertexIndex = 0; vertexIndex < 3; ++vertexIndex )
 					{
 						auto & currentVertex = m_vertices[triangle.vertexIndex(vertexIndex)];
 
@@ -473,7 +473,7 @@ namespace EmEn::Libs::VertexFactory
 					const auto & vertexC = m_vertices[triangle.vertexIndex(2)];
 
 					/* Compute the surface normal. */
-					const auto normal = Math::Vector< 3, data_t >::normal(
+					const auto normal = Math::Vector< 3, vertex_data_t >::normal(
 						vertexA.position(),
 						vertexB.position(),
 						vertexC.position()
@@ -515,7 +515,7 @@ namespace EmEn::Libs::VertexFactory
 					const auto & vertexC = m_vertices[triangle.vertexIndex(2)];
 
 					/* Compute the surface tangent. */
-					const auto tangent = Math::Vector< 3, data_t >::tangent(
+					const auto tangent = Math::Vector< 3, vertex_data_t >::tangent(
 						vertexA.position(),
 						vertexA.textureCoordinates(),
 						vertexB.position(),
@@ -561,7 +561,7 @@ namespace EmEn::Libs::VertexFactory
 					const auto & vertexC = m_vertices[triangle.vertexIndex(2)];
 
 					/* Compute the surface tangent. */
-					const auto tangent = Math::Vector< 3, data_t >::tangent(
+					const auto tangent = Math::Vector< 3, vertex_data_t >::tangent(
 						vertexA.position(),
 						vertexA.textureCoordinates(),
 						vertexB.position(),
@@ -573,7 +573,7 @@ namespace EmEn::Libs::VertexFactory
 					triangle.setSurfaceTangent(tangent);
 
 					/* Compute the surface normal. */
-					const auto normal = Math::Vector< 3, data_t >::normal(
+					const auto normal = Math::Vector< 3, vertex_data_t >::normal(
 						vertexA.position(),
 						vertexB.position(),
 						vertexC.position()
@@ -603,14 +603,14 @@ namespace EmEn::Libs::VertexFactory
 				const auto verticesCount = m_vertices.size();
 
 				#pragma omp parallel for default(none) shared(verticesCount)
-				for ( size_t globalVertexIndex = 0; globalVertexIndex < verticesCount; globalVertexIndex++ )
+				for ( index_data_t globalVertexIndex = 0; globalVertexIndex < verticesCount; ++globalVertexIndex )
 				{
-					Math::Vector< 3, data_t > normal;
+					Math::Vector< 3, vertex_data_t > normal;
 
-					/* We look for every triangle sharing this vertex, add every vector then normalize. */
+					/* We look for every triangle sharing this vertex, add every vector, then normalize. */
 					for ( const auto & triangle : m_triangles )
 					{
-						for ( size_t vertexIndex = 0; vertexIndex < 3; ++vertexIndex )
+						for ( index_data_t vertexIndex = 0; vertexIndex < 3; ++vertexIndex )
 						{
 							if ( triangle.vertexIndex(vertexIndex) != globalVertexIndex )
 							{
@@ -647,14 +647,14 @@ namespace EmEn::Libs::VertexFactory
 				const auto verticesCount = m_vertices.size();
 
 				#pragma omp parallel for default(none) shared(verticesCount)
-				for ( size_t globalVertexIndex = 0; globalVertexIndex < verticesCount; globalVertexIndex++ )
+				for ( index_data_t globalVertexIndex = 0; globalVertexIndex < verticesCount; ++globalVertexIndex )
 				{
-					Math::Vector< 3, data_t > tangent;
+					Math::Vector< 3, vertex_data_t > tangent;
 
-					/* We look for every triangle sharing this vertex, add every vector then normalize. */
+					/* We look for every triangle sharing this vertex, add every vector, then normalize. */
 					for ( const auto & triangle : m_triangles )
 					{
-						for ( size_t vertexIndex = 0; vertexIndex < 3; ++vertexIndex )
+						for ( index_data_t vertexIndex = 0; vertexIndex < 3; ++vertexIndex )
 						{
 							if ( triangle.vertexIndex(vertexIndex) != globalVertexIndex )
 							{
@@ -692,15 +692,15 @@ namespace EmEn::Libs::VertexFactory
 				const auto verticesCount = m_vertices.size();
 
 				#pragma omp parallel for default(none) shared(verticesCount)
-				for ( size_t globalVertexIndex = 0; globalVertexIndex < verticesCount; globalVertexIndex++ )
+				for ( index_data_t globalVertexIndex = 0; globalVertexIndex < verticesCount; ++globalVertexIndex )
 				{
-					Math::Vector< 3, data_t > tangent{};
-					Math::Vector< 3, data_t > normal{};
+					Math::Vector< 3, vertex_data_t > tangent{};
+					Math::Vector< 3, vertex_data_t > normal{};
 
-					/* We look for every triangle sharing this vertex, add every vector then normalize. */
+					/* We look for every triangle sharing this vertex, add every vector, then normalize. */
 					for ( const auto & triangle : m_triangles )
 					{
-						for ( size_t vertexIndex = 0; vertexIndex < 3; ++vertexIndex )
+						for ( index_data_t vertexIndex = 0; vertexIndex < 3; ++vertexIndex )
 						{
 							if ( triangle.vertexIndex(vertexIndex) != globalVertexIndex )
 							{
@@ -728,7 +728,7 @@ namespace EmEn::Libs::VertexFactory
 			setCenterAtBottom (bool updateProperties = true)
 			{
 				/* Find the lowest position. */
-				auto bottom = std::numeric_limits< data_t >::max();
+				auto bottom = std::numeric_limits< vertex_data_t >::max();
 
 				for ( const auto & vertexRef : m_vertices )
 				{
@@ -738,7 +738,7 @@ namespace EmEn::Libs::VertexFactory
 					}
 				}
 
-				this->transform(Math::Matrix< 4, data_t >::translation(0, bottom, 0), updateProperties);
+				this->transform(Math::Matrix< 4, vertex_data_t >::translation(0, bottom, 0), updateProperties);
 			}
 
 			/**
@@ -748,18 +748,18 @@ namespace EmEn::Libs::VertexFactory
 			 * @return void
 			 */
 			void
-			transform (const Math::Matrix< 4, data_t > & transform, bool updateProperties = true) noexcept
+			transform (const Math::Matrix< 4, vertex_data_t > & transform, bool updateProperties = true) noexcept
 			{
-				/* NOTE : For tangents and normals transformation,
+				/* NOTE: For tangents and normals transformation,
 				 * we don't want to translate the vector. */
 				auto noTranslate(transform);
 				noTranslate.clearTranslation();
 
 				for ( auto & vertexRef : m_vertices )
 				{
-					vertexRef.setPosition(transform * Math::Vector< 4, data_t >(vertexRef.position(), 1));
-					vertexRef.setTangent((noTranslate * Math::Vector< 4, data_t >(vertexRef.tangent(), 0)).normalize());
-					vertexRef.setNormal((noTranslate * Math::Vector< 4, data_t >(vertexRef.normal(), 0)).normalize());
+					vertexRef.setPosition(transform * Math::Vector< 4, vertex_data_t >(vertexRef.position(), 1));
+					vertexRef.setTangent((noTranslate * Math::Vector< 4, vertex_data_t >(vertexRef.tangent(), 0)).normalize());
+					vertexRef.setNormal((noTranslate * Math::Vector< 4, vertex_data_t >(vertexRef.normal(), 0)).normalize());
 				}
 
 				/* Updates the invalided bounding box. */
@@ -776,32 +776,32 @@ namespace EmEn::Libs::VertexFactory
 			 */
 			[[deprecated("Not working correctly")]]
 			void
-			removeDoubleVertices (data_t vertexDistanceTolerance) noexcept
+			removeDoubleVertices (vertex_data_t vertexDistanceTolerance) noexcept
 			{
 				/* Gets a copy of the vertices position and clean the vector for replacement. */
-				const std::vector< ShapeVertex< data_t > > baseVertices(m_vertices);
+				const std::vector< ShapeVertex< vertex_data_t > > baseVertices(m_vertices);
 
 				m_vertices.clear();
 
 				/* For every old vertex ... */
-				for ( size_t baseIndex = 0; baseIndex < baseVertices.size(); baseIndex++ )
+				for ( index_data_t baseIndex = 0; baseIndex < baseVertices.size(); ++baseIndex )
 				{
 					const auto & baseVertex = baseVertices[baseIndex];
 
 					/* ... We check if we don't found a close position in the new list. */
 					auto found = false;
-					size_t newIndex = 0;
+					index_data_t newIndex = 0;
 
 					for ( const auto & vertexRef : m_vertices )
 					{
-						if ( Math::Vector< 3, data_t >::distance(baseVertex.position(), vertexRef.position()) < vertexDistanceTolerance )
+						if ( Math::Vector< 3, vertex_data_t >::distance(baseVertex.position(), vertexRef.position()) < vertexDistanceTolerance )
 						{
 							found = true;
 
 							break;
 						}
 
-						newIndex++;
+						++newIndex;
 					}
 
 					/* If not found, we put the new vertex position. */
@@ -809,7 +809,7 @@ namespace EmEn::Libs::VertexFactory
 					{
 						m_vertices.emplace_back(baseVertex);
 
-						newIndex = m_vertices.size() - 1;
+						newIndex = static_cast< index_data_t >(m_vertices.size() - 1);
 					}
 
 					/* Ne replacement requested. */
@@ -821,7 +821,7 @@ namespace EmEn::Libs::VertexFactory
 					/* We processLogics every face index for vertices position. */
 					for ( auto & triangle : m_triangles )
 					{
-						for ( size_t vertexIndex = 0; vertexIndex < 3; vertexIndex++ )
+						for ( index_data_t vertexIndex = 0; vertexIndex < 3; ++vertexIndex )
 						{
 							if ( triangle.vertexIndex(vertexIndex) == baseIndex )
 							{
@@ -853,7 +853,7 @@ namespace EmEn::Libs::VertexFactory
 			 * @return void
 			 */
 			void
-			setGlobalVertexColor (const Math::Vector< 4, data_t > & color) noexcept
+			setGlobalVertexColor (const Math::Vector< 4, vertex_data_t > & color) noexcept
 			{
 				m_vertexColors.clear();
 				m_vertexColors.emplace_back(color);
@@ -861,7 +861,7 @@ namespace EmEn::Libs::VertexFactory
 				/* Sets color pointer to index 0, the unique color. */
 				for ( auto & triangle : m_triangles )
 				{
-					for ( size_t vertexIndex = 0; vertexIndex < 3; vertexIndex++ )
+					for ( index_data_t vertexIndex = 0; vertexIndex < 3; ++vertexIndex )
 					{
 						triangle.setVertexColorIndex(vertexIndex, 0);
 					}
@@ -874,9 +874,9 @@ namespace EmEn::Libs::VertexFactory
 			 * @return void
 			 */
 			void
-			setGlobalVertexColor (const PixelFactory::Color< float > & color) noexcept
+			setGlobalVertexColor (const PixelFactory::Color< vertex_data_t > & color) noexcept
 			{
-				this->setGlobalVertexColor(color.toVector4< float >());
+				this->setGlobalVertexColor(color.template toVector4< vertex_data_t >());
 			}
 
 			/**
@@ -923,7 +923,7 @@ namespace EmEn::Libs::VertexFactory
 			 * @return bool
 			 */
 			bool
-			build (const std::function< bool (std::vector< std::pair< size_t, size_t > > &, std::vector< ShapeVertex< data_t > > &, std::vector< ShapeTriangle< data_t > > &) > & buildFunction, bool textureCoordinatesDeclared, bool computeEdges = false) noexcept
+			build (const std::function< bool (std::vector< std::pair< index_data_t, index_data_t > > &, std::vector< ShapeVertex< vertex_data_t > > &, std::vector< ShapeTriangle< vertex_data_t > > &) > & buildFunction, bool textureCoordinatesDeclared, bool computeEdges = false) noexcept
 			{
 				this->clear();
 
@@ -943,35 +943,33 @@ namespace EmEn::Libs::VertexFactory
 			/**
 			 * @brief Creates an indexed vertex buffer.
 			 * @note Returns the element count in one vertex.
-			 * @tparam buffer_t The precision of vertex attribute data.
 			 * @param vertexBuffer A reference to the vertex buffer.
 			 * @param normalType Set the normal format. Default none.
 			 * @param textureCoordinatesType Set the texture coordinates format. Default none.
 			 * @param vertexColorType Set the vertex color format. Default none.
 			 * @param skeletalAnimationType Set vertex attributes for skeletal animation. Default none.
-			 * @return size_t
+			 * @return index_data_t
 			 */
-			template< typename buffer_t = float >
-			size_t
-			createVertexBuffer (std::vector< buffer_t > & vertexBuffer, NormalType normalType = NormalType::None, TextureCoordinatesType textureCoordinatesType = TextureCoordinatesType::None, VertexColorType vertexColorType = VertexColorType::None, SkeletalAnimationType skeletalAnimationType = SkeletalAnimationType::None) const requires (std::is_floating_point_v< buffer_t >)
+			index_data_t
+			createVertexBuffer (std::vector< vertex_data_t > & vertexBuffer, NormalType normalType = NormalType::None, TextureCoordinatesType textureCoordinatesType = TextureCoordinatesType::None, VertexColorType vertexColorType = VertexColorType::None, SkeletalAnimationType skeletalAnimationType = SkeletalAnimationType::None) const noexcept
 			{
 				const auto vertexElementCount = getVertexElementCount(normalType, textureCoordinatesType, vertexColorType, skeletalAnimationType);
 
 				/* NOTE: Resize destination buffers. */
 				vertexBuffer.resize(m_triangles.size() * 3 * vertexElementCount);
 
-				size_t indexBufferOffset = 0;
+				index_data_t indexBufferOffset = 0;
 
 				for ( const auto & triangle : m_triangles )
 				{
-					for ( size_t triangleVertexIndex = 0; triangleVertexIndex < 3; ++triangleVertexIndex)
+					for ( index_data_t triangleVertexIndex = 0; triangleVertexIndex < 3; ++triangleVertexIndex)
 					{
 						const auto shapeVertexIndex = triangle.vertexIndex(triangleVertexIndex);
 						const auto & vertex = m_vertices[shapeVertexIndex];
 
-						size_t vertexBufferOffset = vertexElementCount * indexBufferOffset;
+						index_data_t vertexBufferOffset = vertexElementCount * indexBufferOffset;
 
-						indexBufferOffset++;
+						++indexBufferOffset;
 
 						/* Positions */
 						Shape::writeVector3ToBuffer(vertex.position(), vertexBuffer, vertexBufferOffset);
@@ -1040,20 +1038,22 @@ namespace EmEn::Libs::VertexFactory
 						switch ( skeletalAnimationType )
 						{
 							case SkeletalAnimationType::Average3:
-								Shape::writeVector3ToBuffer(vertex.influences(), vertexBuffer, vertexBufferOffset);
+								Shape::writeInfluenceToVertexBuffer(vertex.influences(), 3, vertexBuffer, vertexBufferOffset);
 								break;
 
 							case SkeletalAnimationType::Average4:
-								Shape::writeVector4ToBuffer(vertex.influences(), vertexBuffer, vertexBufferOffset);
+								Shape::writeInfluenceToVertexBuffer(vertex.influences(), 4, vertexBuffer, vertexBufferOffset);
 								break;
 
 							case SkeletalAnimationType::Weighted3:
-								Shape::writeVector3ToBuffer(vertex.influences(), vertexBuffer, vertexBufferOffset);
+								Shape::writeInfluenceToVertexBuffer(vertex.influences(), 3, vertexBuffer, vertexBufferOffset);
+
 								Shape::writeVector3ToBuffer(vertex.weights(), vertexBuffer, vertexBufferOffset);
 								break;
 
 							case SkeletalAnimationType::Weighted4:
-								Shape::writeVector4ToBuffer(vertex.influences(), vertexBuffer, vertexBufferOffset);
+								Shape::writeInfluenceToVertexBuffer(vertex.influences(), 4, vertexBuffer, vertexBufferOffset);
+
 								Shape::writeVector4ToBuffer(vertex.weights(), vertexBuffer, vertexBufferOffset);
 								break;
 
@@ -1069,22 +1069,19 @@ namespace EmEn::Libs::VertexFactory
 			/**
 			 * @brief Creates an indexed vertex buffer.
 			 * @note Returns the element count in one vertex.
-			 * @tparam buffer_t The precision of vertex attribute data.
-			 * @tparam indexType_t The precision of index data.
 			 * @param vertexBuffer A reference to the vertex buffer.
 			 * @param indexBuffer A reference to the index buffer.
 			 * @param normalType Set the normal format. Default none.
 			 * @param textureCoordinatesType Set the texture coordinates format. Default none.
 			 * @param vertexColorType Set the vertex color format. Default none.
 			 * @param skeletalAnimationType Set vertex attributes for skeletal animation. Default none.
-			 * @return size_t
+			 * @return index_data_t
 			 */
-			template< typename buffer_t = float, typename indexType_t = uint32_t >
-			size_t
-			createIndexedVertexBuffer (std::vector< buffer_t > & vertexBuffer, std::vector< indexType_t > & indexBuffer, NormalType normalType = NormalType::None, TextureCoordinatesType textureCoordinatesType = TextureCoordinatesType::None, VertexColorType vertexColorType = VertexColorType::None, SkeletalAnimationType skeletalAnimationType = SkeletalAnimationType::None) const noexcept requires (std::is_floating_point_v< buffer_t >, std::is_integral_v< indexType_t >)
+			index_data_t
+			createIndexedVertexBuffer (std::vector< vertex_data_t > & vertexBuffer, std::vector< index_data_t > & indexBuffer, NormalType normalType = NormalType::None, TextureCoordinatesType textureCoordinatesType = TextureCoordinatesType::None, VertexColorType vertexColorType = VertexColorType::None, SkeletalAnimationType skeletalAnimationType = SkeletalAnimationType::None) const noexcept
 			{
 				/* NOTE: Keep track of vertex already used. */
-				std::set< size_t > shapeVertexIndicesDone{};
+				std::set< index_data_t > shapeVertexIndicesDone{};
 
 				const auto vertexElementCount = getVertexElementCount(normalType, textureCoordinatesType, vertexColorType, skeletalAnimationType);
 
@@ -1092,15 +1089,15 @@ namespace EmEn::Libs::VertexFactory
 				vertexBuffer.resize(m_vertices.size() * vertexElementCount);
 				indexBuffer.resize(m_triangles.size() * 3);
 
-				size_t indexBufferOffset = 0;
+				index_data_t indexBufferOffset = 0;
 
 				for ( const auto & triangle : m_triangles )
 				{
-					for ( size_t triangleVertexIndex = 0; triangleVertexIndex < 3; ++triangleVertexIndex )
+					for ( index_data_t triangleVertexIndex = 0; triangleVertexIndex < 3; ++triangleVertexIndex )
 					{
 						const auto shapeVertexIndex = triangle.vertexIndex(triangleVertexIndex);
 
-						indexBuffer[indexBufferOffset++] = static_cast< indexType_t >(shapeVertexIndex);
+						indexBuffer[indexBufferOffset++] = shapeVertexIndex;
 
 						/* NOTE: Skip the vertex index already done. */
 						if ( shapeVertexIndicesDone.contains(shapeVertexIndex) )
@@ -1110,7 +1107,7 @@ namespace EmEn::Libs::VertexFactory
 
 						const auto & vertex = m_vertices.at(shapeVertexIndex);
 
-						size_t vertexBufferOffset = vertexElementCount * shapeVertexIndex;
+						index_data_t vertexBufferOffset = vertexElementCount * shapeVertexIndex;
 
 						/* Positions */
 						Shape::writeVector3ToBuffer(vertex.position(), vertexBuffer, vertexBufferOffset);
@@ -1179,20 +1176,22 @@ namespace EmEn::Libs::VertexFactory
 						switch ( skeletalAnimationType )
 						{
 							case SkeletalAnimationType::Average3:
-								Shape::writeVector3ToBuffer< 4, int32_t >(vertex.influences(), vertexBuffer, vertexBufferOffset);
+								Shape::writeInfluenceToVertexBuffer(vertex.influences(), 3, vertexBuffer, vertexBufferOffset);
 								break;
 
 							case SkeletalAnimationType::Average4:
-								Shape::writeVector4ToBuffer< int32_t >(vertex.influences(), vertexBuffer, vertexBufferOffset);
+								Shape::writeInfluenceToVertexBuffer(vertex.influences(), 4, vertexBuffer, vertexBufferOffset);
 								break;
 
 							case SkeletalAnimationType::Weighted3:
-								Shape::writeVector3ToBuffer< 4, int32_t >(vertex.influences(), vertexBuffer, vertexBufferOffset);
+								Shape::writeInfluenceToVertexBuffer(vertex.influences(), 3, vertexBuffer, vertexBufferOffset);
+
 								Shape::writeVector3ToBuffer(vertex.weights(), vertexBuffer, vertexBufferOffset);
 								break;
 
 							case SkeletalAnimationType::Weighted4:
-								Shape::writeVector4ToBuffer< int32_t >(vertex.influences(), vertexBuffer, vertexBufferOffset);
+								Shape::writeInfluenceToVertexBuffer(vertex.influences(), 4, vertexBuffer, vertexBufferOffset);
+
 								Shape::writeVector4ToBuffer(vertex.weights(), vertexBuffer, vertexBufferOffset);
 								break;
 
@@ -1222,19 +1221,19 @@ namespace EmEn::Libs::VertexFactory
 
 				/* Creates a new group with the offset
 				 * according to triangles execute offset. */
-				m_groups.emplace_back(m_triangles.size(), 0);
+				m_groups.emplace_back(static_cast< uint32_t >(m_triangles.size()), 0);
 			}
 
 			/**
-			 * @brief Declares a new vertex and returns the index of the new vertex.
+			 * @brief Declares a new vertex a returns its index.
 			 * @note This function is for building the shape manually.
 			 * @param position A reference to a vector.
-			 * @return size_t
+			 * @return index_data_t
 			 */
-			size_t
-			addVertex (const Math::Vector< 3, data_t > & position) noexcept
+			index_data_t
+			addVertex (const Math::Vector< 3, vertex_data_t > & position) noexcept
 			{
-				size_t offset = 0;
+				index_data_t offset = 0;
 
 				for ( const auto & vertexRef : m_vertices )
 				{
@@ -1243,23 +1242,23 @@ namespace EmEn::Libs::VertexFactory
 						return offset;
 					}
 
-					offset++;
+					++offset;
 				}
 
 				return this->saveVertex(position, {}, {});
 			}
 
 			/**
-			 * @brief Declares a new vertex.
+			 * @brief Declares a new vertex a returns its index.
 			 * @note This function is for building the shape manually.
 			 * @param position The position of the vertex.
 			 * @param normal The normal of the vertex.
-			 * @return size_t The index of the new vertex.
+			 * @return index_data_t
 			 */
-			size_t
-			addVertex (const Math::Vector< 3, data_t > & position, const Math::Vector< 3, data_t > & normal) noexcept
+			index_data_t
+			addVertex (const Math::Vector< 3, vertex_data_t > & position, const Math::Vector< 3, vertex_data_t > & normal) noexcept
 			{
-				size_t offset = 0;
+				index_data_t offset = 0;
 
 				for ( const auto & vertexRef : m_vertices )
 				{
@@ -1268,24 +1267,24 @@ namespace EmEn::Libs::VertexFactory
 						return offset;
 					}
 
-					offset++;
+					++offset;
 				}
 
 				return this->saveVertex(position, normal, {});
 			}
 
 			/**
-			 * @brief Declares a new vertex.
+			 * @brief Declares a new vertex a returns its index.
 			 * @note This function is for building the shape manually.
 			 * @param position The position of the vertex.
 			 * @param normal The normal of the vertex.
 			 * @param textureCoordinates The texture coordinates to that vertex.
-			 * @return size_t The index of the new vertex.
+			 * @return index_data_t
 			 */
-			size_t
-			addVertex (const Math::Vector< 3, data_t > & position, const Math::Vector< 3, data_t > & normal, const Math::Vector< 3, data_t > & textureCoordinates) noexcept
+			index_data_t
+			addVertex (const Math::Vector< 3, vertex_data_t > & position, const Math::Vector< 3, vertex_data_t > & normal, const Math::Vector< 3, vertex_data_t > & textureCoordinates) noexcept
 			{
-				size_t offset = 0;
+				index_data_t offset = 0;
 
 				for ( const auto & vertexRef : m_vertices )
 				{
@@ -1294,22 +1293,22 @@ namespace EmEn::Libs::VertexFactory
 						return offset;
 					}
 
-					offset++;
+					++offset;
 				}
 
 				return this->saveVertex(position, normal, textureCoordinates);
 			}
 
 			/**
-			 * @brief Declares a new vertex color.
+			 * @brief Declares a new vertex color a returns its index.
 			 * @note This function is for building the shape manually.
 			 * @param color The color.
-			 * @return size_t The index of the new vertex color.
+			 * @return index_data_t
 			 */
-			size_t
-			addVertexColor (const Math::Vector< 4, data_t > & color) noexcept
+			index_data_t
+			addVertexColor (const Math::Vector< 4, vertex_data_t > & color) noexcept
 			{
-				size_t offset = 0;
+				index_data_t offset = 0;
 
 				for ( const auto & existingColor : m_vertexColors )
 				{
@@ -1318,42 +1317,42 @@ namespace EmEn::Libs::VertexFactory
 						return offset;
 					}
 
-					offset++;
+					++offset;
 				}
 
 				return this->saveVertexColor(color);
 			}
 
 			/**
-			 * @brief Saves a new vertex.
+			 * @brief Saves the new vertex and returns its index.
 			 * @note This function is for building the shape manually.
 			 * @param position The position of the vertex.
 			 * @param normal The normal of the vertex.
 			 * @param textureCoordinates The texture coordinates to that vertex.
-			 * @return size_t The index of the new vertex.
+			 * @return index_data_t
 			 */
-			size_t
-			saveVertex (const Math::Vector< 3, data_t > & position, const Math::Vector< 3, data_t > & normal = {}, const Math::Vector< 3, data_t > & textureCoordinates = {}) noexcept
+			index_data_t
+			saveVertex (const Math::Vector< 3, vertex_data_t > & position, const Math::Vector< 3, vertex_data_t > & normal = {}, const Math::Vector< 3, vertex_data_t > & textureCoordinates = {}) noexcept
 			{
 				m_vertices.emplace_back(position, normal, textureCoordinates);
 
 				m_flags[TextureCoordinatesDeclared] = true;
 
-				return m_vertices.size() - 1;
+				return static_cast< index_data_t >(m_vertices.size() - 1);
 			}
 
 			/**
-			 * @brief Saves a new vertex color.
+			 * @brief Saves a new vertex color and returns its index.
 			 * @note This function is for building the shape manually.
 			 * @param color The color.
-			 * @return size_t The index of the new vertex color.
+			 * @return index_data_t The index of the new vertex color.
 			 */
-			size_t
-			saveVertexColor (const Math::Vector< 4, data_t > & color) noexcept
+			index_data_t
+			saveVertexColor (const Math::Vector< 4, vertex_data_t > & color) noexcept
 			{
 				m_vertexColors.emplace_back(color);
 
-				return m_vertexColors.size() - 1;
+				return static_cast< index_data_t >(m_vertexColors.size() - 1);
 			}
 
 			/**
@@ -1362,7 +1361,7 @@ namespace EmEn::Libs::VertexFactory
 			 * @return void
 			 */
 			void
-			addTriangle (ShapeTriangle< data_t > & triangle) noexcept
+			addTriangle (ShapeTriangle< vertex_data_t > & triangle) noexcept
 			{
 				/* Creates edges */
 				triangle.setEdgeIndex(0, this->addEdge(triangle.vertexIndex(0), triangle.vertexIndex(1)));
@@ -1378,7 +1377,7 @@ namespace EmEn::Libs::VertexFactory
 				}
 				else
 				{
-					m_groups.back().second++;
+					++m_groups.back().second;
 				}
 			}
 
@@ -1395,7 +1394,7 @@ namespace EmEn::Libs::VertexFactory
 				m_farthestDistance = 0;
 
 				/* NOTE: This will hold up the center of every vertex. */
-				Math::Vector< 3, data_t > centroid;
+				Math::Vector< 3, vertex_data_t > centroid;
 
 				for ( const auto & vertexRef : m_vertices )
 				{
@@ -1415,7 +1414,7 @@ namespace EmEn::Libs::VertexFactory
 
 				centroid /= m_vertices.size();
 
-				data_t centroidDistance = 0;
+				vertex_data_t centroidDistance = 0;
 
 				for ( const auto & vertexRef : m_vertices )
 				{
@@ -1431,15 +1430,16 @@ namespace EmEn::Libs::VertexFactory
 				m_boundingSphere.setRadius(centroidDistance);
 				m_boundingSphere.setPosition(centroid);
 
-#ifdef EMERAUDE_DEBUG_VERTEX_FACTORY
-				std::cout <<
-					"[DEBUG:VERTEX_FACTORY] Updating shape infos" "\n" <<
-					m_boundingBox <<
-					m_boundingSphere <<
-					"Farthest distance : " << m_farthestDistance << "\n"
-					"Centroid : " << centroid << "\n"
-					"Centroid distance : " << centroid.length() << "\n";
-#endif
+				if constexpr ( VertexFactoryDebugEnabled )
+				{
+					std::cout <<
+						"[DEBUG:VERTEX_FACTORY] Updating shape infos" "\n" <<
+						m_boundingBox <<
+						m_boundingSphere <<
+						"Farthest distance : " << m_farthestDistance << "\n"
+						"Centroid : " << centroid << "\n"
+						"Centroid distance : " << centroid.length() << "\n";
+				}
 			}
 
 			/**
@@ -1457,13 +1457,13 @@ namespace EmEn::Libs::VertexFactory
 					"vertex count: " << obj.m_vertices.size() << ", "
 					"vertex color count: " << obj.m_vertexColors.size() << "\n";
 
-				size_t triangleIndex = 0;
+				index_data_t triangleIndex = 0;
 
 				for ( const auto & triangle : obj.m_triangles )
 				{
 					out << "Triangle #" << triangleIndex << ", ";
 
-					for ( size_t triangleVertexIndex = 0; triangleVertexIndex < 3; ++triangleVertexIndex )
+					for ( index_data_t triangleVertexIndex = 0; triangleVertexIndex < 3; ++triangleVertexIndex )
 					{
 						const auto shapeVertexIndex = triangle.vertexIndex(triangleVertexIndex);
 						const auto & vertex = obj.m_vertices.at(shapeVertexIndex);
@@ -1485,7 +1485,7 @@ namespace EmEn::Libs::VertexFactory
 						out << "\n";
 					}
 
-					triangleIndex++;
+					++triangleIndex;
 				}
 
 				return out;
@@ -1513,15 +1513,15 @@ namespace EmEn::Libs::VertexFactory
 			 * @brief Declares a new edge.
 			 * @param vertexIndexA The index in the vertices list of the first vertex.
 			 * @param vertexIndexB The index in the vertices list of the second vertex.
-			 * @return size_t
+			 * @return index_data_t
 			 */
-			size_t
-			addEdge (size_t vertexIndexA, size_t vertexIndexB) noexcept
+			index_data_t
+			addEdge (index_data_t vertexIndexA, index_data_t vertexIndexB) noexcept
 			{
 				/* Checks for shared edge. */
-				auto sharedIndex = std::numeric_limits< size_t >::max();
+				auto sharedIndex = std::numeric_limits< index_data_t >::max();
 
-				size_t offset = 0;
+				index_data_t offset = 0;
 
 				for ( const auto & edge : m_edges )
 				{
@@ -1532,22 +1532,22 @@ namespace EmEn::Libs::VertexFactory
 						/* Checks if the edge is alone, otherwise it's an error. */
 						if ( edge.isShared() )
 						{
-							return std::numeric_limits< size_t >::max();
+							return std::numeric_limits< index_data_t >::max();
 						}
 
 						break;
 					}
 
-					offset++;
+					++offset;
 				}
 
 				/* Insert the new edge. */
 				m_edges.emplace_back(vertexIndexA, vertexIndexB);
 
-				const auto newEdgeIndex = m_edges.size();
+				const auto newEdgeIndex = static_cast< index_data_t >(m_edges.size());
 
 				/* Link with the shared edge if it found. */
-				if ( sharedIndex < std::numeric_limits< size_t >::max() )
+				if ( sharedIndex < std::numeric_limits< index_data_t >::max() )
 				{
 					/* Sets to new inserted edge the index of the shared edge found. */
 					m_edges.back().setSharedIndex(sharedIndex);
@@ -1565,27 +1565,27 @@ namespace EmEn::Libs::VertexFactory
 			 * @param textureCoordinatesType Set the texture coordinates format. Default none.
 			 * @param vertexColorType Set the vertex color format. Default none.
 			 * @param skeletalAnimationType Set vertex attributes for skeletal animation. Default none.
-			 * @return size_t
+			 * @return index_data_t
 			 */
 			[[nodiscard]]
 			static
-			size_t
+			index_data_t
 			getVertexElementCount (NormalType normalType, TextureCoordinatesType textureCoordinatesType, VertexColorType vertexColorType, SkeletalAnimationType skeletalAnimationType)
 			{
-				auto vertexElementCount = 3UL;
+				auto vertexElementCount = 3;
 
 				switch ( normalType )
 				{
 					case NormalType::Normal :
-						vertexElementCount += 3UL;
+						vertexElementCount += 3;
 						break;
 
 					case NormalType::TangentNormal :
-						vertexElementCount += 6UL;
+						vertexElementCount += 6;
 						break;
 
 					case NormalType::TBNSpace :
-						vertexElementCount += 9UL;
+						vertexElementCount += 9;
 						break;
 
 					default:
@@ -1595,11 +1595,11 @@ namespace EmEn::Libs::VertexFactory
 				switch ( textureCoordinatesType )
 				{
 					case TextureCoordinatesType::UV :
-						vertexElementCount += 2UL;
+						vertexElementCount += 2;
 						break;
 
 					case TextureCoordinatesType::UVW :
-						vertexElementCount += 3UL;
+						vertexElementCount += 3;
 						break;
 
 					default:
@@ -1609,15 +1609,15 @@ namespace EmEn::Libs::VertexFactory
 				switch ( vertexColorType )
 				{
 					case VertexColorType::Gray :
-						vertexElementCount += 1UL;
+						vertexElementCount += 1;
 						break;
 
 					case VertexColorType::RGB :
-						vertexElementCount += 3UL;
+						vertexElementCount += 3;
 						break;
 
 					case VertexColorType::RGBA :
-						vertexElementCount += 4UL;
+						vertexElementCount += 4;
 						break;
 
 					default:
@@ -1627,19 +1627,19 @@ namespace EmEn::Libs::VertexFactory
 				switch ( skeletalAnimationType )
 				{
 					case SkeletalAnimationType::Average3 :
-						vertexElementCount += 3UL;
+						vertexElementCount += 3;
 						break;
 
 					case SkeletalAnimationType::Average4 :
-						vertexElementCount += 4UL;
+						vertexElementCount += 4;
 						break;
 
 					case SkeletalAnimationType::Weighted3 :
-						vertexElementCount += 6UL;
+						vertexElementCount += 6;
 						break;
 
 					case SkeletalAnimationType::Weighted4 :
-						vertexElementCount += 8UL;
+						vertexElementCount += 8;
 						break;
 
 					case SkeletalAnimationType::None :
@@ -1653,108 +1653,101 @@ namespace EmEn::Libs::VertexFactory
 			/**
 			 * @brief Writes the first value from a vector to a vertex buffer at a specific offset.
 			 * @tparam vec_dim_t The dimension of the vector.
-			 * @tparam vec_data_t The precision of vertex attribute data.
 			 * @param vector A reference to a vector.
 			 * @param vertexBuffer A reference to the vertex buffer.
 			 * @param offset A reference to an offset.
 			 * @return void
 			 */
-			template< size_t vec_dim_t, typename vec_data_t >
+			template< size_t vec_dim_t >
 			static
 			void
-			writeVector1ToBuffer (const Math::Vector< vec_dim_t, vec_data_t > & vector, std::vector< data_t > & vertexBuffer, size_t & offset) noexcept
+			writeVector1ToBuffer (const Math::Vector< vec_dim_t, vertex_data_t > & vector, std::vector< vertex_data_t > & vertexBuffer, index_data_t & offset) noexcept
 			{
-				vertexBuffer[offset++] = static_cast< data_t >(vector[Math::X]);
+				vertexBuffer[offset++] = vector[Math::X];
 			}
 
 			/**
 			 * @brief Writes the 2 first values from a vector to a vertex buffer at a specific offset.
 			 * @tparam vec_dim_t The dimension of the vector.
-			 * @tparam vec_data_t The precision of vertex attribute data.
 			 * @param vector A reference to a vector.
 			 * @param vertexBuffer A reference to the vertex buffer.
 			 * @param offset A reference to an offset.
 			 * @return void
 			 */
-			template< size_t vec_dim_t, typename vec_data_t >
+			template< size_t vec_dim_t >
 			static
 			void
-			writeVector2ToBuffer (const Math::Vector< vec_dim_t, vec_data_t > & vector, std::vector< data_t > & vertexBuffer, size_t & offset) noexcept requires ( vec_dim_t == 2UL || vec_dim_t == 3UL || vec_dim_t == 4UL )
+			writeVector2ToBuffer (const Math::Vector< vec_dim_t, vertex_data_t > & vector, std::vector< vertex_data_t > & vertexBuffer, index_data_t & offset) noexcept requires ( vec_dim_t == 2UL || vec_dim_t == 3UL || vec_dim_t == 4UL )
 			{
-				vertexBuffer[offset++] = static_cast< data_t >(vector[Math::X]);
-				vertexBuffer[offset++] = static_cast< data_t >(vector[Math::Y]);
+				vertexBuffer[offset++] = vector[Math::X];
+				vertexBuffer[offset++] = vector[Math::Y];
 			}
 
 			/**
 			 * @brief Writes the 3 first values from a vector to a vertex buffer at a specific offset.
 			 * @tparam vec_dim_t The dimension of the vector.
-			 * @tparam vec_data_t The precision of vertex attribute data.
 			 * @param vector A reference to a vector.
 			 * @param vertexBuffer A reference to the vertex buffer.
 			 * @param offset A reference to an offset.
 			 * @return void
 			 */
-			template< size_t vec_dim_t, typename vec_data_t >
+			template< size_t vec_dim_t >
 			static
 			void
-			writeVector3ToBuffer (const Math::Vector< vec_dim_t, vec_data_t > & vector, std::vector< data_t > & vertexBuffer, size_t & offset) noexcept requires ( vec_dim_t == 3UL || vec_dim_t == 4UL )
+			writeVector3ToBuffer (const Math::Vector< vec_dim_t, vertex_data_t > & vector, std::vector< vertex_data_t > & vertexBuffer, index_data_t & offset) noexcept requires ( vec_dim_t == 3UL || vec_dim_t == 4UL )
 			{
-				vertexBuffer[offset++] = static_cast< data_t >(vector[Math::X]);
-				vertexBuffer[offset++] = static_cast< data_t >(vector[Math::Y]);
-				vertexBuffer[offset++] = static_cast< data_t >(vector[Math::Z]);
+				vertexBuffer[offset++] = vector[Math::X];
+				vertexBuffer[offset++] = vector[Math::Y];
+				vertexBuffer[offset++] = vector[Math::Z];
 			}
 
 			/**
 			 * @brief Writes a vector 4 to a vertex buffer at a specific offset.
-			 * @tparam vec_data_t The precision of vertex attribute data.
 			 * @param vector A reference to a vector.
 			 * @param vertexBuffer A reference to the vertex buffer.
 			 * @param offset A reference to an offset.
 			 * @return void
 			 */
-			template< typename vec_data_t >
 			static
 			void
-			writeVector4ToBuffer (const Math::Vector< 4, vec_data_t > & vector, std::vector< data_t > & vertexBuffer, size_t & offset) noexcept
+			writeVector4ToBuffer (const Math::Vector< 4, vertex_data_t > & vector, std::vector< vertex_data_t > & vertexBuffer, index_data_t & offset) noexcept
 			{
-				vertexBuffer[offset++] = static_cast< data_t >(vector[Math::X]);
-				vertexBuffer[offset++] = static_cast< data_t >(vector[Math::Y]);
-				vertexBuffer[offset++] = static_cast< data_t >(vector[Math::Z]);
-				vertexBuffer[offset++] = static_cast< data_t >(vector[Math::W]);
+				vertexBuffer[offset++] = vector[Math::X];
+				vertexBuffer[offset++] = vector[Math::Y];
+				vertexBuffer[offset++] = vector[Math::Z];
+				vertexBuffer[offset++] = vector[Math::W];
 			}
 
 			/**
 			 * @brief Writes the texture coordinates vertex attributes to a vertex buffer at a specific offset.
-			 * @tparam buffer_t The precision of vertex attribute data.
 			 * @param textureCoordinates A reference to a vector.
 			 * @param size The element count wanted.
 			 * @param vertexBuffer A reference to the vertex buffer.
 			 * @param offset A reference to an offset.
 			 * @return void
 			 */
-			template< typename buffer_t >
 			static
 			void
-			writeTextureCoordinatesToVertexBuffer (const Math::Vector< 3, buffer_t > & textureCoordinates, size_t size, std::vector< buffer_t > & vertexBuffer, size_t & offset)
+			writeTextureCoordinatesToVertexBuffer (const Math::Vector< 3, vertex_data_t > & textureCoordinates, uint32_t size, std::vector< vertex_data_t > & vertexBuffer, index_data_t & offset)
 			{
 				switch ( size )
 				{
 					case 2 :
-						vertexBuffer[offset++] = static_cast< buffer_t >(textureCoordinates[Math::X]);
-						vertexBuffer[offset++] = static_cast< buffer_t >(textureCoordinates[Math::Y]);
+						vertexBuffer[offset++] = textureCoordinates[Math::X];
+						vertexBuffer[offset++] = textureCoordinates[Math::Y];
 						break;
 
 					case 3 :
-						vertexBuffer[offset++] = static_cast< buffer_t >(textureCoordinates[Math::X]);
-						vertexBuffer[offset++] = static_cast< buffer_t >(textureCoordinates[Math::Y]);
-						vertexBuffer[offset++] = static_cast< buffer_t >(textureCoordinates[Math::Z]);
+						vertexBuffer[offset++] = textureCoordinates[Math::X];
+						vertexBuffer[offset++] = textureCoordinates[Math::Y];
+						vertexBuffer[offset++] = textureCoordinates[Math::Z];
 						break;
 
 					case 4 :
-						vertexBuffer[offset++] = static_cast< buffer_t >(textureCoordinates[Math::X]);
-						vertexBuffer[offset++] = static_cast< buffer_t >(textureCoordinates[Math::Y]);
-						vertexBuffer[offset++] = static_cast< buffer_t >(textureCoordinates[Math::Z]);
-						vertexBuffer[offset++] = static_cast< buffer_t >(0);
+						vertexBuffer[offset++] = textureCoordinates[Math::X];
+						vertexBuffer[offset++] = textureCoordinates[Math::Y];
+						vertexBuffer[offset++] = textureCoordinates[Math::Z];
+						vertexBuffer[offset++] = 0;
 						break;
 
 					default:
@@ -1764,40 +1757,79 @@ namespace EmEn::Libs::VertexFactory
 
 			/**
 			 * @brief Writes the color vertex attributes to a vertex buffer at a specific offset.
-			 * @tparam buffer_t The precision of vertex attribute data.
 			 * @param vertexColor A reference to a vector.
 			 * @param size The element count wanted.
 			 * @param vertexBuffer A reference to the vertex buffer.
 			 * @param offset A reference to an offset.
 			 * @return void
 			 */
-			template< typename buffer_t >
 			static
 			void
-			writeColorToVertexBuffer (const Math::Vector< 4, buffer_t > & vertexColor, size_t size, std::vector< buffer_t > & vertexBuffer, size_t & offset)
+			writeColorToVertexBuffer (const Math::Vector< 4, vertex_data_t > & vertexColor, uint32_t size, std::vector< vertex_data_t > & vertexBuffer, index_data_t & offset)
 			{
 				switch ( size )
 				{
 					case 1 :
-						vertexBuffer[offset++] = static_cast< buffer_t >(vertexColor[Math::R]);
+						vertexBuffer[offset++] = vertexColor[Math::R];
 						break;
 
 					case 2 :
-						vertexBuffer[offset++] = static_cast< buffer_t >(vertexColor[Math::R]);
-						vertexBuffer[offset++] = static_cast< buffer_t >(vertexColor[Math::G]);
+						vertexBuffer[offset++] = vertexColor[Math::R];
+						vertexBuffer[offset++] = vertexColor[Math::G];
 						break;
 
 					case 3 :
-						vertexBuffer[offset++] = static_cast< buffer_t >(vertexColor[Math::R]);
-						vertexBuffer[offset++] = static_cast< buffer_t >(vertexColor[Math::G]);
-						vertexBuffer[offset++] = static_cast< buffer_t >(vertexColor[Math::B]);
+						vertexBuffer[offset++] = vertexColor[Math::R];
+						vertexBuffer[offset++] = vertexColor[Math::G];
+						vertexBuffer[offset++] = vertexColor[Math::B];
 						break;
 
 					case 4 :
-						vertexBuffer[offset++] = static_cast< buffer_t >(vertexColor[Math::R]);
-						vertexBuffer[offset++] = static_cast< buffer_t >(vertexColor[Math::G]);
-						vertexBuffer[offset++] = static_cast< buffer_t >(vertexColor[Math::B]);
-						vertexBuffer[offset++] = static_cast< buffer_t >(vertexColor[Math::A]);
+						vertexBuffer[offset++] = vertexColor[Math::R];
+						vertexBuffer[offset++] = vertexColor[Math::G];
+						vertexBuffer[offset++] = vertexColor[Math::B];
+						vertexBuffer[offset++] = vertexColor[Math::A];
+						break;
+
+					default:
+						break;
+				}
+			}
+
+			/**
+			 * @brief Writes the influence attributes to a vertex buffer at a specific offset.
+			 * @param influence A reference to a vector.
+			 * @param size The element count wanted.
+			 * @param vertexBuffer A reference to the vertex buffer.
+			 * @param offset A reference to an offset.
+			 * @return void
+			 */
+			static
+			void
+			writeInfluenceToVertexBuffer (const Math::Vector< 4, int32_t > & influence, uint32_t size, std::vector< vertex_data_t > & vertexBuffer, index_data_t & offset)
+			{
+				switch ( size )
+				{
+					case 1 :
+						vertexBuffer[offset++] = static_cast< vertex_data_t >(influence[Math::X]);
+						break;
+
+					case 2 :
+						vertexBuffer[offset++] = static_cast< vertex_data_t >(influence[Math::X]);
+						vertexBuffer[offset++] = static_cast< vertex_data_t >(influence[Math::Y]);
+						break;
+
+					case 3 :
+						vertexBuffer[offset++] = static_cast< vertex_data_t >(influence[Math::X]);
+						vertexBuffer[offset++] = static_cast< vertex_data_t >(influence[Math::Y]);
+						vertexBuffer[offset++] = static_cast< vertex_data_t >(influence[Math::Z]);
+						break;
+
+					case 4 :
+						vertexBuffer[offset++] = static_cast< vertex_data_t >(influence[Math::X]);
+						vertexBuffer[offset++] = static_cast< vertex_data_t >(influence[Math::Y]);
+						vertexBuffer[offset++] = static_cast< vertex_data_t >(influence[Math::Z]);
+						vertexBuffer[offset++] = static_cast< vertex_data_t >(influence[Math::W]);
 						break;
 
 					default:
@@ -1810,16 +1842,16 @@ namespace EmEn::Libs::VertexFactory
 			static constexpr auto ComputeEdges{1UL};
 
 			/* NOTE: first = offset, second = the number of vertices for this group. */
-			std::vector< std::pair< size_t, size_t > > m_groups{1};
-			std::vector< ShapeVertex< data_t > > m_vertices{};
-			std::vector< Math::Vector< 4, data_t > > m_vertexColors{};
-			std::vector< ShapeTriangle< data_t > > m_triangles{};
-			std::vector< ShapeEdge > m_edges{};
-			Math::Cuboid< data_t > m_boundingBox{};
-			Math::Sphere< data_t > m_boundingSphere{};
+			std::vector< std::pair< index_data_t, index_data_t > > m_groups{1};
+			std::vector< ShapeVertex< vertex_data_t > > m_vertices;
+			std::vector< Math::Vector< 4, vertex_data_t > > m_vertexColors;
+			std::vector< ShapeTriangle< vertex_data_t, index_data_t > > m_triangles;
+			std::vector< ShapeEdge< index_data_t > > m_edges;
+			Math::Space3D::AACuboid< vertex_data_t > m_boundingBox;
+			Math::Space3D::Sphere< vertex_data_t > m_boundingSphere;
 			/* NOTE: This is the max distance between [0,0,0] and the farthest vertex.
 			 * This is different from the fourth component of the centroid (m_boundingSphere). */
-			data_t m_farthestDistance{0};
+			vertex_data_t m_farthestDistance{0};
 			std::array< bool, 8 > m_flags{
 				false/*TextureCoordinatesDeclared*/,
 				false/*ComputeEdges*/,

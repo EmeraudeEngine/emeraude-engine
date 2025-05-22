@@ -33,7 +33,7 @@ namespace EmEn::Animations
 {
 	using namespace EmEn::Libs;
 
-	static constexpr auto TracerTag{"AnimatableInterface"};
+	constexpr auto TracerTag{"AnimatableInterface"};
 
 	void
 	AnimatableInterface::updateAnimations (size_t cycle) noexcept

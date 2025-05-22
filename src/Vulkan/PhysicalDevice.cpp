@@ -209,7 +209,7 @@ namespace EmEn::Vulkan
 	}
 
 	std::optional< uint32_t >
-	PhysicalDevice::getFamilyQueueIndex (VkQueueFlagBits type) noexcept
+	PhysicalDevice::getFamilyQueueIndex (VkQueueFlagBits type) const noexcept
 	{
 		if ( m_queueFamilyProperties.empty() )
 		{

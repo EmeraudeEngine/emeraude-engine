@@ -87,7 +87,12 @@ namespace EmEn::Libs
 			 * @brief Constructs a named item.
 			 * @param name A movable string for the name of the object [std::move].
 			 */
-			explicit NameableTrait (std::string name) noexcept;
+			explicit
+			NameableTrait (std::string name) noexcept
+				: m_name{std::move(name)}
+			{
+
+			}
 
 		private:
 

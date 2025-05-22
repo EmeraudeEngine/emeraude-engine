@@ -50,7 +50,8 @@ namespace EmEn::Scenes
 			 * @brief Constructs a crawler from a node.
 			 * @param baseNode From which node to execute the crawling.
 			 */
-			explicit NodeCrawler (const std::shared_ptr< node_t > & baseNode) noexcept
+			explicit
+			NodeCrawler (const std::shared_ptr< node_t > & baseNode) noexcept
 			{
 				this->populateStack(baseNode);
 			}
@@ -68,7 +69,7 @@ namespace EmEn::Scenes
 
 			/**
 			 * @brief Returns the next node.
-			 * @warning This will never returns a discarded node waiting to be removed from the tree.
+			 * @warning This will never return a discarded node waiting to be removed from the tree.
 			 * @return std::shared_ptr< type_t >
 			 */
 			[[nodiscard]]
@@ -114,6 +115,6 @@ namespace EmEn::Scenes
 				}
 			}
 
-			std::stack< std::shared_ptr< node_t > > m_nodes{};
+			std::stack< std::shared_ptr< node_t > > m_nodes;
 	};
 }

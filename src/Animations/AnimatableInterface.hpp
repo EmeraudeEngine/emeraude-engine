@@ -30,7 +30,6 @@
 #include <cstddef>
 #include <map>
 #include <memory>
-#include <any>
 
 /* Local inclusions for usages. */
 #include "Libs/Variant.hpp"

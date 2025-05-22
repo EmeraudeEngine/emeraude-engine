@@ -34,11 +34,11 @@
 namespace EmEn::Saphir
 {
 	using namespace EmEn::Libs;
-	using namespace Math;
-	using namespace PixelFactory;
-	using namespace Graphics;
-	using namespace Keys;
-	using namespace Vulkan;
+	using namespace EmEn::Libs::Math;
+	using namespace EmEn::Libs::PixelFactory;
+	using namespace EmEn::Graphics;
+	using namespace EmEn::Saphir::Keys;
+	using namespace EmEn::Vulkan;
 
 	bool
 	LightGenerator::generatePhongBlinnVertexShader (Generator::Abstract & generator, VertexShader & vertexShader, LightType lightType, bool enableShadowMap) const noexcept

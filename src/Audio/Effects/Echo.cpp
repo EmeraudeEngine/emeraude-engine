@@ -28,7 +28,7 @@
 
 /* Local inclusions. */
 #include "Tracer.hpp"
-#include <Audio/OpenAL.EFX.hpp>
+#include "Audio/OpenAL.EFX.hpp"
 #include "Audio/Utility.hpp"
 
 namespace EmEn::Audio::Effects
@@ -36,22 +36,27 @@ namespace EmEn::Audio::Effects
 	using namespace EmEn::Libs;
 
 	Echo::Echo () noexcept
-		: Abstract()
 	{
 		if ( this->identifier() == 0 )
+		{
 			return;
+		}
 
 		EFX::alEffecti(this->identifier(), AL_EFFECT_TYPE, AL_EFFECT_ECHO);
 
 		if ( alGetErrors("alEffecti()", __FILE__, __LINE__) )
+		{
 			Tracer::error(ClassId, "Unable to generate OpenAL Echo effect !");
+		}
 	}
 
 	void
 	Echo::resetProperties () noexcept
 	{
 		if ( !EFX::isAvailable() )
+		{
 			return;
+		}
 
 		EFX::alEffectf(this->identifier(), AL_ECHO_DELAY, AL_ECHO_DEFAULT_DELAY);
 		EFX::alEffectf(this->identifier(), AL_ECHO_LRDELAY, AL_ECHO_DEFAULT_LRDELAY);
@@ -63,11 +68,13 @@ namespace EmEn::Audio::Effects
 	Echo::setDelay (float value) noexcept
 	{
 		if ( !EFX::isAvailable() )
+		{
 			return;
+		}
 
 		if ( value < AL_ECHO_MIN_DELAY || value > AL_ECHO_MAX_DELAY )
 		{
-			Tracer::warning(ClassId, BlobTrait() << "Delay must be between " << AL_ECHO_MIN_DELAY << " and " << AL_ECHO_MAX_DELAY << ".");
+			TraceWarning{ClassId} << "Delay must be between " << AL_ECHO_MIN_DELAY << " and " << AL_ECHO_MAX_DELAY << '.';
 
 			return;
 		}
@@ -79,11 +86,13 @@ namespace EmEn::Audio::Effects
 	Echo::setLRDelay (float value) noexcept
 	{
 		if ( !EFX::isAvailable() )
+		{
 			return;
+		}
 
 		if ( value < AL_ECHO_MIN_LRDELAY || value > AL_ECHO_MAX_LRDELAY )
 		{
-			Tracer::warning(ClassId, BlobTrait() << "LR Delay must be between " << AL_ECHO_MIN_LRDELAY << " and " << AL_ECHO_MAX_LRDELAY << ".");
+			TraceWarning{ClassId} << "LR Delay must be between " << AL_ECHO_MIN_LRDELAY << " and " << AL_ECHO_MAX_LRDELAY << '.';
 
 			return;
 		}
@@ -95,11 +104,13 @@ namespace EmEn::Audio::Effects
 	Echo::setDamping (float value) noexcept
 	{
 		if ( !EFX::isAvailable() )
+		{
 			return;
+		}
 
 		if ( value < AL_ECHO_MIN_DAMPING || value > AL_ECHO_MAX_DAMPING )
 		{
-			Tracer::warning(ClassId, BlobTrait() << "Damping must be between " << AL_ECHO_MIN_DAMPING << " and " << AL_ECHO_MAX_DAMPING << ".");
+			TraceWarning{ClassId} << "Damping must be between " << AL_ECHO_MIN_DAMPING << " and " << AL_ECHO_MAX_DAMPING << '.';
 
 			return;
 		}
@@ -111,11 +122,13 @@ namespace EmEn::Audio::Effects
 	Echo::setFeedBack (float value) noexcept
 	{
 		if ( !EFX::isAvailable() )
+		{
 			return;
-
+		}
+		
 		if ( value < AL_ECHO_MIN_FEEDBACK || value > AL_ECHO_MAX_FEEDBACK )
 		{
-			Tracer::warning(ClassId, BlobTrait() << "Feedback must be between " << AL_ECHO_MIN_FEEDBACK << " and " << AL_ECHO_MAX_FEEDBACK << ".");
+			TraceWarning{ClassId} << "Feedback must be between " << AL_ECHO_MIN_FEEDBACK << " and " << AL_ECHO_MAX_FEEDBACK << '.';
 
 			return;
 		}
@@ -127,11 +140,13 @@ namespace EmEn::Audio::Effects
 	Echo::setSpread (float value) noexcept
 	{
 		if ( !EFX::isAvailable() )
+		{
 			return;
+		}
 
 		if ( value < AL_ECHO_MIN_SPREAD || value > AL_ECHO_MAX_SPREAD )
 		{
-			Tracer::warning(ClassId, BlobTrait() << "Spread must be between " << AL_ECHO_MIN_SPREAD << " and " << AL_ECHO_MAX_SPREAD << ".");
+			TraceWarning{ClassId} << "Spread must be between " << AL_ECHO_MIN_SPREAD << " and " << AL_ECHO_MAX_SPREAD << '.';
 
 			return;
 		}
@@ -142,12 +157,12 @@ namespace EmEn::Audio::Effects
 	float
 	Echo::delay () const noexcept
 	{
-		if ( !EFX::isAvailable() )
-			return 0.0F;
+		ALfloat value = 0.0F;
 
-		ALfloat value;
-
-		EFX::alGetEffectf(this->identifier(), AL_ECHO_DELAY, &value);
+		if ( EFX::isAvailable() )
+		{
+			EFX::alGetEffectf(this->identifier(), AL_ECHO_DELAY, &value);
+		}
 
 		return value;
 	}
@@ -155,12 +170,12 @@ namespace EmEn::Audio::Effects
 	float
 	Echo::LRDelay () const noexcept
 	{
-		if ( !EFX::isAvailable() )
-			return 0.0F;
+		ALfloat value = 0.0F;
 
-		ALfloat value;
-
-		EFX::alGetEffectf(this->identifier(), AL_ECHO_LRDELAY, &value);
+		if ( EFX::isAvailable() )
+		{
+			EFX::alGetEffectf(this->identifier(), AL_ECHO_LRDELAY, &value);
+		}
 
 		return value;
 	}
@@ -168,12 +183,12 @@ namespace EmEn::Audio::Effects
 	float
 	Echo::damping () const noexcept
 	{
-		if ( !EFX::isAvailable() )
-			return 0.0F;
+		ALfloat value = 0.0F;
 
-		ALfloat value;
-
-		EFX::alGetEffectf(this->identifier(), AL_ECHO_DAMPING, &value);
+		if ( EFX::isAvailable() )
+		{
+			EFX::alGetEffectf(this->identifier(), AL_ECHO_DAMPING, &value);
+		}
 
 		return value;
 	}
@@ -181,12 +196,12 @@ namespace EmEn::Audio::Effects
 	float
 	Echo::feedBack () const noexcept
 	{
-		if ( !EFX::isAvailable() )
-			return 0.0F;
+		ALfloat value = 0.0F;
 
-		ALfloat value;
-
-		EFX::alGetEffectf(this->identifier(), AL_ECHO_FEEDBACK, &value);
+		if ( EFX::isAvailable() )
+		{
+			EFX::alGetEffectf(this->identifier(), AL_ECHO_FEEDBACK, &value);
+		}
 
 		return value;
 	}
@@ -194,12 +209,12 @@ namespace EmEn::Audio::Effects
 	float
 	Echo::spread () const noexcept
 	{
-		if ( !EFX::isAvailable() )
-			return 0.0F;
+		ALfloat value = 0.0F;
 
-		ALfloat value;
-
-		EFX::alGetEffectf(this->identifier(), AL_ECHO_SPREAD, &value);
+		if ( EFX::isAvailable() )
+		{
+			EFX::alGetEffectf(this->identifier(), AL_ECHO_SPREAD, &value);
+		}
 
 		return value;
 	}

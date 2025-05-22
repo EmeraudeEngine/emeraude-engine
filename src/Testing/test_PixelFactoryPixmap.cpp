@@ -63,7 +63,7 @@ TEST(PixelFactoryPixmap, readPNG_Palette)
 	ASSERT_EQ(image.height(), 512);
 	ASSERT_EQ(image.colorCount(), 3);
 
-	ASSERT_TRUE(FileIO::write(image, {RES_BASE_PATH "/test-assets/tmp_512x512-Palette.png"}, true));
+	ASSERT_TRUE(FileIO::write(image, {"./test-assets/tmp_512x512-Palette.png"}, true));
 }
 
 TEST(PixelFactoryPixmap, readPNG_Grayscale)
@@ -78,7 +78,7 @@ TEST(PixelFactoryPixmap, readPNG_Grayscale)
 	ASSERT_EQ(image.height(), 512);
 	ASSERT_EQ(image.colorCount(), 1);
 
-	ASSERT_TRUE(FileIO::write(image, {RES_BASE_PATH "/test-assets/tmp_512x512-Grayscale.png"}, true));
+	ASSERT_TRUE(FileIO::write(image, {"./test-assets/tmp_512x512-Grayscale.png"}, true));
 }
 
 TEST(PixelFactoryPixmap, readPNG_GrayscaleAlpha)
@@ -93,7 +93,7 @@ TEST(PixelFactoryPixmap, readPNG_GrayscaleAlpha)
 	ASSERT_EQ(image.height(), 512);
 	ASSERT_EQ(image.colorCount(), 2);
 
-	ASSERT_TRUE(FileIO::write(image, {RES_BASE_PATH "/test-assets/tmp_512x512-GrayscaleAlpha.png"}, true));
+	ASSERT_TRUE(FileIO::write(image, {"./test-assets/tmp_512x512-GrayscaleAlpha.png"}, true));
 }
 
 TEST(PixelFactoryPixmap, readPNG_RGB)
@@ -108,7 +108,7 @@ TEST(PixelFactoryPixmap, readPNG_RGB)
 	ASSERT_EQ(image.height(), 512);
 	ASSERT_EQ(image.colorCount(), 3);
 
-	ASSERT_TRUE(FileIO::write(image, {RES_BASE_PATH "/test-assets/tmp_512x512-RGB.png"}, true));
+	ASSERT_TRUE(FileIO::write(image, {"./test-assets/tmp_512x512-RGB.png"}, true));
 }
 
 TEST(PixelFactoryPixmap, readPNG_RGBA)
@@ -123,7 +123,7 @@ TEST(PixelFactoryPixmap, readPNG_RGBA)
 	ASSERT_EQ(image.height(), 512);
 	ASSERT_EQ(image.colorCount(), 4);
 
-	ASSERT_TRUE(FileIO::write(image, {RES_BASE_PATH "/test-assets/tmp_512x512-RGBA.png"}, true));
+	ASSERT_TRUE(FileIO::write(image, {"./test-assets/tmp_512x512-RGBA.png"}, true));
 }
 
 TEST(PixelFactoryPixmap, fillValue)
@@ -138,7 +138,7 @@ TEST(PixelFactoryPixmap, fillValue)
 
 	ASSERT_EQ(image.pixel(32, 32), ColorFromInteger< uint8_t >(127, 127, 127, 255));
 
-	ASSERT_TRUE(FileIO::write(image, {RES_BASE_PATH "/test-assets/tmp_fillValue.png"}, true));
+	ASSERT_TRUE(FileIO::write(image, {"./test-assets/tmp_fillValue.png"}, true));
 }
 
 TEST(PixelFactoryPixmap, fillSequence)
@@ -155,7 +155,7 @@ TEST(PixelFactoryPixmap, fillSequence)
 		ASSERT_TRUE(image.fill(random));
 	}
 
-	ASSERT_TRUE(FileIO::write(image, {RES_BASE_PATH "/test-assets/tmp_fillSequence.png"}, true));
+	ASSERT_TRUE(FileIO::write(image, {"./test-assets/tmp_fillSequence.png"}, true));
 }
 
 TEST(PixelFactoryPixmap, fillColor)
@@ -172,7 +172,7 @@ TEST(PixelFactoryPixmap, fillColor)
 
 	ASSERT_EQ(image.pixel(32, 32), color);
 
-	ASSERT_TRUE(FileIO::write(image, {RES_BASE_PATH "/test-assets/tmp_fillColor.png"}, true));
+	ASSERT_TRUE(FileIO::write(image, {"./test-assets/tmp_fillColor.png"}, true));
 }
 
 TEST(PixelFactoryPixmap, fillPattern)
@@ -192,7 +192,7 @@ TEST(PixelFactoryPixmap, fillPattern)
 		ASSERT_TRUE(image.fill(pattern));
 	}
 
-	ASSERT_TRUE(FileIO::write(image, {RES_BASE_PATH "/test-assets/tmp_fillPattern.png"}, true));
+	ASSERT_TRUE(FileIO::write(image, {"./test-assets/tmp_fillPattern.png"}, true));
 }
 
 TEST(PixelFactoryPixmap, fillHorizontalGradient)
@@ -205,7 +205,7 @@ TEST(PixelFactoryPixmap, fillHorizontalGradient)
 		ASSERT_TRUE(image.fillHorizontal({Red, Green}));
 	}
 
-	ASSERT_TRUE(FileIO::write(image, {RES_BASE_PATH "/test-assets/tmp_fillHorizontalGradient2.png"}, true));
+	ASSERT_TRUE(FileIO::write(image, {"./test-assets/tmp_fillHorizontalGradient2.png"}, true));
 
 	{
 		PrintScopeRealTime stat{"Pixmap::fillHorizontal(gradient3)"};
@@ -218,7 +218,7 @@ TEST(PixelFactoryPixmap, fillHorizontalGradient)
 		ASSERT_TRUE(image.fillHorizontal(gradient));
 	}
 
-	ASSERT_TRUE(FileIO::write(image, {RES_BASE_PATH "/test-assets/tmp_fillHorizontalGradient3.png"}, true));
+	ASSERT_TRUE(FileIO::write(image, {"./test-assets/tmp_fillHorizontalGradient3.png"}, true));
 }
 
 TEST(PixelFactoryPixmap, fillVerticalGradient)
@@ -231,7 +231,7 @@ TEST(PixelFactoryPixmap, fillVerticalGradient)
 		ASSERT_TRUE(image.fillVertical({Green, Cyan}));
 	}
 
-	ASSERT_TRUE(FileIO::write(image, {RES_BASE_PATH "/test-assets/tmp_fillVerticalGradient2.png"}, true));
+	ASSERT_TRUE(FileIO::write(image, {"./test-assets/tmp_fillVerticalGradient2.png"}, true));
 
 	{
 		PrintScopeRealTime stat{"Pixmap::fillVertical(gradient3)"};
@@ -244,7 +244,7 @@ TEST(PixelFactoryPixmap, fillVerticalGradient)
 		ASSERT_TRUE(image.fillVertical(gradient));
 	}
 
-	ASSERT_TRUE(FileIO::write(image, {RES_BASE_PATH "/test-assets/tmp_fillVerticalGradient3.png"}, true));
+	ASSERT_TRUE(FileIO::write(image, {"./test-assets/tmp_fillVerticalGradient3.png"}, true));
 }
 
 TEST(PixelFactoryPixmap, fillChannelValue)
@@ -258,7 +258,7 @@ TEST(PixelFactoryPixmap, fillChannelValue)
 
 		ASSERT_EQ(image.pixel(32, 32), Red);
 
-		ASSERT_TRUE(FileIO::write(image, {RES_BASE_PATH "/test-assets/tmp_fillChannelRedValue.png"}, true));
+		ASSERT_TRUE(FileIO::write(image, {"./test-assets/tmp_fillChannelRedValue.png"}, true));
 
 		ASSERT_TRUE(image.fillChannel(Channel::Red, 0));
 	}
@@ -270,7 +270,7 @@ TEST(PixelFactoryPixmap, fillChannelValue)
 
 		ASSERT_EQ(image.pixel(32, 32), Green);
 
-		ASSERT_TRUE(FileIO::write(image, {RES_BASE_PATH "/test-assets/tmp_fillChannelGreenValue.png"}, true));
+		ASSERT_TRUE(FileIO::write(image, {"./test-assets/tmp_fillChannelGreenValue.png"}, true));
 
 		ASSERT_TRUE(image.fillChannel(Channel::Green, 0));
 	}
@@ -282,7 +282,7 @@ TEST(PixelFactoryPixmap, fillChannelValue)
 
 		ASSERT_EQ(image.pixel(32, 32), Blue);
 
-		ASSERT_TRUE(FileIO::write(image, {RES_BASE_PATH "/test-assets/tmp_fillChannelBlueValue.png"}, true));
+		ASSERT_TRUE(FileIO::write(image, {"./test-assets/tmp_fillChannelBlueValue.png"}, true));
 
 		ASSERT_TRUE(image.fillChannel(Channel::Blue, 0));
 	}
@@ -302,7 +302,7 @@ TEST(PixelFactoryPixmap, fillChannelSequence)
 		ASSERT_TRUE(image.fillChannel(Channel::Alpha, random));
 	}
 
-	ASSERT_TRUE(FileIO::write(image, {RES_BASE_PATH "/test-assets/tmp_fillChannelAlphaSequence.png"}, true));
+	ASSERT_TRUE(FileIO::write(image, {"./test-assets/tmp_fillChannelAlphaSequence.png"}, true));
 }
 
 TEST(PixelFactoryPixmap, fillChannelPattern)
@@ -343,7 +343,7 @@ TEST(PixelFactoryPixmap, fillChannelPattern)
 		ASSERT_TRUE(image.fillChannel(Channel::Alpha, alphaChannel));
 	}
 
-	ASSERT_TRUE(FileIO::write(image, {RES_BASE_PATH "/test-assets/tmp_fillChannelPattern.png"}, true));
+	ASSERT_TRUE(FileIO::write(image, {"./test-assets/tmp_fillChannelPattern.png"}, true));
 }
 
 TEST(PixelFactoryPixmap, fillChannelGradient)
@@ -380,7 +380,7 @@ TEST(PixelFactoryPixmap, fillChannelGradient)
 		ASSERT_TRUE(image.fillVerticalChannel(Channel::Blue, gradient));
 	}
 
-	ASSERT_TRUE(FileIO::write(image, {RES_BASE_PATH "/test-assets/tmp_fillChannelGradient.png"}, true));
+	ASSERT_TRUE(FileIO::write(image, {"./test-assets/tmp_fillChannelGradient.png"}, true));
 }
 
 TEST(PixelFactoryPixmap, noiseGeneration)
@@ -392,7 +392,7 @@ TEST(PixelFactoryPixmap, noiseGeneration)
 
 		ASSERT_TRUE(image.noise());
 
-		ASSERT_TRUE(FileIO::write(image, {RES_BASE_PATH "/test-assets/tmp_1024x1024-noise.png"}, true));
+		ASSERT_TRUE(FileIO::write(image, {"./test-assets/tmp_1024x1024-noise.png"}, true));
 	}
 
 	{
@@ -400,7 +400,7 @@ TEST(PixelFactoryPixmap, noiseGeneration)
 
 		ASSERT_TRUE(image.perlinNoise(9.0F, false));
 
-		ASSERT_TRUE(FileIO::write(image, {RES_BASE_PATH "/test-assets/tmp_1024x1024-perlinNoise.png"}, true));
+		ASSERT_TRUE(FileIO::write(image, {"./test-assets/tmp_1024x1024-perlinNoise.png"}, true));
 	}
 
 	{
@@ -408,6 +408,6 @@ TEST(PixelFactoryPixmap, noiseGeneration)
 
 		ASSERT_TRUE(image.perlinNoise(9.0F, true));
 
-		ASSERT_TRUE(FileIO::write(image, {RES_BASE_PATH "/test-assets/tmp_1024x1024-perlinNoiseGray.png"}, true));
+		ASSERT_TRUE(FileIO::write(image, {"./test-assets/tmp_1024x1024-perlinNoiseGray.png"}, true));
 	}
 }

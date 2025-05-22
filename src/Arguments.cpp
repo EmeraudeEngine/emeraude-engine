@@ -41,21 +41,9 @@ namespace EmEn
 {
 	using namespace EmEn::Libs;
 
-	const size_t Arguments::ClassUID{getClassUID(ClassId)};
-	Arguments * Arguments::s_instance{nullptr};
-
 	Arguments::Arguments (int argc, char * * argv, bool childProcess) noexcept
 		: ServiceInterface(ClassId)
 	{
-		if ( s_instance != nullptr )
-		{
-			std::cerr << __PRETTY_FUNCTION__ << ", constructor called twice !" "\n";
-
-			std::terminate();
-		}
-
-		s_instance = this;
-
 		m_flags[ChildProcess] = childProcess;
 
 		/* NOTE: Create a copy of main() arguments. */
@@ -76,15 +64,6 @@ namespace EmEn
 	{
 		m_flags[ChildProcess] = childProcess;
 
-		if ( s_instance != nullptr )
-		{
-			std::cerr << __PRETTY_FUNCTION__ << ", constructor called twice !" "\n";
-
-			std::terminate();
-		}
-
-		s_instance = this;
-
 		/* NOTE: Create a copy of main() arguments. */
 		if ( argc > 0 && wargv != nullptr )
 		{
@@ -102,8 +81,6 @@ namespace EmEn
 
 	Arguments::~Arguments ()
 	{
-		s_instance = nullptr;
-
 		if ( m_argv != nullptr )
 		{
 			for ( int argIndex = 0; argIndex < m_argc; argIndex++ )
@@ -296,7 +273,7 @@ namespace EmEn
 				continue;
 			}
 
-			/* NOTE: we put "1" to makes argument returning true when calling ArgumentValue::isPresent(). */
+			/* NOTE: we put "1" to make argument returning true when calling ArgumentValue::isPresent(). */
 			m_arguments.emplace(std::piecewise_construct, std::forward_as_tuple(value), std::forward_as_tuple(true));
 		}
 
@@ -325,40 +302,5 @@ namespace EmEn
 		m_arguments.clear();
 
 		return true;
-	}
-
-	std::ostream &
-	operator<< (std::ostream & out, const Arguments & obj)
-	{
-		if ( obj.m_arguments.empty() )
-		{
-			return out << "Executable arguments : NONE" "\n";
-		}
-
-		out << "Executable arguments :" "\n";
-
-		for ( const auto & [name, argument] : obj.m_arguments )
-		{
-			if ( argument.isSwitch() )
-			{
-				out << name << '\n';
-			}
-			else
-			{
-				out << name << " = " << argument << '\n';
-			}
-		}
-
-		return out;
-	}
-
-	std::string
-	to_string (const Arguments & obj) noexcept
-	{
-		std::stringstream output;
-
-		output << obj;
-
-		return output.str();
 	}
 }

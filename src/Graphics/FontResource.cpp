@@ -49,12 +49,6 @@ namespace EmEn::Graphics
 
 	const size_t FontResource::ClassUID{getClassUID(ClassId)};
 
-	FontResource::FontResource (const std::string & name, uint32_t resourceFlagBits) noexcept
-		: ResourceTrait(name, resourceFlagBits)
-	{
-
-	}
-
 	bool
 	FontResource::load () noexcept
 	{
@@ -74,17 +68,17 @@ namespace EmEn::Graphics
 			*charsMap.pixelPointer(index) = bitmap[index] ? 255 : 0;
 		}
 
-		if ( !m_data.parsePixmap(charsMap, 16U, false) )
+		if ( !m_font.parsePixmap(charsMap, 16U, false) )
 		{
 			return this->setLoadSuccess(false);
 		}
 
-		if ( !m_data.parsePixmap(charsMap, 24U, false) )
+		if ( !m_font.parsePixmap(charsMap, 24U, false) )
 		{
 			return this->setLoadSuccess(false);
 		}
 
-		if ( !m_data.parsePixmap(charsMap, 32U, false) )
+		if ( !m_font.parsePixmap(charsMap, 32U, false) )
 		{
 			return this->setLoadSuccess(false);
 		}
@@ -100,7 +94,7 @@ namespace EmEn::Graphics
 			return false;
 		}
 
-		return this->setLoadSuccess(m_data.readFile(filepath, 16U, true));
+		return this->setLoadSuccess(m_font.readFile(filepath, 16U, true));
 	}
 
 	bool
@@ -114,23 +108,5 @@ namespace EmEn::Graphics
 		Tracer::warning(ClassId, "FIXME: This function is not available yet !");
 
 		return this->setLoadSuccess(false);
-	}
-
-	bool
-	FontResource::onDependenciesLoaded () noexcept
-	{
-		return true;
-	}
-
-	std::shared_ptr< FontResource >
-	FontResource::get (const std::string & resourceName, bool directLoad) noexcept
-	{
-		return Resources::Manager::instance()->fonts().getResource(resourceName, !directLoad);
-	}
-
-	std::shared_ptr< FontResource >
-	FontResource::getDefault () noexcept
-	{
-		return Resources::Manager::instance()->fonts().getDefaultResource();
 	}
 }

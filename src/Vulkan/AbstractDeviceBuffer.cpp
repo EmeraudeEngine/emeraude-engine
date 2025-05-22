@@ -36,12 +36,6 @@ namespace EmEn::Vulkan
 {
 	using namespace EmEn::Libs;
 
-	AbstractDeviceBuffer::AbstractDeviceBuffer (const std::shared_ptr< Device > & device, VkBufferCreateFlags createFlags, VkDeviceSize deviceSize, VkBufferUsageFlags bufferUsageFlags) noexcept
-		: Buffer(device, createFlags, deviceSize, bufferUsageFlags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
-	{
-
-	}
-
 	bool
 	AbstractDeviceBuffer::writeData (TransferManager & transferManager, const MemoryRegion & memoryRegion) noexcept
 	{

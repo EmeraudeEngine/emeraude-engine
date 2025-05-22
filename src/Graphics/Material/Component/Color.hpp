@@ -54,7 +54,14 @@ namespace EmEn::Graphics::Material::Component
 			 * @param variableName A string [std::move].
 			 * @param color A reference to a color. Default black.
 			 */
-			explicit Color (std::string variableName, const Libs::PixelFactory::Color< float > & color = {}) noexcept;
+			explicit
+			Color (std::string variableName, const Libs::PixelFactory::Color< float > & color = {}) noexcept
+				: m_variableName{std::move(variableName)},
+				m_color{color}
+			{
+
+			}
+
 
 			/** @copydoc EmEn::Graphics::Material::Component::Interface::create() */
 			[[nodiscard]]
@@ -107,7 +114,7 @@ namespace EmEn::Graphics::Material::Component
 			/** @copydoc EmEn::Graphics::Material::Component::Interface::getSampler() */
 			[[nodiscard]]
 			Saphir::Declaration::Sampler
-			getSampler (uint32_t materialSet) const noexcept override
+			getSampler (uint32_t /*materialSet*/) const noexcept override
 			{
 				return {0, 0, nullptr, nullptr};
 			}
@@ -167,6 +174,8 @@ namespace EmEn::Graphics::Material::Component
 				return m_color.alpha();
 			}
 
+		private:
+
 			/**
 			 * @brief STL streams printable object.
 			 * @param out A reference to the stream output.
@@ -175,16 +184,32 @@ namespace EmEn::Graphics::Material::Component
 			 */
 			friend std::ostream & operator<< (std::ostream & out, const Color & obj);
 
-			/**
-			 * @brief Stringifies the object.
-			 * @param obj A reference to the object to print.
-			 * @return std::string
-			 */
-			friend std::string to_string (const Color & obj) noexcept;
-
-		private:
-
 			std::string m_variableName;
 			Libs::PixelFactory::Color< float > m_color;
 	};
+
+	inline
+	std::ostream &
+	operator<< (std::ostream & out, const Color & obj)
+	{
+		return out << Color::ClassId << "." "\n"
+			"Variable name: " << obj.m_variableName << "\n"
+			"Color: " << obj.m_color;
+	}
+
+	/**
+	 * @brief Stringifies the object.
+	 * @param obj A reference to the object to print.
+	 * @return std::string
+	 */
+	inline
+	std::string
+	to_string (const Color & obj) noexcept
+	{
+		std::stringstream output;
+
+		output << obj;
+
+		return output.str();
+	}
 }

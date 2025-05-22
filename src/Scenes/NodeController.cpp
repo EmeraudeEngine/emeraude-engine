@@ -42,12 +42,6 @@ namespace EmEn::Scenes
 	using namespace EmEn::Libs;
 	using namespace EmEn::Libs::Math;
 
-	NodeController::NodeController () noexcept
-		: KeyboardListenerInterface(false, false)
-	{
-
-	}
-
 	void
 	NodeController::switchTransformSpace () noexcept
 	{
@@ -186,7 +180,7 @@ namespace EmEn::Scenes
 	}
 
 	void
-	NodeController::update () noexcept
+	NodeController::update () const noexcept
 	{
 		if ( !this->hasNode() || !m_controller.isConnected() )
 		{

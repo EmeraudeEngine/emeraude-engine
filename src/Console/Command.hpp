@@ -52,7 +52,12 @@ namespace EmEn::Console
 			 * @param binding The command to execute in the container [std::move].
 			 * @param help A way to explain that command [std::move].
 			 */
-			Command (Binding binding, std::string help) noexcept;
+			Command (Binding binding, std::string help) noexcept
+				: m_binding{std::move(binding)},
+				m_help{std::move(help)}
+			{
+
+			}
 
 			/**
 			 * @brief Returns the binding.

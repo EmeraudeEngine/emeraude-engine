@@ -57,7 +57,12 @@ namespace EmEn::Vulkan
 			 * @brief Constructs a queue family structure.
 			 * @param index The index inside the physical device.
 			 */
-			explicit QueueFamilySQ (uint32_t index) noexcept;
+			explicit
+			QueueFamilySQ (uint32_t index) noexcept
+				: m_queueFamilyIndex{index}
+			{
+
+			}
 
 			/** @copydoc EmEn::Vulkan::QueueFamilyInterface::index() */
 			[[nodiscard]]

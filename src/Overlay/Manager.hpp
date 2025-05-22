@@ -37,6 +37,7 @@
 
 /* Local inclusions for inheritances. */
 #include "ServiceInterface.hpp"
+#include "Libs/ObservableTrait.hpp"
 #include "Input/KeyboardListenerInterface.hpp"
 #include "Input/PointerListenerInterface.hpp"
 #include "Libs/ObserverTrait.hpp"
@@ -60,11 +61,14 @@ namespace EmEn::Overlay
 {
 	/**
 	 * @brief The overlay manager service class.
+	 * @note [OBS][STATIC-OBSERVER][STATIC-OBSERVABLE]
 	 * @extends EmEn::ServiceInterface This is a service.
+	 * @extends EmEn::Libs::ObservableTrait This service is observable.
 	 * @extends EmEn::Input::KeyboardListenerInterface The manager needs to listen to the keyboard.
 	 * @extends EmEn::Input::PointerListenerInterface The manager needs to listen to the pointer.
+	 * @extends EmEn::Libs::ObservableTrait This service observer.
 	 */
-	class Manager final : public ServiceInterface, public Input::KeyboardListenerInterface, public Input::PointerListenerInterface, public Libs::ObserverTrait
+	class Manager final : public ServiceInterface, public Libs::ObservableTrait, public Input::KeyboardListenerInterface, public Input::PointerListenerInterface, public Libs::ObserverTrait
 	{
 		public:
 
@@ -89,38 +93,16 @@ namespace EmEn::Overlay
 			 * @param window A reference to the window.
 			 * @param graphicsRenderer A reference to the graphics renderer.
 			 */
-			Manager (PrimaryServices & primaryServices, Window & window, Graphics::Renderer & graphicsRenderer) noexcept;
-
-			/**
-			 * @brief Copy constructor.
-			 * @param copy A reference to the copied instance.
-			 */
-			Manager (const Manager & copy) noexcept = delete;
-
-			/**
-			 * @brief Move constructor.
-			 * @param copy A reference to the copied instance.
-			 */
-			Manager (Manager && copy) noexcept = delete;
-
-			/**
-			 * @brief Copy assignment.
-			 * @param copy A reference to the copied instance.
-			 * @return Manager &
-			 */
-			Manager & operator= (const Manager & copy) noexcept = delete;
-
-			/**
-			 * @brief Move assignment.
-			 * @param copy A reference to the copied instance.
-			 * @return Manager &
-			 */
-			Manager & operator= (Manager && copy) noexcept = delete;
-
-			/**
-			 * @brief Destructs the overlay manager service.
-			 */
-			~Manager () override = default;
+			Manager (PrimaryServices & primaryServices, Window & window, Graphics::Renderer & graphicsRenderer) noexcept
+				: ServiceInterface{ClassId},
+				KeyboardListenerInterface{false, true},
+				PointerListenerInterface{false, false, true},
+				m_primaryServices{primaryServices},
+				m_window{window},
+				m_graphicsRenderer{graphicsRenderer}
+			{
+				this->observe(&m_window);
+			}
 
 			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
 			[[nodiscard]]
@@ -232,7 +214,7 @@ namespace EmEn::Overlay
 			void clearScreens () noexcept;
 
 			/**
-			 * @brief Gets the named screen and if it's found it will be active on top.
+			 * @brief Gets the named screen, and if it's found, it will be active on top.
 			 * @param name A reference to a string.
 			 * @return bool
 			 */
@@ -259,7 +241,7 @@ namespace EmEn::Overlay
 			void disableAllScreens () noexcept;
 
 			/**
-			 * @brief Makes a named screen on top and eventually disable all others screen.
+			 * @brief Makes a named screen on top and eventually disable all other screens.
 			 * @param screenName A reference to a string.
 			 * @return bool
 			 */
@@ -374,7 +356,7 @@ namespace EmEn::Overlay
 			/**
 			 * @brief Gets or creates the descriptor set layout for this surface.
 			 * @note The descriptor set layout is common for all the overlay.
-			 * @warning Can be nullptr !
+			 * @warning Can be nullptr!
 			 * @param layoutManager A reference to the layout manager.
 			 * @return std::shared_ptr< Vulkan::DescriptorSetLayout >
 			 */
@@ -400,11 +382,11 @@ namespace EmEn::Overlay
 			void updateFramebufferProperties () noexcept;
 
 			/**
-			 * @brief Generates the overlay graphics pipeline.
+			 * @brief Generates the overlay shader program.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool generateGraphicsPipeline () noexcept;
+			bool generateShaderProgram () noexcept;
 
 			/**
 			 * @brief Updates all overlay screens physical representation with a new framebuffer properties.

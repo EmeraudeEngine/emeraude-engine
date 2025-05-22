@@ -26,12 +26,6 @@
 
 #pragma once
 
-/* Engine configuration file. */
-#include "emeraude_config.hpp"
-
-/* STL inclusions. */
-#include <string>
-
 /* Local inclusions for inheritances. */
 #include "Abstract.hpp"
 
@@ -55,7 +49,7 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 			 * @brief Constructs a message dialog.
 			 * @param title A reference to a string for the dialog title.
 			 * @param message A string for the message content to display [std::move].
-			 * @param buttonLayout The buttons layout type. Default "OK".
+			 * @param buttonLayout The button layout type. Default "OK".
 			 * @param messageType The type of message. Default "Info".
 			 */
 			Message (const std::string & title, std::string message, ButtonLayout buttonLayout = ButtonLayout::OK, MessageType messageType = MessageType::Info) noexcept;
@@ -69,40 +63,6 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 			 */
 			[[nodiscard]]
 			Answer getUserAnswer () const noexcept;
-
-			/**
-			 * @brief Creates and opens a message window [Shortcut].
-			 * @param title A reference to a string.
-			 * @param message A reference to a string.
-			 * @param buttonLayout The button layout. Default "ok".
-			 * @param messageType The message type. Default "info".
-			 * @param window A pointer to the main window for parenting. Default no parent.
-			 * @return Answer
-			 */
-			static
-			Answer
-			create (const std::string & title, const std::string & message, ButtonLayout buttonLayout = ButtonLayout::OK, MessageType messageType = MessageType::Info, Window * window = nullptr)
-			{
-				Message dialog{title, message, buttonLayout, messageType};
-				dialog.execute(window);
-				return dialog.getUserAnswer();
-			}
-
-			/**
-			 * @brief Creates and opens a confirmation window [Shortcut].
-			 * @param title A reference to a string.
-			 * @param message A reference to a string.
-			 * @param window A pointer to the main window for parenting. Default no parent.
-			 * @return Answer
-			 */
-			static
-			Answer
-			createConfirmation (const std::string & title, const std::string & message, Window * window = nullptr)
-			{
-				Message dialog{title, message, ButtonLayout::YesNo, MessageType::Question};
-				dialog.execute(window);
-				return dialog.getUserAnswer();
-			}
 
 		private:
 

@@ -29,6 +29,7 @@
 /* STL inclusions. */
 #include <cstring>
 #include <algorithm>
+#include <utility>
 #include <sstream>
 
 /* Third-party inclusions. */
@@ -40,23 +41,14 @@
 #include "Device.hpp"
 #include "DeviceRequirements.hpp"
 #include "Utility.hpp"
+#include "Identification.hpp"
 #include "PrimaryServices.hpp"
 #include "Window.hpp"
-#include "Core.hpp" // FIXME: Remove this (Access to engine info)
 #include "SettingKeys.hpp"
 
 namespace EmEn::Vulkan
 {
 	using namespace EmEn::Libs;
-
-	const size_t Instance::ClassUID{getClassUID(ClassId)};
-
-	Instance::Instance (PrimaryServices & primaryServices) noexcept
-		: ServiceInterface(ClassId),
-		m_primaryServices(primaryServices)
-	{
-
-	}
 
 	void
 	Instance::readSettings () noexcept
@@ -83,32 +75,38 @@ namespace EmEn::Vulkan
 	bool
 	Instance::onInitialize () noexcept
 	{
-		const auto * core = Core::instance();
-
 		this->readSettings();
 
 		if ( this->isDebugModeEnabled() )
 		{
-			this->setRequiredValidationLayers();
+			this->configureValidationLayers();
 		}
 
-		this->setRequiredExtensions();
+		this->configureInstanceExtensions();
 
 		/* Vulkan instance creation */
 		{
-			const auto & identification = core->identification();
-
 			m_applicationInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
 			m_applicationInfo.pNext = nullptr;
-			m_applicationInfo.pApplicationName = identification.applicationId().c_str();
-			m_applicationInfo.applicationVersion = VK_MAKE_VERSION(identification.applicationVersion().major(), identification.applicationVersion().minor(), identification.applicationVersion().revision());
+			m_applicationInfo.pApplicationName = m_identification.applicationId().c_str();
+			m_applicationInfo.applicationVersion = VK_MAKE_VERSION(m_identification.applicationVersion().major(), m_identification.applicationVersion().minor(), m_identification.applicationVersion().revision());
 			m_applicationInfo.pEngineName = Identification::LibraryName;
 			m_applicationInfo.engineVersion = VK_MAKE_VERSION(Identification::LibraryVersion.major(), Identification::LibraryVersion.minor(), Identification::LibraryVersion.revision());
-			m_applicationInfo.apiVersion = VK_API_VERSION_1_3;
-
+			/* [VULKAN-API-SETUP] Vulkan API version selection. */
+			if constexpr ( IsMacOS )
+			{
+				/* NOTE: macOS don't support the Vulkan API.
+				 * MoltenVK is used to translate commands to Metal API, some features can be unsupported. */
+				m_applicationInfo.apiVersion = VK_API_VERSION_1_3;
+				m_createInfo.flags = VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
+			}
+			else
+			{
+				m_applicationInfo.apiVersion = VK_API_VERSION_1_4;
+				m_createInfo.flags = 0;
+			}
 			m_createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
 			m_createInfo.pNext = this->isUsingDebugMessenger() ? &m_debugCreateInfo : nullptr;
-			m_createInfo.flags = VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
 			m_createInfo.pApplicationInfo = &m_applicationInfo;
 			m_createInfo.enabledLayerCount = static_cast< uint32_t >(m_requiredValidationLayers.size());
 			m_createInfo.ppEnabledLayerNames = m_requiredValidationLayers.data();
@@ -116,7 +114,7 @@ namespace EmEn::Vulkan
 			m_createInfo.ppEnabledExtensionNames = m_requiredInstanceExtensions.data();
 
 			/* At this point, we create the vulkan instance.
-			 * Beyond this point Vulkan is in the pipe and usable. */
+			 * Beyond this point, Vulkan is in the pipe and usable. */
 			const auto result = vkCreateInstance(&m_createInfo, nullptr, &m_instance);
 
 			if ( result != VK_SUCCESS )
@@ -149,7 +147,7 @@ namespace EmEn::Vulkan
 
 						for ( const auto & extension : m_requiredInstanceExtensions )
 						{
-							trace << "\t" << extension << "\n";
+							trace << '\t' << extension << '\n';
 						}
 
 						trace << getItemListAsString("Instance", Instance::getExtensions(nullptr));
@@ -225,9 +223,9 @@ namespace EmEn::Vulkan
 			m_instance = VK_NULL_HANDLE;
 		}
 
-		m_requestedValidationLayers.clear();
 		m_requiredValidationLayers.clear();
 		m_requiredInstanceExtensions.clear();
+		m_requiredGraphicsDeviceExtensions.clear();
 
 		return true;
 	}
@@ -274,13 +272,15 @@ namespace EmEn::Vulkan
 	}
 
 	void
-	Instance::setRequiredValidationLayers () noexcept
+	Instance::configureValidationLayers () noexcept
 	{
+		/* [VULKAN-API-SETUP] Vulkan validation layers selection. */
+
 		auto & settings = m_primaryServices.settings();
 
 		const auto availableValidationLayers = Instance::getValidationLayers();
 
-		/* NOTE: Save a copy of validation layers in settings for easy edition. */
+		/* NOTE: Save a copy of validation layers in settings for an easy edition. */
 		if ( settings.isArrayEmpty(VkInstanceAvailableValidationLayersKey) )
 		{
 			for ( const auto & availableValidationLayer : availableValidationLayers )
@@ -296,6 +296,8 @@ namespace EmEn::Vulkan
 		}
 
 		/* Read the settings to get a dynamic list of requested validation layers. */
+		const auto requestedLayers = m_primaryServices.settings().getArrayAs< std::string >(VkInstanceRequestedValidationLayersKey);
+
 		if ( settings.isArrayEmpty(VkInstanceRequestedValidationLayersKey) )
 		{
 			TraceInfo{ClassId} <<
@@ -304,19 +306,17 @@ namespace EmEn::Vulkan
 		}
 		else
 		{
-			m_requestedValidationLayers = m_primaryServices.settings().getArrayAs< std::string >(VkInstanceRequestedValidationLayersKey);
-
 			TraceInfo trace{ClassId};
 
 			trace << "Requested validation layers from settings :" "\n";
 
-			for ( const auto & requestedValidationLayer : m_requestedValidationLayers )
+			for ( const auto & requestedValidationLayer : requestedLayers )
 			{
 				trace << "\t" << requestedValidationLayer << "\n";
 			}
 		}
 
-		m_requiredValidationLayers = Instance::getSupportedValidationLayers(m_requestedValidationLayers, availableValidationLayers);
+		m_requiredValidationLayers = Instance::getSupportedValidationLayers(requestedLayers, availableValidationLayers);
 
 		if ( m_requiredValidationLayers.empty() )
 		{
@@ -336,14 +336,17 @@ namespace EmEn::Vulkan
 	}
 
 	void
-	Instance::setRequiredExtensions () noexcept
+	Instance::configureInstanceExtensions () noexcept
 	{
+		/* [VULKAN-API-SETUP] Vulkan instance extensions selection. */
+
 		/* NOTE: Show available extensions on the current system. */
 		if ( m_flags[ShowInformation] )
 		{
 			TraceInfo{ClassId} << getItemListAsString("Instance", Instance::getExtensions(nullptr));
 		}
 
+		/* NOTE: Set extension requested by GLFW. */
 		uint32_t glfwExtensionCount = 0;
 
 		const auto * glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
@@ -366,10 +369,14 @@ namespace EmEn::Vulkan
 			}
 		}
 
-		/* NOTE: This extension allows applications to control whether devices
-		 * that expose the VK_KHR_portability_subset extension are included in
-		 * the results of physical device enumeration. */
-		m_requiredInstanceExtensions.emplace_back(VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME);
+		/* NOTE: Specific for MoltenVK. */
+		if constexpr ( IsMacOS )
+		{
+			/* NOTE: This extension allows applications to control whether devices
+			 * that expose the VK_KHR_portability_subset extension are included in
+			 * the results of physical device enumeration. */
+			m_requiredInstanceExtensions.emplace_back(VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME);
+		}
 
 		if ( m_flags[ShowInformation] )
 		{
@@ -597,9 +604,11 @@ namespace EmEn::Vulkan
 			return {};
 		}
 
-		std::shared_ptr< PhysicalDevice > selectedPhysicalDevice;
+		auto & settings = m_primaryServices.settings();
+		const auto forceGPUName =settings.get< std::string >(VkDeviceForceGPUKey);
+		const bool showInformation = settings.get< bool >(VkShowInformationKey, DefaultVkShowInformation);
 
-		const auto forceGPUName = m_primaryServices.settings().get< std::string >(VkDeviceForceGPUKey);
+		std::shared_ptr< PhysicalDevice > selectedPhysicalDevice;
 
 		if ( !forceGPUName.empty() )
 		{
@@ -625,21 +634,24 @@ namespace EmEn::Vulkan
 		/* NOTE: Logical device creation for graphics rendering and presentation. */
 		TraceSuccess{ClassId} << "The graphics capable physical device '" << selectedPhysicalDevice->properties().deviceName << "' selected ! ";
 
-		auto logicalDevice = std::make_shared< Device >(selectedPhysicalDevice, m_primaryServices.settings());
+		auto logicalDevice = std::make_shared< Device >(selectedPhysicalDevice->properties().deviceName, selectedPhysicalDevice, showInformation);
 		logicalDevice->setIdentifier((std::stringstream{} << "VulkanInstance-" << selectedPhysicalDevice->properties().deviceName << "(Graphics)-Device").str());
 
+		/* [VULKAN-API-SETUP] Graphics device features configuration. */
 		DeviceRequirements requirements{DeviceJobHint::Graphics};
-		requirements.features().fillModeNonSolid = VK_TRUE; // Required for wireframe mode !
-#if !IS_MACOS
-		requirements.features().geometryShader = VK_TRUE; // Required for TBN space display
-#endif
+		requirements.features().fillModeNonSolid = VK_TRUE; // Required for wireframe mode!
+		if constexpr ( !IsMacOS )
+		{
+			/* NOTE: macOS M1/M2/M3/M4 iGPU do not have the geometry shader stage. */
+			requirements.features().geometryShader = VK_TRUE; // Required for TBN space display
+		}
 		requirements.features().samplerAnisotropy = VK_TRUE;
 		requirements.requireGraphicsQueues({1.0F}, {0.5F});
 		requirements.requireTransferQueues({1.0F});
 
 		if ( window != nullptr && window->usable() )
 		{
-			/* NOTE: Be sure the selected device is the one that processLogics the surface. */
+			/* NOTE: Be sure the selected device is the one that update the surface. */
 			window->surface()->update(logicalDevice);
 
 			requirements.requirePresentationQueues({1.0F}, window->surface()->handle(), false);
@@ -652,6 +664,9 @@ namespace EmEn::Vulkan
 
 		m_graphicsDevice = logicalDevice;
 
+		/* NOTE: Basic GPU do not support flexible textures. */
+		m_flags[StandardTextureCheckEnabled] = m_graphicsDevice->hasBasicSupport();
+
 		return logicalDevice;
 	}
 
@@ -663,9 +678,9 @@ namespace EmEn::Vulkan
 			return m_computeDevice;
 		}
 
-		std::vector< const char * > requiredExtensions{};
+		std::vector< const char * > requiredExtensions;
 
-		std::map< size_t, std::shared_ptr< PhysicalDevice > > scoredDevices{};
+		std::map< size_t, std::shared_ptr< PhysicalDevice > > scoredDevices;
 
 		for ( const auto & physicalDevice : m_physicalDevices )
 		{
@@ -702,6 +717,10 @@ namespace EmEn::Vulkan
 			return {};
 		}
 
+		auto & settings = m_primaryServices.settings();
+		//const auto forceGPUName =settings.get< std::string >(VkDeviceForceGPUKey);
+		const bool showInformation = settings.get< bool >(VkShowInformationKey, DefaultVkShowInformation);
+
 		const auto & selectedPhysicalDevice = scoredDevices.rbegin()->second;
 
 		TraceSuccess{ClassId} <<
@@ -709,7 +728,7 @@ namespace EmEn::Vulkan
 			"Creating the logical compute device ...";
 
 		/* NOTE: Logical device creation for computing. */
-		auto logicalDevice = std::make_shared< Device >(selectedPhysicalDevice, m_primaryServices.settings());
+		auto logicalDevice = std::make_shared< Device >(selectedPhysicalDevice->properties().deviceName, selectedPhysicalDevice, showInformation);
 		logicalDevice->setIdentifier((std::stringstream{} << "VulkanInstance-" << selectedPhysicalDevice->properties().deviceName << "(Physics)-Device").str());
 
 		DeviceRequirements requirements{DeviceJobHint::Compute};
@@ -877,7 +896,7 @@ namespace EmEn::Vulkan
 	}
 
 	bool
-	Instance::checkDevicesFeaturesForGraphics (const std::shared_ptr< PhysicalDevice > & physicalDevice, size_t &) const noexcept
+	Instance::checkDevicesFeaturesForGraphics (const std::shared_ptr< PhysicalDevice > & physicalDevice, size_t & /*score*/) const noexcept
 	{
 		const auto & properties = physicalDevice->properties();
 		const auto & features = physicalDevice->features();

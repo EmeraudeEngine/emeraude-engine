@@ -39,15 +39,9 @@
 namespace EmEn::Saphir
 {
 	using namespace EmEn::Libs;
-	using namespace Declaration;
+	using namespace EmEn::Saphir::Declaration;
 	
-	static constexpr auto TracerTag{"Shader"};
-
-	AbstractShader::AbstractShader (const std::string & name, std::string GLSLVersion, std::string GLSLProfile) noexcept
-		: NameableTrait(name), m_GLSLVersion(std::move(GLSLVersion)), m_GLSLProfile(std::move(GLSLProfile))
-	{
-
-	}
+	constexpr auto TracerTag{"Shader"};
 
 	void
 	AbstractShader::setExtensionBehavior (const char * extension, const char * behavior) noexcept

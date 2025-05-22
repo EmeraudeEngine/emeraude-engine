@@ -26,10 +26,17 @@
 
 #pragma once
 
+/* STL inclusions. */
+#include <atomic>
+#include <mutex>
+
 namespace EmEn::Libs
 {
 	/**
-	 * @brief The lockable trait class. This adds the ability to lock the usage of an object.
+	 * @brief Adds a thread-safe, BasicLockable locking capability to a class.
+	 * @note This trait is compatible with std::lock_guard for RAII-style locking,
+	 * uses an atomic flag to prevent race conditions, and provides a virtual
+	 * destructor for safe polymorphism.
 	 */
 	class LockableTrait
 	{
@@ -39,63 +46,64 @@ namespace EmEn::Libs
 			 * @brief Copy constructor.
 			 * @param copy A reference to the copied instance.
 			 */
-			LockableTrait (const LockableTrait & copy) noexcept = default;
+			LockableTrait (const LockableTrait & copy) noexcept = delete;
 
 			/**
 			 * @brief Move constructor.
 			 * @param copy A reference to the copied instance.
 			 */
-			LockableTrait (LockableTrait && copy) noexcept = default;
+			LockableTrait (LockableTrait && copy) noexcept = delete;
 
 			/**
 			 * @brief Copy assignment.
 			 * @param copy A reference to the copied instance.
 			 * @return LockableTrait &
 			 */
-			LockableTrait & operator= (const LockableTrait & copy) noexcept = default;
+			LockableTrait & operator= (const LockableTrait & copy) noexcept = delete;
 
 			/**
 			 * @brief Move assignment.
 			 * @param copy A reference to the copied instance.
 			 * @return LockableTrait &
 			 */
-			LockableTrait & operator= (LockableTrait && copy) noexcept = default;
+			LockableTrait & operator= (LockableTrait && copy) noexcept = delete;
 
 			/**
 			 * @brief virtual destructor.
-			 * @note As a trait mechanism, 'virtual' keyword is useless here.
 			 */
 			virtual ~LockableTrait () = default;
 
 			/**
-			 * @brief Returns whether the buffer is actually used in a transfer.
+			 * @brief Locks the object.
+			 * @note Part of the BasicLockable requirement for std::lock_guard.
+			 * @return void
+			 */
+			void
+			lock () noexcept
+			{
+				m_locked.store(true, std::memory_order_release);
+			}
+
+			/**
+			 * @brief Unlocks the object.
+			 * @note Part of the BasicLockable requirement for std::lock_guard.
+			 * @return void
+			 */
+			void
+			unlock () noexcept
+			{
+				m_locked.store(false, std::memory_order_release);
+			}
+
+			/**
+			 * @brief Atomically checks if the object is locked.
 			 * @return bool
 			 */
 			[[nodiscard]]
 			bool
 			isLocked () const noexcept
 			{
-				return m_locked;
-			}
-
-			/**
-			 * @brief Locks the usage.
-			 * @return void
-			 */
-			void
-			lock () noexcept
-			{
-				m_locked = true;
-			}
-
-			/**
-			 * @brief Unlock the usage.
-			 * @return void
-			 */
-			void
-			unlock () noexcept
-			{
-				m_locked = false;
+				return m_locked.load(std::memory_order_acquire);
 			}
 
 		protected:
@@ -107,6 +115,6 @@ namespace EmEn::Libs
 
 		private:
 
-			bool m_locked{false};
+			std::atomic_bool m_locked{false};
 	};
 }

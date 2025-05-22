@@ -38,12 +38,6 @@ namespace EmEn::Vulkan
 {
 	using namespace EmEn::Libs;
 
-	DeviceRequirements::DeviceRequirements (DeviceJobHint deviceJobHint) noexcept
-		: m_deviceJobHint(deviceJobHint)
-	{
-
-	}
-
 	void
 	DeviceRequirements::requireGraphicsQueues (const std::vector< float > & queues, const std::vector< float > & transferQueues) noexcept
 	{
@@ -181,15 +175,5 @@ namespace EmEn::Vulkan
 		printInfo("Transfer queue requested", obj.m_transferQueues);
 
 		return out;
-	}
-
-	std::string
-	to_string (const DeviceRequirements & obj) noexcept
-	{
-		std::stringstream output;
-
-		output << obj;
-
-		return output.str();
 	}
 }

@@ -35,35 +35,16 @@
 #include <string>
 
 /* Local inclusions. */
-#include "Abstract.hpp"
 #include "Audio/Manager.hpp"
-#include "Audio/SoundResource.hpp"
-#include "Audio/Source.hpp"
-#include "Libs/Math/CartesianFrame.hpp"
-#include "Libs/Math/Cuboid.hpp"
-#include "Physics/MovableTrait.hpp"
-#include "Resources/ResourceTrait.hpp"
 #include "Scenes/AbstractEntity.hpp"
 #include "Tracer.hpp"
-#include "Libs/Variant.hpp"
 
 namespace EmEn::Scenes::Component
 {
 	using namespace EmEn::Libs;
 	using namespace EmEn::Libs::Math;
-	using namespace Animations;
-	using namespace Audio;
-
-	SoundEmitter::SoundEmitter (const std::string & name, const AbstractEntity & parentEntity, bool permanent) noexcept
-		: Abstract(name, parentEntity)
-	{
-		this->setFlag(KeepInactiveSourceAlive, permanent);
-	}
-
-	SoundEmitter::~SoundEmitter () noexcept
-	{
-		this->stop();
-	}
+	using namespace EmEn::Animations;
+	using namespace EmEn::Audio;
 
 	void
 	SoundEmitter::move (const CartesianFrame< float > & worldCoordinates) noexcept
@@ -91,12 +72,6 @@ namespace EmEn::Scenes::Component
 	}
 
 	bool
-	SoundEmitter::shouldRemove () const noexcept
-	{
-		return false;
-	}
-
-	bool
 	SoundEmitter::onNotification (const ObservableTrait * observable, int notificationCode, const std::any & /*data*/) noexcept
 	{
 		if ( observable->is(SoundResource::ClassUID) )
@@ -112,27 +87,26 @@ namespace EmEn::Scenes::Component
 					break;
 
 				default:
-#ifdef EMERAUDE_DEBUG_OBSERVER_PATTERN
-					TraceDebug{ClassId} << "Event #" << notificationCode << " from a sound resource ignored.";
-#endif
+					if constexpr ( ObserverDebugEnabled )
+					{
+						TraceDebug{ClassId} << "Event #" << notificationCode << " from a sound resource ignored.";
+					}
 					break;
 			}
 
 			return false;
 		}
 
-#ifdef DEBUG
-		/* NOTE: Don't know what is it, goodbye ! */
-		TraceInfo{ClassId} <<
+		/* NOTE: Don't know what is it, goodbye! */
+		TraceDebug{ClassId} <<
 			"Received an unhandled notification (Code:" << notificationCode << ") from observable '" << whoIs(observable->classUID()) << "' (UID:" << observable->classUID() << ")  ! "
 			"Forgetting it ...";
-#endif
 
 		return false;
 	}
 
 	bool
-	SoundEmitter::playAnimation (uint8_t animationID, const Variant & value, size_t cycle) noexcept
+	SoundEmitter::playAnimation (uint8_t animationID, const Variant & value, size_t /*cycle*/) noexcept
 	{
 		switch ( animationID )
 		{
@@ -164,7 +138,7 @@ namespace EmEn::Scenes::Component
 			return true;
 		}
 
-		m_source = Manager::instance()->requestSource();
+		m_source = Audio::Manager::instance()->requestSource();
 
 		if ( m_source == nullptr )
 		{
@@ -187,7 +161,7 @@ namespace EmEn::Scenes::Component
 
 		if ( this->velocityDistortionEnabled() )
 		{
-			/* Copy current velocity to sound source for deforming effect. */
+			/* Copy current velocity to a sound source for deforming effect. */
 			const auto * movable = this->parentEntity().getMovableTrait();
 
 			if ( movable != nullptr )
@@ -195,30 +169,6 @@ namespace EmEn::Scenes::Component
 				m_source->setVelocity(movable->getWorldVelocity());
 			}
 		}
-	}
-
-	void
-	SoundEmitter::releaseSource () noexcept
-	{
-		m_source->removeSound();
-		m_source.reset();
-	}
-
-	void
-	SoundEmitter::releaseAttachedSound () noexcept
-	{
-		this->disableFlag(Loop);
-
-		m_attachedSound.reset();
-	}
-
-	void
-	SoundEmitter::attachSound (const std::shared_ptr< SoundResource > & sound, float gain, bool loop) noexcept
-	{
-		this->setFlag(Loop, loop);
-
-		m_attachedSound = sound;
-		m_gain = gain;
 	}
 
 	void
@@ -251,7 +201,7 @@ namespace EmEn::Scenes::Component
 			return;
 		}
 
-		/* If source is present and is playing, we rewind the sound. */
+		/* If a source is present and is playing, we rewind the sound. */
 		if ( m_source != nullptr && m_source->isPlaying() )
 		{
 			m_source->rewind();
@@ -265,12 +215,11 @@ namespace EmEn::Scenes::Component
 	void
 	SoundEmitter::playAttachedSound () noexcept
 	{
-		/* NOTE : Get an available audio source. */
+		/* NOTE: Get an available audio source. */
 		if ( !this->requestSource() )
 		{
-#ifdef DEBUG
-			Tracer::debug(ClassId, "No more audio source available !");
-#endif
+			TraceDebug{ClassId} << "No more audio source available !";
+
 			return;
 		}
 

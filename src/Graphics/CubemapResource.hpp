@@ -26,17 +26,10 @@
 
 #pragma once
 
-/* STL inclusions. */
-#include <cstddef>
-#include <cstdint>
-#include <memory>
-#include <string>
-
 /* Local inclusions for inheritances. */
 #include "Resources/ResourceTrait.hpp"
 
 /* Local inclusions for usages. */
-#include "Libs/PixelFactory/Color.hpp"
 #include "Libs/PixelFactory/Pixmap.hpp"
 #include "Resources/Container.hpp"
 #include "Types.hpp"
@@ -59,24 +52,44 @@ namespace EmEn::Graphics
 			/** @brief Observable class unique identifier. */
 			static const size_t ClassUID;
 
+			/** @brief Defines the resource dependency complexity. */
+			static constexpr auto Complexity{Resources::DepComplexity::None};
+
 			/**
 			 * @brief Constructs a cubemap resource.
-			 * @param name The name of the resource.
-			 * @param resourceFlagBits The resource flag bits. Default none. (Unused yet)
+			 * @param name A string for the resource name [std::move].
+			 * @param resourceFlags The resource flag bits. Default none. (Unused yet)
 			 */
-			explicit CubemapResource (const std::string & name, uint32_t resourceFlagBits = 0) noexcept;
+			explicit
+			CubemapResource (std::string name, uint32_t resourceFlags = 0) noexcept
+				: ResourceTrait{std::move(name), resourceFlags}
+			{
+
+			}
 
 			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
 			[[nodiscard]]
-			size_t classUID () const noexcept override;
+			size_t
+			classUID () const noexcept override
+			{
+				return ClassUID;
+			}
 
 			/** @copydoc EmEn::Libs::ObservableTrait::is() const */
 			[[nodiscard]]
-			bool is (size_t classUID) const noexcept override;
+			bool
+			is (size_t classUID) const noexcept override
+			{
+				return classUID == ClassUID;
+			}
 
 			/** @copydoc EmEn::Resources::ResourceTrait::classLabel() const */
 			[[nodiscard]]
-			const char * classLabel () const noexcept override;
+			const char *
+				classLabel () const noexcept override
+			{
+				return ClassId;
+			}
 
 			/** @copydoc EmEn::Resources::ResourceTrait::load() */
 			bool load () noexcept override;
@@ -86,6 +99,21 @@ namespace EmEn::Graphics
 
 			/** @copydoc EmEn::Resources::ResourceTrait::load(const Json::Value &) */
 			bool load (const Json::Value & data) noexcept override;
+
+			/** @copydoc EmEn::Resources::ResourceTrait::memoryOccupied() const noexcept */
+			[[nodiscard]]
+			size_t
+			memoryOccupied () const noexcept override
+			{
+				size_t bytes = sizeof(*this);
+
+				for ( const auto & pixmap : m_faces )
+				{
+					bytes += pixmap.bytes< size_t >();
+				}
+
+				return bytes;
+			}
 
 			/**
 			 * @brief Loads a cubemap from a packed pixmap.
@@ -114,15 +142,23 @@ namespace EmEn::Graphics
 			 * @return const CubemapPixmaps &
 			 */
 			[[nodiscard]]
-			const CubemapPixmaps & faces () const noexcept;
+			const CubemapPixmaps &
+			faces () const noexcept
+			{
+				return m_faces;
+			}
 
 			/**
 			 * @brief Returns the size of the cubemap.
-			 * @note Returns the width of the first face of the cubemap.
+			 * @note Returns the width of the first cubemap face.
 			 * @return uint32_t
 			 */
 			[[nodiscard]]
-			uint32_t cubeSize () const noexcept;
+			uint32_t
+			cubeSize () const noexcept
+			{
+				return m_faces[0].width();
+			}
 
 			/**
 			 * @brief Returns whether pixmaps are all gray scale.
@@ -138,33 +174,13 @@ namespace EmEn::Graphics
 			[[nodiscard]]
 			Libs::PixelFactory::Color< float > averageColor () const noexcept;
 
-			/**
-			 * @brief Returns a cubemap resource by its name.
-			 * @param resourceName A reference to a string.
-			 * @param directLoad Use the direct loading mode. Default false.
-			 * @return std::shared_ptr< CubemapResource >
-			 */
-			[[nodiscard]]
-			static std::shared_ptr< CubemapResource > get (const std::string & resourceName, bool directLoad = false) noexcept;
-
-			/**
-			 * @brief Returns the default cubemap resource.
-			 * @return std::shared_ptr< CubemapResource >
-			 */
-			[[nodiscard]]
-			static std::shared_ptr< CubemapResource > getDefault () noexcept;
-
 		private:
-
-			/** @copydoc EmEn::Resources::ResourceTrait::onDependenciesLoaded() */
-			[[nodiscard]]
-			bool onDependenciesLoaded () noexcept override;
 
 			/* JSON keys */
 			static constexpr auto PackedKey{"Packed"};
 			static constexpr auto FileFormatKey{"FileFormat"};
 
-			CubemapPixmaps m_data{};
+			CubemapPixmaps m_faces;
 	};
 }
 

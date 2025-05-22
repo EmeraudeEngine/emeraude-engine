@@ -27,43 +27,42 @@
 #pragma once
 
 /* STL inclusions. */
-#include <any>
-#include <array>
 #include <cstddef>
 #include <cstdint>
+#include <any>
 #include <functional>
 #include <memory>
 #include <string>
-#include <thread>
 #include <tuple>
 #include <unordered_map>
 #include <utility>
 
 /* Local inclusions for inheritances. */
+#include "ContainerInterface.hpp"
 #include "Libs/ObserverTrait.hpp"
-#include "ServiceInterface.hpp"
 
 /* Local inclusions for usages. */
+#include "Libs/ThreadPool.hpp"
 #include "Libs/ObservableTrait.hpp"
 #include "Libs/IO/IO.hpp"
 #include "BaseInformation.hpp"
-#include "DownloadItem.hpp"
 #include "PrimaryServices.hpp"
 #include "LoadingRequest.hpp"
-#include "NetworkManager.hpp"
+#include "Net/Manager.hpp"
 #include "Stores.hpp"
 #include "Types.hpp"
 
 namespace EmEn::Resources
 {
 	/**
-	 * @brief The resource manager template is responsible for loading asynchronously resources with dependencies and hold their lifetime.
+	 * @brief The resource manager template is responsible for loading asynchronous resources with dependencies and hold their lifetime.
+	 * @note [OBS][STATIC-OBSERVABLE]
 	 * @tparam resource_t The type of resources (The resource type is checked by LoadingRequest template).
-	 * @extends EmEn::ServiceInterface This is a service.
+	 * @extends EmEn::Resources::ContainerInterface This is a service.
 	 * @extends EmEn::Libs::ObserverTrait The manager observer resource loading.
 	 */
 	template< typename resource_t >
-	class Container final : public ServiceInterface, public Libs::ObserverTrait
+	class Container final : public ContainerInterface, public Libs::ObserverTrait
 	{
 		public:
 
@@ -93,20 +92,19 @@ namespace EmEn::Resources
 
 			/**
 			 * @brief Constructs a resource manager for a specific resource from the template parameter.
+			 * @param [OBS][STATIC-OBSERVER]
 			 * @param primaryServices A reference to the primary services.
-			 * @param networkManager A reference to the service responsible for download.
 			 * @param resourcesStores A reference to the service responsible for local resource stores.
 			 * @param serviceName The name of the service.
 			 * @param storeName The name of the resource store.
 			 */
-			Container (PrimaryServices & primaryServices, NetworkManager & networkManager, const Stores & resourcesStores, const char * serviceName, std::string storeName = "") noexcept
-				: ServiceInterface(serviceName),
-				m_primaryServices(primaryServices),
-				m_networkManager(networkManager),
-				m_resourcesStores(resourcesStores),
-				m_storeName(std::move(storeName))
+			Container (PrimaryServices & primaryServices, const Stores & resourcesStores, const char * serviceName, std::string storeName = "") noexcept
+				: ContainerInterface{serviceName},
+				m_primaryServices{primaryServices},
+				m_resourcesStores{resourcesStores},
+				m_storeName{std::move(storeName)}
 			{
-				this->observe(&m_networkManager);
+				this->observe(&m_primaryServices.netManager());
 			}
 
 			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
@@ -132,22 +130,55 @@ namespace EmEn::Resources
 				return classUID == ClassUID;
 			}
 
-			/** @copydoc EmEn::ServiceInterface::usable() */
-			[[nodiscard]]
-			bool
-			usable () const noexcept override
+			/** @copydoc EmEn::Resources::ContainerInterface::setVerbosity(bool) noexcept */
+			void
+			setVerbosity (bool state) noexcept override
 			{
-				return m_flags[ServiceInitialized];
+				m_verboseEnabled = state;
 			}
 
-			/**
-			 * @brief Clean up every unused resources.
-			 * @return size_t
-			 */
+			/** @copydoc EmEn::Resources::ContainerInterface::memoryOccupied() const noexcept */
+			[[nodiscard]]
 			size_t
-			unloadUnusedResources () noexcept
+			memoryOccupied () const noexcept override
 			{
-				using namespace EmEn::Libs;
+				const std::lock_guard< std::mutex > scopeLock{m_resourcesAccess};
+
+				size_t bytes = 0;
+
+				for ( const auto & resource : m_resources | std::views::values )
+				{
+					bytes += resource->memoryOccupied();
+				}
+
+				return bytes;
+			}
+
+			/** @copydoc EmEn::Resources::ContainerInterface::unusedMemoryOccupied() const noexcept */
+			[[nodiscard]]
+			size_t
+			unusedMemoryOccupied () const noexcept override
+			{
+				const std::lock_guard< std::mutex > scopeLock{m_resourcesAccess};
+
+				size_t bytes = 0;
+
+				for ( const auto & resource : m_resources | std::views::values )
+				{
+					if ( resource.use_count() == 1 )
+					{
+						bytes += resource->memoryOccupied();
+					}
+				}
+
+				return bytes;
+			}
+
+			/** @copydoc EmEn::Resources::ContainerInterface::unloadUnusedResources() noexcept */
+			size_t
+			unloadUnusedResources () noexcept override
+			{
+				const std::lock_guard< std::mutex > scopeLock{m_resourcesAccess};
 
 				size_t unloadedResources = 0;
 
@@ -181,6 +212,13 @@ namespace EmEn::Resources
 				return unloadedResources;
 			}
 
+			/** @copydoc EmEn::Resources::ContainerInterface::unloadUnusedResources() noexcept */
+			DepComplexity
+			complexity () const noexcept override
+			{
+				return resource_t::Complexity;
+			}
+
 			/**
 			 * @brief Returns whether a resource is loaded and ready to use.
 			 * @param resourceName A reference to a string.
@@ -190,6 +228,8 @@ namespace EmEn::Resources
 			bool
 			isResourceLoaded (const std::string & resourceName) const noexcept
 			{
+				const std::lock_guard< std::mutex > scopeLock{m_resourcesAccess};
+
 				return m_resources.contains(resourceName);
 			}
 
@@ -203,8 +243,11 @@ namespace EmEn::Resources
 			bool
 			isResourceExists (const std::string & resourceName) const noexcept
 			{
-				/* First check in live resources. */
-				if ( this->isResourceLoaded(resourceName) )
+				const std::lock_guard< std::mutex > scopeLock{m_resourcesAccess};
+
+				/* First check in live resources.
+				 * NOTE: Do not use Container::isResourceLoaded() to prevent from mutex deadlock. */
+				if ( m_resources.contains(resourceName) )
 				{
 					return true;
 				}
@@ -222,61 +265,16 @@ namespace EmEn::Resources
 			 * @brief Creates a new resource.
 			 * @note When creating a new resource, put '+' in front of the resource name to prevent it to be overridden from a store resource.
 			 * @param resourceName A string with the name of the resource.
-			 * @param resourceFlagBits The resource construction flag bits. Default none.
+			 * @param resourceFlags The resource construction flags. Default none.
 			 * @return std::shared_ptr< resource_t >
 			 */
 			[[nodiscard]]
 			std::shared_ptr< resource_t >
-			createResource (const std::string & resourceName, uint32_t resourceFlagBits = 0) noexcept
+			createResource (const std::string & resourceName, uint32_t resourceFlags = 0) noexcept
 			{
-				using namespace EmEn::Libs;
+				const std::lock_guard< std::mutex > scopeLock{m_resourcesAccess};
 
-				if ( resourceName == Default )
-				{
-					TraceError{resource_t::ClassId} << Default << "' as resource name is a reserved key !";
-
-					return nullptr;
-				}
-
-				/* First check in store, if the resource exists. */
-				if ( !m_storeName.empty() )
-				{
-					if ( m_resourcesStores.store(m_storeName).contains(resourceName) )
-					{
-						TraceWarning{resource_t::ClassId} <<
-							resource_t::ClassId << " resource named '" << resourceName << "' already exists in " << m_storeName << " store ! "
-							"Use get() function instead.";
-
-						return nullptr;
-					}
-				}
-
-				/* Checks in loaded resources. */
-				{
-					auto loadedIt = m_resources.find(resourceName);
-
-					if ( loadedIt != m_resources.cend() )
-					{
-						TraceWarning{resource_t::ClassId} <<
-							resource_t::ClassId << " resource named '" << resourceName << "' already exists in loaded resources ! "
-							"Use getResource() function instead.";
-
-						return loadedIt->second;
-					}
-				}
-
-				auto result = m_resources.emplace(resourceName, std::make_shared< resource_t >(resourceName, resourceFlagBits));
-
-				if ( !result.second )
-				{
-					TraceFatal{resource_t::ClassId} <<
-						"Unable to get " << resource_t::ClassId << " resource named '" << resourceName << "' into the map. "
-						"This should never happens !";
-
-					return nullptr;
-				}
-
-				return result.first->second;
+				return this->createResourceUnlocked(resourceName, resourceFlags);
 			}
 
 			/**
@@ -288,6 +286,8 @@ namespace EmEn::Resources
 			bool
 			addResource (const std::shared_ptr< resource_t > & resource) noexcept
 			{
+				const std::lock_guard< std::mutex > scopeLock{m_resourcesAccess};
+
 				auto loadedIt = m_resources.find(resource->name());
 
 				if ( loadedIt != m_resources.cend() )
@@ -311,7 +311,10 @@ namespace EmEn::Resources
 			bool
 			preloadResource (const std::string & resourceName, bool asyncLoad = true)
 			{
-				if ( this->isResourceLoaded(resourceName) )
+				const std::lock_guard< std::mutex > scopeLock{m_resourcesAccess};
+
+				/* NOTE: Do not use Container::isResourceLoaded() to prevent from mutex deadlock. */
+				if ( m_resources.contains(resourceName) )
 				{
 					return true;
 				}
@@ -340,7 +343,42 @@ namespace EmEn::Resources
 			}
 
 			/**
-			 * @brief Returns a resource by its name. If the resource is unloaded, a thread will take care about it unless "asyncLoad" argument is set to "false".
+			 * @brief Preloads a bunch of resources.
+			 * @param resourceNames A reference to a vector of strings.
+			 * @return uint32_t
+			 */
+			uint32_t
+			preloadResources (const std::vector< std::string > & resourceNames) noexcept
+			{
+				uint32_t errors = 0;
+
+				for ( const auto & resourceName : resourceNames )
+				{
+					if ( !this->preloadResource(resourceName) )
+					{
+						++errors;
+					}
+				}
+
+				return errors;
+			}
+
+			/**
+			 * @brief Returns the default resource.
+			 * @note The resource should always exist.
+			 * @return std::shared_ptr< resource_t >
+			 */
+			[[nodiscard]]
+			std::shared_ptr< resource_t >
+			getDefaultResource () noexcept
+			{
+				const std::lock_guard< std::mutex > scopeLock{m_resourcesAccess};
+
+				return this->getDefaultResourceUnlocked();
+			}
+
+			/**
+			 * @brief Returns a resource by its name. If the resource is unloaded, a thread will take care of it unless "asyncLoad" argument is set to "false".
 			 * @note The default resource of the store will be returned if nothing was found. A warning trace will be generated.
 			 * @param resourceName A reference to a string for the resource name.
 			 * @param asyncLoad Load the resource asynchronously. Default true.
@@ -350,9 +388,11 @@ namespace EmEn::Resources
 			std::shared_ptr< resource_t >
 			getResource (const std::string & resourceName, bool asyncLoad = true) noexcept
 			{
+				const std::lock_guard< std::mutex > scopeLock{m_resourcesAccess};
+
 				if ( resourceName == Default )
 				{
-					return this->getDefaultResource();
+					return this->getDefaultResourceUnlocked();
 				}
 
 				/* Checks in loaded resources. */
@@ -371,7 +411,7 @@ namespace EmEn::Resources
 						"The resource '" << resourceName << "' doesn't exists and doesn't have a local store ! "
 						"Use Resource::create() function instead.";
 
-					return this->getDefaultResource();
+					return this->getDefaultResourceUnlocked();
 				}
 
 				/* If not already loaded, check in store for loading. */
@@ -383,7 +423,7 @@ namespace EmEn::Resources
 						"The '" << m_storeName << "' store is empty, unable to get '" << resourceName << "' ! "
 						"Use Resource::create() function instead.";
 
-					return this->getDefaultResource();
+					return this->getDefaultResourceUnlocked();
 				}
 
 				const auto & resourceIt = store.find(resourceName);
@@ -395,7 +435,7 @@ namespace EmEn::Resources
 						"The resource named '" << resourceName << "' doesn't exist ! "
 						"Use Resource::create() function instead.";
 
-					return this->getDefaultResource();
+					return this->getDefaultResourceUnlocked();
 				}
 
 				/* Returns the smart pointer to the future loaded resource. */
@@ -405,30 +445,39 @@ namespace EmEn::Resources
 			/**
 			 * @brief Returns an existing resource or a new empty one.
 			 * @param resourceName A string with the name of the resource.
-			 * @param resourceFlagBits The resource construction flag bits. Default none.
+			 * @param resourceFlags The resource construction flags. Default none.
 			 * @param asyncLoad Load the resource asynchronously. Default true.
 			 * @return std::shared_ptr< resource_t >
 			 */
 			[[nodiscard]]
 			std::shared_ptr< resource_t >
-			getOrNewResource (const std::string & resourceName, uint32_t resourceFlagBits = 0, bool asyncLoad = true) noexcept
+			getOrNewResource (const std::string & resourceName, uint32_t resourceFlags = 0, bool asyncLoad = true) noexcept
 			{
+				const std::lock_guard< std::mutex > scopeLock{m_resourcesAccess};
+
 				const auto alreadyLoadedResource = this->checkLoadedResource(resourceName, asyncLoad);
 
-				return alreadyLoadedResource != nullptr ? alreadyLoadedResource : this->createResource(resourceName, resourceFlagBits);
+				if ( alreadyLoadedResource != nullptr )
+				{
+					return alreadyLoadedResource;
+				}
+
+				return this->createResourceUnlocked(resourceName, resourceFlags);
 			}
 
 			/**
 			 * @brief Returns an existing resource or use a method to create a new one.
 			 * @param resourceName A string with the name of the resource.
 			 * @param createFunction A reference to a function to create the existent resource.
-			 * @param resourceFlagBits The resource construction flag bits. Default none.
+			 * @param resourceFlags The resource construction flags. Default none.
 			 * @return std::shared_ptr< resource_t >
 			 */
 			[[nodiscard]]
 			std::shared_ptr< resource_t >
-			getOrCreateResource (const std::string & resourceName, const std::function< bool (resource_t & resource) > & createFunction, uint32_t resourceFlagBits = 0) noexcept
+			getOrCreateResource (const std::string & resourceName, const std::function< bool (resource_t & resource) > & createFunction, uint32_t resourceFlags = 0) noexcept
 			{
+				const std::lock_guard< std::mutex > scopeLock{m_resourcesAccess};
+
 				const auto alreadyLoadedResource = this->checkLoadedResource(resourceName, false);
 
 				if ( alreadyLoadedResource != nullptr )
@@ -437,7 +486,7 @@ namespace EmEn::Resources
 				}
 
 				/* Creates a new resource. */
-				const auto newResource = this->createResource(resourceName, resourceFlagBits);
+				const auto newResource = this->createResourceUnlocked(resourceName, resourceFlags);
 
 				/* Already defines that the resource is in manual loading mode. */
 				if ( !newResource->enableManualLoading() )
@@ -475,13 +524,15 @@ namespace EmEn::Resources
 			 * @brief Returns an existing resource or use a method to create a new one asynchronously.
 			 * @param resourceName A string with the name of the resource.
 			 * @param createFunction A reference to a function to create the existent resource.
-			 * @param resourceFlagBits The resource construction flag bits. Default none.
+			 * @param resourceFlags The resource construction flags. Default none.
 			 * @return std::shared_ptr< resource_t >
 			 */
 			[[nodiscard]]
 			std::shared_ptr< resource_t >
-			getOrCreateResourceAsync (const std::string & resourceName, const std::function< bool (resource_t & resource) > & createFunction, uint32_t resourceFlagBits = 0) noexcept
+			getOrCreateResourceAsync (const std::string & resourceName, const std::function< bool (resource_t & resource) > & createFunction, uint32_t resourceFlags = 0) noexcept
 			{
+				const std::lock_guard< std::mutex > scopeLock{m_resourcesAccess};
+
 				const auto alreadyLoadedResource = this->checkLoadedResource(resourceName, true);
 
 				if ( alreadyLoadedResource != nullptr )
@@ -490,7 +541,7 @@ namespace EmEn::Resources
 				}
 
 				/* Creates a new resource. */
-				const auto newResource = this->createResource(resourceName, resourceFlagBits);
+				const auto newResource = this->createResourceUnlocked(resourceName, resourceFlags);
 
 				/* Already defines that the resource is in manual loading mode. */
 				if ( !newResource->enableManualLoading() )
@@ -498,16 +549,15 @@ namespace EmEn::Resources
 					return nullptr;
 				}
 
-				std::thread generation{[] (const std::function< bool (resource_t & resource) > & createResource, const std::shared_ptr< resource_t > & resource) {
-					if ( createResource(*resource) )
-					{
-						switch ( resource->status() )
+				m_primaryServices.threadPool()->enqueue([createFunction, newResource] {
+					if ( createFunction(*newResource) ) {
+						switch ( newResource->status() )
 						{
 							case Status::Unloaded :
 							case Status::Enqueuing :
 							case Status::ManualEnqueuing :
 								TraceError{resource_t::ClassId} <<
-									"The manual resource '" << resource->name() << " is still in creation mode !"
+									"The manual resource '" << newResource->name() << " is still in creation mode !"
 									"A manual loading should ends with a call to ResourceTrait::setManualLoadSuccess() or ResourceTrait::load().";
 								break;
 
@@ -519,21 +569,209 @@ namespace EmEn::Resources
 					{
 						TraceError{resource_t::ClassId} << "The manual loading function has return an error !";
 					}
-				}, createFunction, newResource};
-
-				generation.detach();
+				});
 
 				return newResource;
 			}
 
 			/**
-			 * @brief Returns the default resource.
-			 * @note Should always exist.
+			 * @brief Returns a random resource from this manager.
+			 * @param asyncLoad Load the resource asynchronously. Default true.
 			 * @return std::shared_ptr< resource_t >
 			 */
 			[[nodiscard]]
 			std::shared_ptr< resource_t >
-			getDefaultResource () noexcept
+			getRandomResource (bool asyncLoad = true) noexcept
+			{
+				if ( m_storeName.empty() )
+				{
+					/* NOTE: Will lock the resource mutex. */
+					return this->getDefaultResource();
+				}
+
+				/* NOTE: Will lock the resource mutex. */
+				return this->getResource(m_resourcesStores.randomName(m_storeName), asyncLoad);
+			}
+
+		private:
+
+			/** @copydoc EmEn::Resources::ContainerInterface::initialize() noexcept */
+			bool
+			initialize () noexcept override
+			{
+				if ( m_verboseEnabled )
+				{
+					if ( m_storeName.empty() )
+					{
+						TraceInfo{resource_t::ClassId} << "The resource type '" << resource_t::ClassId << "' has no local store.";
+					}
+					else
+					{
+						const auto & store = m_resourcesStores.store(m_storeName);
+
+						TraceInfo{resource_t::ClassId} << "The resource type '" << resource_t::ClassId << "' has " << store.size() <<" entries in the local store '" << m_storeName << "' available.";
+					}
+				}
+
+				return true;
+			}
+
+			/** @copydoc EmEn::Resources::ContainerInterface::terminate() noexcept */
+			bool
+			terminate () noexcept override
+			{
+				if ( m_verboseEnabled )
+				{
+					if ( m_storeName.empty() )
+					{
+						TraceInfo{resource_t::ClassId} << "The resource type '" << resource_t::ClassId << "' has no local store. Nothing to unload.";
+					}
+					else
+					{
+						const auto & store = m_resourcesStores.store(m_storeName);
+
+						TraceInfo{resource_t::ClassId} << "The resource type '" << resource_t::ClassId << "' has " << store.size() << " entries in the local store '" << m_storeName << "' to check for unload.";
+					}
+				}
+
+				{
+					const std::lock_guard< std::mutex > scopeLock{m_resourcesAccess};
+
+					m_externalResources.clear();
+					m_resources.clear();
+				}
+
+				return true;
+			}
+
+			/** @copydoc EmEn::Libs::ObserverTrait::onNotification() */
+			bool
+			onNotification (const ObservableTrait * observable, int notificationCode, const std::any & data) noexcept override
+			{
+				if ( observable->is(Net::Manager::ClassUID) )
+				{
+					if ( notificationCode == Net::Manager::FileDownloaded )
+					{
+						const std::lock_guard< std::mutex > scopeLock{m_resourcesAccess};
+
+						const auto downloadTicket = std::any_cast< int >(data);
+
+						auto requestIt = m_externalResources.find(downloadTicket);
+
+						if ( requestIt != m_externalResources.end() )
+						{
+							switch ( m_primaryServices.netManager().downloadStatus(downloadTicket) )
+							{
+								case Net::DownloadStatus::Pending :
+								case Net::DownloadStatus::Transferring :
+								case Net::DownloadStatus::OnHold :
+									return true;
+
+								case Net::DownloadStatus::Done :
+								{
+									Tracer::success(resource_t::ClassId, "Resource downloaded.");
+
+									requestIt->second.setDownloadProcessed(m_primaryServices.fileSystem(), true);
+
+									/* Enqueue the resource loading in the thread pool. */
+									auto request = requestIt->second;
+
+									m_primaryServices.threadPool()->enqueue([this, request] {
+										this->loadingTask(request);
+									});
+								}
+									break;
+
+								case Net::DownloadStatus::Error :
+									Tracer::error(resource_t::ClassId, "Resource failed to download.");
+
+									requestIt->second.setDownloadProcessed(m_primaryServices.fileSystem(), true);
+									break;
+							}
+
+							/* Removes the loading request. */
+							m_externalResources.erase(requestIt);
+						}
+					}
+
+					return true;
+				}
+
+				/* We don't know who is sending this message,
+				 * so we stop the listening. */
+				Tracer::warning(resource_t::ClassId, "Unknown notification, stop listening to this sender.");
+
+				return false;
+			}
+
+			/**
+			 * @brief Creates a new resource.
+			 * @note This version does not lock the mutex.
+			 * @note When creating a new resource, put '+' in front of the resource name to prevent it to be overridden from a store resource.
+			 * @param resourceName A string with the name of the resource.
+			 * @param resourceFlags The resource construction flags.
+			 * @return std::shared_ptr< resource_t >
+			 */
+			[[nodiscard]]
+			std::shared_ptr< resource_t >
+			createResourceUnlocked (const std::string & resourceName, uint32_t resourceFlags) noexcept
+			{
+				if ( resourceName == Default )
+				{
+					TraceError{resource_t::ClassId} << Default << "' as resource name is a reserved key !";
+
+					return nullptr;
+				}
+
+				/* First, check in store if the resource exists. */
+				if ( !m_storeName.empty() )
+				{
+					if ( m_resourcesStores.store(m_storeName).contains(resourceName) )
+					{
+						TraceWarning{resource_t::ClassId} <<
+							resource_t::ClassId << " resource named '" << resourceName << "' already exists in " << m_storeName << " store ! "
+							"Use get() function instead.";
+
+						return nullptr;
+					}
+				}
+
+				/* Checks in loaded resources. */
+				{
+					auto loadedIt = m_resources.find(resourceName);
+
+					if ( loadedIt != m_resources.cend() )
+					{
+						TraceWarning{resource_t::ClassId} <<
+							resource_t::ClassId << " resource named '" << resourceName << "' already exists in loaded resources ! "
+							"Use getResource() function instead.";
+
+						return loadedIt->second;
+					}
+				}
+
+				auto result = m_resources.emplace(resourceName, std::make_shared< resource_t >(resourceName, resourceFlags));
+
+				if ( !result.second )
+				{
+					TraceFatal{resource_t::ClassId} <<
+						"Unable to get " << resource_t::ClassId << " resource named '" << resourceName << "' into the map. "
+						"This should never happens !";
+
+					return nullptr;
+				}
+
+				return result.first->second;
+			}
+
+			/**
+			 * @brief Returns the default resource.
+			 * @note This version does not lock the mutex.
+			 * @return std::shared_ptr< resource_t >
+			 */
+			[[nodiscard]]
+			std::shared_ptr< resource_t >
+			getDefaultResourceUnlocked () noexcept
 			{
 				/* Checks in loaded resources. */
 				{
@@ -571,139 +809,8 @@ namespace EmEn::Resources
 			}
 
 			/**
-			 * @brief Returns a random resource from this manager.
-			 * @param asyncLoad Load the resource asynchronously. Default true.
-			 * @return std::shared_ptr< resource_t >
-			 */
-			[[nodiscard]]
-			std::shared_ptr< resource_t >
-			getRandomResource (bool asyncLoad = true) noexcept
-			{
-				if ( m_storeName.empty() )
-				{
-					return this->getDefaultResource();
-				}
-
-				return this->getResource(m_resourcesStores.randomName(m_storeName), asyncLoad);
-			}
-
-		private:
-
-			/** @copydoc EmEn::ServiceInterface::onInitialize() */
-			bool
-			onInitialize () noexcept override
-			{
-				if ( Stores::s_operationVerboseEnabled )
-				{
-					if ( m_storeName.empty() )
-					{
-						TraceInfo{resource_t::ClassId} << "The resource type '" << resource_t::ClassId << "' has no local store.";
-					}
-					else
-					{
-						const auto & store = m_resourcesStores.store(m_storeName);
-
-						TraceInfo{resource_t::ClassId} <<
-							"The resource type '" << resource_t::ClassId << "' has " << store.size() <<
-							" entries in the local store '" << m_storeName << "' available.";
-					}
-				}
-
-				m_flags[ServiceInitialized] = true;
-
-				return true;
-			}
-
-			/** @copydoc EmEn::ServiceInterface::onTerminate() */
-			bool
-			onTerminate () noexcept override
-			{
-				m_flags[ServiceInitialized] = false;
-
-				if ( Stores::s_operationVerboseEnabled )
-				{
-					if ( m_storeName.empty() )
-					{
-						TraceInfo{resource_t::ClassId} <<
-							"The resource type '" << resource_t::ClassId << "' has no local store."
-							"Nothing to unload.";
-					}
-					else
-					{
-						const auto & store = m_resourcesStores.store(m_storeName);
-
-						TraceInfo{resource_t::ClassId} <<
-							"The resource type '" << resource_t::ClassId << "' has " << store.size() <<
-							" entries in the local store '" << m_storeName << "' to check for unload.";
-					}
-				}
-
-				m_externalResources.clear();
-				m_resources.clear();
-
-				return true;
-			}
-
-			/** @copydoc EmEn::Libs::ObserverTrait::onNotification() */
-			bool
-			onNotification (const Libs::ObservableTrait * observable, int notificationCode, const std::any & data) noexcept override
-			{
-				using namespace EmEn::Libs;
-
-				if ( observable->is(NetworkManager::ClassUID) )
-				{
-					if ( notificationCode == NetworkManager::FileDownloaded )
-					{
-						const auto downloadTicket = std::any_cast< int >(data);
-
-						auto requestIt = m_externalResources.find(downloadTicket);
-
-						if ( requestIt != m_externalResources.end() )
-						{
-							switch ( m_networkManager.downloadStatus(downloadTicket) )
-							{
-								case DownloadItem::Status::Pending :
-								case DownloadItem::Status::Transferring :
-								case DownloadItem::Status::OnHold :
-									return true;
-
-								case DownloadItem::Status::Done :
-								{
-									Tracer::success(resource_t::ClassId, "Resource downloaded.");
-
-									requestIt->second.setDownloadProcessed(m_primaryServices.fileSystem(), true);
-
-									/* Creates a loading thread. */
-									std::thread newTask(&Container::loadingTask, this, requestIt->second);
-
-									newTask.detach();
-								}
-									break;
-
-								case DownloadItem::Status::Error :
-									Tracer::error(resource_t::ClassId, "Resource failed to download.");
-
-									requestIt->second.setDownloadProcessed(m_primaryServices.fileSystem(), true);
-									break;
-							}
-
-							/* Removes the loading request. */
-							m_externalResources.erase(requestIt);
-						}
-					}
-
-					return true;
-				}
-
-				/* We don't know who is sending this message,
-				 * so we stop the listening. */
-				Tracer::warning(resource_t::ClassId, "Unknown notification, stop listening to this sender.");
-
-				return false;
-			}
-
-			/**
 			 * @brief Checks for a previously loaded resource and return it.
+			 * @note Calling methods must lock the resource access.
 			 * @param resourceName A reference to a string.
 			 * @param asyncLoad Load the resource asynchronously.
 			 * @return std::shared_ptr< resource_t >
@@ -714,7 +821,7 @@ namespace EmEn::Resources
 			{
 				if ( resourceName == Default )
 				{
-					return this->getDefaultResource();
+					return this->getDefaultResourceUnlocked();
 				}
 
 				/* Checks in loaded resources. */
@@ -746,6 +853,7 @@ namespace EmEn::Resources
 
 			/**
 			 * @brief Adds a resource to the loading queue.
+			 * @note Calling methods must lock the resource access.
 			 * @param baseInformation A reference to the base information of the resource to be loaded.
 			 * @param asyncLoad Load the resource asynchronously.
 			 * @return std::shared_ptr< resource_t >
@@ -754,16 +862,14 @@ namespace EmEn::Resources
 			std::shared_ptr< resource_t >
 			pushInLoadingQueue (const BaseInformation & baseInformation, bool asyncLoad) noexcept
 			{
-				using namespace EmEn::Libs;
-
 				const auto & name = baseInformation.name();
 
-				/* 1. Check if resource is not already in loading queue ... */
+				/* 1. Check if resource is not already in the loading queue ... */
 				const auto & resourceIt = m_resources.find(name);
 
 				if ( resourceIt != m_resources.cend() )
 				{
-					if ( Stores::s_operationVerboseEnabled )
+					if ( m_verboseEnabled )
 					{
 						TraceInfo{resource_t::ClassId} << "Resource (" << resource_t::ClassId << ") '" << name << "' is already in the loading queue.";
 					}
@@ -775,7 +881,7 @@ namespace EmEn::Resources
 				auto result = m_resources.emplace(
 					std::piecewise_construct,
 					std::forward_as_tuple(name),
-					std::forward_as_tuple(new resource_t(name))
+					std::forward_as_tuple(new resource_t(name, 0))
 				);
 
 				if ( !result.second )
@@ -803,13 +909,13 @@ namespace EmEn::Resources
 						/* NOTE: Check the cache system before downloading. */
 						const auto cacheFile = request.cacheFilepath(m_primaryServices.fileSystem());
 
-						if ( IO::fileExists(cacheFile) )
+						if ( Libs::IO::fileExists(cacheFile) )
 						{
 							request.setDownloadProcessed(m_primaryServices.fileSystem(), true);
 						}
 						else
 						{
-							const auto ticket = m_networkManager.download(request.url(), cacheFile, false);
+							const auto ticket = m_primaryServices.netManager().download(request.url(), cacheFile, false);
 
 							request.setDownloadTicket(ticket);
 
@@ -818,10 +924,10 @@ namespace EmEn::Resources
 					}
 					else
 					{
-						/* Create a thread for the resource loading. */
-						std::thread newTask(&Container::loadingTask, this, request);
-
-						newTask.detach();
+						/* Enqueue the resource loading into the thread pool. */
+						m_primaryServices.threadPool()->enqueue([this, request] {
+							this->loadingTask(request);
+						});
 					}
 				}
 				else
@@ -837,14 +943,13 @@ namespace EmEn::Resources
 
 			/**
 			 * @brief Task for loading a resource on a thread.
-			 * @note The request parameter must be passed by value.
+			 * @note Value must pass the request parameter.
 			 * @param request The loading request.
+			 * @return void
 			 */
 			void
 			loadingTask (LoadingRequest< resource_t > request) noexcept
 			{
-				using namespace EmEn::Libs;
-
 				/* Notify the beginning of a loading process. */
 				this->notify(LoadingProcessStarted);
 
@@ -857,7 +962,7 @@ namespace EmEn::Resources
 				{
 					/* This is a local file, so we load it by using a filepath. */
 					case SourceType::LocalData :
-						if ( Stores::s_operationVerboseEnabled )
+						if ( m_verboseEnabled )
 						{
 							TraceInfo{resource_t::ClassId} << "Loading the resource (" << resource_t::ClassId << ") '" << infos.name() << "'... [CONTAINER]";
 						}
@@ -867,7 +972,7 @@ namespace EmEn::Resources
 
 					/* This is direct data with a JsonCPP way of representing the data. */
 					case SourceType::DirectData :
-						if ( Stores::s_operationVerboseEnabled )
+						if ( m_verboseEnabled )
 						{
 							TraceInfo{resource_t::ClassId} << "Loading the resource (" << resource_t::ClassId << ") '" << infos.name() << "'... [CONTAINER]";
 						}
@@ -875,12 +980,12 @@ namespace EmEn::Resources
 						success = request.resource()->load(infos.data());
 						break;
 
-					/* This should never happen ! ExternalData must be processed before. */
+					/* This should never happen! ExternalData must be processed before. */
 					case SourceType::ExternalData :
 						TraceError{resource_t::ClassId} << "The resource (" << resource_t::ClassId << ") '" << infos.name() << "' should be downloaded first. Unable to load it ! [CONTAINER]";
 						break;
 
-					/* This should never happen ! Undefined is a bug. */
+					/* This should never happen! Undefined is a bug. */
 					case SourceType::Undefined :
 					default:
 						TraceError{resource_t::ClassId} << "The resource (" << resource_t::ClassId << ") '" << infos.name() << "' information are invalid. Unable to load it ! [CONTAINER]";
@@ -889,7 +994,7 @@ namespace EmEn::Resources
 
 				if ( success )
 				{
-					if ( Stores::s_operationVerboseEnabled )
+					if ( m_verboseEnabled )
 					{
 						TraceSuccess{resource_t::ClassId} << "The resource (" << resource_t::ClassId << ") '" << infos.name() << "' is loaded. [CONTAINER]";
 					}
@@ -901,28 +1006,16 @@ namespace EmEn::Resources
 					TraceError{resource_t::ClassId} << "The resource (" << resource_t::ClassId << ") '" << infos.name() << "' failed to load ! [CONTAINER]";
 				}
 
-				/* Notify the end of loading process. */
+				/* Notify the end of the loading process. */
 				this->notify(LoadingProcessFinished);
 			}
 
-			/* Flag names. */
-			static constexpr auto ServiceInitialized{0UL};
-
 			PrimaryServices & m_primaryServices;
-			NetworkManager & m_networkManager;
 			const Stores & m_resourcesStores;
 			std::string m_storeName;
 			std::unordered_map< std::string, std::shared_ptr< resource_t > > m_resources;
 			std::unordered_map< int, LoadingRequest< resource_t > > m_externalResources;
-			std::array< bool, 8 > m_flags{
-				false/*ServiceInitialized*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/
-			};
+			mutable std::mutex m_resourcesAccess;
+			bool m_verboseEnabled{false};
 	};
 }

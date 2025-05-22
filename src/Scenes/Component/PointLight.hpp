@@ -47,11 +47,15 @@ namespace EmEn::Scenes::Component
 
 			/**
 			 * @brief Constructs a point light.
-			 * @param name The name of the component.
+			 * @param name The name of the component [std::move].
 			 * @param parentEntity A reference to the parent entity.
 			 * @param shadowMapResolution Enable the shadow map by specifying the resolution. Default, no shadow map.
 			 */
-			PointLight (const std::string & name, const AbstractEntity & parentEntity, uint32_t shadowMapResolution = 0) noexcept;
+			PointLight (std::string name, const AbstractEntity & parentEntity, uint32_t shadowMapResolution = 0) noexcept
+				: AbstractLightEmitter{std::move(name), parentEntity, shadowMapResolution}
+			{
+
+			}
 
 			/**
 			 * @brief Copy constructor.
@@ -82,19 +86,23 @@ namespace EmEn::Scenes::Component
 			/**
 			 * @brief Destructs a point light.
 			 */
-			~PointLight () override;
+			~PointLight () override = default;
 
 			/** @copydoc EmEn::Scenes::Component::Abstract::getComponentType() */
 			[[nodiscard]]
-			const char * getComponentType () const noexcept override;
+			const char *
+			getComponentType () const noexcept override
+			{
+				return ClassId;
+			}
 
-			/** @copydoc EmEn::Scenes::Component::Abstract::boundingBox() const */
+			/** @copydoc EmEn::Scenes::Component::Abstract::isComponent() */
 			[[nodiscard]]
-			const Libs::Math::Cuboid< float > & boundingBox () const noexcept override;
-
-			/** @copydoc EmEn::Scenes::Component::Abstract::boundingSphere() const */
-			[[nodiscard]]
-			const Libs::Math::Sphere< float > & boundingSphere () const noexcept override;
+			bool
+			isComponent (const char * classID) const noexcept override
+			{
+				return strcmp(ClassId, classID) == 0;
+			}
 
 			/** @copydoc EmEn::Scenes::Component::Abstract::processLogics() */
 			void processLogics (const Scene & scene) noexcept override;
@@ -102,8 +110,13 @@ namespace EmEn::Scenes::Component
 			/** @copydoc EmEn::Scenes::Component::Abstract::move() */
 			void move (const Libs::Math::CartesianFrame< float > & worldCoordinates) noexcept override;
 
-			/** @copydoc EmEn::Scenes::Component::Abstract::shouldRemove() */
-			bool shouldRemove () const noexcept override;
+			/** @copydoc EmEn::Scenes::Component::Abstract::shouldBeRemoved() */
+			[[nodiscard]]
+			bool
+			shouldBeRemoved () const noexcept override
+			{
+				return false;
+			}
 
 			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::touch() */
 			[[nodiscard]]
@@ -111,14 +124,18 @@ namespace EmEn::Scenes::Component
 
 			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::createOnHardware() */
 			[[nodiscard]]
-			bool createOnHardware (LightSet & lightSet, Graphics::Renderer & renderer, AVConsole::Manager & AVConsoleManager) noexcept override;
+			bool createOnHardware (LightSet & lightSet, AVConsole::Manager & AVConsoleManager) noexcept override;
 
 			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::destroyFromHardware() */
-			void destroyFromHardware () noexcept override;
+			void destroyFromHardware (LightSet & lightSet, AVConsole::Manager & AVConsoleManager) noexcept override;
 
 			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::shadowMap() */
 			[[nodiscard]]
-			std::shared_ptr< Graphics::RenderTarget::ShadowMap::Abstract > shadowMap () const noexcept override;
+			std::shared_ptr< Graphics::RenderTarget::Abstract >
+			shadowMap () const noexcept override
+			{
+				return std::static_pointer_cast< Graphics::RenderTarget::Abstract >(m_shadowMap);
+			}
 
 			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::getUniformBlock() */
 			[[nodiscard]]
@@ -135,27 +152,16 @@ namespace EmEn::Scenes::Component
 			 * @return float
 			 */
 			[[nodiscard]]
-			float radius () const noexcept;
-
-			/**
-			 * @brief STL streams printable object.
-			 * @param out A reference to the stream output.
-			 * @param obj A reference to the object to print.
-			 * @return std::ostream &
-			 */
-			friend std::ostream & operator<< (std::ostream & out, const PointLight & obj);
-
-			/**
-			 * @brief Stringifies the object.
-			 * @param obj A reference to the object to print.
-			 * @return std::string
-			 */
-			friend std::string to_string (const PointLight & obj) noexcept;
+			float
+			radius () const noexcept
+			{
+				return m_radius;
+			}
 
 		private:
 
 			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::onTargetConnected() */
-			void onTargetConnected (AbstractVirtualDevice * targetDevice) noexcept override;
+			void onTargetConnected (AVConsole::AVManagers & managers, AbstractVirtualDevice * targetDevice) noexcept override;
 
 			/** @copydoc EmEn::Animations::AnimatableInterface::playAnimation() */
 			bool playAnimation (uint8_t animationID, const Libs::Variant & value, size_t cycle) noexcept override;
@@ -163,7 +169,7 @@ namespace EmEn::Scenes::Component
 			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::onVideoMemoryUpdate() */
 			[[nodiscard]]
 			bool
-			onVideoMemoryUpdate (Vulkan::SharedUniformBuffer & UBO, uint32_t index) noexcept override
+			onVideoMemoryUpdate (Graphics::SharedUniformBuffer & UBO, uint32_t index) noexcept override
 			{
 				return UBO.writeElementData(index, m_buffer.data());
 			}
@@ -174,6 +180,14 @@ namespace EmEn::Scenes::Component
 			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::onIntensityChange() */
 			void onIntensityChange (float intensity) noexcept override;
 
+			/**
+			 * @brief STL streams printable object.
+			 * @param out A reference to the stream output.
+			 * @param obj A reference to the object to print.
+			 * @return std::ostream &
+			 */
+			friend std::ostream & operator<< (std::ostream & out, const PointLight & obj);
+
 			/* Uniform buffer object offset to write data. */
 			static constexpr auto ColorOffset{0UL};
 			static constexpr auto PositionOffset{4UL};
@@ -181,7 +195,7 @@ namespace EmEn::Scenes::Component
 			static constexpr auto RadiusOffset{9UL};
 			static constexpr auto LightMatrixOffset{16UL};
 
-			std::shared_ptr< Graphics::RenderTarget::ShadowMap::Cubemap > m_shadowMap{};
+			std::shared_ptr< Graphics::RenderTarget::ShadowMap< Graphics::ViewMatrices3DUBO > > m_shadowMap;
 			float m_radius{DefaultRadius};
 			std::array< float, 4 + 4 + 4 + 16 > m_buffer{
 				/* Light color. */
@@ -197,4 +211,35 @@ namespace EmEn::Scenes::Component
 				0.0F, 0.0F, 0.0F, 1.0F
 			};
 	};
+
+	inline
+	std::ostream &
+	operator<< (std::ostream & out, const PointLight & obj)
+	{
+		const auto worldCoordinates = obj.getWorldCoordinates();
+
+		return out << "Point light data :" "\n"
+			"Position (World Space) : " << worldCoordinates.position() << "\n"
+			"Color : " << obj.color() << "\n"
+			"Intensity : " << obj.intensity() << "\n"
+			"Radius : " << obj.m_radius << "\n"
+			"Activity : " << ( obj.isEnabled() ? "true" : "false" ) << "\n"
+			"Shadow caster : " << ( obj.isShadowCastingEnabled() ? "true" : "false" ) << '\n';
+	}
+
+	/**
+	 * @brief Stringifies the object.
+	 * @param obj A reference to the object to print.
+	 * @return std::string
+	 */
+	inline
+	std::string
+	to_string (const PointLight & obj) noexcept
+	{
+		std::stringstream output;
+
+		output << obj;
+
+		return output.str();
+	}
 }

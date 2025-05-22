@@ -26,6 +26,9 @@
 
 #include "Network.hpp"
 
+/* Application configurations. */
+#include "emeraude_config.hpp"
+
 /* STL inclusions. */
 #include <iostream>
 
@@ -49,7 +52,7 @@ namespace EmEn::Libs::Network
 		asio::io_context context;
 		asio::ip::tcp::resolver resolver{context};
 
-		const asio::ip::basic_resolver< asio::ip::tcp >::results_type results = resolver.resolve(EMERAUDE_INTERNET_CHECK_DOMAIN, "80");
+		const asio::ip::basic_resolver< asio::ip::tcp >::results_type results = resolver.resolve(InternetCheckDomain, "80");
 
 		return !results.empty();
 #else
@@ -221,6 +224,11 @@ namespace EmEn::Libs::Network
 
 		return false;
 #else
+		if ( verbose )
+		{
+			std::cout << "ASIO has been disabled, unable to download " << uri << " to " << filepath.string() << " !" "\n";
+		}
+
 		return false;
 #endif
 	}
@@ -233,7 +241,7 @@ namespace EmEn::Libs::Network
 		request.add(HTTPRequest::AcceptLanguage, "*");
 		request.add(HTTPRequest::AcceptEncoding, "gzip, deflate");
 		request.add(HTTPRequest::Connection, "close");
-		request.add(HTTPRequest::UserAgent, ENGINE_NAME "/" ENGINE_VERSION_STRING " (" PLATFORM_TARGETED ")");
+		request.add(HTTPRequest::UserAgent, DefaultUserAgent);
 
 		/*
 			BASE : User-Agent: Mozilla/5.0 (<system-information>) <platform> (<platform-details>) <extensions>

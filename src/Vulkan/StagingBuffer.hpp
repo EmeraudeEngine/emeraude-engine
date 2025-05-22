@@ -43,11 +43,19 @@ namespace EmEn::Vulkan
 	{
 		public:
 
+			/** @brief Class identifier. */
+			static constexpr auto ClassId{"VulkanStagingBuffer"};
+
 			/**
 			 * @brief Construct a staging buffer.
 			 * @param device A reference to a device smart pointer.
 			 * @param size The size in bytes. Default empty.
 			 */
-			explicit StagingBuffer (const std::shared_ptr< Device > & device, size_t size = 0) noexcept;
+			explicit
+			StagingBuffer (const std::shared_ptr< Device > & device, VkDeviceSize size = 0) noexcept
+				: AbstractHostBuffer{device, 0, size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT}
+			{
+
+			}
 	};
 }

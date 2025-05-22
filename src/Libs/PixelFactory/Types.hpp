@@ -140,15 +140,31 @@ namespace EmEn::Libs::PixelFactory
 
 	/**
 	 * @brief Structure to wrap raw data for pixmap.
-	 * @tparam precision_t The pixel data type. Default uint8_t.
+	 * @tparam pixel_data_t The pixel component type for the pixmap depth precision. Default uint8_t.
+	 * @tparam dimension_t The type of unsigned integer used for pixmap dimension. Default uint32_t.
 	 */
-	template< typename precision_t = uint8_t >
+	template< typename pixel_data_t = uint8_t, typename dimension_t = uint32_t >
+	requires (std::is_arithmetic_v< pixel_data_t > && std::is_unsigned_v< dimension_t >)
 	struct RawPixmapData
 	{
-		size_t width{0};
-		size_t height{0};
-		size_t colorCount{0};
-		const precision_t * pointer{nullptr};
+		dimension_t width{0};
+		dimension_t height{0};
+		dimension_t colorCount{0};
+		const pixel_data_t * pointer{nullptr};
+	};
+
+	/**
+	 * @brief Structure for text metrics to use to render text on pixmap.
+	 * @tparam dimension_t The type of unsigned integer used for pixmap dimension. Default uint32_t.
+	 */
+	template< typename dimension_t = uint32_t >
+	requires (std::is_unsigned_v< dimension_t >)
+	struct TextMetrics
+	{
+		dimension_t lineHeight{0};
+		dimension_t lineSpace{0};
+		dimension_t maxColumns{0};
+		dimension_t maxRows{0};
 	};
 
 	/** @brief Static constant string containing placeholder text. */

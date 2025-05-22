@@ -26,12 +26,11 @@
 
 #include "SpriteResource.hpp"
 
-/* STL inclusions. */
-#include <cmath>
-
 /* Local inclusions. */
 #include "Libs/VertexFactory/ShapeBuilder.hpp"
 #include "Libs/FastJSON.hpp"
+#include "Graphics/TextureResource/Texture2D.hpp"
+#include "Graphics/TextureResource/AnimatedTexture2D.hpp"
 #include "Graphics/Geometry/IndexedVertexResource.hpp"
 #include "Graphics/Material/BasicResource.hpp"
 #include "Graphics/Material/Helpers.hpp"
@@ -56,12 +55,6 @@ namespace EmEn::Graphics::Renderable
 	const size_t SpriteResource::ClassUID{getClassUID(ClassId)};
 	std::mutex SpriteResource::s_lockGeometryLoading{};
 
-	SpriteResource::SpriteResource (const std::string & name, uint32_t resourceFlagBits) noexcept
-		: Interface(name, IsSprite | resourceFlagBits)
-	{
-
-	}
-
 	bool
 	SpriteResource::load () noexcept
 	{
@@ -79,12 +72,12 @@ namespace EmEn::Graphics::Renderable
 			return this->setLoadSuccess(false);
 		}
 
-		if ( !this->setMaterial(Material::BasicResource::getDefault()) )
+		if ( !this->setMaterial(Resources::Manager::instance()->container< Material::BasicResource >()->getDefaultResource()) )
 		{
 			return this->setLoadSuccess(false);
 		}
 
-		return this->setLoadSuccess(this->addDependency(m_material.get()));
+		return this->setLoadSuccess(this->addDependency(m_material));
 	}
 
 	bool
@@ -97,9 +90,11 @@ namespace EmEn::Graphics::Renderable
 
 		this->setReadyForInstantiation(false);
 
-		const auto materialResource = Resources::Manager::instance()->basicMaterials().getOrCreateResource(
+		auto * manager = Resources::Manager::instance();
+
+		const auto materialResource = manager->container< Material::BasicResource >()->getOrCreateResource(
 			"SpriteMaterial" + this->name(),
-			[&data] (Material::BasicResource & newMaterial)
+			[&data, manager] (Material::BasicResource & newMaterial)
 			{
 				if ( !data.isMember(Material::JKData) || !data[Material::JKData].isObject() )
 				{
@@ -117,7 +112,7 @@ namespace EmEn::Graphics::Renderable
 				{
 					case FillingType::Texture :
 					{
-						const auto textureResource = TextureResource::Texture2D::get(FastJSON::getString(componentData, Material::JKName));
+						const auto textureResource = manager->container< TextureResource::Texture2D >()->getResource(FastJSON::getString(componentData, Material::JKName));
 
 						if ( !newMaterial.setTexture(textureResource, true) )
 						{
@@ -128,7 +123,7 @@ namespace EmEn::Graphics::Renderable
 
 					case FillingType::AnimatedTexture :
 					{
-						const auto textureResource = TextureResource::AnimatedTexture2D::get(FastJSON::getString(componentData, Material::JKName));
+						const auto textureResource = manager->container< TextureResource::AnimatedTexture2D >()->getResource(FastJSON::getString(componentData, Material::JKName));
 
 						if ( !newMaterial.setTexture(textureResource, true) )
 						{
@@ -233,27 +228,27 @@ namespace EmEn::Graphics::Renderable
 			flags |= Geometry::Enable3DPrimaryTextureCoordinates;
 		}
 
-		const auto geometryResource = Resources::Manager::instance()->indexedVertexGeometries().getOrCreateResource(
+		const auto geometryResource = Resources::Manager::instance()->container< Geometry::IndexedVertexResource >()->getOrCreateResource(
 			resourceName.str(),
 			[isAnimated, centerAtBottom, flip] (Geometry::IndexedVertexResource & newGeometry)
 			{
-				Shape< float_t > shape{2 * MaxFrames};
-				ShapeBuilder< float_t > builder{shape};
+				Shape< float, uint32_t > shape{2 * MaxFrames};
 
+				ShapeBuilder< float, uint32_t > builder{shape};
 				builder.beginConstruction(ConstructionMode::TriangleStrip);
-				builder.options().enableGlobalNormal(Vector< 3, float_t >::positiveZ());
+				builder.options().enableGlobalNormal(Vector< 3, float >::positiveZ());
 
 				const auto Ua = flip ? 1.0F : 0.0F;
 				const auto Ub = flip ? 0.0F : 1.0F;
 
-				const Vector< 3, float_t > positionA{-0.5F, centerAtBottom ? -1.0F : -0.5F, 0.0F};
-				const Vector< 3, float_t > positionB{-0.5F, centerAtBottom ?  0.0F :  0.5F, 0.0F};
-				const Vector< 3, float_t > positionC{ 0.5F, centerAtBottom ? -1.0F : -0.5F, 0.0F};
-				const Vector< 3, float_t > positionD{ 0.5F, centerAtBottom ?  0.0F :  0.5F, 0.0F};
+				const Vector< 3, float > positionA{-0.5F, centerAtBottom ? -1.0F : -0.5F, 0.0F};
+				const Vector< 3, float > positionB{-0.5F, centerAtBottom ?  0.0F :  0.5F, 0.0F};
+				const Vector< 3, float > positionC{ 0.5F, centerAtBottom ? -1.0F : -0.5F, 0.0F};
+				const Vector< 3, float > positionD{ 0.5F, centerAtBottom ?  0.0F :  0.5F, 0.0F};
 
 				if ( isAnimated )
 				{
-					for ( size_t frameIndex = 0; frameIndex < MaxFrames; frameIndex++ )
+					for ( uint32_t frameIndex = 0; frameIndex < MaxFrames; frameIndex++ )
 					{
 						const auto depth = static_cast< float >(frameIndex);
 
@@ -315,7 +310,7 @@ namespace EmEn::Graphics::Renderable
 
 		m_geometry = geometryResource;
 
-		return this->addDependency(m_geometry.get());
+		return this->addDependency(m_geometry);
 	}
 
 	bool
@@ -334,7 +329,7 @@ namespace EmEn::Graphics::Renderable
 
 		m_material = materialResource;
 
-		return this->addDependency(m_material.get());
+		return this->addDependency(m_material);
 	}
 
 	bool
@@ -343,17 +338,5 @@ namespace EmEn::Graphics::Renderable
 		this->setReadyForInstantiation(true);
 
 		return true;
-	}
-
-	std::shared_ptr< SpriteResource >
-	SpriteResource::get (const std::string & resourceName, bool directLoad) noexcept
-	{
-		return Resources::Manager::instance()->sprites().getResource(resourceName, !directLoad);
-	}
-
-	std::shared_ptr< SpriteResource >
-	SpriteResource::getDefault () noexcept
-	{
-		return Resources::Manager::instance()->sprites().getDefaultResource();
 	}
 }

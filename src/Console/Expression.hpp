@@ -76,7 +76,7 @@ namespace EmEn::Console
 			}
 
 			/**
-			 * @brief Returns whether the expression has parameter.
+			 * @brief Returns whether the expression has a parameter.
 			 * @return bool
 			 */
 			[[nodiscard]]
@@ -139,7 +139,16 @@ namespace EmEn::Console
 			 * @param obj A reference to the object to print.
 			 * @return std::string
 			 */
-			friend std::string to_string (const Expression & obj) noexcept;
+			friend
+			std::string
+			to_string (const Expression & obj) noexcept
+			{
+				std::stringstream output;
+
+				output << obj;
+
+				return output.str();
+			}
 
 		private:
 

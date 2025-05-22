@@ -28,12 +28,6 @@
 
 namespace EmEn::Vulkan
 {
-	RenderSubPass::RenderSubPass (VkPipelineBindPoint pipelineBindPoint, VkSubpassDescriptionFlags flags) noexcept
-		: m_flags(flags), m_pipelineBindPoint(pipelineBindPoint)
-	{
-
-	}
-
 	VkSubpassDescription
 	RenderSubPass::generateSubPassDescription () const noexcept
 	{

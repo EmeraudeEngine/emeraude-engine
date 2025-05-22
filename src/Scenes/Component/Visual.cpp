@@ -33,46 +33,9 @@ namespace EmEn::Scenes::Component
 {
 	using namespace EmEn::Libs;
 	using namespace EmEn::Libs::Math;
-	using namespace Animations;
-	using namespace Physics;
-	using namespace Graphics;
-
-	Visual::Visual (const std::string & name, const AbstractEntity & parentEntity, const std::shared_ptr< Renderable::Interface > & renderable) noexcept
-		: Abstract(name, parentEntity),
-		m_renderableInstance(std::make_shared< RenderableInstance::Unique >(renderable, this->getWorldCoordinates(), renderable->isSprite() ? RenderableInstance::FacingCamera : RenderableInstance::None))
-	{
-		this->observe(m_renderableInstance.get());
-	}
-
-	std::shared_ptr< RenderableInstance::Abstract >
-	Visual::getRenderableInstance () const noexcept
-	{
-		return m_renderableInstance;
-	}
-
-	const char *
-	Visual::getComponentType () const noexcept
-	{
-		return ClassId;
-	}
-
-	const Cuboid< float > &
-	Visual::boundingBox () const noexcept
-	{
-		return m_renderableInstance->renderable()->boundingBox();
-	}
-
-	const Sphere< float > &
-	Visual::boundingSphere () const noexcept
-	{
-		return m_renderableInstance->renderable()->boundingSphere();
-	}
-
-	void
-	Visual::move (const CartesianFrame< float > & worldCoordinates) noexcept
-	{
-		m_renderableInstance->updateModelMatrix(worldCoordinates);
-	}
+	using namespace EmEn::Animations;
+	using namespace EmEn::Physics;
+	using namespace EmEn::Graphics;
 
 	void
 	Visual::processLogics (const Scene & scene) noexcept
@@ -88,12 +51,6 @@ namespace EmEn::Scenes::Component
 		}
 
 		this->updateAnimations(scene.cycle());
-	}
-
-	bool
-	Visual::shouldRemove () const noexcept
-	{
-		return m_renderableInstance->isBroken();
 	}
 
 	bool

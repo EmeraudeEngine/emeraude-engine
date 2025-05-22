@@ -74,7 +74,7 @@ namespace EmEn::Physics
 	}
 
 	void
-	MovableTrait::addTorque (const Vector< 3, float > & torque) noexcept
+	MovableTrait::addTorque (const Vector< 3, float > & /*torque*/) noexcept
 	{
 		const auto & objectProperties = getObjectProperties();
 
@@ -152,7 +152,7 @@ namespace EmEn::Physics
 			m_linearSpeed = m_linearVelocity.length();
 		}
 
-		/* Apply the drag force, if there is linear speed. */
+		/* Apply the drag force if there is linear speed. */
 		if ( m_linearSpeed > 0.0F )
 		{
 			const auto dragMagnitude = Physics::getDragMagnitude(
@@ -178,13 +178,13 @@ namespace EmEn::Physics
 			isMoveOccurs = true;
 		}
 
-		/* Apply the drag force on rotation, if there is angular speed. */
+		/* Apply the drag force on rotation if there is angular speed. */
 		if ( m_angularSpeed > 0.0F )
 		{
 			/*
 			 * Td = drag torque
 			 * B = angular drag coefficient
-			 * V = volume of submerged portion of polyhedron
+			 * V = volume of a submerged portion of polyhedron
 			 * Vt = total volume of polyhedron
 			 * L = approximation of the average width of the polyhedron
 			 * w = angular velocity

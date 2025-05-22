@@ -31,19 +31,18 @@
 
 /* Local inclusions. */
 #include "Resources/Manager.hpp"
+#include "Graphics/TextureResource/Texture1D.hpp"
+#include "Graphics/TextureResource/Texture2D.hpp"
+#include "Graphics/TextureResource/Texture3D.hpp"
+#include "Graphics/TextureResource/TextureCubemap.hpp"
+#include "Graphics/TextureResource/AnimatedTexture2D.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::Graphics::Material::Component
 {
 	using namespace EmEn::Libs;
 	using namespace EmEn::Libs::Math;
-	using namespace Saphir;
-
-	Texture::Texture (const char * samplerName, std::string variableName, const std::shared_ptr< TextureResource::Abstract > & texture, uint32_t UVWChannel, const Vector< 3, float > & UVWScale, bool enableAlpha) noexcept
-		: m_samplerName(samplerName), m_variableName(std::move(variableName)), m_texture(texture), m_UVWScale(UVWScale), m_UVWChannel(UVWChannel), m_alphaEnabled(enableAlpha)
-	{
-
-	}
+	using namespace EmEn::Saphir;
 
 	Texture::Texture (const char * samplerName, std::string variableName, const Json::Value & data, const FillingType & fillingType, Resources::Manager & resources) noexcept
 		: m_samplerName(samplerName), m_variableName(std::move(variableName))
@@ -68,23 +67,23 @@ namespace EmEn::Graphics::Material::Component
 		switch ( fillingType )
 		{
 			case FillingType::Gradient :
-				m_texture = resources.texture1Ds().getResource(textureResourceName);
+				m_texture = resources.container< TextureResource::Texture1D >()->getResource(textureResourceName);
 				break;
 
 			case FillingType::Texture :
-				m_texture = resources.texture2Ds().getResource(textureResourceName);
+				m_texture = resources.container< TextureResource::Texture2D >()->getResource(textureResourceName);
 				break;
 
 			case FillingType::VolumeTexture :
-				m_texture = resources.texture3Ds().getResource(textureResourceName);
+				m_texture = resources.container< TextureResource::Texture3D >()->getResource(textureResourceName);
 				break;
 
 			case FillingType::Cubemap :
-				m_texture = resources.textureCubemaps().getResource(textureResourceName);
+				m_texture = resources.container< TextureResource::TextureCubemap >()->getResource(textureResourceName);
 				break;
 
 			case FillingType::AnimatedTexture :
-				m_texture = resources.animatedTextures().getResource(textureResourceName);
+				m_texture = resources.container< TextureResource::AnimatedTexture2D >()->getResource(textureResourceName);
 				break;
 
 			case FillingType::Value :
@@ -210,29 +209,5 @@ namespace EmEn::Graphics::Material::Component
 		Tracer::error(ClassId, "Unable to determine texture type !");
 
 		return nullptr;
-	}
-
-	std::ostream &
-	operator<< (std::ostream & out, const Texture & obj)
-	{
-		return out << Texture::ClassId << "." "\n"
-			"Texture uniform name: " << obj.m_samplerName << "\n"
-			"Variable name: " << obj.m_variableName << "\n"
-			"Texture type (component level): " << obj.textureType() << "\n"
-			"Is volumetric texture ? (component level): " << ( obj.isVolumetricTexture() ? "yes" : "no" ) << "\n"
-			"Texture resource name: " << obj.m_texture->name() << "\n"
-			"UVW scale: " << obj.m_UVWScale << "\n"
-			"Alpha channel enabled: " << ( obj.m_alphaEnabled ? "yes" : "no" ) << "\n"
-			"Binding point : " << obj.m_binding << "\n";
-	}
-
-	std::string
-	to_string (const Texture & obj) noexcept
-	{
-		std::stringstream output;
-
-		output << obj;
-
-		return output.str();
 	}
 }

@@ -50,7 +50,13 @@ namespace EmEn::Graphics
 			 * @param cullingMode The triangle culling mode.
 			 * @param triangleClockwise Sets the triangle winding in clockwise mode. Default false.
 			 */
-			RasterizationOptions (PolygonMode polygonMode, CullingMode cullingMode, bool triangleClockwise = false) noexcept;
+			RasterizationOptions (PolygonMode polygonMode, CullingMode cullingMode, bool triangleClockwise = false) noexcept
+				: m_polygonMode{polygonMode},
+				m_cullingMode{cullingMode},
+				m_triangleClockwise{triangleClockwise}
+			{
+
+			}
 
 			/**
 			 * @brief Sets how triangles will be rasterized on screen.

@@ -28,12 +28,6 @@
 
 namespace EmEn::Saphir
 {
-	ComputeShader::ComputeShader (const std::string & name, const std::string & GLSLVersion, const std::string & GLSLProfile) noexcept
-		: AbstractShader(name, GLSLVersion, GLSLProfile)
-	{
-
-	}
-
 	bool
 	ComputeShader::onSourceCodeGeneration (Generator::Abstract & /*generator*/, std::stringstream & /*code*/, std::string & /*topInstructions*/, std::string & /*outputInstructions*/) noexcept
 	{

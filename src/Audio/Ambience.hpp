@@ -41,6 +41,7 @@ namespace EmEn::Audio
 {
 	/**
 	 * @brief The ambience class.
+	 * @note [OBS][STATIC-OBSERVER]
 	 * @extends EmEn::Libs::ObserverTrait This component observes sound loading events.
 	 */
 	class Ambience final : public Libs::ObserverTrait

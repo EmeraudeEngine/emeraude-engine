@@ -26,17 +26,12 @@
 
 #pragma once
 
-/* STL inclusions. */
-#include <cstddef>
-#include <cstdint>
-#include <string>
-
 /* Local inclusions for inheritances. */
 #include "Resources/ResourceTrait.hpp"
 
 /* Local inclusions for usages. */
-#include "Libs/Math/Cuboid.hpp"
-#include "Libs/Math/Sphere.hpp"
+#include "Libs/Math/Space3D/AACuboid.hpp"
+#include "Libs/Math/Space3D/Sphere.hpp"
 #include "Graphics/Geometry/Interface.hpp"
 #include "Graphics/Material/Interface.hpp"
 #include "Graphics/RasterizationOptions.hpp"
@@ -46,13 +41,14 @@ namespace EmEn::Graphics::Renderable
 	/** @brief Renderable interface flag bits. */
 	enum RenderableFlagBits : uint32_t
 	{
+		None = 0U,
 		/** @brief This flag is set when the geometry is fully usable by the GPU,
 		 * thus ready to make mesh, sprite, things, ... as instances. */
-		IsReadyForInstantiation = 1 << 0,
+		IsReadyForInstantiation = 1U << 0,
 		/** @brief This flag tells that the renderable has a skeletal animation available. */
-		HasSkeletalAnimation = 1 << 1,
+		HasSkeletalAnimation = 1U << 1,
 		/** @brief This flag tells the system this renderable uses a single quad which should always face the camera. */
-		IsSprite = 1 << 2
+		IsSprite = 1U << 2
 	};
 
 	/**
@@ -64,8 +60,8 @@ namespace EmEn::Graphics::Renderable
 	{
 		public:
 
-			static const Libs::Math::Cuboid< float > NullBoundingBox;
-			static const Libs::Math::Sphere< float > NullBoundingSphere;
+			static constexpr Libs::Math::Space3D::AACuboid< float > NullBoundingBox{};
+			static constexpr Libs::Math::Space3D::Sphere< float > NullBoundingSphere{};
 
 			/**
 			 * @brief Copy constructor.
@@ -133,11 +129,11 @@ namespace EmEn::Graphics::Renderable
 			}
 
 			/**
-			 * @brief Returns the number of layout to render the whole object.
-			 * @return size_t
+			 * @brief Returns the number of layouts to render the whole object.
+			 * @return uint32_t
 			 */
 			[[nodiscard]]
-			virtual size_t layerCount () const noexcept = 0;
+			virtual uint32_t layerCount () const noexcept = 0;
 
 			/**
 			 * @brief Returns whether the renderable is opaque to get the way to order it with the render lists.
@@ -145,7 +141,7 @@ namespace EmEn::Graphics::Renderable
 			 * @return bool
 			 */
 			[[nodiscard]]
-			virtual bool isOpaque (size_t layerIndex) const noexcept = 0;
+			virtual bool isOpaque (uint32_t layerIndex) const noexcept = 0;
 
 			/**
 			 * @brief Returns the geometry of the renderable.
@@ -161,7 +157,7 @@ namespace EmEn::Graphics::Renderable
 			 * @return const Material::Interface *
 			 */
 			[[nodiscard]]
-			virtual const Material::Interface * material (size_t layerIndex) const noexcept = 0;
+			virtual const Material::Interface * material (uint32_t layerIndex) const noexcept = 0;
 
 			/**
 			 * @brief Returns the rasterization options for the renderable layer.
@@ -170,30 +166,35 @@ namespace EmEn::Graphics::Renderable
 			 * @return const RasterizationOptions *
 			 */
 			[[nodiscard]]
-			virtual const RasterizationOptions * layerRasterizationOptions (size_t layerIndex) const noexcept = 0;
+			virtual const RasterizationOptions * layerRasterizationOptions (uint32_t layerIndex) const noexcept = 0;
 
 			/**
 			 * @brief Returns the bounding box surrounding the renderable.
-			 * @return const Libs::Math::Cuboid< float > &
+			 * @return const Libs::Math::Space3D::AACuboid< float > &
 			 */
 			[[nodiscard]]
-			virtual const Libs::Math::Cuboid< float > & boundingBox () const noexcept = 0;
+			virtual const Libs::Math::Space3D::AACuboid< float > & boundingBox () const noexcept = 0;
 
 			/**
 			 * @brief Returns the bounding sphere surrounding the renderable.
-			 * @return const Libs::Math::Sphere< float > &
+			 * @return const Libs::Math::Space3D::Sphere< float > &
 			 */
 			[[nodiscard]]
-			virtual const Libs::Math::Sphere< float > & boundingSphere () const noexcept = 0;
+			virtual const Libs::Math::Space3D::Sphere< float > & boundingSphere () const noexcept = 0;
 
 		protected:
 
 			/**
 			 * @brief Constructs a renderable object.
-			 * @param name A reference to a string for the resource name.
-			 * @param resourceFlagBits The resource flag bits.
+			 * @param resourceName A string for the resource name [std::move].
+			 * @param resourceFlags The resource flag bits.
 			 */
-			explicit Interface (const std::string & name, uint32_t resourceFlagBits) noexcept;
+			explicit
+			Interface (std::string resourceName, uint32_t resourceFlags) noexcept
+				: ResourceTrait{std::move(resourceName), resourceFlags}
+			{
+
+			}
 
 			/**
 			 * @brief Sets the renderable ready to prepare an instance on GPU.

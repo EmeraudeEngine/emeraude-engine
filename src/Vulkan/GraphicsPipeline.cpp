@@ -41,54 +41,18 @@
 #include "RenderPass.hpp"
 #include "Framebuffer.hpp"
 #include "Utility.hpp"
-#include "Core.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::Vulkan
 {
 	using namespace EmEn::Libs;
-	using namespace Graphics;
-	using namespace Saphir;
+	using namespace EmEn::Graphics;
+	using namespace EmEn::Saphir;
 
 	size_t GraphicsPipeline::s_fakeHash{0};
 
-	GraphicsPipeline::GraphicsPipeline (const std::shared_ptr< Device > & device, VkPipelineCreateFlags createFlags) noexcept
-		: AbstractDeviceDependentObject(device)
-	{
-		m_createInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-		m_createInfo.pNext = nullptr;
-		m_createInfo.flags = createFlags;
-		m_createInfo.stageCount = 0;
-		m_createInfo.pStages = nullptr;
-		m_createInfo.pVertexInputState = nullptr;
-		m_createInfo.pInputAssemblyState = nullptr;
-		m_createInfo.pTessellationState = nullptr;
-		m_createInfo.pViewportState = nullptr;
-		m_createInfo.pRasterizationState = nullptr;
-		m_createInfo.pMultisampleState = nullptr;
-		m_createInfo.pDepthStencilState = nullptr;
-		m_createInfo.pColorBlendState = nullptr;
-		m_createInfo.pDynamicState = nullptr;
-		m_createInfo.layout = VK_NULL_HANDLE;
-		m_createInfo.renderPass = VK_NULL_HANDLE;
-		m_createInfo.subpass = 0;
-		m_createInfo.basePipelineHandle = VK_NULL_HANDLE;
-		m_createInfo.basePipelineIndex = -1;
-	}
-
-	GraphicsPipeline::GraphicsPipeline (const std::shared_ptr< Device > & device, const VkGraphicsPipelineCreateInfo & createInfo) noexcept
-		: AbstractDeviceDependentObject(device), m_createInfo(createInfo)
-	{
-
-	}
-
-	GraphicsPipeline::~GraphicsPipeline ()
-	{
-		this->destroyFromHardware();
-	}
-
 	bool
-	GraphicsPipeline::configureShaderStages (const std::vector< std::shared_ptr< Vulkan::ShaderModule > > & shaderModules) noexcept
+	GraphicsPipeline::configureShaderStages (const std::vector< std::shared_ptr< ShaderModule > > & shaderModules) noexcept
 	{
 		for ( const auto & shaderModule : shaderModules )
 		{
@@ -667,7 +631,7 @@ namespace EmEn::Vulkan
 	}
 
 	bool
-	GraphicsPipeline::configureDynamicState (const std::vector< VkDynamicState > & dynamicStates, VkPipelineDynamicStateCreateFlags flags) noexcept
+	GraphicsPipeline::configureDynamicStates (const std::vector< VkDynamicState > & dynamicStates, VkPipelineDynamicStateCreateFlags flags) noexcept
 	{
 		if ( dynamicStates.empty() )
 		{
@@ -703,7 +667,7 @@ namespace EmEn::Vulkan
 	}
 
 	bool
-	GraphicsPipeline::finalize (const std::shared_ptr< const RenderPass > & renderPass, const std::shared_ptr< PipelineLayout > & pipelineLayout, bool useTesselation) noexcept
+	GraphicsPipeline::finalize (const std::shared_ptr< const RenderPass > & renderPass, const std::shared_ptr< PipelineLayout > & pipelineLayout, bool useTesselation, bool isDynamicStateEnabled) noexcept
 	{
 		if ( renderPass == nullptr )
 		{
@@ -758,15 +722,13 @@ namespace EmEn::Vulkan
 			return false;
 		}
 
-		const auto dynamicStateExtended = Core::instance()->vulkanInstance().isDynamicStateExtensionEnabled();
-
 		/* NOTE: If the VK_EXT_extended_dynamic_state3 extension is enabled, it can be NULL if the pipeline is created with all of
 		 * VK_DYNAMIC_STATE_DEPTH_CLAMP_ENABLE_EXT, VK_DYNAMIC_STATE_RASTERIZER_DISCARD_ENABLE, VK_DYNAMIC_STATE_POLYGON_MODE_EXT,
 		 * VK_DYNAMIC_STATE_CULL_MODE, VK_DYNAMIC_STATE_FRONT_FACE, VK_DYNAMIC_STATE_DEPTH_BIAS_ENABLE, VK_DYNAMIC_STATE_DEPTH_BIAS,
 		 * and VK_DYNAMIC_STATE_LINE_WIDTH dynamic states set. */
 		if ( m_createInfo.pRasterizationState == nullptr )
 		{
-			if ( !dynamicStateExtended || (
+			if ( !isDynamicStateEnabled || (
 				!this->hasDynamicState(VK_DYNAMIC_STATE_DEPTH_CLAMP_ENABLE_EXT) &&
 				!this->hasDynamicState(VK_DYNAMIC_STATE_RASTERIZER_DISCARD_ENABLE) &&
 				!this->hasDynamicState(VK_DYNAMIC_STATE_POLYGON_MODE_EXT) &&
@@ -789,7 +751,7 @@ namespace EmEn::Vulkan
 		 * in which case VkPipelineMultisampleStateCreateInfo::sampleShadingEnable is assumed to be VK_FALSE. */
 		if ( m_createInfo.pMultisampleState == nullptr )
 		{
-			if ( !dynamicStateExtended || (
+			if ( !isDynamicStateEnabled || (
 				!this->hasDynamicState(VK_DYNAMIC_STATE_RASTERIZATION_SAMPLES_EXT) &&
 				!this->hasDynamicState(VK_DYNAMIC_STATE_SAMPLE_MASK_EXT) &&
 				!this->hasDynamicState(VK_DYNAMIC_STATE_ALPHA_TO_COVERAGE_ENABLE_EXT) &&
@@ -808,7 +770,7 @@ namespace EmEn::Vulkan
 		 * and VK_DYNAMIC_STATE_DEPTH_BOUNDS dynamic states set. */
 		if ( m_createInfo.pDepthStencilState == nullptr )
 		{
-			if ( !dynamicStateExtended || (
+			if ( !isDynamicStateEnabled || (
 				!this->hasDynamicState(VK_DYNAMIC_STATE_DEPTH_TEST_ENABLE) &&
 				!this->hasDynamicState(VK_DYNAMIC_STATE_DEPTH_WRITE_ENABLE) &&
 				!this->hasDynamicState(VK_DYNAMIC_STATE_DEPTH_COMPARE_OP) &&
@@ -830,7 +792,7 @@ namespace EmEn::Vulkan
 		 * dynamic states set. */
 		if ( m_createInfo.pColorBlendState == nullptr )
 		{
-			if ( !dynamicStateExtended || (
+			if ( !isDynamicStateEnabled || (
 				!this->hasDynamicState(VK_DYNAMIC_STATE_LOGIC_OP_ENABLE_EXT) &&
 				!this->hasDynamicState(VK_DYNAMIC_STATE_LOGIC_OP_EXT) &&
 				!this->hasDynamicState(VK_DYNAMIC_STATE_COLOR_BLEND_ENABLE_EXT) &&

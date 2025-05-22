@@ -31,28 +31,12 @@
 
 namespace EmEn::Saphir::Declaration
 {
-	using namespace Keys;
-
-	StageOutput::StageOutput (uint32_t location, Key type, Key name, Key interpolation, int32_t arraySize) noexcept
-		: m_location(location),
-		  m_type(type),
-		  m_name(name),
-		  m_interpolation(interpolation),
-		  m_arraySize(arraySize)
-	{
-
-	}
-
-	bool
-	StageOutput::isValid () const noexcept
-	{
-		return m_type != nullptr && m_name != nullptr;
-	}
+	using namespace EmEn::Saphir::Keys;
 
 	std::string
 	StageOutput::sourceCode () const noexcept
 	{
-		std::stringstream code{};
+		std::stringstream code;
 
 		code << GLSL::Layout << " (" << GLSL::Location << " = " << m_location << ") ";
 
@@ -75,53 +59,5 @@ namespace EmEn::Saphir::Declaration
 		code << ";" "\n";
 
 		return code.str();
-	}
-
-	Key
-	StageOutput::name () const noexcept
-	{
-		return m_name;
-	}
-
-	size_t
-	StageOutput::bytes () const noexcept
-	{
-		return 0;
-	}
-
-	uint32_t
-	StageOutput::location () const noexcept
-	{
-		return m_location;
-	}
-
-	Key
-	StageOutput::type () const noexcept
-	{
-		return m_type;
-	}
-
-	Key
-	StageOutput::interpolation () const noexcept
-	{
-		return m_interpolation;
-	}
-
-	int32_t
-	StageOutput::arraySize () const noexcept
-	{
-		return m_arraySize;
-	}
-
-	bool
-	StageOutput::isArray () const noexcept
-	{
-		return m_arraySize > 0;
-	}
-
-	bool
-	StageOutput::isNonFixedArraySize () const noexcept
-	{
-		return m_arraySize == -1;
 	}
 }

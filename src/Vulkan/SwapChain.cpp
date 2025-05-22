@@ -50,14 +50,14 @@ namespace EmEn::Vulkan
 {
 	using namespace EmEn::Libs;
 	using namespace EmEn::Libs::Math;
-	using namespace Graphics;
+	using namespace EmEn::Graphics;
 
-	SwapChain::SwapChain (const std::shared_ptr< Device > & device, Settings & settings, Window & window) noexcept
-		: AbstractDeviceDependentObject(device),
+	SwapChain::SwapChain (const std::shared_ptr< Device > & device, Renderer & renderer, Settings & settings) noexcept
+		: AbstractDeviceDependentObject{device},
 		Abstract(ClassId, {}, {}, RenderTargetType::View, AVConsole::ConnexionType::Input, false),
-		m_window(&window)
+		m_renderer{renderer}
 	{
-		m_window->surface()->update(device);
+		m_renderer.window().surface()->update(device);
 
 		/* NOTE: Check for multisampling. */
 		{
@@ -75,16 +75,16 @@ namespace EmEn::Vulkan
 	}
 
 	bool
-	SwapChain::createBaseSwapChain (VkSwapchainKHR oldSwapChain) noexcept
+	SwapChain::createBaseSwapChain (const Window & window, VkSwapchainKHR oldSwapChain) noexcept
 	{
-		const auto & capabilities = m_window->surface()->capabilities();
-
+		const auto surface = window.surface();
 		const auto surfaceFormat = this->chooseSurfaceFormat();
+		const auto & capabilities = surface->capabilities();
 
 		m_createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
 		m_createInfo.pNext = nullptr;
 		m_createInfo.flags = 0;
-		m_createInfo.surface = m_window->surface()->handle();
+		m_createInfo.surface = surface->handle();
 		m_createInfo.minImageCount = this->selectImageCount(capabilities);
 		m_createInfo.imageFormat = surfaceFormat.format;
 		m_createInfo.imageColorSpace = surfaceFormat.colorSpace;
@@ -105,7 +105,7 @@ namespace EmEn::Vulkan
 		//}
 		//else
 		{
-			m_createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE; /* Performance ! */
+			m_createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE; /* Performance! */
 			m_createInfo.queueFamilyIndexCount = 0; /* Optional */
 			m_createInfo.pQueueFamilyIndices = nullptr; /* Optional */
 		}
@@ -158,16 +158,18 @@ namespace EmEn::Vulkan
 	bool
 	SwapChain::onCreate (Renderer & renderer) noexcept
 	{
-		if ( !this->hasDevice() || m_window == nullptr || m_window->surface() == nullptr )
+		const auto & window = renderer.window();
+
+		if ( !this->hasDevice() || window.surface() == nullptr )
 		{
-			Tracer::fatal(ClassId, "No device, window or surface to create the swap chain !");
+			Tracer::fatal(ClassId, "No device or window surface to create the swap chain !");
 
 			return false;
 		}
 
 		m_status = Status::UnderConstruction;
 
-		if ( !this->createBaseSwapChain() )
+		if ( !this->createBaseSwapChain(window) )
 		{
 			Tracer::error(ClassId, "Unable to create the base of the swap chain !");
 
@@ -185,7 +187,7 @@ namespace EmEn::Vulkan
 			return false;
 		}
 
-		if ( !this->createFramebuffer(renderer) )
+		if ( !this->createFramebuffer() )
 		{
 			Tracer::error(ClassId, "Unable to complete the framebuffer !");
 
@@ -232,20 +234,20 @@ namespace EmEn::Vulkan
 	}
 
 	bool
-	SwapChain::recreateOnHardware (Renderer & renderer) noexcept
+	SwapChain::recreateOnHardware () noexcept
 	{
 		this->resetFramebuffer();
 
 		m_status = Status::UnderConstruction;
 
-		if ( !this->createBaseSwapChain(m_handle) )
+		if ( !this->createBaseSwapChain(m_renderer.window(), m_handle) )
 		{
 			Tracer::error(ClassId, "Unable to recreate the base of the swap chain !");
 
 			return false;
 		}
 
-		if ( !this->createFramebuffer(renderer) )
+		if ( !this->createFramebuffer() )
 		{
 			Tracer::error(ClassId, "Unable to complete the framebuffer !");
 
@@ -308,7 +310,7 @@ namespace EmEn::Vulkan
 			return 1;
 		}
 
-		/* NOTE: Looks like the triple-buffering is enforced by the system. */
+		/* NOTE: It looks like the system enforces the triple-buffering. */
 		if ( capabilities.minImageCount == 3 )
 		{
 			m_flags[TripleBufferingEnabled] = true;
@@ -325,26 +327,24 @@ namespace EmEn::Vulkan
 	VkExtent2D
 	SwapChain::chooseSwapExtent (const VkSurfaceCapabilitiesKHR & capabilities) const noexcept
 	{
-		if ( capabilities.currentExtent.width <= std::numeric_limits< uint32_t >::max() )
-		{
-			return capabilities.currentExtent;
-		}
+		const auto framebufferSize = m_renderer.window().getFramebufferSize();
 
-		const auto & min = capabilities.minImageExtent;
-		const auto & max = capabilities.maxImageExtent;
-
-		const auto framebufferSize = m_window->getFramebufferSize();
+		TraceDebug{ClassId} <<
+			"Vulkan minimum extent detected : " << capabilities.minImageExtent.width << 'X' << capabilities.minImageExtent.height << "\n"
+			"Vulkan maximum extent detected : " << capabilities.maxImageExtent.width << 'X' << capabilities.maxImageExtent.height << "\n"
+			"Vulkan current extent detected : " << capabilities.currentExtent.width << 'X' << capabilities.currentExtent.height << "\n"
+			"GLFW framebuffer : " << framebufferSize.at(0) << 'X' << framebufferSize.at(1);
 
 		return {
-			std::max(min.width, std::min(max.width, framebufferSize[0])),
-			std::max(min.height, std::min(max.height, framebufferSize[1]))
+			std::clamp(framebufferSize[0], capabilities.minImageExtent.width, capabilities.maxImageExtent.width),
+			std::clamp(framebufferSize[1], capabilities.minImageExtent.height, capabilities.maxImageExtent.height)
 		};
 	}
 
 	VkSurfaceFormatKHR
 	SwapChain::chooseSurfaceFormat () const noexcept
 	{
-		const auto & formats = m_window->surface()->formats();
+		const auto & formats = m_renderer.window().surface()->formats();
 
 		/* NOTE: Check for 24 bits sRGB. */
 		const auto formatIt = std::ranges::find_if(formats, [] (auto item) {
@@ -413,7 +413,7 @@ namespace EmEn::Vulkan
 			return false;
 		}
 
-		/* Create image and image views in order to create the render pass. */
+		/* Create image and image views to create the render pass. */
 		for ( size_t imageIndex = 0; imageIndex < m_imageCount; ++imageIndex )
 		{
 			auto & frame = m_frames[imageIndex];
@@ -482,7 +482,7 @@ namespace EmEn::Vulkan
 
 		if ( !renderPass->isCreated() )
 		{
-			/* Prepare a sub-pass for the render pass. */
+			/* Prepare a subpass for the render pass. */
 			RenderSubPass subPass{VK_PIPELINE_BIND_POINT_GRAPHICS, 0};
 
 			/* Color buffer. */
@@ -537,7 +537,7 @@ namespace EmEn::Vulkan
 	}
 
 	bool
-	SwapChain::createFramebuffer (Renderer & renderer) noexcept
+	SwapChain::createFramebuffer () noexcept
 	{
 		if ( m_imageCount == 0 )
 		{
@@ -554,7 +554,7 @@ namespace EmEn::Vulkan
 		}
 
 		/* Create the render pass base on the first set of images (this is the swap chain, all images are technically the same) */
-		const auto renderPass = this->createRenderPass(renderer);
+		const auto renderPass = this->createRenderPass(m_renderer);
 
 		if ( !this->createFramebufferArray(renderPass) )
 		{
@@ -768,7 +768,7 @@ namespace EmEn::Vulkan
 	}
 
 	bool
-	SwapChain::submitCommandBuffer (const std::shared_ptr< CommandBuffer > & commandBuffer, const uint32_t & imageIndex) noexcept
+	SwapChain::submitCommandBuffer (const std::shared_ptr< CommandBuffer > & commandBuffer, const uint32_t & imageIndex, std::vector< VkSemaphore > & waitSemaphores) noexcept
 	{
 		const std::lock_guard< std::mutex > deviceAccessLockGuard{this->device()->deviceAccessLock()};
 
@@ -795,11 +795,11 @@ namespace EmEn::Vulkan
 
 		const auto * graphicsQueue = this->device()->getQueue(QueueJob::Presentation, QueuePriority::High);
 
-		auto * waitSemaphore = currentFrame.imageAvailableSemaphore->handle();
-		auto * signalSemaphore = currentFrame.renderFinishedSemaphore->handle();
-		auto * fence = currentFrame.inFlightFence->handle();
+		const auto signalSemaphore = currentFrame.renderFinishedSemaphore->handle();
 
-		if ( !graphicsQueue->submit(commandBuffer, waitSemaphore, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, signalSemaphore, fence) )
+		waitSemaphores.emplace_back(currentFrame.imageAvailableSemaphore->handle());
+
+		if ( !graphicsQueue->submit(commandBuffer, waitSemaphores, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, signalSemaphore, currentFrame.inFlightFence->handle()) )
 		{
 			return false;
 		}
@@ -837,7 +837,7 @@ namespace EmEn::Vulkan
 	VkPresentModeKHR
 	SwapChain::choosePresentMode () const noexcept
 	{
-		const auto & presentModes = m_window->surface()->presentModes();
+		const auto & presentModes = m_renderer.window().surface()->presentModes();
 
 		if ( m_flags[ShowInformation] )
 		{
@@ -932,13 +932,13 @@ namespace EmEn::Vulkan
 	}
 
 	void
-	SwapChain::onSourceConnected (AbstractVirtualDevice * /*sourceDevice*/) noexcept
+	SwapChain::onSourceConnected (AVConsole::AVManagers & managers, AbstractVirtualDevice * /*sourceDevice*/) noexcept
 	{
-		m_viewMatrices.create(*Renderer::instance(), this->id());
+		m_viewMatrices.create(managers.graphicsRenderer, this->id());
 	}
 
 	void
-	SwapChain::onSourceDisconnected (AbstractVirtualDevice * /*sourceDevice*/) noexcept
+	SwapChain::onSourceDisconnected (AVConsole::AVManagers & managers, AbstractVirtualDevice * /*sourceDevice*/) noexcept
 	{
 		m_viewMatrices.destroy();
 	}

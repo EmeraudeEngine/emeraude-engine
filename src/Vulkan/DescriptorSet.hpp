@@ -69,7 +69,12 @@ namespace EmEn::Vulkan
 			 * @param descriptorPool The reference to the descriptor pool smart pointer.
 			 * @param descriptorSetLayout The reference to the descriptor layout smart pointer.
 			 */
-			DescriptorSet (const std::shared_ptr< DescriptorPool > & descriptorPool, const std::shared_ptr< DescriptorSetLayout > & descriptorSetLayout) noexcept;
+			DescriptorSet (const std::shared_ptr< DescriptorPool > & descriptorPool, const std::shared_ptr< DescriptorSetLayout > & descriptorSetLayout) noexcept
+				: m_descriptorPool{descriptorPool},
+				m_descriptorSetLayout{descriptorSetLayout}
+			{
+
+			}
 
 			/**
 			 * @brief Copy constructor.
@@ -98,7 +103,10 @@ namespace EmEn::Vulkan
 			/**
 			 * @brief Destructs the descriptor set.
 			 */
-			~DescriptorSet () override;
+			~DescriptorSet () override
+			{
+				this->destroy();
+			}
 
 			/**
 			 * @brief Creates the descriptor set in video memory.

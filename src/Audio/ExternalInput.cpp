@@ -40,46 +40,12 @@ namespace EmEn::Audio
 {
 	using namespace EmEn::Libs;
 
-	const size_t ExternalInput::ClassUID{getClassUID(ClassId)};
-
-	ExternalInput::ExternalInput (PrimaryServices & primaryServices) noexcept
-		: ServiceInterface(ClassId), m_primaryServices(primaryServices)
-	{
-
-	}
-
-	ExternalInput::~ExternalInput ()
-	{
-		if ( m_process.joinable() )
-		{
-			m_process.join();
-		}
-	}
-
-	size_t
-	ExternalInput::classUID () const noexcept
-	{
-		return ClassUID;
-	}
-
-	bool
-	ExternalInput::is (size_t classUID) const noexcept
-	{
-		return classUID == ClassUID;
-	}
-
-	bool
-	ExternalInput::usable () const noexcept
-	{
-		return m_device != nullptr;
-	}
-
 	bool
 	ExternalInput::onInitialize () noexcept
 	{
 		m_flags[ShowInformation] = m_primaryServices.settings().get< bool >(OpenALShowInformationKey, DefaultOpenALShowInformation);
 
-		if ( !Manager::instance()->usable() )
+		if ( Manager::audioDisabled() )
 		{
 			Tracer::warning(ClassId, "Audio external input disabled at startup.");
 
@@ -97,7 +63,7 @@ namespace EmEn::Audio
 
 		if ( frequency == WaveFactory::Frequency::Invalid )
 		{
-			Tracer::warning(ClassId, BlobTrait() << "Invalid recorder frequency in configuration file ! Leaving to default (" << DefaultRecorderFrequency << " Hz).");
+			TraceWarning{ClassId} << "Invalid recorder frequency in configuration file ! Leaving to default (" << DefaultRecorderFrequency << " Hz).";
 		}
 		else
 		{
@@ -134,12 +100,6 @@ namespace EmEn::Audio
 		}
 
 		return true;
-	}
-
-	bool
-	ExternalInput::isRecording () const noexcept
-	{
-		return m_flags[IsRecording];
 	}
 
 	void

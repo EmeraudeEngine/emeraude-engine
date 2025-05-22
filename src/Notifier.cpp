@@ -40,15 +40,6 @@ namespace EmEn
 	using namespace EmEn::Libs::Math;
 	using namespace EmEn::Libs::PixelFactory;
 
-	const size_t Notifier::ClassUID{getClassUID(ClassId)};
-
-	Notifier::Notifier (Overlay::Manager & overlayManager) noexcept
-		: ServiceInterface(ClassId),
-		m_overlayManager(overlayManager)
-	{
-
-	}
-
 	bool
 	Notifier::onInitialize () noexcept
 	{
@@ -70,7 +61,7 @@ namespace EmEn
 			return false;
 		}
 
-		m_surface = m_screen->createSurface< Overlay::Surface >("Notifier", Math::Rectangle{0.0F, 0.9F, 1.0F, 0.1F}, 0.0F);
+		m_surface = m_screen->createSurface< Overlay::Surface >("Notifier", Space2D::AARectangle{0.0F, 0.9F, 1.0F, 0.1F}, 0.0F);
 
 		if ( m_surface == nullptr )
 		{
@@ -82,17 +73,50 @@ namespace EmEn
 		m_surface->frontPixmap().fill(Transparent);
 
 		{
-			//m_font = Resources::Manager::instance()->fonts().getResource("old", false);
-			m_font = Resources::Manager::instance()->fonts().getDefaultResource();
+			//m_font = Resources::Manager::instance()->container< Graphics::FontResource >()->getResource("old", false);
+			m_font = Resources::Manager::instance()->container< Graphics::FontResource >()->getDefaultResource();
 
 			m_processor.setPixmap(m_surface->frontPixmap());
 			m_processor.setFont(m_font->font(), 16U);
 			m_processor.setFontColor(White);
 		}
 
-		m_timerID = this->createTimer([&] (Time::TimerID /*timerID*/) {
-			this->updateNotifications();
+		/* NOTE: Create a timer to update the notification lifetime. */
+		m_timerID = this->createTimer([&] (Time::TimerID /*timerID*/)
+		{
+			if ( m_notifications.empty() )
+			{
+				return false;
+			}
 
+			auto notificationIt = m_notifications.begin();
+
+			while ( notificationIt != m_notifications.end() )
+			{
+				if ( notificationIt->second <= 0 )
+				{
+					notificationIt = m_notifications.erase(notificationIt);
+				}
+				else
+				{
+					notificationIt->second -= 500;
+
+					++notificationIt;
+				}
+			}
+
+			if ( m_notifications.empty() )
+			{
+				m_surface->hide();
+			}
+			else
+			{
+				this->renderNotifications();
+
+				m_surface->show();
+			}
+
+			/* Do not stop the timer. */
 			return false;
 		}, 500, false, true);
 
@@ -115,49 +139,38 @@ namespace EmEn
 	}
 
 	void
-	Notifier::updateNotifications () noexcept
+	Notifier::renderNotifications () noexcept
 	{
-		auto notificationIt = m_notifications.begin();
+		const std::lock_guard< std::mutex > lock{m_surface->frontFramebufferMutex()};
 
-		while ( notificationIt != m_notifications.end() )
+		if ( m_surface->frontPixmap().fill(m_clearColor) )
 		{
-			if ( notificationIt->second <= 0 )
+			if ( !m_notifications.empty() )
 			{
-				notificationIt = m_notifications.erase(notificationIt);
-			}
-			else
-			{
-				notificationIt->second -= 500;
+				std::stringstream buffer;
 
-				++notificationIt;
+				m_notificationAccess.lock();
+
+				for ( const auto & [message, delay] : std::ranges::reverse_view(m_notifications))
+				{
+					buffer << message << '\n';
+				}
+
+				m_notificationAccess.unlock();
+
+				m_processor.write(buffer.str());
 			}
+
+			m_surface->setVideoMemoryOutdated();
 		}
-
-		this->displayNotifications();
 	}
 
 	void
-	Notifier::displayNotifications () noexcept
+	Notifier::clearDisplay () const noexcept
 	{
-		const std::lock_guard< std::mutex > lockB{m_surface->frontFramebufferMutex()};
+		const std::lock_guard< std::mutex > lock{m_surface->frontFramebufferMutex()};
 
-		if ( !m_surface->frontPixmap().fill(Transparent) || m_notifications.empty() )
-		{
-			return;
-		}
-
-		std::stringstream buffer;
-
-		{
-			const std::lock_guard< std::mutex > lockA{m_notificationAccess};
-
-			for ( const auto & [message, delay]: std::ranges::reverse_view(m_notifications) )
-			{
-				buffer << message << '\n';
-			}
-		}
-
-		if ( m_processor.write(buffer.str()) )
+		if ( m_surface->frontPixmap().fill(m_clearColor) )
 		{
 			m_surface->setVideoMemoryOutdated();
 		}
@@ -173,11 +186,8 @@ namespace EmEn
 			m_notifications.clear();
 		}
 
-		/* NOTE: Clean up the screen. */
-		if ( m_surface->frontPixmap().fill(Transparent) )
-		{
-			m_surface->setVideoMemoryOutdated();
-		}
+		/* NOTE: Wipe remaining notifications visible on the pixmap. */
+		this->clearDisplay();
 	}
 
 	bool
@@ -187,7 +197,7 @@ namespace EmEn
 		{
 			if ( notificationCode == Overlay::Manager::OverlayResized )
 			{
-				this->displayNotifications();
+				this->renderNotifications();
 			}
 
 			return true;

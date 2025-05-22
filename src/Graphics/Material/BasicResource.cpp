@@ -26,28 +26,16 @@
 
 #include "BasicResource.hpp"
 
-/* STL inclusions. */
-#include <cstddef>
-#include <cstdint>
-#include <memory>
-#include <string>
-
 /* Local inclusions. */
-#include "Libs/Math/Base.hpp"
-#include "Libs/PixelFactory/Color.hpp"
 #include "Libs/FastJSON.hpp"
-#include "Saphir/Declaration/Function.hpp"
-#include "Saphir/Declaration/Types.hpp"
+#include "Saphir/LightGenerator.hpp"
 #include "Saphir/Generator/Abstract.hpp"
 #include "Saphir/Code.hpp"
 #include "Saphir/Keys.hpp"
-#include "Saphir/LightGenerator.hpp"
+#include "Vulkan/LayoutManager.hpp"
 #include "Graphics/Renderer.hpp"
-#include "Graphics/Types.hpp"
-#include "Vulkan/DescriptorSet.hpp"
-#include "Helpers.hpp"
 #include "Resources/Manager.hpp"
-#include "Component/Texture.hpp"
+#include "Helpers.hpp"
 #include "Tracer.hpp"
 
 /* Defining the resource manager class id. */
@@ -61,23 +49,12 @@ const size_t EmEn::Resources::Container< EmEn::Graphics::Material::BasicResource
 namespace EmEn::Graphics::Material
 {
 	using namespace EmEn::Libs;
-	using namespace Math;
-	using namespace Saphir;
-	using namespace Keys;
-	using namespace Vulkan;
+	using namespace EmEn::Libs::Math;
+	using namespace EmEn::Saphir;
+	using namespace EmEn::Saphir::Keys;
+	using namespace EmEn::Vulkan;
 
 	const size_t BasicResource::ClassUID{getClassUID(ClassId)};
-
-	BasicResource::BasicResource (const std::string & name, int resourceFlagBits) noexcept
-		: Interface(name, resourceFlagBits)
-	{
-
-	}
-
-	BasicResource::~BasicResource ()
-	{
-		this->destroy();
-	}
 
 	bool
 	BasicResource::load () noexcept
@@ -136,7 +113,7 @@ namespace EmEn::Graphics::Material
 			{
 				m_textureComponent = std::make_unique< Component::Texture >(Uniform::PrimarySampler, SurfaceColor, componentData, fillingType, *Resources::Manager::instance());
 
-				auto * textureResource = m_textureComponent->textureResource().get();
+				const auto textureResource = m_textureComponent->textureResource();
 
 				if ( !this->addDependency(textureResource) )
 				{
@@ -210,7 +187,7 @@ namespace EmEn::Graphics::Material
 	}
 
 	bool
-	BasicResource::create (Renderer & renderer) noexcept
+	BasicResource::createOnHardware (Renderer & renderer) noexcept
 	{
 		if ( this->isCreated() )
 		{
@@ -404,7 +381,7 @@ namespace EmEn::Graphics::Material
 	}
 
 	void
-	BasicResource::destroy () noexcept
+	BasicResource::destroyFromHardware () noexcept
 	{
 		if ( m_sharedUniformBuffer != nullptr )
 		{
@@ -412,7 +389,7 @@ namespace EmEn::Graphics::Material
 		}
 
 		/* Reset to defaults. */
-		this->resetFlagBits();
+		this->resetFlags();
 
 		/* Reset member variables. */
 		m_physicalSurfaceProperties.reset();
@@ -470,7 +447,7 @@ namespace EmEn::Graphics::Material
 		return textureResource->duration();
 	}
 
-	size_t
+	uint32_t
 	BasicResource::frameIndexAt (uint32_t sceneTime) const noexcept
 	{
 		if ( !this->isFlagEnabled(Animated) || m_textureComponent == nullptr )
@@ -508,8 +485,6 @@ namespace EmEn::Graphics::Material
 	{
 		if ( !this->isFlagEnabled(BlendingEnabled) )
 		{
-			TraceWarning{ClassId} << "The blending is not enabled with the material resource '" << this->name() << "' !";
-
 			return BlendingMode::None;
 		}
 
@@ -583,7 +558,7 @@ namespace EmEn::Graphics::Material
 			return false;
 		}
 
-		const auto * geometry = generator.geometry();
+		const auto * geometry = generator.getGeometryInterface();
 
 		if ( !generator.highQualityLightEnabled() && !generator.declareMaterialUniformBlock(*this, vertexShader, 0) )
 		{
@@ -699,7 +674,7 @@ namespace EmEn::Graphics::Material
 
 		if ( m_textureComponent != nullptr )
 		{
-			const uint32_t materialSet = generator.program()->setIndex(SetType::PerModelLayer);
+			const uint32_t materialSet = generator.shaderProgram()->setIndex(SetType::PerModelLayer);
 
 			return this->generateFragmentShaderCodeWithTexture(fragmentShader, materialSet);
 		}
@@ -756,7 +731,7 @@ namespace EmEn::Graphics::Material
 			return false;
 		}
 
-		if ( !this->addDependency(texture.get()) )
+		if ( !this->addDependency(texture) )
 		{
 			TraceError{ClassId} << "Unable to link the texture '" << texture->name() << "' dependency to material '" << this->name() << "' !";
 
@@ -842,17 +817,5 @@ namespace EmEn::Graphics::Material
 		m_flags[EnableAutoIllumination] = true;
 
 		return this->updateVideoMemory();
-	}
-
-	std::shared_ptr< BasicResource >
-	BasicResource::get (const std::string & resourceName, bool directLoad) noexcept
-	{
-		return Resources::Manager::instance()->basicMaterials().getResource(resourceName, !directLoad);
-	}
-
-	std::shared_ptr< BasicResource >
-	BasicResource::getDefault () noexcept
-	{
-		return Resources::Manager::instance()->basicMaterials().getDefaultResource();
 	}
 }

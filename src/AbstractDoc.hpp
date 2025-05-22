@@ -86,7 +86,11 @@ namespace EmEn
 			 * @brief Constructs a base documentation.
 			 * @param description A reference to a string [std::move].
 			 */
-			explicit AbstractDoc (std::string description) noexcept;
+			explicit AbstractDoc (std::string description) noexcept
+				: m_description{std::move(description)}
+			{
+
+			}
 
 		private:
 

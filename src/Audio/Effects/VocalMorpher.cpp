@@ -28,7 +28,7 @@
 
 /* Local inclusions. */
 #include "Tracer.hpp"
-#include <Audio/OpenAL.EFX.hpp>
+#include "Audio/OpenAL.EFX.hpp"
 #include "Audio/Utility.hpp"
 
 namespace EmEn::Audio::Effects
@@ -36,22 +36,27 @@ namespace EmEn::Audio::Effects
 	using namespace EmEn::Libs;
 
 	VocalMorpher::VocalMorpher () noexcept
-		: Abstract()
 	{
 		if ( this->identifier() == 0 )
+		{
 			return;
+		}
 
 		EFX::alEffecti(this->identifier(), AL_EFFECT_TYPE, AL_EFFECT_VOCAL_MORPHER);
 
 		if ( alGetErrors("alEffecti()", __FILE__, __LINE__) )
+		{
 			Tracer::error(ClassId, "Unable to generate OpenAL Vocal Morpher effect !");
+		}
 	}
 
 	void
 	VocalMorpher::resetProperties () noexcept
 	{
 		if ( !EFX::isAvailable() )
+		{
 			return;
+		}
 
 		EFX::alEffecti(this->identifier(), AL_VOCAL_MORPHER_PHONEMEA, AL_VOCAL_MORPHER_DEFAULT_PHONEMEA);
 		EFX::alEffecti(this->identifier(), AL_VOCAL_MORPHER_PHONEMEA_COARSE_TUNING, AL_VOCAL_MORPHER_DEFAULT_PHONEMEA_COARSE_TUNING);
@@ -64,7 +69,9 @@ namespace EmEn::Audio::Effects
 	VocalMorpher::setPhonemeA (Phoneme value) noexcept
 	{
 		if ( !EFX::isAvailable() )
+		{
 			return;
+		}
 
 		EFX::alEffecti(this->identifier(), AL_VOCAL_MORPHER_PHONEMEA, static_cast< ALint >(value));
 	}
@@ -73,11 +80,13 @@ namespace EmEn::Audio::Effects
 	VocalMorpher::setPhonemeACoarseTuning (int value) noexcept
 	{
 		if ( !EFX::isAvailable() )
+		{
 			return;
+		}
 
 		if ( value < AL_VOCAL_MORPHER_MIN_PHONEMEA_COARSE_TUNING || value > AL_VOCAL_MORPHER_MAX_PHONEMEA_COARSE_TUNING )
 		{
-			Tracer::warning(ClassId, BlobTrait() << "Phoneme A coarse tuning must be between " << AL_VOCAL_MORPHER_MIN_PHONEMEA_COARSE_TUNING << " and " << AL_VOCAL_MORPHER_MAX_PHONEMEA_COARSE_TUNING << ".");
+			TraceWarning{ClassId} << "Phoneme A coarse tuning must be between " << AL_VOCAL_MORPHER_MIN_PHONEMEA_COARSE_TUNING << " and " << AL_VOCAL_MORPHER_MAX_PHONEMEA_COARSE_TUNING << '.';
 
 			return;
 		}
@@ -89,7 +98,9 @@ namespace EmEn::Audio::Effects
 	VocalMorpher::setPhonemeB (Phoneme value) noexcept
 	{
 		if ( !EFX::isAvailable() )
+		{
 			return;
+		}
 
 		EFX::alEffecti(this->identifier(), AL_VOCAL_MORPHER_PHONEMEB, static_cast< ALint >(value));
 	}
@@ -98,11 +109,13 @@ namespace EmEn::Audio::Effects
 	VocalMorpher::setPhonemeBCoarseTuning (int value) noexcept
 	{
 		if ( !EFX::isAvailable() )
+		{
 			return;
+		}
 
 		if ( value < AL_VOCAL_MORPHER_MIN_PHONEMEB_COARSE_TUNING || value > AL_VOCAL_MORPHER_MAX_PHONEMEB_COARSE_TUNING )
 		{
-			Tracer::warning(ClassId, BlobTrait() << "Phoneme B coarse tuning must be between " << AL_VOCAL_MORPHER_MIN_PHONEMEB_COARSE_TUNING << " and " << AL_VOCAL_MORPHER_MAX_PHONEMEB_COARSE_TUNING << ".");
+			TraceWarning{ClassId} << "Phoneme B coarse tuning must be between " << AL_VOCAL_MORPHER_MIN_PHONEMEB_COARSE_TUNING << " and " << AL_VOCAL_MORPHER_MAX_PHONEMEB_COARSE_TUNING << '.';
 
 			return;
 		}
@@ -114,9 +127,11 @@ namespace EmEn::Audio::Effects
 	VocalMorpher::setWaveForm (WaveForm value) noexcept
 	{
 		if ( !EFX::isAvailable() )
+		{
 			return;
+		}
 
-		ALint def;
+		ALint def = 0;
 
 		switch ( value )
 		{
@@ -140,11 +155,13 @@ namespace EmEn::Audio::Effects
 	VocalMorpher::setRate (float value) noexcept
 	{
 		if ( !EFX::isAvailable() )
+		{
 			return;
+		}
 
 		if ( value < AL_VOCAL_MORPHER_MIN_RATE || value > AL_VOCAL_MORPHER_MAX_RATE )
 		{
-			Tracer::warning(ClassId, BlobTrait() << "Rate must be between " << AL_VOCAL_MORPHER_MIN_RATE << " and " << AL_VOCAL_MORPHER_MAX_RATE << ".");
+			TraceWarning{ClassId} << "Rate must be between " << AL_VOCAL_MORPHER_MIN_RATE << " and " << AL_VOCAL_MORPHER_MAX_RATE << '.';
 
 			return;
 		}
@@ -155,9 +172,12 @@ namespace EmEn::Audio::Effects
 	VocalMorpher::Phoneme
 	VocalMorpher::phonemeA () const noexcept
 	{
-		ALint value;
+		ALint value = 0;
 
-		EFX::alGetEffecti(this->identifier(), AL_VOCAL_MORPHER_PHONEMEA, &value);
+		if ( EFX::isAvailable() )
+		{
+			EFX::alGetEffecti(this->identifier(), AL_VOCAL_MORPHER_PHONEMEA, &value);
+		}
 
 		return static_cast< Phoneme >(value);
 	}
@@ -165,9 +185,12 @@ namespace EmEn::Audio::Effects
 	int
 	VocalMorpher::phonemeACoarseTuning () const noexcept
 	{
-		ALint value;
+		ALint value = 0;
 
-		EFX::alGetEffecti(this->identifier(), AL_VOCAL_MORPHER_PHONEMEA_COARSE_TUNING, &value);
+		if ( EFX::isAvailable() )
+		{
+			EFX::alGetEffecti(this->identifier(), AL_VOCAL_MORPHER_PHONEMEA_COARSE_TUNING, &value);
+		}
 
 		return value;
 	}
@@ -175,9 +198,12 @@ namespace EmEn::Audio::Effects
 	VocalMorpher::Phoneme
 	VocalMorpher::phonemeB () const noexcept
 	{
-		ALint value;
+		ALint value = 0;
 
-		EFX::alGetEffecti(this->identifier(), AL_VOCAL_MORPHER_PHONEMEB, &value);
+		if ( EFX::isAvailable() )
+		{
+			EFX::alGetEffecti(this->identifier(), AL_VOCAL_MORPHER_PHONEMEB, &value);
+		}
 
 		return static_cast< Phoneme >(value);
 	}
@@ -185,9 +211,12 @@ namespace EmEn::Audio::Effects
 	int
 	VocalMorpher::phonemeBCoarseTuning () const noexcept
 	{
-		ALint value;
+		ALint value = 0;
 
-		EFX::alGetEffecti(this->identifier(), AL_VOCAL_MORPHER_PHONEMEB_COARSE_TUNING, &value);
+		if ( EFX::isAvailable() )
+		{
+			EFX::alGetEffecti(this->identifier(), AL_VOCAL_MORPHER_PHONEMEB_COARSE_TUNING, &value);
+		}
 
 		return value;
 	}
@@ -196,23 +225,23 @@ namespace EmEn::Audio::Effects
 	VocalMorpher::waveForm () const noexcept
 	{
 		if ( !EFX::isAvailable() )
+		{
 			return WaveForm::Sinusoid;
+		}
 
-		ALint value;
+		ALint value = 0;
 
 		EFX::alGetEffecti(this->identifier(), AL_VOCAL_MORPHER_WAVEFORM, &value);
 
 		switch ( value )
 		{
-			case AL_VOCAL_MORPHER_WAVEFORM_SINUSOID :
-				return WaveForm::Sinusoid;
-
 			case AL_VOCAL_MORPHER_WAVEFORM_TRIANGLE :
 				return WaveForm::Triangle;
 
 			case AL_VOCAL_MORPHER_WAVEFORM_SAWTOOTH :
 				return WaveForm::SawTooth;
 
+			case AL_VOCAL_MORPHER_WAVEFORM_SINUSOID :
 			default:
 				return WaveForm::Sinusoid;
 		}
@@ -221,12 +250,12 @@ namespace EmEn::Audio::Effects
 	float
 	VocalMorpher::rate () const noexcept
 	{
-		if ( !EFX::isAvailable() )
-			return 0.0F;
+		ALfloat value = 0.0F;
 
-		ALfloat value;
-
-		EFX::alGetEffectf(this->identifier(), AL_VOCAL_MORPHER_RATE, &value);
+		if ( EFX::isAvailable() )
+		{
+			EFX::alGetEffectf(this->identifier(), AL_VOCAL_MORPHER_RATE, &value);
+		}
 
 		return value;
 	}

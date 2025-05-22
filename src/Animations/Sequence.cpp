@@ -43,12 +43,6 @@ namespace EmEn::Animations
 	using namespace EmEn::Libs;
 	using namespace EmEn::Libs::Math;
 
-	Sequence::Sequence (uint32_t duration, int32_t repeat) noexcept
-		: m_duration(duration), m_repeat(repeat)
-	{
-
-	}
-
 	Variant
 	Sequence::getLinearInterpolation (const KeyFrames::const_iterator & itStart, const KeyFrames::const_iterator & itEnd, float factor) noexcept
 	{
@@ -540,7 +534,7 @@ namespace EmEn::Animations
 	{
 		m_elapsedTime += EngineUpdateCycleDurationMS< uint32_t >;
 
-		/* Checks for the end of cycle. */
+		/* Checks for the end of the cycle. */
 		if ( m_elapsedTime < m_duration )
 		{
 			return;
@@ -548,48 +542,25 @@ namespace EmEn::Animations
 
 		if ( m_repeat < 0 )
 		{
-			/* NOTE : A loop animation just restart the time. */
+			/* NOTE: A loop animation just restarts the time. */
 			m_elapsedTime = 0;
 		}
 		else
 		{
 			if ( m_repeat > 0 )
 			{
-				/* NOTE : Restart the time for a new repetition. */
+				/* NOTE: Restart the time for a new repetition. */
 				m_repeat--;
 
 				m_elapsedTime = 0;
 			}
 			else
 			{
-				/* NOTE : The sequence has reached the end. */
+				/* NOTE: The sequence has reached the end. */
 				m_flags[IsPlaying] = false;
 
 				m_elapsedTime = m_duration;
 			}
 		}
-	}
-
-	std::ostream &
-	operator<< (std::ostream & out, const Sequence & obj)
-	{
-		for ( auto it = obj.m_keyFrames.cbegin(); it != obj.m_keyFrames.cend(); ++it )
-		{
-			out <<
-				"Frame #" << std::distance(obj.m_keyFrames.cbegin(), it) << " (" << it->first << ")\n"
-				"Value : " << it->second.value() << '\n';
-		}
-
-		return out;
-	}
-
-	std::string
-	to_string (const Sequence & obj) noexcept
-	{
-		std::stringstream output;
-
-		output << obj;
-
-		return output.str();
 	}
 }

@@ -32,12 +32,9 @@
 #include <sstream>
 #include <string>
 
-/* Local inclusions for inheritances. */
-#include "Shape3DInterface.hpp"
-
 /* Local inclusions for usages. */
+#include "Space3D/AACuboid.hpp"
 #include "CartesianFrame.hpp"
-#include "Cuboid.hpp"
 #include "Range.hpp"
 
 namespace EmEn::Libs::Math
@@ -45,11 +42,10 @@ namespace EmEn::Libs::Math
 	/**
 	 * @brief Defines a cuboid volume oriented by coordinates.
 	 * @tparam data_t The type used for geometric distance and dimensions. Default float.
-	 * @extends EmEn::Libs::Math::Shape3DInterface This is a 3D shape.
 	 */
 	template< typename data_t = float >
 	requires (std::is_arithmetic_v< data_t >)
-	class OrientedCuboid final : public Shape3DInterface< data_t >
+	class OrientedCuboid final
 	{
 		public:
 
@@ -66,17 +62,9 @@ namespace EmEn::Libs::Math
 			 * @param cuboid A reference to a cubic volume.
 			 * @param coordinates A reference to a coordinates.
 			 */
-			OrientedCuboid (const Cuboid< data_t > & cuboid, const CartesianFrame< data_t > & coordinates) noexcept
+			OrientedCuboid (const Space3D::AACuboid< data_t > & cuboid, const CartesianFrame< data_t > & coordinates) noexcept
 			{
 				this->set(cuboid, coordinates);
-			}
-
-			/** @copydoc EmEn::Libs::Math::Shape3DInterface::getVolume() */
-			[[nodiscard]]
-			data_t
-			getVolume () const noexcept override
-			{
-				return this->width() * this->height() * this->depth();
 			}
 
 			/**
@@ -86,7 +74,7 @@ namespace EmEn::Libs::Math
 			 * @return bool
 			 */
 			bool
-			set (const Cuboid< data_t > & cuboid, const CartesianFrame< data_t > & coordinates) noexcept
+			set (const Space3D::AACuboid< data_t > & cuboid, const CartesianFrame< data_t > & coordinates) noexcept
 			{
 				if ( !cuboid.isValid() )
 				{
@@ -150,7 +138,7 @@ namespace EmEn::Libs::Math
 			 * @return void
 			 */
 			void
-			merge (Cuboid< data_t > & cuboid) noexcept
+			merge (Space3D::AACuboid< data_t > & cuboid) noexcept
 			{
 				for ( const auto & vertex : m_vertices )
 				{
@@ -159,7 +147,7 @@ namespace EmEn::Libs::Math
 			}
 
 			/**
-			 * @brief Minimum Translation Vector (MTV) : direction.scale(return).
+			 * @brief Minimum Translation Vector (MTV): direction.scale(return).
 			 * @note http://www.dyn4j.org/2010/01/sat/
 			 * @param cuboidA A reference to an orientedCuboid.
 			 * @param cuboidB A reference to another orientedCuboid.
@@ -183,14 +171,14 @@ namespace EmEn::Libs::Math
 				/* Loop over the axes from box A. */
 				for ( const auto & axis : cuboidA.m_normals )
 				{
-					/* Project both shapes onto the axis. */
+					/* Projects both shapes onto the axis. */
 					const auto projectionA = cuboidA.project(axis);
 					const auto projectionB = cuboidB.project(axis);
 
 					/* Gets the possible overlap. */
 					const auto overlap = projectionA.getOverlap(projectionB);
 
-					/* Do the projections overlap ?
+					/* Do the projections overlap?
 					 * If not, then we can guarantee that the shapes do not overlap. */
 					if ( overlap <= 0 )
 					{
@@ -208,14 +196,14 @@ namespace EmEn::Libs::Math
 				/* Loop over the axes from box B. */
 				for ( const auto & axis : cuboidB.m_normals )
 				{
-					/* Project both shapes onto the axis. */
+					/* Projects both shapes onto the axis. */
 					const auto projectionA = cuboidA.project(axis);
 					const auto projectionB = cuboidB.project(axis);
 
 					/* Gets the possible overlap. */
 					const auto overlap = projectionA.getOverlap(projectionB);
 
-					/* Do the projections overlap ?
+					/* Do the projections overlap?
 					 * If not, then we can guarantee that the shapes do not overlap. */
 					if ( overlap <= 0 )
 					{
@@ -230,20 +218,20 @@ namespace EmEn::Libs::Math
 					}
 				}
 
-				/* If we get here then we know that every axis had overlap on it,
+				/* If we get here, then we know that every axis had overlap on it,
 				 * so we can guarantee an intersection. */
 				return distance;
 			}
 
 			/**
 			 * @brief Constructs an axis aligned box from this oriented cuboid.
-			 * @return Cuboid< data_t >
+			 * @return Space3D::AACuboid< data_t >
 			 */
 			[[nodiscard]]
-			Cuboid< data_t >
+			Space3D::AACuboid< data_t >
 			getAxisAlignedBox () const noexcept
 			{
-				Cuboid< data_t > box{};
+				Space3D::AACuboid< data_t > box;
 
 				for ( const auto & point : m_vertices )
 				{

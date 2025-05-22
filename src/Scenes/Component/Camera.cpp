@@ -33,52 +33,9 @@ namespace EmEn::Scenes::Component
 {
 	using namespace EmEn::Libs;
 	using namespace EmEn::Libs::Math;
-	using namespace Animations;
-	using namespace Saphir;
-	using namespace Graphics;
-
-	Camera::Camera (const std::string & name, const AbstractEntity & parentEntity, bool perspective) noexcept
-		: Abstract(name, parentEntity),
-		AbstractVirtualDevice(name, AVConsole::DeviceType::Video, AVConsole::ConnexionType::Output)
-	{
-		this->setFlag(PerspectiveProjection, perspective);
-	}
-
-	const char *
-	Camera::getComponentType () const noexcept
-	{
-		return ClassId;
-	}
-
-	const Cuboid< float > &
-	Camera::boundingBox () const noexcept
-	{
-		return NullBoundingBox;
-	}
-
-	const Sphere< float > &
-	Camera::boundingSphere () const noexcept
-	{
-		return NullBoundingSphere;
-	}
-
-	AVConsole::VideoType
-	Camera::videoType () const noexcept
-	{
-		return AVConsole::VideoType::Camera;
-	}
-
-	bool
-	Camera::isPerspectiveProjection () const noexcept
-	{
-		return this->isFlagEnabled(PerspectiveProjection);
-	}
-
-	bool
-	Camera::isOrthographicProjection () const noexcept
-	{
-		return !this->isFlagEnabled(PerspectiveProjection);
-	}
+	using namespace EmEn::Animations;
+	using namespace EmEn::Saphir;
+	using namespace EmEn::Graphics;
 
 	void
 	Camera::setPerspectiveProjection (float fov, float maxViewableDistance) noexcept
@@ -105,12 +62,6 @@ namespace EmEn::Scenes::Component
 		this->updateProperties(false, m_distance, 0.0F);
 	}
 
-	float
-	Camera::fieldOfView () const noexcept
-	{
-		return m_fov;
-	}
-
 	void
 	Camera::setFieldOfView (float degrees) noexcept
 	{
@@ -120,12 +71,6 @@ namespace EmEn::Scenes::Component
 		{
 			this->updateProperties(true, m_distance, m_fov);
 		}
-	}
-
-	float
-	Camera::distance () const noexcept
-	{
-		return m_distance;
 	}
 
 	void
@@ -141,18 +86,6 @@ namespace EmEn::Scenes::Component
 		{
 			this->updateProperties(false, m_distance, 0.0F);
 		}
-	}
-
-	const FramebufferEffectsList &
-	Camera::lensEffects () const noexcept
-	{
-		return m_lensEffects;
-	}
-
-	bool
-	Camera::isLensEffectPresent (const std::shared_ptr< FramebufferEffectInterface > & effect) const noexcept
-	{
-		return m_lensEffects.contains(effect);
 	}
 
 	void
@@ -174,7 +107,7 @@ namespace EmEn::Scenes::Component
 	{
 		const auto lensIt = m_lensEffects.find(effect);
 
-		if (lensIt == m_lensEffects.cend() )
+		if ( lensIt == m_lensEffects.cend() )
 		{
 			return;
 		}
@@ -195,24 +128,6 @@ namespace EmEn::Scenes::Component
 		m_lensEffects.clear();
 
 		this->notify(LensEffectsChanged);
-	}
-
-	void
-	Camera::move (const CartesianFrame< float > & worldCoordinates) noexcept
-	{
-		this->updateDeviceFromCoordinates(worldCoordinates, this->getWorldVelocity());
-	}
-
-	void
-	Camera::processLogics (const Scene & /*scene*/) noexcept
-	{
-		this->updateDeviceFromCoordinates(this->getWorldCoordinates(), this->getWorldVelocity());
-	}
-
-	bool
-	Camera::shouldRemove () const noexcept
-	{
-		return false;
 	}
 
 	void
@@ -244,7 +159,7 @@ namespace EmEn::Scenes::Component
 	}
 
 	void
-	Camera::onTargetConnected (AbstractVirtualDevice * targetDevice) noexcept
+	Camera::onTargetConnected (AVConsole::AVManagers & managers, AbstractVirtualDevice * targetDevice) noexcept
 	{
 		/* Initialize the target device with coordinates and camera properties. */
 		targetDevice->updateDeviceFromCoordinates(this->getWorldCoordinates(), this->getWorldVelocity());
@@ -260,7 +175,7 @@ namespace EmEn::Scenes::Component
 	}
 
 	bool
-	Camera::playAnimation (uint8_t animationID, const Variant & value, size_t cycle) noexcept
+	Camera::playAnimation (uint8_t animationID, const Variant & value, size_t /*cycle*/) noexcept
 	{
 		switch ( animationID )
 		{
@@ -275,30 +190,5 @@ namespace EmEn::Scenes::Component
 			default:
 				return false;
 		}
-	}
-
-	std::ostream &
-	operator<< (std::ostream & out, const Camera & obj)
-	{
-		const auto coordinates = obj.getWorldCoordinates();
-		const auto velocity = obj.getWorldVelocity();
-
-		return out <<
-			"Video Listener information" "\n"
-			"Position: " << coordinates.position() << "\n"
-			"Forward: " << coordinates.forwardVector() << "\n"
-			"Velocity: " << velocity << "\n"
-			"Field of view: " << obj.fieldOfView() << "\n"
-			"Size of view: " << obj.distance() << "\n";
-	}
-
-	std::string
-	to_string (const Camera & obj) noexcept
-	{
-		std::stringstream output;
-
-		output << obj;
-
-		return output.str();
 	}
 }

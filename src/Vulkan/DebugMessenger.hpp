@@ -84,7 +84,7 @@ namespace EmEn::Vulkan
 			~DebugMessenger () override;
 
 			/**
-			 * @brief Returns a create info for debugging.
+			 * @brief Returns a createInfo for debugging.
 			 * @return VkDebugUtilsMessengerEXT
 			 */
 			[[nodiscard]]
@@ -95,7 +95,7 @@ namespace EmEn::Vulkan
 			}
 
 			/**
-			 * @brief Returns a create info for debugging.
+			 * @brief Returns a createInfo for debugging.
 			 * @return const VkDebugUtilsMessengerCreateInfoEXT &
 			 */
 			[[nodiscard]]

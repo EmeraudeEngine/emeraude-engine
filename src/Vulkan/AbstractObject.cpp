@@ -26,74 +26,7 @@
 
 #include "AbstractObject.hpp"
 
-/* Emeraude-Engine configuration. */
-#include "emeraude_config.hpp"
-
-/* STL inclusions. */
-#ifdef VK_TRACKING_ENABLED
-#include <iostream>
-#endif
-
-/* Local inclusions. */
-#include "Tracer.hpp"
-
 namespace EmEn::Vulkan
 {
-#ifdef VK_TRACKING_ENABLED
-
-	std::map< void *, std::string > AbstractObject::s_tracking{};
-
-	AbstractObject::AbstractObject () noexcept
-		: m_identifier()
-	{
-		s_tracking[this] = "";
-
-		std::cout << "[DEBUG:VK_TRACKING] A Vulkan object (@" << this << ") constructed !" "\n";
-	}
-
-	AbstractObject::~AbstractObject ()
-	{
-		const auto * identifier = m_identifier.empty() ? "***UNIDENTIFIED***" : m_identifier.data();
-
-		if ( !m_flags[Created] )
-		{
-			TraceError{"VulkanObject"} << "A Vulkan object ('" << identifier << "' " << this << ") was not correctly constructed !";
-		}
-
-		if ( !m_flags[Destroyed] )
-		{
-			TraceError{"VulkanObject"} << "A Vulkan object ('" << identifier << "' " << this << ") is not correctly destroyed !";
-		}
-
-		std::cout << "[DEBUG:VK_TRACKING] A Vulkan object ('" << identifier << "' @" << this << ") destructed !" "\n";
-
-		s_tracking.erase(this);
-	}
-
-	void
-	AbstractObject::setIdentifier (const std::string & identifier) noexcept
-	{
-		m_identifier = identifier;
-
-		s_tracking[this] = m_identifier;
-
-		std::cout << "[DEBUG:VK_TRACKING] A Vulkan object ('" << m_identifier << "', @" << this << ") is marked !" "\n";
-	}
-
-#else
-
-	AbstractObject::~AbstractObject ()
-	{
-		if ( !m_flags[Created] )
-		{
-			TraceError{"VulkanObject"} << "A Vulkan object (" << m_identifier << ") was not correctly constructed !";
-		}
-
-		if ( !m_flags[Destroyed] )
-		{
-			TraceError{"VulkanObject"} << "A Vulkan object (" << m_identifier << ") is not correctly destroyed !";
-		}
-	}
-
-#endif
+	std::map< void *, std::string > AbstractObject::s_tracking;
 }

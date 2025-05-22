@@ -27,14 +27,9 @@
 #include "StandardResource.hpp"
 
 /* STL inclusions. */
-#include <cstddef>
-#include <cstdint>
 #include <cstdlib>
-#include <memory>
 #include <ranges>
 #include <sstream>
-#include <string>
-#include <unordered_map>
 
 /* Local inclusions. */
 #include "Libs/Math/Base.hpp"
@@ -74,41 +69,12 @@ namespace EmEn::Graphics::Material
 {
 	using namespace EmEn::Libs;
 	using namespace EmEn::Libs::Math;
-	using namespace Saphir;
-	using namespace Keys;
-	using namespace Component;
-	using namespace Vulkan;
+	using namespace EmEn::Saphir;
+	using namespace EmEn::Saphir::Keys;
+	using namespace EmEn::Graphics::Material::Component;
+	using namespace EmEn::Vulkan;
 
 	const size_t StandardResource::ClassUID{getClassUID(ClassId)};
-
-	StandardResource::StandardResource (const std::string & name, int resourceFlagBits) noexcept
-		: Interface(name, resourceFlagBits)
-	{
-
-	}
-
-	StandardResource::~StandardResource ()
-	{
-		this->destroy();
-	}
-
-	size_t
-	StandardResource::classUID () const noexcept
-	{
-		return ClassUID;
-	}
-
-	bool
-	StandardResource::is (size_t classUID) const noexcept
-	{
-		return classUID == ClassUID;
-	}
-
-	const char *
-	StandardResource::classLabel () const noexcept
-	{
-		return ClassId;
-	}
 
 	bool
 	StandardResource::load () noexcept
@@ -567,9 +533,9 @@ namespace EmEn::Graphics::Material
 				continue;
 			}
 
-			auto textureResource = component->textureResource();
+			const auto textureResource = component->textureResource();
 
-			if ( !this->addDependency(textureResource.get()) )
+			if ( !this->addDependency(textureResource) )
 			{
 				TraceError{ClassId} << "Unable to link the texture '" << textureResource->name() << "' dependency to material '" << this->name() << "' for ambient component !";
 
@@ -581,7 +547,7 @@ namespace EmEn::Graphics::Material
 	}
 
 	bool
-	StandardResource::create (Renderer & renderer) noexcept
+	StandardResource::createOnHardware (Renderer & renderer) noexcept
 	{
 		if ( this->isCreated() )
 		{
@@ -820,12 +786,13 @@ namespace EmEn::Graphics::Material
 	}
 
 	void
-	StandardResource::destroy () noexcept
+	StandardResource::destroyFromHardware () noexcept
 	{
+		/* FIXME: Crash here on application closing ! */
 		m_sharedUniformBuffer->removeElement(this);
 
 		/* Reset to defaults. */
-		this->resetFlagBits();
+		this->resetFlags();
 
 		/* Reset member variables. */
 		m_physicalSurfaceProperties.reset();
@@ -901,7 +868,7 @@ namespace EmEn::Graphics::Material
 		return 0;
 	}
 
-	size_t
+	uint32_t
 	StandardResource::frameIndexAt (uint32_t /*sceneTime*/) const noexcept
 	{
 		/*if ( !this->isFlagEnabled(Animated) )
@@ -1093,7 +1060,7 @@ namespace EmEn::Graphics::Material
 	const DescriptorSet *
 	StandardResource::descriptorSet () const noexcept
 	{
-		// NOTE : This is no more a dynamic.
+		/* NOTE: This is no more a dynamic. */
 		//return m_sharedUniformBuffer->descriptorSet(m_sharedUBOIndex);
 		return m_descriptorSet.get();
 	}
@@ -1127,7 +1094,7 @@ namespace EmEn::Graphics::Material
 			return false;
 		}
 
-		const auto * geometry = generator.geometry();
+		const auto * geometry = generator.getGeometryInterface();
 
 		if ( !generator.highQualityLightEnabled() && !generator.declareMaterialUniformBlock(*this, vertexShader, 0) )
 		{
@@ -1205,13 +1172,13 @@ namespace EmEn::Graphics::Material
 	{
 		const auto componentIt = m_components.find(componentType);
 
-		/* NOTE : The component must exists and use a texture. */
+		/* NOTE: The component must exist and use a texture. */
 		if ( componentIt == m_components.cend() || componentIt->second->type() != Type::Texture )
 		{
 			return true;
 		}
 
-		const auto * component = static_cast< const Texture * >(componentIt->second.get());
+		const auto * component = dynamic_cast< const Texture * >(componentIt->second.get());
 
 		if ( !fragmentShader.declare(Declaration::Sampler{materialSet, component->binding(), component->textureType(), component->samplerName()}) )
 		{
@@ -1246,10 +1213,10 @@ namespace EmEn::Graphics::Material
 			return false;
 		}
 
-		const uint32_t materialSet = generator.program()->setIndex(SetType::PerModelLayer);
+		const uint32_t materialSet = generator.shaderProgram()->setIndex(SetType::PerModelLayer);
 
 		/* Normal component.
-		 * NOTE : Get a sample from a texture in range [0,1], convert it to a normalized range of [-1, 1]. */
+		 * NOTE: Get a sample from a texture in range [0,1], convert it to a normalized range of [-1, 1]. */
 		if ( this->isComponentPresent(ComponentType::Reflection) || !lightGenerator.isAmbientPass() )
 		{
 			if ( !this->generateTextureComponentFragmentShader(ComponentType::Normal, [] (FragmentShader & shader, const Texture * component) {
@@ -1402,7 +1369,7 @@ namespace EmEn::Graphics::Material
 			return false;
 		}
 
-		if ( !this->addDependency(texture.get()) )
+		if ( !this->addDependency(texture) )
 		{
 			TraceError{ClassId} << "Unable to link the texture '" << texture->name() << "' dependency to material '" << this->name() << "' for ambient component !";
 
@@ -1460,7 +1427,7 @@ namespace EmEn::Graphics::Material
 			return false;
 		}
 
-		if ( !this->addDependency(texture.get()) )
+		if ( !this->addDependency(texture) )
 		{
 			TraceError{ClassId} << "Unable to link the texture '" << texture->name() << "' dependency to material '" << this->name() << "' for diffuse component !";
 
@@ -1519,7 +1486,7 @@ namespace EmEn::Graphics::Material
 			return false;
 		}
 
-		if ( !this->addDependency(texture.get()) )
+		if ( !this->addDependency(texture) )
 		{
 			TraceError{ClassId} << "Unable to link the texture '" << texture->name() << "' dependency to material '" << this->name() << "' for specular component !";
 
@@ -1581,7 +1548,7 @@ namespace EmEn::Graphics::Material
 			return false;
 		}
 
-		if ( !this->addDependency(texture.get()) )
+		if ( !this->addDependency(texture) )
 		{
 			TraceError{ClassId} << "Unable to link the texture '" << texture->name() << "' dependency to material '" << this->name() << "' for opacity component !";
 
@@ -1664,7 +1631,7 @@ namespace EmEn::Graphics::Material
 			return false;
 		}
 
-		if ( !this->addDependency(texture.get()) )
+		if ( !this->addDependency(texture) )
 		{
 			TraceError{ClassId} << "Unable to link the texture '" << texture->name() << "' dependency to material '" << this->name() << "' for auto-illumination component !";
 
@@ -1698,7 +1665,7 @@ namespace EmEn::Graphics::Material
 			return false;
 		}
 
-		if ( !this->addDependency(texture.get()) )
+		if ( !this->addDependency(texture) )
 		{
 			TraceError{ClassId} << "Unable to link the texture '" << texture->name() << "' dependency to material '" << this->name() << "' for normal component !";
 
@@ -1732,7 +1699,7 @@ namespace EmEn::Graphics::Material
 			return false;
 		}
 
-		if ( !this->addDependency(texture.get()) )
+		if ( !this->addDependency(texture) )
 		{
 			TraceError{ClassId} << "Unable to link the texture '" << texture->name() << "' dependency to material '" << this->name() << "' for reflection component !";
 
@@ -1905,17 +1872,5 @@ namespace EmEn::Graphics::Material
 		m_materialProperties[ReflectionAmountOffset] = clampToUnit(value);
 
 		m_flags[VideoMemoryUpdateRequested] = true;
-	}
-
-	std::shared_ptr< StandardResource >
-	StandardResource::get (const std::string & resourceName, bool directLoad) noexcept
-	{
-		return Resources::Manager::instance()->standardMaterials().getResource(resourceName, !directLoad);
-	}
-
-	std::shared_ptr< StandardResource >
-	StandardResource::getDefault () noexcept
-	{
-		return Resources::Manager::instance()->standardMaterials().getDefaultResource();
 	}
 }

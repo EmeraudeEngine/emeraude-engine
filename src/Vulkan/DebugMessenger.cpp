@@ -39,7 +39,8 @@ namespace EmEn::Vulkan
 	using namespace EmEn::Libs;
 
 	DebugMessenger::DebugMessenger (const Instance & instance) noexcept
-		: m_instance(instance), m_createInfo(DebugMessenger::getCreateInfo())
+		: m_instance{instance},
+		m_createInfo{DebugMessenger::getCreateInfo()}
 	{
 		auto vkCreateDebugUtilsMessengerEXT = (PFN_vkCreateDebugUtilsMessengerEXT) vkGetInstanceProcAddr(m_instance.handle(), "vkCreateDebugUtilsMessengerEXT");
 

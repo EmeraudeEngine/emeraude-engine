@@ -30,6 +30,7 @@
 #include "emeraude_config.hpp"
 
 /* STL inclusions. */
+#include <cstdint>
 #include <filesystem>
 
 /* Local inclusions for usages. */
@@ -51,10 +52,11 @@ namespace EmEn::Libs::VertexFactory
 
 	/**
 	 * @brief File format interface for reading and writing a geometry.
-	 * @tparam data_t The data precision.
+	 * @tparam vertex_data_t The precision type of vertex data. Default float.
+	 * @tparam index_data_t The precision type of index data. Default uint32_t.
 	 */
-	template< typename data_t >
-	requires (std::is_floating_point_v< data_t >)
+	template< typename vertex_data_t = float, typename index_data_t = uint32_t >
+	requires (std::is_floating_point_v< vertex_data_t > && std::is_unsigned_v< index_data_t > )
 	class FileFormatInterface
 	{
 		public:
@@ -97,7 +99,7 @@ namespace EmEn::Libs::VertexFactory
 			 * @param readOptions A reference to a read options structure.
 			 * @return bool
 			 */
-			virtual bool readFile (const std::filesystem::path & filepath, Shape< data_t > & geometry, const ReadOptions & readOptions) noexcept = 0;
+			virtual bool readFile (const std::filesystem::path & filepath, Shape< vertex_data_t, index_data_t > & geometry, const ReadOptions & readOptions) noexcept = 0;
 
 			/**
 			 * @brief Writes the geometry to a file.
@@ -105,7 +107,7 @@ namespace EmEn::Libs::VertexFactory
 			 * @param geometry A read-only reference to the Geometry.
 			 * @return bool
 			 */
-			virtual bool writeFile (const std::filesystem::path & filepath, const Shape< data_t > & geometry) const noexcept = 0;
+			virtual bool writeFile (const std::filesystem::path & filepath, const Shape< vertex_data_t, index_data_t > & geometry) const noexcept = 0;
 
 		protected:
 

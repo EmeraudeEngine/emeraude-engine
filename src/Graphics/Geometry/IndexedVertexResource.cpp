@@ -26,19 +26,10 @@
 
 #include "IndexedVertexResource.hpp"
 
-/* STL inclusions. */
-#include <cstddef>
-#include <cstdint>
-#include <memory>
-#include <string>
-#include <vector>
-
 /* Local inclusions. */
 #include "Libs/VertexFactory/ShapeGenerator.hpp"
 #include "Libs/VertexFactory/FileIO.hpp"
-#include "Resources/Manager.hpp"
 #include "Vulkan/TransferManager.hpp"
-#include "Tracer.hpp"
 
 /* Defining the resource manager class id. */
 template<>
@@ -55,23 +46,12 @@ namespace EmEn::Graphics::Geometry
 	using namespace EmEn::Libs::VertexFactory;
 	using namespace EmEn::Libs::PixelFactory;
 	using namespace EmEn::Libs::VertexFactory;
-	using namespace Vulkan;
+	using namespace EmEn::Vulkan;
 
 	const size_t IndexedVertexResource::ClassUID{getClassUID(ClassId)};
 
-	IndexedVertexResource::IndexedVertexResource (const std::string & name, uint32_t geometryFlagBits) noexcept
-		: Interface(name, geometryFlagBits)
-	{
-
-	}
-
-	IndexedVertexResource::~IndexedVertexResource ()
-	{
-		this->destroy(true);
-	}
-
 	bool
-	IndexedVertexResource::create () noexcept
+	IndexedVertexResource::createOnHardware (TransferManager & transferManager) noexcept
 	{
 		if ( this->isCreated() )
 		{
@@ -90,16 +70,16 @@ namespace EmEn::Graphics::Geometry
 			return false;
 		}
 
-		if ( !buildSubGeometries(m_subGeometries, m_localData) )
+		if ( !Interface::buildSubGeometries(m_subGeometries, m_localData) )
 		{
 			TraceError{ClassId} << "Resource '" << this->name() << "' fails to build sub-geometries !";
 
 			return false;
 		}
 
-		/* Create the vertex buffer and the index buffer the local data. */
-		std::vector< float > vertexAttributes{};
-		std::vector< uint32_t > indices{};
+		/* Create the vertex and the index buffers the local data. */
+		std::vector< float > vertexAttributes;
+		std::vector< uint32_t > indices;
 
 		const auto vertexElementCount = m_localData.createIndexedVertexBuffer(
 			vertexAttributes,
@@ -117,18 +97,16 @@ namespace EmEn::Graphics::Geometry
 		}
 
 		/* Create hardware buffers from local data. */
-		return this->createVideoMemoryBuffers(vertexAttributes, m_localData.vertexCount(), vertexElementCount, indices);
+		return this->createVideoMemoryBuffers(transferManager, vertexAttributes, m_localData.vertexCount(), vertexElementCount, indices);
 	}
 
 	bool
-	IndexedVertexResource::createVideoMemoryBuffers (const std::vector< float > & vertexAttributes, size_t vertexCount, size_t vertexElementCount, const std::vector< uint32_t > & indices) noexcept
+	IndexedVertexResource::createVideoMemoryBuffers (TransferManager & transferManager, const std::vector< float > & vertexAttributes, uint32_t vertexCount, uint32_t vertexElementCount, const std::vector< uint32_t > & indices) noexcept
 	{
-		auto * transferManager = TransferManager::instance(GPUWorkType::Graphics);
-
-		m_vertexBufferObject = std::make_unique< VertexBufferObject >(transferManager->device(), vertexCount, vertexElementCount);
+		m_vertexBufferObject = std::make_unique< VertexBufferObject >(transferManager.device(), vertexCount, vertexElementCount);
 		m_vertexBufferObject->setIdentifier(this->name() + "-VBO-VertexBufferObject");
 
-		if ( !m_vertexBufferObject->create(*transferManager, vertexAttributes) )
+		if ( !m_vertexBufferObject->create(transferManager, vertexAttributes) )
 		{
 			Tracer::error(ClassId, "Unable to create the vertex buffer object (VBO) !");
 
@@ -137,10 +115,10 @@ namespace EmEn::Graphics::Geometry
 			return false;
 		}
 
-		m_indexBufferObject = std::make_unique< IndexBufferObject >(transferManager->device(), indices.size());
+		m_indexBufferObject = std::make_unique< IndexBufferObject >(transferManager.device(), static_cast< uint32_t >(indices.size()));
 		m_indexBufferObject->setIdentifier(this->name() + "-IBO-IndexBufferObject");
 
-		if ( !m_indexBufferObject->create(*transferManager, indices) )
+		if ( !m_indexBufferObject->create(transferManager, indices) )
 		{
 			Tracer::error(ClassId, "Unable to get an index buffer object (IBO) !");
 
@@ -153,7 +131,7 @@ namespace EmEn::Graphics::Geometry
 	}
 
 	bool
-	IndexedVertexResource::update () noexcept
+	IndexedVertexResource::updateVideoMemory () noexcept
 	{
 		if ( !this->isCreated() )
 		{
@@ -168,7 +146,7 @@ namespace EmEn::Graphics::Geometry
 	}
 
 	void
-	IndexedVertexResource::destroy (bool clearLocalData) noexcept
+	IndexedVertexResource::destroyFromHardware (bool clearLocalData) noexcept
 	{
 		if ( m_vertexBufferObject != nullptr )
 		{
@@ -184,7 +162,7 @@ namespace EmEn::Graphics::Geometry
 
 		if ( clearLocalData )
 		{
-			this->resetFlagBits();
+			this->resetFlags();
 			m_localData.clear();
 			m_subGeometries.clear();
 		}
@@ -266,17 +244,5 @@ namespace EmEn::Graphics::Geometry
 		m_localData = shape;
 
 		return this->setLoadSuccess(true);
-	}
-
-	std::shared_ptr< IndexedVertexResource >
-	IndexedVertexResource::get (const std::string & resourceName, bool directLoad) noexcept
-	{
-		return Resources::Manager::instance()->indexedVertexGeometries().getResource(resourceName, !directLoad);
-	}
-
-	std::shared_ptr< IndexedVertexResource >
-	IndexedVertexResource::getDefault () noexcept
-	{
-		return Resources::Manager::instance()->indexedVertexGeometries().getDefaultResource();
 	}
 }

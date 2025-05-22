@@ -56,7 +56,13 @@ namespace EmEn::Animations
 			 * @param duration The sequence duration in milliseconds.
 			 * @param repeat The number of sequence repetition, -1 is infinite. Default infinite.
 			 */
-			explicit Sequence (uint32_t duration, int32_t repeat = -1) noexcept;
+			explicit
+			Sequence (uint32_t duration, int32_t repeat = -1) noexcept
+				: m_duration{duration},
+				m_repeat{repeat}
+			{
+
+			}
 
 			/** @copydoc EmEn::Animations::AnimationInterface::getNextValue() */
 			Libs::Variant getNextValue () noexcept override;
@@ -136,21 +142,6 @@ namespace EmEn::Animations
 			 */
 			void setCurrentTime (float position) noexcept;
 
-			/**
-			 * @brief STL streams printable object.
-			 * @param out A reference to the stream output.
-			 * @param obj A reference to the object to print.
-			 * @return std::ostream &
-			 */
-			friend std::ostream & operator<< (std::ostream & out, const Sequence & obj);
-
-			/**
-			 * @brief Stringifies the object.
-			 * @param obj A reference to the object to print.
-			 * @return std::string
-			 */
-			friend std::string to_string (const Sequence & obj) noexcept;
-
 		private:
 
 			/**
@@ -186,6 +177,14 @@ namespace EmEn::Animations
 			 */
 			static Libs::Variant getCubicInterpolation (const KeyFrames::const_iterator & itStart, const KeyFrames::const_iterator & itEnd, float factor) noexcept;
 
+			/**
+			 * @brief STL streams printable object.
+			 * @param out A reference to the stream output.
+			 * @param obj A reference to the object to print.
+			 * @return std::ostream &
+			 */
+			friend std::ostream & operator<< (std::ostream & out, const Sequence & obj);
+
 			/* Flag names. */
 			static constexpr auto IsPlaying{0UL};
 
@@ -205,4 +204,34 @@ namespace EmEn::Animations
 				false/*UNUSED*/
 			};
 	};
+
+	inline
+	std::ostream &
+	operator<< (std::ostream & out, const Sequence & obj)
+	{
+		for ( auto it = obj.m_keyFrames.cbegin(); it != obj.m_keyFrames.cend(); ++it )
+		{
+			out <<
+				"Frame #" << std::distance(obj.m_keyFrames.cbegin(), it) << " (" << it->first << ")\n"
+				"Value : " << it->second.value() << '\n';
+		}
+
+		return out;
+	}
+
+	/**
+	 * @brief Stringifies the object.
+	 * @param obj A reference to the object to print.
+	 * @return std::string
+	 */
+	inline
+	std::string
+	to_string (const Sequence & obj) noexcept
+	{
+		std::stringstream output;
+
+		output << obj;
+
+		return output.str();
+	}
 }

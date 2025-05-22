@@ -27,38 +27,12 @@
 #include "Buffer.hpp"
 
 /* Local inclusions. */
-#include "Device.hpp"
-#include "DeviceMemory.hpp"
 #include "Utility.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::Vulkan
 {
 	using namespace EmEn::Libs;
-
-	Buffer::Buffer (const std::shared_ptr< Device > & device, VkBufferCreateFlags createFlags, VkDeviceSize size, VkBufferUsageFlags usageFlags, VkMemoryPropertyFlags memoryPropertyFlag) noexcept
-		: AbstractDeviceDependentObject(device), m_memoryPropertyFlag(memoryPropertyFlag)
-	{
-		m_createInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-		m_createInfo.pNext = nullptr;
-		m_createInfo.flags = createFlags;
-		m_createInfo.size = size;
-		m_createInfo.usage = usageFlags;
-		m_createInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-		m_createInfo.queueFamilyIndexCount = 0;
-		m_createInfo.pQueueFamilyIndices = nullptr;
-	}
-
-	Buffer::Buffer (const std::shared_ptr< Device > & device, const VkBufferCreateInfo & createInfo, VkMemoryPropertyFlags memoryPropertyFlag) noexcept
-		: AbstractDeviceDependentObject(device), m_createInfo(createInfo), m_memoryPropertyFlag(memoryPropertyFlag)
-	{
-
-	}
-
-	Buffer::~Buffer ()
-	{
-		this->destroyFromHardware();
-	}
 
 	bool
 	Buffer::createOnHardware () noexcept
@@ -161,18 +135,5 @@ namespace EmEn::Vulkan
 		this->setDestroyed();
 
 		return true;
-	}
-
-	VkDescriptorBufferInfo
-	Buffer::getDescriptorInfo (uint32_t /*offset*/, uint32_t range) const noexcept
-	{
-		/* FIXME: Setting the offset to break some scenes ! */
-
-		VkDescriptorBufferInfo descriptorInfo{};
-		descriptorInfo.buffer = m_handle;
-		descriptorInfo.offset = 0;
-		descriptorInfo.range = range;
-
-		return descriptorInfo;
 	}
 }

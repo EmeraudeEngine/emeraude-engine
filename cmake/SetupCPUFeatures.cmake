@@ -1,9 +1,9 @@
 if ( NOT CPUFEATURES_ENABLED )
-	if ( EMERAUDE_USE_SYSTEM_LIBS )
-		message("Enabling cpu_features library from system ...")
+	#if ( EMERAUDE_USE_SYSTEM_LIBS )
+	#	message("Enabling cpu_features library from system ...")
 
 		# TODO ...
-	else ()
+	#else ()
 		message("Enabling cpu_features library from local source ...")
 
 		if ( MSVC )
@@ -11,7 +11,7 @@ if ( NOT CPUFEATURES_ENABLED )
 		else ()
 			target_link_libraries(${PROJECT_NAME} PRIVATE ${LOCAL_LIB_DIR}/lib/libcpu_features.a)
 		endif ()
-	endif ()
+	#endif ()
 
 	set(CPUFEATURES_ENABLED On)
 else ()

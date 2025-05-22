@@ -52,6 +52,7 @@ namespace EmEn
 		class Device;
 	}
 
+	class Identification;
 	class PrimaryServices;
 	class Window;
 }
@@ -69,29 +70,40 @@ namespace EmEn::Vulkan
 			/** @brief Class identifier. */
 			static constexpr auto ClassId{"VulkanInstanceService"};
 
-			/** @brief Observable class unique identifier. */
-			static const size_t ClassUID;
-
 			/**
-			 * @brief Constructs the Vulkan instance.
+			 * @brief Constructs a Vulkan instance.
+			 * @param identification A reference to the application identification.
 			 * @param primaryServices A reference to primary services.
 			 */
-			explicit Instance (PrimaryServices & primaryServices) noexcept;
-
-			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
-			[[nodiscard]]
-			size_t
-			classUID () const noexcept override
+			Instance (const Identification & identification, PrimaryServices & primaryServices) noexcept
+				: ServiceInterface{ClassId},
+				m_identification{identification},
+				m_primaryServices{primaryServices}
 			{
-				return ClassUID;
-			}
+				/* [VULKAN-API-SETUP] Graphics device extensions selection. */
 
-			/** @copydoc EmEn::Libs::ObservableTrait::is() const */
-			[[nodiscard]]
-			bool
-			is (size_t classUID) const noexcept override
-			{
-				return classUID == ClassUID;
+				/* VK_KHR_SWAPCHAIN_EXTENSION_NAME = "VK_KHR_swapchain" */
+				m_requiredGraphicsDeviceExtensions.emplace_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
+
+				if constexpr ( IsMacOS )
+				{
+					/* VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME = "VK_KHR_portability_subset" */
+					m_requiredGraphicsDeviceExtensions.emplace_back("VK_KHR_portability_subset");
+				}
+
+				//VK_EXT_BLEND_OPERATION_ADVANCED_EXTENSION_NAME, // Fails on Intel iGPU
+				//VK_EXT_FILTER_CUBIC_EXTENSION_NAME, // Fails on NVidia
+				//VK_KHR_SHARED_PRESENTABLE_IMAGE_EXTENSION_NAME,
+
+				/* NOTE: Enable dynamic state extension. */
+				//VK_EXT_EXTENDED_DYNAMIC_STATE_EXTENSION_NAME,
+				//VK_EXT_EXTENDED_DYNAMIC_STATE_2_EXTENSION_NAME,
+				//VK_EXT_EXTENDED_DYNAMIC_STATE_3_EXTENSION_NAME,
+
+				/* NOTE: Video decoding extensions. (To test one day ...) */
+				//VK_KHR_VIDEO_QUEUE_EXTENSION_NAME,
+				//VK_KHR_VIDEO_DECODE_QUEUE_EXTENSION_NAME,
+				//VK_KHR_VIDEO_DECODE_H265_EXTENSION_NAME,
 			}
 
 			/** @copydoc EmEn::ServiceInterface::usable() */
@@ -179,6 +191,17 @@ namespace EmEn::Vulkan
 			isDynamicStateExtensionEnabled () const noexcept
 			{
 				return m_flags[DynamicStateExtensionEnabled];
+			}
+
+			/**
+			 * @brief Returns whether textures must be checked for standard requirements like sizes being power of two.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isStandardTextureCheckEnabled () const noexcept
+			{
+				return m_flags[StandardTextureCheckEnabled];
 			}
 
 			/**
@@ -305,13 +328,13 @@ namespace EmEn::Vulkan
 			 * @note This method follow the vkEnumerateDeviceLayerProperties() deprecation.
 			 * @return void
 			 */
-			void setRequiredValidationLayers () noexcept;
+			void configureValidationLayers () noexcept;
 
 			/**
-			 * @brief Configures the list of required extensions.
+			 * @brief Configures the list of required instance extensions.
 			 * @return void
 			 */
-			void setRequiredExtensions () noexcept;
+			void configureInstanceExtensions () noexcept;
 
 			/**
 			 * @brief Modulates the device score against a running strategy.
@@ -377,7 +400,9 @@ namespace EmEn::Vulkan
 			static constexpr auto DebugMode{1UL};
 			static constexpr auto UseDebugMessenger{2UL};
 			static constexpr auto DynamicStateExtensionEnabled{3UL};
+			static constexpr auto StandardTextureCheckEnabled{4UL};
 
+			const Identification & m_identification;
 			PrimaryServices & m_primaryServices;
 			VkInstance m_instance{VK_NULL_HANDLE};
 			VkApplicationInfo m_applicationInfo{};
@@ -387,32 +412,15 @@ namespace EmEn::Vulkan
 			std::vector< std::shared_ptr< PhysicalDevice > > m_physicalDevices;
 			std::shared_ptr< Device > m_graphicsDevice;
 			std::shared_ptr< Device > m_computeDevice;
-			std::vector< std::string > m_requestedValidationLayers;
 			std::vector< const char * > m_requiredValidationLayers;
 			std::vector< const char * > m_requiredInstanceExtensions;
-			std::vector< const char * > m_requiredGraphicsDeviceExtensions{
-				VK_KHR_SWAPCHAIN_EXTENSION_NAME,
-				//VK_EXT_BLEND_OPERATION_ADVANCED_EXTENSION_NAME, // Fails on Intel iGPU
-				//VK_EXT_FILTER_CUBIC_EXTENSION_NAME, // Fails on NVidia
-				//VK_KHR_SHARED_PRESENTABLE_IMAGE_EXTENSION_NAME,
-				/* NOTE: Enable dynamic state extension. */
-				//VK_EXT_EXTENDED_DYNAMIC_STATE_EXTENSION_NAME,
-				//VK_EXT_EXTENDED_DYNAMIC_STATE_2_EXTENSION_NAME,
-				//VK_EXT_EXTENDED_DYNAMIC_STATE_3_EXTENSION_NAME,
-				/* NOTE: Video decoding extensions. (To test one day ...) */
-				//VK_KHR_VIDEO_QUEUE_EXTENSION_NAME,
-				//VK_KHR_VIDEO_DECODE_QUEUE_EXTENSION_NAME,
-				//VK_KHR_VIDEO_DECODE_H265_EXTENSION_NAME,
-#if !IS_LINUX && !IS_WINDOWS
-				"VK_KHR_portability_subset", // Not found on macOS : VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME
-#endif
-			};
+			std::vector< const char * > m_requiredGraphicsDeviceExtensions;
 			std::array< bool, 8 > m_flags{
 				false/*ShowInformation*/,
 				false/*DebugMode*/,
 				false/*UseDebugMessenger*/,
 				false/*DynamicStateExtensionEnabled*/,
-				false/*UNUSED*/,
+				false/*StandardTextureCheckEnabled*/,
 				false/*UNUSED*/,
 				false/*UNUSED*/,
 				false/*UNUSED*/

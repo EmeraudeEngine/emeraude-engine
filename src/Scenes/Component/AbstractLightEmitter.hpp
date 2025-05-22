@@ -32,26 +32,26 @@
 #include <string>
 
 /* Local inclusions for inheritances. */
-#include "AVConsole/AbstractVirtualDevice.hpp"
 #include "Abstract.hpp"
+#include "AVConsole/AbstractVirtualDevice.hpp"
 
 /* Local inclusions for usages. */
-#include "AVConsole/Manager.hpp"
-#include "AVConsole/Types.hpp"
 #include "Libs/PixelFactory/Color.hpp"
-#include "Vulkan/SharedUniformBuffer.hpp"
+#include "AVConsole/Types.hpp"
+#include "Graphics/SharedUniformBuffer.hpp"
+#include "Graphics/RenderTarget/ShadowMap.hpp"
 
 /* Forward declarations. */
 namespace EmEn
 {
-	namespace Graphics
+	namespace Vulkan
 	{
-		namespace RenderTarget::ShadowMap
-		{
-			class Abstract;
-		}
+		class DescriptorSet;
+	}
 
-		class Renderer;
+	namespace Graphics::RenderTarget
+	{
+		class Abstract;
 	}
 
 	namespace Saphir::Declaration
@@ -59,9 +59,9 @@ namespace EmEn
 		class UniformBlock;
 	}
 
-	namespace Vulkan
+	namespace AVConsole
 	{
-		class DescriptorSet;
+		class Manager;
 	}
 
 	namespace Scenes
@@ -253,21 +253,32 @@ namespace EmEn::Scenes::Component
 			bool updateVideoMemory () noexcept;
 
 			/**
-			 * @brief Enables the shadow map render.
-			 * @note The shadow map must be requested at light creation, otherwise this function will do nothing.
-			 * @param state The state
+			 * @brief Enables the shadow casting.
+			 * @note The shadow map must have been requested at light creation.
+			 * @param state The state.
 			 * @return void
 			 */
-			void enableShadow (bool state) noexcept;
+			void
+			enableShadowCasting (bool state) noexcept
+			{
+				if ( this->shadowMapResolution() == 0 )
+				{
+					TraceInfo{TracerTag} << "The shadow map texture wasn't requested at light creation ! Cancelling ...";
+
+					return;
+				}
+
+				this->setFlag(ShadowMapEnabled, state);
+			}
 
 			/**
-			 * @brief Returns whether the light is casting shadow.
-			 * @note This will return true if the shadow map resolution has been set and the flag is enabled.
+			 * @brief Returns whether the shadow casting is enabled.
+			 * @note The shadow map must have been requested at light creation.
 			 * @return bool
 			 */
 			[[nodiscard]]
 			bool
-			isShadowEnabled () const noexcept
+			isShadowCastingEnabled () const noexcept
 			{
 				if ( this->shadowMapResolution() == 0 )
 				{
@@ -317,7 +328,15 @@ namespace EmEn::Scenes::Component
 			 */
 			[[nodiscard]]
 			uint32_t
-			UBOAlignment () const noexcept;
+			UBOAlignment () const noexcept
+			{
+				if ( m_sharedUniformBuffer == nullptr )
+				{
+					return 0;
+				}
+
+				return m_sharedUniformBuffer->blockAlignedSize();
+			}
 
 			/**
 			 * @brief Returns the light offset in bytes in the UBO.
@@ -325,14 +344,32 @@ namespace EmEn::Scenes::Component
 			 * @return uint32_t
 			 */
 			[[nodiscard]]
-			uint32_t UBOOffset () const noexcept;
+			uint32_t
+			UBOOffset () const noexcept
+			{
+				if ( m_sharedUniformBuffer == nullptr )
+				{
+					return 0;
+				}
+
+				return m_sharedUBOIndex * m_sharedUniformBuffer->blockAlignedSize();
+			}
 
 			/**
 			 * @brief Returns the light descriptor set.
 			 * @return const Vulkan::DescriptorSet *
 			 */
 			[[nodiscard]]
-			const Vulkan::DescriptorSet * descriptorSet () const noexcept;
+			const Vulkan::DescriptorSet *
+			descriptorSet () const noexcept
+			{
+				if ( m_sharedUniformBuffer == nullptr )
+				{
+					return nullptr;
+				}
+
+				return m_sharedUniformBuffer->descriptorSet(m_sharedUBOIndex);
+			}
 
 			/**
 			 * @brief Returns whether an absolute position is within the light radius.
@@ -344,25 +381,26 @@ namespace EmEn::Scenes::Component
 			/**
 			 * @brief Creates the light on the GPU with the shadow map if requested.
 			 * @param lightSet A reference to the light set.
-			 * @param renderer A reference to the graphic renderer.
 			 * @param AVConsoleManager A reference to master control manager.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			virtual bool createOnHardware (LightSet & lightSet, Graphics::Renderer & renderer, AVConsole::Manager & AVConsoleManager) noexcept = 0;
+			virtual bool createOnHardware (LightSet & lightSet, AVConsole::Manager & AVConsoleManager) noexcept = 0;
 
 			/**
 			 * @brief Removes the light from the GPU.
+			 * @param lightSet A reference to the light set.
+			 * @param AVConsoleManager A reference to master control manager.
 			 * @return void
 			 */
-			virtual void destroyFromHardware () noexcept = 0;
+			virtual void destroyFromHardware (LightSet & lightSet, AVConsole::Manager & AVConsoleManager) noexcept = 0;
 
 			/**
 			 * @brief Gives access to the light shadow map.
-			 * @return std::shared_ptr< Graphics::RenderTarget::ShadowMapSampler::Abstract >
+			 * @return std::shared_ptr< Graphics::RenderTarget::Abstract >
 			 */
 			[[nodiscard]]
-			virtual std::shared_ptr< Graphics::RenderTarget::ShadowMap::Abstract > shadowMap () const noexcept = 0;
+			virtual std::shared_ptr< Graphics::RenderTarget::Abstract > shadowMap () const noexcept = 0;
 
 			/**
 			 * @brief Returns the uniform block explaining how the light works.
@@ -395,7 +433,13 @@ namespace EmEn::Scenes::Component
 			 * @param parentEntity A reference to the parent entity.
 			 * @param shadowMapResolution The shadow map resolution. 0 means no shadow casting.
 			 */
-			AbstractLightEmitter (const std::string & name, const AbstractEntity & parentEntity, uint32_t shadowMapResolution) noexcept;
+			AbstractLightEmitter (const std::string & name, const AbstractEntity & parentEntity, uint32_t shadowMapResolution) noexcept
+				: Abstract{name, parentEntity},
+				AbstractVirtualDevice{name, AVConsole::DeviceType::Video, AVConsole::ConnexionType::Output},
+				m_shadowMapResolution{shadowMapResolution}
+			{
+				this->enableFlag(Enabled);
+			}
 
 			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::updateDeviceFromCoordinates() */
 			void updateDeviceFromCoordinates (const Libs::Math::CartesianFrame< float > & worldCoordinates, const Libs::Math::Vector< 3, float > & worldVelocity) noexcept final;
@@ -409,7 +453,7 @@ namespace EmEn::Scenes::Component
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool addToSharedUniformBuffer (const std::shared_ptr< Vulkan::SharedUniformBuffer > & sharedBufferUniform) noexcept;
+			bool addToSharedUniformBuffer (const std::shared_ptr< Graphics::SharedUniformBuffer > & sharedBufferUniform) noexcept;
 
 			/**
 			 * @brief Removes the light from the shared uniform buffer.
@@ -441,7 +485,7 @@ namespace EmEn::Scenes::Component
 			 * @return bool
 			 */
 			[[nodiscard]]
-			virtual bool onVideoMemoryUpdate (Vulkan::SharedUniformBuffer & UBO, uint32_t index) noexcept = 0;
+			virtual bool onVideoMemoryUpdate (Graphics::SharedUniformBuffer & UBO, uint32_t index) noexcept = 0;
 
 			/**
 			 * @brief Event when the color light changes.
@@ -465,7 +509,7 @@ namespace EmEn::Scenes::Component
 			Libs::PixelFactory::Color< float > m_color{DefaultColor};
 			float m_intensity{DefaultIntensity};
 			uint32_t m_shadowMapResolution{0};
-			std::shared_ptr< Vulkan::SharedUniformBuffer > m_sharedUniformBuffer{};
+			std::shared_ptr< Graphics::SharedUniformBuffer > m_sharedUniformBuffer;
 			uint32_t m_sharedUBOIndex{0};
 	};
 }

@@ -33,17 +33,14 @@
 /* Local inclusions for inheritances. */
 #include "AbstractDeviceDependentObject.hpp"
 
-/* Forward declarations. */
-namespace EmEn::Vulkan
-{
-	class DeviceMemory;
-}
+/* Local inclusions for usages. */
+#include "DeviceMemory.hpp"
 
 namespace EmEn::Vulkan
 {
 	/**
 	 * @brief Defines the base class of all buffers in Vulkan API.
-	 * @extends EmEn::Vulkan::AbstractDeviceDependentObject to allocate memory on device.
+	 * @extends EmEn::Vulkan::AbstractDeviceDependentObject To allocate memory on a device.
 	 */
 	class Buffer : public AbstractDeviceDependentObject
 	{
@@ -55,19 +52,38 @@ namespace EmEn::Vulkan
 			/**
 			 * @brief Constructs a buffer.
 			 * @param device A reference to a device smart pointer.
-			 * @param createFlags The create info flags.
+			 * @param createFlags The createInfo flags.
 			 * @param size The size in bytes.
 			 * @param usageFlags The buffer usage flags.
-			 * @param memoryPropertyFlag The type of memory.
+			 * @param memoryPropertyFlag The type of memory flags.
 			 */
-			Buffer (const std::shared_ptr< Device > & device, VkBufferCreateFlags createFlags, VkDeviceSize size, VkBufferUsageFlags usageFlags, VkMemoryPropertyFlags memoryPropertyFlag) noexcept;
+			Buffer (const std::shared_ptr< Device > & device, VkBufferCreateFlags createFlags, VkDeviceSize size, VkBufferUsageFlags usageFlags, VkMemoryPropertyFlags memoryPropertyFlag) noexcept
+				: AbstractDeviceDependentObject{device},
+				m_memoryPropertyFlag{memoryPropertyFlag}
+			{
+				m_createInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+				m_createInfo.pNext = nullptr;
+				m_createInfo.flags = createFlags;
+				m_createInfo.size = size;
+				m_createInfo.usage = usageFlags;
+				m_createInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+				m_createInfo.queueFamilyIndexCount = 0;
+				m_createInfo.pQueueFamilyIndices = nullptr;
+			}
 
 			/**
-			 * @brief Constructs a buffer with a create info.
+			 * @brief Constructs a buffer with a createInfo.
 			 * @param device A reference to a smart pointer of the device.
-			 * @param createInfo A reference to the create info.
+			 * @param createInfo A reference to the createInfo.
+			 * @param memoryPropertyFlag The type of memory flags.
 			 */
-			Buffer (const std::shared_ptr< Device > & device, const VkBufferCreateInfo & createInfo, VkMemoryPropertyFlags memoryPropertyFlag) noexcept;
+			Buffer (const std::shared_ptr< Device > & device, const VkBufferCreateInfo & createInfo, VkMemoryPropertyFlags memoryPropertyFlag) noexcept
+				: AbstractDeviceDependentObject{device},
+				m_createInfo{createInfo},
+				m_memoryPropertyFlag{memoryPropertyFlag}
+			{
+
+			}
 
 			/**
 			 * @brief Copy constructor.
@@ -96,7 +112,10 @@ namespace EmEn::Vulkan
 			/**
 			 * @brief Destructs the buffer.
 			 */
-			~Buffer () override;
+			~Buffer () override
+			{
+				this->destroyFromHardware();
+			}
 
 			/** @copydoc EmEn::Vulkan::AbstractDeviceDependentObject::createOnHardware() */
 			bool createOnHardware () noexcept final;
@@ -131,7 +150,7 @@ namespace EmEn::Vulkan
 			}
 
 			/**
-			 * @brief Returns the buffer create info.
+			 * @brief Returns the buffer createInfo.
 			 * @return const VkBufferCreateInfo &
 			 */
 			[[nodiscard]]
@@ -154,7 +173,7 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Returns the buffer size in bytes.
-			 * @warning This information come from the create info, not the device memory.
+			 * @warning This information comes from the createInfo, not the device memory.
 			 * @return VkDeviceSize
 			 */
 			[[nodiscard]]
@@ -193,7 +212,18 @@ namespace EmEn::Vulkan
 			 * @return VkDescriptorBufferInfo
 			 */
 			[[nodiscard]]
-			VkDescriptorBufferInfo getDescriptorInfo (uint32_t offset, uint32_t range) const noexcept;
+			VkDescriptorBufferInfo
+			getDescriptorInfo (uint32_t /*offset*/, uint32_t range) const noexcept
+			{
+				/* FIXME: Setting the offset to break some scenes ! */
+
+				VkDescriptorBufferInfo descriptorInfo{};
+				descriptorInfo.buffer = m_handle;
+				descriptorInfo.offset = 0;
+				descriptorInfo.range = range;
+
+				return descriptorInfo;
+			}
 
 		protected:
 

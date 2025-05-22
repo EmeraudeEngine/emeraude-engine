@@ -29,6 +29,7 @@
 /* STL inclusions. */
 #include <cmath>
 #include <string>
+#include <sstream>
 
 /* Local inclusions for usages. */
 #include "Libs/Math/Base.hpp"
@@ -162,42 +163,90 @@ namespace EmEn::Saphir
 			 * @return std::string
 			 */
 			[[nodiscard]]
-			std::string positionVec3 () const noexcept;
+			std::string
+			positionVec3 () const noexcept
+			{
+				std::stringstream output;
+
+				output << "vec3(" << m_position[Libs::Math::X] << ", " << m_position[Libs::Math::Y] << ", " << m_position[Libs::Math::Z] << ")";
+
+				return output.str();
+			}
 
 			/**
 			 * @brief Returns the position as a GLSL vec4.
 			 * @return std::string
 			 */
 			[[nodiscard]]
-			std::string positionVec4 () const noexcept;
+			std::string
+			positionVec4 () const noexcept
+			{
+				std::stringstream output;
+
+				output << "vec4(" << m_position[Libs::Math::X] << ", " << m_position[Libs::Math::Y] << ", " << m_position[Libs::Math::Z] << ", 1.0)";
+
+				return output.str();
+			}
 
 			/**
 			 * @brief Returns the direction as a GLSL vec3.
 			 * @return std::string
 			 */
 			[[nodiscard]]
-			std::string directionVec3 () const noexcept;
+			std::string
+			directionVec3 () const noexcept
+			{
+				std::stringstream output;
+
+				output << "vec3(" << m_direction[Libs::Math::X] << ", " << m_direction[Libs::Math::Y] << ", " << m_direction[Libs::Math::Z] << ")";
+
+				return output.str();
+			}
 
 			/**
 			 * @brief Returns the direction as a GLSL vec4.
 			 * @return std::string
 			 */
 			[[nodiscard]]
-			std::string directionVec4 () const noexcept;
+			std::string
+			directionVec4 () const noexcept
+			{
+				std::stringstream output;
+
+				output << "vec4(" << m_direction[Libs::Math::X] << ", " << m_direction[Libs::Math::Y] << ", " << m_direction[Libs::Math::Z] << ", 0.0)";
+
+				return output.str();
+			}
 
 			/**
 			 * @brief Returns the ambient color as a GLSL vec4.
 			 * @return std::string
 			 */
 			[[nodiscard]]
-			std::string ambientColorVec4 () const noexcept;
+			std::string
+			ambientColorVec4 () const noexcept
+			{
+				std::stringstream output;
+
+				output << "vec4(" << m_ambientColor.red() << ", " << m_ambientColor.green() << ", " << m_ambientColor.blue() << ", 1.0)";
+
+				return output.str();
+			}
 
 			/**
 			 * @brief Returns the light color as a GLSL vec4.
 			 * @return std::string
 			 */
 			[[nodiscard]]
-			std::string colorVec4 () const noexcept;
+			std::string
+			colorVec4 () const noexcept
+			{
+				std::stringstream output;
+
+				output << "vec4(" << m_color.red() << ", " << m_color.green() << ", " << m_color.blue() << ", 1.0)";
+
+				return output.str();
+			}
 
 			/**
 			 * @brief Returns the ambient intensity.
@@ -260,7 +309,23 @@ namespace EmEn::Saphir
 			 * @param obj A reference to the object to print.
 			 * @return std::ostream &
 			 */
-			friend std::ostream & operator<< (std::ostream & out, const StaticLighting & obj);
+			friend
+			std::ostream &
+			operator<< (std::ostream & out, const StaticLighting & obj)
+			{
+				return out <<
+					"Static lighting data:" "\n"
+					"Type: " << to_string(obj.m_type) << "\n"
+					"Position (Spot & Point): " << obj.m_position << "\n"
+					"Direction (Directional & Spot): " << obj.m_direction << "\n"
+					"Ambient color: " << obj.m_ambientColor << "\n"
+					"Light color: " << obj.m_color << "\n"
+					"Ambient intensity: " << obj.m_ambientIntensity << "\n"
+					"Light intensity: " << obj.m_intensity << "\n"
+					"Radius (Spot & Point): " << obj.m_radius << "\n"
+					"Inner cosine angle (Spot): " << obj.m_innerCosAngle << "\n"
+					"Outer cosine angler (Spot): " << obj.m_outerCosAngle << "\n";
+			}
 
 			/**
 			 * @brief Stringifies the object.
@@ -268,7 +333,16 @@ namespace EmEn::Saphir
 			 * @return std::string
 			 */
 
-			friend std::string to_string (const StaticLighting & obj) noexcept;
+			friend
+			std::string
+			to_string (const StaticLighting & obj) noexcept
+			{
+				std::stringstream output;
+
+				output << obj;
+
+				return output.str();
+			}
 
 		private:
 

@@ -39,13 +39,7 @@ namespace EmEn::Console
 {
 	using namespace EmEn::Libs;
 
-	static constexpr auto TracerTag{"Controllable"};
-
-	Controllable::Controllable (std::string consoleIdentifier) noexcept
-		: m_identifier(std::move(consoleIdentifier))
-	{
-
-	}
+	constexpr auto TracerTag{"Controllable"};
 
 	Controllable::~Controllable ()
 	{
@@ -61,13 +55,13 @@ namespace EmEn::Console
 	bool
 	Controllable::execute (Expression & expression, Outputs & outputs) noexcept
 	{
-		/* Checks for next identifier. */
+		/* Checks for the next identifier. */
 		auto identifier = expression.nextIdentifier();
 
 		/* If we got a next identifier. */
 		if ( !identifier.empty() )
 		{
-			/* Checks for sub object */
+			/* Checks for a sub object */
 			const auto objectIt = std::ranges::find_if(m_consoleObjects, [identifier] (const auto & objectIt) {
 				return objectIt.first == identifier;
 			});
@@ -83,7 +77,7 @@ namespace EmEn::Console
 			return false;
 		}
 
-		/* If empty we are at the right level, and we try to execute the command. */
+		/* If empty, we are at the right level, and we try to execute the command. */
 
 		/* Checks for built-in function about a level. */
 		if ( this->checkBuiltInCommands(expression, outputs) )
@@ -126,16 +120,16 @@ namespace EmEn::Console
 		}
 
 		/* For each possible command. */
-		for ( const auto & commandIt : m_commands )
+		for ( const auto & key : m_commands | std::views::keys )
 		{
 			/* Object name is smaller than input, skip it. */
-			if ( identifier.length() > commandIt.first.length() )
+			if ( identifier.length() > key.length() )
 			{
 				continue;
 			}
 
 			/* Perfect match. */
-			if ( identifier == commandIt.first )
+			if ( identifier == key )
 			{
 				continue;
 			}
@@ -146,7 +140,7 @@ namespace EmEn::Console
 			for ( size_t chr = 0; chr < identifier.length(); chr++ )
 			{
 				/* Object name mismatch characters from input. */
-				if ( commandIt.first[chr] != identifier[chr] )
+				if ( key[chr] != identifier[chr] )
 				{
 					mismatch = true;
 
@@ -156,7 +150,7 @@ namespace EmEn::Console
 
 			if ( !mismatch )
 			{
-				suggestions.emplace_back(commandIt.first + "()");
+				suggestions.emplace_back(key + "()");
 			}
 		}
 	}
@@ -250,9 +244,9 @@ namespace EmEn::Console
 		{
 			std::stringstream message;
 
-			for ( const auto & objectIt : m_consoleObjects )
+			for ( const auto & key : m_consoleObjects | std::views::keys )
 			{
-				message << "'" << objectIt.first << "'" "\n";
+				message << "'" << key << "'" "\n";
 			}
 
 			outputs.emplace_back(Severity::Info, message);

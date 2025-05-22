@@ -53,11 +53,12 @@ namespace EmEn::Resources
 			static constexpr auto ClassId{"Randomizer"};
 
 			/**
-			 * @brief Contructs a randomize.
+			 * @brief Constructs a randomizer.
 			 * @param container A reference to the resource container.
 			 */
-			explicit Randomizer (const Container< resource_t > & container) noexcept
-				: m_container(&container)
+			explicit
+			Randomizer (const Container< resource_t > & container) noexcept
+				: m_container{&container}
 			{
 
 			}
@@ -133,6 +134,6 @@ namespace EmEn::Resources
 		private:
 
 			Container< resource_t > * m_container;
-			std::vector< std::shared_ptr< resource_t > > m_collection{};
+			std::vector< std::shared_ptr< resource_t > > m_collection;
 	};
 }

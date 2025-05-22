@@ -33,11 +33,7 @@
 
 /* Local inclusions for inheritances. */
 #include "AbstractDeviceDependentObject.hpp"
-
-namespace EmEn::Vulkan
-{
-	class RenderPass;
-}
+#include "RenderPass.hpp"
 
 namespace EmEn::Vulkan
 {
@@ -57,24 +53,49 @@ namespace EmEn::Vulkan
 			 * @param renderPass A reference to a RenderPass smart pointer.
 			 * @param extent A reference to an VkExtent2D.
 			 * @param layerCount The number of framebuffer layers. Default 1.
-			 * @param createFlags The create info flags. Default none.
+			 * @param createFlags The createInfo flags. Default none.
 			 */
-			Framebuffer (const std::shared_ptr< const RenderPass > & renderPass, const VkExtent2D & extent, uint32_t layerCount = 1, VkFramebufferCreateFlags createFlags = 0) noexcept;
+			Framebuffer (const std::shared_ptr< const RenderPass > & renderPass, const VkExtent2D & extent, uint32_t layerCount = 1, VkFramebufferCreateFlags createFlags = 0) noexcept
+				: AbstractDeviceDependentObject{renderPass->device()},
+				m_renderPass{renderPass}
+			{
+				m_createInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+				m_createInfo.pNext = nullptr;
+				m_createInfo.flags = createFlags;
+				m_createInfo.renderPass = VK_NULL_HANDLE;
+				m_createInfo.attachmentCount = 0;
+				m_createInfo.pAttachments = nullptr;
+				m_createInfo.width = extent.width;
+				m_createInfo.height = extent.height;
+				m_createInfo.layers = layerCount;
+
+				m_attachments.reserve(3);
+			}
 
 			/**
 			 * @brief Constructs a framebuffer.
 			 * @param renderPass A reference to a RenderPass smart pointer.
 			 * @param extent A reference to an VkExtent3D.
-			 * @param createFlags The create info flags. Default none.
+			 * @param createFlags The createInfo flags. Default none.
 			 */
-			Framebuffer (const std::shared_ptr< const RenderPass > & renderPass, const VkExtent3D & extent, VkFramebufferCreateFlags createFlags = 0) noexcept;
+			Framebuffer (const std::shared_ptr< const RenderPass > & renderPass, const VkExtent3D & extent, VkFramebufferCreateFlags createFlags = 0) noexcept
+				: Framebuffer{renderPass, VkExtent2D{extent.width, extent.height}, extent.depth, createFlags}
+			{
+
+			}
 
 			/**
-			 * @brief Constructs a framebuffer with create info.
+			 * @brief Constructs a framebuffer with createInfo.
 			 * @param renderPass A reference to a RenderPass smart pointer.
-			 * @param createInfo A reference to a create info.
+			 * @param createInfo A reference to a createInfo.
 			 */
-			Framebuffer (const std::shared_ptr< const RenderPass > & renderPass, const VkFramebufferCreateInfo & createInfo) noexcept;
+			Framebuffer (const std::shared_ptr< const RenderPass > & renderPass, const VkFramebufferCreateInfo & createInfo) noexcept
+				: AbstractDeviceDependentObject{renderPass->device()},
+				m_createInfo{createInfo},
+				m_renderPass{renderPass}
+			{
+
+			}
 
 			/**
 			 * @brief Copy constructor.
@@ -103,7 +124,10 @@ namespace EmEn::Vulkan
 			/**
 			 * @brief Destructs the framebuffer.
 			 */
-			~Framebuffer () override;
+			~Framebuffer () override
+			{
+				this->destroyFromHardware();
+			}
 
 			/** @copydoc EmEn::Vulkan::AbstractDeviceDependentObject::createOnHardware() */
 			bool createOnHardware () noexcept override;
@@ -133,7 +157,7 @@ namespace EmEn::Vulkan
 			}
 
 			/**
-			 * @brief Returns the framebuffer create info.
+			 * @brief Returns the framebuffer createInfo.
 			 * @return const VkFramebufferCreateInfo &
 			 */
 			[[nodiscard]]

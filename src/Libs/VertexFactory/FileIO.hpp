@@ -31,6 +31,7 @@
 #include <type_traits>
 
 /* Local inclusions for usages. */
+#include "Libs/IO/IO.hpp"
 #include "FileFormatFBX.hpp"
 #include "FileFormatMD2.hpp"
 #include "FileFormatMD3.hpp"
@@ -43,16 +44,17 @@ namespace EmEn::Libs::VertexFactory::FileIO
 {
 	/**
 	 * @brief Reads a file into a shape structure.
-	 * @tparam data_t The pixmap data precision. Default 'uint8_t' (8bits per chanel).
+	 * @tparam vertex_data_t The precision type of vertex data. Default float.
+	 * @tparam index_data_t The precision type of index data. Default uint32_t.
 	 * @param filepath A reference to a filesystem path.
+	 * @param shape A writable reference to a shape.
 	 * @param readOptions A reference to read options structure. Defaults.
 	 * @return bool
 	 */
-	template< typename data_t = uint8_t >
-	requires (std::is_arithmetic_v< data_t >)
+	template< typename vertex_data_t = float, typename index_data_t = uint32_t >
 	[[nodiscard]]
 	bool
-	read (const std::filesystem::path & filepath, Shape< data_t > & shape, const ReadOptions & readOptions = {})
+	read (const std::filesystem::path & filepath, Shape< vertex_data_t, index_data_t > & shape, const ReadOptions & readOptions = {}) requires (std::is_floating_point_v< vertex_data_t > && std::is_unsigned_v< index_data_t > )
 	{
 		if ( !IO::fileExists(filepath) )
 		{
@@ -65,49 +67,49 @@ namespace EmEn::Libs::VertexFactory::FileIO
 
 		if ( extension == "emgeo" )
 		{
-			FileFormatNative< data_t > fileFormat{};
+			FileFormatNative< vertex_data_t, index_data_t > fileFormat{};
 
 			return fileFormat.readFile(filepath, shape, readOptions);
 		}
 
 		if ( extension == "obj" )
 		{
-			FileFormatOBJ< data_t > fileFormat{};
+			FileFormatOBJ< vertex_data_t, index_data_t > fileFormat{};
 
 			return fileFormat.readFile(filepath, shape, readOptions);
 		}
 
 		if ( extension == "fbx" )
 		{
-			FileFormatFBX< data_t > fileFormat{};
+			FileFormatFBX< vertex_data_t, index_data_t > fileFormat{};
 
 			return fileFormat.readFile(filepath, shape, readOptions);
 		}
 
 		if ( extension == "mdl" )
 		{
-			FileFormatMDL< data_t > fileFormat{};
+			FileFormatMDL< vertex_data_t, index_data_t > fileFormat{};
 
 			return fileFormat.readFile(filepath, shape, readOptions);
 		}
 
 		if ( extension == "md2" )
 		{
-			FileFormatMD2< data_t > fileFormat{};
+			FileFormatMD2< vertex_data_t, index_data_t > fileFormat{};
 
 			return fileFormat.readFile(filepath, shape, readOptions);
 		}
 
 		if ( extension == "md3" )
 		{
-			FileFormatMD3< data_t > fileFormat{};
+			FileFormatMD3< vertex_data_t, index_data_t > fileFormat{};
 
 			return fileFormat.readFile(filepath, shape, readOptions);
 		}
 
 		if ( extension == "md5mesh" )
 		{
-			FileFormatMD5< data_t > fileFormat{};
+			FileFormatMD5< vertex_data_t, index_data_t > fileFormat{};
 
 			return fileFormat.readFile(filepath, shape, readOptions);
 		}
@@ -119,17 +121,17 @@ namespace EmEn::Libs::VertexFactory::FileIO
 
 	/**
 	 * @briew Writes a shape into a file.
-	 * @tparam data_t The pixmap data precision. Default 'uint8_t' (8bits per chanel).
+	 * @tparam vertex_data_t The precision type of vertex data. Default float.
+	 * @tparam index_data_t The precision type of index data. Default uint32_t.
 	 * @param shape A reference to the source shape.
 	 * @param filepath A reference to a filesystem path.
 	 * @param overwrite Overwrite existing file. Default false.
 	 * @return bool
 	 */
-	template< typename data_t = uint8_t >
-	requires (std::is_arithmetic_v< data_t >)
+	template< typename vertex_data_t = float, typename index_data_t = uint32_t >
 	[[nodiscard]]
 	bool
-	write (const Shape< data_t > & shape, const std::filesystem::path & filepath, bool overwrite = false)
+	write (const Shape< vertex_data_t, index_data_t > & shape, const std::filesystem::path & filepath, bool overwrite = false) requires (std::is_floating_point_v< vertex_data_t > && std::is_unsigned_v< index_data_t > )
 	{
 		if ( IO::fileExists(filepath) && !overwrite )
 		{
@@ -142,49 +144,49 @@ namespace EmEn::Libs::VertexFactory::FileIO
 
 		if ( extension == "emgeo" )
 		{
-			FileFormatNative< data_t > fileFormat{};
+			FileFormatNative< vertex_data_t, index_data_t > fileFormat{};
 
 			return fileFormat.readFile(filepath, shape);
 		}
 
 		if ( extension == "obj" )
 		{
-			FileFormatOBJ< data_t > fileFormat{};
+			FileFormatOBJ< vertex_data_t, index_data_t > fileFormat{};
 
 			return fileFormat.readFile(filepath, shape);
 		}
 
 		if ( extension == "fbx" )
 		{
-			FileFormatFBX< data_t > fileFormat{};
+			FileFormatFBX< vertex_data_t, index_data_t > fileFormat{};
 
 			return fileFormat.readFile(filepath, shape);
 		}
 
 		if ( extension == "mdl" )
 		{
-			FileFormatMDL< data_t > fileFormat{};
+			FileFormatMDL< vertex_data_t, index_data_t > fileFormat{};
 
 			return fileFormat.readFile(filepath, shape);
 		}
 
 		if ( extension == "md2" )
 		{
-			FileFormatMD2< data_t > fileFormat{};
+			FileFormatMD2< vertex_data_t, index_data_t > fileFormat{};
 
 			return fileFormat.readFile(filepath, shape);
 		}
 
 		if ( extension == "md3" )
 		{
-			FileFormatMD3< data_t > fileFormat{};
+			FileFormatMD3< vertex_data_t, index_data_t > fileFormat{};
 
 			return fileFormat.readFile(filepath, shape);
 		}
 
 		if ( extension == "md5mesh" )
 		{
-			FileFormatMD5< data_t > fileFormat{};
+			FileFormatMD5< vertex_data_t, index_data_t > fileFormat{};
 
 			return fileFormat.readFile(filepath, shape);
 		}

@@ -82,7 +82,7 @@ namespace EmEn::Libs::Math
 
 			/**
 			 * @brief Constructs a plane with defined data.
-			 * @param normal A reference to a vector. Must be normalized !
+			 * @param normal A reference to a vector. Must be normalized!
 			 * @param distance A value.
 			 */
 			Plane (const Vector< 3, data_t > & normal, data_t distance) noexcept

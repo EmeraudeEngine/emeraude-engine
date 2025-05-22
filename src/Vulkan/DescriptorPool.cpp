@@ -36,28 +36,6 @@ namespace EmEn::Vulkan
 {
 	using namespace EmEn::Libs;
 
-	DescriptorPool::DescriptorPool (const std::shared_ptr< Device > & device, const std::vector< VkDescriptorPoolSize > & descriptorPoolSizes, uint32_t maxSets, VkDescriptorPoolCreateFlags createFlags) noexcept
-		: AbstractDeviceDependentObject(device), m_descriptorPoolSizes(descriptorPoolSizes)
-	{
-		m_createInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-		m_createInfo.pNext = nullptr;
-		m_createInfo.flags = createFlags;
-		m_createInfo.maxSets = maxSets;
-		m_createInfo.poolSizeCount = static_cast< uint32_t >(m_descriptorPoolSizes.size());
-		m_createInfo.pPoolSizes = m_descriptorPoolSizes.data();
-	}
-
-	DescriptorPool::DescriptorPool (const std::shared_ptr< Device > & device, const VkDescriptorPoolCreateInfo & createInfo) noexcept
-		: AbstractDeviceDependentObject(device), m_createInfo(createInfo)
-	{
-
-	}
-
-	DescriptorPool::~DescriptorPool ()
-	{
-		this->destroyFromHardware();
-	}
-
 	bool
 	DescriptorPool::createOnHardware() noexcept
 	{
@@ -120,7 +98,7 @@ namespace EmEn::Vulkan
 	}
 
 	VkDescriptorSet
-	DescriptorPool::allocateDescriptorSet (const DescriptorSetLayout & descriptorSetLayout) noexcept
+	DescriptorPool::allocateDescriptorSet (const DescriptorSetLayout & descriptorSetLayout) const noexcept
 	{
 		const std::lock_guard< std::mutex > lock{m_allocationMutex};
 
@@ -152,7 +130,7 @@ namespace EmEn::Vulkan
 	}
 
 	bool
-	DescriptorPool::freeDescriptorSet (VkDescriptorSet descriptorSetHandle) noexcept
+	DescriptorPool::freeDescriptorSet (VkDescriptorSet descriptorSetHandle) const noexcept
 	{
 		const std::lock_guard< std::mutex > lock{m_allocationMutex};
 

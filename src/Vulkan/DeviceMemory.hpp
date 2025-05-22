@@ -49,10 +49,16 @@ namespace EmEn::Vulkan
 			/**
 			 * @brief Constructs a device memory.
 			 * @param device A reference to a smart pointer of the device.
-			 * @param memoryRequirement A reference to a memory requirement.
-			 * @param memoryPropertyFlags The type of memory.
+			 * @param requirement A reference to a memory requirement.
+			 * @param propertyFlags The type of memory.
 			 */
-			DeviceMemory (const std::shared_ptr< Device > & device, const VkMemoryRequirements & memoryRequirement, VkMemoryPropertyFlags memoryPropertyFlags) noexcept;
+			DeviceMemory (const std::shared_ptr< Device > & device, const VkMemoryRequirements & requirement, VkMemoryPropertyFlags propertyFlags) noexcept
+				: AbstractDeviceDependentObject{device},
+				m_requirement{requirement},
+				m_propertyFlags{propertyFlags}
+			{
+
+			}
 
 			/**
 			 * @brief Copy constructor.
@@ -81,7 +87,10 @@ namespace EmEn::Vulkan
 			/**
 			 * @brief Destructs the device memory.
 			 */
-			~DeviceMemory () override;
+			~DeviceMemory () override
+			{
+				this->destroyFromHardware();
+			}
 
 			/** @copydoc EmEn::Vulkan::AbstractDeviceDependentObject::createOnHardware() */
 			bool createOnHardware () noexcept override;
@@ -123,7 +132,7 @@ namespace EmEn::Vulkan
 			const VkMemoryRequirements &
 			memoryRequirement () const noexcept
 			{
-				return m_memoryRequirement;
+				return m_requirement;
 			}
 
 			/**
@@ -134,7 +143,7 @@ namespace EmEn::Vulkan
 			VkMemoryPropertyFlags
 			memoryPropertyFlags () const noexcept
 			{
-				return m_memoryPropertyFlags;
+				return m_propertyFlags;
 			}
 
 			/**
@@ -146,13 +155,13 @@ namespace EmEn::Vulkan
 			size_t
 			bytes () const noexcept
 			{
-				return m_memoryRequirement.size;
+				return m_requirement.size;
 			}
 
 		private:
 
 			VkDeviceMemory m_handle{VK_NULL_HANDLE};
-			VkMemoryRequirements m_memoryRequirement;
-			VkMemoryPropertyFlags m_memoryPropertyFlags;
+			VkMemoryRequirements m_requirement;
+			VkMemoryPropertyFlags m_propertyFlags;
 	};
 }

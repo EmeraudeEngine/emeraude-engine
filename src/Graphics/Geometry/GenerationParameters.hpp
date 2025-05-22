@@ -56,9 +56,14 @@ namespace EmEn::Graphics::Geometry
 
 			/**
 			 * @brief Constructs a generation parameters object.
-			 * @param geometryFlagBits Flags value from GeometryFlagBits. Default 0.
+			 * @param geometryFlags Flags value from GeometryFlagBits. Default 0.
 			 */
-			explicit GenerationParameters (uint32_t geometryFlagBits = 0) noexcept;
+			explicit
+			GenerationParameters (uint32_t geometryFlags = 0) noexcept
+				: FlagTrait{geometryFlags}
+			{
+
+			}
 
 			/**
 			 * @brief Sets the way the vertex color will be generated.
@@ -157,13 +162,13 @@ namespace EmEn::Graphics::Geometry
 
 			/**
 			 * @brief Sets the geometry flags.
-			 * @param geometryResourceFlagBits Flags value from GeometryFlagBits.
+			 * @param geometryFlags Flags value from geometry.
 			 * @return void
 			 */
 			void
-			setGeometryFlags (uint32_t geometryResourceFlagBits) noexcept
+			setGeometryFlags (uint32_t geometryFlags) noexcept
 			{
-				this->setFlagBits(geometryResourceFlagBits);
+				this->setFlags(geometryFlags);
 			}
 
 			/**
@@ -229,7 +234,7 @@ namespace EmEn::Graphics::Geometry
 			uint32_t
 			geometryFlags () const noexcept
 			{
-				return this->flagBits();
+				return this->flags();
 			}
 
 			/**

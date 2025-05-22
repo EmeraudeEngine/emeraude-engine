@@ -96,17 +96,18 @@ namespace EmEn::Libs::WaveFactory
 			isDataValid = false;
 		}
 
-#ifdef DEBUG_WAVEFACTORY
-		std::cout <<
-			"[libsndfile_DEBUG] File loaded.\n" <<
-			"\tFrames (Samples) : " << soundFileInfos.frames << '\n' <<
-			"\tSample rates (Frequency) : " << soundFileInfos.samplerate << " Hz" << '\n' <<
-			"\tDuration : " << ( static_cast< float >(soundFileInfos.frames) / static_cast< float >(soundFileInfos.samplerate) ) << " seconds" << '\n' <<
-			"\tChannels : " << soundFileInfos.channels << '\n' <<
-			"\tFormat (Bits) : " << soundFileInfos.format << '\n' <<
-			"\tSections : " << soundFileInfos.sections << '\n' <<
-			"\tSeekable : " << soundFileInfos.seekable << '\n' <<;
-#endif
+		if constexpr ( WaveFactoryDebugEnabled )
+		{
+			std::cout <<
+				"[libsndfile_DEBUG] File loaded." "\n"
+				"\t" "Frames (Samples) : " << soundFileInfos.frames << "\n"
+				"\t" "Sample rates (Frequency) : " << soundFileInfos.samplerate << " Hz" "\n"
+				"\t" "Duration : " << ( static_cast< float >(soundFileInfos.frames) / static_cast< float >(soundFileInfos.samplerate) ) << " seconds" "\n"
+				"\t" "Channels : " << soundFileInfos.channels << "\n"
+				"\t" "Format (Bits) : " << soundFileInfos.format << "\n"
+				"\t" "Sections : " << soundFileInfos.sections << "\n"
+				"\t" "Seekable : " << soundFileInfos.seekable << '\n';
+		}
 
 		/* 3. Read data */
 		if ( isDataValid )

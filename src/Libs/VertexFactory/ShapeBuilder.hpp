@@ -31,11 +31,9 @@
 
 /* STL inclusions. */
 #include <array>
-#include <cmath>
-#include <cstddef>
+#include <vector>
 #include <iostream>
 #include <type_traits>
-#include <vector>
 
 /* Local inclusions. */
 #include "Shape.hpp"
@@ -56,10 +54,11 @@ namespace EmEn::Libs::VertexFactory
 
 	/**
 	 * @brief The shape builder construct a geometry shape by providing the structure by triangles.
-	 * @tparam float_t The type of data. Default float.
+	 * @tparam vertex_data_t The precision type of vertex data. Default float.
+	 * @tparam index_data_t The precision type of index data. Default uint32_t.
 	 */
-	template< typename float_t = float >
-	requires (std::is_floating_point_v< float_t >)
+	template< typename vertex_data_t = float, typename index_data_t = uint32_t >
+	requires (std::is_floating_point_v< vertex_data_t > && std::is_unsigned_v< index_data_t > )
 	class ShapeBuilder final
 	{
 		public:
@@ -69,7 +68,7 @@ namespace EmEn::Libs::VertexFactory
 			 * @param options A reference to initial builder options. Default none.
 			 */
 			explicit
-			ShapeBuilder (const ShapeBuilderOptions< float_t > & options = {}) noexcept
+			ShapeBuilder (const ShapeBuilderOptions< vertex_data_t > & options = {}) noexcept
 				: m_options(options)
 			{
 
@@ -81,8 +80,9 @@ namespace EmEn::Libs::VertexFactory
 			 * @param options A reference to initial builder options. Default none.
 			 */
 			explicit
-			ShapeBuilder (Shape< float_t > & destinationShape, const ShapeBuilderOptions< float_t > & options = {}) noexcept
-				: m_destinationShape(&destinationShape), m_options(options)
+			ShapeBuilder (Shape< vertex_data_t, index_data_t > & destinationShape, const ShapeBuilderOptions< vertex_data_t > & options = {}) noexcept
+				: m_destinationShape(&destinationShape),
+				m_options(options)
 			{
 
 			}
@@ -122,7 +122,7 @@ namespace EmEn::Libs::VertexFactory
 			 * @return void
 			 */
 			void
-			setDestinationShape (Shape< float_t > & destinationShape) noexcept
+			setDestinationShape (Shape< vertex_data_t, index_data_t > & destinationShape) noexcept
 			{
 				if ( m_constructionMode != ConstructionMode::None )
 				{
@@ -138,10 +138,10 @@ namespace EmEn::Libs::VertexFactory
 
 			/**
 			 * @brief Returns a reference to options to parametrize the build.
-			 * @return ShapeBuilderOptions< type_t > &
+			 * @return ShapeBuilderOptions< vertex_data_t > &
 			 */
 			[[nodiscard]]
-			ShapeBuilderOptions< float_t > &
+			ShapeBuilderOptions< vertex_data_t > &
 			options () noexcept
 			{
 				return m_options;
@@ -176,9 +176,10 @@ namespace EmEn::Libs::VertexFactory
 					m_constructionMode = constructionMode;
 				}
 
-#ifdef EMERAUDE_DEBUG_VERTEX_FACTORY
-				std::cout << "[DEBUG:VERTEX_FACTORY] Ready for construction ... " "\n";
-#endif
+				if constexpr ( VertexFactoryDebugEnabled )
+				{
+					std::cout << "[DEBUG:VERTEX_FACTORY] Ready for construction ... " "\n";
+				}
 			}
 
 			/**
@@ -206,14 +207,14 @@ namespace EmEn::Libs::VertexFactory
 			 * @return void
 			 */
 			void
-			setPosition (const Math::Vector< 3, float_t > & position) noexcept
+			setPosition (const Math::Vector< 3, vertex_data_t > & position) noexcept
 			{
 				m_triangleVertices[m_triangleVertexIndex] = position;
 				m_declaredAttributes[PositionDeclared] = true;
 			}
 
 			void
-			setPosition (float_t x, float_t y, float_t z) noexcept
+			setPosition (vertex_data_t x, vertex_data_t y, vertex_data_t z) noexcept
 			{
 				m_triangleVertices[m_triangleVertexIndex][Math::X] = x;
 				m_triangleVertices[m_triangleVertexIndex][Math::Y] = y;
@@ -222,14 +223,14 @@ namespace EmEn::Libs::VertexFactory
 			}
 
 			void
-			setNormal (const Math::Vector< 3, float_t > & normal) noexcept
+			setNormal (const Math::Vector< 3, vertex_data_t > & normal) noexcept
 			{
 				m_triangleNormals[m_triangleVertexIndex] = normal;
 				m_declaredAttributes[NormalDeclared] = true;
 			}
 
 			void
-			setNormal (float_t x, float_t y, float_t z) noexcept
+			setNormal (vertex_data_t x, vertex_data_t y, vertex_data_t z) noexcept
 			{
 				m_triangleNormals[m_triangleVertexIndex][Math::X] = x;
 				m_triangleNormals[m_triangleVertexIndex][Math::Y] = y;
@@ -238,14 +239,14 @@ namespace EmEn::Libs::VertexFactory
 			}
 
 			void
-			setTextureCoordinates (const Math::Vector< 3, float_t > & textureCoordinates) noexcept
+			setTextureCoordinates (const Math::Vector< 3, vertex_data_t > & textureCoordinates) noexcept
 			{
 				m_triangleTextureCoordinates[m_triangleVertexIndex] = textureCoordinates;
 				m_declaredAttributes[TextureCoordinatesDeclared] = true;
 			}
 
 			void
-			setTextureCoordinates (float_t u, float_t v, float_t w = 0) noexcept
+			setTextureCoordinates (vertex_data_t u, vertex_data_t v, vertex_data_t w = 0) noexcept
 			{
 				m_triangleTextureCoordinates[m_triangleVertexIndex][Math::X] = u;
 				m_triangleTextureCoordinates[m_triangleVertexIndex][Math::Y] = v;
@@ -254,14 +255,14 @@ namespace EmEn::Libs::VertexFactory
 			}
 
 			void
-			setVertexColor (const Math::Vector< 4, float_t > & vertexColor) noexcept
+			setVertexColor (const Math::Vector< 4, vertex_data_t > & vertexColor) noexcept
 			{
 				m_triangleVertexColors[m_triangleVertexIndex] = vertexColor;
 				m_declaredAttributes[VertexColorDeclared] = true;
 			}
 
 			void
-			setVertexColor (const PixelFactory::Color< float_t > & vertexColor) noexcept
+			setVertexColor (const PixelFactory::Color< vertex_data_t > & vertexColor) noexcept
 			{
 				m_triangleVertexColors[m_triangleVertexIndex][Math::X] = vertexColor.red();
 				m_triangleVertexColors[m_triangleVertexIndex][Math::Y] = vertexColor.green();
@@ -271,7 +272,7 @@ namespace EmEn::Libs::VertexFactory
 			}
 
 			void
-			setVertexColor (float_t red, float_t green, float_t blue, float_t alpha = 1) noexcept
+			setVertexColor (vertex_data_t red, vertex_data_t green, vertex_data_t blue, vertex_data_t alpha = 1) noexcept
 			{
 				m_triangleVertexColors[m_triangleVertexIndex][Math::X] = red;
 				m_triangleVertexColors[m_triangleVertexIndex][Math::Y] = green;
@@ -281,15 +282,17 @@ namespace EmEn::Libs::VertexFactory
 			}
 
 			void
-			setInfluences (const Math::Vector< 4, int32_t > & influences) noexcept
+			setInfluences (const Math::Vector< 4, int32_t > & /*influences*/) noexcept
 			{
+				// TODO: Create a vector to store influences
 				//m_triangleVertexColors[m_triangleVertexIndex] = influences;
 				m_declaredAttributes[InfluencesDeclared] = true;
 			}
 
 			void
-			setWeights (const Math::Vector< 4, float_t > & weights) noexcept
+			setWeights (const Math::Vector< 4, vertex_data_t > & /*weights*/) noexcept
 			{
+				// TODO: Create a vector to store weights
 				//m_triangleVertexColors[m_triangleVertexIndex] = weights;
 				m_declaredAttributes[WeightsDeclared] = true;
 			}
@@ -363,9 +366,10 @@ namespace EmEn::Libs::VertexFactory
 				{
 					const auto & textureCoordinatesMultiplier = m_options.textureCoordinatesMultiplier();
 
-#ifdef EMERAUDE_DEBUG_VERTEX_FACTORY
-					std::cout << "[DEBUG:VERTEX_FACTORY] Generating texture coordinates !" "\n";
-#endif
+					if constexpr ( VertexFactoryDebugEnabled )
+					{
+						std::cout << "[DEBUG:VERTEX_FACTORY] Generating texture coordinates !" "\n";
+					}
 
 					m_destinationShape->generateTextureCoordinates(textureCoordinatesMultiplier[Math::X], textureCoordinatesMultiplier[Math::Y]);
 				}
@@ -391,9 +395,11 @@ namespace EmEn::Libs::VertexFactory
 				/* NOTE: If asked with generation parameters, we flip the whole geometry. */
 				if ( m_options.isGeometryFlippingEnabled() )
 				{
-#ifdef EMERAUDE_DEBUG_VERTEX_FACTORY
-					std::cout << "[DEBUG:VERTEX_FACTORY] Flipping the shape !" "\n";
-#endif
+					if constexpr ( VertexFactoryDebugEnabled )
+					{
+						std::cout << "[DEBUG:VERTEX_FACTORY] Flipping the shape !" "\n";
+					}
+
 					m_destinationShape->flipSurface();
 				}
 
@@ -407,20 +413,21 @@ namespace EmEn::Libs::VertexFactory
 					m_constructionMode = ConstructionMode::None;
 				}
 
-#ifdef EMERAUDE_DEBUG_VERTEX_FACTORY
-				std::cout << "[DEBUG:VERTEX_FACTORY] Construction finished !" "\n";
-#endif
+				if constexpr ( VertexFactoryDebugEnabled )
+				{
+					std::cout << "[DEBUG:VERTEX_FACTORY] Construction finished !" "\n";
+				}
 			}
 
 			/**
 			 * @brief Returns a list of distances between vertices.
 			 * @param vertices A list of vertex.
-			 * @return std::vector< type_t >
+			 * @return std::vector< vertex_data_t >
 			 */
 			[[nodiscard]]
 			static
-			std::vector< float_t >
-			getDistances (const std::vector< std::vector< ShapeVertex< float_t > > > & vertices) noexcept
+			std::vector< vertex_data_t >
+			getDistances (const std::vector< std::vector< ShapeVertex< vertex_data_t > > > & vertices) noexcept
 			{
 				if ( vertices.empty() )
 				{
@@ -430,23 +437,23 @@ namespace EmEn::Libs::VertexFactory
 				const auto verticesCount = vertices.size();
 
 				/* Compute vector space. */
-				size_t space = 0;
+				index_data_t space = 0;
 				auto count = verticesCount - 1;
 
-				for ( size_t index = 0; index < verticesCount; index++ )
+				for ( index_data_t index = 0; index < verticesCount; ++index )
 				{
 					space += count--;
 				}
 
 				/* Find every distance between every vertex. */
-				std::vector< float_t > distances{};
+				std::vector< vertex_data_t > distances;
 				distances.reserve(space);
 
-				for ( size_t index = 0; index < verticesCount - 1; index++ )
+				for ( index_data_t index = 0; index < verticesCount - 1; ++index )
 				{
-					for ( size_t subIndex = index + 1; subIndex < verticesCount; subIndex++ )
+					for ( index_data_t subIndex = index + 1; subIndex < verticesCount; ++subIndex )
 					{
-						distances.emplace_back(Math::Vector<3, float_t>::distance(vertices[index].position(), vertices[subIndex].position()));
+						distances.emplace_back(Math::Vector< 3, vertex_data_t >::distance(vertices[index].position(), vertices[subIndex].position()));
 					}
 				}
 
@@ -456,12 +463,12 @@ namespace EmEn::Libs::VertexFactory
 			/**
 			 * @brief Returns minimum, maximum and the average distances between vertices.
 			 * @param vertices A list of vertex.
-			 * @return std::array< type_t, 3 >
+			 * @return std::array< vertex_data_t, 3 >
 			 */
 			[[nodiscard]]
 			static
-			std::array< float_t, 3 >
-			getDistancesAggregate (const std::vector< std::vector< ShapeVertex< float_t > > > & vertices) noexcept
+			std::array< vertex_data_t, 3 >
+			getDistancesAggregate (const std::vector< std::vector< ShapeVertex< vertex_data_t > > > & vertices) noexcept
 			{
 				const auto distances = ShapeBuilder::getDistances(vertices);
 
@@ -545,7 +552,7 @@ namespace EmEn::Libs::VertexFactory
 				{
 					m_triangleTextureCoordinates[m_triangleVertexIndex] = TextureCoordinates::generateCubicCoordinates(
 						m_triangleVertices[m_triangleVertexIndex],
-						m_options.isNormalsEnabled() ? m_triangleNormals[m_triangleVertexIndex] : Math::Vector< 3, float_t >::positiveZ()
+						m_options.isNormalsEnabled() ? m_triangleNormals[m_triangleVertexIndex] : Math::Vector< 3, vertex_data_t >::positiveZ()
 					);
 
 					return true;
@@ -571,7 +578,7 @@ namespace EmEn::Libs::VertexFactory
 
 				if ( m_options.isVertexColorsGenerationEnabled() )
 				{
-					m_triangleVertexColors[m_triangleVertexIndex] = Math::Vector< 4, float_t >{m_triangleVertices[m_triangleVertexIndex].normalized(), 1};
+					m_triangleVertexColors[m_triangleVertexIndex] = Math::Vector< 4, vertex_data_t >{m_triangleVertices[m_triangleVertexIndex].normalized(), 1};
 
 					return true;
 				}
@@ -586,7 +593,7 @@ namespace EmEn::Libs::VertexFactory
 			void
 			newVertexAdded () noexcept
 			{
-				m_triangleVertexIndex++;
+				++m_triangleVertexIndex;
 				m_declaredAttributes.fill(false);
 
 				/* NOTE: If we got 3 vertices, we can create a triangle. */
@@ -645,17 +652,17 @@ namespace EmEn::Libs::VertexFactory
 			void
 			createTriangle () noexcept
 			{
-				ShapeTriangle< float_t > triangle{};
+				ShapeTriangle< vertex_data_t > triangle{};
 
 				const auto & textureCoordinatesMultiplier = m_options.textureCoordinatesMultiplier();
 
-				for ( size_t vertexIndex = 0; vertexIndex < 3; vertexIndex++ )
+				for ( index_data_t vertexIndex = 0; vertexIndex < 3; ++vertexIndex )
 				{
-					size_t attributeIndex = 0;
+					index_data_t attributeIndex = 0;
 
 					/* Vertex position, normal and texCoords. */
 					{
-						const auto textureCoordinates = Math::Vector< 3, float_t >(
+						const auto textureCoordinates = Math::Vector< 3, vertex_data_t >(
 							m_triangleTextureCoordinates[vertexIndex][Math::X] * textureCoordinatesMultiplier[Math::X],
 							m_triangleTextureCoordinates[vertexIndex][Math::Y] * textureCoordinatesMultiplier[Math::Y],
 							m_triangleTextureCoordinates[vertexIndex][Math::Z] * textureCoordinatesMultiplier[Math::Z]
@@ -690,7 +697,7 @@ namespace EmEn::Libs::VertexFactory
 
 				m_destinationShape->addTriangle(triangle);
 
-				m_triangleCount++;
+				++m_triangleCount;
 			}
 
 			static constexpr auto PositionDeclared{0UL};
@@ -700,14 +707,14 @@ namespace EmEn::Libs::VertexFactory
 			static constexpr auto InfluencesDeclared{4UL};
 			static constexpr auto WeightsDeclared{5UL};
 
-			Shape< float_t > * m_destinationShape{nullptr};
-			std::array< Math::Vector< 3, float_t >, 3 > m_triangleVertices{};
-			std::array< Math::Vector< 3, float_t >, 3 > m_triangleNormals{};
-			std::array< Math::Vector< 3, float_t >, 3 > m_triangleTextureCoordinates{};
-			std::array< Math::Vector< 4, float_t >, 3 > m_triangleVertexColors{};
-			size_t m_triangleVertexIndex{0};
-			size_t m_triangleCount{0};
-			ShapeBuilderOptions< float_t > m_options;
+			Shape< vertex_data_t, index_data_t > * m_destinationShape{nullptr};
+			std::array< Math::Vector< 3, vertex_data_t >, 3 > m_triangleVertices{};
+			std::array< Math::Vector< 3, vertex_data_t >, 3 > m_triangleNormals{};
+			std::array< Math::Vector< 3, vertex_data_t >, 3 > m_triangleTextureCoordinates{};
+			std::array< Math::Vector< 4, vertex_data_t >, 3 > m_triangleVertexColors{};
+			index_data_t m_triangleVertexIndex{0};
+			index_data_t m_triangleCount{0};
+			ShapeBuilderOptions< vertex_data_t > m_options;
 			ConstructionMode m_constructionMode{ConstructionMode::None};
 			std::array< bool, 8 > m_declaredAttributes{
 				false/*PositionDeclared*/,

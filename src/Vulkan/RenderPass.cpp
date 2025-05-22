@@ -40,31 +40,6 @@ namespace EmEn::Vulkan
 {
 	using namespace EmEn::Libs;
 
-	RenderPass::RenderPass (const std::shared_ptr< Device > & device, VkRenderPassCreateFlags createFlags) noexcept
-		: AbstractDeviceDependentObject(device)
-	{
-		m_createInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-		m_createInfo.pNext = nullptr;
-		m_createInfo.flags = createFlags;
-		m_createInfo.attachmentCount = 0;
-		m_createInfo.pAttachments = nullptr;
-		m_createInfo.subpassCount = 0;
-		m_createInfo.pSubpasses = nullptr;
-		m_createInfo.dependencyCount = 0;
-		m_createInfo.pDependencies = nullptr;
-	}
-
-	RenderPass::RenderPass (const std::shared_ptr< Device > & device, const VkRenderPassCreateInfo & createInfo) noexcept
-		: AbstractDeviceDependentObject(device), m_createInfo(createInfo)
-	{
-
-	}
-
-	RenderPass::~RenderPass ()
-	{
-		this->destroyFromHardware();
-	}
-
 	std::vector< VkSubpassDescription >
 	RenderPass::getSubPassDescriptions () const noexcept
 	{

@@ -35,7 +35,7 @@
 namespace EmEn::Vulkan
 {
 	/**
-	 * @brief Defines a convenient way to build an shader storage buffer object.
+	 * @brief Defines a convenient way to build a shader storage buffer object.
 	 * @note OpenGL guaranteed a minimum size of 128MB.
 	 * @extends EmEn::Vulkan::AbstractDeviceBuffer This is a device-side buffer.
 	 */
@@ -43,11 +43,18 @@ namespace EmEn::Vulkan
 	{
 		public:
 
+			/** @brief Class identifier. */
+			static constexpr auto ClassId{"VulkanShaderStorageBufferObject"};
+
 			/**
 			 * @brief Constructs a shader storage buffer object.
 			 * @param device A reference to the device smart pointer.
 			 * @param size The size of the buffer.
 			 */
-			ShaderStorageBufferObject (const std::shared_ptr< Device > & device, VkDeviceSize size) noexcept;
+			ShaderStorageBufferObject (const std::shared_ptr< Device > & device, VkDeviceSize size) noexcept
+				: AbstractDeviceBuffer{device, 0, size, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT}
+			{
+
+			}
 	};
 }

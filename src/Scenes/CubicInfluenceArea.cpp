@@ -36,22 +36,10 @@ namespace EmEn::Scenes
 {
 	using namespace EmEn::Libs;
 	using namespace EmEn::Libs::Math;
-	using namespace Physics;
-
-	CubicInfluenceArea::CubicInfluenceArea (const AbstractEntity & parentEntity, float size) noexcept
-		: m_parentEntity(&parentEntity), m_xSize(std::abs(size)), m_ySize(std::abs(size)), m_zSize(std::abs(size))
-	{
-
-	}
-
-	CubicInfluenceArea::CubicInfluenceArea (const AbstractEntity & parentEntity, float xSize, float ySize, float zSize) noexcept
-		: m_parentEntity(&parentEntity), m_xSize(std::abs(xSize)), m_ySize(std::abs(ySize)), m_zSize(std::abs(zSize))
-	{
-
-	}
+	using namespace EmEn::Physics;
 
 	bool
-	CubicInfluenceArea::isUnderInfluence (const CartesianFrame< float > & worldCoordinates, const Sphere< float > & worldBoundingSphere) const noexcept
+	CubicInfluenceArea::isUnderInfluence (const CartesianFrame< float > & worldCoordinates, const Space3D::Sphere< float > & /*worldBoundingSphere*/) const noexcept
 	{
 		/* FIXME: TODO : Use sphere radius ! */
 		const auto position = this->getPositionInModifierSpace(worldCoordinates.position());
@@ -78,7 +66,7 @@ namespace EmEn::Scenes
 	}
 
 	float
-	CubicInfluenceArea::influenceStrength (const CartesianFrame< float > & worldCoordinates, const Sphere< float > & worldBoundingSphere) const noexcept
+	CubicInfluenceArea::influenceStrength (const CartesianFrame< float > & worldCoordinates, const Space3D::Sphere< float > & /*worldBoundingSphere*/) const noexcept
 	{
 		/* FIXME: TODO : Use sphere radius ! */
 		const auto position = this->getPositionInModifierSpace(worldCoordinates.position());
@@ -105,14 +93,14 @@ namespace EmEn::Scenes
 	}
 
 	bool
-	CubicInfluenceArea::isUnderInfluence (const CartesianFrame< float > & worldCoordinates, const Cuboid< float > & worldBoundingBox) const noexcept
+	CubicInfluenceArea::isUnderInfluence (const CartesianFrame< float > & /*worldCoordinates*/, const Space3D::AACuboid< float > & /*worldBoundingBox*/) const noexcept
 	{
 		/* FIXME: TODO ! */
 		return false;
 	}
 
 	float
-	CubicInfluenceArea::influenceStrength (const CartesianFrame< float > & worldCoordinates, const Cuboid< float > & worldBoundingBox) const noexcept
+	CubicInfluenceArea::influenceStrength (const CartesianFrame< float > & /*worldCoordinates*/, const Space3D::AACuboid< float > & /*worldBoundingBox*/) const noexcept
 	{
 		/* FIXME: TODO ! */
 		return 0.0F;

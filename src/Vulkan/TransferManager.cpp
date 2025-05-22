@@ -47,35 +47,7 @@ namespace EmEn::Vulkan
 {
 	using namespace EmEn::Libs;
 
-	const size_t TransferManager::ClassUID{getClassUID(ClassId)};
-
 	std::array< TransferManager *, 2 > TransferManager::s_instances{nullptr, nullptr};
-
-	TransferManager::TransferManager (GPUWorkType type) noexcept
-		: ServiceInterface(ClassId)
-	{
-		if ( s_instances.at(static_cast< size_t >(type)) != nullptr )
-		{
-			std::cerr << __PRETTY_FUNCTION__ << ", constructor called twice !" "\n";
-
-			std::terminate();
-		}
-
-		s_instances.at(static_cast< size_t >(type)) = this;
-	}
-
-	TransferManager::~TransferManager ()
-	{
-		for ( auto & pointer : s_instances )
-		{
-			if ( pointer == this )
-			{
-				pointer = nullptr;
-
-				break;
-			}
-		}
-	}
 
 	bool
 	TransferManager::onInitialize () noexcept
@@ -263,20 +235,21 @@ namespace EmEn::Vulkan
 	{
 		const std::lock_guard< std::mutex > lock{m_transferMutex};
 
-#ifdef DEBUG
-		const auto endCopyOffset = offset + dstBuffer.bytes();
-
-		if ( endCopyOffset > stagingBuffer.bytes() )
+		if constexpr ( IsDebug )
 		{
-			const auto overflow = endCopyOffset - stagingBuffer.bytes();
+			const auto endCopyOffset = offset + dstBuffer.bytes();
 
-			TraceError{ClassId} <<
-				"Source buffer overflow with " << overflow << " bytes !" "\n"
-				"(offset:" << offset << " + length:" << dstBuffer.bytes() << ") > srcBuffer:" << stagingBuffer.bytes();
+			if ( endCopyOffset > stagingBuffer.bytes() )
+			{
+				const auto overflow = endCopyOffset - stagingBuffer.bytes();
 
-			return false;
+				TraceError{ClassId} <<
+					"Source buffer overflow with " << overflow << " bytes !" "\n"
+					"(offset:" << offset << " + length:" << dstBuffer.bytes() << ") > srcBuffer:" << stagingBuffer.bytes();
+
+				return false;
+			}
 		}
-#endif
 
 		auto commandBuffer = std::make_shared< CommandBuffer >(m_transferCommandPool, true);
 		commandBuffer->setIdentifier(ClassId, "ToBuffer", "CommandBuffer");
@@ -306,7 +279,7 @@ namespace EmEn::Vulkan
 	}
 
 	bool
-	TransferManager::transfer (const StagingBuffer & stagingBuffer, Image & dstImage, VkDeviceSize offset) noexcept
+	TransferManager::transfer (const StagingBuffer & stagingBuffer, Image & dstImage, VkDeviceSize /*offset*/) noexcept
 	{
 		const std::lock_guard< std::mutex > lock{m_transferMutex};
 

@@ -26,18 +26,10 @@
 
 #pragma once
 
-/* Engine configuration file. */
-#include "emeraude_config.hpp"
-
 /* STL inclusions. */
-#include <array>
-#include <cstddef>
 #include <map>
 #include <string>
 #include <vector>
-
-/* Local inclusions for inheritances. */
-#include "ServiceInterface.hpp"
 
 /* Local inclusions for usages. */
 #include "BaseInformation.hpp"
@@ -45,17 +37,16 @@
 /* Forward declarations. */
 namespace EmEn
 {
-	class PrimaryServices;
+	class FileSystem;
 }
 
 namespace EmEn::Resources
 {
 	/**
-	 * @brief The resource stores contains by type all resources available on disk by reading an index file.
-	 * This only give the filepath to the actual resource.
-	 * @extends EmEn::ServiceInterface This is a service.
+	 * @brief The resource stores contain by type all resources available on disk by reading an index file.
+	 * This only gives the filepath to the actual resource.
 	 */
-	class Stores final : public ServiceInterface
+	class Stores final
 	{
 		public:
 
@@ -64,29 +55,21 @@ namespace EmEn::Resources
 			/** @brief Class identifier. */
 			static constexpr auto ClassId{"ResourcesStoresService"};
 
-			/** @brief Observable class unique identifier. */
-			static const size_t ClassUID;
-
-			static bool s_operationVerboseEnabled;
-			static bool s_downloadEnabled;
+			/**
+			 * @brief Constructs a resource stores.
+			 */
+			Stores () noexcept = default;
 
 			/**
-			 * @brief Constructs the resource stores.
-			 * @param primaryServices A reference to primary services.
+			 * @brief Returns whether resource stores are empty.
+			 * @return bool
 			 */
-			explicit Stores (PrimaryServices & primaryServices) noexcept;
-
-			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
 			[[nodiscard]]
-			size_t classUID () const noexcept override;
-
-			/** @copydoc EmEn::Libs::ObservableTrait::is() const */
-			[[nodiscard]]
-			bool is (size_t classUID) const noexcept override;
-
-			/** @copydoc EmEn::ServiceInterface::usable() */
-			[[nodiscard]]
-			bool usable () const noexcept override;
+			bool
+			empty () const noexcept
+			{
+				return m_stores.empty();
+			}
 
 			/**
 			 * @brief Returns a reference to a named store.
@@ -97,11 +80,20 @@ namespace EmEn::Resources
 			const Store & store (const std::string & storeName) const noexcept;
 
 			/**
-			 * @brief Updates resources store from another resource JSON definition.
-			 * @param root The resource JSON object.
-			 * @param name The name of the object. Default "unknown".
+			 * @brief Reads the resource index.
+			 * @param fileSystem A reference to the fileSystem services.
+			 * @param verbose Enable verbosity.
+			 * @return bool
 			 */
-			void update (const Json::Value & root, const std::string & name = "Unknown") noexcept;
+			bool initialize (const FileSystem & fileSystem, bool verbose) noexcept;
+
+			/**
+			 * @brief Updates resource store from another resource JSON definition.
+			 * @param root The resource JSON object.
+			 * @param verbose Enable verbosity. Default false.
+			 * @return void
+			 */
+			void update (const Json::Value & root, bool verbose /*= false*/) noexcept;
 
 			/**
 			 * @brief Returns a random resource from a named store.
@@ -119,6 +111,25 @@ namespace EmEn::Resources
 			[[nodiscard]]
 			static bool isJSONData (const std::string & buffer) noexcept;
 
+		private:
+
+			/**
+			 * @brief Returns a list of resources index filepath.
+			 * @param fileSystem A reference to the file system.
+			 * @return std::vector< std::string >
+			 */
+			[[nodiscard]]
+			static std::vector< std::string > getResourcesIndexFiles (const FileSystem & fileSystem) noexcept;
+
+			/**
+			 * @brief Parses a store JSON object to list available resources on disk.
+			 * @param storesObject A reference to a JSON value.
+			 * @param verbose Enable the reading verbosity in console.
+			 * @return size_t
+			 */
+			[[nodiscard]]
+			size_t parseStores (const Json::Value & storesObject, bool verbose) noexcept;
+
 			/**
 			* @brief STL streams printable object.
 			* @param out A reference to the stream output.
@@ -127,55 +138,45 @@ namespace EmEn::Resources
 			*/
 			friend std::ostream & operator<< (std::ostream & out, const Stores & obj);
 
-			/**
-			 * @brief Stringifies the object.
-			 * @param obj A reference to the object to print.
-			 * @return std::string
-			 */
-			friend std::string to_string (const Stores & obj) noexcept;
-
-		private:
-
-			/** @copydoc EmEn::ServiceInterface::onInitialize() */
-			bool onInitialize () noexcept override;
-
-			/** @copydoc EmEn::ServiceInterface::onTerminate() */
-			bool onTerminate () noexcept override;
-
-			/**
-			 * @brief Returns a list of resources index filepath.
-			 * @return std::vector< std::string >
-			 */
-			[[nodiscard]]
-			std::vector< std::string > getResourcesIndexFiles () const noexcept;
-
-			/**
-			 * @brief Parses a store JSON object to list available resources on disk.
-			 * @param storesObject A reference to a json value.
-			 * @param verbose Enable the reading verbosity in console.
-			 * @return size_t
-			 */
-			[[nodiscard]]
-			size_t parseStores (const Json::Value & storesObject, bool verbose) noexcept;
-
 			static constexpr auto StoresKey{"Stores"};
 
-			/* Flag names */
-			static constexpr auto ServiceInitialized{0UL};
-
-			PrimaryServices & m_primaryServices;
 			std::map< std::string, Store > m_stores;
 			Store m_defaultStore;
 			size_t m_registeredResources{0};
-			std::array< bool, 8 > m_flags{
-				false/*ServiceInitialized*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/
-			};
 	};
+
+	inline
+	std::ostream &
+	operator<< (std::ostream & out, const Stores & obj)
+	{
+		if ( obj.m_stores.empty() )
+		{
+			return out << "There is no available resource store !" "\n";
+		}
+
+		out << "Resources stores :" "\n";
+
+		for ( const auto & [name, store] : obj.m_stores )
+		{
+			out << " - " << name << " (" << store.size() << " resources)" << '\n';
+		}
+
+		return out;
+	}
+
+	/**
+	 * @brief Stringifies the object.
+	 * @param obj A reference to the object to print.
+	 * @return std::string
+	 */
+	inline
+	std::string
+	to_string (const Stores & obj) noexcept
+	{
+		std::stringstream output;
+
+		output << obj;
+
+		return output.str();
+	}
 }

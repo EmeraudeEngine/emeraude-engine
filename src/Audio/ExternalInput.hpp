@@ -63,62 +63,47 @@ namespace EmEn::Audio
 			/** @brief Class identifier. */
 			static constexpr auto ClassId{"AudioExternalInputService"};
 
-			/** @brief Observable class unique identifier. */
-			static const size_t ClassUID;
-
 			/**
 			 * @brief Constructs the external audio input.
 			 * @param primaryServices A reference to primary services.
 			 */
-			explicit ExternalInput (PrimaryServices & primaryServices) noexcept;
+			explicit
+			ExternalInput (PrimaryServices & primaryServices) noexcept
+				: ServiceInterface{ClassId},
+				m_primaryServices{primaryServices}
+			{
+
+			}
 
 			/**
-			 * @brief Copy constructor.
-			 * @param copy A reference to the copied instance.
+			 * @brief Destructs the external audio input.
 			 */
-			ExternalInput (const ExternalInput & copy) noexcept = delete;
-
-			/**
-			 * @brief Move constructor.
-			 * @param copy A reference to the copied instance.
-			 */
-			ExternalInput (ExternalInput && copy) noexcept = delete;
-
-			/**
-			 * @brief Copy assignment.
-			 * @param copy A reference to the copied instance.
-			 */
-			ExternalInput & operator= (const ExternalInput & copy) noexcept = delete;
-
-			/**
-			 * @brief Move assignment.
-			 * @param copy A reference to the copied instance.
-			 */
-			ExternalInput & operator= (ExternalInput && copy) noexcept = delete;
-
-			/**
-			 * @brief Destructor.
-			 */
-			~ExternalInput () override;
-
-			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
-			[[nodiscard]]
-			size_t classUID () const noexcept override;
-
-			/** @copydoc EmEn::Libs::ObservableTrait::is() const */
-			[[nodiscard]]
-			bool is (size_t classUID) const noexcept override;
+			~ExternalInput () override
+			{
+				if ( m_process.joinable() )
+				{
+					m_process.join();
+				}
+			}
 
 			/** @copydoc EmEn::ServiceInterface::usable() */
 			[[nodiscard]]
-			bool usable () const noexcept override;
+			bool
+			usable () const noexcept override
+			{
+				return m_device != nullptr;
+			}
 
 			/**
 			 * @brief Returns whether the capture is enabled.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool isRecording () const noexcept;
+			bool
+			isRecording () const noexcept
+			{
+				return m_flags[IsRecording];
+			}
 
 			/**
 			 * @brief Starts the recording.
@@ -135,6 +120,7 @@ namespace EmEn::Audio
 			 * @param filepath A reference to a filesystem path.
 			 * @return bool
 			 */
+			[[nodiscard]]
 			bool saveRecord (const std::filesystem::path & filepath) const noexcept;
 
 		private:

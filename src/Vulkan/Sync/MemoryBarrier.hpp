@@ -47,7 +47,15 @@ namespace EmEn::Vulkan::Sync
 			 * @param srcAccessMask A bitmask of VkAccessFlagBits specifying a source access mask.
 			 * @param dstAccessMask A bitmask of VkAccessFlagBits specifying a destination access mask.
 			 */
-			MemoryBarrier (VkAccessFlags srcAccessMask, VkAccessFlags dstAccessMask) noexcept;
+			MemoryBarrier (VkAccessFlags srcAccessMask, VkAccessFlags dstAccessMask) noexcept
+			{
+				m_barrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
+				m_barrier.pNext = nullptr;
+				m_barrier.srcAccessMask = srcAccessMask;
+				m_barrier.dstAccessMask = dstAccessMask;
+
+				this->setCreated();
+			}
 
 			/**
 			 * @brief Copy constructor.
@@ -76,11 +84,14 @@ namespace EmEn::Vulkan::Sync
 			/**
 			 * @brief Destructs the memory barrier.
 			 */
-			~MemoryBarrier () override;
+			~MemoryBarrier () override
+			{
+				this->setDestroyed();
+			}
 
 			/**
 			 * @brief Returns a reference to the memory barrier vulkan structure.
-			 * @param const VkMemoryBarrier &
+			 * @return const VkMemoryBarrier &
 			 */
 			[[nodiscard]]
 			const VkMemoryBarrier &

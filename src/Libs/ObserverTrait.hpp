@@ -104,17 +104,6 @@ namespace EmEn::Libs
 			}
 
 			/**
-			 * @brief Returns the list of observables.
-			 * @return const std::set< Observable * > &
-			 */
-			[[nodiscard]]
-			const std::set< ObservableTrait * > &
-			observables () const noexcept
-			{
-				return m_observables;
-			}
-
-			/**
 			 * @brief Observes an observable.
 			 * @param observable The pointer of the observable.
 			 * @return void

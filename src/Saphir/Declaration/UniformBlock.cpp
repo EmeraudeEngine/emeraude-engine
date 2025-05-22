@@ -27,39 +27,34 @@
 #include "UniformBlock.hpp"
 
 /* STL inclusions. */
+#include <ranges>
 #include <sstream>
 
 namespace EmEn::Saphir::Declaration
 {
-	using namespace Keys;
-
-	UniformBlock::UniformBlock (uint32_t set, uint32_t binding, MemoryLayout memoryLayout, Key name, Key instanceName, size_t arraySize) noexcept
-		: AbstractBufferBackedBlock(set, binding, memoryLayout, name, instanceName, arraySize)
-	{
-
-	}
+	using namespace EmEn::Saphir::Keys;
 
 	std::string
 	UniformBlock::sourceCode () const noexcept
 	{
-		std::stringstream code{};
+		std::stringstream code;
 
 		/* Check if structure are requested. */
 		const auto & structures = this->structures();
 
 		if ( !structures.empty() )
 		{
-			for ( const auto & structure : structures )
+			for ( const auto & structure: structures | std::views::values )
 			{
-				code << structure.second.sourceCode();
+				code << structure.sourceCode();
 			}
 		}
 
 		code << this->getLayoutQualifier() << GLSL::Uniform << ' ' << this->name() << "\n" "{" "\n";
 
-		for ( const auto & member : this->members() )
+		for ( const auto & bufferBackedBlock: this->members() | std::views::values )
 		{
-			code << '\t' << member.second.sourceCode();
+			code << '\t' << bufferBackedBlock.sourceCode();
 		}
 
 		code << '}';

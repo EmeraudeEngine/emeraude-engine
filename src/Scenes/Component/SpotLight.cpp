@@ -27,7 +27,9 @@
 #include "SpotLight.hpp"
 
 /* Local inclusions. */
+#include "Libs/Math/Space3D/Collisions/PointSphere.hpp"
 #include "Saphir/LightGenerator.hpp"
+#include "AVConsole/Manager.hpp"
 #include "Scenes/Scene.hpp"
 #include "Tracer.hpp"
 
@@ -35,23 +37,12 @@ namespace EmEn::Scenes::Component
 {
 	using namespace EmEn::Libs;
 	using namespace EmEn::Libs::Math;
-	using namespace Animations;
-	using namespace Graphics;
-	using namespace Saphir;
-
-	SpotLight::SpotLight (const std::string & name, const AbstractEntity & parentEntity, uint32_t shadowMapResolution) noexcept
-		: AbstractLightEmitter(name, parentEntity, shadowMapResolution)
-	{
-		this->setConeAngles(30.0F, 35.0F);
-	}
-
-	SpotLight::~SpotLight ()
-	{
-		this->destroyFromHardware();
-	}
+	using namespace EmEn::Animations;
+	using namespace EmEn::Graphics;
+	using namespace EmEn::Saphir;
 
 	void
-	SpotLight::onTargetConnected (AbstractVirtualDevice * targetDevice) noexcept
+	SpotLight::onTargetConnected (AVConsole::AVManagers & /*managers*/, AbstractVirtualDevice * targetDevice) noexcept
 	{
 		const auto maxDistance =
 			m_radius > 0.0F ?
@@ -65,7 +56,7 @@ namespace EmEn::Scenes::Component
 	}
 
 	bool
-	SpotLight::playAnimation (uint8_t animationID, const Variant & value, size_t cycle) noexcept
+	SpotLight::playAnimation (uint8_t animationID, const Variant & value, size_t /*cycle*/) noexcept
 	{
 		switch ( animationID )
 		{
@@ -109,12 +100,6 @@ namespace EmEn::Scenes::Component
 		this->updateAnimations(scene.cycle());
 	}
 
-	bool
-	SpotLight::shouldRemove () const noexcept
-	{
-		return false;
-	}
-
 	void
 	SpotLight::move (const CartesianFrame< float > & worldCoordinates) noexcept
 	{
@@ -123,7 +108,7 @@ namespace EmEn::Scenes::Component
 			return;
 		}
 
-		if ( this->isShadowEnabled() )
+		if ( this->isShadowCastingEnabled() )
 		{
 			this->updateDeviceFromCoordinates(worldCoordinates, this->getWorldVelocity());
 		}
@@ -143,32 +128,18 @@ namespace EmEn::Scenes::Component
 		this->requestVideoMemoryUpdate();
 	}
 
-	void
-	SpotLight::onColorChange (const PixelFactory::Color< float > & color) noexcept
-	{
-		m_buffer[ColorOffset+0] = color.red();
-		m_buffer[ColorOffset+1] = color.green();
-		m_buffer[ColorOffset+2] = color.blue();
-	}
-
-	void
-	SpotLight::onIntensityChange (float intensity) noexcept
-	{
-		m_buffer[IntensityOffset] = intensity;
-	}
-
 	bool
 	SpotLight::touch (const Vector< 3, float > & position) const noexcept
 	{
-		const Sphere< float > boundingSphere{m_radius, this->getWorldCoordinates().position()};
+		const Space3D::Sphere< float > boundingSphere{m_radius, this->getWorldCoordinates().position()};
 
 		/* TODO: Check for the cone ! */
 
-		return boundingSphere.isCollidingWith(position);
+		return Space3D::isColliding(position, boundingSphere);
 	}
 
 	bool
-	SpotLight::createOnHardware (LightSet & lightSet, Renderer & renderer, AVConsole::Manager & AVConsoleManager) noexcept
+	SpotLight::createOnHardware (LightSet & lightSet, AVConsole::Manager & AVConsoleManager) noexcept
 	{
 		if ( this->isCreated() )
 		{
@@ -207,15 +178,15 @@ namespace EmEn::Scenes::Component
 		if ( resolution > 0 )
 		{
 			/* [VULKAN-SHADOW] TODO: Reuse shadow maps + remove it from console on failure */
-			m_shadowMap = AVConsoleManager.createRenderToShadowMap(renderer, this->name() + ShadowMapName, resolution);
+			m_shadowMap = AVConsoleManager.createRenderToShadowMap(this->name() + ShadowMapName, resolution);
 
 			if ( m_shadowMap != nullptr )
 			{
-				if ( this->connect(m_shadowMap) )
+				if ( this->connect(AVConsoleManager.managers(), m_shadowMap) )
 				{
 					TraceSuccess{ClassId} << "2D shadow map successfully created for spotlight '" << this->name() << "'.";
 
-					this->enableShadow(true);
+					this->enableShadowCasting(true);
 				}
 				else
 				{
@@ -234,14 +205,11 @@ namespace EmEn::Scenes::Component
 	}
 
 	void
-	SpotLight::destroyFromHardware () noexcept
+	SpotLight::destroyFromHardware (LightSet & /*lightSet*/, AVConsole::Manager & AVConsoleManager) noexcept
 	{
 		if ( m_shadowMap != nullptr )
 		{
-			this->disconnect(m_shadowMap);
-
-			/* TODO: Check for automatic disconnection ! */
-			//console.removeVideoDevice(m_shadowMap);
+			this->disconnect(AVConsoleManager.managers(), m_shadowMap);
 
 			m_shadowMap.reset();
 		}
@@ -249,26 +217,10 @@ namespace EmEn::Scenes::Component
 		this->removeFromSharedUniformBuffer();
 	}
 
-	std::shared_ptr< RenderTarget::ShadowMap::Abstract >
-	SpotLight::shadowMap () const noexcept
-	{
-		return std::static_pointer_cast< RenderTarget::ShadowMap::Abstract >(m_shadowMap);
-	}
-
 	Declaration::UniformBlock
 	SpotLight::getUniformBlock (uint32_t set, uint32_t binding, bool useShadow) const noexcept
 	{
 		return LightGenerator::getUniformBlock(set, binding, LightType::Spot, useShadow);
-	}
-
-	void
-	SpotLight::setRadius (float radius) noexcept
-	{
-		m_radius = std::abs(radius);
-
-		m_buffer[RadiusOffset] = m_radius;
-
-		this->requestVideoMemoryUpdate();
 	}
 
 	void
@@ -290,50 +242,6 @@ namespace EmEn::Scenes::Component
 		this->requestVideoMemoryUpdate();
 	}
 
-	const char *
-	SpotLight::getComponentType () const noexcept
-	{
-		return ClassId;
-	}
-
-	const Cuboid< float > &
-	SpotLight::boundingBox () const noexcept
-	{
-		return NullBoundingBox;
-	}
-
-	const Sphere< float > &
-	SpotLight::boundingSphere () const noexcept
-	{
-		return NullBoundingSphere;
-	}
-
-	float
-	SpotLight::radius () const noexcept
-	{
-		return m_radius;
-	}
-
-	float
-	SpotLight::innerAngle () const noexcept
-	{
-		return m_innerAngle;
-	}
-
-	float
-	SpotLight::outerAngle () const noexcept
-	{
-		return m_outerAngle;
-	}
-
-	void
-	SpotLight::setInnerAngle (float angle) noexcept
-	{
-		m_innerAngle = angle;
-
-		m_buffer[InnerCosAngleOffset] = std::cos(Radian(m_innerAngle));
-	}
-
 	void
 	SpotLight::setOuterAngle (float angle) noexcept
 	{
@@ -348,32 +256,5 @@ namespace EmEn::Scenes::Component
 
 			this->updateProperties(true, maxDistance, fov);
 		}
-	}
-
-	std::ostream &
-	operator<< (std::ostream & out, const SpotLight & obj)
-	{
-		const auto worldCoordinates = obj.getWorldCoordinates();
-
-		return out << "Spot light data ;\n"
-			"Position (World Space) : " << worldCoordinates.position() << "\n"
-			"Direction (World Space) : " << worldCoordinates.forwardVector() << "\n"
-			"Color : " << obj.color() << "\n"
-			"Intensity : " << obj.intensity() << "\n"
-			"Radius : " << obj.m_radius << "\n"
-			"Inner angle : " << obj.m_innerAngle << "° (" << Radian(obj.m_innerAngle) << " rad) (cosine : " << std::cos(Radian(obj.m_innerAngle)) << ")\n"
-			"Outer angle : " << obj.m_outerAngle << "° (" << Radian(obj.m_outerAngle) << " rad) (cosine : " << std::cos(Radian(obj.m_outerAngle)) << ")\n"
-			"Activity : " << ( obj.isEnabled() ? "true" : "false" ) << "\n"
-			"Shadow caster : " << ( obj.isShadowEnabled() ? "true" : "false" ) << '\n';
-	}
-
-	std::string
-	to_string (const SpotLight & obj) noexcept
-	{
-		std::stringstream output;
-
-		output << obj;
-
-		return output.str();
 	}
 }

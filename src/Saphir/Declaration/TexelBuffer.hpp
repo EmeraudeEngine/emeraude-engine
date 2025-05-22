@@ -36,7 +36,7 @@ namespace EmEn::Saphir::Declaration
 {
 	/**
 	 * @brief The TexelBuffer class
-	 * @extends EmEn::Saphir::DeclarationInterface This is a shader code declaration.
+	 * @extends EmEn::Saphir::Declaration::Interface This is a shader code declaration.
 	 *
 	 * layout (set = 0, binding = 3) uniform samplerBuffer my_float_texel_buffer;
 	 */
@@ -51,44 +51,95 @@ namespace EmEn::Saphir::Declaration
 			 * @param type A C-string to set the type of the uniform. Use one of Keys::GLSL::* keyword.
 			 * @param name A C-string to set the name of the uniform.
 			 */
-			TexelBuffer (uint32_t set, uint32_t binding, Key type, Key name) noexcept;
+			TexelBuffer (uint32_t set, uint32_t binding, Key type, Key name) noexcept
+				: m_type{type},
+				m_name{name},
+				m_set{set},
+				m_binding{binding}
+			{
 
-			/** @copydoc EmEn::Saphir::DeclarationInterface::isValid() */
-			[[nodiscard]]
-			bool isValid () const noexcept override;
+			}
 
-			/** @copydoc EmEn::Saphir::DeclarationInterface::name() */
+			/** @copydoc EmEn::Saphir::Declaration::Interface::isValid() */
 			[[nodiscard]]
-			Key name () const noexcept override;
+			bool
+			isValid () const noexcept override
+			{
+				if ( m_type == nullptr )
+				{
+					return false;
+				}
 
-			/** @copydoc EmEn::Saphir::DeclarationInterface::bytes() */
-			[[nodiscard]]
-			size_t bytes () const noexcept override;
+				if ( m_name == nullptr )
+				{
+					return false;
+				}
 
-			/** @copydoc EmEn::Saphir::DeclarationInterface::sourceCode() */
+				return true;
+			}
+
+			/** @copydoc EmEn::Saphir::Declaration::Interface::name() */
 			[[nodiscard]]
-			std::string sourceCode () const noexcept override;
+			Key
+			name () const noexcept override
+			{
+				return m_name;
+			}
+
+			/** @copydoc EmEn::Saphir::Declaration::Interface::bytes() */
+			[[nodiscard]]
+			uint32_t
+			bytes () const noexcept override
+			{
+				return 0;
+			}
+
+			/** @copydoc EmEn::Saphir::Declaration::Interface::sourceCode() */
+			[[nodiscard]]
+			std::string
+			sourceCode () const noexcept override
+			{
+				std::stringstream code;
+
+				code <<
+					Keys::GLSL::Layout << " (" << Keys::GLSL::Set << " = " << m_set << ", " << Keys::GLSL::Binding << " = " << m_binding << ") " <<
+					Keys::GLSL::Uniform << ' ' << m_type << ' ' << m_name << ";" "\n";
+
+				return code.str();
+			}
 
 			/**
 			 * @brief Returns the variable type.
-			 * @param Key
+			 * @return Key
 			 */
 			[[nodiscard]]
-			Key type () const noexcept;
+			Key
+			type () const noexcept
+			{
+				return m_type;
+			}
 
 			/**
 			 * @brief Gets the set index.
 			 * @return uint32_t
 			 */
 			[[nodiscard]]
-			uint32_t set () const noexcept;
+			uint32_t
+			set () const noexcept
+			{
+				return m_set;
+			}
 
 			/**
 			 * @brief Gets the binding point.
 			 * @return uint32_t
 			 */
 			[[nodiscard]]
-			uint32_t binding () const noexcept;
+			uint32_t
+			binding () const noexcept
+			{
+				return m_binding;
+			}
 
 		private:
 

@@ -27,9 +27,6 @@
 #pragma once
 
 /* STL inclusions. */
-#include <cstddef>
-#include <cstdint>
-#include <string>
 #include <vector>
 #include <memory>
 
@@ -38,12 +35,74 @@
 
 /* Local inclusions for usages. */
 #include "Resources/Container.hpp"
-#include "MeshLayer.hpp"
 
 namespace EmEn::Graphics::Renderable
 {
 	/**
-	 * @brief This class provide a high level object to describe a physical object in the 3D world.
+	 * @brief The mesh layer class.
+	 */
+	class MeshLayer final : public Libs::NameableTrait
+	{
+		public:
+
+			/**
+			 * @brief Constructs a mesh layer.
+			 * @param layerName A string for the layer name [std::move].
+			 * @param material A reference to a material for this layer.
+			 * @param options A reference to a rasterization options.
+			 * @param renderableFlags The renderable level flags.
+			 */
+			MeshLayer (std::string layerName, const std::shared_ptr< Material::Interface > & material, const RasterizationOptions & options, uint32_t renderableFlags) noexcept
+				: NameableTrait{std::move(layerName)},
+				m_material{material},
+				m_rasterizationOptions{options},
+				m_renderableFlags{renderableFlags}
+			{
+
+			}
+
+			/**
+			 * @brief Returns the material resource of the layer.
+			 * @return shared_ptr< Material::Interface >
+			 */
+			[[nodiscard]]
+			std::shared_ptr< Material::Interface >
+			material () const noexcept
+			{
+				return m_material;
+			}
+
+			/**
+			 * @brief Returns the rasterization options for this layer.
+			 * @return const RasterizationOptions &
+			 */
+			[[nodiscard]]
+			const RasterizationOptions &
+			rasterizationOptions () const noexcept
+			{
+				return m_rasterizationOptions;
+			}
+
+			/**
+			 * @brief Returns renderable level flags.
+			 * @return uint32_t
+			 */
+			[[nodiscard]]
+			uint32_t
+			flags () const noexcept
+			{
+				return m_renderableFlags;
+			}
+
+		private:
+
+			std::shared_ptr< Material::Interface > m_material;
+			RasterizationOptions m_rasterizationOptions;
+			uint32_t m_renderableFlags;
+	};
+
+	/**
+	 * @brief This class provides a high level object to describe a physical object in the 3D world.
 	 * @extends EmEn::Graphics::Renderable::Interface Adds the ability to be rendered in the 3D world.
 	 */
 	class MeshResource final : public Interface
@@ -60,58 +119,112 @@ namespace EmEn::Graphics::Renderable
 			/** @brief Observable class unique identifier. */
 			static const size_t ClassUID;
 
+			/** @brief Defines the resource dependency complexity. */
+			static constexpr auto Complexity{Resources::DepComplexity::Complex};
+
 			/**
-			 * @brief Construct a Mesh resource.
-			 * @param name A reference to a string for the resource name.
-			 * @param resourceFlagBits The resource flag bits. Default none.
+			 * @brief Construct a mesh resource.
+			 * @param name A string for the resource name.
+			 * @param renderableFlags The resource flag bits. Default none.
 			 */
-			explicit MeshResource (const std::string & name, uint32_t resourceFlagBits = 0) noexcept;
+			explicit
+			MeshResource (std::string name, uint32_t renderableFlags = 0) noexcept
+				: Interface{std::move(name), renderableFlags}
+			{
+
+			}
 
 			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
 			[[nodiscard]]
-			size_t classUID () const noexcept override;
+			size_t
+			classUID () const noexcept override
+			{
+				return ClassUID;
+			}
 
 			/** @copydoc EmEn::Libs::ObservableTrait::is() const */
 			[[nodiscard]]
-			bool is (size_t classUID) const noexcept override;
+			bool
+			is (size_t classUID) const noexcept override
+			{
+				return classUID == ClassUID;
+			}
 
 			/** @copydoc EmEn::Graphics::Renderable::Interface::layerCount() const */
 			[[nodiscard]]
-			size_t layerCount () const noexcept override;
+			uint32_t
+			layerCount () const noexcept override
+			{
+				return static_cast< uint32_t >(m_layers.size());
+			}
 
 			/** @copydoc EmEn::Graphics::Renderable::Interface::isOpaque() const */
 			[[nodiscard]]
-			bool isOpaque (size_t layerIndex = 0) const noexcept override;
+			bool isOpaque (uint32_t layerIndex) const noexcept override;
 
 			/** @copydoc EmEn::Graphics::Renderable::Interface::geometry() const */
 			[[nodiscard]]
-			const Geometry::Interface * geometry () const noexcept override;
+			const Geometry::Interface *
+			geometry () const noexcept override
+			{
+				return m_geometry.get();
+			}
 
 			/** @copydoc EmEn::Graphics::Renderable::Interface::material() const */
 			[[nodiscard]]
-			const Material::Interface * material (size_t layerIndex = 0) const noexcept override;
+			const Material::Interface * material (uint32_t layerIndex) const noexcept override;
 
 			/** @copydoc EmEn::Graphics::Renderable::Interface::layerRasterizationOptions() const */
 			[[nodiscard]]
-			const RasterizationOptions * layerRasterizationOptions (size_t layerIndex = 0) const noexcept override;
+			const RasterizationOptions * layerRasterizationOptions (uint32_t layerIndex) const noexcept override;
 
 			/** @copydoc EmEn::Graphics::Renderable::Interface::boundingBox() const */
 			[[nodiscard]]
-			const Libs::Math::Cuboid< float > & boundingBox () const noexcept override;
+			const Libs::Math::Space3D::AACuboid< float > &
+			boundingBox () const noexcept override
+			{
+				if ( m_geometry == nullptr )
+				{
+					return NullBoundingBox;
+				}
+
+				return m_geometry->boundingBox();
+			}
 
 			/** @copydoc EmEn::Graphics::Renderable::Interface::boundingSphere() const */
 			[[nodiscard]]
-			const Libs::Math::Sphere< float > & boundingSphere () const noexcept override;
+			const Libs::Math::Space3D::Sphere< float > &
+			boundingSphere () const noexcept override
+			{
+				if ( m_geometry == nullptr )
+				{
+					return NullBoundingSphere;
+				}
+
+				return m_geometry->boundingSphere();
+			}
 
 			/** @copydoc EmEn::Resources::ResourceTrait::classLabel() const */
 			[[nodiscard]]
-			const char * classLabel () const noexcept override;
+			const char *
+			classLabel () const noexcept override
+			{
+				return ClassId;
+			}
 
 			/** @copydoc EmEn::Resources::ResourceTrait::load() */
 			bool load () noexcept override;
 
 			/** @copydoc EmEn::Resources::ResourceTrait::load(const Json::Value &) */
 			bool load (const Json::Value & data) noexcept override;
+
+			/** @copydoc EmEn::Resources::ResourceTrait::memoryOccupied() const noexcept */
+			[[nodiscard]]
+			size_t
+			memoryOccupied () const noexcept override
+			{
+				return sizeof(*this);
+			}
 
 			/**
 			 * @brief Loads a mesh resource from a geometry and a material. This will produce a single layer mesh.
@@ -137,22 +250,6 @@ namespace EmEn::Graphics::Renderable
 			 */
 			[[nodiscard]]
 			float baseSize () const noexcept;
-
-			/**
-			 * @brief Returns a mesh resource by its name.
-			 * @param resourceName A reference to a string.
-			 * @param directLoad Use the direct loading mode. Default false.
-			 * @return std::shared_ptr< MeshResource >
-			 */
-			[[nodiscard]]
-			static std::shared_ptr< MeshResource > get (const std::string & resourceName, bool directLoad = false) noexcept;
-
-			/**
-			 * @brief Returns the default mesh resource.
-			 * @return std::shared_ptr< DynamicSkyResource >
-			 */
-			[[nodiscard]]
-			static std::shared_ptr< MeshResource > getDefault () noexcept;
 
 			/**
 			 * @brief Creates a unique mesh or returns the existing one with same parameters.
@@ -221,7 +318,7 @@ namespace EmEn::Graphics::Renderable
 			 * @param data A reference to a JSON node.
 			 * @return std::shared_ptr< Material::Interface >
 			 */
-			static std::shared_ptr< Material::Interface > parseLayer (const Json::Value & data) noexcept;
+			std::shared_ptr< Material::Interface > parseLayer (const Json::Value & data) const noexcept;
 
 			/**
 			 * @brief Parses a JSON stream to get the mesh options.

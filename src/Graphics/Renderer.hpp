@@ -27,10 +27,10 @@
 #pragma once
 
 /* STL inclusions. */
-#include <any>
-#include <array>
 #include <cstddef>
 #include <cstdint>
+#include <any>
+#include <array>
 #include <map>
 #include <memory>
 #include <vector>
@@ -38,25 +38,29 @@
 
 /* Local inclusions for inheritances. */
 #include "Console/Controllable.hpp"
+#include "Libs/ObservableTrait.hpp"
 #include "Libs/ObserverTrait.hpp"
 #include "ServiceInterface.hpp"
 
 /* Local inclusions for usages. */
 #include "Libs/PixelFactory/Color.hpp"
 #include "Libs/Time/Statistics/RealTime.hpp"
-#include "VertexBufferFormatManager.hpp"
-#include "RenderTarget/Abstract.hpp"
+#include "Vulkan/Instance.hpp"
 #include "Vulkan/LayoutManager.hpp"
-#include "Vulkan/SharedUBOManager.hpp"
 #include "Vulkan/TransferManager.hpp"
+#include "RenderTarget/Abstract.hpp"
 #include "Saphir/ShaderManager.hpp"
+#include "SharedUBOManager.hpp"
+#include "ExternalInput.hpp"
+#include "RendererFrameScope.hpp"
+#include "VertexBufferFormatManager.hpp"
+#include "Window.hpp"
 
 /* Forward declarations. */
 namespace EmEn
 {
 	namespace Vulkan
 	{
-		class Instance;
 		class SwapChain;
 		class Device;
 		class DescriptorPool;
@@ -105,18 +109,19 @@ namespace EmEn
 	}
 
 	class PrimaryServices;
-	class Window;
 }
 
 namespace EmEn::Graphics
 {
 	/**
 	 * @brief The graphics renderer service class.
+	 * @note [OBS][STATIC-OBSERVER][STATIC-OBSERVABLE]
 	 * @extends EmEn::ServiceInterface The renderer is a service.
-	 * @extends EmEn::Console::Controllable The renderer can be controlled by the console.
-	 * @extends EmEn::Libs::ObserverTrait The renderer needs to observe handle changes for instance.
+	 * @extends EmEn::Libs::ObservableTrait The renderer is a service.
+	 * @extends EmEn::Libs::ObserverTrait The renderer needs to observe handle changes, for instance.
+	 * @extends EmEn::Console::Controllable The console can control the renderer.
 	 */
-	class Renderer final : public ServiceInterface, public Console::Controllable, public Libs::ObserverTrait
+	class Renderer final : public ServiceInterface, public Libs::ObservableTrait, public Libs::ObserverTrait, public Console::Controllable
 	{
 		public:
 
@@ -142,38 +147,44 @@ namespace EmEn::Graphics
 			 * @param instance A reference to the Vulkan instance.
 			 * @param window A reference to a handle.
 			 */
-			Renderer (PrimaryServices & primaryServices, Vulkan::Instance & instance, Window & window) noexcept;
+			Renderer (PrimaryServices & primaryServices, Vulkan::Instance & instance, Window & window) noexcept
+				: ServiceInterface{ClassId},
+				Controllable{ClassId},
+				m_primaryServices{primaryServices},
+				m_vulkanInstance{instance},
+				m_window{window},
+				m_shaderManager{primaryServices},
+				m_transferManager{Vulkan::GPUWorkType::Graphics},
+				m_layoutManager{Vulkan::GPUWorkType::Graphics},
+				m_sharedUBOManager{*this}
+			{
+				if ( s_instance != nullptr )
+				{
+					std::cerr << __PRETTY_FUNCTION__ << ", constructor called twice !" "\n";
 
-			/**
-			 * @brief Copy constructor.
-			 * @param copy A reference to the copied instance.
-			 */
-			Renderer (const Renderer & copy) noexcept = delete;
+					std::terminate();
+				}
 
-			/**
-			 * @brief Move constructor.
-			 * @param copy A reference to the copied instance.
-			 */
-			Renderer (Renderer && copy) noexcept = delete;
+				s_instance = this;
 
-			/**
-			 * @brief Copy assignment.
-			 * @param copy A reference to the copied instance.
-			 * @return Renderer &
-			 */
-			Renderer & operator= (const Renderer & copy) noexcept = delete;
+				m_flags[DebugMode] = m_vulkanInstance.isDebugModeEnabled();
 
-			/**
-			 * @brief Move assignment.
-			 * @param copy A reference to the copied instance.
-			 * @return Renderer &
-			 */
-			Renderer & operator= (Renderer && copy) noexcept = delete;
+				/* Framebuffer clear color value. */
+				this->setClearColor(Libs::PixelFactory::Black);
+
+				/* Framebuffer clear depth/stencil values. */
+				this->setClearDepthStencilValues(1.0F, 0);
+
+				this->observe(&m_window);
+			}
 
 			/**
 			 * @brief Destructs the graphics renderer.
 			 */
-			~Renderer () override;
+			~Renderer () override
+			{
+				s_instance = nullptr;
+			}
 
 			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
 			[[nodiscard]]
@@ -197,6 +208,81 @@ namespace EmEn::Graphics
 			usable () const noexcept override
 			{
 				return m_flags[ServiceInitialized];
+			}
+
+			/**
+			 * @brief Returns the windows.
+			 * @return const Window &
+			 */
+			const Window &
+			window () const noexcept
+			{
+				return m_window;
+			}
+
+			/**
+			 * @brief Returns the windows.
+			 * @return Window &
+			 */
+			Window &
+			window () noexcept
+			{
+				return m_window;
+			}
+
+			/**
+			 * @brief Returns whether the debug mode is enabled.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isDebugModeEnabled () const noexcept
+			{
+				return m_flags[DebugMode];
+			}
+
+			/**
+			 * @brief Controls the state of shadow maps rendering.
+			 * @param state The state.
+			 * @return void
+			 */
+			void
+			enableShadowMaps (bool state) noexcept
+			{
+				m_flags[ShadowMapsEnabled] = state;
+			}
+
+			/**
+			 * @brief Returns whether the shadow maps rendering is enabled.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isShadowMapsEnabled () const noexcept
+			{
+				return m_flags[ShadowMapsEnabled];
+			}
+
+			/**
+			 * @brief Controls the state of rendering to textures.
+			 * @param state The state.
+			 * @return void
+			 */
+			void
+			enableRenderToTextures (bool state) noexcept
+			{
+				m_flags[RenderToTexturesEnabled] = state;
+			}
+
+			/**
+			 * @brief Returns whether the rendering to textures is enabled.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isRenderToTexturesEnabled () const noexcept
+			{
+				return m_flags[RenderToTexturesEnabled];
 			}
 
 			/**
@@ -289,10 +375,10 @@ namespace EmEn::Graphics
 
 			/**
 			 * @brief Returns the reference to the shared UBO manager.
-			 * @return Vulkan::SharedUBOManager &
+			 * @return SharedUBOManager &
 			 */
 			[[nodiscard]]
-			Vulkan::SharedUBOManager &
+			SharedUBOManager &
 			sharedUBOManager () noexcept
 			{
 				return m_sharedUBOManager;
@@ -300,10 +386,10 @@ namespace EmEn::Graphics
 
 			/**
 			 * @brief Returns the reference to the shared UBO manager.
-			 * @return const Vulkan::SharedUBOManager &
+			 * @return const SharedUBOManager &
 			 */
 			[[nodiscard]]
-			const Vulkan::SharedUBOManager &
+			const SharedUBOManager &
 			sharedUBOManager () const noexcept
 			{
 				return m_sharedUBOManager;
@@ -329,6 +415,28 @@ namespace EmEn::Graphics
 			vertexBufferFormatManager () const noexcept
 			{
 				return m_vertexBufferFormatManager;
+			}
+
+			/**
+			 * @brief Returns the reference to the video external input service.
+			 * @return ExternalInput &
+			 */
+			[[nodiscard]]
+			ExternalInput &
+			externalInput () noexcept
+			{
+				return m_externalInput;
+			}
+
+			/**
+			 * @brief Returns the reference to the video external input service.
+			 * @return const ExternalInput &
+			 */
+			[[nodiscard]]
+			const ExternalInput &
+			externalInput () const noexcept
+			{
+				return m_externalInput;
 			}
 
 			/**
@@ -469,24 +577,6 @@ namespace EmEn::Graphics
 			bool finalizeGraphicsPipeline (const RenderTarget::Abstract & renderTarget, const Saphir::Program & program, std::shared_ptr< Vulkan::GraphicsPipeline > & graphicsPipeline) noexcept;
 
 			/**
-			 * @brief Gets a specific program for shadow casting.
-			 * @param renderTarget A reference to a render target smart pointer.
-			 * @param renderableInstance A reference to the renderable instance smart pointer.
-			 * @return std::shared_ptr< Saphir::Program >
-			 */
-			[[nodiscard]]
-			std::shared_ptr< Saphir::Program > getShadowProgram (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const std::shared_ptr< RenderableInstance::Abstract > & renderableInstance) noexcept;
-
-			/**
-			 * @brief Gets a specific program for displaying the vertex TBN spaces.
-			 * @param renderTarget A reference to a render target smart pointer.
-			 * @param renderableInstance A reference to the renderable instance smart pointer.
-			 * @return std::shared_ptr< Saphir::Program >
-			 */
-			[[nodiscard]]
-			std::shared_ptr< Saphir::Program > getTBNSpaceProgram (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const std::shared_ptr< RenderableInstance::Abstract > & renderableInstance) noexcept;
-
-			/**
 			 * @brief Returns or creates a render pass.
 			 * @param identifier A reference to a string.
 			 * @param createFlags The createInfo flags. Default none.
@@ -514,14 +604,16 @@ namespace EmEn::Graphics
 
 			/**
 			 * @brief Returns the instance of the graphics renderer.
+			 * @todo This method must be removed!
 			 * @return Renderer *
 			 */
+			//[[deprecated("This method must be removed !")]]
 			[[nodiscard]]
 			static
 			Renderer *
 			instance () noexcept
 			{
-				return s_instance;
+				return s_instance; // FIXME: Remove this
 			}
 
 		private:
@@ -534,7 +626,7 @@ namespace EmEn::Graphics
 
 			/** @copydoc EmEn::Libs::ObserverTrait::onNotification() */
 			[[nodiscard]]
-			bool onNotification (const ObservableTrait * observable, int notificationCode, const std::any & data) noexcept override;
+			bool onNotification (const Libs::ObservableTrait * observable, int notificationCode, const std::any & data) noexcept override;
 
 			/** @copydoc EmEn::Console::Controllable::onRegisterToConsole. */
 			void onRegisterToConsole () noexcept override;
@@ -554,25 +646,28 @@ namespace EmEn::Graphics
 			std::shared_ptr< Vulkan::CommandBuffer > getCommandBuffer (const std::shared_ptr< RenderTarget::Abstract > & renderTarget) noexcept;
 
 			/**
-			 * @brief Updates every shadow maps from the scene.
+			 * @brief Updates every shadow map from the scene.
+			 * @param frameIndex The current frame index in the swap-chain.
 			 * @param scene A reference to the scene.
 			 * @return void
 			 */
-			void renderShadowMaps (Scenes::Scene & scene) noexcept;
+			void renderShadowMaps (uint32_t frameIndex, Scenes::Scene & scene) noexcept;
 
 			/**
 			 * @brief Updates every dynamic texture2Ds from the scene.
+			 * @param frameIndex The current frame index in the swap-chain.
 			 * @param scene A reference to the scene.
 			 * @return void
 			 */
-			void renderRenderToTextures (Scenes::Scene & scene) noexcept;
+			void renderRenderToTextures (uint32_t frameIndex, Scenes::Scene & scene) noexcept;
 
 			/**
-			 * @brief Updates every off-screen views from the scene.
+			 * @brief Updates every off-screen view from the scene.
+			 * @param frameIndex The current frame index in the swap-chain.
 			 * @param scene A reference to the scene.
 			 * @return void
 			 */
-			void renderViews (Scenes::Scene & scene) noexcept;
+			void renderViews (uint32_t frameIndex, Scenes::Scene & scene) noexcept;
 
 			/**
 			 * @brief Creates command pools and buffers according to the swap chain image count.
@@ -608,11 +703,12 @@ namespace EmEn::Graphics
 			Saphir::ShaderManager m_shaderManager;
 			Vulkan::TransferManager m_transferManager;
 			Vulkan::LayoutManager m_layoutManager;
-			Vulkan::SharedUBOManager m_sharedUBOManager;
+			SharedUBOManager m_sharedUBOManager;
 			VertexBufferFormatManager m_vertexBufferFormatManager;
+			ExternalInput m_externalInput;
+			std::vector< ServiceInterface * > m_subServicesEnabled;
 			std::shared_ptr< Vulkan::DescriptorPool > m_descriptorPool;
-			std::vector< std::shared_ptr< Vulkan::CommandPool > > m_commandPools;
-			std::vector< std::shared_ptr< Vulkan::CommandBuffer > > m_commandBuffers;
+			std::vector< RendererFrameScope > m_rendererFrameScope;
 			std::shared_ptr< Vulkan::CommandPool > m_offScreenCommandPool;
 			std::map< std::shared_ptr< RenderTarget::Abstract >, std::shared_ptr< Vulkan::CommandBuffer > > m_offScreenCommandBuffers;
 			std::shared_ptr< Vulkan::SwapChain > m_swapChain;
@@ -622,7 +718,6 @@ namespace EmEn::Graphics
 			std::map< size_t, std::shared_ptr< Vulkan::Sampler > > m_samplers;
 			Libs::Time::Statistics::RealTime< std::chrono::high_resolution_clock > m_statistics{30};
 			std::array< VkClearValue, 2 > m_clearColors{};
-			std::vector< ServiceInterface * > m_subServicesEnabled;
 			std::array< bool, 8 > m_flags{
 				false/*ServiceInitialized*/,
 				false/*DebugMode*/,

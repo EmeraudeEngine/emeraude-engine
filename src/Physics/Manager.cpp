@@ -41,15 +41,7 @@
 
 namespace EmEn::Physics
 {
-	using namespace Vulkan;
-
-	const size_t Manager::ClassUID{getClassUID(ClassId)};
-
-	Manager::Manager (PrimaryServices & primaryServices, Instance & instance) noexcept
-		: ServiceInterface(ClassId), m_primaryServices(primaryServices), m_vulkanInstance(instance)
-	{
-
-	}
+	using namespace EmEn::Vulkan;
 
 	bool
 	Manager::onInitialize () noexcept
@@ -195,29 +187,6 @@ namespace EmEn::Physics
 		m_commandBuffers.clear();
 	}
 
-	size_t
-	Manager::classUID () const noexcept
-	{
-		return ClassUID;
-	}
-
-	bool
-	Manager::is (size_t classUID) const noexcept
-	{
-		return classUID == ClassUID;
-	}
-
-	bool
-	Manager::usable () const noexcept
-	{
-		if ( !m_vulkanInstance.usable() )
-		{
-			return false;
-		}
-
-		return m_flags[ServiceInitialized];
-	}
-
 	std::shared_ptr< ComputePipeline >
 	Manager::getPipeline (const std::shared_ptr< PipelineLayout > & pipelineLayout) noexcept
 	{
@@ -240,8 +209,8 @@ namespace EmEn::Physics
 			return {};
 		}
 
-		auto result = m_pipelines.emplace(hash, pipeline);
+		auto [pair, success] = m_pipelines.emplace(hash, pipeline);
 
-		return result.first->second;
+		return pair->second;
 	}
 }

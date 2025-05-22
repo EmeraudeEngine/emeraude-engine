@@ -26,36 +26,18 @@
 
 #include "Device.hpp"
 
-/* Engine configuration file. */
-#include "emeraude_config.hpp"
-
 /* Local inclusions. */
 #include "Utility.hpp"
 #include "Instance.hpp"
-#include "PhysicalDevice.hpp"
 #include "DeviceRequirements.hpp"
 #include "QueueFamily.hpp"
 #include "QueueFamilySQ.hpp"
-#include "Settings.hpp"
-#include "SettingKeys.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::Vulkan
 {
 	using namespace EmEn::Libs;
-	using namespace Graphics;
-
-	Device::Device (const std::shared_ptr< PhysicalDevice > & physicalDevice, Settings & settings) noexcept
-		: NameableTrait(physicalDevice->properties().deviceName),
-		m_physicalDevice(physicalDevice)
-	{
-		m_flags[ShowInformation] = settings.get< bool >(VkShowInformationKey, DefaultVkShowInformation);
-	}
-
-	Device::~Device ()
-	{
-		this->destroy();
-	}
+	using namespace EmEn::Graphics;
 
 	bool
 	Device::create (const DeviceRequirements & requirements, const std::vector< const char * > & extensions) noexcept

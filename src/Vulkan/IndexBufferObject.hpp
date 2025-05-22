@@ -49,14 +49,19 @@ namespace EmEn::Vulkan
 			 * @param device A reference to the device smart pointer.
 			 * @param indexCount The number of indices the buffer will hold
 			 */
-			IndexBufferObject (const std::shared_ptr< Device > & device, size_t indexCount) noexcept;
+			IndexBufferObject (const std::shared_ptr< Device > & device, uint32_t indexCount) noexcept
+				: AbstractDeviceBuffer{device, 0, indexCount * sizeof(uint32_t), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT},
+				m_indexCount{indexCount}
+			{
+
+			}
 
 			/**
-			 * @brief Returns the number of index in this buffer.
-			 * @return size_t
+			 * @brief Returns the number of indices in this buffer.
+			 * @return uint32_t
 			 */
 			[[nodiscard]]
-			size_t
+			uint32_t
 			indexCount () const noexcept
 			{
 				return m_indexCount;
@@ -73,6 +78,6 @@ namespace EmEn::Vulkan
 
 		private:
 
-			size_t m_indexCount;
+			uint32_t m_indexCount;
 	};
 }

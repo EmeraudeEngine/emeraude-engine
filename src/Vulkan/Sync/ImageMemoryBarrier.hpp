@@ -28,11 +28,7 @@
 
 /* Local inclusions for inheritances. */
 #include "Vulkan/AbstractObject.hpp"
-
-namespace EmEn::Vulkan
-{
-	class Image;
-}
+#include "Vulkan/Image.hpp"
 
 namespace EmEn::Vulkan::Sync
 {
@@ -56,7 +52,25 @@ namespace EmEn::Vulkan::Sync
 			 * @param newLayout The new layout in an image layout transition.
 			 * @param aspectMask Which layer the memory barrier applies. Default COLOR.
 			 */
-			ImageMemoryBarrier (const Image & image, VkAccessFlags srcAccessMask, VkAccessFlags dstAccessMask, VkImageLayout oldLayout, VkImageLayout newLayout, VkImageAspectFlags aspectMask = VK_IMAGE_ASPECT_COLOR_BIT) noexcept;
+			ImageMemoryBarrier (const Image & image, VkAccessFlags srcAccessMask, VkAccessFlags dstAccessMask, VkImageLayout oldLayout, VkImageLayout newLayout, VkImageAspectFlags aspectMask = VK_IMAGE_ASPECT_COLOR_BIT) noexcept
+			{
+				m_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+				m_barrier.pNext = nullptr;
+				m_barrier.srcAccessMask = srcAccessMask;
+				m_barrier.dstAccessMask = dstAccessMask;
+				m_barrier.oldLayout = oldLayout;
+				m_barrier.newLayout = newLayout;
+				m_barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+				m_barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+				m_barrier.image = image.handle();
+				m_barrier.subresourceRange.aspectMask = aspectMask;
+				m_barrier.subresourceRange.baseMipLevel = 0;
+				m_barrier.subresourceRange.levelCount = image.createInfo().mipLevels;
+				m_barrier.subresourceRange.baseArrayLayer = 0;
+				m_barrier.subresourceRange.layerCount = image.createInfo().arrayLayers;
+
+				this->setCreated();
+			}
 
 			/**
 			 * @brief Copy constructor.
@@ -85,7 +99,10 @@ namespace EmEn::Vulkan::Sync
 			/**
 			 * @brief Destructs an image memory barrier.
 			 */
-			~ImageMemoryBarrier () override;
+			~ImageMemoryBarrier () override
+			{
+				this->setDestroyed();
+			}
 
 			/**
 			 * @brief Target a specific mipMap level.
@@ -93,7 +110,12 @@ namespace EmEn::Vulkan::Sync
 			 * @param count The number of mip level. Default 1.
 			 * @return void
 			 */
-			void targetMipLevel (uint32_t offset, uint32_t count = 1) noexcept;
+			void
+			targetMipLevel (uint32_t offset, uint32_t count = 1) noexcept
+			{
+				m_barrier.subresourceRange.baseMipLevel = offset;
+				m_barrier.subresourceRange.levelCount = count;
+			}
 
 			/**
 			 * @brief Target a specific array layer.
@@ -101,7 +123,12 @@ namespace EmEn::Vulkan::Sync
 			 * @param count The number of array layer. Default 1.
 			 * @return void
 			 */
-			void targetLayer (uint32_t offset, uint32_t count = 1) noexcept;
+			void
+			targetLayer (uint32_t offset, uint32_t count = 1) noexcept
+			{
+				m_barrier.subresourceRange.baseArrayLayer = offset;
+				m_barrier.subresourceRange.layerCount = count;
+			}
 
 			/**
 			 * @brief Returns a reference to the image memory barrier vulkan structure.

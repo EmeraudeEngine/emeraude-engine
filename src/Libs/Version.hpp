@@ -28,15 +28,15 @@
 
 /* STL inclusions. */
 #include <cstdint>
-#include <iostream>
 #include <sstream>
 #include <string>
+#include <compare>
+#include <optional>
 
 namespace EmEn::Libs
 {
 	/**
 	 * @brief Utility to create a parametric versioning.
-	 * @TODO Create a templated version to have multiple depth.
 	 */
 	class Version final
 	{
@@ -54,64 +54,54 @@ namespace EmEn::Libs
 			 * @param revision The revision number.
 			 */
 			constexpr Version (int major, int minor, int revision) noexcept
-				: m_major(major), m_minor(minor), m_revision(revision)
+				: m_major{major},
+				m_minor{minor},
+				m_revision{revision}
 			{
 
 			}
 
 			/**
-			 * @brief Constructs a version from a string.
-			 * @param raw A string that hold a version like "1.0.0".
-			 */
-			explicit Version (const std::string & raw) noexcept;
-
-			/**
 			 * @brief Constructs a version from a number.
 			 * @param bitmask An unsigned integer of 32 bits.
 			 */
-			explicit Version (uint32_t bitmask) noexcept;
+			explicit
+			Version (uint32_t bitmask) noexcept
+				: m_major{static_cast<int>((bitmask >> 22) & 0x3FF)}, // 0x3FF = mask 10 bits
+				m_minor{static_cast<int>((bitmask >> 12) & 0x3FF)}, // 0x3FF = mask 10 bits
+				m_revision{static_cast<int>(bitmask & 0xFFF)} // 0xFFF = mask 12 bits
+			{
+
+			}
 
 			/**
-			 * @brief Overloads the equality operator.
-			 * @param operand A reference to a version.
+			 * @brief Default three-way comparison operator (since C++20).
+			 * @note Generates ==, !=, <, >, <=, >= automatically.
 			 * @return bool
 			 */
-			bool operator== (const Version & operand) const noexcept;
+			auto operator<=> (const Version& other) const noexcept = default;
 
 			/**
-			 * @brief Overloads the inequality operator.
-			 * @param operand A reference to a version.
+			 * @brief Parses a string to find the version numbers.
+			 * @note This method return false on failure and let the version to 0.0.0
+			 * @param string A reference to a string.
+			 * @param separator The number delimiter. Default '.'.
 			 * @return bool
 			 */
-			bool operator!= (const Version & operand) const noexcept;
+			bool
+			parseFromString (const std::string & string, char separator = '.') noexcept
+			{
+				std::istringstream stream{string};
 
-			/**
-			 * @brief Overloads the greater than operator.
-			 * @param operand A reference to a version.
-			 * @return bool
-			 */
-			bool operator> (const Version & operand) const noexcept;
+				char sepA = 0;
+				char sepB = 0;
 
-			/**
-			 * @brief Overloads the greater or equal than operator.
-			 * @param operand A reference to a version.
-			 * @return bool
-			 */
-			bool operator>= (const Version & operand) const noexcept;
-
-			/**
-			 * @brief Overloads the lesser than operator.
-			 * @param operand A reference to a version.
-			 * @return bool
-			 */
-			bool operator< (const Version & operand) const noexcept;
-
-			/**
-			 * @brief Overloads the lesser or equal than operator.
-			 * @param operand A reference to a version.
-			 * @return bool
-			 */
-			bool operator<= (const Version & operand) const noexcept;
+				return
+					stream >> m_major >> sepA >> m_minor >> sepB >> m_revision &&
+					sepA == separator &&
+					sepB == separator &&
+					(stream >> std::ws).eof();
+			}
 
 			/**
 			 * @brief Sets the version.
@@ -127,13 +117,6 @@ namespace EmEn::Libs
 				m_minor = minor;
 				m_revision = revision;
 			}
-
-			/**
-			 * @brief Parses a string a set the version.
-			 * @param raw A reference to a string to parse.
-			 * @return bool
-			 */
-			bool set (const std::string & raw) noexcept;
 
 			/**
 			 * @brief Sets the major number of the version.
@@ -202,6 +185,28 @@ namespace EmEn::Libs
 			}
 
 			/**
+			 * @brief Creates a Version from a string, returning an empty optional on failure.
+			 * @param string The string to parse (e.g., "1.2.3").
+			 * @return std::optional< Version >
+			 */
+			[[nodiscard]]
+			static
+			std::optional< Version >
+			FromString (const std::string& string, char separator = '.') noexcept
+			{
+				Version version;
+
+				if ( version.parseFromString(string, separator))
+				{
+					return version;
+				}
+
+				return std::nullopt;
+			}
+
+		private:
+
+			/**
 			 * @brief STL streams printable object.
 			 * @param out A reference to the stream output.
 			 * @param obj A reference to the object to print.
@@ -209,17 +214,31 @@ namespace EmEn::Libs
 			 */
 			friend std::ostream & operator<< (std::ostream & out, const Version & obj);
 
-			/**
-			 * @brief Stringifies the object.
-			 * @param obj A reference to the object to print.
-			 * @return std::string
-			 */
-			friend std::string to_string (const Version & obj) noexcept;
-
-		private:
-
 			int m_major{0};
 			int m_minor{0};
 			int m_revision{0};
 	};
+
+	inline
+	std::ostream &
+	operator<< (std::ostream & out, const Version & obj)
+	{
+		return out << obj.major() << '.' << obj.minor() << '.' << obj.revision();
+	}
+
+	/**
+	 * @brief Stringifies the object.
+	 * @param obj A reference to the object to print.
+	 * @return std::string
+	 */
+	inline
+	std::string
+	to_string (const Version & obj)
+	{
+		std::stringstream output;
+
+		output << obj;
+
+		return output.str();
+	}
 }

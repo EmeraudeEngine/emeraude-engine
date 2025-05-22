@@ -42,24 +42,25 @@ namespace EmEn::Libs::VertexFactory
 {
 	/**
 	 * @brief 3D format from Quake engine.
-	 * @tparam data_t The data precision type.
+	 * @tparam vertex_data_t The precision type of vertex data. Default float.
+	 * @tparam index_data_t The precision type of index data. Default uint32_t.
 	 * @extends EmEn::Libs::VertexFactory::FileFormatInterface
 	 */
-	template< typename data_t >
-	requires (std::is_floating_point_v< data_t >)
-	class FileFormatMDL final : public FileFormatInterface< data_t >
+	template< typename vertex_data_t = float, typename index_data_t = uint32_t >
+	requires (std::is_floating_point_v< vertex_data_t > && std::is_unsigned_v< index_data_t > )
+	class FileFormatMDL final : public FileFormatInterface< vertex_data_t, index_data_t >
 	{
 		public:
 
 			/**
-			 * @brief Constructs a MDL file format.
+			 * @brief Constructs an MDL file format.
 			 */
 			FileFormatMDL () noexcept = default;
 
 			/** @copydoc EmEn::Libs::VertexFactory::FileFormatInterface::readFile() */
 			[[nodiscard]]
 			bool
-			readFile (const std::filesystem::path & filepath, Shape< data_t > & geometry, const ReadOptions & /*readOptions*/) noexcept override
+			readFile (const std::filesystem::path & filepath, Shape< vertex_data_t, index_data_t > & geometry, const ReadOptions & /*readOptions*/) noexcept override
 			{
 				std::ifstream file(filepath, std::ios::in | std::ios::binary);
 
@@ -118,7 +119,7 @@ namespace EmEn::Libs::VertexFactory
 			/** @copydoc EmEn::Libs::VertexFactory::FileFormatInterface::writeFile() */
 			[[nodiscard]]
 			bool
-			writeFile (const std::filesystem::path & filepath, const Shape< data_t > & geometry) const noexcept override
+			writeFile (const std::filesystem::path & filepath, const Shape< vertex_data_t, index_data_t > & geometry) const noexcept override
 			{
 				if ( !geometry.isValid() )
 				{
@@ -390,17 +391,16 @@ namespace EmEn::Libs::VertexFactory
 			}};
 
 			/* Flag names */
-			static constexpr auto UseMDLNormal = 0UL;
+			static constexpr auto UseMDLNormal{0UL};
 
 			/**
-			 * Convert the internal format to the native one.
-			 *
+			 * @brief Converts the internal format to the native one.
 			 * @param geometry A reference to the native geometry.
 			 * @param frameIndex Frame inside the MD2 format.
 			 * @return bool
 			 */
 			bool
-			convertToGeometry (Shape< data_t > & geometry, size_t frameIndex = 0UL) const noexcept
+			convertToGeometry (Shape< vertex_data_t, index_data_t > & geometry, uint32_t frameIndex = 0) const noexcept
 			{
 				if ( m_header.num_tris <= 0 )
 				{
@@ -409,20 +409,20 @@ namespace EmEn::Libs::VertexFactory
 					return false;
 				}
 
-				if ( frameIndex >= static_cast< size_t >(m_header.num_frames) )
+				if ( frameIndex >= static_cast< uint32_t >(m_header.num_frames) )
 				{
 					std::cerr << __PRETTY_FUNCTION__ << ", frame overflow !" "\n";
 
 					return false;
 				}
 
-				const auto triangleCount = static_cast< data_t >(m_header.num_tris);
-				const auto skinWidth = static_cast< data_t >(m_header.skinwidth);
-				const auto skinHeight = static_cast< data_t >(m_header.skinheight);
+				const auto triangleCount = static_cast< vertex_data_t >(m_header.num_tris);
+				const auto skinWidth = static_cast< vertex_data_t >(m_header.skinwidth);
+				const auto skinHeight = static_cast< vertex_data_t >(m_header.skinheight);
 
 				geometry.reserveData(triangleCount * 3, triangleCount * 3, 0U, triangleCount);
 
-				ShapeBuilderOptions< data_t > options{};
+				ShapeBuilderOptions< vertex_data_t > options{};
 				options.enableGlobalVertexColor(PixelFactory::White);
 
 				ShapeBuilder builder{geometry, options};
@@ -440,8 +440,8 @@ namespace EmEn::Libs::VertexFactory
 							const auto & normal = s_anorms[vertex.normalIndex];
 							const auto & textureCoordinate = m_textureCoordinates[m_triangles[triangleIndex].vertex[vertexIndex]];
 
-							auto s = static_cast< data_t >(textureCoordinate.s);
-							auto t = static_cast< data_t >(textureCoordinate.t);
+							auto s = static_cast< vertex_data_t >(textureCoordinate.s);
+							auto t = static_cast< vertex_data_t >(textureCoordinate.t);
 
 							if ( !m_triangles[triangleIndex].facesfront && textureCoordinate.onseam )
 							{
@@ -449,14 +449,14 @@ namespace EmEn::Libs::VertexFactory
 							}
 
 							builder.setPosition(
-								m_header.scale[0] * static_cast< data_t >(vertex.v[0]) + m_header.translate[0],
-								m_header.scale[2] * static_cast< data_t >(vertex.v[2]) + m_header.translate[2],
-								m_header.scale[1] * static_cast< data_t >(vertex.v[1]) + m_header.translate[1]
+								m_header.scale[0] * static_cast< vertex_data_t >(vertex.v[0]) + m_header.translate[0],
+								m_header.scale[2] * static_cast< vertex_data_t >(vertex.v[2]) + m_header.translate[2],
+								m_header.scale[1] * static_cast< vertex_data_t >(vertex.v[1]) + m_header.translate[1]
 							);
 							builder.setNormal(
-								static_cast< data_t >(normal[0]),
-								static_cast< data_t >(normal[1]),
-								static_cast< data_t >(normal[2])
+								static_cast< vertex_data_t >(normal[0]),
+								static_cast< vertex_data_t >(normal[1]),
+								static_cast< vertex_data_t >(normal[2])
 							);
 							builder.setTextureCoordinates(
 								(s + 0.5F) / skinWidth,
@@ -475,8 +475,8 @@ namespace EmEn::Libs::VertexFactory
 							const auto & vertex = m_frames[frameIndex].frame.verts[m_triangles[triangleIndex].vertex[vertexIndex]];
 							const auto & textureCoordinate = m_textureCoordinates[m_triangles[triangleIndex].vertex[vertexIndex]];
 
-							auto s = static_cast< data_t >(textureCoordinate.s);
-							auto t = static_cast< data_t >(textureCoordinate.t);
+							auto s = static_cast< vertex_data_t >(textureCoordinate.s);
+							auto t = static_cast< vertex_data_t >(textureCoordinate.t);
 
 							if ( !m_triangles[triangleIndex].facesfront && textureCoordinate.onseam )
 							{
@@ -484,9 +484,9 @@ namespace EmEn::Libs::VertexFactory
 							}
 
 							builder.setPosition(
-								m_header.scale[0] * static_cast< data_t >(vertex.v[0]) + m_header.translate[0],
-								m_header.scale[2] * static_cast< data_t >(vertex.v[2]) + m_header.translate[2],
-								m_header.scale[1] * static_cast< data_t >(vertex.v[1]) + m_header.translate[1]
+								m_header.scale[0] * static_cast< vertex_data_t >(vertex.v[0]) + m_header.translate[0],
+								m_header.scale[2] * static_cast< vertex_data_t >(vertex.v[2]) + m_header.translate[2],
+								m_header.scale[1] * static_cast< vertex_data_t >(vertex.v[1]) + m_header.translate[1]
 							);
 							builder.setTextureCoordinates(
 								(s + 0.5F) / skinWidth,
@@ -497,7 +497,7 @@ namespace EmEn::Libs::VertexFactory
 					}
 				}
 
-				geometry.transform(Math::Matrix< 4, data_t >::rotation(Math::Radian< data_t >(90), 0, 1, 0));
+				geometry.transform(Math::Matrix< 4, vertex_data_t >::rotation(Math::Radian< vertex_data_t >(90), 0, 1, 0));
 
 				builder.endConstruction();
 
@@ -505,12 +505,12 @@ namespace EmEn::Libs::VertexFactory
 			}
 
 			mdl_header_t m_header{};
-			std::vector< mdl_skin_t > m_skins{};
-			std::vector< mdl_texCoord_t > m_textureCoordinates{};
-			std::vector< mdl_triangle_t > m_triangles{};
-			std::vector< mdl_frame_t > m_frames{};
-			std::vector< unsigned int > m_texID{};
-			int m_iSkin = 0;
+			std::vector< mdl_skin_t > m_skins;
+			std::vector< mdl_texCoord_t > m_textureCoordinates;
+			std::vector< mdl_triangle_t > m_triangles;
+			std::vector< mdl_frame_t > m_frames;
+			std::vector< uint32_t > m_texID{};
+			int32_t m_iSkin = 0;
 			std::array< bool, 4 > m_flags{
 				true/*UseMDLNormal*/,
 				false/*UNUSED*/,

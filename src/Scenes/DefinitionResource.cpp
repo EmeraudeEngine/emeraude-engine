@@ -26,10 +26,6 @@
 
 #include "DefinitionResource.hpp"
 
-/* STL inclusions. */
-#include <fstream>
-#include <cstring>
-
 /* Local inclusions. */
 #include "Tracer.hpp"
 #include "Resources/Manager.hpp"
@@ -47,33 +43,9 @@ const size_t EmEn::Resources::Container< EmEn::Scenes::DefinitionResource >::Cla
 namespace EmEn::Scenes
 {
 	using namespace EmEn::Libs;
-	using namespace Graphics;
+	using namespace EmEn::Graphics;
 
 	const size_t DefinitionResource::ClassUID{getClassUID(ClassId)};
-
-	DefinitionResource::DefinitionResource (const std::string & name, uint32_t resourceFlagBits) noexcept
-		: ResourceTrait(name, resourceFlagBits)
-	{
-
-	}
-
-	size_t
-	DefinitionResource::classUID () const noexcept
-	{
-		return ClassUID;
-	}
-
-	bool
-	DefinitionResource::is (size_t classUID) const noexcept
-	{
-		return classUID == ClassUID;
-	}
-
-	const char *
-	DefinitionResource::classLabel () const noexcept
-	{
-		return ClassId;
-	}
 
 	bool
 	DefinitionResource::load () noexcept
@@ -94,7 +66,9 @@ namespace EmEn::Scenes
 		}
 
 		/* Checks if additional stores before loading (optional) */
-		Resources::Manager::instance()->stores().update(root);
+		auto * manager = Resources::Manager::instance();
+
+		manager->stores().update(root, manager->verbosityEnabled());
 
 		return this->load(root);
 	}
@@ -111,7 +85,9 @@ namespace EmEn::Scenes
 	DefinitionResource::getSceneName () const noexcept
 	{
 		if ( m_root.isMember(FastJSON::NameKey) && m_root[FastJSON::NameKey].isString() )
+		{
 			return m_root[FastJSON::NameKey].asString();
+		}
 
 		return "NoName";
 	}
@@ -121,7 +97,7 @@ namespace EmEn::Scenes
 	{
 		if ( m_root.empty() )
 		{
-			Tracer::error(ClassId, BlobTrait() << "No data ! Load a JSON file or set a JSON string before.");
+			Tracer::error(ClassId, "No data ! Load a JSON file or set a JSON string before.");
 
 			return false;
 		}
@@ -142,7 +118,9 @@ namespace EmEn::Scenes
 	DefinitionResource::getExtraData () const noexcept
 	{
 		if ( !m_root.isMember(ExtraDataKey) || !m_root[ExtraDataKey].isObject() )
+		{
 			return {};
+		}
 
 		return m_root[ExtraDataKey];
 	}
@@ -152,7 +130,7 @@ namespace EmEn::Scenes
 	{
 		if ( !m_root.isMember(FastJSON::PropertiesKey) || !m_root[FastJSON::PropertiesKey].isObject() )
 		{
-			Tracer::warning(ClassId, BlobTrait() << "There is no '" << FastJSON::PropertiesKey << "' definition or is invalid !");
+			TraceWarning{ClassId} << "There is no '" << FastJSON::PropertiesKey << "' definition or is invalid !";
 
 			return false;
 		}
@@ -288,23 +266,5 @@ namespace EmEn::Scenes
 		}*/
 
 		return true;
-	}
-
-	bool
-	DefinitionResource::onDependenciesLoaded () noexcept
-	{
-		return true;
-	}
-
-	std::shared_ptr< DefinitionResource >
-	DefinitionResource::get (const std::string & resourceName, bool directLoad) noexcept
-	{
-		return Resources::Manager::instance()->sceneDefinitions().getResource(resourceName, !directLoad);
-	}
-
-	std::shared_ptr< DefinitionResource >
-	DefinitionResource::getDefault () noexcept
-	{
-		return Resources::Manager::instance()->sceneDefinitions().getDefaultResource();
 	}
 }

@@ -97,22 +97,22 @@ namespace EmEn::Libs::Time::Elapsed
 			{
 				const auto nanoseconds = std::chrono::duration_cast< std::chrono::nanoseconds >(clock_t::now() - m_start).count();
 
-				if constexpr  ( precision_t == static_cast< std::uint8_t >(Precision::Seconds) )
+				if constexpr ( precision_t == static_cast< std::uint8_t >(Precision::Seconds) )
 				{
 					std::cout << m_label << " : " << static_cast< double >(nanoseconds) / 1000000000.0 << " s" "\n";
 				}
 
-				if constexpr  ( precision_t == static_cast< std::uint8_t >(Precision::Milliseconds) )
+				if constexpr ( precision_t == static_cast< std::uint8_t >(Precision::Milliseconds) )
 				{
 					std::cout << m_label << " : " << static_cast< double >(nanoseconds) / 1000000.0 << " ms" "\n";
 				}
 
-				if constexpr  ( precision_t == static_cast< std::uint8_t >(Precision::Microseconds) )
+				if constexpr ( precision_t == static_cast< std::uint8_t >(Precision::Microseconds) )
 				{
 					std::cout << m_label << " : " << static_cast< double >(nanoseconds) / 1000.0 << " μs" "\n";
 				}
 
-				if constexpr  ( precision_t == static_cast< std::uint8_t >(Precision::Nanoseconds) )
+				if constexpr ( precision_t == static_cast< std::uint8_t >(Precision::Nanoseconds) )
 				{
 					std::cout << m_label << " : " << nanoseconds << " ns" "\n" "\n";
 				}
@@ -190,7 +190,7 @@ namespace EmEn::Libs::Time::Elapsed
 			{
 				const auto nanoseconds = std::chrono::duration_cast< std::chrono::nanoseconds >(clock_t::now() - m_start).count();
 
-				if constexpr  ( precision_t == static_cast< std::uint8_t >(Precision::Seconds) )
+				if constexpr ( precision_t == static_cast< std::uint8_t >(Precision::Seconds) )
 				{
 					const auto interval = static_cast< double >(nanoseconds) / 1000000000.0;
 
@@ -202,7 +202,7 @@ namespace EmEn::Libs::Time::Elapsed
 					std::cerr << m_label << " : " << interval << " s" "\n";
 				}
 
-				if constexpr  ( precision_t == static_cast< std::uint8_t >(Precision::Milliseconds) )
+				if constexpr ( precision_t == static_cast< std::uint8_t >(Precision::Milliseconds) )
 				{
 					const auto interval = static_cast< double >(nanoseconds) / 1000000.0;
 
@@ -214,7 +214,7 @@ namespace EmEn::Libs::Time::Elapsed
 					std::cerr << m_label << " : " << interval << " ms" "\n";
 				}
 
-				if constexpr  ( precision_t == static_cast< std::uint8_t >(Precision::Microseconds) )
+				if constexpr ( precision_t == static_cast< std::uint8_t >(Precision::Microseconds) )
 				{
 					const auto interval = static_cast< double >(nanoseconds) / 1000.0;
 
@@ -226,7 +226,7 @@ namespace EmEn::Libs::Time::Elapsed
 					std::cerr << m_label << " : " << interval << " μs" "\n";
 				}
 
-				if constexpr  ( precision_t == static_cast< std::uint8_t >(Precision::Nanoseconds) )
+				if constexpr ( precision_t == static_cast< std::uint8_t >(Precision::Nanoseconds) )
 				{
 					if ( nanoseconds < m_threshold )
 					{

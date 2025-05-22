@@ -47,7 +47,12 @@ namespace EmEn::Animations
 			 * @param value The value at this keyframe [std::move].
 			 * @param interpolation The type of interpolation.
 			 */
-			KeyFrame (Libs::Variant value, Libs::Math::InterpolationType interpolation) noexcept;
+			KeyFrame (Libs::Variant value, Libs::Math::InterpolationType interpolation) noexcept
+				: m_value{std::move(value)},
+				m_interpolation{interpolation}
+			{
+
+			}
 
 			/**
 			 * @brief Returns the value.

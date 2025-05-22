@@ -51,26 +51,7 @@ namespace EmEn::Vulkan::Sync
 				return "Unknown";
 		}
 	}
-
-	Fence::Fence (const std::shared_ptr< Device > & device, VkFenceCreateFlags createFlags) noexcept
-		: AbstractDeviceDependentObject(device)
-	{
-		m_createInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-		m_createInfo.pNext = nullptr;
-		m_createInfo.flags = createFlags; /* NOTE: Avoid the first use blocks everything ... */
-	}
-
-	Fence::Fence (const std::shared_ptr< Device > & device, const VkFenceCreateInfo & createInfo) noexcept
-		: AbstractDeviceDependentObject(device), m_createInfo(createInfo)
-	{
-
-	}
-
-	Fence::~Fence ()
-	{
-		this->destroyFromHardware();
-	}
-
+	
 	bool
 	Fence::createOnHardware () noexcept
 	{
@@ -209,6 +190,50 @@ namespace EmEn::Vulkan::Sync
 		if ( result != VK_SUCCESS )
 		{
 			TraceError{ClassId} << "Unable to wait the fence : " << vkResultToCString(result) << " !";
+
+			return false;
+		}
+
+		return true;
+	}
+
+	bool
+	Fence::waitAndReset (uint64_t timeout) const noexcept
+	{
+		if ( !this->hasDevice() )
+		{
+			Tracer::error(ClassId, "No device to use this fence !");
+
+			return false;
+		}
+
+		auto result = vkWaitForFences(
+			this->device()->handle(),
+			1, &m_handle,
+			VK_FALSE,
+			timeout
+		);
+
+		switch ( result )
+		{
+			case VK_SUCCESS :
+				break;
+
+			case VK_TIMEOUT :
+				TraceError{ClassId} << "The fence exceeded the waiting timeout (" << timeout << " ns) !";
+				break;
+
+			default:
+				TraceError{ClassId} << "Unable to wait the fence : " << vkResultToCString(result) << " !";
+
+				return false;
+		}
+
+		result = vkResetFences(this->device()->handle(), 1, &m_handle);
+
+		if ( result != VK_SUCCESS )
+		{
+			TraceError{ClassId} << "Unable to reset the fence : " << vkResultToCString(result) << " !";
 
 			return false;
 		}

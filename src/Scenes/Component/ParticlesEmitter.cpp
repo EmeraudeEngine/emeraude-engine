@@ -33,20 +33,9 @@ namespace EmEn::Scenes::Component
 {
 	using namespace EmEn::Libs;
 	using namespace EmEn::Libs::Math;
-	using namespace Animations;
-	using namespace Physics;
-	using namespace Graphics;
-
-	ParticlesEmitter::ParticlesEmitter (const std::string & name, const AbstractEntity & parentEntity, const std::shared_ptr< Renderable::Interface > & renderable, uint32_t instanceCount) noexcept
-		: Abstract(name, parentEntity),
-		m_renderableInstance(std::make_shared< RenderableInstance::Multiple >(renderable, instanceCount, renderable->isSprite() ? RenderableInstance::FacingCamera : RenderableInstance::None)),
-		m_particleLimit(instanceCount)
-	{
-		/* NOTE: Prepare local data at the fixed size. */
-		m_particles.resize(m_particleLimit);
-
-		this->observe(m_renderableInstance.get());
-	}
+	using namespace EmEn::Animations;
+	using namespace EmEn::Physics;
+	using namespace EmEn::Graphics;
 
 	void
 	ParticlesEmitter::processLogics (const Scene & scene) noexcept
@@ -157,13 +146,7 @@ namespace EmEn::Scenes::Component
 		}
 
 		m_renderableInstance->setActiveInstanceCount(activeInstanceCount);
-		m_renderableInstance->updateVideoMemory();
-	}
-
-	bool
-	ParticlesEmitter::shouldRemove () const noexcept
-	{
-		return m_renderableInstance->isBroken();
+		m_renderableInstance->updateVideoMemory(scene.AVConsoleManager().graphicsRenderer().transferManager());
 	}
 
 	bool
@@ -267,28 +250,6 @@ namespace EmEn::Scenes::Component
 	}
 
 	void
-	ParticlesEmitter::setParticleSize (float size) noexcept
-	{
-		m_minimumParticleSize = size;
-		m_maximumParticleSize = size;
-	}
-
-	void
-	ParticlesEmitter::setParticleSize (float minimumSize, float maximumSize) noexcept
-	{
-		if ( minimumSize < maximumSize )
-		{
-			m_minimumParticleSize = minimumSize;
-			m_maximumParticleSize = maximumSize;
-		}
-		else
-		{
-			m_minimumParticleSize = maximumSize;
-			m_maximumParticleSize = minimumSize;
-		}
-	}
-
-	void
 	ParticlesEmitter::start (uint32_t duration) noexcept
 	{
 		this->enableFlag(IsEmitting);
@@ -306,39 +267,5 @@ namespace EmEn::Scenes::Component
 			);
 			m_timedEvent->start();
 		}
-	}
-
-	void
-	ParticlesEmitter::stop () noexcept
-	{
-		this->disableFlag(IsEmitting);
-	}
-
-	std::ostream &
-	operator<< (std::ostream & out, const ParticlesEmitter & obj)
-	{
-		return out <<
-			"Particles Generator data :\n"
-			"Enabled : " << ( obj.isEmitting() ? "yes" : "no" ) << "\n"
-			"Particles generated per cycle : " << obj.m_particleGeneratedPerCycle << "\n"
-			"Particles limit : " << obj.m_particleLimit << "\n"
-			"Particles min life : " << obj.m_minimumParticleLifetime << "\n"
-			"Particles max life : " << obj.m_maximumParticleLifetime << "\n"
-			"Particles min size : " << obj.m_minimumParticleSize << "\n"
-			"Particles max size : " << obj.m_maximumParticleSize << "\n"
-			"Particles size processLogics factor : " << obj.m_particleSizeDeltaPerCycle << "\n"
-			"Spreading : " << obj.m_spreadingRadius << "\n"
-			"Chaos magnitude : " << obj.m_chaosMagnitude << "\n"
-			"Living particles : " << obj.m_particles.size() << '\n';
-	}
-
-	std::string
-	to_string (const ParticlesEmitter & obj) noexcept
-	{
-		std::stringstream output;
-
-		output << obj;
-
-		return output.str();
 	}
 }

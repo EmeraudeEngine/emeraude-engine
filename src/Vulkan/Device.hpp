@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* Engine configuration file. */
+#include "emeraude_config.hpp"
+
 /* STL inclusions. */
 #include <array>
 #include <cstdint>
@@ -39,14 +42,13 @@
 #include "Libs/NameableTrait.hpp"
 
 /* Local inclusions for usage. */
-#include "Settings.hpp"
+#include "PhysicalDevice.hpp"
 #include "Types.hpp"
 
 /* Forward declarations. */
 namespace EmEn::Vulkan
 {
 	class Instance;
-	class PhysicalDevice;
 	class DeviceRequirements;
 	class QueueFamilyInterface;
 	class Queue;
@@ -68,10 +70,17 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Constructs a device.
+			 * @param deviceName A string [std::move].
 			 * @param physicalDevice A reference to a physical device smart pointer.
-			 * @param settings A reference to the settings.
+			 * @param showInformation Enable the device information in the terminal.
 			 */
-			explicit Device (const std::shared_ptr< PhysicalDevice > & physicalDevice, Settings & settings) noexcept;
+			explicit
+			Device (std::string deviceName, const std::shared_ptr< PhysicalDevice > & physicalDevice, bool showInformation) noexcept
+				: NameableTrait{std::move(deviceName)},
+				m_physicalDevice{physicalDevice}
+			{
+				m_flags[ShowInformation] = showInformation;
+			}
 
 			/**
 			 * @brief Copy constructor.
@@ -100,7 +109,10 @@ namespace EmEn::Vulkan
 			/**
 			 * @brief Destructs the device.
 			 */
-			~Device () override;
+			~Device () override
+			{
+				this->destroy();
+			}
 
 			/**
 			 * @brief Creates the device.

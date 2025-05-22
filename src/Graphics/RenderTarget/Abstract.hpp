@@ -27,6 +27,7 @@
 #pragma once
 
 /* STL inclusions. */
+#include <cstdint>
 #include <array>
 #include <memory>
 #include <string>
@@ -245,21 +246,6 @@ namespace EmEn::Graphics::RenderTarget
 			}
 
 			/**
-			 * @brief Returns the aspect ratio of the render target.
-			 * @return float
-			 */
-			[[nodiscard]]
-			virtual float aspectRatio () const noexcept
-			{
-				if ( m_extent.height == 0 )
-				{
-					return 0.0F;
-				}
-
-				return static_cast< float >(m_extent.width) / static_cast< float >(m_extent.height);
-			}
-
-			/**
 			 * @brief Creates the render target in the video memory.
 			 * @param renderer A reference to the graphics renderer.
 			 * @return bool
@@ -272,6 +258,13 @@ namespace EmEn::Graphics::RenderTarget
 			 * @return bool
 			 */
 			bool destroy () noexcept;
+
+			/**
+			 * @brief Returns the aspect ratio of the render target.
+			 * @return float
+			 */
+			[[nodiscard]]
+			virtual float aspectRatio () const noexcept = 0;
 
 			/**
 			 * @brief Returns whether the render target is a cubemap.
@@ -327,29 +320,26 @@ namespace EmEn::Graphics::RenderTarget
 		protected:
 
 			/**
-			 * @brief Methods to create on child class.
-			 * @param renderer A reference to the graphics renderer.
-			 * @return bool
-			 */
-			[[nodiscard]]
-			virtual bool onCreate (Renderer & renderer) noexcept = 0;
-
-			/**
-			 * @brief Methods to destroy on child class.
-			 * @return void
-			 */
-			virtual void onDestroy () noexcept = 0;
-
-			/**
 			 * @brief Constructs an abstract render target.
-			 * @param name A reference to a string for the name of the video device.
+			 * @param deviceName A reference to a string for the name of the video device.
 			 * @param precisions The framebuffer precisions.
 			 * @param extent The framebuffer dimensions.
 			 * @param renderType The type of render.
 			 * @param enableSyncPrimitives Enable the creation of global sync primitive for this render target.
 			 * @param allowedConnexionType The type of connexion this virtual device allows.
 			 */
-			Abstract (const std::string & name, const FramebufferPrecisions & precisions, const VkExtent3D & extent, RenderTargetType renderType, AVConsole::ConnexionType allowedConnexionType, bool enableSyncPrimitives) noexcept;
+			Abstract (const std::string & deviceName, const FramebufferPrecisions & precisions, const VkExtent3D & extent, RenderTargetType renderType, AVConsole::ConnexionType allowedConnexionType, bool enableSyncPrimitives) noexcept
+				: AbstractVirtualDevice{deviceName, AVConsole::DeviceType::Video, allowedConnexionType},
+				m_precisions{precisions},
+				m_extent{extent},
+				m_renderArea{
+					.offset = {.x = 0, .y = 0},
+					.extent = {.width = extent.width, .height = extent.height}
+				},
+				m_renderType{renderType}
+			{
+				m_flags[EnableSyncPrimitive] = enableSyncPrimitives;
+			}
 
 			/**
 			 * @brief Sets extents of the render target.
@@ -434,6 +424,20 @@ namespace EmEn::Graphics::RenderTarget
 			 */
 			[[nodiscard]]
 			virtual std::shared_ptr< Vulkan::RenderPass > createRenderPass (Renderer & renderer) const noexcept = 0;
+
+			/**
+			 * @brief Methods to create on child class.
+			 * @param renderer A reference to the graphics renderer.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			virtual bool onCreate (Renderer & renderer) noexcept = 0;
+
+			/**
+			 * @brief Methods to destroy on child class.
+			 * @return void
+			 */
+			virtual void onDestroy () noexcept = 0;
 
 		private:
 

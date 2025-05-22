@@ -36,7 +36,7 @@ namespace EmEn::Saphir::Declaration
 {
 	/**
 	 * @brief The OutputFragment class
-	 * @extends EmEn::Saphir::DeclarationInterface This is a shader code declaration.
+	 * @extends EmEn::Saphir::Declaration::Interface This is a shader code declaration.
 	 */
 	class OutputFragment final : public Interface
 	{
@@ -48,37 +48,83 @@ namespace EmEn::Saphir::Declaration
 			 * @param type A C-string to set the GLSL type of the variable. Use one of Keys::GLSL::* keyword.
 			 * @param name A C-string to set the name of the variable.
 			 */
-			OutputFragment (uint32_t location, Key type, Key name) noexcept;
+			OutputFragment (uint32_t location, Key type, Key name) noexcept
+				: m_location{location},
+				m_type{type},
+				m_name{name}
+			{
 
-			/** @copydoc EmEn::Saphir::DeclarationInterface::isValid() */
-			[[nodiscard]]
-			bool isValid () const noexcept override;
+			}
 
-			/** @copydoc EmEn::Saphir::DeclarationInterface::name() */
+			/** @copydoc EmEn::Saphir::Declaration::Interface::isValid() */
 			[[nodiscard]]
-			Key name () const noexcept override;
+			bool
+			isValid () const noexcept override
+			{
+				if ( m_type == nullptr )
+				{
+					return false;
+				}
 
-			/** @copydoc EmEn::Saphir::DeclarationInterface::bytes() */
-			[[nodiscard]]
-			size_t bytes () const noexcept override;
+				if ( m_name == nullptr )
+				{
+					return false;
+				}
 
-			/** @copydoc EmEn::Saphir::DeclarationInterface::sourceCode() */
+				return true;
+			}
+
+			/** @copydoc EmEn::Saphir::Declaration::Interface::name() */
 			[[nodiscard]]
-			std::string sourceCode () const noexcept override;
+			Key
+			name () const noexcept override
+			{
+				return m_name;
+			}
+
+			/** @copydoc EmEn::Saphir::Declaration::Interface::bytes() */
+			[[nodiscard]]
+			uint32_t
+			bytes () const noexcept override
+			{
+				return 0;
+			}
+
+			/** @copydoc EmEn::Saphir::Declaration::Interface::sourceCode() */
+			[[nodiscard]]
+			std::string
+			sourceCode () const noexcept override
+			{
+				std::stringstream code;
+
+				code <<
+					Keys::GLSL::Layout << " (" << Keys::GLSL::Location << " = " << std::to_string(m_location) << ") " <<
+					Keys::GLSL::Out << ' ' << m_type << ' ' << m_name << ";" "\n";
+
+				return code.str();
+			}
 
 			/**
 			 * @brief Returns the variable location in the shader.
-			 * @param uint32_t
+			 * @return uint32_t
 			 */
 			[[nodiscard]]
-			uint32_t location () const noexcept;
+			uint32_t
+			location () const noexcept
+			{
+				return m_location;
+			}
 
 			/**
 			 * @brief Returns the variable type.
-			 * @param Key
+			 * @return Key
 			 */
 			[[nodiscard]]
-			Key type () const noexcept;
+			Key
+			type () const noexcept
+			{
+				return m_type;
+			}
 
 		private:
 

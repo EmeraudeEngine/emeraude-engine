@@ -250,7 +250,7 @@ namespace EmEn::Physics
 
 			/**
 			 * @brief Adds a physical force to the object acceleration.
-			 * @note Using this formula : F = m * a
+			 * @note Using this formula: F = m * a
 			 * @param force A reference to a vector representing the force. The magnitude (length) will represent the acceleration in m/s².
 			 * @return void
 			 */
@@ -279,7 +279,7 @@ namespace EmEn::Physics
 
 			/**
 			 * @brief Updates the velocity vector from the acceleration vector and return a reference to the new velocity.
-			 * This will in order :
+			 * This will in order:
 			 *  - Apply gravity force to acceleration vector.
 			 *  - Apply drag force to acceleration vector.
 			 *  - Add acceleration vector to velocity vector.
@@ -291,6 +291,7 @@ namespace EmEn::Physics
 
 			/**
 			 * @brief Sets whether this is affected by all physical interactions.
+			 * @note If false, the method stopMovement() will be called.
 			 * @param state The state.
 			 * @return void
 			 */
@@ -298,6 +299,11 @@ namespace EmEn::Physics
 			setMovingAbility (bool state) noexcept
 			{
 				m_flags[IsMovable] = state;
+
+				if ( !state )
+				{
+					this->stopMovement();
+				}
 			}
 
 			/**
@@ -312,7 +318,7 @@ namespace EmEn::Physics
 			}
 
 			/**
-			 * @brief Sets whether this movable trait always compute physics.
+			 * @brief Sets whether this movable trait always computes physics.
 			 * @param state The state.
 			 * @return void
 			 */
@@ -334,7 +340,7 @@ namespace EmEn::Physics
 			}
 
 			/**
-			 * @brief Enables the free fly mode. In other terms , the gravity will be ignored.
+			 * @brief Enables the free fly mode. In other terms, the gravity will be ignored.
 			 * @param state The state.
 			 */
 			void
@@ -356,7 +362,7 @@ namespace EmEn::Physics
 
 			/**
 			 * @brief Check for simulation inertia.
-			 * @warning This method is not physically correct and its aim is to reduce useless physics computation.
+			 * @warning This method is not physically correct, and its aim is to reduce useless physics computation.
 			 * @return bool
 			 */
 			[[nodiscard]]

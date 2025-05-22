@@ -27,9 +27,6 @@
 #pragma once
 
 /* STL inclusions. */
-#include <cstddef>
-#include <cstdint>
-#include <string>
 #include <memory>
 
 /* Local inclusions for inheritances. */
@@ -41,8 +38,8 @@
 namespace EmEn::Graphics::Renderable
 {
 	/**
-	 * @brief The sky box resource class.
-	 * @extends EmEn::Graphics::Renderable::AbstractBackground The is a specialized background.
+	 * @brief The skybox resource class.
+	 * @extends EmEn::Graphics::Renderable::AbstractBackground This is a specialized background.
 	 */
 	class SkyBoxResource final : public AbstractBackground
 	{
@@ -58,44 +55,84 @@ namespace EmEn::Graphics::Renderable
 			/** @brief Observable class unique identifier. */
 			static const size_t ClassUID;
 
+			/** @brief Defines the resource dependency complexity. */
+			static constexpr auto Complexity{Resources::DepComplexity::Complex};
+
 			/**
 			 * @brief Constructs a skybox resource.
 			 * @param name A reference to a string for the resource name.
-			 * @param resourceFlagBits The resource flag bits. Default none.
+			 * @param renderableFlags The resource flag bits. Default none.
 			 */
-			explicit SkyBoxResource (const std::string & name, uint32_t resourceFlagBits = 0) noexcept;
+			explicit
+			SkyBoxResource (std::string name, uint32_t renderableFlags = 0) noexcept
+				: AbstractBackground{std::move(name), renderableFlags}
+			{
+
+			}
 
 			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
 			[[nodiscard]]
-			size_t classUID () const noexcept override;
+			size_t
+			classUID () const noexcept override
+			{
+				return ClassUID;
+			}
 
 			/** @copydoc EmEn::Libs::ObservableTrait::is() const */
 			[[nodiscard]]
-			bool is (size_t classUID) const noexcept override;
+			bool
+			is (size_t classUID) const noexcept override
+			{
+				return classUID == ClassUID;
+			}
 
 			/** @copydoc EmEn::Graphics::Renderable::Interface::layerCount() const */
 			[[nodiscard]]
-			size_t layerCount () const noexcept override;
+			uint32_t
+			layerCount () const noexcept override
+			{
+				return 1;
+			}
 
 			/** @copydoc EmEn::Graphics::Renderable::Interface::isOpaque() const */
 			[[nodiscard]]
-			bool isOpaque (size_t layerIndex = 0) const noexcept override;
+			bool
+			isOpaque (uint32_t /*layerIndex*/) const noexcept override
+			{
+				return true;
+			}
 
 			/** @copydoc EmEn::Graphics::Renderable::Interface::geometry() const */
 			[[nodiscard]]
-			const Geometry::Interface * geometry () const noexcept override;
+			const Geometry::Interface *
+			geometry () const noexcept override
+			{
+				return m_geometry.get();
+			}
 
 			/** @copydoc EmEn::Graphics::Renderable::Interface::material() const */
 			[[nodiscard]]
-			const Material::Interface * material (size_t layerIndex = 0) const noexcept override;
+			const Material::Interface *
+			material (uint32_t /*layerIndex*/) const noexcept override
+			{
+				return m_material.get();
+			}
 
 			/** @copydoc EmEn::Graphics::Renderable::Interface::layerRasterizationOptions() const */
 			[[nodiscard]]
-			const RasterizationOptions * layerRasterizationOptions (size_t layerIndex = 0) const noexcept override;
+			const RasterizationOptions *
+			layerRasterizationOptions (uint32_t /*layerIndex*/) const noexcept override
+			{
+				return nullptr;
+			}
 
 			/** @copydoc EmEn::Resources::ResourceTrait::classLabel() const */
 			[[nodiscard]]
-			const char * classLabel () const noexcept override;
+			const char *
+			classLabel () const noexcept override
+			{
+				return ClassId;
+			}
 
 			/** @copydoc EmEn::Resources::ResourceTrait::load() */
 			bool load () noexcept override;
@@ -103,28 +140,20 @@ namespace EmEn::Graphics::Renderable
 			/** @copydoc EmEn::Resources::ResourceTrait::load(const Json::Value &) */
 			bool load (const Json::Value & data) noexcept override;
 
+			/** @copydoc EmEn::Resources::ResourceTrait::memoryOccupied() const noexcept */
+			[[nodiscard]]
+			size_t
+			memoryOccupied () const noexcept override
+			{
+				return sizeof(*this);
+			}
+
 			/**
 			 * @brief Loads a skybox with a material resource.
 			 * @param material A reference to a material smart pointer.
 			 * @return bool
 			 */
 			bool load (const std::shared_ptr< Material::Interface > & material) noexcept;
-
-			/**
-			 * @brief Returns a skybox resource by its name.
-			 * @param resourceName A reference to a string.
-			 * @param directLoad Use the direct loading mode. Default false.
-			 * @return std::shared_ptr< SkyBoxResource >
-			 */
-			[[nodiscard]]
-			static std::shared_ptr< SkyBoxResource > get (const std::string & resourceName, bool directLoad = false) noexcept;
-
-			/**
-			 * @brief Returns the default skybox resource.
-			 * @return std::shared_ptr< SkyBoxResource >
-			 */
-			[[nodiscard]]
-			static std::shared_ptr< SkyBoxResource > getDefault () noexcept;
 
 		private:
 
@@ -149,8 +178,8 @@ namespace EmEn::Graphics::Renderable
 			 */
 			bool setMaterial (const std::shared_ptr< Material::Interface > & material) noexcept;
 
-			std::shared_ptr< Geometry::Interface > m_geometry{};
-			std::shared_ptr< Material::Interface > m_material{};
+			std::shared_ptr< Geometry::Interface > m_geometry;
+			std::shared_ptr< Material::Interface > m_material;
 	};
 }
 

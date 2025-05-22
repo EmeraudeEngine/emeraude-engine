@@ -45,7 +45,7 @@ namespace EmEn::Audio
 			return;
 		}
 
-		if ( !Manager::instance()->usable() )
+		if ( Manager::audioDisabled() )
 		{
 			*(this->identifierPointer()) = 1;
 

@@ -34,7 +34,7 @@ namespace EmEn::PlatformSpecific::Desktop
 {
 	using namespace EmEn::Libs::Network;
 
-	static constexpr auto TracerTag{"DesktopCommand"};
+	constexpr auto TracerTag{"DesktopCommand"};
 
 	ProgressMode
 	to_ProgressMode (const std::string & string) noexcept

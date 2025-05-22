@@ -56,7 +56,10 @@ namespace EmEn::Animations
 			 * @param minimum A reference to a minimum value.
 			 * @param maximum A reference to a maximum value.
 			 */
-			RandomValue (const Libs::Variant & minimum, const Libs::Variant & maximum) noexcept;
+			RandomValue (const Libs::Variant & minimum, const Libs::Variant & maximum) noexcept
+			{
+				this->setValue(minimum, maximum);
+			}
 
 			/** @copydoc EmEn::Animations::AnimationInterface::getNextValue() */
 			Libs::Variant getNextValue () noexcept override;

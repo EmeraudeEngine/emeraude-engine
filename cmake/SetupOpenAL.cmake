@@ -1,5 +1,5 @@
 if ( NOT OPENAL_ENABLED )
-	if ( EMERAUDE_USE_SYSTEM_LIBS OR (UNIX AND NOT APPLE) )
+	if ( EMERAUDE_USE_SYSTEM_LIBS )
 		message("Enabling OpenAL library from system ...")
 
 		find_package(OpenAL REQUIRED)

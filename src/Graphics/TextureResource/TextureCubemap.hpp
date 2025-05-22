@@ -26,33 +26,12 @@
 
 #pragma once
 
-/* STL inclusions. */
-#include <cstdint>
-#include <cstddef>
-#include <memory>
-#include <string>
-
 /* Local inclusions for inheritances. */
 #include "Abstract.hpp"
 
 /* Local inclusions for usages. */
-#include "Libs/PixelFactory/Color.hpp"
+#include "Graphics/CubemapResource.hpp"
 #include "Resources/Container.hpp"
-#include "Resources/ResourceTrait.hpp"
-
-/* Forward declarations. */
-namespace EmEn
-{
-	namespace Graphics
-	{
-		class CubemapResource;
-	}
-
-	namespace Vulkan
-	{
-		class Image;
-	}
-}
 
 namespace EmEn::Graphics::TextureResource
 {
@@ -74,51 +53,44 @@ namespace EmEn::Graphics::TextureResource
 			/** @brief Observable class unique identifier. */
 			static const size_t ClassUID;
 
-			/**
-			 * @brief Constructs a cubemap resource.
-			 * @param name The name of the resource.
-			 * @param resourceFlagBits The resource flag bits. Default none. (Unused yet)
-			 */
-			explicit TextureCubemap (const std::string & name, uint32_t resourceFlagBits = 0) noexcept;
+			/** @brief Defines the resource dependency complexity. */
+			static constexpr auto Complexity{Resources::DepComplexity::One};
 
 			/**
-			 * @brief Copy constructor.
-			 * @param copy A reference to the copied instance.
+			 * @brief Constructs a texture cubemap resource.
+			 * @param textureName A string for the texture name [std::move].
+			 * @param textureFlags The resource flag bits. Default none. (Unused yet)
 			 */
-			TextureCubemap (const TextureCubemap & copy) noexcept = delete;
+			explicit
+			TextureCubemap (std::string textureName, uint32_t textureFlags = 0) noexcept
+				: Abstract{std::move(textureName), textureFlags}
+			{
+
+			}
 
 			/**
-			 * @brief Move constructor.
-			 * @param copy A reference to the copied instance.
+			 * @brief Destructs the texture cubemap resource.
 			 */
-			TextureCubemap (TextureCubemap && copy) noexcept = delete;
-
-			/**
-			 * @brief Copy assignment.
-			 * @param copy A reference to the copied instance.
-			 * @return TextureCubemap &
-			 */
-			TextureCubemap & operator= (const TextureCubemap & copy) noexcept = delete;
-
-			/**
-			 * @brief Move assignment.
-			 * @param copy A reference to the copied instance.
-			 * @return TextureCubemap &
-			 */
-			TextureCubemap & operator= (TextureCubemap && copy) noexcept = delete;
-
-			/**
-			 * @brief Constructs the texture cubemap resource.
-			 */
-			~TextureCubemap () override;
+			~TextureCubemap () override
+			{
+				this->destroyFromHardware();
+			}
 
 			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
 			[[nodiscard]]
-			size_t classUID () const noexcept override;
+			size_t
+			classUID () const noexcept override
+			{
+				return ClassUID;
+			}
 
 			/** @copydoc EmEn::Libs::ObservableTrait::is() const */
 			[[nodiscard]]
-			bool is (size_t classUID) const noexcept override;
+			bool
+			is (size_t classUID) const noexcept override
+			{
+				return classUID == ClassUID;
+			}
 
 			/** @copydoc EmEn::Graphics::TextureResource::Abstract::isCreated() */
 			[[nodiscard]]
@@ -132,7 +104,11 @@ namespace EmEn::Graphics::TextureResource
 
 			/** @copydoc EmEn::Graphics::TextureResource::Abstract::type() */
 			[[nodiscard]]
-			Type type () const noexcept override;
+			Type
+			type () const noexcept override
+			{
+				return Type::TextureCube;
+			}
 
 			/** @copydoc EmEn::Graphics::TextureResource::Abstract::isGrayScale() */
 			[[nodiscard]]
@@ -144,52 +120,77 @@ namespace EmEn::Graphics::TextureResource
 
 			/** @copydoc EmEn::Graphics::TextureResource::Abstract::dimensions() */
 			[[nodiscard]]
-			uint32_t dimensions () const noexcept override;
+			uint32_t
+			dimensions () const noexcept override
+			{
+				return 3;
+			}
 
 			/** @copydoc EmEn::Graphics::TextureResource::Abstract::isCubemapTexture() */
 			[[nodiscard]]
-			bool isCubemapTexture () const noexcept override;
-
-			/** @copydoc EmEn::Graphics::TextureResource::Abstract::frameCount() */
-			[[nodiscard]]
-			uint32_t frameCount () const noexcept override;
-
-			/** @copydoc EmEn::Graphics::TextureResource::Abstract::duration() */
-			[[nodiscard]]
-			uint32_t duration () const noexcept override;
-
-			/** @copydoc EmEn::Graphics::TextureResource::Abstract::frameIndexAt() */
-			[[nodiscard]]
-			size_t frameIndexAt (uint32_t sceneTime) const noexcept override;
+			bool
+			isCubemapTexture () const noexcept override
+			{
+				return true;
+			}
 
 			/** @copydoc EmEn::Graphics::TextureResource::Abstract::image() */
 			[[nodiscard]]
-			std::shared_ptr< Vulkan::Image > image () const noexcept override;
+			std::shared_ptr< Vulkan::Image >
+			image () const noexcept override
+			{
+				return m_image;
+			}
 
 			/** @copydoc EmEn::Graphics::TextureResource::Abstract::imageView() */
 			[[nodiscard]]
-			std::shared_ptr< Vulkan::ImageView > imageView () const noexcept override;
+			std::shared_ptr< Vulkan::ImageView >
+			imageView () const noexcept override
+			{
+				return m_imageView;
+			}
 
 			/** @copydoc EmEn::Graphics::TextureResource::Abstract::sampler() */
 			[[nodiscard]]
-			std::shared_ptr< Vulkan::Sampler > sampler () const noexcept override;
+			std::shared_ptr< Vulkan::Sampler >
+			sampler () const noexcept override
+			{
+				return m_sampler;
+			}
 
 			/** @copydoc EmEn::Graphics::TextureResource::Abstract::request3DTextureCoordinates() */
 			[[nodiscard]]
-			bool request3DTextureCoordinates () const noexcept override;
+			bool
+			request3DTextureCoordinates () const noexcept override
+			{
+				return true;
+			}
 
 			/** @copydoc EmEn::Resources::ResourceTrait::classLabel() const */
 			[[nodiscard]]
-			const char * classLabel () const noexcept override;
+			const char *
+			classLabel () const noexcept override
+			{
+				return ClassId;
+			}
 
-			/** @copydoc EmEn::Graphics::TextureResource::Abstract::load() */
+			/** @copydoc EmEn::Resources::ResourceTrait::load() */
 			bool load () noexcept override;
 
-			/** @copydoc EmEn::Graphics::TextureResource::Abstract::load (const std::filesystem::path &) */
+			/** @copydoc EmEn::Resources::ResourceTrait::load(const std::filesystem::path &) */
 			bool load (const std::filesystem::path & filepath) noexcept override;
 
-			/** @copydoc EmEn::Graphics::TextureResource::Abstract::load (const Json::Value &) */
+			/** @copydoc EmEn::Resources::ResourceTrait::load(const Json::Value &) */
 			bool load (const Json::Value & data) noexcept override;
+
+			/** @copydoc EmEn::Resources::ResourceTrait::memoryOccupied() const noexcept */
+			[[nodiscard]]
+			size_t
+			memoryOccupied () const noexcept override
+			{
+				/* NOTE: The resource its doesn't contain loaded data. */
+				return sizeof(*this);
+			}
 
 			/**
 			 * @brief Loads from a cubemap resource.
@@ -198,28 +199,12 @@ namespace EmEn::Graphics::TextureResource
 			 */
 			bool load (const std::shared_ptr< CubemapResource > & cubemapResource) noexcept;
 
-			/**
-			 * @brief Returns a cubemap resource by its name.
-			 * @param resourceName A reference to a string.
-			 * @param directLoad Use the direct loading mode. Default false.
-			 * @return std::shared_ptr< Cubemap >
-			 */
-			[[nodiscard]]
-			static std::shared_ptr< TextureCubemap > get (const std::string & resourceName, bool directLoad = false) noexcept;
-
-			/**
-			 * @brief Returns the default cubemap resource.
-			 * @return std::shared_ptr< Cubemap >
-			 */
-			[[nodiscard]]
-			static std::shared_ptr< TextureCubemap > getDefault () noexcept;
-
 		private:
 
-			std::shared_ptr< CubemapResource > m_localData{};
-			std::shared_ptr< Vulkan::Image > m_image{};
-			std::shared_ptr< Vulkan::ImageView > m_imageView{};
-			std::shared_ptr< Vulkan::Sampler > m_sampler{};
+			std::shared_ptr< CubemapResource > m_localData;
+			std::shared_ptr< Vulkan::Image > m_image;
+			std::shared_ptr< Vulkan::ImageView > m_imageView;
+			std::shared_ptr< Vulkan::Sampler > m_sampler;
 	};
 }
 

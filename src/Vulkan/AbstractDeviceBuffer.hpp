@@ -50,11 +50,6 @@ namespace EmEn::Vulkan
 		public:
 
 			/**
-			 * @brief Destructs the device buffer.
-			 */
-			~AbstractDeviceBuffer () override = default;
-
-			/**
 			 * @brief Copy constructor.
 			 * @param copy A reference to the copied instance.
 			 */
@@ -79,6 +74,11 @@ namespace EmEn::Vulkan
 			AbstractDeviceBuffer & operator= (AbstractDeviceBuffer && copy) noexcept = delete;
 
 			/**
+			 * @brief Destructs the device buffer.
+			 */
+			~AbstractDeviceBuffer () override = default;
+
+			/**
 			 * @brief Writes data into the device (GPU side) video memory.
 			 * @param transferManager A reference to a transfer manager.
 			 * @param memoryRegion A reference to the memory region.
@@ -92,10 +92,14 @@ namespace EmEn::Vulkan
 			/**
 			 * @brief Constructs a device buffer.
 			 * @param device A reference to the device smart pointer.
-			 * @param createFlags The create info flags.
+			 * @param createFlags The createInfo flags.
 			 * @param deviceSize The size in bytes.
 			 * @param bufferUsageFlags The buffer usage flags.
 			 */
-			AbstractDeviceBuffer (const std::shared_ptr< Device > & device, VkBufferCreateFlags createFlags, VkDeviceSize deviceSize, VkBufferUsageFlags bufferUsageFlags) noexcept;
+			AbstractDeviceBuffer (const std::shared_ptr< Device > & device, VkBufferCreateFlags createFlags, VkDeviceSize deviceSize, VkBufferUsageFlags bufferUsageFlags) noexcept
+				: Buffer{device, createFlags, deviceSize, bufferUsageFlags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT}
+			{
+
+			}
 	};
 }

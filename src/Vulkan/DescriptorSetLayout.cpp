@@ -39,27 +39,6 @@ namespace EmEn::Vulkan
 {
 	using namespace EmEn::Libs;
 
-	DescriptorSetLayout::DescriptorSetLayout (const std::shared_ptr< Device > & device, std::string UUID, VkDescriptorSetLayoutCreateFlags flags) noexcept
-		: AbstractDeviceDependentObject(device), m_UUID(std::move(UUID))
-	{
-		m_createInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-		m_createInfo.pNext = nullptr;
-		m_createInfo.flags = flags;
-		m_createInfo.bindingCount = 0;
-		m_createInfo.pBindings = nullptr;
-	}
-
-	DescriptorSetLayout::DescriptorSetLayout (const std::shared_ptr< Device > & device, std::string UUID, const VkDescriptorSetLayoutCreateInfo & createInfo) noexcept
-		: AbstractDeviceDependentObject(device), m_createInfo(createInfo), m_UUID(std::move(UUID))
-	{
-
-	}
-
-	DescriptorSetLayout::~DescriptorSetLayout ()
-	{
-		this->destroyFromHardware();
-	}
-
 	bool
 	DescriptorSetLayout::createOnHardware () noexcept
 	{
@@ -77,7 +56,7 @@ namespace EmEn::Vulkan
 			return false;
 		}
 
-		m_createInfo.bindingCount = m_setLayoutBindings.size();
+		m_createInfo.bindingCount = static_cast< uint32_t >(m_setLayoutBindings.size());
 		m_createInfo.pBindings = m_setLayoutBindings.data();
 
 		const auto result = vkCreateDescriptorSetLayout(this->device()->handle(), &m_createInfo, nullptr, &m_handle);
@@ -169,33 +148,5 @@ namespace EmEn::Vulkan
 		}
 
 		return hashValue;
-	}
-
-	std::ostream &
-	operator<< (std::ostream & out, const DescriptorSetLayout & obj)
-	{
-		out << "Descriptor set layout @" << obj.m_handle << " (" << obj.identifier() << ") :\n";
-
-		for ( const auto & setLayoutBinding : obj.m_setLayoutBindings )
-		{
-			out <<
-				"Set layout binding : " << setLayoutBinding.binding << "\n"
-				"\t" "Descriptor type: " << setLayoutBinding.descriptorType << "\n"
-				"\t" "Descriptor count: " << setLayoutBinding.descriptorCount << "\n"
-				"\t" "Stage flags: " << setLayoutBinding.stageFlags << "\n"
-				"\t" "Immutable Samplers: " << setLayoutBinding.pImmutableSamplers << "\n\n";
-		}
-
-		return out;
-	}
-
-	std::string
-	to_string (const DescriptorSetLayout & obj) noexcept
-	{
-		std::stringstream output;
-
-		output << obj;
-
-		return output.str();
 	}
 }

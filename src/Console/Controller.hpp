@@ -27,39 +27,33 @@
 #pragma once
 
 /* STL inclusions. */
-#include <cstddef>
 #include <array>
-#include <vector>
-#include <map>
-#include <string>
 
 /* Local inclusions for inheritances. */
 #include "ServiceInterface.hpp"
+#include "Libs/ObservableTrait.hpp"
 #include "Libs/Time/EventTrait.hpp"
 
 /* Local usages */
 #include "Output.hpp"
+#include "Controllable.hpp"
 
 /* Forward declarations */
 namespace EmEn
 {
 	class PrimaryServices;
-
-	namespace Console
-	{
-		class Controllable;
-		class Expression;
-	}
 }
 
 namespace EmEn::Console
 {
 	/**
-	 * @brief The console service class.
+	 * @brief The console controller service class.
+	 * @note [OBS][STATIC-OBSERVABLE]
 	 * @extends EmEn::ServiceInterface This is a service.
+	 * @extends EmEn::Libs::ObservableTrait This is a service is observable.
 	 * @extends EmEn::Libs::Time::EventTrait This service needs to delay some behavior.
 	 */
-	class Controller final : public ServiceInterface, private Libs::Time::EventTrait< uint32_t, std::milli >
+	class Controller final : public ServiceInterface, public Libs::ObservableTrait, private Libs::Time::EventTrait< uint32_t, std::milli >
 	{
 		public:
 
@@ -69,42 +63,41 @@ namespace EmEn::Console
 			/** @brief Observable class unique identifier. */
 			static const size_t ClassUID;
 
+			/** @brief Observable notification codes. */
+			enum NotificationCode
+			{
+				Exit,
+				HardExit,
+				/* Enumeration boundary. */
+				MaxEnum
+			};
+
 			/**
 			 * @brief Constructs the console controller.
 			 * @param primaryServices A reference to primary services.
 			 */
-			Controller (PrimaryServices & primaryServices) noexcept;
+			explicit
+			Controller (PrimaryServices & primaryServices) noexcept
+				: ServiceInterface{ClassId},
+				m_primaryServices{primaryServices}
+			{
+				if ( s_instance != nullptr )
+				{
+					std::cerr << __PRETTY_FUNCTION__ << ", constructor called twice !" "\n";
 
-			/**
-			 * @brief Copy constructor.
-			 * @param copy A reference to the copied instance.
-			 */
-			Controller (const Controller & copy) noexcept = delete;
+					std::terminate();
+				}
 
-			/**
-			 * @brief Move constructor.
-			 * @param copy A reference to the copied instance.
-			 */
-			Controller (Controller && copy) noexcept = delete;
-
-			/**
-			 * @brief Copy assignment.
-			 * @param copy A reference to the copied instance.
-			 * @return Controller &
-			 */
-			Controller & operator= (const Controller & copy) noexcept = delete;
-
-			/**
-			 * @brief Move assignment.
-			 * @param copy A reference to the copied instance.
-			 * @return Controller &
-			 */
-			Controller & operator= (Controller && copy) noexcept = delete;
+				s_instance = this;
+			}
 
 			/**
 			 * @brief Destructs the console controller.
 			 */
-			~Controller () override;
+			~Controller () override
+			{
+				s_instance = nullptr;
+			}
 
 			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
 			[[nodiscard]]
@@ -164,14 +157,16 @@ namespace EmEn::Console
 
 			/**
 			 * @brief Returns the instance of the console controller.
+			 * @todo This method must be removed!
 			 * @return Controller *
 			 */
+			//[[deprecated("This method must be removed !")]]
 			[[nodiscard]]
 			static
 			Controller *
 			instance () noexcept
 			{
-				return s_instance;
+				return s_instance; // FIXME: Remove this
 			}
 
 			/**

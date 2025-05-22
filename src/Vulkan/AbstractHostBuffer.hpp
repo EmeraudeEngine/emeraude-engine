@@ -52,11 +52,6 @@ namespace EmEn::Vulkan
 		public:
 
 			/**
-			 * @brief Destructs an abstract host buffer.
-			 */
-			~AbstractHostBuffer () override = default;
-
-			/**
 			 * @brief Copy constructor.
 			 * @param copy A reference to the copied instance.
 			 */
@@ -79,6 +74,11 @@ namespace EmEn::Vulkan
 			 * @param copy A reference to the copied instance.
 			 */
 			AbstractHostBuffer & operator= (AbstractHostBuffer && copy) noexcept = delete;
+
+			/**
+			 * @brief Destructs an abstract host buffer.
+			 */
+			~AbstractHostBuffer () override = default;
 
 			/**
 			 * @brief Writes data into the host (CPU side) video memory.
@@ -123,11 +123,15 @@ namespace EmEn::Vulkan
 			/**
 			 * @brief Constructs an abstract host buffer.
 			 * @param device A reference to a smart pointer to the device where the buffer will be created.
-			 * @param createFlags The create info flags.
+			 * @param createFlags The createInfo flags.
 			 * @param deviceSize The size in bytes.
 			 * @param bufferUsageFlags The buffer usage flags.
 			 */
-			AbstractHostBuffer (const std::shared_ptr< Device > & device, VkBufferCreateFlags createFlags, VkDeviceSize deviceSize, VkBufferUsageFlags bufferUsageFlags) noexcept;
+			AbstractHostBuffer (const std::shared_ptr< Device > & device, VkBufferCreateFlags createFlags, VkDeviceSize deviceSize, VkBufferUsageFlags bufferUsageFlags) noexcept
+				: Buffer{device, createFlags, deviceSize, bufferUsageFlags, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT}
+			{
+
+			}
 
 		private:
 

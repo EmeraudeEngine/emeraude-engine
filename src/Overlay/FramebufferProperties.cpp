@@ -32,15 +32,6 @@
 
 namespace EmEn::Overlay
 {
-	FramebufferProperties::FramebufferProperties (uint32_t width, uint32_t height, float scaleX, float scaleY) noexcept
-		: m_width(width),
-		m_height(height),
-		m_screenScaleX(scaleX),
-		m_screenScaleY(scaleY)
-	{
-		this->updateScaledResolution();
-	}
-
 	void
 	FramebufferProperties::updateScaledResolution () noexcept
 	{
@@ -72,24 +63,5 @@ namespace EmEn::Overlay
 		m_inverseScreenScaleY = 1.0F;
 		m_resolutionX = 0.0F;
 		m_resolutionY = 0.0F;
-	}
-
-	std::ostream &
-	operator<< (std::ostream & out, const FramebufferProperties & obj)
-	{
-		return out <<
-			"Framebuffer size : " << obj.width() << "x" << obj.height() << "px" "\n"
-			"Screen scaling (HDPI). X : " << obj.screenScaleX() << ", Y : " << obj.screenScaleY() << "\n"
-			"Resolution : " << obj.resolutionX() << "x" << obj.resolutionY() << "pt" "\n";
-	}
-
-	std::string
-	to_string (const FramebufferProperties & obj) noexcept
-	{
-		std::stringstream output;
-
-		output << obj;
-
-		return output.str();
 	}
 }

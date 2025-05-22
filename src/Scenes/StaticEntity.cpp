@@ -37,12 +37,6 @@ namespace EmEn::Scenes
 
 	const size_t StaticEntity::ClassUID{getClassUID(ClassId)};
 
-	StaticEntity::StaticEntity (const std::string & name, uint32_t sceneTimeMS, const CartesianFrame< float > & coordinates) noexcept
-		: AbstractEntity(name, sceneTimeMS), m_cartesianFrame(coordinates)
-	{
-
-	}
-
 	void
 	StaticEntity::scale (const Vector< 3, float > & factor, TransformSpace transformSpace) noexcept
 	{
@@ -155,18 +149,16 @@ namespace EmEn::Scenes
 			return true;
 		}
 
-#ifdef DEBUG
-		/* NOTE: Don't know what is it, goodbye ! */
-		TraceInfo{ClassId} <<
+		/* NOTE: Don't know what is it, goodbye! */
+		TraceDebug{ClassId} <<
 			"Received an unhandled notification (Code:" << notificationCode << ") from observable '" << whoIs(observable->classUID()) << "' (UID:" << observable->classUID() << ")  ! "
 			"Forgetting it ...";
-#endif
 
 		return false;
 	}
 
 	bool
-	StaticEntity::playAnimation (uint8_t animationID, const Variant & value, size_t cycle) noexcept
+	StaticEntity::playAnimation (uint8_t animationID, const Variant & value, size_t /*cycle*/) noexcept
 	{
 		switch ( animationID )
 		{

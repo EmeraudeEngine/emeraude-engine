@@ -28,7 +28,7 @@
 
 /* Local inclusions. */
 #include "Tracer.hpp"
-#include <Audio/OpenAL.EFX.hpp>
+#include "Audio/OpenAL.EFX.hpp"
 #include "Audio/Utility.hpp"
 
 namespace EmEn::Audio::Effects
@@ -36,22 +36,27 @@ namespace EmEn::Audio::Effects
 	using namespace EmEn::Libs;
 
 	EAXReverb::EAXReverb () noexcept
-		: Abstract()
 	{
 		if ( this->identifier() == 0 )
+		{
 			return;
+		}
 
 		EFX::alEffecti(this->identifier(), AL_EFFECT_TYPE, AL_EFFECT_EAXREVERB);
 
 		if ( alGetErrors("alEffecti()", __FILE__, __LINE__) )
+		{
 			Tracer::error(ClassId, "Unable to generate OpenAL EAX Reverb effect !");
+		}
 	}
 
 	void
 	EAXReverb::resetProperties () noexcept
 	{
 		if ( !EFX::isAvailable() )
+		{
 			return;
+		}
 
 		EFX::alEffectf(this->identifier(), AL_EAXREVERB_DENSITY, AL_EAXREVERB_DEFAULT_DENSITY);
 		EFX::alEffectf(this->identifier(), AL_EAXREVERB_DIFFUSION, AL_EAXREVERB_DEFAULT_DIFFUSION);
@@ -82,11 +87,13 @@ namespace EmEn::Audio::Effects
 	EAXReverb::setDensity (float value) noexcept
 	{
 		if ( !EFX::isAvailable() )
+		{
 			return;
+		}
 
 		if ( value < AL_EAXREVERB_MIN_DENSITY || value > AL_EAXREVERB_MAX_DENSITY )
 		{
-			Tracer::warning(ClassId, BlobTrait() << "Density must be between " << AL_EAXREVERB_MIN_DENSITY << " and " << AL_EAXREVERB_MAX_DENSITY << ".");
+			TraceWarning{ClassId} << "Density must be between " << AL_EAXREVERB_MIN_DENSITY << " and " << AL_EAXREVERB_MAX_DENSITY << '.';
 
 			return;
 		}
@@ -98,11 +105,13 @@ namespace EmEn::Audio::Effects
 	EAXReverb::setDiffusion (float value) noexcept
 	{
 		if ( !EFX::isAvailable() )
+		{
 			return;
+		}
 
 		if ( value < AL_EAXREVERB_MIN_DIFFUSION || value > AL_EAXREVERB_MAX_DIFFUSION )
 		{
-			Tracer::warning(ClassId, BlobTrait() << "Diffusion must be between " << AL_EAXREVERB_MIN_DIFFUSION << " and " << AL_EAXREVERB_MAX_DIFFUSION << ".");
+			TraceWarning{ClassId} << "Diffusion must be between " << AL_EAXREVERB_MIN_DIFFUSION << " and " << AL_EAXREVERB_MAX_DIFFUSION << '.';
 
 			return;
 		}
@@ -114,11 +123,13 @@ namespace EmEn::Audio::Effects
 	EAXReverb::setGain (float value) noexcept
 	{
 		if ( !EFX::isAvailable() )
+		{
 			return;
+		}
 
 		if ( value < AL_EAXREVERB_MIN_GAIN || value > AL_EAXREVERB_MAX_GAIN )
 		{
-			Tracer::warning(ClassId, BlobTrait() << "Gain must be between " << AL_EAXREVERB_MIN_GAIN << " and " << AL_EAXREVERB_MAX_GAIN << ".");
+			TraceWarning{ClassId} << "Gain must be between " << AL_EAXREVERB_MIN_GAIN << " and " << AL_EAXREVERB_MAX_GAIN << '.';
 
 			return;
 		}
@@ -130,11 +141,13 @@ namespace EmEn::Audio::Effects
 	EAXReverb::setGainHF (float value) noexcept
 	{
 		if ( !EFX::isAvailable() )
+		{
 			return;
+		}
 
 		if ( value < AL_EAXREVERB_MIN_GAINHF || value > AL_EAXREVERB_MAX_GAINHF )
 		{
-			Tracer::warning(ClassId, BlobTrait() << "Gain HF must be between " << AL_EAXREVERB_MIN_GAINHF << " and " << AL_EAXREVERB_MAX_GAINHF << ".");
+			TraceWarning{ClassId} << "Gain HF must be between " << AL_EAXREVERB_MIN_GAINHF << " and " << AL_EAXREVERB_MAX_GAINHF << '.';
 
 			return;
 		}
@@ -146,11 +159,13 @@ namespace EmEn::Audio::Effects
 	EAXReverb::setGainLF (float value) noexcept
 	{
 		if ( !EFX::isAvailable() )
+		{
 			return;
+		}
 
 		if ( value < AL_EAXREVERB_MIN_GAINLF || value > AL_EAXREVERB_MAX_GAINLF )
 		{
-			Tracer::warning(ClassId, BlobTrait() << "Gain LF must be between " << AL_EAXREVERB_MIN_GAINLF << " and " << AL_EAXREVERB_MAX_GAINLF << ".");
+			TraceWarning{ClassId} << "Gain LF must be between " << AL_EAXREVERB_MIN_GAINLF << " and " << AL_EAXREVERB_MAX_GAINLF << '.';
 
 			return;
 		}
@@ -162,11 +177,13 @@ namespace EmEn::Audio::Effects
 	EAXReverb::setDecayTime (float value) noexcept
 	{
 		if ( !EFX::isAvailable() )
+		{
 			return;
+		}
 
 		if ( value < AL_EAXREVERB_MIN_DECAY_TIME || value > AL_EAXREVERB_MAX_DECAY_TIME )
 		{
-			Tracer::warning(ClassId, BlobTrait() << "Decay time must be between " << AL_EAXREVERB_MIN_DECAY_TIME << " and " << AL_EAXREVERB_MAX_DECAY_TIME << ".");
+			TraceWarning{ClassId} << "Decay time must be between " << AL_EAXREVERB_MIN_DECAY_TIME << " and " << AL_EAXREVERB_MAX_DECAY_TIME << '.';
 
 			return;
 		}
@@ -178,11 +195,13 @@ namespace EmEn::Audio::Effects
 	EAXReverb::setDecayHFRatio (float value) noexcept
 	{
 		if ( !EFX::isAvailable() )
+		{
 			return;
+		}
 
 		if ( value < AL_EAXREVERB_MIN_DECAY_HFRATIO || value > AL_EAXREVERB_MAX_DECAY_HFRATIO )
 		{
-			Tracer::warning(ClassId, BlobTrait() << "Decay HF ratio must be between " << AL_EAXREVERB_MIN_DECAY_HFRATIO << " and " << AL_EAXREVERB_MAX_DECAY_HFRATIO << ".");
+			TraceWarning{ClassId} << "Decay HF ratio must be between " << AL_EAXREVERB_MIN_DECAY_HFRATIO << " and " << AL_EAXREVERB_MAX_DECAY_HFRATIO << '.';
 
 			return;
 		}
@@ -194,11 +213,13 @@ namespace EmEn::Audio::Effects
 	EAXReverb::setDecayLFRatio (float value) noexcept
 	{
 		if ( !EFX::isAvailable() )
+		{
 			return;
+		}
 
 		if ( value < AL_EAXREVERB_MIN_DECAY_LFRATIO || value > AL_EAXREVERB_MAX_DECAY_LFRATIO )
 		{
-			Tracer::warning(ClassId, BlobTrait() << "Decay LF ratio must be between " << AL_EAXREVERB_MIN_DECAY_LFRATIO << " and " << AL_EAXREVERB_MAX_DECAY_LFRATIO << ".");
+			TraceWarning{ClassId} << "Decay LF ratio must be between " << AL_EAXREVERB_MIN_DECAY_LFRATIO << " and " << AL_EAXREVERB_MAX_DECAY_LFRATIO << '.';
 
 			return;
 		}
@@ -210,11 +231,13 @@ namespace EmEn::Audio::Effects
 	EAXReverb::setReflectionsGain (float value) noexcept
 	{
 		if ( !EFX::isAvailable() )
+		{
 			return;
+		}
 
 		if ( value < AL_EAXREVERB_MIN_REFLECTIONS_GAIN || value > AL_EAXREVERB_MAX_REFLECTIONS_GAIN )
 		{
-			Tracer::warning(ClassId, BlobTrait() << "Reflections gain must be between " << AL_EAXREVERB_MIN_REFLECTIONS_GAIN << " and " << AL_EAXREVERB_MAX_REFLECTIONS_GAIN << ".");
+			TraceWarning{ClassId} << "Reflections gain must be between " << AL_EAXREVERB_MIN_REFLECTIONS_GAIN << " and " << AL_EAXREVERB_MAX_REFLECTIONS_GAIN << '.';
 
 			return;
 		}
@@ -226,11 +249,13 @@ namespace EmEn::Audio::Effects
 	EAXReverb::setReflectionsDelay (float value) noexcept
 	{
 		if ( !EFX::isAvailable() )
+		{
 			return;
+		}
 
 		if ( value < AL_EAXREVERB_MIN_REFLECTIONS_DELAY || value > AL_EAXREVERB_MAX_REFLECTIONS_DELAY )
 		{
-			Tracer::warning(ClassId, BlobTrait() << "Reflections delay must be between " << AL_EAXREVERB_MIN_REFLECTIONS_DELAY << " and " << AL_EAXREVERB_MAX_REFLECTIONS_DELAY << ".");
+			TraceWarning{ClassId} << "Reflections delay must be between " << AL_EAXREVERB_MIN_REFLECTIONS_DELAY << " and " << AL_EAXREVERB_MAX_REFLECTIONS_DELAY << '.';
 
 			return;
 		}
@@ -242,7 +267,9 @@ namespace EmEn::Audio::Effects
 	EAXReverb::setReflectionsPan (float value) noexcept
 	{
 		if ( !EFX::isAvailable() )
+		{
 			return;
+		}
 
 		EFX::alEffectf(this->identifier(), AL_EAXREVERB_REFLECTIONS_PAN, value);
 	}
@@ -251,11 +278,13 @@ namespace EmEn::Audio::Effects
 	EAXReverb::setLateGain (float value) noexcept
 	{
 		if ( !EFX::isAvailable() )
+		{
 			return;
+		}
 
 		if ( value < AL_EAXREVERB_MIN_LATE_REVERB_GAIN || value > AL_EAXREVERB_MAX_LATE_REVERB_GAIN )
 		{
-			Tracer::warning(ClassId, BlobTrait() << "Late reverb gain must be between " << AL_EAXREVERB_MIN_LATE_REVERB_GAIN << " and " << AL_EAXREVERB_MAX_LATE_REVERB_GAIN << ".");
+			TraceWarning{ClassId} << "Late reverb gain must be between " << AL_EAXREVERB_MIN_LATE_REVERB_GAIN << " and " << AL_EAXREVERB_MAX_LATE_REVERB_GAIN << '.';
 
 			return;
 		}
@@ -267,11 +296,13 @@ namespace EmEn::Audio::Effects
 	EAXReverb::setLateDelay (float value) noexcept
 	{
 		if ( !EFX::isAvailable() )
+		{
 			return;
+		}
 
 		if ( value < AL_EAXREVERB_MIN_LATE_REVERB_DELAY || value > AL_EAXREVERB_MAX_LATE_REVERB_DELAY )
 		{
-			Tracer::warning(ClassId, BlobTrait() << "Late reverb delay must be between " << AL_EAXREVERB_MIN_LATE_REVERB_DELAY << " and " << AL_EAXREVERB_MAX_LATE_REVERB_DELAY << ".");
+			TraceWarning{ClassId} << "Late reverb delay must be between " << AL_EAXREVERB_MIN_LATE_REVERB_DELAY << " and " << AL_EAXREVERB_MAX_LATE_REVERB_DELAY << '.';
 
 			return;
 		}
@@ -283,7 +314,9 @@ namespace EmEn::Audio::Effects
 	EAXReverb::setLatePan (float value) noexcept
 	{
 		if ( !EFX::isAvailable() )
+		{
 			return;
+		}
 
 		EFX::alEffectf(this->identifier(), AL_EAXREVERB_LATE_REVERB_PAN, value);
 	}
@@ -292,11 +325,13 @@ namespace EmEn::Audio::Effects
 	EAXReverb::setEchoTime (float value) noexcept
 	{
 		if ( !EFX::isAvailable() )
+		{
 			return;
+		}
 
 		if ( value < AL_EAXREVERB_MIN_ECHO_TIME || value > AL_EAXREVERB_MAX_ECHO_TIME )
 		{
-			Tracer::warning(ClassId, BlobTrait() << "Echo time must be between " << AL_EAXREVERB_MIN_ECHO_TIME << " and " << AL_EAXREVERB_MAX_ECHO_TIME << ".");
+			TraceWarning{ClassId} << "Echo time must be between " << AL_EAXREVERB_MIN_ECHO_TIME << " and " << AL_EAXREVERB_MAX_ECHO_TIME << '.';
 
 			return;
 		}
@@ -308,11 +343,13 @@ namespace EmEn::Audio::Effects
 	EAXReverb::setEchoDepth (float value) noexcept
 	{
 		if ( !EFX::isAvailable() )
+		{
 			return;
+		}
 
 		if ( value < AL_EAXREVERB_MIN_ECHO_DEPTH || value > AL_EAXREVERB_MAX_ECHO_DEPTH )
 		{
-			Tracer::warning(ClassId, BlobTrait() << "Echo depth must be between " << AL_EAXREVERB_MIN_ECHO_DEPTH << " and " << AL_EAXREVERB_MAX_ECHO_DEPTH << ".");
+			TraceWarning{ClassId} << "Echo depth must be between " << AL_EAXREVERB_MIN_ECHO_DEPTH << " and " << AL_EAXREVERB_MAX_ECHO_DEPTH << '.';
 
 			return;
 		}
@@ -324,11 +361,13 @@ namespace EmEn::Audio::Effects
 	EAXReverb::setModulationTime (float value) noexcept
 	{
 		if ( !EFX::isAvailable() )
+		{
 			return;
+		}
 
 		if ( value < AL_EAXREVERB_MIN_MODULATION_TIME || value > AL_EAXREVERB_MAX_MODULATION_TIME )
 		{
-			Tracer::warning(ClassId, BlobTrait() << "Modulation time must be between " << AL_EAXREVERB_MIN_MODULATION_TIME << " and " << AL_EAXREVERB_MAX_MODULATION_TIME << ".");
+			TraceWarning{ClassId} << "Modulation time must be between " << AL_EAXREVERB_MIN_MODULATION_TIME << " and " << AL_EAXREVERB_MAX_MODULATION_TIME << '.';
 
 			return;
 		}
@@ -340,11 +379,13 @@ namespace EmEn::Audio::Effects
 	EAXReverb::setModulationDepth (float value) noexcept
 	{
 		if ( !EFX::isAvailable() )
+		{
 			return;
+		}
 
 		if ( value < AL_EAXREVERB_MIN_MODULATION_DEPTH || value > AL_EAXREVERB_MAX_MODULATION_DEPTH )
 		{
-			Tracer::warning(ClassId, BlobTrait() << "Modulation depth must be between " << AL_EAXREVERB_MIN_MODULATION_DEPTH << " and " << AL_EAXREVERB_MAX_MODULATION_DEPTH << ".");
+			TraceWarning{ClassId} << "Modulation depth must be between " << AL_EAXREVERB_MIN_MODULATION_DEPTH << " and " << AL_EAXREVERB_MAX_MODULATION_DEPTH << '.';
 
 			return;
 		}
@@ -356,11 +397,12 @@ namespace EmEn::Audio::Effects
 	EAXReverb::setAirAbsorptionGainHF (float value) noexcept
 	{
 		if ( !EFX::isAvailable() )
+		{
 			return;
-
+		}
 		if ( value < AL_EAXREVERB_MIN_AIR_ABSORPTION_GAINHF || value > AL_EAXREVERB_MAX_AIR_ABSORPTION_GAINHF )
 		{
-			Tracer::warning(ClassId, BlobTrait() << "Air absorption gain HF must be between " << AL_EAXREVERB_MIN_AIR_ABSORPTION_GAINHF << " and " << AL_EAXREVERB_MAX_AIR_ABSORPTION_GAINHF << ".");
+			TraceWarning{ClassId} << "Air absorption gain HF must be between " << AL_EAXREVERB_MIN_AIR_ABSORPTION_GAINHF << " and " << AL_EAXREVERB_MAX_AIR_ABSORPTION_GAINHF << '.';
 
 			return;
 		}
@@ -372,11 +414,13 @@ namespace EmEn::Audio::Effects
 	EAXReverb::setHFReference (float value) noexcept
 	{
 		if ( !EFX::isAvailable() )
+		{
 			return;
+		}
 
 		if ( value < AL_EAXREVERB_MIN_HFREFERENCE || value > AL_EAXREVERB_MAX_HFREFERENCE )
 		{
-			Tracer::warning(ClassId, BlobTrait() << "HF reference must be between " << AL_EAXREVERB_MIN_HFREFERENCE << " and " << AL_EAXREVERB_MAX_HFREFERENCE << ".");
+			TraceWarning{ClassId} << "HF reference must be between " << AL_EAXREVERB_MIN_HFREFERENCE << " and " << AL_EAXREVERB_MAX_HFREFERENCE << '.';
 
 			return;
 		}
@@ -388,11 +432,13 @@ namespace EmEn::Audio::Effects
 	EAXReverb::setLFReference (float value) noexcept
 	{
 		if ( !EFX::isAvailable() )
+		{
 			return;
+		}
 
 		if ( value < AL_EAXREVERB_MIN_LFREFERENCE || value > AL_EAXREVERB_MAX_LFREFERENCE )
 		{
-			Tracer::warning(ClassId, BlobTrait() << "LF reference must be between " << AL_EAXREVERB_MIN_LFREFERENCE << " and " << AL_EAXREVERB_MAX_LFREFERENCE << ".");
+			TraceWarning{ClassId} << "LF reference must be between " << AL_EAXREVERB_MIN_LFREFERENCE << " and " << AL_EAXREVERB_MAX_LFREFERENCE << '.';
 
 			return;
 		}
@@ -404,11 +450,13 @@ namespace EmEn::Audio::Effects
 	EAXReverb::setRoomRollOffFactor (float value) noexcept
 	{
 		if ( !EFX::isAvailable() )
+		{
 			return;
+		}
 
 		if ( value < AL_EAXREVERB_MIN_ROOM_ROLLOFF_FACTOR || value > AL_EAXREVERB_MAX_ROOM_ROLLOFF_FACTOR )
 		{
-			Tracer::warning(ClassId, BlobTrait() << "Room Roll-off factor must be between " << AL_EAXREVERB_MIN_ROOM_ROLLOFF_FACTOR << " and " << AL_EAXREVERB_MAX_ROOM_ROLLOFF_FACTOR << ".");
+			TraceWarning{ClassId} << "Room Roll-off factor must be between " << AL_EAXREVERB_MIN_ROOM_ROLLOFF_FACTOR << " and " << AL_EAXREVERB_MAX_ROOM_ROLLOFF_FACTOR << '.';
 
 			return;
 		}
@@ -420,7 +468,9 @@ namespace EmEn::Audio::Effects
 	EAXReverb::setDecayHFLimit (bool state) noexcept
 	{
 		if ( !EFX::isAvailable() )
+		{
 			return;
+		}
 
 		EFX::alEffecti(this->identifier(), AL_EAXREVERB_DECAY_HFLIMIT, state ? AL_TRUE : AL_FALSE);
 	}
@@ -428,12 +478,12 @@ namespace EmEn::Audio::Effects
 	float
 	EAXReverb::density () const noexcept
 	{
-		if ( !EFX::isAvailable() )
-			return 0.0F;
+		ALfloat value = 0.0F;
 
-		ALfloat value;
-
-		EFX::alGetEffectf(this->identifier(), AL_EAXREVERB_DENSITY, &value);
+		if ( EFX::isAvailable() )
+		{
+			EFX::alGetEffectf(this->identifier(), AL_EAXREVERB_DENSITY, &value);
+		}
 
 		return value;
 	}
@@ -441,12 +491,12 @@ namespace EmEn::Audio::Effects
 	float
 	EAXReverb::diffusion () const noexcept
 	{
-		if ( !EFX::isAvailable() )
-			return 0.0F;
+		ALfloat value = 0.0F;
 
-		ALfloat value;
-
-		EFX::alGetEffectf(this->identifier(), AL_EAXREVERB_DIFFUSION, &value);
+		if ( EFX::isAvailable() )
+		{
+			EFX::alGetEffectf(this->identifier(), AL_EAXREVERB_DIFFUSION, &value);
+		}
 
 		return value;
 	}
@@ -454,12 +504,12 @@ namespace EmEn::Audio::Effects
 	float
 	EAXReverb::gain () const noexcept
 	{
-		if ( !EFX::isAvailable() )
-			return 0.0F;
+		ALfloat value = 0.0F;
 
-		ALfloat value;
-
-		EFX::alGetEffectf(this->identifier(), AL_EAXREVERB_GAIN, &value);
+		if ( EFX::isAvailable() )
+		{
+			EFX::alGetEffectf(this->identifier(), AL_EAXREVERB_GAIN, &value);
+		}
 
 		return value;
 	}
@@ -467,12 +517,12 @@ namespace EmEn::Audio::Effects
 	float
 	EAXReverb::gainHF () const noexcept
 	{
-		if ( !EFX::isAvailable() )
-			return 0.0F;
+		ALfloat value = 0.0F;
 
-		ALfloat value;
-
-		EFX::alGetEffectf(this->identifier(), AL_EAXREVERB_GAINHF, &value);
+		if ( EFX::isAvailable() )
+		{
+			EFX::alGetEffectf(this->identifier(), AL_EAXREVERB_GAINHF, &value);
+		}
 
 		return value;
 	}
@@ -480,12 +530,12 @@ namespace EmEn::Audio::Effects
 	float
 	EAXReverb::gainLF () const noexcept
 	{
-		if ( !EFX::isAvailable() )
-			return 0.0F;
+		ALfloat value = 0.0F;
 
-		ALfloat value;
-
-		EFX::alGetEffectf(this->identifier(), AL_EAXREVERB_GAINLF, &value);
+		if ( EFX::isAvailable() )
+		{
+			EFX::alGetEffectf(this->identifier(), AL_EAXREVERB_GAINLF, &value);
+		}
 
 		return value;
 	}
@@ -493,12 +543,12 @@ namespace EmEn::Audio::Effects
 	float
 	EAXReverb::decayTime () const noexcept
 	{
-		if ( !EFX::isAvailable() )
-			return 0.0F;
+		ALfloat value = 0.0F;
 
-		ALfloat value;
-
-		EFX::alGetEffectf(this->identifier(), AL_EAXREVERB_DECAY_TIME, &value);
+		if ( EFX::isAvailable() )
+		{
+			EFX::alGetEffectf(this->identifier(), AL_EAXREVERB_DECAY_TIME, &value);
+		}
 
 		return value;
 	}
@@ -506,12 +556,12 @@ namespace EmEn::Audio::Effects
 	float
 	EAXReverb::decayHFRatio () const noexcept
 	{
-		if ( !EFX::isAvailable() )
-			return 0.0F;
+		ALfloat value = 0.0F;
 
-		ALfloat value;
-
-		EFX::alGetEffectf(this->identifier(), AL_EAXREVERB_DECAY_HFRATIO, &value);
+		if ( EFX::isAvailable() )
+		{
+			EFX::alGetEffectf(this->identifier(), AL_EAXREVERB_DECAY_HFRATIO, &value);
+		}
 
 		return value;
 	}
@@ -519,12 +569,12 @@ namespace EmEn::Audio::Effects
 	float
 	EAXReverb::decayLFRatio () const noexcept
 	{
-		if ( !EFX::isAvailable() )
-			return 0.0F;
+		ALfloat value = 0.0F;
 
-		ALfloat value;
-
-		EFX::alGetEffectf(this->identifier(), AL_EAXREVERB_DECAY_LFRATIO, &value);
+		if ( EFX::isAvailable() )
+		{
+			EFX::alGetEffectf(this->identifier(), AL_EAXREVERB_DECAY_LFRATIO, &value);
+		}
 
 		return value;
 	}
@@ -533,12 +583,12 @@ namespace EmEn::Audio::Effects
 	float
 	EAXReverb::reflectionsGain () const noexcept
 	{
-		if ( !EFX::isAvailable() )
-			return 0.0F;
+		ALfloat value = 0.0F;
 
-		ALfloat value;
-
-		EFX::alGetEffectf(this->identifier(), AL_EAXREVERB_REFLECTIONS_GAIN, &value);
+		if ( EFX::isAvailable() )
+		{
+			EFX::alGetEffectf(this->identifier(), AL_EAXREVERB_REFLECTIONS_GAIN, &value);
+		}
 
 		return value;
 	}
@@ -546,12 +596,12 @@ namespace EmEn::Audio::Effects
 	float
 	EAXReverb::reflectionsDelay () const noexcept
 	{
-		if ( !EFX::isAvailable() )
-			return 0.0F;
+		ALfloat value = 0.0F;
 
-		ALfloat value;
-
-		EFX::alGetEffectf(this->identifier(), AL_EAXREVERB_REFLECTIONS_DELAY, &value);
+		if ( EFX::isAvailable() )
+		{
+			EFX::alGetEffectf(this->identifier(), AL_EAXREVERB_REFLECTIONS_DELAY, &value);
+		}
 
 		return value;
 	}
@@ -559,12 +609,12 @@ namespace EmEn::Audio::Effects
 	float
 	EAXReverb::reflectionsPan () const noexcept
 	{
-		if ( !EFX::isAvailable() )
-			return 0.0F;
+		ALfloat value = 0.0F;
 
-		ALfloat value;
-
-		EFX::alGetEffectf(this->identifier(), AL_EAXREVERB_REFLECTIONS_PAN, &value);
+		if ( EFX::isAvailable() )
+		{
+			EFX::alGetEffectf(this->identifier(), AL_EAXREVERB_REFLECTIONS_PAN, &value);
+		}
 
 		return value;
 	}
@@ -572,12 +622,12 @@ namespace EmEn::Audio::Effects
 	float
 	EAXReverb::lateGain () const noexcept
 	{
-		if ( !EFX::isAvailable() )
-			return 0.0F;
+		ALfloat value = 0.0F;
 
-		ALfloat value;
-
-		EFX::alGetEffectf(this->identifier(), AL_EAXREVERB_LATE_REVERB_GAIN, &value);
+		if ( EFX::isAvailable() )
+		{
+			EFX::alGetEffectf(this->identifier(), AL_EAXREVERB_LATE_REVERB_GAIN, &value);
+		}
 
 		return value;
 	}
@@ -585,12 +635,12 @@ namespace EmEn::Audio::Effects
 	float
 	EAXReverb::lateDelay () const noexcept
 	{
-		if ( !EFX::isAvailable() )
-			return 0.0F;
+		ALfloat value = 0.0F;
 
-		ALfloat value;
-
-		EFX::alGetEffectf(this->identifier(), AL_EAXREVERB_LATE_REVERB_DELAY, &value);
+		if ( EFX::isAvailable() )
+		{
+			EFX::alGetEffectf(this->identifier(), AL_EAXREVERB_LATE_REVERB_DELAY, &value);
+		}
 
 		return value;
 	}
@@ -598,12 +648,12 @@ namespace EmEn::Audio::Effects
 	float
 	EAXReverb::latePan () const noexcept
 	{
-		if ( !EFX::isAvailable() )
-			return 0.0F;
+		ALfloat value = 0.0F;
 
-		ALfloat value;
-
-		EFX::alGetEffectf(this->identifier(), AL_EAXREVERB_LATE_REVERB_PAN, &value);
+		if ( EFX::isAvailable() )
+		{
+			EFX::alGetEffectf(this->identifier(), AL_EAXREVERB_LATE_REVERB_PAN, &value);
+		}
 
 		return value;
 	}
@@ -611,12 +661,12 @@ namespace EmEn::Audio::Effects
 	float
 	EAXReverb::echoTime () const noexcept
 	{
-		if ( !EFX::isAvailable() )
-			return 0.0F;
+		ALfloat value = 0.0F;
 
-		ALfloat value;
-
-		EFX::alGetEffectf(this->identifier(), AL_EAXREVERB_ECHO_TIME, &value);
+		if ( EFX::isAvailable() )
+		{
+			EFX::alGetEffectf(this->identifier(), AL_EAXREVERB_ECHO_TIME, &value);
+		}
 
 		return value;
 	}
@@ -624,12 +674,12 @@ namespace EmEn::Audio::Effects
 	float
 	EAXReverb::echoDepth () const noexcept
 	{
-		if ( !EFX::isAvailable() )
-			return 0.0F;
+		ALfloat value = 0.0F;
 
-		ALfloat value;
-
-		EFX::alGetEffectf(this->identifier(), AL_EAXREVERB_ECHO_DEPTH, &value);
+		if ( EFX::isAvailable() )
+		{
+			EFX::alGetEffectf(this->identifier(), AL_EAXREVERB_ECHO_DEPTH, &value);
+		}
 
 		return value;
 	}
@@ -637,12 +687,12 @@ namespace EmEn::Audio::Effects
 	float
 	EAXReverb::modulationTime () const noexcept
 	{
-		if ( !EFX::isAvailable() )
-			return 0.0F;
+		ALfloat value = 0.0F;
 
-		ALfloat value;
-
-		EFX::alGetEffectf(this->identifier(), AL_EAXREVERB_MODULATION_TIME, &value);
+		if ( EFX::isAvailable() )
+		{
+			EFX::alGetEffectf(this->identifier(), AL_EAXREVERB_MODULATION_TIME, &value);
+		}
 
 		return value;
 	}
@@ -650,12 +700,12 @@ namespace EmEn::Audio::Effects
 	float
 	EAXReverb::modulationDepth () const noexcept
 	{
-		if ( !EFX::isAvailable() )
-			return 0.0F;
+		ALfloat value = 0.0F;
 
-		ALfloat value;
-
-		EFX::alGetEffectf(this->identifier(), AL_EAXREVERB_ECHO_DEPTH, &value);
+		if ( EFX::isAvailable() )
+		{
+			EFX::alGetEffectf(this->identifier(), AL_EAXREVERB_ECHO_DEPTH, &value);
+		}
 
 		return value;
 	}
@@ -663,12 +713,12 @@ namespace EmEn::Audio::Effects
 	float
 	EAXReverb::airAbsorptionGainHF () const noexcept
 	{
-		if ( !EFX::isAvailable() )
-			return 0.0F;
+		ALfloat value = 0.0F;
 
-		ALfloat value;
-
-		EFX::alGetEffectf(this->identifier(), AL_EAXREVERB_AIR_ABSORPTION_GAINHF, &value);
+		if ( EFX::isAvailable() )
+		{
+			EFX::alGetEffectf(this->identifier(), AL_EAXREVERB_AIR_ABSORPTION_GAINHF, &value);
+		}
 
 		return value;
 	}
@@ -676,12 +726,12 @@ namespace EmEn::Audio::Effects
 	float
 	EAXReverb::HFReference () const noexcept
 	{
-		if ( !EFX::isAvailable() )
-			return 0.0F;
+		ALfloat value = 0.0F;
 
-		ALfloat value;
-
-		EFX::alGetEffectf(this->identifier(), AL_EAXREVERB_HFREFERENCE, &value);
+		if ( EFX::isAvailable() )
+		{
+			EFX::alGetEffectf(this->identifier(), AL_EAXREVERB_HFREFERENCE, &value);
+		}
 
 		return value;
 	}
@@ -689,12 +739,12 @@ namespace EmEn::Audio::Effects
 	float
 	EAXReverb::LFReference () const noexcept
 	{
-		if ( !EFX::isAvailable() )
-			return 0.0F;
+		ALfloat value = 0.0F;
 
-		ALfloat value;
-
-		EFX::alGetEffectf(this->identifier(), AL_EAXREVERB_LFREFERENCE, &value);
+		if ( EFX::isAvailable() )
+		{
+			EFX::alGetEffectf(this->identifier(), AL_EAXREVERB_LFREFERENCE, &value);
+		}
 
 		return value;
 	}
@@ -702,12 +752,12 @@ namespace EmEn::Audio::Effects
 	float
 	EAXReverb::roomRollOffFactor () const noexcept
 	{
-		if ( !EFX::isAvailable() )
-			return 0.0F;
+		ALfloat value = 0.0F;
 
-		ALfloat value;
-
-		EFX::alGetEffectf(this->identifier(), AL_EAXREVERB_ROOM_ROLLOFF_FACTOR, &value);
+		if ( EFX::isAvailable() )
+		{
+			EFX::alGetEffectf(this->identifier(), AL_EAXREVERB_ROOM_ROLLOFF_FACTOR, &value);
+		}
 
 		return value;
 	}
@@ -715,12 +765,12 @@ namespace EmEn::Audio::Effects
 	bool
 	EAXReverb::decayHFLimit () const noexcept
 	{
-		if ( !EFX::isAvailable() )
-			return false;
+		ALint value = 0;
 
-		ALint value;
-
-		EFX::alGetEffecti(this->identifier(), AL_EAXREVERB_DECAY_HFLIMIT, &value);
+		if ( EFX::isAvailable() )
+		{
+			EFX::alGetEffecti(this->identifier(), AL_EAXREVERB_DECAY_HFLIMIT, &value);
+		}
 
 		return value > 0;
 	}

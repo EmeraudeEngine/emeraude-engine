@@ -23,10 +23,10 @@ message("Job processes used : ${CMAKE_BUILD_PARALLEL_LEVEL}")
 # Declare project and options.
 project(
 	Emeraude
-	VERSION 0.7.42
+	VERSION 0.7.44
 	DESCRIPTION "Emeraude Engine is an open-source (LGPLv3) 3D Graphics engine using Vulkan and written in C++20."
 	HOMEPAGE_URL "https://github.com/londnoir/emeraude-engine"
-	LANGUAGES CXX
+	LANGUAGES C CXX
 )
 
 set(CMAKE_VERBOSE_MAKEFILE On)
@@ -42,6 +42,7 @@ set(EMERAUDE_ENABLE_TESTS Off CACHE BOOL "Enable the Emeraude testing suite (Def
 set(EMERAUDE_INTERNET_CHECK_DOMAIN "google.com" CACHE STRING "Web domain to check internet connexion (Default google.com).")
 set(EMERAUDE_COMPILATION_DIR "" CACHE STRING "Declare where the project is compiled. For macOS this should point the 'package.app' in the compilation folder.")
 set(EMERAUDE_USE_SYSTEM_LIBS Off CACHE BOOL "Use the system for common libraries instead of the embedded ones (Default Off).")
+set(EMERAUDE_ENABLE_PCH Off CACHE BOOL "Enable 'PreCompiled Headers' feature to speed up the compilation (Default Off).")
 set(EMERAUDE_ENABLE_OPENMP On CACHE BOOL "Enable 'libomp' library [SYSTEM] (Default On).")
 set(EMERAUDE_ENABLE_SNDFILE On CACHE BOOL "Enable 'libsndfile' library. Adds the ability to read a wide range of sound formats [SYSTEM] (Default On).")
 set(EMERAUDE_ENABLE_SAMPLERATE On CACHE BOOL "Enable 'libsamplerate' library. Adds the ability to resample a sound on the fly to meet OpenAL settings [SYSTEM|LOCAL] (Default On).")
@@ -52,16 +53,16 @@ set(EMERAUDE_ENABLE_OPENAL On CACHE BOOL "Enable 'libopenal' library. Adds the a
 set(EMERAUDE_ENABLE_TAGLIB On CACHE BOOL "Enable 'libtaglib' library. Adds the ability to read media file tags [SYSTEM] (Default On).")
 set(EMERAUDE_ENABLE_IMGUI Off CACHE BOOL "Enable 'libimgui' library. Adds a GUI to the engine [LOCAL] (Default Off).")
 set(EMERAUDE_ENABLE_BULLET Off CACHE BOOL "Enable 'libBullet' library. Adds a Bullet to the engine [SYSTEM] (Default Off).")
-set(EMERAUDE_ENABLE_NATIVE_DIALOGS On CACHE BOOL "Enable platform native dialog boxes (Default Off).")
 # Debug preprocessor macros control (Ignored in Release).
 option(EMERAUDE_DEBUG_OBSERVER_PATTERN "Enable the debug output of observer pattern (Default Off)." Off)
 option(EMERAUDE_DEBUG_PIXEL_FACTORY "Enable the debug output of pixel factory library (Default Off)." Off)
 option(EMERAUDE_DEBUG_VERTEX_FACTORY "Enable the debug output of vertex factory library (Default Off)." Off)
 option(EMERAUDE_DEBUG_WAVE_FACTORY "Enable the debug output of wave factory library (Default Off)." Off)
-option(KEYBOARD_INPUT_DEBUG_ENABLED "Enable printing of events to the console from keyboard inputs (Default Off)." Off)
-option(POINTER_INPUT_DEBUG_ENABLED "Enable printing of events to the console from pointer inputs (Default Off)." Off)
-option(WINDOW_EVENTS_DEBUG_ENABLED "Enable printing of events to the console from window events (Default Off)." Off)
-option(VK_TRACKING_ENABLED "Enable printing of Vulkan objects lifespan (Default Off)." Off)
+option(EMERAUDE_DEBUG_KEYBOARD_INPUT "Enable printing of events to the console from keyboard inputs (Default Off)." Off)
+option(EMERAUDE_DEBUG_POINTER_INPUT "Enable printing of events to the console from pointer inputs (Default Off)." Off)
+option(EMERAUDE_DEBUG_WINDOW_EVENTS "Enable printing of events to the console from window events (Default Off)." Off)
+option(EMERAUDE_DEBUG_VULKAN_TRACKING "Enable printing of Vulkan objects lifespan (Default Off)." Off)
+option(EMERAUDE_DEBUG_THREAD_POOL "Enable printing of ThreadPool (Default Off)." Off)
 
 # Force the compilation directory for testing (Only if empty)
 if ( EMERAUDE_ENABLE_TESTS AND "${EMERAUDE_COMPILATION_DIR}" STREQUAL "" )
@@ -169,6 +170,7 @@ set(
 	${CMAKE_CURRENT_SOURCE_DIR}/src/AVConsole
 	${CMAKE_CURRENT_SOURCE_DIR}/src/UserDialogs
 	${CMAKE_CURRENT_SOURCE_DIR}/src/Overlay
+	${CMAKE_CURRENT_SOURCE_DIR}/src/Net
 	${CMAKE_CURRENT_SOURCE_DIR}/src/Physics
 	${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific
 	${CMAKE_CURRENT_SOURCE_DIR}/src/Resources
@@ -211,13 +213,21 @@ endif ()
 if ( MSVC )
 	add_library(${PROJECT_NAME} SHARED STATIC ${EMERAUDE_SOURCE_FILES})
 else ()
-	add_library(${PROJECT_NAME} SHARED ${EMERAUDE_SOURCE_FILES})
+	add_library(${PROJECT_NAME} SHARED ${EMERAUDE_SOURCE_FILES}
+            src/Libs/ThreadPool.hpp
+			src/Libs/ThreadPool.cpp
+			src/Resources/ContainerInterface.hpp)
+endif ()
+
+target_sources(${PROJECT_NAME} PUBLIC FILE_SET HEADERS BASE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/src FILES ${EMERAUDE_HEADER_FILES})
+
+# Precompiled headers
+if ( EMERAUDE_ENABLE_PCH )
+	target_precompile_headers(${PROJECT_NAME} PUBLIC ${EMERAUDE_HEADER_FILES})
 endif ()
 
 target_compile_definitions(${PROJECT_NAME} PRIVATE $<$<CONFIG:Debug>:DEBUG>)
 target_compile_definitions(${PROJECT_NAME} PRIVATE $<$<CONFIG:Release>:NDEBUG>)
-
-target_sources(${PROJECT_NAME} PUBLIC FILE_SET HEADERS BASE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/src FILES ${EMERAUDE_HEADER_FILES})
 
 set_target_properties(${PROJECT_NAME} PROPERTIES
 	C_STANDARD 17
@@ -243,6 +253,8 @@ endif ()
 
 
 if ( MSVC )
+	message("Configuring C++ compiler (>= MSVC 2022) for Windows ...")
+
 	target_compile_options(${PROJECT_NAME} PRIVATE
 		/wd4100       # Ignore "unreferenced formal parameter" warning
 		/wd4127       # Ignore "conditional expression is constant" warning
@@ -272,34 +284,66 @@ if ( MSVC )
 		>
 	)
 else ( UNIX )
-	target_compile_options(${PROJECT_NAME} PRIVATE
-		-Wno-unknown-pragmas
-		-Wno-unused
-		-fno-exceptions
-		#-fno-rtti
-		$<$<CONFIG:Debug>:
-			-O0
-			-g
-			-Wall
-			-Wextra
-			-Wpedantic
-			#-Werror
-		>
-		$<$<CONFIG:Relase>:
-			-O2
-			-ffast-math
-			-fdata-sections
-			-ffunction-sections
-		>
-	)
+	if ( APPLE )
+		message("Configuring C++ compiler (>= AppleClang 17.0) for macOS ...")
+
+		target_compile_options(${PROJECT_NAME} PRIVATE
+			-Wno-unknown-pragmas
+			-Wno-unused
+			-fno-exceptions
+			#-fno-rtti
+			-Wno-nullability-extension # Removes warnings from external dependencies libzip.
+			#-fexperimental-library # Enables std::jthread from STL.
+			$<$<CONFIG:Debug>:
+				-O0
+				-g
+				-Wall
+				-Wextra
+				-Wpedantic
+				#-Werror
+			>
+			$<$<CONFIG:Relase>:
+				-O2
+				-ffast-math
+				-fdata-sections
+				-ffunction-sections
+			>
+		)
+	else ()
+		message("Configuring C++ compiler (>= G++13.3) for Linux ...")
+
+		target_compile_options(${PROJECT_NAME} PRIVATE
+			-Wno-unknown-pragmas
+			-Wno-unused
+			-fno-exceptions
+			#-fno-rtti
+			$<$<CONFIG:Debug>:
+				-O0
+				-g
+				-Wall
+				-Wextra
+				-Wpedantic
+				-Werror
+			>
+			$<$<CONFIG:Relase>:
+				-O2
+				-ffast-math
+				-fdata-sections
+				-ffunction-sections
+			>
+		)
+	endif ()
 endif ()
 
 target_include_directories(${PROJECT_NAME} PUBLIC
     ${CMAKE_BINARY_DIR}/include
     ${LOCAL_LIB_DIR}/include
-	# "subprocess.h" library
-    ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/subprocess.h/
 )
+
+# "portable-file-dialogs" library for LINUX
+if ( UNIX AND NOT APPLE )
+	target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/portable-file-dialogs)
+endif ()
 
 target_link_directories(${PROJECT_NAME} PUBLIC ${LOCAL_LIB_DIR}/lib)
 
@@ -351,12 +395,13 @@ if ( EMERAUDE_ENABLE_OPENMP AND NOT APPLE )
 	include(SetupOpenMP)
 endif ()
 
-# FIXME: Needs attention (static: no sound on Linux)
 if ( EMERAUDE_ENABLE_OPENAL )
 	include(SetupOpenAL)
 endif ()
 
 if ( EMERAUDE_ENABLE_SNDFILE )
+	set(BINARY_TARGET_NAME ${PROJECT_NAME})
+
 	include(SetupSndFile)
 endif ()
 
@@ -379,14 +424,6 @@ endif ()
 if ( EMERAUDE_ENABLE_IMGUI )
 	include(SetupPostSourcesImGui)
 endif ()
-
-if ( EMERAUDE_ENABLE_NATIVE_DIALOGS )
-	message("Enabling native dialogs ...")
-
-	if ( UNIX AND NOT APPLE )
-		include(SetupGTK3)
-	endif ()
-endif()
 
 if ( EMERAUDE_ENABLE_BULLET )
 	include(SetupBullet)

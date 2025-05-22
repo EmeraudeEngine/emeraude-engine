@@ -31,20 +31,12 @@
 #include <algorithm>
 
 /* Local inclusions. */
-#include "Device.hpp"
-#include "Buffer.hpp"
 #include "MemoryRegion.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::Vulkan
 {
 	using namespace EmEn::Libs;
-
-	AbstractHostBuffer::AbstractHostBuffer (const std::shared_ptr< Device > & device, VkBufferCreateFlags createFlags, VkDeviceSize deviceSize, VkBufferUsageFlags bufferUsageFlags) noexcept
-		: Buffer(device, createFlags, deviceSize, bufferUsageFlags, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)
-	{
-
-	}
 
 	bool
 	AbstractHostBuffer::writeData (const MemoryRegion & memoryRegion) const noexcept

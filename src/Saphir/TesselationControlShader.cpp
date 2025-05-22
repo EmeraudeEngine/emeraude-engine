@@ -36,13 +36,7 @@
 namespace EmEn::Saphir
 {
 	using namespace EmEn::Libs;
-	using namespace Declaration;
-
-	TesselationControlShader::TesselationControlShader (const std::string & name, const std::string & GLSLVersion, const std::string & GLSLProfile) noexcept
-		: AbstractShader(name, GLSLVersion, GLSLProfile)
-	{
-
-	}
+	using namespace EmEn::Saphir::Declaration;
 
 	bool
 	TesselationControlShader::declare (const StageInput & declaration) noexcept

@@ -27,9 +27,6 @@
 #pragma once
 
 /* STL inclusions. */
-#include <cstddef>
-#include <cstdint>
-#include <string>
 #include <memory>
 
 /* Local inclusions for inheritances. */
@@ -58,6 +55,9 @@ namespace EmEn::Graphics::Renderable
 			/** @brief Observable class unique identifier. */
 			static const size_t ClassUID;
 
+			/** @brief Defines the resource dependency complexity. */
+			static constexpr auto Complexity{Resources::DepComplexity::Complex};
+
 			/* JSON key. */
 			static constexpr auto HeightMapKey{"HeightMap"};
 				static constexpr auto ImageNameKey{"ImageName"};
@@ -73,49 +73,100 @@ namespace EmEn::Graphics::Renderable
 			/**
 			 * @brief Constructs a terrain resource.
 			 * @param name A reference to a string for the resource name.
-			 * @param resourceFlagBits The resource flag bits. Default none.
+			 * @param renderableFlags The resource flag bits. Default none.
 			 */
-			explicit TerrainResource (const std::string & name, uint32_t resourceFlagBits = 0) noexcept;
+			explicit
+			TerrainResource (std::string name, uint32_t renderableFlags = 0) noexcept
+				: SceneAreaInterface{std::move(name), renderableFlags},
+				  m_geometry{std::make_unique< Geometry::AdaptiveVertexGridResource >(this->name() + "AdaptiveGrid")}
+			{
+
+			}
 
 			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
 			[[nodiscard]]
-			size_t classUID () const noexcept override;
+			size_t
+			classUID () const noexcept override
+			{
+				return ClassUID;
+			}
 
 			/** @copydoc EmEn::Libs::ObservableTrait::is() const */
 			[[nodiscard]]
-			bool is (size_t classUID) const noexcept override;
+			bool
+			is (size_t classUID) const noexcept override
+			{
+				return classUID == ClassUID;
+			}
 
 			/** @copydoc EmEn::Graphics::Renderable::Interface::layerCount() const */
 			[[nodiscard]]
-			size_t layerCount () const noexcept override;
+			uint32_t
+			layerCount () const noexcept override
+			{
+				return 1;
+			}
 
 			/** @copydoc EmEn::Graphics::Renderable::Interface::isOpaque() const */
 			[[nodiscard]]
-			bool isOpaque (size_t layerIndex = 0) const noexcept override;
+			bool
+			isOpaque (uint32_t /*layerIndex*/) const noexcept override
+			{
+				if ( m_material != nullptr )
+				{
+					return m_material->isOpaque();
+				}
+
+				return true;
+			}
 
 			/** @copydoc EmEn::Graphics::Renderable::Interface::geometry() const */
 			[[nodiscard]]
-			const Geometry::Interface * geometry () const noexcept override;
+			const Geometry::Interface *
+			geometry () const noexcept override
+			{
+				return m_geometry.get();
+			}
 
 			/** @copydoc EmEn::Graphics::Renderable::Interface::material() const */
 			[[nodiscard]]
-			const Material::Interface * material (size_t layerIndex = 0) const noexcept override;
+			const Material::Interface *
+			material (uint32_t /*layerIndex*/) const noexcept override
+			{
+				return m_material.get();
+			}
 
 			/** @copydoc EmEn::Graphics::Renderable::Interface::layerRasterizationOptions() const */
 			[[nodiscard]]
-			const RasterizationOptions * layerRasterizationOptions (size_t layerIndex = 0) const noexcept override;
+			const RasterizationOptions *
+			layerRasterizationOptions (uint32_t /*layerIndex*/) const noexcept override
+			{
+				return nullptr;
+			}
 
 			/** @copydoc EmEn::Graphics::Renderable::Interface::boundingBox() const */
 			[[nodiscard]]
-			const Libs::Math::Cuboid< float > & boundingBox () const noexcept override;
+			const Libs::Math::Space3D::AACuboid< float > &
+			boundingBox () const noexcept override
+			{
+				return m_localData.boundingBox();
+			}
 
 			/** @copydoc EmEn::Graphics::Renderable::Interface::boundingSphere() const */
 			[[nodiscard]]
-			const Libs::Math::Sphere< float > & boundingSphere () const noexcept override;
+			const Libs::Math::Space3D::Sphere< float > &
+			boundingSphere () const noexcept override
+			{
+				return m_localData.boundingSphere();
+			}
 
 			/** @copydoc EmEn::Resources::ResourceTrait::classLabel() const */
 			[[nodiscard]]
-			const char * classLabel () const noexcept override;
+			const char *
+			classLabel () const noexcept override
+			{
+				return ClassId;
+			}
 
 			/** @copydoc EmEn::Resources::ResourceTrait::load() */
 			bool load () noexcept override;
@@ -126,17 +177,38 @@ namespace EmEn::Graphics::Renderable
 			/** @copydoc EmEn::Resources::ResourceTrait::load(const Json::Value &) */
 			bool load (const Json::Value & data) noexcept override;
 
+			/** @copydoc EmEn::Resources::ResourceTrait::memoryOccupied() const noexcept */
+			[[nodiscard]]
+			size_t
+			memoryOccupied () const noexcept override
+			{
+				// TODO ...
+				return 0;
+			}
+
 			/** @copydoc EmEn::Graphics::Renderable::SceneAreaInterface::getLevelAt(const Libs::Math::Vector< 3, float > &) const */
 			[[nodiscard]]
-			float getLevelAt (const Libs::Math::Vector< 3, float > & worldPosition) const noexcept override;
+			float
+			getLevelAt (const Libs::Math::Vector< 3, float > & worldPosition) const noexcept override
+			{
+				return m_localData.getHeightAt(worldPosition[Libs::Math::X], worldPosition[Libs::Math::Z]);
+			}
 
 			/** @copydoc EmEn::Graphics::Renderable::SceneAreaInterface::getLevelAt(float, float, float) const */
 			[[nodiscard]]
-			Libs::Math::Vector< 3, float > getLevelAt (float positionX, float positionZ, float deltaY = 0.0F) const noexcept override;
+			Libs::Math::Vector< 3, float >
+			getLevelAt (float positionX, float positionZ, float deltaY = 0.0F) const noexcept override
+			{
+				return {positionX, m_localData.getHeightAt(positionX, positionZ) + deltaY, positionZ};
+			}
 
 			/** @copydoc EmEn::Graphics::Renderable::SceneAreaInterface::getNormalAt() const */
 			[[nodiscard]]
-			Libs::Math::Vector< 3, float > getNormalAt (const Libs::Math::Vector< 3, float > & worldPosition) const noexcept override;
+			Libs::Math::Vector< 3, float >
+			getNormalAt (const Libs::Math::Vector< 3, float > & worldPosition) const noexcept override
+			{
+				return m_localData.getNormalAt(worldPosition[Libs::Math::X], worldPosition[Libs::Math::Z]);
+			}
 
 			/**
 			 * @brief Loads a parametric terrain with a material.
@@ -145,23 +217,7 @@ namespace EmEn::Graphics::Renderable
 			 * @param material A pointer to a material resource.
 			 * @return bool
 			 */
-			bool load (float size, size_t division, const std::shared_ptr< Material::Interface > & material) noexcept;
-
-			/**
-			 * @brief Returns a terrain resource by its name.
-			 * @param resourceName A reference to a string.
-			 * @param directLoad Use the direct loading mode. Default false.
-			 * @return std::shared_ptr< TerrainResource >
-			 */
-			[[nodiscard]]
-			static std::shared_ptr< TerrainResource > get (const std::string & resourceName, bool directLoad = false) noexcept;
-
-			/**
-			 * @brief Returns the default terrain resource.
-			 * @return std::shared_ptr< TerrainResource >
-			 */
-			[[nodiscard]]
-			static std::shared_ptr< TerrainResource > getDefault () noexcept;
+			bool load (float size, uint32_t division, const std::shared_ptr< Material::Interface > & material) noexcept;
 
 		private:
 
@@ -171,7 +227,7 @@ namespace EmEn::Graphics::Renderable
 			 * @param division The number of division.
 			 * @return bool
 			 */
-			bool prepareGeometry (float size, size_t division) noexcept;
+			bool prepareGeometry (float size, uint32_t division) noexcept;
 
 			/**
 			 * @brief Sets a grid geometry.
@@ -193,9 +249,9 @@ namespace EmEn::Graphics::Renderable
 			void updateActiveGeometryProcess () noexcept;
 
 			/* Contains the graphical sub-data. */
-			std::shared_ptr< Geometry::AdaptiveVertexGridResource > m_geometry{};
-			std::shared_ptr< Geometry::VertexGridResource > m_farGeometry{};
-			std::shared_ptr< Material::Interface > m_material{};
+			std::shared_ptr< Geometry::AdaptiveVertexGridResource > m_geometry;
+			std::shared_ptr< Geometry::VertexGridResource > m_farGeometry;
+			std::shared_ptr< Material::Interface > m_material;
 			/* Contains the whole data. */
 			Libs::VertexFactory::Grid< float > m_localData{};
 			Libs::Math::Vector< 3, float > m_lastUpdatePosition{};

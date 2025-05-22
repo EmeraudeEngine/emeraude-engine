@@ -37,14 +37,8 @@
 namespace EmEn::Saphir
 {
 	using namespace EmEn::Libs;
-	using namespace Declaration;
+	using namespace EmEn::Saphir::Declaration;
 
-	GeometryShader::GeometryShader (const std::string & name, InputPrimitive inputPrimitive, OutputPrimitive outputPrimitive, const std::string & GLSLVersion, const std::string & GLSLProfile) noexcept
-		: AbstractShader(name, GLSLVersion, GLSLProfile), m_inputPrimitive(std::move(inputPrimitive)), m_outputPrimitive(std::move(outputPrimitive))
-	{
-
-	}
-	
 	bool
 	GeometryShader::declare (const StageInput & declaration) noexcept
 	{

@@ -28,7 +28,7 @@
 
 /* Local inclusions. */
 #include "Tracer.hpp"
-#include <Audio/OpenAL.EFX.hpp>
+#include "Audio/OpenAL.EFX.hpp"
 #include "Audio/Utility.hpp"
 
 namespace EmEn::Audio::Effects
@@ -36,22 +36,27 @@ namespace EmEn::Audio::Effects
 	using namespace EmEn::Libs;
 
 	AutoWah::AutoWah () noexcept
-		: Abstract()
 	{
 		if ( this->identifier() == 0 )
+		{
 			return;
+		}
 
 		EFX::alEffecti(this->identifier(), AL_EFFECT_TYPE, AL_EFFECT_AUTOWAH);
 
 		if ( alGetErrors("alEffecti()", __FILE__, __LINE__) )
+		{
 			Tracer::error(ClassId, "Unable to generate OpenAL Auto-Wah effect !");
+		}
 	}
 
 	void
 	AutoWah::resetProperties () noexcept
 	{
 		if ( !EFX::isAvailable() )
+		{
 			return;
+		}
 
 		EFX::alEffectf(this->identifier(), AL_AUTOWAH_ATTACK_TIME, AL_AUTOWAH_DEFAULT_ATTACK_TIME);
 		EFX::alEffectf(this->identifier(), AL_AUTOWAH_RELEASE_TIME, AL_AUTOWAH_DEFAULT_RELEASE_TIME);
@@ -63,11 +68,13 @@ namespace EmEn::Audio::Effects
 	AutoWah::setAttackTime (float value) noexcept
 	{
 		if ( !EFX::isAvailable() )
+		{
 			return;
+		}
 
 		if ( value < AL_AUTOWAH_MIN_ATTACK_TIME || value > AL_AUTOWAH_MAX_ATTACK_TIME )
 		{
-			Tracer::warning(ClassId, BlobTrait() << "Attack time must be between " << AL_AUTOWAH_MIN_ATTACK_TIME << " and " << AL_AUTOWAH_MAX_ATTACK_TIME << ".");
+			TraceWarning{ClassId} << "Attack time must be between " << AL_AUTOWAH_MIN_ATTACK_TIME << " and " << AL_AUTOWAH_MAX_ATTACK_TIME << '.';
 
 			return;
 		}
@@ -79,11 +86,13 @@ namespace EmEn::Audio::Effects
 	AutoWah::setReleaseTime (float value) noexcept
 	{
 		if ( !EFX::isAvailable() )
+		{
 			return;
+		}
 
 		if ( value < AL_AUTOWAH_MIN_RELEASE_TIME || value > AL_AUTOWAH_MAX_RELEASE_TIME )
 		{
-			Tracer::warning(ClassId, BlobTrait() << "Release time must be between " << AL_AUTOWAH_MIN_RELEASE_TIME << " and " << AL_AUTOWAH_MAX_RELEASE_TIME << ".");
+			TraceWarning{ClassId} << "Release time must be between " << AL_AUTOWAH_MIN_RELEASE_TIME << " and " << AL_AUTOWAH_MAX_RELEASE_TIME << '.';
 
 			return;
 		}
@@ -95,11 +104,13 @@ namespace EmEn::Audio::Effects
 	AutoWah::setResonance (float value) noexcept
 	{
 		if ( !EFX::isAvailable() )
+		{
 			return;
+		}
 
 		if ( value < AL_AUTOWAH_MIN_RESONANCE || value > AL_AUTOWAH_MAX_RESONANCE )
 		{
-			Tracer::warning(ClassId, BlobTrait() << "Resonance must be between " << AL_AUTOWAH_MIN_RESONANCE << " and " << AL_AUTOWAH_MAX_RESONANCE << ".");
+			TraceWarning{ClassId} << "Resonance must be between " << AL_AUTOWAH_MIN_RESONANCE << " and " << AL_AUTOWAH_MAX_RESONANCE << '.';
 
 			return;
 		}
@@ -111,11 +122,13 @@ namespace EmEn::Audio::Effects
 	AutoWah::setPeakGain (float value) noexcept
 	{
 		if ( !EFX::isAvailable() )
+		{
 			return;
+		}
 
 		if ( value < AL_AUTOWAH_MIN_PEAK_GAIN || value > AL_AUTOWAH_MAX_PEAK_GAIN )
 		{
-			Tracer::warning(ClassId, BlobTrait() << "Peak gain must be between " << AL_AUTOWAH_MIN_PEAK_GAIN << " and " << AL_AUTOWAH_MAX_PEAK_GAIN << ".");
+			TraceWarning{ClassId} << "Peak gain must be between " << AL_AUTOWAH_MIN_PEAK_GAIN << " and " << AL_AUTOWAH_MAX_PEAK_GAIN << '.';
 
 			return;
 		}
@@ -126,12 +139,12 @@ namespace EmEn::Audio::Effects
 	float
 	AutoWah::attackTime () const noexcept
 	{
-		if ( !EFX::isAvailable() )
-			return 0.0F;
+		ALfloat value = 0.0F;
 
-		ALfloat value;
-
-		EFX::alGetEffectf(this->identifier(), AL_AUTOWAH_ATTACK_TIME, &value);
+		if ( EFX::isAvailable() )
+		{
+			EFX::alGetEffectf(this->identifier(), AL_AUTOWAH_ATTACK_TIME, &value);
+		}
 
 		return value;
 	}
@@ -139,12 +152,12 @@ namespace EmEn::Audio::Effects
 	float
 	AutoWah::releaseTime () const noexcept
 	{
-		if ( !EFX::isAvailable() )
-			return 0.0F;
+		ALfloat value = 0.0F;
 
-		ALfloat value;
-
-		EFX::alGetEffectf(this->identifier(), AL_AUTOWAH_RELEASE_TIME, &value);
+		if ( EFX::isAvailable() )
+		{
+			EFX::alGetEffectf(this->identifier(), AL_AUTOWAH_RELEASE_TIME, &value);
+		}
 
 		return value;
 	}
@@ -152,12 +165,12 @@ namespace EmEn::Audio::Effects
 	float
 	AutoWah::resonance () const noexcept
 	{
-		if ( !EFX::isAvailable() )
-			return 0.0F;
+		ALfloat value = 0.0F;
 
-		ALfloat value;
-
-		EFX::alGetEffectf(this->identifier(), AL_AUTOWAH_RESONANCE, &value);
+		if ( EFX::isAvailable() )
+		{
+			EFX::alGetEffectf(this->identifier(), AL_AUTOWAH_RESONANCE, &value);
+		}
 
 		return value;
 	}
@@ -165,12 +178,12 @@ namespace EmEn::Audio::Effects
 	float
 	AutoWah::peakGain () const noexcept
 	{
-		if ( !EFX::isAvailable() )
-			return 0.0F;
+		ALfloat value = 0.0F;
 
-		ALfloat value;
-
-		EFX::alGetEffectf(this->identifier(), AL_AUTOWAH_PEAK_GAIN, &value);
+		if ( EFX::isAvailable() )
+		{
+			EFX::alGetEffectf(this->identifier(), AL_AUTOWAH_PEAK_GAIN, &value);
+		}
 
 		return value;
 	}

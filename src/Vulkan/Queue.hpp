@@ -65,7 +65,12 @@ namespace EmEn::Vulkan
 			 * @param queue The handle of the queue.
 			 * @param familyQueueIndex Set which family queue is used to create this queue.
 			 */
-			Queue (VkQueue queue, uint32_t familyQueueIndex) noexcept;
+			Queue (VkQueue queue, uint32_t familyQueueIndex) noexcept
+				: m_handle{queue},
+				m_familyQueueIndex{familyQueueIndex}
+			{
+				this->setCreated();
+			}
 
 			/**
 			 * @brief Copy constructor.
@@ -94,7 +99,10 @@ namespace EmEn::Vulkan
 			/**
 			 * @brief Destructs the device queue.
 			 */
-			~Queue () override;
+			~Queue () override
+			{
+				this->setDestroyed();
+			}
 
 			/**
 			 * @brief Returns the vulkan queue handle.
@@ -174,7 +182,7 @@ namespace EmEn::Vulkan
 			 * @brief Submits a command buffer to the queue.
 			 * @note Waits one semaphore.
 			 * @param buffer A reference to a command buffer smart pointer.
-			 * @param waitSemaphores A semaphore handle.
+			 * @param waitSemaphore A semaphore handle.
 			 * @param waitStageFlags A mask for wait stage.
 			 * @param fence A fence handle. Default None.
 			 * @return bool
@@ -229,7 +237,7 @@ namespace EmEn::Vulkan
 			/**
 			 * @brief Submits a present info.
 			 * @FIXME Bad design.
-			 * @param presentInfo A pointer to a present info.
+			 * @param presentInfo A pointer to a presentInfo structure.
 			 * @param swapChainRecreationNeeded A bool to switch on bad presentation.
 			 * @return bool
 			 */

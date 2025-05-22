@@ -29,85 +29,58 @@
 #if IS_LINUX
 
 /* Third-party inclusions. */
-#ifdef GTK3_ENABLED
-	#include <gtk/gtk.h>
-#endif
+#include "portable-file-dialogs.h"
 
 /* Local inclusions. */
 #include "Window.hpp"
 
 namespace EmEn::PlatformSpecific::Desktop::Dialog
 {
-#ifdef GTK3_ENABLED
 	bool
-	OpenFile::execute (Window * window) noexcept
+	OpenFile::execute (Window * /*window*/) noexcept
 	{
-		GtkWidget * dialog = gtk_file_chooser_dialog_new(
-			this->title().c_str(),
-			window ? window->getGtkWindow() : nullptr,
-			GTK_FILE_CHOOSER_ACTION_OPEN,
-			"Cancel", GTK_RESPONSE_CANCEL,
-			"Open", GTK_RESPONSE_ACCEPT,
-			nullptr
-		);
-
-		if ( dialog == nullptr )
+		/* NOTE: This mode selects a folder. */
+		if ( m_flags[SelectFolder] )
 		{
-			return false;
-		}
+			pfd::select_folder dialog{this->title()};
 
-		for ( const auto & [filterName, extensions] : m_extensionFilters )
-		{
-			GtkFileFilter * filter = gtk_file_filter_new();
-			gtk_file_filter_set_name(filter, filterName.c_str());
+			const auto filepath = dialog.result();
 
-			for ( const auto & extension : extensions )
+			if ( filepath.empty() )
 			{
-				const auto fileType = "*." + extension;
-
-				gtk_file_filter_add_pattern(filter, fileType.c_str());
+				m_flags[Canceled] = true;
+			}
+			else
+			{
+				m_filepaths.emplace_back(filepath);
 			}
 
-			gtk_file_chooser_add_filter(reinterpret_cast< GtkFileChooser * >(dialog), filter);
+			return true;
 		}
 
-		if ( m_flags[MultiSelect] )
+		pfd::open_file dialog{
+			this->title(),
+			{},
+			OpenFile::convertFilterStructureForPFD(m_extensionFilters),
+			m_flags[MultiSelect] ? pfd::opt::multiselect : pfd::opt::none
+		};
+
+		const auto filepaths = dialog.result();
+
+		if ( filepaths.empty() )
 		{
-			gtk_file_chooser_set_select_multiple(GTK_FILE_CHOOSER(dialog), TRUE);
-
-			if ( gtk_dialog_run(GTK_DIALOG(dialog)) == GTK_RESPONSE_ACCEPT )
-			{
-				const GSList * files = gtk_file_chooser_get_filenames(GTK_FILE_CHOOSER(dialog));
-
-				for ( const GSList * iterator = files; iterator; iterator = iterator->next )
-				{
-					m_filepaths.emplace_back(static_cast< char * >(iterator->data));
-				}
-			}
+			m_flags[Canceled] = true;
 		}
 		else
 		{
-			if ( gtk_dialog_run(GTK_DIALOG(dialog)) == GTK_RESPONSE_ACCEPT )
+			for ( auto & filepath : filepaths )
 			{
-				const auto * filepath = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(dialog));
-
 				m_filepaths.emplace_back(filepath);
 			}
 		}
 
-		gtk_widget_destroy(dialog);
-
 		return true;
 	}
-#else
-	bool
-	OpenFile::execute (Window * /*window*/) noexcept
-	{
-		std::cerr << "Native GUI disabled !" "\n";
-
-		return false;
-	}
-#endif
 }
 
 #endif

@@ -28,16 +28,10 @@
 
 /* STL inclusions. */
 #include <algorithm>
-#include <cstdint>
-#include <fstream>
-#include <mutex>
-#include <string>
 
 /* Local inclusions. */
 #include "Libs/FastJSON.hpp"
 #include "Libs/String.hpp"
-#include "Stores.hpp"
-#include "Types.hpp"
 #include "Manager.hpp"
 #include "Tracer.hpp"
 
@@ -45,13 +39,7 @@ namespace EmEn::Resources
 {
 	using namespace EmEn::Libs;
 
-	static constexpr auto TracerTag{"ResourceChain"};
-
-	ResourceTrait::ResourceTrait (const std::string & resourceName, uint32_t initialResourceFlagBits) noexcept
-		: NameableTrait(resourceName), FlagTrait(initialResourceFlagBits)
-	{
-
-	}
+	constexpr auto TracerTag{"ResourceChain"};
 
 	ResourceTrait::~ResourceTrait ()
 	{
@@ -60,7 +48,7 @@ namespace EmEn::Resources
 		switch ( m_status )
 		{
 			case Status::Unloaded :
-				if ( Stores::s_operationVerboseEnabled )
+				if ( s_verboseEnabled )
 				{
 					TraceInfo{TracerTag} << "The resource '" << this->name() << "' (" << this << ") is destroyed with status 'Unloaded' !";
 				}
@@ -79,18 +67,17 @@ namespace EmEn::Resources
 				break;
 
 			case Status::Loaded :
-				/* NOTE: Check the parent list. It should be empty ! */
-				if ( !m_parents.empty() )
+				/* NOTE: Check the parent list. It should be empty! */
+				if ( !m_parentsToNotify.empty() )
 				{
-					TraceError{TracerTag} << "The resource '" << this->name() << "' (" << this << ") is destroyed while still having " << m_parents.size() << " parent pointer(s) !";
+					TraceError{TracerTag} << "The resource '" << this->name() << "' (" << this << ") is destroyed while still having " << m_parentsToNotify.size() << " parent pointer(s) !";
 				}
 
-				/* NOTE: Check the dependency list. It should be empty ! */
-				if ( !m_dependencies.empty() )
+				/* NOTE: Check the dependency list. It should be empty! */
+				if ( !m_dependenciesToWaitFor.empty() )
 				{
-					TraceError{TracerTag} << "The resource '" << this->name() << "' (" << this << ") is destroyed while still having " << m_dependencies.size() << " dependency pointer(s) !";
+					TraceError{TracerTag} << "The resource '" << this->name() << "' (" << this << ") is destroyed while still having " << m_dependenciesToWaitFor.size() << " dependency pointer(s) !";
 				}
-
 				break;
 
 			case Status::Failed :
@@ -102,7 +89,7 @@ namespace EmEn::Resources
 	bool
 	ResourceTrait::initializeEnqueuing (bool manual) noexcept
 	{
-		if ( Stores::s_operationVerboseEnabled )
+		if ( s_verboseEnabled )
 		{
 			TraceInfo{TracerTag} << "Beginning the creation of resource '" << this->name() << "' (" << this->classLabel() << ") ...";
 		}
@@ -135,8 +122,10 @@ namespace EmEn::Resources
 	}
 
 	bool
-	ResourceTrait::addDependency (ResourceTrait * dependency) noexcept
+	ResourceTrait::addDependency (const std::shared_ptr< ResourceTrait > & dependency) noexcept
 	{
+		const std::lock_guard< std::mutex > lock{m_dependenciesAccess};
+
 		/* First, we check the current resource status. */
 		switch ( m_status )
 		{
@@ -177,83 +166,80 @@ namespace EmEn::Resources
 		{
 			Tracer::error(TracerTag, "The dependency pointer is null !");
 
+			m_status = Status::Failed;
+
 			return false;
 		}
 
-		/* If the dependency is loaded or already present.
-		 * we don't need to add it. */
-		if ( dependency->isLoaded() || m_dependencies.contains(dependency) )
+		/* NOTE: If the dependency is already loaded, we skip it... */
+		if ( dependency->isLoaded() )
 		{
-			if ( Stores::s_operationVerboseEnabled )
+			if ( s_verboseEnabled )
 			{
-				TraceInfo{TracerTag} <<
-					"Resource dependency '" << dependency->name() << "' (" << dependency->classLabel() << ") is already loaded or in the queue. "
-					"Skipping this dependency ...";
+				TraceInfo{TracerTag} << "Resource dependency '" << dependency->name() << "' (" << dependency->classLabel() << ") is already loaded.";
 			}
 
 			return true;
 		}
 
-		const auto result = m_dependencies.emplace(dependency);
-
-		/* Set this resource as parent of the dependency (double-link). */
-		if ( result.second )
+		/* NOTE: If the dependency is already present, we also skip it... */
+		if ( std::ranges::find(std::as_const(m_dependenciesToWaitFor), dependency) != m_dependenciesToWaitFor.cend() )
 		{
-			dependency->m_parents.emplace(this);
-
-			if ( Stores::s_operationVerboseEnabled )
+			if ( s_verboseEnabled )
 			{
-				TraceInfo{TracerTag} <<
-					"Resource dependency '" << dependency->name() << "' (" << dependency->classLabel() << ") "
-					"added to resource '" << this->name() << "' (" << this->classLabel() << "). "
-					"Dependency count : " << m_dependencies.size() << ".";
+				TraceInfo{TracerTag} << "Resource dependency '" << dependency->name() << "' (" << dependency->classLabel() << ") is already in the queue.";
 			}
 
 			return true;
 		}
 
-		m_status = Status::Failed;
+		/* NOTE: Adds the dependency to wait for being loaded ... */
+		m_dependenciesToWaitFor.push_back(dependency);
 
-		if ( Stores::s_operationVerboseEnabled )
+		/* ... then set this resource as parent of the dependency (double-link). */
+		dependency->m_parentsToNotify.push_back(this->shared_from_this());
+
+		if ( s_verboseEnabled )
 		{
-			TraceError{TracerTag} <<
-				"Unable to dependency '" << dependency->name() << "' (" << dependency->classLabel() << ") "
-				"to resource '" << this->name() << "' (" << this->classLabel() << ") !";
+			TraceInfo{TracerTag} <<
+				"Resource dependency '" << dependency->name() << "' (" << dependency->classLabel() << ") "
+				"added to resource '" << this->name() << "' (" << this->classLabel() << "). "
+				"Dependency count : " << m_dependenciesToWaitFor.size() << ".";
 		}
 
-		return false;
+		return true;
 	}
 
 	void
-	ResourceTrait::dependencyLoaded (ResourceTrait * dependency) noexcept
+	ResourceTrait::dependencyLoaded (const std::shared_ptr< ResourceTrait > & dependency) noexcept
 	{
-		if ( Stores::s_operationVerboseEnabled )
+		if ( s_verboseEnabled )
 		{
 			TraceInfo{TracerTag} <<
 				"The dependency '" << dependency->name() << "' (" << dependency->classLabel() << ") "
 				"is loaded from resource '" << this->name() << "' (" << this->classLabel() << ") !";
 		}
 
-		/* Removes the resource from dependencies. */
-		m_dependencies.erase(dependency);
+		/* NOTE: Removes the loaded resource from dependencies. */
+		std::erase(m_dependenciesToWaitFor, dependency);
 
-		/* Launch an overall check for dependencies loading. */
+		/* Launch an overall check for dependency loading. */
 		this->checkDependencies();
 	}
 
 	void
 	ResourceTrait::checkDependencies () noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_checkAccess};
+		const std::lock_guard< std::mutex > lock{m_dependenciesAccess};
 
-		/* NOTE: First we check the resource current status. */
+		/* NOTE: First, we check the resource current status. */
 		switch ( m_status )
 		{
-			/* For these status, there is no need to check dependencies now. */
+			/* For these statuses, there is no need to check dependencies now. */
 			case Status::Unloaded :
 			case Status::Enqueuing :
 			case Status::ManualEnqueuing :
-				if ( Stores::s_operationVerboseEnabled )
+				if ( s_verboseEnabled )
 				{
 					TraceInfo{TracerTag} << "The resource '" << this->name() << "' (" << this->classLabel() << ") still enqueuing dependencies !";
 				}
@@ -262,13 +248,13 @@ namespace EmEn::Resources
 			/* This is the state where we want to know if dependencies are loaded. */
 			case Status::Loading :
 			{
-				/* NOTE: If any of dependencies are in a loading state. */
-				if ( std::ranges::any_of(m_dependencies, [] (const auto & dependency) {return !dependency->isLoaded();}) )
+				/* NOTE: If any of the dependencies are in a loading state. */
+				if ( std::ranges::any_of(m_dependenciesToWaitFor, [] (const auto & dependency) {return !dependency->isLoaded();}) )
 				{
 					return;
 				}
 
-				if ( Stores::s_operationVerboseEnabled )
+				if ( s_verboseEnabled )
 				{
 					TraceInfo{TracerTag} << "The resource '" << this->name() << "' (" << this->classLabel() << ") has no more dependency to wait for loading !";
 				}
@@ -279,7 +265,7 @@ namespace EmEn::Resources
 
 					this->notify(LoadFinished);
 
-					if ( Stores::s_operationVerboseEnabled )
+					if ( s_verboseEnabled )
 					{
 						TraceSuccess{TracerTag} << "Resource '" << this->name() << "' (" << this->classLabel() << ") is successfully loaded !";
 					}
@@ -287,13 +273,13 @@ namespace EmEn::Resources
 					if ( !this->isTopResource() )
 					{
 						/* We want to notice parents the resource is loaded. */
-						for ( auto * parent : m_parents )
+						for ( const auto & parent : m_parentsToNotify )
 						{
-							parent->dependencyLoaded(this);
+							parent->dependencyLoaded(this->shared_from_this());
 						}
 
-						/* We don't need to keep tracks of parents. */
-						m_parents.clear();
+						/* Once notified, we don't need to keep tracks of parents. */
+						m_parentsToNotify.clear();
 					}
 				}
 				else
@@ -302,7 +288,7 @@ namespace EmEn::Resources
 
 					this->notify(LoadFailed);
 
-					if ( Stores::s_operationVerboseEnabled )
+					if ( s_verboseEnabled )
 					{
 						TraceError{TracerTag} << "Resource '" << this->name() << "' (" << this->classLabel() << ") failed to load !";
 					}
@@ -311,9 +297,9 @@ namespace EmEn::Resources
 				break;
 
 			case Status::Loaded :
-				if ( !m_dependencies.empty() )
+				if ( !m_dependenciesToWaitFor.empty() )
 				{
-					TraceError{TracerTag} << "The resource '" << this->name() << "' (" << this->classLabel() << ") status is loaded, but still have " << m_dependencies.size() << " dependencies.";
+					TraceError{TracerTag} << "The resource '" << this->name() << "' (" << this->classLabel() << ") status is loaded, but still have " << m_dependenciesToWaitFor.size() << " dependencies.";
 				}
 
 				/* NOTE: We don't want to check again dependencies. */
@@ -331,13 +317,13 @@ namespace EmEn::Resources
 	bool
 	ResourceTrait::setLoadSuccess (bool status) noexcept
 	{
-		if ( Stores::s_operationVerboseEnabled )
+		if ( s_verboseEnabled )
 		{
 			TraceInfo{TracerTag} << "Ending the creation of resource '" << this->name() << "' (" << this->classLabel() << ") ...";
 		}
 
 		/* NOTE: If status is not Enqueuing, ManualEnqueuing or Loading,
-		 * the resource is in an incoherent status ! */
+		 * the resource is in an incoherent status! */
 		switch ( m_status )
 		{
 			case Status::Unloaded :
@@ -363,7 +349,7 @@ namespace EmEn::Resources
 
 		if ( status )
 		{
-			/* Set the resource in loading stage.
+			/* Set the resource in the loading stage.
 			 * NOTE: No more sub-resource enqueuing is possible after this point. */
 			m_status = Status::Loading;
 
@@ -386,7 +372,7 @@ namespace EmEn::Resources
 	bool
 	ResourceTrait::setManualLoadSuccess (bool status) noexcept
 	{
-		/* Avoid to call this method on an automatic loading resource. */
+		/* Avoid it to call this method on an automatic loading resource. */
 		if ( m_status != Status::ManualEnqueuing )
 		{
 			TraceError{TracerTag} << "Resource '" << this->name() << "' (" << this << ") is not in manual mode !";
@@ -415,7 +401,9 @@ namespace EmEn::Resources
 		}
 
 		/* Checks if additional stores before loading (optional) */
-		Manager::instance()->stores().update(root, filepath.string());
+		auto * manager = Manager::instance();
+
+		manager->stores().update(root, manager->verbosityEnabled());
 
 		return this->load(root);
 	}
@@ -425,11 +413,14 @@ namespace EmEn::Resources
 	{
 		const auto filename = String::right(filepath.string(), storeName + IO::Separator);
 
-#if IS_WINDOWS
-		/* NOTE: Resource name use the UNIX convention. */
-		return String::replace(IO::Separator, '/', String::removeFileExtension(filename));
-#else
-		return String::removeFileExtension(filename);
-#endif
+		if constexpr ( IsWindows )
+		{
+			/* NOTE: Resource name uses the UNIX convention. */
+			return String::replace(IO::Separator, '/', String::removeFileExtension(filename));
+		}
+		else
+		{
+			return String::removeFileExtension(filename);
+		}
 	}
 }

@@ -26,19 +26,9 @@
 
 #include "VertexGridResource.hpp"
 
-/* STL inclusions. */
-#include <cstddef>
-#include <cstdint>
-#include <limits>
-#include <memory>
-#include <string>
-#include <vector>
-
 /* Local inclusions. */
 #include "Libs/FastJSON.hpp"
-#include "Resources/Manager.hpp"
 #include "Vulkan/TransferManager.hpp"
-#include "Tracer.hpp"
 
 /* Defining the resource manager class id. */
 template<>
@@ -54,23 +44,12 @@ namespace EmEn::Graphics::Geometry
 	using namespace EmEn::Libs::Math;
 	using namespace EmEn::Libs::VertexFactory;
 	using namespace EmEn::Libs::PixelFactory;
-	using namespace Vulkan;
+	using namespace EmEn::Vulkan;
 
 	const size_t VertexGridResource::ClassUID{getClassUID(ClassId)};
 
-	VertexGridResource::VertexGridResource (const std::string & name, uint32_t geometryFlagBits) noexcept
-		: Interface(name, geometryFlagBits)
-	{
-
-	}
-
-	VertexGridResource::~VertexGridResource ()
-	{
-		this->destroy(true);
-	}
-
 	bool
-	VertexGridResource::create () noexcept
+	VertexGridResource::createOnHardware (TransferManager & transferManager) noexcept
 	{
 		if ( this->isCreated() )
 		{
@@ -91,18 +70,18 @@ namespace EmEn::Graphics::Geometry
 
 		/* NOTE: Example for a 4 divisions square. */
 
-		/* Create the vertex buffer and the index buffer local data. */
-		const auto vertexElementCount = getElementCountFromFlags(this->flagBits());
+		/* Create the vertex and the index buffers local data. */
+		const auto vertexElementCount = getElementCountFromFlags(this->flags());
 		const auto rowCount = m_localData.squaredQuadCount(); /* 4 */
 		/* This holds the number of indices requested to draw a
-		 * full row of quads including the primitive restart. */
+		 * full row of quads, including the primitive restart. */
 		const auto indexPerRowCount = (m_localData.squaredPointCount() * 2) + 1; /* 11 */
 		const auto indexCount = indexPerRowCount * rowCount; /* 44 */
 
-		std::vector< float > vertexAttributes{};
+		std::vector< float > vertexAttributes;
 		vertexAttributes.reserve(m_localData.pointCount() * vertexElementCount); /* 25 * element count per vertex */
 
-		std::vector< uint32_t > indices{};
+		std::vector< uint32_t > indices;
 		indices.reserve(indexCount);
 
 		for ( auto quadYIndex = 0U; quadYIndex < rowCount; quadYIndex++ )
@@ -113,8 +92,7 @@ namespace EmEn::Graphics::Geometry
 			{
 				const auto currentQuad = m_localData.quad(quadXIndex, quadYIndex);
 
-				/* NOTE : Only once by row of quads at execute
-				 * because of GL_TRIANGLE_STRIP technic. */
+				/* NOTE: Only once by row of quads at executing because of GL_TRIANGLE_STRIP technic. */
 				if ( quadXIndex == 0 )
 				{
 					/* NOTE: Shared index if above row 0. */
@@ -133,7 +111,7 @@ namespace EmEn::Graphics::Geometry
 					indices.emplace_back(this->addVertexToBuffer(currentQuad.bottomLeftIndex(), vertexAttributes, vertexElementCount));
 				}
 
-				/* NOTE : Shared index if above row 0. */
+				/* NOTE: Shared index if above row 0. */
 				if ( quadYIndex == 0 )
 				{
 					/* Top right vertex. */
@@ -161,18 +139,16 @@ namespace EmEn::Graphics::Geometry
 		}
 
 		/* Create hardware buffers from local data. */
-		return this->createVideoMemoryBuffers(vertexAttributes, m_localData.pointCount(), vertexElementCount, indices);
+		return this->createVideoMemoryBuffers(transferManager, vertexAttributes, m_localData.pointCount(), vertexElementCount, indices);
 	}
 
 	bool
-	VertexGridResource::createVideoMemoryBuffers (const std::vector< float > & vertexAttributes, size_t vertexCount, size_t vertexElementCount, const std::vector< uint32_t > & indices) noexcept
+	VertexGridResource::createVideoMemoryBuffers (TransferManager & transferManager, const std::vector< float > & vertexAttributes, uint32_t vertexCount, uint32_t vertexElementCount, const std::vector< uint32_t > & indices) noexcept
 	{
-		auto * transferManager = TransferManager::instance(GPUWorkType::Graphics);
-
-		m_vertexBufferObject = std::make_unique< VertexBufferObject >(transferManager->device(), vertexCount, vertexElementCount);
+		m_vertexBufferObject = std::make_unique< VertexBufferObject >(transferManager.device(), vertexCount, vertexElementCount);
 		m_vertexBufferObject->setIdentifier(this->name() + "-VBO-VertexBufferObject");
 
-		if ( !m_vertexBufferObject->create(*transferManager, vertexAttributes) )
+		if ( !m_vertexBufferObject->create(transferManager, vertexAttributes) )
 		{
 			Tracer::error(ClassId, "Unable to create the vertex buffer object (VBO) !");
 
@@ -181,10 +157,10 @@ namespace EmEn::Graphics::Geometry
 			return false;
 		}
 
-		m_indexBufferObject = std::make_unique< IndexBufferObject >(transferManager->device(), indices.size());
+		m_indexBufferObject = std::make_unique< IndexBufferObject >(transferManager.device(), static_cast< uint32_t >(indices.size()));
 		m_indexBufferObject->setIdentifier(this->name() + "-IBO-IndexBufferObject");
 
-		if ( !m_indexBufferObject->create(*transferManager, indices) )
+		if ( !m_indexBufferObject->create(transferManager, indices) )
 		{
 			Tracer::error(ClassId, "Unable to get an index buffer object (IBO) !");
 
@@ -197,7 +173,7 @@ namespace EmEn::Graphics::Geometry
 	}
 
 	bool
-	VertexGridResource::update () noexcept
+	VertexGridResource::updateVideoMemory () noexcept
 	{
 		if ( !this->isCreated() )
 		{
@@ -212,7 +188,7 @@ namespace EmEn::Graphics::Geometry
 	}
 
 	void
-	VertexGridResource::destroy (bool clearLocalData) noexcept
+	VertexGridResource::destroyFromHardware (bool clearLocalData) noexcept
 	{
 		if ( m_vertexBufferObject != nullptr )
 		{
@@ -228,7 +204,7 @@ namespace EmEn::Graphics::Geometry
 
 		if ( clearLocalData )
 		{
-			this->setFlagBits(EnablePrimitiveRestart);
+			this->setFlags(EnablePrimitiveRestart);
 			m_localData.clear();
 		}
 	}
@@ -244,13 +220,13 @@ namespace EmEn::Graphics::Geometry
 	{
 		return this->load(
 			FastJSON::getNumber< float >(data, JKSize, DefaultSize),
-			FastJSON::getNumber< size_t >(data, JKDivision, DefaultDivision),
+			FastJSON::getNumber< uint32_t >(data, JKDivision, DefaultDivision),
 			FastJSON::getNumber< float >(data, JKUVMultiplier, DefaultUVMultiplier)
 		);
 	}
 
 	bool
-	VertexGridResource::load (float size, size_t division, float UVMultiplier, const VertexColorGenMode & vertexColorGenMode, const Color< float > & globalVertexColor) noexcept
+	VertexGridResource::load (float size, uint32_t division, float UVMultiplier, const VertexColorGenMode & vertexColorGenMode, const Color< float > & globalVertexColor) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
@@ -308,7 +284,7 @@ namespace EmEn::Graphics::Geometry
 	}
 
 	uint32_t
-	VertexGridResource::addVertexToBuffer (size_t index, std::vector< float > & buffer, uint32_t vertexElementCount) const noexcept
+	VertexGridResource::addVertexToBuffer (uint32_t index, std::vector< float > & buffer, uint32_t vertexElementCount) const noexcept
 	{
 		const auto position = m_localData.position(index);
 
@@ -438,16 +414,4 @@ namespace EmEn::Graphics::Geometry
 
 		return static_cast< uint32_t >(buffer.size() / vertexElementCount) - 1;
 	}
-
-	std::shared_ptr< VertexGridResource >
-	VertexGridResource::get (const std::string & resourceName, bool directLoad) noexcept
-	{
-		return Resources::Manager::instance()->vertexGridGeometries().getResource(resourceName, !directLoad);
 	}
-
-	std::shared_ptr< VertexGridResource >
-	VertexGridResource::getDefault () noexcept
-	{
-		return Resources::Manager::instance()->vertexGridGeometries().getDefaultResource();
-	}
-}

@@ -29,6 +29,7 @@
 /* STL inclusions. */
 #include <cstdint>
 #include <string>
+#include <sstream>
 
 /* Local inclusions for inheritances. */
 #include "Interface.hpp"
@@ -51,7 +52,13 @@ namespace EmEn::Graphics::Material::Component
 			 * @brief Constructs a value component.
 			 * @param variableName A string [std::move].
 			 */
-			explicit Value (std::string variableName) noexcept;
+			explicit
+			Value (std::string variableName) noexcept
+				: m_variableName{std::move(variableName)}
+			{
+
+			}
+
 
 			/** @copydoc EmEn::Graphics::Material::Component::Interface::create() */
 			[[nodiscard]]
@@ -104,10 +111,12 @@ namespace EmEn::Graphics::Material::Component
 			/** @copydoc EmEn::Graphics::Material::Component::Interface::getSampler() */
 			[[nodiscard]]
 			Saphir::Declaration::Sampler
-			getSampler (uint32_t materialSet) const noexcept override
+			getSampler (uint32_t /*materialSet*/) const noexcept override
 			{
 				return {0, 0, nullptr, nullptr};
 			}
+
+		private:
 
 			/**
 			 * @brief STL streams printable object.
@@ -117,15 +126,31 @@ namespace EmEn::Graphics::Material::Component
 			 */
 			friend std::ostream & operator<< (std::ostream & out, const Value & obj);
 
-			/**
-			 * @brief Stringify the object.
-			 * @param obj A reference to the object to print.
-			 * @return std::string
-			 */
-			friend std::string to_string (const Value & obj) noexcept;
-
-		private:
-
 			std::string m_variableName;
 	};
+
+	inline
+	std::ostream &
+	operator<< (std::ostream & out, const Value & obj)
+	{
+		return
+			out << Value::ClassId << "." "\n"
+			"Variable name: " << obj.m_variableName;
+	}
+
+	/**
+	 * @brief Stringify the object.
+	 * @param obj A reference to the object to print.
+	 * @return std::string
+	 */
+	inline
+	std::string
+	to_string (const Value & obj) noexcept
+	{
+		std::stringstream output;
+
+		output << obj;
+
+		return output.str();
+	}
 }

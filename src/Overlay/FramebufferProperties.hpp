@@ -30,9 +30,7 @@
 #include <cstdint>
 #include <cmath>
 #include <string>
-
-/* Local inclusions for usages. */
-#include "Libs/Math/Rectangle.hpp"
+#include <sstream>
 
 namespace EmEn::Overlay
 {
@@ -56,7 +54,14 @@ namespace EmEn::Overlay
 			 * @param scaleX The scale in X. Default 1.0.
 			 * @param scaleY The scale in Y. Default 1.0.
 			 */
-			FramebufferProperties (uint32_t width, uint32_t height, float scaleX = 1.0F, float scaleY = 1.0F) noexcept;
+			FramebufferProperties (uint32_t width, uint32_t height, float scaleX = 1.0F, float scaleY = 1.0F) noexcept
+				: m_width{width},
+				m_height{height},
+				m_screenScaleX{scaleX},
+				m_screenScaleY{scaleY}
+			{
+				this->updateScaledResolution();
+			}
 
 			/**
 			 * @brief Updates the framebuffer properties from the available window framebuffer.
@@ -120,7 +125,7 @@ namespace EmEn::Overlay
 
 			/**
 			 * @brief Sets the framebuffer scaling factor for HDPI screen.
-			 * @param scale The scale uniform on both axis.
+			 * @param scale The scale uniform on both axes.
 			 * @return void
 			 */
 			void
@@ -296,7 +301,7 @@ namespace EmEn::Overlay
 			uint32_t
 			getSurfaceWidth (float surfaceWidth) const noexcept
 			{
-				/* NOTE: Do not remove the double round ! */
+				/* NOTE: Do not remove the double round! */
 				return static_cast< uint32_t >(std::round(std::round(m_resolutionX * surfaceWidth) * m_screenScaleX));
 			}
 
@@ -309,7 +314,7 @@ namespace EmEn::Overlay
 			uint32_t
 			getSurfaceHeight (float surfaceHeight) const noexcept
 			{
-				/* NOTE: Do not remove the double round ! */
+				/* NOTE: Do not remove the double round! */
 				return static_cast< uint32_t >(std::round(std::round(m_resolutionY * surfaceHeight) * m_screenScaleY));
 			}
 
@@ -319,21 +324,6 @@ namespace EmEn::Overlay
 			 */
 			void reset () noexcept;
 
-			/**
-			 * @brief STL streams printable object.
-			 * @param out A reference to the stream output.
-			 * @param obj A reference to the object to print.
-			 * @return std::ostream &
-			 */
-			friend std::ostream & operator<< (std::ostream & out, const FramebufferProperties & obj);
-
-			/**
-			 * @brief Stringifies the object.
-			 * @param obj A reference to the object to print.
-			 * @return std::string
-			 */
-			friend std::string to_string (const FramebufferProperties & obj) noexcept;
-
 		private:
 
 			/**
@@ -341,6 +331,14 @@ namespace EmEn::Overlay
 			 * @return void
 			 */
 			void updateScaledResolution () noexcept;
+
+			/**
+			 * @brief STL streams printable object.
+			 * @param out A reference to the stream output.
+			 * @param obj A reference to the object to print.
+			 * @return std::ostream &
+			 */
+			friend std::ostream & operator<< (std::ostream & out, const FramebufferProperties & obj);
 
 			uint32_t m_width{0};
 			uint32_t m_height{0};
@@ -351,4 +349,30 @@ namespace EmEn::Overlay
 			float m_resolutionX{0};
 			float m_resolutionY{0};
 	};
+
+	inline
+	std::ostream &
+	operator<< (std::ostream & out, const FramebufferProperties & obj)
+	{
+		return out <<
+			"Framebuffer size : " << obj.width() << "x" << obj.height() << "px" "\n"
+			"Screen scaling (HDPI). X : " << obj.screenScaleX() << ", Y : " << obj.screenScaleY() << "\n"
+			"Resolution : " << obj.resolutionX() << "x" << obj.resolutionY() << "pt" "\n";
+	}
+
+	/**
+	 * @brief Stringifies the object.
+	 * @param obj A reference to the object to print.
+	 * @return std::string
+	 */
+	inline
+	std::string
+	to_string (const FramebufferProperties & obj) noexcept
+	{
+		std::stringstream output;
+
+		output << obj;
+
+		return output.str();
+	}
 }

@@ -35,11 +35,11 @@ namespace EmEn::Audio::Filters
 {
 	using namespace EmEn::Libs;
 
-	static constexpr auto TracerTag{"AbstractFilter"};
+	constexpr auto TracerTag{"AbstractFilter"};
 
 	Abstract::Abstract () noexcept
 	{
-		if ( !Manager::instance()->usable() )
+		if ( Manager::audioDisabled() )
 		{
 			return;
 		}

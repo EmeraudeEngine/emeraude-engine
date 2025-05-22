@@ -28,6 +28,7 @@
 
 /* Local inclusions. */
 #include "Libs/FastJSON.hpp"
+#include "Graphics/TextureResource/TextureCubemap.hpp"
 #include "Graphics/Material/BasicResource.hpp"
 #include "Resources/Manager.hpp"
 
@@ -43,63 +44,9 @@ namespace EmEn::Graphics::Renderable
 {
 	using namespace EmEn::Libs;
 	using namespace EmEn::Libs::Math;
-	using namespace Material;
+	using namespace EmEn::Graphics::Material;
 
 	const size_t SkyBoxResource::ClassUID{getClassUID(ClassId)};
-
-	SkyBoxResource::SkyBoxResource (const std::string & name, uint32_t resourceFlagBits) noexcept
-		: AbstractBackground(name, resourceFlagBits)
-	{
-
-	}
-
-	size_t
-	SkyBoxResource::classUID () const noexcept
-	{
-		return ClassUID;
-	}
-
-	bool
-	SkyBoxResource::is (size_t classUID) const noexcept
-	{
-		return classUID == ClassUID;
-	}
-
-	bool
-	SkyBoxResource::isOpaque (size_t /*layerIndex*/) const noexcept
-	{
-		return true;
-	}
-
-	size_t
-	SkyBoxResource::layerCount () const noexcept
-	{
-		return 1;
-	}
-
-	const Geometry::Interface *
-	SkyBoxResource::geometry () const noexcept
-	{
-		return m_geometry.get();
-	}
-
-	const Material::Interface *
-	SkyBoxResource::material (size_t /*layerIndex*/) const noexcept
-	{
-		return m_material.get();
-	}
-
-	const RasterizationOptions *
-	SkyBoxResource::layerRasterizationOptions (size_t /*layerIndex*/) const noexcept
-	{
-		return nullptr;
-	}
-
-	const char *
-	SkyBoxResource::classLabel () const noexcept
-	{
-		return ClassId;
-	}
 
 	bool
 	SkyBoxResource::load () noexcept
@@ -116,8 +63,8 @@ namespace EmEn::Graphics::Renderable
 
 		auto * resources = Resources::Manager::instance();
 
-		const auto materialResource = resources->basicMaterials().getOrCreateResource("DefaultSkyboxMaterial", [resources] (BasicResource & newMaterial) {
-			if ( !newMaterial.setTexture(resources->textureCubemaps().getDefaultResource()) )
+		const auto materialResource = resources->container< BasicResource >()->getOrCreateResource("DefaultSkyboxMaterial", [resources] (BasicResource & newMaterial) {
+			if ( !newMaterial.setTexture(resources->container< TextureResource::TextureCubemap >()->getDefaultResource()) )
 			{
 				return false;
 			}
@@ -157,8 +104,8 @@ namespace EmEn::Graphics::Renderable
 
 		auto * resources = Resources::Manager::instance();
 
-		const auto materialResource = resources->basicMaterials().getOrCreateResource(textureName + "SkyboxMaterial", [&] (BasicResource & newMaterial) {
-			if ( !newMaterial.setTexture(resources->textureCubemaps().getResource(textureName, this->isDirectLoading())) )
+		const auto materialResource = resources->container< BasicResource >()->getOrCreateResource(textureName + "SkyboxMaterial", [&] (BasicResource & newMaterial) {
+			if ( !newMaterial.setTexture(resources->container< TextureResource::TextureCubemap >()->getResource(textureName, this->isDirectLoading())) )
 			{
 				return false;
 			}
@@ -217,7 +164,7 @@ namespace EmEn::Graphics::Renderable
 
 		m_geometry = geometry;
 
-		if ( !this->addDependency(m_geometry.get()) )
+		if ( !this->addDependency(m_geometry) )
 		{
 			TraceError{ClassId} << "Unable to set geometry for Skybox '" << this->name() << "' !";
 
@@ -241,7 +188,7 @@ namespace EmEn::Graphics::Renderable
 
 		m_material = material;
 
-		if ( !this->addDependency(m_material.get()) )
+		if ( !this->addDependency(m_material) )
 		{
 			TraceError{ClassId} << "Unable to set material for Skybox '" << this->name() << "' !";
 
@@ -249,17 +196,5 @@ namespace EmEn::Graphics::Renderable
 		}
 
 		return true;
-	}
-
-	std::shared_ptr< SkyBoxResource >
-	SkyBoxResource::get (const std::string & resourceName, bool directLoad) noexcept
-	{
-		return Resources::Manager::instance()->skyBoxes().getResource(resourceName, !directLoad);
-	}
-
-	std::shared_ptr< SkyBoxResource >
-	SkyBoxResource::getDefault () noexcept
-	{
-		return Resources::Manager::instance()->skyBoxes().getDefaultResource();
 	}
 }

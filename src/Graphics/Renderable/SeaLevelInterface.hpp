@@ -26,10 +26,6 @@
 
 #pragma once
 
-/* STL inclusions. */
-#include <cstdint>
-#include <string>
-
 /* Local inclusions for inheritances. */
 #include "Interface.hpp"
 
@@ -41,46 +37,18 @@ namespace EmEn::Graphics::Renderable
 	 */
 	class SeaLevelInterface : public Interface
 	{
-		public:
-
-			/**
-			 * @brief Copy constructor.
-			 * @param copy A reference to the copied instance.
-			 */
-			SeaLevelInterface (const SeaLevelInterface & copy) noexcept = delete;
-
-			/**
-			 * @brief Move constructor.
-			 * @param copy A reference to the copied instance.
-			 */
-			SeaLevelInterface (SeaLevelInterface && copy) noexcept = delete;
-
-			/**
-			 * @brief Copy assignment.
-			 * @param copy A reference to the copied instance.
-			 * @return SeaLevelInterface &
-			 */
-			SeaLevelInterface & operator= (const SeaLevelInterface & copy) noexcept = delete;
-
-			/**
-			 * @brief Move assignment.
-			 * @param copy A reference to the copied instance.
-			 * @return SeaLevelInterface &
-			 */
-			SeaLevelInterface & operator= (SeaLevelInterface && copy) noexcept = delete;
-		
-			/**
-			 * @brief Destructs the renderable sea level.
-			 */
-			~SeaLevelInterface () override = default;
-
 		protected:
 
 			/**
-			 * @brief Constructs a renderable sea level.
-			 * @param name A reference to a string for the resource name.
-			 * @param resourceFlagBits The resource flag bits.
+			 * @brief Constructs a renderable sea level interface.
+			 * @param seaLevelName A string for the sea level resource name [std::move].
+			 * @param renderableFlags The resource flag bits.
 			 */
-			explicit SeaLevelInterface (const std::string & name, uint32_t resourceFlagBits) noexcept;
+			explicit
+			SeaLevelInterface (std::string seaLevelName, uint32_t renderableFlags) noexcept
+				: Interface{std::move(seaLevelName), renderableFlags}
+			{
+
+			}
 	};
 }

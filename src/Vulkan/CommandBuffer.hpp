@@ -38,6 +38,7 @@
 
 /* Local inclusions for usages. */
 #include "Libs/PixelFactory/Color.hpp"
+#include "CommandPool.hpp"
 
 /* Forward declarations. */
 namespace EmEn
@@ -59,10 +60,8 @@ namespace EmEn
 		class Framebuffer;
 		class VertexBufferObject;
 		class IndexBufferObject;
-		class CommandPool;
 		class Buffer;
 		class Image;
-		class Framebuffer;
 	}
 
 	namespace Graphics::Geometry
@@ -87,9 +86,32 @@ namespace EmEn::Vulkan
 			/**
 			 * @brief Constructs a command buffer.
 			 * @param commandPool The reference to the command pool smart pointer.
-			 * @param primary Set command as primary or secondary.
+			 * @param primaryLevel Set command as primary or secondary. Default true.
 			 */
-			explicit CommandBuffer (const std::shared_ptr< CommandPool > & commandPool, bool primary = true) noexcept;
+			explicit
+			CommandBuffer (const std::shared_ptr< CommandPool > & commandPool, bool primaryLevel = true) noexcept
+				: m_commandPool(commandPool),
+				m_primaryLevel(primaryLevel)
+			{
+				if constexpr ( IsDebug )
+				{
+					if ( commandPool == nullptr || !commandPool->isCreated() )
+					{
+						Tracer::error(ClassId, "Command pool is null or not created to allocate this command buffer !");
+
+						return;
+					}
+				}
+
+				m_handle = m_commandPool->allocateCommandBuffer(primaryLevel);
+
+				if ( m_handle == VK_NULL_HANDLE )
+				{
+					return;
+				}
+
+				this->setCreated();
+			}
 
 			/**
 			 * @brief Copy constructor.
@@ -118,7 +140,24 @@ namespace EmEn::Vulkan
 			/**
 			 * @brief Destructs the command buffer.
 			 */
-			~CommandBuffer () override;
+			~CommandBuffer () override
+			{
+				if ( m_commandPool == nullptr || !m_commandPool->isCreated() )
+				{
+					Tracer::error(ClassId, "No or uninitialized command pool to destroy this command buffer !");
+
+					return;
+				}
+
+				if ( m_handle != VK_NULL_HANDLE )
+				{
+					m_commandPool->freeCommandBuffer(m_handle);
+
+					m_handle = VK_NULL_HANDLE;
+				}
+
+				this->setDestroyed();
+			}
 
 			/**
 			 * @brief Returns the command buffer vulkan handle.
@@ -440,7 +479,7 @@ namespace EmEn::Vulkan
 			 * @param subGeometryIndex A sub geometry layer index being drawn. Default 0.
 			 * @return void
 			 */
-			void bind (const Graphics::Geometry::Interface & geometry, size_t subGeometryIndex = 0) const noexcept;
+			void bind (const Graphics::Geometry::Interface & geometry, uint32_t subGeometryIndex = 0) const noexcept;
 
 			/**
 			 * @brief Binds a single geometry using a model vertex buffer object for location.
@@ -450,7 +489,7 @@ namespace EmEn::Vulkan
 			 * @param modelVBOOffset The offset in the model vertex buffer object. Default 0.
 			 * @return void
 			 */
-			void bind (const Graphics::Geometry::Interface & geometry, const VertexBufferObject & modelVBO, size_t subGeometryIndex = 0, VkDeviceSize modelVBOOffset = 0) const noexcept;
+			void bind (const Graphics::Geometry::Interface & geometry, const VertexBufferObject & modelVBO, uint32_t subGeometryIndex = 0, VkDeviceSize modelVBOOffset = 0) const noexcept;
 
 			/**
 			 * @brief Registers a draw command.
@@ -459,7 +498,7 @@ namespace EmEn::Vulkan
 			 * @param instanceCount The number of instance. Default 1.
 			 * @return void
 			 */
-			void draw (const Graphics::Geometry::Interface & geometry, size_t subGeometryIndex = 0, uint32_t instanceCount = 1) const noexcept;
+			void draw (const Graphics::Geometry::Interface & geometry, uint32_t subGeometryIndex = 0, uint32_t instanceCount = 1) const noexcept;
 
 		private:
 

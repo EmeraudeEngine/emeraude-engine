@@ -27,23 +27,15 @@
 #pragma once
 
 /* STL inclusions. */
-#include <any>
-#include <cstdint>
 #include <string>
 #include <vector>
+#include <any>
+
+/* Local inclusions. */
+#include "Types.hpp"
 
 namespace EmEn::Console
 {
-	/**	@brief Type of console argument. */
-	enum class ArgumentType
-	{
-		Undefined,
-		Boolean,
-		Integer,
-		Float,
-		String
-	};
-
 	/**
 	 * @brief The console argument class.
 	 */
@@ -63,25 +55,49 @@ namespace EmEn::Console
 			 * @brief Constructs a boolean argument.
 			 * @param value The value
 			 */
-			Argument (bool value) noexcept;
+			explicit
+			Argument (bool value) noexcept
+				: m_type{ArgumentType::Boolean},
+				m_value{value}
+			{
+
+			}
 
 			/**
 			 * @brief Constructs an integer number argument.
 			 * @param value The value
 			 */
-			Argument (int32_t value) noexcept;
+			explicit
+			Argument (int32_t value) noexcept
+				: m_type{ArgumentType::Integer},
+				m_value{value}
+			{
+
+			}
 
 			/**
 			 * @brief Constructs a floating point number argument.
 			 * @param value The value
 			 */
-			Argument (float value) noexcept;
+			explicit
+			Argument (float value) noexcept
+				: m_type{ArgumentType::Float},
+				m_value{value}
+			{
+
+			}
 
 			/**
 			 * @brief Constructs a string argument.
 			 * @param value The value
 			 */
-			Argument (std::string value) noexcept;
+			explicit
+			Argument (std::string value) noexcept
+				: m_type{ArgumentType::String},
+				m_value{std::move(value)}
+			{
+
+			}
 
 			/**
 			 * @brief Returns the type of argument.
@@ -135,7 +151,7 @@ namespace EmEn::Console
 
 		private:
 
-			ArgumentType m_type = ArgumentType::Undefined;
+			ArgumentType m_type{ArgumentType::Undefined};
 			std::any m_value;
 	};
 

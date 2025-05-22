@@ -1,11 +1,16 @@
 # Engine TODO-list
 
-## GENERAL CHECKS
-- Check the for-loop-range like "for ( const auto & item : items | std::views::values )" performances.
+## GENERAL
+- Remove all std::array< bool, n >.
+- Remove all invalid noexcept keyword.
+- Increase inlining with class methods.
+- Improve functions args to use std::move when useful.
+- Rewrite libs Observer/Observable
 
 ## GENERAL BUGS
 - Check for light coherence, create a built-in scene with a fixed directional light and multiple materials.
 - Unloading objets from the scene do not release vulkan memory.
+- Issue on Linux with X11, multi-monitors and NVIDIA proprietary driver. More info : https://forums.developer.nvidia.com/t/external-monitor-freezes-when-using-dedicated-gpu/265406
 
 ## CONSOLE
 - Bring back a useful console behavior.
@@ -44,7 +49,7 @@
 
 ## SHADERS GENERATION :
 - Check source and binary caches.
-- Prepare a way to use manual sources.
+- Prepare a way to use manual GLSL sources.
 - Re-enable normal calculation bypass when the surface is not facing a light.
 
 ## LIGHTING :
@@ -63,8 +68,8 @@
 - Remove Variant for std::any.
 
 ## OVERLAY :
-- Rework the composable overlay to create native menu.
-- Check the TextWriter class.
+- Rework ComposedSurface from overlay to create native menu.
+- Rewrite the TextWriter class.
 
 ## AUDIO :
 - Check to stop sound from an inactive scene. (Shared with SCENE section)

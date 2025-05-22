@@ -107,7 +107,7 @@ namespace EmEn::Physics
 			}
 
 			/**
-			 * @brief Prepares the scene subdivision to speed up collision tests and other things.
+			 * @brief Resolves the collisions to set the entity to a valid location.
 			 * @param targetEntity A reference to a movable entity.
 			 * @return void
 			 */
@@ -148,9 +148,9 @@ namespace EmEn::Physics
 			static bool isBoxCollisionWith (const Scenes::AbstractEntity & boxEntityA, const Scenes::AbstractEntity & boxEntityB, float & overflow, Libs::Math::Vector< 3, float > & direction) noexcept;
 
 			/**
-			 * @brief Returns the possible overflow between two entities using the sphere against box collision model.
+			 * @brief Returns the possible overflow between two entities using the sphere versus box collision model.
 			 * @param boxEntity A reference to the second entity using box.
-			 * @param sphereEntity A reference to the first entity using sphere.
+			 * @param sphereEntity A reference to the first entity using a sphere.
 			 * @param overflow A reference to put the distance of collision overflow.
 			 * @param direction A reference to put the direction of collision if exists.
 			 * @return bool

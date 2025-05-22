@@ -32,10 +32,9 @@
 /* Local inclusions for usages. */
 #include "Libs/PixelFactory/Color.hpp"
 #include "Libs/Math/CartesianFrame.hpp"
-#include "Vulkan/DescriptorSetLayout.hpp"
+#include "Vulkan/LayoutManager.hpp"
 #include "Vulkan/DescriptorSet.hpp"
 #include "Frustum.hpp"
-#include "Types.hpp"
 
 /* Forward declarations. */
 namespace EmEn::Graphics
@@ -85,10 +84,11 @@ namespace EmEn::Graphics
 
 			/**
 			 * @brief Returns the descriptor set layout for this view.
+			 * @param layoutManager A reference to the layout manager.
 			 * @return std::shared_ptr< Vulkan::DescriptorSetLayout >
 			 */
 			[[nodiscard]]
-			std::shared_ptr< Vulkan::DescriptorSetLayout > getDescriptorSetLayout () const noexcept;
+			static std::shared_ptr< Vulkan::DescriptorSetLayout > getDescriptorSetLayout (Vulkan::LayoutManager & layoutManager) noexcept;
 			
 			/**
 			 * @brief Returns the projection matrix.
@@ -151,11 +151,11 @@ namespace EmEn::Graphics
 			 * @note This should be called when the viewport change.
 			 * @param width The width of the viewport.
 			 * @param height The height of the viewport.
-			 * @param distance The maximal distance of the viewport for perspective calculation.
-			 * @param near The minimal distance of the viewport for orthographic calculation.
+			 * @param farDistance The maximal distance of the viewport for perspective calculation.
+			 * @param nearDistance The minimal distance of the viewport for orthographic calculation.
 			 * @return void
 			 */
-			virtual void updateOrthographicViewProperties (float width, float height, float distance, float near) noexcept = 0;
+			virtual void updateOrthographicViewProperties (float width, float height, float farDistance, float nearDistance) noexcept = 0;
 
 			/**
 			 * @brief Updates the view coordinates. This should be called everytime the point of view moves.
@@ -179,7 +179,7 @@ namespace EmEn::Graphics
 			 * @param instanceID A reference to a string.
 			 * @return bool
 			 */
-			virtual bool create (Graphics::Renderer & renderer, const std::string & instanceID) noexcept = 0;
+			virtual bool create (Renderer & renderer, const std::string & instanceID) noexcept = 0;
 
 			/**
 			 * @brief Updates the video memory.

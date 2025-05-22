@@ -32,17 +32,18 @@
 #include <vector>
 #include <string>
 #include <filesystem>
+#include <iostream>
 
 /* Local inclusions for inheritances. */
 #include "ServiceInterface.hpp"
 
 /* Local inclusions for usages. */
 #include "PlatformSpecific/UserInfo.hpp"
+#include "Identification.hpp"
 
 /* Forward declarations. */
 namespace EmEn
 {
-	class Identification;
 	class Arguments;
 }
 
@@ -59,9 +60,6 @@ namespace EmEn
 			/** @brief Class identifier. */
 			static constexpr auto ClassId{"FileSystemService"};
 
-			/** @brief Observable class unique identifier. */
-			static const size_t ClassUID;
-
 			/**
 			 * @brief Constructs the file system.
 			 * @param arguments A reference to arguments.
@@ -69,53 +67,32 @@ namespace EmEn
 			 * @param identification A reference to the application identification.
 			 * @param childProcess Declares a child process.
 			 */
-			FileSystem (const Arguments & arguments, const PlatformSpecific::UserInfo & userInfo, const Identification & identification, bool childProcess) noexcept;
+			FileSystem (const Arguments & arguments, const PlatformSpecific::UserInfo & userInfo, const Identification & identification, bool childProcess) noexcept
+				: ServiceInterface{ClassId},
+				m_arguments{arguments},
+				m_userInfo{userInfo},
+				m_organizationName{identification.applicationOrganization()},
+				m_applicationName{identification.applicationName()},
+				m_applicationReverseId{identification.applicationReverseId()}
+			{
+				if ( s_instance != nullptr )
+				{
+					std::cerr << __PRETTY_FUNCTION__ << ", constructor called twice !" "\n";
 
-			/**
-			 * @brief Copy constructor.
-			 * @param copy A reference to the copied instance.
-			 */
-			FileSystem (const FileSystem & copy) noexcept = delete;
+					std::terminate();
+				}
 
-			/**
-			 * @brief Move constructor.
-			 * @param copy A reference to the copied instance.
-			 */
-			FileSystem (FileSystem && copy) noexcept = delete;
+				s_instance = this;
 
-			/**
-			 * @brief Copy assignment.
-			 * @param copy A reference to the copied instance.
-			 * @return FileSystem &
-			 */
-			FileSystem & operator= (const FileSystem & copy) noexcept = delete;
-
-			/**
-			 * @brief Move assignment.
-			 * @param copy A reference to the copied instance.
-			 * @return FileSystem &
-			 */
-			FileSystem & operator= (FileSystem && copy) noexcept = delete;
+				m_flags[ChildProcess] = childProcess;
+			}
 
 			/**
 			 * @brief Destructs the file system.
 			 */
-			~FileSystem () override;
-
-			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
-			[[nodiscard]]
-			size_t
-			classUID () const noexcept override
+			~FileSystem () override
 			{
-				return ClassUID;
-			}
-
-			/** @copydoc EmEn::Libs::ObservableTrait::is() const */
-			[[nodiscard]]
-			bool
-			is (size_t classUID) const noexcept override
-			{
-				return classUID == ClassUID;
+				s_instance = nullptr;
 			}
 
 			/** @copydoc EmEn::ServiceInterface::usable() */
@@ -289,30 +266,17 @@ namespace EmEn
 
 			/**
 			 * @brief Returns the instance of the file system.
+			 * @todo This method must be removed!
 			 * @return FileSystem *
 			 */
+			//[[deprecated("This method must be removed !")]]
 			[[nodiscard]]
 			static
 			FileSystem *
 			instance () noexcept
 			{
-				return s_instance;
+				return s_instance; // FIXME: Remove this
 			}
-
-			/**
-			 * @brief STL streams printable object.
-			 * @param out A reference to the stream output.
-			 * @param obj A reference to the object to print.
-			 * @return std::ostream &
-			 */
-			friend std::ostream & operator<< (std::ostream & out, const FileSystem & obj);
-
-			/**
-			 * @brief Stringifies the object.
-			 * @param obj A reference to the object to print.
-			 * @return std::string
-			 */
-			friend std::string to_string (const FileSystem & obj) noexcept;
 
 		private:
 
@@ -382,12 +346,20 @@ namespace EmEn
 			 * @brief Registers a directory when tested.
 			 * @param directoryPath A reference to a filesystem path.
 			 * @param createDirectory If no directory was found, create it.
-			 * @param writableRequested Is directory need to be writable.
+			 * @param writableRequested Is directory needed to be writable?
 			 * @param finalDirectoryPath A reference to a filesystem path.
 			 * @return bool
 			 */
 			[[nodiscard]]
 			bool registerDirectory (const std::filesystem::path & directoryPath, bool createDirectory, bool writableRequested, std::filesystem::path & finalDirectoryPath) const noexcept;
+
+			/**
+			 * @brief STL streams printable object.
+			 * @param out A reference to the stream output.
+			 * @param obj A reference to the object to print.
+			 * @return std::ostream &
+			 */
+			friend std::ostream & operator<< (std::ostream & out, const FileSystem & obj);
 
 			/* Flag names. */
 			static constexpr auto ServiceInitialized{0UL};
@@ -421,4 +393,42 @@ namespace EmEn
 				false/*UNUSED*/
 			};
 	};
+
+	inline
+	std::ostream &
+	operator<< (std::ostream & out, const FileSystem & obj)
+	{
+		out <<
+			"File system information :" "\n" <<
+			" - Binary name : " << obj.m_binaryName << "\n"
+			" - Binary directory : " << obj.m_binaryDirectory.string() << "\n"
+			" - User home directory : " << obj.m_userDirectory.string() << "\n"
+			" - Config directory : " << obj.m_configDirectory.string() << "\n"
+			" - Data (Writable) directory : " << obj.m_userDataDirectory.string() << "\n"
+			" - Cache directory : " << obj.m_cacheDirectory.string() << "\n"
+			" - Data (Read-only) directories :" "\n";
+
+		for ( const auto & directory : obj.m_dataDirectories )
+		{
+			out << '\t' << directory.string() << '\n';
+		}
+
+		return out;
+	}
+
+	/**
+	 * @brief Stringifies the object.
+	 * @param obj A reference to the object to print.
+	 * @return std::string
+	 */
+	inline
+	std::string
+	to_string (const FileSystem & obj) noexcept
+	{
+		std::stringstream output;
+
+		output << obj;
+
+		return output.str();
+	}
 }

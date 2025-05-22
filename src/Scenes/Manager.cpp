@@ -28,7 +28,6 @@
 
 /* STL inclusions. */
 #include <algorithm>
-#include <array>
 #include <cstddef>
 #include <map>
 #include <memory>
@@ -53,17 +52,6 @@ namespace EmEn::Scenes
 
 	const size_t Manager::ClassUID{getClassUID(ClassId)};
 
-	Manager::Manager (PrimaryServices & primaryServices, Resources::Manager & resourceManager, Renderer & graphicsRenderer, Audio::Manager & audioManager) noexcept
-		: ServiceInterface(ClassId),
-		Controllable(ClassId),
-		m_primaryServices(primaryServices),
-		m_resourceManager(resourceManager),
-		m_graphicsRenderer(graphicsRenderer),
-		m_audioManager(audioManager)
-	{
-
-	}
-
 	bool
 	Manager::onInitialize () noexcept
 	{
@@ -87,7 +75,7 @@ namespace EmEn::Scenes
 	void
 	Manager::onRegisterToConsole () noexcept
 	{
-		this->bindCommand("listScenes", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
+		this->bindCommand("listScenes", [this] (const Console::Arguments & /*arguments*/, Console::Outputs & outputs) {
 			std::stringstream list;
 
 			list << "Scenes : " "\n";
@@ -102,7 +90,7 @@ namespace EmEn::Scenes
 			return true;
 		});
 
-		this->bindCommand("getActiveSceneName", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
+		this->bindCommand("getActiveSceneName", [this] (const Console::Arguments & /*arguments*/, Console::Outputs & outputs) {
 			if ( m_activeScene != nullptr )
 			{
 				outputs.emplace_back(Severity::Info, std::stringstream{} << "The active scene is '" <<  m_activeScene->name() << "'");
@@ -115,7 +103,7 @@ namespace EmEn::Scenes
 			return true;
 		});
 
-		this->bindCommand("targetActiveScene", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
+		this->bindCommand("targetActiveScene", [this] (const Console::Arguments & /*arguments*/, Console::Outputs & outputs) {
 
 			if ( m_activeScene == nullptr )
 			{
@@ -155,7 +143,7 @@ namespace EmEn::Scenes
 			return true;
 		});
 
-		this->bindCommand("listNodes", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
+		this->bindCommand("listNodes", [this] (const Console::Arguments & /*arguments*/, Console::Outputs & outputs) {
 			const auto scene = m_consoleMemory.scene();
 
 			if ( scene == nullptr )
@@ -213,7 +201,7 @@ namespace EmEn::Scenes
 			return true;
 		});
 
-		this->bindCommand("listStaticEntities", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
+		this->bindCommand("listStaticEntities", [this] (const Console::Arguments & /*arguments*/, Console::Outputs & outputs) {
 			const auto scene = m_consoleMemory.scene();
 
 			if ( scene == nullptr )
@@ -271,7 +259,7 @@ namespace EmEn::Scenes
 			return true;
 		});
 
-		this->bindCommand("targetEntityComponent", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
+		this->bindCommand("targetEntityComponent", [] (const Console::Arguments & arguments, Console::Outputs & outputs) {
 			if ( arguments.empty() )
 			{
 				outputs.emplace_back(Severity::Error, "You must specify a entity component name !");
@@ -330,7 +318,7 @@ namespace EmEn::Scenes
 	Manager::loadScene (const std::string & resourceName) noexcept
 	{
 		/* Loads the scene definition from store (direct loading) */
-		const auto sceneDefinition = m_resourceManager.sceneDefinitions().getResource(resourceName, false);
+		const auto sceneDefinition = m_resourceManager.container< DefinitionResource >()->getResource(resourceName, false);
 
 		if ( sceneDefinition == nullptr )
 		{
@@ -347,9 +335,7 @@ namespace EmEn::Scenes
 	Manager::loadScene (const std::filesystem::path & filepath) noexcept
 	{
 		/* Creates a new resource for the scene definition. */
-		auto sceneDefinition = m_resourceManager
-			.sceneDefinitions()
-			.createResource(filepath.stem().string());
+		auto sceneDefinition = m_resourceManager.container< DefinitionResource >()->createResource(filepath.stem().string());
 
 		if ( sceneDefinition == nullptr )
 		{
@@ -488,7 +474,7 @@ namespace EmEn::Scenes
 		}
 
 		/* Checks whether the scene is usable and tries to complete it otherwise. */
-		if ( !scene->initialize(m_primaryServices.settings()) )
+		if ( !scene->initialize(m_inputManager, m_primaryServices.settings()) )
 		{
 			TraceError{ClassId} << "Unable to initialize the scene '" << scene->name() << "' !";
 
@@ -497,7 +483,7 @@ namespace EmEn::Scenes
 
 		m_activeScene = scene;
 
-		/* Send out a message that scene has been activated. */
+		/* Send out a message that the scene has been activated. */
 		this->notify(SceneActivated, m_activeScene);
 
 		TraceSuccess{ClassId} << "Scene '" << m_activeScene->name() << "' loaded !";
@@ -516,9 +502,9 @@ namespace EmEn::Scenes
 		/* NOTE: Be sure the active is not currently used within the rendering or the logics update tasks. */
 		const std::unique_lock< std::shared_mutex > activeSceneLock{m_activeSceneAccess};
 
-		m_activeScene->shutdown();
+		m_activeScene->shutdown(m_inputManager);
 
-		/* Send out a message that scene has been deactivated. */
+		/* Send out a message that the scene has been deactivated. */
 		this->notify(SceneDeactivated, m_activeScene);
 
 		m_activeScene.reset();

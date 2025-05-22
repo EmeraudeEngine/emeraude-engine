@@ -53,7 +53,11 @@ namespace EmEn::Scenes
 			/**
 			 * @brief Constructs a node controller.
 			 */
-			NodeController () noexcept;
+			NodeController () noexcept
+				: KeyboardListenerInterface{false, false}
+			{
+
+			}
 
 			/**
 			 * @brief Sets a node to control.
@@ -139,7 +143,7 @@ namespace EmEn::Scenes
 			 * @brief Checks the controller buttons. This should be called in logic process loop.
 			 * @return void
 			 */
-			void update () noexcept;
+			void update () const noexcept;
 
 		private:
 

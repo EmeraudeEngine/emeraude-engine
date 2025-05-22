@@ -28,6 +28,7 @@
 
 /* Local inclusions. */
 #include "Saphir/LightGenerator.hpp"
+#include "AVConsole/Manager.hpp"
 #include "Scenes/Scene.hpp"
 #include "Tracer.hpp"
 
@@ -35,23 +36,12 @@ namespace EmEn::Scenes::Component
 {
 	using namespace EmEn::Libs;
 	using namespace EmEn::Libs::Math;
-	using namespace Animations;
-	using namespace Graphics;
-	using namespace Saphir;
-
-	DirectionalLight::DirectionalLight (const std::string & name, const AbstractEntity & parentEntity, uint32_t shadowMapResolution) noexcept
-		: AbstractLightEmitter(name, parentEntity, shadowMapResolution)
-	{
-
-	}
-
-	DirectionalLight::~DirectionalLight ()
-	{
-		this->destroyFromHardware();
-	}
+	using namespace EmEn::Animations;
+	using namespace EmEn::Graphics;
+	using namespace EmEn::Saphir;
 
 	void
-	DirectionalLight::onTargetConnected (AbstractVirtualDevice * targetDevice) noexcept
+	DirectionalLight::onTargetConnected (AVConsole::AVManagers & managers, AbstractVirtualDevice * targetDevice) noexcept
 	{
 		const auto maxDistance = Settings::instance()->get< float >(GraphicsShadowMappingMaxDistanceKey, DefaultGraphicsShadowMappingMaxDistance);
 
@@ -60,7 +50,7 @@ namespace EmEn::Scenes::Component
 	}
 
 	bool
-	DirectionalLight::playAnimation (uint8_t animationID, const Variant & value, size_t cycle) noexcept
+	DirectionalLight::playAnimation (uint8_t animationID, const Variant & value, size_t /*cycle*/) noexcept
 	{
 		switch ( animationID )
 		{
@@ -94,12 +84,6 @@ namespace EmEn::Scenes::Component
 		this->updateAnimations(scene.cycle());
 	}
 
-	bool
-	DirectionalLight::shouldRemove () const noexcept
-	{
-		return false;
-	}
-
 	void
 	DirectionalLight::move (const CartesianFrame< float > & worldCoordinates) noexcept
 	{
@@ -108,7 +92,7 @@ namespace EmEn::Scenes::Component
 			return;
 		}
 
-		if ( this->isShadowEnabled() )
+		if ( this->isShadowCastingEnabled() )
 		{
 			this->updateDeviceFromCoordinates(worldCoordinates, this->getWorldVelocity());
 		}
@@ -137,7 +121,7 @@ namespace EmEn::Scenes::Component
 	}
 
 	bool
-	DirectionalLight::createOnHardware (LightSet & lightSet, Renderer & renderer, AVConsole::Manager & AVConsoleManager) noexcept
+	DirectionalLight::createOnHardware (LightSet & lightSet, AVConsole::Manager & AVConsoleManager) noexcept
 	{
 		if ( this->isCreated() )
 		{
@@ -170,15 +154,15 @@ namespace EmEn::Scenes::Component
 		if ( resolution > 0 )
 		{
 			/* [VULKAN-SHADOW] TODO: Reuse shadow maps + remove it from console on failure */
-			m_shadowMap = AVConsoleManager.createRenderToShadowMap(renderer, this->name() + ShadowMapName, resolution);
+			m_shadowMap = AVConsoleManager.createRenderToShadowMap(this->name() + ShadowMapName, resolution);
 
 			if ( m_shadowMap != nullptr )
 			{
-				if ( this->connect(m_shadowMap) )
+				if ( this->connect(AVConsoleManager.managers(), m_shadowMap) )
 				{
 					TraceSuccess{ClassId} << "2D shadow map successfully created for directional light '" << this->name() << "'.";
 
-					this->enableShadow(true);
+					this->enableShadowCasting(true);
 				}
 				else
 				{
@@ -197,14 +181,11 @@ namespace EmEn::Scenes::Component
 	}
 
 	void
-	DirectionalLight::destroyFromHardware () noexcept
+	DirectionalLight::destroyFromHardware (LightSet & lightSet, AVConsole::Manager & AVConsoleManager) noexcept
 	{
 		if ( m_shadowMap != nullptr )
 		{
-			this->disconnect(m_shadowMap);
-
-			/* TODO: Check for automatic disconnection ! */
-			//console.removeVideoDevice(m_shadowMap);
+			this->disconnect(AVConsoleManager.managers(), m_shadowMap);
 
 			m_shadowMap.reset();
 		}
@@ -212,56 +193,9 @@ namespace EmEn::Scenes::Component
 		this->removeFromSharedUniformBuffer();
 	}
 
-	std::shared_ptr< RenderTarget::ShadowMap::Abstract >
-	DirectionalLight::shadowMap () const noexcept
-	{
-		return std::static_pointer_cast< RenderTarget::ShadowMap::Abstract >(m_shadowMap);
-	}
-
 	Declaration::UniformBlock
 	DirectionalLight::getUniformBlock (uint32_t set, uint32_t binding, bool useShadow) const noexcept
 	{
 		return LightGenerator::getUniformBlock(set, binding, LightType::Directional, useShadow);
-	}
-
-	const char *
-	DirectionalLight::getComponentType () const noexcept
-	{
-		return ClassId;
-	}
-
-	const Cuboid< float > &
-	DirectionalLight::boundingBox () const noexcept
-	{
-		return NullBoundingBox;
-	}
-
-	const Sphere< float > &
-	DirectionalLight::boundingSphere () const noexcept
-	{
-		return NullBoundingSphere;
-	}
-
-	std::ostream &
-	operator<< (std::ostream & out, const DirectionalLight & obj)
-	{
-		const auto worldCoordinates = obj.getWorldCoordinates();
-
-		return out << "Directional light data ;\n"
-			"Direction (World Space) : " << worldCoordinates.forwardVector() << "\n"
-			"Color : " << obj.color() << "\n"
-			"Intensity : " << obj.intensity() << "\n"
-			"Activity : " << ( obj.isEnabled() ? "true" : "false" ) << "\n"
-			"Shadow caster : " << ( obj.isShadowEnabled() ? "true" : "false" ) << '\n';
-	}
-
-	std::string
-	to_string (const DirectionalLight & obj) noexcept
-	{
-		std::stringstream output;
-
-		output << obj;
-
-		return output.str();
 	}
 }

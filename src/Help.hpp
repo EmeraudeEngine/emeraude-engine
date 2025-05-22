@@ -51,9 +51,14 @@ namespace EmEn
 
 			/**
 			 * @brief Constructs the Help service.
-			 * @param name A reference to a string.
+			 * @param name A reference to a string [std::move].
 			 */
-			explicit Help (const std::string & name) noexcept;
+			explicit
+			Help (std::string name) noexcept
+				: NameableTrait{std::move(name)}
+			{
+
+			}
 
 			/**
 			 * @brief Adds a new argument to the help.

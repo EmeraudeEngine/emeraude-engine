@@ -27,9 +27,6 @@
 #pragma once
 
 /* STL inclusions. */
-#include <cstddef>
-#include <cstdint>
-#include <string>
 #include <memory>
 #include <mutex>
 
@@ -42,7 +39,7 @@
 namespace EmEn::Graphics::Renderable
 {
 	/**
-	 * @brief This class provide a high level object to describe a sprite (2D) in the 3D world.
+	 * @brief This class provides a high level object to describe a sprite (2D) in the 3D world.
 	 * @extends EmEn::Graphics::Renderable::Interface Adds the ability to be rendered in the 3D world.
 	 */
 	class SpriteResource final : public Interface
@@ -59,12 +56,20 @@ namespace EmEn::Graphics::Renderable
 			/** @brief Observable class unique identifier. */
 			static const size_t ClassUID;
 
+			/** @brief Defines the resource dependency complexity. */
+			static constexpr auto Complexity{Resources::DepComplexity::Complex};
+
 			/**
 			 * @brief Construct a Sprite resource.
-			 * @param name A reference to a string for the resource name.
-			 * @param resourceFlagBits The resource flag bits. Default none.
+			 * @param name A string for the resource name [std::move].
+			 * @param renderableFlags The resource flag bits. Default none.
 			 */
-			explicit SpriteResource (const std::string & name, uint32_t resourceFlagBits = 0) noexcept;
+			explicit
+			SpriteResource (std::string name, uint32_t renderableFlags = 0) noexcept
+				: Interface{std::move(name), IsSprite | renderableFlags}
+			{
+
+			}
 
 			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
 			[[nodiscard]]
@@ -84,7 +89,7 @@ namespace EmEn::Graphics::Renderable
 
 			/** @copydoc EmEn::Graphics::Renderable::Interface::layerCount() const */
 			[[nodiscard]]
-			size_t
+			uint32_t
 			layerCount () const noexcept override
 			{
 				return 1;
@@ -93,7 +98,7 @@ namespace EmEn::Graphics::Renderable
 			/** @copydoc EmEn::Graphics::Renderable::Interface::isOpaque() const */
 			[[nodiscard]]
 			bool
-			isOpaque (size_t layerIndex = 0) const noexcept override
+			isOpaque (uint32_t /*layerIndex*/) const noexcept override
 			{
 				if ( m_material != nullptr )
 				{
@@ -114,7 +119,7 @@ namespace EmEn::Graphics::Renderable
 			/** @copydoc EmEn::Graphics::Renderable::Interface::material() const */
 			[[nodiscard]]
 			const Material::Interface *
-			material (size_t layerIndex = 0) const noexcept override
+			material (uint32_t /*layerIndex*/) const noexcept override
 			{
 				return m_material.get();
 			}
@@ -122,14 +127,14 @@ namespace EmEn::Graphics::Renderable
 			/** @copydoc EmEn::Graphics::Renderable::Interface::layerRasterizationOptions() const */
 			[[nodiscard]]
 			const RasterizationOptions *
-			layerRasterizationOptions (size_t layerIndex = 0) const noexcept override
+			layerRasterizationOptions (uint32_t /*layerIndex*/) const noexcept override
 			{
 				return nullptr;
 			}
 
 			/** @copydoc EmEn::Graphics::Renderable::Interface::boundingBox() const */
 			[[nodiscard]]
-			const Libs::Math::Cuboid< float > &
+			const Libs::Math::Space3D::AACuboid< float > &
 			boundingBox () const noexcept override
 			{
 				if ( m_geometry == nullptr )
@@ -142,7 +147,7 @@ namespace EmEn::Graphics::Renderable
 
 			/** @copydoc EmEn::Graphics::Renderable::Interface::boundingSphere() const */
 			[[nodiscard]]
-			const Libs::Math::Sphere< float > &
+			const Libs::Math::Space3D::Sphere< float > &
 			boundingSphere () const noexcept override
 			{
 				if ( m_geometry == nullptr )
@@ -166,6 +171,14 @@ namespace EmEn::Graphics::Renderable
 
 			/** @copydoc EmEn::Resources::ResourceTrait::load(const Json::Value &) */
 			bool load (const Json::Value & data) noexcept override;
+
+			/** @copydoc EmEn::Resources::ResourceTrait::memoryOccupied() const noexcept */
+			[[nodiscard]]
+			size_t
+			memoryOccupied () const noexcept override
+			{
+				return sizeof(*this);
+			}
 
 			/**
 			 * @brief Loads a sprite resource from a material.
@@ -236,22 +249,6 @@ namespace EmEn::Graphics::Renderable
 				return m_material->duration();
 			}
 
-			/**
-			 * @brief Returns a sprite resource by its name.
-			 * @param resourceName A reference to a string.
-			 * @param directLoad Use the direct loading mode. Default false.
-			 * @return std::shared_ptr< SpriteResource >
-			 */
-			[[nodiscard]]
-			static std::shared_ptr< SpriteResource > get (const std::string & resourceName, bool directLoad = false) noexcept;
-
-			/**
-			 * @brief Returns the default sprite resource.
-			 * @return std::shared_ptr< SpriteResource >
-			 */
-			[[nodiscard]]
-			static std::shared_ptr< SpriteResource > getDefault () noexcept;
-
 		private:
 
 			/** @copydoc EmEn::Resources::ResourceTrait::onDependenciesLoaded() */
@@ -280,7 +277,7 @@ namespace EmEn::Graphics::Renderable
 			static constexpr auto JKCenterAtBottomKey{"CenterAtBottom"};
 			static constexpr auto JKFlipKey{"Flip"};
 
-			static constexpr size_t MaxFrames{120};
+			static constexpr uint32_t MaxFrames{120};
 			static std::mutex s_lockGeometryLoading;
 
 			std::shared_ptr< Geometry::Interface > m_geometry;

@@ -48,37 +48,6 @@ namespace EmEn::Vulkan
 {
 	using namespace EmEn::Libs;
 
-	Image::Image (const std::shared_ptr< Device > & device, VkImageType imageType, VkFormat format, const VkExtent3D & extent, VkImageUsageFlags usageFlags, VkImageLayout imageLayout, VkImageCreateFlags createFlags, uint32_t mipLevels, uint32_t arrayLayers, VkSampleCountFlagBits samples, VkImageTiling imageTiling) noexcept
-		: AbstractDeviceDependentObject(device)
-	{
-		m_createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-		m_createInfo.pNext = nullptr;
-		m_createInfo.flags = createFlags;
-		m_createInfo.imageType = imageType;
-		m_createInfo.format = format;
-		m_createInfo.extent = extent;
-		m_createInfo.mipLevels = mipLevels;
-		m_createInfo.arrayLayers = arrayLayers;
-		m_createInfo.samples = samples;
-		m_createInfo.tiling = imageTiling;
-		m_createInfo.usage = usageFlags;
-		m_createInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-		m_createInfo.queueFamilyIndexCount = 0;
-		m_createInfo.pQueueFamilyIndices = nullptr;
-		m_createInfo.initialLayout = imageLayout;
-	}
-
-	Image::Image (const std::shared_ptr< Device > & device, const VkImageCreateInfo & createInfo) noexcept
-		: AbstractDeviceDependentObject(device), m_createInfo(createInfo)
-	{
-
-	}
-
-	Image::~Image ()
-	{
-		this->destroyFromHardware();
-	}
-
 	std::shared_ptr< Image >
 	Image::createFromSwapChain (const std::shared_ptr< Device > & device, VkImage handle, const VkSwapchainCreateInfoKHR & createInfo) noexcept
 	{

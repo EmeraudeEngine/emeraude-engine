@@ -28,7 +28,7 @@
 
 /* Local inclusions. */
 #include "Tracer.hpp"
-#include <Audio/OpenAL.EFX.hpp>
+#include "Audio/OpenAL.EFX.hpp"
 #include "Audio/Utility.hpp"
 
 namespace EmEn::Audio::Effects
@@ -36,22 +36,27 @@ namespace EmEn::Audio::Effects
 	using namespace EmEn::Libs;
 
 	Compressor::Compressor () noexcept
-		: Abstract()
 	{
 		if ( this->identifier() == 0 )
+		{
 			return;
+		}
 
 		EFX::alEffecti(this->identifier(), AL_EFFECT_TYPE, AL_EFFECT_COMPRESSOR);
 
 		if ( alGetErrors("alEffecti()", __FILE__, __LINE__) )
+		{
 			Tracer::error(ClassId, "Unable to generate OpenAL Compressor effect !");
+		}
 	}
 
 	void
 	Compressor::resetProperties () noexcept
 	{
 		if ( !EFX::isAvailable() )
+		{
 			return;
+		}
 
 		EFX::alEffecti(this->identifier(), AL_COMPRESSOR_ONOFF, AL_COMPRESSOR_DEFAULT_ONOFF);
 	}
@@ -60,7 +65,9 @@ namespace EmEn::Audio::Effects
 	Compressor::enable (bool state) noexcept
 	{
 		if ( !EFX::isAvailable() )
+		{
 			return;
+		}
 
 		EFX::alEffecti(this->identifier(), AL_COMPRESSOR_ONOFF, state ? AL_TRUE : AL_FALSE);
 	}
@@ -68,12 +75,12 @@ namespace EmEn::Audio::Effects
 	bool
 	Compressor::isEnabled () const noexcept
 	{
-		if ( !EFX::isAvailable() )
-			return false;
+		ALint value = 0;
 
-		ALint value;
-
-		EFX::alGetEffecti(this->identifier(), AL_COMPRESSOR_ONOFF, &value);
+		if ( EFX::isAvailable() )
+		{
+			EFX::alGetEffecti(this->identifier(), AL_COMPRESSOR_ONOFF, &value);
+		}
 
 		return value > 0;
 	}

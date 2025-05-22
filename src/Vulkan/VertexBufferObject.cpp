@@ -33,14 +33,6 @@
 
 namespace EmEn::Vulkan
 {
-	VertexBufferObject::VertexBufferObject (const std::shared_ptr< Device > & device, size_t vertexCount, size_t vertexElementCount) noexcept
-		: AbstractDeviceBuffer(device, 0, static_cast< VkDeviceSize >(vertexCount * vertexElementCount * sizeof(float)), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT),
-		  m_vertexCount(vertexCount),
-		  m_vertexElementCount(vertexElementCount)
-	{
-
-	}
-
 	bool
 	VertexBufferObject::create (TransferManager & transferManager, const std::vector< float > & data) noexcept
 	{

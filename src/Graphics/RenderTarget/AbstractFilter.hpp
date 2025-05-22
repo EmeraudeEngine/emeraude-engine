@@ -26,25 +26,30 @@
 
 #pragma once
 
-/* STL inclusions. */
-#include <string>
-
 /* Local inclusions for inheritances. */
 #include "AVConsole/AbstractVirtualDevice.hpp"
-
-/* Local inclusions for usages. */
 
 namespace EmEn::Graphics::RenderTarget
 {
 	/**
 	 * @brief The base class for all render target filters.
+	 * @TODO Work in progress...
 	 * @extends EmEn::AVConsole::AbstractVirtualDevice This is a virtual video device.
 	 */
 	class AbstractFilter : public AVConsole::AbstractVirtualDevice
 	{
+		public:
+
+
+
 		protected:
 
-			explicit AbstractFilter (const std::string & name) noexcept;
+			explicit
+			AbstractFilter (const std::string & deviceName) noexcept
+				: AbstractVirtualDevice{deviceName, AVConsole::DeviceType::Video, AVConsole::ConnexionType::Both}
+			{
+
+			}
 
 			/** @brief Defaulted virtual destructor. */
 			~AbstractFilter () override = default;

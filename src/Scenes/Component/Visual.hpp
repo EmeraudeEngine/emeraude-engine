@@ -42,6 +42,7 @@ namespace EmEn::Scenes::Component
 {
 	/**
 	 * @brief Defines a component for the visual part of an entity.
+	 * @note [OBS][SHARED-OBSERVER]
 	 * @extends EmEn::Scenes::Component::Abstract The base class for each entity component.
 	 * @extends EmEn::Libs::ObserverTrait This class must dispatch modifications from renderable instance to the entity.
 	 */
@@ -58,32 +59,70 @@ namespace EmEn::Scenes::Component
 			 * @param parentEntity A reference to the parent entity.
 			 * @param renderable A reference to a renderable smart pointer.
 			 */
-			Visual (const std::string & name, const AbstractEntity & parentEntity, const std::shared_ptr< Graphics::Renderable::Interface > & renderable) noexcept;
+			Visual (std::string name, const AbstractEntity & parentEntity, const std::shared_ptr< Graphics::Renderable::Interface > & renderable) noexcept
+				: Abstract{std::move(name), parentEntity},
+				m_renderableInstance(std::make_shared< Graphics::RenderableInstance::Unique >(renderable, this->getWorldCoordinates(), renderable->isSprite() ? Graphics::RenderableInstance::FacingCamera : Graphics::RenderableInstance::None))
+			{
+				this->observe(m_renderableInstance.get());
+			}
 
 			/** @copydoc EmEn::Scenes::Component::Abstract::getRenderableInstance() const */
 			[[nodiscard]]
-			std::shared_ptr< Graphics::RenderableInstance::Abstract > getRenderableInstance () const noexcept override;
+			std::shared_ptr< Graphics::RenderableInstance::Abstract >
+			getRenderableInstance () const noexcept override
+			{
+				return m_renderableInstance;
+			}
 
 			/** @copydoc EmEn::Scenes::Component::Abstract::getComponentType() */
 			[[nodiscard]]
-			const char * getComponentType () const noexcept override;
+			const char *
+			getComponentType () const noexcept override
+			{
+				return ClassId;
+			}
+
+			/** @copydoc EmEn::Scenes::Component::Abstract::isComponent() */
+			[[nodiscard]]
+			bool
+			isComponent (const char * classID) const noexcept override
+			{
+				return strcmp(ClassId, classID) == 0;
+			}
 
 			/** @copydoc EmEn::Scenes::Component::Abstract::boundingBox() const */
 			[[nodiscard]]
-			const Libs::Math::Cuboid< float > & boundingBox () const noexcept override;
+			const Libs::Math::Space3D::AACuboid< float > &
+			boundingBox () const noexcept override
+			{
+				return m_renderableInstance->renderable()->boundingBox();
+			}
 
 			/** @copydoc EmEn::Scenes::Component::Abstract::boundingSphere() const */
 			[[nodiscard]]
-			const Libs::Math::Sphere< float > & boundingSphere () const noexcept override;
+			const Libs::Math::Space3D::Sphere< float > &
+			boundingSphere () const noexcept override
+			{
+				return m_renderableInstance->renderable()->boundingSphere();
+			}
 
 			/** @copydoc EmEn::Scenes::Component::Abstract::move() */
-			void move (const Libs::Math::CartesianFrame< float > & worldCoordinates) noexcept override;
+			void
+			move (const Libs::Math::CartesianFrame< float > & worldCoordinates) noexcept override
+			{
+				m_renderableInstance->updateModelMatrix(worldCoordinates);
+			}
 
 			/** @copydoc EmEn::Scenes::Component::Abstract::processLogics() */
 			void processLogics (const Scene & scene) noexcept override;
 
-			/** @copydoc EmEn::Scenes::Component::Abstract::shouldRemove() */
-			bool shouldRemove () const noexcept override;
+			/** @copydoc EmEn::Scenes::Component::Abstract::shouldBeRemoved() */
+			[[nodiscard]]
+			bool
+			shouldBeRemoved () const noexcept override
+			{
+				return m_renderableInstance->isBroken();
+			}
 
 		private:
 

@@ -28,7 +28,7 @@
 
 /* Local inclusions. */
 #include "Tracer.hpp"
-#include <Audio/OpenAL.EFX.hpp>
+#include "Audio/OpenAL.EFX.hpp"
 #include "Audio/Utility.hpp"
 
 namespace EmEn::Audio::Effects
@@ -36,22 +36,27 @@ namespace EmEn::Audio::Effects
 	using namespace EmEn::Libs;
 
 	RingModulator::RingModulator () noexcept
-		: Abstract()
 	{
 		if ( this->identifier() == 0 )
+		{
 			return;
+		}
 
 		EFX::alEffecti(this->identifier(), AL_EFFECT_TYPE, AL_EFFECT_RING_MODULATOR);
 
 		if ( alGetErrors("alEffecti()", __FILE__, __LINE__) )
+		{
 			Tracer::error(ClassId, "Unable to generate OpenAL Ring Modulator effect !");
+		}
 	}
 
 	void
 	RingModulator::resetProperties () noexcept
 	{
 		if ( !EFX::isAvailable() )
+		{
 			return;
+		}
 
 		EFX::alEffectf(this->identifier(), AL_RING_MODULATOR_FREQUENCY, AL_RING_MODULATOR_DEFAULT_FREQUENCY);
 		EFX::alEffectf(this->identifier(), AL_RING_MODULATOR_HIGHPASS_CUTOFF, AL_RING_MODULATOR_DEFAULT_HIGHPASS_CUTOFF);
@@ -62,11 +67,13 @@ namespace EmEn::Audio::Effects
 	RingModulator::setFrequency (float value) noexcept
 	{
 		if ( !EFX::isAvailable() )
+		{
 			return;
+		}
 
 		if ( value < AL_RING_MODULATOR_MIN_FREQUENCY || value > AL_RING_MODULATOR_MAX_FREQUENCY )
 		{
-			Tracer::warning(ClassId, BlobTrait() << "Frequency must be between " << AL_RING_MODULATOR_MIN_FREQUENCY << " and " << AL_RING_MODULATOR_MAX_FREQUENCY << ".");
+			TraceWarning{ClassId} << "Frequency must be between " << AL_RING_MODULATOR_MIN_FREQUENCY << " and " << AL_RING_MODULATOR_MAX_FREQUENCY << '.';
 
 			return;
 		}
@@ -78,11 +85,13 @@ namespace EmEn::Audio::Effects
 	RingModulator::setHighPassCutOff (float value) noexcept
 	{
 		if ( !EFX::isAvailable() )
+		{
 			return;
+		}
 
 		if ( value < AL_RING_MODULATOR_MIN_HIGHPASS_CUTOFF || value > AL_RING_MODULATOR_MAX_HIGHPASS_CUTOFF )
 		{
-			Tracer::warning(ClassId, BlobTrait() << "HighPass CutOff must be between " << AL_RING_MODULATOR_MIN_HIGHPASS_CUTOFF << " and " << AL_RING_MODULATOR_MAX_HIGHPASS_CUTOFF << ".");
+			TraceWarning{ClassId} << "HighPass CutOff must be between " << AL_RING_MODULATOR_MIN_HIGHPASS_CUTOFF << " and " << AL_RING_MODULATOR_MAX_HIGHPASS_CUTOFF << '.';
 
 			return;
 		}
@@ -94,9 +103,11 @@ namespace EmEn::Audio::Effects
 	RingModulator::setWaveForm (WaveForm value) noexcept
 	{
 		if ( !EFX::isAvailable() )
+		{
 			return;
+		}
 
-		ALint def;
+		ALint def = 0;
 
 		switch ( value )
 		{
@@ -119,12 +130,12 @@ namespace EmEn::Audio::Effects
 	float
 	RingModulator::frequency () const noexcept
 	{
-		if ( !EFX::isAvailable() )
-			return 0.0F;
+		ALfloat value = 0.0F;
 
-		ALfloat value;
-
-		EFX::alGetEffectf(this->identifier(), AL_RING_MODULATOR_FREQUENCY, &value);
+		if ( EFX::isAvailable() )
+		{
+			EFX::alGetEffectf(this->identifier(), AL_RING_MODULATOR_FREQUENCY, &value);
+		}
 
 		return value;
 	}
@@ -132,12 +143,12 @@ namespace EmEn::Audio::Effects
 	float
 	RingModulator::highPassCutOff () const noexcept
 	{
-		if ( !EFX::isAvailable() )
-			return 0.0F;
+		ALfloat value = 0.0F;
 
-		ALfloat value;
-
-		EFX::alGetEffectf(this->identifier(), AL_RING_MODULATOR_HIGHPASS_CUTOFF, &value);
+		if ( EFX::isAvailable() )
+		{
+			EFX::alGetEffectf(this->identifier(), AL_RING_MODULATOR_HIGHPASS_CUTOFF, &value);
+		}
 
 		return value;
 	}
@@ -146,23 +157,23 @@ namespace EmEn::Audio::Effects
 	RingModulator::waveForm () const noexcept
 	{
 		if ( !EFX::isAvailable() )
+		{
 			return WaveForm::Sinusoid;
+		}
 
-		ALint value;
+		ALint value = 0;
 
 		EFX::alGetEffecti(this->identifier(), AL_RING_MODULATOR_WAVEFORM, &value);
 
 		switch ( value )
 		{
-			case AL_RING_MODULATOR_SINUSOID :
-				return WaveForm::Sinusoid;
-
 			case AL_RING_MODULATOR_SAWTOOTH :
 				return WaveForm::SawTooth;
 
 			case AL_RING_MODULATOR_SQUARE :
 				return WaveForm::Square;
 
+			case AL_RING_MODULATOR_SINUSOID :
 			default:
 				return WaveForm::Sinusoid;
 		}

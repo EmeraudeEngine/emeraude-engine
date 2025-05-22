@@ -39,13 +39,7 @@ namespace EmEn::Scenes
 	using namespace Graphics;
 	using namespace Physics;
 
-	static constexpr auto TracerTag{"AbstractEntity"};
-
-	AbstractEntity::AbstractEntity (const std::string & name, uint32_t sceneTimeMS) noexcept
-		: NameableTrait(name), m_birthTime(sceneTimeMS)
-	{
-
-	}
+	constexpr auto TracerTag{"AbstractEntity"};
 
 	bool
 	AbstractEntity::onNotification (const ObservableTrait * observable, int notificationCode, const std::any & data) noexcept
@@ -175,7 +169,7 @@ namespace EmEn::Scenes
 	}
 
 	void
-	AbstractEntity::overrideBoundingPrimitives (const Cuboid< float > & box, const Sphere< float > & sphere) noexcept
+	AbstractEntity::overrideBoundingPrimitives (const Space3D::AACuboid< float > & box, const Space3D::Sphere< float > & sphere) noexcept
 	{
 		m_boundingBox = box;
 		m_boundingSphere = sphere;
@@ -635,7 +629,7 @@ namespace EmEn::Scenes
 	}
 
 	std::shared_ptr< Component::ParticlesEmitter >
-	AbstractEntity::newParticlesEmitter (const std::shared_ptr< Renderable::SpriteResource > & resource, size_t maxParticleCount, const std::string & componentName) noexcept
+	AbstractEntity::newParticlesEmitter (const std::shared_ptr< Renderable::SpriteResource > & resource, uint32_t maxParticleCount, const std::string & componentName) noexcept
 	{
 		/* If no name were passed, we use the resource name. */
 		const auto name = componentName.empty() ? resource->name() : componentName;
@@ -660,7 +654,7 @@ namespace EmEn::Scenes
 	}
 
 	std::shared_ptr< Component::ParticlesEmitter >
-	AbstractEntity::newParticlesEmitter (const std::shared_ptr< Renderable::MeshResource > & resource, size_t maxParticleCount, const std::string & componentName) noexcept
+	AbstractEntity::newParticlesEmitter (const std::shared_ptr< Renderable::MeshResource > & resource, uint32_t maxParticleCount, const std::string & componentName) noexcept
 	{
 		/* If no name were passed, we use the resource name. */
 		const auto name = componentName.empty() ? resource->name() : componentName;
@@ -692,7 +686,7 @@ namespace EmEn::Scenes
 			return nullptr;
 		}
 
-		auto component = std::make_shared< Component::DirectionalPushModifier >(componentName, *this);
+		auto component = std::make_shared< Component::DirectionalPushModifier >(componentName, *this, this->getWorldCoordinates().backwardVector());
 
 		/* Registering the smart pointer. */
 		if ( !this->addComponent(componentName, component) )
@@ -761,7 +755,7 @@ namespace EmEn::Scenes
 
 		while ( componentIt != m_components.end() )
 		{
-			if ( componentIt->second->shouldRemove() )
+			if ( componentIt->second->shouldBeRemoved() )
 			{
 				TraceWarning{TracerTag} << "Removing automatically component '" << componentIt->second->name() << "' ...";
 

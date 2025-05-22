@@ -54,7 +54,12 @@ namespace EmEn::Vulkan
 			 * @param index The index inside the physical device.
 			 * @param maxQueueCount The max number of queue for this family available with the physical device.
 			 */
-			QueueFamily (uint32_t index, size_t maxQueueCount) noexcept;
+			QueueFamily (uint32_t index, size_t maxQueueCount) noexcept
+				: m_queueFamilyIndex{index},
+				m_maxQueueCount{maxQueueCount}
+			{
+
+			}
 
 			/** @copydoc EmEn::Vulkan::QueueFamilyInterface::index() */
 			[[nodiscard]]

@@ -42,7 +42,7 @@
 
 namespace EmEn::PlatformSpecific::Desktop
 {
-	static constexpr auto TracerTag{"Commands"};
+	constexpr auto TracerTag{"Commands"};
 
 	bool
 	runDesktopApplication (const std::string & argument) noexcept
@@ -69,11 +69,11 @@ namespace EmEn::PlatformSpecific::Desktop
 	}
 
 	void
-	flashTaskbarIcon (bool state) noexcept
+	flashTaskbarIcon (const Window & window, bool state) noexcept
 	{
 		FLASHWINFO fwi;
 		fwi.cbSize = sizeof(fwi);
-		fwi.hwnd = Window::instance()->getWin32Window();
+		fwi.hwnd = window.getWin32Window();
 		fwi.dwFlags = state ? FLASHW_ALL : FLASHW_STOP;
 		fwi.uCount = 0;
 		FlashWindowEx(&fwi);

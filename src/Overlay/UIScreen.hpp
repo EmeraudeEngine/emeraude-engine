@@ -50,7 +50,7 @@ namespace EmEn::Overlay
 	/**
 	 * @brief Defines an overlaying screen object.
 	 * @details There is no physical properties. This is just a group of surfaces and dispatch input event to it.
-	 * @exception Libraries::NameableTrait A UI screen have a name.
+	 * @exception EmEn::Libs::NameableTrait A UI screen have a name.
 	 */
 	class UIScreen final : public Libs::NameableTrait
 	{
@@ -61,13 +61,20 @@ namespace EmEn::Overlay
 
 			/**
 			 * @brief Constructs a default UI screen.
-			 * @param name A reference to a string.
+			 * @param name A string [std::move].
 			 * @param framebufferProperties A reference to an array [width, height].
 			 * @param graphicsRenderer A reference to the graphics renderer.
 			 * @param enableKeyboardListener Enables the keyboard listener at creation.
 			 * @param enablePointerListener Enables the pointer listener at creation.
 			 */
-			UIScreen (const std::string & name, const FramebufferProperties & framebufferProperties, Graphics::Renderer & graphicsRenderer, bool enableKeyboardListener, bool enablePointerListener) noexcept;
+			UIScreen (std::string name, const FramebufferProperties & framebufferProperties, Graphics::Renderer & graphicsRenderer, bool enableKeyboardListener, bool enablePointerListener) noexcept
+				: NameableTrait{std::move(name)},
+				m_graphicsRenderer{graphicsRenderer},
+				m_framebufferProperties{framebufferProperties}
+			{
+				m_flags[IsListeningKeyboard] = enableKeyboardListener;
+				m_flags[IsListeningPointer] = enablePointerListener;
+			}
 
 			/**
 			 * @brief Returns whether the UI screen has surfaces declared.
@@ -365,21 +372,6 @@ namespace EmEn::Overlay
 			 */
 			bool onMouseWheel (float positionX, float positionY, float xOffset, float yOffset) const noexcept;
 
-			/**
-			 * @brief STL streams printable object.
-			 * @param out A reference to the stream output.
-			 * @param obj A reference to the object to print.
-			 * @return std::ostream &
-			 */
-			friend std::ostream & operator<< (std::ostream & out, const UIScreen & obj);
-
-			/**
-			 * @brief Stringifies the object.
-			 * @param obj A reference to the object to print.
-			 * @return std::string
-			 */
-			friend std::string to_string (const UIScreen & obj);
-
 		private:
 
 			/**
@@ -387,6 +379,14 @@ namespace EmEn::Overlay
 			 * @return void
 			 */
 			void sortSurfacesByDepth ();
+
+			/**
+			 * @brief STL streams printable object.
+			 * @param out A reference to the stream output.
+			 * @param obj A reference to the object to print.
+			 * @return std::ostream &
+			 */
+			friend std::ostream & operator<< (std::ostream & out, const UIScreen & obj);
 
 			/* Flag names. */
 			static constexpr auto IsVisible{0UL};
@@ -410,4 +410,20 @@ namespace EmEn::Overlay
 				false/*UNUSED*/
 			};
 	};
+
+	/**
+	 * @brief Stringifies the object.
+	 * @param obj A reference to the object to print.
+	 * @return std::string
+	 */
+	inline
+	std::string
+	to_string (const UIScreen & obj)
+	{
+		std::stringstream output;
+
+		output << obj;
+
+		return output.str();
+	}
 }

@@ -48,12 +48,8 @@ namespace EmEn::Scenes
 	{
 		public:
 
-			/**
-			 * @brief Constructs a cubic influence area.
-			 * @param parentEntity A reference to the modifier parent scene entity.
-			 * @param size Unidirectional size of the area.
-			 */
-			explicit CubicInfluenceArea (const AbstractEntity & parentEntity, float size = 1.0F) noexcept;
+			/** @brief Class identifier. */
+			static constexpr auto ClassId{"CubicInfluenceArea"};
 
 			/**
 			 * @brief Constructs a cubic influence area.
@@ -62,23 +58,42 @@ namespace EmEn::Scenes
 			 * @param ySize Size of the area in Y axis.
 			 * @param zSize Size of the area in Z axis.
 			 */
-			CubicInfluenceArea (const AbstractEntity & parentEntity, float xSize, float ySize, float zSize) noexcept;
+			CubicInfluenceArea (const AbstractEntity & parentEntity, float xSize, float ySize, float zSize) noexcept
+				: m_parentEntity{&parentEntity},
+				m_xSize{std::abs(xSize)},
+				m_ySize{std::abs(ySize)},
+				m_zSize{std::abs(zSize)}
+			{
 
-			/** @copydoc EmEn::Scenes::InfluenceAreaInterface::isUnderInfluence(const Libs::Math::CartesianFrame< float > &, const Libs::Math::Sphere< float > &) */
-			[[nodiscard]]
-			bool isUnderInfluence (const Libs::Math::CartesianFrame< float > & worldCoordinates, const Libs::Math::Sphere< float > & worldBoundingSphere) const noexcept override;
+			}
 
-			/** @copydoc EmEn::Scenes::InfluenceAreaInterface::influenceStrength(const Libs::Math::CartesianFrame< float > &, const Libs::Math::Sphere< float > &) */
-			[[nodiscard]]
-			float influenceStrength (const Libs::Math::CartesianFrame< float > & worldCoordinates, const Libs::Math::Sphere< float > & worldBoundingSphere) const noexcept override;
+			/**
+			 * @brief Constructs a cubic influence area.
+			 * @param parentEntity A reference to the modifier parent scene entity.
+			 * @param size Unidirectional size of the area.
+			 */
+			explicit
+			CubicInfluenceArea (const AbstractEntity & parentEntity, float size = 1.0F) noexcept
+				: CubicInfluenceArea{parentEntity, size, size, size}
+			{
 
-			/** @copydoc EmEn::Scenes::InfluenceAreaInterface::isUnderInfluence(const Libs::Math::CartesianFrame< float > &, const Libs::Math::Cuboid< float > &) */
-			[[nodiscard]]
-			bool isUnderInfluence (const Libs::Math::CartesianFrame< float > & worldCoordinates, const Libs::Math::Cuboid< float > & worldBoundingBox) const noexcept override;
+			}
 
-			/** @copydoc EmEn::Scenes::InfluenceAreaInterface::influenceStrength(const Libs::Math::CartesianFrame< float > &, const Libs::Math::Cuboid< float > &) */
+			/** @copydoc EmEn::Scenes::InfluenceAreaInterface::isUnderInfluence(const Libs::Math::CartesianFrame< float > &, const Libs::Math::Space3D::Sphere< float > &) */
 			[[nodiscard]]
-			float influenceStrength (const Libs::Math::CartesianFrame< float > & worldCoordinates, const Libs::Math::Cuboid< float > & worldBoundingBox) const noexcept override;
+			bool isUnderInfluence (const Libs::Math::CartesianFrame< float > & worldCoordinates, const Libs::Math::Space3D::Sphere< float > & worldBoundingSphere) const noexcept override;
+
+			/** @copydoc EmEn::Scenes::InfluenceAreaInterface::influenceStrength(const Libs::Math::CartesianFrame< float > &, const Libs::Math::Space3D::Sphere< float > &) */
+			[[nodiscard]]
+			float influenceStrength (const Libs::Math::CartesianFrame< float > & worldCoordinates, const Libs::Math::Space3D::Sphere< float > & worldBoundingSphere) const noexcept override;
+
+			/** @copydoc EmEn::Scenes::InfluenceAreaInterface::isUnderInfluence(const Libs::Math::CartesianFrame< float > &, const Libs::Math::Space3D::AACuboid< float > &) */
+			[[nodiscard]]
+			bool isUnderInfluence (const Libs::Math::CartesianFrame< float > & worldCoordinates, const Libs::Math::Space3D::AACuboid< float > & worldBoundingBox) const noexcept override;
+
+			/** @copydoc EmEn::Scenes::InfluenceAreaInterface::influenceStrength(const Libs::Math::CartesianFrame< float > &, const Libs::Math::Space3D::AACuboid< float > &) */
+			[[nodiscard]]
+			float influenceStrength (const Libs::Math::CartesianFrame< float > & worldCoordinates, const Libs::Math::Space3D::AACuboid< float > & worldBoundingBox) const noexcept override;
 
 			/**
 			 * @brief Sets the size of the area.

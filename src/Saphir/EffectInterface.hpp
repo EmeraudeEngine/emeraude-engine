@@ -94,7 +94,7 @@ namespace EmEn::Saphir
 			/**
 			 * @brief Generates the code responsible for the fragment shader.
 			 * @param generator A reference to the graphics shader generator.
-			 * @param vertexShader A reference to the fragment shader.
+			 * @param fragmentShader A reference to the fragment shader.
 			 * @return bool
 			 */
 			[[nodiscard]]

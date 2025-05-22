@@ -52,52 +52,69 @@ namespace EmEn
 			/** @brief Class identifier. */
 			static constexpr auto ClassId{"UserService"};
 
-			/** @brief Observable class unique identifier. */
-			static const size_t ClassUID;
-
 			/**
 			 * @brief Constructs a user.
 			 * @param primaryServices A reference to primary services.
 			 */
-			explicit User (PrimaryServices & primaryServices) noexcept;
+			explicit
+			User (PrimaryServices & primaryServices) noexcept
+				: ServiceInterface{ClassId},
+				m_primaryServices{primaryServices}
+			{
 
-			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
-			[[nodiscard]]
-			size_t classUID () const noexcept override;
-
-			/** @copydoc EmEn::Libs::ObservableTrait::is() const */
-			[[nodiscard]]
-			bool is (size_t classUID) const noexcept override;
+			}
 
 			/** @copydoc EmEn::ServiceInterface::usable() */
 			[[nodiscard]]
-			bool usable () const noexcept override;
+			bool
+			usable () const noexcept override
+			{
+				return m_flags[ServiceInitialized];
+			}
 
 			/**
 			 * @brief Sets a user identification.
 			 * @param identifier An integer like ID from external platform.
+			 * @return void
 			 */
-			void setUserID (uint64_t identifier) noexcept;
+			void
+			setUserID (uint64_t identifier) noexcept
+			{
+				m_userID = identifier;
+			}
 
 			/**
 			 * @brief Sets the username.
 			 * @param username A reference to a string.
+			 * @return void
 			 */
-			void setUsername (const std::string & username) noexcept;
+			void
+			setUsername (const std::string & username) noexcept
+			{
+				m_username = username;
+			}
 
 			/**
 			 * @brief Returns the third-party user id.
 			 * @return uint64_t
 			 */
 			[[nodiscard]]
-			uint64_t userID () const noexcept;
+			uint64_t
+			userID () const noexcept
+			{
+				return m_userID;
+			}
 
 			/**
 			 * @brief Returns the username.
 			 * @return const std::string &
 			 */
 			[[nodiscard]]
-			const std::string & username () const noexcept;
+			const std::string &
+			username () const noexcept
+			{
+				return m_username;
+			}
 
 		private:
 

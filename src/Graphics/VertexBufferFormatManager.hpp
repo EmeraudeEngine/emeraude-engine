@@ -67,59 +67,13 @@ namespace EmEn::Graphics
 			/** @brief Class identifier. */
 			static constexpr auto ClassId{"VertexBufferFormatManagerService"};
 
-			/** @brief Observable class unique identifier. */
-			static const size_t ClassUID;
-
 			/**
 			 * @brief Constructs a vertex buffer format manager.
 			 */
-			VertexBufferFormatManager () noexcept;
-
-			/**
-			 * @brief Copy constructor.
-			 * @param copy A reference to the copied instance.
-			 */
-			VertexBufferFormatManager (const VertexBufferFormatManager & copy) noexcept = delete;
-
-			/**
-			 * @brief Move constructor.
-			 * @param copy A reference to the copied instance.
-			 */
-			VertexBufferFormatManager (VertexBufferFormatManager && copy) noexcept = delete;
-
-			/**
-			 * @brief Copy assignment.
-			 * @param copy A reference to the copied instance.
-			 * @return VertexBufferFormatManager &
-			 */
-			VertexBufferFormatManager & operator= (const VertexBufferFormatManager & copy) noexcept = delete;
-
-			/**
-			 * @brief Move assignment.
-			 * @param copy A reference to the copied instance.
-			 * @return VertexBufferFormatManager &
-			 */
-			VertexBufferFormatManager & operator= (VertexBufferFormatManager && copy) noexcept = delete;
-
-			/**
-			 * @brief Destructs the vertex buffer format manager.
-			 */
-			~VertexBufferFormatManager () noexcept override = default;
-
-			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
-			[[nodiscard]]
-			size_t
-			classUID () const noexcept override
+			VertexBufferFormatManager () noexcept
+				: ServiceInterface{ClassId}
 			{
-				return ClassUID;
-			}
 
-			/** @copydoc EmEn::Libs::ObservableTrait::is() const */
-			[[nodiscard]]
-			bool
-			is (size_t classUID) const noexcept override
-			{
-				return classUID == ClassUID;
 			}
 
 			/** @copydoc EmEn::ServiceInterface::usable() */
@@ -142,14 +96,25 @@ namespace EmEn::Graphics
 			}
 
 			/**
-			 * @brief Creates or returns an existing vertex buffer format from a combination of a geometry and a vertex shader.
-			 * @warning The output vertex format can be nullptr !
-			 * @param geometry A reference to a geometry interface.
+			 * @brief Creates or returns an existing vertex buffer format from a vertex shader and parameters.
+			 * @warning The output vertex format can be nullptr!
 			 * @param vertexShader A reference to a vertex shader.
+			 * @param topology
+			 * @param geometryFlagBits
 			 * @return std::shared_ptr< VertexBufferFormat >
 			 */
 			[[nodiscard]]
-			std::shared_ptr< VertexBufferFormat > getVertexBufferFormat (const Geometry::Interface & geometry, const Saphir::VertexShader & vertexShader) noexcept;
+			std::shared_ptr< VertexBufferFormat > getVertexBufferFormat (const Saphir::VertexShader & vertexShader, Topology topology, uint32_t geometryFlagBits) noexcept;
+
+			/**
+			 * @brief Creates or returns an existing vertex buffer format from a combination of a geometry and a vertex shader.
+			 * @warning The output vertex format can be nullptr!
+			 * @param vertexShader A reference to a vertex shader.
+			 * @param geometry A reference to a geometry interface.
+			 * @return std::shared_ptr< VertexBufferFormat >
+			 */
+			[[nodiscard]]
+			std::shared_ptr< VertexBufferFormat > getVertexBufferFormat (const Saphir::VertexShader & vertexShader, const Geometry::Interface & geometry) noexcept;
 
 			/**
 			 * @brief Returns a string showing a VBO usage.
@@ -159,6 +124,15 @@ namespace EmEn::Graphics
 			 */
 			[[nodiscard]]
 			static std::string getVertexBufferObjectUsage (const Geometry::Interface & geometry, const VertexBufferFormat & vertexBufferFormat) noexcept;
+
+			/**
+			 * @brief Returns a string showing a VBO usage.
+			 * @param geometryFlagBits The geometry flag bits.
+			 * @param vertexBufferFormat A reference to the vertex buffer format using the VBO.
+			 * @return std::string
+			 */
+			[[nodiscard]]
+			static std::string getVertexBufferObjectUsage (uint32_t geometryFlagBits, const VertexBufferFormat & vertexBufferFormat) noexcept;
 
 		private:
 

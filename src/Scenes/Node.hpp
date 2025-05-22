@@ -47,6 +47,7 @@ namespace EmEn::Scenes
 {
 	/**
 	 * @brief The Node class is the key component to build the scene node tree.
+	 * @note [OBS][SHARED-OBSERVABLE]
 	 * @extends std::enable_shared_from_this A node need to self replicate its smart pointer.
 	 * @extends EmEn::Scenes::AbstractEntity A node is an entity of the 3D world.
 	 * @extends EmEn::Physics::MovableTrait A node is a movable entity in the 3D world.
@@ -123,16 +124,26 @@ namespace EmEn::Scenes
 			/**
 			 * @brief Constructs the root node.
 			 */
-			Node () noexcept;
+			Node () noexcept
+				: AbstractEntity{Root, 0}
+			{
+				this->setMovingAbility(false);
+			}
 
 			/**
 			 * @brief Constructs a child node.
-			 * @param name The name of the sub child node.
+			 * @param name The name of the sub child node [std::move].
 			 * @param parent a reference to the smart pointer of the parent.
 			 * @param sceneTimeMS The scene current time in milliseconds.
 			 * @param coordinates A reference to a coordinates. Default Origin.
 			 */
-			Node (const std::string & name, const std::shared_ptr< Node > & parent, uint32_t sceneTimeMS, const Libs::Math::CartesianFrame< float > & coordinates = {}) noexcept;
+			Node (std::string name, const std::shared_ptr< Node > & parent, uint32_t sceneTimeMS, const Libs::Math::CartesianFrame< float > & coordinates = {}) noexcept
+				: AbstractEntity{std::move(name), sceneTimeMS},
+				m_parent{parent},
+				m_cartesianFrame{coordinates}
+			{
+
+			}
 
 			/**
 			 * @brief Copy constructor.
@@ -163,7 +174,15 @@ namespace EmEn::Scenes
 			/**
 			 * @brief Destructs the node.
 			 */
-			~Node () override;
+			~Node () override
+			{
+				const auto parentNode = m_parent.lock();
+
+				if ( parentNode != nullptr )
+				{
+					parentNode->forget(this);
+				}
+			}
 
 			/** @copydoc EmEn::Scenes::LocatableInterface::setPosition(const Libs::Math::Vector< 3, float > &, Libs::Math::TransformSpace) */
 			void setPosition (const Libs::Math::Vector< 3, float > & position, Libs::Math::TransformSpace transformSpace) noexcept override;
@@ -254,11 +273,11 @@ namespace EmEn::Scenes
 
 			/** @copydoc EmEn::Scenes::LocatableInterface::getWorldBoundingBox() const */
 			[[nodiscard]]
-			Libs::Math::Cuboid< float > getWorldBoundingBox () const noexcept override;
+			Libs::Math::Space3D::AACuboid< float > getWorldBoundingBox () const noexcept override;
 
 			/** @copydoc EmEn::Scenes::LocatableInterface::getWorldBoundingSphere() const */
 			[[nodiscard]]
-			Libs::Math::Sphere< float > getWorldBoundingSphere () const noexcept override;
+			Libs::Math::Space3D::Sphere< float > getWorldBoundingSphere () const noexcept override;
 
 			/** @copydoc EmEn::Scenes::LocatableInterface::enableSphereCollision(bool) */
 			void
@@ -544,30 +563,11 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			 * @brief Accelerates the node forward. This is a shortcut.
+			 * @brief Speeds up the node forward. This is a shortcut.
 			 * @param power The power of acceleration. This can be negative to decelerate.
 			 * @return void
 			 */
 			void accelerate (float power) noexcept;
-
-			/**
-			 * @brief Returns the overlap from the intersection with another node.
-			 * @param nodeA A reference to a node.
-			 * @param nodeB A reference to a node.
-			 * @return float
-			 */
-			[[nodiscard]]
-			static
-			float
-			getIntersectionOverlap (const Node & nodeA, const Node & nodeB) noexcept
-			{
-				if ( &nodeA == &nodeB )
-				{
-					return 0.0F;
-				}
-
-				return Libs::Math::Sphere< float >::getIntersectionOverlap(nodeA.getWorldBoundingSphere(), nodeB.getWorldBoundingSphere());
-			}
 
 			/**
 			 * @brief Returns the distance between two nodes.

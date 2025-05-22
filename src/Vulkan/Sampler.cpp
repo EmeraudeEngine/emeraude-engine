@@ -66,17 +66,6 @@ namespace EmEn::Vulkan
 		m_createInfo.unnormalizedCoordinates = VK_FALSE;
 	}
 
-	Sampler::Sampler (const std::shared_ptr< Device > & device, const VkSamplerCreateInfo & createInfo) noexcept
-		: AbstractDeviceDependentObject(device), m_createInfo(createInfo)
-	{
-
-	}
-
-	Sampler::~Sampler ()
-	{
-		this->destroyFromHardware();
-	}
-
 	bool
 	Sampler::createOnHardware () noexcept
 	{
@@ -91,7 +80,7 @@ namespace EmEn::Vulkan
 
 		if ( result != VK_SUCCESS )
 		{
-			Tracer::error(ClassId, BlobTrait() << "Unable to create a sampler : " << vkResultToCString(result) << " !");
+			TraceError{ClassId} << "Unable to create a sampler : " << vkResultToCString(result) << " !";
 
 			return false;
 		}

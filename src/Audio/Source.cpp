@@ -43,7 +43,7 @@ namespace EmEn::Audio
 	Source::Source () noexcept
 	{
 		/* NOTE: Fake a source ID to silent all methods. */
-		if ( !Manager::instance()->usable() )
+		if ( Manager::audioDisabled() )
 		{
 			*(this->identifierPointer()) = 1;
 
@@ -73,7 +73,7 @@ namespace EmEn::Audio
 	bool
 	Source::prepareEffectSlot (int channel) noexcept
 	{
-		if ( !Manager::instance()->usable() )
+		if ( Manager::audioDisabled() )
 		{
 			return false;
 		}
@@ -87,7 +87,7 @@ namespace EmEn::Audio
 
 		if ( channel >= EFX::getMaxAuxiliarySends() )
 		{
-			Tracer::warning(ClassId, BlobTrait() << "There is only max " << EFX::getMaxAuxiliarySends() << " effect slots per source !");
+			TraceWarning{ClassId} << "There is only max " << EFX::getMaxAuxiliarySends() << " effect slots per source !";
 
 			return false;
 		}
@@ -112,9 +112,9 @@ namespace EmEn::Audio
 	}
 
 	void
-	Source::setPosition (const Math::Vector< 3, float > & position) noexcept
+	Source::setPosition (const Vector< 3, float > & position) noexcept
 	{
-		if ( !Manager::instance()->usable() || !this->isCreated() )
+		if ( Manager::audioDisabled() || !this->isCreated() )
 		{
 			return;
 		}
@@ -123,9 +123,9 @@ namespace EmEn::Audio
 	}
 
 	void
-	Source::setPosition (const Math::Vector< 4, float > & position) noexcept
+	Source::setPosition (const Vector< 4, float > & position) noexcept
 	{
-		if ( !Manager::instance()->usable() || !this->isCreated() )
+		if ( Manager::audioDisabled() || !this->isCreated() )
 		{
 			return;
 		}
@@ -136,7 +136,7 @@ namespace EmEn::Audio
 	void
 	Source::setPosition (float x, float y, float z) noexcept
 	{
-		if ( !Manager::instance()->usable() || !this->isCreated() )
+		if ( Manager::audioDisabled() || !this->isCreated() )
 		{
 			return;
 		}
@@ -144,12 +144,12 @@ namespace EmEn::Audio
 		alSource3f(this->identifier(), AL_POSITION, x, y ,z);
 	}
 
-	Math::Vector< 3, float >
+	Vector< 3, float >
 	Source::position () const noexcept
 	{
-		Math::Vector< 3, float > position{};
+		Vector< 3, float > position;
 
-		if ( Manager::instance()->usable() )
+		if ( !Manager::audioDisabled() )
 		{
 			if ( this->isCreated() )
 			{
@@ -165,9 +165,9 @@ namespace EmEn::Audio
 	}
 
 	void
-	Source::setDirection (const Math::Vector< 3, float > & direction) noexcept
+	Source::setDirection (const Vector< 3, float > & direction) noexcept
 	{
-		if ( !Manager::instance()->usable() || !this->isCreated() )
+		if ( Manager::audioDisabled() || !this->isCreated() )
 		{
 			return;
 		}
@@ -176,9 +176,9 @@ namespace EmEn::Audio
 	}
 
 	void
-	Source::setDirection (const Math::Vector< 4, float > & direction) noexcept
+	Source::setDirection (const Vector< 4, float > & direction) noexcept
 	{
-		if ( !Manager::instance()->usable() || !this->isCreated() )
+		if ( Manager::audioDisabled() || !this->isCreated() )
 		{
 			return;
 		}
@@ -189,7 +189,7 @@ namespace EmEn::Audio
 	void
 	Source::setDirection (float x, float y, float z) noexcept
 	{
-		if ( !Manager::instance()->usable() || !this->isCreated() )
+		if ( Manager::audioDisabled() || !this->isCreated() )
 		{
 			return;
 		}
@@ -197,12 +197,12 @@ namespace EmEn::Audio
 		alSource3f(this->identifier(), AL_DIRECTION, x, y ,z);
 	}
 
-	Math::Vector< 3, float >
+	Vector< 3, float >
 	Source::direction () const noexcept
 	{
-		Math::Vector< 3, float > direction;
+		Vector< 3, float > direction;
 
-		if ( Manager::instance()->usable() )
+		if ( !Manager::audioDisabled() )
 		{
 			if ( this->isCreated() )
 			{
@@ -218,9 +218,9 @@ namespace EmEn::Audio
 	}
 
 	void
-	Source::setVelocity (const Math::Vector< 3, float > & velocity) noexcept
+	Source::setVelocity (const Vector< 3, float > & velocity) noexcept
 	{
-		if ( !Manager::instance()->usable() || !this->isCreated() )
+		if ( Manager::audioDisabled() || !this->isCreated() )
 		{
 			return;
 		}
@@ -229,9 +229,9 @@ namespace EmEn::Audio
 	}
 
 	void
-	Source::setVelocity (const Math::Vector< 4, float > & velocity) noexcept
+	Source::setVelocity (const Vector< 4, float > & velocity) noexcept
 	{
-		if ( !Manager::instance()->usable() || !this->isCreated() )
+		if ( Manager::audioDisabled() || !this->isCreated() )
 		{
 			return;
 		}
@@ -242,7 +242,7 @@ namespace EmEn::Audio
 	void
 	Source::setVelocity (float x, float y, float z) noexcept
 	{
-		if ( !Manager::instance()->usable() || !this->isCreated() )
+		if ( Manager::audioDisabled() || !this->isCreated() )
 		{
 			return;
 		}
@@ -250,12 +250,12 @@ namespace EmEn::Audio
 		alSource3f(this->identifier(), AL_VELOCITY, x, y ,z);
 	}
 
-	Math::Vector< 3, float >
+	Vector< 3, float >
 	Source::velocity () const noexcept
 	{
-		Math::Vector< 3, float > velocity;
+		Vector< 3, float > velocity;
 
-		if ( Manager::instance()->usable() )
+		if ( !Manager::audioDisabled() )
 		{
 			if ( this->isCreated() )
 			{
@@ -273,7 +273,7 @@ namespace EmEn::Audio
 	void
 	Source::setGain (float gain) noexcept
 	{
-		if ( !Manager::instance()->usable() || !this->isCreated() )
+		if ( Manager::audioDisabled() || !this->isCreated() )
 		{
 			return;
 		}
@@ -291,19 +291,19 @@ namespace EmEn::Audio
 	void
 	Source::boundsGain (float minGain, float maxGain) noexcept
 	{
-		if ( !Manager::instance()->usable() || !this->isCreated() )
+		if ( Manager::audioDisabled() || !this->isCreated() )
 		{
 			return;
 		}
 
-		alSourcef(this->identifier(), AL_MIN_GAIN, Math::clampToUnit(minGain));
-		alSourcef(this->identifier(), AL_MAX_GAIN, Math::clampToUnit(maxGain));
+		alSourcef(this->identifier(), AL_MIN_GAIN, clampToUnit(minGain));
+		alSourcef(this->identifier(), AL_MAX_GAIN, clampToUnit(maxGain));
 	}
 
 	void
 	Source::setReferenceDistance (float distance) noexcept
 	{
-		if ( !Manager::instance()->usable() || !this->isCreated() )
+		if ( Manager::audioDisabled() || !this->isCreated() )
 		{
 			return;
 		}
@@ -323,7 +323,7 @@ namespace EmEn::Audio
 	void
 	Source::setRolloffFactor (float factor) noexcept
 	{
-		if ( !Manager::instance()->usable() || !this->isCreated() )
+		if ( Manager::audioDisabled() || !this->isCreated() )
 		{
 			return;
 		}
@@ -342,7 +342,7 @@ namespace EmEn::Audio
 	void
 	Source::setMaxDistance (float distance) noexcept
 	{
-		if ( !Manager::instance()->usable() || !this->isCreated() )
+		if ( Manager::audioDisabled() || !this->isCreated() )
 		{
 			return;
 		}
@@ -363,7 +363,7 @@ namespace EmEn::Audio
 	void
 	Source::setCone (float innerAngle, float outerAngle, float outerGain, float gainFacingAway) noexcept
 	{
-		if ( !Manager::instance()->usable() || !this->isCreated() )
+		if ( Manager::audioDisabled() || !this->isCreated() )
 		{
 			return;
 		}
@@ -375,19 +375,19 @@ namespace EmEn::Audio
 		alSourcef(this->identifier(), AL_CONE_OUTER_ANGLE, std::clamp(outerAngle, 0.0F, FullRevolution< float >));
 
 		/* The gain attenuation applied when the listener is outside the source's outer cone. Default 0 */
-		alSourcef(this->identifier(), AL_CONE_OUTER_GAIN, Math::clampToUnit(outerGain));
+		alSourcef(this->identifier(), AL_CONE_OUTER_GAIN, clampToUnit(outerGain));
 
 		/* the gain when outside the oriented cone. Default 1. */
 		if ( EFX::isAvailable() )
 		{
-			alSourcef(this->identifier(), AL_CONE_OUTER_GAINHF, Math::clampToUnit(gainFacingAway));
+			alSourcef(this->identifier(), AL_CONE_OUTER_GAINHF, clampToUnit(gainFacingAway));
 		}
 	}
 
 	void
 	Source::setPitch (float pitch) noexcept
 	{
-		if ( !Manager::instance()->usable() || !this->isCreated() )
+		if ( Manager::audioDisabled() || !this->isCreated() )
 		{
 			return;
 		}
@@ -398,7 +398,7 @@ namespace EmEn::Audio
 	void
 	Source::setAirAbsorption (int factor) noexcept
 	{
-		if ( !Manager::instance()->usable() || !this->isCreated() )
+		if ( Manager::audioDisabled() || !this->isCreated() )
 		{
 			return;
 		}
@@ -431,7 +431,7 @@ namespace EmEn::Audio
 	float
 	Source::setRandomPitch (float minPitch, float maxPitch) noexcept
 	{
-		if ( !Manager::instance()->usable() || !this->isCreated() )
+		if ( Manager::audioDisabled() || !this->isCreated() )
 		{
 			return 1.0F;
 		}
@@ -450,7 +450,7 @@ namespace EmEn::Audio
 	void
 	Source::setMuteState (bool state) noexcept
 	{
-		if ( !Manager::instance()->usable() || !this->isCreated() )
+		if ( Manager::audioDisabled() || !this->isCreated() )
 		{
 			return;
 		}
@@ -473,7 +473,7 @@ namespace EmEn::Audio
 	void
 	Source::setRelativeState (bool state) noexcept
 	{
-		if ( !Manager::instance()->usable() || !this->isCreated() )
+		if ( Manager::audioDisabled() || !this->isCreated() )
 		{
 			return;
 		}
@@ -547,7 +547,7 @@ namespace EmEn::Audio
 
 		if ( effectIt == m_effectSlots.cend() )
 		{
-			Tracer::warning(ClassId, BlobTrait() << "There is no effect slot #" << channel << " with this source !");
+			TraceWarning{ClassId} << "There is no effect slot #" << channel << " with this source !";
 
 			return;
 		}
@@ -562,7 +562,7 @@ namespace EmEn::Audio
 
 		if ( effectIt == m_effectSlots.cend() )
 		{
-			Tracer::warning(ClassId, BlobTrait() << "There is no effect slot #" << channel << " with this source !");
+			TraceWarning{ClassId} << "There is no effect slot #" << channel << " with this source !";
 
 			return;
 		}
@@ -573,7 +573,7 @@ namespace EmEn::Audio
 	bool
 	Source::enableDirectFilter (const std::shared_ptr< Filters::Abstract > & filter) noexcept
 	{
-		if ( !Manager::instance()->usable() || !EFX::isAvailable() )
+		if ( Manager::audioDisabled() || !EFX::isAvailable() )
 		{
 			return false;
 		}
@@ -595,7 +595,7 @@ namespace EmEn::Audio
 	void
 	Source::disableDirectFilter () noexcept
 	{
-		if ( !Manager::instance()->usable() || !EFX::isAvailable() )
+		if ( Manager::audioDisabled() || !EFX::isAvailable() )
 		{
 			return;
 		}
@@ -638,7 +638,7 @@ namespace EmEn::Audio
 		/* Checks if the source is audible. */
 		if ( this->isMuted() )
 		{
-			Tracer::debug(ClassId, "Trying to play a sound on a muted source.");
+			TraceDebug{ClassId} << "Trying to play a sound on a muted source.";
 
 			return false;
 		}
@@ -702,14 +702,14 @@ namespace EmEn::Audio
 	void
 	Source::pause () noexcept
 	{
-		if ( !Manager::instance()->usable() )
+		if ( Manager::audioDisabled() )
 		{
 			return;
 		}
 
 		if ( this->getIntValue(AL_SOURCE_STATE, AL_INITIAL) != AL_PLAYING )
 		{
-			Tracer::debug(ClassId, "Trying to pause a non-playing audio source !");
+			TraceDebug{ClassId} << "Trying to pause a non-playing audio source !";
 
 			return;
 		}
@@ -720,14 +720,14 @@ namespace EmEn::Audio
 	void
 	Source::resume () noexcept
 	{
-		if ( !Manager::instance()->usable() )
+		if ( Manager::audioDisabled() )
 		{
 			return;
 		}
 
 		if ( this->getIntValue(AL_SOURCE_STATE, AL_INITIAL) != AL_PAUSED )
 		{
-			Tracer::debug(ClassId, "Trying to resume a non paused audio source !");
+			TraceDebug{ClassId} << "Trying to resume a non paused audio source !";
 
 			return;
 		}
@@ -738,7 +738,7 @@ namespace EmEn::Audio
 	void
 	Source::rewind () noexcept
 	{
-		if ( !Manager::instance()->usable() )
+		if ( Manager::audioDisabled() )
 		{
 			return;
 		}
@@ -752,7 +752,7 @@ namespace EmEn::Audio
 				break;
 
 			default:
-				Tracer::debug(ClassId, "Trying to rewind an empty audio source !");
+				TraceDebug{ClassId} << "Trying to rewind an empty audio source !";
 				break;
 		}
 	}
@@ -760,7 +760,7 @@ namespace EmEn::Audio
 	void
 	Source::stop () noexcept
 	{
-		if ( !Manager::instance()->usable() )
+		if ( Manager::audioDisabled() )
 		{
 			return;
 		}
@@ -797,7 +797,7 @@ namespace EmEn::Audio
 	void
 	Source::clearStream () const noexcept
 	{
-		if ( !Manager::instance()->usable() )
+		if ( Manager::audioDisabled() )
 		{
 			return;
 		}
@@ -835,7 +835,7 @@ namespace EmEn::Audio
 	{
 		auto value = defaultValue;
 
-		if ( Manager::instance()->usable() )
+		if ( !Manager::audioDisabled() )
 		{
 			if ( this->isCreated() )
 			{
@@ -843,7 +843,7 @@ namespace EmEn::Audio
 			}
 			else
 			{
-				Tracer::warning(ClassId, BlobTrait() << "Trying to get data (pName: " << pName << ") from an unloaded audio source !");
+				TraceWarning{ClassId} << "Trying to get data (pName: " << pName << ") from an unloaded audio source !";
 			}
 		}
 
@@ -861,7 +861,7 @@ namespace EmEn::Audio
 	{
 		auto value = defaultValue;
 
-		if ( Manager::instance()->usable() )
+		if ( !Manager::audioDisabled() )
 		{
 			if ( this->isCreated() )
 			{

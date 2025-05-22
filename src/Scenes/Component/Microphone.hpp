@@ -33,6 +33,9 @@
 #include "AVConsole/AbstractVirtualDevice.hpp"
 #include "Abstract.hpp"
 
+/* Local inclusions for usages. */
+#include "Audio/Manager.hpp"
+
 namespace EmEn::Scenes::Component
 {
 	/**
@@ -53,28 +56,65 @@ namespace EmEn::Scenes::Component
 			 * @param name The name of the component.
 			 * @param parentEntity A reference to the parent entity.
 			 */
-			Microphone (const std::string & name, const AbstractEntity & parentEntity) noexcept;
+			Microphone (const std::string & name, const AbstractEntity & parentEntity) noexcept
+				: Abstract{name, parentEntity},
+				AbstractVirtualDevice{name, AVConsole::DeviceType::Audio, AVConsole::ConnexionType::Output}
+			{
 
-			/** @copydoc EmEn::Scenes::Component::Abstract::getComponentType() */
+			}
+
+			/** @copydoc EmEn::Scenes::Component::Abstract::getComponentType() const noexcept */
 			[[nodiscard]]
-			const char * getComponentType () const noexcept override;
+			const char *
+			getComponentType () const noexcept override
+			{
+				return ClassId;
+			}
 
-			/** @copydoc EmEn::Scenes::Component::Abstract::boundingBox() const */
+			/** @copydoc EmEn::Scenes::Component::Abstract::isComponent() const noexcept */
 			[[nodiscard]]
-			const Libs::Math::Cuboid< float > & boundingBox () const noexcept override;
+			bool
+			isComponent (const char * classID) const noexcept override
+			{
+				return strcmp(ClassId, classID) == 0;
+			}
 
-			/** @copydoc EmEn::Scenes::Component::Abstract::boundingSphere() const */
+			/** @copydoc EmEn::Scenes::Component::Abstract::move(const Libs::Math::CartesianFrame< float > &) noexcept */
+			void
+			move (const Libs::Math::CartesianFrame< float > & worldCoordinates) noexcept override
+			{
+				this->updateDeviceFromCoordinates(worldCoordinates, this->getWorldVelocity());
+			}
+
+			/** @copydoc EmEn::Scenes::Component::Abstract::processLogics(const Scene &) noexcept */
+			void
+			processLogics (const Scene & /*scene*/) noexcept override
+			{
+
+			}
+
+			/** @copydoc EmEn::Scenes::Component::Abstract::shouldBeRemoved() const noexcept */
 			[[nodiscard]]
-			const Libs::Math::Sphere< float > & boundingSphere () const noexcept override;
+			bool
+			shouldBeRemoved () const noexcept override
+			{
+				return false;
+			}
 
-			/** @copydoc EmEn::Scenes::Component::Abstract::move() */
-			void move (const Libs::Math::CartesianFrame< float > & worldCoordinates) noexcept override;
+		private:
 
-			/** @copydoc EmEn::Scenes::Component::Abstract::processLogics() */
-			void processLogics (const Scene & scene) noexcept override;
+			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::updateDeviceFromCoordinates() noexcept */
+			void updateDeviceFromCoordinates (const Libs::Math::CartesianFrame< float > & worldCoordinates, const Libs::Math::Vector< 3, float > & worldVelocity) noexcept override;
 
-			/** @copydoc EmEn::Scenes::Component::Abstract::shouldRemove() */
-			bool shouldRemove () const noexcept override;
+			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::onTargetConnected() noexcept */
+			void
+			onTargetConnected (AVConsole::AVManagers & /*managers*/, AbstractVirtualDevice * targetDevice) noexcept override
+			{
+				targetDevice->updateDeviceFromCoordinates(this->getWorldCoordinates(), this->getWorldVelocity());
+			}
+
+			/** @copydoc EmEn::Animations::AnimatableInterface::playAnimation() noexcept */
+			bool playAnimation (uint8_t animationID, const Libs::Variant & value, size_t cycle) noexcept override;
 
 			/**
 			 * @brief STL streams printable object.
@@ -83,23 +123,37 @@ namespace EmEn::Scenes::Component
 			 * @return std::ostream &
 			 */
 			friend std::ostream & operator<< (std::ostream & out, const Microphone & obj);
-
-			/**
-			 * @brief Stringifies the object.
-			 * @param obj A reference to the object to print.
-			 * @return std::string
-			 */
-			friend std::string to_string (const Microphone & obj) noexcept;
-
-		private:
-
-			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::updateDeviceFromCoordinates() */
-			void updateDeviceFromCoordinates (const Libs::Math::CartesianFrame< float > & worldCoordinates, const Libs::Math::Vector< 3, float > & worldVelocity) noexcept override;
-
-			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::onTargetConnected() */
-			void onTargetConnected (AbstractVirtualDevice * targetDevice) noexcept override;
-
-			/** @copydoc EmEn::Animations::AnimatableInterface::playAnimation() */
-			bool playAnimation (uint8_t animationID, const Libs::Variant & value, size_t cycle) noexcept override;
 	};
+
+	inline
+	std::ostream &
+	operator<< (std::ostream & out, const Microphone & /*microphone*/)
+	{
+		std::array< ALfloat, 12 > properties{0};
+
+		Audio::Manager::instance()->listenerProperties(properties);
+
+		return out <<
+			"Audio Listener information" "\n"
+			"Position: " << properties[0] << ", " << properties[1] << ", " << properties[2] << "\n"
+			"Forward: " << properties[3] << ", " << properties[4] << ", " << properties[5] << "\n"
+			"Upward: " << properties[6] << ", " << properties[7] << ", " << properties[8] << "\n"
+			"Velocity: " << properties[9] << ", " << properties[10] << ", " << properties[11] << '\n';
+	}
+
+	/**
+	 * @brief Stringifies the object.
+	 * @param obj A reference to the object to print.
+	 * @return std::string
+	 */
+	inline
+	std::string
+	to_string (const Microphone & obj) noexcept
+	{
+		std::stringstream output;
+
+		output << obj;
+
+		return output.str();
+	}
 }

@@ -34,6 +34,7 @@
 #include "Libs/Math/Base.hpp"
 #include "Resources/Manager.hpp"
 #include "PrimaryServices.hpp"
+#include "SoundResource.hpp"
 #include "Source.hpp"
 #include "Utility.hpp"
 
@@ -44,44 +45,36 @@ namespace EmEn::Audio
 
 	const size_t Manager::ClassUID{getClassUID(ClassId)};
 	Manager * Manager::s_instance{nullptr};
-
-	Manager::Manager (PrimaryServices & primaryServices, Resources::Manager & resourceManager) noexcept
-		: ServiceInterface(ClassId),
-		Controllable(ClassId),
-		m_primaryServices(primaryServices), 
-		m_resourceManager(resourceManager)
-	{
-		if ( s_instance != nullptr )
-		{
-			std::cerr << __PRETTY_FUNCTION__ << ", constructor called twice !" "\n";
-
-			std::terminate();
-		}
-
-		s_instance = this;
-	}
-
-	Manager::~Manager ()
-	{
-		s_instance = nullptr;
-	}
-
-	Manager *
-	Manager::instance () noexcept
-	{
-		return s_instance;
-	}
-
-	size_t
-	Manager::classUID () const noexcept
-	{
-		return ClassUID;
-	}
+	bool Manager::s_audioDisabled{false};
 
 	bool
-	Manager::is (size_t classUID) const noexcept
+	Manager::initializeSubServices () noexcept
 	{
-		return classUID == ClassUID;
+		/* Initialize the track mixer. */
+		if ( m_trackMixer.initialize(m_subServicesEnabled) )
+		{
+			TraceSuccess{ClassId} << m_trackMixer.name() << " service up !";
+		}
+		else
+		{
+			TraceWarning{ClassId} <<
+				m_trackMixer.name() << " service failed to execute." "\n"
+				"No music available !";
+		}
+
+		/* Initialize the audio external input. */
+		if ( m_externalInput.initialize(m_subServicesEnabled) )
+		{
+			TraceSuccess{ClassId} << m_externalInput.name() << " service up !";
+		}
+		else
+		{
+			TraceWarning{ClassId} <<
+				m_externalInput.name() << " service failed to execute !" "\n"
+				"No audio input available !";
+		}
+
+		return true;
 	}
 
 	bool
@@ -94,6 +87,8 @@ namespace EmEn::Audio
 			Tracer::warning(ClassId, "Audio manager disabled at startup.");
 
 			m_flags[ServiceInitialized] = true;
+
+			s_audioDisabled = true;
 			m_flags[AudioDisabledAtStartup] = true;
 
 			return true;
@@ -104,8 +99,6 @@ namespace EmEn::Audio
 
 		/* Sets the music chunk size in bytes. */
 		m_musicChunkSize = m_primaryServices.settings().get< uint32_t >(AudioMusicChunkSizeKey, DefaultAudioMusicChunkSize);
-
-		SoundResource::s_quietConversion = m_primaryServices.settings().get< bool >(AudioQuietConversionKey, DefaultAudioQuietConversion);
 
 		this->queryDevices();
 
@@ -168,7 +161,7 @@ namespace EmEn::Audio
 		m_flags[ServiceInitialized] = true;
 		m_flags[Enabled] = true;
 
-		/* NOTE: Be sure of playback frequency allowed by ths OpenAL context. */
+		/* NOTE: Be sure of the playback frequency allowed by this OpenAL context. */
 		m_playbackFrequency = WaveFactory::toFrequency(m_contextAttributes[ALC_FREQUENCY]);
 
 		this->setMetersPerUnit(1.0F);
@@ -193,8 +186,10 @@ namespace EmEn::Audio
 		{
 			Tracer::error(ClassId, "No audio source available at all ! Disable audio layer ...");
 
-			m_flags[AudioDisabledAtStartup] = true;
 			m_flags[Enabled] = false;
+
+			s_audioDisabled = true;
+			m_flags[AudioDisabledAtStartup] = true;
 
 			return false;
 		}
@@ -214,6 +209,14 @@ namespace EmEn::Audio
 
 		this->registerToConsole();
 
+		/* NOTE: Initialize all sub-services */
+		if ( !this->initializeSubServices() )
+		{
+			Tracer::fatal(ClassId, "Unable to initialize renderer sub-services properly !");
+
+			return false;
+		}
+
 		if ( m_flags[ShowInformation] )
 		{
 			Tracer::info(ClassId, this->getAPIInformation());
@@ -228,7 +231,7 @@ namespace EmEn::Audio
 		m_flags[ServiceInitialized] = false;
 		m_flags[Enabled] = false;
 
-		/* NOTE: Audio sub-system wasn't inited. */
+		/* NOTE: The audio service wasn't inited. */
 		if ( m_flags[AudioDisabledAtStartup] )
 		{
 			return true;
@@ -283,31 +286,6 @@ namespace EmEn::Audio
 		m_flags[Enabled] = state;
 	}
 
-	bool
-	Manager::isAudioEnabled () const noexcept
-	{
-		return m_flags[Enabled];
-	}
-
-	std::shared_ptr< EFX >
-	Manager::getEFX () noexcept
-	{
-		return m_EFX;
-	}
-
-	std::shared_ptr< Source >
-	Manager::defaultSource () const noexcept
-	{
-		return m_defaultSource;
-	}
-
-	void
-	Manager::play (const std::shared_ptr< PlayableInterface > & playable, Source::PlayMode mode, float gain) const noexcept
-	{
-		m_defaultSource->setGain(gain);
-		m_defaultSource->play(playable, mode);
-	}
-
 	void
 	Manager::play (const std::string & resourceName, Source::PlayMode mode, float gain) const noexcept
 	{
@@ -316,7 +294,7 @@ namespace EmEn::Audio
 			return;
 		}
 
-		auto soundResource = m_resourceManager.sounds().getResource(resourceName);
+		auto soundResource = m_resourceManager.container< SoundResource >()->getResource(resourceName);
 
 		if ( !soundResource->isLoaded() )
 		{
@@ -326,18 +304,6 @@ namespace EmEn::Audio
 		}
 
 		this->play(soundResource, mode, gain);
-	}
-
-	WaveFactory::Frequency
-	Manager::frequencyPlayback () const noexcept
-	{
-		return m_playbackFrequency;
-	}
-
-	size_t
-	Manager::musicChunkSize () const noexcept
-	{
-		return m_musicChunkSize;
 	}
 
 	void
@@ -793,35 +759,6 @@ namespace EmEn::Audio
 			}
 
 			m_contextAttributes[attributes[index]] = attributes[index+1];
-		}
-
-		/* Forgotten device attributes... */
-		constexpr std::array< ALint, 9 > keys{
-			ALC_FORMAT_CHANNELS_SOFT, // Not handled on Linux platform
-			ALC_FORMAT_TYPE_SOFT, // Not handled on Linux platform
-			ALC_NUM_HRTF_SPECIFIERS_SOFT,
-			ALC_CONNECTED,
-			0x1997,//ALC_AMBISONIC_LAYOUT_SOFT, Not handled and tokenized on Linux platform
-			0x1998,//ALC_AMBISONIC_SCALING_SOFT, Not handled and tokenized on Linux platform
-			0x1999,//ALC_AMBISONIC_ORDER_SOFT, Not handled and tokenized on Linux platform
-			0x199B,//ALC_MAX_AMBISONIC_ORDER_SOFT, Not handled and tokenized on Linux platform
-			0x19AC//ALC_OUTPUT_MODE_SOFT, Not handled and tokenized on Linux platform
-		};
-
-		for ( auto key : keys )
-		{
-			ALCint value = 0;
-
-			alcGetIntegerv(m_device, key, 1, &value);
-
-			if ( alcGetErrors(m_device, "alcGetIntegerv", __FILE__, __LINE__) )
-			{
-				TraceWarning{ClassId} << "Unable to fetch device attribute 0x" << std::hex << key << " !";
-
-				continue;
-			}
-
-			m_contextAttributes[key] = value;
 		}
 
 		return true;

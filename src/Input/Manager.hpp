@@ -38,6 +38,7 @@
 
 /* Local inclusions for inheritances. */
 #include "ServiceInterface.hpp"
+#include "Libs/ObservableTrait.hpp"
 
 /* Local inclusions for usage */
 #include "KeyboardListenerInterface.hpp"
@@ -56,9 +57,11 @@ namespace EmEn::Input
 {
 	/**
 	 * @brief The input manager service class.
+	 * @note [OBS][STATIC-OBSERVABLE]
 	 * @extends EmEn::ServiceInterface This is a service.
+	 * @extends EmEn::Libs::ObservableTrait This service is observable.
 	 */
-	class Manager final : public ServiceInterface
+	class Manager final : public ServiceInterface, public Libs::ObservableTrait
 	{
 		public:
 
@@ -81,36 +84,28 @@ namespace EmEn::Input
 			 * @param primaryServices A reference to primary services.
 			 * @param window A reference to the handle.
 			 */
-			Manager (PrimaryServices & primaryServices, Window & window) noexcept;
+			Manager (PrimaryServices & primaryServices, Window & window) noexcept
+				: ServiceInterface{ClassId},
+				m_primaryServices{primaryServices},
+				m_window{window}
+			{
+				if ( s_instance != nullptr )
+				{
+					std::cerr << __PRETTY_FUNCTION__ << ", constructor called twice !" "\n";
 
-			/**
-			 * @brief Copy constructor.
-			 * @param copy A reference to the copied instance.
-			 */
-			Manager (const Manager & copy) noexcept = delete;
+					std::terminate();
+				}
 
-			/**
-			 * @brief Move constructor.
-			 * @param copy A reference to the copied instance.
-			 */
-			Manager (Manager && copy) noexcept = delete;
-
-			/**
-			 * @brief Copy assignment.
-			 * @param copy A reference to the copied instance.
-			 */
-			Manager & operator= (const Manager & copy) noexcept = delete;
-
-			/**
-			 * @brief Move assignment.
-			 * @param copy A reference to the copied instance.
-			 */
-			Manager & operator= (Manager && copy) noexcept = delete;
+				s_instance = this;
+			}
 
 			/**
 			 * @brief Destructs the resource manager.
 			 */
-			~Manager () override;
+			~Manager () override
+			{
+				s_instance = nullptr;
+			}
 
 			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
 			[[nodiscard]]
@@ -425,18 +420,6 @@ namespace EmEn::Input
 			 */
 			void removeAllPointerListeners () noexcept;
 
-			/**
-			 * @brief Returns the instance of the input manager.
-			 * @return Manager *
-			 */
-			[[nodiscard]]
-			static
-			Manager *
-			instance () noexcept
-			{
-				return s_instance;
-			}
-
 		private:
 
 			/** @copydoc EmEn::ServiceInterface::onInitialize() */
@@ -446,9 +429,9 @@ namespace EmEn::Input
 			bool onTerminate () noexcept override;
 
 			/**
-			 * @brief Main method to attach all events callback from a glfw handle.
-			 * @param enableKeyboard Enables listeners relative to keyboard.
-			 * @param enablePointer Enables listeners relative to pointer.
+			 * @brief Main method to attach all events callbacks from a glfw handle.
+			 * @param enableKeyboard Enables listeners relative to the keyboard.
+			 * @param enablePointer Enables listeners relative to the pointer.
 			 * @return void
 			 */
 			void linkWindowCallbacks (bool enableKeyboard, bool enablePointer) noexcept;
@@ -470,7 +453,7 @@ namespace EmEn::Input
 			/**
 			 * @brief The callback for the glfw API to handle key inputs.
 			 * @param window The glfw handle.
-			 * @param key The keyboard universal key code. I.e, QWERTY keyboard 'A' key gives the ASCII code '65' on all platform.
+			 * @param key The keyboard universal key code. I.e., QWERTY keyboard 'A' key gives the ASCII code '65' on all platforms.
 			 * @param scancode The OS dependent scancode.
 			 * @param action The key event.
 			 * @param modifiers The modifier keys mask.
@@ -496,7 +479,7 @@ namespace EmEn::Input
 			static void charModsCallback (GLFWwindow * window, unsigned int codepoint, int modifiers) noexcept;
 
 			/**
-			 * @brief Separate method for relative mode pointer called by the main Manager::cursorPositionCallback() method.
+			 * @brief Separate method for a relative mode pointer called by the main Manager::cursorPositionCallback() method.
 			 * @param xPosition The X position of the cursor.
 			 * @param yPosition The Y position of the cursor.
 			 * @return void
@@ -504,7 +487,7 @@ namespace EmEn::Input
 			static void dispatchRelativePointerPosition (double xPosition, double yPosition) noexcept;
 
 			/**
-			 * @brief Separate method for absolute mode pointer called by the main Manager::cursorPositionCallback() method.
+			 * @brief Separate method for an absolute mode pointer called by the main Manager::cursorPositionCallback() method.
 			 * @param xPosition The X position of the cursor.
 			 * @param yPosition The Y position of the cursor.
 			 * @return void
@@ -548,10 +531,10 @@ namespace EmEn::Input
 			static void scrollCallback (GLFWwindow * window, double xOffset, double yOffset) noexcept;
 
 			/**
-			 * @brief The callback for the glfw API to handle file dropped in the handle.
+			 * @brief The callback for the glfw API to handle a file dropped in the handle.
 			 * @param window The glfw handle.
 			 * @param count The number of files.
-			 * @param paths An C-array for the file paths.
+			 * @param paths A C-array for the file paths.
 			 * @return void
 			 */
 			static void dropCallback (GLFWwindow * window, int count, const char * * paths) noexcept;
@@ -579,7 +562,7 @@ namespace EmEn::Input
 
 			static constexpr auto GameControllerDBFile{"gamecontrollerdb.txt"};
 
-			static Manager * s_instance;
+			inline static Manager * s_instance{nullptr};
 
 			PrimaryServices & m_primaryServices;
 			Window & m_window;

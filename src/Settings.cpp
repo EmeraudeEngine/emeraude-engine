@@ -30,7 +30,6 @@
 #include <ctime>
 #include <exception>
 #include <fstream>
-#include <iostream>
 #include <stack>
 
 /* Local inclusions. */
@@ -45,36 +44,7 @@ namespace EmEn
 {
 	using namespace EmEn::Libs;
 
-	const size_t Settings::ClassUID{getClassUID(ClassId)};
-
 	Settings * Settings::s_instance{nullptr};
-
-	Settings::Settings (const Arguments & arguments, const FileSystem & fileSystem, bool childProcess) noexcept
-		: ServiceInterface(ClassId),
-		m_arguments(arguments),
-		m_fileSystem(fileSystem)
-	{
-		if ( s_instance != nullptr )
-		{
-			std::cerr << __PRETTY_FUNCTION__ << ", constructor called twice !" "\n";
-
-			std::terminate();
-		}
-
-		s_instance = this;
-
-		m_flags[ChildProcess] = childProcess;
-
-		if ( !m_flags[ChildProcess] )
-		{
-			m_flags[SaveAtExit] = true;
-		}
-	}
-
-	Settings::~Settings ()
-	{
-		s_instance = nullptr;
-	}
 
 	bool
 	Settings::onInitialize () noexcept
@@ -347,12 +317,7 @@ namespace EmEn
 		Json::Value root{};
 
 		/* 1. JSON File header. */
-		{
-			std::stringstream text;
-			text << ENGINE_VERSION_MAJOR << '.' << ENGINE_VERSION_MINOR << '.' << ENGINE_VERSION_PATCH;
-
-			root[VersionKey] = text.str();
-		}
+		root[VersionKey] = VersionString;
 
 		{
 			const auto timestamp = time(nullptr);
@@ -671,15 +636,5 @@ namespace EmEn
 		}
 
 		return out;
-	}
-
-	std::string
-	to_string (const Settings & obj) noexcept
-	{
-		std::stringstream output;
-
-		output << obj;
-
-		return output.str();
 	}
 }

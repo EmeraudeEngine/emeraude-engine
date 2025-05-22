@@ -39,7 +39,7 @@ namespace EmEn::Saphir::Declaration
 {
 	/**
 	 * @brief The OutputPrimitive class
-	 * @extends EmEn::Saphir::DeclarationInterface This is a shader code declaration.
+	 * @extends EmEn::Saphir::Declaration::Interface This is a shader code declaration.
 	 */
 	class OutputPrimitive : public Interface
 	{
@@ -50,37 +50,66 @@ namespace EmEn::Saphir::Declaration
 			 * @param primitiveType The output primitive type.
 			 * @param maxVertices The max vertices input.
 			 */
-			OutputPrimitive (OutputPrimitiveType primitiveType, uint32_t maxVertices) noexcept;
+			OutputPrimitive (OutputPrimitiveType primitiveType, uint32_t maxVertices) noexcept
+				: m_primitiveType{primitiveType},
+				m_maxVertices{maxVertices}
+			{
 
-			/** @copydoc EmEn::Saphir::DeclarationInterface::isValid() */
+			}
+
+			/** @copydoc EmEn::Saphir::Declaration::Interface::isValid() */
 			[[nodiscard]]
-			bool isValid () const noexcept override;
+			bool
+			isValid () const noexcept override
+			{
+				return m_maxVertices > 0;
+			}
 
-			/** @copydoc EmEn::Saphir::DeclarationInterface::name() */
+			/** @copydoc EmEn::Saphir::Declaration::Interface::name() */
 			[[nodiscard]]
 			Key name () const noexcept override;
 
-			/** @copydoc EmEn::Saphir::DeclarationInterface::bytes() */
+			/** @copydoc EmEn::Saphir::Declaration::Interface::bytes() */
 			[[nodiscard]]
-			size_t bytes () const noexcept override;
+			uint32_t
+			bytes () const noexcept override
+			{
+				return 0;
+			}
 
-			/** @copydoc EmEn::Saphir::DeclarationInterface::sourceCode() */
+			/** @copydoc EmEn::Saphir::Declaration::Interface::sourceCode() */
 			[[nodiscard]]
-			std::string sourceCode () const noexcept override;
+			std::string
+			sourceCode () const noexcept override
+			{
+				std::stringstream code;
+
+				code << Keys::GLSL::Layout << " (" << this->name() << ", " << Keys::GLSL::MaxVertices << " = " << m_maxVertices << ") " << Keys::GLSL::Out << ";" "\n";
+
+				return code.str();
+			}
 
 			/**
 			 * @brief Returns the max vertices.
-			 * @return unsigned int
+			 * @return uint32_t
 			 */
 			[[nodiscard]]
-			uint32_t maxVertices () const noexcept;
+			uint32_t
+			maxVertices () const noexcept
+			{
+				return m_maxVertices;
+			}
 
 			/**
 			 * @brief Returns the output primitive type.
 			 * @return OutputPrimitiveType
 			 */
 			[[nodiscard]]
-			OutputPrimitiveType primitiveType () const noexcept;
+			OutputPrimitiveType
+			primitiveType () const noexcept
+			{
+				return m_primitiveType;
+			}
 
 		private:
 

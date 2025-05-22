@@ -29,8 +29,29 @@
 /* STL inclusions; */
 #include <cstdint>
 
+/* Forward declarations. */
+namespace EmEn
+{
+	namespace Graphics
+	{
+		class Renderer;
+	}
+
+	namespace Audio
+	{
+		class Manager;
+	}
+}
+
 namespace EmEn::AVConsole
 {
+	/** @brief Contains reference to the audio video. */
+	struct AVManagers
+	{
+		Graphics::Renderer & graphicsRenderer;
+		Audio::Manager & audioManager;
+	};
+
 	/** @brief Enumerates device types. */
 	enum class DeviceType: int8_t
 	{

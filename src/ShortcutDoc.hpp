@@ -27,7 +27,7 @@
 #pragma once
 
 /* STL inclusions. */
-#include <ostream>
+#include <sstream>
 #include <string>
 
 /* Local inclusions for inheritances. */
@@ -52,7 +52,13 @@ namespace EmEn
 			 * @param key The main key for the shortcut.
 			 * @param modifiers The additional modifiers. Default none.
 			 */
-			ShortcutDoc (const std::string & description, Input::Key key, int modifiers = 0) noexcept;
+			ShortcutDoc (const std::string & description, Input::Key key, int modifiers = 0) noexcept
+				: AbstractDoc{description},
+				m_key{key},
+				m_modifiers{modifiers}
+			{
+
+			}
 
 			/**
 			 * @brief Returns the main key of the shortcut.
@@ -77,6 +83,8 @@ namespace EmEn
 				return m_modifiers;
 			}
 
+		private:
+
 			/**
 			 * @brief STL streams printable object.
 			 * @param out A reference to the stream output.
@@ -85,16 +93,50 @@ namespace EmEn
 			 */
 			friend std::ostream & operator<< (std::ostream & out, const ShortcutDoc & obj);
 
-			/**
-			 * @brief Stringifies the object.
-			 * @param obj A reference to the object to print.
-			 * @return std::string
-			 */
-			friend std::string to_string (const ShortcutDoc & obj) noexcept;
-
-		private:
-
 			Input::Key m_key;
 			int m_modifiers;
 	};
+
+	inline
+	std::ostream &
+	operator<< (std::ostream & out, const ShortcutDoc & obj)
+	{
+		if ( Input::isKeyboardModifierPressed(Input::ModKeyShift, obj.modifiers()) )
+		{
+			out << "SHIFT + ";
+		}
+
+		if ( Input::isKeyboardModifierPressed(Input::ModKeyControl, obj.modifiers()) )
+		{
+			out << "CTRL + ";
+		}
+
+		if ( Input::isKeyboardModifierPressed(Input::ModKeyAlt, obj.modifiers()) )
+		{
+			out << "ALT + ";
+		}
+
+		if ( Input::isKeyboardModifierPressed(Input::ModKeySuper, obj.modifiers()) )
+		{
+			out << "SUPER + ";
+		}
+
+		return out << to_cstring(obj.key()) << " : " << obj.description();
+	}
+
+	/**
+	 * @brief Stringifies the object.
+	 * @param obj A reference to the object to print.
+	 * @return std::string
+	 */
+	inline
+	std::string
+	to_string (const ShortcutDoc & obj) noexcept
+	{
+		std::stringstream output;
+
+		output << obj;
+
+		return output.str();
+	}
 }

@@ -48,36 +48,9 @@
 namespace EmEn::Saphir
 {
 	using namespace EmEn::Libs;
-	using namespace Vulkan;
+	using namespace EmEn::Vulkan;
 
 	const size_t ShaderManager::ClassUID{getClassUID(ClassId)};
-	std::array< ShaderManager *, 2 > ShaderManager::s_instances{nullptr, nullptr};
-
-	ShaderManager::ShaderManager (PrimaryServices & primaryServices, GPUWorkType type) noexcept
-		: ServiceInterface(ClassId), m_primaryServices(primaryServices)
-	{
-		if ( s_instances.at(static_cast< size_t >(type)) != nullptr )
-		{
-			std::cerr << __PRETTY_FUNCTION__ << ", constructor called twice !" "\n";
-
-			std::terminate();
-		}
-
-		s_instances.at(static_cast< size_t >(type)) = this;
-	}
-
-	ShaderManager::~ShaderManager ()
-	{
-		for ( auto & pointer : s_instances )
-		{
-			if ( pointer == this )
-			{
-				pointer = nullptr;
-
-				break;
-			}
-		}
-	}
 
 	bool
 	ShaderManager::onInitialize () noexcept
@@ -717,13 +690,19 @@ namespace EmEn::Saphir
 		glslang::TShader glslShader{shaderType};
 		glslShader.setStrings(&sourceCodeCString, 1);
 		glslShader.setEnvInput(glslang::EShSourceGlsl, shaderType, glslang::EShClientVulkan, m_defaultVersion);
-#if IS_MACOS
-		glslShader.setEnvClient(glslang::EShClientVulkan, glslang::EShTargetVulkan_1_2);
-		glslShader.setEnvTarget(glslang::EShTargetSpv, glslang::EShTargetSpv_1_5);
-#else
-		glslShader.setEnvClient(glslang::EShClientVulkan, glslang::EShTargetVulkan_1_3);
-		glslShader.setEnvTarget(glslang::EShTargetSpv, glslang::EShTargetSpv_1_6);
-#endif
+		/* [VULKAN-API-SETUP] GLSL/SPIR-V version for Vulkan. */
+		if constexpr ( IsMacOS )
+		{
+			/* NOTE: macOS don't support the Vulkan API.
+			 * MoltenVK is used to translate commands to Metal API, some features can be unsupported. */
+			glslShader.setEnvClient(glslang::EShClientVulkan, glslang::EShTargetVulkan_1_2);
+			glslShader.setEnvTarget(glslang::EShTargetSpv, glslang::EShTargetSpv_1_5);
+		}
+		else
+		{
+			glslShader.setEnvClient(glslang::EShClientVulkan, glslang::EShTargetVulkan_1_3);
+			glslShader.setEnvTarget(glslang::EShTargetSpv, glslang::EShTargetSpv_1_6);
+		}
 
 		/* NOTE: Preprocess the source code. */
 		std::string preprocessedSource;

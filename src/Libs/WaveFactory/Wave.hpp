@@ -110,12 +110,13 @@ namespace EmEn::Libs::WaveFactory
 					m_data.resize(bufferSize);
 				}
 
-#ifdef EMERAUDE_DEBUG_WAVE_FACTORY
-				/* Shows memory usage */
-				auto memoryAllocated = m_data.size() * sizeof(precision_t);
+				if constexpr ( WaveFactoryDebugEnabled )
+				{
+					/* Shows memory usage */
+					auto memoryAllocated = m_data.size() * sizeof(precision_t);
 
-				std::cout << "[DEBUG] " << __PRETTY_FUNCTION__ << ", " << ( static_cast< float >(memoryAllocated) / 1048576 ) << " Mib" "\n";
-#endif
+					std::cout << "[DEBUG] " << __PRETTY_FUNCTION__ << ", " << ( static_cast< float >(memoryAllocated) / 1048576 ) << " Mib" "\n";
+				}
 
 				return true;
 			}
@@ -204,7 +205,7 @@ namespace EmEn::Libs::WaveFactory
 			 */
 			[[nodiscard]]
 			size_t
-			elementsCount () const noexcept
+			elementCount () const noexcept
 			{
 				return m_data.size();
 			}
@@ -215,7 +216,7 @@ namespace EmEn::Libs::WaveFactory
 			 */
 			[[nodiscard]]
 			size_t
-			samplesCount () const noexcept
+			sampleCount () const noexcept
 			{
 				return m_data.size() / static_cast< size_t >(m_channels);
 			}
@@ -245,14 +246,16 @@ namespace EmEn::Libs::WaveFactory
 			}
 
 			/**
-			 * @brief Returns samplesCount * channelsCount * bytesCount (2 for 16bits sound).
-			 * @return size_t
+			 * @brief Returns the size of the wave in bytes (samplesCount * channelsCount * bytesCount (2 for 16bits sound)).
+			 * @tparam output_t The type of output data. Default uint32_t.
+			 * @return output_t
 			 */
+			template< typename output_t = uint32_t >
 			[[nodiscard]]
-			size_t
-			bytesCount () const noexcept
+			output_t
+			bytes () const noexcept
 			{
-				return m_data.size() * sizeof(precision_t);
+				return static_cast< output_t >(m_data.size() * sizeof(precision_t));
 			}
 
 			/**
@@ -342,11 +345,12 @@ namespace EmEn::Libs::WaveFactory
 					output.bytes -= ((count * chunkSize) - m_data.size());
 				}
 
-#ifdef EMERAUDE_DEBUG_WAVE_FACTORY
-				std::cout << "Chunk #" << chunkIndex << " (size: " << chunkSize << ") -> offset " << output.offset << " of " << m_data.size() << "." "\n";
-#endif
+				if constexpr ( WaveFactoryDebugEnabled )
+				{
+					std::cout << "Chunk #" << chunkIndex << " (size: " << chunkSize << ") -> offset " << output.offset << " of " << m_data.size() << "." "\n";
+				}
 
-				/* Sizeof = 2 */
+				/* Note: sizeof = 2 */
 				output.bytes *= sizeof(precision_t);
 
 				return output;
@@ -360,7 +364,7 @@ namespace EmEn::Libs::WaveFactory
 			float
 			seconds () const noexcept
 			{
-				return static_cast< float >(this->samplesCount()) / static_cast< float >(m_frequency);
+				return static_cast< float >(this->sampleCount()) / static_cast< float >(m_frequency);
 			}
 
 			/**
@@ -371,7 +375,7 @@ namespace EmEn::Libs::WaveFactory
 			float
 			milliseconds () const noexcept
 			{
-				return (static_cast< float >(this->samplesCount()) * 1000.0F) / static_cast< float >(m_frequency);
+				return (static_cast< float >(this->sampleCount()) * 1000.0F) / static_cast< float >(m_frequency);
 			}
 
 			/**
@@ -407,11 +411,11 @@ namespace EmEn::Libs::WaveFactory
 			{
 				return out <<
 					"Wave (wave_t) data :\n" <<
-					"Samples count : " << obj.samplesCount() << "\n"
+					"Samples count : " << obj.sampleCount() << "\n"
 					"Channels count : " << static_cast< int >(obj.m_channels) <<"\n"
 					"Frequency : " << static_cast< int >(obj.m_frequency) << "\n"
-					"Wave data count : " << obj.elementsCount() << "\n"
-					"Wave data size : " << obj.bytesCount() << "\n"
+					"Wave data count : " << obj.elementCount() << "\n"
+					"Wave data size : " << obj.bytes() << "\n"
 					"Wave data : " << ( obj.isValid() ? "Loaded" : "Not loaded" ) << '\n';
 			}
 
@@ -450,33 +454,33 @@ namespace EmEn::Libs::WaveFactory
 
 	/**
 	 * @brief Converts a wave format to another one.
-	 * @tparam typeA_t The type of the source wave.
-	 * @tparam typeB_t The type of the destination wave.
+	 * @tparam src_data_t The type of the source wave.
+	 * @tparam dst_data_t The type of the destination wave.
 	 * @param source A reference to the source wave.
 	 * @param destination A reference to the destination wave.
 	 * @return size_t
 	 */
-	template< typename typeA_t, typename typeB_t >
+	template< typename src_data_t, typename dst_data_t >
 	size_t
-	convertWaveFormat (const Wave< typeA_t > & source, Wave< typeB_t > & destination) noexcept
+	convertWaveFormat (const Wave< src_data_t > & source, Wave< dst_data_t > & destination) noexcept
 	{
 		destination.clear();
 
-		const auto bufferSize = source.elementsCount();
+		const auto sampleCount = source.elementCount();
 
-		if ( bufferSize > 0 )
+		if ( sampleCount > 0 )
 		{
-			destination.m_data.resize(bufferSize);
+			destination.m_data.resize(sampleCount);
 
-			for ( size_t sampleIndex = 0; sampleIndex < bufferSize; ++sampleIndex )
+			for ( size_t sampleIndex = 0; sampleIndex < sampleCount; ++sampleIndex )
 			{
-				destination.m_data[sampleIndex] = static_cast< typeB_t >(source.m_data[sampleIndex]);
+				destination.m_data[sampleIndex] = static_cast< dst_data_t >(source.m_data[sampleIndex]);
 			}
 		}
 
 		destination.m_channels = source.m_channels;
 		destination.m_frequency = source.m_frequency;
 
-		return bufferSize;
+		return sampleCount;
 	}
 }

@@ -26,12 +26,6 @@
 
 #pragma once
 
-/* STL inclusions. */
-#include <cstddef>
-#include <cstdint>
-#include <memory>
-#include <string>
-
 /* Local inclusions for inheritances. */
 #include "Resources/ResourceTrait.hpp"
 
@@ -58,24 +52,44 @@ namespace EmEn::Graphics
 			/** @brief Observable class unique identifier. */
 			static const size_t ClassUID;
 
+			/** @brief Defines the resource dependency complexity. */
+			static constexpr auto Complexity{Resources::DepComplexity::None};
+
 			/**
 			 * @brief Constructs an image resource.
-			 * @param name The name of the resource.
-			 * @param resourceFlagBits The resource flag bits. Default none. (Unused yet)
+			 * @param name The name of the resource [std::move].
+			 * @param resourceFlags The resource flag bits. Default none. (Unused yet)
 			 */
-			explicit ImageResource (const std::string & name, uint32_t resourceFlagBits = 0) noexcept;
+			explicit
+			ImageResource (std::string name, uint32_t resourceFlags = 0) noexcept
+				: ResourceTrait{std::move(name), resourceFlags}
+			{
+
+			}
 
 			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
 			[[nodiscard]]
-			size_t classUID () const noexcept override;
+			size_t
+			classUID () const noexcept override
+			{
+				return ClassUID;
+			}
 
 			/** @copydoc EmEn::Libs::ObservableTrait::is() const */
 			[[nodiscard]]
-			bool is (size_t classUID) const noexcept override;
+			bool
+			is (size_t classUID) const noexcept override
+			{
+				return classUID == ClassUID;
+			}
 
 			/** @copydoc EmEn::Resources::ResourceTrait::classLabel() const */
 			[[nodiscard]]
-			const char * classLabel () const noexcept override;
+			const char *
+			classLabel () const noexcept override
+			{
+				return ClassId;
+			}
 
 			/** @copydoc EmEn::Resources::ResourceTrait::load() */
 			bool load () noexcept override;
@@ -86,64 +100,72 @@ namespace EmEn::Graphics
 			/** @copydoc EmEn::Resources::ResourceTrait::load(const Json::Value &) */
 			bool load (const Json::Value & data) noexcept override;
 
+			/** @copydoc EmEn::Resources::ResourceTrait::memoryOccupied() const noexcept */
+			[[nodiscard]]
+			size_t
+			memoryOccupied () const noexcept override
+			{
+				return sizeof(*this) + m_pixmap.bytes< size_t >();
+			}
+
 			/**
 			 * @brief Returns the pixmap.
 			 * @return const Libraries::PixelFactory::Pixmap< uint8_t > &
 			 */
 			[[nodiscard]]
-			const Libs::PixelFactory::Pixmap< uint8_t > & data () const noexcept;
+			const Libs::PixelFactory::Pixmap< uint8_t > &
+			data () const noexcept
+			{
+				return m_pixmap;
+			}
 
 			/**
 			 * @brief Returns the width of the image.
 			 * @return uint32_t
 			 */
 			[[nodiscard]]
-			uint32_t width () const noexcept;
+			uint32_t
+			width () const noexcept
+			{
+				return m_pixmap.width();
+			}
 
 			/**
 			 * @brief Returns the height of the image.
 			 * @return uint32_t
 			 */
 			[[nodiscard]]
-			uint32_t height () const noexcept;
+			uint32_t
+			height () const noexcept
+			{
+				return m_pixmap.height();
+			}
 
 			/**
 			 * @brief Returns whether the image is a gray scale.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool isGrayScale () const noexcept;
+			bool
+			isGrayScale () const noexcept
+			{
+				return m_pixmap.isGrayScale();
+			}
 
 			/**
 			 * @brief Returns the average color of the cubemap.
 			 * @return Libraries::PixelFactory::Color< float >
 			 */
 			[[nodiscard]]
-			Libs::PixelFactory::Color< float > averageColor () const noexcept;
-
-			/**
-			 * @brief Returns an image resource by its name.
-			 * @param resourceName A reference to a string.
-			 * @param directLoad Use the direct loading mode. Default false.
-			 * @return std::shared_ptr< ImageResource >
-			 */
-			[[nodiscard]]
-			static std::shared_ptr< ImageResource > get (const std::string & resourceName, bool directLoad = false) noexcept;
-
-			/**
-			 * @brief Returns the default image resource.
-			 * @return std::shared_ptr< ImageResource >
-			 */
-			[[nodiscard]]
-			static std::shared_ptr< ImageResource > getDefault () noexcept;
+			Libs::PixelFactory::Color< float >
+			averageColor () const noexcept
+			{
+				return m_pixmap.averageColor();
+			}
 
 		private:
 
-			/** @copydoc EmEn::Resources::ResourceTrait::onDependenciesLoaded() */
-			[[nodiscard]]
-			bool onDependenciesLoaded () noexcept override;
-
-			Libs::PixelFactory::Pixmap< uint8_t > m_data{};
+			Libs::PixelFactory::Pixmap< uint8_t > m_pixmap;
 	};
 }
 

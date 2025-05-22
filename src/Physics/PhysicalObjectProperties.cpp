@@ -43,24 +43,6 @@ namespace EmEn::Physics
 
 	const size_t PhysicalObjectProperties::ClassUID{getClassUID(ClassId)};
 
-	PhysicalObjectProperties::PhysicalObjectProperties (float mass, float surface, float dragCoefficient, float bounciness, float stickiness) noexcept
-		: m_mass(mass), m_inverseMass(1.0F / m_mass), m_surface(surface), m_dragCoefficient(dragCoefficient), m_bounciness(bounciness), m_stickiness(stickiness)
-	{
-
-	}
-
-	size_t
-	PhysicalObjectProperties::classUID () const noexcept
-	{
-		return ClassUID;
-	}
-
-	bool
-	PhysicalObjectProperties::is (size_t classUID) const noexcept
-	{
-		return classUID == ClassUID;
-	}
-
 	bool
 	PhysicalObjectProperties::setMass (float value, bool fireEvents) noexcept
 	{
@@ -270,7 +252,7 @@ namespace EmEn::Physics
 			/* Checking the value type and pop an error on bad one. */
 			if ( !data[property.jsonKey].isNumeric() )
 			{
-				Tracer::error(ClassId, BlobTrait() << '\'' << property.jsonKey << "' key must be a floating number !");
+				TraceError{ClassId} << '\'' << property.jsonKey << "' key must be a floating number !";
 
 				continue;
 			}
@@ -308,37 +290,5 @@ namespace EmEn::Physics
 		m_dragCoefficient = (m_dragCoefficient + other.m_dragCoefficient) * Half< float >;
 		m_bounciness = (m_bounciness + other.m_bounciness) * Half< float >;
 		m_stickiness = (m_stickiness + other.m_stickiness) * Half< float >;
-	}
-
-	void
-	PhysicalObjectProperties::reset () noexcept
-	{
-		m_mass = DefaultMass;
-		m_inverseMass = 0.0F;
-		m_surface = DefaultSurface;
-		m_dragCoefficient = DefaultDragCoefficient;
-		m_bounciness = DefaultBounciness;
-		m_stickiness = DefaultStickiness;
-	}
-
-	std::ostream &
-	operator<< (std::ostream & out, const PhysicalObjectProperties & obj)
-	{
-		return out << "Physical object properties :" "\n"
-			"Mass : " << obj.m_mass << " Kg (Inverse: " << obj.m_inverseMass << ")" << '\n' <<
-			"Surface : " << obj.m_surface << " m²" << '\n' <<
-			"Drag Coefficient : " << obj.m_dragCoefficient << '\n' <<
-			"Bounciness : " << obj.m_bounciness << '\n' <<
-			"Stickiness : " << obj.m_stickiness << '\n';
-	}
-
-	std::string
-	to_string (const PhysicalObjectProperties & obj) noexcept
-	{
-		std::stringstream output;
-
-		output << obj;
-
-		return output.str();
 	}
 }

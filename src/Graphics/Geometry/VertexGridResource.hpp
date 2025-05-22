@@ -27,10 +27,6 @@
 #pragma once
 
 /* STL inclusions. */
-#include <cstddef>
-#include <cstdint>
-#include <string>
-#include <vector>
 #include <memory>
 
 /* Local inclusions for inheritances. */
@@ -59,12 +55,20 @@ namespace EmEn::Graphics::Geometry
 			/** @brief Observable class unique identifier. */
 			static const size_t ClassUID;
 
+			/** @brief Defines the resource dependency complexity. */
+			static constexpr auto Complexity{Resources::DepComplexity::One};
+
 			/**
 			 * @brief Construct a vertex grid geometry resource.
 			 * @param name A reference to a string for the resource name.
-			 * @param geometryFlagBits The geometry resource flag bits, See EmEn::Graphics::Geometry::GeometryFlagBits. Default EnablePrimitiveRestart.
+			 * @param geometryFlags The geometry resource flag bits, See EmEn::Graphics::Geometry::GeometryFlagBits. Default EnablePrimitiveRestart.
 			 */
-			explicit VertexGridResource (const std::string & name, uint32_t geometryFlagBits = EnablePrimitiveRestart) noexcept;
+			explicit
+			VertexGridResource (const std::string & name, uint32_t geometryFlags = EnablePrimitiveRestart) noexcept
+				: Interface{name, geometryFlags}
+			{
+
+			}
 
 			/**
 			 * @brief Copy constructor.
@@ -93,7 +97,10 @@ namespace EmEn::Graphics::Geometry
 			/**
 			 * @brief Destructs the vertex grid geometry resource.
 			 */
-			~VertexGridResource () override;
+			~VertexGridResource () override
+			{
+				this->destroyFromHardware(true);
+			}
 
 			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
 			[[nodiscard]]
@@ -139,7 +146,7 @@ namespace EmEn::Graphics::Geometry
 
 			/** @copydoc EmEn::Graphics::Geometry::Interface::subGeometryCount() */
 			[[nodiscard]]
-			size_t
+			uint32_t
 			subGeometryCount () const noexcept override
 			{
 				return 1;
@@ -148,14 +155,14 @@ namespace EmEn::Graphics::Geometry
 			/** @copydoc EmEn::Graphics::Geometry::Interface::subGeometryRange() */
 			[[nodiscard]]
 			std::array< uint32_t, 2 >
-			subGeometryRange (size_t /*subGeometryIndex*/ = 0) const noexcept override
+			subGeometryRange (uint32_t /*subGeometryIndex*/ = 0) const noexcept override
 			{
 				return {0, static_cast< uint32_t >(m_indexBufferObject->indexCount())};
 			}
 
 			/** @copydoc EmEn::Graphics::Geometry::Interface::boundingBox() */
 			[[nodiscard]]
-			const Libs::Math::Cuboid< float > &
+			const Libs::Math::Space3D::AACuboid< float > &
 			boundingBox () const noexcept override
 			{
 				return m_localData.boundingBox();
@@ -163,7 +170,7 @@ namespace EmEn::Graphics::Geometry
 
 			/** @copydoc EmEn::Graphics::Geometry::Interface::boundingSphere() */
 			[[nodiscard]]
-			const Libs::Math::Sphere< float > &
+			const Libs::Math::Space3D::Sphere< float > &
 			boundingSphere () const noexcept override
 			{
 				return m_localData.boundingSphere();
@@ -190,21 +197,22 @@ namespace EmEn::Graphics::Geometry
 			bool
 			useIndexBuffer () const noexcept override
 			{
-#ifdef DEBUG
-				return m_indexBufferObject != nullptr;
-#else
+				if constexpr ( IsDebug )
+				{
+					return m_indexBufferObject != nullptr;
+				}
+
 				return true;
-#endif
 			}
 
-			/** @copydoc EmEn::Graphics::Geometry::Interface::create() */
-			bool create () noexcept override;
+			/** @copydoc EmEn::Graphics::Geometry::Interface::createOnHardware() noexcept */
+			bool createOnHardware (Vulkan::TransferManager & transferManager) noexcept override;
 
-			/** @copydoc EmEn::Graphics::Geometry::Interface::update() */
-			bool update () noexcept override;
+			/** @copydoc EmEn::Graphics::Geometry::Interface::updateVideoMemory() noexcept */
+			bool updateVideoMemory () noexcept override;
 
-			/** @copydoc EmEn::Graphics::Geometry::Interface::destroy() */
-			void destroy (bool clearLocalData) noexcept override;
+			/** @copydoc EmEn::Graphics::Geometry::Interface::destroyFromHardware(bool) noexcept */
+			void destroyFromHardware (bool clearLocalData) noexcept override;
 
 			/** @copydoc EmEn::Resources::ResourceTrait::classLabel() const */
 			[[nodiscard]]
@@ -220,19 +228,28 @@ namespace EmEn::Graphics::Geometry
 			/** @copydoc EmEn::Resources::ResourceTrait::load(const Json::Value &) */
 			bool load (const Json::Value & data) noexcept override;
 
+			/** @copydoc EmEn::Resources::ResourceTrait::memoryOccupied() const noexcept */
+			[[nodiscard]]
+			size_t
+			memoryOccupied () const noexcept override
+			{
+				// TODO ...
+				return 0;
+			}
+
 			/**
 			 * @brief Loads a flat squared grid.
-			 * @param size The size of the whole size of one dimension of the grid. i.e. If the size is 1024, the grid will be from +512 to -512.
-			 * @param division How many cell in one dimension.
+			 * @param size The size of the whole size of one dimension of the grid. I.e. If the size is 1024, the grid will be from +512 to -512.
+			 * @param division How many cells in one dimension.
 			 * @param UVMultiplier Texture coordinates multiplier. Default, 1.0.
 			 * @param vertexColorGenMode Set the vertex color generation mode. Default random.
 			 * @param globalVertexColor A reference to a color. Default black.
 			 * @return bool
 			 */
-			bool load (float size, size_t division, float UVMultiplier = 1.0F, const VertexColorGenMode & vertexColorGenMode = VertexColorGenMode::UseRandom, const Libs::PixelFactory::Color< float > & globalVertexColor = Libs::PixelFactory::Black) noexcept;
+			bool load (float size, uint32_t division, float UVMultiplier = 1.0F, const VertexColorGenMode & vertexColorGenMode = VertexColorGenMode::UseRandom, const Libs::PixelFactory::Color< float > & globalVertexColor = Libs::PixelFactory::Black) noexcept;
 
 			/**
-			 * @brief This load a geometry from a parametric object.
+			 * @brief This loads a geometry from a parametric object.
 			 * @note This only local data and not pushing it to the video RAM.
 			 * @param grid A reference to a geometry from vertex factory library.
 			 * @param vertexColorGenMode Set the vertex color generation mode. Default random.
@@ -262,44 +279,29 @@ namespace EmEn::Graphics::Geometry
 				return m_localData;
 			}
 
-			/**
-			 * @brief Returns a vertex grid resource by its name.
-			 * @param resourceName A reference to a string.
-			 * @param directLoad Use the direct loading mode. Default false.
-			 * @return std::shared_ptr< VertexGridResource >
-			 */
-			[[nodiscard]]
-			static std::shared_ptr< VertexGridResource > get (const std::string & resourceName, bool directLoad = false) noexcept;
-
-			/**
-			 * @brief Returns the default vertex grid resource.
-			 * @return std::shared_ptr< VertexGridResource >
-			 */
-			[[nodiscard]]
-			static std::shared_ptr< VertexGridResource > getDefault () noexcept;
-
 		private:
 
 			/**
-			 * @brief Creates an hardware buffer on the device.
+			 * @brief Creates a hardware buffer on the device.
+			 * @param transferManager A reference to the transfer manager.
 			 * @param vertexAttributes A reference to a vertex attribute vector.
 			 * @param vertexCount The number of vertices.
 			 * @param vertexElementCount The number of elements composing a vertex.
-			 * @param indices A reference to a index vector.
+			 * @param indices A reference to an index vector.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool createVideoMemoryBuffers (const std::vector< float > & vertexAttributes, size_t vertexCount, size_t vertexElementCount, const std::vector< uint32_t > & indices) noexcept;
+			bool createVideoMemoryBuffers (Vulkan::TransferManager & transferManager, const std::vector< float > & vertexAttributes, uint32_t vertexCount, uint32_t vertexElementCount, const std::vector< uint32_t > & indices) noexcept;
 
 			/**
 			 * @brief Adds a vertex to the local buffer.
 			 * @param index The point index in the local grid.
 			 * @param buffer A reference to the vertex attribute buffer.
-			 * @param vertexElementCount The number of element for a vertex count.
+			 * @param vertexElementCount The number of elements for a vertex count.
 			 * @return uint32_t
 			 */
 			[[nodiscard]]
-			uint32_t addVertexToBuffer (size_t index, std::vector< float > & buffer, uint32_t vertexElementCount) const noexcept;
+			uint32_t addVertexToBuffer (uint32_t index, std::vector< float > & buffer, uint32_t vertexElementCount) const noexcept;
 
 			/* JSON key. */
 			static constexpr auto JKSize{"Size"};

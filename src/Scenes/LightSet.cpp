@@ -32,6 +32,8 @@
 /* Local inclusions. */
 #include "Saphir/LightGenerator.hpp"
 #include "Vulkan/SwapChain.hpp"
+#include "Vulkan/DescriptorSetLayout.hpp"
+#include "AVConsole/Manager.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::Scenes
@@ -39,24 +41,16 @@ namespace EmEn::Scenes
 	using namespace EmEn::Libs;
 	using namespace EmEn::Libs::Math;
 	using namespace EmEn::Libs::PixelFactory;
-	using namespace Graphics;
-	using namespace Saphir;
-	using namespace Vulkan;
+	using namespace EmEn::Graphics;
+	using namespace EmEn::Saphir;
+	using namespace EmEn::Vulkan;
 
 	const size_t LightSet::ClassUID{getClassUID(ClassId)};
 
-	LightSet::LightSet (AVConsole::Manager & AVConsoleManager) noexcept
-		: m_AVConsoleManager(AVConsoleManager)
-	{
-
-	}
-
 	std::unique_ptr< DescriptorSet >
-	LightSet::createDescriptorSet (const UniformBufferObject & uniformBufferObject) noexcept
+	LightSet::createDescriptorSet (Renderer & renderer, const UniformBufferObject & uniformBufferObject) noexcept
 	{
-		auto * renderer = Renderer::instance();
-
-		auto descriptorSet = std::make_unique< DescriptorSet >(renderer->descriptorPool(), getDescriptorSetLayout(renderer->layoutManager()));
+		auto descriptorSet = std::make_unique< DescriptorSet >(renderer.descriptorPool(), getDescriptorSetLayout(renderer.layoutManager()));
 
 		if ( !descriptorSet->create() )
 		{
@@ -76,7 +70,7 @@ namespace EmEn::Scenes
 	}
 
 	bool
-	LightSet::initialize (Renderer & renderer, const std::string & sceneName) noexcept
+	LightSet::initialize (const std::string & sceneName) noexcept
 	{
 		if ( !this->isEnabled() )
 		{
@@ -87,6 +81,7 @@ namespace EmEn::Scenes
 
 		const std::lock_guard< std::mutex > lock{m_lightAccess};
 
+		auto & renderer = m_AVConsoleManager.graphicsRenderer();
 		auto & sharedUBOManager = renderer.sharedUBOManager();
 
 		/* Generate directional light shared uniform buffer. */
@@ -105,7 +100,7 @@ namespace EmEn::Scenes
 			/* NOTE: Register existing lights. */
 			for ( const auto & light : m_directionalLights )
 			{
-				if ( !light->createOnHardware(*this, renderer, m_AVConsoleManager) )
+				if ( !light->createOnHardware(*this, m_AVConsoleManager) )
 				{
 					TraceError{ClassId} << "Unable to create the directional light '" << light->name() << "' !";
 
@@ -130,7 +125,7 @@ namespace EmEn::Scenes
 			/* NOTE: Register existing lights. */
 			for ( const auto & light : m_pointLights )
 			{
-				if ( !light->createOnHardware(*this, renderer, m_AVConsoleManager) )
+				if ( !light->createOnHardware(*this, m_AVConsoleManager) )
 				{
 					TraceError{ClassId} << "Unable to create the point light '" << light->name() << "' !";
 
@@ -155,7 +150,7 @@ namespace EmEn::Scenes
 			/* NOTE: Register existing lights. */
 			for ( const auto & light : m_spotLights )
 			{
-				if ( !light->createOnHardware(*this, renderer, m_AVConsoleManager) )
+				if ( !light->createOnHardware(*this, m_AVConsoleManager) )
 				{
 					TraceError{ClassId} << "Unable to create the spot light '" << light->name() << "' !";
 
@@ -172,7 +167,7 @@ namespace EmEn::Scenes
 	}
 
 	bool
-	LightSet::terminate (Renderer & renderer) noexcept
+	LightSet::terminate () noexcept
 	{
 		if ( !this->isEnabled() )
 		{
@@ -181,6 +176,7 @@ namespace EmEn::Scenes
 
 		size_t error = 0;
 
+		auto & renderer = m_AVConsoleManager.graphicsRenderer();
 		auto & sharedUBOManager = renderer.sharedUBOManager();
 
 		m_flags[Initialized] = false;
@@ -225,10 +221,10 @@ namespace EmEn::Scenes
 	}
 
 	void
-	LightSet::add (const std::shared_ptr< Component::DirectionalLight > & light, Renderer & renderer) noexcept
+	LightSet::add (const std::shared_ptr< Component::DirectionalLight > & light) noexcept
 	{
 		/* NOTE: If light set is uninitialized, the light creation will be postponed. */
-		if ( m_flags[Initialized] && !light->createOnHardware(*this, renderer, m_AVConsoleManager) )
+		if ( m_flags[Initialized] && !light->createOnHardware(*this, m_AVConsoleManager) )
 		{
 			TraceError{ClassId} << "Unable to create the directional light '" << light->name() << "' !";
 
@@ -244,10 +240,10 @@ namespace EmEn::Scenes
 	}
 
 	void
-	LightSet::add (const std::shared_ptr< Component::PointLight > & light, Renderer & renderer) noexcept
+	LightSet::add (const std::shared_ptr< Component::PointLight > & light) noexcept
 	{
 		/* NOTE: If light set is uninitialized, the light creation will be postponed. */
-		if ( m_flags[Initialized] && !light->createOnHardware(*this, renderer, m_AVConsoleManager) )
+		if ( m_flags[Initialized] && !light->createOnHardware(*this, m_AVConsoleManager) )
 		{
 			TraceError{ClassId} << "Unable to create the point light '" << light->name() << "' !";
 
@@ -263,10 +259,10 @@ namespace EmEn::Scenes
 	}
 
 	void
-	LightSet::add (const std::shared_ptr< Component::SpotLight > & light, Renderer & renderer) noexcept
+	LightSet::add (const std::shared_ptr< Component::SpotLight > & light) noexcept
 	{
 		/* NOTE: If light set is uninitialized, the light creation will be postponed. */
-		if ( m_flags[Initialized] && !light->createOnHardware(*this, renderer, m_AVConsoleManager) )
+		if ( m_flags[Initialized] && !light->createOnHardware(*this, m_AVConsoleManager) )
 		{
 			TraceError{ClassId} << "Unable to create the spot light '" << light->name() << "' !";
 
@@ -291,7 +287,7 @@ namespace EmEn::Scenes
 
 		this->notify(DirectionalLightRemoved, light);
 
-		light->destroyFromHardware();
+		light->destroyFromHardware(*this, m_AVConsoleManager);
 	}
 
 	void
@@ -304,7 +300,7 @@ namespace EmEn::Scenes
 
 		this->notify(PointLightRemoved, light);
 
-		light->destroyFromHardware();
+		light->destroyFromHardware(*this, m_AVConsoleManager);
 	}
 
 	void
@@ -317,7 +313,7 @@ namespace EmEn::Scenes
 
 		this->notify(SpotLightRemoved, light);
 
-		light->destroyFromHardware();
+		light->destroyFromHardware(*this, m_AVConsoleManager);
 	}
 
 	void
@@ -387,16 +383,6 @@ namespace EmEn::Scenes
 		return out;
 	}
 
-	std::string
-	to_string (const LightSet & obj) noexcept
-	{
-		std::stringstream output;
-
-		output << obj;
-
-		return output.str();
-	}
-
 	std::shared_ptr< DescriptorSetLayout >
 	LightSet::getDescriptorSetLayout (LayoutManager & layoutManager) noexcept
 	{
@@ -420,25 +406,27 @@ namespace EmEn::Scenes
 		return descriptorSetLayout;
 	}
 
-	void
-	LightSet::createDefaultStaticLighting () noexcept
+	StaticLighting &
+	LightSet::getOrCreateDefaultStaticLighting () noexcept
 	{
-		if ( m_staticLighting.contains(DefaultStaticLightingName) )
+		const auto staticLightingIt = m_staticLighting.find(DefaultStaticLightingName);
+
+		if ( staticLightingIt != m_staticLighting.cend() )
 		{
-			return;
+			return staticLightingIt->second;
 		}
 
-		StaticLighting staticLighting{};
+		StaticLighting staticLighting;
 		staticLighting
 			.setAmbientParameters(Blue, 0.005F)
 			.setLightParameters(White, 1.5F)
 			.setAsDirectionalLight({1.0F, 0.0F, 0.0F});
 
-		m_staticLighting.emplace(DefaultStaticLightingName, staticLighting);
+		return m_staticLighting.emplace(DefaultStaticLightingName, staticLighting).first->second;
 	}
 
 	StaticLighting &
-	LightSet::getStaticLighting (const std::string & name) noexcept
+	LightSet::getOrCreateStaticLighting (const std::string & name) noexcept
 	{
 		const auto staticLightingIt = m_staticLighting.find(name);
 
@@ -447,15 +435,15 @@ namespace EmEn::Scenes
 			return staticLightingIt->second;
 		}
 
-		return m_staticLighting[name];
+		return m_staticLighting.emplace(DefaultStaticLightingName, StaticLighting{}).first->second;
 	}
 
 	const StaticLighting *
-	LightSet::getStaticLighting (const std::string & name) const noexcept
+	LightSet::getStaticLightingPointer (const std::string & name) const noexcept
 	{
 		const auto staticLightingIt = m_staticLighting.find(name);
 
-		if ( staticLightingIt == m_staticLighting.cend() )
+		if ( staticLightingIt != m_staticLighting.cend() )
 		{
 			return nullptr;
 		}

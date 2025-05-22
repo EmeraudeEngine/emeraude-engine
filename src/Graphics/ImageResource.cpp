@@ -26,15 +26,10 @@
 
 #include "ImageResource.hpp"
 
-/* STL inclusions. */
-#include <cstddef>
-#include <cstdint>
-#include <memory>
-#include <string>
-
 /* Local inclusions. */
 #include "Libs/PixelFactory/Color.hpp"
 #include "Libs/PixelFactory/FileIO.hpp"
+#include "TextureResource/Abstract.hpp"
 #include "Resources/Manager.hpp"
 #include "Tracer.hpp"
 
@@ -52,30 +47,6 @@ namespace EmEn::Graphics
 
 	const size_t ImageResource::ClassUID{getClassUID(ClassId)};
 
-	ImageResource::ImageResource (const std::string & name, uint32_t resourceFlagBits) noexcept
-		: ResourceTrait(name, resourceFlagBits)
-	{
-
-	}
-
-	size_t
-	ImageResource::classUID () const noexcept
-	{
-		return ClassUID;
-	}
-
-	bool
-	ImageResource::is (size_t classUID) const noexcept
-	{
-		return classUID == ClassUID;
-	}
-
-	const char *
-	ImageResource::classLabel () const noexcept
-	{
-		return ClassId;
-	}
-
 	bool
 	ImageResource::load () noexcept
 	{
@@ -86,14 +57,14 @@ namespace EmEn::Graphics
 			return false;
 		}
 
-		if ( !m_data.initialize(DefaultSize, DefaultSize, PixelFactory::ChannelMode::RGB) )
+		if ( !m_pixmap.initialize(DefaultSize, DefaultSize, PixelFactory::ChannelMode::RGB) )
 		{
 			Tracer::error(ClassId, "Unable to load the default pixmap !");
 
 			return this->setLoadSuccess(false);
 		}
 
-		if ( !m_data.fill(PixelFactory::Magenta) )
+		if ( !m_pixmap.fill(PixelFactory::Magenta) )
 		{
 			Tracer::error(ClassId, "Unable to fill the default pixmap !");
 
@@ -111,16 +82,18 @@ namespace EmEn::Graphics
 			return false;
 		}
 
-		if ( !PixelFactory::FileIO::read(filepath, m_data) )
+		if ( !PixelFactory::FileIO::read(filepath, m_pixmap) )
 		{
 			TraceError{ClassId} << "Unable to load the image file '" << filepath << "' !";
 
 			return this->setLoadSuccess(false);
 		}
 
-		if ( !TextureResource::Abstract::validatePixmap(ClassId, m_data) )
+		if ( !TextureResource::Abstract::validatePixmap(ClassId, this->name(), m_pixmap) )
 		{
 			TraceError{ClassId} << "Unable to use the pixmap from file '" << filepath << "' to create an image !";
+
+			m_pixmap.clear();
 
 			return this->setLoadSuccess(false);
 		}
@@ -139,53 +112,5 @@ namespace EmEn::Graphics
 		Tracer::error(ClassId, "This method can't be used !");
 
 		return this->setLoadSuccess(false);
-	}
-
-	bool
-	ImageResource::onDependenciesLoaded () noexcept
-	{
-		return true;
-	}
-
-	std::shared_ptr< ImageResource >
-	ImageResource::get (const std::string & resourceName, bool directLoad) noexcept
-	{
-		return Resources::Manager::instance()->images().getResource(resourceName, !directLoad);
-	}
-
-	std::shared_ptr< ImageResource >
-	ImageResource::getDefault () noexcept
-	{
-		return Resources::Manager::instance()->images().getDefaultResource();
-	}
-
-	const PixelFactory::Pixmap< uint8_t > &
-	ImageResource::data () const noexcept
-	{
-		return m_data;
-	}
-
-	uint32_t
-	ImageResource::width () const noexcept
-	{
-		return m_data.width();
-	}
-
-	uint32_t
-	ImageResource::height () const noexcept
-	{
-		return m_data.height();
-	}
-
-	bool
-	ImageResource::isGrayScale () const noexcept
-	{
-		return m_data.isGrayScale();
-	}
-
-	PixelFactory::Color< float >
-	ImageResource::averageColor () const noexcept
-	{
-		return m_data.averageColor();
 	}
 }

@@ -28,7 +28,7 @@
 
 /* STL inclusions. */
 #include <cstddef>
-#include <ostream>
+#include <sstream>
 #include <string>
 
 namespace EmEn::Vulkan
@@ -46,7 +46,13 @@ namespace EmEn::Vulkan
 			 * @param bytes The size of data in bytes.
 			 * @param offset The offset to the destination. Default 0.
 			 */
-			MemoryRegion (const void * source, size_t bytes, size_t offset = 0) noexcept;
+			MemoryRegion (const void * source, size_t bytes, size_t offset = 0) noexcept
+				: m_source{source},
+				m_offset{offset},
+				m_bytes{bytes}
+			{
+
+			}
 
 			/**
 			 * @brief Returns the source pointer.
@@ -81,6 +87,8 @@ namespace EmEn::Vulkan
 				return m_offset;
 			}
 
+		private:
+
 			/**
 			 * @brief STL streams printable object.
 			 * @param out A reference to the stream output.
@@ -89,17 +97,31 @@ namespace EmEn::Vulkan
 			 */
 			friend std::ostream & operator<< (std::ostream & out, const MemoryRegion & obj);
 
-			/**
-			 * @brief Stringify the object.
-			 * @param obj A reference to the object to print.
-			 * @return std::string
-			 */
-			friend std::string to_string (const MemoryRegion & obj) noexcept;
-
-		private:
-
 			const void * m_source{nullptr};
 			size_t m_offset{0};
 			size_t m_bytes{0};
 	};
+
+	inline
+	std::ostream &
+	operator<< (std::ostream & out, const MemoryRegion & obj)
+	{
+		return out << "Region of " << obj.m_bytes << " bytes from @" << obj.m_source << " to destination offset : " << obj.m_offset;
+	}
+
+	/**
+	 * @brief Stringify the object.
+	 * @param obj A reference to the object to print.
+	 * @return std::string
+	 */
+	inline
+	std::string
+	to_string (const MemoryRegion & obj) noexcept
+	{
+		std::stringstream output;
+
+		output << obj;
+
+		return output.str();
+	}
 }

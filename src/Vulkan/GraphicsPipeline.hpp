@@ -80,16 +80,44 @@ namespace EmEn::Vulkan
 			/**
 			 * @brief Constructs a graphics pipeline.
 			 * @param device A reference to a device smart pointer.
-			 * @param createFlags The create info flags. Default none.
+			 * @param createFlags The createInfo flags. Default none.
 			 */
-			explicit GraphicsPipeline (const std::shared_ptr< Device > & device, VkPipelineCreateFlags createFlags = 0) noexcept;
+			explicit
+			GraphicsPipeline (const std::shared_ptr< Device > & device, VkPipelineCreateFlags createFlags = 0) noexcept
+				: AbstractDeviceDependentObject{device}
+			{
+				m_createInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+				m_createInfo.pNext = nullptr;
+				m_createInfo.flags = createFlags;
+				m_createInfo.stageCount = 0;
+				m_createInfo.pStages = nullptr;
+				m_createInfo.pVertexInputState = nullptr;
+				m_createInfo.pInputAssemblyState = nullptr;
+				m_createInfo.pTessellationState = nullptr;
+				m_createInfo.pViewportState = nullptr;
+				m_createInfo.pRasterizationState = nullptr;
+				m_createInfo.pMultisampleState = nullptr;
+				m_createInfo.pDepthStencilState = nullptr;
+				m_createInfo.pColorBlendState = nullptr;
+				m_createInfo.pDynamicState = nullptr;
+				m_createInfo.layout = VK_NULL_HANDLE;
+				m_createInfo.renderPass = VK_NULL_HANDLE;
+				m_createInfo.subpass = 0;
+				m_createInfo.basePipelineHandle = VK_NULL_HANDLE;
+				m_createInfo.basePipelineIndex = -1;
+			}
 
 			/**
-			 * @brief Constructs a graphics pipeline with a create info.
+			 * @brief Constructs a graphics pipeline with a createInfo.
 			 * @param device A reference to a device smart pointer.
-			 * @param createInfo A reference to a create info.
+			 * @param createInfo A reference to a createInfo.
 			 */
-			GraphicsPipeline (const std::shared_ptr< Device > & device, const VkGraphicsPipelineCreateInfo & createInfo) noexcept;
+			GraphicsPipeline (const std::shared_ptr< Device > & device, const VkGraphicsPipelineCreateInfo & createInfo) noexcept
+				: AbstractDeviceDependentObject{device},
+				m_createInfo{createInfo}
+			{
+
+			}
 
 			/**
 			 * @brief Copy constructor.
@@ -120,7 +148,10 @@ namespace EmEn::Vulkan
 			/**
 			 * @brief Destructs the graphics pipeline.
 			 */
-			~GraphicsPipeline () override;
+			~GraphicsPipeline () override
+			{
+				this->destroyFromHardware();
+			}
 
 			/** @copydoc EmEn::Vulkan::AbstractDeviceDependentObject::createOnHardware() */
 			bool createOnHardware () noexcept override;
@@ -137,7 +168,7 @@ namespace EmEn::Vulkan
 			bool configureShaderStages (const std::vector< std::shared_ptr< Vulkan::ShaderModule > > & shaderModules) noexcept;
 
 			/**
-			 * @brief Generates vertex input state into the graphics pipeline create info.
+			 * @brief Generates vertex input state into the graphics pipeline createInfo.
 			 * @param vertexBufferFormat A reference to a vertex buffer format.
 			 * @param flags Flags value for this stage. Default 0.
 			 * @return bool
@@ -146,7 +177,7 @@ namespace EmEn::Vulkan
 			bool configureVertexInputState (const Graphics::VertexBufferFormat & vertexBufferFormat, VkPipelineVertexInputStateCreateFlags flags = 0) noexcept;
 
 			/**
-			 * @brief Generates input assembly state into the graphics pipeline create info.
+			 * @brief Generates input assembly state into the graphics pipeline createInfo.
 			 * @param vertexBufferFormat A reference to a vertex buffer format.
 			 * @param flags Flags value for this stage. Default 0.
 			 * @return bool
@@ -155,7 +186,7 @@ namespace EmEn::Vulkan
 			bool configureInputAssemblyState (const Graphics::VertexBufferFormat & vertexBufferFormat, VkPipelineInputAssemblyStateCreateFlags flags = 0) noexcept;
 
 			/**
-			 * @brief Generates tesselation state into the graphics pipeline create info.
+			 * @brief Generates tesselation state into the graphics pipeline createInfo.
 			 * @param flags Flags value for this stage. Default 0.
 			 * @param patchControlPoints
 			 * @return bool
@@ -164,7 +195,7 @@ namespace EmEn::Vulkan
 			bool configureTessellationState (uint32_t patchControlPoints, VkPipelineTessellationStateCreateFlags flags = 0) noexcept;
 
 			/**
-			 * @brief Generates viewport state into the graphics pipeline create info.
+			 * @brief Generates viewport state into the graphics pipeline createInfo.
 			 * @param width The width of the viewport.
 			 * @param height The height of the viewport.
 			 * @param flags Flags value for this stage. Default 0.
@@ -174,7 +205,7 @@ namespace EmEn::Vulkan
 			bool configureViewportState (uint32_t width, uint32_t height, VkPipelineViewportStateCreateFlags flags = 0) noexcept;
 
 			/**
-			 * @brief Generates rasterization state into the graphics pipeline create info.
+			 * @brief Generates rasterization state into the graphics pipeline createInfo.
 			 * @param renderPassType The render pass type.
 			 * @param options A pointer to rasterization options. Default none.
 			 * @param flags Flags value for this stage. Default 0.
@@ -184,7 +215,7 @@ namespace EmEn::Vulkan
 			bool configureRasterizationState (Graphics::RenderPassType renderPassType, const Graphics::RasterizationOptions * options = nullptr, VkPipelineRasterizationStateCreateFlags flags = 0) noexcept;
 
 			/**
-			 * @brief Generates rasterization state into the graphics pipeline create info.
+			 * @brief Generates rasterization state into the graphics pipeline createInfo.
 			 * @param createInfo A reference to a VkPipelineRasterizationStateCreateInfo
 			 * @return bool
 			 */
@@ -192,7 +223,7 @@ namespace EmEn::Vulkan
 			bool configureRasterizationState (VkPipelineRasterizationStateCreateInfo createInfo) noexcept;
 
 			/**
-			 * @brief Generates multisample state into the graphics pipeline create info.
+			 * @brief Generates multisample state into the graphics pipeline createInfo.
 			 * @param renderTarget A reference to the render target.
 			 * @param flags Flags value for this stage. Default 0.
 			 * @return bool
@@ -201,7 +232,7 @@ namespace EmEn::Vulkan
 			bool configureMultisampleState (const Graphics::RenderTarget::Abstract & renderTarget, VkPipelineMultisampleStateCreateFlags flags = 0) noexcept;
 
 			/**
-			 * @brief Generates depth stencil state into the graphics pipeline create info.
+			 * @brief Generates depth stencil state into the graphics pipeline createInfo.
 			 * @param renderPassType The render pass type.
 			 * @param renderableInstance A reference to the renderable instance.
 			 * @param flags Flags value for this stage. Default 0.
@@ -219,14 +250,14 @@ namespace EmEn::Vulkan
 			bool configureDepthStencilState (const VkPipelineDepthStencilStateCreateInfo & createInfo) noexcept;
 
 			/**
-			 * @brief Generates color blend state into the graphics pipeline create info for simple alpha blending.
+			 * @brief Generates color blend state into the graphics pipeline createInfo for simple alpha blending.
 			 * @return bool
 			 */
 			[[nodiscard]]
 			bool configureColorBlendStateForAlphaBlending () noexcept;
 
 			/**
-			 * @brief Generates color blend state into the graphics pipeline create info.
+			 * @brief Generates color blend state into the graphics pipeline createInfo.
 			 * @param renderPassType The render pass type.
 			 * @param material A reference to the material.
 			 * @param blendColor A reference to a color for blend operation. Default Black.
@@ -246,13 +277,13 @@ namespace EmEn::Vulkan
 			bool configureColorBlendState (const std::vector< VkPipelineColorBlendAttachmentState > & attachments, const VkPipelineColorBlendStateCreateInfo & createInfo) noexcept;
 
 			/**
-			 * @brief Generates dynamic state into the graphics pipeline create info.
+			 * @brief Generates dynamic state into the graphics pipeline createInfo.
 			 * @param dynamicStates A vector of dynamic states desired.
 			 * @param flags Flags value for this stage. Default 0.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool configureDynamicState (const std::vector< VkDynamicState > & dynamicStates, VkPipelineDynamicStateCreateFlags flags = 0) noexcept;
+			bool configureDynamicStates (const std::vector< VkDynamicState > & dynamicStates, VkPipelineDynamicStateCreateFlags flags = 0) noexcept;
 
 			/**
 			 * @brief Finalizes the configuration of the graphics pipeline.
@@ -260,10 +291,11 @@ namespace EmEn::Vulkan
 			 * @param renderPass A reference to a render pass smart pointer.
 			 * @param pipelineLayout A reference to a pipeline layout smart pointer.
 			 * @param useTesselation Declares tesselation was enabled.
+			 * @param isDynamicStateEnabled
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool finalize (const std::shared_ptr< const RenderPass > & renderPass, const std::shared_ptr< PipelineLayout > & pipelineLayout, bool useTesselation) noexcept;
+			bool finalize (const std::shared_ptr< const RenderPass > & renderPass, const std::shared_ptr< PipelineLayout > & pipelineLayout, bool useTesselation, bool isDynamicStateEnabled) noexcept;
 
 			/**
 			 * @brief Recreates the graphics pipeline.

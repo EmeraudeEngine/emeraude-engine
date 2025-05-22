@@ -67,7 +67,16 @@ namespace EmEn::Graphics::Material::Component
 			 * @param UVWScale A reference to a vector to scale the texture coordinates. Default 1.0 in all directions.
 			 * @param enableAlpha Enable the alpha channel for opacity/blending. Request a 4 channels texture. Default false.
 			 */
-			Texture (const char * samplerName, std::string variableName, const std::shared_ptr< TextureResource::Abstract > & texture, uint32_t UVWChannel = 0, const Libs::Math::Vector< 3, float > & UVWScale = {1.0F, 1.0F, 1.0F}, bool enableAlpha = false) noexcept;
+			Texture (const char * samplerName, std::string variableName, const std::shared_ptr< TextureResource::Abstract > & texture, uint32_t UVWChannel = 0, const Libs::Math::Vector< 3, float > & UVWScale = {1.0F, 1.0F, 1.0F}, bool enableAlpha = false) noexcept
+				: m_samplerName{samplerName},
+				m_variableName{std::move(variableName)},
+				m_texture{texture},
+				m_UVWScale{UVWScale},
+				m_UVWChannel{UVWChannel},
+				m_alphaEnabled{enableAlpha}
+			{
+
+			}
 
 			/**
 			 * @brief Constructs a texture component from json data.
@@ -253,6 +262,8 @@ namespace EmEn::Graphics::Material::Component
 				return m_samplerName;
 			}
 
+		private:
+
 			/**
 			 * @brief STL streams printable object.
 			 * @param out A reference to the stream output.
@@ -260,15 +271,6 @@ namespace EmEn::Graphics::Material::Component
 			 * @return std::ostream &
 			 */
 			friend std::ostream & operator<< (std::ostream & out, const Texture & obj);
-
-			/**
-			 * @brief Stringifies the object.
-			 * @param obj A reference to the object to print.
-			 * @return std::string
-			 */
-			friend std::string to_string (const Texture & obj) noexcept;
-
-		private:
 
 			/* JSON key. */
 			static constexpr auto JKResourceName{"Name"};
@@ -284,4 +286,35 @@ namespace EmEn::Graphics::Material::Component
 			uint32_t m_binding{0};
 			bool m_alphaEnabled{false};
 	};
+
+	inline
+	std::ostream &
+	operator<< (std::ostream & out, const Texture & obj)
+	{
+		return out << Texture::ClassId << "." "\n"
+			"Texture uniform name: " << obj.m_samplerName << "\n"
+			"Variable name: " << obj.m_variableName << "\n"
+			"Texture type (component level): " << obj.textureType() << "\n"
+			"Is volumetric texture ? (component level): " << ( obj.isVolumetricTexture() ? "yes" : "no" ) << "\n"
+			"Texture resource name: " << obj.m_texture->name() << "\n"
+			"UVW scale: " << obj.m_UVWScale << "\n"
+			"Alpha channel enabled: " << ( obj.m_alphaEnabled ? "yes" : "no" ) << "\n"
+			"Binding point : " << obj.m_binding << "\n";
+	}
+
+	/**
+	 * @brief Stringifies the object.
+	 * @param obj A reference to the object to print.
+	 * @return std::string
+	 */
+	inline
+	std::string
+	to_string (const Texture & obj) noexcept
+	{
+		std::stringstream output;
+
+		output << obj;
+
+		return output.str();
+	}
 }

@@ -26,12 +26,6 @@
 
 #pragma once
 
-/* STL inclusions. */
-#include <cstddef>
-#include <cstdint>
-#include <memory>
-#include <string>
-
 /* Third-party inclusions. */
 #include <vulkan/vulkan.h>
 
@@ -180,29 +174,54 @@ namespace EmEn::Graphics::TextureResource
 			 * @return bool
 			 */
 			[[nodiscard]]
-			virtual bool isCubemapTexture () const noexcept = 0;
+			virtual
+			bool
+			isCubemapTexture () const noexcept
+			{
+				return false;
+			}
 
 			/**
 			 * @brief Returns the number frame.
 			 * @return uint32_t
 			 */
 			[[nodiscard]]
-			virtual uint32_t frameCount () const noexcept = 0;
+			virtual
+			uint32_t
+			frameCount () const noexcept
+			{
+				if ( !this->isLoaded() )
+				{
+					return 0;
+				}
+
+				return 1;
+			}
 
 			/**
 			 * @brief Returns the duration in milliseconds.
 			 * @return uint32_t
 			 */
 			[[nodiscard]]
-			virtual uint32_t duration () const noexcept = 0;
+			virtual
+			uint32_t
+			duration () const noexcept
+			{
+				return 0;
+			}
 
 			/**
-			 * @brief Returns the index of the frame at specific time.
+			 * @brief Returns the index of the frame at a specific time.
 			 * @param sceneTime The current scene time in milliseconds.
-			 * @return size_t
+			 * @return uint32_t
 			 */
 			[[nodiscard]]
-			virtual size_t frameIndexAt (uint32_t sceneTime) const noexcept = 0;
+			virtual
+			uint32_t
+			frameIndexAt (uint32_t sceneTime) const noexcept
+			{
+				return 0;
+			}
 
 			/**
 			 * @brief Returns the image of the texture.
@@ -235,21 +254,35 @@ namespace EmEn::Graphics::TextureResource
 			/**
 			 * @brief Validates a pixmap for Vulkan requirements.
 			 * @param classId A pointer to the class id validating the pixmap.
+			 * @param resourceName A reference to a string.
 			 * @param pixmap A reference to a pixmap.
-			 * @param disablePowerOfTwoCheck Disable the check for size pixmap check. Default false.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			static bool validatePixmap (const char * classId, Libs::PixelFactory::Pixmap< uint8_t > & pixmap, bool disablePowerOfTwoCheck = false) noexcept;
+			static bool validatePixmap (const char * classId, const std::string & resourceName, Libs::PixelFactory::Pixmap< uint8_t > & pixmap) noexcept;
 
 		protected:
 
 			/**
 			 * @brief Constructs an abstract texture resource.
-			 * @param name The name of the resource.
-			 * @param resourceFlagBits The resource flag bits.
+			 * @param textureName A string for the texture name [std::move].
+			 * @param textureFlags The resource flag bits.
 			 */
-			Abstract (const std::string & name, uint32_t resourceFlagBits) noexcept;
+			Abstract (std::string textureName, uint32_t textureFlags) noexcept
+				: ResourceTrait{std::move(textureName), textureFlags}
+			{
+
+			}
+
+			/**
+			 * @brief Validates a texture for Vulkan requirements.
+			 * @note This method is called just before sending the texture to the GPU.
+			 * @param pixmap A reference to a pixmap.
+			 * @param disablePowerOfTwoCheck Disable the check for size pixmap check.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool validateTexture (const Libs::PixelFactory::Pixmap< uint8_t > & pixmap, bool disablePowerOfTwoCheck) const noexcept;
 
 		private:
 

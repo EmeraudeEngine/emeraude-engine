@@ -27,31 +27,36 @@
 #include "BandPass.hpp"
 
 /* Local inclusions. */
-#include "Tracer.hpp"
-#include <Audio/OpenAL.EFX.hpp>
+#include "Audio/OpenAL.EFX.hpp"
 #include "Audio/Utility.hpp"
+#include "Tracer.hpp"
 
 namespace EmEn::Audio::Filters
 {
 	using namespace EmEn::Libs;
 
 	BandPass::BandPass () noexcept
-		: Abstract()
 	{
 		if ( this->identifier() == 0 )
+		{
 			return;
+		}
 
 		EFX::alFilteri(this->identifier(), AL_FILTER_TYPE, AL_FILTER_BANDPASS);
 
 		if ( alGetErrors("alFilteri()", __FILE__, __LINE__) )
+		{
 			Tracer::error(ClassId, "Unable to generate OpenAL Band-Pass filter !");
+		}
 	}
 
 	void
 	BandPass::resetProperties () noexcept
 	{
 		if ( !EFX::isAvailable() )
+		{
 			return;
+		}
 
 		EFX::alFilterf(this->identifier(), AL_BANDPASS_GAIN, AL_BANDPASS_DEFAULT_GAIN);
 		EFX::alFilterf(this->identifier(), AL_BANDPASS_GAINHF, AL_BANDPASS_DEFAULT_GAINHF);
@@ -62,11 +67,13 @@ namespace EmEn::Audio::Filters
 	BandPass::setGain (float value) noexcept
 	{
 		if ( !EFX::isAvailable() )
+		{
 			return;
+		}
 
 		if ( value < AL_BANDPASS_MIN_GAIN || value > AL_BANDPASS_MAX_GAIN )
 		{
-			Tracer::warning(ClassId, BlobTrait() << "Gain must be between " << AL_BANDPASS_MIN_GAIN << " and " << AL_BANDPASS_MAX_GAIN << ".");
+			TraceWarning{ClassId}<< "Gain must be between " << AL_BANDPASS_MIN_GAIN << " and " << AL_BANDPASS_MAX_GAIN << '.';
 
 			return;
 		}
@@ -78,11 +85,13 @@ namespace EmEn::Audio::Filters
 	BandPass::setGainHF (float value) noexcept
 	{
 		if ( !EFX::isAvailable() )
+		{
 			return;
+		}
 
 		if ( value < AL_BANDPASS_MIN_GAINHF || value > AL_BANDPASS_MAX_GAINHF )
 		{
-			Tracer::warning(ClassId, BlobTrait() << "Gain must be between " << AL_BANDPASS_MIN_GAINHF << " and " << AL_BANDPASS_MAX_GAINHF << ".");
+			TraceWarning{ClassId}<< "Gain must be between " << AL_BANDPASS_MIN_GAINHF << " and " << AL_BANDPASS_MAX_GAINHF << '.';
 
 			return;
 		}
@@ -94,11 +103,13 @@ namespace EmEn::Audio::Filters
 	BandPass::setGainLF (float value) noexcept
 	{
 		if ( !EFX::isAvailable() )
+		{
 			return;
+		}
 
 		if ( value < AL_BANDPASS_MIN_GAINLF || value > AL_BANDPASS_MAX_GAINLF )
 		{
-			Tracer::warning(ClassId, BlobTrait() << "Gain must be between " << AL_BANDPASS_MIN_GAINLF << " and " << AL_BANDPASS_MAX_GAINLF << ".");
+			TraceWarning{ClassId}<< "Gain must be between " << AL_BANDPASS_MIN_GAINLF << " and " << AL_BANDPASS_MAX_GAINLF << '.';
 
 			return;
 		}
@@ -109,12 +120,12 @@ namespace EmEn::Audio::Filters
 	float
 	BandPass::gain () const noexcept
 	{
-		if ( !EFX::isAvailable() )
-			return 0.0F;
+		ALfloat value = 0.0F;
 
-		ALfloat value;
-
-		EFX::alGetFilterf(this->identifier(), AL_BANDPASS_GAIN, &value);
+		if ( EFX::isAvailable() )
+		{
+			EFX::alGetFilterf(this->identifier(), AL_BANDPASS_GAIN, &value);
+		}
 
 		return value;
 	}
@@ -122,12 +133,12 @@ namespace EmEn::Audio::Filters
 	float
 	BandPass::gainHF () const noexcept
 	{
-		if ( !EFX::isAvailable() )
-			return 0.0F;
+		ALfloat value = 0.0F;
 
-		ALfloat value;
-
-		EFX::alGetFilterf(this->identifier(), AL_BANDPASS_GAINHF, &value);
+		if ( EFX::isAvailable() )
+		{
+			EFX::alGetFilterf(this->identifier(), AL_BANDPASS_GAINHF, &value);
+		}
 
 		return value;
 	}
@@ -135,12 +146,12 @@ namespace EmEn::Audio::Filters
 	float
 	BandPass::gainLF () const noexcept
 	{
-		if ( !EFX::isAvailable() )
-			return 0.0F;
+		ALfloat value = 0.0F;
 
-		ALfloat value;
-
-		EFX::alGetFilterf(this->identifier(), AL_BANDPASS_GAINLF, &value);
+		if ( EFX::isAvailable() )
+		{
+			EFX::alGetFilterf(this->identifier(), AL_BANDPASS_GAINLF, &value);
+		}
 
 		return value;
 	}

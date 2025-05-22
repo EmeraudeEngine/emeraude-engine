@@ -52,7 +52,12 @@ namespace EmEn::Tool
 			 * @param arguments A reference to the arguments.
 			 * @param vulkanInstance A reference to the vulkan instance.
 			 */
-			explicit ShowVulkanInformation (const Arguments & arguments, const Vulkan::Instance & vulkanInstance) noexcept;
+			ShowVulkanInformation (const Arguments & arguments, const Vulkan::Instance & vulkanInstance) noexcept
+				: m_arguments{arguments},
+				m_vulkanInstance{vulkanInstance}
+			{
+
+			}
 
 			/** @copydoc EmEn::Tool::ToolInterface::execute() */
 			[[nodiscard]]

@@ -43,11 +43,17 @@ namespace EmEn::Vulkan
 		public:
 
 			/**
-			 * @brief Default constructor.
+			 * @brief Construct a render subpass.
 			 * @param pipelineBindPoint Set the type of pipeline being bound to this render sub-pass. Default VK_PIPELINE_BIND_POINT_GRAPHICS.
 			 * @param flags Set flags of the sub-pass. Default none.
 			 */
-			explicit RenderSubPass (VkPipelineBindPoint pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS, VkSubpassDescriptionFlags flags = 0) noexcept;
+			explicit
+			RenderSubPass (VkPipelineBindPoint pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS, VkSubpassDescriptionFlags flags = 0) noexcept
+				: m_flags{flags},
+				m_pipelineBindPoint{pipelineBindPoint}
+			{
+
+			}
 
 			/**
 			 * @brief Returns the description for the render pass.

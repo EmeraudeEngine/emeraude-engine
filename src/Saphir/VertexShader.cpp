@@ -50,15 +50,9 @@
 namespace EmEn::Saphir
 {
 	using namespace EmEn::Libs;
-	using namespace Declaration;
-	using namespace Graphics;
-	using namespace Keys;
-
-	VertexShader::VertexShader (const std::string & name, const std::string & GLSLVersion, const std::string & GLSLProfile) noexcept
-		: AbstractShader(name, GLSLVersion, GLSLProfile)
-	{
-
-	}
+	using namespace EmEn::Saphir::Declaration;
+	using namespace EmEn::Saphir::Keys;
+	using namespace EmEn::Graphics;
 
 	Function
 	VertexShader::generateComputeUpwardVectorFunction () noexcept

@@ -51,26 +51,60 @@ namespace EmEn
 			/** @brief Class identifier. */
 			static constexpr auto ClassId{"PlatformManagerService"};
 
-			/** @brief Observable class unique identifier. */
-			static const size_t ClassUID;
-
 			/**
 			 * @brief Constructs the platform manager.
 			 * @param primaryServices A reference to primary services.
 			 */
-			explicit PlatformManager (PrimaryServices & primaryServices) noexcept;
+			explicit
+			PlatformManager (PrimaryServices & primaryServices) noexcept
+				: ServiceInterface{ClassId},
+				m_primaryServices{primaryServices}
+			{
 
-			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
-			[[nodiscard]]
-			size_t classUID () const noexcept override;
-
-			/** @copydoc EmEn::Libs::ObservableTrait::is() const */
-			[[nodiscard]]
-			bool is (size_t classUID) const noexcept override;
+			}
 
 			/** @copydoc EmEn::ServiceInterface::usable() */
 			[[nodiscard]]
-			bool usable () const noexcept override;
+			bool
+			usable () const noexcept override
+			{
+				return m_flags[ServiceInitialized];
+			}
+
+			/**
+			 * @brief Returns whether GLFW detected a linux platform.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			static bool isLinux () noexcept;
+
+			/**
+			 * @brief Returns whether GLFW detected a macOS platform.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			static bool isMacOS () noexcept;
+
+			/**
+			 * @brief Returns whether GLFW detected a Windows platform.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			static bool isWindows () noexcept;
+
+			/**
+			 * @brief Returns whether GLFW detected a X11 graphic server.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			static bool isUsingX11 () noexcept;
+
+			/**
+			 * @brief Returns whether GLFW detected a Wayland graphic server.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			static bool isUsingWayland () noexcept;
 
 		private:
 

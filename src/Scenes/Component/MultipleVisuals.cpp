@@ -33,17 +33,9 @@ namespace EmEn::Scenes::Component
 {
 	using namespace EmEn::Libs;
 	using namespace EmEn::Libs::Math;
-	using namespace Animations;
-	using namespace Physics;
-	using namespace Graphics;
-
-	MultipleVisuals::MultipleVisuals (const std::string & name, const AbstractEntity & parentEntity, const std::shared_ptr< Renderable::Interface > & renderable, const std::vector< CartesianFrame< float > > & coordinates) noexcept
-		: Abstract(name, parentEntity),
-		m_renderableInstance(std::make_shared< RenderableInstance::Multiple >(renderable, coordinates, renderable->isSprite() ? RenderableInstance::FacingCamera : RenderableInstance::None)),
-		m_coordinates(coordinates)
-	{
-		this->observe(m_renderableInstance.get());
-	}
+	using namespace EmEn::Animations;
+	using namespace EmEn::Physics;
+	using namespace EmEn::Graphics;
 
 	void
 	MultipleVisuals::move (const CartesianFrame< float > & worldCoordinates) noexcept
@@ -74,13 +66,7 @@ namespace EmEn::Scenes::Component
 
 		this->updateAnimations(scene.cycle());
 
-		m_renderableInstance->updateVideoMemory();
-	}
-
-	bool
-	MultipleVisuals::shouldRemove () const noexcept
-	{
-		return m_renderableInstance->isBroken();
+		m_renderableInstance->updateVideoMemory(scene.AVConsoleManager().graphicsRenderer().transferManager());
 	}
 
 	bool

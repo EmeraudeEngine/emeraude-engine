@@ -46,11 +46,6 @@ namespace EmEn::Vulkan
 		public:
 
 			/**
-			 * @brief Destructs a device related vulkan object.
-			 */
-			~AbstractDeviceDependentObject () override = default;
-
-			/**
 			 * @brief Copy constructor.
 			 * @param copy A reference to the copied instance.
 			 */
@@ -73,6 +68,11 @@ namespace EmEn::Vulkan
 			 * @param copy A reference to the copied instance.
 			 */
 			AbstractDeviceDependentObject & operator= (AbstractDeviceDependentObject && copy) noexcept = default;
+
+			/**
+			 * @brief Destructs the device dependent Vulkan object.
+			 */
+			~AbstractDeviceDependentObject () override = default;
 
 			/**
 			 * @brief Returns the device responsible for this object.
@@ -111,10 +111,26 @@ namespace EmEn::Vulkan
 		protected:
 
 			/**
-			 * @brief Constructs a device related vulkan object.
+			 * @brief Constructs a device dependent Vulkan object.
 			 * @param device A reference to the device smart pointer where the object will be used.
 			 */
-			explicit AbstractDeviceDependentObject (const std::shared_ptr< Device > & device) noexcept;
+			explicit
+			AbstractDeviceDependentObject (const std::shared_ptr< Device > & device) noexcept
+				: m_device{device}
+			{
+				if constexpr ( IsDebug )
+				{
+					if ( m_device == nullptr )
+					{
+						Tracer::error("VulkanDeviceDependentObject", "Device is null !");
+					}
+
+					if ( !m_device->isCreated() )
+					{
+						Tracer::warning("VulkanDeviceDependentObject", "Device is not yet usable !");
+					}
+				}
+			}
 
 		private:
 

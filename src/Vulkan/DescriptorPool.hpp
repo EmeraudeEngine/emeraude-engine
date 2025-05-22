@@ -59,16 +59,31 @@ namespace EmEn::Vulkan
 			 * @param device A reference to a smart pointer of a device.
 			 * @param descriptorPoolSizes A reference to a list of descriptor pool sizes.
 			 * @param maxSets The max sets.
-			 * @param createFlags The create info flags. Default none.
+			 * @param createFlags The createInfo flags. Default none.
 			 */
-			DescriptorPool (const std::shared_ptr< Device > & device, const std::vector< VkDescriptorPoolSize > & descriptorPoolSizes, uint32_t maxSets, VkDescriptorPoolCreateFlags createFlags = 0) noexcept;
+			DescriptorPool (const std::shared_ptr< Device > & device, const std::vector< VkDescriptorPoolSize > & descriptorPoolSizes, uint32_t maxSets, VkDescriptorPoolCreateFlags createFlags = 0) noexcept
+				: AbstractDeviceDependentObject{device},
+				m_descriptorPoolSizes{descriptorPoolSizes}
+			{
+				m_createInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+				m_createInfo.pNext = nullptr;
+				m_createInfo.flags = createFlags;
+				m_createInfo.maxSets = maxSets;
+				m_createInfo.poolSizeCount = static_cast< uint32_t >(m_descriptorPoolSizes.size());
+				m_createInfo.pPoolSizes = m_descriptorPoolSizes.data();
+			}
 
 			/**
-			 * @brief Constructs a descriptor pool with create info.
+			 * @brief Constructs a descriptor pool with createInfo.
 			 * @param device A reference to a smart pointer of a device.
-			 * @param createInfo A reference to a create info.
+			 * @param createInfo A reference to a createInfo.
 			 */
-			DescriptorPool (const std::shared_ptr< Device > & device, const VkDescriptorPoolCreateInfo & createInfo) noexcept;
+			DescriptorPool (const std::shared_ptr< Device > & device, const VkDescriptorPoolCreateInfo & createInfo) noexcept
+				: AbstractDeviceDependentObject{device},
+				m_createInfo{createInfo}
+			{
+
+			}
 
 			/**
 			 * @brief Copy constructor.
@@ -99,7 +114,10 @@ namespace EmEn::Vulkan
 			/**
 			 * @brief Destructs the descriptor pool.
 			 */
-			~DescriptorPool () override;
+			~DescriptorPool () override
+			{
+				this->destroyFromHardware();
+			}
 
 			/** @copydoc EmEn::Vulkan::AbstractDeviceDependentObject::createOnHardware() */
 			bool createOnHardware () noexcept override;
@@ -119,7 +137,7 @@ namespace EmEn::Vulkan
 			}
 
 			/**
-			 * @brief Returns the descriptor pool create info.
+			 * @brief Returns the descriptor pool createInfo.
 			 * @return const VkDescriptorPoolCreateInfo &
 			 */
 			[[nodiscard]]
@@ -157,14 +175,14 @@ namespace EmEn::Vulkan
 			 * @return VkDescriptorSet
 			 */
 			[[nodiscard]]
-			VkDescriptorSet allocateDescriptorSet (const DescriptorSetLayout & descriptorSetLayout) noexcept;
+			VkDescriptorSet allocateDescriptorSet (const DescriptorSetLayout & descriptorSetLayout) const noexcept;
 
 			/**
 			 * @brief Frees one descriptor set.
 			 * @param descriptorSetHandle A Vulkan handle to the descriptor set.
 			 * @return bool
 			 */
-			bool freeDescriptorSet (VkDescriptorSet descriptorSetHandle) noexcept;
+			bool freeDescriptorSet (VkDescriptorSet descriptorSetHandle) const noexcept;
 
 		private:
 

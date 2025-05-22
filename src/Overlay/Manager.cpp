@@ -48,15 +48,17 @@
 #endif
 
 /* Local inclusions. */
-#include "Graphics/Renderer.hpp"
 #include "Libs/VertexFactory/ShapeGenerator.hpp"
-#include "PrimaryServices.hpp"
-#include "Resources/Manager.hpp"
 #include "Saphir/Generator/OverlayRendering.hpp"
-#include "UIScreen.hpp"
 #include "Vulkan/SwapChain.hpp"
 #include "Vulkan/GraphicsPipeline.hpp"
 #include "Vulkan/CommandBuffer.hpp"
+#include "Vulkan/DescriptorSetLayout.hpp"
+#include "Graphics/Renderer.hpp"
+#include "Graphics/Geometry/IndexedVertexResource.hpp"
+#include "Resources/Manager.hpp"
+#include "UIScreen.hpp"
+#include "PrimaryServices.hpp"
 #include "Window.hpp"
 
 namespace EmEn::Overlay
@@ -64,20 +66,11 @@ namespace EmEn::Overlay
 	using namespace EmEn::Libs;
 	using namespace EmEn::Libs::Math;
 	using namespace EmEn::Libs::VertexFactory;
-	using namespace Saphir;
-	using namespace Graphics;
-	using namespace Vulkan;
+	using namespace EmEn::Saphir;
+	using namespace EmEn::Graphics;
+	using namespace EmEn::Vulkan;
 
 	const size_t Manager::ClassUID{getClassUID(ClassId)};
-
-	Manager::Manager (PrimaryServices & primaryServices, Window & window, Renderer & graphicsRenderer) noexcept
-		: ServiceInterface(ClassId), KeyboardListenerInterface(false, true), PointerListenerInterface(false, false, true),
-		  m_primaryServices(primaryServices),
-		  m_window(window),
-		  m_graphicsRenderer(graphicsRenderer)
-	{
-		this->observe(&m_window);
-	}
 
 	bool
 	Manager::onKeyPress (int32_t key, int32_t scancode, int32_t modifiers, bool repeat) noexcept
@@ -290,32 +283,18 @@ namespace EmEn::Overlay
 	}
 
 	bool
-	Manager::generateGraphicsPipeline () noexcept
+	Manager::generateShaderProgram () noexcept
 	{
-		Generator::OverlayRendering generator{*this, m_graphicsRenderer.swapChain(), Generator::OverlayRendering::ColorConversion::ToLinear};
-		generator.enableDebugging(m_graphicsRenderer.shaderManager().showSourceCode());
+		Generator::OverlayRendering generator{m_graphicsRenderer.swapChain(), m_surfaceGeometry, Generator::OverlayRendering::ColorConversion::ToLinear};
 
-		/* The vertex buffer format, responsible for the specific VBO is handled with the shaders. */
-		if ( !generator.generateProgram(m_graphicsRenderer.vertexBufferFormatManager()) )
+		if ( !generator.generateShaderProgram(m_graphicsRenderer) )
 		{
+			Tracer::error(ClassId, "Unable to generate the overlay manager shader program !");
+
 			return false;
 		}
 
-		/* The second step is to check every resource needed by shaders (UBO, Samples, etc.).
-		 * NOTE: VBO is an exception done before. */
-		if ( !generator.generateProgramLayout(m_graphicsRenderer) )
-		{
-			return false;
-		}
-
-		/* The third step is to check if separate shaders already exists to avoid an extra compilation.
-		 * Retrieve the graphics pipeline for the combination of the current renderable instance layer and the render pass. */
-		if ( !generator.createGraphicsPipeline(m_graphicsRenderer) )
-		{
-			return false;
-		}
-
-		m_program = generator.program();
+		m_program = generator.shaderProgram();
 
 		return true;
 	}
@@ -358,9 +337,9 @@ namespace EmEn::Overlay
 			return false;
 		}
 
-		if ( !this->generateGraphicsPipeline() )
+		if ( !this->generateShaderProgram() )
 		{
-			TraceError{ClassId} << "Unable to generate a program to render the overlay !";
+			Tracer::error(ClassId, "Unable to generate the overlay manager shader program !");
 
 			return false;
 		}
@@ -409,14 +388,15 @@ namespace EmEn::Overlay
 	{
 		const std::lock_guard< std::mutex > lock{m_screensMutex};
 
-#ifdef DEBUG
-		if ( !m_framebufferProperties.isValid() )
+		if constexpr ( IsDebug )
 		{
-			TraceError{ClassId} << "The screen size are not initialized !";
+			if ( !m_framebufferProperties.isValid() )
+			{
+				TraceError{ClassId} << "The screen size are not initialized !";
 
-			return nullptr;
+				return nullptr;
+			}
 		}
-#endif
 
 		if ( m_screens.contains(name) )
 		{
@@ -703,7 +683,7 @@ namespace EmEn::Overlay
 			return false;
 		}
 
-		/* NOTE: Update all screen according to the new framebuffer. */
+		/* NOTE: Update all screen, according to the new framebuffer. */
 		for ( const auto & [name, screen] : m_screens )
 		{
 			if ( !screen->updateVideoMemory(true) )
@@ -728,14 +708,15 @@ namespace EmEn::Overlay
 			return;
 		}
 
-#ifdef DEBUG
-		if ( m_surfaceGeometry == nullptr || !m_surfaceGeometry->isCreated() )
+		if constexpr ( IsDebug )
 		{
-			TraceError{ClassId} << "The surface geometry is no ready !";
+			if ( m_surfaceGeometry == nullptr || !m_surfaceGeometry->isCreated() )
+			{
+				TraceError{ClassId} << "The surface geometry is no ready !";
 
-			return;
+				return;
+			}
 		}
-#endif
 
 		/* NOTE: To avoid locking the render thread, we only try to lock the mutex or skip the render. */
 		if ( !m_physicalRepresentationUpdateMutex.try_lock() )
@@ -803,21 +784,20 @@ namespace EmEn::Overlay
 					break;
 
 				default :
-#ifdef EMERAUDE_DEBUG_OBSERVER_PATTERN
-					TraceDebug{ClassId} << "Event #" << notificationCode << " from the window ignored.";
-#endif
+					if constexpr ( ObserverDebugEnabled )
+					{
+						TraceDebug{ClassId} << "Event #" << notificationCode << " from the window ignored.";
+					}
 					break;
 			}
 
 			return true;
 		}
 
-#ifdef DEBUG
-		/* NOTE: Don't know what is it, goodbye ! */
-		TraceInfo{ClassId} <<
+		/* NOTE: Don't know what is it, goodbye! */
+		TraceDebug{ClassId} <<
 			"Received an unhandled notification (Code:" << notificationCode << ") from observable '" << whoIs(observable->classUID()) << "' (UID:" << observable->classUID() << ")  ! "
 			"Forgetting it ...";
-#endif
 
 		return false;
 	}

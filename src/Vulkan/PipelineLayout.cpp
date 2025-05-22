@@ -39,24 +39,6 @@ namespace EmEn::Vulkan
 {
 	using namespace EmEn::Libs;
 
-	PipelineLayout::PipelineLayout (const std::shared_ptr< Device > & device, std::string UUID, const std::vector< std::shared_ptr< DescriptorSetLayout > > & descriptorSetLayouts, const std::vector< VkPushConstantRange > & pushConstantRanges, VkPipelineLayoutCreateFlags flags) noexcept
-		: AbstractDeviceDependentObject(device), m_UUID(std::move(UUID)), m_descriptorSetLayouts(descriptorSetLayouts), m_pushConstantRanges(pushConstantRanges)
-	{
-		m_createInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-		m_createInfo.pNext = nullptr;
-		m_createInfo.flags = flags;
-		m_createInfo.setLayoutCount = 0;
-		m_createInfo.pSetLayouts = nullptr;
-		m_createInfo.pushConstantRangeCount = 0;
-		m_createInfo.pPushConstantRanges = nullptr;
-	}
-
-	PipelineLayout::PipelineLayout (const std::shared_ptr< Device > & device, std::string UUID, const VkPipelineLayoutCreateInfo & createInfo, const std::vector< std::shared_ptr< DescriptorSetLayout > > & descriptorSetLayouts, const std::vector< VkPushConstantRange > & pushConstantRanges) noexcept
-		: AbstractDeviceDependentObject(device), m_createInfo(createInfo), m_UUID(std::move(UUID)), m_descriptorSetLayouts(descriptorSetLayouts), m_pushConstantRanges(pushConstantRanges)
-	{
-
-	}
-
 	bool
 	PipelineLayout::operator== (const PipelineLayout & operand) const noexcept
 	{
@@ -65,7 +47,7 @@ namespace EmEn::Vulkan
 			return true;
 		}
 
-		/* FIXME: Find a way to serialize the create info to reduce the equality check complexity. */
+		/* FIXME: Find a way to serialize the createInfo to reduce the equality check complexity. */
 
 		if ( m_createInfo.flags != operand.m_createInfo.flags )
 		{
@@ -108,11 +90,6 @@ namespace EmEn::Vulkan
 		}
 
 		return false;
-	}
-
-	PipelineLayout::~PipelineLayout ()
-	{
-		this->destroyFromHardware();
 	}
 
 	bool

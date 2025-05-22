@@ -32,7 +32,7 @@
 namespace EmEn::Libs::Hash
 {
 	/**
-	 * @brief Hash a string using MD5 algorithm.
+	 * @brief Hash a string using the MD5 algorithm.
 	 * @param input A reference to a string.
 	 * @return std::string.
 	 */
@@ -40,7 +40,7 @@ namespace EmEn::Libs::Hash
 	std::string md5 (const std::string & input) noexcept;
 
 	/**
-	 * @brief Hash a string using SHA-2 (256bits) algorithm.
+	 * @brief Hash a string using SHA-2 (256 bits) algorithm.
 	 * @param input A reference to a string.
 	 * @return std::string.
 	 */
@@ -48,7 +48,7 @@ namespace EmEn::Libs::Hash
 	std::string sha256 (const std::string & input) noexcept;
 
 	/**
-	 * @brief Hash a string using SHA-2 (512bits) algorithm.
+	 * @brief Hash a string using SHA-2 (512 bits) algorithm.
 	 * @param input A reference to a string.
 	 * @return std::string.
 	 */

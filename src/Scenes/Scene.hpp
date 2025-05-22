@@ -49,7 +49,9 @@
 #include "Graphics/Renderable/AbstractBackground.hpp"
 #include "Graphics/Renderable/SceneAreaInterface.hpp"
 #include "Graphics/Renderable/SeaLevelInterface.hpp"
+#include "Audio/SoundEnvironmentProperties.hpp"
 #include "Saphir/EffectInterface.hpp"
+#include "AVConsole/Manager.hpp"
 #include "LightSet.hpp"
 #include "OctreeSector.hpp"
 #include "StaticEntity.hpp"
@@ -58,9 +60,17 @@
 #include "RenderBatch.hpp"
 
 /* Forward Declarations */
-namespace EmEn::Graphics
+namespace EmEn
 {
-	class Renderer;
+	namespace Input
+	{
+		class Manager;
+	}
+
+	namespace Graphics
+	{
+		class Renderer;
+	}
 }
 
 namespace EmEn::Scenes
@@ -78,21 +88,15 @@ namespace EmEn::Scenes
 
 	/**
 	 * @brief Class that describe a whole scene through a nodes structure.
+	 * @note [OBS][SHARED-OBSERVER]
 	 * @extends EmEn::Libs::NameableTrait A scene is a named object in the engine.
 	 * @extends EmEn::Libs::Time::EventTrait A scene can have timed events.
 	 * @extends EmEn::Libs::ObserverTrait The scene will observe the scene node tree and static entity list.
 	 * @extends EmEn::Libs::ObservableTrait Scene will notify its content change.
 	 */
-	class Scene final : public Libs::NameableTrait, public Libs::Time::EventTrait< uint32_t, std::milli >, public Libs::ObserverTrait, public Libs::ObservableTrait
+	class Scene final : public Libs::NameableTrait, public Libs::Time::EventTrait< uint32_t, std::milli >, public Libs::ObserverTrait
 	{
 		public:
-
-			/** @brief Observable notification codes. */
-			enum NotificationCode
-			{
-				/* Enumeration boundary. */
-				MaxEnum
-			};
 
 			/** @brief Class identifier. */
 			static constexpr auto ClassId{"Scene"};
@@ -111,7 +115,20 @@ namespace EmEn::Scenes
 			 * @param seaLevel A reference to a seaLevel smart pointer. Default none.
 			 * @param octreeOptions A reference to an option struct. Defaults.
 			 */
-			Scene (Graphics::Renderer & graphicsRenderer, Audio::Manager & audioManager, const std::string & name, float boundary, const std::shared_ptr< Graphics::Renderable::AbstractBackground > & background = nullptr, const std::shared_ptr< Graphics::Renderable::SceneAreaInterface > & sceneArea = nullptr, const std::shared_ptr< Graphics::Renderable::SeaLevelInterface > & seaLevel = nullptr, const SceneOctreeOptions & octreeOptions = {}) noexcept;
+			Scene (Graphics::Renderer & graphicsRenderer, Audio::Manager & audioManager, const std::string & name, float boundary, const std::shared_ptr< Graphics::Renderable::AbstractBackground > & background = nullptr, const std::shared_ptr< Graphics::Renderable::SceneAreaInterface > & sceneArea = nullptr, const std::shared_ptr< Graphics::Renderable::SeaLevelInterface > & seaLevel = nullptr, const SceneOctreeOptions & octreeOptions = {}) noexcept
+				: NameableTrait{name},
+				m_AVConsoleManager{name, graphicsRenderer, audioManager},
+				m_background{background},
+				m_sceneArea{sceneArea},
+				m_seaLevel{seaLevel},
+				m_rootNode{std::make_shared< Node >()},
+				m_boundary{boundary}
+			{
+				this->observe(&m_AVConsoleManager);
+				this->observe(m_rootNode.get());
+
+				this->buildOctrees(octreeOptions);
+			}
 
 			/**
 			 * @brief Copy constructor.
@@ -142,37 +159,26 @@ namespace EmEn::Scenes
 			/**
 			 * @brief Destructs the scene.
 			 */
-			~Scene () override;
-
-			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
-			[[nodiscard]]
-			size_t
-			classUID () const noexcept override
+			~Scene () override
 			{
-				return ClassUID;
-			}
-
-			/** @copydoc EmEn::Libs::ObservableTrait::is() const */
-			[[nodiscard]]
-			bool
-			is (size_t classUID) const noexcept override
-			{
-				return classUID == ClassUID;
+				this->destroy();
 			}
 
 			/**
 			 * @brief Initializes the scene and get it ready for playing.
+			 * @param inputManager A reference to the input manager.
 			 * @param settings A reference to core settings.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool initialize (Settings & settings) noexcept;
+			bool initialize (Input::Manager & inputManager, Settings & settings) noexcept;
 
 			/**
 			 * @brief Prepares the scene to be removed from playing.
+			 * @param inputManager A reference to the input manager.
 			 * @return void
 			 */
-			void shutdown () noexcept;
+			void shutdown (Input::Manager & inputManager) noexcept;
 
 			/**
 			 * @brief Sets the scene boundary.
@@ -362,7 +368,7 @@ namespace EmEn::Scenes
 			void resetNodeTree () const noexcept;
 
 			/**
-			 * @brief This method is called by the Core every logic cycle.
+			 * @brief The Core calls this method every logic cycle.
 			 * @param engineCycle The cycle number of the engine.
 			 * @return void
 			 */
@@ -783,25 +789,33 @@ namespace EmEn::Scenes
 
 			/** @copydoc EmEn::Libs::ObserverTrait::onNotification() */
 			[[nodiscard]]
-			bool onNotification (const ObservableTrait * observable, int notificationCode, const std::any & data) noexcept override;
+			bool onNotification (const Libs::ObservableTrait * observable, int notificationCode, const std::any & data) noexcept override;
 
 			/**
 			 * @brief Updates the render lists from a point of view.
 			 * @param renderTarget A reference to the render target smart pointer.
-			 * @param shadowRendering Enable the shadow map render list.
+			 * @param isShadowCasting Enable the shadow map render list.
 			 * @return bool
 			 */
-			bool populateRenderLists (const std::shared_ptr< Graphics::RenderTarget::Abstract > & renderTarget, bool shadowRendering) noexcept;
+			bool populateRenderLists (const std::shared_ptr< Graphics::RenderTarget::Abstract > & renderTarget, bool isShadowCasting) noexcept;
+
+			/**
+			 * @brief Inserts a renderable instance in render lists for shadows casting.
+			 * @param renderTarget A reference to the render target smart pointer.
+			 * @param renderableInstance A reference to a renderable instance.
+			 * @param distance The distance from the camera.
+			 * @return void
+			 */
+			void insertInShadowCastLists (const std::shared_ptr< Graphics::RenderTarget::Abstract > & renderTarget, const std::shared_ptr< Graphics::RenderableInstance::Abstract > & renderableInstance, float distance) noexcept;
 
 			/**
 			 * @brief Inserts a renderable instance in render lists.
 			 * @param renderTarget A reference to the render target smart pointer.
 			 * @param renderableInstance A reference to a renderable instance.
 			 * @param distance The distance from the camera.
-			 * @param shadowRendering Enable the shadow map render list.
 			 * @return void
 			 */
-			void insertInRenderLists (const std::shared_ptr< Graphics::RenderTarget::Abstract > & renderTarget, const std::shared_ptr< Graphics::RenderableInstance::Abstract > & renderableInstance, float distance, bool shadowRendering) noexcept;
+			void insertInRenderLists (const std::shared_ptr< Graphics::RenderTarget::Abstract > & renderTarget, const std::shared_ptr< Graphics::RenderableInstance::Abstract > & renderableInstance, float distance) noexcept;
 
 			/**
 			 * @brief Renders a specific selection of objects;
@@ -916,7 +930,7 @@ namespace EmEn::Scenes
 			void initializeRenderableInstance (const std::shared_ptr< Graphics::RenderableInstance::Abstract > & renderableInstance) const noexcept;
 
 			/**
-			 * @brief Initializes a render target with the scene renderable instances.
+			 * @brief Initializes a render target with renderable instances.
 			 * @param renderTarget A reference to a render target smart pointer.
 			 * @return void
 			 */
@@ -931,8 +945,18 @@ namespace EmEn::Scenes
 			std::vector< Graphics::RenderPassType > prepareRenderPassTypes (const Graphics::RenderableInstance::Abstract & renderableInstance) const noexcept;
 
 			/**
+			 * @brief Prepares a renderable instance for a shadow map.
+			 * @note This function returns false only if the instance cannot be prepared. 'True' can postpone the preparation.
+			 * @param renderableInstance A reference to the renderable instance smart pointer.
+			 * @param renderTarget A reference to a render target smart pointer where the renderable instance must get ready.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool getRenderableInstanceReadyForShadowCasting (const std::shared_ptr< Graphics::RenderableInstance::Abstract > & renderableInstance, const std::shared_ptr< Graphics::RenderTarget::Abstract > & renderTarget) const noexcept;
+
+			/**
 			 * @brief Prepares a renderable instance for a specific rendering.
-			 * @note The function return false only if the instance cannot be prepared. 'true' can postpone the preparation.
+			 * @note This function returns false only if the instance cannot be prepared. 'True' can postpone the preparation.
 			 * @param renderableInstance A reference to the renderable instance smart pointer.
 			 * @param renderTarget A reference to a render target smart pointer where the renderable instance must get ready.
 			 * @return bool
@@ -954,8 +978,6 @@ namespace EmEn::Scenes
 			static constexpr auto TranslucentLighted{3UL};
 			static constexpr auto Shadows{4UL};
 
-			Graphics::Renderer & m_graphicsRenderer;
-			Audio::Manager & m_audioManager;
 			AVConsole::Manager m_AVConsoleManager;
 			std::shared_ptr< Graphics::Renderable::AbstractBackground > m_background;
 			std::shared_ptr< Graphics::Renderable::SceneAreaInterface > m_sceneArea;

@@ -38,30 +38,6 @@ namespace EmEn::Vulkan
 
 	size_t ComputePipeline::s_fakeHash = 0;
 
-	ComputePipeline::ComputePipeline (const std::shared_ptr< PipelineLayout > & pipelineLayout, VkPipelineCreateFlags createFlags) noexcept
-		: AbstractDeviceDependentObject(pipelineLayout->device()), m_pipelineLayout(pipelineLayout)
-	{
-		/* FIXME: The compute pipeline is not developed yet. */
-		m_createInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
-		m_createInfo.pNext = nullptr;
-		m_createInfo.flags = createFlags;
-		m_createInfo.stage = VkPipelineShaderStageCreateInfo{};
-		m_createInfo.layout = m_pipelineLayout->handle();
-		m_createInfo.basePipelineHandle = nullptr; // VkPipeline
-		m_createInfo.basePipelineIndex = 0;
-	}
-
-	ComputePipeline::ComputePipeline (const std::shared_ptr< PipelineLayout > & pipelineLayout, const VkComputePipelineCreateInfo & createInfo) noexcept
-		: AbstractDeviceDependentObject(pipelineLayout->device()), m_createInfo(createInfo), m_pipelineLayout(pipelineLayout)
-	{
-
-	}
-
-	ComputePipeline::~ComputePipeline ()
-	{
-		this->destroyFromHardware();
-	}
-
 	bool
 	ComputePipeline::createOnHardware () noexcept
 	{
@@ -83,7 +59,7 @@ namespace EmEn::Vulkan
 
 		if ( result != VK_SUCCESS )
 		{
-			Tracer::error(ClassId, BlobTrait() << "Unable to create a compute pipeline : " << vkResultToCString(result) << " !");
+			TraceError{ClassId} << "Unable to create a compute pipeline : " << vkResultToCString(result) << " !";
 
 			return false;
 		}

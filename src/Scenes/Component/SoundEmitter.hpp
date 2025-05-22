@@ -44,7 +44,7 @@ namespace EmEn::Scenes::Component
 {
 	/**
 	 * @brief Defines a sound source emitter.
-	 * @note You can virtually define infinite number of sound emitter, they are not strictly linked to hardware.
+	 * @note You can virtually define infinite number of sound emitters, they are not strictly linked to hardware.
 	 * @extends EmEn::Scenes::Component::Abstract The base class for each entity component.
 	 * @extends EmEn::Libs::ObserverTrait This component observes sound loading events.
 	 */
@@ -64,16 +64,25 @@ namespace EmEn::Scenes::Component
 
 			/**
 			 * @brief Constructs a sound emitter.
-			 * @param name The name of the renderable instance.
+			 * @note [OBS][SHARED-OBSERVER]
+			 * @param name The name of the renderable instance [std::move].
 			 * @param parentEntity A reference to the parent entity.
 			 * @param permanent Set the sound emitter regularly in use. Default false.
 			 */
-			SoundEmitter (const std::string & name, const AbstractEntity & parentEntity, bool permanent = false) noexcept;
+			SoundEmitter (std::string name, const AbstractEntity & parentEntity, bool permanent = false) noexcept
+				: Abstract{std::move(name), parentEntity}
+			{
+				this->setFlag(KeepInactiveSourceAlive, permanent);
+			}
 
 			/**
-			 * @brief Destroys the sound emitter. Taking cares there is no loading sound, or playing sound.
+			 * @brief Destroys the sound emitter.
+			 * @note Takes care there is no loading sound or playing sound.
 			 */
-			~SoundEmitter () noexcept override;
+			~SoundEmitter () noexcept override
+			{
+				this->stop();
+			}
 
 			/** @copydoc EmEn::Scenes::Component::Abstract::getComponentType() */
 			[[nodiscard]]
@@ -83,20 +92,12 @@ namespace EmEn::Scenes::Component
 				return ClassId;
 			}
 
-			/** @copydoc EmEn::Scenes::Component::Abstract::boundingBox() const */
+			/** @copydoc EmEn::Scenes::Component::Abstract::isComponent() */
 			[[nodiscard]]
-			const Libs::Math::Cuboid< float > &
-			boundingBox () const noexcept override
+			bool
+			isComponent (const char * classID) const noexcept override
 			{
-				return NullBoundingBox;
-			}
-
-			/** @copydoc EmEn::Scenes::Component::Abstract::boundingSphere() const */
-			[[nodiscard]]
-			const Libs::Math::Sphere< float > &
-			boundingSphere () const noexcept override
-			{
-				return NullBoundingSphere;
+				return strcmp(ClassId, classID) == 0;
 			}
 
 			/** @copydoc EmEn::Scenes::Component::Abstract::move() */
@@ -105,8 +106,13 @@ namespace EmEn::Scenes::Component
 			/** @copydoc EmEn::Scenes::Component::Abstract::processLogics() */
 			void processLogics (const Scene & scene) noexcept override;
 
-			/** @copydoc EmEn::Scenes::Component::Abstract::shouldRemove() */
-			bool shouldRemove () const noexcept override;
+			/** @copydoc EmEn::Scenes::Component::Abstract::shouldBeRemoved() */
+			[[nodiscard]]
+			bool
+			shouldBeRemoved () const noexcept override
+			{
+				return false;
+			}
 
 			/**
 			 * @brief Enables/Disables the sound distortion with entity velocity.
@@ -133,7 +139,7 @@ namespace EmEn::Scenes::Component
 			/**
 			 * @brief Changes the gain of the source emitter.
 			 * @param gain An positive value.
-			 * @retur void
+			 * @return void
 			 */
 			void
 			setGain (float gain) noexcept
@@ -148,7 +154,7 @@ namespace EmEn::Scenes::Component
 
 			/**
 			 * @brief Returns the last applied gain.
-			 * @retur float
+			 * @return float
 			 */
 			[[nodiscard]]
 			float
@@ -164,7 +170,14 @@ namespace EmEn::Scenes::Component
 			 * @param loop The loop play mode state. Default false.
 			 * @return void
 			 */
-			void attachSound (const std::shared_ptr< Audio::SoundResource > & sound, float gain = 1.0F, bool loop = false) noexcept;
+			void
+			attachSound (const std::shared_ptr< Audio::SoundResource > & sound, float gain = 1.0F, bool loop = false) noexcept
+			{
+				this->setFlag(Loop, loop);
+
+				m_attachedSound = sound;
+				m_gain = gain;
+			}
 
 			/**
 			 * @brief Sends a sound to play to the underlying source.
@@ -179,7 +192,7 @@ namespace EmEn::Scenes::Component
 
 			/**
 			 * @brief Replays the previous sound if exists.
-			 * @note The sound will be rewound if source is playing.
+			 * @note The sound will be rewound if a source is playing.
 			 * @return void
 			 */
 			void replay () noexcept;
@@ -247,7 +260,12 @@ namespace EmEn::Scenes::Component
 			 * @brief Release an audio source.
 			 * @return void
 			 */
-			void releaseSource () noexcept;
+			void
+			releaseSource () noexcept
+			{
+				m_source->removeSound();
+				m_source.reset();
+			}
 
 			/**
 			 * @brief Plays the attached sound resource.
@@ -259,7 +277,13 @@ namespace EmEn::Scenes::Component
 			 * @brief Releases the attached sound resource.
 			 * @return void
 			 */
-			void releaseAttachedSound () noexcept;
+			void
+			releaseAttachedSound () noexcept
+			{
+				this->disableFlag(Loop);
+
+				m_attachedSound.reset();
+			}
 
 			/* Flag names. */
 			static constexpr auto KeepInactiveSourceAlive{UnusedFlag + 0UL};

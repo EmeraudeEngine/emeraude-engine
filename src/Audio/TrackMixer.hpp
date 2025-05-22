@@ -59,11 +59,13 @@ namespace EmEn::Audio
 {
 	/**
 	 * @brief The track mixer service class.
+	 * @note [OBS][STATIC-OBSERVER][STATIC-OBSERVABLE]
 	 * @extends EmEn::ServiceInterface This is a service.
+	 * @extends EmEn::Libs::ObservableTrait This service is observable.
 	 * @extends EmEn::Console::Controllable The track mixer can be controlled by the console.
-	 * @extends EmEn::Libs::ObserverTrait
+	 * @extends EmEn::Libs::ObserverTrait This service can observe resources loading.
 	 */
-	class TrackMixer final : public ServiceInterface, public Console::Controllable, public Libs::ObserverTrait
+	class TrackMixer final : public ServiceInterface, public Libs::ObservableTrait, public Console::Controllable, public Libs::ObserverTrait
 	{
 		public:
 
@@ -91,7 +93,15 @@ namespace EmEn::Audio
 			 * @param resourceManager A reference to the resource manager.
 			 * @param audioManager A reference to the audio manager.
 			 */
-			TrackMixer (PrimaryServices & primaryServices, Resources::Manager & resourceManager, Manager & audioManager) noexcept;
+			TrackMixer (PrimaryServices & primaryServices, Resources::Manager & resourceManager, Manager & audioManager) noexcept
+				: ServiceInterface{ClassId},
+				Controllable{ClassId},
+				m_primaryServices{primaryServices},
+				m_resourceManager{resourceManager},
+				m_audioManager{audioManager}
+			{
+
+			}
 
 			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
 			[[nodiscard]]

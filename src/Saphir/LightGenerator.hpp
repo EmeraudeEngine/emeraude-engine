@@ -34,6 +34,8 @@
 /* Local inclusions for usages. */
 #include "Declaration/UniformBlock.hpp"
 #include "StaticLighting.hpp"
+#include "Settings.hpp"
+#include "SettingKeys.hpp"
 
 /* Forward declarations. */
 namespace EmEn::Saphir
@@ -63,10 +65,21 @@ namespace EmEn::Saphir
 
 			/**
 			 * @brief Construct the light model generator.
+			 * @param settings A reference to the settings.
 			 * @param renderPassType The render pass type to know which kind of render is implied.
 			 * @param fragmentColor The fragment color name produced at the end of light application. Default "fragmentColor".
 			 */
-			explicit LightGenerator (Graphics::RenderPassType renderPassType, const char * fragmentColor = FragmentColor) noexcept;
+			LightGenerator (Settings & settings, Graphics::RenderPassType renderPassType, const char * fragmentColor = FragmentColor) noexcept
+				: m_renderPassType{renderPassType},
+				m_PCFSample{settings.get< uint32_t >(GraphicsShadowMappingPCFSampleKey, DefaultGraphicsShadowMappingPCFSample)},
+				m_PCFRadius{settings.get< float >(GraphicsShadowMappingPCFRadiusKey, DefaultGraphicsShadowMappingPCFRadius)},
+				m_fragmentColor{fragmentColor}
+			{
+				if ( m_renderPassType == Graphics::RenderPassType::SimplePass )
+				{
+					m_flags[UseStaticLighting] = true;
+				}
+			}
 
 			/**
 			 * @brief Returns whether this is generating the ambient pass.

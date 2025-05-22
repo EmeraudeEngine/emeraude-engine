@@ -34,14 +34,8 @@ namespace EmEn::Scenes::Component
 {
 	using namespace EmEn::Libs;
 	using namespace EmEn::Libs::Math;
-	using namespace Animations;
-	using namespace Physics;
-
-	SphericalPushModifier::SphericalPushModifier (const std::string & name, const AbstractEntity & parentEntity) noexcept
-		: AbstractModifier(name, parentEntity)
-	{
-
-	}
+	using namespace EmEn::Animations;
+	using namespace EmEn::Physics;
 
 	void
 	SphericalPushModifier::move (const CartesianFrame< float > & /*worldCoordinates*/) noexcept
@@ -56,13 +50,7 @@ namespace EmEn::Scenes::Component
 	}
 
 	bool
-	SphericalPushModifier::shouldRemove () const noexcept
-	{
-		return false;
-	}
-
-	bool
-	SphericalPushModifier::playAnimation (uint8_t animationID, const Variant & value, size_t cycle) noexcept
+	SphericalPushModifier::playAnimation (uint8_t animationID, const Variant & value, size_t /*cycle*/) noexcept
 	{
 		switch ( animationID )
 		{
@@ -80,7 +68,7 @@ namespace EmEn::Scenes::Component
 	}
 
 	Vector< 3, float >
-	SphericalPushModifier::getForceAppliedToEntity (const CartesianFrame< float > & worldCoordinates, const Sphere< float > & worldBoundingSphere) const noexcept
+	SphericalPushModifier::getForceAppliedToEntity (const CartesianFrame< float > & worldCoordinates, const Space3D::Sphere< float > & worldBoundingSphere) const noexcept
 	{
 		if ( !this->isEnabled() )
 		{
@@ -105,7 +93,7 @@ namespace EmEn::Scenes::Component
 	}
 
 	Vector< 3, float >
-	SphericalPushModifier::getForceAppliedToEntity (const CartesianFrame< float > & worldCoordinates, const Cuboid< float > & worldBoundingBox) const noexcept
+	SphericalPushModifier::getForceAppliedToEntity (const CartesianFrame< float > & worldCoordinates, const Space3D::AACuboid< float > & worldBoundingBox) const noexcept
 	{
 		if ( !this->isEnabled() )
 		{

@@ -28,35 +28,26 @@
 
 /* STL inclusions. */
 #include <array>
-#include <cstddef>
-#include <cstdint>
-#include <functional>
-#include <memory>
-#include <string>
 #include <unordered_map>
 
 /* Local inclusions for inheritances. */
 #include "Interface.hpp"
 
 /* Local inclusions for usages. */
-#include "Component/Interface.hpp"
-#include "Graphics/TextureResource/Abstract.hpp"
-#include "Graphics/Types.hpp"
-#include "Physics/PhysicalSurfaceProperties.hpp"
-#include "Libs/PixelFactory/Color.hpp"
 #include "Resources/Container.hpp"
-#include "Resources/ResourceTrait.hpp"
+#include "Physics/PhysicalSurfaceProperties.hpp"
+#include "Component/Interface.hpp"
 
 /* Forward declarations. */
 namespace EmEn
 {
-	namespace Graphics::Material::Component
+	namespace Graphics
 	{
-		class Texture;
-	}
+		namespace Material::Component
+		{
+			class Texture;
+		}
 
-	namespace Vulkan
-	{
 		class SharedUniformBuffer;
 	}
 
@@ -83,7 +74,7 @@ namespace EmEn::Graphics::Material
 			/** @brief Class identifier. */
 			static constexpr auto ClassId{"MaterialStandardResource"};
 
-			/* Shader specific keys. */
+			/* Shader-specific keys. */
 			static constexpr auto SurfaceAmbientColor{"SurfaceAmbientColor"};
 			static constexpr auto SurfaceDiffuseColor{"SurfaceDiffuseColor"};
 			static constexpr auto SurfaceSpecularColor{"SurfaceSpecularColor"};
@@ -95,12 +86,20 @@ namespace EmEn::Graphics::Material
 			/** @brief Observable class unique identifier. */
 			static const size_t ClassUID;
 
+			/** @brief Defines the resource dependency complexity. */
+			static constexpr auto Complexity{Resources::DepComplexity::Few};
+
 			/**
 			 * @brief Constructs a material.
 			 * @param name A reference to a string for the resource name.
-			 * @param resourceFlagBits The resource flag bits. Default none.
+			 * @param materialFlags The resource flag bits. Default none.
 			 */
-			explicit StandardResource (const std::string & name, int resourceFlagBits = 0) noexcept;
+			explicit
+			StandardResource (const std::string & name, uint32_t materialFlags = 0) noexcept
+				: Interface{name, materialFlags}
+			{
+
+			}
 
 			/**
 			 * @brief Copy constructor.
@@ -131,19 +130,34 @@ namespace EmEn::Graphics::Material
 			/**
 			 * @brief Destructs the material.
 			 */
-			~StandardResource () override;
+			~StandardResource () override
+			{
+				this->destroyFromHardware();
+			}
 
 			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
 			[[nodiscard]]
-			size_t classUID () const noexcept override;
+			size_t
+			classUID () const noexcept override
+			{
+				return ClassUID;
+			}
 
 			/** @copydoc EmEn::Libs::ObservableTrait::is() const */
 			[[nodiscard]]
-			bool is (size_t classUID) const noexcept override;
+			bool
+			is (size_t classUID) const noexcept override
+			{
+				return classUID == ClassUID;
+			}
 
 			/** @copydoc EmEn::Resources::ResourceTrait::classLabel() const */
 			[[nodiscard]]
-			const char * classLabel () const noexcept override;
+			const char *
+			classLabel () const noexcept override
+			{
+				return ClassId;
+			}
 
 			/** @copydoc EmEn::Resources::ResourceTrait::load() */
 			bool load () noexcept override;
@@ -151,11 +165,19 @@ namespace EmEn::Graphics::Material
 			/** @copydoc EmEn::Resources::ResourceTrait::load(const Json::Value &) */
 			bool load (const Json::Value & data) noexcept override;
 
-			/** @copydoc EmEn::Graphics::Material::Interface::create() */
-			bool create (Renderer & renderer) noexcept override;
+			/** @copydoc EmEn::Resources::ResourceTrait::memoryOccupied() const noexcept */
+			[[nodiscard]]
+			size_t
+			memoryOccupied () const noexcept override
+			{
+				return sizeof(*this);
+			}
 
-			/** @copydoc EmEn::Graphics::Material::Interface::destroy() */
-			void destroy () noexcept override;
+			/** @copydoc EmEn::Graphics::Material::Interface::createOnHardware() */
+			bool createOnHardware (Renderer & renderer) noexcept override;
+
+			/** @copydoc EmEn::Graphics::Material::Interface::destroyFromHardware() */
+			void destroyFromHardware () noexcept override;
 
 			/** @copydoc EmEn::Graphics::Material::Interface::isCreated() */
 			[[nodiscard]]
@@ -195,7 +217,7 @@ namespace EmEn::Graphics::Material
 
 			/** @copydoc EmEn::Graphics::Material::Interface::frameIndexAt() */
 			[[nodiscard]]
-			size_t frameIndexAt (uint32_t sceneTime) const noexcept override;
+			uint32_t frameIndexAt (uint32_t sceneTime) const noexcept override;
 
 			/** @copydoc EmEn::Graphics::Material::Interface::enableBlending() */
 			void enableBlending (BlendingMode mode) noexcept override;
@@ -433,22 +455,6 @@ namespace EmEn::Graphics::Material
 			 */
 			void setReflectionAmount (float value) noexcept;
 
-			/**
-			 * @brief Returns a standard material resource by its name.
-			 * @param resourceName A reference to a string.
-			 * @param directLoad Use the direct loading mode. Default false.
-			 * @return std::shared_ptr< StandardResource >
-			 */
-			[[nodiscard]]
-			static std::shared_ptr< StandardResource > get (const std::string & resourceName, bool directLoad = false) noexcept;
-
-			/**
-			 * @brief Returns the default standard material resource.
-			 * @return std::shared_ptr< StandardResource >
-			 */
-			[[nodiscard]]
-			static std::shared_ptr< StandardResource > getDefault () noexcept;
-
 		private:
 
 			/** @copydoc EmEn::Graphics::Material::Interface::getSharedUniformBufferIdentifier() */
@@ -608,9 +614,9 @@ namespace EmEn::Graphics::Material
 				/* ReflectionAmount (1), Unused (1), Unused (1), Unused (1). */
 				DefaultReflectionAmount, 0.0F, 0.0F, 0.0F
 			};
-			std::shared_ptr< Vulkan::DescriptorSetLayout > m_descriptorSetLayout{};
-			std::unique_ptr< Vulkan::DescriptorSet > m_descriptorSet{};
-			std::shared_ptr< Vulkan::SharedUniformBuffer > m_sharedUniformBuffer{};
+			std::shared_ptr< Vulkan::DescriptorSetLayout > m_descriptorSetLayout;
+			std::unique_ptr< Vulkan::DescriptorSet > m_descriptorSet;
+			std::shared_ptr< SharedUniformBuffer > m_sharedUniformBuffer;
 			float m_alphaThresholdToDiscard{0.1F};
 			uint32_t m_sharedUBOIndex{0};
 			std::array< bool, 8 > m_flags{

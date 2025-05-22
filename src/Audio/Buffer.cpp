@@ -37,7 +37,7 @@ namespace EmEn::Audio
 
 	Buffer::Buffer () noexcept
 	{
-		if ( !Manager::instance()->usable() )
+		if ( Manager::audioDisabled() )
 		{
 			*(this->identifierPointer()) =  1;
 
@@ -74,7 +74,7 @@ namespace EmEn::Audio
 			return false;
 		}
 
-		if ( !Manager::instance()->usable() )
+		if ( Manager::audioDisabled() )
 		{
 			return true;
 		}
@@ -121,7 +121,7 @@ namespace EmEn::Audio
 		}
 		else
 		{
-			alBufferData(this->identifier(), format, wave.data(), static_cast< ALsizei >(wave.bytesCount()), static_cast< ALsizei >(wave.frequency()));
+			alBufferData(this->identifier(), format, wave.data(), wave.bytes< ALsizei >(), static_cast< ALsizei >(wave.frequency()));
 		}
 
 		if ( alGetErrors("alBufferData()", __FILE__, __LINE__) )
@@ -139,7 +139,7 @@ namespace EmEn::Audio
 	{
 		auto value = -1;
 
-		if ( Manager::instance()->usable() )
+		if ( !Manager::audioDisabled() )
 		{
 			if ( this->isCreated() )
 			{
@@ -159,7 +159,7 @@ namespace EmEn::Audio
 	{
 		auto value = -1;
 
-		if ( Manager::instance()->usable() )
+		if ( !Manager::audioDisabled() )
 		{
 			if ( this->isCreated() )
 			{
@@ -179,7 +179,7 @@ namespace EmEn::Audio
 	{
 		auto value = -1;
 
-		if ( Manager::instance()->usable() )
+		if ( !Manager::audioDisabled() )
 		{
 			if ( this->isCreated() )
 			{
@@ -199,7 +199,7 @@ namespace EmEn::Audio
 	{
 		auto value = -1;
 
-		if ( Manager::instance()->usable() )
+		if ( !Manager::audioDisabled() )
 		{
 			if ( this->isCreated() )
 			{

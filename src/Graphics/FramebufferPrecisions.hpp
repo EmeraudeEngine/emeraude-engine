@@ -28,7 +28,7 @@
 
 /* STL inclusions. */
 #include <cstdint>
-#include <ostream>
+#include <sstream>
 #include <string>
 
 /* Local inclusions. */
@@ -58,7 +58,37 @@ namespace EmEn::Graphics
 			 * @param stencilBits A value for bits precision of the stencil buffer.
 			 * @param samples The number of sampler of the color buffer.
 			 */
-			FramebufferPrecisions (uint32_t redBits, uint32_t greenBits, uint32_t blueBits, uint32_t alphaBits, uint32_t depthBits, uint32_t stencilBits, uint32_t samples) noexcept;
+			FramebufferPrecisions (uint32_t redBits, uint32_t greenBits, uint32_t blueBits, uint32_t alphaBits, uint32_t depthBits, uint32_t stencilBits, uint32_t samples) noexcept
+				: m_redBits{redBits},
+				m_greenBits{greenBits},
+				m_blueBits{blueBits},
+				m_alphaBits{alphaBits},
+				m_depthBits{depthBits},
+				m_stencilBits{stencilBits},
+				m_samples{samples}
+			{
+
+			}
+
+			/**
+			 * @brief Constructs a framebuffer precisions.
+			 * @param colorCount A value for the color number.
+			 * @param colorBits A value for channel bits precision of the color buffer.
+			 * @param depthBits A value for bits precision of the depth buffer.
+			 * @param stencilBits A value for bits precision of the stencil buffer.
+			 * @param samples The number of sampler of the color buffer.
+			 */
+			FramebufferPrecisions (uint32_t colorCount, uint32_t colorBits, uint32_t depthBits, uint32_t stencilBits, uint32_t samples) noexcept
+				: m_redBits{colorCount >= 1 ? colorBits : 0},
+				m_greenBits{colorCount >= 2 ? colorBits : 0},
+				m_blueBits{colorCount >= 3 ? colorBits : 0},
+				m_alphaBits{colorCount == 4 ? colorBits : 0},
+				m_depthBits{depthBits},
+				m_stencilBits{stencilBits},
+				m_samples{samples}
+			{
+
+			}
 
 			/**
 			 * @brief Returns red component bits.
@@ -148,6 +178,8 @@ namespace EmEn::Graphics
 				return m_samples;
 			}
 
+		private:
+
 			/**
 			 * @brief STL streams printable object.
 			 * @param out A reference to the stream output.
@@ -155,15 +187,6 @@ namespace EmEn::Graphics
 			 * @return std::ostream &
 			 */
 			friend std::ostream & operator<< (std::ostream & out, const FramebufferPrecisions & obj);
-
-			/**
-			 * @brief Stringifies the object.
-			 * @param obj A reference to the object to print.
-			 * @return std::string
-			 */
-			friend std::string to_string (const FramebufferPrecisions & obj);
-
-		private:
 
 			uint32_t m_redBits{DefaultVideoFramebufferRedBits};
 			uint32_t m_greenBits{DefaultVideoFramebufferGreenBits};
@@ -173,4 +196,31 @@ namespace EmEn::Graphics
 			uint32_t m_stencilBits{DefaultVideoFramebufferStencilBits};
 			uint32_t m_samples{DefaultVideoFramebufferSamples};
 	};
+
+	inline
+	std::ostream &
+	operator<< (std::ostream & out, const FramebufferPrecisions & obj)
+	{
+		return out << "Framebuffer precisions data :" "\n"
+			"Color buffer bits : " << obj.m_redBits << ", " << obj.m_greenBits << ", " << obj.m_blueBits << ", " << obj.m_alphaBits << "\n"
+			"Depth buffer bits : " << obj.m_depthBits << "\n"
+			"Stencil buffer bits : " << obj.m_stencilBits << "\n"
+			"Samples : " << obj.m_samples;
+	}
+
+	/**
+	 * @brief Stringifies the object.
+	 * @param obj A reference to the object to print.
+	 * @return std::string
+	 */
+	inline
+	std::string
+	to_string (const FramebufferPrecisions & obj)
+	{
+		std::stringstream output;
+
+		output << obj;
+
+		return output.str();
+	}
 }

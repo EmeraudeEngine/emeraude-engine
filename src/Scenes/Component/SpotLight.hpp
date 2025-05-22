@@ -51,7 +51,11 @@ namespace EmEn::Scenes::Component
 			 * @param parentEntity A reference to the parent entity.
 			 * @param shadowMapResolution Enable the shadow map by specifying the resolution. Default, no shadow map.
 			 */
-			SpotLight (const std::string & name, const AbstractEntity & parentEntity, uint32_t shadowMapResolution = 0) noexcept;
+			SpotLight (std::string name, const AbstractEntity & parentEntity, uint32_t shadowMapResolution = 0) noexcept
+				: AbstractLightEmitter{std::move(name), parentEntity, shadowMapResolution}
+			{
+				this->setConeAngles(30.0F, 35.0F);
+			}
 
 			/**
 			 * @brief Copy constructor.
@@ -82,19 +86,23 @@ namespace EmEn::Scenes::Component
 			/**
 			 * @brief Destructs a spotlight.
 			 */
-			~SpotLight () override;
+			~SpotLight () override = default;
 
 			/** @copydoc EmEn::Scenes::Component::Abstract::getComponentType() */
 			[[nodiscard]]
-			const char * getComponentType () const noexcept override;
+			const char *
+			getComponentType () const noexcept override
+			{
+				return ClassId;
+			}
 
-			/** @copydoc EmEn::Scenes::Component::Abstract::boundingBox() const */
+			/** @copydoc EmEn::Scenes::Component::Abstract::isComponent() */
 			[[nodiscard]]
-			const Libs::Math::Cuboid< float > & boundingBox () const noexcept override;
-
-			/** @copydoc EmEn::Scenes::Component::Abstract::boundingSphere() const */
-			[[nodiscard]]
-			const Libs::Math::Sphere< float > & boundingSphere () const noexcept override;
+			bool
+			isComponent (const char * classID) const noexcept override
+			{
+				return strcmp(ClassId, classID) == 0;
+			}
 
 			/** @copydoc EmEn::Scenes::Component::Abstract::processLogics() */
 			void processLogics (const Scene & scene) noexcept override;
@@ -102,8 +110,13 @@ namespace EmEn::Scenes::Component
 			/** @copydoc EmEn::Scenes::Component::Abstract::move() */
 			void move (const Libs::Math::CartesianFrame< float > & worldCoordinates) noexcept override;
 
-			/** @copydoc EmEn::Scenes::Component::Abstract::shouldRemove() */
-			bool shouldRemove () const noexcept override;
+			/** @copydoc EmEn::Scenes::Component::Abstract::shouldBeRemoved() */
+			[[nodiscard]]
+			bool
+			shouldBeRemoved () const noexcept override
+			{
+				return false;
+			}
 
 			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::touch() */
 			[[nodiscard]]
@@ -111,14 +124,18 @@ namespace EmEn::Scenes::Component
 
 			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::createOnHardware() */
 			[[nodiscard]]
-			bool createOnHardware (LightSet & lightSet, Graphics::Renderer & renderer, AVConsole::Manager & AVConsoleManager) noexcept override;
+			bool createOnHardware (LightSet & lightSet, AVConsole::Manager & AVConsoleManager) noexcept override;
 
 			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::destroyFromHardware() */
-			void destroyFromHardware () noexcept override;
+			void destroyFromHardware (LightSet & lightSet, AVConsole::Manager & AVConsoleManager) noexcept override;
 
 			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::shadowMap() */
 			[[nodiscard]]
-			std::shared_ptr< Graphics::RenderTarget::ShadowMap::Abstract > shadowMap () const noexcept override;
+			std::shared_ptr< Graphics::RenderTarget::Abstract >
+			shadowMap () const noexcept override
+			{
+				return std::static_pointer_cast< Graphics::RenderTarget::Abstract >(m_shadowMap);
+			}
 
 			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::getUniformBlock() */
 			[[nodiscard]]
@@ -128,7 +145,15 @@ namespace EmEn::Scenes::Component
 			 * @brief Set the radius of light area.
 			 * @param radius
 			 */
-			void setRadius (float radius) noexcept;
+			void
+			setRadius (float radius) noexcept
+			{
+				m_radius = std::abs(radius);
+
+				m_buffer[RadiusOffset] = m_radius;
+
+				this->requestVideoMemoryUpdate();
+			}
 
 			/**
 			 * @brief Sets the inner and the outer angles of the light cone.
@@ -142,21 +167,83 @@ namespace EmEn::Scenes::Component
 			 * @return float
 			 */
 			[[nodiscard]]
-			float radius () const noexcept;
+			float
+			radius () const noexcept
+			{
+				return m_radius;
+			}
 
 			/**
 			 * @brief Returns the inner angle in degree of the cone where light is 100%.
 			 * @return float
 			 */
 			[[nodiscard]]
-			float innerAngle () const noexcept;
+			float
+			innerAngle () const noexcept
+			{
+				return m_innerAngle;
+			}
 
 			/**
 			 * @brief Returns the outer angle in degree of the cone until the light is off.
 			 * @return float
 			 */
 			[[nodiscard]]
-			float outerAngle () const noexcept;
+			float
+			outerAngle () const noexcept
+			{
+				return m_outerAngle;
+			}
+
+		private:
+
+			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::onTargetConnected() */
+			void onTargetConnected (AVConsole::AVManagers & managers, AbstractVirtualDevice * targetDevice) noexcept override;
+
+			/** @copydoc EmEn::Animations::AnimatableInterface::playAnimation() */
+			bool playAnimation (uint8_t animationID, const Libs::Variant & value, size_t cycle) noexcept override;
+
+			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::onVideoMemoryUpdate() */
+			[[nodiscard]]
+			bool
+			onVideoMemoryUpdate (Graphics::SharedUniformBuffer & UBO, uint32_t index) noexcept override
+			{
+				return UBO.writeElementData(index, m_buffer.data());
+			}
+
+			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::onColorChange() */
+			void
+			onColorChange (const Libs::PixelFactory::Color< float > & color) noexcept override
+			{
+				m_buffer[ColorOffset+0] = color.red();
+				m_buffer[ColorOffset+1] = color.green();
+				m_buffer[ColorOffset+2] = color.blue();
+			}
+
+			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::onIntensityChange() */
+			void
+			onIntensityChange (float intensity) noexcept override
+			{
+				m_buffer[IntensityOffset] = intensity;
+			}
+
+			/**
+			 * @brief Sets the inner angle of the cone where light is 100%.
+			 * @param angle The angle in degree.
+			 */
+			void
+			setInnerAngle (float angle) noexcept
+			{
+				m_innerAngle = angle;
+
+				m_buffer[InnerCosAngleOffset] = std::cos(Libs::Math::Radian(m_innerAngle));
+			}
+
+			/**
+			 * @brief Sets the outer angle of the cone until the light is off.
+			 * @param angle The angle in degree.
+			 */
+			void setOuterAngle (float angle) noexcept;
 
 			/**
 			 * @brief STL streams printable object.
@@ -165,47 +252,6 @@ namespace EmEn::Scenes::Component
 			 * @return std::ostream &
 			 */
 			friend std::ostream & operator<< (std::ostream & out, const SpotLight & obj);
-
-			/**
-			 * @brief Stringifies the object.
-			 * @param obj A reference to the object to print.
-			 * @return std::string
-			 */
-			friend std::string to_string (const SpotLight & obj) noexcept;
-
-		private:
-
-			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::onTargetConnected() */
-			void onTargetConnected (AbstractVirtualDevice * targetDevice) noexcept override;
-
-			/** @copydoc EmEn::Animations::AnimatableInterface::playAnimation() */
-			bool playAnimation (uint8_t animationID, const Libs::Variant & value, size_t cycle) noexcept override;
-
-			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::onVideoMemoryUpdate() */
-			[[nodiscard]]
-			bool
-			onVideoMemoryUpdate (Vulkan::SharedUniformBuffer & UBO, uint32_t index) noexcept override
-			{
-				return UBO.writeElementData(index, m_buffer.data());
-			}
-
-			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::onColorChange() */
-			void onColorChange (const Libs::PixelFactory::Color< float > & color) noexcept override;
-
-			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::onIntensityChange() */
-			void onIntensityChange (float intensity) noexcept override;
-
-			/**
-			 * @brief Sets the inner angle of the cone where light is 100%.
-			 * @param angle The angle in degree.
-			 */
-			void setInnerAngle (float angle) noexcept;
-
-			/**
-			 * @brief Sets the outer angle of the cone until the light is off.
-			 * @param angle The angle in degree.
-			 */
-			void setOuterAngle (float angle) noexcept;
 
 			/* Uniform buffer object offset to write data. */
 			static constexpr auto ColorOffset{0UL};
@@ -217,7 +263,7 @@ namespace EmEn::Scenes::Component
 			static constexpr auto OuterCosAngleOffset{15UL};
 			static constexpr auto LightMatrixOffset{16UL};
 
-			std::shared_ptr< Graphics::RenderTarget::ShadowMap::Texture2D > m_shadowMap{};
+			std::shared_ptr< Graphics::RenderTarget::ShadowMap< Graphics::ViewMatrices2DUBO > > m_shadowMap;
 			float m_radius{DefaultRadius};
 			float m_innerAngle{DefaultInnerAngle};
 			float m_outerAngle{DefaultOuterAngle};
@@ -237,4 +283,38 @@ namespace EmEn::Scenes::Component
 				0.0F, 0.0F, 0.0F, 1.0F
 			};
 	};
+
+	inline
+	std::ostream &
+	operator<< (std::ostream & out, const SpotLight & obj)
+	{
+		const auto worldCoordinates = obj.getWorldCoordinates();
+
+		return out << "Spot light data ;\n"
+			"Position (World Space) : " << worldCoordinates.position() << "\n"
+			"Direction (World Space) : " << worldCoordinates.forwardVector() << "\n"
+			"Color : " << obj.color() << "\n"
+			"Intensity : " << obj.intensity() << "\n"
+			"Radius : " << obj.m_radius << "\n"
+			"Inner angle : " << obj.m_innerAngle << "° (" << Libs::Math::Radian(obj.m_innerAngle) << " rad) (cosine : " << std::cos(Libs::Math::Radian(obj.m_innerAngle)) << ")\n"
+			"Outer angle : " << obj.m_outerAngle << "° (" << Libs::Math::Radian(obj.m_outerAngle) << " rad) (cosine : " << std::cos(Libs::Math::Radian(obj.m_outerAngle)) << ")\n"
+			"Activity : " << ( obj.isEnabled() ? "true" : "false" ) << "\n"
+			"Shadow caster : " << ( obj.isShadowCastingEnabled() ? "true" : "false" ) << '\n';
+	}
+
+	/**
+	 * @brief Stringifies the object.
+	 * @param obj A reference to the object to print.
+	 * @return std::string
+	 */
+	inline
+	std::string
+	to_string (const SpotLight & obj) noexcept
+	{
+		std::stringstream output;
+
+		output << obj;
+
+		return output.str();
+	}
 }

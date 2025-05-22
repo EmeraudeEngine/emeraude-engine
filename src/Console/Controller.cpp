@@ -29,8 +29,6 @@
 /* Local inclusions. */
 #include "Libs/String.hpp"
 #include "PrimaryServices.hpp"
-#include "Controllable.hpp"
-#include "Expression.hpp"
 
 namespace EmEn::Console
 {
@@ -38,24 +36,6 @@ namespace EmEn::Console
 
 	const size_t Controller::ClassUID{getClassUID(ClassId)};
 	Controller * Controller::s_instance{nullptr};
-
-	Controller::Controller (PrimaryServices & primaryServices) noexcept
-		: ServiceInterface(ClassId), m_primaryServices(primaryServices)
-	{
-		if ( s_instance != nullptr )
-		{
-			std::cerr << __PRETTY_FUNCTION__ << ", constructor called twice !" "\n";
-
-			std::terminate();
-		}
-
-		s_instance = this;
-	}
-
-	Controller::~Controller ()
-	{
-		s_instance = nullptr;
-	}
 
 	bool
 	Controller::usable () const noexcept
@@ -315,10 +295,7 @@ namespace EmEn::Console
 		{
 			outputs.emplace_back(Severity::Success, "Goodbye !");
 
-			/* FIXME: Launch a notification */
-			/*this->fire([] (double) {
-				Core::instance()->stop();
-			}, 3000.0);*/
+			this->notify(Exit);
 
 			return true;
 		}
@@ -327,11 +304,7 @@ namespace EmEn::Console
 		{
 			outputs.emplace_back(Severity::Warning, "Wild exit command invoked !");
 
-			this->fire([] (Time::TimerID /*timerID*/) {
-				std::terminate();
-
-				return true;
-			}, 3000);
+			this->notify(HardExit);
 
 			return true;
 		}

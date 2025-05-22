@@ -40,38 +40,6 @@ namespace EmEn::Vulkan
 {
 	using namespace EmEn::Libs;
 
-	const size_t LayoutManager::ClassUID{getClassUID(ClassId)};
-
-	std::array< LayoutManager *, 2 > LayoutManager::s_instances{nullptr, nullptr};
-
-	LayoutManager::LayoutManager (GPUWorkType type) noexcept
-		: ServiceInterface(ClassId)
-	{
-		auto & instance = s_instances.at(static_cast< size_t >(type));
-
-		if ( instance != nullptr )
-		{
-			std::cerr << __PRETTY_FUNCTION__ << ", constructor called twice !" "\n";
-
-			std::terminate();
-		}
-
-		instance = this;
-	}
-
-	LayoutManager::~LayoutManager ()
-	{
-		for ( auto & pointer : s_instances )
-		{
-			if ( pointer == this )
-			{
-				pointer = nullptr;
-
-				break;
-			}
-		}
-	}
-
 	bool
 	LayoutManager::usable () const noexcept
 	{

@@ -59,17 +59,33 @@ namespace EmEn::Vulkan
 			 * @brief Constructs a descriptor set layout.
 			 * @param device A reference to a smart pointer of a device.
 			 * @param UUID A reference to a string [std::move].
-			 * @param createFlags The create info flags. Default none.
+			 * @param createFlags The createInfo flags. Default none.
 			 */
-			explicit DescriptorSetLayout (const std::shared_ptr< Device > & device, std::string UUID, VkDescriptorSetLayoutCreateFlags createFlags = 0) noexcept;
+			explicit
+			DescriptorSetLayout (const std::shared_ptr< Device > & device, std::string UUID, VkDescriptorSetLayoutCreateFlags createFlags = 0) noexcept
+				: AbstractDeviceDependentObject{device},
+				m_UUID{std::move(UUID)}
+			{
+				m_createInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+				m_createInfo.pNext = nullptr;
+				m_createInfo.flags = createFlags;
+				m_createInfo.bindingCount = 0;
+				m_createInfo.pBindings = nullptr;
+			}
 
 			/**
-			 * @brief Constructs a descriptor set layout with create info.
+			 * @brief Constructs a descriptor set layout with createInfo.
 			 * @param device A reference to a smart pointer to device where the render pass will be performed.
 			 * @param UUID A reference to a string [std::move].
-			 * @param createInfo A reference to a create info.
+			 * @param createInfo A reference to a createInfo.
 			 */
-			DescriptorSetLayout (const std::shared_ptr< Device > & device, std::string UUID, const VkDescriptorSetLayoutCreateInfo & createInfo) noexcept;
+			DescriptorSetLayout (const std::shared_ptr< Device > & device, std::string UUID, const VkDescriptorSetLayoutCreateInfo & createInfo) noexcept
+				: AbstractDeviceDependentObject{device},
+				m_createInfo{createInfo},
+				m_UUID{std::move(UUID)}
+			{
+
+			}
 
 			/**
 			 * @brief Copy constructor.
@@ -98,7 +114,10 @@ namespace EmEn::Vulkan
 			/**
 			 * @brief Destructs the descriptor set layout.
 			 */
-			~DescriptorSetLayout () override;
+			~DescriptorSetLayout () override
+			{
+				this->destroyFromHardware();
+			}
 
 			/** @copydoc EmEn::Vulkan::AbstractDeviceDependentObject::createOnHardware() */
 			bool createOnHardware () noexcept override;
@@ -404,7 +423,7 @@ namespace EmEn::Vulkan
 			}
 
 			/**
-			 * @brief Returns the descriptor pool create info.
+			 * @brief Returns the descriptor pool createInfo.
 			 * @return const VkDescriptorSetLayoutCreateInfo &
 			 */
 			[[nodiscard]]
@@ -426,21 +445,6 @@ namespace EmEn::Vulkan
 			}
 
 			/**
-			 * @brief STL streams printable object.
-			 * @param out A reference to the stream output.
-			 * @param obj A reference to the object to print.
-			 * @return std::ostream &
-			 */
-			friend std::ostream & operator<< (std::ostream & out, const DescriptorSetLayout & obj);
-
-			/**
-			 * @brief Stringifies the object.
-			 * @param obj A reference to the object to print.
-			 * @return std::string
-			 */
-			friend std::string to_string (const DescriptorSetLayout & obj) noexcept;
-
-			/**
 			 * @brief Returns a hash for a descriptor layout according to constructor params.
 			 * @return size_t
 			 */
@@ -449,9 +453,52 @@ namespace EmEn::Vulkan
 
 		private:
 
+			/**
+			 * @brief STL streams printable object.
+			 * @param out A reference to the stream output.
+			 * @param obj A reference to the object to print.
+			 * @return std::ostream &
+			 */
+			friend std::ostream & operator<< (std::ostream & out, const DescriptorSetLayout & obj);
+
 			VkDescriptorSetLayout m_handle{VK_NULL_HANDLE};
 			VkDescriptorSetLayoutCreateInfo m_createInfo{};
 			std::string m_UUID;
 			std::vector< VkDescriptorSetLayoutBinding > m_setLayoutBindings;
 	};
+
+	inline
+	std::ostream &
+	operator<< (std::ostream & out, const DescriptorSetLayout & obj)
+	{
+		out << "Descriptor set layout @" << obj.m_handle << " (" << obj.identifier() << ") :\n";
+
+		for ( const auto & setLayoutBinding : obj.m_setLayoutBindings )
+		{
+			out <<
+				"Set layout binding : " << setLayoutBinding.binding << "\n"
+				"\t" "Descriptor type: " << setLayoutBinding.descriptorType << "\n"
+				"\t" "Descriptor count: " << setLayoutBinding.descriptorCount << "\n"
+				"\t" "Stage flags: " << setLayoutBinding.stageFlags << "\n"
+				"\t" "Immutable Samplers: " << setLayoutBinding.pImmutableSamplers << "\n\n";
+		}
+
+		return out;
+	}
+
+	/**
+	 * @brief Stringifies the object.
+	 * @param obj A reference to the object to print.
+	 * @return std::string
+	 */
+	inline
+	std::string
+	to_string (const DescriptorSetLayout & obj) noexcept
+	{
+		std::stringstream output;
+
+		output << obj;
+
+		return output.str();
+	}
 }

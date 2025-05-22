@@ -30,10 +30,12 @@
 #include "emeraude_config.hpp"
 
 /* STL inclusions. */
+#include <iostream>
+#include <filesystem>
+#include <condition_variable>
 #include <mutex>
 #include <queue>
 #include <string>
-#include <iostream>
 
 /* Local inclusions for usages. */
 #include "TracerEntry.hpp"
@@ -50,50 +52,68 @@ namespace EmEn
 
 			/**
 			 * @brief Constructs the trace logger.
-			 * @param filepath The path of the log file [std::move].
+			 * @param filepath A reference to a path to the log file [std::move].
+			 * @param logFormat The type of log desired. Default Text.
 			 */
-			explicit TracerLogger (std::string filepath) noexcept;
+			explicit TracerLogger (std::filesystem::path filepath, LogFormat logFormat = LogFormat::Text) noexcept;
 
 			/**
-			 * @brief Returns whether the logger can write to the log file.
-			 * @return bool
+			 * @brief Destructs the trace logger.
 			 */
-			[[nodiscard]]
-			bool
-			usable () const noexcept
-			{
-				return !m_filepath.empty();
-			}
+			~TracerLogger ();
 
 			/**
 			 * @brief Creates a log.
 			 * @param severity The type of log.
-			 * @param tag A pointer to a C-string to describe a tag. This help for sorting logs.
+			 * @param tag A pointer to a C-string to describe a tag. This helps for sorting logs.
 			 * @param message A reference to a string for the log content.
 			 * @param location A reference to a source_location.
 			 * @return void
 			 */
 			void
-			push (Severity severity, const char * tag, const std::string & message, const std::source_location & location) noexcept
+			push (Severity severity, const char * tag, std::string message, const std::source_location & location) noexcept
 			{
-				/* NOTE : Lock between the writing logs task in a file and the push/pop method. */
-				const std::lock_guard< std::mutex > lockGuard{m_entriesAccessMutex};
+				{
+					/* NOTE: Lock between the writing logs task in a file and the push/pop method. */
+					const std::lock_guard< std::mutex > lock{m_entriesAccess};
 
-				m_entries.emplace(severity, tag, message, location, std::this_thread::get_id());
+					m_entries.emplace(severity, tag, std::move(message), location, std::this_thread::get_id());
+				}
+
+				/* NOTE: wake up the thread. */
+				m_condition.notify_one();
+			}
+
+			bool
+			start () noexcept
+			{
+				if ( !m_isUsable || m_isRunning )
+				{
+					if constexpr ( IsDebug )
+					{
+						std::cerr << "TraceLogger::start() : Unable to enable the tracer logger !" "\n";
+					}
+
+					return false;
+				}
+
+				m_isRunning = true;
+
+				m_thread = std::thread{&TracerLogger::task, this};
+
+				return true;
 			}
 
 			/**
-			 * @brief Stops nicely the writing task for shutting down the tracer service.
+			 * @brief Stops the writing task for shutting down the tracer service.
 			 * @return void
 			 */
-			void stop () noexcept
+			void
+			stop () noexcept
 			{
 				m_isRunning = false;
 
-				if ( !m_entries.empty() )
-				{
-					std::cout << "TracerLogger::stop() : Still " << m_entries.size() << " entries to write down in the log file !" "\n";
-				}
+				m_condition.notify_one();
 			}
 
 			/**
@@ -103,14 +123,14 @@ namespace EmEn
 			void
 			clear () noexcept
 			{
-				/* NOTE : Lock between the writing logs task in a file and the push/pop method. */
-				const std::lock_guard< std::mutex > lockGuard{m_entriesAccessMutex};
+				const std::lock_guard< std::mutex > lock{m_entriesAccess};
 
-				while ( !m_entries.empty() )
-				{
-					m_entries.pop();
-				}
+				std::queue< TracerEntry > emptyQueue;
+
+				m_entries.swap(emptyQueue);
 			}
+
+		private:
 
 			/**
 			 * @brief Runs the task of writing entries to the log file.
@@ -118,11 +138,13 @@ namespace EmEn
 			 */
 			void task () noexcept;
 
-		private:
-
-			std::string m_filepath;
+			std::filesystem::path m_filepath;
 			std::queue< TracerEntry > m_entries;
-			std::mutex m_entriesAccessMutex;
-			bool m_isRunning{true};
+			LogFormat m_logFormat;
+			std::thread m_thread;
+			std::mutex m_entriesAccess;
+			std::condition_variable m_condition;
+			std::atomic_bool m_isUsable{false};
+			std::atomic_bool m_isRunning{false};
 	};
 }

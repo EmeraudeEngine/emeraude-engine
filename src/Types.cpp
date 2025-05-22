@@ -55,4 +55,44 @@ namespace EmEn
 				return "Unknown";
 		}
 	}
+
+	const char *
+	to_cstring (LogFormat value) noexcept
+	{
+		switch ( value )
+		{
+			case LogFormat::Text :
+				return TextString;
+
+			case LogFormat::JSON :
+				return JSONString;
+
+			case LogFormat::HTML :
+				return HTMLString;
+
+			default:
+				return "Text";
+		}
+	}
+
+	LogFormat
+	to_LogFormat (const std::string & value) noexcept
+	{
+		if ( value == TextString )
+		{
+			return LogFormat::Text;
+		}
+
+		if ( value == JSONString )
+		{
+			return LogFormat::JSON;
+		}
+
+		if ( value == HTMLString )
+		{
+			return LogFormat::HTML;
+		}
+
+		return LogFormat::Text;
+	}
 }

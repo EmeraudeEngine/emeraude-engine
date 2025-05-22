@@ -60,11 +60,16 @@ namespace EmEn::Vulkan
 			Sampler (const std::shared_ptr< Device > & device, Settings & settings, VkSamplerCreateFlags createFlags = 0) noexcept;
 
 			/**
-			 * @brief Constructs a sampler with create info.
+			 * @brief Constructs a sampler with createInfo.
 			 * @param device A reference to a smart pointer of the device.
 			 * @param createInfo A reference to a creation info.
 			 */
-			Sampler (const std::shared_ptr< Device > & device, const VkSamplerCreateInfo & createInfo) noexcept;
+			Sampler (const std::shared_ptr< Device > & device, const VkSamplerCreateInfo & createInfo) noexcept
+				: AbstractDeviceDependentObject{device},
+				m_createInfo{createInfo}
+			{
+
+			}
 
 			/**
 			 * @brief Copy constructor.
@@ -93,7 +98,10 @@ namespace EmEn::Vulkan
 			/**
 			 * @brief Destructs the sampler.
 			 */
-			~Sampler () override;
+			~Sampler () override
+			{
+				this->destroyFromHardware();
+			}
 
 			/** @copydoc EmEn::Vulkan::AbstractDeviceDependentObject::createOnHardware() */
 			bool createOnHardware () noexcept override;
@@ -113,7 +121,7 @@ namespace EmEn::Vulkan
 			}
 
 			/**
-			 * @brief Returns the sampler create info.
+			 * @brief Returns the sampler createInfo.
 			 * @return const VkSamplerCreateInfo &
 			 */
 			[[nodiscard]]

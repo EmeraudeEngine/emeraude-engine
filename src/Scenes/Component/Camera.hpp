@@ -37,6 +37,7 @@
 #include "Abstract.hpp"
 
 /* Local inclusions for usages. */
+#include "AVConsole/Types.hpp"
 #include "Saphir/FramebufferEffectInterface.hpp"
 #include "SettingKeys.hpp"
 
@@ -44,6 +45,7 @@ namespace EmEn::Scenes::Component
 {
 	/**
 	 * @brief This class defines a physical point of view to capture image in the world.
+	 * @note [OBS][SHARED-OBSERVABLE]
 	 * @extends EmEn::Scenes::Component::Abstract The base class for each entity component.
 	 * @extends EmEn::AVConsole::AbstractVirtualDevice This is a virtual video device.
 	 */
@@ -75,32 +77,58 @@ namespace EmEn::Scenes::Component
 			 * @param parentEntity A reference to the parent entity.
 			 * @param perspective Use a perspective projection.
 			 */
-			Camera (const std::string & name, const AbstractEntity & parentEntity, bool perspective = true) noexcept;
+			Camera (const std::string & name, const AbstractEntity & parentEntity, bool perspective = true) noexcept
+				: Abstract{name, parentEntity},
+				AbstractVirtualDevice{name, AVConsole::DeviceType::Video, AVConsole::ConnexionType::Output}
+			{
+				this->setFlag(PerspectiveProjection, perspective);
+			}
 
 			/** @copydoc EmEn::Scenes::Component::Abstract::getComponentType() */
 			[[nodiscard]]
-			const char * getComponentType () const noexcept override;
+			const char *
+			getComponentType () const noexcept override
+			{
+				return ClassId;
+			}
 
-			/** @copydoc EmEn::Scenes::Component::Abstract::boundingBox() const */
+			/** @copydoc EmEn::Scenes::Component::Abstract::isComponent() */
 			[[nodiscard]]
-			const Libs::Math::Cuboid< float > & boundingBox () const noexcept override;
-
-			/** @copydoc EmEn::Scenes::Component::Abstract::boundingSphere() const */
-			[[nodiscard]]
-			const Libs::Math::Sphere< float > & boundingSphere () const noexcept override;
+			bool
+			isComponent (const char * classID) const noexcept override
+			{
+				return strcmp(ClassId, classID) == 0;
+			}
 
 			/** @copydoc EmEn::Scenes::Component::Abstract::move() */
-			void move (const Libs::Math::CartesianFrame< float > & worldCoordinates) noexcept override;
+			void
+			move (const Libs::Math::CartesianFrame< float > & worldCoordinates) noexcept override
+			{
+				this->updateDeviceFromCoordinates(worldCoordinates, this->getWorldVelocity());
+			}
 
 			/** @copydoc EmEn::Scenes::Component::Abstract::processLogics() */
-			void processLogics (const Scene & scene) noexcept override;
+			void
+			processLogics (const Scene & /*scene*/) noexcept override
+			{
+				this->updateDeviceFromCoordinates(this->getWorldCoordinates(), this->getWorldVelocity());
+			}
 
-			/** @copydoc EmEn::Scenes::Component::Abstract::shouldRemove() */
-			bool shouldRemove () const noexcept override;
+			/** @copydoc EmEn::Scenes::Component::Abstract::shouldBeRemoved() */
+			[[nodiscard]]
+			bool
+			shouldBeRemoved () const noexcept override
+			{
+				return false;
+			}
 
 			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::videoType() */
 			[[nodiscard]]
-			AVConsole::VideoType videoType () const noexcept override;
+			AVConsole::VideoType
+			videoType () const noexcept override
+			{
+				return AVConsole::VideoType::Camera;
+			}
 
 			/**
 			 * @brief Sets the field of view in degrees.
@@ -114,21 +142,33 @@ namespace EmEn::Scenes::Component
 			 * @return float
 			 */
 			[[nodiscard]]
-			float fieldOfView () const noexcept;
+			float
+			fieldOfView () const noexcept
+			{
+				return m_fov;
+			}
 
 			/**
 			 * @brief Returns whether the camera is using a perspective projection.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool isPerspectiveProjection () const noexcept;
+			bool
+			isPerspectiveProjection () const noexcept
+			{
+				return this->isFlagEnabled(PerspectiveProjection);
+			}
 
 			/**
 			 * @brief Returns whether the camera is using an orthographic projection.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool isOrthographicProjection () const noexcept;
+			bool
+			isOrthographicProjection () const noexcept
+			{
+				return !this->isFlagEnabled(PerspectiveProjection);
+			}
 
 			/**
 			 * @brief Sets a perspective projection.
@@ -161,7 +201,11 @@ namespace EmEn::Scenes::Component
 			 * @return float
 			 */
 			[[nodiscard]]
-			float distance () const noexcept;
+			float
+			distance () const noexcept
+			{
+				return m_distance;
+			}
 
 			/**
 			 * @brief Sets the maximal distance of the view.
@@ -175,7 +219,11 @@ namespace EmEn::Scenes::Component
 			 * @return const Saphir::FramebufferEffectsList &
 			 */
 			[[nodiscard]]
-			const Saphir::FramebufferEffectsList & lensEffects () const noexcept;
+			const Saphir::FramebufferEffectsList &
+			lensEffects () const noexcept
+			{
+				return m_lensEffects;
+			}
 
 			/**
 			 * @brief Checks if a shader lens effect is present.
@@ -183,7 +231,11 @@ namespace EmEn::Scenes::Component
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool isLensEffectPresent (const std::shared_ptr< Saphir::FramebufferEffectInterface > & effect) const noexcept;
+			bool
+			isLensEffectPresent (const std::shared_ptr< Saphir::FramebufferEffectInterface > & effect) const noexcept
+			{
+				return m_lensEffects.contains(effect);
+			}
 
 			/**
 			 * @brief Adds a shader lens effect to the camera.
@@ -206,21 +258,6 @@ namespace EmEn::Scenes::Component
 			 */
 			void clearLensEffects () noexcept;
 
-			/**
-			 * @brief STL streams printable object.
-			 * @param out A reference to the stream output.
-			 * @param obj A reference to the object to print.
-			 * @return std::ostream &
-			 */
-			friend std::ostream & operator<< (std::ostream & out, const Camera & obj);
-
-			/**
-			 * @brief Stringifies the object.
-			 * @param obj A reference to the object to print.
-			 * @return std::string
-			 */
-			friend std::string to_string (const Camera & obj) noexcept;
-
 		private:
 		
 			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::updateDeviceFromCoordinates() */
@@ -230,10 +267,18 @@ namespace EmEn::Scenes::Component
 			void updateProperties (bool isPerspectiveProjection, float distance, float fovOrNear) noexcept override;
 
 			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::onTargetConnected() */
-			void onTargetConnected (AbstractVirtualDevice * targetDevice) noexcept override;
+			void onTargetConnected (AVConsole::AVManagers & managers, AbstractVirtualDevice * targetDevice) noexcept override;
 
 			/** @copydoc EmEn::Animations::AnimatableInterface::playAnimation() */
 			bool playAnimation (uint8_t animationID, const Libs::Variant & value, size_t cycle) noexcept override;
+
+			/**
+			 * @brief STL streams printable object.
+			 * @param out A reference to the stream output.
+			 * @param obj A reference to the object to print.
+			 * @return std::ostream &
+			 */
+			friend std::ostream & operator<< (std::ostream & out, const Camera & obj);
 
 			/* Flag names */
 			static constexpr auto PerspectiveProjection{UnusedFlag + 0UL};
@@ -242,4 +287,36 @@ namespace EmEn::Scenes::Component
 			float m_fov{DefaultGraphicsFieldOfView};
 			float m_distance{DefaultGraphicsMaxViewableDistance};
 	};
+
+	inline
+	std::ostream &
+	operator<< (std::ostream & out, const Camera & obj)
+	{
+		const auto coordinates = obj.getWorldCoordinates();
+		const auto velocity = obj.getWorldVelocity();
+
+		return out <<
+			"Video Listener information" "\n"
+			"Position: " << coordinates.position() << "\n"
+			"Forward: " << coordinates.forwardVector() << "\n"
+			"Velocity: " << velocity << "\n"
+			"Field of view: " << obj.fieldOfView() << "\n"
+			"Size of view: " << obj.distance() << "\n";
+	}
+
+	/**
+	 * @brief Stringifies the object.
+	 * @param obj A reference to the object to print.
+	 * @return std::string
+	 */
+	inline
+	std::string
+	to_string (const Camera & obj) noexcept
+	{
+		std::stringstream output;
+
+		output << obj;
+
+		return output.str();
+	}
 }

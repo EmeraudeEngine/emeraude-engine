@@ -43,9 +43,11 @@
 
 /* Local inclusions for inheritances. */
 #include "ServiceInterface.hpp"
+#include "Libs/ObservableTrait.hpp"
 
 /* Local inclusions for usages. */
 #include "Vulkan/Surface.hpp"
+#include "Identification.hpp"
 
 /* Forward declarations. */
 namespace EmEn
@@ -55,28 +57,30 @@ namespace EmEn
 		class Instance;
 	}
 
-	class Identification;
 	class PrimaryServices;
 }
 
-#if IS_LINUX
-using GtkWindow = struct _GtkWindow;
-#elif IS_MACOS
+#if IS_MACOS
+
 using id = struct objc_object *;
+
 #elif IS_WINDOWS
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-#include <Windows.h>
+	#ifndef NOMINMAX
+	#define NOMINMAX
+	#endif
+
+	#include <Windows.h>
 #endif
 
 namespace EmEn
 {
 	/**
 	 * @brief The handle service class is responsible for the physical screen.
+	 * @note [OBS][STATIC-OBSERVABLE]
 	 * @extends EmEn::ServiceInterface This is a service.
+	 * @extends EmEn::Libs::ObservableTrait This service is observable.
 	 */
-	class Window final : public ServiceInterface
+	class Window final : public ServiceInterface, public Libs::ObservableTrait
 	{
 		public:
 
@@ -87,7 +91,7 @@ namespace EmEn
 			static const size_t ClassUID;
 
 			/**
-			 * @brief Structure to keep a state of the window geometry.
+			 * @brief Structure to keep the state of the window geometry.
 			 */
 			struct State
 			{
@@ -111,7 +115,7 @@ namespace EmEn
 			};
 
 			/** @brief Observable notification codes. */
-			enum NotificationCode: uint8_t
+			enum NotificationCode
 			{
 				Created,
 				Destroyed,
@@ -144,38 +148,14 @@ namespace EmEn
 			 * @param instance A reference to the Vulkan instance.
 			 * @param identification A reference to an application identification.
 			 */
-			Window (PrimaryServices & primaryServices, const Vulkan::Instance & instance, const Identification & identification) noexcept;
+			Window (PrimaryServices & primaryServices, const Vulkan::Instance & instance, const Identification & identification) noexcept
+				: ServiceInterface{ClassId},
+				m_primaryServices{primaryServices},
+				m_instance{instance},
+				m_title{identification.applicationId()}
+			{
 
-			/**
-			 * @brief Copy constructor.
-			 * @param copy A reference to the copied instance.
-			 */
-			Window (const Window & copy) noexcept = delete;
-
-			/**
-			 * @brief Move constructor.
-			 * @param copy A reference to the copied instance.
-			 */
-			Window (Window && copy) noexcept = delete;
-
-			/**
-			 * @brief Copy assignment.
-			 * @param copy A reference to the copied instance.
-			 * @return Window &
-			 */
-			Window & operator= (const Window & copy) noexcept = delete;
-
-			/**
-			 * @brief Move assignment.
-			 * @param copy A reference to the copied instance.
-			 * @return Window &
-			 */
-			Window & operator= (Window && copy) noexcept = delete;
-
-			/**
-			 * @brief Destructs the window.
-			 */
-			~Window () override;
+			}
 
 			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
 			[[nodiscard]]
@@ -223,15 +203,7 @@ namespace EmEn
 				return m_handle.get();
 			}
 
-#if IS_LINUX
-			/**
-			 * @brief Returns the application window as a GTK window pointer.
-			 * @note GLFW use X11/Wayland window directly.
-			 * @return GtkWindow *
-			 */
-			[[nodiscard]]
-			GtkWindow * getGtkWindow () const noexcept;
-#elif IS_MACOS
+#if IS_MACOS
 			/**
 			 * @brief Returns the application window as a Cocoa window id.
 			 * @return id
@@ -316,18 +288,52 @@ namespace EmEn
 
 			/**
 			 * @brief Sets a gamma ramp to a specific monitor.
-			 * @TODO Finish this method.
+			 * @param generateRampFn A reference to a function to generate de gamma ramp.
+			 * @param desiredMonitor The number of the monitor for multiple monitors configuration. Default initial monitor.
+			 * @return bool
+			 */
+			template< size_t color_count_t >
+			bool
+			setCustomGamma (const std::function< void (std::array< uint16_t, color_count_t > &, std::array< uint16_t, color_count_t > &, std::array< uint16_t, color_count_t > &) > & generateRampFn, int32_t desiredMonitor = -1) const noexcept
+			{
+				auto * monitor = Window::getMonitor(desiredMonitor);
+
+				if ( monitor == nullptr )
+				{
+					return false;
+				}
+
+				std::array< uint16_t, color_count_t > red{};
+				std::array< uint16_t, color_count_t > green{};
+				std::array< uint16_t, color_count_t > blue{};
+
+				generateRampFn(red, green, blue);
+
+				/* Creates a gamma ramp to pass to monitor. */
+				GLFWgammaramp ramp;
+				ramp.red = red.data();
+				ramp.green = green.data();
+				ramp.blue = blue.data();
+				ramp.size = color_count_t;
+
+				glfwSetGammaRamp(monitor, &ramp);
+
+				return true;
+			}
+
+			/**
+			 * @brief Switch the application to fullscreen mode.
+			 * @param useNativeResolution Overrides the settings and fetch the monitor resolution. Default false.
 			 * @param desiredMonitor The number of the monitor for multiple monitors configuration. Default initial monitor.
 			 * @return void
 			 */
-			void setCustomGamma (int32_t desiredMonitor = -1) const noexcept;
+			void switchToFullscreenMode (bool useNativeResolution = false, int32_t desiredMonitor = -1) const noexcept;
 
 			/**
-			 * @brief Sets fullscreen mode.
-			 * @param state The state.
+			 * @brief Switch the application to windowed mode.
 			 * @return void
 			 */
-			void setFullscreenMode (bool state) const noexcept;
+			void switchToWindowedMode () const noexcept;
 
 			/**
 			 * @brief Returns the centered position for the window.
@@ -440,11 +446,21 @@ namespace EmEn
 			void show () const noexcept;
 
 			/**
-			 * @brief Returns whether the fullscreen mode is enabled.
+			 * @brief Returns whether the application is currently in fullscreen mode.
 			 * @return bool
 			 */
 			[[nodiscard]]
 			bool isFullscreenMode () const noexcept;
+
+			/**
+			 * @brief Returns whether the application is currently in windowed mode.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool isWindowedMode () const noexcept
+			{
+				return !this->isFullscreenMode();
+			}
 
 			/**
 			 * @brief Returns the position, in screen coordinates, of the upper-left corner of the content area of the window.
@@ -534,18 +550,6 @@ namespace EmEn
 			void disableTitleBar () noexcept;
 
 			/**
-			 * @brief Returns the instance of the file system.
-			 * @return Window *
-			 */
-			[[nodiscard]]
-			static
-			Window *
-			instance () noexcept
-			{
-				return s_instance;
-			}
-
-			/**
 			 * @brief Returns the position, in screen coordinates, of the upper-left corner of the content area of the window.
 			 * @param monitor A pointer to the monitor. Default primary.
 			 * @return std::array< int32_t, 2 >
@@ -614,19 +618,20 @@ namespace EmEn
 			bool createSurface (bool useNativeCode) noexcept;
 
 			/**
+			 * @brief Returns the monitor handles at monitor desired index.
+			 * @note If the desired monitor is -1, the settings will be used then, if the desired monitor index is invalid, the primary one will be used.
+			 * @param monitorIndex The desired monitor index. Default -1.
+			 * @return GLFWmonitor *
+			 */
+			[[nodiscard]]
+			GLFWmonitor * getMonitor (int32_t monitorIndex = -1) const noexcept;
+
+			/**
 			 * @brief Returns a list of available monitors on the system.
 			 * @return std::vector< GLFWmonitor * >
 			 */
 			[[nodiscard]]
 			static std::vector< GLFWmonitor * > getMonitors () noexcept;
-
-			/**
-			 * @brief Returns the monitor handles at monitor index.
-			 * @param monitorIndex The monitor index.
-			 * @return GLFWmonitor *
-			 */
-			[[nodiscard]]
-			static GLFWmonitor * getMonitor (uint32_t monitorIndex) noexcept;
 
 			/**
 			 * @brief Returns a list of available mode for a specified monitor.
@@ -734,17 +739,11 @@ namespace EmEn
 			static constexpr auto ShowInformation{0UL};
 			static constexpr auto SaveWindowPropertiesAtExit{1UL};
 
-			/** @brief Singleton pointer. */
-			static Window * s_instance;
-
 			PrimaryServices & m_primaryServices;
 			const Vulkan::Instance & m_instance;
 			std::string m_title;
 			State m_state{};
 			std::unique_ptr< GLFWwindow, std::function< void (GLFWwindow *) > > m_handle;
-#if IS_LINUX
-			GtkWindow * m_gtkWindow{nullptr};
-#endif
 			std::unique_ptr< Vulkan::Surface > m_surface;
 			std::array< bool, 8 > m_flags{
 				false/*ShowInformation*/,

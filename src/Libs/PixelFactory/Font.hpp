@@ -27,9 +27,9 @@
 #pragma once
 
 /* STL inclusions. */
-#include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <cmath>
 #include <iostream>
 #include <sstream>
 #include <string>
@@ -173,6 +173,26 @@ namespace EmEn::Libs::PixelFactory
 				return m_glyphs[ASCIICode];
 			}
 
+			/**
+			 * @brief Returns the size of the font in bytes.
+			 * @tparam output_t The type of output data. Default uint32_t.
+			 * @return output_t
+			 */
+			template< typename output_t = uint32_t >
+			[[nodiscard]]
+			output_t
+			bytes () const noexcept
+			{
+				output_t bytes = 0;
+
+				for ( const auto & glyph : m_glyphs )
+				{
+					bytes += glyph.bytes();
+				}
+
+				return bytes;
+			}
+
 		private:
 
 			std::array< Pixmap< precision_t >, ASCIICount > m_glyphs;
@@ -280,7 +300,7 @@ namespace EmEn::Libs::PixelFactory
 					const auto coordY = static_cast< uint32_t >(std::floor(index / FontMapDivisor)); // Vulkan API
 					//const auto coordY = static_cast< uint32_t >(15 - ((charNum - coordX) / FontMapDivisor)); // OpenGL API
 
-					/* Crop the target out of the chars map. */
+					/* Crop the target out of the character map. */
 					auto glyph = Processor< precision_t >::crop(charsMap, {
 						coordX * glyphWidth, coordY * glyphHeight,
 						glyphWidth, glyphHeight
@@ -291,7 +311,7 @@ namespace EmEn::Libs::PixelFactory
 						glyph = Processor< precision_t >::crop(glyph, Font::getUsableWidth(glyph));
 					}
 
-					/* If the height fits, just output the pixmap. */
+					/* If the height fits, output the pixmap. */
 					if ( glyph.height() == fontSize )
 					{
 						return glyph;
@@ -302,7 +322,7 @@ namespace EmEn::Libs::PixelFactory
 			}
 
 			/**
-			 * @brief Returns the glyphs list for a specific size.
+			 * @brief Returns the glyph list for a specific size.
 			 * @warning The output can be nullptr.
 			 * @note If the size do not exist, the closest one will be selected.
 			 * @param size The font size.
@@ -312,9 +332,9 @@ namespace EmEn::Libs::PixelFactory
 			const ASCIIGlyphArray< precision_t > *
 			glyphs (uint32_t size) const
 			{
-				auto arrayIt = m_glyphs.find(size);
+				auto arrayIt = m_fonts.find(size);
 
-				if ( arrayIt == m_glyphs.cend() )
+				if ( arrayIt == m_fonts.cend() )
 				{
 					const auto closestSize = findClosestSize(size);
 
@@ -325,49 +345,30 @@ namespace EmEn::Libs::PixelFactory
 						return nullptr;
 					}
 
-					arrayIt = m_glyphs.find(closestSize);
+					arrayIt = m_fonts.find(closestSize);
 				}
 
 				return &arrayIt->second;
 			}
 
 			/**
-			 * @brief STL streams printable object.
-			 * @param out A reference to the stream output.
-			 * @param obj A reference to the object to print.
-			 * @return std::ostream &
+			 * @brief Returns the size of the font in bytes.
+			 * @tparam output_t The type of output data. Default uint32_t.
+			 * @return output_t
 			 */
-			friend
-			std::ostream &
-			operator<< (std::ostream & out, const Font & obj)
+			template< typename output_t = uint32_t >
+			[[nodiscard]]
+			output_t
+			bytes () const noexcept
 			{
-				out << "Font data (" << obj.m_glyphs.size() << " sizes cached):" "\n";
+				output_t bytes = 0;
 
-				for ( const auto & [size, glyphArray] : obj.m_glyphs )
+				for ( const auto & [size, font] : m_fonts )
 				{
-					out << "  - Size: " << size
-						<< " (Height: " << glyphArray.height()
-						<< ", FixedWidth: " << std::boolalpha << glyphArray.isFixedWidth()
-						<< ", Widest: " << glyphArray.widestChar() << ")" "\n";
+					bytes += font.bytes();
 				}
 
-				return out;
-			}
-
-			/**
-			 * @brief Stringifies the object.
-			 * @param obj A reference to the object to print.
-			 * @return std::string
-			 */
-			friend
-			std::string
-			to_string (const Font & obj)
-			{
-				std::stringstream output;
-
-				output << obj;
-
-				return output.str();
+				return bytes;
 			}
 
 			/**
@@ -389,11 +390,11 @@ namespace EmEn::Libs::PixelFactory
 			/**
 			 * @brief Returns a rectangle around the valid pixels on X axis.
 			 * @param glyph A reference to a pixmap.
-			 * @return Math::Rectangle< uint32_t >
+			 * @return Math::Space2D::AARectangle< uint32_t >
 			 */
 			[[nodiscard]]
 			static
-			Math::Rectangle< uint32_t >
+			Math::Space2D::AARectangle< uint32_t >
 			getUsableWidth (const Pixmap< precision_t > & glyph) noexcept
 			{
 				const auto isColumnEmpty = [&glyph] (uint32_t coordX)
@@ -443,7 +444,47 @@ namespace EmEn::Libs::PixelFactory
 				return {offset, 0U, width, glyph.height()};
 			}
 
+			/**
+			 * @brief STL streams printable object.
+			 * @param out A reference to the stream output.
+			 * @param obj A reference to the object to print.
+			 * @return std::ostream &
+			 */
+			friend
+			std::ostream &
+			operator<< (std::ostream & out, const Font & obj)
+			{
+				out << "Font data (" << obj.m_fonts.size() << " sizes cached):" "\n";
+
+				for ( const auto & [size, glyphArray] : obj.m_fonts )
+				{
+					out << "  - Size: " << size
+						<< " (Height: " << glyphArray.height()
+						<< ", FixedWidth: " << std::boolalpha << glyphArray.isFixedWidth()
+						<< ", Widest: " << glyphArray.widestChar() << ")" "\n";
+				}
+
+				return out;
+			}
+
+			/**
+			 * @brief Stringifies the object.
+			 * @param obj A reference to the object to print.
+			 * @return std::string
+			 */
+			friend
+			std::string
+			to_string (const Font & obj)
+			{
+				std::stringstream output;
+
+				output << obj;
+
+				return output.str();
+			}
+
 		private:
+
 			/**
 			 * @brief Returns the closest font size.
 			 * @param targetSize The desired font size.
@@ -453,19 +494,19 @@ namespace EmEn::Libs::PixelFactory
 			uint32_t
 			findClosestSize (uint32_t targetSize) const noexcept
 			{
-			    if ( m_glyphs.empty() )
+			    if ( m_fonts.empty() )
 			    {
-			    	return 0UL;
+			    	return 0;
 			    }
 
-			    const auto upper = m_glyphs.lower_bound(targetSize);
+			    const auto upper = m_fonts.lower_bound(targetSize);
 
-			    if ( upper == m_glyphs.cbegin() )
+			    if ( upper == m_fonts.cbegin() )
 			    {
 			        return upper->first;
 			    }
 
-			    if ( upper == m_glyphs.cend() )
+			    if ( upper == m_fonts.cend() )
 			    {
 			        return std::prev(upper)->first;
 			    }
@@ -492,11 +533,11 @@ namespace EmEn::Libs::PixelFactory
 			ASCIIGlyphArray< precision_t > &
 			getGlyphArray (uint32_t size)
 			{
-				auto it = m_glyphs.find(size);
+				auto it = m_fonts.find(size);
 
-				if ( it == m_glyphs.end() )
+				if ( it == m_fonts.end() )
 				{
-					it = m_glyphs.emplace(size, ASCIIGlyphArray< precision_t >{size}).first;
+					it = m_fonts.emplace(size, ASCIIGlyphArray< precision_t >{size}).first;
 				}
 
 				return it->second;
@@ -544,10 +585,10 @@ namespace EmEn::Libs::PixelFactory
 
 				const auto success = glyphs.writeGlyphData([&] (size_t index) {
 					/* Gets the correct glyph index inside the font for the iso code. */
-					const auto glyphIndex = FT_Get_Char_Index(face, index);
+					const auto glyphIndex = FT_Get_Char_Index(face, static_cast< FT_ULong >(index));
 
 					/* Gets the glyph loaded.
-					 * NOTE : Only one font can be loaded at a time. */
+					 * NOTE: Only one font can be loaded at a time. */
 					if ( FT_Load_Glyph(face, glyphIndex, FT_LOAD_RENDER) > 0 )
 					{
 						std::cerr << "[ERROR] Glyph " << glyphIndex << " failed to load !" "\n";
@@ -555,9 +596,9 @@ namespace EmEn::Libs::PixelFactory
 						return Pixmap< precision_t >{};
 					}
 
-					const auto glyphWidth = face->glyph->bitmap.width;
-					const auto glyphHeight = face->glyph->bitmap.rows;
-					const auto size = glyphWidth * glyphHeight;
+					//const auto glyphWidth = face->glyph->bitmap.width;
+					//const auto glyphHeight = face->glyph->bitmap.rows;
+					//const auto size = glyphWidth * glyphHeight;
 
 					/*if ( size > 0 )
 					{
@@ -659,6 +700,6 @@ namespace EmEn::Libs::PixelFactory
 				return FontType::None;
 			}
 
-			std::map< uint32_t, ASCIIGlyphArray< precision_t > > m_glyphs;
+			std::map< uint32_t, ASCIIGlyphArray< precision_t > > m_fonts;
 	};
 }

@@ -30,6 +30,7 @@
 #include <cmath>
 
 /* Local inclusions. */
+#include "Resources/Manager.hpp"
 #include "Graphics/ImageResource.hpp"
 #include "Graphics/PostProcessor.hpp"
 #include "Saphir/Generator/SceneRendering.hpp"
@@ -45,7 +46,9 @@ namespace EmEn::Scenes
 	using namespace Graphics;
 
 	VignettingLensEffect::VignettingLensEffect (float strength) noexcept
-		: m_image(ImageResource::get("Miscellaneous/_vignetting", true))/*, m_texture(Image::Usage::Texture, true)*/, m_strength(strength)
+		: m_image(Resources::Manager::instance()->container< ImageResource >()->getResource("Miscellaneous/_vignetting", true))
+		/*, m_texture(Image::Usage::Texture, true)*/,
+		m_strength{strength}
 	{
 		//if ( !m_texture.initialize(m_image->data()) )
 		//	Tracer::error(ClassId, "Unable to get Vignetting texture !");

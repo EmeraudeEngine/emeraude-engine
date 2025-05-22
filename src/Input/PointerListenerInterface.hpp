@@ -204,7 +204,7 @@ namespace EmEn::Input
 			 */
 			virtual
 			bool
-			onPointerEnter (float positionX, float positionY) noexcept
+			onPointerEnter (float /*positionX*/, float /*positionY*/) noexcept
 			{
 				return false;
 			}
@@ -218,7 +218,7 @@ namespace EmEn::Input
 			 */
 			virtual
 			bool
-			onPointerLeave (float positionX, float positionY) noexcept
+			onPointerLeave (float /*positionX*/, float /*positionY*/) noexcept
 			{
 				return false;
 			}
@@ -232,7 +232,7 @@ namespace EmEn::Input
 			 */
 			virtual
 			bool
-			onPointerMove (float positionX, float positionY) noexcept
+			onPointerMove (float /*positionX*/, float /*positionY*/) noexcept
 			{
 				return false;
 			}
@@ -248,7 +248,7 @@ namespace EmEn::Input
 			 */
 			virtual
 			bool
-			onButtonPress (float positionX, float positionY, int32_t buttonNumber, int32_t modifiers) noexcept
+			onButtonPress (float /*positionX*/, float /*positionY*/, int32_t /*buttonNumber*/, int32_t /*modifiers*/) noexcept
 			{
 				return false;
 			}
@@ -264,7 +264,7 @@ namespace EmEn::Input
 			 */
 			virtual
 			bool
-			onButtonRelease (float positionX, float positionY, int32_t buttonNumber, int32_t modifiers) noexcept
+			onButtonRelease (float /*positionX*/, float /*positionY*/, int32_t /*buttonNumber*/, int32_t /*modifiers*/) noexcept
 			{
 				return false;
 			}
@@ -280,7 +280,7 @@ namespace EmEn::Input
 			 */
 			virtual
 			bool
-			onMouseWheel (float positionX, float positionY, float xOffset, float yOffset) noexcept
+			onMouseWheel (float /*positionX*/, float /*positionY*/, float /*xOffset*/, float /*yOffset*/) noexcept
 			{
 				return false;
 			}

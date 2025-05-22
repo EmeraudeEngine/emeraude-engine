@@ -28,30 +28,9 @@
 
 /* STL inclusions. */
 #include <limits>
-#include <algorithm>
-#include <sstream>
 
 namespace EmEn::Saphir
 {
-	void
-	SetIndexes::enableSet (SetType setType) noexcept
-	{
-		if ( this->isSetEnabled(setType) )
-		{
-			return;
-		}
-
-		m_setTypes.emplace_back(setType);
-	}
-
-	bool
-	SetIndexes::isSetEnabled (SetType setType) const noexcept
-	{
-		return std::ranges::any_of(m_setTypes, [setType] (const auto & currentDescriptorSetType) {
-			return currentDescriptorSetType == setType;
-		});
-	}
-
 	uint32_t
 	SetIndexes::set (SetType setType) const noexcept
 	{
@@ -66,24 +45,5 @@ namespace EmEn::Saphir
 		}
 
 		return std::numeric_limits< uint32_t >::max();
-	}
-
-	std::ostream &
-	operator<< (std::ostream & out, const SetIndexes & obj)
-	{
-		return out << SetIndexes::ClassId << " data :" "\n"
-			"Set per view : " << obj.set(SetType::PerView) << "\n"
-			"Set per light : " << obj.set(SetType::PerLight) << "\n"
-			"Set per model layer : " << obj.set(SetType::PerModelLayer) << "\n";
-	}
-
-	std::string
-	to_string (const SetIndexes & obj) noexcept
-	{
-		std::stringstream output;
-
-		output << obj;
-
-		return output.str();
 	}
 }

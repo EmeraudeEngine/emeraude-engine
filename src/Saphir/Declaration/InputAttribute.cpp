@@ -31,8 +31,8 @@
 
 namespace EmEn::Saphir::Declaration
 {
-	using namespace Keys;
-	using namespace Graphics;
+	using namespace EmEn::Saphir::Keys;
+	using namespace EmEn::Graphics;
 
 	Key
 	getVertexAttributeVariableType (VertexAttributeType vertexAttribute) noexcept
@@ -128,44 +128,10 @@ namespace EmEn::Saphir::Declaration
 		}
 	}
 
-	InputAttribute::InputAttribute (VertexAttributeType vertexAttribute) noexcept
-		: m_location(static_cast< uint32_t >(vertexAttribute)),
-		  m_type(getVertexAttributeVariableType(vertexAttribute)),
-		  m_name(getVertexAttributeVariableName(vertexAttribute))
-	{
-
-	}
-
-	InputAttribute::InputAttribute (VertexAttributeType vertexAttribute, Key type) noexcept
-		: m_location(static_cast< uint32_t >(vertexAttribute)),
-		  m_type(type),
-		  m_name(getVertexAttributeVariableName(vertexAttribute))
-	{
-
-	}
-
-	InputAttribute::InputAttribute (uint32_t location, Key type, Key name, size_t arraySize) noexcept
-		: m_location(location),
-		m_type(type),
-		m_name(name),
-		m_arraySize(arraySize)
-	{
-
-	}
-
-	bool
-	InputAttribute::isValid () const noexcept
-	{
-		if ( m_type == nullptr || m_name == nullptr )
-			return false;
-
-		return true;
-	}
-
 	std::string
 	InputAttribute::sourceCode () const noexcept
 	{
-		std::stringstream code{};
+		std::stringstream code;
 
 		code <<
 			GLSL::Layout << " (" << GLSL::Location << " = " << std::to_string(m_location) << ") " <<
@@ -181,50 +147,28 @@ namespace EmEn::Saphir::Declaration
 		return code.str();
 	}
 
-	Key
-	InputAttribute::name () const noexcept
-	{
-		return m_name;
-	}
-
-	size_t
-	InputAttribute::bytes () const noexcept
-	{
-		return 0;
-	}
-
-	uint32_t
-	InputAttribute::location () const noexcept
-	{
-		return m_location;
-	}
-
-	Key
-	InputAttribute::type () const noexcept
-	{
-		return m_type;
-	}
-
-	size_t
-	InputAttribute::arraySize () const noexcept
-	{
-		return m_arraySize;
-	}
-
 	bool
 	InputAttribute::isModelMatricesVBOAttribute () const noexcept
 	{
 		if ( to_string(VertexAttributeType::ModelMatrixR0) == m_name )
+		{
 			return true;
+		}
 
 		if ( to_string(VertexAttributeType::NormalModelMatrixR0) == m_name )
+		{
 			return true;
+		}
 
 		if ( to_string(VertexAttributeType::ModelPosition) == m_name )
+		{
 			return true;
+		}
 
 		if ( to_string(VertexAttributeType::ModelScaling) == m_name )
+		{
 			return true;
+		}
 
 		return false;
 	}

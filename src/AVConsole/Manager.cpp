@@ -27,31 +27,11 @@
 #include "Manager.hpp"
 
 /* Local inclusions. */
-#include <cstddef>
-#include <cstdint>
-#include <memory>
 #include <ranges>
-#include <set>
 #include <sstream>
-#include <string>
-#include <vector>
 
 /* Local inclusions. */
-#include "AbstractVirtualDevice.hpp"
-#include "Graphics/FramebufferPrecisions.hpp"
-#include "Graphics/RenderTarget/ShadowMap/Cubemap.hpp"
-#include "Graphics/RenderTarget/ShadowMap/Texture2D.hpp"
-#include "Graphics/RenderTarget/Texture/Cubemap.hpp"
-#include "Graphics/RenderTarget/Texture/Texture2D.hpp"
-#include "Graphics/RenderTarget/View/Cubemap.hpp"
-#include "Graphics/RenderTarget/View/Texture2D.hpp"
-#include "Graphics/Renderer.hpp"
-#include "Audio/Manager.hpp"
 #include "Audio/HardwareOutput.hpp"
-#include "Settings.hpp"
-#include "Tracer.hpp"
-#include "Types.hpp"
-#include "Window.hpp"
 
 namespace EmEn::AVConsole
 {
@@ -62,14 +42,15 @@ namespace EmEn::AVConsole
 	const std::string Manager::DefaultViewName{"DefaultView"};
 	const std::string Manager::DefaultSpeakerName{"DefaultSpeaker"};
 
-	Manager::Manager (const std::string & name) noexcept
-		: NameableTrait(name + ClassId),
-		Controllable(ClassId)
+	Manager::Manager (const std::string & name, Renderer & graphicsRenderer, Audio::Manager & audioManager) noexcept
+		: NameableTrait{name + ClassId},
+		Controllable{ClassId},
+		m_AVManagers{graphicsRenderer, audioManager}
 	{
 		/* Console commands bindings. */
 		this->bindCommand("listDevices", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
-			DeviceType deviceType{DeviceType::Both};
-			ConnexionType directionType{ConnexionType::Both};
+			auto deviceType{DeviceType::Both};
+			auto directionType{ConnexionType::Both};
 
 			if ( !arguments.empty() )
 			{
@@ -179,7 +160,7 @@ namespace EmEn::AVConsole
 			{
 				case VideoType::View :
 				{
-					auto renderToView = std::static_pointer_cast< RenderTarget::View::Abstract >(device);
+					auto renderToView = std::static_pointer_cast< RenderTarget::Abstract >(device);
 
 					if ( m_renderToViews.emplace(renderToView).second )
 					{
@@ -194,7 +175,7 @@ namespace EmEn::AVConsole
 
 				case VideoType::Texture :
 				{
-					auto renderToTexture = std::static_pointer_cast< RenderTarget::Texture::Abstract >(device);
+					auto renderToTexture = std::static_pointer_cast< RenderTarget::Abstract >(device);
 
 					if ( m_renderToTextures.emplace(renderToTexture).second )
 					{
@@ -209,7 +190,7 @@ namespace EmEn::AVConsole
 
 				case VideoType::ShadowMap :
 				{
-					auto renderToShadowMap = std::static_pointer_cast< RenderTarget::ShadowMap::Abstract >(device);
+					auto renderToShadowMap = std::static_pointer_cast< RenderTarget::Abstract >(device);
 
 					if ( m_renderToShadowMaps.emplace(renderToShadowMap).second )
 					{
@@ -322,7 +303,7 @@ namespace EmEn::AVConsole
 
 		/* FIXME: This is clearly shit ! */
 		{
-			const auto abstractView = std::static_pointer_cast< RenderTarget::View::Abstract >(device);
+			const auto abstractView = std::static_pointer_cast< RenderTarget::Abstract >(device);
 
 			if ( abstractView != nullptr )
 			{
@@ -330,7 +311,7 @@ namespace EmEn::AVConsole
 			}
 			else
 			{
-				const auto abstractTextures = std::static_pointer_cast< RenderTarget::Texture::Abstract >(device);
+				const auto abstractTextures = std::static_pointer_cast< RenderTarget::Abstract >(device);
 
 				if ( abstractTextures != nullptr )
 				{
@@ -338,7 +319,7 @@ namespace EmEn::AVConsole
 				}
 				else
 				{
-					const auto abstractShadowMaps = std::static_pointer_cast< RenderTarget::ShadowMap::Abstract >(device);
+					const auto abstractShadowMaps = std::static_pointer_cast< RenderTarget::Abstract >(device);
 
 					if ( abstractShadowMaps != nullptr )
 					{
@@ -386,8 +367,8 @@ namespace EmEn::AVConsole
 		return true;
 	}
 
-	std::shared_ptr< RenderTarget::View::Texture2D >
-	Manager::createRenderToView (Renderer & renderer, const std::string & name, uint32_t width, uint32_t height, const FramebufferPrecisions & precisions, bool primaryDevice) noexcept
+	std::shared_ptr< RenderTarget::View< ViewMatrices2DUBO > >
+	Manager::createRenderToView (const std::string & name, uint32_t width, uint32_t height, const FramebufferPrecisions & precisions, bool primaryDevice) noexcept
 	{
 		if ( m_virtualVideoDevices.contains(name) )
 		{
@@ -397,9 +378,9 @@ namespace EmEn::AVConsole
 		}
 
 		/* Create the render target. */
-		auto renderTarget = std::make_shared< RenderTarget::View::Texture2D >(name, width, height, precisions);
+		auto renderTarget = std::make_shared< RenderTarget::View< ViewMatrices2DUBO > >(name, width, height, precisions);
 
-		if ( !renderTarget->create(renderer) )
+		if ( !renderTarget->create(m_AVManagers.graphicsRenderer) )
 		{
 			TraceError{ClassId} << "Unable to create the render to view '" << name << "' !";
 
@@ -416,8 +397,8 @@ namespace EmEn::AVConsole
 		return renderTarget;
 	}
 
-	std::shared_ptr< RenderTarget::View::Cubemap >
-	Manager::createRenderToCubicView (Renderer & renderer, const std::string & name, uint32_t size, const FramebufferPrecisions & precisions, bool primaryDevice) noexcept
+	std::shared_ptr< RenderTarget::View< ViewMatrices3DUBO > >
+	Manager::createRenderToCubicView (const std::string & name, uint32_t size, const FramebufferPrecisions & precisions, bool primaryDevice) noexcept
 	{
 		/* Checks name availability. */
 		if ( m_virtualVideoDevices.contains(name) )
@@ -428,9 +409,9 @@ namespace EmEn::AVConsole
 		}
 
 		/* Create the render target. */
-		auto renderTarget = std::make_shared< RenderTarget::View::Cubemap >(name, size, precisions);
+		auto renderTarget = std::make_shared< RenderTarget::View< ViewMatrices3DUBO > >(name, size, precisions);
 
-		if ( !renderTarget->create(renderer) )
+		if ( !renderTarget->create(m_AVManagers.graphicsRenderer) )
 		{
 			TraceError{ClassId} << "Unable to create the render to cubic view '" << name << "' !";
 
@@ -447,8 +428,8 @@ namespace EmEn::AVConsole
 		return renderTarget;
 	}
 
-	std::shared_ptr< RenderTarget::Texture::Texture2D >
-	Manager::createRenderToTexture2D (Renderer & renderer, const std::string & name, uint32_t width, uint32_t height, uint32_t colorCount) noexcept
+	std::shared_ptr< RenderTarget::Texture< ViewMatrices2DUBO > >
+	Manager::createRenderToTexture2D (const std::string & name, uint32_t width, uint32_t height, uint32_t colorCount) noexcept
 	{
 		if ( m_virtualVideoDevices.contains(name) )
 		{
@@ -460,14 +441,14 @@ namespace EmEn::AVConsole
 		}
 
 		/* Create the render target. */
-		auto renderTarget = std::make_shared< RenderTarget::Texture::Texture2D >(name, width, height, colorCount);
+		auto renderTarget = std::make_shared< RenderTarget::Texture< ViewMatrices2DUBO > >(name, width, height, colorCount);
 
 		if ( !renderTarget->enableManualLoading() )
 		{
 			return {};
 		}
 
-		auto success = renderTarget->createOnHardware(renderer);
+		auto success = renderTarget->createOnHardware(m_AVManagers.graphicsRenderer);
 
 		if ( !renderTarget->setManualLoadSuccess(success) )
 		{
@@ -484,8 +465,8 @@ namespace EmEn::AVConsole
 		return renderTarget;
 	}
 
-	std::shared_ptr< RenderTarget::Texture::Cubemap >
-	Manager::createRenderToCubemap (Renderer & renderer, const std::string & name, uint32_t size, uint32_t colorCount) noexcept
+	std::shared_ptr< RenderTarget::Texture< ViewMatrices3DUBO > >
+	Manager::createRenderToCubemap (const std::string & name, uint32_t size, uint32_t colorCount) noexcept
 	{
 		if ( m_virtualVideoDevices.contains(name) )
 		{
@@ -497,9 +478,9 @@ namespace EmEn::AVConsole
 		}
 
 		/* Create the render target. */
-		auto renderTarget = std::make_shared< RenderTarget::Texture::Cubemap >(name, size, colorCount);
+		auto renderTarget = std::make_shared< RenderTarget::Texture< ViewMatrices3DUBO > >(name, size, colorCount);
 
-		if ( !renderTarget->createOnHardware(renderer) )
+		if ( !renderTarget->createOnHardware(m_AVManagers.graphicsRenderer) )
 		{
 			TraceError{ClassId} << "Unable to create the render to cubemap '" << name << "' !";
 
@@ -516,8 +497,8 @@ namespace EmEn::AVConsole
 		return renderTarget;
 	}
 
-	std::shared_ptr< RenderTarget::ShadowMap::Texture2D >
-	Manager::createRenderToShadowMap (Renderer & renderer, const std::string & name, uint32_t resolution) noexcept
+	std::shared_ptr< RenderTarget::ShadowMap< ViewMatrices2DUBO > >
+	Manager::createRenderToShadowMap (const std::string & name, uint32_t resolution) noexcept
 	{
 		if ( m_virtualVideoDevices.contains(name) )
 		{
@@ -529,9 +510,9 @@ namespace EmEn::AVConsole
 		}
 
 		/* Create the render target. */
-		auto renderTarget = std::make_shared< RenderTarget::ShadowMap::Texture2D >(name, resolution);
+		auto renderTarget = std::make_shared< RenderTarget::ShadowMap< ViewMatrices2DUBO > >(name, resolution);
 
-		if ( !renderTarget->create(renderer) )
+		if ( !renderTarget->create(m_AVManagers.graphicsRenderer) )
 		{
 			TraceError{ClassId} << "Unable to create the render to shadow map '" << name << "' !";
 
@@ -548,8 +529,8 @@ namespace EmEn::AVConsole
 		return renderTarget;
 	}
 
-	std::shared_ptr< RenderTarget::ShadowMap::Cubemap >
-	Manager::createRenderToCubicShadowMap (Renderer & renderer, const std::string & name, uint32_t resolution) noexcept
+	std::shared_ptr< RenderTarget::ShadowMap< ViewMatrices3DUBO > >
+	Manager::createRenderToCubicShadowMap (const std::string & name, uint32_t resolution) noexcept
 	{
 		if ( m_virtualVideoDevices.contains(name) )
 		{
@@ -561,9 +542,9 @@ namespace EmEn::AVConsole
 		}
 
 		/* Create the render target. */
-		auto renderTarget = std::make_shared< RenderTarget::ShadowMap::Cubemap >(name, resolution);
+		auto renderTarget = std::make_shared< RenderTarget::ShadowMap< ViewMatrices3DUBO > >(name, resolution);
 
-		if ( !renderTarget->create(renderer) )
+		if ( !renderTarget->create(m_AVManagers.graphicsRenderer) )
 		{
 			TraceError{ClassId} << "Unable to create the render to cubic shadow map '" << name << "' !";
 
@@ -641,7 +622,7 @@ namespace EmEn::AVConsole
 	}
 
 	bool
-	Manager::connectVideoDevices (const std::string & sourceDeviceId, const std::string & targetDeviceId) const noexcept
+	Manager::connectVideoDevices (const std::string & sourceDeviceId, const std::string & targetDeviceId) noexcept
 	{
 		const auto sourceDevice = this->getVideoDevice(sourceDeviceId);
 
@@ -666,11 +647,11 @@ namespace EmEn::AVConsole
 			return true;
 		}
 
-		return sourceDevice->connect(targetDevice);
+		return sourceDevice->connect(m_AVManagers, targetDevice);
 	}
 
 	bool
-	Manager::connectAudioDevices (const std::string & sourceDeviceId, const std::string & targetDeviceId) const noexcept
+	Manager::connectAudioDevices (const std::string & sourceDeviceId, const std::string & targetDeviceId) noexcept
 	{
 		const auto sourceDevice = this->getAudioDevice(sourceDeviceId);
 
@@ -695,11 +676,11 @@ namespace EmEn::AVConsole
 			return true;
 		}
 
-		return sourceDevice->connect(targetDevice);
+		return sourceDevice->connect(m_AVManagers, targetDevice);
 	}
 
 	bool
-	Manager::createDefaultView (Renderer & graphicsRenderer, Settings & settings) noexcept
+	Manager::createDefaultView (Settings & settings) noexcept
 	{
 		const auto deviceIt = m_virtualVideoDevices.find(DefaultViewName);
 
@@ -709,8 +690,15 @@ namespace EmEn::AVConsole
 		}
 
 		/* Read the default configuration. */
-		const auto width = RenderTarget::View::Texture2D::getWidth();
-		const auto height = RenderTarget::View::Texture2D::getHeight();
+		const auto isFullscreen = settings.get< bool >(VideoFullscreenEnabledKey, DefaultVideoFullscreenEnabled);
+
+		const auto width = isFullscreen ?
+			settings.get< uint32_t >(VideoFullscreenWidthKey, DefaultVideoFullscreenWidth) :
+			settings.get< uint32_t >(VideoWindowWidthKey, DefaultVideoWindowWidth);
+
+		const auto height = isFullscreen ?
+			settings.get< uint32_t >(VideoFullscreenHeightKey, DefaultVideoFullscreenHeight) :
+			settings.get< uint32_t >(VideoWindowHeightKey, DefaultVideoWindowHeight);
 
 		const FramebufferPrecisions precisions{
 			settings.get< uint32_t >(VideoFramebufferRedBitsKey, DefaultVideoFramebufferRedBits),
@@ -722,7 +710,7 @@ namespace EmEn::AVConsole
 			settings.get< uint32_t >(VideoFramebufferSamplesKey, DefaultVideoFramebufferSamples)
 		};
 
-		return this->createRenderToView(graphicsRenderer, DefaultViewName, width, height, precisions, true) != nullptr;
+		return this->createRenderToView(DefaultViewName, width, height, precisions, true) != nullptr;
 	}
 
 	bool
@@ -744,7 +732,7 @@ namespace EmEn::AVConsole
 	}
 
 	bool
-	Manager::autoConnectPrimaryVideoDevices (Renderer & renderer, Settings & settings) noexcept
+	Manager::autoConnectPrimaryVideoDevices (Settings & settings) noexcept
 	{
 		if ( !this->autoSelectPrimaryInputVideoDevice() )
 		{
@@ -757,7 +745,7 @@ namespace EmEn::AVConsole
 		{
 			Tracer::info(ClassId, "There is no output primary video device declared ! Creating a view ...");
 
-			if ( !this->createDefaultView(renderer, settings) )
+			if ( !this->createDefaultView(settings) )
 			{
 				Tracer::error(ClassId, "Unable to create the default view !");
 
@@ -941,14 +929,14 @@ namespace EmEn::AVConsole
 
 		for ( const auto & device : std::ranges::views::values(m_virtualAudioDevices) )
 		{
-			device->disconnectFromAll();
+			device->disconnectFromAll(m_AVManagers);
 		}
 
 		m_virtualAudioDevices.clear();
 
 		for ( const auto & device : std::ranges::views::values(m_virtualVideoDevices) )
 		{
-			device->disconnectFromAll();
+			device->disconnectFromAll(m_AVManagers);
 		}
 
 		m_virtualVideoDevices.clear();
@@ -957,12 +945,10 @@ namespace EmEn::AVConsole
 	bool
 	Manager::onNotification (const ObservableTrait * observable, int notificationCode, const std::any & /*data*/) noexcept
 	{
-#ifdef DEBUG
-		/* NOTE: Don't know what is it, goodbye ! */
-		TraceInfo{ClassId} <<
+		/* NOTE: Don't know what is it, goodbye! */
+		TraceDebug{ClassId} <<
 			"Received an unhandled notification (Code:" << notificationCode << ") from observable '" << whoIs(observable->classUID()) << "' (UID:" << observable->classUID() << ")  ! "
 			"Forgetting it ...";
-#endif
 
 		return false;
 	}

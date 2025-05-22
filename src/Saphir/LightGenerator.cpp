@@ -29,32 +29,16 @@
 /* Local inclusions. */
 #include "Generator/Abstract.hpp"
 #include "Code.hpp"
-#include "Settings.hpp"
-#include "SettingKeys.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::Saphir
 {
 	using namespace EmEn::Libs;
-	using namespace Math;
-	using namespace PixelFactory;
-	using namespace Graphics;
-	using namespace Keys;
-	using namespace Vulkan;
-
-	LightGenerator::LightGenerator (RenderPassType renderPassType, const char * fragmentColor) noexcept
-		: m_renderPassType(renderPassType), m_fragmentColor(fragmentColor)
-	{
-		/* FIXME: Move these settings. */
-		auto * settings = Settings::instance();
-		m_PCFSample = settings->get< uint32_t >(GraphicsShadowMappingPCFSampleKey, DefaultGraphicsShadowMappingPCFSample);
-		m_PCFRadius = settings->get< float >(GraphicsShadowMappingPCFRadiusKey, DefaultGraphicsShadowMappingPCFRadius);
-
-		if ( m_renderPassType == RenderPassType::SimplePass )
-		{
-			m_flags[UseStaticLighting] = true;
-		}
-	}
+	using namespace EmEn::Libs::Math;
+	using namespace EmEn::Libs::PixelFactory;
+	using namespace EmEn::Graphics;
+	using namespace EmEn::Saphir::Keys;
+	using namespace EmEn::Vulkan;
 
 	std::string
 	LightGenerator::lightPositionWorldSpace () const noexcept
@@ -252,7 +236,7 @@ namespace EmEn::Saphir
 	bool
 	LightGenerator::generateVertexShaderCode (Generator::Abstract & generator, VertexShader & vertexShader) const noexcept
 	{
-		const auto lightSetIndex = generator.program()->setIndex(SetType::PerLight);
+		const auto lightSetIndex = generator.shaderProgram()->setIndex(SetType::PerLight);
 
 		auto lightType = LightType::Directional;
 		bool enableShadowMap = false;
@@ -313,7 +297,7 @@ namespace EmEn::Saphir
 	bool
 	LightGenerator::generateFragmentShaderCode (Generator::Abstract & generator, FragmentShader & fragmentShader) const noexcept
 	{
-		const auto lightSetIndex = generator.program()->setIndex(SetType::PerLight);
+		const auto lightSetIndex = generator.shaderProgram()->setIndex(SetType::PerLight);
 
 		auto lightType = LightType::Directional;
 		bool enableShadowMap = false;
