@@ -32,6 +32,7 @@
 /* STL inclusions. */
 #include <algorithm>
 #include <iostream>
+#include <utility>
 
 /* Third-party libraries */
 #define GLFW_INCLUDE_NONE
@@ -205,7 +206,7 @@ namespace EmEn::Input
 	std::array< float, 2 >
 	Manager::getPointerLocation (GLFWwindow * window) noexcept
 	{
-		/* NOTE : If the pointer is locked (mouse view), we don't care about computing the position. */
+		/* NOTE: If the pointer is locked (mouse view), we don't care about computing the position. */
 		if ( s_instance->isPointerLocked() )
 		{
 			return {0.5F, 0.5F};
@@ -228,15 +229,16 @@ namespace EmEn::Input
 	void
 	Manager::keyCallback (GLFWwindow * /*handle*/, int key, int scancode, int action, int modifiers) noexcept
 	{
-#ifdef KEYBOARD_INPUT_DEBUG_ENABLED
-		std::cout <<
-			"[DEBUG:KEYBOARD] Keyboard input detected !" "\n"
-			"Key: " << key << "\n"
-			"ScanCode: " << scancode << "\n"
-			"Action: " << ( action == GLFW_RELEASE ? "Release" : "Press") << "\n"
-			"Repeat: " << ( action == GLFW_REPEAT ? "On" : "Off") << "\n"
-			"Keyboard modifiers: " << getModifierListString(modifiers) << "\n";
-#endif
+		if constexpr ( KeyboardInputDebugEnabled )
+		{
+			TraceDebug{ClassId} <<
+				"Keyboard input detected !" "\n"
+				"Key: " << key << "\n"
+				"ScanCode: " << scancode << "\n"
+				"Action: " << ( action == GLFW_RELEASE ? "Release" : "Press") << "\n"
+				"Repeat: " << ( action == GLFW_REPEAT ? "On" : "Off") << "\n"
+				"Keyboard modifiers: " << getModifierListString(modifiers) << '\n';
+		}
 
 		switch ( key )
 		{
@@ -293,11 +295,12 @@ namespace EmEn::Input
 	void
 	Manager::charCallback (GLFWwindow * /*handle*/, unsigned int codepoint) noexcept
 	{
-#ifdef KEYBOARD_INPUT_DEBUG_ENABLED
-		std::cout <<
-			"[DEBUG:KEYBOARD] Unicode input detected (no modifier) !" "\n"
-			"Unicode: " << codepoint << "\n";
-#endif
+		if constexpr ( KeyboardInputDebugEnabled )
+		{
+			TraceDebug{ClassId} <<
+				"Unicode input detected (no modifier) !" "\n"
+				"Unicode: " << codepoint << '\n';
+		}
 
 		for ( const auto & listener : s_instance->m_keyboardListeners )
 		{
@@ -318,12 +321,13 @@ namespace EmEn::Input
 	void
 	Manager::charModsCallback (GLFWwindow * /*handle*/, unsigned int codepoint, int modifiers) noexcept
 	{
-#ifdef KEYBOARD_INPUT_DEBUG_ENABLED
-		std::cout <<
-			"[DEBUG:KEYBOARD] Unicode input detected !" "\n"
-			"Unicode: " << codepoint << "\n"
-			"Keyboard modifiers: " << getModifierListString(modifiers) << "\n";
-#endif
+		if constexpr ( KeyboardInputDebugEnabled )
+		{
+			TraceDebug{ClassId} <<
+				"Unicode input detected !" "\n"
+				"Unicode: " << codepoint << "\n"
+				"Keyboard modifiers: " << getModifierListString(modifiers) << "\n";
+		}
 
 		for ( const auto & listener : s_instance->m_keyboardListeners )
 		{
@@ -348,9 +352,10 @@ namespace EmEn::Input
 		const auto deltaX = static_cast< float >(xPosition - s_instance->m_lastPointerCoordinates[0]);
 		const auto deltaY = static_cast< float >(yPosition - s_instance->m_lastPointerCoordinates[1]);
 
-#ifdef POINTER_INPUT_DEBUG_ENABLED
-		std::cout << "[RelativeMode] X:" << deltaX << ", Y:" << deltaY << "\n";
-#endif
+		if constexpr ( PointerInputDebugEnabled )
+		{
+			TraceDebug{ClassId} << "[RelativeMode] X:" << deltaX << ", Y:" << deltaY << '\n';
+		}
 
 		if ( s_instance->m_moveEventsTracking != nullptr )
 		{
@@ -385,10 +390,6 @@ namespace EmEn::Input
 		const auto pointerX = static_cast< float >(xPosition);
 		const auto pointerY = static_cast< float >(yPosition);
 
-#ifdef POINTER_INPUT_DEBUG_ENABLED
-		std::cout << "[AbsoluteMode] X:" << xPosition << ", Y:" << yPosition << "\n";
-#endif
-
 		if ( s_instance->m_moveEventsTracking != nullptr )
 		{
 			s_instance->m_moveEventsTracking->onPointerMove(pointerX, pointerY);
@@ -415,9 +416,12 @@ namespace EmEn::Input
 	void
 	Manager::cursorPositionCallback (GLFWwindow * /*window*/, double xPosition, double yPosition) noexcept
 	{
-#ifdef POINTER_INPUT_DEBUG_ENABLED
-		std::cout << "[DEBUG:POINTER] Pointer move detected !" "\n";
-#endif
+		if constexpr ( PointerInputDebugEnabled )
+		{
+			TraceDebug{ClassId} <<
+				"Pointer move detected !" "\n"
+				"[AbsoluteMode] X:" << xPosition << ", Y:" << yPosition << '\n';
+		}
 
 		if ( s_instance->m_flags[PointerCoordinatesScalingEnabled] )
 		{
@@ -439,13 +443,14 @@ namespace EmEn::Input
 	void
 	Manager::cursorEnterCallback (GLFWwindow * window, int entered) noexcept
 	{
-#ifdef POINTER_INPUT_DEBUG_ENABLED
-		std::cout <<
-			"[DEBUG:POINTER] Pointer window interaction detected !" "\n"
-			"Action: " << ( entered == GLFW_TRUE ? "entering" : "leaving" ) <<  "\n";
-#endif
+		if constexpr ( PointerInputDebugEnabled )
+		{
+			TraceDebug{ClassId} <<
+				"Pointer window interaction detected !" "\n"
+				"Action: " << ( entered == GLFW_TRUE ? "entering" : "leaving" ) <<  "\n";
+		}
 
-		/* NOTE : Retrieve the pointer position to set the entering/leaving coordinates. */
+		/* NOTE: Retrieve the pointer position to set the entering/leaving coordinates. */
 		const auto position = getPointerLocation(window);
 
 		/* NOTE: This must always be processed to avoid bug. */
@@ -489,15 +494,16 @@ namespace EmEn::Input
 	void
 	Manager::mouseButtonCallback (GLFWwindow * window, int button, int action, int modifiers) noexcept
 	{
-#ifdef POINTER_INPUT_DEBUG_ENABLED
-		std::cout <<
-			"[DEBUG:POINTER] Pointer click detected !" "\n"
-			"Button number:" << button << "\n"
-			"Action:" << ( action == GLFW_PRESS ? "Press" : "Release" ) << "\n"
-			"Keyboard modifiers: " << getModifierListString(modifiers) << "\n";
-#endif
+		if constexpr ( PointerInputDebugEnabled )
+		{
+			TraceDebug{ClassId} <<
+				"Pointer click detected !" "\n"
+				"Button number:" << button << "\n"
+				"Action:" << ( action == GLFW_PRESS ? "Press" : "Release" ) << "\n"
+				"Keyboard modifiers: " << getModifierListString(modifiers) << "\n";
+		}
 
-		/* NOTE : Retrieve the pointer position to set the click coordinates. */
+		/* NOTE: Retrieve the pointer position to set the click coordinates. */
 		const auto position = Manager::getPointerLocation(window);
 
 		/* NOTE: On release, automatically stop the tracking. */
@@ -543,13 +549,14 @@ namespace EmEn::Input
 	void
 	Manager::scrollCallback (GLFWwindow * window, double xOffset, double yOffset) noexcept
 	{
-#ifdef POINTER_INPUT_DEBUG_ENABLED
-		std::cout <<
-			"[DEBUG:POINTER] Scrolling detected !" "\n"
-			"Offset X:" << xOffset << ", Y:" << yOffset <<  "\n";
-#endif
+		if constexpr ( PointerInputDebugEnabled )
+		{
+			TraceDebug{ClassId} <<
+				"Scrolling detected !" "\n"
+				"Offset X:" << xOffset << ", Y:" << yOffset << '\n';
+		}
 
-		/* NOTE : Retrieve the pointer position to set the scroll coordinates. */
+		/* NOTE: Retrieve the pointer position to set the scroll coordinates. */
 		const auto position = getPointerLocation(window);
 
 		const auto xOffsetF = static_cast< float >(xOffset);
@@ -582,9 +589,10 @@ namespace EmEn::Input
 	void
 	Manager::dropCallback (GLFWwindow * /*handle*/, int count, const char * * paths) noexcept
 	{
-#ifdef WINDOW_EVENTS_DEBUG_ENABLED
-		std::cout << "[DEBUG:WINDOW] " << count << " files has been dropped into the window." "\n";
-#endif
+		if constexpr ( WindowEventsDebugEnabled )
+		{
+			TraceDebug{ClassId} << count << " files has been dropped into the window." "\n";
+		}
 
 		std::vector< std::filesystem::path > filePaths;
 		filePaths.reserve(count);
@@ -609,11 +617,12 @@ namespace EmEn::Input
 	void
 	Manager::joystickCallback (int jid, int event) noexcept
 	{
-#ifdef POINTER_INPUT_DEBUG_ENABLED
-		std::cout <<
-			"[DEBUG:POINTER] Joystick/gamepad configuration changed !" "\n"
-			"Device ID #" << jid << " is " << ( event == GLFW_CONNECTED ? "connected" : "disconnected" ) << "." "\n";
-#endif
+		if constexpr ( PointerInputDebugEnabled )
+		{
+			TraceDebug{ClassId} <<
+				"Joystick/gamepad configuration changed !" "\n"
+				"Device ID #" << jid << " is " << ( event == GLFW_CONNECTED ? "connected" : "disconnected" ) << "." "\n";
+		}
 
 		switch ( event )
 		{
@@ -637,13 +646,13 @@ namespace EmEn::Input
 				TraceInfo{ClassId} << "Game device #" << jid << " disconnected !";
 
 				/* NOTE: Here we don't know if it's a joystick or a gamepad.
-				 * But we don't care a bit because ID are shared between gamepads and joysticks. */
+				 * But we don't care a bit because IDs are shared between gamepads and joysticks. */
 
-				/* First we reset the device last state. */
+				/* First, we reset the device last state. */
 				JoystickController::clearDeviceState(jid);
 				GamepadController::clearDeviceState(jid);
 
-				/* We remove the ID from both ID set. */
+				/* We remove the ID from both ID sets. */
 				s_instance->m_joystickIDs.erase(jid);
 				s_instance->m_gamepadIDs.erase(jid);
 			}
@@ -677,7 +686,10 @@ namespace EmEn::Input
 
 			if ( !IO::fileExists(filepath) )
 			{
-				TraceWarning{ClassId} << "The file " << filepath << " is not present !";
+				if ( m_flags[ShowInformation] )
+				{
+					TraceInfo{ClassId} << "The file " << filepath << " is not present there !";
+				}
 
 				continue;
 			}
@@ -796,7 +808,7 @@ namespace EmEn::Input
 	Manager::waitSystemEvents (double until) noexcept
 	{
 		/* This function is blocking the
-		 * process by waiting an event from system. */
+		 * process by waiting an event from a system. */
 		if ( until > 0.0 )
 		{
 			glfwWaitEventsTimeout(until);

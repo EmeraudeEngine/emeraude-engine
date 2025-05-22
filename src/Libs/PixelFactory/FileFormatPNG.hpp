@@ -51,12 +51,13 @@ namespace EmEn::Libs::PixelFactory
 {
 	/**
 	 * @brief Class for read and write PNG format.
-	 * @tparam data_t Precision of data.
+	 * @tparam pixel_data_t The pixel component type for the pixmap depth precision. Default uint8_t.
+	 * @tparam dimension_t The type of unsigned integer used for pixmap dimension. Default uint32_t.
 	 * @extends EmEn::Libs::PixelFactory::FileFormatInterface The base IO class.
 	 */
-	template< typename data_t = uint8_t >
-	requires (std::is_integral_v< data_t >)
-	class FileFormatPNG final : public FileFormatInterface< data_t >
+	template< typename pixel_data_t = uint8_t, typename dimension_t = uint32_t >
+	requires (std::is_arithmetic_v< pixel_data_t > && std::is_unsigned_v< dimension_t >)
+	class FileFormatPNG final : public FileFormatInterface< pixel_data_t, dimension_t >
 	{
 		public:
 
@@ -68,7 +69,7 @@ namespace EmEn::Libs::PixelFactory
 			/** @copydoc EmEn::Libs::PixelFactory::FileFormatInterface::readFile() */
 			[[nodiscard]]
 			bool
-			readFile (const std::filesystem::path & filepath, Pixmap< data_t > & pixmap) noexcept override
+			readFile (const std::filesystem::path & filepath, Pixmap< pixel_data_t, dimension_t > & pixmap) noexcept override
 			{
 				pixmap.clear();
 
@@ -256,7 +257,7 @@ namespace EmEn::Libs::PixelFactory
 			/** @copydoc EmEn::Libs::PixelFactory::FileFormatInterface::writeFile() */
 			[[nodiscard]]
 			bool
-			writeFile (const std::filesystem::path & filepath, const Pixmap< data_t > & pixmap) const noexcept override
+			writeFile (const std::filesystem::path & filepath, const Pixmap< pixel_data_t, dimension_t > & pixmap) const noexcept override
 			{
 				if ( !pixmap.isValid() )
 				{

@@ -139,27 +139,25 @@ namespace EmEn::Libs
 			[[nodiscard]]
 			virtual bool is (size_t classUID) const noexcept = 0;
 
-#ifdef DEBUG
+#if defined(DEBUG) && IS_LINUX
 			/**
 			 * @brief Returns the label registered when generation the UID to use to debug the Observer::onNotification().
-			 * @note This debugging method will return :
+			 * @note This debugging method will return:
 			 *  - "UNALLOCATED_MAP" if the function is called before any observable creation.
 			 *  - "UNREGISTERED_ITEM" if the UID doesn't exist.
 			 *  - "FEATURE_UNAVAILABLE" if the system is other than Linux.
 			 * @param UID An observable UID.
 			 * @return const char *
 			 */
-	#if IS_LINUX
 			[[nodiscard]]
 			static const char * whoIs (size_t UID) noexcept;
-	#else
+#else
 			[[nodiscard]]
 			static const char *
-			whoIs (size_t UID) noexcept
+			whoIs (size_t /*UID*/) noexcept
 			{
 				return "FEATURE_UNAVAILABLE";
 			}
-	#endif
 #endif
 
 		protected:

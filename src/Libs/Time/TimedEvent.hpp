@@ -27,13 +27,14 @@
 #pragma once
 
 /* STL inclusions. */
-#include <array>
+#include <cstdint>
 #include <chrono>
 #include <functional>
 #include <ratio>
-#include <thread>
 #include <type_traits>
-#include <cstdint>
+#include <thread>
+#include <mutex>
+#include <condition_variable>
 
 /* Local Inclusions. */
 #include "Types.hpp"
@@ -65,7 +66,7 @@ namespace EmEn::Libs::Time
 			TimedEvent (std::function< bool (TimerID) > function, rep_t granularity, bool once = false) noexcept
 				: m_granularity(granularity), m_function(std::move(function))
 			{
-				m_flags[OnlyOnce] = once;
+				m_onlyOnce = once;
 			}
 
 			/**
@@ -99,9 +100,15 @@ namespace EmEn::Libs::Time
 			~TimedEvent ()
 			{
 				/* NOTE: This will causes the while() loop to stop in the thread. */
-				m_flags[IsProcessCreated] = false;
-				m_flags[IsProcessActive] = false;
-				m_flags[IsProcessPaused] = false;
+				{
+					const std::lock_guard< std::mutex > lock{m_mutex};
+
+					m_isProcessCreated = false;
+					//m_isProcessActive = false;
+					//m_isProcessPaused = false;
+				}
+
+				m_condition.notify_one();
 
 				/* If thread is launched, wait for the end. */
 				if ( m_thread.joinable() )
@@ -118,7 +125,21 @@ namespace EmEn::Libs::Time
 			void
 			setGranularity (rep_t granularity) noexcept
 			{
+				const std::lock_guard< std::mutex > lock{m_mutex};
+
 				m_granularity = std::chrono::duration< rep_t, period_t >{granularity};
+				m_previousTime = std::chrono::steady_clock::now();
+			}
+
+			/**
+			 * @brief Resets the timer.
+			 * @return void
+			 */
+			void
+			reset () noexcept
+			{
+				const std::lock_guard< std::mutex > lock{m_mutex};
+
 				m_previousTime = std::chrono::steady_clock::now();
 			}
 
@@ -200,42 +221,37 @@ namespace EmEn::Libs::Time
 			}
 
 			/**
-			 * @brief Resets the previous top.
-			 * @return void
-			 */
-			void
-			resetTop () noexcept
-			{
-				m_previousTime = std::chrono::steady_clock::now();
-			}
-
-			/**
 			 * @brief Starts the timer of the event.
 			 * @return void
 			 */
 			void
 			start () noexcept
 			{
+				const std::lock_guard< std::mutex > lock{m_mutex};
+
 				/* If the process is already active, we do nothing. */
-				if ( m_flags[IsProcessActive] )
+				if ( m_isProcessActive )
 				{
 					return;
 				}
 
-				m_flags[IsProcessActive] = true;
+				m_isProcessActive = true;
+				m_isProcessPaused = false;
 
-				this->resetTop();
+				m_previousTime = std::chrono::steady_clock::now();
 
 				/* Creates the process thread only once. */
-				if ( m_flags[IsProcessCreated] )
+				if ( m_isProcessCreated )
 				{
+					/* NOTE: Wake up the thread. */
+					m_condition.notify_one();
+
 					return;
 				}
 
-				m_flags[IsProcessCreated] = true;
+				m_isProcessCreated = true;
 
-				/* This will be called only for the first execute(). */
-				m_thread = std::thread(&TimedEvent::process, this);
+				m_thread = std::thread{&TimedEvent::process, this};
 			}
 
 			/**
@@ -245,7 +261,14 @@ namespace EmEn::Libs::Time
 			void
 			stop () noexcept
 			{
-				m_flags[IsProcessActive] = false;
+				const std::lock_guard< std::mutex > lock{m_mutex};
+
+				if ( !m_isProcessCreated || !m_isProcessActive )
+				{
+					return;
+				}
+
+				m_isProcessActive = false;
 			}
 
 			/**
@@ -255,13 +278,15 @@ namespace EmEn::Libs::Time
 			void
 			pause () noexcept
 			{
-				if ( !m_flags[IsProcessCreated] || !m_flags[IsProcessActive] )
+				const std::lock_guard< std::mutex > lock{m_mutex};
+
+				if ( !m_isProcessCreated || !m_isProcessActive )
 				{
 					return;
 				}
 
-				m_flags[IsProcessActive] = false;
-				m_flags[IsProcessPaused] = true;
+				m_isProcessActive = false;
+				m_isProcessPaused = true;
 			}
 
 			/**
@@ -271,13 +296,22 @@ namespace EmEn::Libs::Time
 			void
 			resume () noexcept
 			{
-				if ( !m_flags[IsProcessPaused] )
 				{
-					return;
-				}
+					const std::lock_guard< std::mutex > lock{m_mutex};
+					
+					if ( !m_isProcessPaused )
+					{
+						return;
+					}
 
-				m_flags[IsProcessActive] = true;
-				m_flags[IsProcessPaused] = false;
+					m_isProcessActive = true;
+					m_isProcessPaused = false;
+					
+					m_previousTime = std::chrono::steady_clock::now();
+				}
+				
+				/* NOTE: Wake up the thread. */
+				m_condition.notify_one();
 			}
 
 			/**
@@ -288,7 +322,7 @@ namespace EmEn::Libs::Time
 			bool
 			isStarted () const noexcept
 			{
-				return m_flags[IsProcessActive];
+				return m_isProcessActive;
 			}
 
 			/**
@@ -299,7 +333,7 @@ namespace EmEn::Libs::Time
 			bool
 			isPaused () const noexcept
 			{
-				return m_flags[IsProcessPaused];
+				return m_isProcessPaused;
 			}
 
 			/**
@@ -310,72 +344,92 @@ namespace EmEn::Libs::Time
 			bool
 			once () const noexcept
 			{
-				return m_flags[OnlyOnce];
+				return m_onlyOnce;
 			}
 
 		private:
 
 			/**
 			 * @brief Thread task.
-			 * @param event A pointer to the timed event.
 			 * @return void
 			 */
-			static
 			void
-			process (TimedEvent * event) noexcept
+			process ()
 			{
-				while ( event->m_flags[IsProcessCreated] )
+				std::unique_lock< std::mutex > lock{m_mutex};
+
+				while ( m_isProcessCreated )
 				{
-					if ( event->m_flags[IsProcessActive] )
+					/* NOTE: The thread will sleep until "m_isProcessActive" is true or the timer is destroyed.
+					 * The mutex is automatically released during sleep and reacquired upon waking. */
+					m_condition.wait(lock, [this] {
+						return m_isProcessActive || !m_isProcessCreated;
+					});
+
+					/* NOTE: If we wake up because the timer is destroyed, we exit the loop. */
+					if ( !m_isProcessCreated )
 					{
-						rep_t time;
-
-						/* If the delay is elapsed we fire the event. */
-						if ( event->isIntervalElapsed(time) )
-						{
-							if ( event->m_function(event->m_timerId) || event->once() )
-							{
-								event->stop();
-							}
-						}
-						else
-						{
-							/* NOTE: Balance CPU work to avoid burning it.
-							 * We put the thread on standby for the remaining time. */
-							std::this_thread::sleep_for(std::chrono::duration< rep_t, period_t >{time});
-						}
-
-						continue;
+						break;
 					}
 
-					/* NOTE: Balance CPU work to avoid burning it.
-					 * We put the thread to sleep while waiting for the timer to resume. */
-					std::this_thread::sleep_for(std::chrono::milliseconds{SleepTimeForUnactiveProcess});
+					/* NOTE: Get a copy to be thread safe. */
+					const auto granularityCopy = m_granularity;
+					const auto previousTimeCopy = m_previousTime;
+
+					/* NOTE: At this point, we are certain that m_isProcessActive is true and the mutex is locked. */
+					lock.unlock();
+
+					rep_t time;
+					const auto top = std::chrono::steady_clock::now();
+					const auto delta = std::chrono::duration_cast<std::chrono::duration<rep_t, period_t>>(top - previousTimeCopy).count();
+					const auto intervalDuration = granularityCopy.count();
+
+					bool intervalElapsed;
+
+					if ( delta < intervalDuration )
+					{
+						time = intervalDuration - delta;
+
+						intervalElapsed = false;
+					}
+					else
+					{
+						time = delta - intervalDuration;
+
+						intervalElapsed = true;
+					}
+
+					if ( intervalElapsed )
+					{
+						if ( m_function(m_timerId) || m_onlyOnce )
+						{
+							this->stop();
+						}
+						{
+							const std::lock_guard< std::mutex > updateLock(m_mutex);
+
+							m_previousTime = top - std::chrono::duration<rep_t, period_t>{time};
+						}
+					}
+					else
+					{
+						std::this_thread::sleep_for(std::chrono::duration<rep_t, period_t>{time});
+					}
+
+					lock.lock();
 				}
 			}
-
-			/* Flag names. */
-			static constexpr auto OnlyOnce{0UL};
-			static constexpr auto IsProcessCreated{1UL};
-			static constexpr auto IsProcessActive{2UL};
-			static constexpr auto IsProcessPaused{3UL};
-
-			static constexpr rep_t SleepTimeForUnactiveProcess{300};
 
 			std::chrono::duration< rep_t, period_t > m_granularity{std::chrono::seconds{1}};
 			std::chrono::time_point< std::chrono::steady_clock > m_previousTime{std::chrono::steady_clock::now()};
 			std::function< bool (TimerID) > m_function;
 			std::thread m_thread;
+			mutable std::mutex m_mutex;
+			std::condition_variable m_condition;
 			TimerID m_timerId{0};
-			std::array< bool, 8 > m_flags{
-				false/*OnlyOnce*/,
-				false/*IsProcessCreated*/,
-				false/*IsProcessActive*/,
-				false/*IsProcessPaused*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/
-			};
+			std::atomic_bool m_isProcessCreated{false};
+			std::atomic_bool m_isProcessActive{false};
+			std::atomic_bool m_isProcessPaused{false};
+			std::atomic_bool m_onlyOnce{false};
 	};
 }

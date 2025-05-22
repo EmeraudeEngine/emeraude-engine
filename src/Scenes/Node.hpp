@@ -254,11 +254,11 @@ namespace EmEn::Scenes
 
 			/** @copydoc EmEn::Scenes::LocatableInterface::getWorldBoundingBox() const */
 			[[nodiscard]]
-			Libs::Math::Cuboid< float > getWorldBoundingBox () const noexcept override;
+			Libs::Math::Space3D::AACuboid< float > getWorldBoundingBox () const noexcept override;
 
 			/** @copydoc EmEn::Scenes::LocatableInterface::getWorldBoundingSphere() const */
 			[[nodiscard]]
-			Libs::Math::Sphere< float > getWorldBoundingSphere () const noexcept override;
+			Libs::Math::Space3D::Sphere< float > getWorldBoundingSphere () const noexcept override;
 
 			/** @copydoc EmEn::Scenes::LocatableInterface::enableSphereCollision(bool) */
 			void
@@ -544,30 +544,11 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			 * @brief Accelerates the node forward. This is a shortcut.
+			 * @brief Speeds up the node forward. This is a shortcut.
 			 * @param power The power of acceleration. This can be negative to decelerate.
 			 * @return void
 			 */
 			void accelerate (float power) noexcept;
-
-			/**
-			 * @brief Returns the overlap from the intersection with another node.
-			 * @param nodeA A reference to a node.
-			 * @param nodeB A reference to a node.
-			 * @return float
-			 */
-			[[nodiscard]]
-			static
-			float
-			getIntersectionOverlap (const Node & nodeA, const Node & nodeB) noexcept
-			{
-				if ( &nodeA == &nodeB )
-				{
-					return 0.0F;
-				}
-
-				return Libs::Math::Sphere< float >::getIntersectionOverlap(nodeA.getWorldBoundingSphere(), nodeB.getWorldBoundingSphere());
-			}
 
 			/**
 			 * @brief Returns the distance between two nodes.

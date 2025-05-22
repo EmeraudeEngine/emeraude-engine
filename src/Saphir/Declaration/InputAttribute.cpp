@@ -144,7 +144,7 @@ namespace EmEn::Saphir::Declaration
 
 	}
 
-	InputAttribute::InputAttribute (uint32_t location, Key type, Key name, size_t arraySize) noexcept
+	InputAttribute::InputAttribute (uint32_t location, Key type, Key name, uint32_t arraySize) noexcept
 		: m_location(location),
 		m_type(type),
 		m_name(name),
@@ -165,7 +165,7 @@ namespace EmEn::Saphir::Declaration
 	std::string
 	InputAttribute::sourceCode () const noexcept
 	{
-		std::stringstream code{};
+		std::stringstream code;
 
 		code <<
 			GLSL::Layout << " (" << GLSL::Location << " = " << std::to_string(m_location) << ") " <<
@@ -181,50 +181,28 @@ namespace EmEn::Saphir::Declaration
 		return code.str();
 	}
 
-	Key
-	InputAttribute::name () const noexcept
-	{
-		return m_name;
-	}
-
-	size_t
-	InputAttribute::bytes () const noexcept
-	{
-		return 0;
-	}
-
-	uint32_t
-	InputAttribute::location () const noexcept
-	{
-		return m_location;
-	}
-
-	Key
-	InputAttribute::type () const noexcept
-	{
-		return m_type;
-	}
-
-	size_t
-	InputAttribute::arraySize () const noexcept
-	{
-		return m_arraySize;
-	}
-
 	bool
 	InputAttribute::isModelMatricesVBOAttribute () const noexcept
 	{
 		if ( to_string(VertexAttributeType::ModelMatrixR0) == m_name )
+		{
 			return true;
+		}
 
 		if ( to_string(VertexAttributeType::NormalModelMatrixR0) == m_name )
+		{
 			return true;
+		}
 
 		if ( to_string(VertexAttributeType::ModelPosition) == m_name )
+		{
 			return true;
+		}
 
 		if ( to_string(VertexAttributeType::ModelScaling) == m_name )
+		{
 			return true;
+		}
 
 		return false;
 	}

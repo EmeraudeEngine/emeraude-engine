@@ -60,14 +60,16 @@ namespace EmEn::Vulkan
 	CommandBuffer::CommandBuffer (const std::shared_ptr< CommandPool > & commandPool, bool primaryLevel) noexcept
 		: m_commandPool(commandPool), m_primaryLevel(primaryLevel)
 	{
-#ifdef DEBUG
-		if ( commandPool == nullptr || !commandPool->isCreated() )
+		if constexpr ( IsDebug )
 		{
-			Tracer::error(ClassId, "Command pool is null or not created to allocate this command buffer !");
+			if ( commandPool == nullptr || !commandPool->isCreated() )
+			{
+				Tracer::error(ClassId, "Command pool is null or not created to allocate this command buffer !");
 
-			return;
+				return;
+			}
 		}
-#endif
+
 		m_handle = m_commandPool->allocateCommandBuffer(primaryLevel);
 
 		if ( m_handle == VK_NULL_HANDLE )
@@ -172,21 +174,22 @@ namespace EmEn::Vulkan
 	void
 	CommandBuffer::beginRenderPass (const Framebuffer & framebuffer, const VkRect2D & renderArea, const std::array< VkClearValue, 2 > & clearValues, VkSubpassContents subpassContents) const noexcept
 	{
-#ifdef DEBUG
-		if ( !framebuffer.isCreated() )
+		if constexpr ( IsDebug )
 		{
-			Tracer::error(ClassId, "The framebuffer is not created !");
+			if ( !framebuffer.isCreated() )
+			{
+				Tracer::error(ClassId, "The framebuffer is not created !");
 
-			return;
+				return;
+			}
+
+			if ( !this->isCreated() )
+			{
+				Tracer::error(ClassId, "The command buffer is not created !");
+
+				return;
+			}
 		}
-
-		if ( !this->isCreated() )
-		{
-			Tracer::error(ClassId, "The command buffer is not created !");
-
-			return;
-		}
-#endif
 
 		VkRenderPassBeginInfo renderPassBeginInfo{};
 		renderPassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
@@ -203,14 +206,15 @@ namespace EmEn::Vulkan
 	void
 	CommandBuffer::endRenderPass () const noexcept
 	{
-#ifdef DEBUG
-		if ( !this->isCreated() )
+		if constexpr ( IsDebug )
 		{
-			Tracer::error(ClassId, "The command buffer is not created !");
+			if ( !this->isCreated() )
+			{
+				Tracer::error(ClassId, "The command buffer is not created !");
 
-			return;
+				return;
+			}
 		}
-#endif
 
 		vkCmdEndRenderPass(m_handle);
 	}
@@ -218,23 +222,24 @@ namespace EmEn::Vulkan
 	void
 	CommandBuffer::update (const Buffer & buffer, VkDeviceSize dstOffset, VkDeviceSize dataSize, const void * pData) const noexcept
 	{
-#ifdef DEBUG
-		if ( !buffer.isCreated() )
+		if constexpr ( IsDebug )
 		{
-			Tracer::error(ClassId, "The buffer is not created.");
+			if ( !buffer.isCreated() )
+			{
+				Tracer::error(ClassId, "The buffer is not created.");
 
-			return;
+				return;
+			}
+
+			if ( !this->isCreated() )
+			{
+				TraceError{ClassId} <<
+					"The command buffer is not created !" "\n"
+					"Unable to update the buffer " << buffer.handle();
+
+				return;
+			}
 		}
-
-		if ( !this->isCreated() )
-		{
-			TraceError{ClassId} <<
-				"The command buffer is not created !" "\n"
-				"Unable to update the buffer " << buffer.handle();
-
-			return;
-		}
-#endif
 
 		vkCmdUpdateBuffer(
 			m_handle,
@@ -246,23 +251,24 @@ namespace EmEn::Vulkan
 	void
 	CommandBuffer::fill (const Buffer & buffer, VkDeviceSize dstOffset, VkDeviceSize size, uint32_t data) const noexcept
 	{
-#ifdef DEBUG
-		if ( !buffer.isCreated() )
+		if constexpr ( IsDebug )
 		{
-			Tracer::error(ClassId, "The buffer is not created.");
+			if ( !buffer.isCreated() )
+			{
+				Tracer::error(ClassId, "The buffer is not created.");
 
-			return;
+				return;
+			}
+
+			if ( !this->isCreated() )
+			{
+				TraceError{ClassId} <<
+					"The command buffer is not created !" "\n"
+					"Unable to fill the buffer " << buffer.handle();
+
+				return;
+			}
 		}
-
-		if ( !this->isCreated() )
-		{
-			TraceError{ClassId} <<
-				"The command buffer is not created !" "\n"
-				"Unable to fill the buffer " << buffer.handle();
-
-			return;
-		}
-#endif
 
 		vkCmdFillBuffer(
 			m_handle,
@@ -274,30 +280,31 @@ namespace EmEn::Vulkan
 	void
 	CommandBuffer::copy (const Buffer & src, const Buffer & dst, VkDeviceSize srcOffset, VkDeviceSize dstOffset, VkDeviceSize size) const noexcept
 	{
-#ifdef DEBUG
-		if ( !src.isCreated() )
+		if constexpr ( IsDebug )
 		{
-			Tracer::error(ClassId, "The source buffer is not created.");
+			if ( !src.isCreated() )
+			{
+				Tracer::error(ClassId, "The source buffer is not created.");
 
-			return;
+				return;
+			}
+
+			if ( !dst.isCreated() )
+			{
+				Tracer::error(ClassId, "The destination buffer is not created.");
+
+				return;
+			}
+
+			if ( !this->isCreated() )
+			{
+				TraceError{ClassId} <<
+					"The command buffer is not created !" "\n"
+					"Unable to copy buffer " << src.handle() << " to buffer " << dst.handle();
+
+				return;
+			}
 		}
-
-		if ( !dst.isCreated() )
-		{
-			Tracer::error(ClassId, "The destination buffer is not created.");
-
-			return;
-		}
-
-		if ( !this->isCreated() )
-		{
-			TraceError{ClassId} <<
-				"The command buffer is not created !" "\n"
-				"Unable to copy buffer " << src.handle() << " to buffer " << dst.handle();
-
-			return;
-		}
-#endif
 
 		VkBufferCopy bufferCopy{};
 		bufferCopy.srcOffset = srcOffset;
@@ -315,30 +322,31 @@ namespace EmEn::Vulkan
 	void
 	CommandBuffer::copy (const Image & src, const Image & dst) const noexcept
 	{
-#ifdef DEBUG
-		if ( !src.isCreated() )
+		if constexpr ( IsDebug )
 		{
-			Tracer::error(ClassId, "The source image is not created.");
+			if ( !src.isCreated() )
+			{
+				Tracer::error(ClassId, "The source image is not created.");
 
-			return;
+				return;
+			}
+
+			if ( !dst.isCreated() )
+			{
+				Tracer::error(ClassId, "The destination image is not created.");
+
+				return;
+			}
+
+			if ( !this->isCreated() )
+			{
+				TraceError{ClassId} <<
+					"The command buffer is not created !" "\n"
+					"Unable to copy image " << src.handle() << " to image " << dst.handle();
+
+				return;
+			}
 		}
-
-		if ( !dst.isCreated() )
-		{
-			Tracer::error(ClassId, "The destination image is not created.");
-
-			return;
-		}
-
-		if ( !this->isCreated() )
-		{
-			TraceError{ClassId} <<
-				"The command buffer is not created !" "\n"
-				"Unable to copy image " << src.handle() << " to image " << dst.handle();
-
-			return;
-		}
-#endif
 
 		/* FIXME: Check parameters and what to expose for a correct copy. */
 		VkImageCopy imageCopy{};
@@ -367,30 +375,31 @@ namespace EmEn::Vulkan
 	void
 	CommandBuffer::copy (const Buffer & src, const Image & dst, VkDeviceSize /*srcOffset*/) const noexcept
 	{
-#ifdef DEBUG
-		if ( !src.isCreated() )
+		if constexpr ( IsDebug )
 		{
-			Tracer::error(ClassId, "The source buffer is not created.");
+			if ( !src.isCreated() )
+			{
+				Tracer::error(ClassId, "The source buffer is not created.");
 
-			return;
+				return;
+			}
+
+			if ( !dst.isCreated() )
+			{
+				Tracer::error(ClassId, "The destination image is not created.");
+
+				return;
+			}
+
+			if ( !this->isCreated() )
+			{
+				TraceError{ClassId} <<
+					"The command buffer is not created !" "\n"
+					"Unable to copy buffer " << src.handle() << " to image " << dst.handle();
+
+				return;
+			}
 		}
-
-		if ( !dst.isCreated() )
-		{
-			Tracer::error(ClassId, "The destination image is not created.");
-
-			return;
-		}
-
-		if ( !this->isCreated() )
-		{
-			TraceError{ClassId} <<
-				"The command buffer is not created !" "\n"
-				"Unable to copy buffer " << src.handle() << " to image " << dst.handle();
-
-			return;
-		}
-#endif
 
 		constexpr VkImageAspectFlags aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 		const auto baseWidth = dst.createInfo().extent.width;
@@ -430,30 +439,31 @@ namespace EmEn::Vulkan
 	void
 	CommandBuffer::copy (const Image & src, const Buffer & dst) const noexcept
 	{
-#ifdef DEBUG
-		if ( !src.isCreated() )
+		if constexpr ( IsDebug )
 		{
-			Tracer::error(ClassId, "The source image is not created.");
+			if ( !src.isCreated() )
+			{
+				Tracer::error(ClassId, "The source image is not created.");
 
-			return;
+				return;
+			}
+
+			if ( !dst.isCreated() )
+			{
+				Tracer::error(ClassId, "The destination buffer is not created.");
+
+				return;
+			}
+
+			if ( !this->isCreated() )
+			{
+				TraceError{ClassId} <<
+					"The command buffer is not created !" "\n"
+					"Unable to copy image " << src.handle() << " to buffer " << dst.handle();
+
+				return;
+			}
 		}
-
-		if ( !dst.isCreated() )
-		{
-			Tracer::error(ClassId, "The destination buffer is not created.");
-
-			return;
-		}
-
-		if ( !this->isCreated() )
-		{
-			TraceError{ClassId} <<
-				"The command buffer is not created !" "\n"
-				"Unable to copy image " << src.handle() << " to buffer " << dst.handle();
-
-			return;
-		}
-#endif
 
 		/* FIXME: Check parameters and what to expose for a correct copy. */
 		VkBufferImageCopy bufferImageCopy{};
@@ -479,30 +489,31 @@ namespace EmEn::Vulkan
 	void
 	CommandBuffer::blit (const Image & src, const Image & dst) const noexcept
 	{
-#ifdef DEBUG
-		if ( !src.isCreated() )
+		if constexpr ( IsDebug )
 		{
-			Tracer::error(ClassId, "The source image is not created.");
+			if ( !src.isCreated() )
+			{
+				Tracer::error(ClassId, "The source image is not created.");
 
-			return;
+				return;
+			}
+
+			if ( !dst.isCreated() )
+			{
+				Tracer::error(ClassId, "The destination image is not created.");
+
+				return;
+			}
+
+			if ( !this->isCreated() )
+			{
+				TraceError{ClassId} <<
+					"The command buffer is not created !" "\n"
+					"Unable to blit image " << src.handle() << " to image " << dst.handle();
+
+				return;
+			}
 		}
-
-		if ( !dst.isCreated() )
-		{
-			Tracer::error(ClassId, "The destination image is not created.");
-
-			return;
-		}
-
-		if ( !this->isCreated() )
-		{
-			TraceError{ClassId} <<
-				"The command buffer is not created !" "\n"
-				"Unable to blit image " << src.handle() << " to image " << dst.handle();
-
-			return;
-		}
-#endif
 
 		/* FIXME: Pass parameters ! */
 		VkImageBlit imageBlit{};
@@ -531,26 +542,26 @@ namespace EmEn::Vulkan
 	void
 	CommandBuffer::clearColor (const Image & image, VkImageLayout imageLayout, const PixelFactory::Color< float > & color) const noexcept
 	{
-#ifdef DEBUG
-		if ( !image.isCreated() )
+		if constexpr ( IsDebug )
 		{
-			Tracer::error(ClassId, "The image is not created.");
+			if ( !image.isCreated() )
+			{
+				Tracer::error(ClassId, "The image is not created.");
 
-			return;
+				return;
+			}
+
+			if ( !this->isCreated() )
+			{
+				TraceError{ClassId} <<
+					"The command buffer is not created !" "\n"
+					"Unable to clear the color of image " << image.handle();
+
+				return;
+			}
 		}
-
-		if ( !this->isCreated() )
-		{
-			TraceError{ClassId} <<
-				"The command buffer is not created !" "\n"
-				"Unable to clear the color of image " << image.handle();
-
-			return;
-		}
-#endif
 
 		/* FIXME: Check if the image is a color one. */
-
 		VkClearColorValue colorValue{};
 		colorValue.float32[0] = color.red();
 		colorValue.float32[1] = color.green();
@@ -576,23 +587,24 @@ namespace EmEn::Vulkan
 	void
 	CommandBuffer::clearDepthStencil (const Image & image, VkImageLayout imageLayout) const noexcept
 	{
-#ifdef DEBUG
-		if ( !image.isCreated() )
+		if constexpr ( IsDebug )
 		{
-			Tracer::error(ClassId, "The image is not created.");
+			if ( !image.isCreated() )
+			{
+				Tracer::error(ClassId, "The image is not created.");
 
-			return;
+				return;
+			}
+
+			if ( !this->isCreated() )
+			{
+				TraceError{ClassId} <<
+					"The command buffer is not created !" "\n"
+					"Unable to clear the depth and the stencil of image " << image.handle();
+
+				return;
+			}
 		}
-
-		if ( !this->isCreated() )
-		{
-			TraceError{ClassId} <<
-				"The command buffer is not created !" "\n"
-				"Unable to clear the depth and the stencil of image " << image.handle();
-
-			return;
-		}
-#endif
 
 		/* FIXME: Check if the image is a color one. */
 		/* FIXME: Set the possibility to choose the depth, or stencil and the value. */
@@ -618,21 +630,22 @@ namespace EmEn::Vulkan
 	void
 	CommandBuffer::pipelineBarrier (const std::vector< VkMemoryBarrier > & memoryBarriers, const std::vector< VkBufferMemoryBarrier > & bufferMemoryBarriers, const std::vector< VkImageMemoryBarrier > & imageMemoryBarriers, VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask, VkDependencyFlags dependencyFlags) const noexcept
 	{
-#ifdef DEBUG
-		if ( !this->isCreated() )
+		if constexpr ( IsDebug )
 		{
-			Tracer::error(ClassId, "The command buffer is not created !");
+			if ( !this->isCreated() )
+			{
+				Tracer::error(ClassId, "The command buffer is not created !");
 
-			return;
+				return;
+			}
+
+			if ( memoryBarriers.empty() && bufferMemoryBarriers.empty() && imageMemoryBarriers.empty() )
+			{
+				Tracer::warning(ClassId, "There is no memory barrier in the list !");
+
+				return;
+			}
 		}
-
-		if ( memoryBarriers.empty() && bufferMemoryBarriers.empty() && imageMemoryBarriers.empty() )
-		{
-			Tracer::warning(ClassId, "There is no memory barrier in the list !");
-
-			return;
-		}
-#endif
 
 		vkCmdPipelineBarrier(
 			m_handle,
@@ -648,21 +661,22 @@ namespace EmEn::Vulkan
 	void
 	CommandBuffer::pipelineBarrier (const std::vector< VkMemoryBarrier > & memoryBarriers, VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask, VkDependencyFlags dependencyFlags) const noexcept
 	{
-#ifdef DEBUG
-		if ( !this->isCreated() )
+		if constexpr ( IsDebug )
 		{
-			Tracer::error(ClassId, "The command buffer is not created !");
+			if ( !this->isCreated() )
+			{
+				Tracer::error(ClassId, "The command buffer is not created !");
 
-			return;
+				return;
+			}
+
+			if ( memoryBarriers.empty() )
+			{
+				Tracer::warning(ClassId, "There is no memory barrier in the list !");
+
+				return;
+			}
 		}
-
-		if ( memoryBarriers.empty() )
-		{
-			Tracer::warning(ClassId, "There is no memory barrier in the list !");
-
-			return;
-		}
-#endif
 
 		vkCmdPipelineBarrier(
 			m_handle,
@@ -678,21 +692,22 @@ namespace EmEn::Vulkan
 	void
 	CommandBuffer::pipelineBarrier (const std::vector< VkBufferMemoryBarrier > & bufferMemoryBarriers, VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask, VkDependencyFlags dependencyFlags) const noexcept
 	{
-#ifdef DEBUG
-		if ( !this->isCreated() )
+		if constexpr ( IsDebug )
 		{
-			Tracer::error(ClassId, "The command buffer is not created !");
+			if ( !this->isCreated() )
+			{
+				Tracer::error(ClassId, "The command buffer is not created !");
 
-			return;
+				return;
+			}
+
+			if ( bufferMemoryBarriers.empty() )
+			{
+				Tracer::warning(ClassId, "There is no buffer memory barrier in the list !");
+
+				return;
+			}
 		}
-
-		if ( bufferMemoryBarriers.empty() )
-		{
-			Tracer::warning(ClassId, "There is no buffer memory barrier in the list !");
-
-			return;
-		}
-#endif
 
 		vkCmdPipelineBarrier(
 			m_handle,
@@ -708,21 +723,22 @@ namespace EmEn::Vulkan
 	void
 	CommandBuffer::pipelineBarrier (const std::vector< VkImageMemoryBarrier > & imageMemoryBarriers, VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask, VkDependencyFlags dependencyFlags) const noexcept
 	{
-#ifdef DEBUG
-		if ( !this->isCreated() )
+		if constexpr ( IsDebug )
 		{
-			Tracer::error(ClassId, "The command buffer is not created !");
+			if ( !this->isCreated() )
+			{
+				Tracer::error(ClassId, "The command buffer is not created !");
 
-			return;
+				return;
+			}
+
+			if ( imageMemoryBarriers.empty() )
+			{
+				Tracer::warning(ClassId, "There is no image memory barrier in the list !");
+
+				return;
+			}
 		}
-
-		if ( imageMemoryBarriers.empty() )
-		{
-			Tracer::warning(ClassId, "There is no image memory barrier in the list !");
-
-			return;
-		}
-#endif
 
 		vkCmdPipelineBarrier(
 			m_handle,
@@ -738,14 +754,15 @@ namespace EmEn::Vulkan
 	void
 	CommandBuffer::pipelineBarrier (const Sync::MemoryBarrier & memoryBarrier, VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask, VkDependencyFlags dependencyFlags) const noexcept
 	{
-#ifdef DEBUG
-		if ( !this->isCreated() )
+		if constexpr ( IsDebug )
 		{
-			Tracer::error(ClassId, "The command buffer is not created !");
+			if ( !this->isCreated() )
+			{
+				Tracer::error(ClassId, "The command buffer is not created !");
 
-			return;
+				return;
+			}
 		}
-#endif
 
 		vkCmdPipelineBarrier(
 			m_handle,
@@ -761,14 +778,15 @@ namespace EmEn::Vulkan
 	void
 	CommandBuffer::pipelineBarrier (const Sync::BufferMemoryBarrier & bufferMemoryBarrier, VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask, VkDependencyFlags dependencyFlags) const noexcept
 	{
-#ifdef DEBUG
-		if ( !this->isCreated() )
+		if constexpr ( IsDebug )
 		{
-			Tracer::error(ClassId, "The command buffer is not created !");
+			if ( !this->isCreated() )
+			{
+				Tracer::error(ClassId, "The command buffer is not created !");
 
-			return;
+				return;
+			}
 		}
-#endif
 
 		vkCmdPipelineBarrier(
 			m_handle,
@@ -784,14 +802,15 @@ namespace EmEn::Vulkan
 	void
 	CommandBuffer::pipelineBarrier (const Sync::ImageMemoryBarrier & imageMemoryBarrier, VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask, VkDependencyFlags dependencyFlags) const noexcept
 	{
-#ifdef DEBUG
-		if ( !this->isCreated() )
+		if constexpr ( IsDebug )
 		{
-			Tracer::error(ClassId, "The command buffer is not created !");
+			if ( !this->isCreated() )
+			{
+				Tracer::error(ClassId, "The command buffer is not created !");
 
-			return;
+				return;
+			}
 		}
-#endif
 
 		vkCmdPipelineBarrier(
 			m_handle,
@@ -807,23 +826,24 @@ namespace EmEn::Vulkan
 	void
 	CommandBuffer::setEvent (const Sync::Event & event, VkPipelineStageFlags flags) const noexcept
 	{
-#ifdef DEBUG
-		if ( !event.isCreated() )
+		if constexpr ( IsDebug )
 		{
-			Tracer::error(ClassId, "The event is not created !");
+			if ( !event.isCreated() )
+			{
+				Tracer::error(ClassId, "The event is not created !");
 
-			return;
+				return;
+			}
+
+			if ( !this->isCreated() )
+			{
+				TraceError{ClassId} <<
+					"The command buffer is not created !" "\n"
+					"Unable to set event " << event.handle();
+
+				return;
+			}
 		}
-
-		if ( !this->isCreated() )
-		{
-			TraceError{ClassId} <<
-				"The command buffer is not created !" "\n"
-				"Unable to set event " << event.handle();
-
-			return;
-		}
-#endif
 
 		vkCmdSetEvent(
 			m_handle,
@@ -835,23 +855,24 @@ namespace EmEn::Vulkan
 	void
 	CommandBuffer::resetEvent (const Sync::Event & event, VkPipelineStageFlags flags) const noexcept
 	{
-#ifdef DEBUG
-		if ( !event.isCreated() )
+		if constexpr ( IsDebug )
 		{
-			Tracer::error(ClassId, "The event is not created !");
+			if ( !event.isCreated() )
+			{
+				Tracer::error(ClassId, "The event is not created !");
 
-			return;
+				return;
+			}
+
+			if ( !this->isCreated() )
+			{
+				TraceError{ClassId} <<
+					"The command buffer is not created !" "\n"
+					"Unable to reset event " << event.handle();
+
+				return;
+			}
 		}
-
-		if ( !this->isCreated() )
-		{
-			TraceError{ClassId} <<
-				"The command buffer is not created !" "\n"
-				"Unable to reset event " << event.handle();
-
-			return;
-		}
-#endif
 
 		vkCmdResetEvent(
 			m_handle,
@@ -863,28 +884,29 @@ namespace EmEn::Vulkan
 	void
 	CommandBuffer::waitEvents (const std::vector< VkEvent > & events, VkPipelineStageFlags srcFlags, VkPipelineStageFlags dstFlags, const std::vector< VkMemoryBarrier > & memoryBarriers, const std::vector< VkBufferMemoryBarrier > & bufferMemoryBarriers, const std::vector< VkImageMemoryBarrier > & imageMemoryBarriers) const noexcept
 	{
-#ifdef DEBUG
-		if ( !this->isCreated() )
+		if constexpr ( IsDebug )
 		{
-			Tracer::error(ClassId, "The command buffer is not created !");
+			if ( !this->isCreated() )
+			{
+				Tracer::error(ClassId, "The command buffer is not created !");
 
-			return;
+				return;
+			}
+
+			if ( events.empty() )
+			{
+				Tracer::warning(ClassId, "There is no event in the list !");
+
+				return;
+			}
+
+			if ( events.empty() && memoryBarriers.empty() && bufferMemoryBarriers.empty() && imageMemoryBarriers.empty() )
+			{
+				Tracer::warning(ClassId, "There is no memory barrier in the list !");
+
+				return;
+			}
 		}
-
-		if ( events.empty() )
-		{
-			Tracer::warning(ClassId, "There is no event in the list !");
-
-			return;
-		}
-
-		if ( events.empty() && memoryBarriers.empty() && bufferMemoryBarriers.empty() && imageMemoryBarriers.empty() )
-		{
-			Tracer::warning(ClassId, "There is no memory barrier in the list !");
-
-			return;
-		}
-#endif
 
 		vkCmdWaitEvents(
 			m_handle,
@@ -899,23 +921,24 @@ namespace EmEn::Vulkan
 	void
 	CommandBuffer::bind (const GraphicsPipeline & graphicsPipeline) const noexcept
 	{
-#ifdef DEBUG
-		if ( !graphicsPipeline.isCreated() )
+		if constexpr ( IsDebug )
 		{
-			Tracer::error(ClassId, "The graphics pipeline is not created !");
+			if ( !graphicsPipeline.isCreated() )
+			{
+				Tracer::error(ClassId, "The graphics pipeline is not created !");
 
-			return;
+				return;
+			}
+
+			if ( !this->isCreated() )
+			{
+				TraceError{ClassId} <<
+					"The command buffer is not created !" "\n"
+					"Unable to bind graphics pipeline " << graphicsPipeline.handle();
+
+				return;
+			}
 		}
-
-		if ( !this->isCreated() )
-		{
-			TraceError{ClassId} <<
-				"The command buffer is not created !" "\n"
-				"Unable to bind graphics pipeline " << graphicsPipeline.handle();
-
-			return;
-		}
-#endif
 
 		vkCmdBindPipeline(
 			m_handle,
@@ -927,23 +950,24 @@ namespace EmEn::Vulkan
 	void
 	CommandBuffer::bind (const ComputePipeline & computePipeline) const noexcept
 	{
-#ifdef DEBUG
-		if ( !computePipeline.isCreated() )
+		if constexpr ( IsDebug )
 		{
-			Tracer::error(ClassId, "The compute pipeline is not created !");
+			if ( !computePipeline.isCreated() )
+			{
+				Tracer::error(ClassId, "The compute pipeline is not created !");
 
-			return;
+				return;
+			}
+
+			if ( !this->isCreated() )
+			{
+				TraceError{ClassId} <<
+					"The command buffer is not created !" "\n"
+					"Unable to bind compute pipeline " << computePipeline.handle();
+
+				return;
+			}
 		}
-
-		if ( !this->isCreated() )
-		{
-			TraceError{ClassId} <<
-				"The command buffer is not created !" "\n"
-				"Unable to bind compute pipeline " << computePipeline.handle();
-
-			return;
-		}
-#endif
 
 		vkCmdBindPipeline(
 			m_handle,
@@ -955,23 +979,24 @@ namespace EmEn::Vulkan
 	void
 	CommandBuffer::bind (const VertexBufferObject & vertexBufferObject, VkDeviceSize offset) const noexcept
 	{
-#ifdef DEBUG
-		if ( !vertexBufferObject.isCreated() )
+		if constexpr ( IsDebug )
 		{
-			Tracer::error(ClassId, "The vertex buffer object is not created !");
+			if ( !vertexBufferObject.isCreated() )
+			{
+				Tracer::error(ClassId, "The vertex buffer object is not created !");
 
-			return;
+				return;
+			}
+
+			if ( !this->isCreated() )
+			{
+				TraceError{ClassId} <<
+					"The command buffer is not created !" "\n"
+					"Unable to bind vertex buffer object " << vertexBufferObject.handle();
+
+				return;
+			}
 		}
-
-		if ( !this->isCreated() )
-		{
-			TraceError{ClassId} <<
-				"The command buffer is not created !" "\n"
-				"Unable to bind vertex buffer object " << vertexBufferObject.handle();
-
-			return;
-		}
-#endif
 
 		constexpr uint32_t firstBinding = 0;
 
@@ -993,23 +1018,24 @@ namespace EmEn::Vulkan
 	void
 	CommandBuffer::bind (const IndexBufferObject & indexBufferObject, VkDeviceSize offset, VkIndexType indexType) const noexcept
 	{
-#ifdef DEBUG
-		if ( !indexBufferObject.isCreated() )
+		if constexpr ( IsDebug )
 		{
-			Tracer::error(ClassId, "The index buffer object is not created !");
+			if ( !indexBufferObject.isCreated() )
+			{
+				Tracer::error(ClassId, "The index buffer object is not created !");
 
-			return;
+				return;
+			}
+
+			if ( !this->isCreated() )
+			{
+				TraceError{ClassId} <<
+					"The command buffer is not created !" "\n"
+					"Unable to bind index buffer object " << indexBufferObject.handle();
+
+				return;
+			}
 		}
-
-		if ( !this->isCreated() )
-		{
-			TraceError{ClassId} <<
-				"The command buffer is not created !" "\n"
-				"Unable to bind index buffer object " << indexBufferObject.handle();
-
-			return;
-		}
-#endif
 
 		vkCmdBindIndexBuffer(
 			m_handle,
@@ -1022,30 +1048,31 @@ namespace EmEn::Vulkan
 	void
 	CommandBuffer::bind (const DescriptorSet & descriptorSet, const PipelineLayout & pipelineLayout, VkPipelineBindPoint bindPoint, uint32_t firstSet) const noexcept
 	{
-#ifdef DEBUG
-		if ( !pipelineLayout.isCreated() )
+		if constexpr ( IsDebug )
 		{
-			Tracer::error(ClassId, "The pipeline layout is not created !");
+			if ( !pipelineLayout.isCreated() )
+			{
+				Tracer::error(ClassId, "The pipeline layout is not created !");
 
-			return;
+				return;
+			}
+
+			if ( !descriptorSet.isCreated() )
+			{
+				Tracer::error(ClassId, "The descriptor set is not created !");
+
+				return;
+			}
+
+			if ( !this->isCreated() )
+			{
+				TraceError{ClassId} <<
+					"The command buffer is not created !" "\n"
+					"Unable to bind descriptor set " << descriptorSet.handle() << " with pipeline layout " << pipelineLayout.handle();
+
+				return;
+			}
 		}
-
-		if ( !descriptorSet.isCreated() )
-		{
-			Tracer::error(ClassId, "The descriptor set is not created !");
-
-			return;
-		}
-
-		if ( !this->isCreated() )
-		{
-			TraceError{ClassId} <<
-				"The command buffer is not created !" "\n"
-				"Unable to bind descriptor set " << descriptorSet.handle() << " with pipeline layout " << pipelineLayout.handle();
-
-			return;
-		}
-#endif
 
 		auto * descriptorSetHandle = descriptorSet.handle();
 
@@ -1062,30 +1089,31 @@ namespace EmEn::Vulkan
 	void
 	CommandBuffer::bind (const DescriptorSet & descriptorSet, const PipelineLayout & pipelineLayout, VkPipelineBindPoint bindPoint, uint32_t firstSet, uint32_t dynamicOffset) const noexcept
 	{
-#ifdef DEBUG
-		if ( !pipelineLayout.isCreated() )
+		if constexpr ( IsDebug )
 		{
-			Tracer::error(ClassId, "The pipeline layout is not created !");
+			if ( !pipelineLayout.isCreated() )
+			{
+				Tracer::error(ClassId, "The pipeline layout is not created !");
 
-			return;
+				return;
+			}
+
+			if ( !descriptorSet.isCreated() )
+			{
+				Tracer::error(ClassId, "The descriptor set is not created !");
+
+				return;
+			}
+
+			if ( !this->isCreated() )
+			{
+				TraceError{ClassId} <<
+					"The command buffer is not created !" "\n"
+					"Unable to bind descriptor set " << descriptorSet.handle() << " with pipeline layout " << pipelineLayout.handle();
+
+				return;
+			}
 		}
-
-		if ( !descriptorSet.isCreated() )
-		{
-			Tracer::error(ClassId, "The descriptor set is not created !");
-
-			return;
-		}
-
-		if ( !this->isCreated() )
-		{
-			TraceError{ClassId} <<
-				"The command buffer is not created !" "\n"
-				"Unable to bind descriptor set " << descriptorSet.handle() << " with pipeline layout " << pipelineLayout.handle();
-
-			return;
-		}
-#endif
 
 		auto * descriptorSetHandle = descriptorSet.handle();
 
@@ -1100,18 +1128,19 @@ namespace EmEn::Vulkan
 	}
 
 	void
-	CommandBuffer::bind (const Graphics::Geometry::Interface & geometry, size_t /*subGeometryIndex*/) const noexcept
+	CommandBuffer::bind (const Graphics::Geometry::Interface & geometry, uint32_t /*subGeometryIndex*/) const noexcept
 	{
-#ifdef DEBUG
-		if ( !this->isCreated() )
+		if constexpr ( IsDebug )
 		{
-			TraceError{ClassId} <<
-				"The command buffer is not created !" "\n"
-				"Unable to bind geometry '" << geometry.name() << "'";
+			if ( !this->isCreated() )
+			{
+				TraceError{ClassId} <<
+					"The command buffer is not created !" "\n"
+					"Unable to bind geometry '" << geometry.name() << "'";
 
-			return;
+				return;
+			}
 		}
-#endif
 
 		{
 			auto * vertexBufferObjectHandle = geometry.vertexBufferObject()->handle();
@@ -1140,18 +1169,19 @@ namespace EmEn::Vulkan
 	}
 
 	void
-	CommandBuffer::bind (const Graphics::Geometry::Interface & geometry, const VertexBufferObject & modelVBO, size_t subGeometryIndex, VkDeviceSize modelVBOOffset) const noexcept
+	CommandBuffer::bind (const Graphics::Geometry::Interface & geometry, const VertexBufferObject & modelVBO, uint32_t subGeometryIndex, VkDeviceSize modelVBOOffset) const noexcept
 	{
-#ifdef DEBUG
-		if ( !this->isCreated() )
+		if constexpr ( IsDebug )
 		{
-			TraceError{ClassId} <<
-				"The command buffer is not created !" "\n"
-				"Unable to bind geometry '" << geometry.name() << "' with model VBO " << modelVBO.handle();
+			if ( !this->isCreated() )
+			{
+				TraceError{ClassId} <<
+					"The command buffer is not created !" "\n"
+					"Unable to bind geometry '" << geometry.name() << "' with model VBO " << modelVBO.handle();
 
-			return;
+				return;
+			}
 		}
-#endif
 
 		/* Binding vertex buffer object if exists. */
 		{
@@ -1191,30 +1221,31 @@ namespace EmEn::Vulkan
 	}
 
 	void
-	CommandBuffer::draw (const Graphics::Geometry::Interface & geometry, size_t subGeometryIndex, uint32_t instanceCount) const noexcept
+	CommandBuffer::draw (const Graphics::Geometry::Interface & geometry, uint32_t subGeometryIndex, uint32_t instanceCount) const noexcept
 	{
-#ifdef DEBUG
-		if ( !this->isCreated() )
+		if constexpr ( IsDebug )
 		{
-			TraceError{ClassId} << "The command buffer is not created for the geometry '" << geometry.name() << "' !";
+			if ( !this->isCreated() )
+			{
+				TraceError{ClassId} << "The command buffer is not created for the geometry '" << geometry.name() << "' !";
 
-			return;
+				return;
+			}
+
+			if ( instanceCount == 0 )
+			{
+				TraceError{ClassId} << "No instance count for the geometry '" << geometry.name() << "' !";
+
+				return;
+			}
+
+			if ( !geometry.isCreated() )
+			{
+				TraceError{ClassId} << "The geometry '" << geometry.name() << "' is not created !";
+
+				return;
+			}
 		}
-
-		if ( instanceCount == 0 )
-		{
-			TraceError{ClassId} << "No instance count for the geometry '" << geometry.name() << "' !";
-
-			return;
-		}
-
-		if ( !geometry.isCreated() )
-		{
-			TraceError{ClassId} << "The geometry '" << geometry.name() << "' is not created !";
-
-			return;
-		}
-#endif
 
 		const auto range = geometry.subGeometryRange(subGeometryIndex);
 
@@ -1225,9 +1256,9 @@ namespace EmEn::Vulkan
 
 			vkCmdDrawIndexed(
 				m_handle,
-				range[1]/*indexCount*/,
+				range[1],
 				instanceCount,
-				range[0]/*firstIndex*/,
+				range[0],
 				vertexOffset,
 				firstInstance
 			);
@@ -1239,7 +1270,7 @@ namespace EmEn::Vulkan
 
 			vkCmdDraw(
 				m_handle,
-				range[1]/*vertexCount*/,
+				range[1],
 				instanceCount,
 				firstVertex,
 				firstInstance

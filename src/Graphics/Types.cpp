@@ -32,6 +32,33 @@
 namespace EmEn::Graphics
 {
 	const char *
+	to_cstring (RenderTargetType value) noexcept
+	{
+		switch ( value )
+		{
+			case RenderTargetType::View :
+				return ViewString;
+
+			case RenderTargetType::CubicView :
+				return CubicViewString;
+
+			case RenderTargetType::ShadowMap :
+				return ShadowMapString;
+
+			case RenderTargetType::ShadowCubemap :
+				return ShadowCubemapString;
+
+			case RenderTargetType::Texture :
+				return TextureString;
+
+			case RenderTargetType::Cubemap :
+				return CubemapString;
+		}
+
+		return nullptr;
+	}
+
+	const char *
 	to_cstring (RenderPassType value) noexcept
 	{
 		switch ( value )

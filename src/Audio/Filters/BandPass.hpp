@@ -26,9 +26,6 @@
 
 #pragma once
 
-/* STL inclusions. */
-#include <memory>
-
 /* Local inclusions for inheritances. */
 #include "Abstract.hpp"
 
@@ -36,7 +33,7 @@ namespace EmEn::Audio::Filters
 {
 	/**
 	 * @brief The band pass filter.
-	 * @extends EmEn::Audio::Abstract This is a filter.
+	 * @extends EmEn::Audio::Filters::Abstract This is a filter.
 	 */
 	class BandPass final : public Abstract
 	{

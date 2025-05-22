@@ -523,7 +523,7 @@ namespace EmEn::Saphir::Declaration
 		}
 	}
 
-	size_t
+	uint32_t
 	size_bytes (VariableType type) noexcept
 	{
 		switch ( type )

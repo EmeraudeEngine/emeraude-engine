@@ -157,13 +157,13 @@ namespace EmEn::Graphics::Geometry
 
 			/**
 			 * @brief Sets the geometry flags.
-			 * @param geometryResourceFlagBits Flags value from GeometryFlagBits.
+			 * @param geometryflags Flags value from GeometryFlagBits.
 			 * @return void
 			 */
 			void
-			setGeometryFlags (uint32_t geometryResourceFlagBits) noexcept
+			setGeometryFlags (uint32_t geometryflags) noexcept
 			{
-				this->setFlagBits(geometryResourceFlagBits);
+				this->setFlags(geometryflags);
 			}
 
 			/**
@@ -229,7 +229,7 @@ namespace EmEn::Graphics::Geometry
 			uint32_t
 			geometryFlags () const noexcept
 			{
-				return this->flagBits();
+				return this->flags();
 			}
 
 			/**

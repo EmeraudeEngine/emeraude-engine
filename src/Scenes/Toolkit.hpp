@@ -27,13 +27,13 @@
 #pragma once
 
 /* STL inclusions. */
-#include <array>
 #include <cstddef>
 #include <cstdint>
-#include <memory>
 #include <string>
-#include <type_traits>
+#include <array>
 #include <vector>
+#include <memory>
+#include <type_traits>
 
 /* Local inclusions for usage. */
 #include "AbstractEntity.hpp"
@@ -82,7 +82,7 @@ namespace EmEn::Scenes
 	};
 
 	/**
-	 * @brief This class ease the build of a scene.
+	 * @brief This class eases the build of a scene.
 	 */
 	class Toolkit final
 	{
@@ -111,7 +111,7 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			 * @brief Returns whether the toolkit has debug mode enabled.
+			 * @brief Returns if the toolkit has debug mode enabled.
 			 * @return bool
 			 */
 			[[nodiscard]]
@@ -200,7 +200,7 @@ namespace EmEn::Scenes
 
 			/**
 			 * @brief Sets a node which will be responsible for being the parent of the next node created.
-			 * @note The cursor will use parent node coordinates system.
+			 * @note The cursor will use a parent node coordinates system.
 			 * @param node A reference to a scene node smart pointer.
 			 * @return Toolkit &
 			 */
@@ -242,7 +242,7 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			 * @brief Reset the entity generation state of toolkit to default.
+			 * @brief Reset the entity generation state of the toolkit to default.
 			 * @return Toolkit &
 			 */
 			Toolkit &
@@ -261,7 +261,7 @@ namespace EmEn::Scenes
 			/**
 			 * @brief Generates a new scene node using the cursor.
 			 * @param entityName A reference to a string for the entity entityName. Default auto-generated.
-			 * @param genPolicy Set the entity generation policy. Default simple.
+			 * @param genPolicy Set the entity generation policy. Default, 'Simple'.
 			 * @param movable Set the movable property of the node. Default true.
 			 * @return std::shared_ptr< Node >
 			 */
@@ -271,9 +271,9 @@ namespace EmEn::Scenes
 			/**
 			 * @brief Generates a new scene node pointing toward a location and using the cursor.
 			 * @param entityName A reference to a string for the entity name. Default auto-generated.
-			 * @param pointTo The position where the node point to.
-			 * @param genPolicy Set the entity generation policy. Default simple.
-			 * @param movable Set the movable property of the node. Default true.
+			 * @param pointTo The position where the node points to.
+			 * @param genPolicy Set the entity generation policy. Default, 'Simple'.
+			 * @param movable Set the movable property of the node. Default, 'true'.
 			 * @return std::shared_ptr< Node >
 			 */
 			[[nodiscard]]
@@ -282,7 +282,7 @@ namespace EmEn::Scenes
 			/**
 			 * @brief Generates a new static entity using the cursor.
 			 * @param entityName A reference to a string for the entity name. Default auto-generated.
-			 * @param genPolicy Set the entity generation policy. Default simple.
+			 * @param genPolicy Set the entity generation policy. Default, 'Simple'.
 			 * @return std::shared_ptr< StaticEntity >
 			 */
 			[[nodiscard]]
@@ -291,8 +291,8 @@ namespace EmEn::Scenes
 			/**
 			 * @brief Generates a new static entity pointing toward a location and using the cursor.
 			 * @param entityName A reference to a string for the entity name. Default auto-generated.
-			 * @param pointTo The position where the node point to.
-			 * @param genPolicy Set the entity generation policy. Default simple.
+			 * @param pointTo The position where the node points to.
+			 * @param genPolicy Set the entity generation policy. Default, 'Simple'.
 			 * @return std::shared_ptr< StaticEntity >
 			 */
 			[[nodiscard]]
@@ -301,9 +301,9 @@ namespace EmEn::Scenes
 			/**
 			 * @brief Generates a new entity using the cursor.
 			 * @note Shortcut to Toolkit::generateNode() and Toolkit:: generateStaticEntity().
-			 * @tparam entity_t The type of entity, a scene node or a static entity. Default StaticEntity.
+			 * @tparam entity_t The type of entity, a scene node or a static entity. Default, 'StaticEntity'.
 			 * @param entityName A reference to a string for the entity name. Default auto-generated.
-			 * @param genPolicy Set the entity generation policy. Default simple.
+			 * @param genPolicy Set the entity generation policy. Default, 'Simple'.
 			 * @return std::shared_ptr< entity_t >
 			 */
 			template< typename entity_t = StaticEntity >
@@ -327,10 +327,10 @@ namespace EmEn::Scenes
 			/**
 			 * @brief Generates a new entity pointing toward a location and using the cursor.
 			 * @note Shortcut to Toolkit::generateNode() and Toolkit:: generateStaticEntity().
-			 * @tparam entity_t The type of entity, a scene node or a static entity. Default StaticEntity.
-			 * @param pointTo The position where the entity point to.
-			 * @param entityName A reference to a string for the entity name. Default auto-generated.
-			 * @param genPolicy Set the entity generation policy. Default simple.
+			 * @tparam entity_t The type of entity, a scene node or a static entity. Default, 'StaticEntity'.
+			 * @param pointTo The position where the entity points to.
+			 * @param entityName A reference to a string for the entity name. Default, auto-generated.
+			 * @param genPolicy Set the entity generation policy. Default, 'Simple'.
 			 * @return std::shared_ptr< entity_t >
 			 */
 			template< typename entity_t = StaticEntity >
@@ -353,12 +353,12 @@ namespace EmEn::Scenes
 
 			/**
 			 * @brief Generates a camera using the perspective projection.
-			 * @tparam entity_t The type of entity, a scene node or a static entity. Default StaticEntity.
+			 * @tparam entity_t The type of entity, a scene node or a static entity. Default, 'StaticEntity'.
 			 * @param entityName The used for the node and the camera component.
 			 * @param fov The camera field of view expressed in degrees. Default 85.0.
-			 * @param pointTo A position where the camera should initially look at. Default origin.
-			 * @param primaryDevice Set the camera as the primary device. Default false.
-			 * @param showModel Enables a model to visualize the camera. Default false.
+			 * @param pointTo A position where the camera should initially look at. Default, [0,0,0].
+			 * @param primaryDevice Set the camera as the primary device. Default, 'false'.
+			 * @param showModel Enables a model to visualize the camera. Default, 'false'.
 			 * @return BuiltEntity< entity_t, Component::Camera >
 			 */
 			template< typename entity_t = StaticEntity >
@@ -387,12 +387,12 @@ namespace EmEn::Scenes
 
 			/**
 			 * @brief Generates a camera using the orthographic projection.
-			 * @tparam entity_t The type of entity, a scene node or a static entity. Default StaticEntity.
+			 * @tparam entity_t The type of entity, a scene node or a static entity. Default, 'StaticEntity'.
 			 * @param entityName The used for the node and the camera component.
 			 * @param size The square size of the capture. Default 1.0.
-			 * @param pointTo A position where the camera should initially look at. Default origin.
-			 * @param primaryDevice Declare this camera as the primary video device. Default false.
-			 * @param showModel Display a model to visualize the camera. Default false.
+			 * @param pointTo A position where the camera should initially look at. Default, [0,0,0].
+			 * @param primaryDevice Declare this camera as the primary video device. Default, 'false'.
+			 * @param showModel Display a model to visualize the camera. Default, 'false'.
 			 * @return BuiltEntity< Node, Component::Camera >
 			 */
 			template< typename entity_t = StaticEntity >
@@ -421,10 +421,10 @@ namespace EmEn::Scenes
 
 			/**
 			 * @brief Generates a camera prepared for rendering an environment for use in a reflection or a skybox.
-			 * @tparam entity_t The type of entity, a scene node or a static entity. Default StaticEntity.
+			 * @tparam entity_t The type of entity, a scene node or a static entity. Default, 'StaticEntity'.
 			 * @param entityName The used for the node and the camera component.
-			 * @param primaryDevice Declare this camera as the primary video device. Default false.
-			 * @param showModel Display a model to visualize the camera. Default false.
+			 * @param primaryDevice Declare this camera as the primary video device. Default, 'false'.
+			 * @param showModel Display a model to visualize the camera. Default, 'false'.
 			 * @return BuiltEntity< entity_t, Component::Camera >
 			 */
 			template< typename entity_t = StaticEntity >
@@ -453,7 +453,7 @@ namespace EmEn::Scenes
 
 			/**
 			 * @brief Generates a directional light. Like the sun.
-			 * @tparam entity_t The type of entity, a scene node or a static entity. Default StaticEntity.
+			 * @tparam entity_t The type of entity, a scene node or a static entity. Default, 'StaticEntity'.
 			 * @param entityName The used for the node and the light emitter component.
 			 * @param pointTo Set where the ray should point. Default, world origin.
 			 * @param color The color of the light. Default, white.
@@ -483,7 +483,7 @@ namespace EmEn::Scenes
 
 			/**
 			 * @brief Generates a point light. Like a bulb.
-			 * @tparam entity_t The type of entity, a scene node or a static entity. Default StaticEntity.
+			 * @tparam entity_t The type of entity, a scene node or a static entity. Default, 'StaticEntity'.
 			 * @param entityName The used for the node and the light emitter component.
 			 * @param color The color of the light. Default, white.
 			 * @param radius The radius of the light. Default, infinite.
@@ -514,7 +514,7 @@ namespace EmEn::Scenes
 
 			/**
 			 * @brief Generates a spotlight. Like a ... spotlight ;).
-			 * @tparam entity_t The type of entity, a scene node or a static entity. Default StaticEntity.
+			 * @tparam entity_t The type of entity, a scene node or a static entity. Default, 'StaticEntity'.
 			 * @param entityName The used for the node and the light emitter component.
 			 * @param pointTo Set where the ray should point. Default, world origin.
 			 * @param innerAngle Define the inner border of the light cone where the light will be emitted at 100% inside. Default 35°.
@@ -549,7 +549,7 @@ namespace EmEn::Scenes
 
 			/**
 			 * @brief Generates a mesh instance in the scene from a mesh resource.
-			 * @tparam entity_t The type of entity, a scene node or a static entity. Default StaticEntity.
+			 * @tparam entity_t The type of entity, a scene node or a static entity. Default, 'StaticEntity'.
 			 * @param entityName A reference to a string.
 			 * @param meshResource A mesh resource smart pointer. Default mesh resource.
 			 * @param enablePhysicalProperties Enable physicals properties on the new component. Default true.
@@ -569,7 +569,7 @@ namespace EmEn::Scenes
 
 				if ( meshResource == nullptr )
 				{
-					meshResource = Resources::Manager::instance()->meshes().getDefaultResource();
+					meshResource = Resources::Manager::instance()->container< Graphics::Renderable::MeshResource >()->getDefaultResource();
 				}
 
 				return {entity, entity->newVisual(meshResource, enablePhysicalProperties, enableLighting, entityName)};
@@ -577,7 +577,7 @@ namespace EmEn::Scenes
 
 			/**
 			 * @brief Generates a mesh instance in the scene from a simple mesh resource.
-			 * @tparam entity_t The type of entity, a scene node or a static entity. Default StaticEntity.
+			 * @tparam entity_t The type of entity, a scene node or a static entity. Default, 'StaticEntity'.
 			 * @param entityName A reference to a string.
 			 * @param simpleMeshResource A simple mesh resource smart pointer. Default simple mesh resource.
 			 * @param enablePhysicalProperties Enable physicals properties on the new component. Default true.
@@ -597,7 +597,7 @@ namespace EmEn::Scenes
 
 				if ( simpleMeshResource == nullptr )
 				{
-					simpleMeshResource = Resources::Manager::instance()->simpleMeshes().getDefaultResource();
+					simpleMeshResource = Resources::Manager::instance()->container< Graphics::Renderable::SimpleMeshResource >()->getDefaultResource();
 				}
 
 				return {entity, entity->newVisual(simpleMeshResource, enablePhysicalProperties, enableLighting, entityName)};
@@ -605,7 +605,7 @@ namespace EmEn::Scenes
 
 			/**
 			 * @brief Generates a simple mesh instance in the scene from a geometry resource and a material resource.
-			 * @tparam entity_t The type of entity, a scene node or a static entity. Default StaticEntity.
+			 * @tparam entity_t The type of entity, a scene node or a static entity. Default, 'StaticEntity'.
 			 * @param entityName A reference to a string.
 			 * @param geometryResource A geometry smart pointer. Default geometry resource.
 			 * @param materialResource A material smart pointer. Default material resource.
@@ -617,14 +617,16 @@ namespace EmEn::Scenes
 			BuiltEntity< entity_t, Component::Visual >
 			generateMeshInstance (const std::string & entityName, std::shared_ptr< Graphics::Geometry::Interface > geometryResource = nullptr, std::shared_ptr< Graphics::Material::Interface > materialResource = nullptr, bool enablePhysicalProperties = true, bool enableLighting = true) noexcept requires (std::is_base_of_v< AbstractEntity, entity_t >)
 			{
+				auto * resources = Resources::Manager::instance();
+
 				if ( geometryResource == nullptr )
 				{
-					geometryResource = Resources::Manager::instance()->indexedVertexGeometries().getDefaultResource();
+					geometryResource = resources->container< Graphics::Geometry::IndexedVertexResource >()->getDefaultResource();
 				}
 
 				if ( materialResource == nullptr )
 				{
-					materialResource = Resources::Manager::instance()->basicMaterials().getDefaultResource();
+					materialResource = resources->container< Graphics::Material::BasicResource >()->getDefaultResource();
 				}
 
 				if ( geometryResource->subGeometryCount() > 1 )
@@ -642,7 +644,7 @@ namespace EmEn::Scenes
 			/**
 			 * @brief Generates a mesh instance in the scene from a shape and a material resource.
 			 * @note Shortcut to Toolkit::generateMeshInstance().
-			 * @tparam entity_t The type of entity, a scene node or a static entity. Default StaticEntity.
+			 * @tparam entity_t The type of entity, a scene node or a static entity. Default, 'StaticEntity'.
 			 * @param entityName A reference to a string.
 			 * @param shape A reference to a vertex factory shape.
 			 * @param materialResource A reference to a material smart pointer. Default material resource.
@@ -670,7 +672,7 @@ namespace EmEn::Scenes
 
 			/**
 			 * @brief Generates a sprite instance in the scene.
-			 * @tparam entity_t The type of entity, a scene node or a static entity. Default StaticEntity.
+			 * @tparam entity_t The type of entity, a scene node or a static entity. Default, 'StaticEntity'.
 			 * @param entityName A reference to a string.
 			 * @param spriteResource A sprite resource smart pointer. Default sprite resource.
 			 * @param enablePhysicalProperties Enable physicals properties on the new component. Default true.
@@ -690,7 +692,7 @@ namespace EmEn::Scenes
 
 				if ( spriteResource == nullptr )
 				{
-					spriteResource = Resources::Manager::instance()->sprites().getDefaultResource();
+					spriteResource = Resources::Manager::instance()->container< Graphics::Renderable::SpriteResource >()->getDefaultResource();
 				}
 
 				return {entity, entity->newVisual(spriteResource, enablePhysicalProperties, enableLighting, entityName)};
@@ -699,7 +701,7 @@ namespace EmEn::Scenes
 			/**
 			 * @brief Generates a cuboid mesh instance with computed physics properties.
 			 * @note Shortcut to Toolkit::generateMeshInstance(). The TBN space and one texture coordinates will be enabled.
-			 * @tparam entity_t The type of entity, a scene node or a static entity. Default StaticEntity.
+			 * @tparam entity_t The type of entity, a scene node or a static entity. Default, 'StaticEntity'.
 			 * @param entityName A reference to a string.
 			 * @param size The dimension of the cuboid.
 			 * @param materialResource A material resource. Default random.
@@ -744,7 +746,7 @@ namespace EmEn::Scenes
 			/**
 			 * @brief Generates a cube mesh instance with computed physics properties.
 			 * @note Shortcut to Toolkit::generateMeshInstance(). The TBN space and one texture coordinates will be enabled.
-			 * @tparam entity_t The type of entity, a scene node or a static entity. Default StaticEntity.
+			 * @tparam entity_t The type of entity, a scene node or a static entity. Default, 'StaticEntity'.
 			 * @param entityName A reference to a string.
 			 * @param size The uniform size of the cube.
 			 * @param materialResource A material resource. Default random.
@@ -762,11 +764,11 @@ namespace EmEn::Scenes
 			/**
 			 * @brief Generates a sphere mesh instance with computed physics properties.
 			 * @note Shortcut to Toolkit::generateMeshInstance(). The TBN space and one texture coordinates will be enabled.
-			 * @tparam entity_t The type of entity, a scene node or a static entity. Default StaticEntity.
+			 * @tparam entity_t The type of entity, a scene node or a static entity. Default, 'StaticEntity'.
 			 * @param entityName A reference to a string.
 			 * @param radius The radius of the sphere.
 			 * @param materialResource A reference to a material smart pointer. Default nullptr.
-			 * @param useGeodesic Use geodesic sphere instead classical. Default false.
+			 * @param useGeodesic Use a geodesic sphere instead of a classic one. Default, 'false'.
 			 * @param enablePhysicalProperties Enable physicals properties on the new component. Default true.
 			 * @param enableLighting Enable the lighting. Default true.
 			 * @return BuiltEntity< entity_t, Component::Visual >
@@ -796,6 +798,11 @@ namespace EmEn::Scenes
 				if ( entity.isValid() && enablePhysicalProperties )
 				{
 					entity.entity()->enableSphereCollision(true);
+					/* FIXME: The bounding sphere is incorrectly computed from the geometry! */
+					entity.entity()->overrideBoundingPrimitives(
+						Space3D::AACuboid{radius},
+						Space3D::Sphere{radius}
+					);
 
 					const auto density = materialResource == nullptr ? 1.0F : materialResource->physicalSurfaceProperties().density();
 
@@ -814,7 +821,7 @@ namespace EmEn::Scenes
 			/**
 			 * @brief Generates a spherical push modifier in the scene.
 			 * @todo Add influence area to be really useful.
-			 * @tparam entity_t The type of entity, a scene node or a static entity. Default StaticEntity.
+			 * @tparam entity_t The type of entity, a scene node or a static entity. Default, 'StaticEntity'.
 			 * @param entityName A reference to a string.
 			 * @param magnitude The push magnitude.
 			 * @return BuiltEntity< entity_t, Component::SphericalPushModifier >

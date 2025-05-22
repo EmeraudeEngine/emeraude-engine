@@ -37,6 +37,8 @@
 
 namespace EmEn::Graphics
 {
+	using namespace Libs;
+
 	const size_t VertexBufferFormatManager::ClassUID{getClassUID(ClassId)};
 
 	VertexBufferFormatManager::VertexBufferFormatManager () noexcept
@@ -173,14 +175,297 @@ namespace EmEn::Graphics
 	}
 
 	std::shared_ptr< VertexBufferFormat >
-	VertexBufferFormatManager::getVertexBufferFormat (const Geometry::Interface & geometry, const Saphir::VertexShader & vertexShader) noexcept
+	VertexBufferFormatManager::getVertexBufferFormat (const Saphir::VertexShader & vertexShader, Topology topology, uint32_t geometryFlagBits) noexcept
+	{
+		const std::lock_guard lock{m_building};
+
+		m_stagingVertexBufferFormat = std::make_shared< VertexBufferFormat >();
+
+		{
+			/* NOTE: These are the used vertex attributes in the vertex shader. */
+			const auto & requestedVertexAttributes = vertexShader.vertexAttributes();
+
+			/* VBO format for vertices. */
+			{
+				this->beginBinding(0);
+
+				if ( requestedVertexAttributes.contains(VertexAttributeType::Position) )
+				{
+					this->declareAttribute(VertexAttributeType::Position);
+				}
+				else
+				{
+					this->declareJump(VertexAttributeType::Position);
+				}
+
+				/* Check the uses of the full tangent space or normals. */
+				if (
+					requestedVertexAttributes.contains(VertexAttributeType::Tangent) &&
+					requestedVertexAttributes.contains(VertexAttributeType::Binormal) &&
+					requestedVertexAttributes.contains(VertexAttributeType::Normal)
+				)
+				{
+					if ( FlagTrait< uint32_t >::disabled(geometryFlagBits,Geometry::EnableTangentSpace) )
+					{
+						TraceError{ClassId} << "The vertex shader '" << vertexShader.name() << "' needs tangent space !";
+
+						return nullptr;
+					}
+
+					this->declareAttribute(VertexAttributeType::Tangent);
+					this->declareAttribute(VertexAttributeType::Binormal);
+					this->declareAttribute(VertexAttributeType::Normal);
+				}
+				else if ( requestedVertexAttributes.contains(VertexAttributeType::Normal) )
+				{
+					if ( FlagTrait< uint32_t >::disabled(geometryFlagBits, Geometry::EnableNormal) )
+					{
+						TraceError{ClassId} << "The vertex shader '" << vertexShader.name() << "' needs normal attributes !";
+
+						return nullptr;
+					}
+
+					/* Check for attribute presence to jump over. */
+					if ( FlagTrait< uint32_t >::enabled(geometryFlagBits,Geometry::EnableTangentSpace) )
+					{
+						this->declareJump(VertexAttributeType::Tangent);
+						this->declareJump(VertexAttributeType::Binormal);
+					}
+
+					this->declareAttribute(VertexAttributeType::Normal);
+				}
+				else
+				{
+					/* Check for attribute presence to jump over. */
+					if ( FlagTrait< uint32_t >::enabled(geometryFlagBits, Geometry::EnableTangentSpace) )
+					{
+						this->declareJump(VertexAttributeType::Tangent);
+						this->declareJump(VertexAttributeType::Binormal);
+						this->declareJump(VertexAttributeType::Normal);
+					}
+					else if ( FlagTrait< uint32_t >::enabled(geometryFlagBits,Geometry::EnableNormal) )
+					{
+						this->declareJump(VertexAttributeType::Normal);
+					}
+				}
+
+				/* Check for primary texture coordinates conformance. */
+				if (
+					requestedVertexAttributes.contains(VertexAttributeType::Primary2DTextureCoordinates) ||
+					requestedVertexAttributes.contains(VertexAttributeType::Primary3DTextureCoordinates)
+				)
+				{
+					if ( requestedVertexAttributes.contains(VertexAttributeType::Primary2DTextureCoordinates) )
+					{
+						if ( FlagTrait< uint32_t >::disabled(geometryFlagBits, Geometry::EnablePrimaryTextureCoordinates) )
+						{
+							TraceError{ClassId} << "The vertex shader '" << vertexShader.name() << "' needs 2D primary texture coordinates attributes !";
+
+							return nullptr;
+						}
+
+						this->declareAttribute(VertexAttributeType::Primary2DTextureCoordinates);
+					}
+					else
+					{
+						if ( FlagTrait< uint32_t >::disabled(geometryFlagBits, Geometry::Enable3DPrimaryTextureCoordinates) )
+						{
+							TraceError{ClassId} << "The vertex shader '" << vertexShader.name() << "' needs 3D primary texture coordinates attributes version !";
+
+							return nullptr;
+						}
+
+						this->declareAttribute(VertexAttributeType::Primary3DTextureCoordinates);
+					}
+				}
+				else if ( FlagTrait< uint32_t >::enabled(geometryFlagBits, Geometry::EnablePrimaryTextureCoordinates) )
+				{
+					if ( FlagTrait< uint32_t >::enabled(geometryFlagBits, Geometry::Enable3DPrimaryTextureCoordinates) )
+					{
+						this->declareJump(VertexAttributeType::Primary3DTextureCoordinates);
+					}
+					else
+					{
+						this->declareJump(VertexAttributeType::Primary2DTextureCoordinates);
+					}
+				}
+
+				/* Check for secondary texture coordinates conformance. */
+				if (
+					requestedVertexAttributes.contains(VertexAttributeType::Secondary2DTextureCoordinates) ||
+					requestedVertexAttributes.contains(VertexAttributeType::Secondary3DTextureCoordinates)
+				)
+				{
+					if ( requestedVertexAttributes.contains(VertexAttributeType::Secondary2DTextureCoordinates) )
+					{
+						if ( FlagTrait< uint32_t >::disabled(geometryFlagBits, Geometry::EnableSecondaryTextureCoordinates) )
+						{
+							TraceError{ClassId} << "The vertex shader '" << vertexShader.name() << "' needs 2D secondary texture coordinates attributes !";
+
+							return nullptr;
+						}
+
+						this->declareAttribute(VertexAttributeType::Secondary2DTextureCoordinates);
+					}
+					else
+					{
+						if ( FlagTrait< uint32_t >::disabled(geometryFlagBits, Geometry::Enable3DSecondaryTextureCoordinates) )
+						{
+							TraceError{ClassId} << "The vertex shader '" << vertexShader.name() << "' needs 3D secondary texture coordinates attributes version !";
+
+							return nullptr;
+						}
+
+						this->declareAttribute(VertexAttributeType::Secondary3DTextureCoordinates);
+					}
+				}
+				else if ( FlagTrait< uint32_t >::enabled(geometryFlagBits, Geometry::EnableSecondaryTextureCoordinates) )
+				{
+					if ( FlagTrait< uint32_t >::enabled(geometryFlagBits, Geometry::Enable3DSecondaryTextureCoordinates) )
+					{
+						this->declareJump(VertexAttributeType::Secondary3DTextureCoordinates);
+					}
+					else
+					{
+						this->declareJump(VertexAttributeType::Secondary2DTextureCoordinates);
+					}
+				}
+
+				/* Checking the vertex color */
+				if ( requestedVertexAttributes.contains(VertexAttributeType::VertexColor) )
+				{
+					if ( FlagTrait< uint32_t >::disabled(geometryFlagBits, Geometry::EnableVertexColor) )
+					{
+						TraceError{ClassId} << "The vertex shader '" << vertexShader.name() << "' needs vertex color attributes !";
+
+						return nullptr;
+					}
+
+					this->declareAttribute(VertexAttributeType::VertexColor);
+				}
+				else
+				{
+					/* Check for attribute presence to jump over. */
+					if ( FlagTrait< uint32_t >::enabled(geometryFlagBits, Geometry::EnableVertexColor) )
+					{
+						this->declareJump(VertexAttributeType::VertexColor);
+					}
+				}
+
+				uint32_t bufferFlags{0};
+
+				if ( FlagTrait< uint32_t >::enabled(geometryFlagBits, Geometry::EnableDynamicVertexBuffer) )
+				{
+					bufferFlags |= IsDynamicVertexBuffer;
+				}
+
+				if ( FlagTrait< uint32_t >::enabled(geometryFlagBits, Geometry::EnableAbsolutePosition) )
+				{
+					bufferFlags |= IsPositionAbsolute;
+				}
+
+				if ( FlagTrait< uint32_t >::enabled(geometryFlagBits, Geometry::EnablePrimitiveRestart) )
+				{
+					bufferFlags |= RequestPrimitiveRestart;
+				}
+
+				if ( !this->endBinding(topology, bufferFlags) )
+				{
+					return nullptr;
+				}
+			}
+
+			/* VBO format for model matrices. */
+			if ( vertexShader.isInstancingEnabled() )
+			{
+				this->beginBinding(1);
+
+				if ( vertexShader.isBillBoardingEnabled() )
+				{
+					if ( requestedVertexAttributes.contains(VertexAttributeType::ModelPosition) )
+					{
+						this->declareAttribute(VertexAttributeType::ModelPosition);
+					}
+					else
+					{
+						this->declareJump(VertexAttributeType::ModelPosition);
+					}
+
+					if ( requestedVertexAttributes.contains(VertexAttributeType::ModelScaling) )
+					{
+						this->declareAttribute(VertexAttributeType::ModelScaling);
+					}
+					else
+					{
+						this->declareJump(VertexAttributeType::ModelScaling);
+					}
+				}
+				else
+				{
+					/* NOTE: Matrix 4x4 declaration. */
+					if ( requestedVertexAttributes.contains(VertexAttributeType::ModelMatrixR0) )
+					{
+						this->declareAttribute(VertexAttributeType::ModelMatrixR0);
+						this->declareAttribute(VertexAttributeType::ModelMatrixR1);
+						this->declareAttribute(VertexAttributeType::ModelMatrixR2);
+						this->declareAttribute(VertexAttributeType::ModelMatrixR3);
+					}
+					else
+					{
+						this->declareJump(VertexAttributeType::ModelMatrixR0);
+						this->declareJump(VertexAttributeType::ModelMatrixR1);
+						this->declareJump(VertexAttributeType::ModelMatrixR2);
+						this->declareJump(VertexAttributeType::ModelMatrixR3);
+					}
+
+					/* Check the uses of the full tangent space or normals. */
+					if ( requestedVertexAttributes.contains(VertexAttributeType::NormalModelMatrixR0) )
+					{
+						/* NOTE: Matrix 3x3 declaration. */
+						this->declareAttribute(VertexAttributeType::NormalModelMatrixR0);
+						this->declareAttribute(VertexAttributeType::NormalModelMatrixR1);
+						this->declareAttribute(VertexAttributeType::NormalModelMatrixR2);
+					}
+					else
+					{
+						/* Check for attribute presence to jump over. */
+						this->declareJump(VertexAttributeType::NormalModelMatrixR0);
+						this->declareJump(VertexAttributeType::NormalModelMatrixR1);
+						this->declareJump(VertexAttributeType::NormalModelMatrixR2);
+					}
+				}
+
+				if ( !this->endBinding(Topology::CustomData, PerInstance | IsDynamicVertexBuffer) )
+				{
+					return nullptr;
+				}
+			}
+		}
+
+		const auto vertexBufferFormat = m_vertexBufferFormats.emplace_back(m_stagingVertexBufferFormat);
+
+		this->resetBuildingParameters();
+
+		if ( m_flags[PrintGeneratedFormat] )
+		{
+			TraceInfo{ClassId} << "Geometry flags : " "\n" <<
+				Geometry::getFlagsString(geometryFlagBits) << "\n" <<
+				*vertexBufferFormat <<
+				VertexBufferFormatManager::getVertexBufferObjectUsage(geometryFlagBits, *vertexBufferFormat);
+		}
+
+		return vertexBufferFormat;
+	}
+
+	std::shared_ptr< VertexBufferFormat >
+	VertexBufferFormatManager::getVertexBufferFormat (const Saphir::VertexShader & vertexShader, const Geometry::Interface & geometry) noexcept
 	{
 		const std::lock_guard lock{m_building};
 		
 		m_stagingVertexBufferFormat = std::make_shared< VertexBufferFormat >();
 		
 		{
-			/* NOTE : These are the used vertex attributes in the vertex shader. */
+			/* NOTE: These are the used vertex attributes in the vertex shader. */
 			const auto & requestedVertexAttributes = vertexShader.vertexAttributes();
 
 			/* VBO format for vertices. */
@@ -461,7 +746,7 @@ namespace EmEn::Graphics
 		if ( m_flags[PrintGeneratedFormat] )
 		{
 			TraceInfo{ClassId} << "Geometry flags : " "\n" <<
-				Geometry::getFlagsString(geometry.flagBits()) << "\n" <<
+				Geometry::getFlagsString(geometry.flags()) << "\n" <<
 				*vertexBufferFormat <<
 				VertexBufferFormatManager::getVertexBufferObjectUsage(geometry, *vertexBufferFormat);
 		}
@@ -533,7 +818,7 @@ namespace EmEn::Graphics
 			output << (vertexBufferFormat.isPresent(VertexAttributeType::VertexColor) ? "[4:color]" : "{4:color}" );
 		}
 
-		output << "\n";
+		output << "\n" "Total element count: " << elementCount << "\n";
 
 		const auto VBOElementCount = geometry.vertexBufferObject()->vertexElementCount();
 
@@ -541,6 +826,75 @@ namespace EmEn::Graphics
 		{
 			TraceError{ClassId} << "Element count per vertex mismatch between VBO (" << VBOElementCount << ") and the declaration from geometry flags (" << elementCount << ") !";
 		}
+
+		return output.str();
+	}
+
+	std::string
+	VertexBufferFormatManager::getVertexBufferObjectUsage (uint32_t geometryFlagBits, const VertexBufferFormat & vertexBufferFormat) noexcept
+	{
+		std::stringstream output;
+
+		size_t elementCount = 3;
+
+		output << "VBO #0 enabled vertex attribute layout :" "\n\n" <<
+			   ( vertexBufferFormat.isPresent(VertexAttributeType::Position) ? "[3:position]" : "{3:position}" );
+
+		if ( FlagTrait< uint32_t >::enabled(geometryFlagBits, Geometry::EnableTangentSpace) )
+		{
+			elementCount += 9;
+
+			output << (vertexBufferFormat.isPresent(VertexAttributeType::Tangent) ? "[3:tangent]" : "{3:tangent}" );
+			output << (vertexBufferFormat.isPresent(VertexAttributeType::Binormal) ? "[3:binormal]" : "{3:binormal}" );
+			output << (vertexBufferFormat.isPresent(VertexAttributeType::Normal) ? "[3:normal]" : "{3:normal}" );
+		}
+		else if ( FlagTrait< uint32_t >::enabled(geometryFlagBits, Geometry::EnableNormal) )
+		{
+			elementCount += 3;
+
+			output << (vertexBufferFormat.isPresent(VertexAttributeType::Normal) ? "[3:normal]" : "{3:normal}" );
+		}
+
+		if ( FlagTrait< uint32_t >::enabled(geometryFlagBits,Geometry::EnablePrimaryTextureCoordinates) )
+		{
+			if ( FlagTrait< uint32_t >::enabled(geometryFlagBits,Geometry::Enable3DPrimaryTextureCoordinates) )
+			{
+				elementCount += 3;
+
+				output << (vertexBufferFormat.isPresent(VertexAttributeType::Primary3DTextureCoordinates) ? "[3:priTexCoord]" : "{3:priTexCoord}" );
+			}
+			else
+			{
+				elementCount += 2;
+
+				output << (vertexBufferFormat.isPresent(VertexAttributeType::Primary2DTextureCoordinates) ? "[2:priTexCoord]" : "{2:priTexCoord}" );
+			}
+		}
+
+		if ( FlagTrait< uint32_t >::enabled(geometryFlagBits,Geometry::EnableSecondaryTextureCoordinates) )
+		{
+			if ( FlagTrait< uint32_t >::enabled(geometryFlagBits,Geometry::Enable3DSecondaryTextureCoordinates) )
+			{
+				elementCount += 3;
+
+				output << (vertexBufferFormat.isPresent(VertexAttributeType::Secondary3DTextureCoordinates) ? "[3:secTexCoord]" : "{3:secTexCoord}" );
+			}
+			else
+			{
+				elementCount += 2;
+
+				output << (vertexBufferFormat.isPresent(VertexAttributeType::Secondary2DTextureCoordinates) ? "[2:secTexCoord]" : "{2:secTexCoord}" );
+			}
+		}
+
+		if ( FlagTrait< uint32_t >::enabled(geometryFlagBits,Geometry::EnableVertexColor) )
+		{
+			elementCount += 4;
+
+			output << (vertexBufferFormat.isPresent(VertexAttributeType::VertexColor) ? "[4:color]" : "{4:color}" );
+		}
+
+		output << "\n" "Total element count: " << elementCount << "\n";
 
 		return output.str();
 	}

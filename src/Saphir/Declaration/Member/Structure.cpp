@@ -32,32 +32,19 @@
 namespace EmEn::Saphir::Declaration::Member
 {
 	Structure::Structure (VariableType type, Key name) noexcept
-		: m_type(type), m_name(name)
+		: m_type(type),
+		m_name(name)
 	{
 
-	}
-
-	VariableType
-	Structure::type () const noexcept
-	{
-		return m_type;
-	}
-
-	Key
-	Structure::name () const noexcept
-	{
-		return m_name;
-	}
-
-	size_t
-	Structure::bytes () const noexcept
-	{
-		return size_bytes(m_type);
 	}
 
 	std::string
 	Structure::sourceCode () const noexcept
 	{
-		return (std::stringstream{} << to_cstring(m_type) << ' ' << m_name << ";" "\n").str();
+		std::stringstream code;
+
+		code << to_cstring(m_type) << ' ' << m_name << ";" "\n";
+
+		return code.str();
 	}
 }

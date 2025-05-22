@@ -121,7 +121,7 @@ namespace EmEn::Audio
 		}
 		else
 		{
-			alBufferData(this->identifier(), format, wave.data(), static_cast< ALsizei >(wave.bytesCount()), static_cast< ALsizei >(wave.frequency()));
+			alBufferData(this->identifier(), format, wave.data(), wave.bytes< ALsizei >(), static_cast< ALsizei >(wave.frequency()));
 		}
 
 		if ( alGetErrors("alBufferData()", __FILE__, __LINE__) )

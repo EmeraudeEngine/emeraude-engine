@@ -72,6 +72,41 @@ namespace EmEn
 			[[nodiscard]]
 			bool usable () const noexcept override;
 
+			/**
+			 * @brief Returns whether GLFW detected a linux platform.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			static bool isLinux () noexcept;
+
+			/**
+			 * @brief Returns whether GLFW detected a macOS platform.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			static bool isMacOS () noexcept;
+
+			/**
+			 * @brief Returns whether GLFW detected a Windows platform.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			static bool isWindows () noexcept;
+
+			/**
+			 * @brief Returns whether GLFW detected a X11 graphic server.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			static bool isUsingX11 () noexcept;
+
+			/**
+			 * @brief Returns whether GLFW detected a Wayland graphic server.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			static bool isUsingWayland () noexcept;
+
 		private:
 
 			/** @copydoc EmEn::ServiceInterface::onInitialize() */

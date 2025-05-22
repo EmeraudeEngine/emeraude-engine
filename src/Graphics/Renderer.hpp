@@ -27,10 +27,10 @@
 #pragma once
 
 /* STL inclusions. */
-#include <any>
-#include <array>
 #include <cstddef>
 #include <cstdint>
+#include <any>
+#include <array>
 #include <map>
 #include <memory>
 #include <vector>
@@ -44,12 +44,13 @@
 /* Local inclusions for usages. */
 #include "Libs/PixelFactory/Color.hpp"
 #include "Libs/Time/Statistics/RealTime.hpp"
-#include "VertexBufferFormatManager.hpp"
-#include "RenderTarget/Abstract.hpp"
 #include "Vulkan/LayoutManager.hpp"
 #include "Vulkan/SharedUBOManager.hpp"
 #include "Vulkan/TransferManager.hpp"
+#include "RenderTarget/Abstract.hpp"
 #include "Saphir/ShaderManager.hpp"
+#include "RendererFrameScope.hpp"
+#include "VertexBufferFormatManager.hpp"
 
 /* Forward declarations. */
 namespace EmEn
@@ -113,8 +114,8 @@ namespace EmEn::Graphics
 	/**
 	 * @brief The graphics renderer service class.
 	 * @extends EmEn::ServiceInterface The renderer is a service.
-	 * @extends EmEn::Console::Controllable The renderer can be controlled by the console.
-	 * @extends EmEn::Libs::ObserverTrait The renderer needs to observe handle changes for instance.
+	 * @extends EmEn::Console::Controllable The console can control the renderer.
+	 * @extends EmEn::Libs::ObserverTrait The renderer needs to observe handle changes, for instance.
 	 */
 	class Renderer final : public ServiceInterface, public Console::Controllable, public Libs::ObserverTrait
 	{
@@ -197,6 +198,61 @@ namespace EmEn::Graphics
 			usable () const noexcept override
 			{
 				return m_flags[ServiceInitialized];
+			}
+
+			/**
+			 * @brief Returns whether the debug mode is enabled.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isDebugModeEnabled () const noexcept
+			{
+				return m_flags[DebugMode];
+			}
+
+			/**
+			 * @brief Controls the state of shadow maps rendering.
+			 * @param state The state.
+			 * @return void
+			 */
+			void
+			enableShadowMaps (bool state) noexcept
+			{
+				m_flags[ShadowMapsEnabled] = state;
+			}
+
+			/**
+			 * @brief Returns whether the shadow maps rendering is enabled.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isShadowMapsEnabled () const noexcept
+			{
+				return m_flags[ShadowMapsEnabled];
+			}
+
+			/**
+			 * @brief Controls the state of rendering to textures.
+			 * @param state The state.
+			 * @return void
+			 */
+			void
+			enableRenderToTextures (bool state) noexcept
+			{
+				m_flags[RenderToTexturesEnabled] = state;
+			}
+
+			/**
+			 * @brief Returns whether the rendering to textures is enabled.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isRenderToTexturesEnabled () const noexcept
+			{
+				return m_flags[RenderToTexturesEnabled];
 			}
 
 			/**
@@ -469,24 +525,6 @@ namespace EmEn::Graphics
 			bool finalizeGraphicsPipeline (const RenderTarget::Abstract & renderTarget, const Saphir::Program & program, std::shared_ptr< Vulkan::GraphicsPipeline > & graphicsPipeline) noexcept;
 
 			/**
-			 * @brief Gets a specific program for shadow casting.
-			 * @param renderTarget A reference to a render target smart pointer.
-			 * @param renderableInstance A reference to the renderable instance smart pointer.
-			 * @return std::shared_ptr< Saphir::Program >
-			 */
-			[[nodiscard]]
-			std::shared_ptr< Saphir::Program > getShadowProgram (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const std::shared_ptr< RenderableInstance::Abstract > & renderableInstance) noexcept;
-
-			/**
-			 * @brief Gets a specific program for displaying the vertex TBN spaces.
-			 * @param renderTarget A reference to a render target smart pointer.
-			 * @param renderableInstance A reference to the renderable instance smart pointer.
-			 * @return std::shared_ptr< Saphir::Program >
-			 */
-			[[nodiscard]]
-			std::shared_ptr< Saphir::Program > getTBNSpaceProgram (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const std::shared_ptr< RenderableInstance::Abstract > & renderableInstance) noexcept;
-
-			/**
 			 * @brief Returns or creates a render pass.
 			 * @param identifier A reference to a string.
 			 * @param createFlags The createInfo flags. Default none.
@@ -554,25 +592,28 @@ namespace EmEn::Graphics
 			std::shared_ptr< Vulkan::CommandBuffer > getCommandBuffer (const std::shared_ptr< RenderTarget::Abstract > & renderTarget) noexcept;
 
 			/**
-			 * @brief Updates every shadow maps from the scene.
+			 * @brief Updates every shadow map from the scene.
+			 * @param frameIndex The current frame index in the swap-chain.
 			 * @param scene A reference to the scene.
 			 * @return void
 			 */
-			void renderShadowMaps (Scenes::Scene & scene) noexcept;
+			void renderShadowMaps (uint32_t frameIndex, Scenes::Scene & scene) noexcept;
 
 			/**
 			 * @brief Updates every dynamic texture2Ds from the scene.
+			 * @param frameIndex The current frame index in the swap-chain.
 			 * @param scene A reference to the scene.
 			 * @return void
 			 */
-			void renderRenderToTextures (Scenes::Scene & scene) noexcept;
+			void renderRenderToTextures (uint32_t frameIndex, Scenes::Scene & scene) noexcept;
 
 			/**
-			 * @brief Updates every off-screen views from the scene.
+			 * @brief Updates every off-screen view from the scene.
+			 * @param frameIndex The current frame index in the swap-chain.
 			 * @param scene A reference to the scene.
 			 * @return void
 			 */
-			void renderViews (Scenes::Scene & scene) noexcept;
+			void renderViews (uint32_t frameIndex, Scenes::Scene & scene) noexcept;
 
 			/**
 			 * @brief Creates command pools and buffers according to the swap chain image count.
@@ -611,8 +652,7 @@ namespace EmEn::Graphics
 			Vulkan::SharedUBOManager m_sharedUBOManager;
 			VertexBufferFormatManager m_vertexBufferFormatManager;
 			std::shared_ptr< Vulkan::DescriptorPool > m_descriptorPool;
-			std::vector< std::shared_ptr< Vulkan::CommandPool > > m_commandPools;
-			std::vector< std::shared_ptr< Vulkan::CommandBuffer > > m_commandBuffers;
+			std::vector< RendererFrameScope > m_rendererFrameScope;
 			std::shared_ptr< Vulkan::CommandPool > m_offScreenCommandPool;
 			std::map< std::shared_ptr< RenderTarget::Abstract >, std::shared_ptr< Vulkan::CommandBuffer > > m_offScreenCommandBuffers;
 			std::shared_ptr< Vulkan::SwapChain > m_swapChain;

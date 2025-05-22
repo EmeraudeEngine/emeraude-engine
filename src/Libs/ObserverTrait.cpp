@@ -30,9 +30,7 @@
 #include "emeraude_config.hpp"
 
 /* STL inclusions. */
-#ifdef EMERAUDE_DEBUG_OBSERVER_PATTERN
 #include <iostream>
-#endif
 
 /* Local inclusions. */
 #include "Libs/ObservableTrait.hpp"
@@ -56,9 +54,11 @@ namespace EmEn::Libs
 
 		if ( !result.second )
 		{
-#ifdef EMERAUDE_DEBUG_OBSERVER_PATTERN
-			std::cout << "observe() : (@" << this << ") already observing ('" << observable->classUID() << "')." "\n";
-#endif
+			if constexpr ( ObserverDebugEnabled )
+			{
+				std::cout << "observe() : (@" << this << ") already observing ('" << observable->classUID() << "')." "\n";
+			}
+
 			return;
 		}
 
@@ -70,9 +70,11 @@ namespace EmEn::Libs
 	{
 		if ( m_observables.erase(observable) == 0 )
 		{
-#ifdef EMERAUDE_DEBUG_OBSERVER_PATTERN
-			std::cout << "release() : (@" << this << ") wasn't observing ('" << observable->classUID() << "')." "\n";
-#endif
+			if constexpr ( ObserverDebugEnabled )
+			{
+				std::cout << "release() : (@" << this << ") wasn't observing ('" << observable->classUID() << "')." "\n";
+			}
+
 			return;
 		}
 

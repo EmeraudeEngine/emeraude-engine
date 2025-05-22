@@ -40,7 +40,8 @@ namespace EmEn::Console
 	Controller * Controller::s_instance{nullptr};
 
 	Controller::Controller (PrimaryServices & primaryServices) noexcept
-		: ServiceInterface(ClassId), m_primaryServices(primaryServices)
+		: ServiceInterface(ClassId),
+		m_primaryServices(primaryServices)
 	{
 		if ( s_instance != nullptr )
 		{

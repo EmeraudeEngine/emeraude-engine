@@ -47,32 +47,32 @@ namespace EmEn::Vulkan
 			/** @brief Class identifier. */
 			static constexpr auto ClassId{"VulkanUniformBufferObject"};
 
-			static constexpr auto Vector2Room{4UL};
-			static constexpr auto Vector2iSize{2UL * sizeof(int)};
-			static constexpr auto Vector2fSize{2UL * sizeof(float)};
-			static constexpr auto Vector2dSize{2UL * sizeof(double)};
-			static constexpr auto Vector3Room{4UL};
-			static constexpr auto Vector3iSize{3UL * sizeof(int)};
-			static constexpr auto Vector3fSize{3UL * sizeof(float)};
-			static constexpr auto Vector3dSize{3UL * sizeof(double)};
-			static constexpr auto Vector4Room{4UL};
-			static constexpr auto Vector4iSize{4UL * sizeof(int)};
-			static constexpr auto Vector4fSize{4UL * sizeof(float)};
-			static constexpr auto Vector4dSize{4UL * sizeof(double)};
-			static constexpr auto Matrix2Room{8UL};
-			static constexpr auto Matrix2fSize{4UL * sizeof(float)};
-			static constexpr auto Matrix2dSize{4UL * sizeof(double)};
-			static constexpr auto Matrix3Room{12UL};
-			static constexpr auto Matrix3fSize{9UL * sizeof(float)};
-			static constexpr auto Matrix3dSize{9UL * sizeof(double)};
-			static constexpr auto Matrix4Room{16UL};
-			static constexpr auto Matrix4fSize{16UL * sizeof(float)};
-			static constexpr auto Matrix4dSize{16UL * sizeof(double)};
+			static constexpr auto Vector2Room{4U};
+			static constexpr auto Vector2iSize{2U * sizeof(int)};
+			static constexpr auto Vector2fSize{2U * sizeof(float)};
+			static constexpr auto Vector2dSize{2U * sizeof(double)};
+			static constexpr auto Vector3Room{4U};
+			static constexpr auto Vector3iSize{3U * sizeof(int)};
+			static constexpr auto Vector3fSize{3U * sizeof(float)};
+			static constexpr auto Vector3dSize{3U * sizeof(double)};
+			static constexpr auto Vector4Room{4U};
+			static constexpr auto Vector4iSize{4U * sizeof(int)};
+			static constexpr auto Vector4fSize{4U * sizeof(float)};
+			static constexpr auto Vector4dSize{4U * sizeof(double)};
+			static constexpr auto Matrix2Room{8U};
+			static constexpr auto Matrix2fSize{4U * sizeof(float)};
+			static constexpr auto Matrix2dSize{4U * sizeof(double)};
+			static constexpr auto Matrix3Room{12U};
+			static constexpr auto Matrix3fSize{9U * sizeof(float)};
+			static constexpr auto Matrix3dSize{9U * sizeof(double)};
+			static constexpr auto Matrix4Room{16U};
+			static constexpr auto Matrix4fSize{16U * sizeof(float)};
+			static constexpr auto Matrix4dSize{16U * sizeof(double)};
 
 			using Buffer::getDescriptorInfo;
 
 			/**
-			 * @brief Constructs an uniform buffer object (UBO).
+			 * @brief Constructs a uniform buffer object (UBO).
 			 * @param device A reference to a smart pointer to the device where the buffer will be created.
 			 * @param size The size of the buffer.
 			 * @param blockAlignedSize The size of a block. Default, no sub-objects.

@@ -339,7 +339,7 @@ namespace EmEn::Graphics
 		auto rowWidth = 0UL;
 
 		auto width = 0UL;
-		auto lineCount = 1UL;
+		//auto lineCount = 1UL;
 
 		for ( const auto character : text )
 		{
@@ -359,14 +359,14 @@ namespace EmEn::Graphics
 				/* LF \n Line feed */
 				case 10 :
 					width = std::max(width, rowWidth);
-					lineCount++;
+					//lineCount++;
 
 					rowWidth = 0UL;
 					continue;
 
 				/* VT \v Vertical Tab */
 				case 11 :
-					lineCount += 4;
+					//lineCount += 4;
 					continue;
 
 				case 13 : // CR \r Carriage return[g]
@@ -429,7 +429,7 @@ namespace EmEn::Graphics
 			else
 			{
 				width = std::max(width, rowWidth);
-				lineCount++;
+				//lineCount++;
 
 				rowWidth = 0UL;
 			}

@@ -28,10 +28,7 @@
 
 /* Local inclusions. */
 #include "Libs/SourceCodeParser.hpp"
-#include "Graphics/RenderableInstance/Abstract.hpp"
-#include "Vulkan/GraphicsPipeline.hpp"
 #include "Saphir/Code.hpp"
-#include "Tracer.hpp"
 
 namespace EmEn::Saphir::Generator
 {
@@ -40,14 +37,14 @@ namespace EmEn::Saphir::Generator
 	using namespace Vulkan;
 	using namespace Keys;
 
-	TBNSpaceRendering::TBNSpaceRendering (Settings & settings, const std::shared_ptr< const RenderTarget::Abstract > & renderTarget, const std::shared_ptr< const RenderableInstance::Abstract > & renderableInstance) noexcept
-		: Abstract(settings, ClassId, renderTarget), m_renderableInstance(renderableInstance)
+	TBNSpaceRendering::TBNSpaceRendering (const std::shared_ptr< const RenderTarget::Abstract > & renderTarget, const std::shared_ptr< const RenderableInstance::Abstract > & renderableInstance, uint32_t layerIndex) noexcept
+		: Abstract(ClassId, renderTarget, renderableInstance, layerIndex)
 	{
 
 	}
 
 	bool
-	TBNSpaceRendering::onGenerateProgram (Program & program) noexcept
+	TBNSpaceRendering::onGenerateShadersCode (Program & program) noexcept
 	{
 		/* Generate the vertex shader stage. */
 		if ( this->generateVertexShader(program) )
@@ -134,10 +131,10 @@ namespace EmEn::Saphir::Generator
 	}
 
 	bool
-	TBNSpaceRendering::onGenerateProgramLayout (const SetIndexes & /*setIndexes*/, std::vector< std::shared_ptr< DescriptorSetLayout > > & /*descriptorSetLayouts*/, std::vector< VkPushConstantRange > & pushConstantRanges) noexcept
+	TBNSpaceRendering::onCreateDataLayouts (const SetIndexes & /*setIndexes*/, std::vector< std::shared_ptr< DescriptorSetLayout > > & /*descriptorSetLayouts*/, std::vector< VkPushConstantRange > & pushConstantRanges) noexcept
 	{
 		Abstract::generatePushConstantRanges(
-			this->program()->vertexShader()->pushConstantBlockDeclarations(),
+			this->shaderProgram()->vertexShader()->pushConstantBlockDeclarations(),
 			pushConstantRanges,
 			VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_GEOMETRY_BIT
 		);
@@ -151,9 +148,9 @@ namespace EmEn::Saphir::Generator
 		/* Create the vertex shader. */
 		auto * vertexShader = program.initVertexShader(
 			this->name( ) + "VertexShader",
-			m_renderableInstance->instancingEnabled(),
+			this->isFlagEnabled(IsInstancingEnabled),
 			false,
-			m_renderableInstance->isFacingCamera()
+			this->isFlagEnabled(IsRenderableFacingCamera)
 		);
 		vertexShader->setExtensionBehavior("GL_ARB_separate_shader_objects", "enable");
 
@@ -168,7 +165,7 @@ namespace EmEn::Saphir::Generator
 			return false;
 		}
 
-		if ( m_renderableInstance->instancingEnabled() )
+		if ( this->isFlagEnabled(IsInstancingEnabled) )
 		{
 			/* Declare the view uniform block. */
 			if ( !this->declareViewUniformBlock(*vertexShader) )
@@ -223,7 +220,7 @@ namespace EmEn::Saphir::Generator
 
 		std::string modelViewProjectionMatrix{};
 
-		if ( m_renderableInstance->instancingEnabled() )
+		if ( this->isFlagEnabled(IsInstancingEnabled) )
 		{
 			modelViewProjectionMatrix = (std::stringstream{} << ShaderVariable::ModelViewProjectionMatrix << "[index]").str();
 		}
@@ -308,7 +305,9 @@ namespace EmEn::Saphir::Generator
 	bool
 	TBNSpaceRendering::onGraphicsPipelineConfiguration (const Program & /*program*/, GraphicsPipeline & graphicsPipeline) noexcept
 	{
-		if ( m_renderableInstance == nullptr )
+		const auto renderableInstance = this->getRenderableInstance();
+
+		if ( renderableInstance == nullptr )
 		{
 			Tracer::error(ClassId, "The renderable instance pointer is null !");
 
@@ -322,7 +321,7 @@ namespace EmEn::Saphir::Generator
 			return false;
 		}
 
-		if ( !graphicsPipeline.configureDepthStencilState(RenderPassType::SimplePass, *m_renderableInstance) )
+		if ( !graphicsPipeline.configureDepthStencilState(RenderPassType::SimplePass, *renderableInstance) )
 		{
 			Tracer::error(ClassId, "Unable to configure the graphics pipeline depth/stencil state !");
 

@@ -31,26 +31,11 @@ namespace EmEn::Graphics::Renderable
 	using namespace EmEn::Libs;
 
 	MeshLayer::MeshLayer (const std::string & name, const std::shared_ptr< Material::Interface > & material, const RasterizationOptions & options, int flags) noexcept
-		: NameableTrait(name), m_material(material), m_rasterizationOptions(options), m_renderableFlags(flags)
+		: NameableTrait(name),
+		m_material(material),
+		m_rasterizationOptions(options),
+		m_renderableFlags(flags)
 	{
 
-	}
-
-	std::shared_ptr< Material::Interface >
-	MeshLayer::material () const noexcept
-	{
-		return m_material;
-	}
-
-	const RasterizationOptions &
-	MeshLayer::rasterizationOptions () const noexcept
-	{
-		return m_rasterizationOptions;
-	}
-
-	int
-	MeshLayer::flags () const noexcept
-	{
-		return m_renderableFlags;
 	}
 }

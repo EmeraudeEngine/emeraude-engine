@@ -58,6 +58,9 @@ namespace EmEn::Scenes
 			/** @brief Observable class unique identifier. */
 			static const size_t ClassUID;
 
+			/** @brief Defines the resource dependency complexity. */
+			static constexpr auto Complexity{Resources::DepComplexity::None};
+
 			/* JSON key. */
 			static constexpr auto BackgroundKey{"Background"};
 			static constexpr auto SceneAreaKey{"SceneArea"};
@@ -72,9 +75,9 @@ namespace EmEn::Scenes
 			/**
 			 * @brief Constructs a definition resource.
 			 * @param name The name of the resource.
-			 * @param resourceFlagBits The resource flag bits. Default none. (Unused yet)
+			 * @param resourceFlags The resource flag bits. Default none. (Unused yet)
 			 */
-			explicit DefinitionResource (const std::string & name, uint32_t resourceFlagBits = 0) noexcept;
+			explicit DefinitionResource (const std::string & name, uint32_t resourceFlags = 0) noexcept;
 
 			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
 			[[nodiscard]]
@@ -97,6 +100,15 @@ namespace EmEn::Scenes
 			/** @copydoc EmEn::Resources::ResourceTrait::load(const Json::Value &) */
 			bool load (const Json::Value & data) noexcept override;
 
+			/** @copydoc EmEn::Resources::ResourceTrait::memoryOccupied() const noexcept */
+			[[nodiscard]]
+			size_t
+			memoryOccupied () const noexcept override
+			{
+				// TODO with json node ...
+				return 0;
+			}
+
 			/** @brief Gives the name of the scene. */
 			[[nodiscard]]
 			std::string getSceneName () const noexcept;
@@ -107,22 +119,6 @@ namespace EmEn::Scenes
 			/** @brief Gets the extra data from the scene definition */
 			[[nodiscard]]
 			Json::Value getExtraData () const noexcept;
-
-			/**
-			 * @brief Returns a definition resource by its name.
-			 * @param resourceName A reference to a string.
-			 * @param directLoad Use the direct loading mode. Default false.
-			 * @return std::shared_ptr< DefinitionResource >
-			 */
-			[[nodiscard]]
-			static std::shared_ptr< DefinitionResource > get (const std::string & resourceName, bool directLoad = false) noexcept;
-
-			/**
-			 * @brief Returns the default definition resource.
-			 * @return std::shared_ptr< DefinitionResource >
-			 */
-			[[nodiscard]]
-			static std::shared_ptr< DefinitionResource > getDefault () noexcept;
 
 		private:
 
@@ -151,7 +147,7 @@ namespace EmEn::Scenes
 			 */
 			bool readSceneArea (Scene & scene) noexcept;
 
-			Json::Value m_root{};
+			Json::Value m_root;
 	};
 }
 

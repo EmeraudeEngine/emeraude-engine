@@ -27,10 +27,10 @@
 #pragma once
 
 /* STL inclusions. */
-#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <limits>
+#include <array>
 #include <string>
 
 /* Local usages. */
@@ -39,17 +39,47 @@
 namespace EmEn::Graphics
 {
 	/* Common expressions. */
-	static constexpr auto NoneString{"None"};
-	static constexpr auto InvalidString{"Invalid"};
+	constexpr auto NoneString{"None"};
+	constexpr auto InvalidString{"Invalid"};
 
-	/** @brief The type of rendering to sort graphics pipeline. */
+	/** @brief The type of rendering to sort a graphics pipeline. */
 	enum class RenderTargetType : uint8_t
 	{
 		View,
 		CubicView,
 		ShadowMap,
-		ShadowCubemap
+		ShadowCubemap,
+		Texture,
+		Cubemap
 	};
+
+	constexpr auto ViewString{"View"};
+	constexpr auto CubicViewString{"CubicView"};
+	constexpr auto ShadowMapString{"ShadowMap"};
+	constexpr auto ShadowCubemapString{"ShadowCubemap"};
+	constexpr auto TextureString{"Texture"};
+	constexpr auto CubemapString{"Cubemap"};
+
+	/**
+	 * @brief Converts a render target type enumeration value to the corresponding string.
+	 * @param value The enumeration value.
+	 * @return const char *
+	 */
+	[[nodiscard]]
+	const char * to_cstring (RenderTargetType value) noexcept;
+
+	/**
+	 * @brief Returns a string version of the enum value.
+	 * @param value The enum value.
+	 * @return std::string
+	 */
+	[[nodiscard]]
+	inline
+	std::string
+	to_string (RenderTargetType value) noexcept
+	{
+		return {to_cstring(value)};
+	}
 
 	/** @brief Defines the render type to sort out what involves the rendering. */
 	enum class RenderPassType : uint32_t
@@ -68,14 +98,14 @@ namespace EmEn::Graphics
 		None = std::numeric_limits< uint32_t >::max()
 	};
 
-	static constexpr auto SimplePassString{"SimplePass"};
-	static constexpr auto AmbientPassString{"AmbientPass"};
-	static constexpr auto DirectionalLightPassString{"DirectionalLightPass"};
-	static constexpr auto DirectionalLightPassNoShadowString{"DirectionalLightPassNoShadow"};
-	static constexpr auto PointLightPassString{"PointLightPass"};
-	static constexpr auto PointLightPassNoShadowString{"PointLightPassNoShadow"};
-	static constexpr auto SpotLightPassString{"SpotLightPass"};
-	static constexpr auto SpotLightPassNoShadowString{"SpotLightPassNoShadow"};
+	constexpr auto SimplePassString{"SimplePass"};
+	constexpr auto AmbientPassString{"AmbientPass"};
+	constexpr auto DirectionalLightPassString{"DirectionalLightPass"};
+	constexpr auto DirectionalLightPassNoShadowString{"DirectionalLightPassNoShadow"};
+	constexpr auto PointLightPassString{"PointLightPass"};
+	constexpr auto PointLightPassNoShadowString{"PointLightPassNoShadow"};
+	constexpr auto SpotLightPassString{"SpotLightPass"};
+	constexpr auto SpotLightPassNoShadowString{"SpotLightPassNoShadow"};
 
 	/**
 	 * @brief Converts a light pass type enumeration value to the corresponding string.
@@ -114,8 +144,8 @@ namespace EmEn::Graphics
 		Invalid = std::numeric_limits< uint32_t >::max()
 	};
 
-	static constexpr auto UniformBufferObjectString{"UniformBufferObject"};
-	static constexpr auto VertexBufferObjectString{"VertexBufferObject"};
+	constexpr auto UniformBufferObjectString{"UniformBufferObject"};
+	constexpr auto VertexBufferObjectString{"VertexBufferObject"};
 
 	/**
 	 * @brief Converts a model matrices type enumeration value to the corresponding string.
@@ -160,14 +190,14 @@ namespace EmEn::Graphics
 		None = std::numeric_limits< uint32_t >::max()
 	};
 
-	static constexpr auto ValueString{"Value"};
-	static constexpr auto ColorString{"Color"};
-	static constexpr auto GradientString{"Gradient"};
-	static constexpr auto TextureString{"Texture"};
-	static constexpr auto VolumeTextureString{"VolumeTexture"};
-	static constexpr auto CubemapString{"Cubemap"};
-	static constexpr auto AnimatedTextureString{"AnimatedTexture"};
-	static constexpr auto AlphaChannelAsValueString{"AlphaChannelAsValue"};
+	constexpr auto ValueString{"Value"};
+	constexpr auto ColorString{"Color"};
+	constexpr auto GradientString{"Gradient"};
+	//constexpr auto TextureString{"Texture"}; // Already exists
+	constexpr auto VolumeTextureString{"VolumeTexture"};
+	//constexpr auto CubemapString{"Cubemap"}; // Already exists
+	constexpr auto AnimatedTextureString{"AnimatedTexture"};
+	constexpr auto AlphaChannelAsValueString{"AlphaChannelAsValue"};
 
 	/**
 	 * @brief Converts a filling type enumeration value to the corresponding string.
@@ -208,10 +238,10 @@ namespace EmEn::Graphics
 		None = std::numeric_limits< uint32_t >::max()
 	};
 
-	static constexpr auto NormalBlendingString{"Normal"};
-	static constexpr auto AddBlendingString{"Add"};
-	static constexpr auto MultiplyBlendingString{"Multiply"};
-	static constexpr auto ScreenBlendingString{"Screen"};
+	constexpr auto NormalBlendingString{"Normal"};
+	constexpr auto AddBlendingString{"Add"};
+	constexpr auto MultiplyBlendingString{"Multiply"};
+	constexpr auto ScreenBlendingString{"Screen"};
 
 	/**
 	 * @brief Converts a blending mode enumeration value to the corresponding string.
@@ -259,17 +289,17 @@ namespace EmEn::Graphics
 		Invalid = std::numeric_limits< uint32_t >::max()
 	};
 
-	static constexpr auto AmbientString{"Ambient"};
-	static constexpr auto DiffuseString{"Diffuse"};
-	static constexpr auto SpecularString{"Specular"};
-	static constexpr auto AlbedoString{"Albedo"};
-	static constexpr auto AutoIlluminationString{"AutoIlluminationColor"};
-	static constexpr auto OpacityString{"Opacity"};
-	static constexpr auto NormalString{"Normal"};
-	static constexpr auto DisplacementString{"Displacement"};
-	static constexpr auto ReflectionString{"Reflection"};
-	static constexpr auto RoughnessString{"Roughness"};
-	static constexpr auto MetalnessString{"Metalness"};
+	constexpr auto AmbientString{"Ambient"};
+	constexpr auto DiffuseString{"Diffuse"};
+	constexpr auto SpecularString{"Specular"};
+	constexpr auto AlbedoString{"Albedo"};
+	constexpr auto AutoIlluminationString{"AutoIlluminationColor"};
+	constexpr auto OpacityString{"Opacity"};
+	constexpr auto NormalString{"Normal"};
+	constexpr auto DisplacementString{"Displacement"};
+	constexpr auto ReflectionString{"Reflection"};
+	constexpr auto RoughnessString{"Roughness"};
+	constexpr auto MetalnessString{"Metalness"};
 
 	/**
 	 * @brief Converts a component type enumeration value to the corresponding string.
@@ -318,18 +348,18 @@ namespace EmEn::Graphics
 		Invalid = std::numeric_limits< uint32_t >::max()
 	};
 
-	static constexpr auto PointListString{"PointList"};
-	static constexpr auto LineLineString{"LineLine"};
-	static constexpr auto LineStripString{"LineStrip"};
-	static constexpr auto TriangleListString{"TriangleList"};
-	static constexpr auto TriangleStripString{"TriangleStrip"};
-	static constexpr auto TriangleFanString{"TriangleFan"};
-	static constexpr auto LineListWithAdjacencyString{"LineListWithAdjacency"};
-	static constexpr auto LineStripWithAdjacencyString{"LineStripWithAdjacency"};
-	static constexpr auto TriangleListWithAdjacencyString{"TriangleListWithAdjacency"};
-	static constexpr auto TriangleStripWithAdjacencyString{"TriangleStripWithAdjacency"};
-	static constexpr auto PatchListString{"PatchList"};
-	static constexpr auto CustomDataString{"CustomData"};
+	constexpr auto PointListString{"PointList"};
+	constexpr auto LineLineString{"LineLine"};
+	constexpr auto LineStripString{"LineStrip"};
+	constexpr auto TriangleListString{"TriangleList"};
+	constexpr auto TriangleStripString{"TriangleStrip"};
+	constexpr auto TriangleFanString{"TriangleFan"};
+	constexpr auto LineListWithAdjacencyString{"LineListWithAdjacency"};
+	constexpr auto LineStripWithAdjacencyString{"LineStripWithAdjacency"};
+	constexpr auto TriangleListWithAdjacencyString{"TriangleListWithAdjacency"};
+	constexpr auto TriangleStripWithAdjacencyString{"TriangleStripWithAdjacency"};
+	constexpr auto PatchListString{"PatchList"};
+	constexpr auto CustomDataString{"CustomData"};
 
 	/**
 	 * @brief Converts a topology type enumeration value to the corresponding string.
@@ -370,10 +400,10 @@ namespace EmEn::Graphics
 		Invalid = std::numeric_limits< uint32_t >::max()
 	};
 
-	static constexpr auto FillString{"Fill"};
-	static constexpr auto LineString{"Line"};
-	static constexpr auto PointString{"Point"};
-	static constexpr auto FillRectangleString{"FillRectangle"};
+	constexpr auto FillString{"Fill"};
+	constexpr auto LineString{"Line"};
+	constexpr auto PointString{"Point"};
+	constexpr auto FillRectangleString{"FillRectangle"};
 
 	/**
 	 * @brief Converts a polygon mode enumeration value to the corresponding string.
@@ -414,11 +444,11 @@ namespace EmEn::Graphics
 		Invalid = std::numeric_limits< uint32_t >::max()
 	};
 
-	//static constexpr auto NoneString{"None"};
-	static constexpr auto BackString{"Back"};
-	static constexpr auto FrontString{"Front"};
-	static constexpr auto BothString{"Both"};
-	//static constexpr auto InvalidString{"Invalid"};
+	//constexpr auto NoneString{"None"}; // Already exists
+	constexpr auto BackString{"Back"};
+	constexpr auto FrontString{"Front"};
+	constexpr auto BothString{"Both"};
+	//constexpr auto InvalidString{"Invalid"}; // Already exists
 
 	/**
 	 * @brief Converts a culling mode enumeration value to the corresponding string.
@@ -458,9 +488,9 @@ namespace EmEn::Graphics
 		Invalid = std::numeric_limits< uint32_t >::max()
 	};
 
-	static constexpr auto ColorBufferString{"ColorBuffer"};
-	static constexpr auto DepthBufferString{"DepthBuffer"};
-	static constexpr auto StencilBufferString{"StencilBuffer"};
+	constexpr auto ColorBufferString{"ColorBuffer"};
+	constexpr auto DepthBufferString{"DepthBuffer"};
+	constexpr auto StencilBufferString{"StencilBuffer"};
 
 	/**
 	 * @brief Converts a buffer type enumeration value to the corresponding string.
@@ -492,9 +522,9 @@ namespace EmEn::Graphics
 	BufferType to_BufferType (const std::string & value) noexcept;
 
 	/** @brief UBO alignment for matrix. */
-	static constexpr auto Matrix4Alignment{16UL};
+	constexpr auto Matrix4Alignment{16UL};
 	/** @brief UBO alignment for vector. */
-	static constexpr auto VectorAlignment{4UL};
+	constexpr auto VectorAlignment{4UL};
 
 	/** @brief Defines vertex attribute types. */
 	enum class VertexAttributeType : uint32_t
@@ -519,19 +549,19 @@ namespace EmEn::Graphics
 		ModelScaling = 17U
 	};
 
-	static constexpr auto PositionString{"Position"};
-	static constexpr auto TangentString{"Tangent"};
-	static constexpr auto BinormalString{"Binormal"};
-	//static constexpr auto NormalString{"Normal"};
-	static constexpr auto VertexColorString{"VertexColor"};
-	static constexpr auto Primary2DTextureCoordinatesString{"Primary2DTextureCoordinates"};
-	static constexpr auto Primary3DTextureCoordinatesString{"Primary3DTextureCoordinates"};
-	static constexpr auto Secondary2DTextureCoordinatesString{"Secondary2DTextureCoordinates"};
-	static constexpr auto Secondary3DTextureCoordinatesString{"Secondary3DTextureCoordinates"};
-	static constexpr auto ModelMatrixString{"ModelMatrix"};
-	static constexpr auto NormalModelMatrixString{"NormalModelMatrix"};
-	static constexpr auto ModelPositionString{"ModelPosition"};
-	static constexpr auto ModelScalingString{"ModelScaling"};
+	constexpr auto PositionString{"Position"};
+	constexpr auto TangentString{"Tangent"};
+	constexpr auto BinormalString{"Binormal"};
+	//constexpr auto NormalString{"Normal"}; // Already exists
+	constexpr auto VertexColorString{"VertexColor"};
+	constexpr auto Primary2DTextureCoordinatesString{"Primary2DTextureCoordinates"};
+	constexpr auto Primary3DTextureCoordinatesString{"Primary3DTextureCoordinates"};
+	constexpr auto Secondary2DTextureCoordinatesString{"Secondary2DTextureCoordinates"};
+	constexpr auto Secondary3DTextureCoordinatesString{"Secondary3DTextureCoordinates"};
+	constexpr auto ModelMatrixString{"ModelMatrix"};
+	constexpr auto NormalModelMatrixString{"NormalModelMatrix"};
+	constexpr auto ModelPositionString{"ModelPosition"};
+	constexpr auto ModelScalingString{"ModelScaling"};
 
 	/**
 	 * @brief Converts a vertex attribute type enumeration value to the corresponding string.
@@ -565,11 +595,11 @@ namespace EmEn::Graphics
 	/**
 	 * @brief Returns the attribute type size (number of element).
 	 * @param type The type of attribute.
-	 * @return size_t
+	 * @return uint32_t
 	 */
 	[[nodiscard]]
 	constexpr
-	size_t
+	uint32_t
 	getAttributeSize (VertexAttributeType type) noexcept
 	{
 		switch ( type )
@@ -616,12 +646,12 @@ namespace EmEn::Graphics
 		NegativeZ = 5
 	};
 
-	static constexpr auto PositiveXString{"PositiveX"};
-	static constexpr auto NegativeXString{"NegativeX"};
-	static constexpr auto PositiveYString{"PositiveY"};
-	static constexpr auto NegativeYString{"NegativeY"};
-	static constexpr auto PositiveZString{"PositiveZ"};
-	static constexpr auto NegativeZString{"NegativeZ"};
+	constexpr auto PositiveXString{"PositiveX"};
+	constexpr auto NegativeXString{"NegativeX"};
+	constexpr auto PositiveYString{"PositiveY"};
+	constexpr auto NegativeYString{"NegativeY"};
+	constexpr auto PositiveZString{"PositiveZ"};
+	constexpr auto NegativeZString{"NegativeZ"};
 
 	static auto constexpr CubemapFaceCount{6UL};
 
@@ -678,10 +708,10 @@ namespace EmEn::Graphics
 		Trilinear
 	};
 
-	static constexpr auto CustomString{"Custom"};
-	static constexpr auto LinearString{"Linear"};
-	static constexpr auto BilinearString{"Bilinear"};
-	static constexpr auto TrilinearString{"Trilinear"};
+	constexpr auto CustomString{"Custom"};
+	constexpr auto LinearString{"Linear"};
+	constexpr auto BilinearString{"Bilinear"};
+	constexpr auto TrilinearString{"Trilinear"};
 
 	/**
 	 * @brief Converts a filter quality enumeration value to the corresponding string.
@@ -755,23 +785,23 @@ namespace EmEn::Graphics
 		Axis
 	};
 
-	//static constexpr auto CustomString{"Custom"};
-	static constexpr auto TriangleString{"ShapeTriangle"};
-	static constexpr auto QuadString{"Quad"};
-	static constexpr auto CubeString{"Cube"};
-	static constexpr auto SphereString{"Sphere"};
-	static constexpr auto GeodesicSphereString{"GeodesicSphere"};
-	static constexpr auto CylinderString{"Cylinder"};
-	static constexpr auto ConeString{"Cone"};
-	static constexpr auto DiskString{"Disk"};
-	static constexpr auto TorusString{"Torus"};
-	static constexpr auto TetrahedronString{"Tetrahedron"};
-	static constexpr auto HexahedronString{"Hexahedron"};
-	static constexpr auto OctahedronString{"Octahedron"};
-	static constexpr auto DodecahedronString{"Dodecahedron"};
-	static constexpr auto IcosahedronString{"Icosahedron"};
-	static constexpr auto ArrowString{"Arrow"};
-	static constexpr auto AxisString{"Axis"};
+	//constexpr auto CustomString{"Custom"}; // Already exists
+	constexpr auto TriangleString{"ShapeTriangle"};
+	constexpr auto QuadString{"Quad"};
+	constexpr auto CubeString{"Cube"};
+	constexpr auto SphereString{"Sphere"};
+	constexpr auto GeodesicSphereString{"GeodesicSphere"};
+	constexpr auto CylinderString{"Cylinder"};
+	constexpr auto ConeString{"Cone"};
+	constexpr auto DiskString{"Disk"};
+	constexpr auto TorusString{"Torus"};
+	constexpr auto TetrahedronString{"Tetrahedron"};
+	constexpr auto HexahedronString{"Hexahedron"};
+	constexpr auto OctahedronString{"Octahedron"};
+	constexpr auto DodecahedronString{"Dodecahedron"};
+	constexpr auto IcosahedronString{"Icosahedron"};
+	constexpr auto ArrowString{"Arrow"};
+	constexpr auto AxisString{"Axis"};
 
 	/**
 	 * @brief Converts a shape type enumeration value to the corresponding string.
@@ -812,9 +842,9 @@ namespace EmEn::Graphics
 		Spot = 2
 	};
 
-	static constexpr auto DirectionalLightString{"DirectionalLight"};
-	static constexpr auto PointLightString{"PointLight"};
-	static constexpr auto SpotLightString{"SpotLight"};
+	constexpr auto DirectionalLightString{"DirectionalLight"};
+	constexpr auto PointLightString{"PointLight"};
+	constexpr auto SpotLightString{"SpotLight"};
 
 	/**
 	 * @brief Returns a C-String version of the enum value.
@@ -862,12 +892,12 @@ namespace EmEn::Graphics
 		TAA = 5
 	};
 
-	static constexpr auto MSAAString{"MSAA"};
-	static constexpr auto SSAAString{"SSAA"};
-	static constexpr auto TXAAString{"TXAA"};
-	static constexpr auto FXAAString{"FXAA"};
-	static constexpr auto SMAAString{"SMAA"};
-	static constexpr auto TAAString{"TAA"};
+	constexpr auto MSAAString{"MSAA"};
+	constexpr auto SSAAString{"SSAA"};
+	constexpr auto TXAAString{"TXAA"};
+	constexpr auto FXAAString{"FXAA"};
+	constexpr auto SMAAString{"SMAA"};
+	constexpr auto TAAString{"TAA"};
 
 	/**
 	 * @brief Returns a C-String version of the enum value.

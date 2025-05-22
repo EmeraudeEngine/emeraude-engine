@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_config.hpp"
+
 /* STL inclusions. */
 #include <sstream>
 #include <string>
@@ -44,18 +47,40 @@ namespace EmEn::Libs
 			 */
 			BlobTrait () = default;
 
+#if IS_MACOS
 			/**
 			 * @brief Constructs a blob with an initial string.
 			 * @param initialString A pointer to a C-string.
 			 */
-			explicit BlobTrait (const char * initialString);
+			explicit
+			BlobTrait (const char * initialString)
+				: m_stream{initialString}
+			{
+
+			}
 
 			/**
 			 * @brief Constructs a blob with an initial string.
 			 * @param initialString A reference to a string.
 			 */
-			explicit BlobTrait (const std::string & initialString);
+			explicit
+			BlobTrait (const std::string & initialString)
+				: m_stream{initialString}
+			{
 
+			}
+#else
+			/**
+			 * @brief Constructs a blob with an initial string view.
+			 * @param initialString A string view.
+			 */
+			explicit
+			BlobTrait (std::string_view initialString)
+				: m_stream{std::string{initialString}}
+			{
+
+			}
+#endif
 			/**
 			 * @brief Deleted copy constructor.
 			 * @param other A reference to a blob.
@@ -95,7 +120,7 @@ namespace EmEn::Libs
 			 */
 			template< typename data_t >
 			BlobTrait &
-			operator<< (const data_t & value) noexcept
+			operator<< (const data_t & value)
 			{
 				m_stream << value;
 
@@ -108,7 +133,7 @@ namespace EmEn::Libs
 			 * @return BlobTrait &
 			 */
 			BlobTrait &
-			operator<< (bool value) noexcept
+			operator<< (bool value)
 			{
 				m_stream << ( value ? "True" : "False" );
 
@@ -121,7 +146,7 @@ namespace EmEn::Libs
 			 * @return BlobTrait &
 			 */
 			BlobTrait &
-			operator<< (void * value) noexcept
+			operator<< (void * value)
 			{
 				m_stream << '@' << value;
 
@@ -134,7 +159,7 @@ namespace EmEn::Libs
 			 * @return BlobTrait &
 			 */
 			BlobTrait &
-			operator<< (const void * value) noexcept
+			operator<< (const void * value)
 			{
 				m_stream << '@' << value;
 
@@ -147,7 +172,7 @@ namespace EmEn::Libs
 			 * @return BlobTrait &
 			 */
 			BlobTrait &
-			operator<< (const std::stringstream & value) noexcept
+			operator<< (const std::stringstream & value)
 			{
 				m_stream << value.str();
 
@@ -159,7 +184,7 @@ namespace EmEn::Libs
 			 * @return std::string
 			 */
 			std::string
-			get () const noexcept
+			get () const
 			{
 				return m_stream.str();
 			}

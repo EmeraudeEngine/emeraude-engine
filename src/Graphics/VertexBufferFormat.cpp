@@ -28,7 +28,6 @@
 
 /* STL inclusions. */
 #include <sstream>
-#include <algorithm>
 
 namespace EmEn::Graphics
 {
@@ -122,9 +121,9 @@ namespace EmEn::Graphics
 		{
 			out << " - Binding formats :" "\n";
 
-			for ( const auto & bindingFormat : obj.m_bindingFormats )
+			for ( const auto & [index, binding] : obj.m_bindingFormats )
 			{
-				out << "\t" << "Binding index:" << bindingFormat.first << " (" << bindingFormat.second << ")\n";
+				out << "\t" << "Binding index:" << index << " (" << binding << ")\n";
 			}
 		}
 
@@ -136,12 +135,12 @@ namespace EmEn::Graphics
 		{
 			out << " - Binding descriptions :" "\n";
 
-			for ( const auto & binding : obj.m_bindings )
+			for ( const auto & [binding, stride, inputRate] : obj.m_bindings )
 			{
 				out << "\t" <<
-					"Binding point:" << binding.binding << ", "
-					"stride:" << binding.stride << ", "
-					"input rate: " << binding.inputRate << "\n";
+					"Binding point:" << binding << ", "
+					"stride:" << stride << ", "
+					"input rate: " << inputRate << "\n";
 			}
 		}
 
@@ -153,13 +152,13 @@ namespace EmEn::Graphics
 		{
 			out << " - Attribute descriptions :" "\n";
 
-			for ( const auto & attribute : obj.m_attributes )
+			for ( const auto & [location, binding, format, offset] : obj.m_attributes )
 			{
 				out << "\t" <<
-					"Attribute location:" << attribute.location << " (" << to_cstring(static_cast< VertexAttributeType >(attribute.location)) << "), "
-					"binding:" << attribute.binding << ", "
-					"format:" << attribute.format << ", "
-					"offset:" << attribute.offset << "\n";
+					"Attribute location:" << location << " (" << to_cstring(static_cast< VertexAttributeType >(location)) << "), "
+					"binding:" << binding << ", "
+					"format:" << format << ", "
+					"offset:" << offset << "\n";
 			}
 		}
 

@@ -43,17 +43,19 @@ namespace EmEn::Overlay
 	using namespace EmEn::Graphics;
 	using namespace EmEn::Vulkan;
 
-	Surface::Surface (const FramebufferProperties & framebufferProperties, const std::string & name, const Rectangle< float > & geometry, float depth) noexcept
+	Surface::Surface (const FramebufferProperties & framebufferProperties, const std::string & name, const Space2D::AARectangle< float > & geometry, float depth, bool visible) noexcept
 		: NameableTrait(name),
 		m_framebufferProperties(framebufferProperties),
 		m_rectangle(geometry),
 		m_depth(depth)
 	{
+		m_flags[IsVisible] = visible;
+
 		this->updateModelMatrix();
 	}
 
 	void
-	Surface::setGeometry (const Rectangle< float > & rectangle) noexcept
+	Surface::setGeometry (const Space2D::AARectangle< float > & rectangle) noexcept
 	{
 		m_rectangle = rectangle;
 
@@ -144,20 +146,20 @@ namespace EmEn::Overlay
 	Surface::isEventBlocked (float screenX, float screenY) const noexcept
 	{
 		/* The test is not required at all. */
-		if ( !m_flags[IsOpaque] )
+		if ( !this->isBlockingEvent() )
 		{
 			return false;
 		}
 
 		/* NOTE: The alpha testing is disabled, so whatever the position is, it's blocked. */
-		if ( !m_flags[IsAlphaTestEnabled] )
+		if ( !this->isBlockingEventWithAlphaTest() )
 		{
 			return true;
 		}
 
 		/* Get the pixel coordinates on the surface. */
-		const auto surfaceX = static_cast< size_t >(screenX - (static_cast< float >(m_framebufferProperties.width()) * m_rectangle.left()));
-		const auto surfaceY = static_cast< size_t >(screenY - (static_cast< float >(m_framebufferProperties.height()) * m_rectangle.top()));
+		const auto surfaceX = static_cast< uint32_t >(screenX - (static_cast< float >(m_framebufferProperties.width()) * m_rectangle.left()));
+		const auto surfaceY = static_cast< uint32_t >(screenY - (static_cast< float >(m_framebufferProperties.height()) * m_rectangle.top()));
 
 		/* Get that pixel color from the pixmap. */
 		const auto pixelColor = m_frontLocalData.safePixel(surfaceX, surfaceY);

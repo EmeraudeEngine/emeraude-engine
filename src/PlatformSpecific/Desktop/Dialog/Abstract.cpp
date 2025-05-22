@@ -26,6 +26,9 @@
 
 #include "Abstract.hpp"
 
+/* STL inclusions. */
+#include <sstream>
+
 namespace EmEn::PlatformSpecific::Desktop::Dialog
 {
 	Abstract::Abstract (std::string title) noexcept
@@ -34,9 +37,33 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 
 	}
 
-	const std::string &
-	Abstract::title () const noexcept
+#ifdef IS_LINUX
+	std::vector< std::string >
+	Abstract::convertFilterStructureForPFD (const std::vector< std::pair< std::string, std::vector< std::string > > > & extensionFilters) noexcept
 	{
-		return m_title;
+		std::vector< std::string > pfdFilterStructure;
+		pfdFilterStructure.reserve(extensionFilters.size() * 2);
+
+		for ( const auto & [filterName, extensions] : extensionFilters )
+		{
+			pfdFilterStructure.emplace_back(filterName);
+
+			std::stringstream extensionString;
+
+			for ( auto it = extensions.cbegin(); it != extensions.cend(); ++it )
+			{
+				extensionString << "*." << *it;
+
+				if ( std::next(it) != extensions.cend() )
+				{
+					extensionString << ' ';
+				}
+			}
+
+			pfdFilterStructure.emplace_back(extensionString.str());
+		}
+
+		return pfdFilterStructure;
 	}
+#endif
 }

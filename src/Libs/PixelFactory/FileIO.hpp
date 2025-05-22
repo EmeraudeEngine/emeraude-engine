@@ -27,6 +27,7 @@
 #pragma once
 
 /* STL inclusions. */
+#include <cstdint>
 #include <filesystem>
 #include <iostream>
 #include <type_traits>
@@ -42,15 +43,16 @@ namespace EmEn::Libs::PixelFactory::FileIO
 {
 	/**
 	 * @brief Reads a file into a pixmap structure.
-	 * @tparam data_t The pixmap data precision. Default 'uint8_t' (8bits per chanel).
+	 * @tparam pixel_data_t The pixel component type for the pixmap depth precision. Default uint8_t.
+	 * @tparam dimension_t The type of unsigned integer used for pixmap dimension. Default uint32_t.
 	 * @param filepath A reference to a filesystem path.
 	 * @param pixmap A reference to the destination pixmap.
 	 * @return bool
 	 */
-	template< typename data_t = uint8_t >
+	template< typename pixel_data_t = uint8_t, typename dimension_t = uint32_t >
 	[[nodiscard]]
 	bool
-	read (const std::filesystem::path & filepath, Pixmap< data_t > & pixmap) requires (std::is_arithmetic_v< data_t >)
+	read (const std::filesystem::path & filepath, Pixmap< pixel_data_t, dimension_t > & pixmap) requires (std::is_arithmetic_v< pixel_data_t > && std::is_unsigned_v< dimension_t >)
 	{
 		if ( !IO::fileExists(filepath) )
 		{
@@ -63,21 +65,21 @@ namespace EmEn::Libs::PixelFactory::FileIO
 
 		if ( extension == "jpg" || extension == "jpeg" )
 		{
-			FileFormatJpeg< data_t > fileFormat;
+			FileFormatJpeg< pixel_data_t, dimension_t > fileFormat;
 
 			return fileFormat.readFile(filepath, pixmap);
 		}
 
 		if ( extension == "png" )
 		{
-			FileFormatPNG< data_t > fileFormat;
+			FileFormatPNG< pixel_data_t, dimension_t > fileFormat;
 
 			return fileFormat.readFile(filepath, pixmap);
 		}
 
 		if ( extension == "tga" )
 		{
-			FileFormatTarga< data_t > fileFormat;
+			FileFormatTarga< pixel_data_t, dimension_t > fileFormat;
 
 			return fileFormat.readFile(filepath, pixmap);
 		}
@@ -89,16 +91,17 @@ namespace EmEn::Libs::PixelFactory::FileIO
 
 	/**
 	 * @briew Writes a pixmap into a file.
-	 * @tparam data_t The pixmap data precision. Default 'uint8_t' (8bits per chanel).
+	 * @tparam pixel_data_t The pixel component type for the pixmap depth precision. Default uint8_t.
+	 * @tparam dimension_t The type of unsigned integer used for pixmap dimension. Default uint32_t.
 	 * @param pixmap A reference to the source pixmap.
 	 * @param filepath A reference to a filesystem path.
 	 * @param overwrite Overwrite existing file. Default false.
 	 * @return bool
 	 */
-	template< typename data_t = uint8_t >
+	template< typename pixel_data_t = uint8_t, typename dimension_t = uint32_t >
 	[[nodiscard]]
 	bool
-	write (const Pixmap< data_t > & pixmap, const std::filesystem::path & filepath, bool overwrite = false) requires (std::is_arithmetic_v< data_t >)
+	write (const Pixmap< pixel_data_t, dimension_t > & pixmap, const std::filesystem::path & filepath, bool overwrite = false) requires (std::is_arithmetic_v< pixel_data_t > && std::is_unsigned_v< dimension_t >)
 	{
 		if ( IO::fileExists(filepath) && !overwrite )
 		{
@@ -111,21 +114,21 @@ namespace EmEn::Libs::PixelFactory::FileIO
 
 		if ( extension == "jpg" || extension == "jpeg" )
 		{
-			FileFormatJpeg< data_t > fileFormat;
+			FileFormatJpeg< pixel_data_t, dimension_t > fileFormat;
 
 			return fileFormat.writeFile(filepath, pixmap);
 		}
 
 		if ( extension == "png" )
 		{
-			FileFormatPNG< data_t > fileFormat;
+			FileFormatPNG< pixel_data_t, dimension_t > fileFormat;
 
 			return fileFormat.writeFile(filepath, pixmap);
 		}
 
 		if ( extension == "tga" )
 		{
-			FileFormatTarga< data_t > fileFormat;
+			FileFormatTarga< pixel_data_t, dimension_t > fileFormat;
 
 			return fileFormat.writeFile(filepath, pixmap);
 		}

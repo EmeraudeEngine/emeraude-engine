@@ -27,17 +27,20 @@
 #pragma once
 
 /* STL inclusions. */
-#include <cmath>
-#include <iostream>
+#include <cstdint>
 #include <sstream>
 #include <string>
+#include <type_traits>
 
 namespace EmEn::Libs::VertexFactory
 {
 	/**
 	 * @brief Describe a grid cell.
+	 * @tparam index_data_t The precision type of index data. Default uint32_t.
 	 * @note A cell is a square.
 	 */
+	template< typename index_data_t = uint32_t >
+	requires (std::is_unsigned_v< index_data_t > )
 	class GridQuad final
 	{
 		public:
@@ -54,8 +57,11 @@ namespace EmEn::Libs::VertexFactory
 			 * @param topRightIndex
 			 * @param bottomRightIndex
 			 */
-			GridQuad (size_t topLeftIndex, size_t bottomLeftIndex, size_t topRightIndex, size_t bottomRightIndex) noexcept
-				: m_topLeftIndex(topLeftIndex), m_bottomLeftIndex(bottomLeftIndex), m_topRightIndex(topRightIndex), m_bottomRightIndex(bottomRightIndex)
+			GridQuad (index_data_t topLeftIndex, index_data_t bottomLeftIndex, index_data_t topRightIndex, index_data_t bottomRightIndex) noexcept
+				: m_topLeftIndex(topLeftIndex),
+				m_bottomLeftIndex(bottomLeftIndex),
+				m_topRightIndex(topRightIndex),
+				m_bottomRightIndex(bottomRightIndex)
 			{
 
 			}
@@ -77,7 +83,7 @@ namespace EmEn::Libs::VertexFactory
 			 * @return void
 			 */
 			void
-			setTopLeftIndex (size_t index) noexcept
+			setTopLeftIndex (index_data_t index) noexcept
 			{
 				m_topLeftIndex = index;
 			}
@@ -88,7 +94,7 @@ namespace EmEn::Libs::VertexFactory
 			 * @return void
 			 */
 			void
-			setBottomLeftIndex (size_t index) noexcept
+			setBottomLeftIndex (index_data_t index) noexcept
 			{
 				m_bottomLeftIndex = index;
 			}
@@ -99,7 +105,7 @@ namespace EmEn::Libs::VertexFactory
 			 * @return void
 			 */
 			void
-			setTopRightIndex (size_t index) noexcept
+			setTopRightIndex (index_data_t index) noexcept
 			{
 				m_topRightIndex = index;
 			}
@@ -110,17 +116,17 @@ namespace EmEn::Libs::VertexFactory
 			 * @return void
 			 */
 			void
-			setBottomRightIndex (size_t index) noexcept
+			setBottomRightIndex (index_data_t index) noexcept
 			{
 				m_bottomRightIndex = index;
 			}
 
 			/**
 			 * @brief Returns the quad top left index to the geometry data.
-			 * @return size_t
+			 * @return index_data_t
 			 */
 			[[nodiscard]]
-			size_t
+			index_data_t
 			topLeftIndex () const noexcept
 			{
 				return m_topLeftIndex;
@@ -128,10 +134,10 @@ namespace EmEn::Libs::VertexFactory
 
 			/**
 			 * @brief Returns the quad bottom left index to the geometry data.
-			 * @return size_t
+			 * @return index_data_t
 			 */
 			[[nodiscard]]
-			size_t
+			index_data_t
 			bottomLeftIndex () const noexcept
 			{
 				return m_bottomLeftIndex;
@@ -139,10 +145,10 @@ namespace EmEn::Libs::VertexFactory
 
 			/**
 			 * @brief Returns the quad top right index to the geometry data.
-			 * @return size_t
+			 * @return index_data_t
 			 */
 			[[nodiscard]]
-			size_t
+			index_data_t
 			topRightIndex () const noexcept
 			{
 				return m_topRightIndex;
@@ -150,10 +156,10 @@ namespace EmEn::Libs::VertexFactory
 
 			/**
 			 * @brief Returns the quad bottom right index to the geometry data.
-			 * @return size_t
+			 * @return index_data_t
 			 */
 			[[nodiscard]]
-			size_t
+			index_data_t
 			bottomRightIndex () const noexcept
 			{
 				return m_bottomRightIndex;
@@ -194,9 +200,9 @@ namespace EmEn::Libs::VertexFactory
 
 		private:
 
-			size_t m_topLeftIndex{0};
-			size_t m_bottomLeftIndex{0};
-			size_t m_topRightIndex{0};
-			size_t m_bottomRightIndex{0};
+			index_data_t m_topLeftIndex{0};
+			index_data_t m_bottomLeftIndex{0};
+			index_data_t m_topRightIndex{0};
+			index_data_t m_bottomRightIndex{0};
 	};
 }

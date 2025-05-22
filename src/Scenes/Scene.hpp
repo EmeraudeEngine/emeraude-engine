@@ -788,20 +788,28 @@ namespace EmEn::Scenes
 			/**
 			 * @brief Updates the render lists from a point of view.
 			 * @param renderTarget A reference to the render target smart pointer.
-			 * @param shadowRendering Enable the shadow map render list.
+			 * @param isShadowCasting Enable the shadow map render list.
 			 * @return bool
 			 */
-			bool populateRenderLists (const std::shared_ptr< Graphics::RenderTarget::Abstract > & renderTarget, bool shadowRendering) noexcept;
+			bool populateRenderLists (const std::shared_ptr< Graphics::RenderTarget::Abstract > & renderTarget, bool isShadowCasting) noexcept;
+
+			/**
+			 * @brief Inserts a renderable instance in render lists for shadows casting.
+			 * @param renderTarget A reference to the render target smart pointer.
+			 * @param renderableInstance A reference to a renderable instance.
+			 * @param distance The distance from the camera.
+			 * @return void
+			 */
+			void insertInShadowCastLists (const std::shared_ptr< Graphics::RenderTarget::Abstract > & renderTarget, const std::shared_ptr< Graphics::RenderableInstance::Abstract > & renderableInstance, float distance) noexcept;
 
 			/**
 			 * @brief Inserts a renderable instance in render lists.
 			 * @param renderTarget A reference to the render target smart pointer.
 			 * @param renderableInstance A reference to a renderable instance.
 			 * @param distance The distance from the camera.
-			 * @param shadowRendering Enable the shadow map render list.
 			 * @return void
 			 */
-			void insertInRenderLists (const std::shared_ptr< Graphics::RenderTarget::Abstract > & renderTarget, const std::shared_ptr< Graphics::RenderableInstance::Abstract > & renderableInstance, float distance, bool shadowRendering) noexcept;
+			void insertInRenderLists (const std::shared_ptr< Graphics::RenderTarget::Abstract > & renderTarget, const std::shared_ptr< Graphics::RenderableInstance::Abstract > & renderableInstance, float distance) noexcept;
 
 			/**
 			 * @brief Renders a specific selection of objects;
@@ -916,7 +924,7 @@ namespace EmEn::Scenes
 			void initializeRenderableInstance (const std::shared_ptr< Graphics::RenderableInstance::Abstract > & renderableInstance) const noexcept;
 
 			/**
-			 * @brief Initializes a render target with the scene renderable instances.
+			 * @brief Initializes a render target with renderable instances.
 			 * @param renderTarget A reference to a render target smart pointer.
 			 * @return void
 			 */
@@ -931,8 +939,18 @@ namespace EmEn::Scenes
 			std::vector< Graphics::RenderPassType > prepareRenderPassTypes (const Graphics::RenderableInstance::Abstract & renderableInstance) const noexcept;
 
 			/**
+			 * @brief Prepares a renderable instance for a shadow map.
+			 * @note This function returns false only if the instance cannot be prepared. 'True' can postpone the preparation.
+			 * @param renderableInstance A reference to the renderable instance smart pointer.
+			 * @param renderTarget A reference to a render target smart pointer where the renderable instance must get ready.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool getRenderableInstanceReadyForShadowCasting (const std::shared_ptr< Graphics::RenderableInstance::Abstract > & renderableInstance, const std::shared_ptr< Graphics::RenderTarget::Abstract > & renderTarget) const noexcept;
+
+			/**
 			 * @brief Prepares a renderable instance for a specific rendering.
-			 * @note The function return false only if the instance cannot be prepared. 'true' can postpone the preparation.
+			 * @note This function returns false only if the instance cannot be prepared. 'True' can postpone the preparation.
 			 * @param renderableInstance A reference to the renderable instance smart pointer.
 			 * @param renderTarget A reference to a render target smart pointer where the renderable instance must get ready.
 			 * @return bool

@@ -31,28 +31,18 @@
 
 namespace EmEn::Saphir::Declaration::Member
 {
-	PushConstant::PushConstant (VariableType type, Key name, size_t arraySize) noexcept
-		: m_type(type), m_name(name), m_arraySize(arraySize)
+	PushConstant::PushConstant (VariableType type, Key name, uint32_t arraySize) noexcept
+		: m_type(type),
+		m_name(name),
+		m_arraySize(arraySize)
 	{
 
 	}
 
-	VariableType
-	PushConstant::type () const noexcept
-	{
-		return m_type;
-	}
-
-	Key
-	PushConstant::name () const noexcept
-	{
-		return m_name;
-	}
-
-	size_t
+	uint32_t
 	PushConstant::bytes () const noexcept
 	{
-		/* FIXME : Check alignement with array size. */
+		/* FIXME : Check alignment with array size. */
 		if ( m_arraySize > 1 )
 		{
 			return size_bytes(m_type) * m_arraySize;
@@ -61,16 +51,10 @@ namespace EmEn::Saphir::Declaration::Member
 		return size_bytes(m_type);
 	}
 
-	size_t
-	PushConstant::arraySize () const noexcept
-	{
-		return m_arraySize;
-	}
-
 	std::string
 	PushConstant::sourceCode () const noexcept
 	{
-		std::stringstream code{};
+		std::stringstream code;
 
 		code << to_cstring(m_type) << ' ' << m_name;
 

@@ -35,7 +35,8 @@ namespace EmEn
 	const size_t User::ClassUID{getClassUID(ClassId)};
 
 	User::User (PrimaryServices & primaryServices) noexcept
-		: ServiceInterface(ClassId), m_primaryServices(primaryServices)
+		: ServiceInterface(ClassId),
+		m_primaryServices(primaryServices)
 	{
 
 	}

@@ -27,9 +27,7 @@
 #include "ObservableTrait.hpp"
 
 /* STL inclusions. */
-#ifdef EMERAUDE_DEBUG_OBSERVER_PATTERN
 #include <iostream>
-#endif
 
 /* Local inclusions. */
 #include "ObserverTrait.hpp"
@@ -58,14 +56,15 @@ namespace EmEn::Libs
 	{
 		const std::lock_guard< std::mutex > lock{m_notificationMutex};
 
-		#ifdef EMERAUDE_DEBUG_OBSERVER_PATTERN
-		if ( m_observers.empty() )
+		if constexpr ( ObserverDebugEnabled )
 		{
-			std::cout << "Observable @" << this << " tries to notify the code '" << notificationCode << "', but no one was listening !" "\n";
+			if ( m_observers.empty() )
+			{
+				std::cout << "Observable @" << this << " tries to notify the code '" << notificationCode << "', but no one was listening !" "\n";
 
-			return;
+				return;
+			}
 		}
-		#endif
 
 		/* [ERASE IN LOOP] */
 		auto observerIt = m_observers.begin();
@@ -129,9 +128,10 @@ namespace EmEn::Libs
 			});
 		}
 
-		#ifdef EMERAUDE_DEBUG_OBSERVER_PATTERN
-		std::cout << "Linking UID: " << UID << " to item '" << label << "'" "\n";
-		#endif
+		if constexpr ( ObserverDebugEnabled )
+		{
+			std::cout << "Linking UID: " << UID << " to item '" << label << "'" "\n";
+		}
 
 		s_classUIDs->emplace(UID, label);
 
@@ -139,7 +139,7 @@ namespace EmEn::Libs
 	}
 #else
 	size_t
-	ObservableTrait::getClassUID (const char * label) noexcept
+	ObservableTrait::getClassUID (const char * /*label*/) noexcept
 	{
 		/* NOTE: Lock the call to this function to be sure having a unique class identifier. */
 		const std::lock_guard< std::mutex > lock{s_UIDMutex};

@@ -37,7 +37,7 @@ namespace EmEn::Saphir::Declaration
 {
 	/**
 	 * @brief Base class for GLSL interface blocks.
-	 * @extends EmEn::Saphir::DeclarationInterface This is a shader code declaration.
+	 * @extends EmEn::Saphir::Declaration::Interface This is a shader code declaration.
 	 *
 	 * storage_qualifier block_name
 	 * {
@@ -81,28 +81,44 @@ namespace EmEn::Saphir::Declaration
 
 			/** @copydoc EmEn::Saphir::Declaration::Interface::name() */
 			[[nodiscard]]
-			Key name () const noexcept final;
+			Key
+			name () const noexcept final
+			{
+				return m_name;
+			}
 
 			/**
 			 * @brief Returns the name of the instance of the block in GLSL code.
 			 * @return std::string
 			 */
 			[[nodiscard]]
-			const std::string & instanceName () const noexcept;
+			const std::string &
+			instanceName () const noexcept
+			{
+				return m_instanceName;
+			}
 
 			/**
 			 * @brief Returns the size of the array.
-			 * @return size_t
+			 * @return uint32_t
 			 */
 			[[nodiscard]]
-			size_t arraySize () const noexcept;
+			uint32_t
+			arraySize () const noexcept
+			{
+				return m_arraySize;
+			}
 
 			/**
 			 * @brief Returns a list of structure in use in this block.
 			 * @return const std::unordered_map< Key, Structure > &
 			 */
 			[[nodiscard]]
-			const std::unordered_map< Key, Structure > & structures () const noexcept;
+			const std::unordered_map< Key, Structure > &
+			structures () const noexcept
+			{
+				return m_structures;
+			}
 
 		protected:
 
@@ -112,7 +128,7 @@ namespace EmEn::Saphir::Declaration
 			 * @param instanceName A C-string to set the name of the instance of the block. Default nullptr.
 			 * @param arraySize Set the block as an array. Default 0.
 			 */
-			explicit BlockInterface (Key name, Key instanceName = nullptr, size_t arraySize = 0) noexcept;
+			explicit BlockInterface (Key name, Key instanceName = nullptr, uint32_t arraySize = 0) noexcept;
 			
 			/**
 			 * @brief Adds a structure declaration in use in this block.
@@ -126,7 +142,7 @@ namespace EmEn::Saphir::Declaration
 
 			Key m_name;
 			std::string m_instanceName;
-			size_t m_arraySize;
+			uint32_t m_arraySize;
 			std::unordered_map< Key, Structure > m_structures{};
 	};
 }

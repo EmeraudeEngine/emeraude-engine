@@ -36,13 +36,13 @@ namespace EmEn::Graphics::Renderable
 	using namespace EmEn::Libs::Math;
 	using namespace Resources;
 
-	static constexpr auto TracerTag{"RenderableInterface"};
+	constexpr auto TracerTag{"RenderableInterface"};
 
-	const Cuboid< float > Interface::NullBoundingBox{};
-	const Sphere< float > Interface::NullBoundingSphere{};
+	const Space3D::AACuboid< float > Interface::NullBoundingBox{};
+	const Space3D::Sphere< float > Interface::NullBoundingSphere{};
 
-	Interface::Interface (const std::string & name, uint32_t resourceFlagBits) noexcept
-		: ResourceTrait(name, resourceFlagBits)
+	Interface::Interface (const std::string & name, uint32_t resourceFlags) noexcept
+		: ResourceTrait(name, resourceFlags)
 	{
 
 	}
@@ -60,31 +60,34 @@ namespace EmEn::Graphics::Renderable
 			return false;
 		}
 
-#ifdef DEBUG
-		/* NOTE: Check the geometry resource. */
-		if ( !this->geometry()->isLoaded() )
+		if constexpr ( IsDebug )
 		{
-
-			TraceError{TracerTag} <<
-				"Resource '" << this->name() << "' (" << this->classLabel() << ") structure ill-formed ! "
-				"The geometry is not created !";
-
-			return false;
-		}
-
-		/* NOTE: Check material resources. */
-		for ( size_t layerIndex = 0; layerIndex < this->layerCount(); layerIndex++ )
-		{
-			if ( !this->material(layerIndex)->isCreated() )
+			/* NOTE: Check the geometry resource. */
+			if ( !this->geometry()->isLoaded() )
 			{
+
 				TraceError{TracerTag} <<
 					"Resource '" << this->name() << "' (" << this->classLabel() << ") structure ill-formed ! "
-					"The material #" << layerIndex << " is not created !";
+					"The geometry is not created !";
 
 				return false;
 			}
+
+			/* NOTE: Check material resources. */
+			const auto layerCount = this->layerCount();
+
+			for ( uint32_t layerIndex = 0; layerIndex < layerCount; layerIndex++ )
+			{
+				if ( !this->material(layerIndex)->isCreated() )
+				{
+					TraceError{TracerTag} <<
+						"Resource '" << this->name() << "' (" << this->classLabel() << ") structure ill-formed ! "
+						"The material #" << layerIndex << " is not created !";
+
+					return false;
+				}
+			}
 		}
-#endif
 
 		this->setReadyForInstantiation(true);
 

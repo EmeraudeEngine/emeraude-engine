@@ -39,7 +39,7 @@ namespace EmEn::Graphics::Geometry
 	using namespace EmEn::Libs::Math;
 	using namespace EmEn::Libs::VertexFactory;
 
-	static constexpr auto TracerTag{"GeometryInterface"};
+	constexpr auto TracerTag{"GeometryInterface"};
 
 	Interface::Interface (const std::string & name, uint32_t geometryFlagBits) noexcept
 		: ResourceTrait(name, geometryFlagBits)
@@ -48,7 +48,7 @@ namespace EmEn::Graphics::Geometry
 	}
 
 	bool
-	Interface::buildSubGeometries (std::vector< SubGeometry > & subGeometries, size_t length) noexcept
+	Interface::buildSubGeometries (std::vector< SubGeometry > & subGeometries, uint32_t length) noexcept
 	{
 		if ( length == 0 )
 		{
@@ -56,7 +56,7 @@ namespace EmEn::Graphics::Geometry
 		}
 
 		subGeometries.clear();
-		subGeometries.emplace_back(0UL, length);
+		subGeometries.emplace_back(0, length);
 
 		return true;
 	}

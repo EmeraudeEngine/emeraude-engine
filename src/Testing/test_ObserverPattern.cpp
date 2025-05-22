@@ -67,13 +67,13 @@ class Noise final : public ObservableTrait
 
 const size_t Noise::ClassUID{getClassUID("Noise")};
 
-class Dummy final : public ObservableTrait
+class DummyClass final : public ObservableTrait
 {
 	public:
 
 		static const size_t ClassUID;
 
-		Dummy () = default;
+		DummyClass () = default;
 
 		[[nodiscard]]
 		size_t
@@ -96,7 +96,7 @@ class Dummy final : public ObservableTrait
 		}
 };
 
-const size_t Dummy::ClassUID{getClassUID("Dummy")};
+const size_t DummyClass::ClassUID{getClassUID("DummyClass")};
 
 class Watcher final : public ObserverTrait
 {
@@ -130,7 +130,7 @@ class Watcher final : public ObserverTrait
 				return true;
 			}
 
-			if ( observable->is(Dummy::ClassUID) )
+			if ( observable->is(DummyClass::ClassUID) )
 			{
 				m_dummyEventIntercepted = true;
 
@@ -148,13 +148,13 @@ TEST(Observer, uniqueIdentifier)
 {
 	const Noise noisyInstance{};
 
-	const Dummy instanceA{};
+	const DummyClass instanceA{};
 
-	ASSERT_EQ(instanceA.is(Dummy::ClassUID), true);
+	ASSERT_EQ(instanceA.is(DummyClass::ClassUID), true);
 
-	const Dummy instanceB{};
+	const DummyClass instanceB{};
 
-	ASSERT_EQ(instanceB.is(Dummy::ClassUID), true);
+	ASSERT_EQ(instanceB.is(DummyClass::ClassUID), true);
 }
 
 TEST(Observer, watch)
@@ -163,7 +163,7 @@ TEST(Observer, watch)
 
 	Watcher watcher{};
 
-	Dummy instance{};
+	DummyClass instance{};
 
 	watcher.observe(&instance);
 	watcher.observe(&noisyInstance);

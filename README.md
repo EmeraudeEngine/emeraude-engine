@@ -9,21 +9,25 @@ This lib provide :
 - an overlay manager to draw on screen.
 - ...
 
+The name comes from a DOS game called "The Legend of Kyrandia" which makes extensive use of gemstones. As a child, I was a fan of emeralds in this game.
+
 # External dependencies
 
-The engine needs some external libraries, most of them are provided by an external repository that creates an archive of static binaries (https://github.com/londnoir/ext-deps-generator).
-Others are submodules and compiled directly with the final binary.
+The engine needs some external libraries, most of them are provided by an external repository (https://github.com/londnoir/ext-deps-generator) that creates binaries.
+The "ext-deps-generator" project builds two folders in its "output/" directory. These two folders must be copied into the "dependencies/" folder of this project.
+
+There are other submodules compiled directly with the final binary.
 
 # Requirements
 
- - A compiler compatible with C++20
- - CMake (3.25.1) to generate the project
- - Python3
- - Vulkan SDK from https://vulkan.lunarg.com/sdk/home
-
-This library is maintained from Debian 12 (stable) using G++ 12.2.
-On macOS, you need Xcode environment installed for the minimal SDK 12.
-On Windows, you need the "Visual Studio 2022" environment installed.
+ - A C++20 compiler. This library is maintained from :
+   - "Debian 13 (GNU/Linux)" using "G++ 14.2.0" compiler
+   - "Ubuntu 24.04 LTS (GNU/Linux)" using "G++ 13.3.0" compiler
+   - "Apple macOS Sequoia 15.5" using "Apple Clang 17.0" compiler and the minimal SDK version 12.0
+   - "Microsoft Windows 11" using "MSVC 19.43.34812.0" compiler ("Visual Studio 2022 Community Edition")
+ - CMake 3.25.1+ to generate the project
+ - Python 3
+ - Vulkan SDK 1.3.296.0 from https://vulkan.lunarg.com/sdk/home
 
 Note: Further information will come here to complete dependent pieces of software and libraries installation. 
 But this shouldn't be complicated to resolve problems described by CMake logs.
@@ -33,9 +37,7 @@ But this shouldn't be complicated to resolve problems described by CMake logs.
 For now, you need to manually copy the results of "ext-deps-generator" into the directory "emeraude-engine/dependencies/" to CMake find the static libraries.
 Keep the exact directory name (linux|mac|windows).(x86_64|arm64)-(Debug|Release).
 
-This will produce the shared library.
-
-## Release
+## Release compilation
 
 ```bash
 git clone --recurse-submodules https://github.com/londnoir/emeraude-engine.git
@@ -43,7 +45,9 @@ cmake -S ./emeraude-engine -B ./emeraude-engine/cmake-build-release -DCMAKE_BUIL
 cmake --build ./emeraude-engine/cmake-build-release --config Release
 ```
 
-## Debug
+This will produce the release shared library.
+
+## Debug compilation
 
 ```bash
 git clone --recurse-submodules https://github.com/londnoir/emeraude-engine.git
@@ -51,8 +55,4 @@ cmake -S ./emeraude-engine -B ./emeraude-engine/cmake-build-debug -DCMAKE_BUILD_
 cmake --build ./emeraude-engine/cmake-build-debug --config Debug
 ```
 
-## Rules of development
-
-1. Readability. The code should be easily readable by a 5-year experienced C++ programmer. It makes extensive use of OOP, templates, and metaprogramming.
-2. Performance. Once readability is achieved, the goal is performance. The final program should make the best use of the CPU, RAM, and GPU for what they were designed for.
-3. Maintainability. Finally, the code should be as easily modifiable as possible. It strives to be compartmentalized and organized by functionality and concept.
+This will produce the debug shared library.

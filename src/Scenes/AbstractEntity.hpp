@@ -43,8 +43,8 @@
 
 /* Local inclusions for usages. */
 #include "Libs/Math/CartesianFrame.hpp"
-#include "Libs/Math/Cuboid.hpp"
-#include "Libs/Math/Sphere.hpp"
+#include "Libs/Math/Space3D/AACuboid.hpp"
+#include "Libs/Math/Space3D/Sphere.hpp"
 #include "Audio/SoundResource.hpp"
 #include "Graphics/Renderable/MeshResource.hpp"
 #include "Graphics/Renderable/SpriteResource.hpp"
@@ -85,7 +85,7 @@ namespace EmEn::Scenes
 	 * @extends EmEn::Libs::FlagArrayTrait Each component has 8 flags, 2 are used by this base class.
 	 * @extends EmEn::Libs::NameableTrait An entity is nameable.
 	 * @extends EmEn::Scenes::LocatableInterface An entity is insertable to an octree system.
-	 * @extends EmEn::Libs::ObserverTrait An entity listen to its components.
+	 * @extends EmEn::Libs::ObserverTrait An entity listens to its components.
 	 * @extends EmEn::Libs::ObservableTrait An entity is observable to notify its content modification easily.
 	 */
 	class AbstractEntity : public Libs::FlagArrayTrait< 8 >, public Libs::NameableTrait, public LocatableInterface, public Libs::ObserverTrait, public Libs::ObservableTrait
@@ -165,7 +165,7 @@ namespace EmEn::Scenes
 
 			/** @copydoc EmEn::Scenes::LocatableInterface::localBoundingBox() const */
 			[[nodiscard]]
-			const Libs::Math::Cuboid< float > &
+			const Libs::Math::Space3D::AACuboid< float > &
 			localBoundingBox () const noexcept final
 			{
 				return m_boundingBox;
@@ -173,7 +173,7 @@ namespace EmEn::Scenes
 
 			/** @copydoc EmEn::Scenes::LocatableInterface::localBoundingSphere() const */
 			[[nodiscard]]
-			const Libs::Math::Sphere< float > &
+			const Libs::Math::Space3D::Sphere< float > &
 			localBoundingSphere () const noexcept final
 			{
 				return m_boundingSphere;
@@ -246,14 +246,14 @@ namespace EmEn::Scenes
 			std::shared_ptr< Component::Abstract > getComponent (const std::string & name) const noexcept;
 
 			/**
-			 * @brief Removes a component by his name from this entity. Returns true whether the component existed.
+			 * @brief Removes a component by his name from this entity. Returns 'true' whether the component existed.
 			 * @param name The name of the component.
 			 * @return bool
 			 */
 			bool removeComponent (const std::string & name) noexcept;
 
 			/**
-			 * @brief Removes a component by its pointer from this entity. Returns true whether the component existed.
+			 * @brief Removes a component by its pointer from this entity. Returns 'true' whether the component existed.
 			 * @param component The name of the component.
 			 * @return bool
 			 */
@@ -303,7 +303,7 @@ namespace EmEn::Scenes
 			std::shared_ptr< Component::Camera > newCamera (bool perspective = true, bool primaryDevice = false, const std::string & componentName = "Camera") noexcept;
 
 			/**
-			 * @brief Creates a camera as primary device, using a perspective projection [SHORTCUT].
+			 * @brief Creates a camera as a primary device, using a perspective projection [SHORTCUT].
 			 * @param componentName The name of the component. Default "PrimaryPerspectiveCamera".
 			 * @return std::shared_ptr< Component::Camera >
 			 */
@@ -314,7 +314,7 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			 * @brief Creates a camera as primary device, using an orthographic projection [SHORTCUT].
+			 * @brief Creates a camera as a primary device, using an orthographic projection [SHORTCUT].
 			 * @param componentName The name of the component. Default "PrimaryOrthographicCamera".
 			 * @return std::shared_ptr< Component::Camera >
 			 */
@@ -355,7 +355,7 @@ namespace EmEn::Scenes
 			std::shared_ptr< Component::Microphone > newMicrophone (bool primaryDevice = false, const std::string & componentName = "Microphone") noexcept;
 
 			/**
-			 * @brief Creates a microphone as primary device [SHORTCUT].
+			 * @brief Creates a microphone as a primary device [SHORTCUT].
 			 * @param componentName The name of the component. Default "PrimaryMicrophone".
 			 * @return std::shared_ptr< Component::Microphone >
 			 */
@@ -435,7 +435,7 @@ namespace EmEn::Scenes
 			 * @param componentName The name of the component. Default "ParticlesEmitter".
 			 * @return std::shared_ptr< Component::ParticlesEmitter >
 			 */
-			std::shared_ptr< Component::ParticlesEmitter > newParticlesEmitter (const std::shared_ptr< Graphics::Renderable::SpriteResource > & resource, size_t maxParticleCount, const std::string & componentName = "ParticlesEmitter") noexcept;
+			std::shared_ptr< Component::ParticlesEmitter > newParticlesEmitter (const std::shared_ptr< Graphics::Renderable::SpriteResource > & resource, uint32_t maxParticleCount, const std::string & componentName = "ParticlesEmitter") noexcept;
 
 			/**
 			 * @brief Creates a particles emitter using a mesh resource.
@@ -444,7 +444,7 @@ namespace EmEn::Scenes
 			 * @param componentName The name of the component. Default "ParticlesEmitter".
 			 * @return std::shared_ptr< Component::ParticlesEmitter >
 			 */
-			std::shared_ptr< Component::ParticlesEmitter > newParticlesEmitter (const std::shared_ptr< Graphics::Renderable::MeshResource > & resource, size_t maxParticleCount, const std::string & componentName = "ParticlesEmitter") noexcept;
+			std::shared_ptr< Component::ParticlesEmitter > newParticlesEmitter (const std::shared_ptr< Graphics::Renderable::MeshResource > & resource, uint32_t maxParticleCount, const std::string & componentName = "ParticlesEmitter") noexcept;
 
 			/**
 			 * @brief Creates a directional push modifier.
@@ -475,7 +475,7 @@ namespace EmEn::Scenes
 			 * @param sphere A reference to a sphere.
 			 * @return void
 			 */
-			void overrideBoundingPrimitives (const Libs::Math::Cuboid< float > & box, const Libs::Math::Sphere< float > & sphere) noexcept;
+			void overrideBoundingPrimitives (const Libs::Math::Space3D::AACuboid< float > & box, const Libs::Math::Space3D::Sphere< float > & sphere) noexcept;
 
 			/**
 			 * @brief Enables a visual debug for this entity.
@@ -527,7 +527,7 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			 * @brief Returns when the entity is born in the time scene (ms).
+			 * @brief Returns when the entity was born in the time scene (ms).
 			 * @return uint32_t
 			 */
 			[[nodiscard]]
@@ -595,7 +595,7 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			 * @brief Disables the collisions test.
+			 * @brief Disables the collision tests.
 			 * @return void
 			 */
 			void
@@ -816,7 +816,7 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			 * @brief Called when a notification is not handled by the entity abstract level.
+			 * @brief Called when the entity does not handle a notification abstract level.
 			 * @todo [GENERAL] Should use is own method. Rethink the purpose.
 			 * @note If this function return false, the observer will be automatically detached.
 			 * @return bool
@@ -825,14 +825,14 @@ namespace EmEn::Scenes
 
 			/**
 			 * @brief Called when the entity has moved.
-			 * @todo [PHYSICS] Should use is own method.
+			 * @todo [PHYSICS] Should use its own method.
 			 * @return void
 			 */
 			virtual void onLocationDataUpdate () noexcept = 0;
 
 			std::map< std::string, std::shared_ptr< Component::Abstract > > m_components;
-			Libs::Math::Cuboid< float > m_boundingBox;
-			Libs::Math::Sphere< float > m_boundingSphere;
+			Libs::Math::Space3D::AACuboid< float > m_boundingBox;
+			Libs::Math::Space3D::Sphere< float > m_boundingSphere;
 			Physics::PhysicalObjectProperties m_physicalObjectProperties;
 			uint32_t m_birthTime{0};
 			size_t m_lastUpdatedMoveCycle{0};

@@ -28,8 +28,8 @@
 
 namespace EmEn::Graphics::Renderable
 {
-	SeaLevelInterface::SeaLevelInterface (const std::string & name, uint32_t resourceFlagBits) noexcept
-		: Interface(name, resourceFlagBits)
+	SeaLevelInterface::SeaLevelInterface (const std::string & name, uint32_t resourceFlags) noexcept
+		: Interface(name, resourceFlags)
 	{
 
 	}

@@ -27,21 +27,17 @@
 #pragma once
 
 /* STL inclusions. */
-#include <array>
 #include <cstdint>
-#include <memory>
-#include <string>
 #include <vector>
+#include <string>
+#include <memory>
 
 /* Local inclusions for inheritances. */
 #include "Libs/NameableTrait.hpp"
 
 /* Local inclusions for usages. */
-#include "Graphics/Geometry/Interface.hpp"
-#include "Graphics/Material/Interface.hpp"
-#include "Saphir/AbstractShader.hpp"
+#include "Graphics/RenderableInstance/Abstract.hpp"
 #include "Saphir/Program.hpp"
-#include "Saphir/SetIndexes.hpp"
 
 namespace EmEn
 {
@@ -52,7 +48,6 @@ namespace EmEn
 			class Abstract;
 		}
 
-		class VertexBufferFormatManager;
 		class Renderer;
 	}
 
@@ -66,11 +61,25 @@ namespace EmEn
 
 namespace EmEn::Saphir::Generator
 {
+	/** @brief Generator flag bits. */
+	enum GeneratorFlagBits : uint32_t
+	{
+		None = 0,
+		Debug = 1 << 0,
+		NormalMappingEnabled = 1 << 1,
+		HighQualityLightEnabled = 1 << 2,
+		HighQualityReflectionEnabled = 1 << 3,
+		IsInstancingEnabled = 1 << 4,
+		IsRenderableFacingCamera = 1 << 5,
+		IsLightingEnabled = 1 << 6,
+	};
+
 	/**
 	 * @brief The base class for every shader program generator.
 	 * @extends EmEn::Libs::NameableTrait This will hold the name of the program generated.
+	 * @extends EmEn::Libs::FlagTrait Enables flag ability for parameters.
 	 */
-	class Abstract : public Libs::NameableTrait
+	class Abstract : public Libs::NameableTrait, public Libs::FlagTrait< uint32_t >
 	{
 		public:
 
@@ -116,7 +125,14 @@ namespace EmEn::Saphir::Generator
 			void
 			enableDebugging (bool state) noexcept
 			{
-				m_flags[Debug] = state;
+				if ( state )
+				{
+					this->enableFlag(Debug);
+				}
+				else
+				{
+					this->disableFlag(Debug);
+				}
 			}
 
 			/**
@@ -127,7 +143,7 @@ namespace EmEn::Saphir::Generator
 			bool
 			debuggingEnabled () const noexcept
 			{
-				return m_flags[Debug];
+				return this->isFlagEnabled(Debug);
 			}
 
 			/**
@@ -138,7 +154,7 @@ namespace EmEn::Saphir::Generator
 			bool
 			normalMappingEnabled () const noexcept
 			{
-				return m_flags[NormalMappingEnabled];
+				return this->isFlagEnabled(NormalMappingEnabled);
 			}
 
 			/**
@@ -149,7 +165,7 @@ namespace EmEn::Saphir::Generator
 			bool
 			highQualityLightEnabled () const noexcept
 			{
-				return m_flags[HighQualityLightEnabled];
+				return this->isFlagEnabled(HighQualityLightEnabled);
 			}
 
 			/**
@@ -160,7 +176,29 @@ namespace EmEn::Saphir::Generator
 			bool
 			highQualityReflectionEnabled () const noexcept
 			{
-				return m_flags[HighQualityReflectionEnabled];
+				return this->isFlagEnabled(HighQualityReflectionEnabled);
+			}
+
+			/**
+			 * @brief Returns whether the renderable is using instancing.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isInstancingEnabled () const noexcept
+			{
+				return this->isFlagEnabled(IsInstancingEnabled);
+			}
+
+			/**
+			 * @brief Returns whether the renderable is facing the camera like sprites.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isRenderableFacingCamera () const noexcept
+			{
+				return this->isFlagEnabled(IsRenderableFacingCamera);
 			}
 
 			/**
@@ -176,14 +214,113 @@ namespace EmEn::Saphir::Generator
 			}
 
 			/**
+			 * @brief Returns whether the generator have access to the renderable instance.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isRenderableInstanceAvailable () const noexcept
+			{
+				return m_renderableInstance != nullptr;
+			}
+
+			/**
+			 * @brief Returns the renderable instance pointer.
+			 * @return const Graphics::Renderable::Interface *
+			 */
+			[[nodiscard]]
+			const Graphics::RenderableInstance::Abstract *
+			getRenderableInstance () const noexcept
+			{
+				return m_renderableInstance.get();
+			}
+
+			/**
+			 * @brief Returns the renderable interface pointer.
+			 * @return const Graphics::Renderable::Interface *
+			 */
+			[[nodiscard]]
+			const Graphics::Renderable::Interface *
+			getRenderable () const noexcept
+			{
+				if ( !this->isRenderableInstanceAvailable() )
+				{
+					return nullptr;
+				}
+
+				return m_renderableInstance->renderable();
+			}
+
+			/**
+			 * @brief Returns the geometry interface pointer.
+			 * @return const Graphics::Geometry::Interface *
+			 */
+			[[nodiscard]]
+			const Graphics::Geometry::Interface *
+			getGeometryInterface () const noexcept
+			{
+				if ( !this->isRenderableInstanceAvailable() )
+				{
+					return nullptr;
+				}
+
+				return m_renderableInstance->renderable()->geometry();
+			}
+
+			/**
+			 * @brief Returns whether the generator will use a material.
+			 * @note The material is provided by the constructor with a renderable instance.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			materialEnabled () const noexcept
+			{
+				if ( !this->isRenderableInstanceAvailable() )
+				{
+					return false;
+				}
+
+				return m_renderableInstance->renderable()->material(m_layerIndex) != nullptr;
+			}
+
+			/**
+			 * @brief Returns the renderable instance layer index being in use.
+			 * @return
+			 */
+			[[nodiscard]]
+			uint32_t
+			layerIndex () const noexcept
+			{
+				return m_layerIndex;
+			}
+
+			/**
+			 * @brief Returns the material interface pointer.
+			 * @warning Can be a null pointer, check with GraphicsShaderGenerator::materialEnabled().
+			 * @return const Graphics::Material::Interface *
+			 */
+			[[nodiscard]]
+			const Graphics::Material::Interface *
+			getMaterialInterface () const noexcept
+			{
+				if ( !this->isRenderableInstanceAvailable() )
+				{
+					return nullptr;
+				}
+
+				return m_renderableInstance->renderable()->material(m_layerIndex);
+			}
+
+			/**
 			 * @brief Returns the shader program.
 			 * @return std::shared_ptr< Program >
 			 */
 			[[nodiscard]]
 			std::shared_ptr< Program >
-			program () const noexcept
+			shaderProgram () const noexcept
 			{
-				return m_program;
+				return m_shaderProgram;
 			}
 
 			/**
@@ -193,32 +330,6 @@ namespace EmEn::Saphir::Generator
 			 */
 			[[nodiscard]]
 			uint32_t getNextShaderVariableLocation (uint32_t increment = 1) noexcept;
-
-			/**
-			 * @brief Generates the program shaders source codes.
-			 * @param vertexBufferFormatManager A reference to the vertex buffer format manager.
-			 * @param GLSLVersion The GLSL version in use. Default "460".
-			 * @param GLSLProfile The GLSL profile in use. Default "core".
-			 * @return bool
-			 */
-			[[nodiscard]]
-			bool generateProgram (Graphics::VertexBufferFormatManager & vertexBufferFormatManager, const std::string & GLSLVersion = DefaultGLSLVersion, const std::string & GLSLProfile = DefaultGLSLProfile) noexcept;
-
-			/**
-			 * @brief Generates all layout for the graphics pipeline.
-			 * @param renderer A reference to the renderer to manage redundant layouts.
-			 * @return bool
-			 */
-			[[nodiscard]]
-			bool generateProgramLayout (Graphics::Renderer & renderer) noexcept;
-
-			/**
-			 * @brief Creates the final Vulkan graphics pipeline.
-			 * @param renderer A reference to the renderer to manage redundant resources.
-			 * @return bool
-			 */
-			[[nodiscard]]
-			bool createGraphicsPipeline (Graphics::Renderer & renderer) noexcept;
 
 			/**
 			 * @brief Declares the view uniform block according to input information.
@@ -248,38 +359,41 @@ namespace EmEn::Saphir::Generator
 			bool declareMatrixPushConstantBlock (AbstractShader & shader) const noexcept;
 
 			/**
-			 * @brief Returns whether program will use an optional material.
-			 * @note Can be overridden to return directly false.
+			 * @brief Generates the shader program.
+			 * @param renderer A reference to the graphics renderer.
+			 * @param GLSLVersion The GLSL version in use. Default "460".
+			 * @param GLSLProfile The GLSL profile in use. Default "core".
 			 * @return bool
 			 */
 			[[nodiscard]]
-			virtual bool materialEnabled () const noexcept = 0;
-
-			/**
-			 * @brief Returns the material interface pointer.
-			 * @note Should be overridden to use material.
-			 * @warning Can be null, check with GraphicsShaderGenerator::materialEnabled().
-			 * @return const Graphics::Material::Interface *
-			 */
-			[[nodiscard]]
-			virtual const Graphics::Material::Interface * material () const noexcept = 0;
-
-			/**
-			 * @brief Returns the geometry interface pointer.
-			 * @return const Graphics::Geometry::Interface *
-			 */
-			[[nodiscard]]
-			virtual const Graphics::Geometry::Interface * geometry () const noexcept = 0;
+			bool generateShaderProgram (Graphics::Renderer & renderer, const std::string & GLSLVersion = DefaultGLSLVersion, const std::string & GLSLProfile = DefaultGLSLProfile) noexcept;
 
 		protected:
 
-			/** 
-			 * @brief Constructs an abstract shader generator.
-			 * @param settings A reference to the core settings.
-			 * @param name A reference to string for the program being generated.
+			/**
+			 * @brief Constructs an abstract shader program generator.
+			 * @param shaderProgramName A reference to string for the program being generated.
 			 * @param renderTarget A reference to a renderTarget smart pointer.
 			 */
-			Abstract (Settings & settings, const std::string & name, const std::shared_ptr< const Graphics::RenderTarget::Abstract > & renderTarget) noexcept;
+			Abstract (const std::string & shaderProgramName, const std::shared_ptr< const Graphics::RenderTarget::Abstract > & renderTarget) noexcept;
+
+			/**
+			 * @brief Constructs an abstract shader program generator with a specified renderable instance.
+			 * @param shaderProgramName A reference to string for the program being generated.
+			 * @param renderTarget A reference to a renderTarget smart pointer.
+			 * @param renderableInstance A reference to a renderTarget smart pointer.
+			 * @param layerIndex The renderable instance layer targeted.
+			 */
+			Abstract (const std::string & shaderProgramName, const std::shared_ptr< const Graphics::RenderTarget::Abstract > & renderTarget, const std::shared_ptr< const Graphics::RenderableInstance::Abstract > & renderableInstance, uint32_t layerIndex) noexcept;
+
+			/**
+			 * @brief Constructs an abstract shader program generator with a generic geometry specification.
+			 * @param shaderProgramName A reference to string for the program being generated.
+			 * @param renderTarget A reference to a renderTarget smart pointer.
+			 * @param topology A reference to a renderTarget smart pointer.
+			 * @param geometryFlags The renderable instance layer targeted.
+			 */
+			Abstract (const std::string & shaderProgramName, const std::shared_ptr< const Graphics::RenderTarget::Abstract > & renderTarget, Graphics::Topology topology, uint32_t geometryFlags) noexcept;
 
 			/**
 			 * @brief Generates the fall-back vertex shader stage of the graphics pipeline.
@@ -310,7 +424,7 @@ namespace EmEn::Saphir::Generator
 			 * @return bool
 			 */
 			[[nodiscard]]
-			virtual bool onGenerateProgram (Program & program) noexcept = 0;
+			virtual bool onGenerateShadersCode (Program & program) noexcept = 0;
 
 			/**
 			 * @brief Methods to override for generating specific program layout.
@@ -321,7 +435,7 @@ namespace EmEn::Saphir::Generator
 			 * @return bool
 			 */
 			[[nodiscard]]
-			virtual bool onGenerateProgramLayout (const SetIndexes & setIndexes, std::vector< std::shared_ptr< Vulkan::DescriptorSetLayout > > & descriptorSetLayouts, std::vector< VkPushConstantRange > & pushConstantRanges) noexcept = 0;
+			virtual bool onCreateDataLayouts (const SetIndexes & setIndexes, std::vector< std::shared_ptr< Vulkan::DescriptorSetLayout > > & descriptorSetLayouts, std::vector< VkPushConstantRange > & pushConstantRanges) noexcept = 0;
 
 			/**
 			 * @brief Configures the graphics pipeline from child shader generators.
@@ -344,24 +458,28 @@ namespace EmEn::Saphir::Generator
 
 		private:
 
-			/* Flag names */
-			static constexpr auto Debug{0UL};
-			static constexpr auto NormalMappingEnabled{1UL};
-			static constexpr auto HighQualityLightEnabled{2UL};
-			static constexpr auto HighQualityReflectionEnabled{3UL};
+			/**
+			 * @brief Creates all data description layouts for the graphics pipeline.
+			 * @param renderer A reference to the renderer.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool createDataLayout (Graphics::Renderer & renderer) noexcept;
+
+			/**
+			 * @brief Creates the final Vulkan graphics pipeline.
+			 * @param renderer A reference to the renderer.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool createGraphicsPipeline (Graphics::Renderer & renderer) noexcept;
 
 			std::shared_ptr< const Graphics::RenderTarget::Abstract > m_renderTarget;
-			std::shared_ptr< Program > m_program;
+			std::shared_ptr< const Graphics::RenderableInstance::Abstract > m_renderableInstance;
+			uint32_t m_layerIndex{0};
+			Graphics::Topology m_topology{Graphics::Topology::TriangleList};
+			uint32_t m_geometryFlags{0};
+			std::shared_ptr< Program > m_shaderProgram;
 			uint32_t m_nextShaderVariableLocation{0};
-			std::array< bool, 8 > m_flags{
-				false/*Debug*/,
-				false/*NormalMappingEnabled*/,
-				false/*HighQualityLightEnabled*/,
-				false/*HighQualityReflectionEnabled*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/
-			};
 	};
 }

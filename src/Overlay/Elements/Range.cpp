@@ -35,7 +35,7 @@ namespace EmEn::Overlay::Elements
 	using namespace EmEn::Libs::Math;
 	using namespace EmEn::Libs::PixelFactory;
 
-	Range::Range (const FramebufferProperties & framebufferProperties, const std::string & name, const Math::Rectangle< float > & geometry, float depth) noexcept
+	Range::Range (const FramebufferProperties & framebufferProperties, const std::string & name, const Math::Space2D::AARectangle< float > & geometry, float depth) noexcept
 		: ComposedSurface(framebufferProperties, name, geometry, depth)//, m_textWriter(this->pixmap())
 	{
 

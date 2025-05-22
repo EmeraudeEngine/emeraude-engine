@@ -35,8 +35,9 @@
 namespace EmEn::Libs
 {
 	/**
-	 * @brief This trait is intended to be inherited by an object which need threaded tasks.
+	 * @brief This trait is intended to be inherited by an object that needs threaded tasks.
 	 * @tparam data_t The type of data to parallelize.
+	 * @deprecated Use Libs::ThreadPool instead!
 	 */
 	template< typename data_t >
 	class ParallelizableTrait
@@ -115,7 +116,7 @@ namespace EmEn::Libs
 			}
 
 			/**
-			 * @brief Waits for all job to finish.
+			 * @brief Waits for all jobs to finish.
 			 * @return void
 			 */
 			void

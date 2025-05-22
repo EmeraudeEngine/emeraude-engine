@@ -52,7 +52,15 @@ namespace EmEn
 			 * @param location The location of the message in the code source.
 			 * @param threadId The thread ID.
 			 */
-			TracerEntry (Severity severity, const char * tag, std::string message, const std::source_location & location, const std::thread::id & threadId) noexcept;
+			TracerEntry (Severity severity, const char * tag, std::string message, const std::source_location & location, const std::thread::id & threadId) noexcept
+				: m_severity(severity),
+				m_tag(tag),
+				m_message(std::move(message)),
+				m_location(location),
+				m_threadId(threadId)
+			{
+
+			}
 
 			/**
 			 * @brief Returns the time of the message.

@@ -79,8 +79,8 @@ namespace EmEn::Graphics::Renderable
 			/**
 			 * @brief Constructs a renderable sea level.
 			 * @param name A reference to a string for the resource name.
-			 * @param resourceFlagBits The resource flag bits.
+			 * @param resourceFlags The resource flag bits.
 			 */
-			explicit SeaLevelInterface (const std::string & name, uint32_t resourceFlagBits) noexcept;
+			explicit SeaLevelInterface (const std::string & name, uint32_t resourceFlags) noexcept;
 	};
 }

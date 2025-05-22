@@ -48,7 +48,7 @@ namespace EmEn::Graphics
 			static constexpr auto Fragment = "em_Fragment";
 
 			/**
-			 * @brief Construct a offscreen framebuffer for post-rendering effects.
+			 * @brief Construct an offscreen framebuffer for post-rendering effects.
 			 * @param width The framebuffer width.
 			 * @param height The framebuffer height.
 			 * @param colorBufferBits The desired color precision.
@@ -66,14 +66,14 @@ namespace EmEn::Graphics
 			bool usable () const noexcept;
 
 			/**
-			 * @brief Sets a list of post effect.
+			 * @brief Sets a list of post-effect.
 			 * @param effectsList The list of shader effects.
 			 * @return void
 			 */
 			void setEffectsList (const Saphir::FramebufferEffectsList & effectsList) noexcept;
 
 			/**
-			 * @brief Clears every effects.
+			 * @brief Clears every effect.
 			 * @return void
 			 */
 			void clearEffects () noexcept;
@@ -92,10 +92,10 @@ namespace EmEn::Graphics
 
 			/**
 			 * @brief Render the off-screen buffer with effects to the default framebuffer.
-			 * @param region The viewport area to blit/copy the render.
+			 * @param region The viewport area to blit/copies the render.
 			 * @return void
 			 */
-			void render (const Libs::Math::Rectangle< uint32_t > & region) const noexcept;
+			void render (const Libs::Math::Space2D::AARectangle< uint32_t > & region) const noexcept;
 
 			/**
 			 * @brief Returns a pointer to the framebuffer responsible for the post-processor.

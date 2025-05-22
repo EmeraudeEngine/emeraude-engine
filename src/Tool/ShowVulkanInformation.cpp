@@ -64,7 +64,7 @@ namespace EmEn::Tool
 			info << "\n" << "No physical device available !" << "\n";
 		}
 
-		Tracer::instance()->enableTracing(false);
+		Tracer::instance()->disableTracer(true);
 
 		return true;
 	}

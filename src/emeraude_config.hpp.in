@@ -26,8 +26,81 @@
 
 #pragma once
 
-/* Include platform macros. */
-#include "platform.hpp"
+/*****************************************************************
+ * Warning: This file is configured by cmake, do not modify it ! *
+ *****************************************************************/
+
+#if defined(DEBUG) && defined(NDEBUG)
+#error "DEBUG and NDEBUG flags are set together ! Check the project configuration."
+#endif
+
+#pragma once
+
+#if defined(__i386__) || defined(_M_IX86) // Major detection of x86 32bit architecture.
+	#define IS_X86_ARCH 1
+	#define IS_ARM_ARCH 0
+	#define IS_32BIT_PLATFORM 1
+	#define IS_64BIT_PLATFORM 0
+	#define PLATFORM_PRECISION "32bit"
+	#define PLATFORM_ARCH "x86_32"
+	#define PLATFORM_ARCH_NICENAME "Intel x86"
+#elif defined(__x86_64__) || defined(__amd64__) || defined(_M_AMD64) || defined(_WIN64) // Major detection of x86 64bit architecture.
+	#define IS_X86_ARCH 1
+	#define IS_ARM_ARCH 0
+	#define IS_32BIT_PLATFORM 0
+	#define IS_64BIT_PLATFORM 1
+	#define PLATFORM_PRECISION "64bit"
+	#define PLATFORM_ARCH "x86_64"
+	#define PLATFORM_ARCH_NICENAME "AMD64"
+#elif defined(__arm__) // Major detection of ARM 32bit architecture.
+	#define IS_X86_ARCH 0
+	#define IS_ARM_ARCH 1
+	#define IS_32BIT_PLATFORM 1
+	#define IS_64BIT_PLATFORM 0
+	#define PLATFORM_PRECISION "32bit"
+	#define PLATFORM_ARCH "arm"
+	#define PLATFORM_ARCH_NICENAME "ARMv7" // Should be the ARMv7
+#elif defined(__aarch64__) || defined(__arm64__) // Major detection of ARM 64bit architecture.
+	#define IS_X86_ARCH 0
+	#define IS_ARM_ARCH 1
+	#define IS_32BIT_PLATFORM 0
+	#define IS_64BIT_PLATFORM 1
+	#define PLATFORM_PRECISION "64bit"
+	#define PLATFORM_ARCH "arm64"
+	#define PLATFORM_ARCH_NICENAME "AArch64"
+#else
+	#error "Unsupported architecture !"
+#endif
+
+#if defined(linux) || defined(__linux) || defined(__linux__) // Major detection of Linux OS
+	#define IS_LINUX 1
+	#define IS_WINDOWS 0
+	#define IS_MACOS 0
+	#define OS_NAME "linux"
+#elif defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__NT__) || defined(_WIN64) // Major detection of Windows OS
+	#define IS_LINUX 0
+	#define IS_WINDOWS 1
+	#define IS_MACOS 0
+	#define OS_NAME "windows"
+#elif defined(__APPLE__) // Major detection of Apple OS
+	#define IS_LINUX 0
+	#define IS_WINDOWS 0
+	#define IS_MACOS 1
+	#define OS_NAME "macos"
+#else
+	#error "Unsupported OS !"
+#endif
+
+#define PLATFORM_TARGETED OS_NAME "-" PLATFORM_PRECISION "-" PLATFORM_ARCH
+
+/* NOTE: Code will use the GCC macro for printing function signature. */
+#ifndef __PRETTY_FUNCTION__ // NOLINT(bugprone-reserved-identifier)
+	#ifdef _MSC_VER
+		#define __PRETTY_FUNCTION__ __FUNCSIG__
+	#else
+		#define __PRETTY_FUNCTION__ __FUNCTION__
+	#endif
+#endif
 
 #define EMERAUDE_ENGINE 1
 #define ENGINE_NAME "@PROJECT_NAME@"
@@ -37,35 +110,15 @@
 #define ENGINE_VERSION_STRING "@PROJECT_VERSION_MAJOR@.@PROJECT_VERSION_MINOR@.@PROJECT_VERSION_PATCH@"
 
 #ifdef DEBUG
-	#define BOOLEAN_FOLLOWING_DEBUG true
-	#define BOOLEAN_FOLLOWING_RELEASE false
-
-	/* Libraries debug controls at compile-time. */
 	#cmakedefine EMERAUDE_DEBUG_OBSERVER_PATTERN
 	#cmakedefine EMERAUDE_DEBUG_PIXEL_FACTORY
 	#cmakedefine EMERAUDE_DEBUG_VERTEX_FACTORY
 	#cmakedefine EMERAUDE_DEBUG_WAVE_FACTORY
-	#cmakedefine KEYBOARD_INPUT_DEBUG_ENABLED
-	#cmakedefine POINTER_INPUT_DEBUG_ENABLED
-	#cmakedefine WINDOW_EVENTS_DEBUG_ENABLED
-	#cmakedefine VK_TRACKING_ENABLED
-#else
-	#define BOOLEAN_FOLLOWING_DEBUG false
-	#define BOOLEAN_FOLLOWING_RELEASE false
+	#cmakedefine EMERAUDE_DEBUG_KEYBOARD_INPUT
+	#cmakedefine EMERAUDE_DEBUG_POINTER_INPUT
+	#cmakedefine EMERAUDE_DEBUG_WINDOW_EVENTS
+	#cmakedefine EMERAUDE_DEBUG_VULKAN_TRACKING
 #endif
-
-#ifndef __PRETTY_FUNCTION__
-	#ifdef _MSC_VER
-		#define __PRETTY_FUNCTION__ __FUNCSIG__
-	#else
-		#define __PRETTY_FUNCTION__ __FUNCTION__
-	#endif
-#endif
-
-/* Some constants */
-#define EMERAUDE_INTERNET_CHECK_DOMAIN "@EMERAUDE_INTERNET_CHECK_DOMAIN@"
-
-#define GLFW_INCLUDE_VULKAN
 
 /* Third-party libraries enabled at compile-time. */
 #cmakedefine EMERAUDE_USE_SYSTEM_LIBS
@@ -78,4 +131,72 @@
 #cmakedefine BULLET_ENABLED
 #cmakedefine CPUFEATURES_ENABLED
 #cmakedefine HWLOC_ENABLED
-#cmakedefine GTK3_ENABLED
+
+/* NOTE: Be sure this define is always set for GLFW.
+ * FIXME: Check if this is useful ! */
+#define GLFW_INCLUDE_VULKAN
+
+
+
+/* ===== Modern C++ macro like constants ===== */
+
+#define ON true
+#define On true
+#define OFF false
+#define Off false
+
+namespace EmEn
+{
+	constexpr bool IsX86Arch{IS_X86_ARCH};
+	constexpr bool IsARMArch{IS_ARM_ARCH};
+	constexpr bool Is32BitPlatform{IS_32BIT_PLATFORM};
+	constexpr bool Is64BitPlatform{IS_64BIT_PLATFORM};
+	constexpr auto PlatformPrecision{PLATFORM_PRECISION};
+	constexpr auto PlatformArch{PLATFORM_ARCH};
+	constexpr auto PlatformArchNiceName{PLATFORM_ARCH_NICENAME};
+	constexpr auto PlatformTargeted{PLATFORM_TARGETED};
+
+	constexpr bool IsLinux{IS_LINUX};
+	constexpr bool IsWindows{IS_WINDOWS};
+	constexpr bool IsMacOS{IS_MACOS};
+	constexpr auto OSName{OS_NAME};
+
+    constexpr auto EngineName{"@PROJECT_NAME@"};
+    constexpr unsigned int VersionMajor{@PROJECT_VERSION_MAJOR@};
+    constexpr unsigned int VersionMinor{@PROJECT_VERSION_MINOR@};
+    constexpr unsigned int VersionPatch{@PROJECT_VERSION_PATCH@};
+    constexpr auto VersionString{"@PROJECT_VERSION_MAJOR@.@PROJECT_VERSION_MINOR@.@PROJECT_VERSION_PATCH@"};
+    constexpr auto InternetCheckDomain{"@EMERAUDE_INTERNET_CHECK_DOMAIN@"};
+    constexpr auto DefaultUserAgent{"@PROJECT_NAME@/@PROJECT_VERSION_MAJOR@.@PROJECT_VERSION_MINOR@.@PROJECT_VERSION_PATCH@ (" PLATFORM_TARGETED ")"};
+
+    #ifdef DEBUG
+    	constexpr bool IsDebug{true};
+        constexpr bool IsRelease{false};
+
+        constexpr bool ObserverDebugEnabled{@EMERAUDE_DEBUG_OBSERVER_PATTERN@};
+        constexpr bool PixelFactoryDebugEnabled{@EMERAUDE_DEBUG_PIXEL_FACTORY@};
+        constexpr bool VertexFactoryDebugEnabled{@EMERAUDE_DEBUG_VERTEX_FACTORY@};
+        constexpr bool WaveFactoryDebugEnabled{@EMERAUDE_DEBUG_WAVE_FACTORY@};
+        constexpr bool KeyboardInputDebugEnabled{@EMERAUDE_DEBUG_KEYBOARD_INPUT@};
+        constexpr bool PointerInputDebugEnabled{@EMERAUDE_DEBUG_POINTER_INPUT@};
+        constexpr bool WindowEventsDebugEnabled{@EMERAUDE_DEBUG_WINDOW_EVENTS@};
+        constexpr bool VulkanTrackingDebugEnabled{@EMERAUDE_DEBUG_VULKAN_TRACKING@};
+    #else
+    	constexpr bool IsDebug{false};
+        constexpr bool IsRelease{true};
+
+        constexpr bool ObserverDebugEnabled{false};
+        constexpr bool PixelFactoryDebugEnabled{false};
+        constexpr bool VertexFactoryDebugEnabled{false};
+        constexpr bool WaveFactoryDebugEnabled{false};
+        constexpr bool KeyboardInputDebugEnabled{false};
+        constexpr bool PointerInputDebugEnabled{false};
+        constexpr bool WindowEventsDebugEnabled{false};
+        constexpr bool VulkanTrackingDebugEnabled{false};
+    #endif
+}
+
+#undef ON
+#undef On
+#undef OFF
+#undef Off

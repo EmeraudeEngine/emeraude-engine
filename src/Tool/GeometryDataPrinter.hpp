@@ -27,8 +27,8 @@
 #pragma once
 
 /* STL inclusions. */
+#include <cstdint>
 #include <array>
-#include <cstddef>
 #include <string>
 
 /* Local inclusions for inheritances. */
@@ -42,7 +42,7 @@ namespace EmEn::Tool
 {
 	/**
 	 * @brief The geometry data printer tool.
-	 * @extends EmEn::Tool::ToolInterface This is tool interface.
+	 * @extends EmEn::Tool::ToolInterface This is a tool interface.
 	 */
 	class GeometryDataPrinter final : public ToolInterface
 	{
@@ -76,12 +76,12 @@ namespace EmEn::Tool
 			static constexpr auto EnableTexCoords{2UL};
 			static constexpr auto Enable3DTexCoords{3UL};
 
-			std::string m_outputFile{};
-			Libs::VertexFactory::Shape< float > m_shape{};
+			std::string m_outputFile;
+			Libs::VertexFactory::Shape< float, uint32_t > m_shape;
 			Graphics::ShapeType m_shapeType{Graphics::ShapeType::Cube};
 			float m_baseSize{1.0F};
 			float m_baseLength{4.0F};
-			size_t m_quality{8};
+			uint32_t m_quality{8};
 			std::array< bool, 8 > m_flags{
 				false/*EnableNormals*/,
 				false/*EnableTangentSpace*/,

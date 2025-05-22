@@ -644,8 +644,8 @@ namespace EmEn::Scenes
 	CartesianFrame< float >
 	Node::getWorldCoordinates () const noexcept
 	{
-		/* NOTE: As root, return the origin !
-		 * If the parent is the root node, just return the frame. */
+		/* NOTE: As root, return the origin!
+		 * If the parent is the root node, return the frame. */
 		if ( this->isRoot() || this->parent()->isRoot() )
 		{
 			return m_cartesianFrame;
@@ -680,12 +680,12 @@ namespace EmEn::Scenes
 		return CartesianFrame< float >{matrix, scalingVector};
 	}
 
-	Cuboid< float >
+	Space3D::AACuboid< float >
 	Node::getWorldBoundingBox () const noexcept
 	{
 		if ( this->isRoot() )
 		{
-			/* NOTE: Returns a null box ! */
+			/* NOTE: Returns a null box! */
 			return {};
 		}
 
@@ -697,12 +697,12 @@ namespace EmEn::Scenes
 		return OrientedCuboid< float >{this->localBoundingBox(), this->getWorldCoordinates()}.getAxisAlignedBox();
 	}
 
-	Sphere< float >
+	Space3D::Sphere< float >
 	Node::getWorldBoundingSphere () const noexcept
 	{
 		if ( this->isRoot() )
 		{
-			/* NOTE: Returns a null box ! */
+			/* NOTE: Returns a null sphere! */
 			return {};
 		}
 
@@ -769,7 +769,7 @@ namespace EmEn::Scenes
 		}
 
 		/* Dispatch the movement to every sub node. */
-		for ( const auto & [nodeName, subNode] : m_children )
+		for ( const auto & subNode : m_children | std::views::values )
 		{
 			subNode->onLocationDataUpdate();
 		}
@@ -991,7 +991,7 @@ namespace EmEn::Scenes
 	{
 		if ( observable->is(Component::Abstract::ClassUID) || observable->is(PhysicalObjectProperties::ClassUID) )
 		{
-			/* Avoid an auto forget. */
+			/* NOTE: Avoid an automatic observer release. */
 			return true;
 		}
 
@@ -1005,18 +1005,16 @@ namespace EmEn::Scenes
 			}
 		}
 
-#ifdef DEBUG
-		/* NOTE: Don't know what is it, goodbye ! */
-		TraceInfo{ClassId} <<
+		/* NOTE: Don't know what is it, goodbye! */
+		TraceDebug{ClassId} <<
 			"Received an unhandled notification (Code:" << notificationCode << ") from observable '" << whoIs(observable->classUID()) << "' (UID:" << observable->classUID() << ")  ! "
 			"Forgetting it ...";
-#endif
 
 		return false;
 	}
 
 	bool
-	Node::playAnimation (uint8_t animationID, const Variant & value, size_t cycle) noexcept
+	Node::playAnimation (uint8_t animationID, const Variant & value, size_t /*cycle*/) noexcept
 	{
 		switch ( animationID )
 		{

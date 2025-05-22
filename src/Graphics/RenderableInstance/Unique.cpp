@@ -77,42 +77,45 @@ namespace EmEn::Graphics::RenderableInstance
 		/* [VULKAN-PUSH-CONSTANT:4] Push camera related matrices. */
 		if ( program.wasAdvancedMatricesEnabled() )
 		{
-#ifndef SPLIT_PUSH_CONSTANTS
-			/* NOTE: Create a single buffer for 2x mat4x4. */
-			std::array< float, 32 > buffer{};
-			std::memcpy(buffer.data(), viewMatrix.data(), MatrixBytes);
-			std::memcpy(&buffer[Matrix4Alignment], modelMatrix.data(), MatrixBytes);
+			if constexpr ( MergePushConstants )
+			{
+				/* NOTE: Create a single buffer for 2x mat4x4. */
+				std::array< float, 32 > buffer{};
+				std::memcpy(buffer.data(), viewMatrix.data(), MatrixBytes);
+				std::memcpy(&buffer[Matrix4Alignment], modelMatrix.data(), MatrixBytes);
 
-			/* NOTE: Push the view matrix (V) and the model matrix (M). */
-			vkCmdPushConstants(
-				commandBuffer.handle(),
-				pipelineLayout.handle(),
-				stageFlags,
-				0,
-				MatrixBytes * 2,
-				buffer.data()
-			);
-#else
-			/* NOTE: Push the view matrix (V). */
-			vkCmdPushConstants(
-				commandBuffer.handle(),
-				pipelineLayout.handle(),
-				stageFlags,
-				0,
-				MatrixBytes,
-				viewMatrix.data()
-			);
+				/* NOTE: Push the view matrix (V) and the model matrix (M). */
+				vkCmdPushConstants(
+					commandBuffer.handle(),
+					pipelineLayout.handle(),
+					stageFlags,
+					0,
+					MatrixBytes * 2,
+					buffer.data()
+				);
+			}
+			else
+			{
+				/* NOTE: Push the view matrix (V). */
+				vkCmdPushConstants(
+					commandBuffer.handle(),
+					pipelineLayout.handle(),
+					stageFlags,
+					0,
+					MatrixBytes,
+					viewMatrix.data()
+				);
 
-			/* NOTE: Push the model matrix (M). */
-			vkCmdPushConstants(
-				commandBuffer.handle(),
-				pipelineLayout.handle(),
-				stageFlags,
-				MatrixBytes,
-				MatrixBytes,
-				modelMatrix.data()
-			);
-#endif
+				/* NOTE: Push the model matrix (M). */
+				vkCmdPushConstants(
+					commandBuffer.handle(),
+					pipelineLayout.handle(),
+					stageFlags,
+					MatrixBytes,
+					MatrixBytes,
+					modelMatrix.data()
+				);
+			}
 		}
 		else
 		{
@@ -131,7 +134,7 @@ namespace EmEn::Graphics::RenderableInstance
 	}
 
 	void
-	Unique::bindInstanceModelLayer (const CommandBuffer & commandBuffer, size_t layerIndex) const noexcept
+	Unique::bindInstanceModelLayer (const CommandBuffer & commandBuffer, uint32_t layerIndex) const noexcept
 	{
 		/* Bind the geometry VBO and the optional IBO. */
 		commandBuffer.bind(*this->renderable()->geometry(), layerIndex);

@@ -77,7 +77,7 @@ namespace EmEn::Vulkan
 			return false;
 		}
 
-		m_createInfo.bindingCount = m_setLayoutBindings.size();
+		m_createInfo.bindingCount = static_cast< uint32_t >(m_setLayoutBindings.size());
 		m_createInfo.pBindings = m_setLayoutBindings.data();
 
 		const auto result = vkCreateDescriptorSetLayout(this->device()->handle(), &m_createInfo, nullptr, &m_handle);

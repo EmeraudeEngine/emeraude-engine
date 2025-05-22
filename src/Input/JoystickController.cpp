@@ -151,14 +151,15 @@ namespace EmEn::Input
 			return false;
 		}
 
-#ifdef DEBUG
-		if ( static_cast< size_t >(buttonNum) > JoystickMaxButtons )
+		if constexpr ( IsDebug )
 		{
-			std::cerr << "Buttons limit is " << JoystickMaxButtons << " !" "\n";
+			if ( static_cast< size_t >(buttonNum) > JoystickMaxButtons )
+			{
+				std::cerr << "Buttons limit is " << JoystickMaxButtons << " !" "\n";
 
-			return false;
+				return false;
+			}
 		}
-#endif
 
 		return s_devicesState.at(m_deviceID).buttons[buttonNum];
 	}
@@ -171,14 +172,15 @@ namespace EmEn::Input
 			return true;
 		}
 
-#ifdef DEBUG
-		if ( static_cast< size_t >(buttonNum) > JoystickMaxButtons )
+		if constexpr ( IsDebug )
 		{
-			std::cerr << "Buttons limit is " << JoystickMaxButtons << " !" "\n";
+			if ( static_cast< size_t >(buttonNum) > JoystickMaxButtons )
+			{
+				std::cerr << "Buttons limit is " << JoystickMaxButtons << " !" "\n";
 
-			return true;
+				return true;
+			}
 		}
-#endif
 
 		return !s_devicesState.at(m_deviceID).buttons[buttonNum];
 	}
@@ -191,14 +193,15 @@ namespace EmEn::Input
 			return Center;
 		}
 
-#ifdef DEBUG
-		if ( static_cast< size_t >(hatNum) > JoystickMaxHats )
+		if constexpr ( IsDebug )
 		{
-			std::cerr << "Hats limit is " << JoystickMaxHats << " !" "\n";
+			if ( static_cast< size_t >(hatNum) > JoystickMaxHats )
+			{
+				std::cerr << "Hats limit is " << JoystickMaxHats << " !" "\n";
 
-			return Center;
+				return Center;
+			}
 		}
-#endif
 
 		return s_devicesState.at(m_deviceID).hats[hatNum];
 	}

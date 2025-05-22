@@ -36,7 +36,7 @@
 #include "Constants.hpp"
 #include "Manager.hpp"
 #include "Layouts/Main.hpp"
-#include "Libs/Math/Rectangle.hpp"
+#include "Libs/Math/Space2D/AARectangle.hpp"
 #include "Libs/Math/Vector.hpp"
 #include "Libs/PixelFactory/Pixmap.hpp"
 #include "Tracer.hpp"
@@ -51,7 +51,7 @@ namespace EmEn::Overlay
 	using namespace Graphics;
 	using namespace Vulkan;
 
-	ComposedSurface::ComposedSurface (const FramebufferProperties & framebufferProperties, const std::string & name, const Math::Rectangle< float > & geometry, float depth) noexcept
+	ComposedSurface::ComposedSurface (const FramebufferProperties & framebufferProperties, const std::string & name, const Math::Space2D::AARectangle< float > & geometry, float depth) noexcept
 		: Surface(framebufferProperties, name, geometry, depth)
 	{
 
@@ -92,12 +92,12 @@ namespace EmEn::Overlay
 	}*/
 
 	void
-	ComposedSurface::setPosition (int positionX, int positionY) noexcept
+	ComposedSurface::setPosition (int /*positionX*/, int /*positionY*/) noexcept
 	{
 		// FIXME: Size must use the overlay notified size !
-		const auto windowSize =  Window::instance()->getFramebufferSize();
-		const auto surfaceX = static_cast< float >(windowSize[0]) / static_cast< float >(positionX);
-		const auto surfaceY = static_cast< float >(windowSize[1]) / static_cast< float >(positionY);
+		//const auto windowSize =  Window::instance()->getFramebufferSize();
+		//const auto surfaceX = static_cast< float >(windowSize[0]) / static_cast< float >(positionX);
+		//const auto surfaceY = static_cast< float >(windowSize[1]) / static_cast< float >(positionY);
 
 		//this->setPosition(surfaceX, surfaceY);
 	}

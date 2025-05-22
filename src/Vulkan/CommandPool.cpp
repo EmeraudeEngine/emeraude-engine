@@ -84,7 +84,7 @@ namespace EmEn::Vulkan
 
 		if ( result != VK_SUCCESS )
 		{
-			Tracer::error(ClassId, BlobTrait() << "Unable to create command pool : " << vkResultToCString(result) << " !");
+			TraceError{ClassId} << "Unable to create command pool : " << vkResultToCString(result) << " !";
 
 			return false;
 		}

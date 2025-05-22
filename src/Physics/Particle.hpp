@@ -156,7 +156,7 @@ namespace EmEn::Physics
 
 			/** @copydoc EmEn::Scenes::LocatableInterface::localBoundingBox() const */
 			[[nodiscard]]
-			const Libs::Math::Cuboid< float > &
+			const Libs::Math::Space3D::AACuboid< float > &
 			localBoundingBox () const noexcept override
 			{
 				return Scenes::Component::Abstract::NullBoundingBox;
@@ -164,7 +164,7 @@ namespace EmEn::Physics
 
 			/** @copydoc EmEn::Scenes::LocatableInterface::getWorldBoundingBox() const */
 			[[nodiscard]]
-			Libs::Math::Cuboid< float >
+			Libs::Math::Space3D::AACuboid< float >
 			getWorldBoundingBox () const noexcept override
 			{
 				return Scenes::Component::Abstract::NullBoundingBox;
@@ -172,7 +172,7 @@ namespace EmEn::Physics
 
 			/** @copydoc EmEn::Scenes::LocatableInterface::localBoundingSphere() const */
 			[[nodiscard]]
-			const Libs::Math::Sphere< float > &
+			const Libs::Math::Space3D::Sphere< float > &
 			localBoundingSphere () const noexcept override
 			{
 				return Scenes::Component::Abstract::NullBoundingSphere;
@@ -180,7 +180,7 @@ namespace EmEn::Physics
 
 			/** @copydoc EmEn::Scenes::LocatableInterface::getWorldBoundingSphere() const */
 			[[nodiscard]]
-			Libs::Math::Sphere< float >
+			Libs::Math::Space3D::Sphere< float >
 			getWorldBoundingSphere () const noexcept override
 			{
 				return Scenes::Component::Abstract::NullBoundingSphere;

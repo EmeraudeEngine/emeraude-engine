@@ -135,18 +135,18 @@ namespace EmEn
 			size_t fileRemainingCount () const noexcept;
 
 			/**
-			 * @brief totalBytesTotal
-			 * @return size_t
+			 * @brief Returns the total bytes to wait.
+			 * @return uint64_t
 			 */
 			[[nodiscard]]
-			size_t totalBytesTotal () const noexcept;
+			uint64_t totalBytesTotal () const noexcept;
 
 			/**
-			 * @brief totalBytesReceived
-			 * @return size_t
+			 * @brief Return the total bytes received.
+			 * @return uint64_t
 			 */
 			[[nodiscard]]
-			size_t totalBytesReceived () const noexcept;
+			uint64_t totalBytesReceived () const noexcept;
 
 			/**
 			 * @brief Controls download information output from NetworkManager in console.

@@ -36,7 +36,6 @@
 #include "Resources/ResourceTrait.hpp"
 
 /* Local inclusions for usages. */
-#include "Libs/PixelFactory/Color.hpp"
 #include "Libs/PixelFactory/Pixmap.hpp"
 #include "Resources/Container.hpp"
 #include "Types.hpp"
@@ -59,12 +58,15 @@ namespace EmEn::Graphics
 			/** @brief Observable class unique identifier. */
 			static const size_t ClassUID;
 
+			/** @brief Defines the resource dependency complexity. */
+			static constexpr auto Complexity{Resources::DepComplexity::None};
+
 			/**
 			 * @brief Constructs a cubemap resource.
 			 * @param name The name of the resource.
-			 * @param resourceFlagBits The resource flag bits. Default none. (Unused yet)
+			 * @param resourceFlags The resource flag bits. Default none. (Unused yet)
 			 */
-			explicit CubemapResource (const std::string & name, uint32_t resourceFlagBits = 0) noexcept;
+			explicit CubemapResource (const std::string & name, uint32_t resourceFlags = 0) noexcept;
 
 			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
 			[[nodiscard]]
@@ -86,6 +88,21 @@ namespace EmEn::Graphics
 
 			/** @copydoc EmEn::Resources::ResourceTrait::load(const Json::Value &) */
 			bool load (const Json::Value & data) noexcept override;
+
+			/** @copydoc EmEn::Resources::ResourceTrait::memoryOccupied() const noexcept */
+			[[nodiscard]]
+			size_t
+			memoryOccupied () const noexcept override
+			{
+				size_t bytes = sizeof(*this);
+
+				for ( const auto & pixmap : m_faces )
+				{
+					bytes += pixmap.bytes< size_t >();
+				}
+
+				return bytes;
+			}
 
 			/**
 			 * @brief Loads a cubemap from a packed pixmap.
@@ -118,7 +135,7 @@ namespace EmEn::Graphics
 
 			/**
 			 * @brief Returns the size of the cubemap.
-			 * @note Returns the width of the first face of the cubemap.
+			 * @note Returns the width of the first cubemap face.
 			 * @return uint32_t
 			 */
 			[[nodiscard]]
@@ -138,22 +155,6 @@ namespace EmEn::Graphics
 			[[nodiscard]]
 			Libs::PixelFactory::Color< float > averageColor () const noexcept;
 
-			/**
-			 * @brief Returns a cubemap resource by its name.
-			 * @param resourceName A reference to a string.
-			 * @param directLoad Use the direct loading mode. Default false.
-			 * @return std::shared_ptr< CubemapResource >
-			 */
-			[[nodiscard]]
-			static std::shared_ptr< CubemapResource > get (const std::string & resourceName, bool directLoad = false) noexcept;
-
-			/**
-			 * @brief Returns the default cubemap resource.
-			 * @return std::shared_ptr< CubemapResource >
-			 */
-			[[nodiscard]]
-			static std::shared_ptr< CubemapResource > getDefault () noexcept;
-
 		private:
 
 			/** @copydoc EmEn::Resources::ResourceTrait::onDependenciesLoaded() */
@@ -164,7 +165,7 @@ namespace EmEn::Graphics
 			static constexpr auto PackedKey{"Packed"};
 			static constexpr auto FileFormatKey{"FileFormat"};
 
-			CubemapPixmaps m_data{};
+			CubemapPixmaps m_faces;
 	};
 }
 

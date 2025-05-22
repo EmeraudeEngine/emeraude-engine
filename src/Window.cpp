@@ -117,7 +117,7 @@ namespace EmEn
 				glfwWindowHint(GLFW_REFRESH_RATE, GLFW_DONT_CARE);
 			}
 
-			/* GLFW_AUTO_ICONIFY specifies whether the full screen window will
+			/* GLFW_AUTO_ICONIFY specifies whether the full-screen window will
 			 * automatically iconify and restore the previous video mode on
 			 * input focus loss. Possible values are GLFW_TRUE and GLFW_FALSE.
 			 * This hint is ignored for windowed mode windows. */
@@ -126,6 +126,10 @@ namespace EmEn
 			if ( !this->create(fullscreenWidth, fullscreenHeight, preferredMonitor, true) )
 			{
 				Tracer::fatal(ClassId, "Unable to get a valid fullscreen window !");
+
+				/* NOTE: Set back settings to default to avoid failing start in loop. */
+				m_primaryServices.settings().set< int32_t >(VideoFullscreenWidthKey, DefaultVideoFullscreenWidth);
+				m_primaryServices.settings().set< int32_t >(VideoFullscreenHeightKey, DefaultVideoFullscreenHeight);
 
 				return false;
 			}
@@ -145,15 +149,15 @@ namespace EmEn
 
 			/* GLFW_VISIBLE specifies whether the windowed mode window will
 			 * be initially visible. Possible values are GLFW_TRUE
-			 * and GLFW_FALSE. This hint is ignored for full screen windows. */
-			glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE); /* NOTE: Start hidden ! */
+			 * and GLFW_FALSE. This hint is ignored for full-screen windows. */
+			glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE); /* NOTE: Start hidden! */
 
 			/* GLFW_DECORATED specifies whether the windowed mode window will
 			 * have window decorations such as a border, a close widget, etc.
 			 * An undecorated window will not be resizable by the user but will
 			 * still allow the user to generate close events on some platforms.
 			 * Possible values are GLFW_TRUE and GLFW_FALSE. This hint is ignored
-			 * for full screen windows. */
+			 * for full-screen windows. */
 			glfwWindowHint(GLFW_DECORATED, frameless ? GLFW_FALSE : GLFW_TRUE);
 
 			/* GLFW_FOCUSED specifies whether the windowed mode window will be
@@ -165,16 +169,16 @@ namespace EmEn
 			/* GLFW_FLOATING specifies whether the windowed mode window will be
 			 * floating above other regular windows, also called topmost or always-on-top.
 			 * This is intended primarily for debugging purposes and cannot be used to
-			 * implement proper full screen windows. Possible values are GLFW_TRUE and GLFW_FALSE.
-			 * This hint is ignored for full screen windows. */
+			 * implement proper full-screen windows. Possible values are GLFW_TRUE and GLFW_FALSE.
+			 * This hint is ignored for full-screen windows. */
 			glfwWindowHint(GLFW_FLOATING, GLFW_FALSE);
 
 			/* GLFW_MAXIMIZED specifies whether the windowed mode window will be maximized when created.
-			 * Possible values are GLFW_TRUE and GLFW_FALSE. This hint is ignored for full screen windows. */
+			 * Possible values are GLFW_TRUE and GLFW_FALSE. This hint is ignored for full-screen windows. */
 			glfwWindowHint(GLFW_MAXIMIZED, GLFW_FALSE);
 
 			/* GLFW_CENTER_CURSOR specifies whether the cursor should be centered over newly
-			 * created full screen windows. Possible values are GLFW_TRUE and GLFW_FALSE.
+			 * created full-screen windows. Possible values are GLFW_TRUE and GLFW_FALSE.
 			 * This hint is ignored for windowed mode windows. */
 			glfwWindowHint(GLFW_CENTER_CURSOR, GLFW_TRUE);
 
@@ -193,36 +197,43 @@ namespace EmEn
 			 * This includes the initial placement when the window is created.
 			 * Possible values are GLFW_TRUE and GLFW_FALSE.
 			 *
-			 * This hint only has an effect on platforms where screen coordinates
+			 * This hint only affects platforms where screen coordinates
 			 * and pixels always map 1:1 such as Windows and X11. On platforms like
-			 * macOS the resolution of the framebuffer is changed independently
+			 * macOS, the resolution of the framebuffer is changed independently
 			 * of the window size.*/
 			glfwWindowHint(GLFW_SCALE_TO_MONITOR, GLFW_FALSE);
 
-#if IS_LINUX
-			/* GLFW_X11_CLASS_NAME and GLFW_X11_INSTANCE_NAME specifies the desired ASCII
-			 * encoded class and instance parts of the ICCCM WM_CLASS window property. */
-			glfwWindowHintString(GLFW_X11_CLASS_NAME, ENGINE_NAME);
-			glfwWindowHintString(GLFW_X11_INSTANCE_NAME, ENGINE_NAME "_instance");
-#endif
+			if constexpr ( IsLinux )
+			{
+				/* GLFW_X11_CLASS_NAME and GLFW_X11_INSTANCE_NAME specifies the desired ASCII
+				 * encoded class and instance parts of the ICCCM WM_CLASS window property. */
+				glfwWindowHintString(GLFW_X11_CLASS_NAME, EngineName);
+				glfwWindowHintString(GLFW_X11_INSTANCE_NAME, ENGINE_NAME "_instance"); // FIXME: Check to pass the application name here.
+			}
 
-#if IS_MACOS
-			/* GLFW_COCOA_RETINA_FRAMEBUFFER specifies whether to use full resolution framebuffers on Retina displays.
-			 * Possible values are GLFW_TRUE and GLFW_FALSE. This is ignored on other platforms. */
-			glfwWindowHint(GLFW_COCOA_RETINA_FRAMEBUFFER, GLFW_TRUE);
-			/* GLFW_COCOA_FRAME_NAME specifies the UTF-8 encoded name to use for autosaving the window frame, or if
-			 * empty disables frame autosaving for the window. This is ignored on other platforms. */
-			glfwWindowHintString(GLFW_COCOA_FRAME_NAME, ENGINE_NAME);
-			/* GLFW_COCOA_GRAPHICS_SWITCHING specifies whether to in Automatic Graphics Switching, i.e. to allow the
-			 * system to choose the integrated GPU for the OpenGL context and move it between GPUs if necessary or
-			 * whether to force it to always run on the discrete GPU. This only affects systems with both integrated
-			 * and discrete GPUs. Possible values are GLFW_TRUE and GLFW_FALSE. This is ignored on other platforms. */
-			glfwWindowHint(GLFW_COCOA_GRAPHICS_SWITCHING, GLFW_FALSE);
-#endif
+			if constexpr ( IsWindows )
+			{
+				/* GLFW_COCOA_RETINA_FRAMEBUFFER specifies whether to use full resolution framebuffers on Retina displays.
+				 * Possible values are GLFW_TRUE and GLFW_FALSE. This is ignored on other platforms. */
+				glfwWindowHint(GLFW_COCOA_RETINA_FRAMEBUFFER, GLFW_TRUE);
+				/* GLFW_COCOA_FRAME_NAME specifies the UTF-8 encoded name to use for autosaving the window frame, or if
+				 * empty disables frame autosaving for the window. This is ignored on other platforms. */
+				glfwWindowHintString(GLFW_COCOA_FRAME_NAME, EngineName);
+				/* GLFW_COCOA_GRAPHICS_SWITCHING specifies whether to in Automatic Graphics Switching, i.e., to allow the
+				 * system to choose the integrated GPU for the OpenGL context and move it between GPUs if necessary or
+				 * whether to force it to always run on the discrete GPU. This only affects systems with both integrated
+				 * and discrete GPUs. Possible values are GLFW_TRUE and GLFW_FALSE. This is ignored on other platforms. */
+				glfwWindowHint(GLFW_COCOA_GRAPHICS_SWITCHING, GLFW_FALSE);
+			}
 
 			if ( this->create(windowWidth, windowHeight, preferredMonitor, false) )
 			{
-				this->resize(windowWidth, windowHeight);
+				/* NOTE: If the resize fails (invalid size), set back settings to defaults. */
+				if ( !this->resize(windowWidth, windowHeight) )
+				{
+					m_primaryServices.settings().set< int32_t >(VideoWindowWidthKey, DefaultVideoWindowWidth);
+					m_primaryServices.settings().set< int32_t >(VideoWindowHeightKey, DefaultVideoWindowHeight);
+				}
 			}
 			else
 			{
@@ -271,7 +282,7 @@ namespace EmEn
 			this->setGamma(gamma, preferredMonitor);
 		}
 
-		const auto useNativeCode = !m_primaryServices.settings().get< bool >(VkCreateSurfaceWithGLFWKey, DefaultVkCreateSurfaceWithGLFW);
+		const auto useNativeCode = m_primaryServices.settings().get< bool >(GLFWEnableNativeCodeForVkSurfaceKey, DefaultEnableNativeCodeForVkSurface);
 
 		if ( !this->createSurface(useNativeCode) )
 		{
@@ -282,7 +293,7 @@ namespace EmEn
 
 		this->initializeState();
 
-		/* NOTE : The window starts non-visible. */
+		/* NOTE: The window starts non-visible. */
 		glfwShowWindow(m_handle.get());
 
 		if ( m_flags[ShowInformation] )
@@ -323,16 +334,19 @@ namespace EmEn
 			}
 			else
 			{
-#if IS_MACOS
-				const auto scaledWidth = static_cast< float >(m_state.framebufferWidth) / m_state.contentXScale;
-				const auto scaledHeight = static_cast< float >(m_state.framebufferHeight) / m_state.contentYScale;
+				if constexpr ( IsMacOS )
+				{
+					const auto scaledWidth = static_cast< float >(m_state.framebufferWidth) / m_state.contentXScale;
+					const auto scaledHeight = static_cast< float >(m_state.framebufferHeight) / m_state.contentYScale;
 
-				m_primaryServices.settings().set(VideoWindowWidthKey, static_cast< uint32_t >(scaledWidth));
-				m_primaryServices.settings().set(VideoWindowHeightKey, static_cast< uint32_t >(scaledHeight));
-#else
-				m_primaryServices.settings().set(VideoWindowWidthKey, m_state.framebufferWidth);
-				m_primaryServices.settings().set(VideoWindowHeightKey, m_state.framebufferHeight);
-#endif
+					m_primaryServices.settings().set(VideoWindowWidthKey, static_cast< uint32_t >(scaledWidth));
+					m_primaryServices.settings().set(VideoWindowHeightKey, static_cast< uint32_t >(scaledHeight));
+				}
+				else
+				{
+					m_primaryServices.settings().set(VideoWindowWidthKey, m_state.framebufferWidth);
+					m_primaryServices.settings().set(VideoWindowHeightKey, m_state.framebufferHeight);
+				}
 
 				m_primaryServices.settings().set(VideoWindowXPositionKey, m_state.windowXPosition);
 				m_primaryServices.settings().set(VideoWindowYPositionKey, m_state.windowYPosition);
@@ -342,7 +356,7 @@ namespace EmEn
 		m_surface.reset();
 
 		/* Reset the window pointer.
-		 * NOTE: Will remove automatically all callback */
+		 * NOTE: It will automatically remove all callbacks. */
 		m_handle.reset();
 
 		return true;
@@ -389,7 +403,7 @@ namespace EmEn
 					break;
 				}
 
-				/* Checks for below sizes. */
+				/* Checks for the below sizes. */
 				if ( mode.width < width && mode.width > closest[0] && mode.height < height && mode.height > closest[1] )
 				{
 					closest[0] = mode.width;
@@ -442,23 +456,16 @@ namespace EmEn
 	std::array< int32_t, 2 >
 	Window::getCenteredPosition (const std::array< uint32_t , 2 > & windowSize, int32_t desiredMonitor) const noexcept
 	{
-		const uint32_t monitorIndex =
-			desiredMonitor < 0 ?
-			m_primaryServices.settings().get< uint32_t >(VideoPreferredMonitorKey, DefaultVideoPreferredMonitor) :
-			static_cast< uint32_t >(desiredMonitor);
-
-		auto * monitor = Window::getMonitor(monitorIndex);
+		auto * monitor = Window::getMonitor(desiredMonitor);
 
 		/* Get the monitor virtual position and dimensions and the window dimension. */
-		const auto desktopPosition = getDesktopPosition(monitor);
-		const auto desktopSize = getDesktopSize(monitor);
+		const auto desktopPosition = Window::getDesktopPosition(monitor);
+		const auto desktopSize = Window::getDesktopSize(monitor);
 
-#ifdef DEBUG
 		TraceDebug{ClassId} <<
 			"Desktop position (X: " << desktopPosition[0] << ", Y: " << desktopPosition[1] << ")" "\n"
 			"Desktop dimension (Width: " << desktopSize[0] << ", Height: " << desktopSize[1] << ")" "\n"
 			"Window dimension (Width: " << windowSize[0] << ", Height: " << windowSize[1] << ")" "\n";
-#endif
 
 		/* Get the window position center on the selected monitor. */
 		return {
@@ -595,12 +602,7 @@ namespace EmEn
 	void
 	Window::setGamma (float value, int32_t desiredMonitor) const noexcept
 	{
-		const uint32_t monitorIndex =
-			desiredMonitor < 0 ?
-			m_primaryServices.settings().get< uint32_t >(VideoPreferredMonitorKey, DefaultVideoPreferredMonitor) :
-			static_cast< uint32_t >(desiredMonitor);
-
-		auto * monitor = Window::getMonitor(monitorIndex);
+		auto * monitor = Window::getMonitor(desiredMonitor);
 
 		if ( monitor != nullptr )
 		{
@@ -609,86 +611,85 @@ namespace EmEn
 	}
 
 	void
-	Window::setCustomGamma (int32_t desiredMonitor) const noexcept
+	Window::switchToFullscreenMode (bool useNativeResolution, int32_t desiredMonitor) const noexcept
 	{
-		const uint32_t monitorIndex =
-			desiredMonitor < 0 ?
-			m_primaryServices.settings().get< uint32_t >(VideoPreferredMonitorKey, DefaultVideoPreferredMonitor) :
-			static_cast< uint32_t >(desiredMonitor);
-
-		auto * monitor = Window::getMonitor(monitorIndex);
-
-		if ( monitor == nullptr )
+		if ( this->isFullscreenMode() )
 		{
 			return;
 		}
 
-		constexpr auto colorCount{256UL};
+		/* NOTE: Get the right system monitor. */
+		auto * monitor = Window::getMonitor(desiredMonitor);
 
-		std::array< uint16_t, colorCount > red{};
-		std::array< uint16_t, colorCount > green{};
-		std::array< uint16_t, colorCount > blue{};
+		auto & settings = m_primaryServices.settings();
 
-		/* TODO: Find a formula to compute a valid gamma ramp. */
-		for ( size_t index = 0;  index < colorCount;  index++ )
+		/* Save the current window size. */
 		{
-			red[index] = 0;
-			green[index] = 0;
-			blue[index] = 0;
+			const auto currentSize = this->getFramebufferSize();
+			settings.set<uint32_t>(VideoWindowWidthKey, currentSize[0]);
+			settings.set<uint32_t>(VideoWindowHeightKey, currentSize[1]);
 		}
 
-		/* Creates a gamma ramp to pass to monitor. */
-		GLFWgammaramp ramp;
-		ramp.red = red.data();
-		ramp.green = green.data();
-		ramp.blue = blue.data();
-		ramp.size = colorCount;
+		const auto refreshRate = settings.get< int32_t >(VideoFullscreenRefreshRateKey, DefaultVideoFullscreenRefreshRate);
 
-		glfwSetGammaRamp(monitor, &ramp);
-	}
-
-	void
-	Window::setFullscreenMode (bool state) const noexcept
-	{
-		/* State still the same. */
-		if ( this->isFullscreenMode() == state )
+		if ( useNativeResolution )
 		{
-			return;
-		}
-
-		const auto preferredMonitor = m_primaryServices.settings().get< int32_t >(VideoPreferredMonitorKey, DefaultVideoPreferredMonitor);
-
-		if ( state )
-		{
-			auto * monitor = getMonitor(preferredMonitor);
-
-			const auto fullscreenWidth = m_primaryServices.settings().get< int32_t >(VideoFullscreenWidthKey, DefaultVideoFullscreenWidth);
-			const auto fullscreenHeight = m_primaryServices.settings().get< int32_t >(VideoFullscreenHeightKey, DefaultVideoFullscreenHeight);
-			const auto refreshRate = m_primaryServices.settings().get< int32_t >(VideoFullscreenRefreshRateKey, DefaultVideoFullscreenRefreshRate);
+			const auto monitorSize = getDesktopSize(monitor);
 
 			glfwSetWindowMonitor(
 				m_handle.get(),
 				monitor,
 				0, 0,
-				fullscreenWidth, fullscreenHeight,
+				static_cast< int32_t >(monitorSize[0]), static_cast< int32_t >(monitorSize[1]),
 				refreshRate
 			);
 		}
 		else
 		{
-			const auto windowWidth = m_primaryServices.settings().get< int32_t >(VideoWindowWidthKey, DefaultVideoWindowWidth);
-			const auto windowHeight = m_primaryServices.settings().get< int32_t >(VideoWindowHeightKey, DefaultVideoWindowHeight);
-			const auto XPosition = m_primaryServices.settings().get< int32_t >(VideoWindowXPositionKey, DefaultVideoWindowXPosition);
-			const auto YPosition = m_primaryServices.settings().get< int32_t >(VideoWindowYPositionKey, DefaultVideoWindowYPosition);
+			auto width = settings.get< int32_t >(VideoFullscreenWidthKey, DefaultVideoFullscreenWidth);
+			auto height = settings.get< int32_t >(VideoFullscreenHeightKey, DefaultVideoFullscreenHeight);
+
+			if ( width == 0 || height == 0 )
+			{
+				width = DefaultVideoFullscreenWidth;
+				height = DefaultVideoFullscreenHeight;
+
+				/* Save fullscreen settings. */
+				settings.set< uint32_t >(VideoFullscreenWidthKey, width);
+				settings.set< uint32_t >(VideoFullscreenHeightKey, height);
+			}
 
 			glfwSetWindowMonitor(
 				m_handle.get(),
-				nullptr,
-				XPosition, YPosition,
-				windowWidth, windowHeight,
-				GLFW_DONT_CARE
+				monitor,
+				0, 0,
+				width, height,
+				refreshRate
 			);
 		}
+	}
+
+	void
+	Window::switchToWindowedMode () const noexcept
+	{
+		if ( this->isWindowedMode() )
+		{
+			return;
+		}
+
+		const auto & settings = m_primaryServices.settings();
+		const auto windowWidth = settings.get< int32_t >(VideoWindowWidthKey, DefaultVideoWindowWidth);
+		const auto windowHeight = settings.get< int32_t >(VideoWindowHeightKey, DefaultVideoWindowHeight);
+		const auto XPosition = settings.get< int32_t >(VideoWindowXPositionKey, DefaultVideoWindowXPosition);
+		const auto YPosition = settings.get< int32_t >(VideoWindowYPositionKey, DefaultVideoWindowYPosition);
+
+		glfwSetWindowMonitor(
+			m_handle.get(),
+			nullptr,
+			XPosition, YPosition,
+			windowWidth, windowHeight,
+			GLFW_DONT_CARE
+		);
 	}
 
 	bool
@@ -707,7 +708,7 @@ namespace EmEn
 
 		glfwGetWindowPos(m_handle.get(), &xPosition, &yPosition);
 
-		/* NOTE : We use the glfw handler to display errors. */
+		/* NOTE: We use the glfw handler to display errors. */
 		switch ( glfwGetError(nullptr) )
 		{
 			case GLFW_NOT_INITIALIZED :
@@ -730,7 +731,7 @@ namespace EmEn
 
 		glfwGetWindowSize(m_handle.get(), &widthPts, &heightPts);
 
-		/* NOTE : We use the glfw handler to display errors. */
+		/* NOTE: We use the glfw handler to display errors. */
 		switch ( glfwGetError(nullptr) )
 		{
 			case GLFW_NOT_INITIALIZED :
@@ -758,7 +759,7 @@ namespace EmEn
 
 		glfwGetWindowFrameSize(m_handle.get(), &leftPts, &topPts, &rightPts, &bottomPts);
 
-		/* NOTE : We use the glfw handler to display errors. */
+		/* NOTE: We use the glfw handler to display errors. */
 		switch ( glfwGetError(nullptr) )
 		{
 			case GLFW_NOT_INITIALIZED :
@@ -799,7 +800,7 @@ namespace EmEn
 
 		glfwGetMonitorPos(monitor, &xPosition, &yPosition);
 
-		/* NOTE : We use the glfw handler to display errors. */
+		/* NOTE: We use the glfw handler to display errors. */
 		switch ( glfwGetError(nullptr) )
 		{
 			case GLFW_NOT_INITIALIZED :
@@ -832,7 +833,7 @@ namespace EmEn
 
 		const auto * mode = glfwGetVideoMode(monitor);
 
-		/* NOTE : We use the glfw handler to display errors. */
+		/* NOTE: We use the glfw handler to display errors. */
 		if ( mode == nullptr )
 		{
 			return {0, 0};
@@ -852,7 +853,7 @@ namespace EmEn
 
 		glfwGetFramebufferSize(m_handle.get(), &widthPx, &heightPx);
 
-		/* NOTE : We use the glfw handler to display errors. */
+		/* NOTE: We use the glfw handler to display errors. */
 		switch ( glfwGetError(nullptr) )
 		{
 			case GLFW_NOT_INITIALIZED :
@@ -889,7 +890,7 @@ namespace EmEn
 
 		glfwGetWindowContentScale(m_handle.get(), scale.data(), scale.data()+1);
 
-		/* NOTE : We use the glfw handler to display errors. */
+		/* NOTE: We use the glfw handler to display errors. */
 		switch ( glfwGetError(nullptr) )
 		{
 			case GLFW_NOT_INITIALIZED :
@@ -1028,7 +1029,7 @@ namespace EmEn
 
 		if ( fullscreenMode )
 		{
-			monitor = getMonitor(monitorNumber);
+			monitor = Window::getMonitor(monitorNumber);
 
 			/* If one of the size is automatic,
 			 * we use the current mode of the monitor */
@@ -1181,7 +1182,7 @@ namespace EmEn
 	}
 
 	GLFWmonitor *
-	Window::getMonitor (uint32_t monitorIndex) noexcept
+	Window::getMonitor (int32_t desiredMonitorIndex) const noexcept
 	{
 		const auto monitors = Window::getMonitors();
 
@@ -1191,6 +1192,10 @@ namespace EmEn
 
 			return nullptr;
 		}
+
+		const auto monitorIndex = desiredMonitorIndex < 0 ?
+			m_primaryServices.settings().get< uint32_t >(VideoPreferredMonitorKey, DefaultVideoPreferredMonitor) :
+			static_cast< uint32_t >(desiredMonitorIndex);
 
 		if ( monitorIndex >= monitors.size() )
 		{
@@ -1207,7 +1212,7 @@ namespace EmEn
 	std::vector< GLFWvidmode >
 	Window::getMonitorModes (GLFWmonitor * monitor) noexcept
 	{
-		std::vector< GLFWvidmode > list{};
+		std::vector< GLFWvidmode > list;
 
 		int count = 0;
 
@@ -1229,9 +1234,10 @@ namespace EmEn
 	void
 	Window::framebufferSizeCallback (GLFWwindow * window, int width, int height) noexcept
 	{
-#ifdef WINDOW_EVENTS_DEBUG_ENABLED
-		std::cout << "[DEBUG:WINDOW] Framebuffer size changed to " << width << "x" << height << " px." "\n";
-#endif
+		if constexpr ( WindowEventsDebugEnabled )
+		{
+			TraceDebug{ClassId} << "Framebuffer size changed to " << width << "x" << height << " px." "\n";
+		}
 
 		auto * _this = static_cast< Window * >(glfwGetWindowUserPointer(window));
 
@@ -1252,9 +1258,10 @@ namespace EmEn
 	void
 	Window::windowRefreshCallback (GLFWwindow * window) noexcept
 	{
-#ifdef WINDOW_EVENTS_DEBUG_ENABLED
-		std::cout << "[DEBUG:WINDOW] Window refresh request." "\n";
-#endif
+		if constexpr ( WindowEventsDebugEnabled )
+		{
+			TraceDebug{ClassId} << "Window refresh request." "\n";
+		}
 
 		auto * _this = static_cast< Window * >(glfwGetWindowUserPointer(window));
 
@@ -1269,9 +1276,10 @@ namespace EmEn
 	void
 	Window::windowSizeCallback (GLFWwindow * window, int width, int height) noexcept
 	{
-#ifdef WINDOW_EVENTS_DEBUG_ENABLED
-		std::cout << "[DEBUG:WINDOW] Window size changed to " << width << "x" << height << " pt." "\n";
-#endif
+		if constexpr ( WindowEventsDebugEnabled )
+		{
+			TraceDebug{ClassId} << "Window size changed to " << width << "x" << height << " pt." "\n";
+		}
 
 		auto * _this = static_cast< Window * >(glfwGetWindowUserPointer(window));
 
@@ -1299,9 +1307,10 @@ namespace EmEn
 	void
 	Window::windowPositionCallback (GLFWwindow * window, int xPosition, int yPosition) noexcept
 	{
-#ifdef WINDOW_EVENTS_DEBUG_ENABLED
-		std::cout << "[DEBUG:WINDOW] Window position changed to X:" << xPosition << ", Y:" << yPosition << "." "\n";
-#endif
+		if constexpr ( WindowEventsDebugEnabled )
+		{
+			TraceDebug{ClassId} << "Window position changed to X:" << xPosition << ", Y:" << yPosition << "." "\n";
+		}
 
 		auto * _this = static_cast< Window * >(glfwGetWindowUserPointer(window));
 
@@ -1320,9 +1329,10 @@ namespace EmEn
 	void
 	Window::monitorConfigurationChanged (GLFWmonitor * /*monitor*/, int event) noexcept
 	{
-#ifdef WINDOW_EVENTS_DEBUG_ENABLED
-		std::cout << "[DEBUG:WINDOW] Monitor configuration changed (Monitor " << ( event == GLFW_CONNECTED ? "connected" : "disconnected") << ")." "\n";
-#endif
+		if constexpr ( WindowEventsDebugEnabled )
+		{
+			TraceDebug{ClassId} << "Monitor configuration changed (Monitor " << ( event == GLFW_CONNECTED ? "connected" : "disconnected") << ")." "\n";
+		}
 
 		switch ( event )
 		{
@@ -1342,9 +1352,10 @@ namespace EmEn
 	void
 	Window::windowCloseCallback (GLFWwindow * window) noexcept
 	{
-#ifdef WINDOW_EVENTS_DEBUG_ENABLED
-		std::cout << "[DEBUG:WINDOW] Window close requested." "\n";
-#endif
+		if constexpr ( WindowEventsDebugEnabled )
+		{
+			TraceDebug{ClassId} << "Window close requested." "\n";
+		}
 
 		auto * _this = static_cast< Window * >(glfwGetWindowUserPointer(window));
 
@@ -1354,7 +1365,7 @@ namespace EmEn
 		}
 
 		/* We clear the close bit.
-		 * The engine window itself the running state. */
+		 * The engine window itself is the running state. */
 		glfwSetWindowShouldClose(window, GLFW_FALSE);
 
 		/* Send the signal to the engine */
@@ -1364,9 +1375,10 @@ namespace EmEn
 	void
 	Window::windowFocusCallback (GLFWwindow * window, int focused) noexcept
 	{
-#ifdef WINDOW_EVENTS_DEBUG_ENABLED
-		std::cout << "[DEBUG:WINDOW] Window is " << ( focused == GLFW_TRUE ? "focused" : "blurred" ) << "." "\n";
-#endif
+		if constexpr ( WindowEventsDebugEnabled )
+		{
+			TraceDebug{ClassId} << "Window is " << ( focused == GLFW_TRUE ? "focused" : "blurred" ) << "." "\n";
+		}
 
 		auto * _this = static_cast< Window * >(glfwGetWindowUserPointer(window));
 
@@ -1381,9 +1393,10 @@ namespace EmEn
 	void
 	Window::windowIconifyCallback (GLFWwindow * window, int hidden) noexcept
 	{
-#ifdef WINDOW_EVENTS_DEBUG_ENABLED
-		std::cout << "[DEBUG:WINDOW] Window is " << ( hidden == GLFW_TRUE ? "hidden" : "visible" ) << "." "\n";
-#endif
+		if constexpr ( WindowEventsDebugEnabled )
+		{
+			TraceDebug{ClassId} << "Window is " << ( hidden == GLFW_TRUE ? "hidden" : "visible" ) << "." "\n";
+		}
 
 		auto * _this = static_cast< Window * >(glfwGetWindowUserPointer(window));
 
@@ -1398,9 +1411,10 @@ namespace EmEn
 	void
 	Window::windowMaximizeCallback (GLFWwindow * window, int maximized) noexcept
 	{
-#ifdef WINDOW_EVENTS_DEBUG_ENABLED
-		std::cout << "[DEBUG:WINDOW] Window is " << ( maximized == GLFW_TRUE ? "maximized" : "minimized" ) << "." "\n";
-#endif
+		if constexpr ( WindowEventsDebugEnabled )
+		{
+			TraceDebug{ClassId} << "Window is " << ( maximized == GLFW_TRUE ? "maximized" : "minimized" ) << "." "\n";
+		}
 
 		auto * _this = static_cast< Window * >(glfwGetWindowUserPointer(window));
 
@@ -1415,9 +1429,10 @@ namespace EmEn
 	void
 	Window::windowContentScaleCallback (GLFWwindow * window, float xScale, float yScale) noexcept
 	{
-#ifdef WINDOW_EVENTS_DEBUG_ENABLED
-		std::cout << "[DEBUG:WINDOW] Window scale changed to X:" << xScale << ", Y:" << yScale << "." "\n";
-#endif
+		if constexpr ( WindowEventsDebugEnabled )
+		{
+			TraceDebug{ClassId} << "Window scale changed to X:" << xScale << ", Y:" << yScale << "." "\n";
+		}
 
 		auto * _this = static_cast< Window * >(glfwGetWindowUserPointer(window));
 

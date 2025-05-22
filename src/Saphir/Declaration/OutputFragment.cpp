@@ -42,8 +42,15 @@ namespace EmEn::Saphir::Declaration
 	bool
 	OutputFragment::isValid () const noexcept
 	{
-		if ( m_type == nullptr || m_name == nullptr )
+		if ( m_type == nullptr )
+		{
 			return false;
+		}
+
+		if ( m_name == nullptr )
+		{
+			return false;
+		}
 
 		return true;
 	}
@@ -51,33 +58,12 @@ namespace EmEn::Saphir::Declaration
 	std::string
 	OutputFragment::sourceCode () const noexcept
 	{
-		return (std::stringstream{} <<
+		std::stringstream code;
+
+		code <<
 			GLSL::Layout << " (" << GLSL::Location << " = " << std::to_string(m_location) << ") " <<
-			GLSL::Out << ' ' << m_type << ' ' << m_name << ";" "\n"
-		).str();
-	}
+			GLSL::Out << ' ' << m_type << ' ' << m_name << ";" "\n";
 
-	Key
-	OutputFragment::name () const noexcept
-	{
-		return m_name;
-	}
-
-	size_t
-	OutputFragment::bytes () const noexcept
-	{
-		return 0;
-	}
-
-	uint32_t
-	OutputFragment::location () const noexcept
-	{
-		return m_location;
-	}
-
-	Key
-	OutputFragment::type () const noexcept
-	{
-		return m_type;
+		return code.str();
 	}
 }

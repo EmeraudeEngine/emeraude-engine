@@ -46,7 +46,9 @@ namespace EmEn::Physics
 	const size_t Manager::ClassUID{getClassUID(ClassId)};
 
 	Manager::Manager (PrimaryServices & primaryServices, Instance & instance) noexcept
-		: ServiceInterface(ClassId), m_primaryServices(primaryServices), m_vulkanInstance(instance)
+		: ServiceInterface(ClassId),
+		m_primaryServices(primaryServices),
+		m_vulkanInstance(instance)
 	{
 
 	}

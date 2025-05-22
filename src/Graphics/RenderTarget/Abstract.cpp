@@ -43,7 +43,7 @@ namespace EmEn::Graphics::RenderTarget
 	using namespace EmEn::Libs;
 	using namespace Vulkan;
 
-	static constexpr auto TracerTag{"RenderTarget"};
+	constexpr auto TracerTag{"RenderTarget"};
 
 	Abstract::Abstract (const std::string & name, const FramebufferPrecisions & precisions, const VkExtent3D & extent, RenderTargetType renderType, AVConsole::ConnexionType allowedConnexionType, bool enableSyncPrimitives) noexcept
 		: AbstractVirtualDevice(name, AVConsole::DeviceType::Video, allowedConnexionType),
@@ -63,7 +63,7 @@ namespace EmEn::Graphics::RenderTarget
 	{
 		if ( m_flags[EnableSyncPrimitive] )
 		{
-			m_fence = std::make_shared< Sync::Fence >(renderer.device());
+			m_fence = std::make_shared< Sync::Fence >(renderer.device(), VK_FENCE_CREATE_SIGNALED_BIT);
 			m_fence->setIdentifier(TracerTag, this->id(), "Fence");
 
 			if ( !m_fence->createOnHardware() )

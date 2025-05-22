@@ -53,47 +53,60 @@ namespace EmEn::Libs::VertexFactory
 {
 	/**
 	 * @brief An OBJ vertex structure.
+	 * @tparam index_data_t The precision type of index data.
 	 * @note OBJ format use index starting at 1.
 	 */
-	class OBJVertex
+	template< typename index_data_t >
+	requires (std::is_unsigned_v< index_data_t > )
+	class OBJVertex final
 	{
 		public:
 
-			OBJVertex (uint32_t vIndex) noexcept
+			explicit
+			OBJVertex (index_data_t vIndex) noexcept
 				: vIndex(vIndex)
 			{
 
 			}
 
-			OBJVertex (uint32_t vIndex, uint32_t vtIndex) noexcept
-				: vIndex(vIndex), vtIndex(vtIndex)
+			OBJVertex (index_data_t vIndex, index_data_t vtIndex) noexcept
+				: vIndex(vIndex),
+				vtIndex(vtIndex)
 			{
 
 			}
 
-			OBJVertex (uint32_t vIndex, uint32_t vtIndex, uint32_t vnIndex) noexcept
-				: vIndex(vIndex), vtIndex(vtIndex), vnIndex(vnIndex)
+			OBJVertex (index_data_t vIndex, index_data_t vtIndex, index_data_t vnIndex) noexcept
+				: vIndex(vIndex),
+				vtIndex(vtIndex),
+				vnIndex(vnIndex)
 			{
 
 			}
 				
-			uint32_t vIndex{0};
-			uint32_t vtIndex{0};
-			uint32_t vnIndex{0};
+			index_data_t vIndex{0};
+			index_data_t vtIndex{0};
+			index_data_t vnIndex{0};
 	};
 
-	/** @brief An OBJ triangle structure. */
-	using OBJTriangle = std::array< OBJVertex, 3 >;
+	/**
+	 * @brief An OBJ triangle structure.
+	 * @tparam index_data_t The precision type of index data.
+	 */
+	template< typename index_data_t >
+	requires (std::is_unsigned_v< index_data_t > )
+	using OBJTriangle = std::array< OBJVertex< index_data_t >, 3 >;
 
 	/**
 	 * @brief The FileFormatOBJ class.
-	 * @tparam data_t The data precision type.
+	 * @tparam vertex_data_t The precision type of vertex data. Default float.
+	 * @tparam index_data_t The precision type of index data. Default uint32_t.
 	 * @note http://www.fileformat.info/format/wavefrontobj/egff.htm
 	 * @extends EmEn::Libs::VertexFactory::FileFormatInterface
 	 */
-	template< typename data_t >
-	requires (std::is_floating_point_v< data_t >)
-	class FileFormatOBJ final : public FileFormatInterface< data_t >
+	template< typename vertex_data_t = float, typename index_data_t = uint32_t >
+	requires (std::is_floating_point_v< vertex_data_t > && std::is_unsigned_v< index_data_t > )
+	class FileFormatOBJ final : public FileFormatInterface< vertex_data_t, index_data_t >
 	{
 		public:
 
@@ -105,7 +118,7 @@ namespace EmEn::Libs::VertexFactory
 			/** @copydoc EmEn::Libs::VertexFactory::FileFormatInterface::readFile() */
 			[[nodiscard]]
 			bool
-			readFile (const std::filesystem::path & filepath, Shape< data_t > & geometry, const ReadOptions & readOptions) noexcept override
+			readFile (const std::filesystem::path & filepath, Shape< vertex_data_t, index_data_t > & geometry, const ReadOptions & readOptions) noexcept override
 			{
 				m_readOptions = readOptions;
 
@@ -133,7 +146,7 @@ namespace EmEn::Libs::VertexFactory
 				}
 
 				/* 3. Read a third and final time to assemble faces. */
-				return geometry.build([this, &geometry, &file] (std::vector< std::pair< size_t, size_t > > & groups, std::vector< ShapeVertex< data_t > > & vertices, std::vector< ShapeTriangle< data_t > > & triangles) {
+				return geometry.build([this, &geometry, &file] (std::vector< std::pair< index_data_t, index_data_t > > & groups, std::vector< ShapeVertex< vertex_data_t > > & vertices, std::vector< ShapeTriangle< vertex_data_t, index_data_t > > & triangles) {
 					switch ( m_faceMode )
 					{
 						case FaceMode::V :
@@ -226,7 +239,7 @@ namespace EmEn::Libs::VertexFactory
 			/** @copydoc EmEn::Libs::VertexFactory::FileFormatInterface::writeFile() */
 			[[nodiscard]]
 			bool
-			writeFile (const std::filesystem::path & filepath, const Shape< data_t > & geometry) const noexcept override
+			writeFile (const std::filesystem::path & filepath, const Shape< vertex_data_t, index_data_t > & geometry) const noexcept override
 			{
 				if ( !geometry.isValid() )
 				{
@@ -336,23 +349,23 @@ namespace EmEn::Libs::VertexFactory
 			{
 				std::string line{};
 
-				size_t positionCount = 0;
-				size_t textureCoordinatesCount = 0;
-				size_t normalCount = 0;
+				index_data_t positionCount = 0;
+				index_data_t textureCoordinatesCount = 0;
+				index_data_t normalCount = 0;
 
 				while ( std::getline(file, line) )
 				{
 					if ( line.starts_with("v ") )
 					{
-						positionCount++;
+						++positionCount;
 					}
 					else if ( line.starts_with("vt ") )
 					{
-						textureCoordinatesCount++;
+						++textureCoordinatesCount;
 					}
 					else if ( line.starts_with("vn ") )
 					{
-						normalCount++;
+						++normalCount;
 					}
 					else if ( line.starts_with("f ") )
 					{
@@ -374,14 +387,15 @@ namespace EmEn::Libs::VertexFactory
 					}
 				}
 
-#ifdef EMERAUDE_DEBUG_VERTEX_FACTORY
-				std::cout <<
-					"[DEBUG:VERTEX_FACTORY] File Parsing - First pass result." "\n" <<
-					"\t" "Vertices : " << positionCount << "\n"
-					"\t" "Texture Coordinates : " << textureCoordinatesCount << "\n"
-					"\t" "Normals : " << normalCount << "\n"
-					"\t" "Faces : " << m_faceCount << "\n\n";
-#endif
+				if constexpr ( VertexFactoryDebugEnabled )
+				{
+					std::cout <<
+						"[DEBUG:VERTEX_FACTORY] File Parsing - First pass result." "\n" <<
+						"\t" "Vertices : " << positionCount << "\n"
+						"\t" "Texture Coordinates : " << textureCoordinatesCount << "\n"
+						"\t" "Normals : " << normalCount << "\n"
+						"\t" "Faces : " << m_faceCount << "\n\n";
+				}
 
 				if ( positionCount == 0 )
 				{
@@ -402,13 +416,13 @@ namespace EmEn::Libs::VertexFactory
 				m_vt.resize(textureCoordinatesCount);
 				m_vn.resize(normalCount);
 
-				m_vertexCount = std::max(m_v.size(), std::max(m_vt.size(), m_vn.size()));
+				m_vertexCount = static_cast< index_data_t >(std::max(m_v.size(), std::max(m_vt.size(), m_vn.size())));
 
-				if ( m_vertexCount == m_v.size() )
+				if ( m_vertexCount == static_cast< index_data_t >(m_v.size()) )
 				{
 					m_predominantAttribute = PredominantAttributes::V;
 				}
-				else if ( m_vertexCount == m_vn.size() )
+				else if ( m_vertexCount == static_cast< index_data_t >(m_vn.size()) )
 				{
 					m_predominantAttribute = PredominantAttributes::VN;
 				}
@@ -429,15 +443,15 @@ namespace EmEn::Libs::VertexFactory
 			 * @return bool
 			 */
 			bool
-			parseFaceAssemblyV (std::ifstream & file, std::vector< std::pair< size_t, size_t > > & groups, std::vector< ShapeVertex< data_t > > & vertices, std::vector< ShapeTriangle< data_t > > & triangles) noexcept
+			parseFaceAssemblyV (std::ifstream & file, std::vector< std::pair< index_data_t, index_data_t > > & groups, std::vector< ShapeVertex< vertex_data_t > > & vertices, std::vector< ShapeTriangle< vertex_data_t, index_data_t > > & triangles) noexcept
 			{
 				/* NOTE: Resize/reserving memory space to the geometry shape. */
 				vertices.resize(m_vertexCount);
 				triangles.reserve(m_faceCount);
 
 				/* Keep count on attributes and triangles. */
-				size_t positionCount = 0;
-				size_t triangleCount = 0;
+				index_data_t positionCount = 0;
+				index_data_t triangleCount = 0;
 
 				std::string objLine{};
 
@@ -460,7 +474,7 @@ namespace EmEn::Libs::VertexFactory
 					}
 					else if ( objLine.starts_with("f ") )
 					{
-						std::vector< OBJVertex > faceIndices{};
+						std::vector< OBJVertex< index_data_t > > faceIndices{};
 
 						if ( !this->extractFaceIndices(objLine, faceIndices) )
 						{
@@ -468,7 +482,7 @@ namespace EmEn::Libs::VertexFactory
 						}
 
 						/* NOTE: f line can express a triangle or a polygon ! */
-						for ( size_t triangleOffset = 0; triangleOffset < faceIndices.size() - 2; triangleOffset++ )
+						for ( index_data_t triangleOffset = 0; triangleOffset < faceIndices.size() - 2; ++triangleOffset )
 						{
 							/* NOTES: "f 0 1 2 3"
 							 * Must goes into
@@ -476,9 +490,9 @@ namespace EmEn::Libs::VertexFactory
 							 * "0 2 3"
 							 */
 
-							ShapeTriangle< data_t > triangle{};
+							ShapeTriangle< vertex_data_t, index_data_t > triangle;
 
-							for ( size_t faceVertexIndex = 0; faceVertexIndex < 3; faceVertexIndex++ )
+							for ( index_data_t faceVertexIndex = 0; faceVertexIndex < 3; ++faceVertexIndex )
 							{
 								const auto realFaceVertexIndex = faceVertexIndex == 0 ? faceVertexIndex : faceVertexIndex + triangleOffset;
 
@@ -494,11 +508,11 @@ namespace EmEn::Libs::VertexFactory
 
 							triangles.emplace_back(triangle);
 
-							triangleCount++;
+							++triangleCount;
 
 							if ( !groups.empty() )
 							{
-								groups.back().second++;
+								++groups.back().second;
 							}
 						}
 					}
@@ -516,19 +530,19 @@ namespace EmEn::Libs::VertexFactory
 			 * @return bool
 			 */
 			bool
-			parseFaceAssemblyV_VN (std::ifstream & file, std::vector< std::pair< size_t, size_t > > & groups, std::vector< ShapeVertex< data_t > > & vertices, std::vector< ShapeTriangle< data_t > > & triangles) noexcept
+			parseFaceAssemblyV_VN (std::ifstream & file, std::vector< std::pair< index_data_t, index_data_t > > & groups, std::vector< ShapeVertex< vertex_data_t > > & vertices, std::vector< ShapeTriangle< vertex_data_t, index_data_t > > & triangles) noexcept
 			{
 				/* NOTE: Resize/reserving memory space to the geometry shape. */
 				vertices.resize(m_vertexCount);
 				triangles.reserve(m_faceCount);
 
 				/* Keep track of generated shape vertex index. */
-				std::set< size_t > writtenIndexes{};
+				std::set< index_data_t > writtenIndexes{};
 
 				/* Keep count on attributes and triangles. */
-				size_t positionCount = 0;
-				size_t normalCount = 0;
-				size_t triangleCount = 0;
+				index_data_t positionCount = 0;
+				index_data_t normalCount = 0;
+				index_data_t triangleCount = 0;
 
 				std::string objLine{};
 
@@ -555,7 +569,7 @@ namespace EmEn::Libs::VertexFactory
 					}
 					else if ( objLine.starts_with("f ") )
 					{
-						std::vector< OBJVertex > faceIndices{};
+						std::vector< OBJVertex< index_data_t > > faceIndices;
 
 						if ( !this->extractFaceIndices(objLine, faceIndices) )
 						{
@@ -563,7 +577,7 @@ namespace EmEn::Libs::VertexFactory
 						}
 
 						/* NOTE: f line can express a triangle or a polygon ! */
-						for ( size_t triangleOffset = 0; triangleOffset < faceIndices.size() - 2; triangleOffset++ )
+						for ( index_data_t triangleOffset = 0; triangleOffset < faceIndices.size() - 2; ++triangleOffset )
 						{
 							/* NOTES: "f 0 1 2 3"
 							 * Must goes into
@@ -571,9 +585,9 @@ namespace EmEn::Libs::VertexFactory
 							 * "0 2 3"
 							 */
 
-							ShapeTriangle< data_t > triangle{};
+							ShapeTriangle< vertex_data_t, index_data_t > triangle;
 
-							for ( size_t faceVertexIndex = 0; faceVertexIndex < 3; faceVertexIndex++ )
+							for ( index_data_t faceVertexIndex = 0; faceVertexIndex < 3; ++faceVertexIndex )
 							{
 								const auto realFaceVertexIndex = faceVertexIndex == 0 ? faceVertexIndex : faceVertexIndex + triangleOffset;
 								const auto & OBJVertex = faceIndices.at(realFaceVertexIndex);
@@ -583,7 +597,7 @@ namespace EmEn::Libs::VertexFactory
 								const auto vnIndex = OBJVertex.vnIndex - 1;
 
 								/* NOTE: Get the real shape vertex index in the final shape. */
-								size_t geometryVertexIndex = 0;
+								index_data_t geometryVertexIndex = 0;
 
 								switch ( m_predominantAttribute )
 								{
@@ -610,7 +624,7 @@ namespace EmEn::Libs::VertexFactory
 									{
 										vertices.emplace_back(position, m_vn.at(vnIndex));
 
-										geometryVertexIndex = vertices.size() - 1;
+										geometryVertexIndex = static_cast< index_data_t >(vertices.size() - 1);
 									}
 								}
 								else
@@ -629,11 +643,11 @@ namespace EmEn::Libs::VertexFactory
 
 							triangles.emplace_back(triangle);
 
-							triangleCount++;
+							++triangleCount;
 
 							if ( !groups.empty() )
 							{
-								groups.back().second++;
+								++groups.back().second;
 							}
 						}
 					}
@@ -651,19 +665,19 @@ namespace EmEn::Libs::VertexFactory
 			 * @return bool
 			 */
 			bool
-			parseFaceAssemblyV_VT (std::ifstream & file, std::vector< std::pair< size_t, size_t > > & groups, std::vector< ShapeVertex< data_t > > & vertices, std::vector< ShapeTriangle< data_t > > & triangles) noexcept
+			parseFaceAssemblyV_VT (std::ifstream & file, std::vector< std::pair< index_data_t, index_data_t > > & groups, std::vector< ShapeVertex< vertex_data_t > > & vertices, std::vector< ShapeTriangle< vertex_data_t, index_data_t > > & triangles) noexcept
 			{
 				/* NOTE: Resize/reserving memory space to the geometry shape. */
 				vertices.resize(m_vertexCount);
 				triangles.reserve(m_faceCount);
 
 				/* Keep track of generated shape vertex index. */
-				std::set< size_t > writtenIndexes{};
+				std::set< index_data_t > writtenIndexes{};
 
 				/* Keep count on attributes and triangles. */
-				size_t positionCount = 0;
-				size_t textureCoordinatesCount = 0;
-				size_t triangleCount = 0;
+				index_data_t positionCount = 0;
+				index_data_t textureCoordinatesCount = 0;
+				index_data_t triangleCount = 0;
 
 				std::string objLine{};
 
@@ -690,7 +704,7 @@ namespace EmEn::Libs::VertexFactory
 					}
 					else if ( objLine.starts_with("f ") )
 					{
-						std::vector< OBJVertex > faceIndices{};
+						std::vector< OBJVertex< index_data_t > > faceIndices;
 
 						if ( !this->extractFaceIndices(objLine, faceIndices) )
 						{
@@ -698,7 +712,7 @@ namespace EmEn::Libs::VertexFactory
 						}
 
 						/* NOTE: f line can express a triangle or a polygon ! */
-						for ( size_t triangleOffset = 0; triangleOffset < faceIndices.size() - 2; triangleOffset++ )
+						for ( index_data_t triangleOffset = 0; triangleOffset < faceIndices.size() - 2; ++triangleOffset )
 						{
 							/* NOTES: "f 0 1 2 3"
 							 * Must goes into
@@ -706,9 +720,9 @@ namespace EmEn::Libs::VertexFactory
 							 * "0 2 3"
 							 */
 
-							ShapeTriangle< data_t > triangle{};
+							ShapeTriangle< vertex_data_t, index_data_t > triangle;
 
-							for ( size_t faceVertexIndex = 0; faceVertexIndex < 3; faceVertexIndex++ )
+							for ( index_data_t faceVertexIndex = 0; faceVertexIndex < 3; ++faceVertexIndex )
 							{
 								const auto realFaceVertexIndex = faceVertexIndex == 0 ? faceVertexIndex : faceVertexIndex + triangleOffset;
 								const auto & OBJVertex = faceIndices.at(realFaceVertexIndex);
@@ -718,7 +732,7 @@ namespace EmEn::Libs::VertexFactory
 								const auto vtIndex = OBJVertex.vtIndex - 1;
 
 								/* NOTE: Get the real shape vertex index in the final shape. */
-								size_t geometryVertexIndex = 0;
+								index_data_t geometryVertexIndex = 0;
 
 								switch ( m_predominantAttribute )
 								{
@@ -745,7 +759,7 @@ namespace EmEn::Libs::VertexFactory
 									{
 										vertices.emplace_back(position, Math::Vector< 3, float >{}, m_vt.at(vtIndex));
 
-										geometryVertexIndex = vertices.size() - 1;
+										geometryVertexIndex = static_cast< index_data_t >(vertices.size() - 1);
 									}
 								}
 								else
@@ -764,11 +778,11 @@ namespace EmEn::Libs::VertexFactory
 
 							triangles.emplace_back(triangle);
 
-							triangleCount++;
+							++triangleCount;
 
 							if ( !groups.empty() )
 							{
-								groups.back().second++;
+								++groups.back().second;
 							}
 						}
 					}
@@ -786,20 +800,20 @@ namespace EmEn::Libs::VertexFactory
 			 * @return bool
 			 */
 			bool
-			parseFaceAssemblyV_VT_VN (std::ifstream & file, std::vector< std::pair< size_t, size_t > > & groups, std::vector< ShapeVertex< data_t > > & vertices, std::vector< ShapeTriangle< data_t > > & triangles) noexcept
+			parseFaceAssemblyV_VT_VN (std::ifstream & file, std::vector< std::pair< index_data_t, index_data_t > > & groups, std::vector< ShapeVertex< vertex_data_t > > & vertices, std::vector< ShapeTriangle< vertex_data_t, index_data_t > > & triangles) noexcept
 			{
 				/* NOTE: Resize/reserving memory space to the geometry shape. */
 				vertices.resize(m_vertexCount);
 				triangles.reserve(m_faceCount);
 
 				/* Keep track of generated shape vertex index. */
-				std::set< size_t > writtenIndexes{};
+				std::set< index_data_t > writtenIndexes{};
 
 				/* Keep count on attributes and triangles. */
-				size_t positionCount = 0;
-				size_t textureCoordinatesCount = 0;
-				size_t normalCount = 0;
-				size_t triangleCount = 0;
+				index_data_t positionCount = 0;
+				index_data_t textureCoordinatesCount = 0;
+				index_data_t normalCount = 0;
+				index_data_t triangleCount = 0;
 
 				std::string objLine{};
 
@@ -830,7 +844,7 @@ namespace EmEn::Libs::VertexFactory
 					}
 					else if ( objLine.starts_with("f ") )
 					{
-						std::vector< OBJVertex > faceIndices{};
+						std::vector< OBJVertex< index_data_t > > faceIndices;
 
 						if ( !this->extractFaceIndices(objLine, faceIndices) )
 						{
@@ -838,7 +852,7 @@ namespace EmEn::Libs::VertexFactory
 						}
 
 						/* NOTE: f line can express a triangle or a polygon ! */
-						for ( size_t triangleOffset = 0; triangleOffset < faceIndices.size() - 2; triangleOffset++ )
+						for ( index_data_t triangleOffset = 0; triangleOffset < faceIndices.size() - 2; ++triangleOffset )
 						{
 							/* NOTES: "f 0 1 2 3"
 							 * Must goes into
@@ -846,9 +860,9 @@ namespace EmEn::Libs::VertexFactory
 							 * "0 2 3"
 							 */
 
-							ShapeTriangle< data_t > triangle{};
+							ShapeTriangle< vertex_data_t, index_data_t > triangle;
 
-							for ( size_t faceVertexIndex = 0; faceVertexIndex < 3; faceVertexIndex++ )
+							for ( index_data_t faceVertexIndex = 0; faceVertexIndex < 3; ++faceVertexIndex )
 							{
 								const auto realFaceVertexIndex = faceVertexIndex == 0 ? faceVertexIndex : faceVertexIndex + triangleOffset;
 								const auto & OBJVertex = faceIndices.at(realFaceVertexIndex);
@@ -859,7 +873,7 @@ namespace EmEn::Libs::VertexFactory
 								const auto vtIndex = OBJVertex.vtIndex - 1;
 
 								/* NOTE: Get the real shape vertex index in the final shape. */
-								size_t geometryVertexIndex = 0;
+								index_data_t geometryVertexIndex = 0;
 
 								switch ( m_predominantAttribute )
 								{
@@ -887,7 +901,7 @@ namespace EmEn::Libs::VertexFactory
 									{
 										vertices.emplace_back(position, m_vn.at(vnIndex), m_vt.at(vtIndex));
 
-										geometryVertexIndex = vertices.size() - 1;
+										geometryVertexIndex = static_cast< uint32_t >(vertices.size() - 1);
 									}
 								}
 								else
@@ -907,11 +921,11 @@ namespace EmEn::Libs::VertexFactory
 
 							triangles.emplace_back(triangle);
 
-							triangleCount++;
+							++triangleCount;
 
 							if ( !groups.empty() )
 							{
-								groups.back().second++;
+								++groups.back().second;
 							}
 						}
 					}
@@ -927,7 +941,7 @@ namespace EmEn::Libs::VertexFactory
 			 * @return void
 			 */
 			void
-			extractPositionAttribute (const std::string & vLine, size_t offset) noexcept
+			extractPositionAttribute (const std::string & vLine, index_data_t offset) noexcept
 			{
 #ifdef USE_SAFE_READ
 				Math::Vector< 3, data_t > position{vLine, ' ', 1};
@@ -981,7 +995,7 @@ namespace EmEn::Libs::VertexFactory
 			 * @return void
 			 */
 			void
-			extractTextureCoordinatesAttribute (const std::string & vtLine, size_t offset) noexcept
+			extractTextureCoordinatesAttribute (const std::string & vtLine, index_data_t offset) noexcept
 			{
 #ifdef USE_SAFE_READ
 				Math::Vector< 2, data_t > textureCoordinates{vtLine, ' ', 1};
@@ -1018,7 +1032,7 @@ namespace EmEn::Libs::VertexFactory
 			 * @return void
 			 */
 			void
-			extractNormalAttribute (const std::string & vnLine, size_t offset) noexcept
+			extractNormalAttribute (const std::string & vnLine, index_data_t offset) noexcept
 			{
 #ifdef USE_SAFE_READ
 				Math::Vector< 3, data_t > normal{vnLine, ' ', 1};
@@ -1062,7 +1076,7 @@ namespace EmEn::Libs::VertexFactory
 			 * @return bool
 			 */
 			bool
-			extractFaceIndices (const std::string & fLine, std::vector< OBJVertex > & faceIndices) const noexcept
+			extractFaceIndices (const std::string & fLine, std::vector< OBJVertex< index_data_t > > & faceIndices) const noexcept
 			{
 #ifdef USE_SAFE_READ
 				/* Split the face definition into points. */
@@ -1079,7 +1093,7 @@ namespace EmEn::Libs::VertexFactory
 				/* NOTE: Reserving the final data excluding the "f" part. */
 				faceIndices.reserve(points.size() - 1);
 
-				for ( size_t index = 1; index < points.size(); index++ )
+				for ( index_data_t index = 1; index < points.size(); ++index )
 				{
 					uint32_t vIndex = 0;
 					uint32_t vtIndex = 0;
@@ -1155,7 +1169,7 @@ namespace EmEn::Libs::VertexFactory
 				return true;
 #else
 
-				const size_t pointCount = getSpaceCount(fLine);
+				const index_data_t pointCount = getSpaceCount(fLine);
 
 				if ( pointCount == 3 )
 				{
@@ -1341,22 +1355,22 @@ namespace EmEn::Libs::VertexFactory
 			/**
 			 * @brief Returns the number of usable space in the OBJ line.
 			 * @param line A reference to a string.
-			 * @return size_t
+			 * @return index_data_t
 			 */
 			[[nodiscard]]
 			static
-			size_t
+			index_data_t
 			getSpaceCount (const std::string & line) noexcept
 			{
 				const auto lastChar = line.find_last_not_of(" \t\f\v\n\r");
 
-				size_t count = 0;
+				index_data_t count = 0;
 
-				for ( size_t index = 0; index < lastChar; index++ )
+				for ( index_data_t index = 0; index < lastChar; ++index )
 				{
 					if ( line.at(index) == ' ' )
 					{
-						count++;
+						++count;
 					}
 				}
 
@@ -1527,11 +1541,11 @@ namespace EmEn::Libs::VertexFactory
 			static constexpr auto YAxisFlipEnabled{1UL};
 			static constexpr auto ZAxisFlipEnabled{2UL};
 
-			std::vector< Math::Vector< 3, data_t > > m_v{};
-			std::vector< Math::Vector< 3, data_t > > m_vt{};
-			std::vector< Math::Vector< 3, data_t > > m_vn{};
-			size_t m_vertexCount{0}; /* Combined attributes vertex count. */
-			size_t m_faceCount{0};
+			std::vector< Math::Vector< 3, vertex_data_t > > m_v;
+			std::vector< Math::Vector< 3, vertex_data_t > > m_vt;
+			std::vector< Math::Vector< 3, vertex_data_t > > m_vn;
+			index_data_t m_vertexCount{0}; /* Combined attributes vertex count. */
+			index_data_t m_faceCount{0};
 			FaceMode m_faceMode{FaceMode::Undetermined};
 			PredominantAttributes m_predominantAttribute{PredominantAttributes::V};
 			ReadOptions m_readOptions{};

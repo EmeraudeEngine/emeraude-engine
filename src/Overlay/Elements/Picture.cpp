@@ -37,7 +37,7 @@ namespace EmEn::Overlay::Elements
 	using namespace EmEn::Libs::PixelFactory;
 	using namespace Graphics;
 
-	Picture::Picture (const FramebufferProperties & framebufferProperties, const std::string & name, const Math::Rectangle< float > & geometry, float depth) noexcept
+	Picture::Picture (const FramebufferProperties & framebufferProperties, const std::string & name, const Math::Space2D::AARectangle< float > & geometry, float depth) noexcept
 		: ComposedSurface(framebufferProperties, name, geometry, depth)
 	{
 

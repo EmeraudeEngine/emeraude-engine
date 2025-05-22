@@ -332,18 +332,18 @@ namespace EmEn
 		return ticket;
 	}
 
-	size_t
+	uint64_t
 	NetworkManager::totalBytesTotal () const noexcept
 	{
-		return std::accumulate(m_downloadItems.cbegin(), m_downloadItems.cend(), 0UL, [] (auto sum, const auto & item) {
+		return std::accumulate(m_downloadItems.cbegin(), m_downloadItems.cend(), 0UL, [] (uint64_t sum, const auto & item) {
 			return sum + item.bytesTotal();
 		});
 	}
 
-	size_t
+	uint64_t
 	NetworkManager::totalBytesReceived () const noexcept
 	{
-		return std::accumulate(m_downloadItems.cbegin(), m_downloadItems.cend(), 0UL, [] (auto sum, const auto & item) {
+		return std::accumulate(m_downloadItems.cbegin(), m_downloadItems.cend(), 0UL, [] (uint64_t sum, const auto & item) {
 			return sum + item.bytesReceived();
 		});
 	}

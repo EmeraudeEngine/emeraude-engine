@@ -182,6 +182,17 @@ namespace EmEn::Vulkan
 			}
 
 			/**
+			 * @brief Returns whether textures must be checked for standard requirements like sizes being power of two.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isStandardTextureCheckEnabled () const noexcept
+			{
+				return m_flags[StandardTextureCheckEnabled];
+			}
+
+			/**
 			 * @brief Returns a logical device with graphics capabilities.
 			 * @param window A reference to a Window to check the device with presentation. Default Off-screen rendering.
 			 * @return std::shared_ptr< Device >
@@ -377,6 +388,7 @@ namespace EmEn::Vulkan
 			static constexpr auto DebugMode{1UL};
 			static constexpr auto UseDebugMessenger{2UL};
 			static constexpr auto DynamicStateExtensionEnabled{3UL};
+			static constexpr auto StandardTextureCheckEnabled{4UL};
 
 			PrimaryServices & m_primaryServices;
 			VkInstance m_instance{VK_NULL_HANDLE};
@@ -390,29 +402,13 @@ namespace EmEn::Vulkan
 			std::vector< std::string > m_requestedValidationLayers;
 			std::vector< const char * > m_requiredValidationLayers;
 			std::vector< const char * > m_requiredInstanceExtensions;
-			std::vector< const char * > m_requiredGraphicsDeviceExtensions{
-				VK_KHR_SWAPCHAIN_EXTENSION_NAME,
-				//VK_EXT_BLEND_OPERATION_ADVANCED_EXTENSION_NAME, // Fails on Intel iGPU
-				//VK_EXT_FILTER_CUBIC_EXTENSION_NAME, // Fails on NVidia
-				//VK_KHR_SHARED_PRESENTABLE_IMAGE_EXTENSION_NAME,
-				/* NOTE: Enable dynamic state extension. */
-				//VK_EXT_EXTENDED_DYNAMIC_STATE_EXTENSION_NAME,
-				//VK_EXT_EXTENDED_DYNAMIC_STATE_2_EXTENSION_NAME,
-				//VK_EXT_EXTENDED_DYNAMIC_STATE_3_EXTENSION_NAME,
-				/* NOTE: Video decoding extensions. (To test one day ...) */
-				//VK_KHR_VIDEO_QUEUE_EXTENSION_NAME,
-				//VK_KHR_VIDEO_DECODE_QUEUE_EXTENSION_NAME,
-				//VK_KHR_VIDEO_DECODE_H265_EXTENSION_NAME,
-#if !IS_LINUX && !IS_WINDOWS
-				"VK_KHR_portability_subset", // Not found on macOS : VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME
-#endif
-			};
+			std::vector< const char * > m_requiredGraphicsDeviceExtensions;
 			std::array< bool, 8 > m_flags{
 				false/*ShowInformation*/,
 				false/*DebugMode*/,
 				false/*UseDebugMessenger*/,
 				false/*DynamicStateExtensionEnabled*/,
-				false/*UNUSED*/,
+				false/*StandardTextureCheckEnabled*/,
 				false/*UNUSED*/,
 				false/*UNUSED*/,
 				false/*UNUSED*/

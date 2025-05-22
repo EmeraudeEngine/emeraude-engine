@@ -56,7 +56,7 @@ namespace EmEn::Graphics::RenderableInstance
 
 	Multiple::Multiple (const std::shared_ptr< Renderable::Interface > & renderable, const std::vector< CartesianFrame< float > > & instanceLocations, uint32_t flagBits) noexcept
 		: Abstract(renderable, EnableInstancing | flagBits),
-		m_instanceCount(instanceLocations.size()),
+		m_instanceCount(static_cast< uint32_t >(instanceLocations.size())),
 		m_activeInstanceCount(m_instanceCount)
 	{
 		if ( m_instanceCount == 0 )
@@ -95,7 +95,7 @@ namespace EmEn::Graphics::RenderableInstance
 		}
 	}
 
-	Multiple::Multiple (const std::shared_ptr< Renderable::Interface > & renderable, size_t instanceCount, uint32_t flagBits) noexcept
+	Multiple::Multiple (const std::shared_ptr< Renderable::Interface > & renderable, uint32_t instanceCount, uint32_t flagBits) noexcept
 		: Abstract(renderable, EnableInstancing | flagBits),
 		m_instanceCount(instanceCount)
 	{
@@ -131,7 +131,7 @@ namespace EmEn::Graphics::RenderableInstance
 	}
 
 	bool
-	Multiple::updateLocalData (const CartesianFrame< float > & instanceLocation, size_t instanceIndex) noexcept
+	Multiple::updateLocalData (const CartesianFrame< float > & instanceLocation, uint32_t instanceIndex) noexcept
 	{
 		/* Check against the local data. */
 		if ( instanceIndex >= m_instanceCount )
@@ -191,7 +191,7 @@ namespace EmEn::Graphics::RenderableInstance
 	}
 
 	bool
-	Multiple::updateLocalData (const std::vector< CartesianFrame< float > > & instanceLocations, size_t instanceOffset) noexcept
+	Multiple::updateLocalData (const std::vector< CartesianFrame< float > > & instanceLocations, uint32_t instanceOffset) noexcept
 	{
 		/* Check against the local data. */
 		const auto endOffset = instanceOffset + instanceLocations.size();
@@ -241,14 +241,14 @@ namespace EmEn::Graphics::RenderableInstance
 				modelMatrix.copy(m_localData.data() + elementOffset);
 
 				/* Advance offset for the normal matrix (16 floats). */
-				elementOffset += 4UL * getAttributeSize(VertexAttributeType::ModelMatrixR0);
+				elementOffset += 4U * getAttributeSize(VertexAttributeType::ModelMatrixR0);
 
 				/* Write normal matrix for this instance. */
 				const auto normalModelMatrix = modelMatrix.inverse().transpose().toMatrix3();
 				normalModelMatrix.copy(m_localData.data() + elementOffset);
 
 				/* Advance offset for the next instance model matrix (9 floats). */
-				elementOffset += 3UL * getAttributeSize(VertexAttributeType::NormalModelMatrixR0);
+				elementOffset += 3U * getAttributeSize(VertexAttributeType::NormalModelMatrixR0);
 			}
 		}
 
@@ -318,7 +318,7 @@ namespace EmEn::Graphics::RenderableInstance
 		auto * transferManager = TransferManager::instance(GPUWorkType::Graphics);
 
 		const auto vertexElementCount = this->isFacingCamera() ? SpriteVBOElementCount : MeshVBOElementCount;
-		const auto vertexCount = m_localData.size() / vertexElementCount;
+		const auto vertexCount = static_cast< uint32_t >(m_localData.size() / vertexElementCount);
 
 		m_vertexBufferObject = std::make_unique< VertexBufferObject >(transferManager->device(), vertexCount, vertexElementCount);
 		m_vertexBufferObject->setIdentifier("Multiple-ModelVBO-VertexBufferObject");
@@ -342,14 +342,15 @@ namespace EmEn::Graphics::RenderableInstance
 	{
 		const std::lock_guard< std::mutex > lock{m_GPUMemoryAccess};
 
-#ifdef DEBUG
-		if ( !this->isModelMatricesCreated() )
+		if constexpr ( IsDebug )
 		{
-			Tracer::error(ClassId, "Trying to map an uninitialized VBO.");
+			if ( !this->isModelMatricesCreated() )
+			{
+				Tracer::error(ClassId, "Trying to map an uninitialized VBO.");
 
-			return false;
+				return false;
+			}
 		}
-#endif
 
 		if ( this->isFlagEnabled(ArePositionsSynchronized) )
 		{
@@ -386,42 +387,45 @@ namespace EmEn::Graphics::RenderableInstance
 		/* [VULKAN-PUSH-CONSTANT:4] Push camera related matrices. */
 		if ( program.wasAdvancedMatricesEnabled() || program.wasBillBoardingEnabled() )
 		{
-#ifndef SPLIT_PUSH_CONSTANTS
-			/* NOTE: Create a single buffer for 2x mat4x4. */
-			std::array< float, 32 > buffer{};
-			std::memcpy(buffer.data(), viewMatrix.data(), MatrixBytes);
-			std::memcpy(&buffer[Matrix4Alignment], viewProjectionMatrix.data(), MatrixBytes);
+			if constexpr ( MergePushConstants )
+			{
+				/* NOTE: Create a single buffer for 2x mat4x4. */
+				std::array< float, 32 > buffer{};
+				std::memcpy(buffer.data(), viewMatrix.data(), MatrixBytes);
+				std::memcpy(&buffer[Matrix4Alignment], viewProjectionMatrix.data(), MatrixBytes);
 
-			/* NOTE: Push the view matrix (V) and the view projection matrix (VP). */
-			vkCmdPushConstants(
-				commandBuffer.handle(),
-				pipelineLayout.handle(),
-				stageFlags,
-				0,
-				MatrixBytes * 2,
-				buffer.data()
-			);
-#else
-			/* NOTE: Push the view matrix (V). */
-			vkCmdPushConstants(
-				commandBuffer.handle(),
-				pipelineLayout.handle(),
-				stageFlags,
-				0,
-				MatrixBytes,
-				viewMatrix.data()
-			);
+				/* NOTE: Push the view matrix (V) and the view projection matrix (VP). */
+				vkCmdPushConstants(
+					commandBuffer.handle(),
+					pipelineLayout.handle(),
+					stageFlags,
+					0,
+					MatrixBytes * 2,
+					buffer.data()
+				);
+			}
+			else
+			{
+				/* NOTE: Push the view matrix (V). */
+				vkCmdPushConstants(
+					commandBuffer.handle(),
+					pipelineLayout.handle(),
+					stageFlags,
+					0,
+					MatrixBytes,
+					viewMatrix.data()
+				);
 
-			/* NOTE: Push the view projection matrix (VP). */
-			vkCmdPushConstants(
-				commandBuffer.handle(),
-				pipelineLayout.handle(),
-				stageFlags,
-				MatrixBytes,
-				MatrixBytes,
-				viewProjectionMatrix.data()
-			);
-#endif
+				/* NOTE: Push the view projection matrix (VP). */
+				vkCmdPushConstants(
+					commandBuffer.handle(),
+					pipelineLayout.handle(),
+					stageFlags,
+					MatrixBytes,
+					MatrixBytes,
+					viewProjectionMatrix.data()
+				);
+			}
 		}
 		else
 		{
@@ -438,7 +442,7 @@ namespace EmEn::Graphics::RenderableInstance
 	}
 
 	void
-	Multiple::bindInstanceModelLayer (const CommandBuffer & commandBuffer, size_t layerIndex) const noexcept
+	Multiple::bindInstanceModelLayer (const CommandBuffer & commandBuffer, uint32_t layerIndex) const noexcept
 	{
 		/*  Bind the geometry VBO and the optional IBO with the model matrix VBO. */
 		commandBuffer.bind(*this->renderable()->geometry(), *m_vertexBufferObject, layerIndex);

@@ -232,7 +232,7 @@ namespace EmEn::Overlay
 			void clearScreens () noexcept;
 
 			/**
-			 * @brief Gets the named screen and if it's found it will be active on top.
+			 * @brief Gets the named screen, and if it's found, it will be active on top.
 			 * @param name A reference to a string.
 			 * @return bool
 			 */
@@ -259,7 +259,7 @@ namespace EmEn::Overlay
 			void disableAllScreens () noexcept;
 
 			/**
-			 * @brief Makes a named screen on top and eventually disable all others screen.
+			 * @brief Makes a named screen on top and eventually disable all other screens.
 			 * @param screenName A reference to a string.
 			 * @return bool
 			 */
@@ -374,7 +374,7 @@ namespace EmEn::Overlay
 			/**
 			 * @brief Gets or creates the descriptor set layout for this surface.
 			 * @note The descriptor set layout is common for all the overlay.
-			 * @warning Can be nullptr !
+			 * @warning Can be nullptr!
 			 * @param layoutManager A reference to the layout manager.
 			 * @return std::shared_ptr< Vulkan::DescriptorSetLayout >
 			 */
@@ -400,11 +400,11 @@ namespace EmEn::Overlay
 			void updateFramebufferProperties () noexcept;
 
 			/**
-			 * @brief Generates the overlay graphics pipeline.
+			 * @brief Generates the overlay shader program.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool generateGraphicsPipeline () noexcept;
+			bool generateShaderProgram () noexcept;
 
 			/**
 			 * @brief Updates all overlay screens physical representation with a new framebuffer properties.

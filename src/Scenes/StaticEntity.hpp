@@ -321,7 +321,7 @@ namespace EmEn::Scenes
 
 			/** @copydoc EmEn::Scenes::LocatableInterface::getWorldBoundingBox() const */
 			[[nodiscard]]
-			Libs::Math::Cuboid< float >
+			Libs::Math::Space3D::AACuboid< float >
 			getWorldBoundingBox () const noexcept override
 			{
 				return Libs::Math::OrientedCuboid< float >{this->localBoundingBox(), m_cartesianFrame}.getAxisAlignedBox();
@@ -329,7 +329,7 @@ namespace EmEn::Scenes
 
 			/** @copydoc EmEn::Scenes::LocatableInterface::getWorldBoundingSphere() const */
 			[[nodiscard]]
-			Libs::Math::Sphere< float >
+			Libs::Math::Space3D::Sphere< float >
 			getWorldBoundingSphere () const noexcept override
 			{
 				return {
@@ -418,7 +418,7 @@ namespace EmEn::Scenes
 			 */
 			[[nodiscard]]
 			Libs::Math::Matrix< 4, float >
-			getViewMatrix (bool rotateOnly = false) const noexcept
+			getViewMatrix () const noexcept
 			{
 				return m_cartesianFrame.getViewMatrix();
 			}

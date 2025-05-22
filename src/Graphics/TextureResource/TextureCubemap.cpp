@@ -33,16 +33,16 @@
 #include <string>
 
 /* Local inclusions. */
-#include "Abstract.hpp"
-#include "Graphics/ImageResource.hpp"
-#include "Graphics/Renderer.hpp"
 #include "Libs/PixelFactory/Color.hpp"
-#include "Resources/Container.hpp"
-#include "Resources/Manager.hpp"
-#include "Tracer.hpp"
+#include "Vulkan/Instance.hpp"
 #include "Vulkan/Image.hpp"
 #include "Vulkan/ImageView.hpp"
 #include "Vulkan/Sampler.hpp"
+#include "Graphics/Renderer.hpp"
+#include "Resources/Container.hpp"
+#include "Resources/Manager.hpp"
+#include "Tracer.hpp"
+
 
 /* Defining the resource manager class id. */
 template<>
@@ -59,8 +59,8 @@ namespace EmEn::Graphics::TextureResource
 
 	const size_t TextureCubemap::ClassUID{getClassUID(ClassId)};
 
-	TextureCubemap::TextureCubemap (const std::string & name, uint32_t resourceFlagBits) noexcept
-		: Abstract(name, resourceFlagBits)
+	TextureCubemap::TextureCubemap (const std::string & name, uint32_t resourceFlags) noexcept
+		: Abstract(name, resourceFlags)
 	{
 
 	}
@@ -94,6 +94,14 @@ namespace EmEn::Graphics::TextureResource
 	bool
 	TextureCubemap::createOnHardware (Renderer & renderer) noexcept
 	{
+		for ( const auto & pixmap: m_localData->faces() )
+		{
+			if ( !this->validateTexture(pixmap, !renderer.vulkanInstance().isStandardTextureCheckEnabled()) )
+			{
+				return false;
+			}
+		}
+
 		/* Create a Vulkan image. */
 		m_image = std::make_shared< Image >(
 			renderer.device(),
@@ -247,7 +255,7 @@ namespace EmEn::Graphics::TextureResource
 		return 0;
 	}
 
-	size_t
+	uint32_t
 	TextureCubemap::frameIndexAt (uint32_t /*sceneTime*/) const noexcept
 	{
 		return 0;
@@ -291,9 +299,9 @@ namespace EmEn::Graphics::TextureResource
 			return false;
 		}
 
-		m_localData = CubemapResource::getDefault();
+		m_localData = Resources::Manager::instance()->container< CubemapResource >()->getDefaultResource();
 
-		if ( !this->addDependency(m_localData.get()) )
+		if ( !this->addDependency(m_localData) )
 		{
 			return this->setLoadSuccess(false);
 		}
@@ -304,14 +312,14 @@ namespace EmEn::Graphics::TextureResource
 	bool
 	TextureCubemap::load (const std::filesystem::path & filepath) noexcept
 	{
-		return this->load(CubemapResource::get(getResourceNameFromFilepath(filepath, "Cubemaps"), true));
+		return this->load(Resources::Manager::instance()->container< CubemapResource >()->getResource(getResourceNameFromFilepath(filepath, "Cubemaps"), true));
 	}
 
 	bool
 	TextureCubemap::load (const Json::Value & /*data*/) noexcept
 	{
 		/* NOTE: This resource has no local store,
-		 * so this method won't be called from a resource container ! */
+		 * so this method won't be called from a resource container! */
 		Tracer::error(ClassId, "This type of resource is not intended to be loaded this way !");
 
 		return false;
@@ -334,7 +342,7 @@ namespace EmEn::Graphics::TextureResource
 
 		m_localData = cubemapResource;
 
-		if ( !this->addDependency(m_localData.get()) )
+		if ( !this->addDependency(m_localData) )
 		{
 			TraceError{ClassId} << "Unable to add the cubemap '" << cubemapResource->name() << "' as dependency !";
 
@@ -342,17 +350,5 @@ namespace EmEn::Graphics::TextureResource
 		}
 
 		return this->setLoadSuccess(true);
-	}
-
-	std::shared_ptr< TextureCubemap >
-	TextureCubemap::get (const std::string & resourceName, bool directLoad) noexcept
-	{
-		return Resources::Manager::instance()->textureCubemaps().getResource(resourceName, !directLoad);
-	}
-
-	std::shared_ptr< TextureCubemap >
-	TextureCubemap::getDefault () noexcept
-	{
-		return Resources::Manager::instance()->textureCubemaps().getDefaultResource();
 	}
 }

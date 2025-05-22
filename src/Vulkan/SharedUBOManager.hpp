@@ -136,7 +136,7 @@ namespace EmEn::Vulkan
 			 * @return std::shared_ptr< SharedUniformBuffer >
 			 */
 			[[nodiscard]]
-			std::shared_ptr< SharedUniformBuffer > createSharedUniformBuffer (const std::string & name, size_t uniformBlockSize, size_t maxElementCount = 0) noexcept;
+			std::shared_ptr< SharedUniformBuffer > createSharedUniformBuffer (const std::string & name, uint32_t uniformBlockSize, uint32_t maxElementCount = 0) noexcept;
 
 			/**
 			 * @brief Creates a shared dynamic buffer uniform.
@@ -147,7 +147,7 @@ namespace EmEn::Vulkan
 			 * @return std::shared_ptr< SharedUniformBuffer >
 			 */
 			[[nodiscard]]
-			std::shared_ptr< SharedUniformBuffer > createSharedUniformBuffer (const std::string & name, const SharedUniformBuffer::DescriptorSetCreator & descriptorSetCreator, size_t uniformBlockSize, size_t maxElementCount = 0) noexcept;
+			std::shared_ptr< SharedUniformBuffer > createSharedUniformBuffer (const std::string & name, const SharedUniformBuffer::DescriptorSetCreator & descriptorSetCreator, uint32_t uniformBlockSize, uint32_t maxElementCount = 0) noexcept;
 
 			/**
 			 * @brief Returns a named shared buffer uniform.

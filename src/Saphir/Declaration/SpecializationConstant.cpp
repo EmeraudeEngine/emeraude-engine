@@ -34,7 +34,10 @@ namespace EmEn::Saphir::Declaration
 	using namespace Keys;
 
 	SpecializationConstant::SpecializationConstant (Key type, Key name, uint32_t constantId, std::string defaultValue) noexcept
-		: m_type(type), m_name(name), m_constantId(constantId), m_defaultValue(std::move(defaultValue))
+		: m_type(type),
+		m_name(name),
+		m_constantId(constantId),
+		m_defaultValue(std::move(defaultValue))
 	{
 
 	}
@@ -42,46 +45,23 @@ namespace EmEn::Saphir::Declaration
 	bool
 	SpecializationConstant::isValid () const noexcept
 	{
-		if ( m_type == nullptr || m_name == nullptr )
+		if ( m_type == nullptr )
+		{
 			return false;
+		}
+
+		if ( m_name == nullptr )
+		{
+			return false;
+		}
 
 		return true;
-	}
-
-	Key
-	SpecializationConstant::name () const noexcept
-	{
-		return m_name;
-	}
-
-	size_t
-	SpecializationConstant::bytes () const noexcept
-	{
-		return 0;
-	}
-
-	Key
-	SpecializationConstant::type () const noexcept
-	{
-		return m_type;
-	}
-
-	uint32_t
-	SpecializationConstant::constantId () const noexcept
-	{
-		return m_constantId;
-	}
-
-	const std::string &
-	SpecializationConstant::defaultValue () const noexcept
-	{
-		return m_defaultValue;
 	}
 
 	std::string
 	SpecializationConstant::sourceCode () const noexcept
 	{
-		std::stringstream code{};
+		std::stringstream code;
 
 		code <<
 			GLSL::Layout << "(" << GLSL::ConstantId << " = " << m_constantId << ")" << ' ' <<

@@ -46,16 +46,16 @@ namespace EmEn::Vulkan::Sync
 			static constexpr auto ClassId{"VulkanSemaphore"};
 
 			/**
-			 * @brief Constructs a semaphore.
+			 * @brief Constructs semaphore.
 			 * @param device A reference to a smart pointer of the device.
-			 * @param createFlags The create info flags. Default none.
+			 * @param createFlags The createInfo flags. Default none.
 			 */
 			explicit Semaphore (const std::shared_ptr< Device > & device, VkSemaphoreCreateFlags createFlags = 0) noexcept;
 
 			/**
-			 * @brief Constructs a semaphore with a create info.
+			 * @brief Constructs a semaphore with a createInfo.
 			 * @param device A reference to a smart pointer of the device.
-			 * @param createInfo A reference to the create info.
+			 * @param createInfo A reference to the createInfo.
 			 */
 			Semaphore (const std::shared_ptr< Device > & device, const VkSemaphoreCreateInfo & createInfo) noexcept;
 
@@ -106,7 +106,7 @@ namespace EmEn::Vulkan::Sync
 			}
 
 			/**
-			 * @brief Returns the semaphore create info.
+			 * @brief Returns the semaphore createInfo.
 			 * @return const VkSemaphoreCreateInfo &
 			 */
 			[[nodiscard]]

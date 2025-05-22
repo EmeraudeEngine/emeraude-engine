@@ -58,7 +58,7 @@ namespace EmEn::Overlay::Elements
 			 * @param geometry A reference to a rectangle for the surface geometry on screen. Default the whole screen.
 			 * @param depth A depth value to order surface on the screen. Default 0.0.
 			 */
-			Input (const FramebufferProperties & framebufferProperties, const std::string & name, const Libs::Math::Rectangle< float > & geometry = {}, float depth = 0.0F) noexcept;
+			Input (const FramebufferProperties & framebufferProperties, const std::string & name, const Libs::Math::Space2D::AARectangle< float > & geometry = {}, float depth = 0.0F) noexcept;
 
 			/** @copydoc EmEn::Overlay::Surface::onKeyRelease() */
 			bool onKeyRelease (int32_t key, int32_t scancode, int32_t modifiers) noexcept override;

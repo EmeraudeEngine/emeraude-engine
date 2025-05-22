@@ -40,6 +40,7 @@
 #include "Libs/PixelFactory/Color.hpp"
 #include "Resources/Container.hpp"
 #include "Resources/Manager.hpp"
+#include "Vulkan/Instance.hpp"
 #include "Vulkan/Image.hpp"
 #include "Vulkan/ImageView.hpp"
 #include "Vulkan/Sampler.hpp"
@@ -60,8 +61,8 @@ namespace EmEn::Graphics::TextureResource
 
 	const size_t Texture2D::ClassUID{getClassUID(ClassId)};
 
-	Texture2D::Texture2D (const std::string & name, uint32_t resourceFlagBits) noexcept
-		: Abstract(name, resourceFlagBits)
+	Texture2D::Texture2D (const std::string & name, uint32_t resourceFlags) noexcept
+		: Abstract(name, resourceFlags)
 	{
 
 	}
@@ -95,6 +96,11 @@ namespace EmEn::Graphics::TextureResource
 	bool
 	Texture2D::createOnHardware (Renderer & renderer) noexcept
 	{
+		if ( !this->validateTexture(m_localData->data(), !renderer.vulkanInstance().isStandardTextureCheckEnabled()) )
+		{
+			return false;
+		}
+
 		auto & settings = renderer.primaryServices().settings();
 
 		const auto mipLevels = std::min(
@@ -255,7 +261,7 @@ namespace EmEn::Graphics::TextureResource
 		return 0;
 	}
 
-	size_t
+	uint32_t
 	Texture2D::frameIndexAt (uint32_t /*sceneTime*/) const noexcept
 	{
 		return 0;
@@ -299,9 +305,9 @@ namespace EmEn::Graphics::TextureResource
 			return false;
 		}
 
-		m_localData = ImageResource::getDefault();
+		m_localData = Resources::Manager::instance()->container< ImageResource >()->getDefaultResource();
 
-		if ( !this->addDependency(m_localData.get()) )
+		if ( !this->addDependency(m_localData) )
 		{
 			return this->setLoadSuccess(false);
 		}
@@ -312,7 +318,7 @@ namespace EmEn::Graphics::TextureResource
 	bool
 	Texture2D::load (const std::filesystem::path & filepath) noexcept
 	{
-		return this->load(ImageResource::get(getResourceNameFromFilepath(filepath, "Images"), true));
+		return this->load(Resources::Manager::instance()->container< ImageResource >()->getResource(getResourceNameFromFilepath(filepath, "Images"), true));
 	}
 
 	bool
@@ -342,7 +348,7 @@ namespace EmEn::Graphics::TextureResource
 
 		m_localData = imageResource;
 
-		if ( !this->addDependency(m_localData.get()) )
+		if ( !this->addDependency(m_localData) )
 		{
 			TraceError{ClassId} << "Unable to add the image '" << imageResource->name() << "' as dependency !";
 
@@ -356,17 +362,5 @@ namespace EmEn::Graphics::TextureResource
 	Texture2D::localData () noexcept
 	{
 		return m_localData;
-	}
-
-	std::shared_ptr< Texture2D >
-	Texture2D::get (const std::string & resourceName, bool directLoad) noexcept
-	{
-		return Resources::Manager::instance()->texture2Ds().getResource(resourceName, !directLoad);
-	}
-
-	std::shared_ptr< Texture2D >
-	Texture2D::getDefault () noexcept
-	{
-		return Resources::Manager::instance()->texture2Ds().getDefaultResource();
 	}
 }

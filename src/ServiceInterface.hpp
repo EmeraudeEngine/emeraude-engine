@@ -42,7 +42,7 @@ namespace EmEn
 	/**
 	 * @brief The service interface.
 	 * @note A service cannot be duplicated and should act like a singleton.
-	 * @extends EmEn::Libs::NameableTrait Each service have a name.
+	 * @extends EmEn::Libs::NameableTrait Each service has a name.
 	 * @extends EmEn::Libs::ObservableTrait Each service should be observable.
 	 */
 	class ServiceInterface : public Libs::NameableTrait, public Libs::ObservableTrait
@@ -92,7 +92,7 @@ namespace EmEn
 
 			/**
 			 * @brief Starts the service and register the pointer into a service list.
-			 * @note This version ensure each service in order for an automatic cleaning.
+			 * @note This version ensures each service in order for an automatic cleaning.
 			 * @param services A reference to auto register the service for shutdown.
 			 * @return bool.
 			 */
@@ -106,7 +106,7 @@ namespace EmEn
 
 			/**
 			 * @brief Returns whether the service is up and available.
-			 * @warning This function must reflect the method ServiceInterface::onInitialize() has been called !
+			 * @warning This function must reflect the method ServiceInterface::onInitialize() has been called!
 			 * @return bool.
 			 */
 			[[nodiscard]]

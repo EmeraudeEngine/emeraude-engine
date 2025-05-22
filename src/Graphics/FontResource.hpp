@@ -58,12 +58,20 @@ namespace EmEn::Graphics
 			/** @brief Observable class unique identifier. */
 			static const size_t ClassUID;
 
+			/** @brief Defines the resource dependency complexity. */
+			static constexpr auto Complexity{Resources::DepComplexity::None};
+
 			/**
 			 * @brief Constructs a font resource.
 			 * @param name A reference to a string for resource name.
-			 * @param resourceFlagBits The resource flag bits. Default none. (Unused yet)
+			 * @param resourceFlags The resource flag bits. Default none. (Unused yet)
 			 */
-			explicit FontResource (const std::string & name, uint32_t resourceFlagBits = 0) noexcept;
+			explicit
+			FontResource (const std::string & name, uint32_t resourceFlags = 0) noexcept
+				: ResourceTrait(name, resourceFlags)
+			{
+
+			}
 
 			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
 			[[nodiscard]]
@@ -98,6 +106,14 @@ namespace EmEn::Graphics
 			/** @copydoc EmEn::Resources::ResourceTrait::load(const Json::Value &) */
 			bool load (const Json::Value & data) noexcept override;
 
+			/** @copydoc EmEn::Resources::ResourceTrait::memoryOccupied() const noexcept */
+			[[nodiscard]]
+			size_t
+			memoryOccupied () const noexcept override
+			{
+				return sizeof(*this) + m_font.bytes< size_t >();
+			}
+
 			/**
 			 * @brie Returns the font.
 			 * @return const Libs::PixelFactory::Font< uint8_t > &
@@ -105,24 +121,8 @@ namespace EmEn::Graphics
 			const Libs::PixelFactory::Font< uint8_t > &
 			font () const noexcept
 			{
-				return m_data;
+				return m_font;
 			}
-
-			/**
-			 * @brief Returns a font resource by its name.
-			 * @param resourceName A reference to a string.
-			 * @param directLoad Use the direct loading mode. Default false.
-			 * @return std::shared_ptr< FontResource >
-			 */
-			[[nodiscard]]
-			static std::shared_ptr< FontResource > get (const std::string & resourceName, bool directLoad = false) noexcept;
-
-			/**
-			 * @brief Returns the default font resource.
-			 * @return std::shared_ptr< FontResource >
-			 */
-			[[nodiscard]]
-			static std::shared_ptr< FontResource > getDefault () noexcept;
 
 		private:
 
@@ -130,7 +130,7 @@ namespace EmEn::Graphics
 			[[nodiscard]]
 			bool onDependenciesLoaded () noexcept override;
 
-			Libs::PixelFactory::Font< uint8_t > m_data;
+			Libs::PixelFactory::Font< uint8_t > m_font;
 	};
 }
 

@@ -28,8 +28,8 @@
 
 /* STL inclusions. */
 #include <cmath>
-#include <type_traits>
 #include <vector>
+#include <type_traits>
 
 /* Local inclusions. */
 #include "Base.hpp"
@@ -54,7 +54,7 @@ namespace EmEn::Libs::Math
 
 			/**
 			 * @brief Constructs the line formula.
-			 * @param points An array of arrays of 2 floats.
+			 * @param points A reference to a vector.
 			 */
 			explicit
 			LineFormula (const std::vector< Vector< 2, data_t > > & points) noexcept

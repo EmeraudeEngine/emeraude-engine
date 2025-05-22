@@ -48,19 +48,27 @@ namespace EmEn::Saphir::Declaration::Member
 			 * @param name A C-string to set the name of the member.
 			 * @param arraySize The size of the array. Default 0.
 			 */
-			PushConstant (VariableType type, Key name, size_t arraySize = 0) noexcept;
+			PushConstant (VariableType type, Key name, uint32_t arraySize = 0) noexcept;
 
 			/** @copydoc EmEn::Saphir::Declaration::Member::Interface::type() */
 			[[nodiscard]]
-			VariableType type () const noexcept override;
+			VariableType
+			type () const noexcept override
+			{
+				return m_type;
+			}
 
 			/** @copydoc EmEn::Saphir::Declaration::Member::Interface::name() */
 			[[nodiscard]]
-			Key name () const noexcept override;
+			Key
+			name () const noexcept override
+			{
+				return m_name;
+			}
 
 			/** @copydoc EmEn::Saphir::Declaration::Member::Interface::bytes() */
 			[[nodiscard]]
-			size_t bytes () const noexcept override;
+			uint32_t bytes () const noexcept override;
 
 			/** @copydoc EmEn::Saphir::Declaration::Member::Interface::sourceCode() */
 			[[nodiscard]]
@@ -72,12 +80,16 @@ namespace EmEn::Saphir::Declaration::Member
 			 * @return size_t
 			 */
 			[[nodiscard]]
-			size_t arraySize () const noexcept;
+			uint32_t
+			arraySize () const noexcept
+			{
+				return m_arraySize;
+			}
 
 		private:
 
 			VariableType m_type;
 			Key m_name;
-			size_t m_arraySize;
+			uint32_t m_arraySize;
 	};
 }

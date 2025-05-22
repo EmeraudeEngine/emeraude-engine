@@ -27,14 +27,12 @@
 #pragma once
 
 /* STL inclusions. */
-#include <cstddef>
+#include <cstdint>
 #include <cmath>
 #include <array>
 #include <vector>
 
 /* Local inclusions for usages. */
-#include "Libs/Math/Matrix.hpp"
-#include "Libs/Math/Cuboid.hpp"
 #include "TextureCoordinates.hpp"
 #include "ShapeBuilder.hpp"
 #include "ShapeAssembler.hpp"
@@ -44,29 +42,30 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 	/**
 	 * @brief Generates a triangle front-facing the camera (Z+).
 	 * @note Ready for vulkan default world axis.
-	 * @tparam float_t The type of floating point number. Default float.
+	 * @tparam vertex_data_t The precision type of vertex data. Default float.
+	 * @tparam index_data_t The precision type of index data. Default uint32_t.
 	 * @param size The size of the triangle. Default 1.
 	 * @param options A reference to initial builder options. Default none.
-	 * @return Shape< float_t >
+	 * @return Shape< vertex_data_t, index_data_t >
 	 */
-	template< typename float_t = float >
+	template< typename vertex_data_t = float, typename index_data_t = uint32_t >
 	[[nodiscard]]
-	Shape< float_t >
-	generateTriangle (float_t size = 1, const ShapeBuilderOptions< float_t > & options = {}) noexcept requires (std::is_floating_point_v< float_t >)
+	Shape< vertex_data_t, index_data_t >
+	generateTriangle (vertex_data_t size = 1, const ShapeBuilderOptions< vertex_data_t > & options = {}) noexcept requires (std::is_floating_point_v< vertex_data_t > && std::is_unsigned_v< index_data_t > )
 	{
-		Shape< float_t > shape{1};
+		Shape< vertex_data_t, index_data_t > shape{1};
 
-		ShapeBuilder< float_t > builder{shape, options};
+		ShapeBuilder< vertex_data_t, index_data_t > builder{shape, options};
 
-		const auto height = size * (std::sqrt(static_cast< float_t >(3)) * static_cast< float_t >(0.5));
-		const auto halfSize = size * static_cast< float_t >(0.5);
+		const auto height = size * (std::sqrt(static_cast< vertex_data_t >(3)) * static_cast< vertex_data_t >(0.5));
+		const auto halfSize = size * static_cast< vertex_data_t >(0.5);
 
 		builder.beginConstruction(ConstructionMode::Triangles);
 
-		builder.options().enableGlobalNormal(Math::Vector< 3, float_t >::positiveZ());
+		builder.options().enableGlobalNormal(Math::Vector< 3, vertex_data_t >::positiveZ());
 
 		/* The top of the triangle (Negative Y). */
-		builder.setPosition(0, -(height * static_cast< float_t >(0.5)), 0);
+		builder.setPosition(0, -(height * static_cast< vertex_data_t >(0.5)), 0);
 		builder.setTextureCoordinates(0.5, 0);
 		builder.setVertexColor(1, 0, 0);
 		builder.newVertex();
@@ -91,22 +90,23 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 	/**
 	 * @brief Generates a quad front-facing the camera (Z+).
 	 * @note Ready for vulkan default world axis.
-	 * @tparam float_t The data type of the shape
+	 * @tparam vertex_data_t The precision type of vertex data. Default float.
+	 * @tparam index_data_t The precision type of index data. Default uint32_t.
 	 * @param xScale The size in X-axis.
 	 * @param yScale The size in Y-axis. Default same as X-axis.
 	 * @param options A reference to initial builder options. Default none.
-	 * @return Shape< float_t >
+	 * @return Shape< vertex_data_t, index_data_t >
 	 */
-	template< typename float_t = float >
+	template< typename vertex_data_t = float, typename index_data_t = uint32_t >
 	[[nodiscard]]
-	Shape< float_t >
-	generateQuad (float_t xScale, float_t yScale = 0, const ShapeBuilderOptions< float_t > & options = {}) noexcept requires (std::is_floating_point_v< float_t >)
+	Shape< vertex_data_t, index_data_t >
+	generateQuad (vertex_data_t xScale, vertex_data_t yScale = 0, const ShapeBuilderOptions< vertex_data_t > & options = {}) noexcept requires (std::is_floating_point_v< vertex_data_t > && std::is_unsigned_v< index_data_t > )
 	{
-		constexpr auto Half = static_cast< float_t >(0.5);
+		constexpr auto Half = static_cast< vertex_data_t >(0.5);
 
-		Shape< float_t > shape{2};
+		Shape< vertex_data_t, index_data_t > shape{2};
 
-		ShapeBuilder< float_t > builder{shape, options};
+		ShapeBuilder< vertex_data_t, index_data_t > builder{shape, options};
 
 		xScale *= Half;
 
@@ -121,7 +121,7 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 
 		builder.beginConstruction(ConstructionMode::TriangleStrip);
 
-		builder.options().enableGlobalNormal(Math::Vector< 3, float_t >::positiveZ());
+		builder.options().enableGlobalNormal(Math::Vector< 3, vertex_data_t >::positiveZ());
 
 		/* Top-left */
 		builder.setPosition(-xScale, -yScale, 0);
@@ -155,20 +155,21 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 	/**
 	 * @brief Generates a cuboid shape.
 	 * @note Ready for vulkan default world axis.
-	 * @tparam float_t The type of floating point number. Default float.
+	 * @tparam vertex_data_t The precision type of vertex data. Default float.
+	 * @tparam index_data_t The precision type of index data. Default uint32_t.
 	 * @param width The width of the cuboid shape. Default 1.
 	 * @param height The height of the cuboid shape. Default same as width.
 	 * @param depth The depth of the cuboid shape. Default same as width.
 	 * @param options A reference to initial builder options. Default none.
-	 * @return Shape< float_t >
+	 * @return Shape< vertex_data_t, index_data_t >
 	 */
-	template< typename float_t = float >
+	template< typename vertex_data_t = float, typename index_data_t = uint32_t >
 	[[nodiscard]]
-	Shape< float_t >
-	generateCuboid (float_t width = 1, float_t height = 0, float_t depth = 0, const ShapeBuilderOptions< float_t > & options = {}) noexcept requires (std::is_floating_point_v< float_t >)
+	Shape< vertex_data_t, index_data_t >
+	generateCuboid (vertex_data_t width = 1, vertex_data_t height = 0, vertex_data_t depth = 0, const ShapeBuilderOptions< vertex_data_t > & options = {}) noexcept requires (std::is_floating_point_v< vertex_data_t > && std::is_unsigned_v< index_data_t > )
 	{
-		constexpr auto Half = static_cast< float_t >(0.5);
-		constexpr auto SplitFactor = static_cast< float_t >(1.0);
+		constexpr auto Half = static_cast< vertex_data_t >(0.5);
+		constexpr auto SplitFactor = static_cast< vertex_data_t >(1.0);
 
 		/* Centering value on axis */
 		{
@@ -196,15 +197,15 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 			}
 		}
 
-		Shape< float_t > shape{12};
+		Shape< vertex_data_t, index_data_t > shape{12};
 
-		ShapeBuilder< float_t > builder{shape, options};
+		ShapeBuilder< vertex_data_t, index_data_t > builder{shape, options};
 		
 		builder.beginConstruction(ConstructionMode::TriangleStrip);
 
 		/* Right face (X+) */
 		{
-			builder.options().enableGlobalNormal(Math::Vector< 3, float_t >::positiveX());
+			builder.options().enableGlobalNormal(Math::Vector< 3, vertex_data_t >::positiveX());
 
 			builder.setPosition(width, -height * SplitFactor, -depth * SplitFactor);
 			builder.setTextureCoordinates(1, 0);
@@ -231,7 +232,7 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 
 		/* Left face (X-) */
 		{
-			builder.options().enableGlobalNormal(Math::Vector< 3, float_t >::negativeX());
+			builder.options().enableGlobalNormal(Math::Vector< 3, vertex_data_t >::negativeX());
 
 			builder.setPosition(-width,  height * SplitFactor, -depth * SplitFactor);
 			builder.setTextureCoordinates(0, 1);
@@ -258,7 +259,7 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 
 		/* Top face (Y+) */
 		{
-			builder.options().enableGlobalNormal(Math::Vector< 3, float_t >::positiveY());
+			builder.options().enableGlobalNormal(Math::Vector< 3, vertex_data_t >::positiveY());
 
 			builder.setPosition(-width * SplitFactor,  height, -depth * SplitFactor);
 			builder.setTextureCoordinates(0, 1);
@@ -285,7 +286,7 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 
 		/* Bottom face (Y-) */
 		{
-			builder.options().enableGlobalNormal(Math::Vector< 3, float_t >::negativeY());
+			builder.options().enableGlobalNormal(Math::Vector< 3, vertex_data_t >::negativeY());
 
 			builder.setPosition(-width * SplitFactor, -height,  depth * SplitFactor);
 			builder.setTextureCoordinates(0, 1);
@@ -312,7 +313,7 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 
 		/* Front face (Z+) */
 		{
-			builder.options().enableGlobalNormal(Math::Vector< 3, float_t >::positiveZ());
+			builder.options().enableGlobalNormal(Math::Vector< 3, vertex_data_t >::positiveZ());
 
 			builder.setPosition(-width * SplitFactor, -height * SplitFactor,  depth); // Top-left
 			builder.setTextureCoordinates(0, 0);
@@ -339,7 +340,7 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 
 		/* Back face (Z-) */
 		{
-			builder.options().enableGlobalNormal(Math::Vector< 3, float_t >::negativeZ());
+			builder.options().enableGlobalNormal(Math::Vector< 3, vertex_data_t >::negativeZ());
 
 			builder.setPosition( width * SplitFactor, -height * SplitFactor, -depth); // Top-right
 			builder.setTextureCoordinates(0, 0);
@@ -372,15 +373,16 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 	/**
 	 * @brief Generates a cuboid shape from a vector 3.
 	 * @note Ready for vulkan default world axis.
-	 * @tparam float_t The type of floating point number. Default float.
+	 * @tparam vertex_data_t The precision type of vertex data. Default float.
+	 * @tparam index_data_t The precision type of index data. Default uint32_t.
 	 * @param size The dimension of the cuboid. X for width, Y for height and Z for depth.
 	 * @param options A reference to initial builder options. Default none.
-	 * @return Shape< float_t >
+	 * @return Shape< vertex_data_t, index_data_t >
 	 */
-	template< typename float_t = float >
+	template< typename vertex_data_t = float, typename index_data_t = uint32_t >
 	[[nodiscard]]
-	Shape< float_t >
-	generateCuboid (const Math::Vector< 3, float_t > & size, const ShapeBuilderOptions< float_t > & options = {}) noexcept requires (std::is_floating_point_v< float_t >)
+	Shape< vertex_data_t, index_data_t >
+	generateCuboid (const Math::Vector< 3, vertex_data_t > & size, const ShapeBuilderOptions< vertex_data_t > & options = {}) noexcept requires (std::is_floating_point_v< vertex_data_t > && std::is_unsigned_v< index_data_t > )
 	{
 		return generateCuboid(size[Math::X], size[Math::Y], size[Math::Z], options);
 	}
@@ -388,15 +390,16 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 	/**
 	 * @brief Generates a cuboid shape from a vector 4.
 	 * @note Ready for vulkan default world axis.
-	 * @tparam float_t The type of floating point number. Default float.
+	 * @tparam vertex_data_t The precision type of vertex data. Default float.
+	 * @tparam index_data_t The precision type of index data. Default uint32_t.
 	 * @param size The dimension of the cuboid. X for width, Y for height and Z for depth.
 	 * @param options A reference to initial builder options. Default none.
-	 * @return Shape< float_t >
+	 * @return Shape< vertex_data_t, index_data_t >
 	 */
-	template< typename float_t = float >
+	template< typename vertex_data_t = float, typename index_data_t = uint32_t >
 	[[nodiscard]]
-	Shape< float_t >
-	generateCuboid (const Math::Vector< 4, float_t > & size, const ShapeBuilderOptions< float_t > & options = {}) noexcept requires (std::is_floating_point_v< float_t >)
+	Shape< vertex_data_t, index_data_t >
+	generateCuboid (const Math::Vector< 4, vertex_data_t > & size, const ShapeBuilderOptions< vertex_data_t > & options = {}) noexcept requires (std::is_floating_point_v< vertex_data_t > && std::is_unsigned_v< index_data_t > )
 	{
 		return generateCuboid(size[Math::X], size[Math::Y], size[Math::Z], options);
 	}
@@ -404,26 +407,27 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 	/**
 	 * @brief Generates a cuboid shape by using a minimum and a maximum vector.
 	 * @note Ready for vulkan default world axis.
-	 * @tparam float_t The type of floating point number. Default float.
+	 * @tparam vertex_data_t The precision type of vertex data. Default float.
+	 * @tparam index_data_t The precision type of index data. Default uint32_t.
 	 * @param max Positive point of the cuboid.
 	 * @param min Negative point of the cuboid.
 	 * @param options A reference to initial builder options. Default none.
-	 * @return Shape< float_t >
+	 * @return Shape< vertex_data_t, index_data_t >
 	 */
-	template< typename float_t = float >
+	template< typename vertex_data_t = float, typename index_data_t = uint32_t >
 	[[nodiscard]]
-	Shape< float_t >
-	generateCuboid (const Math::Vector< 3, float_t > & max, const Math::Vector< 3, float_t > & min, const ShapeBuilderOptions< float_t > & options = {}) noexcept requires (std::is_floating_point_v< float_t >)
+	Shape< vertex_data_t, index_data_t >
+	generateCuboid (const Math::Vector< 3, vertex_data_t > & max, const Math::Vector< 3, vertex_data_t > & min, const ShapeBuilderOptions< vertex_data_t > & options = {}) noexcept requires (std::is_floating_point_v< vertex_data_t > && std::is_unsigned_v< index_data_t > )
 	{
-		Shape< float_t > shape{12};
+		Shape< vertex_data_t, index_data_t > shape{12};
 
-		ShapeBuilder< float_t > builder{shape, options};
+		ShapeBuilder< vertex_data_t, index_data_t > builder{shape, options};
 
 		builder.beginConstruction(ConstructionMode::TriangleStrip);
 
 		/* Right face (X+) */
 		{
-			builder.options().enableGlobalNormal(Math::Vector< 3, float_t >::positiveX());
+			builder.options().enableGlobalNormal(Math::Vector< 3, vertex_data_t >::positiveX());
 
 			builder.setPosition(max[Math::X], min[Math::Y], min[Math::Z]);
 			builder.setTextureCoordinates(1, 0);
@@ -450,7 +454,7 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 
 		/* Left face (X-) */
 		{
-			builder.options().enableGlobalNormal(Math::Vector< 3, float_t >::negativeX());
+			builder.options().enableGlobalNormal(Math::Vector< 3, vertex_data_t >::negativeX());
 
 			builder.setPosition(min[Math::X], max[Math::Y], min[Math::Z]);
 			builder.setTextureCoordinates(0, 1);
@@ -477,7 +481,7 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 
 		/* Top face (Y+) */
 		{
-			builder.options().enableGlobalNormal(Math::Vector< 3, float_t >::positiveY());
+			builder.options().enableGlobalNormal(Math::Vector< 3, vertex_data_t >::positiveY());
 
 			builder.setPosition(min[Math::X], max[Math::Y], min[Math::Z]);
 			builder.setTextureCoordinates(0, 1);
@@ -504,7 +508,7 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 
 		/* Bottom face (Y-) */
 		{
-			builder.options().enableGlobalNormal(Math::Vector< 3, float_t >::negativeY());
+			builder.options().enableGlobalNormal(Math::Vector< 3, vertex_data_t >::negativeY());
 
 			builder.setPosition(min[Math::X], min[Math::Y], max[Math::Z]);
 			builder.setTextureCoordinates(0, 1);
@@ -531,7 +535,7 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 
 		/* Front face (Z+) */
 		{
-			builder.options().enableGlobalNormal(Math::Vector< 3, float_t >::positiveZ());
+			builder.options().enableGlobalNormal(Math::Vector< 3, vertex_data_t >::positiveZ());
 
 			builder.setPosition(min[Math::X], min[Math::Y], max[Math::Z]); // Top-left
 			builder.setTextureCoordinates(0, 0);
@@ -558,7 +562,7 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 
 		/* Back face (Z-) */
 		{
-			builder.options().enableGlobalNormal(Math::Vector< 3, float_t >::negativeZ());
+			builder.options().enableGlobalNormal(Math::Vector< 3, vertex_data_t >::negativeZ());
 
 			builder.setPosition(max[Math::X], min[Math::Y], min[Math::Z]); // Top-right
 			builder.setTextureCoordinates(0, 0);
@@ -591,45 +595,46 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 	/**
 	 * @brief Generates a cuboid shape.
 	 * @note Ready for vulkan default world axis.
-	 * @tparam float_t The type of floating point number. Default float.
+	 * @tparam vertex_data_t The precision type of vertex data. Default float.
+	 * @tparam index_data_t The precision type of index data. Default uint32_t.
 	 * @param box A reference to a cuboid definition.
 	 * @param options A reference to initial builder options. Default none.
-	 * @return Shape< float_t >
+	 * @return Shape< vertex_data_t, index_data_t >
 	 */
-	template< typename float_t = float >
+	template< typename vertex_data_t = float, typename index_data_t = uint32_t >
 	[[nodiscard]]
-	Shape< float_t >
-	generateCuboid (const Math::Cuboid< float_t > & box, const ShapeBuilderOptions< float_t > & options = {}) noexcept requires (std::is_floating_point_v< float_t >)
+	Shape< vertex_data_t, index_data_t >
+	generateCuboid (const Math::Space3D::AACuboid< vertex_data_t > & box, const ShapeBuilderOptions< vertex_data_t > & options = {}) noexcept requires (std::is_floating_point_v< vertex_data_t > && std::is_unsigned_v< index_data_t > )
 	{
 		return generateCuboid(box.maximum(), box.minimum(), options);
 	}
 
-	template< typename float_t = float >
+	template< typename vertex_data_t = float, typename index_data_t = uint32_t >
 	[[nodiscard]]
-	Shape< float_t >
-	generateHollowedCube (float_t size, float borderSize, const ShapeBuilderOptions< float_t > & options = {}) noexcept requires (std::is_floating_point_v< float_t >)
+	Shape< vertex_data_t, index_data_t >
+	generateHollowedCube (vertex_data_t size, vertex_data_t borderSize, const ShapeBuilderOptions< vertex_data_t > & options = {}) noexcept requires (std::is_floating_point_v< vertex_data_t > && std::is_unsigned_v< index_data_t > )
 	{
 		/* Centering value on axis */
-		size *= static_cast< float_t >(0.5);
+		size *= static_cast< vertex_data_t >(0.5);
 
-		Shape< float_t > shape{8 * 12};
+		Shape< vertex_data_t, index_data_t > shape{8 * 12};
 
 		{
-			Shape< float_t > intermediateShape{8 * 4};
+			Shape< vertex_data_t, index_data_t > intermediateShape{8 * 4};
 
-			ShapeAssembler< float_t > finalAssembler{shape};
+			ShapeAssembler< vertex_data_t, index_data_t > finalAssembler{shape};
 
 			{
-				Shape< float_t > wireShape{8};
+				Shape< vertex_data_t, index_data_t > wireShape{8};
 
-				ShapeBuilder< float_t > builder{wireShape, options};
+				ShapeBuilder< vertex_data_t, index_data_t > builder{wireShape, options};
 
-				ShapeAssembler< float_t > assembler{intermediateShape};
+				ShapeAssembler< vertex_data_t, index_data_t > assembler{intermediateShape};
 
 				builder.beginConstruction(ConstructionMode::TriangleStrip);
 
 				/* Right face (X+) */
-				builder.options().enableGlobalNormal(Math::Vector< 3, float_t >::positiveX());
+				builder.options().enableGlobalNormal(Math::Vector< 3, vertex_data_t >::positiveX());
 				builder.setPosition(-size + borderSize, -size + borderSize, -size);
 				builder.newVertex();
 				builder.setPosition(-size + borderSize, -size + borderSize, -size + borderSize);
@@ -641,7 +646,7 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 				builder.resetCurrentTriangle();
 
 				/* Left face (X-) */
-				builder.options().enableGlobalNormal(Math::Vector< 3, float_t >::negativeX());
+				builder.options().enableGlobalNormal(Math::Vector< 3, vertex_data_t >::negativeX());
 				builder.setPosition(-size,  size, -size); // High point
 				builder.newVertex();
 				builder.setPosition(-size,  size - borderSize, -size + borderSize);
@@ -653,7 +658,7 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 				builder.resetCurrentTriangle();
 
 				/* Front face (Z+) */
-				builder.options().enableGlobalNormal(Math::Vector< 3, float_t >::positiveZ());
+				builder.options().enableGlobalNormal(Math::Vector< 3, vertex_data_t >::positiveZ());
 				builder.setPosition(-size, -size + borderSize, -size + borderSize);
 				builder.newVertex();
 				builder.setPosition(-size,  size - borderSize, -size + borderSize);
@@ -665,7 +670,7 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 				builder.resetCurrentTriangle();
 
 				/* Back face (Z-) */
-				builder.options().enableGlobalNormal(Math::Vector< 3, float_t >::negativeZ());
+				builder.options().enableGlobalNormal(Math::Vector< 3, vertex_data_t >::negativeZ());
 				builder.setPosition(-size + borderSize, -size + borderSize, -size);
 				builder.newVertex();
 				builder.setPosition(-size + borderSize,  size - borderSize, -size);
@@ -695,21 +700,22 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 	/**
 	 * @brief Generates a sphere shape.
 	 * @note Ready for vulkan default world axis.
-	 * @tparam float_t The type of floating point number. Default float.
+	 * @tparam vertex_data_t The precision type of vertex data. Default float.
+	 * @tparam index_data_t The precision type of index data. Default uint32_t.
 	 * @param radius The radius of the sphere shape. Default 1.
 	 * @param slices Slices precision of the sphere shape. Default 16.
 	 * @param stacks Stack precision of the sphere shape. Default 8.
 	 * @param options A reference to initial builder options. Default none.
-	 * @return Shape< float_t >
+	 * @return Shape< vertex_data_t, index_data_t >
 	 */
-	template< typename float_t = float >
+	template< typename vertex_data_t = float, typename index_data_t = uint32_t >
 	[[nodiscard]]
-	Shape< float_t >
-	generateSphere (float_t radius = 1, size_t slices = 16, size_t stacks = 8, const ShapeBuilderOptions< float_t > & options = {}) noexcept requires (std::is_floating_point_v< float_t >)
+	Shape< vertex_data_t, index_data_t >
+	generateSphere (vertex_data_t radius = 1, index_data_t slices = 16, index_data_t stacks = 8, const ShapeBuilderOptions< vertex_data_t > & options = {}) noexcept requires (std::is_floating_point_v< vertex_data_t > && std::is_unsigned_v< index_data_t > )
 	{
-		Shape< float_t > shape{slices * stacks * 6};
+		Shape< vertex_data_t, index_data_t > shape{slices * stacks * 6};
 
-		ShapeBuilder< float_t > builder{shape, options};
+		ShapeBuilder< vertex_data_t, index_data_t > builder{shape, options};
 
 		if ( radius < 0 )
 		{
@@ -720,23 +726,23 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 			radius = 1;
 		}
 
-		const auto dRHO = std::numbers::pi_v< float_t > / static_cast< float_t >(stacks);
-		const auto dTheta = (2 * std::numbers::pi_v< float_t >) / static_cast< float_t >(slices);
+		const auto dRHO = std::numbers::pi_v< vertex_data_t > / static_cast< vertex_data_t >(stacks);
+		const auto dTheta = (2 * std::numbers::pi_v< vertex_data_t >) / static_cast< vertex_data_t >(slices);
 
-		const auto deltaU = static_cast< float_t >(1) / static_cast< float_t >(slices);
-		const auto deltaV = static_cast< float_t >(1) / static_cast< float_t >(stacks);
+		const auto deltaU = static_cast< vertex_data_t >(1) / static_cast< vertex_data_t >(slices);
+		const auto deltaV = static_cast< vertex_data_t >(1) / static_cast< vertex_data_t >(stacks);
 
-		std::array< Math::Vector< 3, float_t >, 4 > positions{};
-		std::array< Math::Vector< 3, float_t >, 4 > normals{};
-		std::array< Math::Vector< 3, float_t >, 4 > textureCoordinates{};
+		std::array< Math::Vector< 3, vertex_data_t >, 4 > positions{};
+		std::array< Math::Vector< 3, vertex_data_t >, 4 > normals{};
+		std::array< Math::Vector< 3, vertex_data_t >, 4 > textureCoordinates{};
 
-		auto texCoordU = static_cast< float_t >(1);
+		auto texCoordU = static_cast< vertex_data_t >(1);
 
 		builder.beginConstruction(ConstructionMode::TriangleStrip);
 
-		for ( size_t stackIndex = 0; stackIndex < stacks; stackIndex++ )
+		for ( index_data_t stackIndex = 0; stackIndex < stacks; ++stackIndex )
 		{
-			const auto RHO = dRHO * static_cast< float_t >(stackIndex);
+			const auto RHO = dRHO * static_cast< vertex_data_t >(stackIndex);
 
 			const auto sineRHO = std::sin(RHO);
 			const auto cosineRHO = std::cos(RHO);
@@ -747,11 +753,11 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 			/* Many sources of OpenGL sphere drawing code uses a triangle fan
 			 * for the caps of the sphere. This however introduces texturing
 			 * artifacts at the poles on some OpenGL implementations. */
-			auto texCoordV = static_cast< float_t >(0);
+			auto texCoordV = static_cast< vertex_data_t >(0);
 
-			for ( size_t sliceIndex = 0; sliceIndex < slices; sliceIndex++)
+			for ( index_data_t sliceIndex = 0; sliceIndex < slices; ++sliceIndex)
 			{
-				auto theta = sliceIndex == slices ? 0 : static_cast< float_t >(sliceIndex) * dTheta;
+				auto theta = sliceIndex == slices ? 0 : static_cast< vertex_data_t >(sliceIndex) * dTheta;
 				auto sTheta = -std::sin(theta);
 				auto cTheta = std::cos(theta);
 
@@ -771,7 +777,7 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 				textureCoordinates[1] = {texCoordU - deltaV, texCoordV, 0};
 				normals[1] = {normalX, normalY, normalZ};
 
-				theta = sliceIndex + 1 == slices ? 0 : static_cast< float_t >(sliceIndex + 1) * dTheta;
+				theta = sliceIndex + 1 == slices ? 0 : static_cast< vertex_data_t >(sliceIndex + 1) * dTheta;
 				sTheta = -std::sin(theta);
 				cTheta = std::cos(theta);
 
@@ -827,6 +833,8 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 
 	/**
 	 * @brief Subdivision method for geodesic sphere generation.
+	 * @tparam vertex_data_t The precision type of vertex data. Default float.
+	 * @tparam index_data_t The precision type of index data. Default uint32_t.
 	 * @param builder A reference to the builder.
 	 * @param vectorA A reference to a vector.
 	 * @param vectorB A reference to a vector.
@@ -835,9 +843,9 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 	 * @param depth The current depth.
 	 * @return void
 	 */
-	template< typename float_t = float >
+	template< typename vertex_data_t = float, typename index_data_t = uint32_t >
 	void
-	subdivide (ShapeBuilder< float_t > & builder, const Math::Vector< 3, float_t > & vectorA, const Math::Vector< 3, float_t > & vectorB, const Math::Vector< 3, float_t > & vectorC, std::vector< Math::Vector< 3, float_t > > & points, size_t depth) noexcept requires (std::is_floating_point_v< float_t >)
+	subdivide (ShapeBuilder< vertex_data_t, index_data_t > & builder, const Math::Vector< 3, vertex_data_t > & vectorA, const Math::Vector< 3, vertex_data_t > & vectorB, const Math::Vector< 3, vertex_data_t > & vectorC, std::vector< Math::Vector< 3, vertex_data_t > > & points, index_data_t depth) noexcept requires (std::is_floating_point_v< vertex_data_t > && std::is_unsigned_v< index_data_t > )
 	{
 		if ( depth == 0 )
 		{
@@ -869,26 +877,27 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 	/**
 	 * @brief Generates a geodesic sphere shape.
 	 * @note Ready for vulkan default world axis.
-	 * @tparam float_t The type of floating point number. Default float.
+	 * @tparam vertex_data_t The precision type of vertex data. Default float.
+	 * @tparam index_data_t The precision type of index data. Default uint32_t.
 	 * @param radius The radius of the sphere shape. Default 1.
 	 * @param depth Depth precision of the sphere shape. Default 2.
 	 * @param options A reference to initial builder options. Default none.
-	 * @return Shape< float_t >
+	 * @return Shape< vertex_data_t, index_data_t >
 	 */
-	template< typename float_t = float >
+	template< typename vertex_data_t = float, typename index_data_t = uint32_t >
 	[[nodiscard]]
-	Shape< float_t >
-	generateGeodesicSphere (float_t radius = 1, size_t depth = 2, const ShapeBuilderOptions< float_t > & options = {}) noexcept requires (std::is_floating_point_v< float_t >)
+	Shape< vertex_data_t, index_data_t >
+	generateGeodesicSphere (vertex_data_t radius = 1, index_data_t depth = 2, const ShapeBuilderOptions< vertex_data_t > & options = {}) noexcept requires (std::is_floating_point_v< vertex_data_t > && std::is_unsigned_v< index_data_t > )
 	{
-		Shape< float_t > shape{depth * 20};
+		Shape< vertex_data_t, index_data_t > shape{depth * 20};
 
-		ShapeBuilder< float_t > builder{shape, options};
+		ShapeBuilder< vertex_data_t, index_data_t > builder{shape, options};
 
-		const auto positionX = static_cast< float_t >(0.525731112119133606);
-		const auto positionY = static_cast< float_t >(0.0);
-		const auto positionZ = static_cast< float_t >(0.850650808352039932);
+		const auto positionX = static_cast< vertex_data_t >(0.525731112119133606);
+		const auto positionY = static_cast< vertex_data_t >(0.0);
+		const auto positionZ = static_cast< vertex_data_t >(0.850650808352039932);
 
-		const std::array< Math::Vector< 3, float_t >, 12 > vertices{{
+		const std::array< Math::Vector< 3, vertex_data_t >, 12 > vertices{{
 			{-positionX,  positionY,  positionZ},
 			{ positionX,  positionY,  positionZ},
 			{-positionX,  positionY, -positionZ},
@@ -903,7 +912,7 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 			{-positionZ, -positionX,  positionY}
 		}};
 
-		constexpr std::array< std::array< size_t , 3 >, 20 > indices{{
+		constexpr std::array< std::array< index_data_t , 3 >, 20 > indices{{
 			{{0, 4, 1}},
 			{{0, 9, 4}},
 			{{9, 5, 4}},
@@ -926,7 +935,7 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 			{{7, 2, 11}}
 		}};
 
-		std::vector< Math::Vector< 3, float_t > > points{};
+		std::vector< Math::Vector< 3, vertex_data_t > > points{};
 
 		builder.beginConstruction(ConstructionMode::Triangles);
 
@@ -937,7 +946,7 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 
 		builder.endConstruction();
 
-		shape.transform(Math::Matrix< 4, float_t >::scaling(radius));
+		shape.transform(Math::Matrix< 4, vertex_data_t >::scaling(radius));
 
 		return shape;
 	}
@@ -945,46 +954,47 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 	/**
 	 * @brief Generates a cylinder shape.
 	 * @note Ready for vulkan default world axis.
-	 * @tparam float_t The type of floating point number. Default float.
+	 * @tparam vertex_data_t The precision type of vertex data. Default float.
+	 * @tparam index_data_t The precision type of index data. Default uint32_t.
 	 * @param baseRadius The bottom radius of the cylinder shape. Default 1.
 	 * @param topRadius The top radius of the cylinder shape. Default 1.
 	 * @param length The length of the cylinder shape. Default 1.
 	 * @param slices Slices precision of the cylinder shape. Default 8.
 	 * @param stacks Stack precision of the cylinder shape. Default 1.
 	 * @param options A reference to initial builder options. Default none.
-	 * @return Shape< float_t >
+	 * @return Shape< vertex_data_t, index_data_t >
 	 */
-	template< typename float_t = float >
+	template< typename vertex_data_t = float, typename index_data_t = uint32_t >
 	[[nodiscard]]
-	Shape< float_t >
-	generateCylinder (float_t baseRadius = 1, float_t topRadius = 1, float_t length = 1, size_t slices = 8, size_t stacks = 1, const ShapeBuilderOptions< float_t > & options = {}) noexcept requires (std::is_floating_point_v< float_t >)
+	Shape< vertex_data_t, index_data_t >
+	generateCylinder (vertex_data_t baseRadius = 1, vertex_data_t topRadius = 1, vertex_data_t length = 1, index_data_t slices = 8, index_data_t stacks = 1, const ShapeBuilderOptions< vertex_data_t > & options = {}) noexcept requires (std::is_floating_point_v< vertex_data_t > && std::is_unsigned_v< index_data_t > )
 	{
-		Shape< float_t > shape{slices * stacks * 6};
+		Shape< vertex_data_t, index_data_t > shape{slices * stacks * 6};
 
-		ShapeBuilder< float_t > builder{shape, options};
+		ShapeBuilder< vertex_data_t, index_data_t > builder{shape, options};
 
-		const auto radiusStep = (topRadius - baseRadius) / static_cast< float_t >(stacks);
-		const auto stepSizeSlice = (2 * std::numbers::pi_v< float_t >) / static_cast< float_t >(slices);
+		const auto radiusStep = (topRadius - baseRadius) / static_cast< vertex_data_t >(stacks);
+		const auto stepSizeSlice = (2 * std::numbers::pi_v< vertex_data_t >) / static_cast< vertex_data_t >(slices);
 
 		/* Texture coordinates */
-		const auto deltaU = static_cast< float_t >(1.0) / static_cast< float_t >(slices);
-		const auto deltaV = static_cast< float_t >(1.0) / static_cast< float_t >(stacks);
+		const auto deltaU = static_cast< vertex_data_t >(1.0) / static_cast< vertex_data_t >(slices);
+		const auto deltaV = static_cast< vertex_data_t >(1.0) / static_cast< vertex_data_t >(stacks);
 
-		std::array< Math::Vector< 3, float_t >, 4 > positions{};
-		std::array< Math::Vector< 3, float_t >, 4 > normals{};
-		std::array< Math::Vector< 3, float_t >, 4 > textureCoordinates{};
+		std::array< Math::Vector< 3, vertex_data_t >, 4 > positions{};
+		std::array< Math::Vector< 3, vertex_data_t >, 4 > normals{};
+		std::array< Math::Vector< 3, vertex_data_t >, 4 > textureCoordinates{};
 
 		builder.beginConstruction(ConstructionMode::TriangleStrip);
 
-		for ( size_t stackIndex = 0; stackIndex < stacks; stackIndex++ )
+		for ( index_data_t stackIndex = 0; stackIndex < stacks; ++stackIndex )
 		{
-			const auto stackIndexF = static_cast< float_t >(stackIndex);
-			const auto stackIndexPlusOneF = static_cast< float_t >(stackIndex + 1);
+			const auto stackIndexF = static_cast< vertex_data_t >(stackIndex);
+			const auto stackIndexPlusOneF = static_cast< vertex_data_t >(stackIndex + 1);
 
 			/* Texture coordinates.
 			 * NOTE: Inverted for Vulkan. */
-			const auto texCoordV = static_cast< float_t >(1.0) - (stackIndex == 0 ? 0 : deltaV * stackIndexF);
-			const auto nextV = static_cast< float_t >(1.0) - (stackIndex == stacks - 1 ? 1 : deltaV * stackIndexPlusOneF);
+			const auto texCoordV = static_cast< vertex_data_t >(1.0) - (stackIndex == 0 ? 0 : deltaV * stackIndexF);
+			const auto nextV = static_cast< vertex_data_t >(1.0) - (stackIndex == stacks - 1 ? 1 : deltaV * stackIndexPlusOneF);
 
 			const auto currentRadius = baseRadius + (radiusStep * stackIndexF);
 			const auto nextRadius = baseRadius + (radiusStep * stackIndexPlusOneF);
@@ -995,16 +1005,16 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 			/* Rise over run... */
 			const auto yNormal = Utility::isZero(baseRadius - topRadius) ? 0 : baseRadius - topRadius;
 
-			for ( size_t sliceIndex = 0; sliceIndex < slices; sliceIndex++ )
+			for ( index_data_t sliceIndex = 0; sliceIndex < slices; ++sliceIndex )
 			{
-				const auto sliceIndexF = static_cast< float_t >(sliceIndex);
-				const auto sliceIndexPlusOneF = static_cast< float_t >(sliceIndex + 1);
+				const auto sliceIndexF = static_cast< vertex_data_t >(sliceIndex);
+				const auto sliceIndexPlusOneF = static_cast< vertex_data_t >(sliceIndex + 1);
 
 				/* Texture coordinates.
 				 * NOTE : Surface Normal, same for everybody
 				 * NOTE² : Inverted for Vulkan. */
-				const auto texCoordU = static_cast< float_t >(1.0) - (sliceIndex == 0 ? 0 : deltaU * sliceIndexF);
-				const auto nextTexCoordU = static_cast< float_t >(1.0) - (sliceIndex == slices - 1 ? 1 : deltaU * sliceIndexPlusOneF);
+				const auto texCoordU = static_cast< vertex_data_t >(1.0) - (sliceIndex == 0 ? 0 : deltaU * sliceIndexF);
+				const auto nextTexCoordU = static_cast< vertex_data_t >(1.0) - (sliceIndex == slices - 1 ? 1 : deltaU * sliceIndexPlusOneF);
 
 				const auto theta = stepSizeSlice * sliceIndexF;
 				const auto thetaNext = sliceIndex == slices - 1 ? 0 : stepSizeSlice * sliceIndexPlusOneF;
@@ -1082,41 +1092,43 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 	/**
 	 * @brief Generates a cone shape.
 	 * @note Ready for vulkan default world axis.
-	 * @tparam float_t The type of floating point number. Default float.
+	 * @tparam vertex_data_t The precision type of vertex data. Default float.
+	 * @tparam index_data_t The precision type of index data. Default uint32_t.
 	 * @param radius The radius of the base cylinder. Default 1.
 	 * @param length The length of the cone shape. Default 1.
 	 * @param slices Slices precision of the cone shape. Default 8.
 	 * @param stacks Stack precision of the cone shape. Default 1.
 	 * @param options A reference to initial builder options. Default none.
-	 * @return Shape< float_t >
+	 * @return Shape< vertex_data_t, index_data_t >
 	 */
-	template< typename float_t = float >
+	template< typename vertex_data_t = float, typename index_data_t = uint32_t >
 	[[nodiscard]]
-	Shape< float_t >
-	generateCone (float_t radius = 1, float_t length = 1, size_t slices = 8, size_t stacks = 1, const ShapeBuilderOptions< float_t > & options = {}) noexcept requires (std::is_floating_point_v< float_t >)
+	Shape< vertex_data_t, index_data_t >
+	generateCone (vertex_data_t radius = 1, vertex_data_t length = 1, index_data_t slices = 8, index_data_t stacks = 1, const ShapeBuilderOptions< vertex_data_t > & options = {}) noexcept requires (std::is_floating_point_v< vertex_data_t > && std::is_unsigned_v< index_data_t > )
 	{
-		return generateCylinder(radius, static_cast< float_t >(0), length, slices, stacks, options);
+		return generateCylinder(radius, static_cast< vertex_data_t >(0), length, slices, stacks, options);
 	}
 
 	/**
 	 * @brief Generates a disk shape facing the sky (Y-).
 	 * @note Ready for vulkan default world axis.
-	 * @tparam float_t The type of floating point number. Default float.
+	 * @tparam vertex_data_t The precision type of vertex data. Default float.
+	 * @tparam index_data_t The precision type of index data. Default uint32_t.
 	 * @param outerRadius The radius of the outer part of the disk. Default 1.
 	 * @param innerRadius The radius of the inner part of the disk. Default 0.5.
 	 * @param slices Slices precision of the disk shape. Default 8.
 	 * @param stacks Stack precision of the disk shape. Default 1.
 	 * @param options A reference to initial builder options. Default none.
-	 * @return Shape< float_t >
+	 * @return Shape< vertex_data_t, index_data_t >
 	 */
-	template< typename float_t = float >
+	template< typename vertex_data_t = float, typename index_data_t = uint32_t >
 	[[nodiscard]]
-	Shape< float_t >
-	generateDisk (float_t outerRadius = 1, float_t innerRadius = 0.5, size_t slices = 8, size_t stacks = 1, const ShapeBuilderOptions< float_t > & options = {}) noexcept requires (std::is_floating_point_v< float_t >)
+	Shape< vertex_data_t, index_data_t >
+	generateDisk (vertex_data_t outerRadius = 1, vertex_data_t innerRadius = 0.5, index_data_t slices = 8, index_data_t stacks = 1, const ShapeBuilderOptions< vertex_data_t > & options = {}) noexcept requires (std::is_floating_point_v< vertex_data_t > && std::is_unsigned_v< index_data_t > )
 	{
-		Shape< float_t > shape{slices * stacks * 6};
+		Shape< vertex_data_t, index_data_t > shape{slices * stacks * 6};
 
-		ShapeBuilder< float_t > builder{shape, options};
+		ShapeBuilder< vertex_data_t, index_data_t > builder{shape, options};
 
 		if ( innerRadius > outerRadius )
 		{
@@ -1127,18 +1139,18 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 		}
 
 		const auto stepSizeRadial = std::abs(outerRadius - innerRadius) / stacks;
-		const auto stepSizeSlice = (2 * std::numbers::pi_v< float_t >) / slices;
-		const auto radialScale = static_cast< float_t >(1) / outerRadius;
+		const auto stepSizeSlice = (2 * std::numbers::pi_v< vertex_data_t >) / slices;
+		const auto radialScale = static_cast< vertex_data_t >(1) / outerRadius;
 
-		std::array< Math::Vector< 3, float_t >, 4 > positions{};
-		std::array< Math::Vector< 3, float_t >, 4 > textureCoordinates{};
+		std::array< Math::Vector< 3, vertex_data_t >, 4 > positions{};
+		std::array< Math::Vector< 3, vertex_data_t >, 4 > textureCoordinates{};
 
 		builder.beginConstruction(ConstructionMode::TriangleStrip);
-		builder.options().enableGlobalNormal(Math::Vector< 3, float_t >::positiveY());
+		builder.options().enableGlobalNormal(Math::Vector< 3, vertex_data_t >::positiveY());
 
-		for ( size_t stackIndex = 0; stackIndex < stacks; stackIndex++ )
+		for ( index_data_t stackIndex = 0; stackIndex < stacks; ++stackIndex )
 		{
-			for ( size_t sliceIndex = 0; sliceIndex < slices; sliceIndex++ )
+			for ( index_data_t sliceIndex = 0; sliceIndex < slices; ++sliceIndex )
 			{
 				const auto inner = innerRadius + stackIndex * stepSizeRadial;
 				const auto outer = innerRadius + (stackIndex + 1) * stepSizeRadial;
@@ -1149,32 +1161,32 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 				/* Inner First */
 				positions[0] = {std::cos(theta) * inner, 0, std::sin(theta) * inner};
 				textureCoordinates[0] = {
-					((positions[0][Math::X] * radialScale) + 1) * static_cast< float_t >(0.5),
-					((positions[0][Math::Z] * radialScale) + 1) * static_cast< float_t >(0.5),
+					((positions[0][Math::X] * radialScale) + 1) * static_cast< vertex_data_t >(0.5),
+					((positions[0][Math::Z] * radialScale) + 1) * static_cast< vertex_data_t >(0.5),
 					0
 				};
 
 				/* Inner Second */
 				positions[1] = {std::cos(thetaNext) * inner, 0, std::sin(thetaNext) * inner};
 				textureCoordinates[1] = {
-					((positions[1][Math::X] * radialScale) + 1) * static_cast< float_t >(0.5),
-					((positions[1][Math::Z] * radialScale) + 1) * static_cast< float_t >(0.5),
+					((positions[1][Math::X] * radialScale) + 1) * static_cast< vertex_data_t >(0.5),
+					((positions[1][Math::Z] * radialScale) + 1) * static_cast< vertex_data_t >(0.5),
 					0
 				};
 
 				/* Outer First */
 				positions[2] = {std::cos(theta) * outer, 0, std::sin(theta) * outer};
 				textureCoordinates[2] = {
-					((positions[2][Math::X] * radialScale) + 1) * static_cast< float_t >(0.5),
-					((positions[2][Math::Z] * radialScale) + 1) * static_cast< float_t >(0.5),
+					((positions[2][Math::X] * radialScale) + 1) * static_cast< vertex_data_t >(0.5),
+					((positions[2][Math::Z] * radialScale) + 1) * static_cast< vertex_data_t >(0.5),
 					0
 				};
 
 				/* Outer Second */
 				positions[3] = {std::cos(thetaNext) * outer, 0, std::sin(thetaNext) * outer};
 				textureCoordinates[3] = {
-					((positions[3][Math::X] * radialScale) + 1) * static_cast< float_t >(0.5),
-					((positions[3][Math::Z] * radialScale) + 1) * static_cast< float_t >(0.5),
+					((positions[3][Math::X] * radialScale) + 1) * static_cast< vertex_data_t >(0.5),
+					((positions[3][Math::Z] * radialScale) + 1) * static_cast< vertex_data_t >(0.5),
 					0
 				};
 
@@ -1207,38 +1219,39 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 	/**
 	 * @brief Generates a torus shape.
 	 * @note Ready for vulkan default world axis.
-	 * @tparam float_t The type of floating point number. Default float.
+	 * @tparam vertex_data_t The precision type of vertex data. Default float.
+	 * @tparam index_data_t The precision type of index data. Default uint32_t.
 	 * @param majorRadius The major radius of the torus shape. Default 1.
 	 * @param minorRadius The minor radius of the torus shape. Default 0.5.
 	 * @param slices Slices precision of the torus shape. Default 8.
 	 * @param stacks Stack precision of the torus shape. Default 8.
 	 * @param options A reference to initial builder options. Default none.
-	 * @return Shape< float_t >
+	 * @return Shape< vertex_data_t, index_data_t >
 	 */
-	template< typename float_t = float >
+	template< typename vertex_data_t = float, typename index_data_t = uint32_t >
 	[[nodiscard]]
-	Shape< float_t >
-	generateTorus (float_t majorRadius = 1, float_t minorRadius = 0.5, size_t slices = 8, size_t stacks = 8, const ShapeBuilderOptions< float_t > & options = {}) noexcept requires (std::is_floating_point_v< float_t >)
+	Shape< vertex_data_t, index_data_t >
+	generateTorus (vertex_data_t majorRadius = 1, vertex_data_t minorRadius = 0.5, index_data_t slices = 8, index_data_t stacks = 8, const ShapeBuilderOptions< vertex_data_t > & options = {}) noexcept requires (std::is_floating_point_v< vertex_data_t > && std::is_unsigned_v< index_data_t > )
 	{
-		Shape< float_t > shape{stacks * (slices + 1) * 6};
+		Shape< vertex_data_t, index_data_t > shape{stacks * (slices + 1) * 6};
 
-		ShapeBuilder< float_t > builder{shape, options};
+		ShapeBuilder< vertex_data_t, index_data_t > builder{shape, options};
 
-		const auto stacksF = static_cast< float_t >(stacks);
-		const auto slicesF = static_cast< float_t >(slices);
+		const auto stacksF = static_cast< vertex_data_t >(stacks);
+		const auto slicesF = static_cast< vertex_data_t >(slices);
 
-		const auto majorStep = (2 * std::numbers::pi_v< float_t >) / stacksF;
-		const auto minorStep = (2 * std::numbers::pi_v< float_t >) / slicesF;
+		const auto majorStep = (2 * std::numbers::pi_v< vertex_data_t >) / stacksF;
+		const auto minorStep = (2 * std::numbers::pi_v< vertex_data_t >) / slicesF;
 
-		std::array< Math::Vector< 3, float_t >, 4 > positions{};
-		std::array< Math::Vector< 3, float_t >, 4 > normals{};
-		std::array< Math::Vector< 3, float_t >, 4 > textureCoordinates{};
+		std::array< Math::Vector< 3, vertex_data_t >, 4 > positions{};
+		std::array< Math::Vector< 3, vertex_data_t >, 4 > normals{};
+		std::array< Math::Vector< 3, vertex_data_t >, 4 > textureCoordinates{};
 
 		builder.beginConstruction(ConstructionMode::TriangleStrip);
 
-		for ( size_t stackIndex = 0; stackIndex < stacks; ++stackIndex )
+		for ( index_data_t stackIndex = 0; stackIndex < stacks; ++stackIndex )
 		{
-			const auto stackIndexF = static_cast< float_t >(stackIndex);
+			const auto stackIndexF = static_cast< vertex_data_t >(stackIndex);
 
 			const auto tempXZA = stackIndexF * majorStep;
 			const auto positionXA = std::cos(tempXZA);
@@ -1248,9 +1261,9 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 			const auto positionXB = std::cos(tempXZB);
 			const auto positionZB = std::sin(tempXZB);
 
-			for ( size_t sliceIndex = 0; sliceIndex <= slices; ++sliceIndex )
+			for ( index_data_t sliceIndex = 0; sliceIndex <= slices; ++sliceIndex )
 			{
-				const auto sliceIndexF = static_cast< float_t >(sliceIndex);
+				const auto sliceIndexF = static_cast< vertex_data_t >(sliceIndex);
 
 				auto stepB = sliceIndexF * minorStep;
 				auto norm = std::cos(stepB);
@@ -1260,9 +1273,9 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 				/* Texture coordinates.
 				 * NOTE: V is inverted for Vulkan. */
 				const auto texCoordUA = stackIndexF / stacksF;
-				const auto texCoordVA = static_cast< float_t >(1.0) - (sliceIndexF / slicesF);
+				const auto texCoordVA = static_cast< vertex_data_t >(1.0) - (sliceIndexF / slicesF);
 				const auto texCoordUB = (stackIndexF + 1) / stacksF;
-				const auto texCoordVB = static_cast< float_t >(1.0) - ((sliceIndexF + 1) / slicesF);
+				const auto texCoordVB = static_cast< vertex_data_t >(1.0) - ((sliceIndexF + 1) / slicesF);
 
 				/* First point */
 				positions[0] = {positionXA * radius, positionY, positionZA * radius};
@@ -1327,32 +1340,33 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 	/**
 	 * @brief Generates a tetrahedron shape (Fire symbol).
 	 * @note Ready for vulkan default world axis.
-	 * @FIXME Mathematically incorrect geometry.
-	 * @tparam float_t The type of floating point number. Default float.
+	 * @fixme Mathematically incorrect geometry.
+	 * @tparam vertex_data_t The precision type of vertex data. Default float.
+	 * @tparam index_data_t The precision type of index data. Default uint32_t.
 	 * @param radius The radius of the shape. Default 1.
 	 * @param options A reference to initial builder options. Default none.
-	 * @return Shape< float_t >
+	 * @return Shape< vertex_data_t, index_data_t >
 	 */
-	template< typename float_t = float >
+	template< typename vertex_data_t = float, typename index_data_t = uint32_t >
 	[[nodiscard]]
-	Shape< float_t >
-	generateTetrahedron (float_t radius = 1, const ShapeBuilderOptions< float_t > & options = {}) noexcept requires (std::is_floating_point_v< float_t >)
+	Shape< vertex_data_t, index_data_t >
+	generateTetrahedron (vertex_data_t radius = 1, const ShapeBuilderOptions< vertex_data_t > & options = {}) noexcept requires (std::is_floating_point_v< vertex_data_t > && std::is_unsigned_v< index_data_t > )
 	{
-		Shape< float_t > shape{4};
+		Shape< vertex_data_t, index_data_t > shape{4};
 
-		ShapeBuilder< float_t > builder{shape, options};
+		ShapeBuilder< vertex_data_t, index_data_t > builder{shape, options};
 
 		/* NOTE : a = (2 * √6) / 3 * r */
-		const float_t edgeSize = (static_cast< float_t >(2) * std::sqrt(static_cast< float_t >(6))) / static_cast< float_t >(3) * radius;
+		const vertex_data_t edgeSize = (static_cast< vertex_data_t >(2) * std::sqrt(static_cast< vertex_data_t >(6))) / static_cast< vertex_data_t >(3) * radius;
 
-		const Math::Vector< 3, float_t > frontLeft{ edgeSize, edgeSize, -edgeSize};
-		const Math::Vector< 3, float_t > frontRight{-edgeSize, edgeSize, -edgeSize};
-		const Math::Vector< 3, float_t > back{0, edgeSize, edgeSize};
-		const Math::Vector< 3, float_t > top{0, -edgeSize, 0};
+		const Math::Vector< 3, vertex_data_t > frontLeft{ edgeSize, edgeSize, -edgeSize};
+		const Math::Vector< 3, vertex_data_t > frontRight{-edgeSize, edgeSize, -edgeSize};
+		const Math::Vector< 3, vertex_data_t > back{0, edgeSize, edgeSize};
+		const Math::Vector< 3, vertex_data_t > top{0, -edgeSize, 0};
 
-		const Math::Vector< 3, float_t > UVBottomLeft{0, 1, 0};
-		const Math::Vector< 3, float_t > UVBottomRight{1, 1, 0};
-		const Math::Vector< 3, float_t > UVTopMiddle{0.5, 0, 0};
+		const Math::Vector< 3, vertex_data_t > UVBottomLeft{0, 1, 0};
+		const Math::Vector< 3, vertex_data_t > UVBottomRight{1, 1, 0};
+		const Math::Vector< 3, vertex_data_t > UVTopMiddle{0.5, 0, 0};
 
 		builder.beginConstruction(ConstructionMode::Triangles);
 
@@ -1404,20 +1418,21 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 	/**
 	 * @brief Generates a hexahedron shape (Earth symbol).
 	 * @note Ready for vulkan default world axis.
-	 * @FIXME Mathematically incorrect geometry.
-	 * @tparam float_t The type of floating point number. Default float.
+	 * @fixme Mathematically incorrect geometry.
+	 * @tparam vertex_data_t The precision type of vertex data. Default float.
+	 * @tparam index_data_t The precision type of index data. Default uint32_t.
 	 * @param radius The radius of the shape. Default 1.
 	 * @param options A reference to initial builder options. Default none.
-	 * @return Shape< float_t >
+	 * @return Shape< vertex_data_t, index_data_t >
 	 */
-	template< typename float_t = float >
+	template< typename vertex_data_t = float, typename index_data_t = uint32_t >
 	[[nodiscard]]
-	Shape< float_t >
-	generateHexahedron (float_t radius = 1, const ShapeBuilderOptions< float_t > & options = {}) noexcept requires (std::is_floating_point_v< float_t >)
+	Shape< vertex_data_t, index_data_t >
+	generateHexahedron (vertex_data_t radius = 1, const ShapeBuilderOptions< vertex_data_t > & options = {}) noexcept requires (std::is_floating_point_v< vertex_data_t > && std::is_unsigned_v< index_data_t > )
 	{
 		/* NOTE: c = √(2) * r */
-		const float_t edgeSize = std::sqrt(static_cast< float_t >(2)) * radius;
-		const float_t delta = std::sqrt(static_cast< float_t >(3)) * edgeSize * 0.5;
+		const vertex_data_t edgeSize = std::sqrt(static_cast< vertex_data_t >(2)) * radius;
+		const vertex_data_t delta = std::sqrt(static_cast< vertex_data_t >(3)) * edgeSize * 0.5;
 
 		return generateCuboid(delta, delta, delta, options);
 	}
@@ -1425,23 +1440,24 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 	/**
 	 * @brief Generates an octahedron shape (Air symbol).
 	 * @note Ready for vulkan default world axis.
-	 * @FIXME Mathematically incorrect geometry.
-	 * @tparam float_t The type of floating point number. Default float.
+	 * @fixme Mathematically incorrect geometry.
+	 * @tparam vertex_data_t The precision type of vertex data. Default float.
+	 * @tparam index_data_t The precision type of index data. Default uint32_t.
 	 * @param radius The volume radius. Default 1.
 	 * @param options A reference to initial builder options. Default none.
-	 * @return Shape< float_t >
+	 * @return Shape< vertex_data_t, index_data_t >
 	 */
-	template< typename float_t = float >
+	template< typename vertex_data_t = float, typename index_data_t = uint32_t >
 	[[nodiscard]]
-	Shape< float_t >
-	generateOctahedron (float_t radius = 1, const ShapeBuilderOptions< float_t > & options = {}) noexcept requires (std::is_floating_point_v< float_t >)
+	Shape< vertex_data_t, index_data_t >
+	generateOctahedron (vertex_data_t radius = 1, const ShapeBuilderOptions< vertex_data_t > & options = {}) noexcept requires (std::is_floating_point_v< vertex_data_t > && std::is_unsigned_v< index_data_t > )
 	{
-		Shape< float_t > shape{8};
+		Shape< vertex_data_t, index_data_t > shape{8};
 
-		ShapeBuilder< float_t > builder{shape, options};
+		ShapeBuilder< vertex_data_t, index_data_t > builder{shape, options};
 
 		/* NOTE: a = √2 / 2 * r */
-		const float_t edgeSize = std::sqrt(static_cast< float_t >(2)) / static_cast< float_t >(2) * radius;
+		const vertex_data_t edgeSize = std::sqrt(static_cast< vertex_data_t >(2)) / static_cast< vertex_data_t >(2) * radius;
 
 		builder.beginConstruction(ConstructionMode::Triangles);
 
@@ -1543,19 +1559,20 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 	/**
 	 * @brief Generates a dodecahedron shape (Ether, Universe symbol).
 	 * @TODO Write the algorithm.
-	 * @tparam float_t The type of floating point number. Default float.
+	 * @tparam vertex_data_t The precision type of vertex data. Default float.
+	 * @tparam index_data_t The precision type of index data. Default uint32_t.
 	 * @param radius The radius of the shape. Default 1.
 	 * @param options A reference to initial builder options. Default none.
-	 * @return Shape< float_t >
+	 * @return Shape< vertex_data_t, index_data_t >
 	 */
-	template< typename float_t = float >
+	template< typename vertex_data_t = float, typename index_data_t = uint32_t >
 	[[nodiscard]]
-	Shape< float_t >
-	generateDodecahedron (float_t radius = 1, const ShapeBuilderOptions< float_t > & options = {}) noexcept requires (std::is_floating_point_v< float_t >)
+	Shape< vertex_data_t, index_data_t >
+	generateDodecahedron (vertex_data_t radius = 1, const ShapeBuilderOptions< vertex_data_t > & options = {}) noexcept requires (std::is_floating_point_v< vertex_data_t > && std::is_unsigned_v< index_data_t > )
 	{
-		Shape< float_t > shape{36};
+		Shape< vertex_data_t, index_data_t > shape{36};
 
-		ShapeBuilder< float_t > builder{shape, options};
+		ShapeBuilder< vertex_data_t, index_data_t > builder{shape, options};
 
 		std::cerr << __PRETTY_FUNCTION__ << ", not handle yet ! (Radius: " << radius << ")" "\n";
 
@@ -1565,19 +1582,20 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 	/**
 	 * @brief Generates an icosahedron shape (Water symbol).
 	 * @TODO Write the algorithm.
-	 * @tparam float_t The type of floating point number. Default float.
+	 * @tparam vertex_data_t The precision type of vertex data. Default float.
+	 * @tparam index_data_t The precision type of index data. Default uint32_t.
 	 * @param radius The radius of the shape. Default 1.
 	 * @param options A reference to initial builder options. Default none.
-	 * @return Shape< float_t >
+	 * @return Shape< vertex_data_t, index_data_t >
 	 */
-	template< typename float_t = float >
+	template< typename vertex_data_t = float, typename index_data_t = uint32_t >
 	[[nodiscard]]
-	Shape< float_t >
-	generateIcosahedron (float_t radius = 1, const ShapeBuilderOptions< float_t > & options = {}) noexcept requires (std::is_floating_point_v< float_t >)
+	Shape< vertex_data_t, index_data_t >
+	generateIcosahedron (vertex_data_t radius = 1, const ShapeBuilderOptions< vertex_data_t > & options = {}) noexcept requires (std::is_floating_point_v< vertex_data_t > && std::is_unsigned_v< index_data_t > )
 	{
-		Shape< float_t > shape{20};
+		Shape< vertex_data_t, index_data_t > shape{20};
 
-		ShapeBuilder< float_t > builder{shape, options};
+		ShapeBuilder< vertex_data_t, index_data_t > builder{shape, options};
 
 		std::cerr << __PRETTY_FUNCTION__ << ", not handle yet ! (Radius: " << radius << ")" "\n";
 

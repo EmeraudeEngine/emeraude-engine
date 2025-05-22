@@ -27,7 +27,7 @@
 #pragma once
 
 /* STL inclusions. */
-#include <cstddef>
+#include <cstdint>
 #include <memory>
 #include <vector>
 
@@ -54,14 +54,14 @@ namespace EmEn::Vulkan
 			 * @param vertexCount The number of vertex that buffer will hold.
 			 * @param vertexElementCount The number of sub-element that composes one vertex.
 			 */
-			VertexBufferObject (const std::shared_ptr< Device > & device, size_t vertexCount, size_t vertexElementCount) noexcept;
+			VertexBufferObject (const std::shared_ptr< Device > & device, uint32_t vertexCount, uint32_t vertexElementCount) noexcept;
 
 			/**
 			 * @brief Returns the number of vertex in this buffer.
-			 * @return size_t
+			 * @return uint32_t
 			 */
 			[[nodiscard]]
-			size_t
+			uint32_t
 			vertexCount () const noexcept
 			{
 				return m_vertexCount;
@@ -69,10 +69,10 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Returns the number of sub-element of one vertex in this buffer.
-			 * @return size_t
+			 * @return uint32_t
 			 */
 			[[nodiscard]]
-			size_t
+			uint32_t
 			vertexElementCount () const noexcept
 			{
 				return m_vertexElementCount;
@@ -81,10 +81,10 @@ namespace EmEn::Vulkan
 			/**
 			 * @brief Returns the total number of element in this buffer.
 			 * @note Same as VertexBufferObject::vertexCount() * VertexBufferObject::vertexElementCount().
-			 * @return size_t
+			 * @return uint32_t
 			 */
 			[[nodiscard]]
-			size_t
+			uint32_t
 			elementCount () const noexcept
 			{
 				return m_vertexCount * m_vertexElementCount;
@@ -104,7 +104,7 @@ namespace EmEn::Vulkan
 
 		private:
 
-			size_t m_vertexCount;
-			size_t m_vertexElementCount;
+			uint32_t m_vertexCount;
+			uint32_t m_vertexElementCount;
 	};
 }

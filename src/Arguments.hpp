@@ -59,19 +59,19 @@ namespace EmEn
 			static const size_t ClassUID;
 
 			/**
-			 * @brief Constructs the arguments service.
+			 * @brief Constructs the argument service.
 			 * @param argc The argument count from the standard C/C++ main() function.
-			 * @param argv The argument values from the standard C/C++ main() function.
+			 * @param argv The argument value from the standard C/C++ main() function.
 			 * @param childProcess Declares a child process.
 			 */
 			Arguments (int argc, char * * argv, bool childProcess) noexcept;
 
 #if IS_WINDOWS
 			/**
-			 * @brief Constructs the arguments service.
+			 * @brief Constructs the argument service.
 			 * @note Windows version.
 			 * @param argc The argument count from the standard C/C++ main() function.
-			 * @param wargv The argument values from the standard C/C++ main() function.
+			 * @param wargv The argument value from the standard C/C++ main() function.
 			 * @param childProcess Declares a child process.
 			 */
 			Arguments (int argc, wchar_t * * wargv, bool childProcess) noexcept;
@@ -195,7 +195,7 @@ namespace EmEn
 			Argument get (const std::string & name, const std::string & alternateName) const noexcept;
 
 			/**
-			 * @brief Returns a parsed argument from the command line. Multiple name version.
+			 * @brief Returns a parsed argument from the command line. Multiple name versions.
 			 * @param namesList A reference to a vector of string defining all possible argument names from the command line.
 			 * @return Argument
 			 */
@@ -267,7 +267,7 @@ namespace EmEn
 			bool onTerminate () noexcept override;
 
 			/**
-			 * @brief Recreates argc and argv from main parameters after modifications.
+			 * @brief Recreates argc and argv from the main parameters after modifications.
 			 * @return void
 			 */
 			void recreateRawArguments () const noexcept;

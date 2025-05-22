@@ -26,7 +26,11 @@
 
 #pragma once
 
+/* Engine configuration file. */
+#include "emeraude_config.hpp"
+
 /* STL inclusions. */
+#include <vector>
 #include <string>
 
 /* Forward declarations. */
@@ -81,10 +85,14 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 			 * @return const std::string &
 			 */
 			[[nodiscard]]
-			const std::string & title () const noexcept;
+			const std::string &
+			title () const noexcept
+			{
+				return m_title;
+			}
 
 			/**
-			 * @brief Executes the dialog.
+			 * @brief Executes the dialog, if something goes wrong, the method will return false.
 			 * @param window A pointer to the window to set parenting (Optional).
 			 * @return bool
 			 */
@@ -97,6 +105,16 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 			 * @param title A string to name the dialog [std::move].
 			 */
 			explicit Abstract (std::string title) noexcept;
+
+#ifdef IS_LINUX
+			/**
+			 * @brief Helpers for "portable-file-dialogs" and generate filter structure.
+			 * @param extensionFilters A reference to vector.
+			 * @return std::vector< std::string >
+			 */
+			[[nodiscard]]
+			static std::vector< std::string > convertFilterStructureForPFD (const std::vector< std::pair< std::string, std::vector< std::string > > > & extensionFilters) noexcept;
+#endif
 
 		private:
 

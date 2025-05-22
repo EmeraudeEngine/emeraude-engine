@@ -36,7 +36,7 @@ namespace EmEn::Overlay::Elements
 	using namespace PixelFactory;
 	using namespace Graphics;
 
-	Text::Text (const FramebufferProperties & framebufferProperties, const std::string & name, const Math::Rectangle< float > & geometry, float depth) noexcept
+	Text::Text (const FramebufferProperties & framebufferProperties, const std::string & name, const Math::Space2D::AARectangle< float > & geometry, float depth) noexcept
 		: ComposedSurface(framebufferProperties, name, geometry, depth)//, m_textWriter(this->pixmap())
 	{
 		m_textWriter.enableWrapping(true);

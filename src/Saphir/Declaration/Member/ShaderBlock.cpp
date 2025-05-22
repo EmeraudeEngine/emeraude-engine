@@ -31,46 +31,25 @@
 
 namespace EmEn::Saphir::Declaration::Member
 {
-	ShaderBlock::ShaderBlock (VariableType type, Key name, Key interpolation, size_t arraySize) noexcept
-		: m_type(type), m_name(name), m_interpolation(interpolation), m_arraySize(arraySize)
+	ShaderBlock::ShaderBlock (VariableType type, Key name, Key interpolation, uint32_t arraySize) noexcept
+		: m_type(type),
+		m_name(name),
+		m_interpolation(interpolation),
+		m_arraySize(arraySize)
 	{
 
 	}
 
-	VariableType
-	ShaderBlock::type () const noexcept
-	{
-		return m_type;
-	}
-
-	Key
-	ShaderBlock::name () const noexcept
-	{
-		return m_name;
-	}
-
-	size_t
+	uint32_t
 	ShaderBlock::bytes () const noexcept
 	{
-		/* FIXME : Check alignement with array size. */
+		/* FIXME : Check alignment with array size. */
 		if ( m_arraySize > 1 )
 		{
 			return size_bytes(m_type) * m_arraySize;
 		}
 
 		return size_bytes(m_type);
-	}
-
-	const Key &
-	ShaderBlock::interpolation () const noexcept
-	{
-		return m_interpolation;
-	}
-
-	size_t
-	ShaderBlock::arraySize () const noexcept
-	{
-		return m_arraySize;
 	}
 
 	std::string

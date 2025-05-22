@@ -27,8 +27,8 @@
 #pragma once
 
 /* STL inclusions. */
-#include <array>
 #include <cstdint>
+#include <array>
 #include <memory>
 #include <string>
 
@@ -37,7 +37,7 @@
 
 /* Local inclusions for usages. */
 #include "Layouts/Main.hpp"
-#include "Libs/Math/Rectangle.hpp"
+#include "Libs/Math/Space2D/AARectangle.hpp"
 #include "Libs/Math/Vector.hpp"
 #include "Libs/PixelFactory/Pixmap.hpp"
 #include "Graphics/Geometry/IndexedVertexResource.hpp"
@@ -86,7 +86,7 @@ namespace EmEn::Overlay
 			 * @param geometry A reference to a rectangle for the surface geometry on screen. Default the whole screen.
 			 * @param depth A depth value to order surface on the screen. Default 0.0.
 			 */
-			ComposedSurface (const FramebufferProperties & framebufferProperties, const std::string & name, const Libs::Math::Rectangle< float > & geometry = {}, float depth = 0.0F) noexcept;
+			ComposedSurface (const FramebufferProperties & framebufferProperties, const std::string & name, const Libs::Math::Space2D::AARectangle< float > & geometry = {}, float depth = 0.0F) noexcept;
 
 			/**
 			 * @brief Sets the dimension of the surface.
@@ -237,7 +237,7 @@ namespace EmEn::Overlay
 			static constexpr auto IsFocused{3UL};
 
 			Layouts::Main m_rootLayout{};
-			Libs::Math::Rectangle< float > m_rectangle{0.0F, 0.0F, 1.0F, 1.0F};
+			Libs::Math::Space2D::AARectangle< float > m_rectangle{0.0F, 0.0F, 1.0F, 1.0F};
 			std::unique_ptr< Graphics::Geometry::IndexedVertexResource > m_geometry{};
 			std::shared_ptr< Vulkan::Image > m_texture{};
 			Libs::PixelFactory::Pixmap< uint8_t > m_data{};

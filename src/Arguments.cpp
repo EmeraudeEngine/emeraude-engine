@@ -296,7 +296,7 @@ namespace EmEn
 				continue;
 			}
 
-			/* NOTE: we put "1" to makes argument returning true when calling ArgumentValue::isPresent(). */
+			/* NOTE: we put "1" to make argument returning true when calling ArgumentValue::isPresent(). */
 			m_arguments.emplace(std::piecewise_construct, std::forward_as_tuple(value), std::forward_as_tuple(true));
 		}
 

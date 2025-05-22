@@ -86,11 +86,11 @@ namespace EmEn::Graphics::Renderable
 			 * @brief Returns a position where Y is completed by the level at X,Z position.
 			 * @param positionX The X coordinates.
 			 * @param positionZ The Z coordinates.
-			 * @param deltaY A difference value to add to the height. Default 0.0F.
+			 * @param deltaY A difference value to add to the height.
 			 * @return Vector< 3, float >
 			 */
 			[[nodiscard]]
-			virtual Libs::Math::Vector< 3, float > getLevelAt (float positionX, float positionZ, float deltaY = 0.0F) const noexcept = 0;
+			virtual Libs::Math::Vector< 3, float > getLevelAt (float positionX, float positionZ, float deltaY) const noexcept = 0;
 
 			/**
 			 * @brief Returns the normal vector under the given position.
@@ -105,8 +105,8 @@ namespace EmEn::Graphics::Renderable
 			/**
 			 * @brief Constructs a renderable scene area.
 			 * @param name A reference to a string for the resource name.
-			 * @param resourceFlagBits The resource flag bits.
+			 * @param resourceFlags The resource flag bits.
 			 */
-			explicit SceneAreaInterface (const std::string & name, uint32_t resourceFlagBits) noexcept;
+			explicit SceneAreaInterface (const std::string & name, uint32_t resourceFlags) noexcept;
 	};
 }

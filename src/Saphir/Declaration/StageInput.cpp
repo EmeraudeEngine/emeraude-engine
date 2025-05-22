@@ -59,13 +59,23 @@ namespace EmEn::Saphir::Declaration
 	bool
 	StageInput::isValid () const noexcept
 	{
-		return m_type != nullptr && m_name != nullptr;
+		if ( m_type == nullptr )
+		{
+			return false;
+		}
+
+		if ( m_name == nullptr )
+		{
+			return false;
+		}
+
+		return true;
 	}
 
 	std::string
 	StageInput::sourceCode () const noexcept
 	{
-		std::stringstream code{};
+		std::stringstream code;
 
 		code << GLSL::Layout << " (" << GLSL::Location << " = " << m_location << ") ";
 
@@ -88,53 +98,5 @@ namespace EmEn::Saphir::Declaration
 		code << ";" "\n";
 
 		return code.str();
-	}
-
-	Key
-	StageInput::name () const noexcept
-	{
-		return m_name;
-	}
-
-	size_t
-	StageInput::bytes () const noexcept
-	{
-		return 0;
-	}
-
-	uint32_t
-	StageInput::location () const noexcept
-	{
-		return m_location;
-	}
-
-	Key
-	StageInput::type () const noexcept
-	{
-		return m_type;
-	}
-
-	Key
-	StageInput::interpolation () const noexcept
-	{
-		return m_interpolation;
-	}
-
-	int32_t
-	StageInput::arraySize () const noexcept
-	{
-		return m_arraySize;
-	}
-
-	bool
-	StageInput::isArray () const noexcept
-	{
-		return m_arraySize > 0;
-	}
-
-	bool
-	StageInput::isNonFixedArraySize () const noexcept
-	{
-		return m_arraySize == -1;
 	}
 }

@@ -79,15 +79,19 @@ namespace EmEn::Scenes::Component
 
 			/** @copydoc EmEn::Scenes::Component::Abstract::getComponentType() */
 			[[nodiscard]]
-			const char * getComponentType () const noexcept override;
+			const char *
+			getComponentType () const noexcept override
+			{
+				return ClassId;
+			}
 
-			/** @copydoc EmEn::Scenes::Component::Abstract::boundingBox() const */
+			/** @copydoc EmEn::Scenes::Component::Abstract::isComponent() */
 			[[nodiscard]]
-			const Libs::Math::Cuboid< float > & boundingBox () const noexcept override;
-
-			/** @copydoc EmEn::Scenes::Component::Abstract::boundingSphere() const */
-			[[nodiscard]]
-			const Libs::Math::Sphere< float > & boundingSphere () const noexcept override;
+			bool
+			isComponent (const char * classID) const noexcept override
+			{
+				return strcmp(ClassId, classID) == 0;
+			}
 
 			/** @copydoc EmEn::Scenes::Component::Abstract::move() */
 			void move (const Libs::Math::CartesianFrame< float > & worldCoordinates) noexcept override;
@@ -95,12 +99,21 @@ namespace EmEn::Scenes::Component
 			/** @copydoc EmEn::Scenes::Component::Abstract::processLogics() */
 			void processLogics (const Scene & scene) noexcept override;
 
-			/** @copydoc EmEn::Scenes::Component::Abstract::shouldRemove() */
-			bool shouldRemove () const noexcept override;
+			/** @copydoc EmEn::Scenes::Component::Abstract::shouldBeRemoved() */
+			[[nodiscard]]
+			bool
+			shouldBeRemoved () const noexcept override
+			{
+				return false;
+			}
 
 			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::videoType() */
 			[[nodiscard]]
-			AVConsole::VideoType videoType () const noexcept override;
+			AVConsole::VideoType
+			videoType () const noexcept override
+			{
+				return AVConsole::VideoType::Camera;
+			}
 
 			/**
 			 * @brief Sets the field of view in degrees.
@@ -114,21 +127,33 @@ namespace EmEn::Scenes::Component
 			 * @return float
 			 */
 			[[nodiscard]]
-			float fieldOfView () const noexcept;
+			float
+			fieldOfView () const noexcept
+			{
+				return m_fov;
+			}
 
 			/**
 			 * @brief Returns whether the camera is using a perspective projection.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool isPerspectiveProjection () const noexcept;
+			bool
+			isPerspectiveProjection () const noexcept
+			{
+				return this->isFlagEnabled(PerspectiveProjection);
+			}
 
 			/**
 			 * @brief Returns whether the camera is using an orthographic projection.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool isOrthographicProjection () const noexcept;
+			bool
+			isOrthographicProjection () const noexcept
+			{
+				return !this->isFlagEnabled(PerspectiveProjection);
+			}
 
 			/**
 			 * @brief Sets a perspective projection.
@@ -161,7 +186,11 @@ namespace EmEn::Scenes::Component
 			 * @return float
 			 */
 			[[nodiscard]]
-			float distance () const noexcept;
+			float
+			distance () const noexcept
+			{
+				return m_distance;
+			}
 
 			/**
 			 * @brief Sets the maximal distance of the view.
@@ -175,7 +204,11 @@ namespace EmEn::Scenes::Component
 			 * @return const Saphir::FramebufferEffectsList &
 			 */
 			[[nodiscard]]
-			const Saphir::FramebufferEffectsList & lensEffects () const noexcept;
+			const Saphir::FramebufferEffectsList &
+			lensEffects () const noexcept
+			{
+				return m_lensEffects;
+			}
 
 			/**
 			 * @brief Checks if a shader lens effect is present.
@@ -183,7 +216,11 @@ namespace EmEn::Scenes::Component
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool isLensEffectPresent (const std::shared_ptr< Saphir::FramebufferEffectInterface > & effect) const noexcept;
+			bool
+			isLensEffectPresent (const std::shared_ptr< Saphir::FramebufferEffectInterface > & effect) const noexcept
+			{
+				return m_lensEffects.contains(effect);
+			}
 
 			/**
 			 * @brief Adds a shader lens effect to the camera.

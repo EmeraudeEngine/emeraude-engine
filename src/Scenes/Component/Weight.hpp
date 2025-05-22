@@ -76,15 +76,35 @@ namespace EmEn::Scenes::Component
 
 			/** @copydoc EmEn::Scenes::Component::Abstract::getComponentType() */
 			[[nodiscard]]
-			const char * getComponentType () const noexcept override;
+			const char *
+			getComponentType () const noexcept override
+			{
+				return ClassId;
+			}
+
+			/** @copydoc EmEn::Scenes::Component::Abstract::isComponent() */
+			[[nodiscard]]
+			bool
+			isComponent (const char * classID) const noexcept override
+			{
+				return strcmp(ClassId, classID) == 0;
+			}
 
 			/** @copydoc EmEn::Scenes::Component::Abstract::boundingBox() const */
 			[[nodiscard]]
-			const Libs::Math::Cuboid< float > & boundingBox () const noexcept override;
+			const Libs::Math::Space3D::AACuboid< float > &
+			boundingBox () const noexcept override
+			{
+				return m_boundingBox;
+			}
 
 			/** @copydoc EmEn::Scenes::Component::Abstract::boundingSphere() const */
 			[[nodiscard]]
-			const Libs::Math::Sphere< float > & boundingSphere () const noexcept override;
+			const Libs::Math::Space3D::Sphere< float > &
+			boundingSphere () const noexcept override
+			{
+				return m_boundingSphere;
+			}
 
 			/** @copydoc EmEn::Scenes::Component::Abstract::move() */
 			void move (const Libs::Math::CartesianFrame< float > & worldCoordinates) noexcept override;
@@ -92,8 +112,13 @@ namespace EmEn::Scenes::Component
 			/** @copydoc EmEn::Scenes::Component::Abstract::processLogics() */
 			void processLogics (const Scene & scene) noexcept override;
 
-			/** @copydoc EmEn::Scenes::Component::Abstract::shouldRemove() */
-			bool shouldRemove () const noexcept override;
+			/** @copydoc EmEn::Scenes::Component::Abstract::shouldBeRemoved() */
+			[[nodiscard]]
+			bool
+			shouldBeRemoved () const noexcept override
+			{
+				return false;
+			}
 
 			/**
 			 * @brief Set the bounding sphere radius.
@@ -123,7 +148,7 @@ namespace EmEn::Scenes::Component
 			/** @copydoc EmEn::Animations::AnimatableInterface::playAnimation() */
 			bool playAnimation (uint8_t animationID, const Libs::Variant & value, size_t cycle) noexcept override;
 
-			Libs::Math::Cuboid< float > m_boundingBox;
-			Libs::Math::Sphere< float > m_boundingSphere;
+			Libs::Math::Space3D::AACuboid< float > m_boundingBox;
+			Libs::Math::Space3D::Sphere< float > m_boundingSphere;
 	};
 }

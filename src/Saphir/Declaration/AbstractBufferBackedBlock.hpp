@@ -84,34 +84,51 @@ namespace EmEn::Saphir::Declaration
 
 			/** @copydoc EmEn::Saphir::Declaration::BlockInterface::bytes() */
 			[[nodiscard]]
-			size_t bytes () const noexcept final;
+			uint32_t bytes () const noexcept final;
 
 			/**
 			 * @brief Gets the set index.
 			 * @return uint32_t.
 			 */
 			[[nodiscard]]
-			uint32_t set () const noexcept;
+			uint32_t
+			set () const noexcept
+			{
+				return m_set;
+			}
 
 			/**
 			 * @brief Gets the binding point.
 			 * @return uint32_t.
 			 */
 			[[nodiscard]]
-			uint32_t binding () const noexcept;
+			uint32_t
+			binding () const noexcept
+			{
+				return m_binding;
+			}
 
 			/**
 			 * @brief Sets matrix storage order.
 			 * @param matrixStorageOrder
+			 * @return void
 			 */
-			void setMatrixStorageOrder (MatrixStorageOrder matrixStorageOrder) noexcept;
+			void
+			setMatrixStorageOrder (MatrixStorageOrder matrixStorageOrder) noexcept
+			{
+				m_matrixStorageOrder = matrixStorageOrder;
+			}
 
 			/**
 			 * @brief Gets matrix storage order.
 			 * @return MatrixStorageOrder
 			 */
 			[[nodiscard]]
-			MatrixStorageOrder matrixStorageOrder () const noexcept;
+			MatrixStorageOrder
+			matrixStorageOrder () const noexcept
+			{
+				return m_matrixStorageOrder;
+			}
 
 			/**
 			 * @brief Adds a member to the block.
@@ -134,23 +151,29 @@ namespace EmEn::Saphir::Declaration
 			 * @param name A C-string to set the name of the member.
 			 * @param arraySize The size of the array.
 			 * @param layout The layout to use. Default nullptr.
+			 * @return bool
 			 */
-			bool addArrayMember (VariableType type, Key name, size_t arraySize, Key layout = nullptr) noexcept;
+			bool addArrayMember (VariableType type, Key name, uint32_t arraySize, Key layout = nullptr) noexcept;
 
 			/**
 			 * @brief Adds an array member to the block.
 			 * @param structure A reference to a structure.
 			 * @param arraySize The size of the array.
 			 * @param layout The layout to use. Default nullptr.
+			 * @return bool
 			 */
-			bool addArrayMember (const Structure & structure, size_t arraySize, Key layout = nullptr) noexcept;
+			bool addArrayMember (const Structure & structure, uint32_t arraySize, Key layout = nullptr) noexcept;
 
 			/**
 			 * @brief Returns the list of members.
 			 * @return const std::vector< std::pair< Key, Member::BufferBackedBlock > > &
 			 */
 			[[nodiscard]]
-			const std::vector< std::pair< Key, Member::BufferBackedBlock > > & members () const noexcept;
+			const std::vector< std::pair< Key, Member::BufferBackedBlock > > &
+			members () const noexcept
+			{
+				return m_members;
+			}
 
 		protected:
 
@@ -163,9 +186,13 @@ namespace EmEn::Saphir::Declaration
 			 * @param instanceName A C-string to set the name of the instance of the block. Default nullptr.
 			 * @param arraySize Set the block as an array. Default 0.
 			 */
-			AbstractBufferBackedBlock (uint32_t set, uint32_t binding, MemoryLayout memoryLayout, Key name, Key instanceName = nullptr, size_t arraySize = 0) noexcept;
+			AbstractBufferBackedBlock (uint32_t set, uint32_t binding, MemoryLayout memoryLayout, Key name, Key instanceName = nullptr, uint32_t arraySize = 0) noexcept;
 
-			/** @copydoc EmEn::Saphir::BlockInterface::getLayoutQualifier() */
+			/**
+			 * @brief Returns the layout qualifier.
+			 * @return std::string
+			 */
+			[[nodiscard]]
 			std::string getLayoutQualifier () const noexcept;
 
 		private:

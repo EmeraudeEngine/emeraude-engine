@@ -77,7 +77,7 @@ namespace EmEn
 			 * @param received
 			 * @return void
 			 */
-			void setProgression (size_t total, size_t received) noexcept;
+			void setProgression (uint64_t total, uint64_t received) noexcept;
 
 			/**
 			 * @brief Returns the URL of the downloaded item.
@@ -113,10 +113,10 @@ namespace EmEn
 
 			/**
 			 * @brief Returns the total bytes of the item.
-			 * @return size_t
+			 * @return uint64_t
 			 */
 			[[nodiscard]]
-			size_t
+			uint64_t
 			bytesTotal () const noexcept
 			{
 				return m_bytesTotal;
@@ -124,10 +124,10 @@ namespace EmEn
 
 			/**
 			 * @brief Returns the actual bytes of the item downloaded.
-			 * @return size_t
+			 * @return uint64_t
 			 */
 			[[nodiscard]]
-			size_t
+			uint64_t
 			bytesReceived () const noexcept
 			{
 				return m_bytesReceived;
@@ -160,8 +160,8 @@ namespace EmEn
 			Libs::Network::URL m_url;
 			std::filesystem::path m_output;
 			std::string m_header;
-			size_t m_bytesTotal{0};
-			size_t m_bytesReceived{0};
+			uint64_t m_bytesTotal{0};
+			uint64_t m_bytesReceived{0};
 			Status m_status{Status::Pending};
 			bool m_replaceExistingFile;
 	};

@@ -34,7 +34,9 @@ namespace EmEn
 	using namespace EmEn::Libs;
 
 	DownloadItem::DownloadItem (Network::URL url, std::filesystem::path output, bool replaceExistingFile) noexcept
-		: m_url(std::move(url)), m_output(std::move(output)), m_replaceExistingFile(replaceExistingFile)
+		: m_url(std::move(url)),
+		m_output(std::move(output)),
+		m_replaceExistingFile(replaceExistingFile)
 	{
 
 	}
@@ -58,7 +60,7 @@ namespace EmEn
 	}
 
 	void
-	DownloadItem::setProgression (size_t total, size_t received) noexcept
+	DownloadItem::setProgression (uint64_t total, uint64_t received) noexcept
 	{
 		m_bytesTotal = total;
 		m_bytesReceived = received;

@@ -26,15 +26,8 @@
 
 #pragma once
 
-/* STL inclusions. */
-#include <vector>
-#include <memory>
-
 /* Local inclusions for inheritances. */
 #include "Abstract.hpp"
-
-/* Local inclusions for usages. */
-#include "Graphics/RenderableInstance/Abstract.hpp"
 
 namespace EmEn::Saphir::Generator
 {
@@ -51,35 +44,11 @@ namespace EmEn::Saphir::Generator
 
 			/** 
 			 * @brief Constructs a TBN space rendering pipeline.
-			 * @param settings A reference to the core settings.
 			 * @param renderTarget A reference to the render target smart pointer.
 			 * @param renderableInstance A reference to the renderable instance smart pointer.
+			 * @param layerIndex The renderable instance layer index.
 			 */
-			TBNSpaceRendering (Settings & settings, const std::shared_ptr< const Graphics::RenderTarget::Abstract > & renderTarget, const std::shared_ptr< const Graphics::RenderableInstance::Abstract > & renderableInstance) noexcept;
-
-			/** @copydoc EmEn::Saphir::Generator::Abstract::materialEnabled() */
-			[[nodiscard]]
-			bool
-			materialEnabled () const noexcept override
-			{
-				return false;
-			}
-
-			/** @copydoc EmEn::Saphir::Generator::Abstract::material() const */
-			[[nodiscard]]
-			const Graphics::Material::Interface *
-			material () const noexcept override
-			{
-				return nullptr;
-			}
-
-			/** @copydoc EmEn::Saphir::Generator::Abstract::geometry() */
-			[[nodiscard]]
-			const Graphics::Geometry::Interface *
-			geometry () const noexcept override
-			{
-				return m_renderableInstance->renderable()->geometry();
-			}
+			TBNSpaceRendering (const std::shared_ptr< const Graphics::RenderTarget::Abstract > & renderTarget, const std::shared_ptr< const Graphics::RenderableInstance::Abstract > & renderableInstance, uint32_t layerIndex) noexcept;
 
 		private:
 
@@ -87,19 +56,19 @@ namespace EmEn::Saphir::Generator
 			void
 			prepareUniformSets (SetIndexes & setIndexes) noexcept override
 			{
-				if ( m_renderableInstance->instancingEnabled() )
+				if ( this->isFlagEnabled(IsInstancingEnabled) )
 				{
 					setIndexes.enableSet(SetType::PerView);
 				}
 			}
 
-			/** @copydoc EmEn::Saphir::Generator::Abstract::onGenerateProgram() */
+			/** @copydoc EmEn::Saphir::Generator::Abstract::onGenerateShadersCode() */
 			[[nodiscard]]
-			bool onGenerateProgram (Program & program) noexcept override;
+			bool onGenerateShadersCode (Program & program) noexcept override;
 
-			/** @copydoc EmEn::Saphir::Generator::Abstract::onGenerateProgramLayout() */
+			/** @copydoc EmEn::Saphir::Generator::Abstract::onCreateDataLayouts() */
 			[[nodiscard]]
-			bool onGenerateProgramLayout (const SetIndexes & setIndexes, std::vector< std::shared_ptr< Vulkan::DescriptorSetLayout > > & descriptorSetLayouts, std::vector< VkPushConstantRange > & pushConstantRanges) noexcept override;
+			bool onCreateDataLayouts (const SetIndexes & setIndexes, std::vector< std::shared_ptr< Vulkan::DescriptorSetLayout > > & descriptorSetLayouts, std::vector< VkPushConstantRange > & pushConstantRanges) noexcept override;
 
 			/** @copydoc EmEn::Saphir::Generator::Abstract::onGraphicsPipelineConfiguration() */
 			[[nodiscard]]
@@ -125,7 +94,5 @@ namespace EmEn::Saphir::Generator
 			 */
 			[[nodiscard]]
 			bool generateFragmentShader (Program & program) noexcept;
-
-			std::shared_ptr< const Graphics::RenderableInstance::Abstract > m_renderableInstance;
 	};
 }

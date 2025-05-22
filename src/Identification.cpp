@@ -26,10 +26,11 @@
 
 #include "Identification.hpp"
 
-/* Local inclusions. */
+/* STL inclusions. */
+#include <sstream>
 #include <ranges>
 
-
+/* Local inclusions. */
 #include "Libs/String.hpp"
 
 namespace EmEn
@@ -45,6 +46,7 @@ namespace EmEn
 		/* NOTE: Engine identification string. */
 		{
 			std::stringstream stream;
+
 			stream << LibraryName << " (" << LibraryVersion << "; " << LibraryPlatform << "; " << LibraryCompilationDate << ") LGPLv3 - " << LibraryAuthorName;
 
 			m_engineId = stream.str();
@@ -53,6 +55,7 @@ namespace EmEn
 		/* NOTE: Application identification string. */
 		{
 			std::stringstream stream;
+
 			stream << m_applicationName << " (" << m_applicationVersion << ") - " << m_applicationOrganization;
 
 			m_applicationId = stream.str();

@@ -80,7 +80,7 @@ namespace EmEn::Overlay
 	}
 
 	void
-	UIScreen::render (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const CommandBuffer & commandBuffer, const PipelineLayout & pipelineLayout, const Geometry::IndexedVertexResource & surfaceGeometry) const noexcept
+	UIScreen::render (const std::shared_ptr< RenderTarget::Abstract > & /*renderTarget*/, const CommandBuffer & commandBuffer, const PipelineLayout & pipelineLayout, const Geometry::IndexedVertexResource & surfaceGeometry) const noexcept
 	{
 		const std::lock_guard< std::mutex > lock{m_surfacesMutex};
 
@@ -135,7 +135,8 @@ namespace EmEn::Overlay
 			return false;
 		}
 
-		surfaceIt->second->destroyFromHardware();
+		// TODO: Check why we can't explicitly kill the surface here.
+		//surfaceIt->second->destroyFromHardware();
 
 		m_surfaces.erase(surfaceIt);
 
@@ -201,9 +202,8 @@ namespace EmEn::Overlay
 	bool
 	UIScreen::onKeyPress (int32_t key, int32_t scancode, int32_t modifiers, bool repeat) const noexcept
 	{
-		const auto dispatchEvent = [key, scancode, modifiers, repeat] (const std::shared_ptr< Surface > & surface) -> bool
-		{
-			if ( !surface->isListeningKeyboard() || !surface->isFocused() )
+		const auto dispatchEvent = [key, scancode, modifiers, repeat] (const std::shared_ptr< Surface > & surface) -> bool {
+			if ( !surface->isVisible() || !surface->isListeningKeyboard() || !surface->isFocused() )
 			{
 				return false;
 			}
@@ -216,27 +216,16 @@ namespace EmEn::Overlay
 			return dispatchEvent(m_inputExclusiveSurface);
 		}
 
-		auto somethingHappens = false;
-
-		for ( const auto & surface : std::views::reverse(m_sortedSurfaces) )
-		{
-			somethingHappens = dispatchEvent(surface);
-
-			if ( somethingHappens && surface->isBlockingEvent() )
-			{
-				break;
-			}
-		}
-
-		return somethingHappens;
+		return std::ranges::any_of(std::views::reverse(m_sortedSurfaces), [dispatchEvent] (const auto & surface) -> bool {
+			return dispatchEvent(surface);
+		});
 	}
 
 	bool
 	UIScreen::onKeyRelease (int32_t key, int32_t scancode, int32_t modifiers) const noexcept
 	{
-		const auto dispatchEvent = [key, scancode, modifiers] (const std::shared_ptr< Surface > & surface) -> bool
-		{
-			if ( !surface->isListeningKeyboard() || !surface->isFocused() )
+		const auto dispatchEvent = [key, scancode, modifiers] (const std::shared_ptr< Surface > & surface) -> bool {
+			if ( !surface->isVisible() || !surface->isListeningKeyboard() || !surface->isFocused() )
 			{
 				return false;
 			}
@@ -249,27 +238,16 @@ namespace EmEn::Overlay
 			return dispatchEvent(m_inputExclusiveSurface);
 		}
 
-		auto somethingHappens = false;
-
-		for ( const auto & surface : std::views::reverse(m_sortedSurfaces) )
-		{
-			somethingHappens = dispatchEvent(surface);
-
-			if ( somethingHappens && surface->isBlockingEvent() )
-			{
-				break;
-			}
-		}
-
-		return somethingHappens;
+		return std::ranges::any_of(std::views::reverse(m_sortedSurfaces), [dispatchEvent] (const auto & surface) -> bool {
+			return dispatchEvent(surface);
+		});
 	}
 
 	bool
 	UIScreen::onCharacterType (uint32_t unicode) const noexcept
 	{
-		const auto dispatchEvent = [unicode] (const std::shared_ptr< Surface > & surface) -> bool
-		{
-			if ( !surface->isListeningKeyboard() || !surface->isFocused() )
+		const auto dispatchEvent = [unicode] (const std::shared_ptr< Surface > & surface) -> bool {
+			if ( !surface->isVisible() || !surface->isListeningKeyboard() || !surface->isFocused() )
 			{
 				return false;
 			}
@@ -282,30 +260,19 @@ namespace EmEn::Overlay
 			return dispatchEvent(m_inputExclusiveSurface);
 		}
 
-		auto somethingHappens = false;
-
-		for ( const auto & surface : std::views::reverse(m_sortedSurfaces) )
-		{
-			somethingHappens = dispatchEvent(surface);
-
-			if ( somethingHappens && surface->isBlockingEvent() )
-			{
-				break;
-			}
-		}
-
-		return somethingHappens;
+		return std::ranges::any_of(std::views::reverse(m_sortedSurfaces), [dispatchEvent] (const auto & surface) -> bool {
+			return dispatchEvent(surface);
+		});
 	}
 
 	bool
 	UIScreen::onPointerMove (float positionX, float positionY) const noexcept
 	{
-		const auto dispatchEvent = [positionX, positionY] (const std::shared_ptr< Surface > & surface) -> bool
-		{
+		const auto dispatchEvent = [positionX, positionY] (const std::shared_ptr< Surface > & surface) -> bool {
 			/* NOTE: Always check if the pointer is over the surface. */
 			const auto pointerOver = surface->isBelowPoint(positionX, positionY);
 
-			if ( !surface->isListeningPointer() )
+			if ( !surface->isVisible() || !surface->isListeningPointer() )
 			{
 				surface->setPointerOverState(pointerOver);
 
@@ -314,7 +281,7 @@ namespace EmEn::Overlay
 
 			if ( pointerOver )
 			{
-				/* NOTE: If pointer wasn't over the surface before, generate an entering event. */
+				/* NOTE: If the pointer wasn't over the surface before, generate an entering event. */
 				if ( !surface->isPointerWasOver() )
 				{
 					surface->setPointerOverState(true);
@@ -325,7 +292,7 @@ namespace EmEn::Overlay
 				return surface->onPointerMove(positionX, positionY);
 			}
 
-			/* NOTE: If pointer was over the surface before, generate a leaving event. */
+			/* NOTE: If the pointer was over the surface before, generate a leaving event. */
 			if ( surface->isPointerWasOver() )
 			{
 				surface->setPointerOverState(false);
@@ -341,27 +308,16 @@ namespace EmEn::Overlay
 			return dispatchEvent(m_inputExclusiveSurface);
 		}
 
-		auto somethingHappens = false;
-
-		for ( const auto & surface : std::views::reverse(m_sortedSurfaces) )
-		{
-			somethingHappens = dispatchEvent(surface);
-
-			if ( somethingHappens && surface->isBlockingEvent() )
-			{
-				break;
-			}
-		}
-
-		return somethingHappens;
+		return std::ranges::any_of(std::views::reverse(m_sortedSurfaces), [dispatchEvent] (const auto & surface) -> bool {
+			return dispatchEvent(surface);
+		});
 	}
 
 	bool
 	UIScreen::onButtonPress (float positionX, float positionY, int32_t buttonNumber, int32_t modifiers) const noexcept
 	{
-		const auto dispatchEvent = [positionX, positionY, buttonNumber, modifiers] (const std::shared_ptr< Surface > & surface) -> bool
-		{
-			if ( surface->isListeningPointer() && surface->isBelowPoint(positionX, positionY) )
+		const auto dispatchEvent = [positionX, positionY, buttonNumber, modifiers] (const std::shared_ptr< Surface > & surface) -> bool {
+			if ( surface->isVisible() && surface->isListeningPointer() && surface->isBelowPoint(positionX, positionY) )
 			{
 				surface->setFocusedState(true);
 
@@ -378,27 +334,16 @@ namespace EmEn::Overlay
 			return dispatchEvent(m_inputExclusiveSurface);
 		}
 
-		auto somethingHappens = false;
-
-		for ( const auto & surface : std::views::reverse(m_sortedSurfaces) )
-		{
-			somethingHappens = dispatchEvent(surface);
-
-			if ( somethingHappens && surface->isBlockingEvent() )
-			{
-				break;
-			}
-		}
-
-		return somethingHappens;
+		return std::ranges::any_of(std::views::reverse(m_sortedSurfaces), [dispatchEvent] (const auto & surface) -> bool {
+			return dispatchEvent(surface);
+		});
 	}
 
 	bool
 	UIScreen::onButtonRelease (float positionX, float positionY, int32_t buttonNumber, int32_t modifiers) const noexcept
 	{
-		const auto dispatchEvent = [positionX, positionY, buttonNumber, modifiers] (const std::shared_ptr< Surface > & surface) -> bool
-		{
-			if ( surface->isListeningPointer() && surface->isBelowPoint(positionX, positionY) )
+		const auto dispatchEvent = [positionX, positionY, buttonNumber, modifiers] (const std::shared_ptr< Surface > & surface) -> bool {
+			if ( surface->isVisible() && surface->isListeningPointer() && surface->isBelowPoint(positionX, positionY) )
 			{
 				return surface->onButtonRelease(positionX, positionY, buttonNumber, modifiers);
 			}
@@ -411,27 +356,16 @@ namespace EmEn::Overlay
 			return dispatchEvent(m_inputExclusiveSurface);
 		}
 
-		auto somethingHappens = false;
-
-		for ( const auto & surface : std::views::reverse(m_sortedSurfaces) )
-		{
-			somethingHappens = dispatchEvent(surface);
-
-			if ( somethingHappens && surface->isBlockingEvent() )
-			{
-				break;
-			}
-		}
-
-		return somethingHappens;
+		return std::ranges::any_of(std::views::reverse(m_sortedSurfaces), [dispatchEvent] (const auto & surface) -> bool {
+			return dispatchEvent(surface);
+		});
 	}
 
 	bool
 	UIScreen::onMouseWheel (float positionX, float positionY, float xOffset, float yOffset) const noexcept
 	{
-		const auto dispatchEvent = [positionX, positionY, xOffset, yOffset] (const std::shared_ptr< Surface > & surface) -> bool
-		{
-			if ( surface->isListeningPointer() && surface->isBelowPoint(positionX, positionY) )
+		const auto dispatchEvent = [positionX, positionY, xOffset, yOffset] (const std::shared_ptr< Surface > & surface) -> bool {
+			if ( surface->isVisible() && surface->isListeningPointer() && surface->isBelowPoint(positionX, positionY) )
 			{
 				return surface->onMouseWheel(positionX, positionY, xOffset, yOffset);
 			}
@@ -444,19 +378,9 @@ namespace EmEn::Overlay
 			return dispatchEvent(m_inputExclusiveSurface);
 		}
 
-		auto somethingHappens = false;
-
-		for ( const auto & surface : std::views::reverse(m_sortedSurfaces) )
-		{
-			somethingHappens = dispatchEvent(surface);
-
-			if ( somethingHappens && surface->isBlockingEvent() )
-			{
-				break;
-			}
-		}
-
-		return somethingHappens;
+		return std::ranges::any_of(std::views::reverse(m_sortedSurfaces), [dispatchEvent] (const auto & surface) -> bool {
+			return dispatchEvent(surface);
+		});
 	}
 
 	void
@@ -485,8 +409,12 @@ namespace EmEn::Overlay
 	std::ostream &
 	operator<< (std::ostream & out, const UIScreen & obj)
 	{
-		out << "UI screen data :" "\n"
-			"Has input exclusive surface : " << (obj.m_inputExclusiveSurface == nullptr ? "[No]" : obj.m_inputExclusiveSurface->name() ) << '\n';
+		out <<
+			"UI screen '" << obj.name() << "' data :" "\n"
+			"Is visible : " << ( obj.isVisible() ? "YES" : "NO" ) << "\n" <<
+			"Is listening to the keyboard : " << ( obj.isListeningKeyboard() ? "YES" : "NO" ) << "\n" <<
+			"Is listening to the mouse/pointer : " << ( obj.isListeningPointer() ? "YES" : "NO" ) << "\n" <<
+			"Has input exclusive surface : " << ( obj.m_inputExclusiveSurface == nullptr ? "[No]" : obj.m_inputExclusiveSurface->name() ) << '\n';
 
 		if ( obj.m_surfaces.empty() )
 		{
@@ -494,11 +422,15 @@ namespace EmEn::Overlay
 		}
 		else
 		{
-			out << "Surfaces : " "\n";
+			out <<
+				"Surfaces : " "\n"
+				"==============================================================================" "\n";
 
 			for ( const auto & surface : obj.m_sortedSurfaces )
 			{
-				out << *surface << '\n';
+				out <<
+					*surface <<
+					"==============================================================================" "\n";
 			}
 		}
 

@@ -51,24 +51,6 @@ namespace EmEn::Scenes::Component
 		this->physicalObjectProperties().setProperties(initialProperties);
 	}
 
-	const char *
-	Weight::getComponentType () const noexcept
-	{
-		return ClassId;
-	}
-
-	const Cuboid< float > &
-	Weight::boundingBox () const noexcept
-	{
-		return m_boundingBox;
-	}
-
-	const Sphere< float > &
-	Weight::boundingSphere () const noexcept
-	{
-		return m_boundingSphere;
-	}
-
 	void
 	Weight::move (const CartesianFrame< float > & /*worldCoordinates*/) noexcept
 	{
@@ -82,13 +64,7 @@ namespace EmEn::Scenes::Component
 	}
 
 	bool
-	Weight::shouldRemove () const noexcept
-	{
-		return false;
-	}
-
-	bool
-	Weight::playAnimation (uint8_t animationID, const Variant & value, size_t cycle) noexcept
+	Weight::playAnimation (uint8_t animationID, const Variant & value, size_t /*cycle*/) noexcept
 	{
 		switch ( animationID )
 		{

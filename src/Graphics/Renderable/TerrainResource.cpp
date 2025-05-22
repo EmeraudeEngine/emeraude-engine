@@ -30,6 +30,7 @@
 #include "Libs/FastJSON.hpp"
 #include "Resources/Manager.hpp"
 #include "Graphics/Material/StandardResource.hpp"
+#include "Scenes/DefinitionResource.hpp"
 
 /* Defining the resource manager class id. */
 template<>
@@ -44,74 +45,15 @@ namespace EmEn::Graphics::Renderable
 	using namespace EmEn::Libs;
 	using namespace EmEn::Libs::Math;
 	using namespace EmEn::Libs::VertexFactory;
-	using namespace Scenes;
+	using namespace EmEn::Scenes;
 
 	const size_t TerrainResource::ClassUID{getClassUID(ClassId)};
 
-	TerrainResource::TerrainResource (const std::string & name, uint32_t resourceFlagBits) noexcept
-		: SceneAreaInterface(name, resourceFlagBits),
+	TerrainResource::TerrainResource (const std::string & name, uint32_t resourceFlags) noexcept
+		: SceneAreaInterface(name, resourceFlags),
 		  m_geometry(std::make_unique< Geometry::AdaptiveVertexGridResource >(name + "AdaptiveGrid"))
 	{
 
-	}
-
-	size_t
-	TerrainResource::classUID () const noexcept
-	{
-		return ClassUID;
-	}
-
-	bool
-	TerrainResource::is (size_t classUID) const noexcept
-	{
-		return classUID == ClassUID;
-	}
-
-	size_t
-	TerrainResource::layerCount () const noexcept
-	{
-		return 1;
-	}
-
-	bool
-	TerrainResource::isOpaque (size_t /*layerIndex*/) const noexcept
-	{
-		if ( m_material != nullptr )
-		{
-			return m_material->isOpaque();
-		}
-
-		return true;
-	}
-
-	const Geometry::Interface *
-	TerrainResource::geometry () const noexcept
-	{
-		return m_geometry.get();
-	}
-
-	const Material::Interface *
-	TerrainResource::material (size_t /*layerIndex*/) const noexcept
-	{
-		return m_material.get();
-	}
-
-	const RasterizationOptions *
-	TerrainResource::layerRasterizationOptions (size_t /*layerIndex*/) const noexcept
-	{
-		return nullptr;
-	}
-
-	const Cuboid< float > &
-	TerrainResource::boundingBox () const noexcept
-	{
-		return m_localData.boundingBox();
-	}
-
-	const Sphere< float > &
-	TerrainResource::boundingSphere () const noexcept
-	{
-		return m_localData.boundingSphere();
 	}
 
 	/*void
@@ -164,7 +106,7 @@ namespace EmEn::Graphics::Renderable
 	{
 		if ( geometryResource == nullptr )
 		{
-			Tracer::error(ClassId, BlobTrait() << "Geometry smart pointer attached to Renderable '" << this->name() << "' " << this << " is null !");
+			TraceError{ClassId} << "Geometry smart pointer attached to Renderable '" << this->name() << "' " << this << " is null !";
 
 			return false;
 		}
@@ -175,7 +117,7 @@ namespace EmEn::Graphics::Renderable
 		m_geometry = geometryResource;
 
 		/* Checks if all is loaded */
-		return this->addDependency(m_geometry.get());
+		return this->addDependency(m_geometry);
 	}
 
 	bool
@@ -183,7 +125,7 @@ namespace EmEn::Graphics::Renderable
 	{
 		if ( materialResource == nullptr )
 		{
-			Tracer::error(ClassId, BlobTrait() << "Material smart pointer attached to Renderable '" << this->name() << "' " << this << " is null !");
+			TraceError{ClassId} << "Material smart pointer attached to Renderable '" << this->name() << "' " << this << " is null !";
 
 			return false;
 		}
@@ -194,7 +136,7 @@ namespace EmEn::Graphics::Renderable
 		m_material = materialResource;
 
 		/* Checks if all is loaded */
-		return this->addDependency(m_material.get());
+		return this->addDependency(m_material);
 	}
 
 	void
@@ -214,7 +156,7 @@ namespace EmEn::Graphics::Renderable
 	}
 
 	bool
-	TerrainResource::prepareGeometry (float size, size_t division) noexcept
+	TerrainResource::prepareGeometry (float size, uint32_t division) noexcept
 	{
 		/* 1. Create the local data. */
 		if ( !m_localData.initializeData(size, division) )
@@ -237,12 +179,6 @@ namespace EmEn::Graphics::Renderable
 		return true;
 	}
 
-	const char *
-	TerrainResource::classLabel () const noexcept
-	{
-		return ClassId;
-	}
-
 	bool
 	TerrainResource::load () noexcept
 	{
@@ -256,7 +192,7 @@ namespace EmEn::Graphics::Renderable
 			return this->setLoadSuccess(false);
 		}
 
-		if ( !this->setMaterial(Material::StandardResource::getDefault()) )
+		if ( !this->setMaterial(Resources::Manager::instance()->container< Material::StandardResource >()->getDefaultResource()) )
 		{
 			m_localData.clear();
 
@@ -279,11 +215,13 @@ namespace EmEn::Graphics::Renderable
 		}
 
 		/* Checks if additional stores before loading (optional) */
-		Resources::Manager::instance()->stores().update(root);
+		auto * manager = Resources::Manager::instance();
+
+		manager->stores().update(root, manager->verbosityEnabled());
 
 		if ( !root.isMember(DefinitionResource::SceneAreaKey) )
 		{
-			Tracer::error(ClassId, BlobTrait() << "The key '" << DefinitionResource::SceneAreaKey << "' is not present !");
+			TraceError{ClassId} << "The key '" << DefinitionResource::SceneAreaKey << "' is not present !";
 
 			return this->setLoadSuccess(false);
 		}
@@ -292,14 +230,14 @@ namespace EmEn::Graphics::Renderable
 
 		if ( !sceneAreaObject.isMember(FastJSON::TypeKey) && !sceneAreaObject[FastJSON::TypeKey].isString() )
 		{
-			Tracer::error(ClassId, BlobTrait() << "The key '" << FastJSON::TypeKey << "' is not present or not a string !");
+			TraceError{ClassId} << "The key '" << FastJSON::TypeKey << "' is not present or not a string !";
 
 			return this->setLoadSuccess(false);
 		}
 
 		if ( sceneAreaObject[FastJSON::TypeKey].asString() != ClassId || !sceneAreaObject.isMember(FastJSON::DataKey) )
 		{
-			Tracer::error(ClassId, BlobTrait() << "This file doesn't contains a Terrain definition !");
+			Tracer::error(ClassId, "This file doesn't contains a Terrain definition !");
 
 			return this->setLoadSuccess(false);
 		}
@@ -321,14 +259,14 @@ namespace EmEn::Graphics::Renderable
 
 		/* Checks size and division options... */
 		const auto size = FastJSON::getNumber< float >(data, FastJSON::SizeKey, DefaultSize);
-		const auto division = FastJSON::getNumber< size_t >(data, FastJSON::DivisionKey, DefaultDivision);
+		const auto division = FastJSON::getNumber< uint32_t >(data, FastJSON::DivisionKey, DefaultDivision);
 
 		/* Checks material type. */
 		const auto materialType = FastJSON::getString(data, MaterialTypeKey);
 
 		if ( materialType.empty() || materialType != Material::StandardResource::ClassId )
 		{
-			Tracer::error(ClassId, BlobTrait() << "Material resource type '" << materialType << "' is not handled yet !");
+			TraceError{ClassId} << "Material resource type '" << materialType << "' for terrain '" << this->name() << "' is not handled !";
 
 			return this->setLoadSuccess(false);
 		}
@@ -377,7 +315,7 @@ namespace EmEn::Graphics::Renderable
 		if ( vertexColorMap != nullptr )
 			m_farGeometry->enableVertexColor(vertexColorMap);*/
 
-		if ( !m_farGeometry->load(size, division / 64) )
+		if ( !m_farGeometry->load(size, division / 64U) )
 		{
 			Tracer::error(ClassId, "Unable to create the far geometry !");
 
@@ -387,7 +325,7 @@ namespace EmEn::Graphics::Renderable
 		/* The material. */
 		std::shared_ptr< Material::Interface > materialResource{};
 
-		auto & materials = resources->standardMaterials();
+		auto * materials = resources->container< Material::StandardResource >();
 
 		const auto materialName = FastJSON::getString(data, MaterialNameKey);
 
@@ -395,23 +333,23 @@ namespace EmEn::Graphics::Renderable
 		{
 			TraceWarning{ClassId} << "The key '" << MaterialNameKey << "' is not present or not a string !";
 
-			materialResource = materials.getDefaultResource();
+			materialResource = materials->getDefaultResource();
 		}
 		else
 		{
-			materialResource = materials.getResource(materialName);
+			materialResource = materials->getResource(materialName);
 
 			if ( materialResource == nullptr )
 			{
 				TraceError{ClassId} << "Material '" << materialName << "' is not available in data stores, using default one !";
 
-				materialResource = materials.getDefaultResource();
+				materialResource = materials->getDefaultResource();
 			}
 		}
 
 		if ( !this->setMaterial(materialResource) )
 		{
-			Tracer::error(ClassId, BlobTrait() << "Unable to use material for Terrain '" << this->name() << "' !");
+			TraceError{ClassId} << "Unable to use material for Terrain '" << this->name() << "' !";
 
 			return this->setLoadSuccess(false);
 		}
@@ -425,22 +363,24 @@ namespace EmEn::Graphics::Renderable
 
 			if ( heightMapping.isArray() )
 			{
+				auto * images = resources->container< ImageResource >();
+
 				for ( const auto & iteration : heightMapping )
 				{
 					auto imageName = FastJSON::getString(iteration, ImageNameKey);
 
 					if ( imageName.empty() )
 					{
-						Tracer::warning(ClassId, BlobTrait() << "The key '" << ImageNameKey << "' is not present or not a string !");
+						TraceWarning{ClassId} << "The key '" << ImageNameKey << "' is not present or not a string !";
 
 						continue;
 					}
 
-					auto imageResource = resources->images().getResource(imageName, true);
+					auto imageResource = images->getResource(imageName, true);
 
 					if ( imageResource == nullptr )
 					{
-						Tracer::warning(ClassId, BlobTrait() << "Image '" << imageName << "' is not available in data stores !");
+						TraceWarning{ClassId} << "Image '" << imageName << "' is not available in data stores !";
 
 						continue;
 					}
@@ -462,7 +402,7 @@ namespace EmEn::Graphics::Renderable
 			}
 			else
 			{
-				Tracer::warning(ClassId, BlobTrait() << "The key '" << HeightMapKey << "' is not an array !");
+				TraceWarning{ClassId} << "The key '" << HeightMapKey << "' is not an array !";
 			}
 		}
 
@@ -491,7 +431,7 @@ namespace EmEn::Graphics::Renderable
 			}
 			else
 			{
-				Tracer::warning(ClassId, BlobTrait() << "The key '" << PerlinNoiseKey << "' is not an array !");
+				TraceWarning{ClassId} << "The key '" << PerlinNoiseKey << "' is not an array !";
 			}
 		}
 
@@ -503,7 +443,7 @@ namespace EmEn::Graphics::Renderable
 		m_farGeometry->localData().setUVMultiplier(value);
 
 		/* Checks if all is loaded */
-		if ( !this->addDependency(m_farGeometry.get()) )
+		if ( !this->addDependency(m_farGeometry) )
 		{
 			return this->setLoadSuccess(false);
 		}
@@ -512,7 +452,7 @@ namespace EmEn::Graphics::Renderable
 		//	m_geometry->enableVertexColor(vertexColorMap);
 
 		/* Creates the adaptive geometry (visible part). */
-		if ( !m_geometry->load(m_localData, division / 16, {0.0F, 0.0F, 0.0F}) )
+		if ( !m_geometry->load(m_localData, division / 16U, {0.0F, 0.0F, 0.0F}) )
 		{
 			Tracer::error(ClassId, "Unable to create adaptive grid from local data !");
 
@@ -525,7 +465,7 @@ namespace EmEn::Graphics::Renderable
 	}
 
 	bool
-	TerrainResource::load (float size, size_t division, const std::shared_ptr< Material::Interface > & material) noexcept
+	TerrainResource::load (float size, uint32_t division, const std::shared_ptr< Material::Interface > & material) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
@@ -541,23 +481,11 @@ namespace EmEn::Graphics::Renderable
 
 		if ( !this->setMaterial(material) )
 		{
-			Tracer::error(ClassId, BlobTrait() << "Unable to use material for Terrain '" << this->name() << "' !");
+			TraceError{ClassId} << "Unable to use material for Terrain '" << this->name() << "' !";
 
 			return this->setLoadSuccess(false);
 		}
 
 		return this->setLoadSuccess(true);
-	}
-
-	std::shared_ptr< TerrainResource >
-	TerrainResource::get (const std::string & resourceName, bool directLoad) noexcept
-	{
-		return Resources::Manager::instance()->terrains().getResource(resourceName, !directLoad);
-	}
-
-	std::shared_ptr< TerrainResource >
-	TerrainResource::getDefault () noexcept
-	{
-		return Resources::Manager::instance()->terrains().getDefaultResource();
 	}
 }

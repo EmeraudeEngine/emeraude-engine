@@ -26,16 +26,8 @@
 
 #pragma once
 
-/* STL inclusions. */
-#include <vector>
-#include <memory>
-
 /* Local inclusions for inheritances. */
 #include "Abstract.hpp"
-
-/* Local inclusions for usages. */
-#include "Graphics/Geometry/IndexedVertexResource.hpp"
-#include "Overlay/Manager.hpp"
 
 namespace EmEn::Saphir::Generator
 {
@@ -59,35 +51,11 @@ namespace EmEn::Saphir::Generator
 
 			/**
 			 * @brief Constructs a graphics shader generator for a geometry.
-			 * @param overlayManager A reference to the overlay manager.
 			 * @param renderTarget A reference to a render target.
+			 * @param geometry A reference to the geometry interface smart pointer.
 			 * @param conversion A color conversion to display the overlay. Default none.
 			 */
-			OverlayRendering (Overlay::Manager & overlayManager, const std::shared_ptr< const Graphics::RenderTarget::Abstract > & renderTarget, ColorConversion conversion = ColorConversion::None) noexcept;
-
-			/** @copydoc EmEn::Saphir::Generator::Abstract::materialEnabled() const */
-			[[nodiscard]]
-			bool
-			materialEnabled () const noexcept override
-			{
-				return false;
-			}
-
-			/** @copydoc EmEn::Saphir::Generator::Abstract::material() const */
-			[[nodiscard]]
-			const Graphics::Material::Interface *
-			material () const noexcept override
-			{
-				return nullptr;
-			}
-
-			/** @copydoc EmEn::Saphir::Generator::Abstract::geometry() const */
-			[[nodiscard]]
-			const Graphics::Geometry::Interface *
-			geometry () const noexcept override
-			{
-				return m_overlayManager.surfaceGeometry().get();
-			}
+			OverlayRendering (const std::shared_ptr< const Graphics::RenderTarget::Abstract > & renderTarget, const std::shared_ptr< const Graphics::Geometry::Interface > & geometry, ColorConversion conversion = ColorConversion::None) noexcept;
 
 		private:
 
@@ -98,13 +66,13 @@ namespace EmEn::Saphir::Generator
 				setIndexes.enableSet(SetType::PerModel);
 			}
 
-			/** @copydoc EmEn::Saphir::Generator::Abstract::onGenerateProgram() */
+			/** @copydoc EmEn::Saphir::Generator::Abstract::onGenerateShadersCode() */
 			[[nodiscard]]
-			bool onGenerateProgram (Program & program) noexcept override;
+			bool onGenerateShadersCode (Program & program) noexcept override;
 
-			/** @copydoc EmEn::Saphir::Generator::Abstract::onGenerateProgramLayout() */
+			/** @copydoc EmEn::Saphir::Generator::Abstract::onCreateDataLayouts() */
 			[[nodiscard]]
-			bool onGenerateProgramLayout (const SetIndexes & setIndexes, std::vector< std::shared_ptr< Vulkan::DescriptorSetLayout > > & descriptorSetLayouts, std::vector< VkPushConstantRange > & pushConstantRanges) noexcept override;
+			bool onCreateDataLayouts (const SetIndexes & setIndexes, std::vector< std::shared_ptr< Vulkan::DescriptorSetLayout > > & descriptorSetLayouts, std::vector< VkPushConstantRange > & pushConstantRanges) noexcept override;
 
 			/** @copydoc EmEn::Saphir::Generator::Abstract::onGraphicsPipelineConfiguration() */
 			[[nodiscard]]
@@ -126,7 +94,6 @@ namespace EmEn::Saphir::Generator
 			[[nodiscard]]
 			bool generateFragmentShader (Program & program) noexcept;
 
-			Overlay::Manager & m_overlayManager;
 			ColorConversion m_colorConversion{ColorConversion::None};
 	};
 }

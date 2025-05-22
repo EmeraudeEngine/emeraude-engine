@@ -116,14 +116,14 @@ namespace EmEn::Graphics::RenderableInstance
 
 			/** @copydoc EmEn::Graphics::RenderableInstance::Abstract::instanceCount() */
 			[[nodiscard]]
-			size_t
+			uint32_t
 			instanceCount () const noexcept override
 			{
 				return 1;
 			}
 
 			/** @copydoc EmEn::Graphics::RenderableInstance::Abstract::bindInstanceModelLayer() */
-			void bindInstanceModelLayer (const Vulkan::CommandBuffer & commandBuffer, size_t layerIndex) const noexcept override;
+			void bindInstanceModelLayer (const Vulkan::CommandBuffer & commandBuffer, uint32_t layerIndex) const noexcept override;
 
 			Libs::Math::CartesianFrame< float > m_cartesianFrame;
 	};

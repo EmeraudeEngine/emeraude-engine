@@ -667,7 +667,7 @@ namespace EmEn::Vulkan
 	}
 
 	bool
-	GraphicsPipeline::configureDynamicState (const std::vector< VkDynamicState > & dynamicStates, VkPipelineDynamicStateCreateFlags flags) noexcept
+	GraphicsPipeline::configureDynamicStates (const std::vector< VkDynamicState > & dynamicStates, VkPipelineDynamicStateCreateFlags flags) noexcept
 	{
 		if ( dynamicStates.empty() )
 		{

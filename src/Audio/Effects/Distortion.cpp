@@ -28,7 +28,7 @@
 
 /* Local inclusions. */
 #include "Tracer.hpp"
-#include <Audio/OpenAL.EFX.hpp>
+#include "Audio/OpenAL.EFX.hpp"
 #include "Audio/Utility.hpp"
 
 namespace EmEn::Audio::Effects
@@ -36,22 +36,27 @@ namespace EmEn::Audio::Effects
 	using namespace EmEn::Libs;
 
 	Distortion::Distortion () noexcept
-		: Abstract()
 	{
 		if ( this->identifier() == 0 )
+		{
 			return;
+		}
 
 		EFX::alEffecti(this->identifier(), AL_EFFECT_TYPE, AL_EFFECT_DISTORTION);
 
 		if ( alGetErrors("alEffecti()", __FILE__, __LINE__) )
+		{
 			Tracer::error(ClassId, "Unable to generate OpenAL Distortion effect !");
+		}
 	}
 
 	void
 	Distortion::resetProperties () noexcept
 	{
 		if ( !EFX::isAvailable() )
+		{
 			return;
+		}
 
 		EFX::alEffectf(this->identifier(), AL_DISTORTION_EDGE, AL_DISTORTION_DEFAULT_EDGE);
 		EFX::alEffectf(this->identifier(), AL_DISTORTION_GAIN, AL_DISTORTION_DEFAULT_GAIN);
@@ -64,11 +69,13 @@ namespace EmEn::Audio::Effects
 	Distortion::setEdge (float value) noexcept
 	{
 		if ( !EFX::isAvailable() )
+		{
 			return;
+		}
 
 		if ( value < AL_DISTORTION_MIN_EDGE || value > AL_DISTORTION_MAX_EDGE )
 		{
-			Tracer::warning(ClassId, BlobTrait() << "ShapeEdge must be between " << AL_DISTORTION_MIN_EDGE << " and " << AL_DISTORTION_MAX_EDGE << ".");
+			TraceWarning{ClassId} << "ShapeEdge must be between " << AL_DISTORTION_MIN_EDGE << " and " << AL_DISTORTION_MAX_EDGE << '.';
 
 			return;
 		}
@@ -80,11 +87,13 @@ namespace EmEn::Audio::Effects
 	Distortion::setGain (float value) noexcept
 	{
 		if ( !EFX::isAvailable() )
+		{
 			return;
+		}
 
 		if ( value < AL_DISTORTION_MIN_GAIN || value > AL_DISTORTION_MAX_GAIN )
 		{
-			Tracer::warning(ClassId, BlobTrait() << "Gain must be between " << AL_DISTORTION_MIN_GAIN << " and " << AL_DISTORTION_MAX_GAIN << ".");
+			TraceWarning{ClassId} << "Gain must be between " << AL_DISTORTION_MIN_GAIN << " and " << AL_DISTORTION_MAX_GAIN << '.';
 
 			return;
 		}
@@ -96,11 +105,13 @@ namespace EmEn::Audio::Effects
 	Distortion::setLowPassCutOff (float value) noexcept
 	{
 		if ( !EFX::isAvailable() )
+		{
 			return;
+		}
 
 		if ( value < AL_DISTORTION_MIN_LOWPASS_CUTOFF || value > AL_DISTORTION_MAX_LOWPASS_CUTOFF )
 		{
-			Tracer::warning(ClassId, BlobTrait() << "Low-pass cut-off must be between " << AL_DISTORTION_MIN_LOWPASS_CUTOFF << " and " << AL_DISTORTION_MAX_LOWPASS_CUTOFF << ".");
+			TraceWarning{ClassId} << "Low-pass cut-off must be between " << AL_DISTORTION_MIN_LOWPASS_CUTOFF << " and " << AL_DISTORTION_MAX_LOWPASS_CUTOFF << '.';
 
 			return;
 		}
@@ -112,11 +123,13 @@ namespace EmEn::Audio::Effects
 	Distortion::setEQCenter (float value) noexcept
 	{
 		if ( !EFX::isAvailable() )
+		{
 			return;
+		}
 
 		if ( value < AL_DISTORTION_MIN_EQCENTER || value > AL_DISTORTION_MAX_EQCENTER )
 		{
-			Tracer::warning(ClassId, BlobTrait() << "EQ center must be between " << AL_DISTORTION_MIN_EQCENTER << " and " << AL_DISTORTION_MAX_EQCENTER << ".");
+			TraceWarning{ClassId} << "EQ center must be between " << AL_DISTORTION_MIN_EQCENTER << " and " << AL_DISTORTION_MAX_EQCENTER << '.';
 
 			return;
 		}
@@ -128,11 +141,13 @@ namespace EmEn::Audio::Effects
 	Distortion::setEQBandWidth (float value) noexcept
 	{
 		if ( !EFX::isAvailable() )
+		{
 			return;
+		}
 
 		if ( value < AL_DISTORTION_MIN_EQBANDWIDTH || value > AL_DISTORTION_MAX_EQBANDWIDTH )
 		{
-			Tracer::warning(ClassId, BlobTrait() << "EQ bandwidth must be between " << AL_DISTORTION_MIN_EQBANDWIDTH << " and " << AL_DISTORTION_MAX_EQBANDWIDTH << ".");
+			TraceWarning{ClassId} << "EQ bandwidth must be between " << AL_DISTORTION_MIN_EQBANDWIDTH << " and " << AL_DISTORTION_MAX_EQBANDWIDTH << '.';
 
 			return;
 		}
@@ -143,12 +158,12 @@ namespace EmEn::Audio::Effects
 	float
 	Distortion::edge () const noexcept
 	{
-		if ( !EFX::isAvailable() )
-			return 0.0F;
+		ALfloat value = 0.0F;
 
-		ALfloat value;
-
-		EFX::alGetEffectf(this->identifier(), AL_DISTORTION_EDGE, &value);
+		if ( EFX::isAvailable() )
+		{
+			EFX::alGetEffectf(this->identifier(), AL_DISTORTION_EDGE, &value);
+		}
 
 		return value;
 	}
@@ -156,12 +171,12 @@ namespace EmEn::Audio::Effects
 	float
 	Distortion::gain () const noexcept
 	{
-		if ( !EFX::isAvailable() )
-			return 0.0F;
+		ALfloat value = 0.0F;
 
-		ALfloat value;
-
-		EFX::alGetEffectf(this->identifier(), AL_DISTORTION_GAIN, &value);
+		if ( EFX::isAvailable() )
+		{
+			EFX::alGetEffectf(this->identifier(), AL_DISTORTION_GAIN, &value);
+		}
 
 		return value;
 	}
@@ -169,12 +184,12 @@ namespace EmEn::Audio::Effects
 	float
 	Distortion::lowPassCutOff () const noexcept
 	{
-		if ( !EFX::isAvailable() )
-			return 0.0F;
+		ALfloat value = 0.0F;
 
-		ALfloat value;
-
-		EFX::alGetEffectf(this->identifier(), AL_DISTORTION_LOWPASS_CUTOFF, &value);
+		if ( EFX::isAvailable() )
+		{
+			EFX::alGetEffectf(this->identifier(), AL_DISTORTION_LOWPASS_CUTOFF, &value);
+		}
 
 		return value;
 	}
@@ -182,12 +197,12 @@ namespace EmEn::Audio::Effects
 	float
 	Distortion::EQCenter () const noexcept
 	{
-		if ( !EFX::isAvailable() )
-			return 0.0F;
+		ALfloat value = 0.0F;
 
-		ALfloat value;
-
-		EFX::alGetEffectf(this->identifier(), AL_DISTORTION_EQCENTER, &value);
+		if ( EFX::isAvailable() )
+		{
+			EFX::alGetEffectf(this->identifier(), AL_DISTORTION_EQCENTER, &value);
+		}
 
 		return value;
 	}
@@ -195,12 +210,12 @@ namespace EmEn::Audio::Effects
 	float
 	Distortion::EQBandWidth () const noexcept
 	{
-		if ( !EFX::isAvailable() )
-			return 0.0F;
+		ALfloat value = 0.0F;
 
-		ALfloat value;
-
-		EFX::alGetEffectf(this->identifier(), AL_DISTORTION_EQBANDWIDTH, &value);
+		if ( EFX::isAvailable() )
+		{
+			EFX::alGetEffectf(this->identifier(), AL_DISTORTION_EQBANDWIDTH, &value);
+		}
 
 		return value;
 	}

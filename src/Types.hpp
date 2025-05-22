@@ -85,4 +85,45 @@ namespace EmEn
 	{
 		return {to_cstring(value)};
 	}
+
+	/** @brief Log file format enumeration. */
+	enum class LogFormat : uint8_t
+	{
+		Text,
+		JSON,
+		HTML
+	};
+
+	static constexpr auto TextString{"Text"};
+	static constexpr auto JSONString{"JSON"};
+	static constexpr auto HTMLString{"HTML"};
+
+	/**
+	 * @brief Returns a C-String version of the enum value.
+	 * @param value The enum value.
+	 * @return const char *
+	 */
+	[[nodiscard]]
+	const char * to_cstring (LogFormat value) noexcept;
+
+	/**
+	 * @brief Returns a string version of the enum value.
+	 * @param value The enum value.
+	 * @return std::string
+	 */
+	[[nodiscard]]
+	inline
+	std::string
+	to_string (LogFormat value) noexcept
+	{
+		return {to_cstring(value)};
+	}
+
+	/**
+	 * @brief Converts a string to a LogFormat enumeration.
+	 * @param value A reference to a string.
+	 * @return LogFormat
+	 */
+	[[nodiscard]]
+	LogFormat to_LogFormat (const std::string & value) noexcept;
 }

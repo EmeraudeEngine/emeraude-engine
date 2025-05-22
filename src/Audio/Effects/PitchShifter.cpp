@@ -28,7 +28,7 @@
 
 /* Local inclusions. */
 #include "Tracer.hpp"
-#include <Audio/OpenAL.EFX.hpp>
+#include "Audio/OpenAL.EFX.hpp"
 #include "Audio/Utility.hpp"
 
 namespace EmEn::Audio::Effects
@@ -36,22 +36,27 @@ namespace EmEn::Audio::Effects
 	using namespace EmEn::Libs;
 
 	PitchShifter::PitchShifter () noexcept
-		: Abstract()
 	{
 		if ( this->identifier() == 0 )
+		{
 			return;
+		}
 
 		EFX::alEffecti(this->identifier(), AL_EFFECT_TYPE, AL_EFFECT_PITCH_SHIFTER);
 
 		if ( alGetErrors("alEffecti()", __FILE__, __LINE__) )
+		{
 			Tracer::error(ClassId, "Unable to generate OpenAL Pith Shifter effect !");
+		}
 	}
 
 	void
 	PitchShifter::resetProperties () noexcept
 	{
 		if ( !EFX::isAvailable() )
+		{
 			return;
+		}
 
 		EFX::alEffecti(this->identifier(), AL_PITCH_SHIFTER_COARSE_TUNE, AL_PITCH_SHIFTER_DEFAULT_COARSE_TUNE);
 		EFX::alEffecti(this->identifier(), AL_PITCH_SHIFTER_FINE_TUNE, AL_PITCH_SHIFTER_DEFAULT_FINE_TUNE);
@@ -61,11 +66,13 @@ namespace EmEn::Audio::Effects
 	PitchShifter::setShifterCoarseTune (int value) noexcept
 	{
 		if ( !EFX::isAvailable() )
+		{
 			return;
+		}
 
 		if ( value < AL_PITCH_SHIFTER_MIN_COARSE_TUNE || value > AL_PITCH_SHIFTER_MAX_COARSE_TUNE )
 		{
-			Tracer::warning(ClassId, BlobTrait() << "Coarse tune must be between " << AL_PITCH_SHIFTER_MIN_COARSE_TUNE << " and " << AL_PITCH_SHIFTER_MAX_COARSE_TUNE << ".");
+			TraceWarning{ClassId} << "Coarse tune must be between " << AL_PITCH_SHIFTER_MIN_COARSE_TUNE << " and " << AL_PITCH_SHIFTER_MAX_COARSE_TUNE << '.';
 
 			return;
 		}
@@ -77,11 +84,13 @@ namespace EmEn::Audio::Effects
 	PitchShifter::setShifterFineTune (int value) noexcept
 	{
 		if ( !EFX::isAvailable() )
+		{
 			return;
+		}
 
 		if ( value < AL_PITCH_SHIFTER_MIN_FINE_TUNE || value > AL_PITCH_SHIFTER_MAX_FINE_TUNE )
 		{
-			Tracer::warning(ClassId, BlobTrait() << "Fine tune must be between " << AL_PITCH_SHIFTER_MIN_FINE_TUNE << " and " << AL_PITCH_SHIFTER_MAX_FINE_TUNE << ".");
+			TraceWarning{ClassId} << "Fine tune must be between " << AL_PITCH_SHIFTER_MIN_FINE_TUNE << " and " << AL_PITCH_SHIFTER_MAX_FINE_TUNE << '.';
 
 			return;
 		}
@@ -92,12 +101,12 @@ namespace EmEn::Audio::Effects
 	int
 	PitchShifter::shifterCoarseTune () const noexcept
 	{
-		if ( !EFX::isAvailable() )
-			return 0;
+		ALint value = 0;
 
-		ALint value;
-
-		EFX::alGetEffecti(this->identifier(), AL_PITCH_SHIFTER_COARSE_TUNE, &value);
+		if ( EFX::isAvailable() )
+		{
+			EFX::alGetEffecti(this->identifier(), AL_PITCH_SHIFTER_COARSE_TUNE, &value);
+		}
 
 		return value;
 	}
@@ -105,12 +114,12 @@ namespace EmEn::Audio::Effects
 	int
 	PitchShifter::shifterFineTune () const noexcept
 	{
-		if ( !EFX::isAvailable() )
-			return 0;
+		ALint value = 0;
 
-		ALint value;
-
-		EFX::alGetEffecti(this->identifier(), AL_PITCH_SHIFTER_FINE_TUNE, &value);
+		if ( EFX::isAvailable() )
+		{
+			EFX::alGetEffecti(this->identifier(), AL_PITCH_SHIFTER_FINE_TUNE, &value);
+		}
 
 		return value;
 	}

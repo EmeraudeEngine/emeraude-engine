@@ -61,12 +61,12 @@ namespace EmEn::Physics
 		public:
 
 			/** @brief Class identifier. */
-			static constexpr auto ClassId{"PhysicsCollision"};
+			static constexpr auto ClassId{"Collision"};
 
 			/**
 			 * @brief Constructs a collision structure against the scene area.
 			 * @param type The type of collision.
-			 * @param entity A pointer to an entity in case of a .
+			 * @param entity A pointer to an entity in case of a collision.
 			 * @param position A reference to a vector for the collision world position.
 			 * @param direction A reference to a vector for the collision direction.
 			 */
@@ -85,7 +85,7 @@ namespace EmEn::Physics
 
 			/**
 			 * @brief Returns the entity involved in the collision when the type is StaticEntity or MovableEntity.
-			 * @warning This method can return nullptr if no entity is involved, check the type first !
+			 * @warning This method can return nullptr if no entity is involved, check the type first!
 			 * @return Scenes::AbstractEntity *
 			 */
 			[[nodiscard]]

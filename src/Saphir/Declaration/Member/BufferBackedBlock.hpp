@@ -49,19 +49,27 @@ namespace EmEn::Saphir::Declaration::Member
 			 * @param layout The layout to use. Default none.
 			 * @param arraySize The size of the array. Default 0.
 			 */
-			BufferBackedBlock (VariableType type, Key name, Key layout = nullptr, size_t arraySize = 0) noexcept;
+			BufferBackedBlock (VariableType type, Key name, Key layout = nullptr, uint32_t arraySize = 0) noexcept;
 
 			/** @copydoc EmEn::Saphir::Declaration::Member::Interface::type() */
 			[[nodiscard]]
-			VariableType type () const noexcept override;
+			VariableType
+			type () const noexcept override
+			{
+				return m_type;
+			}
 
 			/** @copydoc EmEn::Saphir::Declaration::Member::Interface::name() */
 			[[nodiscard]]
-			Key name () const noexcept override;
+			Key
+			name () const noexcept override
+			{
+				return m_name;
+			}
 
 			/** @copydoc EmEn::Saphir::Declaration::Member::Interface::bytes() */
 			[[nodiscard]]
-			size_t bytes () const noexcept override;
+			uint32_t bytes () const noexcept override;
 
 			/** @copydoc EmEn::Saphir::Declaration::Member::Interface::sourceCode() */
 			[[nodiscard]]
@@ -72,21 +80,29 @@ namespace EmEn::Saphir::Declaration::Member
 			 * @return Key
 			 */
 			[[nodiscard]]
-			const Key & layout () const noexcept;
+			const Key &
+			layout () const noexcept
+			{
+				return m_layout;
+			}
 
 			/**
 			 * @brief Returns the array size.
 			 * @note 0 Means a single variable.
-			 * @return size_t
+			 * @return uint32_t
 			 */
 			[[nodiscard]]
-			size_t arraySize () const noexcept;
+			uint32_t
+			arraySize () const noexcept
+			{
+				return m_arraySize;
+			}
 
 		private:
 
 			VariableType m_type;
 			Key m_name;
 			Key m_layout;
-			size_t m_arraySize;
+			uint32_t m_arraySize;
 	};
 }

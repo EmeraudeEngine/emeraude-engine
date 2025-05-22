@@ -36,7 +36,7 @@
 #include "Libs/NameableTrait.hpp"
 
 /* Local inclusions for usages. */
-#include "Graphics/VertexBufferFormat.hpp"
+#include "Graphics/VertexBufferFormatManager.hpp"
 #include "Vulkan/GraphicsPipeline.hpp"
 #include "VertexShader.hpp"
 #include "TesselationControlShader.hpp"
@@ -50,7 +50,7 @@ namespace EmEn::Saphir
 {
 	/**
 	 * @brief The program class.
-	 * @note This will contain all the necessary shaders in order to build a program like OpenGL.
+	 * @note This will contain all the necessary shaders to build a program like OpenGL.
 	 * @extends EmEn::Libs::NameableTrait This is a nameable class.
 	 */
 	class Program final : public Libs::NameableTrait
@@ -69,22 +69,11 @@ namespace EmEn::Saphir
 			Program (const std::string & name, std::string GLSLVersion, std::string GLSLProfile) noexcept;
 
 			/**
-			 * @brief Returns whether the program has shader source codes and a vertex buffer format.
+			 * @brief Returns whether the program has shader source codes.
 			 * @return bool
 			 */
 			[[nodiscard]]
 			bool isComplete () const noexcept;
-
-			/**
-			 * @brief Returns whether the program has layouts to describe how it works to the GPU.
-			 * @return bool
-			 */
-			[[nodiscard]]
-			bool
-			isDescribed () const noexcept
-			{
-				return m_pipelineLayout != nullptr;
-			}
 
 			/**
 			 * @brief Returns whether the program shaders are compiled.
@@ -344,15 +333,23 @@ namespace EmEn::Saphir
 			std::vector< AbstractShader * > getShaderList () const noexcept;
 
 			/**
-			 * @brief Set the vertex buffer format.
-			 * @param vertexBufferFormat A reference to a vertex buffer format smart pointer.
+			 * @brief Creates a vertex buffer format.
+			 * @param vertexBufferFormatManager A reference to the vertex buffer format manager.
+			 * @param geometry A pointer to a geometry interface.
 			 * @return void
 			 */
-			void
-			setVertexBufferFormat (const std::shared_ptr< Graphics::VertexBufferFormat > & vertexBufferFormat) noexcept
-			{
-				m_vertexBufferFormat = vertexBufferFormat;
-			}
+			[[nodiscard]]
+			bool createVertexBufferFormat (Graphics::VertexBufferFormatManager & vertexBufferFormatManager, const Graphics::Geometry::Interface * geometry) noexcept;
+
+			/**
+			 * @brief Creates a vertex buffer format.
+			 * @param vertexBufferFormatManager A reference to the vertex buffer format manager.
+			 * @param topology The geometry topology.
+			 * @param geometryFlagBits The geometry flags.
+			 * @return void
+			 */
+			[[nodiscard]]
+			bool createVertexBufferFormat (Graphics::VertexBufferFormatManager & vertexBufferFormatManager, Graphics::Topology topology, uint32_t geometryFlagBits) noexcept;
 
 			/**
 			 * @brief Returns the vertex buffer format.

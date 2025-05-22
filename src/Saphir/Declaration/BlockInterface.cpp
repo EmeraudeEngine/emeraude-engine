@@ -33,34 +33,12 @@ namespace EmEn::Saphir::Declaration
 {
 	using namespace Keys;
 
-	BlockInterface::BlockInterface (Key name, Key instanceName, size_t arraySize) noexcept
-		: m_name(name), m_instanceName(instanceName), m_arraySize(arraySize)
+	BlockInterface::BlockInterface (Key name, Key instanceName, uint32_t arraySize) noexcept
+		: m_name(name),
+		m_instanceName(instanceName),
+		m_arraySize(arraySize)
 	{
 
-	}
-
-	Key
-	BlockInterface::name () const noexcept
-	{
-		return m_name;
-	}
-
-	const std::string &
-	BlockInterface::instanceName () const noexcept
-	{
-		return m_instanceName;
-	}
-
-	size_t
-	BlockInterface::arraySize () const noexcept
-	{
-		return m_arraySize;
-	}
-
-	const std::unordered_map< Key, Structure > &
-	BlockInterface::structures () const noexcept
-	{
-		return m_structures;
 	}
 
 	bool

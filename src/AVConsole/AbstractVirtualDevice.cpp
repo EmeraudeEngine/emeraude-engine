@@ -27,6 +27,7 @@
 #include "AbstractVirtualDevice.hpp"
 
 /* STL inclusions. */
+#include <ranges>
 #include <sstream>
 
 /* Local inclusions. */
@@ -36,7 +37,7 @@ namespace EmEn::AVConsole
 {
 	using namespace EmEn::Libs;
 
-	static constexpr auto TracerTag{"VirtualDevice"};
+	constexpr auto TracerTag{"VirtualDevice"};
 
 	size_t AbstractVirtualDevice::s_deviceCount{0};
 
@@ -56,7 +57,7 @@ namespace EmEn::AVConsole
 			return m_inputs.contains(device);
 		}
 
-		/* NOTE: Both is already tested above. */
+		/* NOTE: Both are already tested above. */
 		if ( direction == ConnexionType::Output /*|| direction == ConnexionType::Both*/ )
 		{
 			return m_outputs.contains(device);
@@ -68,7 +69,7 @@ namespace EmEn::AVConsole
 	bool
 	AbstractVirtualDevice::canConnect (const std::shared_ptr< AbstractVirtualDevice > & targetDevice) const noexcept
 	{
-		/* NOTE: Avoid to connect an audio device with a video device -> non sens ! */
+		/* NOTE: Avoid connecting an audio device with a video device -> non sens! */
 		if ( m_type != targetDevice->m_type )
 		{
 			Tracer::error(TracerTag, "Devices are not the same type !");
@@ -76,7 +77,7 @@ namespace EmEn::AVConsole
 			return false;
 		}
 
-		/* NOTE: As connexions goes from device output to another device input, this device must allow outputting ! */
+		/* NOTE: As connexions go from device output to another device input, this device must allow outputting! */
 		if ( m_allowedConnexionType == ConnexionType::Input )
 		{
 			TraceError{TracerTag} << "The virtual device '" << this->id() << "' do not allows output !";
@@ -137,7 +138,7 @@ namespace EmEn::AVConsole
 	}
 
 	bool
-	AbstractVirtualDevice::interconnect (const std::shared_ptr< AbstractVirtualDevice > & targetDevice, const std::string & filterDevice) noexcept
+	AbstractVirtualDevice::interconnect (const std::shared_ptr< AbstractVirtualDevice > & targetDevice) noexcept
 	{
 		/* NOTE: Before performs any disconnection, we need to know first
 		 * if the device is able to support input and output. */
@@ -148,8 +149,7 @@ namespace EmEn::AVConsole
 			return false;
 		}
 
-		/* NOTE: Double-check. Not really necessary,
-		 * but help to have a clear output message on failure.  */
+		/* NOTE: Double-check. Not really necessary, but help to have a clear output message on failure.  */
 		if ( !this->canConnect(targetDevice) )
 		{
 			return false;
@@ -162,33 +162,50 @@ namespace EmEn::AVConsole
 			return false;
 		}
 
-		for ( const auto & outputDevice : m_outputs )
+		return std::ranges::all_of(m_outputs, [&] (const auto & outputDevice) {
+			/* NOTE: First unlink the direct connexion and relink with the new device in between. */
+			return this->disconnect(outputDevice, true) && this->connect(targetDevice, true) && targetDevice->connect(outputDevice, false);
+		});
+	}
+
+	bool
+	AbstractVirtualDevice::interconnect (const std::shared_ptr< AbstractVirtualDevice > & targetDevice, const std::string & outputDeviceName) noexcept
+	{
+		/* NOTE: Before performs any disconnection, we need to know first
+		 * if the device is able to support input and output. */
+		if ( targetDevice->allowedConnexionType() == ConnexionType::Both )
 		{
-			/* NOTE: Targeting only one device. */
-			if ( !filterDevice.empty() && filterDevice != outputDevice->id() )
-			{
-				continue;
-			}
+			TraceError{TracerTag} << "The virtual device '" << this->id() << "' must allow input/output to perform a interconnection !";
 
-			/* NOTE: First unlink the direct connexion. */
-			if ( !this->disconnect(outputDevice, true) )
-			{
-				return false;
-			}
-
-			/* NOTE: Relink with the new device in between. */
-			if ( !this->connect(targetDevice, true) )
-			{
-				return false;
-			}
-
-			if ( !targetDevice->connect(outputDevice, false) )
-			{
-				return false;
-			}
+			return false;
 		}
 
-		return true;
+		/* NOTE: Double-check. Not really necessary, but help to have a clear output message on failure.  */
+		if ( !this->canConnect(targetDevice) )
+		{
+			return false;
+		}
+
+		if ( m_outputs.empty() )
+		{
+			TraceError{TracerTag} << "The virtual device '" << this->id() << "' has no existing output connexion !";
+
+			return false;
+		}
+
+		const auto outputDevice = std::ranges::find_if(m_outputs, [&outputDeviceName] (const auto & outputDevice) {
+			return outputDeviceName.empty() || outputDeviceName == outputDevice->id();
+		});
+
+		if ( outputDevice == m_outputs.cend() )
+		{
+			TraceError{TracerTag} << "There is no output virtual device named '" << outputDeviceName << "' !";
+
+			return false;
+		}
+
+		/* NOTE: First unlink the direct connexion and relink with the new device in between. */
+		return this->disconnect(*outputDevice, true) && this->connect(targetDevice, true) && targetDevice->connect(*outputDevice, false);
 	}
 
 	bool
@@ -230,7 +247,7 @@ namespace EmEn::AVConsole
 	void
 	AbstractVirtualDevice::disconnectFromAll () noexcept
 	{
-		/* Remove these devices from outputs of every device where it's connected. */
+		/* Remove these devices from the outputs of every device where it's connected. */
 		for ( const auto & input : m_inputs )
 		{
 			input->m_outputs.erase(this->shared_from_this());
@@ -238,7 +255,7 @@ namespace EmEn::AVConsole
 
 		m_inputs.clear();
 
-		/* Remove these devices from inputs of every device where it's connected. */
+		/* Remove these devices from the inputs of every device where it's connected. */
 		for ( const auto & output : m_outputs )
 		{
 			output->disconnectBack(this->shared_from_this(), true);

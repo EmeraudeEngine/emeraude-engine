@@ -28,12 +28,8 @@
 
 /* Local inclusions. */
 #include "Libs/SourceCodeParser.hpp"
-#include "Graphics/Geometry/IndexedVertexResource.hpp"
-#include "Graphics/Renderer.hpp"
-#include "Vulkan/GraphicsPipeline.hpp"
 #include "Saphir/Code.hpp"
 #include "Overlay/Manager.hpp"
-#include "Tracer.hpp"
 
 namespace EmEn::Saphir::Generator
 {
@@ -42,16 +38,15 @@ namespace EmEn::Saphir::Generator
 	using namespace Vulkan;
 	using namespace Keys;
 
-	OverlayRendering::OverlayRendering (Overlay::Manager & overlayManager, const std::shared_ptr< const RenderTarget::Abstract > & renderTarget, ColorConversion conversion) noexcept
-		: Abstract(overlayManager.primaryServices().settings(), ClassId, renderTarget),
-		m_overlayManager(overlayManager),
+	OverlayRendering::OverlayRendering (const std::shared_ptr< const RenderTarget::Abstract > & renderTarget, const std::shared_ptr< const Geometry::Interface > & geometry, ColorConversion conversion) noexcept
+		: Abstract(ClassId, renderTarget, geometry->topology(), geometry->flags()),
 		m_colorConversion(conversion)
 	{
 
 	}
 
 	bool
-	OverlayRendering::onGenerateProgram (Program & program) noexcept
+	OverlayRendering::onGenerateShadersCode (Program & program) noexcept
 	{
 		if ( this->generateVertexShader(program) )
 		{
@@ -111,7 +106,7 @@ namespace EmEn::Saphir::Generator
 	}
 
 	bool
-	OverlayRendering::onGenerateProgramLayout (const SetIndexes & /*setIndexes*/, std::vector< std::shared_ptr< DescriptorSetLayout > > & descriptorSetLayouts, std::vector< VkPushConstantRange > & pushConstantRanges) noexcept
+	OverlayRendering::onCreateDataLayouts (const SetIndexes & /*setIndexes*/, std::vector< std::shared_ptr< DescriptorSetLayout > > & descriptorSetLayouts, std::vector< VkPushConstantRange > & pushConstantRanges) noexcept
 	{
 		auto descriptorSetLayout = Overlay::Manager::getDescriptorSetLayout(Renderer::instance()->layoutManager());
 
@@ -124,7 +119,7 @@ namespace EmEn::Saphir::Generator
 
 		descriptorSetLayouts.emplace_back(descriptorSetLayout);
 
-		Abstract::generatePushConstantRanges(this->program()->vertexShader()->pushConstantBlockDeclarations(), pushConstantRanges, VK_SHADER_STAGE_VERTEX_BIT);
+		Abstract::generatePushConstantRanges(this->shaderProgram()->vertexShader()->pushConstantBlockDeclarations(), pushConstantRanges, VK_SHADER_STAGE_VERTEX_BIT);
 
 		return true;
 	}
@@ -225,9 +220,6 @@ namespace EmEn::Saphir::Generator
 					ShaderVariable::OutputFragment << " = texture(" << Uniform::PrimarySampler << ", " << ShaderVariable::Primary2DTextureCoordinates << ").bgra;";
 				break;
 		}
-
-
-
 
 		return fragmentShader->generateSourceCode(*this);
 	}

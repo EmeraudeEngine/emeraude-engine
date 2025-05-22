@@ -33,25 +33,16 @@ namespace EmEn::Saphir::Declaration::Member
 {
 	using namespace Keys;
 
-	BufferBackedBlock::BufferBackedBlock (VariableType type, Key name, Key layout, size_t arraySize) noexcept
-		: m_type(type), m_name(name), m_layout(layout), m_arraySize(arraySize)
+	BufferBackedBlock::BufferBackedBlock (VariableType type, Key name, Key layout, uint32_t arraySize) noexcept
+		: m_type(type),
+		m_name(name),
+		m_layout(layout),
+		m_arraySize(arraySize)
 	{
 
 	}
 
-	VariableType
-	BufferBackedBlock::type () const noexcept
-	{
-		return m_type;
-	}
-
-	Key
-	BufferBackedBlock::name () const noexcept
-	{
-		return m_name;
-	}
-
-	size_t
+	uint32_t
 	BufferBackedBlock::bytes () const noexcept
 	{
 		/* FIXME : Check alignment with array size. */
@@ -63,22 +54,10 @@ namespace EmEn::Saphir::Declaration::Member
 		return size_bytes(m_type);
 	}
 
-	const Key &
-	BufferBackedBlock::layout () const noexcept
-	{
-		return m_layout;
-	}
-
-	size_t
-	BufferBackedBlock::arraySize () const noexcept
-	{
-		return m_arraySize;
-	}
-
 	std::string
 	BufferBackedBlock::sourceCode () const noexcept
 	{
-		std::stringstream code{};
+		std::stringstream code;
 
 		if ( m_layout != nullptr )
 		{

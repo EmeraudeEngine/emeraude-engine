@@ -59,8 +59,8 @@ namespace EmEn::Graphics::TextureResource
 
 	const size_t Texture3D::ClassUID{getClassUID(ClassId)};
 
-	Texture3D::Texture3D (const std::string & name, uint32_t resourceFlagBits) noexcept
-		: Abstract(name, resourceFlagBits)
+	Texture3D::Texture3D (const std::string & name, uint32_t resourceFlags) noexcept
+		: Abstract(name, resourceFlags)
 	{
 
 	}
@@ -184,7 +184,7 @@ namespace EmEn::Graphics::TextureResource
 		return 0;
 	}
 
-	size_t
+	uint32_t
 	Texture3D::frameIndexAt (uint32_t /*sceneTime*/) const noexcept
 	{
 		return 0;
@@ -232,11 +232,11 @@ namespace EmEn::Graphics::TextureResource
 
 		m_localData.resize(size * size * size * 4);
 
-		for ( size_t xIndex = 0; xIndex < size; xIndex++ )
+		for ( uint32_t xIndex = 0; xIndex < size; xIndex++ )
 		{
-			for ( size_t yIndex = 0; yIndex < size; yIndex++ )
+			for ( uint32_t yIndex = 0; yIndex < size; yIndex++ )
 			{
-				for ( size_t zIndex = 0; zIndex < size; zIndex++ )
+				for ( uint32_t zIndex = 0; zIndex < size; zIndex++ )
 				{
 					const auto index = (xIndex * yIndex * size) * zIndex;
 
@@ -254,14 +254,14 @@ namespace EmEn::Graphics::TextureResource
 	bool
 	Texture3D::load (const std::filesystem::path & filepath) noexcept
 	{
-		return this->load(ImageResource::get(getResourceNameFromFilepath(filepath, "Images"), true));
+		return this->load(Resources::Manager::instance()->container< ImageResource >()->getResource(getResourceNameFromFilepath(filepath, "Images"), true));
 	}
 
 	bool
 	Texture3D::load (const Json::Value & /*data*/) noexcept
 	{
 		/* NOTE: This resource has no local store,
-		 * so this method won't be called from a resource container ! */
+		 * so this method won't be called from a resource container! */
 		Tracer::error(ClassId, "This type of resource is not intended to be loaded this way !");
 
 		return false;
@@ -286,7 +286,7 @@ namespace EmEn::Graphics::TextureResource
 
 		/*m_localData = imageResource;
 
-		if ( !this->addDependency(m_localData.get()) )
+		if ( !this->addDependency(m_localData) )
 		{
 			TraceError{ClassId} << "Unable to add the image '" << imageResource->name() << "' as dependency !";
 
@@ -294,17 +294,5 @@ namespace EmEn::Graphics::TextureResource
 		}*/
 
 		return this->setLoadSuccess(true);
-	}
-
-	std::shared_ptr< Texture3D >
-	Texture3D::get (const std::string & resourceName, bool directLoad) noexcept
-	{
-		return Resources::Manager::instance()->texture3Ds().getResource(resourceName, !directLoad);
-	}
-
-	std::shared_ptr< Texture3D >
-	Texture3D::getDefault () noexcept
-	{
-		return Resources::Manager::instance()->texture3Ds().getDefaultResource();
 	}
 }

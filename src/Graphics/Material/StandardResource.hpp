@@ -95,12 +95,15 @@ namespace EmEn::Graphics::Material
 			/** @brief Observable class unique identifier. */
 			static const size_t ClassUID;
 
+			/** @brief Defines the resource dependency complexity. */
+			static constexpr auto Complexity{Resources::DepComplexity::Few};
+
 			/**
 			 * @brief Constructs a material.
 			 * @param name A reference to a string for the resource name.
-			 * @param resourceFlagBits The resource flag bits. Default none.
+			 * @param resourceFlags The resource flag bits. Default none.
 			 */
-			explicit StandardResource (const std::string & name, int resourceFlagBits = 0) noexcept;
+			explicit StandardResource (const std::string & name, int resourceFlags = 0) noexcept;
 
 			/**
 			 * @brief Copy constructor.
@@ -151,6 +154,14 @@ namespace EmEn::Graphics::Material
 			/** @copydoc EmEn::Resources::ResourceTrait::load(const Json::Value &) */
 			bool load (const Json::Value & data) noexcept override;
 
+			/** @copydoc EmEn::Resources::ResourceTrait::memoryOccupied() const noexcept */
+			[[nodiscard]]
+			size_t
+			memoryOccupied () const noexcept override
+			{
+				return sizeof(*this);
+			}
+
 			/** @copydoc EmEn::Graphics::Material::Interface::create() */
 			bool create (Renderer & renderer) noexcept override;
 
@@ -195,7 +206,7 @@ namespace EmEn::Graphics::Material
 
 			/** @copydoc EmEn::Graphics::Material::Interface::frameIndexAt() */
 			[[nodiscard]]
-			size_t frameIndexAt (uint32_t sceneTime) const noexcept override;
+			uint32_t frameIndexAt (uint32_t sceneTime) const noexcept override;
 
 			/** @copydoc EmEn::Graphics::Material::Interface::enableBlending() */
 			void enableBlending (BlendingMode mode) noexcept override;
@@ -432,22 +443,6 @@ namespace EmEn::Graphics::Material
 			 * @return void
 			 */
 			void setReflectionAmount (float value) noexcept;
-
-			/**
-			 * @brief Returns a standard material resource by its name.
-			 * @param resourceName A reference to a string.
-			 * @param directLoad Use the direct loading mode. Default false.
-			 * @return std::shared_ptr< StandardResource >
-			 */
-			[[nodiscard]]
-			static std::shared_ptr< StandardResource > get (const std::string & resourceName, bool directLoad = false) noexcept;
-
-			/**
-			 * @brief Returns the default standard material resource.
-			 * @return std::shared_ptr< StandardResource >
-			 */
-			[[nodiscard]]
-			static std::shared_ptr< StandardResource > getDefault () noexcept;
 
 		private:
 

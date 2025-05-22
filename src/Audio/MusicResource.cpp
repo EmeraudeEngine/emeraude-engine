@@ -56,8 +56,8 @@ namespace EmEn::Audio
 
 	const size_t MusicResource::ClassUID{getClassUID(ClassId)};
 
-	MusicResource::MusicResource (const std::string & name, uint32_t resourceFlagBits) noexcept
-		: ResourceTrait(name, resourceFlagBits)
+	MusicResource::MusicResource (const std::string & name, uint32_t resourceFlags) noexcept
+		: ResourceTrait(name, resourceFlags)
 	{
 
 	}
@@ -111,6 +111,8 @@ namespace EmEn::Audio
 		m_title = tag->title().to8Bit(true);
 		m_artist = tag->artist().to8Bit(true);
 #else
+		TraceWarning{ClassId} << "TagLib has been disabled! Unable to read audio metadata from '" << filepath << "' !";
+
 		m_title = "UnknownTitle";
 		m_artist = "UnknownArtist";
 #endif
@@ -230,17 +232,5 @@ namespace EmEn::Audio
 		Tracer::warning(ClassId, "FIXME: This function is not available yet !");
 
 		return this->setLoadSuccess(false);
-	}
-
-	std::shared_ptr< MusicResource >
-	MusicResource::get (const std::string & resourceName, bool directLoad) noexcept
-	{
-		return Resources::Manager::instance()->musics().getResource(resourceName, !directLoad);
-	}
-
-	std::shared_ptr< MusicResource >
-	MusicResource::getDefault () noexcept
-	{
-		return Resources::Manager::instance()->musics().getDefaultResource();
 	}
 }

@@ -35,7 +35,7 @@ namespace EmEn::Audio::Effects
 {
 	using namespace EmEn::Libs;
 
-	static constexpr auto TracerTag{"AbstractEffect"};
+	constexpr auto TracerTag{"AbstractEffect"};
 
 	Abstract::Abstract () noexcept
 	{

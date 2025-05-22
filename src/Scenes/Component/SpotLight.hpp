@@ -86,15 +86,19 @@ namespace EmEn::Scenes::Component
 
 			/** @copydoc EmEn::Scenes::Component::Abstract::getComponentType() */
 			[[nodiscard]]
-			const char * getComponentType () const noexcept override;
+			const char *
+			getComponentType () const noexcept override
+			{
+				return ClassId;
+			}
 
-			/** @copydoc EmEn::Scenes::Component::Abstract::boundingBox() const */
+			/** @copydoc EmEn::Scenes::Component::Abstract::isComponent() */
 			[[nodiscard]]
-			const Libs::Math::Cuboid< float > & boundingBox () const noexcept override;
-
-			/** @copydoc EmEn::Scenes::Component::Abstract::boundingSphere() const */
-			[[nodiscard]]
-			const Libs::Math::Sphere< float > & boundingSphere () const noexcept override;
+			bool
+			isComponent (const char * classID) const noexcept override
+			{
+				return strcmp(ClassId, classID) == 0;
+			}
 
 			/** @copydoc EmEn::Scenes::Component::Abstract::processLogics() */
 			void processLogics (const Scene & scene) noexcept override;
@@ -102,8 +106,13 @@ namespace EmEn::Scenes::Component
 			/** @copydoc EmEn::Scenes::Component::Abstract::move() */
 			void move (const Libs::Math::CartesianFrame< float > & worldCoordinates) noexcept override;
 
-			/** @copydoc EmEn::Scenes::Component::Abstract::shouldRemove() */
-			bool shouldRemove () const noexcept override;
+			/** @copydoc EmEn::Scenes::Component::Abstract::shouldBeRemoved() */
+			[[nodiscard]]
+			bool
+			shouldBeRemoved () const noexcept override
+			{
+				return false;
+			}
 
 			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::touch() */
 			[[nodiscard]]
@@ -118,7 +127,11 @@ namespace EmEn::Scenes::Component
 
 			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::shadowMap() */
 			[[nodiscard]]
-			std::shared_ptr< Graphics::RenderTarget::ShadowMap::Abstract > shadowMap () const noexcept override;
+			std::shared_ptr< Graphics::RenderTarget::Abstract >
+			shadowMap () const noexcept override
+			{
+				return std::static_pointer_cast< Graphics::RenderTarget::Abstract >(m_shadowMap);
+			}
 
 			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::getUniformBlock() */
 			[[nodiscard]]
@@ -142,21 +155,33 @@ namespace EmEn::Scenes::Component
 			 * @return float
 			 */
 			[[nodiscard]]
-			float radius () const noexcept;
+			float
+			radius () const noexcept
+			{
+				return m_radius;
+			}
 
 			/**
 			 * @brief Returns the inner angle in degree of the cone where light is 100%.
 			 * @return float
 			 */
 			[[nodiscard]]
-			float innerAngle () const noexcept;
+			float
+			innerAngle () const noexcept
+			{
+				return m_innerAngle;
+			}
 
 			/**
 			 * @brief Returns the outer angle in degree of the cone until the light is off.
 			 * @return float
 			 */
 			[[nodiscard]]
-			float outerAngle () const noexcept;
+			float
+			outerAngle () const noexcept
+			{
+				return m_outerAngle;
+			}
 
 			/**
 			 * @brief STL streams printable object.
@@ -217,7 +242,7 @@ namespace EmEn::Scenes::Component
 			static constexpr auto OuterCosAngleOffset{15UL};
 			static constexpr auto LightMatrixOffset{16UL};
 
-			std::shared_ptr< Graphics::RenderTarget::ShadowMap::Texture2D > m_shadowMap{};
+			std::shared_ptr< Graphics::RenderTarget::ShadowMap< Graphics::ViewMatrices2DUBO > > m_shadowMap;
 			float m_radius{DefaultRadius};
 			float m_innerAngle{DefaultInnerAngle};
 			float m_outerAngle{DefaultOuterAngle};

@@ -263,20 +263,21 @@ namespace EmEn::Vulkan
 	{
 		const std::lock_guard< std::mutex > lock{m_transferMutex};
 
-#ifdef DEBUG
-		const auto endCopyOffset = offset + dstBuffer.bytes();
-
-		if ( endCopyOffset > stagingBuffer.bytes() )
+		if constexpr ( IsDebug )
 		{
-			const auto overflow = endCopyOffset - stagingBuffer.bytes();
+			const auto endCopyOffset = offset + dstBuffer.bytes();
 
-			TraceError{ClassId} <<
-				"Source buffer overflow with " << overflow << " bytes !" "\n"
-				"(offset:" << offset << " + length:" << dstBuffer.bytes() << ") > srcBuffer:" << stagingBuffer.bytes();
+			if ( endCopyOffset > stagingBuffer.bytes() )
+			{
+				const auto overflow = endCopyOffset - stagingBuffer.bytes();
 
-			return false;
+				TraceError{ClassId} <<
+					"Source buffer overflow with " << overflow << " bytes !" "\n"
+					"(offset:" << offset << " + length:" << dstBuffer.bytes() << ") > srcBuffer:" << stagingBuffer.bytes();
+
+				return false;
+			}
 		}
-#endif
 
 		auto commandBuffer = std::make_shared< CommandBuffer >(m_transferCommandPool, true);
 		commandBuffer->setIdentifier(ClassId, "ToBuffer", "CommandBuffer");
@@ -306,7 +307,7 @@ namespace EmEn::Vulkan
 	}
 
 	bool
-	TransferManager::transfer (const StagingBuffer & stagingBuffer, Image & dstImage, VkDeviceSize offset) noexcept
+	TransferManager::transfer (const StagingBuffer & stagingBuffer, Image & dstImage, VkDeviceSize /*offset*/) noexcept
 	{
 		const std::lock_guard< std::mutex > lock{m_transferMutex};
 

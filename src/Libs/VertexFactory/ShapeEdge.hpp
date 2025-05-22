@@ -27,8 +27,9 @@
 #pragma once
 
 /* STL inclusions. */
-#include <cstddef>
+#include <cstdint>
 #include <limits>
+#include <type_traits>
 
 #if IS_WINDOWS
 #undef max
@@ -38,7 +39,10 @@ namespace EmEn::Libs::VertexFactory
 {
 	/**
 	 * @brief The shape edge class.
+	 * @tparam index_data_t The precision type of index data. Default uint32_t.
 	 */
+	template< typename index_data_t = uint32_t >
+	requires (std::is_unsigned_v< index_data_t > )
 	class ShapeEdge final
 	{
 		public:
@@ -53,8 +57,9 @@ namespace EmEn::Libs::VertexFactory
 			 * @param vertexIndexA The index of the first point for the edge.
 			 * @param vertexIndexB The index of the last point for the edge.
 			 */
-			constexpr ShapeEdge (size_t vertexIndexA, size_t vertexIndexB) noexcept
-				: m_vertexIndexA(vertexIndexA), m_vertexIndexB(vertexIndexB)
+			constexpr ShapeEdge (index_data_t vertexIndexA, index_data_t vertexIndexB) noexcept
+				: m_vertexIndexA(vertexIndexA),
+				m_vertexIndexB(vertexIndexB)
 			{
 
 			}
@@ -70,10 +75,14 @@ namespace EmEn::Libs::VertexFactory
 				if ( this != &operand )
 				{
 					if ( m_vertexIndexA == operand.m_vertexIndexA && m_vertexIndexB == operand.m_vertexIndexB )
+					{
 						return true;
+					}
 
 					if ( m_vertexIndexA == operand.m_vertexIndexB && m_vertexIndexB == operand.m_vertexIndexA )
+					{
 						return true;
+					}
 				}
 
 				return false;
@@ -96,7 +105,7 @@ namespace EmEn::Libs::VertexFactory
 			 * @return void
 			 */
 			void
-			setSharedIndex (size_t index) noexcept
+			setSharedIndex (index_data_t index) noexcept
 			{
 				m_sharedEdgeIndex = index;
 			}
@@ -114,10 +123,10 @@ namespace EmEn::Libs::VertexFactory
 
 			/**
 			 * @brief Returns the index of the first point for the edge.
-			 * @return size_t
+			 * @return index_data_t
 			 */
 			[[nodiscard]]
-			size_t
+			index_data_t
 			vertexIndexA () const noexcept
 			{
 				return m_vertexIndexA;
@@ -125,10 +134,10 @@ namespace EmEn::Libs::VertexFactory
 
 			/**
 			 * @brief Returns the index of the last point for the edge.
-			 * @return size_t
+			 * @return index_data_t
 			 */
 			[[nodiscard]]
-			size_t
+			index_data_t
 			vertexIndexB () const noexcept
 			{
 				return m_vertexIndexB;
@@ -136,10 +145,10 @@ namespace EmEn::Libs::VertexFactory
 
 			/**
 			 * @brief Returns the shared index.
-			 * @return size_t
+			 * @return index_data_t
 			 */
 			[[nodiscard]]
-			size_t
+			index_data_t
 			sharedIndex () const noexcept
 			{
 				return m_sharedEdgeIndex;
@@ -153,7 +162,7 @@ namespace EmEn::Libs::VertexFactory
 			 */
 			[[nodiscard]]
 			bool
-			same (size_t vertexIndexA, size_t vertexIndexB) const noexcept
+			same (index_data_t vertexIndexA, index_data_t vertexIndexB) const noexcept
 			{
 				if ( vertexIndexA == m_vertexIndexA && vertexIndexB == m_vertexIndexB )
 				{
@@ -176,13 +185,13 @@ namespace EmEn::Libs::VertexFactory
 			bool
 			isShared () const noexcept
 			{
-				return m_sharedEdgeIndex < std::numeric_limits< size_t >::max();
+				return m_sharedEdgeIndex < std::numeric_limits< index_data_t >::max();
 			}
 
 		private:
 
-			size_t m_vertexIndexA{0};
-			size_t m_vertexIndexB{0};
-			size_t m_sharedEdgeIndex{std::numeric_limits< size_t >::max()};
+			index_data_t m_vertexIndexA{0};
+			index_data_t m_vertexIndexB{0};
+			index_data_t m_sharedEdgeIndex{std::numeric_limits< index_data_t >::max()};
 	};
 }

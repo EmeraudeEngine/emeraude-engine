@@ -26,9 +26,6 @@
 
 #include "Collision.hpp"
 
-/* Local inclusions. */
-#include "Scenes/AbstractEntity.hpp"
-
 namespace EmEn::Physics
 {
 	using namespace EmEn::Libs;
@@ -36,7 +33,10 @@ namespace EmEn::Physics
 	using namespace Scenes;
 
 	Collision::Collision (CollisionType type, AbstractEntity * entity, const Vector< 3, float > & position, const Vector< 3, float > & direction) noexcept
-		: m_type(type), m_entity(entity), m_position(position), m_direction(direction)
+		: m_type(type),
+		m_entity(entity),
+		m_position(position),
+		m_direction(direction)
 	{
 
 	}

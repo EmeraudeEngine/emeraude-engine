@@ -252,7 +252,7 @@ namespace EmEn::Vulkan
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool configureDynamicState (const std::vector< VkDynamicState > & dynamicStates, VkPipelineDynamicStateCreateFlags flags = 0) noexcept;
+			bool configureDynamicStates (const std::vector< VkDynamicState > & dynamicStates, VkPipelineDynamicStateCreateFlags flags = 0) noexcept;
 
 			/**
 			 * @brief Finalizes the configuration of the graphics pipeline.

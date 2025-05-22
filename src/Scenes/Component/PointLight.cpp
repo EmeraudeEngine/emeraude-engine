@@ -27,6 +27,7 @@
 #include "PointLight.hpp"
 
 /* Local inclusions. */
+#include "Libs/Math/Space3D/Collisions/PointSphere.hpp"
 #include "Saphir/LightGenerator.hpp"
 #include "Scenes/Scene.hpp"
 #include "Tracer.hpp"
@@ -63,7 +64,7 @@ namespace EmEn::Scenes::Component
 	}
 
 	bool
-	PointLight::playAnimation (uint8_t identifier, const Variant & value, size_t cycle) noexcept
+	PointLight::playAnimation (uint8_t identifier, const Variant & value, size_t /*cycle*/) noexcept
 	{
 		switch ( identifier )
 		{
@@ -99,12 +100,6 @@ namespace EmEn::Scenes::Component
 		this->updateAnimations(scene.cycle());
 	}
 
-	bool
-	PointLight::shouldRemove () const noexcept
-	{
-		return false;
-	}
-
 	void
 	PointLight::move (const CartesianFrame< float > & worldCoordinates) noexcept
 	{
@@ -113,7 +108,7 @@ namespace EmEn::Scenes::Component
 			return;
 		}
 
-		if ( this->isShadowEnabled() )
+		if ( this->isShadowCastingEnabled() )
 		{
 			this->updateDeviceFromCoordinates(worldCoordinates, this->getWorldVelocity());
 		}
@@ -144,9 +139,9 @@ namespace EmEn::Scenes::Component
 	bool
 	PointLight::touch (const Vector< 3, float > & position) const noexcept
 	{
-		const Sphere< float > boundingSphere{m_radius, this->getWorldCoordinates().position()};
+		const Space3D::Sphere< float > boundingSphere{m_radius, this->getWorldCoordinates().position()};
 
-		return boundingSphere.isCollidingWith(position);
+		return Space3D::isColliding(position, boundingSphere);
 	}
 
 	bool
@@ -191,7 +186,7 @@ namespace EmEn::Scenes::Component
 				{
 					TraceSuccess{ClassId} << "Cubic shadow map successfully created for point light '" << this->name() << "'.";
 
-					this->enableShadow(true);
+					this->enableShadowCasting(true);
 				}
 				else
 				{
@@ -225,34 +220,10 @@ namespace EmEn::Scenes::Component
 		this->removeFromSharedUniformBuffer();
 	}
 
-	std::shared_ptr< RenderTarget::ShadowMap::Abstract >
-	PointLight::shadowMap () const noexcept
-	{
-		return std::static_pointer_cast< RenderTarget::ShadowMap::Abstract >(m_shadowMap);
-	}
-
 	Declaration::UniformBlock
 	PointLight::getUniformBlock (uint32_t set, uint32_t binding, bool useShadow) const noexcept
 	{
 		return LightGenerator::getUniformBlock(set, binding, LightType::Point, useShadow);
-	}
-
-	const char *
-	PointLight::getComponentType () const noexcept
-	{
-		return ClassId;
-	}
-
-	const Cuboid< float > &
-	PointLight::boundingBox () const noexcept
-	{
-		return NullBoundingBox;
-	}
-
-	const Sphere< float > &
-	PointLight::boundingSphere () const noexcept
-	{
-		return NullBoundingSphere;
 	}
 
 	void
@@ -263,12 +234,6 @@ namespace EmEn::Scenes::Component
 		m_buffer[RadiusOffset] = m_radius;
 
 		this->requestVideoMemoryUpdate();
-	}
-
-	float
-	PointLight::radius () const noexcept
-	{
-		return m_radius;
 	}
 
 	std::ostream &
@@ -282,7 +247,7 @@ namespace EmEn::Scenes::Component
 			"Intensity : " << obj.intensity() << "\n"
 			"Radius : " << obj.m_radius << "\n"
 			"Activity : " << ( obj.isEnabled() ? "true" : "false" ) << "\n"
-			"Shadow caster : " << ( obj.isShadowEnabled() ? "true" : "false" ) << '\n';
+			"Shadow caster : " << ( obj.isShadowCastingEnabled() ? "true" : "false" ) << '\n';
 	}
 
 	std::string

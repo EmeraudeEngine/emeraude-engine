@@ -27,14 +27,15 @@
 #include "OutputBlock.hpp"
 
 /* STL inclusions. */
-#include <sstream>
 #include <limits>
+#include <ranges>
+#include <sstream>
 
 namespace EmEn::Saphir::Declaration
 {
 	using namespace Keys;
 
-	OutputBlock::OutputBlock (Key name, uint32_t location, Key instanceName, size_t arraySize) noexcept
+	OutputBlock::OutputBlock (Key name, uint32_t location, Key instanceName, uint32_t arraySize) noexcept
 		: AbstractShaderBlock(name, location, instanceName, arraySize)
 	{
 
@@ -43,16 +44,16 @@ namespace EmEn::Saphir::Declaration
 	std::string
 	OutputBlock::sourceCode () const noexcept
 	{
-		std::stringstream code{};
+		std::stringstream code;
 
 		/* Check if structure are requested. */
 		const auto & structures = this->structures();
 
 		if ( !structures.empty() )
 		{
-			for ( const auto & structure : structures )
+			for ( const auto & structure: structures | std::views::values )
 			{
-				code << structure.second.sourceCode();
+				code << structure.sourceCode();
 			}
 		}
 
@@ -60,9 +61,9 @@ namespace EmEn::Saphir::Declaration
 			GLSL::Layout << " (" << GLSL::Location << " = " << this->location() << ") " <<
 			GLSL::Out << ' ' << this->name() << "\n" "{" "\n";
 
-		for ( const auto & member : this->members() )
+		for ( const auto & shaderBlock: this->members() | std::views::values )
 		{
-			code << '\t' << member.second.sourceCode();
+			code << '\t' << shaderBlock.sourceCode();
 		}
 
 		code << '}';
@@ -71,7 +72,7 @@ namespace EmEn::Saphir::Declaration
 		{
 			code << ' ' << this->instanceName();
 
-			if ( this->arraySize() == std::numeric_limits< size_t >::max() )
+			if ( this->arraySize() == std::numeric_limits< uint32_t >::max() )
 			{
 				code << "[]";
 			}

@@ -51,15 +51,27 @@ namespace EmEn::Saphir::Declaration::Member
 
 			/** @copydoc EmEn::Saphir::Declaration::Member::Interface::type() */
 			[[nodiscard]]
-			VariableType type () const noexcept override;
+			VariableType
+			type () const noexcept override
+			{
+				return m_type;
+			}
 
 			/** @copydoc EmEn::Saphir::Declaration::Member::Interface::name() */
 			[[nodiscard]]
-			Key name () const noexcept override;
+			Key
+			name () const noexcept override
+			{
+				return m_name;
+			}
 
 			/** @copydoc EmEn::Saphir::Declaration::Member::Interface::bytes() */
 			[[nodiscard]]
-			size_t bytes () const noexcept override;
+			uint32_t
+			bytes () const noexcept override
+			{
+				return size_bytes(m_type);
+			}
 
 			/** @copydoc EmEn::Saphir::Declaration::Member::Interface::sourceCode() */
 			[[nodiscard]]

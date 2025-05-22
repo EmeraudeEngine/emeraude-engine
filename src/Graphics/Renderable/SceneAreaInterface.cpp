@@ -31,8 +31,8 @@ namespace EmEn::Graphics::Renderable
 	using namespace EmEn::Libs;
 	using namespace EmEn::Libs::Math;
 
-	SceneAreaInterface::SceneAreaInterface (const std::string & name, uint32_t resourceFlagBits) noexcept
-		: Interface(name, resourceFlagBits)
+	SceneAreaInterface::SceneAreaInterface (const std::string & name, uint32_t resourceFlags) noexcept
+		: Interface(name, resourceFlags)
 	{
 
 	}

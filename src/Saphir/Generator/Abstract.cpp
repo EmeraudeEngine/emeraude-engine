@@ -27,22 +27,12 @@
 #include "Abstract.hpp"
 
 /* Local inclusions. */
-#include "Saphir/Declaration/PushConstantBlock.hpp"
-#include "Saphir/Declaration/Structure.hpp"
-#include "Saphir/Declaration/Types.hpp"
-#include "Saphir/Declaration/UniformBlock.hpp"
-#include "Saphir/Code.hpp"
-#include "Saphir/Keys.hpp"
-#include "Graphics/Geometry/Interface.hpp"
-#include "Graphics/Material/Interface.hpp"
-#include "Graphics/RenderTarget/Abstract.hpp"
-#include "Graphics/VertexBufferFormatManager.hpp"
+#include "Abstract.hpp"
+#include "Graphics/RenderableInstance/Abstract.hpp"
 #include "Graphics/Renderer.hpp"
 #include "Graphics/Types.hpp"
 #include "Graphics/ViewMatricesInterface.hpp"
-#include "Vulkan/DescriptorSetLayout.hpp"
-#include "Vulkan/GraphicsPipeline.hpp"
-#include "Settings.hpp"
+#include "Saphir/Code.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::Saphir::Generator
@@ -52,15 +42,44 @@ namespace EmEn::Saphir::Generator
 	using namespace Vulkan;
 	using namespace Keys;
 
-	static constexpr auto TracerTag{"ShaderGenerator"};
-	
-	Abstract::Abstract (Settings & settings, const std::string & name, const std::shared_ptr< const Graphics::RenderTarget::Abstract > & renderTarget) noexcept
-		: NameableTrait(name), m_renderTarget(renderTarget)
+	constexpr auto TracerTag{"ShaderGenerator"};
+
+	Abstract::Abstract (const std::string & shaderProgramName, const std::shared_ptr< const RenderTarget::Abstract > & renderTarget) noexcept
+		: NameableTrait(shaderProgramName),
+		m_renderTarget(renderTarget)
 	{
-		/* FIXME: This should not be done here, but rather in the Renderer */
-		m_flags[NormalMappingEnabled] = settings.get< bool >(NormalMappingEnabledKey, DefaultNormalMappingEnabled);
-		m_flags[HighQualityLightEnabled] = settings.get< bool >(HighQualityLightEnabledKey, DefaultHighQualityLightEnabled);
-		m_flags[HighQualityReflectionEnabled] = settings.get< bool >(HighQualityReflectionEnabledKey, DefaultHighQualityReflectionEnabled);
+
+	}
+	
+	Abstract::Abstract (const std::string & shaderProgramName, const std::shared_ptr< const RenderTarget::Abstract > & renderTarget, const std::shared_ptr< const RenderableInstance::Abstract > & renderableInstance, uint32_t layerIndex) noexcept
+		: NameableTrait(shaderProgramName),
+		m_renderTarget(renderTarget),
+		m_renderableInstance(renderableInstance),
+		m_layerIndex(layerIndex)
+	{
+		if ( renderableInstance->instancingEnabled() )
+		{
+			this->enableFlag(IsInstancingEnabled);
+		}
+
+		if ( renderableInstance->isFacingCamera() )
+		{
+			this->enableFlag(IsRenderableFacingCamera);
+		}
+
+		if ( renderableInstance->isLightingEnabled() )
+		{
+			this->enableFlag(IsLightingEnabled);
+		}
+	}
+
+	Abstract::Abstract (const std::string & shaderProgramName, const std::shared_ptr< const RenderTarget::Abstract > & renderTarget, Topology topology, uint32_t geometryFlags) noexcept
+		: NameableTrait(shaderProgramName),
+		m_renderTarget(renderTarget),
+		m_topology(topology),
+		m_geometryFlags(geometryFlags)
+	{
+
 	}
 
 	bool
@@ -148,68 +167,12 @@ namespace EmEn::Saphir::Generator
 	}
 
 	bool
-	Abstract::generateProgram (VertexBufferFormatManager & vertexBufferFormatManager, const std::string & GLSLVersion, const std::string & GLSLProfile) noexcept
+	Abstract::createDataLayout (Renderer & renderer) noexcept
 	{
-		m_program = std::make_shared< Program >(this->name(), GLSLVersion, GLSLProfile);
-
-		/* Prepare the number of binding set and identifier. */
-		this->prepareUniformSets(m_program->setIndexes());
-
-		if ( !this->onGenerateProgram(*m_program) )
-		{
-			Tracer::error(TracerTag, "Unable to generate the program at child shader generator level !");
-
-			return false;
-		}
-
-		/* We need the vertex shader to get all vertex attributes really used from the pipeline. */
-		const auto * vertexShader = m_program->vertexShader();
-
-		if ( vertexShader == nullptr )
-		{
-			Tracer::error(TracerTag, "There is no vertex shader to build the vertex buffer format !");
-
-			return false;
-		}
-
-		const auto * geometry = this->geometry();
-
-		if ( geometry == nullptr )
-		{
-			Tracer::error(TracerTag, "There is no geometry to build the vertex buffer format !");
-
-			return false;
-		}
-
-		/* Prepare the vertex buffer format. */
-		const auto vertexBufferFormat = vertexBufferFormatManager.getVertexBufferFormat(*geometry, *vertexShader);
-
-		if ( vertexBufferFormat == nullptr )
-		{
-			TraceError{TracerTag} << "Unable to get a vertex buffer format for geometry '" << geometry->name() << "' !";
-
-			return false;
-		}
-
-		m_program->setVertexBufferFormat(vertexBufferFormat);
-
-		return true;
-	}
-
-	bool
-	Abstract::generateProgramLayout (Renderer & renderer) noexcept
-	{
-		if ( m_program == nullptr || !m_program->isComplete() )
-		{
-			Tracer::error(TracerTag, "The program pointer is null or the program is not complete !");
-
-			return false;
-		}
-
 		std::vector< std::shared_ptr< DescriptorSetLayout > > descriptorSetLayouts{};
 		std::vector< VkPushConstantRange > pushConstantRanges{};
 
-		const auto & setIndexes = m_program->setIndexes();
+		const auto & setIndexes = m_shaderProgram->setIndexes();
 
 		/* Prepare the descriptor set layout for the view. */
 		if ( setIndexes.isSetEnabled(SetType::PerView) )
@@ -228,8 +191,10 @@ namespace EmEn::Saphir::Generator
 		}
 
 		/* Let child class generate all other descriptor set layouts. */
-		if ( !this->onGenerateProgramLayout(setIndexes, descriptorSetLayouts, pushConstantRanges) )
+		if ( !this->onCreateDataLayouts(setIndexes, descriptorSetLayouts, pushConstantRanges) )
 		{
+			Tracer::error(TracerTag, "Unable to create the data layouts at child shader generator level !");
+
 			return false;
 		}
 
@@ -244,7 +209,7 @@ namespace EmEn::Saphir::Generator
 			return false;
 		}
 
-		m_program->setPipelineLayout(pipelineLayout);
+		m_shaderProgram->setPipelineLayout(pipelineLayout);
 
 		return true;
 	}
@@ -252,19 +217,12 @@ namespace EmEn::Saphir::Generator
 	bool
 	Abstract::createGraphicsPipeline (Renderer & renderer) noexcept
 	{
-		if ( m_program == nullptr || !m_program->isDescribed() )
-		{
-			Tracer::error(TracerTag, "The program pointer is null or the program is not described in layouts !");
-
-			return false;
-		}
-
 		/* Create a graphics pipeline base and configure it before letting the renderer handle the final invocation on GPU.  */
 		auto graphicsPipeline = std::make_shared< GraphicsPipeline >(renderer.device());
 		graphicsPipeline->setIdentifier(TracerTag, this->name(), "Pipeline");
 
 		{
-			auto shaderModules = renderer.shaderManager().getShaderModules(renderer.device(), m_program);
+			auto shaderModules = renderer.shaderManager().getShaderModules(renderer.device(), m_shaderProgram);
 
 			if ( shaderModules.empty() || !graphicsPipeline->configureShaderStages(shaderModules) )
 			{
@@ -274,7 +232,7 @@ namespace EmEn::Saphir::Generator
 			}
 		}
 
-		const auto & vertexBufferFormat = *m_program->vertexBufferFormat();
+		const auto & vertexBufferFormat = *m_shaderProgram->vertexBufferFormat();
 
 		if ( !graphicsPipeline->configureVertexInputState(vertexBufferFormat) )
 		{
@@ -291,7 +249,7 @@ namespace EmEn::Saphir::Generator
 		}
 
 		/* NOTE: If tesselation wasn't enabled, there is no point to configure it. */
-		if ( m_program->useTesselation() )
+		if ( m_shaderProgram->useTesselation() )
 		{
 			if ( !graphicsPipeline->configureTessellationState(0) )
 			{
@@ -319,7 +277,7 @@ namespace EmEn::Saphir::Generator
 			return false;
 		}
 
-		if ( !this->onGraphicsPipelineConfiguration(*m_program, *graphicsPipeline) )
+		if ( !this->onGraphicsPipelineConfiguration(*m_shaderProgram, *graphicsPipeline) )
 		{
 			Tracer::error(TracerTag, "Unable to configure the graphics pipeline at child shader generator level !");
 
@@ -327,14 +285,78 @@ namespace EmEn::Saphir::Generator
 		}
 
 		/* FIXME: Only to get the render pass handle. This can become general for the render target type. ! */
-		if ( !renderer.finalizeGraphicsPipeline(*m_renderTarget, *m_program, graphicsPipeline) )
+		if ( !renderer.finalizeGraphicsPipeline(*m_renderTarget, *m_shaderProgram, graphicsPipeline) )
 		{
-			TraceError{TracerTag} << "Unable to finalize the graphics pipeline of the program '" << m_program->name() << "' !";
+			TraceError{TracerTag} << "Unable to finalize the graphics pipeline of the program '" << m_shaderProgram->name() << "' !";
 
 			return false;
 		}
 
-		m_program->setGraphicsPipeline(graphicsPipeline);
+		m_shaderProgram->setGraphicsPipeline(graphicsPipeline);
+
+		return true;
+	}
+
+	bool
+	Abstract::generateShaderProgram (Renderer & renderer, const std::string & GLSLVersion, const std::string & GLSLProfile) noexcept
+	{
+		this->enableDebugging(renderer.shaderManager().showSourceCode());
+
+		/* NOTE: Declare a new program. */
+		m_shaderProgram = std::make_shared< Program >(this->name(), GLSLVersion, GLSLProfile);
+
+		/* Prepare the number of binding sets and identifiers. */
+		this->prepareUniformSets(m_shaderProgram->setIndexes());
+
+		/* NOTE: First, we generate all shader source code. */
+		if ( !this->onGenerateShadersCode(*m_shaderProgram) )
+		{
+			Tracer::error(TracerTag, "Unable to generate shaders source code at child shader generator level !");
+
+			return false;
+		}
+
+		if ( this->isRenderableInstanceAvailable() )
+		{
+			const auto * geometry = this->getGeometryInterface();
+
+			if ( !m_shaderProgram->createVertexBufferFormat(renderer.vertexBufferFormatManager(), geometry) )
+			{
+				Tracer::error(TracerTag, "Unable to create the vertex buffer format !");
+
+				return false;
+			}
+		}
+		else
+		{
+			if ( !m_shaderProgram->createVertexBufferFormat(renderer.vertexBufferFormatManager(), m_topology, m_geometryFlags) )
+			{
+				Tracer::error(TracerTag, "Unable to create the vertex buffer format !");
+
+				return false;
+			}
+		}
+
+		if ( !m_shaderProgram->isComplete() )
+		{
+			Tracer::error(TracerTag, "The shader program is not complete !");
+
+			return false;
+		}
+
+		/* The second step is to check every resource needed by shaders (UBO, Samples, etc.).
+		 * NOTE: VBO is an exception done before. */
+		if ( !this->createDataLayout(renderer) )
+		{
+			return false;
+		}
+
+		/* NOTE: The third step is to check if separate shaders already exist to avoid an extra compilation.
+		 * Retrieve the graphics pipeline for the combination of the current renderable instance layer and the render pass. */
+		if ( !this->createGraphicsPipeline(renderer) )
+		{
+			return false;
+		}
 
 		return true;
 	}
@@ -355,9 +377,9 @@ namespace EmEn::Saphir::Generator
 		/* [VULKAN-PUSH-CONSTANT:1] Declare push constant usage by analyzing needs. */
 		Declaration::PushConstantBlock pushConstantBlock{PushConstant::Type::Matrices, PushConstant::Matrices};
 
-		if ( m_program->wasInstancingEnabled() )
+		if ( m_shaderProgram->wasInstancingEnabled() )
 		{
-			if ( m_program->wasAdvancedMatricesEnabled() || m_program->wasBillBoardingEnabled() )
+			if ( m_shaderProgram->wasAdvancedMatricesEnabled() || m_shaderProgram->wasBillBoardingEnabled() )
 			{
 				/* NOTE: Push the view matrix (V) and the view projection matrix (VP). */
 				pushConstantBlock.addMember(Declaration::VariableType::Matrix4, PushConstant::Component::ViewMatrix);
@@ -371,7 +393,7 @@ namespace EmEn::Saphir::Generator
 		}
 		else
 		{
-			if ( m_program->wasAdvancedMatricesEnabled() )
+			if ( m_shaderProgram->wasAdvancedMatricesEnabled() )
 			{
 				/* NOTE: Push the view matrix (V) and the model matrix (M). */
 				pushConstantBlock.addMember(Declaration::VariableType::Matrix4, PushConstant::Component::ViewMatrix);
@@ -390,12 +412,12 @@ namespace EmEn::Saphir::Generator
 	void
 	Abstract::generatePushConstantRanges (const std::vector< Declaration::PushConstantBlock > & pushConstantBlocks, std::vector< VkPushConstantRange > & pushConstantRanges, VkShaderStageFlags stageFlags) noexcept
 	{
-		/* [VULKAN-PUSH-CONSTANT:2] Prepare the push constants declaration for pipeline. */
+		/* [VULKAN-PUSH-CONSTANT:2] Prepare the push constants declaration for the pipeline. */
 		uint32_t offset = 0;
 
 		for ( const auto & pushConstantBlock : pushConstantBlocks )
 		{
-			const auto bytes = static_cast< uint32_t >(pushConstantBlock.bytes());
+			const auto bytes = pushConstantBlock.bytes();
 
 			pushConstantRanges.push_back({
 				.stageFlags = stageFlags,
@@ -428,9 +450,8 @@ namespace EmEn::Saphir::Generator
 	bool
 	Abstract::declareViewUniformBlock (AbstractShader & shader, uint32_t binding) const noexcept
 	{
-		const auto setIndex = m_program->setIndex(SetType::PerView);
+		const auto setIndex = m_shaderProgram->setIndex(SetType::PerView);
 
-		/* FIXME: This information could bet set at generator constructor. */
 		if ( m_renderTarget->isCubemap() )
 		{
 			/* FIXME: Rework this to split common data between each cubemap faces ! */
@@ -461,7 +482,7 @@ namespace EmEn::Saphir::Generator
 	bool
 	Abstract::declareMaterialUniformBlock (const Material::Interface & material, AbstractShader & shader, uint32_t binding) const noexcept
 	{
-		const auto setIndex = m_program->setIndex(SetType::PerModelLayer);
+		const auto setIndex = m_shaderProgram->setIndex(SetType::PerModelLayer);
 		const auto uniformBlock = material.getUniformBlock(setIndex, binding);
 
 		return shader.declare(uniformBlock);

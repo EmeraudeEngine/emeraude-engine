@@ -69,37 +69,4 @@ namespace EmEn::Libs::Time::Elapsed
 
 			std::chrono::time_point< clockType > m_startTime{};
 	};
-
-	/**
-	 * @brief Gets the duration in CPU time between two point in milliseconds.
-	 * @note The internal precision is set to nanoseconds.
-	 * @extends EmEn::Libs::Time::Elapsed::Abstract
-	 */
-	class CPUTime final : public Abstract
-	{
-		public:
-
-			/**
-			 * @brief Constructs an elapsed CPU time structure.
-			 */
-			CPUTime () noexcept = default;
-
-			/** @copydoc EmEn::Libs::Time::Elapsed::Abstract::start() */
-			void
-			start () noexcept override
-			{
-				m_startTime = std::clock();
-			}
-
-			/** @copydoc EmEn::Libs::Time::Elapsed::Abstract::stop() */
-			void
-			stop () noexcept override
-			{
-				this->setDuration(std::clock() - m_startTime);
-			}
-
-		private:
-
-			std::clock_t m_startTime{};
-	};
 }

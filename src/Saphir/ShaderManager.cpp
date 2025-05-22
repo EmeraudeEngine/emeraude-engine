@@ -54,7 +54,8 @@ namespace EmEn::Saphir
 	std::array< ShaderManager *, 2 > ShaderManager::s_instances{nullptr, nullptr};
 
 	ShaderManager::ShaderManager (PrimaryServices & primaryServices, GPUWorkType type) noexcept
-		: ServiceInterface(ClassId), m_primaryServices(primaryServices)
+		: ServiceInterface(ClassId),
+		m_primaryServices(primaryServices)
 	{
 		if ( s_instances.at(static_cast< size_t >(type)) != nullptr )
 		{

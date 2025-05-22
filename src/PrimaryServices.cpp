@@ -30,6 +30,7 @@
 #include <iostream>
 #include <sstream>
 #include <ranges>
+#include <utility>
 
 /* Local inclusions. */
 #include "Libs/IO/IO.hpp"
@@ -38,44 +39,92 @@ namespace EmEn
 {
 	using namespace EmEn::Libs;
 
-	PrimaryServices::PrimaryServices (int argc, char * * argv, const Identification & identification, bool childProcess) noexcept
-		: m_arguments(argc, argv, childProcess),
-		m_tracer(m_arguments, m_settings, childProcess),
-		m_fileSystem(m_arguments, m_userInfo, identification, childProcess),
-		m_settings(m_arguments, m_fileSystem, childProcess)
+	PrimaryServices::PrimaryServices (int argc, char * * argv, const Identification & identification) noexcept
+		: m_processName("main"),
+		m_arguments(argc, argv, false),
+		m_tracer(m_arguments, m_processName, false),
+		m_fileSystem(m_arguments, m_userInfo, identification, false),
+		m_settings(m_arguments, m_fileSystem, false)
 	{
-		m_flags[ChildProcess] = childProcess;
-
-		/* NOTE: This must be done immediately ! */
+		/* NOTE: This must be done immediately! */
 		if ( !m_arguments.initialize(m_primaryServicesEnabled) )
 		{
 			std::cerr << ClassId << ", " << m_arguments.name() << " service failed to execute !";
 		}
 
-		if ( !childProcess && m_arguments.get("--verbose").isPresent() )
+		if ( m_arguments.get("--verbose").isPresent() )
 		{
 			m_flags[ShowInformation] = true;
 		}
 	}
 
-#if IS_WINDOWS
-	PrimaryServices::PrimaryServices (int argc, wchar_t * * wargv, const Identification & identification, bool childProcess) noexcept
-		: m_arguments(argc, wargv, childProcess),
-		m_tracer(m_arguments, m_settings, childProcess),
-		m_fileSystem(m_arguments, m_userInfo, identification, childProcess),
-		m_settings(m_arguments, m_fileSystem, childProcess)
+	PrimaryServices::PrimaryServices (int argc, char * * argv, const Identification & identification, std::string processName, const std::vector< std::string > & additionalArguments) noexcept
+		: m_processName(std::move(processName)),
+		m_arguments(argc, argv, true),
+		m_tracer(m_arguments, m_processName, true),
+		m_fileSystem(m_arguments, m_userInfo, identification, true),
+		m_settings(m_arguments, m_fileSystem, true)
 	{
-		m_flags[ChildProcess] = childProcess;
+		m_flags[ChildProcess] = true;
 
-		/* NOTE: This must be done immediately ! */
+		/* NOTE: This must be done immediately! */
+		if ( m_arguments.initialize(m_primaryServicesEnabled) )
+		{
+			if ( !additionalArguments.empty() )
+			{
+				for ( const auto & argument: additionalArguments )
+				{
+					m_arguments.addArgument(argument);
+				}
+			}
+		}
+		else
+		{
+			std::cerr << ClassId << ", " << m_arguments.name() << " service failed to execute !";
+		}
+	}
+
+#if IS_WINDOWS
+	PrimaryServices::PrimaryServices (int argc, wchar_t * * wargv, const Identification & identification) noexcept
+		: m_arguments(argc, wargv, false),
+		m_tracer(m_arguments, "main", false),
+		m_fileSystem(m_arguments, m_userInfo, identification, false),
+		m_settings(m_arguments, m_fileSystem, false)
+	{
+		/* NOTE: This must be done immediately! */
 		if ( !m_arguments.initialize(m_primaryServicesEnabled) )
 		{
 			std::cerr << ClassId << ", " << m_arguments.name() << " service failed to execute !";
 		}
 
-		if ( !childProcess && m_arguments.get("--verbose").isPresent() )
+		if ( m_arguments.get("--verbose").isPresent() )
 		{
 			m_flags[ShowInformation] = true;
+		}
+	}
+
+	PrimaryServices::PrimaryServices (int argc, wchar_t * * wargv, const Identification & identification, const std::string & processName, const std::vector< std::string > & additionalArguments) noexcept
+		: m_arguments(argc, wargv, true),
+		m_tracer(m_arguments, processName, true),
+		m_fileSystem(m_arguments, m_userInfo, identification, true),
+		m_settings(m_arguments, m_fileSystem, true)
+	{
+		m_flags[ChildProcess] = true;
+
+		/* NOTE: This must be done immediately! */
+		if ( m_arguments.initialize(m_primaryServicesEnabled) )
+		{
+			if ( !additionalArguments.empty() )
+			{
+				for ( const auto & argument: additionalArguments )
+				{
+					m_arguments.addArgument(argument);
+				}
+			}
+		}
+		else
+		{
+			std::cerr << ClassId << ", " << m_arguments.name() << " service failed to execute !";
 		}
 	}
 #endif
@@ -84,17 +133,21 @@ namespace EmEn
 	PrimaryServices::initialize () noexcept
 	{
 		/* Initialize tracer. */
-		if ( !m_tracer.initialize(m_primaryServicesEnabled) )
+		if ( m_tracer.initialize(m_primaryServicesEnabled) )
 		{
-			std::cerr << ClassId << ", " << m_tracer.name() << " service failed to execute !";
+			std::cout << ClassId << ", " << m_tracer.name() << " primary service up [" << m_processName << "] !" "\n";
+		}
+		else
+		{
+			std::cerr << ClassId << ", " << m_tracer.name() << " primary service failed to execute [" << m_processName << "] !" "\n";
 
 			return false;
 		}
 
-		/* Initialize the file system to reach every useful directories. */
+		/* Initialize the file system to reach every useful directory. */
 		if ( m_fileSystem.initialize(m_primaryServicesEnabled) )
 		{
-			TraceSuccess{ClassId} << m_fileSystem.name() << " service up !";
+			TraceSuccess{ClassId} << m_fileSystem.name() << " primary service up [" << m_processName << "] !";
 
 			/* Creating some basic paths. */
 			const auto directory = m_fileSystem.userDataDirectory("captures");
@@ -113,24 +166,24 @@ namespace EmEn
 		}
 		else
 		{
-			TraceFatal{ClassId} << m_fileSystem.name() << " service failed to execute !";
+			TraceFatal{ClassId} << m_fileSystem.name() << " primary service failed to execute [" << m_processName << "] !";
 
 			return false;
 		}
 
 		/* Initialize core settings.
-		 * NOTE : Settings class manages to write default file. */
+		 * NOTE: Settings class manages to write a default file. */
 		if ( m_settings.initialize(m_primaryServicesEnabled) )
 		{
-			TraceSuccess{ClassId} << m_settings.name() << " service up !";
+			TraceSuccess{ClassId} << m_settings.name() << " primary service up [" << m_processName << "] !";
 
-			/* NOTE: Now the core settings is initialized, we can update the tracer service configuration. */
-			m_tracer.readSettings();
+			/* NOTE: Now the core settings are initialized, we can update the tracer service configuration. */
+			m_tracer.lateInitialize(m_fileSystem, m_settings);
 		}
 		else
 		{
 			TraceError{ClassId} <<
-				m_fileSystem.name() << " service failed to execute !" "\n"
+				m_fileSystem.name() << " primary service failed to execute [" << m_processName << "] !" "\n"
 				"There is a problem to read or write the core settings file." "\n"
 				"The engine will use the default configuration.";
 		}
@@ -146,11 +199,11 @@ namespace EmEn
 		{
 			if ( service->terminate() )
 			{
-				TraceSuccess{ClassId} << service->name() << " primary service terminated gracefully !";
+				TraceSuccess{ClassId} << service->name() << " primary service terminated gracefully [" << m_processName << "] !";
 			}
 			else
 			{
-				TraceError{ClassId} << service->name() << " primary service failed to terminate properly !";
+				TraceError{ClassId} << service->name() << " primary service failed to terminate properly [" << m_processName << "] !";
 			}
 		}
 	}

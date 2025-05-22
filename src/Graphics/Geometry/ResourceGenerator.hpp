@@ -27,7 +27,6 @@
 #pragma once
 
 /* STL inclusions. */
-#include <cstddef>
 #include <cstdint>
 #include <string>
 #include <memory>
@@ -192,7 +191,7 @@ namespace EmEn::Graphics::Geometry
 			 * @return std::shared_ptr< IndexedVertexResource >
 			 */
 			[[nodiscard]]
-			std::shared_ptr< IndexedVertexResource > sphere (float radius, size_t slices = 16, size_t stacks = 8, std::string resourceName = {}) const noexcept;
+			std::shared_ptr< IndexedVertexResource > sphere (float radius, uint32_t slices = 16, uint32_t stacks = 8, std::string resourceName = {}) const noexcept;
 
 			/**
 			 * @brief Generates a geodesic sphere geometry.
@@ -202,7 +201,7 @@ namespace EmEn::Graphics::Geometry
 			 * @return std::shared_ptr< IndexedVertexResource >
 			 */
 			[[nodiscard]]
-			std::shared_ptr< IndexedVertexResource > geodesicSphere (float radius, size_t depth = 2, std::string resourceName = {}) const noexcept;
+			std::shared_ptr< IndexedVertexResource > geodesicSphere (float radius, uint32_t depth = 2, std::string resourceName = {}) const noexcept;
 
 			/**
 			 * @brief Generates a cylinder geometry.
@@ -215,7 +214,7 @@ namespace EmEn::Graphics::Geometry
 			 * @return std::shared_ptr< IndexedVertexResource >
 			 */
 			[[nodiscard]]
-			std::shared_ptr< IndexedVertexResource > cylinder (float baseRadius, float topRadius, float length, size_t slices = 8, size_t stacks = 1, std::string resourceName = {}) const noexcept;
+			std::shared_ptr< IndexedVertexResource > cylinder (float baseRadius, float topRadius, float length, uint32_t slices = 8, uint32_t stacks = 1, std::string resourceName = {}) const noexcept;
 
 			/**
 			 * @brief Generates a cone geometry.
@@ -228,7 +227,7 @@ namespace EmEn::Graphics::Geometry
 			 */
 			[[nodiscard]]
 			std::shared_ptr< IndexedVertexResource >
-			cone (float radius, float length, size_t slices = 8, size_t stacks = 1, const std::string & resourceName = {}) const noexcept
+			cone (float radius, float length, uint32_t slices = 8, uint32_t stacks = 1, const std::string & resourceName = {}) const noexcept
 			{
 				return this->cylinder(radius, 0, length, slices, stacks, resourceName);
 			}
@@ -243,7 +242,7 @@ namespace EmEn::Graphics::Geometry
 			 * @return std::shared_ptr< IndexedVertexResource >
 			 */
 			[[nodiscard]]
-			std::shared_ptr< IndexedVertexResource > disk (float outerRadius, float innerRadius, size_t slices = 8, size_t stacks = 1, std::string resourceName = {}) const noexcept;
+			std::shared_ptr< IndexedVertexResource > disk (float outerRadius, float innerRadius, uint32_t slices = 8, uint32_t stacks = 1, std::string resourceName = {}) const noexcept;
 
 			/**
 			 * @brief Generates a torus geometry.
@@ -255,7 +254,7 @@ namespace EmEn::Graphics::Geometry
 			 * @return std::shared_ptr< IndexedVertexResource >
 			 */
 			[[nodiscard]]
-			std::shared_ptr< IndexedVertexResource > torus (float majorRadius, float minorRadius, size_t slices = 8, size_t stacks = 8, std::string resourceName = {}) const noexcept;
+			std::shared_ptr< IndexedVertexResource > torus (float majorRadius, float minorRadius, uint32_t slices = 8, uint32_t stacks = 8, std::string resourceName = {}) const noexcept;
 
 			/**
 			 * @brief Generates a octahedron geometry.
@@ -282,7 +281,7 @@ namespace EmEn::Graphics::Geometry
 			 * @return std::shared_ptr< IndexedVertexResource >
 			 */
 			[[nodiscard]]
-			std::shared_ptr< IndexedVertexResource > tetrahedron (float radius, std::string resourceName = {}) noexcept;
+			std::shared_ptr< IndexedVertexResource > tetrahedron (float radius, std::string resourceName = {}) const noexcept;
 
 			/**
 			 * @brief Generates a dodecahedron geometry.
@@ -330,7 +329,7 @@ namespace EmEn::Graphics::Geometry
 			 * @return shared_ptr< VertexGridResource >
 			 */
 			[[nodiscard]]
-			std::shared_ptr< VertexGridResource > surface (float size, size_t division, std::string resourceName = {}) const noexcept;
+			std::shared_ptr< VertexGridResource > surface (float size, uint32_t division, std::string resourceName = {}) const noexcept;
 
 		private:
 

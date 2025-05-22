@@ -382,7 +382,7 @@ namespace EmEn
 			 * @brief Registers a directory when tested.
 			 * @param directoryPath A reference to a filesystem path.
 			 * @param createDirectory If no directory was found, create it.
-			 * @param writableRequested Is directory need to be writable.
+			 * @param writableRequested Is directory needed to be writable?
 			 * @param finalDirectoryPath A reference to a filesystem path.
 			 * @return bool
 			 */

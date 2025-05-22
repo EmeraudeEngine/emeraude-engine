@@ -347,12 +347,7 @@ namespace EmEn
 		Json::Value root{};
 
 		/* 1. JSON File header. */
-		{
-			std::stringstream text;
-			text << ENGINE_VERSION_MAJOR << '.' << ENGINE_VERSION_MINOR << '.' << ENGINE_VERSION_PATCH;
-
-			root[VersionKey] = text.str();
-		}
+		root[VersionKey] = VersionString;
 
 		{
 			const auto timestamp = time(nullptr);

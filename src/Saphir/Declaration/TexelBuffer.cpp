@@ -34,7 +34,10 @@ namespace EmEn::Saphir::Declaration
 	using namespace Keys;
 
 	TexelBuffer::TexelBuffer (uint32_t set, uint32_t binding, Key type, Key name) noexcept
-		: m_type(type), m_name(name), m_set(set), m_binding(binding)
+		: m_type(type),
+		m_name(name),
+		m_set(set),
+		m_binding(binding)
 	{
 
 	}
@@ -42,8 +45,15 @@ namespace EmEn::Saphir::Declaration
 	bool
 	TexelBuffer::isValid () const noexcept
 	{
-		if ( m_type == nullptr || m_name == nullptr )
+		if ( m_type == nullptr )
+		{
 			return false;
+		}
+
+		if ( m_name == nullptr )
+		{
+			return false;
+		}
 
 		return true;
 	}
@@ -51,39 +61,12 @@ namespace EmEn::Saphir::Declaration
 	std::string
 	TexelBuffer::sourceCode () const noexcept
 	{
-		return (std::stringstream{} <<
+		std::stringstream code;
+
+		code <<
 			GLSL::Layout << " (" << GLSL::Set << " = " << m_set << ", " << GLSL::Binding << " = " << m_binding << ") " <<
-			GLSL::Uniform << ' ' << m_type << ' ' << m_name << ";" "\n"
-		).str();
-	}
+			GLSL::Uniform << ' ' << m_type << ' ' << m_name << ";" "\n";
 
-	Key
-	TexelBuffer::name () const noexcept
-	{
-		return m_name;
-	}
-
-	size_t
-	TexelBuffer::bytes () const noexcept
-	{
-		return 0;
-	}
-
-	Key
-	TexelBuffer::type () const noexcept
-	{
-		return m_type;
-	}
-
-	uint32_t
-	TexelBuffer::set () const noexcept
-	{
-		return m_set;
-	}
-
-	uint32_t
-	TexelBuffer::binding () const noexcept
-	{
-		return m_binding;
+		return code.str();
 	}
 }

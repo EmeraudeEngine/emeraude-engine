@@ -43,7 +43,8 @@ namespace EmEn::Audio
 	const size_t ExternalInput::ClassUID{getClassUID(ClassId)};
 
 	ExternalInput::ExternalInput (PrimaryServices & primaryServices) noexcept
-		: ServiceInterface(ClassId), m_primaryServices(primaryServices)
+		: ServiceInterface(ClassId),
+		m_primaryServices(primaryServices)
 	{
 
 	}
@@ -97,7 +98,7 @@ namespace EmEn::Audio
 
 		if ( frequency == WaveFactory::Frequency::Invalid )
 		{
-			Tracer::warning(ClassId, BlobTrait() << "Invalid recorder frequency in configuration file ! Leaving to default (" << DefaultRecorderFrequency << " Hz).");
+			TraceWarning{ClassId} << "Invalid recorder frequency in configuration file ! Leaving to default (" << DefaultRecorderFrequency << " Hz).";
 		}
 		else
 		{

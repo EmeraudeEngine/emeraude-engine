@@ -37,7 +37,7 @@ namespace EmEn::Saphir::Declaration
 {
 	/**
 	 * @brief The Structure class
-	 * @extends EmEn::Saphir::DeclarationInterface This is a shader code declaration.
+	 * @extends EmEn::Saphir::Declaration::Interface This is a shader code declaration.
 	 */
 	class Structure final : public Interface
 	{
@@ -53,19 +53,27 @@ namespace EmEn::Saphir::Declaration
 			 */
 			explicit Structure (Key name, Key instanceName = nullptr) noexcept;
 
-			/** @copydoc EmEn::Saphir::DeclarationInterface::isValid() */
+			/** @copydoc EmEn::Saphir::Declaration::Interface::isValid() */
 			[[nodiscard]]
 			bool isValid () const noexcept override;
 
-			/** @copydoc EmEn::Saphir::DeclarationInterface::name() */
+			/** @copydoc EmEn::Saphir::Declaration::Interface::name() */
 			[[nodiscard]]
-			Key name () const noexcept override;
+			Key
+			name () const noexcept override
+			{
+				return m_name;
+			}
 
-			/** @copydoc EmEn::Saphir::DeclarationInterface::bytes() */
+			/** @copydoc EmEn::Saphir::Declaration::Interface::bytes() */
 			[[nodiscard]]
-			size_t bytes () const noexcept override;
+			uint32_t
+			bytes () const noexcept override
+			{
+				return 0;
+			}
 
-			/** @copydoc EmEn::Saphir::DeclarationInterface::sourceCode() */
+			/** @copydoc EmEn::Saphir::Declaration::Interface::sourceCode() */
 			[[nodiscard]]
 			std::string sourceCode () const noexcept override;
 
@@ -74,7 +82,11 @@ namespace EmEn::Saphir::Declaration
 			 * @return std::string.
 			 */
 			[[nodiscard]]
-			const std::string & instanceName () const noexcept;
+			const std::string &
+			instanceName () const noexcept
+			{
+				return m_instanceName;
+			}
 
 			/**
 			 * @brief Adds a member to the structure.
@@ -89,12 +101,16 @@ namespace EmEn::Saphir::Declaration
 			 * @return const std::vector< std::pair< Key, Member::Structure > > &
 			 */
 			[[nodiscard]]
-			const std::vector< std::pair< Key, Member::Structure > > & members () const noexcept;
+			const std::vector< std::pair< Key, Member::Structure > > &
+			members () const noexcept
+			{
+				return m_members;
+			}
 
 		private:
 
 			Key m_name;
-			std::string m_instanceName{};
-			std::vector< std::pair< Key, Member::Structure > > m_members{};
+			std::string m_instanceName;
+			std::vector< std::pair< Key, Member::Structure > > m_members;
 	};
 }

@@ -53,7 +53,7 @@ namespace EmEn::Graphics::Geometry
 			m_globalVertexColor << ',' <<
 			m_transformMatrix << ',' <<
 			m_textureCoordinatesMultiplier << ',' <<
-			this->flagBits() << ',' <<
+			this->flags() << ',' <<
 			m_flags[CenterAtBottom] << ',' <<
 			m_flags[FlipGeometry] << ',' <<
 			m_flags[GlobalVertexColorSet]

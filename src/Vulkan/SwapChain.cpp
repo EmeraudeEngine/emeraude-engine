@@ -105,7 +105,7 @@ namespace EmEn::Vulkan
 		//}
 		//else
 		{
-			m_createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE; /* Performance ! */
+			m_createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE; /* Performance! */
 			m_createInfo.queueFamilyIndexCount = 0; /* Optional */
 			m_createInfo.pQueueFamilyIndices = nullptr; /* Optional */
 		}
@@ -308,7 +308,7 @@ namespace EmEn::Vulkan
 			return 1;
 		}
 
-		/* NOTE: Looks like the triple-buffering is enforced by the system. */
+		/* NOTE: It looks like the system enforces the triple-buffering. */
 		if ( capabilities.minImageCount == 3 )
 		{
 			m_flags[TripleBufferingEnabled] = true;
@@ -325,19 +325,17 @@ namespace EmEn::Vulkan
 	VkExtent2D
 	SwapChain::chooseSwapExtent (const VkSurfaceCapabilitiesKHR & capabilities) const noexcept
 	{
-		if ( capabilities.currentExtent.width <= std::numeric_limits< uint32_t >::max() )
-		{
-			return capabilities.currentExtent;
-		}
-
-		const auto & min = capabilities.minImageExtent;
-		const auto & max = capabilities.maxImageExtent;
-
 		const auto framebufferSize = m_window->getFramebufferSize();
 
+		TraceDebug{ClassId} <<
+			"Vulkan minimum extent detected : " << capabilities.minImageExtent.width << 'X' << capabilities.minImageExtent.height << "\n"
+			"Vulkan maximum extent detected : " << capabilities.maxImageExtent.width << 'X' << capabilities.maxImageExtent.height << "\n"
+			"Vulkan current extent detected : " << capabilities.currentExtent.width << 'X' << capabilities.currentExtent.height << "\n"
+			"GLFW framebuffer : " << framebufferSize.at(0) << 'X' << framebufferSize.at(1);
+
 		return {
-			std::max(min.width, std::min(max.width, framebufferSize[0])),
-			std::max(min.height, std::min(max.height, framebufferSize[1]))
+			std::clamp(framebufferSize[0], capabilities.minImageExtent.width, capabilities.maxImageExtent.width),
+			std::clamp(framebufferSize[1], capabilities.minImageExtent.height, capabilities.maxImageExtent.height)
 		};
 	}
 
@@ -413,7 +411,7 @@ namespace EmEn::Vulkan
 			return false;
 		}
 
-		/* Create image and image views in order to create the render pass. */
+		/* Create image and image views to create the render pass. */
 		for ( size_t imageIndex = 0; imageIndex < m_imageCount; ++imageIndex )
 		{
 			auto & frame = m_frames[imageIndex];
@@ -482,7 +480,7 @@ namespace EmEn::Vulkan
 
 		if ( !renderPass->isCreated() )
 		{
-			/* Prepare a sub-pass for the render pass. */
+			/* Prepare a subpass for the render pass. */
 			RenderSubPass subPass{VK_PIPELINE_BIND_POINT_GRAPHICS, 0};
 
 			/* Color buffer. */
@@ -768,7 +766,7 @@ namespace EmEn::Vulkan
 	}
 
 	bool
-	SwapChain::submitCommandBuffer (const std::shared_ptr< CommandBuffer > & commandBuffer, const uint32_t & imageIndex) noexcept
+	SwapChain::submitCommandBuffer (const std::shared_ptr< CommandBuffer > & commandBuffer, const uint32_t & imageIndex, std::vector< VkSemaphore > & waitSemaphores) noexcept
 	{
 		const std::lock_guard< std::mutex > deviceAccessLockGuard{this->device()->deviceAccessLock()};
 
@@ -795,11 +793,11 @@ namespace EmEn::Vulkan
 
 		const auto * graphicsQueue = this->device()->getQueue(QueueJob::Presentation, QueuePriority::High);
 
-		auto * waitSemaphore = currentFrame.imageAvailableSemaphore->handle();
-		auto * signalSemaphore = currentFrame.renderFinishedSemaphore->handle();
-		auto * fence = currentFrame.inFlightFence->handle();
+		const auto signalSemaphore = currentFrame.renderFinishedSemaphore->handle();
 
-		if ( !graphicsQueue->submit(commandBuffer, waitSemaphore, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, signalSemaphore, fence) )
+		waitSemaphores.emplace_back(currentFrame.imageAvailableSemaphore->handle());
+
+		if ( !graphicsQueue->submit(commandBuffer, waitSemaphores, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, signalSemaphore, currentFrame.inFlightFence->handle()) )
 		{
 			return false;
 		}

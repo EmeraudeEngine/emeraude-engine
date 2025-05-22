@@ -27,18 +27,23 @@
 #pragma once
 
 /* STL inclusions. */
+#include <cstdint>
 #include <array>
 #include <limits>
 #include <type_traits>
+
+/* Local inclusions. */
+#include "Libs/Math/Vector.hpp"
 
 namespace EmEn::Libs::VertexFactory
 {
 	/**
 	 * @brief The shape triangle class.
-	 * @tparam data_t The precision type of vertex data. Default float.
+	 * @tparam vertex_data_t The precision type of vertex data. Default float.
+	 * @tparam index_data_t The precision type of index data. Default uint32_t.
 	 */
-	template< typename data_t = float >
-	requires (std::is_floating_point_v< data_t >)
+	template< typename vertex_data_t = float, typename index_data_t = uint32_t >
+	requires (std::is_floating_point_v< vertex_data_t > && std::is_unsigned_v< index_data_t > )
 	class ShapeTriangle final
 	{
 		public:
@@ -54,7 +59,7 @@ namespace EmEn::Libs::VertexFactory
 			 * @param geometryVertexIndexB The second position index.
 			 * @param geometryVertexIndexC The third position index.
 			 */
-			ShapeTriangle (size_t geometryVertexIndexA, size_t geometryVertexIndexB, size_t geometryVertexIndexC) noexcept
+			ShapeTriangle (index_data_t geometryVertexIndexA, index_data_t geometryVertexIndexB, index_data_t geometryVertexIndexC) noexcept
 				: m_vertexIndexes({geometryVertexIndexA, geometryVertexIndexB, geometryVertexIndexC})
 			{
 
@@ -66,7 +71,7 @@ namespace EmEn::Libs::VertexFactory
 			 * @return void
 			 */
 			void
-			setSurfaceTangent (const Math::Vector< 3, data_t > & tangent) noexcept
+			setSurfaceTangent (const Math::Vector< 3, vertex_data_t > & tangent) noexcept
 			{
 				m_surfaceTangent = tangent;
 			}
@@ -77,53 +82,53 @@ namespace EmEn::Libs::VertexFactory
 			 * @return void
 			 */
 			void
-			setSurfaceNormal (const Math::Vector< 3, data_t > & normal) noexcept
+			setSurfaceNormal (const Math::Vector< 3, vertex_data_t > & normal) noexcept
 			{
 				m_surfaceNormal = normal;
 			}
 
 			/**
-			 * @brief Sets vertex index to one vertex of the triangle..
+			 * @brief Sets vertex index to one vertex of the triangle.
 			 * @param triangleVertexIndex The vertex index of the triangle. Must be 0, 1 or 2 !
 			 * @param geometryVertexIndex The vertex index from the geometry data.
 			 * @return void
 			 */
 			void
-			setVertexIndex (size_t triangleVertexIndex, size_t geometryVertexIndex) noexcept
+			setVertexIndex (index_data_t triangleVertexIndex, index_data_t geometryVertexIndex) noexcept
 			{
 				m_vertexIndexes[triangleVertexIndex] = geometryVertexIndex;
 			}
 
 			/**
-			 * @brief Sets vertex index to one vertex of the triangle..
+			 * @brief Sets vertex index to one vertex of the triangle.
 			 * @param triangleVertexIndex The vertex index of the triangle. Must be 0, 1 or 2 !
 			 * @param colorListIndex The color index from the geometry data.
 			 * @return void
 			 */
 			void
-			setVertexColorIndex (size_t triangleVertexIndex, size_t colorListIndex) noexcept
+			setVertexColorIndex (index_data_t triangleVertexIndex, index_data_t colorListIndex) noexcept
 			{
 				m_vertexColorIndexes[triangleVertexIndex] = colorListIndex;
 			}
 
 			/**
-			 * @brief Sets edge index to one vertex of the triangle..
+			 * @brief Sets edge index to one vertex of the triangle.
 			 * @param triangleVertexIndex The vertex index of the triangle. Must be 0, 1 or 2 !
 			 * @param edgeListIndex The edge index from the geometry data.
 			 * @return void
 			 */
 			void
-			setEdgeIndex (size_t triangleVertexIndex, size_t edgeListIndex) noexcept
+			setEdgeIndex (index_data_t triangleVertexIndex, index_data_t edgeListIndex) noexcept
 			{
 				m_edgeIndexes[triangleVertexIndex] = edgeListIndex;
 			}
 
 			/**
 			 * @brief Returns the surface tangent vector.
-			 * @return const Math::Vector< 3, data_t > &
+			 * @return const Math::Vector< 3, vertex_data_t > &
 			 */
 			[[nodiscard]]
-			const Math::Vector< 3, data_t > &
+			const Math::Vector< 3, vertex_data_t > &
 			surfaceTangent () const noexcept
 			{
 				return m_surfaceTangent;
@@ -131,10 +136,10 @@ namespace EmEn::Libs::VertexFactory
 
 			/**
 			 * @brief Returns the surface normal vector.
-			 * @return const Math::Vector< 3, data_t > &
+			 * @return const Math::Vector< 3, vertex_data_t > &
 			 */
 			[[nodiscard]]
-			const Math::Vector< 3, data_t > &
+			const Math::Vector< 3, vertex_data_t > &
 			surfaceNormal () const noexcept
 			{
 				return m_surfaceNormal;
@@ -142,23 +147,23 @@ namespace EmEn::Libs::VertexFactory
 
 			/**
 			 * @brief Returns the surface bi-normal vector.
-			 * @return const Math::Vector< 3, data_t > &
+			 * @return const Math::Vector< 3, vertex_data_t > &
 			 */
 			[[nodiscard]]
-			Math::Vector< 3, data_t >
+			Math::Vector< 3, vertex_data_t >
 			surfaceBinormal () const noexcept
 			{
-				return Math::Vector< 3, data_t >::crossProduct(m_surfaceNormal, m_surfaceTangent);
+				return Math::Vector< 3, vertex_data_t >::crossProduct(m_surfaceNormal, m_surfaceTangent);
 			}
 
 			/**
 			 * @brief Returns the vertex index in the geometry data from one vertex of the triangle.
 			 * @param triangleVertexIndex The vertex index of the triangle. Must be 0, 1 or 2 !
-			 * @return size_t
+			 * @return index_data_t
 			 */
 			[[nodiscard]]
-			size_t
-			vertexIndex (size_t triangleVertexIndex) const noexcept
+			index_data_t
+			vertexIndex (index_data_t triangleVertexIndex) const noexcept
 			{
 				return m_vertexIndexes[triangleVertexIndex];
 			}
@@ -166,11 +171,11 @@ namespace EmEn::Libs::VertexFactory
 			/**
 			 * @brief Returns the color index in the geometry data from one vertex of the triangle.
 			 * @param triangleVertexIndex The vertex index of the triangle. Must be 0, 1 or 2 !
-			 * @return size_t
+			 * @return index_data_t
 			 */
 			[[nodiscard]]
-			size_t
-			vertexColorIndex (size_t triangleVertexIndex) const noexcept
+			index_data_t
+			vertexColorIndex (index_data_t triangleVertexIndex) const noexcept
 			{
 				return m_vertexColorIndexes[triangleVertexIndex];
 			}
@@ -178,11 +183,11 @@ namespace EmEn::Libs::VertexFactory
 			/**
 			 * @brief Returns the edge index in the geometry data from one vertex of the triangle.
 			 * @param triangleVertexIndex The vertex index of the triangle. Must be 0, 1 or 2 !
-			 * @return size_t
+			 * @return index_data_t
 			 */
 			[[nodiscard]]
-			size_t
-			edgeIndex (size_t triangleVertexIndex) const noexcept
+			index_data_t
+			edgeIndex (index_data_t triangleVertexIndex) const noexcept
 			{
 				return m_edgeIndexes[triangleVertexIndex];
 			}
@@ -216,14 +221,14 @@ namespace EmEn::Libs::VertexFactory
 
 		private:
 
-			Math::Vector< 3, data_t > m_surfaceTangent{};
-			Math::Vector< 3, data_t > m_surfaceNormal{};
-			std::array< size_t, 3 > m_vertexIndexes{0, 0, 0}; /* Position, tangent, normal and texture coordinates indices. */
-			std::array< size_t, 3 > m_vertexColorIndexes{0, 0, 0};
-			std::array< size_t, 3 > m_edgeIndexes{
-				std::numeric_limits< size_t >::max(),
-				std::numeric_limits< size_t >::max(),
-				std::numeric_limits< size_t >::max()
+			Math::Vector< 3, vertex_data_t > m_surfaceTangent{};
+			Math::Vector< 3, vertex_data_t > m_surfaceNormal{};
+			std::array< index_data_t, 3 > m_vertexIndexes{0, 0, 0}; /* Position, tangent, normal and texture coordinates indices. */
+			std::array< index_data_t, 3 > m_vertexColorIndexes{0, 0, 0};
+			std::array< index_data_t, 3 > m_edgeIndexes{
+				std::numeric_limits< index_data_t >::max(),
+				std::numeric_limits< index_data_t >::max(),
+				std::numeric_limits< index_data_t >::max()
 			};
 	};
 }

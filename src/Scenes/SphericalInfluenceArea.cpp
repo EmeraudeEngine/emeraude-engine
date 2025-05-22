@@ -58,7 +58,7 @@ namespace EmEn::Scenes
 	}
 
 	bool
-	SphericalInfluenceArea::isUnderInfluence (const CartesianFrame< float > & worldCoordinates, const Sphere< float > & worldBoundingSphere) const noexcept
+	SphericalInfluenceArea::isUnderInfluence (const CartesianFrame< float > & worldCoordinates, const Space3D::Sphere< float > & worldBoundingSphere) const noexcept
 	{
 		const auto range = m_outerRadius + worldBoundingSphere.radius();
 
@@ -66,7 +66,7 @@ namespace EmEn::Scenes
 	}
 
 	float
-	SphericalInfluenceArea::influenceStrength (const CartesianFrame< float > & worldCoordinates, const Sphere< float > & worldBoundingSphere) const noexcept
+	SphericalInfluenceArea::influenceStrength (const CartesianFrame< float > & worldCoordinates, const Space3D::Sphere< float > & worldBoundingSphere) const noexcept
 	{
 		const auto distance = (worldCoordinates.position() - m_parentEntity->getWorldCoordinates().position()).length();
 
@@ -91,14 +91,14 @@ namespace EmEn::Scenes
 	}
 
 	bool
-	SphericalInfluenceArea::isUnderInfluence (const CartesianFrame< float > & worldCoordinates, const Cuboid< float > & worldBoundingBox) const noexcept
+	SphericalInfluenceArea::isUnderInfluence (const CartesianFrame< float > & /*worldCoordinates*/, const Space3D::AACuboid< float > & /*worldBoundingBox*/) const noexcept
 	{
 		/* FIXME: TODO ! */
 		return false;
 	}
 
 	float
-	SphericalInfluenceArea::influenceStrength (const CartesianFrame< float > & worldCoordinates, const Cuboid< float > & worldBoundingBox) const noexcept
+	SphericalInfluenceArea::influenceStrength (const CartesianFrame< float > & /*worldCoordinates*/, const Space3D::AACuboid< float > & /*worldBoundingBox*/) const noexcept
 	{
 		/* FIXME: TODO ! */
 		return 0.0F;

@@ -27,20 +27,18 @@
 #include "GeometryDataPrinter.hpp"
 
 /* STL inclusions. */
-#include <cstddef>
-#include <cstdint>
 #include <fstream>
 #include <iostream>
 #include <sstream>
 #include <vector>
 
 /* Local inclusions. */
+#include "Libs/VertexFactory/ShapeGenerator.hpp"
+#include "Libs/BlobTrait.hpp"
+#include "Graphics/Types.hpp"
 #include "Arguments.hpp"
 #include "Constants.hpp"
-#include "Graphics/Types.hpp"
-#include "Libs/BlobTrait.hpp"
 #include "Tracer.hpp"
-#include "Libs/VertexFactory/ShapeGenerator.hpp"
 
 namespace EmEn::Tool
 {
@@ -109,59 +107,59 @@ namespace EmEn::Tool
 		switch ( m_shapeType )
 		{
 			case ShapeType::Triangle :
-				m_shape = ShapeGenerator::generateTriangle(m_baseSize);
+				m_shape = ShapeGenerator::generateTriangle< float, uint32_t >(m_baseSize);
 				break;
 
 			case ShapeType::Quad :
-				m_shape = ShapeGenerator::generateQuad(m_baseSize);
+				m_shape = ShapeGenerator::generateQuad< float, uint32_t >(m_baseSize);
 				break;
 
 			case ShapeType::Cube :
-				m_shape = ShapeGenerator::generateCuboid(m_baseSize);
+				m_shape = ShapeGenerator::generateCuboid< float, uint32_t >(m_baseSize);
 				break;
 
 			case ShapeType::Sphere :
-				m_shape = ShapeGenerator::generateSphere(m_baseSize, m_quality, m_quality);
+				m_shape = ShapeGenerator::generateSphere< float, uint32_t >(m_baseSize, m_quality, m_quality);
 				break;
 
 			case ShapeType::GeodesicSphere :
-				m_shape = ShapeGenerator::generateGeodesicSphere(m_baseSize, m_quality);
+				m_shape = ShapeGenerator::generateGeodesicSphere< float, uint32_t >(m_baseSize, m_quality);
 				break;
 
 			case ShapeType::Cylinder :
-				m_shape = ShapeGenerator::generateCylinder(m_baseSize, m_baseSize, m_baseLength, m_quality);
+				m_shape = ShapeGenerator::generateCylinder< float, uint32_t >(m_baseSize, m_baseSize, m_baseLength, m_quality);
 				break;
 
 			case ShapeType::Cone :
-				m_shape = ShapeGenerator::generateCone(m_baseSize, m_baseLength, m_quality);
+				m_shape = ShapeGenerator::generateCone< float, uint32_t >(m_baseSize, m_baseLength, m_quality);
 				break;
 
 			case ShapeType::Disk :
-				m_shape = ShapeGenerator::generateDisk(m_baseSize, m_baseSize * Half< float >, m_quality);
+				m_shape = ShapeGenerator::generateDisk< float, uint32_t >(m_baseSize, m_baseSize * Half< float >, m_quality);
 				break;
 
 			case ShapeType::Torus :
-				m_shape = ShapeGenerator::generateTorus(m_baseSize, m_baseSize * Half< float >, m_quality, m_quality);
+				m_shape = ShapeGenerator::generateTorus< float, uint32_t >(m_baseSize, m_baseSize * Half< float >, m_quality, m_quality);
 				break;
 
 			case ShapeType::Tetrahedron :
-				m_shape = ShapeGenerator::generateTetrahedron(m_baseSize);
+				m_shape = ShapeGenerator::generateTetrahedron< float, uint32_t >(m_baseSize);
 				break;
 
 			case ShapeType::Hexahedron :
-				m_shape = ShapeGenerator::generateHexahedron(m_baseSize);
+				m_shape = ShapeGenerator::generateHexahedron< float, uint32_t >(m_baseSize);
 				break;
 
 			case ShapeType::Octahedron :
-				m_shape = ShapeGenerator::generateOctahedron(m_baseSize);
+				m_shape = ShapeGenerator::generateOctahedron< float, uint32_t >(m_baseSize);
 				break;
 
 			case ShapeType::Dodecahedron :
-				m_shape = ShapeGenerator::generateDodecahedron(m_baseSize);
+				m_shape = ShapeGenerator::generateDodecahedron< float, uint32_t >(m_baseSize);
 				break;
 
 			case ShapeType::Icosahedron :
-				m_shape = ShapeGenerator::generateIcosahedron(m_baseSize);
+				m_shape = ShapeGenerator::generateIcosahedron< float, uint32_t >(m_baseSize);
 				break;
 
 			case ShapeType::Custom :
@@ -196,7 +194,7 @@ namespace EmEn::Tool
 			out <<
 				"#pragma once" "\n\n"
 
-				"#include <cstddef>" "\n"
+				"#include <cstdint>" "\n"
 				"#include <array>" "\n\n";
 
 			out << this->printData();
@@ -204,7 +202,7 @@ namespace EmEn::Tool
 			out.close();
 		}
 
-		Tracer::instance()->enableTracing(false);
+		Tracer::instance()->disableTracer(true);
 
 		return true;
 	}
@@ -212,8 +210,8 @@ namespace EmEn::Tool
 	std::string
 	GeometryDataPrinter::printData () const noexcept
 	{
-		std::vector< float > vertices{};
-		std::vector< size_t > indices{};
+		std::vector< float > vertices;
+		std::vector< uint32_t > indices;
 
 		NormalType normals;
 		TextureCoordinatesType textureCoordinates;
@@ -247,8 +245,8 @@ namespace EmEn::Tool
 		std::stringstream out{};
 
 		out <<
-			"const size_t vertexElementCount = " << vertexElementCount << ";" "\n"
-			"const size_t vertexCount = " << m_shape.vertexCount() << ";" "\n\n"
+			"const uint32_t vertexElementCount = " << vertexElementCount << ";" "\n"
+			"const uint32_t vertexCount = " << m_shape.vertexCount() << ";" "\n\n"
 
 			"const std::array< float, " << vertexElementCount * m_shape.vertexCount() << " > vertices{" "\n";
 
@@ -266,7 +264,7 @@ namespace EmEn::Tool
 
 		out << "};" "\n\n";
 
-		out << "const std::array< size_t, " << indices.size() << " > indices{" "\n";
+		out << "const std::array< uint32_t, " << indices.size() << " > indices{" "\n";
 
 		for ( size_t index = 0; index < indices.size(); index += 3 )
 		{

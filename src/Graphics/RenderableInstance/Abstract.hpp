@@ -27,9 +27,9 @@
 #pragma once
 
 /* STL inclusions. */
-#include <any>
 #include <cstddef>
 #include <cstdint>
+#include <any>
 #include <unordered_map>
 #include <memory>
 #include <string>
@@ -44,6 +44,7 @@
 /* Local inclusions for usages. */
 #include "Graphics/Renderable/Interface.hpp"
 #include "Graphics/Types.hpp"
+#include "RenderTargetProgramsInterface.hpp"
 
 /* Forward declarations. */
 namespace EmEn
@@ -84,13 +85,15 @@ namespace EmEn
 
 namespace EmEn::Graphics::RenderableInstance
 {
+	constexpr bool MergePushConstants{true};
+
 	/** @brief Renderable instance flag bits. */
 	enum RenderableInstanceFlagBits : uint32_t
 	{
 		None = 0,
 		/**
 		 * @brief This flag is set when the renderable instance is ready to be rendered in a 3D scene.
-		 * @warning This is different from the renderable flag "IsReadyForInstantiation" !
+		 * @warning This is different from the renderable flag "IsReadyForInstantiation"!
 		 */
 		IsReadyToRender = 1 << 0,
 		/**
@@ -122,23 +125,16 @@ namespace EmEn::Graphics::RenderableInstance
 		DisableStencilWrite = 1 << 12,
 		/** @brief [DEBUG] This flag tells the renderer to display tangent space vectors on the render instance. */
 		DisplayTBNSpaceEnabled = 1 << 13,
-		/** @brief This flag tells the renderable instance need an extra transformation matrix to be applied. */
+		/** @brief This flag tells the renderable instance to need an extra transformation matrix to be applied. */
 		ApplyTransformationMatrix = 1 << 14,
-		/** @brief This flag tells disable the light distance check. */
+		/** @brief This flag tells disabling the light distance check. */
 		DisableLightDistanceCheck = 1 << 15
-	};
-
-	/**	@brief Structure to render an instance for a specific render target. */
-	struct RenderTargetPrograms
-	{
-		std::unordered_map< RenderPassType, std::vector< std::shared_ptr< Saphir::Program > > > renderPasses;
-		bool isReadyToRender{false};
 	};
 
 	/**
 	 * @brief Defines the base of renderable instance to draw any object in a scene.
 	 * @extends EmEn::Libs::FlagTrait A renderable instance is flag-able.
-	 * @extends EmEn::Libs::ObserverTrait A renderable instance need to observe the renderable loading.
+	 * @extends EmEn::Libs::ObserverTrait A renderable instance needs to observe the renderable loading.
 	 * @extends EmEn::Libs::ObservableTrait A renderable instance is observable as well.
 	 */
 	class Abstract : public std::enable_shared_from_this< Abstract >, public Libs::FlagTrait< uint32_t >, public Libs::ObserverTrait, public Libs::ObservableTrait
@@ -205,19 +201,20 @@ namespace EmEn::Graphics::RenderableInstance
 			}
 
 			/**
+			 * @brief Returns whether this instance is ready to cast shadows.
+			 * @param renderTarget A reference to a render target smart pointer.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool isReadyToCastShadows (const std::shared_ptr< RenderTarget::Abstract > & renderTarget) const noexcept;
+
+			/**
 			 * @brief Returns whether this instance is ready for rendering.
 			 * @param renderTarget A reference to a render target smart pointer.
 			 * @return bool
 			 */
 			[[nodiscard]]
 			bool isReadyToRender (const std::shared_ptr< RenderTarget::Abstract > & renderTarget) const noexcept;
-
-			/**
-			 * @brief Disables the renderable instance for rendering.
-			 * @param renderTarget A reference to a render target smart pointer.
-			 * @return void
-			 */
-			void disableForRender (const std::shared_ptr< RenderTarget::Abstract > & renderTarget) noexcept;
 
 			/**
 			 * @brief Returns whether this renderable instance is unable to get ready for rendering.
@@ -392,7 +389,7 @@ namespace EmEn::Graphics::RenderableInstance
 			}
 
 			/**
-			 * @brief Returns whether the depth write is disabled with this instance.
+			 * @brief Returns whether the depth writes is disabled with this instance.
 			 * @return bool
 			 */
 			[[nodiscard]]
@@ -468,7 +465,16 @@ namespace EmEn::Graphics::RenderableInstance
 			}
 
 			/**
-			 * @brief Get the renderable instance ready to render in a scene.
+			 * @brief Gets the renderable instance ready to render in a scene.
+			 * @param renderTarget A reference to the render target smart pointer.
+			 * @param renderer A writable reference to the graphics renderer.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool getReadyForShadowCasting (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, Renderer & renderer) noexcept;
+
+			/**
+			 * @brief Gets the renderable instance ready to render in a scene.
 			 * @param scene A reference to the scene.
 			 * @param renderTarget A reference to the render target smart pointer.
 			 * @param renderPassTypes A reference to a list of requested render pass types.
@@ -493,7 +499,7 @@ namespace EmEn::Graphics::RenderableInstance
 			 * @brief Sets the renderable instance broken from a child class.
 			 * @note This is the debug version.
 			 * @param errorMessage Trace an error message.
-			 * @param location If a message has to be traced, this pass the location. Default auto-generated by the mighty C++ STL.
+			 * @param location If a message has to be traced, this passes the location. Default auto-generated by the mighty C++ STL.
 			 * @return void
 			 */
 			void setBroken (const std::string & errorMessage, const std::source_location & location = std::source_location::current()) noexcept;
@@ -523,28 +529,6 @@ namespace EmEn::Graphics::RenderableInstance
 			}
 
 			/**
-			 * @brief Sets a graphics pipeline for shadow casting.
-			 * @param program A reference to a program smart pointer.
-			 * @return void
-			 */
-			void
-			setShadowProgram (const std::shared_ptr< Saphir::Program > & program) noexcept
-			{
-				m_shadowProgram = program;
-			}
-
-			/**
-			 * @brief Sets a graphics pipeline for displaying the geometry TBN space.
-			 * @param program A reference to a program smart pointer.
-			 * @return void
-			 */
-			void
-			setTBNSpaceProgram (const std::shared_ptr< Saphir::Program > & program) noexcept
-			{
-				m_TBNSpaceProgram = program;
-			}
-
-			/**
 			 * @brief Refresh graphics pipelines for a specific render target.
 			 * @param renderTarget A reference to the render target smart pointer.
 			 * @return bool
@@ -559,38 +543,33 @@ namespace EmEn::Graphics::RenderableInstance
 			void destroyGraphicsPipelines (const std::shared_ptr< RenderTarget::Abstract > & renderTarget) noexcept;
 
 			/**
-			 * @brief Validates the renderable instance by checking graphics pipeline.
-			 * @param renderTarget A reference to the render target smart pointer.
-			 * @return bool
-			 */
-			[[nodiscard]]
-			bool validate (const std::shared_ptr< RenderTarget::Abstract > & renderTarget) noexcept;
-
-			/**
 			 * @brief Draws the instance in a shadow map.
 			 * @param renderTarget A reference to the render target smart pointer.
+			 * @param layerIndex The renderable layer index.
 			 * @param commandBuffer A reference to a command buffer.
 			 * @return void
 			 */
-			void castShadows (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const Vulkan::CommandBuffer & commandBuffer) const noexcept;
+			void castShadows (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, uint32_t layerIndex, const Vulkan::CommandBuffer & commandBuffer) const noexcept;
 
 			/**
 			 * @brief Draws the instance in a render target.
 			 * @param renderTarget A reference to the render target smart pointer.
 			 * @param lightEmitter A pointer to an optional light emitter. TODO: should be a smart pointer.
 			 * @param renderPassType The render pass type into the render target.
+			 * @param layerIndex The renderable layer index.
 			 * @param commandBuffer A reference to a command buffer.
 			 * @return void
 			 */
-			void render (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const Scenes::Component::AbstractLightEmitter * lightEmitter, RenderPassType renderPassType, const Vulkan::CommandBuffer & commandBuffer) const noexcept;
+			void render (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const Scenes::Component::AbstractLightEmitter * lightEmitter, RenderPassType renderPassType, uint32_t layerIndex, const Vulkan::CommandBuffer & commandBuffer) const noexcept;
 
 			/**
 			 * @brief Draws the TBN space over each vertex.
 			 * @param renderTarget A reference to the render target smart pointer.
+			 * @param layerIndex The renderable layer index.
 			 * @param commandBuffer A reference to a command buffer.
 			 * @return void
 			 */
-			void renderTBNSpace (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const Vulkan::CommandBuffer & commandBuffer) const noexcept;
+			void renderTBNSpace (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, uint32_t layerIndex, const Vulkan::CommandBuffer & commandBuffer) const noexcept;
 
 			/**
 			 * @brief Returns whether this instance is animated with frames.
@@ -646,12 +625,12 @@ namespace EmEn::Graphics::RenderableInstance
 			virtual void pushMatrices (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::PipelineLayout & pipelineLayout, const ViewMatricesInterface & viewMatrices, const Saphir::Program & program) const noexcept = 0;
 
 			/**
-			 * @brief Returns the number of instance to draw.
+			 * @brief Returns the number of instances to draw.
 			 * @note This is a more convenient named method than get the vertex count from the VBO.
-			 * @return size_t
+			 * @return uint32_t
 			 */
 			[[nodiscard]]
-			virtual size_t instanceCount () const noexcept = 0;
+			virtual uint32_t instanceCount () const noexcept = 0;
 
 			/**
 			 * @brief Returns whether model matrices are created in video memory.
@@ -686,7 +665,7 @@ namespace EmEn::Graphics::RenderableInstance
 			 * @param layerIndex The current layer to bind.
 			 * @return void
 			 */
-			virtual void bindInstanceModelLayer (const Vulkan::CommandBuffer & commandBuffer, size_t layerIndex) const noexcept = 0;
+			virtual void bindInstanceModelLayer (const Vulkan::CommandBuffer & commandBuffer, uint32_t layerIndex) const noexcept = 0;
 
 			mutable std::mutex m_GPUMemoryAccess{};
 
@@ -696,14 +675,13 @@ namespace EmEn::Graphics::RenderableInstance
 			[[nodiscard]]
 			bool onNotification (const ObservableTrait * observable, int notificationCode, const std::any & data) noexcept override;
 
-			std::shared_ptr< Renderable::Interface > m_renderable;
-			std::unordered_map<
-				std::shared_ptr< RenderTarget::Abstract >,
-				RenderTargetPrograms
-			> m_renderTargets;
-			size_t m_frameIndex{0};
+			[[nodiscard]]
+			RenderTargetProgramsInterface * getOrCreateRenderTargetProgramInterface (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, uint32_t layerCount);
+
 			Libs::Math::Matrix< 4, float > m_transformationMatrix;
-			std::shared_ptr< Saphir::Program > m_shadowProgram;
-			std::shared_ptr< Saphir::Program > m_TBNSpaceProgram;
+			std::shared_ptr< Renderable::Interface > m_renderable;
+			std::unordered_map< std::shared_ptr< const RenderTarget::Abstract >, std::unique_ptr< RenderTargetProgramsInterface > > m_renderTargetPrograms;
+			uint32_t m_frameIndex{0};
+
 	};
 }

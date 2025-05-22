@@ -44,7 +44,7 @@
 #include "Saphir/LightGenerator.hpp"
 #include "Graphics/Renderer.hpp"
 #include "Graphics/Types.hpp"
-#include "Vulkan/DescriptorSet.hpp"
+#include "Vulkan/DescriptorSetLayout.hpp"
 #include "Helpers.hpp"
 #include "Resources/Manager.hpp"
 #include "Component/Texture.hpp"
@@ -68,8 +68,8 @@ namespace EmEn::Graphics::Material
 
 	const size_t BasicResource::ClassUID{getClassUID(ClassId)};
 
-	BasicResource::BasicResource (const std::string & name, int resourceFlagBits) noexcept
-		: Interface(name, resourceFlagBits)
+	BasicResource::BasicResource (const std::string & name, int resourceFlags) noexcept
+		: Interface(name, resourceFlags)
 	{
 
 	}
@@ -136,7 +136,7 @@ namespace EmEn::Graphics::Material
 			{
 				m_textureComponent = std::make_unique< Component::Texture >(Uniform::PrimarySampler, SurfaceColor, componentData, fillingType, *Resources::Manager::instance());
 
-				auto * textureResource = m_textureComponent->textureResource().get();
+				const auto textureResource = m_textureComponent->textureResource();
 
 				if ( !this->addDependency(textureResource) )
 				{
@@ -412,7 +412,7 @@ namespace EmEn::Graphics::Material
 		}
 
 		/* Reset to defaults. */
-		this->resetFlagBits();
+		this->resetFlags();
 
 		/* Reset member variables. */
 		m_physicalSurfaceProperties.reset();
@@ -470,7 +470,7 @@ namespace EmEn::Graphics::Material
 		return textureResource->duration();
 	}
 
-	size_t
+	uint32_t
 	BasicResource::frameIndexAt (uint32_t sceneTime) const noexcept
 	{
 		if ( !this->isFlagEnabled(Animated) || m_textureComponent == nullptr )
@@ -508,8 +508,6 @@ namespace EmEn::Graphics::Material
 	{
 		if ( !this->isFlagEnabled(BlendingEnabled) )
 		{
-			TraceWarning{ClassId} << "The blending is not enabled with the material resource '" << this->name() << "' !";
-
 			return BlendingMode::None;
 		}
 
@@ -583,7 +581,7 @@ namespace EmEn::Graphics::Material
 			return false;
 		}
 
-		const auto * geometry = generator.geometry();
+		const auto * geometry = generator.getGeometryInterface();
 
 		if ( !generator.highQualityLightEnabled() && !generator.declareMaterialUniformBlock(*this, vertexShader, 0) )
 		{
@@ -699,7 +697,7 @@ namespace EmEn::Graphics::Material
 
 		if ( m_textureComponent != nullptr )
 		{
-			const uint32_t materialSet = generator.program()->setIndex(SetType::PerModelLayer);
+			const uint32_t materialSet = generator.shaderProgram()->setIndex(SetType::PerModelLayer);
 
 			return this->generateFragmentShaderCodeWithTexture(fragmentShader, materialSet);
 		}
@@ -756,7 +754,7 @@ namespace EmEn::Graphics::Material
 			return false;
 		}
 
-		if ( !this->addDependency(texture.get()) )
+		if ( !this->addDependency(texture) )
 		{
 			TraceError{ClassId} << "Unable to link the texture '" << texture->name() << "' dependency to material '" << this->name() << "' !";
 
@@ -842,17 +840,5 @@ namespace EmEn::Graphics::Material
 		m_flags[EnableAutoIllumination] = true;
 
 		return this->updateVideoMemory();
-	}
-
-	std::shared_ptr< BasicResource >
-	BasicResource::get (const std::string & resourceName, bool directLoad) noexcept
-	{
-		return Resources::Manager::instance()->basicMaterials().getResource(resourceName, !directLoad);
-	}
-
-	std::shared_ptr< BasicResource >
-	BasicResource::getDefault () noexcept
-	{
-		return Resources::Manager::instance()->basicMaterials().getDefaultResource();
 	}
 }

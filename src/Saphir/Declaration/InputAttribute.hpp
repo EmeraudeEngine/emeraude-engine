@@ -52,7 +52,7 @@ namespace EmEn::Saphir::Declaration
 
 	/**
 	 * @brief Defines a vertex attribute in a shader.
-	 * @extends EmEn::Saphir::DeclarationInterface This is a shader code declaration.
+	 * @extends EmEn::Saphir::Declaration::Interface This is a shader code declaration.
 	 */
 	class InputAttribute final : public Interface
 	{
@@ -78,48 +78,67 @@ namespace EmEn::Saphir::Declaration
 			 * @param name A C-string to set the name of the attribute.
 			 * @param arraySize An integer to set the size of the array. Default 0.
 			 */
-			InputAttribute (uint32_t location, Key type, Key name, size_t arraySize = 0) noexcept;
+			InputAttribute (uint32_t location, Key type, Key name, uint32_t arraySize = 0) noexcept;
 
-			/** @copydoc EmEn::Saphir::DeclarationInterface::isValid() */
+			/** @copydoc EmEn::Saphir::Declaration::Interface::isValid() */
 			[[nodiscard]]
 			bool isValid () const noexcept override;
 
-			/** @copydoc EmEn::Saphir::DeclarationInterface::name() */
+			/** @copydoc EmEn::Saphir::Declaration::Interface::name() */
 			[[nodiscard]]
-			Key name () const noexcept override;
+			Key
+			name () const noexcept override
+			{
+				return m_name;
+			}
 
-			/** @copydoc EmEn::Saphir::DeclarationInterface::bytes() */
+			/** @copydoc EmEn::Saphir::Declaration::Interface::bytes() */
 			[[nodiscard]]
-			size_t bytes () const noexcept override;
+			uint32_t bytes () const noexcept override
+			{
+				return 0;
+			}
 
-			/** @copydoc EmEn::Saphir::DeclarationInterface::sourceCode() */
+			/** @copydoc EmEn::Saphir::Declaration::Interface::sourceCode() */
 			[[nodiscard]]
 			std::string sourceCode () const noexcept override;
 
 			/**
 			 * @brief Returns the variable location in the shader.
-			 * @param uint32_t
+			 * @return uint32_t
 			 */
 			[[nodiscard]]
-			uint32_t location () const noexcept;
+			uint32_t
+			location () const noexcept
+			{
+				return m_location;
+			}
 
 			/**
 			 * @brief Returns the variable type.
-			 * @param Key
+			 * @return Key
 			 */
 			[[nodiscard]]
-			Key type () const noexcept;
+			Key
+			type () const noexcept
+			{
+				return m_type;
+			}
 
 			/**
 			 * @brief Returns the array size.
-			 * @param size_t
+			 * @return uint32_t
 			 */
 			[[nodiscard]]
-			size_t arraySize () const noexcept;
+			uint32_t
+			arraySize () const noexcept
+			{
+				return m_arraySize;
+			}
 
 			/**
 			 * @brief Returns whether the attribute is part of the model matrices VBO.
-			 * @param bool
+			 * @return bool
 			 */
 			[[nodiscard]]
 			bool isModelMatricesVBOAttribute () const noexcept;
@@ -129,6 +148,6 @@ namespace EmEn::Saphir::Declaration
 			uint32_t m_location;
 			Key m_type;
 			Key m_name;
-			size_t m_arraySize{0};
+			uint32_t m_arraySize{0};
 	};
 }

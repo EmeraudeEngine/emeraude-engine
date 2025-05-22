@@ -46,10 +46,10 @@ namespace EmEn::Graphics::TextureResource
 	using namespace EmEn::Libs::PixelFactory;
 	using namespace Vulkan;
 
-	static constexpr auto TracerTag{"AbstractTextureResource"};
+	constexpr auto TracerTag{"AbstractTextureResource"};
 
-	Abstract::Abstract (const std::string & name, uint32_t resourceFlagBits) noexcept
-		: ResourceTrait(name, resourceFlagBits)
+	Abstract::Abstract (const std::string & name, uint32_t resourceFlags) noexcept
+		: ResourceTrait(name, resourceFlags)
 	{
 
 	}
@@ -116,18 +116,11 @@ namespace EmEn::Graphics::TextureResource
 	}
 
 	bool
-	Abstract::validatePixmap (const char * classId, Pixmap< uint8_t > & pixmap, bool disablePowerOfTwoCheck) noexcept
+	Abstract::validatePixmap (const char * classId, const std::string & resourceName, Pixmap< uint8_t > & pixmap) noexcept
 	{
 		if ( !pixmap.isValid() )
 		{
-			Tracer::error(classId, "The pixmap is invalid !");
-
-			return false;
-		}
-
-		if ( !disablePowerOfTwoCheck && !pixmap.isPowerOfTwo() )
-		{
-			TraceError{classId} << "The pixmap size are not power of two (" << pixmap.width() << "X" << pixmap.height() << ") !";
+			TraceError{classId} << "The pixmap for resource '" << resourceName << "' is invalid !";
 
 			return false;
 		}
@@ -135,14 +128,37 @@ namespace EmEn::Graphics::TextureResource
 		/* TODO: Sometimes gray scale GPU resources is useful ! */
 		if ( pixmap.colorCount() != 4 )
 		{
-			Tracer::warning(classId, "The pixmap color channel mismatch the system ! Converting to RGBA ...");
+			if ( !s_quietConversion )
+			{
+				TraceWarning{classId} << "The pixmap for resource '" << resourceName << "' color channel mismatch the system ! Converting to RGBA ...";
+			}
 
 			pixmap = Processor< uint8_t >::toRGBA(pixmap);
 		}
 
 		if ( !pixmap.isValid() )
 		{
-			Tracer::error(classId, "The pixmap became invalid after validation !");
+			TraceError{classId} << "The pixmap for resource '" << resourceName << "' became invalid after validation !";
+
+			return false;
+		}
+
+		return true;
+	}
+
+	bool
+	Abstract::validateTexture (const Pixmap< uint8_t > & pixmap, bool disablePowerOfTwoCheck) const noexcept
+	{
+		if ( !pixmap.isValid() )
+		{
+			TraceError{TracerTag} << "The pixmap for resource '" << this->name() << "' is invalid !";
+
+			return false;
+		}
+
+		if ( !disablePowerOfTwoCheck && !pixmap.isPowerOfTwo() )
+		{
+			TraceError{TracerTag} << "The pixmap size for resource '" << this->name() << "' are not power of two (" << pixmap.width() << "X" << pixmap.height() << ") !";
 
 			return false;
 		}

@@ -44,11 +44,11 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 		Quit
 	};
 
-	static constexpr auto NoButtonString{"NoButton"};
-	static constexpr auto OKString{"OK"};
-	static constexpr auto OKCancelString{"OKCancel"};
-	static constexpr auto YesNoString{"YesNo"};
-	static constexpr auto QuitString{"Quit"};
+	constexpr auto NoButtonString{"NoButton"};
+	constexpr auto OKString{"OK"};
+	constexpr auto OKCancelString{"OKCancel"};
+	constexpr auto YesNoString{"YesNo"};
+	constexpr auto QuitString{"Quit"};
 
 	/**
 	 * @brief Returns a C-String version of the enum value.
@@ -90,10 +90,10 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 		Question
 	};
 
-	static constexpr auto InfoString{"Info"};
-	static constexpr auto WarningString{"Warning"};
-	static constexpr auto ErrorString{"Error"};
-	static constexpr auto QuestionString{"Question"};
+	constexpr auto InfoString{"Info"};
+	constexpr auto WarningString{"Warning"};
+	constexpr auto ErrorString{"Error"};
+	constexpr auto QuestionString{"Question"};
 
 	/**
 	 * @brief Returns a C-String version of the enum value.
@@ -133,14 +133,16 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 		OK,
 		Cancel,
 		Yes,
-		No
+		No,
+		DialogFailure
 	};
 
-	static constexpr auto NoneString{"None"};
-	//static constexpr auto OKString{"OK"};
-	static constexpr auto CancelString{"Cancel"};
-	static constexpr auto YesString{"Yes"};
-	static constexpr auto NoString{"No"};
+	constexpr auto NoneString{"None"};
+	//constexpr auto OKString{"OK"};
+	constexpr auto CancelString{"Cancel"};
+	constexpr auto YesString{"Yes"};
+	constexpr auto NoString{"No"};
+	constexpr auto DialogFailureString{"DialogFailure"};
 
 	/**
 	 * @brief Returns a C-String version of the enum value.

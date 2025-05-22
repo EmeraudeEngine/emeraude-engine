@@ -100,7 +100,7 @@ namespace EmEn::AVConsole
 			}
 
 			/**
-			 * @brief Returns the device allowed connexion type.
+			 * @brief Returns the device allowed a connexion type.
 			 * @return ConnexionType
 			 */
 			[[nodiscard]]
@@ -181,13 +181,21 @@ namespace EmEn::AVConsole
 			bool connect (const std::shared_ptr< AbstractVirtualDevice > & targetDevice, bool quietly = false) noexcept;
 
 			/**
-			 * @brief Interconnects a virtual device between existing output.
+			 * @brief Interconnects a virtual device between an existing output.
 			 * @note this[Output] -> target[Input]
 			 * @param targetDevice A reference to a virtual device smart pointer.
-			 * @param filterDevice This will only target one device by its name. Default All.
 			 * @return bool
 			 */
-			bool interconnect (const std::shared_ptr< AbstractVirtualDevice > & targetDevice, const std::string & filterDevice = {}) noexcept;
+			bool interconnect (const std::shared_ptr< AbstractVirtualDevice > & targetDevice) noexcept;
+
+			/**
+			 * @brief Interconnects a virtual device between all existing outputs.
+			 * @note this[Output] -> target[Input]
+			 * @param targetDevice A reference to a virtual device smart pointer.
+			 * @param outputDeviceName A reference to a string.
+			 * @return bool
+			 */
+			bool interconnect (const std::shared_ptr< AbstractVirtualDevice > & targetDevice, const std::string & outputDeviceName) noexcept;
 
 			/**
 			 * @brief Disconnects the output of this virtual device from the input of a virtual device.
@@ -229,7 +237,7 @@ namespace EmEn::AVConsole
 			VideoType
 			videoType () const noexcept
 			{
-				/* NOTE: A video device should override this method ! */
+				/* NOTE: A video device should override this method! */
 				assert(m_type == DeviceType::Audio);
 
 				return VideoType::NotVideoDevice;
@@ -246,9 +254,9 @@ namespace EmEn::AVConsole
 			 */
 			virtual
 			void
-			updateProperties (bool isPerspectiveProjection, float distance, float fovOrNear) noexcept
+			updateProperties (bool /*isPerspectiveProjection*/, float /*distance*/, float /*fovOrNear*/) noexcept
 			{
-				/* NOTE: A video device should override this method ! */
+				/* NOTE: A video device should override this method! */
 				assert(m_type == DeviceType::Audio);
 			}
 
@@ -258,7 +266,7 @@ namespace EmEn::AVConsole
 			 * @param sourceDevice A pointer to the virtual device.
 			 * @return void
 			 */
-			virtual void onSourceConnected (AbstractVirtualDevice * sourceDevice) noexcept
+			virtual void onSourceConnected (AbstractVirtualDevice * /*sourceDevice*/) noexcept
 			{
 
 			}
@@ -269,7 +277,7 @@ namespace EmEn::AVConsole
 			 * @param targetDevice A pointer to the virtual device.
 			 * @return void
 			 */
-			virtual void onTargetConnected (AbstractVirtualDevice * targetDevice) noexcept
+			virtual void onTargetConnected (AbstractVirtualDevice * /*targetDevice*/) noexcept
 			{
 
 			}
@@ -280,7 +288,7 @@ namespace EmEn::AVConsole
 			 * @param sourceDevice A pointer to the virtual device.
 			 * @return void
 			 */
-			virtual void onSourceDisconnected (AbstractVirtualDevice * sourceDevice) noexcept
+			virtual void onSourceDisconnected (AbstractVirtualDevice * /*sourceDevice*/) noexcept
 			{
 
 			}
@@ -291,7 +299,7 @@ namespace EmEn::AVConsole
 			 * @param targetDevice A pointer to the virtual device.
 			 * @return void
 			 */
-			virtual void onTargetDisconnected (AbstractVirtualDevice * targetDevice) noexcept
+			virtual void onTargetDisconnected (AbstractVirtualDevice * /*targetDevice*/) noexcept
 			{
 
 			}

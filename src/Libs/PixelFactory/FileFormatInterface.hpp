@@ -27,6 +27,7 @@
 #pragma once
 
 /* STL inclusions. */
+#include <cstdint>
 #include <array>
 #include <filesystem>
 
@@ -37,10 +38,11 @@ namespace EmEn::Libs::PixelFactory
 {
 	/**
 	 * @brief File format interface for reading and writing a pixmap.
-	 * @tparam data_t The data precision.
+	 * @tparam pixel_data_t The pixel component type for the pixmap depth precision. Default uint8_t.
+	 * @tparam dimension_t The type of unsigned integer used for pixmap dimension. Default uint32_t.
 	 */
-	template< typename data_t >
-	requires (std::is_arithmetic_v< data_t >)
+	template< typename pixel_data_t = uint8_t, typename dimension_t = uint32_t >
+	requires (std::is_arithmetic_v< pixel_data_t > && std::is_unsigned_v< dimension_t >)
 	class FileFormatInterface
 	{
 		public:
@@ -94,7 +96,7 @@ namespace EmEn::Libs::PixelFactory
 			 * @param pixmap A reference to the pixmap.
 			 * @return bool
 			 */
-			virtual bool readFile (const std::filesystem::path & filepath, Pixmap< data_t > & pixmap) noexcept = 0;
+			virtual bool readFile (const std::filesystem::path & filepath, Pixmap< pixel_data_t, dimension_t > & pixmap) noexcept = 0;
 
 			/**
 			 * @brief Writes the pixmap to a file.
@@ -102,7 +104,7 @@ namespace EmEn::Libs::PixelFactory
 			 * @param pixmap A read-only reference to the pixmap.
 			 * @return bool
 			 */
-			virtual bool writeFile (const std::filesystem::path & filepath, const Pixmap< data_t > & pixmap) const noexcept = 0;
+			virtual bool writeFile (const std::filesystem::path & filepath, const Pixmap< pixel_data_t, dimension_t > & pixmap) const noexcept = 0;
 
 		protected:
 

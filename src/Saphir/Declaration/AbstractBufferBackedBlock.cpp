@@ -30,6 +30,9 @@
 #include <sstream>
 
 /* Local inclusions. */
+#include <ranges>
+
+
 #include "Libs/Utility.hpp"
 #include "Tracer.hpp"
 
@@ -38,10 +41,13 @@ namespace EmEn::Saphir::Declaration
 	using namespace EmEn::Libs;
 	using namespace Keys;
 
-	static constexpr auto TracerTag{"BufferBackedBlock"};
+	constexpr auto TracerTag{"BufferBackedBlock"};
 
-	AbstractBufferBackedBlock::AbstractBufferBackedBlock (uint32_t set, uint32_t binding, MemoryLayout memoryLayout, Key name, Key instanceName, size_t arraySize) noexcept
-		: BlockInterface(name, instanceName, arraySize), m_set(set), m_binding(binding), m_memoryLayout(memoryLayout)
+	AbstractBufferBackedBlock::AbstractBufferBackedBlock (uint32_t set, uint32_t binding, MemoryLayout memoryLayout, Key name, Key instanceName, uint32_t arraySize) noexcept
+		: BlockInterface(name, instanceName, arraySize),
+		m_set(set),
+		m_binding(binding),
+		m_memoryLayout(memoryLayout)
 	{
 
 	}
@@ -67,58 +73,28 @@ namespace EmEn::Saphir::Declaration
 		return true;
 	}
 
-	void
-	AbstractBufferBackedBlock::setMatrixStorageOrder (MatrixStorageOrder matrixStorageOrder) noexcept
-	{
-		m_matrixStorageOrder = matrixStorageOrder;
-	}
-
-	size_t
+	uint32_t
 	AbstractBufferBackedBlock::bytes () const noexcept
 	{
-		size_t size = 0;
+		uint32_t size = 0;
 
-		for ( const auto & structure : this->structures() )
+		for ( const auto & structure: this->structures() | std::views::values )
 		{
-			size += structure.second.bytes();
+			size += structure.bytes();
 		}
 
-		for ( const auto & member : this->members() )
+		for ( const auto & bufferBackedBlock: this->members() | std::views::values )
 		{
-			size += member.second.bytes();
+			size +=  bufferBackedBlock.bytes();
 		}
 
 		/* FIXME: Check alignment. */
-		if ( this->arraySize() > 1UL )
+		if ( this->arraySize() > 1U )
 		{
 			size *= this->arraySize();
 		}
 
 		return size;
-	}
-
-	uint32_t
-	AbstractBufferBackedBlock::set () const noexcept
-	{
-		return m_set;
-	}
-
-	uint32_t
-	AbstractBufferBackedBlock::binding () const noexcept
-	{
-		return m_binding;
-	}
-
-	MatrixStorageOrder
-	AbstractBufferBackedBlock::matrixStorageOrder () const noexcept
-	{
-		return m_matrixStorageOrder;
-	}
-
-	const std::vector< std::pair< Key, Member::BufferBackedBlock > > &
-	AbstractBufferBackedBlock::members () const noexcept
-	{
-		return m_members;
 	}
 
 	bool
@@ -167,7 +143,7 @@ namespace EmEn::Saphir::Declaration
 	}
 
 	bool
-	AbstractBufferBackedBlock::addArrayMember (VariableType type, Key name, size_t arraySize, Key layout) noexcept
+	AbstractBufferBackedBlock::addArrayMember (VariableType type, Key name, uint32_t arraySize, Key layout) noexcept
 	{
 		if ( Utility::contains(m_members, name) )
 		{
@@ -176,7 +152,7 @@ namespace EmEn::Saphir::Declaration
 			return false;
 		}
 
-		if ( arraySize == 0UL )
+		if ( arraySize == 0 )
 		{
 			return false;
 		}
@@ -191,7 +167,7 @@ namespace EmEn::Saphir::Declaration
 	}
 
 	bool
-	AbstractBufferBackedBlock::addArrayMember (const Structure & structure, size_t arraySize, Key layout) noexcept
+	AbstractBufferBackedBlock::addArrayMember (const Structure & structure, uint32_t arraySize, Key layout) noexcept
 	{
 		const auto * name = structure.instanceName().c_str();
 

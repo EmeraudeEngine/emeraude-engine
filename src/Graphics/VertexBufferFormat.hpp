@@ -59,7 +59,7 @@ namespace EmEn::Graphics
 
 			/**
 			 * @brief Equality operator.
-			 * @param operand A reference to an other VertexBufferFormat.
+			 * @param operand A reference to another vertex buffer format.
 			 * @return bool
 			 */
 			[[nodiscard]]
@@ -67,7 +67,7 @@ namespace EmEn::Graphics
 
 			/**
 			 * @brief Different operator.
-			 * @param operand A reference to an other VertexBufferFormat.
+			 * @param operand A reference to another vertex buffer format.
 			 * @return bool
 			 */
 			[[nodiscard]]
@@ -189,7 +189,7 @@ namespace EmEn::Graphics
 			{
 				const auto location = static_cast< uint32_t >(attribute);
 
-				return std::any_of(m_attributes.cbegin(), m_attributes.cend(), [location] (const auto & item) {
+				return std::ranges::any_of(m_attributes, [location] (const auto & item) {
 					return item.location == location;
 				});
 			}

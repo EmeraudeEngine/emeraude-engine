@@ -162,7 +162,7 @@ namespace EmEn::Input
 			 */
 			virtual
 			bool
-			onKeyPress (int32_t key, int32_t scancode, int32_t modifiers, bool repeat) noexcept
+			onKeyPress (int32_t /*key*/, int32_t /*scancode*/, int32_t /*modifiers*/, bool /*repeat*/) noexcept
 			{
 				return false;
 			}
@@ -177,7 +177,7 @@ namespace EmEn::Input
 			 */
 			virtual
 			bool
-			onKeyRelease (int32_t key, int32_t scancode, int32_t modifiers) noexcept
+			onKeyRelease (int32_t /*key*/, int32_t /*scancode*/, int32_t /*modifiers*/) noexcept
 			{
 				return false;
 			}
@@ -190,7 +190,7 @@ namespace EmEn::Input
 			 */
 			virtual
 			bool
-			onCharacterType (uint32_t unicode) noexcept
+			onCharacterType (uint32_t /*unicode*/) noexcept
 			{
 				std::cerr << "Text mode has been enabled on a listener which not overriding the method onCharacterType() !" "\n";
 

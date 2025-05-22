@@ -46,7 +46,7 @@ namespace EmEn
 {
 	namespace Graphics
 	{
-		namespace RenderTarget::ShadowMap
+		namespace RenderTarget
 		{
 			class Abstract;
 		}
@@ -253,24 +253,37 @@ namespace EmEn::Scenes::Component
 			bool updateVideoMemory () noexcept;
 
 			/**
-			 * @brief Enables the shadow map render.
-			 * @note The shadow map must be requested at light creation, otherwise this function will do nothing.
-			 * @param state The state
+			 * @brief Enables the shadow casting.
+			 * @note The shadow map must have been requested at light creation.
+			 * @param state The state.
 			 * @return void
 			 */
-			void enableShadow (bool state) noexcept;
+			void
+			enableShadowCasting (bool state) noexcept
+			{
+				if ( this->shadowMapResolution() == 0 )
+				{
+					TraceInfo{TracerTag} << "The shadow map texture wasn't requested at light creation ! Cancelling ...";
+
+					return;
+				}
+
+				this->setFlag(ShadowMapEnabled, state);
+			}
 
 			/**
-			 * @brief Returns whether the light is casting shadow.
-			 * @note This will return true if the shadow map resolution has been set and the flag is enabled.
+			 * @brief Returns whether the shadow casting is enabled.
+			 * @note The shadow map must have been requested at light creation.
 			 * @return bool
 			 */
 			[[nodiscard]]
 			bool
-			isShadowEnabled () const noexcept
+			isShadowCastingEnabled () const noexcept
 			{
 				if ( this->shadowMapResolution() == 0 )
 				{
+					TraceInfo{TracerTag} << "The shadow map texture wasn't requested at light creation ! Cancelling ...";
+
 					return false;
 				}
 
@@ -359,10 +372,10 @@ namespace EmEn::Scenes::Component
 
 			/**
 			 * @brief Gives access to the light shadow map.
-			 * @return std::shared_ptr< Graphics::RenderTarget::ShadowMapSampler::Abstract >
+			 * @return std::shared_ptr< Graphics::RenderTarget::Abstract >
 			 */
 			[[nodiscard]]
-			virtual std::shared_ptr< Graphics::RenderTarget::ShadowMap::Abstract > shadowMap () const noexcept = 0;
+			virtual std::shared_ptr< Graphics::RenderTarget::Abstract > shadowMap () const noexcept = 0;
 
 			/**
 			 * @brief Returns the uniform block explaining how the light works.
@@ -465,7 +478,7 @@ namespace EmEn::Scenes::Component
 			Libs::PixelFactory::Color< float > m_color{DefaultColor};
 			float m_intensity{DefaultIntensity};
 			uint32_t m_shadowMapResolution{0};
-			std::shared_ptr< Vulkan::SharedUniformBuffer > m_sharedUniformBuffer{};
+			std::shared_ptr< Vulkan::SharedUniformBuffer > m_sharedUniformBuffer;
 			uint32_t m_sharedUBOIndex{0};
 	};
 }

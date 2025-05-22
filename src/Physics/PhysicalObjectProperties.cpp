@@ -270,7 +270,7 @@ namespace EmEn::Physics
 			/* Checking the value type and pop an error on bad one. */
 			if ( !data[property.jsonKey].isNumeric() )
 			{
-				Tracer::error(ClassId, BlobTrait() << '\'' << property.jsonKey << "' key must be a floating number !");
+				TraceError{ClassId} << '\'' << property.jsonKey << "' key must be a floating number !";
 
 				continue;
 			}

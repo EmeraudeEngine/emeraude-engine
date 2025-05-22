@@ -269,7 +269,7 @@ namespace EmEn::Graphics
 			}
 
 			[[nodiscard]]
-			Libs::Math::Rectangle< uint32_t >
+			Libs::Math::Space2D::AARectangle< uint32_t >
 			getArea (const Libs::PixelFactory::Pixmap< uint8_t > & glyph) const noexcept
 			{
 				return {static_cast< uint32_t >(m_currentCursor[Libs::Math::X]), this->OpenGLCursorY(glyph.height()), glyph.width(), glyph.height()};

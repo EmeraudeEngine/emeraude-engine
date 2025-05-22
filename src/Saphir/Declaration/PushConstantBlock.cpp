@@ -30,6 +30,9 @@
 #include <sstream>
 
 /* Local inclusions. */
+#include <ranges>
+
+
 #include "Libs/Utility.hpp"
 #include "Tracer.hpp"
 
@@ -65,23 +68,23 @@ namespace EmEn::Saphir::Declaration
 		return true;
 	}
 
-	size_t
+	uint32_t
 	PushConstantBlock::bytes () const noexcept
 	{
-		size_t size = 0;
+		uint32_t size = 0;
 
-		for ( const auto & structure : this->structures() )
+		for ( const auto & structure : this->structures() | std::views::values )
 		{
-			size += structure.second.bytes();
+			size += structure.bytes();
 		}
 
-		for ( const auto & member : this->members() )
+		for ( const auto & pushConstant : this->members() | std::views::values )
 		{
-			size += member.second.bytes();
+			size +=  pushConstant .bytes();
 		}
 
 		/* FIXME: Check alignment. */
-		if ( this->arraySize() > 1UL )
+		if ( this->arraySize() > 1U )
 		{
 			size *= this->arraySize();
 		}
@@ -109,7 +112,7 @@ namespace EmEn::Saphir::Declaration
 	}
 
 	bool
-	PushConstantBlock::addArrayMember (VariableType type, Key name, size_t arraySize) noexcept
+	PushConstantBlock::addArrayMember (VariableType type, Key name, uint32_t arraySize) noexcept
 	{
 		if ( Utility::contains(m_members, name) )
 		{
@@ -132,23 +135,17 @@ namespace EmEn::Saphir::Declaration
 		return true;
 	}
 
-	const std::vector< std::pair< Key, Member::PushConstant > > &
-	PushConstantBlock::members () const noexcept
-	{
-		return m_members;
-	}
-
 	std::string
 	PushConstantBlock::sourceCode () const noexcept
 	{
-		std::stringstream code{};
+		std::stringstream code;
 
 		/* Default Std430 */
 		code << GLSL::Layout << " (" << GLSL::PushConstant << ") " << GLSL::Uniform << ' ' << this->name() << "\n" "{" "\n";
 
-		for ( const auto & member : m_members )
+		for ( const auto & pushConstant : m_members | std::views::values )
 		{
-			code << '\t' << member.second.sourceCode();
+			code << '\t' <<  pushConstant.sourceCode();
 		}
 
 		code << '}';

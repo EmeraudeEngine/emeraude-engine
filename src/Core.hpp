@@ -69,9 +69,9 @@
 namespace EmEn
 {
 	/**
-	 * @brief Core object of Emeraude-Engine. One of his main role is to hold all services.
+	 * @brief Core object of Emeraude-Engine. One of his main roles is to hold all services.
 	 * @note This class act as a singleton. So you can call from everywhere with Core::instance().
-	 * @extends EmEn::Input::KeyboardListenerInterface The core need to get events from the keyboard for low level interaction.
+	 * @extends EmEn::Input::KeyboardListenerInterface The core needs to get events from the keyboard for low-level interaction.
 	 * @extends EmEn::Console::Controllable The core can be controlled by the console.
 	 * @extends EmEn::Libs::ObserverTrait The core is an observer.
 	 * @extends EmEn::Libs::ObservableTrait The core is observable.
@@ -83,7 +83,7 @@ namespace EmEn
 			/** @brief Class identifier. */
 			static constexpr auto ClassId{"Core"};
 
-			/* Arguments keys */
+			/* Argument keys */
 			static constexpr auto ToolsArg{"-t"};
 			static constexpr auto ToolsLongArg{"--tools-mode"};
 			static constexpr auto VulkanInformationToolName{"vulkanInfo"};
@@ -145,8 +145,7 @@ namespace EmEn
 			 * @note This will call the private method Core::initializeCoreLevel(),
 			 * which calls consecutively Core::onInitialize() right after
 			 * the core initialization, then Core::onStart().
-			 * Finally at the loop exit, this will call the private methode Core::terminate(),
-			 * which call Core::onTermination().
+			 * Finally, at the loop exit, this will call the private methode Core::terminate(), which calls Core::onTermination().
 			 * @return bool
 			 */
 			[[nodiscard]]
@@ -165,7 +164,7 @@ namespace EmEn
 			void resume () noexcept;
 
 			/**
-			 * @brief Stops the engine. This method fire the event to stop the execution.
+			 * @brief Stops the engine. This method fires the event to stop the execution.
 			 * @note Beyond this function everything will stop until full exit.
 			 * This will call first Core::onStop().
 			 * @return void
@@ -174,14 +173,14 @@ namespace EmEn
 
 			/**
 			 * @brief Analyzes files dropped in the handle of the engine.
-			 * It can be used to load Scene in JSON format for example.
+			 * It can be used to load Scene in JSON format, for example.
 			 * @param filepaths A reference to a vector of filesystem paths.
 			 * @return void
 			 */
 			void openFiles (const std::vector< std::filesystem::path > & filepaths) noexcept;
 
 			/**
-			 * @brief This function hang the engine and executes a system command.
+			 * @brief This function hangs the engine and executes a system command.
 			 * @param command A reference to a string holding a command to execute by the system.
 			 * @return void
 			 */
@@ -654,29 +653,40 @@ namespace EmEn
 
 		protected:
 
-#if IS_WINDOWS
 			/**
 			 * @brief Constructs the engine core.
 			 * @param argc The argument count from the standard C/C++ main() function.
-			 * @param wargv The argument values from the standard C/C++ main() function.
-			 * @param applicationName The name of the application using the engine. Default "UnknownApplication".
-			 * @param applicationVersion A reference to a version of the application. Default 0.0.0.
-			 * @param applicationOrganization The name of the application organization. Default "UnknownOrganization".
-			 * @param applicationDomain The domain of the application. Default "unknown.org".
-			 */
-			Core (int argc, wchar_t * * wargv, const char * applicationName = "UnknownApplication", const Libs::Version & applicationVersion = {0, 0, 0}, const char * applicationOrganization = "UnknownOrganization", const char * applicationDomain = "unknown.org") noexcept;
-#else
-			/**
-			 * @brief Constructs the engine core.
-			 * @param argc The argument count from the standard C/C++ main() function.
-			 * @param argv The argument values from the standard C/C++ main() function.
+			 * @param argv The argument value from the standard C/C++ main() function.
 			 * @param applicationName The name of the application using the engine. Default "UnknownApplication".
 			 * @param applicationVersion A reference to a version of the application. Default 0.0.0.
 			 * @param applicationOrganization The name of the application organization. Default "UnknownOrganization".
 			 * @param applicationDomain The domain of the application. Default "localhost".
 			 */
 			Core (int argc, char * * argv, const char * applicationName = "UnknownApplication", const Libs::Version & applicationVersion = {0, 0, 0}, const char * applicationOrganization = "UnknownOrganization", const char * applicationDomain = "localhost") noexcept;
+
+#if IS_WINDOWS
+			/**
+			 * @brief Constructs the engine core.
+			 * @param argc The argument count from the standard C/C++ main() function.
+			 * @param wargv The argument value from the standard C/C++ main() function.
+			 * @param applicationName The name of the application using the engine. Default "UnknownApplication".
+			 * @param applicationVersion A reference to a version of the application. Default 0.0.0.
+			 * @param applicationOrganization The name of the application organization. Default "UnknownOrganization".
+			 * @param applicationDomain The domain of the application. Default "unknown.org".
+			 */
+			Core (int argc, wchar_t * * wargv, const char * applicationName = "UnknownApplication", const Libs::Version & applicationVersion = {0, 0, 0}, const char * applicationOrganization = "UnknownOrganization", const char * applicationDomain = "unknown.org") noexcept;
 #endif
+
+			/**
+			 * @brief Prevents core to handle unhandled keys.
+			 * @warning Enables this if you handle keys correctly.
+			 * @return void
+			 */
+			void
+			preventDefaultKeyBehaviors () noexcept
+			{
+				m_flags[PreventDefaultKeyBehaviors] = true;
+			}
 
 			/**
 			 * @brief Returns the execution time of the engine in microseconds.
@@ -701,22 +711,22 @@ namespace EmEn
 			}
 
 			/**
-			 * @brief Takes a screenshot and save it to captures folder of the current OS user.
-			 * @param depth a boolean to capture Z-Depth in an aside file. Default is false.
-			 * @param stencil a boolean to capture stencil in an aside file. Default is false.
+			 * @brief Takes a screenshot and save it in the image folder of the current OS user.
+			 * @param depth A boolean to capture Z-Depth in an aside file. Default is false.
+			 * @param stencil A boolean to capture stencil in an aside file. Default is false.
 			 * @return bool
 			 */
 			bool screenshot (bool depth = false, bool stencil = false) noexcept;
 
 			/**
-			 * @brief Returns a captures of every framebuffer.
+			 * @brief Returns a capture of every framebuffer.
 			 * @return bool
 			 */
 			[[nodiscard]]
 			bool dumpFramebuffer () const noexcept;
 
 			/**
-			 * @brief Sets a flag value for user application.
+			 * @brief Sets a flag value for the user application.
 			 * @param flag The flag. Must be between 8 and 15.
 			 * @param state The state.
 			 */
@@ -807,6 +817,14 @@ namespace EmEn
 				m_cursorAtlas.resetCursor(m_window);
 			}
 
+			/**
+			 * @brief Enables an application service.
+			 * @param userService A pointer to a service interface.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool enableUserService (ServiceInterface * userService) noexcept;
+
 		private:
 
 			/** @copydoc EmEn::Input::KeyboardListenerInterface::onKeyPress() */
@@ -832,6 +850,14 @@ namespace EmEn
 			virtual void onMainLoopCycle () noexcept;
 
 			/**
+			 * @brief Initializes the basic functionalities of the engine.
+			 * @note After this function, the engine can run some tools in a terminal.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool initializeBaseLevel () noexcept;
+
+			/**
 			 * @brief Initializes the core level of the engine.
 			 * @details After that function, the graphics render, the audio manager and
 			 * the input manager will be available.
@@ -847,7 +873,7 @@ namespace EmEn
 			bool initializeCoreScreen () noexcept;
 
 			/**
-			 * @brief Performs the logics task.
+			 * @brief Performs the logic task.
 			 * @return void
 			 */
 			void logicsTask () noexcept;
@@ -878,7 +904,7 @@ namespace EmEn
 			void showStatistics (double elapsedTime) const noexcept;
 
 			/**
-			 * @brief Checks for message to display in a dialog.
+			 * @brief Checks for a message to display in a dialog.
 			 * @return void
 			 */
 			void checkForDialogMessages () noexcept;
@@ -899,13 +925,12 @@ namespace EmEn
 			}
 
 			/**
-			 * @brief Called before the initialization of secondary services. This is the moment to show application information without starting.
-			 * @note If the method return "true", the application will stop.
-			 * @param arguments A reference to the arguments.
+			 * @brief Called before the initialization of secondary services. For example, this is the moment to show application help in the terminal without starting.
+			 * @note If the method returns "true", the application will stop.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			virtual bool readArgumentsBeforeInitialization (const Arguments & arguments) noexcept = 0;
+			virtual bool onBeforeSecondaryServicesInitialization () noexcept = 0;
 
 			/**
 			 * @brief Called before entering the main loop. All Services are available at this point.
@@ -915,8 +940,8 @@ namespace EmEn
 			virtual bool onStart () noexcept = 0;
 
 			/**
-			 * @brief Called in every logics processing cycle.
-			 * @warning This come from a different thread.
+			 * @brief Called in every logic processing cycle.
+			 * @warning This comes from a different thread.
 			 * @param engineCycle The current engine cycle number.
 			 * @return void
 			 */
@@ -944,7 +969,7 @@ namespace EmEn
 			/**
 			 * @brief Event sent to the application when a key is pressed.
 			 * @note The Core has priority on these events.
-			 * @param key The keyboard universal key code. I.e, QWERTY keyboard 'A' key gives the ASCII code '65' on all platform.
+			 * @param key The keyboard universal key code. I.e., QWERTY keyboard 'A' key gives the ASCII code '65' on all platforms.
 			 * @param scancode The OS dependent scancode.
 			 * @param modifiers The modifier keys mask.
 			 * @param repeat Indicate if the key is repeated.
@@ -955,7 +980,7 @@ namespace EmEn
 			/**
 			 * @brief Event sent to the application when a key is released.
 			 * @note The Core has priority on these events.
-			 * @param key The keyboard universal key code. I.e, QWERTY keyboard 'A' key gives the ASCII code '65' on all platform.
+			 * @param key The keyboard universal key code. I.e., QWERTY keyboard 'A' key gives the ASCII code '65' on all platforms.
 			 * @param scancode The OS dependent scancode.
 			 * @param modifiers The modifier keys mask.
 			 * @return bool
@@ -981,7 +1006,7 @@ namespace EmEn
 			virtual bool onAppNotification (const Libs::ObservableTrait * observable, int notificationCode, const std::any & data) noexcept = 0;
 
 			/**
-			 * @brief Called when files has been loaded.
+			 * @brief Called when files have been loaded.
 			 * @param filepaths A reference to a vector of filesystem paths.
 			 * @return void
 			 */
@@ -994,6 +1019,7 @@ namespace EmEn
 			static constexpr auto Pausable{3UL};
 			static constexpr auto Paused{4UL};
 			static constexpr auto ShowHelp{5UL};
+			static constexpr auto PreventDefaultKeyBehaviors{6UL};
 
 			static Core * s_instance;
 
@@ -1019,6 +1045,7 @@ namespace EmEn
 			Scenes::Manager m_sceneManager{m_primaryServices, m_resourceManager, m_graphicsRenderer, m_audioManager};
 			std::vector< ServiceInterface * > m_primaryServicesEnabled;
 			std::vector< ServiceInterface * > m_secondaryServicesEnabled;
+			std::vector< ServiceInterface * > m_userServiceEnabled;
 			CursorAtlas m_cursorAtlas;
 			std::thread m_logicsThread;
 			std::thread m_renderingThread;
@@ -1034,7 +1061,7 @@ namespace EmEn
 				false/*Pausable*/,
 				false/*Paused*/,
 				false/*ShowHelp*/,
-				false/*UNUSED*/,
+				false/*PreventDefaultKeyBehaviors*/,
 				false/*UNUSED*/,
 				/* Flags for user application. */
 				false/*RESERVED*/,

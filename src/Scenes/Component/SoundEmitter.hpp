@@ -44,7 +44,7 @@ namespace EmEn::Scenes::Component
 {
 	/**
 	 * @brief Defines a sound source emitter.
-	 * @note You can virtually define infinite number of sound emitter, they are not strictly linked to hardware.
+	 * @note You can virtually define infinite number of sound emitters, they are not strictly linked to hardware.
 	 * @extends EmEn::Scenes::Component::Abstract The base class for each entity component.
 	 * @extends EmEn::Libs::ObserverTrait This component observes sound loading events.
 	 */
@@ -71,7 +71,7 @@ namespace EmEn::Scenes::Component
 			SoundEmitter (const std::string & name, const AbstractEntity & parentEntity, bool permanent = false) noexcept;
 
 			/**
-			 * @brief Destroys the sound emitter. Taking cares there is no loading sound, or playing sound.
+			 * @brief Destroys the sound emitter. Takes care there is no loading sound or playing sound.
 			 */
 			~SoundEmitter () noexcept override;
 
@@ -83,20 +83,12 @@ namespace EmEn::Scenes::Component
 				return ClassId;
 			}
 
-			/** @copydoc EmEn::Scenes::Component::Abstract::boundingBox() const */
+			/** @copydoc EmEn::Scenes::Component::Abstract::isComponent() */
 			[[nodiscard]]
-			const Libs::Math::Cuboid< float > &
-			boundingBox () const noexcept override
+			bool
+			isComponent (const char * classID) const noexcept override
 			{
-				return NullBoundingBox;
-			}
-
-			/** @copydoc EmEn::Scenes::Component::Abstract::boundingSphere() const */
-			[[nodiscard]]
-			const Libs::Math::Sphere< float > &
-			boundingSphere () const noexcept override
-			{
-				return NullBoundingSphere;
+				return strcmp(ClassId, classID) == 0;
 			}
 
 			/** @copydoc EmEn::Scenes::Component::Abstract::move() */
@@ -105,8 +97,13 @@ namespace EmEn::Scenes::Component
 			/** @copydoc EmEn::Scenes::Component::Abstract::processLogics() */
 			void processLogics (const Scene & scene) noexcept override;
 
-			/** @copydoc EmEn::Scenes::Component::Abstract::shouldRemove() */
-			bool shouldRemove () const noexcept override;
+			/** @copydoc EmEn::Scenes::Component::Abstract::shouldBeRemoved() */
+			[[nodiscard]]
+			bool
+			shouldBeRemoved () const noexcept override
+			{
+				return false;
+			}
 
 			/**
 			 * @brief Enables/Disables the sound distortion with entity velocity.
@@ -133,7 +130,7 @@ namespace EmEn::Scenes::Component
 			/**
 			 * @brief Changes the gain of the source emitter.
 			 * @param gain An positive value.
-			 * @retur void
+			 * @return void
 			 */
 			void
 			setGain (float gain) noexcept
@@ -148,7 +145,7 @@ namespace EmEn::Scenes::Component
 
 			/**
 			 * @brief Returns the last applied gain.
-			 * @retur float
+			 * @return float
 			 */
 			[[nodiscard]]
 			float
@@ -179,7 +176,7 @@ namespace EmEn::Scenes::Component
 
 			/**
 			 * @brief Replays the previous sound if exists.
-			 * @note The sound will be rewound if source is playing.
+			 * @note The sound will be rewound if a source is playing.
 			 * @return void
 			 */
 			void replay () noexcept;

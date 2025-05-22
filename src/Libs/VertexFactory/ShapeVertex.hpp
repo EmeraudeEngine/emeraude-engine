@@ -29,14 +29,17 @@
 /* STL inclusions. */
 #include <type_traits>
 
+/* Local inclusions. */
+#include "Libs/Math/Vector.hpp"
+
 namespace EmEn::Libs::VertexFactory
 {
 	/**
 	 * @brief The shape vertex class. This structure contains the position, the tangent, the normal and the texture coordinates.
-	 * @tparam float_t The type of floating point number. Default float.
+	 * @tparam vertex_data_t The type of floating point number. Default float.
 	 */
-	template< typename float_t = float >
-	requires (std::is_floating_point_v< float_t >)
+	template< typename vertex_data_t = float >
+	requires (std::is_floating_point_v< vertex_data_t >)
 	class ShapeVertex final
 	{
 		public:
@@ -53,7 +56,7 @@ namespace EmEn::Libs::VertexFactory
 			 * @param textureCoordinates A reference to a vector for texture coordinates. Default [0, 0, 0].
 			 */
 			explicit
-			ShapeVertex (const Math::Vector< 3, float_t > & position, const Math::Vector< 3, float_t > & normal = Math::Vector< 3, float_t >::positiveZ(), const Math::Vector< 3, float_t > & textureCoordinates = {}) noexcept
+			ShapeVertex (const Math::Vector< 3, vertex_data_t > & position, const Math::Vector< 3, vertex_data_t > & normal = Math::Vector< 3, vertex_data_t >::positiveZ(), const Math::Vector< 3, vertex_data_t > & textureCoordinates = {}) noexcept
 				: m_position(position), m_normal(normal), m_textureCoordinates(textureCoordinates)
 			{
 
@@ -65,7 +68,7 @@ namespace EmEn::Libs::VertexFactory
 			 * @return void
 			 */
 			void
-			setPosition (const Math::Vector< 3, float_t > & position) noexcept
+			setPosition (const Math::Vector< 3, vertex_data_t > & position) noexcept
 			{
 				m_position = position;
 			}
@@ -76,7 +79,7 @@ namespace EmEn::Libs::VertexFactory
 			 * @return void
 			 */
 			void
-			setPosition (const Math::Vector< 4, float_t > & position) noexcept
+			setPosition (const Math::Vector< 4, vertex_data_t > & position) noexcept
 			{
 				m_position[Math::X] = position[Math::X];
 				m_position[Math::Y] = position[Math::Y];
@@ -89,7 +92,7 @@ namespace EmEn::Libs::VertexFactory
 			 * @return void
 			 */
 			void
-			setTangent (const Math::Vector< 3, float_t > & tangent) noexcept
+			setTangent (const Math::Vector< 3, vertex_data_t > & tangent) noexcept
 			{
 				m_tangent = tangent;
 			}
@@ -100,7 +103,7 @@ namespace EmEn::Libs::VertexFactory
 			 * @return void
 			 */
 			void
-			setTangent (const Math::Vector< 4, float_t > & tangent) noexcept
+			setTangent (const Math::Vector< 4, vertex_data_t > & tangent) noexcept
 			{
 				m_tangent[Math::X] = tangent[Math::X];
 				m_tangent[Math::Y] = tangent[Math::Y];
@@ -113,7 +116,7 @@ namespace EmEn::Libs::VertexFactory
 			 * @return void
 			 */
 			void
-			setNormal (const Math::Vector< 3, float_t > & normal) noexcept
+			setNormal (const Math::Vector< 3, vertex_data_t > & normal) noexcept
 			{
 				m_normal = normal;
 			}
@@ -124,7 +127,7 @@ namespace EmEn::Libs::VertexFactory
 			 * @return void
 			 */
 			void
-			setNormal (const Math::Vector< 4, float_t > & normal) noexcept
+			setNormal (const Math::Vector< 4, vertex_data_t > & normal) noexcept
 			{
 				m_normal[Math::X] = normal[Math::X];
 				m_normal[Math::Y] = normal[Math::Y];
@@ -137,7 +140,7 @@ namespace EmEn::Libs::VertexFactory
 			 * @return void
 			 */
 			void
-			setTextureCoordinates (const Math::Vector< 2, float_t > & textureCoordinates) noexcept
+			setTextureCoordinates (const Math::Vector< 2, vertex_data_t > & textureCoordinates) noexcept
 			{
 				m_textureCoordinates[Math::X] = textureCoordinates[Math::X];
 				m_textureCoordinates[Math::Y] = textureCoordinates[Math::Y];
@@ -149,7 +152,7 @@ namespace EmEn::Libs::VertexFactory
 			 * @return void
 			 */
 			void
-			setTextureCoordinates (const Math::Vector< 3, float_t > & textureCoordinates) noexcept
+			setTextureCoordinates (const Math::Vector< 3, vertex_data_t > & textureCoordinates) noexcept
 			{
 				m_textureCoordinates = textureCoordinates;
 			}
@@ -160,7 +163,7 @@ namespace EmEn::Libs::VertexFactory
 			 * @return void
 			 */
 			void
-			setTextureCoordinates (const Math::Vector< 4, float_t > & textureCoordinates) noexcept
+			setTextureCoordinates (const Math::Vector< 4, vertex_data_t > & textureCoordinates) noexcept
 			{
 				m_textureCoordinates[Math::X] = textureCoordinates[Math::X];
 				m_textureCoordinates[Math::Y] = textureCoordinates[Math::Y];
@@ -193,7 +196,7 @@ namespace EmEn::Libs::VertexFactory
 			 * @return void
 			 */
 			void
-			setWeights (float_t weightA, float_t weightB = 0, float_t weightC = 0, float_t weightD = 0) noexcept
+			setWeights (vertex_data_t weightA, vertex_data_t weightB = 0, vertex_data_t weightC = 0, vertex_data_t weightD = 0) noexcept
 			{
 				m_weights[Math::X] = weightA;
 				m_weights[Math::Y] = weightB;
@@ -206,7 +209,7 @@ namespace EmEn::Libs::VertexFactory
 			 * @return const Math::Vector< 3, data_t > &
 			 */
 			[[nodiscard]]
-			const Math::Vector< 3, float_t > &
+			const Math::Vector< 3, vertex_data_t > &
 			position () const noexcept
 			{
 				return m_position;
@@ -217,7 +220,7 @@ namespace EmEn::Libs::VertexFactory
 			 * @return const Math::Vector< 3, data_t > &
 			 */
 			[[nodiscard]]
-			const Math::Vector< 3, float_t > &
+			const Math::Vector< 3, vertex_data_t > &
 			tangent () const noexcept
 			{
 				return m_tangent;
@@ -228,7 +231,7 @@ namespace EmEn::Libs::VertexFactory
 			 * @return const Math::Vector< 3, data_t > &
 			 */
 			[[nodiscard]]
-			const Math::Vector< 3, float_t > &
+			const Math::Vector< 3, vertex_data_t > &
 			normal () const noexcept
 			{
 				return m_normal;
@@ -240,10 +243,10 @@ namespace EmEn::Libs::VertexFactory
 			 * @return const Math::Vector< 3, data_t > &
 			 */
 			[[nodiscard]]
-			Math::Vector< 3, float_t >
+			Math::Vector< 3, vertex_data_t >
 			biNormal () const noexcept
 			{
-				return Math::Vector< 3, float_t >::crossProduct(m_normal, m_tangent);
+				return Math::Vector< 3, vertex_data_t >::crossProduct(m_normal, m_tangent);
 			}
 
 			/**
@@ -251,7 +254,7 @@ namespace EmEn::Libs::VertexFactory
 			 * @return const Math::Vector< 3, data_t > &
 			 */
 			[[nodiscard]]
-			const Math::Vector< 3, float_t > &
+			const Math::Vector< 3, vertex_data_t > &
 			textureCoordinates () const noexcept
 			{
 				return m_textureCoordinates;
@@ -273,7 +276,7 @@ namespace EmEn::Libs::VertexFactory
 			 * @return const Math::Vector< 3, data_t > &
 			 */
 			[[nodiscard]]
-			const Math::Vector< 4, float_t > &
+			const Math::Vector< 4, vertex_data_t > &
 			weights () const noexcept
 			{
 				return m_weights;
@@ -305,11 +308,11 @@ namespace EmEn::Libs::VertexFactory
 
 		private:
 
-			Math::Vector< 3, float_t > m_position{0, 0, 0};
-			Math::Vector< 3, float_t > m_tangent{1, 0, 0};
-			Math::Vector< 3, float_t > m_normal{0, 0, 1};
-			Math::Vector< 3, float_t > m_textureCoordinates{0, 0, 0};
+			Math::Vector< 3, vertex_data_t > m_position{0, 0, 0};
+			Math::Vector< 3, vertex_data_t > m_tangent{1, 0, 0};
+			Math::Vector< 3, vertex_data_t > m_normal{0, 0, 1};
+			Math::Vector< 3, vertex_data_t > m_textureCoordinates{0, 0, 0};
 			Math::Vector< 4, int32_t > m_influences{-1, -1, -1, -1};
-			Math::Vector< 4, float_t > m_weights{0, 0, 0, 0};
+			Math::Vector< 4, vertex_data_t > m_weights{0, 0, 0, 0};
 	};
 }

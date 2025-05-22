@@ -86,7 +86,7 @@ namespace EmEn::Resources
 	[[nodiscard]]
 	SourceType to_SourceType (const std::string & value) noexcept;
 
-	/** @brief This enum define every stages of resource loading. */
+	/** @brief This enum defines every stage of resource loading. */
 	enum class Status : uint8_t
 	{
 		/* This is the status of a new resource instantiation. */
@@ -131,4 +131,13 @@ namespace EmEn::Resources
 	{
 		return {to_cstring(value)};
 	}
+
+	/** @brief Describes the depth of dependencies requested for a resource. */
+	enum class DepComplexity: uint8_t
+	{
+		None = 0,
+		One = 1,
+		Few = 2,
+		Complex = 3
+	};
 }

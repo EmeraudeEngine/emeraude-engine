@@ -30,17 +30,11 @@
 #include "emeraude_config.hpp"
 
 /* STL inclusions. */
-#include <cstddef>
-#include <cstdint>
 #include <exception>
 #include <iostream>
-#include <memory>
 #include <ranges>
-#include <vector>
 
 /* Local inclusions. */
-#include "Libs/PixelFactory/Color.hpp"
-#include "Libs/Time/Statistics/RealTime.hpp"
 #include "Libs/Time/Elapsed/PrintScopeRealTime.hpp"
 #include "Vulkan/Sync/ImageMemoryBarrier.hpp"
 #include "Vulkan/Device.hpp"
@@ -55,8 +49,6 @@
 #include "Vulkan/Sampler.hpp"
 #include "Vulkan/SwapChain.hpp"
 #include "Vulkan/Types.hpp"
-#include "Saphir/Generator/ShadowRendering.hpp"
-#include "Saphir/Generator/TBNSpaceRendering.hpp"
 #include "Scenes/Scene.hpp"
 #include "Core.hpp"
 #include "PrimaryServices.hpp"
@@ -187,7 +179,7 @@ namespace EmEn::Graphics
 	Renderer::onInitialize () noexcept
 	{
 		/* NOTE: Graphics device selection from the vulkan instance.
-		 * The Vulkan instance don't create directly a device on its initialization. */
+		 * The Vulkan instance doesn't directly create a device on its initialization. */
 		if ( m_vulkanInstance.usable() )
 		{
 			m_device = m_vulkanInstance.getGraphicsDevice(&m_window);
@@ -211,7 +203,7 @@ namespace EmEn::Graphics
 		 *  - The shader manager (for shaders code generation to binary in the GPU)
 		 *  - The transfer manager (for memory move from CPU to GPU)
 		 *  - The layout manager (for graphics pipeline)
-		 *  - The shared uniform buffer object manager (to re-use a same large UBO between objects)
+		 *  - The shared uniform buffer object manager (to re-use the same large UBO between objects)
 		 *  - The vertex buffer format manager (to describe each vertex buffer once)
 		 */
 		if ( !this->initializeSubServices() )
@@ -254,7 +246,7 @@ namespace EmEn::Graphics
 				{VK_DESCRIPTOR_TYPE_SAMPLER, 16},
 				/* NOTE: Texture (than can be sampled). */
 				{VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 64},
-				/* NOTE: Texture associated to a filter (VK_DESCRIPTOR_TYPE_SAMPLER+VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE). */
+				/* NOTE: Texture associated with a filter (VK_DESCRIPTOR_TYPE_SAMPLER+VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE). */
 				{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 64},
 				/* NOTE:  */
 				//{VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 0},
@@ -299,6 +291,26 @@ namespace EmEn::Graphics
 		}
 
 		this->registerToConsole();
+
+		/* Reading some parameters. */
+		{
+			auto & settings = m_primaryServices.settings();
+
+			if ( settings.get< bool >(NormalMappingEnabledKey, DefaultNormalMappingEnabled) )
+			{
+				Tracer::info(ClassId, "Normal mapping enabled !");
+			}
+
+			if ( settings.get< bool >(HighQualityLightEnabledKey, DefaultHighQualityLightEnabled) )
+			{
+				Tracer::info(ClassId, "High quality light shader code enabled !");
+			}
+
+			if ( settings.get< bool >(HighQualityReflectionEnabledKey, DefaultHighQualityReflectionEnabled) )
+			{
+				Tracer::info(ClassId, "High quality reflection shader code enabled !");
+			}
+		}
 
 		m_flags[ServiceInitialized] = true;
 
@@ -416,18 +428,19 @@ namespace EmEn::Graphics
 			return nullptr;
 		}
 
-		const auto result = m_samplers.emplace(type, sampler);
+		const auto [samplerPair, success] = m_samplers.emplace(type, sampler);
 
-#ifdef DEBUG
-		if ( !result.second )
+		if constexpr ( IsDebug )
 		{
-			Tracer::fatal(ClassId, "Unable to insert the sampler into map !");
+			if ( !success )
+			{
+				Tracer::fatal(ClassId, "Unable to insert the sampler into map !");
 
-			return {};
+				return {};
+			}
 		}
-#endif
 
-		return result.first->second;
+		return samplerPair->second;
 	}
 
 	[[nodiscard]]
@@ -454,64 +467,6 @@ namespace EmEn::Graphics
 		return m_pipelines.emplace(hash, graphicsPipeline).second;
 	}
 
-	std::shared_ptr< Program >
-	Renderer::getShadowProgram (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const std::shared_ptr< RenderableInstance::Abstract > & renderableInstance) noexcept
-	{
-		Generator::ShadowRendering generator{m_primaryServices.settings(), renderTarget, renderableInstance};
-
-		if ( !generator.generateProgram(m_vertexBufferFormatManager) )
-		{
-			Tracer::error(ClassId, "Unable to generate the shadow program !");
-
-			return {};
-		}
-
-		if ( !generator.generateProgramLayout(*this) )
-		{
-			Tracer::error(ClassId, "Unable to generate the shadow program layout !");
-
-			return {};
-		}
-
-		if ( !generator.createGraphicsPipeline(*this) )
-		{
-			Tracer::error(ClassId, "Unable to create the shadow graphics pipeline !");
-
-			return {};
-		}
-
-		return generator.program();
-	}
-
-	std::shared_ptr< Program >
-	Renderer::getTBNSpaceProgram (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const std::shared_ptr< RenderableInstance::Abstract > & renderableInstance) noexcept
-	{
-		Generator::TBNSpaceRendering generator{m_primaryServices.settings(), renderTarget, renderableInstance};
-
-		if ( !generator.generateProgram(m_vertexBufferFormatManager) )
-		{
-			Tracer::error(ClassId, "Unable to generate the TBN space program !");
-
-			return {};
-		}
-
-		if ( !generator.generateProgramLayout(*this) )
-		{
-			Tracer::error(ClassId, "Unable to generate the TBN space program layout !");
-
-			return {};
-		}
-
-		if ( !generator.createGraphicsPipeline(*this) )
-		{
-			Tracer::error(ClassId, "Unable to create the TBN space graphics pipeline !");
-
-			return {};
-		}
-
-		return generator.program();
-	}
-
 	void
 	Renderer::renderFrame (const std::shared_ptr< Scenes::Scene > & scene, const Overlay::Manager & overlayManager) noexcept
 	{
@@ -532,24 +487,7 @@ namespace EmEn::Graphics
 
 		m_statistics.start();
 
-		/* NOTE: Offscreen rendering */
-		if ( scene != nullptr )
-		{
-			/* [VULKAN-SHADOW] */
-			/*if ( m_flags[ShadowMapsEnabled] )
-			{
-				this->renderShadowMaps(*scene);
-			}*/
-
-			/*if ( m_flags[RenderToTexturesEnabled] )
-			{
-				this->renderRenderToTextures(*scene);
-			}*/
-
-			//this->renderViews(*scene);
-		}
-
-		/* First we get an image ready to render into it. */
+		/* First, we get an image ready to render into it. */
 		uint32_t imageIndex = 0;
 
 		if ( !m_swapChain->acquireNextImage(imageIndex) )
@@ -557,8 +495,28 @@ namespace EmEn::Graphics
 			return;
 		}
 
+		/* NOTE: Clear all semaphores for the new frame. */
+		m_rendererFrameScope[imageIndex].clearSemaphores();
+
+		/* NOTE: Offscreen rendering */
+		if ( scene != nullptr )
+		{
+			if ( this->isShadowMapsEnabled() )
+			{
+				/* [VULKAN-SHADOW] */
+				this->renderShadowMaps(imageIndex, *scene);
+			}
+
+			if ( this->isRenderToTexturesEnabled() )
+			{
+				this->renderRenderToTextures(imageIndex, *scene);
+			}
+
+			this->renderViews(imageIndex, *scene);
+		}
+
 		/* Then we need the command buffer linked to this image by its index. */
-		const auto commandBuffer = m_commandBuffers[imageIndex];
+		const auto commandBuffer = m_rendererFrameScope[imageIndex].commandBuffer();
 
 		if ( !commandBuffer->begin(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT) )
 		{
@@ -583,7 +541,7 @@ namespace EmEn::Graphics
 			return;
 		}
 
-		if ( !m_swapChain->submitCommandBuffer(commandBuffer, imageIndex) )
+		if ( !m_swapChain->submitCommandBuffer(commandBuffer, imageIndex, m_rendererFrameScope[imageIndex].secondarySemaphores()) )
 		{
 			return;
 		}
@@ -617,12 +575,31 @@ namespace EmEn::Graphics
 	}
 
 	void
-	Renderer::renderShadowMaps (Scenes::Scene & scene) noexcept
+	Renderer::renderShadowMaps (uint32_t frameIndex, Scenes::Scene & scene) noexcept
 	{
 		const auto * queue = this->device()->getQueue(QueueJob::Graphics, QueuePriority::High);
 
 		for ( const auto & shadowMap : scene.AVConsoleManager().renderToShadowMaps() )
 		{
+			if constexpr ( IsDebug )
+			{
+				if ( !shadowMap->isValid() )
+				{
+					TraceError{ClassId} << "Unable to render shadow map " << shadowMap->id() << " !";
+
+					continue;
+				}
+			}
+
+			const auto fence = shadowMap->fence();
+
+			if ( !fence->waitAndReset(250000000) )
+			{
+				TraceDebug{ClassId} << "Unable to wait on shadow map " << shadowMap->id() << " !";
+
+				continue;
+			}
+
 			const auto commandBuffer = this->getCommandBuffer(shadowMap);
 
 			if ( !commandBuffer->begin(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT) )
@@ -645,22 +622,45 @@ namespace EmEn::Graphics
 				continue;
 			}
 
-			if ( !queue->submit(commandBuffer, shadowMap->semaphore()->handle()) )
+			const auto semaphore = shadowMap->semaphore();
+
+			if ( !queue->submit(commandBuffer, shadowMap->semaphore()->handle(), fence->handle()) )
 			{
 				TraceError{ClassId} << "Unable to submit command buffer for render target '" << shadowMap->id() << "' !";
 
 				continue;
 			}
+
+			m_rendererFrameScope[frameIndex].declareSemaphore(semaphore, true);
 		}
 	}
 
 	void
-	Renderer::renderRenderToTextures (Scenes::Scene & scene) noexcept
+	Renderer::renderRenderToTextures (uint32_t frameIndex, Scenes::Scene & scene) noexcept
 	{
 		const auto * queue = this->device()->getQueue(QueueJob::Graphics, QueuePriority::High);
 
 		for ( const auto & renderToTexture : scene.AVConsoleManager().renderToTextures() )
 		{
+			if constexpr ( IsDebug )
+			{
+				if ( !renderToTexture->isValid() )
+				{
+					TraceError{ClassId} << "Unable to render to texture " << renderToTexture->id() << " !";
+
+					continue;
+				}
+			}
+
+			const auto fence = renderToTexture->fence();
+
+			if ( !fence->waitAndReset(250000000) )
+			{
+				TraceDebug{ClassId} << "Unable to wait on render to texture " << renderToTexture->id() << " !";
+
+				continue;
+			}
+
 			const auto commandBuffer = this->getCommandBuffer(renderToTexture);
 
 			if ( !commandBuffer->begin(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT) )
@@ -683,24 +683,23 @@ namespace EmEn::Graphics
 				continue;
 			}
 
-			if ( !queue->submit(commandBuffer, renderToTexture->semaphore()->handle()) )
+			const auto semaphore = renderToTexture->semaphore();
+
+			if ( !queue->submit(commandBuffer, m_rendererFrameScope[frameIndex].primarySemaphores(), VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, renderToTexture->semaphore()->handle(), fence->handle()) )
 			{
 				TraceError{ClassId} << "Unable to submit command buffer for render target '" << renderToTexture->id() << "' !";
 
 				continue;
 			}
+
+			m_rendererFrameScope[frameIndex].declareSemaphore(semaphore, false);
 		}
 	}
 
 	void
-	Renderer::renderViews (Scenes::Scene & scene) noexcept
+	Renderer::renderViews (uint32_t frameIndex, Scenes::Scene & scene) noexcept
 	{
-		//const auto * graphicsQueue = this->device()->getQueue(QueueJob::Graphics, QueuePriority::High);
 
-		for ( const auto & renderToView : scene.AVConsoleManager().renderToViews() )
-		{
-			TraceDebug{ClassId} << "[DEBUG] Rendering to view '" << renderToView->id() << "' ...";
-		}
 	}
 
 	bool
@@ -731,21 +730,20 @@ namespace EmEn::Graphics
 					break;
 
 				default :
-#ifdef EMERAUDE_DEBUG_OBSERVER_PATTERN
-					TraceDebug{ClassId} << "Event #" << notificationCode << " from the window ignored.";
-#endif
+					if constexpr ( ObserverDebugEnabled )
+					{
+						TraceDebug{ClassId} << "Event #" << notificationCode << " from the window ignored.";
+					}
 					break;
 			}
 
 			return true;
 		}
 
-#ifdef DEBUG
-		/* NOTE: Don't know what is it, goodbye ! */
-		TraceInfo{ClassId} <<
+		/* NOTE: Don't know what is it, goodbye! */
+		TraceDebug{ClassId} <<
 			"Received an unhandled notification (Code:" << notificationCode << ") from observable '" << whoIs(observable->classUID()) << "' (UID:" << observable->classUID() << ")  ! "
 			"Forgetting it ...";
-#endif
 
 		return false;
 	}
@@ -755,30 +753,13 @@ namespace EmEn::Graphics
 	{
 		const auto imageCount = m_swapChain->imageCount();
 
-		m_commandPools.resize(imageCount);
-		m_commandBuffers.resize(imageCount);
+		m_rendererFrameScope.resize(imageCount);
 
-		for ( size_t index = 0; index < imageCount; index++ )
+		for ( uint32_t imageIndex = 0; imageIndex < imageCount; imageIndex++ )
 		{
-			auto & commandPool = m_commandPools[index];
-			auto & commandBuffer = m_commandBuffers[index];
-
-			commandPool = std::make_shared< CommandPool >(m_device, m_device->getGraphicsFamilyIndex(), false, true, false);
-			commandPool->setIdentifier(ClassId, (std::stringstream{} << "Frame" << index).str(), "CommandPool");
-
-			if ( !commandPool->createOnHardware() )
+			if ( !m_rendererFrameScope[imageIndex].initialize(m_device, imageIndex) )
 			{
-				TraceError{ClassId} << "Unable to create the command pool #" << index << " !";
-
-				return false;
-			}
-
-			commandBuffer = std::make_shared< CommandBuffer >(commandPool);
-			commandBuffer->setIdentifier(ClassId, (std::stringstream{} << "Frame" << index).str(), "CommandBuffer");
-
-			if ( !commandBuffer->isCreated() )
-			{
-				TraceError{ClassId} << "Unable to create the command buffer #" << index << " !";
+				TraceError{ClassId} << "Unable to create the render frame scope #" << imageIndex << " !";
 
 				return false;
 			}
@@ -804,8 +785,7 @@ namespace EmEn::Graphics
 
 		m_offScreenCommandPool.reset();
 
-		m_commandBuffers.clear();
-		m_commandPools.clear();
+		m_rendererFrameScope.clear();
 	}
 
 	bool
@@ -813,7 +793,7 @@ namespace EmEn::Graphics
 	{
 		//this->destroyCommandSystem();
 
-		/* NOTE: Wait for a valid framebuffer dimensions in case of handle minimisation. */
+		/* NOTE: Wait for a valid framebuffer dimensions in case of handle minimization. */
 		//m_window.waitValidWindowSize();
 
 		if ( !m_swapChain->recreateOnHardware(*this) )

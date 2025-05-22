@@ -33,12 +33,13 @@ namespace EmEn::Libs::VertexFactory
 {
 	/**
 	 * @brief Emeraude engine native geometry format.
-	 * @tparam data_t The data precision type.
+	 * @tparam vertex_data_t The precision type of vertex data. Default float.
+	 * @tparam index_data_t The precision type of index data. Default uint32_t.
 	 * @extends EmEn::Libs::VertexFactory::FileFormatInterface
 	 */
-	template< typename data_t >
-	requires (std::is_floating_point_v< data_t >)
-	class FileFormatNative final : public FileFormatInterface< data_t >
+	template< typename vertex_data_t = float, typename index_data_t = uint32_t >
+	requires (std::is_floating_point_v< vertex_data_t > && std::is_unsigned_v< index_data_t > )
+	class FileFormatNative final : public FileFormatInterface< vertex_data_t, index_data_t >
 	{
 		public:
 
@@ -50,7 +51,7 @@ namespace EmEn::Libs::VertexFactory
 			/** @copydoc EmEn::Libs::VertexFactory::FileFormatInterface::readFile() */
 			[[nodiscard]]
 			bool
-			readFile (const std::filesystem::path & filepath, Shape< data_t > & geometry, const ReadOptions & /*readOptions*/) noexcept override
+			readFile (const std::filesystem::path & filepath, Shape< vertex_data_t, index_data_t > & geometry, const ReadOptions & /*readOptions*/) noexcept override
 			{
 				geometry.clear();
 
@@ -62,7 +63,7 @@ namespace EmEn::Libs::VertexFactory
 			/** @copydoc EmEn::Libs::VertexFactory::FileFormatInterface::writeFile() */
 			[[nodiscard]]
 			bool
-			writeFile (const std::filesystem::path & filepath, const Shape< data_t > & geometry) const noexcept override
+			writeFile (const std::filesystem::path & filepath, const Shape< vertex_data_t, index_data_t > & geometry) const noexcept override
 			{
 				if ( !geometry.isValid() )
 				{

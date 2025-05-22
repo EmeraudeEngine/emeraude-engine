@@ -43,8 +43,8 @@
 namespace EmEn::Graphics::RenderableInstance
 {
 	/**
-	 * @brief This is a renderable object that use a VBO to determine multiple locations for the renderable object.
-	 * @note This version use its own VBO to store locations.
+	 * @brief This is a renderable object that uses a VBO to determine multiple locations for the renderable object.
+	 * @note This version uses its own VBO to store locations.
 	 * @extends EmEn::Graphics::RenderableInstance::Abstract It needs the base of a renderable instance.
 	 */
 	class Multiple final : public Abstract
@@ -68,7 +68,7 @@ namespace EmEn::Graphics::RenderableInstance
 			 * @param instanceCount The maximum of number of locations hold by this instance.
 			 * @param flagBits The multiple renderable instance level flags. Default 0.
 			 */
-			Multiple (const std::shared_ptr< Renderable::Interface > & renderable, size_t instanceCount, uint32_t flagBits = 0) noexcept;
+			Multiple (const std::shared_ptr< Renderable::Interface > & renderable, uint32_t instanceCount, uint32_t flagBits = 0) noexcept;
 
 			/** @copydoc EmEn::Graphics::RenderableInstance::Abstract::isModelMatricesCreated() const */
 			[[nodiscard]]
@@ -123,7 +123,7 @@ namespace EmEn::Graphics::RenderableInstance
 			 * @return void
 			 */
 			void
-			setActiveInstanceCount (size_t count) noexcept
+			setActiveInstanceCount (uint32_t count) noexcept
 			{
 				m_activeInstanceCount = std::min(count, m_instanceCount);
 			}
@@ -135,7 +135,7 @@ namespace EmEn::Graphics::RenderableInstance
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool updateLocalData (const Libs::Math::CartesianFrame< float > & instanceLocation, size_t instanceIndex) noexcept;
+			bool updateLocalData (const Libs::Math::CartesianFrame< float > & instanceLocation, uint32_t instanceIndex) noexcept;
 
 			/**
 			 * @brief Updates instance locations from a batch.
@@ -144,7 +144,7 @@ namespace EmEn::Graphics::RenderableInstance
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool updateLocalData (const std::vector< Libs::Math::CartesianFrame< float > > & instanceLocations, size_t instanceOffset = 0) noexcept;
+			bool updateLocalData (const std::vector< Libs::Math::CartesianFrame< float > > & instanceLocations, uint32_t instanceOffset = 0) noexcept;
 
 			/**
 			 * @brief Copies local data to video memory.
@@ -159,14 +159,14 @@ namespace EmEn::Graphics::RenderableInstance
 
 			/** @copydoc EmEn::Graphics::RenderableInstance::Abstract::instanceCount() */
 			[[nodiscard]]
-			size_t
+			uint32_t
 			instanceCount () const noexcept override
 			{
 				return m_activeInstanceCount;
 			}
 
 			/** @copydoc EmEn::Graphics::RenderableInstance::Abstract::bindInstanceModelLayer() */
-			void bindInstanceModelLayer (const Vulkan::CommandBuffer & commandBuffer, size_t layerIndex) const noexcept override;
+			void bindInstanceModelLayer (const Vulkan::CommandBuffer & commandBuffer, uint32_t layerIndex) const noexcept override;
 
 			/**
 			 * @brief Creates the model matrices.
@@ -191,20 +191,20 @@ namespace EmEn::Graphics::RenderableInstance
 			static bool coordinatesToModelMatrices (const std::vector< Libs::Math::CartesianFrame< float > > & coordinates, std::vector< Libs::Math::Matrix< 4, float > > & modelMatrices, bool strict = false) noexcept;
 
 			/* Position vector (vec3 aligned to a vec4) + scale vector (vec3 aligned to a vec4) */
-			//static constexpr size_t SpriteVBOElementCount = 4UL + 4UL;
-			//static constexpr size_t SpriteVBOElementBytes = 16UL + 16UL;
+			//static constexpr uint32_t SpriteVBOElementCount = 4UL + 4UL;
+			//static constexpr uint32_t SpriteVBOElementBytes = 16UL + 16UL;
 			/* Model matrix 4x4 (4 x vec4) + normal matrix 3x3 (3 x vec3 aligned to a vec4) */
-			//static constexpr size_t MeshVBOElementCount = 16UL + 12UL;
-			//static constexpr size_t MeshVBOElementBytes = 64UL + 48UL;
+			//static constexpr uint32_t MeshVBOElementCount = 16UL + 12UL;
+			//static constexpr uint32_t MeshVBOElementBytes = 64UL + 48UL;
 
 			/* Position vector + scale vector */
-			static constexpr size_t SpriteVBOElementCount = 3UL + 3UL;
+			static constexpr uint32_t SpriteVBOElementCount = 3U + 3U;
 			/* Model matrix 4x4 + normal matrix 3x3 */
-			static constexpr size_t MeshVBOElementCount = 16UL + 9UL;
+			static constexpr uint32_t MeshVBOElementCount = 16U + 9U;
 
 			std::unique_ptr< Vulkan::VertexBufferObject > m_vertexBufferObject;
 			std::vector< float > m_localData;
-			size_t m_instanceCount{0};
-			size_t m_activeInstanceCount{0};
+			uint32_t m_instanceCount{0};
+			uint32_t m_activeInstanceCount{0};
 	};
 }

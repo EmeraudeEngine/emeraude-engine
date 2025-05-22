@@ -78,12 +78,6 @@ namespace EmEn::Scenes::Component
 	}
 
 	bool
-	MultipleVisuals::shouldRemove () const noexcept
-	{
-		return m_renderableInstance->isBroken();
-	}
-
-	bool
 	MultipleVisuals::playAnimation (uint8_t /*animationID*/, const Variant & /*value*/, size_t /*cycle*/) noexcept
 	{
 		return false;

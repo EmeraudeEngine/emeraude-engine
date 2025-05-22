@@ -27,7 +27,6 @@
 #pragma once
 
 /* STL inclusions. */
-#include <cstddef>
 #include <cstdint>
 #include <cmath>
 #include <vector>
@@ -65,18 +64,18 @@ namespace EmEn::Vulkan
 			 * @param uniformBlockSize The size of the uniform block.
 			 * @param maxElementCount The max number of element to hold in one UBO. Default, compute the maximum according to structure size and UBO properties. Default is the max limit.
 			 */
-			SharedUniformBuffer (const std::shared_ptr< Device > & device, size_t uniformBlockSize, size_t maxElementCount = 0) noexcept;
+			SharedUniformBuffer (const std::shared_ptr< Device > & device, uint32_t uniformBlockSize, uint32_t maxElementCount = 0) noexcept;
 
 			/**
-			 * @brief Constructs a shared uniform buffer with an unique descriptor set.
-			 * @note This version use a dynamic uniform buffer to switch from element to element instead of binding an other descriptor set.
+			 * @brief Constructs a shared uniform buffer with a unique descriptor set.
+			 * @note This version use a dynamic uniform buffer to switch from element to element instead of binding another descriptor set.
 			 * @warning The descriptor set is unique for all elements, so all other binds will be the same for each element.
 			 * @param device A reference to the device smart pointer.
 			 * @param descriptorSetCreator A reference to a lambda to build the associated descriptor set.
 			 * @param uniformBlockSize The size of the uniform block.
 			 * @param maxElementCount The max number of element to hold in one UBO. Default, compute the maximum according to structure size and UBO properties. Default is the max limit.
 			 */
-			SharedUniformBuffer (const std::shared_ptr< Device > & device, const DescriptorSetCreator & descriptorSetCreator, size_t uniformBlockSize, size_t maxElementCount = 0) noexcept;
+			SharedUniformBuffer (const std::shared_ptr< Device > & device, const DescriptorSetCreator & descriptorSetCreator, uint32_t uniformBlockSize, uint32_t maxElementCount = 0) noexcept;
 
 			/**
 			 * @brief Returns whether the shared uniform buffer is usable.
@@ -122,7 +121,7 @@ namespace EmEn::Vulkan
 			 * @return UniformBufferObject *
 			 */
 			[[nodiscard]]
-			DescriptorSet * descriptorSet (uint32_t index) noexcept;
+			DescriptorSet * descriptorSet (uint32_t index) const noexcept;
 
 			/**
 			 * @brief Adds a new element to the uniform buffer object.
@@ -142,10 +141,10 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Returns the number of element present in the buffer.
-			 * @return size_t
+			 * @return uint32_t
 			 */
 			[[nodiscard]]
-			size_t elementCount () const noexcept;
+			uint32_t elementCount () const noexcept;
 
 			/**
 			 * @brief Writes element data to the UBO.
@@ -165,7 +164,7 @@ namespace EmEn::Vulkan
 			uint32_t
 			blockAlignedSize () const noexcept
 			{
-				return static_cast< uint32_t >(m_blockAlignedSize);
+				return m_blockAlignedSize;
 			}
 
 		private:
@@ -173,10 +172,10 @@ namespace EmEn::Vulkan
 			/**
 			 * @brief Computes internal sizes of the UBO.
 			 * @param elementCount The desired element count for the whole shared uniform buffer.
-			 * @return size_t
+			 * @return uint32_t
 			 */
 			[[nodiscard]]
-			size_t computeBlockAlignment (size_t elementCount) noexcept;
+			uint32_t computeBlockAlignment (uint32_t elementCount) noexcept;
 
 			/**
 			 * @brief Adds a buffer to the UBO list without creating a descriptor set associated.
@@ -196,19 +195,19 @@ namespace EmEn::Vulkan
 			/**
 			 * @brief Returns the right UBO index from element index.
 			 * @param index The element index.
-			 * @return size_t
+			 * @return uint32_t
 			 */
 			[[nodiscard]]
-			size_t
+			uint32_t
 			bufferIndex (uint32_t index) const noexcept
 			{
 				return std::floor(index / m_maxElementCountPerUBO);
 			}
 
 			std::shared_ptr< Device > m_device;
-			size_t m_uniformBlockSize;
-			size_t m_maxElementCountPerUBO{0};
-			size_t m_blockAlignedSize{0};
+			uint32_t m_uniformBlockSize;
+			uint32_t m_maxElementCountPerUBO{0};
+			uint32_t m_blockAlignedSize{0};
 			std::vector< std::unique_ptr< UniformBufferObject > > m_uniformBufferObjects;
 			std::vector< std::unique_ptr< DescriptorSet > > m_descriptorSets;
 			std::vector< const void * > m_elements;

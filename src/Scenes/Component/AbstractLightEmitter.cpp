@@ -43,14 +43,14 @@ namespace EmEn::Scenes::Component
 	Matrix< 4, float >
 	AbstractLightEmitter::getLightSpaceMatrix () const noexcept
 	{
-		if ( !this->isShadowEnabled() )
+		if ( !this->isShadowCastingEnabled() )
 		{
 			return Matrix< 4, float >::identity();
 		}
 
 		const auto & viewMatrices = this->shadowMap()->viewMatrices();
 
-		return RenderTarget::ShadowMap::Abstract::ScaleBiasMatrix * viewMatrices.projectionMatrix() * viewMatrices.viewMatrix(false, 0);
+		return RenderTarget::ScaleBiasMatrix * viewMatrices.projectionMatrix() * viewMatrices.viewMatrix(false, 0);
 	}
 
 	void
@@ -129,19 +129,6 @@ namespace EmEn::Scenes::Component
 		}
 
 		return true;
-	}
-
-	void
-	AbstractLightEmitter::enableShadow (bool state) noexcept
-	{
-		if ( this->shadowMapResolution() == 0 )
-		{
-			TraceInfo{TracerTag} << "The shadow map texture wasn't requested at light creation ! Cancelling ...";
-
-			return;
-		}
-
-		this->setFlag(ShadowMapEnabled, state);
 	}
 
 	uint32_t

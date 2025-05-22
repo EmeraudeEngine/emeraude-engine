@@ -61,13 +61,7 @@ namespace EmEn::Scenes::Component
 	}
 
 	bool
-	DirectionalPushModifier::shouldRemove () const noexcept
-	{
-		return false;
-	}
-
-	bool
-	DirectionalPushModifier::playAnimation (uint8_t animationID, const Variant & value, size_t cycle) noexcept
+	DirectionalPushModifier::playAnimation (uint8_t animationID, const Variant & value, size_t /*cycle*/) noexcept
 	{
 		switch ( animationID )
 		{
@@ -85,7 +79,7 @@ namespace EmEn::Scenes::Component
 	}
 
 	Vector< 3, float >
-	DirectionalPushModifier::getForceAppliedToEntity (const CartesianFrame< float > & worldCoordinates, const Sphere< float > & worldBoundingSphere) const noexcept
+	DirectionalPushModifier::getForceAppliedToEntity (const CartesianFrame< float > & worldCoordinates, const Space3D::Sphere< float > & worldBoundingSphere) const noexcept
 	{
 		if ( !this->isEnabled() )
 		{
@@ -110,7 +104,7 @@ namespace EmEn::Scenes::Component
 	}
 
 	Vector< 3, float >
-	DirectionalPushModifier::getForceAppliedToEntity (const CartesianFrame< float > & worldCoordinates, const Cuboid< float > & worldBoundingBox) const noexcept
+	DirectionalPushModifier::getForceAppliedToEntity (const CartesianFrame< float > & worldCoordinates, const Space3D::AACuboid< float > & worldBoundingBox) const noexcept
 	{
 		if ( !this->isEnabled() )
 		{

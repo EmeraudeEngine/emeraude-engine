@@ -36,7 +36,7 @@
 
 namespace EmEn
 {
-	static constexpr auto TracerTag{"ServiceInterface"};
+	constexpr auto TracerTag{"ServiceInterface"};
 
 	ServiceInterface::ServiceInterface (const std::string & serviceInstanceName) noexcept
 		: NameableTrait(serviceInstanceName)

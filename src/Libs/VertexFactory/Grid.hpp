@@ -30,20 +30,19 @@
 #include "emeraude_config.hpp"
 
 /* STL inclusions. */
-#include <cstddef>
 #include <cstdint>
-#include <functional>
+#include <vector>
+#include <string>
 #include <iostream>
 #include <sstream>
-#include <string>
+#include <functional>
 #include <type_traits>
-#include <vector>
 
 /* Local inclusions. */
 #include "Libs/Algorithms/DiamondSquare.hpp"
 #include "Libs/Algorithms/PerlinNoise.hpp"
-#include "Libs/Math/Cuboid.hpp"
-#include "Libs/Math/Sphere.hpp"
+#include "Libs/Math/Space3D/AACuboid.hpp"
+#include "Libs/Math/Space3D/Sphere.hpp"
 #include "Libs/Math/Vector.hpp"
 #include "Libs/PixelFactory/Color.hpp"
 #include "Libs/PixelFactory/Pixmap.hpp"
@@ -63,10 +62,11 @@ namespace EmEn::Libs::VertexFactory
 
 	/**
 	 * @brief The grid geometry class.
-	 * @tparam number_t The type of floating point number. Default float.
+	 * @tparam vertex_data_t The precision type of vertex data. Default float.
+	 * @tparam index_data_t The precision type of index data. Default uint32_t.
 	 */
-	template< typename number_t = float >
-	requires (std::is_floating_point_v< number_t >)
+	template< typename vertex_data_t = float, typename index_data_t = uint32_t >
+	requires (std::is_floating_point_v< vertex_data_t > && std::is_unsigned_v< index_data_t > )
 	class Grid final
 	{
 		public:
@@ -78,14 +78,14 @@ namespace EmEn::Libs::VertexFactory
 
 			/**
 			 * @brief Reserves data for a new grid.
-			 * @note All parameter is for one dimension, because a Grid is always a square.
+			 * @note All parameters are for one dimension, because a Grid is always a square.
 			 * @param size The size of the grid or a cell grid depending on the third parameter.
-			 * @param division The number of cell per dimension (square).
+			 * @param division The number of cells per dimension (square).
 			 * @param isSizeForCell Tells if the size parameter is the size of a cell or the whole grid.
 			 * @return bool
 			 */
 			bool
-			initializeData (number_t size, size_t division, bool isSizeForCell = false) noexcept
+			initializeData (vertex_data_t size, index_data_t division, bool isSizeForCell = false) noexcept
 			{
 				if ( division == 0 )
 				{
@@ -108,14 +108,15 @@ namespace EmEn::Libs::VertexFactory
 				m_squaredPointCount = division + 1;
 				m_pointHeights.resize(this->pointCount(), 0);
 
-#ifdef EMERAUDE_DEBUG_VERTEX_FACTORY
-				/* Shows memory usage */
-				const auto memoryAllocated = m_pointHeights.size() * sizeof(number_t);
+				if constexpr ( VertexFactoryDebugEnabled )
+				{
+					/* Shows memory usage */
+					const auto memoryAllocated = m_pointHeights.size() * sizeof(vertex_data_t);
 
-				std::cout << "[DEBUG:VERTEX_FACTORY] " << ( static_cast< number_t >(memoryAllocated) / 1048576 ) << " Mib allocated." "\n";
-#endif
+					std::cout << "[DEBUG:VERTEX_FACTORY] " << ( static_cast< vertex_data_t >(memoryAllocated) / 1048576 ) << " Mib allocated." "\n";
+				}
 
-				constexpr auto Half = static_cast< number_t >(0.5);
+				constexpr auto Half = static_cast< vertex_data_t >(0.5);
 
 				/* If we specify the size about the division. */
 				if ( isSizeForCell )
@@ -144,7 +145,7 @@ namespace EmEn::Libs::VertexFactory
 			 * @return void
 			 */
 			void
-			applyDisplacementMapping (const PixelFactory::Pixmap< uint8_t > & map, number_t factor, Mode mode = Mode::Replace) noexcept
+			applyDisplacementMapping (const PixelFactory::Pixmap< uint8_t > & map, vertex_data_t factor, Mode mode = Mode::Replace) noexcept
 			{
 				if ( !map.isValid() )
 				{
@@ -156,7 +157,7 @@ namespace EmEn::Libs::VertexFactory
 				switch ( mode )
 				{
 					case Mode::Replace :
-						this->applyTransformation([this, &map, factor] (size_t indexOnX, size_t indexOnY, number_t coordU, number_t coordV) {
+						this->applyTransformation([this, &map, factor] (index_data_t indexOnX, index_data_t indexOnY, vertex_data_t coordU, vertex_data_t coordV) {
 							m_pointHeights[this->index(indexOnX, indexOnY)] = map.cosineSample(coordU, coordV).gray() * factor;
 
 							return true;
@@ -164,7 +165,7 @@ namespace EmEn::Libs::VertexFactory
 						break;
 
 					case Mode::Add :
-						this->applyTransformation([this, &map, factor] (size_t indexOnX, size_t indexOnY, number_t coordU, number_t coordV) {
+						this->applyTransformation([this, &map, factor] (index_data_t indexOnX, index_data_t indexOnY, vertex_data_t coordU, vertex_data_t coordV) {
 							m_pointHeights[this->index(indexOnX, indexOnY)] += map.cosineSample(coordU, coordV).gray() * factor;
 
 							return true;
@@ -172,7 +173,7 @@ namespace EmEn::Libs::VertexFactory
 						break;
 
 					case Mode::Subtract :
-						this->applyTransformation([this, &map, factor] (size_t indexOnX, size_t indexOnY, number_t coordU, number_t coordV) {
+						this->applyTransformation([this, &map, factor] (index_data_t indexOnX, index_data_t indexOnY, vertex_data_t coordU, vertex_data_t coordV) {
 							m_pointHeights[this->index(indexOnX, indexOnY)] -= map.cosineSample(coordU, coordV).gray() * factor;
 
 							return true;
@@ -180,7 +181,7 @@ namespace EmEn::Libs::VertexFactory
 						break;
 
 					case Mode::Multiply :
-						this->applyTransformation([this, &map, factor] (size_t indexOnX, size_t indexOnY, number_t coordU, number_t coordV) {
+						this->applyTransformation([this, &map, factor] (index_data_t indexOnX, index_data_t indexOnY, vertex_data_t coordU, vertex_data_t coordV) {
 							m_pointHeights[this->index(indexOnX, indexOnY)] *= map.cosineSample(coordU, coordV).gray() * factor;
 
 							return true;
@@ -188,7 +189,7 @@ namespace EmEn::Libs::VertexFactory
 						break;
 
 					case Mode::Divide :
-						this->applyTransformation([this, &map, factor] (size_t indexOnX, size_t indexOnY, number_t coordU, number_t coordV) {
+						this->applyTransformation([this, &map, factor] (index_data_t indexOnX, index_data_t indexOnY, vertex_data_t coordU, vertex_data_t coordV) {
 							m_pointHeights[this->index(indexOnX, indexOnY)] /= map.cosineSample(coordU, coordV).gray() * factor;
 
 							return true;
@@ -205,14 +206,14 @@ namespace EmEn::Libs::VertexFactory
 			 * @return void
 			 */
 			void
-			applyPerlinNoise (number_t size, number_t factor, Mode mode = Mode::Replace) noexcept
+			applyPerlinNoise (vertex_data_t size, vertex_data_t factor, Mode mode = Mode::Replace) noexcept
 			{
-				Algorithms::PerlinNoise< number_t > generator{};
+				Algorithms::PerlinNoise< vertex_data_t > generator{};
 
 				switch ( mode )
 				{
 					case Mode::Replace :
-						this->applyTransformation([this, size, factor, &generator] (size_t indexOnX, size_t indexOnY, number_t coordU, number_t coordV) {
+						this->applyTransformation([this, size, factor, &generator] (index_data_t indexOnX, index_data_t indexOnY, vertex_data_t coordU, vertex_data_t coordV) {
 							const auto index = this->index(indexOnX, indexOnY);
 
 							m_pointHeights[index] = generator.generate(coordU * size, coordV * size, 0) * factor;
@@ -223,7 +224,7 @@ namespace EmEn::Libs::VertexFactory
 						break;
 
 					case Mode::Add :
-						this->applyTransformation([this, size, factor, &generator] (size_t indexOnX, size_t indexOnY, number_t coordU, number_t coordV) {
+						this->applyTransformation([this, size, factor, &generator] (index_data_t indexOnX, index_data_t indexOnY, vertex_data_t coordU, vertex_data_t coordV) {
 							const auto index = this->index(indexOnX, indexOnY);
 
 							m_pointHeights[index] += generator.generate(coordU * size, coordV * size, 0) * factor;
@@ -234,7 +235,7 @@ namespace EmEn::Libs::VertexFactory
 						break;
 
 					case Mode::Subtract :
-						this->applyTransformation([this, size, factor, &generator] (size_t indexOnX, size_t indexOnY, number_t coordU, number_t coordV) {
+						this->applyTransformation([this, size, factor, &generator] (index_data_t indexOnX, index_data_t indexOnY, vertex_data_t coordU, vertex_data_t coordV) {
 							const auto index = this->index(indexOnX, indexOnY);
 
 							m_pointHeights[index] -= generator.generate(coordU * size, coordV * size, 0) * factor;
@@ -245,7 +246,7 @@ namespace EmEn::Libs::VertexFactory
 						break;
 
 					case Mode::Multiply :
-						this->applyTransformation([this, size, factor, &generator] (size_t indexOnX, size_t indexOnY, number_t coordU, number_t coordV) {
+						this->applyTransformation([this, size, factor, &generator] (index_data_t indexOnX, index_data_t indexOnY, vertex_data_t coordU, vertex_data_t coordV) {
 							const auto index = this->index(indexOnX, indexOnY);
 
 							m_pointHeights[index] *= generator.generate(coordU * size, coordV * size, 0) * factor;
@@ -256,7 +257,7 @@ namespace EmEn::Libs::VertexFactory
 						break;
 
 					case Mode::Divide :
-						this->applyTransformation([this, size, factor, &generator] (size_t indexOnX, size_t indexOnY, number_t coordU, number_t coordV) {
+						this->applyTransformation([this, size, factor, &generator] (index_data_t indexOnX, index_data_t indexOnY, vertex_data_t coordU, vertex_data_t coordV) {
 							const auto index = this->index(indexOnX, indexOnY);
 
 							m_pointHeights[index] /= generator.generate(coordU * size, coordV * size, 0) * factor;
@@ -277,16 +278,16 @@ namespace EmEn::Libs::VertexFactory
 			 * @return void
 			 */
 			void
-			applyDiamondSquare (number_t factor, number_t roughness, int32_t seed = 1, Mode mode = Mode::Replace) noexcept
+			applyDiamondSquare (vertex_data_t factor, vertex_data_t roughness, int32_t seed = 1, Mode mode = Mode::Replace) noexcept
 			{
-				Algorithms::DiamondSquare< number_t > map{seed, false};
+				Algorithms::DiamondSquare< vertex_data_t > map{seed, false};
 
 				if ( map.generate(m_squaredPointCount, roughness) )
 				{
 					switch ( mode )
 					{
 						case Mode::Replace :
-							this->applyTransformation([this, factor, &map] (size_t indexOnX, size_t indexOnY) {
+							this->applyTransformation([this, factor, &map] (index_data_t indexOnX, index_data_t indexOnY) {
 								const auto index = this->index(indexOnX, indexOnY);
 
 								m_pointHeights[index] = map.value(indexOnX, indexOnY) * factor;
@@ -297,7 +298,7 @@ namespace EmEn::Libs::VertexFactory
 							break;
 
 						case Mode::Add :
-							this->applyTransformation([this, factor, &map] (size_t indexOnX, size_t indexOnY) {
+							this->applyTransformation([this, factor, &map] (index_data_t indexOnX, index_data_t indexOnY) {
 								const auto index = this->index(indexOnX, indexOnY);
 
 								m_pointHeights[index] += map.value(indexOnX, indexOnY) * factor;
@@ -308,7 +309,7 @@ namespace EmEn::Libs::VertexFactory
 							break;
 
 						case Mode::Subtract :
-							this->applyTransformation([this, factor, &map] (size_t indexOnX, size_t indexOnY) {
+							this->applyTransformation([this, factor, &map] (index_data_t indexOnX, index_data_t indexOnY) {
 								const auto index = this->index(indexOnX, indexOnY);
 
 								m_pointHeights[index] -= map.value(indexOnX, indexOnY) * factor;
@@ -319,7 +320,7 @@ namespace EmEn::Libs::VertexFactory
 							break;
 
 						case Mode::Multiply :
-							this->applyTransformation([this, factor, &map] (size_t indexOnX, size_t indexOnY) {
+							this->applyTransformation([this, factor, &map] (index_data_t indexOnX, index_data_t indexOnY) {
 								const auto index = this->index(indexOnX, indexOnY);
 
 								m_pointHeights[index] *= map.value(indexOnX, indexOnY) * factor;
@@ -330,7 +331,7 @@ namespace EmEn::Libs::VertexFactory
 							break;
 
 						case Mode::Divide :
-							this->applyTransformation([this, factor, &map] (size_t indexOnX, size_t indexOnY) {
+							this->applyTransformation([this, factor, &map] (index_data_t indexOnX, index_data_t indexOnY) {
 								const auto index = this->index(indexOnX, indexOnY);
 
 								m_pointHeights[index] /= map.value(indexOnX, indexOnY) * factor;
@@ -349,11 +350,11 @@ namespace EmEn::Libs::VertexFactory
 			 * @return void
 			 */
 			void
-			scale (number_t value) noexcept
+			scale (vertex_data_t value) noexcept
 			{
-				constexpr auto Half = static_cast< number_t >(0.5);
+				constexpr auto Half = static_cast< vertex_data_t >(0.5);
 
-				std::transform(m_pointHeights.begin(), m_pointHeights.end(), m_pointHeights.begin(), [value] (auto height) -> number_t {
+				std::transform(m_pointHeights.begin(), m_pointHeights.end(), m_pointHeights.begin(), [value] (auto height) -> vertex_data_t {
 					return height * value;
 				});
 
@@ -389,7 +390,7 @@ namespace EmEn::Libs::VertexFactory
 			 * @return void
 			 */
 			void
-			setUVMultiplier (number_t UVMultiplier) noexcept
+			setUVMultiplier (vertex_data_t UVMultiplier) noexcept
 			{
 				if ( UVMultiplier > 0 )
 				{
@@ -405,7 +406,7 @@ namespace EmEn::Libs::VertexFactory
 			 * @return void
 			 */
 			void
-			setUVMultiplier (number_t UMultiplier, number_t VMultiplier) noexcept
+			setUVMultiplier (vertex_data_t UMultiplier, vertex_data_t VMultiplier) noexcept
 			{
 				if ( UMultiplier > 0 )
 				{
@@ -420,10 +421,10 @@ namespace EmEn::Libs::VertexFactory
 
 			/**
 			 * @brief Returns the multiplier to the U component of texture coordinates.
-			 * @return type_t
+			 * @return vertex_data_t
 			 */
 			[[nodiscard]]
-			number_t
+			vertex_data_t
 			UMultiplier () const noexcept
 			{
 				return m_UMultiplier;
@@ -431,10 +432,10 @@ namespace EmEn::Libs::VertexFactory
 
 			/**
 			 * @brief Returns the multiplier to the V component of texture coordinates.
-			 * @return type_t
+			 * @return vertex_data_t
 			 */
 			[[nodiscard]]
-			number_t
+			vertex_data_t
 			VMultiplier () const noexcept
 			{
 				return m_VMultiplier;
@@ -465,10 +466,10 @@ namespace EmEn::Libs::VertexFactory
 
 			/**
 			 * @brief Returns a bounding box enclosing the whole grid.
-			 * @return const AxisAlignedBoundingBox< type_t > &
+			 * @return const Math::Space3D::AACuboid< vertex_data_t > &
 			 */
 			[[nodiscard]]
-			const Math::Cuboid< number_t > &
+			const Math::Space3D::AACuboid< vertex_data_t > &
 			boundingBox () const noexcept
 			{
 				return m_boundingBox;
@@ -476,10 +477,10 @@ namespace EmEn::Libs::VertexFactory
 
 			/**
 			 * @brief Returns the bounding radius.
-			 * @return const Sphere< type_t > &
+			 * @return const Math::Space3D::Sphere< vertex_data_t > &
 			 */
 			[[nodiscard]]
-			const Math::Sphere< number_t > &
+			const Math::Space3D::Sphere< vertex_data_t > &
 			boundingSphere () const noexcept
 			{
 				return m_boundingSphere;
@@ -487,10 +488,10 @@ namespace EmEn::Libs::VertexFactory
 
 			/**
 			 * @brief Returns the squared dimension of the grid.
-			 * @return type_t
+			 * @return vertex_data_t
 			 */
 			[[nodiscard]]
-			number_t
+			vertex_data_t
 			squaredSize () const noexcept
 			{
 				return m_halfSquaredSize + m_halfSquaredSize;
@@ -499,10 +500,10 @@ namespace EmEn::Libs::VertexFactory
 			/**
 			 * @brief Returns the half squared dimension of the grid.
 			 * @note Useful when using coordinates thinking the origin of the grid is at his center.
-			 * @return type_t
+			 * @return vertex_data_t
 			 */
 			[[nodiscard]]
-			number_t
+			vertex_data_t
 			halfSquaredSize () const noexcept
 			{
 				return m_halfSquaredSize;
@@ -510,10 +511,10 @@ namespace EmEn::Libs::VertexFactory
 
 			/**
 			 * @brief Returns the size of a grid cell.
-			 * @return type_t
+			 * @return vertex_data_t
 			 */
 			[[nodiscard]]
-			number_t
+			vertex_data_t
 			quadSize () const noexcept
 			{
 				return m_quadSquaredSize;
@@ -523,11 +524,11 @@ namespace EmEn::Libs::VertexFactory
 			 * @brief Returns the height at cell coordinates.
 			 * @param indexOnX The grid quad index on X axis.
 			 * @param indexOnY The grid quad index on Y axis.
-			 * @return type_t
+			 * @return vertex_data_t
 			 */
 			[[nodiscard]]
-			number_t
-			getHeightAt (size_t indexOnX, size_t indexOnY) const noexcept
+			vertex_data_t
+			getHeightAt (index_data_t indexOnX, index_data_t indexOnY) const noexcept
 			{
 				return m_pointHeights[this->index(indexOnX, indexOnY)];
 			}
@@ -536,11 +537,11 @@ namespace EmEn::Libs::VertexFactory
 			 * @brief Returns the height at an arbitrary X/Y coordinates.
 			 * @param positionX The coordinate on X axis.
 			 * @param positionY The coordinate on Y axis.
-			 * @return type_t
+			 * @return vertex_data_t
 			 */
 			[[nodiscard]]
-			number_t
-			getHeightAt (number_t positionX, number_t positionY) const noexcept
+			vertex_data_t
+			getHeightAt (vertex_data_t positionX, vertex_data_t positionY) const noexcept
 			{
 				/* If coordinates are outside the grid, we return zero. */
 				if ( positionX <= -m_halfSquaredSize || positionX >= m_halfSquaredSize || positionY <= -m_halfSquaredSize || positionY >= m_halfSquaredSize )
@@ -554,7 +555,7 @@ namespace EmEn::Libs::VertexFactory
 				const auto realY = (positionY + m_halfSquaredSize) / m_quadSquaredSize;
 				const auto factorY = realY - std::floor(realY);
 
-				const auto currentQuad = this->quad(static_cast< size_t >(std::floor(realX)), static_cast< size_t >(std::floor(realY)));
+				const auto currentQuad = this->quad(static_cast< index_data_t >(std::floor(realX)), static_cast< index_data_t >(std::floor(realY)));
 
 				/* Interpolate height from each corner of the quad. First X axis... */
 				const auto top = Math::linearInterpolation(m_pointHeights[currentQuad.topLeftIndex()], m_pointHeights[currentQuad.topRightIndex()], factorX);
@@ -568,16 +569,16 @@ namespace EmEn::Libs::VertexFactory
 			 * @brief Returns the normal vector at an arbitrary X/Y coordinates.
 			 * @param positionX The coordinate on X axis.
 			 * @param positionY The coordinate on Y axis.
-			 * @return Math::Vector< 3, type_t >
+			 * @return Math::Vector< 3, vertex_data_t >
 			 */
 			[[nodiscard]]
-			Math::Vector< 3, number_t >
-			getNormalAt (number_t positionX, number_t positionY) const noexcept
+			Math::Vector< 3, vertex_data_t >
+			getNormalAt (vertex_data_t positionX, vertex_data_t positionY) const noexcept
 			{
 				/* If coordinates are outside the grid, we return zero. */
 				if ( positionX <= -m_halfSquaredSize || positionX >= m_halfSquaredSize || positionY <= -m_halfSquaredSize || positionY >= m_halfSquaredSize )
 				{
-					return Math::Vector< 3, number_t>::positiveY();
+					return Math::Vector< 3, vertex_data_t>::positiveY();
 				}
 
 				const auto realX = (positionX + m_halfSquaredSize) / m_quadSquaredSize;
@@ -586,7 +587,7 @@ namespace EmEn::Libs::VertexFactory
 				const auto realY = (positionY + m_halfSquaredSize) / m_quadSquaredSize;
 				const auto factorY = realY - std::floor(realY);
 
-				const auto coordQuad = this->quad(static_cast< size_t >(std::floor(realX)), static_cast< size_t >(std::floor(realY)));
+				const auto coordQuad = this->quad(static_cast< index_data_t >(std::floor(realX)), static_cast< index_data_t >(std::floor(realY)));
 
 				/* Interpolate height from each corner of the quad. First X axis... */
 				const auto top = Math::linearInterpolation(this->normal(coordQuad.topLeftIndex()), this->normal(coordQuad.topRightIndex()), factorX);
@@ -598,10 +599,10 @@ namespace EmEn::Libs::VertexFactory
 
 			/**
 			 * @brief Returns the point count.
-			 * @return size_t
+			 * @return index_data_t
 			 */
 			[[nodiscard]]
-			size_t
+			index_data_t
 			pointCount () const noexcept
 			{
 				return m_squaredPointCount * m_squaredPointCount;
@@ -609,10 +610,10 @@ namespace EmEn::Libs::VertexFactory
 
 			/**
 			 * @brief Returns the point count in one dimension.
-			 * @return size_t
+			 * @return index_data_t
 			 */
 			[[nodiscard]]
-			size_t
+			index_data_t
 			squaredPointCount () const noexcept
 			{
 				return m_squaredPointCount;
@@ -620,10 +621,10 @@ namespace EmEn::Libs::VertexFactory
 
 			/**
 			 * @brief Returns the number of grid cell.
-			 * @return size_t
+			 * @return index_data_t
 			 */
 			[[nodiscard]]
-			size_t
+			index_data_t
 			quadCount () const noexcept
 			{
 				return m_squaredQuadCount * m_squaredQuadCount;
@@ -631,10 +632,10 @@ namespace EmEn::Libs::VertexFactory
 
 			/**
 			 * @brief Returns the number of grid cell in one dimension.
-			 * @return size_t
+			 * @return index_data_t
 			 */
 			[[nodiscard]]
-			size_t
+			index_data_t
 			squaredQuadCount () const noexcept
 			{
 				return m_squaredQuadCount;
@@ -644,11 +645,11 @@ namespace EmEn::Libs::VertexFactory
 			 * @brief Convert XY indexes to buffer index.
 			 * @param indexOnX The grid quad index on X axis.
 			 * @param indexOnY The grid quad index on Y axis.
-			 * @return size_t
+			 * @return index_data_t
 			 */
 			[[nodiscard]]
-			size_t
-			index (size_t indexOnX, size_t indexOnY) const noexcept
+			index_data_t
+			index (index_data_t indexOnX, index_data_t indexOnY) const noexcept
 			{
 				return indexOnX + (indexOnY * m_squaredPointCount);
 			}
@@ -656,24 +657,24 @@ namespace EmEn::Libs::VertexFactory
 			/**
 			 * @brief Returns the X grid coordinates from grid index.
 			 * @param index The grid index.
-			 * @return size_t
+			 * @return index_data_t
 			 */
 			[[nodiscard]]
-			size_t
-			indexOnX (size_t index) const noexcept
+			index_data_t
+			indexOnX (index_data_t index) const noexcept
 			{
 				return index % m_squaredPointCount;
 			}
 			/**
 			 * @brief Returns the Y grid coordinates from grid index.
 			 * @param index The grid index.
-			 * @return size_t
+			 * @return index_data_t
 			 */
 			[[nodiscard]]
-			size_t
-			indexOnY (size_t index) const noexcept
+			index_data_t
+			indexOnY (index_data_t index) const noexcept
 			{
-				return static_cast< size_t >(std::floor(index / m_squaredPointCount));
+				return static_cast< index_data_t >(std::floor(index / m_squaredPointCount));
 			}
 
 			/**
@@ -683,8 +684,8 @@ namespace EmEn::Libs::VertexFactory
 			 * @return GridQuad
 			 */
 			[[nodiscard]]
-			GridQuad
-			quad (size_t indexOnX, size_t indexOnY) const noexcept
+			GridQuad< index_data_t >
+			quad (index_data_t indexOnX, index_data_t indexOnY) const noexcept
 			{
 				if ( indexOnX >= m_squaredQuadCount || indexOnY >= m_squaredQuadCount )
 				{
@@ -710,31 +711,31 @@ namespace EmEn::Libs::VertexFactory
 			 * @brief Returns the nearest quad at coordinates.
 			 * @param coordX
 			 * @param coordY
-			 * @return GridQuad
+			 * @return GridQuad< index_data_t >
 			 */
 			[[nodiscard]]
-			GridQuad
-			nearestQuad (number_t coordX, number_t coordY) const noexcept
+			GridQuad< index_data_t >
+			nearestQuad (vertex_data_t coordX, vertex_data_t coordY) const noexcept
 			{
 				const auto realX = std::floor((coordX + m_halfSquaredSize) / m_quadSquaredSize);
 				const auto realY = std::floor((coordY + m_halfSquaredSize) / m_quadSquaredSize);
 
-				return this->quad(static_cast< size_t >(realX), static_cast< size_t >(realY));
+				return this->quad(static_cast< index_data_t >(realX), static_cast< index_data_t >(realY));
 			}
 
 			/**
 			 * @brief Builds position vectors.
-			 * @return std::vector< type_t >
+			 * @return std::vector< vertex_data_t >
 			 */
-			std::vector< number_t >
+			std::vector< vertex_data_t >
 			buildPositionVector () const noexcept
 			{
-				std::vector< number_t > vector{m_squaredPointCount * m_squaredPointCount * 3};
+				std::vector< vertex_data_t > vector{m_squaredPointCount * m_squaredPointCount * 3};
 
 				#pragma omp simd
-				for ( size_t xIndex = 0; xIndex < m_squaredPointCount; xIndex++ )
+				for ( index_data_t xIndex = 0; xIndex < m_squaredPointCount; ++xIndex )
 				{
-					for ( size_t yIndex = 0; yIndex < m_squaredPointCount; yIndex++ )
+					for ( index_data_t yIndex = 0; yIndex < m_squaredPointCount; ++yIndex )
 					{
 						vector.push_back((xIndex * m_quadSquaredSize) - m_halfSquaredSize);
 						vector.push_back(m_pointHeights[this->index(xIndex, yIndex)]);
@@ -749,11 +750,11 @@ namespace EmEn::Libs::VertexFactory
 			 * @brief Returns the position vector at grid coordinates.
 			 * @param positionX The grid quad index on X axis.
 			 * @param positionY The grid quad index on Y axis.
-			 * @return Math::Vector< 3, type_t >
+			 * @return Math::Vector< 3, vertex_data_t >
 			 */
 			[[nodiscard]]
-			Math::Vector< 3, number_t >
-			position (size_t positionX, size_t positionY) const noexcept
+			Math::Vector< 3, vertex_data_t >
+			position (index_data_t positionX, index_data_t positionY) const noexcept
 			{
 				return {
 					(positionX * m_quadSquaredSize) - m_halfSquaredSize,
@@ -765,11 +766,11 @@ namespace EmEn::Libs::VertexFactory
 			/**
 			 * @brief Returns the position vector at grid cell index.
 			 * @param index The grid cell index.
-			 * @return Math::Vector< 3, type_t >
+			 * @return Math::Vector< 3, vertex_data_t >
 			 */
 			[[nodiscard]]
-			Math::Vector< 3, number_t >
-			position (size_t index) const noexcept
+			Math::Vector< 3, vertex_data_t >
+			position (index_data_t index) const noexcept
 			{
 				return this->position(this->indexOnX(index), this->indexOnY(index));
 			}
@@ -780,13 +781,13 @@ namespace EmEn::Libs::VertexFactory
 			 * @param indexOnX The grid quad index on X axis.
 			 * @param indexOnY The grid quad index on Y axis.
 			 * @param thisPosition The reference to the position at this same spot.
-			 * @return Math::Vector< 3, type_t >
+			 * @return Math::Vector< 3, vertex_data_t >
 			 */
 			[[nodiscard]]
-			Math::Vector< 3, number_t >
-			normal (size_t indexOnX, size_t indexOnY, const Math::Vector< 3, number_t > & thisPosition) const noexcept
+			Math::Vector< 3, vertex_data_t >
+			normal (index_data_t indexOnX, index_data_t indexOnY, const Math::Vector< 3, vertex_data_t > & thisPosition) const noexcept
 			{
-				Math::Vector< 3, number_t > normal{};
+				Math::Vector< 3, vertex_data_t > normal{};
 
 				/* Checks the two quads top to this position.
 				 * NOTE: indexOnY:0 = top. */
@@ -797,7 +798,7 @@ namespace EmEn::Libs::VertexFactory
 					/* Top-Left quad. */
 					if ( indexOnX > 0 )
 					{
-						normal += Math::Vector< 3, number_t >::normal(
+						normal += Math::Vector< 3, vertex_data_t >::normal(
 							top,
 							thisPosition,
 							this->position(indexOnX - 1, indexOnY)
@@ -807,7 +808,7 @@ namespace EmEn::Libs::VertexFactory
 					/* Top-Right quad. */
 					if ( indexOnX < (m_squaredPointCount - 1) )
 					{
-						normal += Math::Vector< 3, number_t >::normal(
+						normal += Math::Vector< 3, vertex_data_t >::normal(
 							this->position(indexOnX + 1, indexOnY),
 							thisPosition,
 							top
@@ -823,7 +824,7 @@ namespace EmEn::Libs::VertexFactory
 					/* Bottom-Left quad. */
 					if ( indexOnX > 0 )
 					{
-						normal += Math::Vector< 3, number_t >::normal(
+						normal += Math::Vector< 3, vertex_data_t >::normal(
 							this->position(indexOnX - 1, indexOnY),
 							thisPosition,
 							bottom
@@ -833,7 +834,7 @@ namespace EmEn::Libs::VertexFactory
 					/* Bottom-Right quad. */
 					if ( indexOnX < (m_squaredPointCount - 1) )
 					{
-						normal += Math::Vector< 3, number_t >::normal(
+						normal += Math::Vector< 3, vertex_data_t >::normal(
 							bottom,
 							thisPosition,
 							this->position(indexOnX + 1, indexOnY)
@@ -843,7 +844,7 @@ namespace EmEn::Libs::VertexFactory
 
 				if ( normal.isZero() )
 				{
-					return Math::Vector< 3, number_t >::negativeY();
+					return Math::Vector< 3, vertex_data_t >::negativeY();
 				}
 
 				return normal.normalize();
@@ -853,11 +854,11 @@ namespace EmEn::Libs::VertexFactory
 			 * @brief Returns the normal vector at grid coordinates.
 			 * @param positionX The grid quad index on X axis.
 			 * @param positionY The grid quad index on Y axis.
-			 * @return Math::Vector< 3, type_t >
+			 * @return Math::Vector< 3, vertex_data_t >
 			 */
 			[[nodiscard]]
-			Math::Vector< 3, number_t >
-			normal (size_t positionX, size_t positionY) const noexcept
+			Math::Vector< 3, vertex_data_t >
+			normal (index_data_t positionX, index_data_t positionY) const noexcept
 			{
 				return this->normal(positionX, positionY, this->position(positionX, positionY));
 			}
@@ -866,11 +867,11 @@ namespace EmEn::Libs::VertexFactory
 			 * @brief Returns the normal vector at grid index.
 			 * @param index The grid quad index.
 			 * @param thisPosition The reference to the position at this same spot.
-			 * @return Math::Vector< 3, type_t >
+			 * @return Math::Vector< 3, vertex_data_t >
 			 */
 			[[nodiscard]]
-			Math::Vector< 3, number_t >
-			normal (size_t index, const Math::Vector< 3, number_t > & thisPosition) const noexcept
+			Math::Vector< 3, vertex_data_t >
+			normal (index_data_t index, const Math::Vector< 3, vertex_data_t > & thisPosition) const noexcept
 			{
 				return this->normal(this->indexOnX(index), this->indexOnY(index), thisPosition);
 			}
@@ -878,11 +879,11 @@ namespace EmEn::Libs::VertexFactory
 			/**
 			 * @brief Returns the normal vector at grid index.
 			 * @param index The grid quad index.
-			 * @return Math::Vector< 3, type_t >
+			 * @return Math::Vector< 3, vertex_data_t >
 			 */
 			[[nodiscard]]
-			Math::Vector< 3, number_t >
-			normal (size_t index) const noexcept
+			Math::Vector< 3, vertex_data_t >
+			normal (index_data_t index) const noexcept
 			{
 				const auto xIndex = this->indexOnX(index);
 				const auto yIndex = this->indexOnY(index);
@@ -897,13 +898,13 @@ namespace EmEn::Libs::VertexFactory
 			 * @param indexOnY The grid quad index on Y axis.
 			 * @param thisPosition The reference to the position at this same spot.
 			 * @param thisUV The reference to the texture coordinates at this same spot.
-			 * @return Math::Vector< 3, type_t >
+			 * @return Math::Vector< 3, vertex_data_t >
 			 */
 			[[nodiscard]]
-			Math::Vector< 3, number_t >
-			tangent (size_t indexOnX, size_t indexOnY, const Math::Vector< 3, number_t > & thisPosition, const Math::Vector< 3, number_t > & thisUV) const
+			Math::Vector< 3, vertex_data_t >
+			tangent (index_data_t indexOnX, index_data_t indexOnY, const Math::Vector< 3, vertex_data_t > & thisPosition, const Math::Vector< 3, vertex_data_t > & thisUV) const
 			{
-				Math::Vector< 3, number_t > tangent{};
+				Math::Vector< 3, vertex_data_t > tangent{};
 
 				/* Checks the two quads top to this position.
 				 * NOTE: indexOnY:0 = top. */
@@ -915,7 +916,7 @@ namespace EmEn::Libs::VertexFactory
 					/* Top-Left quad. */
 					if ( indexOnX > 0 )
 					{
-						tangent += Math::Vector< 3, number_t >::tangent(
+						tangent += Math::Vector< 3, vertex_data_t >::tangent(
 							this->position(indexOnX - 1, indexOnY),
 							this->textureCoordinates3D(indexOnX - 1, indexOnY),
 							thisPosition,
@@ -928,7 +929,7 @@ namespace EmEn::Libs::VertexFactory
 					/* Top-Right quad. */
 					if ( indexOnX < (m_squaredPointCount - 1) )
 					{
-						tangent += Math::Vector< 3, number_t >::tangent(
+						tangent += Math::Vector< 3, vertex_data_t >::tangent(
 							topPosition,
 							topUV,
 							thisPosition,
@@ -948,7 +949,7 @@ namespace EmEn::Libs::VertexFactory
 					/* Bottom-Left quad. */
 					if ( indexOnX > 0 )
 					{
-						tangent += Math::Vector< 3, number_t >::tangent(
+						tangent += Math::Vector< 3, vertex_data_t >::tangent(
 							bottomPosition,
 							bottomUV,
 							thisPosition,
@@ -961,7 +962,7 @@ namespace EmEn::Libs::VertexFactory
 					/* Bottom-Right quad. */
 					if ( indexOnX < (m_squaredPointCount - 1) )
 					{
-						tangent += Math::Vector< 3, number_t >::tangent(
+						tangent += Math::Vector< 3, vertex_data_t >::tangent(
 							this->position(indexOnX + 1, indexOnY),
 							this->textureCoordinates3D(indexOnX + 1, indexOnY),
 							thisPosition,
@@ -974,7 +975,7 @@ namespace EmEn::Libs::VertexFactory
 
 				if ( tangent.isZero() )
 				{
-					return Math::Vector< 3, number_t >::positiveX();
+					return Math::Vector< 3, vertex_data_t >::positiveX();
 				}
 
 				return tangent.normalize();
@@ -984,11 +985,11 @@ namespace EmEn::Libs::VertexFactory
 			 * @brief Returns the tangent vector at grid coordinates.
 			 * @param positionX The grid quad index on X axis.
 			 * @param positionY The grid quad index on Y axis.
-			 * @return Math::Vector< 3, type_t >
+			 * @return Math::Vector< 3, vertex_data_t >
 			 */
 			[[nodiscard]]
-			Math::Vector< 3, number_t >
-			tangent (size_t positionX, size_t positionY) const noexcept
+			Math::Vector< 3, vertex_data_t >
+			tangent (index_data_t positionX, index_data_t positionY) const noexcept
 			{
 				return this->tangent(positionX, positionY, this->position(positionX, positionY), this->textureCoordinates3D(positionX, positionY));
 			}
@@ -996,11 +997,11 @@ namespace EmEn::Libs::VertexFactory
 			/**
 			 * @brief Returns the tangent vector at grid index.
 			 * @param index The grid quad index.
-			 * @return Math::Vector< 3, type_t >
+			 * @return Math::Vector< 3, vertex_data_t >
 			 */
 			[[nodiscard]]
-			Math::Vector< 3, number_t >
-			tangent (size_t index) const noexcept
+			Math::Vector< 3, vertex_data_t >
+			tangent (index_data_t index) const noexcept
 			{
 				const auto xIndex = this->indexOnX(index);
 				const auto yIndex = this->indexOnY(index);
@@ -1013,11 +1014,11 @@ namespace EmEn::Libs::VertexFactory
 			 * @param index The grid quad index.
 			 * @param thisPosition The reference to the position at this same spot.
 			 * @param thisUV The reference to the texture coordinates at this same spot.
-			 * @return Math::Vector< 3, type_t >
+			 * @return Math::Vector< 3, vertex_data_t >
 			 */
 			[[nodiscard]]
-			Math::Vector< 3, number_t >
-			tangent (size_t index, const Math::Vector< 3, number_t > & thisPosition, const Math::Vector< 3, number_t > & thisUV) const noexcept
+			Math::Vector< 3, vertex_data_t >
+			tangent (index_data_t index, const Math::Vector< 3, vertex_data_t > & thisPosition, const Math::Vector< 3, vertex_data_t > & thisUV) const noexcept
 			{
 				return this->tangent(this->indexOnX(index), this->indexOnY(index), thisPosition, thisUV);
 			}
@@ -1026,28 +1027,28 @@ namespace EmEn::Libs::VertexFactory
 			 * @brief Returns a 2D texture coordinates at grid coordinates.
 			 * @param indexOnX The grid quad index on X axis.
 			 * @param indexOnY The grid quad index on Y axis.
-			 * @return Math::Vector< 2, type_t >
+			 * @return Math::Vector< 2, vertex_data_t >
 			 */
 			[[nodiscard]]
-			Math::Vector< 2, number_t >
-			textureCoordinates2D (size_t indexOnX, size_t indexOnY) const noexcept
+			Math::Vector< 2, vertex_data_t >
+			textureCoordinates2D (index_data_t indexOnX, index_data_t indexOnY) const noexcept
 			{
-				const auto div = static_cast< number_t >(m_squaredQuadCount);
+				const auto div = static_cast< vertex_data_t >(m_squaredQuadCount);
 
 				return {
-					(static_cast< number_t >(indexOnX) / div) * m_UMultiplier,
-					(static_cast< number_t >(indexOnY) / div) * m_VMultiplier
+					(static_cast< vertex_data_t >(indexOnX) / div) * m_UMultiplier,
+					(static_cast< vertex_data_t >(indexOnY) / div) * m_VMultiplier
 				};
 			}
 
 			/**
 			 * @brief Returns a 2D texture coordinates at grid index.
 			 * @param index The grid quad index.
-			 * @return Math::Vector< 2, type_t >
+			 * @return Math::Vector< 2, vertex_data_t >
 			 */
 			[[nodiscard]]
-			Math::Vector< 2, number_t >
-			textureCoordinates2D (size_t index) const noexcept
+			Math::Vector< 2, vertex_data_t >
+			textureCoordinates2D (index_data_t index) const noexcept
 			{
 				return this->textureCoordinates2D(this->indexOnX(index), this->indexOnY(index));
 			}
@@ -1056,17 +1057,17 @@ namespace EmEn::Libs::VertexFactory
 			 * @brief Returns a 3D texture coordinates at grid coordinates.
 			 * @param indexOnX The grid quad index on X axis.
 			 * @param indexOnY The grid quad index on Y axis.
-			 * @return Math::Vector< 2, type_t >
+			 * @return Math::Vector< 2, vertex_data_t >
 			 */
 			[[nodiscard]]
-			Math::Vector< 3, number_t >
-			textureCoordinates3D (size_t indexOnX, size_t indexOnY) const noexcept
+			Math::Vector< 3, vertex_data_t >
+			textureCoordinates3D (index_data_t indexOnX, index_data_t indexOnY) const noexcept
 			{
-				const auto div = static_cast< number_t >(m_squaredQuadCount);
+				const auto div = static_cast< vertex_data_t >(m_squaredQuadCount);
 
 				return {
-					(static_cast< number_t >(indexOnX) / div) * m_UMultiplier,
-					(static_cast< number_t >(indexOnY) / div) * m_VMultiplier,
+					(static_cast< vertex_data_t >(indexOnX) / div) * m_UMultiplier,
+					(static_cast< vertex_data_t >(indexOnY) / div) * m_VMultiplier,
 					(m_pointHeights[this->index(indexOnX, indexOnY)] - m_boundingBox.minimum()[Math::Y]) / m_boundingBox.height()
 				};
 			}
@@ -1074,11 +1075,11 @@ namespace EmEn::Libs::VertexFactory
 			/**
 			 * @brief Returns a 3D texture coordinates at grid index.
 			 * @param index The grid quad index.
-			 * @return Math::Vector< 3, type_t >
+			 * @return Math::Vector< 3, vertex_data_t >
 			 */
 			[[nodiscard]]
-			Math::Vector< 3, number_t >
-			textureCoordinates3D (size_t index) const noexcept
+			Math::Vector< 3, vertex_data_t >
+			textureCoordinates3D (index_data_t index) const noexcept
 			{
 				return this->textureCoordinates3D(this->indexOnX(index), this->indexOnY(index));
 			}
@@ -1091,19 +1092,19 @@ namespace EmEn::Libs::VertexFactory
 			 */
 			[[nodiscard]]
 			PixelFactory::Color< float >
-			vertexColor (size_t index, const PixelFactory::Pixmap< uint8_t > & pixmap) const noexcept
+			vertexColor (index_data_t index, const PixelFactory::Pixmap< uint8_t > & pixmap) const noexcept
 			{
-				const auto coordU = static_cast< number_t >(this->indexOnX(index)) / static_cast< number_t >(m_squaredPointCount);
-				const auto coordV = static_cast< number_t >(this->indexOnY(index)) / static_cast< number_t >(m_squaredPointCount);
+				const auto coordU = static_cast< vertex_data_t >(this->indexOnX(index)) / static_cast< vertex_data_t >(m_squaredPointCount);
+				const auto coordV = static_cast< vertex_data_t >(this->indexOnY(index)) / static_cast< vertex_data_t >(m_squaredPointCount);
 
 				return pixmap.linearSample(coordU, coordV);
 			}
 
 			/**
 			 * @brief Returns the list of heights;
-			 * @return const std::vector< type_t > &
+			 * @return const std::vector< vertex_data_t > &
 			 */
-			const std::vector< number_t > &
+			const std::vector< vertex_data_t > &
 			heights () const noexcept
 			{
 				return m_pointHeights;
@@ -1153,7 +1154,7 @@ namespace EmEn::Libs::VertexFactory
 				return out << "Grid data :\n"
 					"Quad count : " << obj.quadCount() << "(Squared: " << obj.m_squaredQuadCount << ")\n"
 					"Point count : " << obj.pointCount() << "(Squared: " << obj.m_squaredPointCount << ")\n"
-					"Vector< type_t >::size() : " << obj.m_pointHeights.size() << "\n"
+					"Vector< vertex_data_t >::size() : " << obj.m_pointHeights.size() << "\n"
 					"UV multiplier : " << obj.m_UMultiplier << ", " << obj.m_VMultiplier << "\n"
 					"Quad size (squared) : " << obj.m_quadSquaredSize << "\n"
 					"Grid size (squared) : " << ( obj.m_halfSquaredSize + obj.m_halfSquaredSize ) << "\n"
@@ -1185,19 +1186,19 @@ namespace EmEn::Libs::VertexFactory
 			 * @return void
 			 */
 			void
-			applyTransformation (const std::function< bool (size_t, size_t, number_t, number_t) > & transform) noexcept
+			applyTransformation (const std::function< bool (index_data_t, index_data_t, vertex_data_t, vertex_data_t) > & transform) noexcept
 			{
-				const auto square = static_cast< number_t >(m_squaredQuadCount);
+				const auto square = static_cast< vertex_data_t >(m_squaredQuadCount);
 
 				/* Loop over Y axis and get the V coordinates. */
-				for ( size_t yIndex = 0; yIndex < m_squaredPointCount; yIndex++ )
+				for ( index_data_t yIndex = 0; yIndex < m_squaredPointCount; ++yIndex )
 				{
-					const auto coordV = static_cast< number_t >(yIndex) / square;
+					const auto coordV = static_cast< vertex_data_t >(yIndex) / square;
 
 					/* Loop over X axis and get the U coordinates. */
-					for ( size_t xIndex = 0; xIndex < m_squaredPointCount; xIndex++ )
+					for ( index_data_t xIndex = 0; xIndex < m_squaredPointCount; ++xIndex )
 					{
-						const auto coordU = static_cast< number_t >(xIndex) / square;
+						const auto coordU = static_cast< vertex_data_t >(xIndex) / square;
 
 						/* Send data to transformation function. */
 						if ( !transform(xIndex, yIndex, coordU, coordV) )
@@ -1216,13 +1217,13 @@ namespace EmEn::Libs::VertexFactory
 			 * @return void
 			 */
 			void
-			applyTransformation (const std::function< bool (size_t, size_t) > & transform) const noexcept
+			applyTransformation (const std::function< bool (index_data_t, index_data_t) > & transform) const noexcept
 			{
 				/* Loop over Y axis and get the V coordinates. */
-				for ( size_t yIndex = 0; yIndex < m_squaredPointCount; yIndex++ )
+				for ( index_data_t yIndex = 0; yIndex < m_squaredPointCount; ++yIndex )
 				{
 					/* Loop over X axis and get the U coordinates. */
-					for ( size_t xIndex = 0; xIndex < m_squaredPointCount; xIndex++ )
+					for ( index_data_t xIndex = 0; xIndex < m_squaredPointCount; ++xIndex )
 					{
 						/* Send data to transformation function. */
 						if ( !transform(xIndex, yIndex) )
@@ -1250,15 +1251,15 @@ namespace EmEn::Libs::VertexFactory
 				}
 			}
 
-			size_t m_squaredQuadCount{0};
+			index_data_t m_squaredQuadCount{0};
 			/* NOTE: m_squareQuads + 1 */
-			size_t m_squaredPointCount{0};
-			std::vector< number_t > m_pointHeights{};
-			number_t m_quadSquaredSize{2};
-			number_t m_halfSquaredSize{1};
-			number_t m_UMultiplier{1};
-			number_t m_VMultiplier{1};
-			Math::Cuboid< number_t > m_boundingBox;
-			Math::Sphere< number_t > m_boundingSphere;
+			index_data_t m_squaredPointCount{0};
+			std::vector< vertex_data_t > m_pointHeights{};
+			vertex_data_t m_quadSquaredSize{2};
+			vertex_data_t m_halfSquaredSize{1};
+			vertex_data_t m_UMultiplier{1};
+			vertex_data_t m_VMultiplier{1};
+			Math::Space3D::AACuboid< vertex_data_t > m_boundingBox;
+			Math::Space3D::Sphere< vertex_data_t > m_boundingSphere;
 	};
 }

@@ -52,5 +52,5 @@ TEST(PixelFactoryPixmapFormat, writeTarga)
 
 	ASSERT_TRUE(FileIO::read(LargeRGB, image));
 
-	ASSERT_TRUE(FileIO::write(image, {RES_BASE_PATH "/test-assets/tmp_writeTarga.tga"}, true));
+	ASSERT_TRUE(FileIO::write(image, {"./test-assets/tmp_writeTarga.tga"}, true));
 }

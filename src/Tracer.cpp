@@ -26,31 +26,30 @@
 
 #include "Tracer.hpp"
 
+/* Project configuration. */
+#include "emeraude_config.hpp"
+
 /* STL inclusions. */
-#include <algorithm>
 #include <cstring>
+#include <algorithm>
 #include <exception>
 #include <iostream>
-#include <memory>
-#include <sstream>
-#include <thread>
-
-/* Local inclusions. */
-#include "Libs/BlobTrait.hpp"
-#include "Libs/String.hpp"
-#include "Arguments.hpp"
-#include "ServiceInterface.hpp"
-#include "Settings.hpp"
-#include "SettingKeys.hpp"
-#include "TracerLogger.hpp"
-#include "Types.hpp"
-#if IS_WINDOWS
-#include "PlatformSpecific/Helpers.hpp"
-#endif
 
 /* System inclusions. */
 #if IS_LINUX || IS_MACOS
 #include <unistd.h>
+#endif
+
+/* Local inclusions. */
+#include "Libs/String.hpp"
+#include "Arguments.hpp"
+#include "FileSystem.hpp"
+#include "SettingKeys.hpp"
+#include "Settings.hpp"
+#include "TracerLogger.hpp"
+#include "Types.hpp"
+#if IS_WINDOWS
+#include "PlatformSpecific/Helpers.hpp"
 #endif
 
 namespace EmEn
@@ -61,11 +60,13 @@ namespace EmEn
 
 	Tracer * Tracer::s_instance{nullptr};
 
-	Tracer::Tracer (const Arguments & arguments, Settings & settings, bool childProcess) noexcept
+	Tracer::Tracer (const Arguments & arguments, std::string processName, bool childProcess) noexcept
 		: ServiceInterface(ClassId),
 		m_arguments(arguments),
-		m_settings(settings)
+		m_processName(std::move(processName))
 	{
+		m_flags[IsChildProcess] = childProcess;
+
 		if ( s_instance != nullptr )
 		{
 			std::cerr << __PRETTY_FUNCTION__ << ", constructor called twice !" "\n";
@@ -74,25 +75,11 @@ namespace EmEn
 		}
 
 		s_instance = this;
-
-		m_flags[ChildProcess] = childProcess;
 	}
 
 	Tracer::~Tracer ()
 	{
 		s_instance = nullptr;
-	}
-
-	size_t
-	Tracer::classUID () const noexcept
-	{
-		return ClassUID;
-	}
-
-	bool
-	Tracer::is (size_t classUID) const noexcept
-	{
-		return classUID == ClassUID;
 	}
 
 	bool
@@ -125,18 +112,7 @@ namespace EmEn
 		{
 			std::cout << "Tracer disabled on startup !" "\n";
 
-			m_flags[EnableTracing] = false;
-		}
-
-		argument = m_arguments.get("-l", "--enable-log");
-
-		if ( argument.isPresent() )
-		{
-			m_logger = std::make_unique< TracerLogger >(argument.value());
-
-			m_flags[EnableLogging] = true;
-
-			m_loggerProcess = std::thread{&TracerLogger::task, m_logger.get()};
+			m_flags[IsTracerDisabled] = true;
 		}
 
 		m_flags[ServiceInitialized] = true;
@@ -149,141 +125,125 @@ namespace EmEn
 	{
 		m_flags[ServiceInitialized] = false;
 
-		if ( m_logger != nullptr )
-		{
-			m_logger->stop();
-
-			if ( m_loggerProcess.joinable() )
-			{
-				m_loggerProcess.join();
-			}
-
-			m_logger.reset();
-		}
+		this->disableLogger();
 
 		return true;
 	}
 
-	bool
-	Tracer::usable () const noexcept
+	std::filesystem::path
+	Tracer::generateLogFilepath (const std::string & name) const noexcept
 	{
-		return m_flags[ServiceInitialized];
+		std::stringstream filename;
+		filename << "journal-" << name;
+
+		switch ( m_logFormat )
+		{
+			case LogFormat::Text :
+				filename << ".log";
+				break;
+
+			case LogFormat::JSON :
+				filename << ".json";
+				break;
+
+			case LogFormat::HTML :
+				filename << ".html";
+				break;
+		}
+
+		auto cacheDirectory = m_cacheDirectory;
+
+		return cacheDirectory.append(filename.str());
 	}
 
 	bool
-	Tracer::enableLogger (const std::string & filepath) noexcept
+	Tracer::enableLogger (const std::filesystem::path & filepath) noexcept
 	{
 		if ( m_logger != nullptr )
 		{
 			return true;
 		}
 
-		m_logger = std::make_unique< TracerLogger >(filepath);
+		m_logger = std::make_unique< TracerLogger >(filepath, m_logFormat);
 
-		if ( !m_logger->usable() )
+		if ( m_logger->start() )
 		{
-			m_logger.reset();
-
-			this->trace(Severity::Error, "Tracer", Libs::BlobTrait() << "Unable to enable the logger with the file '" << filepath << "' !");
-
-			return false;
+			return true;
 		}
 
-		m_loggerProcess = std::thread{&TracerLogger::task, m_logger.get()};
+		m_logger.reset();
 
-		m_flags[EnableLogging] = true;
+		this->trace(Severity::Error, ClassId, "Unable to enable the tracer logger!");
 
-		return true;
+		return false;
 	}
 
 	void
 	Tracer::disableLogger () noexcept
 	{
-		/* FIXME: Detach ?! */
-		if ( m_logger != nullptr )
-		{
-			m_logger->stop();
+		m_logger.reset();
+	}
 
-			if ( m_loggerProcess.joinable() )
+	void
+	Tracer::lateInitialize (const FileSystem & fileSystem, Settings & settings) noexcept
+	{
+		if ( this->isTracerDisabled() )
+		{
+			return;
+		}
+
+		this->enablePrintOnlyErrors(settings.get< bool >(TracerPrintOnlyErrorsKey, DefaultTracerPrintOnlyErrors));
+		this->enableSourceLocation(settings.get< bool >(TracerEnableSourceLocationKey, DefaultTracerEnableSourceLocation));
+		this->enableThreadInfos(settings.get< bool >(TracerEnableThreadInfosKey, DefaultTracerEnableThreadInfos));
+
+		m_cacheDirectory = fileSystem.cacheDirectory();
+		m_logFormat = to_LogFormat(settings.get< std::string >(TracerLogFormatKey, DefaultTracerLogFormat));
+
+		const auto argument = m_arguments.get("-l", "--enable-log");
+
+		if ( settings.get< bool >(TracerEnableLoggerKey, DefaultTracerEnableLogger) || argument.isPresent() )
+		{
+			m_flags[LoggerRequestedAtStartup] = true;
+
+			/* NOTE: Disable the logger creation at the startup. This is useful for multi-processes application. */
+			if ( m_arguments.get("--disable-log").isPresent() )
 			{
-				m_loggerProcess.join();
+				return;
 			}
 
-			m_logger.reset();
+			if ( argument.value().empty() )
+			{
+				const auto logFilepath = this->generateLogFilepath(m_processName);
+
+				this->enableLogger(logFilepath);
+			}
+			else
+			{
+				this->enableLogger(std::filesystem::path{argument.value()});
+			}
 		}
 	}
 
 	void
-	Tracer::readSettings () noexcept
+	Tracer::trace (Severity severity, const char * tag, std::string_view message, const std::source_location & location) const noexcept
 	{
-		this->enablePrintOnlyErrors(m_settings.get< bool >(TracerPrintOnlyErrorsKey, DefaultPrintOnlyErrors));
-		this->enableShowLocation(m_settings.get< bool >(TracerShowLocationKey, DefaultShowLocation));
-		this->enableShowThreadInfos(m_settings.get< bool >(TracerShowThreadInfosKey, DefaultShowThreadInfos));
-	}
-
-	void
-	Tracer::trace (Severity severity, const char * tag, const std::string & message, const char * location) const noexcept
-	{
-		if ( !this->isTracingEnabled() || !this->filterTag(tag) )
+		if ( this->isTracerDisabled() || !this->filterTag(tag) )
 		{
 			return;
 		}
 
-		std::stringstream trace{};
+		std::stringstream trace;
 
 		trace << '[' << to_string(severity) << "][" << tag << ']';
 
 		Tracer::colorizeMessage(trace, severity, message);
 
-		if ( m_flags[ShowLocation] && location != nullptr )
-		{
-			trace << "\n\t" "[" << location << ']';
-		}
-
-		if ( m_flags[ShowThreadInfos] )
-		{
-			this->injectProcessInfo(trace);
-		}
-
-		switch ( severity )
-		{
-			case Severity::Debug :
-			case Severity::Info :
-			case Severity::Success :
-				if ( !m_flags[PrintOnlyErrors] )
-				{
-					std::cout << trace.str() << '\n';
-				}
-				break;
-
-			case Severity::Warning :
-			case Severity::Error :
-			case Severity::Fatal :
-				std::cerr << trace.str() << '\n';
-				break;
-		}
-	}
-
-	void
-	Tracer::trace (Severity severity, const char * tag, const std::string & message, const std::source_location & location) const noexcept
-	{
-		if ( !this->isTracingEnabled() || !this->filterTag(tag) )
-		{
-			return;
-		}
-
-		std::stringstream trace{};
-
-		trace << '[' << to_string(severity) << "][" << tag << ']';
-
-		Tracer::colorizeMessage(trace, severity, message);
-
-		if ( m_flags[ShowLocation] )
+		if ( this->isSourceLocationEnabled() )
 		{
 			trace << "\n\t" "[" << location.file_name() << ':' << location.line() << ':' << location.column() << " `" << location.function_name() << "`]";
 		}
 
-		if ( m_flags[ShowThreadInfos] )
+		if ( this->isThreadInfosEnabled() )
 		{
 			this->injectProcessInfo(trace);
 		}
@@ -308,14 +268,14 @@ namespace EmEn
 
 		if ( m_logger != nullptr )
 		{
-			m_logger->push(severity, tag, message, location);
+			m_logger->push(severity, tag, std::string{message}, location);
 		}
 	}
 
 	void
-	Tracer::traceAPI (const char * tag, const char * functionName, const std::string & message, const std::source_location & location) const noexcept
+	Tracer::traceAPI (const char * tag, const char * functionName, std::string_view message, const std::source_location & location) const noexcept
 	{
-		std::stringstream trace{};
+		std::stringstream trace;
 
 		trace << "[" << tag << "] ";
 
@@ -328,12 +288,12 @@ namespace EmEn
 			trace << "\033[1;93m" << functionName << "(), " << message << "\033[0m ";
 		}
 
-		if ( m_flags[ShowLocation] )
+		if ( this->isSourceLocationEnabled() )
 		{
 			trace << "\n\t" "[" << location.file_name() << ':' << location.line() << ':' << location.column() << " `" << location.function_name() << "`]";
 		}
 
-		if ( m_flags[ShowThreadInfos] )
+		if ( this->isThreadInfosEnabled() )
 		{
 			this->injectProcessInfo(trace);
 		}
@@ -368,7 +328,7 @@ namespace EmEn
 	void
 	Tracer::traceGLFW (int error, const char * description) noexcept
 	{
-		s_instance->trace(Severity::Error, "GLFW", (std::stringstream{} << description << " (errno:" << error << ')').str(), nullptr);
+		s_instance->trace(Severity::Error, "GLFW", (std::stringstream{} << description << " (errno:" << error << ')').str(), {});
 	}
 
 	bool
@@ -380,180 +340,9 @@ namespace EmEn
 			return true;
 		}
 
-		/* Checks if a term match the filter. */
+		/* Checks if a term matches the filter. */
 		return std::ranges::any_of(m_filters, [tag](const auto & filteredTag) {
 			return std::strcmp(tag, filteredTag.c_str()) == 0;
 		});
-	}
-
-	TraceDebug::TraceDebug (const char * tag, const std::source_location & location) noexcept
-		: m_tag(tag), m_location(location)
-	{
-
-	}
-
-	TraceDebug::TraceDebug (const char * tag, const char * initialMessage, const std::source_location & location) noexcept
-		: BlobTrait(initialMessage), m_tag(tag), m_location(location)
-	{
-
-	}
-
-	TraceDebug::TraceDebug (const char * tag, const std::string & initialMessage, const std::source_location & location) noexcept
-		: BlobTrait(initialMessage), m_tag(tag), m_location(location)
-	{
-
-	}
-
-	TraceDebug::~TraceDebug ()
-	{
-		Tracer::instance()->trace(Severity::Debug, m_tag, this->get(), m_location);
-	}
-
-	TraceSuccess::TraceSuccess (const char * tag, const std::source_location & location) noexcept
-		: m_tag(tag), m_location(location)
-	{
-
-	}
-
-	TraceSuccess::TraceSuccess (const char * tag, const char * initialMessage, const std::source_location & location) noexcept
-		: BlobTrait(initialMessage), m_tag(tag), m_location(location)
-	{
-
-	}
-
-	TraceSuccess::TraceSuccess (const char * tag, const std::string & initialMessage, const std::source_location & location) noexcept
-		: BlobTrait(initialMessage), m_tag(tag), m_location(location)
-	{
-
-	}
-
-	TraceSuccess::~TraceSuccess ()
-	{
-		Tracer::instance()->trace(Severity::Success, m_tag, this->get(), m_location);
-	}
-
-	TraceInfo::TraceInfo (const char * tag, const std::source_location & location) noexcept
-		: m_tag(tag), m_location(location)
-	{
-
-	}
-
-	TraceInfo::TraceInfo (const char * tag, const char * initialMessage, const std::source_location & location) noexcept
-		: BlobTrait(initialMessage), m_tag(tag), m_location(location)
-	{
-
-	}
-
-	TraceInfo::TraceInfo (const char * tag, const std::string & initialMessage, const std::source_location & location) noexcept
-		: BlobTrait(initialMessage), m_tag(tag), m_location(location)
-	{
-
-	}
-
-	TraceInfo::~TraceInfo ()
-	{
-		Tracer::instance()->trace(Severity::Info, m_tag, this->get(), m_location);
-	}
-
-	TraceWarning::TraceWarning (const char * tag, const std::source_location & location) noexcept
-		: m_tag(tag), m_location(location)
-	{
-
-	}
-
-	TraceWarning::TraceWarning (const char * tag, const char * initialMessage, const std::source_location & location) noexcept
-		: BlobTrait(initialMessage), m_tag(tag), m_location(location)
-	{
-
-	}
-
-	TraceWarning::TraceWarning (const char * tag, const std::string & initialMessage, const std::source_location & location) noexcept
-		: BlobTrait(initialMessage), m_tag(tag), m_location(location)
-	{
-
-	}
-
-	TraceWarning::~TraceWarning ()
-	{
-		Tracer::instance()->trace(Severity::Warning, m_tag, this->get(), m_location);
-	}
-
-	TraceError::TraceError (const char * tag, const std::source_location & location) noexcept
-		: m_tag(tag), m_location(location)
-	{
-
-	}
-
-	TraceError::TraceError (const char * tag, const char * initialMessage, const std::source_location & location) noexcept
-		: BlobTrait(initialMessage), m_tag(tag), m_location(location)
-	{
-
-	}
-
-	TraceError::TraceError (const char * tag, const std::string & initialMessage, const std::source_location & location) noexcept
-		: BlobTrait(initialMessage), m_tag(tag), m_location(location)
-	{
-
-	}
-
-	TraceError::~TraceError ()
-	{
-		Tracer::instance()->trace(Severity::Error, m_tag, this->get(), m_location);
-	}
-
-	TraceFatal::TraceFatal (const char * tag, bool terminate, const std::source_location & location) noexcept
-		: m_tag(tag), m_location(location), m_terminate(terminate)
-	{
-
-	}
-
-	TraceFatal::TraceFatal (const char * tag, const char * initialMessage, bool terminate, const std::source_location & location) noexcept
-		: BlobTrait(initialMessage), m_tag(tag), m_location(location), m_terminate(terminate)
-	{
-
-	}
-
-	TraceFatal::TraceFatal (const char * tag, const std::string & initialMessage, bool terminate, const std::source_location & location) noexcept
-		: BlobTrait(initialMessage), m_tag(tag), m_location(location), m_terminate(terminate)
-	{
-
-	}
-
-	TraceFatal::~TraceFatal ()
-	{
-		Tracer::instance()->trace(Severity::Fatal, m_tag, this->get(), m_location);
-
-		if ( m_terminate )
-		{
-			std::terminate();
-		}
-	}
-
-	TraceAPI::TraceAPI (const char * tag, const char * functionName, bool terminate, const std::source_location & location) noexcept
-		: m_tag(tag), m_functionName(functionName), m_location(location), m_terminate(terminate)
-	{
-
-	}
-
-	TraceAPI::TraceAPI (const char * tag, const char * functionName, const char * initialMessage, bool terminate, const std::source_location & location) noexcept
-		: BlobTrait(initialMessage), m_tag(tag), m_functionName(functionName), m_location(location), m_terminate(terminate)
-	{
-
-	}
-
-	TraceAPI::TraceAPI (const char * tag, const char * functionName, const std::string & initialMessage, bool terminate, const std::source_location & location) noexcept
-		: BlobTrait(initialMessage), m_tag(tag), m_functionName(functionName), m_location(location), m_terminate(terminate)
-	{
-
-	}
-
-	TraceAPI::~TraceAPI ()
-	{
-		Tracer::instance()->traceAPI(m_tag, m_functionName, this->get(), m_location);
-
-		if ( m_terminate )
-		{
-			std::terminate();
-		}
 	}
 }

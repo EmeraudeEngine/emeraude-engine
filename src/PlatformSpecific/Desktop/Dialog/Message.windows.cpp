@@ -80,7 +80,7 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 		UINT messageType = getMessageType(m_messageType);
 		UINT layout = getButtonLayout(m_buttonLayout);
 
-		/* NOTE: Convert strings from 8 bit char to wide char. */
+		/* NOTE: Convert strings from 8bit char to wide char. */
 		const auto & title = this->title();
 		const std::wstring wsTitle(title.cbegin(), title.cend());
 		const std::wstring wsMessage(m_message.cbegin(), m_message.cend());

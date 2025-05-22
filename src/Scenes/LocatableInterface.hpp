@@ -28,7 +28,8 @@
 
 /* Local inclusions for usages. */
 #include "Libs/Math/CartesianFrame.hpp"
-#include "Libs/Math/Cuboid.hpp"
+#include "Libs/Math/Space3D/AACuboid.hpp"
+#include "Libs/Math/Space3D/Sphere.hpp"
 
 namespace EmEn::Scenes
 {
@@ -245,31 +246,31 @@ namespace EmEn::Scenes
 
 			/**
 			 * @brief Returns the world bounding box of a 3D world entity.
-			 * @return const Libs::Math::Cuboid< float > &
+			 * @return const Libs::Math::Space3D::AACuboid< float > &
 			 */
 			[[nodiscard]]
-			virtual const Libs::Math::Cuboid< float > & localBoundingBox () const noexcept = 0;
+			virtual const Libs::Math::Space3D::AACuboid< float > & localBoundingBox () const noexcept = 0;
 
 			/**
 			 * @brief Returns the world bounding box of a 3D world entity.
-			 * @return Libs::Math::Cuboid< float >
+			 * @return Libs::Math::Space3D::AACuboid< float >
 			 */
 			[[nodiscard]]
-			virtual Libs::Math::Cuboid< float > getWorldBoundingBox () const noexcept = 0;
+			virtual Libs::Math::Space3D::AACuboid< float > getWorldBoundingBox () const noexcept = 0;
 
 			/**
 			 * @brief Returns the world bounding sphere of a 3D world entity.
-			 * @return const Libs::Math::Sphere< float > &
+			 * @return const Libs::Math::Space3D::Sphere< float > &
 			 */
 			[[nodiscard]]
-			virtual const Libs::Math::Sphere< float > & localBoundingSphere () const noexcept = 0;
+			virtual const Libs::Math::Space3D::Sphere< float > & localBoundingSphere () const noexcept = 0;
 
 			/**
 			 * @brief Returns the world bounding sphere of a 3D world entity.
-			 * @return Libs::Math::Sphere< float >
+			 * @return Libs::Math::Space3D::Sphere< float >
 			 */
 			[[nodiscard]]
-			virtual Libs::Math::Sphere< float > getWorldBoundingSphere () const noexcept = 0;
+			virtual Libs::Math::Space3D::Sphere< float > getWorldBoundingSphere () const noexcept = 0;
 
 			/**
 			 * @brief Enables the sphere collision simplification.

@@ -27,6 +27,7 @@
 #include "Program.hpp"
 
 /* Local inclusions. */
+#include "Graphics/Geometry/Interface.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::Saphir
@@ -43,14 +44,14 @@ namespace EmEn::Saphir
 	bool
 	Program::isComplete () const noexcept
 	{
-		/* NOTE: The vertex shader is mandatory ! */
+		/* NOTE: The vertex shader is mandatory! */
 		if ( m_vertexShader == nullptr || !m_vertexShader->isGenerated() )
 		{
 			return false;
 		}
 
 		/* NOTE: The tesselation shader is optional.
-		 * But if a control shader is present the evaluation must be too. */
+		 * But if a control shader is present, the evaluation must be too. */
 		if ( m_tesselationControlShader != nullptr )
 		{
 			if ( !m_tesselationControlShader->isGenerated() )
@@ -70,14 +71,8 @@ namespace EmEn::Saphir
 			return false;
 		}
 
-		/* NOTE: The fragment shader is mandatory ! */
+		/* NOTE: The fragment shader is mandatory! */
 		if ( m_fragmentShader == nullptr || !m_fragmentShader->isGenerated() )
-		{
-			return false;
-		}
-
-		/* NOTE: The vertex buffer format is mandatory as well as the vertex shader ! */
-		if ( m_vertexBufferFormat == nullptr )
 		{
 			return false;
 		}
@@ -427,5 +422,58 @@ namespace EmEn::Saphir
 		}
 
 		return list;
+	}
+
+	bool
+	Program::createVertexBufferFormat (VertexBufferFormatManager & vertexBufferFormatManager, const Geometry::Interface * geometry) noexcept
+	{
+		if ( !this->hasVertexShader() )
+		{
+			Tracer::error(ClassId, "There is no vertex shader to build the vertex buffer format !");
+
+			return false;
+		}
+
+		if ( geometry == nullptr )
+		{
+			Tracer::error(ClassId, "There is no geometry to build the vertex buffer format !");
+
+			return false;
+		}
+
+		/* Prepare the vertex buffer format. */
+		m_vertexBufferFormat = vertexBufferFormatManager.getVertexBufferFormat(*m_vertexShader, *geometry);
+
+		if ( m_vertexBufferFormat == nullptr )
+		{
+			TraceError{ClassId} << "Unable to get a vertex buffer format for geometry '" << geometry->name() << "' !";
+
+			return false;
+		}
+
+		return true;
+	}
+
+	bool
+	Program::createVertexBufferFormat (VertexBufferFormatManager & vertexBufferFormatManager, Topology topology, uint32_t geometryFlagBits) noexcept
+	{
+		if ( !this->hasVertexShader() )
+		{
+			Tracer::error(ClassId, "There is no vertex shader to build the vertex buffer format !");
+
+			return false;
+		}
+
+		/* Prepare the vertex buffer format. */
+		m_vertexBufferFormat = vertexBufferFormatManager.getVertexBufferFormat(*m_vertexShader, topology, geometryFlagBits);
+
+		if ( m_vertexBufferFormat == nullptr )
+		{
+			Tracer::error(ClassId, "Unable to get a vertex buffer format !");
+
+			return false;
+		}
+
+		return true;
 	}
 }

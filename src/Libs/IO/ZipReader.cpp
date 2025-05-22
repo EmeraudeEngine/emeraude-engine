@@ -47,7 +47,7 @@ namespace EmEn::Libs::IO
 	bool
 	ZipReader::isArchiveFile (const std::filesystem::path & filepath) noexcept
 	{
-		if ( !exists(filepath) )
+		if ( !std::filesystem::exists(filepath) )
 		{
 			return false;
 		}
@@ -69,7 +69,7 @@ namespace EmEn::Libs::IO
 	bool
 	ZipReader::open () noexcept
 	{
-		if ( !exists(m_filepath) )
+		if ( !std::filesystem::exists(m_filepath) )
 		{
 			std::cerr << ClassId << " : The archive file " << m_filepath << " doesn't exists !" "\n";
 
@@ -130,7 +130,7 @@ namespace EmEn::Libs::IO
 	}
 
 	bool
-	ZipReader::extract (const std::string & entryName, const std::filesystem::path & directory) const noexcept
+	ZipReader::extract (const std::string & entryName, const std::filesystem::path & destinationPath, bool overwrite) const noexcept
 	{
 		if ( std::ranges::find(m_entryNames, entryName) == m_entryNames.cend() )
 		{
@@ -139,24 +139,40 @@ namespace EmEn::Libs::IO
 			return false;
 		}
 
-		if ( !is_directory(directory) && !exists(directory) )
-		{
-			std::cerr << ClassId << " : Unable to use the destination directory " << directory << " !" "\n";
-
-			return false;
-		}
-
-		std::filesystem::path filepath = directory;
+		/* NOTE: Complete the final destination. This can hold subdirectories. */
+		std::filesystem::path filepath = destinationPath;
 		filepath.append(entryName);
 
-		if ( exists(filepath) )
-		{
-			std::cerr << ClassId << " : The destination file " << filepath << " already exists !" "\n";
+		/* NOTE: Check the final destination. */
+		const auto finalDirectory = filepath.parent_path();
 
-			return false;
+		if ( std::filesystem::exists(finalDirectory) )
+		{
+			if ( !is_directory(finalDirectory) )
+			{
+				std::cerr << ClassId << " : Unable to use the destination directory " << finalDirectory << " !" "\n";
+
+				return false;
+			}
+
+			if ( std::filesystem::exists(filepath) && !overwrite )
+			{
+				std::cerr << ClassId << " : The destination file " << filepath << " already exists !" "\n";
+
+				return false;
+			}
+		}
+		else
+		{
+			if ( !std::filesystem::create_directories(finalDirectory) )
+			{
+				std::cerr << ClassId << " : Unable to create the destination directory " << finalDirectory << " !" "\n";
+
+				return false;
+			}
 		}
 
-		std::ofstream file{filepath.string(), std::ios::binary};
+		std::ofstream file{filepath.string(), std::ios::binary | std::ios::trunc};
 
 		if ( !file.is_open() )
 		{
@@ -180,13 +196,33 @@ namespace EmEn::Libs::IO
 	}
 
 	bool
-	ZipReader::extractAll (const std::filesystem::path & directory) const noexcept
+	ZipReader::extractAll (const std::filesystem::path & destinationPath, bool overwrite) const noexcept
 	{
 		size_t fileExtracted = 0;
 
+		/* NOTE: Check the main destination. */
+		if ( std::filesystem::exists(destinationPath) )
+		{
+			if ( !is_directory(destinationPath) )
+			{
+				std::cerr << ClassId << " : Unable to use the destination directory " << destinationPath << " !" "\n";
+
+				return false;
+			}
+		}
+		else
+		{
+			if ( !std::filesystem::create_directories(destinationPath) )
+			{
+				std::cerr << ClassId << " : Unable to create the destination directory " << destinationPath << " !" "\n";
+
+				return false;
+			}
+		}
+
 		for ( const auto & entryName : m_entryNames )
 		{
-			if ( this->extract(entryName, directory) )
+			if ( this->extract(entryName, destinationPath, overwrite) )
 			{
 				fileExtracted++;
 			}

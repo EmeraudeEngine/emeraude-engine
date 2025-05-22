@@ -44,30 +44,6 @@ namespace EmEn::Scenes::Component
 		this->observe(m_renderableInstance.get());
 	}
 
-	std::shared_ptr< RenderableInstance::Abstract >
-	Visual::getRenderableInstance () const noexcept
-	{
-		return m_renderableInstance;
-	}
-
-	const char *
-	Visual::getComponentType () const noexcept
-	{
-		return ClassId;
-	}
-
-	const Cuboid< float > &
-	Visual::boundingBox () const noexcept
-	{
-		return m_renderableInstance->renderable()->boundingBox();
-	}
-
-	const Sphere< float > &
-	Visual::boundingSphere () const noexcept
-	{
-		return m_renderableInstance->renderable()->boundingSphere();
-	}
-
 	void
 	Visual::move (const CartesianFrame< float > & worldCoordinates) noexcept
 	{
@@ -88,12 +64,6 @@ namespace EmEn::Scenes::Component
 		}
 
 		this->updateAnimations(scene.cycle());
-	}
-
-	bool
-	Visual::shouldRemove () const noexcept
-	{
-		return m_renderableInstance->isBroken();
 	}
 
 	bool

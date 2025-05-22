@@ -27,7 +27,7 @@
 #include "PostProcessor.hpp"
 
 /* Local inclusions. */
-#include "Graphics/RenderTarget/View/Abstract.hpp"
+#include "Graphics/RenderTarget/View.hpp"
 #include "Saphir/FramebufferEffectInterface.hpp"
 #include "Tracer.hpp"
 
@@ -129,7 +129,7 @@ namespace EmEn::Graphics
 	}
 
 	void
-	PostProcessor::render (const Rectangle< uint32_t > & /*region*/) const noexcept
+	PostProcessor::render (const Space2D::AARectangle< uint32_t > & /*region*/) const noexcept
 	{
 		/*if ( m_effectsList.empty() )
 		{

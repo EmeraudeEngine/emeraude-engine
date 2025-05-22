@@ -33,8 +33,8 @@
 namespace EmEn::Libs
 {
 	/**
-	 * @brief Adds the ability to use flags on object by using an array of booleans.
-	 * @note Only the flags reading is public. This is intended for internal options of a class.
+	 * @brief Adds the ability to use flags on an object by using an array of booleans.
+	 * @note Only the flag reading is public. This is intended for internal options of a class.
 	 * @warning The EmEn::FlagTrait is a better alternative to use.
 	 * @tparam count_t The number of possible flags. Default 8.
 	 */
@@ -104,6 +104,24 @@ namespace EmEn::Libs
 				return m_flags[flag];
 			}
 
+			/**
+			 * @brief Returns whether a flag is disabled.
+			 * @warning Out of bound flag index will return silently 'false'.
+			 * @param flag The flag index.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isFlagDisabled (size_t flag) const noexcept
+			{
+				if ( flag >= count_t )
+				{
+					return true;
+				}
+
+				return !m_flags[flag];
+			}
+
 		protected:
 
 			/**
@@ -113,7 +131,7 @@ namespace EmEn::Libs
 
 			/**
 			 * @brief Enables a flag.
-			 * @warning Out of bound flag index will do silently nothing.
+			 * @warning Out of bound flag index will silently do nothing.
 			 * @param flag The flag index.
 			 * @return void
 			 */
@@ -128,7 +146,7 @@ namespace EmEn::Libs
 
 			/**
 			 * @brief Toggles a flag state.
-			 * @warning Out of bound flag index will do silently nothing.
+			 * @warning Out of bound flag index will silently do nothing.
 			 * @param flag The flag index.
 			 * @return void
 			 */
@@ -143,7 +161,7 @@ namespace EmEn::Libs
 
 			/**
 			 * @brief Disables a flag.
-			 * @warning Out of bound flag index will do silently nothing.
+			 * @warning Out of bound flag index will silently do nothing.
 			 * @param flag The flag index.
 			 * @return void
 			 */
@@ -158,7 +176,7 @@ namespace EmEn::Libs
 
 			/**
 			 * @brief Sets a flag state.
-			 * @warning Out of bound flag index will do silently nothing.
+			 * @warning Out of bound flag index will silently do nothing.
 			 * @param flag The flag index.
 			 * @param state The flag state.
 			 * @return void

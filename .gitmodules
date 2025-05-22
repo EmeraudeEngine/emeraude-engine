@@ -9,7 +9,7 @@
 	url = https://github.com/ocornut/imgui.git
 [submodule "dependencies/glfw"]
 	path = dependencies/glfw
-	url = https://github.com/LondNoir/glfw.git
+	url = https://github.com/EmeraudeEngine/glfw.git
 [submodule "dependencies/googletest"]
 	path = dependencies/googletest
 	url = https://github.com/google/googletest.git
@@ -22,3 +22,6 @@
 [submodule "dependencies/reproc"]
 	path = dependencies/reproc
 	url = https://github.com/DaanDeMeyer/reproc
+[submodule "dependencies/portable-file-dialogs"]
+	path = dependencies/portable-file-dialogs
+	url = https://github.com/samhocevar/portable-file-dialogs.git

@@ -26,6 +26,9 @@
 
 #include "FileSystem.hpp"
 
+/* Emeraude-Engine configuration. */
+#include "emeraude_config.hpp"
+
 /* STL inclusions. */
 #include <cstddef>
 #include <array>
@@ -36,7 +39,6 @@
 
 /* Local inclusion. */
 #include "Libs/IO/IO.hpp"
-#include "platform.hpp"
 #include "PlatformSpecific/UserInfo.hpp"
 #include "PlatformSpecific/SystemInfo.hpp"
 #include "Identification.hpp"

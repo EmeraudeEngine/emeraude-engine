@@ -31,7 +31,7 @@
 
 namespace EmEn::Graphics
 {
-	static constexpr auto TracerTag{"ViewMatricesInterface"};
+	constexpr auto TracerTag{"ViewMatricesInterface"};
 
 	std::shared_ptr< Vulkan::DescriptorSetLayout >
 	ViewMatricesInterface::getDescriptorSetLayout () const noexcept

@@ -78,7 +78,7 @@ namespace EmEn::Physics
 			 */
 			[[nodiscard]]
 			float
-			gravity (float altitude) const noexcept
+			gravity (float /*altitude*/) const noexcept
 			{
 				// FIXME: TODO ...
 

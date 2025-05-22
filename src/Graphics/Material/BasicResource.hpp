@@ -49,7 +49,7 @@
 namespace EmEn::Graphics::Material
 {
 	/**
-	 * @brief The basic material class use only one component.
+	 * @brief The basic material class use only one part.
 	 * @extends EmEn::Graphics::Material::Interface This is a material.
 	 */
 	class BasicResource final : public Interface
@@ -63,18 +63,21 @@ namespace EmEn::Graphics::Material
 			/** @brief Class identifier. */
 			static constexpr auto ClassId{"MaterialBasicResource"};
 
-			/* Shader specific keys. */
+			/* Shader-specific keys. */
 			static constexpr auto SurfaceColor{"SurfaceColor"};
 
 			/** @brief Observable class unique identifier. */
 			static const size_t ClassUID;
 
+			/** @brief Defines the resource dependency complexity. */
+			static constexpr auto Complexity{Resources::DepComplexity::Few};
+
 			/**
 			 * @brief Constructs a basic material.
 			 * @param name A reference to a string for the resource name.
-			 * @param resourceFlagBits The resource flag bits. Default none.
+			 * @param resourceFlags The resource flag bits. Default none.
 			 */
-			explicit BasicResource (const std::string & name, int resourceFlagBits = 0) noexcept;
+			explicit BasicResource (const std::string & name, int resourceFlags = 0) noexcept;
 
 			/**
 			 * @brief Copy constructor.
@@ -137,6 +140,14 @@ namespace EmEn::Graphics::Material
 			/** @copydoc EmEn::Resources::ResourceTrait::load(const Json::Value &) */
 			bool load (const Json::Value & data) noexcept override;
 
+			/** @copydoc EmEn::Resources::ResourceTrait::memoryOccupied() const noexcept */
+			[[nodiscard]]
+			size_t
+			memoryOccupied () const noexcept override
+			{
+				return sizeof(*this);
+			}
+
 			/** @copydoc EmEn::Graphics::Material::Interface::create() */
 			bool create (Renderer & renderer) noexcept override;
 
@@ -197,7 +208,7 @@ namespace EmEn::Graphics::Material
 
 			/** @copydoc EmEn::Graphics::Material::Interface::frameIndexAt() */
 			[[nodiscard]]
-			size_t frameIndexAt (uint32_t sceneTime) const noexcept override;
+			uint32_t frameIndexAt (uint32_t sceneTime) const noexcept override;
 
 			/** @copydoc EmEn::Graphics::Material::Interface::enableBlending() */
 			void enableBlending (BlendingMode mode) noexcept override;
@@ -387,22 +398,6 @@ namespace EmEn::Graphics::Material
 			{
 				return m_materialProperties[AutoIlluminationOffset];
 			}
-
-			/**
-			 * @brief Returns a basic material resource by its name.
-			 * @param resourceName A reference to a string.
-			 * @param directLoad Use the direct loading mode. Default false.
-			 * @return std::shared_ptr< BasicResource >
-			 */
-			[[nodiscard]]
-			static std::shared_ptr< BasicResource > get (const std::string & resourceName, bool directLoad = false) noexcept;
-
-			/**
-			 * @brief Returns the default basic material resource.
-			 * @return std::shared_ptr< BasicResource >
-			 */
-			[[nodiscard]]
-			static std::shared_ptr< BasicResource > getDefault () noexcept;
 
 		private:
 

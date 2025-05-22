@@ -15,6 +15,7 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 	{
         @autoreleasepool
         {
+            [NSApplication sharedApplication]; // FIXME: Check the usefulness of this line !
             [NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];
 
             NSString * title = [NSString stringWithCString:this->title().c_str()
@@ -49,7 +50,7 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
             }
             [file_types_list addObject:[file_type_set array]];
 
-            // Passing empty array to setAllowedFileTypes will cause exception.
+            // Passing an empty array to setAllowedFileTypes will cause exception.
             NSArray * file_types = nil;
             NSUInteger count = [file_types_list count];
 
@@ -64,7 +65,9 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
                     file_types = nil;
                 }
             }
-            [panel setAllowedFileTypes:file_types];
+
+			[panel setAllowedFileTypes:file_types];
+			//panel.allowedContentTypes = file_types; // Recommanded new way
 
             // TODO: Format picker not yet implemented, macOS doesnt support it natively.
             // To create it like electron see : https://github.com/electron/electron/blob/main/shell/browser/ui/file_dialog_mac.mm#L133

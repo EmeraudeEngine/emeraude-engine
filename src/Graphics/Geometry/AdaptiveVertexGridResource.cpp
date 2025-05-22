@@ -87,11 +87,11 @@ namespace EmEn::Graphics::Geometry
 		}
 
 		/* NOTE: Requesting a VBO using data. */
-		const auto vertexElementCount = getElementCountFromFlags(this->flagBits());
+		const auto vertexElementCount = getElementCountFromFlags(this->flags());
 
 		auto * transferManager = TransferManager::instance(GPUWorkType::Graphics);
 
-		m_vertexBufferObject = std::make_unique< VertexBufferObject >(transferManager->device(), m_localData.size(), vertexElementCount);
+		m_vertexBufferObject = std::make_unique< VertexBufferObject >(transferManager->device(), static_cast< uint32_t >(m_localData.size()), vertexElementCount);
 		m_vertexBufferObject->setIdentifier(this->name() + "-VBO-VertexBufferObject");
 
 		if ( !m_vertexBufferObject->create(*transferManager, m_localData) )
@@ -104,7 +104,7 @@ namespace EmEn::Graphics::Geometry
 		}
 
 		/* NOTE: Requesting an IBO using data. */
-		m_indexBufferObject = std::make_unique< IndexBufferObject >(transferManager->device(), m_indices.size());
+		m_indexBufferObject = std::make_unique< IndexBufferObject >(transferManager->device(), static_cast< uint32_t >(m_indices.size()));
 		m_indexBufferObject->setIdentifier(this->name() + "-IBO-IndexBufferObject");
 
 		if ( !m_indexBufferObject->create(*transferManager, m_indices) )
@@ -152,7 +152,7 @@ namespace EmEn::Graphics::Geometry
 
 		if ( clearLocalData )
 		{
-			this->setFlagBits(EnablePrimitiveRestart);
+			this->setFlags(EnablePrimitiveRestart);
 			m_localData.clear();
 			m_indices.clear();
 
@@ -192,7 +192,7 @@ namespace EmEn::Graphics::Geometry
 	}
 
 	bool
-	AdaptiveVertexGridResource::load (const Grid< float > & baseGrid, size_t quadCount, const Vector< 3, float > & position) noexcept
+	AdaptiveVertexGridResource::load (const Grid< float > & baseGrid, uint32_t quadCount, const Vector< 3, float > & position) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
@@ -234,7 +234,7 @@ namespace EmEn::Graphics::Geometry
 		return this->setLoadSuccess(true);
 	}
 
-	size_t
+	uint32_t
 	AdaptiveVertexGridResource::findStartingOffset (const Grid< float > & baseGrid, const Vector< 3, float > & position) const noexcept
 	{
 		/* Convert from 3D to 2D coordinates and shift the position to the bottom-left
@@ -256,11 +256,11 @@ namespace EmEn::Graphics::Geometry
 	bool
 	AdaptiveVertexGridResource::generateIndicesBuffer () noexcept
 	{
-		for ( size_t yIndex = 0; yIndex < m_squareQuadCount; yIndex++ )
+		for ( uint32_t yIndex = 0; yIndex < m_squareQuadCount; yIndex++ )
 		{
 			const auto rowOffset = yIndex * m_squarePointCount;
 
-			for ( size_t xIndex = 0; xIndex < m_squareQuadCount; xIndex++ )
+			for ( uint32_t xIndex = 0; xIndex < m_squareQuadCount; xIndex++ )
 			{
 				const auto topLeft = rowOffset + xIndex;
 				const auto bottomLeft = topLeft + m_squarePointCount;
@@ -298,11 +298,11 @@ namespace EmEn::Graphics::Geometry
 
 		const auto startingOffset = this->findStartingOffset(baseGrid, position);
 
-		for ( size_t yIndex = 0; yIndex < m_squarePointCount; yIndex++ )
+		for ( uint32_t yIndex = 0; yIndex < m_squarePointCount; yIndex++ )
 		{
 			const auto rowOffset = startingOffset + (yIndex * baseGrid.squaredPointCount());
 
-			for ( size_t xIndex = 0; xIndex < m_squarePointCount; xIndex++ )
+			for ( uint32_t xIndex = 0; xIndex < m_squarePointCount; xIndex++ )
 			{
 				const auto index = rowOffset + xIndex;
 
@@ -314,7 +314,7 @@ namespace EmEn::Graphics::Geometry
 	}
 
 	void
-	AdaptiveVertexGridResource::addGridPointToVertexAttributes (const Grid< float > & grid, size_t index) noexcept
+	AdaptiveVertexGridResource::addGridPointToVertexAttributes (const Grid< float > & grid, uint32_t index) noexcept
 	{
 		const auto position = grid.position(index);
 
@@ -435,17 +435,5 @@ namespace EmEn::Graphics::Geometry
 		}
 
 		m_vertexColorMap = vertexColorMap;
-	}
-
-	std::shared_ptr< AdaptiveVertexGridResource >
-	AdaptiveVertexGridResource::get (const std::string & resourceName, bool directLoad) noexcept
-	{
-		return Resources::Manager::instance()->adaptiveVertexGridGeometries().getResource(resourceName, !directLoad);
-	}
-
-	std::shared_ptr< AdaptiveVertexGridResource >
-	AdaptiveVertexGridResource::getDefault () noexcept
-	{
-		return Resources::Manager::instance()->adaptiveVertexGridGeometries().getDefaultResource();
 	}
 }

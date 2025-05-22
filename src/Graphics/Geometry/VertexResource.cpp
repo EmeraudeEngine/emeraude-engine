@@ -100,13 +100,11 @@ namespace EmEn::Graphics::Geometry
 			this->vertexColorEnabled() ? VertexColorType::RGBA : VertexColorType::None
 		);
 
-#ifdef DEBUG
 		TraceDebug{ClassId} <<
 			"Buffer statistics." "\n"
 			"Vertex count : " << m_localData.vertexCount() << "\n"
 			"Vertex buffer (VBO) size : " << vertexAttributes.size() << "\n"
 			"Vertex element count : " << vertexElementCount;
-#endif
 
 		if ( vertexAttributes.empty() || vertexElementCount == 0 )
 		{
@@ -120,9 +118,9 @@ namespace EmEn::Graphics::Geometry
 	}
 
 	bool
-	VertexResource::createVideoMemoryBuffers (const std::vector< float > & vertexAttributes, size_t vertexCount, size_t vertexElementCount) noexcept
+	VertexResource::createVideoMemoryBuffers (const std::vector< float > & vertexAttributes, uint32_t vertexCount, uint32_t vertexElementCount) noexcept
 	{
-		auto * transferManager = Vulkan::TransferManager::instance(GPUWorkType::Graphics);
+		auto * transferManager = TransferManager::instance(GPUWorkType::Graphics);
 
 		m_vertexBufferObject = std::make_unique< VertexBufferObject >(transferManager->device(), vertexCount, vertexElementCount);
 		m_vertexBufferObject->setIdentifier(this->name() + "-VBO-VertexBufferObject");
@@ -176,7 +174,7 @@ namespace EmEn::Graphics::Geometry
 
 		if ( clearLocalData )
 		{
-			this->resetFlagBits();
+			this->resetFlags();
 			m_localData.clear();
 			m_subGeometries.clear();
 		}
@@ -250,17 +248,5 @@ namespace EmEn::Graphics::Geometry
 		m_localData = shape;
 
 		return this->setLoadSuccess(true);
-	}
-
-	std::shared_ptr< VertexResource >
-	VertexResource::get (const std::string & resourceName, bool directLoad) noexcept
-	{
-		return Resources::Manager::instance()->vertexGeometries().getResource(resourceName, !directLoad);
-	}
-
-	std::shared_ptr< VertexResource >
-	VertexResource::getDefault () noexcept
-	{
-		return Resources::Manager::instance()->vertexGeometries().getDefaultResource();
 	}
 }

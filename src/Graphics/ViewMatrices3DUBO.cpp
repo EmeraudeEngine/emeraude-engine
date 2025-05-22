@@ -179,14 +179,15 @@ namespace EmEn::Graphics
 	bool
 	ViewMatrices3DUBO::updateVideoMemory () const noexcept
 	{
-#ifdef DEBUG
-		if ( m_uniformBufferObject == nullptr )
+		if constexpr ( IsDebug )
 		{
-			Tracer::error(ClassId, "The uniform buffer object is uninitialized !");
+			if ( m_uniformBufferObject == nullptr )
+			{
+				Tracer::error(ClassId, "The uniform buffer object is uninitialized !");
 
-			return false;
+				return false;
+			}
 		}
-#endif
 
 		/* NOTE: Lock between updateVideoMemory() and destroy(). */
 		const std::lock_guard< std::mutex > lockGuard{m_GPUBufferAccessLock};

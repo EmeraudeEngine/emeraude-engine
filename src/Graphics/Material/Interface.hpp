@@ -403,7 +403,7 @@ namespace EmEn::Graphics::Material
 			 * @return size_t
 			 */
 			[[nodiscard]]
-			virtual size_t frameIndexAt (uint32_t sceneTime) const noexcept = 0;
+			virtual uint32_t frameIndexAt (uint32_t sceneTime) const noexcept = 0;
 
 			/**
 			 * @brief Enables a blending and set the desired mode.
@@ -477,9 +477,9 @@ namespace EmEn::Graphics::Material
 			/**
 			 * @brief Constructs a material interface.
 			 * @param name The name of the resource.
-			 * @param resourceFlagBits The resource flag bits.
+			 * @param resourceFlags The resource flag bits.
 			 */
-			explicit Interface (const std::string & name, uint32_t resourceFlagBits) noexcept;
+			explicit Interface (const std::string & name, uint32_t resourceFlags) noexcept;
 
 			/**
 			 * @brief Returns the shared uniform buffer corresponding to this material.

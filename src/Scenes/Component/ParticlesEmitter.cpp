@@ -161,12 +161,6 @@ namespace EmEn::Scenes::Component
 	}
 
 	bool
-	ParticlesEmitter::shouldRemove () const noexcept
-	{
-		return m_renderableInstance->isBroken();
-	}
-
-	bool
 	ParticlesEmitter::playAnimation (uint8_t animationID, const Variant & value, size_t /*cycle*/) noexcept
 	{
 		switch ( animationID )

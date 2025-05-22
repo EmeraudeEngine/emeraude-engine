@@ -31,9 +31,6 @@
 #include <cmath>
 #include <string>
 
-/* Local inclusions for usages. */
-#include "Libs/Math/Rectangle.hpp"
-
 namespace EmEn::Overlay
 {
 	/**
@@ -120,7 +117,7 @@ namespace EmEn::Overlay
 
 			/**
 			 * @brief Sets the framebuffer scaling factor for HDPI screen.
-			 * @param scale The scale uniform on both axis.
+			 * @param scale The scale uniform on both axes.
 			 * @return void
 			 */
 			void
@@ -296,7 +293,7 @@ namespace EmEn::Overlay
 			uint32_t
 			getSurfaceWidth (float surfaceWidth) const noexcept
 			{
-				/* NOTE: Do not remove the double round ! */
+				/* NOTE: Do not remove the double round! */
 				return static_cast< uint32_t >(std::round(std::round(m_resolutionX * surfaceWidth) * m_screenScaleX));
 			}
 
@@ -309,7 +306,7 @@ namespace EmEn::Overlay
 			uint32_t
 			getSurfaceHeight (float surfaceHeight) const noexcept
 			{
-				/* NOTE: Do not remove the double round ! */
+				/* NOTE: Do not remove the double round! */
 				return static_cast< uint32_t >(std::round(std::round(m_resolutionY * surfaceHeight) * m_screenScaleY));
 			}
 

@@ -36,7 +36,7 @@ namespace EmEn::Saphir::Declaration
 {
 	/**
 	 * @brief The StageOutput class
-	 * @extends EmEn::Saphir::DeclarationInterface This is a shader code declaration.
+	 * @extends EmEn::Saphir::Declaration::Interface This is a shader code declaration.
 	 */
 	class StageOutput final : public Interface
 	{
@@ -52,63 +52,95 @@ namespace EmEn::Saphir::Declaration
 			 */
 			StageOutput (uint32_t location, Key type, Key name, Key interpolation = nullptr, int32_t arraySize = 0) noexcept;
 
-			/** @copydoc EmEn::Saphir::DeclarationInterface::isValid() */
+			/** @copydoc EmEn::Saphir::Declaration::Interface::isValid() */
 			[[nodiscard]]
 			bool isValid () const noexcept override;
 
-			/** @copydoc EmEn::Saphir::DeclarationInterface::name() */
+			/** @copydoc EmEn::Saphir::Declaration::Interface::name() */
 			[[nodiscard]]
-			Key name () const noexcept override;
+			Key
+			name () const noexcept override
+			{
+				return m_name;
+			}
 
-			/** @copydoc EmEn::Saphir::DeclarationInterface::bytes() */
+			/** @copydoc EmEn::Saphir::Declaration::Interface::bytes() */
 			[[nodiscard]]
-			size_t bytes () const noexcept override;
+			uint32_t
+			bytes () const noexcept override
+			{
+				return 0;
+			}
 
-			/** @copydoc EmEn::Saphir::DeclarationInterface::sourceCode() */
+			/** @copydoc EmEn::Saphir::Declaration::Interface::sourceCode() */
 			[[nodiscard]]
 			std::string sourceCode () const noexcept override;
 
 			/**
 			 * @brief Returns the variable location in the shader.
-			 * @param uint32_t
+			 * @return uint32_t
 			 */
 			[[nodiscard]]
-			uint32_t location () const noexcept;
+			uint32_t
+			location () const noexcept
+			{
+				return m_location;
+			}
 
 			/**
 			 * @brief Returns the variable type.
-			 * @param Key
+			 * @return Key
 			 */
 			[[nodiscard]]
-			Key type () const noexcept;
+			Key
+			type () const noexcept
+			{
+				return m_type;
+			}
 
 			/**
 			 * @brief Returns the variable interpolation.
-			 * @param Key
+			 * @return Key
 			 */
 			[[nodiscard]]
-			Key interpolation () const noexcept;
+			Key
+			interpolation () const noexcept
+			{
+				return m_interpolation;
+			}
 
 			/**
 			 * @brief Returns the array size.
-			 * @param size_t
+			 * @return size_t
 			 */
 			[[nodiscard]]
-			int32_t arraySize () const noexcept;
+			int32_t
+			arraySize () const noexcept
+			{
+				return m_arraySize;
+			}
 
 			/**
 			 * @brief Returns whether the expression is an array.
-			 * @param bool
+			 * @return bool
 			 */
 			[[nodiscard]]
-			bool isArray () const noexcept;
+			bool
+			isArray () const noexcept
+			{
+				return m_arraySize > 0;
+			}
 
 			/**
-			 * @brief Returns whether the expression is an array non size fixed.
-			 * @param bool
+			 * @brief Returns whether the expression is a non-fixed size array.
+			 * @return bool
 			 */
 			[[nodiscard]]
-			bool isNonFixedArraySize () const noexcept;
+			bool
+			isNonFixedArraySize () const noexcept
+			{
+				return m_arraySize == -1;
+			}
 
 		private:
 

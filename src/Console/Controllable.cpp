@@ -39,7 +39,7 @@ namespace EmEn::Console
 {
 	using namespace EmEn::Libs;
 
-	static constexpr auto TracerTag{"Controllable"};
+	constexpr auto TracerTag{"Controllable"};
 
 	Controllable::Controllable (std::string consoleIdentifier) noexcept
 		: m_identifier(std::move(consoleIdentifier))

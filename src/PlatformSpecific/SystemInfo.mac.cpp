@@ -26,8 +26,8 @@
 
 #include "SystemInfo.hpp"
 
-/* Project configuration files. */
-#include "platform.hpp"
+/* Emeraude-Engine configuration. */
+#include "emeraude_config.hpp"
 
 #if IS_MACOS
 

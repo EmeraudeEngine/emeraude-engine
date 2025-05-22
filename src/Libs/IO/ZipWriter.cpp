@@ -50,7 +50,7 @@ namespace EmEn::Libs::IO
 	bool
 	ZipWriter::addFilepathToSources (const std::filesystem::path & path, const std::string & entryName) noexcept
 	{
-		if ( !is_regular_file(path) && !exists(path) )
+		if ( !std::filesystem::is_regular_file(path) && !std::filesystem::exists(path) )
 		{
 			std::cerr << ClassId << " : The path " << path << " is not a regular file or doesn't exists !" "\n";
 
@@ -72,7 +72,7 @@ namespace EmEn::Libs::IO
 	bool
 	ZipWriter::addDirectoryToSources (const std::filesystem::path & path) noexcept
 	{
-		if ( !is_directory(path) && !exists(path) )
+		if ( !std::filesystem::is_directory(path) && !std::filesystem::exists(path) )
 		{
 			std::cerr << ClassId << " : The path " << path << " is not a directory or doesn't exists !" "\n";
 
@@ -106,7 +106,7 @@ namespace EmEn::Libs::IO
 	bool
 	ZipWriter::create () noexcept
 	{
-		if ( exists(m_filepath) )
+		if ( std::filesystem::exists(m_filepath) )
 		{
 			std::cerr << ClassId << " : The archive file " << m_filepath << " already exists !" "\n";
 

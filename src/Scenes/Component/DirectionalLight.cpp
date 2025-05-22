@@ -60,7 +60,7 @@ namespace EmEn::Scenes::Component
 	}
 
 	bool
-	DirectionalLight::playAnimation (uint8_t animationID, const Variant & value, size_t cycle) noexcept
+	DirectionalLight::playAnimation (uint8_t animationID, const Variant & value, size_t /*cycle*/) noexcept
 	{
 		switch ( animationID )
 		{
@@ -94,12 +94,6 @@ namespace EmEn::Scenes::Component
 		this->updateAnimations(scene.cycle());
 	}
 
-	bool
-	DirectionalLight::shouldRemove () const noexcept
-	{
-		return false;
-	}
-
 	void
 	DirectionalLight::move (const CartesianFrame< float > & worldCoordinates) noexcept
 	{
@@ -108,7 +102,7 @@ namespace EmEn::Scenes::Component
 			return;
 		}
 
-		if ( this->isShadowEnabled() )
+		if ( this->isShadowCastingEnabled() )
 		{
 			this->updateDeviceFromCoordinates(worldCoordinates, this->getWorldVelocity());
 		}
@@ -178,7 +172,7 @@ namespace EmEn::Scenes::Component
 				{
 					TraceSuccess{ClassId} << "2D shadow map successfully created for directional light '" << this->name() << "'.";
 
-					this->enableShadow(true);
+					this->enableShadowCasting(true);
 				}
 				else
 				{
@@ -212,34 +206,10 @@ namespace EmEn::Scenes::Component
 		this->removeFromSharedUniformBuffer();
 	}
 
-	std::shared_ptr< RenderTarget::ShadowMap::Abstract >
-	DirectionalLight::shadowMap () const noexcept
-	{
-		return std::static_pointer_cast< RenderTarget::ShadowMap::Abstract >(m_shadowMap);
-	}
-
 	Declaration::UniformBlock
 	DirectionalLight::getUniformBlock (uint32_t set, uint32_t binding, bool useShadow) const noexcept
 	{
 		return LightGenerator::getUniformBlock(set, binding, LightType::Directional, useShadow);
-	}
-
-	const char *
-	DirectionalLight::getComponentType () const noexcept
-	{
-		return ClassId;
-	}
-
-	const Cuboid< float > &
-	DirectionalLight::boundingBox () const noexcept
-	{
-		return NullBoundingBox;
-	}
-
-	const Sphere< float > &
-	DirectionalLight::boundingSphere () const noexcept
-	{
-		return NullBoundingSphere;
 	}
 
 	std::ostream &
@@ -252,7 +222,7 @@ namespace EmEn::Scenes::Component
 			"Color : " << obj.color() << "\n"
 			"Intensity : " << obj.intensity() << "\n"
 			"Activity : " << ( obj.isEnabled() ? "true" : "false" ) << "\n"
-			"Shadow caster : " << ( obj.isShadowEnabled() ? "true" : "false" ) << '\n';
+			"Shadow caster : " << ( obj.isShadowCastingEnabled() ? "true" : "false" ) << '\n';
 	}
 
 	std::string

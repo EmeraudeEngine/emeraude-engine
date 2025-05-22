@@ -26,9 +26,6 @@
 
 #include "GizmoRendering.hpp"
 
-/* Local inclusions. */
-#include "Settings.hpp"
-
 namespace EmEn::Saphir::Generator
 {
 	using namespace EmEn::Libs;
@@ -36,8 +33,8 @@ namespace EmEn::Saphir::Generator
 	using namespace Vulkan;
 	using namespace Keys;
 
-	GizmoRendering::GizmoRendering (Settings & settings, const std::shared_ptr< const Graphics::RenderTarget::Abstract > & renderTarget) noexcept
-		: Abstract(settings, ClassId, renderTarget)
+	GizmoRendering::GizmoRendering (const std::shared_ptr< const RenderTarget::Abstract > & renderTarget) noexcept
+		: Abstract(ClassId, renderTarget)
 	{
 
 	}
@@ -49,13 +46,13 @@ namespace EmEn::Saphir::Generator
 	}
 
 	bool
-	GizmoRendering::onGenerateProgram (Program & /*program*/) noexcept
+	GizmoRendering::onGenerateShadersCode (Program & /*program*/) noexcept
 	{
 		return false;
 	}
 
 	bool
-	GizmoRendering::onGenerateProgramLayout (const SetIndexes & /*setIndexes*/, std::vector< std::shared_ptr< DescriptorSetLayout > > & /*descriptorSetLayouts*/, std::vector< VkPushConstantRange > & /*pushConstantRanges*/) noexcept
+	GizmoRendering::onCreateDataLayouts (const SetIndexes & /*setIndexes*/, std::vector< std::shared_ptr< DescriptorSetLayout > > & /*descriptorSetLayouts*/, std::vector< VkPushConstantRange > & /*pushConstantRanges*/) noexcept
 	{
 		return true;
 	}

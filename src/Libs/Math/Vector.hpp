@@ -59,8 +59,8 @@ namespace EmEn::Libs::Math
 	/**
 	 * @brief Defines a vector from two to four values suitable for 3D graphics.
 	 * @tparam dim_t The dimension of the vector. This can be 2, 3 or 4.
-	 * @tparam precision_t The data precision, should be a floating point number. Default float.
-	 * @note For position the fourth component should be 1 and for direction, it should be 0.
+	 * @tparam precision_t The data precision should be a floating point number. Default float.
+	 * @note For position, the fourth component should be 1, and for a direction, it should be 0.
 	 * In that way, translation with matrices won't affect direction vectors.
 	 * @todo Check pertinence of OpenMP pragmas
 	 */
@@ -235,9 +235,9 @@ namespace EmEn::Libs::Math
 
 			/**
 			 * @brief Builds a Vector< dim_t, precision_t > using a raw definition from a std::string.
-			 * @warning Bad formatted string will result to an origin vector.
+			 * @warning Bad-formatted string will result to an origin vector.
 			 * @param str The string containing the vector definition.
-			 * @param separator A char to specify the values separator. Default is white space.
+			 * @param separator A char to specify the value separator. Default is white space.
 			 * @param offset An index where to execute copying values. Default is 0.
 			 */
 			explicit
@@ -709,7 +709,7 @@ namespace EmEn::Libs::Math
 
 			/**
 			 * @brief Divides vector components by a scalar.
-			 * @warning Division by zero do not throw exception !
+			 * @warning Division by zero does not throw exception!
 			 * @param operand A scalar.
 			 * @return Vector
 			 */
@@ -1004,7 +1004,7 @@ namespace EmEn::Libs::Math
 			/**
 			 * @brief Rescales the vector 2 length to unit (Snap to dominant axis).
 			 * @warning This version is mathematically incorrect due to integer usage.
-			 * This will however make the vector point to the highest direction.
+			 * This will, however, make the vector point to the highest direction.
 			 * @return Vector &
 			 */
 			Vector &
@@ -1038,7 +1038,7 @@ namespace EmEn::Libs::Math
 			/**
 			 * @brief Rescales the vector 3|4 length to unit (Snap to dominant axis).
 			 * @warning This version is mathematically incorrect due to integer usage.
-			 * This will however make the vector point to the highest direction.
+			 * This will, however, make the vector point to the highest direction.
 			 * @return Vector &
 			 */
 			Vector &
@@ -1076,7 +1076,7 @@ namespace EmEn::Libs::Math
 					m_data[Z] = 0;
 				}
 
-				/* NOTE: If the vector is dimension 4, last component must be set to zero. */
+				/* NOTE: If the vector is dimension 4, the last component must be set to zero. */
 				if constexpr ( dim_t == 4 )
 				{
 					m_data[W] = 0;
@@ -1450,7 +1450,7 @@ namespace EmEn::Libs::Math
 
 			/**
 			 * @brief Gets the normal vector from a triangle defined by three points.
-			 * @note Gives points in counter clock wise order !
+			 * @note Gives points in counter-clock wise order!
 			 * @param pointA Vertex A position of the triangle.
 			 * @param pointB Vertex B position of the triangle.
 			 * @param pointC Vertex C position of the triangle.
@@ -1466,7 +1466,7 @@ namespace EmEn::Libs::Math
 
 			/**
 			 * @brief Gets the tangent vector from a triangle defined by three points and three texture coordinates.
-			 * @note Gives points in counter clock wise order !
+			 * @note Gives points in counter-clock wise order!
 			 * @param pointA Vertex A position of the triangle.
 			 * @param uvA Vertex A texture coordinates of the triangle.
 			 * @param pointB Vertex B position of the triangle.
@@ -1707,7 +1707,7 @@ namespace EmEn::Libs::Math
 				#pragma omp simd
 				for ( size_t index = 0; index < dim_t; index++ )
 				{
-					target[index] = m_data[index]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic) : We use raw data here.
+					target[index] = m_data[index]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic): We use raw data here.
 				}
 			}
 

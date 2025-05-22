@@ -60,21 +60,33 @@ namespace EmEn::Graphics::Renderable
 			 * @return shared_ptr< Material::Interface >
 			 */
 			[[nodiscard]]
-			std::shared_ptr< Material::Interface > material () const noexcept;
+			std::shared_ptr< Material::Interface >
+			material () const noexcept
+			{
+				return m_material;
+			}
 
 			/**
 			 * @brief Returns the rasterization options for this layer.
 			 * @return const RasterizationOptions &
 			 */
 			[[nodiscard]]
-			const RasterizationOptions & rasterizationOptions () const noexcept;
+			const RasterizationOptions &
+			rasterizationOptions () const noexcept
+			{
+				return m_rasterizationOptions;
+			}
 
 			/**
 			 * @brief Returns renderable level flags.
 			 * @return int
 			 */
 			[[nodiscard]]
-			int flags () const noexcept;
+			int
+			flags () const noexcept
+			{
+				return m_renderableFlags;
+			}
 
 		private:
 

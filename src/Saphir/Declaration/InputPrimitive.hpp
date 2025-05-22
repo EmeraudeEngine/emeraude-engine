@@ -36,7 +36,7 @@ namespace EmEn::Saphir::Declaration
 {
 	/**
 	 * @brief The InputPrimitive class
-	 * @extends EmEn::Saphir::DeclarationInterface This is a shader code declaration.
+	 * @extends EmEn::Saphir::Declaration::Interface This is a shader code declaration.
 	 */
 	class InputPrimitive final : public Interface
 	{
@@ -48,19 +48,27 @@ namespace EmEn::Saphir::Declaration
 			 */
 			explicit InputPrimitive (InputPrimitiveType primitiveType) noexcept;
 
-			/** @copydoc EmEn::Saphir::DeclarationInterface::isValid() */
+			/** @copydoc EmEn::Saphir::Declaration::Interface::isValid() */
 			[[nodiscard]]
-			bool isValid () const noexcept override;
+			bool
+			isValid () const noexcept override
+			{
+				return true;
+			}
 
-			/** @copydoc EmEn::Saphir::DeclarationInterface::name() */
+			/** @copydoc EmEn::Saphir::Declaration::Interface::name() */
 			[[nodiscard]]
 			Key name () const noexcept override;
 
-			/** @copydoc EmEn::Saphir::DeclarationInterface::bytes() */
+			/** @copydoc EmEn::Saphir::Declaration::Interface::bytes() */
 			[[nodiscard]]
-			size_t bytes () const noexcept override;
+			uint32_t
+			bytes () const noexcept override
+			{
+				return 0;
+			}
 
-			/** @copydoc EmEn::Saphir::DeclarationInterface::sourceCode() */
+			/** @copydoc EmEn::Saphir::Declaration::Interface::sourceCode() */
 			[[nodiscard]]
 			std::string sourceCode () const noexcept override;
 
@@ -69,7 +77,11 @@ namespace EmEn::Saphir::Declaration
 			 * @return InputPrimitiveType
 			 */
 			[[nodiscard]]
-			InputPrimitiveType primitiveType () const noexcept;
+			InputPrimitiveType
+			primitiveType () const noexcept
+			{
+				return m_primitiveType;
+			}
 
 		private:
 

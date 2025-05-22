@@ -51,8 +51,8 @@ namespace EmEn::Scenes
 
 	const size_t DefinitionResource::ClassUID{getClassUID(ClassId)};
 
-	DefinitionResource::DefinitionResource (const std::string & name, uint32_t resourceFlagBits) noexcept
-		: ResourceTrait(name, resourceFlagBits)
+	DefinitionResource::DefinitionResource (const std::string & name, uint32_t resourceFlags) noexcept
+		: ResourceTrait(name, resourceFlags)
 	{
 
 	}
@@ -94,7 +94,9 @@ namespace EmEn::Scenes
 		}
 
 		/* Checks if additional stores before loading (optional) */
-		Resources::Manager::instance()->stores().update(root);
+		auto * manager = Resources::Manager::instance();
+
+		manager->stores().update(root, manager->verbosityEnabled());
 
 		return this->load(root);
 	}
@@ -121,7 +123,7 @@ namespace EmEn::Scenes
 	{
 		if ( m_root.empty() )
 		{
-			Tracer::error(ClassId, BlobTrait() << "No data ! Load a JSON file or set a JSON string before.");
+			Tracer::error(ClassId, "No data ! Load a JSON file or set a JSON string before.");
 
 			return false;
 		}
@@ -152,7 +154,7 @@ namespace EmEn::Scenes
 	{
 		if ( !m_root.isMember(FastJSON::PropertiesKey) || !m_root[FastJSON::PropertiesKey].isObject() )
 		{
-			Tracer::warning(ClassId, BlobTrait() << "There is no '" << FastJSON::PropertiesKey << "' definition or is invalid !");
+			TraceWarning{ClassId} << "There is no '" << FastJSON::PropertiesKey << "' definition or is invalid !";
 
 			return false;
 		}
@@ -294,17 +296,5 @@ namespace EmEn::Scenes
 	DefinitionResource::onDependenciesLoaded () noexcept
 	{
 		return true;
-	}
-
-	std::shared_ptr< DefinitionResource >
-	DefinitionResource::get (const std::string & resourceName, bool directLoad) noexcept
-	{
-		return Resources::Manager::instance()->sceneDefinitions().getResource(resourceName, !directLoad);
-	}
-
-	std::shared_ptr< DefinitionResource >
-	DefinitionResource::getDefault () noexcept
-	{
-		return Resources::Manager::instance()->sceneDefinitions().getDefaultResource();
 	}
 }

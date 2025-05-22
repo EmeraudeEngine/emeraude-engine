@@ -38,7 +38,7 @@
 namespace EmEn
 {
 	/**
-	 * @brief This class holds information about an application.
+	 * @brief This class holds information about the application.
 	 */
 	class Identification final
 	{
@@ -48,9 +48,9 @@ namespace EmEn
 			static constexpr auto ClassId{"Identification"};
 
 			static constexpr auto LibraryAuthorName{"\"LondNoir\" <londnoir@gmail.com>"};
-			static constexpr auto LibraryName{ENGINE_NAME};
-			static constexpr auto LibraryVersion{Libs::Version(ENGINE_VERSION_MAJOR, ENGINE_VERSION_MINOR, ENGINE_VERSION_PATCH)};
-			static constexpr auto LibraryPlatform{PLATFORM_TARGETED};
+			static constexpr auto LibraryName{EngineName};
+			static constexpr auto LibraryVersion{Libs::Version(VersionMajor, VersionMinor, VersionPatch)};
+			static constexpr auto LibraryPlatform{PlatformTargeted};
 			static constexpr auto LibraryCompilationDate{__DATE__};
 
 			/** 
@@ -61,17 +61,6 @@ namespace EmEn
 			 * @param domain The domain of the application.
 			 */
 			Identification (const char * name, const Libs::Version & version, const char * organization, const char * domain) noexcept;
-
-			/**
-			 * @brief Returns the engine identification.
-			 * @return const std::string &
-			 */
-			[[nodiscard]]
-			const std::string &
-			engineId () const noexcept
-			{
-				return m_engineId;
-			}
 
 			/**
 			 * @brief Returns the application name.
@@ -86,7 +75,7 @@ namespace EmEn
 
 			/**
 			 * @brief Returns the application version.
-			 * @return const Libraries::Version &
+			 * @return const Libs::Version &
 			 */
 			[[nodiscard]]
 			const Libs::Version &
@@ -118,11 +107,22 @@ namespace EmEn
 			}
 
 			/**
-			 * @brief Returns the full application identification.
-			 * @return std::string
+			 * @brief Returns the engine identification.
+			 * @return const std::string &
 			 */
 			[[nodiscard]]
-			std::string
+			const std::string &
+			engineId () const noexcept
+			{
+				return m_engineId;
+			}
+
+			/**
+			 * @brief Returns the full application identification.
+			 * @return const std::string &
+			 */
+			[[nodiscard]]
+			const std::string &
 			applicationId () const noexcept
 			{
 				return m_applicationId;
@@ -130,10 +130,10 @@ namespace EmEn
 
 			/**
 			 * @brief Returns the application reverse id.
-			 * @return std::string
+			 * @return const std::string &
 			 */
 			[[nodiscard]]
-			std::string
+			const std::string &
 			applicationReverseId () const noexcept
 			{
 				return m_applicationReverseId;
@@ -141,12 +141,12 @@ namespace EmEn
 
 		private:
 
-			std::string m_engineId;
-			std::string m_applicationId;
-			std::string m_applicationReverseId;
 			std::string m_applicationName;
 			Libs::Version m_applicationVersion;
 			std::string m_applicationOrganization;
 			std::string m_applicationDomain;
+			std::string m_engineId;
+			std::string m_applicationId;
+			std::string m_applicationReverseId;
 	};
 }

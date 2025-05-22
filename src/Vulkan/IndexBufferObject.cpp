@@ -32,8 +32,9 @@
 
 namespace EmEn::Vulkan
 {
-	IndexBufferObject::IndexBufferObject (const std::shared_ptr< Device > & device, size_t indexCount) noexcept
-		: AbstractDeviceBuffer(device, 0, static_cast< VkDeviceSize >(indexCount * sizeof(uint32_t)), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT), m_indexCount(indexCount)
+	IndexBufferObject::IndexBufferObject (const std::shared_ptr< Device > & device, uint32_t indexCount) noexcept
+		: AbstractDeviceBuffer(device, 0, indexCount * sizeof(uint32_t), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT),
+		m_indexCount(indexCount)
 	{
 
 	}

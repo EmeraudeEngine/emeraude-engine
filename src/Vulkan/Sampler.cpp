@@ -91,7 +91,7 @@ namespace EmEn::Vulkan
 
 		if ( result != VK_SUCCESS )
 		{
-			Tracer::error(ClassId, BlobTrait() << "Unable to create a sampler : " << vkResultToCString(result) << " !");
+			TraceError{ClassId} << "Unable to create a sampler : " << vkResultToCString(result) << " !";
 
 			return false;
 		}

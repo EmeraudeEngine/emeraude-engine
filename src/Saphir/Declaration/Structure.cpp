@@ -48,36 +48,16 @@ namespace EmEn::Saphir::Declaration
 	Structure::isValid () const noexcept
 	{
 		if ( m_name == nullptr )
+		{
 			return false;
+		}
 
 		if ( m_members.empty() )
+		{
 			return false;
+		}
 
 		return true;
-	}
-
-	Key
-	Structure::name () const noexcept
-	{
-		return m_name;
-	}
-
-	size_t
-	Structure::bytes () const noexcept
-	{
-		return 0;
-	}
-
-	const std::string &
-	Structure::instanceName () const noexcept
-	{
-		return m_instanceName;
-	}
-
-	const std::vector< std::pair< Key, Member::Structure > > &
-	Structure::members () const noexcept
-	{
-		return m_members;
 	}
 
 	bool

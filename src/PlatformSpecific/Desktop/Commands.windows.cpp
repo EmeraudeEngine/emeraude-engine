@@ -42,7 +42,7 @@
 
 namespace EmEn::PlatformSpecific::Desktop
 {
-	static constexpr auto TracerTag{"Commands"};
+	constexpr auto TracerTag{"Commands"};
 
 	bool
 	runDesktopApplication (const std::string & argument) noexcept

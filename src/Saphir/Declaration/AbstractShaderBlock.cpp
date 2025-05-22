@@ -36,8 +36,9 @@ namespace EmEn::Saphir::Declaration
 
 	const char * ShaderBlockTracerTag = "ShaderBlock";
 
-	AbstractShaderBlock::AbstractShaderBlock (Key name, uint32_t location, Key instanceName, size_t arraySize) noexcept
-		: BlockInterface(name, instanceName, arraySize), m_location(location)
+	AbstractShaderBlock::AbstractShaderBlock (Key name, uint32_t location, Key instanceName, uint32_t arraySize) noexcept
+		: BlockInterface(name, instanceName, arraySize),
+		m_location(location)
 	{
 
 	}
@@ -46,33 +47,21 @@ namespace EmEn::Saphir::Declaration
 	AbstractShaderBlock::isValid () const noexcept
 	{
 		if ( this->name() == nullptr )
+		{
 			return false;
+		}
 
 		if ( this->instanceName().empty() )
+		{
 			return false;
+		}
 
 		if ( m_members.empty() )
+		{
 			return false;
+		}
 
 		return true;
-	}
-
-	size_t
-	AbstractShaderBlock::bytes () const noexcept
-	{
-		return 0;
-	}
-
-	uint32_t
-	AbstractShaderBlock::location () const noexcept
-	{
-		return m_location;
-	}
-
-	const std::vector< std::pair< Key, Member::ShaderBlock > > &
-	AbstractShaderBlock::members () const noexcept
-	{
-		return m_members;
 	}
 
 	bool
@@ -107,7 +96,9 @@ namespace EmEn::Saphir::Declaration
 		}
 
 		if ( !this->addStructure(structure.name(), structure) )
+		{
 			return false;
+		}
 
 		m_members.emplace_back(
 			std::piecewise_construct,
@@ -119,7 +110,7 @@ namespace EmEn::Saphir::Declaration
 	}
 
 	bool
-	AbstractShaderBlock::addArrayMember (VariableType type, Key name, size_t arraySize, Key interpolation) noexcept
+	AbstractShaderBlock::addArrayMember (VariableType type, Key name, uint32_t arraySize, Key interpolation) noexcept
 	{
 		if ( Utility::contains(m_members, name) )
 		{
@@ -129,7 +120,9 @@ namespace EmEn::Saphir::Declaration
 		}
 
 		if ( arraySize == 0 )
+		{
 			return false;
+		}
 
 		m_members.emplace_back(
 			std::piecewise_construct,
@@ -141,7 +134,7 @@ namespace EmEn::Saphir::Declaration
 	}
 
 	bool
-	AbstractShaderBlock::addArrayMember (const Structure & structure, size_t arraySize, Key interpolation) noexcept
+	AbstractShaderBlock::addArrayMember (const Structure & structure, uint32_t arraySize, Key interpolation) noexcept
 	{
 		const auto name = structure.instanceName().c_str();
 
@@ -153,10 +146,14 @@ namespace EmEn::Saphir::Declaration
 		}
 
 		if ( arraySize == 0 )
+		{
 			return false;
+		}
 
 		if ( !this->addStructure(structure.name(), structure) )
+		{
 			return false;
+		}
 
 		m_members.emplace_back(
 			std::piecewise_construct,

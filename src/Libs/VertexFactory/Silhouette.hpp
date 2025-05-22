@@ -27,21 +27,23 @@
 #pragma once
 
 /* STL inclusions. */
+#include <cstdint>
 #include <vector>
+#include <type_traits>
 
 /* Local inclusions for usages. */
-#include "ShapeEdge.hpp"
 #include "Libs/Math/CartesianFrame.hpp"
 #include "Shape.hpp"
 
 namespace EmEn::Libs::VertexFactory
 {
 	/**
-	 * @brief The Silhouette class.
-	 * @tparam float_t The type of float point number.
+	 * @brief The Silhouette detection class.
+	 * @tparam vertex_data_t The precision type of vertex data. Default float.
+	 * @tparam index_data_t The precision type of index data. Default uint32_t.
 	 */
-	template< typename float_t = float >
-	requires (std::is_floating_point_v< float_t >)
+	template< typename vertex_data_t = float, typename index_data_t = uint32_t >
+	requires (std::is_floating_point_v< vertex_data_t > && std::is_unsigned_v< index_data_t > )
 	class Silhouette final
 	{
 		public:
@@ -53,10 +55,10 @@ namespace EmEn::Libs::VertexFactory
 
 			/**
 			 * @brief Gives access to edges list.
-			 * @return std::vector< ShapeEdge >
+			 * @return std::vector< ShapeEdge< index_data_t > >
 			 */
 			[[nodiscard]]
-			const std::vector< ShapeEdge > &
+			const std::vector< ShapeEdge< index_data_t > > &
 			edges () const noexcept
 			{
 				return m_edges;
@@ -69,7 +71,7 @@ namespace EmEn::Libs::VertexFactory
 			 * @return bool
 			 */
 			bool
-			build (const Shape< float_t > & geometry, const Math::CartesianFrame< float_t > & pointOfView) noexcept
+			build (const Shape< vertex_data_t, index_data_t > & geometry, const Math::CartesianFrame< vertex_data_t > & pointOfView) noexcept
 			{
 				if ( geometry.isValid() )
 				{
@@ -90,7 +92,7 @@ namespace EmEn::Libs::VertexFactory
 				for ( const auto & triangle : triangles )
 				{
 					/* Checks if the triangle is facing the point of view. */
-					if ( Math::Vector< 3, float_t >::dotProduct(triangle.surfaceNormal(), direction) > 0.0F )
+					if ( Math::Vector< 3, vertex_data_t >::dotProduct(triangle.surfaceNormal(), direction) > 0.0F )
 					{
 						/* If the triangle is visible, then add every edge. */
 						m_edges.emplace_back(edges[triangle.edgeIndex(0)]);
@@ -104,6 +106,6 @@ namespace EmEn::Libs::VertexFactory
 
 		private:
 
-			std::vector< ShapeEdge > m_edges{};
+			std::vector< ShapeEdge< index_data_t > > m_edges;
 	};
 }

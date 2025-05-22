@@ -27,6 +27,7 @@
 #pragma once
 
 /* STL inclusions. */
+#include <cstdint>
 #include <array>
 #include <memory>
 #include <string>
@@ -245,21 +246,6 @@ namespace EmEn::Graphics::RenderTarget
 			}
 
 			/**
-			 * @brief Returns the aspect ratio of the render target.
-			 * @return float
-			 */
-			[[nodiscard]]
-			virtual float aspectRatio () const noexcept
-			{
-				if ( m_extent.height == 0 )
-				{
-					return 0.0F;
-				}
-
-				return static_cast< float >(m_extent.width) / static_cast< float >(m_extent.height);
-			}
-
-			/**
 			 * @brief Creates the render target in the video memory.
 			 * @param renderer A reference to the graphics renderer.
 			 * @return bool
@@ -272,6 +258,13 @@ namespace EmEn::Graphics::RenderTarget
 			 * @return bool
 			 */
 			bool destroy () noexcept;
+
+			/**
+			 * @brief Returns the aspect ratio of the render target.
+			 * @return float
+			 */
+			[[nodiscard]]
+			virtual float aspectRatio () const noexcept = 0;
 
 			/**
 			 * @brief Returns whether the render target is a cubemap.

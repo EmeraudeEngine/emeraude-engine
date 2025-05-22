@@ -71,7 +71,7 @@ namespace EmEn::Vulkan
 	}
 
 	std::shared_ptr< SharedUniformBuffer >
-	SharedUBOManager::createSharedUniformBuffer (const std::string & name, size_t uniformBlockSize, size_t maxElementCount) noexcept
+	SharedUBOManager::createSharedUniformBuffer (const std::string & name, uint32_t uniformBlockSize, uint32_t maxElementCount) noexcept
 	{
 		if ( m_sharedUniformBuffers.contains(name) )
 		{
@@ -93,7 +93,7 @@ namespace EmEn::Vulkan
 	}
 
 	std::shared_ptr< SharedUniformBuffer >
-	SharedUBOManager::createSharedUniformBuffer (const std::string & name, const SharedUniformBuffer::DescriptorSetCreator & descriptorSetCreator, size_t uniformBlockSize, size_t maxElementCount) noexcept
+	SharedUBOManager::createSharedUniformBuffer (const std::string & name, const SharedUniformBuffer::DescriptorSetCreator & descriptorSetCreator, uint32_t uniformBlockSize, uint32_t maxElementCount) noexcept
 	{
 		if ( m_sharedUniformBuffers.contains(name) )
 		{

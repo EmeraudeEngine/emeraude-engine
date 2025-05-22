@@ -38,10 +38,10 @@ namespace EmEn::Graphics::Material
 {
 	using namespace EmEn::Libs;
 
-	static constexpr auto TracerTag{"MaterialInterface"};
+	constexpr auto TracerTag{"MaterialInterface"};
 
-	Interface::Interface (const std::string & name, uint32_t resourceFlagBits) noexcept
-		: ResourceTrait(name, resourceFlagBits)
+	Interface::Interface (const std::string & name, uint32_t resourceFlags) noexcept
+		: ResourceTrait(name, resourceFlags)
 	{
 
 	}

@@ -347,9 +347,10 @@ namespace EmEn::Audio
 						break;
 
 					default:
-#ifdef EMERAUDE_DEBUG_OBSERVER_PATTERN
-						TraceDebug{ClassId} << "Event #" << notificationCode << " from a music resource ignored.";
-#endif
+						if constexpr ( ObserverDebugEnabled )
+						{
+							TraceDebug{ClassId} << "Event #" << notificationCode << " from a music resource ignored.";
+						}
 						break;
 				}
 			}
@@ -362,12 +363,10 @@ namespace EmEn::Audio
 			return false;
 		}
 
-#ifdef DEBUG
-		/* NOTE: Don't know what is it, goodbye ! */
-		TraceInfo{ClassId} <<
+		/* NOTE: Don't know what is it, goodbye! */
+		TraceDebug{ClassId} <<
 			"Received an unhandled notification (Code:" << notificationCode << ") from observable '" << whoIs(observable->classUID()) << "' (UID:" << observable->classUID() << ")  ! "
 			"Forgetting it ...";
-#endif
 
 		return false;
 	}
@@ -420,7 +419,7 @@ namespace EmEn::Audio
 
 			/* Search the song. */
 			const auto soundTrackName = arguments[0].asString();
-			const auto soundtrack = m_resourceManager.musics().getResource(soundTrackName);
+			const auto soundtrack = m_resourceManager.container< MusicResource >()->getResource(soundTrackName);
 
 			if ( soundtrack == nullptr )
 			{

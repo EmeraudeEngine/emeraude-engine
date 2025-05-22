@@ -27,9 +27,9 @@
 #pragma once
 
 /* STL inclusions. */
-#include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <cmath>
 #include <sstream>
 #include <string>
 #include <type_traits>
@@ -49,11 +49,11 @@ namespace EmEn::Libs::Math
 
 	/**
 	 * @brief Defines a frame in Euclidean space to easily manipulate the position and rotation of an object in a 3D scene.
-	 * @note This class defines methods to build model and view matrices. The convention (Vulkan friendly at best) is :
-	 *  - X axis : positive right, negative left
-	 *  - Y axis : positive down, negative up
-	 *  - Z axis : positive back, negative front
-	 * @tparam precision_t The data precision, should be a floating point number. Default float.
+	 * @note This class defines methods to build model and view matrices. The convention (Vulkan friendly at best) is:
+	 *  - X axis: positive right, negative left
+	 *  - Y axis: positive down, negative up
+	 *  - Z axis: positive back, negative front
+	 * @tparam precision_t The data precision should be a floating point number. Default float.
 	 */
 	template< typename precision_t = float > requires (std::is_floating_point_v< precision_t >)
 	class CartesianFrame final
@@ -232,7 +232,7 @@ namespace EmEn::Libs::Math
 			/**
 			 * @brief Sets the backward vector (Z+).
 			 * @note This will re-orient automatically the frame.
-			 * @param forward The vector that hold the desired direction of the frame.
+			 * @param forward The vector that holds the desired direction of the frame.
 			 * @return void
 			 */
 			void
@@ -336,7 +336,7 @@ namespace EmEn::Libs::Math
 			}
 
 			/**
-			 * @brief Sets an Y axis scaling factor.
+			 * @brief Sets a Y axis scaling factor.
 			 * @param factor The factor value.
 			 * @return void
 			 */
@@ -347,7 +347,7 @@ namespace EmEn::Libs::Math
 			}
 
 			/**
-			 * @brief Sets an Z axis scaling factor.
+			 * @brief Sets a Z axis scaling factor.
 			 * @param factor The factor value.
 			 * @return void
 			 */
@@ -407,7 +407,7 @@ namespace EmEn::Libs::Math
 
 			/**
 			 * @brief Returns the frame downward vector (Y+).
-			 * @note An initial frame should give [0, 1, 0] vector.
+			 * @note An initial frame should give a vector [0, 1, 0].
 			 * @return const Vector< 3, precision_t > &
 			 */
 			[[nodiscard]]
@@ -419,7 +419,7 @@ namespace EmEn::Libs::Math
 
 			/**
 			 * @brief Returns the frame upward vector (Y-).
-			 * @note An initial frame should give [0, -1, 0] vector.
+			 * @note An initial frame should give a vector [0, -1, 0].
 			 * @warning the return is a value.
 			 * @return Vector< 3, precision_t >
 			 */
@@ -432,7 +432,7 @@ namespace EmEn::Libs::Math
 
 			/**
 			 * @brief Returns the frame backward vector (Z+).
-			 * @note An initial frame should give [0, 0, 1] vector.
+			 * @note An initial frame should give a vector [0, 0, 1].
 			 * @return const Vector< 3, precision_t > &
 			 */
 			[[nodiscard]]
@@ -444,7 +444,7 @@ namespace EmEn::Libs::Math
 
 			/**
 			 * @brief Returns the frame forward vector (Z-).
-			 * @note An initial frame should give [0, 0, -1] vector.
+			 * @note An initial frame should give a vector [0, 0, -1].
 			 * @warning the return is a value.
 			 * @return Vector< 3, precision_t >
 			 */
@@ -748,7 +748,7 @@ namespace EmEn::Libs::Math
 			/**
 			 * @brief Rotates the frame around an arbitrary axis.
 			 * @param radian The angle expressed in radian. You can use the Math::Radian(degree).
-			 * @param axis A Vector3 to defines the axis.
+			 * @param axis A Vector3 to define the axis.
 			 * @param local Using local axis.
 			 * @return void
 			 */
@@ -780,7 +780,7 @@ namespace EmEn::Libs::Math
 			/**
 			 * @brief Rotates this frame around a world-space axis passing through the origin of another frame.
 			 * @param radian The angle expressed in radian. You can use the Math::Radian(degree).
-			 * @param worldAxis The axis of rotation (in world coordinates, should ideally be normalized).
+			 * @param worldAxis The axis of rotation (in world coordinates should ideally be normalized).
 			 * @param referenceFrame The frame whose origin defines the point around which to rotate.
 			 * @return void
 			 */
@@ -800,8 +800,8 @@ namespace EmEn::Libs::Math
 			/**
 			 * @brief Rotates on X axis (Pitch).
 			 * @param radian The angle expressed in radian. You can use the Math::Radian(degree).
-			 * @param local If true, rotates around the local X-axis (Right), affecting only orientation.
-			 * If false, rotates around the world X-axis, affecting orientation and position relative to the world origin.
+			 * @param local If true, rotates around the local X axis (Right), affecting only orientation.
+			 * If false, rotates around the world X axis, affecting orientation and position relative to the world origin.
 			 * @return void
 			 */
 			void
@@ -835,8 +835,8 @@ namespace EmEn::Libs::Math
 			/**
 			 * @brief Rotates on Y axis (Yaw).
 			 * @param radian The angle expressed in radian. You can use the Math::Radian(degree).
-			 * @param local If true, rotates around the local Y-axis (Downward), affecting only orientation.
-			 * If false, rotates around the world Y-axis, affecting orientation and position relative to the world origin.
+			 * @param local If true, rotates around the local Y axis (Downward), affecting only orientation.
+			 * If false, rotates around the world Y axis, affecting orientation and position relative to the world origin.
 			 * @return void
 			 */
 			void
@@ -869,8 +869,8 @@ namespace EmEn::Libs::Math
 			/**
 			 * @brief Rotates on Z axis (Roll).
 			 * @param radian The angle expressed in radian. You can use the Math::Radian(degree).
-			 * @param local If true, rotates around the local Z-axis (Backward), affecting only orientation.
-			 * If false, rotates around the world Z-axis, affecting orientation and position relative to the world origin.
+			 * @param local If true, rotates around the local Z axis (Backward), affecting only orientation.
+			 * If false, rotates around the world Z axis, affecting orientation and position relative to the world origin.
 			 * @return void
 			 */
 			void
@@ -1012,7 +1012,7 @@ namespace EmEn::Libs::Math
 			/**
 			 * @brief Returns the model matrix to place a billboard in a 3D scene.
 			 * @note This is a variant of Cartesian::getModelMatrix() for sprite facing camera.
-			 * Matrix layout :
+			 * Matrix layout:
 			 *   [Xx][Ux][Fx][Px] Xx with scalingX
 			 *   [Xy][Uy][Fy][Py] Uy with scalingY
 			 *   [Xz][Uz][Fz][Pz] Fz with scalingZ
@@ -1101,7 +1101,7 @@ namespace EmEn::Libs::Math
 			    // Scaling is not identity, calculate the full inverse InvS * InvR * InvT
 		        // 1. Calculate inverse scaling factors
 		        //    We assume scale factors are non-zero. Division by zero is undefined behavior.
-		        //    Consider adding asserts or checks if zero scale is possible but invalid.
+		        //    Consider adding assertions or checks if a zero scale is possible but invalid.
 		        const precision_t invScaleX = static_cast<precision_t>(1) / m_scaling[X];
 		        const precision_t invScaleY = static_cast<precision_t>(1) / m_scaling[Y];
 		        const precision_t invScaleZ = static_cast<precision_t>(1) / m_scaling[Z];
@@ -1121,7 +1121,7 @@ namespace EmEn::Libs::Math
 		        //    InvR (transpose of R) has columns: right, downward, backward.
 		        //    InvS applies 1/scale to each component of these column vectors.
 		        //    The resulting matrix (InvS * InvR) will have columns:
-		        //    Col0 = [right.x*invSx,    right.y*invSy,    right.z*invSz]
+		        //    Col0 = [right.x*invSx, right.y*invSy, right.z*invSz]
 		        //    Col1 = [downward.x*invSx, downward.y*invSy, downward.z*invSz]
 		        //    Col2 = [backward.x*invSx, backward.y*invSy, backward.z*invSz]
 
@@ -1315,8 +1315,8 @@ namespace EmEn::Libs::Math
 				Vector< 3, precision_t > downward;
 
 				/* Compute temporal downward vector based on the backward
-				 * vector watch out when look up/down at 90 degree for
-				 * example, backward vector is on the Y axis. */
+				 * vector watch out when look up/down at 90 degrees.
+				 * For example, the backward vector is on the Y axis. */
 				if ( std::abs(backward[X]) < 0.0F && std::abs(backward[Z]) < 0.0F )
 				{
 					/* If backward vector is pointing on +Y axis. */
@@ -1324,7 +1324,7 @@ namespace EmEn::Libs::Math
 				}
 				else
 				{
-					/* In general, downward vector is straight down. */
+					/* In general, the downward vector is straight down. */
 					downward = Vector< 3, precision_t >::positiveY();
 				}
 
@@ -1336,7 +1336,7 @@ namespace EmEn::Libs::Math
 
 			/* NOTE:
 			 * The position and directions are expressed in parent axis (or world axis).
-			 * X axe vector is not here because it's extracted by a cross product from downward and backward vectors.
+			 * X axe vector is not here because it's extracted by a cross-product from downward and backward vectors.
 			 * The scale vector is expressed in local axis.
 			 */
 			Vector< 3, precision_t > m_position;

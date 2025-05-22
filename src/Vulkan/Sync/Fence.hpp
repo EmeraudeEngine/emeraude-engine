@@ -86,14 +86,14 @@ namespace EmEn::Vulkan::Sync
 			/**
 			 * @brief Constructs a fence.
 			 * @param device A reference to a smart pointer of the device.
-			 * @param createFlags The create info flags. Default VK_FENCE_CREATE_SIGNALED_BIT.
+			 * @param createFlags The createInfo flags. Default VK_FENCE_CREATE_SIGNALED_BIT.
 			 */
 			explicit Fence (const std::shared_ptr< Device > & device, VkFenceCreateFlags createFlags = VK_FENCE_CREATE_SIGNALED_BIT) noexcept;
 
 			/**
-			 * @brief Constructs an fence with a create info.
+			 * @brief Constructs an fence with a createInfo.
 			 * @param device A reference to a smart pointer of the device.
-			 * @param createInfo A reference to the create info.
+			 * @param createInfo A reference to the createInfo.
 			 */
 			Fence (const std::shared_ptr< Device > & device, const VkFenceCreateInfo & createInfo) noexcept;
 
@@ -144,7 +144,7 @@ namespace EmEn::Vulkan::Sync
 			}
 
 			/**
-			 * @brief Returns the fence create info.
+			 * @brief Returns the fence createInfo.
 			 * @return const VkFenceCreateInfo &
 			 */
 			[[nodiscard]]
@@ -182,6 +182,14 @@ namespace EmEn::Vulkan::Sync
 			 */
 			[[nodiscard]]
 			bool wait (uint64_t timeout = std::numeric_limits< uint64_t >::max()) const noexcept;
+
+			/**
+			 * @brief Waits for a fence to be signaled and reset it.
+			 * @param timeout A duration in nanoseconds for timeout. Default close to infinity (584 years).
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool waitAndReset (uint64_t timeout = std::numeric_limits< uint64_t >::max()) const noexcept;
 
 			/**
 			 * @brief Waits for all fences to be signaled.

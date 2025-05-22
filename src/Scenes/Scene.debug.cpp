@@ -50,7 +50,7 @@ namespace EmEn::Scenes
 
 		auto * resources = Resources::Manager::instance();
 
-		const auto materialResource = resources->basicMaterials().getOrCreateResource("+DebugSceneMaterial", [] (Material::BasicResource & newMaterial) {
+		const auto materialResource = resources->container< Material::BasicResource >()->getOrCreateResource("+DebugSceneMaterial", [] (Material::BasicResource & newMaterial) {
 			newMaterial.enableVertexColor();
 
 			return newMaterial.setManualLoadSuccess(true);
@@ -87,7 +87,7 @@ namespace EmEn::Scenes
 				return false;
 			}
 
-			const auto meshResource = resources->meshes().getOrCreateResource(label, [&geometryResource, &materialResource] (Renderable::MeshResource & newMesh) {
+			const auto meshResource = resources->container< Renderable::MeshResource >()->getOrCreateResource(label, [&geometryResource, &materialResource] (Renderable::MeshResource & newMesh) {
 				return newMesh.load(geometryResource, materialResource);
 			});
 
@@ -103,7 +103,7 @@ namespace EmEn::Scenes
 				return false;
 			}
 
-			/* NOTE : Configure the renderable instance advanced options. */
+			/* NOTE: Configure the renderable instance advanced options. */
 			const auto renderableInstance = meshInstance->getRenderableInstance();
 			renderableInstance->setUseInfinityView(true);
 			renderableInstance->disableDepthTest(true);
@@ -151,11 +151,11 @@ namespace EmEn::Scenes
 		}
 
 		const auto planeSize = m_boundary * Double< float >;
-		const auto planeDivision = static_cast< size_t >(m_boundary / 100.0F);
+		const auto planeDivision = static_cast< uint32_t >(m_boundary / 100.0F);
 
 		auto * resources = Resources::Manager::instance();
 
-		const auto materialResource = resources->basicMaterials().getOrCreateResource("+DebugSceneMaterial", [] (Material::BasicResource & newMaterial) {
+		const auto materialResource = resources->container< Material::BasicResource >()->getOrCreateResource("+DebugSceneMaterial", [] (Material::BasicResource & newMaterial) {
 			newMaterial.enableVertexColor();
 
 			return newMaterial.setManualLoadSuccess(true);
@@ -172,7 +172,7 @@ namespace EmEn::Scenes
 			return false;
 		}
 
-		const auto meshResource = resources->meshes().getOrCreateResource(GroundZeroPlaneDisplay, [&geometryResource, &materialResource] (Renderable::MeshResource & newMesh) {
+		const auto meshResource = resources->container< Renderable::MeshResource >()->getOrCreateResource(GroundZeroPlaneDisplay, [&geometryResource, &materialResource] (Renderable::MeshResource & newMesh) {
 			return newMesh.load(geometryResource, materialResource, {PolygonMode::Line, CullingMode::None});
 		});
 
@@ -188,7 +188,7 @@ namespace EmEn::Scenes
 			return false;
 		}
 
-		/* NOTE : Configure the renderable instance advanced options. */
+		/* NOTE: Configure the renderable instance advanced options. */
 		meshInstance->getRenderableInstance()->disableDepthTest(true);
 
 		return true;
@@ -228,11 +228,11 @@ namespace EmEn::Scenes
 		}
 
 		const auto planeSize = m_boundary * Double< float >;
-		const auto planeDivision = static_cast< size_t >(m_boundary / 100.0F);
+		const auto planeDivision = static_cast< uint32_t >(m_boundary / 100.0F);
 
 		auto * resources = Resources::Manager::instance();
 
-		const auto materialResource = resources->basicMaterials().getOrCreateResource("+DebugSceneMaterial", [] (Material::BasicResource & newMaterial) {
+		const auto materialResource = resources->container< Material::BasicResource >()->getOrCreateResource("+DebugSceneMaterial", [] (Material::BasicResource & newMaterial) {
 			newMaterial.enableVertexColor();
 
 			return newMaterial.setManualLoadSuccess(true);
@@ -270,7 +270,7 @@ namespace EmEn::Scenes
 				return false;
 			}
 
-			const auto meshResource = resources->meshes().getOrCreateResource(label, [&geometryResource, &materialResource] (Renderable::MeshResource & newMesh) {
+			const auto meshResource = resources->container< Renderable::MeshResource >()->getOrCreateResource(label, [&geometryResource, &materialResource] (Renderable::MeshResource & newMesh) {
 				return newMesh.load(geometryResource, materialResource, {PolygonMode::Line, CullingMode::None});
 			});
 
@@ -298,7 +298,7 @@ namespace EmEn::Scenes
 				return false;
 			}
 
-			/* NOTE : Configure the renderable instance options. */
+			/* NOTE: Configure the renderable instance options. */
 			meshInstance->getRenderableInstance()->disableDepthTest(true);
 		}
 

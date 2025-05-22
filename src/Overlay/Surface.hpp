@@ -38,7 +38,7 @@
 #include "Graphics/TextureResource/Abstract.hpp"
 #include "FramebufferProperties.hpp"
 #include "Libs/Math/Matrix.hpp"
-#include "Libs/Math/Rectangle.hpp"
+#include "Libs/Math/Space2D/AARectangle.hpp"
 
 namespace EmEn::Vulkan
 {
@@ -49,7 +49,7 @@ namespace EmEn::Overlay
 {
 	/**
 	 * @brief The base class for overlay UIScreen surfaces.
-	 * @exception Libraries::NameableTrait A surface have a name.
+	 * @exception Libraries::NameableTrait A surface has a name.
 	 */
 	class Surface : public Libs::NameableTrait
 	{
@@ -64,8 +64,9 @@ namespace EmEn::Overlay
 			 * @param name A reference to a string.
 			 * @param geometry A reference to a rectangle for the surface geometry on screen. Default the whole screen.
 			 * @param depth A depth value to order surface on the screen. Default 0.0.
+			 * @param visible Set visibility state on startup. Default true.
 			 */
-			Surface (const FramebufferProperties & framebufferProperties, const std::string & name, const Libs::Math::Rectangle< float > & geometry = {}, float depth = 0.0F) noexcept;
+			Surface (const FramebufferProperties & framebufferProperties, const std::string & name, const Libs::Math::Space2D::AARectangle< float > & geometry = {}, float depth = 0.0F, bool visible = true) noexcept;
 
 			/**
 			 * @brief Copy constructor.
@@ -111,10 +112,10 @@ namespace EmEn::Overlay
 
 			/**
 			 * @brief Returns the surface geometry.
-			 * @return const Libs::Math::Rectangle< float > &
+			 * @return const Libs::Math::Space2D::AARectangle< float > &
 			 */
 			[[nodiscard]]
-			const Libs::Math::Rectangle< float > &
+			const Libs::Math::Space2D::AARectangle< float > &
 			geometry () const noexcept
 			{
 				return m_rectangle;
@@ -181,7 +182,7 @@ namespace EmEn::Overlay
 			 * @param rectangle A reference to a rectangle.
 			 * @return void
 			 */
-			void setGeometry (const Libs::Math::Rectangle< float > & rectangle) noexcept;
+			void setGeometry (const Libs::Math::Space2D::AARectangle< float > & rectangle) noexcept;
 
 			/**
 			 * @brief Sets the surface position in the screen.
@@ -279,7 +280,7 @@ namespace EmEn::Overlay
 			}
 
 			/**
-			 * @brief Declares the video memory content outdated in order to re-upload it.
+			 * @brief Declares the video memory content outdated to re-upload it.
 			 * @return void
 			 */
 			void
@@ -487,7 +488,7 @@ namespace EmEn::Overlay
 			bool isEventBlocked (float screenX, float screenY) const noexcept;
 
 			/**
-			 * @brief Checks whether the pointer coordinates intersects with the surface.
+			 * @brief Checks whether the pointer coordinates intersect with the surface.
 			 * @param positionX The pointer coordinate on X screen axis.
 			 * @param positionY The pointer coordinate on Y screen axis.
 			 * @return bool
@@ -537,13 +538,15 @@ namespace EmEn::Overlay
 			/**
 			 * @brief On key press event handler.
 			 * @note Override this method to react on the input event.
-			 * @param key The keyboard universal key code. I.e, QWERTY keyboard 'A' key gives the ASCII code '65' on all platform.
+			 * @param key The keyboard universal key code. I.e., QWERTY keyboard 'A' key gives the ASCII code '65' on all platforms.
 			 * @param scancode The OS dependent scancode.
 			 * @param modifiers The modifier keys mask.
 			 * @param repeat Repeat state.
 			 * @return bool
 			 */
-			virtual bool onKeyPress (int32_t key, int32_t scancode, int32_t modifiers, bool repeat) noexcept
+			virtual
+			bool
+			onKeyPress (int32_t /*key*/, int32_t /*scancode*/, int32_t /*modifiers*/, bool /*repeat*/) noexcept
 			{
 				return false;
 			}
@@ -551,12 +554,14 @@ namespace EmEn::Overlay
 			/**
 			 * @brief On key release event handler.
 			 * @note Override this method to react on the input event.
-			 * @param key The keyboard universal key code. I.e, QWERTY keyboard 'A' key gives the ASCII code '65' on all platform.
+			 * @param key The keyboard universal key code. I.e., QWERTY keyboard 'A' key gives the ASCII code '65' on all platforms.
 			 * @param scancode The OS dependent scancode.
 			 * @param modifiers The modifier keys mask.
 			 * @return bool
 			 */
-			virtual bool onKeyRelease (int32_t key, int32_t scancode, int32_t modifiers) noexcept
+			virtual
+			bool
+			onKeyRelease (int32_t /*key*/, int32_t /*scancode*/, int32_t /*modifiers*/) noexcept
 			{
 				return false;
 			}
@@ -567,45 +572,53 @@ namespace EmEn::Overlay
 			 * @param unicode The character Unicode value.
 			 * @return bool
 			 */
-			virtual bool onCharacterType (uint32_t unicode) noexcept
+			virtual
+			bool
+			onCharacterType (uint32_t /*unicode*/) noexcept
 			{
 				return false;
 			}
 
 			/**
-			 * @brief Method fired when pointer is entering the surface.
+			 * @brief Method fired when a pointer is entering the surface.
 			 * @note Override this method to react on the input event.
 			 * @param positionX The pointer X position.
 			 * @param positionY The pointer Y position.
 			 * @return bool
 			 */
-			virtual void onPointerEnter (float positionX, float positionY) noexcept
+			virtual
+			void
+			onPointerEnter (float /*positionX*/, float /*positionY*/) noexcept
 			{
 
 			}
 
 			/**
-			 * @brief Method fired when pointer is leaving the surface.
+			 * @brief Method fired when a pointer is leaving the surface.
 			 * @note Override this method to react on the input event.
 			 * @param positionX The pointer X position.
 			 * @param positionY The pointer Y position.
 			 * @return bool
 			 */
-			virtual void onPointerLeave (float positionX, float positionY) noexcept
+			virtual
+			void
+			onPointerLeave (float /*positionX*/, float /*positionY*/) noexcept
 			{
 
 			}
 
 			/**
-			 * @brief Method fired when pointer is moving on the surface.
+			 * @brief Method fired when a pointer is moving on the surface.
 			 * @note Override this method to react on the input event.
 			 * @param positionX The pointer X position.
 			 * @param positionY The pointer Y position.
 			 * @return bool
 			 */
-			virtual bool onPointerMove (float positionX, float positionY) noexcept
+			virtual
+			bool
+			onPointerMove (float /*positionX*/, float /*positionY*/) noexcept
 			{
-				return m_flags[IsOpaque];
+				return this->isBlockingEvent();
 			}
 
 			/**
@@ -617,9 +630,11 @@ namespace EmEn::Overlay
 			 * @param modifiers The keyboard modifiers held when the button has been pressed.
 			 * @return bool
 			 */
-			virtual bool onButtonPress (float positionX, float positionY, int32_t buttonNumber, int32_t modifiers) noexcept
+			virtual
+			bool
+			onButtonPress (float /*positionX*/, float /*positionY*/, int32_t /*buttonNumber*/, int32_t /*modifiers*/) noexcept
 			{
-				return m_flags[IsOpaque];
+				return this->isBlockingEvent();
 			}
 
 			/**
@@ -631,9 +646,11 @@ namespace EmEn::Overlay
 			 * @param modifiers The keyboard modifiers held when the button has been released.
 			 * @return bool
 			 */
-			virtual bool onButtonRelease (float positionX, float positionY, int buttonNumber, int modifiers) noexcept
+			virtual
+			bool
+			onButtonRelease (float /*positionX*/, float /*positionY*/, int /*buttonNumber*/, int /*modifiers*/) noexcept
 			{
-				return m_flags[IsOpaque];
+				return this->isBlockingEvent();
 			}
 
 			/**
@@ -645,9 +662,11 @@ namespace EmEn::Overlay
 			 * @param yOffset The scroll distance on the Y axis.
 			 * @return bool
 			 */
-			virtual bool onMouseWheel (float positionX, float positionY, float xOffset, float yOffset) noexcept
+			virtual
+			bool
+			onMouseWheel (float /*positionX*/, float /*positionY*/, float /*xOffset*/, float /*yOffset*/) noexcept
 			{
-				return m_flags[IsOpaque];
+				return this->isBlockingEvent();
 			}
 
 			/**
@@ -745,7 +764,7 @@ namespace EmEn::Overlay
 			static constexpr auto ReadyToSwap{12UL};
 
 			const FramebufferProperties & m_framebufferProperties;
-			Libs::Math::Rectangle< float > m_rectangle{0.0F, 0.0F, 1.0F, 1.0F};
+			Libs::Math::Space2D::AARectangle< float > m_rectangle{0.0F, 0.0F, 1.0F, 1.0F};
 			Libs::Math::Matrix< 4, float > m_modelMatrix;
 			Libs::PixelFactory::Pixmap< uint8_t > m_frontLocalData;
 			Libs::PixelFactory::Pixmap< uint8_t > m_backLocalData;
@@ -762,7 +781,7 @@ namespace EmEn::Overlay
 			std::array< bool, 16 > m_flags{
 				false/*VideoMemorySizeValid*/,
 				false/*VideoMemoryUpToDate*/,
-				true/*IsVisible*/,
+				false/*IsVisible*/,
 				false/*IsListeningKeyboard*/,
 				false/*IsListeningPointer*/,
 				false/*LockPointerMoveEvents*/,

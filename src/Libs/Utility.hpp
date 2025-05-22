@@ -27,17 +27,14 @@
 #pragma once
 
 /* STL inclusions. */
-#include <array>
-#include <chrono>
-#include <cmath>
 #include <cstdint>
-#include <functional>
-#include <limits>
-#include <string>
+#include <cstdlib> // std::rand
+#include <cmath> // std::pow, std::round
 #include <type_traits>
-#include <utility>
+#include <functional> // std::function
+#include <algorithm> // std::any_of
 #include <vector>
-#include <algorithm>
+#include <chrono>
 
 namespace EmEn::Libs::Utility
 {
@@ -74,7 +71,7 @@ namespace EmEn::Libs::Utility
 	}
 
 	/**
-	 * @brief Contains method version for STL vector using a pair as key/value.
+	 * @brief Contains a method version for STL vector using a pair as key/value.
 	 * @tparam x_t The key and needle type.
 	 * @tparam y_t The value type.
 	 * @param haystack A reference to a vector of pairs.
@@ -141,7 +138,7 @@ namespace EmEn::Libs::Utility
 	}
 
 	/**
-	 * @brief Returns the ratio between two number.
+	 * @brief Returns the ratio between two numbers.
 	 * @tparam number_t The type of floating point number. Default float.
 	 * @param total The divisor.
 	 * @param part The dividend.
@@ -163,7 +160,7 @@ namespace EmEn::Libs::Utility
 	}
 
 	/**
-	 * @brief Returns the ratio between two number.
+	 * @brief Returns the ratio between two numbers.
 	 * @tparam number_t The type of integral number. Default int32_t.
 	 * @param total The divisor.
 	 * @param part The dividend.
@@ -188,7 +185,7 @@ namespace EmEn::Libs::Utility
 	 * @brief Rounds up a number.
 	 * @tparam number_t The type of floating point number. Default float.
 	 * @param value The number to round.
-	 * @param precision The number of decimal.
+	 * @param precision The amount of decimal.
 	 * @return number_t
 	 */
 	template< typename number_t = float >
@@ -258,7 +255,7 @@ namespace EmEn::Libs::Utility
 	 * @tparam number_t The type of floating point number. Default float.
 	 * @param operandA The first number.
 	 * @param operandB The second number.
-	 * @param epsilon epsilon The floating point tolerance value. Default C++ epsilon.
+	 * @param epsilon The floating point tolerance value. Default C++ epsilon.
 	 * @return bool
 	 */
 	template< typename number_t = float >
@@ -274,7 +271,7 @@ namespace EmEn::Libs::Utility
 	 * @tparam number_t The type of floating point number. Default float.
 	 * @param operandA The first number.
 	 * @param operandB The second number.
-	 * @param epsilon epsilon The floating point tolerance value. Default C++ epsilon.
+	 * @param epsilon The floating point tolerance value. Default C++ epsilon.
 	 * @return bool
 	 */
 	template< typename number_t = float >
@@ -289,7 +286,7 @@ namespace EmEn::Libs::Utility
 	 * @brief Checks if a floating number is zero.
 	 * @tparam number_t The type of floating point number.
 	 * @param value The number to test.
-	 * @param epsilon epsilon The floating point tolerance value. Default C++ epsilon.
+	 * @param epsilon The floating point tolerance value. Default C++ epsilon.
 	 * @return bool
 	 */
 	template< typename number_t = float >
@@ -306,11 +303,11 @@ namespace EmEn::Libs::Utility
 	}
 
 	/**
-	 * @brief Replaces a number if it's a below the tolerated zero.
+	 * @brief Replaces a number if it's below the tolerated zero.
 	 * @tparam number_t The type of floating point number. Default float.
 	 * @param value The number to test.
 	 * @param replacement The number to replace with if the test failed.
-	 * @param epsilon epsilon The floating point tolerance value. Default C++ epsilon.
+	 * @param epsilon The floating point tolerance value. Default C++ epsilon.
 	 * @return number_t
 	 */
 	template< typename number_t = float >
@@ -325,7 +322,7 @@ namespace EmEn::Libs::Utility
 	 * @brief Checks if a floating number is one.
 	 * @tparam number_t The type of floating point number.
 	 * @param value The number to test.
-	 * @param epsilon epsilon The floating point tolerance value. Default C++ epsilon.
+	 * @param epsilon The floating point tolerance value. Default C++ epsilon.
 	 * @return bool
 	 */
 	template< typename number_t = float >
@@ -345,6 +342,13 @@ namespace EmEn::Libs::Utility
 	int32_t
 	timeBasedSeed () noexcept
 	{
-		return static_cast< int32_t >(std::chrono::system_clock::now().time_since_epoch().count());
+		const auto now_count = std::chrono::system_clock::now().time_since_epoch().count();
+
+		/* NOTE: "Folds" the 64-bit value into 32-bit by combining the high and low parts. */
+		const auto unsigned_count = static_cast< uint64_t >(now_count);
+		const auto high_bits = static_cast< uint32_t >(unsigned_count >> 32);
+		const auto low_bits  = static_cast< uint32_t >(unsigned_count);
+
+		return static_cast< int32_t >(high_bits ^ low_bits);
 	}
 }

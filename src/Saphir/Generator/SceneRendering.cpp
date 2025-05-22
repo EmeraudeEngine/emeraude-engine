@@ -28,12 +28,8 @@
 
 /* Local inclusions. */
 #include "Libs/SourceCodeParser.hpp"
-#include "Graphics/Renderer.hpp"
-#include "Vulkan/GraphicsPipeline.hpp"
-#include "Saphir/Code.hpp"
-#include "Saphir/Keys.hpp"
 #include "Scenes/Scene.hpp"
-#include "Tracer.hpp"
+#include "Saphir/Code.hpp"
 
 namespace EmEn::Saphir::Generator
 {
@@ -42,10 +38,26 @@ namespace EmEn::Saphir::Generator
 	using namespace Vulkan;
 	using namespace Keys;
 
-	SceneRendering::SceneRendering (Settings & settings, const std::string & name, const std::shared_ptr< const RenderTarget::Abstract > & renderTarget, const std::shared_ptr< const RenderableInstance::Abstract > & renderableInstance, size_t layerIndex, RenderPassType renderPassType, const Scenes::Scene & scene) noexcept
-		: Abstract(settings, name, renderTarget), m_renderPassType(renderPassType), m_lightGenerator(renderPassType), m_renderableInstance(renderableInstance), m_layerIndex(layerIndex), m_scene(&scene)
+	SceneRendering::SceneRendering (const std::string & shaderProgramName, const std::shared_ptr< const RenderTarget::Abstract > & renderTarget, const std::shared_ptr< const RenderableInstance::Abstract > & renderableInstance, uint32_t layerIndex, const Scenes::Scene & scene, RenderPassType renderPassType, const Settings & settings) noexcept
+		: Abstract(shaderProgramName, renderTarget, renderableInstance, layerIndex),
+		m_renderPassType(renderPassType),
+		m_lightGenerator(renderPassType),
+		m_scene(&scene)
 	{
+		if ( settings.get< bool >(NormalMappingEnabledKey, DefaultNormalMappingEnabled) )
+		{
+			this->enableFlag(NormalMappingEnabled);
+		}
 
+		if ( settings.get< bool >(HighQualityLightEnabledKey, DefaultHighQualityLightEnabled) )
+		{
+			this->enableFlag(HighQualityLightEnabled);
+		}
+
+		if ( settings.get< bool >(HighQualityReflectionEnabledKey, DefaultHighQualityReflectionEnabled) )
+		{
+			this->enableFlag(HighQualityReflectionEnabled);
+		}
 	}
 
 	void
@@ -53,7 +65,7 @@ namespace EmEn::Saphir::Generator
 	{
 		setIndexes.enableSet(SetType::PerView);
 
-		if ( m_renderableInstance->isLightingEnabled() )
+		if ( this->isFlagEnabled(IsLightingEnabled) )
 		{
 			switch ( m_renderPassType )
 			{
@@ -78,10 +90,10 @@ namespace EmEn::Saphir::Generator
 	}
 
 	bool
-	SceneRendering::onGenerateProgram (Program & program) noexcept
+	SceneRendering::onGenerateShadersCode (Program & program) noexcept
 	{
 		/* Configure the light generator with the material for all shaders. */
-		if ( m_renderableInstance->isLightingEnabled() )
+		if ( this->isFlagEnabled(IsLightingEnabled) )
 		{
 			if ( m_renderPassType == RenderPassType::SimplePass && m_scene->lightSet().isUsingStaticLighting() )
 			{
@@ -99,9 +111,9 @@ namespace EmEn::Saphir::Generator
 
 			if ( this->materialEnabled() )
 			{
-				if ( !this->material()->setupLightGenerator(m_lightGenerator) )
+				if ( !this->getMaterialInterface()->setupLightGenerator(m_lightGenerator) )
 				{
-					TraceError{ClassId} << "Unable to configure the light generator with material '" << this->material()->name() << "' !";
+					TraceError{ClassId} << "Unable to configure the light generator with material '" << this->getMaterialInterface()->name() << "' !";
 
 					return false;
 				}
@@ -172,7 +184,7 @@ namespace EmEn::Saphir::Generator
 	bool
 	SceneRendering::isAdvancedRendering () const noexcept
 	{
-		if ( this->material()->isComplex() )
+		if ( this->getMaterialInterface()->isComplex() )
 		{
 			return true;
 		}
@@ -197,7 +209,7 @@ namespace EmEn::Saphir::Generator
 	}
 
 	bool
-	SceneRendering::onGenerateProgramLayout (const SetIndexes & setIndexes, std::vector< std::shared_ptr< DescriptorSetLayout > > & descriptorSetLayouts, std::vector< VkPushConstantRange > & pushConstantRanges) noexcept
+	SceneRendering::onCreateDataLayouts (const SetIndexes & setIndexes, std::vector< std::shared_ptr< DescriptorSetLayout > > & descriptorSetLayouts, std::vector< VkPushConstantRange > & pushConstantRanges) noexcept
 	{
 		if ( m_scene != nullptr && setIndexes.isSetEnabled(SetType::PerLight) )
 		{
@@ -216,7 +228,7 @@ namespace EmEn::Saphir::Generator
 		/* Prepare the descriptor set layout for the model layer. */
 		if ( this->materialEnabled() && setIndexes.isSetEnabled(SetType::PerModelLayer) )
 		{
-			auto descriptorSetLayout = this->material()->descriptorSetLayout();
+			auto descriptorSetLayout = this->getMaterialInterface()->descriptorSetLayout();
 
 			if ( descriptorSetLayout == nullptr )
 			{
@@ -228,7 +240,7 @@ namespace EmEn::Saphir::Generator
 			descriptorSetLayouts.emplace_back(descriptorSetLayout);
 		}
 
-		Abstract::generatePushConstantRanges(this->program()->vertexShader()->pushConstantBlockDeclarations(), pushConstantRanges, VK_SHADER_STAGE_VERTEX_BIT);
+		Abstract::generatePushConstantRanges(this->shaderProgram()->vertexShader()->pushConstantBlockDeclarations(), pushConstantRanges, VK_SHADER_STAGE_VERTEX_BIT);
 
 		return true;
 	}
@@ -239,9 +251,9 @@ namespace EmEn::Saphir::Generator
 		/* Create the vertex shader. */
 		auto * vertexShader = program.initVertexShader(
 			this->name( ) + "VertexShader",
-			m_renderableInstance->instancingEnabled(),
+			this->isFlagEnabled(IsInstancingEnabled),
 			this->isAdvancedRendering(),
-			m_renderableInstance->isFacingCamera()
+			this->isFlagEnabled(IsRenderableFacingCamera)
 		);
 		vertexShader->setExtensionBehavior("GL_ARB_separate_shader_objects", "enable");
 
@@ -263,15 +275,15 @@ namespace EmEn::Saphir::Generator
 		}
 
 		/* If present, generate the material shader code. */
-		if ( this->materialEnabled() && !this->material()->generateVertexShaderCode(*this, *vertexShader) )
+		if ( this->materialEnabled() && !this->getMaterialInterface()->generateVertexShaderCode(*this, *vertexShader) )
 		{
-			TraceError{ClassId} << "Unable to generate vertex shader code part for material '" << this->material()->name() << "' !";
+			TraceError{ClassId} << "Unable to generate vertex shader code part for material '" << this->getMaterialInterface()->name() << "' !";
 
 			return false;
 		}
 
 		/* Generate the lighting shader code. */
-		if ( m_scene->lightSet().isEnabled() && m_renderableInstance->isLightingEnabled() )
+		if ( m_scene->lightSet().isEnabled() && this->isFlagEnabled(IsLightingEnabled) )
 		{
 			if ( !m_lightGenerator.generateVertexShaderCode(*this, *vertexShader) )
 			{
@@ -301,15 +313,15 @@ namespace EmEn::Saphir::Generator
 		fragmentShader->declareDefaultOutputFragment();
 
 		/* If a material is present, generate the shader code (optional). */
-		if ( this->materialEnabled() && !this->material()->generateFragmentShaderCode(*this, m_lightGenerator, *fragmentShader) )
+		if ( this->materialEnabled() && !this->getMaterialInterface()->generateFragmentShaderCode(*this, m_lightGenerator, *fragmentShader) )
 		{
-			TraceError{ClassId} << "Unable to generate fragment shader code part for material '" << this->material()->name() << "' !";
+			TraceError{ClassId} << "Unable to generate fragment shader code part for material '" << this->getMaterialInterface()->name() << "' !";
 
 			return false;
 		}
 
 		/* If the light is enabled, generate the shader code (optional). */
-		if ( m_scene->lightSet().isEnabled() && m_renderableInstance->isLightingEnabled() )
+		if ( m_scene->lightSet().isEnabled() && this->isFlagEnabled(IsLightingEnabled) )
 		{
 			/* Declare the view uniform block. */
 			if ( !m_scene->lightSet().isUsingStaticLighting() && !this->declareViewUniformBlock(*fragmentShader) )
@@ -326,13 +338,13 @@ namespace EmEn::Saphir::Generator
 		}
 
 		/* Generates the fragment output. */
-		if ( m_scene->lightSet().isEnabled() && m_renderableInstance->isLightingEnabled() )
+		if ( m_scene->lightSet().isEnabled() && this->isFlagEnabled(IsLightingEnabled) )
 		{
 			Code{*fragmentShader, Location::Output} << ShaderVariable::OutputFragment << " = " << m_lightGenerator.fragmentColor() << ';';
 		}
 		else if ( this->materialEnabled() )
 		{
-			Code{*fragmentShader, Location::Output} << ShaderVariable::OutputFragment << " = " << this->material()->fragmentColor() << ';';
+			Code{*fragmentShader, Location::Output} << ShaderVariable::OutputFragment << " = " << this->getMaterialInterface()->fragmentColor() << ';';
 		}
 		else
 		{
@@ -340,7 +352,7 @@ namespace EmEn::Saphir::Generator
 		}
 
 		/* TODO: Try to discard before ! */
-		if ( this->materialEnabled() && this->material()->blendingMode() != BlendingMode::None )
+		if ( this->materialEnabled() && this->getMaterialInterface()->blendingMode() != BlendingMode::None )
 		{
 			Code{*fragmentShader, Location::Output} << "if ( " << ShaderVariable::OutputFragment << ".a <= 0.0 ) discard;";
 		}
@@ -351,23 +363,24 @@ namespace EmEn::Saphir::Generator
 	bool
 	SceneRendering::onGraphicsPipelineConfiguration (const Program & /*program*/, GraphicsPipeline & graphicsPipeline) noexcept
 	{
-		const auto * renderable = m_renderableInstance->renderable();
+		const auto * renderableInstance = this->getRenderableInstance();
+		const auto * renderable = renderableInstance->renderable();
 
-		if ( !graphicsPipeline.configureRasterizationState(m_renderPassType, renderable->layerRasterizationOptions(m_layerIndex)) )
+		if ( !graphicsPipeline.configureRasterizationState(m_renderPassType, renderable->layerRasterizationOptions(this->layerIndex())) )
 		{
 			Tracer::error(ClassId, "Unable to configure the graphics pipeline rasterization state !");
 
 			return false;
 		}
 
-		if ( !graphicsPipeline.configureDepthStencilState(m_renderPassType, *m_renderableInstance) )
+		if ( !graphicsPipeline.configureDepthStencilState(m_renderPassType, *renderableInstance) )
 		{
 			Tracer::error(ClassId, "Unable to configure the graphics pipeline depth/stencil state !");
 
 			return false;
 		}
 
-		if ( !graphicsPipeline.configureColorBlendState(m_renderPassType, *renderable->material(m_layerIndex)) )
+		if ( !graphicsPipeline.configureColorBlendState(m_renderPassType, *renderable->material(this->layerIndex())) )
 		{
 			Tracer::error(ClassId, "Unable to configure the graphics pipeline color blend state !");
 

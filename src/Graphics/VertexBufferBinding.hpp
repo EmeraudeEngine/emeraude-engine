@@ -29,7 +29,6 @@
 /* STL inclusions. */
 #include <cstddef>
 #include <cstdint>
-#include <ostream>
 #include <string>
 
 /* Local inclusions for inheritances. */
@@ -52,7 +51,7 @@ namespace EmEn::Graphics
 	};
 
 	/**
-	 * @brief Describes the data inside a vertex attribute binding. How many elements and the primitive used.
+	 * @brief Describes the data inside a vertex attribute binding. How many elements and the used primitive.
 	 * @extends EmEn::Libs::FlagTrait
 	 */
 	class VertexBufferBinding final : public Libs::FlagTrait< uint32_t >
@@ -63,7 +62,7 @@ namespace EmEn::Graphics
 			static constexpr auto ClassId{"VertexBufferBinding"};
 
 			/**
-			 * @brief Constructs a VBO binding format to describes how to use it.
+			 * @brief Constructs a VBO binding format to describe how to use it.
 			 * @param binding The binding index.
 			 * @param elementCount The element count to make a vertex.
 			 * @param topology The type of primitive.
@@ -73,7 +72,7 @@ namespace EmEn::Graphics
 
 			/**
 			 * @brief Equality operator.
-			 * @param operand A reference to an other VertexBufferBinding.
+			 * @param operand A reference to another vertex buffer binding.
 			 * @return bool
 			 */
 			[[nodiscard]]
@@ -81,7 +80,7 @@ namespace EmEn::Graphics
 
 			/**
 			 * @brief Different operator.
-			 * @param operand A reference to an other VertexBufferBinding.
+			 * @param operand A reference to another vertex buffer binding.
 			 * @return bool
 			 */
 			[[nodiscard]]
@@ -92,7 +91,7 @@ namespace EmEn::Graphics
 			}
 
 			/**
-			 * @brief Returns the element count to make a vertex.
+			 * @brief Returns the elements count to make a vertex.
 			 * @return size_t
 			 */
 			[[nodiscard]]
@@ -105,7 +104,7 @@ namespace EmEn::Graphics
 			/**
 			 * @brief Returns the vertex size in bytes at a specific binding point.
 			 * @note Same as VertexBufferFormat::elementCount() * sizeof(float).
-			 * @param size_t
+			 * @return size_t
 			 */
 			[[nodiscard]]
 			size_t

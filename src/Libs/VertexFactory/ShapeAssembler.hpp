@@ -26,10 +26,8 @@
 
 #pragma once
 
-/* Engine configuration file. */
-#include "emeraude_config.hpp"
-
 /* STL inclusions. */
+#include <cstdint>
 #include <type_traits>
 
 /* Local inclusions. */
@@ -40,10 +38,11 @@ namespace EmEn::Libs::VertexFactory
 {
 	/**
 	 * @brief The shape assembler class provide an easy way to group shapes.
-	 * @tparam float_t The type of floating point number. Default float.
+	 * @tparam vertex_data_t The precision type of vertex data. Default float.
+	 * @tparam index_data_t The precision type of index data. Default uint32_t.
 	 */
-	template< typename float_t = float >
-	requires (std::is_floating_point_v< float_t >)
+	template< typename vertex_data_t = float, typename index_data_t = uint32_t >
+	requires (std::is_floating_point_v< vertex_data_t > && std::is_unsigned_v< index_data_t > )
 	class ShapeAssembler final
 	{
 		public:
@@ -57,7 +56,7 @@ namespace EmEn::Libs::VertexFactory
 			 * @brief Constructs the shape assembler with a targeted destination.
 			 * @param destinationShape A reference to the shape.
 			 */
-			explicit ShapeAssembler (Shape< float_t > & destinationShape) noexcept
+			explicit ShapeAssembler (Shape< vertex_data_t, index_data_t > & destinationShape) noexcept
 				: m_destinationShape(&destinationShape)
 			{
 
@@ -98,7 +97,7 @@ namespace EmEn::Libs::VertexFactory
 			 * @return void
 			 */
 			void
-			setDestinationShape (Shape< float_t > & destinationShape) noexcept
+			setDestinationShape (Shape< vertex_data_t, index_data_t > & destinationShape) noexcept
 			{
 				m_destinationShape = &destinationShape;
 			}
@@ -110,14 +109,14 @@ namespace EmEn::Libs::VertexFactory
 			 * @return bool
 			 */
 			bool
-			merge (const Shape< float_t > & sourceShape, bool useNewGroup = false) noexcept
+			merge (const Shape< vertex_data_t, index_data_t > & sourceShape, bool useNewGroup = false) noexcept
 			{
 				if ( m_destinationShape == nullptr || sourceShape.empty() )
 				{
 					return false;
 				}
 
-				ShapeBuilder builder{*m_destinationShape};
+				ShapeBuilder< vertex_data_t, index_data_t > builder{*m_destinationShape};
 				builder.beginConstruction(ConstructionMode::Triangles);
 
 				if ( useNewGroup )
@@ -127,7 +126,7 @@ namespace EmEn::Libs::VertexFactory
 
 				for ( const auto & triangle : sourceShape.triangles() )
 				{
-					for ( size_t vertexIndex = 0; vertexIndex < 3; vertexIndex++ )
+					for ( index_data_t vertexIndex = 0; vertexIndex < 3; ++vertexIndex )
 					{
 						const auto & vertex = sourceShape.vertex(triangle.vertexIndex(vertexIndex));
 
@@ -152,14 +151,14 @@ namespace EmEn::Libs::VertexFactory
 			 * @return bool
 			 */
 			bool
-			merge (const Shape< float_t > & sourceShape, const Math::Matrix< 4, float_t > & transform, bool useNewGroup = false) noexcept
+			merge (const Shape< vertex_data_t, index_data_t > & sourceShape, const Math::Matrix< 4, vertex_data_t > & transform, bool useNewGroup = false) noexcept
 			{
 				if ( m_destinationShape == nullptr || sourceShape.empty() )
 				{
 					return false;
 				}
 
-				ShapeBuilder builder{*m_destinationShape};
+				ShapeBuilder< vertex_data_t, index_data_t > builder{*m_destinationShape};
 				builder.beginConstruction(ConstructionMode::Triangles);
 
 				if ( useNewGroup )
@@ -172,12 +171,12 @@ namespace EmEn::Libs::VertexFactory
 
 				for ( const auto & triangle : sourceShape.triangles() )
 				{
-					for ( size_t vertexIndex = 0; vertexIndex < 3; vertexIndex++ )
+					for ( index_data_t vertexIndex = 0; vertexIndex < 3; ++vertexIndex )
 					{
 						const auto & vertex = sourceShape.vertex(triangle.vertexIndex(vertexIndex));
 
-						builder.setPosition((transform * Math::Vector< 4, float_t >(vertex.position(), 1)).toVector3());
-						builder.setNormal((noTranslate * Math::Vector< 4, float_t >(vertex.normal(), 0)).toVector3().normalize());
+						builder.setPosition((transform * Math::Vector< 4, vertex_data_t >(vertex.position(), 1)).toVector3());
+						builder.setNormal((noTranslate * Math::Vector< 4, vertex_data_t >(vertex.normal(), 0)).toVector3().normalize());
 						builder.setTextureCoordinates(vertex.textureCoordinates());
 						builder.setVertexColor(sourceShape.vertexColor(triangle.vertexColorIndex(vertexIndex)));
 						builder.newVertex();
@@ -197,7 +196,7 @@ namespace EmEn::Libs::VertexFactory
 			 * @return bool
 			 */
 			bool
-			merge (const Shape< float_t > & sourceShape, const Math::CartesianFrame< float_t > & atLocation, bool useNewGroup = false) noexcept
+			merge (const Shape< vertex_data_t, index_data_t > & sourceShape, const Math::CartesianFrame< vertex_data_t > & atLocation, bool useNewGroup = false) noexcept
 			{
 				return this->merge(sourceShape, atLocation.modelMatrix(), useNewGroup);
 			}
@@ -211,7 +210,7 @@ namespace EmEn::Libs::VertexFactory
 			 */
 			static
 			bool
-			merge (Shape< float_t > & destinationShape, const Shape< float_t > & sourceShape, bool useNewGroup = false) noexcept
+			merge (Shape< vertex_data_t, index_data_t > & destinationShape, const Shape< vertex_data_t, index_data_t > & sourceShape, bool useNewGroup = false) noexcept
 			{
 				return ShapeAssembler{destinationShape}.merge(sourceShape, useNewGroup);
 			}
@@ -221,15 +220,15 @@ namespace EmEn::Libs::VertexFactory
 			 * @param shapeA A reference to a shape.
 			 * @param shapeB A reference to a shape.
 			 * @param useGroup Define the shapes as group. Default false.
-			 * @return Shape< type_t >
+			 * @return Shape< vertex_data_t, index_data_t >
 			 */
 			static
-			Shape< float_t >
-			merge (const Shape< float_t > & shapeA, const Shape< float_t > & shapeB, bool useGroup = false) noexcept
+			Shape< vertex_data_t, index_data_t >
+			merge (const Shape< vertex_data_t, index_data_t > & shapeA, const Shape< vertex_data_t, index_data_t > & shapeB, bool useGroup = false) noexcept
 			{
-				Shape< float_t > output{};
+				Shape< vertex_data_t, index_data_t > output;
 
-				ShapeAssembler assembler{output};
+				ShapeAssembler< vertex_data_t, index_data_t > assembler{output};
 				assembler.merge(shapeA, useGroup);
 				assembler.merge(shapeB, useGroup);
 
@@ -240,15 +239,15 @@ namespace EmEn::Libs::VertexFactory
 			 * @brief Merges a list of shapes and returns a new one.
 			 * @param shapes A reference to vector of shapes.
 			 * @param useGroup Define every shape as a group. Default false.
-			 * @return Shape< type_t >
+			 * @return Shape< vertex_data_t, index_data_t >
 			 */
 			static
-			Shape< float_t >
-			mergeList (const std::vector< Shape< float_t > > & shapes, bool useGroup = false) noexcept
+			Shape< vertex_data_t, index_data_t >
+			mergeList (const std::vector< Shape< vertex_data_t, index_data_t > > & shapes, bool useGroup = false) noexcept
 			{
-				Shape< float_t > output{};
+				Shape< vertex_data_t, index_data_t > output;
 
-				ShapeAssembler assembler{output};
+				ShapeAssembler< vertex_data_t, index_data_t > assembler{output};
 
 				for ( const auto & shape : shapes )
 				{
@@ -260,6 +259,6 @@ namespace EmEn::Libs::VertexFactory
 
 		private:
 
-			Shape< float_t > * m_destinationShape{nullptr};
+			Shape< vertex_data_t, index_data_t > * m_destinationShape{nullptr};
 	};
 }

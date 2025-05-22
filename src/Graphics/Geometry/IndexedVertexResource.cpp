@@ -121,7 +121,7 @@ namespace EmEn::Graphics::Geometry
 	}
 
 	bool
-	IndexedVertexResource::createVideoMemoryBuffers (const std::vector< float > & vertexAttributes, size_t vertexCount, size_t vertexElementCount, const std::vector< uint32_t > & indices) noexcept
+	IndexedVertexResource::createVideoMemoryBuffers (const std::vector< float > & vertexAttributes, uint32_t vertexCount, uint32_t vertexElementCount, const std::vector< uint32_t > & indices) noexcept
 	{
 		auto * transferManager = TransferManager::instance(GPUWorkType::Graphics);
 
@@ -137,7 +137,7 @@ namespace EmEn::Graphics::Geometry
 			return false;
 		}
 
-		m_indexBufferObject = std::make_unique< IndexBufferObject >(transferManager->device(), indices.size());
+		m_indexBufferObject = std::make_unique< IndexBufferObject >(transferManager->device(), static_cast< uint32_t >(indices.size()));
 		m_indexBufferObject->setIdentifier(this->name() + "-IBO-IndexBufferObject");
 
 		if ( !m_indexBufferObject->create(*transferManager, indices) )
@@ -184,7 +184,7 @@ namespace EmEn::Graphics::Geometry
 
 		if ( clearLocalData )
 		{
-			this->resetFlagBits();
+			this->resetFlags();
 			m_localData.clear();
 			m_subGeometries.clear();
 		}
@@ -266,17 +266,5 @@ namespace EmEn::Graphics::Geometry
 		m_localData = shape;
 
 		return this->setLoadSuccess(true);
-	}
-
-	std::shared_ptr< IndexedVertexResource >
-	IndexedVertexResource::get (const std::string & resourceName, bool directLoad) noexcept
-	{
-		return Resources::Manager::instance()->indexedVertexGeometries().getResource(resourceName, !directLoad);
-	}
-
-	std::shared_ptr< IndexedVertexResource >
-	IndexedVertexResource::getDefault () noexcept
-	{
-		return Resources::Manager::instance()->indexedVertexGeometries().getDefaultResource();
 	}
 }

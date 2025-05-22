@@ -300,21 +300,20 @@ namespace EmEn::Audio
 					break;
 
 				default:
-#ifdef EMERAUDE_DEBUG_OBSERVER_PATTERN
-					TraceDebug{ClassId} << "Event #" << notificationCode << " from a sound resource ignored.";
-#endif
-				break;
+					if constexpr ( ObserverDebugEnabled )
+					{
+						TraceDebug{ClassId} << "Event #" << notificationCode << " from a sound resource ignored.";
+					}
+					break;
 			}
 
 			return false;
 		}
 
-#ifdef DEBUG
-		/* NOTE: Don't know what is it, goodbye ! */
-		TraceInfo{ClassId} <<
+		/* NOTE: Don't know what is it, goodbye! */
+		TraceDebug{ClassId} <<
 			"Received an unhandled notification (Code:" << notificationCode << ") from observable '" << ObservableTrait::whoIs(observable->classUID()) << "' (UID:" << observable->classUID() << ")  ! "
 			"Forgetting it ...";
-#endif
 
 		return false;
 	}
@@ -370,7 +369,7 @@ namespace EmEn::Audio
 			return false;
 		}
 
-		auto & soundManager = Resources::Manager::instance()->sounds();
+		auto * soundManager = Resources::Manager::instance()->container< SoundResource >();
 
 		/* 1. Read base sound set information. */
 		this->setChannelCount(FastJSON::getNumber< size_t >(root, JKChannelCount, DefaultChannelCount));
@@ -387,7 +386,7 @@ namespace EmEn::Audio
 
 				if ( !resourceName.empty() )
 				{
-					this->setLoopSound(soundManager.getResource(resourceName), FastJSON::getNumber< float >(loopSFX, JKGain, DefaultGain));
+					this->setLoopSound(soundManager->getResource(resourceName), FastJSON::getNumber< float >(loopSFX, JKGain, DefaultGain));
 				}
 				else
 				{
@@ -431,7 +430,7 @@ namespace EmEn::Audio
 					const auto maxPitch = FastJSON::getNumber< float >(SFX, JKMaximumPitch, 1.0F);
 					const auto velocity = FastJSON::getNumber< float >(SFX, JKRadialVelocity, 0.0F);
 
-					if ( !this->addSound(soundManager.getResource(resourceName), gain, relative, minPitch, maxPitch, velocity) )
+					if ( !this->addSound(soundManager->getResource(resourceName), gain, relative, minPitch, maxPitch, velocity) )
 					{
 						break;
 					}

@@ -26,17 +26,14 @@
 
 #pragma once
 
-/* Project configuration. */
-#include "emeraude_config.hpp"
-
 /* STL inclusions. */
-#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <sstream>
 #include <string>
 #include <thread>
+#include <array>
 #include <vector>
 #include "Libs/std_source_location.hpp"
 
@@ -52,13 +49,14 @@
 namespace EmEn
 {
 	class Arguments;
+	class FileSystem;
 	class Settings;
 }
 
 namespace EmEn
 {
 	/**
-	 * @brief The tracer service class.
+	 * @brief The tracer service class responsible for logging messages, errors, warnings, etc. to the terminal or in a log file.
 	 * @extends EmEn::ServiceInterface This is a service.
 	 */
 	class Tracer final : public ServiceInterface
@@ -96,11 +94,11 @@ namespace EmEn
 
 			/**
 			 * @brief Constructs the tracer.
-			 * @param arguments A reference to Arguments.
-			 * @param settings A reference to core settings. Warning this can't be used at this time.
+			 * @param arguments A reference to the argument service.
+			 * @param processName A string to identify the instance with multi-processes application [std::move].
 			 * @param childProcess Declares a child process.
 			 */
-			Tracer (const Arguments & arguments, Settings & settings, bool childProcess) noexcept;
+			Tracer (const Arguments & arguments, std::string processName, bool childProcess) noexcept;
 
 			/**
 			 * @brief Copy constructor.
@@ -133,26 +131,50 @@ namespace EmEn
 
 			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
 			[[nodiscard]]
-			size_t classUID () const noexcept override;
+			size_t
+			classUID () const noexcept override
+			{
+				return ClassUID;
+			}
 
 			/** @copydoc EmEn::Libs::ObservableTrait::is() const */
 			[[nodiscard]]
-			bool is (size_t classUID) const noexcept override;
+			bool
+			is (size_t classUID) const noexcept override
+			{
+				return classUID == ClassUID;
+			}
 
 			/** @copydoc EmEn::ServiceInterface::usable() */
 			[[nodiscard]]
-			bool usable () const noexcept override;
+			bool
+			usable () const noexcept override
+			{
+				return m_flags[ServiceInitialized];
+			}
 
 			/**
-			 * @brief Adds a term to only print out trace message containing it.
-			 * @note This only affect the standard console output.
+			 * @brief Returns the process name.
+			 * @note This is useful for multi-processes application.
+			 * @return const std::string &
+			 */
+			[[nodiscard]]
+			const std::string &
+			processName () const noexcept
+			{
+				return m_processName;
+			}
+
+			/**
+			 * @brief Adds a term to only print out a trace message containing it.
+			 * @note This only affects the standard console output.
 			 * @param filter The term to filter.
 			 * @return void
 			 */
 			void
-			addTagFilter (const std::string & filter) noexcept
+			addTagFilter (std::string filter)
 			{
-				m_filters.emplace_back(filter);
+				m_filters.emplace_back(std::move(filter));
 			}
 
 			/**
@@ -166,7 +188,7 @@ namespace EmEn
 			}
 
 			/**
-			 * @brief Enables only the errors to be print in the standard console. By default, this is option is disabled.
+			 * @brief Enables only the errors to be print in the standard console. By default, this option is disabled.
 			 * @note This won't affect the log file.
 			 * @param state The state.
 			 * @return void
@@ -189,15 +211,15 @@ namespace EmEn
 			}
 
 			/**
-			 * @brief Enables the location "[file:number]" section in the standard console. By default, this options is enabled.
+			 * @brief Enables the location "[file:number]" section in the standard console. By default, this option is enabled.
 			 * @note This won't affect the log file.
 			 * @param state The state.
 			 * @return void
 			 */
 			void
-			enableShowLocation (bool state) noexcept
+			enableSourceLocation (bool state) noexcept
 			{
-				m_flags[ShowLocation] = state;
+				m_flags[SourceLocationEnabled] = state;
 			}
 
 			/**
@@ -206,21 +228,21 @@ namespace EmEn
 			 */
 			[[nodiscard]]
 			bool
-			showLocation () const noexcept
+			isSourceLocationEnabled () const noexcept
 			{
-				return m_flags[ShowLocation];
+				return m_flags[SourceLocationEnabled];
 			}
 
 			/**
-			 * @brief Enables the thread information section in the standard console. By default, this options is enabled.
+			 * @brief Enables the thread information section in the standard console. By default, this option is enabled.
 			 * @note This won't affect the log file.
 			 * @param state The state.
 			 * @return void
 			 */
 			void
-			enableShowThreadInfos (bool state) noexcept
+			enableThreadInfos (bool state) noexcept
 			{
-				m_flags[ShowThreadInfos] = state;
+				m_flags[ThreadInfosEnabled] = state;
 			}
 
 			/**
@@ -229,39 +251,62 @@ namespace EmEn
 			 */
 			[[nodiscard]]
 			bool
-			showThreadInfos () const noexcept
+			isThreadInfosEnabled () const noexcept
 			{
-				return m_flags[ShowThreadInfos];
+				return m_flags[ThreadInfosEnabled];
 			}
 
 			/**
-			 * @brief Turns ON/OFF the tracer.
+			 * @brief Disables the tracer.
 			 * @param state The state.
 			 * @return void
 			 */
 			void
-			enableTracing (bool state) noexcept
+			disableTracer (bool state) noexcept
 			{
-				m_flags[EnableTracing] = state;
+				m_flags[IsTracerDisabled] = state;
 			}
 
 			/**
-			 * @brief Returns whether the tracer is enabled.
+			 * @brief Returns whether the tracer is disabled.
 			 * @return bool
 			 */
 			[[nodiscard]]
 			bool
-			isTracingEnabled () const noexcept
+			isTracerDisabled () const noexcept
 			{
-				return m_flags[EnableTracing];
+				return m_flags[IsTracerDisabled];
+			}
+
+			/**
+			 * @brief Returns whether the tracer is requested to enable logger at startup.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isLoggerRequestedAtStartup () const noexcept
+			{
+				return m_flags[LoggerRequestedAtStartup];
 			}
 
 			/**
 			 * @brief Prepares the logger to write into a logfile.
-			 * @param filepath A reference to a string for the filepath.
+			 * @param filepath A reference to a path.
 			 * @return bool
 			 */
-			bool enableLogger (const std::string & filepath) noexcept;
+			bool enableLogger (const std::filesystem::path & filepath) noexcept;
+
+			/**
+			 * @brief Returns whether the tracer is writing into the logfile.
+			 * @note Returns always false if the logger is disabled.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isLoggerEnabled () const noexcept
+			{
+				return m_logger != nullptr;
+			}
 
 			/**
 			 * @brief Removes the logger and closes the logfile.
@@ -270,97 +315,41 @@ namespace EmEn
 			void disableLogger () noexcept;
 
 			/**
-			 * @brief Turns ON/OFF the tracer writing into the logfile.
-			 * @param state The state.
+			 * @brief Late stage of initialization for the Tracer service as it needs some infos.
+			 * @warning This can't be done at startup because the Tracer service is the first to be set up.
+			 * @param fileSystem A reference to the filesystem service.
+			 * @param settings A reference to the settings service.
 			 * @return void
 			 */
-			void
-			enableLogging (bool state) noexcept
-			{
-				if ( m_logger == nullptr )
-				{
-					return;
-				}
-
-				m_flags[EnableLogging] = state;
-			}
-
-			/**
-			 * @brief Returns whether the tracer is writing into the logfile.
-			 * @note Returns always false, if the logger is disabled.
-			 * @return bool
-			 */
-			[[nodiscard]]
-			bool
-			isLoggingEnabled () const noexcept
-			{
-				return m_flags[EnableLogging];
-			}
-
-			/**
-			 * @brief Reads the application settings.
-			 * @warning This can't be done at startup because the Tracer service is the first to be setup.
-			 * @return void
-			 */
-			void readSettings () noexcept;
+			void lateInitialize (const FileSystem & fileSystem, Settings & settings) noexcept;
 
 			/**
 			 * @brief Creates a log.
 			 * @param severity The type of log.
-			 * @param tag A pointer on a c-string for identify and sort logs.
-			 * @param message A reference to a string for the log content.
-			 * @param location A pointer to a C-string to describe the location. Use LOCATION for default behavior.
-			 * @return void
-			 */
-			void trace (Severity severity, const char * tag, const std::string & message, const char * location) const noexcept;
-
-			/**
-			 * @brief Creates a log with the Blob class.
-			 * @param severity The type of log.
-			 * @param tag A pointer on a c-string for identify and sort logs.
-			 * @param message A reference to a string for the log content.
-			 * @param location A pointer to a C-string to describe the location. Use LOCATION for default behavior.
-			 * @return void
-			 */
-			void
-			trace (Severity severity, const char * tag, const Libs::BlobTrait & message, const char * location) const noexcept
-			{
-				this->trace(severity, tag, message.get(), location);
-			}
-
-			/**
-			 * @brief Creates a log.
-			 * @param severity The type of log.
-			 * @param tag A pointer on a c-string for identify and sort logs.
-			 * @param message A reference to a string for the log content.
+			 * @param tag A pointer on a c-string to identify and sort logs.
+			 * @param message A string view.
 			 * @param location A reference to a source_location. Default constructed in place.
 			 * @return void
 			 */
-			void trace (Severity severity, const char * tag, const std::string & message, const std::source_location & location = std::source_location::current()) const noexcept;
-
-			/**
-			 * @brief Creates a log with the Blob class.
-			 * @param severity The type of log.
-			 * @param tag A pointer on a c-string for identify and sort logs.
-			 * @param message A reference to a string for the log content.
-			 * @param location A reference to a source_location. Default constructed in place.
-			 * @return void
-			 */
-			void
-			trace (Severity severity, const char * tag, const Libs::BlobTrait & message, const std::source_location & location = std::source_location::current()) const noexcept
-			{
-				this->trace(severity, tag, message.get(), location);
-			}
+			void trace (Severity severity, const char * tag, std::string_view message, const std::source_location & location = std::source_location::current()) const noexcept;
 
 			/**
 			 * @brief Creates a log for a specific API.
-			 * @param tag A pointer on a c-string for identify and sort logs.
+			 * @param tag A pointer on a c-string to identify and sort logs.
 			 * @param functionName A pointer on a c-string for the API function.
-			 * @param message A reference to a string for the message. Default none.
+			 * @param message A string view. Default none.
 			 * @param location A reference to a source_location. Default constructed in place.
 			 * @return void
 			 */
-			void traceAPI (const char * tag, const char * functionName, const std::string & message = {}, const std::source_location & location = std::source_location::current()) const noexcept;
+			void traceAPI (const char * tag, const char * functionName, std::string_view message = {}, const std::source_location & location = std::source_location::current()) const noexcept;
+
+			/**
+			 * @brief Generates the name of a log file based on a name.
+			 * @param name A reference to a string.
+			 * @return std::filesystem::path
+			 */
+			[[nodiscard]]
+			std::filesystem::path generateLogFilepath (const std::string & name) const noexcept;
 
 			/**
 			 * @brief Returns the instance of tracer.
@@ -376,210 +365,110 @@ namespace EmEn
 
 			/**
 			 * @brief Creates a quick log with Info as severity.
-			 * @param tag A pointer on a c-string for identify and sort logs.
-			 * @param message A reference to a string for the log content.
+			 * @param tag A pointer on a c-string to identify and sort logs.
+			 * @param message A string view.
 			 * @param location A reference to a source_location. Default constructed in place.
 			 * @return void
 			 */
 			static
 			void
-			info (const char * tag, const std::string & message, const std::source_location & location = std::source_location::current()) noexcept
+			info (const char * tag, std::string_view message, const std::source_location & location = std::source_location::current()) noexcept
 			{
 				s_instance->trace(Severity::Info, tag, message, location);
 			}
 
 			/**
-			 * @brief Creates a quick log with Info as severity.
-			 * @param tag A pointer on a c-string for identify and sort logs.
-			 * @param message A reference to a blob for the log content.
-			 * @param location A reference to a source_location. Default constructed in place.
-			 * @return void
-			 */
-			static
-			void
-			info (const char * tag, const Libs::BlobTrait & message, const std::source_location & location = std::source_location::current()) noexcept
-			{
-				s_instance->trace(Severity::Info, tag, message.get(), location);
-			}
-
-			/**
 			 * @brief Creates a quick log with Success as severity.
-			 * @param tag A pointer on a c-string for identify and sort logs.
-			 * @param message A reference to a string for the log content.
+			 * @param tag A pointer on a c-string to identify and sort logs.
+			 * @param message A string view.
 			 * @param location A reference to a source_location. Default constructed in place.
 			 * @return void
 			 */
 			static
 			void
-			success (const char * tag, const std::string & message, const std::source_location & location = std::source_location::current()) noexcept
+			success (const char * tag, std::string_view message, const std::source_location & location = std::source_location::current()) noexcept
 			{
 				s_instance->trace(Severity::Success, tag, message, location);
 			}
 
 			/**
-			 * @brief Creates a quick log with Success as severity.
-			 * @param tag A pointer on a c-string for identify and sort logs.
-			 * @param message A reference to a blob for the log content.
-			 * @param location A reference to a source_location. Default constructed in place.
-			 * @return void
-			 */
-			static
-			void
-			success (const char * tag, const Libs::BlobTrait & message, const std::source_location & location = std::source_location::current()) noexcept
-			{
-				s_instance->trace(Severity::Success, tag, message.get(), location);
-			}
-
-			/**
 			 * @brief Creates a quick log with Warning as severity.
-			 * @param tag A pointer on a c-string for identify and sort logs.
-			 * @param message A reference to a string for the log content.
+			 * @param tag A pointer on a c-string to identify and sort logs.
+			 * @param message A string view.
 			 * @param location A reference to a source_location. Default constructed in place.
 			 * @return void
 			 */
 			static
 			void
-			warning (const char * tag, const std::string & message, const std::source_location & location = std::source_location::current()) noexcept
+			warning (const char * tag, std::string_view message, const std::source_location & location = std::source_location::current()) noexcept
 			{
 				s_instance->trace(Severity::Warning, tag, message, location);
 			}
 
 			/**
-			 * @brief Creates a quick log with Warning as severity.
-			 * @param tag A pointer on a c-string for identify and sort logs.
-			 * @param message A reference to a blob for the log content.
-			 * @param location A reference to a source_location. Default constructed in place.
-			 * @return void
-			 */
-			static
-			void
-			warning (const char * tag, const Libs::BlobTrait & message, const std::source_location & location = std::source_location::current()) noexcept
-			{
-				s_instance->trace(Severity::Warning, tag, message.get(), location);
-			}
-
-			/**
 			 * @brief Creates a quick log with Error as severity.
-			 * @param tag A pointer on a c-string for identify and sort logs.
-			 * @param message A reference to a string for the log content.
+			 * @param tag A pointer on a c-string to identify and sort logs.
+			 * @param message A string view.
 			 * @param location A reference to a source_location. Default constructed in place.
 			 * @return void
 			 */
 			static
 			void
-			error (const char * tag, const std::string & message, const std::source_location & location = std::source_location::current()) noexcept
+			error (const char * tag, std::string_view message, const std::source_location & location = std::source_location::current()) noexcept
 			{
 				s_instance->trace(Severity::Error, tag, message, location);
 			}
 
 			/**
-			 * @brief Creates a quick log with Error as severity.
-			 * @param tag A pointer on a c-string for identify and sort logs.
-			 * @param message A reference to a blob for the log content.
-			 * @param location A reference to a source_location. Default constructed in place.
-			 * @return void
-			 */
-			static
-			void
-			error (const char * tag, const Libs::BlobTrait & message, const std::source_location & location = std::source_location::current()) noexcept
-			{
-				s_instance->trace(Severity::Error, tag, message.get(), location);
-			}
-
-			/**
 			 * @brief Creates a quick log with Fatal as severity.
-			 * @param tag A pointer on a c-string for identify and sort logs.
-			 * @param message A reference to a string for the log content.
+			 * @param tag A pointer on a c-string to identify and sort logs.
+			 * @param message A string view.
 			 * @param location A reference to a source_location. Default constructed in place.
 			 * @return void
 			 */
 			static
 			void
-			fatal (const char * tag, const std::string & message, const std::source_location & location = std::source_location::current()) noexcept
+			fatal (const char * tag, std::string_view message, const std::source_location & location = std::source_location::current()) noexcept
 			{
 				s_instance->trace(Severity::Fatal, tag, message, location);
 			}
 
 			/**
-			 * @brief Creates a quick log with Fatal as severity.
-			 * @param tag A pointer on a c-string for identify and sort logs.
-			 * @param message A reference to a blob for the log content.
-			 * @param location A reference to a source_location. Default constructed in place.
-			 * @return void
-			 */
-			static
-			void
-			fatal (const char * tag, const Libs::BlobTrait & message, const std::source_location & location = std::source_location::current()) noexcept
-			{
-				s_instance->trace(Severity::Fatal, tag, message.get(), location);
-			}
-
-			/**
 			 * @brief Creates a quick log with Debug as severity.
-			 * @param tag A pointer on a c-string for identify and sort logs.
-			 * @param message A reference to a string for the log content.
+			 * @param tag A pointer on a c-string to identify and sort logs.
+			 * @param message A string view.
 			 * @param location A reference to a source_location. Default constructed in place.
 			 * @return void
 			 */
 			static
 			void
-			debug (const char * tag, const std::string & message, const std::source_location & location = std::source_location::current()) noexcept
+			debug (const char * tag, std::string_view message, const std::source_location & location = std::source_location::current()) noexcept
 			{
-				#ifdef DEBUG
-				s_instance->trace(Severity::Debug, tag, message, location);
-				#endif
-			}
-
-			/**
-			 * @brief Creates a quick log with Debug as severity.
-			 * @param tag A pointer on a c-string for identify and sort logs.
-			 * @param message A reference to a blob for the log content.
-			 * @param location A reference to a source_location. Default constructed in place.
-			 * @return void
-			 */
-			static
-			void
-			debug (const char * tag, const Libs::BlobTrait & message, const std::source_location & location = std::source_location::current()) noexcept
-			{
-				#ifdef DEBUG
-				s_instance->trace(Severity::Debug, tag, message.get(), location);
-				#endif
+				if constexpr ( IsDebug )
+				{
+					s_instance->trace(Severity::Debug, tag, message, location);
+				}
 			}
 
 			/**
 			 * @brief Creates a quick log for API usage.
-			 * @param tag A pointer on a c-string for identify and sort logs.
+			 * @param tag A pointer on a c-string to identify and sort logs.
 			 * @param functionName A pointer on a c-string for the API function.
-			 * @param message A reference to a string for the log content. Default none.
+			 * @param message A string view. Default none.
 			 * @param location A reference to a source_location. Default constructed in place.
 			 * @return void
 			 */
 			static
 			void
-			API (const char * tag, const char * functionName, const std::string & message = {}, const std::source_location & location = std::source_location::current())
+			API (const char * tag, const char * functionName, std::string_view message = {}, const std::source_location & location = std::source_location::current())
 			{
 				s_instance->traceAPI(tag, functionName, message, location);
 			}
 
 			/**
-			 * @brief Creates a quick log for API usage.
-			 * @param tag A pointer on a c-string for identify and sort logs.
-			 * @param functionName A pointer on a c-string for the API function.
-			 * @param message A reference to a blob for the log content.
-			 * @param location A reference to a source_location. Default constructed in place.
-			 * @return void
-			 */
-			static
-			void
-			API (const char * tag, const char * functionName, const Libs::BlobTrait & message, const std::source_location & location = std::source_location::current())
-			{
-				s_instance->traceAPI(tag, functionName, message.get(), location);
-			}
-
-			/**
 			 * @brief Converts GLFW log facility to trace()
-			 * @param error The error number from GLFW library.
-			 * @param description The message associated to the error code.
+			 * @param error The error number from the GLFW library.
+			 * @param description The message associated with the error code.
 			 * @return void
 			 */
 			static void traceGLFW (int error, const char * description) noexcept;
@@ -596,12 +485,12 @@ namespace EmEn
 			 * @brief Colorizes a message from the severity type.
 			 * @param stream A reference to a stream.
 			 * @param severity The severity.
-			 * @param message A reference to a string.
+			 * @param message A string view.
 			 * @return void
 			 */
 			static
 			void
-			colorizeMessage (std::stringstream & stream, Severity severity, const std::string & message) noexcept
+			colorizeMessage (std::stringstream & stream, Severity severity,  std::string_view message) noexcept
 			{
 				switch ( severity )
 				{
@@ -640,7 +529,7 @@ namespace EmEn
 			void injectProcessInfo (std::stringstream & stream) const noexcept;
 
 			/**
-			 * @brief Filters the current tag. If the method return true, the message with the tag is allowed to be displayed.
+			 * @brief Filters the current tag. If the method returns true, the message with the tag is allowed to be displayed.
 			 * @param tag The tag to filter.
 			 * @return bool
 			 */
@@ -648,36 +537,42 @@ namespace EmEn
 
 			/* Flag names. */
 			static constexpr auto ServiceInitialized{0UL};
-			static constexpr auto ChildProcess{1UL};
+			static constexpr auto IsChildProcess{1UL};
 			static constexpr auto PrintOnlyErrors{2UL};
-			static constexpr auto ShowLocation{3UL};
-			static constexpr auto ShowThreadInfos{4UL};
-			static constexpr auto EnableTracing{5UL};
-			static constexpr auto EnableLogging{6UL};
+			static constexpr auto SourceLocationEnabled{3UL};
+			static constexpr auto ThreadInfosEnabled{4UL};
+			static constexpr auto IsTracerDisabled{5UL};
+			static constexpr auto LoggerRequestedAtStartup{6UL};
 
 			static Tracer * s_instance;
 
 			const Arguments & m_arguments;
-			Settings & m_settings;
+			std::filesystem::path m_cacheDirectory;
+			std::string m_processName;
 			std::vector< std::string > m_filters;
 			std::unique_ptr< TracerLogger > m_logger;
-			std::thread m_loggerProcess;
+			LogFormat m_logFormat{LogFormat::Text};
 			int m_parentProcessID{-1};
 			int m_processID{-1};
 			std::array< bool, 8 > m_flags{
 				false/*ServiceInitialized*/,
-				false/*ChildProcess*/,
+				false/*IsChildProcess*/,
 				false/*PrintOnlyErrors*/,
-				false/*ShowLocation*/,
-				true/*ShowThreadInfos*/,
-				true/*EnableTracing*/,
-				false/*EnableLogging*/,
+				false/*SourceLocationEnabled*/,
+				false/*ThreadInfosEnabled*/,
+				false/*IsTracerDisabled*/,
+				false/*LoggerRequestedAtStartup*/,
 				false/*UNUSED*/
 			};
 	};
 
+	/* ==================================================================================================================== */
+	/* ================================================ Tracer utilities ================================================== */
+	/* ==================================================================================================================== */
+
+#ifdef DEBUG
 	/**
-	 * @brief This utils class create a debug trace object.
+	 * @brief This utils class creates a debug trace object.
 	 * @extends EmEn::Libs::BlobTrait
 	 */
 	class TraceDebug final : public Libs::BlobTrait
@@ -689,23 +584,27 @@ namespace EmEn
 			 * @param tag A pointer to a C-string for the tag.
 			 * @param location A reference to a source location structure.
 			 */
-			explicit TraceDebug (const char * tag, const std::source_location & location = std::source_location::current()) noexcept;
+			explicit
+			TraceDebug (const char * tag, const std::source_location & location = std::source_location::current()) noexcept
+				: m_tag(tag),
+				m_location(location)
+			{
+
+			}
 
 			/**
 			 * @brief Constructs a debug trace with an initial message.
 			 * @param tag A pointer to a C-string for the tag.
-			 * @param initialMessage A pointer to a C-string.
+			 * @param initialMessage A string view.
 			 * @param location A reference to a source location structure.
 			 */
-			TraceDebug (const char * tag, const char * initialMessage, const std::source_location & location = std::source_location::current()) noexcept;
+			TraceDebug (const char * tag, const std::string & initialMessage, const std::source_location & location = std::source_location::current()) noexcept
+				: BlobTrait(initialMessage),
+				m_tag(tag),
+				m_location(location)
+			{
 
-			/**
-			 * @brief Constructs a debug trace with an initial message.
-			 * @param tag A pointer to a C-string for the tag.
-			 * @param initialMessage A reference to a string.
-			 * @param location A reference to a source location structure.
-			 */
-			TraceDebug (const char * tag, const std::string & initialMessage, const std::source_location & location = std::source_location::current()) noexcept;
+			}
 
 			/**
 			 * @brief Copy constructor.
@@ -734,16 +633,52 @@ namespace EmEn
 			/**
 			 * @brief Destructs the trace and calls the real tracer service.
 			 */
-			~TraceDebug ();
+			~TraceDebug ()
+			{
+				Tracer::instance()->trace(Severity::Debug, m_tag, this->get(), m_location);
+			}
 
 		private:
 
 			const char * m_tag;
 			std::source_location m_location;
 	};
+#else
+	/**
+	 * @brief This utils class creates a debug trace object.
+	 * @note This dummy version is intended to be wiped out from the code at compile-time.
+	 */
+	class TraceDebug final
+	{
+		public:
+
+			explicit TraceDebug (const char *, const std::source_location & = {}) noexcept {}
+
+			TraceDebug (const char *, const char *, const std::source_location & = {}) noexcept {}
+
+			TraceDebug (const char *, const std::string &, const std::source_location & = {}) noexcept {}
+
+			TraceDebug (const TraceDebug &) noexcept = delete;
+
+			TraceDebug (TraceDebug &&) noexcept = delete;
+
+			TraceDebug & operator= (const TraceDebug &) noexcept = delete;
+
+			TraceDebug & operator= (TraceDebug &&) noexcept = delete;
+
+			~TraceDebug () = default;
+
+			template< typename data_t >
+			TraceDebug &
+			operator<< (const data_t &) noexcept
+			{
+				return *this;
+			}
+	};
+#endif
 
 	/**
-	 * @brief This utils class create a success trace object.
+	 * @brief This utils class creates a success trace object.
 	 * @extends EmEn::Libs::BlobTrait
 	 */
 	class TraceSuccess final : public Libs::BlobTrait
@@ -755,23 +690,27 @@ namespace EmEn
 			 * @param tag A pointer to a C-string for the tag.
 			 * @param location A reference to a source location structure.
 			 */
-			explicit TraceSuccess (const char * tag, const std::source_location & location = std::source_location::current()) noexcept;
+			explicit
+			TraceSuccess (const char * tag, const std::source_location & location = std::source_location::current()) noexcept
+				: m_tag(tag),
+				m_location(location)
+			{
+
+			}
 
 			/**
 			 * @brief Constructs a success trace with an initial message.
 			 * @param tag A pointer to a C-string for the tag.
-			 * @param initialMessage A pointer to a C-string.
+			 * @param initialMessage A string view.
 			 * @param location A reference to a source location structure.
 			 */
-			TraceSuccess (const char * tag, const char * initialMessage, const std::source_location & location = std::source_location::current()) noexcept;
+			TraceSuccess (const char * tag, const std::string & initialMessage, const std::source_location & location = std::source_location::current()) noexcept
+				: BlobTrait(initialMessage),
+				m_tag(tag),
+				m_location(location)
+			{
 
-			/**
-			 * @brief Constructs a success trace with an initial message.
-			 * @param tag A pointer to a C-string for the tag.
-			 * @param initialMessage A reference to a string.
-			 * @param location A reference to a source location structure.
-			 */
-			TraceSuccess (const char * tag, const std::string & initialMessage, const std::source_location & location = std::source_location::current()) noexcept;
+			}
 
 			/**
 			 * @brief Copy constructor.
@@ -800,7 +739,11 @@ namespace EmEn
 			/**
 			 * @brief Destructs the trace and calls the real tracer service.
 			 */
-			~TraceSuccess ();
+			~TraceSuccess ()
+			{
+				Tracer::instance()->trace(Severity::Success, m_tag, this->get(), m_location);
+			}
+
 
 		private:
 
@@ -809,7 +752,7 @@ namespace EmEn
 	};
 
 	/**
-	 * @brief This utils class create an info trace object.
+	 * @brief This utils class creates an info trace object.
 	 * @extends EmEn::Libs::BlobTrait
 	 */
 	class TraceInfo final : public Libs::BlobTrait
@@ -821,23 +764,27 @@ namespace EmEn
 			 * @param tag A pointer to a C-string for the tag.
 			 * @param location A reference to a source location structure.
 			 */
-			explicit TraceInfo (const char * tag, const std::source_location & location = std::source_location::current()) noexcept;
+			explicit
+			TraceInfo (const char * tag, const std::source_location & location = std::source_location::current()) noexcept
+				: m_tag(tag),
+				m_location(location)
+			{
+
+			}
 
 			/**
 			 * @brief Constructs an info trace with an initial message.
 			 * @param tag A pointer to a C-string for the tag.
-			 * @param initialMessage A pointer to a C-string.
+			 * @param initialMessage A string view.
 			 * @param location A reference to a source location structure.
 			 */
-			TraceInfo (const char * tag, const char * initialMessage, const std::source_location & location = std::source_location::current()) noexcept;
+			TraceInfo (const char * tag, const std::string & initialMessage, const std::source_location & location = std::source_location::current()) noexcept
+				: BlobTrait(initialMessage),
+				m_tag(tag),
+				m_location(location)
+			{
 
-			/**
-			 * @brief Constructs an info trace with an initial message.
-			 * @param tag A pointer to a C-string for the tag.
-			 * @param initialMessage A reference to a string.
-			 * @param location A reference to a source location structure.
-			 */
-			TraceInfo (const char * tag, const std::string & initialMessage, const std::source_location & location = std::source_location::current()) noexcept;
+			}
 
 			/**
 			 * @brief Copy constructor.
@@ -866,7 +813,10 @@ namespace EmEn
 			/**
 			 * @brief Destructs the trace and calls the real tracer service.
 			 */
-			~TraceInfo ();
+			~TraceInfo ()
+			{
+				Tracer::instance()->trace(Severity::Info, m_tag, this->get(), m_location);
+			}
 
 		private:
 
@@ -875,7 +825,7 @@ namespace EmEn
 	};
 
 	/**
-	 * @brief This utils class create a warning trace object.
+	 * @brief This utils class creates a warning trace object.
 	 * @extends EmEn::Libs::BlobTrait
 	 */
 	class TraceWarning final : public Libs::BlobTrait
@@ -887,23 +837,27 @@ namespace EmEn
 			 * @param tag A pointer to a C-string for the tag.
 			 * @param location A reference to a source location structure.
 			 */
-			explicit TraceWarning (const char * tag, const std::source_location & location = std::source_location::current()) noexcept;
+			explicit
+			TraceWarning (const char * tag, const std::source_location & location = std::source_location::current()) noexcept
+				: m_tag(tag),
+				m_location(location)
+			{
+
+			}
 
 			/**
 			 * @brief Constructs a warning trace with an initial message.
 			 * @param tag A pointer to a C-string for the tag.
-			 * @param initialMessage A pointer to a C-string.
+			 * @param initialMessage A string view.
 			 * @param location A reference to a source location structure.
 			 */
-			TraceWarning (const char * tag, const char * initialMessage, const std::source_location & location = std::source_location::current()) noexcept;
+			TraceWarning (const char * tag, const std::string & initialMessage, const std::source_location & location = std::source_location::current()) noexcept
+				: BlobTrait(initialMessage),
+				m_tag(tag),
+				m_location(location)
+			{
 
-			/**
-			 * @brief Constructs a warning trace with an initial message.
-			 * @param tag A pointer to a C-string for the tag.
-			 * @param initialMessage A reference to a string.
-			 * @param location A reference to a source location structure.
-			 */
-			TraceWarning (const char * tag, const std::string & initialMessage, const std::source_location & location = std::source_location::current()) noexcept;
+			}
 
 			/**
 			 * @brief Copy constructor.
@@ -932,7 +886,10 @@ namespace EmEn
 			/**
 			 * @brief Destructs the trace and calls the real tracer service.
 			 */
-			~TraceWarning ();
+			~TraceWarning ()
+			{
+				Tracer::instance()->trace(Severity::Warning, m_tag, this->get(), m_location);
+			}
 
 		private:
 
@@ -953,23 +910,27 @@ namespace EmEn
 			 * @param tag A pointer to a C-string for the tag.
 			 * @param location A reference to a source location structure.
 			 */
-			explicit TraceError (const char * tag, const std::source_location & location = std::source_location::current()) noexcept;
+			explicit
+			TraceError (const char * tag, const std::source_location & location = std::source_location::current()) noexcept
+				: m_tag(tag),
+				m_location(location)
+			{
+
+			}
 
 			/**
 			 * @brief Constructs an error trace with an initial message.
 			 * @param tag A pointer to a C-string for the tag.
-			 * @param initialMessage A pointer to a C-string.
+			 * @param initialMessage A string view.
 			 * @param location A reference to a source location structure.
 			 */
-			TraceError (const char * tag, const char * initialMessage, const std::source_location & location = std::source_location::current()) noexcept;
+			TraceError (const char * tag, const std::string & initialMessage, const std::source_location & location = std::source_location::current()) noexcept
+				: BlobTrait(initialMessage),
+				m_tag(tag),
+				m_location(location)
+			{
 
-			/**
-			 * @brief Constructs an error trace with an initial message.
-			 * @param tag A pointer to a C-string for the tag.
-			 * @param initialMessage A reference to a string.
-			 * @param location A reference to a source location structure.
-			 */
-			TraceError (const char * tag, const std::string & initialMessage, const std::source_location & location = std::source_location::current()) noexcept;
+			}
 
 			/**
 			 * @brief Copy constructor.
@@ -998,7 +959,10 @@ namespace EmEn
 			/**
 			 * @brief Destructs the trace and calls the real tracer service.
 			 */
-			~TraceError ();
+			~TraceError ()
+			{
+				Tracer::instance()->trace(Severity::Error, m_tag, this->get(), m_location);
+			}
 
 		private:
 
@@ -1007,7 +971,7 @@ namespace EmEn
 	};
 
 	/**
-	 * @brief This utils class create a fatal trace object.
+	 * @brief This utils class creates a fatal trace object.
 	 * @extends EmEn::Libs::BlobTrait
 	 */
 	class TraceFatal final : public Libs::BlobTrait
@@ -1020,25 +984,30 @@ namespace EmEn
 			 * @param terminate Call std::terminate() at this object destructor. Default false.
 			 * @param location A reference to a source location structure.
 			 */
-			explicit TraceFatal (const char * tag, bool terminate = false, const std::source_location & location = std::source_location::current()) noexcept;
+			explicit
+			TraceFatal (const char * tag, bool terminate = false, const std::source_location & location = std::source_location::current()) noexcept
+				: m_tag(tag),
+				m_location(location),
+				m_terminate(terminate)
+			{
+
+			}
 
 			/**
 			 * @brief Constructs a fatal trace with an initial message.
 			 * @param tag A pointer to a C-string for the tag.
-			 * @param initialMessage A pointer to a C-string.
+			 * @param initialMessage A string view.
 			 * @param terminate Call std::terminate() at this object destructor. Default false.
 			 * @param location A reference to a source location structure.
 			 */
-			TraceFatal (const char * tag, const char * initialMessage, bool terminate = false, const std::source_location & location = std::source_location::current()) noexcept;
+			TraceFatal (const char * tag, const std::string & initialMessage, bool terminate = false, const std::source_location & location = std::source_location::current()) noexcept
+				: BlobTrait(initialMessage),
+				m_tag(tag),
+				m_location(location),
+				m_terminate(terminate)
+			{
 
-			/**
-			 * @brief Constructs a fatal trace with an initial message.
-			 * @param tag A pointer to a C-string for the tag.
-			 * @param initialMessage A reference to a string.
-			 * @param terminate Call std::terminate() at this object destructor. Default false.
-			 * @param location A reference to a source location structure.
-			 */
-			TraceFatal (const char * tag, const std::string & initialMessage, bool terminate = false, const std::source_location & location = std::source_location::current()) noexcept;
+			}
 
 			/**
 			 * @brief Copy constructor.
@@ -1069,7 +1038,15 @@ namespace EmEn
 			/**
 			 * @brief Destructs the trace and calls the real tracer service.
 			 */
-			~TraceFatal ();
+			~TraceFatal ()
+			{
+				Tracer::instance()->trace(Severity::Fatal, m_tag, this->get(), m_location);
+
+				if ( m_terminate )
+				{
+					std::terminate();
+				}
+			}
 
 		private:
 
@@ -1079,7 +1056,7 @@ namespace EmEn
 	};
 
 	/**
-	 * @brief This utils class create an API trace object.
+	 * @brief This utils class creates an API trace object.
 	 * @extends EmEn::Libs::BlobTrait
 	 */
 	class TraceAPI final : public Libs::BlobTrait
@@ -1093,27 +1070,33 @@ namespace EmEn
 			 * @param terminate Call std::terminate() at this object destructor. Default false.
 			 * @param location A reference to a source location structure.
 			 */
-			explicit TraceAPI (const char * tag, const char * functionName, bool terminate = false, const std::source_location & location = std::source_location::current()) noexcept;
+			explicit
+			TraceAPI (const char * tag, const char * functionName, bool terminate = false, const std::source_location & location = std::source_location::current()) noexcept
+				: m_tag(tag),
+				m_functionName(functionName),
+				m_location(location),
+				m_terminate(terminate)
+			{
+
+			}
 
 			/**
 			 * @brief Constructs a fatal trace with an initial message.
 			 * @param tag A pointer to a C-string for the tag.
 			 * @param functionName A pointer on a c-string for the API function.
-			 * @param initialMessage A pointer to a C-string.
+			 * @param initialMessage A string view.
 			 * @param terminate Call std::terminate() at this object destructor. Default false.
 			 * @param location A reference to a source location structure.
 			 */
-			TraceAPI (const char * tag, const char * functionName, const char * initialMessage, bool terminate = false, const std::source_location & location = std::source_location::current()) noexcept;
+			TraceAPI (const char * tag, const char * functionName, const std::string & initialMessage, bool terminate = false, const std::source_location & location = std::source_location::current()) noexcept
+				: BlobTrait(initialMessage),
+				m_tag(tag),
+				m_functionName(functionName),
+				m_location(location),
+				m_terminate(terminate)
+			{
 
-			/**
-			 * @brief Constructs a fatal trace with an initial message.
-			 * @param tag A pointer to a C-string for the tag.
-			 * @param functionName A pointer on a c-string for the API function.
-			 * @param initialMessage A reference to a string.
-			 * @param terminate Call std::terminate() at this object destructor. Default false.
-			 * @param location A reference to a source location structure.
-			 */
-			TraceAPI (const char * tag, const char * functionName, const std::string & initialMessage, bool terminate = false, const std::source_location & location = std::source_location::current()) noexcept;
+			}
 
 			/**
 			 * @brief Copy constructor.
@@ -1144,7 +1127,15 @@ namespace EmEn
 			/**
 			 * @brief Destructs the trace and calls the real tracer service.
 			 */
-			~TraceAPI ();
+			~TraceAPI ()
+			{
+				Tracer::instance()->traceAPI(m_tag, m_functionName, this->get(), m_location);
+
+				if ( m_terminate )
+				{
+					std::terminate();
+				}
+			}
 
 		private:
 

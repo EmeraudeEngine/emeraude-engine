@@ -32,10 +32,10 @@
 #include <string>
 
 /* Local inclusions for usages. */
-#include "Libs/Math/Cuboid.hpp"
+#include "Libs/Math/Space3D/AACuboid.hpp"
+#include "Libs/Math/Space3D/Sphere.hpp"
 #include "Libs/Math/Matrix.hpp"
 #include "Libs/Math/Plane.hpp"
-#include "Libs/Math/Sphere.hpp"
 #include "Libs/Math/Vector.hpp"
 
 namespace EmEn::Graphics
@@ -73,7 +73,7 @@ namespace EmEn::Graphics
 			void updateProperties (float farDistance) noexcept;
 
 			/**
-			 * @brief Updates the frustum geometry when the camera move.
+			 * @brief Updates the frustum geometry when the camera moves.
 			 * @param viewProjectionMatrix
 			 */
 			void update (const Libs::Math::Matrix< 4, float > & viewProjectionMatrix) noexcept;
@@ -104,7 +104,7 @@ namespace EmEn::Graphics
 			 * @return Result
 			 */
 			[[nodiscard]]
-			Result isCollidingWith (const Libs::Math::Sphere< float > & sphere) const noexcept;
+			Result isCollidingWith (const Libs::Math::Space3D::Sphere< float > & sphere) const noexcept;
 
 			/**
 			 * @brief Checks an axis aligned bounding box against the Frustum.
@@ -113,7 +113,7 @@ namespace EmEn::Graphics
 			 * @return Result
 			 */
 			[[nodiscard]]
-			Result isCollidingWith (const Libs::Math::Cuboid< float > & box) const noexcept;
+			Result isCollidingWith (const Libs::Math::Space3D::AACuboid< float > & box) const noexcept;
 
 			/**
 			 * @brief Checks a ??? against the Frustum.

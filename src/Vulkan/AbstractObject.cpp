@@ -30,44 +30,57 @@
 #include "emeraude_config.hpp"
 
 /* STL inclusions. */
-#ifdef VK_TRACKING_ENABLED
 #include <iostream>
-#endif
 
 /* Local inclusions. */
 #include "Tracer.hpp"
 
 namespace EmEn::Vulkan
 {
-#ifdef VK_TRACKING_ENABLED
-
 	std::map< void *, std::string > AbstractObject::s_tracking{};
 
 	AbstractObject::AbstractObject () noexcept
-		: m_identifier()
 	{
-		s_tracking[this] = "";
+		if constexpr ( VulkanTrackingDebugEnabled )
+		{
+			s_tracking[this] = "";
 
-		std::cout << "[DEBUG:VK_TRACKING] A Vulkan object (@" << this << ") constructed !" "\n";
+			std::cout << "[DEBUG:VK_TRACKING] A Vulkan object (@" << this << ") constructed !" "\n";
+		}
 	}
 
 	AbstractObject::~AbstractObject ()
 	{
-		const auto * identifier = m_identifier.empty() ? "***UNIDENTIFIED***" : m_identifier.data();
-
-		if ( !m_flags[Created] )
+		if constexpr ( VulkanTrackingDebugEnabled )
 		{
-			TraceError{"VulkanObject"} << "A Vulkan object ('" << identifier << "' " << this << ") was not correctly constructed !";
-		}
+			const auto * identifier = m_identifier.empty() ? "***UNIDENTIFIED***" : m_identifier.data();
 
-		if ( !m_flags[Destroyed] )
+			if ( !m_flags[Created] )
+			{
+				TraceError{"VulkanObject"} << "A Vulkan object ('" << identifier << "' " << this << ") was not correctly constructed !";
+			}
+
+			if ( !m_flags[Destroyed] )
+			{
+				TraceError{"VulkanObject"} << "A Vulkan object ('" << identifier << "' " << this << ") is not correctly destroyed !";
+			}
+
+			std::cout << "[DEBUG:VK_TRACKING] A Vulkan object ('" << identifier << "' @" << this << ") destructed !" "\n";
+
+			s_tracking.erase(this);
+		}
+		else
 		{
-			TraceError{"VulkanObject"} << "A Vulkan object ('" << identifier << "' " << this << ") is not correctly destroyed !";
+			if ( !m_flags[Created] )
+			{
+				TraceError{"VulkanObject"} << "A Vulkan object (" << m_identifier << ") was not correctly constructed !";
+			}
+
+			if ( !m_flags[Destroyed] )
+			{
+				TraceError{"VulkanObject"} << "A Vulkan object (" << m_identifier << ") is not correctly destroyed !";
+			}
 		}
-
-		std::cout << "[DEBUG:VK_TRACKING] A Vulkan object ('" << identifier << "' @" << this << ") destructed !" "\n";
-
-		s_tracking.erase(this);
 	}
 
 	void
@@ -75,25 +88,20 @@ namespace EmEn::Vulkan
 	{
 		m_identifier = identifier;
 
-		s_tracking[this] = m_identifier;
+		if constexpr ( VulkanTrackingDebugEnabled )
+		{
+			s_tracking[this] = m_identifier;
 
-		std::cout << "[DEBUG:VK_TRACKING] A Vulkan object ('" << m_identifier << "', @" << this << ") is marked !" "\n";
+			std::cout << "[DEBUG:VK_TRACKING] A Vulkan object ('" << m_identifier << "', @" << this << ") is marked !" "\n";
+		}
 	}
 
-#else
-
-	AbstractObject::~AbstractObject ()
+	void
+	AbstractObject::setIdentifier (const char * classId, const std::string & instanceId, const char * vulkanObjectName) noexcept
 	{
-		if ( !m_flags[Created] )
-		{
-			TraceError{"VulkanObject"} << "A Vulkan object (" << m_identifier << ") was not correctly constructed !";
-		}
+		std::stringstream identifier;
+		identifier << classId << '-' << instanceId << '-' << vulkanObjectName;
 
-		if ( !m_flags[Destroyed] )
-		{
-			TraceError{"VulkanObject"} << "A Vulkan object (" << m_identifier << ") is not correctly destroyed !";
-		}
+		this->setIdentifier(identifier.str());
 	}
-
-#endif
 }

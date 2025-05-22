@@ -33,7 +33,7 @@ namespace EmEn::Saphir::Declaration
 {
 	/**
 	 * @brief The InputBlock class
-	 * @extends EmEn::Saphir::AbstractShaderBlock
+	 * @extends EmEn::Saphir::Declaration::AbstractShaderBlock
 	 */
 	class OutputBlock final : public AbstractShaderBlock
 	{
@@ -46,9 +46,9 @@ namespace EmEn::Saphir::Declaration
 			 * @param instanceName A C-string to set the name of the instance of the block. Default nullptr.
 			 * @param arraySize Set the block as an array. Default 0.
 			 */
-			explicit OutputBlock (Key name, uint32_t location, Key instanceName = nullptr, size_t arraySize = 0) noexcept;
+			explicit OutputBlock (Key name, uint32_t location, Key instanceName = nullptr, uint32_t arraySize = 0) noexcept;
 
-			/** @copydoc EmEn::Saphir::DeclarationInterface::sourceCode() */
+			/** @copydoc EmEn::Saphir::Declaration::Interface::sourceCode() */
 			[[nodiscard]]
 			std::string sourceCode () const noexcept override;
 	};

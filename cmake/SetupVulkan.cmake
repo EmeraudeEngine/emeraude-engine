@@ -32,7 +32,8 @@ if ( NOT VULKAN_ENABLED )
 			message("Vulkan glslang found !")
 			message(" - Binary : ${Vulkan_glslang_LIBRARY}")
 
-			target_link_libraries(${PROJECT_NAME} PRIVATE ${Vulkan_glslang_LIBRARY} MachineIndependent OGLCompiler GenericCodeGen OSDependent glslang)
+			#target_link_libraries(${PROJECT_NAME} PRIVATE ${Vulkan_glslang_LIBRARY} MachineIndependent OGLCompiler GenericCodeGen OSDependent glslang)
+			target_link_libraries(${PROJECT_NAME} PRIVATE ${Vulkan_glslang_LIBRARY} MachineIndependent GenericCodeGen OSDependent glslang)
 		endif ()
 
 		if ( Vulkan_SPIRV-Tools_FOUND )
@@ -74,10 +75,9 @@ if ( NOT VULKAN_ENABLED )
 		message("Vulkan ${Vulkan_VERSION} library enabled !")
 		message(" - Headers : ${Vulkan_INCLUDE_DIRS}")
 		message(" - Binary : ${Vulkan_LIBRARIES}")
-		message(" - SDK : ${VULKAN_SDK}")
 
 		target_include_directories(${PROJECT_NAME} PUBLIC ${Vulkan_INCLUDE_DIRS})
-		target_link_libraries(${PROJECT_NAME} PUBLIC ${Vulkan_LIBRARIES})
+		target_link_libraries(${PROJECT_NAME} PUBLIC Vulkan::Vulkan)
 
 		message("Configuring GLSLang library as sub-project ...")
 
@@ -88,7 +88,7 @@ if ( NOT VULKAN_ENABLED )
 
 			execute_process(
 				COMMAND ${Python3_EXECUTABLE} update_glslang_sources.py
-				WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/glslang/
+				WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/glslang
 				COMMAND_ERROR_IS_FATAL ANY
 			)
 		endif ()
@@ -102,9 +102,10 @@ if ( NOT VULKAN_ENABLED )
 		set(ENABLE_RTTI On CACHE BOOL "" FORCE)
 		set(ENABLE_EXCEPTIONS Off CACHE BOOL "" FORCE)
 
-		add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/dependencies/glslang glslang EXCLUDE_FROM_ALL)
+		add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/dependencies/glslang EXCLUDE_FROM_ALL)
+
 		target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/glslang)
-		target_link_libraries(${PROJECT_NAME} PRIVATE glslang SPIRV)
+		target_link_libraries(${PROJECT_NAME} PRIVATE SPIRV glslang)
 	endif ()
 
 	set(VULKAN_ENABLED On)

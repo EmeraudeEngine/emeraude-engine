@@ -32,15 +32,15 @@
 namespace EmEn::Saphir::Declaration
 {
 	/**
-	 * @brief Uniform Block. This is the GLSL counter-part of an uniform buffer object (UBO).
-	 * @extends EmEn::Saphir::AbstractBufferBackedBlock
+	 * @brief Uniform Block. This is the GLSL counter-part of a uniform buffer object (UBO).
+	 * @extends EmEn::Saphir::Declaration::AbstractBufferBackedBlock
 	 */
 	class UniformBlock final : public AbstractBufferBackedBlock
 	{
 		public:
 
 			/**
-			 * @brief Constructs an uniform block.
+			 * @brief Constructs a uniform block.
 			 * @param set An integer to define in which set the buffer is.
 			 * @param binding An integer to define at which point the buffer is bound.
 			 * @param memoryLayout The type of video memory layout.
@@ -48,9 +48,9 @@ namespace EmEn::Saphir::Declaration
 			 * @param instanceName A C-string to set the name of the instance of the block. Default nullptr.
 			 * @param arraySize Set the block as an array. Default 0.
 			 */
-			UniformBlock (uint32_t set, uint32_t binding, MemoryLayout memoryLayout, Key name, Key instanceName = nullptr, size_t arraySize = 0) noexcept;
+			UniformBlock (uint32_t set, uint32_t binding, MemoryLayout memoryLayout, Key name, Key instanceName = nullptr, uint32_t arraySize = 0) noexcept;
 
-			/** @copydoc EmEn::Saphir::DeclarationInterface::sourceCode() */
+			/** @copydoc EmEn::Saphir::Declaration::Interface::sourceCode() */
 			[[nodiscard]]
 			std::string sourceCode () const noexcept override;
 	};

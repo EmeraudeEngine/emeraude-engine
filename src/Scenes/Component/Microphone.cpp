@@ -32,7 +32,7 @@
 #include <array>
 
 /* Local inclusions. */
-#include "Scenes/AbstractEntity.hpp"
+#include "Audio/Manager.hpp"
 
 namespace EmEn::Scenes::Component
 {
@@ -48,24 +48,6 @@ namespace EmEn::Scenes::Component
 
 	}
 
-	const char *
-	Microphone::getComponentType () const noexcept
-	{
-		return ClassId;
-	}
-
-	const Cuboid< float > &
-	Microphone::boundingBox () const noexcept
-	{
-		return NullBoundingBox;
-	}
-
-	const Sphere< float > &
-	Microphone::boundingSphere () const noexcept
-	{
-		return NullBoundingSphere;
-	}
-
 	void
 	Microphone::move (const CartesianFrame< float > & worldCoordinates) noexcept
 	{
@@ -76,12 +58,6 @@ namespace EmEn::Scenes::Component
 	Microphone::processLogics (const Scene & /*scene*/) noexcept
 	{
 
-	}
-
-	bool
-	Microphone::shouldRemove () const noexcept
-	{
-		return false;
 	}
 
 	void
@@ -116,7 +92,7 @@ namespace EmEn::Scenes::Component
 	{
 		std::array< ALfloat, 12 > properties{0};
 
-		Manager::instance()->listenerProperties(properties);
+		Audio::Manager::instance()->listenerProperties(properties);
 
 		return out <<
 			"Audio Listener information" "\n"

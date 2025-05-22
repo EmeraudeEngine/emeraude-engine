@@ -33,8 +33,8 @@
 namespace EmEn::Libs
 {
 	/**
-	 * @brief Adds the ability to use flags on object by using an integer and bitwise operations.
-	 * @note Only the flags reading is public. This is intended for internal options of a class.
+	 * @brief Adds the ability to use flags on an object by using an integer and bitwise operations.
+	 * @note Only the flag reading is public. This is intended for internal options of a class.
 	 * @tparam data_t The size of the flag. Default uint32_t.
 	 */
 	template< typename data_t = uint32_t >
@@ -81,7 +81,7 @@ namespace EmEn::Libs
 			 */
 			[[nodiscard]]
 			data_t
-			flagBits () const noexcept
+			flags () const noexcept
 			{
 				return m_flags;
 			}
@@ -98,6 +98,46 @@ namespace EmEn::Libs
 				return (m_flags & flagBit) != 0;
 			}
 
+			/**
+			 * @brief Returns whether a flag is disabled.
+			 * @param flagBit The flag bit to check.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isFlagDisabled (data_t flagBit) const noexcept
+			{
+				return (m_flags & flagBit) == 0;
+			}
+
+			/**
+			 * @brief Returns whether a flag is enabled.
+			 * @param flags The flags.
+			 * @param flagBit The flag bit to check.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			static
+			bool
+			enabled (data_t flags, data_t flagBit) noexcept
+			{
+				return (flags & flagBit) != 0;
+			}
+
+			/**
+			 * @brief Returns whether a flag is disabled.
+			 * @param flags The flags.
+			 * @param flagBit The flag bit to check.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			static
+			bool
+			disabled (data_t flags, data_t flagBit) noexcept
+			{
+				return (flags & flagBit) == 0;
+			}
+
 		protected:
 
 			/**
@@ -107,10 +147,11 @@ namespace EmEn::Libs
 
 			/**
 			 * @brief Constructs a flag trait.
-			 * @param flagBits The initial flag value.
+			 * @param flags The initial flag value.
 			 */
-			explicit FlagTrait (data_t flagBits) noexcept
-				: m_flags(flagBits)
+			explicit
+			FlagTrait (data_t flags) noexcept
+				: m_flags(flags)
 			{
 
 			}
@@ -151,13 +192,13 @@ namespace EmEn::Libs
 			/**
 			 * @brief Sets multiple flags in one shot.
 			 * @warning This will erase all previous flags.
-			 * @param flagBits The flag bits value.
+			 * @param flags The flag bits.
 			 * @return void
 			 */
 			void
-			setFlagBits (data_t flagBits) noexcept
+			setFlags (data_t flags) noexcept
 			{
-				m_flags = flagBits;
+				m_flags = flags;
 			}
 
 			/**
@@ -166,7 +207,7 @@ namespace EmEn::Libs
 			 * @return void
 			 */
 			void
-			resetFlagBits () noexcept
+			resetFlags () noexcept
 			{
 				m_flags = 0;
 			}

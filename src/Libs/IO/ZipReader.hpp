@@ -124,22 +124,22 @@ namespace EmEn::Libs::IO
 
 			/**
 			 * @brief Extracts a specific entry from the ZIP archive to a directory.
-			 * @note The directory must exist.
 			 * @param entryName A reference to a string.
-			 * @param directory A reference to a path.
+			 * @param destinationPath A reference to a path.
+			 * @param overwrite Erase an existing file with the same name in the destination path. Default false.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool extract (const std::string & entryName, const std::filesystem::path & directory) const noexcept;
+			bool extract (const std::string & entryName, const std::filesystem::path & destinationPath, bool overwrite = false) const noexcept;
 
 			/**
 			 * @brief Extracts all files present in the archive to a directory.
-			 * @note The directory must exist.
-			 * @param directory A reference to a path.
+			 * @param destinationPath A reference to a path.
+			 * @param overwrite Erase every existing file with the same name in the destination path. Default false.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool extractAll (const std::filesystem::path & directory) const noexcept;
+			bool extractAll (const std::filesystem::path & destinationPath, bool overwrite = false) const noexcept;
 
 			/**
 			 * @brief Returns whether file is an archive file by testing it.

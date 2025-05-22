@@ -37,11 +37,11 @@ namespace EmEn::Scenes::Component
 	using namespace Graphics;
 	using namespace Physics;
 
-	static constexpr auto TracerTag{"EntityComponent"};
+	constexpr auto TracerTag{"EntityComponent"};
 
 	const size_t Abstract::ClassUID{getClassUID("AbstractEntityComponent")};
-	const Cuboid< float > Abstract::NullBoundingBox{};
-	const Sphere< float > Abstract::NullBoundingSphere{};
+	const Space3D::AACuboid< float > Abstract::NullBoundingBox{};
+	const Space3D::Sphere< float > Abstract::NullBoundingSphere{};
 
 	Abstract::Abstract (const std::string & name, const AbstractEntity & parentEntity) noexcept
 		: NameableTrait(name),

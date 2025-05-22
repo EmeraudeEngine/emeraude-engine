@@ -55,7 +55,28 @@ namespace EmEn::Vulkan
 		: ServiceInterface(ClassId),
 		m_primaryServices(primaryServices)
 	{
+		/* VK_KHR_SWAPCHAIN_EXTENSION_NAME = "VK_KHR_swapchain" */
+		m_requiredGraphicsDeviceExtensions.emplace_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
 
+		if constexpr ( IsMacOS )
+		{
+			/* VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME = "VK_KHR_portability_subset" */
+			m_requiredGraphicsDeviceExtensions.emplace_back("VK_KHR_portability_subset");
+		}
+
+		//VK_EXT_BLEND_OPERATION_ADVANCED_EXTENSION_NAME, // Fails on Intel iGPU
+		//VK_EXT_FILTER_CUBIC_EXTENSION_NAME, // Fails on NVidia
+		//VK_KHR_SHARED_PRESENTABLE_IMAGE_EXTENSION_NAME,
+
+		/* NOTE: Enable dynamic state extension. */
+		//VK_EXT_EXTENDED_DYNAMIC_STATE_EXTENSION_NAME,
+		//VK_EXT_EXTENDED_DYNAMIC_STATE_2_EXTENSION_NAME,
+		//VK_EXT_EXTENDED_DYNAMIC_STATE_3_EXTENSION_NAME,
+
+		/* NOTE: Video decoding extensions. (To test one day ...) */
+		//VK_KHR_VIDEO_QUEUE_EXTENSION_NAME,
+		//VK_KHR_VIDEO_DECODE_QUEUE_EXTENSION_NAME,
+		//VK_KHR_VIDEO_DECODE_H265_EXTENSION_NAME,
 	}
 
 	void
@@ -108,7 +129,14 @@ namespace EmEn::Vulkan
 
 			m_createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
 			m_createInfo.pNext = this->isUsingDebugMessenger() ? &m_debugCreateInfo : nullptr;
-			m_createInfo.flags = VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
+			if constexpr ( IsMacOS )
+			{
+				m_createInfo.flags = VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
+			}
+			else
+			{
+				m_createInfo.flags = 0;
+			}
 			m_createInfo.pApplicationInfo = &m_applicationInfo;
 			m_createInfo.enabledLayerCount = static_cast< uint32_t >(m_requiredValidationLayers.size());
 			m_createInfo.ppEnabledLayerNames = m_requiredValidationLayers.data();
@@ -116,7 +144,7 @@ namespace EmEn::Vulkan
 			m_createInfo.ppEnabledExtensionNames = m_requiredInstanceExtensions.data();
 
 			/* At this point, we create the vulkan instance.
-			 * Beyond this point Vulkan is in the pipe and usable. */
+			 * Beyond this point, Vulkan is in the pipe and usable. */
 			const auto result = vkCreateInstance(&m_createInfo, nullptr, &m_instance);
 
 			if ( result != VK_SUCCESS )
@@ -149,7 +177,7 @@ namespace EmEn::Vulkan
 
 						for ( const auto & extension : m_requiredInstanceExtensions )
 						{
-							trace << "\t" << extension << "\n";
+							trace << '\t' << extension << '\n';
 						}
 
 						trace << getItemListAsString("Instance", Instance::getExtensions(nullptr));
@@ -280,7 +308,7 @@ namespace EmEn::Vulkan
 
 		const auto availableValidationLayers = Instance::getValidationLayers();
 
-		/* NOTE: Save a copy of validation layers in settings for easy edition. */
+		/* NOTE: Save a copy of validation layers in settings for an easy edition. */
 		if ( settings.isArrayEmpty(VkInstanceAvailableValidationLayersKey) )
 		{
 			for ( const auto & availableValidationLayer : availableValidationLayers )
@@ -366,10 +394,13 @@ namespace EmEn::Vulkan
 			}
 		}
 
-		/* NOTE: This extension allows applications to control whether devices
-		 * that expose the VK_KHR_portability_subset extension are included in
-		 * the results of physical device enumeration. */
-		m_requiredInstanceExtensions.emplace_back(VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME);
+		if constexpr ( IsMacOS )
+		{
+			/* NOTE: This extension allows applications to control whether devices
+			 * that expose the VK_KHR_portability_subset extension are included in
+			 * the results of physical device enumeration. */
+			m_requiredInstanceExtensions.emplace_back(VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME);
+		}
 
 		if ( m_flags[ShowInformation] )
 		{
@@ -629,10 +660,12 @@ namespace EmEn::Vulkan
 		logicalDevice->setIdentifier((std::stringstream{} << "VulkanInstance-" << selectedPhysicalDevice->properties().deviceName << "(Graphics)-Device").str());
 
 		DeviceRequirements requirements{DeviceJobHint::Graphics};
-		requirements.features().fillModeNonSolid = VK_TRUE; // Required for wireframe mode !
-#if !IS_MACOS
-		requirements.features().geometryShader = VK_TRUE; // Required for TBN space display
-#endif
+		requirements.features().fillModeNonSolid = VK_TRUE; // Required for wireframe mode!
+		if constexpr ( !IsMacOS )
+		{
+			/* NOTE: MacOS M? iGPU do not have the geometry shader stage. */
+			requirements.features().geometryShader = VK_TRUE; // Required for TBN space display
+		}
 		requirements.features().samplerAnisotropy = VK_TRUE;
 		requirements.requireGraphicsQueues({1.0F}, {0.5F});
 		requirements.requireTransferQueues({1.0F});
@@ -651,6 +684,9 @@ namespace EmEn::Vulkan
 		}
 
 		m_graphicsDevice = logicalDevice;
+
+		/* NOTE: Basic GPU do not support flexible textures. */
+		m_flags[StandardTextureCheckEnabled] = m_graphicsDevice->hasBasicSupport();
 
 		return logicalDevice;
 	}

@@ -56,15 +56,27 @@ namespace EmEn::Saphir::Declaration
 
 			/** @copydoc EmEn::Saphir::Declaration::Interface::isValid() */
 			[[nodiscard]]
-			bool isValid () const noexcept override;
+			bool
+			isValid () const noexcept override
+			{
+				return m_name != nullptr;
+			}
 
 			/** @copydoc EmEn::Saphir::Declaration::Interface::name() */
 			[[nodiscard]]
-			Key name () const noexcept override;
+			Key
+			name () const noexcept override
+			{
+				return m_name;
+			}
 
 			/** @copydoc EmEn::Saphir::Declaration::Interface::bytes() */
 			[[nodiscard]]
-			size_t bytes () const noexcept override;
+			uint32_t
+			bytes () const noexcept override
+			{
+				return 0;
+			}
 
 			/** @copydoc EmEn::Saphir::Declaration::Interface::sourceCode() */
 			[[nodiscard]]
@@ -75,14 +87,22 @@ namespace EmEn::Saphir::Declaration
 			 * @return Key
 			 */
 			[[nodiscard]]
-			Key returnType () const noexcept;
+			Key
+			returnType () const noexcept
+			{
+				return m_returnType;
+			}
 
 			/**
 			 * @brief parameters
 			 * @return const std::vector< std::string > &
 			 */
 			[[nodiscard]]
-			const std::vector< std::string > & parameters () const noexcept;
+			const std::vector< std::string > &
+			parameters () const noexcept
+			{
+				return m_parameters;
+			}
 
 			/**
 			 * @brief Adds an input parameter to the function signature.

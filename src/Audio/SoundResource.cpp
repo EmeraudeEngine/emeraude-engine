@@ -46,10 +46,8 @@ namespace EmEn::Audio
 
 	const size_t SoundResource::ClassUID{getClassUID(ClassId)};
 
-	bool SoundResource::s_quietConversion{true};
-
-	SoundResource::SoundResource (const std::string & name, uint32_t resourceFlagBits) noexcept
-		: ResourceTrait(name, resourceFlagBits)
+	SoundResource::SoundResource (const std::string & name, uint32_t resourceFlags) noexcept
+		: ResourceTrait(name, resourceFlags)
 	{
 
 	}
@@ -196,17 +194,5 @@ namespace EmEn::Audio
 		}
 
 		return true;
-	}
-
-	std::shared_ptr< SoundResource >
-	SoundResource::get (const std::string & resourceName, bool directLoad) noexcept
-	{
-		return Resources::Manager::instance()->sounds().getResource(resourceName, !directLoad);
-	}
-
-	std::shared_ptr< SoundResource >
-	SoundResource::getDefault () noexcept
-	{
-		return Resources::Manager::instance()->sounds().getDefaultResource();
 	}
 }

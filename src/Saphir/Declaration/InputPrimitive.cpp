@@ -39,12 +39,6 @@ namespace EmEn::Saphir::Declaration
 
 	}
 
-	bool
-	InputPrimitive::isValid () const noexcept
-	{
-		return true;
-	}
-
 	Key
 	InputPrimitive::name () const noexcept
 	{
@@ -70,21 +64,13 @@ namespace EmEn::Saphir::Declaration
 		}
 	}
 
-	size_t
-	InputPrimitive::bytes () const noexcept
-	{
-		return 0;
-	}
-
 	std::string
 	InputPrimitive::sourceCode () const noexcept
 	{
-		return (std::stringstream{} << GLSL::Layout << " (" << this->name() << ") " << GLSL::In << ";" "\n").str();
-	}
+		std::stringstream code;
 
-	InputPrimitiveType
-	InputPrimitive::primitiveType () const noexcept
-	{
-		return m_primitiveType;
+		code << GLSL::Layout << " (" << this->name() << ") " << GLSL::In << ";" "\n";
+
+		return code.str();
 	}
 }

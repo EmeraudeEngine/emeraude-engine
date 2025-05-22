@@ -44,42 +44,6 @@ namespace EmEn::Scenes::Component
 		this->setFlag(PerspectiveProjection, perspective);
 	}
 
-	const char *
-	Camera::getComponentType () const noexcept
-	{
-		return ClassId;
-	}
-
-	const Cuboid< float > &
-	Camera::boundingBox () const noexcept
-	{
-		return NullBoundingBox;
-	}
-
-	const Sphere< float > &
-	Camera::boundingSphere () const noexcept
-	{
-		return NullBoundingSphere;
-	}
-
-	AVConsole::VideoType
-	Camera::videoType () const noexcept
-	{
-		return AVConsole::VideoType::Camera;
-	}
-
-	bool
-	Camera::isPerspectiveProjection () const noexcept
-	{
-		return this->isFlagEnabled(PerspectiveProjection);
-	}
-
-	bool
-	Camera::isOrthographicProjection () const noexcept
-	{
-		return !this->isFlagEnabled(PerspectiveProjection);
-	}
-
 	void
 	Camera::setPerspectiveProjection (float fov, float maxViewableDistance) noexcept
 	{
@@ -105,12 +69,6 @@ namespace EmEn::Scenes::Component
 		this->updateProperties(false, m_distance, 0.0F);
 	}
 
-	float
-	Camera::fieldOfView () const noexcept
-	{
-		return m_fov;
-	}
-
 	void
 	Camera::setFieldOfView (float degrees) noexcept
 	{
@@ -120,12 +78,6 @@ namespace EmEn::Scenes::Component
 		{
 			this->updateProperties(true, m_distance, m_fov);
 		}
-	}
-
-	float
-	Camera::distance () const noexcept
-	{
-		return m_distance;
 	}
 
 	void
@@ -141,18 +93,6 @@ namespace EmEn::Scenes::Component
 		{
 			this->updateProperties(false, m_distance, 0.0F);
 		}
-	}
-
-	const FramebufferEffectsList &
-	Camera::lensEffects () const noexcept
-	{
-		return m_lensEffects;
-	}
-
-	bool
-	Camera::isLensEffectPresent (const std::shared_ptr< FramebufferEffectInterface > & effect) const noexcept
-	{
-		return m_lensEffects.contains(effect);
 	}
 
 	void
@@ -209,12 +149,6 @@ namespace EmEn::Scenes::Component
 		this->updateDeviceFromCoordinates(this->getWorldCoordinates(), this->getWorldVelocity());
 	}
 
-	bool
-	Camera::shouldRemove () const noexcept
-	{
-		return false;
-	}
-
 	void
 	Camera::updateDeviceFromCoordinates (const CartesianFrame< float > & worldCoordinates, const Vector< 3, float > & worldVelocity) noexcept
 	{
@@ -260,7 +194,7 @@ namespace EmEn::Scenes::Component
 	}
 
 	bool
-	Camera::playAnimation (uint8_t animationID, const Variant & value, size_t cycle) noexcept
+	Camera::playAnimation (uint8_t animationID, const Variant & value, size_t /*cycle*/) noexcept
 	{
 		switch ( animationID )
 		{

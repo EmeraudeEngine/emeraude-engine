@@ -36,22 +36,22 @@ namespace EmEn::Graphics::Geometry
 	enum GeometryFlagBits : uint32_t
 	{
 		/* Vertex attributes present in local data. */
-		/** @brief This flags tells the geometry have normals in vertex attributes. */
+		/** @brief This flags tells the geometry to have normals in vertex attributes. */
 		EnableNormal = 1 << 0,
 		/**
-		 * @brief This flags tells the geometry have tangents, bi-normals and normals (TBN) in vertex attributes.
+		 * @brief This flags tells the geometry to have tangents, bi-normals and normals (TBN) in vertex attributes.
 		 * @note Overrides GeometryFlagBits::EnableNormal flag.
 		 */
 		EnableTangentSpace = 1 << 1,
-		/** @brief This flags tells the geometry have primary texture coordinates in vertex attributes. */
+		/** @brief This flags tells the geometry to have primary texture coordinates in vertex attributes. */
 		EnablePrimaryTextureCoordinates = 1 << 2,
-		/** @brief This flags tells the geometry have secondary texture coordinates in vertex attributes. */
+		/** @brief This flags tells the geometry to have secondary texture coordinates in vertex attributes. */
 		EnableSecondaryTextureCoordinates = 1 << 3,
-		/** @brief This flags tells the geometry have vertex colors in vertex attributes. */
+		/** @brief This flags tells the geometry to have vertex colors in vertex attributes. */
 		EnableVertexColor = 1 << 4,
 		/** @brief This flags tells the geometry uses influence indexes to a uniform buffer for skeletal animations. */
 		EnableInfluence = 1 << 5,
-		/** @brief This flags tells the geometry have weights in vertex attributes. */
+		/** @brief This flags tells the geometry to have weights in vertex attributes. */
 		EnableWeight = 1 << 6,
 		/** @brief This flags tells the primary texture coordinates are expressed in 3D (UVW) instead of 2D (UV). */
 		Enable3DPrimaryTextureCoordinates = 1 << 7,
@@ -61,7 +61,7 @@ namespace EmEn::Graphics::Geometry
 		EnableDynamicVertexBuffer = 1 << 9,
 		/** @brief This flags tells the vertex positions are expressed in world coordinates. */
 		EnableAbsolutePosition = 1 << 10,
-		/** @brief This flags tells the index buffer use the special index to restart primitives. */
+		/** @brief This flags tells the index buffer uses the special index to restart primitives. */
 		EnablePrimitiveRestart = 1 << 11
 	};
 

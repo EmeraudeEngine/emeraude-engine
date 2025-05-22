@@ -59,6 +59,9 @@ namespace EmEn::Graphics::Geometry
 			/** @brief Observable class unique identifier. */
 			static const size_t ClassUID;
 
+			/** @brief Defines the resource dependency complexity. */
+			static constexpr auto Complexity{Resources::DepComplexity::One};
+
 			/**
 			 * @brief Construct a vertex grid geometry resource.
 			 * @param name A reference to a string for the resource name.
@@ -139,7 +142,7 @@ namespace EmEn::Graphics::Geometry
 
 			/** @copydoc EmEn::Graphics::Geometry::Interface::subGeometryCount() */
 			[[nodiscard]]
-			size_t
+			uint32_t
 			subGeometryCount () const noexcept override
 			{
 				return 1;
@@ -148,14 +151,14 @@ namespace EmEn::Graphics::Geometry
 			/** @copydoc EmEn::Graphics::Geometry::Interface::subGeometryRange() */
 			[[nodiscard]]
 			std::array< uint32_t, 2 >
-			subGeometryRange (size_t /*subGeometryIndex*/ = 0) const noexcept override
+			subGeometryRange (uint32_t /*subGeometryIndex*/ = 0) const noexcept override
 			{
 				return {0, static_cast< uint32_t >(m_indexBufferObject->indexCount())};
 			}
 
 			/** @copydoc EmEn::Graphics::Geometry::Interface::boundingBox() */
 			[[nodiscard]]
-			const Libs::Math::Cuboid< float > &
+			const Libs::Math::Space3D::AACuboid< float > &
 			boundingBox () const noexcept override
 			{
 				return m_localData.boundingBox();
@@ -163,7 +166,7 @@ namespace EmEn::Graphics::Geometry
 
 			/** @copydoc EmEn::Graphics::Geometry::Interface::boundingSphere() */
 			[[nodiscard]]
-			const Libs::Math::Sphere< float > &
+			const Libs::Math::Space3D::Sphere< float > &
 			boundingSphere () const noexcept override
 			{
 				return m_localData.boundingSphere();
@@ -190,11 +193,12 @@ namespace EmEn::Graphics::Geometry
 			bool
 			useIndexBuffer () const noexcept override
 			{
-#ifdef DEBUG
-				return m_indexBufferObject != nullptr;
-#else
+				if constexpr ( IsDebug )
+				{
+					return m_indexBufferObject != nullptr;
+				}
+
 				return true;
-#endif
 			}
 
 			/** @copydoc EmEn::Graphics::Geometry::Interface::create() */
@@ -220,6 +224,15 @@ namespace EmEn::Graphics::Geometry
 			/** @copydoc EmEn::Resources::ResourceTrait::load(const Json::Value &) */
 			bool load (const Json::Value & data) noexcept override;
 
+			/** @copydoc EmEn::Resources::ResourceTrait::memoryOccupied() const noexcept */
+			[[nodiscard]]
+			size_t
+			memoryOccupied () const noexcept override
+			{
+				// TODO ...
+				return 0;
+			}
+
 			/**
 			 * @brief Loads a flat squared grid.
 			 * @param size The size of the whole size of one dimension of the grid. i.e. If the size is 1024, the grid will be from +512 to -512.
@@ -229,7 +242,7 @@ namespace EmEn::Graphics::Geometry
 			 * @param globalVertexColor A reference to a color. Default black.
 			 * @return bool
 			 */
-			bool load (float size, size_t division, float UVMultiplier = 1.0F, const VertexColorGenMode & vertexColorGenMode = VertexColorGenMode::UseRandom, const Libs::PixelFactory::Color< float > & globalVertexColor = Libs::PixelFactory::Black) noexcept;
+			bool load (float size, uint32_t division, float UVMultiplier = 1.0F, const VertexColorGenMode & vertexColorGenMode = VertexColorGenMode::UseRandom, const Libs::PixelFactory::Color< float > & globalVertexColor = Libs::PixelFactory::Black) noexcept;
 
 			/**
 			 * @brief This load a geometry from a parametric object.
@@ -262,22 +275,6 @@ namespace EmEn::Graphics::Geometry
 				return m_localData;
 			}
 
-			/**
-			 * @brief Returns a vertex grid resource by its name.
-			 * @param resourceName A reference to a string.
-			 * @param directLoad Use the direct loading mode. Default false.
-			 * @return std::shared_ptr< VertexGridResource >
-			 */
-			[[nodiscard]]
-			static std::shared_ptr< VertexGridResource > get (const std::string & resourceName, bool directLoad = false) noexcept;
-
-			/**
-			 * @brief Returns the default vertex grid resource.
-			 * @return std::shared_ptr< VertexGridResource >
-			 */
-			[[nodiscard]]
-			static std::shared_ptr< VertexGridResource > getDefault () noexcept;
-
 		private:
 
 			/**
@@ -289,7 +286,7 @@ namespace EmEn::Graphics::Geometry
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool createVideoMemoryBuffers (const std::vector< float > & vertexAttributes, size_t vertexCount, size_t vertexElementCount, const std::vector< uint32_t > & indices) noexcept;
+			bool createVideoMemoryBuffers (const std::vector< float > & vertexAttributes, uint32_t vertexCount, uint32_t vertexElementCount, const std::vector< uint32_t > & indices) noexcept;
 
 			/**
 			 * @brief Adds a vertex to the local buffer.
@@ -299,7 +296,7 @@ namespace EmEn::Graphics::Geometry
 			 * @return uint32_t
 			 */
 			[[nodiscard]]
-			uint32_t addVertexToBuffer (size_t index, std::vector< float > & buffer, uint32_t vertexElementCount) const noexcept;
+			uint32_t addVertexToBuffer (uint32_t index, std::vector< float > & buffer, uint32_t vertexElementCount) const noexcept;
 
 			/* JSON key. */
 			static constexpr auto JKSize{"Size"};

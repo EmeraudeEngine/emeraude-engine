@@ -26,8 +26,8 @@
 
 #include "Types.hpp"
 
-/* Project configuration. */
-#include "platform.hpp"
+/* Emeraude-Engine configuration. */
+#include "emeraude_config.hpp"
 
 /* STL inclusions. */
 #include <iostream>

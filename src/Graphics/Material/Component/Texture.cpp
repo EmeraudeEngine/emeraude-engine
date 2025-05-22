@@ -31,6 +31,11 @@
 
 /* Local inclusions. */
 #include "Resources/Manager.hpp"
+#include "Graphics/TextureResource/Texture1D.hpp"
+#include "Graphics/TextureResource/Texture2D.hpp"
+#include "Graphics/TextureResource/Texture3D.hpp"
+#include "Graphics/TextureResource/TextureCubemap.hpp"
+#include "Graphics/TextureResource/AnimatedTexture2D.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::Graphics::Material::Component
@@ -68,23 +73,23 @@ namespace EmEn::Graphics::Material::Component
 		switch ( fillingType )
 		{
 			case FillingType::Gradient :
-				m_texture = resources.texture1Ds().getResource(textureResourceName);
+				m_texture = resources.container< TextureResource::Texture1D >()->getResource(textureResourceName);
 				break;
 
 			case FillingType::Texture :
-				m_texture = resources.texture2Ds().getResource(textureResourceName);
+				m_texture = resources.container< TextureResource::Texture2D >()->getResource(textureResourceName);
 				break;
 
 			case FillingType::VolumeTexture :
-				m_texture = resources.texture3Ds().getResource(textureResourceName);
+				m_texture = resources.container< TextureResource::Texture3D >()->getResource(textureResourceName);
 				break;
 
 			case FillingType::Cubemap :
-				m_texture = resources.textureCubemaps().getResource(textureResourceName);
+				m_texture = resources.container< TextureResource::TextureCubemap >()->getResource(textureResourceName);
 				break;
 
 			case FillingType::AnimatedTexture :
-				m_texture = resources.animatedTextures().getResource(textureResourceName);
+				m_texture = resources.container< TextureResource::AnimatedTexture2D >()->getResource(textureResourceName);
 				break;
 
 			case FillingType::Value :

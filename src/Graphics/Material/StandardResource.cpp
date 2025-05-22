@@ -81,8 +81,8 @@ namespace EmEn::Graphics::Material
 
 	const size_t StandardResource::ClassUID{getClassUID(ClassId)};
 
-	StandardResource::StandardResource (const std::string & name, int resourceFlagBits) noexcept
-		: Interface(name, resourceFlagBits)
+	StandardResource::StandardResource (const std::string & name, int resourceFlags) noexcept
+		: Interface(name, resourceFlags)
 	{
 
 	}
@@ -567,9 +567,9 @@ namespace EmEn::Graphics::Material
 				continue;
 			}
 
-			auto textureResource = component->textureResource();
+			const auto textureResource = component->textureResource();
 
-			if ( !this->addDependency(textureResource.get()) )
+			if ( !this->addDependency(textureResource) )
 			{
 				TraceError{ClassId} << "Unable to link the texture '" << textureResource->name() << "' dependency to material '" << this->name() << "' for ambient component !";
 
@@ -825,7 +825,7 @@ namespace EmEn::Graphics::Material
 		m_sharedUniformBuffer->removeElement(this);
 
 		/* Reset to defaults. */
-		this->resetFlagBits();
+		this->resetFlags();
 
 		/* Reset member variables. */
 		m_physicalSurfaceProperties.reset();
@@ -901,7 +901,7 @@ namespace EmEn::Graphics::Material
 		return 0;
 	}
 
-	size_t
+	uint32_t
 	StandardResource::frameIndexAt (uint32_t /*sceneTime*/) const noexcept
 	{
 		/*if ( !this->isFlagEnabled(Animated) )
@@ -1127,7 +1127,7 @@ namespace EmEn::Graphics::Material
 			return false;
 		}
 
-		const auto * geometry = generator.geometry();
+		const auto * geometry = generator.getGeometryInterface();
 
 		if ( !generator.highQualityLightEnabled() && !generator.declareMaterialUniformBlock(*this, vertexShader, 0) )
 		{
@@ -1246,10 +1246,10 @@ namespace EmEn::Graphics::Material
 			return false;
 		}
 
-		const uint32_t materialSet = generator.program()->setIndex(SetType::PerModelLayer);
+		const uint32_t materialSet = generator.shaderProgram()->setIndex(SetType::PerModelLayer);
 
 		/* Normal component.
-		 * NOTE : Get a sample from a texture in range [0,1], convert it to a normalized range of [-1, 1]. */
+		 * NOTE: Get a sample from a texture in range [0,1], convert it to a normalized range of [-1, 1]. */
 		if ( this->isComponentPresent(ComponentType::Reflection) || !lightGenerator.isAmbientPass() )
 		{
 			if ( !this->generateTextureComponentFragmentShader(ComponentType::Normal, [] (FragmentShader & shader, const Texture * component) {
@@ -1402,7 +1402,7 @@ namespace EmEn::Graphics::Material
 			return false;
 		}
 
-		if ( !this->addDependency(texture.get()) )
+		if ( !this->addDependency(texture) )
 		{
 			TraceError{ClassId} << "Unable to link the texture '" << texture->name() << "' dependency to material '" << this->name() << "' for ambient component !";
 
@@ -1460,7 +1460,7 @@ namespace EmEn::Graphics::Material
 			return false;
 		}
 
-		if ( !this->addDependency(texture.get()) )
+		if ( !this->addDependency(texture) )
 		{
 			TraceError{ClassId} << "Unable to link the texture '" << texture->name() << "' dependency to material '" << this->name() << "' for diffuse component !";
 
@@ -1519,7 +1519,7 @@ namespace EmEn::Graphics::Material
 			return false;
 		}
 
-		if ( !this->addDependency(texture.get()) )
+		if ( !this->addDependency(texture) )
 		{
 			TraceError{ClassId} << "Unable to link the texture '" << texture->name() << "' dependency to material '" << this->name() << "' for specular component !";
 
@@ -1581,7 +1581,7 @@ namespace EmEn::Graphics::Material
 			return false;
 		}
 
-		if ( !this->addDependency(texture.get()) )
+		if ( !this->addDependency(texture) )
 		{
 			TraceError{ClassId} << "Unable to link the texture '" << texture->name() << "' dependency to material '" << this->name() << "' for opacity component !";
 
@@ -1664,7 +1664,7 @@ namespace EmEn::Graphics::Material
 			return false;
 		}
 
-		if ( !this->addDependency(texture.get()) )
+		if ( !this->addDependency(texture) )
 		{
 			TraceError{ClassId} << "Unable to link the texture '" << texture->name() << "' dependency to material '" << this->name() << "' for auto-illumination component !";
 
@@ -1698,7 +1698,7 @@ namespace EmEn::Graphics::Material
 			return false;
 		}
 
-		if ( !this->addDependency(texture.get()) )
+		if ( !this->addDependency(texture) )
 		{
 			TraceError{ClassId} << "Unable to link the texture '" << texture->name() << "' dependency to material '" << this->name() << "' for normal component !";
 
@@ -1732,7 +1732,7 @@ namespace EmEn::Graphics::Material
 			return false;
 		}
 
-		if ( !this->addDependency(texture.get()) )
+		if ( !this->addDependency(texture) )
 		{
 			TraceError{ClassId} << "Unable to link the texture '" << texture->name() << "' dependency to material '" << this->name() << "' for reflection component !";
 
@@ -1905,17 +1905,5 @@ namespace EmEn::Graphics::Material
 		m_materialProperties[ReflectionAmountOffset] = clampToUnit(value);
 
 		m_flags[VideoMemoryUpdateRequested] = true;
-	}
-
-	std::shared_ptr< StandardResource >
-	StandardResource::get (const std::string & resourceName, bool directLoad) noexcept
-	{
-		return Resources::Manager::instance()->standardMaterials().getResource(resourceName, !directLoad);
-	}
-
-	std::shared_ptr< StandardResource >
-	StandardResource::getDefault () noexcept
-	{
-		return Resources::Manager::instance()->standardMaterials().getDefaultResource();
 	}
 }

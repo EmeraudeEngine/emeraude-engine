@@ -78,20 +78,28 @@ namespace EmEn::Scenes::Component
 				return ClassId;
 			}
 
+			/** @copydoc EmEn::Scenes::Component::Abstract::isComponent() */
+			[[nodiscard]]
+			bool
+			isComponent (const char * classID) const noexcept override
+			{
+				return strcmp(ClassId, classID) == 0;
+			}
+
 			/** @copydoc EmEn::Scenes::Component::Abstract::boundingBox() const */
 			[[nodiscard]]
-			const Libs::Math::Cuboid< float > &
+			const Libs::Math::Space3D::AACuboid< float > &
 			boundingBox () const noexcept override
 			{
-				return NullBoundingBox;
+				return m_renderableInstance->renderable()->boundingBox();
 			}
 
 			/** @copydoc EmEn::Scenes::Component::Abstract::boundingSphere() const */
 			[[nodiscard]]
-			const Libs::Math::Sphere< float > &
+			const Libs::Math::Space3D::Sphere< float > &
 			boundingSphere () const noexcept override
 			{
-				return NullBoundingSphere;
+				return m_renderableInstance->renderable()->boundingSphere();
 			}
 
 			/** @copydoc EmEn::Scenes::Component::Abstract::move() */
@@ -100,8 +108,13 @@ namespace EmEn::Scenes::Component
 			/** @copydoc EmEn::Scenes::Component::Abstract::processLogics() */
 			void processLogics (const Scene & scene) noexcept override;
 
-			/** @copydoc EmEn::Scenes::Component::Abstract::shouldRemove() */
-			bool shouldRemove () const noexcept override;
+			/** @copydoc EmEn::Scenes::Component::Abstract::shouldBeRemoved() */
+			[[nodiscard]]
+			bool
+			shouldBeRemoved () const noexcept override
+			{
+				return m_renderableInstance->isBroken();
+			}
 
 		private:
 

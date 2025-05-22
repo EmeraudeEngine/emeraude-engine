@@ -92,34 +92,31 @@ namespace EmEn::Scenes::Component
 				return ClassId;
 			}
 
-			/** @copydoc EmEn::Scenes::Component::Abstract::boundingBox() const */
+			/** @copydoc EmEn::Scenes::Component::Abstract::isComponent() */
 			[[nodiscard]]
-			const Libs::Math::Cuboid< float > &
-			boundingBox () const noexcept override
+			bool
+			isComponent (const char * classID) const noexcept override
 			{
-				return NullBoundingBox;
-			}
-
-			/** @copydoc EmEn::Scenes::Component::Abstract::boundingSphere() const */
-			[[nodiscard]]
-			const Libs::Math::Sphere< float > &
-			boundingSphere () const noexcept override
-			{
-				return NullBoundingSphere;
+				return strcmp(ClassId, classID) == 0;
 			}
 
 			/** @copydoc EmEn::Scenes::Component::Abstract::move() */
 			void
-			move (const Libs::Math::CartesianFrame< float > & worldCoordinates) noexcept override
+			move (const Libs::Math::CartesianFrame< float > & /*worldCoordinates*/) noexcept override
 			{
-				// FIXME: Check the particles coordinates
+				// FIXME: Check the particle coordinates
 			}
 
 			/** @copydoc EmEn::Scenes::Component::Abstract::processLogics() */
 			void processLogics (const Scene & scene) noexcept override;
 
-			/** @copydoc EmEn::Scenes::Component::Abstract::shouldRemove() */
-			bool shouldRemove () const noexcept override;
+			/** @copydoc EmEn::Scenes::Component::Abstract::shouldBeRemoved() */
+			[[nodiscard]]
+			bool
+			shouldBeRemoved () const noexcept override
+			{
+				return m_renderableInstance->isBroken();
+			}
 
 			/**
 			 * @brief Returns the particle limit.

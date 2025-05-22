@@ -27,7 +27,7 @@
 #include "SharedUniformBuffer.hpp"
 
 /* STL inclusions. */
-#include <algorithm>
+#include <ranges>
 
 /* Local inclusions. */
 #include "Libs/Math/Base.hpp"
@@ -40,12 +40,13 @@ namespace EmEn::Vulkan
 {
 	using namespace EmEn::Libs;
 
-	SharedUniformBuffer::SharedUniformBuffer (const std::shared_ptr< Device > & device, size_t uniformBlockSize, size_t maxElementCount) noexcept
-		: m_device(device), m_uniformBlockSize(uniformBlockSize)
+	SharedUniformBuffer::SharedUniformBuffer (const std::shared_ptr< Device > & device, uint32_t uniformBlockSize, uint32_t maxElementCount) noexcept
+		: m_device(device),
+		m_uniformBlockSize(uniformBlockSize)
 	{
 		const auto bufferCount = this->computeBlockAlignment(maxElementCount);
 
-		for ( size_t index = 0; index < bufferCount; index++ )
+		for ( uint32_t index = 0; index < bufferCount; index++ )
 		{
 			if ( !this->addBuffer() )
 			{
@@ -54,12 +55,13 @@ namespace EmEn::Vulkan
 		}
 	}
 
-	SharedUniformBuffer::SharedUniformBuffer (const std::shared_ptr< Device > & device, const DescriptorSetCreator & descriptorSetCreator, size_t uniformBlockSize, size_t maxElementCount) noexcept
-		: m_device(device), m_uniformBlockSize(uniformBlockSize)
+	SharedUniformBuffer::SharedUniformBuffer (const std::shared_ptr< Device > & device, const DescriptorSetCreator & descriptorSetCreator, uint32_t uniformBlockSize, uint32_t maxElementCount) noexcept
+		: m_device(device),
+		m_uniformBlockSize(uniformBlockSize)
 	{
 		const auto bufferCount = this->computeBlockAlignment(maxElementCount);
 
-		for ( size_t index = 0; index < bufferCount; index++ )
+		for ( uint32_t index = 0; index < bufferCount; index++ )
 		{
 			if ( !this->addBuffer(descriptorSetCreator) )
 			{
@@ -68,15 +70,15 @@ namespace EmEn::Vulkan
 		}
 	}
 
-	size_t
-	SharedUniformBuffer::computeBlockAlignment (size_t maxElementCount) noexcept
+	uint32_t
+	SharedUniformBuffer::computeBlockAlignment (uint32_t maxElementCount) noexcept
 	{
 		/* NOTE: nvidia GTX 1070 : 65536 bytes and 256 bytes alignment, so 256 optimal elements. */
 		const auto & limits = m_device->physicalDevice()->properties().limits;
 		const auto maxUBOSize = limits.maxUniformBufferRange;
-		const auto minUBOAlignment =  limits.minUniformBufferOffsetAlignment;
+		const auto minUBOAlignment = limits.minUniformBufferOffsetAlignment;
 
-		m_blockAlignedSize = minUBOAlignment * Math::alignCount(m_uniformBlockSize, static_cast< size_t >(minUBOAlignment));
+		m_blockAlignedSize = minUBOAlignment * Math::alignCount(m_uniformBlockSize, static_cast< uint32_t >(minUBOAlignment));
 		m_maxElementCountPerUBO = maxUBOSize / m_blockAlignedSize;
 
 		/*TraceInfo{ClassId} <<
@@ -92,7 +94,7 @@ namespace EmEn::Vulkan
 			return 1;
 		}
 
-		return Math::alignCount(maxElementCount * m_blockAlignedSize, static_cast< size_t >(maxUBOSize));
+		return Math::alignCount(maxElementCount * m_blockAlignedSize, maxUBOSize);
 	}
 
 	const UniformBufferObject *
@@ -126,7 +128,7 @@ namespace EmEn::Vulkan
 	}
 
 	DescriptorSet *
-	SharedUniformBuffer::descriptorSet (uint32_t index) noexcept
+	SharedUniformBuffer::descriptorSet (uint32_t index) const noexcept
 	{
 		if ( !this->isDynamic() )
 		{
@@ -170,7 +172,7 @@ namespace EmEn::Vulkan
 	void
 	SharedUniformBuffer::removeElement (const void * element) noexcept
 	{
-		auto elementIt = std::find_if(m_elements.begin(), m_elements.end(), [element] (const auto & seat) {
+		const auto elementIt = std::ranges::find_if(m_elements, [element] (const auto & seat) {
 			return seat == element;
 		});
 
@@ -180,10 +182,10 @@ namespace EmEn::Vulkan
 		}
 	}
 
-	size_t
+	uint32_t
 	SharedUniformBuffer::elementCount () const noexcept
 	{
-		size_t count = 0;
+		uint32_t count = 0;
 
 		for ( const auto & seat : m_elements )
 		{

@@ -26,18 +26,18 @@
 
 #pragma once
 
-/* Project configuration. */
-#include "platform.hpp"
+/* Emeraude-Engine configuration. */
+#include "emeraude_config.hpp"
 
 /* STL inclusions. */
-#include <functional>
+#include <cstdint>
 #include <iostream>
-#include <ratio>
 #include <tuple>
 #include <utility>
 #include <map>
 #include <ranges>
-#include <cstdint>
+#include <functional>
+#include <ratio>
 
 /* Local Inclusions. */
 #include "Types.hpp"
@@ -99,7 +99,9 @@ namespace EmEn::Libs::Time
 			TimerID
 			createTimer (const std::function< bool (TimerID) > & callable, rep_t granularity, bool once = false, bool autostart = false) noexcept
 			{
-				const auto timerID = m_lastTimerID++;
+				const std::lock_guard< std::mutex > lock{m_eventsMutex};
+
+				const auto timerID = m_lastTimerID.fetch_add(1, std::memory_order_relaxed);
 
 				const auto result = m_events.emplace(
 					std::piecewise_construct,
@@ -146,17 +148,9 @@ namespace EmEn::Libs::Time
 			bool
 			setTimerGranularity (TimerID timerID, rep_t granularity) noexcept
 			{
-				/* Gets the right timer. */
-				auto * timer = this->getTimer(timerID);
-
-				if ( timer == nullptr )
-				{
-					return false;
-				}
-
-				timer->setGranularity(granularity);
-
-				return true;
+				return this->withTimer(timerID, [granularity] (auto * timer) {
+					timer->setGranularity(granularity);
+				});
 			}
 
 			/**
@@ -167,16 +161,9 @@ namespace EmEn::Libs::Time
 			bool
 			startTimer (TimerID timerID) noexcept
 			{
-				auto * timer = this->getTimer(timerID);
-
-				if ( timer == nullptr )
-				{
-					return false;
-				}
-
-				timer->start();
-
-				return true;
+				return this->withTimer(timerID, [] (auto * timer) {
+					timer->start();
+				});
 			}
 
 			/**
@@ -187,17 +174,9 @@ namespace EmEn::Libs::Time
 			bool
 			stopTimer (TimerID timerID) noexcept
 			{
-				/* Gets the right timer. */
-				auto * timer = this->getTimer(timerID);
-
-				if ( timer == nullptr )
-				{
-					return false;
-				}
-
-				timer->stop();
-
-				return true;
+				return this->withTimer(timerID, [] (auto * timer) {
+					timer->stop();
+				});
 			}
 
 			/**
@@ -208,14 +187,9 @@ namespace EmEn::Libs::Time
 			bool
 			isTimerStarted (TimerID timerID) noexcept
 			{
-				const auto * timer = this->getTimer(timerID);
-
-				if ( timer == nullptr )
-				{
-					return false;
-				}
-
-				return timer->isStarted();
+				return this->withTimer(timerID, [] (auto * timer) {
+					return timer->isStarted();
+				});
 			}
 
 			/**
@@ -226,16 +200,9 @@ namespace EmEn::Libs::Time
 			bool
 			pauseTimer (TimerID timerID) noexcept
 			{
-				auto * timer = this->getTimer(timerID);
-
-				if ( timer == nullptr )
-				{
-					return false;
-				}
-
-				timer->pause();
-
-				return true;
+				return this->withTimer(timerID, [] (auto * timer) {
+					timer->pause();
+				});
 			}
 
 			/**
@@ -246,16 +213,9 @@ namespace EmEn::Libs::Time
 			bool
 			resumeTimer (TimerID timerID) noexcept
 			{
-				auto * timer = this->getTimer(timerID);
-
-				if ( timer == nullptr )
-				{
-					return false;
-				}
-
-				timer->resume();
-
-				return true;
+				return this->withTimer(timerID, [] (auto * timer) {
+					timer->resume();
+				});
 			}
 
 			/**
@@ -265,6 +225,8 @@ namespace EmEn::Libs::Time
 			void
 			startTimers () noexcept
 			{
+				const std::lock_guard< std::mutex > lock{m_eventsMutex};
+
 				for ( auto & event : std::ranges::views::values(m_events) )
 				{
 					event.start();
@@ -278,6 +240,8 @@ namespace EmEn::Libs::Time
 			void
 			stopTimers () noexcept
 			{
+				const std::lock_guard< std::mutex > lock{m_eventsMutex};
+
 				for ( auto & event : std::ranges::views::values(m_events) )
 				{
 					event.stop();
@@ -291,6 +255,8 @@ namespace EmEn::Libs::Time
 			void
 			pauseTimers () noexcept
 			{
+				const std::lock_guard< std::mutex > lock{m_eventsMutex};
+
 				for ( auto & event : std::ranges::views::values(m_events) )
 				{
 					event.pause();
@@ -304,6 +270,8 @@ namespace EmEn::Libs::Time
 			void
 			resumeTimers () noexcept
 			{
+				const std::lock_guard< std::mutex > lock{m_eventsMutex};
+
 				for ( auto & event : std::ranges::views::values(m_events) )
 				{
 					event.resume();
@@ -318,14 +286,9 @@ namespace EmEn::Libs::Time
 			bool
 			isTimerPaused (TimerID timerID) noexcept
 			{
-				const auto * timer = this->getTimer(timerID);
-
-				if ( timer == nullptr )
-				{
-					return false;
-				}
-
-				return timer->isPaused();
+				return this->withTimer(timerID, [] (auto * timer) {
+					return timer->isPaused();
+				});
 			}
 
 			/**
@@ -336,6 +299,8 @@ namespace EmEn::Libs::Time
 			void
 			destroyTimer (TimerID timerID) noexcept
 			{
+				const std::lock_guard< std::mutex > lock{m_eventsMutex};
+
 				m_events.erase(timerID);
 			}
 
@@ -346,6 +311,8 @@ namespace EmEn::Libs::Time
 			void
 			destroyTimers () noexcept
 			{
+				const std::lock_guard< std::mutex > lock{m_eventsMutex};
+
 				m_events.clear();
 			}
 
@@ -357,39 +324,55 @@ namespace EmEn::Libs::Time
 			EventTrait () noexcept = default;
 
 			/**
-			 * @brief Returns a timer.
+			 * @brief Executes a function with a specific timer.
+			 * @tparam function_t The type of function.
 			 * @param timerID The timer ID.
-			 * @return TimedEvent< rep_t, period_t > *
+			 * @param function A function.
+			 * @return std::invoke_result_t< function_t, TimedEvent< rep_t, period_t > * >
 			 */
-			TimedEvent< rep_t, period_t > *
-			getTimer (TimerID timerID) noexcept
+			template< typename function_t >
+			std::invoke_result_t< function_t, TimedEvent< rep_t, period_t > * >
+			withTimer (TimerID timerID, function_t function) const noexcept
 			{
+				const std::lock_guard< std::mutex > lock{m_eventsMutex};
+
 				const auto timerIt = m_events.find(timerID);
 
 				if ( timerIt == m_events.cend() )
 				{
-					std::cerr << __PRETTY_FUNCTION__ << ", unable to find timer #" << timerID << " !" "\n";
+					using ReturnType = std::invoke_result_t< function_t, TimedEvent< rep_t, period_t > * >;
 
-					return nullptr;
+					if constexpr ( !std::is_void_v< ReturnType > )
+					{
+						/* NOTE: Return a default value. */
+						return ReturnType{};
+					}
+					else
+					{
+						return;
+					}
 				}
 
-				return &timerIt->second;
+				return function(&timerIt->second);
 			}
 
+			/**
+			 * @brief Resets a timer.
+			 * @param timerID The timer ID.
+			 * @return void
+			 */
 			void
 			resetTimer (TimerID timerID) noexcept
 			{
-				const auto timerIt = m_events.find(timerID);
-
-				if ( timerIt != m_events.cend() )
-				{
-					timerIt->second.resetTop();
-				}
+				this->withTimer(timerID, [] (auto * timer) {
+					timer->resetTop();
+				});
 			}
 
 		private:
 
-			TimerID m_lastTimerID{1};
-			std::map< TimerID, TimedEvent< rep_t, period_t > > m_events{};
+			std::atomic< TimerID > m_lastTimerID{1};
+			std::map< TimerID, TimedEvent< rep_t, period_t > > m_events;
+			mutable std::mutex m_eventsMutex;
 	};
 }

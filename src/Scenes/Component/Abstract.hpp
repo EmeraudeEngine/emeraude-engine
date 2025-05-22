@@ -41,7 +41,8 @@
 #include "Animations/AnimatableInterface.hpp"
 
 /* Local inclusions for usages. */
-#include "Libs/Math/Cuboid.hpp"
+#include "Libs/Math/Space3D/AACuboid.hpp"
+#include "Libs/Math/Space3D/Sphere.hpp"
 #include "Physics/MovableTrait.hpp"
 
 /* Forward declarations. */
@@ -189,7 +190,7 @@ namespace EmEn::Scenes::Component
 
 			/**
 			 * @brief Returns to the renderable, if component is visual.
-			 * @warning Can be null !
+			 * @warning Can be a null pointer!
 			 * @return const Graphics::Renderable::Interface *
 			 */
 			[[nodiscard]]
@@ -218,14 +219,14 @@ namespace EmEn::Scenes::Component
 			}
 
 			/**
-			 * @brief Returns the absolute coordinates of this component using parent node.
+			 * @brief Returns the absolute coordinates of this component using the parent node.
 			 * @return Libs::Math::Coordinates< float >
 			 */
 			[[nodiscard]]
 			Libs::Math::CartesianFrame< float > getWorldCoordinates () const noexcept;
 
 			/**
-			 * @brief Returns the absolute velocity of this component using parent node.
+			 * @brief Returns the absolute velocity of this component using the parent node.
 			 * @return Libs::Math::Vector< 3, float >
 			 */
 			[[nodiscard]]
@@ -240,7 +241,7 @@ namespace EmEn::Scenes::Component
 
 			/**
 			 * @brief Returns to the renderable instance, if component is visual.
-			 * @warning Can be null !
+			 * @warning Can be a null pointer!
 			 * @return std::shared_ptr< Graphics::RenderableInstance::Abstract >
 			 */
 			[[nodiscard]]
@@ -252,6 +253,30 @@ namespace EmEn::Scenes::Component
 			}
 
 			/**
+			 * @brief Returns the local bounding box of this component.
+			 * @note Can be invalid. On non-overridden method, this will return a null bounding box.
+			 * @return const Libs::Math::Space3D::AACuboid< float > &
+			 */
+			[[nodiscard]]
+			virtual const Libs::Math::Space3D::AACuboid< float > &
+			boundingBox () const noexcept
+			{
+				return NullBoundingBox;
+			}
+
+			/**
+			 * @brief Returns the local bounding sphere of this component.
+			 * @note Can be invalid. On non-overridden method, this will return a null bounding sphere.
+			 * @return const Libs::Math::Space3D::Sphere< float > &
+			 */
+			[[nodiscard]]
+			virtual const Libs::Math::Space3D::Sphere< float > &
+			boundingSphere () const noexcept
+			{
+				return NullBoundingSphere;
+			}
+
+			/**
 			 * @brief Returns the type of component.
 			 * @return const char *
 			 */
@@ -259,20 +284,12 @@ namespace EmEn::Scenes::Component
 			virtual const char * getComponentType () const noexcept = 0;
 
 			/**
-			 * @brief Returns the local bounding box of this component.
-			 * @note Can be invalid.
-			 * @return const Libs::Math::Cuboid< float > &
+			 * @brief Checks the type of the current component.
+			 * @param classID A C-string.
+			 * @return bool
 			 */
 			[[nodiscard]]
-			virtual const Libs::Math::Cuboid< float > & boundingBox () const noexcept = 0;
-
-			/**
-			 * @brief Returns the local bounding sphere of this component.
-			 * @note Can be invalid.
-			 * @return const Libs::Math::Sphere< float > &
-			 */
-			[[nodiscard]]
-			virtual const Libs::Math::Sphere< float > & boundingSphere () const noexcept = 0;
+			virtual bool isComponent (const char * classID) const noexcept = 0;
 
 			/**
 			 * @brief This method is called when the entity is updated by the core logic every cycle.
@@ -294,10 +311,10 @@ namespace EmEn::Scenes::Component
 			 * @return bool
 			 */
 			[[nodiscard]]
-			virtual bool shouldRemove () const noexcept = 0;
+			virtual bool shouldBeRemoved () const noexcept = 0;
 
-			static const Libs::Math::Cuboid< float > NullBoundingBox;
-			static const Libs::Math::Sphere< float > NullBoundingSphere;
+			static const Libs::Math::Space3D::AACuboid< float > NullBoundingBox;
+			static const Libs::Math::Space3D::Sphere< float > NullBoundingSphere;
 
 		protected:
 

@@ -41,442 +41,442 @@ namespace EmEn::Saphir
 		{
 			namespace Define
 			{
-				static constexpr auto Version = "#version";
-				static constexpr auto Extension = "#extension";
-				static constexpr auto Line = "#line";
+				constexpr auto Version = "#version";
+				constexpr auto Extension = "#extension";
+				constexpr auto Line = "#line";
 			}
 
 			namespace Profile
 			{
-				static constexpr auto Core = "core";
-				static constexpr auto Compatibility = "compatibility";
-				static constexpr auto EmbeddedSystem = "es";
+				constexpr auto Core = "core";
+				constexpr auto Compatibility = "compatibility";
+				constexpr auto EmbeddedSystem = "es";
 			}
 
 			namespace Extension
 			{
-				static constexpr auto All = "all";
-				static constexpr auto Enable = "enable";
-				static constexpr auto Require = "require";
-				static constexpr auto Warn = "warn";
-				static constexpr auto Disable = "disable";
+				constexpr auto All = "all";
+				constexpr auto Enable = "enable";
+				constexpr auto Require = "require";
+				constexpr auto Warn = "warn";
+				constexpr auto Disable = "disable";
 			}
 
 			namespace Macro
 			{
-				static constexpr auto File = "__FILE__";
-				static constexpr auto Line = "__LINE__";
-				static constexpr auto Version = "__VERSION__";
-				static constexpr auto GLCoreProfile = "GL_core_profile";
-				static constexpr auto GLCompatibilityProfile = "GL_compatibility_profile";
+				constexpr auto File = "__FILE__";
+				constexpr auto Line = "__LINE__";
+				constexpr auto Version = "__VERSION__";
+				constexpr auto GLCoreProfile = "GL_core_profile";
+				constexpr auto GLCompatibilityProfile = "GL_compatibility_profile";
 			}
 
 			namespace Primitive
 			{
-				static constexpr auto Points = "points";
-				static constexpr auto Lines = "lines";
-				static constexpr auto LineAdjacency = "lines_adjacency";
-				static constexpr auto LineStrip = "line_strip";
-				static constexpr auto Triangles = "triangles";
-				static constexpr auto TrianglesAdjacency = "triangles_adjacency";
-				static constexpr auto TriangleStrip = "triangle_strip";
+				constexpr auto Points = "points";
+				constexpr auto Lines = "lines";
+				constexpr auto LineAdjacency = "lines_adjacency";
+				constexpr auto LineStrip = "line_strip";
+				constexpr auto Triangles = "triangles";
+				constexpr auto TrianglesAdjacency = "triangles_adjacency";
+				constexpr auto TriangleStrip = "triangle_strip";
 			}
 
 			/* Flow controls */
-			static constexpr auto Break = "break";
-			static constexpr auto Continue = "continue";
-			static constexpr auto Do = "do";
-			static constexpr auto For = "for";
-			static constexpr auto While = "while";
-			static constexpr auto Switch = "switch";
-			static constexpr auto Case = "case";
-			static constexpr auto Default = "default";
-			static constexpr auto If = "if";
-			static constexpr auto Else = "else";
-			static constexpr auto Discard = "discard";
-			static constexpr auto Return = "return";
+			constexpr auto Break = "break";
+			constexpr auto Continue = "continue";
+			constexpr auto Do = "do";
+			constexpr auto For = "for";
+			constexpr auto While = "while";
+			constexpr auto Switch = "switch";
+			constexpr auto Case = "case";
+			constexpr auto Default = "default";
+			constexpr auto If = "if";
+			constexpr auto Else = "else";
+			constexpr auto Discard = "discard";
+			constexpr auto Return = "return";
 
 			/* Qualifiers */
-			static constexpr auto Const = "const";
-			static constexpr auto Uniform = "uniform";
-			static constexpr auto In = "in";
-			static constexpr auto Out = "out";
-			static constexpr auto InOut = "inout";
-			static constexpr auto Buffer = "buffer";
-			static constexpr auto Shared = "shared";
-			static constexpr auto Packed = "packed";
-			static constexpr auto Std140 = "std140";
-			static constexpr auto Std430 = "std430";
-			static constexpr auto Attribute = "attribute";
-			static constexpr auto Varying = "varying";
-			static constexpr auto Coherent = "coherent";
-			static constexpr auto Volatile = "volatile";
-			static constexpr auto Restrict = "restrict";
-			static constexpr auto ReadOnly = "readonly";
-			static constexpr auto WriteOnly = "writeonly";
-			static constexpr auto Layout = "layout";
-			static constexpr auto Centroid = "centroid";
-			static constexpr auto Flat = "flat";
-			static constexpr auto Smooth = "smooth";
-			static constexpr auto NoPerspective = "noperspective";
-			static constexpr auto Patch = "patch";
-			static constexpr auto Sample = "sample";
-			static constexpr auto Invariant = "invariant";
-			static constexpr auto Precise = "precise";
-			static constexpr auto Subroutine = "subroutine";
-			static constexpr auto Struct = "struct";
+			constexpr auto Const = "const";
+			constexpr auto Uniform = "uniform";
+			constexpr auto In = "in";
+			constexpr auto Out = "out";
+			constexpr auto InOut = "inout";
+			constexpr auto Buffer = "buffer";
+			constexpr auto Shared = "shared";
+			constexpr auto Packed = "packed";
+			constexpr auto Std140 = "std140";
+			constexpr auto Std430 = "std430";
+			constexpr auto Attribute = "attribute";
+			constexpr auto Varying = "varying";
+			constexpr auto Coherent = "coherent";
+			constexpr auto Volatile = "volatile";
+			constexpr auto Restrict = "restrict";
+			constexpr auto ReadOnly = "readonly";
+			constexpr auto WriteOnly = "writeonly";
+			constexpr auto Layout = "layout";
+			constexpr auto Centroid = "centroid";
+			constexpr auto Flat = "flat";
+			constexpr auto Smooth = "smooth";
+			constexpr auto NoPerspective = "noperspective";
+			constexpr auto Patch = "patch";
+			constexpr auto Sample = "sample";
+			constexpr auto Invariant = "invariant";
+			constexpr auto Precise = "precise";
+			constexpr auto Subroutine = "subroutine";
+			constexpr auto Struct = "struct";
 
 			/* Layout parameters */
-			static constexpr auto Set = "set";
-			static constexpr auto Binding = "binding";
-			static constexpr auto Location = "location";
-			static constexpr auto ColumnMajor = "column_major";
-			static constexpr auto RowMajor = "row_major";
-			static constexpr auto Align = "align";
-			static constexpr auto Offset = "offset";
-			static constexpr auto MaxVertices = "max_vertices";
-			static constexpr auto PushConstant = "push_constant";
-			static constexpr auto ConstantId = "constant_id";
+			constexpr auto Set = "set";
+			constexpr auto Binding = "binding";
+			constexpr auto Location = "location";
+			constexpr auto ColumnMajor = "column_major";
+			constexpr auto RowMajor = "row_major";
+			constexpr auto Align = "align";
+			constexpr auto Offset = "offset";
+			constexpr auto MaxVertices = "max_vertices";
+			constexpr auto PushConstant = "push_constant";
+			constexpr auto ConstantId = "constant_id";
 
 			/* Precisions */
-			static constexpr auto Precision = "precision";
-			static constexpr auto Low = "lowp";
-			static constexpr auto Medium = "mediump";
-			static constexpr auto High = "highp";
+			constexpr auto Precision = "precision";
+			constexpr auto Low = "lowp";
+			constexpr auto Medium = "mediump";
+			constexpr auto High = "highp";
 
 			/* Literal types */
-			static constexpr auto Void = "void";
-			static constexpr auto Float = "float";
-			static constexpr auto Double = "double";
-			static constexpr auto UnsignedInteger = "uint";
-			static constexpr auto Integer = "int";
-			static constexpr auto AtomicUnsignedInteger = "atomic_uint";
-			static constexpr auto Boolean = "bool";
-			static constexpr auto True = "true";
-			static constexpr auto False = "false";
+			constexpr auto Void = "void";
+			constexpr auto Float = "float";
+			constexpr auto Double = "double";
+			constexpr auto UnsignedInteger = "uint";
+			constexpr auto Integer = "int";
+			constexpr auto AtomicUnsignedInteger = "atomic_uint";
+			constexpr auto Boolean = "bool";
+			constexpr auto True = "true";
+			constexpr auto False = "false";
 
 			/* Const literal types */
-			static constexpr auto ConstFloat = "const float";
-			static constexpr auto ConstDouble = "const double";
-			static constexpr auto ConstUnsignedInteger = "const uint";
-			static constexpr auto ConstInteger = "const int";
+			constexpr auto ConstFloat = "const float";
+			constexpr auto ConstDouble = "const double";
+			constexpr auto ConstUnsignedInteger = "const uint";
+			constexpr auto ConstInteger = "const int";
 
 			/* Vector (Float) types */
-			static constexpr auto FloatVector2 = "vec2";
-			static constexpr auto FloatVector3 = "vec3";
-			static constexpr auto FloatVector4 = "vec4";
+			constexpr auto FloatVector2 = "vec2";
+			constexpr auto FloatVector3 = "vec3";
+			constexpr auto FloatVector4 = "vec4";
 			/* Vector (Double) types */
-			static constexpr auto DoubleVector2 = "dvec2";
-			static constexpr auto DoubleVector3 = "dvec3";
-			static constexpr auto DoubleVector4 = "dvec4";
+			constexpr auto DoubleVector2 = "dvec2";
+			constexpr auto DoubleVector3 = "dvec3";
+			constexpr auto DoubleVector4 = "dvec4";
 			/* Vector (Unsigned integer) types */
-			static constexpr auto UIntVector2 = "uvec2";
-			static constexpr auto UIntVector3 = "uvec3";
-			static constexpr auto UIntVector4 = "uvec4";
+			constexpr auto UIntVector2 = "uvec2";
+			constexpr auto UIntVector3 = "uvec3";
+			constexpr auto UIntVector4 = "uvec4";
 			/* Vector (Signed integer) types */
-			static constexpr auto SIntVector2 = "ivec2";
-			static constexpr auto SIntVector3 = "ivec3";
-			static constexpr auto SIntVector4 = "ivec4";
+			constexpr auto SIntVector2 = "ivec2";
+			constexpr auto SIntVector3 = "ivec3";
+			constexpr auto SIntVector4 = "ivec4";
 			/* Vector (Boolean) types */
-			static constexpr auto BooleanVector2 = "bvec2";
-			static constexpr auto BooleanVector3 = "bvec3";
-			static constexpr auto BooleanVector4 = "bvec4";
+			constexpr auto BooleanVector2 = "bvec2";
+			constexpr auto BooleanVector3 = "bvec3";
+			constexpr auto BooleanVector4 = "bvec4";
 
 			/* Const vector (Float) types */
-			static constexpr auto ConstFloatVector2 = "const vec2";
-			static constexpr auto ConstFloatVector3 = "const vec3";
-			static constexpr auto ConstFloatVector4 = "const vec4";
+			constexpr auto ConstFloatVector2 = "const vec2";
+			constexpr auto ConstFloatVector3 = "const vec3";
+			constexpr auto ConstFloatVector4 = "const vec4";
 			/* Const vector (Double) types */
-			static constexpr auto ConstDoubleVector2 = "const dvec2";
-			static constexpr auto ConstDoubleVector3 = "const dvec3";
-			static constexpr auto ConstDoubleVector4 = "const dvec4";
+			constexpr auto ConstDoubleVector2 = "const dvec2";
+			constexpr auto ConstDoubleVector3 = "const dvec3";
+			constexpr auto ConstDoubleVector4 = "const dvec4";
 			/* Const vector (Unsigned integer) types */
-			static constexpr auto ConstUIntVector2 = "const uvec2";
-			static constexpr auto ConstUIntVector3 = "const uvec3";
-			static constexpr auto ConstUIntVector4 = "const uvec4";
+			constexpr auto ConstUIntVector2 = "const uvec2";
+			constexpr auto ConstUIntVector3 = "const uvec3";
+			constexpr auto ConstUIntVector4 = "const uvec4";
 			/* Const vector (Signed integer) types */
-			static constexpr auto ConstSIntVector2 = "const ivec2";
-			static constexpr auto ConstSIntVector3 = "const ivec3";
-			static constexpr auto ConstSIntVector4 = "const ivec4";
+			constexpr auto ConstSIntVector2 = "const ivec2";
+			constexpr auto ConstSIntVector3 = "const ivec3";
+			constexpr auto ConstSIntVector4 = "const ivec4";
 			/* Const vector (Boolean) types */
-			static constexpr auto ConstBooleanVector2 = "const bvec2";
-			static constexpr auto ConstBooleanVector3 = "const bvec3";
-			static constexpr auto ConstBooleanVector4 = "const bvec4";
+			constexpr auto ConstBooleanVector2 = "const bvec2";
+			constexpr auto ConstBooleanVector3 = "const bvec3";
+			constexpr auto ConstBooleanVector4 = "const bvec4";
 
 			/* Matrix (Float) types */
-			static constexpr auto Matrix2 = "mat2";
-			static constexpr auto Matrix3 = "mat3";
-			static constexpr auto Matrix4 = "mat4";
-			static constexpr auto Matrix2x2 = "mat2x2";
-			static constexpr auto Matrix2x3 = "mat2x3";
-			static constexpr auto Matrix2x4 = "mat2x4";
-			static constexpr auto Matrix3x3 = "mat3x3";
-			static constexpr auto Matrix3x2 = "mat3x2";
-			static constexpr auto Matrix3x4 = "mat3x4";
-			static constexpr auto Matrix4x2 = "mat4x2";
-			static constexpr auto Matrix4x3 = "mat4x3";
-			static constexpr auto Matrix4x4 = "mat4x4";
+			constexpr auto Matrix2 = "mat2";
+			constexpr auto Matrix3 = "mat3";
+			constexpr auto Matrix4 = "mat4";
+			constexpr auto Matrix2x2 = "mat2x2";
+			constexpr auto Matrix2x3 = "mat2x3";
+			constexpr auto Matrix2x4 = "mat2x4";
+			constexpr auto Matrix3x3 = "mat3x3";
+			constexpr auto Matrix3x2 = "mat3x2";
+			constexpr auto Matrix3x4 = "mat3x4";
+			constexpr auto Matrix4x2 = "mat4x2";
+			constexpr auto Matrix4x3 = "mat4x3";
+			constexpr auto Matrix4x4 = "mat4x4";
 			/* Matrix (Double) types */
-			static constexpr auto DoubleMatrix2 = "dmat2";
-			static constexpr auto DoubleMatrix3 = "dmat3";
-			static constexpr auto DoubleMatrix4 = "dmat4";
-			static constexpr auto DoubleMatrix2x2 = "dmat2x2";
-			static constexpr auto DoubleMatrix2x3 = "dmat2x3";
-			static constexpr auto DoubleMatrix2x4 = "dmat2x4";
-			static constexpr auto DoubleMatrix3x3 = "dmat3x3";
-			static constexpr auto DoubleMatrix3x2 = "dmat3x2";
-			static constexpr auto DoubleMatrix3x4 = "dmat3x4";
-			static constexpr auto DoubleMatrix4x2 = "dmat4x2";
-			static constexpr auto DoubleMatrix4x3 = "dmat4x3";
-			static constexpr auto DoubleMatrix4x4 = "dmat4x4";
+			constexpr auto DoubleMatrix2 = "dmat2";
+			constexpr auto DoubleMatrix3 = "dmat3";
+			constexpr auto DoubleMatrix4 = "dmat4";
+			constexpr auto DoubleMatrix2x2 = "dmat2x2";
+			constexpr auto DoubleMatrix2x3 = "dmat2x3";
+			constexpr auto DoubleMatrix2x4 = "dmat2x4";
+			constexpr auto DoubleMatrix3x3 = "dmat3x3";
+			constexpr auto DoubleMatrix3x2 = "dmat3x2";
+			constexpr auto DoubleMatrix3x4 = "dmat3x4";
+			constexpr auto DoubleMatrix4x2 = "dmat4x2";
+			constexpr auto DoubleMatrix4x3 = "dmat4x3";
+			constexpr auto DoubleMatrix4x4 = "dmat4x4";
 
 			/* Const matrix (Float) types */
-			static constexpr auto ConstMatrix2 = "const mat2";
-			static constexpr auto ConstMatrix3 = "const mat3";
-			static constexpr auto ConstMatrix4 = "const mat4";
-			static constexpr auto ConstMatrix2x2 = "const mat2x2";
-			static constexpr auto ConstMatrix2x3 = "const mat2x3";
-			static constexpr auto ConstMatrix2x4 = "const mat2x4";
-			static constexpr auto ConstMatrix3x3 = "const mat3x3";
-			static constexpr auto ConstMatrix3x2 = "const mat3x2";
-			static constexpr auto ConstMatrix3x4 = "const mat3x4";
-			static constexpr auto ConstMatrix4x2 = "const mat4x2";
-			static constexpr auto ConstMatrix4x3 = "const mat4x3";
-			static constexpr auto ConstMatrix4x4 = "const mat4x4";
+			constexpr auto ConstMatrix2 = "const mat2";
+			constexpr auto ConstMatrix3 = "const mat3";
+			constexpr auto ConstMatrix4 = "const mat4";
+			constexpr auto ConstMatrix2x2 = "const mat2x2";
+			constexpr auto ConstMatrix2x3 = "const mat2x3";
+			constexpr auto ConstMatrix2x4 = "const mat2x4";
+			constexpr auto ConstMatrix3x3 = "const mat3x3";
+			constexpr auto ConstMatrix3x2 = "const mat3x2";
+			constexpr auto ConstMatrix3x4 = "const mat3x4";
+			constexpr auto ConstMatrix4x2 = "const mat4x2";
+			constexpr auto ConstMatrix4x3 = "const mat4x3";
+			constexpr auto ConstMatrix4x4 = "const mat4x4";
 			/* Const matrix (Double) types */
-			static constexpr auto ConstDoubleMatrix2 = "const dmat2";
-			static constexpr auto ConstDoubleMatrix3 = "const dmat3";
-			static constexpr auto ConstDoubleMatrix4 = "const dmat4";
-			static constexpr auto ConstDoubleMatrix2x2 = "const dmat2x2";
-			static constexpr auto ConstDoubleMatrix2x3 = "const dmat2x3";
-			static constexpr auto ConstDoubleMatrix2x4 = "const dmat2x4";
-			static constexpr auto ConstDoubleMatrix3x3 = "const dmat3x3";
-			static constexpr auto ConstDoubleMatrix3x2 = "const dmat3x2";
-			static constexpr auto ConstDoubleMatrix3x4 = "const dmat3x4";
-			static constexpr auto ConstDoubleMatrix4x2 = "const dmat4x2";
-			static constexpr auto ConstDoubleMatrix4x3 = "const dmat4x3";
-			static constexpr auto ConstDoubleMatrix4x4 = "const dmat4x4";
+			constexpr auto ConstDoubleMatrix2 = "const dmat2";
+			constexpr auto ConstDoubleMatrix3 = "const dmat3";
+			constexpr auto ConstDoubleMatrix4 = "const dmat4";
+			constexpr auto ConstDoubleMatrix2x2 = "const dmat2x2";
+			constexpr auto ConstDoubleMatrix2x3 = "const dmat2x3";
+			constexpr auto ConstDoubleMatrix2x4 = "const dmat2x4";
+			constexpr auto ConstDoubleMatrix3x3 = "const dmat3x3";
+			constexpr auto ConstDoubleMatrix3x2 = "const dmat3x2";
+			constexpr auto ConstDoubleMatrix3x4 = "const dmat3x4";
+			constexpr auto ConstDoubleMatrix4x2 = "const dmat4x2";
+			constexpr auto ConstDoubleMatrix4x3 = "const dmat4x3";
+			constexpr auto ConstDoubleMatrix4x4 = "const dmat4x4";
 
 			/* Sampler (Float) types */
-			static constexpr auto Sampler1D = "sampler1D";
-			static constexpr auto Sampler1DArray = "sampler1DArray";
-			static constexpr auto Sampler2D = "sampler2D";
-			static constexpr auto Sampler2DArray = "sampler2DArray";
-			static constexpr auto Sampler2DMS = "sampler2DMS";
-			static constexpr auto Sampler2DMSArray = "sampler2DMSArray";
-			static constexpr auto Sampler3D = "sampler3D";
-			static constexpr auto SamplerCube = "samplerCube";
-			static constexpr auto SamplerCubeArray = "samplerCubeArray";
-			static constexpr auto SamplerBuffer = "samplerBuffer";
+			constexpr auto Sampler1D = "sampler1D";
+			constexpr auto Sampler1DArray = "sampler1DArray";
+			constexpr auto Sampler2D = "sampler2D";
+			constexpr auto Sampler2DArray = "sampler2DArray";
+			constexpr auto Sampler2DMS = "sampler2DMS";
+			constexpr auto Sampler2DMSArray = "sampler2DMSArray";
+			constexpr auto Sampler3D = "sampler3D";
+			constexpr auto SamplerCube = "samplerCube";
+			constexpr auto SamplerCubeArray = "samplerCubeArray";
+			constexpr auto SamplerBuffer = "samplerBuffer";
 			/* Sampler (Unsigned integer) types */
-			static constexpr auto UIntSamplerBuffer = "usamplerBuffer";
-			static constexpr auto UIntSamplerCubeArray = "usamplerCubeArray";
-			static constexpr auto UIntSamplerCube = "usamplerCube";
-			static constexpr auto UIntSampler3D = "usampler3D";
-			static constexpr auto UIntSampler2DMSArray = "usampler2DMSArray";
-			static constexpr auto UIntSampler2DMS = "usampler2DMS";
-			static constexpr auto UIntSampler2DRectangle = "usampler2DRect";
-			static constexpr auto UIntSampler2D = "usampler2D";
-			static constexpr auto UIntSampler2DArray = "usampler2DArray";
-			static constexpr auto UIntSampler1D = "usampler1D";
-			static constexpr auto UIntSampler1DArray = "usampler1DArray";
+			constexpr auto UIntSamplerBuffer = "usamplerBuffer";
+			constexpr auto UIntSamplerCubeArray = "usamplerCubeArray";
+			constexpr auto UIntSamplerCube = "usamplerCube";
+			constexpr auto UIntSampler3D = "usampler3D";
+			constexpr auto UIntSampler2DMSArray = "usampler2DMSArray";
+			constexpr auto UIntSampler2DMS = "usampler2DMS";
+			constexpr auto UIntSampler2DRectangle = "usampler2DRect";
+			constexpr auto UIntSampler2D = "usampler2D";
+			constexpr auto UIntSampler2DArray = "usampler2DArray";
+			constexpr auto UIntSampler1D = "usampler1D";
+			constexpr auto UIntSampler1DArray = "usampler1DArray";
 			/* Sampler (Signed integer) types */
-			static constexpr auto SIntSamplerBuffer = "isamplerBuffer";
-			static constexpr auto SIntSamplerCubeArray = "isamplerCubeArray";
-			static constexpr auto SIntSamplerCube = "isamplerCube";
-			static constexpr auto SIntSampler3D = "isampler3D";
-			static constexpr auto SIntSampler2DMSArray = "isampler2DMSArray";
-			static constexpr auto SIntSampler2DMS = "isampler2DMS";
-			static constexpr auto SIntSampler2DRectangle = "isampler2DRect";
-			static constexpr auto SIntSampler2D = "isampler2D";
-			static constexpr auto SIntSampler2DArray = "isampler2DArray";
-			static constexpr auto SIntSampler1D = "isampler1D";
-			static constexpr auto SIntSampler1DArray = "isampler1DArray";
+			constexpr auto SIntSamplerBuffer = "isamplerBuffer";
+			constexpr auto SIntSamplerCubeArray = "isamplerCubeArray";
+			constexpr auto SIntSamplerCube = "isamplerCube";
+			constexpr auto SIntSampler3D = "isampler3D";
+			constexpr auto SIntSampler2DMSArray = "isampler2DMSArray";
+			constexpr auto SIntSampler2DMS = "isampler2DMS";
+			constexpr auto SIntSampler2DRectangle = "isampler2DRect";
+			constexpr auto SIntSampler2D = "isampler2D";
+			constexpr auto SIntSampler2DArray = "isampler2DArray";
+			constexpr auto SIntSampler1D = "isampler1D";
+			constexpr auto SIntSampler1DArray = "isampler1DArray";
 
 			/* Shadow sampler (Float only) types */
-			static constexpr auto Sampler1DShadow = "sampler1DShadow";
-			static constexpr auto Sampler1DArrayShadow = "sampler1DArrayShadow";
-			static constexpr auto Sampler2DShadow = "sampler2DShadow";
-			static constexpr auto Sampler2DArrayShadow = "sampler2DArrayShadow";
-			static constexpr auto Sampler2DRectangle = "sampler2DRect";
-			static constexpr auto Sampler2DRectangleShadow = "sampler2DRectShadow";
-			static constexpr auto SamplerCubeShadow = "samplerCubeShadow";
-			static constexpr auto SamplerCubeArrayShadow = "samplerCubeArrayShadow";
+			constexpr auto Sampler1DShadow = "sampler1DShadow";
+			constexpr auto Sampler1DArrayShadow = "sampler1DArrayShadow";
+			constexpr auto Sampler2DShadow = "sampler2DShadow";
+			constexpr auto Sampler2DArrayShadow = "sampler2DArrayShadow";
+			constexpr auto Sampler2DRectangle = "sampler2DRect";
+			constexpr auto Sampler2DRectangleShadow = "sampler2DRectShadow";
+			constexpr auto SamplerCubeShadow = "samplerCubeShadow";
+			constexpr auto SamplerCubeArrayShadow = "samplerCubeArrayShadow";
 
 			/* Image (Float) types */
-			static constexpr auto Image1D = "image1D";
-			static constexpr auto Image1DArray = "image1DArray";
-			static constexpr auto Image2D = "image2D";
-			static constexpr auto Image2DArray = "image2DArray";
-			static constexpr auto Image2DRectangle = "image2DRect";
-			static constexpr auto Image2DMS = "image2DMS";
-			static constexpr auto Image2DMSArray = "image2DMSArray";
-			static constexpr auto Image3D = "image3D";
-			static constexpr auto ImageCube = "imageCube";
-			static constexpr auto ImageCubeArray = "imageCubeArray";
-			static constexpr auto ImageBuffer = "imageBuffer";
+			constexpr auto Image1D = "image1D";
+			constexpr auto Image1DArray = "image1DArray";
+			constexpr auto Image2D = "image2D";
+			constexpr auto Image2DArray = "image2DArray";
+			constexpr auto Image2DRectangle = "image2DRect";
+			constexpr auto Image2DMS = "image2DMS";
+			constexpr auto Image2DMSArray = "image2DMSArray";
+			constexpr auto Image3D = "image3D";
+			constexpr auto ImageCube = "imageCube";
+			constexpr auto ImageCubeArray = "imageCubeArray";
+			constexpr auto ImageBuffer = "imageBuffer";
 			/* Image (Unsigned integer) types */
-			static constexpr auto UIntImage1D = "uimage1D";
-			static constexpr auto UIntImage1DArray = "uimage1DArray";
-			static constexpr auto UIntImage2D = "uimage2D";
-			static constexpr auto UIntImage2DArray = "uimage2DArray";
-			static constexpr auto UIntImage2DRectangle = "uimage2DRect";
-			static constexpr auto UIntImage2DMS = "uimage2DMS";
-			static constexpr auto UIntImage2DMSArray = "uimage2DMSArray";
-			static constexpr auto UIntImage3D = "uimage3D";
-			static constexpr auto UIntImageCube = "uimageCube";
-			static constexpr auto UIntImageCubeArray = "uimageCubeArray";
-			static constexpr auto UIntImageBuffer = "uimageBuffer";
+			constexpr auto UIntImage1D = "uimage1D";
+			constexpr auto UIntImage1DArray = "uimage1DArray";
+			constexpr auto UIntImage2D = "uimage2D";
+			constexpr auto UIntImage2DArray = "uimage2DArray";
+			constexpr auto UIntImage2DRectangle = "uimage2DRect";
+			constexpr auto UIntImage2DMS = "uimage2DMS";
+			constexpr auto UIntImage2DMSArray = "uimage2DMSArray";
+			constexpr auto UIntImage3D = "uimage3D";
+			constexpr auto UIntImageCube = "uimageCube";
+			constexpr auto UIntImageCubeArray = "uimageCubeArray";
+			constexpr auto UIntImageBuffer = "uimageBuffer";
 			/* Image (Signed integer) types */
-			static constexpr auto SIntImage1D = "iimage1D";
-			static constexpr auto SIntImage1DArray = "iimage1DArray";
-			static constexpr auto SIntImage2D = "iimage2D";
-			static constexpr auto SIntImage2DArray = "iimage2DArray";
-			static constexpr auto SIntImage2DRectangle = "iimage2DRect";
-			static constexpr auto SIntImage2DMS = "iimage2DMS";
-			static constexpr auto SIntImage2DMSArray = "iimage2DMSArray";
-			static constexpr auto SIntImage3D = "iimage3D";
-			static constexpr auto SIntImageCube = "iimageCube";
-			static constexpr auto SIntImageCubeArray = "iimageCubeArray";
-			static constexpr auto SIntImageBuffer = "iimageBuffer";
+			constexpr auto SIntImage1D = "iimage1D";
+			constexpr auto SIntImage1DArray = "iimage1DArray";
+			constexpr auto SIntImage2D = "iimage2D";
+			constexpr auto SIntImage2DArray = "iimage2DArray";
+			constexpr auto SIntImage2DRectangle = "iimage2DRect";
+			constexpr auto SIntImage2DMS = "iimage2DMS";
+			constexpr auto SIntImage2DMSArray = "iimage2DMSArray";
+			constexpr auto SIntImage3D = "iimage3D";
+			constexpr auto SIntImageCube = "iimageCube";
+			constexpr auto SIntImageCubeArray = "iimageCubeArray";
+			constexpr auto SIntImageBuffer = "iimageBuffer";
 
 			/* === Vulkan only ==== */
 
 			/* Texture (Float) types */
-			static constexpr auto Texture1D = "texture1D";
-			static constexpr auto Texture2D = "texture2D";
-			static constexpr auto Texture3D = "texture3D";
-			static constexpr auto TextureCube = "textureCube";
-			static constexpr auto Texture2DRectangle = "texture2DRect";
-			static constexpr auto Texture1DArray = "texture1DArray";
-			static constexpr auto Texture2DArray = "texture2DArray";
-			static constexpr auto TextureCubeArray = "textureCubeArray";
-			static constexpr auto TextureBuffer = "textureBuffer";
-			static constexpr auto Texture2DMS = "texture2DMS";
-			static constexpr auto Texture2DMSArray = "texture2DMSArray";
+			constexpr auto Texture1D = "texture1D";
+			constexpr auto Texture2D = "texture2D";
+			constexpr auto Texture3D = "texture3D";
+			constexpr auto TextureCube = "textureCube";
+			constexpr auto Texture2DRectangle = "texture2DRect";
+			constexpr auto Texture1DArray = "texture1DArray";
+			constexpr auto Texture2DArray = "texture2DArray";
+			constexpr auto TextureCubeArray = "textureCubeArray";
+			constexpr auto TextureBuffer = "textureBuffer";
+			constexpr auto Texture2DMS = "texture2DMS";
+			constexpr auto Texture2DMSArray = "texture2DMSArray";
 			/* Texture (Unsigned integer) types */
-			static constexpr auto UIntTexture1D = "utexture1D";
-			static constexpr auto UIntTexture2D = "utexture2D";
-			static constexpr auto UIntTexture3D = "utexture3D";
-			static constexpr auto UIntTextureCube = "utextureCube";
-			static constexpr auto UIntTexture2DRectangle = "utexture2DRect";
-			static constexpr auto UIntTexture1DArray = "utexture1DArray";
-			static constexpr auto UIntTexture2DArray = "utexture2DArray";
-			static constexpr auto UIntTextureCubeArray = "utextureCubeArray";
-			static constexpr auto UIntTextureBuffer = "utextureBuffer";
-			static constexpr auto UIntTexture2DMS = "utexture2DMS";
-			static constexpr auto UIntTexture2DMSArray = "utexture2DMSArray";
+			constexpr auto UIntTexture1D = "utexture1D";
+			constexpr auto UIntTexture2D = "utexture2D";
+			constexpr auto UIntTexture3D = "utexture3D";
+			constexpr auto UIntTextureCube = "utextureCube";
+			constexpr auto UIntTexture2DRectangle = "utexture2DRect";
+			constexpr auto UIntTexture1DArray = "utexture1DArray";
+			constexpr auto UIntTexture2DArray = "utexture2DArray";
+			constexpr auto UIntTextureCubeArray = "utextureCubeArray";
+			constexpr auto UIntTextureBuffer = "utextureBuffer";
+			constexpr auto UIntTexture2DMS = "utexture2DMS";
+			constexpr auto UIntTexture2DMSArray = "utexture2DMSArray";
 			/* Texture (Signed integer) types */
-			static constexpr auto SIntTexture1D = "itexture1D";
-			static constexpr auto SIntTexture2D = "itexture2D";
-			static constexpr auto SIntTexture3D = "itexture3D";
-			static constexpr auto SIntTextureCube = "itextureCube";
-			static constexpr auto SIntTexture2DRectangle = "itexture2DRect";
-			static constexpr auto SIntTexture1DArray = "itexture1DArray";
-			static constexpr auto SIntTexture2DArray = "itexture2DArray";
-			static constexpr auto SIntTextureCubeArray = "itextureCubeArray";
-			static constexpr auto SIntTextureBuffer = "itextureBuffer";
-			static constexpr auto SIntTexture2DMS = "itexture2DMS";
-			static constexpr auto SIntTexture2DMSArray = "itexture2DMSArray";
+			constexpr auto SIntTexture1D = "itexture1D";
+			constexpr auto SIntTexture2D = "itexture2D";
+			constexpr auto SIntTexture3D = "itexture3D";
+			constexpr auto SIntTextureCube = "itextureCube";
+			constexpr auto SIntTexture2DRectangle = "itexture2DRect";
+			constexpr auto SIntTexture1DArray = "itexture1DArray";
+			constexpr auto SIntTexture2DArray = "itexture2DArray";
+			constexpr auto SIntTextureCubeArray = "itextureCubeArray";
+			constexpr auto SIntTextureBuffer = "itextureBuffer";
+			constexpr auto SIntTexture2DMS = "itexture2DMS";
+			constexpr auto SIntTexture2DMSArray = "itexture2DMSArray";
 
 			/* Additional sampler types */
-			static constexpr auto Sampler = "sampler";
-			static constexpr auto SamplerShadow = "samplerShadow";
+			constexpr auto Sampler = "sampler";
+			constexpr auto SamplerShadow = "samplerShadow";
 
 			/* Subpass (Float) types */
-			static constexpr auto SubpassInput = "subpassInput";
-			static constexpr auto SubpassInputMS = "subpassInputMS";
+			constexpr auto SubpassInput = "subpassInput";
+			constexpr auto SubpassInputMS = "subpassInputMS";
 			/* Subpass (Unsigned integer) types */
-			static constexpr auto UIntSubpassInput = "usubpassInput";
-			static constexpr auto UIntSubpassInputMS = "usubpassInputMS";
+			constexpr auto UIntSubpassInput = "usubpassInput";
+			constexpr auto UIntSubpassInputMS = "usubpassInputMS";
 			/* Subpass (Signed integer) types */
-			static constexpr auto SIntSubpassInput = "isubpassInput";
-			static constexpr auto SIntSubpassInputMS = "isubpassInputMS";
+			constexpr auto SIntSubpassInput = "isubpassInput";
+			constexpr auto SIntSubpassInputMS = "isubpassInputMS";
 
 			/* === Reserved === */
 
-			static constexpr auto _Common = "common";
-			static constexpr auto _Partition = "partition";
-			static constexpr auto _Active = "active";
-			static constexpr auto _ASM = "asm";
-			static constexpr auto _Class = "class";
-			static constexpr auto _Union = "union";
-			static constexpr auto _Enum = "enum";
-			static constexpr auto _Typedef = "typedef";
-			static constexpr auto _Template = "template";
-			static constexpr auto _This = "this";
-			static constexpr auto _Resource = "resource";
-			static constexpr auto _Goto = "goto";
-			static constexpr auto _Inline = "inline";
-			static constexpr auto _NoInline = "noinline";
-			static constexpr auto _Public = "public";
-			static constexpr auto _Static = "static";
-			static constexpr auto _Extern = "extern";
-			static constexpr auto _External = "external";
-			static constexpr auto _Interface = "interface";
-			static constexpr auto _Long = "long";
-			static constexpr auto _Short = "short";
-			static constexpr auto _Half = "half";
-			static constexpr auto _Fixed = "fixed";
-			static constexpr auto _Unsigned = "unsigned";
-			static constexpr auto _Superp = "superp";
-			static constexpr auto _Input = "input";
-			static constexpr auto _Output = "output";
-			static constexpr auto _HalfVector2 = "hvec2";
-			static constexpr auto _HalfVector3 = "hvec3";
-			static constexpr auto _HalfVector4 = "hvec4";
-			static constexpr auto _FloatVector2 = "fvec2";
-			static constexpr auto _FloatVector3 = "fvec3";
-			static constexpr auto _FloatVector4 = "fvec4";
-			static constexpr auto _Filter = "filter";
-			static constexpr auto _SizeOf = "sizeof";
-			static constexpr auto _Cast = "cast";
-			static constexpr auto _Namespace = "namespace";
-			static constexpr auto _Using = "using";
-			static constexpr auto _Sampler3DRectangle = "sampler3DRect";
+			constexpr auto _Common = "common";
+			constexpr auto _Partition = "partition";
+			constexpr auto _Active = "active";
+			constexpr auto _ASM = "asm";
+			constexpr auto _Class = "class";
+			constexpr auto _Union = "union";
+			constexpr auto _Enum = "enum";
+			constexpr auto _Typedef = "typedef";
+			constexpr auto _Template = "template";
+			constexpr auto _This = "this";
+			constexpr auto _Resource = "resource";
+			constexpr auto _Goto = "goto";
+			constexpr auto _Inline = "inline";
+			constexpr auto _NoInline = "noinline";
+			constexpr auto _Public = "public";
+			constexpr auto _Static = "static";
+			constexpr auto _Extern = "extern";
+			constexpr auto _External = "external";
+			constexpr auto _Interface = "interface";
+			constexpr auto _Long = "long";
+			constexpr auto _Short = "short";
+			constexpr auto _Half = "half";
+			constexpr auto _Fixed = "fixed";
+			constexpr auto _Unsigned = "unsigned";
+			constexpr auto _Superp = "superp";
+			constexpr auto _Input = "input";
+			constexpr auto _Output = "output";
+			constexpr auto _HalfVector2 = "hvec2";
+			constexpr auto _HalfVector3 = "hvec3";
+			constexpr auto _HalfVector4 = "hvec4";
+			constexpr auto _FloatVector2 = "fvec2";
+			constexpr auto _FloatVector3 = "fvec3";
+			constexpr auto _FloatVector4 = "fvec4";
+			constexpr auto _Filter = "filter";
+			constexpr auto _SizeOf = "sizeof";
+			constexpr auto _Cast = "cast";
+			constexpr auto _Namespace = "namespace";
+			constexpr auto _Using = "using";
+			constexpr auto _Sampler3DRectangle = "sampler3DRect";
 
 			namespace _Qualifier
 			{
-				static constexpr auto Uniform = "uniform";
-				static constexpr auto In = "in";
-				static constexpr auto ConstIn = "const in";
-				static constexpr auto Out = "out";
-				static constexpr auto InOut = "inout";
-				static constexpr auto Layout = "layout";
-				static constexpr auto Const = "const";
-				static constexpr auto Precision = "precision";
-				static constexpr auto Location = "location";
-				static constexpr auto Buffer = "buffer";
-				static constexpr auto ColumnMajor = "column_major";
-				static constexpr auto RowMajor = "row_major";
-				static constexpr auto Set = "set";
-				static constexpr auto Binding = "binding";
-				static constexpr auto Align = "align";
-				static constexpr auto Offset = "offset";
-				static constexpr auto Struct = "struct";
-				static constexpr auto MaxVertices = "max_vertices";
-				static constexpr auto PushConstant = "push_constant";
-				static constexpr auto ConstantId = "constant_id";
+				constexpr auto Uniform = "uniform";
+				constexpr auto In = "in";
+				constexpr auto ConstIn = "const in";
+				constexpr auto Out = "out";
+				constexpr auto InOut = "inout";
+				constexpr auto Layout = "layout";
+				constexpr auto Const = "const";
+				constexpr auto Precision = "precision";
+				constexpr auto Location = "location";
+				constexpr auto Buffer = "buffer";
+				constexpr auto ColumnMajor = "column_major";
+				constexpr auto RowMajor = "row_major";
+				constexpr auto Set = "set";
+				constexpr auto Binding = "binding";
+				constexpr auto Align = "align";
+				constexpr auto Offset = "offset";
+				constexpr auto Struct = "struct";
+				constexpr auto MaxVertices = "max_vertices";
+				constexpr auto PushConstant = "push_constant";
+				constexpr auto ConstantId = "constant_id";
 
 				namespace _Interpolation
 				{
-					static constexpr auto Flat = "flat";
-					static constexpr auto Smooth = "smooth";
-					static constexpr auto NoPerspective = "noperspective";
-					static constexpr auto Centroid = "centroid";
+					constexpr auto Flat = "flat";
+					constexpr auto Smooth = "smooth";
+					constexpr auto NoPerspective = "noperspective";
+					constexpr auto Centroid = "centroid";
 				}
 
 				namespace _Memory
 				{
-					static constexpr auto Coherent = "coherent";
-					static constexpr auto Volatile = "volatile";
-					static constexpr auto Restrict = "restrict";
-					static constexpr auto ReadOny = "readonly";
-					static constexpr auto WriteOnly = "writeonly";
-					static constexpr auto Shared = "shared";
-					static constexpr auto Packed = "packed";
-					static constexpr auto Std140 = "std140";
-					static constexpr auto Std430 = "std430";
+					constexpr auto Coherent = "coherent";
+					constexpr auto Volatile = "volatile";
+					constexpr auto Restrict = "restrict";
+					constexpr auto ReadOny = "readonly";
+					constexpr auto WriteOnly = "writeonly";
+					constexpr auto Shared = "shared";
+					constexpr auto Packed = "packed";
+					constexpr auto Std140 = "std140";
+					constexpr auto Std430 = "std430";
 				}
 			}
 
@@ -491,11 +491,11 @@ namespace EmEn::Saphir
 				*/
 				namespace In
 				{
-					static constexpr auto VertexID = "gl_VertexID";
-					static constexpr auto InstanceID = "gl_InstanceID";
-					static constexpr auto DrawID = "gl_DrawID"; // Requires GLSL 4.60 or ARB_shader_draw_parameters
-					static constexpr auto BaseVertex = "gl_BaseVertex"; // Requires GLSL 4.60 or ARB_shader_draw_parameters
-					static constexpr auto BaseInstance = "gl_BaseInstance"; // Requires GLSL 4.60 or ARB_shader_draw_parameters
+					constexpr auto VertexID = "gl_VertexID";
+					constexpr auto InstanceID = "gl_InstanceID";
+					constexpr auto DrawID = "gl_DrawID"; // Requires GLSL 4.60 or ARB_shader_draw_parameters
+					constexpr auto BaseVertex = "gl_BaseVertex"; // Requires GLSL 4.60 or ARB_shader_draw_parameters
+					constexpr auto BaseInstance = "gl_BaseInstance"; // Requires GLSL 4.60 or ARB_shader_draw_parameters
 				}
 				/*
 					out gl_PerVertex
@@ -507,9 +507,9 @@ namespace EmEn::Saphir
 				*/
 				namespace Out
 				{
-					static constexpr auto Position = "gl_Position";
-					static constexpr auto PointSize = "gl_PointSize";
-					static constexpr auto ClipDistance = "gl_ClipDistance";
+					constexpr auto Position = "gl_Position";
+					constexpr auto PointSize = "gl_PointSize";
+					constexpr auto ClipDistance = "gl_ClipDistance";
 				}
 			}
 
@@ -541,15 +541,15 @@ namespace EmEn::Saphir
 				*/
 				namespace In
 				{
-					static constexpr auto In = "gl_in";
-					static constexpr auto Position = "gl_Position";
-					static constexpr auto PointSize = "gl_PointSize";
-					static constexpr auto ClipDistance = "gl_ClipDistance";
-					static constexpr auto IndexedPosition = "gl_in[index].gl_Position";
-					static constexpr auto IndexedPointSize = "gl_in[index].gl_PointSize";
-					static constexpr auto IndexedClipDistance = "gl_in[index].gl_ClipDistance";
-					static constexpr auto PrimitiveIDIn = "gl_PrimitiveIDIn";
-					static constexpr auto InvocationID = "gl_InvocationID";
+					constexpr auto In = "gl_in";
+					constexpr auto Position = "gl_Position";
+					constexpr auto PointSize = "gl_PointSize";
+					constexpr auto ClipDistance = "gl_ClipDistance";
+					constexpr auto IndexedPosition = "gl_in[index].gl_Position";
+					constexpr auto IndexedPointSize = "gl_in[index].gl_PointSize";
+					constexpr auto IndexedClipDistance = "gl_in[index].gl_ClipDistance";
+					constexpr auto PrimitiveIDIn = "gl_PrimitiveIDIn";
+					constexpr auto InvocationID = "gl_InvocationID";
 				}
 				/*
 					out gl_PerVertex
@@ -564,20 +564,20 @@ namespace EmEn::Saphir
 				*/
 				namespace Out
 				{
-					static constexpr auto Position = "gl_Position";
-					static constexpr auto PointSize = "gl_PointSize";
-					static constexpr auto ClipDistance = "gl_ClipDistance";
-					static constexpr auto PrimitiveID = "gl_PrimitiveID";
-					static constexpr auto Layer = "gl_Layer";
-					static constexpr auto ViewportIndex = "gl_ViewportIndex";
+					constexpr auto Position = "gl_Position";
+					constexpr auto PointSize = "gl_PointSize";
+					constexpr auto ClipDistance = "gl_ClipDistance";
+					constexpr auto PrimitiveID = "gl_PrimitiveID";
+					constexpr auto Layer = "gl_Layer";
+					constexpr auto ViewportIndex = "gl_ViewportIndex";
 				}
 
 				namespace Function
 				{
-					static constexpr auto EmitStreamVertex = "EmitStreamVertex";
-					static constexpr auto EndStreamPrimitive = "EndStreamPrimitive";
-					static constexpr auto EmitVertex = "EmitVertex";
-					static constexpr auto EndPrimitive = "EndPrimitive";
+					constexpr auto EmitStreamVertex = "EmitStreamVertex";
+					constexpr auto EndStreamPrimitive = "EndStreamPrimitive";
+					constexpr auto EmitVertex = "EmitVertex";
+					constexpr auto EndPrimitive = "EndPrimitive";
 				}
 			}
 
@@ -597,16 +597,16 @@ namespace EmEn::Saphir
 				*/
 				namespace In
 				{
-					static constexpr auto FragCoord = "gl_FragCoord";
-					static constexpr auto FrontFacing = "gl_FrontFacing";
-					static constexpr auto PointCoord = "gl_PointCoord";
-					static constexpr auto SampleID = "gl_SampleID";
-					static constexpr auto SamplePosition = "gl_SamplePosition";
-					static constexpr auto SampleMaskIn = "gl_SampleMaskIn"; // []
-					static constexpr auto ClipDistance = "gl_ClipDistance"; // []
-					static constexpr auto PrimitiveID = "gl_PrimitiveID";
-					static constexpr auto Layer = "gl_Layer";
-					static constexpr auto ViewportIndex = "gl_ViewportIndex";
+					constexpr auto FragCoord = "gl_FragCoord";
+					constexpr auto FrontFacing = "gl_FrontFacing";
+					constexpr auto PointCoord = "gl_PointCoord";
+					constexpr auto SampleID = "gl_SampleID";
+					constexpr auto SamplePosition = "gl_SamplePosition";
+					constexpr auto SampleMaskIn = "gl_SampleMaskIn"; // []
+					constexpr auto ClipDistance = "gl_ClipDistance"; // []
+					constexpr auto PrimitiveID = "gl_PrimitiveID";
+					constexpr auto Layer = "gl_Layer";
+					constexpr auto ViewportIndex = "gl_ViewportIndex";
 				}
 				/*
 					out float gl_FragDepth;
@@ -614,15 +614,15 @@ namespace EmEn::Saphir
 				*/
 				namespace Out
 				{
-					static constexpr auto FragDepth = "gl_FragDepth";
-					static constexpr auto SampleMask = "gl_SampleMask";
-					static constexpr auto FragColor = "gl_FragColor";
+					constexpr auto FragDepth = "gl_FragDepth";
+					constexpr auto SampleMask = "gl_SampleMask";
+					constexpr auto FragColor = "gl_FragColor";
 				}
 			}
 
 			namespace Functions
 			{
-				static constexpr auto Length = "length";
+				constexpr auto Length = "length";
 			}
 		}
 
@@ -635,152 +635,152 @@ namespace EmEn::Saphir
 		 */
 		namespace Attribute
 		{
-			static constexpr auto Position{"vaVertex"};
-			static constexpr auto Tangent{"vaTangent"};
-			static constexpr auto Binormal{"vaBinormal"};
-			static constexpr auto Normal{"vaNormal"};
-			static constexpr auto Color{"vaColor"};
-			static constexpr auto Primary2DTextureCoordinates{"va2DTexCoord0"};
-			static constexpr auto Primary3DTextureCoordinates{"va3DTexCoord0"};
-			static constexpr auto Secondary2DTextureCoordinates{"va2DTexCoord1"};
-			static constexpr auto Secondary3DTextureCoordinates{"va3DTexCoord1"};
-			static constexpr auto ModelMatrix{"vaModelMatrix"};
-			static constexpr auto NormalModelMatrix{"vaNormalModelMatrix"};
-			static constexpr auto ModelPosition{"vaModelPosition"};
-			static constexpr auto ModelScaling{"vaModelScaling"};
+			constexpr auto Position{"vaVertex"};
+			constexpr auto Tangent{"vaTangent"};
+			constexpr auto Binormal{"vaBinormal"};
+			constexpr auto Normal{"vaNormal"};
+			constexpr auto Color{"vaColor"};
+			constexpr auto Primary2DTextureCoordinates{"va2DTexCoord0"};
+			constexpr auto Primary3DTextureCoordinates{"va3DTexCoord0"};
+			constexpr auto Secondary2DTextureCoordinates{"va2DTexCoord1"};
+			constexpr auto Secondary3DTextureCoordinates{"va3DTexCoord1"};
+			constexpr auto ModelMatrix{"vaModelMatrix"};
+			constexpr auto NormalModelMatrix{"vaNormalModelMatrix"};
+			constexpr auto ModelPosition{"vaModelPosition"};
+			constexpr auto ModelScaling{"vaModelScaling"};
 		}
 
 		/** @brief Structures naming convention. */
 		namespace Struct
 		{
-			static constexpr auto CubemapFace{"CubemapFace"};
+			constexpr auto CubemapFace{"CubemapFace"};
 		}
 
 		/** @brief Uniforms naming convention. */
 		namespace Uniform
 		{
 			/* Generic */
-			static constexpr auto PrimarySampler{"uPrimarySampler"};
-			static constexpr auto SecondarySampler{"uSecondarySampler"};
+			constexpr auto PrimarySampler{"uPrimarySampler"};
+			constexpr auto SecondarySampler{"uSecondarySampler"};
 			/* Material specific */
-			static constexpr auto AmbientSampler{"uAmbientSampler"};
-			static constexpr auto DiffuseSampler{"uDiffuseSampler"};
-			static constexpr auto SpecularSampler{"uSpecularSampler"};
-			static constexpr auto AutoIlluminationSampler{"uAutoIlluminationSampler"};
-			static constexpr auto NormalSampler{"uNormalSampler"};
-			static constexpr auto ReflectionSampler{"uReflectionSampler"};
-			static constexpr auto OpacitySampler{"uOpacitySampler"};
-			static constexpr auto ShadowMapSampler{"uShadowMapSampler"};
+			constexpr auto AmbientSampler{"uAmbientSampler"};
+			constexpr auto DiffuseSampler{"uDiffuseSampler"};
+			constexpr auto SpecularSampler{"uSpecularSampler"};
+			constexpr auto AutoIlluminationSampler{"uAutoIlluminationSampler"};
+			constexpr auto NormalSampler{"uNormalSampler"};
+			constexpr auto ReflectionSampler{"uReflectionSampler"};
+			constexpr auto OpacitySampler{"uOpacitySampler"};
+			constexpr auto ShadowMapSampler{"uShadowMapSampler"};
 		}
 
 		/** @brief Uniforms block variables naming convention. */
 		namespace UniformBlock
 		{
-			static constexpr auto View{"ubView"};
-			static constexpr auto Material{"ubMaterial"};
-			static constexpr auto Light{"ubLight"};
+			constexpr auto View{"ubView"};
+			constexpr auto Material{"ubMaterial"};
+			constexpr auto Light{"ubLight"};
 
 			namespace Type
 			{
-				static constexpr auto View{"View"};
-				static constexpr auto CubemapView{"CubemapView"};
-				static constexpr auto BasicMaterial{"BasicMaterial"};
-				static constexpr auto StandardMaterial{"StandardMaterial"};
-				static constexpr auto DirectionalLight{"DirectionalLight"};
-				static constexpr auto PointLight{"PointLight"};
-				static constexpr auto SpotLight{"SpotLight"};
+				constexpr auto View{"View"};
+				constexpr auto CubemapView{"CubemapView"};
+				constexpr auto BasicMaterial{"BasicMaterial"};
+				constexpr auto StandardMaterial{"StandardMaterial"};
+				constexpr auto DirectionalLight{"DirectionalLight"};
+				constexpr auto PointLight{"PointLight"};
+				constexpr auto SpotLight{"SpotLight"};
 			}
 
 			namespace Component
 			{
 				/* Generic */
-				static constexpr auto Instance{"instance"};
-				static constexpr auto Amount{"amount"};
-				static constexpr auto Scale{"scale"};
+				constexpr auto Instance{"instance"};
+				constexpr auto Amount{"amount"};
+				constexpr auto Scale{"scale"};
 				/* View specific */
-				static constexpr auto ProjectionMatrix{"projectionMatrix"};
-				static constexpr auto PositionWorldSpace{"positionWorldSpace"};
-				static constexpr auto Velocity = "velocity";
-				static constexpr auto ViewProperties{"viewProperties"};
-				static constexpr auto AmbientLightColor{"ambientLightColor"};
-				static constexpr auto AmbientLightIntensity{"ambientLightIntensity"};
+				constexpr auto ProjectionMatrix{"projectionMatrix"};
+				constexpr auto PositionWorldSpace{"positionWorldSpace"};
+				constexpr auto Velocity = "velocity";
+				constexpr auto ViewProperties{"viewProperties"};
+				constexpr auto AmbientLightColor{"ambientLightColor"};
+				constexpr auto AmbientLightIntensity{"ambientLightIntensity"};
 				/* Material specific */
-				static constexpr auto AmbientColor{"ambientColor"};
-				static constexpr auto DiffuseColor{"diffuseColor"};
-				static constexpr auto SpecularColor{"specularColor"};
-				static constexpr auto Shininess{"shininess"};
-				static constexpr auto AutoIlluminationColor{"autoIlluminationColor"};
-				static constexpr auto AutoIlluminationAmount{"autoIlluminationAmount"};
-				static constexpr auto Opacity{"opacity"};
-				static constexpr auto NormalScale{"normalScale"};
-				static constexpr auto ReflectionAmount{"reflectionAmount"};
+				constexpr auto AmbientColor{"ambientColor"};
+				constexpr auto DiffuseColor{"diffuseColor"};
+				constexpr auto SpecularColor{"specularColor"};
+				constexpr auto Shininess{"shininess"};
+				constexpr auto AutoIlluminationColor{"autoIlluminationColor"};
+				constexpr auto AutoIlluminationAmount{"autoIlluminationAmount"};
+				constexpr auto Opacity{"opacity"};
+				constexpr auto NormalScale{"normalScale"};
+				constexpr auto ReflectionAmount{"reflectionAmount"};
 				/* Light specific */
-				static constexpr auto Color{"color"};
-				//static constexpr auto PositionWorldSpace{"positionWorldSpace"}; // Shared with View
-				static constexpr auto DirectionWorldSpace{"directionWorldSpace"};
-				static constexpr auto Intensity{"intensity"};
-				static constexpr auto Radius{"radius"};
-				static constexpr auto InnerCosAngle{"innerCosAngle"};
-				static constexpr auto OuterCosAngle{"outerCosAngle"};
-				static constexpr auto ViewProjectionMatrix{"viewProjectionMatrix"};
+				constexpr auto Color{"color"};
+				//constexpr auto PositionWorldSpace{"positionWorldSpace"}; // Shared with View
+				constexpr auto DirectionWorldSpace{"directionWorldSpace"};
+				constexpr auto Intensity{"intensity"};
+				constexpr auto Radius{"radius"};
+				constexpr auto InnerCosAngle{"innerCosAngle"};
+				constexpr auto OuterCosAngle{"outerCosAngle"};
+				constexpr auto ViewProjectionMatrix{"viewProjectionMatrix"};
 			}
 		}
 
 		/** @brief Push constant variables naming convention. */
 		namespace PushConstant
 		{
-			static constexpr auto Matrices{"pcMatrices"};
-			static constexpr auto Overlay{"pcOverlay"};
+			constexpr auto Matrices{"pcMatrices"};
+			constexpr auto Overlay{"pcOverlay"};
 
 			namespace Type
 			{
-				static constexpr auto Matrices{"Matrices"};
-				static constexpr auto Overlay{"Overlay"};
+				constexpr auto Matrices{"Matrices"};
+				constexpr auto Overlay{"Overlay"};
 			}
 
 			namespace Component
 			{
 				/* NOTE : Regular 3D rendering. */
-				static constexpr auto ViewMatrix{"viewMatrix"};
-				static constexpr auto ModelMatrix{"modelMatrix"};
-				static constexpr auto ViewProjectionMatrix{"viewProjectionMatrix"};
-				static constexpr auto ModelViewProjectionMatrix{"modelViewProjectionMatrix"};
+				constexpr auto ViewMatrix{"viewMatrix"};
+				constexpr auto ModelMatrix{"modelMatrix"};
+				constexpr auto ViewProjectionMatrix{"viewProjectionMatrix"};
+				constexpr auto ModelViewProjectionMatrix{"modelViewProjectionMatrix"};
 				/* NOTE : Specific (overlay, ...) rendering. */
-				static constexpr auto TransformationMatrix{"transformationMatrix"};
+				constexpr auto TransformationMatrix{"transformationMatrix"};
 			}
 		}
 
 		/** @brief Interstage variables naming convention. */
 		namespace ShaderVariable
 		{
-			static constexpr auto PositionWorldSpace{"svPositionWorldSpace"};
-			static constexpr auto GLPositionWorldSpace{"gl_Position@WorldSpace"}; /* NOTE: Must never appear in real code. */
-			static constexpr auto PositionViewSpace{"svPositionViewSpace"};
-			static constexpr auto PositionTextureSpace{"svPositionTextureSpace"};
-			static constexpr auto PositionScreenSpace{"gl_Position"};
-			static constexpr auto PrimaryVertexColor{"svPrimaryVertexColor"};
-			static constexpr auto SecondaryVertexColor{"svSecondaryVertexColor"};
-			static constexpr auto Primary2DTextureCoordinates{"sv2DTexCoord0"};
-			static constexpr auto Primary3DTextureCoordinates{"sv3DTexCoord0"};
-			static constexpr auto Secondary2DTextureCoordinates{"sv2DTexCoord1"};
-			static constexpr auto Secondary3DTextureCoordinates{"sv3DTexCoord1"};
-			static constexpr auto ReflectionTextureCoordinates{"svReflectionTexCoord"};
-			static constexpr auto TangentWorldSpace{"svTangentWorldSpace"};
-			static constexpr auto TangentViewSpace{"svTangentViewSpace"};
-			static constexpr auto BinormalWorldSpace{"svBinormalWorldSpace"};
-			static constexpr auto BinormalViewSpace{"svBinormalViewSpace"};
-			static constexpr auto NormalWorldSpace{"svNormalWorldSpace"};
-			static constexpr auto NormalViewSpace{"svNormalViewSpace"};
-			static constexpr auto SpriteModelMatrix{"svSpriteModelMatrix"};
-			static constexpr auto ModelViewMatrix{"svModelViewMatrix"};
-			static constexpr auto NormalMatrix{"svNormalMatrix"};
-			static constexpr auto ModelViewProjectionMatrix{"svModelViewProjectionMatrix"};
-			static constexpr auto WorldTBNMatrix{"svWorldTBNMatrix"};
-			static constexpr auto ViewTBNMatrix{"svViewTBNMatrix"};
-			static constexpr auto WorldToTangentMatrix{"svWorldToTangent"};
-			static constexpr auto OutputFragment{"svOutputFragment"};
-			static constexpr auto FragCoord{"svFragCoord"};
-			static constexpr auto Light{"svLight"};
+			constexpr auto PositionWorldSpace{"svPositionWorldSpace"};
+			constexpr auto GLPositionWorldSpace{"gl_Position@WorldSpace"}; /* NOTE: Must never appear in real code. */
+			constexpr auto PositionViewSpace{"svPositionViewSpace"};
+			constexpr auto PositionTextureSpace{"svPositionTextureSpace"};
+			constexpr auto PositionScreenSpace{"gl_Position"};
+			constexpr auto PrimaryVertexColor{"svPrimaryVertexColor"};
+			constexpr auto SecondaryVertexColor{"svSecondaryVertexColor"};
+			constexpr auto Primary2DTextureCoordinates{"sv2DTexCoord0"};
+			constexpr auto Primary3DTextureCoordinates{"sv3DTexCoord0"};
+			constexpr auto Secondary2DTextureCoordinates{"sv2DTexCoord1"};
+			constexpr auto Secondary3DTextureCoordinates{"sv3DTexCoord1"};
+			constexpr auto ReflectionTextureCoordinates{"svReflectionTexCoord"};
+			constexpr auto TangentWorldSpace{"svTangentWorldSpace"};
+			constexpr auto TangentViewSpace{"svTangentViewSpace"};
+			constexpr auto BinormalWorldSpace{"svBinormalWorldSpace"};
+			constexpr auto BinormalViewSpace{"svBinormalViewSpace"};
+			constexpr auto NormalWorldSpace{"svNormalWorldSpace"};
+			constexpr auto NormalViewSpace{"svNormalViewSpace"};
+			constexpr auto SpriteModelMatrix{"svSpriteModelMatrix"};
+			constexpr auto ModelViewMatrix{"svModelViewMatrix"};
+			constexpr auto NormalMatrix{"svNormalMatrix"};
+			constexpr auto ModelViewProjectionMatrix{"svModelViewProjectionMatrix"};
+			constexpr auto WorldTBNMatrix{"svWorldTBNMatrix"};
+			constexpr auto ViewTBNMatrix{"svViewTBNMatrix"};
+			constexpr auto WorldToTangentMatrix{"svWorldToTangent"};
+			constexpr auto OutputFragment{"svOutputFragment"};
+			constexpr auto FragCoord{"svFragCoord"};
+			constexpr auto Light{"svLight"};
 		}
 
 		/** @brief Shader block variables naming convention. */
@@ -788,13 +788,13 @@ namespace EmEn::Saphir
 		{
 			namespace Component
 			{
-				static constexpr auto AttenuationFactor = "AttenuationFactor";
-				static constexpr auto SpotFactor = "SpotFactor";
-				static constexpr auto DirectionWorldSpace = "directionWorldSpace";
-				static constexpr auto DirectionViewSpace = "directionViewSpace";
-				static constexpr auto DirectionTextureSpace = "directionTextureSpace";
-				static constexpr auto ViewDirectionTextureSpace = "viewDirectionTextureSpace";
-				static constexpr auto PositionLightSpace = "positionLightSpace";
+				constexpr auto AttenuationFactor = "AttenuationFactor";
+				constexpr auto SpotFactor = "SpotFactor";
+				constexpr auto DirectionWorldSpace = "directionWorldSpace";
+				constexpr auto DirectionViewSpace = "directionViewSpace";
+				constexpr auto DirectionTextureSpace = "directionTextureSpace";
+				constexpr auto ViewDirectionTextureSpace = "viewDirectionTextureSpace";
+				constexpr auto PositionLightSpace = "positionLightSpace";
 			}
 		}
 	}

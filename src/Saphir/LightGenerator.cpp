@@ -252,7 +252,7 @@ namespace EmEn::Saphir
 	bool
 	LightGenerator::generateVertexShaderCode (Generator::Abstract & generator, VertexShader & vertexShader) const noexcept
 	{
-		const auto lightSetIndex = generator.program()->setIndex(SetType::PerLight);
+		const auto lightSetIndex = generator.shaderProgram()->setIndex(SetType::PerLight);
 
 		auto lightType = LightType::Directional;
 		bool enableShadowMap = false;
@@ -313,7 +313,7 @@ namespace EmEn::Saphir
 	bool
 	LightGenerator::generateFragmentShaderCode (Generator::Abstract & generator, FragmentShader & fragmentShader) const noexcept
 	{
-		const auto lightSetIndex = generator.program()->setIndex(SetType::PerLight);
+		const auto lightSetIndex = generator.shaderProgram()->setIndex(SetType::PerLight);
 
 		auto lightType = LightType::Directional;
 		bool enableShadowMap = false;

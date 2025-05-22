@@ -83,7 +83,7 @@ namespace EmEn::Vulkan
 
 		if ( result != VK_SUCCESS )
 		{
-			Tracer::error(ClassId, BlobTrait() << "Unable to create a compute pipeline : " << vkResultToCString(result) << " !");
+			TraceError{ClassId} << "Unable to create a compute pipeline : " << vkResultToCString(result) << " !";
 
 			return false;
 		}

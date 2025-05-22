@@ -33,7 +33,7 @@ namespace EmEn::Saphir::Declaration
 {
 	/**
 	 * @brief Shader Storage Block. This is the GLSL counter-part of Shader Storage Buffer Object.
-	 * @extends EmEn::Saphir::AbstractBufferBackedBlock
+	 * @extends EmEn::Saphir::Declaration::AbstractBufferBackedBlock
 	 */
 	class ShaderStorageBlock final : public AbstractBufferBackedBlock
 	{
@@ -48,9 +48,9 @@ namespace EmEn::Saphir::Declaration
 			 * @param instanceName A C-string to set the name of the instance of the block. Default nullptr.
 			 * @param arraySize Set the block as an array. Default 0.
 			 */
-			ShaderStorageBlock (uint32_t set, uint32_t binding, MemoryLayout memoryLayout, Key name, Key instanceName = nullptr, size_t arraySize = 0) noexcept;
+			ShaderStorageBlock (uint32_t set, uint32_t binding, MemoryLayout memoryLayout, Key name, Key instanceName = nullptr, uint32_t arraySize = 0) noexcept;
 
-			/** @copydoc EmEn::Saphir::DeclarationInterface::sourceCode() */
+			/** @copydoc EmEn::Saphir::Declaration::Interface::sourceCode() */
 			[[nodiscard]]
 			std::string sourceCode () const noexcept override;
 	};

@@ -39,12 +39,6 @@ namespace EmEn::Saphir::Declaration
 
 	}
 
-	bool
-	OutputPrimitive::isValid () const noexcept
-	{
-		return m_maxVertices > 0;
-	}
-
 	Key
 	OutputPrimitive::name () const noexcept
 	{
@@ -64,27 +58,13 @@ namespace EmEn::Saphir::Declaration
 		}
 	}
 
-	size_t
-	OutputPrimitive::bytes () const noexcept
-	{
-		return 0;
-	}
-
-	uint32_t
-	OutputPrimitive::maxVertices () const noexcept
-	{
-		return m_maxVertices;
-	}
-
-	OutputPrimitiveType
-	OutputPrimitive::primitiveType () const noexcept
-	{
-		return m_primitiveType;
-	}
-
 	std::string
 	OutputPrimitive::sourceCode () const noexcept
 	{
-		return (std::stringstream{} << GLSL::Layout << " (" << this->name() << ", " << GLSL::MaxVertices << " = " << m_maxVertices << ") " << GLSL::Out << ";" "\n").str();
+		std::stringstream code;
+
+		code << GLSL::Layout << " (" << this->name() << ", " << GLSL::MaxVertices << " = " << m_maxVertices << ") " << GLSL::Out << ";" "\n";
+
+		return code.str();
 	}
 }

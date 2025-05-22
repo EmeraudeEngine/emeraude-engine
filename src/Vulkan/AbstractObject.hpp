@@ -26,16 +26,11 @@
 
 #pragma once
 
-/* Emeraude-Engine configuration. */
-#include "emeraude_config.hpp"
-
 /* STL inclusions. */
 #include <array>
 #include <string>
 #include <sstream>
-#ifdef VK_TRACKING_ENABLED
 #include <map>
-#endif
 
 /* Third-party inclusions. */
 #include <vulkan/vulkan.h>
@@ -80,27 +75,11 @@ namespace EmEn::Vulkan
 			 */
 			virtual ~AbstractObject ();
 
-#ifdef VK_TRACKING_ENABLED
-
 			/**
 			 * @brief Sets an identifier to the vulkan to ease the debugging.
 			 * @return void
 			 */
 			void setIdentifier (const std::string & identifier) noexcept;
-
-#else
-
-			/**
-			 * @brief Sets an identifier to the vulkan to ease the debugging.
-			 * @return void
-			 */
-			void
-			setIdentifier (const std::string & identifier) noexcept
-			{
-				m_identifier = identifier;
-			}
-
-#endif
 
 			/**
 			 * @brief Sets an identifier to the vulkan to ease the debugging.
@@ -109,11 +88,7 @@ namespace EmEn::Vulkan
 			 * @param vulkanObjectName A string pointer for the type of Vulkan object;
 			 * @return void
 			 */
-			void
-			setIdentifier (const char * classId, const std::string & instanceId, const char * vulkanObjectName) noexcept
-			{
-				this->setIdentifier((std::stringstream{} << classId << '-' << instanceId << '-' << vulkanObjectName).str());
-			}
+			void setIdentifier (const char * classId, const std::string & instanceId, const char * vulkanObjectName) noexcept;
 
 			/**
 			 * @brief Returns the vulkan object identifier.
@@ -137,23 +112,14 @@ namespace EmEn::Vulkan
 				return m_flags[Created];
 			}
 
-#ifdef VK_TRACKING_ENABLED
 			static std::map< void *, std::string > s_tracking;
-#endif
 
 		protected:
 
-#ifdef VK_TRACKING_ENABLED
 			/**
 			 * @brief Constructs a base vulkan object.
 			 */
 			AbstractObject () noexcept;
-#else
-			/**
-			 * @brief Constructs a base vulkan object.
-			 */
-			AbstractObject () noexcept = default;
-#endif
 
 			/**
 			 * @brief For development purpose, this should be called by the child class constructor if everything is OK.
