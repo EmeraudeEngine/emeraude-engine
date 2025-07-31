@@ -67,24 +67,6 @@ namespace EmEn::Audio
 		s_instance = nullptr;
 	}
 
-	Manager *
-	Manager::instance () noexcept
-	{
-		return s_instance;
-	}
-
-	size_t
-	Manager::classUID () const noexcept
-	{
-		return ClassUID;
-	}
-
-	bool
-	Manager::is (size_t classUID) const noexcept
-	{
-		return classUID == ClassUID;
-	}
-
 	bool
 	Manager::onInitialize () noexcept
 	{
@@ -282,31 +264,6 @@ namespace EmEn::Audio
 		m_flags[Enabled] = state;
 	}
 
-	bool
-	Manager::isAudioEnabled () const noexcept
-	{
-		return m_flags[Enabled];
-	}
-
-	std::shared_ptr< EFX >
-	Manager::getEFX () noexcept
-	{
-		return m_EFX;
-	}
-
-	std::shared_ptr< Source >
-	Manager::defaultSource () const noexcept
-	{
-		return m_defaultSource;
-	}
-
-	void
-	Manager::play (const std::shared_ptr< PlayableInterface > & playable, Source::PlayMode mode, float gain) const noexcept
-	{
-		m_defaultSource->setGain(gain);
-		m_defaultSource->play(playable, mode);
-	}
-
 	void
 	Manager::play (const std::string & resourceName, Source::PlayMode mode, float gain) const noexcept
 	{
@@ -325,18 +282,6 @@ namespace EmEn::Audio
 		}
 
 		this->play(soundResource, mode, gain);
-	}
-
-	WaveFactory::Frequency
-	Manager::frequencyPlayback () const noexcept
-	{
-		return m_playbackFrequency;
-	}
-
-	size_t
-	Manager::musicChunkSize () const noexcept
-	{
-		return m_musicChunkSize;
 	}
 
 	void

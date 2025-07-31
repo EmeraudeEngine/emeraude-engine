@@ -46,6 +46,7 @@
 
 /* Local inclusions for usages. */
 #include "Vulkan/Surface.hpp"
+#include "Identification.hpp"
 
 /* Forward declarations. */
 namespace EmEn
@@ -55,7 +56,6 @@ namespace EmEn
 		class Instance;
 	}
 
-	class Identification;
 	class PrimaryServices;
 }
 
@@ -145,7 +145,14 @@ namespace EmEn
 			 * @param instance A reference to the Vulkan instance.
 			 * @param identification A reference to an application identification.
 			 */
-			Window (PrimaryServices & primaryServices, const Vulkan::Instance & instance, const Identification & identification) noexcept;
+			Window (PrimaryServices & primaryServices, const Vulkan::Instance & instance, const Identification & identification) noexcept
+				: ServiceInterface{ClassId},
+				m_primaryServices{primaryServices},
+				m_instance{instance},
+				m_title{identification.applicationId()}
+			{
+
+			}
 
 			/**
 			 * @brief Copy constructor.
@@ -176,7 +183,7 @@ namespace EmEn
 			/**
 			 * @brief Destructs the window.
 			 */
-			~Window () override;
+			~Window () override = default;
 
 			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
 			[[nodiscard]]
@@ -571,18 +578,6 @@ namespace EmEn
 			void disableTitleBar () noexcept;
 
 			/**
-			 * @brief Returns the instance of the file system.
-			 * @return Window *
-			 */
-			[[nodiscard]]
-			static
-			Window *
-			instance () noexcept
-			{
-				return s_instance;
-			}
-
-			/**
 			 * @brief Returns the position, in screen coordinates, of the upper-left corner of the content area of the window.
 			 * @param monitor A pointer to the monitor. Default primary.
 			 * @return std::array< int32_t, 2 >
@@ -771,9 +766,6 @@ namespace EmEn
 			/* Flag names. */
 			static constexpr auto ShowInformation{0UL};
 			static constexpr auto SaveWindowPropertiesAtExit{1UL};
-
-			/** @brief Singleton pointer. */
-			static Window * s_instance;
 
 			PrimaryServices & m_primaryServices;
 			const Vulkan::Instance & m_instance;

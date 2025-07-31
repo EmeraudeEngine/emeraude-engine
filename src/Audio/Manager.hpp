@@ -128,11 +128,19 @@ namespace EmEn::Audio
 
 			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
 			[[nodiscard]]
-			size_t classUID () const noexcept override;
+			size_t
+			classUID () const noexcept override
+			{
+				return ClassUID;
+			}
 
 			/** @copydoc EmEn::Libs::ObservableTrait::is() const */
 			[[nodiscard]]
-			bool is (size_t classUID) const noexcept override;
+			bool
+			is (size_t classUID) const noexcept override
+			{
+				return classUID == ClassUID;
+			}
 
 			/** @copydoc EmEn::ServiceInterface::usable() */
 			[[nodiscard]]
@@ -154,21 +162,33 @@ namespace EmEn::Audio
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool isAudioEnabled () const noexcept;
+			bool
+			isAudioEnabled () const noexcept
+			{
+				return m_flags[Enabled];
+			}
 
 			/**
 			 * @brief Returns the EFX extension checker.
 			 * @return std::shared_ptr< EFX >
 			 */
 			[[nodiscard]]
-			std::shared_ptr< EFX > getEFX () noexcept;
+			std::shared_ptr< EFX >
+			getEFX () noexcept
+			{
+				return m_EFX;
+			}
 
 			/**
 			 * @brief Returns the default Source.
 			 * @return std::shared_ptr< Source >
 			 */
 			[[nodiscard]]
-			std::shared_ptr< Source > defaultSource () const noexcept;
+			std::shared_ptr< Source >
+			defaultSource () const noexcept
+			{
+				return m_defaultSource;
+			}
 
 			/**
 			 * @brief Plays a sound on the default source.
@@ -176,7 +196,12 @@ namespace EmEn::Audio
 			 * @param mode The play mode. Default Once.
 			 * @param gain The gain of the channel to play the sound.
 			 */
-			void play (const std::shared_ptr< PlayableInterface > & playable, Source::PlayMode mode = Source::PlayMode::Once, float gain = 1.0F) const noexcept;
+			void
+			play (const std::shared_ptr< PlayableInterface > & playable, Source::PlayMode mode = Source::PlayMode::Once, float gain = 1.0F) const noexcept
+			{
+				m_defaultSource->setGain(gain);
+				m_defaultSource->play(playable, mode);
+			}
 
 			/**
 			 * @brief Plays a sound on the default source.
@@ -198,14 +223,22 @@ namespace EmEn::Audio
 			 * @return Frequency
 			 */
 			[[nodiscard]]
-			Libs::WaveFactory::Frequency frequencyPlayback () const noexcept;
+			Libs::WaveFactory::Frequency
+			frequencyPlayback () const noexcept
+			{
+				return m_playbackFrequency;
+			}
 
 			/**
 			 * @brief Returns the music chunk size for streaming.
 			 * @return size_t
 			 */
 			[[nodiscard]]
-			size_t musicChunkSize () const noexcept;
+			size_t
+			musicChunkSize () const noexcept
+			{
+				return m_musicChunkSize;
+			}
 
 			/**
 			 * @brief Sets the master volume.
@@ -293,10 +326,16 @@ namespace EmEn::Audio
 
 			/**
 			 * @brief Returns the instance of the audio manager.
+			 * @FIXME Remove this !
 			 * @return Manager *
 			 */
 			[[nodiscard]]
-			static Manager * instance () noexcept;
+			static
+			Manager *
+			instance () noexcept
+			{
+				return s_instance;
+			}
 
 		private:
 

@@ -34,7 +34,6 @@
 
 /* Local inclusions. */
 #include "Vulkan/Instance.hpp"
-#include "Identification.hpp"
 #include "PrimaryServices.hpp"
 #include "SettingKeys.hpp"
 
@@ -45,29 +44,6 @@ namespace EmEn
 	using namespace Vulkan;
 
 	const size_t Window::ClassUID{getClassUID(ClassId)};
-
-	Window * Window::s_instance{nullptr};
-
-	Window::Window (PrimaryServices & primaryServices, const Instance & instance, const Identification & identification) noexcept
-		: ServiceInterface(ClassId),
-		m_primaryServices(primaryServices),
-		m_instance(instance),
-		m_title(identification.applicationId())
-	{
-		if ( s_instance != nullptr )
-		{
-			std::cerr << __PRETTY_FUNCTION__ << ", constructor called twice !" "\n";
-
-			std::terminate();
-		}
-
-		s_instance = this;
-	}
-
-	Window::~Window ()
-	{
-		s_instance = nullptr;
-	}
 
 	bool
 	Window::onInitialize () noexcept

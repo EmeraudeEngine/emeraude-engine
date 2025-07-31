@@ -77,11 +77,11 @@ namespace EmEn::Overlay
 	ComposedSurface::setGeometry (unsigned int width, unsigned int height) noexcept
 	{
 		// FIXME: Size must use the overlay notified size !
-		const auto windowSize = Window::instance()->getFramebufferSize();
+		/*const auto windowSize = Window::instance()->getFramebufferSize();
 		const auto surfaceWidth = static_cast< float >(windowSize[0]) / static_cast< float >(width);
 		const auto surfaceHeight = static_cast< float >(windowSize[1]) / static_cast< float >(height);
 
-		this->setGeometry(surfaceWidth, surfaceHeight);
+		this->setGeometry(surfaceWidth, surfaceHeight);*/
 	}
 
 	/*void
@@ -172,24 +172,28 @@ namespace EmEn::Overlay
 	ComposedSurface::realSize () const noexcept
 	{
 		// FIXME: Size must use the overlay notified size !
-		const auto windowSize = Window::instance()->getFramebufferSize();
+		/*const auto windowSize = Window::instance()->getFramebufferSize();
 
 		return {
 			static_cast< float >(windowSize[0]) * m_rectangle.width(),
 			static_cast< float >(windowSize[1]) * m_rectangle.height()
-		};
+		};*/
+
+		return {1.0F, 1.0F};
 	}
 
 	std::array< float, 2 >
 	ComposedSurface::offsets () const noexcept
 	{
 		// FIXME: Size must use the overlay notified size !
-		const auto windowSize = Window::instance()->getFramebufferSize();
+		/*const auto windowSize = Window::instance()->getFramebufferSize();
 
 		return {
 			static_cast< float >(windowSize[0]) * (m_rectangle.left() - m_rectangle.width() + 1.0F) * Half< float >,
 			static_cast< float >(windowSize[1]) * (m_rectangle.top() - m_rectangle.height() + 1.0F) * Half< float >
-		};
+		};*/
+
+		return {0.0F, 0.0F};
 	}
 
 	const Vector< 2, float > &
@@ -308,14 +312,14 @@ namespace EmEn::Overlay
 		}
 
 		// FIXME: Size must use the overlay notified size !
-		const auto windowSize = Window::instance()->getFramebufferSize();
+		/*const auto windowSize = Window::instance()->getFramebufferSize();
 
 		if ( !this->updateTexture(windowSize[0], windowSize[1]) )
 		{
 			Tracer::error(ClassId, "Unable to create/update surface texture !");
 
 			return false;
-		}
+		}*/
 
 		return this->onResize(m_data);
 	}
