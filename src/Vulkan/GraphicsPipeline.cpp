@@ -41,7 +41,6 @@
 #include "RenderPass.hpp"
 #include "Framebuffer.hpp"
 #include "Utility.hpp"
-#include "Core.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::Vulkan
@@ -703,7 +702,7 @@ namespace EmEn::Vulkan
 	}
 
 	bool
-	GraphicsPipeline::finalize (const std::shared_ptr< const RenderPass > & renderPass, const std::shared_ptr< PipelineLayout > & pipelineLayout, bool useTesselation) noexcept
+	GraphicsPipeline::finalize (const std::shared_ptr< const RenderPass > & renderPass, const std::shared_ptr< PipelineLayout > & pipelineLayout, bool useTesselation, bool isDynamicStateEnabled) noexcept
 	{
 		if ( renderPass == nullptr )
 		{
@@ -758,15 +757,13 @@ namespace EmEn::Vulkan
 			return false;
 		}
 
-		const auto dynamicStateExtended = Core::instance()->vulkanInstance().isDynamicStateExtensionEnabled();
-
 		/* NOTE: If the VK_EXT_extended_dynamic_state3 extension is enabled, it can be NULL if the pipeline is created with all of
 		 * VK_DYNAMIC_STATE_DEPTH_CLAMP_ENABLE_EXT, VK_DYNAMIC_STATE_RASTERIZER_DISCARD_ENABLE, VK_DYNAMIC_STATE_POLYGON_MODE_EXT,
 		 * VK_DYNAMIC_STATE_CULL_MODE, VK_DYNAMIC_STATE_FRONT_FACE, VK_DYNAMIC_STATE_DEPTH_BIAS_ENABLE, VK_DYNAMIC_STATE_DEPTH_BIAS,
 		 * and VK_DYNAMIC_STATE_LINE_WIDTH dynamic states set. */
 		if ( m_createInfo.pRasterizationState == nullptr )
 		{
-			if ( !dynamicStateExtended || (
+			if ( !isDynamicStateEnabled || (
 				!this->hasDynamicState(VK_DYNAMIC_STATE_DEPTH_CLAMP_ENABLE_EXT) &&
 				!this->hasDynamicState(VK_DYNAMIC_STATE_RASTERIZER_DISCARD_ENABLE) &&
 				!this->hasDynamicState(VK_DYNAMIC_STATE_POLYGON_MODE_EXT) &&
@@ -789,7 +786,7 @@ namespace EmEn::Vulkan
 		 * in which case VkPipelineMultisampleStateCreateInfo::sampleShadingEnable is assumed to be VK_FALSE. */
 		if ( m_createInfo.pMultisampleState == nullptr )
 		{
-			if ( !dynamicStateExtended || (
+			if ( !isDynamicStateEnabled || (
 				!this->hasDynamicState(VK_DYNAMIC_STATE_RASTERIZATION_SAMPLES_EXT) &&
 				!this->hasDynamicState(VK_DYNAMIC_STATE_SAMPLE_MASK_EXT) &&
 				!this->hasDynamicState(VK_DYNAMIC_STATE_ALPHA_TO_COVERAGE_ENABLE_EXT) &&
@@ -808,7 +805,7 @@ namespace EmEn::Vulkan
 		 * and VK_DYNAMIC_STATE_DEPTH_BOUNDS dynamic states set. */
 		if ( m_createInfo.pDepthStencilState == nullptr )
 		{
-			if ( !dynamicStateExtended || (
+			if ( !isDynamicStateEnabled || (
 				!this->hasDynamicState(VK_DYNAMIC_STATE_DEPTH_TEST_ENABLE) &&
 				!this->hasDynamicState(VK_DYNAMIC_STATE_DEPTH_WRITE_ENABLE) &&
 				!this->hasDynamicState(VK_DYNAMIC_STATE_DEPTH_COMPARE_OP) &&
@@ -830,7 +827,7 @@ namespace EmEn::Vulkan
 		 * dynamic states set. */
 		if ( m_createInfo.pColorBlendState == nullptr )
 		{
-			if ( !dynamicStateExtended || (
+			if ( !isDynamicStateEnabled || (
 				!this->hasDynamicState(VK_DYNAMIC_STATE_LOGIC_OP_ENABLE_EXT) &&
 				!this->hasDynamicState(VK_DYNAMIC_STATE_LOGIC_OP_EXT) &&
 				!this->hasDynamicState(VK_DYNAMIC_STATE_COLOR_BLEND_ENABLE_EXT) &&

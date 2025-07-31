@@ -30,15 +30,7 @@ namespace EmEn::Scenes::Component
 {
 	using namespace EmEn::Libs;
 	using namespace EmEn::Libs::Math;
-	using namespace Graphics;
-
-	AbstractLightEmitter::AbstractLightEmitter (const std::string & name, const AbstractEntity & parentEntity, uint32_t shadowMapResolution) noexcept
-		: Abstract(name, parentEntity),
-		AbstractVirtualDevice(name, AVConsole::DeviceType::Video, AVConsole::ConnexionType::Output),
-		m_shadowMapResolution(shadowMapResolution)
-	{
-		this->enableFlag(Enabled);
-	}
+	using namespace EmEn::Graphics;
 
 	Matrix< 4, float >
 	AbstractLightEmitter::getLightSpaceMatrix () const noexcept
@@ -129,38 +121,5 @@ namespace EmEn::Scenes::Component
 		}
 
 		return true;
-	}
-
-	uint32_t
-	AbstractLightEmitter::UBOAlignment () const noexcept
-	{
-		if ( m_sharedUniformBuffer == nullptr )
-		{
-			return 0;
-		}
-
-		return m_sharedUniformBuffer->blockAlignedSize();
-	}
-
-	uint32_t
-	AbstractLightEmitter::UBOOffset () const noexcept
-	{
-		if ( m_sharedUniformBuffer == nullptr )
-		{
-			return 0;
-		}
-
-		return m_sharedUBOIndex * m_sharedUniformBuffer->blockAlignedSize();
-	}
-
-	const Vulkan::DescriptorSet *
-	AbstractLightEmitter::descriptorSet () const noexcept
-	{
-		if ( m_sharedUniformBuffer == nullptr )
-		{
-			return nullptr;
-		}
-
-		return m_sharedUniformBuffer->descriptorSet(m_sharedUBOIndex);
 	}
 }

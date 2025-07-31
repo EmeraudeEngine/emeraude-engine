@@ -54,8 +54,10 @@ namespace EmEn
 
 namespace EmEn::Console
 {
+
+
 	/**
-	 * @brief The console service class.
+	 * @brief The console controller service class.
 	 * @extends EmEn::ServiceInterface This is a service.
 	 * @extends EmEn::Libs::Time::EventTrait This service needs to delay some behavior.
 	 */
@@ -69,11 +71,20 @@ namespace EmEn::Console
 			/** @brief Observable class unique identifier. */
 			static const size_t ClassUID;
 
+			/** @brief Observable notification codes. */
+			enum NotificationCode
+			{
+				Exit,
+				HardExit,
+				/* Enumeration boundary. */
+				MaxEnum
+			};
+
 			/**
 			 * @brief Constructs the console controller.
 			 * @param primaryServices A reference to primary services.
 			 */
-			Controller (PrimaryServices & primaryServices) noexcept;
+			explicit Controller (PrimaryServices & primaryServices) noexcept;
 
 			/**
 			 * @brief Copy constructor.

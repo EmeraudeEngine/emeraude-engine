@@ -53,15 +53,15 @@ namespace EmEn::Scenes
 	const size_t Scene::ClassUID{getClassUID(ClassId)};
 
 	Scene::Scene (Renderer & graphicsRenderer, Audio::Manager & audioManager, const std::string & name, float boundary, const std::shared_ptr< Renderable::AbstractBackground > & background, const std::shared_ptr< Renderable::SceneAreaInterface > & sceneArea, const std::shared_ptr< Renderable::SeaLevelInterface > & seaLevel, const SceneOctreeOptions & octreeOptions) noexcept
-		: NameableTrait(name),
-		m_graphicsRenderer(graphicsRenderer),
-		m_audioManager(audioManager),
-		m_AVConsoleManager(name),
-		m_background(background),
-		m_sceneArea(sceneArea),
-		m_seaLevel(seaLevel),
-		m_rootNode(std::make_shared<Node>()),
-		m_boundary(boundary)
+		: NameableTrait{name},
+		m_graphicsRenderer{graphicsRenderer},
+		m_audioManager{audioManager},
+		m_AVConsoleManager{name, graphicsRenderer},
+		m_background{background},
+		m_sceneArea{sceneArea},
+		m_seaLevel{seaLevel},
+		m_rootNode{std::make_shared< Node >()},
+		m_boundary{boundary}
 	{
 		this->observe(&m_AVConsoleManager);
 		this->observe(m_rootNode.get());
@@ -204,7 +204,7 @@ namespace EmEn::Scenes
 				m_AVConsoleManager.addVideoDevice(swapChain, true);
 			}
 
-			if ( !m_AVConsoleManager.autoConnectPrimaryVideoDevices(m_graphicsRenderer, settings) )
+			if ( !m_AVConsoleManager.autoConnectPrimaryVideoDevices(settings) )
 			{
 				TraceError{ClassId} << "Unable to auto-connect primary video devices !";
 
@@ -1436,7 +1436,7 @@ namespace EmEn::Scenes
 				return true;
 
 			case AbstractEntity::DirectionalLightCreated :
-				m_lightSet.add(std::any_cast< std::shared_ptr< Component::DirectionalLight > >(data), m_graphicsRenderer);
+				m_lightSet.add(std::any_cast< std::shared_ptr< Component::DirectionalLight > >(data));
 
 				return true;
 
@@ -1446,7 +1446,7 @@ namespace EmEn::Scenes
 				return true;
 
 			case AbstractEntity::PointLightCreated :
-				m_lightSet.add(std::any_cast< std::shared_ptr< Component::PointLight > >(data), m_graphicsRenderer);
+				m_lightSet.add(std::any_cast< std::shared_ptr< Component::PointLight > >(data));
 
 				return true;
 
@@ -1456,7 +1456,7 @@ namespace EmEn::Scenes
 				return true;
 
 			case AbstractEntity::SpotLightCreated :
-				m_lightSet.add(std::any_cast< std::shared_ptr< Component::SpotLight > >(data), m_graphicsRenderer);
+				m_lightSet.add(std::any_cast< std::shared_ptr< Component::SpotLight > >(data));
 
 				return true;
 

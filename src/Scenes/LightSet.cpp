@@ -105,7 +105,7 @@ namespace EmEn::Scenes
 			/* NOTE: Register existing lights. */
 			for ( const auto & light : m_directionalLights )
 			{
-				if ( !light->createOnHardware(*this, renderer, m_AVConsoleManager) )
+				if ( !light->createOnHardware(*this, m_AVConsoleManager) )
 				{
 					TraceError{ClassId} << "Unable to create the directional light '" << light->name() << "' !";
 
@@ -130,7 +130,7 @@ namespace EmEn::Scenes
 			/* NOTE: Register existing lights. */
 			for ( const auto & light : m_pointLights )
 			{
-				if ( !light->createOnHardware(*this, renderer, m_AVConsoleManager) )
+				if ( !light->createOnHardware(*this, m_AVConsoleManager) )
 				{
 					TraceError{ClassId} << "Unable to create the point light '" << light->name() << "' !";
 
@@ -155,7 +155,7 @@ namespace EmEn::Scenes
 			/* NOTE: Register existing lights. */
 			for ( const auto & light : m_spotLights )
 			{
-				if ( !light->createOnHardware(*this, renderer, m_AVConsoleManager) )
+				if ( !light->createOnHardware(*this, m_AVConsoleManager) )
 				{
 					TraceError{ClassId} << "Unable to create the spot light '" << light->name() << "' !";
 
@@ -225,10 +225,10 @@ namespace EmEn::Scenes
 	}
 
 	void
-	LightSet::add (const std::shared_ptr< Component::DirectionalLight > & light, Renderer & renderer) noexcept
+	LightSet::add (const std::shared_ptr< Component::DirectionalLight > & light) noexcept
 	{
 		/* NOTE: If light set is uninitialized, the light creation will be postponed. */
-		if ( m_flags[Initialized] && !light->createOnHardware(*this, renderer, m_AVConsoleManager) )
+		if ( m_flags[Initialized] && !light->createOnHardware(*this, m_AVConsoleManager) )
 		{
 			TraceError{ClassId} << "Unable to create the directional light '" << light->name() << "' !";
 
@@ -244,10 +244,10 @@ namespace EmEn::Scenes
 	}
 
 	void
-	LightSet::add (const std::shared_ptr< Component::PointLight > & light, Renderer & renderer) noexcept
+	LightSet::add (const std::shared_ptr< Component::PointLight > & light) noexcept
 	{
 		/* NOTE: If light set is uninitialized, the light creation will be postponed. */
-		if ( m_flags[Initialized] && !light->createOnHardware(*this, renderer, m_AVConsoleManager) )
+		if ( m_flags[Initialized] && !light->createOnHardware(*this, m_AVConsoleManager) )
 		{
 			TraceError{ClassId} << "Unable to create the point light '" << light->name() << "' !";
 
@@ -263,10 +263,10 @@ namespace EmEn::Scenes
 	}
 
 	void
-	LightSet::add (const std::shared_ptr< Component::SpotLight > & light, Renderer & renderer) noexcept
+	LightSet::add (const std::shared_ptr< Component::SpotLight > & light) noexcept
 	{
 		/* NOTE: If light set is uninitialized, the light creation will be postponed. */
-		if ( m_flags[Initialized] && !light->createOnHardware(*this, renderer, m_AVConsoleManager) )
+		if ( m_flags[Initialized] && !light->createOnHardware(*this, m_AVConsoleManager) )
 		{
 			TraceError{ClassId} << "Unable to create the spot light '" << light->name() << "' !";
 

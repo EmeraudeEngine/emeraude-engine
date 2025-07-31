@@ -70,7 +70,6 @@ namespace EmEn
 {
 	/**
 	 * @brief Core object of Emeraude-Engine. One of his main roles is to hold all services.
-	 * @note This class act as a singleton. So you can call from everywhere with Core::instance().
 	 * @extends EmEn::Input::KeyboardListenerInterface The core needs to get events from the keyboard for low-level interaction.
 	 * @extends EmEn::Console::Controllable The core can be controlled by the console.
 	 * @extends EmEn::Libs::ObserverTrait The core is an observer.
@@ -639,18 +638,6 @@ namespace EmEn
 				return m_sceneManager;
 			}
 
-			/**
-			 * @brief Returns the Core singleton.
-			 * @return Core *
-			 */
-			[[nodiscard]]
-			static
-			Core *
-			instance () noexcept
-			{
-				return s_instance;
-			}
-
 		protected:
 
 			/**
@@ -1021,8 +1008,6 @@ namespace EmEn
 			static constexpr auto ShowHelp{5UL};
 			static constexpr auto PreventDefaultKeyBehaviors{6UL};
 
-			static Core * s_instance;
-
 			Identification m_identification;
 			Help m_coreHelp{"Core engine"};
 			PrimaryServices m_primaryServices;
@@ -1031,7 +1016,7 @@ namespace EmEn
 			Resources::Manager m_resourceManager{m_primaryServices, m_networkManager};
 			User m_user{m_primaryServices};
 			PlatformManager m_platformManager{m_primaryServices};
-			Vulkan::Instance m_vulkanInstance{m_primaryServices};
+			Vulkan::Instance m_vulkanInstance{m_identification, m_primaryServices};
 			Window m_window{m_primaryServices, m_vulkanInstance, m_identification};
 			Input::Manager m_inputManager{m_primaryServices, m_window};
 			Graphics::Renderer m_graphicsRenderer{m_primaryServices, m_vulkanInstance, m_window};

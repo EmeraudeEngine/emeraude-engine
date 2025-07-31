@@ -29,6 +29,7 @@
 /* STL inclusions. */
 #include <cstring>
 #include <algorithm>
+#include <utility>
 #include <sstream>
 
 /* Third-party inclusions. */
@@ -40,9 +41,9 @@
 #include "Device.hpp"
 #include "DeviceRequirements.hpp"
 #include "Utility.hpp"
+#include "Identification.hpp"
 #include "PrimaryServices.hpp"
 #include "Window.hpp"
-#include "Core.hpp" // FIXME: Remove this (Access to engine info)
 #include "SettingKeys.hpp"
 
 namespace EmEn::Vulkan
@@ -51,9 +52,10 @@ namespace EmEn::Vulkan
 
 	const size_t Instance::ClassUID{getClassUID(ClassId)};
 
-	Instance::Instance (PrimaryServices & primaryServices) noexcept
-		: ServiceInterface(ClassId),
-		m_primaryServices(primaryServices)
+	Instance::Instance (const Identification & identification, PrimaryServices & primaryServices) noexcept
+		: ServiceInterface{ClassId},
+		m_identification{identification},
+		m_primaryServices{primaryServices}
 	{
 		/* VK_KHR_SWAPCHAIN_EXTENSION_NAME = "VK_KHR_swapchain" */
 		m_requiredGraphicsDeviceExtensions.emplace_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
@@ -104,8 +106,6 @@ namespace EmEn::Vulkan
 	bool
 	Instance::onInitialize () noexcept
 	{
-		const auto * core = Core::instance();
-
 		this->readSettings();
 
 		if ( this->isDebugModeEnabled() )
@@ -117,12 +117,10 @@ namespace EmEn::Vulkan
 
 		/* Vulkan instance creation */
 		{
-			const auto & identification = core->identification();
-
 			m_applicationInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
 			m_applicationInfo.pNext = nullptr;
-			m_applicationInfo.pApplicationName = identification.applicationId().c_str();
-			m_applicationInfo.applicationVersion = VK_MAKE_VERSION(identification.applicationVersion().major(), identification.applicationVersion().minor(), identification.applicationVersion().revision());
+			m_applicationInfo.pApplicationName = m_identification.applicationId().c_str();
+			m_applicationInfo.applicationVersion = VK_MAKE_VERSION(m_identification.applicationVersion().major(), m_identification.applicationVersion().minor(), m_identification.applicationVersion().revision());
 			m_applicationInfo.pEngineName = Identification::LibraryName;
 			m_applicationInfo.engineVersion = VK_MAKE_VERSION(Identification::LibraryVersion.major(), Identification::LibraryVersion.minor(), Identification::LibraryVersion.revision());
 			m_applicationInfo.apiVersion = VK_API_VERSION_1_3;
@@ -663,7 +661,7 @@ namespace EmEn::Vulkan
 		requirements.features().fillModeNonSolid = VK_TRUE; // Required for wireframe mode!
 		if constexpr ( !IsMacOS )
 		{
-			/* NOTE: MacOS M? iGPU do not have the geometry shader stage. */
+			/* NOTE: macOS M? iGPU do not have the geometry shader stage. */
 			requirements.features().geometryShader = VK_TRUE; // Required for TBN space display
 		}
 		requirements.features().samplerAnisotropy = VK_TRUE;

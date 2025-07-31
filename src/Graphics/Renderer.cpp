@@ -50,8 +50,8 @@
 #include "Vulkan/SwapChain.hpp"
 #include "Vulkan/Types.hpp"
 #include "Scenes/Scene.hpp"
-#include "Core.hpp"
 #include "PrimaryServices.hpp"
+#include "Overlay/Manager.hpp"
 #include "Window.hpp"
 
 namespace EmEn::Graphics
@@ -459,7 +459,7 @@ namespace EmEn::Graphics
 			return true;
 		}
 
-		if ( !graphicsPipeline->finalize(renderTarget.framebuffer()->renderPass(), program.pipelineLayout(), program.useTesselation()) )
+		if ( !graphicsPipeline->finalize(renderTarget.framebuffer()->renderPass(), program.pipelineLayout(), program.useTesselation(), m_vulkanInstance.isDynamicStateExtensionEnabled()) )
 		{
 			return false;
 		}
@@ -481,7 +481,7 @@ namespace EmEn::Graphics
 
 			if ( !this->recreateSwapChain() )
 			{
-				Core::instance()->stop();
+				return;
 			}
 		}
 

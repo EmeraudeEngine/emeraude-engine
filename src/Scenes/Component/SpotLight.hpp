@@ -120,7 +120,7 @@ namespace EmEn::Scenes::Component
 
 			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::createOnHardware() */
 			[[nodiscard]]
-			bool createOnHardware (LightSet & lightSet, Graphics::Renderer & renderer, AVConsole::Manager & AVConsoleManager) noexcept override;
+			bool createOnHardware (LightSet & lightSet, AVConsole::Manager & AVConsoleManager) noexcept override;
 
 			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::destroyFromHardware() */
 			void destroyFromHardware () noexcept override;

@@ -52,6 +52,7 @@ namespace EmEn
 		class Device;
 	}
 
+	class Identification;
 	class PrimaryServices;
 	class Window;
 }
@@ -73,10 +74,11 @@ namespace EmEn::Vulkan
 			static const size_t ClassUID;
 
 			/**
-			 * @brief Constructs the Vulkan instance.
+			 * @brief Constructs a Vulkan instance.
+			 * @param identification A reference to the application identification.
 			 * @param primaryServices A reference to primary services.
 			 */
-			explicit Instance (PrimaryServices & primaryServices) noexcept;
+			Instance (const Identification & identification, PrimaryServices & primaryServices) noexcept;
 
 			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
 			[[nodiscard]]
@@ -390,6 +392,7 @@ namespace EmEn::Vulkan
 			static constexpr auto DynamicStateExtensionEnabled{3UL};
 			static constexpr auto StandardTextureCheckEnabled{4UL};
 
+			const Identification & m_identification;
 			PrimaryServices & m_primaryServices;
 			VkInstance m_instance{VK_NULL_HANDLE};
 			VkApplicationInfo m_applicationInfo{};

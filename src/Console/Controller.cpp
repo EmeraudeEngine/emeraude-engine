@@ -316,10 +316,7 @@ namespace EmEn::Console
 		{
 			outputs.emplace_back(Severity::Success, "Goodbye !");
 
-			/* FIXME: Launch a notification */
-			/*this->fire([] (double) {
-				Core::instance()->stop();
-			}, 3000.0);*/
+			this->notify(Exit);
 
 			return true;
 		}
@@ -328,11 +325,7 @@ namespace EmEn::Console
 		{
 			outputs.emplace_back(Severity::Warning, "Wild exit command invoked !");
 
-			this->fire([] (Time::TimerID /*timerID*/) {
-				std::terminate();
-
-				return true;
-			}, 3000);
+			this->notify(HardExit);
 
 			return true;
 		}

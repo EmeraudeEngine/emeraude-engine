@@ -56,27 +56,12 @@ namespace EmEn
 	using namespace Input;
 	using namespace Resources;
 
-	Core * Core::s_instance{nullptr};
-
 	Core::Core (int argc, char * * argv, const char * applicationName, const Version & applicationVersion, const char * applicationOrganization, const char * applicationDomain) noexcept
 		: KeyboardListenerInterface(false, false),
 		Controllable(ClassId),
 		m_identification(applicationName, applicationVersion, applicationOrganization, applicationDomain),
 		m_primaryServices(argc, argv, m_identification)
 	{
-		if ( s_instance != nullptr )
-		{
-			std::cerr << __PRETTY_FUNCTION__ << ", constructor called twice !" "\n";
-
-#if IS_MACOS // clang 15 failure (try to use __apple_build_version__)
-			std::terminate();
-#else
-			std::quick_exit(1);
-#endif
-		}
-
-		s_instance = this;
-
 		if ( !this->initializeBaseLevel() )
 		{
 #if IS_MACOS // clang 15 failure (try to use __apple_build_version__)
@@ -94,15 +79,6 @@ namespace EmEn
 		m_identification(applicationName, applicationVersion, applicationOrganization, applicationDomain),
 		m_primaryServices(argc, wargv, m_identification)
 	{
-		if ( s_instance != nullptr )
-		{
-			std::cerr << __PRETTY_FUNCTION__ << ", constructor called twice !" "\n";
-
-			std::quick_exit(1);
-		}
-
-		s_instance = this;
-
 		if ( !this->initializeBaseLevel() )
 		{
 			std::quick_exit(2);
@@ -132,8 +108,6 @@ namespace EmEn
 		m_primaryServicesEnabled.clear();
 
 		Tracer::success(ClassId, "*** Core level terminated ***");
-
-		s_instance = nullptr;
 	}
 
 	void
@@ -445,6 +419,8 @@ namespace EmEn
 			TraceSuccess{ClassId} << m_consoleController.name() << " service up !";
 
 			this->registerToConsole();
+
+			this->observe(&m_consoleController);
 		}
 		else
 		{
@@ -1216,6 +1192,33 @@ namespace EmEn
 	bool
 	Core::onNotification (const ObservableTrait * observable, int notificationCode, const std::any & data) noexcept
 	{
+		if ( observable == &m_consoleController )
+		{
+			switch ( notificationCode )
+			{
+				case Console::Controller::Exit :
+
+					this->stop();
+
+					break;
+
+				case Console::Controller::HardExit :
+					/* NOTE: Hard cord termination of the program ! */
+					std::terminate();
+
+					break;
+
+				default:
+					if constexpr ( ObserverDebugEnabled )
+					{
+						TraceDebug{ClassId} << "Event #" << notificationCode << " from '" << Console::Controller::ClassId << "' ignored.";
+					}
+					break;
+			}
+
+			return true;
+		}
+
 		if ( observable == &m_networkManager )
 		{
 			TraceDebug{ClassId} << "Receiving an event from '" << NetworkManager::ClassId << "' (code:" << notificationCode << ") ...";

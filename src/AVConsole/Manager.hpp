@@ -97,8 +97,9 @@ namespace EmEn::AVConsole
 			/**
 			 * @brief Constructs the master control console.
 			 * @param name A reference to a string.
+			 * @param graphicsRenderer A reference to the graphics renderer.
 			 */
-			explicit Manager (const std::string & name) noexcept;
+			Manager (const std::string & name, Graphics::Renderer & graphicsRenderer) noexcept;
 
 			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
 			[[nodiscard]]
@@ -252,27 +253,24 @@ namespace EmEn::AVConsole
 
 			/**
 			 * @brief Creates a render to shadow map (Texture2D) device.
-			 * @param renderer A reference to the graphics renderer.
 			 * @param name A reference to a string to name the virtual video device.
 			 * @param resolution The resolution of the shadow map.
 			 * @return std::shared_ptr< Graphics::RenderTarget::ShadowMap< Graphics::ViewMatrices2DUBO > >
 			 */
 			[[nodiscard]]
-			std::shared_ptr< Graphics::RenderTarget::ShadowMap< Graphics::ViewMatrices2DUBO > > createRenderToShadowMap (Graphics::Renderer & renderer, const std::string & name, uint32_t resolution) noexcept;
+			std::shared_ptr< Graphics::RenderTarget::ShadowMap< Graphics::ViewMatrices2DUBO > > createRenderToShadowMap (const std::string & name, uint32_t resolution) noexcept;
 
 			/**
 			 * @brief Creates a render to cubic shadow map (Cubemap) device.
-			 * @param renderer A reference to the graphics renderer.
 			 * @param name A reference to a string to name the virtual video device.
 			 * @param resolution The resolution of the shadow map.
 			 * @return std::shared_ptr< Graphics::RenderTarget::ShadowMap< Graphics::ViewMatrices3DUBO > >
 			 */
 			[[nodiscard]]
-			std::shared_ptr< Graphics::RenderTarget::ShadowMap< Graphics::ViewMatrices3DUBO > > createRenderToCubicShadowMap (Graphics::Renderer & renderer, const std::string & name, uint32_t resolution) noexcept;
+			std::shared_ptr< Graphics::RenderTarget::ShadowMap< Graphics::ViewMatrices3DUBO > > createRenderToCubicShadowMap (const std::string & name, uint32_t resolution) noexcept;
 
 			/**
 			 * @brief Creates a render to texture 2D device.
-			 * @param renderer A reference to the graphics renderer.
 			 * @param name A reference to a string to name the virtual video device.
 			 * @param width The width of the surface.
 			 * @param height The height of the surface.
@@ -280,22 +278,20 @@ namespace EmEn::AVConsole
 			 * @return std::shared_ptr< Graphics::RenderTarget::Texture< Graphics::ViewMatrices2DUBO > >
 			 */
 			[[nodiscard]]
-			std::shared_ptr< Graphics::RenderTarget::Texture< Graphics::ViewMatrices2DUBO > > createRenderToTexture2D (Graphics::Renderer & renderer, const std::string & name, uint32_t width, uint32_t height, uint32_t colorCount = 4) noexcept;
+			std::shared_ptr< Graphics::RenderTarget::Texture< Graphics::ViewMatrices2DUBO > > createRenderToTexture2D (const std::string & name, uint32_t width, uint32_t height, uint32_t colorCount = 4) noexcept;
 
 			/**
 			 * @brief Creates a render to cubemap device.
-			 * @param renderer A reference to the graphics renderer.
 			 * @param name A reference to a string to name the virtual video device.
 			 * @param size The size of the cubemap.
 			 * @param colorCount The number of color channel desired for the texture2Ds. Default 4.
 			 * @return std::shared_ptr< Graphics::RenderTarget::Texture::Texture< Graphics::ViewMatrices3DUBO > >
 			 */
 			[[nodiscard]]
-			std::shared_ptr< Graphics::RenderTarget::Texture< Graphics::ViewMatrices3DUBO > > createRenderToCubemap (Graphics::Renderer & renderer, const std::string & name, uint32_t size, uint32_t colorCount = 4) noexcept;
+			std::shared_ptr< Graphics::RenderTarget::Texture< Graphics::ViewMatrices3DUBO > > createRenderToCubemap (const std::string & name, uint32_t size, uint32_t colorCount = 4) noexcept;
 
 			/**
 			 * @brief Creates a render to view (Texture 2D) device.
-			 * @param renderer A reference to the graphics renderer.
 			 * @param name A reference to a string to name the virtual video device.
 			 * @param width The width of the surface.
 			 * @param height The height of the surface.
@@ -304,11 +300,10 @@ namespace EmEn::AVConsole
 			 * @return std::shared_ptr< Graphics::RenderTarget::View< Graphics::ViewMatrices2DUBO > >
 			 */
 			[[nodiscard]]
-			std::shared_ptr< Graphics::RenderTarget::View< Graphics::ViewMatrices2DUBO > > createRenderToView (Graphics::Renderer & renderer, const std::string & name, uint32_t width, uint32_t height, const Graphics::FramebufferPrecisions & precisions = {}, bool primaryDevice = false) noexcept;
+			std::shared_ptr< Graphics::RenderTarget::View< Graphics::ViewMatrices2DUBO > > createRenderToView (const std::string & name, uint32_t width, uint32_t height, const Graphics::FramebufferPrecisions & precisions = {}, bool primaryDevice = false) noexcept;
 
 			/**
 			 * @brief Creates a render to cubic view (Cubemap) device.
-			 * @param renderer A reference to the graphics renderer.
 			 * @param name A reference to a string to name the virtual video device.
 			 * @param size The size of the cubemap.
 			 * @param precisions A reference to a framebuffer precisions structure.
@@ -316,7 +311,7 @@ namespace EmEn::AVConsole
 			 * @return std::shared_ptr< Graphics::RenderTarget::View< Graphics::ViewMatrices3DUBO > >
 			 */
 			[[nodiscard]]
-			std::shared_ptr< Graphics::RenderTarget::View< Graphics::ViewMatrices3DUBO > > createRenderToCubicView (Graphics::Renderer & renderer, const std::string & name, uint32_t size, const Graphics::FramebufferPrecisions & precisions = {}, bool primaryDevice = false) noexcept;
+			std::shared_ptr< Graphics::RenderTarget::View< Graphics::ViewMatrices3DUBO > > createRenderToCubicView (const std::string & name, uint32_t size, const Graphics::FramebufferPrecisions & precisions = {}, bool primaryDevice = false) noexcept;
 
 			/**
 			 * @brief Connects two video devices.
@@ -336,11 +331,10 @@ namespace EmEn::AVConsole
 
 			/**
 			 * @brief Auto-connects the primary video devices.
-			 * @param graphicsRenderer A reference to the graphics renderer.
 			 * @param settings A reference to the core settings.
 			 * @return bool
 			 */
-			bool autoConnectPrimaryVideoDevices (Graphics::Renderer & graphicsRenderer, Settings & settings) noexcept;
+			bool autoConnectPrimaryVideoDevices (Settings & settings) noexcept;
 
 			/**
 			 * @brief Auto-connects the primary audio devices.
@@ -359,12 +353,11 @@ namespace EmEn::AVConsole
 
 			/**
 			 * @brief Creates the default view.
-			 * @param graphicsRenderer A reference to the graphics renderer.
 			 * @param settings A reference to the core settings.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool createDefaultView (Graphics::Renderer & graphicsRenderer, Settings & settings) noexcept;
+			bool createDefaultView (Settings & settings) noexcept;
 
 			/**
 			 * @brief Creates the default speaker.
@@ -385,7 +378,7 @@ namespace EmEn::AVConsole
 
 			/** @copydoc Libs:ObserverTrait::onNotification() */
 			[[nodiscard]]
-			bool onNotification (const Libs::ObservableTrait * observable, int notificationCode, const std::any & data) noexcept override;
+			bool onNotification (const ObservableTrait * observable, int notificationCode, const std::any & data) noexcept override;
 
 			/** @copydoc EmEn::Console::Controllable::onRegisterToConsole. */
 			void onRegisterToConsole () noexcept override;
@@ -404,6 +397,7 @@ namespace EmEn::AVConsole
 			 */
 			bool autoSelectPrimaryInputAudioDevice () noexcept;
 
+			Graphics::Renderer & m_graphicsRenderer;
 			std::unordered_map< std::string, std::shared_ptr< AbstractVirtualDevice > > m_virtualVideoDevices;
 			std::unordered_map< std::string, std::shared_ptr< AbstractVirtualDevice > > m_virtualAudioDevices;
 			std::set< std::shared_ptr< Graphics::RenderTarget::Abstract > > m_renderToShadowMaps;

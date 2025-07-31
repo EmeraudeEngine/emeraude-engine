@@ -80,14 +80,14 @@ namespace EmEn::Vulkan
 			/**
 			 * @brief Constructs a graphics pipeline.
 			 * @param device A reference to a device smart pointer.
-			 * @param createFlags The create info flags. Default none.
+			 * @param createFlags The createInfo flags. Default none.
 			 */
 			explicit GraphicsPipeline (const std::shared_ptr< Device > & device, VkPipelineCreateFlags createFlags = 0) noexcept;
 
 			/**
-			 * @brief Constructs a graphics pipeline with a create info.
+			 * @brief Constructs a graphics pipeline with a createInfo.
 			 * @param device A reference to a device smart pointer.
-			 * @param createInfo A reference to a create info.
+			 * @param createInfo A reference to a createInfo.
 			 */
 			GraphicsPipeline (const std::shared_ptr< Device > & device, const VkGraphicsPipelineCreateInfo & createInfo) noexcept;
 
@@ -260,10 +260,11 @@ namespace EmEn::Vulkan
 			 * @param renderPass A reference to a render pass smart pointer.
 			 * @param pipelineLayout A reference to a pipeline layout smart pointer.
 			 * @param useTesselation Declares tesselation was enabled.
+			 * @param isDynamicStateEnabled
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool finalize (const std::shared_ptr< const RenderPass > & renderPass, const std::shared_ptr< PipelineLayout > & pipelineLayout, bool useTesselation) noexcept;
+			bool finalize (const std::shared_ptr< const RenderPass > & renderPass, const std::shared_ptr< PipelineLayout > & pipelineLayout, bool useTesselation, bool isDynamicStateEnabled) noexcept;
 
 			/**
 			 * @brief Recreates the graphics pipeline.

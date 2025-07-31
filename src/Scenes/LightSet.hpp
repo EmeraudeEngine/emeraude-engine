@@ -361,26 +361,23 @@ namespace EmEn::Scenes
 			/**
 			 * @brief Adds a directional light.
 			 * @param light A smart pointer to the scene directional light.
-			 * @param renderer A reference to the renderer.
 			 * @return void
 			 */
-			void add (const std::shared_ptr< Component::DirectionalLight > & light, Graphics::Renderer & renderer) noexcept;
+			void add (const std::shared_ptr< Component::DirectionalLight > & light) noexcept;
 
 			/**
 			 * @brief Adds a point light.
 			 * @param light A smart pointer to the scene point light.
-			 * @param renderer A reference to the renderer.
 			 * @return void
 			 */
-			void add (const std::shared_ptr< Component::PointLight > & light, Graphics::Renderer & renderer) noexcept;
+			void add (const std::shared_ptr< Component::PointLight > & light) noexcept;
 
 			/**
 			 * @brief Adds a spotlight.
 			 * @param light A smart pointer to the scene spotlight.
-			 * @param renderer A reference to the renderer.
 			 * @return void
 			 */
-			void add (const std::shared_ptr< Component::SpotLight > & light, Graphics::Renderer & renderer) noexcept;
+			void add (const std::shared_ptr< Component::SpotLight > & light) noexcept;
 
 			/**
 			 * @brief Removes a directional light.

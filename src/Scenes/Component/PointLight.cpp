@@ -145,7 +145,7 @@ namespace EmEn::Scenes::Component
 	}
 
 	bool
-	PointLight::createOnHardware (LightSet & lightSet, Renderer & renderer, AVConsole::Manager & AVConsoleManager) noexcept
+	PointLight::createOnHardware (LightSet & lightSet, AVConsole::Manager & AVConsoleManager) noexcept
 	{
 		if ( this->isCreated() )
 		{
@@ -178,7 +178,7 @@ namespace EmEn::Scenes::Component
 		if ( resolution > 0 )
 		{
 			/* [VULKAN-SHADOW] TODO: Reuse shadow maps + remove it from console on failure */
-			m_shadowMap = AVConsoleManager.createRenderToCubicShadowMap(renderer, this->name() + ShadowMapName, resolution);
+			m_shadowMap = AVConsoleManager.createRenderToCubicShadowMap(this->name() + ShadowMapName, resolution);
 
 			if ( m_shadowMap != nullptr )
 			{

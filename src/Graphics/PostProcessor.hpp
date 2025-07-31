@@ -33,7 +33,8 @@
 namespace EmEn::Graphics
 {
 	/**
-	 * @brief The PostProcessor class
+	 * @brief The post process class to add effect on the final render.
+	 * @todo This is a relic from the OpenGL version and must be rewrite from the ground.
 	 */
 	class PostProcessor final
 	{
@@ -45,7 +46,7 @@ namespace EmEn::Graphics
 			static constexpr auto ClassId{"PostProcessor"};
 
 			/* GLSL variables. */
-			static constexpr auto Fragment = "em_Fragment";
+			static constexpr auto Fragment{"em_Fragment"};
 
 			/**
 			 * @brief Construct an offscreen framebuffer for post-rendering effects.
@@ -96,13 +97,6 @@ namespace EmEn::Graphics
 			 * @return void
 			 */
 			void render (const Libs::Math::Space2D::AARectangle< uint32_t > & region) const noexcept;
-
-			/**
-			 * @brief Returns a pointer to the framebuffer responsible for the post-processor.
-			 * @return const Framebuffer *
-			 */
-			//[[nodiscard]]
-			//const Framebuffer * framebuffer () const noexcept;
 
 			/**
 			 * @brief Returns whether the framebuffer is using multisample.
@@ -156,13 +150,13 @@ namespace EmEn::Graphics
 			static constexpr auto ServiceInitialized{0UL};
 			static constexpr auto UpdateRequested{1UL};
 
-			//Framebuffer m_framebuffer{};
-			//std::shared_ptr< Vulkan::Texture2D > m_colorBuffer{};
-			//RenderBufferObject m_extraBuffer{};
-			std::unique_ptr< Geometry::IndexedVertexResource > m_geometry{};
-			Saphir::FramebufferEffectsList m_effectsList{};
-			//std::shared_ptr< Program > m_program{};
-			//RasterizationMode m_rasterizationMode{};
+			//Framebuffer m_framebuffer;
+			//std::shared_ptr< Vulkan::Texture2D > m_colorBuffer;
+			//RenderBufferObject m_extraBuffer;
+			std::unique_ptr< Geometry::IndexedVertexResource > m_geometry;
+			Saphir::FramebufferEffectsList m_effectsList;
+			//std::shared_ptr< Program > m_program;
+			//RasterizationMode m_rasterizationMode;
 			std::array< bool, 8 > m_flags{
 				false/*ServiceInitialized*/,
 				false/*UpdateRequested*/,

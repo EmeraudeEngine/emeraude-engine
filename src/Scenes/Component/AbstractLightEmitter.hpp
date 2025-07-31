@@ -32,26 +32,21 @@
 #include <string>
 
 /* Local inclusions for inheritances. */
-#include "AVConsole/AbstractVirtualDevice.hpp"
 #include "Abstract.hpp"
+#include "AVConsole/AbstractVirtualDevice.hpp"
 
 /* Local inclusions for usages. */
+#include "Libs/PixelFactory/Color.hpp"
 #include "AVConsole/Manager.hpp"
 #include "AVConsole/Types.hpp"
-#include "Libs/PixelFactory/Color.hpp"
 #include "Vulkan/SharedUniformBuffer.hpp"
 
 /* Forward declarations. */
 namespace EmEn
 {
-	namespace Graphics
+	namespace Graphics::RenderTarget
 	{
-		namespace RenderTarget
-		{
-			class Abstract;
-		}
-
-		class Renderer;
+		class Abstract;
 	}
 
 	namespace Saphir::Declaration
@@ -330,7 +325,15 @@ namespace EmEn::Scenes::Component
 			 */
 			[[nodiscard]]
 			uint32_t
-			UBOAlignment () const noexcept;
+			UBOAlignment () const noexcept
+			{
+				if ( m_sharedUniformBuffer == nullptr )
+				{
+					return 0;
+				}
+
+				return m_sharedUniformBuffer->blockAlignedSize();
+			}
 
 			/**
 			 * @brief Returns the light offset in bytes in the UBO.
@@ -338,14 +341,32 @@ namespace EmEn::Scenes::Component
 			 * @return uint32_t
 			 */
 			[[nodiscard]]
-			uint32_t UBOOffset () const noexcept;
+			uint32_t
+			UBOOffset () const noexcept
+			{
+				if ( m_sharedUniformBuffer == nullptr )
+				{
+					return 0;
+				}
+
+				return m_sharedUBOIndex * m_sharedUniformBuffer->blockAlignedSize();
+			}
 
 			/**
 			 * @brief Returns the light descriptor set.
 			 * @return const Vulkan::DescriptorSet *
 			 */
 			[[nodiscard]]
-			const Vulkan::DescriptorSet * descriptorSet () const noexcept;
+			const Vulkan::DescriptorSet *
+			descriptorSet () const noexcept
+			{
+				if ( m_sharedUniformBuffer == nullptr )
+				{
+					return nullptr;
+				}
+
+				return m_sharedUniformBuffer->descriptorSet(m_sharedUBOIndex);
+			}
 
 			/**
 			 * @brief Returns whether an absolute position is within the light radius.
@@ -357,12 +378,11 @@ namespace EmEn::Scenes::Component
 			/**
 			 * @brief Creates the light on the GPU with the shadow map if requested.
 			 * @param lightSet A reference to the light set.
-			 * @param renderer A reference to the graphic renderer.
 			 * @param AVConsoleManager A reference to master control manager.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			virtual bool createOnHardware (LightSet & lightSet, Graphics::Renderer & renderer, AVConsole::Manager & AVConsoleManager) noexcept = 0;
+			virtual bool createOnHardware (LightSet & lightSet, AVConsole::Manager & AVConsoleManager) noexcept = 0;
 
 			/**
 			 * @brief Removes the light from the GPU.
@@ -408,7 +428,13 @@ namespace EmEn::Scenes::Component
 			 * @param parentEntity A reference to the parent entity.
 			 * @param shadowMapResolution The shadow map resolution. 0 means no shadow casting.
 			 */
-			AbstractLightEmitter (const std::string & name, const AbstractEntity & parentEntity, uint32_t shadowMapResolution) noexcept;
+			AbstractLightEmitter (const std::string & name, const AbstractEntity & parentEntity, uint32_t shadowMapResolution) noexcept
+				: Abstract{name, parentEntity},
+				AbstractVirtualDevice{name, AVConsole::DeviceType::Video, AVConsole::ConnexionType::Output},
+				m_shadowMapResolution{shadowMapResolution}
+			{
+				this->enableFlag(Enabled);
+			}
 
 			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::updateDeviceFromCoordinates() */
 			void updateDeviceFromCoordinates (const Libs::Math::CartesianFrame< float > & worldCoordinates, const Libs::Math::Vector< 3, float > & worldVelocity) noexcept final;
