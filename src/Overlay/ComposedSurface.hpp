@@ -68,6 +68,7 @@ namespace EmEn::Overlay
 
 	/**
 	 * @brief The base class of all overlay surfaces.
+	 * @TODO Was an early attempt to create a parametric GUI composed with sub-surfaces from the OpenGL version. A full rewrite is needed.
 	 * @extends EmEn::Overlay::Surface This is a surface.
 	 */
 	class ComposedSurface : public Surface
