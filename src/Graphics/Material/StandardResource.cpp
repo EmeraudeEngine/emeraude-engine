@@ -89,7 +89,7 @@ namespace EmEn::Graphics::Material
 
 	StandardResource::~StandardResource ()
 	{
-		this->destroy();
+		this->destroyFromHardware();
 	}
 
 	size_t
@@ -581,7 +581,7 @@ namespace EmEn::Graphics::Material
 	}
 
 	bool
-	StandardResource::create (Renderer & renderer) noexcept
+	StandardResource::createOnHardware (Renderer & renderer) noexcept
 	{
 		if ( this->isCreated() )
 		{
@@ -820,7 +820,7 @@ namespace EmEn::Graphics::Material
 	}
 
 	void
-	StandardResource::destroy () noexcept
+	StandardResource::destroyFromHardware () noexcept
 	{
 		m_sharedUniformBuffer->removeElement(this);
 

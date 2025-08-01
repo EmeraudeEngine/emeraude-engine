@@ -39,7 +39,7 @@ namespace EmEn::Graphics
 {
 	using namespace EmEn::Libs;
 	using namespace EmEn::Libs::Math;
-	using namespace Vulkan;
+	using namespace EmEn::Vulkan;
 
 	const std::array< Matrix< 4, float >, CubemapFaceIndexes.size() > ViewMatrices3DUBO::CubemapOrientation{
 		Matrix< 4, float >::lookAt(Vector< 3, float >{0.0F, 0.0F, 0.0F}, Vector< 3, float >{ 1.0F,  0.0F,  0.0F}, Vector< 3, float >{ 0.0F, -1.0F,  0.0F}), // X+
@@ -73,7 +73,10 @@ namespace EmEn::Graphics
 
 		std::memcpy(&m_bufferData[ProjectionMatrixOffset], m_projection.data(), Matrix4Alignment * sizeof(float));
 
-		this->updateVideoMemory();
+		if ( !this->updateVideoMemory() )
+		{
+			Tracer::error(ClassId, "Unable to update video memory !");
+		}
 	}
 
 	void
@@ -92,7 +95,10 @@ namespace EmEn::Graphics
 
 		std::memcpy(&m_bufferData[ProjectionMatrixOffset], m_projection.data(), Matrix4Alignment * sizeof(float));
 
-		this->updateVideoMemory();
+		if ( !this->updateVideoMemory() )
+		{
+			Tracer::error(ClassId, "Unable to update video memory !");
+		}
 	}
 
 	void
@@ -128,13 +134,16 @@ namespace EmEn::Graphics
 
 		m_bufferData[AmbientLightIntensityOffset] = intensity;
 
-		this->updateVideoMemory();
+		if ( !this->updateVideoMemory() )
+		{
+			Tracer::error(ClassId, "Unable to update video memory !");
+		}
 	}
 
 	bool
 	ViewMatrices3DUBO::create (Renderer & renderer, const std::string & instanceID) noexcept
 	{
-		const auto descriptorSetLayout = this->getDescriptorSetLayout();
+		const auto descriptorSetLayout = ViewMatricesInterface::getDescriptorSetLayout(renderer.layoutManager());
 
 		if ( descriptorSetLayout == nullptr )
 		{
@@ -153,7 +162,7 @@ namespace EmEn::Graphics
 			return false;
 		}
 
-		m_descriptorSet = std::make_unique< DescriptorSet >(renderer.descriptorPool(), this->getDescriptorSetLayout());
+		m_descriptorSet = std::make_unique< DescriptorSet >(renderer.descriptorPool(), ViewMatricesInterface::getDescriptorSetLayout(renderer.layoutManager()));
 		m_descriptorSet->setIdentifier(ClassId, instanceID, "DescriptorSet");
 
 		if ( !m_descriptorSet->create() )
@@ -210,15 +219,5 @@ namespace EmEn::Graphics
 	operator<< (std::ostream & out, const ViewMatrices3DUBO & /*obj*/)
 	{
 		return out << "NOT YET";
-	}
-
-	std::string
-	to_string (const ViewMatrices3DUBO & obj) noexcept
-	{
-		std::stringstream output;
-
-		output << obj;
-
-		return output.str();
 	}
 }

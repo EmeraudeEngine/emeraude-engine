@@ -97,7 +97,7 @@ namespace EmEn::Saphir::Generator
 		{
 			if ( m_renderPassType == RenderPassType::SimplePass && m_scene->lightSet().isUsingStaticLighting() )
 			{
-				const auto * staticLighting = m_scene->lightSet().getStaticLighting();
+				const auto * staticLighting = m_scene->lightSet().getStaticLightingPointer();
 
 				if ( staticLighting == nullptr )
 				{
@@ -209,11 +209,11 @@ namespace EmEn::Saphir::Generator
 	}
 
 	bool
-	SceneRendering::onCreateDataLayouts (const SetIndexes & setIndexes, std::vector< std::shared_ptr< DescriptorSetLayout > > & descriptorSetLayouts, std::vector< VkPushConstantRange > & pushConstantRanges) noexcept
+	SceneRendering::onCreateDataLayouts (Renderer & renderer, const SetIndexes & setIndexes, std::vector< std::shared_ptr< DescriptorSetLayout > > & descriptorSetLayouts, std::vector< VkPushConstantRange > & pushConstantRanges) noexcept
 	{
 		if ( m_scene != nullptr && setIndexes.isSetEnabled(SetType::PerLight) )
 		{
-			auto descriptorSetLayout = Scenes::LightSet::getDescriptorSetLayout(Renderer::instance()->layoutManager());
+			auto descriptorSetLayout = Scenes::LightSet::getDescriptorSetLayout(renderer.layoutManager());
 
 			if ( descriptorSetLayout == nullptr )
 			{

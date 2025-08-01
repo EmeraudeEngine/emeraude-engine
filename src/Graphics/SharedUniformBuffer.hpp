@@ -1,5 +1,5 @@
 /*
- * src/Vulkan/SharedUniformBuffer.hpp
+ * src/Graphics/SharedUniformBuffer.hpp
  * This file is part of Emeraude-Engine
  *
  * Copyright (C) 2010-2025 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
@@ -35,15 +35,23 @@
 #include <functional>
 
 /* Local inclusions for usages. */
-#include "UniformBufferObject.hpp"
-#include "DescriptorSet.hpp"
+#include "Vulkan/UniformBufferObject.hpp"
+#include "Vulkan/DescriptorSet.hpp"
 
-namespace EmEn::Vulkan
+namespace EmEn
 {
-	class Device;
+	namespace Vulkan
+	{
+		class Device;
+	}
+
+	namespace Graphics
+	{
+		class Renderer;
+	}
 }
 
-namespace EmEn::Vulkan
+namespace EmEn::Graphics
 {
 	/**
 	 * @brief The shared uniform buffer class.
@@ -54,9 +62,9 @@ namespace EmEn::Vulkan
 		public:
 
 			/** @brief Class identifier. */
-			static constexpr auto ClassId{"VulkanSharedUniformBuffer"};
+			static constexpr auto ClassId{"SharedUniformBuffer"};
 
-			using DescriptorSetCreator = std::function< std::unique_ptr< DescriptorSet > (UniformBufferObject & uniformBufferObject) >;
+			using descriptor_set_creator_t = std::function< std::unique_ptr< Vulkan::DescriptorSet > (Renderer & renderer, Vulkan::UniformBufferObject & uniformBufferObject) >;
 
 			/**
 			 * @brief Constructs a shared uniform buffer.
@@ -64,18 +72,19 @@ namespace EmEn::Vulkan
 			 * @param uniformBlockSize The size of the uniform block.
 			 * @param maxElementCount The max number of element to hold in one UBO. Default, compute the maximum according to structure size and UBO properties. Default is the max limit.
 			 */
-			SharedUniformBuffer (const std::shared_ptr< Device > & device, uint32_t uniformBlockSize, uint32_t maxElementCount = 0) noexcept;
+			SharedUniformBuffer (const std::shared_ptr< Vulkan::Device > & device, uint32_t uniformBlockSize, uint32_t maxElementCount = 0) noexcept;
 
 			/**
 			 * @brief Constructs a shared uniform buffer with a unique descriptor set.
 			 * @note This version use a dynamic uniform buffer to switch from element to element instead of binding another descriptor set.
 			 * @warning The descriptor set is unique for all elements, so all other binds will be the same for each element.
 			 * @param device A reference to the device smart pointer.
+			 * @param renderer A reference to the graphics renderer.
 			 * @param descriptorSetCreator A reference to a lambda to build the associated descriptor set.
 			 * @param uniformBlockSize The size of the uniform block.
 			 * @param maxElementCount The max number of element to hold in one UBO. Default, compute the maximum according to structure size and UBO properties. Default is the max limit.
 			 */
-			SharedUniformBuffer (const std::shared_ptr< Device > & device, const DescriptorSetCreator & descriptorSetCreator, uint32_t uniformBlockSize, uint32_t maxElementCount = 0) noexcept;
+			SharedUniformBuffer (const std::shared_ptr< Vulkan::Device > & device, Renderer & renderer, const descriptor_set_creator_t & descriptorSetCreator, uint32_t uniformBlockSize, uint32_t maxElementCount = 0) noexcept;
 
 			/**
 			 * @brief Returns whether the shared uniform buffer is usable.
@@ -105,7 +114,7 @@ namespace EmEn::Vulkan
 			 * @return const UniformBufferObject *
 			 */
 			[[nodiscard]]
-			const UniformBufferObject * uniformBufferObject (uint32_t index) const noexcept;
+			const Vulkan::UniformBufferObject * uniformBufferObject (uint32_t index) const noexcept;
 
 			/**
 			 * @brief Returns the uniform buffer object pointer.
@@ -113,7 +122,7 @@ namespace EmEn::Vulkan
 			 * @return UniformBufferObject *
 			 */
 			[[nodiscard]]
-			UniformBufferObject * uniformBufferObject (uint32_t index) noexcept;
+			Vulkan::UniformBufferObject * uniformBufferObject (uint32_t index) noexcept;
 
 			/**
 			 * @brief Returns the descriptor set pointer.
@@ -121,7 +130,7 @@ namespace EmEn::Vulkan
 			 * @return UniformBufferObject *
 			 */
 			[[nodiscard]]
-			DescriptorSet * descriptorSet (uint32_t index) const noexcept;
+			Vulkan::DescriptorSet * descriptorSet (uint32_t index) const noexcept;
 
 			/**
 			 * @brief Adds a new element to the uniform buffer object.
@@ -186,11 +195,12 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Adds a buffer to the UBO list.
+			 * @param renderer A reference to the renderer.
 			 * @param descriptorSetCreator A reference to a lambda to build the associated descriptor set.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool addBuffer (const DescriptorSetCreator & descriptorSetCreator) noexcept;
+			bool addBuffer (Renderer & renderer, const descriptor_set_creator_t & descriptorSetCreator) noexcept;
 
 			/**
 			 * @brief Returns the right UBO index from element index.
@@ -204,12 +214,12 @@ namespace EmEn::Vulkan
 				return std::floor(index / m_maxElementCountPerUBO);
 			}
 
-			std::shared_ptr< Device > m_device;
+			std::shared_ptr< Vulkan::Device > m_device;
 			uint32_t m_uniformBlockSize;
 			uint32_t m_maxElementCountPerUBO{0};
 			uint32_t m_blockAlignedSize{0};
-			std::vector< std::unique_ptr< UniformBufferObject > > m_uniformBufferObjects;
-			std::vector< std::unique_ptr< DescriptorSet > > m_descriptorSets;
+			std::vector< std::unique_ptr< Vulkan::UniformBufferObject > > m_uniformBufferObjects;
+			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_descriptorSets;
 			std::vector< const void * > m_elements;
 			mutable std::mutex m_memoryAccess;
 	};

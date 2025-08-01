@@ -1,5 +1,5 @@
 /*
- * src/Vulkan/SharedUBOManager.hpp
+ * src/Graphics/SharedUBOManager.hpp
  * This file is part of Emeraude-Engine
  *
  * Copyright (C) 2010-2025 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
@@ -38,9 +38,8 @@
 
 /* Local inclusions for usages. */
 #include "SharedUniformBuffer.hpp"
-#include "Types.hpp"
 
-namespace EmEn::Vulkan
+namespace EmEn::Graphics
 {
 	/**
 	 * @brief The shared UBO manager class.
@@ -58,9 +57,15 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Constructs a shared UBO manager service.
-			 * @param type The GPU work type.
+			 * @param renderer A reference to the graphics renderer.
 			 */
-			explicit SharedUBOManager (GPUWorkType type) noexcept;
+			explicit
+			SharedUBOManager (Renderer & renderer) noexcept
+				: ServiceInterface{ClassId},
+				m_renderer{renderer}
+			{
+
+			}
 
 			/**
 			 * @brief Copy constructor.
@@ -91,7 +96,7 @@ namespace EmEn::Vulkan
 			/**
 			 * @brief Destructs the shared UBO manager service.
 			 */
-			~SharedUBOManager () override;
+			~SharedUBOManager () override = default;
 
 			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
 			[[nodiscard]]
@@ -123,7 +128,7 @@ namespace EmEn::Vulkan
 			 * @return void
 			 */
 			void
-			setDevice (const std::shared_ptr< Device > & device) noexcept
+			setDevice (const std::shared_ptr< Vulkan::Device > & device) noexcept
 			{
 				m_device = device;
 			}
@@ -147,7 +152,7 @@ namespace EmEn::Vulkan
 			 * @return std::shared_ptr< SharedUniformBuffer >
 			 */
 			[[nodiscard]]
-			std::shared_ptr< SharedUniformBuffer > createSharedUniformBuffer (const std::string & name, const SharedUniformBuffer::DescriptorSetCreator & descriptorSetCreator, uint32_t uniformBlockSize, uint32_t maxElementCount = 0) noexcept;
+			std::shared_ptr< SharedUniformBuffer > createSharedUniformBuffer (const std::string & name, const SharedUniformBuffer::descriptor_set_creator_t & descriptorSetCreator, uint32_t uniformBlockSize, uint32_t maxElementCount = 0) noexcept;
 
 			/**
 			 * @brief Returns a named shared buffer uniform.
@@ -171,18 +176,6 @@ namespace EmEn::Vulkan
 			 */
 			bool destroySharedUniformBuffer (const std::string & name) noexcept;
 
-			/**
-			 * @brief Returns the instance of the shared UBO manager.
-			 * @param type The GPU work type.
-			 * @return SharedUBOManager *
-			 */
-			[[nodiscard]]
-			static SharedUBOManager *
-			instance (GPUWorkType type) noexcept
-			{
-				return s_instances.at(static_cast< size_t >(type));
-			}
-
 		private:
 
 			/** @copydoc EmEn::ServiceInterface::onInitialize() */
@@ -194,9 +187,8 @@ namespace EmEn::Vulkan
 			/* Flag names */
 			static constexpr auto ServiceInitialized{0UL};
 
-			static std::array< SharedUBOManager *, 2 > s_instances;
-
-			std::shared_ptr< Device > m_device;
+			Renderer & m_renderer;
+			std::shared_ptr< Vulkan::Device > m_device;
 			std::map< std::string, std::shared_ptr< SharedUniformBuffer > > m_sharedUniformBuffers;
 			std::array< bool, 8 > m_flags{
 				false/*ServiceInitialized*/,

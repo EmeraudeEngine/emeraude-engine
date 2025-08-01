@@ -38,11 +38,11 @@
 #include "Graphics/RenderTarget/Abstract.hpp"
 
 /* Local inclusions for usages. */
+#include "Libs/Math/CartesianFrame.hpp"
 #include "AVConsole/AbstractVirtualDevice.hpp"
 #include "AVConsole/Types.hpp"
 #include "Graphics/Renderer.hpp"
 #include "Graphics/ViewMatrices2DUBO.hpp"
-#include "Libs/Math/CartesianFrame.hpp"
 #include "Settings.hpp"
 
 /* Forward declarations. */
@@ -106,16 +106,16 @@ namespace EmEn::Vulkan
 			/**
 			 * @brief Constructs a swap chain.
 			 * @param device A reference to a smart pointer of the device in use with the swap chain.
+			 * @param renderer A reference to the graphics renderer.
 			 * @param settings A reference to the settings.
-			 * @param window A reference to the window.
 			 */
-			SwapChain (const std::shared_ptr< Device > & device, Settings & settings, Window & window) noexcept;
+			SwapChain (const std::shared_ptr< Device > & device, Graphics::Renderer & renderer, Settings & settings) noexcept;
 
 			/** @copydoc EmEn::Vulkan::AbstractDeviceDependentObject::createOnHardware() */
 			bool
 			createOnHardware () noexcept override
 			{
-				if ( !this->create(*Graphics::Renderer::instance()) )
+				if ( !this->create(m_renderer) )
 				{
 					return false;
 				}
@@ -219,11 +219,10 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Recreates the swap chain.
-			 * @param renderer A reference to the renderer.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool recreateOnHardware (Graphics::Renderer & renderer) noexcept;
+			bool recreateOnHardware () noexcept;
 
 			/**
 			 * @brief Returns the swap chain vulkan handle.
@@ -316,10 +315,10 @@ namespace EmEn::Vulkan
 			void updateProperties (bool isPerspectiveProjection, float distance, float fovOrNear) noexcept override;
 
 			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::onSourceConnected() */
-			void onSourceConnected (AbstractVirtualDevice * sourceDevice) noexcept override;
+			void onSourceConnected (AVConsole::AVManagers & managers, AbstractVirtualDevice * sourceDevice) noexcept override;
 
 			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::onSourceDisconnected() */
-			void onSourceDisconnected (AbstractVirtualDevice * sourceDevice) noexcept override;
+			void onSourceDisconnected (AVConsole::AVManagers & managers, AbstractVirtualDevice * sourceDevice) noexcept override;
 
 			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::onCreate() */
 			[[nodiscard]]
@@ -342,11 +341,12 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Creates the base swap chain object.
+			 * @param window A reference to the window.
 			 * @param oldSwapChain A handle to the previous swap chain. Default none.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool createBaseSwapChain (VkSwapchainKHR oldSwapChain = VK_NULL_HANDLE) noexcept;
+			bool createBaseSwapChain (const Window & window, VkSwapchainKHR oldSwapChain = VK_NULL_HANDLE) noexcept;
 
 			/**
 			 * @brief Destroys the base swap chain object.
@@ -430,10 +430,9 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Creates the swap-chain framebuffer.
-			 * @param renderer A reference to the renderer.
 			 * @return bool
 			 */
-			bool createFramebuffer (Graphics::Renderer & renderer) noexcept;
+			bool createFramebuffer () noexcept;
 
 			/**
 			 * @brief Resets the swap-chain framebuffer.
@@ -459,7 +458,7 @@ namespace EmEn::Vulkan
 			static constexpr auto TripleBufferingEnabled{1UL};
 			static constexpr auto VSyncEnabled{2UL};
 
-			Window * m_window;
+			Graphics::Renderer & m_renderer;
 			VkSwapchainKHR m_handle{VK_NULL_HANDLE};
 			VkSwapchainCreateInfoKHR m_createInfo{};
 			Status m_status{Status::Uninitialized};

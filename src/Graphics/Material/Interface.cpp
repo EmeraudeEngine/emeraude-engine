@@ -32,19 +32,12 @@
 #include "Saphir/Declaration/UniformBlock.hpp"
 #include "Tracer.hpp"
 #include "Libs/FastJSON.hpp"
-#include "Vulkan/SharedUBOManager.hpp"
 
 namespace EmEn::Graphics::Material
 {
 	using namespace EmEn::Libs;
 
 	constexpr auto TracerTag{"MaterialInterface"};
-
-	Interface::Interface (const std::string & name, uint32_t resourceFlags) noexcept
-		: ResourceTrait(name, resourceFlags)
-	{
-
-	}
 
 	void
 	Interface::enableBlendingFromJson (const Json::Value & data) noexcept
@@ -66,7 +59,7 @@ namespace EmEn::Graphics::Material
 		this->enableBlending(blendingMode);
 	}
 
-	std::shared_ptr< Vulkan::SharedUniformBuffer >
+	std::shared_ptr< SharedUniformBuffer >
 	Interface::getSharedUniformBuffer (Renderer & renderer, const std::string & identifier) const noexcept
 	{
 		auto sharedUniformBuffer = renderer.sharedUBOManager().getSharedUniformBuffer(identifier);
@@ -84,16 +77,7 @@ namespace EmEn::Graphics::Material
 	bool
 	Interface::onDependenciesLoaded () noexcept
 	{
-		auto * renderer = Renderer::instance();
-
-		if ( renderer == nullptr )
-		{
-			TraceError{TracerTag} << "Unable to reach the graphics renderer for material resource (" << this->classLabel() << ") '" << this->name() << "' !";
-
-			return false;
-		}
-
-		if ( !this->isCreated() && !this->create(*renderer) )
+		if ( !this->isCreated() && !this->createOnHardware(*Renderer::instance()) )
 		{
 			TraceError{TracerTag} << "Unable to load material resource (" << this->classLabel() << ") '" << this->name() << "' !";
 

@@ -39,7 +39,7 @@ namespace EmEn::Graphics
 {
 	using namespace EmEn::Libs;
 	using namespace EmEn::Libs::Math;
-	using namespace Vulkan;
+	using namespace EmEn::Vulkan;
 
 	void
 	ViewMatrices2DUBO::updatePerspectiveViewProperties (float width, float height, float distance, float fov) noexcept
@@ -69,7 +69,10 @@ namespace EmEn::Graphics
 
 		std::memcpy(&m_bufferData[ProjectionMatrixOffset], m_projection.data(), Matrix4Alignment * sizeof(float));
 
-		this->updateVideoMemory();
+		if ( !this->updateVideoMemory() )
+		{
+			Tracer::error(ClassId, "Unable to update video memory !");
+		}
 	}
 
 	void
@@ -97,7 +100,10 @@ namespace EmEn::Graphics
 
 		std::memcpy(&m_bufferData[ProjectionMatrixOffset], m_projection.data(), Matrix4Alignment * sizeof(float));
 
-		this->updateVideoMemory();
+		if ( !this->updateVideoMemory() )
+		{
+			Tracer::error(ClassId, "Unable to update video memory !");
+		}
 	}
 
 	void
@@ -127,13 +133,16 @@ namespace EmEn::Graphics
 
 		m_bufferData[AmbientLightIntensityOffset] = intensity;
 
-		this->updateVideoMemory();
+		if ( !this->updateVideoMemory() )
+		{
+			Tracer::error(ClassId, "Unable to update video memory !");
+		}
 	}
 
 	bool
 	ViewMatrices2DUBO::create (Renderer & renderer, const std::string & instanceID) noexcept
 	{
-		auto descriptorSetLayout = this->getDescriptorSetLayout();
+		auto descriptorSetLayout = ViewMatricesInterface::getDescriptorSetLayout(renderer.layoutManager());
 
 		if ( descriptorSetLayout == nullptr )
 		{
@@ -223,15 +232,5 @@ namespace EmEn::Graphics
 		}
 
 		return out;
-	}
-
-	std::string
-	to_string (const ViewMatrices2DUBO & obj) noexcept
-	{
-		std::stringstream output;
-
-		output << obj;
-
-		return output.str();
 	}
 }

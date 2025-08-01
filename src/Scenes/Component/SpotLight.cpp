@@ -29,6 +29,7 @@
 /* Local inclusions. */
 #include "Libs/Math/Space3D/Collisions/PointSphere.hpp"
 #include "Saphir/LightGenerator.hpp"
+#include "AVConsole/Manager.hpp"
 #include "Scenes/Scene.hpp"
 #include "Tracer.hpp"
 
@@ -36,23 +37,12 @@ namespace EmEn::Scenes::Component
 {
 	using namespace EmEn::Libs;
 	using namespace EmEn::Libs::Math;
-	using namespace Animations;
-	using namespace Graphics;
-	using namespace Saphir;
-
-	SpotLight::SpotLight (const std::string & name, const AbstractEntity & parentEntity, uint32_t shadowMapResolution) noexcept
-		: AbstractLightEmitter(name, parentEntity, shadowMapResolution)
-	{
-		this->setConeAngles(30.0F, 35.0F);
-	}
-
-	SpotLight::~SpotLight ()
-	{
-		this->destroyFromHardware();
-	}
+	using namespace EmEn::Animations;
+	using namespace EmEn::Graphics;
+	using namespace EmEn::Saphir;
 
 	void
-	SpotLight::onTargetConnected (AbstractVirtualDevice * targetDevice) noexcept
+	SpotLight::onTargetConnected (AVConsole::AVManagers & managers, AbstractVirtualDevice * targetDevice) noexcept
 	{
 		const auto maxDistance =
 			m_radius > 0.0F ?
@@ -206,7 +196,7 @@ namespace EmEn::Scenes::Component
 
 			if ( m_shadowMap != nullptr )
 			{
-				if ( this->connect(m_shadowMap) )
+				if ( this->connect(AVConsoleManager.managers(), m_shadowMap) )
 				{
 					TraceSuccess{ClassId} << "2D shadow map successfully created for spotlight '" << this->name() << "'.";
 
@@ -229,14 +219,11 @@ namespace EmEn::Scenes::Component
 	}
 
 	void
-	SpotLight::destroyFromHardware () noexcept
+	SpotLight::destroyFromHardware (LightSet & lightSet, AVConsole::Manager & AVConsoleManager) noexcept
 	{
 		if ( m_shadowMap != nullptr )
 		{
-			this->disconnect(m_shadowMap);
-
-			/* TODO: Check for automatic disconnection ! */
-			//console.removeVideoDevice(m_shadowMap);
+			this->disconnect(AVConsoleManager.managers(), m_shadowMap);
 
 			m_shadowMap.reset();
 		}

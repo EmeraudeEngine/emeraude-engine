@@ -75,7 +75,7 @@ namespace EmEn::Scenes::Component
 	}
 
 	void
-	Microphone::onTargetConnected (AbstractVirtualDevice * targetDevice) noexcept
+	Microphone::onTargetConnected (AVConsole::AVManagers & managers, AbstractVirtualDevice * targetDevice) noexcept
 	{
 		/* Initialize the target device with coordinates. */
 		targetDevice->updateDeviceFromCoordinates(this->getWorldCoordinates(), this->getWorldVelocity());

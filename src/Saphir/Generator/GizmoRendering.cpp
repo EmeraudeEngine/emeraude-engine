@@ -52,7 +52,7 @@ namespace EmEn::Saphir::Generator
 	}
 
 	bool
-	GizmoRendering::onCreateDataLayouts (const SetIndexes & /*setIndexes*/, std::vector< std::shared_ptr< DescriptorSetLayout > > & /*descriptorSetLayouts*/, std::vector< VkPushConstantRange > & /*pushConstantRanges*/) noexcept
+	GizmoRendering::onCreateDataLayouts (Renderer & /*renderer*/, const SetIndexes & /*setIndexes*/, std::vector< std::shared_ptr< DescriptorSetLayout > > & /*descriptorSetLayouts*/, std::vector< VkPushConstantRange > & /*pushConstantRanges*/) noexcept
 	{
 		return true;
 	}

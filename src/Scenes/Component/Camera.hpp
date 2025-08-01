@@ -37,6 +37,7 @@
 #include "Abstract.hpp"
 
 /* Local inclusions for usages. */
+#include "AVConsole/Types.hpp"
 #include "Saphir/FramebufferEffectInterface.hpp"
 #include "SettingKeys.hpp"
 
@@ -267,7 +268,7 @@ namespace EmEn::Scenes::Component
 			void updateProperties (bool isPerspectiveProjection, float distance, float fovOrNear) noexcept override;
 
 			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::onTargetConnected() */
-			void onTargetConnected (AbstractVirtualDevice * targetDevice) noexcept override;
+			void onTargetConnected (AVConsole::AVManagers & managers, AbstractVirtualDevice * targetDevice) noexcept override;
 
 			/** @copydoc EmEn::Animations::AnimatableInterface::playAnimation() */
 			bool playAnimation (uint8_t animationID, const Libs::Variant & value, size_t cycle) noexcept override;

@@ -76,7 +76,7 @@ namespace EmEn::Graphics::Material
 
 	BasicResource::~BasicResource ()
 	{
-		this->destroy();
+		this->destroyFromHardware();
 	}
 
 	bool
@@ -210,7 +210,7 @@ namespace EmEn::Graphics::Material
 	}
 
 	bool
-	BasicResource::create (Renderer & renderer) noexcept
+	BasicResource::createOnHardware (Renderer & renderer) noexcept
 	{
 		if ( this->isCreated() )
 		{
@@ -404,7 +404,7 @@ namespace EmEn::Graphics::Material
 	}
 
 	void
-	BasicResource::destroy () noexcept
+	BasicResource::destroyFromHardware () noexcept
 	{
 		if ( m_sharedUniformBuffer != nullptr )
 		{

@@ -178,7 +178,7 @@ namespace EmEn::Saphir::Generator
 		if ( setIndexes.isSetEnabled(SetType::PerView) )
 		{
 			/* FIXME: This could be general for render target type. */
-			const auto descriptorSetLayout = m_renderTarget->viewMatrices().getDescriptorSetLayout();
+			const auto descriptorSetLayout = ViewMatricesInterface::getDescriptorSetLayout(renderer.layoutManager());
 
 			if ( descriptorSetLayout == nullptr )
 			{
@@ -191,7 +191,7 @@ namespace EmEn::Saphir::Generator
 		}
 
 		/* Let child class generate all other descriptor set layouts. */
-		if ( !this->onCreateDataLayouts(setIndexes, descriptorSetLayouts, pushConstantRanges) )
+		if ( !this->onCreateDataLayouts(renderer, setIndexes, descriptorSetLayouts, pushConstantRanges) )
 		{
 			Tracer::error(TracerTag, "Unable to create the data layouts at child shader generator level !");
 

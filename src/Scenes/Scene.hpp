@@ -49,7 +49,9 @@
 #include "Graphics/Renderable/AbstractBackground.hpp"
 #include "Graphics/Renderable/SceneAreaInterface.hpp"
 #include "Graphics/Renderable/SeaLevelInterface.hpp"
+#include "Audio/SoundEnvironmentProperties.hpp"
 #include "Saphir/EffectInterface.hpp"
+#include "AVConsole/Manager.hpp"
 #include "LightSet.hpp"
 #include "OctreeSector.hpp"
 #include "StaticEntity.hpp"
@@ -972,8 +974,6 @@ namespace EmEn::Scenes
 			static constexpr auto TranslucentLighted{3UL};
 			static constexpr auto Shadows{4UL};
 
-			Graphics::Renderer & m_graphicsRenderer;
-			Audio::Manager & m_audioManager;
 			AVConsole::Manager m_AVConsoleManager;
 			std::shared_ptr< Graphics::Renderable::AbstractBackground > m_background;
 			std::shared_ptr< Graphics::Renderable::SceneAreaInterface > m_sceneArea;

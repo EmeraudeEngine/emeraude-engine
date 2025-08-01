@@ -1,5 +1,5 @@
 /*
- * src/Vulkan/SharedUniformBuffer.cpp
+ * src/Graphics/SharedUniformBuffer.cpp
  * This file is part of Emeraude-Engine
  *
  * Copyright (C) 2010-2025 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
@@ -31,14 +31,16 @@
 
 /* Local inclusions. */
 #include "Libs/Math/Base.hpp"
-#include "PhysicalDevice.hpp"
-#include "Device.hpp"
-#include "MemoryRegion.hpp"
+#include "Renderer.hpp"
 #include "Tracer.hpp"
+#include "Vulkan/Device.hpp"
+#include "Vulkan/MemoryRegion.hpp"
+#include "Vulkan/PhysicalDevice.hpp"
 
-namespace EmEn::Vulkan
+namespace EmEn::Graphics
 {
 	using namespace EmEn::Libs;
+	using namespace EmEn::Vulkan;
 
 	SharedUniformBuffer::SharedUniformBuffer (const std::shared_ptr< Device > & device, uint32_t uniformBlockSize, uint32_t maxElementCount) noexcept
 		: m_device(device),
@@ -55,7 +57,7 @@ namespace EmEn::Vulkan
 		}
 	}
 
-	SharedUniformBuffer::SharedUniformBuffer (const std::shared_ptr< Device > & device, const DescriptorSetCreator & descriptorSetCreator, uint32_t uniformBlockSize, uint32_t maxElementCount) noexcept
+	SharedUniformBuffer::SharedUniformBuffer (const std::shared_ptr< Device > & device, Renderer & renderer, const descriptor_set_creator_t & descriptorSetCreator, uint32_t uniformBlockSize, uint32_t maxElementCount) noexcept
 		: m_device(device),
 		m_uniformBlockSize(uniformBlockSize)
 	{
@@ -63,7 +65,7 @@ namespace EmEn::Vulkan
 
 		for ( uint32_t index = 0; index < bufferCount; index++ )
 		{
-			if ( !this->addBuffer(descriptorSetCreator) )
+			if ( !this->addBuffer(renderer, descriptorSetCreator) )
 			{
 				break;
 			}
@@ -235,7 +237,7 @@ namespace EmEn::Vulkan
 	}
 
 	bool
-	SharedUniformBuffer::addBuffer (const DescriptorSetCreator & descriptorSetCreator) noexcept
+	SharedUniformBuffer::addBuffer (Renderer & renderer, const descriptor_set_creator_t & descriptorSetCreator) noexcept
 	{
 		const auto & limits = m_device->physicalDevice()->properties().limits;
 		const auto chunkId = (std::stringstream{} << "DynamicChunk#" << m_uniformBufferObjects.size()).str();
@@ -250,7 +252,7 @@ namespace EmEn::Vulkan
 			return false;
 		}
 
-		auto * descriptorSet = m_descriptorSets.emplace_back(descriptorSetCreator(*uniformBufferObject)).get();
+		auto * descriptorSet = m_descriptorSets.emplace_back(descriptorSetCreator(renderer, *uniformBufferObject)).get();
 		descriptorSet->setIdentifier(ClassId, chunkId, "DescriptorSet");
 
 		m_elements.resize(m_uniformBufferObjects.size() * m_maxElementCountPerUBO, nullptr);

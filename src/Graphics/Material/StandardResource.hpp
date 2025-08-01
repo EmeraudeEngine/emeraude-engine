@@ -50,13 +50,13 @@
 /* Forward declarations. */
 namespace EmEn
 {
-	namespace Graphics::Material::Component
+	namespace Graphics
 	{
-		class Texture;
-	}
+		namespace Material::Component
+		{
+			class Texture;
+		}
 
-	namespace Vulkan
-	{
 		class SharedUniformBuffer;
 	}
 
@@ -162,11 +162,11 @@ namespace EmEn::Graphics::Material
 				return sizeof(*this);
 			}
 
-			/** @copydoc EmEn::Graphics::Material::Interface::create() */
-			bool create (Renderer & renderer) noexcept override;
+			/** @copydoc EmEn::Graphics::Material::Interface::createOnHardware() */
+			bool createOnHardware (Renderer & renderer) noexcept override;
 
-			/** @copydoc EmEn::Graphics::Material::Interface::destroy() */
-			void destroy () noexcept override;
+			/** @copydoc EmEn::Graphics::Material::Interface::destroyFromHardware() */
+			void destroyFromHardware () noexcept override;
 
 			/** @copydoc EmEn::Graphics::Material::Interface::isCreated() */
 			[[nodiscard]]
@@ -603,9 +603,9 @@ namespace EmEn::Graphics::Material
 				/* ReflectionAmount (1), Unused (1), Unused (1), Unused (1). */
 				DefaultReflectionAmount, 0.0F, 0.0F, 0.0F
 			};
-			std::shared_ptr< Vulkan::DescriptorSetLayout > m_descriptorSetLayout{};
-			std::unique_ptr< Vulkan::DescriptorSet > m_descriptorSet{};
-			std::shared_ptr< Vulkan::SharedUniformBuffer > m_sharedUniformBuffer{};
+			std::shared_ptr< Vulkan::DescriptorSetLayout > m_descriptorSetLayout;
+			std::unique_ptr< Vulkan::DescriptorSet > m_descriptorSet;
+			std::shared_ptr< SharedUniformBuffer > m_sharedUniformBuffer;
 			float m_alphaThresholdToDiscard{0.1F};
 			uint32_t m_sharedUBOIndex{0};
 			std::array< bool, 8 > m_flags{

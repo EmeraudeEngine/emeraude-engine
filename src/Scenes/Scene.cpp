@@ -37,6 +37,7 @@
 /* Local inclusions. */
 #include "Input/Manager.hpp"
 #include "Graphics/Renderer.hpp"
+#include "Audio/Manager.hpp"
 #include "Vulkan/SwapChain.hpp" // FIXME: Should not be there
 #include "NodeCrawler.hpp"
 #include "Tracer.hpp"
@@ -46,17 +47,15 @@ namespace EmEn::Scenes
 	using namespace EmEn::Libs;
 	using namespace EmEn::Libs::Math;
 	using namespace EmEn::Libs::PixelFactory;
-	using namespace Graphics;
-	using namespace Saphir;
-	using namespace Physics;
+	using namespace EmEn::Graphics;
+	using namespace EmEn::Saphir;
+	using namespace EmEn::Physics;
 
 	const size_t Scene::ClassUID{getClassUID(ClassId)};
 
 	Scene::Scene (Renderer & graphicsRenderer, Audio::Manager & audioManager, const std::string & name, float boundary, const std::shared_ptr< Renderable::AbstractBackground > & background, const std::shared_ptr< Renderable::SceneAreaInterface > & sceneArea, const std::shared_ptr< Renderable::SeaLevelInterface > & seaLevel, const SceneOctreeOptions & octreeOptions) noexcept
 		: NameableTrait{name},
-		m_graphicsRenderer{graphicsRenderer},
-		m_audioManager{audioManager},
-		m_AVConsoleManager{name, graphicsRenderer},
+		m_AVConsoleManager{name, graphicsRenderer, audioManager},
 		m_background{background},
 		m_sceneArea{sceneArea},
 		m_seaLevel{seaLevel},
@@ -179,7 +178,7 @@ namespace EmEn::Scenes
 		}
 
 		/* Set audio properties for this scene. */
-		m_audioManager.setSoundEnvironmentProperties(m_soundEnvironmentProperties);
+		m_AVConsoleManager.audioManager().setSoundEnvironmentProperties(m_soundEnvironmentProperties);
 
 		return true;
 	}
@@ -197,7 +196,7 @@ namespace EmEn::Scenes
 				return false;
 			}
 
-			const auto & swapChain = m_graphicsRenderer.swapChain();
+			const auto & swapChain = m_AVConsoleManager.graphicsRenderer().swapChain();
 
 			if ( swapChain != nullptr )
 			{
@@ -211,7 +210,7 @@ namespace EmEn::Scenes
 				return false;
 			}
 
-			if ( !m_AVConsoleManager.autoConnectPrimaryAudioDevices(m_audioManager, settings) )
+			if ( !m_AVConsoleManager.autoConnectPrimaryAudioDevices(m_AVConsoleManager.audioManager(), settings) )
 			{
 				TraceError{ClassId} << "Unable to auto-connect primary audio devices !";
 
@@ -220,7 +219,7 @@ namespace EmEn::Scenes
 
 			TraceInfo{ClassId} << m_AVConsoleManager.getConnexionStates();
 
-			if ( !m_lightSet.initialize(m_graphicsRenderer, this->name()) )
+			if ( !m_lightSet.initialize(this->name()) )
 			{
 				TraceError{ClassId} << "Unable to initialize the light set !";
 
@@ -317,7 +316,7 @@ namespace EmEn::Scenes
 		/* FIXME: Find a better solution ! */
 		{
 			m_lightSet.removeAllLights();
-			m_lightSet.terminate(*Renderer::instance());
+			m_lightSet.terminate();
 		}
 
 		this->destroyOctrees();
@@ -1915,7 +1914,7 @@ namespace EmEn::Scenes
 			return false;
 		}
 
-		return renderableInstance->getReadyForShadowCasting(renderTarget, m_graphicsRenderer);
+		return renderableInstance->getReadyForShadowCasting(renderTarget, m_AVConsoleManager.graphicsRenderer());
 	}
 
 	bool
@@ -1943,7 +1942,7 @@ namespace EmEn::Scenes
 			return false;
 		}
 
-		return renderableInstance->getReadyForRender(*this, renderTarget, renderPassTypes, m_graphicsRenderer);
+		return renderableInstance->getReadyForRender(*this, renderTarget, renderPassTypes, m_AVConsoleManager.graphicsRenderer());
 	}
 
 	std::string

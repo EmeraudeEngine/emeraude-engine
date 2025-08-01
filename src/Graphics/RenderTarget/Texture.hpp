@@ -494,14 +494,14 @@ namespace EmEn::Graphics::RenderTarget
 
 			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::onSourceConnected() */
 			void
-			onSourceConnected (AbstractVirtualDevice * sourceDevice) noexcept override
+			onSourceConnected (AVConsole::AVManagers & managers, AbstractVirtualDevice * /*sourceDevice*/) noexcept override
 			{
-				m_viewMatrices.create(*Renderer::instance(), this->id());
+				m_viewMatrices.create(managers.graphicsRenderer, this->id());
 			}
 
 			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::onSourceDisconnected() */
 			void
-			onSourceDisconnected (AbstractVirtualDevice * sourceDevice) noexcept override
+			onSourceDisconnected (AVConsole::AVManagers & /*managers*/, AbstractVirtualDevice * /*sourceDevice*/) noexcept override
 			{
 				m_viewMatrices.destroy();
 			}
@@ -517,7 +517,7 @@ namespace EmEn::Graphics::RenderTarget
 				}
 
 				/* Create a sampler for the texture. */
-				m_sampler = Renderer::instance()->getSampler(0, 0);
+				m_sampler = renderer.getSampler(0, 0);
 				m_sampler->setIdentifier(ClassId, this->name(), "RTT-Sampler");
 
 				if ( m_sampler == nullptr )

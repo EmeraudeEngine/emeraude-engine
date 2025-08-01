@@ -27,9 +27,9 @@
 #pragma once
 
 /* STL inclusions. */
-#include <array>
 #include <cstddef>
 #include <cstdint>
+#include <array>
 #include <memory>
 #include <string>
 
@@ -40,8 +40,8 @@
 #include "Libs/PixelFactory/Color.hpp"
 #include "Saphir/Declaration/UniformBlock.hpp"
 #include "Graphics/TextureResource/Abstract.hpp"
+#include "Graphics/SharedUniformBuffer.hpp"
 #include "Graphics/Types.hpp"
-#include "Vulkan/SharedUniformBuffer.hpp"
 #include "Physics/PhysicalSurfaceProperties.hpp"
 #include "Resources/Container.hpp"
 #include "Component/Texture.hpp"
@@ -148,11 +148,11 @@ namespace EmEn::Graphics::Material
 				return sizeof(*this);
 			}
 
-			/** @copydoc EmEn::Graphics::Material::Interface::create() */
-			bool create (Renderer & renderer) noexcept override;
+			/** @copydoc EmEn::Graphics::Material::Interface::createOnHardware() */
+			bool createOnHardware (Renderer & renderer) noexcept override;
 
-			/** @copydoc EmEn::Graphics::Material::Interface::destroy() */
-			void destroy () noexcept override;
+			/** @copydoc EmEn::Graphics::Material::Interface::destroyFromHardware() */
+			void destroyFromHardware () noexcept override;
 
 			/** @copydoc EmEn::Graphics::Material::Interface::isCreated() */
 			[[nodiscard]]
@@ -483,7 +483,7 @@ namespace EmEn::Graphics::Material
 			};
 			std::shared_ptr< Vulkan::DescriptorSetLayout > m_descriptorSetLayout;
 			std::unique_ptr< Vulkan::DescriptorSet > m_descriptorSet;
-			std::shared_ptr< Vulkan::SharedUniformBuffer > m_sharedUniformBuffer;
+			std::shared_ptr< SharedUniformBuffer > m_sharedUniformBuffer;
 			uint32_t m_sharedUBOIndex{0};
 			std::array< bool, 8 > m_flags{
 				false/*DynamicColorEnabled*/,

@@ -51,7 +51,11 @@ namespace EmEn::Scenes::Component
 			 * @param parentEntity A reference to the parent entity.
 			 * @param shadowMapResolution Enable the shadow map by specifying the resolution. Default, no shadow map.
 			 */
-			SpotLight (const std::string & name, const AbstractEntity & parentEntity, uint32_t shadowMapResolution = 0) noexcept;
+			SpotLight (const std::string & name, const AbstractEntity & parentEntity, uint32_t shadowMapResolution = 0) noexcept
+				: AbstractLightEmitter{name, parentEntity, shadowMapResolution}
+			{
+				this->setConeAngles(30.0F, 35.0F);
+			}
 
 			/**
 			 * @brief Copy constructor.
@@ -82,7 +86,7 @@ namespace EmEn::Scenes::Component
 			/**
 			 * @brief Destructs a spotlight.
 			 */
-			~SpotLight () override;
+			~SpotLight () override = default;
 
 			/** @copydoc EmEn::Scenes::Component::Abstract::getComponentType() */
 			[[nodiscard]]
@@ -123,7 +127,7 @@ namespace EmEn::Scenes::Component
 			bool createOnHardware (LightSet & lightSet, AVConsole::Manager & AVConsoleManager) noexcept override;
 
 			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::destroyFromHardware() */
-			void destroyFromHardware () noexcept override;
+			void destroyFromHardware (LightSet & lightSet, AVConsole::Manager & AVConsoleManager) noexcept override;
 
 			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::shadowMap() */
 			[[nodiscard]]
@@ -201,7 +205,7 @@ namespace EmEn::Scenes::Component
 		private:
 
 			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::onTargetConnected() */
-			void onTargetConnected (AbstractVirtualDevice * targetDevice) noexcept override;
+			void onTargetConnected (AVConsole::AVManagers & managers, AbstractVirtualDevice * targetDevice) noexcept override;
 
 			/** @copydoc EmEn::Animations::AnimatableInterface::playAnimation() */
 			bool playAnimation (uint8_t animationID, const Libs::Variant & value, size_t cycle) noexcept override;
@@ -209,7 +213,7 @@ namespace EmEn::Scenes::Component
 			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::onVideoMemoryUpdate() */
 			[[nodiscard]]
 			bool
-			onVideoMemoryUpdate (Vulkan::SharedUniformBuffer & UBO, uint32_t index) noexcept override
+			onVideoMemoryUpdate (Graphics::SharedUniformBuffer & UBO, uint32_t index) noexcept override
 			{
 				return UBO.writeElementData(index, m_buffer.data());
 			}

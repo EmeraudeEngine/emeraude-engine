@@ -74,7 +74,7 @@ namespace EmEn::Graphics
 		m_shaderManager{primaryServices, GPUWorkType::Graphics},
 		m_transferManager{GPUWorkType::Graphics},
 		m_layoutManager{GPUWorkType::Graphics},
-		m_sharedUBOManager{GPUWorkType::Graphics}
+		m_sharedUBOManager{*this}
 	{
 		if ( s_instance != nullptr )
 		{
@@ -215,7 +215,7 @@ namespace EmEn::Graphics
 
 		/* NOTE: Create the swap-chain for presenting images to screen. */
 		{
-			m_swapChain = std::make_shared< SwapChain >(m_device, m_primaryServices.settings(), m_window);
+			m_swapChain = std::make_shared< SwapChain >(m_device, *this, m_primaryServices.settings());
 			m_swapChain->setIdentifier(ClassId, "Main", "SwapChain");
 
 			if ( !m_swapChain->createOnHardware() )
@@ -796,7 +796,7 @@ namespace EmEn::Graphics
 		/* NOTE: Wait for a valid framebuffer dimensions in case of handle minimization. */
 		//m_window.waitValidWindowSize();
 
-		if ( !m_swapChain->recreateOnHardware(*this) )
+		if ( !m_swapChain->recreateOnHardware() )
 		{
 			Tracer::fatal(ClassId, "Unable to rebuild the swap chain !");
 

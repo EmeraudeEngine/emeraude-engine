@@ -46,7 +46,6 @@ namespace EmEn
 		class DescriptorSetLayout;
 		class LayoutManager;
 		class UniformBufferObject;
-		class SharedUniformBuffer;
 	}
 
 	namespace Physics
@@ -74,6 +73,7 @@ namespace EmEn
 	namespace Graphics
 	{
 		class Renderer;
+		class SharedUniformBuffer;
 	}
 }
 
@@ -318,13 +318,13 @@ namespace EmEn::Graphics::Material
 			 * @param renderer A reference to the graphics renderer.
 			 * @return bool
 			 */
-			virtual bool create (Renderer & renderer) noexcept = 0;
+			virtual bool createOnHardware (Renderer & renderer) noexcept = 0;
 
 			/**
 			 * @brief Releases the material from the video memory.
 			 * @return void
 			 */
-			virtual void destroy () noexcept = 0;
+			virtual void destroyFromHardware () noexcept = 0;
 
 			/**
 			 * @brief Returns whether the material is usable.
@@ -479,16 +479,21 @@ namespace EmEn::Graphics::Material
 			 * @param name The name of the resource.
 			 * @param resourceFlags The resource flag bits.
 			 */
-			explicit Interface (const std::string & name, uint32_t resourceFlags) noexcept;
+			explicit
+			Interface (const std::string & name, uint32_t resourceFlags) noexcept
+				: ResourceTrait{name, resourceFlags}
+			{
+
+			}
 
 			/**
 			 * @brief Returns the shared uniform buffer corresponding to this material.
 			 * @param renderer A reference to the graphics renderer.
 			 * @param identifier A reference to a string.
-			 * @return std::shared_ptr< Vulkan::SharedUniformBuffer >
+			 * @return std::shared_ptr< SharedUniformBuffer >
 			 */
 			[[nodiscard]]
-			std::shared_ptr< Vulkan::SharedUniformBuffer > getSharedUniformBuffer (Renderer & renderer, const std::string & identifier) const noexcept;
+			std::shared_ptr< SharedUniformBuffer > getSharedUniformBuffer (Renderer & renderer, const std::string & identifier) const noexcept;
 
 			/**
 			 * @brief Returns the shared uniform buffer identifier corresponding to this material.

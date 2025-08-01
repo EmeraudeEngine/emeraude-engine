@@ -1,5 +1,5 @@
 /*
- * src/Vulkan/SharedUBOManager.cpp
+ * src/Graphics/SharedUBOManager.cpp
  * This file is part of Emeraude-Engine
  *
  * Copyright (C) 2010-2025 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
@@ -26,49 +26,15 @@
 
 #include "SharedUBOManager.hpp"
 
-/* STL inclusions. */
-#include <exception>
-#include <iostream>
-
 /* Local inclusions. */
-#include "Device.hpp"
+#include "Vulkan/Device.hpp"
 #include "Tracer.hpp"
 
-namespace EmEn::Vulkan
+namespace EmEn::Graphics
 {
 	using namespace EmEn::Libs;
 
 	const size_t SharedUBOManager::ClassUID{getClassUID(ClassId)};
-
-	std::array< SharedUBOManager *, 2 > SharedUBOManager::s_instances{nullptr, nullptr};
-
-	SharedUBOManager::SharedUBOManager (GPUWorkType type) noexcept
-		: ServiceInterface(ClassId)
-	{
-		auto & instance = s_instances.at(static_cast< size_t >(type));
-
-		if ( instance != nullptr )
-		{
-			std::cerr << __PRETTY_FUNCTION__ << ", constructor called twice !" "\n";
-
-			std::terminate();
-		}
-
-		instance = this;
-	}
-
-	SharedUBOManager::~SharedUBOManager ()
-	{
-		for ( auto & pointer : s_instances )
-		{
-			if ( pointer == this )
-			{
-				pointer = nullptr;
-
-				break;
-			}
-		}
-	}
 
 	std::shared_ptr< SharedUniformBuffer >
 	SharedUBOManager::createSharedUniformBuffer (const std::string & name, uint32_t uniformBlockSize, uint32_t maxElementCount) noexcept
@@ -93,7 +59,7 @@ namespace EmEn::Vulkan
 	}
 
 	std::shared_ptr< SharedUniformBuffer >
-	SharedUBOManager::createSharedUniformBuffer (const std::string & name, const SharedUniformBuffer::DescriptorSetCreator & descriptorSetCreator, uint32_t uniformBlockSize, uint32_t maxElementCount) noexcept
+	SharedUBOManager::createSharedUniformBuffer (const std::string & name, const SharedUniformBuffer::descriptor_set_creator_t & descriptorSetCreator, uint32_t uniformBlockSize, uint32_t maxElementCount) noexcept
 	{
 		if ( m_sharedUniformBuffers.contains(name) )
 		{
@@ -102,7 +68,7 @@ namespace EmEn::Vulkan
 			return nullptr;
 		}
 
-		auto sharedUniformBuffer = std::make_shared< SharedUniformBuffer >(m_device, descriptorSetCreator, uniformBlockSize, maxElementCount);
+		auto sharedUniformBuffer = std::make_shared< SharedUniformBuffer >(m_device, m_renderer, descriptorSetCreator, uniformBlockSize, maxElementCount);
 
 		if ( !sharedUniformBuffer->usable() )
 		{

@@ -37,6 +37,7 @@
 
 /* Local inclusions for usages. */
 #include "Vulkan/UniformBufferObject.hpp"
+#include "Graphics/Types.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::Graphics
@@ -166,7 +167,16 @@ namespace EmEn::Graphics
 			 * @param obj A reference to the object to print.
 			 * @return std::string
 			 */
-			friend std::string to_string (const ViewMatrices2DUBO & obj) noexcept;
+			friend
+			std::string
+			to_string (const ViewMatrices2DUBO & obj) noexcept
+			{
+				std::stringstream output;
+
+				output << obj;
+
+				return output.str();
+			}
 
 		private:
 

@@ -38,7 +38,6 @@
 #include "Libs/ObservableTrait.hpp"
 
 /* Local inclusions for usage. */
-#include "AVConsole/Manager.hpp"
 #include "Component/DirectionalLight.hpp"
 #include "Component/PointLight.hpp"
 #include "Component/SpotLight.hpp"
@@ -47,18 +46,10 @@
 #include "Vulkan/DescriptorSet.hpp"
 
 /* Forward declarations. */
-namespace EmEn
+namespace EmEn::Vulkan
 {
-	namespace Graphics
-	{
-		class Renderer;
-	}
-
-	namespace Vulkan
-	{
-		class LayoutManager;
-		class DescriptorSetLayout;
-	}
+	class LayoutManager;
+	class DescriptorSetLayout;
 }
 
 namespace EmEn::Scenes
@@ -97,9 +88,14 @@ namespace EmEn::Scenes
 
 			/**
 			 * @brief Constructs a light set.
-			 * @param AVConsole A reference to master control manager.
+			 * @param AVConsoleManager A reference to master control manager. Will gives access to graphics renderer.
 			 */
-			explicit LightSet (AVConsole::Manager & AVConsole) noexcept;
+			explicit
+			LightSet (AVConsole::Manager & AVConsoleManager) noexcept
+				: m_AVConsoleManager(AVConsoleManager)
+			{
+
+			}
 
 			/**
 			 * @brief Copy constructor.
@@ -189,24 +185,23 @@ namespace EmEn::Scenes
 			{
 				this->enable();
 				this->setStaticLightingState(true);
-				return this->getStaticLighting(DefaultStaticLightingName);
+
+				return this->getOrCreateStaticLighting(DefaultStaticLightingName);
 			}
 
 			/**
 			 * @brief Initializes the light set GPU resources.
-			 * @param renderer A reference to the renderer.
 			 * @param sceneName A reference to a string.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool initialize (Graphics::Renderer & renderer, const std::string & sceneName) noexcept;
+			bool initialize (const std::string & sceneName) noexcept;
 
 			/**
 			 * @brief Releases the GPU resources.
-			 * @param renderer A reference to the renderer.
 			 * @return bool
 			 */
-			bool terminate (Graphics::Renderer & renderer) noexcept;
+			bool terminate () noexcept;
 
 			/**
 			 * @brief Enables the use of a static lighting incorporated to the shaders.
@@ -220,7 +215,7 @@ namespace EmEn::Scenes
 
 				if ( m_flags[UseStaticLighting] )
 				{
-					this->createDefaultStaticLighting();
+					this->getOrCreateDefaultStaticLighting();
 				}
 			}
 
@@ -237,10 +232,10 @@ namespace EmEn::Scenes
 
 			/**
 			 * @brief Returns the shared buffer uniform for directional light buffer.
-			 * @return std::shared_ptr< Vulkan::SharedUniformBuffer >
+			 * @return std::shared_ptr< Graphics::SharedUniformBuffer >
 			 */
 			[[nodiscard]]
-			std::shared_ptr< Vulkan::SharedUniformBuffer >
+			std::shared_ptr< Graphics::SharedUniformBuffer >
 			directionalLightBuffer () const noexcept
 			{
 				return m_directionalLightBuffer;
@@ -248,10 +243,10 @@ namespace EmEn::Scenes
 
 			/**
 			 * @brief Returns the shared buffer uniform for point light buffer.
-			 * @return std::shared_ptr< Vulkan::SharedUniformBuffer >
+			 * @return std::shared_ptr< Graphics::SharedUniformBuffer >
 			 */
 			[[nodiscard]]
-			std::shared_ptr< Vulkan::SharedUniformBuffer >
+			std::shared_ptr< Graphics::SharedUniformBuffer >
 			pointLightBuffer () const noexcept
 			{
 				return m_pointLightBuffer;
@@ -259,10 +254,10 @@ namespace EmEn::Scenes
 
 			/**
 			 * @brief Returns the shared buffer uniform for spotlight buffer.
-			 * @return std::shared_ptr< Vulkan::SharedUniformBuffer >
+			 * @return std::shared_ptr< Graphics::SharedUniformBuffer >
 			 */
 			[[nodiscard]]
-			std::shared_ptr< Vulkan::SharedUniformBuffer >
+			std::shared_ptr< Graphics::SharedUniformBuffer >
 			spotLightBuffer () const noexcept
 			{
 				return m_spotLightBuffer;
@@ -486,26 +481,26 @@ namespace EmEn::Scenes
 			void removeAllLights () noexcept;
 
 			/**
-			 * @return Creates the default static lighting.
-			 * @return void
+			 * @return Returns or creates the default static lighting.
+			 * @return Saphir::StaticLighting &
 			 */
-			void createDefaultStaticLighting () noexcept;
+			Saphir::StaticLighting & getOrCreateDefaultStaticLighting () noexcept;
 
 			/**
 			 * @brief Returns or creates a static lighting.
-			 * @param name A reference to a string. Default, the default one.
+			 * @param name A reference to a string.
 			 * @return Saphir::StaticLighting &
 			 */
-			[[nodiscard]]
-			Saphir::StaticLighting & getStaticLighting (const std::string & name = DefaultStaticLightingName) noexcept;
+			Saphir::StaticLighting & getOrCreateStaticLighting (const std::string & name) noexcept;
 
 			/**
-			 * @brief Returns a named static lighting.
-			 * @param name A reference to a string. Default, the default one.
+			 * @brief Returns the pointer to a static lighting.
+			 * @warning Can be nullptr!
+			 * @param name A reference to a string. Default, none.
 			 * @return const Saphir::StaticLighting *
 			 */
 			[[nodiscard]]
-			const Saphir::StaticLighting * getStaticLighting (const std::string & name = DefaultStaticLightingName) const noexcept;
+			const Saphir::StaticLighting * getStaticLightingPointer (const std::string & name = DefaultStaticLightingName) const noexcept;
 
 			/**
 			 * @brief Updates all light UBO.
@@ -535,17 +530,27 @@ namespace EmEn::Scenes
 			 * @param obj A reference to the object to print.
 			 * @return std::string
 			 */
-			friend std::string to_string (const LightSet & obj) noexcept;
+			friend
+			std::string
+			to_string (const LightSet & obj) noexcept
+			{
+				std::stringstream output;
+
+				output << obj;
+
+				return output.str();
+			}
 
 		private:
 
 			/**
 			 * @brief Creates the descriptor set for a light within the shared uniform buffer object.
+			 * @param renderer A reference to the graphics renderer.
 			 * @param uniformBufferObject A reference to the uniform buffer object.
 			 * @return std::unique_ptr< Vulkan::DescriptorSet >
 			 */
 			[[nodiscard]]
-			static std::unique_ptr< Vulkan::DescriptorSet > createDescriptorSet (const Vulkan::UniformBufferObject & uniformBufferObject) noexcept;
+			static std::unique_ptr< Vulkan::DescriptorSet > createDescriptorSet (Graphics::Renderer & renderer, const Vulkan::UniformBufferObject & uniformBufferObject) noexcept;
 
 			static constexpr auto DefaultStaticLightingName{"Default"};
 
@@ -557,18 +562,18 @@ namespace EmEn::Scenes
 			static constexpr auto UseLightDistance{4UL};
 
 			AVConsole::Manager & m_AVConsoleManager;
-			std::shared_ptr< Vulkan::SharedUniformBuffer > m_directionalLightBuffer;
-			std::shared_ptr< Vulkan::SharedUniformBuffer > m_pointLightBuffer;
-			std::shared_ptr< Vulkan::SharedUniformBuffer > m_spotLightBuffer;
+			std::shared_ptr< Graphics::SharedUniformBuffer > m_directionalLightBuffer;
+			std::shared_ptr< Graphics::SharedUniformBuffer > m_pointLightBuffer;
+			std::shared_ptr< Graphics::SharedUniformBuffer > m_spotLightBuffer;
 			std::set< std::shared_ptr< Component::AbstractLightEmitter > > m_lights;
 			std::set< std::shared_ptr< Component::DirectionalLight > > m_directionalLights;
 			std::set< std::shared_ptr< Component::PointLight > > m_pointLights;
 			std::set< std::shared_ptr< Component::SpotLight > > m_spotLights;
+			std::map< std::string, Saphir::StaticLighting > m_staticLighting;
 			Libs::PixelFactory::Color< float > m_ambientLightColor{Libs::PixelFactory::Black};
 			float m_ambientLightIntensity{DefaultAmbientLightIntensity};
 			float m_lightPercentToAmbient{DefaultLightPercentToAmbient};
 			mutable std::mutex m_lightAccess;
-			std::map< std::string, Saphir::StaticLighting > m_staticLighting;
 			std::array< bool, 8 > m_flags{
 				false/*Enabled*/,
 				false/*Initialized*/,

@@ -30,13 +30,13 @@
 #include "Graphics/RenderTarget/Abstract.hpp"
 
 /* Local inclusions for usages. */
+#include "Graphics/Renderer.hpp"
+#include "Graphics/ViewMatrices2DUBO.hpp"
+#include "Graphics/ViewMatrices3DUBO.hpp"
 #include "Vulkan/Framebuffer.hpp"
 #include "Vulkan/Image.hpp"
 #include "Vulkan/ImageView.hpp"
 #include "Vulkan/Instance.hpp"
-#include "Graphics/Renderer.hpp"
-#include "Graphics/ViewMatrices2DUBO.hpp"
-#include "Graphics/ViewMatrices3DUBO.hpp"
 
 namespace EmEn::Graphics::RenderTarget
 {
@@ -272,14 +272,14 @@ namespace EmEn::Graphics::RenderTarget
 
 			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::onSourceConnected() */
 			void
-			onSourceConnected (AbstractVirtualDevice * /*sourceDevice*/) noexcept override
+			onSourceConnected (AVConsole::AVManagers & AVManagers, AbstractVirtualDevice * /*sourceDevice*/) noexcept override
 			{
-				m_viewMatrices.create(*Renderer::instance(), this->id());
+				m_viewMatrices.create(AVManagers.graphicsRenderer, this->id());
 			}
 
 			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::onSourceDisconnected() */
 			void
-			onSourceDisconnected (AbstractVirtualDevice * /*sourceDevice*/) noexcept override
+			onSourceDisconnected (AVConsole::AVManagers & /*AVManagers*/, AbstractVirtualDevice * /*sourceDevice*/) noexcept override
 			{
 				m_viewMatrices.destroy();
 			}

@@ -44,11 +44,9 @@
 
 /* Local inclusions for usages. */
 #include "AbstractVirtualDevice.hpp"
-#include "Graphics/FramebufferPrecisions.hpp"
 #include "Graphics/RenderTarget/ShadowMap.hpp"
 #include "Graphics/RenderTarget/Texture.hpp"
 #include "Graphics/RenderTarget/View.hpp"
-#include "Audio/Manager.hpp"
 #include "Types.hpp"
 
 namespace EmEn
@@ -98,8 +96,9 @@ namespace EmEn::AVConsole
 			 * @brief Constructs the master control console.
 			 * @param name A reference to a string.
 			 * @param graphicsRenderer A reference to the graphics renderer.
+			 * @param audioManager A reference to the audio manager.
 			 */
-			Manager (const std::string & name, Graphics::Renderer & graphicsRenderer) noexcept;
+			Manager (const std::string & name, Graphics::Renderer & graphicsRenderer, Audio::Manager & audioManager) noexcept;
 
 			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
 			[[nodiscard]]
@@ -115,6 +114,39 @@ namespace EmEn::AVConsole
 			is (size_t classUID) const noexcept override
 			{
 				return classUID == ClassUID;
+			}
+
+			/**
+			 * @brief Shares the audio video managers.
+			 * @return AVManagers &
+			 */
+			[[nodiscard]]
+			AVManagers &
+			managers () noexcept
+			{
+				return m_AVManagers;
+			}
+
+			/**
+			 * @brief Shares the graphics renderer service.
+			 * @return Graphics::Renderer &
+			 */
+			[[nodiscard]]
+			Graphics::Renderer &
+			graphicsRenderer () const noexcept
+			{
+				return m_AVManagers.graphicsRenderer;
+			}
+
+			/**
+			 * @brief Shares the audio manager service.
+			 * @return Audio::Manager &
+			 */
+			[[nodiscard]]
+			Audio::Manager &
+			audioManager () const noexcept
+			{
+				return m_AVManagers.audioManager;
 			}
 
 			/**
@@ -319,7 +351,7 @@ namespace EmEn::AVConsole
 			 * @param targetDeviceId A reference to a string of input virtual video device id.
 			 * @return bool
 			 */
-			bool connectVideoDevices (const std::string & sourceDeviceId, const std::string & targetDeviceId) const noexcept;
+			bool connectVideoDevices (const std::string & sourceDeviceId, const std::string & targetDeviceId) noexcept;
 
 			/**
 			 * @brief Connects two audio devices.
@@ -327,7 +359,7 @@ namespace EmEn::AVConsole
 			 * @param targetDeviceId A reference to a string of input virtual audio device id.
 			 * @return bool
 			 */
-			bool connectAudioDevices (const std::string & sourceDeviceId, const std::string & targetDeviceId) const noexcept;
+			bool connectAudioDevices (const std::string & sourceDeviceId, const std::string & targetDeviceId) noexcept;
 
 			/**
 			 * @brief Auto-connects the primary video devices.
@@ -397,7 +429,7 @@ namespace EmEn::AVConsole
 			 */
 			bool autoSelectPrimaryInputAudioDevice () noexcept;
 
-			Graphics::Renderer & m_graphicsRenderer;
+			AVManagers m_AVManagers;
 			std::unordered_map< std::string, std::shared_ptr< AbstractVirtualDevice > > m_virtualVideoDevices;
 			std::unordered_map< std::string, std::shared_ptr< AbstractVirtualDevice > > m_virtualAudioDevices;
 			std::set< std::shared_ptr< Graphics::RenderTarget::Abstract > > m_renderToShadowMaps;

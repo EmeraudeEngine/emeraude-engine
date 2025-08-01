@@ -42,15 +42,15 @@ namespace EmEn::AVConsole
 	const std::string Manager::DefaultViewName{"DefaultView"};
 	const std::string Manager::DefaultSpeakerName{"DefaultSpeaker"};
 
-	Manager::Manager (const std::string & name, Renderer & graphicsRenderer) noexcept
+	Manager::Manager (const std::string & name, Renderer & graphicsRenderer, Audio::Manager & audioManager) noexcept
 		: NameableTrait{name + ClassId},
 		Controllable{ClassId},
-		m_graphicsRenderer{graphicsRenderer}
+		m_AVManagers{graphicsRenderer, audioManager}
 	{
 		/* Console commands bindings. */
 		this->bindCommand("listDevices", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
-			DeviceType deviceType{DeviceType::Both};
-			ConnexionType directionType{ConnexionType::Both};
+			auto deviceType{DeviceType::Both};
+			auto directionType{ConnexionType::Both};
 
 			if ( !arguments.empty() )
 			{
@@ -380,7 +380,7 @@ namespace EmEn::AVConsole
 		/* Create the render target. */
 		auto renderTarget = std::make_shared< RenderTarget::View< ViewMatrices2DUBO > >(name, width, height, precisions);
 
-		if ( !renderTarget->create(m_graphicsRenderer) )
+		if ( !renderTarget->create(m_AVManagers.graphicsRenderer) )
 		{
 			TraceError{ClassId} << "Unable to create the render to view '" << name << "' !";
 
@@ -411,7 +411,7 @@ namespace EmEn::AVConsole
 		/* Create the render target. */
 		auto renderTarget = std::make_shared< RenderTarget::View< ViewMatrices3DUBO > >(name, size, precisions);
 
-		if ( !renderTarget->create(m_graphicsRenderer) )
+		if ( !renderTarget->create(m_AVManagers.graphicsRenderer) )
 		{
 			TraceError{ClassId} << "Unable to create the render to cubic view '" << name << "' !";
 
@@ -448,7 +448,7 @@ namespace EmEn::AVConsole
 			return {};
 		}
 
-		auto success = renderTarget->createOnHardware(m_graphicsRenderer);
+		auto success = renderTarget->createOnHardware(m_AVManagers.graphicsRenderer);
 
 		if ( !renderTarget->setManualLoadSuccess(success) )
 		{
@@ -480,7 +480,7 @@ namespace EmEn::AVConsole
 		/* Create the render target. */
 		auto renderTarget = std::make_shared< RenderTarget::Texture< ViewMatrices3DUBO > >(name, size, colorCount);
 
-		if ( !renderTarget->createOnHardware(m_graphicsRenderer) )
+		if ( !renderTarget->createOnHardware(m_AVManagers.graphicsRenderer) )
 		{
 			TraceError{ClassId} << "Unable to create the render to cubemap '" << name << "' !";
 
@@ -512,7 +512,7 @@ namespace EmEn::AVConsole
 		/* Create the render target. */
 		auto renderTarget = std::make_shared< RenderTarget::ShadowMap< ViewMatrices2DUBO > >(name, resolution);
 
-		if ( !renderTarget->create(m_graphicsRenderer) )
+		if ( !renderTarget->create(m_AVManagers.graphicsRenderer) )
 		{
 			TraceError{ClassId} << "Unable to create the render to shadow map '" << name << "' !";
 
@@ -544,7 +544,7 @@ namespace EmEn::AVConsole
 		/* Create the render target. */
 		auto renderTarget = std::make_shared< RenderTarget::ShadowMap< ViewMatrices3DUBO > >(name, resolution);
 
-		if ( !renderTarget->create(m_graphicsRenderer) )
+		if ( !renderTarget->create(m_AVManagers.graphicsRenderer) )
 		{
 			TraceError{ClassId} << "Unable to create the render to cubic shadow map '" << name << "' !";
 
@@ -622,7 +622,7 @@ namespace EmEn::AVConsole
 	}
 
 	bool
-	Manager::connectVideoDevices (const std::string & sourceDeviceId, const std::string & targetDeviceId) const noexcept
+	Manager::connectVideoDevices (const std::string & sourceDeviceId, const std::string & targetDeviceId) noexcept
 	{
 		const auto sourceDevice = this->getVideoDevice(sourceDeviceId);
 
@@ -647,11 +647,11 @@ namespace EmEn::AVConsole
 			return true;
 		}
 
-		return sourceDevice->connect(targetDevice);
+		return sourceDevice->connect(m_AVManagers, targetDevice);
 	}
 
 	bool
-	Manager::connectAudioDevices (const std::string & sourceDeviceId, const std::string & targetDeviceId) const noexcept
+	Manager::connectAudioDevices (const std::string & sourceDeviceId, const std::string & targetDeviceId) noexcept
 	{
 		const auto sourceDevice = this->getAudioDevice(sourceDeviceId);
 
@@ -676,7 +676,7 @@ namespace EmEn::AVConsole
 			return true;
 		}
 
-		return sourceDevice->connect(targetDevice);
+		return sourceDevice->connect(m_AVManagers, targetDevice);
 	}
 
 	bool
@@ -929,14 +929,14 @@ namespace EmEn::AVConsole
 
 		for ( const auto & device : std::ranges::views::values(m_virtualAudioDevices) )
 		{
-			device->disconnectFromAll();
+			device->disconnectFromAll(m_AVManagers);
 		}
 
 		m_virtualAudioDevices.clear();
 
 		for ( const auto & device : std::ranges::views::values(m_virtualVideoDevices) )
 		{
-			device->disconnectFromAll();
+			device->disconnectFromAll(m_AVManagers);
 		}
 
 		m_virtualVideoDevices.clear();

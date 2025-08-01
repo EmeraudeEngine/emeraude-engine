@@ -37,13 +37,18 @@
 
 /* Local inclusions for usages. */
 #include "Libs/PixelFactory/Color.hpp"
-#include "AVConsole/Manager.hpp"
 #include "AVConsole/Types.hpp"
-#include "Vulkan/SharedUniformBuffer.hpp"
+#include "Graphics/SharedUniformBuffer.hpp"
+#include "Graphics/RenderTarget/ShadowMap.hpp"
 
 /* Forward declarations. */
 namespace EmEn
 {
+	namespace Vulkan
+	{
+		class DescriptorSet;
+	}
+
 	namespace Graphics::RenderTarget
 	{
 		class Abstract;
@@ -54,9 +59,9 @@ namespace EmEn
 		class UniformBlock;
 	}
 
-	namespace Vulkan
+	namespace AVConsole
 	{
-		class DescriptorSet;
+		class Manager;
 	}
 
 	namespace Scenes
@@ -386,9 +391,11 @@ namespace EmEn::Scenes::Component
 
 			/**
 			 * @brief Removes the light from the GPU.
+			 * @param lightSet A reference to the light set.
+			 * @param AVConsoleManager A reference to master control manager.
 			 * @return void
 			 */
-			virtual void destroyFromHardware () noexcept = 0;
+			virtual void destroyFromHardware (LightSet & lightSet, AVConsole::Manager & AVConsoleManager) noexcept = 0;
 
 			/**
 			 * @brief Gives access to the light shadow map.
@@ -448,7 +455,7 @@ namespace EmEn::Scenes::Component
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool addToSharedUniformBuffer (const std::shared_ptr< Vulkan::SharedUniformBuffer > & sharedBufferUniform) noexcept;
+			bool addToSharedUniformBuffer (const std::shared_ptr< Graphics::SharedUniformBuffer > & sharedBufferUniform) noexcept;
 
 			/**
 			 * @brief Removes the light from the shared uniform buffer.
@@ -480,7 +487,7 @@ namespace EmEn::Scenes::Component
 			 * @return bool
 			 */
 			[[nodiscard]]
-			virtual bool onVideoMemoryUpdate (Vulkan::SharedUniformBuffer & UBO, uint32_t index) noexcept = 0;
+			virtual bool onVideoMemoryUpdate (Graphics::SharedUniformBuffer & UBO, uint32_t index) noexcept = 0;
 
 			/**
 			 * @brief Event when the color light changes.
@@ -504,7 +511,7 @@ namespace EmEn::Scenes::Component
 			Libs::PixelFactory::Color< float > m_color{DefaultColor};
 			float m_intensity{DefaultIntensity};
 			uint32_t m_shadowMapResolution{0};
-			std::shared_ptr< Vulkan::SharedUniformBuffer > m_sharedUniformBuffer;
+			std::shared_ptr< Graphics::SharedUniformBuffer > m_sharedUniformBuffer;
 			uint32_t m_sharedUBOIndex{0};
 	};
 }

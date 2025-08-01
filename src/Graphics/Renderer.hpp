@@ -45,10 +45,10 @@
 #include "Libs/PixelFactory/Color.hpp"
 #include "Libs/Time/Statistics/RealTime.hpp"
 #include "Vulkan/LayoutManager.hpp"
-#include "Vulkan/SharedUBOManager.hpp"
 #include "Vulkan/TransferManager.hpp"
 #include "RenderTarget/Abstract.hpp"
 #include "Saphir/ShaderManager.hpp"
+#include "SharedUBOManager.hpp"
 #include "RendererFrameScope.hpp"
 #include "VertexBufferFormatManager.hpp"
 
@@ -201,6 +201,26 @@ namespace EmEn::Graphics
 			}
 
 			/**
+			 * @brief Returns the windows.
+			 * @return const Window &
+			 */
+			const Window &
+			window () const noexcept
+			{
+				return m_window;
+			}
+
+			/**
+			 * @brief Returns the windows.
+			 * @return Window &
+			 */
+			Window &
+			window () noexcept
+			{
+				return m_window;
+			}
+
+			/**
 			 * @brief Returns whether the debug mode is enabled.
 			 * @return bool
 			 */
@@ -345,10 +365,10 @@ namespace EmEn::Graphics
 
 			/**
 			 * @brief Returns the reference to the shared UBO manager.
-			 * @return Vulkan::SharedUBOManager &
+			 * @return SharedUBOManager &
 			 */
 			[[nodiscard]]
-			Vulkan::SharedUBOManager &
+			SharedUBOManager &
 			sharedUBOManager () noexcept
 			{
 				return m_sharedUBOManager;
@@ -356,10 +376,10 @@ namespace EmEn::Graphics
 
 			/**
 			 * @brief Returns the reference to the shared UBO manager.
-			 * @return const Vulkan::SharedUBOManager &
+			 * @return const SharedUBOManager &
 			 */
 			[[nodiscard]]
-			const Vulkan::SharedUBOManager &
+			const SharedUBOManager &
 			sharedUBOManager () const noexcept
 			{
 				return m_sharedUBOManager;
@@ -649,7 +669,7 @@ namespace EmEn::Graphics
 			Saphir::ShaderManager m_shaderManager;
 			Vulkan::TransferManager m_transferManager;
 			Vulkan::LayoutManager m_layoutManager;
-			Vulkan::SharedUBOManager m_sharedUBOManager;
+			SharedUBOManager m_sharedUBOManager;
 			VertexBufferFormatManager m_vertexBufferFormatManager;
 			std::shared_ptr< Vulkan::DescriptorPool > m_descriptorPool;
 			std::vector< RendererFrameScope > m_rendererFrameScope;

@@ -149,7 +149,7 @@ namespace EmEn::Graphics::TextureResource
 		}
 
 		/* Get a Vulkan sampler. */
-		m_sampler = Renderer::instance()->getSampler(0, 0);
+		m_sampler = renderer.getSampler(0, 0);
 		m_sampler->setIdentifier(ClassId, this->name(), "Sampler");
 
 		if ( m_sampler == nullptr )

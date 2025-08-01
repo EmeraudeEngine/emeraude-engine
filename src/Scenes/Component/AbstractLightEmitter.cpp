@@ -26,6 +26,9 @@
 
 #include "AbstractLightEmitter.hpp"
 
+/* Local inclusions. */
+#include "AVConsole/Manager.hpp"
+
 namespace EmEn::Scenes::Component
 {
 	using namespace EmEn::Libs;
@@ -74,7 +77,7 @@ namespace EmEn::Scenes::Component
 	}
 
 	bool
-	AbstractLightEmitter::addToSharedUniformBuffer (const std::shared_ptr< Vulkan::SharedUniformBuffer > & sharedBufferUniform) noexcept
+	AbstractLightEmitter::addToSharedUniformBuffer (const std::shared_ptr< SharedUniformBuffer > & sharedBufferUniform) noexcept
 	{
 		m_sharedUniformBuffer = sharedBufferUniform;
 

@@ -429,13 +429,14 @@ namespace EmEn::Saphir::Generator
 			/**
 			 * @brief Methods to override for generating specific program layout.
 			 * @note The render target descriptor set layout is already present.
+			 * @param renderer A reference to the renderer.
 			 * @param setIndexes A reference to a set indexes structure.
 			 * @param descriptorSetLayouts A reference to as list of descriptor set layouts to complete.
 			 * @param pushConstantRanges A reference to as list of push constant ranges to complete.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			virtual bool onCreateDataLayouts (const SetIndexes & setIndexes, std::vector< std::shared_ptr< Vulkan::DescriptorSetLayout > > & descriptorSetLayouts, std::vector< VkPushConstantRange > & pushConstantRanges) noexcept = 0;
+			virtual bool onCreateDataLayouts (Graphics::Renderer & renderer, const SetIndexes & setIndexes, std::vector< std::shared_ptr< Vulkan::DescriptorSetLayout > > & descriptorSetLayouts, std::vector< VkPushConstantRange > & pushConstantRanges) noexcept = 0;
 
 			/**
 			 * @brief Configures the graphics pipeline from child shader generators.

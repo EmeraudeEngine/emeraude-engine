@@ -53,6 +53,7 @@
 #include "Vulkan/SwapChain.hpp"
 #include "Vulkan/GraphicsPipeline.hpp"
 #include "Vulkan/CommandBuffer.hpp"
+#include "Vulkan/DescriptorSetLayout.hpp"
 #include "Graphics/Renderer.hpp"
 #include "Graphics/Geometry/IndexedVertexResource.hpp"
 #include "Resources/Manager.hpp"
