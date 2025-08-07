@@ -75,6 +75,8 @@
 - Check to stop sound from an inactive scene. (Shared with SCENE section)
 
 ## GENERAL VULKAN :
+- Implement descriptorIndexing from Vulkan 1.2
+- Implement VK_KHR_synchronization2 and VK_KHR_dynamic_rendering from Vulkan 1.3
 - Check validation layers and debug messenger relationship. (According to khronos, this is valid to create the debug messenger without validation layers)
 - Fix texture loading. (UINT->UNORM) Convert data before ? or not ?
 - Use of separated image from sampler in GLSL when useful.
