@@ -293,7 +293,7 @@ namespace EmEn::Vulkan
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool declareQueuesFromSingleQueueFamily (const DeviceRequirements & requirements, const VkQueueFamilyProperties & queueFamilyProperty) noexcept;
+			bool declareQueuesFromSingleQueueFamily (const DeviceRequirements & requirements, const VkQueueFamilyProperties2 & queueFamilyProperty) noexcept;
 
 			/**
 			 * @brief Declares queues for a device with multiple queue family.
@@ -302,7 +302,7 @@ namespace EmEn::Vulkan
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool declareQueuesFromMultipleQueueFamilies (const DeviceRequirements & requirements, const std::vector< VkQueueFamilyProperties > & queueFamilyProperties) noexcept;
+			bool declareQueuesFromMultipleQueueFamilies (const DeviceRequirements & requirements, const std::vector< VkQueueFamilyProperties2 > & queueFamilyProperties) noexcept;
 
 			/**
 			 * @brief Creates the device with the defined and verified queues.

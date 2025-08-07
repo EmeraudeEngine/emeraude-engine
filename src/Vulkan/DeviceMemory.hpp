@@ -52,7 +52,7 @@ namespace EmEn::Vulkan
 			 * @param requirement A reference to a memory requirement.
 			 * @param propertyFlags The type of memory.
 			 */
-			DeviceMemory (const std::shared_ptr< Device > & device, const VkMemoryRequirements & requirement, VkMemoryPropertyFlags propertyFlags) noexcept
+			DeviceMemory (const std::shared_ptr< Device > & device, const VkMemoryRequirements2 & requirement, VkMemoryPropertyFlags propertyFlags) noexcept
 				: AbstractDeviceDependentObject{device},
 				m_requirement{requirement},
 				m_propertyFlags{propertyFlags}
@@ -126,10 +126,10 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Returns the memory requirement.
-			 * @param const VkMemoryRequirements &
+			 * @return const VkMemoryRequirements2 &
 			 */
 			[[nodiscard]]
-			const VkMemoryRequirements &
+			const VkMemoryRequirements2 &
 			memoryRequirement () const noexcept
 			{
 				return m_requirement;
@@ -155,13 +155,13 @@ namespace EmEn::Vulkan
 			size_t
 			bytes () const noexcept
 			{
-				return m_requirement.size;
+				return m_requirement.memoryRequirements.size;
 			}
 
 		private:
 
 			VkDeviceMemory m_handle{VK_NULL_HANDLE};
-			VkMemoryRequirements m_requirement;
+			VkMemoryRequirements2 m_requirement;
 			VkMemoryPropertyFlags m_propertyFlags;
 	};
 }

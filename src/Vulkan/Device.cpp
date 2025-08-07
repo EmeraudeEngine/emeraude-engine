@@ -124,16 +124,16 @@ namespace EmEn::Vulkan
 	}
 
 	bool
-	Device::declareQueuesFromSingleQueueFamily (const DeviceRequirements & requirements, const VkQueueFamilyProperties & queueFamilyProperty) noexcept
+	Device::declareQueuesFromSingleQueueFamily (const DeviceRequirements & requirements, const VkQueueFamilyProperties2 & queueFamilyProperty) noexcept
 	{
-		auto queueFamily = queueFamilyProperty.queueCount > 1 ?
-			m_queueFamilies.emplace_back(std::make_shared< QueueFamily >(0, queueFamilyProperty.queueCount)) :
+		auto queueFamily = queueFamilyProperty.queueFamilyProperties.queueCount > 1 ?
+			m_queueFamilies.emplace_back(std::make_shared< QueueFamily >(0, queueFamilyProperty.queueFamilyProperties.queueCount)) :
 			m_queueFamilies.emplace_back(std::make_shared< QueueFamilySQ >(0));
 
 		m_flags[HasBasicSupport] = true;
 
 		/* NOTE: Without transfer nothing is possible ! This should never happen ! */
-		if ( (queueFamilyProperty.queueFlags & VK_QUEUE_TRANSFER_BIT) == 0 )
+		if ( (queueFamilyProperty.queueFamilyProperties.queueFlags & VK_QUEUE_TRANSFER_BIT) == 0 )
 		{
 			TraceFatal{ClassId} << "The physical device '" << this->name() << "' has no queue for transfer !";
 
@@ -144,7 +144,7 @@ namespace EmEn::Vulkan
 
 		if ( requirements.needsGraphics() )
 		{
-			if ( (queueFamilyProperty.queueFlags & VK_QUEUE_GRAPHICS_BIT) == 0 )
+			if ( (queueFamilyProperty.queueFamilyProperties.queueFlags & VK_QUEUE_GRAPHICS_BIT) == 0 )
 			{
 				TraceError{ClassId} << "The physical device '" << this->name() << "' has no queue for graphics !";
 
@@ -169,7 +169,7 @@ namespace EmEn::Vulkan
 
 		if ( requirements.needsCompute() )
 		{
-			if ( (queueFamilyProperty.queueFlags & VK_QUEUE_COMPUTE_BIT) == 0 )
+			if ( (queueFamilyProperty.queueFamilyProperties.queueFlags & VK_QUEUE_COMPUTE_BIT) == 0 )
 			{
 				TraceError{ClassId} << "The physical device '" << this->name() << "' has no queue for compute !";
 
@@ -184,14 +184,14 @@ namespace EmEn::Vulkan
 	}
 
 	bool
-	Device::declareQueuesFromMultipleQueueFamilies (const DeviceRequirements & requirements, const std::vector< VkQueueFamilyProperties > & queueFamilyProperties) noexcept
+	Device::declareQueuesFromMultipleQueueFamilies (const DeviceRequirements & requirements, const std::vector< VkQueueFamilyProperties2 > & queueFamilyProperties) noexcept
 	{
 		/* Loop over all existing queue family in the physical device. */
 		for ( uint32_t queueFamilyIndex = 0; queueFamilyIndex < queueFamilyProperties.size(); queueFamilyIndex++ )
 		{
-			const auto & flag = queueFamilyProperties[queueFamilyIndex].queueFlags;
+			const auto & flag = queueFamilyProperties[queueFamilyIndex].queueFamilyProperties.queueFlags;
 
-			const auto maxQueueCount = queueFamilyProperties[queueFamilyIndex].queueCount;
+			const auto maxQueueCount = queueFamilyProperties[queueFamilyIndex].queueFamilyProperties.queueCount;
 
 			auto queueFamily = maxQueueCount > 1 ?
 				m_queueFamilies.emplace_back(std::make_shared< QueueFamily >(queueFamilyIndex, maxQueueCount)) :
@@ -295,7 +295,7 @@ namespace EmEn::Vulkan
 			TraceInfo{ClassId} << requirements;
 		}
 
-		const auto & queueFamilyProperties = m_physicalDevice->queueFamilyProperties();
+		const auto & queueFamilyProperties = m_physicalDevice->queueFamilyPropertiesVK11();
 
 		if ( queueFamilyProperties.empty() )
 		{
@@ -420,16 +420,15 @@ namespace EmEn::Vulkan
 		/* Creates the logical device from the physical device information. */
 		VkDeviceCreateInfo createInfo{};
 		createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-		createInfo.pNext = nullptr;
+		createInfo.pNext = &requirements.features();
 		createInfo.flags = 0;
 		createInfo.queueCreateInfoCount = static_cast< uint32_t >(queueCreateInfos.size());
 		createInfo.pQueueCreateInfos = queueCreateInfos.data();
-		/* NOTE: Device layer are ignored (Device layer deprecation) */
-		createInfo.enabledLayerCount = 0;
-		createInfo.ppEnabledLayerNames = nullptr;
+		createInfo.enabledLayerCount = 0; // NOTE: Device layer are ignored (Device layer deprecation)
+		createInfo.ppEnabledLayerNames = nullptr; // ...
 		createInfo.enabledExtensionCount = static_cast< uint32_t >(extensions.size());
 		createInfo.ppEnabledExtensionNames = extensions.data();
-		createInfo.pEnabledFeatures = &(requirements.features());
+		createInfo.pEnabledFeatures = nullptr; // VULKAN 1.0 API feature
 
 		const auto result = vkCreateDevice(m_physicalDevice->handle(), &createInfo, nullptr, &m_handle);
 
@@ -522,7 +521,7 @@ namespace EmEn::Vulkan
 	uint32_t
 	Device::findMemoryType (uint32_t memoryTypeFilter, VkMemoryPropertyFlags propertyFlags) const noexcept
 	{
-		const auto & memoryProperties = m_physicalDevice->memoryProperties();
+		const auto & memoryProperties = m_physicalDevice->memoryPropertiesVK10();
 
 		for ( auto memoryTypeIndex = 0U; memoryTypeIndex < memoryProperties.memoryTypeCount; memoryTypeIndex++ )
 		{

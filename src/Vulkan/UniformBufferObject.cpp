@@ -41,7 +41,7 @@ namespace EmEn::Vulkan
 			return 1;
 		}
 
-		const auto maxUBOSize = this->device()->physicalDevice()->properties().limits.maxUniformBufferRange;
+		const auto maxUBOSize = this->device()->physicalDevice()->propertiesVK10().limits.maxUniformBufferRange;
 
 		return maxUBOSize / m_blockAlignedSize;
 	}

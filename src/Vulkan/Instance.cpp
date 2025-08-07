@@ -102,7 +102,7 @@ namespace EmEn::Vulkan
 			}
 			else
 			{
-				m_applicationInfo.apiVersion = VK_API_VERSION_1_4;
+				m_applicationInfo.apiVersion = VK_API_VERSION_1_3;
 				m_createInfo.flags = 0;
 			}
 			m_createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
@@ -275,12 +275,11 @@ namespace EmEn::Vulkan
 	Instance::configureValidationLayers () noexcept
 	{
 		/* [VULKAN-API-SETUP] Vulkan validation layers selection. */
-
 		auto & settings = m_primaryServices.settings();
 
-		const auto availableValidationLayers = Instance::getValidationLayers();
+		const auto availableValidationLayers = Instance::getAvailableValidationLayers();
 
-		/* NOTE: Save a copy of validation layers in settings for an easy edition. */
+		/* NOTE: Save a copy of validation layers in settings for an easy settings edition. */
 		if ( settings.isArrayEmpty(VkInstanceAvailableValidationLayersKey) )
 		{
 			for ( const auto & availableValidationLayer : availableValidationLayers )
@@ -295,38 +294,43 @@ namespace EmEn::Vulkan
 			TraceInfo{ClassId} << getItemListAsString(availableValidationLayers);
 		}
 
-		/* Read the settings to get a dynamic list of requested validation layers. */
-		const auto requestedLayers = m_primaryServices.settings().getArrayAs< std::string >(VkInstanceRequestedValidationLayersKey);
+		/* NOTE: Read the settings to get the desired validation layers. */
+		static const auto desiredValidationLayers = m_primaryServices.settings().getArrayAs< std::string >(VkInstanceRequestedValidationLayersKey);
 
 		if ( settings.isArrayEmpty(VkInstanceRequestedValidationLayersKey) )
 		{
 			TraceInfo{ClassId} <<
 				"No validation layer is requested from settings !" "\n"
 				"NOTE: You can change the validation layers selected in settings at the array key : '" << VkInstanceRequestedValidationLayersKey << "'.";
+
+			return;
 		}
-		else
+
+		/* NOTE: Show desired validation layers from the settings. */
+		if ( m_flags[ShowInformation] )
 		{
 			TraceInfo trace{ClassId};
 
-			trace << "Requested validation layers from settings :" "\n";
+			trace << "Desired Vulkan validation layers from settings :" "\n";
 
-			for ( const auto & requestedValidationLayer : requestedLayers )
+			for ( const auto & requestedValidationLayer : desiredValidationLayers )
 			{
 				trace << "\t" << requestedValidationLayer << "\n";
 			}
 		}
 
-		m_requiredValidationLayers = Instance::getSupportedValidationLayers(requestedLayers, availableValidationLayers);
+		/* NOTE: Here we check if the desired validations layers ara available and create the vector for the instance createInfo.  */
+		m_requiredValidationLayers = Instance::getSupportedValidationLayers(desiredValidationLayers, availableValidationLayers);
 
 		if ( m_requiredValidationLayers.empty() )
 		{
-			Tracer::warning(ClassId, "None of the validation layers requested are available on this system ! Check your Vulkan setup.");
+			Tracer::warning(ClassId, "None of the Vulkan validation layers requested are available on this system ! Check your dev Vulkan setup.");
 		}
 		else
 		{
 			TraceInfo trace{ClassId};
 
-			trace << "Final validation layers selected :" "\n";
+			trace << "Vulkan validation layers selected :" "\n";
 
 			for ( const auto & requiredValidationLayer : m_requiredValidationLayers )
 			{
@@ -399,9 +403,9 @@ namespace EmEn::Vulkan
 	}
 
 	std::vector< VkLayerProperties >
-	Instance::getValidationLayers () noexcept
+	Instance::getAvailableValidationLayers () noexcept
 	{
-		std::vector< VkLayerProperties > validationLayers{};
+		std::vector< VkLayerProperties > validationLayers;
 
 		uint32_t count = 0;
 
@@ -577,7 +581,7 @@ namespace EmEn::Vulkan
 
 			if ( m_flags[ShowInformation] )
 			{
-				TraceInfo(ClassId) << "Physical device '" << physicalDevice->properties().deviceName << "' reached a score of " << score << " !";
+				TraceInfo(ClassId) << "Physical device '" << physicalDevice->propertiesVK10().deviceName << "' reached a score of " << score << " !";
 			}
 
 			graphicsDevices.emplace(score, physicalDevice);
@@ -632,20 +636,21 @@ namespace EmEn::Vulkan
 		}
 
 		/* NOTE: Logical device creation for graphics rendering and presentation. */
-		TraceSuccess{ClassId} << "The graphics capable physical device '" << selectedPhysicalDevice->properties().deviceName << "' selected ! ";
+		TraceSuccess{ClassId} << "The graphics capable physical device '" << selectedPhysicalDevice->propertiesVK10().deviceName << "' selected ! ";
 
-		auto logicalDevice = std::make_shared< Device >(selectedPhysicalDevice->properties().deviceName, selectedPhysicalDevice, showInformation);
-		logicalDevice->setIdentifier((std::stringstream{} << "VulkanInstance-" << selectedPhysicalDevice->properties().deviceName << "(Graphics)-Device").str());
+		auto logicalDevice = std::make_shared< Device >(selectedPhysicalDevice->propertiesVK10().deviceName, selectedPhysicalDevice, showInformation);
+		logicalDevice->setIdentifier((std::stringstream{} << "VulkanInstance-" << selectedPhysicalDevice->propertiesVK10().deviceName << "(Graphics)-Device").str());
 
 		/* [VULKAN-API-SETUP] Graphics device features configuration. */
 		DeviceRequirements requirements{DeviceJobHint::Graphics};
-		requirements.features().fillModeNonSolid = VK_TRUE; // Required for wireframe mode!
+		requirements.featuresVK10().fillModeNonSolid = VK_TRUE; // Required for wireframe mode!
 		if constexpr ( !IsMacOS )
 		{
 			/* NOTE: macOS M1/M2/M3/M4 iGPU do not have the geometry shader stage. */
-			requirements.features().geometryShader = VK_TRUE; // Required for TBN space display
+			requirements.featuresVK10().geometryShader = VK_TRUE; // Required for TBN space display
 		}
-		requirements.features().samplerAnisotropy = VK_TRUE;
+		requirements.featuresVK10().samplerAnisotropy = VK_TRUE;
+		requirements.featuresVK13().shaderDemoteToHelperInvocation = VK_TRUE;
 		requirements.requireGraphicsQueues({1.0F}, {0.5F});
 		requirements.requireTransferQueues({1.0F});
 
@@ -703,7 +708,7 @@ namespace EmEn::Vulkan
 
 			if ( m_flags[ShowInformation] )
 			{
-				TraceInfo{ClassId} << "Physical device '" << physicalDevice->properties().deviceName << "' reached score of " << score;
+				TraceInfo{ClassId} << "Physical device '" << physicalDevice->propertiesVK10().deviceName << "' reached score of " << score;
 			}
 
 			scoredDevices.emplace(score, physicalDevice);
@@ -724,12 +729,12 @@ namespace EmEn::Vulkan
 		const auto & selectedPhysicalDevice = scoredDevices.rbegin()->second;
 
 		TraceSuccess{ClassId} <<
-			"Compute capable physical device '" << selectedPhysicalDevice->properties().deviceName << "' selected ! "
+			"Compute capable physical device '" << selectedPhysicalDevice->propertiesVK10().deviceName << "' selected ! "
 			"Creating the logical compute device ...";
 
 		/* NOTE: Logical device creation for computing. */
-		auto logicalDevice = std::make_shared< Device >(selectedPhysicalDevice->properties().deviceName, selectedPhysicalDevice, showInformation);
-		logicalDevice->setIdentifier((std::stringstream{} << "VulkanInstance-" << selectedPhysicalDevice->properties().deviceName << "(Physics)-Device").str());
+		auto logicalDevice = std::make_shared< Device >(selectedPhysicalDevice->propertiesVK10().deviceName, selectedPhysicalDevice, showInformation);
+		logicalDevice->setIdentifier((std::stringstream{} << "VulkanInstance-" << selectedPhysicalDevice->propertiesVK10().deviceName << "(Physics)-Device").str());
 
 		DeviceRequirements requirements{DeviceJobHint::Compute};
 		requirements.requireComputeQueues({1.0F}, {0.5F});
@@ -748,35 +753,28 @@ namespace EmEn::Vulkan
 	std::vector< const char * >
 	Instance::getSupportedValidationLayers (const std::vector< std::string > & requestedValidationLayers, const std::vector< VkLayerProperties > & availableValidationLayers) noexcept
 	{
-		std::vector< const char * > supportedValidationLayers{};
+		std::vector< const char * > supportedValidationLayers;
 
-		if ( !availableValidationLayers.empty() )
+		for ( const auto & requestedValidationLayer : requestedValidationLayers )
 		{
-			for ( const auto & requestedValidationLayer : requestedValidationLayers )
+			auto layerFound = false;
+
+			for ( const auto & availableValidationLayer : availableValidationLayers )
 			{
-				auto layerFound = false;
-
-				for ( const auto & availableValidationLayer : availableValidationLayers )
+				if ( std::strcmp(requestedValidationLayer.c_str(), availableValidationLayer.layerName ) == 0 )
 				{
-					if ( std::strcmp(requestedValidationLayer.c_str(), availableValidationLayer.layerName ) == 0 )
-					{
-						supportedValidationLayers.emplace_back(requestedValidationLayer.c_str());
+					supportedValidationLayers.emplace_back(requestedValidationLayer.c_str());
 
-						layerFound = true;
+					layerFound = true;
 
-						break;
-					}
-				}
-
-				if ( !layerFound )
-				{
-					TraceWarning{ClassId} << "The requested '" << requestedValidationLayer << "' validation layer is unavailable !";
+					break;
 				}
 			}
-		}
-		else
-		{
-			TraceError{ClassId} << "There is no validation layer available !";
+
+			if ( !layerFound )
+			{
+				TraceWarning{ClassId} << "The requested '" << requestedValidationLayer << "' validation layer is unavailable !";
+			}
 		}
 
 		return supportedValidationLayers;
@@ -852,14 +850,14 @@ namespace EmEn::Vulkan
 	bool
 	Instance::checkDeviceCompatibility (const std::shared_ptr< PhysicalDevice > & physicalDevice, RunningMode runningMode, VkQueueFlagBits type, size_t & score) const noexcept
 	{
-		for ( const auto & queueFamilyProperty : physicalDevice->queueFamilyProperties() )
+		for ( const auto & queueFamilyProperty : physicalDevice->queueFamilyPropertiesVK11() )
 		{
-			if ( (queueFamilyProperty.queueFlags & type) == 0 )
+			if ( (queueFamilyProperty.queueFamilyProperties.queueFlags & type) == 0 )
 			{
 				continue;
 			}
 
-			this->modulateDeviceScoring(physicalDevice->properties(), runningMode, score);
+			this->modulateDeviceScoring(physicalDevice->propertiesVK10(), runningMode, score);
 
 			return true;
 		}
@@ -870,10 +868,10 @@ namespace EmEn::Vulkan
 	bool
 	Instance::checkDeviceCompatibility (const std::shared_ptr< PhysicalDevice > & physicalDevice, RunningMode runningMode, const Window * window, size_t & score) const noexcept
 	{
-		for ( const auto & queueFamilyProperty : physicalDevice->queueFamilyProperties() )
+		for ( const auto & queueFamilyProperty : physicalDevice->queueFamilyPropertiesVK11() )
 		{
 			/* Must be a graphics family queue. */
-			if ( (queueFamilyProperty.queueFlags & VK_QUEUE_GRAPHICS_BIT) == 0 )
+			if ( (queueFamilyProperty.queueFamilyProperties.queueFlags & VK_QUEUE_GRAPHICS_BIT) == 0 )
 			{
 				continue;
 			}
@@ -887,7 +885,7 @@ namespace EmEn::Vulkan
 			score += window->surface()->formats().size();
 			score += window->surface()->presentModes().size();
 
-			this->modulateDeviceScoring(physicalDevice->properties(), runningMode, score);
+			this->modulateDeviceScoring(physicalDevice->propertiesVK10(), runningMode, score);
 
 			return true;
 		}
@@ -898,8 +896,8 @@ namespace EmEn::Vulkan
 	bool
 	Instance::checkDevicesFeaturesForGraphics (const std::shared_ptr< PhysicalDevice > & physicalDevice, size_t & /*score*/) const noexcept
 	{
-		const auto & properties = physicalDevice->properties();
-		const auto & features = physicalDevice->features();
+		const auto & properties = physicalDevice->propertiesVK10();
+		const auto & features = physicalDevice->featuresVK10();
 
 		if ( features.robustBufferAccess == 0 )
 		{
@@ -1309,7 +1307,7 @@ namespace EmEn::Vulkan
 	bool
 	Instance::checkDeviceForRequiredExtensions (const std::shared_ptr< PhysicalDevice > & physicalDevice, const std::vector< const char * > & requiredExtensions, size_t & score) const noexcept
 	{
-		const auto & properties = physicalDevice->properties();
+		const auto & properties = physicalDevice->propertiesVK10();
 		const auto & extensions = physicalDevice->getExtensions();
 
 		score += extensions.size();

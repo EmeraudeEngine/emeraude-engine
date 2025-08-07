@@ -58,12 +58,19 @@ namespace EmEn::Vulkan
 			return false;
 		}
 
-		/* Allocate memory for the new image. */
-		VkMemoryRequirements memoryRequirement{};
+		/* Allocate memory for the new buffer. */
+		VkBufferMemoryRequirementsInfo2 info{};
+		info.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_REQUIREMENTS_INFO_2;
+		info.pNext = VK_NULL_HANDLE;
+		info.buffer = m_handle;
 
-		vkGetBufferMemoryRequirements(
+		VkMemoryRequirements2 memoryRequirement{};
+		memoryRequirement.sType = VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2;
+		memoryRequirement.pNext = VK_NULL_HANDLE;
+
+		vkGetBufferMemoryRequirements2(
 			this->device()->handle(),
-			m_handle,
+			&info,
 			&memoryRequirement
 		);
 

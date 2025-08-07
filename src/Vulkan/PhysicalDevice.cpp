@@ -41,25 +41,67 @@ namespace EmEn::Vulkan
 	using namespace EmEn::Libs;
 
 	PhysicalDevice::PhysicalDevice (const VkPhysicalDevice & physicalDevice) noexcept
-		: m_physicalDevice(physicalDevice)
+		: m_physicalDevice{physicalDevice}
 	{
+		/* NOTE: Get the device features. */
+		{
+			/* NOTE: Device features from Vulkan 1.3 API. */
+			m_featuresVK13.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
+			m_featuresVK13.pNext = nullptr;
+			/* NOTE: Device features from Vulkan 1.2 API. */
+			m_featuresVK12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
+			m_featuresVK12.pNext = &m_featuresVK13;
+			/* NOTE: Device features from Vulkan 1.1 API. */
+			m_featuresVK11.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES;
+			m_featuresVK11.pNext = &m_featuresVK12;
+			/* NOTE: Device features from Vulkan 1.0 API. */
+			m_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+			m_features.pNext = &m_featuresVK11;
+
+			vkGetPhysicalDeviceFeatures2(m_physicalDevice, &m_features);
+		}
+
+		/* NOTE: Get the device properties. */
+		{
+			/* NOTE: Device properties from Vulkan 1.3 API. */
+			m_propertiesVK13.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_PROPERTIES;
+			m_propertiesVK13.pNext = nullptr;
+			/* NOTE: Device properties from Vulkan 1.2 API. */
+			m_propertiesVK12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_PROPERTIES;
+			m_propertiesVK12.pNext = &m_propertiesVK13;
+			/* NOTE: Device properties from Vulkan 1.1 API. */
+			m_propertiesVK11.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_PROPERTIES;
+			m_propertiesVK11.pNext = &m_propertiesVK12;
+			/* NOTE: Device properties from Vulkan 1.0 API. */
+			m_properties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
+			m_properties.pNext = &m_propertiesVK11;
+
+			vkGetPhysicalDeviceProperties2(m_physicalDevice, &m_properties);
+		}
+
+		/* NOTE: Get the device memory properties. */
+		{
+			m_memoryProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_PROPERTIES_2;
+			m_memoryProperties.pNext = nullptr;
+
+			vkGetPhysicalDeviceMemoryProperties2(m_physicalDevice, &m_memoryProperties);
+		}
+
 		uint32_t count = 0;
 		VkResult result{};
 
-		vkGetPhysicalDeviceFeatures(m_physicalDevice, &m_features);
-
-		vkGetPhysicalDeviceProperties(m_physicalDevice, &m_properties);
-
-		vkGetPhysicalDeviceMemoryProperties(m_physicalDevice, &m_memoryProperties);
-
 		{
-			vkGetPhysicalDeviceQueueFamilyProperties(m_physicalDevice, &count, nullptr);
+			vkGetPhysicalDeviceQueueFamilyProperties2(m_physicalDevice, &count, nullptr);
 
 			if ( count > 0 )
 			{
-				m_queueFamilyProperties.resize(count);
+				m_queueFamilyProperties.resize(count, {
+					.sType = VK_STRUCTURE_TYPE_QUEUE_FAMILY_PROPERTIES_2,
+					.pNext = nullptr,
+					.queueFamilyProperties{}
+				});
 
-				vkGetPhysicalDeviceQueueFamilyProperties(m_physicalDevice, &count, m_queueFamilyProperties.data());
+				vkGetPhysicalDeviceQueueFamilyProperties2(m_physicalDevice, &count, m_queueFamilyProperties.data());
 			}
 		}
 
@@ -222,7 +264,7 @@ namespace EmEn::Vulkan
 		{
 			auto index = std::distance(m_queueFamilyProperties.cbegin(), it);
 
-			if ( (m_queueFamilyProperties[index].queueFlags & type) != 0 )
+			if ( (m_queueFamilyProperties[index].queueFamilyProperties.queueFlags & type) != 0 )
 			{
 				return index;
 			}
@@ -551,38 +593,38 @@ namespace EmEn::Vulkan
 
 				std::vector< std::string > flags{};
 
-				if ( (familyQueue.queueFlags & VK_QUEUE_GRAPHICS_BIT) != 0 )
+				if ( (familyQueue.queueFamilyProperties.queueFlags & VK_QUEUE_GRAPHICS_BIT) != 0 )
 				{
 					flags.emplace_back("Graphics");
 				}
 
-				if ( (familyQueue.queueFlags & VK_QUEUE_COMPUTE_BIT) != 0 )
+				if ( (familyQueue.queueFamilyProperties.queueFlags & VK_QUEUE_COMPUTE_BIT) != 0 )
 				{
 					flags.emplace_back("Compute");
 				}
 
-				if ( (familyQueue.queueFlags & VK_QUEUE_TRANSFER_BIT) != 0 )
+				if ( (familyQueue.queueFamilyProperties.queueFlags & VK_QUEUE_TRANSFER_BIT) != 0 )
 				{
 					flags.emplace_back("Transfer");
 				}
 
-				if ( (familyQueue.queueFlags & VK_QUEUE_SPARSE_BINDING_BIT) != 0 )
+				if ( (familyQueue.queueFamilyProperties.queueFlags & VK_QUEUE_SPARSE_BINDING_BIT) != 0 )
 				{
 					flags.emplace_back("SparseBinding");
 				}
 
-				if ( (familyQueue.queueFlags & VK_QUEUE_PROTECTED_BIT) != 0 )
+				if ( (familyQueue.queueFamilyProperties.queueFlags & VK_QUEUE_PROTECTED_BIT) != 0 )
 				{
 					flags.emplace_back("Protected");
 				}
 
-				if ( (familyQueue.queueFlags & VK_QUEUE_VIDEO_DECODE_BIT_KHR) != 0 )
+				if ( (familyQueue.queueFamilyProperties.queueFlags & VK_QUEUE_VIDEO_DECODE_BIT_KHR) != 0 )
 				{
 					flags.emplace_back("VideoDecode");
 				}
 
 #ifdef VK_ENABLE_BETA_EXTENSIONS
-				if ( (familyQueue.queueFlags & VK_QUEUE_VIDEO_ENCODE_BIT_KHR) != 0 )
+				if ( (familyQueue.queueFamilyProperties.queueFlags & VK_QUEUE_VIDEO_ENCODE_BIT_KHR) != 0 )
 				{
 					flags.emplace_back("VideoEncode");
 				}
@@ -591,15 +633,15 @@ namespace EmEn::Vulkan
 				/* Optical flow are fundamental algorithms in computer vision (CV) area.
 				 * This extension allows applications to estimate 2D displacement of pixels between two frames.
 				 * For use with : NVIDIA Optical Flow SDK Version 5 */
-				if ( (familyQueue.queueFlags & VK_QUEUE_OPTICAL_FLOW_BIT_NV) != 0 )
+				if ( (familyQueue.queueFamilyProperties.queueFlags & VK_QUEUE_OPTICAL_FLOW_BIT_NV) != 0 )
 				{
 					flags.emplace_back("OpticalFlow");
 				}
 
-				output << "\t#" << index << " supports " << familyQueue.queueCount << "x {" << String::implode(flags, " | ") << "}";
+				output << "\t#" << index << " supports " << familyQueue.queueFamilyProperties.queueCount << "x {" << String::implode(flags, " | ") << "}";
 
 				/* Additional info */
-				output << " timestampValidBits: " << familyQueue.timestampValidBits << ", minImageTransferGranularity(" << familyQueue.minImageTransferGranularity.width << ", " << familyQueue.minImageTransferGranularity.height << ", " << familyQueue.minImageTransferGranularity.depth << ")" "\n";
+				output << " timestampValidBits: " << familyQueue.queueFamilyProperties.timestampValidBits << ", minImageTransferGranularity(" << familyQueue.queueFamilyProperties.minImageTransferGranularity.width << ", " << familyQueue.queueFamilyProperties.minImageTransferGranularity.height << ", " << familyQueue.queueFamilyProperties.minImageTransferGranularity.depth << ")" "\n";
 			}
 		}
 		else
@@ -622,7 +664,7 @@ namespace EmEn::Vulkan
 
 		for ( const auto & queueFamilyProperties : m_queueFamilyProperties )
 		{
-			queueCount += queueFamilyProperties.queueCount;
+			queueCount += queueFamilyProperties.queueFamilyProperties.queueCount;
 		}
 
 		return queueCount;
@@ -632,7 +674,7 @@ namespace EmEn::Vulkan
 	PhysicalDevice::getMaxAvailableSampleCount () const noexcept
 	{
 		/* NOTE: We are using the smallest support between a color buffer and the depth buffer. */
-		const VkSampleCountFlags supportedSampleCount = std::min(m_properties.limits.framebufferColorSampleCounts, m_properties.limits.framebufferDepthSampleCounts);
+		const VkSampleCountFlags supportedSampleCount = std::min(m_properties.properties.limits.framebufferColorSampleCounts, m_properties.properties.limits.framebufferDepthSampleCounts);
 
 		constexpr std::array< VkSampleCountFlagBits, 6 > samples {
 			VK_SAMPLE_COUNT_64_BIT,

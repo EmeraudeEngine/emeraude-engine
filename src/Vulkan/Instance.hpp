@@ -225,7 +225,7 @@ namespace EmEn::Vulkan
 			 * @return std::vector< VkLayerProperties >
 			 */
 			[[nodiscard]]
-			static std::vector< VkLayerProperties > getValidationLayers () noexcept;
+			static std::vector< VkLayerProperties > getAvailableValidationLayers () noexcept;
 
 			/**
 			 * @brief Returns a list of extensions available from Vulkan.
@@ -292,7 +292,7 @@ namespace EmEn::Vulkan
 			 * @return std::vector< const char * >
 			 */
 			[[nodiscard]]
-			static std::vector< const char * > getSupportedValidationLayers (const std::vector< std::string > & requestedValidationLayers, const std::vector< VkLayerProperties > & availableValidationLayers = Instance::getValidationLayers()) noexcept;
+			static std::vector< const char * > getSupportedValidationLayers (const std::vector< std::string > & requestedValidationLayers, const std::vector< VkLayerProperties > & availableValidationLayers = Instance::getAvailableValidationLayers()) noexcept;
 
 		private:
 

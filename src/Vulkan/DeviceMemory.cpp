@@ -48,15 +48,15 @@ namespace EmEn::Vulkan
 		VkMemoryAllocateInfo allocateInfo{};
 		allocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
 		allocateInfo.pNext = nullptr;
-		allocateInfo.allocationSize = m_requirement.size;
-		allocateInfo.memoryTypeIndex = this->device()->findMemoryType(m_requirement.memoryTypeBits, m_propertyFlags);
+		allocateInfo.allocationSize = m_requirement.memoryRequirements.size;
+		allocateInfo.memoryTypeIndex = this->device()->findMemoryType(m_requirement.memoryRequirements.memoryTypeBits, m_propertyFlags);
 
 		const auto result = vkAllocateMemory(this->device()->handle(), &allocateInfo, nullptr, &m_handle);
 
 		if ( result != VK_SUCCESS )
 		{
 			TraceError{ClassId} <<
-				"Unable to allocate " << m_requirement.size << " bytes (alignment:" << m_requirement.alignment << " bytes) "
+				"Unable to allocate " << m_requirement.memoryRequirements.size << " bytes (alignment:" << m_requirement.memoryRequirements.alignment << " bytes) "
 				"in the device memory " << m_handle << " : " << vkResultToCString(result) << " !";
 
 			return false;

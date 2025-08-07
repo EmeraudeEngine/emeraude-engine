@@ -62,31 +62,120 @@ namespace EmEn::Vulkan
 			 * @return VkPhysicalDevice
 			 */
 			[[nodiscard]]
-			VkPhysicalDevice handle () const noexcept
+			VkPhysicalDevice
+			handle () const noexcept
 			{
 				return m_physicalDevice;
 			}
 
 			/**
-			 * @brief features
-			 * @return const VkPhysicalDeviceFeatures &
+			 * @brief Returns the physical device features.
+			 * @return const VkPhysicalDeviceFeatures2 &
 			 */
 			[[nodiscard]]
-			const VkPhysicalDeviceFeatures &
+			const VkPhysicalDeviceFeatures2 &
 			features () const noexcept
 			{
 				return m_features;
 			}
 
 			/**
-			 * @brief Returns prefetched physical device properties.
+			 * @brief Returns the physical device feature list from Vulkan 1.0 API.
+			 * @return const VkPhysicalDeviceFeatures &
+			 */
+			[[nodiscard]]
+			const VkPhysicalDeviceFeatures &
+			featuresVK10 () const noexcept
+			{
+				return m_features.features;
+			}
+
+			/**
+			 * @brief Returns the physical device feature list from Vulkan 1.1 API.
+			 * @return const VkPhysicalDeviceVulkan11Features &
+			 */
+			[[nodiscard]]
+			const VkPhysicalDeviceVulkan11Features &
+			featuresVK11 () const noexcept
+			{
+				return m_featuresVK11;
+			}
+
+			/**
+			 * @brief Returns the physical device feature list from Vulkan 1.2 API.
+			 * @return const VkPhysicalDeviceVulkan12Features &
+			 */
+			[[nodiscard]]
+			const VkPhysicalDeviceVulkan12Features &
+			featuresVK12 () const noexcept
+			{
+				return m_featuresVK12;
+			}
+
+			/**
+			 * @brief Returns the physical device feature list from Vulkan 1.3 API.
+			 * @return const VkPhysicalDeviceVulkan13Features &
+			 */
+			[[nodiscard]]
+			const VkPhysicalDeviceVulkan13Features &
+			featuresVK13 () const noexcept
+			{
+				return m_featuresVK13;
+			}
+
+			/**
+			 * @brief Returns prefetched physical device properties structure (VK11).
+			 * @return const VkPhysicalDeviceProperties2 &
+			 */
+			[[nodiscard]]
+			const VkPhysicalDeviceProperties2 &
+			properties () const noexcept
+			{
+				return m_properties;
+			}
+
+			/**
+			 * @brief Returns prefetched physical device properties from Vulkan 1.0 API.
 			 * @return const VkPhysicalDeviceProperties &
 			 */
 			[[nodiscard]]
 			const VkPhysicalDeviceProperties &
-			properties () const noexcept
+			propertiesVK10 () const noexcept
 			{
-				return m_properties;
+				return m_properties.properties;
+			}
+
+			/**
+			 * @brief Returns prefetched physical device properties from Vulkan 1.1 API.
+			 * @return const VkPhysicalDeviceVulkan11Properties &
+			 */
+			[[nodiscard]]
+			const VkPhysicalDeviceVulkan11Properties &
+			propertiesVK11 () const noexcept
+			{
+				return m_propertiesVK11;
+			}
+
+			/**
+			 * @brief Returns prefetched physical device properties from Vulkan 1.2 API.
+			 * @return const VkPhysicalDeviceVulkan12Properties &
+			 */
+			[[nodiscard]]
+			const VkPhysicalDeviceVulkan12Properties &
+			propertiesVK12 () const noexcept
+			{
+				return m_propertiesVK12;
+			}
+
+			/**
+			 * @brief Returns prefetched physical device properties from Vulkan 1.3 API.
+			 * @return const VkPhysicalDeviceVulkan13Properties &
+			 */
+			[[nodiscard]]
+			const VkPhysicalDeviceVulkan13Properties &
+			propertiesVK13 () const noexcept
+			{
+				return m_propertiesVK13;
 			}
 
 			/**
@@ -98,7 +187,7 @@ namespace EmEn::Vulkan
 			std::string
 			deviceType () const noexcept
 			{
-				switch ( m_properties.deviceType )
+				switch ( m_properties.properties.deviceType )
 				{
 					case VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU :
 						return "Integrated GPU device";
@@ -127,7 +216,7 @@ namespace EmEn::Vulkan
 			std::string
 			deviceName () const noexcept
 			{
-				return m_properties.deviceName;
+				return m_properties.properties.deviceName;
 			}
 
 			/**
@@ -139,7 +228,7 @@ namespace EmEn::Vulkan
 			Libs::Version
 			APIDriver () const noexcept
 			{
-				return Libs::Version{m_properties.apiVersion};
+				return Libs::Version{m_properties.properties.apiVersion};
 			}
 
 			/**
@@ -163,7 +252,7 @@ namespace EmEn::Vulkan
 			Libs::Version
 			DriverVersion () const noexcept
 			{
-				return Libs::Version{m_properties.driverVersion};
+				return Libs::Version{m_properties.properties.driverVersion};
 			}
 
 			/**
@@ -187,28 +276,28 @@ namespace EmEn::Vulkan
 			std::string
 			vendorId () const noexcept
 			{
-				switch ( m_properties.vendorID )
+				switch ( m_properties.properties.vendorID )
 				{
 					case 0x1002 :
-						return "AMD (" + std::to_string(m_properties.vendorID) + ")";
+						return "AMD (" + std::to_string(m_properties.properties.vendorID) + ")";
 
 					case 0x1010 :
-						return "ImgTec (" + std::to_string(m_properties.vendorID) + ")";
+						return "ImgTec (" + std::to_string(m_properties.properties.vendorID) + ")";
 
 					case 0x10DE :
-						return "Nvidia (" + std::to_string(m_properties.vendorID) + ")";
+						return "Nvidia (" + std::to_string(m_properties.properties.vendorID) + ")";
 
 					case 0x13B5 :
-						return "ARM (" + std::to_string(m_properties.vendorID) + ")";
+						return "ARM (" + std::to_string(m_properties.properties.vendorID) + ")";
 
 					case 0x5143 :
-						return "Qualcomm (" + std::to_string(m_properties.vendorID) + ")";
+						return "Qualcomm (" + std::to_string(m_properties.properties.vendorID) + ")";
 
 					case 0x8086 :
-						return "Intel (" + std::to_string(m_properties.vendorID) + ")";
+						return "Intel (" + std::to_string(m_properties.properties.vendorID) + ")";
 
 					default :
-						return std::to_string(m_properties.vendorID);
+						return std::to_string(m_properties.properties.vendorID);
 				}
 			}
 
@@ -221,7 +310,7 @@ namespace EmEn::Vulkan
 			std::string
 			deviceId () const noexcept
 			{
-				return std::to_string(m_properties.deviceID);
+				return std::to_string(m_properties.properties.deviceID);
 			}
 
 			/**
@@ -233,27 +322,38 @@ namespace EmEn::Vulkan
 			std::string
 			pipelineCacheUUID () const noexcept
 			{
-				return PhysicalDevice::UUIDToString(m_properties.pipelineCacheUUID);
+				return PhysicalDevice::UUIDToString(m_properties.properties.pipelineCacheUUID);
 			}
 
 			/**
-			 * @brief Returns prefetched physical device memory properties.
+			 * @brief Returns prefetched physical device memory properties from Vulkan 1.0.
 			 * @return const VkPhysicalDeviceMemoryProperties &
 			 */
 			[[nodiscard]]
 			const VkPhysicalDeviceMemoryProperties &
-			memoryProperties () const noexcept
+			memoryPropertiesVK10 () const noexcept
+			{
+				return m_memoryProperties.memoryProperties;
+			}
+
+			/**
+			 * @brief Returns prefetched physical device memory properties from Vulkan 1.1.
+			 * @return const VkPhysicalDeviceMemoryProperties2 &
+			 */
+			[[nodiscard]]
+			const VkPhysicalDeviceMemoryProperties2 &
+			memoryPropertiesVK11 () const noexcept
 			{
 				return m_memoryProperties;
 			}
 
 			/**
-			 * @brief Returns prefetched physical device queue family properties.
-			 * @return const std::vector< VkQueueFamilyProperties > &
+			 * @brief Returns prefetched physical device queue family properties from Vulkan 1.1.
+			 * @return const std::vector< VkQueueFamilyProperties2 > &
 			 */
 			[[nodiscard]]
-			const std::vector< VkQueueFamilyProperties > &
-			queueFamilyProperties () const noexcept
+			const std::vector< VkQueueFamilyProperties2 > &
+			queueFamilyPropertiesVK11 () const noexcept
 			{
 				return m_queueFamilyProperties;
 			}
@@ -508,10 +608,16 @@ namespace EmEn::Vulkan
 		private:
 
 			VkPhysicalDevice m_physicalDevice;
-			VkPhysicalDeviceFeatures m_features{};
-			VkPhysicalDeviceProperties m_properties{};
-			VkPhysicalDeviceMemoryProperties m_memoryProperties{};
-			std::vector< VkQueueFamilyProperties > m_queueFamilyProperties;
+			VkPhysicalDeviceFeatures2 m_features{};
+			VkPhysicalDeviceVulkan11Features m_featuresVK11{};
+			VkPhysicalDeviceVulkan12Features m_featuresVK12{};
+			VkPhysicalDeviceVulkan13Features m_featuresVK13{};
+			VkPhysicalDeviceProperties2 m_properties{};
+			VkPhysicalDeviceVulkan11Properties m_propertiesVK11{};
+			VkPhysicalDeviceVulkan12Properties m_propertiesVK12{};
+			VkPhysicalDeviceVulkan13Properties m_propertiesVK13{};
+			VkPhysicalDeviceMemoryProperties2 m_memoryProperties{};
+			std::vector< VkQueueFamilyProperties2 > m_queueFamilyProperties;
 			std::vector< VkPhysicalDeviceToolProperties > m_toolProperties;
 			std::vector< VkDisplayPropertiesKHR > m_displayProperties;
 			std::vector< VkDisplayPlanePropertiesKHR > m_displayPlaneProperties;

@@ -60,7 +60,7 @@ namespace EmEn::Vulkan
 
 		if ( !queueFamilyIndex.has_value() )
 		{
-			TraceError{ClassId} << "The physical device '" << physicalDevice->properties().deviceName << "' doesn't support graphics !";
+			TraceError{ClassId} << "The physical device '" << physicalDevice->propertiesVK10().deviceName << "' doesn't support graphics !";
 
 			return false;
 		}
@@ -69,7 +69,7 @@ namespace EmEn::Vulkan
 
 		if ( !m_supported )
 		{
-			TraceError{ClassId} << "The physical device '" << physicalDevice->properties().deviceName << "' doesn't support graphics presentation !";
+			TraceError{ClassId} << "The physical device '" << physicalDevice->propertiesVK10().deviceName << "' doesn't support graphics presentation !";
 
 			return false;
 		}

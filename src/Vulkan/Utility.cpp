@@ -172,7 +172,7 @@ namespace EmEn::Vulkan
 
 		std::stringstream output;
 
-		output << "Validation layers available :" "\n";
+		output << "Vulkan validation layers available on the sy :" "\n";
 
 		for ( const auto & validationLayer : validationLayers )
 		{

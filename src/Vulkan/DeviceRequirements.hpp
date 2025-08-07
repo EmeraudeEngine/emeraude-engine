@@ -58,7 +58,18 @@ namespace EmEn::Vulkan
 			DeviceRequirements (DeviceJobHint deviceJobHint) noexcept
 				: m_deviceJobHint{deviceJobHint}
 			{
-
+				/* NOTE: Device features from Vulkan 1.3 API. */
+				m_featuresVK13.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
+				m_featuresVK13.pNext = nullptr;
+				/* NOTE: Device features from Vulkan 1.2 API. */
+				m_featuresVK12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
+				m_featuresVK12.pNext = &m_featuresVK13;
+				/* NOTE: Device features from Vulkan 1.1 API. */
+				m_featuresVK11.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES;
+				m_featuresVK11.pNext = &m_featuresVK12;
+				/* NOTE: Device features from Vulkan 1.0 API. */
+				m_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+				m_features.pNext = &m_featuresVK11;
 			}
 
 			/**
@@ -73,25 +84,102 @@ namespace EmEn::Vulkan
 			}
 
 			/**
-			 * @brief Gives access to device features to configure it.
+			 * @brief Returns the physical device features.
+			 * @return const VkPhysicalDeviceFeatures2 &
+			 */
+			[[nodiscard]]
+			const VkPhysicalDeviceFeatures2 &
+			features () const noexcept
+			{
+				return m_features;
+			}
+
+			/**
+			 * @brief Gives access to configure Vulkan 1.0 API device features.
 			 * @return VkPhysicalDeviceFeatures &
 			 */
 			[[nodiscard]]
 			VkPhysicalDeviceFeatures &
-			features () noexcept
+			featuresVK10 () noexcept
 			{
-				return m_deviceFeatures;
+				return m_features.features;
 			}
 
 			/**
-			 * @brief Returns the device feature for the createInfo.
+			 * @brief Returns the Vulkan 1.0 API device features for the createInfo.
 			 * @return const VkPhysicalDeviceFeatures &
 			 */
 			[[nodiscard]]
 			const VkPhysicalDeviceFeatures &
-			features () const noexcept
+			featuresVK10 () const noexcept
 			{
-				return m_deviceFeatures;
+				return m_features.features;
+			}
+
+			/**
+			 * @brief Gives access to configure Vulkan 1.1 API device features.
+			 * @return VkPhysicalDeviceVulkan11Features &
+			 */
+			[[nodiscard]]
+			VkPhysicalDeviceVulkan11Features &
+			featuresVK11 () noexcept
+			{
+				return m_featuresVK11;
+			}
+
+			/**
+			 * @brief Returns the Vulkan 1.1 API device features for the createInfo.
+			 * @return const VkPhysicalDeviceVulkan11Features &
+			 */
+			[[nodiscard]]
+			const VkPhysicalDeviceVulkan11Features &
+			featuresVK11 () const noexcept
+			{
+				return m_featuresVK11;
+			}
+
+			/**
+			 * @brief Gives access to configure Vulkan 1.2 API device features.
+			 * @return VkPhysicalDeviceVulkan11Features &
+			 */
+			[[nodiscard]]
+			VkPhysicalDeviceVulkan12Features &
+			featuresVK12 () noexcept
+			{
+				return m_featuresVK12;
+			}
+
+			/**
+			 * @brief Returns the Vulkan 1.2 API device features for the createInfo.
+			 * @return const VkPhysicalDeviceVulkan11Features &
+			 */
+			[[nodiscard]]
+			const VkPhysicalDeviceVulkan12Features &
+			featuresVK12 () const noexcept
+			{
+				return m_featuresVK12;
+			}
+
+			/**
+			 * @brief Gives access to configure Vulkan 1.3 API device features.
+			 * @return VkPhysicalDeviceVulkan13Features &
+			 */
+			[[nodiscard]]
+			VkPhysicalDeviceVulkan13Features &
+			featuresVK13 () noexcept
+			{
+				return m_featuresVK13;
+			}
+
+			/**
+			 * @brief Returns the Vulkan 1.3 API device features for the createInfo.
+			 * @return const VkPhysicalDeviceVulkan13Features &
+			 */
+			[[nodiscard]]
+			const VkPhysicalDeviceVulkan13Features &
+			featuresVK13 () const noexcept
+			{
+				return m_featuresVK13;
 			}
 
 			/**
@@ -302,7 +390,10 @@ namespace EmEn::Vulkan
 			friend std::ostream & operator<< (std::ostream & out, const DeviceRequirements & obj);
 
 			DeviceJobHint m_deviceJobHint;
-			VkPhysicalDeviceFeatures m_deviceFeatures{};
+			VkPhysicalDeviceFeatures2 m_features{};
+			VkPhysicalDeviceVulkan11Features m_featuresVK11{};
+			VkPhysicalDeviceVulkan12Features m_featuresVK12{};
+			VkPhysicalDeviceVulkan13Features m_featuresVK13{};
 			std::vector< float > m_graphicsQueues;
 			std::vector< float > m_graphicsTransferQueues;
 			std::vector< float > m_presentationQueues;

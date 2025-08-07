@@ -76,7 +76,7 @@ namespace EmEn::Graphics
 	SharedUniformBuffer::computeBlockAlignment (uint32_t maxElementCount) noexcept
 	{
 		/* NOTE: nvidia GTX 1070 : 65536 bytes and 256 bytes alignment, so 256 optimal elements. */
-		const auto & limits = m_device->physicalDevice()->properties().limits;
+		const auto & limits = m_device->physicalDevice()->propertiesVK10().limits;
 		const auto maxUBOSize = limits.maxUniformBufferRange;
 		const auto minUBOAlignment = limits.minUniformBufferOffsetAlignment;
 
@@ -218,7 +218,7 @@ namespace EmEn::Graphics
 	bool
 	SharedUniformBuffer::addBuffer () noexcept
 	{
-		const auto & limits = m_device->physicalDevice()->properties().limits;
+		const auto & limits = m_device->physicalDevice()->propertiesVK10().limits;
 		const auto chunkId = (std::stringstream{} << "Chunk#" << m_uniformBufferObjects.size()).str();
 
 		auto * uniformBufferObject = m_uniformBufferObjects.emplace_back(std::make_unique< UniformBufferObject >(m_device, limits.maxUniformBufferRange, m_blockAlignedSize)).get();
@@ -239,7 +239,7 @@ namespace EmEn::Graphics
 	bool
 	SharedUniformBuffer::addBuffer (Renderer & renderer, const descriptor_set_creator_t & descriptorSetCreator) noexcept
 	{
-		const auto & limits = m_device->physicalDevice()->properties().limits;
+		const auto & limits = m_device->physicalDevice()->propertiesVK10().limits;
 		const auto chunkId = (std::stringstream{} << "DynamicChunk#" << m_uniformBufferObjects.size()).str();
 
 		auto * uniformBufferObject = m_uniformBufferObjects.emplace_back(std::make_unique< UniformBufferObject >(m_device, limits.maxUniformBufferRange, m_blockAlignedSize)).get();
