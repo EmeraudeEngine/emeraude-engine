@@ -106,7 +106,7 @@ namespace EmEn::Vulkan
 	bool
 	LayoutManager::createDescriptorSetLayout (const std::shared_ptr< DescriptorSetLayout > & descriptorSetLayout) noexcept
 	{
-		/* NOTE : Descriptor set layout identifier must be unique. */
+		/* NOTE: Descriptor set layout identifier must be unique. */
 		if ( m_descriptorSetLayouts.contains(descriptorSetLayout->UUID()) )
 		{
 			TraceError{ClassId} << "The manager already holds a descriptor set layout named '" << descriptorSetLayout->UUID() << "' !";
@@ -114,7 +114,7 @@ namespace EmEn::Vulkan
 			return false;
 		}
 
-		/* NOTE : Do not save incomplete descriptor set layout. */
+		/* NOTE: Do not save incomplete descriptor set layout. */
 		if ( !descriptorSetLayout->createOnHardware() )
 		{
 			TraceError{ClassId} << "The descriptor set layout '" << descriptorSetLayout->UUID() << "' is not created !";
@@ -126,7 +126,7 @@ namespace EmEn::Vulkan
 	}
 
 	std::shared_ptr< PipelineLayout >
-	LayoutManager::getPipelineLayout (const std::vector< std::shared_ptr< DescriptorSetLayout > > & descriptorSetLayouts, const std::vector< VkPushConstantRange > & pushConstantRanges, VkPipelineLayoutCreateFlags createFlags) noexcept
+	LayoutManager::getPipelineLayout (const StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > & descriptorSetLayouts, const StaticVector< VkPushConstantRange, 4 > & pushConstantRanges, VkPipelineLayoutCreateFlags createFlags) noexcept
 	{
 		/* FIXME: Find a better way to create an UUID. */
 		std::stringstream pipelineLayoutUUIDStream;

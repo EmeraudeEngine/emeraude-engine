@@ -29,9 +29,9 @@
 /* STL inclusions. */
 #include <cstdint>
 #include <memory>
-#include <vector>
 
 /* Local inclusions for inheritances. */
+#include "Libs/StaticVector.hpp"
 #include "AbstractDeviceDependentObject.hpp"
 #include "RenderPass.hpp"
 
@@ -68,8 +68,6 @@ namespace EmEn::Vulkan
 				m_createInfo.width = extent.width;
 				m_createInfo.height = extent.height;
 				m_createInfo.layers = layerCount;
-
-				m_attachments.reserve(3);
 			}
 
 			/**
@@ -168,7 +166,7 @@ namespace EmEn::Vulkan
 			}
 
 			/**
-			 * @brief Returns the render pass associated to this framebuffer.
+			 * @brief Returns the render pass associated with this framebuffer.
 			 * @return std::shared_ptr< const RenderPass >
 			 */
 			[[nodiscard]]
@@ -183,6 +181,6 @@ namespace EmEn::Vulkan
 			VkFramebuffer m_handle{VK_NULL_HANDLE};
 			VkFramebufferCreateInfo m_createInfo{};
 			std::shared_ptr< const RenderPass > m_renderPass;
-			std::vector< VkImageView > m_attachments;
+			Libs::StaticVector< VkImageView, 8 > m_attachments;
 	};
 }

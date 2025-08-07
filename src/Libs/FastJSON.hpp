@@ -26,12 +26,17 @@
 
 #pragma once
 
+/* Application configuration. */
+#include "emeraude_config.hpp"
+
 /* STL inclusions. */
 #include <cstddef>
 #include <iostream>
 #include <string>
 #include <type_traits>
 #include <filesystem>
+#include <optional>
+#include <utility>
 
 /* Third-party inclusions. */
 #ifndef JSON_USE_EXCEPTION
@@ -40,11 +45,12 @@
 #include "json/json.h"
 
 /* Local inclusions. */
-#include "Libs/Math/Vector.hpp"
+#include "Libs/Math/Matrix.hpp"
 #include "Libs/PixelFactory/Color.hpp"
 
 namespace EmEn::Libs::FastJSON
 {
+	/* NOTE: Common JSON key. */
 	constexpr auto TypeKey{"Type"};
 	constexpr auto NameKey{"Name"};
 	constexpr auto PositionKey{"Position"};
@@ -60,373 +66,426 @@ namespace EmEn::Libs::FastJSON
 	constexpr auto ModeKey{"Mode"};
 	
 	/**
-	 * @brief Gets the root json node from a filepath.
+	 * @brief Gets the root JSON node from a filepath.
 	 * @param filepath A reference to a filesystem path.
-	 * @param root A writable reference to a Json::Value.
 	 * @param stackLimit The depth of JSON parsing. Default 16.
 	 * @param quiet Do not print console message. Default false.
-	 * @return bool
+	 * @return std::optional< Json::Value >
 	 */
 	[[nodiscard]]
-	bool getRootFromFile (const std::filesystem::path & filepath, Json::Value & root, int stackLimit = 16, bool quiet = false) noexcept;
+	std::optional< Json::Value > getRootFromFile (const std::filesystem::path & filepath, int stackLimit = 16, bool quiet = false);
 
 	/**
-	 * @brief Gets the root json node from a string.
+	 * @brief Gets the root JSON node from a string.
 	 * @param json A reference to a string.
-	 * @param root A writable reference to a Json::Value.
 	 * @param stackLimit The depth of JSON parsing. Default 16.
 	 * @param quiet Do not print console message. Default false.
-	 * @return bool
+	 * @return std::optional< Json::Value >
 	 */
 	[[nodiscard]]
-	bool getRootFromString (const std::string & json, Json::Value & root, int stackLimit = 16, bool quiet = false) noexcept;
+	std::optional< Json::Value > getRootFromString (const std::string & json, int stackLimit = 16, bool quiet = false);
 
 	/**
-	 * @brief Creates a compact standard string from a json value.
+	 * @brief Creates a compact standard string from a JSON node.
 	 * @param root A reference to a json value.
 	 * @return std::string
 	 */
 	[[nodiscard]]
-	std::string stringify (const Json::Value & root) noexcept;
+	std::string stringify (const Json::Value & root);
 
 	/**
-	 * @brief Gets a JSON array node.
-	 * @param data A reference to a json value.
-	 * @param JSONKey The json key name.
-	 * @param array A writable reference to a json value.
-	 * @return bool
+	 * @brief Gets a JSON array from a JSON node.
+	 * @param parentNode A reference to a json node.
+	 * @param key The json key name.
+	 * @return std::optional< Json::Value >
 	 */
 	[[nodiscard]]
-	bool getArray (const Json::Value & data, const char * JSONKey, Json::Value & array) noexcept;
-
-	/**
-	 * @brief Gets a JSON object node.
-	 * @param data A reference to a json value.
-	 * @param JSONKey The json key name.
-	 * @param object A writable reference to a json value.
-	 * @return bool
-	 */
-	[[nodiscard]]
-	bool getObject (const Json::Value & data, const char * JSONKey, Json::Value & object) noexcept;
-
-	/**
-	 * @brief Gets a number from a json node.
-	 * @param data A reference to a json value.
-	 * @param JSONKey The json key name.
-	 * @return std::string
-	 */
-	template< typename number_t >
-	[[nodiscard]]
-	number_t
-	getNumber (const Json::Value & data, const char * JSONKey) noexcept requires (std::is_arithmetic_v< number_t >)
+	inline
+	std::optional< Json::Value >
+	getArray (const Json::Value & parentNode, const char * key) noexcept
 	{
-		if ( !data.isMember(JSONKey) )
+		if ( !parentNode.isMember(key) )
 		{
-			std::cerr << "The key '" << JSONKey << "' is not present !" "\n";
+			if constexpr ( IsDebug )
+			{
+				std::cerr << "[FastJSON-DEBUG] Key '" << key << "' is missing !" << std::endl;
+			}
 
-			return static_cast< number_t >(0);
+			return std::nullopt;
 		}
 
-		if ( !data[JSONKey].isNumeric() )
-		{
-			std::cerr << "The key '" << JSONKey << "' is not numeric !" "\n";
+		const auto & node = parentNode[key];
 
-			return static_cast< number_t >(0);
+		if ( !node.isArray() )
+		{
+			if constexpr ( IsDebug )
+			{
+				std::cerr << "[FastJSON-DEBUG] Key '" << key << "' is not an array !" << std::endl;
+			}
+
+			return std::nullopt;
 		}
 
-		if constexpr ( std::is_same_v< number_t, int8_t > || std::is_same_v< number_t, int16_t> || std::is_same_v< number_t, int32_t > )
-		{
-			return static_cast< number_t >(data[JSONKey].asInt());
-		}
-
-		if constexpr ( std::is_same_v< number_t, int64_t > )
-		{
-			return data[JSONKey].asInt64();
-		}
-
-		if constexpr ( std::is_same_v< number_t, uint8_t > || std::is_same_v< number_t, uint16_t> || std::is_same_v< number_t, uint32_t > )
-		{
-			return data[JSONKey].asUInt();
-		}
-
-		if constexpr ( std::is_same_v< number_t, uint64_t > )
-		{
-			return data[JSONKey].asUInt64();
-		}
-
-		if constexpr ( std::is_same_v< number_t, float_t > )
-		{
-			return data[JSONKey].asFloat();
-		}
-
-		if constexpr ( std::is_same_v< number_t, double_t > )
-		{
-			return data[JSONKey].asDouble();
-		}
-
-		/* NOTE: Default behavior. */
-		return static_cast< number_t >(data[JSONKey].asInt());
+		return node;
 	}
 
 	/**
-	 * @brief Gets a number from a json node.
-	 * @param data A reference to a json value.
-	 * @param JSONKey The json key name.
-	 * @param defaultValue The default value.
-	 * @return std::string
+	 * @brief Gets a JSON object from a JSON node.
+	 * @param parentNode A reference to a json node.
+	 * @param key The json key name.
+	 * @return std::optional< Json::Value >
 	 */
-	template< typename number_t >
 	[[nodiscard]]
-	number_t
-	getNumber (const Json::Value & data, const char * JSONKey, number_t defaultValue) noexcept requires (std::is_arithmetic_v< number_t >)
+	inline
+	std::optional< Json::Value >
+	getObject (const Json::Value & parentNode, const char * key) noexcept
 	{
-		if ( !data.isMember(JSONKey) || !data[JSONKey].isNumeric() )
+		if ( !parentNode.isMember(key) )
 		{
-			return defaultValue;
+			if constexpr ( IsDebug )
+			{
+				std::cerr << "[FastJSON-DEBUG] Key '" << key << "' is missing !" << std::endl;
+			}
+
+			return std::nullopt;
 		}
 
-		if constexpr ( std::is_same_v< number_t, int8_t > || std::is_same_v< number_t, int16_t> || std::is_same_v< number_t, int32_t > )
+		const auto & node = parentNode[key];
+
+		if ( !node.isObject() )
 		{
-			return static_cast< number_t >(data[JSONKey].asInt());
+			if constexpr ( IsDebug )
+			{
+				std::cerr << "[FastJSON-DEBUG] Key '" << key << "' is not an object !" << std::endl;
+			}
+
+			return std::nullopt;
 		}
 
-		if constexpr ( std::is_same_v< number_t, int64_t > )
-		{
-			return data[JSONKey].asInt64();
-		}
-
-		if constexpr ( std::is_same_v< number_t, uint8_t > || std::is_same_v< number_t, uint16_t> || std::is_same_v< number_t, uint32_t > )
-		{
-			return data[JSONKey].asUInt();
-		}
-
-		if constexpr ( std::is_same_v< number_t, uint64_t > )
-		{
-			return data[JSONKey].asUInt64();
-		}
-
-		if constexpr ( std::is_same_v< number_t, float_t > )
-		{
-			return data[JSONKey].asFloat();
-		}
-
-		if constexpr ( std::is_same_v< number_t, double_t > )
-		{
-			return data[JSONKey].asDouble();
-		}
-
-		/* NOTE: Default behavior. */
-		return static_cast< number_t >(data[JSONKey].asInt());
+		return node;
 	}
 
 	/**
-	 * @brief Gets a boolean from a json node.
-	 * @param data A reference to a json value.
-	 * @param JSONKey The json key name.
-	 * @return std::string
+	 * @brief Returns a number from a JSON node.
+	 * @tparam value_t The type of the number.
+	 * @param parentNode A reference to a JSON node.
+	 * @param key The JSON key name to look for.
+	 * @return std::optional< value_t >
 	 */
+	template< typename value_t >
 	[[nodiscard]]
-	bool getBoolean (const Json::Value & data, const char * JSONKey) noexcept;
-
-	/**
-	 * @brief Gets a boolean from a json node.
-	 * @param data A reference to a json value.
-	 * @param JSONKey The json key name.
-	 * @param defaultValue The default value.
-	 * @return std::string
-	 */
-	[[nodiscard]]
-	bool getBoolean (const Json::Value & data, const char * JSONKey, bool defaultValue) noexcept;
-
-	/**
-	 * @brief Gets a string from a json node.
-	 * @param data A reference to a json value.
-	 * @param JSONKey The json key name.
-	 * @return std::string
-	 */
-	[[nodiscard]]
-	std::string getString (const Json::Value & data, const char * JSONKey) noexcept;
-
-	/**
-	 * @brief Gets a string from a json node.
-	 * @param data A reference to a json value.
-	 * @param JSONKey The json key name.
-	 * @param defaultValue The default value.
-	 * @return std::string
-	 */
-	[[nodiscard]]
-	std::string getString (const Json::Value & data, const char * JSONKey, const std::string & defaultValue) noexcept;
-
-	/**
-	 * @brief Gets a vector from a json node.
-	 * @tparam dim_t The dimension of the vector.
-	 * @tparam output_t The data type of the vector. Default float.
-	 * @param data A reference to a json value.
-	 * @param JSONKey The json key name.
-	 * @return Math::Vector< dim_t, output_t >
-	 */
-	template< size_t dim_t, typename output_t = float >
-	[[nodiscard]]
-	static
-	Math::Vector< dim_t, output_t >
-	getVector (const Json::Value & data, const char * JSONKey) noexcept requires (dim_t == 2 || dim_t == 3 || dim_t == 4) && std::is_arithmetic_v< output_t >
+	std::optional< value_t >
+	getValue (const Json::Value & parentNode, const char * key) noexcept requires (std::is_arithmetic_v< value_t >)
 	{
-		if ( !data.isMember(JSONKey) )
+		if ( !parentNode.isMember(key) )
 		{
-			std::cerr << "The key '" << JSONKey << "' is not present !" "\n";
+			if constexpr ( IsDebug )
+			{
+				std::cerr << "[FastJSON-DEBUG] Key '" << key << "' is missing !" << std::endl;
+			}
 
-			return {};
+			return std::nullopt;
 		}
 
-		const auto & vector = data[JSONKey];
+		const auto & node = parentNode[key];
 
-		if ( !vector.isArray() || vector.size() < dim_t )
+		if constexpr ( std::is_same_v< value_t, bool > )
 		{
-			std::cerr << "The key '" << JSONKey << "' is not an array of " << dim_t << " numbers !" "\n";
+			if ( node.isBool() )
+			{
+				return parentNode[key].asBool();
+			}
+		}
+		else
+		{
+			if ( node.isNumeric() )
+			{
+				if constexpr ( std::is_same_v< value_t, int8_t > || std::is_same_v< value_t, int16_t> || std::is_same_v< value_t, int32_t > )
+				{
+					return static_cast< value_t >(node.asInt());
+				}
 
-			return {};
+				if constexpr ( std::is_same_v< value_t, int64_t > )
+				{
+					return node.asInt64();
+				}
+
+				if constexpr ( std::is_same_v< value_t, uint8_t > || std::is_same_v< value_t, uint16_t> || std::is_same_v< value_t, uint32_t > )
+				{
+					return static_cast< value_t >(node.asUInt());
+				}
+
+				if constexpr ( std::is_same_v< value_t, uint64_t > )
+				{
+					return node.asUInt64();
+				}
+
+				if constexpr ( std::is_same_v< value_t, float_t > )
+				{
+					return node.asFloat();
+				}
+
+				if constexpr ( std::is_same_v< value_t, double_t > )
+				{
+					return node.asDouble();
+				}
+			}
 		}
 
-		if constexpr ( dim_t == 2 )
-		{ 
-			return {vector[0].asFloat(), vector[1].asFloat()};
+		if constexpr ( IsDebug )
+		{
+			std::cerr << "[FastJSON-DEBUG] Key '" << key << "' is not convertible to a numeric value !" << std::endl;
 		}
 
-		if constexpr ( dim_t == 3 )
-		{ 
-			return {vector[0].asFloat(), vector[1].asFloat(), vector[2].asFloat()};
-		}
-
-		if constexpr ( dim_t == 4 )
-		{ 
-			return {vector[0].asFloat(), vector[1].asFloat(), vector[2].asFloat(), vector[3].asFloat()};
-		}
-
-		return {};
+		return std::nullopt;
 	}
 
 	/**
-	 * @brief Gets a vector from a json node.
-	 * @tparam dim_t The dimension of the vector.
-	 * @tparam output_t The data type of the vector. Default float.
-	 * @param data A reference to a json value.
-	 * @param JSONKey The json key name.
-	 * @param defaultValue The default value.
-	 * @return Math::Vector< dim_t, output_t >
+	 * @brief Returns a string from a JSON node.
+	 * @tparam value_t The type of the variable. For overloading, this must be 'std::string'.
+	 * @param parentNode A reference to a JSON node.
+	 * @param key The JSON key name to look for.
+	 * @return std::optional< value_t >
 	 */
-	template< size_t dim_t, typename output_t = float >
+	template< typename value_t >
 	[[nodiscard]]
-	static
-	Math::Vector< dim_t, output_t >
-	getVector (const Json::Value & data, const char * JSONKey, const Math::Vector< dim_t, output_t > & defaultValue) noexcept requires (dim_t == 2 || dim_t == 3 || dim_t == 4) && std::is_arithmetic_v< output_t >
+	std::optional< value_t >
+	getValue (const Json::Value & parentNode, const char * key) requires (std::is_same_v< value_t, std::string >)
 	{
-		if ( !data.isMember(JSONKey) )
+		if ( !parentNode.isMember(key) )
 		{
-			return defaultValue;
+			if constexpr ( IsDebug )
+			{
+				std::cerr << "[FastJSON-DEBUG] Key '" << key << "' is missing !" << std::endl;
+			}
+
+			return std::nullopt;
 		}
 
-		const auto & vector = data[JSONKey];
+		const auto & node = parentNode[key];
 
-		if ( !vector.isArray() || vector.size() < dim_t )
+		if ( !node.isString() )
 		{
-			return defaultValue;
+			if constexpr ( IsDebug )
+			{
+				std::cerr << "[FastJSON-DEBUG] Key '" << key << "' is not a string !" << std::endl;
+			}
+
+			return std::nullopt;
 		}
 
-		if constexpr ( dim_t == 2 )
-		{
-			return {vector[0].asFloat(), vector[1].asFloat()};
-		}
-
-		if constexpr ( dim_t == 3 )
-		{
-			return {vector[0].asFloat(), vector[1].asFloat(), vector[2].asFloat()};
-		}
-
-		if constexpr ( dim_t == 4 )
-		{
-			return {vector[0].asFloat(), vector[1].asFloat(), vector[2].asFloat(), vector[3].asFloat()};
-		}
-
-		return defaultValue;
+		return node.asString();
 	}
 
 	/**
-	 * @brief Gets a color from a json node.
-	 * @tparam output_t The data type of the color. Must be a floating point number. Default float.
-	 * @param data  A reference to a json value.
-	 * @param JSONKey The json key name.
-	 * @return PixelFactory::Color< output_t >
+	 * @brief Helper to choose the correct function to cast a number.
+	 * @tparam precision_t The type of precision to cast
 	 */
-	template< typename output_t = float >
-	[[nodiscard]]
-	static
-	PixelFactory::Color< output_t >
-	getColor (const Json::Value & data, const char * JSONKey) noexcept requires (std::is_floating_point_v< output_t >)
+	template< typename precision_t >
+	struct JsonValueCaster;
+
+	/**
+	 * @brief Helper specialization for float casting.
+	 */
+	template<>
+	struct JsonValueCaster< float >
 	{
-		if ( !data.isMember(JSONKey) )
+		static
+		float
+		cast (const Json::Value & node) noexcept
 		{
-			std::cerr << "The key '" << JSONKey << "' is not present !" "\n";
+			return node.asFloat();
+		}
+	};
 
-			return {};
+	/**
+	 * @brief Helper specialization for double casting.
+	 */
+	template<>
+	struct JsonValueCaster< double >
+	{
+		static
+		double
+		cast (const Json::Value & node) noexcept
+		{
+			return node.asDouble();
+		}
+	};
+
+	/**
+	 * @brief Helpers to constructs a multiple same parameters objects like vectors or matrices.
+	 * @tparam object_t The type of object to instantiate.
+	 * @tparam parameter_count The number of parameters.
+	 * @tparam Is
+	 * @param node A reference to a JSON node.
+	 * @return object_t
+	 */
+	template< typename object_t, typename parameter_count, std::size_t... Is >
+	object_t
+	createFromJsonImpl (const Json::Value & node, std::index_sequence< Is... >)
+	{
+		return object_t{ JsonValueCaster< parameter_count >::cast(node[static_cast< Json::Value::ArrayIndex >(Is)])... };
+	}
+
+	/**
+	 * @brief Returns a vector from a JSON node.
+	 * @tparam value_t The type of vector.
+	 * @param parentNode A reference to a JSON node.
+	 * @param key The JSON key name to look for.
+	 * @return std::optional< value_t >
+	 */
+	template< Math::VectorConcept value_t >
+	[[nodiscard]]
+	std::optional< value_t >
+	getValue (const Json::Value & parentNode, const char * key) noexcept
+	{
+		using Traits = Math::VectorTraits< value_t >;
+
+		if ( !parentNode.isMember(key) )
+		{
+			if constexpr ( IsDebug )
+			{
+				std::cerr << "[FastJSON-DEBUG] Key '" << key << "' is missing !" << std::endl;
+			}
+
+			return std::nullopt;
 		}
 
-		if ( !data[JSONKey].isArray() )
-		{
-			std::cerr << "The key '" << JSONKey << "' is not an array !" "\n";
+		const auto & node = parentNode[key];
 
-			return {};
+		if ( !node.isArray() || node.size() < Traits::dim )
+		{
+			if constexpr ( IsDebug )
+			{
+				std::cerr << "[FastJSON-DEBUG] Key '" << key << "' is not an array of " << Traits::dim << " items !" << std::endl;
+			}
+
+			return std::nullopt;
 		}
 
-		const auto & vector = data[JSONKey];
+		return createFromJsonImpl< value_t, typename Traits::precision >(node, std::make_index_sequence< Traits::dim >());
+	}
 
-		switch ( vector.size() )
+	/**
+	 * @brief Returns a matrix from a JSON node.
+	 * @tparam value_t The type of vector.
+	 * @param parentNode A reference to a JSON node.
+	 * @param key The JSON key name to look for.
+	 * @return std::optional< value_t >
+	 */
+	template< Math::MatrixConcept value_t >
+	[[nodiscard]]
+	std::optional< value_t >
+	getValue (const Json::Value & parentNode, const char * key) noexcept
+	{
+		using Traits = Math::MatrixTraits< value_t >;
+
+		constexpr size_t element_count = Traits::dim * Traits::dim;
+
+		if ( !parentNode.isMember(key) )
 		{
-			case 3 :
-				return {vector[0].asFloat(), vector[1].asFloat(), vector[2].asFloat()};
+			if constexpr ( IsDebug )
+			{
+				std::cerr << "[FastJSON-DEBUG] Key '" << key << "' is missing !" << std::endl;
+			}
 
-			case 4 :
-				return {vector[0].asFloat(), vector[1].asFloat(), vector[2].asFloat(), vector[3].asFloat()};
+			return std::nullopt;
+		}
+
+		const auto & node = parentNode[key];
+
+		if ( !node.isArray() || node.size() < element_count )
+		{
+			if constexpr ( IsDebug )
+			{
+				std::cerr << "[FastJSON-DEBUG] Key '" << key << "' is not an array of " << element_count << " items !" << std::endl;
+			}
+
+			return std::nullopt;
+		}
+
+		return createFromJsonImpl< value_t, typename Traits::precision >(node, std::make_index_sequence<element_count>());
+	}
+
+	/**
+	 * @brief Returns a color from a JSON node.
+	 * @tparam value_t The type of vector.
+	 * @param parentNode A reference to a JSON node.
+	 * @param key The JSON key name to look for.
+	 * @return std::optional< value_t >
+	 */
+	template< PixelFactory::ColorConcept value_t >
+	[[nodiscard]]
+	std::optional< value_t >
+	getValue (const Json::Value & parentNode, const char * key) noexcept
+	{
+		using precision_t = typename PixelFactory::ColorTraits< value_t >::precision;
+
+		if ( !parentNode.isMember(key) )
+		{
+			if constexpr ( IsDebug )
+			{
+				std::cerr << "[FastJSON-DEBUG] Key '" << key << "' is missing !" << std::endl;
+			}
+
+			return std::nullopt;
+		}
+
+		const auto & node = parentNode[key];
+
+		if ( !node.isArray() )
+		{
+			if constexpr ( IsDebug )
+			{
+				std::cerr << "[FastJSON-DEBUG] Key '" << key << "' is not an array !" << std::endl;
+			}
+
+			return std::nullopt;
+		}
+
+		switch ( node.size() )
+		{
+			case 3:
+				return createFromJsonImpl< value_t, precision_t >(node, std::make_index_sequence< 3 >());
+
+			case 4:
+				return createFromJsonImpl< value_t, precision_t >(node, std::make_index_sequence< 4 >());
 
 			default:
-				std::cerr << "The key '" << JSONKey << "' is an invalid color !" "\n";
+				if constexpr ( IsDebug )
+				{
+					std::cerr << "[FastJSON-DEBUG] Key '" << key << "' cannot be converted to a color !" << std::endl;
+				}
 
-				return {};
+				return std::nullopt;
 		}
 	}
 
 	/**
-	 * @brief Gets a color from a json node.
-	 * @tparam output_t The data type of the color. Must be a floating point number. Default float.
-	 * @param data  A reference to a json value.
-	 * @param JSONKey The json key name.
-	 * @param defaultValue The default value.
-	 * @return PixelFactory::Color< output_t >
+	 * @brief Gets a string from a json node using a list of valid terms.
+	 * @param data A reference to a json value.
+	 * @param key The json key name.
+	 * @param possibleValues An array of allowed string values.
+	 * @return std::optional< std::string >, The string value if it's found and valid, otherwise std::nullopt.
 	 */
-	template< typename output_t = float >
+	template< size_t dim_t >
 	[[nodiscard]]
-	static
-	PixelFactory::Color< output_t >
-	getColor (const Json::Value & data, const char * JSONKey, const PixelFactory::Color< output_t > & defaultValue) noexcept requires (std::is_floating_point_v< output_t >)
+	std::optional< std::string >
+	getValidatedStringValue (const Json::Value & data, std::string_view key, const std::array< std::string_view, dim_t > & possibleValues) requires (dim_t > 0)
 	{
-		if ( !data.isMember(JSONKey) || !data[JSONKey].isArray() )
+		if ( const std::string keyString{key}; data.isMember(keyString) )
 		{
-			return defaultValue;
+			if ( const auto & node = data[keyString]; node.isString() )
+			{
+				auto foundValue = node.asString();
+
+				if ( std::ranges::any_of(possibleValues, [&] (std::string_view value) {return value == foundValue;}) )
+				{
+					return foundValue;
+				}
+			}
 		}
 
-		const auto & vector = data[JSONKey];
-
-		switch ( vector.size() )
-		{
-			case 3 :
-				return {vector[0].asFloat(), vector[1].asFloat(), vector[2].asFloat()};
-
-			case 4 :
-				return {vector[0].asFloat(), vector[1].asFloat(), vector[2].asFloat(), vector[3].asFloat()};
-
-			default:
-				std::cerr << "The key '" << JSONKey << "' is an invalid color !" "\n";
-
-				return defaultValue;
-		}
+		return std::nullopt;
 	}
 }

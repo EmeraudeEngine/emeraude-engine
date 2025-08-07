@@ -109,7 +109,7 @@ namespace EmEn::Vulkan
 		m_flags[ServiceInitialized] = false;
 
 		/* FIXME: Seems unnecessary */
-		m_device->waitIdle("Destroying a transfert manager");
+		m_device->waitIdle("Destroying a transfer manager");
 
 		m_specificCommandPool.reset();
 		m_transferCommandPool.reset();
@@ -167,7 +167,7 @@ namespace EmEn::Vulkan
 	TransferManager::createStagingBuffer (size_t bytes) const noexcept
 	{
 		auto buffer = std::make_shared< StagingBuffer >(m_device, bytes);
-		buffer->setIdentifier((std::stringstream{} << "TransferManager-Buffer" << m_stagingBuffers.size() << "-StagingBuffer").str());
+		buffer->setIdentifier(ClassId, (std::stringstream{} << m_stagingBuffers.size() << "Bytes").str(), "StagingBuffer");
 
 		if ( !buffer->createOnHardware() )
 		{
@@ -290,7 +290,7 @@ namespace EmEn::Vulkan
 		const auto layerCount = dstImage.createInfo().arrayLayers;
 		const auto mipLevelCount = dstImage.createInfo().mipLevels;
 
-		/* NOTE: Work on transfer queue. */
+		/* NOTE: Work on the transfer queue. */
 		{
 			const auto commandBuffer = std::make_shared< CommandBuffer >(m_transferCommandPool, true);
 			commandBuffer->setIdentifier(ClassId, "StagingBufferToImage", "CommandBuffer");
@@ -374,7 +374,7 @@ namespace EmEn::Vulkan
 			/* FIXME: This causes a VK_ERROR_DEVICE_LOST (smart-pointer gone) */
 		}
 
-		/* NOTE: Work on graphics queue. */
+		/* NOTE: Work on the graphics queue. */
 		{
 			const auto commandBuffer = std::make_shared< CommandBuffer >(m_specificCommandPool, true);
 			commandBuffer->setIdentifier(ClassId, "PrepareImage", "CommandBuffer");

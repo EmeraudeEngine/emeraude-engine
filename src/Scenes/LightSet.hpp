@@ -46,10 +46,23 @@
 #include "Vulkan/DescriptorSet.hpp"
 
 /* Forward declarations. */
-namespace EmEn::Vulkan
+namespace EmEn
 {
-	class LayoutManager;
-	class DescriptorSetLayout;
+	namespace AVConsole
+	{
+		class Manager;
+	}
+
+	namespace Vulkan
+	{
+		class LayoutManager;
+		class DescriptorSetLayout;
+	}
+
+	namespace Scenes
+	{
+		class Scene;
+	}
 }
 
 namespace EmEn::Scenes
@@ -89,14 +102,8 @@ namespace EmEn::Scenes
 
 			/**
 			 * @brief Constructs a light set.
-			 * @param AVConsoleManager A reference to master control manager. Will gives access to graphics renderer.
 			 */
-			explicit
-			LightSet (AVConsole::Manager & AVConsoleManager) noexcept
-				: m_AVConsoleManager(AVConsoleManager)
-			{
-
-			}
+			LightSet () noexcept = default;
 
 			/**
 			 * @brief Copy constructor.
@@ -192,17 +199,18 @@ namespace EmEn::Scenes
 
 			/**
 			 * @brief Initializes the light set GPU resources.
-			 * @param sceneName A reference to a string.
+			 * @param scene A reference to a scene.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool initialize (const std::string & sceneName) noexcept;
+			bool initialize (Scene & scene) noexcept;
 
 			/**
 			 * @brief Releases the GPU resources.
+			 * @param scene A reference to a scene.
 			 * @return bool
 			 */
-			bool terminate () noexcept;
+			bool terminate (Scene & scene) noexcept;
 
 			/**
 			 * @brief Enables the use of a static lighting incorporated to the shaders.
@@ -355,46 +363,52 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			 * @brief Adds a directional light.
+			 * @brief Adds a directional light to the light set for the scene.
+			 * @param scene A reference to a scene.
 			 * @param light A smart pointer to the scene directional light.
 			 * @return void
 			 */
-			void add (const std::shared_ptr< Component::DirectionalLight > & light) noexcept;
+			void add (Scene & scene, const std::shared_ptr< Component::DirectionalLight > & light) noexcept;
 
 			/**
-			 * @brief Adds a point light.
+			 * @brief Adds a point light to the light set for the scene.
+			 * @param scene A reference to a scene.
 			 * @param light A smart pointer to the scene point light.
 			 * @return void
 			 */
-			void add (const std::shared_ptr< Component::PointLight > & light) noexcept;
+			void add (Scene & scene, const std::shared_ptr< Component::PointLight > & light) noexcept;
 
 			/**
-			 * @brief Adds a spotlight.
+			 * @brief Adds a spotlight to the light set for the scene.
+			 * @param scene A reference to a scene.
 			 * @param light A smart pointer to the scene spotlight.
 			 * @return void
 			 */
-			void add (const std::shared_ptr< Component::SpotLight > & light) noexcept;
+			void add (Scene & scene, const std::shared_ptr< Component::SpotLight > & light) noexcept;
 
 			/**
-			 * @brief Removes a directional light.
+			 * @brief Removes a directional light from the light set of the scene.
+			 * @param scene A reference to a scene.
 			 * @param light A smart pointer to the scene directional light.
 			 * @return void
 			 */
-			void remove (const std::shared_ptr< Component::DirectionalLight > & light) noexcept;
+			void remove (Scene & scene, const std::shared_ptr< Component::DirectionalLight > & light) noexcept;
 
 			/**
-			 * @brief Removes a point light.
+			 * @brief Removes a point light from the light set of the scene.
+			 * @param scene A reference to a scene.
 			 * @param light A smart pointer to the scene point light.
 			 * @return void
 			 */
-			void remove (const std::shared_ptr< Component::PointLight > & light) noexcept;
+			void remove (Scene & scene, const std::shared_ptr< Component::PointLight > & light) noexcept;
 
 			/**
-			 * @brief Removes a spotlight.
+			 * @brief Removes a spotlight from the light set of the scene.
+			 * @param scene A reference to a scene.
 			 * @param light A smart pointer to the scene spotlight.
 			 * @return void
 			 */
-			void remove (const std::shared_ptr< Component::SpotLight > & light) noexcept;
+			void remove (Scene & scene, const std::shared_ptr< Component::SpotLight > & light) noexcept;
 
 			/**
 			 * @brief Returns the light emitter list.
@@ -546,7 +560,6 @@ namespace EmEn::Scenes
 			static constexpr auto CreateAmbientFromLights{3UL};
 			static constexpr auto UseLightDistance{4UL};
 
-			AVConsole::Manager & m_AVConsoleManager;
 			std::shared_ptr< Graphics::SharedUniformBuffer > m_directionalLightBuffer;
 			std::shared_ptr< Graphics::SharedUniformBuffer > m_pointLightBuffer;
 			std::shared_ptr< Graphics::SharedUniformBuffer > m_spotLightBuffer;

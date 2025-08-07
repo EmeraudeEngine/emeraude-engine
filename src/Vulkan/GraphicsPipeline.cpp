@@ -52,7 +52,7 @@ namespace EmEn::Vulkan
 	size_t GraphicsPipeline::s_fakeHash{0};
 
 	bool
-	GraphicsPipeline::configureShaderStages (const std::vector< std::shared_ptr< ShaderModule > > & shaderModules) noexcept
+	GraphicsPipeline::configureShaderStages (const StaticVector< std::shared_ptr< ShaderModule >, 5 > & shaderModules) noexcept
 	{
 		for ( const auto & shaderModule : shaderModules )
 		{
@@ -324,7 +324,7 @@ namespace EmEn::Vulkan
 	}
 
 	bool
-	GraphicsPipeline::configureRasterizationState (VkPipelineRasterizationStateCreateInfo createInfo) noexcept
+	GraphicsPipeline::configureRasterizationState (const VkPipelineRasterizationStateCreateInfo & createInfo) noexcept
 	{
 		m_rasterizationState = createInfo;
 
@@ -515,7 +515,7 @@ namespace EmEn::Vulkan
 
 			switch ( renderPassType )
 			{
-				/* NOTE : This will perform a light color addition over the ambient pass. */
+				/* NOTE: This will perform a light color addition over the ambient pass. */
 				case RenderPassType::DirectionalLightPass :
 				case RenderPassType::DirectionalLightPassNoShadow :
 				case RenderPassType::PointLightPass :
@@ -619,7 +619,7 @@ namespace EmEn::Vulkan
 	}
 
 	bool
-	GraphicsPipeline::configureColorBlendState (const std::vector< VkPipelineColorBlendAttachmentState > & attachments, const VkPipelineColorBlendStateCreateInfo & createInfo) noexcept
+	GraphicsPipeline::configureColorBlendState (const StaticVector< VkPipelineColorBlendAttachmentState, 8 > & attachments, const VkPipelineColorBlendStateCreateInfo & createInfo) noexcept
 	{
 		m_colorBlendAttachments = attachments;
 		m_colorBlendState = createInfo;
@@ -631,7 +631,7 @@ namespace EmEn::Vulkan
 	}
 
 	bool
-	GraphicsPipeline::configureDynamicStates (const std::vector< VkDynamicState > & dynamicStates, VkPipelineDynamicStateCreateFlags flags) noexcept
+	GraphicsPipeline::configureDynamicStates (const StaticVector< VkDynamicState, 16 > & dynamicStates, VkPipelineDynamicStateCreateFlags flags) noexcept
 	{
 		if ( dynamicStates.empty() )
 		{
@@ -691,7 +691,7 @@ namespace EmEn::Vulkan
 			return false;
 		}
 
-		/* NOTE: it can be NULL if the pipeline is created with both VK_DYNAMIC_STATE_PRIMITIVE_RESTART_ENABLE,
+		/* NOTE: it can be NULL if the pipeline is created with both VK_DYNAMIC_STATE_PRIMITIVE_RESTART_ENABLE
 		 * and VK_DYNAMIC_STATE_PRIMITIVE_TOPOLOGY dynamic states set and dynamicPrimitiveTopologyUnrestricted is VK_TRUE.
 		 * It is ignored if the pipeline includes a mesh shader stage (VK_EXT_mesh_shader). */
 		if ( m_createInfo.pInputAssemblyState == nullptr && !this->hasDynamicState(VK_DYNAMIC_STATE_PRIMITIVE_RESTART_ENABLE) && !this->hasDynamicState(VK_DYNAMIC_STATE_PRIMITIVE_TOPOLOGY) )
@@ -713,7 +713,7 @@ namespace EmEn::Vulkan
 			}
 		}
 
-		/* NOTE: it can be NULL if the pipeline is created with both VK_DYNAMIC_STATE_VIEWPORT_WITH_COUNT,
+		/* NOTE: it can be NULL if the pipeline is created with both VK_DYNAMIC_STATE_VIEWPORT_WITH_COUNT
 		 * and VK_DYNAMIC_STATE_SCISSOR_WITH_COUNT dynamic states set. */
 		if ( m_createInfo.pViewportState == nullptr && !this->hasDynamicState(VK_DYNAMIC_STATE_VIEWPORT_WITH_COUNT) && !this->hasDynamicState(VK_DYNAMIC_STATE_SCISSOR_WITH_COUNT) )
 		{

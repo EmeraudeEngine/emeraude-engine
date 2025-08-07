@@ -27,8 +27,8 @@
 #include "Manager.hpp"
 
 /* STL inclusions. */
-#include <algorithm>
 #include <cstddef>
+#include <algorithm>
 #include <map>
 #include <memory>
 #include <ranges>
@@ -41,13 +41,12 @@
 #include "Graphics/Renderable/AbstractBackground.hpp"
 #include "Graphics/Renderable/SceneAreaInterface.hpp"
 #include "Graphics/Renderable/SeaLevelInterface.hpp"
-#include "Graphics/Renderer.hpp"
 #include "Resources/Manager.hpp"
 #include "PrimaryServices.hpp"
 
 namespace EmEn::Scenes
 {
-	using namespace EmEn::Libs;
+	using namespace Libs;
 	using namespace Graphics;
 
 	const size_t Manager::ClassUID{getClassUID(ClassId)};
@@ -55,7 +54,7 @@ namespace EmEn::Scenes
 	bool
 	Manager::onInitialize () noexcept
 	{
-		m_flags[ServiceInitialized] = true;
+		m_initialized = true;
 
 		this->registerToConsole();
 
@@ -65,9 +64,29 @@ namespace EmEn::Scenes
 	bool
 	Manager::onTerminate () noexcept
 	{
-		m_flags[ServiceInitialized] = false;
+		const std::lock_guard< std::mutex > lock{m_sceneListAccess};
 
-		this->deleteAllScenes();
+		m_initialized = false;
+
+		/* First, disable the possible current active scene. */
+		this->disableActiveScene();
+
+		/* Then, remove all scene one by one. */
+		for ( auto sceneIt = m_scenes.cbegin(); sceneIt != m_scenes.cend(); )
+		{
+			if ( sceneIt->second.use_count() > 1 )
+			{
+				TraceError{ClassId} << "The scene '" << sceneIt->first << "' smart pointer still have " << sceneIt->second.use_count() << " uses ! Force a call to Scene::destroy().";
+			}
+			else
+			{
+				TraceSuccess{ClassId} << "Removing scene '" << sceneIt->first << "' ...";
+			}
+
+			m_scenes.erase(sceneIt++);
+
+			this->notify(SceneDestroyed);
+		}
 
 		return true;
 	}
@@ -214,10 +233,9 @@ namespace EmEn::Scenes
 			std::stringstream list;
 			list << "Static entities : " "\n";
 
-			for ( const auto & key: scene->staticEntities() | std::views::keys )
-			{
-				list << " - '" <<  key << "'" "\n";
-			}
+			scene->forEachStaticEntities([&list] (const auto & entity) {
+				list << " - '" <<  entity.name() << "'" "\n";
+			});
 
 			outputs.emplace_back(Severity::Info, list.str());
 
@@ -300,6 +318,8 @@ namespace EmEn::Scenes
 	std::shared_ptr< Scene >
 	Manager::newScene (const std::string & sceneName, float boundary, const std::shared_ptr< Renderable::AbstractBackground > & background, const std::shared_ptr< Renderable::SceneAreaInterface > & sceneArea, const std::shared_ptr< Renderable::SeaLevelInterface > & seaLevel) noexcept
 	{
+		const std::lock_guard< std::mutex > lock{m_sceneListAccess};
+
 		if ( this->hasSceneNamed(sceneName) )
 		{
 			TraceError{ClassId} << "A scene named '" << sceneName << "' already exists ! Delete it first or enable it.";
@@ -327,7 +347,7 @@ namespace EmEn::Scenes
 			return {nullptr, nullptr};
 		}
 
-		/* If everything ok, let the scene definition load method continuing the job. */
+		/* If everything ok, let the scene definition load the method continuing the job. */
 		return this->loadScene(sceneDefinition);
 	}
 
@@ -352,7 +372,7 @@ namespace EmEn::Scenes
 			return {nullptr, sceneDefinition};
 		}
 
-		/* If everything ok, let the scene definition load method continuing the job. */
+		/* If everything ok, let the scene definition load the method continuing the job. */
 		return this->loadScene(sceneDefinition);
 	}
 
@@ -387,20 +407,24 @@ namespace EmEn::Scenes
 	void
 	Manager::refreshScenes () const noexcept
 	{
+		const std::lock_guard< std::mutex > lock{m_sceneListAccess};
+
+		/* FIXME: Check back this shit ! */
 		for ( const auto & scene : std::ranges::views::values(m_scenes) )
 		{
 			TraceInfo{ClassId} << "Refreshing scene '" << scene->name() << "' ...";
 
-			for ( const auto & renderTarget : scene->AVConsoleManager().renderToViews() )
-			{
+			scene->forEachRenderToView([&scene] (const auto & renderTarget) {
 				scene->refreshRenderableInstances(renderTarget);
-			}
+			});
 		}
 	}
 
 	bool
 	Manager::deleteScene (const std::string & sceneName) noexcept
 	{
+		const std::lock_guard< std::mutex > lock{m_sceneListAccess};
+
 		const auto sceneIt = m_scenes.find(sceneName);
 
 		if ( sceneIt == m_scenes.end() )
@@ -410,9 +434,13 @@ namespace EmEn::Scenes
 			return false;
 		}
 
-		/* NOTE: Disable the scene, if this is the one being deleted. */
-		if ( m_activeScene == sceneIt->second )
+		/* NOTE: Disable the scene if this is the one being deleted. */
+		if ( sceneIt->second == m_activeScene )
 		{
+			/* NOTE: This will lock the shared mutex here.
+			 * As long as we don't have any other code that locks these
+			 * two mutexes in reverse order (m_activeSceneSharedAccess -> m_sceneListAccess),
+			 * we are safe from a deadlock. */
 			this->disableActiveScene();
 		}
 
@@ -421,36 +449,6 @@ namespace EmEn::Scenes
 		this->notify(SceneDestroyed);
 
 		return true;
-	}
-
-	void
-	Manager::deleteAllScenes () noexcept
-	{
-		if ( m_scenes.empty() )
-		{
-			return;
-		}
-
-		/* First, disable the possible current active scene. */
-		this->disableActiveScene();
-
-		for ( auto sceneIt = m_scenes.cbegin(); sceneIt != m_scenes.cend(); )
-		{
-			if ( sceneIt->second.use_count() > 1 )
-			{
-				TraceError{ClassId} << "The scene '" << sceneIt->first << "' smart pointer still have " << sceneIt->second.use_count() << " uses ! Force a call to Scene::destroy().";
-
-				sceneIt->second->destroy();
-			}
-			else
-			{
-				TraceSuccess{ClassId} << "Removing scene '" << sceneIt->first << "' ...";
-			}
-
-			m_scenes.erase(sceneIt++);
-		}
-
-		this->notify(SceneDestroyed);
 	}
 
 	bool
@@ -464,7 +462,7 @@ namespace EmEn::Scenes
 		}
 
 		/* NOTE: Be sure the active is not currently used within the rendering or the logics update tasks. */
-		const std::unique_lock< std::shared_mutex > activeSceneLock{m_activeSceneAccess};
+		const std::unique_lock< std::shared_mutex > activeSceneLock{m_activeSceneSharedAccess};
 
 		if ( scene == nullptr )
 		{
@@ -474,7 +472,7 @@ namespace EmEn::Scenes
 		}
 
 		/* Checks whether the scene is usable and tries to complete it otherwise. */
-		if ( !scene->initialize(m_inputManager, m_primaryServices.settings()) )
+		if ( !scene->enable(m_inputManager, m_primaryServices.settings()) )
 		{
 			TraceError{ClassId} << "Unable to initialize the scene '" << scene->name() << "' !";
 
@@ -484,7 +482,7 @@ namespace EmEn::Scenes
 		m_activeScene = scene;
 
 		/* Send out a message that the scene has been activated. */
-		this->notify(SceneActivated, m_activeScene);
+		this->notify(SceneEnabled, m_activeScene);
 
 		TraceSuccess{ClassId} << "Scene '" << m_activeScene->name() << "' loaded !";
 
@@ -500,12 +498,12 @@ namespace EmEn::Scenes
 		}
 
 		/* NOTE: Be sure the active is not currently used within the rendering or the logics update tasks. */
-		const std::unique_lock< std::shared_mutex > activeSceneLock{m_activeSceneAccess};
+		const std::unique_lock< std::shared_mutex > activeSceneLock{m_activeSceneSharedAccess};
 
-		m_activeScene->shutdown(m_inputManager);
+		m_activeScene->disable(m_inputManager);
 
 		/* Send out a message that the scene has been deactivated. */
-		this->notify(SceneDeactivated, m_activeScene);
+		this->notify(SceneDisabled, m_activeScene);
 
 		m_activeScene.reset();
 
@@ -515,6 +513,8 @@ namespace EmEn::Scenes
 	std::vector< std::string >
 	Manager::getSceneNames () const noexcept
 	{
+		const std::lock_guard< std::mutex > lock{m_sceneListAccess};
+
 		if ( m_scenes.empty() )
 		{
 			return {};
@@ -532,6 +532,8 @@ namespace EmEn::Scenes
 	std::shared_ptr< Scene >
 	Manager::getScene (const std::string & sceneName) noexcept
 	{
+		const std::lock_guard< std::mutex > lock{m_sceneListAccess};
+
 		const auto sceneIt = m_scenes.find(sceneName);
 
 		if ( sceneIt == m_scenes.end() )
@@ -545,6 +547,8 @@ namespace EmEn::Scenes
 	std::shared_ptr< const Scene >
 	Manager::getScene (const std::string & sceneName) const noexcept
 	{
+		const std::lock_guard< std::mutex > lock{m_sceneListAccess};
+
 		const auto sceneIt = m_scenes.find(sceneName);
 
 		if ( sceneIt == m_scenes.cend() )

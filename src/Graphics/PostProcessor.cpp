@@ -38,7 +38,7 @@ namespace EmEn::Graphics
 	using namespace EmEn::Saphir;
 	using namespace EmEn::Vulkan;
 
-	PostProcessor::PostProcessor (unsigned int width, unsigned int height, unsigned int colorBufferBits, unsigned int depthBufferBits, unsigned int stencilBufferBits, unsigned int samples) noexcept
+	PostProcessor::PostProcessor (unsigned int /*width*/, unsigned int /*height*/, unsigned int /*colorBufferBits*/, unsigned int /*depthBufferBits*/, unsigned int /*stencilBufferBits*/, unsigned int /*samples*/) noexcept
 	{
 
 	}

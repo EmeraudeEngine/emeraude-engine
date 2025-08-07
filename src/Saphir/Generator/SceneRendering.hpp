@@ -106,7 +106,7 @@ namespace EmEn::Saphir::Generator
 
 			/** @copydoc EmEn::Saphir::Generator::Abstract::onCreateDataLayouts() */
 			[[nodiscard]]
-			bool onCreateDataLayouts (Graphics::Renderer & renderer, const SetIndexes & setIndexes, std::vector< std::shared_ptr< Vulkan::DescriptorSetLayout > > & descriptorSetLayouts, std::vector< VkPushConstantRange > & pushConstantRanges) noexcept override;
+			bool onCreateDataLayouts (Graphics::Renderer & renderer, const SetIndexes & setIndexes, Libs::StaticVector< std::shared_ptr< Vulkan::DescriptorSetLayout >, 4 > & descriptorSetLayouts, Libs::StaticVector< VkPushConstantRange, 4 > & pushConstantRanges) noexcept override;
 
 			/** @copydoc EmEn::Saphir::Generator::Abstract::onGraphicsPipelineConfiguration() */
 			[[nodiscard]]

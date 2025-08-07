@@ -26,6 +26,8 @@
 
 #include "Particle.hpp"
 
+#include "Scenes/Scene.hpp"
+
 namespace EmEn::Physics
 {
 	using namespace EmEn::Libs;
@@ -388,7 +390,7 @@ namespace EmEn::Physics
 	}
 
 	bool
-	Particle::updateSimulation (const PhysicalEnvironmentProperties & envProperties, const PhysicalObjectProperties & particleProperties, const CartesianFrame< float > & worldCoordinates, const std::set< std::shared_ptr< Scenes::Component::AbstractModifier > > & modifiers) noexcept
+	Particle::updateSimulation (const Scenes::Scene & scene, const PhysicalObjectProperties & particleProperties, const CartesianFrame< float > & worldCoordinates) noexcept
 	{
 		if ( particleProperties.isMassNull() )
 		{
@@ -396,12 +398,13 @@ namespace EmEn::Physics
 		}
 
 		/* Apply scene modifiers. */
-		for ( const auto & modifier : modifiers )
-		{
-			const auto force = modifier->getForceAppliedToEntity(worldCoordinates, this->localBoundingSphere());
+		scene.forEachModifiers([this, &worldCoordinates, &particleProperties] (const auto & modifier) {
+			const auto force = modifier.getForceAppliedToEntity(worldCoordinates, this->localBoundingSphere());
 
 			m_linearVelocity += force * particleProperties.inverseMass() * EngineUpdateCycleDurationS< float >;
-		}
+		});
+
+		const PhysicalEnvironmentProperties & envProperties = scene.physicalEnvironmentProperties();
 
 		/* Apply gravity. */
 		m_linearVelocity[Y] += envProperties.steppedSurfaceGravity();

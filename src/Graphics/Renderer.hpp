@@ -167,7 +167,7 @@ namespace EmEn::Graphics
 
 				s_instance = this;
 
-				m_flags[DebugMode] = m_vulkanInstance.isDebugModeEnabled();
+				m_debugMode = m_vulkanInstance.isDebugModeEnabled();
 
 				/* Framebuffer clear color value. */
 				this->setClearColor(Libs::PixelFactory::Black);
@@ -207,7 +207,7 @@ namespace EmEn::Graphics
 			bool
 			usable () const noexcept override
 			{
-				return m_flags[ServiceInitialized];
+				return m_serviceInitialized;
 			}
 
 			/**
@@ -238,7 +238,7 @@ namespace EmEn::Graphics
 			bool
 			isDebugModeEnabled () const noexcept
 			{
-				return m_flags[DebugMode];
+				return m_debugMode;
 			}
 
 			/**
@@ -249,7 +249,7 @@ namespace EmEn::Graphics
 			void
 			enableShadowMaps (bool state) noexcept
 			{
-				m_flags[ShadowMapsEnabled] = state;
+				m_shadowMapsEnabled = state;
 			}
 
 			/**
@@ -260,7 +260,7 @@ namespace EmEn::Graphics
 			bool
 			isShadowMapsEnabled () const noexcept
 			{
-				return m_flags[ShadowMapsEnabled];
+				return m_shadowMapsEnabled;
 			}
 
 			/**
@@ -271,7 +271,7 @@ namespace EmEn::Graphics
 			void
 			enableRenderToTextures (bool state) noexcept
 			{
-				m_flags[RenderToTexturesEnabled] = state;
+				m_renderToTexturesEnabled = state;
 			}
 
 			/**
@@ -282,7 +282,7 @@ namespace EmEn::Graphics
 			bool
 			isRenderToTexturesEnabled () const noexcept
 			{
-				return m_flags[RenderToTexturesEnabled];
+				return m_renderToTexturesEnabled;
 			}
 
 			/**
@@ -493,10 +493,10 @@ namespace EmEn::Graphics
 			getClearColor () const noexcept
 			{
 				return {
-						m_clearColors[0].color.float32[0],
-						m_clearColors[0].color.float32[1],
-						m_clearColors[0].color.float32[2],
-						m_clearColors[0].color.float32[3]
+					m_clearColors[0].color.float32[0],
+					m_clearColors[0].color.float32[1],
+					m_clearColors[0].color.float32[2],
+					m_clearColors[0].color.float32[3]
 				};
 			}
 
@@ -567,7 +567,7 @@ namespace EmEn::Graphics
 			}
 
 			/**
-			 * @brief Finalizes the graphics pipeline creation by replacing it by a similar or create and cache this new one.
+			 * @brief Finalizes the graphics pipeline creation by replacing it with a similar or create and cache this new one.
 			 * @param renderTarget A reference to a render target.
 			 * @param program A reference to the program.
 			 * @param graphicsPipeline A reference to the graphics pipeline smart pointer.
@@ -607,7 +607,6 @@ namespace EmEn::Graphics
 			 * @todo This method must be removed!
 			 * @return Renderer *
 			 */
-			//[[deprecated("This method must be removed !")]]
 			[[nodiscard]]
 			static
 			Renderer *
@@ -718,15 +717,9 @@ namespace EmEn::Graphics
 			std::map< size_t, std::shared_ptr< Vulkan::Sampler > > m_samplers;
 			Libs::Time::Statistics::RealTime< std::chrono::high_resolution_clock > m_statistics{30};
 			std::array< VkClearValue, 2 > m_clearColors{};
-			std::array< bool, 8 > m_flags{
-				false/*ServiceInitialized*/,
-				false/*DebugMode*/,
-				true/*ShadowMapsEnabled*/,
-				true/*RenderToTexturesEnabled*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/
-			};
+			bool m_serviceInitialized{false};
+			bool m_debugMode{false};
+			bool m_shadowMapsEnabled{true};
+			bool m_renderToTexturesEnabled{true};
 	};
 }

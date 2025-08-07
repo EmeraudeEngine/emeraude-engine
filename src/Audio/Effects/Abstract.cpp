@@ -44,7 +44,7 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		if ( !EFX::isAvailable() )
+		if ( !OpenAL::isEFXAvailable() )
 		{
 			Tracer::warning(TracerTag, "OpenAL EFX is not supported !");
 
@@ -53,7 +53,7 @@ namespace EmEn::Audio::Effects
 
 		alFlushErrors();
 
-		EFX::alGenEffects(1, this->identifierPointer());
+		OpenAL::alGenEffects(1, this->identifierPointer());
 
 		if ( alGetErrors("alGenEffects()", __FILE__, __LINE__) || this->identifier() <= 0 )
 		{
@@ -65,14 +65,14 @@ namespace EmEn::Audio::Effects
 
 	Abstract::~Abstract ()
 	{
-		if ( !EFX::isAvailable() )
+		if ( !OpenAL::isEFXAvailable() )
 		{
 			return;
 		}
 
 		if ( this->isCreated() )
 		{
-			EFX::alDeleteEffects(1, this->identifierPointer());
+			OpenAL::alDeleteEffects(1, this->identifierPointer());
 		}
 
 		this->resetIdentifier();
@@ -81,11 +81,11 @@ namespace EmEn::Audio::Effects
 	bool
 	Abstract::isCreated () const noexcept
 	{
-		if ( !EFX::isAvailable() || this->identifier() <= 0 )
+		if ( !OpenAL::isEFXAvailable() || this->identifier() <= 0 )
 		{
 			return false;
 		}
 
-		return EFX::alIsEffect(this->identifier()) == AL_TRUE;
+		return OpenAL::alIsEffect(this->identifier()) == AL_TRUE;
 	}
 }

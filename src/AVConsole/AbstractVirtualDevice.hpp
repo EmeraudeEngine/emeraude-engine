@@ -29,8 +29,10 @@
 /* STL inclusions. */
 #include <cstddef>
 #include <memory>
-#include <set>
+#include <mutex>
+#include <unordered_set>
 #include <string>
+#include <atomic>
 
 /* Local inclusions for usages. */
 #include "Libs/Math/CartesianFrame.hpp"
@@ -50,27 +52,27 @@ namespace EmEn::AVConsole
 			 * @brief Copy constructor.
 			 * @param copy A reference to the copied instance.
 			 */
-			AbstractVirtualDevice (const AbstractVirtualDevice & copy) noexcept = default;
+			AbstractVirtualDevice (const AbstractVirtualDevice & copy) noexcept = delete;
 
 			/**
 			 * @brief Move constructor.
 			 * @param copy A reference to the copied instance.
 			 */
-			AbstractVirtualDevice (AbstractVirtualDevice && copy) noexcept = default;
+			AbstractVirtualDevice (AbstractVirtualDevice && copy) noexcept = delete;
 
 			/**
 			 * @brief Copy assignment.
 			 * @param copy A reference to the copied instance.
 			 * @return AbstractVirtualDevice &
 			 */
-			AbstractVirtualDevice & operator= (const AbstractVirtualDevice & copy) noexcept = default;
+			AbstractVirtualDevice & operator= (const AbstractVirtualDevice & copy) noexcept = delete;
 
 			/**
 			 * @brief Move assignment.
 			 * @param copy A reference to the copied instance.
 			 * @return AbstractVirtualDevice &
 			 */
-			AbstractVirtualDevice & operator= (AbstractVirtualDevice && copy) noexcept = default;
+			AbstractVirtualDevice & operator= (AbstractVirtualDevice && copy) noexcept = delete;
 
 			/**
 			 * @brief Destructs an abstract device.
@@ -111,110 +113,164 @@ namespace EmEn::AVConsole
 			}
 
 			/**
-			 * @brief Returns whether at least one virtual device is connected as input.
+			 * @brief Returns whether at least one virtual device is connected as an input.
 			 * @return bool
 			 */
 			[[nodiscard]]
 			bool
 			hasInputConnected () const noexcept
 			{
-				return !m_inputs.empty();
+				const std::lock_guard< std::mutex > lock{m_IOAccess};
+
+				return !m_inputDevicesConnected.empty();
 			}
 
 			/**
-			 * @brief Returns all virtual devices connected to input.
-			 * @return const std::set< std::shared_ptr< AbstractVirtualAudioDevice > > &
-			 */
-			[[nodiscard]]
-			const std::set< std::shared_ptr< AbstractVirtualDevice > > &
-			inputs () const noexcept
-			{
-				return m_inputs;
-			}
-
-			/**
-			 * @brief Returns whether at least one virtual device is connected as output.
+			 * @brief Returns whether at least one virtual device is connected as an output.
 			 * @return bool
 			 */
 			[[nodiscard]]
 			bool
 			hasOutputConnected () const noexcept
 			{
-				return !m_outputs.empty();
+				const std::lock_guard< std::mutex > lock{m_IOAccess};
+
+				return !m_outputDevicesConnected.empty();
 			}
 
 			/**
-			 * @brief Returns all virtual devices connected to output.
-			 * @return const std::set< std::shared_ptr< AbstractVirtualAudioDevice > > &
+			 * @brief Executes a function over each input.
+			 * @tparam function_t The type of function. Signature: void (const std::shared_ptr< AbstractVirtualDevice > &)
+			 * @param processInput
+			 * @return void
 			 */
-			[[nodiscard]]
-			const std::set< std::shared_ptr< AbstractVirtualDevice > > &
-			outputs () const noexcept
+			template< typename function_t >
+			void
+			forEachInputs (function_t && processInput) const noexcept requires (std::is_invocable_v< function_t, const std::shared_ptr< AbstractVirtualDevice > & >)
 			{
-				return m_outputs;
+				const std::lock_guard< std::mutex > lock{m_IOAccess};
+
+				for ( const auto & input : m_inputDevicesConnected )
+				{
+					processInput(input.lock());
+				}
+			}
+
+			/**
+			 * @brief Executes a function over each output.
+			 * @tparam function_t The type of function. Signature: void (const std::shared_ptr< AbstractVirtualDevice > &)
+			 * @param processOutput
+			 * @return void
+			 */
+			template< typename function_t >
+			void
+			forEachOutputs (function_t && processOutput) const noexcept requires (std::is_invocable_v< function_t, const std::shared_ptr< AbstractVirtualDevice > & >)
+			{
+				const std::lock_guard< std::mutex > lock{m_IOAccess};
+
+				for ( const auto & output : m_outputDevicesConnected )
+				{
+					processOutput(output.lock());
+				}
 			}
 
 			/**
 			 * @brief Returns whether a device is connected.
 			 * @param device A reference to a virtual device smart pointer.
-			 * @param direction The connexion direction tested. Both means as input or output.
+			 * @param direction The connexion direction tested. ConnexionType::Both means as input or output.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool isConnectedWith (const std::shared_ptr< AbstractVirtualDevice > & device, ConnexionType direction) const noexcept;
+			bool
+			isConnectedWith (const std::shared_ptr< AbstractVirtualDevice > & device, ConnexionType direction) const noexcept
+			{
+				const std::lock_guard< std::mutex > lock{m_IOAccess};
+
+				if ( direction == ConnexionType::Input || direction == ConnexionType::Both )
+				{
+					return m_inputDevicesConnected.contains(device);
+				}
+
+				/* NOTE: Both are already tested above. */
+				if ( direction == ConnexionType::Output /*|| direction == ConnexionType::Both*/ )
+				{
+					return m_outputDevicesConnected.contains(device);
+				}
+
+				return false;
+			}
 
 			/**
-			 * @brief Checks if a device can be connected to output.
+			 * @brief Checks if a target device input can be connected to this device output.
 			 * @param targetDevice A reference to a virtual device smart pointer.
-			 * @return bool
+			 * @return ConnexionResult
 			 */
 			[[nodiscard]]
-			bool canConnect (const std::shared_ptr< AbstractVirtualDevice > & targetDevice) const noexcept;
+			ConnexionResult
+			canConnect (const std::shared_ptr< AbstractVirtualDevice > & targetDevice) const noexcept
+			{
+				/* NOTE: Avoid connecting an audio device with a video device -> non sens! */
+				if ( m_type != targetDevice->m_type )
+				{
+					return ConnexionResult::DifferentDeviceType;
+				}
+
+				/* NOTE: As connexions go from device output to another device input, this device must allow outputting! */
+				if ( m_allowedConnexionType == ConnexionType::Input || targetDevice->m_allowedConnexionType == ConnexionType::Output )
+				{
+					return ConnexionResult::NotAllowed;
+				}
+
+				return ConnexionResult::Success;
+			}
 
 			/**
 			 * @brief Connects a virtual device to output.
 			 * @note this[Output] -> target[Input]
 			 * @param managers A reference to the audio video managers.
 			 * @param targetDevice A reference to a virtual device smart pointer.
-			 * @param quietly Do not fire connexion event. Default false.
-			 * @return bool
+			 * @param fireEvents Set to fire or not events on connexion.
+			 * @return ConnexionResult
 			 */
-			bool connect (AVManagers & managers, const std::shared_ptr< AbstractVirtualDevice > & targetDevice, bool quietly = false) noexcept;
-
-			/**
-			 * @brief Interconnects a virtual device between an existing output.
-			 * @note this[Output] -> target[Input]
-			 * @param managers A reference to the audio video managers.
-			 * @param targetDevice A reference to a virtual device smart pointer.
-			 * @return bool
-			 */
-			bool interconnect (AVManagers & managers, const std::shared_ptr< AbstractVirtualDevice > & targetDevice) noexcept;
+			ConnexionResult connect (AVManagers & managers, const std::shared_ptr< AbstractVirtualDevice > & targetDevice, bool fireEvents) noexcept;
 
 			/**
 			 * @brief Interconnects a virtual device between all existing outputs.
 			 * @note this[Output] -> target[Input]
 			 * @param managers A reference to the audio video managers.
-			 * @param targetDevice A reference to a virtual device smart pointer.
-			 * @param outputDeviceName A reference to a string.
-			 * @return bool
+			 * @param intermediateDevice A reference to a virtual device smart pointer.
+			 * @param fireEvents Set to fire or not events on connexion.
+			 * @return ConnexionResult
 			 */
-			bool interconnect (AVManagers & managers, const std::shared_ptr< AbstractVirtualDevice > & targetDevice, const std::string & outputDeviceName) noexcept;
+			ConnexionResult interconnect (AVManagers & managers, const std::shared_ptr< AbstractVirtualDevice > & intermediateDevice, bool fireEvents) noexcept;
+
+			/**
+			 * @brief Interconnects a virtual device between a specific output.
+			 * @note this[Output] -> target[Input]
+			 * @param managers A reference to the audio video managers.
+			 * @param intermediateDevice A reference to a virtual device smart pointer.
+			 * @param outputDeviceName A reference to a string to filter an output. If this device does not exist, the method will perform no connexion.
+			 * @param fireEvents Set to fire or not events on connexion.
+			 * @return ConnexionResult
+			 */
+			ConnexionResult interconnect (AVManagers & managers, const std::shared_ptr< AbstractVirtualDevice > & intermediateDevice, const std::string & outputDeviceName, bool fireEvents) noexcept;
 
 			/**
 			 * @brief Disconnects the output of this virtual device from the input of a virtual device.
 			 * @param managers A reference to the audio video managers.
 			 * @param targetDevice A reference to a virtual device smart pointer.
-			 * @param quietly Do not fire disconnection event. Default false.
-			 * @return bool
+			 * @param fireEvents Set to fire or not events on disconnection.
+			 * @return ConnexionResult
 			 */
-			bool disconnect (AVManagers & managers, const std::shared_ptr< AbstractVirtualDevice > & targetDevice, bool quietly = false) noexcept;
+			ConnexionResult disconnect (AVManagers & managers, const std::shared_ptr< AbstractVirtualDevice > & targetDevice, bool fireEvents) noexcept;
 
 			/**
 			 * @brief Disconnects the device from everything.
 			 * @param managers A reference to the audio video managers.
+			 * @param fireEvents Set to fire or not events on disconnection.
 			 * @return void
 			 */
-			void disconnectFromAll (AVManagers & managers) noexcept;
+			void disconnectFromAll (AVManagers & managers, bool fireEvents) noexcept;
 
 			/**
 			 * @brief Returns a printable state of connexions.
@@ -252,9 +308,9 @@ namespace EmEn::AVConsole
 			 * @brief Updates the video device properties.
 			 * @note Ignored on audio device.
 			 * @todo This should not be here !
-			 * @param isPerspectiveProjection Declares the perspective type of image.
+			 * @param isPerspectiveProjection Declares the perspective type of the image.
 			 * @param distance The maximal distance of the view.
-			 * @param fovOrNear The field of view. Ignored if the projection is orthographic and can be used as near value override.
+			 * @param fovOrNear The field of view. Ignored if the projection is orthographic and can be used as a near-value override.
 			 * @return void
 			 */
 			virtual
@@ -263,62 +319,6 @@ namespace EmEn::AVConsole
 			{
 				/* NOTE: A video device should override this method! */
 				assert(m_type == DeviceType::Audio);
-			}
-
-			/**
-			 * @brief Event fired when a virtual device is connected to input.
-			 * @note This method uses a pointer instead of reference to ease the dynamic cast. It will never be null.
-			 * @param managers A reference to the audio video managers.
-			 * @param sourceDevice A pointer to the virtual device.
-			 * @return void
-			 */
-			virtual
-			void
-			onSourceConnected (AVManagers & /*managers*/, AbstractVirtualDevice * /*sourceDevice*/) noexcept
-			{
-
-			}
-
-			/**
-			 * @brief Event fired when a virtual device is connected to output.
-			 * @note This method uses a pointer instead of reference to ease the dynamic cast. It will never be null.
-			 * @param managers A reference to the audio video managers.
-			 * @param targetDevice A pointer to the virtual device.
-			 * @return void
-			 */
-			virtual
-			void
-			onTargetConnected (AVManagers & /*managers*/, AbstractVirtualDevice * /*targetDevice*/) noexcept
-			{
-
-			}
-
-			/**
-			 * @brief Event fired when a virtual device is disconnected to input.
-			 * @note This method uses a pointer instead of reference to ease the dynamic cast. It will never be null.
-			 * @param managers A reference to the audio video managers.
-			 * @param sourceDevice A pointer to the virtual device.
-			 * @return void
-			 */
-			virtual
-			void
-			onSourceDisconnected (AVManagers & /*managers*/, AbstractVirtualDevice * /*sourceDevice*/) noexcept
-			{
-
-			}
-
-			/**
-			 * @brief Event fired when a virtual device is disconnected to output.
-			 * @note This method uses a pointer instead of reference to ease the dynamic cast. It will never be null.
-			 * @param managers A reference to the audio video managers.
-			 * @param targetDevice A pointer to the virtual device.
-			 * @return void
-			 */
-			virtual
-			void
-			onTargetDisconnected (AVManagers & /*managers*/, AbstractVirtualDevice * /*targetDevice*/) noexcept
-			{
-
 			}
 
 		protected:
@@ -332,31 +332,69 @@ namespace EmEn::AVConsole
 			explicit
 			AbstractVirtualDevice (const std::string & name, DeviceType type, ConnexionType allowedConnexionType) noexcept
 				: m_id{buildDeviceId(name)},
-				  m_type{type},
-				  m_allowedConnexionType{allowedConnexionType}
+				m_type{type},
+				m_allowedConnexionType{allowedConnexionType}
+			{
+
+			}
+
+			/**
+			 * @brief Event fired when a virtual device is connected to input.
+			 * @note This method uses a pointer instead of a reference to ease the dynamic cast. It will never be null.
+			 * @param managers A reference to the audio video managers.
+			 * @param inputDevice A pointer to the virtual device.
+			 * @return void
+			 */
+			virtual
+			void
+			onInputDeviceConnected (AVManagers & /*managers*/, AbstractVirtualDevice * /*inputDevice*/) noexcept
+			{
+
+			}
+
+			/**
+			 * @brief Event fired when a virtual device is connected to output.
+			 * @note This method uses a pointer instead of a reference to ease the dynamic cast. It will never be null.
+			 * @param managers A reference to the audio video managers.
+			 * @param outputDevice A pointer to the virtual device.
+			 * @return void
+			 */
+			virtual
+			void
+			onOutputDeviceConnected (AVManagers & /*managers*/, AbstractVirtualDevice * /*outputDevice*/) noexcept
+			{
+
+			}
+
+			/**
+			 * @brief Event fired when a virtual device is disconnected to input.
+			 * @note This method uses a pointer instead of a reference to ease the dynamic cast. It will never be null.
+			 * @param managers A reference to the audio video managers.
+			 * @param inputDevice A pointer to the virtual device.
+			 * @return void
+			 */
+			virtual
+			void
+			onInputDeviceDisconnected (AVManagers & /*managers*/, AbstractVirtualDevice * /*inputDevice*/) noexcept
+			{
+
+			}
+
+			/**
+			 * @brief Event fired when a virtual device is disconnected to output.
+			 * @note This method uses a pointer instead of a reference to ease the dynamic cast. It will never be null.
+			 * @param managers A reference to the audio video managers.
+			 * @param outputDevice A pointer to the virtual device.
+			 * @return void
+			 */
+			virtual
+			void
+			onOutputDeviceDisconnected (AVManagers & /*managers*/, AbstractVirtualDevice * /*outputDevice*/) noexcept
 			{
 
 			}
 
 		private:
-
-			/**
-			 * @brief Connects back a connected virtual device.
-			 * @param managers A reference to the audio video managers.
-			 * @param sourceDevice A reference to a virtual device smart pointer.
-			 * @param quietly Do not fire connexion event. Default false.
-			 * @return bool
-			 */
-			bool connectBack (AVManagers & managers, const std::shared_ptr< AbstractVirtualDevice > & sourceDevice, bool quietly) noexcept;
-
-			/**
-			 * @brief Disconnects back a connected virtual device.
-			 * @param managers A reference to the audio video managers.
-			 * @param sourceDevice A reference to a virtual device smart pointer.
-			 * @param quietly Do not fire disconnection event. Default false.
-			 * @return bool
-			 */
-			bool disconnectBack (AVManagers & managers, const std::shared_ptr< AbstractVirtualDevice > & sourceDevice, bool quietly) noexcept;
 
 			/**
 			 * @brief Builds a device id.
@@ -375,12 +413,13 @@ namespace EmEn::AVConsole
 				return deviceId.str();
 			}
 
-			static size_t s_deviceCount;
+			static std::atomic_size_t s_deviceCount;
 
-			std::string m_id;
-			DeviceType m_type;
-			ConnexionType m_allowedConnexionType;
-			std::set< std::shared_ptr< AbstractVirtualDevice > > m_inputs;
-			std::set< std::shared_ptr< AbstractVirtualDevice > > m_outputs;
+			const std::string m_id;
+			const DeviceType m_type;
+			const ConnexionType m_allowedConnexionType;
+			std::unordered_set< std::weak_ptr< AbstractVirtualDevice >, WeakPtrOwnerHash, WeakPtrOwnerEqual > m_inputDevicesConnected;
+			std::unordered_set< std::weak_ptr< AbstractVirtualDevice >, WeakPtrOwnerHash, WeakPtrOwnerEqual > m_outputDevicesConnected;
+			mutable std::mutex m_IOAccess;
 	};
 }

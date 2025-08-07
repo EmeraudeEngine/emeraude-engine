@@ -47,11 +47,19 @@ namespace EmEn::Audio
 	{
 		public:
 
+			/** @brief Class identifier. */
+			static constexpr auto ClassId{"Recorder"};
+
 			/**
 			 * @brief Constructs a recorder.
 			 * @param name A reference to a name.
 			 */
-			explicit Recorder (const std::string & name) noexcept;
+			explicit
+			Recorder (const std::string & name) noexcept
+				: AbstractVirtualDevice{name, AVConsole::DeviceType::Audio, AVConsole::ConnexionType::Both}
+			{
+
+			}
 
 		private:
 

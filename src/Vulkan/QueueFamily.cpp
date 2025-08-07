@@ -33,8 +33,10 @@
 
 namespace EmEn::Vulkan
 {
+	using namespace EmEn::Libs;
+
 	bool
-	QueueFamily::declareQueueStructure (const std::vector< std::pair< QueueJob, float > > & structure) noexcept
+	QueueFamily::declareQueueStructure (const StaticVector< std::pair< QueueJob, float >, 16 > & structure) noexcept
 	{
 		const auto size = structure.size();
 
@@ -47,13 +49,10 @@ namespace EmEn::Vulkan
 			return false;
 		}
 
-		m_queueJobs.reserve(size);
-		m_queuePriorities.reserve(size);
-
-		for ( const auto & queueDef : structure )
+		for ( const auto & queueDefinition : structure )
 		{
-			m_queueJobs.emplace_back(queueDef.first);
-			m_queuePriorities.emplace_back(queueDef.second);
+			m_queueJobs.emplace_back(queueDefinition.first);
+			m_queuePriorities.emplace_back(queueDefinition.second);
 		}
 
 		m_queues.resize(size);
@@ -92,7 +91,7 @@ namespace EmEn::Vulkan
 			}
 
 			m_queues[queueIndex] = std::make_unique< Queue >(queueHandle, m_queueFamilyIndex);
-			m_queues[queueIndex]->setIdentifier((std::stringstream{} << "Device-" << m_queueFamilyIndex << '.' << queueIndex << "-Queue").str());
+			m_queues[queueIndex]->setIdentifier(ClassId, (std::stringstream{} << m_queueFamilyIndex << '.' << queueIndex).str(), "Queue");
 		}
 
 		return true;

@@ -28,57 +28,38 @@
 
 /* STL inclusions. */
 #include <cstddef>
-#include <string>
 #include <thread>
 #include <vector>
-#include <array>
 #include <filesystem>
-
-/* Local inclusions for inheritances. */
-#include "ServiceInterface.hpp"
 
 /* Third-party inclusions. */
 #include "AL/al.h"
 #include "AL/alc.h"
 
-/* Local inclusions for usages. */
+/* Local inclusions. */
 #include "Libs/WaveFactory/Types.hpp"
-
-/* Forward declarations. */
-namespace EmEn
-{
-	class PrimaryServices;
-}
 
 namespace EmEn::Audio
 {
 	/**
 	 * @brief Class that define a device to grab audio from outside the engine like a real microphone.
-	 * @extends EmEn::ServiceInterface This is a service.
 	 */
-	class ExternalInput final : public ServiceInterface
+	class AudioRecorder final
 	{
 		public:
 
 			/** @brief Class identifier. */
-			static constexpr auto ClassId{"AudioExternalInputService"};
+			static constexpr auto ClassId{"AudioRecorder"};
 
 			/**
-			 * @brief Constructs the external audio input.
-			 * @param primaryServices A reference to primary services.
+			 * @brief Constructs an audio recorder.
 			 */
-			explicit
-			ExternalInput (PrimaryServices & primaryServices) noexcept
-				: ServiceInterface{ClassId},
-				m_primaryServices{primaryServices}
-			{
-
-			}
+			AudioRecorder () noexcept = default;
 
 			/**
-			 * @brief Destructs the external audio input.
+			 * @brief Destructs the audio recorder.
 			 */
-			~ExternalInput () override
+			~AudioRecorder ()
 			{
 				if ( m_process.joinable() )
 				{
@@ -86,12 +67,24 @@ namespace EmEn::Audio
 				}
 			}
 
-			/** @copydoc EmEn::ServiceInterface::usable() */
-			[[nodiscard]]
-			bool
-			usable () const noexcept override
+			/**
+			 * @brief Set an input device to enable recording.
+			 * @param device A pointer to an input device.
+			 * @param channels The recording channel number.
+			 * @param frequency The recording frequency.
+			 * @return void
+			 */
+			void
+			configure (ALCdevice * device, Libs::WaveFactory::Channels channels, Libs::WaveFactory::Frequency frequency) noexcept
 			{
-				return m_device != nullptr;
+				if ( device == nullptr )
+				{
+					this->stop();
+				}
+
+				m_device = device;
+				m_channels = channels;
+				m_frequency = frequency;
 			}
 
 			/**
@@ -102,7 +95,7 @@ namespace EmEn::Audio
 			bool
 			isRecording () const noexcept
 			{
-				return m_flags[IsRecording];
+				return m_isRecording;
 			}
 
 			/**
@@ -125,42 +118,16 @@ namespace EmEn::Audio
 
 		private:
 
-			/** @copydoc EmEn::ServiceInterface::onInitialize() */
-			bool onInitialize () noexcept override;
-
-			/** @copydoc EmEn::ServiceInterface::onTerminate() */
-			bool onTerminate () noexcept override;
-
 			/**
 			 * @brief Process the capture task.
 			 */
-			void process () noexcept;
+			void recordingTask () noexcept;
 
-			/**
-			 * @brief Queries devices information.
-			 * @return bool.
-			 */
-			bool queryDevices () noexcept;
-
-			/* Flag names */
-			static constexpr auto ShowInformation{0UL};
-			static constexpr auto IsRecording{1UL};
-
-			PrimaryServices & m_primaryServices;
 			ALCdevice * m_device{nullptr};
-			std::vector< std::string > m_availableCaptureDevices;
+			Libs::WaveFactory::Channels m_channels{Libs::WaveFactory::Channels::Invalid};
+			Libs::WaveFactory::Frequency m_frequency{Libs::WaveFactory::Frequency::Invalid};
 			std::vector< ALshort > m_samples;
 			std::thread m_process;
-			Libs::WaveFactory::Frequency m_frequency = Libs::WaveFactory::Frequency::PCM44100Hz;
-			std::array< bool, 8 > m_flags{
-				false/*ShowInformation*/,
-				false/*IsRecording*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/
-			};
+			bool m_isRecording{false};
 	};
 }

@@ -307,7 +307,7 @@ namespace EmEn::Graphics::RenderableInstance
 		const auto vertexCount = static_cast< uint32_t >(m_localData.size() / vertexElementCount);
 
 		m_vertexBufferObject = std::make_unique< VertexBufferObject >(transferManager.device(), vertexCount, vertexElementCount);
-		m_vertexBufferObject->setIdentifier("Multiple-ModelVBO-VertexBufferObject");
+		m_vertexBufferObject->setIdentifier(ClassId, "MultipleInstance??", "VertexBufferObject");
 
 		if ( !m_vertexBufferObject->create(transferManager, m_localData) )
 		{
@@ -357,7 +357,7 @@ namespace EmEn::Graphics::RenderableInstance
 	}
 
 	void
-	Multiple::pushMatrices (const CommandBuffer & commandBuffer, const PipelineLayout & pipelineLayout, const ViewMatricesInterface & viewMatrices, const Saphir::Program & program) const noexcept
+	Multiple::pushMatrices (const CommandBuffer & commandBuffer, const PipelineLayout & pipelineLayout, const Saphir::Program & program, uint32_t readStateIndex, const ViewMatricesInterface & viewMatrices, const CartesianFrame< float > * /*worldCoordinates*/) const noexcept
 	{
 		constexpr uint32_t MatrixBytes{Matrix4Alignment * sizeof(float)};
 
@@ -365,10 +365,10 @@ namespace EmEn::Graphics::RenderableInstance
 			VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_GEOMETRY_BIT :
 			VK_SHADER_STAGE_VERTEX_BIT;
 
-		const auto & viewMatrix = viewMatrices.viewMatrix(this->isUsingInfinityView(), 0);
-		const auto viewProjectionMatrix = viewMatrices.projectionMatrix() * viewMatrix;
+		const auto & viewMatrix = viewMatrices.viewMatrix(readStateIndex,this->isUsingInfinityView(), 0);
+		const auto viewProjectionMatrix = viewMatrices.projectionMatrix(readStateIndex) * viewMatrix;
 
-		/* [VULKAN-PUSH-CONSTANT:4] Push camera related matrices. */
+		/* [VULKAN-PUSH-CONSTANT:4] Push camera-related matrices. */
 		if ( program.wasAdvancedMatricesEnabled() || program.wasBillBoardingEnabled() )
 		{
 			if constexpr ( MergePushConstants )

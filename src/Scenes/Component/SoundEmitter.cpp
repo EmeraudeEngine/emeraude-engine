@@ -41,20 +41,18 @@
 
 namespace EmEn::Scenes::Component
 {
-	using namespace EmEn::Libs;
-	using namespace EmEn::Libs::Math;
-	using namespace EmEn::Animations;
-	using namespace EmEn::Audio;
+	using namespace Libs;
+	using namespace Libs::Math;
+	using namespace Animations;
+	using namespace Audio;
 
 	void
 	SoundEmitter::move (const CartesianFrame< float > & worldCoordinates) noexcept
 	{
-		if ( m_source == nullptr )
+		if ( m_source != nullptr )
 		{
-			return;
+			this->updateSource(worldCoordinates);
 		}
-
-		this->updateSource(worldCoordinates);
 	}
 
 	void
@@ -65,9 +63,11 @@ namespace EmEn::Scenes::Component
 			return;
 		}
 
+		/* Autorelease unused sound source. */
 		if ( !this->isFlagEnabled(KeepInactiveSourceAlive) && m_source->isStopped() )
 		{
-			this->releaseSource();
+			m_source->removeSound();
+			m_source.reset();
 		}
 	}
 
@@ -97,7 +97,7 @@ namespace EmEn::Scenes::Component
 			return false;
 		}
 
-		/* NOTE: Don't know what is it, goodbye! */
+		/* NOTE: Don't know what it is, goodbye! */
 		TraceDebug{ClassId} <<
 			"Received an unhandled notification (Code:" << notificationCode << ") from observable '" << whoIs(observable->classUID()) << "' (UID:" << observable->classUID() << ")  ! "
 			"Forgetting it ...";
@@ -128,26 +128,6 @@ namespace EmEn::Scenes::Component
 			default:
 				return false;
 		}
-	}
-
-	bool
-	SoundEmitter::requestSource () noexcept
-	{
-		if ( m_source != nullptr )
-		{
-			return true;
-		}
-
-		m_source = Audio::Manager::instance()->requestSource();
-
-		if ( m_source == nullptr )
-		{
-			return false;
-		}
-
-		this->updateSource(this->getWorldCoordinates());
-
-		return true;
 	}
 
 	void
@@ -213,73 +193,36 @@ namespace EmEn::Scenes::Component
 	}
 
 	void
+	SoundEmitter::stop () noexcept
+	{
+		if ( m_source != nullptr )
+		{
+			m_source->stop();
+
+			if ( !this->isFlagEnabled(KeepInactiveSourceAlive) )
+			{
+				m_source->removeSound();
+				m_source.reset();
+			}
+		}
+	}
+
+	void
 	SoundEmitter::playAttachedSound () noexcept
 	{
-		/* NOTE: Get an available audio source. */
-		if ( !this->requestSource() )
+		if ( m_source == nullptr )
 		{
-			TraceDebug{ClassId} << "No more audio source available !";
-
-			return;
+			m_source = Manager::instance()->requestSource();
 		}
 
-		m_source->setGain(m_gain);
-		m_source->play(m_attachedSound, this->isFlagEnabled(Loop) ? Source::PlayMode::Loop : Source::PlayMode::Once);
-	}
-
-	void
-	SoundEmitter::stop () const noexcept
-	{
-		if ( m_source == nullptr || m_attachedSound == nullptr )
+		if ( m_source != nullptr )
 		{
-			return;
+			/* Check if useful. */
+			this->updateSource(this->getWorldCoordinates());
+
+			m_source->setGain(m_gain);
+			m_source->play(m_attachedSound, this->isFlagEnabled(Loop) ? PlayMode::Loop : PlayMode::Once);
 		}
-
-		m_source->stop();
-	}
-
-	void
-	SoundEmitter::pause () const noexcept
-	{
-		if ( m_source == nullptr || m_attachedSound == nullptr )
-		{
-			return;
-		}
-
-		m_source->pause();
-	}
-
-	void
-	SoundEmitter::resume () const noexcept
-	{
-		if ( m_source == nullptr || m_attachedSound == nullptr )
-		{
-			return;
-		}
-
-		m_source->resume();
-	}
-
-	void
-	SoundEmitter::rewind () const noexcept
-	{
-		if ( m_source == nullptr || m_attachedSound == nullptr )
-		{
-			return;
-		}
-
-		m_source->rewind();
-	}
-
-	bool
-	SoundEmitter::isPlaying () const noexcept
-	{
-		if ( m_source == nullptr || m_attachedSound == nullptr )
-		{
-			return false;
-		}
-
-		return m_source->isPlaying();
 	}
 
 	void
@@ -291,7 +234,8 @@ namespace EmEn::Scenes::Component
 
 		if ( m_source != nullptr )
 		{
-			this->releaseSource();
+			m_source->removeSound();
+			m_source.reset();
 		}
 
 		m_gain = 8.0F;

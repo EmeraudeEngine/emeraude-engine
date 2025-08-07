@@ -29,6 +29,8 @@
 /* STL inclusions. */
 #include <cstdint>
 #include <string>
+#include <string_view>
+#include <array>
 
 namespace EmEn::PlatformSpecific::Desktop::Dialog
 {
@@ -50,6 +52,14 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 	constexpr auto YesNoString{"YesNo"};
 	constexpr auto QuitString{"Quit"};
 
+	constexpr auto ButtonLayouts = std::array< std::string_view, 5 >{
+		NoButtonString,
+		OKString,
+		OKCancelString,
+		YesNoString,
+		QuitString
+	};
+
 	/**
 	 * @brief Returns a C-String version of the enum value.
 	 * @param value The enum value.
@@ -66,7 +76,7 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 	[[nodiscard]]
 	inline
 	std::string
-	to_string (ButtonLayout value) noexcept
+	to_string (ButtonLayout value)
 	{
 		return {to_cstring(value)};
 	}
@@ -95,6 +105,13 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 	constexpr auto ErrorString{"Error"};
 	constexpr auto QuestionString{"Question"};
 
+	constexpr auto MessageTypes = std::array< std::string_view, 4 >{
+		InfoString,
+		WarningString,
+		ErrorString,
+		QuestionString
+	};
+
 	/**
 	 * @brief Returns a C-String version of the enum value.
 	 * @param value The enum value.
@@ -111,7 +128,7 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 	[[nodiscard]]
 	inline
 	std::string
-	to_string (MessageType value) noexcept
+	to_string (MessageType value)
 	{
 		return {to_cstring(value)};
 	}
@@ -160,7 +177,7 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 	[[nodiscard]]
 	inline
 	std::string
-	to_string (Answer value) noexcept
+	to_string (Answer value)
 	{
 		return {to_cstring(value)};
 	}

@@ -458,14 +458,14 @@ namespace EmEn::Libs::String
 
 	/**
  	 * @brief Converts a floating point number into a boolean.
-	 * @tparam float_t The type of floating point number. Default float.
+	 * @tparam number_t The type of floating point number. Default float.
 	 * @param value The value to converts.
 	 * @return bool
 	 */
-	template< typename float_t = float >
+	template< typename number_t = float >
 	[[nodiscard]]
 	bool
-	toBool (float_t value) noexcept requires (std::is_floating_point_v< float_t >)
+	toBool (number_t value) noexcept requires (std::is_floating_point_v< number_t >)
 	{
 		return !Utility::isZero(value);
 	}

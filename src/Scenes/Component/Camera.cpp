@@ -138,10 +138,9 @@ namespace EmEn::Scenes::Component
 			return;
 		}
 
-		for ( const auto & output : this->outputs() )
-		{
+		this->forEachOutputs([&worldCoordinates, &worldVelocity] (const auto & output) {
 			output->updateDeviceFromCoordinates(worldCoordinates, worldVelocity);
-		}
+		});
 	}
 
 	void
@@ -152,14 +151,13 @@ namespace EmEn::Scenes::Component
 			return;
 		}
 
-		for ( const auto & output : this->outputs() )
-		{
+		this->forEachOutputs([isPerspectiveProjection, distance, fovOrNear] (const auto & output) {
 			output->updateProperties(isPerspectiveProjection, distance, fovOrNear);
-		}
+		});
 	}
 
 	void
-	Camera::onTargetConnected (AVConsole::AVManagers & managers, AbstractVirtualDevice * targetDevice) noexcept
+	Camera::onOutputDeviceConnected (AVConsole::AVManagers & /*managers*/, AbstractVirtualDevice * targetDevice) noexcept
 	{
 		/* Initialize the target device with coordinates and camera properties. */
 		targetDevice->updateDeviceFromCoordinates(this->getWorldCoordinates(), this->getWorldVelocity());

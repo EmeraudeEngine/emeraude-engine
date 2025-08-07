@@ -218,7 +218,7 @@ namespace EmEn::Graphics::TextureResource
 			[[nodiscard]]
 			virtual
 			uint32_t
-			frameIndexAt (uint32_t sceneTime) const noexcept
+			frameIndexAt (uint32_t /*sceneTime*/) const noexcept
 			{
 				return 0;
 			}

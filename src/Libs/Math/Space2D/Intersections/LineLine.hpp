@@ -38,7 +38,7 @@ namespace EmEn::Libs::Math::Space2D
 	 * @param lineB A reference to a line.
 	 * @return bool
 	 */
-	template< typename precision_t = float >
+	/*template< typename precision_t = float >
 	[[nodiscard]]
 	static
 	bool
@@ -47,7 +47,7 @@ namespace EmEn::Libs::Math::Space2D
 		// TODO...
 
 		return false;
-	}
+	}*/
 
 	/**
 	 * @brief Checks if lines are intersecting and gives the intersection point.
@@ -57,7 +57,7 @@ namespace EmEn::Libs::Math::Space2D
 	 * @param intersection A writable reference to a vector for the intersection if method returns true.
 	 * @return bool
 	 */
-	template< typename precision_t = float >
+	/*template< typename precision_t = float >
 	[[nodiscard]]
 	static
 	bool
@@ -66,7 +66,7 @@ namespace EmEn::Libs::Math::Space2D
 		// TODO...
 
 		return false;
-	}
+	}*/
 
 	/**
 	 * @brief Finds the intersection between two lines using the "Cramer" method.

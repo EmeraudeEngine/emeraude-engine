@@ -31,11 +31,11 @@
 #include <sstream>
 
 /* Local inclusions. */
-#include "Audio/HardwareOutput.hpp"
+#include "Tracer.hpp"
 
 namespace EmEn::AVConsole
 {
-	using namespace EmEn::Libs;
+	using namespace Libs;
 	using namespace Graphics;
 
 	const size_t Manager::ClassUID{getClassUID(ClassId)};
@@ -50,47 +50,26 @@ namespace EmEn::AVConsole
 		/* Console commands bindings. */
 		this->bindCommand("listDevices", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
 			auto deviceType{DeviceType::Both};
-			auto directionType{ConnexionType::Both};
 
 			if ( !arguments.empty() )
 			{
-				{
-					const auto argument = arguments[0].asString();
+				const auto argument = arguments[0].asString();
 
-					if ( argument == "video" )
-					{
-						deviceType = DeviceType::Video;
-					}
-					else if ( argument == "audio" )
-					{
-						deviceType = DeviceType::Audio;
-					}
-					else if ( argument == "both" )
-					{
-						deviceType = DeviceType::Both;
-					}
+				if ( argument == "video" )
+				{
+					deviceType = DeviceType::Video;
 				}
-
-				if ( arguments.size() > 1 )
+				else if ( argument == "audio" )
 				{
-					const auto argument = std::any_cast< std::string >(arguments[1]);
-
-					if ( argument == "input" )
-					{
-						directionType = ConnexionType::Input;
-					}
-					else if ( argument == "output" )
-					{
-						directionType = ConnexionType::Output;
-					}
-					else if ( argument == "both" )
-					{
-						directionType = ConnexionType::Both;
-					}
+					deviceType = DeviceType::Audio;
+				}
+				else if ( argument == "both" )
+				{
+					deviceType = DeviceType::Both;
 				}
 			}
 
-			outputs.emplace_back(Severity::Info, this->getDeviceList(deviceType, directionType));
+			outputs.emplace_back(Severity::Info, this->getDeviceList(deviceType));
 
 			return 0;
 		}, "Get a list of input/output audio/video devices.");
@@ -137,7 +116,7 @@ namespace EmEn::AVConsole
 	}
 
 	bool
-	Manager::addVideoDevice (const std::shared_ptr< AbstractVirtualDevice > & device, bool primaryDevice) noexcept
+	Manager::addVideoDeviceNoLock (const std::shared_ptr< AbstractVirtualDevice > & device, bool primaryDevice) noexcept
 	{
 		if ( device->deviceType() != DeviceType::Video )
 		{
@@ -155,59 +134,6 @@ namespace EmEn::AVConsole
 				return false;
 			}
 
-			/* NOTE: Save the video device to a specific container for rendering processLogics. */
-			switch ( device->videoType() )
-			{
-				case VideoType::View :
-				{
-					auto renderToView = std::static_pointer_cast< RenderTarget::Abstract >(device);
-
-					if ( m_renderToViews.emplace(renderToView).second )
-					{
-						this->notify(RenderToViewAdded, renderToView);
-					}
-					else
-					{
-						TraceError{ClassId} << "Unable to store the render to view '" << renderToView->id() << "' for rendering !";
-					}
-				}
-					break;
-
-				case VideoType::Texture :
-				{
-					auto renderToTexture = std::static_pointer_cast< RenderTarget::Abstract >(device);
-
-					if ( m_renderToTextures.emplace(renderToTexture).second )
-					{
-						this->notify(RenderToTextureAdded, renderToTexture);
-					}
-					else
-					{
-						TraceError{ClassId} << "Unable to store the render to texture '" << device->id() << "' for rendering !";
-					}
-				}
-					break;
-
-				case VideoType::ShadowMap :
-				{
-					auto renderToShadowMap = std::static_pointer_cast< RenderTarget::Abstract >(device);
-
-					if ( m_renderToShadowMaps.emplace(renderToShadowMap).second )
-					{
-						this->notify(RenderToShadowMapAdded, renderToShadowMap);
-					}
-					else
-					{
-						TraceError{ClassId} << "Unable to store the render to shadow map '" << device->id() << "' for rendering !";
-					}
-				}
-					break;
-
-				default :
-					/* Nothing to do with this type of device. */
-					break;
-			}
-
 			TraceSuccess{ClassId} << "New virtual video device '" << device->id() << "' available !";
 
 			this->notify(VideoDeviceAdded, device);
@@ -223,14 +149,14 @@ namespace EmEn::AVConsole
 			switch ( device->allowedConnexionType() )
 			{
 				case ConnexionType::Output :
-					TraceInfo{ClassId} << "Virtual video device '" << device->id() << "' declared as primary input !";
+					TraceDebug{ClassId} << "Virtual video device '" << device->id() << "' declared as primary input (I.e. Camera) !";
 
 					m_primaryInputVideoDeviceId = device->id();
 					break;
 
 				case ConnexionType::Input :
 				case ConnexionType::Both :
-					TraceInfo{ClassId} << "Virtual video device '" << device->id() << "' declared as primary output !";
+					TraceDebug{ClassId} << "Virtual video device '" << device->id() << "' declared as primary output (I.e. Screen) !";
 
 					m_primaryOutputVideoDeviceId = device->id();
 					break;
@@ -241,7 +167,7 @@ namespace EmEn::AVConsole
 	}
 
 	bool
-	Manager::addAudioDevice (const std::shared_ptr< AbstractVirtualDevice > & device, bool primaryDevice) noexcept
+	Manager::addAudioDeviceNoLock (const std::shared_ptr< AbstractVirtualDevice > & device, bool primaryDevice) noexcept
 	{
 		if ( device->deviceType() != DeviceType::Audio )
 		{
@@ -274,14 +200,14 @@ namespace EmEn::AVConsole
 			switch ( device->allowedConnexionType() )
 			{
 				case ConnexionType::Output :
-					TraceInfo{ClassId} << "Virtual audio device '" << device->id() << "' declared as primary input !";
+					TraceDebug{ClassId} << "Virtual audio device '" << device->id() << "' declared as primary input (I.e. Microphone) !";
 
 					m_primaryInputAudioDeviceId = device->id();
 					break;
 
 				case ConnexionType::Input :
 				case ConnexionType::Both :
-					TraceInfo{ClassId} << "Virtual audio device '" << device->id() << "' declared as primary output !";
+					TraceDebug{ClassId} << "Virtual audio device '" << device->id() << "' declared as primary output (I.e. Speaker) !";
 
 					m_primaryOutputAudioDeviceId = device->id();
 					break;
@@ -294,6 +220,8 @@ namespace EmEn::AVConsole
 	bool
 	Manager::removeVideoDevice (const std::shared_ptr< AbstractVirtualDevice > & device) noexcept
 	{
+		const std::lock_guard< std::mutex > lock{m_deviceAccess};
+
 		if ( device->deviceType() != DeviceType::Video )
 		{
 			TraceWarning{ClassId} << "The virtual device '" << device->id() << "' is not a video device !";
@@ -301,33 +229,7 @@ namespace EmEn::AVConsole
 			return false;
 		}
 
-		/* FIXME: This is clearly shit ! */
-		{
-			const auto abstractView = std::static_pointer_cast< RenderTarget::Abstract >(device);
-
-			if ( abstractView != nullptr )
-			{
-				m_renderToViews.erase(abstractView);
-			}
-			else
-			{
-				const auto abstractTextures = std::static_pointer_cast< RenderTarget::Abstract >(device);
-
-				if ( abstractTextures != nullptr )
-				{
-					m_renderToTextures.erase(abstractTextures);
-				}
-				else
-				{
-					const auto abstractShadowMaps = std::static_pointer_cast< RenderTarget::Abstract >(device);
-
-					if ( abstractShadowMaps != nullptr )
-					{
-						m_renderToShadowMaps.erase(abstractShadowMaps);
-					}
-				}
-			}
-		}
+		device->disconnectFromAll(m_AVManagers, true);
 
 		if ( m_virtualVideoDevices.erase(device->id()) <= 0 )
 		{
@@ -346,12 +248,16 @@ namespace EmEn::AVConsole
 	bool
 	Manager::removeAudioDevice (const std::shared_ptr< AbstractVirtualDevice > & device) noexcept
 	{
+		const std::lock_guard< std::mutex > lock{m_deviceAccess};
+
 		if ( device->deviceType() != DeviceType::Audio )
 		{
 			TraceWarning{ClassId} << "The virtual device '" << device->id() << "' is not an audio device !";
 
 			return false;
 		}
+
+		device->disconnectFromAll(m_AVManagers, true);
 
 		if ( m_virtualAudioDevices.erase(device->id()) <= 0 )
 		{
@@ -367,228 +273,8 @@ namespace EmEn::AVConsole
 		return true;
 	}
 
-	std::shared_ptr< RenderTarget::View< ViewMatrices2DUBO > >
-	Manager::createRenderToView (const std::string & name, uint32_t width, uint32_t height, const FramebufferPrecisions & precisions, bool primaryDevice) noexcept
-	{
-		if ( m_virtualVideoDevices.contains(name) )
-		{
-			TraceError{ClassId} << "A virtual device named '" << name << "' already exists ! Render to view creation canceled ...";
-
-			return {};
-		}
-
-		/* Create the render target. */
-		auto renderTarget = std::make_shared< RenderTarget::View< ViewMatrices2DUBO > >(name, width, height, precisions);
-
-		if ( !renderTarget->create(m_AVManagers.graphicsRenderer) )
-		{
-			TraceError{ClassId} << "Unable to create the render to view '" << name << "' !";
-
-			return {};
-		}
-
-		if ( !this->addVideoDevice(renderTarget, primaryDevice) )
-		{
-			TraceError{ClassId} << "Unable to add the render to view '" << name << "' as a virtual video device !";
-
-			return {};
-		}
-
-		return renderTarget;
-	}
-
-	std::shared_ptr< RenderTarget::View< ViewMatrices3DUBO > >
-	Manager::createRenderToCubicView (const std::string & name, uint32_t size, const FramebufferPrecisions & precisions, bool primaryDevice) noexcept
-	{
-		/* Checks name availability. */
-		if ( m_virtualVideoDevices.contains(name) )
-		{
-			TraceError{ClassId} << "A virtual device named '" << name << "' already exists ! Render to cubic view creation canceled ...";
-
-			return {};
-		}
-
-		/* Create the render target. */
-		auto renderTarget = std::make_shared< RenderTarget::View< ViewMatrices3DUBO > >(name, size, precisions);
-
-		if ( !renderTarget->create(m_AVManagers.graphicsRenderer) )
-		{
-			TraceError{ClassId} << "Unable to create the render to cubic view '" << name << "' !";
-
-			return {};
-		}
-
-		if ( !this->addVideoDevice(renderTarget, primaryDevice) )
-		{
-			TraceError{ClassId} << "Unable to add the render to cubic view '" << name << "' as a virtual video device !";
-
-			return {};
-		}
-
-		return renderTarget;
-	}
-
-	std::shared_ptr< RenderTarget::Texture< ViewMatrices2DUBO > >
-	Manager::createRenderToTexture2D (const std::string & name, uint32_t width, uint32_t height, uint32_t colorCount) noexcept
-	{
-		if ( m_virtualVideoDevices.contains(name) )
-		{
-			TraceError{ClassId} <<
-				"A virtual video device named '" << name << "' already exists ! "
-				"Render to texture 2D creation canceled ...";
-
-			return {};
-		}
-
-		/* Create the render target. */
-		auto renderTarget = std::make_shared< RenderTarget::Texture< ViewMatrices2DUBO > >(name, width, height, colorCount);
-
-		if ( !renderTarget->enableManualLoading() )
-		{
-			return {};
-		}
-
-		auto success = renderTarget->createOnHardware(m_AVManagers.graphicsRenderer);
-
-		if ( !renderTarget->setManualLoadSuccess(success) )
-		{
-			return {};
-		}
-
-		if ( !this->addVideoDevice(renderTarget) )
-		{
-			TraceError{ClassId} << "Unable to add the render to texture 2D '" << name << "' as a virtual video device !";
-
-			return {};
-		}
-
-		return renderTarget;
-	}
-
-	std::shared_ptr< RenderTarget::Texture< ViewMatrices3DUBO > >
-	Manager::createRenderToCubemap (const std::string & name, uint32_t size, uint32_t colorCount) noexcept
-	{
-		if ( m_virtualVideoDevices.contains(name) )
-		{
-			TraceError{ClassId} <<
-				"A virtual video device named '" << name << "' already exists ! "
-				"Render to cubemap creation canceled ...";
-
-			return {};
-		}
-
-		/* Create the render target. */
-		auto renderTarget = std::make_shared< RenderTarget::Texture< ViewMatrices3DUBO > >(name, size, colorCount);
-
-		if ( !renderTarget->createOnHardware(m_AVManagers.graphicsRenderer) )
-		{
-			TraceError{ClassId} << "Unable to create the render to cubemap '" << name << "' !";
-
-			return {};
-		}
-
-		if ( !this->addVideoDevice(renderTarget) )
-		{
-			TraceError{ClassId} << "Unable to add the render to cubemap '" << name << "' as a virtual video device !";
-
-			return {};
-		}
-
-		return renderTarget;
-	}
-
-	std::shared_ptr< RenderTarget::ShadowMap< ViewMatrices2DUBO > >
-	Manager::createRenderToShadowMap (const std::string & name, uint32_t resolution) noexcept
-	{
-		if ( m_virtualVideoDevices.contains(name) )
-		{
-			TraceError{ClassId} <<
-				"A virtual video device named '" << name << "' already exists ! "
-				"Render to shadow map creation canceled ...";
-
-			return {};
-		}
-
-		/* Create the render target. */
-		auto renderTarget = std::make_shared< RenderTarget::ShadowMap< ViewMatrices2DUBO > >(name, resolution);
-
-		if ( !renderTarget->create(m_AVManagers.graphicsRenderer) )
-		{
-			TraceError{ClassId} << "Unable to create the render to shadow map '" << name << "' !";
-
-			return {};
-		}
-
-		if ( !this->addVideoDevice(renderTarget) )
-		{
-			TraceError{ClassId} << "Unable to add the render to shadow map '" << name << "' as a virtual video device !";
-
-			return {};
-		}
-
-		return renderTarget;
-	}
-
-	std::shared_ptr< RenderTarget::ShadowMap< ViewMatrices3DUBO > >
-	Manager::createRenderToCubicShadowMap (const std::string & name, uint32_t resolution) noexcept
-	{
-		if ( m_virtualVideoDevices.contains(name) )
-		{
-			TraceError{ClassId} <<
-				"A virtual video device named '" << name << "' already exists ! "
-				"Render to cubic shadow map creation canceled ...";
-
-			return {};
-		}
-
-		/* Create the render target. */
-		auto renderTarget = std::make_shared< RenderTarget::ShadowMap< ViewMatrices3DUBO > >(name, resolution);
-
-		if ( !renderTarget->create(m_AVManagers.graphicsRenderer) )
-		{
-			TraceError{ClassId} << "Unable to create the render to cubic shadow map '" << name << "' !";
-
-			return {};
-		}
-
-		if ( !this->addVideoDevice(renderTarget) )
-		{
-			TraceError{ClassId} << "Unable to add the render to cubic shadow map '" << name << "' as a virtual video device !";
-
-			return {};
-		}
-
-		return renderTarget;
-	}
-
-	std::shared_ptr< AbstractVirtualDevice >
-	Manager::getVideoDevice (const std::string & deviceId) const noexcept
-	{
-		const auto deviceIt = m_virtualVideoDevices.find(deviceId);
-
-		if ( deviceIt == m_virtualVideoDevices.cend() )
-		{
-			return nullptr;
-		}
-
-		return deviceIt->second;
-	}
-
-	std::shared_ptr< AbstractVirtualDevice >
-	Manager::getAudioDevice (const std::string & deviceId) const noexcept
-	{
-		const auto deviceIt = m_virtualAudioDevices.find(deviceId);
-
-		if ( deviceIt == m_virtualAudioDevices.cend() )
-		{
-			return nullptr;
-		}
-
-		return deviceIt->second;
-	}
-
 	std::vector< std::shared_ptr< AbstractVirtualDevice > >
-	Manager::getVideoDeviceSources () const noexcept
+	Manager::getVideoDeviceSourcesNoLock () const noexcept
 	{
 		std::vector< std::shared_ptr< AbstractVirtualDevice > > list{};
 		list.reserve(m_virtualVideoDevices.size());
@@ -605,7 +291,7 @@ namespace EmEn::AVConsole
 	}
 
 	std::vector< std::shared_ptr< AbstractVirtualDevice > >
-	Manager::getAudioDeviceSources () const noexcept
+	Manager::getAudioDeviceSourcesNoLock () const noexcept
 	{
 		std::vector< std::shared_ptr< AbstractVirtualDevice > > list{};
 		list.reserve(m_virtualAudioDevices.size());
@@ -624,22 +310,29 @@ namespace EmEn::AVConsole
 	bool
 	Manager::connectVideoDevices (const std::string & sourceDeviceId, const std::string & targetDeviceId) noexcept
 	{
-		const auto sourceDevice = this->getVideoDevice(sourceDeviceId);
+		std::shared_ptr< AbstractVirtualDevice > sourceDevice;
+		std::shared_ptr< AbstractVirtualDevice > targetDevice;
 
-		if ( sourceDevice == nullptr )
 		{
-			TraceError{ClassId} << "Unable to find virtual video device '" << sourceDeviceId << "' as source device to connect !";
+			const std::lock_guard< std::mutex > lock{m_deviceAccess};
 
-			return false;
-		}
+			sourceDevice = this->getVideoDeviceNoLock(sourceDeviceId);
 
-		const auto targetDevice = this->getVideoDevice(targetDeviceId);
+			if ( sourceDevice == nullptr )
+			{
+				TraceError{ClassId} << "Unable to find virtual video device '" << sourceDeviceId << "' as source device to connect !";
 
-		if ( targetDevice == nullptr )
-		{
-			TraceError{ClassId} << "Unable to find virtual video device '" << targetDeviceId << "' as target device to connect !";
+				return false;
+			}
 
-			return false;
+			targetDevice = this->getVideoDeviceNoLock(targetDeviceId);
+
+			if ( targetDevice == nullptr )
+			{
+				TraceError{ClassId} << "Unable to find virtual video device '" << targetDeviceId << "' as target device to connect !";
+
+				return false;
+			}
 		}
 
 		if ( sourceDevice->isConnectedWith(targetDevice, ConnexionType::Output) )
@@ -647,28 +340,58 @@ namespace EmEn::AVConsole
 			return true;
 		}
 
-		return sourceDevice->connect(m_AVManagers, targetDevice);
+		switch ( sourceDevice->connect(m_AVManagers, targetDevice, true) )
+		{
+			case ConnexionResult::Success :
+				TraceSuccess{ClassId} << "The video device '" << sourceDeviceId << "' is connected to '" << targetDeviceId << "' !";
+
+				break;
+
+			case ConnexionResult::Failure :
+				TraceError{ClassId} << "Unable to connect video device '" << sourceDeviceId << "' to '" << targetDeviceId << "' !";
+
+				return false;
+
+			case ConnexionResult::DifferentDeviceType :
+				TraceError{ClassId} << "The device '" << sourceDeviceId << "' or '" << targetDeviceId << "' is not a video device !";
+
+				return false;
+
+			case ConnexionResult::NotAllowed :
+				TraceError{ClassId} << "The device '" << sourceDeviceId << "' and '" << targetDeviceId << "' are not allowed to connect !";
+
+				return false;
+		}
+
+		return true;
 	}
 
 	bool
 	Manager::connectAudioDevices (const std::string & sourceDeviceId, const std::string & targetDeviceId) noexcept
 	{
-		const auto sourceDevice = this->getAudioDevice(sourceDeviceId);
+		std::shared_ptr< AbstractVirtualDevice > sourceDevice;
+		std::shared_ptr< AbstractVirtualDevice > targetDevice;
 
-		if ( sourceDevice == nullptr )
 		{
-			TraceError{ClassId} << "Unable to find virtual audio device '" << sourceDeviceId << "' as source device to connect !";
+			const std::lock_guard< std::mutex > lock{m_deviceAccess};
 
-			return false;
-		}
+			sourceDevice = this->getAudioDeviceNoLock(sourceDeviceId);
 
-		const auto targetDevice = this->getAudioDevice(targetDeviceId);
+			if ( sourceDevice == nullptr )
+			{
+				TraceError{ClassId} << "Unable to find virtual audio device '" << sourceDeviceId << "' as source device to connect !";
 
-		if ( targetDevice == nullptr )
-		{
-			TraceError{ClassId} << "Unable to find virtual audio device '" << targetDeviceId << "' as target device to connect !";
+				return false;
+			}
 
-			return false;
+			targetDevice = this->getAudioDeviceNoLock(targetDeviceId);
+
+			if ( targetDevice == nullptr )
+			{
+				TraceError{ClassId} << "Unable to find virtual audio device '" << targetDeviceId << "' as target device to connect !";
+
+				return false;
+			}
 		}
 
 		if ( sourceDevice->isConnectedWith(targetDevice, ConnexionType::Output) )
@@ -676,20 +399,40 @@ namespace EmEn::AVConsole
 			return true;
 		}
 
-		return sourceDevice->connect(m_AVManagers, targetDevice);
+		switch ( sourceDevice->connect(m_AVManagers, targetDevice, true) )
+		{
+			case ConnexionResult::Success :
+				TraceSuccess{ClassId} << "The audio device '" << sourceDeviceId << "' is connected to '" << targetDeviceId << "' !";
+
+				break;
+
+			case ConnexionResult::Failure :
+				TraceError{ClassId} << "Unable to connect audio device '" << sourceDeviceId << "' to '" << targetDeviceId << "' !";
+
+				return false;
+
+			case ConnexionResult::DifferentDeviceType :
+				TraceError{ClassId} << "The device '" << sourceDeviceId << "' or '" << targetDeviceId << "' is not an audio device !";
+
+				return false;
+
+			case ConnexionResult::NotAllowed :
+				TraceError{ClassId} << "The audio device '" << sourceDeviceId << "' and '" << targetDeviceId << "' are not allowed to connect !";
+
+				return false;
+		}
+
+		return true;
 	}
 
-	bool
-	Manager::createDefaultView (Settings & settings) noexcept
+	/*bool
+	Manager::createDefaultViewNoLock (Settings & settings) noexcept
 	{
-		const auto deviceIt = m_virtualVideoDevices.find(DefaultViewName);
-
-		if ( deviceIt != m_virtualVideoDevices.cend() )
+		if ( m_virtualVideoDevices.contains(DefaultViewName) )
 		{
 			return true;
 		}
 
-		/* Read the default configuration. */
 		const auto isFullscreen = settings.get< bool >(VideoFullscreenEnabledKey, DefaultVideoFullscreenEnabled);
 
 		const auto width = isFullscreen ?
@@ -710,15 +453,29 @@ namespace EmEn::AVConsole
 			settings.get< uint32_t >(VideoFramebufferSamplesKey, DefaultVideoFramebufferSamples)
 		};
 
-		return this->createRenderToView(DefaultViewName, width, height, precisions, true) != nullptr;
-	}
+		const auto renderTarget = std::make_shared< RenderTarget::View< ViewMatrices2DUBO > >(DefaultViewName, width, height, precisions);
 
-	bool
-	Manager::createDefaultSpeaker (Audio::Manager & audioManager, Settings & /*settings*/) noexcept
+		if ( !renderTarget->create(m_AVManagers.graphicsRenderer) )
+		{
+			TraceError{ClassId} << "Unable to create the default render to view '" << DefaultViewName << "' !";
+
+			return false;
+		}
+
+		if ( !this->addVideoDeviceNoLock(renderTarget, true) )
+		{
+			TraceError{ClassId} << "Unable to add the default render to view '" << DefaultViewName << "' as a virtual video device !";
+
+			return false;
+		}
+
+		return true;
+	}*/
+
+	/*bool
+	Manager::createDefaultSpeakerNoLock (Audio::Manager & audioManager, Settings & settings) noexcept
 	{
-		const auto deviceIt = m_virtualAudioDevices.find(DefaultSpeakerName);
-
-		if ( deviceIt != m_virtualAudioDevices.cend() )
+		if ( m_virtualAudioDevices.contains(DefaultSpeakerName) )
 		{
 			return true;
 		}
@@ -728,74 +485,90 @@ namespace EmEn::AVConsole
 			return false;
 		}
 
-		return this->addAudioDevice(std::make_shared< Audio::HardwareOutput >(DefaultSpeakerName, audioManager), true);
-	}
+		return this->addAudioDeviceNoLock(std::make_shared< Audio::HardwareOutput >(DefaultSpeakerName, audioManager), true);
+	}*/
 
 	bool
-	Manager::autoConnectPrimaryVideoDevices (Settings & settings) noexcept
+	Manager::autoConnectPrimaryVideoDevices () noexcept
 	{
-		if ( !this->autoSelectPrimaryInputVideoDevice() )
+		std::string sourceId;
+		std::string targetId;
+
 		{
-			Tracer::error(ClassId, "There is no input primary video device declared !");
+			const std::lock_guard< std::mutex > lock{m_deviceAccess};
 
-			return false;
-		}
-
-		if ( m_primaryOutputVideoDeviceId.empty() )
-		{
-			Tracer::info(ClassId, "There is no output primary video device declared ! Creating a view ...");
-
-			if ( !this->createDefaultView(settings) )
+			if ( !this->autoSelectPrimaryInputVideoDevice() )
 			{
-				Tracer::error(ClassId, "Unable to create the default view !");
+				Tracer::error(ClassId, "There is no input primary video device declared !");
 
 				return false;
 			}
-		}
 
-		return this->connectVideoDevices(m_primaryInputVideoDeviceId, m_primaryOutputVideoDeviceId);
-	}
-
-	bool
-	Manager::autoConnectPrimaryAudioDevices (Audio::Manager & audioManager, Settings & settings) noexcept
-	{
-		if ( !this->autoSelectPrimaryInputAudioDevice() )
-		{
-			Tracer::error(ClassId, "There is no input primary audio device declared !");
-
-			return false;
-		}
-
-		if ( m_primaryOutputAudioDeviceId.empty() )
-		{
-			Tracer::info(ClassId, "There is no output primary audio device declared ! Creating a speaker ...");
-
-			if ( !this->createDefaultSpeaker(audioManager, settings) )
+			if ( m_primaryOutputVideoDeviceId.empty() )
 			{
-				Tracer::error(ClassId, "Unable to create the default speaker !");
+				Tracer::info(ClassId, "There is no output primary video device declared ! Creating a view ...");
 
 				return false;
 			}
+
+			sourceId = m_primaryInputVideoDeviceId;
+			targetId = m_primaryOutputVideoDeviceId;
 		}
 
-		return this->connectAudioDevices(m_primaryInputAudioDeviceId, m_primaryOutputAudioDeviceId);
+		TraceDebug{ClassId} << "Connecting devices : " << sourceId << " => " << targetId;
+
+		return this->connectVideoDevices(sourceId, targetId);
+	}
+
+	bool
+	Manager::autoConnectPrimaryAudioDevices () noexcept
+	{
+		std::string sourceId;
+		std::string targetId;
+
+		{
+			const std::lock_guard< std::mutex > lock{m_deviceAccess};
+
+			if ( !this->autoSelectPrimaryInputAudioDevice() )
+			{
+				Tracer::error(ClassId, "There is no input primary audio device declared !");
+
+				return false;
+			}
+
+			if ( m_primaryOutputAudioDeviceId.empty() )
+			{
+				Tracer::info(ClassId, "There is no output primary audio device declared ! Creating a speaker ...");
+
+				return false;
+			}
+
+			sourceId = m_primaryInputAudioDeviceId;
+			targetId = m_primaryOutputAudioDeviceId;
+		}
+
+		TraceDebug{ClassId} << "Connecting devices : " << sourceId << " => " << targetId;
+
+		return this->connectAudioDevices(sourceId, targetId);
 	}
 
 	std::string
 	Manager::getConnexionStates () const noexcept
 	{
+		const std::lock_guard< std::mutex > lock{m_deviceAccess};
+
 		std::stringstream string;
 
 		string << "Video routes :" "\n";
 
-		for ( const auto & device : this->getVideoDeviceSources() )
+		for ( const auto & device : this->getVideoDeviceSourcesNoLock() )
 		{
 			string << device->getConnexionState();
 		}
 
 		string << "Audio routes :" "\n";
 
-		for ( const auto & device : this->getAudioDeviceSources() )
+		for ( const auto & device : this->getAudioDeviceSourcesNoLock() )
 		{
 			string << device->getConnexionState();
 		}
@@ -804,13 +577,14 @@ namespace EmEn::AVConsole
 	}
 
 	std::string
-	Manager::getDeviceList (DeviceType deviceType, ConnexionType directionType) const noexcept
+	Manager::getDeviceList (DeviceType deviceType) const noexcept
 	{
+		const std::lock_guard< std::mutex > lock{m_deviceAccess};
+
 		std::stringstream string;
 
 		if ( deviceType == DeviceType::Video || deviceType == DeviceType::Both )
 		{
-			if ( directionType == ConnexionType::Input || directionType == ConnexionType::Both )
 			{
 				size_t count = 0;
 
@@ -820,7 +594,7 @@ namespace EmEn::AVConsole
 				{
 					const auto deviceConnexionType = device->allowedConnexionType();
 
-					if ( deviceConnexionType == ConnexionType::Input || deviceConnexionType == ConnexionType::Both )
+					if ( deviceConnexionType == ConnexionType::Output || deviceConnexionType == ConnexionType::Both )
 					{
 						string << " - '" << name << "'" "\n";
 
@@ -834,7 +608,6 @@ namespace EmEn::AVConsole
 				}
 			}
 
-			if ( directionType == ConnexionType::Output || directionType == ConnexionType::Both )
 			{
 				size_t count = 0;
 
@@ -844,7 +617,7 @@ namespace EmEn::AVConsole
 				{
 					const auto deviceConnexionType = device->allowedConnexionType();
 
-					if ( deviceConnexionType == ConnexionType::Output || deviceConnexionType == ConnexionType::Both )
+					if ( deviceConnexionType == ConnexionType::Input || deviceConnexionType == ConnexionType::Both )
 					{
 						string << " - '" << name << "'" "\n";
 
@@ -861,7 +634,6 @@ namespace EmEn::AVConsole
 
 		if ( deviceType == DeviceType::Audio || deviceType == DeviceType::Both )
 		{
-			if ( directionType == ConnexionType::Input || directionType == ConnexionType::Both )
 			{
 				size_t count = 0;
 
@@ -871,7 +643,7 @@ namespace EmEn::AVConsole
 				{
 					const auto deviceConnexionType = device->allowedConnexionType();
 
-					if ( deviceConnexionType == ConnexionType::Input || deviceConnexionType == ConnexionType::Both )
+					if ( deviceConnexionType == ConnexionType::Output || deviceConnexionType == ConnexionType::Both )
 					{
 						string << " - '" << name << "'" "\n";
 
@@ -885,7 +657,6 @@ namespace EmEn::AVConsole
 				}
 			}
 
-			if ( directionType == ConnexionType::Output || directionType == ConnexionType::Both )
 			{
 				size_t count = 0;
 
@@ -895,7 +666,7 @@ namespace EmEn::AVConsole
 				{
 					const auto deviceConnexionType = device->allowedConnexionType();
 
-					if ( deviceConnexionType == ConnexionType::Output || deviceConnexionType == ConnexionType::Both )
+					if ( deviceConnexionType == ConnexionType::Input || deviceConnexionType == ConnexionType::Both )
 					{
 						string << " - '" << name << "'" "\n";
 
@@ -916,36 +687,53 @@ namespace EmEn::AVConsole
 	void
 	Manager::clear () noexcept
 	{
+		const std::lock_guard< std::mutex > lock{m_deviceAccess};
+
 		/* NOTE: Clearing the primary device names. */
 		m_primaryOutputAudioDeviceId.clear();
 		m_primaryInputAudioDeviceId.clear();
 		m_primaryOutputVideoDeviceId.clear();
 		m_primaryInputVideoDeviceId.clear();
 
-		/* NOTE: Removing the specific devices. */
-		m_renderToShadowMaps.clear();
-		m_renderToTextures.clear();
-		m_renderToViews.clear();
-
-		for ( const auto & device : std::ranges::views::values(m_virtualAudioDevices) )
+		/* Clearing the video devices. */
+		for ( const auto & device : m_virtualVideoDevices | std::views::values )
 		{
-			device->disconnectFromAll(m_AVManagers);
-		}
+			if ( device == nullptr )
+			{
+				Tracer::error(ClassId, "Invalid video device !");
 
-		m_virtualAudioDevices.clear();
+				continue;
+			}
 
-		for ( const auto & device : std::ranges::views::values(m_virtualVideoDevices) )
-		{
-			device->disconnectFromAll(m_AVManagers);
+			TraceDebug{ClassId} << "Disconnecting video device '" << device->id() << "' ... ";
+
+			device->disconnectFromAll(m_AVManagers, false);
 		}
 
 		m_virtualVideoDevices.clear();
+
+		/* Clearing the audio devices. */
+		for ( const auto & device : m_virtualAudioDevices | std::views::values )
+		{
+			if ( device == nullptr )
+			{
+				Tracer::error(ClassId, "Invalid audio device !");
+
+				continue;
+			}
+
+			TraceDebug{ClassId} << "Disconnecting audio device '" << device->id() << "' ... ";
+
+			device->disconnectFromAll(m_AVManagers, false);
+		}
+
+		m_virtualAudioDevices.clear();
 	}
 
 	bool
 	Manager::onNotification (const ObservableTrait * observable, int notificationCode, const std::any & /*data*/) noexcept
 	{
-		/* NOTE: Don't know what is it, goodbye! */
+		/* NOTE: Don't know what it is, goodbye! */
 		TraceDebug{ClassId} <<
 			"Received an unhandled notification (Code:" << notificationCode << ") from observable '" << whoIs(observable->classUID()) << "' (UID:" << observable->classUID() << ")  ! "
 			"Forgetting it ...";

@@ -97,11 +97,11 @@ namespace EmEn::Scenes::Component
 					{
 						const auto coordinates = CartesianFrame< float >{emitterMatrix * particle.localCoordinates().getModelMatrix()};
 
-						newLocation = particle.updateSimulation(envProperties, m_particlePhysicalProperties, coordinates, scene.modifiers());
+						newLocation = particle.updateSimulation(scene, m_particlePhysicalProperties, coordinates);
 					}
 					else
 					{
-						newLocation = particle.updateSimulation(envProperties, m_particlePhysicalProperties, particle.localCoordinates(), scene.modifiers());
+						newLocation = particle.updateSimulation(scene, m_particlePhysicalProperties, particle.localCoordinates());
 					}
 					break;
 

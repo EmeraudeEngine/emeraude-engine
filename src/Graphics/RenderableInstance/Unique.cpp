@@ -37,12 +37,12 @@
 
 namespace EmEn::Graphics::RenderableInstance
 {
-	using namespace EmEn::Libs;
-	using namespace EmEn::Libs::Math;
-	using namespace EmEn::Vulkan;
+	using namespace Libs;
+	using namespace Libs::Math;
+	using namespace Vulkan;
 
 	void
-	Unique::pushMatrices (const CommandBuffer & commandBuffer, const PipelineLayout & pipelineLayout, const ViewMatricesInterface & viewMatrices, const Saphir::Program & program) const noexcept
+	Unique::pushMatrices (const CommandBuffer & commandBuffer, const PipelineLayout & pipelineLayout, const Saphir::Program & program, uint32_t readStateIndex, const ViewMatricesInterface & viewMatrices, const CartesianFrame< float > * worldCoordinates) const noexcept
 	{
 		constexpr uint32_t MatrixBytes{Matrix4Alignment * sizeof(float)};
 
@@ -50,18 +50,23 @@ namespace EmEn::Graphics::RenderableInstance
 			VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_GEOMETRY_BIT :
 			VK_SHADER_STAGE_VERTEX_BIT;
 
-		const auto & viewMatrix = viewMatrices.viewMatrix(this->isUsingInfinityView(), 0);
+		const auto & viewMatrix = viewMatrices.viewMatrix(readStateIndex, this->isUsingInfinityView(), 0);
 
-		auto modelMatrix = this->isFacingCamera() ?
-			m_cartesianFrame.getSpriteModelMatrix(viewMatrices.position()) :
-			m_cartesianFrame.getModelMatrix();
+		Matrix< 4, float > modelMatrix;
+
+		if ( worldCoordinates != nullptr )
+		{
+			modelMatrix = this->isFacingCamera() ?
+				worldCoordinates->getSpriteModelMatrix(viewMatrices.position(readStateIndex)) :
+				worldCoordinates->getModelMatrix();
+		}
 
 		if ( this->isFlagEnabled(ApplyTransformationMatrix) )
 		{
 			modelMatrix *= this->transformationMatrix();
 		}
 
-		/* [VULKAN-PUSH-CONSTANT:4] Push camera related matrices. */
+		/* [VULKAN-PUSH-CONSTANT:4] Push camera-related matrices. */
 		if ( program.wasAdvancedMatricesEnabled() )
 		{
 			if constexpr ( MergePushConstants )
@@ -106,7 +111,7 @@ namespace EmEn::Graphics::RenderableInstance
 		}
 		else
 		{
-			const auto modelViewProjectionMatrix = viewMatrices.projectionMatrix() * viewMatrix * modelMatrix;
+			const auto modelViewProjectionMatrix = viewMatrices.projectionMatrix(readStateIndex) * viewMatrix * modelMatrix;
 
 			/* NOTE: Push the model view projection matrix (MVP). */
 			vkCmdPushConstants(

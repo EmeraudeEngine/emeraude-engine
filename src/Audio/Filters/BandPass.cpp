@@ -27,7 +27,7 @@
 #include "BandPass.hpp"
 
 /* Local inclusions. */
-#include "Audio/OpenAL.EFX.hpp"
+#include "Audio/OpenALExtensions.hpp"
 #include "Audio/Utility.hpp"
 #include "Tracer.hpp"
 
@@ -42,7 +42,7 @@ namespace EmEn::Audio::Filters
 			return;
 		}
 
-		EFX::alFilteri(this->identifier(), AL_FILTER_TYPE, AL_FILTER_BANDPASS);
+		OpenAL::alFilteri(this->identifier(), AL_FILTER_TYPE, AL_FILTER_BANDPASS);
 
 		if ( alGetErrors("alFilteri()", __FILE__, __LINE__) )
 		{
@@ -53,20 +53,20 @@ namespace EmEn::Audio::Filters
 	void
 	BandPass::resetProperties () noexcept
 	{
-		if ( !EFX::isAvailable() )
+		if ( !OpenAL::isEFXAvailable() )
 		{
 			return;
 		}
 
-		EFX::alFilterf(this->identifier(), AL_BANDPASS_GAIN, AL_BANDPASS_DEFAULT_GAIN);
-		EFX::alFilterf(this->identifier(), AL_BANDPASS_GAINHF, AL_BANDPASS_DEFAULT_GAINHF);
-		EFX::alFilterf(this->identifier(), AL_BANDPASS_GAINLF, AL_BANDPASS_DEFAULT_GAINLF);
+		OpenAL::alFilterf(this->identifier(), AL_BANDPASS_GAIN, AL_BANDPASS_DEFAULT_GAIN);
+		OpenAL::alFilterf(this->identifier(), AL_BANDPASS_GAINHF, AL_BANDPASS_DEFAULT_GAINHF);
+		OpenAL::alFilterf(this->identifier(), AL_BANDPASS_GAINLF, AL_BANDPASS_DEFAULT_GAINLF);
 	}
 
 	void
 	BandPass::setGain (float value) noexcept
 	{
-		if ( !EFX::isAvailable() )
+		if ( !OpenAL::isEFXAvailable() )
 		{
 			return;
 		}
@@ -78,13 +78,13 @@ namespace EmEn::Audio::Filters
 			return;
 		}
 
-		EFX::alFilterf(this->identifier(), AL_BANDPASS_GAIN, value);
+		OpenAL::alFilterf(this->identifier(), AL_BANDPASS_GAIN, value);
 	}
 
 	void
 	BandPass::setGainHF (float value) noexcept
 	{
-		if ( !EFX::isAvailable() )
+		if ( !OpenAL::isEFXAvailable() )
 		{
 			return;
 		}
@@ -96,13 +96,13 @@ namespace EmEn::Audio::Filters
 			return;
 		}
 
-		EFX::alFilterf(this->identifier(), AL_BANDPASS_GAINHF, value);
+		OpenAL::alFilterf(this->identifier(), AL_BANDPASS_GAINHF, value);
 	}
 
 	void
 	BandPass::setGainLF (float value) noexcept
 	{
-		if ( !EFX::isAvailable() )
+		if ( !OpenAL::isEFXAvailable() )
 		{
 			return;
 		}
@@ -114,7 +114,7 @@ namespace EmEn::Audio::Filters
 			return;
 		}
 
-		EFX::alFilterf(this->identifier(), AL_BANDPASS_GAINLF, value);
+		OpenAL::alFilterf(this->identifier(), AL_BANDPASS_GAINLF, value);
 	}
 
 	float
@@ -122,9 +122,9 @@ namespace EmEn::Audio::Filters
 	{
 		ALfloat value = 0.0F;
 
-		if ( EFX::isAvailable() )
+		if ( OpenAL::isEFXAvailable() )
 		{
-			EFX::alGetFilterf(this->identifier(), AL_BANDPASS_GAIN, &value);
+			OpenAL::alGetFilterf(this->identifier(), AL_BANDPASS_GAIN, &value);
 		}
 
 		return value;
@@ -135,9 +135,9 @@ namespace EmEn::Audio::Filters
 	{
 		ALfloat value = 0.0F;
 
-		if ( EFX::isAvailable() )
+		if ( OpenAL::isEFXAvailable() )
 		{
-			EFX::alGetFilterf(this->identifier(), AL_BANDPASS_GAINHF, &value);
+			OpenAL::alGetFilterf(this->identifier(), AL_BANDPASS_GAINHF, &value);
 		}
 
 		return value;
@@ -148,9 +148,9 @@ namespace EmEn::Audio::Filters
 	{
 		ALfloat value = 0.0F;
 
-		if ( EFX::isAvailable() )
+		if ( OpenAL::isEFXAvailable() )
 		{
-			EFX::alGetFilterf(this->identifier(), AL_BANDPASS_GAINLF, &value);
+			OpenAL::alGetFilterf(this->identifier(), AL_BANDPASS_GAINLF, &value);
 		}
 
 		return value;

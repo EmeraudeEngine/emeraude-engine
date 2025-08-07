@@ -39,12 +39,12 @@
 
 namespace EmEn::Scenes
 {
-	using namespace EmEn::Libs;
-	using namespace EmEn::Libs::Math;
-	using namespace EmEn::Libs::PixelFactory;
-	using namespace EmEn::Libs::VertexFactory;
-	using namespace EmEn::Graphics;
-	using namespace EmEn::Physics;
+	using namespace Libs;
+	using namespace Libs::Math;
+	using namespace Libs::PixelFactory;
+	using namespace Libs::VertexFactory;
+	using namespace Graphics;
+	using namespace Physics;
 
 	const size_t Node::ClassUID{getClassUID(ClassId)};
 
@@ -59,7 +59,7 @@ namespace EmEn::Scenes
 		switch ( transformSpace )
 		{
 			case TransformSpace::Local :
-				m_cartesianFrame.setPosition(m_cartesianFrame.getRotationMatrix3() * position);
+				m_logicStateCoordinates.setPosition(m_logicStateCoordinates.getRotationMatrix3() * position);
 				break;
 
 			case TransformSpace::Parent :
@@ -68,11 +68,11 @@ namespace EmEn::Scenes
 
 				if ( parentNode->isRoot() )
 				{
-					m_cartesianFrame.setPosition(position);
+					m_logicStateCoordinates.setPosition(position);
 				}
 				else
 				{
-					m_cartesianFrame.setPosition(parentNode->m_cartesianFrame.getRotationMatrix3() * position);
+					m_logicStateCoordinates.setPosition(parentNode->m_logicStateCoordinates.getRotationMatrix3() * position);
 				}
 			}
 				break;
@@ -80,7 +80,7 @@ namespace EmEn::Scenes
 			case TransformSpace::World :
 				if ( m_parent.lock()->isRoot() )
 				{
-					m_cartesianFrame.setPosition(position);
+					m_logicStateCoordinates.setPosition(position);
 				}
 				else
 				{
@@ -103,7 +103,7 @@ namespace EmEn::Scenes
 		switch ( transformSpace )
 		{
 			case TransformSpace::Local :
-				m_cartesianFrame.setPosition(m_cartesianFrame.rightVector() * position);
+				m_logicStateCoordinates.setPosition(m_logicStateCoordinates.rightVector() * position);
 				break;
 
 			case TransformSpace::Parent :
@@ -112,11 +112,11 @@ namespace EmEn::Scenes
 
 				if ( parentNode->isRoot() )
 				{
-					m_cartesianFrame.setXPosition(position);
+					m_logicStateCoordinates.setXPosition(position);
 				}
 				else
 				{
-					m_cartesianFrame.setPosition(parentNode->m_cartesianFrame.rightVector() * position);
+					m_logicStateCoordinates.setPosition(parentNode->m_logicStateCoordinates.rightVector() * position);
 				}
 			}
 				break;
@@ -124,7 +124,7 @@ namespace EmEn::Scenes
 			case TransformSpace::World :
 				if ( m_parent.lock()->isRoot() )
 				{
-					m_cartesianFrame.setXPosition(position);
+					m_logicStateCoordinates.setXPosition(position);
 				}
 				else
 				{
@@ -147,7 +147,7 @@ namespace EmEn::Scenes
 		switch ( transformSpace )
 		{
 			case TransformSpace::Local :
-				m_cartesianFrame.setPosition(m_cartesianFrame.downwardVector() * position);
+				m_logicStateCoordinates.setPosition(m_logicStateCoordinates.downwardVector() * position);
 				break;
 
 			case TransformSpace::Parent :
@@ -156,11 +156,11 @@ namespace EmEn::Scenes
 
 				if ( parentNode->isRoot() )
 				{
-					m_cartesianFrame.setYPosition(position);
+					m_logicStateCoordinates.setYPosition(position);
 				}
 				else
 				{
-					m_cartesianFrame.setPosition(parentNode->m_cartesianFrame.downwardVector() * position);
+					m_logicStateCoordinates.setPosition(parentNode->m_logicStateCoordinates.downwardVector() * position);
 				}
 			}
 				break;
@@ -168,7 +168,7 @@ namespace EmEn::Scenes
 			case TransformSpace::World :
 				if ( m_parent.lock()->isRoot() )
 				{
-					m_cartesianFrame.setYPosition(position);
+					m_logicStateCoordinates.setYPosition(position);
 				}
 				else
 				{
@@ -191,7 +191,7 @@ namespace EmEn::Scenes
 		switch ( transformSpace )
 		{
 			case TransformSpace::Local :
-				m_cartesianFrame.setPosition(m_cartesianFrame.backwardVector() * position);
+				m_logicStateCoordinates.setPosition(m_logicStateCoordinates.backwardVector() * position);
 				break;
 
 			case TransformSpace::Parent :
@@ -200,11 +200,11 @@ namespace EmEn::Scenes
 
 				if ( parentNode->isRoot() )
 				{
-					m_cartesianFrame.setZPosition(position);
+					m_logicStateCoordinates.setZPosition(position);
 				}
 				else
 				{
-					m_cartesianFrame.setPosition(parentNode->m_cartesianFrame.backwardVector() * position);
+					m_logicStateCoordinates.setPosition(parentNode->m_logicStateCoordinates.backwardVector() * position);
 				}
 			}
 				break;
@@ -212,7 +212,7 @@ namespace EmEn::Scenes
 			case TransformSpace::World :
 				if ( m_parent.lock()->isRoot() )
 				{
-					m_cartesianFrame.setZPosition(position);
+					m_logicStateCoordinates.setZPosition(position);
 				}
 				else
 				{
@@ -235,7 +235,7 @@ namespace EmEn::Scenes
 		switch ( transformSpace )
 		{
 			case TransformSpace::Local :
-				m_cartesianFrame.translate(distance, true);
+				m_logicStateCoordinates.translate(distance, true);
 				break;
 
 			case TransformSpace::Parent :
@@ -244,11 +244,11 @@ namespace EmEn::Scenes
 
 				if ( parentNode->isRoot() )
 				{
-					m_cartesianFrame.translate(distance, false);
+					m_logicStateCoordinates.translate(distance, false);
 				}
 				else
 				{
-					m_cartesianFrame.translate(distance, parentNode->localCoordinates());
+					m_logicStateCoordinates.translate(distance, parentNode->localCoordinates());
 				}
 			}
 				break;
@@ -256,7 +256,7 @@ namespace EmEn::Scenes
 			case TransformSpace::World :
 				if ( m_parent.lock()->isRoot() )
 				{
-					m_cartesianFrame.translate(distance, false);
+					m_logicStateCoordinates.translate(distance, false);
 				}
 				else
 				{
@@ -279,7 +279,7 @@ namespace EmEn::Scenes
 		switch ( transformSpace )
 		{
 			case TransformSpace::Local :
-				m_cartesianFrame.translateX(distance, true);
+				m_logicStateCoordinates.translateX(distance, true);
 				break;
 
 			case TransformSpace::Parent :
@@ -288,11 +288,11 @@ namespace EmEn::Scenes
 
 				if ( parentNode->isRoot() )
 				{
-					m_cartesianFrame.translateX(distance, false);
+					m_logicStateCoordinates.translateX(distance, false);
 				}
 				else
 				{
-					m_cartesianFrame.translateX(distance, parentNode->localCoordinates());
+					m_logicStateCoordinates.translateX(distance, parentNode->localCoordinates());
 				}
 			}
 				break;
@@ -300,7 +300,7 @@ namespace EmEn::Scenes
 			case TransformSpace::World :
 				if ( m_parent.lock()->isRoot() )
 				{
-					m_cartesianFrame.translateX(distance, false);
+					m_logicStateCoordinates.translateX(distance, false);
 				}
 				else
 				{
@@ -323,7 +323,7 @@ namespace EmEn::Scenes
 		switch ( transformSpace )
 		{
 			case TransformSpace::Local :
-				m_cartesianFrame.translateY(distance, true);
+				m_logicStateCoordinates.translateY(distance, true);
 				break;
 
 			case TransformSpace::Parent :
@@ -332,11 +332,11 @@ namespace EmEn::Scenes
 
 				if ( parentNode->isRoot() )
 				{
-					m_cartesianFrame.translateY(distance, false);
+					m_logicStateCoordinates.translateY(distance, false);
 				}
 				else
 				{
-					m_cartesianFrame.translateY(distance, parentNode->localCoordinates());
+					m_logicStateCoordinates.translateY(distance, parentNode->localCoordinates());
 				}
 			}
 				break;
@@ -344,7 +344,7 @@ namespace EmEn::Scenes
 			case TransformSpace::World :
 				if ( m_parent.lock()->isRoot() )
 				{
-					m_cartesianFrame.translateY(distance, false);
+					m_logicStateCoordinates.translateY(distance, false);
 				}
 				else
 				{
@@ -367,7 +367,7 @@ namespace EmEn::Scenes
 		switch ( transformSpace )
 		{
 			case TransformSpace::Local :
-				m_cartesianFrame.translateZ(distance, true);
+				m_logicStateCoordinates.translateZ(distance, true);
 				break;
 
 			case TransformSpace::Parent :
@@ -376,11 +376,11 @@ namespace EmEn::Scenes
 
 				if ( parentNode->isRoot() )
 				{
-					m_cartesianFrame.translateZ(distance, false);
+					m_logicStateCoordinates.translateZ(distance, false);
 				}
 				else
 				{
-					m_cartesianFrame.translateZ(distance, parentNode->localCoordinates());
+					m_logicStateCoordinates.translateZ(distance, parentNode->localCoordinates());
 				}
 			}
 				break;
@@ -388,7 +388,7 @@ namespace EmEn::Scenes
 			case TransformSpace::World :
 				if ( m_parent.lock()->isRoot() )
 				{
-					m_cartesianFrame.translateZ(distance, false);
+					m_logicStateCoordinates.translateZ(distance, false);
 				}
 				else
 				{
@@ -411,15 +411,15 @@ namespace EmEn::Scenes
 		switch ( transformSpace )
 		{
 			case TransformSpace::Local :
-				m_cartesianFrame.rotate(radian, axis, true);
+				m_logicStateCoordinates.rotate(radian, axis, true);
 				break;
 
 			case TransformSpace::Parent :
-				m_cartesianFrame.rotate(radian, axis, m_parent.lock()->localCoordinates());
+				m_logicStateCoordinates.rotate(radian, axis, m_parent.lock()->localCoordinates());
 				break;
 
 			case TransformSpace::World :
-				m_cartesianFrame.rotate(radian, axis, false);
+				m_logicStateCoordinates.rotate(radian, axis, false);
 				break;
 		}
 
@@ -437,15 +437,15 @@ namespace EmEn::Scenes
 		switch ( transformSpace )
 		{
 			case TransformSpace::Local :
-				m_cartesianFrame.pitch(radian, true);
+				m_logicStateCoordinates.pitch(radian, true);
 				break;
 
 			case TransformSpace::Parent :
-				m_cartesianFrame.pitch(radian, m_parent.lock()->localCoordinates());
+				m_logicStateCoordinates.pitch(radian, m_parent.lock()->localCoordinates());
 				break;
 
 			case TransformSpace::World :
-				m_cartesianFrame.pitch(radian, false);
+				m_logicStateCoordinates.pitch(radian, false);
 				break;
 		}
 
@@ -463,15 +463,15 @@ namespace EmEn::Scenes
 		switch ( transformSpace )
 		{
 			case TransformSpace::Local :
-				m_cartesianFrame.yaw(radian, true);
+				m_logicStateCoordinates.yaw(radian, true);
 				break;
 
 			case TransformSpace::Parent :
-				m_cartesianFrame.yaw(radian, m_parent.lock()->localCoordinates());
+				m_logicStateCoordinates.yaw(radian, m_parent.lock()->localCoordinates());
 				break;
 
 			case TransformSpace::World :
-				m_cartesianFrame.yaw(radian, false);
+				m_logicStateCoordinates.yaw(radian, false);
 				break;
 		}
 
@@ -489,15 +489,15 @@ namespace EmEn::Scenes
 		switch ( transformSpace )
 		{
 			case TransformSpace::Local :
-				m_cartesianFrame.roll(radian, true);
+				m_logicStateCoordinates.roll(radian, true);
 				break;
 
 			case TransformSpace::Parent :
-				m_cartesianFrame.roll(radian, m_parent.lock()->localCoordinates());
+				m_logicStateCoordinates.roll(radian, m_parent.lock()->localCoordinates());
 				break;
 
 			case TransformSpace::World :
-				m_cartesianFrame.roll(radian, false);
+				m_logicStateCoordinates.roll(radian, false);
 				break;
 		}
 
@@ -515,7 +515,7 @@ namespace EmEn::Scenes
 		switch ( transformSpace )
 		{
 			case TransformSpace::Local :
-				m_cartesianFrame.setScalingFactor(factor);
+				m_logicStateCoordinates.setScalingFactor(factor);
 				break;
 
 			case TransformSpace::Parent :
@@ -538,7 +538,7 @@ namespace EmEn::Scenes
 		switch ( transformSpace )
 		{
 			case TransformSpace::Local :
-				m_cartesianFrame.setScalingFactor(factor);
+				m_logicStateCoordinates.setScalingFactor(factor);
 				break;
 
 			case TransformSpace::Parent :
@@ -561,7 +561,7 @@ namespace EmEn::Scenes
 		switch ( transformSpace )
 		{
 			case TransformSpace::Local :
-				m_cartesianFrame.setScalingXFactor(factor);
+				m_logicStateCoordinates.setScalingXFactor(factor);
 				break;
 
 			case TransformSpace::Parent :
@@ -584,7 +584,7 @@ namespace EmEn::Scenes
 		switch ( transformSpace )
 		{
 			case TransformSpace::Local :
-				m_cartesianFrame.setScalingYFactor(factor);
+				m_logicStateCoordinates.setScalingYFactor(factor);
 				break;
 
 			case TransformSpace::Parent :
@@ -607,7 +607,7 @@ namespace EmEn::Scenes
 		switch ( transformSpace )
 		{
 			case TransformSpace::Local :
-				m_cartesianFrame.setScalingZFactor(factor);
+				m_logicStateCoordinates.setScalingZFactor(factor);
 				break;
 
 			case TransformSpace::Parent :
@@ -626,7 +626,7 @@ namespace EmEn::Scenes
 		 * If the parent is the root node, return the frame. */
 		if ( this->isRoot() || this->parent()->isRoot() )
 		{
-			return m_cartesianFrame;
+			return m_logicStateCoordinates;
 		}
 
 		/* Stack up a reversed tree for each cartesian frame. */
@@ -669,7 +669,7 @@ namespace EmEn::Scenes
 
 		if ( this->parent()->isRoot() )
 		{
-			return OrientedCuboid< float >{this->localBoundingBox(), m_cartesianFrame}.getAxisAlignedBox();
+			return OrientedCuboid< float >{this->localBoundingBox(), m_logicStateCoordinates}.getAxisAlignedBox();
 		}
 
 		return OrientedCuboid< float >{this->localBoundingBox(), this->getWorldCoordinates()}.getAxisAlignedBox();
@@ -688,7 +688,7 @@ namespace EmEn::Scenes
 		{
 			return {
 				this->localBoundingSphere().radius(),
-				m_cartesianFrame.position() + this->localBoundingSphere().position()
+				m_logicStateCoordinates.position() + this->localBoundingSphere().position()
 			};
 		}
 
@@ -739,7 +739,7 @@ namespace EmEn::Scenes
 		/* Dispatch the movement to every component. */
 		if ( this->parent()->isRoot() )
 		{
-			this->onContainerMove(m_cartesianFrame);
+			this->onContainerMove(m_logicStateCoordinates);
 		}
 		else
 		{
@@ -922,7 +922,7 @@ namespace EmEn::Scenes
 
 		if ( this->parent()->isRoot() )
 		{
-			this->addForce(m_cartesianFrame.forwardVector().scale(power));
+			this->addForce(m_logicStateCoordinates.forwardVector().scale(power));
 		}
 		else
 		{
@@ -958,7 +958,7 @@ namespace EmEn::Scenes
 
 		if ( this->parent()->isRoot() )
 		{
-			return m_cartesianFrame.position() + this->centerOfMass();
+			return m_logicStateCoordinates.position() + this->centerOfMass();
 		}
 
 		return this->getWorldCoordinates().position() + this->centerOfMass();

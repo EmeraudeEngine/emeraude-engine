@@ -28,14 +28,8 @@
 
 namespace EmEn::Audio
 {
-	using namespace EmEn::Libs;
-	using namespace EmEn::Libs::Math;
-
-	Recorder::Recorder (const std::string & name) noexcept
-		: AbstractVirtualDevice(name, AVConsole::DeviceType::Audio, AVConsole::ConnexionType::Both)
-	{
-
-	}
+	using namespace Libs;
+	using namespace Libs::Math;
 
 	void
 	Recorder::updateDeviceFromCoordinates (const CartesianFrame< float > & /*worldCoordinates*/, const Vector< 3, float > & /*worldVelocity*/) noexcept

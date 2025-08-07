@@ -40,39 +40,320 @@
 
 namespace EmEn::Audio
 {
-	using namespace EmEn::Libs;
-	using namespace EmEn::Libs::Math;
+	using namespace Libs;
+	using namespace Libs::Math;
 
 	const size_t Manager::ClassUID{getClassUID(ClassId)};
 	Manager * Manager::s_instance{nullptr};
 	bool Manager::s_audioDisabled{false};
 
 	bool
-	Manager::initializeSubServices () noexcept
+	Manager::queryOutputDevices (bool useExtendedAPI) noexcept
 	{
-		/* Initialize the track mixer. */
-		if ( m_trackMixer.initialize(m_subServicesEnabled) )
+		/* NOTE: Check for the audio device enumeration. */
+		const char * extensionName = useExtendedAPI ? "ALC_ENUMERATE_ALL_EXT" : "ALC_ENUMERATION_EXT";
+
+		if ( alcIsExtensionPresent(nullptr, extensionName) == ALC_FALSE )
 		{
-			TraceSuccess{ClassId} << m_trackMixer.name() << " service up !";
-		}
-		else
-		{
-			TraceWarning{ClassId} <<
-				m_trackMixer.name() << " service failed to execute." "\n"
-				"No music available !";
+			TraceError{ClassId} << "OpenAL extension '" << extensionName << "' not available!";
+
+			return false;
 		}
 
-		/* Initialize the audio external input. */
-		if ( m_externalInput.initialize(m_subServicesEnabled) )
+		m_availableOutputDevices.clear();
+		m_usingAdvancedEnumeration = useExtendedAPI;
+
+		const auto * devices = alcGetString(nullptr, useExtendedAPI ? ALC_ALL_DEVICES_SPECIFIER : ALC_DEVICE_SPECIFIER);
+
+		if ( devices == nullptr )
 		{
-			TraceSuccess{ClassId} << m_externalInput.name() << " service up !";
+			Tracer::error(ClassId, "There is no audio devices!");
+
+			return false;
+		}
+
+		while ( *devices != '\0' )
+		{
+			m_availableOutputDevices.emplace_back(devices);
+
+			devices += m_availableOutputDevices.back().length() + 1;
+		}
+
+		if ( m_availableOutputDevices.empty() )
+		{
+			/* No device at all... */
+			m_selectedOutputDeviceName.clear();
+
+			return false;
+		}
+
+		const auto * defaultDeviceName = alcGetString(nullptr, useExtendedAPI ? ALC_DEFAULT_ALL_DEVICES_SPECIFIER : ALC_DEFAULT_DEVICE_SPECIFIER);
+
+		if ( m_selectedOutputDeviceName.empty() )
+		{
+			m_selectedOutputDeviceName.assign(defaultDeviceName);
 		}
 		else
 		{
-			TraceWarning{ClassId} <<
-				m_externalInput.name() << " service failed to execute !" "\n"
-				"No audio input available !";
+			/* NOTE: Check if the previous selected device from settings is still available. */
+			const auto deviceIt = std::ranges::find_if(m_availableOutputDevices, [this] (const std::string & deviceName) {
+				return deviceName == m_selectedOutputDeviceName;
+			});
+
+			if ( deviceIt == m_availableOutputDevices.cend() )
+			{
+				TraceWarning{ClassId} << "The selected output audio device '" << m_selectedOutputDeviceName << "' is not available anymore!";
+
+				m_selectedOutputDeviceName.assign(defaultDeviceName);
+			}
 		}
+
+		m_audioSystemAvailable = true;
+
+		return true;
+	}
+
+	bool
+	Manager::setupAudioOutputDevice () noexcept
+	{
+		auto & settings = m_primaryServices.settings();
+		
+		/* First, read setting for a desired output audio device. */
+		m_selectedOutputDeviceName = settings.get< std::string >(AudioDeviceNameKey, DefaultAudioDeviceName);
+
+		/* Then, check the audio system. */
+		bool forceDefaultDevice = false;
+
+		if ( !settings.get< bool >(AudioForceDefaultDeviceKey, DefaultAudioForceDefaultDevice) )
+		{
+			if ( this->queryOutputDevices(true) || this->queryOutputDevices(false) )
+			{
+				if ( m_showInformation )
+				{
+					std::cout << "[OpenAL] Audio devices:" "\n";
+
+					for ( const auto & deviceName : m_availableOutputDevices )
+					{
+						std::cout << " - " << deviceName << '\n';
+					}
+
+					std::cout << "Default: " << m_selectedOutputDeviceName << '\n';
+				}
+			}
+			else
+			{
+				forceDefaultDevice = true;
+
+				Tracer::warning(ClassId, "There is no audio system found by querying! Let OpenAL open a default itself ...");
+			}
+		}
+		else
+		{
+			forceDefaultDevice = true;
+		}
+
+		/* Checks configuration file */
+		const auto frequency = WaveFactory::toFrequency(settings.get< int32_t >(AudioPlaybackFrequencyKey, DefaultAudioPlaybackFrequency));
+
+		if ( frequency == WaveFactory::Frequency::Invalid )
+		{
+			TraceWarning{ClassId} << "Invalid frequency in settings file! Leaving to default " << DefaultAudioPlaybackFrequency << " Hz.";
+		}
+		else
+		{
+			m_playbackFrequency = frequency;
+		}
+
+		/* NOTE: Opening the output audio device. */
+		if ( forceDefaultDevice )
+		{
+			m_outputDevice = alcOpenDevice(nullptr);
+
+			if ( alcGetErrors(m_outputDevice, "alcOpenDevice(NULL)", __FILE__, __LINE__) || m_outputDevice == nullptr )
+			{
+				TraceError{ClassId} << "Unable to open the default output audio device !";
+
+				return false;
+			}
+		}
+		else
+		{
+			m_outputDevice = alcOpenDevice(m_selectedOutputDeviceName.c_str());
+
+			if ( alcGetErrors(m_outputDevice, "alcOpenDevice(deviceName)", __FILE__, __LINE__) || m_outputDevice == nullptr )
+			{
+				TraceError{ClassId} << "Unable to open the selected output audio device '" << m_selectedOutputDeviceName << "' !";
+
+				return false;
+			}
+		}
+
+		if ( m_usingAdvancedEnumeration )
+		{
+			TraceSuccess{ClassId} << "The output audio device '" << alcGetString(m_outputDevice, ALC_ALL_DEVICES_SPECIFIER) << "' selected !";
+		}
+		else
+		{
+			TraceSuccess{ClassId} << "The output audio device '" << alcGetString(m_outputDevice, ALC_DEVICE_SPECIFIER) << "' selected !";
+		}
+
+		const std::array attributeList{
+			ALC_FREQUENCY, static_cast< int >(m_playbackFrequency),
+			ALC_REFRESH, settings.get< int32_t >(OpenALRefreshRateKey, DefaultOpenALRefreshRate),
+			ALC_SYNC, settings.get< int32_t >(OpenALSyncStateKey, DefaultOpenALSyncState),
+			ALC_MONO_SOURCES, settings.get< int32_t >(OpenALMaxMonoSourceCountKey, DefaultOpenALMaxMonoSourceCount),
+			ALC_STEREO_SOURCES, settings.get< int32_t >(OpenALMaxStereoSourceCountKey, DefaultOpenALMaxStereoSourceCount),
+			0
+		};
+
+		/* Context creation and set it as default. */
+		m_context = alcCreateContext(m_outputDevice, attributeList.data());
+
+		if ( alcGetErrors(m_outputDevice, "alcCreateContext()", __FILE__, __LINE__) || m_context == nullptr )
+		{
+			Tracer::error(ClassId, "Unable to create an audio context !");
+
+			return false;
+		}
+
+		if ( alcMakeContextCurrent(m_context) == AL_FALSE || alcGetErrors(m_outputDevice, "alcMakeContextCurrent()", __FILE__, __LINE__) )
+		{
+			Tracer::error(ClassId, "Unable set the current audio context !");
+
+			return false;
+		}
+
+		OpenAL::installExtensionEvents();
+
+		/* OpenAL EFX extensions. */
+		if ( settings.get< bool >(OpenALUseEFXExtensionsKey, DefaultOpenALUseEFXExtensions) )
+		{
+			OpenAL::installExtensionSystemEvents(m_outputDevice);
+
+			OpenAL::installExtensionEFX(m_outputDevice);
+		}
+
+		return this->saveContextAttributes();
+	}
+
+	bool
+	Manager::queryInputDevices () noexcept
+	{
+		/* NOTE: Check for the audio device enumeration. */
+		if ( alcIsExtensionPresent(nullptr, "ALC_EXT_CAPTURE") == ALC_FALSE )
+		{
+			Tracer::error(ClassId, "OpenAL extension 'ALC_EXT_CAPTURE' not available!");
+
+			return false;
+		}
+
+		m_availableInputDevices.clear();
+
+		const auto * devices = alcGetString(nullptr, ALC_CAPTURE_DEVICE_SPECIFIER);
+
+		if ( devices == nullptr )
+		{
+			Tracer::error(ClassId, "There is no capture audio devices!");
+
+			return false;
+		}
+
+		while ( *devices != '\0' )
+		{
+			m_availableInputDevices.emplace_back(devices);
+
+			devices += m_availableInputDevices.back().length() + 1;
+		}
+
+		if ( m_availableInputDevices.empty() )
+		{
+			/* No device at all... */
+			m_selectedInputDeviceName.clear();
+
+			return false;
+		}
+
+		const auto * defaultDeviceName = alcGetString(nullptr, ALC_CAPTURE_DEFAULT_DEVICE_SPECIFIER);
+
+		if ( m_selectedInputDeviceName.empty() )
+		{
+			m_selectedInputDeviceName.assign(defaultDeviceName);
+		}
+		else
+		{
+			/* NOTE: Check if the previous selected device from settings is still available. */
+			const auto deviceIt = std::ranges::find_if(m_availableInputDevices, [this] (const std::string & deviceName) {
+				return deviceName == m_selectedInputDeviceName;
+			});
+
+			if ( deviceIt == m_availableInputDevices.cend() )
+			{
+				TraceWarning{ClassId} << "The selected input audio device '" << m_selectedInputDeviceName << "' is not available anymore!";
+
+				m_selectedInputDeviceName.assign(defaultDeviceName);
+			}
+		}
+
+		m_audioCaptureAvailable = true;
+
+		return true;
+	}
+
+	bool
+	Manager::setupAudioInputDevice () noexcept
+	{
+		auto & settings = m_primaryServices.settings();
+
+		/* First, read setting for a desired input audio device. */
+		m_selectedInputDeviceName = settings.get< std::string >(AudioRecorderDeviceNameKey, DefaultAudioRecorderDeviceName);
+
+		/* Then, check the audio capture system. */
+		if ( !this->queryInputDevices() )
+		{
+			return false;
+		}
+
+		if ( m_showInformation )
+		{
+			std::cout << "[OpenAL] Capture audio devices:" "\n";
+
+			for ( const auto & deviceName : m_availableInputDevices )
+			{
+				std::cout << " - " << deviceName << '\n';
+			}
+
+			std::cout << "Default: " << m_selectedInputDeviceName << '\n';
+		}
+
+		/* Checks configuration file */
+		const auto frequency = WaveFactory::toFrequency(settings.get< int32_t >(RecorderFrequencyKey, DefaultRecorderFrequency));
+		const auto bufferSize = settings.get< int32_t >(RecorderBufferSizeKey, DefaultRecorderBufferSize);
+
+		if ( frequency == WaveFactory::Frequency::Invalid )
+		{
+			TraceWarning{ClassId} << "Invalid recorder frequency in settings file! Leaving to default " << DefaultRecorderFrequency << " Hz.";
+		}
+		else
+		{
+			m_recordFrequency = frequency;
+		}
+
+		/* NOTE: Opening the output input device. */
+		m_inputDevice = alcCaptureOpenDevice(
+			m_selectedInputDeviceName.c_str(),
+			static_cast< ALuint >(m_recordFrequency),
+			AL_FORMAT_MONO16,
+			bufferSize * 1024
+		);
+
+		if ( m_inputDevice == nullptr )
+		{
+			TraceError{ClassId} << "Unable to open the input audio device '" << m_selectedOutputDeviceName << "' !";
+
+			return false;
+		}
+
+		TraceSuccess{ClassId} << "The input audio device '" << alcGetString(m_inputDevice, ALC_CAPTURE_DEVICE_SPECIFIER) << "' selected !";
 
 		return true;
 	}
@@ -80,146 +361,119 @@ namespace EmEn::Audio
 	bool
 	Manager::onInitialize () noexcept
 	{
-		m_flags[ShowInformation] = m_primaryServices.settings().get< bool >(OpenALShowInformationKey, DefaultOpenALShowInformation);
+		auto & settings = m_primaryServices.settings();
 
-		if ( m_primaryServices.arguments().get("--disable-audio").isPresent() || !m_primaryServices.settings().get< bool >(AudioEnableKey, DefaultAudioEnable) )
+		m_showInformation = settings.get< bool >(OpenALShowInformationKey, DefaultOpenALShowInformation);
+
+		if ( m_primaryServices.arguments().get("--disable-audio").isPresent() || !settings.get< bool >(AudioEnableKey, DefaultAudioEnable) )
 		{
-			Tracer::warning(ClassId, "Audio manager disabled at startup.");
-
-			m_flags[ServiceInitialized] = true;
-
 			s_audioDisabled = true;
-			m_flags[AudioDisabledAtStartup] = true;
+			m_serviceInitialized = true;
+
+			Tracer::warning(ClassId, "Audio manager disabled at startup.");
 
 			return true;
 		}
 
-		/* Sets the frequency playback. */
-		m_playbackFrequency = WaveFactory::toFrequency(m_primaryServices.settings().get< int32_t >(AudioPlaybackFrequencyKey, DefaultAudioPlaybackFrequency));
-
-		/* Sets the music chunk size in bytes. */
-		m_musicChunkSize = m_primaryServices.settings().get< uint32_t >(AudioMusicChunkSizeKey, DefaultAudioMusicChunkSize);
-
-		this->queryDevices();
-
-		/* Take the default device. */
-		m_device = alcOpenDevice(nullptr);
-
-		if ( alcGetErrors(m_device, "alcOpenDevice()", __FILE__, __LINE__) || m_device == nullptr )
+		/* NOTE: Select an audio device. */
+		if ( this->setupAudioOutputDevice() )
 		{
-			Tracer::error(ClassId, "Unable to get the default audio device !");
+			m_serviceInitialized = true;
+		}
+		else
+		{
+			s_audioDisabled = true;
+
+			Tracer::error(ClassId, "Unable to get an audio device or an audio context! Disabling audio layer.");
 
 			return false;
 		}
 
-		std::array attrList{
-			ALC_FREQUENCY, static_cast< int >(m_playbackFrequency),
-			ALC_REFRESH, m_primaryServices.settings().get< int32_t >(OpenALRefreshRateKey, DefaultOpenALRefreshRate),
-			ALC_SYNC, m_primaryServices.settings().get< int32_t >(OpenALSyncStateKey, DefaultOpenALSyncState),
-			ALC_MONO_SOURCES, m_primaryServices.settings().get< int32_t >(OpenALMaxMonoSourceCountKey, DefaultOpenALMaxMonoSourceCount),
-			ALC_STEREO_SOURCES, m_primaryServices.settings().get< int32_t >(OpenALMaxStereoSourceCountKey, DefaultOpenALMaxStereoSourceCount),
-			0
-		};
-
-		/* Context creation and set it as default. */
-		m_context = alcCreateContext(m_device, attrList.data());
-
-		if ( alcGetErrors(m_device, "alcCreateContext()", __FILE__, __LINE__) || m_context == nullptr )
+		/* NOTE: Select a capture audio device. */
+		if ( settings.get< bool >(AudioRecorderEnableKey, DefaultAudioRecorderEnable) )
 		{
-			Tracer::error(ClassId, "Unable to load an audio context !");
-
-			return false;
-		}
-
-		if ( alcMakeContextCurrent(m_context) == AL_FALSE || alcGetErrors(m_device, "alcMakeContextCurrent()", __FILE__, __LINE__) )
-		{
-			Tracer::error(ClassId, "Unable set the current audio context !");
-
-			return false;
-		}
-
-		/* OpenAL EFX extensions. */
-		if ( m_primaryServices.settings().get< bool >(OpenALUseEFXExtensionsKey, DefaultOpenALUseEFXExtensions) )
-		{
-			m_EFX = std::make_shared< EFX >(m_device);
-
-			if ( EFX::isAvailable() )
+			if ( this->setupAudioInputDevice() )
 			{
-				Tracer::success(ClassId, "OpenAL EFX extension available.");
+				m_audioRecorder.configure(m_inputDevice, WaveFactory::Channels::Mono, m_recordFrequency);
 			}
 			else
 			{
-				Tracer::warning(ClassId, "OpenAL EFX extension unavailable !");
+				Tracer::error(ClassId, "Unable to get a capture audio device! Disabling audio recording.");
 			}
 		}
 
-		if ( !this->saveContextAttributes() )
-		{
-			return false;
-		}
-
-		m_flags[ServiceInitialized] = true;
-		m_flags[Enabled] = true;
-
-		/* NOTE: Be sure of the playback frequency allowed by this OpenAL context. */
-		m_playbackFrequency = WaveFactory::toFrequency(m_contextAttributes[ALC_FREQUENCY]);
-
+		/* NOTE: Set up the audio configuration. */
 		this->setMetersPerUnit(1.0F);
-		this->setMasterVolume(m_primaryServices.settings().get< float >(AudioMasterVolumeKey, DefaultAudioMasterVolume));
+		this->setMasterVolume(settings.get< float >(AudioMasterVolumeKey, DefaultAudioMasterVolume));
+		m_playbackFrequency = WaveFactory::toFrequency(m_contextAttributes[ALC_FREQUENCY]); /* NOTE: Be sure of the playback frequency allowed by this OpenAL context. */
+		m_musicChunkSize = settings.get< uint32_t >(AudioMusicChunkSizeKey, DefaultAudioMusicChunkSize);
 
-		/* Create all sources available minus the default one. */
-		for ( int index = 0; index < m_contextAttributes[ALC_MONO_SOURCES]; index++ )
+		/* NOTE: Create a default source. */
+		m_defaultSource = std::make_shared< Source >();
+
+		/* Create all sources available minus the default one and two for the track mixer. */
+		if ( m_contextAttributes[ALC_MONO_SOURCES] > 4 )
 		{
-			auto source = std::make_shared< Source >();
+			const auto maxMonoSources = static_cast< size_t >(m_contextAttributes[ALC_MONO_SOURCES]) - 3;
 
-			if ( !source->isCreated() )
+			m_allSources.reserve(maxMonoSources);
+			m_availableSources.reserve(maxMonoSources);
+
+			for ( size_t index = 0; index < maxMonoSources; index++ )
 			{
-				TraceWarning{ClassId} << "Unable to create the source #" << index << " !";
+				auto source = std::make_shared< Source >();
 
-				break;
+				if ( !source->isCreated() )
+				{
+					TraceWarning{ClassId} << "Unable to create the source #" << index << " !";
+
+					break;
+				}
+
+				m_allSources.push_back(source);
+
+				m_availableSources.push_back(source.get());
 			}
-
-			m_sources.emplace_back(source);
 		}
 
-		if ( m_sources.empty() )
+		if ( m_allSources.empty() )
 		{
-			Tracer::error(ClassId, "No audio source available at all ! Disable audio layer ...");
-
-			m_flags[Enabled] = false;
+			Tracer::error(ClassId, "No audio source available at all! Disabling audio layer.");
 
 			s_audioDisabled = true;
-			m_flags[AudioDisabledAtStartup] = true;
 
 			return false;
 		}
 
-		m_defaultSource = *m_sources.begin();
+		m_audioEnabled = true;
 
-		/* NOTE: Check for missing errors from audio lib initialization. */
-		if ( alcGetErrors(m_device, "AudioInit", __FILE__, __LINE__) )
+		this->registerToConsole();
+
+		if ( m_trackMixer.initialize() )
 		{
-			Tracer::warning(ClassId, "There was unread problem with ALC during initialization !");
+			TraceSuccess{ClassId} << m_trackMixer.name() << " service up !";
+
+			m_trackMixer.enableCrossFader(m_contextAttributes[ALC_STEREO_SOURCES] >= 2);
+		}
+		else
+		{
+			TraceWarning{ClassId} << m_trackMixer.name() << " service failed to execute !";
 		}
 
-		if ( alGetErrors("AudioInit", __FILE__, __LINE__) )
+		if ( m_showInformation )
+		{
+			Tracer::info(ClassId, this->getAPIInformation());
+		}
+
+		/* NOTE: Check for missing errors from audio lib initialization. */
+		if ( alGetErrors("GlobalInitFlush", __FILE__, __LINE__) )
 		{
 			Tracer::warning(ClassId, "There was unread problem with AL during initialization !");
 		}
 
-		this->registerToConsole();
-
-		/* NOTE: Initialize all sub-services */
-		if ( !this->initializeSubServices() )
+		if ( alcGetErrors(m_outputDevice, "GlobalInitFlush", __FILE__, __LINE__) )
 		{
-			Tracer::fatal(ClassId, "Unable to initialize renderer sub-services properly !");
-
-			return false;
-		}
-
-		if ( m_flags[ShowInformation] )
-		{
-			Tracer::info(ClassId, this->getAPIInformation());
+			Tracer::warning(ClassId, "There was unread problem with ALC during initialization !");
 		}
 
 		return true;
@@ -228,26 +482,57 @@ namespace EmEn::Audio
 	bool
 	Manager::onTerminate () noexcept
 	{
-		m_flags[ServiceInitialized] = false;
-		m_flags[Enabled] = false;
+		m_audioEnabled = false;
+		m_serviceInitialized = false;
 
 		/* NOTE: The audio service wasn't inited. */
-		if ( m_flags[AudioDisabledAtStartup] )
+		if ( !m_audioSystemAvailable )
 		{
 			return true;
 		}
 
+		if ( m_trackMixer.terminate() )
+		{
+			TraceSuccess{ClassId} << m_trackMixer.name() << " primary service terminated gracefully !";
+		}
+		else
+		{
+			TraceError{ClassId} << m_trackMixer.name() << " primary service failed to terminate properly !";
+		}
+
+		m_defaultSource.reset();
+
 		/* NOTE: Check for missing errors from audio lib execution. */
-		if ( alGetErrors("AudioRelease", __FILE__, __LINE__) )
+		if ( alGetErrors("GlobalReleaseFlush", __FILE__, __LINE__) )
 		{
 			Tracer::warning(ClassId, "There was unread problem with AL during execution !");
 		}
 
-		if ( alcGetErrors(m_device, "AudioRelease", __FILE__, __LINE__) )
+		if ( alcGetErrors(m_outputDevice, "GlobalReleaseFlush", __FILE__, __LINE__) )
 		{
 			Tracer::warning(ClassId, "There was unread problem with ALC during execution !");
 		}
 
+		auto & settings = m_primaryServices.settings();
+
+		/* NOTE: Release the output audio device. */
+		if ( m_inputDevice != nullptr )
+		{
+			if ( alcCaptureCloseDevice(m_inputDevice) == ALC_TRUE )
+			{
+				TraceSuccess{ClassId} << "The input audio device '" << m_selectedInputDeviceName << "' closed !";
+
+				settings.set< std::string >(AudioRecorderDeviceNameKey, m_selectedInputDeviceName);
+			}
+			else
+			{
+				TraceError{ClassId} << "Unable to close the input audio device '" << m_selectedInputDeviceName << "' !";
+			}
+
+			m_inputDevice = nullptr;
+		}
+
+		/* NOTE: Release the audio context. */
 		alcMakeContextCurrent(nullptr);
 
 		if ( m_context != nullptr )
@@ -257,11 +542,21 @@ namespace EmEn::Audio
 			m_context = nullptr;
 		}
 
-		if ( m_device != nullptr )
+		/* NOTE: Release the output audio device. */
+		if ( m_outputDevice != nullptr )
 		{
-			alcCloseDevice(m_device);
+			if ( alcCloseDevice(m_outputDevice) == ALC_TRUE )
+			{
+				TraceSuccess{ClassId} << "The output audio device '" << m_selectedOutputDeviceName << "' closed !";
 
-			m_device = nullptr;
+				settings.set< std::string >(AudioDeviceNameKey, m_selectedOutputDeviceName);
+			}
+			else
+			{
+				TraceError{ClassId} << "Unable to close the output audio device '" << m_selectedOutputDeviceName << "' !";
+			}
+
+			m_outputDevice = nullptr;
 		}
 
 		return true;
@@ -276,40 +571,44 @@ namespace EmEn::Audio
 	void
 	Manager::enableAudio (bool state) noexcept
 	{
-		if ( m_flags[AudioDisabledAtStartup] )
+		if ( !m_audioSystemAvailable )
 		{
 			Tracer::info(ClassId, "The audio sub-system has been disabled at startup !");
 
 			return;
 		}
 
-		m_flags[Enabled] = state;
+		m_audioEnabled = state;
 	}
 
 	void
-	Manager::play (const std::string & resourceName, Source::PlayMode mode, float gain) const noexcept
+	Manager::play (const std::shared_ptr< PlayableInterface > & playable, PlayMode mode, float gain) const noexcept
 	{
-		if ( !this->isAudioEnabled() )
+		if ( this->isAudioEnabled() && m_defaultSource != nullptr )
 		{
-			return;
+			m_defaultSource->setGain(gain);
+			m_defaultSource->play(playable, mode);
 		}
+	}
 
-		auto soundResource = m_resourceManager.container< SoundResource >()->getResource(resourceName);
-
-		if ( !soundResource->isLoaded() )
+	void
+	Manager::play (const std::string & resourceName, PlayMode mode, float gain) const noexcept
+	{
+		if ( this->isAudioEnabled() && m_defaultSource != nullptr )
 		{
-			TraceInfo{ClassId} << "The sound '" << soundResource->name() << "' is not yet loaded !";
+			const auto soundResource = m_resourceManager
+				.container< SoundResource >()
+				->getResource(resourceName);
 
-			return;
+			m_defaultSource->setGain(gain);
+			m_defaultSource->play(soundResource, mode);
 		}
-
-		this->play(soundResource, mode, gain);
 	}
 
 	void
 	Manager::setMetersPerUnit (float meters) noexcept
 	{
-		if ( m_flags[AudioDisabledAtStartup] || !EFX::isAvailable() )
+		if ( !m_audioSystemAvailable || !OpenAL::isEFXAvailable() )
 		{
 			return;
 		}
@@ -329,7 +628,7 @@ namespace EmEn::Audio
 	{
 		ALfloat meters = AL_DEFAULT_METERS_PER_UNIT;
 
-		if ( !m_flags[AudioDisabledAtStartup] && EFX::isAvailable() )
+		if ( m_audioSystemAvailable && OpenAL::isEFXAvailable() )
 		{
 			alGetListenerf(AL_METERS_PER_UNIT, &meters);
 		}
@@ -343,12 +642,12 @@ namespace EmEn::Audio
 		ALCint major = 0;
 		ALCint minor = 0;
 
-		if ( !m_flags[AudioDisabledAtStartup] )
+		if ( m_audioSystemAvailable )
 		{
 			if ( m_contextAttributes.empty() )
 			{
-				alcGetIntegerv(m_device, ALC_MAJOR_VERSION, 1, &major);
-				alcGetIntegerv(m_device, ALC_MINOR_VERSION, 1, &minor);
+				alcGetIntegerv(m_outputDevice, ALC_MAJOR_VERSION, 1, &major);
+				alcGetIntegerv(m_outputDevice, ALC_MINOR_VERSION, 1, &minor);
 			}
 			else
 			{
@@ -370,7 +669,7 @@ namespace EmEn::Audio
 		ALCint major = 0;
 		ALCint minor = 0;
 
-		if ( !m_flags[AudioDisabledAtStartup] )
+		if ( m_audioSystemAvailable )
 		{
 			/*if ( m_contextAttributes.empty() )
 			{
@@ -394,38 +693,45 @@ namespace EmEn::Audio
 	size_t
 	Manager::getAvailableSourceCount () const noexcept
 	{
-		size_t count = 0;
+		const std::lock_guard< std::mutex > lock{m_sourcePoolMutex};
 
-		for ( const auto & source : m_sources )
-		{
-			if ( source.use_count() == 1 )
-			{
-				count++;
-			}
-		}
-
-		return count;
+		return m_availableSources.size();
 	}
 
-	std::shared_ptr< Source >
-	Manager::requestSource () const noexcept
+	SourceRequest
+	Manager::requestSource () noexcept
 	{
-		/* FIXME: Find a better way to deliver quickly an available source. */
-		for ( const auto & source : m_sources )
+		const std::lock_guard< std::mutex > lock{m_sourcePoolMutex};
+
+		if ( m_availableSources.empty() )
 		{
-			if ( source.use_count() == 1 )
-			{
-				return source;
-			}
+			return nullptr;
 		}
 
-		return nullptr;
+		auto * source = m_availableSources.back();
+
+		m_availableSources.pop_back();
+
+		return {source, [this](Source * sourceToRelease) {
+			this->releaseSource(sourceToRelease);
+		}};
+	}
+
+	void
+	Manager::releaseSource (Source * source) noexcept
+	{
+		if ( source != nullptr )
+		{
+			const std::lock_guard< std::mutex > lock{m_sourcePoolMutex};
+
+			m_availableSources.push_back(source);
+		}
 	}
 
 	void
 	Manager::setMasterVolume (float gain) noexcept
 	{
-		if ( m_flags[AudioDisabledAtStartup] )
+		if ( !m_audioSystemAvailable )
 		{
 			return;
 		}
@@ -438,7 +744,7 @@ namespace EmEn::Audio
 	{
 		ALfloat gain = 0.0F;
 
-		if ( !m_flags[AudioDisabledAtStartup] )
+		if ( m_audioSystemAvailable )
 		{
 			alGetListenerf(AL_GAIN, &gain);
 		}
@@ -449,7 +755,7 @@ namespace EmEn::Audio
 	void
 	Manager::setSoundEnvironmentProperties (const SoundEnvironmentProperties & properties) noexcept
 	{
-		if ( m_flags[AudioDisabledAtStartup] )
+		if ( !m_audioSystemAvailable )
 		{
 			return;
 		}
@@ -560,7 +866,7 @@ namespace EmEn::Audio
 	void
 	Manager::setListenerProperties (const std::array< ALfloat, 12 > & properties) noexcept
 	{
-		if ( !m_flags[AudioDisabledAtStartup] )
+		if ( m_audioSystemAvailable )
 		{
 			alListenerfv(AL_POSITION, properties.data());
 			alListenerfv(AL_ORIENTATION, properties.data() + 3);
@@ -571,7 +877,7 @@ namespace EmEn::Audio
 	void
 	Manager::listenerProperties (std::array< ALfloat, 12 > & properties) const noexcept
 	{
-		if ( !m_flags[AudioDisabledAtStartup] )
+		if ( m_audioSystemAvailable )
 		{
 			alGetListenerfv(AL_POSITION, properties.data());
 			alGetListenerfv(AL_ORIENTATION, properties.data() + 3);
@@ -582,7 +888,7 @@ namespace EmEn::Audio
 	std::string
 	Manager::getAPIInformation () const noexcept
 	{
-		if ( m_flags[AudioDisabledAtStartup] )
+		if ( !m_audioSystemAvailable )
 		{
 			return "API not loaded !";
 		}
@@ -621,98 +927,27 @@ namespace EmEn::Audio
 		output << "ALC information" "\n";
 
 		/* ALC Capabilities (read before) */
-		for ( const auto & pair : m_contextAttributes )
+		for ( const auto & [label, value] : m_contextAttributes )
 		{
-			output << " - " << alcKeyToLabel(pair.first) << " : " << pair.second << "\n";
+			output << " - " << alcKeyToLabel(label) << " : " << value << "\n";
 		}
 
 		/* ALC extensions */
+		if ( const auto extensions = String::explode(alcGetString(nullptr, ALC_EXTENSIONS), ' ', false); extensions.empty() )
 		{
-			auto extensions = String::explode(alcGetString(nullptr, ALC_EXTENSIONS), ' ', false);
+			output << "No ALC extension available !" "\n";
+		}
+		else
+		{
+			output << "Available ALC extensions :" "\n";
 
-			if ( extensions.empty() )
+			for ( const auto & extension : extensions )
 			{
-				output << "No ALC extension available !" "\n";
-			}
-			else
-			{
-				output << "Available ALC extensions :" "\n";
-
-				for ( const auto & extension : extensions )
-				{
-					output << " - " << extension << '\n';
-				}
+				output << " - " << extension << '\n';
 			}
 		}
 
 		return output.str();
-	}
-
-	std::vector< std::string >
-	Manager::getDeviceName (const ALCchar * list) noexcept
-	{
-		std::vector< std::string > devices{};
-
-		if ( list != nullptr )
-		{
-			while ( std::strlen(list) > 0 )
-			{
-				devices.emplace_back(list);
-
-				list += std::strlen(list) + 1;
-			}
-		}
-
-		return devices;
-	}
-
-	void
-	Manager::queryDevices () noexcept
-	{
-		const ALCchar * devices = alcGetString(nullptr, ALC_DEVICE_SPECIFIER);
-
-		if ( devices != nullptr )
-		{
-			while ( std::strlen(devices) > 0 )
-			{
-				m_availableAudioDevices.emplace_back(devices);
-
-				devices += std::strlen(devices) + 1;
-			}
-
-			if ( m_flags[ShowInformation] )
-			{
-				std::cout << "[OpenAL] Devices :" "\n";
-
-				for ( const auto & deviceName : m_availableAudioDevices )
-				{
-					std::cout << " - " << deviceName << '\n';
-				}
-
-				std::cout << "[OpenAL] Default device : " << alcGetString(nullptr, ALC_DEFAULT_DEVICE_SPECIFIER) << '\n';
-			}
-		}
-
-		if ( m_flags[ShowInformation] && alcIsExtensionPresent(nullptr, "ALC_ENUMERATE_ALL_EXT") == ALC_TRUE )
-		{
-			devices = alcGetString(nullptr, ALC_ALL_DEVICES_SPECIFIER);
-
-			if ( devices != nullptr )
-			{
-				std::cout << "[OpenAL] All devices :\n";
-
-				while ( std::strlen(devices) > 0 )
-				{
-					std::cout << " - " << devices << '\n';
-
-					devices += std::strlen(devices) + 1;
-				}
-
-				std::cout << "[OpenAL] Default all devices : " << alcGetString(nullptr, ALC_DEFAULT_ALL_DEVICES_SPECIFIER) << '\n';
-			}
-		}
-
-		alcFlushErrors(m_device);
 	}
 
 	std::vector< ALCint >
@@ -722,16 +957,16 @@ namespace EmEn::Audio
 
 		ALCint size = 0;
 
-		alcGetIntegerv(m_device, ALC_ATTRIBUTES_SIZE, 1, &size);
+		alcGetIntegerv(m_outputDevice, ALC_ATTRIBUTES_SIZE, 1, &size);
 
 		if ( size > 0 )
 		{
 			attributes.resize(size);
 
-			alcGetIntegerv(m_device, ALC_ALL_ATTRIBUTES, size, attributes.data());
+			alcGetIntegerv(m_outputDevice, ALC_ALL_ATTRIBUTES, size, attributes.data());
 		}
 
-		if ( alcGetErrors(m_device, "alcGetIntegerv", __FILE__, __LINE__) )
+		if ( alcGetErrors(m_outputDevice, "alcGetIntegerv", __FILE__, __LINE__) )
 		{
 			Tracer::warning(ClassId, "Unable to fetch device attributes correctly !");
 		}

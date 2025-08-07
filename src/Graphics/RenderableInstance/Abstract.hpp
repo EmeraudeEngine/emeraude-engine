@@ -42,6 +42,7 @@
 #include "Libs/ObserverTrait.hpp"
 
 /* Local inclusions for usages. */
+#include "Libs/Math/CartesianFrame.hpp"
 #include "Graphics/Renderable/Interface.hpp"
 #include "Graphics/Types.hpp"
 #include "RenderTargetProgramsInterface.hpp"
@@ -132,7 +133,7 @@ namespace EmEn::Graphics::RenderableInstance
 	};
 
 	/**
-	 * @brief Defines the base of renderable instance to draw any object in a scene.
+	 * @brief Defines the base of a renderable instance to draw any object in a scene.
 	 * @note [OBS][SHARED-OBSERVER][SHARED-OBSERVABLE]
 	 * @extends EmEn::Libs::FlagTrait A renderable instance is flag-able.
 	 * @extends EmEn::Libs::ObserverTrait A renderable instance needs to observe the renderable loading.
@@ -370,7 +371,7 @@ namespace EmEn::Graphics::RenderableInstance
 			}
 
 			/**
-			 * @brief Disables the depth write with this instance.
+			 * @brief Disables the depth writing with this instance.
 			 * @param state The state.
 			 * @return Abstract *
 			 */
@@ -452,6 +453,17 @@ namespace EmEn::Graphics::RenderableInstance
 			isLightDistanceCheckDisabled () const noexcept
 			{
 				return this->isFlagEnabled(DisableLightDistanceCheck);
+			}
+
+			/**
+			 * @brief Returns the light distance check is enabled.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isLightDistanceCheckEnabled () const noexcept
+			{
+				return this->isFlagDisabled(DisableLightDistanceCheck);
 			}
 
 			/**
@@ -545,32 +557,38 @@ namespace EmEn::Graphics::RenderableInstance
 
 			/**
 			 * @brief Draws the instance in a shadow map.
+			 * @param readStateIndex The render state-valid index to read data.
 			 * @param renderTarget A reference to the render target smart pointer.
 			 * @param layerIndex The renderable layer index.
+			 * @param worldCoordinates A pointer to the world coordinates of the instance. A nullptr means at the origin of the world.
 			 * @param commandBuffer A reference to a command buffer.
 			 * @return void
 			 */
-			void castShadows (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, uint32_t layerIndex, const Vulkan::CommandBuffer & commandBuffer) const noexcept;
+			void castShadows (uint32_t readStateIndex, const std::shared_ptr< RenderTarget::Abstract > & renderTarget, uint32_t layerIndex, const Libs::Math::CartesianFrame< float > * worldCoordinates, const Vulkan::CommandBuffer & commandBuffer) const noexcept;
 
 			/**
 			 * @brief Draws the instance in a render target.
+			 * @param readStateIndex The render state-valid index to read data.
 			 * @param renderTarget A reference to the render target smart pointer.
 			 * @param lightEmitter A pointer to an optional light emitter. TODO: should be a smart pointer.
 			 * @param renderPassType The render pass type into the render target.
 			 * @param layerIndex The renderable layer index.
+			 * @param worldCoordinates A pointer to the world coordinates of the instance. A nullptr means at the origin of the world.
 			 * @param commandBuffer A reference to a command buffer.
 			 * @return void
 			 */
-			void render (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const Scenes::Component::AbstractLightEmitter * lightEmitter, RenderPassType renderPassType, uint32_t layerIndex, const Vulkan::CommandBuffer & commandBuffer) const noexcept;
+			void render (uint32_t readStateIndex, const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const Scenes::Component::AbstractLightEmitter * lightEmitter, RenderPassType renderPassType, uint32_t layerIndex, const Libs::Math::CartesianFrame< float > * worldCoordinates, const Vulkan::CommandBuffer & commandBuffer) const noexcept;
 
 			/**
 			 * @brief Draws the TBN space over each vertex.
+			 * @param readStateIndex The render state-valid index to read data.
 			 * @param renderTarget A reference to the render target smart pointer.
 			 * @param layerIndex The renderable layer index.
+			 * @param worldCoordinates A pointer to the world coordinates of the instance. A nullptr means at the origin of the world.
 			 * @param commandBuffer A reference to a command buffer.
 			 * @return void
 			 */
-			void renderTBNSpace (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, uint32_t layerIndex, const Vulkan::CommandBuffer & commandBuffer) const noexcept;
+			void renderTBNSpace (uint32_t readStateIndex, const std::shared_ptr< RenderTarget::Abstract > & renderTarget, uint32_t layerIndex, const Libs::Math::CartesianFrame< float > * worldCoordinates, const Vulkan::CommandBuffer & commandBuffer) const noexcept;
 
 			/**
 			 * @brief Returns whether this instance is animated with frames.
@@ -599,18 +617,11 @@ namespace EmEn::Graphics::RenderableInstance
 				m_frameIndex = this->renderable()->material(0)->frameIndexAt(sceneTimeMS);
 			}
 
-			/**
-			 * @brief Returns the position where should be the renderable instance renderer in the world.
-			 * @return Libs::Math::Vector< 3, float >
-			 */
-			[[nodiscard]]
-			virtual Libs::Math::Vector< 3, float > worldPosition () const noexcept = 0;
-
 		protected:
 
 			/**
 			 * @brief Constructs a renderable instance.
-			 * @param renderable A reference to renderable interface smart pointer.
+			 * @param renderable A reference to a renderable interface smart pointer.
 			 * @param flagBits The renderable instance level flags.
 			 */
 			Abstract (const std::shared_ptr< Renderable::Interface > & renderable, uint32_t flagBits) noexcept
@@ -624,11 +635,13 @@ namespace EmEn::Graphics::RenderableInstance
 			 * @brief Configures push constant into the command buffer.
 			 * @param commandBuffer A reference to the command buffer.
 			 * @param pipelineLayout A reference to the pipeline layout.
-			 * @param viewMatrices A reference to the view matrices.
 			 * @param program A reference to the program.
+			 * @param readStateIndex The render state-valid index to read data.
+			 * @param viewMatrices A reference to the view matrices.
+			 * @param worldCoordinates A pointer to the world coordinates of the instance. A nullptr means at the origin of the world.
 			 * @return void
 			 */
-			virtual void pushMatrices (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::PipelineLayout & pipelineLayout, const ViewMatricesInterface & viewMatrices, const Saphir::Program & program) const noexcept = 0;
+			virtual void pushMatrices (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::PipelineLayout & pipelineLayout, const Saphir::Program & program, uint32_t readStateIndex, const ViewMatricesInterface & viewMatrices, const Libs::Math::CartesianFrame< float > * worldCoordinates) const noexcept = 0;
 
 			/**
 			 * @brief Returns the number of instances to draw.
@@ -646,24 +659,18 @@ namespace EmEn::Graphics::RenderableInstance
 			virtual bool isModelMatricesCreated () const noexcept = 0;
 
 			/**
-			 * @brief Returns whether the instance use a uniform buffer object for the model matrices.
+			 * @brief Returns whether the instance uses a uniform buffer object for the model matrices.
 			 * @return bool
 			 */
 			[[nodiscard]]
 			virtual bool useModelUniformBufferObject () const noexcept = 0;
 
 			/**
-			 * @brief Returns whether the instance use a vertex buffer object for the model matrices.
+			 * @brief Returns whether the instance uses a vertex buffer object for the model matrices.
 			 * @return bool
 			 */
 			[[nodiscard]]
 			virtual bool useModelVertexBufferObject () const noexcept = 0;
-
-			/**
-			 * @brief Resets model matrices in video memory.
-			 * @return void
-			 */
-			virtual void resetModelMatrices () noexcept = 0;
 
 			/**
 			 * @brief Binds the renderable instance resources to a command buffer.
@@ -673,7 +680,7 @@ namespace EmEn::Graphics::RenderableInstance
 			 */
 			virtual void bindInstanceModelLayer (const Vulkan::CommandBuffer & commandBuffer, uint32_t layerIndex) const noexcept = 0;
 
-			mutable std::mutex m_GPUMemoryAccess{};
+			mutable std::mutex m_GPUMemoryAccess;
 
 		private:
 
@@ -684,8 +691,8 @@ namespace EmEn::Graphics::RenderableInstance
 			[[nodiscard]]
 			RenderTargetProgramsInterface * getOrCreateRenderTargetProgramInterface (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, uint32_t layerCount);
 
+			const std::shared_ptr< Renderable::Interface > m_renderable;
 			Libs::Math::Matrix< 4, float > m_transformationMatrix;
-			std::shared_ptr< Renderable::Interface > m_renderable;
 			std::unordered_map< std::shared_ptr< const RenderTarget::Abstract >, std::unique_ptr< RenderTargetProgramsInterface > > m_renderTargetPrograms;
 			uint32_t m_frameIndex{0};
 

@@ -56,10 +56,9 @@ namespace EmEn::Scenes::Component
 			return;
 		}
 
-		for ( const auto & output : this->outputs() )
-		{
+		this->forEachOutputs([&worldCoordinates, &worldVelocity] (const auto & output) {
 			output->updateDeviceFromCoordinates(worldCoordinates, worldVelocity);
-		}
+		});
 	}
 
 	void
@@ -70,10 +69,9 @@ namespace EmEn::Scenes::Component
 			return;
 		}
 
-		for ( const auto & output : this->outputs() )
-		{
+		this->forEachOutputs([isPerspectiveProjection, distance, fovOrNear] (const auto & output) {
 			output->updateProperties(isPerspectiveProjection, distance, fovOrNear);
-		}
+		});
 	}
 
 	bool

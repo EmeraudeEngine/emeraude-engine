@@ -204,7 +204,7 @@ namespace EmEn::Physics
 	}
 
 	bool
-	Collider::isSphereCollisionWith (const AbstractEntity & sphereEntityA, const AbstractEntity & sphereEntityB, float & overflow, Vector< 3, float > & direction) noexcept
+	Collider::isSphereCollisionWith (const AbstractEntity & sphereEntityA, const AbstractEntity & sphereEntityB, float & /*overflow*/, Vector< 3, float > & direction) noexcept
 	{
 		const auto sphereA = sphereEntityA.getWorldBoundingSphere();
 		const auto sphereB = sphereEntityB.getWorldBoundingSphere();

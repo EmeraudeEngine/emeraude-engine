@@ -56,7 +56,7 @@ namespace EmEn::Resources
 			static constexpr auto ClassId{"ResourcesStoresService"};
 
 			/**
-			 * @brief Constructs a resource stores.
+			 * @brief Constructs a resource store.
 			 */
 			Stores () noexcept = default;
 
@@ -104,6 +104,14 @@ namespace EmEn::Resources
 			std::string randomName (const std::string & storeName) const noexcept;
 
 			/**
+			 * @brief Returns the resource name list.
+			 * @warning Copy !
+			 * @return std::vector< std::string >
+			 */
+			[[nodiscard]]
+			std::vector< std::string > resourceNames () const noexcept;
+
+			/**
 			 * @brief Returns whether the string buffer is JSON data or not.
 			 * @param buffer A reference to a string.
 			 * @return bool
@@ -124,7 +132,7 @@ namespace EmEn::Resources
 			/**
 			 * @brief Parses a store JSON object to list available resources on disk.
 			 * @param storesObject A reference to a JSON value.
-			 * @param verbose Enable the reading verbosity in console.
+			 * @param verbose Enable the reading verbosity in the console.
 			 * @return size_t
 			 */
 			[[nodiscard]]

@@ -27,9 +27,9 @@
 #include "Echo.hpp"
 
 /* Local inclusions. */
-#include "Tracer.hpp"
-#include "Audio/OpenAL.EFX.hpp"
+#include "Audio/OpenALExtensions.hpp"
 #include "Audio/Utility.hpp"
+#include "Tracer.hpp"
 
 namespace EmEn::Audio::Effects
 {
@@ -42,7 +42,7 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		EFX::alEffecti(this->identifier(), AL_EFFECT_TYPE, AL_EFFECT_ECHO);
+		OpenAL::alEffecti(this->identifier(), AL_EFFECT_TYPE, AL_EFFECT_ECHO);
 
 		if ( alGetErrors("alEffecti()", __FILE__, __LINE__) )
 		{
@@ -53,21 +53,21 @@ namespace EmEn::Audio::Effects
 	void
 	Echo::resetProperties () noexcept
 	{
-		if ( !EFX::isAvailable() )
+		if ( !OpenAL::isEFXAvailable() )
 		{
 			return;
 		}
 
-		EFX::alEffectf(this->identifier(), AL_ECHO_DELAY, AL_ECHO_DEFAULT_DELAY);
-		EFX::alEffectf(this->identifier(), AL_ECHO_LRDELAY, AL_ECHO_DEFAULT_LRDELAY);
-		EFX::alEffectf(this->identifier(), AL_ECHO_DAMPING, AL_ECHO_DEFAULT_DAMPING);
-		EFX::alEffectf(this->identifier(), AL_ECHO_SPREAD, AL_ECHO_DEFAULT_SPREAD);
+		OpenAL::alEffectf(this->identifier(), AL_ECHO_DELAY, AL_ECHO_DEFAULT_DELAY);
+		OpenAL::alEffectf(this->identifier(), AL_ECHO_LRDELAY, AL_ECHO_DEFAULT_LRDELAY);
+		OpenAL::alEffectf(this->identifier(), AL_ECHO_DAMPING, AL_ECHO_DEFAULT_DAMPING);
+		OpenAL::alEffectf(this->identifier(), AL_ECHO_SPREAD, AL_ECHO_DEFAULT_SPREAD);
 	}
 
 	void
 	Echo::setDelay (float value) noexcept
 	{
-		if ( !EFX::isAvailable() )
+		if ( !OpenAL::isEFXAvailable() )
 		{
 			return;
 		}
@@ -79,13 +79,13 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		EFX::alEffectf(this->identifier(), AL_ECHO_DELAY, value);
+		OpenAL::alEffectf(this->identifier(), AL_ECHO_DELAY, value);
 	}
 
 	void
 	Echo::setLRDelay (float value) noexcept
 	{
-		if ( !EFX::isAvailable() )
+		if ( !OpenAL::isEFXAvailable() )
 		{
 			return;
 		}
@@ -97,13 +97,13 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		EFX::alEffectf(this->identifier(), AL_ECHO_LRDELAY, value);
+		OpenAL::alEffectf(this->identifier(), AL_ECHO_LRDELAY, value);
 	}
 
 	void
 	Echo::setDamping (float value) noexcept
 	{
-		if ( !EFX::isAvailable() )
+		if ( !OpenAL::isEFXAvailable() )
 		{
 			return;
 		}
@@ -115,13 +115,13 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		EFX::alEffectf(this->identifier(), AL_ECHO_DAMPING, value);
+		OpenAL::alEffectf(this->identifier(), AL_ECHO_DAMPING, value);
 	}
 
 	void
 	Echo::setFeedBack (float value) noexcept
 	{
-		if ( !EFX::isAvailable() )
+		if ( !OpenAL::isEFXAvailable() )
 		{
 			return;
 		}
@@ -133,13 +133,13 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		EFX::alEffectf(this->identifier(), AL_ECHO_FEEDBACK, value);
+		OpenAL::alEffectf(this->identifier(), AL_ECHO_FEEDBACK, value);
 	}
 
 	void
 	Echo::setSpread (float value) noexcept
 	{
-		if ( !EFX::isAvailable() )
+		if ( !OpenAL::isEFXAvailable() )
 		{
 			return;
 		}
@@ -151,7 +151,7 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		EFX::alEffectf(this->identifier(), AL_ECHO_SPREAD, value);
+		OpenAL::alEffectf(this->identifier(), AL_ECHO_SPREAD, value);
 	}
 
 	float
@@ -159,9 +159,9 @@ namespace EmEn::Audio::Effects
 	{
 		ALfloat value = 0.0F;
 
-		if ( EFX::isAvailable() )
+		if ( OpenAL::isEFXAvailable() )
 		{
-			EFX::alGetEffectf(this->identifier(), AL_ECHO_DELAY, &value);
+			OpenAL::alGetEffectf(this->identifier(), AL_ECHO_DELAY, &value);
 		}
 
 		return value;
@@ -172,9 +172,9 @@ namespace EmEn::Audio::Effects
 	{
 		ALfloat value = 0.0F;
 
-		if ( EFX::isAvailable() )
+		if ( OpenAL::isEFXAvailable() )
 		{
-			EFX::alGetEffectf(this->identifier(), AL_ECHO_LRDELAY, &value);
+			OpenAL::alGetEffectf(this->identifier(), AL_ECHO_LRDELAY, &value);
 		}
 
 		return value;
@@ -185,9 +185,9 @@ namespace EmEn::Audio::Effects
 	{
 		ALfloat value = 0.0F;
 
-		if ( EFX::isAvailable() )
+		if ( OpenAL::isEFXAvailable() )
 		{
-			EFX::alGetEffectf(this->identifier(), AL_ECHO_DAMPING, &value);
+			OpenAL::alGetEffectf(this->identifier(), AL_ECHO_DAMPING, &value);
 		}
 
 		return value;
@@ -198,9 +198,9 @@ namespace EmEn::Audio::Effects
 	{
 		ALfloat value = 0.0F;
 
-		if ( EFX::isAvailable() )
+		if ( OpenAL::isEFXAvailable() )
 		{
-			EFX::alGetEffectf(this->identifier(), AL_ECHO_FEEDBACK, &value);
+			OpenAL::alGetEffectf(this->identifier(), AL_ECHO_FEEDBACK, &value);
 		}
 
 		return value;
@@ -211,9 +211,9 @@ namespace EmEn::Audio::Effects
 	{
 		ALfloat value = 0.0F;
 
-		if ( EFX::isAvailable() )
+		if ( OpenAL::isEFXAvailable() )
 		{
-			EFX::alGetEffectf(this->identifier(), AL_ECHO_SPREAD, &value);
+			OpenAL::alGetEffectf(this->identifier(), AL_ECHO_SPREAD, &value);
 		}
 
 		return value;

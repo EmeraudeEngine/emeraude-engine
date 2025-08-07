@@ -43,7 +43,7 @@ namespace EmEn::Scenes
 		switch ( transformSpace )
 		{
 			case TransformSpace::Local :
-				m_cartesianFrame.setScalingFactor(factor);
+				m_logicStateCoordinates.setScalingFactor(factor);
 				break;
 
 			case TransformSpace::Parent :
@@ -61,7 +61,7 @@ namespace EmEn::Scenes
 		switch ( transformSpace )
 		{
 			case TransformSpace::Local :
-				m_cartesianFrame.setScalingFactor(factor);
+				m_logicStateCoordinates.setScalingFactor(factor);
 				break;
 
 			case TransformSpace::Parent :
@@ -79,7 +79,7 @@ namespace EmEn::Scenes
 		switch ( transformSpace )
 		{
 			case TransformSpace::Local :
-				m_cartesianFrame.setScalingXFactor(factor);
+				m_logicStateCoordinates.setScalingXFactor(factor);
 				break;
 
 			case TransformSpace::Parent :
@@ -97,7 +97,7 @@ namespace EmEn::Scenes
 		switch ( transformSpace )
 		{
 			case TransformSpace::Local :
-				m_cartesianFrame.setScalingYFactor(factor);
+				m_logicStateCoordinates.setScalingYFactor(factor);
 				break;
 
 			case TransformSpace::Parent :
@@ -115,7 +115,7 @@ namespace EmEn::Scenes
 		switch ( transformSpace )
 		{
 			case TransformSpace::Local :
-				m_cartesianFrame.setScalingZFactor(factor);
+				m_logicStateCoordinates.setScalingZFactor(factor);
 				break;
 
 			case TransformSpace::Parent :

@@ -45,6 +45,77 @@
 namespace EmEn::Vulkan
 {
 	/**
+	 * @brief Debug policy for Vulkan object identification. This will hold a 'std::string' to help keep track of objects.
+	 */
+	class IdentifierDebugPolicy
+	{
+		public:
+
+			/**
+			 * @brief Sets an identifier to the vulkan to ease the debugging.
+			 * @param classId A string pointer for the class holding the Vulkan object.
+			 * @param instanceId A reference to a string for the instance identifier.
+			 * @param vulkanObjectName A string pointer for the type of Vulkan object;
+			 * @return void
+			 */
+			void
+			set (const char * classId, const std::string & instanceId, const char * vulkanObjectName) noexcept
+			{
+				std::stringstream identifier;
+
+				identifier << classId << '-' << instanceId << '-' << vulkanObjectName;
+
+				m_identifier = identifier.str();
+			}
+
+			/**
+			 * @brief Returns the vulkan object identifier.
+			 * @return const std::string &
+			 */
+			[[nodiscard]]
+			const std::string &
+			get () const noexcept
+			{
+				return m_identifier;
+			}
+
+		private:
+
+			std::string m_identifier;
+	};
+
+	/**
+	 * @brief Release policy for Vulkan object identification. This helps to remove all cost from Vulkan object identification in release with code optimization.
+	 */
+	class IdentifierReleasePolicy
+	{
+		public:
+
+			/** @brief Dummy function meant to be removed by the compiler. */
+			void
+			set (const char *, const std::string &, const char *) noexcept
+			{
+
+			}
+
+			/** @brief Dummy function meant to be removed by the compiler. */
+			[[nodiscard]]
+			const std::string &
+			get () const noexcept
+			{
+				static const std::string empty;
+
+				return empty;
+			}
+	};
+
+#ifdef DEBUG
+	using Identifier = IdentifierDebugPolicy;
+#else
+	using Identifier = IdentifierReleasePolicy;
+#endif
+
+	/**
 	 * @brief Base of all Vulkan API objects.
 	 */
 	class AbstractObject
@@ -85,7 +156,7 @@ namespace EmEn::Vulkan
 			{
 				if constexpr ( VulkanTrackingDebugEnabled )
 				{
-					const auto * identifier = m_identifier.empty() ? "***UNIDENTIFIED***" : m_identifier.data();
+					const auto * identifier = this->identifier().empty() ? "***UNIDENTIFIED***" : this->identifier().data();
 
 					if ( !m_flags[Created] )
 					{
@@ -105,48 +176,34 @@ namespace EmEn::Vulkan
 				{
 					if ( !m_flags[Created] )
 					{
-						TraceError{"VulkanObject"} << "A Vulkan object (" << m_identifier << ") was not correctly constructed !";
+						TraceError{"VulkanObject"} << "A Vulkan object (" << this->identifier() << ") was not correctly constructed !";
 					}
 
 					if ( !m_flags[Destroyed] )
 					{
-						TraceError{"VulkanObject"} << "A Vulkan object (" << m_identifier << ") is not correctly destroyed !";
+						TraceError{"VulkanObject"} << "A Vulkan object (" << this->identifier() << ") is not correctly destroyed !";
 					}
-				}
-			}
-
-			/**
-			 * @brief Sets an identifier to the vulkan to ease the debugging.
-			 * @return void
-			 */
-			void
-			setIdentifier (const std::string & identifier) noexcept
-			{
-				m_identifier = identifier;
-
-				if constexpr ( VulkanTrackingDebugEnabled )
-				{
-					s_tracking[this] = m_identifier;
-
-					std::cout << "[DEBUG:VK_TRACKING] A Vulkan object ('" << m_identifier << "', @" << this << ") is marked !" "\n";
 				}
 			}
 
 			/**
 			 * @brief Sets an identifier to the vulkan to ease the debugging.
 			 * @param classId A string pointer for the class holding the Vulkan object.
-			 * @param instanceId A reference to a string for the instance of the class holding the Vulkan object.
+			 * @param instanceId A reference to a string for the instance identifier.
 			 * @param vulkanObjectName A string pointer for the type of Vulkan object;
 			 * @return void
 			 */
 			void
 			setIdentifier (const char * classId, const std::string & instanceId, const char * vulkanObjectName) noexcept
 			{
-				std::stringstream identifier;
+				m_identifier.set(classId, instanceId, vulkanObjectName);
 
-				identifier << classId << '-' << instanceId << '-' << vulkanObjectName;
+				if constexpr ( VulkanTrackingDebugEnabled )
+				{
+					s_tracking[this] = this->identifier();
 
-				this->setIdentifier(identifier.str());
+					std::cout << "[DEBUG:VK_TRACKING] A Vulkan object ('" << this->identifier() << "', @" << this << ") is marked !" "\n";
+				}
 			}
 
 			/**
@@ -157,7 +214,7 @@ namespace EmEn::Vulkan
 			const std::string &
 			identifier () const noexcept
 			{
-				return m_identifier;
+				return m_identifier.get();
 			}
 
 			/**
@@ -214,7 +271,8 @@ namespace EmEn::Vulkan
 			static constexpr auto Created{0UL};
 			static constexpr auto Destroyed{1UL};
 
-			std::string m_identifier;
+			[[no_unique_address]]
+			Identifier m_identifier; /* NOTE: In release mode, this shouldn't take any memory space. */
 			std::array< bool, 8 > m_flags{
 				false/*Created*/,
 				false/*Destroyed*/,

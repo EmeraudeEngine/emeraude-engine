@@ -102,6 +102,10 @@ namespace EmEn
 		/* Audio layer */
 		constexpr auto AudioEnableKey{"Core/Audio/Enable"};
 		constexpr auto DefaultAudioEnable{true};
+		constexpr auto AudioDeviceNameKey{"Core/Audio/DeviceName"};
+		constexpr auto DefaultAudioDeviceName{""};
+		constexpr auto AudioForceDefaultDeviceKey{"Core/Audio/ForceDefaultDevice"};
+		constexpr auto DefaultAudioForceDefaultDevice{false};
 		constexpr auto AudioPlaybackFrequencyKey{"Core/Audio/PlaybackFrequency"};
 		constexpr auto DefaultAudioPlaybackFrequency{48000};
 		constexpr auto AudioMasterVolumeKey{"Core/Audio/MasterVolume"};
@@ -113,7 +117,11 @@ namespace EmEn
 		constexpr auto AudioMusicChunkSizeKey{"Core/Audio/MusicChunkSize"};
 		constexpr auto DefaultAudioMusicChunkSize{8192};
 
-			/* Recorder */
+			/* Audio recorder */
+			constexpr auto AudioRecorderEnableKey{"Core/Audio/Recorder/Enable"};
+			constexpr auto DefaultAudioRecorderEnable{false};
+			constexpr auto AudioRecorderDeviceNameKey{"Core/Audio/Recorder/DeviceName"};
+			constexpr auto DefaultAudioRecorderDeviceName{""};
 			constexpr auto RecorderFrequencyKey{"Core/Audio/Recorder/Frequency"};
 			constexpr auto DefaultRecorderFrequency{48000};
 			constexpr auto RecorderBufferSizeKey{"Core/Audio/Recorder/BufferSize"};

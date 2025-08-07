@@ -105,44 +105,51 @@ namespace EmEn::Graphics::Renderable
 
 				const auto & componentData = data[Material::JKData];
 
-				/* Check the texture type. */
-				const auto type = FastJSON::getString(data, Material::JKType);
-
-				switch ( to_FillingType(type) )
+				/* Check the texture resource type. */
+				if ( const auto fillingType = Material::getFillingTypeFromJSON(data) )
 				{
-					case FillingType::Texture :
+					switch ( fillingType.value() )
 					{
-						const auto textureResource = manager->container< TextureResource::Texture2D >()->getResource(FastJSON::getString(componentData, Material::JKName));
-
-						if ( !newMaterial.setTexture(textureResource, true) )
+						case FillingType::Texture :
 						{
-							return newMaterial.setManualLoadSuccess(false);
+							const auto textureResource = manager->container< TextureResource::Texture2D >()->getResource(FastJSON::getValue< std::string >(componentData, Material::JKName).value_or(Resources::Default));
+
+							if ( !newMaterial.setTexture(textureResource, true) )
+							{
+								return newMaterial.setManualLoadSuccess(false);
+							}
 						}
-					}
-						break;
+							break;
 
-					case FillingType::AnimatedTexture :
-					{
-						const auto textureResource = manager->container< TextureResource::AnimatedTexture2D >()->getResource(FastJSON::getString(componentData, Material::JKName));
-
-						if ( !newMaterial.setTexture(textureResource, true) )
+						case FillingType::AnimatedTexture :
 						{
-							return newMaterial.setManualLoadSuccess(false);
+							const auto textureResource = manager->container< TextureResource::AnimatedTexture2D >()->getResource(FastJSON::getValue< std::string >(componentData, Material::JKName).value_or(Resources::Default));
+
+							if ( !newMaterial.setTexture(textureResource, true) )
+							{
+								return newMaterial.setManualLoadSuccess(false);
+							}
 						}
+							break;
+
+						default:
+							TraceError{ClassId} << "Unhandled material type (" << to_string(fillingType.value()) << ") for sprite !";
+
+							return newMaterial.setManualLoadSuccess(false);
 					}
-						break;
+				}
+				else
+				{
+					TraceError{ClassId} << "Undefined material type for sprite !";
 
-					default:
-						TraceError{ClassId} << "Unhandled material type (" << type << ") for sprite !";
-
-						return newMaterial.setManualLoadSuccess(false);
+					return newMaterial.setManualLoadSuccess(false);
 				}
 
 				/* Check the blending mode. */
 				newMaterial.enableBlendingFromJson(data);
 
 				/* Check the optional global auto-illumination amount. */
-				const auto autoIllumination = FastJSON::getNumber< float >(data, Material::JKAutoIllumination, 0.0F);
+				const auto autoIllumination = FastJSON::getValue< float >(data, Material::JKAutoIllumination).value_or(0.0F);
 
 				if ( autoIllumination > 0.0F )
 				{
@@ -150,7 +157,7 @@ namespace EmEn::Graphics::Renderable
 				}
 
 				/* Check the optional global opacity. */
-				const auto opacity = FastJSON::getNumber< float >(data, Material::JKOpacity, 1.0F);
+				const auto opacity = FastJSON::getValue< float >(data, Material::JKOpacity).value_or(1.0F);
 
 				if ( opacity < 1.0F )
 				{
@@ -169,9 +176,9 @@ namespace EmEn::Graphics::Renderable
 			return this->setLoadSuccess(false);
 		}
 
-		const auto isAnimated = to_FillingType(FastJSON::getString(data, Material::JKType)) == FillingType::AnimatedTexture;
-		const auto centerAtBottom = FastJSON::getBoolean(data, JKCenterAtBottomKey, false);
-		const auto flip = FastJSON::getBoolean(data, JKFlipKey, false);
+		const auto isAnimated = Material::getFillingTypeFromJSON(data) == FillingType::AnimatedTexture;
+		const auto centerAtBottom = FastJSON::getValue< bool >(data, JKCenterAtBottomKey).value_or(false);
+		const auto flip = FastJSON::getValue< bool >(data, JKFlipKey).value_or(false);
 
 		if ( !this->prepareGeometry(isAnimated, centerAtBottom, flip) )
 		{
@@ -180,7 +187,7 @@ namespace EmEn::Graphics::Renderable
 			return this->setLoadSuccess(false);
 		}
 
-		m_size = FastJSON::getNumber< float >(data, JKSizeKey, 1.0F);
+		m_size = FastJSON::getValue< float >(data, JKSizeKey).value_or(1.0F);
 
 		return this->setLoadSuccess(true);
 	}

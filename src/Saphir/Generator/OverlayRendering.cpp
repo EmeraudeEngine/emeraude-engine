@@ -99,7 +99,7 @@ namespace EmEn::Saphir::Generator
 	}
 
 	bool
-	OverlayRendering::onCreateDataLayouts (Renderer & renderer, const SetIndexes & /*setIndexes*/, std::vector< std::shared_ptr< DescriptorSetLayout > > & descriptorSetLayouts, std::vector< VkPushConstantRange > & pushConstantRanges) noexcept
+	OverlayRendering::onCreateDataLayouts (Renderer & renderer, const SetIndexes & /*setIndexes*/, StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > & descriptorSetLayouts, StaticVector< VkPushConstantRange, 4 > & pushConstantRanges) noexcept
 	{
 		auto descriptorSetLayout = Overlay::Manager::getDescriptorSetLayout(renderer.layoutManager());
 

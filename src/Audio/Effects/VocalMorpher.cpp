@@ -27,9 +27,9 @@
 #include "VocalMorpher.hpp"
 
 /* Local inclusions. */
-#include "Tracer.hpp"
-#include "Audio/OpenAL.EFX.hpp"
+#include "Audio/OpenALExtensions.hpp"
 #include "Audio/Utility.hpp"
+#include "Tracer.hpp"
 
 namespace EmEn::Audio::Effects
 {
@@ -42,7 +42,7 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		EFX::alEffecti(this->identifier(), AL_EFFECT_TYPE, AL_EFFECT_VOCAL_MORPHER);
+		OpenAL::alEffecti(this->identifier(), AL_EFFECT_TYPE, AL_EFFECT_VOCAL_MORPHER);
 
 		if ( alGetErrors("alEffecti()", __FILE__, __LINE__) )
 		{
@@ -53,33 +53,33 @@ namespace EmEn::Audio::Effects
 	void
 	VocalMorpher::resetProperties () noexcept
 	{
-		if ( !EFX::isAvailable() )
+		if ( !OpenAL::isEFXAvailable() )
 		{
 			return;
 		}
 
-		EFX::alEffecti(this->identifier(), AL_VOCAL_MORPHER_PHONEMEA, AL_VOCAL_MORPHER_DEFAULT_PHONEMEA);
-		EFX::alEffecti(this->identifier(), AL_VOCAL_MORPHER_PHONEMEA_COARSE_TUNING, AL_VOCAL_MORPHER_DEFAULT_PHONEMEA_COARSE_TUNING);
-		EFX::alEffecti(this->identifier(), AL_VOCAL_MORPHER_PHONEMEB, AL_VOCAL_MORPHER_DEFAULT_PHONEMEB);
-		EFX::alEffecti(this->identifier(), AL_VOCAL_MORPHER_PHONEMEB_COARSE_TUNING, AL_VOCAL_MORPHER_DEFAULT_PHONEMEB_COARSE_TUNING);
-		EFX::alEffecti(this->identifier(), AL_VOCAL_MORPHER_WAVEFORM, AL_VOCAL_MORPHER_DEFAULT_WAVEFORM);
+		OpenAL::alEffecti(this->identifier(), AL_VOCAL_MORPHER_PHONEMEA, AL_VOCAL_MORPHER_DEFAULT_PHONEMEA);
+		OpenAL::alEffecti(this->identifier(), AL_VOCAL_MORPHER_PHONEMEA_COARSE_TUNING, AL_VOCAL_MORPHER_DEFAULT_PHONEMEA_COARSE_TUNING);
+		OpenAL::alEffecti(this->identifier(), AL_VOCAL_MORPHER_PHONEMEB, AL_VOCAL_MORPHER_DEFAULT_PHONEMEB);
+		OpenAL::alEffecti(this->identifier(), AL_VOCAL_MORPHER_PHONEMEB_COARSE_TUNING, AL_VOCAL_MORPHER_DEFAULT_PHONEMEB_COARSE_TUNING);
+		OpenAL::alEffecti(this->identifier(), AL_VOCAL_MORPHER_WAVEFORM, AL_VOCAL_MORPHER_DEFAULT_WAVEFORM);
 	}
 
 	void
 	VocalMorpher::setPhonemeA (Phoneme value) noexcept
 	{
-		if ( !EFX::isAvailable() )
+		if ( !OpenAL::isEFXAvailable() )
 		{
 			return;
 		}
 
-		EFX::alEffecti(this->identifier(), AL_VOCAL_MORPHER_PHONEMEA, static_cast< ALint >(value));
+		OpenAL::alEffecti(this->identifier(), AL_VOCAL_MORPHER_PHONEMEA, static_cast< ALint >(value));
 	}
 
 	void
 	VocalMorpher::setPhonemeACoarseTuning (int value) noexcept
 	{
-		if ( !EFX::isAvailable() )
+		if ( !OpenAL::isEFXAvailable() )
 		{
 			return;
 		}
@@ -91,24 +91,24 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		EFX::alEffecti(this->identifier(), AL_VOCAL_MORPHER_PHONEMEA_COARSE_TUNING, value);
+		OpenAL::alEffecti(this->identifier(), AL_VOCAL_MORPHER_PHONEMEA_COARSE_TUNING, value);
 	}
 
 	void
 	VocalMorpher::setPhonemeB (Phoneme value) noexcept
 	{
-		if ( !EFX::isAvailable() )
+		if ( !OpenAL::isEFXAvailable() )
 		{
 			return;
 		}
 
-		EFX::alEffecti(this->identifier(), AL_VOCAL_MORPHER_PHONEMEB, static_cast< ALint >(value));
+		OpenAL::alEffecti(this->identifier(), AL_VOCAL_MORPHER_PHONEMEB, static_cast< ALint >(value));
 	}
 
 	void
 	VocalMorpher::setPhonemeBCoarseTuning (int value) noexcept
 	{
-		if ( !EFX::isAvailable() )
+		if ( !OpenAL::isEFXAvailable() )
 		{
 			return;
 		}
@@ -120,13 +120,13 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		EFX::alEffecti(this->identifier(), AL_VOCAL_MORPHER_PHONEMEB_COARSE_TUNING, value);
+		OpenAL::alEffecti(this->identifier(), AL_VOCAL_MORPHER_PHONEMEB_COARSE_TUNING, value);
 	}
 
 	void
 	VocalMorpher::setWaveForm (WaveForm value) noexcept
 	{
-		if ( !EFX::isAvailable() )
+		if ( !OpenAL::isEFXAvailable() )
 		{
 			return;
 		}
@@ -148,13 +148,13 @@ namespace EmEn::Audio::Effects
 				break;
 		}
 
-		EFX::alEffecti(this->identifier(), AL_VOCAL_MORPHER_WAVEFORM, def);
+		OpenAL::alEffecti(this->identifier(), AL_VOCAL_MORPHER_WAVEFORM, def);
 	}
 
 	void
 	VocalMorpher::setRate (float value) noexcept
 	{
-		if ( !EFX::isAvailable() )
+		if ( !OpenAL::isEFXAvailable() )
 		{
 			return;
 		}
@@ -166,7 +166,7 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		EFX::alEffectf(this->identifier(), AL_VOCAL_MORPHER_RATE, value);
+		OpenAL::alEffectf(this->identifier(), AL_VOCAL_MORPHER_RATE, value);
 	}
 
 	VocalMorpher::Phoneme
@@ -174,9 +174,9 @@ namespace EmEn::Audio::Effects
 	{
 		ALint value = 0;
 
-		if ( EFX::isAvailable() )
+		if ( OpenAL::isEFXAvailable() )
 		{
-			EFX::alGetEffecti(this->identifier(), AL_VOCAL_MORPHER_PHONEMEA, &value);
+			OpenAL::alGetEffecti(this->identifier(), AL_VOCAL_MORPHER_PHONEMEA, &value);
 		}
 
 		return static_cast< Phoneme >(value);
@@ -187,9 +187,9 @@ namespace EmEn::Audio::Effects
 	{
 		ALint value = 0;
 
-		if ( EFX::isAvailable() )
+		if ( OpenAL::isEFXAvailable() )
 		{
-			EFX::alGetEffecti(this->identifier(), AL_VOCAL_MORPHER_PHONEMEA_COARSE_TUNING, &value);
+			OpenAL::alGetEffecti(this->identifier(), AL_VOCAL_MORPHER_PHONEMEA_COARSE_TUNING, &value);
 		}
 
 		return value;
@@ -200,9 +200,9 @@ namespace EmEn::Audio::Effects
 	{
 		ALint value = 0;
 
-		if ( EFX::isAvailable() )
+		if ( OpenAL::isEFXAvailable() )
 		{
-			EFX::alGetEffecti(this->identifier(), AL_VOCAL_MORPHER_PHONEMEB, &value);
+			OpenAL::alGetEffecti(this->identifier(), AL_VOCAL_MORPHER_PHONEMEB, &value);
 		}
 
 		return static_cast< Phoneme >(value);
@@ -213,9 +213,9 @@ namespace EmEn::Audio::Effects
 	{
 		ALint value = 0;
 
-		if ( EFX::isAvailable() )
+		if ( OpenAL::isEFXAvailable() )
 		{
-			EFX::alGetEffecti(this->identifier(), AL_VOCAL_MORPHER_PHONEMEB_COARSE_TUNING, &value);
+			OpenAL::alGetEffecti(this->identifier(), AL_VOCAL_MORPHER_PHONEMEB_COARSE_TUNING, &value);
 		}
 
 		return value;
@@ -224,14 +224,14 @@ namespace EmEn::Audio::Effects
 	VocalMorpher::WaveForm
 	VocalMorpher::waveForm () const noexcept
 	{
-		if ( !EFX::isAvailable() )
+		if ( !OpenAL::isEFXAvailable() )
 		{
 			return WaveForm::Sinusoid;
 		}
 
 		ALint value = 0;
 
-		EFX::alGetEffecti(this->identifier(), AL_VOCAL_MORPHER_WAVEFORM, &value);
+		OpenAL::alGetEffecti(this->identifier(), AL_VOCAL_MORPHER_WAVEFORM, &value);
 
 		switch ( value )
 		{
@@ -252,9 +252,9 @@ namespace EmEn::Audio::Effects
 	{
 		ALfloat value = 0.0F;
 
-		if ( EFX::isAvailable() )
+		if ( OpenAL::isEFXAvailable() )
 		{
-			EFX::alGetEffectf(this->identifier(), AL_VOCAL_MORPHER_RATE, &value);
+			OpenAL::alGetEffectf(this->identifier(), AL_VOCAL_MORPHER_RATE, &value);
 		}
 
 		return value;

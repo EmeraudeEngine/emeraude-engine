@@ -27,9 +27,9 @@
 #include "Flanger.hpp"
 
 /* Local inclusions. */
-#include "Tracer.hpp"
-#include "Audio/OpenAL.EFX.hpp"
+#include "Audio/OpenALExtensions.hpp"
 #include "Audio/Utility.hpp"
+#include "Tracer.hpp"
 
 namespace EmEn::Audio::Effects
 {
@@ -42,7 +42,7 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		EFX::alEffecti(this->identifier(), AL_EFFECT_TYPE, AL_EFFECT_FLANGER);
+		OpenAL::alEffecti(this->identifier(), AL_EFFECT_TYPE, AL_EFFECT_FLANGER);
 
 		if ( alGetErrors("alEffecti()", __FILE__, __LINE__) )
 		{
@@ -53,23 +53,23 @@ namespace EmEn::Audio::Effects
 	void
 	Flanger::resetProperties () noexcept
 	{
-		if ( !EFX::isAvailable() )
+		if ( !OpenAL::isEFXAvailable() )
 		{
 			return;
 		}
 
-		EFX::alEffecti(this->identifier(), AL_FLANGER_WAVEFORM, AL_FLANGER_DEFAULT_WAVEFORM);
-		EFX::alEffecti(this->identifier(), AL_FLANGER_PHASE, AL_FLANGER_DEFAULT_PHASE);
-		EFX::alEffectf(this->identifier(), AL_FLANGER_RATE, AL_FLANGER_DEFAULT_RATE);
-		EFX::alEffectf(this->identifier(), AL_FLANGER_DEPTH, AL_FLANGER_DEFAULT_DEPTH);
-		EFX::alEffectf(this->identifier(), AL_FLANGER_FEEDBACK, AL_FLANGER_DEFAULT_FEEDBACK);
-		EFX::alEffectf(this->identifier(), AL_FLANGER_DELAY, AL_FLANGER_DEFAULT_DELAY);
+		OpenAL::alEffecti(this->identifier(), AL_FLANGER_WAVEFORM, AL_FLANGER_DEFAULT_WAVEFORM);
+		OpenAL::alEffecti(this->identifier(), AL_FLANGER_PHASE, AL_FLANGER_DEFAULT_PHASE);
+		OpenAL::alEffectf(this->identifier(), AL_FLANGER_RATE, AL_FLANGER_DEFAULT_RATE);
+		OpenAL::alEffectf(this->identifier(), AL_FLANGER_DEPTH, AL_FLANGER_DEFAULT_DEPTH);
+		OpenAL::alEffectf(this->identifier(), AL_FLANGER_FEEDBACK, AL_FLANGER_DEFAULT_FEEDBACK);
+		OpenAL::alEffectf(this->identifier(), AL_FLANGER_DELAY, AL_FLANGER_DEFAULT_DELAY);
 	}
 
 	void
 	Flanger::setWaveForm (WaveForm value) noexcept
 	{
-		if ( !EFX::isAvailable() )
+		if ( !OpenAL::isEFXAvailable() )
 		{
 			return;
 		}
@@ -87,13 +87,13 @@ namespace EmEn::Audio::Effects
 				break;
 		}
 
-		EFX::alEffecti(this->identifier(), AL_FLANGER_WAVEFORM, def);
+		OpenAL::alEffecti(this->identifier(), AL_FLANGER_WAVEFORM, def);
 	}
 
 	void
 	Flanger::setPhase (int value) noexcept
 	{
-		if ( !EFX::isAvailable() )
+		if ( !OpenAL::isEFXAvailable() )
 		{
 			return;
 		}
@@ -105,13 +105,13 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		EFX::alEffecti(this->identifier(), AL_FLANGER_PHASE, value);
+		OpenAL::alEffecti(this->identifier(), AL_FLANGER_PHASE, value);
 	}
 
 	void
 	Flanger::setRate (float value) noexcept
 	{
-		if ( !EFX::isAvailable() )
+		if ( !OpenAL::isEFXAvailable() )
 		{
 			return;
 		}
@@ -123,13 +123,13 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		EFX::alEffectf(this->identifier(), AL_FLANGER_RATE, value);
+		OpenAL::alEffectf(this->identifier(), AL_FLANGER_RATE, value);
 	}
 
 	void
 	Flanger::setDepth (float value) noexcept
 	{
-		if ( !EFX::isAvailable() )
+		if ( !OpenAL::isEFXAvailable() )
 		{
 			return;
 		}
@@ -141,13 +141,13 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		EFX::alEffectf(this->identifier(), AL_FLANGER_DEPTH, value);
+		OpenAL::alEffectf(this->identifier(), AL_FLANGER_DEPTH, value);
 	}
 
 	void
 	Flanger::setFeedBack (float value) noexcept
 	{
-		if ( !EFX::isAvailable() )
+		if ( !OpenAL::isEFXAvailable() )
 		{
 			return;
 		}
@@ -159,13 +159,13 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		EFX::alEffectf(this->identifier(), AL_FLANGER_FEEDBACK, value);
+		OpenAL::alEffectf(this->identifier(), AL_FLANGER_FEEDBACK, value);
 	}
 
 	void
 	Flanger::setDelay (float value) noexcept
 	{
-		if ( !EFX::isAvailable() )
+		if ( !OpenAL::isEFXAvailable() )
 		{
 			return;
 		}
@@ -177,20 +177,20 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		EFX::alEffectf(this->identifier(), AL_FLANGER_DELAY, value);
+		OpenAL::alEffectf(this->identifier(), AL_FLANGER_DELAY, value);
 	}
 
 	Flanger::WaveForm
 	Flanger::waveForm () const noexcept
 	{
-		if ( !EFX::isAvailable() )
+		if ( !OpenAL::isEFXAvailable() )
 		{
 			return WaveForm::Triangle;
 		}
 
 		ALint value = 0;
 
-		EFX::alGetEffecti(this->identifier(), AL_FLANGER_WAVEFORM, &value);
+		OpenAL::alGetEffecti(this->identifier(), AL_FLANGER_WAVEFORM, &value);
 
 		switch ( value )
 		{
@@ -208,9 +208,9 @@ namespace EmEn::Audio::Effects
 	{
 		ALint value = 0;
 
-		if ( EFX::isAvailable() )
+		if ( OpenAL::isEFXAvailable() )
 		{
-			EFX::alGetEffecti(this->identifier(), AL_FLANGER_PHASE, &value);
+			OpenAL::alGetEffecti(this->identifier(), AL_FLANGER_PHASE, &value);
 		}
 
 		return value;
@@ -221,9 +221,9 @@ namespace EmEn::Audio::Effects
 	{
 		ALfloat value = 0.0F;
 
-		if ( EFX::isAvailable() )
+		if ( OpenAL::isEFXAvailable() )
 		{
-			EFX::alGetEffectf(this->identifier(), AL_FLANGER_RATE, &value);
+			OpenAL::alGetEffectf(this->identifier(), AL_FLANGER_RATE, &value);
 		}
 
 		return value;
@@ -234,9 +234,9 @@ namespace EmEn::Audio::Effects
 	{
 		ALfloat value = 0.0F;
 
-		if ( EFX::isAvailable() )
+		if ( OpenAL::isEFXAvailable() )
 		{
-			EFX::alGetEffectf(this->identifier(), AL_FLANGER_DEPTH, &value);
+			OpenAL::alGetEffectf(this->identifier(), AL_FLANGER_DEPTH, &value);
 		}
 
 		return value;
@@ -247,9 +247,9 @@ namespace EmEn::Audio::Effects
 	{
 		ALfloat value = 0.0F;
 
-		if ( EFX::isAvailable() )
+		if ( OpenAL::isEFXAvailable() )
 		{
-			EFX::alGetEffectf(this->identifier(), AL_FLANGER_FEEDBACK, &value);
+			OpenAL::alGetEffectf(this->identifier(), AL_FLANGER_FEEDBACK, &value);
 		}
 
 		return value;
@@ -260,9 +260,9 @@ namespace EmEn::Audio::Effects
 	{
 		ALfloat value = 0.0F;
 
-		if ( EFX::isAvailable() )
+		if ( OpenAL::isEFXAvailable() )
 		{
-			EFX::alGetEffectf(this->identifier(), AL_FLANGER_DELAY, &value);
+			OpenAL::alGetEffectf(this->identifier(), AL_FLANGER_DELAY, &value);
 		}
 
 		return value;

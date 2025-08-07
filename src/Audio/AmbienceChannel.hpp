@@ -46,17 +46,11 @@ namespace EmEn::Audio
 			 * @brief Constructs an ambience channel.
 			 * @param source A reference to an audio source smart pointer.
 			 */
-			explicit AmbienceChannel (const std::shared_ptr< Source > & source) noexcept;
-
-			/**
-			 * @brief Gets the channel source.
-			 * @return std::shared_ptr< Source >
-			 */
-			[[nodiscard]]
-			std::shared_ptr< Source >
-			getSource () const noexcept
+			explicit
+			AmbienceChannel (SourceRequest && source) noexcept
+				: m_source{std::move(source)}
 			{
-				return m_source;
+
 			}
 
 			/**
@@ -80,6 +74,67 @@ namespace EmEn::Audio
 			 */
 			[[nodiscard]]
 			unsigned int play (const AmbienceSound & sound, float radius) noexcept;
+
+			/**
+			 * @brief Stops the source.
+			 * @param removeSound Remove the sound associated.
+			 * @return void
+			 */
+			void
+			stop (bool removeSound) const noexcept
+			{
+				if ( m_source != nullptr )
+				{
+					m_source->stop();
+
+					if ( removeSound )
+					{
+						m_source->removeSound();
+					}
+				}
+			}
+
+			/** @copydoc EmEn::Audio::Source::setReferenceDistance() */
+			void
+			setReferenceDistance (float distance) const noexcept
+			{
+				if ( m_source != nullptr )
+				{
+					m_source->setReferenceDistance(distance);
+				}
+			}
+
+			/** @copydoc EmEn::Audio::Source::setMaxDistance() */
+			void
+			setMaxDistance (float distance) const noexcept
+			{
+				if ( m_source != nullptr )
+				{
+					m_source->setMaxDistance(distance);
+				}
+			}
+
+			/** @copydoc EmEn::Audio::Source::enableDirectFilter() */
+			bool
+			enableDirectFilter (const std::shared_ptr< Filters::Abstract > & filter) const noexcept
+			{
+				if ( m_source == nullptr )
+				{
+					return false;
+				}
+
+				return m_source->enableDirectFilter(filter);
+			}
+
+			/** @copydoc EmEn::Audio::Source::disableDirectFilter() */
+			void
+			disableDirectFilter () const noexcept
+			{
+				if ( m_source != nullptr )
+				{
+					m_source->disableDirectFilter();
+				}
+			}
 
 			/**
 			 * @brief Updates the current time.
@@ -133,7 +188,7 @@ namespace EmEn::Audio
 
 		private:
 
-			std::shared_ptr< Source > m_source;
+			SourceRequest m_source;
 			Libs::Math::Vector< 3, float > m_position;
 			Libs::Math::Vector< 3, float > m_velocity;
 			unsigned int m_timeBeforeNextPlay{0U};

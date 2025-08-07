@@ -2529,6 +2529,27 @@ namespace EmEn::Libs::Math
 			std::array< precision_t, dim_t * dim_t > m_data{0};
 	};
 
+	/* NOTE: Trait and concept to check a matrix in template. */
+	template< typename T >
+	inline constexpr bool is_matrix_v = false;
+
+	template< size_t dim_t, typename precision_t >
+	requires (dim_t == 2 || dim_t == 3 || dim_t == 4) && std::is_arithmetic_v< precision_t >
+	inline constexpr bool is_matrix_v< Matrix< dim_t, precision_t > > = true;
+
+	template< typename T >
+	concept MatrixConcept = is_matrix_v< T >;
+
+	template< typename T >
+	struct MatrixTraits;
+
+	template< size_t dim_t, typename precision_t >
+	struct MatrixTraits< Matrix< dim_t, precision_t > >
+	{
+		static constexpr size_t dim = dim_t;
+		using precision = precision_t;
+	};
+
 	using Matrix2F = Matrix< 2, float >;
 	using Matrix3F = Matrix< 3, float >;
 	using Matrix4F = Matrix< 4, float >;

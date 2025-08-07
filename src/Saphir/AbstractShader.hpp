@@ -36,6 +36,7 @@
 #include "CodeGeneratorInterface.hpp"
 
 /* Local inclusions for usages. */
+#include "Libs/StaticVector.hpp"
 #include "Declaration/Function.hpp"
 #include "Declaration/PushConstantBlock.hpp"
 #include "Declaration/Sampler.hpp"
@@ -236,10 +237,10 @@ namespace EmEn::Saphir
 
 			/**
 			 * @brief Returns the list of push constant block declarations.
-			 * @return const std::vector< Declaration::PushConstantBlock > &
+			 * @return const Libs::StaticVector< Declaration::PushConstantBlock, 4 > &
 			 */
 			[[nodiscard]]
-			const std::vector< Declaration::PushConstantBlock > &
+			const Libs::StaticVector< Declaration::PushConstantBlock, 4 > &
 			pushConstantBlockDeclarations () const noexcept
 			{
 				return m_pushConstantBlocks;
@@ -383,6 +384,37 @@ namespace EmEn::Saphir
 			}
 
 			/**
+			 * @brief Generates shader declarations.
+			 * @tparam declaration_t The type of declaration. This should be derived from Declaration::Interface.
+			 * @param code A reference to a stream.
+			 * @param declarations A reference to a list of declaration.
+			 * @param comment A section comment. Default none.
+			 * @return void
+			 */
+			template< typename declaration_t >
+			static
+			void
+			generateDeclarations (std::stringstream & code, const Libs::StaticVector< declaration_t, 4 > & declarations, const char * comment = nullptr) noexcept requires (std::is_base_of_v< Declaration::Interface, declaration_t >)
+			{
+				if ( declarations.empty() )
+				{
+					return;
+				}
+
+				if ( comment != nullptr )
+				{
+					code << "/* " << comment << " */" "\n";
+				}
+
+				for ( const auto & declaration : declarations )
+				{
+					code << declaration.sourceCode();
+				}
+
+				code << '\n';
+			}
+
+			/**
 			 * @brief Called from the child class for generating the source code.
 			 * @param generator A reference to the generator.
 			 * @param code A reference to string.
@@ -420,6 +452,6 @@ namespace EmEn::Saphir
 			std::vector< Declaration::ShaderStorageBlock > m_shaderStorageBlocks; /* SSBO */
 			std::vector< Declaration::Sampler > m_samplers;
 			std::vector< Declaration::TexelBuffer > m_texelBuffers; /* (Vulkan only) */
-			std::vector< Declaration::PushConstantBlock > m_pushConstantBlocks; /* (Vulkan only) FIXME: Only one is authorized ! */
+			Libs::StaticVector< Declaration::PushConstantBlock, 4 > m_pushConstantBlocks; /* (Vulkan only) FIXME: Only one is authorized ! */
 	};
 }

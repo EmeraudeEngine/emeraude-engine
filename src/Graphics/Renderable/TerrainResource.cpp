@@ -26,6 +26,9 @@
 
 #include "TerrainResource.hpp"
 
+/* 3rd inclusions. */
+#include "magic_enum/magic_enum.hpp"
+
 /* Local inclusions. */
 #include "Libs/FastJSON.hpp"
 #include "Resources/Manager.hpp"
@@ -180,14 +183,16 @@ namespace EmEn::Graphics::Renderable
 	bool
 	TerrainResource::load (const std::filesystem::path & filepath) noexcept
 	{
-		Json::Value root;
+		const auto rootCheck = FastJSON::getRootFromFile(filepath);
 
-		if ( !FastJSON::getRootFromFile(filepath, root) )
+		if ( !rootCheck )
 		{
 			TraceError{ClassId} << "Unable to parse the resource file " << filepath << " !" "\n";
 
 			return this->setLoadSuccess(false);
 		}
+
+		const auto & root = rootCheck.value();
 
 		/* Checks if additional stores before loading (optional) */
 		auto * manager = Resources::Manager::instance();
@@ -233,15 +238,15 @@ namespace EmEn::Graphics::Renderable
 		/* First, we check every key from JSON data. */
 
 		/* Checks size and division options... */
-		const auto size = FastJSON::getNumber< float >(data, FastJSON::SizeKey, DefaultSize);
-		const auto division = FastJSON::getNumber< uint32_t >(data, FastJSON::DivisionKey, DefaultDivision);
+		const auto size = FastJSON::getValue< float >(data, FastJSON::SizeKey).value_or(DefaultSize);
+		const auto division = FastJSON::getValue< uint32_t >(data, FastJSON::DivisionKey).value_or(DefaultDivision);
 
 		/* Checks material type. */
-		const auto materialType = FastJSON::getString(data, MaterialTypeKey);
+		const auto materialType = FastJSON::getValue< std::string >(data, MaterialTypeKey);
 
-		if ( materialType.empty() || materialType != Material::StandardResource::ClassId )
+		if ( !materialType || materialType != Material::StandardResource::ClassId )
 		{
-			TraceError{ClassId} << "Material resource type '" << materialType << "' for terrain '" << this->name() << "' is not handled !";
+			TraceError{ClassId} << "Material resource type '" << materialType.value() << "' for terrain '" << this->name() << "' is not handled !";
 
 			return this->setLoadSuccess(false);
 		}
@@ -302,9 +307,9 @@ namespace EmEn::Graphics::Renderable
 
 		auto * materials = resources->container< Material::StandardResource >();
 
-		const auto materialName = FastJSON::getString(data, MaterialNameKey);
+		const auto materialName = FastJSON::getValue< std::string >(data, MaterialNameKey);
 
-		if ( materialName.empty() )
+		if ( !materialName )
 		{
 			TraceWarning{ClassId} << "The key '" << MaterialNameKey << "' is not present or not a string !";
 
@@ -312,11 +317,11 @@ namespace EmEn::Graphics::Renderable
 		}
 		else
 		{
-			materialResource = materials->getResource(materialName);
+			materialResource = materials->getResource(materialName.value());
 
 			if ( materialResource == nullptr )
 			{
-				TraceError{ClassId} << "Material '" << materialName << "' is not available in data stores, using default one !";
+				TraceError{ClassId} << "Material '" << materialName.value() << "' is not available in data stores, using default one !";
 
 				materialResource = materials->getDefaultResource();
 			}
@@ -342,32 +347,33 @@ namespace EmEn::Graphics::Renderable
 
 				for ( const auto & iteration : heightMapping )
 				{
-					auto imageName = FastJSON::getString(iteration, ImageNameKey);
+					auto imageName = FastJSON::getValue< std::string >(iteration, ImageNameKey);
 
-					if ( imageName.empty() )
+					if ( !imageName )
 					{
 						TraceWarning{ClassId} << "The key '" << ImageNameKey << "' is not present or not a string !";
 
 						continue;
 					}
 
-					auto imageResource = images->getResource(imageName, true);
+					auto imageResource = images->getResource(imageName.value(), true);
 
 					if ( imageResource == nullptr )
 					{
-						TraceWarning{ClassId} << "Image '" << imageName << "' is not available in data stores !";
+						TraceWarning{ClassId} << "Image '" << imageName.value() << "' is not available in data stores !";
 
 						continue;
 					}
 
 					/* Color inversion if requested. */
-					const auto inverse = FastJSON::getBoolean(iteration, InverseKey, false);
+					const auto inverse = FastJSON::getValue< bool >(iteration, InverseKey).value_or(false);
 
 					/* Checks for scaling. */
-					const auto scale = FastJSON::getNumber< float >(iteration, FastJSON::ScaleKey, 1.0F);
+					const auto scale = FastJSON::getValue< float >(iteration, FastJSON::ScaleKey).value_or(1.0F);
 
 					/* Checks the mode for leveling the vertices. */
-					const auto mode = Grid< float >::getMode(FastJSON::getString(iteration, FastJSON::ModeKey));
+					const auto modeString = FastJSON::getValidatedStringValue(iteration, FastJSON::ModeKey, PointTransformationModes).value_or("Replace");
+					const auto mode = magic_enum::enum_cast< EmEn::Libs::VertexFactory::PointTransformationMode >(modeString).value();
 
 					/* Applies the height map on the geometry. */
 					m_localData.applyDisplacementMapping(imageResource->data(), inverse ? -scale : scale, mode);
@@ -391,13 +397,14 @@ namespace EmEn::Graphics::Renderable
 				for ( const auto & iteration : noiseFiltering )
 				{
 					/* Size parameter for perlin noise. */
-					const auto perlinSize = FastJSON::getNumber< float >(iteration, FastJSON::SizeKey);
+					const auto perlinSize = FastJSON::getValue< float >(iteration, FastJSON::SizeKey).value_or(8.0F);
 
 					/* Height scaling parameter. */
-					const auto perlinScale = FastJSON::getNumber< float >(iteration, FastJSON::ScaleKey, 1.0F);
+					const auto perlinScale = FastJSON::getValue< float >(iteration, FastJSON::ScaleKey).value_or(1.0F);
 
 					/* Checks the mode for leveling the vertices. */
-					const auto perlinMode = Grid< float >::getMode(FastJSON::getString(iteration, FastJSON::ModeKey));
+					const auto modeString = FastJSON::getValidatedStringValue(iteration, FastJSON::ModeKey, PointTransformationModes).value_or("Replace");
+					const auto perlinMode = magic_enum::enum_cast< EmEn::Libs::VertexFactory::PointTransformationMode >(modeString).value();
 
 					m_localData.applyPerlinNoise(perlinSize, perlinScale, perlinMode);
 
@@ -411,7 +418,7 @@ namespace EmEn::Graphics::Renderable
 		}
 
 		/* Checks if the UV multiplier parameter. */
-		const auto value = FastJSON::getNumber< float >(data, FastJSON::UVMultiplierKey, 1.0F);
+		const auto value = FastJSON::getValue< float >(data, FastJSON::UVMultiplierKey).value_or(1.0F);
 
 		m_localData.setUVMultiplier(value);
 

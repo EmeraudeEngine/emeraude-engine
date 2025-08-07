@@ -31,7 +31,14 @@
 
 namespace EmEn::Audio
 {
-	/** @brief The distance model to use with audio source for mixing. */
+	/** @brief The playing mode enumeration. */
+	enum class PlayMode : uint8_t
+	{
+		Once,
+		Loop
+	};
+
+	/** @brief The distance model to use with an audio source for mixing. */
 	enum class DistanceModel : uint8_t
 	{
 		Inverse,

@@ -41,8 +41,8 @@
 
 namespace EmEn::Audio
 {
-	using namespace EmEn::Libs;
-	using namespace EmEn::Libs::Math;
+	using namespace Libs;
+	using namespace Libs::Math;
 
 	Ambience::~Ambience ()
 	{
@@ -83,7 +83,7 @@ namespace EmEn::Audio
 			{
 				m_channels.clear();
 
-				const auto * audioManager = Manager::instance();
+				auto * audioManager = Manager::instance();
 
 				for ( size_t channelIndex = 0; channelIndex < m_channelCount; channelIndex++ )
 				{
@@ -104,7 +104,7 @@ namespace EmEn::Audio
 						source->enableDirectFilter(m_directFilter);
 					}
 
-					m_channels.emplace_back(source);
+					m_channels.emplace_back(std::move(source));
 				}
 			}
 		}
@@ -127,8 +127,7 @@ namespace EmEn::Audio
 		{
 			for ( const auto & channel : m_channels )
 			{
-				channel.getSource()->stop();
-				channel.getSource()->removeSound();
+				channel.stop(true);
 			}
 
 			m_channels.clear();
@@ -142,10 +141,8 @@ namespace EmEn::Audio
 
 		for ( const auto & channel : m_channels )
 		{
-			auto source = channel.getSource();
-
-			source->setReferenceDistance(m_radius * Half< float >);
-			source->setMaxDistance(m_radius * Double< float >);
+			channel.setReferenceDistance(m_radius * Half< float >);
+			channel.setMaxDistance(m_radius * Double< float >);
 		}
 	}
 
@@ -213,7 +210,7 @@ namespace EmEn::Audio
 		}
 
 		return !std::ranges::any_of(std::as_const(m_channels), [filter] (auto & channel) {
-			return static_cast< bool >(!channel.getSource()->enableDirectFilter(filter));
+			return static_cast< bool >(!channel.enableDirectFilter(filter));
 		});
 	}
 
@@ -227,7 +224,7 @@ namespace EmEn::Audio
 
 		for ( const auto & channel : m_channels )
 		{
-			channel.getSource()->disableDirectFilter();
+			channel.disableDirectFilter();
 		}
 
 		m_directFilter.reset();
@@ -264,7 +261,7 @@ namespace EmEn::Audio
 			/* NOTE: Delay the sound play if not loaded. */
 			if ( m_loopSound->isLoaded() )
 			{
-				m_loopedSource->play(m_loopSound, Source::PlayMode::Loop);
+				m_loopedSource->play(m_loopSound, PlayMode::Loop);
 			}
 			else
 			{
@@ -292,7 +289,7 @@ namespace EmEn::Audio
 			switch ( notificationCode )
 			{
 				case Resources::ResourceTrait::LoadFinished :
-					m_loopedSource->play(m_loopSound, Source::PlayMode::Loop);
+					m_loopedSource->play(m_loopSound, PlayMode::Loop);
 					break;
 
 				case Resources::ResourceTrait::LoadFailed :
@@ -360,20 +357,22 @@ namespace EmEn::Audio
 	bool
 	Ambience::loadSoundSet (const std::filesystem::path & filepath) noexcept
 	{
-		Json::Value root;
+		const auto rootCheck = FastJSON::getRootFromFile(filepath);
 
-		if ( !FastJSON::getRootFromFile(filepath, root) )
+		if ( !rootCheck )
 		{
 			TraceError{ClassId} << "Unable to read file " << filepath << " !";
 
 			return false;
 		}
 
+		const auto & root = rootCheck.value();
+
 		auto * soundManager = Resources::Manager::instance()->container< SoundResource >();
 
 		/* 1. Read base sound set information. */
-		this->setChannelCount(FastJSON::getNumber< size_t >(root, JKChannelCount, DefaultChannelCount));
-		this->setRadius(FastJSON::getNumber< float >(root, JKRadius, DefaultRadius));
+		this->setChannelCount(FastJSON::getValue< size_t >(root, JKChannelCount).value_or(DefaultChannelCount));
+		this->setRadius(FastJSON::getValue< float >(root, JKRadius).value_or(DefaultRadius));
 
 		/* 2. Read the loop sound effect. */
 		if ( root.isMember(JKLoopSoundEffect) )
@@ -382,11 +381,9 @@ namespace EmEn::Audio
 
 			if ( loopSFX.isObject() )
 			{
-				const auto resourceName = FastJSON::getString(loopSFX, JKResourceName);
-
-				if ( !resourceName.empty() )
+				if ( const auto soundResourceName = FastJSON::getValue< std::string >(loopSFX, JKResourceName) )
 				{
-					this->setLoopSound(soundManager->getResource(resourceName), FastJSON::getNumber< float >(loopSFX, JKGain, DefaultGain));
+					this->setLoopSound(soundManager->getResource(soundResourceName.value()), FastJSON::getValue< float >(loopSFX, JKGain).value_or(DefaultGain));
 				}
 				else
 				{
@@ -415,24 +412,22 @@ namespace EmEn::Audio
 						continue;
 					}
 
-					const auto resourceName = FastJSON::getString(SFX, JKResourceName);
+					if ( const auto soundResourceName = FastJSON::getValue< std::string >(SFX, JKResourceName) )
+					{
+						const auto gain = FastJSON::getValue< float >(SFX, JKGain).value_or(DefaultGain);
+						const auto relative = FastJSON::getValue< bool >(SFX, JKRelative).value_or(true);
+						const auto minPitch = FastJSON::getValue< float >(SFX, JKMinimumPitch).value_or(1.0F);
+						const auto maxPitch = FastJSON::getValue< float >(SFX, JKMaximumPitch).value_or(1.0F);
+						const auto velocity = FastJSON::getValue< float >(SFX, JKRadialVelocity).value_or(0.0F);
 
-					if ( resourceName.empty() )
+						if ( !this->addSound(soundManager->getResource(soundResourceName.value()), gain, relative, minPitch, maxPitch, velocity) )
+						{
+							break;
+						}
+					}
+					else
 					{
 						Tracer::error(ClassId, "A sound effect resource name is empty or unspecified !");
-
-						continue;
-					}
-
-					const auto gain = FastJSON::getNumber< float >(SFX, JKGain, DefaultGain);
-					const auto relative = FastJSON::getBoolean(SFX, JKRelative, true);
-					const auto minPitch = FastJSON::getNumber< float >(SFX, JKMinimumPitch, 1.0F);
-					const auto maxPitch = FastJSON::getNumber< float >(SFX, JKMaximumPitch, 1.0F);
-					const auto velocity = FastJSON::getNumber< float >(SFX, JKRadialVelocity, 0.0F);
-
-					if ( !this->addSound(soundManager->getResource(resourceName), gain, relative, minPitch, maxPitch, velocity) )
-					{
-						break;
 					}
 				}
 			}

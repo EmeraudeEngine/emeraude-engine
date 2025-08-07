@@ -350,7 +350,7 @@ namespace EmEn::Scenes
 			/**
 			 * @brief Creates a microphone.
 			 * @param componentName The name of the component. Default "Microphone".
-			 * @param primaryDevice Set this device as primary one. Default false.
+			 * @param primaryDevice Set this device as the primary one. Default false.
 			 * @return std::shared_ptr< Component::Microphone >
 			 */
 			std::shared_ptr< Component::Microphone > newMicrophone (bool primaryDevice = false, const std::string & componentName = "Microphone") noexcept;
@@ -410,7 +410,7 @@ namespace EmEn::Scenes
 			/**
 			 * @brief Creates a visual instance.
 			 * @param resource A reference to a renderable interface smart pointer.
-			 * @param enablePhysicalProperties Enable physicals properties on the new component. Default true.
+			 * @param enablePhysicalProperties Enable physical properties on the new component. Default true.
 			 * @param enableLighting Enable the lighting on the visual. Default true.
 			 * @param componentName A reference to a string for the name of the component. Default "Visual".
 			 * @return std::shared_ptr< Component::Visual >
@@ -422,7 +422,7 @@ namespace EmEn::Scenes
 			 * @note Version for multiple underlying renderable object instances.
 			 * @param resource A reference to a renderable interface smart pointer.
 			 * @param coordinates An array of coordinates to place instances.
-			 * @param enablePhysicalProperties Enable physicals properties on the new component. Default true.
+			 * @param enablePhysicalProperties Enable physical properties on the new component. Default true.
 			 * @param enableLighting Enable the lighting on the visual. Default true.
 			 * @param componentName The name of the component. Default "MultipleVisuals".
 			 * @return std::shared_ptr< Component::MultipleVisuals >
@@ -430,7 +430,7 @@ namespace EmEn::Scenes
 			std::shared_ptr< Component::MultipleVisuals > newVisual (const std::shared_ptr< Graphics::Renderable::Interface > & resource, const std::vector< Libs::Math::CartesianFrame< float > > & coordinates, bool enablePhysicalProperties = true, bool enableLighting = true, const std::string & componentName = "MultipleVisuals") noexcept;
 
 			/**
-			 * @brief Creates a particles emitter using a sprite resource.
+			 * @brief Creates a particle emitter using a sprite resource.
 			 * @param resource a reference to a sprite resource smart pointer.
 			 * @param maxParticleCount The limit of particles allowed to be generated at once.
 			 * @param componentName The name of the component. Default "ParticlesEmitter".
@@ -464,7 +464,7 @@ namespace EmEn::Scenes
 			/**
 			 * @brief Creates a weight with customized properties.
 			 * @note This component will automatically enable the physical properties.
-			 * @param initialProperties A reference to a physical object properties.
+			 * @param initialProperties A reference to a physical object property.
 			 * @param componentName The name of the component. Default "Weight".
 			 * @return std::shared_ptr< Component::Weight >
 			 */
@@ -508,7 +508,7 @@ namespace EmEn::Scenes
 			bool isVisualDebugEnabled (VisualDebugType type) const noexcept;
 
 			/**
-			 * @brief Updates components logics from engine cycle and returns if the entity has moved in the scene.
+			 * @brief Updates components logics from the engine cycle and returns if the entity has moved in the scene.
 			 * @param scene A reference to the scene.
 			 * @param engineCycle The current engine cycle number.
 			 * @return bool
@@ -644,6 +644,22 @@ namespace EmEn::Scenes
 			 */
 			[[nodiscard]]
 			virtual bool isMoving () const noexcept = 0;
+
+			/**
+			 * @brief Copies local data for a stable render.
+			 * @note This must be done at the end of the logic loop.
+			 * @param writeStateIndex The render state-free index to write data.
+			 * @return void
+			 */
+			virtual void publishStateForRendering (uint32_t writeStateIndex) noexcept = 0;
+
+			/**
+			 * @brief Returns the world coordinates of the entity for rendering.
+			 * @param readStateIndex The render state-valid index to read data.
+			 * @return void const Libs::Math::CartesianFrame< float > &
+			 */
+			[[nodiscard]]
+			virtual const Libs::Math::CartesianFrame< float > & getWorldCoordinatesStateForRendering (uint32_t readStateIndex) const noexcept = 0;
 
 		protected:
 
@@ -823,11 +839,11 @@ namespace EmEn::Scenes
 
 			/**
 			 * @brief Called when the entity does not handle a notification abstract level.
-			 * @todo [GENERAL] Should use is own method. Rethink the purpose.
+			 * @todo [GENERAL] Should use its own method. Rethink the purpose.
 			 * @note If this function return false, the observer will be automatically detached.
 			 * @return bool
 			 */
-			virtual bool onUnhandledNotification (const Libs::ObservableTrait * observable, int notificationCode, const std::any & data) noexcept = 0;
+			virtual bool onUnhandledNotification (const ObservableTrait * observable, int notificationCode, const std::any & data) noexcept = 0;
 
 			/**
 			 * @brief Called when the entity has moved.

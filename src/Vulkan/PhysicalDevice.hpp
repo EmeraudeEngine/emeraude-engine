@@ -37,6 +37,7 @@
 #include <vulkan/vulkan.h>
 
 /* Local inclusions for usages. */
+#include "Libs/StaticVector.hpp"
 #include "Libs/Version.hpp"
 
 namespace EmEn::Vulkan
@@ -349,10 +350,10 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Returns prefetched physical device queue family properties from Vulkan 1.1.
-			 * @return const std::vector< VkQueueFamilyProperties2 > &
+			 * @return const Libs::StaticVector< VkQueueFamilyProperties2, 8 > &
 			 */
 			[[nodiscard]]
-			const std::vector< VkQueueFamilyProperties2 > &
+			const Libs::StaticVector< VkQueueFamilyProperties2, 8 > &
 			queueFamilyPropertiesVK11 () const noexcept
 			{
 				return m_queueFamilyProperties;
@@ -535,7 +536,7 @@ namespace EmEn::Vulkan
 			std::vector< VkPresentModeKHR > getSurfacePresentModes (VkSurfaceKHR surface) const noexcept;
 
 			/**
-			 * @brief Returns the physical device present rectangles.
+			 * @brief Returns the physical device presents rectangles.
 			 * @param surface
 			 * @return std::vector< VkRect2D >
 			 */
@@ -559,7 +560,7 @@ namespace EmEn::Vulkan
 			VkMultisamplePropertiesEXT getMultisampleProperties (VkSampleCountFlagBits samples) const noexcept;
 
 			/**
-			 * @brief Returns a list of validation layers available from physical device.
+			 * @brief Returns a list of validation layers available from a physical device.
 			 * @return std::vector< VkLayerProperties >
 			 */
 			[[deprecated("Vulkan has deprecated the device layer for instance layer only.")]]
@@ -567,7 +568,7 @@ namespace EmEn::Vulkan
 			std::vector< VkLayerProperties > getValidationLayers () const noexcept;
 
 			/**
-			 * @brief Returns a list of extensions available from physical device.
+			 * @brief Returns a list of extensions available from a physical device.
 			 * @param pLayerName Default nullptr.
 			 * @return std::vector< VkExtensionProperties >
 			 */
@@ -591,7 +592,7 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Gets the maximum sample the GPU can handle for multisample rendering.
-			 * @note This method check the smallest support between the color buffer and the depth buffer.
+			 * @note This method checks the smallest support between the color buffer and the depth buffer.
 			 * @return VkSampleCountFlagBits
 			 */
 			[[nodiscard]]
@@ -617,7 +618,7 @@ namespace EmEn::Vulkan
 			VkPhysicalDeviceVulkan12Properties m_propertiesVK12{};
 			VkPhysicalDeviceVulkan13Properties m_propertiesVK13{};
 			VkPhysicalDeviceMemoryProperties2 m_memoryProperties{};
-			std::vector< VkQueueFamilyProperties2 > m_queueFamilyProperties;
+			Libs::StaticVector< VkQueueFamilyProperties2, 8 > m_queueFamilyProperties;
 			std::vector< VkPhysicalDeviceToolProperties > m_toolProperties;
 			std::vector< VkDisplayPropertiesKHR > m_displayProperties;
 			std::vector< VkDisplayPlanePropertiesKHR > m_displayPlaneProperties;

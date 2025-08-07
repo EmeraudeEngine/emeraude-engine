@@ -131,6 +131,11 @@ namespace EmEn::Libs::WaveFactory
 			bool
 			initialize (const std::vector< precision_t > & data, Channels channels, Frequency frequency) noexcept
 			{
+				if ( data.empty() )
+				{
+					return false;
+				}
+
 				m_data = data;
 				m_channels = channels;
 				m_frequency = frequency;

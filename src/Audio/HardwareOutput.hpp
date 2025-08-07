@@ -55,7 +55,12 @@ namespace EmEn::Audio
 			 * @param name A reference to a name.
 			 * @param audioManager A reference to the audioManager.
 			 */
-			HardwareOutput (const std::string & name, Manager & audioManager) noexcept;
+			HardwareOutput (const std::string & name, Manager & audioManager) noexcept
+				: AbstractVirtualDevice{name, AVConsole::DeviceType::Audio, AVConsole::ConnexionType::Input},
+				m_audioManager{&audioManager}
+			{
+
+			}
 
 		private:
 

@@ -42,7 +42,7 @@ namespace EmEn::Scenes::Component
 	using namespace EmEn::Saphir;
 
 	void
-	PointLight::onTargetConnected (AVConsole::AVManagers & managers, AbstractVirtualDevice * targetDevice) noexcept
+	PointLight::onOutputDeviceConnected (AVConsole::AVManagers & /*managers*/, AbstractVirtualDevice * targetDevice) noexcept
 	{
 		const auto maxDistance =
 			m_radius > 0.0F ?
@@ -135,7 +135,7 @@ namespace EmEn::Scenes::Component
 	}
 
 	bool
-	PointLight::createOnHardware (LightSet & lightSet, AVConsole::Manager & AVConsoleManager) noexcept
+	PointLight::createOnHardware (Scene & scene) noexcept
 	{
 		if ( this->isCreated() )
 		{
@@ -145,7 +145,7 @@ namespace EmEn::Scenes::Component
 		}
 
 		/* Create and register the light to a shared uniform buffer. */
-		if ( !this->addToSharedUniformBuffer(lightSet.pointLightBuffer()) )
+		if ( !this->addToSharedUniformBuffer(scene.lightSet().pointLightBuffer()) )
 		{
 			Tracer::error(ClassId, "Unable to create the point light shared uniform buffer !");
 
@@ -168,26 +168,26 @@ namespace EmEn::Scenes::Component
 		if ( resolution > 0 )
 		{
 			/* [VULKAN-SHADOW] TODO: Reuse shadow maps + remove it from console on failure */
-			m_shadowMap = AVConsoleManager.createRenderToCubicShadowMap(this->name() + ShadowMapName, resolution);
+			m_shadowMap = scene.createRenderToCubicShadowMap(this->name() + ShadowMapName, resolution);
 
 			if ( m_shadowMap != nullptr )
 			{
-				if ( this->connect(AVConsoleManager.managers(), m_shadowMap) )
+				if ( this->connect(scene.AVConsoleManager().managers(), m_shadowMap, true) != AVConsole::ConnexionResult::Success )
 				{
-					TraceSuccess{ClassId} << "Cubic shadow map successfully created for point light '" << this->name() << "'.";
+					TraceSuccess{ClassId} << "Cubic shadow map (" << resolution << "px³) successfully created for point light '" << this->name() << "'.";
 
 					this->enableShadowCasting(true);
 				}
 				else
 				{
-					TraceError{ClassId} << "Unable to connect the cubic shadow map to point light '" << this->name() << "' !";
+					TraceError{ClassId} << "Unable to connect the cubic shadow map (" << resolution << "px³) to point light '" << this->name() << "' !";
 
 					m_shadowMap.reset();
 				}
 			}
 			else
 			{
-				TraceError{ClassId} << "Unable to create a cubic shadow map for point light '" << this->name() << "' !";
+				TraceError{ClassId} << "Unable to create a cubic shadow map (" << resolution << "px³) for point light '" << this->name() << "' !";
 			}
 		}
 
@@ -195,11 +195,11 @@ namespace EmEn::Scenes::Component
 	}
 
 	void
-	PointLight::destroyFromHardware (LightSet & lightSet, AVConsole::Manager & AVConsoleManager) noexcept
+	PointLight::destroyFromHardware (Scene & scene) noexcept
 	{
 		if ( m_shadowMap != nullptr )
 		{
-			this->disconnect(AVConsoleManager.managers(), m_shadowMap);
+			this->disconnect(scene.AVConsoleManager().managers(), m_shadowMap, true);
 
 			m_shadowMap.reset();
 		}

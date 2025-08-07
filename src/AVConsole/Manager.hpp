@@ -31,7 +31,7 @@
 #include <cstdint>
 #include <any>
 #include <memory>
-#include <set>
+#include <mutex>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -44,9 +44,6 @@
 
 /* Local inclusions for usages. */
 #include "AbstractVirtualDevice.hpp"
-#include "Graphics/RenderTarget/ShadowMap.hpp"
-#include "Graphics/RenderTarget/Texture.hpp"
-#include "Graphics/RenderTarget/View.hpp"
 #include "Types.hpp"
 
 namespace EmEn
@@ -57,12 +54,12 @@ namespace EmEn
 namespace EmEn::AVConsole
 {
 	/**
-	 * @brief The master control links every virtual audio/video input/output from the scene.
+	 * @brief The audio/video manager links every virtual audio/video input/output from a scene.
 	 * @note [OBS][STATIC-OBSERVER][STATIC-OBSERVABLE]
-	 * @extends EmEn::Libs::NameableTrait The master control can have a name according to the scene.
-	 * @extends EmEn::Console::Controllable The master control is usable from the console.
-	 * @extends EmEn::Libs::ObserverTrait The master control wants to get notifications from devices.
-	 * @extends EmEn::Libs::ObserverTrait The master control dispatch device configuration changes.
+	 * @extends EmEn::Libs::NameableTrait The audio/video manager can have a name according to a scene.
+	 * @extends EmEn::Console::Controllable The audio/video manager is usable from the console.
+	 * @extends EmEn::Libs::ObserverTrait The audio/video manager wants to get notifications from devices.
+	 * @extends EmEn::Libs::ObserverTrait The audio/video manager dispatches device configuration changes.
 	 */
 	class Manager final : public Libs::NameableTrait, public Console::Controllable, public Libs::ObserverTrait, public Libs::ObservableTrait
 	{
@@ -94,7 +91,7 @@ namespace EmEn::AVConsole
 			static const std::string DefaultSpeakerName;
 
 			/**
-			 * @brief Constructs the master control console.
+			 * @brief Constructs the audio/video manager.
 			 * @param name A reference to a string.
 			 * @param graphicsRenderer A reference to the graphics renderer.
 			 * @param audioManager A reference to the audio manager.
@@ -151,12 +148,72 @@ namespace EmEn::AVConsole
 			}
 
 			/**
+			 * @brief Returns whether a virtual video device exists.
+			 * @param deviceId A reference to a string.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isVideoDeviceExists (const std::string & deviceId) const noexcept
+			{
+				const std::lock_guard< std::mutex > lock{m_deviceAccess};
+
+				return m_virtualVideoDevices.contains(deviceId);
+			}
+
+			/**
+			 * @brief Returns whether a virtual audio device exists.
+			 * @param deviceId A reference to a string.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isAudioDeviceExists (const std::string & deviceId) const noexcept
+			{
+				const std::lock_guard< std::mutex > lock{m_deviceAccess};
+
+				return m_virtualAudioDevices.contains(deviceId);
+			}
+
+			/**
+			 * @brief Returns whether a primary video output is set.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			hasPrimaryVideoOutput () const noexcept
+			{
+				const std::lock_guard< std::mutex > lock{m_deviceAccess};
+
+				return !m_primaryOutputVideoDeviceId.empty();
+			}
+
+			/**
+			 * @brief Returns whether a primary audio output is set.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			hasPrimaryAudioOutput () const noexcept
+			{
+				const std::lock_guard< std::mutex > lock{m_deviceAccess};
+
+				return !m_primaryOutputAudioDeviceId.empty();
+			}
+
+			/**
 			 * @brief Returns a video device by its name.
 			 * @param deviceId A reference to a string.
 			 * @return std::shared_ptr< AbstractVirtualDevice >
 			 */
 			[[nodiscard]]
-			std::shared_ptr< AbstractVirtualDevice > getVideoDevice (const std::string & deviceId) const noexcept;
+			std::shared_ptr< AbstractVirtualDevice >
+			getVideoDevice (const std::string & deviceId) const noexcept
+			{
+				const std::lock_guard< std::mutex > lock{m_deviceAccess};
+
+				return this->getVideoDeviceNoLock(deviceId);
+			}
 
 			/**
 			 * @brief Returns an audio device by its name.
@@ -164,21 +221,39 @@ namespace EmEn::AVConsole
 			 * @return std::shared_ptr< AbstractVirtualDevice >
 			 */
 			[[nodiscard]]
-			std::shared_ptr< AbstractVirtualDevice > getAudioDevice (const std::string & deviceId) const noexcept;
+			std::shared_ptr< AbstractVirtualDevice >
+			getAudioDevice (const std::string & deviceId) const noexcept
+			{
+				const std::lock_guard< std::mutex > lock{m_deviceAccess};
+
+				return this->getAudioDeviceNoLock(deviceId);
+			}
 
 			/**
 			 * @brief Returns a list of video sources.
 			 * @return std::vector< std::shared_ptr< AbstractVirtualDevice > >
 			 */
 			[[nodiscard]]
-			std::vector< std::shared_ptr< AbstractVirtualDevice > > getVideoDeviceSources () const noexcept;
+			std::vector< std::shared_ptr< AbstractVirtualDevice > >
+			getVideoDeviceSources () const noexcept
+			{
+				const std::lock_guard< std::mutex > lock{m_deviceAccess};
+
+				return this->getVideoDeviceSourcesNoLock();
+			}
 
 			/**
 			 * @brief Returns a list of audio sources.
 			 * @return std::vector< std::shared_ptr< AbstractVirtualDevice > >
 			 */
 			[[nodiscard]]
-			std::vector< std::shared_ptr< AbstractVirtualDevice > > getAudioDeviceSources () const noexcept;
+			std::vector< std::shared_ptr< AbstractVirtualDevice > >
+			getAudioDeviceSources () const noexcept
+			{
+				const std::lock_guard< std::mutex > lock{m_deviceAccess};
+
+				return this->getAudioDeviceSourcesNoLock();
+			}
 
 			/**
 			 * @brief Returns the primary video device.
@@ -188,12 +263,14 @@ namespace EmEn::AVConsole
 			std::shared_ptr< AbstractVirtualDevice >
 			getPrimaryVideoDevice () const noexcept
 			{
+				const std::lock_guard< std::mutex > lock{m_deviceAccess};
+
 				if ( m_primaryOutputVideoDeviceId.empty() )
 				{
 					return nullptr;
 				}
 
-				return this->getVideoDevice(m_primaryOutputVideoDeviceId);
+				return this->getVideoDeviceNoLock(m_primaryOutputVideoDeviceId);
 			}
 
 			/**
@@ -204,54 +281,14 @@ namespace EmEn::AVConsole
 			std::shared_ptr< AbstractVirtualDevice >
 			getPrimaryAudioDevice () const noexcept
 			{
+				const std::lock_guard< std::mutex > lock{m_deviceAccess};
+
 				if ( m_primaryOutputAudioDeviceId.empty() )
 				{
 					return nullptr;
 				}
 
-				return this->getAudioDevice(m_primaryOutputAudioDeviceId);
-			}
-
-			/**
-			 * @brief Returns a printable device List.
-			 * @param deviceType The type of devices. Default both.
-			 * @param directionType The direction of connexion. Default both.
-			 * @return std::string
-			 */
-			[[nodiscard]]
-			std::string getDeviceList (DeviceType deviceType = DeviceType::Both, ConnexionType directionType = ConnexionType::Both) const noexcept;
-
-			/**
-			 * @brief Returns available render to shadow maps from the scene.
-			 * @return const std::set< std::shared_ptr< Graphics::RenderTarget::Abstract > > &
-			 */
-			[[nodiscard]]
-			const std::set< std::shared_ptr< Graphics::RenderTarget::Abstract > > &
-			renderToShadowMaps () const noexcept
-			{
-				return m_renderToShadowMaps;
-			}
-
-			/**
-			 * @brief Returns available render to texture2Ds from the scene.
-			 * @return const std::set< std::shared_ptr< Graphics::RenderTarget::Abstract > > &
-			 */
-			[[nodiscard]]
-			const std::set< std::shared_ptr< Graphics::RenderTarget::Abstract > > &
-			renderToTextures () const noexcept
-			{
-				return m_renderToTextures;
-			}
-
-			/**
-			 * @brief Returns available render to views from the scene.
-			 * @return const std::set< std::shared_ptr< Graphics::RenderTarget::Abstract > > &
-			 */
-			[[nodiscard]]
-			const std::set< std::shared_ptr< Graphics::RenderTarget::Abstract > > &
-			renderToViews () const noexcept
-			{
-				return m_renderToViews;
+				return this->getAudioDeviceNoLock(m_primaryOutputAudioDeviceId);
 			}
 
 			/**
@@ -260,7 +297,13 @@ namespace EmEn::AVConsole
 			 * @param primaryDevice Set the device as primary for its connexion type. Default false.
 			 * @return bool
 			 */
-			bool addVideoDevice (const std::shared_ptr< AbstractVirtualDevice > & device, bool primaryDevice = false) noexcept;
+			bool
+			addVideoDevice (const std::shared_ptr< AbstractVirtualDevice > & device, bool primaryDevice = false) noexcept
+			{
+				const std::lock_guard< std::mutex > lock{m_deviceAccess};
+
+				return this->addVideoDeviceNoLock(device, primaryDevice);
+			}
 
 			/**
 			 * @brief Adds a virtual audio device.
@@ -268,7 +311,13 @@ namespace EmEn::AVConsole
 			 * @param primaryDevice Set the device as primary for its connexion type. Default false.
 			 * @return bool
 			 */
-			bool addAudioDevice (const std::shared_ptr< AbstractVirtualDevice > & device, bool primaryDevice = false) noexcept;
+			bool
+			addAudioDevice (const std::shared_ptr< AbstractVirtualDevice > & device, bool primaryDevice = false) noexcept
+			{
+				const std::lock_guard< std::mutex > lock{m_deviceAccess};
+
+				return this->addAudioDeviceNoLock(device, primaryDevice);
+			}
 
 			/**
 			 * @brief Removes a virtual video device.
@@ -285,97 +334,40 @@ namespace EmEn::AVConsole
 			bool removeAudioDevice (const std::shared_ptr< AbstractVirtualDevice > & device) noexcept;
 
 			/**
-			 * @brief Creates a render to shadow map (Texture2D) device.
-			 * @param name A reference to a string to name the virtual video device.
-			 * @param resolution The resolution of the shadow map.
-			 * @return std::shared_ptr< Graphics::RenderTarget::ShadowMap< Graphics::ViewMatrices2DUBO > >
-			 */
-			[[nodiscard]]
-			std::shared_ptr< Graphics::RenderTarget::ShadowMap< Graphics::ViewMatrices2DUBO > > createRenderToShadowMap (const std::string & name, uint32_t resolution) noexcept;
-
-			/**
-			 * @brief Creates a render to cubic shadow map (Cubemap) device.
-			 * @param name A reference to a string to name the virtual video device.
-			 * @param resolution The resolution of the shadow map.
-			 * @return std::shared_ptr< Graphics::RenderTarget::ShadowMap< Graphics::ViewMatrices3DUBO > >
-			 */
-			[[nodiscard]]
-			std::shared_ptr< Graphics::RenderTarget::ShadowMap< Graphics::ViewMatrices3DUBO > > createRenderToCubicShadowMap (const std::string & name, uint32_t resolution) noexcept;
-
-			/**
-			 * @brief Creates a render to texture 2D device.
-			 * @param name A reference to a string to name the virtual video device.
-			 * @param width The width of the surface.
-			 * @param height The height of the surface.
-			 * @param colorCount The number of color channel desired for the texture2Ds. Default 4.
-			 * @return std::shared_ptr< Graphics::RenderTarget::Texture< Graphics::ViewMatrices2DUBO > >
-			 */
-			[[nodiscard]]
-			std::shared_ptr< Graphics::RenderTarget::Texture< Graphics::ViewMatrices2DUBO > > createRenderToTexture2D (const std::string & name, uint32_t width, uint32_t height, uint32_t colorCount = 4) noexcept;
-
-			/**
-			 * @brief Creates a render to cubemap device.
-			 * @param name A reference to a string to name the virtual video device.
-			 * @param size The size of the cubemap.
-			 * @param colorCount The number of color channel desired for the texture2Ds. Default 4.
-			 * @return std::shared_ptr< Graphics::RenderTarget::Texture::Texture< Graphics::ViewMatrices3DUBO > >
-			 */
-			[[nodiscard]]
-			std::shared_ptr< Graphics::RenderTarget::Texture< Graphics::ViewMatrices3DUBO > > createRenderToCubemap (const std::string & name, uint32_t size, uint32_t colorCount = 4) noexcept;
-
-			/**
-			 * @brief Creates a render to view (Texture 2D) device.
-			 * @param name A reference to a string to name the virtual video device.
-			 * @param width The width of the surface.
-			 * @param height The height of the surface.
-			 * @param precisions A reference to a framebuffer precisions structure.
-			 * @param primaryDevice Set the device as primary output. Default false.
-			 * @return std::shared_ptr< Graphics::RenderTarget::View< Graphics::ViewMatrices2DUBO > >
-			 */
-			[[nodiscard]]
-			std::shared_ptr< Graphics::RenderTarget::View< Graphics::ViewMatrices2DUBO > > createRenderToView (const std::string & name, uint32_t width, uint32_t height, const Graphics::FramebufferPrecisions & precisions = {}, bool primaryDevice = false) noexcept;
-
-			/**
-			 * @brief Creates a render to cubic view (Cubemap) device.
-			 * @param name A reference to a string to name the virtual video device.
-			 * @param size The size of the cubemap.
-			 * @param precisions A reference to a framebuffer precisions structure.
-			 * @param primaryDevice Set the device as primary output. Default false.
-			 * @return std::shared_ptr< Graphics::RenderTarget::View< Graphics::ViewMatrices3DUBO > >
-			 */
-			[[nodiscard]]
-			std::shared_ptr< Graphics::RenderTarget::View< Graphics::ViewMatrices3DUBO > > createRenderToCubicView (const std::string & name, uint32_t size, const Graphics::FramebufferPrecisions & precisions = {}, bool primaryDevice = false) noexcept;
-
-			/**
 			 * @brief Connects two video devices.
-			 * @param sourceDeviceId A reference to a string of output virtual video device id.
-			 * @param targetDeviceId A reference to a string of input virtual video device id.
+			 * @param sourceDeviceId A reference to a string of an output virtual video device id.
+			 * @param targetDeviceId A reference to a string of an input virtual video device id.
 			 * @return bool
 			 */
 			bool connectVideoDevices (const std::string & sourceDeviceId, const std::string & targetDeviceId) noexcept;
 
 			/**
 			 * @brief Connects two audio devices.
-			 * @param sourceDeviceId A reference to a string of output virtual audio device id.
-			 * @param targetDeviceId A reference to a string of input virtual audio device id.
+			 * @param sourceDeviceId A reference to a string of an output virtual audio device id.
+			 * @param targetDeviceId A reference to a string of an input virtual audio device id.
 			 * @return bool
 			 */
 			bool connectAudioDevices (const std::string & sourceDeviceId, const std::string & targetDeviceId) noexcept;
 
 			/**
 			 * @brief Auto-connects the primary video devices.
-			 * @param settings A reference to the core settings.
 			 * @return bool
 			 */
-			bool autoConnectPrimaryVideoDevices (Settings & settings) noexcept;
+			bool autoConnectPrimaryVideoDevices () noexcept;
 
 			/**
 			 * @brief Auto-connects the primary audio devices.
-			 * @param audioManager A reference to the audio manager.
-			 * @param settings A reference to the core settings.
 			 * @return bool
 			 */
-			bool autoConnectPrimaryAudioDevices (Audio::Manager & audioManager, Settings & settings) noexcept;
+			bool autoConnectPrimaryAudioDevices () noexcept;
+
+			/**
+			 * @brief Returns a printable device List.
+			 * @param deviceType The type of devices. Default both.
+			 * @return std::string
+			 */
+			[[nodiscard]]
+			std::string getDeviceList (DeviceType deviceType = DeviceType::Both) const noexcept;
 
 			/**
 			 * @brief Returns a printable state of connexions.
@@ -385,24 +377,7 @@ namespace EmEn::AVConsole
 			std::string getConnexionStates () const noexcept;
 
 			/**
-			 * @brief Creates the default view.
-			 * @param settings A reference to the core settings.
-			 * @return bool
-			 */
-			[[nodiscard]]
-			bool createDefaultView (Settings & settings) noexcept;
-
-			/**
-			 * @brief Creates the default speaker.
-			 * @param audioManager A reference to the audio manager.
-			 * @param settings A reference to the core settings.
-			 * @return bool
-			 */
-			[[nodiscard]]
-			bool createDefaultSpeaker (Audio::Manager & audioManager, Settings & settings) noexcept;
-
-			/**
-			 * @brief Clears all device from the console.
+			 * @brief Clears all devices from the console.
 			 * @return void
 			 */
 			void clear () noexcept;
@@ -417,14 +392,88 @@ namespace EmEn::AVConsole
 			void onRegisterToConsole () noexcept override;
 
 			/**
-			 * @brief Selects automatically a primary input video device.
+			 * @brief Adds a virtual video device.
+			 * @note This method doesn't lock the access mutex.
+			 * @param device A reference to a virtual video device smart pointer.
+			 * @param primaryDevice Set the device as primary for its connexion type.
+			 * @return bool
+			 */
+			bool addVideoDeviceNoLock (const std::shared_ptr< AbstractVirtualDevice > & device, bool primaryDevice) noexcept;
+
+			/**
+			 * @brief Adds a virtual audio device.
+			 * @note This method doesn't lock the access mutex.
+			 * @param device A reference to a virtual audio device smart pointer.
+			 * @param primaryDevice Set the device as primary for its connexion type.
+			 * @return bool
+			 */
+			bool addAudioDeviceNoLock (const std::shared_ptr< AbstractVirtualDevice > & device, bool primaryDevice) noexcept;
+
+			/**
+			 * @brief Returns a video device by its name.
+			 * @note This method doesn't lock the access mutex.
+			 * @param deviceId A reference to a string.
+			 * @return std::shared_ptr< AbstractVirtualDevice >
+			 */
+			std::shared_ptr< AbstractVirtualDevice >
+			getVideoDeviceNoLock (const std::string & deviceId) const noexcept
+			{
+				const auto deviceIt = m_virtualVideoDevices.find(deviceId);
+
+				if ( deviceIt == m_virtualVideoDevices.cend() )
+				{
+					return nullptr;
+				}
+
+				return deviceIt->second;
+			}
+
+			/**
+			 * @brief Returns an audio device by its name.
+			 * @note This method doesn't lock the access mutex.
+			 * @param deviceId A reference to a string.
+			 * @return std::shared_ptr< AbstractVirtualDevice >
+			 */
+			std::shared_ptr< AbstractVirtualDevice >
+			getAudioDeviceNoLock (const std::string & deviceId) const noexcept
+			{
+				const auto deviceIt = m_virtualAudioDevices.find(deviceId);
+
+				if ( deviceIt == m_virtualAudioDevices.cend() )
+				{
+					return nullptr;
+				}
+
+				return deviceIt->second;
+			}
+
+			/**
+			 * @brief Returns a list of video sources.
+			 * @note This method doesn't lock the access mutex.
+			 * @return std::vector< std::shared_ptr< AbstractVirtualDevice > >
+			 */
+			[[nodiscard]]
+			std::vector< std::shared_ptr< AbstractVirtualDevice > > getVideoDeviceSourcesNoLock () const noexcept;
+
+			/**
+			 * @brief Returns a list of audio sources.
+			 * @note This method doesn't lock the access mutex.
+			 * @return std::vector< std::shared_ptr< AbstractVirtualDevice > >
+			 */
+			[[nodiscard]]
+			std::vector< std::shared_ptr< AbstractVirtualDevice > > getAudioDeviceSourcesNoLock () const noexcept;
+
+			/**
+			 * @brief Automatically selects a primary input video device.
+			 * @note This method doesn't lock the access mutex.
 			 * @note If a primary device is already selected, the function won't change anything.
 			 * @return bool
 			 */
 			bool autoSelectPrimaryInputVideoDevice () noexcept;
 
 			/**
-			 * @brief Selects automatically a primary input audio device.
+			 * @brief Automatically selects a primary input audio device.
+			 * @note This method doesn't lock the access mutex.
 			 * @note If a primary device is already selected, the function won't change anything.
 			 * @return bool
 			 */
@@ -433,12 +482,10 @@ namespace EmEn::AVConsole
 			AVManagers m_AVManagers;
 			std::unordered_map< std::string, std::shared_ptr< AbstractVirtualDevice > > m_virtualVideoDevices;
 			std::unordered_map< std::string, std::shared_ptr< AbstractVirtualDevice > > m_virtualAudioDevices;
-			std::set< std::shared_ptr< Graphics::RenderTarget::Abstract > > m_renderToShadowMaps;
-			std::set< std::shared_ptr< Graphics::RenderTarget::Abstract > > m_renderToTextures;
-			std::set< std::shared_ptr< Graphics::RenderTarget::Abstract > > m_renderToViews;
-			std::string m_primaryInputVideoDeviceId; /* A camera */
-			std::string m_primaryOutputVideoDeviceId; /* A view */
-			std::string m_primaryInputAudioDeviceId; /* A microphone */
-			std::string m_primaryOutputAudioDeviceId; /* A speaker */
+			std::string m_primaryInputVideoDeviceId; /* Like a camera. */
+			std::string m_primaryOutputVideoDeviceId; /* Like a view. */
+			std::string m_primaryInputAudioDeviceId; /* Like a microphone. */
+			std::string m_primaryOutputAudioDeviceId; /* Like a speaker. */
+			mutable std::mutex m_deviceAccess;
 	};
 }

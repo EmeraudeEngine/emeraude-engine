@@ -27,9 +27,9 @@
 #include "Reverb.hpp"
 
 /* Local inclusions. */
-#include "Tracer.hpp"
-#include "Audio/OpenAL.EFX.hpp"
+#include "Audio/OpenALExtensions.hpp"
 #include "Audio/Utility.hpp"
+#include "Tracer.hpp"
 
 namespace EmEn::Audio::Effects
 {
@@ -42,7 +42,7 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		EFX::alEffecti(this->identifier(), AL_EFFECT_TYPE, AL_EFFECT_REVERB);
+		OpenAL::alEffecti(this->identifier(), AL_EFFECT_TYPE, AL_EFFECT_REVERB);
 
 		if ( alGetErrors("alEffecti()", __FILE__, __LINE__) )
 		{
@@ -53,30 +53,30 @@ namespace EmEn::Audio::Effects
 	void
 	Reverb::resetProperties () noexcept
 	{
-		if ( !EFX::isAvailable() )
+		if ( !OpenAL::isEFXAvailable() )
 		{
 			return;
 		}
 
-		EFX::alEffectf(this->identifier(), AL_REVERB_DENSITY, AL_REVERB_DEFAULT_DENSITY);
-		EFX::alEffectf(this->identifier(), AL_REVERB_DIFFUSION, AL_REVERB_DEFAULT_DIFFUSION);
-		EFX::alEffectf(this->identifier(), AL_REVERB_GAIN, AL_REVERB_DEFAULT_GAIN);
-		EFX::alEffectf(this->identifier(), AL_REVERB_GAINHF, AL_REVERB_DEFAULT_GAINHF);
-		EFX::alEffectf(this->identifier(), AL_REVERB_DECAY_TIME, AL_REVERB_DEFAULT_DECAY_TIME);
-		EFX::alEffectf(this->identifier(), AL_REVERB_DECAY_HFRATIO, AL_REVERB_DEFAULT_DECAY_HFRATIO);
-		EFX::alEffectf(this->identifier(), AL_REVERB_REFLECTIONS_GAIN, AL_REVERB_DEFAULT_REFLECTIONS_GAIN);
-		EFX::alEffectf(this->identifier(), AL_REVERB_REFLECTIONS_DELAY, AL_REVERB_DEFAULT_REFLECTIONS_DELAY);
-		EFX::alEffectf(this->identifier(), AL_REVERB_LATE_REVERB_GAIN, AL_REVERB_DEFAULT_LATE_REVERB_GAIN);
-		EFX::alEffectf(this->identifier(), AL_REVERB_LATE_REVERB_DELAY, AL_REVERB_DEFAULT_LATE_REVERB_DELAY);
-		EFX::alEffectf(this->identifier(), AL_REVERB_AIR_ABSORPTION_GAINHF, AL_REVERB_DEFAULT_AIR_ABSORPTION_GAINHF);
-		EFX::alEffectf(this->identifier(), AL_REVERB_ROOM_ROLLOFF_FACTOR, AL_REVERB_DEFAULT_ROOM_ROLLOFF_FACTOR);
-		EFX::alEffecti(this->identifier(), AL_REVERB_DECAY_HFLIMIT, AL_REVERB_DEFAULT_DECAY_HFLIMIT);
+		OpenAL::alEffectf(this->identifier(), AL_REVERB_DENSITY, AL_REVERB_DEFAULT_DENSITY);
+		OpenAL::alEffectf(this->identifier(), AL_REVERB_DIFFUSION, AL_REVERB_DEFAULT_DIFFUSION);
+		OpenAL::alEffectf(this->identifier(), AL_REVERB_GAIN, AL_REVERB_DEFAULT_GAIN);
+		OpenAL::alEffectf(this->identifier(), AL_REVERB_GAINHF, AL_REVERB_DEFAULT_GAINHF);
+		OpenAL::alEffectf(this->identifier(), AL_REVERB_DECAY_TIME, AL_REVERB_DEFAULT_DECAY_TIME);
+		OpenAL::alEffectf(this->identifier(), AL_REVERB_DECAY_HFRATIO, AL_REVERB_DEFAULT_DECAY_HFRATIO);
+		OpenAL::alEffectf(this->identifier(), AL_REVERB_REFLECTIONS_GAIN, AL_REVERB_DEFAULT_REFLECTIONS_GAIN);
+		OpenAL::alEffectf(this->identifier(), AL_REVERB_REFLECTIONS_DELAY, AL_REVERB_DEFAULT_REFLECTIONS_DELAY);
+		OpenAL::alEffectf(this->identifier(), AL_REVERB_LATE_REVERB_GAIN, AL_REVERB_DEFAULT_LATE_REVERB_GAIN);
+		OpenAL::alEffectf(this->identifier(), AL_REVERB_LATE_REVERB_DELAY, AL_REVERB_DEFAULT_LATE_REVERB_DELAY);
+		OpenAL::alEffectf(this->identifier(), AL_REVERB_AIR_ABSORPTION_GAINHF, AL_REVERB_DEFAULT_AIR_ABSORPTION_GAINHF);
+		OpenAL::alEffectf(this->identifier(), AL_REVERB_ROOM_ROLLOFF_FACTOR, AL_REVERB_DEFAULT_ROOM_ROLLOFF_FACTOR);
+		OpenAL::alEffecti(this->identifier(), AL_REVERB_DECAY_HFLIMIT, AL_REVERB_DEFAULT_DECAY_HFLIMIT);
 	}
 
 	void
 	Reverb::setDensity (float value) noexcept
 	{
-		if ( !EFX::isAvailable() )
+		if ( !OpenAL::isEFXAvailable() )
 		{
 			return;
 		}
@@ -88,13 +88,13 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		EFX::alEffectf(this->identifier(), AL_REVERB_DENSITY, value);
+		OpenAL::alEffectf(this->identifier(), AL_REVERB_DENSITY, value);
 	}
 
 	void
 	Reverb::setDiffusion (float value) noexcept
 	{
-		if ( !EFX::isAvailable() )
+		if ( !OpenAL::isEFXAvailable() )
 		{
 			return;
 		}
@@ -106,13 +106,13 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		EFX::alEffectf(this->identifier(), AL_REVERB_DIFFUSION, value);
+		OpenAL::alEffectf(this->identifier(), AL_REVERB_DIFFUSION, value);
 	}
 
 	void
 	Reverb::setGain (float value) noexcept
 	{
-		if ( !EFX::isAvailable() )
+		if ( !OpenAL::isEFXAvailable() )
 		{
 			return;
 		}
@@ -124,13 +124,13 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		EFX::alEffectf(this->identifier(), AL_REVERB_GAIN, value);
+		OpenAL::alEffectf(this->identifier(), AL_REVERB_GAIN, value);
 	}
 
 	void
 	Reverb::setGainHF (float value) noexcept
 	{
-		if ( !EFX::isAvailable() )
+		if ( !OpenAL::isEFXAvailable() )
 		{
 			return;
 		}
@@ -142,13 +142,13 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		EFX::alEffectf(this->identifier(), AL_REVERB_GAINHF, value);
+		OpenAL::alEffectf(this->identifier(), AL_REVERB_GAINHF, value);
 	}
 
 	void
 	Reverb::setDecayTime (float value) noexcept
 	{
-		if ( !EFX::isAvailable() )
+		if ( !OpenAL::isEFXAvailable() )
 		{
 			return;
 		}
@@ -160,13 +160,13 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		EFX::alEffectf(this->identifier(), AL_REVERB_DECAY_TIME, value);
+		OpenAL::alEffectf(this->identifier(), AL_REVERB_DECAY_TIME, value);
 	}
 
 	void
 	Reverb::setDecayHFRatio (float value) noexcept
 	{
-		if ( !EFX::isAvailable() )
+		if ( !OpenAL::isEFXAvailable() )
 		{
 			return;
 		}
@@ -178,13 +178,13 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		EFX::alEffectf(this->identifier(), AL_REVERB_DECAY_HFRATIO, value);
+		OpenAL::alEffectf(this->identifier(), AL_REVERB_DECAY_HFRATIO, value);
 	}
 
 	void
 	Reverb::setReflectionsGain (float value) noexcept
 	{
-		if ( !EFX::isAvailable() )
+		if ( !OpenAL::isEFXAvailable() )
 		{
 			return;
 		}
@@ -196,13 +196,13 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		EFX::alEffectf(this->identifier(), AL_REVERB_REFLECTIONS_GAIN, value);
+		OpenAL::alEffectf(this->identifier(), AL_REVERB_REFLECTIONS_GAIN, value);
 	}
 
 	void
 	Reverb::setReflectionsDelay (float value) noexcept
 	{
-		if ( !EFX::isAvailable() )
+		if ( !OpenAL::isEFXAvailable() )
 		{
 			return;
 		}
@@ -214,13 +214,13 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		EFX::alEffectf(this->identifier(), AL_REVERB_REFLECTIONS_DELAY, value);
+		OpenAL::alEffectf(this->identifier(), AL_REVERB_REFLECTIONS_DELAY, value);
 	}
 
 	void
 	Reverb::setLateGain (float value) noexcept
 	{
-		if ( !EFX::isAvailable() )
+		if ( !OpenAL::isEFXAvailable() )
 		{
 			return;
 		}
@@ -232,13 +232,13 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		EFX::alEffectf(this->identifier(), AL_REVERB_LATE_REVERB_GAIN, value);
+		OpenAL::alEffectf(this->identifier(), AL_REVERB_LATE_REVERB_GAIN, value);
 	}
 
 	void
 	Reverb::setLateDelay (float value) noexcept
 	{
-		if ( !EFX::isAvailable() )
+		if ( !OpenAL::isEFXAvailable() )
 		{
 			return;
 		}
@@ -250,13 +250,13 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		EFX::alEffectf(this->identifier(), AL_REVERB_LATE_REVERB_DELAY, value);
+		OpenAL::alEffectf(this->identifier(), AL_REVERB_LATE_REVERB_DELAY, value);
 	}
 
 	void
 	Reverb::setAirAbsorptionGainHF (float value) noexcept
 	{
-		if ( !EFX::isAvailable() )
+		if ( !OpenAL::isEFXAvailable() )
 		{
 			return;
 		}
@@ -268,13 +268,13 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		EFX::alEffectf(this->identifier(), AL_REVERB_AIR_ABSORPTION_GAINHF, value);
+		OpenAL::alEffectf(this->identifier(), AL_REVERB_AIR_ABSORPTION_GAINHF, value);
 	}
 
 	void
 	Reverb::setRoomRollOffFactor (float value) noexcept
 	{
-		if ( !EFX::isAvailable() )
+		if ( !OpenAL::isEFXAvailable() )
 		{
 			return;
 		}
@@ -287,18 +287,18 @@ namespace EmEn::Audio::Effects
 		}
 
 
-		EFX::alEffectf(this->identifier(), AL_REVERB_ROOM_ROLLOFF_FACTOR, value);
+		OpenAL::alEffectf(this->identifier(), AL_REVERB_ROOM_ROLLOFF_FACTOR, value);
 	}
 
 	void
 	Reverb::setDecayHFLimit (bool state) noexcept
 	{
-		if ( !EFX::isAvailable() )
+		if ( !OpenAL::isEFXAvailable() )
 		{
 			return;
 		}
 
-		EFX::alEffecti(this->identifier(), AL_REVERB_DECAY_HFLIMIT, state ? AL_TRUE : AL_FALSE);
+		OpenAL::alEffecti(this->identifier(), AL_REVERB_DECAY_HFLIMIT, state ? AL_TRUE : AL_FALSE);
 	}
 
 	float
@@ -306,9 +306,9 @@ namespace EmEn::Audio::Effects
 	{
 		ALfloat value = 0.0F;
 
-		if ( EFX::isAvailable() )
+		if ( OpenAL::isEFXAvailable() )
 		{
-			EFX::alGetEffectf(this->identifier(), AL_REVERB_DENSITY, &value);
+			OpenAL::alGetEffectf(this->identifier(), AL_REVERB_DENSITY, &value);
 		}
 
 		return value;
@@ -319,9 +319,9 @@ namespace EmEn::Audio::Effects
 	{
 		ALfloat value = 0.0F;
 
-		if ( EFX::isAvailable() )
+		if ( OpenAL::isEFXAvailable() )
 		{
-			EFX::alGetEffectf(this->identifier(), AL_REVERB_DIFFUSION, &value);
+			OpenAL::alGetEffectf(this->identifier(), AL_REVERB_DIFFUSION, &value);
 		}
 
 		return value;
@@ -332,9 +332,9 @@ namespace EmEn::Audio::Effects
 	{
 		ALfloat value = 0.0F;
 
-		if ( EFX::isAvailable() )
+		if ( OpenAL::isEFXAvailable() )
 		{
-			EFX::alGetEffectf(this->identifier(), AL_REVERB_GAIN, &value);
+			OpenAL::alGetEffectf(this->identifier(), AL_REVERB_GAIN, &value);
 		}
 
 		return value;
@@ -345,9 +345,9 @@ namespace EmEn::Audio::Effects
 	{
 		ALfloat value = 0.0F;
 
-		if ( EFX::isAvailable() )
+		if ( OpenAL::isEFXAvailable() )
 		{
-			EFX::alGetEffectf(this->identifier(), AL_REVERB_GAINHF, &value);
+			OpenAL::alGetEffectf(this->identifier(), AL_REVERB_GAINHF, &value);
 		}
 
 		return value;
@@ -358,9 +358,9 @@ namespace EmEn::Audio::Effects
 	{
 		ALfloat value = 0.0F;
 
-		if ( EFX::isAvailable() )
+		if ( OpenAL::isEFXAvailable() )
 		{
-			EFX::alGetEffectf(this->identifier(), AL_REVERB_DECAY_TIME, &value);
+			OpenAL::alGetEffectf(this->identifier(), AL_REVERB_DECAY_TIME, &value);
 		}
 
 		return value;
@@ -371,9 +371,9 @@ namespace EmEn::Audio::Effects
 	{
 		ALfloat value = 0.0F;
 
-		if ( EFX::isAvailable() )
+		if ( OpenAL::isEFXAvailable() )
 		{
-			EFX::alGetEffectf(this->identifier(), AL_REVERB_DECAY_HFRATIO, &value);
+			OpenAL::alGetEffectf(this->identifier(), AL_REVERB_DECAY_HFRATIO, &value);
 		}
 
 		return value;
@@ -384,9 +384,9 @@ namespace EmEn::Audio::Effects
 	{
 		ALfloat value = 0.0F;
 
-		if ( EFX::isAvailable() )
+		if ( OpenAL::isEFXAvailable() )
 		{
-			EFX::alGetEffectf(this->identifier(), AL_REVERB_REFLECTIONS_GAIN, &value);
+			OpenAL::alGetEffectf(this->identifier(), AL_REVERB_REFLECTIONS_GAIN, &value);
 		}
 
 		return value;
@@ -397,9 +397,9 @@ namespace EmEn::Audio::Effects
 	{
 		ALfloat value = 0.0F;
 
-		if ( EFX::isAvailable() )
+		if ( OpenAL::isEFXAvailable() )
 		{
-			EFX::alGetEffectf(this->identifier(), AL_REVERB_REFLECTIONS_DELAY, &value);
+			OpenAL::alGetEffectf(this->identifier(), AL_REVERB_REFLECTIONS_DELAY, &value);
 		}
 
 		return value;
@@ -410,9 +410,9 @@ namespace EmEn::Audio::Effects
 	{
 		ALfloat value = 0.0F;
 
-		if ( EFX::isAvailable() )
+		if ( OpenAL::isEFXAvailable() )
 		{
-			EFX::alGetEffectf(this->identifier(), AL_REVERB_LATE_REVERB_GAIN, &value);
+			OpenAL::alGetEffectf(this->identifier(), AL_REVERB_LATE_REVERB_GAIN, &value);
 		}
 
 		return value;
@@ -423,9 +423,9 @@ namespace EmEn::Audio::Effects
 	{
 		ALfloat value = 0.0F;
 
-		if ( EFX::isAvailable() )
+		if ( OpenAL::isEFXAvailable() )
 		{
-			EFX::alGetEffectf(this->identifier(), AL_REVERB_LATE_REVERB_DELAY, &value);
+			OpenAL::alGetEffectf(this->identifier(), AL_REVERB_LATE_REVERB_DELAY, &value);
 		}
 
 		return value;
@@ -436,9 +436,9 @@ namespace EmEn::Audio::Effects
 	{
 		ALfloat value = 0.0F;
 
-		if ( EFX::isAvailable() )
+		if ( OpenAL::isEFXAvailable() )
 		{
-			EFX::alGetEffectf(this->identifier(), AL_REVERB_AIR_ABSORPTION_GAINHF, &value);
+			OpenAL::alGetEffectf(this->identifier(), AL_REVERB_AIR_ABSORPTION_GAINHF, &value);
 		}
 
 		return value;
@@ -449,9 +449,9 @@ namespace EmEn::Audio::Effects
 	{
 		ALfloat value = 0.0F;
 
-		if ( EFX::isAvailable() )
+		if ( OpenAL::isEFXAvailable() )
 		{
-			EFX::alGetEffectf(this->identifier(), AL_REVERB_ROOM_ROLLOFF_FACTOR, &value);
+			OpenAL::alGetEffectf(this->identifier(), AL_REVERB_ROOM_ROLLOFF_FACTOR, &value);
 		}
 
 		return value;
@@ -462,9 +462,9 @@ namespace EmEn::Audio::Effects
 	{
 		ALint value = 0;
 
-		if ( EFX::isAvailable() )
+		if ( OpenAL::isEFXAvailable() )
 		{
-			EFX::alGetEffecti(this->identifier(), AL_REVERB_DECAY_HFLIMIT, &value);
+			OpenAL::alGetEffecti(this->identifier(), AL_REVERB_DECAY_HFLIMIT, &value);
 		}
 
 		return value > 0;

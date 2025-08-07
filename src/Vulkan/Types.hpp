@@ -88,7 +88,7 @@ namespace EmEn::Vulkan
 	[[nodiscard]]
 	inline
 	std::string
-	to_string (QueueJob value) noexcept
+	to_string (QueueJob value)
 	{
 		return {to_cstring(value)};
 	}

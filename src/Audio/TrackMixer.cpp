@@ -30,8 +30,9 @@
 #include "emeraude_config.hpp"
 
 /* Local inclusions. */
-#include "Manager.hpp"
+#include "OpenALExtensions.hpp"
 #include "Resources/Manager.hpp"
+#include "Manager.hpp"
 #include "Settings.hpp"
 #include "Tracer.hpp"
 
@@ -42,35 +43,86 @@ namespace EmEn::Audio
 	const size_t TrackMixer::ClassUID{getClassUID(ClassId)};
 
 	bool
+	TrackMixer::enableSourceEvents () noexcept
+	{
+		if ( !OpenAL::isEventsAvailable() )
+		{
+			TraceWarning{ClassId} << "The OpenAL extension for source events is not available !";
+
+			return false;
+		}
+
+		OpenAL::alEventCallbackSOFT(eventCallback, this);
+
+		constexpr std::array< ALCenum, 1 > events{
+			//AL_EVENT_TYPE_BUFFER_COMPLETED_SOFT,
+			AL_EVENT_TYPE_SOURCE_STATE_CHANGED_SOFT,
+			//AL_EVENT_TYPE_DISCONNECTED_SOFT
+		};
+
+		OpenAL::alEventControlSOFT(events.size(), events.data(), AL_TRUE);
+
+		return true;
+	}
+
+	void
+	TrackMixer::eventCallback (ALenum eventType, ALuint object, ALuint param, ALsizei /*length*/, const ALchar * message, void * userParam) noexcept
+	{
+		if ( eventType != AL_EVENT_TYPE_SOURCE_STATE_CHANGED_SOFT || param != AL_STOPPED )
+		{
+			return;
+		}
+
+		auto * trackMixer = static_cast< TrackMixer * >(userParam);
+
+		const std::lock_guard< std::mutex > lock{trackMixer->m_stateAccess};
+
+		const PlayingTrack currentTrack = trackMixer->m_playingTrack;
+		const ALuint currentSourceId = currentTrack == PlayingTrack::TrackA
+			? trackMixer->m_trackA->identifier()
+			: trackMixer->m_trackB->identifier();
+
+		if ( object != currentSourceId )
+		{
+			return;
+		}
+
+		TraceDebug{ClassId} << message;
+
+		trackMixer->m_requestNextTrack = true;
+		trackMixer->m_fadeCv.notify_one();
+	}
+
+	bool
 	TrackMixer::onInitialize () noexcept
 	{
-		/* Sets master volume. */
-		const auto gain = m_primaryServices.settings().get< float >(AudioMusicVolumeKey, DefaultAudioMusicVolume);
-
-		this->setVolume(gain);
-
-		/* Allocating track sources (to volume 0) */
-		for ( const auto & trackPtr : std::array{&m_trackA, &m_trackB} )
+		if ( this->enableSourceEvents() )
 		{
-			auto & track = (*trackPtr);
+			TraceSuccess{ClassId} << "Events for source are enabled !";
 
-			track = m_audioManager.requestSource();
-
-			if ( track == nullptr )
-			{
-				Tracer::error(ClassId, "There is no more source available to create the mixer sound tracks !");
-
-				return false;
-			}
-
-			track->setRelativeState(true);
-			track->setRolloffFactor(0.0F);
-			track->setGain(0.0F);
+			m_playMode = PlayMode::Once;
 		}
+
+		/* Sets master volume. */
+		this->setVolume(m_primaryServices.settings().get< float >(AudioMusicVolumeKey, DefaultAudioMusicVolume));
+
+		/* NOTE: Allocating track sources (to volume 0) */
+		m_trackA = std::make_unique< Source >();
+		m_trackA->setRelativeState(true);
+		m_trackA->setRolloffFactor(0.0F);
+		m_trackA->setGain(0.0F);
+
+		m_trackB = std::make_unique< Source >();
+		m_trackB->setRelativeState(true);
+		m_trackB->setRolloffFactor(0.0F);
+		m_trackB->setGain(0.0F);
 
 		this->registerToConsole();
 
-		m_flags[ServiceInitialized] = true;
+		m_stopThread = false;
+		m_eventThread = std::thread{&TrackMixer::eventLoop, this};
+
+		m_serviceInitialized = true;
 
 		return true;
 	}
@@ -78,9 +130,17 @@ namespace EmEn::Audio
 	bool
 	TrackMixer::onTerminate () noexcept
 	{
-		if ( this->usable() )
+		if ( m_serviceInitialized )
 		{
-			m_flags[ServiceInitialized] = false;
+			m_serviceInitialized = false;
+
+			m_stopThread = true;
+			m_fadeCv.notify_one();
+
+			if ( m_eventThread.joinable() )
+			{
+				m_eventThread.join();
+			}
 
 			m_trackA->stop();
 			m_trackB->stop();
@@ -92,6 +152,8 @@ namespace EmEn::Audio
 	void
 	TrackMixer::setVolume (float volume) noexcept
 	{
+		const std::lock_guard< std::mutex > lock{m_stateAccess};
+
 		m_gain = Math::clampToUnit(volume);
 
 		if ( this->usable() )
@@ -128,7 +190,33 @@ namespace EmEn::Audio
 	}
 
 	bool
-	TrackMixer::setSoundTrack (const std::shared_ptr< MusicResource > & track, bool fade) noexcept
+	TrackMixer::play () noexcept
+	{
+		/* NOTE: If OpenAL is playing, we don't do anything. */
+		if ( this->isPlaying() )
+		{
+			return true;
+		}
+
+		if ( m_playlist.empty() )
+		{
+			Tracer::warning(ClassId, "The playlist is empty !");
+
+			return false;
+		}
+
+		/* NOTE: Check if the current music index is correct. */
+		if ( m_musicIndex >= m_playlist.size() )
+		{
+			m_musicIndex = 0;
+		}
+
+		/* NOTE: We play the music at the index. */
+		return this->play(m_playlist[m_musicIndex]);
+	}
+
+	bool
+	TrackMixer::play (const std::shared_ptr< MusicResource > & track) noexcept
 	{
 		if ( !this->usable() )
 		{
@@ -144,70 +232,120 @@ namespace EmEn::Audio
 			return false;
 		}
 
-		m_flags[IsFadingWasDemanded] = fade;
+		{
+			const std::lock_guard< std::mutex > lock{m_stateAccess};
+
+			m_userState = UserState::Playing;
+		}
 
 		/* Check if we need to wait the track to be loaded in memory. */
 		if ( !this->checkTrackLoading(track) )
 		{
-			Tracer::info(ClassId, "Waits for the track to be fully loaded into memory for playback ...");
+			Tracer::debug(ClassId, "Waits for the track to be fully loaded into memory for playback ...");
 
 			return true;
 		}
 
-		if ( m_flags[IsFadingWasDemanded] )
+		if ( m_crossFaderEnabled )
 		{
 			this->notify(MusicSwitching, (std::stringstream{} << "Fading to '" << track->title() << "' track from '" << track->artist() << "'.").str());
-
-			/* Which track is playing. */
-			switch ( m_playingTrack )
-			{
-				case PlayingTrack::TrackA :
-					m_flags[IsTrackingFading] = true;
-
-					m_trackB->play(track, Source::PlayMode::Loop);
-
-					m_playingTrack = PlayingTrack::TrackB;
-					break;
-
-				case PlayingTrack::None:
-				case PlayingTrack::TrackB :
-					m_flags[IsTrackingFading] = true;
-
-					m_trackA->play(track, Source::PlayMode::Loop);
-
-					m_playingTrack = PlayingTrack::TrackA;
-					break;
-			}
 		}
 		else
 		{
 			this->notify(MusicPlaying, (std::stringstream{} << "Now playing '" << track->title() << "' track from '" << track->artist() << "'.").str());
+		}
 
-			/* Which track is playing. */
+		/* NOTE: Check which track was playing. */
+		PlayingTrack trackToPlayNow;
+		bool wasPlaying = true;
+
+		{
+			const std::lock_guard< std::mutex > lock{m_stateAccess};
+
 			switch ( m_playingTrack )
 			{
 				case PlayingTrack::None:
 					m_playingTrack = PlayingTrack::TrackA;
 
-					[[fallthrough]];
-
-				case PlayingTrack::TrackA :
-					m_flags[IsTrackingFading] = false;
-
-					m_trackA->setGain(m_gain);
-					m_trackA->play(track, Source::PlayMode::Loop);
+					wasPlaying = false;
 					break;
 
-				case PlayingTrack::TrackB :
-					m_flags[IsTrackingFading] = false;
+				case PlayingTrack::TrackA:
+					m_playingTrack = PlayingTrack::TrackB;
 
-					m_trackB->setGain(m_gain);
-					m_trackB->play(track, Source::PlayMode::Loop);
+					if ( m_crossFaderEnabled )
+					{
+						m_isFading = true;
+					}
+					break;
+
+				case PlayingTrack::TrackB:
+					m_playingTrack = PlayingTrack::TrackA;
+
+					if ( m_crossFaderEnabled )
+					{
+						m_isFading = true;
+					}
 					break;
 			}
+
+			trackToPlayNow = m_playingTrack;
+		}
+    
+		bool success = false;
+		const float initialGain = m_crossFaderEnabled && wasPlaying ? 0.0F : m_gain;
+
+		if ( trackToPlayNow == PlayingTrack::TrackA )
+		{
+			m_trackA->setGain(initialGain);
+
+			success = m_trackA->play(track, m_playMode);
+		}
+		else
+		{
+			m_trackB->setGain(initialGain);
+
+			success = m_trackB->play(track, m_playMode);
 		}
 
-		return true;
+		if ( m_isFading && success )
+		{
+			m_fadeCv.notify_one();
+		}
+
+		return success;
+	}
+
+	bool
+	TrackMixer::next () noexcept
+	{
+		/* NOTE: If the player is paused, we don't change anything. */
+		if ( m_userState == UserState::Paused )
+		{
+			return false;
+		}
+
+		if ( m_playlist.empty() )
+		{
+			Tracer::warning(ClassId, "The playlist is empty !");
+
+			return false;
+		}
+
+		m_musicIndex++;
+
+		if ( m_musicIndex >= m_playlist.size() )
+		{
+			m_musicIndex = 0;
+		}
+
+		/* NOTE: If the player is stopped, we just change the track. */
+		if ( m_userState == UserState::Stopped )
+		{
+			return true;
+		}
+
+		return this->play(m_playlist[m_musicIndex]);
 	}
 
 	bool
@@ -215,6 +353,8 @@ namespace EmEn::Audio
 	{
 		if ( this->usable() )
 		{
+			const std::lock_guard< std::mutex > lock{m_stateAccess};
+
 			switch ( m_playingTrack )
 			{
 				case PlayingTrack::TrackA :
@@ -237,21 +377,29 @@ namespace EmEn::Audio
 			return;
 		}
 
+		const std::lock_guard< std::mutex > lock{m_stateAccess};
+
 		switch ( m_playingTrack )
 		{
 			case PlayingTrack::None:
 				break;
 
 			case PlayingTrack::TrackA :
+				m_userState = UserState::Paused;
+
 				m_trackA->pause();
 
 				this->notify(MusicPaused);
+
 				break;
 
 			case PlayingTrack::TrackB :
+				m_userState = UserState::Paused;
+
 				m_trackB->pause();
 
 				this->notify(MusicPaused);
+
 				break;
 		}
 	}
@@ -264,21 +412,29 @@ namespace EmEn::Audio
 			return;
 		}
 
+		const std::lock_guard< std::mutex > lock{m_stateAccess};
+
 		switch ( m_playingTrack )
 		{
 			case PlayingTrack::None:
 				break;
 
 			case PlayingTrack::TrackA :
+				m_userState = UserState::Playing;
+
 				m_trackA->resume();
 
 				this->notify(MusicResumed);
+
 				break;
 
 			case PlayingTrack::TrackB :
+				m_userState = UserState::Playing;
+
 				m_trackB->resume();
 
 				this->notify(MusicResumed);
+
 				break;
 		}
 	}
@@ -290,6 +446,10 @@ namespace EmEn::Audio
 		{
 			return;
 		}
+
+		const std::lock_guard< std::mutex > lock{m_stateAccess};
+
+		m_userState = UserState::Stopped;
 
 		switch ( m_playingTrack )
 		{
@@ -313,7 +473,7 @@ namespace EmEn::Audio
 	}
 
 	bool
-	TrackMixer::onNotification (const Libs::ObservableTrait * observable, int notificationCode, const std::any & /*data*/) noexcept
+	TrackMixer::onNotification (const ObservableTrait * observable, int notificationCode, const std::any & /*data*/) noexcept
 	{
 		if ( observable->is(MusicResource::ClassUID) )
 		{
@@ -324,11 +484,11 @@ namespace EmEn::Audio
 					/* The track loaded successfully, we can now play it. */
 					case Resources::ResourceTrait::LoadFinished :
 					{
-						auto loadedTrack = m_loadingTrack;
+						const auto loadedTrack = m_loadingTrack;
 
 						m_loadingTrack.reset();
 
-						this->setSoundTrack(loadedTrack, m_flags[IsFadingWasDemanded]);
+						this->play(loadedTrack);
 					}
 						break;
 
@@ -353,7 +513,7 @@ namespace EmEn::Audio
 			return false;
 		}
 
-		/* NOTE: Don't know what is it, goodbye! */
+		/* NOTE: Don't know what it is, goodbye! */
 		TraceDebug{ClassId} <<
 			"Received an unhandled notification (Code:" << notificationCode << ") from observable '" << whoIs(observable->classUID()) << "' (UID:" << observable->classUID() << ")  ! "
 			"Forgetting it ...";
@@ -418,7 +578,7 @@ namespace EmEn::Audio
 				return 2;
 			}
 
-			this->setSoundTrack(soundtrack);
+			this->play(soundtrack);
 
 			outputs.emplace_back(Severity::Success, std::stringstream{} << "Playing '" << soundTrackName << "' ...");
 
@@ -489,80 +649,109 @@ namespace EmEn::Audio
 	}
 
 	bool
-	TrackMixer::fadeTrack (Source & track, float step) const noexcept
+	TrackMixer::fadeIn (Source * track, float step) const noexcept
 	{
-		auto bound = false;
+		auto currentGain = track->gain();
 
-		auto currentVolume = track.gain();
+		currentGain += step;
 
-		/* Stepping */
-		currentVolume += step;
-
-		if ( currentVolume > m_gain )
+		if ( currentGain >= m_gain )
 		{
-			currentVolume = m_gain;
-			bound = true;
-		}
-		else if ( currentVolume < 0.0F )
-		{
-			currentVolume = 0.0F;
-			bound = true;
+			track->setGain(m_gain);
+
+			return true;
 		}
 
-		track.setGain(currentVolume);
+		track->setGain(currentGain);
 
-		return bound;
+		return false;
 	}
 
 	void
-	TrackMixer::update () noexcept
+	TrackMixer::fadeOut (Source * track, float step) noexcept
 	{
-		if ( !this->usable() )
+		auto currentGain = track->gain();
+
+		currentGain -= step;
+
+		if ( currentGain <= 0.0F )
 		{
-			return;
+			track->stop();
+			track->removeSound();
 		}
-
-		if ( m_flags[IsTrackingFading] )
+		else
 		{
-			constexpr auto stepValue = 0.01F;
+			track->setGain(currentGain);
+		}
+	}
 
-			switch ( m_playingTrack )
+	void
+	TrackMixer::eventLoop ()
+	{
+		using namespace std::chrono_literals;
+
+		while ( !m_stopThread )
+		{
 			{
-				case PlayingTrack::TrackA :
-					/* Decrease TrackB volume. */
-					if ( !m_trackB->isMuted() )
-					{
-						this->fadeTrack(*m_trackB, -stepValue);
-					}
+				std::unique_lock< std::mutex > lock {m_stateAccess};
 
-					/* Increase TrackA volume. */
-					if ( this->fadeTrack(*m_trackA, stepValue) )
-					{
-						m_trackB->setGain(0.0F);
+				m_fadeCv.wait(lock, [&] {
+					return m_isFading || m_requestNextTrack || m_stopThread;
+				});
+			}
 
-						m_flags[IsTrackingFading] = false;
-					}
-					break;
+			if ( m_stopThread )
+			{
+				return;
+			}
 
-				case PlayingTrack::TrackB :
-					/* Decrease TrackA volume. */
-					if ( !m_trackA->isMuted() )
-					{
-						this->fadeTrack(*m_trackA, -stepValue);
-					}
+			if ( m_requestNextTrack )
+			{
+				m_requestNextTrack = false;
 
-					/* Increase TrackB volume. */
-					if ( this->fadeTrack(*m_trackB, stepValue) )
-					{
-						m_trackA->setGain(0.0F);
+				if ( m_userState != UserState::Stopped )
+				{
+					this->next();
+				}
+			}
 
-						m_flags[IsTrackingFading] = false;
-					}
-					break;
+			while ( m_isFading && !m_stopThread )
+			{
+				constexpr auto stepValue = 0.01F;
 
-				case PlayingTrack::None :
-					m_flags[IsTrackingFading] = false;
-					break;
+				switch ( m_playingTrack )
+				{
+					/* NOTE: We are playing on the track A, so we fade out the track B. */
+					case PlayingTrack::TrackA :
+						if ( !m_trackB->isMuted() )
+						{
+							TrackMixer::fadeOut(m_trackB.get(), stepValue);
+						}
+
+						if ( this->fadeIn(m_trackA.get(), stepValue) )
+						{
+							m_isFading = false;
+						}
+						break;
+
+					case PlayingTrack::TrackB :
+						if ( !m_trackA->isMuted() )
+						{
+							TrackMixer::fadeOut(m_trackA.get(), stepValue);
+						}
+
+						if ( this->fadeIn(m_trackB.get(), stepValue) )
+						{
+							m_isFading = false;
+						}
+						break;
+
+					case PlayingTrack::None :
+						m_isFading = false;
+						break;
+				}
+
+				std::this_thread::sleep_for(16ms);
 			}
 		}
 	}

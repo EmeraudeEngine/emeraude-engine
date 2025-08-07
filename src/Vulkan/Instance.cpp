@@ -639,7 +639,7 @@ namespace EmEn::Vulkan
 		TraceSuccess{ClassId} << "The graphics capable physical device '" << selectedPhysicalDevice->propertiesVK10().deviceName << "' selected ! ";
 
 		auto logicalDevice = std::make_shared< Device >(selectedPhysicalDevice->propertiesVK10().deviceName, selectedPhysicalDevice, showInformation);
-		logicalDevice->setIdentifier((std::stringstream{} << "VulkanInstance-" << selectedPhysicalDevice->propertiesVK10().deviceName << "(Graphics)-Device").str());
+		logicalDevice->setIdentifier(ClassId, (std::stringstream{} << selectedPhysicalDevice->propertiesVK10().deviceName << "(Graphics)").str(), "Device");
 
 		/* [VULKAN-API-SETUP] Graphics device features configuration. */
 		DeviceRequirements requirements{DeviceJobHint::Graphics};
@@ -734,7 +734,7 @@ namespace EmEn::Vulkan
 
 		/* NOTE: Logical device creation for computing. */
 		auto logicalDevice = std::make_shared< Device >(selectedPhysicalDevice->propertiesVK10().deviceName, selectedPhysicalDevice, showInformation);
-		logicalDevice->setIdentifier((std::stringstream{} << "VulkanInstance-" << selectedPhysicalDevice->propertiesVK10().deviceName << "(Physics)-Device").str());
+		logicalDevice->setIdentifier(ClassId, (std::stringstream{} << selectedPhysicalDevice->propertiesVK10().deviceName << "(Physics)").str(), "Device");
 
 		DeviceRequirements requirements{DeviceJobHint::Compute};
 		requirements.requireComputeQueues({1.0F}, {0.5F});

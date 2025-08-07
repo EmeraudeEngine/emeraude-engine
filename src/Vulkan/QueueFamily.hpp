@@ -30,17 +30,20 @@
 #include <cstddef>
 #include <cstdint>
 #include <utility>
-#include <vector>
 #include <memory>
 
 /* Local inclusions for inheritances. */
 #include "QueueFamilyInterface.hpp"
 
+/* Local inclusions for usages. */
+#include "Libs/StaticVector.hpp"
+#include "Queue.hpp"
+
 namespace EmEn::Vulkan
 {
 	/**
 	 * @brief Describe a queue family for a device using multiple queues.
-	 * @extends EmEn::Vulkan::QueueFamilyInterface The base class of queue family.
+	 * @extends EmEn::Vulkan::QueueFamilyInterface The base class of the queue family.
 	 */
 	class QueueFamily final : public QueueFamilyInterface
 	{
@@ -52,7 +55,7 @@ namespace EmEn::Vulkan
 			/**
 			 * @brief Constructs a queue family structure.
 			 * @param index The index inside the physical device.
-			 * @param maxQueueCount The max number of queue for this family available with the physical device.
+			 * @param maxQueueCount The max number of queues for this family available with the physical device.
 			 */
 			QueueFamily (uint32_t index, size_t maxQueueCount) noexcept
 				: m_queueFamilyIndex{index},
@@ -87,7 +90,7 @@ namespace EmEn::Vulkan
 
 			/** @copydoc EmEn::Vulkan::QueueFamilyInterface::declareQueueStructure() */
 			[[nodiscard]]
-			bool declareQueueStructure (const std::vector< std::pair< QueueJob, float > > & structure) noexcept override;
+			bool declareQueueStructure (const Libs::StaticVector< std::pair< QueueJob, float >, 16 > & structure) noexcept override;
 
 			/** @copydoc EmEn::Vulkan::QueueFamilyInterface::getCreateInfo() */
 			[[nodiscard]]
@@ -110,8 +113,8 @@ namespace EmEn::Vulkan
 
 			uint32_t m_queueFamilyIndex;
 			size_t m_maxQueueCount;
-			std::vector< QueueJob > m_queueJobs;
-			std::vector< float > m_queuePriorities;
-			std::vector< std::unique_ptr< Queue > > m_queues;
+			Libs::StaticVector< QueueJob, 16 > m_queueJobs;
+			Libs::StaticVector< float, 16 > m_queuePriorities;
+			Libs::StaticVector< std::unique_ptr< Queue >, 16 > m_queues;
 	};
 }

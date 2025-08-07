@@ -24,7 +24,7 @@
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
 
-#include "Types.hpp"
+#include "Helpers.hpp"
 
 /* STL inclusions. */
 #include <sstream>

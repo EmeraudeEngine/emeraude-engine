@@ -27,8 +27,11 @@
 #pragma once
 
 /* STL inclusions. */
-#include <array>
 #include <memory>
+#include <mutex>
+#include <condition_variable>
+#include <thread>
+#include <atomic>
 
 /* Local inclusions for inheritances. */
 #include "ServiceInterface.hpp"
@@ -38,6 +41,7 @@
 /* Local inclusions for usages. */
 #include "MusicResource.hpp"
 #include "Source.hpp"
+#include "Types.hpp"
 
 /* Forward declarations. */
 namespace EmEn
@@ -61,11 +65,11 @@ namespace EmEn::Audio
 	 * @brief The track mixer service class.
 	 * @note [OBS][STATIC-OBSERVER][STATIC-OBSERVABLE]
 	 * @extends EmEn::ServiceInterface This is a service.
+	 * @extends EmEn::Console::Controllable The console can control the track mixer.
 	 * @extends EmEn::Libs::ObservableTrait This service is observable.
-	 * @extends EmEn::Console::Controllable The track mixer can be controlled by the console.
-	 * @extends EmEn::Libs::ObserverTrait This service can observe resources loading.
+	 * @extends EmEn::Libs::ObserverTrait This service can observe resource loading.
 	 */
-	class TrackMixer final : public ServiceInterface, public Libs::ObservableTrait, public Console::Controllable, public Libs::ObserverTrait
+	class TrackMixer final : public ServiceInterface, public Console::Controllable, public Libs::ObservableTrait, public Libs::ObserverTrait
 	{
 		public:
 
@@ -74,6 +78,17 @@ namespace EmEn::Audio
 
 			/** @brief Observable class unique identifier. */
 			static const size_t ClassUID;
+
+			/** @brief Define the track mixer user state (Not OpenAL). */
+			enum class UserState : uint8_t
+			{
+				/** @brief The user stopped the music. */
+				Stopped,
+				/** @brief The user started the music. */
+				Playing,
+				/** @brief The user paused the music. */
+				Paused
+			};
 
 			/** @brief Observable notification codes. */
 			enum NotificationCode
@@ -88,7 +103,7 @@ namespace EmEn::Audio
 			};
 
 			/**
-			 * @brief Constructs the external audio input.
+			 * @brief Constructs a track mixer.
 			 * @param primaryServices A reference to primary services.
 			 * @param resourceManager A reference to the resource manager.
 			 * @param audioManager A reference to the audio manager.
@@ -124,13 +139,8 @@ namespace EmEn::Audio
 			bool
 			usable () const noexcept override
 			{
-				return m_flags[ServiceInitialized];
+				return m_serviceInitialized;
 			}
-
-			/**
-			 * @brief Updates the track mixer.
-			 */
-			void update () noexcept;
 
 			/**
 			 * @brief Sets the track gain.
@@ -150,12 +160,60 @@ namespace EmEn::Audio
 			}
 
 			/**
-			 * @brief Plays a soundtrack.
-			 * @param track A reference to a music resource.
-			 * @param fade Enable fading. Default false.
+			 * @brief Enables the cross-fader
+			 * @param state The state.
+			 * @return void
+			 */
+			void
+			enableCrossFader (bool state) noexcept
+			{
+				m_crossFaderEnabled = state;
+			}
+
+			/**
+			 * @brief Returns whether the cross-fader is enabled.
 			 * @return bool
 			 */
-			bool setSoundTrack (const std::shared_ptr< MusicResource > & track, bool fade = false) noexcept;
+			[[nodiscard]]
+			bool
+			isCrossFaderEnabled () const noexcept
+			{
+				return m_crossFaderEnabled;
+			}
+
+			/**
+			 * @brief Adds a soundtrack to the playlist.
+			 * @param track A reference to a music resource.
+			 * @return void
+			 */
+			void
+			addToPlaylist (const std::shared_ptr< MusicResource > & track) noexcept
+			{
+				m_playlist.push_back(track);
+			}
+
+			/**
+			 * @brief Removes all soundtracks from the playlist.
+			 * @return void
+			 */
+			void
+			clearPlaylist ()
+			{
+				m_playlist.clear();
+			}
+
+			/**
+			 * @brief Plays the playlist.
+			 * @return bool
+			 */
+			bool play () noexcept;
+
+			/**
+			 * @brief Plays a soundtrack.
+			 * @param track A reference to a music resource.
+			 * @return bool
+			 */
+			bool play (const std::shared_ptr< MusicResource > & track) noexcept;
 
 			/**
 			 * @brief Returns whether the soundtrack is playing.
@@ -163,6 +221,12 @@ namespace EmEn::Audio
 			 */
 			[[nodiscard]]
 			bool isPlaying () const noexcept;
+
+			/**
+			 * @brief Starts the next music in the playlist.
+			 * @return bool
+			 */
+			bool next () noexcept;
 
 			/**
 			 * @brief Pauses the music.
@@ -200,18 +264,38 @@ namespace EmEn::Audio
 
 			/** @copydoc EmEn::Libs::ObserverTrait::onNotification() */
 			[[nodiscard]]
-			bool onNotification (const Libs::ObservableTrait * observable, int notificationCode, const std::any & data) noexcept override;
+			bool onNotification (const ObservableTrait * observable, int notificationCode, const std::any & data) noexcept override;
 
 			/** @copydoc EmEn::Console::Controllable::onRegisterToConsole. */
 			void onRegisterToConsole () noexcept override;
 
 			/**
-			 * @brief Fades a track.
-			 * @param track A reference to the track.
+			 * @brief Enables OpenAL soft for source events.
+			 * @return bool
+			 */
+			bool enableSourceEvents () noexcept;
+
+			/**
+			 * @brief Process for fading.
+			 * @return void
+			 */
+			void eventLoop ();
+
+			/**
+			 * @brief Fades in a track.
+			 * @param track A pointer to the track.
 			 * @param step The step of raising or lowering the volume.
 			 * @return bool
 			 */
-			bool fadeTrack (Source & track, float step) const noexcept;
+			bool fadeIn (Source * track, float step) const noexcept;
+
+			/**
+			 * @brief Fades out a track.
+			 * @param track A pointer to the track.
+			 * @param step The step of raising or lowering the volume.
+			 * @return void
+			 */
+			static void fadeOut (Source * track, float step) noexcept;
 
 			/**
 			 * @brief Check the music resource loading.
@@ -221,28 +305,37 @@ namespace EmEn::Audio
 			[[nodiscard]]
 			bool checkTrackLoading (const std::shared_ptr< MusicResource > & track) noexcept;
 
-			/* Flag names. */
-			static constexpr auto ServiceInitialized{0UL};
-			static constexpr auto IsFadingWasDemanded{1UL};
-			static constexpr auto IsTrackingFading{2UL};
+			/**
+			 * @brief OpenAL source event callback.
+			 * @param eventType
+			 * @param object
+			 * @param param
+			 * @param length
+			 * @param message
+			 * @param userParam
+			 * @return void
+			 */
+			static void eventCallback (ALenum eventType, ALuint object, ALuint param, ALsizei length, const ALchar * message, void * userParam) noexcept;
 
 			PrimaryServices & m_primaryServices;
 			Resources::Manager & m_resourceManager;
 			Manager & m_audioManager;
-			std::shared_ptr< Source > m_trackA;
-			std::shared_ptr< Source > m_trackB;
+			std::unique_ptr< Source > m_trackA;
+			std::unique_ptr< Source > m_trackB;
 			float m_gain{0.0F};
+			UserState m_userState{UserState::Stopped};
+			PlayMode m_playMode{PlayMode::Loop};
 			PlayingTrack m_playingTrack{PlayingTrack::None};
+			size_t m_musicIndex{0};
+			std::vector< std::shared_ptr< MusicResource > > m_playlist;
 			std::shared_ptr< MusicResource > m_loadingTrack;
-			std::array< bool, 8 > m_flags{
-				false/*ServiceInitialized*/,
-				false/*IsFadingWasDemanded*/,
-				false/*IsTrackingFading*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/
-			};
+			std::thread m_eventThread;
+			mutable std::mutex m_stateAccess;
+			std::condition_variable m_fadeCv;
+			std::atomic_bool m_stopThread{false};
+			bool m_serviceInitialized{false};
+			bool m_crossFaderEnabled{false};
+			bool m_isFading{false};
+			std::atomic_bool m_requestNextTrack{false};
 	};
 }

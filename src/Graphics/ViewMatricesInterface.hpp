@@ -45,7 +45,7 @@ namespace EmEn::Graphics
 namespace EmEn::Graphics
 {
 	/** 
-	 * @brief Defines an abstract way to describes a view with coordinates and matrices to use with Vulkan.
+	 * @brief Defines an abstract way to describe a view with coordinates and matrices to use with Vulkan.
 	 */
 	class ViewMatricesInterface
 	{
@@ -98,6 +98,14 @@ namespace EmEn::Graphics
 			virtual const Libs::Math::Matrix< 4, float > & projectionMatrix () const noexcept = 0;
 
 			/**
+			 * @brief Returns the projection matrix.
+			 * @param readStateIndex The render state-valid index to read data.
+			 * @return const Matrix< 4, float > &
+			 */
+			[[nodiscard]]
+			virtual const Libs::Math::Matrix< 4, float > & projectionMatrix (uint32_t readStateIndex) const noexcept = 0;
+
+			/**
 			 * @brief Returns the view matrix.
 			 * @param infinity Gives the view matrix for infinite view.
 			 * @param index The index of the matrix for the cubemap view.
@@ -107,6 +115,16 @@ namespace EmEn::Graphics
 			virtual const Libs::Math::Matrix< 4, float > & viewMatrix (bool infinity, size_t index) const noexcept = 0;
 
 			/**
+			 * @brief Returns the view matrix.
+			 * @param readStateIndex The render state-valid index to read data.
+			 * @param infinity Gives the view matrix for infinite view.
+			 * @param index The index of the matrix for the cubemap view.
+			 * @return const Matrix< 4, float > &
+			 */
+			[[nodiscard]]
+			virtual const Libs::Math::Matrix< 4, float > & viewMatrix (uint32_t readStateIndex, bool infinity, size_t index) const noexcept = 0;
+
+			/**
 			 * @brief Returns the position of the point of view.
 			 * @return const Libs::Math::Vector< 3, float > &
 			 */
@@ -114,12 +132,29 @@ namespace EmEn::Graphics
 			virtual const Libs::Math::Vector< 3, float > & position () const noexcept = 0;
 
 			/**
+			 * @brief Returns the position of the point of view.
+			 * @param readStateIndex The render state-valid index to read data.
+			 * @return const Libs::Math::Vector< 3, float > &
+			 */
+			[[nodiscard]]
+			virtual const Libs::Math::Vector< 3, float > & position (uint32_t readStateIndex) const noexcept = 0;
+
+			/**
 			 * @brief Returns the const access to the frustum for object clipping.
-			 * @param index The index of the frustum for the cubemap view. Default 0.
+			 * @param index The index of the frustum for the cubemap view.
 			 * @return Frustum
 			 */
 			[[nodiscard]]
 			virtual const Frustum & frustum (size_t index) const noexcept = 0;
+
+			/**
+			 * @brief Returns the const access to the frustum for object clipping.
+			 * @param readStateIndex The render state-valid index to read data.
+			 * @param index The index of the frustum for the cubemap view.
+			 * @return Frustum
+			 */
+			[[nodiscard]]
+			virtual const Frustum & frustum (uint32_t readStateIndex, size_t index) const noexcept = 0;
 
 			/**
 			 * @brief Returns the aspect ratio of the view.
@@ -137,7 +172,7 @@ namespace EmEn::Graphics
 
 			/**
 			 * @brief Updates view properties with a perspective projection.
-			 * @note This should be called when the viewport change.
+			 * @note This should be called when the viewport changes.
 			 * @param width The width of the viewport.
 			 * @param height The height of the viewport.
 			 * @param distance The maximal distance of the viewport for perspective calculation.
@@ -148,7 +183,7 @@ namespace EmEn::Graphics
 
 			/**
 			 * @brief Updates view properties with an orthographic projection.
-			 * @note This should be called when the viewport change.
+			 * @note This should be called when the viewport changes.
 			 * @param width The width of the viewport.
 			 * @param height The height of the viewport.
 			 * @param farDistance The maximal distance of the viewport for perspective calculation.
@@ -174,7 +209,7 @@ namespace EmEn::Graphics
 			virtual void updateAmbientLightProperties (const Libs::PixelFactory::Color< float > & color, float intensity) noexcept = 0;
 
 			/**
-			 * @brief Creates buffer in the video memory.
+			 * @brief Creates a buffer in the video memory.
 			 * @param renderer A reference to the renderer.
 			 * @param instanceID A reference to a string.
 			 * @return bool
@@ -182,11 +217,21 @@ namespace EmEn::Graphics
 			virtual bool create (Renderer & renderer, const std::string & instanceID) noexcept = 0;
 
 			/**
+			 * @brief Copies local data for a stable render.
+			 * @note This must be done at the end of the logic loop.
+			 * @param writeStateIndex The render state-free index to write data.
+			 * @return void
+			 */
+			virtual void publishStateForRendering (uint32_t writeStateIndex) noexcept = 0;
+
+			/**
 			 * @brief Updates the video memory.
+			 * @note This is done just before a rendering.
+			 * @param readStateIndex The render state-valid index to read data.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			virtual bool updateVideoMemory () const noexcept = 0;
+			virtual bool updateVideoMemory (uint32_t readStateIndex) const noexcept = 0;
 
 			/**
 			 * @brief Destroys buffer in the video memory.

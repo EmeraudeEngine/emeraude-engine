@@ -44,11 +44,11 @@ namespace EmEn::Audio
 		auto hasError = false;
 
 		/* Load the first error, if exists... */
-		ALenum error = 0;
+		ALenum error = AL_NO_ERROR;
 
 		while ( (error = alGetError()) != AL_NO_ERROR )
 		{
-			std::cerr << "[OpenAL AC API][" << lastFunctionCalled << ":" << filename << '@' << line << "] ";
+			std::cerr << "[OpenAL-AC-API][" << lastFunctionCalled << ":" << filename << '@' << line << "] ";
 
 			switch ( error )
 			{
@@ -88,7 +88,7 @@ namespace EmEn::Audio
 	void
 	alFlushErrors () noexcept
 	{
-		auto error = alGetError();
+		ALenum error = alGetError();
 
 		while ( error != AL_NO_ERROR )
 		{
@@ -102,42 +102,13 @@ namespace EmEn::Audio
 		auto hasError = false;
 
 		/* Load the first error, if exists... */
-		ALenum error = 0;
+		ALCenum error = ALC_NO_ERROR;
 
 		while ( (error = alcGetError(device)) != ALC_NO_ERROR )
 		{
-			std::cerr << "[OpenAL ALC API][" << lastFunctionCalled << ":" << filename << ':' << line << "] : ";
-
-			switch ( error )
-			{
-				case ALC_INVALID_DEVICE :
-					std::cerr << "Invalid device, ";
-					break;
-
-				case ALC_INVALID_CONTEXT :
-					std::cerr << "Invalid context, ";
-					break;
-
-				case ALC_INVALID_ENUM :
-					std::cerr << "Invalid enumeration, ";
-					break;
-
-				case ALC_INVALID_VALUE :
-					std::cerr << "Invalid value, ";
-					break;
-
-				case ALC_OUT_OF_MEMORY :
-					std::cerr << "Out of memory, ";
-					break;
-
-				default :
-					std::cerr << "Unknown, ";
-					break;
-			}
-
-			std::cerr << alGetString(error) << '\n';
-
 			hasError = true;
+
+			std::cerr << "[OpenAL-ALC-API][" << lastFunctionCalled << ":" << filename << ':' << line << "] : " << alcGetString(device, error) << '\n';
 		}
 
 		return hasError;
@@ -146,7 +117,7 @@ namespace EmEn::Audio
 	void
 	alcFlushErrors (ALCdevice * device) noexcept
 	{
-		auto error = alcGetError(device);
+		ALCenum error = alcGetError(device);
 
 		while ( error != ALC_NO_ERROR )
 		{

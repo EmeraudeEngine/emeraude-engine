@@ -27,9 +27,9 @@
 #include "RingModulator.hpp"
 
 /* Local inclusions. */
-#include "Tracer.hpp"
-#include "Audio/OpenAL.EFX.hpp"
+#include "Audio/OpenALExtensions.hpp"
 #include "Audio/Utility.hpp"
+#include "Tracer.hpp"
 
 namespace EmEn::Audio::Effects
 {
@@ -42,7 +42,7 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		EFX::alEffecti(this->identifier(), AL_EFFECT_TYPE, AL_EFFECT_RING_MODULATOR);
+		OpenAL::alEffecti(this->identifier(), AL_EFFECT_TYPE, AL_EFFECT_RING_MODULATOR);
 
 		if ( alGetErrors("alEffecti()", __FILE__, __LINE__) )
 		{
@@ -53,20 +53,20 @@ namespace EmEn::Audio::Effects
 	void
 	RingModulator::resetProperties () noexcept
 	{
-		if ( !EFX::isAvailable() )
+		if ( !OpenAL::isEFXAvailable() )
 		{
 			return;
 		}
 
-		EFX::alEffectf(this->identifier(), AL_RING_MODULATOR_FREQUENCY, AL_RING_MODULATOR_DEFAULT_FREQUENCY);
-		EFX::alEffectf(this->identifier(), AL_RING_MODULATOR_HIGHPASS_CUTOFF, AL_RING_MODULATOR_DEFAULT_HIGHPASS_CUTOFF);
-		EFX::alEffecti(this->identifier(), AL_RING_MODULATOR_WAVEFORM, AL_RING_MODULATOR_DEFAULT_WAVEFORM);
+		OpenAL::alEffectf(this->identifier(), AL_RING_MODULATOR_FREQUENCY, AL_RING_MODULATOR_DEFAULT_FREQUENCY);
+		OpenAL::alEffectf(this->identifier(), AL_RING_MODULATOR_HIGHPASS_CUTOFF, AL_RING_MODULATOR_DEFAULT_HIGHPASS_CUTOFF);
+		OpenAL::alEffecti(this->identifier(), AL_RING_MODULATOR_WAVEFORM, AL_RING_MODULATOR_DEFAULT_WAVEFORM);
 	}
 
 	void
 	RingModulator::setFrequency (float value) noexcept
 	{
-		if ( !EFX::isAvailable() )
+		if ( !OpenAL::isEFXAvailable() )
 		{
 			return;
 		}
@@ -78,13 +78,13 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		EFX::alEffectf(this->identifier(), AL_RING_MODULATOR_FREQUENCY, value);
+		OpenAL::alEffectf(this->identifier(), AL_RING_MODULATOR_FREQUENCY, value);
 	}
 
 	void
 	RingModulator::setHighPassCutOff (float value) noexcept
 	{
-		if ( !EFX::isAvailable() )
+		if ( !OpenAL::isEFXAvailable() )
 		{
 			return;
 		}
@@ -96,13 +96,13 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		EFX::alEffectf(this->identifier(), AL_RING_MODULATOR_HIGHPASS_CUTOFF, value);
+		OpenAL::alEffectf(this->identifier(), AL_RING_MODULATOR_HIGHPASS_CUTOFF, value);
 	}
 
 	void
 	RingModulator::setWaveForm (WaveForm value) noexcept
 	{
-		if ( !EFX::isAvailable() )
+		if ( !OpenAL::isEFXAvailable() )
 		{
 			return;
 		}
@@ -124,7 +124,7 @@ namespace EmEn::Audio::Effects
 				break;
 		}
 
-		EFX::alEffecti(this->identifier(), AL_RING_MODULATOR_WAVEFORM, def);
+		OpenAL::alEffecti(this->identifier(), AL_RING_MODULATOR_WAVEFORM, def);
 	}
 
 	float
@@ -132,9 +132,9 @@ namespace EmEn::Audio::Effects
 	{
 		ALfloat value = 0.0F;
 
-		if ( EFX::isAvailable() )
+		if ( OpenAL::isEFXAvailable() )
 		{
-			EFX::alGetEffectf(this->identifier(), AL_RING_MODULATOR_FREQUENCY, &value);
+			OpenAL::alGetEffectf(this->identifier(), AL_RING_MODULATOR_FREQUENCY, &value);
 		}
 
 		return value;
@@ -145,9 +145,9 @@ namespace EmEn::Audio::Effects
 	{
 		ALfloat value = 0.0F;
 
-		if ( EFX::isAvailable() )
+		if ( OpenAL::isEFXAvailable() )
 		{
-			EFX::alGetEffectf(this->identifier(), AL_RING_MODULATOR_HIGHPASS_CUTOFF, &value);
+			OpenAL::alGetEffectf(this->identifier(), AL_RING_MODULATOR_HIGHPASS_CUTOFF, &value);
 		}
 
 		return value;
@@ -156,14 +156,14 @@ namespace EmEn::Audio::Effects
 	RingModulator::WaveForm
 	RingModulator::waveForm () const noexcept
 	{
-		if ( !EFX::isAvailable() )
+		if ( !OpenAL::isEFXAvailable() )
 		{
 			return WaveForm::Sinusoid;
 		}
 
 		ALint value = 0;
 
-		EFX::alGetEffecti(this->identifier(), AL_RING_MODULATOR_WAVEFORM, &value);
+		OpenAL::alGetEffecti(this->identifier(), AL_RING_MODULATOR_WAVEFORM, &value);
 
 		switch ( value )
 		{

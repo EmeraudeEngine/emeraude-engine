@@ -128,10 +128,10 @@ namespace EmEn::Scenes::Component
 
 			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::createOnHardware() */
 			[[nodiscard]]
-			bool createOnHardware (LightSet & lightSet, AVConsole::Manager & AVConsoleManager) noexcept override;
+			bool createOnHardware (Scene & scene) noexcept override;
 
 			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::destroyFromHardware() */
-			void destroyFromHardware (LightSet & lightSet, AVConsole::Manager & AVConsoleManager) noexcept override;
+			void destroyFromHardware (Scene & scene) noexcept override;
 
 			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::shadowMap() */
 			[[nodiscard]]
@@ -147,8 +147,8 @@ namespace EmEn::Scenes::Component
 
 		private:
 
-			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::onTargetConnected() */
-			void onTargetConnected (AVConsole::AVManagers & managers, AbstractVirtualDevice * targetDevice) noexcept override;
+			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::onOutputDeviceConnected() */
+			void onOutputDeviceConnected (AVConsole::AVManagers & managers, AbstractVirtualDevice * targetDevice) noexcept override;
 
 			/** @copydoc EmEn::Animations::AnimatableInterface::playAnimation() */
 			bool playAnimation (uint8_t animationID, const Libs::Variant & value, size_t cycle) noexcept override;

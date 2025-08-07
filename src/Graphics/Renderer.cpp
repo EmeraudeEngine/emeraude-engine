@@ -78,7 +78,7 @@ namespace EmEn::Graphics
 			return false;
 		}
 
-		/* Initialize transfer manager for graphics. */
+		/* Initialize a transfer manager for graphics. */
 		m_transferManager.setDevice(m_device);
 
 		if ( m_transferManager.initialize(m_subServicesEnabled) )
@@ -92,7 +92,7 @@ namespace EmEn::Graphics
 			return false;
 		}
 
-		/* Initialize layout manager for graphics. */
+		/* Initialize the layout manager for graphics. */
 		m_layoutManager.setDevice(m_device);
 
 		if ( m_layoutManager.initialize(m_subServicesEnabled) )
@@ -106,7 +106,7 @@ namespace EmEn::Graphics
 			return false;
 		}
 
-		/* Initialize shared UBO manager for graphics. */
+		/* Initialize a shared UBO manager for graphics. */
 		m_sharedUBOManager.setDevice(m_device);
 
 		if ( m_sharedUBOManager.initialize(m_subServicesEnabled) )
@@ -171,10 +171,10 @@ namespace EmEn::Graphics
 		}
 
 		/*
-		 * NOTE: Initialize all sub-services :
-		 *  - The shader manager (for shaders code generation to binary in the GPU)
+		 * NOTE: Initialize all sub-services:
+		 *  - The shader manager (for shader code generation to binary in the GPU)
 		 *  - The transfer manager (for memory move from CPU to GPU)
-		 *  - The layout manager (for graphics pipeline)
+		 *  - The layout manager (for a graphics pipeline)
 		 *  - The shared uniform buffer object manager (to re-use the same large UBO between objects)
 		 *  - The vertex buffer format manager (to describe each vertex buffer once)
 		 *  - The external input manager
@@ -186,7 +186,7 @@ namespace EmEn::Graphics
 			return false;
 		}
 
-		/* NOTE: Create the swap-chain for presenting images to screen. */
+		/* NOTE: Create the swap-chain for presenting images to the screen. */
 		{
 			m_swapChain = std::make_shared< SwapChain >(m_device, *this, m_primaryServices.settings());
 			m_swapChain->setIdentifier(ClassId, "Main", "SwapChain");
@@ -217,7 +217,7 @@ namespace EmEn::Graphics
 			const auto sizes = std::vector< VkDescriptorPoolSize >{
 				/* NOTE: Texture filtering alone. */
 				{VK_DESCRIPTOR_TYPE_SAMPLER, 16},
-				/* NOTE: Texture (than can be sampled). */
+				/* NOTE: Texture (that can be sampled). */
 				{VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 64},
 				/* NOTE: Texture associated with a filter (VK_DESCRIPTOR_TYPE_SAMPLER+VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE). */
 				{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 64},
@@ -285,7 +285,7 @@ namespace EmEn::Graphics
 			}
 		}
 
-		m_flags[ServiceInitialized] = true;
+		m_serviceInitialized = true;
 
 		return true;
 	}
@@ -295,26 +295,31 @@ namespace EmEn::Graphics
 	{
 		size_t error = 0;
 
-		m_flags[ServiceInitialized] = false;
+		m_serviceInitialized = false;
+
+		m_device->waitIdle("Renderer::onTerminate()");
 
 		/* NOTE: Stacked resources on the runtime. */
 		{
-			for ( const auto &sampler: m_samplers | std::views::values )
+			for ( const auto & sampler: m_samplers | std::views::values )
 			{
 				sampler->destroyFromHardware();
 			}
+
 			m_samplers.clear();
 
 			for ( const auto & renderPass: m_renderPasses | std::views::values )
 			{
 				renderPass->destroyFromHardware();
 			}
+
 			m_renderPasses.clear();
 
-			for ( const auto &pipeline: m_pipelines | std::views::values )
+			for ( const auto & pipeline: m_pipelines | std::views::values )
 			{
 				pipeline->destroyFromHardware();
 			}
+
 			m_pipelines.clear();
 		}
 
@@ -384,9 +389,7 @@ namespace EmEn::Graphics
 	std::shared_ptr< Sampler >
 	Renderer::getSampler (size_t type, VkSamplerCreateFlags createFlags) noexcept
 	{
-		const auto samplerIt = m_samplers.find(type);
-
-		if ( samplerIt != m_samplers.cend() )
+		if ( const auto samplerIt = m_samplers.find(type); samplerIt != m_samplers.cend() )
 		{
 			return samplerIt->second;
 		}
@@ -423,9 +426,7 @@ namespace EmEn::Graphics
 		/* FIXME: Fake hash ! */
 		const auto hash = GraphicsPipeline::getHash();
 
-		const auto pipelineIt = m_pipelines.find(hash);
-
-		if ( pipelineIt != m_pipelines.cend() )
+		if ( const auto pipelineIt = m_pipelines.find(hash); pipelineIt != m_pipelines.cend() )
 		{
 			graphicsPipeline = pipelineIt->second;
 
@@ -460,16 +461,15 @@ namespace EmEn::Graphics
 
 		m_statistics.start();
 
-		/* First, we get an image ready to render into it. */
-		uint32_t imageIndex = 0;
+		const auto imageIndex = m_swapChain->acquireNextImage();
 
-		if ( !m_swapChain->acquireNextImage(imageIndex) )
+		if ( !imageIndex )
 		{
 			return;
 		}
 
 		/* NOTE: Clear all semaphores for the new frame. */
-		m_rendererFrameScope[imageIndex].clearSemaphores();
+		m_rendererFrameScope[imageIndex.value()].clearSemaphores();
 
 		/* NOTE: Offscreen rendering */
 		if ( scene != nullptr )
@@ -477,19 +477,19 @@ namespace EmEn::Graphics
 			if ( this->isShadowMapsEnabled() )
 			{
 				/* [VULKAN-SHADOW] */
-				this->renderShadowMaps(imageIndex, *scene);
+				this->renderShadowMaps(imageIndex.value(), *scene);
 			}
 
 			if ( this->isRenderToTexturesEnabled() )
 			{
-				this->renderRenderToTextures(imageIndex, *scene);
+				this->renderRenderToTextures(imageIndex.value(), *scene);
 			}
 
-			this->renderViews(imageIndex, *scene);
+			this->renderViews(imageIndex.value(), *scene);
 		}
 
 		/* Then we need the command buffer linked to this image by its index. */
-		const auto commandBuffer = m_rendererFrameScope[imageIndex].commandBuffer();
+		const auto commandBuffer = m_rendererFrameScope[imageIndex.value()].commandBuffer();
 
 		if ( !commandBuffer->begin(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT) )
 		{
@@ -498,13 +498,13 @@ namespace EmEn::Graphics
 
 		commandBuffer->beginRenderPass(*m_swapChain->framebuffer(), m_swapChain->renderArea(), m_clearColors, VK_SUBPASS_CONTENTS_INLINE);
 
-		/* Render the scene. */
+		/* First, render the scene. */
 		if ( scene != nullptr )
 		{
 			scene->render(m_swapChain, *commandBuffer);
 		}
 
-		/* Render the overlay. */
+		/* Then render the overlay system over the 3D-rendered scene. */
 		overlayManager.render(m_swapChain, *commandBuffer);
 
 		commandBuffer->endRenderPass();
@@ -514,7 +514,7 @@ namespace EmEn::Graphics
 			return;
 		}
 
-		if ( !m_swapChain->submitCommandBuffer(commandBuffer, imageIndex, m_rendererFrameScope[imageIndex].secondarySemaphores()) )
+		if ( !m_swapChain->submitCommandBuffer(commandBuffer, imageIndex.value(), m_rendererFrameScope[imageIndex.value()].secondarySemaphores()) )
 		{
 			return;
 		}
@@ -552,15 +552,14 @@ namespace EmEn::Graphics
 	{
 		const auto * queue = this->device()->getQueue(QueueJob::Graphics, QueuePriority::High);
 
-		for ( const auto & shadowMap : scene.AVConsoleManager().renderToShadowMaps() )
-		{
+		scene.forEachRenderToShadowMap([&] (const std::shared_ptr< RenderTarget::Abstract > & shadowMap) {
 			if constexpr ( IsDebug )
 			{
 				if ( !shadowMap->isValid() )
 				{
 					TraceError{ClassId} << "Unable to render shadow map " << shadowMap->id() << " !";
 
-					continue;
+					return;
 				}
 			}
 
@@ -570,7 +569,7 @@ namespace EmEn::Graphics
 			{
 				TraceDebug{ClassId} << "Unable to wait on shadow map " << shadowMap->id() << " !";
 
-				continue;
+				return;
 			}
 
 			const auto commandBuffer = this->getCommandBuffer(shadowMap);
@@ -579,7 +578,7 @@ namespace EmEn::Graphics
 			{
 				TraceError{ClassId} << "Unable to begin with render target '" << shadowMap->id() << "' command buffer !";
 
-				continue;
+				return;
 			}
 
 			commandBuffer->beginRenderPass(*shadowMap->framebuffer(), shadowMap->renderArea(), m_clearColors, VK_SUBPASS_CONTENTS_INLINE);
@@ -592,20 +591,27 @@ namespace EmEn::Graphics
 			{
 				TraceError{ClassId} << "Unable to finish the command buffer for render target '" << shadowMap->id() << " !";
 
-				continue;
+				return;
 			}
 
-			const auto semaphore = shadowMap->semaphore();
+			const auto semaphoreHandle = shadowMap->semaphore()->handle();
 
-			if ( !queue->submit(commandBuffer, shadowMap->semaphore()->handle(), fence->handle()) )
+			const auto submitted = queue->submit(
+				commandBuffer,
+				SynchInfo{}
+					.signals({&semaphoreHandle, 1})
+					.withFence(fence->handle())
+			);
+
+			if ( !submitted )
 			{
 				TraceError{ClassId} << "Unable to submit command buffer for render target '" << shadowMap->id() << "' !";
 
-				continue;
+				return;
 			}
 
-			m_rendererFrameScope[frameIndex].declareSemaphore(semaphore, true);
-		}
+			m_rendererFrameScope[frameIndex].declareSemaphore(shadowMap->semaphore(), true);
+		});
 	}
 
 	void
@@ -613,7 +619,7 @@ namespace EmEn::Graphics
 	{
 		const auto * queue = this->device()->getQueue(QueueJob::Graphics, QueuePriority::High);
 
-		for ( const auto & renderToTexture : scene.AVConsoleManager().renderToTextures() )
+		scene.forEachRenderToTexture([&] (const std::shared_ptr< RenderTarget::Abstract > & renderToTexture)
 		{
 			if constexpr ( IsDebug )
 			{
@@ -621,7 +627,7 @@ namespace EmEn::Graphics
 				{
 					TraceError{ClassId} << "Unable to render to texture " << renderToTexture->id() << " !";
 
-					continue;
+					return;
 				}
 			}
 
@@ -631,7 +637,7 @@ namespace EmEn::Graphics
 			{
 				TraceDebug{ClassId} << "Unable to wait on render to texture " << renderToTexture->id() << " !";
 
-				continue;
+				return;
 			}
 
 			const auto commandBuffer = this->getCommandBuffer(renderToTexture);
@@ -640,7 +646,7 @@ namespace EmEn::Graphics
 			{
 				TraceError{ClassId} << "Unable to begin with render target '" << renderToTexture->id() << "' command buffer !";
 
-				continue;
+				return;
 			}
 
 			commandBuffer->beginRenderPass(*renderToTexture->framebuffer(), renderToTexture->renderArea(), m_clearColors, VK_SUBPASS_CONTENTS_INLINE);
@@ -653,24 +659,35 @@ namespace EmEn::Graphics
 			{
 				TraceError{ClassId} << "Unable to finish the command buffer for render target '" << renderToTexture->id() << " !";
 
-				continue;
+				return;
 			}
 
-			const auto semaphore = renderToTexture->semaphore();
+			const auto signalSemaphoreHandle = renderToTexture->semaphore()->handle();
 
-			if ( !queue->submit(commandBuffer, m_rendererFrameScope[frameIndex].primarySemaphores(), VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, renderToTexture->semaphore()->handle(), fence->handle()) )
+			const auto & waitSemaphores = m_rendererFrameScope[frameIndex].primarySemaphores();
+			const StaticVector< VkPipelineStageFlags, 16 > waitStages(waitSemaphores.size(), VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+
+			const auto submitted = queue->submit(
+				commandBuffer,
+				SynchInfo{}
+					.waits(waitSemaphores, waitStages)
+					.signals({&signalSemaphoreHandle, 1})
+					.withFence(fence->handle())
+			);
+
+			if ( !submitted )
 			{
 				TraceError{ClassId} << "Unable to submit command buffer for render target '" << renderToTexture->id() << "' !";
 
-				continue;
+				return;
 			}
 
-			m_rendererFrameScope[frameIndex].declareSemaphore(semaphore, false);
-		}
+			m_rendererFrameScope[frameIndex].declareSemaphore(renderToTexture->semaphore(), false);
+		});
 	}
 
 	void
-	Renderer::renderViews (uint32_t frameIndex, Scenes::Scene & scene) noexcept
+	Renderer::renderViews (uint32_t /*frameIndex*/, Scenes::Scene & /*scene*/) noexcept
 	{
 
 	}
@@ -695,7 +712,7 @@ namespace EmEn::Graphics
 						break;
 					}
 
-					if ( !m_window.surface()->update(this->device()->physicalDevice()) )
+					if ( !m_window.surface()->update(device->physicalDevice()) )
 					{
 						Tracer::error(ClassId, "Unable to update the handle surface from a framebuffer resized !");
 					}
@@ -713,7 +730,7 @@ namespace EmEn::Graphics
 			return true;
 		}
 
-		/* NOTE: Don't know what is it, goodbye! */
+		/* NOTE: Don't know what it is, goodbye! */
 		TraceDebug{ClassId} <<
 			"Received an unhandled notification (Code:" << notificationCode << ") from observable '" << whoIs(observable->classUID()) << "' (UID:" << observable->classUID() << ")  ! "
 			"Forgetting it ...";
@@ -766,7 +783,7 @@ namespace EmEn::Graphics
 	{
 		//this->destroyCommandSystem();
 
-		/* NOTE: Wait for a valid framebuffer dimensions in case of handle minimization. */
+		/* NOTE: Wait for a valid framebuffer dimension in case of handle minimization. */
 		//m_window.waitValidWindowSize();
 
 		if ( !m_swapChain->recreateOnHardware() )

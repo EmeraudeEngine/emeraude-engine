@@ -245,7 +245,7 @@ namespace EmEn::Resources
 			{
 				const std::lock_guard< std::mutex > scopeLock{m_resourcesAccess};
 
-				/* First check in live resources.
+				/* First, check in live resources.
 				 * NOTE: Do not use Container::isResourceLoaded() to prevent from mutex deadlock. */
 				if ( m_resources.contains(resourceName) )
 				{
@@ -259,6 +259,25 @@ namespace EmEn::Resources
 				}
 
 				return m_resourcesStores.store(m_storeName).contains(resourceName);
+			}
+
+			/**
+			 * @brief Returns all resource names from the store.
+			 * @return std::vector< std::string >
+			 */
+			std::vector< std::string >
+			getResourceNames () const noexcept
+			{
+				const auto & resourceStore = m_resourcesStores.store(m_storeName);
+
+				std::vector< std::string > names;
+
+				for ( const auto & name : resourceStore | std::views::keys )
+				{
+					names.emplace_back(name);
+				}
+
+				return names;
 			}
 
 			/**
@@ -698,7 +717,7 @@ namespace EmEn::Resources
 				}
 
 				/* We don't know who is sending this message,
-				 * so we stop the listening. */
+				 * so we stop listening. */
 				Tracer::warning(resource_t::ClassId, "Unknown notification, stop listening to this sender.");
 
 				return false;
@@ -864,7 +883,7 @@ namespace EmEn::Resources
 			{
 				const auto & name = baseInformation.name();
 
-				/* 1. Check if resource is not already in the loading queue ... */
+				/* 1. Check if a resource is not already in the loading queue ... */
 				const auto & resourceIt = m_resources.find(name);
 
 				if ( resourceIt != m_resources.cend() )

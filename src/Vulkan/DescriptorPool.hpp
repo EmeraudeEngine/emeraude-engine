@@ -74,18 +74,6 @@ namespace EmEn::Vulkan
 			}
 
 			/**
-			 * @brief Constructs a descriptor pool with createInfo.
-			 * @param device A reference to a smart pointer of a device.
-			 * @param createInfo A reference to a createInfo.
-			 */
-			DescriptorPool (const std::shared_ptr< Device > & device, const VkDescriptorPoolCreateInfo & createInfo) noexcept
-				: AbstractDeviceDependentObject{device},
-				m_createInfo{createInfo}
-			{
-
-			}
-
-			/**
 			 * @brief Copy constructor.
 			 * @param copy A reference to the copied instance.
 			 */

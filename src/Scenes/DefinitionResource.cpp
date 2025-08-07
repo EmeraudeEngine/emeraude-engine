@@ -56,14 +56,16 @@ namespace EmEn::Scenes
 	bool
 	DefinitionResource::load (const std::filesystem::path & filepath) noexcept
 	{
-		Json::Value root;
+		const auto rootCheck = FastJSON::getRootFromFile(filepath);
 
-		if ( !FastJSON::getRootFromFile(filepath, root) )
+		if ( !rootCheck )
 		{
 			TraceError{ClassId} << "Unable to parse the resource file " << filepath << " !" "\n";
 
 			return false;
 		}
+
+		const auto & root = rootCheck.value();
 
 		/* Checks if additional stores before loading (optional) */
 		auto * manager = Resources::Manager::instance();
@@ -139,9 +141,9 @@ namespace EmEn::Scenes
 		auto properties = m_root[FastJSON::PropertiesKey];
 
 		scene.setPhysicalEnvironmentProperties({
-			FastJSON::getNumber< float >(properties, SurfaceGravityKey, Physics::Gravity::Earth< float >),
-			FastJSON::getNumber< float >(properties, AtmosphericDensityKey, Physics::Density::EarthStandardAir< float >),
-			FastJSON::getNumber< float >(properties, PlanetRadiusKey, Physics::Radius::Earth< float >)
+			FastJSON::getValue< float >(properties, SurfaceGravityKey).value_or(Physics::Gravity::Earth< float >),
+			FastJSON::getValue< float >(properties, AtmosphericDensityKey).value_or(Physics::Density::EarthStandardAir< float >),
+			FastJSON::getValue< float >(properties, PlanetRadiusKey).value_or(Physics::Radius::Earth< float >)
 		});
 
 		return true;

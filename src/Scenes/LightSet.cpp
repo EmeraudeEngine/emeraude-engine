@@ -30,20 +30,21 @@
 #include <ostream>
 
 /* Local inclusions. */
-#include "Saphir/LightGenerator.hpp"
-#include "Vulkan/SwapChain.hpp"
-#include "Vulkan/DescriptorSetLayout.hpp"
 #include "AVConsole/Manager.hpp"
+#include "Saphir/LightGenerator.hpp"
+#include "Vulkan/DescriptorSetLayout.hpp"
+#include "Vulkan/SwapChain.hpp"
+#include "Scene.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::Scenes
 {
-	using namespace EmEn::Libs;
-	using namespace EmEn::Libs::Math;
-	using namespace EmEn::Libs::PixelFactory;
-	using namespace EmEn::Graphics;
-	using namespace EmEn::Saphir;
-	using namespace EmEn::Vulkan;
+	using namespace Libs;
+	using namespace Libs::Math;
+	using namespace Libs::PixelFactory;
+	using namespace Graphics;
+	using namespace Saphir;
+	using namespace Vulkan;
 
 	const size_t LightSet::ClassUID{getClassUID(ClassId)};
 
@@ -70,25 +71,25 @@ namespace EmEn::Scenes
 	}
 
 	bool
-	LightSet::initialize (const std::string & sceneName) noexcept
+	LightSet::initialize (Scene & scene) noexcept
 	{
 		if ( !this->isEnabled() )
 		{
-			TraceInfo{ClassId} << "Lighting is not enabled for scene '" << sceneName << "'.";
+			TraceInfo{ClassId} << "Lighting is not enabled for scene '" << scene.name() << "'.";
 
 			return true;
 		}
 
 		const std::lock_guard< std::mutex > lock{m_lightAccess};
 
-		auto & renderer = m_AVConsoleManager.graphicsRenderer();
+		auto & renderer = scene.AVConsoleManager().graphicsRenderer();
 		auto & sharedUBOManager = renderer.sharedUBOManager();
 
 		/* Generate directional light shared uniform buffer. */
 		{
 			const auto uniformBlock = LightGenerator::getUniformBlock(0, 0, LightType::Directional, false);
 
-			m_directionalLightBuffer = sharedUBOManager.createSharedUniformBuffer(sceneName + "DirectionalLights", createDescriptorSet, uniformBlock.bytes());
+			m_directionalLightBuffer = sharedUBOManager.createSharedUniformBuffer(scene.name() + "DirectionalLights", createDescriptorSet, uniformBlock.bytes());
 
 			if ( m_directionalLightBuffer == nullptr )
 			{
@@ -100,7 +101,7 @@ namespace EmEn::Scenes
 			/* NOTE: Register existing lights. */
 			for ( const auto & light : m_directionalLights )
 			{
-				if ( !light->createOnHardware(*this, m_AVConsoleManager) )
+				if ( !light->createOnHardware(scene) )
 				{
 					TraceError{ClassId} << "Unable to create the directional light '" << light->name() << "' !";
 
@@ -113,7 +114,7 @@ namespace EmEn::Scenes
 		{
 			const auto uniformBlock = LightGenerator::getUniformBlock(0, 0, LightType::Point, false);
 
-			m_pointLightBuffer = sharedUBOManager.createSharedUniformBuffer(sceneName + "PointLights", createDescriptorSet, uniformBlock.bytes());
+			m_pointLightBuffer = sharedUBOManager.createSharedUniformBuffer(scene.name() + "PointLights", createDescriptorSet, uniformBlock.bytes());
 
 			if ( m_pointLightBuffer == nullptr )
 			{
@@ -125,7 +126,7 @@ namespace EmEn::Scenes
 			/* NOTE: Register existing lights. */
 			for ( const auto & light : m_pointLights )
 			{
-				if ( !light->createOnHardware(*this, m_AVConsoleManager) )
+				if ( !light->createOnHardware(scene) )
 				{
 					TraceError{ClassId} << "Unable to create the point light '" << light->name() << "' !";
 
@@ -138,7 +139,7 @@ namespace EmEn::Scenes
 		{
 			const auto uniformBlock = LightGenerator::getUniformBlock(0, 0, LightType::Spot, false);
 
-			m_spotLightBuffer = sharedUBOManager.createSharedUniformBuffer(sceneName + "SpotLights", createDescriptorSet, uniformBlock.bytes());
+			m_spotLightBuffer = sharedUBOManager.createSharedUniformBuffer(scene.name() + "SpotLights", createDescriptorSet, uniformBlock.bytes());
 
 			if ( m_spotLightBuffer == nullptr )
 			{
@@ -150,7 +151,7 @@ namespace EmEn::Scenes
 			/* NOTE: Register existing lights. */
 			for ( const auto & light : m_spotLights )
 			{
-				if ( !light->createOnHardware(*this, m_AVConsoleManager) )
+				if ( !light->createOnHardware(scene) )
 				{
 					TraceError{ClassId} << "Unable to create the spot light '" << light->name() << "' !";
 
@@ -167,7 +168,7 @@ namespace EmEn::Scenes
 	}
 
 	bool
-	LightSet::terminate () noexcept
+	LightSet::terminate (Scene & scene) noexcept
 	{
 		if ( !this->isEnabled() )
 		{
@@ -176,12 +177,12 @@ namespace EmEn::Scenes
 
 		size_t error = 0;
 
-		auto & renderer = m_AVConsoleManager.graphicsRenderer();
+		auto & renderer = scene.AVConsoleManager().graphicsRenderer();
 		auto & sharedUBOManager = renderer.sharedUBOManager();
 
 		m_flags[Initialized] = false;
 
-		/* Release the directional light shared uniform buffer. */
+		/* Release the directional light SharedUniformBuffer. */
 		{
 			const auto pointer = m_directionalLightBuffer;
 
@@ -193,7 +194,7 @@ namespace EmEn::Scenes
 			}
 		}
 
-		/* Release the point light shared uniform buffer. */
+		/* Release the point light SharedUniformBuffer. */
 		{
 			const auto pointer = m_pointLightBuffer;
 
@@ -205,7 +206,7 @@ namespace EmEn::Scenes
 			}
 		}
 
-		/* Release the spotlight shared uniform buffer. */
+		/* Release the spotlight SharedUniformBuffer. */
 		{
 			const auto pointer = m_spotLightBuffer;
 
@@ -221,10 +222,10 @@ namespace EmEn::Scenes
 	}
 
 	void
-	LightSet::add (const std::shared_ptr< Component::DirectionalLight > & light) noexcept
+	LightSet::add (Scene & scene, const std::shared_ptr< Component::DirectionalLight > & light) noexcept
 	{
-		/* NOTE: If light set is uninitialized, the light creation will be postponed. */
-		if ( m_flags[Initialized] && !light->createOnHardware(*this, m_AVConsoleManager) )
+		/* NOTE: If the light set is uninitialized, the light creation will be postponed. */
+		if ( m_flags[Initialized] && !light->createOnHardware(scene) )
 		{
 			TraceError{ClassId} << "Unable to create the directional light '" << light->name() << "' !";
 
@@ -240,10 +241,10 @@ namespace EmEn::Scenes
 	}
 
 	void
-	LightSet::add (const std::shared_ptr< Component::PointLight > & light) noexcept
+	LightSet::add (Scene & scene, const std::shared_ptr< Component::PointLight > & light) noexcept
 	{
-		/* NOTE: If light set is uninitialized, the light creation will be postponed. */
-		if ( m_flags[Initialized] && !light->createOnHardware(*this, m_AVConsoleManager) )
+		/* NOTE: If the light set is uninitialized, the light creation will be postponed. */
+		if ( m_flags[Initialized] && !light->createOnHardware(scene) )
 		{
 			TraceError{ClassId} << "Unable to create the point light '" << light->name() << "' !";
 
@@ -259,10 +260,10 @@ namespace EmEn::Scenes
 	}
 
 	void
-	LightSet::add (const std::shared_ptr< Component::SpotLight > & light) noexcept
+	LightSet::add (Scene & scene, const std::shared_ptr< Component::SpotLight > & light) noexcept
 	{
-		/* NOTE: If light set is uninitialized, the light creation will be postponed. */
-		if ( m_flags[Initialized] && !light->createOnHardware(*this, m_AVConsoleManager) )
+		/* NOTE: If the light set is uninitialized, the light creation will be postponed. */
+		if ( m_flags[Initialized] && !light->createOnHardware(scene) )
 		{
 			TraceError{ClassId} << "Unable to create the spot light '" << light->name() << "' !";
 
@@ -278,7 +279,7 @@ namespace EmEn::Scenes
 	}
 
 	void
-	LightSet::remove (const std::shared_ptr< Component::DirectionalLight > & light) noexcept
+	LightSet::remove (Scene & scene, const std::shared_ptr< Component::DirectionalLight > & light) noexcept
 	{
 		const std::lock_guard< std::mutex > lock{m_lightAccess};
 
@@ -287,11 +288,11 @@ namespace EmEn::Scenes
 
 		this->notify(DirectionalLightRemoved, light);
 
-		light->destroyFromHardware(*this, m_AVConsoleManager);
+		light->destroyFromHardware(scene);
 	}
 
 	void
-	LightSet::remove (const std::shared_ptr< Component::PointLight > & light) noexcept
+	LightSet::remove (Scene & scene, const std::shared_ptr< Component::PointLight > & light) noexcept
 	{
 		const std::lock_guard< std::mutex > lock{m_lightAccess};
 
@@ -300,11 +301,11 @@ namespace EmEn::Scenes
 
 		this->notify(PointLightRemoved, light);
 
-		light->destroyFromHardware(*this, m_AVConsoleManager);
+		light->destroyFromHardware(scene);
 	}
 
 	void
-	LightSet::remove (const std::shared_ptr< Component::SpotLight > & light) noexcept
+	LightSet::remove (Scene & scene, const std::shared_ptr< Component::SpotLight > & light) noexcept
 	{
 		const std::lock_guard< std::mutex > lock{m_lightAccess};
 
@@ -313,7 +314,7 @@ namespace EmEn::Scenes
 
 		this->notify(SpotLightRemoved, light);
 
-		light->destroyFromHardware(*this, m_AVConsoleManager);
+		light->destroyFromHardware(scene);
 	}
 
 	void

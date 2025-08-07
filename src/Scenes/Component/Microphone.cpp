@@ -40,10 +40,9 @@ namespace EmEn::Scenes::Component
 			return;
 		}
 
-		for ( const auto & output : this->outputs() )
-		{
+		this->forEachOutputs([&worldCoordinates, &worldVelocity] (const auto & output) {
 			output->updateDeviceFromCoordinates(worldCoordinates, worldVelocity);
-		}
+		});
 	}
 
 	bool

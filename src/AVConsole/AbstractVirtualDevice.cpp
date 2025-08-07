@@ -27,7 +27,6 @@
 #include "AbstractVirtualDevice.hpp"
 
 /* STL inclusions. */
-#include <ranges>
 #include <sstream>
 
 /* Local inclusions. */
@@ -35,241 +34,247 @@
 
 namespace EmEn::AVConsole
 {
-	using namespace EmEn::Libs;
+	using namespace Libs;
 
 	constexpr auto TracerTag{"VirtualDevice"};
 
-	size_t AbstractVirtualDevice::s_deviceCount{0};
+	std::atomic< size_t > AbstractVirtualDevice::s_deviceCount{0};
 
-	bool
-	AbstractVirtualDevice::isConnectedWith (const std::shared_ptr< AbstractVirtualDevice > & device, ConnexionType direction) const noexcept
+	ConnexionResult
+	AbstractVirtualDevice::connect (AVManagers & managers, const std::shared_ptr< AbstractVirtualDevice > & targetDevice, bool fireEvents) noexcept
 	{
-		if ( direction == ConnexionType::Input || direction == ConnexionType::Both )
+		if ( const auto result = this->canConnect(targetDevice); result != ConnexionResult::Success )
 		{
-			return m_inputs.contains(device);
+			return result;
 		}
 
-		/* NOTE: Both are already tested above. */
-		if ( direction == ConnexionType::Output /*|| direction == ConnexionType::Both*/ )
 		{
-			return m_outputs.contains(device);
+			const std::scoped_lock lock{m_IOAccess, targetDevice->m_IOAccess};
+
+			/* NOTE: Performs connexion from the other input list device first. */
+			if ( !targetDevice->m_inputDevicesConnected.emplace(this->shared_from_this()).second )
+			{
+				return ConnexionResult::Failure;
+			}
+
+			/* NOTE: Connecting on this device output list. */
+			m_outputDevicesConnected.emplace(targetDevice);
 		}
 
-		return false;
+		if ( fireEvents )
+		{
+			targetDevice->onInputDeviceConnected(managers, this);
+
+			this->onOutputDeviceConnected(managers, targetDevice.get());
+		}
+
+		return ConnexionResult::Success;
 	}
 
-	bool
-	AbstractVirtualDevice::canConnect (const std::shared_ptr< AbstractVirtualDevice > & targetDevice) const noexcept
+	ConnexionResult
+	AbstractVirtualDevice::interconnect (AVManagers & managers, const std::shared_ptr< AbstractVirtualDevice > & intermediateDevice, bool fireEvents) noexcept
 	{
-		/* NOTE: Avoid connecting an audio device with a video device -> non sens! */
-		if ( m_type != targetDevice->m_type )
+		/* 1. Check if connexion is allowed (intermediate must be Both). */
+		if ( intermediateDevice->allowedConnexionType() != ConnexionType::Both )
 		{
-			Tracer::error(TracerTag, "Devices are not the same type !");
+			TraceError{TracerTag} << "The virtual device '" << intermediateDevice->id() << "' must allow input/output to perform an interconnection !";
 
-			return false;
+			return ConnexionResult::NotAllowed;
 		}
 
-		/* NOTE: As connexions go from device output to another device input, this device must allow outputting! */
-		if ( m_allowedConnexionType == ConnexionType::Input )
-		{
-			TraceError{TracerTag} << "The virtual device '" << this->id() << "' do not allows output !";
-
-			return false;
-		}
-
-		return true;
-	}
-
-	bool
-	AbstractVirtualDevice::connect (AVManagers & managers, const std::shared_ptr< AbstractVirtualDevice > & targetDevice, bool quietly) noexcept
-	{
-		if ( !this->canConnect(targetDevice) )
-		{
-			return false;
-		}
-
-		/* NOTE: This will check if the target device is allowed to connect back. */
-		if ( !targetDevice->connectBack(managers, this->shared_from_this(), quietly) )
-		{
-			return false;
-		}
-
-		m_outputs.emplace(targetDevice);
-
-		if ( !quietly )
-		{
-			this->onTargetConnected(managers, targetDevice.get());
-		}
-
-		return true;
-	}
-
-	bool
-	AbstractVirtualDevice::connectBack (AVManagers & managers, const std::shared_ptr< AbstractVirtualDevice > & sourceDevice, bool quietly) noexcept
-	{
-		if ( m_allowedConnexionType == ConnexionType::Output )
-		{
-			TraceError{TracerTag} << "The virtual device '" << this->id() << "' do not allows input !";
-
-			return false;
-		}
-
-		if ( !m_inputs.emplace(sourceDevice).second )
-		{
-			TraceError{TracerTag} << "Unable to register '" << sourceDevice->id() << "' to the virtual device '" << this->id() << "' inputs !";
-
-			return false;
-		}
-
-		if ( !quietly )
-		{
-			this->onSourceConnected(managers, sourceDevice.get());
-		}
-
-		return true;
-	}
-
-	bool
-	AbstractVirtualDevice::interconnect (AVManagers & managers, const std::shared_ptr< AbstractVirtualDevice > & targetDevice) noexcept
-	{
-		/* NOTE: Before performs any disconnection, we need to know first
-		 * if the device is able to support input and output. */
-		if ( targetDevice->allowedConnexionType() == ConnexionType::Both )
-		{
-			TraceError{TracerTag} << "The virtual device '" << this->id() << "' must allow input/output to perform a interconnection !";
-
-			return false;
-		}
-
-		/* NOTE: Double-check. Not really necessary, but help to have a clear output message on failure.  */
-		if ( !this->canConnect(targetDevice) )
-		{
-			return false;
-		}
-
-		if ( m_outputs.empty() )
+		/* 2. Check if there is output! */
+		if ( m_outputDevicesConnected.empty() )
 		{
 			TraceError{TracerTag} << "The virtual device '" << this->id() << "' has no existing output connexion !";
 
-			return false;
+			return ConnexionResult::Failure;
 		}
 
-		return std::ranges::all_of(m_outputs, [&] (const auto & outputDevice) {
-			/* NOTE: First unlink the direct connexion and relink with the new device in between. */
-			return this->disconnect(managers, outputDevice, true) && this->connect(managers, targetDevice, true) && targetDevice->connect(managers, outputDevice, false);
-		});
+		for ( const auto & outputDeviceWeak : m_outputDevicesConnected )
+		{
+			const auto outputDevice = outputDeviceWeak.lock();
+
+			if ( outputDevice == nullptr )
+			{
+				continue;
+			}
+
+			/* 3. Disconnect direct link between devices. */
+			if ( const auto result = this->disconnect(managers, outputDevice, fireEvents); result != ConnexionResult::Success )
+			{
+				continue;
+			}
+
+			/* 4. Connect the intermediate device between the disconnected devices. */
+			if ( const auto result = this->connect(managers, intermediateDevice, true); result != ConnexionResult::Success )
+			{
+				return result;
+			}
+
+			if ( const auto result = intermediateDevice->connect(managers, outputDevice, true); result != ConnexionResult::Success )
+			{
+				return result;
+			}
+
+			// TODO: Here, we need to handle failure. What if one of the connections fails?
+			// TODO: Leave the system in a "broken" state or try to roll back?
+			// TODO: For now, we just return false.
+		}
+
+		return ConnexionResult::Success;
 	}
 
-	bool
-	AbstractVirtualDevice::interconnect (AVManagers & managers, const std::shared_ptr< AbstractVirtualDevice > & targetDevice, const std::string & outputDeviceName) noexcept
+	ConnexionResult
+	AbstractVirtualDevice::interconnect (AVManagers & managers, const std::shared_ptr< AbstractVirtualDevice > & intermediateDevice, const std::string & outputDeviceName, bool fireEvents) noexcept
 	{
-		/* NOTE: Before performs any disconnection, we need to know first
-		 * if the device is able to support input and output. */
-		if ( targetDevice->allowedConnexionType() == ConnexionType::Both )
-		{
-			TraceError{TracerTag} << "The virtual device '" << this->id() << "' must allow input/output to perform a interconnection !";
-
-			return false;
-		}
-
-		/* NOTE: Double-check. Not really necessary, but help to have a clear output message on failure.  */
-		if ( !this->canConnect(targetDevice) )
-		{
-			return false;
-		}
-
-		if ( m_outputs.empty() )
+		/* 1. Check the existence of the device inside outputs. */
+		if ( m_outputDevicesConnected.empty() )
 		{
 			TraceError{TracerTag} << "The virtual device '" << this->id() << "' has no existing output connexion !";
 
-			return false;
+			return ConnexionResult::Failure;
 		}
 
-		const auto outputDevice = std::ranges::find_if(m_outputs, [&outputDeviceName] (const auto & outputDevice) {
-			return outputDeviceName.empty() || outputDeviceName == outputDevice->id();
+		const auto outputDeviceIt = std::ranges::find_if(m_outputDevicesConnected, [&outputDeviceName] (const auto & deviceWeak) {
+			const auto device = deviceWeak.lock();
+
+			if ( device == nullptr)
+			{
+				return false;
+			}
+
+			return outputDeviceName.empty() || outputDeviceName == device->id();
 		});
 
-		if ( outputDevice == m_outputs.cend() )
+		if ( outputDeviceIt == m_outputDevicesConnected.cend() )
 		{
 			TraceError{TracerTag} << "There is no output virtual device named '" << outputDeviceName << "' !";
 
-			return false;
+			return ConnexionResult::Failure;
 		}
 
-		/* NOTE: First unlink the direct connexion and relink with the new device in between. */
-		return this->disconnect(managers, *outputDevice, true) && this->connect(managers, targetDevice, true) && targetDevice->connect(managers, *outputDevice, false);
+		/* 2. Check if connexion is allowed. */
+		if ( intermediateDevice->allowedConnexionType() != ConnexionType::Both )
+		{
+			TraceError{TracerTag} << "The virtual device '" << intermediateDevice->id() << "' must allow input/output to perform an interconnection !";
+
+			return ConnexionResult::NotAllowed;
+		}
+
+		/* 3. Disconnect the direct link between the devices. */
+		if ( const auto result = this->disconnect(managers, outputDeviceIt->lock(), fireEvents); result != ConnexionResult::Success )
+		{
+			return result;
+		}
+
+		/* 4. Connect the intermediate device between the disconnected devices. */
+		if ( const auto result = this->connect(managers, intermediateDevice, fireEvents); result != ConnexionResult::Success )
+		{
+			return result;
+		}
+
+		if ( const auto result = intermediateDevice->connect(managers, outputDeviceIt->lock(), fireEvents); result != ConnexionResult::Success )
+		{
+			return result;
+		}
+
+		return ConnexionResult::Success;
 	}
 
-	bool
-	AbstractVirtualDevice::disconnect (AVManagers & managers, const std::shared_ptr< AbstractVirtualDevice > & targetDevice, bool quietly) noexcept
+	ConnexionResult
+	AbstractVirtualDevice::disconnect (AVManagers & managers, const std::shared_ptr< AbstractVirtualDevice > & targetDevice, bool fireEvents) noexcept
 	{
-		if ( !targetDevice->disconnectBack(managers, this->shared_from_this(), quietly) )
 		{
-			return false;
+			const std::scoped_lock lock{m_IOAccess, targetDevice->m_IOAccess};
+
+			/* NOTE: Performs disconnection from the other input list device first. */
+			if ( targetDevice->m_inputDevicesConnected.erase(this->shared_from_this()) == 0 )
+			{
+				return ConnexionResult::Failure;
+			}
+
+			/* NOTE: Disconnecting on this device output list. */
+			m_outputDevicesConnected.erase(targetDevice);
 		}
 
-		m_outputs.erase(targetDevice);
-
-		if ( !quietly )
+		if ( fireEvents )
 		{
-			this->onTargetDisconnected(managers, targetDevice.get());
+			targetDevice->onInputDeviceDisconnected(managers, this);
+
+			this->onOutputDeviceDisconnected(managers, targetDevice.get());
 		}
 
-		return true;
-	}
-
-	bool
-	AbstractVirtualDevice::disconnectBack (AVManagers & managers, const std::shared_ptr< AbstractVirtualDevice > & sourceDevice, bool quietly) noexcept
-	{
-		if ( m_inputs.erase(sourceDevice) == 0 )
-		{
-			TraceError{TracerTag} << "Unable to unregister '" << sourceDevice->id() << "' from the virtual device '" << this->id() << "' inputs !";
-
-			return false;
-		}
-
-		if ( !quietly )
-		{
-			this->onSourceDisconnected(managers, sourceDevice.get());
-		}
-
-		return true;
+		return ConnexionResult::Success;
 	}
 
 	void
-	AbstractVirtualDevice::disconnectFromAll (AVManagers & managers) noexcept
+	AbstractVirtualDevice::disconnectFromAll (AVManagers & managers, bool fireEvents) noexcept
 	{
-		/* Remove these devices from the outputs of every device where it's connected. */
-		for ( const auto & input : m_inputs )
+		/* NOTE: We lock IO access on this device. */
+		const std::lock_guard< std::mutex > lockHere{m_IOAccess};
+
+		const auto thisDevice = this->shared_from_this();
+
+		for ( const auto & deviceWeakPointer : m_inputDevicesConnected )
 		{
-			input->m_outputs.erase(this->shared_from_this());
+			if ( const auto inputDeviceConnected = deviceWeakPointer.lock() )
+			{
+				/* NOTE: We lock IO access on the other device. */
+				const std::lock_guard< std::mutex > lockThere{inputDeviceConnected->m_IOAccess};
+
+				inputDeviceConnected->m_outputDevicesConnected.erase(thisDevice);
+
+				if ( fireEvents )
+				{
+					inputDeviceConnected->onOutputDeviceDisconnected(managers, this);
+				}
+			}
 		}
 
-		m_inputs.clear();
+		m_inputDevicesConnected.clear();
 
-		/* Remove these devices from the inputs of every device where it's connected. */
-		for ( const auto & output : m_outputs )
+		for ( const auto & deviceWeakPointer : m_outputDevicesConnected )
 		{
-			output->disconnectBack(managers, this->shared_from_this(), true);
+			if ( const auto outputDeviceConnected = deviceWeakPointer.lock() )
+			{
+				/* NOTE: We lock IO access on the other device. */
+				const std::lock_guard< std::mutex > lockThere{outputDeviceConnected->m_IOAccess};
+
+				outputDeviceConnected->m_inputDevicesConnected.erase(thisDevice);
+
+				if ( fireEvents )
+				{
+					outputDeviceConnected->onInputDeviceDisconnected(managers, this);
+				}
+			}
 		}
 
-		m_outputs.clear();
+		m_outputDevicesConnected.clear();
 	}
 
 	std::string
 	AbstractVirtualDevice::getConnexionState () const noexcept
 	{
+		const std::lock_guard< std::mutex > lock{m_IOAccess};
+
 		std::stringstream string;
 
-		if ( m_outputs.empty() )
+		if ( m_outputDevicesConnected.empty() )
 		{
-			string << "\t" " - " << this->id() << " -> [NOT CONNECTED]" << "\n";
+			string << "\t" " - " << this->id() << " -> [NOT_CONNECTED]" << "\n";
 		}
 		else
 		{
-			for ( const auto & output : m_outputs )
+			for ( const auto & outputWeak : m_outputDevicesConnected )
 			{
-				string << "\t" " - " << this->id() << " -> " << output->id() << "\n";
+				if ( const auto output = outputWeak.lock(); output == nullptr )
+				{
+					string << "\t" " - " << this->id() << " -> [BROKEN_DEVICE] " "\n";
+				}
+				else
+				{
+					string << "\t" " - " << this->id() << " -> " << output->id() << '\n';
+				}
 			}
 		}
 

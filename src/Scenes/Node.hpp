@@ -33,6 +33,7 @@
 #include <map>
 #include <memory>
 #include <string>
+#include <array>
 
 /* Local inclusions for inheritances. */
 #include "AbstractEntity.hpp"
@@ -46,9 +47,9 @@
 namespace EmEn::Scenes
 {
 	/**
-	 * @brief The Node class is the key component to build the scene node tree.
+	 * @brief The Node class is the key part to build the scene node tree.
 	 * @note [OBS][SHARED-OBSERVABLE]
-	 * @extends std::enable_shared_from_this A node need to self replicate its smart pointer.
+	 * @extends std::enable_shared_from_this A node needs to self-replicate its smart pointer.
 	 * @extends EmEn::Scenes::AbstractEntity A node is an entity of the 3D world.
 	 * @extends EmEn::Physics::MovableTrait A node is a movable entity in the 3D world.
 	 * @extends EmEn::Animations::AnimatableInterface A node can be animated by the engine logics.
@@ -135,12 +136,12 @@ namespace EmEn::Scenes
 			 * @param name The name of the sub child node [std::move].
 			 * @param parent a reference to the smart pointer of the parent.
 			 * @param sceneTimeMS The scene current time in milliseconds.
-			 * @param coordinates A reference to a coordinates. Default Origin.
+			 * @param coordinates A reference to a coordinate. Default Origin.
 			 */
 			Node (std::string name, const std::shared_ptr< Node > & parent, uint32_t sceneTimeMS, const Libs::Math::CartesianFrame< float > & coordinates = {}) noexcept
 				: AbstractEntity{std::move(name), sceneTimeMS},
 				m_parent{parent},
-				m_cartesianFrame{coordinates}
+				m_logicStateCoordinates{coordinates}
 			{
 
 			}
@@ -239,7 +240,7 @@ namespace EmEn::Scenes
 			void
 			lookAt (const Libs::Math::Vector< 3, float > & target, bool flipZAxis) noexcept override
 			{
-				m_cartesianFrame.lookAt(target, flipZAxis);
+				m_logicStateCoordinates.lookAt(target, flipZAxis);
 
 				this->onLocationDataUpdate();
 			}
@@ -248,7 +249,7 @@ namespace EmEn::Scenes
 			void
 			setLocalCoordinates (const Libs::Math::CartesianFrame< float > & coordinates) noexcept override
 			{
-				m_cartesianFrame = coordinates;
+				m_logicStateCoordinates = coordinates;
 			}
 
 			/** @copydoc EmEn::Scenes::LocatableInterface::localCoordinates() const */
@@ -256,7 +257,7 @@ namespace EmEn::Scenes
 			const Libs::Math::CartesianFrame< float > &
 			localCoordinates () const noexcept override
 			{
-				return m_cartesianFrame;
+				return m_logicStateCoordinates;
 			}
 
 			/** @copydoc EmEn::Scenes::LocatableInterface::localCoordinates() */
@@ -264,7 +265,7 @@ namespace EmEn::Scenes
 			Libs::Math::CartesianFrame< float > &
 			localCoordinates () noexcept override
 			{
-				return m_cartesianFrame;
+				return m_logicStateCoordinates;
 			}
 
 			/** @copydoc EmEn::Scenes::LocatableInterface::getWorldCoordinates() const */
@@ -326,6 +327,31 @@ namespace EmEn::Scenes
 				return this->hasVelocity();
 			}
 
+			/** @copydoc EmEn::Scenes::AbstractEntity::publishStateForRendering(uint32_t) */
+			void
+			publishStateForRendering (uint32_t writeStateIndex) noexcept override
+			{
+				if constexpr ( IsDebug )
+				{
+					if ( writeStateIndex >= m_renderStateCoordinates.size() )
+					{
+						Tracer::error(ClassId, "Index overflow !");
+
+						return;
+					}
+				}
+
+				m_renderStateCoordinates[writeStateIndex] = m_logicStateCoordinates;
+			}
+
+			/** @copydoc EmEn::Scenes::AbstractEntity::getWorldCoordinatesStateForRendering(uint32_t) const */
+			[[nodiscard]]
+			const Libs::Math::CartesianFrame< float > &
+			getWorldCoordinatesStateForRendering (uint32_t readStateIndex) const noexcept override
+			{
+				return m_renderStateCoordinates[readStateIndex];
+			}
+
 			/** @copydoc EmEn::Scenes::AbstractEntity::getMovableTrait() */
 			[[nodiscard]]
 			MovableTrait *
@@ -365,7 +391,7 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			 * @brief Returns whether the node is the top tree one. Parent pointer is nullptr.
+			 * @brief Returns whether the node is the top tree one. The parent pointer is nullptr.
 			 * @return bool.
 			 */
 			[[nodiscard]]
@@ -376,7 +402,7 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			 * @brief Returns true if the node have no child.
+			 * @brief Returns true if the node has no child.
 			 * @return bool
 			 */
 			[[nodiscard]]
@@ -454,7 +480,7 @@ namespace EmEn::Scenes
 			std::shared_ptr< const Node > getRoot () const noexcept;
 
 			/**
-			 * @brief Creates a sub node at a given coordinates.
+			 * @brief Creates a sub node at given coordinates.
 			 * @warning If the node already exists, the method will return a null pointer.
 			 * @param name A reference to a string.
 			 * @param sceneTimeMS The scene current time in milliseconds.
@@ -481,7 +507,7 @@ namespace EmEn::Scenes
 
 			/**
 			 * @brief Returns a sub node by its name.
-			 * @warning Can be nullptr !
+			 * @warning Can be nullptr!
 			 * @param name A reference to a string.
 			 * @return std::shared_ptr< Node >
 			 */
@@ -517,7 +543,7 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			 * @brief Plans a destruction for this Node. Thread-safe.
+			 * @brief Plans destruction for this Node. Thread-safe.
 			 * @return void
 			 */
 			void discard () noexcept;
@@ -534,7 +560,7 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			 * @brief Removes directly all sub node below this node.
+			 * @brief Directly removes all sub nodes below this node.
 			 * @return void
 			 */
 			void destroyTree () noexcept;
@@ -638,10 +664,11 @@ namespace EmEn::Scenes
 			/* Flag names. */
 			static constexpr auto IsDiscardable{NextFlag + 0UL};
 
-			/* NOTE : If nullptr, this node is the root. */
+			/* NOTE: If nullptr, this node is the root. */
 			std::weak_ptr< Node > m_parent;
 			std::map< std::string, std::shared_ptr< Node > > m_children;
-			Libs::Math::CartesianFrame< float > m_cartesianFrame;
+			Libs::Math::CartesianFrame< float > m_logicStateCoordinates;
+			std::array< Libs::Math::CartesianFrame< float >, 2 > m_renderStateCoordinates{};
 			uint64_t m_lifetime{0};
 	};
 }

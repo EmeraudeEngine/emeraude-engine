@@ -219,16 +219,16 @@ namespace EmEn
 	bool
 	Settings::readFile (const std::filesystem::path & filepath) noexcept
 	{
-		Json::Value root;
+		const auto root = FastJSON::getRootFromFile(filepath);
 
-		if ( !FastJSON::getRootFromFile(filepath, root) )
+		if ( !root )
 		{
 			TraceError{ClassId} << "Unable to parse the settings file " << filepath << " !" "\n";
 
 			return false;
 		}
 
-		return this->readLevel(root, m_store);
+		return this->readLevel(root.value(), m_store);
 	}
 
 	bool

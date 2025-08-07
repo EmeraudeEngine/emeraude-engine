@@ -29,11 +29,12 @@
 /* STL inclusions. */
 #include <array>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <vector>
 
 /* Third-party inclusions. */
-#include "OpenAL.EFX.hpp"
+#include "OpenALExtensions.hpp"
 
 /* Local inclusions for inheritances. */
 #include "ServiceInterface.hpp"
@@ -43,9 +44,9 @@
 /* Local inclusions for usages. */
 #include "Libs/WaveFactory/Types.hpp"
 #include "Audio/TrackMixer.hpp"
-#include "Audio/ExternalInput.hpp"
+#include "Audio/AudioRecorder.hpp"
 #include "SettingKeys.hpp"
-#include "Source.hpp" // FIXME
+#include "Source.hpp"
 #include "SoundEnvironmentProperties.hpp"
 #include "Types.hpp"
 
@@ -62,13 +63,6 @@ namespace EmEn
 
 namespace EmEn::Audio
 {
-	/** @brief The playing mode enumeration. */
-	enum class PlayMode
-	{
-		Once,
-		Loop
-	};
-
 	/**
 	 * @brief The audio manager service class.
 	 * @note [OBS][STATIC-OBSERVABLE]
@@ -145,15 +139,15 @@ namespace EmEn::Audio
 			bool
 			usable () const noexcept override
 			{
-				return m_flags[ServiceInitialized];
+				return m_serviceInitialized;
 			}
 
 			/**
 			 * @brief Returns the reference to the track mixer service.
-			 * @return Audio::TrackMixer &
+			 * @return TrackMixer &
 			 */
 			[[nodiscard]]
-			Audio::TrackMixer &
+			TrackMixer &
 			trackMixer () noexcept
 			{
 				return m_trackMixer;
@@ -161,10 +155,10 @@ namespace EmEn::Audio
 
 			/**
 			 * @brief Returns the reference to the track mixer service.
-			 * @return const Audio::TrackMixer &
+			 * @return const TrackMixer &
 			 */
 			[[nodiscard]]
-			const Audio::TrackMixer &
+			const TrackMixer &
 			trackMixer () const noexcept
 			{
 				return m_trackMixer;
@@ -172,24 +166,24 @@ namespace EmEn::Audio
 
 			/**
 			 * @brief Returns the reference to the audio external input service.
-			 * @return ExternalInput &
+			 * @return AudioRecorder &
 			 */
 			[[nodiscard]]
-			ExternalInput &
-			externalInput () noexcept
+			AudioRecorder &
+			audioRecorder () noexcept
 			{
-				return m_externalInput;
+				return m_audioRecorder;
 			}
 
 			/**
 			 * @brief Returns the reference to the audio external input service.
-			 * @return const ExternalInput &
+			 * @return const AudioRecorder &
 			 */
 			[[nodiscard]]
-			const ExternalInput &
-			externalInput () const noexcept
+			const AudioRecorder &
+			audioRecorder () const noexcept
 			{
-				return m_externalInput;
+				return m_audioRecorder;
 			}
 
 			/**
@@ -207,43 +201,38 @@ namespace EmEn::Audio
 			bool
 			isAudioEnabled () const noexcept
 			{
-				return m_flags[Enabled];
+				return m_audioEnabled;
 			}
 
 			/**
-			 * @brief Returns the EFX extension checker.
-			 * @return std::shared_ptr< EFX >
+			 * @brief Returns a list a available output audio devices.
+			 * @return bool
 			 */
 			[[nodiscard]]
-			std::shared_ptr< EFX >
-			getEFX () noexcept
+			const std::vector< std::string > &
+			availableOutputDevices () const noexcept
 			{
-				return m_EFX;
+				return m_availableOutputDevices;
 			}
 
 			/**
-			 * @brief Returns the default Source.
-			 * @return std::shared_ptr< Source >
+			 * @brief Returns a list a available input audio devices.
+			 * @return bool
 			 */
 			[[nodiscard]]
-			std::shared_ptr< Source >
-			defaultSource () const noexcept
+			const std::vector< std::string > &
+			availableInputDevices () const noexcept
 			{
-				return m_defaultSource;
+				return m_availableInputDevices;
 			}
 
 			/**
 			 * @brief Plays a sound on the default source.
 			 * @param playable A reference to a playable interface smart pointer.
-			 * @param mode The play mode. Default Once.
+			 * @param mode The mode. Default Once.
 			 * @param gain The gain of the channel to play the sound.
 			 */
-			void
-			play (const std::shared_ptr< PlayableInterface > & playable, Source::PlayMode mode = Source::PlayMode::Once, float gain = 1.0F) const noexcept
-			{
-				m_defaultSource->setGain(gain);
-				m_defaultSource->play(playable, mode);
-			}
+			void play (const std::shared_ptr< PlayableInterface > & playable, PlayMode mode = PlayMode::Once, float gain = 1.0F) const noexcept;
 
 			/**
 			 * @brief Plays a sound on the default source.
@@ -251,7 +240,7 @@ namespace EmEn::Audio
 			 * @param mode The play mode. Default Once.
 			 * @param gain The gain of the channel to play the sound.
 			 */
-			void play (const std::string & resourceName, Source::PlayMode mode = Source::PlayMode::Once, float gain = 1.0F) const noexcept;
+			void play (const std::string & resourceName, PlayMode mode = PlayMode::Once, float gain = 1.0F) const noexcept;
 
 			/**
 			 * @brief Returns the API (OpenAL) information.
@@ -297,7 +286,7 @@ namespace EmEn::Audio
 
 			/**
 			 * @brief Changes the sound properties.
-			 * @param properties A reference to a sound environment properties.
+			 * @param properties A reference to a sound environment property structure.
 			 * @return void
 			 */
 			void setSoundEnvironmentProperties (const SoundEnvironmentProperties & properties) noexcept;
@@ -361,10 +350,10 @@ namespace EmEn::Audio
 
 			/**
 			 * @brief Returns an available audio source.
-			 * @return std::shared_ptr< Source >
+			 * @return SourceRequest
 			 */
 			[[nodiscard]]
-			std::shared_ptr< Source > requestSource () const noexcept;
+			SourceRequest requestSource () noexcept;
 
 			[[nodiscard]]
 			static
@@ -379,7 +368,6 @@ namespace EmEn::Audio
 			 * @todo This method must be removed!
 			 * @return Manager *
 			 */
-			//[[deprecated("This method must be removed !")]]
 			[[nodiscard]]
 			static
 			Manager *
@@ -400,11 +388,37 @@ namespace EmEn::Audio
 			void onRegisterToConsole () noexcept override;
 
 			/**
-			 * @brief Initialize all sub services of the renderer.
+			 * @brief Queries the available basic audio device and save it.
+			 * @param useExtendedAPI Use the extended API version of querying audio devices.
+			 * @return bool
+			 */
+			bool queryOutputDevices (bool useExtendedAPI) noexcept;
+
+			/**
+			 * @brief Queries the available basic audio device and save it.
+			 * @return bool
+			 */
+			bool queryInputDevices () noexcept;
+
+			/**
+			 * @brief Selects an output audio device to play sound and create a context with it.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool initializeSubServices () noexcept;
+			bool setupAudioOutputDevice () noexcept;
+
+			/**
+			 * @brief Selects an input audio device to record sound.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool setupAudioInputDevice () noexcept;
+
+			/**
+			 * @brief Release an unused source.
+			 * @return void
+			 */
+			void releaseSource (Source * source) noexcept;
 
 			/**
 			 * @brief Sets the doppler effect factor.
@@ -446,19 +460,6 @@ namespace EmEn::Audio
 			DistanceModel distanceModel () const noexcept;
 
 			/**
-			 * @brief Returns the split device name from the raw API data.
-			 * @param list The raw list from OpenAL.
-			 * @return std::vector< std::string >
-			 */
-			[[nodiscard]]
-			static std::vector< std::string > getDeviceName (const ALCchar * list) noexcept;
-
-			/**
-			 * @brief Queries the available device and save it.
-			 */
-			void queryDevices () noexcept;
-
-			/**
 			 * @brief Returns the device attributes.
 			 * @return std::vector< ALCint >
 			 */
@@ -483,26 +484,28 @@ namespace EmEn::Audio
 			PrimaryServices & m_primaryServices;
 			Resources::Manager & m_resourceManager;
 			TrackMixer m_trackMixer{m_primaryServices, m_resourceManager, *this};
-			ExternalInput m_externalInput{m_primaryServices};
-			std::vector< ServiceInterface * > m_subServicesEnabled;
-			ALCdevice * m_device{nullptr};
+			AudioRecorder m_audioRecorder;
+			std::vector< std::string > m_availableOutputDevices;
+			std::string m_selectedOutputDeviceName;
+			std::vector< std::string > m_availableInputDevices;
+			std::string m_selectedInputDeviceName;
+			ALCdevice * m_outputDevice{nullptr};
+			ALCdevice * m_inputDevice{nullptr};
 			ALCcontext * m_context{nullptr};
-			std::vector< std::string > m_availableAudioDevices;
-			std::shared_ptr< EFX > m_EFX;
 			std::map< ALCint, ALCint > m_contextAttributes;
 			std::shared_ptr< Source > m_defaultSource;
-			std::vector< std::shared_ptr< Source > > m_sources;
-			Libs::WaveFactory::Frequency m_playbackFrequency{Libs::WaveFactory::Frequency::PCM22050Hz};
+			std::vector< std::shared_ptr< Source > > m_allSources;
+			std::vector< Source * > m_availableSources;
+			mutable std::mutex m_sourcePoolMutex;
+			Libs::WaveFactory::Frequency m_playbackFrequency{Libs::WaveFactory::Frequency::PCM48000Hz};
+			Libs::WaveFactory::Frequency m_recordFrequency{Libs::WaveFactory::Frequency::PCM48000Hz};
 			size_t m_musicChunkSize{DefaultAudioMusicChunkSize};
-			std::array< bool, 8 > m_flags{
-				false/*ServiceInitialized*/,
-				false/*ShowInformation*/,
-				false/*AudioDisabledAtStartup*/,
-				false/*Enabled*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/
-			};
+			bool m_serviceInitialized{false};
+			bool m_showInformation{false};
+			bool m_audioSystemAvailable{false}; /* No audio device found to play sound. */
+			bool m_audioCaptureAvailable{false}; /* No audio capture device found to record sound. */
+			bool m_audioEnabled{false}; /* Dynamic switch for audio playback. Even if the audio system is available. */
+			bool m_usingAdvancedEnumeration{false};
+			bool m_isRecording{false};
 	};
 }

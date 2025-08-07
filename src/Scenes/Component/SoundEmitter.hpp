@@ -44,7 +44,7 @@ namespace EmEn::Scenes::Component
 {
 	/**
 	 * @brief Defines a sound source emitter.
-	 * @note You can virtually define infinite number of sound emitters, they are not strictly linked to hardware.
+	 * @note You can virtually define an infinite number of sound emitters, they are not strictly linked to hardware.
 	 * @extends EmEn::Scenes::Component::Abstract The base class for each entity component.
 	 * @extends EmEn::Libs::ObserverTrait This component observes sound loading events.
 	 */
@@ -201,32 +201,62 @@ namespace EmEn::Scenes::Component
 			 * @brief Stops the playing.
 			 * @return void
 			 */
-			void stop () const noexcept;
+			void stop () noexcept;
 
 			/**
 			 * @brief Pauses the playing.
 			 * @return void
 			 */
-			void pause () const noexcept;
+			void
+			pause () const noexcept
+			{
+				if ( m_source != nullptr )
+				{
+					m_source->pause();
+				}
+			}
 
 			/**
 			 * @brief Resumes a paused sound.
 			 * @return void
 			 */
-			void resume () const noexcept;
+			void
+			resume () const noexcept
+			{
+				if ( m_source != nullptr )
+				{
+					m_source->resume();
+				}
+			}
 
 			/**
 			 * @brief Rewinds the sound.
 			 * @return void
 			 */
-			void rewind () const noexcept;
+			void
+			rewind () const noexcept
+			{
+				if ( m_source != nullptr )
+				{
+					m_source->rewind();
+				}
+			}
 
 			/**
 			 * @brief Returns whether the source is playing something or not.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool isPlaying () const noexcept;
+			bool
+			isPlaying () const noexcept
+			{
+				if ( m_source == nullptr )
+				{
+					return false;
+				}
+
+				return m_source->isPlaying();
+			}
 
 			/**
 			 * @brief Removes attached sound.
@@ -244,28 +274,11 @@ namespace EmEn::Scenes::Component
 			bool onNotification (const Libs::ObservableTrait * observable, int notificationCode, const std::any & data) noexcept override;
 
 			/**
-			 * @brief Gets an available audio source from the manager.
-			 * @return bool
-			 */
-			bool requestSource () noexcept;
-
-			/**
 			 * @brief Updates the source properties with the entity.
-			 * @param worldCoordinates A reference to a coordinates.
+			 * @param worldCoordinates A reference to a coordinate.
 			 * @return void
 			 */
 			void updateSource (const Libs::Math::CartesianFrame< float > & worldCoordinates) const noexcept;
-
-			/**
-			 * @brief Release an audio source.
-			 * @return void
-			 */
-			void
-			releaseSource () noexcept
-			{
-				m_source->removeSound();
-				m_source.reset();
-			}
 
 			/**
 			 * @brief Plays the attached sound resource.
@@ -290,7 +303,7 @@ namespace EmEn::Scenes::Component
 			static constexpr auto Loop{UnusedFlag + 1UL};
 			static constexpr auto VelocityDistortionEnabled{UnusedFlag + 2UL};
 
-			std::shared_ptr< Audio::Source > m_source;
+			Audio::SourceRequest m_source;
 			std::shared_ptr< Audio::SoundResource > m_attachedSound;
 			float m_gain{8.0F};
 	};

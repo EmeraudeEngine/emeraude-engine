@@ -67,7 +67,7 @@ namespace EmEn::Audio
 	 * @return bool
 	 */
 	[[nodiscard]]
-	bool alcGetErrors (ALCdevice * device, const std::string & lastFunctionCalled = {"NO_AC_FUNCTION_REGISTERED"}, const std::string & filename = {"UNKNOWN"}, int line = -1) noexcept;
+	bool alcGetErrors (ALCdevice * device, const std::string & lastFunctionCalled = {"NO_ALC_FUNCTION_REGISTERED"}, const std::string & filename = {"UNKNOWN"}, int line = -1) noexcept;
 
 	/**
 	 * brief

@@ -34,7 +34,7 @@
 #include <memory>
 
 /* Third-party inclusions. */
-#include "OpenAL.EFX.hpp"
+#include "OpenALExtensions.hpp"
 
 /* Local inclusions for inheritances. */
 #include "AbstractObject.hpp"
@@ -44,6 +44,7 @@
 #include "Libs/Math/Vector.hpp"
 #include "EffectSlot.hpp"
 #include "PlayableInterface.hpp"
+#include "Types.hpp"
 
 namespace EmEn::Audio
 {
@@ -54,13 +55,6 @@ namespace EmEn::Audio
 	class Source final : public AbstractObject
 	{
 		public:
-
-			/** @brief The play mode enumerations. */
-			enum class PlayMode : uint8_t
-			{
-				Once,
-				Loop
-			};
 
 			/** @brief The source type enumerations. */
 			enum class SourceType : uint8_t
@@ -315,7 +309,7 @@ namespace EmEn::Audio
 
 			/**
 			 * @brief Higher method to set the attenuation parameters of the source.
-			 * @param rolloffFactor Set how quickly (higher number) the sound will lower or not. Default is 1.0F.
+			 * @param rolloffFactor Set how quickly (higher number) the sound will lower or not. The default is 1.0F.
 			 * @param referenceDistance Set from what distance the sound will execute to be lowered.
 			 * @param maxDistance Set the distance after which the sound will no longer be heard.
 			 * @return void
@@ -382,7 +376,7 @@ namespace EmEn::Audio
 			float
 			coneGainFacingAway () const noexcept
 			{
-				return EFX::isAvailable() ? this->getFloatValue(AL_CONE_OUTER_GAINHF, 1.0F) : 1.0F;
+				return OpenAL::isEFXAvailable() ? this->getFloatValue(AL_CONE_OUTER_GAINHF, 1.0F) : 1.0F;
 			}
 
 			/**
@@ -460,7 +454,7 @@ namespace EmEn::Audio
 			void setRelativeState (bool state) noexcept;
 
 			/**
-			 * @brief Returns whether is the source is muted or not (gain=0.0).
+			 * @brief Returns whether the source is muted or not (gain=0.0).
 			 * @return bool
 			 */
 			[[nodiscard]]
@@ -471,7 +465,7 @@ namespace EmEn::Audio
 			}
 
 			/**
-			 * @brief Returns whether is the source is playing or not.
+			 * @brief Returns whether the source is playing or not.
 			 * @return bool
 			 */
 			[[nodiscard]]
@@ -482,8 +476,8 @@ namespace EmEn::Audio
 			}
 
 			/**
-			 * @brief Returns whether is the source is paused or not.
-			 * @note This state keep the sound reading cursor.
+			 * @brief Returns whether the source is paused or not.
+			 * @note This state keeps the sound reading cursor.
 			 * @return bool
 			 */
 			[[nodiscard]]
@@ -494,7 +488,7 @@ namespace EmEn::Audio
 			}
 
 			/**
-			 * @brief Returns whether is the source is stopped or not.
+			 * @brief Returns whether the source is stopped or not.
 			 * @return bool
 			 */
 			[[nodiscard]]
@@ -529,7 +523,7 @@ namespace EmEn::Audio
 			/**
 			 * @brief Adds an effect on the source.
 			 * @warning This method only works with the EFX extension.
-			 * @param effect A reference to a effect smart pointer.
+			 * @param effect A reference to an effect smart pointer.
 			 * @param channel The index of the slot. Default 0.
 			 * @return bool
 			 */
@@ -547,7 +541,7 @@ namespace EmEn::Audio
 			/**
 			 * @brief Adds effects and a filter on the source.
 			 * @warning This method only works with the EFX extension.
-			 * @param effect A reference to a effect smart pointer.
+			 * @param effect A reference to an effect smart pointer.
 			 * @param filter A reference to a filter smart pointer.
 			 * @param channel The index of the slot. Default 0.
 			 * @return bool
@@ -586,7 +580,7 @@ namespace EmEn::Audio
 			void disableDirectFilter () noexcept;
 
 			/**
-			 * @brief Plays a sound or a music (streamed) to the source.
+			 * @brief Plays a sound or music (streamed) to the source.
 			 * @note If something is playing or paused. It will be stopped and/or removed.
 			 * @param playableInterface A reference to a playable interface smart pointer.
 			 * @param mode The playing mode. Default once.
@@ -690,7 +684,7 @@ namespace EmEn::Audio
 			bool prepareEffectSlot (int channel) noexcept;
 
 			/**
-			 * @brief Returns the number of buffer queued to the audio source.
+			 * @brief Returns the amount of buffer queued to the audio source.
 			 * @return int
 			 */
 			[[nodiscard]]
@@ -701,7 +695,7 @@ namespace EmEn::Audio
 			}
 
 			/**
-			 * @brief Returns the number of buffer already played by the audio source.
+			 * @brief Returns the amount of buffer already played by the audio source.
 			 * @return int
 			 */
 			[[nodiscard]]
@@ -738,4 +732,6 @@ namespace EmEn::Audio
 			std::shared_ptr< PlayableInterface > m_currentPlayableInterface;
 			float m_previousGain{1.0F};
 	};
+
+	using SourceRequest = std::unique_ptr< Source, std::function< void( Source * ) > >;
 }

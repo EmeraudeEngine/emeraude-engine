@@ -30,12 +30,12 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
-#include <vector>
 
 /* Local inclusions for inheritances. */
 #include "AbstractDeviceDependentObject.hpp"
 
 /* Local inclusions for usages. */
+#include "Libs/StaticVector.hpp"
 #include "Libs/PixelFactory/Color.hpp"
 #include "Graphics/Types.hpp"
 #include "RenderPass.hpp"
@@ -165,7 +165,7 @@ namespace EmEn::Vulkan
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool configureShaderStages (const std::vector< std::shared_ptr< Vulkan::ShaderModule > > & shaderModules) noexcept;
+			bool configureShaderStages (const Libs::StaticVector< std::shared_ptr< ShaderModule >, 5 > & shaderModules) noexcept;
 
 			/**
 			 * @brief Generates vertex input state into the graphics pipeline createInfo.
@@ -220,7 +220,7 @@ namespace EmEn::Vulkan
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool configureRasterizationState (VkPipelineRasterizationStateCreateInfo createInfo) noexcept;
+			bool configureRasterizationState (const VkPipelineRasterizationStateCreateInfo & createInfo) noexcept;
 
 			/**
 			 * @brief Generates multisample state into the graphics pipeline createInfo.
@@ -260,7 +260,7 @@ namespace EmEn::Vulkan
 			 * @brief Generates color blend state into the graphics pipeline createInfo.
 			 * @param renderPassType The render pass type.
 			 * @param material A reference to the material.
-			 * @param blendColor A reference to a color for blend operation. Default Black.
+			 * @param blendColor A reference to a color for the blend operation. Default Black.
 			 * @param flags Flags value for this stage. Default 0.
 			 * @return bool
 			 */
@@ -274,7 +274,7 @@ namespace EmEn::Vulkan
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool configureColorBlendState (const std::vector< VkPipelineColorBlendAttachmentState > & attachments, const VkPipelineColorBlendStateCreateInfo & createInfo) noexcept;
+			bool configureColorBlendState (const Libs::StaticVector< VkPipelineColorBlendAttachmentState, 8 > & attachments, const VkPipelineColorBlendStateCreateInfo & createInfo) noexcept;
 
 			/**
 			 * @brief Generates dynamic state into the graphics pipeline createInfo.
@@ -283,7 +283,7 @@ namespace EmEn::Vulkan
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool configureDynamicStates (const std::vector< VkDynamicState > & dynamicStates, VkPipelineDynamicStateCreateFlags flags = 0) noexcept;
+			bool configureDynamicStates (const Libs::StaticVector< VkDynamicState, 16 > & dynamicStates, VkPipelineDynamicStateCreateFlags flags = 0) noexcept;
 
 			/**
 			 * @brief Finalizes the configuration of the graphics pipeline.
@@ -331,10 +331,10 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Returns the list of color blend attachments.
-			 * @return const std::vector< VkPipelineColorBlendAttachmentState > &
+			 * @return const Libs::StaticVector< VkPipelineColorBlendAttachmentState, 8 > &
 			 */
 			[[nodiscard]]
-			const std::vector< VkPipelineColorBlendAttachmentState > &
+			const Libs::StaticVector< VkPipelineColorBlendAttachmentState, 8 > &
 			colorBlendAttachments () const noexcept
 			{
 				return m_colorBlendAttachments;
@@ -368,19 +368,19 @@ namespace EmEn::Vulkan
 
 			VkPipeline m_handle{VK_NULL_HANDLE};
 			VkGraphicsPipelineCreateInfo m_createInfo{};
-			std::vector< VkPipelineShaderStageCreateInfo > m_shaderStages;
+			Libs::StaticVector< VkPipelineShaderStageCreateInfo, 5 > m_shaderStages;
 			VkPipelineVertexInputStateCreateInfo m_vertexInputState{};
 			VkPipelineInputAssemblyStateCreateInfo m_inputAssemblyState{};
 			VkPipelineTessellationStateCreateInfo m_tessellationState{};
-			std::vector< VkViewport > m_viewports;
-			std::vector< VkRect2D > m_scissors;
+			Libs::StaticVector< VkViewport, 4 > m_viewports;
+			Libs::StaticVector< VkRect2D, 4 > m_scissors;
 			VkPipelineViewportStateCreateInfo m_viewportState{};
 			VkPipelineRasterizationStateCreateInfo m_rasterizationState{};
 			VkPipelineMultisampleStateCreateInfo m_multisampleState{};
 			VkPipelineDepthStencilStateCreateInfo m_depthStencilState{};
-			std::vector< VkPipelineColorBlendAttachmentState > m_colorBlendAttachments;
+			Libs::StaticVector< VkPipelineColorBlendAttachmentState, 8 > m_colorBlendAttachments;
 			VkPipelineColorBlendStateCreateInfo m_colorBlendState{};
-			std::vector< VkDynamicState > m_dynamicStates;
+			Libs::StaticVector< VkDynamicState, 16 > m_dynamicStates;
 			VkPipelineDynamicStateCreateInfo m_dynamicState{};
 	};
 }

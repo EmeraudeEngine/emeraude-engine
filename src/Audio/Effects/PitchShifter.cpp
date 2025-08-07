@@ -27,9 +27,9 @@
 #include "PitchShifter.hpp"
 
 /* Local inclusions. */
-#include "Tracer.hpp"
-#include "Audio/OpenAL.EFX.hpp"
+#include "Audio/OpenALExtensions.hpp"
 #include "Audio/Utility.hpp"
+#include "Tracer.hpp"
 
 namespace EmEn::Audio::Effects
 {
@@ -42,7 +42,7 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		EFX::alEffecti(this->identifier(), AL_EFFECT_TYPE, AL_EFFECT_PITCH_SHIFTER);
+		OpenAL::alEffecti(this->identifier(), AL_EFFECT_TYPE, AL_EFFECT_PITCH_SHIFTER);
 
 		if ( alGetErrors("alEffecti()", __FILE__, __LINE__) )
 		{
@@ -53,19 +53,19 @@ namespace EmEn::Audio::Effects
 	void
 	PitchShifter::resetProperties () noexcept
 	{
-		if ( !EFX::isAvailable() )
+		if ( !OpenAL::isEFXAvailable() )
 		{
 			return;
 		}
 
-		EFX::alEffecti(this->identifier(), AL_PITCH_SHIFTER_COARSE_TUNE, AL_PITCH_SHIFTER_DEFAULT_COARSE_TUNE);
-		EFX::alEffecti(this->identifier(), AL_PITCH_SHIFTER_FINE_TUNE, AL_PITCH_SHIFTER_DEFAULT_FINE_TUNE);
+		OpenAL::alEffecti(this->identifier(), AL_PITCH_SHIFTER_COARSE_TUNE, AL_PITCH_SHIFTER_DEFAULT_COARSE_TUNE);
+		OpenAL::alEffecti(this->identifier(), AL_PITCH_SHIFTER_FINE_TUNE, AL_PITCH_SHIFTER_DEFAULT_FINE_TUNE);
 	}
 
 	void
 	PitchShifter::setShifterCoarseTune (int value) noexcept
 	{
-		if ( !EFX::isAvailable() )
+		if ( !OpenAL::isEFXAvailable() )
 		{
 			return;
 		}
@@ -77,13 +77,13 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		EFX::alEffecti(this->identifier(), AL_PITCH_SHIFTER_COARSE_TUNE, value);
+		OpenAL::alEffecti(this->identifier(), AL_PITCH_SHIFTER_COARSE_TUNE, value);
 	}
 
 	void
 	PitchShifter::setShifterFineTune (int value) noexcept
 	{
-		if ( !EFX::isAvailable() )
+		if ( !OpenAL::isEFXAvailable() )
 		{
 			return;
 		}
@@ -95,7 +95,7 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		EFX::alEffecti(this->identifier(), AL_PITCH_SHIFTER_FINE_TUNE, value);
+		OpenAL::alEffecti(this->identifier(), AL_PITCH_SHIFTER_FINE_TUNE, value);
 	}
 
 	int
@@ -103,9 +103,9 @@ namespace EmEn::Audio::Effects
 	{
 		ALint value = 0;
 
-		if ( EFX::isAvailable() )
+		if ( OpenAL::isEFXAvailable() )
 		{
-			EFX::alGetEffecti(this->identifier(), AL_PITCH_SHIFTER_COARSE_TUNE, &value);
+			OpenAL::alGetEffecti(this->identifier(), AL_PITCH_SHIFTER_COARSE_TUNE, &value);
 		}
 
 		return value;
@@ -116,9 +116,9 @@ namespace EmEn::Audio::Effects
 	{
 		ALint value = 0;
 
-		if ( EFX::isAvailable() )
+		if ( OpenAL::isEFXAvailable() )
 		{
-			EFX::alGetEffecti(this->identifier(), AL_PITCH_SHIFTER_FINE_TUNE, &value);
+			OpenAL::alGetEffecti(this->identifier(), AL_PITCH_SHIFTER_FINE_TUNE, &value);
 		}
 
 		return value;

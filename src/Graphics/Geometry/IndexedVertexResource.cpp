@@ -104,7 +104,7 @@ namespace EmEn::Graphics::Geometry
 	IndexedVertexResource::createVideoMemoryBuffers (TransferManager & transferManager, const std::vector< float > & vertexAttributes, uint32_t vertexCount, uint32_t vertexElementCount, const std::vector< uint32_t > & indices) noexcept
 	{
 		m_vertexBufferObject = std::make_unique< VertexBufferObject >(transferManager.device(), vertexCount, vertexElementCount);
-		m_vertexBufferObject->setIdentifier(this->name() + "-VBO-VertexBufferObject");
+		m_vertexBufferObject->setIdentifier(ClassId, this->name(), "VertexBufferObject");
 
 		if ( !m_vertexBufferObject->create(transferManager, vertexAttributes) )
 		{
@@ -116,7 +116,7 @@ namespace EmEn::Graphics::Geometry
 		}
 
 		m_indexBufferObject = std::make_unique< IndexBufferObject >(transferManager.device(), static_cast< uint32_t >(indices.size()));
-		m_indexBufferObject->setIdentifier(this->name() + "-IBO-IndexBufferObject");
+		m_indexBufferObject->setIdentifier(ClassId, this->name(), "IndexBufferObject");
 
 		if ( !m_indexBufferObject->create(transferManager, indices) )
 		{

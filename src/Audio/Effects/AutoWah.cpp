@@ -27,9 +27,9 @@
 #include "AutoWah.hpp"
 
 /* Local inclusions. */
-#include "Tracer.hpp"
-#include "Audio/OpenAL.EFX.hpp"
+#include "Audio/OpenALExtensions.hpp"
 #include "Audio/Utility.hpp"
+#include "Tracer.hpp"
 
 namespace EmEn::Audio::Effects
 {
@@ -42,7 +42,7 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		EFX::alEffecti(this->identifier(), AL_EFFECT_TYPE, AL_EFFECT_AUTOWAH);
+		OpenAL::alEffecti(this->identifier(), AL_EFFECT_TYPE, AL_EFFECT_AUTOWAH);
 
 		if ( alGetErrors("alEffecti()", __FILE__, __LINE__) )
 		{
@@ -53,21 +53,21 @@ namespace EmEn::Audio::Effects
 	void
 	AutoWah::resetProperties () noexcept
 	{
-		if ( !EFX::isAvailable() )
+		if ( !OpenAL::isEFXAvailable() )
 		{
 			return;
 		}
 
-		EFX::alEffectf(this->identifier(), AL_AUTOWAH_ATTACK_TIME, AL_AUTOWAH_DEFAULT_ATTACK_TIME);
-		EFX::alEffectf(this->identifier(), AL_AUTOWAH_RELEASE_TIME, AL_AUTOWAH_DEFAULT_RELEASE_TIME);
-		EFX::alEffectf(this->identifier(), AL_AUTOWAH_RESONANCE, AL_AUTOWAH_DEFAULT_RESONANCE);
-		EFX::alEffectf(this->identifier(), AL_AUTOWAH_PEAK_GAIN, AL_AUTOWAH_DEFAULT_PEAK_GAIN);
+		OpenAL::alEffectf(this->identifier(), AL_AUTOWAH_ATTACK_TIME, AL_AUTOWAH_DEFAULT_ATTACK_TIME);
+		OpenAL::alEffectf(this->identifier(), AL_AUTOWAH_RELEASE_TIME, AL_AUTOWAH_DEFAULT_RELEASE_TIME);
+		OpenAL::alEffectf(this->identifier(), AL_AUTOWAH_RESONANCE, AL_AUTOWAH_DEFAULT_RESONANCE);
+		OpenAL::alEffectf(this->identifier(), AL_AUTOWAH_PEAK_GAIN, AL_AUTOWAH_DEFAULT_PEAK_GAIN);
 	}
 
 	void
 	AutoWah::setAttackTime (float value) noexcept
 	{
-		if ( !EFX::isAvailable() )
+		if ( !OpenAL::isEFXAvailable() )
 		{
 			return;
 		}
@@ -79,13 +79,13 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		EFX::alEffectf(this->identifier(), AL_AUTOWAH_ATTACK_TIME, value);
+		OpenAL::alEffectf(this->identifier(), AL_AUTOWAH_ATTACK_TIME, value);
 	}
 
 	void
 	AutoWah::setReleaseTime (float value) noexcept
 	{
-		if ( !EFX::isAvailable() )
+		if ( !OpenAL::isEFXAvailable() )
 		{
 			return;
 		}
@@ -97,13 +97,13 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		EFX::alEffectf(this->identifier(), AL_AUTOWAH_RELEASE_TIME, value);
+		OpenAL::alEffectf(this->identifier(), AL_AUTOWAH_RELEASE_TIME, value);
 	}
 
 	void
 	AutoWah::setResonance (float value) noexcept
 	{
-		if ( !EFX::isAvailable() )
+		if ( !OpenAL::isEFXAvailable() )
 		{
 			return;
 		}
@@ -115,13 +115,13 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		EFX::alEffectf(this->identifier(), AL_AUTOWAH_RESONANCE, value);
+		OpenAL::alEffectf(this->identifier(), AL_AUTOWAH_RESONANCE, value);
 	}
 
 	void
 	AutoWah::setPeakGain (float value) noexcept
 	{
-		if ( !EFX::isAvailable() )
+		if ( !OpenAL::isEFXAvailable() )
 		{
 			return;
 		}
@@ -133,7 +133,7 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		EFX::alEffectf(this->identifier(), AL_AUTOWAH_PEAK_GAIN, value);
+		OpenAL::alEffectf(this->identifier(), AL_AUTOWAH_PEAK_GAIN, value);
 	}
 
 	float
@@ -141,9 +141,9 @@ namespace EmEn::Audio::Effects
 	{
 		ALfloat value = 0.0F;
 
-		if ( EFX::isAvailable() )
+		if ( OpenAL::isEFXAvailable() )
 		{
-			EFX::alGetEffectf(this->identifier(), AL_AUTOWAH_ATTACK_TIME, &value);
+			OpenAL::alGetEffectf(this->identifier(), AL_AUTOWAH_ATTACK_TIME, &value);
 		}
 
 		return value;
@@ -154,9 +154,9 @@ namespace EmEn::Audio::Effects
 	{
 		ALfloat value = 0.0F;
 
-		if ( EFX::isAvailable() )
+		if ( OpenAL::isEFXAvailable() )
 		{
-			EFX::alGetEffectf(this->identifier(), AL_AUTOWAH_RELEASE_TIME, &value);
+			OpenAL::alGetEffectf(this->identifier(), AL_AUTOWAH_RELEASE_TIME, &value);
 		}
 
 		return value;
@@ -167,9 +167,9 @@ namespace EmEn::Audio::Effects
 	{
 		ALfloat value = 0.0F;
 
-		if ( EFX::isAvailable() )
+		if ( OpenAL::isEFXAvailable() )
 		{
-			EFX::alGetEffectf(this->identifier(), AL_AUTOWAH_RESONANCE, &value);
+			OpenAL::alGetEffectf(this->identifier(), AL_AUTOWAH_RESONANCE, &value);
 		}
 
 		return value;
@@ -180,9 +180,9 @@ namespace EmEn::Audio::Effects
 	{
 		ALfloat value = 0.0F;
 
-		if ( EFX::isAvailable() )
+		if ( OpenAL::isEFXAvailable() )
 		{
-			EFX::alGetEffectf(this->identifier(), AL_AUTOWAH_PEAK_GAIN, &value);
+			OpenAL::alGetEffectf(this->identifier(), AL_AUTOWAH_PEAK_GAIN, &value);
 		}
 
 		return value;

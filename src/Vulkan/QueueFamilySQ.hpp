@@ -91,7 +91,7 @@ namespace EmEn::Vulkan
 			/** @copydoc EmEn::Vulkan::QueueFamilyInterface::declareQueueStructure() */
 			[[nodiscard]]
 			bool
-			declareQueueStructure (const std::vector< std::pair< QueueJob, float > > & /*structure*/) noexcept override
+			declareQueueStructure (const Libs::StaticVector< std::pair< QueueJob, float >, 16 > & /*structure*/) noexcept override
 			{
 				Tracer::error(ClassId, "This is a single queue family !");
 

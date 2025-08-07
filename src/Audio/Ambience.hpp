@@ -97,9 +97,9 @@ namespace EmEn::Audio
 			}
 
 			/**
-			 * @brief Sets the number of sound that can be played simultaneously.
+			 * @brief Sets the number of sounds that can be played simultaneously.
 			 * @note This will change after a call to start().
-			 * @param count The number of channel.
+			 * @param count The number of channels.
 			 * @return void
 			 */
 			void
@@ -109,7 +109,7 @@ namespace EmEn::Audio
 			}
 
 			/**
-			 * @brief Returns the number of sound that can be played simultaneously.
+			 * @brief Returns the number of sounds that can be played simultaneously.
 			 * @return size_t
 			 */
 			[[nodiscard]]
@@ -252,7 +252,7 @@ namespace EmEn::Audio
 			}
 
 			/**
-			 * @brief Returns whether this ambience needs a sound effect channels.
+			 * @brief Returns whether this ambience needs a sound effect channel.
 			 * @return bool
 			 */
 			[[nodiscard]]

@@ -152,8 +152,8 @@ namespace EmEn::Graphics::Material
 			const auto & specularData = data[SpecularString];
 
 			this->setSpecularComponent(
-				FastJSON::getColor(specularData, JKColor, DefaultSpecularColor),
-				FastJSON::getNumber< float >(specularData, JKShininess, DefaultShininess)
+				FastJSON::getValue< PixelFactory::Color< float > >(specularData, JKColor).value_or(DefaultSpecularColor),
+				FastJSON::getValue< float >(specularData, JKShininess).value_or(DefaultShininess)
 			);
 		}
 
@@ -172,7 +172,7 @@ namespace EmEn::Graphics::Material
 
 			const auto & autoIlluminationData = data[AutoIlluminationString];
 
-			this->setAutoIlluminationAmount(FastJSON::getNumber< float >(autoIlluminationData, JKValue, DefaultAutoIllumination));
+			this->setAutoIlluminationAmount(FastJSON::getValue< float >(autoIlluminationData, JKValue).value_or(DefaultAutoIllumination));
 		}
 
 		/* Check the optional global opacity. */

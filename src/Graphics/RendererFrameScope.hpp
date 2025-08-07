@@ -5,9 +5,13 @@
 #include <memory>
 #include <vector>
 #include <string>
+#include <sstream>
 
 /* Third-party inclusions. */
 #include <vulkan/vulkan.h>
+
+/* Local usages. */
+#include "Libs/StaticVector.hpp"
 
 /* Forward declarations. */
 namespace EmEn::Vulkan
@@ -88,10 +92,10 @@ namespace EmEn::Graphics
 
 			/**
 			 * @brief Returns primary semaphores ready to use with vkQueueSubmit().
-			 * @return std::vector< VkSemaphore > &
+			 * @return Libs::Storage< VkSemaphore, 16 > &
 			 */
 			[[nodiscard]]
-			std::vector< VkSemaphore > &
+			Libs::StaticVector< VkSemaphore, 16 > &
 			primarySemaphores () noexcept
 			{
 				return m_primarySemaphores;
@@ -99,10 +103,10 @@ namespace EmEn::Graphics
 
 			/**
 			 * @brief Returns secondary semaphores ready to use with vkQueueSubmit().
-			 * @return std::vector< VkSemaphore > &
+			 * @return Libs::Storage< VkSemaphore, 16 > &
 			 */
 			[[nodiscard]]
-			std::vector< VkSemaphore > &
+			Libs::StaticVector< VkSemaphore, 16 > &
 			secondarySemaphores () noexcept
 			{
 				return m_secondarySemaphores;
@@ -127,12 +131,21 @@ namespace EmEn::Graphics
 			 * @return std::string
 			 */
 			[[nodiscard]]
-			static std::string getFrameName (uint32_t frameIndex) noexcept;
+			static
+			std::string
+			getFrameName (uint32_t frameIndex) noexcept
+			{
+				std::stringstream frameName;
+
+				frameName << "Frame" << frameIndex;
+
+				return frameName.str();
+			}
 
 			std::shared_ptr< Vulkan::CommandPool > m_commandPool;
 			std::shared_ptr< Vulkan::CommandBuffer > m_commandBuffer;
-			std::vector< VkSemaphore > m_primarySemaphores;
-			std::vector< VkSemaphore > m_secondarySemaphores;
+			Libs::StaticVector< VkSemaphore, 16 > m_primarySemaphores;
+			Libs::StaticVector< VkSemaphore, 16 > m_secondarySemaphores;
 			uint32_t m_frameIndex{0};
 	};
 }

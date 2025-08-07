@@ -106,8 +106,10 @@ namespace EmEn::Graphics::RenderTarget
 	}
 
 	bool
-	Abstract::createColorBuffer (const std::shared_ptr< Device > & device, std::shared_ptr< Image > & image, std::shared_ptr< ImageView > & imageView, const std::string & purposeId) const noexcept
+	Abstract::createColorBuffer (const std::shared_ptr< Device > & device, std::shared_ptr< Image > & image, std::shared_ptr< ImageView > & imageView, const std::string & identifier) const noexcept
 	{
+		const auto instanceID = identifier + "ColorBuffer";
+
 		image = std::make_shared< Image >(
 			device,
 			VK_IMAGE_TYPE_2D,
@@ -118,14 +120,14 @@ namespace EmEn::Graphics::RenderTarget
 			0, // flags
 			1, // Image mip levels
 			1, //m_createInfo.imageArrayLayers, // Image array layers
-			VK_SAMPLE_COUNT_1_BIT, // Image multi sampling
-			VK_IMAGE_TILING_OPTIMAL // Image tiling
+			VK_SAMPLE_COUNT_1_BIT,
+			VK_IMAGE_TILING_OPTIMAL
 		);
-		image->setIdentifier(purposeId + "-Image");
+		image->setIdentifier(TracerTag, instanceID, "Image");
 
 		if ( !image->createOnHardware() )
 		{
-			TraceError{TracerTag} << "Unable to create image '" << purposeId << "' !";
+			TraceError{TracerTag} << "Unable to create image '" << instanceID << "' !";
 
 			return false;
 		}
@@ -143,11 +145,11 @@ namespace EmEn::Graphics::RenderTarget
 				.layerCount = imageCreateInfo.arrayLayers
 			}
 		);
-		imageView->setIdentifier(purposeId + "-ImageView");
+		imageView->setIdentifier(TracerTag, instanceID, "ImageView");
 
 		if ( !imageView->createOnHardware() )
 		{
-			TraceFatal{TracerTag} << "Unable to create image view '" << purposeId << "' !";
+			TraceFatal{TracerTag} << "Unable to create image view '" << instanceID << "' !";
 
 			return false;
 		}
@@ -156,8 +158,10 @@ namespace EmEn::Graphics::RenderTarget
 	}
 
 	bool
-	Abstract::createDepthBuffer (const std::shared_ptr< Device > & device, std::shared_ptr< Image > & image, std::shared_ptr< ImageView > & imageView, const std::string & purposeId) const noexcept
+	Abstract::createDepthBuffer (const std::shared_ptr< Device > & device, std::shared_ptr< Image > & image, std::shared_ptr< ImageView > & imageView, const std::string & identifier) const noexcept
 	{
+		const auto instanceID = identifier + "DepthBuffer";
+
 		image = std::make_shared< Image >(
 			device,
 			VK_IMAGE_TYPE_2D,
@@ -168,14 +172,14 @@ namespace EmEn::Graphics::RenderTarget
 			0, // flags
 			1, // Image mip levels
 			1, //m_createInfo.imageArrayLayers, // Image array layers
-			VK_SAMPLE_COUNT_1_BIT, // Image multi sampling
-			VK_IMAGE_TILING_OPTIMAL // Image tiling
+			VK_SAMPLE_COUNT_1_BIT,
+			VK_IMAGE_TILING_OPTIMAL
 		);
-		image->setIdentifier(purposeId + "-Image");
+		image->setIdentifier(TracerTag, instanceID, "Image");
 
 		if ( !image->createOnHardware() )
 		{
-			TraceError{TracerTag} << "Unable to create image '" << purposeId << "' !";
+			TraceError{TracerTag} << "Unable to create image '" << instanceID << "' !";
 
 			return false;
 		}
@@ -193,11 +197,11 @@ namespace EmEn::Graphics::RenderTarget
 				.layerCount = imageCreateInfo.arrayLayers
 			}
 		);
-		imageView->setIdentifier(purposeId + "D-ImageView");
+		imageView->setIdentifier(TracerTag, instanceID, "ImageView");
 
 		if ( !imageView->createOnHardware() )
 		{
-			TraceFatal{TracerTag} << "Unable to create image view '" << purposeId << "' !";
+			TraceFatal{TracerTag} << "Unable to create image view '" << instanceID << "' !";
 
 			return false;
 		}
@@ -206,12 +210,14 @@ namespace EmEn::Graphics::RenderTarget
 	}
 
 	bool
-	Abstract::createDepthStencilBuffer (const std::shared_ptr< Device > & device, std::shared_ptr< Image > & image, std::shared_ptr< ImageView > & depthImageView, std::shared_ptr< ImageView > & stencilImageView, const std::string & purposeId) noexcept
+	Abstract::createDepthStencilBuffer (const std::shared_ptr< Device > & device, std::shared_ptr< Image > & image, std::shared_ptr< ImageView > & depthImageView, std::shared_ptr< ImageView > & stencilImageView, const std::string & identifier) noexcept
 	{
-		if ( !this->createDepthBuffer(device, image, depthImageView, purposeId) )
+		if ( !this->createDepthBuffer(device, image, depthImageView, identifier) )
 		{
 			return false;
 		}
+
+		const auto instanceID = identifier + "StencilBuffer";
 
 		const auto & imageCreateInfo = image->createInfo();
 
@@ -219,18 +225,18 @@ namespace EmEn::Graphics::RenderTarget
 			image,
 			VK_IMAGE_VIEW_TYPE_2D,
 			VkImageSubresourceRange{
-				.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
+				.aspectMask = VK_IMAGE_ASPECT_STENCIL_BIT,
 				.baseMipLevel = 0,
 				.levelCount = imageCreateInfo.mipLevels,
 				.baseArrayLayer = 0,
 				.layerCount = imageCreateInfo.arrayLayers
 			}
 		);
-		stencilImageView->setIdentifier(purposeId + "S-ImageView");
+		stencilImageView->setIdentifier(TracerTag, instanceID, "ImageView");
 
 		if ( !stencilImageView->createOnHardware() )
 		{
-			TraceFatal{TracerTag} << "Unable to create image view '" << purposeId << "' !";
+			TraceFatal{TracerTag} << "Unable to create image view '" << instanceID << "' !";
 
 			return false;
 		}

@@ -30,13 +30,14 @@
 #include "Abstract.hpp"
 
 /* Local inclusions for usages. */
-#include "Graphics/Renderer.hpp"
-#include "Graphics/ViewMatrices2DUBO.hpp"
-#include "Graphics/ViewMatrices3DUBO.hpp"
 #include "Vulkan/Framebuffer.hpp"
 #include "Vulkan/Image.hpp"
 #include "Vulkan/ImageView.hpp"
+#include "Vulkan/Sampler.hpp"
 #include "Vulkan/Instance.hpp"
+#include "Graphics/Renderer.hpp"
+#include "Graphics/ViewMatrices2DUBO.hpp"
+#include "Graphics/ViewMatrices3DUBO.hpp"
 
 namespace EmEn::Graphics::RenderTarget
 {
@@ -182,6 +183,17 @@ namespace EmEn::Graphics::RenderTarget
 				return m_depthImageView;
 			}
 
+			/**
+			 * @brief Returns the shadow map compare sampler.
+			 * @return std::shared_ptr< Vulkan::Sampler >
+			 */
+			[[nodiscard]]
+			std::shared_ptr< Vulkan::Sampler >
+			sampler () const noexcept
+			{
+				return m_sampler;
+			}
+
 			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::isValid() */
 			[[nodiscard]]
 			bool
@@ -204,6 +216,13 @@ namespace EmEn::Graphics::RenderTarget
 				if ( m_depthImageView == nullptr || !m_depthImageView->isCreated() )
 				{
 					TraceError{ClassId} << "The render target '" << this->id() << "' (Shadow) depth image view is missing or not created !";
+
+					return false;
+				}
+
+				if ( m_sampler == nullptr ||  !m_sampler->isCreated() )
+				{
+					TraceError{ClassId} << "The render target '" << this->id() << "' (Shadow) sampler is missing or not created !";
 
 					return false;
 				}
@@ -236,16 +255,16 @@ namespace EmEn::Graphics::RenderTarget
 				}
 			}
 
-			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::onSourceConnected() */
+			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::onInputDeviceConnected() */
 			void
-			onSourceConnected (AVConsole::AVManagers & AVManagers, AbstractVirtualDevice * /*sourceDevice*/) noexcept override
+			onInputDeviceConnected (AVConsole::AVManagers & AVManagers, AbstractVirtualDevice * /*sourceDevice*/) noexcept override
 			{
 				m_viewMatrices.create(AVManagers.graphicsRenderer, this->id());
 			}
 
 			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::onSourceDisconnected() */
 			void
-			onSourceDisconnected (AVConsole::AVManagers & /*AVManagers*/, AbstractVirtualDevice * /*sourceDevice*/) noexcept override
+			onInputDeviceDisconnected (AVConsole::AVManagers & /*AVManagers*/, AbstractVirtualDevice * /*sourceDevice*/) noexcept override
 			{
 				m_viewMatrices.destroy();
 			}
@@ -258,6 +277,17 @@ namespace EmEn::Graphics::RenderTarget
 				if ( !this->createImages(renderer.device()) )
 				{
 					TraceError{ClassId} << "Unable to create image buffers for shadow map '" << this->id() << "' !";
+
+					return false;
+				}
+
+				/* Create a sampler for the texture. */
+				m_sampler = renderer.getSampler(0, 0);
+				m_sampler->setIdentifier(ClassId, this->id(), "Sampler");
+
+				if ( m_sampler == nullptr )
+				{
+					Tracer::error(ClassId, "Unable to get a sampler !");
 
 					return false;
 				}
@@ -276,12 +306,19 @@ namespace EmEn::Graphics::RenderTarget
 			void
 			onDestroy () noexcept override
 			{
-				/* Depth buffer. */
-				m_depthImageView.reset();
-				m_depthImage.reset();
-
-				/* Framebuffer. */
+				/* First, destroy the framebuffer. */
 				m_framebuffer.reset();
+
+				/* Next, destroy the sampler. */
+				m_sampler.reset();
+
+				/* Next, destroy the image views. */
+				m_depthImageView.reset();
+				m_debugImageView.reset();
+
+				/* Finally, destroy the images. */
+				m_depthImage.reset();
+				m_debugImage.reset();
 			}
 
 			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::createRenderPass() */
@@ -294,7 +331,7 @@ namespace EmEn::Graphics::RenderTarget
 
 				if ( !renderPass->isCreated() )
 				{
-					/* Prepare a sub-pass for the render pass. */
+					/* Prepare a subpass for the render pass. */
 					Vulkan::RenderSubPass subPass{VK_PIPELINE_BIND_POINT_GRAPHICS, 0};
 
 					/* Color buffer. */
@@ -326,7 +363,7 @@ namespace EmEn::Graphics::RenderTarget
 					renderPass->addSubPassDependency({
 						.srcSubpass = VK_SUBPASS_EXTERNAL,
 						.dstSubpass = 0,
-						.srcStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+						.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, //VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
 						.dstStageMask = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
 						.srcAccessMask = VK_ACCESS_SHADER_READ_BIT,
 						.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
@@ -363,60 +400,54 @@ namespace EmEn::Graphics::RenderTarget
 			bool
 			createImages (const std::shared_ptr< Vulkan::Device > & device) noexcept
 			{
-				/* Color buffer. */
+				/* The color buffer for debugging if needed. */
 				if ( this->precisions().colorBits() > 0 )
 				{
 					TraceWarning{ClassId} << "Color bits requested for shadow map '" << this->id() << "' !";
 				}
 
-				/* Depth/Stencil buffer. */
-				if ( this->precisions().depthBits() > 0 || this->precisions().stencilBits() > 0 )
+				/* The depth buffer.
+				 * NOTE: Stencil buffer is useless here! */
+				if ( this->precisions().depthBits() > 0 )
 				{
 					m_depthImage = std::make_shared< Vulkan::Image >(
 						device,
 						VK_IMAGE_TYPE_2D,
-						Vulkan::Instance::findDepthStencilFormat(device, this->precisions()),
+						Vulkan::Instance::findDepthStencilFormat(device, this->precisions()), /* Should be VK_FORMAT_D32_SFLOAT or VK_FORMAT_D16_UNORM */
 						this->extent(),
 						VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-						VK_IMAGE_LAYOUT_UNDEFINED
+						VK_IMAGE_LAYOUT_UNDEFINED,
+						this->isCubemap() ? VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT : 0,
+						1,
+						this->isCubemap() ? 6 : 1
 					);
-					m_depthImage->setIdentifier(this->id() + "-Depth-Image");
+					m_depthImage->setIdentifier(ClassId, this->id(), "Image");
 
 					if ( !m_depthImage->createOnHardware() )
 					{
-						TraceError{ClassId} << "Unable to create an image (Depth/Stencil buffer) for shadow map '" << this->id() << "' !";
+						TraceError{ClassId} << "Unable to create an image (Depth buffer) for shadow map '" << this->id() << "' !";
 
 						return false;
 					}
 
-					/* Create a view to exploit the depth part of the image. */
-					if ( this->precisions().depthBits() > 0 )
-					{
-						m_depthImageView = std::make_shared< Vulkan::ImageView >(
-							m_depthImage,
-							VK_IMAGE_VIEW_TYPE_2D,
-							VkImageSubresourceRange{
-								.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
-								.baseMipLevel = 0,
-								.levelCount = m_depthImage->createInfo().mipLevels,
-								.baseArrayLayer = 0,
-								.layerCount = m_depthImage->createInfo().arrayLayers
-							}
-						);
-						m_depthImage->setIdentifier(this->id() + "-Depth-ImageView");
-
-						if ( !m_depthImageView->createOnHardware() )
-						{
-							TraceError{ClassId} << "Unable to create an image view (Depth buffer) for shadow map '" << this->id() << "' !";
-
-							return false;
+					m_depthImageView = std::make_shared< Vulkan::ImageView >(
+						m_depthImage,
+						this->isCubemap() ? VK_IMAGE_VIEW_TYPE_CUBE : VK_IMAGE_VIEW_TYPE_2D,
+						VkImageSubresourceRange{
+							.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
+							.baseMipLevel = 0,
+							.levelCount = m_depthImage->createInfo().mipLevels, /* Must be 1 */
+							.baseArrayLayer = 0,
+							.layerCount = m_depthImage->createInfo().arrayLayers /* Must be 1 or 6 (cubemap) */
 						}
-					}
+					);
+					m_depthImageView->setIdentifier(ClassId, this->id(), "ImageView");
 
-					/* Create a view to exploit the stencil part of the image. */
-					if ( this->precisions().stencilBits() > 0 )
+					if ( !m_depthImageView->createOnHardware() )
 					{
-						TraceWarning{ClassId} << "Stencil bits requested for shadow map '" << this->id() << "' !";
+						TraceError{ClassId} << "Unable to create an image view (Depth buffer) for shadow map '" << this->id() << "' !";
+
+						return false;
 					}
 				}
 
@@ -434,7 +465,7 @@ namespace EmEn::Graphics::RenderTarget
 			{
 				/* Prepare the framebuffer. */
 				m_framebuffer = std::make_shared< Vulkan::Framebuffer >(renderPass, this->extent());
-				m_framebuffer->setIdentifier(this->id() + "-Main-Framebuffer");
+				m_framebuffer->setIdentifier(ClassId, this->id(), "Framebuffer");
 
 				/* Color buffer. */
 				if ( this->precisions().colorBits() > 0 )
@@ -464,9 +495,12 @@ namespace EmEn::Graphics::RenderTarget
 				return true;
 			}
 
-			std::shared_ptr< Vulkan::Framebuffer > m_framebuffer;
+			std::shared_ptr< Vulkan::Image > m_debugImage;
 			std::shared_ptr< Vulkan::Image > m_depthImage;
+			std::shared_ptr< Vulkan::ImageView > m_debugImageView;
 			std::shared_ptr< Vulkan::ImageView > m_depthImageView;
+			std::shared_ptr< Vulkan::Sampler > m_sampler;
+			std::shared_ptr< Vulkan::Framebuffer > m_framebuffer;
 			view_matrices_t m_viewMatrices;
 	};
 }

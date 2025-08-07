@@ -175,7 +175,7 @@ namespace EmEn::Graphics
 	uint32_t
 	MovieResource::extractFrameDuration (const Json::Value & data, uint32_t frameCount) noexcept
 	{
-		const auto fps = FastJSON::getNumber< uint32_t >(data, JKFrameRate, 0);
+		const auto fps = FastJSON::getValue< uint32_t >(data, JKFrameRate).value_or(0);
 
 		if ( fps > 0 )
 		{
@@ -183,7 +183,7 @@ namespace EmEn::Graphics
 			return BaseTime / fps;
 		}
 
-		const auto animationDuration = FastJSON::getNumber< uint32_t >(data, JKAnimationDuration, 0);
+		const auto animationDuration = FastJSON::getValue< uint32_t >(data, JKAnimationDuration).value_or(0);
 
 		if ( animationDuration > 0 )
 		{
@@ -192,33 +192,33 @@ namespace EmEn::Graphics
 		}
 
 		/* NOTE: Using a defined frame duration. */
-		return FastJSON::getNumber< uint32_t >(data, JKFrameDuration, DefaultFrameDuration);
+		return FastJSON::getValue< uint32_t >(data, JKFrameDuration).value_or(DefaultFrameDuration);
 	}
 
 	bool
 	MovieResource::loadParametric (const Json::Value & data) noexcept
 	{
 		/* Checks the base name of animation files. */
-		const auto basename = FastJSON::getString(data, JKBaseFrameName);
+		const auto basename = FastJSON::getValue< std::string >(data, JKBaseFrameName);
 
-		if ( basename.empty() )
+		if ( !basename )
 		{
 			return false;
 		}
 
-		std::string replaceKey{};
+		std::string replaceKey;
 
-		const auto nWidth = MovieResource::extractCountWidth(basename, replaceKey);
+		const auto nWidth = MovieResource::extractCountWidth(basename.value(), replaceKey);
 
 		if ( nWidth == 0 )
 		{
-			TraceError{ClassId} << "Invalid basename '" << basename << "' !";
+			TraceError{ClassId} << "Invalid basename '" << basename.value() << "' !";
 
 			return false;
 		}
 
 		/* Gets the frame count. */
-		const auto frameCount = FastJSON::getNumber< uint32_t >(data, JKFrameCount, 0);
+		const auto frameCount = FastJSON::getValue< uint32_t >(data, JKFrameCount).value_or(0);
 
 		if ( frameCount == 0 )
 		{
@@ -237,7 +237,7 @@ namespace EmEn::Graphics
 			return false;
 		}
 
-		m_looping = FastJSON::getBoolean(data, JKIsLooping, true);
+		m_looping = FastJSON::getValue< bool >(data, JKIsLooping).value_or(true);
 
 		/* Gets all frames images. */
 		auto * imageContainer = Resources::Manager::instance()->container< ImageResource >();
@@ -245,7 +245,7 @@ namespace EmEn::Graphics
 		for ( uint32_t frameIndex = 0; frameIndex < frameCount; frameIndex++ )
 		{
 			/* Sets the number as a string. */
-			const auto filename = String::replace(replaceKey, pad(std::to_string(frameIndex + 1), nWidth, '0', String::Side::Left), basename);
+			const auto filename = String::replace(replaceKey, pad(std::to_string(frameIndex + 1), nWidth, '0', String::Side::Left), basename.value());
 
 			const auto imageResource = imageContainer->getResource(filename, false);
 
@@ -277,27 +277,25 @@ namespace EmEn::Graphics
 
 		for ( const auto & frame : data[JKFrames] )
 		{
-			const auto imageName = FastJSON::getString(frame, JKImage);
+			if ( const auto imageResourceName = FastJSON::getValue< std::string >(frame, JKImage) )
+			{
+				/* NOTE: The image must be loaded synchronously here. */
+				const auto imageResource = images->getResource(imageResourceName.value(), false);
+				const auto duration = FastJSON::getValue< uint32_t >(frame, JKDuration).value_or(DefaultFrameDuration);
 
-			if ( imageName.empty() )
+				if ( !imageResource->isLoaded() )
+				{
+					return false;
+				}
+
+				m_frames.emplace_back(imageResource->data(), duration);
+			}
+			else
 			{
 				TraceError{ClassId} <<
 					"The '" << JKImage << "' key is not present or not a string in movie frame definition ! "
 					"Skipping that frame...";
-
-				continue;
 			}
-
-			/* NOTE: The image must be loaded synchronously here. */
-			const auto imageResource = images->getResource(imageName, false);
-			const auto duration = FastJSON::getNumber< uint32_t >(frame, JKDuration, DefaultFrameDuration);
-
-			if ( !imageResource->isLoaded() )
-			{
-				return false;
-			}
-
-			m_frames.emplace_back(imageResource->data(), duration);
 		}
 
 		return true;

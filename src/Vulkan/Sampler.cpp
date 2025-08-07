@@ -38,7 +38,7 @@ namespace EmEn::Vulkan
 	using namespace EmEn::Libs;
 
 	Sampler::Sampler (const std::shared_ptr< Device > & device, Settings & settings, VkSamplerCreateFlags createFlags) noexcept
-		: AbstractDeviceDependentObject(device)
+		: AbstractDeviceDependentObject{device}
 	{
 		const auto magFilter = settings.get< std::string >(GraphicsTextureMagFilteringKey, DefaultGraphicsTextureFiltering);
 		const auto minFilter = settings.get< std::string >(GraphicsTextureMinFilteringKey, DefaultGraphicsTextureFiltering);
@@ -58,8 +58,8 @@ namespace EmEn::Vulkan
 		m_createInfo.mipLodBias = 0.0F;
 		m_createInfo.anisotropyEnable = anisotropyLevels > 1.0F ? VK_TRUE : VK_FALSE;
 		m_createInfo.maxAnisotropy = anisotropyLevels;
-		m_createInfo.compareEnable = VK_FALSE;
-		m_createInfo.compareOp = VK_COMPARE_OP_ALWAYS;
+		m_createInfo.compareEnable = VK_FALSE; // For shadow map, must be true.
+		m_createInfo.compareOp = VK_COMPARE_OP_ALWAYS; // For shadow map, must be VK_COMPARE_OP_LESS_OR_EQUAL or VK_COMPARE_OP_LESS
 		m_createInfo.minLod = 0.0F;
 		m_createInfo.maxLod = mipLevels > 0.0F ? mipLevels : VK_LOD_CLAMP_NONE;
 		m_createInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;

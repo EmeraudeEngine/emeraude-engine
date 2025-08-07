@@ -28,14 +28,8 @@
 
 namespace EmEn::Audio
 {
-	using namespace EmEn::Libs;
-	using namespace EmEn::Libs::Math;
-
-	AmbienceChannel::AmbienceChannel (const std::shared_ptr< Source > & source) noexcept
-		: m_source(source)
-	{
-
-	}
+	using namespace Libs;
+	using namespace Libs::Math;
 
 	unsigned int
 	AmbienceChannel::play (const AmbienceSound & sound, float radius) noexcept
@@ -69,7 +63,7 @@ namespace EmEn::Audio
 		m_source->setGain(sound.channelGain());
 		m_source->setPitch(pitch);
 
-		m_source->play(sound.soundResource(), Source::PlayMode::Once);
+		m_source->play(sound.soundResource(), PlayMode::Once);
 
 		return static_cast< unsigned int >(sound.soundResource()->localData().milliseconds() / pitch);
 	}

@@ -103,8 +103,7 @@ namespace EmEn::Vulkan
 		}
 
 		/* Repack vulkan handles to use within the createInfo. */
-		std::vector< VkDescriptorSetLayout > setLayouts{};
-		setLayouts.reserve(m_descriptorSetLayouts.size());
+		StaticVector< VkDescriptorSetLayout, 4 > setLayouts{};
 
 		std::ranges::transform(m_descriptorSetLayouts, std::back_inserter(setLayouts), [] (const auto & item) -> VkDescriptorSetLayout {
 			return item->handle();
@@ -112,7 +111,7 @@ namespace EmEn::Vulkan
 
 		/* [VULKAN-PUSH-CONSTANT:3] Declare push constants requested for the pipeline. */
 		m_createInfo.setLayoutCount = static_cast< uint32_t >(setLayouts.size());
-		m_createInfo.pSetLayouts = setLayouts.data(); // FIXME: Local variable may escape the function
+		m_createInfo.pSetLayouts = setLayouts.data();
 		m_createInfo.pushConstantRangeCount = static_cast< uint32_t >(m_pushConstantRanges.size());
 		m_createInfo.pPushConstantRanges = m_pushConstantRanges.data();
 
@@ -164,7 +163,7 @@ namespace EmEn::Vulkan
 	}
 
 	size_t
-	PipelineLayout::getHash (const std::vector< std::shared_ptr< DescriptorSetLayout > > & descriptorSetLayouts, const std::vector< VkPushConstantRange > & pushConstantRanges, VkPipelineLayoutCreateFlags flags) noexcept
+	PipelineLayout::getHash (const StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > & descriptorSetLayouts, const StaticVector< VkPushConstantRange, 4 > & pushConstantRanges, VkPipelineLayoutCreateFlags flags) noexcept
 	{
 		/* FIXME: Weak and unstable hash method !! */
 		size_t hash = 0;

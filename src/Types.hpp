@@ -81,7 +81,7 @@ namespace EmEn
 	[[nodiscard]]
 	inline
 	std::string
-	to_string (Severity value) noexcept
+	to_string (Severity value)
 	{
 		return {to_cstring(value)};
 	}
@@ -114,7 +114,7 @@ namespace EmEn
 	[[nodiscard]]
 	inline
 	std::string
-	to_string (LogFormat value) noexcept
+	to_string (LogFormat value)
 	{
 		return {to_cstring(value)};
 	}

@@ -27,8 +27,6 @@
 #include "Queue.hpp"
 
 /* Local inclusions. */
-#include "Sync/Fence.hpp"
-#include "Sync/Semaphore.hpp"
 #include "CommandBuffer.hpp"
 #include "Utility.hpp"
 #include "Tracer.hpp"
@@ -37,20 +35,26 @@ namespace EmEn::Vulkan
 {
 	using namespace EmEn::Libs;
 
-	std::mutex Queue::s_mutex{};
-
 	bool
-	Queue::submit (const VkSubmitInfo & submitInfo, VkFence fence) const noexcept
+	Queue::submit (const std::shared_ptr< CommandBuffer > & commandBuffer) const noexcept
 	{
-		const std::lock_guard< std::mutex > lock{s_mutex};
+		const VkCommandBuffer commandBufferHandle = commandBuffer->handle();
+		const VkSubmitInfo submitInfo
+		{
+			.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+			.pNext = nullptr,
+			.waitSemaphoreCount = 0,
+			.pWaitSemaphores = VK_NULL_HANDLE,
+			.pWaitDstStageMask = VK_NULL_HANDLE,
+			.commandBufferCount = 1,
+			.pCommandBuffers = &commandBufferHandle,
+			.signalSemaphoreCount = 0,
+			.pSignalSemaphores = VK_NULL_HANDLE,
+		};
 
-		const auto result = vkQueueSubmit(
-			m_handle,
-			1, &submitInfo,
-			fence
-		);
+		const std::lock_guard< std::mutex > lock{m_access};
 
-		if ( result != VK_SUCCESS )
+		if ( const auto result = vkQueueSubmit(m_handle, 1, &submitInfo, VK_NULL_HANDLE); result != VK_SUCCESS )
 		{
 			TraceError{ClassId} << "Unable to submit work into the queue : " << vkResultToCString(result) << " !";
 
@@ -60,252 +64,46 @@ namespace EmEn::Vulkan
 		return true;
 	}
 
-	bool
-	Queue::submit (const std::shared_ptr< CommandBuffer > & buffer, const std::vector< VkSemaphore > & waitSemaphores, VkPipelineStageFlags waitStageFlags, const std::vector< VkSemaphore > & signalSemaphores, VkFence fence) const noexcept
-	{
-		VkCommandBuffer commandBufferHandle = buffer->handle();
+    bool
+	Queue::submit (const std::shared_ptr< CommandBuffer > & commandBuffer, const SynchInfo & synchInfo) const noexcept
+    {
+        if ( synchInfo.waitSemaphores.size() != synchInfo.waitStages.size() )
+        {
+        	Tracer::error(ClassId, "Wait semaphore count must equal wait stage count!");
 
-		VkSubmitInfo submitInfo{};
-		submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-		//submitInfo.pNext = nullptr;
-		if ( !waitSemaphores.empty() )
+            return false;
+        }
+
+        const VkCommandBuffer commandBufferHandle = commandBuffer->handle();
+        const VkSubmitInfo submitInfo
 		{
-			submitInfo.waitSemaphoreCount = static_cast< uint32_t >(waitSemaphores.size());
-			submitInfo.pWaitSemaphores = waitSemaphores.data();
-			submitInfo.pWaitDstStageMask = &waitStageFlags;
-		}
-		submitInfo.commandBufferCount = 1;
-		submitInfo.pCommandBuffers = &commandBufferHandle;
-		if ( !signalSemaphores.empty() )
-		{
-			submitInfo.signalSemaphoreCount = static_cast< uint32_t >(signalSemaphores.size());
-			submitInfo.pSignalSemaphores = signalSemaphores.data();
-		}
+            .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+            .pNext = nullptr,
+            .waitSemaphoreCount = static_cast< uint32_t >(synchInfo.waitSemaphores.size()),
+            .pWaitSemaphores = synchInfo.waitSemaphores.data(),
+            .pWaitDstStageMask = synchInfo.waitStages.data(),
+            .commandBufferCount = 1,
+            .pCommandBuffers = &commandBufferHandle,
+            .signalSemaphoreCount = static_cast< uint32_t >(synchInfo.signalSemaphores.size()),
+            .pSignalSemaphores = synchInfo.signalSemaphores.data(),
+        };
 
-		return this->submit(submitInfo, fence);
-	}
+        const std::lock_guard< std::mutex > lock{m_access};
 
-	bool
-	Queue::submit (const std::shared_ptr< CommandBuffer > & buffer, VkSemaphore waitSemaphore, VkPipelineStageFlags waitStageFlags, VkSemaphore signalSemaphore, VkFence fence) const noexcept
-	{
-		if ( waitSemaphore == VK_NULL_HANDLE )
-		{
-			Tracer::warning(ClassId, "The semaphore to wait is a null pointer ! (1)");
+		if ( const auto result = vkQueueSubmit(m_handle, 1, &submitInfo, synchInfo.fence); result != VK_SUCCESS )
+        {
+        	TraceError{ClassId} << "Unable to submit work into the queue : " << vkResultToCString(result) << " !";
 
-			return false;
-		}
+            return false;
+        }
 
-		if ( signalSemaphore == VK_NULL_HANDLE )
-		{
-			Tracer::warning(ClassId, "The semaphore to signal is a null pointer ! (1)");
-
-			return false;
-		}
-
-		VkCommandBuffer commandBufferHandle = buffer->handle();
-
-		VkSubmitInfo submitInfo{};
-		submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-		//submitInfo.pNext = nullptr;
-		submitInfo.waitSemaphoreCount = 1;
-		submitInfo.pWaitSemaphores = &waitSemaphore;
-		submitInfo.pWaitDstStageMask = &waitStageFlags;
-		submitInfo.commandBufferCount = 1;
-		submitInfo.pCommandBuffers = &commandBufferHandle;
-		submitInfo.signalSemaphoreCount = 1;
-		submitInfo.pSignalSemaphores = &signalSemaphore;
-
-		return this->submit(submitInfo, fence);
-	}
-
-	bool
-	Queue::submit (const std::shared_ptr< CommandBuffer > & buffer, VkSemaphore waitSemaphore, VkPipelineStageFlags waitStageFlags, const std::vector< VkSemaphore > & signalSemaphores, VkFence fence) const noexcept
-	{
-		if ( waitSemaphore == VK_NULL_HANDLE )
-		{
-			Tracer::warning(ClassId, "The semaphore to wait is a null pointer ! (2)");
-
-			return false;
-		}
-
-		VkCommandBuffer commandBufferHandle = buffer->handle();
-
-		VkSubmitInfo submitInfo{};
-		submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-		//submitInfo.pNext = nullptr;
-		submitInfo.waitSemaphoreCount = 1;
-		submitInfo.pWaitSemaphores = &waitSemaphore;
-		submitInfo.pWaitDstStageMask = &waitStageFlags;
-		submitInfo.commandBufferCount = 1;
-		submitInfo.pCommandBuffers = &commandBufferHandle;
-		if ( !signalSemaphores.empty() )
-		{
-			submitInfo.signalSemaphoreCount = static_cast< uint32_t >(signalSemaphores.size());
-			submitInfo.pSignalSemaphores = signalSemaphores.data();
-		}
-
-		return this->submit(submitInfo, fence);
-	}
-
-	bool
-	Queue::submit (const std::shared_ptr< CommandBuffer > & buffer, const std::vector< VkSemaphore > & waitSemaphores, VkPipelineStageFlags waitStageFlags, VkSemaphore signalSemaphore, VkFence fence) const noexcept
-	{
-		if ( signalSemaphore == VK_NULL_HANDLE )
-		{
-			Tracer::warning(ClassId, "The semaphore to signal is a null pointer ! (3)");
-
-			return false;
-		}
-
-		VkCommandBuffer commandBufferHandle = buffer->handle();
-
-		VkSubmitInfo submitInfo{};
-		submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-		//submitInfo.pNext = nullptr;
-		if ( !waitSemaphores.empty() )
-		{
-			submitInfo.waitSemaphoreCount = static_cast< uint32_t >(waitSemaphores.size());
-			submitInfo.pWaitSemaphores = waitSemaphores.data();
-			submitInfo.pWaitDstStageMask = &waitStageFlags;
-		}
-		submitInfo.commandBufferCount = 1;
-		submitInfo.pCommandBuffers = &commandBufferHandle;
-		submitInfo.signalSemaphoreCount = 1;
-		submitInfo.pSignalSemaphores = &signalSemaphore;
-
-		return this->submit(submitInfo, fence);
-	}
-
-	bool
-	Queue::submit (const std::shared_ptr< CommandBuffer > & buffer, VkSemaphore waitSemaphore, VkPipelineStageFlags waitStageFlags, VkFence fence) const noexcept
-	{
-		if ( waitSemaphore == VK_NULL_HANDLE )
-		{
-			Tracer::warning(ClassId, "The semaphore to wait is a null pointer ! (4)");
-
-			return false;
-		}
-
-		VkCommandBuffer commandBufferHandle = buffer->handle();
-
-		VkSubmitInfo submitInfo{};
-		submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-		//submitInfo.pNext = nullptr;
-		submitInfo.waitSemaphoreCount = 1;
-		submitInfo.pWaitSemaphores = &waitSemaphore;
-		submitInfo.pWaitDstStageMask = &waitStageFlags;
-		submitInfo.commandBufferCount = 1;
-		submitInfo.pCommandBuffers = &commandBufferHandle;
-		//submitInfo.signalSemaphoreCount = 0;
-		//submitInfo.pSignalSemaphores = nullptr;
-
-		return this->submit(submitInfo, fence);
-	}
-
-	bool
-	Queue::submit (const std::shared_ptr< CommandBuffer > & buffer, const std::vector< VkSemaphore > & waitSemaphores, VkPipelineStageFlags waitStageFlags, VkFence fence) const noexcept
-	{
-		if ( waitSemaphores.empty() )
-		{
-			Tracer::warning(ClassId, "No semaphore to wait ! (5)");
-
-			return false;
-		}
-
-		VkCommandBuffer commandBufferHandle = buffer->handle();
-
-		VkSubmitInfo submitInfo{};
-		submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-		//submitInfo.pNext = nullptr;
-		if ( !waitSemaphores.empty() )
-		{
-			submitInfo.waitSemaphoreCount = static_cast< uint32_t >(waitSemaphores.size());
-			submitInfo.pWaitSemaphores = waitSemaphores.data();
-			submitInfo.pWaitDstStageMask = &waitStageFlags;
-		}
-		submitInfo.commandBufferCount = 1;
-		submitInfo.pCommandBuffers = &commandBufferHandle;
-		//submitInfo.signalSemaphoreCount = 0;
-		//submitInfo.pSignalSemaphores = nullptr;
-
-		return this->submit(submitInfo, fence);
-	}
-
-	bool
-	Queue::submit (const std::shared_ptr< CommandBuffer > & buffer, VkSemaphore signalSemaphore, VkFence fence) const noexcept
-	{
-		if ( signalSemaphore == VK_NULL_HANDLE )
-		{
-			Tracer::warning(ClassId, "The semaphore to signal is a null pointer ! (6)");
-
-			return false;
-		}
-
-		VkCommandBuffer commandBufferHandle = buffer->handle();
-
-		VkSubmitInfo submitInfo{};
-		submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-		//submitInfo.pNext = nullptr;
-		//submitInfo.waitSemaphoreCount = 0;
-		//submitInfo.pWaitSemaphores = nullptr;
-		//submitInfo.pWaitDstStageMask = nullptr;
-		submitInfo.commandBufferCount = 1;
-		submitInfo.pCommandBuffers = &commandBufferHandle;
-		submitInfo.signalSemaphoreCount = 1;
-		submitInfo.pSignalSemaphores = &signalSemaphore;
-
-		return this->submit(submitInfo, fence);
-	}
-
-	bool
-	Queue::submit (const std::shared_ptr< CommandBuffer > & buffer, const std::vector< VkSemaphore > & signalSemaphores, VkFence fence) const noexcept
-	{
-		if ( signalSemaphores.empty() )
-		{
-			Tracer::warning(ClassId, "No semaphore to wait ! (7)");
-
-			return false;
-		}
-
-		VkCommandBuffer commandBufferHandle = buffer->handle();
-
-		VkSubmitInfo submitInfo{};
-		submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-		//submitInfo.pNext = nullptr;
-		//submitInfo.waitSemaphoreCount = 0;
-		//submitInfo.pWaitSemaphores = nullptr;
-		//submitInfo.pWaitDstStageMask = nullptr;
-		submitInfo.commandBufferCount = 1;
-		submitInfo.pCommandBuffers = &commandBufferHandle;
-		submitInfo.signalSemaphoreCount = static_cast< uint32_t >(signalSemaphores.size());
-		submitInfo.pSignalSemaphores = signalSemaphores.data();
-
-		return this->submit(submitInfo, fence);
-	}
-
-	bool
-	Queue::submit (const std::shared_ptr< CommandBuffer > & buffer, VkFence fence) const noexcept
-	{
-		VkCommandBuffer commandBufferHandle = buffer->handle();
-
-		VkSubmitInfo submitInfo{};
-		submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-		//submitInfo.pNext = nullptr;
-		//submitInfo.waitSemaphoreCount = 0;
-		//submitInfo.pWaitSemaphores = nullptr;
-		//submitInfo.pWaitDstStageMask = nullptr;
-		submitInfo.commandBufferCount = 1;
-		submitInfo.pCommandBuffers = &commandBufferHandle;
-		//submitInfo.signalSemaphoreCount = 0;
-		//submitInfo.pSignalSemaphores = nullptr;
-
-		return this->submit(submitInfo, fence);
-	}
+        return true;
+    }
 
 	bool
 	Queue::present (const VkPresentInfoKHR * presentInfo, bool & swapChainRecreationNeeded) const noexcept
 	{
-		//const std::lock_guard< std::mutex > lock{s_mutex};
+		const std::lock_guard< std::mutex > lock{m_access};
 
 		switch ( vkQueuePresentKHR(m_handle, presentInfo) )
 		{

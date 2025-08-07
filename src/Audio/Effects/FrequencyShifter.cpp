@@ -27,9 +27,9 @@
 #include "FrequencyShifter.hpp"
 
 /* Local inclusions. */
-#include "Tracer.hpp"
-#include "Audio/OpenAL.EFX.hpp"
+#include "Audio/OpenALExtensions.hpp"
 #include "Audio/Utility.hpp"
+#include "Tracer.hpp"
 
 namespace EmEn::Audio::Effects
 {
@@ -42,7 +42,7 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		EFX::alEffecti(this->identifier(), AL_EFFECT_TYPE, AL_EFFECT_FREQUENCY_SHIFTER);
+		OpenAL::alEffecti(this->identifier(), AL_EFFECT_TYPE, AL_EFFECT_FREQUENCY_SHIFTER);
 
 		if ( alGetErrors("alEffecti()", __FILE__, __LINE__) )
 		{
@@ -53,20 +53,20 @@ namespace EmEn::Audio::Effects
 	void
 	FrequencyShifter::resetProperties () noexcept
 	{
-		if ( !EFX::isAvailable() )
+		if ( !OpenAL::isEFXAvailable() )
 		{
 			return;
 		}
 
-		EFX::alEffectf(this->identifier(), AL_FREQUENCY_SHIFTER_FREQUENCY, AL_FREQUENCY_SHIFTER_DEFAULT_FREQUENCY);
-		EFX::alEffecti(this->identifier(), AL_FREQUENCY_SHIFTER_LEFT_DIRECTION, AL_FREQUENCY_SHIFTER_DEFAULT_LEFT_DIRECTION);
-		EFX::alEffecti(this->identifier(), AL_FREQUENCY_SHIFTER_RIGHT_DIRECTION, AL_FREQUENCY_SHIFTER_DEFAULT_RIGHT_DIRECTION);
+		OpenAL::alEffectf(this->identifier(), AL_FREQUENCY_SHIFTER_FREQUENCY, AL_FREQUENCY_SHIFTER_DEFAULT_FREQUENCY);
+		OpenAL::alEffecti(this->identifier(), AL_FREQUENCY_SHIFTER_LEFT_DIRECTION, AL_FREQUENCY_SHIFTER_DEFAULT_LEFT_DIRECTION);
+		OpenAL::alEffecti(this->identifier(), AL_FREQUENCY_SHIFTER_RIGHT_DIRECTION, AL_FREQUENCY_SHIFTER_DEFAULT_RIGHT_DIRECTION);
 	}
 
 	void
 	FrequencyShifter::setFrequency (float value) noexcept
 	{
-		if ( !EFX::isAvailable() )
+		if ( !OpenAL::isEFXAvailable() )
 		{
 			return;
 		}
@@ -78,13 +78,13 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		EFX::alEffectf(this->identifier(), AL_FREQUENCY_SHIFTER_FREQUENCY, value);
+		OpenAL::alEffectf(this->identifier(), AL_FREQUENCY_SHIFTER_FREQUENCY, value);
 	}
 
 	void
 	FrequencyShifter::setLeftDirection (Direction value) noexcept
 	{
-		if ( !EFX::isAvailable() )
+		if ( !OpenAL::isEFXAvailable() )
 		{
 			return;
 		}
@@ -106,13 +106,13 @@ namespace EmEn::Audio::Effects
 				break;
 		}
 
-		EFX::alEffecti(this->identifier(), AL_FREQUENCY_SHIFTER_LEFT_DIRECTION, def);
+		OpenAL::alEffecti(this->identifier(), AL_FREQUENCY_SHIFTER_LEFT_DIRECTION, def);
 	}
 
 	void
 	FrequencyShifter::setRightDirection (Direction value) noexcept
 	{
-		if ( !EFX::isAvailable() )
+		if ( !OpenAL::isEFXAvailable() )
 		{
 			return;
 		}
@@ -134,7 +134,7 @@ namespace EmEn::Audio::Effects
 				break;
 		}
 
-		EFX::alEffecti(this->identifier(), AL_FREQUENCY_SHIFTER_RIGHT_DIRECTION, def);
+		OpenAL::alEffecti(this->identifier(), AL_FREQUENCY_SHIFTER_RIGHT_DIRECTION, def);
 	}
 
 	float
@@ -142,9 +142,9 @@ namespace EmEn::Audio::Effects
 	{
 		ALfloat value = 0.0F;
 
-		if ( EFX::isAvailable() )
+		if ( OpenAL::isEFXAvailable() )
 		{
-			EFX::alGetEffectf(this->identifier(), AL_FREQUENCY_SHIFTER_FREQUENCY, &value);
+			OpenAL::alGetEffectf(this->identifier(), AL_FREQUENCY_SHIFTER_FREQUENCY, &value);
 		}
 
 		return value;
@@ -153,14 +153,14 @@ namespace EmEn::Audio::Effects
 	FrequencyShifter::Direction
 	FrequencyShifter::leftDirection () const noexcept
 	{
-		if ( !EFX::isAvailable() )
+		if ( !OpenAL::isEFXAvailable() )
 		{
 			return Direction::Down;
 		}
 
 		ALint value = 0;
 
-		EFX::alGetEffecti(this->identifier(), AL_FREQUENCY_SHIFTER_LEFT_DIRECTION, &value);
+		OpenAL::alGetEffecti(this->identifier(), AL_FREQUENCY_SHIFTER_LEFT_DIRECTION, &value);
 
 		switch ( value )
 		{
@@ -179,14 +179,14 @@ namespace EmEn::Audio::Effects
 	FrequencyShifter::Direction
 	FrequencyShifter::rightDirection () const noexcept
 	{
-		if ( !EFX::isAvailable() )
+		if ( !OpenAL::isEFXAvailable() )
 		{
 			return Direction::Down;
 		}
 
 		ALint value = 0;
 
-		EFX::alGetEffecti(this->identifier(), AL_FREQUENCY_SHIFTER_RIGHT_DIRECTION, &value);
+		OpenAL::alGetEffecti(this->identifier(), AL_FREQUENCY_SHIFTER_RIGHT_DIRECTION, &value);
 
 		switch ( value )
 		{

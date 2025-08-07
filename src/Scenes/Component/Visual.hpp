@@ -61,7 +61,7 @@ namespace EmEn::Scenes::Component
 			 */
 			Visual (std::string name, const AbstractEntity & parentEntity, const std::shared_ptr< Graphics::Renderable::Interface > & renderable) noexcept
 				: Abstract{std::move(name), parentEntity},
-				m_renderableInstance(std::make_shared< Graphics::RenderableInstance::Unique >(renderable, this->getWorldCoordinates(), renderable->isSprite() ? Graphics::RenderableInstance::FacingCamera : Graphics::RenderableInstance::None))
+				m_renderableInstance(std::make_shared< Graphics::RenderableInstance::Unique >(renderable, renderable->isSprite() ? Graphics::RenderableInstance::FacingCamera : Graphics::RenderableInstance::None))
 			{
 				this->observe(m_renderableInstance.get());
 			}
@@ -108,9 +108,9 @@ namespace EmEn::Scenes::Component
 
 			/** @copydoc EmEn::Scenes::Component::Abstract::move() */
 			void
-			move (const Libs::Math::CartesianFrame< float > & worldCoordinates) noexcept override
+			move (const Libs::Math::CartesianFrame< float > & /*worldCoordinates*/) noexcept override
 			{
-				m_renderableInstance->updateModelMatrix(worldCoordinates);
+
 			}
 
 			/** @copydoc EmEn::Scenes::Component::Abstract::processLogics() */

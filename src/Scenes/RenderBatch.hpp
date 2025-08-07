@@ -37,7 +37,7 @@
 namespace EmEn::Scenes
 {
 	/**
-	 * @brief The RenderBatch class
+	 * @brief The RenderBatch class.
 	 */
 	class RenderBatch final
 	{
@@ -48,11 +48,13 @@ namespace EmEn::Scenes
 			/**
 			 * @brief Constructs a render batch.
 			 * @param renderableInstance A reference to a renderable instance smart pointer.
-			 * @param subGeometryIndex The layer index of the renderable. Default 0.
+			 * @param worldCoordinates A pointer to the cartesian frame.
+			 * @param subGeometryIndex The layer index of the renderable.
 			 */
 			explicit
-			RenderBatch (const std::shared_ptr< const Graphics::RenderableInstance::Abstract > & renderableInstance, uint32_t subGeometryIndex = 0) noexcept
+			RenderBatch (const std::shared_ptr< const Graphics::RenderableInstance::Abstract > & renderableInstance, const Libs::Math::CartesianFrame< float > * worldCoordinates, uint32_t subGeometryIndex) noexcept
 				: m_renderableInstance{renderableInstance},
+				m_worldCoordinates{worldCoordinates},
 				m_subGeometryIndex{subGeometryIndex}
 			{
 
@@ -67,6 +69,19 @@ namespace EmEn::Scenes
 			renderableInstance () const noexcept
 			{
 				return m_renderableInstance;
+			}
+
+			/**
+			 * @brief Returns the world coordinates of the renderable instance.
+			 * @note If nullptr, this means at the origin.
+			 * @warning Do not store this pointer!
+			 * @return const Libs::Math::CartesianFrame< float > *
+			 */
+			[[nodiscard]]
+			const Libs::Math::CartesianFrame< float > *
+			worldCoordinates () const noexcept
+			{
+				return m_worldCoordinates;
 			}
 
 			/**
@@ -85,25 +100,27 @@ namespace EmEn::Scenes
 			 * @param renderList A referencer to a render list.
 			 * @param distance The distance of the renderable from the camera.
 			 * @param renderableInstance A pointer to the renderable instance.
+			 * @param worldCoordinates A pointer to the cartesian frame.
 			 * @param subGeometryIndex The layer index of the renderable.
 			 * @return void
 			 */
 			static
 			void
-			create (List & renderList, float distance, const std::shared_ptr< Graphics::RenderableInstance::Abstract > & renderableInstance, uint32_t subGeometryIndex = 0UL) noexcept
+			create (List & renderList, float distance, const std::shared_ptr< Graphics::RenderableInstance::Abstract > & renderableInstance, const Libs::Math::CartesianFrame< float > * worldCoordinates, uint32_t subGeometryIndex) noexcept
 			{
 				renderList.emplace(
 					std::piecewise_construct,
 					std::forward_as_tuple(static_cast< uint64_t >(distance * DistanceMultiplier)),
-					std::forward_as_tuple(renderableInstance, subGeometryIndex)
+					std::forward_as_tuple(renderableInstance, worldCoordinates, subGeometryIndex)
 				);
 			}
 
 		private :
 
-			static constexpr auto DistanceMultiplier{1000UL};
+			static constexpr auto DistanceMultiplier{1000.0F};
 
-			std::shared_ptr< const Graphics::RenderableInstance::Abstract > m_renderableInstance;
-			uint32_t m_subGeometryIndex;
+			const std::shared_ptr< const Graphics::RenderableInstance::Abstract > m_renderableInstance;
+			const Libs::Math::CartesianFrame< float > * m_worldCoordinates{nullptr};
+			const uint32_t m_subGeometryIndex;
 	};
 }

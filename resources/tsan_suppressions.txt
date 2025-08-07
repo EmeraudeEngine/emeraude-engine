@@ -1,0 +1,4 @@
+race:libnvidia*
+race:libvulkan*
+deadly_signal:libnvidia*
+deadly_signal:libvulkan*

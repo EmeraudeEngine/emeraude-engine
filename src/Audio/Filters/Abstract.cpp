@@ -44,7 +44,7 @@ namespace EmEn::Audio::Filters
 			return;
 		}
 
-		if ( !EFX::isAvailable() )
+		if ( !OpenAL::isEFXAvailable() )
 		{
 			Tracer::warning(TracerTag, "OpenAL EFX is not supported !");
 
@@ -53,7 +53,7 @@ namespace EmEn::Audio::Filters
 
 		alFlushErrors();
 
-		EFX::alGenFilters(1, this->identifierPointer());
+		OpenAL::alGenFilters(1, this->identifierPointer());
 
 		if ( alGetErrors("alGenFilters()", __FILE__, __LINE__) || this->identifier() <= 0 )
 		{
@@ -63,14 +63,14 @@ namespace EmEn::Audio::Filters
 
 	Abstract::~Abstract ()
 	{
-		if ( !EFX::isAvailable() )
+		if ( !OpenAL::isEFXAvailable() )
 		{
 			return;
 		}
 
 		if ( this->isCreated() )
 		{
-			EFX::alDeleteFilters(1, this->identifierPointer());
+			OpenAL::alDeleteFilters(1, this->identifierPointer());
 		}
 
 		this->resetIdentifier();
@@ -79,11 +79,11 @@ namespace EmEn::Audio::Filters
 	bool
 	Abstract::isCreated () const noexcept
 	{
-		if ( !EFX::isAvailable() || this->identifier() <= 0 )
+		if ( !OpenAL::isEFXAvailable() || this->identifier() <= 0 )
 		{
 			return false;
 		}
 
-		return EFX::alIsFilter(this->identifier()) == AL_TRUE;
+		return OpenAL::alIsFilter(this->identifier()) == AL_TRUE;
 	}
 }

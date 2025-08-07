@@ -28,7 +28,7 @@
 
 /* STL inclusions */
 #include <cstdint>
-#include <set>
+#include <unordered_set>
 #include <memory>
 
 /* Local inclusions for inheritances. */
@@ -294,13 +294,12 @@ namespace EmEn::Physics
 			/**
 			 * @brief Updates the particle physics simulation.
 			 * @note This is the default engine behavior.
-			 * @param envProperties A reference to the physical environment properties coming from the scene.
+			 * @param scene A reference to the scene.
 			 * @param particleProperties A reference to the physical object properties coming from the particle emitter.
 			 * @param worldCoordinates A reference to a cartesian frame according to the particle emitter location.
-			 * @param modifiers A reference to a vector of scene modifiers.
 			 * @return bool
 			 */
-			bool updateSimulation (const PhysicalEnvironmentProperties & envProperties, const PhysicalObjectProperties & particleProperties, const Libs::Math::CartesianFrame< float > & worldCoordinates, const std::set< std::shared_ptr< Scenes::Component::AbstractModifier > > & modifiers) noexcept;
+			bool updateSimulation (const Scenes::Scene & scene, const PhysicalObjectProperties & particleProperties, const Libs::Math::CartesianFrame< float > & worldCoordinates) noexcept;
 
 			/**
 			 * @brief Updates the particles position and properties.

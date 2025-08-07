@@ -27,9 +27,9 @@
 #include "Chorus.hpp"
 
 /* Local inclusions. */
-#include "Tracer.hpp"
-#include "Audio/OpenAL.EFX.hpp"
+#include "Audio/OpenALExtensions.hpp"
 #include "Audio/Utility.hpp"
+#include "Tracer.hpp"
 
 namespace EmEn::Audio::Effects
 {
@@ -42,7 +42,7 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		EFX::alEffecti(this->identifier(), AL_EFFECT_TYPE, AL_EFFECT_CHORUS);
+		OpenAL::alEffecti(this->identifier(), AL_EFFECT_TYPE, AL_EFFECT_CHORUS);
 
 		if ( alGetErrors("alEffecti()", __FILE__, __LINE__) )
 		{
@@ -53,23 +53,23 @@ namespace EmEn::Audio::Effects
 	void
 	Chorus::resetProperties () noexcept
 	{
-		if ( !EFX::isAvailable() )
+		if ( !OpenAL::isEFXAvailable() )
 		{
 			return;
 		}
 
-		EFX::alEffecti(this->identifier(), AL_CHORUS_WAVEFORM, AL_CHORUS_DEFAULT_WAVEFORM);
-		EFX::alEffecti(this->identifier(), AL_CHORUS_PHASE, AL_CHORUS_DEFAULT_PHASE);
-		EFX::alEffectf(this->identifier(), AL_CHORUS_RATE, AL_CHORUS_DEFAULT_RATE);
-		EFX::alEffectf(this->identifier(), AL_CHORUS_DEPTH, AL_CHORUS_DEFAULT_DEPTH);
-		EFX::alEffectf(this->identifier(), AL_CHORUS_FEEDBACK, AL_CHORUS_DEFAULT_FEEDBACK);
-		EFX::alEffectf(this->identifier(), AL_CHORUS_DELAY, AL_CHORUS_DEFAULT_DELAY);
+		OpenAL::alEffecti(this->identifier(), AL_CHORUS_WAVEFORM, AL_CHORUS_DEFAULT_WAVEFORM);
+		OpenAL::alEffecti(this->identifier(), AL_CHORUS_PHASE, AL_CHORUS_DEFAULT_PHASE);
+		OpenAL::alEffectf(this->identifier(), AL_CHORUS_RATE, AL_CHORUS_DEFAULT_RATE);
+		OpenAL::alEffectf(this->identifier(), AL_CHORUS_DEPTH, AL_CHORUS_DEFAULT_DEPTH);
+		OpenAL::alEffectf(this->identifier(), AL_CHORUS_FEEDBACK, AL_CHORUS_DEFAULT_FEEDBACK);
+		OpenAL::alEffectf(this->identifier(), AL_CHORUS_DELAY, AL_CHORUS_DEFAULT_DELAY);
 	}
 
 	void
 	Chorus::setWaveForm (WaveForm value) noexcept
 	{
-		if ( !EFX::isAvailable() )
+		if ( !OpenAL::isEFXAvailable() )
 		{
 			return;
 		}
@@ -87,13 +87,13 @@ namespace EmEn::Audio::Effects
 				break;
 		}
 
-		EFX::alEffecti(this->identifier(), AL_CHORUS_WAVEFORM, def);
+		OpenAL::alEffecti(this->identifier(), AL_CHORUS_WAVEFORM, def);
 	}
 
 	void
 	Chorus::setPhase (int value) noexcept
 	{
-		if ( !EFX::isAvailable() )
+		if ( !OpenAL::isEFXAvailable() )
 		{
 			return;
 		}
@@ -105,13 +105,13 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		EFX::alEffecti(this->identifier(), AL_CHORUS_PHASE, value);
+		OpenAL::alEffecti(this->identifier(), AL_CHORUS_PHASE, value);
 	}
 
 	void
 	Chorus::setRate (float value) noexcept
 	{
-		if ( !EFX::isAvailable() )
+		if ( !OpenAL::isEFXAvailable() )
 		{
 			return;
 		}
@@ -123,13 +123,13 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		EFX::alEffectf(this->identifier(), AL_CHORUS_RATE, value);
+		OpenAL::alEffectf(this->identifier(), AL_CHORUS_RATE, value);
 	}
 
 	void
 	Chorus::setDepth (float value) noexcept
 	{
-		if ( !EFX::isAvailable() )
+		if ( !OpenAL::isEFXAvailable() )
 		{
 			return;
 		}
@@ -141,13 +141,13 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		EFX::alEffectf(this->identifier(), AL_CHORUS_DEPTH, value);
+		OpenAL::alEffectf(this->identifier(), AL_CHORUS_DEPTH, value);
 	}
 
 	void
 	Chorus::setFeedBack (float value) noexcept
 	{
-		if ( !EFX::isAvailable() )
+		if ( !OpenAL::isEFXAvailable() )
 		{
 			return;
 		}
@@ -159,13 +159,13 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		EFX::alEffectf(this->identifier(), AL_CHORUS_FEEDBACK, value);
+		OpenAL::alEffectf(this->identifier(), AL_CHORUS_FEEDBACK, value);
 	}
 
 	void
 	Chorus::setDelay (float value) noexcept
 	{
-		if ( !EFX::isAvailable() )
+		if ( !OpenAL::isEFXAvailable() )
 		{
 			return;
 		}
@@ -177,17 +177,17 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		EFX::alEffectf(this->identifier(), AL_CHORUS_DELAY, value);
+		OpenAL::alEffectf(this->identifier(), AL_CHORUS_DELAY, value);
 	}
 
 	Chorus::WaveForm
 	Chorus::waveForm () const noexcept
 	{
-		if ( EFX::isAvailable() )
+		if ( OpenAL::isEFXAvailable() )
 		{
 			ALint value = 0;
 
-			EFX::alGetEffecti(this->identifier(), AL_CHORUS_WAVEFORM, &value);
+			OpenAL::alGetEffecti(this->identifier(), AL_CHORUS_WAVEFORM, &value);
 
 			switch ( value )
 			{
@@ -208,9 +208,9 @@ namespace EmEn::Audio::Effects
 	{
 		ALint value = 0;
 
-		if ( EFX::isAvailable() )
+		if ( OpenAL::isEFXAvailable() )
 		{
-			EFX::alGetEffecti(this->identifier(), AL_CHORUS_PHASE, &value);
+			OpenAL::alGetEffecti(this->identifier(), AL_CHORUS_PHASE, &value);
 		}
 
 		return value;
@@ -221,9 +221,9 @@ namespace EmEn::Audio::Effects
 	{
 		ALfloat value = 0.0F;
 
-		if ( EFX::isAvailable() )
+		if ( OpenAL::isEFXAvailable() )
 		{
-			EFX::alGetEffectf(this->identifier(), AL_CHORUS_RATE, &value);
+			OpenAL::alGetEffectf(this->identifier(), AL_CHORUS_RATE, &value);
 		}
 
 		return value;
@@ -234,9 +234,9 @@ namespace EmEn::Audio::Effects
 	{
 		ALfloat value = 0.0F;
 
-		if ( EFX::isAvailable() )
+		if ( OpenAL::isEFXAvailable() )
 		{
-			EFX::alGetEffectf(this->identifier(), AL_CHORUS_DEPTH, &value);
+			OpenAL::alGetEffectf(this->identifier(), AL_CHORUS_DEPTH, &value);
 		}
 
 		return value;
@@ -247,9 +247,9 @@ namespace EmEn::Audio::Effects
 	{
 		ALfloat value = 0.0F;
 
-		if ( EFX::isAvailable() )
+		if ( OpenAL::isEFXAvailable() )
 		{
-			EFX::alGetEffectf(this->identifier(), AL_CHORUS_FEEDBACK, &value);
+			OpenAL::alGetEffectf(this->identifier(), AL_CHORUS_FEEDBACK, &value);
 		}
 
 		return value;
@@ -260,9 +260,9 @@ namespace EmEn::Audio::Effects
 	{
 		ALfloat value = 0.0F;
 
-		if ( EFX::isAvailable() )
+		if ( OpenAL::isEFXAvailable() )
 		{
-			EFX::alGetEffectf(this->identifier(), AL_CHORUS_DELAY, &value);
+			OpenAL::alGetEffectf(this->identifier(), AL_CHORUS_DELAY, &value);
 		}
 
 		return value;

@@ -35,28 +35,97 @@
 #include <ranges>
 
 /* Local inclusions. */
-#include "Input/Manager.hpp"
-#include "Graphics/Renderer.hpp"
+#include "Audio/HardwareOutput.hpp"
 #include "Audio/Manager.hpp"
-#include "Vulkan/SwapChain.hpp" // FIXME: Should not be there
+#include "Graphics/Renderer.hpp"
+#include "Input/Manager.hpp"
 #include "NodeCrawler.hpp"
 #include "Tracer.hpp"
+#include "Vulkan/SwapChain.hpp" // FIXME: Should not be there
 
 namespace EmEn::Scenes
 {
-	using namespace EmEn::Libs;
-	using namespace EmEn::Libs::Math;
-	using namespace EmEn::Libs::PixelFactory;
-	using namespace EmEn::Graphics;
-	using namespace EmEn::Saphir;
-	using namespace EmEn::Physics;
+	using namespace Libs;
+	using namespace Libs::Math;
+	using namespace Libs::PixelFactory;
+	using namespace Graphics;
+	using namespace Saphir;
+	using namespace Physics;
+
+	Scene::~Scene ()
+	{
+		/* From 'Scene setup data' */
+		{
+			m_initialized = false;
+
+			/* NOTE: Release all shared_ptr. */
+			m_environmentEffects.clear();
+
+			/* NOTE: Other data are trivial. */
+		}
+
+		/* From 'Structures for faster access to specific data' */
+		{
+			/* NOTE: Release all shared_ptr on entity components. */
+			m_modifiers.clear();
+
+			/* NOTE: Release all shared_ptr on entity components. */
+			m_renderToViews.clear();
+			m_renderToTextures.clear();
+			m_renderToShadowMaps.clear();
+
+			/* NOTE: Release all shared_ptr. */
+			for ( auto & visual : m_sceneVisualComponents )
+			{
+				visual.reset();
+			}
+
+			/* NOTE: Releasing octrees provoked by the smart-pointer reset. */
+			//this->destroyOctrees();
+			m_physicsOctree.reset();
+			m_renderingOctree.reset();
+		}
+
+		/* From 'Managers deeply linked to the scene content' */
+		{
+			/* Release the shared_ptr on a scene node. */
+			m_nodeController.releaseNode();
+
+			/* Release all shared_ptr on renderable. */
+			for ( auto & renderList : m_renderLists )
+			{
+				renderList.clear();
+			}
+
+			/* Release all shared_ptr on entity components, should remove renderTarget (shadow map). */
+			m_lightSet.removeAllLights();
+			m_lightSet.terminate(*this);
+
+			m_AVConsoleManager.clear();
+		}
+
+		/* From 'Real scene content holder' */
+		{
+			/* NOTE: Release shared_ptr */
+			m_seaLevelResource.reset();
+			m_sceneAreaResource.reset();
+			m_backgroundResource.reset();
+
+			/* NOTE: Release all shared_ptr */
+			m_staticEntities.clear();
+
+			/* NOTE: Destroy the node tree and reset the root node. */
+			this->resetNodeTree();
+			m_rootNode.reset();
+		}
+	}
 
 	void
 	Scene::registerSceneVisualComponents () noexcept
 	{
-		if ( m_background != nullptr )
+		if ( m_backgroundResource != nullptr )
 		{
-			m_sceneVisualComponents[0] = std::make_shared< Component::Visual >("Background", *m_rootNode, m_background);
+			m_sceneVisualComponents[0] = std::make_unique< Component::Visual >("Background", *m_rootNode, m_backgroundResource);
 
 			/* NOTE: Disables lighting model on the background.
 			 * TODO: Check to disable at construct time. */
@@ -68,9 +137,9 @@ namespace EmEn::Scenes
 			this->checkRenderableInstance(renderableInstance);
 		}
 
-		if ( m_sceneArea != nullptr )
+		if ( m_sceneAreaResource != nullptr )
 		{
-			m_sceneVisualComponents[1] = std::make_shared< Component::Visual >("SceneArea", *m_rootNode, m_sceneArea);
+			m_sceneVisualComponents[1] = std::make_unique< Component::Visual >("SceneArea", *m_rootNode, m_sceneAreaResource);
 
 			const auto renderableInstance = m_sceneVisualComponents[1]->getRenderableInstance();
 			renderableInstance->enableLighting();
@@ -80,9 +149,9 @@ namespace EmEn::Scenes
 			this->checkRenderableInstance(renderableInstance);
 		}
 
-		if ( m_seaLevel != nullptr )
+		if ( m_seaLevelResource != nullptr )
 		{
-			m_sceneVisualComponents[2] = std::make_shared< Component::Visual >("SeaLevel", *m_rootNode, m_seaLevel);
+			m_sceneVisualComponents[2] = std::make_unique< Component::Visual >("SeaLevel", *m_rootNode, m_seaLevelResource);
 
 			const auto renderableInstance = m_sceneVisualComponents[2]->getRenderableInstance();
 			renderableInstance->enableLighting();
@@ -162,9 +231,9 @@ namespace EmEn::Scenes
 	}
 
 	bool
-	Scene::initialize (Input::Manager & inputManager, Settings & settings) noexcept
+	Scene::enable (Input::Manager & inputManager, Settings & /*settings*/) noexcept
 	{
-		if ( !m_flags[Initialized] )
+		if ( !m_initialized )
 		{
 			this->registerSceneVisualComponents();
 
@@ -174,40 +243,65 @@ namespace EmEn::Scenes
 				return false;
 			}
 
-			const auto & swapChain = m_AVConsoleManager.graphicsRenderer().swapChain();
-
-			if ( swapChain != nullptr )
+			/* NOTE: Connecting video devices. */
 			{
-				m_AVConsoleManager.addVideoDevice(swapChain, true);
+				if ( !m_AVConsoleManager.hasPrimaryVideoOutput() )
+				{
+					if ( const auto swapChain = m_AVConsoleManager.graphicsRenderer().swapChain(); swapChain != nullptr )
+					{
+						m_AVConsoleManager.addVideoDevice(swapChain, true);
+
+						m_renderToViewAccess.lock();
+						m_renderToViews.emplace(swapChain);
+						m_renderToViewAccess.unlock();
+
+						TraceDebug{ClassId} << "SwapChain added to AVConsole!";
+					}
+				}
+
+				if ( !m_AVConsoleManager.autoConnectPrimaryVideoDevices() )
+				{
+					TraceError{ClassId} << "Unable to auto-connect primary video devices !";
+
+					return false;
+				}
+
+				if ( !m_lightSet.initialize(*this) )
+				{
+					TraceError{ClassId} << "Unable to initialize the light set !";
+
+					return false;
+				}
 			}
 
-			if ( !m_AVConsoleManager.autoConnectPrimaryVideoDevices(settings) )
+			/* NOTE: Connecting audio devices (optional). */
+			if ( m_AVConsoleManager.audioManager().usable() )
 			{
-				TraceError{ClassId} << "Unable to auto-connect primary video devices !";
+				if ( !m_AVConsoleManager.hasPrimaryAudioOutput() )
+				{
+					const auto defaultSpeaker = std::make_shared< Audio::HardwareOutput >(AVConsole::Manager::DefaultSpeakerName, m_AVConsoleManager.audioManager());
 
-				return false;
+					m_AVConsoleManager.addAudioDevice(defaultSpeaker, true);
+				}
+
+				if ( !m_AVConsoleManager.autoConnectPrimaryAudioDevices() )
+				{
+					TraceError{ClassId} << "Unable to auto-connect primary audio devices !";
+
+					return false;
+				}
+			}
+			else
+			{
+				TraceWarning{ClassId} << "No audio layer available!";
 			}
 
-			if ( !m_AVConsoleManager.autoConnectPrimaryAudioDevices(m_AVConsoleManager.audioManager(), settings) )
-			{
-				TraceError{ClassId} << "Unable to auto-connect primary audio devices !";
+			TraceSuccess{ClassId} << "Scene " << this->name() << " initialized!" "\n" << m_AVConsoleManager.getConnexionStates();
 
-				return false;
-			}
-
-			TraceInfo{ClassId} << m_AVConsoleManager.getConnexionStates();
-
-			if ( !m_lightSet.initialize(this->name()) )
-			{
-				TraceError{ClassId} << "Unable to initialize the light set !";
-
-				return false;
-			}
-
-			m_flags[Initialized] = true;
+			m_initialized = true;
 		}
 
-		/* FIXME: When re-enabling, the swap-chain do not have the correct ambient light parameters ! */
+		/* FIXME: When re-enabling, the swap-chain does not have the correct ambient light parameters! */
 
 		inputManager.addKeyboardListener(&m_nodeController);
 
@@ -215,13 +309,240 @@ namespace EmEn::Scenes
 	}
 
 	void
-	Scene::shutdown (Input::Manager & inputManager) noexcept
+	Scene::disable (Input::Manager & inputManager) noexcept
 	{
-		/* FIXME: Find a better way to stop the node controller ! */
+		/* FIXME: Find a better way to stop the node controller! */
 		m_nodeController.releaseNode();
 		m_nodeController.disconnectDevice();
 
 		inputManager.removeKeyboardListener(&m_nodeController);
+	}
+
+	std::shared_ptr< RenderTarget::View< ViewMatrices2DUBO > >
+	Scene::createRenderToView (const std::string & name, uint32_t width, uint32_t height, const FramebufferPrecisions & precisions, bool primaryDevice) noexcept
+	{
+		const std::lock_guard< std::mutex > lock{m_renderToViewAccess};
+
+		if ( m_AVConsoleManager.isVideoDeviceExists(name) )
+		{
+			TraceError{ClassId} << "A virtual device named '" << name << "' already exists ! Render to view creation canceled ...";
+
+			return {};
+		}
+
+		/* Create the render target. */
+		auto renderTarget = std::make_shared< RenderTarget::View< ViewMatrices2DUBO > >(name, width, height, precisions);
+
+		if ( !renderTarget->create(m_AVConsoleManager.graphicsRenderer()) )
+		{
+			TraceError{ClassId} << "Unable to create the render to view '" << name << "' !";
+
+			return {};
+		}
+
+		if ( !m_AVConsoleManager.addVideoDevice(renderTarget, primaryDevice) )
+		{
+			TraceError{ClassId} << "Unable to add the render to view '" << name << "' as a virtual video device !";
+
+			return {};
+		}
+
+		m_renderToViews.emplace(renderTarget);
+
+		return renderTarget;
+	}
+
+	std::shared_ptr< RenderTarget::View< ViewMatrices3DUBO > >
+	Scene::createRenderToCubicView (const std::string & name, uint32_t size, const FramebufferPrecisions & precisions, bool primaryDevice) noexcept
+	{
+		const std::lock_guard< std::mutex > lock{m_renderToViewAccess};
+
+		/* Checks name availability. */
+		if ( m_AVConsoleManager.isVideoDeviceExists(name) )
+		{
+			TraceError{ClassId} << "A virtual device named '" << name << "' already exists ! Render to cubic view creation canceled ...";
+
+			return {};
+		}
+
+		/* Create the render target. */
+		auto renderTarget = std::make_shared< RenderTarget::View< ViewMatrices3DUBO > >(name, size, precisions);
+
+		if ( !renderTarget->create(m_AVConsoleManager.graphicsRenderer()) )
+		{
+			TraceError{ClassId} << "Unable to create the render to cubic view '" << name << "' !";
+
+			return {};
+		}
+
+		if ( !m_AVConsoleManager.addVideoDevice(renderTarget, primaryDevice) )
+		{
+			TraceError{ClassId} << "Unable to add the render to cubic view '" << name << "' as a virtual video device !";
+
+			return {};
+		}
+
+		m_renderToViews.emplace(renderTarget);
+
+		return renderTarget;
+	}
+
+	std::shared_ptr< RenderTarget::Texture< ViewMatrices2DUBO > >
+	Scene::createRenderToTexture2D (const std::string & name, uint32_t width, uint32_t height, uint32_t colorCount) noexcept
+	{
+		const std::lock_guard< std::mutex > lock{m_renderToTextureAccess};
+
+		if ( m_AVConsoleManager.isVideoDeviceExists(name) )
+		{
+			TraceError{ClassId} <<
+				"A virtual video device named '" << name << "' already exists ! "
+				"Render to texture 2D creation canceled ...";
+
+			return {};
+		}
+
+		/* Create the render target. */
+		auto renderTarget = std::make_shared< RenderTarget::Texture< ViewMatrices2DUBO > >(name, width, height, colorCount);
+
+		if ( !renderTarget->enableManualLoading() )
+		{
+			return {};
+		}
+
+		const auto success = renderTarget->createOnHardware(m_AVConsoleManager.graphicsRenderer());
+
+		if ( !renderTarget->setManualLoadSuccess(success) )
+		{
+			TraceError{ClassId} << "Unable to create the render to texture 2D '" << name << "' !";
+
+			return {};
+		}
+
+		if ( !m_AVConsoleManager.addVideoDevice(renderTarget, false) )
+		{
+			TraceError{ClassId} << "Unable to add the render to texture 2D '" << name << "' as a virtual video device !";
+
+			return {};
+		}
+
+		m_renderToTextures.emplace(renderTarget);
+
+		return renderTarget;
+	}
+
+	std::shared_ptr< RenderTarget::Texture< ViewMatrices3DUBO > >
+	Scene::createRenderToCubemap (const std::string & name, uint32_t size, uint32_t colorCount) noexcept
+	{
+		const std::lock_guard< std::mutex > lock{m_renderToTextureAccess};
+
+		if ( m_AVConsoleManager.isVideoDeviceExists(name) )
+		{
+			TraceError{ClassId} <<
+				"A virtual video device named '" << name << "' already exists ! "
+				"Render to cubemap creation canceled ...";
+
+			return {};
+		}
+
+		/* Create the render target. */
+		auto renderTarget = std::make_shared< RenderTarget::Texture< ViewMatrices3DUBO > >(name, size, colorCount);
+
+		if ( !renderTarget->enableManualLoading() )
+		{
+			return {};
+		}
+
+		const auto success = renderTarget->createOnHardware(m_AVConsoleManager.graphicsRenderer());
+
+		if ( !renderTarget->setManualLoadSuccess(success) )
+		{
+			TraceError{ClassId} << "Unable to create the render to cubemap '" << name << "' !";
+
+			return {};
+		}
+
+		if ( !m_AVConsoleManager.addVideoDevice(renderTarget, false) )
+		{
+			TraceError{ClassId} << "Unable to add the render to cubemap '" << name << "' as a virtual video device !";
+
+			return {};
+		}
+
+		m_renderToTextures.emplace(renderTarget);
+
+		return renderTarget;
+	}
+
+	std::shared_ptr< RenderTarget::ShadowMap< ViewMatrices2DUBO > >
+	Scene::createRenderToShadowMap (const std::string & name, uint32_t resolution) noexcept
+	{
+		const std::lock_guard< std::mutex > lock{m_renderToShadowMapAccess};
+
+		if ( m_AVConsoleManager.isVideoDeviceExists(name) )
+		{
+			TraceError{ClassId} <<
+				"A virtual video device named '" << name << "' already exists ! "
+				"Render to shadow map creation canceled ...";
+
+			return {};
+		}
+
+		/* Create the render target. */
+		auto renderTarget = std::make_shared< RenderTarget::ShadowMap< ViewMatrices2DUBO > >(name, resolution);
+
+		if ( !renderTarget->create(m_AVConsoleManager.graphicsRenderer()) )
+		{
+			TraceError{ClassId} << "Unable to create the render to shadow map '" << name << "' !";
+
+			return {};
+		}
+
+		if ( !m_AVConsoleManager.addVideoDevice(renderTarget, false) )
+		{
+			TraceError{ClassId} << "Unable to add the render to shadow map '" << name << "' as a virtual video device !";
+
+			return {};
+		}
+
+		m_renderToShadowMaps.emplace(renderTarget);
+
+		return renderTarget;
+	}
+
+	std::shared_ptr< RenderTarget::ShadowMap< ViewMatrices3DUBO > >
+	Scene::createRenderToCubicShadowMap (const std::string & name, uint32_t resolution) noexcept
+	{
+		const std::lock_guard< std::mutex > lock{m_renderToShadowMapAccess};
+
+		if ( m_AVConsoleManager.isVideoDeviceExists(name) )
+		{
+			TraceError{ClassId} <<
+				"A virtual video device named '" << name << "' already exists ! "
+				"Render to cubic shadow map creation canceled ...";
+
+			return {};
+		}
+
+		/* Create the render target. */
+		auto renderTarget = std::make_shared< RenderTarget::ShadowMap< ViewMatrices3DUBO > >(name, resolution);
+
+		if ( !renderTarget->create(m_AVConsoleManager.graphicsRenderer()) )
+		{
+			TraceError{ClassId} << "Unable to create the render to cubic shadow map '" << name << "' !";
+
+			return {};
+		}
+
+		if ( !m_AVConsoleManager.addVideoDevice(renderTarget, false) )
+		{
+			TraceError{ClassId} << "Unable to add the render to cubic shadow map '" << name << "' as a virtual video device !";
+
+			return {};
+		}
+
+		m_renderToShadowMaps.emplace(renderTarget);
+
+		return renderTarget;
 	}
 
 	std::shared_ptr< StaticEntity >
@@ -239,7 +560,7 @@ namespace EmEn::Scenes
 	bool
 	Scene::removeStaticEntity (const std::string & name) noexcept
 	{
-		/* Fist, check the presence of the entity in the list. */
+		/* First, check the presence of the entity in the list. */
 		const auto staticEntityIt = m_staticEntities.find(name);
 
 		if ( staticEntityIt == m_staticEntities.end() )
@@ -253,14 +574,14 @@ namespace EmEn::Scenes
 
 		if ( m_renderingOctree != nullptr && staticEntity->isRenderable() )
 		{
-			const std::lock_guard< std::mutex > lockGuard{m_renderingOctreeMutex};
+			const std::lock_guard< std::mutex > lock{m_renderingOctreeAccess};
 
 			m_renderingOctree->erase(staticEntity);
 		}
 
 		if ( m_physicsOctree != nullptr )
 		{
-			const std::lock_guard< std::mutex > lockGuard{m_physicsOctreeMutex};
+			const std::lock_guard< std::mutex > lock{m_physicsOctreeAccess};
 
 			m_physicsOctree->erase(staticEntity);
 		}
@@ -270,38 +591,6 @@ namespace EmEn::Scenes
 		m_staticEntities.erase(staticEntityIt);
 
 		return true;
-	}
-
-	void
-	Scene::destroy () noexcept
-	{
-		m_environmentEffects.clear();
-
-		/* NOTE: Remove the scene global visuals */
-		{
-			for ( auto & visual : m_sceneVisualComponents )
-			{
-				visual.reset();
-			}
-
-			m_seaLevel.reset();
-			m_sceneArea.reset();
-			m_background.reset();
-		}
-
-		m_modifiers.clear();
-
-		/* FIXME: Find a better solution ! */
-		{
-			m_lightSet.removeAllLights();
-			m_lightSet.terminate();
-		}
-
-		this->destroyOctrees();
-		m_nodeController.releaseNode();
-		this->resetNodeTree();
-		m_staticEntities.clear();
-		m_AVConsoleManager.clear();
 	}
 
 	bool
@@ -360,14 +649,14 @@ namespace EmEn::Scenes
 	{
 		if ( m_renderingOctree != nullptr )
 		{
-			const std::lock_guard< std::mutex > lock{m_renderingOctreeMutex};
+			const std::lock_guard< std::mutex > lock{m_renderingOctreeAccess};
 
 			m_renderingOctree.reset();
 		}
 
 		if ( m_physicsOctree != nullptr )
 		{
-			const std::lock_guard< std::mutex > lock{m_physicsOctreeMutex};
+			const std::lock_guard< std::mutex > lock{m_physicsOctreeAccess};
 
 			m_physicsOctree.reset();
 		}
@@ -376,7 +665,7 @@ namespace EmEn::Scenes
 	bool
 	Scene::rebuildRenderingOctree (bool keepElements) noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_renderingOctreeMutex};
+		const std::lock_guard< std::mutex > lock{m_renderingOctreeAccess};
 
 		if ( m_boundary <= 0.0F )
 		{
@@ -411,7 +700,7 @@ namespace EmEn::Scenes
 	bool
 	Scene::rebuildPhysicsOctree (bool keepElements) noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_physicsOctreeMutex};
+		const std::lock_guard< std::mutex > lock{m_physicsOctreeAccess};
 
 		if ( m_boundary <= 0.0F )
 		{
@@ -449,7 +738,7 @@ namespace EmEn::Scenes
 		/* Check the entity in the rendering octree. */
 		if ( m_renderingOctree != nullptr && entity->isRenderable() )
 		{
-			const std::lock_guard< std::mutex > lockGuard{m_renderingOctreeMutex};
+			const std::lock_guard< std::mutex > lockGuard{m_renderingOctreeAccess};
 
 			if ( m_renderingOctree->contains(entity) )
 			{
@@ -464,7 +753,7 @@ namespace EmEn::Scenes
 		/* Check the entity in the physics octree. */
 		if ( m_physicsOctree != nullptr && entity->isDeflector() )
 		{
-			const std::lock_guard< std::mutex > lockGuard{m_physicsOctreeMutex};
+			const std::lock_guard< std::mutex > lock{m_physicsOctreeAccess};
 
 			if ( m_physicsOctree->contains(entity) )
 			{
@@ -480,7 +769,7 @@ namespace EmEn::Scenes
 	void
 	Scene::resetNodeTree () const noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_sceneNodesMutex};
+		const std::lock_guard< std::mutex > lock{m_sceneNodesAccess};
 
 		m_rootNode->destroyTree();
 	}
@@ -495,7 +784,7 @@ namespace EmEn::Scenes
 
 		/* Update scene static entities logics. */
 		{
-			const std::lock_guard< std::mutex > lock{m_staticEntitiesMutex};
+			const std::lock_guard< std::mutex > lock{m_staticEntitiesAccess};
 
 			for ( const auto & staticEntity : std::ranges::views::values(m_staticEntities) )
 			{
@@ -508,9 +797,9 @@ namespace EmEn::Scenes
 
 		/* Update scene nodes logics. */
 		{
-			const std::lock_guard< std::mutex > lock{m_sceneNodesMutex};
+			const std::lock_guard< std::mutex > lock{m_sceneNodesAccess};
 
-			NodeCrawler< Node > crawler(m_rootNode);
+			NodeCrawler< Node > crawler{m_rootNode};
 
 			std::shared_ptr< Node > currentNode{};
 
@@ -580,21 +869,152 @@ namespace EmEn::Scenes
 	}
 
 	void
+	Scene::publishStateForRendering () noexcept
+	{
+		/* TODO: Check to copy only relevant data to speed up the transfer. */
+		const uint32_t nextTarget = m_renderStateIndex == 0 ? 1 : 0;
+
+		for ( const auto & staticEntity : std::ranges::views::values(m_staticEntities) )
+		{
+			staticEntity->publishStateForRendering(nextTarget);
+		}
+
+		NodeCrawler< Node > crawler{m_rootNode};
+
+		std::shared_ptr< Node > currentNode{};
+
+		while ( (currentNode = crawler.nextNode()) != nullptr )
+		{
+			currentNode->publishStateForRendering(nextTarget);
+		}
+
+		this->forEachRenderToShadowMap([&nextTarget] (const auto & renderTarget){
+			renderTarget->viewMatrices().publishStateForRendering(nextTarget);
+		});
+
+		this->forEachRenderToTexture([&nextTarget] (const auto & renderTarget){
+			renderTarget->viewMatrices().publishStateForRendering(nextTarget);
+		});
+
+		this->forEachRenderToView([&nextTarget] (const auto & renderTarget){
+			renderTarget->viewMatrices().publishStateForRendering(nextTarget);
+		});
+
+		/* NOTE: Declare the new target to read from for the rendering thread. */
+		m_renderStateIndex.store(nextTarget, std::memory_order_release);
+	}
+
+	void
+	Scene::castShadows (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const Vulkan::CommandBuffer & commandBuffer) noexcept
+	{
+		const uint32_t readStateIndex = m_renderStateIndex.load(std::memory_order_acquire);
+
+		if ( !m_lightSet.isEnabled() )
+		{
+			return;
+		}
+
+		/* Sort the scene according to the point of view. */
+		if ( !this->populateRenderLists(renderTarget, readStateIndex, true) )
+		{
+			/* There is nothing to shadow to cast ... */
+			return;
+		}
+
+		//TraceDebug{ClassId} <<
+		//	"Shadow map content :" "\n"
+		//	" - Plain objects : " << m_renderLists[Shadows].size() << "\n";
+
+		for ( const auto & renderBatch : m_renderLists[Shadows] | std::views::values )
+		{
+			renderBatch.renderableInstance()->castShadows(readStateIndex, renderTarget, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer);
+		}
+	}
+
+	void
+	Scene::render (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const Vulkan::CommandBuffer & commandBuffer) noexcept
+	{
+		const uint32_t readStateIndex = m_renderStateIndex.load(std::memory_order_acquire);
+
+		//std::cout << "Rendering from render state #" << readStateIndex << "... " "\n";
+
+		/* Sort the scene according to the point of view. */
+		if ( !this->populateRenderLists(renderTarget, readStateIndex, false) )
+		{
+			return;
+		}
+
+		//TraceDebug{ClassId} <<
+		//	"Frame content :" "\n"
+		//	" - Opaque / +lighted : " << m_renderLists[Opaque].size() << " / " << m_renderLists[OpaqueLighted].size() << "\n"
+		//	" - Translucent / +lighted : " << m_renderLists[Translucent].size() << " / " << m_renderLists[TranslucentLighted].size() << "\n";
+
+		/* First, we render all opaque renderable objects. */
+		this->renderSelection(renderTarget, readStateIndex, commandBuffer, m_renderLists[Opaque], m_renderLists[OpaqueLighted]);
+
+		/* After, we render all translucent renderable objects. */
+		this->renderSelection(renderTarget, readStateIndex, commandBuffer, m_renderLists[Translucent], m_renderLists[TranslucentLighted]);
+
+		/* Optional rendering.
+		 * FIXME: Add a main control. */
+		/*{
+			for ( const auto & renderBatch : m_renderLists[Opaque] )
+			{
+				const auto * renderableInstance = renderBatch.second.renderableInstance();
+
+				if ( renderableInstance->isDisplayTBNSpaceEnabled() )
+				{
+					renderableInstance->renderTBNSpace(renderTarget, commandBuffer);
+				}
+			}
+
+			for ( const auto & renderBatch : m_renderLists[Translucent] )
+			{
+				const auto * renderableInstance = renderBatch.second.renderableInstance();
+
+				if ( renderableInstance->isDisplayTBNSpaceEnabled() )
+				{
+					renderableInstance->renderTBNSpace(renderTarget, commandBuffer);
+				}
+			}
+
+			for ( const auto & renderBatch : m_renderLists[OpaqueLighted] )
+			{
+				const auto * renderableInstance = renderBatch.second.renderableInstance();
+
+				if ( renderableInstance->isDisplayTBNSpaceEnabled() )
+				{
+					renderableInstance->renderTBNSpace(renderTarget, commandBuffer);
+				}
+			}
+
+			for ( const auto & renderBatch : m_renderLists[TranslucentLighted] )
+			{
+				const auto * renderableInstance = renderBatch.second.renderableInstance();
+
+				if ( renderableInstance->isDisplayTBNSpaceEnabled() )
+				{
+					renderableInstance->renderTBNSpace(renderTarget, commandBuffer);
+				}
+			}
+		}*/
+	}
+
+	void
 	Scene::applyModifiers (Node & node) const noexcept
 	{
-		for ( const auto & modifier : m_modifiers )
-		{
+		this->forEachModifiers([&node] (const auto & modifier) {
 			/* NOTE: Avoid working on the same Node. */
-			if ( &node == &modifier->parentEntity() )
+			if ( &node == &modifier.parentEntity() )
 			{
-				continue;
+				return;
 			}
 
 			/* FIXME: Use AABB when usable */
-			const auto modifierForce = modifier->getForceAppliedToEntity(node.getWorldCoordinates(), node.getWorldBoundingSphere());
+			const auto modifierForce = modifier.getForceAppliedToEntity(node.getWorldCoordinates(), node.getWorldBoundingSphere());
 
 			node.addForce(modifierForce);
-		}
+		});
 	}
 
 	void
@@ -627,7 +1047,7 @@ namespace EmEn::Scenes
 			const auto & entityA = *elementIt;
 			const bool entityAHasMovableAbility = entityA->hasMovableAbility();
 
-			/* Copy the iterator to iterate through next elements with it without modify the initial one. */
+			/* Copy the iterator to iterate through the next elements with it without modify the initial one. */
 			auto elementItCopy = elementIt;
 
 			for ( ++elementItCopy; elementItCopy != elements.end(); ++elementItCopy )
@@ -699,15 +1119,15 @@ namespace EmEn::Scenes
 
 		auto & collider = entity->getMovableTrait()->collider();
 
-		if ( m_sceneArea != nullptr )
+		if ( m_sceneAreaResource != nullptr )
 		{
-			const auto groundLevel = m_sceneArea->getLevelAt(worldPosition) - entity->getWorldBoundingSphere().radius();
+			const auto groundLevel = m_sceneAreaResource->getLevelAt(worldPosition) - entity->getWorldBoundingSphere().radius();
 
 			if ( worldPosition[Y] >= groundLevel )
 			{
 				entity->setYPosition(groundLevel, TransformSpace::World);
 
-				collider.addCollision(CollisionType::SceneGround, nullptr, worldPosition, m_sceneArea->getNormalAt(worldPosition));
+				collider.addCollision(CollisionType::SceneGround, nullptr, worldPosition, m_sceneAreaResource->getNormalAt(worldPosition));
 			}
 		}
 
@@ -776,7 +1196,7 @@ namespace EmEn::Scenes
 		auto & collider = entity->getMovableTrait()->collider();
 
 		/* Running the subtest first. */
-		if ( m_sceneArea != nullptr )
+		if ( m_sceneAreaResource != nullptr )
 		{
 			/* Gets the four points of the box bottom. */
 			const std::array< Vector< 3, float >, 4 > points{
@@ -792,7 +1212,7 @@ namespace EmEn::Scenes
 
 			for ( const auto & position : points )
 			{
-				const auto groundLevel = m_sceneArea->getLevelAt(position);
+				const auto groundLevel = m_sceneAreaResource->getLevelAt(position);
 				const auto distance = groundLevel - position[Y];
 
 				if ( distance <= highestDistance )
@@ -806,7 +1226,7 @@ namespace EmEn::Scenes
 			{
 				entity->moveY(highestDistance, TransformSpace::World);
 
-				collider.addCollision(CollisionType::SceneGround, nullptr, *collisionPosition, m_sceneArea->getNormalAt(*collisionPosition));
+				collider.addCollision(CollisionType::SceneGround, nullptr, *collisionPosition, m_sceneAreaResource->getNormalAt(*collisionPosition));
 			}
 		}
 
@@ -866,7 +1286,7 @@ namespace EmEn::Scenes
 	}
 
 	void
-	Scene::insertInShadowCastLists (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const std::shared_ptr< RenderableInstance::Abstract > & renderableInstance, float distance) noexcept
+	Scene::insertInShadowCastLists (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const std::shared_ptr< RenderableInstance::Abstract > & renderableInstance, const CartesianFrame< float > * worldCoordinates, float distance) noexcept
 	{
 		/* Check whether the renderable instance is ready to cast shadows. */
 		if ( !renderableInstance->isReadyToCastShadows(renderTarget) )
@@ -901,12 +1321,12 @@ namespace EmEn::Scenes
 
 		for ( uint32_t layerIndex = 0; layerIndex < layerCount; layerIndex++ )
 		{
-			RenderBatch::create(m_renderLists[Shadows], distance, renderableInstance, layerIndex);
+			RenderBatch::create(m_renderLists[Shadows], distance, renderableInstance, worldCoordinates, layerIndex);
 		}
 	}
 
 	void
-	Scene::insertInRenderLists (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const std::shared_ptr< RenderableInstance::Abstract > & renderableInstance, float distance) noexcept
+	Scene::insertInRenderLists (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const std::shared_ptr< RenderableInstance::Abstract > & renderableInstance, const CartesianFrame< float > * worldCoordinates, float distance) noexcept
 	{
 		/* Check whether the renderable instance is ready to render. */
 		if ( !renderableInstance->isReadyToRender(renderTarget) )
@@ -947,29 +1367,29 @@ namespace EmEn::Scenes
 			{
 				if ( isOpaque )
 				{
-					RenderBatch::create(m_renderLists[OpaqueLighted], distance, renderableInstance, layerIndex);
+					RenderBatch::create(m_renderLists[OpaqueLighted], distance, renderableInstance, worldCoordinates, layerIndex);
 				}
 				else
 				{
-					RenderBatch::create(m_renderLists[TranslucentLighted], distance * -1.0F, renderableInstance, layerIndex);
+					RenderBatch::create(m_renderLists[TranslucentLighted], distance * -1.0F, renderableInstance, worldCoordinates, layerIndex);
 				}
 			}
 			else
 			{
 				if ( isOpaque )
 				{
-					RenderBatch::create(m_renderLists[Opaque], distance, renderableInstance, layerIndex);
+					RenderBatch::create(m_renderLists[Opaque], distance, renderableInstance, worldCoordinates, layerIndex);
 				}
 				else
 				{
-					RenderBatch::create(m_renderLists[Translucent], distance * -1.0F, renderableInstance, layerIndex);
+					RenderBatch::create(m_renderLists[Translucent], distance * -1.0F, renderableInstance, worldCoordinates, layerIndex);
 				}
 			}
 		}
 	}
 
 	bool
-	Scene::populateRenderLists (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, bool isShadowCasting) noexcept
+	Scene::populateRenderLists (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, uint32_t readStateIndex, bool isShadowCasting) noexcept
 	{
 		/* FIXME: TODO integrate the max viewable distance and the frustum culling. */
 
@@ -990,7 +1410,6 @@ namespace EmEn::Scenes
 		const auto & cameraPosition = renderTarget->viewMatrices().position();
 		Vector< 3, float > entityPosition{};
 
-		/* Sorting global renderable objects from the scene. */
 		for ( const auto & visualComponent : m_sceneVisualComponents )
 		{
 			if ( visualComponent == nullptr )
@@ -1007,17 +1426,17 @@ namespace EmEn::Scenes
 
 			if ( isShadowCasting )
 			{
-				this->insertInShadowCastLists(renderTarget, renderableInstance, 0.0F);
+				this->insertInShadowCastLists(renderTarget, renderableInstance, nullptr, 0.0F);
 			}
 			else
 			{
-				this->insertInRenderLists(renderTarget, renderableInstance, 0.0F);
+				this->insertInRenderLists(renderTarget, renderableInstance, nullptr, 0.0F);
 			}
 		}
 
 		/* Sorting renderable objects from scene static entities. */
 		{
-			const std::lock_guard< std::mutex > lock{m_staticEntitiesMutex};
+			const std::lock_guard< std::mutex > lock{m_staticEntitiesAccess};
 
 			for ( const auto & staticEntity : std::ranges::views::values(m_staticEntities) )
 			{
@@ -1027,8 +1446,7 @@ namespace EmEn::Scenes
 					continue;
 				}
 
-				/* Prepares the entity position (costly) for the lambda. */
-				entityPosition = staticEntity->getWorldCoordinates().position();
+				const auto & worldCoordinates = staticEntity->getWorldCoordinatesStateForRendering(readStateIndex);
 
 				for ( const auto & component: staticEntity->components() | std::views::values )
 				{
@@ -1041,11 +1459,11 @@ namespace EmEn::Scenes
 
 					if ( isShadowCasting )
 					{
-						this->insertInShadowCastLists(renderTarget, renderableInstance, Vector< 3, float >::distance(cameraPosition, entityPosition));
+						this->insertInShadowCastLists(renderTarget, renderableInstance, &worldCoordinates, Vector< 3, float >::distance(cameraPosition, worldCoordinates.position()));
 					}
 					else
 					{
-						this->insertInRenderLists(renderTarget, renderableInstance, Vector< 3, float >::distance(cameraPosition, entityPosition));
+						this->insertInRenderLists(renderTarget, renderableInstance, &worldCoordinates, Vector< 3, float >::distance(cameraPosition, worldCoordinates.position()));
 					}
 				}
 			}
@@ -1053,8 +1471,8 @@ namespace EmEn::Scenes
 
 		/* Sorting renderable objects from the scene node tree. */
 		{
-			/* NOTE: Prevent scene node deletion from logic update thread to crash the rendering. */
-			const std::lock_guard< std::mutex > lock{m_sceneNodesMutex};
+			/* NOTE: Prevent scene node deletion from the logic update thread to crash the rendering. */
+			const std::lock_guard< std::mutex > lock{m_sceneNodesAccess};
 
 			NodeCrawler< const Node > crawler{m_rootNode};
 
@@ -1068,8 +1486,7 @@ namespace EmEn::Scenes
 					continue;
 				}
 
-				/* Prepares the entity position (costly) for the lambda. */
-				entityPosition = node->getWorldCoordinates().position();
+				const auto & worldCoordinates = node->getWorldCoordinatesStateForRendering(readStateIndex);
 
 				for ( const auto & component: node->components() | std::views::values )
 				{
@@ -1082,11 +1499,11 @@ namespace EmEn::Scenes
 
 					if ( isShadowCasting )
 					{
-						this->insertInShadowCastLists(renderTarget, renderableInstance, Vector< 3, float >::distance(cameraPosition, entityPosition));
+						this->insertInShadowCastLists(renderTarget, renderableInstance, &worldCoordinates, Vector< 3, float >::distance(cameraPosition, worldCoordinates.position()));
 					}
 					else
 					{
-						this->insertInRenderLists(renderTarget, renderableInstance, Vector< 3, float >::distance(cameraPosition, entityPosition));
+						this->insertInRenderLists(renderTarget, renderableInstance, &worldCoordinates, Vector< 3, float >::distance(cameraPosition, worldCoordinates.position()));
 					}
 				}
 			}
@@ -1099,8 +1516,38 @@ namespace EmEn::Scenes
 	}
 
 	void
-	Scene::updateVideoMemory () const noexcept
+	Scene::updateVideoMemory (bool shadowMapEnabled, bool renderToTextureEnabled) const noexcept
 	{
+		const uint32_t readStateIndex = m_renderStateIndex.load(std::memory_order_acquire);
+
+		if ( shadowMapEnabled && !m_renderToShadowMaps.empty() )
+		{
+			this->forEachRenderToShadowMap([readStateIndex] (const auto & renderTarget) {
+				if ( !renderTarget->viewMatrices().updateVideoMemory(readStateIndex) )
+				{
+					TraceError{ClassId} << "Failed to update the video memory of the render target (Shadow map) from readStateIndex #" << readStateIndex << " !";
+				}
+			});
+		}
+
+		if ( renderToTextureEnabled && !m_renderToTextures.empty() )
+		{
+			this->forEachRenderToTexture([readStateIndex] (const auto & renderTarget) {
+				if ( !renderTarget->viewMatrices().updateVideoMemory(readStateIndex) )
+				{
+					TraceError{ClassId} << "Failed to update the video memory of the render target (Texture) from readStateIndex #" << readStateIndex << " !";
+				}
+			});
+		}
+
+		/* NOTE: There should be at least the swap chain! */
+		this->forEachRenderToView([readStateIndex] (const auto & renderTarget) {
+			if ( !renderTarget->viewMatrices().updateVideoMemory(readStateIndex) )
+			{
+				TraceError{ClassId} << "Failed to update the video memory of the render target (View) from readStateIndex #" << readStateIndex << " !";
+			}
+		});
+
 		if ( !m_lightSet.updateVideoMemory() )
 		{
 			Tracer::error(ClassId, "Unable to update the light set data to the video memory !");
@@ -1108,13 +1555,13 @@ namespace EmEn::Scenes
 	}
 
 	void
-	Scene::renderSelection (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const Vulkan::CommandBuffer & commandBuffer, const RenderBatch::List & unlightedObjects, const RenderBatch::List & lightedObjects) const noexcept
+	Scene::renderSelection (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, uint32_t readStateIndex, const Vulkan::CommandBuffer & commandBuffer, const RenderBatch::List & unlightedObjects, const RenderBatch::List & lightedObjects) const noexcept
 	{
 		if ( !unlightedObjects.empty() )
 		{
 			for ( const auto & renderBatch : unlightedObjects | std::views::values )
 			{
-				renderBatch.renderableInstance()->render(renderTarget, nullptr, RenderPassType::SimplePass, renderBatch.subGeometryIndex(), commandBuffer);
+				renderBatch.renderableInstance()->render(readStateIndex, renderTarget, nullptr, RenderPassType::SimplePass, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer);
 			}
 		}
 
@@ -1127,7 +1574,7 @@ namespace EmEn::Scenes
 		{
 			for ( const auto & renderBatch : lightedObjects | std::views::values )
 			{
-				renderBatch.renderableInstance()->render(renderTarget, nullptr, RenderPassType::SimplePass, renderBatch.subGeometryIndex(), commandBuffer);
+				renderBatch.renderableInstance()->render(readStateIndex, renderTarget, nullptr, RenderPassType::SimplePass, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer);
 			}
 
 			return;
@@ -1139,7 +1586,7 @@ namespace EmEn::Scenes
 			const std::lock_guard< std::mutex > lock{m_lightSet.mutex()};
 
 			/* Ambient pass. */
-			renderBatch.renderableInstance()->render(renderTarget, nullptr, RenderPassType::AmbientPass, renderBatch.subGeometryIndex(), commandBuffer);
+			renderBatch.renderableInstance()->render(readStateIndex, renderTarget, nullptr, RenderPassType::AmbientPass, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer);
 
 			/* Loop through all directional lights. */
 			for ( const auto & light : m_lightSet.directionalLights() )
@@ -1149,7 +1596,7 @@ namespace EmEn::Scenes
 					continue;
 				}
 
-				renderBatch.renderableInstance()->render(renderTarget, light.get(), RenderPassType::DirectionalLightPassNoShadow, renderBatch.subGeometryIndex(), commandBuffer);
+				renderBatch.renderableInstance()->render(readStateIndex, renderTarget, light.get(), RenderPassType::DirectionalLightPassNoShadow, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer);
 			}
 
 			/* Loop through all point lights. */
@@ -1162,10 +1609,18 @@ namespace EmEn::Scenes
 
 				const auto & instance = renderBatch.renderableInstance();
 
-				if ( instance->isLightDistanceCheckDisabled() || light->touch(instance->worldPosition()) )
+				/* NOTE: If a light distance check is needed. */
+				if ( instance->isLightDistanceCheckEnabled() )
 				{
-					instance->render(renderTarget, light.get(), RenderPassType::PointLightPassNoShadow, renderBatch.subGeometryIndex(), commandBuffer);
+					const auto * worldCoordinates = renderBatch.worldCoordinates();
+
+					if ( worldCoordinates != nullptr && !light->touch(worldCoordinates->position()) )
+					{
+						continue;
+					}
 				}
+
+				instance->render(readStateIndex, renderTarget, light.get(), RenderPassType::PointLightPassNoShadow, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer);
 			}
 
 			/* Loop through all spotlights. */
@@ -1178,124 +1633,55 @@ namespace EmEn::Scenes
 
 				const auto & instance = renderBatch.renderableInstance();
 
-				if ( instance->isLightDistanceCheckDisabled() || light->touch(instance->worldPosition()) )
+				/* NOTE: If a light distance check is needed. */
+				if ( instance->isLightDistanceCheckEnabled() )
 				{
-					renderBatch.renderableInstance()->render(renderTarget, light.get(), RenderPassType::SpotLightPassNoShadow, renderBatch.subGeometryIndex(), commandBuffer);
+					const auto * worldCoordinates = renderBatch.worldCoordinates();
+
+					if ( worldCoordinates != nullptr && !light->touch(worldCoordinates->position()) )
+					{
+						continue;
+					}
 				}
+
+				renderBatch.renderableInstance()->render(readStateIndex, renderTarget, light.get(), RenderPassType::SpotLightPassNoShadow, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer);
 			}
 		}
 	}
 
 	void
-	Scene::castShadows (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const Vulkan::CommandBuffer & commandBuffer) noexcept
-	{
-		if ( !m_lightSet.isEnabled() )
-		{
-			return;
-		}
-
-		/* Sort the scene according to the point of view. */
-		if ( !this->populateRenderLists(renderTarget, true) )
-		{
-			/* There is nothing to shadow to cast ... */
-			return;
-		}
-
-		//TraceDebug{ClassId} <<
-		//	"Shadow map content :" "\n"
-		//	" - Plain objects : " << m_renderLists[Shadows].size() << "\n";
-
-		for ( const auto & renderBatch : m_renderLists[Shadows] | std::views::values )
-		{
-			renderBatch.renderableInstance()->castShadows(renderTarget, renderBatch.subGeometryIndex(), commandBuffer);
-		}
-	}
-
-	void
-	Scene::render (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const Vulkan::CommandBuffer & commandBuffer) noexcept
-	{
-		/* Sort the scene according to the point of view. */
-		if ( !this->populateRenderLists(renderTarget, false) )
-		{
-			/* There is nothing to render... */
-			return;
-		}
-
-		//TraceDebug{ClassId} <<
-		//	"Frame content :" "\n"
-		//	" - Opaque / +lighted : " << m_renderLists[Opaque].size() << " / " << m_renderLists[OpaqueLighted].size() << "\n"
-		//	" - Translucent / +lighted : " << m_renderLists[Translucent].size() << " / " << m_renderLists[TranslucentLighted].size() << "\n";
-
-		/* First, we render all opaque renderable objects. */
-		this->renderSelection(renderTarget, commandBuffer, m_renderLists[Opaque], m_renderLists[OpaqueLighted]);
-
-		/* After, we render all translucent renderable objects. */
-		this->renderSelection(renderTarget, commandBuffer, m_renderLists[Translucent], m_renderLists[TranslucentLighted]);
-
-		/* Optional rendering.
-		 * FIXME: Add a master control. */
-		/*{
-			for ( const auto & renderBatch : m_renderLists[Opaque] )
-			{
-				const auto * renderableInstance = renderBatch.second.renderableInstance();
-
-				if ( renderableInstance->isDisplayTBNSpaceEnabled() )
-				{
-					renderableInstance->renderTBNSpace(renderTarget, commandBuffer);
-				}
-			}
-
-			for ( const auto & renderBatch : m_renderLists[Translucent] )
-			{
-				const auto * renderableInstance = renderBatch.second.renderableInstance();
-
-				if ( renderableInstance->isDisplayTBNSpaceEnabled() )
-				{
-					renderableInstance->renderTBNSpace(renderTarget, commandBuffer);
-				}
-			}
-
-			for ( const auto & renderBatch : m_renderLists[OpaqueLighted] )
-			{
-				const auto * renderableInstance = renderBatch.second.renderableInstance();
-
-				if ( renderableInstance->isDisplayTBNSpaceEnabled() )
-				{
-					renderableInstance->renderTBNSpace(renderTarget, commandBuffer);
-				}
-			}
-
-			for ( const auto & renderBatch : m_renderLists[TranslucentLighted] )
-			{
-				const auto * renderableInstance = renderBatch.second.renderableInstance();
-
-				if ( renderableInstance->isDisplayTBNSpaceEnabled() )
-				{
-					renderableInstance->renderTBNSpace(renderTarget, commandBuffer);
-				}
-			}
-		}*/
-	}
-
-	void
-	Scene::checkAVConsoleNotification (int notificationCode, const std::any & data) const noexcept
+	Scene::checkAVConsoleNotification (int notificationCode, const std::any & data) noexcept
 	{
 		switch ( notificationCode )
 		{
 			case AVConsole::Manager::VideoDeviceAdded :
-				TraceDebug{ClassId} << "A new video device is available.";
+				TraceDebug{ClassId} << "A new video device is available for the scene.";
 				break;
 
 			case AVConsole::Manager::VideoDeviceRemoved :
-				TraceDebug{ClassId} << "A video device has been removed.";
+			{
+				const auto device = std::any_cast< const std::shared_ptr< AVConsole::AbstractVirtualDevice > >(data);
+
+				if ( const auto renderTarget = std::dynamic_pointer_cast< RenderTarget::Abstract >(device) )
+				{
+					const std::scoped_lock lock{m_renderToShadowMapAccess, m_renderToTextureAccess, m_renderToViewAccess};
+
+					/* NOTE: If the conversion is successful, renderTarget is not null. */
+					m_renderToViews.erase(renderTarget);
+					m_renderToTextures.erase(renderTarget);
+					m_renderToShadowMaps.erase(renderTarget);
+				}
+
+				TraceDebug{ClassId} << "A video device has been removed from the scene.";
+			}
 				break;
 
 			case AVConsole::Manager::AudioDeviceAdded :
-				TraceDebug{ClassId} << "A new audio device is available.";
+				TraceDebug{ClassId} << "A new audio device is available for the scene.";
 				break;
 
 			case AVConsole::Manager::AudioDeviceRemoved :
-				TraceDebug{ClassId} << "An audio device has been removed.";
+				TraceDebug{ClassId} << "An audio device has been removed from the scene.";
 				break;
 
 			case AVConsole::Manager::RenderToShadowMapAdded :
@@ -1339,14 +1725,14 @@ namespace EmEn::Scenes
 
 				if ( m_renderingOctree != nullptr && node->isRenderable() )
 				{
-					const std::lock_guard< std::mutex > lockGuard{m_renderingOctreeMutex};
+					const std::lock_guard< std::mutex > lockGuard{m_renderingOctreeAccess};
 
 					m_renderingOctree->erase(node);
 				}
 
 				if ( m_physicsOctree != nullptr )
 				{
-					const std::lock_guard< std::mutex > lockGuard{m_physicsOctreeMutex};
+					const std::lock_guard< std::mutex > lock{m_physicsOctreeAccess};
 
 					m_physicsOctree->erase(node);
 				}
@@ -1359,9 +1745,7 @@ namespace EmEn::Scenes
 			default:
 				if constexpr ( ObserverDebugEnabled )
 				{
-					const auto node = std::any_cast< std::shared_ptr< Node > >(data);
-
-					TraceDebug{ClassId} << "Event #" << notificationCode << " from '" << node->name() << "' ignored.";
+					TraceDebug{ClassId} << "Event #" << notificationCode << " from a Node ignored.";
 				}
 				return false;
 		}
@@ -1413,32 +1797,32 @@ namespace EmEn::Scenes
 				return true;
 
 			case AbstractEntity::DirectionalLightCreated :
-				m_lightSet.add(std::any_cast< std::shared_ptr< Component::DirectionalLight > >(data));
+				m_lightSet.add(*this, std::any_cast< std::shared_ptr< Component::DirectionalLight > >(data));
 
 				return true;
 
 			case AbstractEntity::DirectionalLightDestroyed :
-				m_lightSet.remove(std::any_cast< std::shared_ptr< Component::DirectionalLight > >(data));
+				m_lightSet.remove(*this, std::any_cast< std::shared_ptr< Component::DirectionalLight > >(data));
 
 				return true;
 
 			case AbstractEntity::PointLightCreated :
-				m_lightSet.add(std::any_cast< std::shared_ptr< Component::PointLight > >(data));
+				m_lightSet.add(*this, std::any_cast< std::shared_ptr< Component::PointLight > >(data));
 
 				return true;
 
 			case AbstractEntity::PointLightDestroyed :
-				m_lightSet.remove(std::any_cast< std::shared_ptr< Component::PointLight > >(data));
+				m_lightSet.remove(*this, std::any_cast< std::shared_ptr< Component::PointLight > >(data));
 
 				return true;
 
 			case AbstractEntity::SpotLightCreated :
-				m_lightSet.add(std::any_cast< std::shared_ptr< Component::SpotLight > >(data));
+				m_lightSet.add(*this, std::any_cast< std::shared_ptr< Component::SpotLight > >(data));
 
 				return true;
 
 			case AbstractEntity::SpotLightDestroyed :
-				m_lightSet.remove(std::any_cast< std::shared_ptr< Component::SpotLight > >(data));
+				m_lightSet.remove(*this, std::any_cast< std::shared_ptr< Component::SpotLight > >(data));
 
 				return true;
 
@@ -1493,9 +1877,7 @@ namespace EmEn::Scenes
 			default:
 				if constexpr ( ObserverDebugEnabled )
 				{
-					const auto component = std::any_cast< std::shared_ptr< Component::Abstract > >(data);
-
-					TraceDebug{ClassId} << "Event #" << notificationCode << " from '" << component->name() << "' ignored.";
+					TraceDebug{ClassId} << "Event #" << notificationCode << " from an entity component ignored.";
 				}
 				return false;
 		}
@@ -1559,7 +1941,7 @@ namespace EmEn::Scenes
 			return true;
 		}
 
-		/* NOTE: Don't know what is it, goodbye! */
+		/* NOTE: Don't know what it is, goodbye! */
 		TraceDebug{ClassId} <<
 			"Received an unhandled notification (Code:" << notificationCode << ") from observable '" << ObservableTrait::whoIs(observable->classUID()) << "' (UID:" << observable->classUID() << ")  ! "
 			"Forgetting it ...";
@@ -1601,29 +1983,26 @@ namespace EmEn::Scenes
 	void
 	Scene::initializeRenderableInstance (const std::shared_ptr< RenderableInstance::Abstract > & renderableInstance) const noexcept
 	{
-		for ( const auto & renderTarget : m_AVConsoleManager.renderToShadowMaps() )
-		{
+		this->forEachRenderToShadowMap([&] (const auto & renderTarget) {
 			if ( !this->getRenderableInstanceReadyForShadowCasting(renderableInstance, renderTarget) )
 			{
 				TraceError{ClassId} << "The initialization of renderable instance '" << renderableInstance->renderable()->name() << "' for shadow map '" << renderTarget->id() << "' has failed !";
 			}
-		}
+		});
 
-		for ( const auto & renderTarget : m_AVConsoleManager.renderToTextures() )
-		{
+		this->forEachRenderToTexture([&] (const auto & renderTarget) {
 			if ( !this->getRenderableInstanceReadyForRender(renderableInstance, renderTarget) )
 			{
 				TraceError{ClassId} << "The initialization of renderable instance '" << renderableInstance->renderable()->name() << "' for render target '" << renderTarget->id() << "' has failed !";
 			}
-		}
+		});
 
-		for ( const auto & renderTarget : m_AVConsoleManager.renderToViews() )
-		{
+		this->forEachRenderToView([&] (const auto & renderTarget) {
 			if ( !this->getRenderableInstanceReadyForRender(renderableInstance, renderTarget) )
 			{
 				TraceError{ClassId} << "The initialization of renderable instance '" << renderableInstance->renderable()->name() << "' for render target '" << renderTarget->id() << "' has failed !";
 			}
-		}
+		});
 	}
 
 	void
@@ -1673,7 +2052,6 @@ namespace EmEn::Scenes
 	void
 	Scene::forEachRenderableInstance (const std::function< bool (const std::shared_ptr< RenderableInstance::Abstract > & renderableInstance) > & function) const noexcept
 	{
-		/* Check global renderable objects from the scene. */
 		for ( const auto & visualComponent : m_sceneVisualComponents )
 		{
 			if ( visualComponent == nullptr )
@@ -1698,7 +2076,7 @@ namespace EmEn::Scenes
 
 		/* Check renderable objects from scene static entities. */
 		{
-			const std::lock_guard< std::mutex > lock{m_staticEntitiesMutex};
+			const std::lock_guard< std::mutex > lock{m_staticEntitiesAccess};
 
 			for ( const auto & staticEntity : std::ranges::views::values(m_staticEntities) )
 			{
@@ -1735,8 +2113,8 @@ namespace EmEn::Scenes
 
 		/* Check renderable objects from the scene node tree. */
 		{
-			/* NOTE: Prevent scene node deletion from logic update thread to crash the rendering. */
-			const std::lock_guard< std::mutex > lock{m_sceneNodesMutex};
+			/* NOTE: Prevent scene node deletion from the logic update thread to crash the rendering. */
+			const std::lock_guard< std::mutex > lock{m_sceneNodesAccess};
 
 			NodeCrawler< const Node > crawler{m_rootNode};
 
@@ -1910,7 +2288,7 @@ namespace EmEn::Scenes
 			return false;
 		}
 
-		/* NOTE: Check how many render pass this renderable instance needs. */
+		/* NOTE: Check how many render passes this renderable instance needs. */
 		const auto renderPassTypes = this->prepareRenderPassTypes(*renderableInstance);
 
 		if ( renderPassTypes.empty() )
@@ -2033,7 +2411,7 @@ namespace EmEn::Scenes
 		}
 		else
 		{
-			const std::lock_guard< std::mutex > lock{m_renderingOctreeMutex};
+			const std::lock_guard< std::mutex > lock{m_renderingOctreeAccess};
 
 			output <<
 				"Rendering octree :" "\n"
@@ -2056,7 +2434,7 @@ namespace EmEn::Scenes
 		}
 		else
 		{
-			const std::lock_guard< std::mutex > lock{m_physicsOctreeMutex};
+			const std::lock_guard< std::mutex > lock{m_physicsOctreeAccess};
 
 			output <<
 				"Physics octree :" "\n"

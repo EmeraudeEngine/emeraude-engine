@@ -36,9 +36,9 @@
 
 namespace EmEn::Graphics
 {
-	using namespace EmEn::Libs;
-	using namespace EmEn::Libs::Math;
-	using namespace EmEn::Vulkan;
+	using namespace Libs;
+	using namespace Libs::Math;
+	using namespace Vulkan;
 
 	const std::array< Matrix< 4, float >, CubemapFaceIndexes.size() > ViewMatrices3DUBO::CubemapOrientation{
 		Matrix< 4, float >::lookAt(Vector< 3, float >{0.0F, 0.0F, 0.0F}, Vector< 3, float >{ 1.0F,  0.0F,  0.0F}, Vector< 3, float >{ 0.0F, -1.0F,  0.0F}), // X+
@@ -63,80 +63,65 @@ namespace EmEn::Graphics
 	{
 		const auto powA = std::pow(std::tan(Radian(QuartRevolution< float >) * 0.5F), 2.0F);
 
-		m_bufferData[ViewWidthOffset] = width;
-		m_bufferData[ViewHeightOffset] = height;
-		m_bufferData[ViewDistanceOffset] = distance;
-		m_bufferData[ViewNearOffset] = 0.1F / std::sqrt(1.0F + powA * 2.0F);
+		m_logicState.bufferData[ViewWidthOffset] = width;
+		m_logicState.bufferData[ViewHeightOffset] = height;
+		m_logicState.bufferData[ViewDistanceOffset] = distance;
+		m_logicState.bufferData[ViewNearOffset] = 0.1F / std::sqrt(1.0F + powA * 2.0F);
 
-		m_projection = Matrix< 4, float >::perspectiveProjection(QuartRevolution< float >, 1.0F, m_bufferData[ViewNearOffset], m_bufferData[ViewDistanceOffset]);
+		m_logicState.projection = Matrix< 4, float >::perspectiveProjection(QuartRevolution< float >, 1.0F, m_logicState.bufferData[ViewNearOffset], m_logicState.bufferData[ViewDistanceOffset]);
 
-		std::memcpy(&m_bufferData[ProjectionMatrixOffset], m_projection.data(), Matrix4Alignment * sizeof(float));
-
-		if ( !this->updateVideoMemory() )
-		{
-			Tracer::error(ClassId, "Unable to update video memory !");
-		}
+		std::memcpy(&m_logicState.bufferData[ProjectionMatrixOffset], m_logicState.projection.data(), Matrix4Alignment * sizeof(float));
 	}
 
 	void
 	ViewMatrices3DUBO::updateOrthographicViewProperties (float width, float height, float farDistance, float nearDistance) noexcept
 	{
-		m_bufferData[ViewWidthOffset] = width;
-		m_bufferData[ViewHeightOffset] = height;
-		m_bufferData[ViewNearOffset] = nearDistance;
-		m_bufferData[ViewDistanceOffset] = farDistance;
+		m_logicState.bufferData[ViewWidthOffset] = width;
+		m_logicState.bufferData[ViewHeightOffset] = height;
+		m_logicState.bufferData[ViewNearOffset] = nearDistance;
+		m_logicState.bufferData[ViewDistanceOffset] = farDistance;
 
-		m_projection = Matrix< 4, float >::orthographicProjection(
-			-m_bufferData[ViewDistanceOffset], m_bufferData[ViewDistanceOffset],
-			-m_bufferData[ViewDistanceOffset], m_bufferData[ViewDistanceOffset],
-			m_bufferData[ViewNearOffset], m_bufferData[ViewDistanceOffset]
+		m_logicState.projection = Matrix< 4, float >::orthographicProjection(
+			-m_logicState.bufferData[ViewDistanceOffset], m_logicState.bufferData[ViewDistanceOffset],
+			-m_logicState.bufferData[ViewDistanceOffset], m_logicState.bufferData[ViewDistanceOffset],
+			m_logicState.bufferData[ViewNearOffset], m_logicState.bufferData[ViewDistanceOffset]
 		);
 
-		std::memcpy(&m_bufferData[ProjectionMatrixOffset], m_projection.data(), Matrix4Alignment * sizeof(float));
-
-		if ( !this->updateVideoMemory() )
-		{
-			Tracer::error(ClassId, "Unable to update video memory !");
-		}
+		std::memcpy(&m_logicState.bufferData[ProjectionMatrixOffset], m_logicState.projection.data(), Matrix4Alignment * sizeof(float));
 	}
 
 	void
 	ViewMatrices3DUBO::updateViewCoordinates (const CartesianFrame< float > & coordinates, const Vector< 3, float > & velocity) noexcept
 	{
-		m_position = coordinates.position();
+		m_logicState.position = coordinates.position();
 
 		for ( auto face : CubemapFaceIndexes )
 		{
 			const auto faceIndex = static_cast< size_t >(face);
 
-			m_views.at(faceIndex) = CubemapOrientation.at(faceIndex) * Matrix< 4, float >::translation(-m_position);
-			m_infinityViews.at(faceIndex) = CubemapOrientation.at(faceIndex) * Matrix< 4, float >::translation(-m_position);
-			m_frustums.at(faceIndex).update(m_projection * m_views.at(faceIndex));
+			m_logicState.views.at(faceIndex) = CubemapOrientation.at(faceIndex) * Matrix< 4, float >::translation(-m_logicState.position);
+			m_logicState.infinityViews.at(faceIndex) = CubemapOrientation.at(faceIndex) * Matrix< 4, float >::translation(-m_logicState.position);
+			m_logicState.frustums.at(faceIndex).update(m_logicState.projection * m_logicState.views.at(faceIndex));
 		}
 
-		/* FIXME: These data is not constantly updated on GPU. */
-		m_bufferData[WorldPositionOffset + 0] = m_position.x();
-		m_bufferData[WorldPositionOffset + 1] = m_position.y();
-		m_bufferData[WorldPositionOffset + 2] = m_position.z();
+		/* FIXME: These data are not constantly updated on GPU. */
+		m_logicState.bufferData[WorldPositionOffset + 0] = m_logicState.position.x();
+		m_logicState.bufferData[WorldPositionOffset + 1] = m_logicState.position.y();
+		m_logicState.bufferData[WorldPositionOffset + 2] = m_logicState.position.z();
 
-		m_bufferData[VelocityVectorOffset + 0] = velocity.x();
-		m_bufferData[VelocityVectorOffset + 1] = velocity.y();
-		m_bufferData[VelocityVectorOffset + 2] = velocity.z();
+		m_logicState.bufferData[VelocityVectorOffset + 0] = velocity.x();
+		m_logicState.bufferData[VelocityVectorOffset + 1] = velocity.y();
+		m_logicState.bufferData[VelocityVectorOffset + 2] = velocity.z();
 	}
 
 	void
 	ViewMatrices3DUBO::updateAmbientLightProperties (const PixelFactory::Color< float > & color, float intensity) noexcept
 	{
-		m_bufferData[AmbientLightColorOffset+0] = color.red();
-		m_bufferData[AmbientLightColorOffset+1] = color.green();
-		m_bufferData[AmbientLightColorOffset+2] = color.blue();
+		m_logicState.bufferData[AmbientLightColorOffset+0] = color.red();
+		m_logicState.bufferData[AmbientLightColorOffset+1] = color.green();
+		m_logicState.bufferData[AmbientLightColorOffset+2] = color.blue();
 
-		m_bufferData[AmbientLightIntensityOffset] = intensity;
-
-		if ( !this->updateVideoMemory() )
-		{
-			Tracer::error(ClassId, "Unable to update video memory !");
-		}
+		m_logicState.bufferData[AmbientLightIntensityOffset] = intensity;
 	}
 
 	bool
@@ -180,15 +165,21 @@ namespace EmEn::Graphics
 			return false;
 		}
 
-		/* Initial video memory update. */
-		return this->updateVideoMemory();
+		return true;
 	}
 
 	bool
-	ViewMatrices3DUBO::updateVideoMemory () const noexcept
+	ViewMatrices3DUBO::updateVideoMemory (uint32_t readStateIndex) const noexcept
 	{
 		if constexpr ( IsDebug )
 		{
+			if ( readStateIndex >= m_renderState.size() )
+			{
+				Tracer::error(ClassId, "Index overflow !");
+
+				return false;
+			}
+
 			if ( m_uniformBufferObject == nullptr )
 			{
 				Tracer::error(ClassId, "The uniform buffer object is uninitialized !");
@@ -207,7 +198,7 @@ namespace EmEn::Graphics
 			return false;
 		}
 
-		std::memcpy(pointer, m_bufferData.data(), m_bufferData.size() * sizeof(float));
+		std::memcpy(pointer, m_renderState[readStateIndex].bufferData.data(), m_renderState[readStateIndex].bufferData.size() * sizeof(float));
 
 		m_uniformBufferObject->unmapMemory();
 

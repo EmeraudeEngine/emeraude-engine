@@ -23,7 +23,7 @@ message("Job processes used : ${CMAKE_BUILD_PARALLEL_LEVEL}")
 # Declare project and options.
 project(
 	Emeraude
-	VERSION 0.7.44
+	VERSION 0.7.5
 	DESCRIPTION "Emeraude Engine is an open-source (LGPLv3) 3D Graphics engine using Vulkan and written in C++20."
 	HOMEPAGE_URL "https://github.com/londnoir/emeraude-engine"
 	LANGUAGES C CXX
@@ -52,7 +52,9 @@ set(EMERAUDE_ENABLE_HWLOC On CACHE BOOL "Enable 'HWLOC' library. Adds the cpu co
 set(EMERAUDE_ENABLE_OPENAL On CACHE BOOL "Enable 'libopenal' library. Adds the audio to the engine [LOCAL] (Default On).")
 set(EMERAUDE_ENABLE_TAGLIB On CACHE BOOL "Enable 'libtaglib' library. Adds the ability to read media file tags [SYSTEM] (Default On).")
 set(EMERAUDE_ENABLE_IMGUI Off CACHE BOOL "Enable 'libimgui' library. Adds a GUI to the engine [LOCAL] (Default Off).")
-set(EMERAUDE_ENABLE_BULLET Off CACHE BOOL "Enable 'libBullet' library. Adds a Bullet to the engine [SYSTEM] (Default Off).")
+set(EMERAUDE_ENABLE_BULLET Off CACHE BOOL "Enable 'libBullet' library. Adds the Bullet physics engine [SYSTEM] (Default Off).")
+set(EMERAUDE_ENABLE_FASTGLTF Off CACHE BOOL "Enable 'fastgltf' library. Adds a glTF file format reader [SYSTEM] (Default Off).")
+set(EMERAUDE_ENABLE_TSAN Off CACHE BOOL "Enable 'ThreadSanitizer' library. Adds a dev tool to trace data race [SYSTEM] (Linux only, Default Off).")
 # Debug preprocessor macros control (Ignored in Release).
 option(EMERAUDE_DEBUG_OBSERVER_PATTERN "Enable the debug output of observer pattern (Default Off)." Off)
 option(EMERAUDE_DEBUG_PIXEL_FACTORY "Enable the debug output of pixel factory library (Default Off)." Off)
@@ -214,9 +216,9 @@ if ( MSVC )
 	add_library(${PROJECT_NAME} SHARED STATIC ${EMERAUDE_SOURCE_FILES})
 else ()
 	add_library(${PROJECT_NAME} SHARED ${EMERAUDE_SOURCE_FILES}
-            src/Libs/ThreadPool.hpp
-			src/Libs/ThreadPool.cpp
-			src/Resources/ContainerInterface.hpp)
+		src/Libs/ThreadPool.hpp
+		src/Libs/ThreadPool.cpp
+		src/Resources/ContainerInterface.hpp)
 endif ()
 
 target_sources(${PROJECT_NAME} PUBLIC FILE_SET HEADERS BASE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/src FILES ${EMERAUDE_HEADER_FILES})
@@ -318,6 +320,7 @@ else ( UNIX )
 			-fno-exceptions
 			#-fno-rtti
 			$<$<CONFIG:Debug>:
+				-DDEBUG
 				-O0
 				-g
 				-Wall
@@ -326,12 +329,20 @@ else ( UNIX )
 				-Werror
 			>
 			$<$<CONFIG:Relase>:
+				-DNDEBUG
 				-O2
 				-ffast-math
 				-fdata-sections
 				-ffunction-sections
 			>
 		)
+
+		if ( EMERAUDE_ENABLE_TSAN )
+			message("Enabling ThreadSanitizer tools ...")
+
+			target_compile_options(${PROJECT_NAME} PRIVATE -fsanitize=thread)
+			target_link_options(${PROJECT_NAME} PRIVATE -fsanitize=thread)
+		endif ()
 	endif ()
 endif ()
 
@@ -350,6 +361,9 @@ target_link_directories(${PROJECT_NAME} PUBLIC ${LOCAL_LIB_DIR}/lib)
 
 
 ###### Dependencies ######
+
+# Magic Enum
+target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/magic_enum/include)
 
 # Request : brotli, bzip2, harbuzz, png, zlib
 include(SetupFreetype)
@@ -410,7 +424,11 @@ if ( EMERAUDE_ENABLE_SAMPLERATE )
 endif ()
 
 if ( EMERAUDE_ENABLE_ASIO )
-	include(SetupASIO)
+	if ( EMERAUDE_ENABLE_TSAN )
+		message(WARNING "Disabling ASIO when ThreadSanitizer is requested !")
+	else ()
+		include(SetupASIO)
+	endif ()
 endif ()
 
 if ( EMERAUDE_ENABLE_CPUFEATURES )
@@ -427,6 +445,10 @@ endif ()
 
 if ( EMERAUDE_ENABLE_BULLET )
 	include(SetupBullet)
+endif()
+
+if ( EMERAUDE_ENABLE_FASTGLTF )
+	include(SetupFastGLTF)
 endif()
 
 
@@ -465,6 +487,15 @@ endif ()
 ###### Write the project C++ config file ######
 
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/src/emeraude_config.hpp.in ${CMAKE_BINARY_DIR}/include/emeraude_config.hpp)
+
+if ( EMERAUDE_ENABLE_TSAN )
+	message("Use env variable : TSAN_OPTIONS=\"suppressions=tsan_suppressions.txt\"")
+
+	file(
+		COPY ${CMAKE_CURRENT_SOURCE_DIR}/resources/tsan_suppressions.txt
+		DESTINATION ${EMERAUDE_COMPILATION_DIR}
+	)
+endif ()
 
 if ( NOT "${EMERAUDE_COMPILATION_DIR}" STREQUAL "" )
 	# Copy 'gamecontrollerdb.txt' in the compilation directory.

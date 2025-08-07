@@ -155,14 +155,16 @@ namespace EmEn::Net
 		}
 
 		/* Read the JSON content. */
-		Json::Value root;
+		const auto rootCheck = FastJSON::getRootFromFile(filepath);
 
-		if ( !Libs::FastJSON::getRootFromFile(filepath, root) )
+		if ( !rootCheck )
 		{
 			TraceError{ClassId} << "Unable to read the download cache db file '" << filepath << "' !";
 
 			return false;
 		}
+
+		const auto & root = rootCheck.value();
 
 		/* Check the root node of the JSON for a file array. */
 		if ( !root.isMember(FileDataBaseKey) )

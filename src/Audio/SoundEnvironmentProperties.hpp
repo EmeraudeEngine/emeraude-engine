@@ -35,17 +35,17 @@
 namespace EmEn::Audio
 {
 	/**
-	 * @brief The sound environnement properties class to define how the sound will be played somewhere.
+	 * @brief The sound environment properties class to define how the sound will be played somewhere.
 	 */
 	class SoundEnvironmentProperties final
 	{
 		public:
 
 			/** @brief Class identifier. */
-			static constexpr auto ClassId{"SoundEnvironnementProperties"};
+			static constexpr auto ClassId{"SoundEnvironmentProperties"};
 
 			/** 
-			 * @brief Constructs a default sound environnement properties.
+			 * @brief Constructs a default sound environment properties.
 			 */
 			SoundEnvironmentProperties () noexcept = default;
 
@@ -122,6 +122,6 @@ namespace EmEn::Audio
 
 			float m_dopplerFactor{1.0F};
 			float m_speedOfSound{Physics::SpeedOfSound::Air< float >};
-			Audio::DistanceModel m_distanceModel{Audio::DistanceModel::Exponent};
+			DistanceModel m_distanceModel{DistanceModel::Exponent};
 	};
 }

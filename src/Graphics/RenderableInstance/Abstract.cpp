@@ -45,10 +45,11 @@
 
 namespace EmEn::Graphics::RenderableInstance
 {
-	using namespace EmEn::Libs;
-	using namespace EmEn::Vulkan;
-	using namespace EmEn::Saphir;
-	using namespace EmEn::Saphir::Keys;
+	using namespace Libs;
+	using namespace Libs::Math;
+	using namespace Vulkan;
+	using namespace Saphir;
+	using namespace Saphir::Keys;
 
 	constexpr auto TracerTag{"RenderableInstance"};
 
@@ -318,7 +319,7 @@ namespace EmEn::Graphics::RenderableInstance
 	}
 
 	void
-	Abstract::castShadows (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, uint32_t layerIndex, const CommandBuffer & commandBuffer) const noexcept
+	Abstract::castShadows (uint32_t readStateIndex, const std::shared_ptr< RenderTarget::Abstract > & renderTarget, uint32_t layerIndex, const CartesianFrame< float > * worldCoordinates, const CommandBuffer & commandBuffer) const noexcept
 	{
 		const std::lock_guard< std::mutex > lock{m_GPUMemoryAccess};
 
@@ -357,13 +358,13 @@ namespace EmEn::Graphics::RenderableInstance
 
 		this->bindInstanceModelLayer(commandBuffer, layerIndex);
 
-		this->pushMatrices(commandBuffer, *pipelineLayout, renderTarget->viewMatrices(), *program);
+		this->pushMatrices(commandBuffer, *pipelineLayout, *program, readStateIndex, renderTarget->viewMatrices(), worldCoordinates);
 
 		commandBuffer.draw(*m_renderable->geometry(), layerIndex, this->instanceCount());
 	}
 
 	void
-	Abstract::render (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const Scenes::Component::AbstractLightEmitter * lightEmitter, RenderPassType renderPassType, uint32_t layerIndex, const CommandBuffer & commandBuffer) const noexcept
+	Abstract::render (uint32_t readStateIndex, const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const Scenes::Component::AbstractLightEmitter * lightEmitter, RenderPassType renderPassType, uint32_t layerIndex, const CartesianFrame< float > * worldCoordinates, const CommandBuffer & commandBuffer) const noexcept
 	{
 		const std::lock_guard< std::mutex > lock{m_GPUMemoryAccess};
 
@@ -391,11 +392,11 @@ namespace EmEn::Graphics::RenderableInstance
 		/* Bind the graphics pipeline. */
 		commandBuffer.bind(*program->graphicsPipeline());
 
-		/* Bind renderable instance VBO/IBO. */
+		/* Bind a renderable instance VBO / IBO. */
 		this->bindInstanceModelLayer(commandBuffer, layerIndex);
 
 		/* Configure the push constants. */
-		this->pushMatrices(commandBuffer, *pipelineLayout, renderTarget->viewMatrices(), *program);
+		this->pushMatrices(commandBuffer, *pipelineLayout, *program, readStateIndex, renderTarget->viewMatrices(), worldCoordinates);
 
 		uint32_t setOffset = 0;
 
@@ -440,7 +441,7 @@ namespace EmEn::Graphics::RenderableInstance
 	}
 
 	void
-	Abstract::renderTBNSpace (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, uint32_t layerIndex, const CommandBuffer & commandBuffer) const noexcept
+	Abstract::renderTBNSpace (uint32_t readStateIndex, const std::shared_ptr< RenderTarget::Abstract > & renderTarget, uint32_t layerIndex, const CartesianFrame< float > * worldCoordinates, const CommandBuffer & commandBuffer) const noexcept
 	{
 		const std::lock_guard< std::mutex > lock{m_GPUMemoryAccess};
 
@@ -479,7 +480,7 @@ namespace EmEn::Graphics::RenderableInstance
 
 		this->bindInstanceModelLayer(commandBuffer, layerIndex);
 
-		this->pushMatrices(commandBuffer, *pipelineLayout, renderTarget->viewMatrices(), *program);
+		this->pushMatrices(commandBuffer, *pipelineLayout, *program, readStateIndex, renderTarget->viewMatrices(), worldCoordinates);
 
 		commandBuffer.draw(*m_renderable->geometry(), layerIndex, this->instanceCount());
 	}

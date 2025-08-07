@@ -214,7 +214,7 @@ namespace EmEn::Graphics::Material
 			case FillingType::Color :
 			{
 				const auto color = parseColorComponent(componentData);
-				const auto shininess = FastJSON::getNumber< float >(data[SpecularString], JKShininess, DefaultShininess);
+				const auto shininess = FastJSON::getValue< float >(data[SpecularString], JKShininess).value_or(DefaultShininess);
 
 				if ( !this->setSpecularComponent(color, shininess) )
 				{
@@ -240,7 +240,7 @@ namespace EmEn::Graphics::Material
 				// FIXME: Check UVW channel number
 				this->enableFlag(UsesPrimaryTextureCoordinates);
 
-				this->setShininess(FastJSON::getNumber< float >(data[SpecularString], JKShininess, DefaultShininess));
+				this->setShininess(FastJSON::getValue< float >(data[SpecularString], JKShininess).value_or(DefaultShininess));
 			}
 				return true;
 
@@ -266,7 +266,7 @@ namespace EmEn::Graphics::Material
 			return false;
 		}
 
-		m_alphaThresholdToDiscard = FastJSON::getNumber< float >(data[OpacityString], JKAlphaThreshold, 0.1F);
+		m_alphaThresholdToDiscard = FastJSON::getValue< float >(data[OpacityString], JKAlphaThreshold).value_or(0.1F);
 
 		switch ( fillingType )
 		{
@@ -299,7 +299,7 @@ namespace EmEn::Graphics::Material
 				// FIXME: Check UVW channel number
 				this->enableFlag(UsesPrimaryTextureCoordinates);
 
-				this->setOpacity(FastJSON::getNumber< float >(data[OpacityString], JKAmount, DefaultOpacity));
+				this->setOpacity(FastJSON::getValue< float >(data[OpacityString], JKAmount).value_or(DefaultOpacity));
 			}
 				return true;
 
@@ -330,7 +330,7 @@ namespace EmEn::Graphics::Material
 			case FillingType::Color :
 			{
 				const auto color = parseColorComponent(componentData);
-				const auto amount = FastJSON::getNumber< float >(data[AutoIlluminationString], JKAmount, DefaultAutoIlluminationAmount);
+				const auto amount = FastJSON::getValue< float >(data[AutoIlluminationString], JKAmount).value_or(DefaultAutoIlluminationAmount);
 
 				if ( !this->setAutoIlluminationComponent(color, amount) )
 				{
@@ -356,7 +356,7 @@ namespace EmEn::Graphics::Material
 				// FIXME: Check UVW channel number
 				this->enableFlag(UsesPrimaryTextureCoordinates);
 
-				this->setAutoIlluminationAmount(FastJSON::getNumber< float >(data[AutoIlluminationString], JKAmount, DefaultAutoIlluminationAmount));
+				this->setAutoIlluminationAmount(FastJSON::getValue< float >(data[AutoIlluminationString], JKAmount).value_or(DefaultAutoIlluminationAmount));
 			}
 				return true;
 
@@ -401,7 +401,7 @@ namespace EmEn::Graphics::Material
 				// FIXME: Check UVW channel number
 				this->enableFlag(UsesPrimaryTextureCoordinates);
 
-				this->setNormalScale(FastJSON::getNumber< float >(data[NormalString], JKScale, DefaultNormalScale));
+				this->setNormalScale(FastJSON::getValue< float >(data[NormalString], JKScale).value_or(DefaultNormalScale));
 			}
 				return true;
 
@@ -446,7 +446,7 @@ namespace EmEn::Graphics::Material
 				// FIXME: Check UVW channel number
 				this->enableFlag(UsesPrimaryTextureCoordinates);
 
-				this->setReflectionAmount(FastJSON::getNumber< float >(data[ReflectionString], JKAmount, DefaultReflectionAmount));
+				this->setReflectionAmount(FastJSON::getValue< float >(data[ReflectionString], JKAmount).value_or(DefaultReflectionAmount));
 			}
 				return true;
 

@@ -266,8 +266,8 @@ namespace EmEn::Scenes::Component
 			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::updateProperties() */
 			void updateProperties (bool isPerspectiveProjection, float distance, float fovOrNear) noexcept override;
 
-			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::onTargetConnected() */
-			void onTargetConnected (AVConsole::AVManagers & managers, AbstractVirtualDevice * targetDevice) noexcept override;
+			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::onOutputDeviceConnected() */
+			void onOutputDeviceConnected (AVConsole::AVManagers & managers, AbstractVirtualDevice * targetDevice) noexcept override;
 
 			/** @copydoc EmEn::Animations::AnimatableInterface::playAnimation() */
 			bool playAnimation (uint8_t animationID, const Libs::Variant & value, size_t cycle) noexcept override;

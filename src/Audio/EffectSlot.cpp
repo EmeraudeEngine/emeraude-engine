@@ -27,7 +27,7 @@
 #include "EffectSlot.hpp"
 
 /* Local inclusions. */
-#include "OpenAL.EFX.hpp"
+#include "OpenALExtensions.hpp"
 #include "Manager.hpp"
 #include "Utility.hpp"
 #include "Tracer.hpp"
@@ -38,7 +38,7 @@ namespace EmEn::Audio
 
 	EffectSlot::EffectSlot () noexcept
 	{
-		if ( !EFX::isAvailable() )
+		if ( !OpenAL::isEFXAvailable() )
 		{
 			Tracer::warning(ClassId, "OpenAL EFX is not supported !");
 
@@ -54,7 +54,7 @@ namespace EmEn::Audio
 
 		alFlushErrors();
 
-		EFX::alGenAuxiliaryEffectSlots(1, this->identifierPointer());
+		OpenAL::alGenAuxiliaryEffectSlots(1, this->identifierPointer());
 
 		if ( alGetErrors("alGenAuxiliaryEffectSlots()", __FILE__, __LINE__) || this->identifier() <= 0 )
 		{
@@ -64,7 +64,7 @@ namespace EmEn::Audio
 
 	EffectSlot::~EffectSlot ()
 	{
-		if ( !EFX::isAvailable() )
+		if ( !OpenAL::isEFXAvailable() )
 		{
 			return;
 		}
@@ -73,7 +73,7 @@ namespace EmEn::Audio
 		{
 			this->clearEffect();
 
-			EFX::alDeleteAuxiliaryEffectSlots(1, this->identifierPointer());
+			OpenAL::alDeleteAuxiliaryEffectSlots(1, this->identifierPointer());
 		}
 
 		this->clearFilter();
@@ -89,7 +89,7 @@ namespace EmEn::Audio
 			return false;
 		}
 
-		return EFX::alIsAuxiliaryEffectSlot(this->identifier()) == AL_TRUE;
+		return OpenAL::alIsAuxiliaryEffectSlot(this->identifier()) == AL_TRUE;
 	}
 
 	bool
@@ -109,7 +109,7 @@ namespace EmEn::Audio
 			return false;
 		}
 
-		EFX::alAuxiliaryEffectSloti(this->identifier(), AL_EFFECTSLOT_EFFECT, static_cast< ALint >(effect->identifier()));
+		OpenAL::alAuxiliaryEffectSloti(this->identifier(), AL_EFFECTSLOT_EFFECT, static_cast< ALint >(effect->identifier()));
 
 		if ( alGetErrors("alAuxiliaryEffectSloti()", __FILE__, __LINE__) )
 		{
@@ -173,7 +173,7 @@ namespace EmEn::Audio
 	void
 	EffectSlot::clearEffect () noexcept
 	{
-		EFX::alAuxiliaryEffectSloti(this->identifier(), AL_EFFECTSLOT_EFFECT, AL_NONE);
+		OpenAL::alAuxiliaryEffectSloti(this->identifier(), AL_EFFECTSLOT_EFFECT, AL_NONE);
 
 		m_effect.reset();
 	}

@@ -103,7 +103,7 @@ namespace EmEn
 
 		m_primaryServicesEnabled.clear();
 
-		/* FIXME: This should be here! */
+		/* FIXME: This shouldn't be here! */
 		m_resourceManager.unloadUnusedResources();
 
 		m_primaryServices.terminate();
@@ -128,23 +128,23 @@ namespace EmEn
 			const auto top = std::chrono::steady_clock::now();
 
 			{
-				/* NOTE: Prevent an active scene deletion/switch during the logic update task without blocking the rendering task. */
-				const std::shared_lock< std::shared_mutex > activeSceneLock{m_sceneManager.activeSceneAccess()};
-
 				const Time::Elapsed::PrintScopeRealTimeThreshold stat{"logicsTask", 1000.0 / 60.0};
 
-				m_lifetime += EngineUpdateCycleDurationUS< uint64_t >;
-
-				/* Call the application method to update its logics first. */
+				/* User-application cyclic update. */
 				this->onProcessLogics(m_cycle);
 
-				const auto activeScene = m_sceneManager.activeScene();
-
-				if ( activeScene != nullptr )
-				{
+				/* Core-application cyclic update on the active scene only.
+				 * NOTE: It will ask for a shared-access to the active scene
+				 * preventing locking the "rendering thread" for updating the scene logic. */
+				m_sceneManager.withSharedActiveScene([&] (const auto & activeScene ) {
+					/* This should run "freely" on one thread. */
 					activeScene->processLogics(m_cycle);
-				}
 
+					/* Tells the system one snapshot of the logic is ready to be synced. */
+					activeScene->publishStateForRendering();
+				}, true);
+
+				m_lifetime += EngineUpdateCycleDurationUS< uint64_t >;
 				m_cycle++;
 			}
 
@@ -175,21 +175,25 @@ namespace EmEn
 			}
 
 			{
-				/* NOTE: Prevent an active scene deletion/switch during the rendering task without blocking the logic update task. */
-				const std::shared_lock< std::shared_mutex > activeSceneLock{m_sceneManager.activeSceneAccess()};
-
 				const Time::Elapsed::PrintScopeRealTimeThreshold stat{"renderingTask", 1000.0 / 30.0};
 
-				const auto & activeScene = m_sceneManager.activeScene();
+				/* NOTE: Ask for a shared-access to the scene content prevening to lock the "logic thread" and draw the scene. */
+				m_sceneManager.withSharedActiveScene([&] (const auto & activeScene) {
+					if ( activeScene != nullptr )
+					{
+						/* This should only sync UBO for the scene. */
+						activeScene->updateVideoMemory(
+							m_graphicsRenderer.isShadowMapsEnabled(),
+							m_graphicsRenderer.isRenderToTexturesEnabled()
+						);
+					}
 
-				if ( activeScene != nullptr )
-				{
-					activeScene->updateVideoMemory();
-				}
+					/* This should only sync UBO for the overlay. */
+					m_overlayManager.updateVideoMemory();
 
-				m_overlayManager.updateVideoMemory();
-
-				m_graphicsRenderer.renderFrame(activeScene, m_overlayManager);
+					/* Render the scene (optional) and the overlay on top. */
+					m_graphicsRenderer.renderFrame(activeScene, m_overlayManager);
+				}, false);
 
 				frames++;
 			}
@@ -235,7 +239,7 @@ namespace EmEn
 
 		/* NOTE: Create the logic loop and the rendering loop into threads
 		 * automatically joined at the end of this function.
-		 * TODO: Use std::jthread instead to auto join threads at the end. */
+		 * TODO: We can use std::jthread instead to auto join threads at the end, but macOS SDK 12.0 doesn't provide std::jthread. */
 		std::thread logicsThread{[this] {
 			this->logicsTask();
 		}};
@@ -278,10 +282,9 @@ namespace EmEn
 			if ( m_flags[Paused] )
 			{
 				/* Stop all timers of an active scene. */
-				if ( m_sceneManager.hasActiveScene() )
-				{
-					m_sceneManager.activeScene()->pauseTimers();
-				}
+				m_sceneManager.withExclusiveActiveScene([&] (const auto & activeScene) {
+					activeScene->pauseTimers();
+				}, true);
 
 				/* Wait until an event release the pause state. */
 				while ( m_flags[Paused] )
@@ -293,10 +296,9 @@ namespace EmEn
 				}
 
 				/* Restart all timers of the active scene. */
-				if ( m_sceneManager.hasActiveScene() )
-				{
-					m_sceneManager.activeScene()->resumeTimers();
-				}
+				m_sceneManager.withExclusiveActiveScene([&] (const auto & activeScene) {
+					activeScene->resumeTimers();
+				}, true);
 			}
 
 			if constexpr ( IsDebug )
@@ -311,8 +313,8 @@ namespace EmEn
 			std::this_thread::sleep_for(std::chrono::milliseconds(1));
 		}
 
-		/* NOTE: Be sure all threads from the pool finishes their work. */
-		if ( auto threadPool = m_primaryServices.threadPool(); threadPool != nullptr )
+		/* NOTE: Be sure all threads from the pool finish their work. */
+		if ( const auto threadPool = m_primaryServices.threadPool(); threadPool != nullptr )
 		{
 			threadPool->wait();
 		}
@@ -740,9 +742,6 @@ namespace EmEn
 
 		this->onStop();
 
-		/* FIXME: Check the right order for stopping the engine! */
-		m_sceneManager.deleteAllScenes();
-
 		/* Stopping the logics and rendering loops. */
 		m_flags[IsLogicsLoopRunning] = false;
 		m_flags[IsRenderingLoopRunning] = false;
@@ -915,25 +914,23 @@ namespace EmEn
 
 				/* Direct keys reserved by core. */
 				case KeyF1 :
-				{
+					m_sceneManager.withSharedActiveScene([] (const auto & activeScene) {
+						if ( activeScene != nullptr )
+						{
+							TraceInfo{ClassId} <<
+								"Scene '" << activeScene->name() << "' content:" "\n" <<
+								"Octree System : " "\n" << activeScene->getSectorSystemStatistics(true) <<
+								"Static entities : " "\n" << activeScene->getStaticEntitySystemStatistics(true) <<
+								"Node entities : " "\n" << activeScene->getNodeSystemStatistics(true) <<
+								"Light set : " "\n" << activeScene->lightSet();
+						}
+						else
+						{
+							Tracer::info(ClassId, "No active scene !");
+						}
+					}, false);
+
 					m_audioManager.play("switch_on");
-
-					if ( m_sceneManager.hasActiveScene())
-					{
-						const auto scene = m_sceneManager.activeScene();
-
-						TraceInfo{ClassId} <<
-							"Scene '" << scene->name() << "' content:" "\n" <<
-							"Octree System : " "\n" << scene->getSectorSystemStatistics(true) <<
-							"Static entities : " "\n" << scene->getStaticEntitySystemStatistics(true) <<
-							"Node entities : " "\n" << scene->getNodeSystemStatistics(true) <<
-							"Light set : " "\n" << scene->lightSet();
-					}
-					else
-					{
-						Tracer::info(ClassId, "No active scene !");
-					}
-				}
 					return true;
 
 				case KeyF2 :
@@ -1165,7 +1162,7 @@ namespace EmEn
 					break;
 
 				case Console::Controller::HardExit :
-					/* NOTE: Hard cord termination of the program ! */
+					/* NOTE: Hard cord termination of the program! */
 					std::terminate();
 
 					break;
@@ -1308,8 +1305,8 @@ namespace EmEn
 
 				case Scenes::Manager::SceneCreated :
 				case Scenes::Manager::SceneLoaded :
-				case Scenes::Manager::SceneActivated :
-				case Scenes::Manager::SceneDeactivated :
+				case Scenes::Manager::SceneEnabled :
+				case Scenes::Manager::SceneDisabled :
 				default :
 					TraceDebug{ClassId} << "Receiving an event from '" << Scenes::Manager::ClassId << "' (code:" << notificationCode << ") ...";
 					break;

@@ -65,6 +65,15 @@ namespace EmEn
 
 namespace EmEn::Graphics::RenderTarget
 {
+	/** @brief Cubemap render strategy enumeration. */
+	enum class CubemapRenderStrategy : uint8_t
+	{
+		/** @brief Render each face of the cubemap in a separate render pass. (6 passes total). */
+		Sequential,
+		/** @brief Renders all 6 faces in a single pass using a Geometry Shader. (1 pass only). */
+		GeometryShader
+	};
+
 	/**
 	 * @brief The base class for all render targets.
 	 * @extends EmEn::AVConsole::AbstractVirtualDevice This is a virtual video device.
@@ -388,22 +397,22 @@ namespace EmEn::Graphics::RenderTarget
 			 * @param device A reference to a graphics device smart pointer.
 			 * @param image A reference to an image smart pointer.
 			 * @param imageView A reference to an image view smart pointer.
-			 * @param purposeId A reference to a string to identify buffers.
+			 * @param identifier A reference to a string to identify buffers.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool createColorBuffer (const std::shared_ptr< Vulkan::Device > & device, std::shared_ptr< Vulkan::Image > & image, std::shared_ptr< Vulkan::ImageView > & imageView, const std::string & purposeId) const noexcept;
+			bool createColorBuffer (const std::shared_ptr< Vulkan::Device > & device, std::shared_ptr< Vulkan::Image > & image, std::shared_ptr< Vulkan::ImageView > & imageView, const std::string & identifier) const noexcept;
 
 			/**
 			 * @brief Creates a depth buffer.
 			 * @param device A reference to a graphics device smart pointer.
 			 * @param image A reference to an image smart pointer.
 			 * @param imageView A reference to an image view smart pointer.
-			 * @param purposeId A reference to a string to identify buffers.
+			 * @param identifier A reference to a string to identify buffers.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool createDepthBuffer (const std::shared_ptr< Vulkan::Device > & device, std::shared_ptr< Vulkan::Image > & image, std::shared_ptr< Vulkan::ImageView > & imageView, const std::string & purposeId) const noexcept;
+			bool createDepthBuffer (const std::shared_ptr< Vulkan::Device > & device, std::shared_ptr< Vulkan::Image > & image, std::shared_ptr< Vulkan::ImageView > & imageView, const std::string & identifier) const noexcept;
 
 			/**
 			 * @brief Creates a depth+stencil buffer.
@@ -411,11 +420,11 @@ namespace EmEn::Graphics::RenderTarget
 			 * @param image A reference to an image smart pointer.
 			 * @param depthImageView A reference to an image view smart pointer.
 			 * @param stencilImageView A reference to an image view smart pointer.
-			 * @param purposeId A reference to a string to identify buffers.
+			 * @param identifier A reference to a string to identify buffers.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			virtual bool createDepthStencilBuffer (const std::shared_ptr< Vulkan::Device > & device, std::shared_ptr< Vulkan::Image > & image, std::shared_ptr< Vulkan::ImageView > & depthImageView, std::shared_ptr< Vulkan::ImageView > & stencilImageView, const std::string & purposeId) noexcept;
+			virtual bool createDepthStencilBuffer (const std::shared_ptr< Vulkan::Device > & device, std::shared_ptr< Vulkan::Image > & image, std::shared_ptr< Vulkan::ImageView > & depthImageView, std::shared_ptr< Vulkan::ImageView > & stencilImageView, const std::string & identifier) noexcept;
 
 			/**
 			 * @brief Creates or returns a render pass.

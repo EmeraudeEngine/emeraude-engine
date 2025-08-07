@@ -58,16 +58,6 @@ namespace EmEn
 	{
 		class UniformBlock;
 	}
-
-	namespace AVConsole
-	{
-		class Manager;
-	}
-
-	namespace Scenes
-	{
-		class LightSet;
-	}
 }
 
 namespace EmEn::Scenes::Component
@@ -380,20 +370,18 @@ namespace EmEn::Scenes::Component
 
 			/**
 			 * @brief Creates the light on the GPU with the shadow map if requested.
-			 * @param lightSet A reference to the light set.
-			 * @param AVConsoleManager A reference to master control manager.
+			 * @param scene A reference to the scene.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			virtual bool createOnHardware (LightSet & lightSet, AVConsole::Manager & AVConsoleManager) noexcept = 0;
+			virtual bool createOnHardware (Scene & scene) noexcept = 0;
 
 			/**
 			 * @brief Removes the light from the GPU.
-			 * @param lightSet A reference to the light set.
-			 * @param AVConsoleManager A reference to master control manager.
+			 * @param scene A reference to the scene.
 			 * @return void
 			 */
-			virtual void destroyFromHardware (LightSet & lightSet, AVConsole::Manager & AVConsoleManager) noexcept = 0;
+			virtual void destroyFromHardware (Scene & scene) noexcept = 0;
 
 			/**
 			 * @brief Gives access to the light shadow map.

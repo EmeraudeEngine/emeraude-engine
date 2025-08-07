@@ -318,7 +318,7 @@ namespace EmEn::Vulkan
 	bool
 	Image::destroyFromHardware () noexcept
 	{
-		/* NOTE: Swap chain image are destroyed by the OS. */
+		/* NOTE: The OS destroys the swap chain image. */
 		if ( m_flags[IsSwapChainImage] )
 		{
 			m_handle = VK_NULL_HANDLE;

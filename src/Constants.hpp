@@ -41,7 +41,7 @@ namespace EmEn
 	constexpr number_t EngineUpdateFrequency{60};
 
 	/**
-	 * @brief Returns the duration of one cycle in second.
+	 * @brief Returns the duration of one cycle in a second.
 	 * @note Typically 1 / 60 = 0.0166...
 	 * @tparam number_t The type of float point number. Default float.
 	 */
@@ -60,7 +60,7 @@ namespace EmEn
 
 	/**
 	 * @brief Returns in microseconds the duration of one cycle.
-	 * @note Typically 1000000 / 60 = 16.6666...
+	 * @note Typically 1,000,000 / 60 = 16.6666...
 	 * @tparam number_t The type of float point number. Default float.
 	 */
 	template< typename number_t = float >
@@ -69,27 +69,27 @@ namespace EmEn
 
 	/**
 	 * @brief Constant for scaling to 0.
-	 * @tparam float_t The type of float point number. Default float.
+	 * @tparam number_t The type of float point number. Default float.
 	 */
-	template< typename float_t = float >
-	requires (std::is_floating_point_v< float_t >)
-	constexpr float_t Zero{0};
+	template< typename number_t = float >
+	requires (std::is_floating_point_v< number_t >)
+	constexpr number_t Zero{0};
 
 	/**
 	 * @brief Constant for scaling to 0.5.
-	 * @tparam float_t The type of float point number. Default float.
+	 * @tparam number_t The type of float point number. Default float.
 	 */
-	template< typename float_t = float >
-	requires (std::is_floating_point_v< float_t >)
-	constexpr float_t Half{0.5};
+	template< typename number_t = float >
+	requires (std::is_floating_point_v< number_t >)
+	constexpr number_t Half{0.5};
 
 	/**
 	 * @brief Constant for scaling to 1.
-	 * @tparam float_t The type of float point number. Default float.
+	 * @tparam number_t The type of float point number. Default float.
 	 */
-	template< typename float_t = float >
-	requires (std::is_floating_point_v< float_t >)
-	constexpr float_t One{1};
+	template< typename number_t = float >
+	requires (std::is_floating_point_v< number_t >)
+	constexpr number_t One{1};
 
 	/**
 	 * @brief Constant for scaling to 2.

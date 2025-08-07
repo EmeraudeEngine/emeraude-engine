@@ -84,15 +84,6 @@ namespace EmEn::Graphics::RenderableInstance
 				return m_vertexBufferObject->isCreated();
 			}
 
-			/** @copydoc EmEn::Graphics::RenderableInstance::Abstract::resetModelMatrices() */
-			void
-			resetModelMatrices () noexcept override
-			{
-				this->resetLocalData();
-
-				this->disableFlag(ArePositionsSynchronized);
-			}
-
 			/** @copydoc EmEn::Graphics::RenderableInstance::Abstract::useModelUniformBufferObject() */
 			[[nodiscard]]
 			bool
@@ -107,15 +98,6 @@ namespace EmEn::Graphics::RenderableInstance
 			useModelVertexBufferObject () const noexcept override
 			{
 				return true;
-			}
-
-			/** @copydoc EmEn::Graphics::RenderableInstance::Abstract::worldPosition() */
-			[[nodiscard]]
-			Libs::Math::Vector< 3, float >
-			worldPosition () const noexcept override
-			{
-				// TODO: This should have the average location ...
-				return {};
 			}
 
 			/**
@@ -154,10 +136,22 @@ namespace EmEn::Graphics::RenderableInstance
 			 */
 			bool updateVideoMemory (Vulkan::TransferManager & transferManager) noexcept;
 
+			/**
+			 * @brief Reset the local data.
+			 * @return void
+			 */
+			void
+			resetModelMatrices () noexcept
+			{
+				this->resetLocalData();
+
+				this->disableFlag(ArePositionsSynchronized);
+			}
+
 		private:
 
 			/** @copydoc EmEn::Graphics::RenderableInstance::Abstract::pushMatrices() */
-			void pushMatrices (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::PipelineLayout & pipelineLayout, const ViewMatricesInterface & viewMatrices, const Saphir::Program & program) const noexcept override;
+			void pushMatrices (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::PipelineLayout & pipelineLayout, const Saphir::Program & program, uint32_t readStateIndex, const ViewMatricesInterface & viewMatrices, const Libs::Math::CartesianFrame< float > * worldCoordinates) const noexcept override;
 
 			/** @copydoc EmEn::Graphics::RenderableInstance::Abstract::instanceCount() */
 			[[nodiscard]]

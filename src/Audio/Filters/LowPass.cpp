@@ -27,9 +27,9 @@
 #include "LowPass.hpp"
 
 /* Local inclusions. */
-#include "Tracer.hpp"
-#include "Audio/OpenAL.EFX.hpp"
+#include "Audio/OpenALExtensions.hpp"
 #include "Audio/Utility.hpp"
+#include "Tracer.hpp"
 
 namespace EmEn::Audio::Filters
 {
@@ -42,7 +42,7 @@ namespace EmEn::Audio::Filters
 			return;
 		}
 
-		EFX::alFilteri(this->identifier(), AL_FILTER_TYPE, AL_FILTER_LOWPASS);
+		OpenAL::alFilteri(this->identifier(), AL_FILTER_TYPE, AL_FILTER_LOWPASS);
 
 		if ( alGetErrors("alFilteri()", __FILE__, __LINE__) )
 		{
@@ -53,19 +53,19 @@ namespace EmEn::Audio::Filters
 	void
 	LowPass::resetProperties () noexcept
 	{
-		if ( !EFX::isAvailable() )
+		if ( !OpenAL::isEFXAvailable() )
 		{
 			return;
 		}
 
-		EFX::alFilterf(this->identifier(), AL_LOWPASS_GAIN, AL_LOWPASS_DEFAULT_GAIN);
-		EFX::alFilterf(this->identifier(), AL_LOWPASS_GAINHF, AL_LOWPASS_DEFAULT_GAINHF);
+		OpenAL::alFilterf(this->identifier(), AL_LOWPASS_GAIN, AL_LOWPASS_DEFAULT_GAIN);
+		OpenAL::alFilterf(this->identifier(), AL_LOWPASS_GAINHF, AL_LOWPASS_DEFAULT_GAINHF);
 	}
 
 	void
 	LowPass::setGain (float value) noexcept
 	{
-		if ( !EFX::isAvailable() )
+		if ( !OpenAL::isEFXAvailable() )
 		{
 			return;
 		}
@@ -77,13 +77,13 @@ namespace EmEn::Audio::Filters
 			return;
 		}
 
-		EFX::alFilterf(this->identifier(), AL_LOWPASS_GAIN, value);
+		OpenAL::alFilterf(this->identifier(), AL_LOWPASS_GAIN, value);
 	}
 
 	void
 	LowPass::setGainHF (float value) noexcept
 	{
-		if ( !EFX::isAvailable() )
+		if ( !OpenAL::isEFXAvailable() )
 		{
 			return;
 		}
@@ -95,7 +95,7 @@ namespace EmEn::Audio::Filters
 			return;
 		}
 
-		EFX::alFilterf(this->identifier(), AL_LOWPASS_GAINHF, value);
+		OpenAL::alFilterf(this->identifier(), AL_LOWPASS_GAINHF, value);
 	}
 
 	float
@@ -103,9 +103,9 @@ namespace EmEn::Audio::Filters
 	{
 		ALfloat value = 0.0F;
 
-		if ( EFX::isAvailable() )
+		if ( OpenAL::isEFXAvailable() )
 		{
-			EFX::alGetFilterf(this->identifier(), AL_LOWPASS_GAIN, &value);
+			OpenAL::alGetFilterf(this->identifier(), AL_LOWPASS_GAIN, &value);
 		}
 
 		return value;
@@ -116,9 +116,9 @@ namespace EmEn::Audio::Filters
 	{
 		ALfloat value = 0.0F;
 
-		if ( EFX::isAvailable() )
+		if ( OpenAL::isEFXAvailable() )
 		{
-			EFX::alGetFilterf(this->identifier(), AL_LOWPASS_GAINHF, &value);
+			OpenAL::alGetFilterf(this->identifier(), AL_LOWPASS_GAINHF, &value);
 		}
 
 		return value;

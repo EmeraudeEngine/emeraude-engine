@@ -47,19 +47,10 @@
 #include "Libs/PixelFactory/Color.hpp"
 #include "Libs/PixelFactory/Pixmap.hpp"
 #include "GridQuad.hpp"
+#include "Types.hpp"
 
 namespace EmEn::Libs::VertexFactory
 {
-	/** @brief Mode of applying a transformation on the grid data. */
-	enum class Mode : uint8_t
-	{
-		Replace,
-		Add,
-		Subtract,
-		Multiply,
-		Divide
-	};
-
 	/**
 	 * @brief The grid geometry class.
 	 * @tparam vertex_data_t The precision type of vertex data. Default float.
@@ -145,7 +136,7 @@ namespace EmEn::Libs::VertexFactory
 			 * @return void
 			 */
 			void
-			applyDisplacementMapping (const PixelFactory::Pixmap< uint8_t > & map, vertex_data_t factor, Mode mode = Mode::Replace) noexcept
+			applyDisplacementMapping (const PixelFactory::Pixmap< uint8_t > & map, vertex_data_t factor, PointTransformationMode mode = PointTransformationMode::Replace) noexcept
 			{
 				if ( !map.isValid() )
 				{
@@ -156,7 +147,7 @@ namespace EmEn::Libs::VertexFactory
 
 				switch ( mode )
 				{
-					case Mode::Replace :
+					case PointTransformationMode::Replace :
 						this->applyTransformation([this, &map, factor] (index_data_t indexOnX, index_data_t indexOnY, vertex_data_t coordU, vertex_data_t coordV) {
 							m_pointHeights[this->index(indexOnX, indexOnY)] = map.cosineSample(coordU, coordV).gray() * factor;
 
@@ -164,7 +155,7 @@ namespace EmEn::Libs::VertexFactory
 						});
 						break;
 
-					case Mode::Add :
+					case PointTransformationMode::Add :
 						this->applyTransformation([this, &map, factor] (index_data_t indexOnX, index_data_t indexOnY, vertex_data_t coordU, vertex_data_t coordV) {
 							m_pointHeights[this->index(indexOnX, indexOnY)] += map.cosineSample(coordU, coordV).gray() * factor;
 
@@ -172,7 +163,7 @@ namespace EmEn::Libs::VertexFactory
 						});
 						break;
 
-					case Mode::Subtract :
+					case PointTransformationMode::Subtract :
 						this->applyTransformation([this, &map, factor] (index_data_t indexOnX, index_data_t indexOnY, vertex_data_t coordU, vertex_data_t coordV) {
 							m_pointHeights[this->index(indexOnX, indexOnY)] -= map.cosineSample(coordU, coordV).gray() * factor;
 
@@ -180,7 +171,7 @@ namespace EmEn::Libs::VertexFactory
 						});
 						break;
 
-					case Mode::Multiply :
+					case PointTransformationMode::Multiply :
 						this->applyTransformation([this, &map, factor] (index_data_t indexOnX, index_data_t indexOnY, vertex_data_t coordU, vertex_data_t coordV) {
 							m_pointHeights[this->index(indexOnX, indexOnY)] *= map.cosineSample(coordU, coordV).gray() * factor;
 
@@ -188,7 +179,7 @@ namespace EmEn::Libs::VertexFactory
 						});
 						break;
 
-					case Mode::Divide :
+					case PointTransformationMode::Divide :
 						this->applyTransformation([this, &map, factor] (index_data_t indexOnX, index_data_t indexOnY, vertex_data_t coordU, vertex_data_t coordV) {
 							m_pointHeights[this->index(indexOnX, indexOnY)] /= map.cosineSample(coordU, coordV).gray() * factor;
 
@@ -206,13 +197,13 @@ namespace EmEn::Libs::VertexFactory
 			 * @return void
 			 */
 			void
-			applyPerlinNoise (vertex_data_t size, vertex_data_t factor, Mode mode = Mode::Replace) noexcept
+			applyPerlinNoise (vertex_data_t size, vertex_data_t factor, PointTransformationMode mode = PointTransformationMode::Replace) noexcept
 			{
 				Algorithms::PerlinNoise< vertex_data_t > generator{};
 
 				switch ( mode )
 				{
-					case Mode::Replace :
+					case PointTransformationMode::Replace :
 						this->applyTransformation([this, size, factor, &generator] (index_data_t indexOnX, index_data_t indexOnY, vertex_data_t coordU, vertex_data_t coordV) {
 							const auto index = this->index(indexOnX, indexOnY);
 
@@ -223,7 +214,7 @@ namespace EmEn::Libs::VertexFactory
 						});
 						break;
 
-					case Mode::Add :
+					case PointTransformationMode::Add :
 						this->applyTransformation([this, size, factor, &generator] (index_data_t indexOnX, index_data_t indexOnY, vertex_data_t coordU, vertex_data_t coordV) {
 							const auto index = this->index(indexOnX, indexOnY);
 
@@ -234,7 +225,7 @@ namespace EmEn::Libs::VertexFactory
 						});
 						break;
 
-					case Mode::Subtract :
+					case PointTransformationMode::Subtract :
 						this->applyTransformation([this, size, factor, &generator] (index_data_t indexOnX, index_data_t indexOnY, vertex_data_t coordU, vertex_data_t coordV) {
 							const auto index = this->index(indexOnX, indexOnY);
 
@@ -245,7 +236,7 @@ namespace EmEn::Libs::VertexFactory
 						});
 						break;
 
-					case Mode::Multiply :
+					case PointTransformationMode::Multiply :
 						this->applyTransformation([this, size, factor, &generator] (index_data_t indexOnX, index_data_t indexOnY, vertex_data_t coordU, vertex_data_t coordV) {
 							const auto index = this->index(indexOnX, indexOnY);
 
@@ -256,7 +247,7 @@ namespace EmEn::Libs::VertexFactory
 						});
 						break;
 
-					case Mode::Divide :
+					case PointTransformationMode::Divide :
 						this->applyTransformation([this, size, factor, &generator] (index_data_t indexOnX, index_data_t indexOnY, vertex_data_t coordU, vertex_data_t coordV) {
 							const auto index = this->index(indexOnX, indexOnY);
 
@@ -278,7 +269,7 @@ namespace EmEn::Libs::VertexFactory
 			 * @return void
 			 */
 			void
-			applyDiamondSquare (vertex_data_t factor, vertex_data_t roughness, int32_t seed = 1, Mode mode = Mode::Replace) noexcept
+			applyDiamondSquare (vertex_data_t factor, vertex_data_t roughness, int32_t seed = 1, PointTransformationMode mode = PointTransformationMode::Replace) noexcept
 			{
 				Algorithms::DiamondSquare< vertex_data_t > map{seed, false};
 
@@ -286,7 +277,7 @@ namespace EmEn::Libs::VertexFactory
 				{
 					switch ( mode )
 					{
-						case Mode::Replace :
+						case PointTransformationMode::Replace :
 							this->applyTransformation([this, factor, &map] (index_data_t indexOnX, index_data_t indexOnY) {
 								const auto index = this->index(indexOnX, indexOnY);
 
@@ -297,7 +288,7 @@ namespace EmEn::Libs::VertexFactory
 							});
 							break;
 
-						case Mode::Add :
+						case PointTransformationMode::Add :
 							this->applyTransformation([this, factor, &map] (index_data_t indexOnX, index_data_t indexOnY) {
 								const auto index = this->index(indexOnX, indexOnY);
 
@@ -308,7 +299,7 @@ namespace EmEn::Libs::VertexFactory
 							});
 							break;
 
-						case Mode::Subtract :
+						case PointTransformationMode::Subtract :
 							this->applyTransformation([this, factor, &map] (index_data_t indexOnX, index_data_t indexOnY) {
 								const auto index = this->index(indexOnX, indexOnY);
 
@@ -319,7 +310,7 @@ namespace EmEn::Libs::VertexFactory
 							});
 							break;
 
-						case Mode::Multiply :
+						case PointTransformationMode::Multiply :
 							this->applyTransformation([this, factor, &map] (index_data_t indexOnX, index_data_t indexOnY) {
 								const auto index = this->index(indexOnX, indexOnY);
 
@@ -330,7 +321,7 @@ namespace EmEn::Libs::VertexFactory
 							});
 							break;
 
-						case Mode::Divide :
+						case PointTransformationMode::Divide :
 							this->applyTransformation([this, factor, &map] (index_data_t indexOnX, index_data_t indexOnY) {
 								const auto index = this->index(indexOnX, indexOnY);
 
@@ -1108,37 +1099,6 @@ namespace EmEn::Libs::VertexFactory
 			heights () const noexcept
 			{
 				return m_pointHeights;
-			}
-
-			/**
-			 * @brief Returns the mode in enum.
-			 * @param string A reference to a string.
-			 * @return Mode
-			 */
-			static
-			Mode
-			getMode (const std::string & string) noexcept
-			{
-				if ( string == "Add" )
-				{
-					return Mode::Add;
-				}
-
-				if ( string == "Subtract" )
-				{
-					return Mode::Subtract;
-				}
-
-				if ( string == "Multiply" )
-				{
-					return Mode::Multiply;
-				}
-
-				if ( string == "Divide" )
-				{
-					return Mode::Divide;
-				}
-				return Mode::Replace;
 			}
 
 			/**

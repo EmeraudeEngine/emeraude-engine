@@ -51,7 +51,7 @@ namespace EmEn::Scenes
 {
 	/**
 	 * @brief The octree sector class.
-	 * @tparam element_t The type of inserted element, it must inherit from EmEn::Scenes::LocatableInterface.
+	 * @tparam element_t The type of the inserted element, it must inherit from EmEn::Scenes::LocatableInterface.
 	 * @tparam enable_volume Enable the use of the element volume instead of their position. This implies multiple insertions at the same depth level.
 	 * @extends std::enable_shared_from_this A sector must be able to give his own smart pointer.
 	 * @extends EmEn::Libs::Math::Space3D::AACuboid A sector is a cube in the 3D space and thus provides intersection detection with primitives.
@@ -299,7 +299,7 @@ namespace EmEn::Scenes
 
 			/**
 			 * @brief Returns the parent sector.
-			 * @warning This can be nullptr. Check if the sector is root before.
+			 * @warning This can be nullptr. Check if the sector is the root one before.
 			 * @return std::weak_ptr< OctreeSector >
 			 */
 			[[nodiscard]]
@@ -311,7 +311,7 @@ namespace EmEn::Scenes
 
 			/**
 			 * @brief Returns the parent sector.
-			 * @warning This can be nullptr. Check if the sector is root before.
+			 * @warning This can be nullptr. Check if the sector is the root one before.
 			 * @return std::weak_ptr< const OctreeSector >
 			 */
 			[[nodiscard]]
@@ -597,7 +597,7 @@ namespace EmEn::Scenes
 			getSurroundingSectors (bool includeThisSector) const noexcept
 			{
 				std::vector< std::shared_ptr< const OctreeSector > > sectors;
-				/* Reserve space for 26 neighbors + self */
+				/* Reserve space for 26 neighbors and itself */
 				sectors.reserve(27);
 
 				if ( includeThisSector )
@@ -612,7 +612,7 @@ namespace EmEn::Scenes
 					{
 						for ( int z = -1; z <= 1; ++z )
 						{
-							/* Skip the center (0,0,0) which is the current sector itself. */
+							/* Skip the center (0, 0, 0), which is the current sector itself. */
 							if ( x == 0 && y == 0 && z == 0 )
 							{
 								continue;

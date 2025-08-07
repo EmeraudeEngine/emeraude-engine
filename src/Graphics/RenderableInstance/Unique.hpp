@@ -53,13 +53,11 @@ namespace EmEn::Graphics::RenderableInstance
 			/**
 			 * @brief Constructs a renderable instance.
 			 * @param renderable A reference to a smart pointer of a renderable object.
-			 * @param location A reference to a coordinates for the initial location. Default origin.
 			 * @param flagBits The multiple renderable instance level flags. Default 0.
 			 */
 			explicit
-			Unique (const std::shared_ptr< Renderable::Interface > & renderable, const Libs::Math::CartesianFrame< float > & location = {}, uint32_t flagBits = 0) noexcept
-				: Abstract{renderable, flagBits},
-				m_cartesianFrame{location}
+			Unique (const std::shared_ptr< Renderable::Interface > & renderable, uint32_t flagBits = 0) noexcept
+				: Abstract{renderable, flagBits}
 			{
 				this->observe(renderable.get());
 			}
@@ -70,13 +68,6 @@ namespace EmEn::Graphics::RenderableInstance
 			isModelMatricesCreated () const noexcept override
 			{
 				return true;
-			}
-
-			/** @copydoc EmEn::Graphics::RenderableInstance::Abstract::resetModelMatrices() */
-			void
-			resetModelMatrices () noexcept override
-			{
-				m_cartesianFrame.reset();
 			}
 
 			/** @copydoc EmEn::Graphics::RenderableInstance::Abstract::useModelUniformBufferObject() */
@@ -95,30 +86,10 @@ namespace EmEn::Graphics::RenderableInstance
 				return false;
 			}
 
-			/** @copydoc EmEn::Graphics::RenderableInstance::Abstract::worldPosition() */
-			[[nodiscard]]
-			Libs::Math::Vector< 3, float >
-			worldPosition () const noexcept override
-			{
-				return m_cartesianFrame.position();
-			}
-
-			/**
-			 * @brief Updates the renderable instance cartesian frame.
-			 * @note The coordinates of the frame expected to be absolute.
-			 * @param worldCartesianFrame A reference to a cartesian frame.
-			 * @return void
-			 */
-			void
-			updateModelMatrix (const Libs::Math::CartesianFrame< float > & worldCartesianFrame) noexcept
-			{
-				m_cartesianFrame = worldCartesianFrame;
-			}
-
 		private:
 
 			/** @copydoc EmEn::Graphics::RenderableInstance::Abstract::pushMatrices() */
-			void pushMatrices (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::PipelineLayout & pipelineLayout, const ViewMatricesInterface & viewMatrices, const Saphir::Program & program) const noexcept override;
+			void pushMatrices (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::PipelineLayout & pipelineLayout, const Saphir::Program & program, uint32_t readStateIndex, const ViewMatricesInterface & viewMatrices, const Libs::Math::CartesianFrame< float > * worldCoordinates) const noexcept override;
 
 			/** @copydoc EmEn::Graphics::RenderableInstance::Abstract::instanceCount() */
 			[[nodiscard]]
@@ -130,7 +101,5 @@ namespace EmEn::Graphics::RenderableInstance
 
 			/** @copydoc EmEn::Graphics::RenderableInstance::Abstract::bindInstanceModelLayer() */
 			void bindInstanceModelLayer (const Vulkan::CommandBuffer & commandBuffer, uint32_t layerIndex) const noexcept override;
-
-			Libs::Math::CartesianFrame< float > m_cartesianFrame;
 	};
 }

@@ -106,9 +106,9 @@ namespace EmEn::Scenes::Component
 			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::updateDeviceFromCoordinates() noexcept */
 			void updateDeviceFromCoordinates (const Libs::Math::CartesianFrame< float > & worldCoordinates, const Libs::Math::Vector< 3, float > & worldVelocity) noexcept override;
 
-			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::onTargetConnected() noexcept */
+			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::onOutputDeviceConnected() noexcept */
 			void
-			onTargetConnected (AVConsole::AVManagers & /*managers*/, AbstractVirtualDevice * targetDevice) noexcept override
+			onOutputDeviceConnected (AVConsole::AVManagers & /*managers*/, AbstractVirtualDevice * targetDevice) noexcept override
 			{
 				targetDevice->updateDeviceFromCoordinates(this->getWorldCoordinates(), this->getWorldVelocity());
 			}

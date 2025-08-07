@@ -31,6 +31,7 @@
 #include <cstdint>
 #include <any>
 #include <string>
+#include <array>
 
 /* Local inclusions for inheritances. */
 #include "AbstractEntity.hpp"
@@ -44,8 +45,8 @@ namespace EmEn::Scenes
 {
 	/**
 	 * @brief Defines a static entity, which means that it does not physically act on its own.
-	 * @extends std::enable_shared_from_this A static entity need to self replicate its smart pointer.
-	 * @extends EmEn::Scenes::AbstractEntity A static entity is obviously an entity of the 3D world.
+	 * @extends std::enable_shared_from_this A static entity needs to self-replicate its smart pointer.
+	 * @extends EmEn::Scenes::AbstractEntity A static entity is an entity of the 3D world.
 	 * @extends EmEn::Animations::AnimatableInterface This class can be animated by the engine logics.
 	 */
 	class StaticEntity final : public std::enable_shared_from_this< StaticEntity >, public AbstractEntity, public Animations::AnimatableInterface
@@ -97,7 +98,7 @@ namespace EmEn::Scenes
 			 */
 			StaticEntity (const std::string & name, uint32_t sceneTimeMS, const Libs::Math::CartesianFrame< float > & coordinates = {}) noexcept
 				: AbstractEntity{name, sceneTimeMS},
-				m_cartesianFrame{coordinates}
+				m_logicStateCoordinates{coordinates}
 			{
 
 			}
@@ -139,11 +140,11 @@ namespace EmEn::Scenes
 			{
 				if ( transformSpace == Libs::Math::TransformSpace::Local )
 				{
-					m_cartesianFrame.setPosition(m_cartesianFrame.getRotationMatrix3() * position);
+					m_logicStateCoordinates.setPosition(m_logicStateCoordinates.getRotationMatrix3() * position);
 				}
 				else
 				{
-					m_cartesianFrame.setPosition(position);
+					m_logicStateCoordinates.setPosition(position);
 				}
 
 				this->onLocationDataUpdate();
@@ -155,11 +156,11 @@ namespace EmEn::Scenes
 			{
 				if ( transformSpace == Libs::Math::TransformSpace::Local )
 				{
-					m_cartesianFrame.setPosition(m_cartesianFrame.rightVector() * position);
+					m_logicStateCoordinates.setPosition(m_logicStateCoordinates.rightVector() * position);
 				}
 				else
 				{
-					m_cartesianFrame.setXPosition(position);
+					m_logicStateCoordinates.setXPosition(position);
 				}
 
 				this->onLocationDataUpdate();
@@ -171,11 +172,11 @@ namespace EmEn::Scenes
 			{
 				if ( transformSpace == Libs::Math::TransformSpace::Local )
 				{
-					m_cartesianFrame.setPosition(m_cartesianFrame.downwardVector() * position);
+					m_logicStateCoordinates.setPosition(m_logicStateCoordinates.downwardVector() * position);
 				}
 				else
 				{
-					m_cartesianFrame.setYPosition(position);
+					m_logicStateCoordinates.setYPosition(position);
 				}
 
 				this->onLocationDataUpdate();
@@ -187,11 +188,11 @@ namespace EmEn::Scenes
 			{
 				if ( transformSpace == Libs::Math::TransformSpace::Local )
 				{
-					m_cartesianFrame.setPosition(m_cartesianFrame.backwardVector() * position);
+					m_logicStateCoordinates.setPosition(m_logicStateCoordinates.backwardVector() * position);
 				}
 				else
 				{
-					m_cartesianFrame.setZPosition(position);
+					m_logicStateCoordinates.setZPosition(position);
 				}
 
 				this->onLocationDataUpdate();
@@ -201,7 +202,7 @@ namespace EmEn::Scenes
 			void
 			move (const Libs::Math::Vector< 3, float > & distance, Libs::Math::TransformSpace transformSpace) noexcept override
 			{
-				m_cartesianFrame.translate(distance, transformSpace == Libs::Math::TransformSpace::Local);
+				m_logicStateCoordinates.translate(distance, transformSpace == Libs::Math::TransformSpace::Local);
 
 				this->onLocationDataUpdate();
 			}
@@ -210,7 +211,7 @@ namespace EmEn::Scenes
 			void
 			moveX (float distance, Libs::Math::TransformSpace transformSpace) noexcept override
 			{
-				m_cartesianFrame.translateX(distance, transformSpace == Libs::Math::TransformSpace::Local);
+				m_logicStateCoordinates.translateX(distance, transformSpace == Libs::Math::TransformSpace::Local);
 
 				this->onLocationDataUpdate();
 			}
@@ -219,7 +220,7 @@ namespace EmEn::Scenes
 			void
 			moveY (float distance, Libs::Math::TransformSpace transformSpace) noexcept override
 			{
-				m_cartesianFrame.translateY(distance, transformSpace == Libs::Math::TransformSpace::Local);
+				m_logicStateCoordinates.translateY(distance, transformSpace == Libs::Math::TransformSpace::Local);
 
 				this->onLocationDataUpdate();
 			}
@@ -228,7 +229,7 @@ namespace EmEn::Scenes
 			void
 			moveZ (float distance, Libs::Math::TransformSpace transformSpace) noexcept override
 			{
-				m_cartesianFrame.translateZ(distance, transformSpace == Libs::Math::TransformSpace::Local);
+				m_logicStateCoordinates.translateZ(distance, transformSpace == Libs::Math::TransformSpace::Local);
 
 				this->onLocationDataUpdate();
 			}
@@ -237,7 +238,7 @@ namespace EmEn::Scenes
 			void
 			rotate (float radian, const Libs::Math::Vector< 3, float > & axis, Libs::Math::TransformSpace transformSpace) noexcept override
 			{
-				m_cartesianFrame.rotate(radian, axis, transformSpace == Libs::Math::TransformSpace::Local);
+				m_logicStateCoordinates.rotate(radian, axis, transformSpace == Libs::Math::TransformSpace::Local);
 
 				this->onLocationDataUpdate();
 			}
@@ -246,7 +247,7 @@ namespace EmEn::Scenes
 			void
 			pitch (float radian, Libs::Math::TransformSpace transformSpace) noexcept override
 			{
-				m_cartesianFrame.pitch(radian, transformSpace == Libs::Math::TransformSpace::Local);
+				m_logicStateCoordinates.pitch(radian, transformSpace == Libs::Math::TransformSpace::Local);
 
 				this->onLocationDataUpdate();
 			}
@@ -255,7 +256,7 @@ namespace EmEn::Scenes
 			void
 			yaw (float radian, Libs::Math::TransformSpace transformSpace) noexcept override
 			{
-				m_cartesianFrame.yaw(radian, transformSpace == Libs::Math::TransformSpace::Local);
+				m_logicStateCoordinates.yaw(radian, transformSpace == Libs::Math::TransformSpace::Local);
 
 				this->onLocationDataUpdate();
 			}
@@ -264,7 +265,7 @@ namespace EmEn::Scenes
 			void
 			roll (float radian, Libs::Math::TransformSpace transformSpace) noexcept override
 			{
-				m_cartesianFrame.roll(radian, transformSpace == Libs::Math::TransformSpace::Local);
+				m_logicStateCoordinates.roll(radian, transformSpace == Libs::Math::TransformSpace::Local);
 
 				this->onLocationDataUpdate();
 			}
@@ -288,7 +289,7 @@ namespace EmEn::Scenes
 			void
 			lookAt (const Libs::Math::Vector< 3, float > & target, bool flipZAxis) noexcept override
 			{
-				m_cartesianFrame.lookAt(target, flipZAxis);
+				m_logicStateCoordinates.lookAt(target, flipZAxis);
 
 				this->onLocationDataUpdate();
 			}
@@ -297,7 +298,7 @@ namespace EmEn::Scenes
 			void
 			setLocalCoordinates (const Libs::Math::CartesianFrame< float > & coordinates) noexcept override
 			{
-				m_cartesianFrame = coordinates;
+				m_logicStateCoordinates = coordinates;
 			}
 
 			/** @copydoc EmEn::Scenes::LocatableInterface::localCoordinates() const */
@@ -305,7 +306,7 @@ namespace EmEn::Scenes
 			const Libs::Math::CartesianFrame< float > &
 			localCoordinates () const noexcept override
 			{
-				return m_cartesianFrame;
+				return m_logicStateCoordinates;
 			}
 
 			/** @copydoc EmEn::Scenes::LocatableInterface::localCoordinates() */
@@ -313,7 +314,7 @@ namespace EmEn::Scenes
 			Libs::Math::CartesianFrame< float > &
 			localCoordinates () noexcept override
 			{
-				return m_cartesianFrame;
+				return m_logicStateCoordinates;
 			}
 
 			/** @copydoc EmEn::Scenes::LocatableInterface::getWorldCoordinates() const */
@@ -321,7 +322,7 @@ namespace EmEn::Scenes
 			Libs::Math::CartesianFrame< float >
 			getWorldCoordinates () const noexcept override
 			{
-				return m_cartesianFrame;
+				return m_logicStateCoordinates;
 			}
 
 			/** @copydoc EmEn::Scenes::LocatableInterface::getWorldBoundingBox() const */
@@ -329,7 +330,7 @@ namespace EmEn::Scenes
 			Libs::Math::Space3D::AACuboid< float >
 			getWorldBoundingBox () const noexcept override
 			{
-				return Libs::Math::OrientedCuboid< float >{this->localBoundingBox(), m_cartesianFrame}.getAxisAlignedBox();
+				return Libs::Math::OrientedCuboid< float >{this->localBoundingBox(), m_logicStateCoordinates}.getAxisAlignedBox();
 			}
 
 			/** @copydoc EmEn::Scenes::LocatableInterface::getWorldBoundingSphere() const */
@@ -339,7 +340,7 @@ namespace EmEn::Scenes
 			{
 				return {
 					this->localBoundingSphere().radius(),
-					m_cartesianFrame.position() + this->localBoundingSphere().position()
+					m_logicStateCoordinates.position() + this->localBoundingSphere().position()
 				};
 			}
 
@@ -390,6 +391,31 @@ namespace EmEn::Scenes
 				return false;
 			}
 
+			/** @copydoc EmEn::Scenes::AbstractEntity::publishStateForRendering(uint32_t) */
+			void
+			publishStateForRendering (uint32_t writeStateIndex) noexcept override
+			{
+				if constexpr ( IsDebug )
+				{
+					if ( writeStateIndex >= m_renderStateCoordinates.size() )
+					{
+						Tracer::error(ClassId, "Index overflow !");
+
+						return;
+					}
+				}
+
+				m_renderStateCoordinates[writeStateIndex] = m_logicStateCoordinates;
+			}
+
+			/** @copydoc EmEn::Scenes::AbstractEntity::getWorldCoordinatesStateForRendering(uint32_t) const */
+			[[nodiscard]]
+			const Libs::Math::CartesianFrame< float > &
+			getWorldCoordinatesStateForRendering (uint32_t readStateIndex) const noexcept override
+			{
+				return m_renderStateCoordinates[readStateIndex];
+			}
+
 			/** @copydoc EmEn::Scenes::AbstractEntity::getMovableTrait() */
 			[[nodiscard]]
 			Physics::MovableTrait *
@@ -414,7 +440,7 @@ namespace EmEn::Scenes
 			Libs::Math::Matrix< 4, float >
 			getModelMatrix () const noexcept
 			{
-				return m_cartesianFrame.getModelMatrix();
+				return m_logicStateCoordinates.getModelMatrix();
 			}
 
 			/**
@@ -425,7 +451,7 @@ namespace EmEn::Scenes
 			Libs::Math::Matrix< 4, float >
 			getViewMatrix () const noexcept
 			{
-				return m_cartesianFrame.getViewMatrix();
+				return m_logicStateCoordinates.getViewMatrix();
 			}
 
 			/**
@@ -436,7 +462,7 @@ namespace EmEn::Scenes
 			Libs::Math::Matrix< 4, float >
 			getInfinityViewMatrix () const noexcept
 			{
-				return m_cartesianFrame.getInfinityViewMatrix();
+				return m_logicStateCoordinates.getInfinityViewMatrix();
 			}
 
 		private:
@@ -449,7 +475,7 @@ namespace EmEn::Scenes
 			onLocationDataUpdate () noexcept override
 			{
 				/* Dispatch the movement to every component of the node. */
-				this->onContainerMove(m_cartesianFrame);
+				this->onContainerMove(m_logicStateCoordinates);
 			}
 
 			/** @copydoc EmEn::Animations::AnimatableInterface::playAnimation() */
@@ -461,6 +487,7 @@ namespace EmEn::Scenes
 			/** @copydoc EmEn::Scenes::AbstractEntity::onContentModified() */
 			void onContentModified () noexcept override;
 
-			Libs::Math::CartesianFrame< float > m_cartesianFrame;
+			Libs::Math::CartesianFrame< float > m_logicStateCoordinates;
+			std::array< Libs::Math::CartesianFrame< float >, 2 > m_renderStateCoordinates{};
 	};
 }

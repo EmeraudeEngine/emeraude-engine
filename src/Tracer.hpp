@@ -55,14 +55,14 @@ namespace EmEn
 namespace EmEn
 {
 	/**
-	 * @brief The tracer service class responsible for logging messages, errors, warnings, etc. to the terminal or in a log file.
+	 * @brief The tracer class is responsible for logging messages, errors, warnings, etc. to the terminal or in a log file.
 	 */
 	class Tracer final
 	{
 		public:
 
 			/** @brief Class identifier. */
-			static constexpr auto ClassId{"TracerService"};
+			static constexpr auto ClassId{"Tracer"};
 
 			/* ANSI Escape Codes */
 			static constexpr auto CSI{"\033["};
@@ -122,7 +122,7 @@ namespace EmEn
 
 				if constexpr ( IsDebug )
 				{
-					std::cout << "Tracer destroyed" << std::endl;
+					std::cout << "Tracer instance destroyed!" << std::endl;
 				}
 			}
 

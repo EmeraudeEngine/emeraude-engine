@@ -38,13 +38,6 @@ namespace EmEn::Audio
 	using namespace EmEn::Libs;
 	using namespace EmEn::Libs::Math;
 
-	HardwareOutput::HardwareOutput (const std::string & name, Manager & audioManager) noexcept
-		: AbstractVirtualDevice(name, AVConsole::DeviceType::Audio, AVConsole::ConnexionType::Input),
-		m_audioManager(&audioManager)
-	{
-
-	}
-
 	void
 	HardwareOutput::updateDeviceFromCoordinates (const CartesianFrame< float > & worldCoordinates, const Vector< 3, float > & worldVelocity) noexcept
 	{

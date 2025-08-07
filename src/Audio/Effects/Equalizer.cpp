@@ -27,9 +27,9 @@
 #include "Equalizer.hpp"
 
 /* Local inclusions. */
-#include "Tracer.hpp"
-#include "Audio/OpenAL.EFX.hpp"
+#include "Audio/OpenALExtensions.hpp"
 #include "Audio/Utility.hpp"
+#include "Tracer.hpp"
 
 namespace EmEn::Audio::Effects
 {
@@ -42,7 +42,7 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		EFX::alEffecti(this->identifier(), AL_EFFECT_TYPE, AL_EFFECT_EQUALIZER);
+		OpenAL::alEffecti(this->identifier(), AL_EFFECT_TYPE, AL_EFFECT_EQUALIZER);
 
 		if ( alGetErrors("alEffecti()", __FILE__, __LINE__) )
 		{
@@ -53,27 +53,27 @@ namespace EmEn::Audio::Effects
 	void
 	Equalizer::resetProperties () noexcept
 	{
-		if ( !EFX::isAvailable() )
+		if ( !OpenAL::isEFXAvailable() )
 		{
 			return;
 		}
 
-		EFX::alEffectf(this->identifier(), AL_EQUALIZER_LOW_GAIN, AL_EQUALIZER_DEFAULT_LOW_GAIN);
-		EFX::alEffectf(this->identifier(), AL_EQUALIZER_LOW_CUTOFF, AL_EQUALIZER_DEFAULT_LOW_CUTOFF);
-		EFX::alEffectf(this->identifier(), AL_EQUALIZER_MID1_GAIN, AL_EQUALIZER_DEFAULT_MID1_GAIN);
-		EFX::alEffectf(this->identifier(), AL_EQUALIZER_MID1_CENTER, AL_EQUALIZER_DEFAULT_MID1_CENTER);
-		EFX::alEffectf(this->identifier(), AL_EQUALIZER_MID1_WIDTH, AL_EQUALIZER_DEFAULT_MID1_WIDTH);
-		EFX::alEffectf(this->identifier(), AL_EQUALIZER_MID2_GAIN, AL_EQUALIZER_DEFAULT_MID2_GAIN);
-		EFX::alEffectf(this->identifier(), AL_EQUALIZER_MID2_CENTER, AL_EQUALIZER_DEFAULT_MID2_CENTER);
-		EFX::alEffectf(this->identifier(), AL_EQUALIZER_MID2_WIDTH, AL_EQUALIZER_DEFAULT_MID2_WIDTH);
-		EFX::alEffectf(this->identifier(), AL_EQUALIZER_HIGH_GAIN, AL_EQUALIZER_DEFAULT_HIGH_GAIN);
-		EFX::alEffectf(this->identifier(), AL_EQUALIZER_HIGH_CUTOFF, AL_EQUALIZER_DEFAULT_HIGH_CUTOFF);
+		OpenAL::alEffectf(this->identifier(), AL_EQUALIZER_LOW_GAIN, AL_EQUALIZER_DEFAULT_LOW_GAIN);
+		OpenAL::alEffectf(this->identifier(), AL_EQUALIZER_LOW_CUTOFF, AL_EQUALIZER_DEFAULT_LOW_CUTOFF);
+		OpenAL::alEffectf(this->identifier(), AL_EQUALIZER_MID1_GAIN, AL_EQUALIZER_DEFAULT_MID1_GAIN);
+		OpenAL::alEffectf(this->identifier(), AL_EQUALIZER_MID1_CENTER, AL_EQUALIZER_DEFAULT_MID1_CENTER);
+		OpenAL::alEffectf(this->identifier(), AL_EQUALIZER_MID1_WIDTH, AL_EQUALIZER_DEFAULT_MID1_WIDTH);
+		OpenAL::alEffectf(this->identifier(), AL_EQUALIZER_MID2_GAIN, AL_EQUALIZER_DEFAULT_MID2_GAIN);
+		OpenAL::alEffectf(this->identifier(), AL_EQUALIZER_MID2_CENTER, AL_EQUALIZER_DEFAULT_MID2_CENTER);
+		OpenAL::alEffectf(this->identifier(), AL_EQUALIZER_MID2_WIDTH, AL_EQUALIZER_DEFAULT_MID2_WIDTH);
+		OpenAL::alEffectf(this->identifier(), AL_EQUALIZER_HIGH_GAIN, AL_EQUALIZER_DEFAULT_HIGH_GAIN);
+		OpenAL::alEffectf(this->identifier(), AL_EQUALIZER_HIGH_CUTOFF, AL_EQUALIZER_DEFAULT_HIGH_CUTOFF);
 	}
 
 	void
 	Equalizer::setLowGain (float value) noexcept
 	{
-		if ( !EFX::isAvailable() )
+		if ( !OpenAL::isEFXAvailable() )
 		{
 			return;
 		}
@@ -85,13 +85,13 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		EFX::alEffectf(this->identifier(), AL_EQUALIZER_LOW_GAIN, value);
+		OpenAL::alEffectf(this->identifier(), AL_EQUALIZER_LOW_GAIN, value);
 	}
 
 	void
 	Equalizer::setLowCutOff (float value) noexcept
 	{
-		if ( !EFX::isAvailable() )
+		if ( !OpenAL::isEFXAvailable() )
 		{
 			return;
 		}
@@ -103,13 +103,13 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		EFX::alEffectf(this->identifier(), AL_EQUALIZER_LOW_CUTOFF, value);
+		OpenAL::alEffectf(this->identifier(), AL_EQUALIZER_LOW_CUTOFF, value);
 	}
 
 	void
 	Equalizer::setMid1Gain (float value) noexcept
 	{
-		if ( !EFX::isAvailable() )
+		if ( !OpenAL::isEFXAvailable() )
 		{
 			return;
 		}
@@ -120,13 +120,13 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		EFX::alEffectf(this->identifier(), AL_EQUALIZER_MID1_GAIN, value);
+		OpenAL::alEffectf(this->identifier(), AL_EQUALIZER_MID1_GAIN, value);
 	}
 
 	void
 	Equalizer::setMid1Center (float value) noexcept
 	{
-		if ( !EFX::isAvailable() )
+		if ( !OpenAL::isEFXAvailable() )
 		{
 			return;
 		}
@@ -138,13 +138,13 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		EFX::alEffectf(this->identifier(), AL_EQUALIZER_MID1_CENTER, value);
+		OpenAL::alEffectf(this->identifier(), AL_EQUALIZER_MID1_CENTER, value);
 	}
 
 	void
 	Equalizer::setMid1Width (float value) noexcept
 	{
-		if ( !EFX::isAvailable() )
+		if ( !OpenAL::isEFXAvailable() )
 		{
 			return;
 		}
@@ -156,13 +156,13 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		EFX::alEffectf(this->identifier(), AL_EQUALIZER_MID1_WIDTH, value);
+		OpenAL::alEffectf(this->identifier(), AL_EQUALIZER_MID1_WIDTH, value);
 	}
 
 	void
 	Equalizer::setMid2Gain (float value) noexcept
 	{
-		if ( !EFX::isAvailable() )
+		if ( !OpenAL::isEFXAvailable() )
 		{
 			return;
 		}
@@ -174,13 +174,13 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		EFX::alEffectf(this->identifier(), AL_EQUALIZER_MID2_GAIN, value);
+		OpenAL::alEffectf(this->identifier(), AL_EQUALIZER_MID2_GAIN, value);
 	}
 
 	void
 	Equalizer::setMid2Center (float value) noexcept
 	{
-		if ( !EFX::isAvailable() )
+		if ( !OpenAL::isEFXAvailable() )
 		{
 			return;
 		}
@@ -191,13 +191,13 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		EFX::alEffectf(this->identifier(), AL_EQUALIZER_MID2_CENTER, value);
+		OpenAL::alEffectf(this->identifier(), AL_EQUALIZER_MID2_CENTER, value);
 	}
 
 	void
 	Equalizer::setMid2Width (float value) noexcept
 	{
-		if ( !EFX::isAvailable() )
+		if ( !OpenAL::isEFXAvailable() )
 		{
 			return;
 		}
@@ -209,13 +209,13 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		EFX::alEffectf(this->identifier(), AL_EQUALIZER_MID2_WIDTH, value);
+		OpenAL::alEffectf(this->identifier(), AL_EQUALIZER_MID2_WIDTH, value);
 	}
 
 	void
 	Equalizer::setHighGain (float value) noexcept
 	{
-		if ( !EFX::isAvailable() )
+		if ( !OpenAL::isEFXAvailable() )
 		{
 			return;
 		}
@@ -227,13 +227,13 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		EFX::alEffectf(this->identifier(), AL_EQUALIZER_HIGH_GAIN, value);
+		OpenAL::alEffectf(this->identifier(), AL_EQUALIZER_HIGH_GAIN, value);
 	}
 
 	void
 	Equalizer::setHighCutOff (float value) noexcept
 	{
-		if ( !EFX::isAvailable() )
+		if ( !OpenAL::isEFXAvailable() )
 		{
 			return;
 		}
@@ -245,7 +245,7 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		EFX::alEffectf(this->identifier(), AL_EQUALIZER_HIGH_CUTOFF, value);
+		OpenAL::alEffectf(this->identifier(), AL_EQUALIZER_HIGH_CUTOFF, value);
 	}
 
 	float
@@ -253,9 +253,9 @@ namespace EmEn::Audio::Effects
 	{
 		ALfloat value = 0.0F;
 
-		if ( EFX::isAvailable() )
+		if ( OpenAL::isEFXAvailable() )
 		{
-			EFX::alGetEffectf(this->identifier(), AL_EQUALIZER_LOW_GAIN, &value);
+			OpenAL::alGetEffectf(this->identifier(), AL_EQUALIZER_LOW_GAIN, &value);
 		}
 
 		return value;
@@ -266,9 +266,9 @@ namespace EmEn::Audio::Effects
 	{
 		ALfloat value = 0.0F;
 
-		if ( EFX::isAvailable() )
+		if ( OpenAL::isEFXAvailable() )
 		{
-			EFX::alGetEffectf(this->identifier(), AL_EQUALIZER_LOW_CUTOFF, &value);
+			OpenAL::alGetEffectf(this->identifier(), AL_EQUALIZER_LOW_CUTOFF, &value);
 		}
 
 		return value;
@@ -279,9 +279,9 @@ namespace EmEn::Audio::Effects
 	{
 		ALfloat value = 0.0F;
 
-		if ( EFX::isAvailable() )
+		if ( OpenAL::isEFXAvailable() )
 		{
-			EFX::alGetEffectf(this->identifier(), AL_EQUALIZER_MID1_GAIN, &value);
+			OpenAL::alGetEffectf(this->identifier(), AL_EQUALIZER_MID1_GAIN, &value);
 		}
 
 		return value;
@@ -292,9 +292,9 @@ namespace EmEn::Audio::Effects
 	{
 		ALfloat value = 0.0F;
 
-		if ( EFX::isAvailable() )
+		if ( OpenAL::isEFXAvailable() )
 		{
-			EFX::alGetEffectf(this->identifier(), AL_EQUALIZER_MID1_CENTER, &value);
+			OpenAL::alGetEffectf(this->identifier(), AL_EQUALIZER_MID1_CENTER, &value);
 		}
 
 		return value;
@@ -305,9 +305,9 @@ namespace EmEn::Audio::Effects
 	{
 		ALfloat value = 0.0F;
 
-		if ( EFX::isAvailable() )
+		if ( OpenAL::isEFXAvailable() )
 		{
-			EFX::alGetEffectf(this->identifier(), AL_EQUALIZER_MID1_WIDTH, &value);
+			OpenAL::alGetEffectf(this->identifier(), AL_EQUALIZER_MID1_WIDTH, &value);
 		}
 
 		return value;
@@ -318,9 +318,9 @@ namespace EmEn::Audio::Effects
 	{
 		ALfloat value = 0.0F;
 
-		if ( EFX::isAvailable() )
+		if ( OpenAL::isEFXAvailable() )
 		{
-			EFX::alGetEffectf(this->identifier(), AL_EQUALIZER_MID2_GAIN, &value);
+			OpenAL::alGetEffectf(this->identifier(), AL_EQUALIZER_MID2_GAIN, &value);
 		}
 
 		return value;
@@ -331,9 +331,9 @@ namespace EmEn::Audio::Effects
 	{
 		ALfloat value = 0.0F;
 
-		if ( EFX::isAvailable() )
+		if ( OpenAL::isEFXAvailable() )
 		{
-			EFX::alGetEffectf(this->identifier(), AL_EQUALIZER_MID2_CENTER, &value);
+			OpenAL::alGetEffectf(this->identifier(), AL_EQUALIZER_MID2_CENTER, &value);
 		}
 
 		return value;
@@ -344,9 +344,9 @@ namespace EmEn::Audio::Effects
 	{
 		ALfloat value = 0.0F;
 
-		if ( EFX::isAvailable() )
+		if ( OpenAL::isEFXAvailable() )
 		{
-			EFX::alGetEffectf(this->identifier(), AL_EQUALIZER_MID2_WIDTH, &value);
+			OpenAL::alGetEffectf(this->identifier(), AL_EQUALIZER_MID2_WIDTH, &value);
 		}
 
 		return value;
@@ -357,9 +357,9 @@ namespace EmEn::Audio::Effects
 	{
 		ALfloat value = 0.0F;
 
-		if ( EFX::isAvailable() )
+		if ( OpenAL::isEFXAvailable() )
 		{
-			EFX::alGetEffectf(this->identifier(), AL_EQUALIZER_HIGH_GAIN, &value);
+			OpenAL::alGetEffectf(this->identifier(), AL_EQUALIZER_HIGH_GAIN, &value);
 		}
 
 		return value;
@@ -370,9 +370,9 @@ namespace EmEn::Audio::Effects
 	{
 		ALfloat value = 0.0F;
 
-		if ( EFX::isAvailable() )
+		if ( OpenAL::isEFXAvailable() )
 		{
-			EFX::alGetEffectf(this->identifier(), AL_EQUALIZER_HIGH_CUTOFF, &value);
+			OpenAL::alGetEffectf(this->identifier(), AL_EQUALIZER_HIGH_CUTOFF, &value);
 		}
 
 		return value;

@@ -78,21 +78,21 @@ namespace EmEn::Audio
 			return false;
 		}
 
-		if ( !EFX::isAvailable() )
+		if ( !OpenAL::isEFXAvailable() )
 		{
 			Tracer::warning(ClassId, "OpenAL EFX is not supported !");
 
 			return false;
 		}
 
-		if ( channel >= EFX::getMaxAuxiliarySends() )
+		if ( channel >= OpenAL::g_maxAuxiliarySends )
 		{
-			TraceWarning{ClassId} << "There is only max " << EFX::getMaxAuxiliarySends() << " effect slots per source !";
+			TraceWarning{ClassId} << "There is only max " << OpenAL::g_maxAuxiliarySends << " effect slots per source !";
 
 			return false;
 		}
 
-		/* Checks if effect slot is not already created. */
+		/* Checks if the effect slot is not already created. */
 		const auto effectIt = m_effectSlots.find(channel);
 
 		if ( effectIt != m_effectSlots.cend() )
@@ -378,7 +378,7 @@ namespace EmEn::Audio
 		alSourcef(this->identifier(), AL_CONE_OUTER_GAIN, clampToUnit(outerGain));
 
 		/* the gain when outside the oriented cone. Default 1. */
-		if ( EFX::isAvailable() )
+		if ( OpenAL::isEFXAvailable() )
 		{
 			alSourcef(this->identifier(), AL_CONE_OUTER_GAINHF, clampToUnit(gainFacingAway));
 		}
@@ -403,7 +403,7 @@ namespace EmEn::Audio
 			return;
 		}
 
-		if ( !EFX::isAvailable() )
+		if ( !OpenAL::isEFXAvailable() )
 		{
 			Tracer::warning(ClassId, "OpenAL EFX is not supported !");
 
@@ -418,7 +418,7 @@ namespace EmEn::Audio
 	int
 	Source::airAbsorption () const noexcept
 	{
-		if ( !EFX::isAvailable() )
+		if ( !OpenAL::isEFXAvailable() )
 		{
 			Tracer::warning(ClassId, "OpenAL EFX is not supported !");
 
@@ -573,7 +573,7 @@ namespace EmEn::Audio
 	bool
 	Source::enableDirectFilter (const std::shared_ptr< Filters::Abstract > & filter) noexcept
 	{
-		if ( Manager::audioDisabled() || !EFX::isAvailable() )
+		if ( Manager::audioDisabled() || !OpenAL::isEFXAvailable() )
 		{
 			return false;
 		}
@@ -595,7 +595,7 @@ namespace EmEn::Audio
 	void
 	Source::disableDirectFilter () noexcept
 	{
-		if ( Manager::audioDisabled() || !EFX::isAvailable() )
+		if ( Manager::audioDisabled() || !OpenAL::isEFXAvailable() )
 		{
 			return;
 		}
@@ -633,14 +633,6 @@ namespace EmEn::Audio
 			}
 
 			m_currentPlayableInterface = playableInterface;
-		}
-
-		/* Checks if the source is audible. */
-		if ( this->isMuted() )
-		{
-			TraceDebug{ClassId} << "Trying to play a sound on a muted source.";
-
-			return false;
 		}
 
 		/* We stop the source if playing something already. */
@@ -696,7 +688,12 @@ namespace EmEn::Audio
 			alSourcePlay(this->identifier());
 		}
 
-		return !alGetErrors(__PRETTY_FUNCTION__, static_cast< const char * >(__FILE__), __LINE__);
+		if ( alGetErrors("Source::play()", static_cast< const char * >(__FILE__), __LINE__) )
+		{
+			return false;
+		}
+
+		return true;
 	}
 
 	void
@@ -804,10 +801,10 @@ namespace EmEn::Audio
 
 		alFlushErrors();
 
-		/* NOTE: Be sure looping state is off when removing buffers. */
+		/* NOTE: Be sure the looping state is off when removing buffers. */
 		alSourcei(this->identifier(), AL_LOOPING, AL_FALSE);
 
-		/* Gets the number of buffer currently queued in the source.
+		/* Gets the amount of buffer currently queued in the source.
 		 * NOTE: No the processed, all of them. */
 		ALint bufferCount = 0;
 

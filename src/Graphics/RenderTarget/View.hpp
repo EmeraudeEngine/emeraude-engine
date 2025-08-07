@@ -270,16 +270,16 @@ namespace EmEn::Graphics::RenderTarget
 				}
 			}
 
-			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::onSourceConnected() */
+			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::onInputDeviceConnected() */
 			void
-			onSourceConnected (AVConsole::AVManagers & AVManagers, AbstractVirtualDevice * /*sourceDevice*/) noexcept override
+			onInputDeviceConnected (AVConsole::AVManagers & AVManagers, AbstractVirtualDevice * /*sourceDevice*/) noexcept override
 			{
 				m_viewMatrices.create(AVManagers.graphicsRenderer, this->id());
 			}
 
 			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::onSourceDisconnected() */
 			void
-			onSourceDisconnected (AVConsole::AVManagers & /*AVManagers*/, AbstractVirtualDevice * /*sourceDevice*/) noexcept override
+			onInputDeviceDisconnected (AVConsole::AVManagers & /*AVManagers*/, AbstractVirtualDevice * /*sourceDevice*/) noexcept override
 			{
 				m_viewMatrices.destroy();
 			}
@@ -310,17 +310,17 @@ namespace EmEn::Graphics::RenderTarget
 			void
 			onDestroy () noexcept override
 			{
-				/* Depth stencil buffer. */
+				/* First, destroy the framebuffer. */
+				m_framebuffer.reset();
+
+				/* Next, destroy the image views. */
 				m_stencilImageView.reset();
 				m_depthImageView.reset();
-				m_depthStencilImage.reset();
-
-				/* Color buffer */
 				m_colorImageView.reset();
-				m_colorImage.reset();
 
-				/* Framebuffer */
-				m_framebuffer.reset();
+				/* Finally, destroy the images. */
+				m_depthStencilImage.reset();
+				m_colorImage.reset();
 			}
 
 			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::createRenderPass() */
@@ -333,7 +333,7 @@ namespace EmEn::Graphics::RenderTarget
 
 				if ( !renderPass->isCreated() )
 				{
-					/* Prepare a sub-pass for the render pass. */
+					/* Prepare a subpass for the render pass. */
 					Vulkan::RenderSubPass subPass{VK_PIPELINE_BIND_POINT_GRAPHICS, 0};
 
 					/* Color buffer. */
@@ -408,7 +408,7 @@ namespace EmEn::Graphics::RenderTarget
 				/* Color buffer. */
 				if ( this->precisions().colorBits() > 0 )
 				{
-					/* Create the image for color buffer in video memory. */
+					/* Create the image for a color buffer in video memory. */
 					m_colorImage = std::make_shared< Vulkan::Image >(
 						device,
 						VK_IMAGE_TYPE_2D,
@@ -421,7 +421,7 @@ namespace EmEn::Graphics::RenderTarget
 						1,
 						device->findSampleCount(this->precisions().samples())
 					);
-					m_colorImage->setIdentifier(this->id() + "-Color-Image");
+					m_colorImage->setIdentifier(ClassId, this->id(), "Image");
 
 					if ( !m_colorImage->createOnHardware() )
 					{
@@ -442,7 +442,7 @@ namespace EmEn::Graphics::RenderTarget
 							.layerCount = m_colorImage->createInfo().arrayLayers
 						}
 					);
-					m_colorImageView->setIdentifier(this->id() + "-Color-ImageView");
+					m_colorImageView->setIdentifier(ClassId, this->id(), "ImageView");
 
 					if ( !m_colorImageView->createOnHardware() )
 					{
@@ -464,7 +464,7 @@ namespace EmEn::Graphics::RenderTarget
 						VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
 						VK_IMAGE_LAYOUT_UNDEFINED
 					);
-					m_depthStencilImage->setIdentifier(this->id() + "-DepthStencil-Image");
+					m_depthStencilImage->setIdentifier(ClassId, this->id(), "Image");
 
 					if ( !m_depthStencilImage->createOnHardware() )
 					{
@@ -487,7 +487,7 @@ namespace EmEn::Graphics::RenderTarget
 								.layerCount = m_depthStencilImage->createInfo().arrayLayers
 							}
 						);
-						m_depthImageView->setIdentifier(this->id() + "-Depth-ImageView");
+						m_depthImageView->setIdentifier(ClassId, this->id(), "ImageView");
 
 						if ( !m_depthImageView->createOnHardware() )
 						{
@@ -511,7 +511,7 @@ namespace EmEn::Graphics::RenderTarget
 								.layerCount = m_depthStencilImage->createInfo().arrayLayers
 							}
 						);
-						m_stencilImageView->setIdentifier(this->id() + "-Stencil-ImageView");
+						m_stencilImageView->setIdentifier(ClassId, this->id(), "ImageView");
 
 						if ( !m_stencilImageView->createOnHardware() )
 						{
@@ -525,7 +525,6 @@ namespace EmEn::Graphics::RenderTarget
 				return true;
 			}
 
-
 			/**
 			 * @brief Creates the framebuffer.
 			 * @param renderPass A reference to the render pass smart pointer.
@@ -536,7 +535,7 @@ namespace EmEn::Graphics::RenderTarget
 			createFramebuffer (const std::shared_ptr< Vulkan::RenderPass > & renderPass) noexcept
 			{
 				m_framebuffer = std::make_shared< Vulkan::Framebuffer >(renderPass, this->extent());
-				m_framebuffer->setIdentifier(this->id() + "-Main-Framebuffer");
+				m_framebuffer->setIdentifier(ClassId, this->id(), "Framebuffer");
 
 				/* Color buffer. */
 				if ( this->precisions().colorBits() > 0 )
@@ -566,12 +565,12 @@ namespace EmEn::Graphics::RenderTarget
 				return true;
 			}
 
-			std::shared_ptr< Vulkan::Framebuffer > m_framebuffer;
 			std::shared_ptr< Vulkan::Image > m_colorImage;
-			std::shared_ptr< Vulkan::ImageView > m_colorImageView;
 			std::shared_ptr< Vulkan::Image > m_depthStencilImage;
+			std::shared_ptr< Vulkan::ImageView > m_colorImageView;
 			std::shared_ptr< Vulkan::ImageView > m_depthImageView;
 			std::shared_ptr< Vulkan::ImageView > m_stencilImageView;
+			std::shared_ptr< Vulkan::Framebuffer > m_framebuffer;
 			view_matrices_t m_viewMatrices;
 	};
 }

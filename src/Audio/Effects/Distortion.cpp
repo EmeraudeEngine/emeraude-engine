@@ -27,9 +27,9 @@
 #include "Distortion.hpp"
 
 /* Local inclusions. */
-#include "Tracer.hpp"
-#include "Audio/OpenAL.EFX.hpp"
+#include "Audio/OpenALExtensions.hpp"
 #include "Audio/Utility.hpp"
+#include "Tracer.hpp"
 
 namespace EmEn::Audio::Effects
 {
@@ -42,7 +42,7 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		EFX::alEffecti(this->identifier(), AL_EFFECT_TYPE, AL_EFFECT_DISTORTION);
+		OpenAL::alEffecti(this->identifier(), AL_EFFECT_TYPE, AL_EFFECT_DISTORTION);
 
 		if ( alGetErrors("alEffecti()", __FILE__, __LINE__) )
 		{
@@ -53,22 +53,22 @@ namespace EmEn::Audio::Effects
 	void
 	Distortion::resetProperties () noexcept
 	{
-		if ( !EFX::isAvailable() )
+		if ( !OpenAL::isEFXAvailable() )
 		{
 			return;
 		}
 
-		EFX::alEffectf(this->identifier(), AL_DISTORTION_EDGE, AL_DISTORTION_DEFAULT_EDGE);
-		EFX::alEffectf(this->identifier(), AL_DISTORTION_GAIN, AL_DISTORTION_DEFAULT_GAIN);
-		EFX::alEffectf(this->identifier(), AL_DISTORTION_LOWPASS_CUTOFF, AL_DISTORTION_DEFAULT_LOWPASS_CUTOFF);
-		EFX::alEffectf(this->identifier(), AL_DISTORTION_EQCENTER, AL_DISTORTION_DEFAULT_EQCENTER);
-		EFX::alEffectf(this->identifier(), AL_DISTORTION_EQBANDWIDTH, AL_DISTORTION_DEFAULT_EQBANDWIDTH);
+		OpenAL::alEffectf(this->identifier(), AL_DISTORTION_EDGE, AL_DISTORTION_DEFAULT_EDGE);
+		OpenAL::alEffectf(this->identifier(), AL_DISTORTION_GAIN, AL_DISTORTION_DEFAULT_GAIN);
+		OpenAL::alEffectf(this->identifier(), AL_DISTORTION_LOWPASS_CUTOFF, AL_DISTORTION_DEFAULT_LOWPASS_CUTOFF);
+		OpenAL::alEffectf(this->identifier(), AL_DISTORTION_EQCENTER, AL_DISTORTION_DEFAULT_EQCENTER);
+		OpenAL::alEffectf(this->identifier(), AL_DISTORTION_EQBANDWIDTH, AL_DISTORTION_DEFAULT_EQBANDWIDTH);
 	}
 
 	void
 	Distortion::setEdge (float value) noexcept
 	{
-		if ( !EFX::isAvailable() )
+		if ( !OpenAL::isEFXAvailable() )
 		{
 			return;
 		}
@@ -80,13 +80,13 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		EFX::alEffectf(this->identifier(), AL_DISTORTION_EDGE, value);
+		OpenAL::alEffectf(this->identifier(), AL_DISTORTION_EDGE, value);
 	}
 
 	void
 	Distortion::setGain (float value) noexcept
 	{
-		if ( !EFX::isAvailable() )
+		if ( !OpenAL::isEFXAvailable() )
 		{
 			return;
 		}
@@ -98,13 +98,13 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		EFX::alEffectf(this->identifier(), AL_DISTORTION_GAIN, value);
+		OpenAL::alEffectf(this->identifier(), AL_DISTORTION_GAIN, value);
 	}
 
 	void
 	Distortion::setLowPassCutOff (float value) noexcept
 	{
-		if ( !EFX::isAvailable() )
+		if ( !OpenAL::isEFXAvailable() )
 		{
 			return;
 		}
@@ -116,13 +116,13 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		EFX::alEffectf(this->identifier(), AL_DISTORTION_LOWPASS_CUTOFF, value);
+		OpenAL::alEffectf(this->identifier(), AL_DISTORTION_LOWPASS_CUTOFF, value);
 	}
 
 	void
 	Distortion::setEQCenter (float value) noexcept
 	{
-		if ( !EFX::isAvailable() )
+		if ( !OpenAL::isEFXAvailable() )
 		{
 			return;
 		}
@@ -134,13 +134,13 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		EFX::alEffectf(this->identifier(), AL_DISTORTION_EQCENTER, value);
+		OpenAL::alEffectf(this->identifier(), AL_DISTORTION_EQCENTER, value);
 	}
 
 	void
 	Distortion::setEQBandWidth (float value) noexcept
 	{
-		if ( !EFX::isAvailable() )
+		if ( !OpenAL::isEFXAvailable() )
 		{
 			return;
 		}
@@ -152,7 +152,7 @@ namespace EmEn::Audio::Effects
 			return;
 		}
 
-		EFX::alEffectf(this->identifier(), AL_DISTORTION_EQBANDWIDTH, value);
+		OpenAL::alEffectf(this->identifier(), AL_DISTORTION_EQBANDWIDTH, value);
 	}
 
 	float
@@ -160,9 +160,9 @@ namespace EmEn::Audio::Effects
 	{
 		ALfloat value = 0.0F;
 
-		if ( EFX::isAvailable() )
+		if ( OpenAL::isEFXAvailable() )
 		{
-			EFX::alGetEffectf(this->identifier(), AL_DISTORTION_EDGE, &value);
+			OpenAL::alGetEffectf(this->identifier(), AL_DISTORTION_EDGE, &value);
 		}
 
 		return value;
@@ -173,9 +173,9 @@ namespace EmEn::Audio::Effects
 	{
 		ALfloat value = 0.0F;
 
-		if ( EFX::isAvailable() )
+		if ( OpenAL::isEFXAvailable() )
 		{
-			EFX::alGetEffectf(this->identifier(), AL_DISTORTION_GAIN, &value);
+			OpenAL::alGetEffectf(this->identifier(), AL_DISTORTION_GAIN, &value);
 		}
 
 		return value;
@@ -186,9 +186,9 @@ namespace EmEn::Audio::Effects
 	{
 		ALfloat value = 0.0F;
 
-		if ( EFX::isAvailable() )
+		if ( OpenAL::isEFXAvailable() )
 		{
-			EFX::alGetEffectf(this->identifier(), AL_DISTORTION_LOWPASS_CUTOFF, &value);
+			OpenAL::alGetEffectf(this->identifier(), AL_DISTORTION_LOWPASS_CUTOFF, &value);
 		}
 
 		return value;
@@ -199,9 +199,9 @@ namespace EmEn::Audio::Effects
 	{
 		ALfloat value = 0.0F;
 
-		if ( EFX::isAvailable() )
+		if ( OpenAL::isEFXAvailable() )
 		{
-			EFX::alGetEffectf(this->identifier(), AL_DISTORTION_EQCENTER, &value);
+			OpenAL::alGetEffectf(this->identifier(), AL_DISTORTION_EQCENTER, &value);
 		}
 
 		return value;
@@ -212,9 +212,9 @@ namespace EmEn::Audio::Effects
 	{
 		ALfloat value = 0.0F;
 
-		if ( EFX::isAvailable() )
+		if ( OpenAL::isEFXAvailable() )
 		{
-			EFX::alGetEffectf(this->identifier(), AL_DISTORTION_EQBANDWIDTH, &value);
+			OpenAL::alGetEffectf(this->identifier(), AL_DISTORTION_EQBANDWIDTH, &value);
 		}
 
 		return value;
