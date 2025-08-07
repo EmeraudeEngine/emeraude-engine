@@ -360,20 +360,22 @@ namespace EmEn::Audio
 	bool
 	Ambience::loadSoundSet (const std::filesystem::path & filepath) noexcept
 	{
-		Json::Value root;
+		const auto rootCheck = FastJSON::getRootFromFile(filepath);
 
-		if ( !FastJSON::getRootFromFile(filepath, root) )
+		if ( !rootCheck )
 		{
 			TraceError{ClassId} << "Unable to read file " << filepath << " !";
 
 			return false;
 		}
 
+		const auto & root = rootCheck.value();
+
 		auto * soundManager = Resources::Manager::instance()->container< SoundResource >();
 
 		/* 1. Read base sound set information. */
-		this->setChannelCount(FastJSON::getNumber< size_t >(root, JKChannelCount, DefaultChannelCount));
-		this->setRadius(FastJSON::getNumber< float >(root, JKRadius, DefaultRadius));
+		this->setChannelCount(FastJSON::getValue< size_t >(root, JKChannelCount).value_or(DefaultChannelCount));
+		this->setRadius(FastJSON::getValue< float >(root, JKRadius).value_or(DefaultRadius));
 
 		/* 2. Read the loop sound effect. */
 		if ( root.isMember(JKLoopSoundEffect) )
@@ -382,11 +384,9 @@ namespace EmEn::Audio
 
 			if ( loopSFX.isObject() )
 			{
-				const auto resourceName = FastJSON::getString(loopSFX, JKResourceName);
-
-				if ( !resourceName.empty() )
+				if ( const auto soundResourceName = FastJSON::getValue< std::string >(loopSFX, JKResourceName) )
 				{
-					this->setLoopSound(soundManager->getResource(resourceName), FastJSON::getNumber< float >(loopSFX, JKGain, DefaultGain));
+					this->setLoopSound(soundManager->getResource(soundResourceName.value()), FastJSON::getValue< float >(loopSFX, JKGain).value_or(DefaultGain));
 				}
 				else
 				{
@@ -415,24 +415,22 @@ namespace EmEn::Audio
 						continue;
 					}
 
-					const auto resourceName = FastJSON::getString(SFX, JKResourceName);
+					if ( const auto soundResourceName = FastJSON::getValue< std::string >(SFX, JKResourceName) )
+					{
+						const auto gain = FastJSON::getValue< float >(SFX, JKGain).value_or(DefaultGain);
+						const auto relative = FastJSON::getValue< bool >(SFX, JKRelative).value_or(true);
+						const auto minPitch = FastJSON::getValue< float >(SFX, JKMinimumPitch).value_or(1.0F);
+						const auto maxPitch = FastJSON::getValue< float >(SFX, JKMaximumPitch).value_or(1.0F);
+						const auto velocity = FastJSON::getValue< float >(SFX, JKRadialVelocity).value_or(0.0F);
 
-					if ( resourceName.empty() )
+						if ( !this->addSound(soundManager->getResource(soundResourceName.value()), gain, relative, minPitch, maxPitch, velocity) )
+						{
+							break;
+						}
+					}
+					else
 					{
 						Tracer::error(ClassId, "A sound effect resource name is empty or unspecified !");
-
-						continue;
-					}
-
-					const auto gain = FastJSON::getNumber< float >(SFX, JKGain, DefaultGain);
-					const auto relative = FastJSON::getBoolean(SFX, JKRelative, true);
-					const auto minPitch = FastJSON::getNumber< float >(SFX, JKMinimumPitch, 1.0F);
-					const auto maxPitch = FastJSON::getNumber< float >(SFX, JKMaximumPitch, 1.0F);
-					const auto velocity = FastJSON::getNumber< float >(SFX, JKRadialVelocity, 0.0F);
-
-					if ( !this->addSound(soundManager->getResource(resourceName), gain, relative, minPitch, maxPitch, velocity) )
-					{
-						break;
 					}
 				}
 			}

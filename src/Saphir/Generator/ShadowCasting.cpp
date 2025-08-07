@@ -138,7 +138,7 @@ namespace EmEn::Saphir::Generator
 	}
 
 	bool
-	ShadowCasting::onCreateDataLayouts (Renderer & /*renderer*/, const SetIndexes & /*setIndexes*/, std::vector< std::shared_ptr< DescriptorSetLayout > > & /*descriptorSetLayouts*/, std::vector< VkPushConstantRange > & pushConstantRanges) noexcept
+	ShadowCasting::onCreateDataLayouts (Renderer & /*renderer*/, const SetIndexes & /*setIndexes*/, StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > & /*descriptorSetLayouts*/, StaticVector< VkPushConstantRange, 4 > & pushConstantRanges) noexcept
 	{
 		Abstract::generatePushConstantRanges(this->shaderProgram()->vertexShader()->pushConstantBlockDeclarations(), pushConstantRanges, VK_SHADER_STAGE_VERTEX_BIT);
 
@@ -296,7 +296,7 @@ namespace EmEn::Saphir::Generator
 			}
 		}
 
-		const std::vector< VkDynamicState > dynamicStates{
+		const StaticVector< VkDynamicState, 16 > dynamicStates{
 			VK_DYNAMIC_STATE_VIEWPORT
 		};
 

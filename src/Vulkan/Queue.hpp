@@ -28,27 +28,76 @@
 
 /* STL inclusions. */
 #include <cstdint>
-#include <vector>
 #include <memory>
 #include <mutex>
+#include <span>
 
 /* Local inclusions for inheritances. */
 #include "AbstractObject.hpp"
 
+/* Local inclusions for usages. */
+#include "Libs/StaticVector.hpp"
+
 namespace EmEn::Vulkan
 {
-	namespace Sync
-	{
-		class Fence;
-		class Semaphore;
-	}
-
 	class Device;
 	class CommandBuffer;
 }
 
 namespace EmEn::Vulkan
 {
+	/**
+	 * @brief Structure for synchronization parameters for a queue submission.
+	 */
+	struct SynchInfo
+	{
+		/**
+		 * @brief Adds a wait info for semaphores.
+		 * @param semaphores A list of semaphore handles.
+		 * @param stages A list of flag mask for stages to wait.
+		 * @return SynchInfo &
+		 */
+		SynchInfo &
+		waits (std::span< const VkSemaphore > semaphores, std::span< const VkPipelineStageFlags > stages)
+		{
+			waitSemaphores = semaphores;
+			waitStages = stages;
+
+			return *this;
+		}
+
+		/**
+		 * @brief Adds a signal info for semaphores.
+		 * @param semaphores A list of semaphore handles.
+		 * @return SynchInfo &
+		 */
+		SynchInfo &
+		signals (std::span< const VkSemaphore > semaphores)
+		{
+			signalSemaphores = semaphores;
+
+			return *this;
+		}
+
+		/**
+		 * @brief Adds a fence to signal.
+		 * @param fenceHandle A fence handle.
+		 * @return SynchInfo &
+		 */
+		SynchInfo &
+		withFence (VkFence fenceHandle)
+		{
+			fence = fenceHandle;
+
+			return *this;
+		}
+
+		std::span< const VkSemaphore > waitSemaphores;
+		std::span< const VkPipelineStageFlags > waitStages;
+		std::span< const VkSemaphore > signalSemaphores;
+		VkFence fence{VK_NULL_HANDLE};
+	};
+
 	/**
 	 * @brief Defines a device working queue.
 	 * @extends EmEn::Vulkan::AbstractObject A queue is directly created by the device, so a simple object is perfect.
@@ -76,25 +125,25 @@ namespace EmEn::Vulkan
 			 * @brief Copy constructor.
 			 * @param copy A reference to the copied instance.
 			 */
-			Queue (const Queue & copy) noexcept = default;
+			Queue (const Queue & copy) noexcept = delete;
 
 			/**
 			 * @brief Move constructor.
 			 * @param copy A reference to the copied instance.
 			 */
-			Queue (Queue && copy) noexcept = default;
+			Queue (Queue && copy) noexcept = delete;
 
 			/**
 			 * @brief Copy assignment.
 			 * @param copy A reference to the copied instance.
 			 */
-			Queue & operator= (const Queue & copy) noexcept = default;
+			Queue & operator= (const Queue & copy) noexcept = delete;
 
 			/**
 			 * @brief Move assignment.
 			 * @param copy A reference to the copied instance.
 			 */
-			Queue & operator= (Queue && copy) noexcept = default;
+			Queue & operator= (Queue && copy) noexcept = delete;
 
 			/**
 			 * @brief Destructs the device queue.
@@ -128,111 +177,20 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Submits a command buffer to the queue.
-			 * @note Waits multiple semaphores, signals multiple semaphores.
-			 * @param buffer A reference to a command buffer smart pointer.
-			 * @param waitSemaphores A reference to a vector of semaphore handles.
-			 * @param waitStageFlags A mask for wait stage.
-			 * @param signalSemaphores A reference to a vector of semaphore handles.
-			 * @param fence A fence handle. Default None.
+			 * @param commandBuffer A reference to a command buffer smart pointer.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool submit (const std::shared_ptr< CommandBuffer > & buffer, const std::vector< VkSemaphore > & waitSemaphores, VkPipelineStageFlags waitStageFlags, const std::vector< VkSemaphore > & signalSemaphores, VkFence fence = VK_NULL_HANDLE) const noexcept;
+			bool submit (const std::shared_ptr< CommandBuffer > & commandBuffer) const noexcept;
 
 			/**
-			 * @brief Submits a command buffer to the queue.
-			 * @note Waits one semaphore, signals one semaphore.
-			 * @param buffer A reference to a command buffer smart pointer.
-			 * @param waitSemaphore A semaphore handle.
-			 * @param waitStageFlags A mask for wait stage.
-			 * @param signalSemaphore A semaphore handle.
-			 * @param fence A fence handle. Default None.
+			 * @brief Submits a command buffer to the queue with synchronization info.
+			 * @param commandBuffer A reference to a command buffer smart pointer.
+			 * @param synchInfo A reference to a syncInfo.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool submit (const std::shared_ptr< CommandBuffer > & buffer, VkSemaphore waitSemaphore, VkPipelineStageFlags waitStageFlags, VkSemaphore signalSemaphore, VkFence fence = VK_NULL_HANDLE) const noexcept;
-
-			/**
-			 * @brief Submits a command buffer to the queue.
-			 * @note Waits one semaphore, signals multiple semaphores.
-			 * @param buffer A reference to a command buffer smart pointer.
-			 * @param waitSemaphore A semaphore handle.
-			 * @param waitStageFlags A mask for wait stage.
-			 * @param signalSemaphores A reference to a vector of semaphore handles.
-			 * @param fence A fence handle. Default None.
-			 * @return bool
-			 */
-			[[nodiscard]]
-			bool submit (const std::shared_ptr< CommandBuffer > & buffer, VkSemaphore waitSemaphore, VkPipelineStageFlags waitStageFlags, const std::vector< VkSemaphore > & signalSemaphores, VkFence fence = VK_NULL_HANDLE) const noexcept;
-
-			/**
-			 * @brief Submits a command buffer to the queue.
-			 * @note Waits multiple semaphores, signals one semaphore.
-			 * @param buffer A reference to a command buffer smart pointer.
-			 * @param waitSemaphores A reference to a vector of semaphore handles.
-			 * @param waitStageFlags A mask for wait stage.
-			 * @param signalSemaphore A semaphore handles.
-			 * @param fence A fence handle. Default None.
-			 * @return bool
-			 */
-			[[nodiscard]]
-			bool submit (const std::shared_ptr< CommandBuffer > & buffer, const std::vector< VkSemaphore > & waitSemaphores, VkPipelineStageFlags waitStageFlags, VkSemaphore signalSemaphore, VkFence fence = VK_NULL_HANDLE) const noexcept;
-
-			/**
-			 * @brief Submits a command buffer to the queue.
-			 * @note Waits one semaphore.
-			 * @param buffer A reference to a command buffer smart pointer.
-			 * @param waitSemaphore A semaphore handle.
-			 * @param waitStageFlags A mask for wait stage.
-			 * @param fence A fence handle. Default None.
-			 * @return bool
-			 */
-			[[nodiscard]]
-			bool submit (const std::shared_ptr< CommandBuffer > & buffer, VkSemaphore waitSemaphore, VkPipelineStageFlags waitStageFlags, VkFence fence = VK_NULL_HANDLE) const noexcept;
-
-			/**
-			 * @brief Submits a command buffer to the queue.
-			 * @note Waits multiple semaphores.
-			 * @param buffer A reference to a command buffer smart pointer.
-			 * @param waitSemaphores A reference to a vector of semaphore handles.
-			 * @param waitStageFlags A mask for wait stage.
-			 * @param fence A fence handle. Default None.
-			 * @return bool
-			 */
-			[[nodiscard]]
-			bool submit (const std::shared_ptr< CommandBuffer > & buffer, const std::vector< VkSemaphore > & waitSemaphores, VkPipelineStageFlags waitStageFlags, VkFence fence = VK_NULL_HANDLE) const noexcept;
-
-			/**
-			 * @brief Submits a command buffer to the queue.
-			 * @note Signals one semaphore.
-			 * @param buffer A reference to a command buffer smart pointer.
-			 * @param signalSemaphore A semaphore handle.
-			 * @param fence A fence handle. Default None.
-			 * @return bool
-			 */
-			[[nodiscard]]
-			bool submit (const std::shared_ptr< CommandBuffer > & buffer, VkSemaphore signalSemaphore, VkFence fence = VK_NULL_HANDLE) const noexcept;
-
-			/**
-			 * @brief Submits a command buffer to the queue.
-			 * @note Signals multiple semaphores.
-			 * @param buffer A reference to a command buffer smart pointer.
-			 * @param signalSemaphores A reference to a vector of semaphore handles.
-			 * @param fence A fence handle. Default None.
-			 * @return bool
-			 */
-			[[nodiscard]]
-			bool submit (const std::shared_ptr< CommandBuffer > & buffer, const std::vector< VkSemaphore > & signalSemaphores, VkFence fence = VK_NULL_HANDLE) const noexcept;
-
-			/**
-			 * @brief Submits a command buffer to the queue.
-			 * @note No semaphore usage.
-			 * @param buffer A reference to a command buffer smart pointer.
-			 * @param fence A fence handle. Default None.
-			 * @return bool
-			 */
-			[[nodiscard]]
-			bool submit (const std::shared_ptr< CommandBuffer > & buffer, VkFence fence = VK_NULL_HANDLE) const noexcept;
+			bool submit (const std::shared_ptr< CommandBuffer > & commandBuffer, const SynchInfo & synchInfo) const noexcept;
 
 			/**
 			 * @brief Submits a present info.
@@ -253,18 +211,8 @@ namespace EmEn::Vulkan
 
 		private:
 
-			/**
-			 * @brief Submit work on GPU.
-			 * @param submitInfo A reference to a submit info structure.
-			 * @param fence A fence handle.
-			 * @return bool
-			 */
-			[[nodiscard]]
-			bool submit (const VkSubmitInfo & submitInfo, VkFence fence) const noexcept;
-
-			static std::mutex s_mutex;
-
 			VkQueue m_handle;
 			uint32_t m_familyQueueIndex;
+			mutable std::mutex m_access;
 	};
 }

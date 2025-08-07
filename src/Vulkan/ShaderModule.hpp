@@ -34,6 +34,9 @@
 /* Local inclusions for inheritances. */
 #include "AbstractDeviceDependentObject.hpp"
 
+/* Local inclusions for usages. */
+#include "Libs/StaticVector.hpp"
+
 namespace EmEn::Vulkan
 {
 	/**
@@ -165,7 +168,7 @@ namespace EmEn::Vulkan
 			VkShaderModuleCreateInfo m_createInfo{};
 			VkShaderStageFlagBits m_shaderType{};
 			std::vector< uint32_t > m_binaryCode;
-			std::vector< VkSpecializationMapEntry > m_mapEntries;
+			Libs::StaticVector< VkSpecializationMapEntry, 8 > m_mapEntries;
 			VkSpecializationInfo m_specializationInfo{};
 			VkPipelineShaderStageCreateInfo m_pipelineShaderStageCreateInfo{};
 	};

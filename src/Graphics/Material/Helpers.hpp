@@ -75,6 +75,78 @@ namespace EmEn::Graphics::Material
 	static constexpr auto JKAlphaThreshold{"AlphaThreshold"};
 
 	/**
+	 * @brief Returns the filling type token from a JSON value.
+	 * @param data A reference to a JSON value.
+	 * @return std::optional< FillingType >
+	 */
+	[[nodiscard]]
+	inline
+	std::optional< FillingType >
+	getFillingTypeFromJSON (const Json::Value & data) noexcept
+	{
+		if ( data.isMember(JKType) && data[JKType].isString() )
+		{
+			constexpr std::array< const char *, 9 > fillingTypes{
+				ValueString,
+				ColorString,
+				GradientString,
+				TextureString,
+				VolumeTextureString,
+				CubemapString,
+				AnimatedTextureString,
+				AlphaChannelAsValueString,
+				NoneString
+			};
+
+			const auto foundValue = data[JKType].asString();
+
+			for ( const auto & value : fillingTypes )
+			{
+				if ( foundValue == value )
+				{
+					return to_FillingType(foundValue);
+				}
+			}
+		}
+
+		return std::nullopt;
+	}
+
+	/**
+	 * @brief Returns the blending mode token from a JSON value.
+	 * @param data A reference to a JSON value.
+	 * @return std::optional< BlendingMode >
+	 */
+	[[nodiscard]]
+	inline
+	std::optional< BlendingMode >
+	getBlendingModeFromJSON (const Json::Value & data) noexcept
+	{
+		if ( data.isMember(JKBlendingMode) && data[JKBlendingMode].isString() )
+		{
+			constexpr std::array< const char *, 5 > fillingTypes{
+				NormalBlendingString,
+				AddBlendingString,
+				MultiplyBlendingString,
+				ScreenBlendingString,
+				NoneString
+			};
+
+			const auto foundValue = data[JKBlendingMode].asString();
+
+			for ( const auto & value : fillingTypes )
+			{
+				if ( foundValue == value )
+				{
+					return to_BlendingMode(foundValue);
+				}
+			}
+		}
+
+		return std::nullopt;
+	}
+
+	/**
 	 * @brief Checks primary texture coordinates linkage between the material and the geometry.
 	 * @param generator A reference to the shader manager.
 	 * @param vertexShader A reference to the vertex shader.
@@ -100,8 +172,8 @@ namespace EmEn::Graphics::Material
 	 * @brief Parses the base of a component structure from JSON data.
 	 * @param data A reference to the json value.
 	 * @param componentName A string for the componentName.
-	 * @param fillingType A reference to filling type to complete, if succeed.
-	 * @param componentData A reference to componentName data to complete, if succeed.
+	 * @param fillingType A reference to filling type to complete, if succeeded.
+	 * @param componentData A reference to componentName data to complete, if succeeded.
 	 * @param optional Set the component as optional and will not return error if not present. Default false.
 	 * @return bool
 	 */

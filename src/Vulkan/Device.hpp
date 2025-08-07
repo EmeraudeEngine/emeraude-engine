@@ -34,7 +34,6 @@
 #include <cstdint>
 #include <map>
 #include <mutex>
-#include <vector>
 #include <memory>
 
 /* Local inclusions for inheritances. */
@@ -42,6 +41,7 @@
 #include "Libs/NameableTrait.hpp"
 
 /* Local inclusions for usage. */
+#include "Libs/StaticVector.hpp"
 #include "PhysicalDevice.hpp"
 #include "Types.hpp"
 
@@ -58,8 +58,8 @@ namespace EmEn::Vulkan
 {
 	/**
 	 * @brief Defines a logical device from a physical device.
-	 * @extends EmEn::Vulkan::AbstractObject Obviously this is the device, so simple object is ok.
-	 * @extends EmEn::Libs::NameableTrait to set a name on a device.
+	 * @extends EmEn::Vulkan::AbstractObject This is the device, so a simple object is ok.
+	 * @extends EmEn::Libs::NameableTrait To set a name on a device.
 	 */
 	class Device final : public std::enable_shared_from_this< Device >, public AbstractObject, public Libs::NameableTrait
 	{
@@ -116,7 +116,7 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Creates the device.
-			 * @param requirements A reference to a device requirements.
+			 * @param requirements A reference to a device requirement.
 			 * @param extensions A reference to a vector of extensions.
 			 * @return bool
 			 */
@@ -201,7 +201,7 @@ namespace EmEn::Vulkan
 			uint32_t getComputeFamilyIndex () const noexcept;
 
 			/**
-			 * @brief Returns whether the device has been set up to have separated transfer queue.
+			 * @brief Returns whether the device has been set up to have a separated transfer queue.
 			 * @return bool
 			 */
 			[[nodiscard]]
@@ -247,7 +247,7 @@ namespace EmEn::Vulkan
 			uint32_t findMemoryType (uint32_t memoryTypeFilter, VkMemoryPropertyFlags propertyFlags) const noexcept;
 
 			/**
-			 * @brief Finds a supported format from device.
+			 * @brief Finds a supported format from a device.
 			 * @param formats A reference to a format vector.
 			 * @param tiling
 			 * @param featureFlags
@@ -279,16 +279,16 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Prepares queues configuration from requirements.
-			 * @param requirements A reference to a device requirements.
+			 * @param requirements A reference to a device requirement.
 			 * @param queueCreateInfos A reference to a list of CreateInfo for Vulkan queues to complete.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool prepareQueues (const DeviceRequirements & requirements, std::vector< VkDeviceQueueCreateInfo > & queueCreateInfos) noexcept;
+			bool prepareQueues (const DeviceRequirements & requirements, Libs::StaticVector< VkDeviceQueueCreateInfo, 16 > & queueCreateInfos) noexcept;
 
 			/**
 			 * @brief Declares queues for a device with a single queue family.
-			 * @param requirements A reference to a device requirements.
+			 * @param requirements A reference to a device requirement.
 			 * @param queueFamilyProperty A reference to the queue family properties.
 			 * @return bool
 			 */
@@ -297,22 +297,22 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Declares queues for a device with multiple queue family.
-			 * @param requirements A reference to a device requirements.
+			 * @param requirements A reference to a device requirement.
 			 * @param queueFamilyProperties A reference to a vector of queue family properties.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool declareQueuesFromMultipleQueueFamilies (const DeviceRequirements & requirements, const std::vector< VkQueueFamilyProperties2 > & queueFamilyProperties) noexcept;
+			bool declareQueuesFromMultipleQueueFamilies (const DeviceRequirements & requirements, const Libs::StaticVector< VkQueueFamilyProperties2, 8 > & queueFamilyProperties) noexcept;
 
 			/**
 			 * @brief Creates the device with the defined and verified queues.
-			 * @param requirements A reference to a device requirements.
+			 * @param requirements A reference to a device requirement.
 			 * @param queueCreateInfos A reference to a list of CreateInfo for Vulkan queues.
 			 * @param extensions A reference to a list of extensions to enable with the device.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool createDevice (const DeviceRequirements & requirements, const std::vector< VkDeviceQueueCreateInfo > & queueCreateInfos, const std::vector< const char * > & extensions) noexcept;
+			bool createDevice (const DeviceRequirements & requirements, const Libs::StaticVector< VkDeviceQueueCreateInfo, 16 > & queueCreateInfos, const std::vector< const char * > & extensions) noexcept;
 
 			/* Flag names. */
 			static constexpr auto ShowInformation{0UL};
@@ -320,7 +320,7 @@ namespace EmEn::Vulkan
 
 			std::shared_ptr< PhysicalDevice > m_physicalDevice;
 			VkDevice m_handle{VK_NULL_HANDLE};
-			std::vector< std::shared_ptr< QueueFamilyInterface > > m_queueFamilies;
+			Libs::StaticVector< std::shared_ptr< QueueFamilyInterface >, 8 > m_queueFamilies;
 			std::map< QueueJob, std::shared_ptr< QueueFamilyInterface > > m_queueFamilyPerJob;
 			mutable std::mutex m_mutex;
 			std::array< bool, 8 > m_flags{

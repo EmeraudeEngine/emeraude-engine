@@ -42,7 +42,7 @@ namespace EmEn::Scenes::Component
 	using namespace EmEn::Saphir;
 
 	void
-	PointLight::onTargetConnected (AVConsole::AVManagers & managers, AbstractVirtualDevice * targetDevice) noexcept
+	PointLight::onTargetConnected (AVConsole::AVManagers & /*managers*/, AbstractVirtualDevice * targetDevice) noexcept
 	{
 		const auto maxDistance =
 			m_radius > 0.0F ?
@@ -174,20 +174,20 @@ namespace EmEn::Scenes::Component
 			{
 				if ( this->connect(AVConsoleManager.managers(), m_shadowMap) )
 				{
-					TraceSuccess{ClassId} << "Cubic shadow map successfully created for point light '" << this->name() << "'.";
+					TraceSuccess{ClassId} << "Cubic shadow map (" << resolution << "px³) successfully created for point light '" << this->name() << "'.";
 
 					this->enableShadowCasting(true);
 				}
 				else
 				{
-					TraceError{ClassId} << "Unable to connect the cubic shadow map to point light '" << this->name() << "' !";
+					TraceError{ClassId} << "Unable to connect the cubic shadow map (" << resolution << "px³) to point light '" << this->name() << "' !";
 
 					m_shadowMap.reset();
 				}
 			}
 			else
 			{
-				TraceError{ClassId} << "Unable to create a cubic shadow map for point light '" << this->name() << "' !";
+				TraceError{ClassId} << "Unable to create a cubic shadow map (" << resolution << "px³) for point light '" << this->name() << "' !";
 			}
 		}
 
@@ -195,7 +195,7 @@ namespace EmEn::Scenes::Component
 	}
 
 	void
-	PointLight::destroyFromHardware (LightSet & lightSet, AVConsole::Manager & AVConsoleManager) noexcept
+	PointLight::destroyFromHardware (LightSet & /*lightSet*/, AVConsole::Manager & AVConsoleManager) noexcept
 	{
 		if ( m_shadowMap != nullptr )
 		{

@@ -219,9 +219,9 @@ namespace EmEn::Graphics::Geometry
 	VertexGridResource::load (const Json::Value & data) noexcept
 	{
 		return this->load(
-			FastJSON::getNumber< float >(data, JKSize, DefaultSize),
-			FastJSON::getNumber< uint32_t >(data, JKDivision, DefaultDivision),
-			FastJSON::getNumber< float >(data, JKUVMultiplier, DefaultUVMultiplier)
+			FastJSON::getValue< float >(data, JKSize).value_or(DefaultSize),
+			FastJSON::getValue< uint32_t >(data, JKDivision).value_or(DefaultDivision),
+			FastJSON::getValue< float >(data, JKUVMultiplier).value_or(DefaultUVMultiplier)
 		);
 	}
 

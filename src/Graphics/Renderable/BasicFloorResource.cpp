@@ -26,9 +26,6 @@
 
 #include "BasicFloorResource.hpp"
 
-/* STL inclusions. */
-#include <fstream>
-
 /* Local inclusions. */
 #include "Libs/FastJSON.hpp"
 #include "Resources/Manager.hpp"
@@ -122,14 +119,16 @@ namespace EmEn::Graphics::Renderable
 	bool
 	BasicFloorResource::load (const std::filesystem::path & filepath) noexcept
 	{
-		Json::Value root;
+		const auto rootCheck = FastJSON::getRootFromFile(filepath);
 
-		if ( !FastJSON::getRootFromFile(filepath, root) )
+		if ( !rootCheck )
 		{
 			TraceError{ClassId} << "Unable to parse the resource file " << filepath << " !" "\n";
 
 			return this->setLoadSuccess(false);
 		}
+
+		const auto & root = rootCheck.value();
 
 		/* Checks if additional stores before loading (optional) */
 		auto * manager = Resources::Manager::instance();

@@ -41,7 +41,7 @@ namespace EmEn::Scenes::Component
 	using namespace EmEn::Saphir;
 
 	void
-	DirectionalLight::onTargetConnected (AVConsole::AVManagers & managers, AbstractVirtualDevice * targetDevice) noexcept
+	DirectionalLight::onTargetConnected (AVConsole::AVManagers & /*managers*/, AbstractVirtualDevice * targetDevice) noexcept
 	{
 		const auto maxDistance = Settings::instance()->get< float >(GraphicsShadowMappingMaxDistanceKey, DefaultGraphicsShadowMappingMaxDistance);
 
@@ -160,20 +160,20 @@ namespace EmEn::Scenes::Component
 			{
 				if ( this->connect(AVConsoleManager.managers(), m_shadowMap) )
 				{
-					TraceSuccess{ClassId} << "2D shadow map successfully created for directional light '" << this->name() << "'.";
+					TraceSuccess{ClassId} << "2D shadow map (" << resolution << "px²) successfully created for directional light '" << this->name() << "'.";
 
 					this->enableShadowCasting(true);
 				}
 				else
 				{
-					TraceError{ClassId} << "Unable to connect the 2D shadow map to directional light '" << this->name() << "' !";
+					TraceError{ClassId} << "Unable to connect the 2D shadow map (" << resolution << "px²) to directional light '" << this->name() << "' !";
 
 					m_shadowMap.reset();
 				}
 			}
 			else
 			{
-				TraceError{ClassId} << "Unable to create a 2D shadow map for directional light '" << this->name() << "' !";
+				TraceError{ClassId} << "Unable to create a 2D shadow map (" << resolution << "px²) for directional light '" << this->name() << "' !";
 			}
 		}
 
@@ -181,7 +181,7 @@ namespace EmEn::Scenes::Component
 	}
 
 	void
-	DirectionalLight::destroyFromHardware (LightSet & lightSet, AVConsole::Manager & AVConsoleManager) noexcept
+	DirectionalLight::destroyFromHardware (LightSet & /*lightSet*/, AVConsole::Manager & AVConsoleManager) noexcept
 	{
 		if ( m_shadowMap != nullptr )
 		{

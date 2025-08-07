@@ -28,15 +28,17 @@
 
 /* STL inclusions. */
 #include <cstdint>
-#include <vector>
 
 /* Third-party inclusions. */
 #include <vulkan/vulkan.h>
 
+/* Local inclusions for usage. */
+#include "Libs/StaticVector.hpp"
+
 namespace EmEn::Vulkan
 {
 	/**
-	 * @brief The render sub-pass class to complete a render pass.
+	 * @brief The render subpass class to complete a render pass.
 	 */
 	class RenderSubPass final
 	{
@@ -44,8 +46,8 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Construct a render subpass.
-			 * @param pipelineBindPoint Set the type of pipeline being bound to this render sub-pass. Default VK_PIPELINE_BIND_POINT_GRAPHICS.
-			 * @param flags Set flags of the sub-pass. Default none.
+			 * @param pipelineBindPoint Set the type of pipeline being bound to this render subpass. Default VK_PIPELINE_BIND_POINT_GRAPHICS.
+			 * @param flags Set flags of the subpass. Default none.
 			 */
 			explicit
 			RenderSubPass (VkPipelineBindPoint pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS, VkSubpassDescriptionFlags flags = 0) noexcept
@@ -63,7 +65,7 @@ namespace EmEn::Vulkan
 			VkSubpassDescription generateSubPassDescription () const noexcept;
 
 			/**
-			 * @brief Adds an input attachment to the sub-pass.
+			 * @brief Adds an input attachment to the subpass.
 			 * @param attachment The index of attachment.
 			 * @param layout The image layout.
 			 * @return void
@@ -78,7 +80,7 @@ namespace EmEn::Vulkan
 			}
 
 			/**
-			 * @brief Adds a color attachment to the sub-pass.
+			 * @brief Adds a color attachment to the subpass.
 			 * @param attachment The index of attachment.
 			 * @param layout The image layout.
 			 * @return void
@@ -93,8 +95,8 @@ namespace EmEn::Vulkan
 			}
 
 			/**
-			 * @brief Adds a resolve attachment to the sub-passes.
-			 * @warning If there is resolve attachment, it must be the same count as color attachments.
+			 * @brief Adds a resolve attachment to the subpasses.
+			 * @warning If there is a resolve attachment, it must be the same count as color attachments.
 			 * @param attachment The index of attachment.
 			 * @param layout The image layout.
 			 * @return void
@@ -123,7 +125,7 @@ namespace EmEn::Vulkan
 			}
 
 			/**
-			 * @brief Adds a preserved attachment between sub-passes.
+			 * @brief Adds a preserved attachment between subpasses.
 			 * @param index An index to the attachment.
 			 * @return void
 			 */
@@ -137,11 +139,11 @@ namespace EmEn::Vulkan
 
 			VkSubpassDescriptionFlags m_flags;
 			VkPipelineBindPoint m_pipelineBindPoint;
-			std::vector< VkAttachmentReference > m_inputAttachments;
-			std::vector< VkAttachmentReference > m_colorAttachments;
-			std::vector< VkAttachmentReference > m_resolveAttachments; // Use the color attachments count.
+			Libs::StaticVector< VkAttachmentReference, 8 > m_inputAttachments;
+			Libs::StaticVector< VkAttachmentReference, 8 > m_colorAttachments;
+			Libs::StaticVector< VkAttachmentReference, 8 > m_resolveAttachments; // Use the color attachments count.
 			VkAttachmentReference m_depthStencilAttachment{};
-			std::vector< uint32_t > m_preserveAttachments;
+			Libs::StaticVector< uint32_t, 8 > m_preserveAttachments;
 			bool m_depthStencilAttachmentSet{false};
 	};
 }

@@ -28,12 +28,12 @@
 
 /* STL inclusions. */
 #include <memory>
-#include <vector>
 
 /* Local inclusions for inheritances. */
 #include "AbstractDeviceDependentObject.hpp"
 
 /* Local inclusions for usages. */
+#include "Libs/StaticVector.hpp"
 #include "RenderSubPass.hpp"
 
 namespace EmEn::Vulkan
@@ -51,7 +51,7 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Constructs a render pass.
-			 * @param device A reference to a smart pointer to device where the render pass will be performed.
+			 * @param device A reference to a smart pointer to a device where the render pass will be performed.
 			 * @param createFlags The createInfo flags. Default none.
 			 */
 			explicit
@@ -71,7 +71,7 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Constructs a render pass with createInfo.
-			 * @param device A reference to a smart pointer to device where the render pass will be performed.
+			 * @param device A reference to a smart pointer to a device where the render pass will be performed.
 			 * @param createInfo A reference to a createInfo.
 			 */
 			RenderPass (const std::shared_ptr< Device > & device, const VkRenderPassCreateInfo & createInfo) noexcept
@@ -132,7 +132,7 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Adds a render sub-pass description.
-			 * @param subPass A reference to a render sub-pass structure.
+			 * @param subPass A reference to a render subpass structure.
 			 * @return void
 			 */
 			void
@@ -143,7 +143,7 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Adds a sub-pass dependency.
-			 * @param dependency A reference to a sub-pass dependency.
+			 * @param dependency A reference to a subpass dependency.
 			 * @return void
 			 */
 			void
@@ -177,16 +177,16 @@ namespace EmEn::Vulkan
 		private:
 
 			/**
-			 * @brief Pack sub-pass descriptions.
-			 * @return std::vector< VkSubpassDescription >
+			 * @brief Pack subpass descriptions.
+			 * @return Libs::StaticVector< VkSubpassDescription, 4 >
 			 */
 			[[nodiscard]]
-			std::vector< VkSubpassDescription > getSubPassDescriptions () const noexcept;
+			Libs::StaticVector< VkSubpassDescription, 4 > getSubPassDescriptions () const noexcept;
 
 			VkRenderPass m_handle{VK_NULL_HANDLE};
 			VkRenderPassCreateInfo m_createInfo{};
-			std::vector< VkAttachmentDescription > m_attachmentDescriptions;
-			std::vector< RenderSubPass > m_renderSubPasses;
-			std::vector< VkSubpassDependency > m_subPassDependencies;
+			Libs::StaticVector< VkAttachmentDescription, 8 > m_attachmentDescriptions;
+			Libs::StaticVector< RenderSubPass, 4 > m_renderSubPasses;
+			Libs::StaticVector< VkSubpassDependency, 8 > m_subPassDependencies;
 	};
 }

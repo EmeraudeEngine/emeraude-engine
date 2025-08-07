@@ -28,7 +28,6 @@
 
 /* STL inclusions. */
 #include <algorithm>
-#include <utility>
 
 /* Local inclusions. */
 #include "Device.hpp"
@@ -133,7 +132,7 @@ namespace EmEn::Vulkan
 	}
 
 	size_t
-	DescriptorSetLayout::getHash (const std::vector< VkDescriptorSetLayoutBinding > & bindings, VkDescriptorSetLayoutCreateFlags flags) noexcept
+	DescriptorSetLayout::getHash (const Libs::StaticVector< VkDescriptorSetLayoutBinding, 16 > & bindings, VkDescriptorSetLayoutCreateFlags flags) noexcept
 	{
 		/* FIXME: Weak and unstable hash method !! */
 		size_t hashValue = 0;

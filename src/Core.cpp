@@ -103,7 +103,7 @@ namespace EmEn
 
 		m_primaryServicesEnabled.clear();
 
-		/* FIXME: This should be here! */
+		/* FIXME: This shouldn't be here! */
 		m_resourceManager.unloadUnusedResources();
 
 		m_primaryServices.terminate();
@@ -235,7 +235,7 @@ namespace EmEn
 
 		/* NOTE: Create the logic loop and the rendering loop into threads
 		 * automatically joined at the end of this function.
-		 * TODO: Use std::jthread instead to auto join threads at the end. */
+		 * TODO: We can use std::jthread instead to auto join threads at the end, but macOS SDK 12.0 doesn't provide std::jthread. */
 		std::thread logicsThread{[this] {
 			this->logicsTask();
 		}};
@@ -311,8 +311,8 @@ namespace EmEn
 			std::this_thread::sleep_for(std::chrono::milliseconds(1));
 		}
 
-		/* NOTE: Be sure all threads from the pool finishes their work. */
-		if ( auto threadPool = m_primaryServices.threadPool(); threadPool != nullptr )
+		/* NOTE: Be sure all threads from the pool finish their work. */
+		if ( const auto threadPool = m_primaryServices.threadPool(); threadPool != nullptr )
 		{
 			threadPool->wait();
 		}
@@ -740,9 +740,6 @@ namespace EmEn
 
 		this->onStop();
 
-		/* FIXME: Check the right order for stopping the engine! */
-		m_sceneManager.deleteAllScenes();
-
 		/* Stopping the logics and rendering loops. */
 		m_flags[IsLogicsLoopRunning] = false;
 		m_flags[IsRenderingLoopRunning] = false;
@@ -1165,7 +1162,7 @@ namespace EmEn
 					break;
 
 				case Console::Controller::HardExit :
-					/* NOTE: Hard cord termination of the program ! */
+					/* NOTE: Hard cord termination of the program! */
 					std::terminate();
 
 					break;

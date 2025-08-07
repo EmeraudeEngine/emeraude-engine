@@ -1765,6 +1765,26 @@ namespace EmEn::Libs::PixelFactory
 		};
 	}
 
+	/* NOTE: Trait and concept to check a color in template. */
+	template< typename T >
+	inline constexpr bool is_color_v = false;
+
+	template< typename data_t >
+	requires (std::is_floating_point_v< data_t >)
+	inline constexpr bool is_color_v< Color< data_t > > = true;
+
+	template< typename T >
+	concept ColorConcept = is_color_v< T >;
+
+	template< typename T >
+	struct ColorTraits;
+
+	template< typename data_t >
+	struct ColorTraits< Color< data_t > >
+	{
+		using precision = data_t;
+	};
+
 	/* Predefined colors */
 	static constexpr Color< float > White{1.0F, 1.0F, 1.0F, 1.0F};
 	static constexpr Color< float > LightGrey{0.75F, 0.75F, 0.75F, 1.0F};

@@ -91,14 +91,16 @@ namespace EmEn::Resources
 			TraceInfo{ClassId} << "Loading resource index from file '" << filepath << "' ...";
 
 			/* 1. Get raw JSON data from a file. */
-			Json::Value root;
+			const auto rootCheck = FastJSON::getRootFromFile(filepath);
 
-			if ( !FastJSON::getRootFromFile(filepath, root) )
+			if ( !rootCheck )
 			{
 				TraceError{ClassId} << "Unable to parse the index file " << filepath << " !" "\n";
 
 				continue;
 			}
+
+			const auto & root = rootCheck.value();
 
 			/* 3. Register every stores */
 			if ( !root.isMember(StoresKey) )

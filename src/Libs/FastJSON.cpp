@@ -33,8 +33,8 @@
 
 namespace EmEn::Libs::FastJSON
 {
-	bool
-	getRootFromFile (const std::filesystem::path & filepath, Json::Value & root, int stackLimit, bool quiet) noexcept
+	std::optional< Json::Value >
+	getRootFromFile (const std::filesystem::path & filepath, int stackLimit, bool quiet)
 	{
 		Json::CharReaderBuilder builder{};
 		builder["collectComments"] = false;
@@ -56,31 +56,30 @@ namespace EmEn::Libs::FastJSON
 		{
 			if ( !quiet )
 			{
-				std::cerr << "Unable to open the file " << filepath << " !" "\n";
+				std::cerr << "[FastJSON-DEBUG] Unable to open the file " << filepath << " !" "\n";
 			}
 
-			return false;
+			return std::nullopt;
 		}
 
+		Json::Value root;
 		std::string errors;
 
 		if ( !parseFromStream(builder, json, &root, &errors) )
 		{
 			if ( !quiet )
 			{
-				std::cerr << "Unable to parse JSON file " << filepath << " ! Errors :" "\n" << errors << "\n";
+				std::cerr << "[FastJSON-DEBUG] Unable to parse JSON file " << filepath << " ! Errors :" "\n" << errors << "\n";
 			}
 
-			root = Json::nullValue;
-
-			return false;
+			return std::nullopt;
 		}
 
-		return true;
+		return root;
 	}
 
-	bool
-	getRootFromString (const std::string & json, Json::Value & root, int stackLimit, bool quiet) noexcept
+	std::optional< Json::Value >
+	getRootFromString (const std::string & json, int stackLimit, bool quiet)
 	{
 		Json::CharReaderBuilder builder{};
 		builder["collectComments"] = false;
@@ -96,27 +95,26 @@ namespace EmEn::Libs::FastJSON
 		builder["allowSpecialFloats"] = true;
 		builder["skipBom"] = true;
 
-		Json::CharReader * reader = builder.newCharReader();
+		const std::unique_ptr< Json::CharReader > reader{builder.newCharReader()};
 
+		Json::Value root;
 		std::string errors;
 
 		if ( !reader->parse(json.data(), json.data() + json.size(), &root, &errors) )
 		{
 			if ( !quiet )
 			{
-				std::cerr << "Unable to parse JSON from a string ! Errors :" "\n" << errors << "\n";
+				std::cerr << "[FastJSON-DEBUG] Unable to parse JSON from a string ! Errors :" "\n" << errors << "\n";
 			}
 
-			root = Json::nullValue;
-
-			return false;
+			return std::nullopt;
 		}
 
-		return true;
+		return root;
 	}
 
 	std::string
-	stringify (const Json::Value & root) noexcept
+	stringify (const Json::Value & root)
 	{
 		Json::StreamWriterBuilder builder{};
 		builder["commentStyle"] = "None";
@@ -129,101 +127,5 @@ namespace EmEn::Libs::FastJSON
 		builder["emitUTF8"] = true;
 
 		return Json::writeString(builder, root);
-	}
-
-	bool
-	getArray (const Json::Value & data, const char * JSONKey, Json::Value & array) noexcept
-	{
-		if ( !data.isMember(JSONKey) )
-		{
-			std::cerr << "The key '" << JSONKey << "' is not present !" "\n";
-
-			return false;
-		}
-
-		array = data[JSONKey];
-
-		if ( !array.isArray() )
-		{
-			std::cerr << "The key '" << JSONKey << "' is not an array !" "\n";
-
-			return false;
-		}
-
-		return true;
-	}
-
-	bool
-	getObject (const Json::Value & data, const char * JSONKey, Json::Value & object) noexcept
-	{
-		if ( !data.isMember(JSONKey) )
-		{
-			std::cerr << "The key '" << JSONKey << "' is not present !" "\n";
-
-			return false;
-		}
-
-		object = data[JSONKey];
-
-		if ( !object.isObject() )
-		{
-			std::cerr << "The key '" << JSONKey << "' is not an object !" "\n";
-
-			return false;
-		}
-
-		return true;
-	}
-
-	bool
-	getBoolean (const Json::Value & data, const char * JSONKey) noexcept
-	{
-		if ( !data.isMember(JSONKey) )
-		{
-			std::cerr << "The key '" << JSONKey << "' is not present !" "\n";
-
-			return false;
-		}
-
-		if ( !data[JSONKey].isBool() )
-		{
-			std::cerr << "The key '" << JSONKey << "' is not a boolean !" "\n";
-
-			return false;
-		}
-
-		return data[JSONKey].asBool();
-	}
-
-	bool
-	getBoolean (const Json::Value & data, const char * JSONKey, bool defaultValue) noexcept
-	{
-		return data.isMember(JSONKey) && data[JSONKey].isBool() ? data[JSONKey].asBool() : defaultValue;
-	}
-
-	std::string
-	getString (const Json::Value & data, const char * JSONKey) noexcept
-	{
-		if ( !data.isMember(JSONKey) )
-		{
-			std::cerr << "The key '" << JSONKey << "' is not present !" "\n";
-
-			return {};
-		}
-
-		if ( !data[JSONKey].isString() )
-		{
-			std::cerr << "The key '" << JSONKey << "' is not a string !" "\n";
-
-			return {};
-		}
-
-		return data[JSONKey].asString();
-	}
-
-	std::string
-	getString (const Json::Value & data, const char * JSONKey, const std::string & defaultValue) noexcept
-	{
-		return data.isMember(JSONKey) && data[JSONKey].isString() ? data[JSONKey].asString() : defaultValue;
 	}
 }

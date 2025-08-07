@@ -65,7 +65,7 @@ namespace EmEn::Vulkan
 
 	/**
 	 * @brief The vulkan image-specific buffer class.
-	 * @extends std::enable_shared_from_this Adds the ability to self replicate the smart pointer.
+	 * @extends std::enable_shared_from_this Adds the ability to self-replicate the smart pointer.
 	 * @extends EmEn::Vulkan::AbstractDeviceDependentObject This object needs a device.
 	 */
 	class Image final : public AbstractDeviceDependentObject

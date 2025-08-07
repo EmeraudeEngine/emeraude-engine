@@ -102,7 +102,7 @@ namespace EmEn::PlatformSpecific
 	[[nodiscard]]
 	inline
 	std::string
-	to_string (GPUDeviceType value) noexcept
+	to_string (GPUDeviceType value)
 	{
 		return {to_cstring(value)};
 	}

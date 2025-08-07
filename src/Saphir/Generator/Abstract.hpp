@@ -36,6 +36,7 @@
 #include "Libs/NameableTrait.hpp"
 
 /* Local inclusions for usages. */
+#include "Libs/StaticVector.hpp"
 #include "Graphics/RenderableInstance/Abstract.hpp"
 #include "Saphir/Program.hpp"
 
@@ -468,7 +469,7 @@ namespace EmEn::Saphir::Generator
 			 * @return bool
 			 */
 			[[nodiscard]]
-			virtual bool onCreateDataLayouts (Graphics::Renderer & renderer, const SetIndexes & setIndexes, std::vector< std::shared_ptr< Vulkan::DescriptorSetLayout > > & descriptorSetLayouts, std::vector< VkPushConstantRange > & pushConstantRanges) noexcept = 0;
+			virtual bool onCreateDataLayouts (Graphics::Renderer & renderer, const SetIndexes & setIndexes, Libs::StaticVector< std::shared_ptr< Vulkan::DescriptorSetLayout >, 4 > & descriptorSetLayouts, Libs::StaticVector< VkPushConstantRange, 4 > & pushConstantRanges) noexcept = 0;
 
 			/**
 			 * @brief Configures the graphics pipeline from child shader generators.
@@ -487,7 +488,7 @@ namespace EmEn::Saphir::Generator
 			 * @param stageFlags
 			 * @return void
 			 */
-			static void generatePushConstantRanges (const std::vector< Declaration::PushConstantBlock > & pushConstantBlocks, std::vector< VkPushConstantRange > & pushConstantRanges, VkShaderStageFlags stageFlags) noexcept;
+			static void generatePushConstantRanges (const Libs::StaticVector< Declaration::PushConstantBlock, 4 > & pushConstantBlocks, Libs::StaticVector< VkPushConstantRange, 4 > & pushConstantRanges, VkShaderStageFlags stageFlags) noexcept;
 
 		private:
 

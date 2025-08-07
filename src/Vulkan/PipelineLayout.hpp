@@ -30,11 +30,13 @@
 #include <cstddef>
 #include <ostream>
 #include <memory>
-#include <vector>
 #include <string>
 
 /* Local inclusions for inheritances. */
 #include "AbstractDeviceDependentObject.hpp"
+
+/* Local inclusions for usages. */
+#include "Libs/StaticVector.hpp"
 
 namespace EmEn::Vulkan
 {
@@ -64,7 +66,7 @@ namespace EmEn::Vulkan
 			 * @param createFlags The createInfo flags. Default none.
 			 */
 			explicit
-			PipelineLayout (const std::shared_ptr< Device > & device, std::string UUID, const std::vector< std::shared_ptr< DescriptorSetLayout > > & descriptorSetLayouts = {}, const std::vector< VkPushConstantRange > & pushConstantRanges = {}, VkPipelineLayoutCreateFlags createFlags = 0) noexcept
+			PipelineLayout (const std::shared_ptr< Device > & device, std::string UUID, const Libs::StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > & descriptorSetLayouts = {}, const Libs::StaticVector< VkPushConstantRange, 4 > & pushConstantRanges = {}, VkPipelineLayoutCreateFlags createFlags = 0) noexcept
 				: AbstractDeviceDependentObject{device},
 				m_UUID{std::move(UUID)},
 				m_descriptorSetLayouts{descriptorSetLayouts},
@@ -87,7 +89,7 @@ namespace EmEn::Vulkan
 			 * @param descriptorSetLayouts A reference to a list of descriptor set layouts. Default empty.
 			 * @param pushConstantRanges A reference to a list of push constant ranges. Default empty.
 			 */
-			PipelineLayout (const std::shared_ptr< Device > & device, std::string UUID, const VkPipelineLayoutCreateInfo & createInfo, const std::vector< std::shared_ptr< DescriptorSetLayout > > & descriptorSetLayouts = {}, const std::vector< VkPushConstantRange > & pushConstantRanges = {}) noexcept
+			PipelineLayout (const std::shared_ptr< Device > & device, std::string UUID, const VkPipelineLayoutCreateInfo & createInfo, const Libs::StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > & descriptorSetLayouts = {}, const Libs::StaticVector< VkPushConstantRange, 4 > & pushConstantRanges = {}) noexcept
 				: AbstractDeviceDependentObject{device},
 				m_createInfo{createInfo},
 				m_UUID{std::move(UUID)},
@@ -189,11 +191,11 @@ namespace EmEn::Vulkan
 			}
 
 			/**
-			 * @brief Returns the list of descriptor set layouts associated to this pipeline layout.
-			 * @return const vector< shared_ptr< DescriptorSetLayout > > &
+			 * @brief Returns the list of descriptor set layouts associated with this pipeline layout.
+			 * @return const Libs::StaticVector< shared_ptr< DescriptorSetLayout >, 4 > &
 			 */
 			[[nodiscard]]
-			const std::vector< std::shared_ptr< DescriptorSetLayout > > &
+			const Libs::StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > &
 			descriptorSetLayouts () const noexcept
 			{
 				return m_descriptorSetLayouts;
@@ -201,10 +203,10 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Returns the push constant range list.
-			 * @return const std::vector< VkPushConstantRange > &
+			 * @return const Libs::StaticVector< VkPushConstantRange, 4 > &
 			 */
 			[[nodiscard]]
-			const std::vector< VkPushConstantRange > &
+			const Libs::StaticVector< VkPushConstantRange, 4 > &
 			pushConstantRanges () const noexcept
 			{
 				return m_pushConstantRanges;
@@ -233,14 +235,14 @@ namespace EmEn::Vulkan
 			 * @return size_t
 			 */
 			[[nodiscard]]
-			static size_t getHash (const std::vector< std::shared_ptr< DescriptorSetLayout > > & descriptorSetLayouts, const std::vector< VkPushConstantRange > & pushConstantRanges, VkPipelineLayoutCreateFlags flags) noexcept;
+			static size_t getHash (const Libs::StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > & descriptorSetLayouts, const Libs::StaticVector< VkPushConstantRange, 4 > & pushConstantRanges, VkPipelineLayoutCreateFlags flags) noexcept;
 
 		private:
 
 			VkPipelineLayout m_handle{VK_NULL_HANDLE};
 			VkPipelineLayoutCreateInfo m_createInfo{};
 			std::string m_UUID;
-			std::vector< std::shared_ptr< DescriptorSetLayout > > m_descriptorSetLayouts;
-			std::vector< VkPushConstantRange > m_pushConstantRanges;
+			Libs::StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > m_descriptorSetLayouts;
+			Libs::StaticVector< VkPushConstantRange, 4 > m_pushConstantRanges;
 	};
 }

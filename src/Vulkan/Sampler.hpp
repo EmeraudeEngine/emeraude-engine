@@ -62,7 +62,7 @@ namespace EmEn::Vulkan
 			/**
 			 * @brief Constructs a sampler with createInfo.
 			 * @param device A reference to a smart pointer of the device.
-			 * @param createInfo A reference to a creation info.
+			 * @param createInfo A reference to a createInfo.
 			 */
 			Sampler (const std::shared_ptr< Device > & device, const VkSamplerCreateInfo & createInfo) noexcept
 				: AbstractDeviceDependentObject{device},

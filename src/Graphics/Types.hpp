@@ -76,7 +76,7 @@ namespace EmEn::Graphics
 	[[nodiscard]]
 	inline
 	std::string
-	to_string (RenderTargetType value) noexcept
+	to_string (RenderTargetType value)
 	{
 		return {to_cstring(value)};
 	}
@@ -123,7 +123,7 @@ namespace EmEn::Graphics
 	[[nodiscard]]
 	inline
 	std::string
-	to_string (RenderPassType value) noexcept
+	to_string (RenderPassType value)
 	{
 		return {to_cstring(value)};
 	}
@@ -163,7 +163,7 @@ namespace EmEn::Graphics
 	[[nodiscard]]
 	inline
 	std::string
-	to_string (ModelMatrixType value) noexcept
+	to_string (ModelMatrixType value)
 	{
 		return {to_cstring(value)};
 	}
@@ -215,7 +215,7 @@ namespace EmEn::Graphics
 	[[nodiscard]]
 	inline
 	std::string
-	to_string (FillingType value) noexcept
+	to_string (FillingType value)
 	{
 		return {to_cstring(value)};
 	}
@@ -259,7 +259,7 @@ namespace EmEn::Graphics
 	[[nodiscard]]
 	inline
 	std::string
-	to_string (BlendingMode value) noexcept
+	to_string (BlendingMode value)
 	{
 		return {to_cstring(value)};
 	}
@@ -317,7 +317,7 @@ namespace EmEn::Graphics
 	[[nodiscard]]
 	inline
 	std::string
-	to_string (ComponentType value) noexcept
+	to_string (ComponentType value)
 	{
 		return {to_cstring(value)};
 	}
@@ -377,7 +377,7 @@ namespace EmEn::Graphics
 	[[nodiscard]]
 	inline
 	std::string
-	to_string (Topology value) noexcept
+	to_string (Topology value)
 	{
 		return {to_cstring(value)};
 	}
@@ -421,7 +421,7 @@ namespace EmEn::Graphics
 	[[nodiscard]]
 	inline
 	std::string
-	to_string (PolygonMode value) noexcept
+	to_string (PolygonMode value)
 	{
 		return {to_cstring(value)};
 	}
@@ -466,7 +466,7 @@ namespace EmEn::Graphics
 	[[nodiscard]]
 	inline
 	std::string
-	to_string (CullingMode value) noexcept
+	to_string (CullingMode value)
 	{
 		return {to_cstring(value)};
 	}
@@ -508,7 +508,7 @@ namespace EmEn::Graphics
 	[[nodiscard]]
 	inline
 	std::string
-	to_string (BufferType value) noexcept
+	to_string (BufferType value)
 	{
 		return {to_cstring(value)};
 	}
@@ -579,7 +579,7 @@ namespace EmEn::Graphics
 	[[nodiscard]]
 	inline
 	std::string
-	to_string (VertexAttributeType value) noexcept
+	to_string (VertexAttributeType value)
 	{
 		return {to_cstring(value)};
 	}
@@ -679,7 +679,7 @@ namespace EmEn::Graphics
 	[[nodiscard]]
 	inline
 	std::string
-	to_string (CubemapFace value) noexcept
+	to_string (CubemapFace value)
 	{
 		return {to_cstring(value)};
 	}
@@ -729,7 +729,7 @@ namespace EmEn::Graphics
 	[[nodiscard]]
 	inline
 	std::string
-	to_string (FilterQuality value) noexcept
+	to_string (FilterQuality value)
 	{
 		return {to_cstring(value)};
 	}
@@ -819,7 +819,7 @@ namespace EmEn::Graphics
 	[[nodiscard]]
 	inline
 	std::string
-	to_string (ShapeType value) noexcept
+	to_string (ShapeType value)
 	{
 		return {to_cstring(value)};
 	}

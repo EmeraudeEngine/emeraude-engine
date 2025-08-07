@@ -31,6 +31,24 @@
 
 namespace EmEn::Libs::VertexFactory
 {
+	/** @brief Mode of applying a transformation on the grid data. */
+	enum class PointTransformationMode : uint8_t
+	{
+		Replace,
+		Add,
+		Subtract,
+		Multiply,
+		Divide
+	};
+
+	constexpr std::array< std::string_view, 5 > PointTransformationModes{
+		"Replace",
+		"Add" ,
+		"Subtract",
+		"Multiply",
+		"Divide"
+	};
+
 	/** @brief The normal format. */
 	enum class NormalType : uint8_t
 	{

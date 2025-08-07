@@ -2200,17 +2200,17 @@ namespace EmEn::Libs::Math
 
 				if constexpr ( dim_t == 2 )
 				{
-					return out << "Vector2(" << fixed << setprecision(8) << '[' << setw(16) << obj.m_data[X] << ", " << setw(16) << obj.m_data[Y] << ')';
+					return out << "Vector2(" << fixed << setprecision(8) << '[' << setw(16) << obj.m_data[X] << ", " << setw(16) << obj.m_data[Y] << "])";
 				}
 
 				if constexpr ( dim_t == 3 )
 				{
-					return out << "Vector3(" << fixed << setprecision(8) << '[' << setw(16) << obj.m_data[X] << ", " << setw(16) << obj.m_data[Y] << ", " << setw(16) << obj.m_data[Z] << ')';
+					return out << "Vector3(" << fixed << setprecision(8) << '[' << setw(16) << obj.m_data[X] << ", " << setw(16) << obj.m_data[Y] << ", " << setw(16) << obj.m_data[Z] << "])";
 				}
 
 				if constexpr ( dim_t == 4 )
 				{
-					return out << "Vector4(" << fixed << setprecision(8) << '[' << setw(16) << obj.m_data[X] << ", " << setw(16) << obj.m_data[Y] << ", " << setw(16) << obj.m_data[Z] << ", " << setw(16) << obj.m_data[W] << ')';
+					return out << "Vector4(" << fixed << setprecision(8) << '[' << setw(16) << obj.m_data[X] << ", " << setw(16) << obj.m_data[Y] << ", " << setw(16) << obj.m_data[Z] << ", " << setw(16) << obj.m_data[W] << "])";
 				}
 				else
 				{
@@ -2237,6 +2237,27 @@ namespace EmEn::Libs::Math
 		private:
 
 			std::array< precision_t, dim_t > m_data{};
+	};
+
+	/* NOTE: Trait and concept to check a vector in template. */
+	template< typename T >
+	inline constexpr bool is_vector_v = false;
+
+	template< size_t dim_t, typename precision_t >
+	requires (dim_t == 2 || dim_t == 3 || dim_t == 4) && std::is_arithmetic_v< precision_t >
+	inline constexpr bool is_vector_v< Vector< dim_t, precision_t > > = true;
+
+	template< typename T >
+	concept VectorConcept = is_vector_v< T >;
+
+	template< typename T >
+	struct VectorTraits;
+
+	template< size_t dim_t, typename precision_t >
+	struct VectorTraits< Vector< dim_t, precision_t > >
+	{
+		static constexpr size_t dim = dim_t;
+		using precision = precision_t;
 	};
 
 	using Vector2I = Vector< 2, signed int >;

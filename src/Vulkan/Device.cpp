@@ -48,7 +48,7 @@ namespace EmEn::Vulkan
 		}
 
 		/* Queue creation definitions. */
-		std::vector< VkDeviceQueueCreateInfo > queueCreateInfos{};
+		StaticVector< VkDeviceQueueCreateInfo, 16 > queueCreateInfos;
 
 		/* Check queues availabilities and possibilities against requirements. */
 		if ( !this->prepareQueues(requirements, queueCreateInfos) )
@@ -83,7 +83,7 @@ namespace EmEn::Vulkan
 			return false;
 		}
 
-		/* Retrieve every created queues. */
+		/* Retrieve every created queue. */
 		auto device = this->shared_from_this();
 
 		for ( auto & queueFamily : m_queueFamilies )
@@ -132,7 +132,7 @@ namespace EmEn::Vulkan
 
 		m_flags[HasBasicSupport] = true;
 
-		/* NOTE: Without transfer nothing is possible ! This should never happen ! */
+		/* NOTE: Without a transfer nothing is possible! This should never happen! */
 		if ( (queueFamilyProperty.queueFamilyProperties.queueFlags & VK_QUEUE_TRANSFER_BIT) == 0 )
 		{
 			TraceFatal{ClassId} << "The physical device '" << this->name() << "' has no queue for transfer !";
@@ -184,9 +184,9 @@ namespace EmEn::Vulkan
 	}
 
 	bool
-	Device::declareQueuesFromMultipleQueueFamilies (const DeviceRequirements & requirements, const std::vector< VkQueueFamilyProperties2 > & queueFamilyProperties) noexcept
+	Device::declareQueuesFromMultipleQueueFamilies (const DeviceRequirements & requirements, const StaticVector< VkQueueFamilyProperties2, 8 > & queueFamilyProperties) noexcept
 	{
-		/* Loop over all existing queue family in the physical device. */
+		/* Loop over all existing queue families in the physical device. */
 		for ( uint32_t queueFamilyIndex = 0; queueFamilyIndex < queueFamilyProperties.size(); queueFamilyIndex++ )
 		{
 			const auto & flag = queueFamilyProperties[queueFamilyIndex].queueFamilyProperties.queueFlags;
@@ -201,7 +201,7 @@ namespace EmEn::Vulkan
 			{
 				if ( requirements.needsGraphics() )
 				{
-					/* If no graphic queue has been registered or if the queue family is exclusive to graphics. */
+					/* If no graphic queue has been registered, or if the queue family is exclusive to graphics. */
 					if ( !m_queueFamilyPerJob.contains(QueueJob::Graphics) || (flag & VK_QUEUE_COMPUTE_BIT) == 0 )
 					{
 						m_queueFamilyPerJob[QueueJob::Graphics] = queueFamily;
@@ -225,7 +225,7 @@ namespace EmEn::Vulkan
 
 			if ( requirements.needsCompute() && (flag & VK_QUEUE_COMPUTE_BIT) != 0 )
 			{
-				/* If no compute queue has been registered or if the queue family is exclusive to compute. */
+				/* If no compute queue has been registered, or if the queue family is exclusive to compute. */
 				if ( !m_queueFamilyPerJob.contains(QueueJob::Compute) || (flag & VK_QUEUE_GRAPHICS_BIT) == 0 )
 				{
 					m_queueFamilyPerJob[QueueJob::Compute] = queueFamily;
@@ -243,7 +243,7 @@ namespace EmEn::Vulkan
 			}
 		}
 
-		/* Check if every need are met. */
+		/* Check if every need is met. */
 		if ( requirements.needsGraphics() && !m_queueFamilyPerJob.contains(QueueJob::Graphics) )
 		{
 			TraceError{ClassId} << "The physical device '" << this->name() << "' has no queue for graphics !";
@@ -288,7 +288,7 @@ namespace EmEn::Vulkan
 	}
 
 	bool
-	Device::prepareQueues (const DeviceRequirements & requirements, std::vector< VkDeviceQueueCreateInfo > & queueCreateInfos) noexcept
+	Device::prepareQueues (const DeviceRequirements & requirements, StaticVector< VkDeviceQueueCreateInfo, 16 > & queueCreateInfos) noexcept
 	{
 		if ( m_flags[ShowInformation] )
 		{
@@ -337,7 +337,7 @@ namespace EmEn::Vulkan
 		{
 			if ( !queueFamily->hasSingleQueue() )
 			{
-				std::vector< std::pair< QueueJob, float > > structure{};
+				StaticVector< std::pair< QueueJob, float >, 16 > structure;
 
 				for ( const auto & job : m_queueFamilyPerJob )
 				{
@@ -415,7 +415,7 @@ namespace EmEn::Vulkan
 	}
 
 	bool
-	Device::createDevice (const DeviceRequirements & requirements, const std::vector< VkDeviceQueueCreateInfo > & queueCreateInfos, const std::vector< const char * > & extensions) noexcept
+	Device::createDevice (const DeviceRequirements & requirements, const StaticVector< VkDeviceQueueCreateInfo, 16 > & queueCreateInfos, const std::vector< const char * > & extensions) noexcept
 	{
 		/* Creates the logical device from the physical device information. */
 		VkDeviceCreateInfo createInfo{};
@@ -424,7 +424,7 @@ namespace EmEn::Vulkan
 		createInfo.flags = 0;
 		createInfo.queueCreateInfoCount = static_cast< uint32_t >(queueCreateInfos.size());
 		createInfo.pQueueCreateInfos = queueCreateInfos.data();
-		createInfo.enabledLayerCount = 0; // NOTE: Device layer are ignored (Device layer deprecation)
+		createInfo.enabledLayerCount = 0; // NOTE: Device layer is ignored (Device layer deprecation)
 		createInfo.ppEnabledLayerNames = nullptr; // ...
 		createInfo.enabledExtensionCount = static_cast< uint32_t >(extensions.size());
 		createInfo.ppEnabledExtensionNames = extensions.data();

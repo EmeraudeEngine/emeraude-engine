@@ -30,13 +30,13 @@
 #include <cstddef>
 #include <cstdint>
 #include <utility>
-#include <vector>
 #include <memory>
 
 /* Third-party inclusions. */
 #include <vulkan/vulkan.h>
 
 /* Local inclusions for usages. */
+#include "Libs/StaticVector.hpp"
 #include "Types.hpp"
 
 /* Forward declaration. */
@@ -108,12 +108,12 @@ namespace EmEn::Vulkan
 			virtual bool hasSingleQueue () const noexcept = 0;
 
 			/**
-			 * @brief Declares the queues structures inside the family.
+			 * @brief Declares the queue structures inside the family.
 			 * @param structure A reference to a vector for the desired job and priority.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			virtual bool declareQueueStructure (const std::vector< std::pair< QueueJob, float > > & structure) noexcept = 0;
+			virtual bool declareQueueStructure (const Libs::StaticVector< std::pair< QueueJob, float >, 16 > & structure) noexcept = 0;
 
 			/**
 			 * @brief Returns the createInfo to build the queue family setup on the device.
@@ -125,7 +125,7 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Retrievers the allocated queues on the device for this queue family.
-			 * @param device A reference to the device smart pointer where queues has been created.
+			 * @param device A reference to the device smart pointer where queues have been created.
 			 * @return bool
 			 */
 			[[nodiscard]]

@@ -495,7 +495,7 @@ namespace EmEn::Vulkan
 			 * @brief Registers a draw command.
 			 * @param geometry A reference to the geometry.
 			 * @param subGeometryIndex A sub geometry layer index being drawn. Default 0.
-			 * @param instanceCount The number of instance. Default 1.
+			 * @param instanceCount The number of instances. Default 1.
 			 * @return void
 			 */
 			void draw (const Graphics::Geometry::Interface & geometry, uint32_t subGeometryIndex = 0, uint32_t instanceCount = 1) const noexcept;

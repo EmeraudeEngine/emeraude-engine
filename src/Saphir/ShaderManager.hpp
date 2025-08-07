@@ -175,10 +175,10 @@ namespace EmEn::Saphir
 			 * @brief Returns shader modules corresponding to a program.
 			 * @param device A reference to a device smart pointer.
 			 * @param program A reference to a program smart pointer.
-			 * @return std::vector< std::shared_ptr< Vulkan::ShaderModule > >
+			 * @return Libs::StaticVector< std::shared_ptr< Vulkan::ShaderModule >, 5 >
 			 */
 			[[nodiscard]]
-			std::vector< std::shared_ptr< Vulkan::ShaderModule > > getShaderModules (const std::shared_ptr< Vulkan::Device > & device, const std::shared_ptr< Program > & program) noexcept;
+			Libs::StaticVector< std::shared_ptr< Vulkan::ShaderModule >, 5 > getShaderModules (const std::shared_ptr< Vulkan::Device > & device, const std::shared_ptr< Program > & program) noexcept;
 
 		private:
 

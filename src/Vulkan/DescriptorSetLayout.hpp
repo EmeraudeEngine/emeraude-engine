@@ -32,10 +32,12 @@
 #include <ostream>
 #include <memory>
 #include <string>
-#include <vector>
 
 /* Local inclusions for inheritances. */
 #include "AbstractDeviceDependentObject.hpp"
+
+/* Local inclusions for usages. */
+#include "Libs/StaticVector.hpp"
 
 namespace EmEn::Vulkan
 {
@@ -75,7 +77,7 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Constructs a descriptor set layout with createInfo.
-			 * @param device A reference to a smart pointer to device where the render pass will be performed.
+			 * @param device A reference to a smart pointer to a device where the render pass will be performed.
 			 * @param UUID A reference to a string [std::move].
 			 * @param createInfo A reference to a createInfo.
 			 */
@@ -147,7 +149,7 @@ namespace EmEn::Vulkan
 			 * @brief Declares a sampler binding.
 			 * @param binding The binding point.
 			 * @param stageFlags Define at which stage of the shader the bond appears. Default all.
-			 * @param descriptorCount Define the number of descriptor to bind. Default 1.
+			 * @param descriptorCount Define the number of descriptors to bind. Default 1.
 			 * @param pImmutableSamplers The immutable samplers to bind. Default none.
 			 * @return bool
 			 */
@@ -167,8 +169,8 @@ namespace EmEn::Vulkan
 			 * @brief Declare combined image sampler binding.
 			 * @param binding The binding point.
 			 * @param stageFlags Define at which stage of the shader the bond appears. Default all.
-			 * @param descriptorCount Define the number of descriptor to bind. Default 1.
-			 * @param pImmutableSamplers he immutable samplers to bind. Default none.
+			 * @param descriptorCount Define the number of descriptors to bind. Default 1.
+			 * @param pImmutableSamplers The immutable samplers to bind. Default none.
 			 * @return bool
 			 */
 			bool
@@ -187,7 +189,7 @@ namespace EmEn::Vulkan
 			 * @brief Declares sampled image binding.
 			 * @param binding The binding point.
 			 * @param stageFlags Define at which stage of the shader the bond appears. Default all.
-			 * @param descriptorCount Define the number of descriptor to bind. Default 1.
+			 * @param descriptorCount Define the number of descriptors to bind. Default 1.
 			 * @return bool
 			 */
 			bool
@@ -206,7 +208,7 @@ namespace EmEn::Vulkan
 			 * @brief Declares storage image binding.
 			 * @param binding The binding point.
 			 * @param stageFlags Define at which stage of the shader the bond appears. Default all.
-			 * @param descriptorCount Define the number of descriptor to bind. Default 1.
+			 * @param descriptorCount Define the number of descriptors to bind. Default 1.
 			 * @return bool
 			 */
 			bool
@@ -225,7 +227,7 @@ namespace EmEn::Vulkan
 			 * @brief Declares uniform texel buffer binding.
 			 * @param binding The binding point.
 			 * @param stageFlags Define at which stage of the shader the bond appears. Default all.
-			 * @param descriptorCount Define the number of descriptor to bind. Default 1.
+			 * @param descriptorCount Define the number of descriptors to bind. Default 1.
 			 * @return bool
 			 */
 			bool
@@ -244,7 +246,7 @@ namespace EmEn::Vulkan
 			 * @brief Declares storage texel buffer binding.
 			 * @param binding The binding point.
 			 * @param stageFlags Define at which stage of the shader the bond appears. Default all.
-			 * @param descriptorCount Define the number of descriptor to bind. Default 1.
+			 * @param descriptorCount Define the number of descriptors to bind. Default 1.
 			 * @return bool
 			 */
 			bool
@@ -263,7 +265,7 @@ namespace EmEn::Vulkan
 			 * @brief Declares uniform buffer binding.
 			 * @param binding The binding point.
 			 * @param stageFlags Define at which stage of the shader the bond appears. Default all.
-			 * @param descriptorCount Define the number of descriptor to bind. Default 1.
+			 * @param descriptorCount Define the number of descriptors to bind. Default 1.
 			 * @return bool
 			 */
 			bool
@@ -282,7 +284,7 @@ namespace EmEn::Vulkan
 			 * @brief Declares storage buffer binding.
 			 * @param binding The binding point.
 			 * @param stageFlags Define at which stage of the shader the bond appears. Default all.
-			 * @param descriptorCount Define the number of descriptor to bind. Default 1.
+			 * @param descriptorCount Define the number of descriptors to bind. Default 1.
 			 * @return bool
 			 */
 			bool
@@ -301,7 +303,7 @@ namespace EmEn::Vulkan
 			 * @brief Declares uniform buffer dynamic binding.
 			 * @param binding The binding point.
 			 * @param stageFlags Define at which stage of the shader the bond appears. Default all.
-			 * @param descriptorCount Define the number of descriptor to bind. Default 1.
+			 * @param descriptorCount Define the number of descriptors to bind. Default 1.
 			 * @return bool
 			 */
 			bool
@@ -320,7 +322,7 @@ namespace EmEn::Vulkan
 			 * @brief Declares storage texel dynamic binding.
 			 * @param binding The binding point.
 			 * @param stageFlags Define at which stage of the shader the bond appears. Default all.
-			 * @param descriptorCount Define the number of descriptor to bind. Default 1.
+			 * @param descriptorCount Define the number of descriptors to bind. Default 1.
 			 * @return bool
 			 */
 			bool
@@ -339,7 +341,7 @@ namespace EmEn::Vulkan
 			 * @brief Declares input attachment binding.
 			 * @param binding The binding point.
 			 * @param stageFlags Define at which stage of the shader the bond appears. Default all.
-			 * @param descriptorCount Define the number of descriptor to bind. Default 1.
+			 * @param descriptorCount Define the number of descriptors to bind. Default 1.
 			 * @return bool
 			 */
 			bool
@@ -358,7 +360,7 @@ namespace EmEn::Vulkan
 			 * @brief Declares inline uniform block binding.
 			 * @param binding The binding point.
 			 * @param stageFlags Define at which stage of the shader the bond appears. Default all.
-			 * @param descriptorCount Define the number of descriptor to bind. Default 1.
+			 * @param descriptorCount Define the number of descriptors to bind. Default 1.
 			 * @return bool
 			 */
 			bool
@@ -377,7 +379,7 @@ namespace EmEn::Vulkan
 			 * @brief Declares acceleration structure binding.
 			 * @param binding The binding point.
 			 * @param stageFlags Define at which stage of the shader the bond appears. Default all.
-			 * @param descriptorCount Define the number of descriptor to bind. Default 1.
+			 * @param descriptorCount Define the number of descriptors to bind. Default 1.
 			 * @return bool
 			 */
 			bool
@@ -396,7 +398,7 @@ namespace EmEn::Vulkan
 			 * @brief Declares acceleration structure binding.
 			 * @param binding The binding point.
 			 * @param stageFlags Define at which stage of the shader the bond appears. Default all.
-			 * @param descriptorCount Define the number of descriptor to bind. Default 1.
+			 * @param descriptorCount Define the number of descriptors to bind. Default 1.
 			 * @return bool
 			 */
 			bool
@@ -449,7 +451,7 @@ namespace EmEn::Vulkan
 			 * @return size_t
 			 */
 			[[nodiscard]]
-			static size_t getHash (const std::vector< VkDescriptorSetLayoutBinding > & bindings, VkDescriptorSetLayoutCreateFlags flags) noexcept;
+			static size_t getHash (const Libs::StaticVector< VkDescriptorSetLayoutBinding, 16 > & bindings, VkDescriptorSetLayoutCreateFlags flags) noexcept;
 
 		private:
 
@@ -464,7 +466,7 @@ namespace EmEn::Vulkan
 			VkDescriptorSetLayout m_handle{VK_NULL_HANDLE};
 			VkDescriptorSetLayoutCreateInfo m_createInfo{};
 			std::string m_UUID;
-			std::vector< VkDescriptorSetLayoutBinding > m_setLayoutBindings;
+			Libs::StaticVector< VkDescriptorSetLayoutBinding, 16 > m_setLayoutBindings;
 	};
 
 	inline

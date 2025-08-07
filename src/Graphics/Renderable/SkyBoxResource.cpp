@@ -44,6 +44,7 @@ namespace EmEn::Graphics::Renderable
 {
 	using namespace EmEn::Libs;
 	using namespace EmEn::Libs::Math;
+	using namespace EmEn::Libs::PixelFactory;
 	using namespace EmEn::Graphics::Material;
 
 	const size_t SkyBoxResource::ClassUID{getClassUID(ClassId)};
@@ -118,13 +119,13 @@ namespace EmEn::Graphics::Renderable
 			return this->setLoadSuccess(false);
 		}
 
-		this->setLightPosition(FastJSON::getVector< 3, float >(data, LightPositionKey));
+		this->setLightPosition(FastJSON::getValue< Vector< 3, float > >(data, LightPositionKey).value_or(Vector< 3, float >::origin()));
 
-		this->setLightAmbientColor(FastJSON::getColor(data, LightAmbientColorKey));
+		this->setLightAmbientColor(FastJSON::getValue< Color< float > >(data, LightAmbientColorKey).value_or(Black));
 
-		this->setLightDiffuseColor(FastJSON::getColor(data, LightDiffuseColorKey));
+		this->setLightDiffuseColor(FastJSON::getValue< Color< float > >(data, LightDiffuseColorKey).value_or(Black));
 
-		this->setLightSpecularColor(FastJSON::getColor(data, LightSpecularColorKey));
+		this->setLightSpecularColor(FastJSON::getValue< Color< float > >(data, LightSpecularColorKey).value_or(Black));
 
 		return this->setLoadSuccess(true);
 	}
