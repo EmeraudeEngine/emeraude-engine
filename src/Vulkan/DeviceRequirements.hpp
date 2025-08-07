@@ -30,12 +30,12 @@
 #include <cstddef>
 #include <sstream>
 #include <string>
-#include <vector>
 
 /* Third-party inclusions. */
 #include <vulkan/vulkan.h>
 
 /* Local inclusions for usages. */
+#include "Libs/StaticVector.hpp"
 #include "Types.hpp"
 
 namespace EmEn::Vulkan
@@ -52,7 +52,7 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Constructs a device requirements.
-			 * @param deviceJobHint A hint for the device main job.
+			 * @param deviceJobHint A hint for the device's main job.
 			 */
 			explicit
 			DeviceRequirements (DeviceJobHint deviceJobHint) noexcept
@@ -73,7 +73,7 @@ namespace EmEn::Vulkan
 			}
 
 			/**
-			 * @brief Returns the main job of the device to help at queue creation decision.
+			 * @brief Returns the main job of the device to help with queue creation decision.
 			 * @return DeviceJobHint
 			 */
 			[[nodiscard]]
@@ -188,7 +188,7 @@ namespace EmEn::Vulkan
 			 * @param transferQueues A reference to a vector of priorities for transfer graphics queues.
 			 * @return void
 			 */
-			void requireGraphicsQueues (const std::vector< float > & queues, const std::vector< float > & transferQueues = {}) noexcept;
+			void requireGraphicsQueues (const Libs::StaticVector< float, 16 > & queues, const Libs::StaticVector< float, 16 > & transferQueues = {}) noexcept;
 
 			/**
 			 * @brief Declares a specific queue for graphics presentation.
@@ -197,7 +197,7 @@ namespace EmEn::Vulkan
 			 * @param separate Try to use a different queue family than the graphics one if possible.
 			 * @return void
 			 */
-			void requirePresentationQueues (const std::vector< float > & queues, VkSurfaceKHR surface, bool separate) noexcept;
+			void requirePresentationQueues (const Libs::StaticVector< float, 16 > & queues, VkSurfaceKHR surface, bool separate) noexcept;
 
 			/**
 			 * @brief Declares compute queues requirements.
@@ -205,14 +205,14 @@ namespace EmEn::Vulkan
 			 * @param transferQueues A reference to a vector of priorities for transfer compute queues.
 			 * @return void
 			 */
-			void requireComputeQueues (const std::vector< float > & queues, const std::vector< float > & transferQueues = {}) noexcept;
+			void requireComputeQueues (const Libs::StaticVector< float, 16 > & queues, const Libs::StaticVector< float, 16 > & transferQueues = {}) noexcept;
 
 			/**
 			 * @brief Declares transfer queues requirements.
 			 * @param queues A reference to a vector of priorities for pure transfer queues.
 			 * @return void
 			 */
-			void requireTransferQueues (const std::vector< float > & queues) noexcept;
+			void requireTransferQueues (const Libs::StaticVector< float, 16 > & queues) noexcept;
 
 			/**
 			 * @brief Returns whether the device configuration requires graphics.
@@ -248,7 +248,7 @@ namespace EmEn::Vulkan
 			}
 
 			/**
-			 * @brief Returns whether to try a separate queue for presentation than graphics queue.
+			 * @brief Returns whether to try a separate queue for presentation than the graphics queue.
 			 * @return bool
 			 */
 			[[nodiscard]]
@@ -270,14 +270,14 @@ namespace EmEn::Vulkan
 			}
 
 			/**
-			 * @brief Returns the number of required queue count for the device configuration.
+			 * @brief Returns the number of required queue counts for the device configuration.
 			 * @return size_t
 			 */
 			[[nodiscard]]
 			size_t getRequiredQueueCount () const noexcept;
 
 			/**
-			 * @brief In case of graphics presentation request, this returns the surface used for graphics to check validity.
+			 * @brief In the case of graphics presentation request, this returns the surface used for graphics to check validity.
 			 * @return VkSurfaceKHR
 			 */
 			[[nodiscard]]
@@ -289,10 +289,10 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Returns the graphics queue priorities.
-			 * @return const std::vector< float > &
+			 * @return const Libs::StaticVector< float, 16 > &
 			 */
 			[[nodiscard]]
-			const std::vector< float > &
+			const Libs::StaticVector< float, 16 > &
 			graphicsQueuePriorities () const noexcept
 			{
 				return m_graphicsQueues;
@@ -300,10 +300,10 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Returns the graphics transfer queue priorities.
-			 * @return const std::vector< float > &
+			 * @return const Libs::StaticVector< float, 16 > &
 			 */
 			[[nodiscard]]
-			const std::vector< float > &
+			const Libs::StaticVector< float, 16 > &
 			graphicsTransferQueuePriorities () const noexcept
 			{
 				return m_graphicsTransferQueues;
@@ -311,10 +311,10 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Returns the presentation queue priorities.
-			 * @return const std::vector< float > &
+			 * @return const Libs::StaticVector< float, 16 > &
 			 */
 			[[nodiscard]]
-			const std::vector< float > &
+			const Libs::StaticVector< float, 16 > &
 			presentationQueuePriorities () const noexcept
 			{
 				return m_presentationQueues;
@@ -322,10 +322,10 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Returns the compute queue priorities.
-			 * @return const std::vector< float > &
+			 * @return const Libs::StaticVector< float, 16 > &
 			 */
 			[[nodiscard]]
-			const std::vector< float > &
+			const Libs::StaticVector< float, 16 > &
 			computeQueuePriorities () const noexcept
 			{
 				return m_computeQueues;
@@ -333,10 +333,10 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Returns the compute transfer queue priorities.
-			 * @return const std::vector< float > &
+			 * @return const Libs::StaticVector< float, 16 > &
 			 */
 			[[nodiscard]]
-			const std::vector< float > &
+			const Libs::StaticVector< float, 16 > &
 			computeTransferQueuePriorities () const noexcept
 			{
 				return m_presentationQueues;
@@ -344,10 +344,10 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Returns the transfer queue priorities.
-			 * @return const std::vector< float > &
+			 * @return const Libs::StaticVector< float, 16 > &
 			 */
 			[[nodiscard]]
-			const std::vector< float > &
+			const Libs::StaticVector< float, 16 > &
 			transferQueuePriorities () const noexcept
 			{
 				return m_transferQueues;
@@ -394,12 +394,12 @@ namespace EmEn::Vulkan
 			VkPhysicalDeviceVulkan11Features m_featuresVK11{};
 			VkPhysicalDeviceVulkan12Features m_featuresVK12{};
 			VkPhysicalDeviceVulkan13Features m_featuresVK13{};
-			std::vector< float > m_graphicsQueues;
-			std::vector< float > m_graphicsTransferQueues;
-			std::vector< float > m_presentationQueues;
-			std::vector< float > m_computeQueues;
-			std::vector< float > m_computeTransferQueues;
-			std::vector< float > m_transferQueues;
+			Libs::StaticVector< float, 16 > m_graphicsQueues;
+			Libs::StaticVector< float, 16 > m_graphicsTransferQueues;
+			Libs::StaticVector< float, 16 > m_presentationQueues;
+			Libs::StaticVector< float, 16 > m_computeQueues;
+			Libs::StaticVector< float, 16 > m_computeTransferQueues;
+			Libs::StaticVector< float, 16 > m_transferQueues;
 			VkSurfaceKHR m_surface{VK_NULL_HANDLE};
 			bool m_presentationSeparated{false};
 	};

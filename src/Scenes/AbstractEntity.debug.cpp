@@ -96,7 +96,7 @@ namespace EmEn::Scenes
 		}
 
 		/* NOTE: Create an instance of this visual debug mesh. */
-		const auto meshInstance = this->newVisual(meshResource, false, false, label);
+		const auto meshInstance = this->newVisual(meshResource, false, true, label);
 
 		if ( meshInstance == nullptr )
 		{
@@ -373,7 +373,7 @@ namespace EmEn::Scenes
 	{
 		return resources.container< Renderable::MeshResource >()->getOrCreateResourceAsync(CameraDebugName, [&resources] (Renderable::MeshResource & newMesh) {
 			/* NOTE: Get the geometry. */
-			const auto geometryResource = resources.container< Geometry::IndexedVertexResource >()->getResource("Camera", false);
+			const auto geometryResource = resources.container< Geometry::IndexedVertexResource >()->getResource("Items/Camera", false);
 
 			/* NOTE: Get a basic material. */
 			const auto materialResource = resources.container< Material::BasicResource >()->getDefaultResource();

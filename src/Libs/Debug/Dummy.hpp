@@ -30,7 +30,7 @@
 #include <iostream>
 #include <utility>
 
-namespace EmEn::Libs
+namespace EmEn::Libs::Debug
 {
 	/**
 	 * @brief Dummy class to identify special method in use.

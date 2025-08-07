@@ -44,6 +44,7 @@
 #include <limits>
 #include <type_traits>
 #include <iostream>
+#include <span>
 
 /* Local inclusions for usage. */
 #include "Libs/Algorithms/PerlinNoise.hpp"
@@ -82,6 +83,257 @@ namespace EmEn::Libs::PixelFactory
 			};
 
 			/**
+			 *
+			 * @tparam color_data_t The underlying type for the Color. Default float.
+			 */
+			template< typename color_data_t = float >
+			requires (std::is_floating_point_v< color_data_t >)
+			class PixelProxy final
+			{
+				public:
+
+					PixelProxy (Pixmap * pixmap, size_t index) noexcept
+						: m_pixmap{pixmap},
+						m_index{index}
+					{
+
+					}
+
+					/**
+					 * @brief Assignment operator: to be able to write to the pixel.
+					 * @param color A reference to a color.
+					 * @return PixelProxy &
+					 */
+					PixelProxy &
+					operator= (const Color< color_data_t > & color) noexcept
+					{
+						m_pixmap->setPixel(m_index, color);
+
+						return *this;
+					}
+
+					/**
+					 * @brief Conversion operator: to be able to read the pixel.
+					 */
+					explicit
+					operator Color< color_data_t >() const noexcept
+					{
+						return m_pixmap->template pixel< color_data_t >(m_index);
+					}
+
+				private:
+
+					Pixmap * m_pixmap;
+					size_t m_index;
+			};
+
+			/**
+			 * @brief An iterator to traverse the pixels of the Pixmap.
+			 * @tparam color_data_t The underlying type for the Color object returned by the iterator. Default float
+			 */
+			template< typename color_data_t = float >
+			requires (std::is_floating_point_v< color_data_t >)
+			class ConstPixmapIterator final
+			{
+				public:
+
+					 using iterator_category = std::random_access_iterator_tag;
+					 using value_type        = Color< color_data_t >;
+					 using difference_type   = std::ptrdiff_t;
+					 using pointer           = void;
+					 using reference         = value_type;
+
+					/**
+					 * @brief Constructs an iterator.
+					 * @param pixmap A point the parent pixmap.
+					 * @param index The pixel index.
+					 */
+					ConstPixmapIterator (const Pixmap * pixmap, size_t index) noexcept
+						: m_pixmap{pixmap},
+						m_index{index}
+					{
+
+					}
+
+					reference
+					operator* () const noexcept
+					{
+						return m_pixmap->template pixel< color_data_t >(m_index);
+					}
+
+					ConstPixmapIterator &
+					operator++ () noexcept
+					{
+						++m_index; return *this;
+					}
+
+					ConstPixmapIterator
+					operator++ (int) noexcept
+					{
+						ConstPixmapIterator tmp = *this; ++(*this); return tmp;
+					}
+
+					ConstPixmapIterator &
+					operator-- () noexcept
+					{
+						--m_index; return *this;
+					}
+
+					ConstPixmapIterator
+					operator-- (int) noexcept
+					{
+						ConstPixmapIterator tmp = *this; --(*this); return tmp;
+					}
+
+					ConstPixmapIterator &
+					operator+= (difference_type n) noexcept
+					{
+						m_index += n; return *this;
+					}
+
+					ConstPixmapIterator
+					operator+ (difference_type n) const noexcept
+					{
+						return ConstPixmapIterator(m_pixmap, m_index + n);
+					}
+
+					ConstPixmapIterator &
+					operator-= (difference_type n) noexcept
+					{
+						m_index -= n; return *this;
+					}
+
+					ConstPixmapIterator
+					operator- (difference_type n) const noexcept
+					{
+						return ConstPixmapIterator(m_pixmap, m_index - n);
+					}
+
+					difference_type
+					operator- (const ConstPixmapIterator & other) const noexcept
+					{
+						return m_index - other.m_index;
+					}
+
+					reference
+					operator[] (difference_type n) const
+					{
+						return m_pixmap->template pixel< color_data_t >(m_index + n);
+					}
+
+					auto
+					operator<=> (const ConstPixmapIterator & other) const = default;
+
+				private:
+
+					const Pixmap * m_pixmap;
+					size_t m_index;
+			};
+
+			/**
+			 * @brief An iterator to traverse the pixels of the Pixmap.
+			 * @tparam color_data_t The underlying type for the Color object returned by the iterator. Default float
+			 */
+			template< typename color_data_t = float >
+			requires (std::is_floating_point_v< color_data_t >)
+			class PixmapIterator final
+			{
+				public:
+
+					 using iterator_category = std::random_access_iterator_tag;
+					 using value_type        = Color< color_data_t >;
+					 using difference_type   = std::ptrdiff_t;
+					 using pointer           = void;
+					 using reference         = PixelProxy< color_data_t >;
+
+					/**
+					 * @brief Constructs an iterator.
+					 * @param pixmap A point the parent pixmap.
+					 * @param index The pixel index.
+					 */
+					PixmapIterator (Pixmap * pixmap, size_t index) noexcept
+						: m_pixmap{pixmap},
+						m_index{index}
+					{
+
+					}
+
+					reference
+					operator* () const noexcept
+					{
+						return PixelProxy< color_data_t >(m_pixmap, m_index);
+					}
+
+					PixmapIterator &
+					operator++ () noexcept
+					{
+						++m_index; return *this;
+					}
+
+					PixmapIterator
+					operator++ (int) noexcept
+					{
+						PixmapIterator tmp = *this; ++(*this); return tmp;
+					}
+
+					PixmapIterator &
+					operator-- () noexcept
+					{
+						--m_index; return *this;
+					}
+
+					PixmapIterator
+					operator-- (int) noexcept
+					{
+						PixmapIterator tmp = *this; --(*this); return tmp;
+					}
+
+					PixmapIterator &
+					operator+= (difference_type n) noexcept
+					{
+						m_index += n; return *this;
+					}
+
+					PixmapIterator
+					operator+ (difference_type n) const noexcept
+					{
+						return PixmapIterator(m_pixmap, m_index + n);
+					}
+
+					PixmapIterator &
+					operator-= (difference_type n) noexcept
+					{
+						m_index -= n; return *this;
+					}
+
+					PixmapIterator
+					operator- (difference_type n) const noexcept
+					{
+						return PixmapIterator(m_pixmap, m_index - n);
+					}
+
+					difference_type
+					operator- (const PixmapIterator & other) const noexcept
+					{
+						return m_index - other.m_index;
+					}
+
+					reference
+					operator[] (difference_type n) const
+					{
+						return *(*this + n);
+					}
+
+					auto
+					operator<=> (const PixmapIterator & other) const = default;
+
+				private:
+
+					Pixmap * m_pixmap;
+					size_t m_index;
+			};
+
+			/**
 			 * @brief Constructs a default pixmap.
 			 * @note The channel mode will be set to RGB.
 			 */
@@ -94,9 +346,9 @@ namespace EmEn::Libs::PixelFactory
 			 * @param channelMode The desired color count. Default RGB.
 			 */
 			Pixmap (dimension_t width, dimension_t height, ChannelMode channelMode = ChannelMode::RGB)
-				: m_width(width),
-				m_height(height),
-				m_channelMode(channelMode)
+				: m_width{width},
+				m_height{height},
+				m_channelMode{channelMode}
 			{
 				m_data.resize(this->elementCount());
 
@@ -114,6 +366,35 @@ namespace EmEn::Libs::PixelFactory
 			}
 
 			/**
+			 * @brief Constructs a new pixmap initialized with a data span.
+			 * @param width The initial width of the pixmap.
+			 * @param height The initial height of the pixmap.
+			 * @param channelMode The desired color count.
+			 * @param data A span of the raw pixel data. The size must match width * height * colorCount.
+			 */
+			Pixmap (dimension_t width, dimension_t height, ChannelMode channelMode, std::span< const pixel_data_t > data)
+				: m_width{width},
+				m_height{height},
+				m_channelMode{channelMode}
+			{
+				const auto expectedSize = this->elementCount();
+
+				if ( data.size() != expectedSize )
+				{
+					if constexpr ( IsDebug )
+					{
+						std::cerr << "Pixmap construction from span failed: data size mismatch. Expected " << expectedSize << ", got " << data.size() << ".\n";
+					}
+
+					this->clear();
+
+					return;
+				}
+
+				m_data.assign(data.begin(), data.end());
+			}
+
+			/**
 			 * @brief Constructs a new pixmap initialized with a designed color.
 			 * @tparam color_data_t The color data type. Default float.
 			 * @param width The initial width of the pixmap.
@@ -123,9 +404,9 @@ namespace EmEn::Libs::PixelFactory
 			 */
 			template< typename color_data_t = float >
 			Pixmap (dimension_t width, dimension_t height, ChannelMode channelMode, const Color< color_data_t > & color) requires (std::is_floating_point_v< color_data_t >)
-				: m_width(width),
-				m_height(height),
-				m_channelMode(channelMode)
+				: m_width{width},
+				m_height{height},
+				m_channelMode{channelMode}
 			{
 				m_data.resize(this->elementCount());
 
@@ -168,6 +449,50 @@ namespace EmEn::Libs::PixelFactory
 				m_data.resize(this->elementCount());
 
 				return this->initAlphaChannel();
+			}
+
+			/**
+			 * @brief Initializes the pixmap data.
+			 * @param width The initial width of the pixmap.
+			 * @param height The initial height of the pixmap.
+			 * @param channelMode The desired color count.
+			 * @param data A span of the raw pixel data. The size must match width * height * colorCount.
+			 * @return bool True on success, false on failure (invalid dimensions or data size mismatch).
+			 */
+			bool
+			initialize (dimension_t width, dimension_t height, ChannelMode channelMode, std::span< const pixel_data_t > data)
+			{
+				if ( width == 0 || height == 0 )
+				{
+					if constexpr ( IsDebug )
+					{
+						std::cerr << "Invalid pixmap dimensions for span initialization!\n";
+					}
+
+					return false;
+				}
+
+				m_width = width;
+				m_height = height;
+				m_channelMode = channelMode;
+
+				const auto expectedSize = this->elementCount();
+
+				if ( data.size() != expectedSize )
+				{
+					if constexpr ( IsDebug )
+					{
+						std::cerr << "Pixmap initialization from span failed: data size mismatch. Expected " << expectedSize << ", got " << data.size() << ".\n";
+					}
+
+					this->clear();
+
+					return false;
+				}
+
+				m_data.assign(data.begin(), data.end());
+
+				return true;
 			}
 
 			/**
@@ -406,6 +731,106 @@ namespace EmEn::Libs::PixelFactory
 			isPowerOfTwo () const noexcept
 			{
 				return std::has_single_bit(this->width()) && std::has_single_bit(this->height());
+			}
+
+			/**
+			 * @brief Returns an iterator to the beginning of the pixmap.
+			 * @return An iterator pointing to the first pixel.
+			 */
+			template< typename color_data_t = float >
+			[[nodiscard]]
+			PixmapIterator< color_data_t >
+			begin () noexcept requires (std::is_floating_point_v< color_data_t >)
+			{
+				return PixmapIterator< color_data_t >(this, 0);
+			}
+
+			/**
+			 * @brief Returns a const iterator to the beginning of the pixmap.
+			 * @return A const iterator pointing to the first pixel.
+			 */
+			template< typename color_data_t = float >
+			[[nodiscard]]
+			ConstPixmapIterator< color_data_t >
+			begin () const noexcept requires (std::is_floating_point_v< color_data_t >)
+			{
+				return ConstPixmapIterator< color_data_t >(this, 0);
+			}
+
+			/**
+			 * @brief Returns a const iterator to the beginning of the pixmap.
+			 * @return A const iterator pointing to the first pixel.
+			 */
+			template< typename color_data_t = float >
+			[[nodiscard]]
+			ConstPixmapIterator< color_data_t >
+			cbegin () const noexcept requires (std::is_floating_point_v< color_data_t >)
+			{
+				return ConstPixmapIterator< color_data_t >(this, 0);
+			}
+
+			/**
+			 * @brief Returns an iterator to the end of the pixmap.
+			 * @return An iterator pointing one past the last pixel.
+			 */
+			template< typename color_data_t = float >
+			[[nodiscard]]
+			PixmapIterator< color_data_t >
+			end () noexcept requires (std::is_floating_point_v< color_data_t >)
+			{
+				return PixmapIterator< color_data_t >(this, this->pixelCount());
+			}
+
+			/**
+			 * @brief Returns a const iterator to the end of the pixmap.
+			 * @return A const iterator pointing one past the last pixel.
+			 */
+			template< typename color_data_t = float >
+			[[nodiscard]]
+			ConstPixmapIterator< color_data_t >
+			end () const noexcept requires (std::is_floating_point_v< color_data_t >)
+			{
+				return ConstPixmapIterator< color_data_t >(this, this->pixelCount());
+			}
+
+			/**
+			 * @brief Returns a const iterator to the end of the pixmap.
+			 * @return A const iterator pointing one past the last pixel.
+			 */
+			template< typename color_data_t = float >
+			[[nodiscard]]
+			ConstPixmapIterator< color_data_t >
+			cend () const noexcept requires (std::is_floating_point_v< color_data_t >)
+			{
+				return ConstPixmapIterator< color_data_t >(this, this->pixelCount());
+			}
+
+			/**
+			 * @brief Returns a temporary view of the pixmap to be used in range-based for loops with a specific color data type.
+			 * @tparam color_data_t The desired underlying type for the Color objects. Default float.
+			 * @return auto
+			 */
+			template< typename color_data_t = float >
+			[[nodiscard]]
+			auto
+			as () const noexcept requires (std::is_floating_point_v< color_data_t >)
+			{
+				struct PixmapView
+				{
+					const Pixmap * m_pixmap;
+
+					auto begin () const
+					{
+						return m_pixmap->template cbegin< color_data_t >();
+					}
+
+					auto end () const
+					{
+						return m_pixmap->template cend< color_data_t >();
+					}
+				};
+
+				return PixmapView{this};
 			}
 
 			/**
@@ -659,7 +1084,7 @@ namespace EmEn::Libs::PixelFactory
 					}
 				}
 
-				if ( m_flags[UpdatedRegionMarkerEnabled] )
+				if ( m_updatedRegionMarkerEnabled )
 				{
 					this->markPixelUpdated(
 						static_cast< dimension_t >(pixelIndex) % m_width,
@@ -1022,7 +1447,7 @@ namespace EmEn::Libs::PixelFactory
 				constexpr uv_t Zero{0};
 				constexpr uv_t One{1};
 
-				if ( m_flags[UVWrappingEnabled] )
+				if ( m_UVWrappingEnabled )
 				{
 					if ( u < Zero || u > One )
 					{
@@ -1068,7 +1493,7 @@ namespace EmEn::Libs::PixelFactory
 				constexpr uv_t Zero{0};
 				constexpr uv_t One{1};
 
-				if ( m_flags[UVWrappingEnabled] )
+				if ( m_UVWrappingEnabled )
 				{
 					if ( u < Zero || u > One )
 					{
@@ -1122,7 +1547,7 @@ namespace EmEn::Libs::PixelFactory
 				constexpr uv_t Zero{0};
 				constexpr uv_t One{1};
 
-				if ( m_flags[UVWrappingEnabled] )
+				if ( m_UVWrappingEnabled )
 				{
 					if ( u < Zero || u > One )
 					{
@@ -1176,7 +1601,7 @@ namespace EmEn::Libs::PixelFactory
 				constexpr uv_t Zero{0};
 				constexpr uv_t One{1};
 
-				if ( m_flags[UVWrappingEnabled] )
+				if ( m_UVWrappingEnabled )
 				{
 					if ( u < Zero || u > One )
 					{
@@ -1277,7 +1702,7 @@ namespace EmEn::Libs::PixelFactory
 
 				m_data[dataOffset] = value;
 
-				if ( m_flags[UpdatedRegionMarkerEnabled] )
+				if ( m_updatedRegionMarkerEnabled )
 				{
 					this->markPixelUpdated(coordX, coordY);
 				}
@@ -1425,7 +1850,7 @@ namespace EmEn::Libs::PixelFactory
 			void
 			enableUpdatedRegionMarker (bool state) noexcept
 			{
-				m_flags[UpdatedRegionMarkerEnabled] = state;
+				m_updatedRegionMarkerEnabled = state;
 			}
 
 			/**
@@ -1436,7 +1861,7 @@ namespace EmEn::Libs::PixelFactory
 			bool
 			isUpdatedRegionMarkerEnabled () const noexcept
 			{
-				return m_flags[UpdatedRegionMarkerEnabled];
+				return m_updatedRegionMarkerEnabled;
 			}
 
 			/**
@@ -1498,7 +1923,7 @@ namespace EmEn::Libs::PixelFactory
 			void
 			markRectangleUpdated (const Math::Space2D::AARectangle< dimension_t > & rectangle) noexcept
 			{
-				if ( m_flags[UpdatedRegionMarkerEnabled] )
+				if ( m_updatedRegionMarkerEnabled )
 				{
 					m_lastUpdatedRegion.merge(rectangle);
 				}
@@ -1511,7 +1936,7 @@ namespace EmEn::Libs::PixelFactory
 			void
 			markEverythingUpdated () noexcept
 			{
-				if ( m_flags[UpdatedRegionMarkerEnabled] )
+				if ( m_updatedRegionMarkerEnabled )
 				{
 					m_lastUpdatedRegion.setLeft(0);
 					m_lastUpdatedRegion.setRight(0);
@@ -2343,12 +2768,14 @@ namespace EmEn::Libs::PixelFactory
 			 * @brief Applies a function on every pixel in rows order (Single loop).
 			 * @note Returning false will skip the pixel.
 			 * @warning This method is slow.
-			 * @param updatePixel A reference to a function to modify the pixel. Signature: bool (Color & pixel)
+			 * @tparam color_data_t The color data type. Default float.
+			 * @tparam callable_t The callable function type. Signature: bool (Color & pixel).
+			 * @param updatePixel A reference to a function to modify the pixel.
 			 * @return void
 			 */
-			template< typename color_data_t = float >
+			template< typename color_data_t = float, typename callable_t >
 			void
-			forEachPixel (const std::function< bool (Color< color_data_t > &) > & updatePixel) noexcept requires (std::is_floating_point_v< color_data_t >)
+			forEachPixel (callable_t updatePixel) noexcept requires (std::is_floating_point_v< color_data_t > && std::is_invocable_r_v< bool, callable_t, Color< color_data_t > & >)
 			{
 				const auto pixelCount = static_cast< size_t >(this->pixelCount());
 
@@ -2370,12 +2797,13 @@ namespace EmEn::Libs::PixelFactory
 			 * @note Returning false will skip the pixel.
 			 * @warning This method is slow.
 			 * @tparam color_data_t The color data type. Default float.
-			 * @param updatePixel A reference to a function to modify the pixel. Signature: bool (Color & pixel, dimension_t coordX, dimension_t coordY)
+			 * @tparam callable_t The callable function type. Signature: bool (Color & pixel, dimension_t coordX, dimension_t coordY)
+			 * @param updatePixel A reference to a function to modify the pixel.
 			 * @return void
 			 */
-			template< typename color_data_t = float >
+			template< typename color_data_t = float, typename callable_t >
 			void
-			forEachPixelRowMajor (const std::function< bool (Color< color_data_t > &, dimension_t, dimension_t) > & updatePixel) noexcept requires (std::is_floating_point_v< color_data_t >)
+			forEachPixelRowMajor (callable_t updatePixel) noexcept requires (std::is_floating_point_v< color_data_t > && std::is_invocable_r_v< bool, callable_t, Color< color_data_t > &, dimension_t, dimension_t >)
 			{
 				const auto pixelCount = static_cast< size_t >(this->pixelCount());
 
@@ -2397,12 +2825,13 @@ namespace EmEn::Libs::PixelFactory
 			 * @note Returning false will skip the pixel.
 			 * @warning This method is slow.
 			 * @tparam color_data_t The color data type. Default float.
-			 * @param updatePixel A reference to a function to modify the pixel. Signature: bool (Color & pixel, dimension_t coordX, dimension_t coordY)
+			 * @tparam callable_t The callable function type. Signature: bool (Color & pixel, dimension_t coordX, dimension_t coordY)
+			 * @param updatePixel A reference to a function to modify the pixel.
 			 * @return void
 			 */
-			template< typename color_data_t = float >
+			template< typename color_data_t = float, typename callable_t >
 			void
-			forEachPixelColMajor (const std::function< bool (Color< color_data_t > &, dimension_t, dimension_t) > & updatePixel) noexcept requires (std::is_floating_point_v< color_data_t >)
+			forEachPixelColMajor (callable_t updatePixel) noexcept requires (std::is_floating_point_v< color_data_t > && std::is_invocable_r_v< bool, callable_t, Color< color_data_t > &, dimension_t, dimension_t >)
 			{
 				for ( dimension_t coordX = 0; coordX < m_width; ++coordX )
 				{
@@ -2456,6 +2885,24 @@ namespace EmEn::Libs::PixelFactory
 			}
 
 			/**
+			 * @brief Stringifies the object.
+			 * @param obj A reference to the object to print.
+			 * @return std::string
+			 */
+			friend
+			std::string
+			to_string (const Pixmap & obj)
+			{
+				std::stringstream output;
+
+				output << obj;
+
+				return output.str();
+			}
+
+		private:
+
+			/**
 			 * @brief STL streams printable object.
 			 * @param out A reference to the stream output.
 			 * @param obj A reference to the object to print.
@@ -2503,24 +2950,6 @@ namespace EmEn::Libs::PixelFactory
 			}
 
 			/**
-			 * @brief Stringifies the object.
-			 * @param obj A reference to the object to print.
-			 * @return std::string
-			 */
-			friend
-			std::string
-			to_string (const Pixmap & obj)
-			{
-				std::stringstream output;
-
-				output << obj;
-
-				return output.str();
-			}
-
-		private:
-
-			/**
 			 * @brief Clamps a pixel index to a valid position in the pixmap.
 			 * @param pixelIndex A pixel index.
 			 * @return void
@@ -2530,7 +2959,8 @@ namespace EmEn::Libs::PixelFactory
 			{
 				const auto pixelCount = this->pixelCount();
 
-				static_assert(pixelIndex >= pixelCount, "Pixel index overflow !");
+				//static_assert(pixelIndex >= pixelCount, "Pixel index overflow !");
+				assert(pixelIndex < pixelCount && "Pixel index overflow !");
 
 				if ( pixelIndex >= pixelCount )
 				{
@@ -2577,26 +3007,14 @@ namespace EmEn::Libs::PixelFactory
 						return true;
 				}
 			}
-
-			/* Flag names. */
-			static constexpr auto UVWrappingEnabled{0UL};
-			static constexpr auto UpdatedRegionMarkerEnabled{1UL};
-
+			
 			dimension_t m_width{0};
 			dimension_t m_height{0};
 			ChannelMode m_channelMode{ChannelMode::RGB};
 			std::vector< pixel_data_t > m_data{};
 			Math::Space2D::AARectangle< dimension_t > m_lastUpdatedRegion;
-			std::array< bool, 8 > m_flags{
-				true/*UVWrappingEnabled*/,
-				true/*UpdatedRegionMarkerEnabled*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/
-			};
+			bool m_UVWrappingEnabled{true};
+			bool m_updatedRegionMarkerEnabled{true};
 	};
 
 	/**

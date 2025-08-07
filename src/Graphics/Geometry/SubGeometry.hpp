@@ -32,7 +32,7 @@
 
 /* Local inclusions for inheritances */
 #include "Libs/FlagTrait.hpp"
-#include "Types.hpp"
+#include "Helpers.hpp"
 
 namespace EmEn::Graphics::Geometry
 {

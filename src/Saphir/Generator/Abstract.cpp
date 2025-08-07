@@ -130,12 +130,12 @@ namespace EmEn::Saphir::Generator
 	bool
 	Abstract::createDataLayout (Renderer & renderer) noexcept
 	{
-		std::vector< std::shared_ptr< DescriptorSetLayout > > descriptorSetLayouts{};
-		std::vector< VkPushConstantRange > pushConstantRanges{};
+		StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > descriptorSetLayouts;
+		StaticVector< VkPushConstantRange, 4 > pushConstantRanges;
 
 		const auto & setIndexes = m_shaderProgram->setIndexes();
 
-		/* Prepare the descriptor set layout for the view. */
+		/* Prepare the descriptor set a layout for the view. */
 		if ( setIndexes.isSetEnabled(SetType::PerView) )
 		{
 			/* FIXME: This could be general for render target type. */
@@ -371,7 +371,7 @@ namespace EmEn::Saphir::Generator
 	}
 
 	void
-	Abstract::generatePushConstantRanges (const std::vector< Declaration::PushConstantBlock > & pushConstantBlocks, std::vector< VkPushConstantRange > & pushConstantRanges, VkShaderStageFlags stageFlags) noexcept
+	Abstract::generatePushConstantRanges (const StaticVector< Declaration::PushConstantBlock, 4 > & pushConstantBlocks, StaticVector< VkPushConstantRange, 4 > & pushConstantRanges, VkShaderStageFlags stageFlags) noexcept
 	{
 		/* [VULKAN-PUSH-CONSTANT:2] Prepare the push constants declaration for the pipeline. */
 		uint32_t offset = 0;

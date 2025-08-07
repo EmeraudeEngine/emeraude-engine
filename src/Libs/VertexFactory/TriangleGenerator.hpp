@@ -39,10 +39,10 @@ namespace EmEn::Libs::VertexFactory
 {
 	/**
 	 * @brief The triangle generator class.
-	 * @tparam float_t The type of floating point number. Default float.
+	 * @tparam number_t The type of floating point number. Default float.
 	 */
-	template< typename float_t = float >
-	requires (std::is_floating_point_v< float_t >)
+	template< typename number_t = float >
+	requires (std::is_floating_point_v< number_t >)
 	class TriangleGenerator final
 	{
 		public:
@@ -65,7 +65,7 @@ namespace EmEn::Libs::VertexFactory
 			 * @return void
 			 */
 			void
-			addVertex (const Libs::Math::Vector< 3, float_t > & vertex) noexcept
+			addVertex (const Libs::Math::Vector< 3, number_t > & vertex) noexcept
 			{
 				m_vertices.emplace_back(vertex);
 			}
@@ -76,7 +76,7 @@ namespace EmEn::Libs::VertexFactory
 			 * @return void
 			 */
 			void
-			addVertices (const std::vector< Libs::Math::Vector< 3, float_t > > & vertices) noexcept
+			addVertices (const std::vector< Libs::Math::Vector< 3, number_t > > & vertices) noexcept
 			{
 				m_vertices.insert(m_vertices.end(), vertices.cbegin(), vertices.cend());
 			}
@@ -88,7 +88,7 @@ namespace EmEn::Libs::VertexFactory
 			 * @param enableReduction Removes central vertices, before creating the envelope.
 			 * @return Shape< type_t >
 			 */
-			Shape< float_t >
+			Shape< number_t >
 			generateEnvelope (bool enableReduction = true) noexcept
 			{
 				if ( m_vertices.empty() )
@@ -146,9 +146,9 @@ namespace EmEn::Libs::VertexFactory
 				}
 
 				/* Generate triangles. */
-				Shape< float_t > shape{triangles.size() * 3, 1, triangles.size()};
+				Shape< number_t > shape{triangles.size() * 3, 1, triangles.size()};
 
-				ShapeBuilder< float_t > builder{shape};
+				ShapeBuilder< number_t > builder{shape};
 
 				builder.beginConstruction(ConstructionMode::Triangles);
 
@@ -168,7 +168,7 @@ namespace EmEn::Libs::VertexFactory
 			 * @brief Generates the geometry.
 			 * @return Shape< type_t >
 			 */
-			Shape< float_t >
+			Shape< number_t >
 			generate () noexcept
 			{
 				if ( m_vertices.empty() )
@@ -230,7 +230,7 @@ namespace EmEn::Libs::VertexFactory
 							continue;
 						}
 
-						const auto distance = Math::Vector< 3, float_t >::distance(m_vertices[index], m_vertices[subIndex]);
+						const auto distance = Math::Vector< 3, number_t >::distance(m_vertices[index], m_vertices[subIndex]);
 
 						if ( distance <= aggregate[Avg] )
 						{
@@ -246,9 +246,9 @@ namespace EmEn::Libs::VertexFactory
 				}
 
 				/* Generate triangles. */
-				Shape< float_t > shape{triangles.size() * 3, 1, triangles.size()};
+				Shape< number_t > shape{triangles.size() * 3, 1, triangles.size()};
 
-				ShapeBuilder< float_t > builder{shape};
+				ShapeBuilder< number_t > builder{shape};
 
 				builder.beginConstruction(ConstructionMode::Triangles);
 
@@ -271,7 +271,7 @@ namespace EmEn::Libs::VertexFactory
 			 * @brief Returns the centroid of the vertices.
 			 * @return Math::Vector< 3, type_t >
 			 */
-			Math::Vector< 3, float_t >
+			Math::Vector< 3, number_t >
 			getCentroid () const noexcept
 			{
 				if ( m_vertices.empty() )
@@ -279,7 +279,7 @@ namespace EmEn::Libs::VertexFactory
 					return {};
 				}
 
-				Math::Vector< 3, float_t > centroid{};
+				Math::Vector< 3, number_t > centroid{};
 
 				std::accumulate(m_vertices.cbegin(), m_vertices.cend(), [] (const auto & vertex) {
 					return vertex;
@@ -295,7 +295,7 @@ namespace EmEn::Libs::VertexFactory
 			 * @return std::vector< type_t >
 			 */
 			[[nodiscard]]
-			std::vector< float_t >
+			std::vector< number_t >
 			getDistances () const noexcept
 			{
 				if ( m_vertices.empty() )
@@ -315,14 +315,14 @@ namespace EmEn::Libs::VertexFactory
 				}
 
 				/* Find every distance between every vertex. */
-				std::vector< float_t > distances{};
+				std::vector< number_t > distances{};
 				distances.reserve(space);
 
 				for ( size_t index = 0; index < verticesCount - 1; index++ )
 				{
 					for ( size_t subIndex = index + 1; subIndex < verticesCount; subIndex++ )
 					{
-						distances.emplace_back(Math::Vector<3, float_t>::distance(m_vertices[index], m_vertices[subIndex]));
+						distances.emplace_back(Math::Vector<3, number_t>::distance(m_vertices[index], m_vertices[subIndex]));
 					}
 				}
 
@@ -334,7 +334,7 @@ namespace EmEn::Libs::VertexFactory
 			 * @return std::array< type_t, 3 >
 			 */
 			[[nodiscard]]
-			std::array< float_t, 3 >
+			std::array< number_t, 3 >
 			getDistancesAggregate () const noexcept
 			{
 				const auto distances = TriangleGenerator::getDistances();
@@ -352,8 +352,8 @@ namespace EmEn::Libs::VertexFactory
 			 * @return std::vector< type_t >
 			 */
 			[[nodiscard]]
-			std::vector< float_t >
-			getDistances (const Math::Vector< 3, float_t > & point) const noexcept
+			std::vector< number_t >
+			getDistances (const Math::Vector< 3, number_t > & point) const noexcept
 			{
 				if ( m_vertices.empty() )
 				{
@@ -362,11 +362,11 @@ namespace EmEn::Libs::VertexFactory
 
 				const auto verticesCount = m_vertices.size();
 
-				std::vector< float_t > distances(verticesCount, 0);
+				std::vector< number_t > distances(verticesCount, 0);
 
 				for ( size_t index = 0; index < verticesCount; index++ )
 				{
-					distances[index] = Math::Vector<3, float_t>::distance(m_vertices[index], point);
+					distances[index] = Math::Vector<3, number_t>::distance(m_vertices[index], point);
 				}
 
 				return distances;
@@ -378,8 +378,8 @@ namespace EmEn::Libs::VertexFactory
 			 * @return std::array< type_t, 3 >
 			 */
 			[[nodiscard]]
-			std::array< float_t, 3 >
-			getDistancesAggregate (const Math::Vector< 3, float_t > & point) const noexcept
+			std::array< number_t, 3 >
+			getDistancesAggregate (const Math::Vector< 3, number_t > & point) const noexcept
 			{
 				const auto distances = TriangleGenerator::getDistances(point);
 
@@ -411,7 +411,7 @@ namespace EmEn::Libs::VertexFactory
 
 				while ( vertexIt != m_vertices.end() )
 				{
-					const auto distance = Math::Vector< 3, float_t >::distance(centroidPosition, *vertexIt);
+					const auto distance = Math::Vector< 3, number_t >::distance(centroidPosition, *vertexIt);
 
 					if ( distance < aggregate[Avg] )
 					{
@@ -424,6 +424,6 @@ namespace EmEn::Libs::VertexFactory
 				}
 			}
 
-			std::vector< Libs::Math::Vector< 3, float_t > > m_vertices{};
+			std::vector< Libs::Math::Vector< 3, number_t > > m_vertices{};
 	};
 }

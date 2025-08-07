@@ -26,24 +26,21 @@
 
 #include "SwapChain.hpp"
 
+/* Application configuration. */
+#include "emeraude_config.hpp"
+
 /* STL inclusions. */
-#include <cstddef>
-#include <limits>
-#include <mutex>
+#if !IS_MACOS
+#include <format>
+#endif
 
 /* Local inclusions. */
+#include "Vulkan/Framebuffer.hpp"
+#include "Vulkan/ImageView.hpp"
+#include "Vulkan/Queue.hpp"
+#include "Vulkan/Utility.hpp"
 #include "Graphics/Renderer.hpp"
-#include "Sync/Fence.hpp"
-#include "Sync/Semaphore.hpp"
-#include "Instance.hpp"
-#include "Device.hpp"
-#include "Queue.hpp"
-#include "Framebuffer.hpp"
-#include "RenderPass.hpp"
-#include "Image.hpp"
-#include "ImageView.hpp"
-#include "Utility.hpp"
-#include "Window.hpp"
+#include "Settings.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::Vulkan
@@ -69,9 +66,9 @@ namespace EmEn::Vulkan
 			}
 		}
 
-		m_flags[ShowInformation] = settings.get< bool >(VkShowInformationKey, DefaultVkShowInformation);
-		m_flags[VSyncEnabled] = settings.get< bool >(VideoEnableVSyncKey, DefaultVideoEnableVSync);
-		m_flags[TripleBufferingEnabled] = settings.get< bool >(VideoEnableTripleBufferingKey, DefaultVideoEnableTripleBuffering);
+		m_showInformation = settings.get< bool >(VkShowInformationKey, DefaultVkShowInformation);
+		m_tripleBufferingEnabled = settings.get< bool >(VideoEnableTripleBufferingKey, DefaultVideoEnableTripleBuffering);
+		m_VSyncEnabled = settings.get< bool >(VideoEnableVSyncKey, DefaultVideoEnableVSync);
 	}
 
 	bool
@@ -254,7 +251,7 @@ namespace EmEn::Vulkan
 			return false;
 		}
 
-		if ( m_flags[ShowInformation] )
+		if ( m_showInformation )
 		{
 			TraceSuccess{ClassId} << "The swap chain " << m_handle << " (" << this->identifier() << ") is successfully recreated !";
 		}
@@ -304,8 +301,8 @@ namespace EmEn::Vulkan
 		{
 			Tracer::error(ClassId, "The swap chain can only use 1 image. Disabling double buffering and V-Sync !");
 
-			m_flags[TripleBufferingEnabled] = false;
-			m_flags[VSyncEnabled] = false;
+			m_tripleBufferingEnabled = false;
+			m_VSyncEnabled = false;
 
 			return 1;
 		}
@@ -313,10 +310,10 @@ namespace EmEn::Vulkan
 		/* NOTE: It looks like the system enforces the triple-buffering. */
 		if ( capabilities.minImageCount == 3 )
 		{
-			m_flags[TripleBufferingEnabled] = true;
+			m_tripleBufferingEnabled = true;
 		}
 
-		if ( m_flags[TripleBufferingEnabled] && ( capabilities.maxImageCount == 0 || capabilities.maxImageCount >= 3 ) )
+		if ( m_tripleBufferingEnabled && ( capabilities.maxImageCount == 0 || capabilities.maxImageCount >= 3 ) )
 		{
 			return 3;
 		}
@@ -372,7 +369,7 @@ namespace EmEn::Vulkan
 			return false;
 		}
 
-		if ( m_flags[ShowInformation] )
+		if ( m_showInformation )
 		{
 			TraceInfo{ClassId} << "The swap chain is using " << m_imageCount << " images.";
 		}
@@ -418,28 +415,28 @@ namespace EmEn::Vulkan
 		{
 			auto & frame = m_frames[imageIndex];
 
+#if IS_MACOS
+			const auto colorBufferId = (std::stringstream{} << "SwapChain-ColorBuffer" << imageIndex).str();
+			const auto depthBufferId = (std::stringstream{} << "SwapChain-DepthBuffer" << imageIndex).str();
+#else
+			const auto colorBufferId = std::format("SwapChain-ColorBuffer{}", imageIndex);
+			const auto depthBufferId = std::format("SwapChain-DepthBuffer{}", imageIndex);
+#endif
+
 			/* Color buffer. */
+			if ( !this->createColorBuffer(swapChainImages[imageIndex], frame.colorImage, frame.colorImageView, colorBufferId) )
 			{
-				const auto purposeId = (std::stringstream{} << "SwapChain-ColorBuffer" << imageIndex).str();
+				TraceFatal{ClassId} << "Unable to create the color buffer #" << imageIndex << " !";
 
-				if ( !this->createColorBuffer(swapChainImages[imageIndex], frame.colorImage, frame.colorImageView, purposeId) )
-				{
-					TraceFatal{ClassId} << "Unable to create the color buffer #" << imageIndex << " !";
-
-					return false;
-				}
+				return false;
 			}
 
 			/* Depth/Stencil buffer. */
+			if ( !this->createDepthStencilBuffer(this->device(), frame.depthStencilImage, frame.depthImageView, frame.stencilImageView, depthBufferId) )
 			{
-				const auto purposeId = (std::stringstream{} << "SwapChain-DepthBuffer" << imageIndex).str();
+				TraceFatal{ClassId} << "Unable to create the depth buffer #" << imageIndex << " !";
 
-				if ( !this->createDepthStencilBuffer(this->device(), frame.depthStencilImage, frame.depthImageView, frame.stencilImageView, purposeId) )
-				{
-					TraceFatal{ClassId} << "Unable to create the depth buffer #" << imageIndex << " !";
-
-					return false;
-				}
+				return false;
 			}
 		}
 
@@ -456,7 +453,11 @@ namespace EmEn::Vulkan
 
 			/* Prepare the framebuffer for attachments. */
 			frame.framebuffer = std::make_unique< Framebuffer >(renderPass, this->extent());
+#if IS_MACOS
 			frame.framebuffer->setIdentifier((std::stringstream{} << "SwapChain-Frame" << imageIndex << "-Framebuffer").str());
+#else
+			frame.framebuffer->setIdentifier(std::format("SwapChain-Frame{}-Framebuffer", imageIndex));
+#endif
 
 			/* Color buffer. */
 			frame.framebuffer->addAttachment(frame.colorImageView->handle());
@@ -554,9 +555,7 @@ namespace EmEn::Vulkan
 		}
 
 		/* Create the render pass base on the first set of images (this is the swap chain, all images are technically the same) */
-		const auto renderPass = this->createRenderPass(m_renderer);
-
-		if ( !this->createFramebufferArray(renderPass) )
+		if ( !this->createFramebufferArray(this->createRenderPass(m_renderer)) )
 		{
 			Tracer::error(ClassId, "Unable to create the swap chain framebuffer !");
 
@@ -656,7 +655,7 @@ namespace EmEn::Vulkan
 			image,
 			VK_IMAGE_VIEW_TYPE_2D,
 			VkImageSubresourceRange{
-				.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
+				.aspectMask = VK_IMAGE_ASPECT_STENCIL_BIT,
 				.baseMipLevel = 0,
 				.levelCount = imageCreateInfo.mipLevels,
 				.baseArrayLayer = 0,
@@ -683,7 +682,11 @@ namespace EmEn::Vulkan
 			auto & frame = m_frames[imageIndex];
 
 			frame.imageAvailableSemaphore = std::make_unique< Sync::Semaphore >(this->device());
-			frame.imageAvailableSemaphore->setIdentifier((std::stringstream{} << "SwapChain-ImageAvailable" << imageIndex << "-Semaphore").str());
+#if IS_MACOS
+			frame.framebuffer->setIdentifier((std::stringstream{} << "SwapChain-ImageAvailable" << imageIndex << "-Semaphore").str());
+#else
+			frame.imageAvailableSemaphore->setIdentifier(std::format("SwapChain-ImageAvailable{}-Semaphore", imageIndex));
+#endif
 
 			if ( !frame.imageAvailableSemaphore->createOnHardware() )
 			{
@@ -693,7 +696,11 @@ namespace EmEn::Vulkan
 			}
 
 			frame.renderFinishedSemaphore = std::make_unique< Sync::Semaphore >(this->device());
-			frame.renderFinishedSemaphore->setIdentifier((std::stringstream{} << "SwapChain-RenderFinished" << imageIndex << "-Semaphore").str());
+#if IS_MACOS
+			frame.framebuffer->setIdentifier((std::stringstream{} << "SwapChain-RenderFinished" << imageIndex << "-Semaphore").str());
+#else
+			frame.renderFinishedSemaphore->setIdentifier(std::format("SwapChain-RenderFinished{}-Semaphore", imageIndex));
+#endif
 
 			if ( !frame.renderFinishedSemaphore->createOnHardware() )
 			{
@@ -703,7 +710,11 @@ namespace EmEn::Vulkan
 			}
 
 			frame.inFlightFence = std::make_unique< Sync::Fence >(this->device());
-			frame.inFlightFence->setIdentifier((std::stringstream{} << "SwapChain-ImageInFlight" << imageIndex << "-Fence").str());
+#if IS_MACOS
+			frame.framebuffer->setIdentifier((std::stringstream{} << "SwapChain-ImageInFlight" << imageIndex << "-Fence").str());
+#else
+			frame.inFlightFence->setIdentifier(std::format("SwapChain-ImageInFlight{}-Fence", imageIndex));
+#endif
 
 			if ( !frame.inFlightFence->createOnHardware() )
 			{
@@ -716,12 +727,12 @@ namespace EmEn::Vulkan
 		return true;
 	}
 
-	bool
-	SwapChain::acquireNextImage (uint32_t & imageIndex) noexcept
+	std::optional< uint32_t >
+	SwapChain::acquireNextImage () noexcept
 	{
 		if ( m_status != Status::Ready )
 		{
-			return false;
+			return std::nullopt;
 		}
 
 		const auto & currentFrame = m_frames.at(m_currentFrame);
@@ -730,8 +741,10 @@ namespace EmEn::Vulkan
 		{
 			Tracer::error(ClassId, "Something wrong happens while waiting the fence !");
 
-			return false;
+			return std::nullopt;
 		}
+
+		uint32_t imageIndex;
 
 		const auto result = vkAcquireNextImageKHR(
 			this->device()->handle(),
@@ -745,12 +758,12 @@ namespace EmEn::Vulkan
 		switch ( result )
 		{
 			case VK_SUCCESS :
-				return true;
+				return imageIndex;
 
 			case VK_TIMEOUT :
 				TraceWarning{ClassId} << "VK_TIMEOUT @ acquisition for image #" << imageIndex << " !";
 
-				return false;
+				return std::nullopt;
 
 			case VK_ERROR_OUT_OF_DATE_KHR :
 			case VK_SUBOPTIMAL_KHR :
@@ -758,17 +771,17 @@ namespace EmEn::Vulkan
 
 				m_status = Status::Degraded;
 
-				return false;
+				return std::nullopt;
 
 			default:
 				TraceError{ClassId} << "Error from the swap chain : " << vkResultToCString(result) << " !";
 
-				return false;
+				return std::nullopt;
 		}
 	}
 
 	bool
-	SwapChain::submitCommandBuffer (const std::shared_ptr< CommandBuffer > & commandBuffer, const uint32_t & imageIndex, std::vector< VkSemaphore > & waitSemaphores) noexcept
+	SwapChain::submitCommandBuffer (const std::shared_ptr< CommandBuffer > & commandBuffer, const uint32_t & imageIndex, const StaticVector< VkSemaphore, 16 > & callerWaitSemaphores) noexcept
 	{
 		const std::lock_guard< std::mutex > deviceAccessLockGuard{this->device()->deviceAccessLock()};
 
@@ -793,39 +806,52 @@ namespace EmEn::Vulkan
 			return false;
 		}
 
-		const auto * graphicsQueue = this->device()->getQueue(QueueJob::Presentation, QueuePriority::High);
+		const auto signalSemaphoreHandle = currentFrame.renderFinishedSemaphore->handle();
 
-		const auto signalSemaphore = currentFrame.renderFinishedSemaphore->handle();
-
-		waitSemaphores.emplace_back(currentFrame.imageAvailableSemaphore->handle());
-
-		if ( !graphicsQueue->submit(commandBuffer, waitSemaphores, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, signalSemaphore, currentFrame.inFlightFence->handle()) )
 		{
-			return false;
+			StaticVector< VkSemaphore, 16 > waitSemaphores = callerWaitSemaphores;
+			waitSemaphores.emplace_back(currentFrame.imageAvailableSemaphore->handle());
+
+			const StaticVector< VkPipelineStageFlags, 16 > waitStages(waitSemaphores.size(), VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
+
+			const auto submitted = this->device()
+				->getQueue(QueueJob::Graphics, QueuePriority::High)
+				->submit(
+					commandBuffer,
+					SynchInfo{}
+						.waits(waitSemaphores, waitStages)
+						.signals({&signalSemaphoreHandle, 1})
+						.withFence(currentFrame.inFlightFence->handle())
+				);
+
+			if ( !submitted )
+			{
+				return false;
+			}
 		}
 
-		const auto * presentationQueue = this->device()->getQueue(QueueJob::Presentation, QueuePriority::High);
-
-		bool swapChainRecreationNeeded = false;
-
-		VkPresentInfoKHR presentInfo{};
-		presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-		presentInfo.pNext = nullptr;
-		presentInfo.waitSemaphoreCount = 1;
-		presentInfo.pWaitSemaphores = &signalSemaphore;
-		presentInfo.swapchainCount = 1;
-		presentInfo.pSwapchains = &m_handle;
-		presentInfo.pImageIndices = &imageIndex;
-		presentInfo.pResults = nullptr;
-
-		if ( !presentationQueue->present(&presentInfo, swapChainRecreationNeeded) )
 		{
-			if ( swapChainRecreationNeeded )
-			{
-				m_status = Status::Degraded;
-			}
+			bool swapChainRecreationNeeded = false;
 
-			return false;
+			VkPresentInfoKHR presentInfo{};
+			presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+			presentInfo.pNext = nullptr;
+			presentInfo.waitSemaphoreCount = 1;
+			presentInfo.pWaitSemaphores = &signalSemaphoreHandle;
+			presentInfo.swapchainCount = 1;
+			presentInfo.pSwapchains = &m_handle;
+			presentInfo.pImageIndices = &imageIndex;
+			presentInfo.pResults = nullptr;
+
+			if ( !this->device()->getQueue(QueueJob::Presentation, QueuePriority::High)->present(&presentInfo, swapChainRecreationNeeded) )
+			{
+				if ( swapChainRecreationNeeded )
+				{
+					m_status = Status::Degraded;
+				}
+
+				return false;
+			}
 		}
 
 		/* TODO: Check if this is correct to skip the current frame index, when swap-chain has failed to present the image. */
@@ -839,7 +865,7 @@ namespace EmEn::Vulkan
 	{
 		const auto & presentModes = m_renderer.window().surface()->presentModes();
 
-		if ( m_flags[ShowInformation] )
+		if ( m_showInformation )
 		{
 			std::stringstream info;
 			info << "Present modes available :" "\n";
@@ -885,11 +911,11 @@ namespace EmEn::Vulkan
 			TraceInfo{ClassId} << info.str();
 		}
 
-		if ( m_flags[VSyncEnabled] )
+		if ( m_VSyncEnabled )
 		{
 			if ( std::ranges::find(presentModes, VK_PRESENT_MODE_MAILBOX_KHR) != presentModes.cend() )
 			{
-				if ( m_flags[ShowInformation] )
+				if ( m_showInformation )
 				{
 					TraceInfo{ClassId} << "The swap chain will use MAILBOX as presentation mode.";
 				}
@@ -897,11 +923,11 @@ namespace EmEn::Vulkan
 				return VK_PRESENT_MODE_MAILBOX_KHR;
 			}
 		}
-		else if ( m_flags[TripleBufferingEnabled] )
+		else if ( m_tripleBufferingEnabled )
 		{
 			if ( std::ranges::find(presentModes, VK_PRESENT_MODE_FIFO_RELAXED_KHR) != presentModes.cend() )
 			{
-				if ( m_flags[ShowInformation] )
+				if ( m_showInformation )
 				{
 					TraceInfo{ClassId} << "The swap chain will use FIFO_RELAXED as presentation mode.";
 				}
@@ -913,7 +939,7 @@ namespace EmEn::Vulkan
 		{
 			if ( std::ranges::find(presentModes, VK_PRESENT_MODE_IMMEDIATE_KHR) != presentModes.cend() )
 			{
-				if ( m_flags[ShowInformation] )
+				if ( m_showInformation )
 				{
 					TraceInfo{ClassId} << "The swap chain will use IMMEDIATE as presentation mode.";
 				}
@@ -922,7 +948,7 @@ namespace EmEn::Vulkan
 			}
 		}
 
-		if ( m_flags[ShowInformation] )
+		if ( m_showInformation )
 		{
 			TraceInfo{ClassId} << "The swap chain will use FIFO as presentation mode.";
 		}
@@ -938,7 +964,7 @@ namespace EmEn::Vulkan
 	}
 
 	void
-	SwapChain::onSourceDisconnected (AVConsole::AVManagers & managers, AbstractVirtualDevice * /*sourceDevice*/) noexcept
+	SwapChain::onSourceDisconnected (AVConsole::AVManagers & /*managers*/, AbstractVirtualDevice * /*sourceDevice*/) noexcept
 	{
 		m_viewMatrices.destroy();
 	}

@@ -36,6 +36,12 @@
 /* Local inclusions for usages. */
 #include "Resources/Container.hpp"
 
+/* Forward declarations. */
+namespace EmEn::Resources
+{
+	class Manager;
+}
+
 namespace EmEn::Graphics::Renderable
 {
 	/**
@@ -308,17 +314,19 @@ namespace EmEn::Graphics::Renderable
 
 			/**
 			 * @brief Parses a JSON stream to get the geometry information.
+			 * @param resources A reference to the resource manager.
 			 * @param data A reference to a JSON node.
 			 * @return std::shared_ptr< Geometry::Interface >
 			 */
-			std::shared_ptr< Geometry::Interface > parseGeometry (const Json::Value & data) noexcept;
+			std::shared_ptr< Geometry::Interface > parseGeometry (Resources::Manager & resources, const Json::Value & data) noexcept;
 
 			/**
 			 * @brief Parses a JSON stream to get the material information.
+			 * @param resources A reference to the resource manager.
 			 * @param data A reference to a JSON node.
 			 * @return std::shared_ptr< Material::Interface >
 			 */
-			std::shared_ptr< Material::Interface > parseLayer (const Json::Value & data) const noexcept;
+			static std::shared_ptr< Material::Interface > parseLayer (Resources::Manager & resources, const Json::Value & data) noexcept;
 
 			/**
 			 * @brief Parses a JSON stream to get the mesh options.

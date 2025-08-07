@@ -30,7 +30,7 @@
 #include <sstream>
 
 /* Local inclusions. */
-#include "Graphics/Geometry/Types.hpp"
+#include "Graphics/Geometry/Helpers.hpp"
 #include "Libs/Utility.hpp"
 
 namespace EmEn::Graphics::Geometry

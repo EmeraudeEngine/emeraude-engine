@@ -184,20 +184,20 @@ namespace EmEn::Scenes::Component
 			{
 				if ( this->connect(AVConsoleManager.managers(), m_shadowMap) )
 				{
-					TraceSuccess{ClassId} << "2D shadow map successfully created for spotlight '" << this->name() << "'.";
+					TraceSuccess{ClassId} << "2D shadow map (" << resolution << "px²) successfully created for spotlight '" << this->name() << "'.";
 
 					this->enableShadowCasting(true);
 				}
 				else
 				{
-					TraceError{ClassId} << "Unable to connect the 2D shadow map to spotlight '" << this->name() << "' !";
+					TraceError{ClassId} << "Unable to connect the 2D shadow map (" << resolution << "px²) to spotlight '" << this->name() << "' !";
 
 					m_shadowMap.reset();
 				}
 			}
 			else
 			{
-				TraceError{ClassId} << "Unable to create a 2D shadow map for spotlight '" << this->name() << "' !";
+				TraceError{ClassId} << "Unable to create a 2D shadow map (" << resolution << "px²) for spotlight '" << this->name() << "' !";
 			}
 		}
 

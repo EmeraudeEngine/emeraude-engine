@@ -431,11 +431,10 @@ namespace EmEn::Saphir
 		return shaderModule;
 	}
 
-	std::vector< std::shared_ptr< ShaderModule > >
+	StaticVector< std::shared_ptr< ShaderModule >, 5 >
 	ShaderManager::getShaderModules (const std::shared_ptr< Device > & device, const std::shared_ptr< Program > & program) noexcept
 	{
-		std::vector< std::shared_ptr< ShaderModule > > shaderModules;
-		shaderModules.reserve(program->getShaderList().size());
+		StaticVector< std::shared_ptr< ShaderModule >, 5 > shaderModules;
 
 		for ( const auto * shader : program->getShaderList() )
 		{

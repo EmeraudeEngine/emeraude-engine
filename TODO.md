@@ -3,9 +3,10 @@
 ## GENERAL
 - Remove all std::array< bool, n >.
 - Remove all invalid noexcept keyword.
-- Increase inlining with class methods.
+- Increase inlining with class methods. EDIT: Almost done.
 - Improve functions args to use std::move when useful.
-- Rewrite libs Observer/Observable
+- Rewrite libs Observer/Observable pattern with the idea of static and shared objects.
+- Replace all std::stringstream by std::format (c++20) for simple keys, names or identifiers generation.
 
 ## GENERAL BUGS
 - Check for light coherence, create a built-in scene with a fixed directional light and multiple materials.
@@ -75,6 +76,8 @@
 - Check to stop sound from an inactive scene. (Shared with SCENE section)
 
 ## GENERAL VULKAN :
+- Implement descriptorIndexing from Vulkan 1.2
+- Implement VK_KHR_synchronization2 and VK_KHR_dynamic_rendering from Vulkan 1.3
 - Check validation layers and debug messenger relationship. (According to khronos, this is valid to create the debug messenger without validation layers)
 - Fix texture loading. (UINT->UNORM) Convert data before ? or not ?
 - Use of separated image from sampler in GLSL when useful.

@@ -159,7 +159,7 @@ namespace EmEn::Scenes::Component
 	}
 
 	void
-	Camera::onTargetConnected (AVConsole::AVManagers & managers, AbstractVirtualDevice * targetDevice) noexcept
+	Camera::onTargetConnected (AVConsole::AVManagers & /*managers*/, AbstractVirtualDevice * targetDevice) noexcept
 	{
 		/* Initialize the target device with coordinates and camera properties. */
 		targetDevice->updateDeviceFromCoordinates(this->getWorldCoordinates(), this->getWorldVelocity());

@@ -67,7 +67,7 @@ namespace EmEn::Vulkan::Sync
 	[[nodiscard]]
 	inline
 	std::string
-	to_string (FenceStatus value) noexcept
+	to_string (FenceStatus value)
 	{
 		return {to_cstring(value)};
 	}

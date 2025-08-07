@@ -73,7 +73,7 @@ namespace EmEn::Resources
 	[[nodiscard]]
 	inline
 	std::string
-	to_string (SourceType value) noexcept
+	to_string (SourceType value)
 	{
 		return {to_cstring(value)};
 	}
@@ -127,7 +127,7 @@ namespace EmEn::Resources
 	[[nodiscard]]
 	inline
 	std::string
-	to_string (Status value) noexcept
+	to_string (Status value)
 	{
 		return {to_cstring(value)};
 	}

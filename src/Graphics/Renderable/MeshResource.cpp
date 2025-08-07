@@ -27,10 +27,9 @@
 #include "MeshResource.hpp"
 
 /* Local inclusions. */
-#include "Graphics/Geometry/IndexedVertexResource.hpp"
-#include "Graphics/Geometry/VertexResource.hpp"
-#include "Graphics/Material/BasicResource.hpp"
-#include "Graphics/Material/StandardResource.hpp"
+#include "Libs/FastJSON.hpp"
+#include "Graphics/Geometry/Geometries.hpp"
+#include "Graphics/Material/Materials.hpp"
 #include "Resources/Manager.hpp"
 
 /* Defining the resource manager class id. */
@@ -118,24 +117,8 @@ namespace EmEn::Graphics::Renderable
 	}
 
 	std::shared_ptr< Geometry::Interface >
-	MeshResource::parseGeometry (const Json::Value & data) noexcept
+	MeshResource::parseGeometry (Resources::Manager & resources, const Json::Value & data) noexcept
 	{
-		/* Checks geometry type key */
-		if ( !data.isMember(GeometryTypeKey) || !data[GeometryTypeKey].isString() )
-		{
-			TraceError{ClassId} << "The key '" << GeometryTypeKey << "' is not present or not a string !";
-
-			return nullptr;
-		}
-
-		/* Checks geometry resource name key */
-		if ( !data.isMember(GeometryNameKey) || !data[GeometryNameKey].isString() )
-		{
-			TraceError{ClassId} << "The key '" << GeometryNameKey << "' is not present or not a string !";
-
-			return nullptr;
-		}
-
 		/* Checks size option */
 		if ( data.isMember(BaseSizeKey) )
 		{
@@ -149,28 +132,64 @@ namespace EmEn::Graphics::Renderable
 			}
 		}
 
-		/* Gets the resource from geometry store. */
-		const auto geometryType = data[GeometryTypeKey].asString();
+		const auto geometryType = FastJSON::getValidatedStringValue(data, GeometryTypeKey, Geometry::Types).value_or(IndexedVertexResource::ClassId);
+		const auto geometryResourceName = FastJSON::getValue< std::string >(data, GeometryNameKey);
+
+		if ( geometryType == VertexResource::ClassId )
+		{
+			if ( !geometryResourceName )
+			{
+				TraceError{ClassId} << "The key '" << GeometryTypeKey << "' for '" << VertexResource::ClassId << "' is not present or not a string !";
+
+				return resources.container< VertexResource >()->getDefaultResource();
+			}
+
+			return resources.container< VertexResource >()->getResource(geometryResourceName.value());
+		}
 
 		if ( geometryType == IndexedVertexResource::ClassId )
 		{
-			const auto geometryName = data[GeometryNameKey].asString();
-
-			auto geometryResource = Resources::Manager::instance()->container< IndexedVertexResource >()->getResource(geometryName);
-
-			if ( geometryResource == nullptr )
+			if ( !geometryResourceName )
 			{
-				TraceError{ClassId} << "Geometry '" << geometryName << "' not found to complete the Mesh !";
+				TraceError{ClassId} << "The key '" << GeometryTypeKey << "' for '" << IndexedVertexResource::ClassId << "' is not present or not a string !";
 
-				return nullptr;
+				return resources.container< IndexedVertexResource >()->getDefaultResource();
 			}
 
-			return geometryResource;
+			return resources.container< IndexedVertexResource >()->getResource(geometryResourceName.value());
 		}
 
 		TraceWarning{ClassId} << "Geometry resource type '" << geometryType << "' is not handled !";
 
-		return nullptr;
+		return resources.container< IndexedVertexResource >()->getDefaultResource();
+	}
+
+	std::shared_ptr< Material::Interface >
+	MeshResource::parseLayer (Resources::Manager & resources, const Json::Value & data) noexcept
+	{
+		const auto materialType = FastJSON::getValidatedStringValue(data, MaterialTypeKey, Material::Types).value_or(BasicResource::ClassId);
+		const auto materialResourceName = FastJSON::getValue< std::string >(data, MaterialNameKey);
+
+		if ( materialType == StandardResource::ClassId )
+		{
+			if ( !materialResourceName )
+			{
+				TraceError{ClassId} << "The key '" << MaterialNameKey << "' for '" << StandardResource::ClassId << "' is not present or not a string !";
+
+				return resources.container< StandardResource >()->getDefaultResource();
+			}
+
+			return resources.container< StandardResource >()->getResource(materialResourceName.value());
+		}
+
+		if ( !materialResourceName )
+		{
+			TraceError{ClassId} << "The key '" << MaterialNameKey << "' for '" << BasicResource::ClassId << "' is not present or not a string !";
+
+			return resources.container< BasicResource >()->getDefaultResource();
+		}
+
+		return resources.container< BasicResource >()->getResource(materialResourceName.value());
 	}
 
 	RasterizationOptions
@@ -209,49 +228,6 @@ namespace EmEn::Graphics::Renderable
 		return layerRasterizationOptions;
 	}
 
-	std::shared_ptr< Material::Interface >
-	MeshResource::parseLayer (const Json::Value & data) const noexcept
-	{
-		auto * standardResources = Resources::Manager::instance()->container< StandardResource >();
-
-		if ( !data.isMember(MaterialTypeKey) || !data[MaterialTypeKey].isString() )
-		{
-			TraceError{ClassId} << "The key '" << MaterialTypeKey << "' is not present or not a string !";
-
-			return standardResources->getDefaultResource();
-		}
-
-		if ( !data.isMember(MaterialNameKey) || !data[MaterialTypeKey].isString() )
-		{
-			TraceError{ClassId} << "The key '" << MaterialNameKey << "' is not present or not a string !";
-
-			return standardResources->getDefaultResource();
-		}
-
-		/* Gets the resource from material store. */
-		const auto materialType = data[MaterialTypeKey].asString();
-
-		if ( materialType == StandardResource::ClassId )
-		{
-			const auto materialName = data[MaterialNameKey].asString();
-
-			auto materialResource = standardResources->getResource(materialName);
-
-			if ( materialResource == nullptr )
-			{
-				TraceError{ClassId} << "Material '" << materialName << "' not found to complete sub-mesh !";
-
-				return standardResources->getDefaultResource();
-			}
-
-			return materialResource;
-		}
-
-		TraceWarning{ClassId} << "Material resource type '" << materialType << "' for mesh '" << this->name() << "' is not handled !";
-
-		return standardResources->getDefaultResource();
-	}
-
 	bool
 	MeshResource::load (const Json::Value & data) noexcept
 	{
@@ -260,11 +236,13 @@ namespace EmEn::Graphics::Renderable
 			return false;
 		}
 
+		auto * resources = Resources::Manager::instance();
+
 		/* FIXME: Physics properties from Mesh definitions. */
 		//this->parseOptions(data);
 
 		/* Parse geometry definition. */
-		const auto geometryResource = this->parseGeometry(data);
+		const auto geometryResource = this->parseGeometry(*resources, data);
 
 		if ( geometryResource == nullptr )
 		{
@@ -304,7 +282,7 @@ namespace EmEn::Graphics::Renderable
 		for ( const auto & layerRule : layerRules )
 		{
 			/* Parse material definition and get default if error occurs. */
-			auto materialResource = this->parseLayer(layerRule);
+			auto materialResource = MeshResource::parseLayer(*resources, layerRule);
 
 			/* Gets a default material. */
 			if ( materialResource == nullptr )

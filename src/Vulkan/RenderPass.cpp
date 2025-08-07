@@ -32,7 +32,6 @@
 
 /* Local inclusions. */
 #include "Device.hpp"
-#include "RenderSubPass.hpp"
 #include "Utility.hpp"
 #include "Tracer.hpp"
 
@@ -40,11 +39,10 @@ namespace EmEn::Vulkan
 {
 	using namespace EmEn::Libs;
 
-	std::vector< VkSubpassDescription >
+	StaticVector< VkSubpassDescription, 4 >
 	RenderPass::getSubPassDescriptions () const noexcept
 	{
-		std::vector< VkSubpassDescription > descriptions{};
-		descriptions.reserve(m_renderSubPasses.size());
+		StaticVector< VkSubpassDescription, 4 > descriptions;
 
 		std::ranges::transform(m_renderSubPasses, std::back_inserter(descriptions), [] (const auto & renderSubPass) {
 			return renderSubPass.generateSubPassDescription();

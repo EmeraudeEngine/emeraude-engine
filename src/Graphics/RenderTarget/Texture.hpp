@@ -71,7 +71,7 @@ namespace EmEn::Graphics::RenderTarget
 			 * @param name The name of the texture for debugging.
 			 * @param width The width of the texture.
 			 * @param width The height of the texture.
-			 * @param colorCount The number of color channel desired. Default 4.
+			 * @param colorCount The number of color channels desired. Default 4.
 			 */
 			Texture (const std::string & name, uint32_t width, uint32_t height, uint32_t colorCount = 4) noexcept requires (std::is_same_v< view_matrices_t, ViewMatrices2DUBO >)
 				: RenderTarget::Abstract{
@@ -91,11 +91,11 @@ namespace EmEn::Graphics::RenderTarget
 			 * @brief Constructs a render to cubemap.
 			 * @param name A reference to a string for the name of the video device.
 			 * @param size The size of the cubemap.
-			 * @param colorCount The number of color channel desired. Default 4.
+			 * @param colorCount The number of color channels desired. Default 4.
 			 */
 			Texture (const std::string & name, uint32_t size, uint32_t colorCount = 4) noexcept requires (std::is_same_v< view_matrices_t, ViewMatrices3DUBO >)
-				: RenderTarget::Abstract(name, {8, 8, 8, 8, 32, 0, 1}, {size, size, 1}, RenderTargetType::Cubemap, AVConsole::ConnexionType::Both, true),
-				TextureResource::Abstract(name, 0)
+				: RenderTarget::Abstract{name, {colorCount, 8, 32, 0, 1}, {size, size, 1}, RenderTargetType::Cubemap, AVConsole::ConnexionType::Both, true},
+				TextureResource::Abstract{name, 0}
 			{
 
 			}
@@ -106,7 +106,7 @@ namespace EmEn::Graphics::RenderTarget
 			 */
 			explicit
 			Texture (const std::string & name) noexcept
-				: Texture(name, 64, 4)
+				: Texture{name, 64, 4}
 			{
 				Tracer::warning(ClassId, "This resource are not intended to build that way !");
 			}
@@ -524,20 +524,20 @@ namespace EmEn::Graphics::RenderTarget
 			void
 			onDestroy () noexcept override
 			{
-				/* Depth stencil buffer. */
-				m_stencilImageView.reset();
-				m_depthImageView.reset();
-				m_depthStencilImage.reset();
+				/* First, destroy the framebuffer. */
+				m_framebuffer.reset();
 
-				/* Color buffer */
-				m_colorImageView.reset();
-				m_colorImage.reset();
-
-				/* FIXME: The sampler must be shared ! */
+				/* Next, destroy the sampler. */
 				m_sampler.reset();
 
-				/* Framebuffer */
-				m_framebuffer.reset();
+				/* Next, destroy the image views. */
+				m_stencilImageView.reset();
+				m_depthImageView.reset();
+				m_colorImageView.reset();
+
+				/* Finally, destroy the images. */
+				m_depthStencilImage.reset();
+				m_colorImage.reset();
 			}
 
 			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::createRenderPass() */
@@ -634,7 +634,7 @@ namespace EmEn::Graphics::RenderTarget
 				/* Color buffer. */
 				if ( this->precisions().colorBits() > 0 )
 				{
-					/* Create the image for color buffer in video memory. */
+					/* Create the image for a color buffer in video memory. */
 					m_colorImage = std::make_shared< Vulkan::Image >(
 						device,
 						VK_IMAGE_TYPE_2D,
@@ -788,13 +788,13 @@ namespace EmEn::Graphics::RenderTarget
 				return true;
 			}
 
-			std::shared_ptr< Vulkan::Framebuffer > m_framebuffer;
 			std::shared_ptr< Vulkan::Image > m_colorImage;
-			std::shared_ptr< Vulkan::ImageView > m_colorImageView;
 			std::shared_ptr< Vulkan::Image > m_depthStencilImage;
+			std::shared_ptr< Vulkan::ImageView > m_colorImageView;
 			std::shared_ptr< Vulkan::ImageView > m_depthImageView;
 			std::shared_ptr< Vulkan::ImageView > m_stencilImageView;
 			std::shared_ptr< Vulkan::Sampler > m_sampler;
+			std::shared_ptr< Vulkan::Framebuffer > m_framebuffer;
 			view_matrices_t m_viewMatrices;
 	};
 }

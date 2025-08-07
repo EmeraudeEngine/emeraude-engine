@@ -10,20 +10,11 @@ namespace EmEn::Graphics
 {
 	using namespace EmEn::Vulkan;
 
-	std::string
-	RendererFrameScope::getFrameName (uint32_t frameIndex) noexcept
-	{
-		std::stringstream frameName;
-
-		frameName << "Frame" << frameIndex;
-
-		return frameName.str();
-	}
-
 	bool
 	RendererFrameScope::initialize (const std::shared_ptr< Device > & device, uint32_t frameIndex) noexcept
 	{
 		const auto frameName = RendererFrameScope::getFrameName(frameIndex);
+
 		m_frameIndex = frameIndex;
 
 		m_commandPool = std::make_shared< CommandPool >(device, device->getGraphicsFamilyIndex(), false, true, false);

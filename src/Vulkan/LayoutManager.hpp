@@ -32,7 +32,6 @@
 #include <map>
 #include <memory>
 #include <string>
-#include <vector>
 
 /* Third-party inclusions. */
 #include <vulkan/vulkan.h>
@@ -41,6 +40,7 @@
 #include "ServiceInterface.hpp"
 
 /* Local inclusions for usages. */
+#include "Libs/StaticVector.hpp"
 #include "Types.hpp"
 
 /* Forward declarations. */
@@ -130,12 +130,12 @@ namespace EmEn::Vulkan
 			/**
 			 * @brief Returns an existing pipeline layout or create a new one corresponding to parameters.
 			 * @param descriptorSetLayouts A reference to a list of descriptor set layout.
-			 * @param pushConstantRanges A reference to push-constant range list.
+			 * @param pushConstantRanges A reference to a push-constant range list.
 			 * @param createFlags The Vulkan flag at pipeline layout creation. Default None.
 			 * @return std::shared_ptr< PipelineLayout >
 			 */
 			[[nodiscard]]
-			std::shared_ptr< PipelineLayout > getPipelineLayout (const std::vector< std::shared_ptr< DescriptorSetLayout > > & descriptorSetLayouts, const std::vector< VkPushConstantRange > & pushConstantRanges = {}, VkPipelineLayoutCreateFlags createFlags = 0) noexcept;
+			std::shared_ptr< PipelineLayout > getPipelineLayout (const Libs::StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > & descriptorSetLayouts, const Libs::StaticVector< VkPushConstantRange, 4 > & pushConstantRanges = {}, VkPipelineLayoutCreateFlags createFlags = 0) noexcept;
 
 		private:
 

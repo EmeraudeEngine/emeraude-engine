@@ -94,12 +94,8 @@
 #define PLATFORM_TARGETED OS_NAME "-" PLATFORM_PRECISION "-" PLATFORM_ARCH
 
 /* NOTE: Code will use the GCC macro for printing function signature. */
-#ifndef __PRETTY_FUNCTION__ // NOLINT(bugprone-reserved-identifier)
-	#ifdef _MSC_VER
-		#define __PRETTY_FUNCTION__ __FUNCSIG__
-	#else
-		#define __PRETTY_FUNCTION__ __FUNCTION__
-	#endif
+#ifdef _MSC_VER
+    #define __PRETTY_FUNCTION__ __FUNCSIG__
 #endif
 
 #define EMERAUDE_ENGINE 1
@@ -133,6 +129,7 @@
 #cmakedefine BULLET_ENABLED
 #cmakedefine CPUFEATURES_ENABLED
 #cmakedefine HWLOC_ENABLED
+#cmakedefine FASTGLTF_ENABLED
 
 /* NOTE: Be sure this define is always set for GLFW.
  * FIXME: Check if this is useful ! */

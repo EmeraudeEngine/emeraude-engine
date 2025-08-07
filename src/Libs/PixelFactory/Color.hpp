@@ -43,7 +43,7 @@
 namespace EmEn::Libs::PixelFactory
 {
 	/**
-	 * @brief Defines a color which using an internal floating point data.
+	 * @brief Defines a color which using internal floating point data.
 	 * @tparam data_t The type of floating point number. Default float.
 	 */
 	template< typename data_t = float >
@@ -52,13 +52,13 @@ namespace EmEn::Libs::PixelFactory
 	{
 		public:
 
-			/** @brief Index accessor for red component. */
+			/** @brief Index accessor for the red component. */
 			static constexpr auto R{0UL};
-			/** @brief Index accessor for green component. */
+			/** @brief Index accessor for the green component. */
 			static constexpr auto G{1UL};
-			/** @brief Index accessor for blue component. */
+			/** @brief Index accessor for the blue component. */
 			static constexpr auto B{2UL};
-			/** @brief Index accessor for alpha component. */
+			/** @brief Index accessor for the alpha component. */
 			static constexpr auto A{3UL};
 
 			/**
@@ -117,7 +117,7 @@ namespace EmEn::Libs::PixelFactory
 			}
 
 			/**
-			 * @brief Constructs a color from a vector 4.
+			 * @brief Constructs a color from vector 4.
 			 * @param data A reference to a vector.
 			 */
 			constexpr
@@ -129,7 +129,7 @@ namespace EmEn::Libs::PixelFactory
 			}
 
 			/**
-			 * @brief Constructs a color from a vector 3.
+			 * @brief Constructs a color from vector 3.
 			 * @param data A reference to a vector.
 			 */
 			constexpr
@@ -278,7 +278,7 @@ namespace EmEn::Libs::PixelFactory
 
 			/**
 			 * @brief Performs a division on color channels (RGB).
-			 * @note This won't affect alpha channel.
+			 * @note This won't affect the alpha channel.
 			 * @param operand A reference to a color.
 			 * @return Color
 			 */
@@ -296,7 +296,7 @@ namespace EmEn::Libs::PixelFactory
 
 			/**
 			 * @brief Performs a division on color channels (RGB).
-			 * @note This won't affect alpha channel.
+			 * @note This won't affect the alpha channel.
 			 * @param operand A reference to a color.
 			 * @return Color &
 			 */
@@ -315,7 +315,7 @@ namespace EmEn::Libs::PixelFactory
 
 			/**
 			 * @brief Adds a value to color channels (RGB).
-			 * @note This won't affect alpha channel.
+			 * @note This won't affect the alpha channel.
 			 * @param operand The value to add.
 			 * @return Color
 			 */
@@ -333,7 +333,7 @@ namespace EmEn::Libs::PixelFactory
 
 			/**
 			 * @brief Adds a value to color channels (RGB).
-			 * @note This won't affect alpha channel.
+			 * @note This won't affect the alpha channel.
 			 * @param operand The value to add.
 			 * @return Color &
 			 */
@@ -352,7 +352,7 @@ namespace EmEn::Libs::PixelFactory
 
 			/**
 			 * @brief Subtracts a value from color channels (RGB).
-			 * @note This won't affect alpha channel.
+			 * @note This won't affect the alpha channel.
 			 * @param operand The value to subtract.
 			 * @return Color
 			 */
@@ -370,7 +370,7 @@ namespace EmEn::Libs::PixelFactory
 
 			/**
 			 * @brief Subtracts a value from color channels (RGB).
-			 * @note This won't affect alpha channel.
+			 * @note This won't affect the alpha channel.
 			 * @param operand The value to subtract.
 			 * @return Color &
 			 */
@@ -424,7 +424,7 @@ namespace EmEn::Libs::PixelFactory
 			/**
 			 * @brief Divides color channels (RGB) by a value.
 			 * @note Division by zero will be ignored and leave the base color unmodified.
-			 * @note This won't affect alpha channel.
+			 * @note This won't affect the alpha channel.
 			 * @param operand The value for the division.
 			 * @return Color
 			 */
@@ -448,7 +448,7 @@ namespace EmEn::Libs::PixelFactory
 			/**
 			 * @brief Divides color channels (RGB) by a value.
 			 * @note Division by zero will be ignored and leave the base color unmodified.
-			 * @note This won't affect alpha channel.
+			 * @note This won't affect the alpha channel.
 			 * @param operand The value for the division.
 			 * @return Color &
 			 */
@@ -691,7 +691,7 @@ namespace EmEn::Libs::PixelFactory
 			}
 
 			/**
-			 * @brief Sets the color hue from HSV model.
+			 * @brief Sets the color hue from the HSV model.
 			 * @param degree The angle of color. The angle will be rounded to 360.
 			 * @return void
 			 */
@@ -702,7 +702,7 @@ namespace EmEn::Libs::PixelFactory
 			}
 
 			/**
-			 * @brief Sets the color hue from HSV model.
+			 * @brief Sets the color hue from the HSV model.
 			 * @param degree The angle of color. The angle will be rounded to 360.
 			 * @return void
 			 */
@@ -713,7 +713,7 @@ namespace EmEn::Libs::PixelFactory
 			}
 
 			/**
-			 * @brief Sets the saturation value from HSV model.
+			 * @brief Sets the saturation value from the HSV model.
 			 * @param saturation The color saturation. Will be clamped between 0 and 100.
 			 * @return void
 			 */
@@ -724,7 +724,7 @@ namespace EmEn::Libs::PixelFactory
 			}
 
 			/**
-			 * @brief Sets the saturation value from HSV model.
+			 * @brief Sets the saturation value from the HSV model.
 			 * @param saturation The color saturation. Will be clamped between 0 and 100.
 			 * @return void
 			 */
@@ -742,7 +742,7 @@ namespace EmEn::Libs::PixelFactory
 			}
 
 			/**
-			 * @brief Sets the color value from HSV model.
+			 * @brief Sets the color value from the HSV model.
 			 * @param value The color value. Will be clamped between 0 and 100.
 			 * @return void
 			 */
@@ -753,7 +753,7 @@ namespace EmEn::Libs::PixelFactory
 			}
 
 			/**
-			 * @brief Sets the color value from HSV model.
+			 * @brief Sets the color value from the HSV model.
 			 * @param value The color value. Will be clamped between 0 and 100.
 			 * @return void
 			 */
@@ -950,7 +950,7 @@ namespace EmEn::Libs::PixelFactory
 			}
 
 			/**
-			 * @brief Returns the average RGB as gray component.
+			 * @brief Returns the average RGB as a gray component.
 			 * @return data_t
 			 */
 			[[nodiscard]]
@@ -961,7 +961,7 @@ namespace EmEn::Libs::PixelFactory
 			}
 
 			/**
-			 * @brief Returns the average RGB as gray component in an unsigned integer type.
+			 * @brief Returns the average RGB as a gray component in an unsigned integer type.
 			 * @tparam output_t The type of unsigned integer data. Default uint8_t.
 			 * @return output_t
 			 */
@@ -1002,17 +1002,17 @@ namespace EmEn::Libs::PixelFactory
 			}
 
 			/**
-			 * @brief Returns the color hue [0-360] from HSV model.
+			 * @brief Returns the color hue [0-360] from the HSV model.
 			 * @return data_t
 			 */
 			[[nodiscard]]
 			data_t
 			hue () const noexcept
 			{
-				/* Minimum intensity over color component. */
+				/* Minimum intensity over a color component. */
 				const auto min = std::min(m_components[R], std::min(m_components[G], m_components[B]));
 
-				/* Max intensity over color component. */
+				/* Max intensity over a color component. */
 				const auto max = std::max(m_components[R], std::max(m_components[G], m_components[B]));
 
 				/* Compute the hue component */
@@ -1058,17 +1058,17 @@ namespace EmEn::Libs::PixelFactory
 			}
 
 			/**
-			 * @brief Returns the color saturation [0-100] from HSV model.
+			 * @brief Returns the color saturation [0-100] from the HSV model.
 			 * @return data_t
 			 */
 			[[nodiscard]]
 			data_t
 			saturation () const noexcept
 			{
-				/* Minimum intensity over color component. */
+				/* Minimum intensity over a color component. */
 				const auto min = std::min(m_components[R], std::min(m_components[G], m_components[B]));
 
-				/* Max intensity over color component. */
+				/* Max intensity over a color component. */
 				const auto max = std::max(m_components[R], std::max(m_components[G], m_components[B]));
 
 				/* Intensity difference. */
@@ -1079,7 +1079,7 @@ namespace EmEn::Libs::PixelFactory
 			}
 
 			/**
-			 * @brief Returns the color value [0-100] from HSV model.
+			 * @brief Returns the color value [0-100] from the HSV model.
 			 * @return data_t
 			 */
 			[[nodiscard]]
@@ -1092,9 +1092,9 @@ namespace EmEn::Libs::PixelFactory
 
 			/**
 			 * @brief Returns the luminance of a color.
-			 * @param red The value of red component.
-			 * @param green The value of green component.
-			 * @param blue The value of blue component.
+			 * @param red The value of the red component.
+			 * @param green The value of the green component.
+			 * @param blue The value of the blue component.
 			 * @param mode The conversion mode. Default LumaRec709.
 			 * @param option Additional parameter for specific mode. Default 0.
 			 * @return data_t
@@ -1224,7 +1224,7 @@ namespace EmEn::Libs::PixelFactory
 
 			/**
 			 * @brief Returns the differences between two colors.
-			 * @note Formula : f(a, b) = max(a, b) - min(a, b)
+			 * @note Formula: f(a, b) = max(a, b) - min(a, b)
 			 * @param colorA A reference to a color for operand A.
 			 * @param colorB A reference to a color for operand B.
 			 * @param premultipliedAlpha Get alpha from a and b. Default false.
@@ -1245,7 +1245,7 @@ namespace EmEn::Libs::PixelFactory
 
 			/**
 			 * @brief Returns the darker components of two colors.
-			 * @note Formula : f(a, b) = min(a, b)
+			 * @note Formula: f(a, b) = min(a, b)
 			 * @param colorA A reference to a color for operand A.
 			 * @param colorB A reference to a color for operand B.
 			 * @param premultipliedAlpha Get alpha from a and b. Default false.
@@ -1339,7 +1339,7 @@ namespace EmEn::Libs::PixelFactory
 
 			/**
 			 * @brief Returns a random color.
-			 * @warning This version use the unreliable old C rand() function. Color::random method instead.
+			 * @warning This version uses the unreliable old C rand() function. Color::random method instead.
 			 * @param min The minimum value for the RGB component.
 			 * @param max The maximum value for the RGB component.
 			 * @return Color
@@ -1480,7 +1480,7 @@ namespace EmEn::Libs::PixelFactory
 			/**
 			 * @brief Copies the vector data inside a C-Array of float.
 			 * @warning  The target must provide enough space.
-			 * @param target The array target to fill the color.
+			 * @param target The array targets to fill the color.
 			 * @return void
 			 */
 			void
@@ -1639,7 +1639,7 @@ namespace EmEn::Libs::PixelFactory
 
 	/**
 	 * @brief Helper to create a color from integer.
-	 * @note With signed integer, negative number will count for 0.
+	 * @note With signed integer, a negative number will count for 0.
 	 * @tparam input_t The type of integer data. Default uint8_t.
 	 * @tparam output_t The color data type. Default float.
 	 * @param red Red component.
@@ -1663,7 +1663,7 @@ namespace EmEn::Libs::PixelFactory
 
 	/**
 	 * @brief Helper to create a color from integer.
-	 * @note With signed integer, negative number will count for 0.
+	 * @note With signed integer, a negative number will count for 0.
 	 * @tparam input_t The type of integer data. Default uint8_t.
 	 * @tparam output_t The color data type. Default float.
 	 * @param red Red component.
@@ -1685,7 +1685,7 @@ namespace EmEn::Libs::PixelFactory
 
 	/**
 	 * @brief Helper to create a color from integer.
-	 * @note With signed integer, negative number will count for 0.
+	 * @note With signed integer, a negative number will count for 0.
 	 * @tparam input_t The type of integer data. Default uint8_t.
 	 * @tparam output_t The color data type. Default float.
 	 * @param color A reference to an STL array.
@@ -1706,7 +1706,7 @@ namespace EmEn::Libs::PixelFactory
 
 	/**
 	 * @brief Helper to create a color from integer.
-	 * @note With signed integer, negative number will count for 0.
+	 * @note With signed integer, a negative number will count for 0.
 	 * @tparam input_t The type of integer data. Default uint8_t.
 	 * @tparam output_t The color data type. Default float.
 	 * @param color A reference to an STL array.
@@ -1726,7 +1726,7 @@ namespace EmEn::Libs::PixelFactory
 
 	/**
 	 * @brief Helper to create a color from integer.
-	 * @note With signed integer, negative number will count for 0.
+	 * @note With signed integer, a negative number will count for 0.
 	 * @tparam input_t The type of integer data. Default uint8_t.
 	 * @tparam output_t The color data type. Default float.
 	 * @param color A reference to a Vector.
@@ -1747,7 +1747,7 @@ namespace EmEn::Libs::PixelFactory
 
 	/**
 	 * @brief Helper to create a color from integer.
-	 * @note With signed integer, negative number will count for 0.
+	 * @note With signed integer, a negative number will count for 0.
 	 * @tparam input_t The type of integer data. Default uint8_t.
 	 * @tparam output_t The color data type. Default float.
 	 * @param color A reference to a Vector.
@@ -1764,6 +1764,26 @@ namespace EmEn::Libs::PixelFactory
 			static_cast< output_t >(color.z()) / std::numeric_limits< input_t >::max()
 		};
 	}
+
+	/* NOTE: Trait and concept to check a color in template. */
+	template< typename T >
+	inline constexpr bool is_color_v = false;
+
+	template< typename data_t >
+	requires (std::is_floating_point_v< data_t >)
+	inline constexpr bool is_color_v< Color< data_t > > = true;
+
+	template< typename T >
+	concept ColorConcept = is_color_v< T >;
+
+	template< typename T >
+	struct ColorTraits;
+
+	template< typename data_t >
+	struct ColorTraits< Color< data_t > >
+	{
+		using precision = data_t;
+	};
 
 	/* Predefined colors */
 	static constexpr Color< float > White{1.0F, 1.0F, 1.0F, 1.0F};

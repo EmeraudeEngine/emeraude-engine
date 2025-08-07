@@ -62,7 +62,7 @@ namespace EmEn::Vulkan::Sync
 	[[nodiscard]]
 	inline
 	std::string
-	to_string (EventStatus value) noexcept
+	to_string (EventStatus value)
 	{
 		return {to_cstring(value)};
 	}

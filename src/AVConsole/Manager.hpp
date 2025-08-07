@@ -57,12 +57,12 @@ namespace EmEn
 namespace EmEn::AVConsole
 {
 	/**
-	 * @brief The master control links every virtual audio/video input/output from the scene.
+	 * @brief The audio/video manager links every virtual audio/video input/output from a scene.
 	 * @note [OBS][STATIC-OBSERVER][STATIC-OBSERVABLE]
-	 * @extends EmEn::Libs::NameableTrait The master control can have a name according to the scene.
-	 * @extends EmEn::Console::Controllable The master control is usable from the console.
-	 * @extends EmEn::Libs::ObserverTrait The master control wants to get notifications from devices.
-	 * @extends EmEn::Libs::ObserverTrait The master control dispatch device configuration changes.
+	 * @extends EmEn::Libs::NameableTrait The audio/video manager can have a name according to a scene.
+	 * @extends EmEn::Console::Controllable The audio/video manager is usable from the console.
+	 * @extends EmEn::Libs::ObserverTrait The audio/video manager wants to get notifications from devices.
+	 * @extends EmEn::Libs::ObserverTrait The audio/video manager dispatches device configuration changes.
 	 */
 	class Manager final : public Libs::NameableTrait, public Console::Controllable, public Libs::ObserverTrait, public Libs::ObservableTrait
 	{
@@ -94,7 +94,7 @@ namespace EmEn::AVConsole
 			static const std::string DefaultSpeakerName;
 
 			/**
-			 * @brief Constructs the master control console.
+			 * @brief Constructs the audio/video manager.
 			 * @param name A reference to a string.
 			 * @param graphicsRenderer A reference to the graphics renderer.
 			 * @param audioManager A reference to the audio manager.
@@ -285,7 +285,7 @@ namespace EmEn::AVConsole
 			bool removeAudioDevice (const std::shared_ptr< AbstractVirtualDevice > & device) noexcept;
 
 			/**
-			 * @brief Creates a render to shadow map (Texture2D) device.
+			 * @brief Creates a render to a shadow map (Texture2D) device.
 			 * @param name A reference to a string to name the virtual video device.
 			 * @param resolution The resolution of the shadow map.
 			 * @return std::shared_ptr< Graphics::RenderTarget::ShadowMap< Graphics::ViewMatrices2DUBO > >
@@ -294,7 +294,7 @@ namespace EmEn::AVConsole
 			std::shared_ptr< Graphics::RenderTarget::ShadowMap< Graphics::ViewMatrices2DUBO > > createRenderToShadowMap (const std::string & name, uint32_t resolution) noexcept;
 
 			/**
-			 * @brief Creates a render to cubic shadow map (Cubemap) device.
+			 * @brief Creates a render to a cubic shadow map (Cubemap) device.
 			 * @param name A reference to a string to name the virtual video device.
 			 * @param resolution The resolution of the shadow map.
 			 * @return std::shared_ptr< Graphics::RenderTarget::ShadowMap< Graphics::ViewMatrices3DUBO > >
@@ -303,11 +303,11 @@ namespace EmEn::AVConsole
 			std::shared_ptr< Graphics::RenderTarget::ShadowMap< Graphics::ViewMatrices3DUBO > > createRenderToCubicShadowMap (const std::string & name, uint32_t resolution) noexcept;
 
 			/**
-			 * @brief Creates a render to texture 2D device.
+			 * @brief Creates a render to a texture 2D device.
 			 * @param name A reference to a string to name the virtual video device.
 			 * @param width The width of the surface.
 			 * @param height The height of the surface.
-			 * @param colorCount The number of color channel desired for the texture2Ds. Default 4.
+			 * @param colorCount The number of color channels desired for the texture2Ds. Default 4.
 			 * @return std::shared_ptr< Graphics::RenderTarget::Texture< Graphics::ViewMatrices2DUBO > >
 			 */
 			[[nodiscard]]
@@ -317,19 +317,19 @@ namespace EmEn::AVConsole
 			 * @brief Creates a render to cubemap device.
 			 * @param name A reference to a string to name the virtual video device.
 			 * @param size The size of the cubemap.
-			 * @param colorCount The number of color channel desired for the texture2Ds. Default 4.
+			 * @param colorCount The number of color channels desired for the texture2Ds. Default 4.
 			 * @return std::shared_ptr< Graphics::RenderTarget::Texture::Texture< Graphics::ViewMatrices3DUBO > >
 			 */
 			[[nodiscard]]
 			std::shared_ptr< Graphics::RenderTarget::Texture< Graphics::ViewMatrices3DUBO > > createRenderToCubemap (const std::string & name, uint32_t size, uint32_t colorCount = 4) noexcept;
 
 			/**
-			 * @brief Creates a render to view (Texture 2D) device.
+			 * @brief Creates a render-to-view (Texture 2D) device.
 			 * @param name A reference to a string to name the virtual video device.
 			 * @param width The width of the surface.
 			 * @param height The height of the surface.
 			 * @param precisions A reference to a framebuffer precisions structure.
-			 * @param primaryDevice Set the device as primary output. Default false.
+			 * @param primaryDevice Set the device as the primary output. Default false.
 			 * @return std::shared_ptr< Graphics::RenderTarget::View< Graphics::ViewMatrices2DUBO > >
 			 */
 			[[nodiscard]]
@@ -340,7 +340,7 @@ namespace EmEn::AVConsole
 			 * @param name A reference to a string to name the virtual video device.
 			 * @param size The size of the cubemap.
 			 * @param precisions A reference to a framebuffer precisions structure.
-			 * @param primaryDevice Set the device as primary output. Default false.
+			 * @param primaryDevice Set the device as the primary output. Default false.
 			 * @return std::shared_ptr< Graphics::RenderTarget::View< Graphics::ViewMatrices3DUBO > >
 			 */
 			[[nodiscard]]
@@ -348,16 +348,16 @@ namespace EmEn::AVConsole
 
 			/**
 			 * @brief Connects two video devices.
-			 * @param sourceDeviceId A reference to a string of output virtual video device id.
-			 * @param targetDeviceId A reference to a string of input virtual video device id.
+			 * @param sourceDeviceId A reference to a string of an output virtual video device id.
+			 * @param targetDeviceId A reference to a string of an input virtual video device id.
 			 * @return bool
 			 */
 			bool connectVideoDevices (const std::string & sourceDeviceId, const std::string & targetDeviceId) noexcept;
 
 			/**
 			 * @brief Connects two audio devices.
-			 * @param sourceDeviceId A reference to a string of output virtual audio device id.
-			 * @param targetDeviceId A reference to a string of input virtual audio device id.
+			 * @param sourceDeviceId A reference to a string of an output virtual audio device id.
+			 * @param targetDeviceId A reference to a string of an input virtual audio device id.
 			 * @return bool
 			 */
 			bool connectAudioDevices (const std::string & sourceDeviceId, const std::string & targetDeviceId) noexcept;
@@ -402,7 +402,7 @@ namespace EmEn::AVConsole
 			bool createDefaultSpeaker (Audio::Manager & audioManager, Settings & settings) noexcept;
 
 			/**
-			 * @brief Clears all device from the console.
+			 * @brief Clears all devices from the console.
 			 * @return void
 			 */
 			void clear () noexcept;
@@ -417,14 +417,14 @@ namespace EmEn::AVConsole
 			void onRegisterToConsole () noexcept override;
 
 			/**
-			 * @brief Selects automatically a primary input video device.
+			 * @brief Automatically selects a primary input video device.
 			 * @note If a primary device is already selected, the function won't change anything.
 			 * @return bool
 			 */
 			bool autoSelectPrimaryInputVideoDevice () noexcept;
 
 			/**
-			 * @brief Selects automatically a primary input audio device.
+			 * @brief Automatically selects a primary input audio device.
 			 * @note If a primary device is already selected, the function won't change anything.
 			 * @return bool
 			 */

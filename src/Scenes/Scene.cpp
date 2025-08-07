@@ -1359,9 +1359,7 @@ namespace EmEn::Scenes
 			default:
 				if constexpr ( ObserverDebugEnabled )
 				{
-					const auto node = std::any_cast< std::shared_ptr< Node > >(data);
-
-					TraceDebug{ClassId} << "Event #" << notificationCode << " from '" << node->name() << "' ignored.";
+					TraceDebug{ClassId} << "Event #" << notificationCode << " from a Node ignored.";
 				}
 				return false;
 		}
@@ -1493,9 +1491,7 @@ namespace EmEn::Scenes
 			default:
 				if constexpr ( ObserverDebugEnabled )
 				{
-					const auto component = std::any_cast< std::shared_ptr< Component::Abstract > >(data);
-
-					TraceDebug{ClassId} << "Event #" << notificationCode << " from '" << component->name() << "' ignored.";
+					TraceDebug{ClassId} << "Event #" << notificationCode << " from an entity component ignored.";
 				}
 				return false;
 		}

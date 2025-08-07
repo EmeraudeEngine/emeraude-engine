@@ -42,21 +42,12 @@ namespace EmEn::Graphics::Material
 	void
 	Interface::enableBlendingFromJson (const Json::Value & data) noexcept
 	{
-		const auto blendingModeStr = FastJSON::getString(data, JKBlendingMode, NormalBlendingString);
+		const auto blendingMode = Material::getBlendingModeFromJSON(data);
 
-		if ( blendingModeStr.empty() )
+		if ( blendingMode && blendingMode != BlendingMode::None )
 		{
-			return;
+			this->enableBlending(blendingMode.value());
 		}
-
-		const auto blendingMode = to_BlendingMode(blendingModeStr);
-
-		if ( blendingMode == BlendingMode::None )
-		{
-			return;
-		}
-
-		this->enableBlending(blendingMode);
 	}
 
 	std::shared_ptr< SharedUniformBuffer >

@@ -263,7 +263,7 @@ namespace EmEn::Resources
 				{
 					m_status = Status::Loaded;
 
-					this->notify(LoadFinished);
+					this->notify(LoadFinished, this->name());
 
 					if ( s_verboseEnabled )
 					{
@@ -286,7 +286,7 @@ namespace EmEn::Resources
 				{
 					m_status = Status::Failed;
 
-					this->notify(LoadFailed);
+					this->notify(LoadFailed, this->name());
 
 					if ( s_verboseEnabled )
 					{
@@ -361,7 +361,7 @@ namespace EmEn::Resources
 		{
 			m_status = Status::Failed;
 
-			this->notify(LoadFailed);
+			this->notify(LoadFailed, this->name());
 
 			TraceError{TracerTag} << "Resource '" << this->name() << "' (" << this << ") failed to load ...";
 		}
@@ -386,16 +386,16 @@ namespace EmEn::Resources
 	bool
 	ResourceTrait::load (const std::filesystem::path & filepath) noexcept
 	{
-		Json::Value root;
+		const auto root = FastJSON::getRootFromFile(filepath);
 
-		if ( !FastJSON::getRootFromFile(filepath, root) )
+		if ( !root )
 		{
 			TraceError{TracerTag} << "Unable to parse the resource file " << filepath << " !" "\n";
 
 			/* NOTE: Set status here. */
 			m_status = Status::Failed;
 
-			this->notify(LoadFailed);
+			this->notify(LoadFailed, this->name());
 
 			return false;
 		}
@@ -403,9 +403,9 @@ namespace EmEn::Resources
 		/* Checks if additional stores before loading (optional) */
 		auto * manager = Manager::instance();
 
-		manager->stores().update(root, manager->verbosityEnabled());
+		manager->stores().update(root.value(), manager->verbosityEnabled());
 
-		return this->load(root);
+		return this->load(root.value());
 	}
 
 	std::string

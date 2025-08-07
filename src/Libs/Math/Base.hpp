@@ -51,79 +51,79 @@ namespace EmEn::Libs::Math
 
 	/**
 	 * @brief Archimedes's constant.
-	 * @tparam float_t The type of floating point number. Default float.
+	 * @tparam number_t The type of floating point number. Default float.
 	 */
-	template< typename float_t = float >
-	requires (std::is_floating_point_v< float_t >)
-	[[deprecated("Use std::numbers::pi_v< float_t > instead !")]]
-	constexpr float_t Pi = static_cast< float_t >(3.14159265358979323846264338327950288);
+	template< typename number_t = float >
+	requires (std::is_floating_point_v< number_t >)
+	[[deprecated("Use std::numbers::pi_v< number_t > instead !")]]
+	constexpr number_t Pi = static_cast< number_t >(3.14159265358979323846264338327950288);
 
 	/**
 	 * @brief Constant for the golden ratio.
 	 * @note (A + B) / A = A / B ('A' must be the biggest) or (1 + std::sqrt(5)) / 2
-	 * @tparam float_t The type of floating point number. Default float.
+	 * @tparam number_t The type of floating point number. Default float.
 	 */
-	template< typename float_t = float >
-	requires (std::is_floating_point_v< float_t >)
-	[[deprecated("Use std::numbers::phi_v< float_t > instead !")]]
-	constexpr float_t Phi = static_cast< float_t >(1.61803398874989484820458683436563811);
+	template< typename number_t = float >
+	requires (std::is_floating_point_v< number_t >)
+	[[deprecated("Use std::numbers::phi_v< number_t > instead !")]]
+	constexpr number_t Phi = static_cast< number_t >(1.61803398874989484820458683436563811);
 
 	/**
 	 * @brief Euleur's constant.
-	 * @tparam float_t The type of floating point number. Default float.
+	 * @tparam number_t The type of floating point number. Default float.
 	 */
-	template< typename float_t = float >
-	requires (std::is_floating_point_v< float_t >)
-	[[deprecated("Use std::numbers::e_v< float_t > instead !")]]
-	constexpr float_t e = static_cast< float_t >(2.71828182845904523536028747135266249);
+	template< typename number_t = float >
+	requires (std::is_floating_point_v< number_t >)
+	[[deprecated("Use std::numbers::e_v< number_t > instead !")]]
+	constexpr number_t e = static_cast< number_t >(2.71828182845904523536028747135266249);
 
 	/**
 	 * @brief Gets the pi constant.
-	 * @tparam float_t The floating point number type. Default float.
-	 * @return float_t
+	 * @tparam number_t The floating point number type. Default float.
+	 * @return number_t
 	 */
-	template< typename float_t = float >
+	template< typename number_t = float >
 	[[nodiscard]]
-	[[deprecated("Use std::numbers::pi_v< float_t > instead !")]]
-	float_t
-	getPi () noexcept requires (std::is_floating_point_v< float_t >)
+	[[deprecated("Use std::numbers::pi_v< number_t > instead !")]]
+	number_t
+	getPi () noexcept requires (std::is_floating_point_v< number_t >)
 	{
-		return std::atan(static_cast< float_t >(1)) * 4;
+		return std::atan(static_cast< number_t >(1)) * 4;
 	}
 
 	/**
 	 * @brief Gets the gold number.
-	 * @tparam float_t The type of floating point number. Default float.
-	 * @return float_t
+	 * @tparam number_t The type of floating point number. Default float.
+	 * @return number_t
 	 */
-	template< typename float_t = float >
+	template< typename number_t = float >
 	[[nodiscard]]
-	[[deprecated("Use std::numbers::phi_v< float_t > instead !")]]
-	float_t
-	getPhi () noexcept requires (std::is_floating_point_v< float_t >)
+	[[deprecated("Use std::numbers::phi_v< number_t > instead !")]]
+	number_t
+	getPhi () noexcept requires (std::is_floating_point_v< number_t >)
 	{
-		return (1 + std::sqrt(static_cast< float_t >(5))) * static_cast< float_t >(0.5);
+		return (1 + std::sqrt(static_cast< number_t >(5))) * static_cast< number_t >(0.5);
 	}
 
 	/**
 	 * @brief Gets the Euleur's constant.
-	 * @tparam float_t The type of floating point number. Default float.
-	 * @return float_t
+	 * @tparam number_t The type of floating point number. Default float.
+	 * @return number_t
 	 */
-	template< typename float_t = float >
+	template< typename number_t = float >
 	[[nodiscard]]
-	[[deprecated("Use std::numbers::e_v< float_t > instead !")]]
-	float_t
-	getE (int trial = 4) noexcept requires (std::is_floating_point_v< float_t >)
+	[[deprecated("Use std::numbers::e_v< number_t > instead !")]]
+	number_t
+	getE (int trial = 4) noexcept requires (std::is_floating_point_v< number_t >)
 	{
 		auto euler = [] (const int number) {
-			return static_cast< float_t >(std::pow(1 + 1.0 / number, number));
+			return static_cast< number_t >(std::pow(1 + 1.0 / number, number));
 		};
 
-		float_t tmpA = euler(1);
-		float_t tmpB = euler(2);
+		number_t tmpA = euler(1);
+		number_t tmpB = euler(2);
 
-		while ( std::abs(tmpA - tmpB) > static_cast< float_t >(1e-8) )
+		while ( std::abs(tmpA - tmpB) > static_cast< number_t >(1e-8) )
 		{
 			tmpA = tmpB;
 
@@ -169,32 +169,32 @@ namespace EmEn::Libs::Math
 
 	/**
 	 * @brief Turns degree value into radian value.
-	 * @tparam float_t The type of floating point number. Default float.
+	 * @tparam number_t The type of floating point number. Default float.
 	 * @param degree The angle to convert in radians.
-	 * @return float_t
+	 * @return number_t
 	 */
-	template< typename float_t = float >
+	template< typename number_t = float >
 	[[nodiscard]]
 	constexpr
-	float_t
-	Radian (float_t degree) noexcept requires (std::is_floating_point_v< float_t >)
+	number_t
+	Radian (number_t degree) noexcept requires (std::is_floating_point_v< number_t >)
 	{
-		return degree * std::numbers::pi_v< float_t > / HalfRevolution< float_t >;
+		return degree * std::numbers::pi_v< number_t > / HalfRevolution< number_t >;
 	}
 
 	/**
 	 * @brief Turns radian value into degree value.
-	 * @tparam float_t The type of floating point number. Default float.
+	 * @tparam number_t The type of floating point number. Default float.
 	 * @param radian The angle to convert in degrees.
-	 * @return float_t
+	 * @return number_t
 	 */
-	template< typename float_t = float>
+	template< typename number_t = float>
 	[[nodiscard]]
 	constexpr
-	float_t
-	Degree (float_t radian) noexcept requires (std::is_floating_point_v< float_t >)
+	number_t
+	Degree (number_t radian) noexcept requires (std::is_floating_point_v< number_t >)
 	{
-		return radian / std::numbers::pi_v< float_t > * HalfRevolution< float_t >;
+		return radian / std::numbers::pi_v< number_t > * HalfRevolution< number_t >;
 	}
 
 	/**
@@ -227,15 +227,15 @@ namespace EmEn::Libs::Math
 
 	/**
 	 * @brief Clamps a value between "0.0" and "1.0".
-	 * @tparam float_t The type of floating point number. Default float.
+	 * @tparam number_t The type of floating point number. Default float.
 	 * @param value The value.
-	 * @return float_t
+	 * @return number_t
 	 */
-	template< typename float_t = float >
+	template< typename number_t = float >
 	[[nodiscard]]
 	constexpr
-	float_t
-	clampToUnit (float_t value) noexcept requires (std::is_floating_point_v< float_t >)
+	number_t
+	clampToUnit (number_t value) noexcept requires (std::is_floating_point_v< number_t >)
 	{
 		if ( value < 0 )
 		{
@@ -252,17 +252,17 @@ namespace EmEn::Libs::Math
 
 	/**
 	 * @brief Clamps a radian value to one cycle.
-	 * @tparam float_t The type of floating point number. Default float.
+	 * @tparam number_t The type of floating point number. Default float.
 	 * @param radian A reference to the value.
 	 * @return bool
 	 */
-	template< typename float_t = float >
+	template< typename number_t = float >
 	[[nodiscard]]
 	constexpr
 	bool
-	clampRadian (float_t & radian) noexcept requires (std::is_floating_point_v< float_t >)
+	clampRadian (number_t & radian) noexcept requires (std::is_floating_point_v< number_t >)
 	{
-		const auto limit = Radian(FullRevolution< float_t >);
+		const auto limit = Radian(FullRevolution< number_t >);
 
 		/* Too high */
 		if ( radian > limit )
@@ -286,17 +286,17 @@ namespace EmEn::Libs::Math
 
 	/**
 	 * @brief Clamps a radian value to one cycle.
-	 * @tparam float_t The type of floating point number. Default float.
+	 * @tparam number_t The type of floating point number. Default float.
 	 * @param radian The angle in radian.
 	 * @return bool
 	 */
-	template< typename float_t = float >
+	template< typename number_t = float >
 	[[nodiscard]]
 	constexpr
-	float_t
-	getClampedRadian (float_t radian) noexcept requires (std::is_floating_point_v< float_t >)
+	number_t
+	getClampedRadian (number_t radian) noexcept requires (std::is_floating_point_v< number_t >)
 	{
-		const auto limit = Radian(FullRevolution< float_t >);
+		const auto limit = Radian(FullRevolution< number_t >);
 
 		/* Too high */
 		if ( radian > limit )
@@ -317,14 +317,14 @@ namespace EmEn::Libs::Math
 	/**
 	 * @brief Performs cotan of an angle in degree.
 	 * @todo Can be marked 'constexpr' in C++23
-	 * @tparam float_t The type of floating point number. Default float.
+	 * @tparam number_t The type of floating point number. Default float.
 	 * @param degree The angle to compute.
-	 * @return float_t
+	 * @return number_t
 	 */
-	template< typename float_t = float >
+	template< typename number_t = float >
 	[[nodiscard]]
-	float_t
-	cotan (float_t degree) noexcept requires (std::is_floating_point_v< float_t >)
+	number_t
+	cotan (number_t degree) noexcept requires (std::is_floating_point_v< number_t >)
 	{
 		degree = Radian(degree);
 
@@ -334,32 +334,32 @@ namespace EmEn::Libs::Math
 	/**
 	 * @brief Performs fast cotan of an angle in degree.
 	 * @todo Can be marked 'constexpr' in C++23
-	 * @tparam float_t The type of floating point number. Default float.
+	 * @tparam number_t The type of floating point number. Default float.
 	 * @param degree The angle to compute.
-	 * @return float_t
+	 * @return number_t
 	 */
-	template< typename float_t = float >
+	template< typename number_t = float >
 	[[nodiscard]]
-	float_t
-	fastCotan (float_t degree) noexcept requires (std::is_floating_point_v< float_t >)
+	number_t
+	fastCotan (number_t degree) noexcept requires (std::is_floating_point_v< number_t >)
 	{
-		return std::tan(Radian< float_t >(QuartRevolution< float_t >) - Radian(degree));
+		return std::tan(Radian< number_t >(QuartRevolution< number_t >) - Radian(degree));
 	}
 
 	/**
 	 * @brief Performs a linear interpolation between values.
 	 * @tparam number_t The type of number. Default float.
-	 * @tparam scale_float_t The type of floating point number for the scale. Default float.
+	 * @tparam scale_number_t The type of floating point number for the scale. Default float.
 	 * @param operandA The operand A.
 	 * @param operandB The operand B.
 	 * @param factor The interpolation factor from 0.0 to 1.0.
 	 * @return number_t
 	 */
-	template< typename number_t = float, typename scale_float_t = float >
+	template< typename number_t = float, typename scale_number_t = float >
 	[[nodiscard]]
 	constexpr
 	number_t
-	linearInterpolation (number_t operandA, number_t operandB, scale_float_t factor) noexcept requires (std::is_arithmetic_v< number_t >, std::is_floating_point_v< scale_float_t >)
+	linearInterpolation (number_t operandA, number_t operandB, scale_number_t factor) noexcept requires (std::is_arithmetic_v< number_t >, std::is_floating_point_v< scale_number_t >)
 	{
 		return operandA + (operandB - operandA) * factor;
 	}
@@ -368,19 +368,19 @@ namespace EmEn::Libs::Math
 	 * @brief Performs a cosine interpolation between values.
 	 * @todo Can be marked 'constexpr' in C++23
 	 * @tparam number_t The type of number. Default float.
-	 * @tparam scale_float_t The type of floating point number for the scale. Default float.
+	 * @tparam scale_number_t The type of floating point number for the scale. Default float.
 	 * @param operandA The first value.
 	 * @param operandB The second value.
 	 * @param factor The interpolation factor from 0.0 to 1.0.
 	 * @return number_t
 	 */
-	template< typename number_t = float, typename scale_float_t = float >
+	template< typename number_t = float, typename scale_number_t = float >
 	[[nodiscard]]
 	number_t
-	cosineInterpolation (number_t operandA, number_t operandB, scale_float_t factor) noexcept requires (std::is_arithmetic_v< number_t >, std::is_floating_point_v< scale_float_t >)
+	cosineInterpolation (number_t operandA, number_t operandB, scale_number_t factor) noexcept requires (std::is_arithmetic_v< number_t >, std::is_floating_point_v< scale_number_t >)
 	{
 		/* Cosine version only modifies 'factor' before performing a simple linear interpolation. */
-		factor = (static_cast< scale_float_t >(1) - std::cos(factor * std::numbers::pi_v< scale_float_t >)) * static_cast< scale_float_t >(0.5);
+		factor = (static_cast< scale_number_t >(1) - std::cos(factor * std::numbers::pi_v< scale_number_t >)) * static_cast< scale_number_t >(0.5);
 
 		return linearInterpolation(operandA, operandB, factor);
 	}
@@ -388,7 +388,7 @@ namespace EmEn::Libs::Math
 	/**
 	 * @brief Performs a cubic interpolation between values.
 	 * @tparam number_t The type of number. Default float.
-	 * @tparam scale_float_t The type of floating point number for the scale. Default float.
+	 * @tparam scale_number_t The type of floating point number for the scale. Default float.
 	 * @param valueA The first value.
 	 * @param valueB The second value.
 	 * @param valueC The third value.
@@ -396,10 +396,10 @@ namespace EmEn::Libs::Math
 	 * @param factor The interpolation factor from 0.0 to 1.0.
 	 * @return number_t
 	 */
-	template< typename number_t = float, typename scale_float_t = float >
+	template< typename number_t = float, typename scale_number_t = float >
 	[[nodiscard]]
 	number_t
-	cubicInterpolation (number_t valueA, number_t valueB, number_t valueC, number_t valueD, scale_float_t factor) noexcept requires (std::is_arithmetic_v< number_t >, std::is_floating_point_v< scale_float_t >)
+	cubicInterpolation (number_t valueA, number_t valueB, number_t valueC, number_t valueD, scale_number_t factor) noexcept requires (std::is_arithmetic_v< number_t >, std::is_floating_point_v< scale_number_t >)
 	{
 		const auto tmpA = valueD - valueC - valueA + valueB;
 		const auto tmpB = valueA - valueB - tmpA;
@@ -445,7 +445,7 @@ namespace EmEn::Libs::Math
 	/**
 	 * @brief Performs a cubic (Catmull-Rom) interpolation between values.
 	 * @tparam number_t The type of number. Default float.
-	 * @tparam scale_float_t The type of floating point number for the scale. Default float.
+	 * @tparam scale_number_t The type of floating point number for the scale. Default float.
 	 * @param valueA The first value.
 	 * @param valueB The second value.
 	 * @param valueC The third value.
@@ -453,14 +453,14 @@ namespace EmEn::Libs::Math
 	 * @param factor The interpolation factor from 0.0 to 1.0.
 	 * @return number_t
 	 */
-	template< typename number_t = float, typename scale_float_t = float >
+	template< typename number_t = float, typename scale_number_t = float >
 	[[nodiscard]]
 	number_t
-	cubicCatmullRomInterpolation (number_t valueA, number_t valueB, number_t valueC, number_t valueD, scale_float_t factor) noexcept requires (std::is_arithmetic_v< number_t >, std::is_floating_point_v< scale_float_t >)
+	cubicCatmullRomInterpolation (number_t valueA, number_t valueB, number_t valueC, number_t valueD, scale_number_t factor) noexcept requires (std::is_arithmetic_v< number_t >, std::is_floating_point_v< scale_number_t >)
 	{
-		const auto tmpA = static_cast< scale_float_t >(-0.5) * valueA + static_cast< scale_float_t >(1.5) * valueB - static_cast< scale_float_t >(1.5) * valueC + static_cast< scale_float_t >(0.5) * valueD;
-		const auto tmpB = valueA - static_cast< scale_float_t >(2.5) * valueB + static_cast< scale_float_t >(2.0) * valueC - static_cast< scale_float_t >(0.5) * valueD;
-		const auto tmpC = static_cast< scale_float_t >(-0.5) * valueA + static_cast< scale_float_t >(0.5) * valueC;
+		const auto tmpA = static_cast< scale_number_t >(-0.5) * valueA + static_cast< scale_number_t >(1.5) * valueB - static_cast< scale_number_t >(1.5) * valueC + static_cast< scale_number_t >(0.5) * valueD;
+		const auto tmpB = valueA - static_cast< scale_number_t >(2.5) * valueB + static_cast< scale_number_t >(2.0) * valueC - static_cast< scale_number_t >(0.5) * valueD;
+		const auto tmpC = static_cast< scale_number_t >(-0.5) * valueA + static_cast< scale_number_t >(0.5) * valueC;
 		const auto tmpD = valueB;
 
 #ifdef OPTIMIZED
@@ -475,7 +475,7 @@ namespace EmEn::Libs::Math
 	/**
 	 * @brief Performs a Hermite interpolation between values.
 	 * @tparam number_t The type of number. Default float.
-	 * @tparam scale_float_t The type of floating point number for the scale. Default float.
+	 * @tparam scale_number_t The type of floating point number for the scale. Default float.
 	 * @param valueA The first value.
 	 * @param valueB The second value.
 	 * @param valueC The third value.
@@ -485,24 +485,24 @@ namespace EmEn::Libs::Math
 	 * @param bias 0 is even, positive is towards first segment, negative towards the other.
 	 * @return number_t
 	 */
-	template< typename number_t = float, typename scale_float_t = float >
+	template< typename number_t = float, typename scale_number_t = float >
 	[[nodiscard]]
 	number_t
-	hermiteInterpolate (number_t valueA, number_t valueB, number_t valueC, number_t valueD, scale_float_t factor, scale_float_t tension, scale_float_t bias) noexcept requires (std::is_arithmetic_v< number_t >, std::is_floating_point_v< scale_float_t >)
+	hermiteInterpolate (number_t valueA, number_t valueB, number_t valueC, number_t valueD, scale_number_t factor, scale_number_t tension, scale_number_t bias) noexcept requires (std::is_arithmetic_v< number_t >, std::is_floating_point_v< scale_number_t >)
 	{
 		const auto factor2 = factor * factor;
 		const auto factor3 = factor2 * factor;
 
-		const auto tmpA = static_cast< scale_float_t >(2.0) * factor3 - static_cast< scale_float_t >(3.0) * factor2 + static_cast< scale_float_t >(1.0);
-		const auto tmpB = factor3 - static_cast< scale_float_t >(2.0) * factor2 + factor;
+		const auto tmpA = static_cast< scale_number_t >(2.0) * factor3 - static_cast< scale_number_t >(3.0) * factor2 + static_cast< scale_number_t >(1.0);
+		const auto tmpB = factor3 - static_cast< scale_number_t >(2.0) * factor2 + factor;
 		const auto tmpC = factor3 - factor2;
-		const auto tmpD = - static_cast< scale_float_t >(2.0) * factor3 + static_cast< scale_float_t >(3.0) * factor2;
+		const auto tmpD = - static_cast< scale_number_t >(2.0) * factor3 + static_cast< scale_number_t >(3.0) * factor2;
 
-		auto mult0 = (valueB - valueA) * (static_cast< scale_float_t >(1.0) + bias) * (static_cast< scale_float_t >(1.0) - tension) * static_cast< scale_float_t >(0.5);
-		mult0 += (valueC - valueB) * (static_cast< scale_float_t >(1.0) - bias) * (static_cast< scale_float_t >(1.0) - tension) * static_cast< scale_float_t >(0.5);
+		auto mult0 = (valueB - valueA) * (static_cast< scale_number_t >(1.0) + bias) * (static_cast< scale_number_t >(1.0) - tension) * static_cast< scale_number_t >(0.5);
+		mult0 += (valueC - valueB) * (static_cast< scale_number_t >(1.0) - bias) * (static_cast< scale_number_t >(1.0) - tension) * static_cast< scale_number_t >(0.5);
 
-		auto mult1 = (valueC - valueB) * (static_cast< scale_float_t >(1.0) + bias) * (static_cast< scale_float_t >(1.0) - tension) * static_cast< scale_float_t >(0.5);
-		mult1 += (valueD - valueC) * (static_cast< scale_float_t >(1.0) - bias) * (static_cast< scale_float_t >(1.0) - tension) * static_cast< scale_float_t >(0.5);
+		auto mult1 = (valueC - valueB) * (static_cast< scale_number_t >(1.0) + bias) * (static_cast< scale_number_t >(1.0) - tension) * static_cast< scale_number_t >(0.5);
+		mult1 += (valueD - valueC) * (static_cast< scale_number_t >(1.0) - bias) * (static_cast< scale_number_t >(1.0) - tension) * static_cast< scale_number_t >(0.5);
 
 		return tmpA * valueB + tmpB * mult0 + tmpC * mult1 + tmpD * valueC;
 	}
@@ -526,52 +526,52 @@ namespace EmEn::Libs::Math
 
 	/**
 	 * @brief Computes a circle circumference.
-	 * @tparam float_t The type of floating point number. Default float.
+	 * @tparam number_t The type of floating point number. Default float.
 	 * @param radius The radius.
-	 * @return float_t
+	 * @return number_t
 	 */
-	template< typename float_t = float >
+	template< typename number_t = float >
 	[[nodiscard]]
 	constexpr
-	float_t
-	circleCircumference (float_t radius) noexcept requires (std::is_floating_point_v< float_t >)
+	number_t
+	circleCircumference (number_t radius) noexcept requires (std::is_floating_point_v< number_t >)
 	{
-		return radius > 0 ? 2 * std::numbers::pi_v< float_t > * radius : 0;
+		return radius > 0 ? 2 * std::numbers::pi_v< number_t > * radius : 0;
 	}
 
 	/**
 	 * @brief Computes a circle area.
-	 * @tparam float_t The type of floating point number. Default float.
+	 * @tparam number_t The type of floating point number. Default float.
 	 * @param radius The radius.
-	 * @return float_t
+	 * @return number_t
 	 */
-	template< typename float_t = float >
+	template< typename number_t = float >
 	[[nodiscard]]
 	constexpr
-	float_t
-	circleArea (float_t radius) noexcept requires (std::is_floating_point_v< float_t >)
+	number_t
+	circleArea (number_t radius) noexcept requires (std::is_floating_point_v< number_t >)
 	{
-		return radius > 0 ? std::numbers::pi_v< float_t > * (radius * radius) : 0;
+		return radius > 0 ? std::numbers::pi_v< number_t > * (radius * radius) : 0;
 	}
 
 	/**
 	 * @brief Computes a sphere volume.
 	 * @todo Can be marked 'constexpr' in C++26 (std::pow)
-	 * @tparam float_t The type of floating point number. Default float.
+	 * @tparam number_t The type of floating point number. Default float.
 	 * @param radius The radius.
-	 * @return float_t
+	 * @return number_t
 	 */
-	template< typename float_t = float >
+	template< typename number_t = float >
 	[[nodiscard]]
-	float_t
-	sphereVolume (float_t radius) noexcept requires (std::is_floating_point_v< float_t >)
+	number_t
+	sphereVolume (number_t radius) noexcept requires (std::is_floating_point_v< number_t >)
 	{
 		if ( radius <= 0 )
 		{
 			return 0;
 		}
 
-		return static_cast< float_t >(4) / static_cast< float_t >(3) * std::numbers::pi_v< float_t > * std::pow(radius, 3);
+		return static_cast< number_t >(4) / static_cast< number_t >(3) * std::numbers::pi_v< number_t > * std::pow(radius, 3);
 	}
 
 	/**
@@ -608,32 +608,32 @@ namespace EmEn::Libs::Math
 
 	/**
 	 * @brief Returns the reciprocal.
-	 * @tparam float_t The type of floating point number. Default float.
+	 * @tparam number_t The type of floating point number. Default float.
 	 * @param value The value.
-	 * @return float_t
+	 * @return number_t
 	 */
-	template< typename float_t = float >
+	template< typename number_t = float >
 	[[nodiscard]]
 	constexpr
-	float_t
-	reciprocal (float_t value) noexcept requires (std::is_floating_point_v< float_t >)
+	number_t
+	reciprocal (number_t value) noexcept requires (std::is_floating_point_v< number_t >)
 	{
-		return static_cast< float_t >(1) / value;
+		return static_cast< number_t >(1) / value;
 	}
 
 	/**
 	 * @brief Returns the reciprocal square root.
 	 * @todo Can be marked 'constexpr' in C++26 (std::sqrt)
-	 * @tparam float_t The type of floating point number. Default float.
+	 * @tparam number_t The type of floating point number. Default float.
 	 * @param value The value.
-	 * @return float_t
+	 * @return number_t
 	 */
-	template< typename float_t = float >
+	template< typename number_t = float >
 	[[nodiscard]]
-	float_t
-	reciprocalSquareRoot (float_t value) requires (std::is_floating_point_v< float_t >)
+	number_t
+	reciprocalSquareRoot (number_t value) requires (std::is_floating_point_v< number_t >)
 	{
-		return static_cast< float_t >(1) / std::sqrt(value);
+		return static_cast< number_t >(1) / std::sqrt(value);
 	}
 
 	/**

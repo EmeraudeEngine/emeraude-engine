@@ -65,6 +65,15 @@ namespace EmEn
 
 namespace EmEn::Graphics::RenderTarget
 {
+	/** @brief Cubemap render strategy enumeration. */
+	enum class CubemapRenderStrategy : uint8_t
+	{
+		/** @brief Render each face of the cubemap in a separate render pass. (6 passes total). */
+		Sequential,
+		/** @brief Renders all 6 faces in a single pass using a Geometry Shader. (1 pass only). */
+		GeometryShader
+	};
+
 	/**
 	 * @brief The base class for all render targets.
 	 * @extends EmEn::AVConsole::AbstractVirtualDevice This is a virtual video device.

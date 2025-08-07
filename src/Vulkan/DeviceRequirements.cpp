@@ -39,7 +39,7 @@ namespace EmEn::Vulkan
 	using namespace EmEn::Libs;
 
 	void
-	DeviceRequirements::requireGraphicsQueues (const std::vector< float > & queues, const std::vector< float > & transferQueues) noexcept
+	DeviceRequirements::requireGraphicsQueues (const StaticVector< float, 16 > & queues, const StaticVector< float, 16 > & transferQueues) noexcept
 	{
 		if ( queues.empty() )
 		{
@@ -64,7 +64,7 @@ namespace EmEn::Vulkan
 	}
 
 	void
-	DeviceRequirements::requirePresentationQueues (const std::vector< float > & queues, VkSurfaceKHR surface, bool separate) noexcept
+	DeviceRequirements::requirePresentationQueues (const StaticVector< float, 16 > & queues, VkSurfaceKHR surface, bool separate) noexcept
 	{
 		if ( queues.empty() )
 		{
@@ -89,7 +89,7 @@ namespace EmEn::Vulkan
 	}
 
 	void
-	DeviceRequirements::requireComputeQueues (const std::vector< float > & queues, const std::vector< float > & transferQueues) noexcept
+	DeviceRequirements::requireComputeQueues (const StaticVector< float, 16 > & queues, const StaticVector< float, 16 > & transferQueues) noexcept
 	{
 		if ( queues.empty() )
 		{
@@ -114,7 +114,7 @@ namespace EmEn::Vulkan
 	}
 
 	void
-	DeviceRequirements::requireTransferQueues (const std::vector< float > & queues) noexcept
+	DeviceRequirements::requireTransferQueues (const StaticVector< float, 16 > & queues) noexcept
 	{
 		if ( queues.empty() )
 		{
@@ -146,7 +146,7 @@ namespace EmEn::Vulkan
 	std::ostream &
 	operator<< (std::ostream & out, const DeviceRequirements & obj)
 	{
-		auto printInfo = [&out] (const char * title, const std::vector< float > & queues) {
+		auto printInfo = [&out] (const char * title, const StaticVector< float, 16 > & queues) {
 			out << title << " : " << queues.size();
 
 			if ( !queues.empty() )
