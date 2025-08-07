@@ -103,7 +103,7 @@ namespace EmEn
 
 		m_primaryServicesEnabled.clear();
 
-		/* FIXME: This should be here! */
+		/* FIXME: This shouldn't be here! */
 		m_resourceManager.unloadUnusedResources();
 
 		m_primaryServices.terminate();
@@ -235,7 +235,8 @@ namespace EmEn
 
 		/* NOTE: Create the logic loop and the rendering loop into threads
 		 * automatically joined at the end of this function.
-		 * TODO: Use std::jthread instead to auto join threads at the end. */
+		 * TODO: Use std::jthread instead to auto join threads at the end.
+		 * NOTE: macOS do not provide std::jthread. */
 		std::thread logicsThread{[this] {
 			this->logicsTask();
 		}};
