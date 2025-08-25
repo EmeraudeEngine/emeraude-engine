@@ -1005,14 +1005,14 @@ namespace EmEn::Libs
 	 * @param rhs The right-hand side StaticVector.
 	 * @return A std::strong_ordering value indicating the result of the comparison.
 	 */
-	template< typename data_t, std::size_t max_capacity >
+	/*template< typename data_t, std::size_t max_capacity >
 	[[nodiscard]]
 	constexpr
 	auto
 	operator<=> (const StaticVector< data_t, max_capacity > & lhs, const StaticVector< data_t, max_capacity > & rhs)
 	{
 		return std::lexicographical_compare_three_way(lhs.begin(), lhs.end(), rhs.begin(), rhs.end());
-	}
+	}*/
 
 	/**
 	 * @brief Performs an equality comparison between two StaticVector instances.
