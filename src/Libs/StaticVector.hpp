@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* Application configuration */
+#include "emeraude_config.hpp"
+
 /* STL inclusions. */
 #include <cstdlib>
 #include <cstddef>
@@ -1005,14 +1008,28 @@ namespace EmEn::Libs
 	 * @param rhs The right-hand side StaticVector.
 	 * @return A std::strong_ordering value indicating the result of the comparison.
 	 */
-	/*template< typename data_t, std::size_t max_capacity >
+	template< typename data_t, std::size_t max_capacity >
 	[[nodiscard]]
 	constexpr
 	auto
 	operator<=> (const StaticVector< data_t, max_capacity > & lhs, const StaticVector< data_t, max_capacity > & rhs)
 	{
+#if IS_MACOS && __MAC_OS_X_VERSION_MAX_ALLOWED < 150000
+		const std::size_t min_size = std::min(lhs.size(), rhs.size());
+
+		for ( std::size_t i = 0; i < min_size; ++i )
+		{
+			if ( auto cmp = lhs[i] <=> rhs[i]; cmp != 0 )
+			{
+				return cmp;
+			}
+		}
+
+		return lhs.size() <=> rhs.size();
+#else
 		return std::lexicographical_compare_three_way(lhs.begin(), lhs.end(), rhs.begin(), rhs.end());
-	}*/
+#endif
+	}
 
 	/**
 	 * @brief Performs an equality comparison between two StaticVector instances.
