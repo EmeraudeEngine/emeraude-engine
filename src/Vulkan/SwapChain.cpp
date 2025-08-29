@@ -416,15 +416,13 @@ namespace EmEn::Vulkan
 			auto & frame = m_frames[imageIndex];
 
 #if IS_MACOS
-			const auto colorBufferId = (std::stringstream{} << "SwapChain-ColorBuffer" << imageIndex).str();
-			const auto depthBufferId = (std::stringstream{} << "SwapChain-DepthBuffer" << imageIndex).str();
+			const auto identifier = (std::stringstream{} << "Frame" << imageIndex).str();
 #else
-			const auto colorBufferId = std::format("SwapChain-ColorBuffer{}", imageIndex);
-			const auto depthBufferId = std::format("SwapChain-DepthBuffer{}", imageIndex);
+			const auto identifier = std::format("Frame{}", imageIndex);
 #endif
 
 			/* Color buffer. */
-			if ( !this->createColorBuffer(swapChainImages[imageIndex], frame.colorImage, frame.colorImageView, colorBufferId) )
+			if ( !this->createColorBuffer(swapChainImages[imageIndex], frame.colorImage, frame.colorImageView, identifier) )
 			{
 				TraceFatal{ClassId} << "Unable to create the color buffer #" << imageIndex << " !";
 
@@ -432,7 +430,7 @@ namespace EmEn::Vulkan
 			}
 
 			/* Depth/Stencil buffer. */
-			if ( !this->createDepthStencilBuffer(this->device(), frame.depthStencilImage, frame.depthImageView, frame.stencilImageView, depthBufferId) )
+			if ( !this->createDepthStencilBuffer(this->device(), frame.depthStencilImage, frame.depthImageView, frame.stencilImageView, identifier) )
 			{
 				TraceFatal{ClassId} << "Unable to create the depth buffer #" << imageIndex << " !";
 
@@ -454,9 +452,9 @@ namespace EmEn::Vulkan
 			/* Prepare the framebuffer for attachments. */
 			frame.framebuffer = std::make_unique< Framebuffer >(renderPass, this->extent());
 #if IS_MACOS
-			frame.framebuffer->setIdentifier((std::stringstream{} << "SwapChain-Frame" << imageIndex << "-Framebuffer").str());
+			frame.framebuffer->setIdentifier(ClassId, (std::stringstream{} << "Frame" << imageIndex).str(), "Framebuffer");
 #else
-			frame.framebuffer->setIdentifier(std::format("SwapChain-Frame{}-Framebuffer", imageIndex));
+			frame.framebuffer->setIdentifier(ClassId, std::format("Frame{}", imageIndex), "Framebuffer");
 #endif
 
 			/* Color buffer. */
@@ -566,15 +564,17 @@ namespace EmEn::Vulkan
 	}
 
 	bool
-	SwapChain::createColorBuffer (const VkImage & swapChainImage, std::shared_ptr< Image > & image, std::shared_ptr< ImageView > & imageView, const std::string & purposeId) const noexcept
+	SwapChain::createColorBuffer (const VkImage & swapChainImage, std::shared_ptr< Image > & image, std::shared_ptr< ImageView > & imageView, const std::string & identifier) const noexcept
 	{
+		const auto instanceId = identifier + "ColorBuffer";
+
 		/* NOTE: Create an image from existing data from the swap chain. */
 		image = Image::createFromSwapChain(this->device(), swapChainImage, m_createInfo);
-		image->setIdentifier(purposeId + "-Image");
+		image->setIdentifier(ClassId, instanceId, "Image");
 
 		if ( swapChainImage != image->handle() )
 		{
-			TraceFatal{ClassId} << "Unable to create image '" << purposeId << "' !";
+			TraceFatal{ClassId} << "Unable to create image '" << instanceId << "' !";
 
 			return false;
 		}
@@ -592,11 +592,11 @@ namespace EmEn::Vulkan
 				.layerCount = imageCreateInfo.arrayLayers
 			}
 		);
-		imageView->setIdentifier(purposeId + "-ImageView");
+		imageView->setIdentifier(ClassId, instanceId, "ImageView");
 
 		if ( !imageView->createOnHardware() )
 		{
-			TraceFatal{ClassId} << "Unable to create image view '" << purposeId << "' !";
+			TraceFatal{ClassId} << "Unable to create image view '" << instanceId << "' !";
 
 			return false;
 		}
@@ -605,7 +605,7 @@ namespace EmEn::Vulkan
 	}
 
 	bool
-	SwapChain::createDepthStencilBuffer (const std::shared_ptr< Device > & device, std::shared_ptr< Image > & image, std::shared_ptr< ImageView > & depthImageView, std::shared_ptr< ImageView > & stencilImageView, const std::string & purposeId) noexcept
+	SwapChain::createDepthStencilBuffer (const std::shared_ptr< Device > & device, std::shared_ptr< Image > & image, std::shared_ptr< ImageView > & depthImageView, std::shared_ptr< ImageView > & stencilImageView, const std::string & identifier) noexcept
 	{
 		image = std::make_shared< Image >(
 			device,
@@ -620,11 +620,11 @@ namespace EmEn::Vulkan
 			VK_SAMPLE_COUNT_1_BIT, // Image multi sampling
 			VK_IMAGE_TILING_OPTIMAL // Image tiling
 		);
-		image->setIdentifier(purposeId + "-Image");
+		image->setIdentifier(ClassId, identifier + "DepthStencilBuffer", "Image");
 
 		if ( !image->createOnHardware() )
 		{
-			TraceError{ClassId} << "Unable to create image '" << purposeId << "' !";
+			TraceError{ClassId} << "Unable to create image '" << identifier << "DepthStencilBuffer' !";
 
 			return false;
 		}
@@ -642,11 +642,11 @@ namespace EmEn::Vulkan
 				.layerCount = imageCreateInfo.arrayLayers
 			}
 		);
-		depthImageView->setIdentifier(purposeId + "Depth-ImageView");
+		depthImageView->setIdentifier(ClassId, identifier + "DepthBuffer", "ImageView");
 
 		if ( !depthImageView->createOnHardware() )
 		{
-			TraceFatal{ClassId} << "Unable to create image view '" << purposeId << "' !";
+			TraceFatal{ClassId} << "Unable to create image view '" << identifier << "DepthBuffer' !";
 
 			return false;
 		}
@@ -662,11 +662,11 @@ namespace EmEn::Vulkan
 				.layerCount = imageCreateInfo.arrayLayers
 			}
 		);
-		stencilImageView->setIdentifier(purposeId + "Stencil-ImageView");
+		stencilImageView->setIdentifier(ClassId, identifier + "StencilBuffer", "ImageView");
 
 		if ( !stencilImageView->createOnHardware() )
 		{
-			TraceFatal{ClassId} << "Unable to create image view '" << purposeId << "' !";
+			TraceFatal{ClassId} << "Unable to create image view '" << identifier << "StencilBuffer' !";
 
 			return false;
 		}
@@ -683,9 +683,9 @@ namespace EmEn::Vulkan
 
 			frame.imageAvailableSemaphore = std::make_unique< Sync::Semaphore >(this->device());
 #if IS_MACOS
-			frame.framebuffer->setIdentifier((std::stringstream{} << "SwapChain-ImageAvailable" << imageIndex << "-Semaphore").str());
+			frame.framebuffer->setIdentifier(ClassId, (std::stringstream{} << "Frame" << imageIndex << "ImageAvailable").str(), "Semaphore");
 #else
-			frame.imageAvailableSemaphore->setIdentifier(std::format("SwapChain-ImageAvailable{}-Semaphore", imageIndex));
+			frame.imageAvailableSemaphore->setIdentifier(ClassId, std::format("Frame{}ImageAvailable", imageIndex), "Semaphore");
 #endif
 
 			if ( !frame.imageAvailableSemaphore->createOnHardware() )
@@ -697,9 +697,9 @@ namespace EmEn::Vulkan
 
 			frame.renderFinishedSemaphore = std::make_unique< Sync::Semaphore >(this->device());
 #if IS_MACOS
-			frame.framebuffer->setIdentifier((std::stringstream{} << "SwapChain-RenderFinished" << imageIndex << "-Semaphore").str());
+			frame.framebuffer->setIdentifier(ClassId, (std::stringstream{} << "Frame" << imageIndex << "RenderFinished").str(), "Semaphore");
 #else
-			frame.renderFinishedSemaphore->setIdentifier(std::format("SwapChain-RenderFinished{}-Semaphore", imageIndex));
+			frame.renderFinishedSemaphore->setIdentifier(ClassId, std::format("Frame{}RenderFinished", imageIndex), "Semaphore");
 #endif
 
 			if ( !frame.renderFinishedSemaphore->createOnHardware() )
@@ -711,9 +711,9 @@ namespace EmEn::Vulkan
 
 			frame.inFlightFence = std::make_unique< Sync::Fence >(this->device());
 #if IS_MACOS
-			frame.framebuffer->setIdentifier((std::stringstream{} << "SwapChain-ImageInFlight" << imageIndex << "-Fence").str());
+			frame.framebuffer->setIdentifier(ClassId, (std::stringstream{} << "Frame" << imageIndex << "ImageInFlight").str(), "Fence");
 #else
-			frame.inFlightFence->setIdentifier(std::format("SwapChain-ImageInFlight{}-Fence", imageIndex));
+			frame.inFlightFence->setIdentifier(ClassId, std::format("Frame{}ImageInFlight", imageIndex), "Fence");
 #endif
 
 			if ( !frame.inFlightFence->createOnHardware() )

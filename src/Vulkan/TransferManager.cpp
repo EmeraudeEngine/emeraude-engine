@@ -167,7 +167,7 @@ namespace EmEn::Vulkan
 	TransferManager::createStagingBuffer (size_t bytes) const noexcept
 	{
 		auto buffer = std::make_shared< StagingBuffer >(m_device, bytes);
-		buffer->setIdentifier((std::stringstream{} << "TransferManager-Buffer" << m_stagingBuffers.size() << "-StagingBuffer").str());
+		buffer->setIdentifier(ClassId, (std::stringstream{} << m_stagingBuffers.size() << "Bytes").str(), "StagingBuffer");
 
 		if ( !buffer->createOnHardware() )
 		{

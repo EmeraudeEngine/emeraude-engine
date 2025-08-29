@@ -91,7 +91,7 @@ namespace EmEn::Vulkan
 			}
 
 			m_queues[queueIndex] = std::make_unique< Queue >(queueHandle, m_queueFamilyIndex);
-			m_queues[queueIndex]->setIdentifier((std::stringstream{} << "Device-" << m_queueFamilyIndex << '.' << queueIndex << "-Queue").str());
+			m_queues[queueIndex]->setIdentifier(ClassId, (std::stringstream{} << m_queueFamilyIndex << '.' << queueIndex).str(), "Queue");
 		}
 
 		return true;

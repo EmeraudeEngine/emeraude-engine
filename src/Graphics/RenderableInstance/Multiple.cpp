@@ -307,7 +307,7 @@ namespace EmEn::Graphics::RenderableInstance
 		const auto vertexCount = static_cast< uint32_t >(m_localData.size() / vertexElementCount);
 
 		m_vertexBufferObject = std::make_unique< VertexBufferObject >(transferManager.device(), vertexCount, vertexElementCount);
-		m_vertexBufferObject->setIdentifier("Multiple-ModelVBO-VertexBufferObject");
+		m_vertexBufferObject->setIdentifier(ClassId, "MultipleInstance??", "VertexBufferObject");
 
 		if ( !m_vertexBufferObject->create(transferManager, m_localData) )
 		{

@@ -501,7 +501,7 @@ namespace EmEn::Graphics::RenderTarget
 
 				/* Create a sampler for the texture. */
 				m_sampler = renderer.getSampler(0, 0);
-				m_sampler->setIdentifier(ClassId, this->name(), "RTT-Sampler");
+				m_sampler->setIdentifier(ClassId, this->name(), "Sampler");
 
 				if ( m_sampler == nullptr )
 				{
@@ -643,7 +643,7 @@ namespace EmEn::Graphics::RenderTarget
 						VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
 						VK_IMAGE_LAYOUT_UNDEFINED
 					);
-					m_colorImage->setIdentifier(this->name() + "-Color-Image");
+					m_colorImage->setIdentifier(ClassId, this->name(), "Image");
 					m_colorImage->setCurrentImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
 					if ( !m_colorImage->createOnHardware() )
@@ -665,7 +665,7 @@ namespace EmEn::Graphics::RenderTarget
 							.layerCount = m_colorImage->createInfo().arrayLayers
 						}
 					);
-					m_colorImageView->setIdentifier(this->name() + "-Color-ImageView");
+					m_colorImageView->setIdentifier(ClassId, this->name(), "ImageView");
 
 					if ( !m_colorImageView->createOnHardware() )
 					{
@@ -687,7 +687,7 @@ namespace EmEn::Graphics::RenderTarget
 						VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
 						VK_IMAGE_LAYOUT_UNDEFINED
 					);
-					m_depthStencilImage->setIdentifier(this->name() + "-DepthStencil-Image");
+					m_depthStencilImage->setIdentifier(ClassId, this->name(), "Image");
 					m_depthStencilImage->setCurrentImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
 					if ( !m_depthStencilImage->createOnHardware() )
@@ -711,7 +711,7 @@ namespace EmEn::Graphics::RenderTarget
 								.layerCount = m_depthStencilImage->createInfo().arrayLayers
 							}
 						);
-						m_depthImageView->setIdentifier(this->name() + "-Depth-ImageView");
+						m_depthImageView->setIdentifier(ClassId, this->name(), "ImageView");
 
 						if ( !m_depthImageView->createOnHardware() )
 						{
@@ -735,6 +735,7 @@ namespace EmEn::Graphics::RenderTarget
 								.layerCount = m_depthStencilImage->createInfo().arrayLayers
 							}
 						);
+						m_stencilImageView->setIdentifier(ClassId, this->name(), "ImageView");
 
 						if ( !m_stencilImageView->createOnHardware() )
 						{
@@ -758,7 +759,7 @@ namespace EmEn::Graphics::RenderTarget
 			createFramebuffer (const std::shared_ptr< Vulkan::RenderPass > & renderPass) noexcept
 			{
 				m_framebuffer = std::make_shared< Vulkan::Framebuffer >(renderPass, this->extent());
-				m_framebuffer->setIdentifier(this->name() + "-Main-Framebuffer");
+				m_framebuffer->setIdentifier(ClassId, this->name(), "Framebuffer");
 
 				/* Color buffer. */
 				if ( this->precisions().colorBits() > 0 )

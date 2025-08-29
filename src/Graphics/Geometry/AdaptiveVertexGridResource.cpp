@@ -72,7 +72,7 @@ namespace EmEn::Graphics::Geometry
 		const auto vertexElementCount = getElementCountFromFlags(this->flags());
 
 		m_vertexBufferObject = std::make_unique< VertexBufferObject >(transferManager.device(), static_cast< uint32_t >(m_localData.size()), vertexElementCount);
-		m_vertexBufferObject->setIdentifier(this->name() + "-VBO-VertexBufferObject");
+		m_vertexBufferObject->setIdentifier(ClassId, this->name(), "VertexBufferObject");
 
 		if ( !m_vertexBufferObject->create(transferManager, m_localData) )
 		{
@@ -85,7 +85,7 @@ namespace EmEn::Graphics::Geometry
 
 		/* NOTE: Requesting an IBO using data. */
 		m_indexBufferObject = std::make_unique< IndexBufferObject >(transferManager.device(), static_cast< uint32_t >(m_indices.size()));
-		m_indexBufferObject->setIdentifier(this->name() + "-IBO-IndexBufferObject");
+		m_indexBufferObject->setIdentifier(ClassId, this->name(), "IndexBufferObject");
 
 		if ( !m_indexBufferObject->create(transferManager, m_indices) )
 		{

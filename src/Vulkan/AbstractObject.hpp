@@ -117,25 +117,8 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Sets an identifier to the vulkan to ease the debugging.
-			 * @return void
-			 */
-			void
-			setIdentifier (const std::string & identifier) noexcept
-			{
-				m_identifier = identifier;
-
-				if constexpr ( VulkanTrackingDebugEnabled )
-				{
-					s_tracking[this] = m_identifier;
-
-					std::cout << "[DEBUG:VK_TRACKING] A Vulkan object ('" << m_identifier << "', @" << this << ") is marked !" "\n";
-				}
-			}
-
-			/**
-			 * @brief Sets an identifier to the vulkan to ease the debugging.
 			 * @param classId A string pointer for the class holding the Vulkan object.
-			 * @param instanceId A reference to a string for the instance of the class holding the Vulkan object.
+			 * @param instanceId A reference to a string for the instance identifier.
 			 * @param vulkanObjectName A string pointer for the type of Vulkan object;
 			 * @return void
 			 */
@@ -146,7 +129,14 @@ namespace EmEn::Vulkan
 
 				identifier << classId << '-' << instanceId << '-' << vulkanObjectName;
 
-				this->setIdentifier(identifier.str());
+				m_identifier = identifier.str();
+
+				if constexpr ( VulkanTrackingDebugEnabled )
+				{
+					s_tracking[this] = m_identifier;
+
+					std::cout << "[DEBUG:VK_TRACKING] A Vulkan object ('" << m_identifier << "', @" << this << ") is marked !" "\n";
+				}
 			}
 
 			/**

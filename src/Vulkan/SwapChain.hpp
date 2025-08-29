@@ -380,11 +380,11 @@ namespace EmEn::Vulkan
 			 * @param swapChainImage A reference to a swap-chain image.
 			 * @param image A reference to an image smart pointer.
 			 * @param imageView A reference to an image view smart pointer.
-			 * @param purposeId A reference to a string to identify buffers.
+			 * @param identifier A reference to a string to identify buffers.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool createColorBuffer (const VkImage & swapChainImage, std::shared_ptr< Image > & image, std::shared_ptr< ImageView > & imageView, const std::string & purposeId) const noexcept;
+			bool createColorBuffer (const VkImage & swapChainImage, std::shared_ptr< Image > & image, std::shared_ptr< ImageView > & imageView, const std::string & identifier) const noexcept;
 
 			/**
 			 * @brief Creates a depth+stencil buffer.
@@ -392,11 +392,11 @@ namespace EmEn::Vulkan
 			 * @param image A reference to an image smart pointer.
 			 * @param depthImageView A reference to an image view smart pointer.
 			 * @param stencilImageView A reference to an image view smart pointer.
-			 * @param purposeId A reference to a string to identify buffers.
+			 * @param identifier A reference to a string to identify buffers.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool createDepthStencilBuffer (const std::shared_ptr< Device > & device, std::shared_ptr< Image > & image, std::shared_ptr< ImageView > & depthImageView, std::shared_ptr< ImageView > & stencilImageView, const std::string & purposeId) noexcept override;
+			bool createDepthStencilBuffer (const std::shared_ptr< Device > & device, std::shared_ptr< Image > & image, std::shared_ptr< ImageView > & depthImageView, std::shared_ptr< ImageView > & stencilImageView, const std::string & identifier) noexcept override;
 
 			/**
 			 * @brief Creates the images and the image views for each swap-chain frame.

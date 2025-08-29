@@ -421,7 +421,7 @@ namespace EmEn::Graphics::RenderTarget
 						1,
 						device->findSampleCount(this->precisions().samples())
 					);
-					m_colorImage->setIdentifier(this->id() + "-Color-Image");
+					m_colorImage->setIdentifier(ClassId, this->id(), "Image");
 
 					if ( !m_colorImage->createOnHardware() )
 					{
@@ -442,7 +442,7 @@ namespace EmEn::Graphics::RenderTarget
 							.layerCount = m_colorImage->createInfo().arrayLayers
 						}
 					);
-					m_colorImageView->setIdentifier(this->id() + "-Color-ImageView");
+					m_colorImageView->setIdentifier(ClassId, this->id(), "ImageView");
 
 					if ( !m_colorImageView->createOnHardware() )
 					{
@@ -464,7 +464,7 @@ namespace EmEn::Graphics::RenderTarget
 						VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
 						VK_IMAGE_LAYOUT_UNDEFINED
 					);
-					m_depthStencilImage->setIdentifier(this->id() + "-DepthStencil-Image");
+					m_depthStencilImage->setIdentifier(ClassId, this->id(), "Image");
 
 					if ( !m_depthStencilImage->createOnHardware() )
 					{
@@ -487,7 +487,7 @@ namespace EmEn::Graphics::RenderTarget
 								.layerCount = m_depthStencilImage->createInfo().arrayLayers
 							}
 						);
-						m_depthImageView->setIdentifier(this->id() + "-Depth-ImageView");
+						m_depthImageView->setIdentifier(ClassId, this->id(), "ImageView");
 
 						if ( !m_depthImageView->createOnHardware() )
 						{
@@ -511,7 +511,7 @@ namespace EmEn::Graphics::RenderTarget
 								.layerCount = m_depthStencilImage->createInfo().arrayLayers
 							}
 						);
-						m_stencilImageView->setIdentifier(this->id() + "-Stencil-ImageView");
+						m_stencilImageView->setIdentifier(ClassId, this->id(), "ImageView");
 
 						if ( !m_stencilImageView->createOnHardware() )
 						{
@@ -535,7 +535,7 @@ namespace EmEn::Graphics::RenderTarget
 			createFramebuffer (const std::shared_ptr< Vulkan::RenderPass > & renderPass) noexcept
 			{
 				m_framebuffer = std::make_shared< Vulkan::Framebuffer >(renderPass, this->extent());
-				m_framebuffer->setIdentifier(this->id() + "-Main-Framebuffer");
+				m_framebuffer->setIdentifier(ClassId, this->id(), "Framebuffer");
 
 				/* Color buffer. */
 				if ( this->precisions().colorBits() > 0 )

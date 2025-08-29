@@ -283,7 +283,7 @@ namespace EmEn::Graphics::RenderTarget
 
 				/* Create a sampler for the texture. */
 				m_sampler = renderer.getSampler(0, 0);
-				m_sampler->setIdentifier(this->id() + "-RTT-Sampler");
+				m_sampler->setIdentifier(ClassId, this->id(), "Sampler");
 
 				if ( m_sampler == nullptr )
 				{
@@ -421,7 +421,7 @@ namespace EmEn::Graphics::RenderTarget
 						1,
 						this->isCubemap() ? 6 : 1
 					);
-					m_depthImage->setIdentifier(this->id() + "-Depth-Image");
+					m_depthImage->setIdentifier(ClassId, this->id(), "Image");
 
 					if ( !m_depthImage->createOnHardware() )
 					{
@@ -441,7 +441,7 @@ namespace EmEn::Graphics::RenderTarget
 							.layerCount = m_depthImage->createInfo().arrayLayers /* Must be 1 or 6 (cubemap) */
 						}
 					);
-					m_depthImageView->setIdentifier(this->id() + "-Depth-ImageView");
+					m_depthImageView->setIdentifier(ClassId, this->id(), "ImageView");
 
 					if ( !m_depthImageView->createOnHardware() )
 					{
@@ -465,7 +465,7 @@ namespace EmEn::Graphics::RenderTarget
 			{
 				/* Prepare the framebuffer. */
 				m_framebuffer = std::make_shared< Vulkan::Framebuffer >(renderPass, this->extent());
-				m_framebuffer->setIdentifier(this->id() + "-Main-Framebuffer");
+				m_framebuffer->setIdentifier(ClassId, this->id(), "Framebuffer");
 
 				/* Color buffer. */
 				if ( this->precisions().colorBits() > 0 )

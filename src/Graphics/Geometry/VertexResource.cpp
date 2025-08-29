@@ -107,7 +107,7 @@ namespace EmEn::Graphics::Geometry
 	VertexResource::createVideoMemoryBuffers (TransferManager & transferManager, const std::vector< float > & vertexAttributes, uint32_t vertexCount, uint32_t vertexElementCount) noexcept
 	{
 		m_vertexBufferObject = std::make_unique< VertexBufferObject >(transferManager.device(), vertexCount, vertexElementCount);
-		m_vertexBufferObject->setIdentifier(this->name() + "-VBO-VertexBufferObject");
+		m_vertexBufferObject->setIdentifier(ClassId, this->name(), "VertexBufferObject");
 
 		if ( !m_vertexBufferObject->create(transferManager, vertexAttributes) )
 		{
