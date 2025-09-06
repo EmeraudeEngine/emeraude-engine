@@ -75,9 +75,6 @@ namespace EmEn::Overlay
 			/** @brief Class identifier. */
 			static constexpr auto ClassId{"OverlayManagerService"};
 
-			/** @brief Observable class unique identifier. */
-			static const size_t ClassUID;
-
 			enum NotificationCode
 			{
 				UIScreenCreated,
@@ -104,12 +101,25 @@ namespace EmEn::Overlay
 				this->observe(&m_window);
 			}
 
+			/**
+			 * @brief Returns the unique identifier for this class [Thread-safe].
+			 * @return size_t
+			 */
+			static
+			size_t
+			getClassUID () noexcept
+			{
+				static const size_t classUID = EmEn::Libs::Hash::FNV1a(ClassId);
+
+				return classUID;
+			}
+
 			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
 			[[nodiscard]]
 			size_t
 			classUID () const noexcept override
 			{
-				return ClassUID;
+				return getClassUID();
 			}
 
 			/** @copydoc EmEn::Libs::ObservableTrait::is() const */
@@ -117,7 +127,7 @@ namespace EmEn::Overlay
 			bool
 			is (size_t classUID) const noexcept override
 			{
-				return classUID == ClassUID;
+				return classUID == getClassUID();
 			}
 
 			/** @copydoc EmEn::ServiceInterface::usable() */
@@ -125,7 +135,7 @@ namespace EmEn::Overlay
 			bool
 			usable () const noexcept override
 			{
-				return m_flags[ServiceInitialized];
+				return m_serviceInitialized;
 			}
 
 			/** @copydoc EmEn::Input::KeyboardListenerInterface::onKeyPress() */
@@ -176,7 +186,7 @@ namespace EmEn::Overlay
 			bool
 			isEnabled () const noexcept
 			{
-				return m_flags[Enabled];
+				return m_enabled;
 			}
 
 			/**
@@ -412,10 +422,6 @@ namespace EmEn::Overlay
 
 #endif
 
-			/* Flag names. */
-			static constexpr auto ServiceInitialized{0UL};
-			static constexpr auto Enabled{1UL};
-
 			PrimaryServices & m_primaryServices;
 			Window & m_window;
 			Graphics::Renderer & m_graphicsRenderer;
@@ -431,16 +437,8 @@ namespace EmEn::Overlay
 			std::unordered_map< std::string, std::shared_ptr< ImGUIScreen > > m_ImGUIScreens;
 #endif
 			mutable std::mutex m_physicalRepresentationUpdateMutex;
-			mutable std::mutex m_screensMutex;
-			std::array< bool, 8 > m_flags{
-				false/*ServiceInitialized*/,
-				false/*Enabled*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/
-			};
+			mutable std::mutex m_screensAccess;
+			bool m_serviceInitialized{false};
+			bool m_enabled{false};
 	};
 }

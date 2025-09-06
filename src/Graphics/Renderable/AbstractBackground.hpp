@@ -201,18 +201,20 @@ namespace EmEn::Graphics::Renderable
 			}
 
 			/**
-			 * @brief Creates and/or returns a sky box (cube) geometry.
+			 * @brief Creates and/or returns a skybox (cube) geometry.
+			 * @param serviceProvider A reference to the resource manager through a service provider.
 			 * @return shared_ptr< Geometry::IndexedVertexResource >
 			 */
 			[[nodiscard]]
-			static std::shared_ptr< Geometry::IndexedVertexResource > getSkyBoxGeometry () noexcept;
+			static std::shared_ptr< Geometry::IndexedVertexResource > getSkyBoxGeometry (Resources::ServiceProvider & serviceProvider) noexcept;
 
 			/**
 			 * @brief Creates and/or returns a sky dome (sphere) geometry.
+			 * @param serviceProvider A reference to the resource manager through a service provider.
 			 * @return shared_ptr< Geometry::IndexedVertexResource >
 			 */
 			[[nodiscard]]
-			static std::shared_ptr< Geometry::IndexedVertexResource > getSkyDomeGeometry () noexcept;
+			static std::shared_ptr< Geometry::IndexedVertexResource > getSkyDomeGeometry (Resources::ServiceProvider & serviceProvider) noexcept;
 
 		protected:
 
@@ -233,7 +235,7 @@ namespace EmEn::Graphics::Renderable
 			static constexpr auto SkyBoxGeometryName{"SkyBoxGeometry"};
 			static constexpr auto SkyDomeGeometryName{"SkyDomeGeometry"};
 
-			/* FIXME: Set a correct size. */
+			/* FIXME: Set the correct size. */
 			static constexpr auto SkySize{512.0F};
 
 			Libs::PixelFactory::Color< float > m_averageColor{10.0F / 256.0F, 24.0F / 256.0F, 43.0F / 256.0F, 1.0F};

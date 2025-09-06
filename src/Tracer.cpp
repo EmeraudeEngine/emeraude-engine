@@ -26,14 +26,11 @@
 
 #include "Tracer.hpp"
 
-/* Project configuration. */
-#include "emeraude_config.hpp"
-
 /* STL inclusions. */
 #include <cstring>
 #include <algorithm>
-#include <exception>
-#include <iostream>
+#include <fstream>
+#include <utility>
 
 /* System inclusions. */
 #if IS_LINUX || IS_MACOS
@@ -44,24 +41,176 @@
 #include "Libs/String.hpp"
 #include "Arguments.hpp"
 #include "FileSystem.hpp"
-#include "SettingKeys.hpp"
 #include "Settings.hpp"
-#include "TracerLogger.hpp"
-#include "Types.hpp"
+#include "SettingKeys.hpp"
 #if IS_WINDOWS
 #include "PlatformSpecific/Helpers.hpp"
 #endif
 
 namespace EmEn
 {
-	using namespace EmEn::Libs;
+	using namespace Libs;
+
+	TracerLogger::TracerLogger (std::filesystem::path filepath, LogFormat logFormat) noexcept
+		: m_filepath{std::move(filepath)},
+		m_logFormat{logFormat}
+	{
+		std::fstream file{m_filepath, std::ios::out | std::ios::trunc};
+
+		m_isUsable = file.is_open();
+
+		file.close();
+
+		if constexpr ( IsDebug )
+		{
+			if ( m_isUsable )
+			{
+				std::cout << "TracerLogger::TracerLogger() : Log file " << m_filepath << " opened !" "\n";
+			}
+			else
+			{
+				std::cerr << "TracerLogger::TracerLogger() : Unable to open the log file " << m_filepath << " !" "\n";
+			}
+		}
+	}
+
+	TracerLogger::~TracerLogger ()
+	{
+		this->stop();
+
+		if ( m_thread.joinable() )
+		{
+			m_thread.join();
+		}
+	}
+
+	void
+	TracerLogger::task () noexcept
+	{
+		std::fstream file{m_filepath, std::ios::out | std::ios::app};
+
+		/* NOTE: Write the file start. */
+		switch ( m_logFormat )
+		{
+			case LogFormat::Text :
+				file << "====== " << EngineName << " " << VersionString << " execution. Beginning at " << std::chrono::steady_clock::now().time_since_epoch().count() << " ======" "\n";
+				break;
+
+			case LogFormat::JSON :
+				file << "{" "\n";
+				break;
+
+			case LogFormat::HTML :
+				file <<
+					"<!DOCTYPE html>" "\n"
+					"<html>" "\n"
+					"\t" "<head>" "\n"
+					"\t\t" "<title>" << EngineName << " " << VersionString << " execution</title>" "\n"
+					"\t" "</head>" "\n"
+					"\t" "<body>" "\n"
+
+					"\t\t" "<h1>" << EngineName << " " << VersionString << " execution</h1>" "\n"
+					"\t\t" "<p>Beginning at " << std::chrono::steady_clock::now().time_since_epoch().count() << "</p>" "\n";
+				break;
+		}
+
+		while ( m_isRunning )
+		{
+			std::queue< TracerEntry > localQueue;
+
+			{
+				std::unique_lock< std::mutex > lock{m_entriesAccess};
+
+				/* NOTE: Wait for the thread to be a wake-up. */
+				m_condition.wait(lock, [&] {
+					return !m_entries.empty() || !m_isRunning;
+				});
+
+				if ( !m_entries.empty() )
+				{
+					m_entries.swap(localQueue);
+				}
+			}
+
+			while ( !localQueue.empty() )
+			{
+				const auto & entry = localQueue.front();
+
+				switch ( m_logFormat )
+				{
+					case LogFormat::Text :
+						file <<
+							"[" << entry.time().time_since_epoch().count() << "]"
+							"[" << entry.tag() << "]"
+							"[" << to_string(entry.severity()) << "]"
+							"[" << entry.location().file_name() << ':' << entry.location().line() << ':' << entry.location().column() << " `" << entry.location().function_name() << "`]" "\n"
+							<< entry.message() << '\n';
+						break;
+
+					case LogFormat::JSON :
+						file <<
+							"\t" "{" "\n"
+							"\t\t" "\"tag\" : " << entry.tag() << " @ <small><i>" << entry.location().file_name() << ':' << entry.location().line() << ':' << entry.location().column() << " `" << entry.location().function_name() << '`' << "</i></small></h2>" "\n"
+							"\t\t" "\"filename\" : " << entry.location().file_name() << ':' << entry.location().line() << ':' << entry.location().column() << " `" << entry.location().function_name() << '`' << "</i></small></h2>" "\n"
+							"\t\t" "\"line\" : " <<  entry.location().line() << ':' << entry.location().column() << " `" << entry.location().function_name() << '`' << "</i></small></h2>" "\n"
+							"\t\t" "\"column\" :" << entry.location().column() << " `" << entry.location().function_name() << '`' << "</i></small></h2>" "\n"
+							"\t\t" "\"function\" : " << entry.location().function_name() << '`' << "</i></small></h2>" "\n"
+							"\t\t" "<p class=\"entry-time\">Time: " << entry.time().time_since_epoch().count() << "</p>" "\n"
+							"\t\t" "<p class=\"entry-thread\">Thread: " << entry.threadId() << "</p>" "\n"
+							"\t\t" "<p class=\"entry-severity\">Severity: " << to_string(entry.severity()) << "<p/>" "\n"
+							"\t\t" "<pre class=\"entry-message\">" "\n"
+							<< entry.message() << "\n"
+							"\t\t" "</pre>" "\n"
+							"\t" "}" "\n";
+						break;
+
+					case LogFormat::HTML :
+						file <<
+							"\t\t" "<div>" "\n"
+							"\t\t\t" "<h2 class=\"entry-tag\">" << entry.tag() << " @ <small><i>" << entry.location().file_name() << ':' << entry.location().line() << ':' << entry.location().column() << " `" << entry.location().function_name() << '`' << "</i></small></h2>" "\n"
+							"\t\t\t" "<p class=\"entry-time\">Time: " << entry.time().time_since_epoch().count() << "</p>" "\n"
+							"\t\t\t" "<p class=\"entry-thread\">Thread: " << entry.threadId() << "</p>" "\n"
+							"\t\t\t" "<p class=\"entry-severity\">Severity: " << to_string(entry.severity()) << "<p/>" "\n"
+							"\t\t\t" "<pre class=\"entry-message\">" "\n"
+							<< entry.message() << "\n"
+							"\t\t\t" "</pre>" "\n"
+							"\t\t" "</div>" "\n";
+						break;
+				}
+
+				localQueue.pop();
+			}
+
+			/* NOTE: Force to write into the file. */
+			file.flush();
+		}
+
+		/* NOTE: Write the file end. */
+		switch ( m_logFormat )
+		{
+			case LogFormat::Text :
+				file << "====== Log file closed properly ======" "\n";
+				break;
+
+			case LogFormat::JSON :
+				file << "}" "\n";
+				break;
+
+			case LogFormat::HTML :
+				file <<
+				   "\t\t" "<p>Ending at " << std::chrono::steady_clock::now().time_since_epoch().count() << "</p>" "\n"
+				   "\t" "</body>" "\n"
+				   "</html>" "\n";
+				break;
+		}
+	}
 
 	void
 	Tracer::earlySetup (const Arguments & arguments, std::string processName, bool childProcess) noexcept
 	{
 		m_processName = std::move(processName);
 
-		m_flags[IsChildProcess] = childProcess;
+		m_isChildProcess = childProcess;
 
 		/* NOTE: Register once PPID and PID for this tracer. */
 #if IS_LINUX || IS_MACOS
@@ -74,9 +223,7 @@ namespace EmEn
 		m_processID = static_cast< int >(PID);
 #endif
 
-		auto argument = arguments.get("--filter-tags");
-
-		if ( argument.isPresent() )
+		if ( const auto argument = arguments.get("--filter-tags") )
 		{
 			for ( const auto & term : String::explode(argument.value(), ',', false) )
 			{
@@ -84,16 +231,14 @@ namespace EmEn
 			}
 		}
 
-		argument = arguments.get("-q", "--disable-tracing");
-
-		if ( argument.isPresent() )
+		if ( arguments.isSwitchPresent("-q", "--disable-tracing") )
 		{
 			std::cout << "Tracer disabled on startup !" "\n";
 
-			m_flags[IsTracerDisabled] = true;
+			m_isTracerDisabled = true;
 		}
 
-		m_flags[ServiceInitialized] = true;
+		m_serviceInitialized = true;
 	}
 
 	void
@@ -104,21 +249,22 @@ namespace EmEn
 			return;
 		}
 
-		this->enablePrintOnlyErrors(settings.get< bool >(TracerPrintOnlyErrorsKey, DefaultTracerPrintOnlyErrors));
-		this->enableSourceLocation(settings.get< bool >(TracerEnableSourceLocationKey, DefaultTracerEnableSourceLocation));
-		this->enableThreadInfos(settings.get< bool >(TracerEnableThreadInfosKey, DefaultTracerEnableThreadInfos));
+		this->enablePrintOnlyErrors(settings.getOrSetDefault< bool >(TracerPrintOnlyErrorsKey, DefaultTracerPrintOnlyErrors));
+		this->enableSourceLocation(settings.getOrSetDefault< bool >(TracerEnableSourceLocationKey, DefaultTracerEnableSourceLocation));
+		this->enableThreadInfos(settings.getOrSetDefault< bool >(TracerEnableThreadInfosKey, DefaultTracerEnableThreadInfos));
 
 		m_cacheDirectory = fileSystem.cacheDirectory();
-		m_logFormat = to_LogFormat(settings.get< std::string >(TracerLogFormatKey, DefaultTracerLogFormat));
+		m_logFormat = to_LogFormat(settings.getOrSetDefault< std::string >(TracerLogFormatKey, DefaultTracerLogFormat));
 
+		/* TODO: Clarify this behavior! */
 		const auto argument = arguments.get("-l", "--enable-log");
 
-		if ( settings.get< bool >(TracerEnableLoggerKey, DefaultTracerEnableLogger) || argument.isPresent() )
+		if ( settings.getOrSetDefault< bool >(TracerEnableLoggerKey, DefaultTracerEnableLogger) || argument.has_value() )
 		{
-			m_flags[LoggerRequestedAtStartup] = true;
+			m_loggerRequestedAtStartup = true;
 
 			/* NOTE: Disable the logger creation at the startup. This is useful for multi-processes application. */
-			if ( arguments.get("--disable-log").isPresent() )
+			if ( arguments.isSwitchPresent("--disable-log") )
 			{
 				return;
 			}
@@ -219,7 +365,7 @@ namespace EmEn
 			case Severity::Debug :
 			case Severity::Info :
 			case Severity::Success :
-				if ( !m_flags[PrintOnlyErrors] )
+				if ( !m_printOnlyErrors )
 				{
 					std::cout << trace.str() << '\n';
 				}

@@ -39,7 +39,7 @@ namespace EmEn::Audio::Filters
 
 	Abstract::Abstract () noexcept
 	{
-		if ( Manager::audioDisabled() )
+		if ( !Manager::isAudioSystemAvailable() )
 		{
 			return;
 		}

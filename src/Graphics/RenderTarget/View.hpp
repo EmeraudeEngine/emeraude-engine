@@ -277,7 +277,7 @@ namespace EmEn::Graphics::RenderTarget
 				m_viewMatrices.create(AVManagers.graphicsRenderer, this->id());
 			}
 
-			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::onSourceDisconnected() */
+			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::onInputDeviceDisconnected() */
 			void
 			onInputDeviceDisconnected (AVConsole::AVManagers & /*AVManagers*/, AbstractVirtualDevice * /*sourceDevice*/) noexcept override
 			{

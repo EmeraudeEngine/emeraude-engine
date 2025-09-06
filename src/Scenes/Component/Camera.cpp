@@ -31,11 +31,11 @@
 
 namespace EmEn::Scenes::Component
 {
-	using namespace EmEn::Libs;
-	using namespace EmEn::Libs::Math;
-	using namespace EmEn::Animations;
-	using namespace EmEn::Saphir;
-	using namespace EmEn::Graphics;
+	using namespace Libs;
+	using namespace Libs::Math;
+	using namespace Animations;
+	using namespace Saphir;
+	using namespace Graphics;
 
 	void
 	Camera::setPerspectiveProjection (float fov, float maxViewableDistance) noexcept

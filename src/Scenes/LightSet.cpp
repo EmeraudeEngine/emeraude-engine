@@ -46,8 +46,6 @@ namespace EmEn::Scenes
 	using namespace Saphir;
 	using namespace Vulkan;
 
-	const size_t LightSet::ClassUID{getClassUID(ClassId)};
-
 	std::unique_ptr< DescriptorSet >
 	LightSet::createDescriptorSet (Renderer & renderer, const UniformBufferObject & uniformBufferObject) noexcept
 	{
@@ -80,7 +78,7 @@ namespace EmEn::Scenes
 			return true;
 		}
 
-		const std::lock_guard< std::mutex > lock{m_lightAccess};
+		const std::lock_guard< std::mutex > lock{m_lightsAccess};
 
 		auto & renderer = scene.AVConsoleManager().graphicsRenderer();
 		auto & sharedUBOManager = renderer.sharedUBOManager();
@@ -160,9 +158,10 @@ namespace EmEn::Scenes
 			}
 		}
 
-		renderer.swapChain()->viewMatrices().updateAmbientLightProperties(m_ambientLightColor, m_ambientLightIntensity);
+		/* FIXME: Take only in account the main view! */
+		renderer.mainRenderTarget()->viewMatrices().updateAmbientLightProperties(m_ambientLightColor, m_ambientLightIntensity);
 
-		m_flags[Initialized] = true;
+		m_initialized = true;
 
 		return true;
 	}
@@ -180,7 +179,7 @@ namespace EmEn::Scenes
 		auto & renderer = scene.AVConsoleManager().graphicsRenderer();
 		auto & sharedUBOManager = renderer.sharedUBOManager();
 
-		m_flags[Initialized] = false;
+		m_initialized = false;
 
 		/* Release the directional light SharedUniformBuffer. */
 		{
@@ -225,14 +224,14 @@ namespace EmEn::Scenes
 	LightSet::add (Scene & scene, const std::shared_ptr< Component::DirectionalLight > & light) noexcept
 	{
 		/* NOTE: If the light set is uninitialized, the light creation will be postponed. */
-		if ( m_flags[Initialized] && !light->createOnHardware(scene) )
+		if ( m_initialized && !light->createOnHardware(scene) )
 		{
 			TraceError{ClassId} << "Unable to create the directional light '" << light->name() << "' !";
 
 			return;
 		}
 
-		const std::lock_guard< std::mutex > lock{m_lightAccess};
+		const std::lock_guard< std::mutex > lock{m_lightsAccess};
 
 		m_lights.emplace(light);
 		m_directionalLights.emplace(light);
@@ -244,14 +243,14 @@ namespace EmEn::Scenes
 	LightSet::add (Scene & scene, const std::shared_ptr< Component::PointLight > & light) noexcept
 	{
 		/* NOTE: If the light set is uninitialized, the light creation will be postponed. */
-		if ( m_flags[Initialized] && !light->createOnHardware(scene) )
+		if ( m_initialized && !light->createOnHardware(scene) )
 		{
 			TraceError{ClassId} << "Unable to create the point light '" << light->name() << "' !";
 
 			return;
 		}
 
-		const std::lock_guard< std::mutex > lock{m_lightAccess};
+		const std::lock_guard< std::mutex > lock{m_lightsAccess};
 
 		m_lights.emplace(light);
 		m_pointLights.emplace(light);
@@ -263,14 +262,14 @@ namespace EmEn::Scenes
 	LightSet::add (Scene & scene, const std::shared_ptr< Component::SpotLight > & light) noexcept
 	{
 		/* NOTE: If the light set is uninitialized, the light creation will be postponed. */
-		if ( m_flags[Initialized] && !light->createOnHardware(scene) )
+		if ( m_initialized && !light->createOnHardware(scene) )
 		{
 			TraceError{ClassId} << "Unable to create the spot light '" << light->name() << "' !";
 
 			return;
 		}
 
-		const std::lock_guard< std::mutex > lock{m_lightAccess};
+		const std::lock_guard< std::mutex > lock{m_lightsAccess};
 
 		m_lights.emplace(light);
 		m_spotLights.emplace(light);
@@ -281,7 +280,7 @@ namespace EmEn::Scenes
 	void
 	LightSet::remove (Scene & scene, const std::shared_ptr< Component::DirectionalLight > & light) noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_lightAccess};
+		const std::lock_guard< std::mutex > lock{m_lightsAccess};
 
 		m_lights.erase(light);
 		m_directionalLights.erase(light);
@@ -294,7 +293,7 @@ namespace EmEn::Scenes
 	void
 	LightSet::remove (Scene & scene, const std::shared_ptr< Component::PointLight > & light) noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_lightAccess};
+		const std::lock_guard< std::mutex > lock{m_lightsAccess};
 
 		m_lights.erase(light);
 		m_pointLights.erase(light);
@@ -307,7 +306,7 @@ namespace EmEn::Scenes
 	void
 	LightSet::remove (Scene & scene, const std::shared_ptr< Component::SpotLight > & light) noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_lightAccess};
+		const std::lock_guard< std::mutex > lock{m_lightsAccess};
 
 		m_lights.erase(light);
 		m_spotLights.erase(light);
@@ -320,7 +319,7 @@ namespace EmEn::Scenes
 	void
 	LightSet::removeAllLights () noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_lightAccess};
+		const std::lock_guard< std::mutex > lock{m_lightsAccess};
 
 		m_lights.clear();
 		m_directionalLights.clear();
@@ -333,7 +332,7 @@ namespace EmEn::Scenes
 	std::ostream &
 	operator<< (std::ostream & out, const LightSet & obj)
 	{
-		const std::lock_guard< std::mutex > lock{obj.m_lightAccess};
+		const std::lock_guard< std::mutex > lock{obj.m_lightsAccess};
 
 		out <<
 			"Ambient light color : " << obj.m_ambientLightColor << "\n"
@@ -429,9 +428,7 @@ namespace EmEn::Scenes
 	StaticLighting &
 	LightSet::getOrCreateStaticLighting (const std::string & name) noexcept
 	{
-		const auto staticLightingIt = m_staticLighting.find(name);
-
-		if ( staticLightingIt != m_staticLighting.cend() )
+		if ( const auto staticLightingIt = m_staticLighting.find(name); staticLightingIt != m_staticLighting.cend() )
 		{
 			return staticLightingIt->second;
 		}
@@ -444,7 +441,7 @@ namespace EmEn::Scenes
 	{
 		const auto staticLightingIt = m_staticLighting.find(name);
 
-		if ( staticLightingIt != m_staticLighting.cend() )
+		if ( staticLightingIt == m_staticLighting.cend() )
 		{
 			return nullptr;
 		}
@@ -460,7 +457,7 @@ namespace EmEn::Scenes
 			return true;
 		}
 
-		const std::lock_guard< std::mutex > lock{m_lightAccess};
+		const std::lock_guard< std::mutex > lock{m_lightsAccess};
 
 		size_t errors = 0;
 

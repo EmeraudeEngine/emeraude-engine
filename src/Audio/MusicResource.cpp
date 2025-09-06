@@ -26,14 +26,9 @@
 
 #include "MusicResource.hpp"
 
-/* Engine configuration file. */
-#include "emeraude_config.hpp"
-
 /* Third-party inclusions. */
-#ifdef TAGLIB_ENABLED
-	#include "taglib/tag.h"
-	#include "taglib/fileref.h"
-#endif
+#include "taglib/tag.h"
+#include "taglib/fileref.h"
 
 /* Local inclusions. */
 #include "Libs/WaveFactory/Processor.hpp"
@@ -42,30 +37,14 @@
 #include "Manager.hpp"
 #include "Tracer.hpp"
 
-/* Defining the resource manager class id. */
-template<>
-const char * const EmEn::Resources::Container< EmEn::Audio::MusicResource >::ClassId{"MusicContainer"};
-
-/* Defining the resource manager ClassUID. */
-template<>
-const size_t EmEn::Resources::Container< EmEn::Audio::MusicResource >::ClassUID{getClassUID(ClassId)};
-
 namespace EmEn::Audio
 {
-	using namespace EmEn::Libs;
-
-	const size_t MusicResource::ClassUID{getClassUID(ClassId)};
-
-	MusicResource::MusicResource (const std::string & name, uint32_t resourceFlags) noexcept
-		: ResourceTrait(name, resourceFlags)
-	{
-
-	}
+	using namespace Libs;
 
 	bool
 	MusicResource::onDependenciesLoaded () noexcept
 	{
-		const auto chunkSize = Manager::instance()->musicChunkSize();
+		const auto chunkSize = Manager::musicChunkSize();
 		const auto chunkCount = m_localData.chunkCount(chunkSize);
 
 		m_buffers.resize(chunkCount);
@@ -89,7 +68,6 @@ namespace EmEn::Audio
 	void
 	MusicResource::readMetaData (const std::filesystem::path & filepath) noexcept
 	{
-#ifdef TAGLIB_ENABLED
 		const TagLib::FileRef file(filepath.c_str());
 
 		if ( file.isNull() )
@@ -110,18 +88,12 @@ namespace EmEn::Audio
 
 		m_title = tag->title().to8Bit(true);
 		m_artist = tag->artist().to8Bit(true);
-#else
-		TraceWarning{ClassId} << "TagLib has been disabled! Unable to read audio metadata from '" << filepath << "' !";
-
-		m_title = "UnknownTitle";
-		m_artist = "UnknownArtist";
-#endif
 	}
 
 	bool
-	MusicResource::load () noexcept
+	MusicResource::load (Resources::ServiceProvider & /*serviceProvider*/) noexcept
 	{
-		if ( Manager::audioDisabled() )
+		if ( !Manager::isAudioSystemAvailable() )
 		{
 			return true;
 		}
@@ -131,7 +103,7 @@ namespace EmEn::Audio
 			return false;
 		}
 
-		const auto frequencyPlayback = Manager::instance()->frequencyPlayback();
+		const auto frequencyPlayback = Manager::frequencyPlayback();
 		const auto tenSeconds = 10 * static_cast< size_t >(frequencyPlayback);
 
 		if ( !m_localData.initialize(tenSeconds, WaveFactory::Channels::Stereo, frequencyPlayback) )
@@ -148,9 +120,9 @@ namespace EmEn::Audio
 	}
 
 	bool
-	MusicResource::load (const std::filesystem::path & filepath) noexcept
+	MusicResource::load (Resources::ServiceProvider & /*serviceProvider*/, const std::filesystem::path & filepath) noexcept
 	{
-		if ( Manager::audioDisabled() )
+		if ( !Manager::isAudioSystemAvailable() )
 		{
 			return true;
 		}
@@ -167,9 +139,9 @@ namespace EmEn::Audio
 			return this->setLoadSuccess(false);
 		}
 
-		const auto frequencyPlayback = Manager::instance()->frequencyPlayback();
+		const auto frequencyPlayback = Manager::frequencyPlayback();
 
-		/* Checks frequency for playback within audio engine. */
+		/* Checks frequency for playback within the audio engine. */
 		if ( m_localData.frequency() != frequencyPlayback )
 		{
 			TraceWarning{ClassId} <<
@@ -179,7 +151,7 @@ namespace EmEn::Audio
 			/* Copy the buffer in float (single precision) format. */
 			WaveFactory::Processor processor(m_localData);
 
-			/* Launch a mix down process ... */
+			/* Launch a mix-down process ... */
 			/* FIXME: If music is not stereo, so mono or 5.1 for instance set it to a stereo wave format. */
 			/*if ( m_localData.channels() != WaveFactory::Channels::Stereo )
 			{
@@ -201,7 +173,7 @@ namespace EmEn::Audio
 				return this->setLoadSuccess(false);
 			}
 
-			/* Gets back the buffer in 16bits integer format. */
+			/* Gets back the buffer in 16 bits integer format. */
 			if ( !processor.toWave(m_localData) )
 			{
 				Tracer::error(ClassId, "Unable to copy the fixed wave format !");
@@ -210,16 +182,16 @@ namespace EmEn::Audio
 			}
 		}
 
-		/* Read optional metadata from soundtrack if available. */
+		/* Read optional metadata from the soundtrack if available. */
 		this->readMetaData(filepath);
 
 		return this->setLoadSuccess(true);
 	}
 
 	bool
-	MusicResource::load (const Json::Value & /*data*/) noexcept
+	MusicResource::load (Resources::ServiceProvider & /*serviceProvider*/, const Json::Value & /*data*/) noexcept
 	{
-		if ( Manager::audioDisabled() )
+		if ( !Manager::isAudioSystemAvailable() )
 		{
 			return true;
 		}

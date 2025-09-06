@@ -120,19 +120,11 @@
 
 /* Third-party libraries enabled at compile-time. */
 #cmakedefine EMERAUDE_USE_SYSTEM_LIBS
-#cmakedefine SNDFILE_ENABLED
-#cmakedefine SAMPLERATE_ENABLED
 #cmakedefine ASIO_ENABLED
-#cmakedefine OPENAL_ENABLED
-#cmakedefine TAGLIB_ENABLED
 #cmakedefine IMGUI_ENABLED
-#cmakedefine BULLET_ENABLED
-#cmakedefine CPUFEATURES_ENABLED
-#cmakedefine HWLOC_ENABLED
-#cmakedefine FASTGLTF_ENABLED
 
-/* NOTE: Be sure this define is always set for GLFW.
- * FIXME: Check if this is useful ! */
+/* NOTE: Be sure this token is always set for GLFW.
+ * FIXME: Check if this is useful! */
 #define GLFW_INCLUDE_VULKAN
 
 

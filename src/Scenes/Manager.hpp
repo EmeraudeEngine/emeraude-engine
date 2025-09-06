@@ -152,9 +152,6 @@ namespace EmEn::Scenes
 			/** @brief Class identifier. */
 			static constexpr auto ClassId{"SceneManagerService"};
 
-			/** @brief Observable class unique identifier. */
-			static const size_t ClassUID;
-
 			static constexpr auto DefaultSceneBoundary{1000.0F};
 
 			/** @brief Observable notification codes. */
@@ -196,12 +193,25 @@ namespace EmEn::Scenes
 
 			}
 
+			/**
+			 * @brief Returns the unique identifier for this class [Thread-safe].
+			 * @return size_t
+			 */
+			static
+			size_t
+			getClassUID () noexcept
+			{
+				static const size_t classUID = EmEn::Libs::Hash::FNV1a(ClassId);
+
+				return classUID;
+			}
+
 			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
 			[[nodiscard]]
 			size_t
 			classUID () const noexcept override
 			{
-				return ClassUID;
+				return getClassUID();
 			}
 
 			/** @copydoc EmEn::Libs::ObservableTrait::is() const */
@@ -209,7 +219,7 @@ namespace EmEn::Scenes
 			bool
 			is (size_t classUID) const noexcept override
 			{
-				return classUID == ClassUID;
+				return classUID == getClassUID();
 			}
 
 			/** @copydoc EmEn::ServiceInterface::usable() */
@@ -272,10 +282,10 @@ namespace EmEn::Scenes
 			SceneLoading loadScene (const std::shared_ptr< DefinitionResource > & sceneDefinition) noexcept;
 
 			/**
-			 * @brief Launches the process to refresh all scenes.
-			 * @return void
+			 * @brief Refreshes the active scene.
+			 * @return bool
 			 */
-			void refreshScenes () const noexcept;
+			bool refreshActiveScene () const noexcept;
 
 			/**
 			 * @brief Disables and delete a scene.

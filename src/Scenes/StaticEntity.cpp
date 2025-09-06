@@ -31,11 +31,9 @@
 
 namespace EmEn::Scenes
 {
-	using namespace EmEn::Libs;
-	using namespace EmEn::Libs::Math;
+	using namespace Libs;
+	using namespace Libs::Math;
 	using namespace Physics;
-
-	const size_t StaticEntity::ClassUID{getClassUID(ClassId)};
 
 	void
 	StaticEntity::scale (const Vector< 3, float > & factor, TransformSpace transformSpace) noexcept
@@ -144,14 +142,14 @@ namespace EmEn::Scenes
 	bool
 	StaticEntity::onUnhandledNotification (const ObservableTrait * observable, int notificationCode, const std::any & /*data*/) noexcept
 	{
-		if ( observable->is(PhysicalObjectProperties::ClassUID) )
+		if ( observable->is(PhysicalObjectProperties::getClassUID()) )
 		{
 			return true;
 		}
 
-		/* NOTE: Don't know what is it, goodbye! */
+		/* NOTE: Don't know what it is, goodbye! */
 		TraceDebug{ClassId} <<
-			"Received an unhandled notification (Code:" << notificationCode << ") from observable '" << whoIs(observable->classUID()) << "' (UID:" << observable->classUID() << ")  ! "
+			"Received an unhandled notification (Code:" << notificationCode << ") from observable (UID:" << observable->classUID() << ")  ! "
 			"Forgetting it ...";
 
 		return false;

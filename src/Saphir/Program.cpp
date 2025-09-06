@@ -155,8 +155,6 @@ namespace EmEn::Saphir
 
 		if ( enableBillBoarding )
 		{
-			TraceInfo{ClassId} << "The vertex shader '" << name << "' declared for bill-boards rendering ...";
-
 			m_vertexShader->enableBillBoarding();
 		}
 

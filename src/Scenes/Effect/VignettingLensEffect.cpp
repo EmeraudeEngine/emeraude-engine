@@ -40,14 +40,14 @@
 
 namespace EmEn::Scenes
 {
-	using namespace EmEn::Libs;
+	using namespace Libs;
 	using namespace Saphir;
 	using namespace Saphir::Keys;
 	using namespace Graphics;
 
-	VignettingLensEffect::VignettingLensEffect (float strength) noexcept
-		: m_image(Resources::Manager::instance()->container< ImageResource >()->getResource("Miscellaneous/_vignetting", true))
-		/*, m_texture(Image::Usage::Texture, true)*/,
+	VignettingLensEffect::VignettingLensEffect (Resources::Manager & resourceManager, float strength) noexcept
+		: m_image{resourceManager.container< ImageResource >()->getResource("Miscellaneous/_vignetting", true)}
+		/*, m_texture{Image::Usage::Texture, true}*/,
 		m_strength{strength}
 	{
 		//if ( !m_texture.initialize(m_image->data()) )

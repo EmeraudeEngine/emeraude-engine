@@ -27,27 +27,21 @@
 #include "TransferManager.hpp"
 
 /* STL inclusions. */
-#include <exception>
-#include <iostream>
 #include <sstream>
-#include <memory>
 
 /* Local inclusions. */
 #include "Sync/ImageMemoryBarrier.hpp"
+#include "Sync/Semaphore.hpp"
 #include "Device.hpp"
 #include "Queue.hpp"
-#include "CommandPool.hpp"
 #include "CommandBuffer.hpp"
-#include "AbstractDeviceBuffer.hpp"
-#include "StagingBuffer.hpp"
+#include "Buffer.hpp"
 #include "Image.hpp"
-#include "Tracer.hpp"
+#include "StagingBuffer.hpp"
 
 namespace EmEn::Vulkan
 {
-	using namespace EmEn::Libs;
-
-	std::array< TransferManager *, 2 > TransferManager::s_instances{nullptr, nullptr};
+	using namespace Libs;
 
 	bool
 	TransferManager::onInitialize () noexcept
@@ -76,7 +70,7 @@ namespace EmEn::Vulkan
 		/* Read the queue configuration from the device. */
 		if ( !m_device->hasBasicSupport() )
 		{
-			m_flags[SeparatedQueues] = true;
+			m_separatedQueues = true;
 
 			m_specificCommandPool = std::make_shared< CommandPool >(m_device, m_device->getGraphicsFamilyIndex(), true, false, false);
 			m_specificCommandPool->setIdentifier(ClassId, "Specific", "CommandPool");
@@ -95,7 +89,7 @@ namespace EmEn::Vulkan
 			m_specificCommandPool = m_transferCommandPool;
 		}
 
-		m_flags[ServiceInitialized] = true;
+		m_serviceInitialized = true;
 
 		return true;
 	}
@@ -103,10 +97,10 @@ namespace EmEn::Vulkan
 	bool
 	TransferManager::onTerminate () noexcept
 	{
-		const std::lock_guard< std::mutex > lockA{m_stagingBufferMutex};
-		const std::lock_guard< std::mutex > lockB{m_transferMutex};
+		/* [VULKAN-CPU-SYNC] */
+		//const std::lock_guard< Device > lock{*m_device};
 
-		m_flags[ServiceInitialized] = false;
+		m_serviceInitialized = false;
 
 		/* FIXME: Seems unnecessary */
 		m_device->waitIdle("Destroying a transfer manager");
@@ -137,76 +131,28 @@ namespace EmEn::Vulkan
 	}
 
 	std::shared_ptr< StagingBuffer >
-	TransferManager::getStagingBuffer (size_t bytes) noexcept
+	TransferManager::getAndReserveStagingBuffer (size_t bytes) noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_stagingBufferMutex};
+		TraceInfo{ClassId} << this->getStagingBuffersStatistics();
 
-		/* Try to get an existing one... */
-		auto buffer = this->searchFreeStagingBuffer(bytes);
-
-		if ( buffer == nullptr )
-		{
-			/* ... Or create a new one. */
-			buffer = this->createStagingBuffer(bytes);
-
-			if ( buffer == nullptr )
-			{
-				return nullptr;
-			}
-
-			m_stagingBuffers.emplace_back(buffer);
-		}
-
-		/* Lock the buffer for the outside world. */
-		buffer->lock();
-
-		return buffer;
-	}
-
-	std::shared_ptr< StagingBuffer >
-	TransferManager::createStagingBuffer (size_t bytes) const noexcept
-	{
-		auto buffer = std::make_shared< StagingBuffer >(m_device, bytes);
-		buffer->setIdentifier(ClassId, (std::stringstream{} << m_stagingBuffers.size() << "Bytes").str(), "StagingBuffer");
-
-		if ( !buffer->createOnHardware() )
-		{
-			TraceError{ClassId} << "Unable to create a new staging buffer of " << bytes << " bytes !";
-
-			return nullptr;
-		}
-
-		return buffer;
-	}
-
-	std::shared_ptr< StagingBuffer >
-	TransferManager::searchFreeStagingBuffer (size_t bytes) const noexcept
-	{
-		if ( m_stagingBuffers.empty() )
-		{
-			return nullptr;
-		}
-
-		/* Get the first free buffer with sufficient space ... */
+		/* Try to get an existing one with the right size... */
 		for ( const auto & stagingBuffer : m_stagingBuffers )
 		{
-			if ( stagingBuffer->isLocked() )
+			if ( !stagingBuffer->isFree() )
 			{
 				continue;
 			}
 
-			if ( bytes > stagingBuffer->bytes() )
+			if ( bytes <= stagingBuffer->bytes() )
 			{
-				continue;
+				return stagingBuffer;
 			}
-
-			return stagingBuffer;
 		}
 
-		/* ... Or get the first free buffer and reallocate it ... */
+		/* Try to get a free one for reallocation. */
 		for ( const auto & stagingBuffer : m_stagingBuffers )
 		{
-			if ( stagingBuffer->isLocked() )
+			if ( !stagingBuffer->isFree() )
 			{
 				continue;
 			}
@@ -222,18 +168,31 @@ namespace EmEn::Vulkan
 			return stagingBuffer;
 		}
 
-		if ( m_flags[Debug] )
+		/* ... Or create a new one. */
+		auto stagingBuffer = std::make_shared< StagingBuffer >(m_device, bytes);
+		stagingBuffer->setIdentifier(ClassId, (std::stringstream{} << m_stagingBuffers.size() << "Bytes").str(), "StagingBuffer");
+
+		if ( !stagingBuffer->createOnHardware() )
 		{
-			TraceInfo{ClassId} << "No existing staging buffer available for now." "\n" << this->getStagingBuffersStatistics();
+			TraceError{ClassId} << "Unable to create a new staging buffer of " << bytes << " bytes !";
+
+			return nullptr;
 		}
 
-		return nullptr;
+		m_stagingBuffers.emplace_back(stagingBuffer);
+
+		return stagingBuffer;
 	}
 
 	bool
-	TransferManager::transfer (const StagingBuffer & stagingBuffer, AbstractDeviceBuffer & dstBuffer, VkDeviceSize offset) noexcept
+	TransferManager::transfer (const StagingBuffer & stagingBuffer, const Buffer & dstBuffer, VkDeviceSize offset) noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_transferMutex};
+		const auto * fence = stagingBuffer.fence();
+
+		if ( !fence->reset() )
+		{
+			return false;
+		}
 
 		if constexpr ( IsDebug )
 		{
@@ -251,7 +210,7 @@ namespace EmEn::Vulkan
 			}
 		}
 
-		auto commandBuffer = std::make_shared< CommandBuffer >(m_transferCommandPool, true);
+		const auto commandBuffer = std::make_shared< CommandBuffer >(m_transferCommandPool, true);
 		commandBuffer->setIdentifier(ClassId, "ToBuffer", "CommandBuffer");
 
 		if ( !commandBuffer->isCreated() )
@@ -273,15 +232,36 @@ namespace EmEn::Vulkan
 			return false;
 		}
 
-		const std::lock_guard< std::mutex > deviceAccessLockGuard{m_device->deviceAccessLock()};
+		auto * queue = m_device->getQueue(QueueJob::Transfer, QueuePriority::Medium);
 
-		return m_device->getQueue(QueueJob::Transfer, QueuePriority::Medium)->submit(commandBuffer);
+		if ( !queue->submit(commandBuffer, SynchInfo{}.withFence(fence->handle())) )
+		{
+			Tracer::error(ClassId, "Unable to transfer a buffer !");
+
+			return false;
+		}
+
+		return true;
 	}
 
 	bool
 	TransferManager::transfer (const StagingBuffer & stagingBuffer, Image & dstImage, VkDeviceSize /*offset*/) noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_transferMutex};
+		const auto * fence = stagingBuffer.fence();
+
+		if ( !fence->reset() )
+		{
+			return false;
+		}
+
+		Sync::Semaphore transferCompleteSemaphore{m_device};
+
+		if ( !transferCompleteSemaphore.createOnHardware() )
+		{
+			Tracer::error(ClassId, "Unable to create the semaphore for image transfer !");
+
+			return false;
+		}
 
 		constexpr VkImageAspectFlags aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 		const auto baseWidth = dstImage.createInfo().extent.width;
@@ -355,10 +335,14 @@ namespace EmEn::Vulkan
 
 			if ( commandBuffer->end() )
 			{
-				const std::lock_guard< std::mutex > deviceAccessLockGuard{m_device->deviceAccessLock()};
+				auto * queue = m_device->getQueue(QueueJob::Transfer, QueuePriority::Medium);
 
-				if ( !m_device->getQueue(QueueJob::Transfer, QueuePriority::Medium)->submit(commandBuffer) )
+				VkSemaphore semaphoreHandle = transferCompleteSemaphore.handle();
+
+				if ( !queue->submit(commandBuffer, SynchInfo{}.signals({&semaphoreHandle, 1})) )
 				{
+					Tracer::error(ClassId, "Unable to transfer an image (1/2) !");
+
 					return false;
 				}
 
@@ -478,10 +462,15 @@ namespace EmEn::Vulkan
 
 			if ( commandBuffer->end() )
 			{
-				const std::lock_guard< std::mutex > deviceAccessLockGuard{m_device->deviceAccessLock()};
+				auto * queue = m_device->getQueue(QueueJob::GraphicsTransfer, QueuePriority::Medium);
 
-				if ( !m_device->getQueue(QueueJob::GraphicsTransfer, QueuePriority::Medium)->submit(commandBuffer) )
+				VkSemaphore semaphoreHandle = transferCompleteSemaphore.handle();
+				VkPipelineStageFlags waitStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+
+				if ( !queue->submit(commandBuffer, SynchInfo{}.waits({&semaphoreHandle, 1}, {&waitStage, 1}).withFence(fence->handle())) )
 				{
+					Tracer::error(ClassId, "Unable to transfer an image (2/2) !");
+
 					return false;
 				}
 

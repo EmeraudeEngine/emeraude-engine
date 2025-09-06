@@ -91,6 +91,8 @@ namespace EmEn::Scenes::Component
 			static constexpr auto DefaultInnerAngle{30.0F};
 			static constexpr auto DefaultOuterAngle{45.0F};
 
+			static float s_maxDistance;
+
 			/**
 			 * @brief Copy constructor.
 			 * @param copy A reference to the copied instance.

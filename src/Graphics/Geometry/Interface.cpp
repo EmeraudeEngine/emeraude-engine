@@ -32,15 +32,19 @@
 
 /* Local inclusions. */
 #include "Vulkan/TransferManager.hpp"
+#include "Graphics/Renderer.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::Graphics::Geometry
 {
-	using namespace EmEn::Libs;
-	using namespace EmEn::Libs::Math;
-	using namespace EmEn::Libs::VertexFactory;
+	using namespace Libs;
+	using namespace Libs::Math;
+	using namespace Libs::VertexFactory;
+	using namespace Vulkan;
 
 	constexpr auto TracerTag{"GeometryInterface"};
+
+	Renderer * Interface::s_graphicsRenderer{nullptr};
 
 	bool
 	Interface::buildSubGeometries (std::vector< SubGeometry > & subGeometries, uint32_t length) noexcept
@@ -68,8 +72,6 @@ namespace EmEn::Graphics::Geometry
 
 		if ( shape.hasGroups() )
 		{
-			//TraceInfo{TracerTag} << "Shape has " << shape.groupCount() << " groups ! Creating sub-geometries ...";
-
 			/* FIXME: Check topology/primitive */
 			std::ranges::transform(shape.groups(), std::back_inserter(subGeometries), [] (const auto & group) {
 				const auto offset = static_cast< uint32_t >(group.first * 3);
@@ -100,7 +102,14 @@ namespace EmEn::Graphics::Geometry
 	bool
 	Interface::onDependenciesLoaded () noexcept
 	{
-		if ( !this->isCreated() && !this->createOnHardware(*Vulkan::TransferManager::instance(Vulkan::GPUWorkType::Graphics)) )
+		if ( s_graphicsRenderer == nullptr )
+		{
+			TraceError{TracerTag} << "The static renderer pointer is null !";
+
+			return false;
+		}
+
+		if ( !this->isCreated() && !this->createOnHardware(s_graphicsRenderer->transferManager()) )
 		{
 			TraceError{TracerTag} << "Unable to send the geometry resource '" << this->name() << "' (" << this->classLabel() << ") into the video memory !";
 

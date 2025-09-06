@@ -190,7 +190,7 @@ namespace EmEn::Graphics
 
 			std::vector< std::shared_ptr< VertexBufferFormat > > m_vertexBufferFormats;
 			/* Building parameters */
-			std::mutex m_building;
+			std::mutex m_listAccess;
 			std::shared_ptr< VertexBufferFormat > m_stagingVertexBufferFormat;
 			uint32_t m_currentBinding{0};
 			uint32_t m_bindingOffset{0};

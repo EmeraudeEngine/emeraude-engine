@@ -99,7 +99,7 @@ namespace EmEn::Libs::Time
 			TimerID
 			createTimer (const std::function< bool (TimerID) > & callable, rep_t granularity, bool once = false, bool autostart = false) noexcept
 			{
-				const std::lock_guard< std::mutex > lock{m_eventsMutex};
+				const std::lock_guard< std::mutex > lock{m_eventsAccess};
 
 				const auto timerID = m_lastTimerID.fetch_add(1, std::memory_order_relaxed);
 
@@ -225,7 +225,7 @@ namespace EmEn::Libs::Time
 			void
 			startTimers () noexcept
 			{
-				const std::lock_guard< std::mutex > lock{m_eventsMutex};
+				const std::lock_guard< std::mutex > lock{m_eventsAccess};
 
 				for ( auto & event : std::ranges::views::values(m_events) )
 				{
@@ -240,7 +240,7 @@ namespace EmEn::Libs::Time
 			void
 			stopTimers () noexcept
 			{
-				const std::lock_guard< std::mutex > lock{m_eventsMutex};
+				const std::lock_guard< std::mutex > lock{m_eventsAccess};
 
 				for ( auto & event : std::ranges::views::values(m_events) )
 				{
@@ -255,7 +255,7 @@ namespace EmEn::Libs::Time
 			void
 			pauseTimers () noexcept
 			{
-				const std::lock_guard< std::mutex > lock{m_eventsMutex};
+				const std::lock_guard< std::mutex > lock{m_eventsAccess};
 
 				for ( auto & event : std::ranges::views::values(m_events) )
 				{
@@ -270,7 +270,7 @@ namespace EmEn::Libs::Time
 			void
 			resumeTimers () noexcept
 			{
-				const std::lock_guard< std::mutex > lock{m_eventsMutex};
+				const std::lock_guard< std::mutex > lock{m_eventsAccess};
 
 				for ( auto & event : std::ranges::views::values(m_events) )
 				{
@@ -299,7 +299,7 @@ namespace EmEn::Libs::Time
 			void
 			destroyTimer (TimerID timerID) noexcept
 			{
-				const std::lock_guard< std::mutex > lock{m_eventsMutex};
+				const std::lock_guard< std::mutex > lock{m_eventsAccess};
 
 				m_events.erase(timerID);
 			}
@@ -311,7 +311,7 @@ namespace EmEn::Libs::Time
 			void
 			destroyTimers () noexcept
 			{
-				const std::lock_guard< std::mutex > lock{m_eventsMutex};
+				const std::lock_guard< std::mutex > lock{m_eventsAccess};
 
 				m_events.clear();
 			}
@@ -334,7 +334,7 @@ namespace EmEn::Libs::Time
 			std::invoke_result_t< function_t, TimedEvent< rep_t, period_t > * >
 			withTimer (TimerID timerID, function_t function) const noexcept
 			{
-				const std::lock_guard< std::mutex > lock{m_eventsMutex};
+				const std::lock_guard< std::mutex > lock{m_eventsAccess};
 
 				const auto timerIt = m_events.find(timerID);
 
@@ -373,6 +373,6 @@ namespace EmEn::Libs::Time
 
 			std::atomic< TimerID > m_lastTimerID{1};
 			std::map< TimerID, TimedEvent< rep_t, period_t > > m_events;
-			mutable std::mutex m_eventsMutex;
+			mutable std::mutex m_eventsAccess;
 	};
 }

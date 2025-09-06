@@ -27,20 +27,10 @@
 #include "Abstract.hpp"
 
 /* STL inclusions. */
-#include <algorithm>
-#include <cstddef>
-#include <cstdint>
 #include <iostream>
-#include <numeric>
 
 namespace EmEn::Libs::Time::Statistics
 {
-	Abstract::Abstract (size_t range) noexcept
-		: m_range(std::max< size_t >(range, 1)), m_durations(m_range, 0.0), m_executionsPerSeconds(m_range, 0UL)
-	{
-
-	}
-
 	void
 	Abstract::incrementIndex (size_t & index) const noexcept
 	{
@@ -80,42 +70,6 @@ namespace EmEn::Libs::Time::Statistics
 		m_executionsPerSeconds[m_EPSIndex] = count;
 
 		this->incrementIndex(m_EPSIndex);
-	}
-
-	uint64_t
-	Abstract::duration () const noexcept
-	{
-		return m_durations[this->getPreviousIndex(m_durationIndex)];
-	}
-
-	double
-	Abstract::averageDuration () const noexcept
-	{
-		return std::accumulate(m_durations.cbegin(), m_durations.cend(), 0.0) / static_cast< double >(m_range);
-	}
-
-	uint32_t
-	Abstract::executionsPerSecond () const noexcept
-	{
-		return m_executionsPerSeconds[this->getPreviousIndex(m_EPSIndex)];
-	}
-
-	double
-	Abstract::averageExecutionsPerSecond () const noexcept
-	{
-		return std::accumulate(m_executionsPerSeconds.cbegin(), m_executionsPerSeconds.cend(), 0.0) / static_cast< double >(m_range);
-	}
-
-	size_t
-	Abstract::range () const noexcept
-	{
-		return m_range;
-	}
-
-	size_t
-	Abstract::topCount () const noexcept
-	{
-		return m_topCount;
 	}
 
 	void

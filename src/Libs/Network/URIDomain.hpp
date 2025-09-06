@@ -30,7 +30,6 @@
 #include <cstdint>
 #include <array>
 #include <map>
-#include <iostream>
 #include <sstream>
 #include <string>
 
@@ -60,7 +59,7 @@ namespace EmEn::Libs::Network
 			URIDomain () noexcept = default;
 
 			/**
-			 * @brief Constructs an URI domain.
+			 * @brief Constructs a URI domain.
 			 * @param hostname The host part of the URI domain [std::move].
 			 * @param port The port used by the URI domain. Default 0.
 			 * @param base The base [std::move]. Default "//".
@@ -68,10 +67,20 @@ namespace EmEn::Libs::Network
 			 * @param password The password used by the URI domain [std::move]. Default none.
 			 * @param options The user login options used by the URI domain. Default none.
 			 */
-			explicit URIDomain (Hostname hostname, uint32_t port = 0, std::string base = "//", std::string username = {}, std::string password = {}, const std::map< std::string, std::string > & options = {}) noexcept;
+			explicit
+			URIDomain (Hostname hostname, uint32_t port = 0, std::string base = "//", std::string username = {}, std::string password = {}, const std::map< std::string, std::string > & options = {}) noexcept
+				: m_base{std::move(base)},
+				m_username{std::move(username)},
+				m_password{std::move(password)},
+				m_options{options},
+				m_hostname{std::move(hostname)},
+				m_port{port}
+			{
+
+			}
 
 			/**
-			 * @brief Constructs an URI domain from a raw string.
+			 * @brief Constructs a URI domain from a raw string.
 			 * @param rawString A reference to a string.
 			 */
 			explicit URIDomain (std::string rawString) noexcept;
@@ -105,7 +114,7 @@ namespace EmEn::Libs::Network
 			}
 
 			/**
-			 * @brief Sets the URI domain user name.
+			 * @brief Sets the URI domain username.
 			 * @note Separate method from URIDomain::setUserinfo().
 			 * @param username A reference to a string.
 			 * @return void
@@ -164,7 +173,7 @@ namespace EmEn::Libs::Network
 
 			/**
 			 * @brief Sets the port to the URI domain.
-			 * @param port The port number as an unsigned 32 bits integer.
+			 * @param port The port number as an unsigned 32-bit integer.
 			 * @return void
 			 */
 			void
@@ -174,7 +183,7 @@ namespace EmEn::Libs::Network
 			}
 
 			/**
-			 * @brief Returns the user informations part.
+			 * @brief Returns the user information part.
 			 * @return std::string
 			 */
 			[[nodiscard]]
@@ -265,21 +274,6 @@ namespace EmEn::Libs::Network
 				return m_hostname.empty();
 			}
 
-			/**
-			 * @brief STL streams printable object.
-			 * @param out A reference to the stream output.
-			 * @param obj A reference to the object to print.
-			 * @return std::ostream &
-			 */
-			friend std::ostream & operator<< (std::ostream & out, const URIDomain & obj);
-
-			/**
-			 * @brief Stringifies the object.
-			 * @param obj A reference to the object to print.
-			 * @return std::string
-			 */
-			friend std::string to_string (const URIDomain & obj) noexcept;
-
 		private:
 
 			/**
@@ -299,7 +293,7 @@ namespace EmEn::Libs::Network
 			std::string extractBase (const std::string & string) noexcept;
 
 			/**
-			 * @brief Extracts the user informations from a raw string.
+			 * @brief Extracts the user information from a raw string.
 			 * @param string A reference to a string.
 			 * @return std::string
 			 */
@@ -307,11 +301,19 @@ namespace EmEn::Libs::Network
 			std::string extractUserInfos (const std::string & string) noexcept;
 
 			/**
-			 * @brief Parses the user informations.
+			 * @brief Parses the user information.
 			 * @param string A reference to a string.
 			 * @return void
 			 */
 			void parseUserInfos (const std::string & string) noexcept;
+
+			/**
+			 * @brief STL streams printable object.
+			 * @param out A reference to the stream output.
+			 * @param obj A reference to the object to print.
+			 * @return std::ostream &
+			 */
+			friend std::ostream & operator<< (std::ostream & out, const URIDomain & obj);
 
 			std::string m_base;
 			std::string m_username;
@@ -320,4 +322,20 @@ namespace EmEn::Libs::Network
 			Hostname m_hostname;
 			uint32_t m_port{0};
 	};
+
+	/**
+	 * @brief Stringifies the object.
+	 * @param obj A reference to the object to print.
+	 * @return std::string
+	 */
+	inline
+	std::string
+	to_string (const URIDomain & obj) noexcept
+	{
+		std::stringstream output;
+
+		output << obj;
+
+		return output.str();
+	}
 }

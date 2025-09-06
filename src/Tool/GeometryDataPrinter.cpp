@@ -42,61 +42,41 @@
 
 namespace EmEn::Tool
 {
-	using namespace EmEn::Libs;
-	using namespace EmEn::Libs::VertexFactory;
+	using namespace Libs;
+	using namespace Libs::VertexFactory;
 	using namespace Graphics;
 
 	GeometryDataPrinter::GeometryDataPrinter (const Arguments & arguments) noexcept
 	{
+		if ( const auto arg = arguments.get("--output-file", "-o") )
 		{
-			const auto arg = arguments.get("--output-file", "-o");
-
-			if ( arg.isPresent() )
-			{
-				m_outputFile = arg.value();
-			}
+			m_outputFile = arg.value();
 		}
 
+		if ( const auto arg = arguments.get("--shape") )
 		{
-			const auto arg = arguments.get("--shape");
-
-			if ( arg.isPresent() )
-			{
-				m_shapeType = to_ShapeType(String::ucfirst(arg.value()));
-			}
+			m_shapeType = to_ShapeType(String::ucfirst(arg.value()));
 		}
 
+		if ( const auto arg = arguments.get("--size") )
 		{
-			const auto arg = arguments.get("--size");
-
-			if ( arg.isPresent() )
-			{
-				m_baseSize = String::toNumber< float >(arg.value());
-			}
+			m_baseSize = String::toNumber< float >(arg.value());
 		}
 
+		if ( const auto arg = arguments.get("--length") )
 		{
-			const auto arg = arguments.get("--length");
-
-			if ( arg.isPresent() )
-			{
-				m_baseLength = String::toNumber< float >(arg.value());
-			}
+			m_baseLength = String::toNumber< float >(arg.value());
 		}
 
+		if ( const auto arg = arguments.get("--quality") )
 		{
-			const auto arg = arguments.get("--quality");
-
-			if ( arg.isPresent() )
-			{
-				m_quality = String::toNumber< uint64_t >(arg.value());
-			}
+			m_quality = String::toNumber< uint64_t >(arg.value());
 		}
-
-		m_flags[EnableNormals] = arguments.get("--enable-normals").isPresent();
-		m_flags[EnableTangentSpace] = arguments.get("--enable-tangent-space").isPresent();
-		m_flags[EnableTexCoords] = arguments.get("--enable-tex-coords").isPresent();
-		m_flags[Enable3DTexCoords] = arguments.get("--enable-3d-tex-coords").isPresent();
+		
+		m_flags[EnableNormals] = arguments.isSwitchPresent("--enable-normals");
+		m_flags[EnableTangentSpace] = arguments.isSwitchPresent("--enable-tangent-space");
+		m_flags[EnableTexCoords] = arguments.isSwitchPresent("--enable-tex-coords");
+		m_flags[Enable3DTexCoords] = arguments.isSwitchPresent("--enable-3d-tex-coords");
 	}
 
 	bool
@@ -202,7 +182,7 @@ namespace EmEn::Tool
 			out.close();
 		}
 
-		Tracer::instance().disableTracer(true);
+		Tracer::getInstance().disableTracer(true);
 
 		return true;
 	}

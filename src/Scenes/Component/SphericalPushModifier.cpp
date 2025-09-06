@@ -32,10 +32,10 @@
 
 namespace EmEn::Scenes::Component
 {
-	using namespace EmEn::Libs;
-	using namespace EmEn::Libs::Math;
-	using namespace EmEn::Animations;
-	using namespace EmEn::Physics;
+	using namespace Libs;
+	using namespace Libs::Math;
+	using namespace Animations;
+	using namespace Physics;
 
 	void
 	SphericalPushModifier::move (const CartesianFrame< float > & /*worldCoordinates*/) noexcept

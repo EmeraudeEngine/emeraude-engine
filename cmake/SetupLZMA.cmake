@@ -1,24 +1,22 @@
-if ( NOT LZMA_ENABLED )
-	if ( EMERAUDE_USE_SYSTEM_LIBS )
-		message("Enabling LZMA library from system ...")
+if ( NOT TARGET_BINARY_FOR_SETUP )
+	message(FATAL_ERROR "TARGET_BINARY_FOR_SETUP is not SET !")
+endif ()
 
-		# NOTE: https://cmake.org/cmake/help/latest/module/FindLibLZMA.html
-		find_package(LibLZMA REQUIRED)
+if ( EMERAUDE_USE_SYSTEM_LIBS )
+	message("Enabling LZMA library from system ...")
 
-		target_include_directories(${PROJECT_NAME} PRIVATE ${LIBLZMA_INCLUDE_DIRS})
-		target_link_directories(${PROJECT_NAME} PRIVATE ${LIBLZMA_LIBRARIES})
-		target_link_libraries(${PROJECT_NAME} PRIVATE LibLZMA::LibLZMA)
-	else ()
-		message("Enabling LZMA library from local source ...")
+	# NOTE: https://cmake.org/cmake/help/latest/module/FindLibLZMA.html
+	find_package(LibLZMA REQUIRED)
 
-		if ( MSVC )
-			target_link_libraries(${PROJECT_NAME} PRIVATE ${LOCAL_LIB_DIR}/lib/lzma.lib)
-		else ()
-			target_link_libraries(${PROJECT_NAME} PRIVATE ${LOCAL_LIB_DIR}/lib/liblzma.a)
-		endif ()
-	endif ()
+	target_include_directories(${TARGET_BINARY_FOR_SETUP} PUBLIC ${LIBLZMA_INCLUDE_DIRS})
 
-	set(LZMA_ENABLED On)
+	target_link_directories(${TARGET_BINARY_FOR_SETUP} PUBLIC ${LIBLZMA_LIBRARIES})
+
+	target_link_libraries(${TARGET_BINARY_FOR_SETUP} PRIVATE LibLZMA::LibLZMA)
 else ()
-	message("The LZMA library is already enabled.")
+	message("Enabling LZMA library from local source ...")
+
+	target_compile_definitions(${TARGET_BINARY_FOR_SETUP} PUBLIC LZMA_API_STATIC)
+
+	target_link_libraries(${TARGET_BINARY_FOR_SETUP} PRIVATE lzma)
 endif ()

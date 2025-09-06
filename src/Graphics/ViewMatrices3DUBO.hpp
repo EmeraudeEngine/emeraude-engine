@@ -249,8 +249,9 @@ namespace EmEn::Graphics
 			void
 			destroy () noexcept override
 			{
+				/* [VULKAN-CPU-SYNC] */
 				/* NOTE: Lock between updateVideoMemory() and destroy(). */
-				const std::lock_guard< std::mutex > lockGuard{m_GPUBufferAccessLock};
+				const std::lock_guard< std::mutex > lock{m_memoryAccess};
 
 				m_descriptorSet.reset();
 				m_uniformBufferObject.reset();
@@ -321,7 +322,7 @@ namespace EmEn::Graphics
 			std::array< DataState, 2 > m_renderState;
 			std::unique_ptr< Vulkan::UniformBufferObject > m_uniformBufferObject;
 			std::unique_ptr< Vulkan::DescriptorSet > m_descriptorSet;
-			mutable std::mutex m_GPUBufferAccessLock;
+			mutable std::mutex m_memoryAccess;
 	};
 
 	inline

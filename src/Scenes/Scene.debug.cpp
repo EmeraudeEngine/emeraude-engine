@@ -35,22 +35,20 @@
 
 namespace EmEn::Scenes
 {
-	using namespace EmEn::Libs;
-	using namespace EmEn::Libs::Math;
-	using namespace EmEn::Libs::PixelFactory;
+	using namespace Libs;
+	using namespace Libs::Math;
+	using namespace Libs::PixelFactory;
 	using namespace Graphics;
 
 	bool
-	Scene::enableCompassDisplay () noexcept
+	Scene::enableCompassDisplay (Resources::Manager & resourceManager) noexcept
 	{
 		if ( this->compassDisplayEnabled() )
 		{
 			return true;
 		}
 
-		auto * resources = Resources::Manager::instance();
-
-		const auto materialResource = resources->container< Material::BasicResource >()->getOrCreateResource("+DebugSceneMaterial", [] (Material::BasicResource & newMaterial) {
+		const auto materialResource = resourceManager.container< Material::BasicResource >()->getOrCreateResource("+DebugSceneMaterial", [] (Material::BasicResource & newMaterial) {
 			newMaterial.enableVertexColor();
 
 			return newMaterial.setManualLoadSuccess(true);
@@ -77,7 +75,7 @@ namespace EmEn::Scenes
 		{
 			const auto label = String::incrementalLabel(CompassDisplay, count);
 
-			Geometry::ResourceGenerator generator{*resources, Geometry::EnableNormal | Geometry::EnableVertexColor};
+			Geometry::ResourceGenerator generator{resourceManager, Geometry::EnableNormal | Geometry::EnableVertexColor};
 			generator.parameters().setGlobalVertexColor(color);
 
 			const auto geometryResource = generator.sphere(8.0F, 16, 8, label);
@@ -87,7 +85,7 @@ namespace EmEn::Scenes
 				return false;
 			}
 
-			const auto meshResource = resources->container< Renderable::MeshResource >()->getOrCreateResource(label, [&geometryResource, &materialResource] (Renderable::MeshResource & newMesh) {
+			const auto meshResource = resourceManager.container< Renderable::MeshResource >()->getOrCreateResource(label, [&geometryResource, &materialResource] (Renderable::MeshResource & newMesh) {
 				return newMesh.load(geometryResource, materialResource);
 			});
 
@@ -128,7 +126,7 @@ namespace EmEn::Scenes
 	}
 
 	bool
-	Scene::toggleCompassDisplay () noexcept
+	Scene::toggleCompassDisplay (Resources::Manager & resourceManager) noexcept
 	{
 		if ( this->compassDisplayEnabled() )
 		{
@@ -137,13 +135,13 @@ namespace EmEn::Scenes
 			return false;
 		}
 
-		this->enableCompassDisplay();
+		this->enableCompassDisplay(resourceManager);
 
 		return true;
 	}
 
 	bool
-	Scene::enableGroundZeroDisplay () noexcept
+	Scene::enableGroundZeroDisplay (Resources::Manager & resourceManager) noexcept
 	{
 		if ( this->groundZeroDisplayEnabled() )
 		{
@@ -153,15 +151,13 @@ namespace EmEn::Scenes
 		const auto planeSize = m_boundary * Double< float >;
 		const auto planeDivision = static_cast< uint32_t >(m_boundary / 100.0F);
 
-		auto * resources = Resources::Manager::instance();
-
-		const auto materialResource = resources->container< Material::BasicResource >()->getOrCreateResource("+DebugSceneMaterial", [] (Material::BasicResource & newMaterial) {
+		const auto materialResource = resourceManager.container< Material::BasicResource >()->getOrCreateResource("+DebugSceneMaterial", [] (Material::BasicResource & newMaterial) {
 			newMaterial.enableVertexColor();
 
 			return newMaterial.setManualLoadSuccess(true);
 		});
 
-		Geometry::ResourceGenerator generator{*resources, Geometry::EnableNormal | Geometry::EnableVertexColor | Geometry::EnablePrimitiveRestart};
+		Geometry::ResourceGenerator generator{resourceManager, Geometry::EnableNormal | Geometry::EnableVertexColor | Geometry::EnablePrimitiveRestart};
 		generator.parameters().setVertexColorGenMode(VertexColorGenMode::UseGlobal);
 		generator.parameters().setGlobalVertexColor(White);
 
@@ -172,7 +168,7 @@ namespace EmEn::Scenes
 			return false;
 		}
 
-		const auto meshResource = resources->container< Renderable::MeshResource >()->getOrCreateResource(GroundZeroPlaneDisplay, [&geometryResource, &materialResource] (Renderable::MeshResource & newMesh) {
+		const auto meshResource = resourceManager.container< Renderable::MeshResource >()->getOrCreateResource(GroundZeroPlaneDisplay, [&geometryResource, &materialResource] (Renderable::MeshResource & newMesh) {
 			return newMesh.load(geometryResource, materialResource, {PolygonMode::Line, CullingMode::None});
 		});
 
@@ -207,7 +203,7 @@ namespace EmEn::Scenes
 	}
 
 	void
-	Scene::toggleGroundZeroDisplay () noexcept
+	Scene::toggleGroundZeroDisplay (Resources::Manager & resourceManager) noexcept
 	{
 		if ( this->groundZeroDisplayEnabled() )
 		{
@@ -215,12 +211,12 @@ namespace EmEn::Scenes
 		}
 		else
 		{
-			this->enableGroundZeroDisplay();
+			this->enableGroundZeroDisplay(resourceManager);
 		}
 	}
 
 	bool
-	Scene::enableBoundaryPlanesDisplay () noexcept
+	Scene::enableBoundaryPlanesDisplay (Resources::Manager & resourceManager) noexcept
 	{
 		if ( this->boundaryPlanesDisplayEnabled() )
 		{
@@ -230,9 +226,7 @@ namespace EmEn::Scenes
 		const auto planeSize = m_boundary * Double< float >;
 		const auto planeDivision = static_cast< uint32_t >(m_boundary / 100.0F);
 
-		auto * resources = Resources::Manager::instance();
-
-		const auto materialResource = resources->container< Material::BasicResource >()->getOrCreateResource("+DebugSceneMaterial", [] (Material::BasicResource & newMaterial) {
+		const auto materialResource = resourceManager.container< Material::BasicResource >()->getOrCreateResource("+DebugSceneMaterial", [] (Material::BasicResource & newMaterial) {
 			newMaterial.enableVertexColor();
 
 			return newMaterial.setManualLoadSuccess(true);
@@ -259,7 +253,7 @@ namespace EmEn::Scenes
 		{
 			const auto label = String::incrementalLabel(BoundaryPlanesDisplay, count);
 
-			Geometry::ResourceGenerator generator{*resources, Geometry::EnableNormal | Geometry::EnableVertexColor | Geometry::EnablePrimitiveRestart};
+			Geometry::ResourceGenerator generator{resourceManager, Geometry::EnableNormal | Geometry::EnableVertexColor | Geometry::EnablePrimitiveRestart};
 			generator.parameters().setVertexColorGenMode(VertexColorGenMode::UseGlobal);
 			generator.parameters().setGlobalVertexColor(color);
 
@@ -270,7 +264,7 @@ namespace EmEn::Scenes
 				return false;
 			}
 
-			const auto meshResource = resources->container< Renderable::MeshResource >()->getOrCreateResource(label, [&geometryResource, &materialResource] (Renderable::MeshResource & newMesh) {
+			const auto meshResource = resourceManager.container< Renderable::MeshResource >()->getOrCreateResource(label, [&geometryResource, &materialResource] (Renderable::MeshResource & newMesh) {
 				return newMesh.load(geometryResource, materialResource, {PolygonMode::Line, CullingMode::None});
 			});
 
@@ -321,7 +315,7 @@ namespace EmEn::Scenes
 	}
 
 	void
-	Scene::toggleBoundaryPlanesDisplay () noexcept
+	Scene::toggleBoundaryPlanesDisplay (Resources::Manager & resourceManager) noexcept
 	{
 		if ( this->boundaryPlanesDisplayEnabled() )
 		{
@@ -329,7 +323,7 @@ namespace EmEn::Scenes
 		}
 		else
 		{
-			this->enableGroundZeroDisplay();
+			this->enableGroundZeroDisplay(resourceManager);
 		}
 	}
 }

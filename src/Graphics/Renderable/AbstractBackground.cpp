@@ -32,15 +32,15 @@
 
 namespace EmEn::Graphics::Renderable
 {
-	using namespace EmEn::Libs;
-	using namespace EmEn::Libs::Math;
-	using namespace EmEn::Libs::PixelFactory;
-	using namespace EmEn::Libs::VertexFactory;
+	using namespace Libs;
+	using namespace Libs::Math;
+	using namespace Libs::PixelFactory;
+	using namespace Libs::VertexFactory;
 
 	std::shared_ptr< Geometry::IndexedVertexResource >
-	AbstractBackground::getSkyBoxGeometry () noexcept
+	AbstractBackground::getSkyBoxGeometry (Resources::ServiceProvider & serviceProvider) noexcept
 	{
-		auto * geometries = Resources::Manager::instance()->container< Geometry::IndexedVertexResource >();
+		auto * geometries = serviceProvider.container< Geometry::IndexedVertexResource >();
 
 		if ( geometries->isResourceLoaded(SkyBoxGeometryName) )
 		{
@@ -65,9 +65,9 @@ namespace EmEn::Graphics::Renderable
 	}
 
 	std::shared_ptr< Geometry::IndexedVertexResource >
-	AbstractBackground::getSkyDomeGeometry () noexcept
+	AbstractBackground::getSkyDomeGeometry (Resources::ServiceProvider & serviceProvider) noexcept
 	{
-		auto * geometries = Resources::Manager::instance()->container< Geometry::IndexedVertexResource >();
+		auto * geometries = serviceProvider.container< Geometry::IndexedVertexResource >();
 
 		if ( geometries->isResourceLoaded(SkyDomeGeometryName) )
 		{

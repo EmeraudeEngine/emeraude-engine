@@ -1,3 +1,7 @@
+if ( NOT TARGET_BINARY_FOR_SETUP )
+	message(FATAL_ERROR "TARGET_BINARY_FOR_SETUP is not SET !")
+endif ()
+
 message("Configuring reproc/reproc++ library as sub-project ...")
 
 set(REPROC++ ON)
@@ -11,7 +15,6 @@ set(REPROC_TIDY OFF)
 set(REPROC_SANITIZERS OFF)
 set(REPROC_WARNINGS_AS_ERRORS OFF)
 set(REPROC_OBJECT_LIBRARIES ON)
-#set(BUILD_SHARED_LIBS ON)
 
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/dependencies/reproc EXCLUDE_FROM_ALL)
 
@@ -20,8 +23,8 @@ if ( UNIX )
 	target_compile_options(reproc++ PRIVATE -fPIC)
 endif ()
 
-target_include_directories(${PROJECT_NAME} PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/reproc/reproc/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/reproc/reproc++/include
+target_include_directories(${TARGET_BINARY_FOR_SETUP} PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/reproc/reproc/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/reproc/reproc++/include
 )
-target_link_libraries(${PROJECT_NAME} PRIVATE reproc reproc++)
+target_link_libraries(${TARGET_BINARY_FOR_SETUP} PRIVATE reproc reproc++)

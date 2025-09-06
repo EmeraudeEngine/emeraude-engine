@@ -33,22 +33,12 @@
 #include "Resources/Manager.hpp"
 #include "Tracer.hpp"
 
-/* Defining the resource manager class id. */
-template<>
-const char * const EmEn::Resources::Container< EmEn::Graphics::ImageResource >::ClassId{"ImageContainer"};
-
-/* Defining the resource manager ClassUID. */
-template<>
-const size_t EmEn::Resources::Container< EmEn::Graphics::ImageResource >::ClassUID{getClassUID(ClassId)};
-
 namespace EmEn::Graphics
 {
-	using namespace EmEn::Libs;
-
-	const size_t ImageResource::ClassUID{getClassUID(ClassId)};
+	using namespace Libs;
 
 	bool
-	ImageResource::load () noexcept
+	ImageResource::load (Resources::ServiceProvider & /*serviceProvider*/) noexcept
 	{
 		constexpr size_t DefaultSize{32};
 
@@ -75,7 +65,7 @@ namespace EmEn::Graphics
 	}
 
 	bool
-	ImageResource::load (const std::filesystem::path & filepath) noexcept
+	ImageResource::load (Resources::ServiceProvider & /*serviceProvider*/, const std::filesystem::path & filepath) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
@@ -102,7 +92,7 @@ namespace EmEn::Graphics
 	}
 
 	bool
-	ImageResource::load (const Json::Value & /*data*/) noexcept
+	ImageResource::load (Resources::ServiceProvider & /*serviceProvider*/, const Json::Value & /*data*/) noexcept
 	{
 		if ( !this->beginLoading() )
 		{

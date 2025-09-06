@@ -52,9 +52,6 @@ namespace EmEn::Graphics::Renderable
 			/** @brief Class identifier. */
 			static constexpr auto ClassId{"SimpleMeshResource"};
 
-			/** @brief Observable class unique identifier. */
-			static const size_t ClassUID;
-
 			/** @brief Defines the resource dependency complexity. */
 			static constexpr auto Complexity{Resources::DepComplexity::Complex};
 
@@ -70,12 +67,25 @@ namespace EmEn::Graphics::Renderable
 
 			}
 
+			/**
+			 * @brief Returns the unique identifier for this class [Thread-safe].
+			 * @return size_t
+			 */
+			static
+			size_t
+			getClassUID () noexcept
+			{
+				static const size_t classUID = EmEn::Libs::Hash::FNV1a(ClassId);
+
+				return classUID;
+			}
+
 			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
 			[[nodiscard]]
 			size_t
 			classUID () const noexcept override
 			{
-				return ClassUID;
+				return getClassUID();
 			}
 
 			/** @copydoc EmEn::Libs::ObservableTrait::is() const */
@@ -83,7 +93,7 @@ namespace EmEn::Graphics::Renderable
 			bool
 			is (size_t classUID) const noexcept override
 			{
-				return classUID == ClassUID;
+				return classUID == getClassUID();
 			}
 
 			/** @copydoc EmEn::Resources::ResourceTrait::classLabel() const */
@@ -94,11 +104,11 @@ namespace EmEn::Graphics::Renderable
 				return ClassId;
 			}
 
-			/** @copydoc EmEn::Resources::ResourceTrait::load() */
-			bool load () noexcept override;
+			/** @copydoc EmEn::Resources::ResourceTrait::load(Resources::ServiceProvider &) */
+			bool load (Resources::ServiceProvider & serviceProvider) noexcept override;
 
-			/** @copydoc EmEn::Resources::ResourceTrait::load(const Json::Value &) */
-			bool load (const Json::Value & data) noexcept override;
+			/** @copydoc EmEn::Resources::ResourceTrait::load(Resources::Manager &, const Json::Value &) */
+			bool load (Resources::ServiceProvider & serviceProvider, const Json::Value & data) noexcept override;
 
 			/** @copydoc EmEn::Resources::ResourceTrait::memoryOccupied() const noexcept */
 			[[nodiscard]]
@@ -188,15 +198,16 @@ namespace EmEn::Graphics::Renderable
 			bool load (const std::shared_ptr< Geometry::Interface > & geometry, const std::shared_ptr< Material::Interface > & material = nullptr) noexcept;
 
 			/**
-			 * @brief Creates a unique simple mesh or returns the existing one with same parameters.
+			 * @brief Creates a unique simple mesh or returns the existing one with the same parameters.
 			 * The resource name will be based on sub-resource names.
+			 * @param serviceProvider A reference to the resource manager through a service provider.
 			 * @param geometryResource A reference to a geometry resource smart pointer.
 			 * @param materialResource A reference to a material resource smart pointer.
 			 * @param resourceName A string. Default auto generated name.
 			 * @return std::shared_ptr< SimpleMeshResource >
 			 */
 			[[nodiscard]]
-			static std::shared_ptr< SimpleMeshResource > getOrCreate (const std::shared_ptr< Geometry::Interface > & geometryResource, const std::shared_ptr< Material::Interface > & materialResource, std::string resourceName = {}) noexcept;
+			static std::shared_ptr< SimpleMeshResource > getOrCreate (Resources::ServiceProvider & serviceProvider, const std::shared_ptr< Geometry::Interface > & geometryResource, const std::shared_ptr< Material::Interface > & materialResource, std::string resourceName = {}) noexcept;
 
 		private:
 

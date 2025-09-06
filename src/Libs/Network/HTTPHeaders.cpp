@@ -26,9 +26,6 @@
 
 #include "HTTPHeaders.hpp"
 
-/* Emeraude-Engine configuration. */
-#include "emeraude_config.hpp"
-
 /* STL inclusions. */
 #include <iostream>
 
@@ -37,36 +34,10 @@
 
 namespace EmEn::Libs::Network
 {
-	HTTPHeaders::HTTPHeaders (Version version) noexcept
-		: m_version(version)
-	{
-
-	}
-
-	void
-	HTTPHeaders::setVersion (Version version) noexcept
-	{
-		m_version = version;
-	}
-
-	HTTPHeaders::Version
-	HTTPHeaders::version () const noexcept
-	{
-		return m_version;
-	}
-
-	void
-	HTTPHeaders::add (const std::string & key, const std::string & value) noexcept
-	{
-		m_headers.emplace(key, value);
-	}
-
 	std::string
 	HTTPHeaders::value (const std::string & key) const noexcept
 	{
-		const auto headerIt = m_headers.find(key);
-
-		if ( headerIt != m_headers.cend() )
+		if ( const auto headerIt = m_headers.find(key); headerIt != m_headers.cend() )
 		{
 			return headerIt->second;
 		}
@@ -81,7 +52,7 @@ namespace EmEn::Libs::Network
 
 		if ( empty(lines) )
 		{
-			std::cerr << __PRETTY_FUNCTION__ << ", empty HTTP header !" "\n";
+			std::cerr << "HTTPHeaders::parse(), empty HTTP header !" "\n";
 
 			return false;
 		}
@@ -93,7 +64,7 @@ namespace EmEn::Libs::Network
 		}
 		else
 		{
-			std::cerr << __PRETTY_FUNCTION__ << ", unable to identify the HTTP header !" "\n";
+			std::cerr << "HTTPHeaders::parse(), unable to identify the HTTP header !" "\n";
 
 			return false;
 		}
@@ -107,7 +78,7 @@ namespace EmEn::Libs::Network
 
 			if ( chunks.size() != 2 )
 			{
-				std::cerr << __PRETTY_FUNCTION__ << ", unable to parse header line : " << line << "\n";
+				std::cerr << "HTTPHeaders::parse(), unable to parse header line : " << line << "\n";
 
 				errors++;
 

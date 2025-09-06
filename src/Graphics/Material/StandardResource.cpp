@@ -57,27 +57,17 @@
 #include "Helpers.hpp"
 #include "Tracer.hpp"
 
-/* Defining the resource manager class id. */
-template<>
-const char * const EmEn::Resources::Container< EmEn::Graphics::Material::StandardResource >::ClassId{"StandardResourceContainer"};
-
-/* Defining the resource manager ClassUID. */
-template<>
-const size_t EmEn::Resources::Container< EmEn::Graphics::Material::StandardResource >::ClassUID{getClassUID(ClassId)};
-
 namespace EmEn::Graphics::Material
 {
-	using namespace EmEn::Libs;
-	using namespace EmEn::Libs::Math;
-	using namespace EmEn::Saphir;
-	using namespace EmEn::Saphir::Keys;
-	using namespace EmEn::Graphics::Material::Component;
-	using namespace EmEn::Vulkan;
-
-	const size_t StandardResource::ClassUID{getClassUID(ClassId)};
+	using namespace Libs;
+	using namespace Libs::Math;
+	using namespace Saphir;
+	using namespace Saphir::Keys;
+	using namespace Graphics::Material::Component;
+	using namespace Vulkan;
 
 	bool
-	StandardResource::load () noexcept
+	StandardResource::load (Resources::ServiceProvider & /*serviceProvider*/) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
@@ -92,7 +82,7 @@ namespace EmEn::Graphics::Material
 	}
 
 	bool
-	StandardResource::parseAmbientComponent (const Json::Value & data, Resources::Manager & resources) noexcept
+	StandardResource::parseAmbientComponent (const Json::Value & data, Resources::ServiceProvider & serviceProvider) noexcept
 	{
 		FillingType fillingType{};
 
@@ -122,7 +112,7 @@ namespace EmEn::Graphics::Material
 			case FillingType::Cubemap :
 			case FillingType::AnimatedTexture :
 			{
-				const auto result = m_components.emplace(ComponentType::Ambient, std::make_unique< Texture >(Uniform::AmbientSampler, SurfaceAmbientColor, componentData, fillingType, resources));
+				const auto result = m_components.emplace(ComponentType::Ambient, std::make_unique< Texture >(Uniform::AmbientSampler, SurfaceAmbientColor, componentData, fillingType, serviceProvider));
 
 				if ( !result.second || result.first->second == nullptr )
 				{
@@ -146,7 +136,7 @@ namespace EmEn::Graphics::Material
 	}
 
 	bool
-	StandardResource::parseDiffuseComponent (const Json::Value & data, Resources::Manager & resources) noexcept
+	StandardResource::parseDiffuseComponent (const Json::Value & data, Resources::ServiceProvider & serviceProvider) noexcept
 	{
 		FillingType fillingType{};
 
@@ -176,7 +166,7 @@ namespace EmEn::Graphics::Material
 			case FillingType::Cubemap :
 			case FillingType::AnimatedTexture :
 			{
-				const auto result = m_components.emplace(ComponentType::Diffuse, std::make_unique< Texture >(Uniform::DiffuseSampler, SurfaceDiffuseColor, componentData, fillingType, resources));
+				const auto result = m_components.emplace(ComponentType::Diffuse, std::make_unique< Texture >(Uniform::DiffuseSampler, SurfaceDiffuseColor, componentData, fillingType, serviceProvider));
 
 				if ( !result.second || result.first->second == nullptr )
 				{
@@ -198,7 +188,7 @@ namespace EmEn::Graphics::Material
 	}
 
 	bool
-	StandardResource::parseSpecularComponent (const Json::Value & data, Resources::Manager & resources) noexcept
+	StandardResource::parseSpecularComponent (const Json::Value & data, Resources::ServiceProvider & serviceProvider) noexcept
 	{
 		FillingType fillingType{};
 
@@ -229,7 +219,7 @@ namespace EmEn::Graphics::Material
 			case FillingType::Cubemap :
 			case FillingType::AnimatedTexture :
 			{
-				const auto result = m_components.emplace(ComponentType::Specular, std::make_unique< Texture >(Uniform::SpecularSampler, SurfaceSpecularColor, componentData, fillingType, resources));
+				const auto result = m_components.emplace(ComponentType::Specular, std::make_unique< Texture >(Uniform::SpecularSampler, SurfaceSpecularColor, componentData, fillingType, serviceProvider));
 
 				if ( !result.second || result.first->second == nullptr )
 				{
@@ -255,7 +245,7 @@ namespace EmEn::Graphics::Material
 	}
 
 	bool
-	StandardResource::parseOpacityComponent (const Json::Value & data, Resources::Manager & resources) noexcept
+	StandardResource::parseOpacityComponent (const Json::Value & data, Resources::ServiceProvider & serviceProvider) noexcept
 	{
 		FillingType fillingType{};
 
@@ -287,7 +277,7 @@ namespace EmEn::Graphics::Material
 			case FillingType::Cubemap :
 			case FillingType::AnimatedTexture :
 			{
-				const auto result = m_components.emplace(ComponentType::Opacity, std::make_unique< Texture >(Uniform::OpacitySampler, SurfaceOpacityAmount, componentData, fillingType, resources));
+				const auto result = m_components.emplace(ComponentType::Opacity, std::make_unique< Texture >(Uniform::OpacitySampler, SurfaceOpacityAmount, componentData, fillingType, serviceProvider));
 
 				if ( !result.second || result.first->second == nullptr )
 				{
@@ -314,7 +304,7 @@ namespace EmEn::Graphics::Material
 	}
 
 	bool
-	StandardResource::parseAutoIlluminationComponent (const Json::Value & data, Resources::Manager & resources) noexcept
+	StandardResource::parseAutoIlluminationComponent (const Json::Value & data, Resources::ServiceProvider & serviceProvider) noexcept
 	{
 		FillingType fillingType{};
 
@@ -345,7 +335,7 @@ namespace EmEn::Graphics::Material
 			case FillingType::Cubemap :
 			case FillingType::AnimatedTexture :
 			{
-				const auto result = m_components.emplace(ComponentType::AutoIllumination, std::make_unique< Texture >(Uniform::AutoIlluminationSampler, SurfaceAutoIlluminationColor, componentData, fillingType, resources));
+				const auto result = m_components.emplace(ComponentType::AutoIllumination, std::make_unique< Texture >(Uniform::AutoIlluminationSampler, SurfaceAutoIlluminationColor, componentData, fillingType, serviceProvider));
 
 				if ( !result.second || result.first->second == nullptr )
 				{
@@ -371,7 +361,7 @@ namespace EmEn::Graphics::Material
 	}
 
 	bool
-	StandardResource::parseNormalComponent (const Json::Value & data, Resources::Manager & resources) noexcept
+	StandardResource::parseNormalComponent (const Json::Value & data, Resources::ServiceProvider & serviceProvider) noexcept
 	{
 		FillingType fillingType{};
 
@@ -390,7 +380,7 @@ namespace EmEn::Graphics::Material
 			case FillingType::Cubemap :
 			case FillingType::AnimatedTexture :
 			{
-				const auto result = m_components.emplace(ComponentType::Normal, std::make_unique< Texture >(Uniform::NormalSampler, SurfaceNormalVector, componentData, fillingType, resources));
+				const auto result = m_components.emplace(ComponentType::Normal, std::make_unique< Texture >(Uniform::NormalSampler, SurfaceNormalVector, componentData, fillingType, serviceProvider));
 
 				if ( !result.second || result.first->second == nullptr )
 				{
@@ -416,7 +406,7 @@ namespace EmEn::Graphics::Material
 	}
 
 	bool
-	StandardResource::parseReflectionComponent (const Json::Value & data, Resources::Manager & resources) noexcept
+	StandardResource::parseReflectionComponent (const Json::Value & data, Resources::ServiceProvider & serviceProvider) noexcept
 	{
 		FillingType fillingType{};
 
@@ -435,7 +425,7 @@ namespace EmEn::Graphics::Material
 			case FillingType::Cubemap :
 			case FillingType::AnimatedTexture :
 			{
-				const auto result = m_components.emplace(ComponentType::Reflection, std::make_unique< Texture >(Uniform::ReflectionSampler, SurfaceReflectionColor, componentData, fillingType, resources));
+				const auto result = m_components.emplace(ComponentType::Reflection, std::make_unique< Texture >(Uniform::ReflectionSampler, SurfaceReflectionColor, componentData, fillingType, serviceProvider));
 
 				if ( !result.second || result.first->second == nullptr )
 				{
@@ -461,58 +451,56 @@ namespace EmEn::Graphics::Material
 	}
 
 	bool
-	StandardResource::load (const Json::Value & data) noexcept
+	StandardResource::load (Resources::ServiceProvider & serviceProvider, const Json::Value & data) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
 			return false;
 		}
 
-		auto * resources = Resources::Manager::instance();
-
-		if ( !this->parseAmbientComponent(data, *resources) )
+		if ( !this->parseAmbientComponent(data, serviceProvider) )
 		{
 			TraceError{ClassId} << "Error while parsing the ambient component for material '" << this->name() << "' resource from JSON file !" "\n" "Data : " << data;
 
 			return this->setLoadSuccess(false);
 		}
 
-		if ( !this->parseDiffuseComponent(data, *resources) )
+		if ( !this->parseDiffuseComponent(data, serviceProvider) )
 		{
 			TraceError{ClassId} << "Error while parsing the diffuse component for material '" << this->name() << "' resource from JSON file !" "\n" "Data : " << data;
 
 			return this->setLoadSuccess(false);
 		}
 
-		if ( !this->parseSpecularComponent(data, *resources) )
+		if ( !this->parseSpecularComponent(data, serviceProvider) )
 		{
 			TraceError{ClassId} << "Error while parsing the specular component for material '" << this->name() << "' resource from JSON file !" "\n" "Data : " << data;
 
 			return this->setLoadSuccess(false);
 		}
 
-		if ( !this->parseAutoIlluminationComponent(data, *resources) )
+		if ( !this->parseAutoIlluminationComponent(data, serviceProvider) )
 		{
 			TraceError{ClassId} << "Error while parsing the auto-illumination component for material '" << this->name() << "' resource from JSON file !" "\n" "Data : " << data;
 
 			return this->setLoadSuccess(false);
 		}
 
-		if ( !this->parseOpacityComponent(data, *resources) )
+		if ( !this->parseOpacityComponent(data, serviceProvider) )
 		{
 			TraceError{ClassId} << "Error while parsing the opacity component for material '" << this->name() << "' resource from JSON file !" "\n" "Data : " << data;
 
 			return this->setLoadSuccess(false);
 		}
 
-		if ( !this->parseNormalComponent(data, *resources) )
+		if ( !this->parseNormalComponent(data, serviceProvider) )
 		{
 			TraceError{ClassId} << "Error while parsing the normal component for material '" << this->name() << "' resource from JSON file !" "\n" "Data : " << data;
 
 			return this->setLoadSuccess(false);
 		}
 
-		if ( !this->parseReflectionComponent(data, *resources) )
+		if ( !this->parseReflectionComponent(data, serviceProvider) )
 		{
 			TraceError{ClassId} << "Error while parsing the reflection component for material '" << this->name() << "' resource from JSON file !" "\n" "Data : " << data;
 

@@ -24,12 +24,11 @@
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
 
-#include "SystemInfo.hpp"
-
 /* Emeraude-Engine configuration. */
 #include "emeraude_config.hpp"
 
 #if IS_MACOS
+#include "SystemInfo.hpp"
 
 /* STL inclusions. */
 #include <iostream>

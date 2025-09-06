@@ -37,7 +37,6 @@
 #include "PlatformSpecific/SystemInfo.hpp"
 #include "PlatformSpecific/UserInfo.hpp"
 #include "Arguments.hpp"
-#include "Tracer.hpp"
 #include "FileSystem.hpp"
 #include "Settings.hpp"
 #include "Net/Manager.hpp"
@@ -70,7 +69,7 @@ namespace EmEn
 			 * @param processName A string  [std::move].
 			 * @param additionalArguments A reference to a vector of strings. Default none.
 			 */
-			PrimaryServices (int argc, char * * argv, const Identification & identification, std::string processName, const std::vector< std::string > & additionalArguments = {}) noexcept;
+			PrimaryServices (int argc, char * * argv, const Identification & identification, std::string processName, const std::vector< std::pair< std::string, std::string > > & additionalArguments = {}) noexcept;
 
 #if IS_WINDOWS
 			/**
@@ -89,7 +88,7 @@ namespace EmEn
 			 * @param processName A reference to a string.
 			 * @param additionalArguments A reference to a vector of strings. Default none.
 			 */
-			PrimaryServices (int argc, wchar_t * * wargv, const Identification & identification, const std::string & processName, const std::vector< std::string > & additionalArguments = {}) noexcept;
+			PrimaryServices (int argc, wchar_t * * wargv, const Identification & identification, const std::string & processName, const std::vector< std::pair< std::string, std::string > > & additionalArguments = {}) noexcept;
 #endif
 
 			/**

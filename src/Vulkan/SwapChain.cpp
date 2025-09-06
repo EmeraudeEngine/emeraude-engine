@@ -45,9 +45,9 @@
 
 namespace EmEn::Vulkan
 {
-	using namespace EmEn::Libs;
-	using namespace EmEn::Libs::Math;
-	using namespace EmEn::Graphics;
+	using namespace Libs;
+	using namespace Libs::Math;
+	using namespace Graphics;
 
 	SwapChain::SwapChain (const std::shared_ptr< Device > & device, Renderer & renderer, Settings & settings) noexcept
 		: AbstractDeviceDependentObject{device},
@@ -58,7 +58,7 @@ namespace EmEn::Vulkan
 
 		/* NOTE: Check for multisampling. */
 		{
-			const auto sampleCount = settings.get< uint32_t >(VideoFramebufferSamplesKey, DefaultVideoFramebufferSamples);
+			const auto sampleCount = settings.getOrSetDefault< uint32_t >(VideoFramebufferSamplesKey, DefaultVideoFramebufferSamples);
 
 			if ( sampleCount > 1 )
 			{
@@ -66,15 +66,15 @@ namespace EmEn::Vulkan
 			}
 		}
 
-		m_showInformation = settings.get< bool >(VkShowInformationKey, DefaultVkShowInformation);
-		m_tripleBufferingEnabled = settings.get< bool >(VideoEnableTripleBufferingKey, DefaultVideoEnableTripleBuffering);
-		m_VSyncEnabled = settings.get< bool >(VideoEnableVSyncKey, DefaultVideoEnableVSync);
+		m_showInformation = settings.getOrSetDefault< bool >(VkShowInformationKey, DefaultVkShowInformation);
+		m_tripleBufferingEnabled = settings.getOrSetDefault< bool >(VideoEnableTripleBufferingKey, DefaultVideoEnableTripleBuffering);
+		m_VSyncEnabled = settings.getOrSetDefault< bool >(VideoEnableVSyncKey, DefaultVideoEnableVSync);
 	}
 
 	bool
 	SwapChain::createBaseSwapChain (const Window & window, VkSwapchainKHR oldSwapChain) noexcept
 	{
-		const auto surface = window.surface();
+		const auto * surface = window.surface();
 		const auto surfaceFormat = this->chooseSurfaceFormat();
 		const auto & capabilities = surface->capabilities();
 
@@ -253,6 +253,8 @@ namespace EmEn::Vulkan
 			return false;
 		}
 
+		this->updateProperties();
+
 		if ( m_showInformation )
 		{
 			TraceSuccess{ClassId} << "The swap chain " << m_handle << " (" << this->identifier() << ") is successfully recreated !";
@@ -412,7 +414,7 @@ namespace EmEn::Vulkan
 			return false;
 		}
 
-		bool requestDepthStencilBuffer = this->precisions().depthBits() > 0 || this->precisions().stencilBits() > 0;
+		const bool requestDepthStencilBuffer = this->precisions().depthBits() > 0 || this->precisions().stencilBits() > 0;
 
 		/* Create image and image views to create the render pass. */
 		for ( size_t imageIndex = 0; imageIndex < m_imageCount; ++imageIndex )
@@ -760,7 +762,7 @@ namespace EmEn::Vulkan
 			return std::nullopt;
 		}
 
-		uint32_t imageIndex;
+		uint32_t imageIndex = 0;
 
 		const auto result = vkAcquireNextImageKHR(
 			this->device()->handle(),
@@ -799,8 +801,6 @@ namespace EmEn::Vulkan
 	bool
 	SwapChain::submitCommandBuffer (const std::shared_ptr< CommandBuffer > & commandBuffer, const uint32_t & imageIndex, const StaticVector< VkSemaphore, 16 > & callerWaitSemaphores) noexcept
 	{
-		const std::lock_guard< std::mutex > deviceAccessLockGuard{this->device()->deviceAccessLock()};
-
 		if ( m_status != Status::Ready )
 		{
 			return false;
@@ -822,8 +822,9 @@ namespace EmEn::Vulkan
 			return false;
 		}
 
-		const auto signalSemaphoreHandle = currentFrame.renderFinishedSemaphore->handle();
+		auto * const signalSemaphoreHandle = currentFrame.renderFinishedSemaphore->handle();
 
+		/* Submit */
 		{
 			StaticVector< VkSemaphore, 16 > waitSemaphores = callerWaitSemaphores;
 			waitSemaphores.emplace_back(currentFrame.imageAvailableSemaphore->handle());
@@ -846,6 +847,7 @@ namespace EmEn::Vulkan
 			}
 		}
 
+		/* Present */
 		{
 			bool swapChainRecreationNeeded = false;
 
@@ -995,19 +997,19 @@ namespace EmEn::Vulkan
 	}
 
 	void
-	SwapChain::updateProperties (bool isPerspectiveProjection, float distance, float fovOrNear) noexcept
+	SwapChain::updateProperties () noexcept
 	{
 		const auto & extent = this->extent();
 		const auto width = static_cast< float >(extent.width);
 		const auto height = static_cast< float >(extent.height);
 
-		if ( isPerspectiveProjection )
+		if ( m_isPerspectiveProjection )
 		{
-			m_viewMatrices.updatePerspectiveViewProperties(width, height, distance, fovOrNear);
+			m_viewMatrices.updatePerspectiveViewProperties(width, height, m_distance, m_fovOrNear);
 		}
 		else
 		{
-			m_viewMatrices.updateOrthographicViewProperties(width, height, distance, fovOrNear);
+			m_viewMatrices.updateOrthographicViewProperties(width, height, m_distance, m_fovOrNear);
 		}
 	}
 }

@@ -92,7 +92,31 @@ namespace EmEn::PlatformSpecific
 	 * @return const char *
 	 */
 	[[nodiscard]]
-	const char * to_cstring (GPUDeviceType value) noexcept;
+	inline
+	const char *
+	to_cstring (GPUDeviceType value) noexcept
+	{
+		switch ( value )
+		{
+			case GPUDeviceType::Other :
+				return OtherString;
+
+			case GPUDeviceType::IntegratedGPU :
+				return IntegratedGPUString;
+
+			case GPUDeviceType::DiscreteGPU :
+				return DiscreteGPUString;
+
+			case GPUDeviceType::VirtualGPU :
+				return VirtualGPUString;
+
+			case GPUDeviceType::CPU :
+				return CPUString;
+
+			default:
+				return nullptr;
+		}
+	}
 
 	/**
 	 * @brief Returns a string version of the enum value.

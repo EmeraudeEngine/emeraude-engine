@@ -11,7 +11,7 @@ list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 message("Using CMake ${CMAKE_VERSION}")
 
 #######################################################################
-# Configure the parallel job count
+# Configure the parallel job count.
 cmake_host_system_information(RESULT DETECTED_JOB_COUNT QUERY NUMBER_OF_PHYSICAL_CORES)
 
 set(JOB_COUNT ${DETECTED_JOB_COUNT} CACHE STRING "The number of job used for compilation. Default auto.")
@@ -19,42 +19,47 @@ set(CMAKE_BUILD_PARALLEL_LEVEL ${JOB_COUNT})
 
 message("Job processes used : ${CMAKE_BUILD_PARALLEL_LEVEL}")
 
+
+
 #######################################################################
 # Declare project and options.
+option(EMERAUDE_BUILD_SERVICES_ONLY "Build only the Emeraude-Engine services (Default Off)" Off)
+
+if ( EMERAUDE_BUILD_SERVICES_ONLY )
+	set(BINARY_NAME EmeraudeServices)
+else ()
+	set(BINARY_NAME Emeraude)
+endif ()
+
 project(
-	Emeraude
-	VERSION 0.7.5
+	${BINARY_NAME}
+	VERSION 0.7.51
 	DESCRIPTION "Emeraude Engine is an open-source (LGPLv3) 3D Graphics engine using Vulkan and written in C++20."
-	HOMEPAGE_URL "https://github.com/londnoir/emeraude-engine"
+	HOMEPAGE_URL "https://github.com/EmeraudeEngine/emeraude-engine"
 	LANGUAGES C CXX
 )
+
+set_property(GLOBAL PROPERTY USE_FOLDERS On)
 
 set(CMAKE_VERBOSE_MAKEFILE On)
 set(CMAKE_EXPORT_COMPILE_COMMANDS On)
 
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${CMAKE_BUILD_TYPE})
-set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${CMAKE_BUILD_TYPE})
+# Configure output directory by compilation type.
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/$<CONFIG>")
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/$<CONFIG>")
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/$<CONFIG>")
 
-set_property(GLOBAL PROPERTY USE_FOLDERS On)
-
-# Emeraude libraries project variables and options
-set(EMERAUDE_ENABLE_TESTS Off CACHE BOOL "Enable the Emeraude testing suite (Default Off).")
+# Emeraude libraries project variables and options.
 set(EMERAUDE_INTERNET_CHECK_DOMAIN "google.com" CACHE STRING "Web domain to check internet connexion (Default google.com).")
 set(EMERAUDE_COMPILATION_DIR "" CACHE STRING "Declare where the project is compiled. For macOS this should point the 'package.app' in the compilation folder.")
-set(EMERAUDE_USE_SYSTEM_LIBS Off CACHE BOOL "Use the system for common libraries instead of the embedded ones (Default Off).")
-set(EMERAUDE_ENABLE_PCH Off CACHE BOOL "Enable 'PreCompiled Headers' feature to speed up the compilation (Default Off).")
-set(EMERAUDE_ENABLE_OPENMP On CACHE BOOL "Enable 'libomp' library [SYSTEM] (Default On).")
-set(EMERAUDE_ENABLE_SNDFILE On CACHE BOOL "Enable 'libsndfile' library. Adds the ability to read a wide range of sound formats [SYSTEM] (Default On).")
-set(EMERAUDE_ENABLE_SAMPLERATE On CACHE BOOL "Enable 'libsamplerate' library. Adds the ability to resample a sound on the fly to meet OpenAL settings [SYSTEM|LOCAL] (Default On).")
-set(EMERAUDE_ENABLE_ASIO On CACHE BOOL "Enable 'libasio' library. Adds the networking ability [SYSTEM|LOCAL] (Default On).")
-set(EMERAUDE_ENABLE_CPUFEATURES On CACHE BOOL "Enable 'cpu_features' library. Adds the cpu identification ability [LOCAL] (Default On).")
-set(EMERAUDE_ENABLE_HWLOC On CACHE BOOL "Enable 'HWLOC' library. Adds the cpu cores/threads info ability [SYSTEM|LOCAL] (Default On).")
-set(EMERAUDE_ENABLE_OPENAL On CACHE BOOL "Enable 'libopenal' library. Adds the audio to the engine [LOCAL] (Default On).")
-set(EMERAUDE_ENABLE_TAGLIB On CACHE BOOL "Enable 'libtaglib' library. Adds the ability to read media file tags [SYSTEM] (Default On).")
-set(EMERAUDE_ENABLE_IMGUI Off CACHE BOOL "Enable 'libimgui' library. Adds a GUI to the engine [LOCAL] (Default Off).")
-set(EMERAUDE_ENABLE_BULLET Off CACHE BOOL "Enable 'libBullet' library. Adds the Bullet physics engine [SYSTEM] (Default Off).")
-set(EMERAUDE_ENABLE_FASTGLTF Off CACHE BOOL "Enable 'fastgltf' library. Adds a glTF file format reader [SYSTEM] (Default Off).")
-set(EMERAUDE_ENABLE_TSAN Off CACHE BOOL "Enable 'ThreadSanitizer' library. Adds a dev tool to trace data race [SYSTEM] (Linux only, Default Off).")
+option(EMERAUDE_ENABLE_TESTS "Enable the Emeraude-Engine testing suite (Default Off)." Off)
+option(EMERAUDE_ENABLE_PCH "Enable 'PreCompiled Headers' feature to speed up the compilation (Default Off)." Off)
+option(EMERAUDE_USE_STATIC_RUNTIME "Build Emeraude-Engine with the static MSVC runtime (Windows Only, Default Off)." Off)
+option(EMERAUDE_USE_SYSTEM_LIBS "Use the system for common libraries instead of the embedded ones (Deprecated, Default Off)." Off)
+option(EMERAUDE_ENABLE_TSAN "Enable 'ThreadSanitizer' library. Adds a dev tool to trace data race [SYSTEM] (Linux only, Default Off)." Off)
+option(EMERAUDE_ENABLE_OPENMP "Enable 'libomp' library [SYSTEM] (Default On)." On)
+option(EMERAUDE_ENABLE_ASIO "Enable 'libasio' library. Adds the networking ability [SYSTEM|LOCAL] (Default On)." On)
+option(EMERAUDE_ENABLE_IMGUI "Enable 'libimgui' library. Adds a GUI to the engine [LOCAL] (Default Off)." Off)
 # Debug preprocessor macros control (Ignored in Release).
 option(EMERAUDE_DEBUG_OBSERVER_PATTERN "Enable the debug output of observer pattern (Default Off)." Off)
 option(EMERAUDE_DEBUG_PIXEL_FACTORY "Enable the debug output of pixel factory library (Default Off)." Off)
@@ -65,6 +70,8 @@ option(EMERAUDE_DEBUG_POINTER_INPUT "Enable printing of events to the console fr
 option(EMERAUDE_DEBUG_WINDOW_EVENTS "Enable printing of events to the console from window events (Default Off)." Off)
 option(EMERAUDE_DEBUG_VULKAN_TRACKING "Enable printing of Vulkan objects lifespan (Default Off)." Off)
 option(EMERAUDE_DEBUG_THREAD_POOL "Enable printing of ThreadPool (Default Off)." Off)
+
+
 
 # Force the compilation directory for testing (Only if empty)
 if ( EMERAUDE_ENABLE_TESTS AND "${EMERAUDE_COMPILATION_DIR}" STREQUAL "" )
@@ -89,9 +96,9 @@ if ( UNIX AND NOT APPLE )
 		set(APP_ARCH "x86_64")
 	endif ()
 
-	set(LOCAL_LIB_DIR ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/linux.${APP_ARCH}-${CMAKE_BUILD_TYPE} CACHE STRING "Final directory for local libraries for Linux.")
+	message("Linux platform targets arch ${APP_ARCH}")
 
-	set(CMAKE_GEN_EXTRA_FLAGS -G "Ninja" CACHE STRING "Local libraries compilation extra generation flags for Linux.")
+	set(LOCAL_LIB_DIR ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/linux.${APP_ARCH}-${CMAKE_BUILD_TYPE} CACHE STRING "Final directory for local libraries for Linux.")
 elseif ( APPLE )
 	message("Apple platform detected ! macOS architecture : ${CMAKE_OSX_ARCHITECTURES}, default target SDK : ${CMAKE_OSX_DEPLOYMENT_TARGET}")
 
@@ -109,41 +116,40 @@ elseif ( APPLE )
 	set(CMAKE_OSX_ARCHITECTURES ${APP_ARCH})
 	set(CMAKE_OSX_DEPLOYMENT_TARGET ${APP_OSX_DEPLOYMENT_TARGET})
 
-	message("macOS target arch ${CMAKE_OSX_ARCHITECTURES} with SDK ${CMAKE_OSX_DEPLOYMENT_TARGET}")
+	message("Apple platform targets arch ${APP_ARCH} with SDK ${APP_OSX_DEPLOYMENT_TARGET}")
 
 	set(LOCAL_LIB_DIR ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/mac.${APP_ARCH}-${CMAKE_BUILD_TYPE} CACHE STRING "Final directory for local libraries for macOS.")
-
-	set(CMAKE_GEN_EXTRA_FLAGS -DCMAKE_OSX_ARCHITECTURES=${APP_ARCH} -DCMAKE_OSX_DEPLOYMENT_TARGET=${APP_OSX_DEPLOYMENT_TARGET} -G "Ninja" CACHE STRING "Local libraries compilation extra generation flags for macOS.")
-elseif ( MSVC OR MSYS OR MINGW )
+elseif ( MSVC )
 	message("Windows platform detected !")
 
-	# FIXME: Pass these info directly to MSVC via flags
-	set(CMAKE_C_STANDARD 17)
-	set(CMAKE_C_STANDARD_REQUIRED On)
-	set(CMAKE_C_EXTENSIONS On)
-	set(CMAKE_C_FLAGS_DEBUG "-DDEBUG")
-	set(CMAKE_C_FLAGS_RELEASE "-DNDEBUG")
-	set(CMAKE_CXX_STANDARD 20)
-	set(CMAKE_CXX_STANDARD_REQUIRED On)
-	set(CMAKE_CXX_EXTENSIONS On)
-	set(CMAKE_CXX_FLAGS_DEBUG "-DDEBUG")
-	set(CMAKE_CXX_FLAGS_RELEASE "-DNDEBUG")
-
-	set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
-
-	if ( ${APP_ARCH} STREQUAL "" )
+	if ( NOT DEFINED APP_ARCH )
 		set(APP_ARCH "x86_64")
 	endif ()
 
-	set(LOCAL_LIB_DIR ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/windows.${APP_ARCH}-${CMAKE_BUILD_TYPE} CACHE STRING "Final directory for local libraries for Windows.")
+	message("Windows platform targets arch ${APP_ARCH}")
 
-	set(CMAKE_GEN_EXTRA_FLAGS -G "Visual Studio 17 2022" -A x64 CACHE STRING "Local libraries compilation extra generation flags for Windows.")
+	if ( EMERAUDE_USE_STATIC_RUNTIME )
+		message("[EmeraudeEngine] Using static MSVC Runtime library!")
+
+		# Set /MT or /MTd
+		set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+		set(LOCAL_LIB_DIR ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/windows.${APP_ARCH}-${CMAKE_BUILD_TYPE}-MT CACHE STRING "Final directory for local libraries for Windows.")
+	else ()
+		message("[EmeraudeEngine] Using dynamic MSVC Runtime library!")
+
+		# Default behavior : /MD or /MDd
+		set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
+		set(LOCAL_LIB_DIR ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/windows.${APP_ARCH}-${CMAKE_BUILD_TYPE}-MD CACHE STRING "Final directory for local libraries for Windows.")
+	endif ()
 endif ()
 
+# Download the binary precompiled package for the current configuration.
+#include(InstallExternalDependencies)
+
 # Print out project paths
-message("[${PROJECT_NAME}] Project directory : ${CMAKE_SOURCE_DIR}, current : ${CMAKE_CURRENT_SOURCE_DIR}")
-message("[${PROJECT_NAME}] Source directory : ${EMERAUDE_SOURCE_DIR}")
-message("[${PROJECT_NAME}] Binary directory : ${CMAKE_BINARY_DIR}, current : ${CMAKE_CURRENT_BINARY_DIR}")
+message("[EmeraudeEngine] Project directory: ${CMAKE_SOURCE_DIR}, current : ${CMAKE_CURRENT_SOURCE_DIR}")
+message("[EmeraudeEngine] Binary directory: ${CMAKE_BINARY_DIR}, current : ${CMAKE_CURRENT_BINARY_DIR}")
+message("[EmeraudeEngine] Local external dependencies: ${LOCAL_LIB_DIR}")
 
 
 
@@ -158,37 +164,7 @@ include(SetupPreSourcesJsonCpp)
 
 #######################################################################
 # Project header and source files.
-file(GLOB EMERAUDE_HEADER_FILES ${CMAKE_CURRENT_SOURCE_DIR}/src/*.hpp)
-file(GLOB EMERAUDE_SOURCE_FILES ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp)
-
-set(
-	EMERAUDE_DIRECTORIES
-	${CMAKE_CURRENT_SOURCE_DIR}/src/Libs
-	${CMAKE_CURRENT_SOURCE_DIR}/src/Animations
-	${CMAKE_CURRENT_SOURCE_DIR}/src/Audio
-	${CMAKE_CURRENT_SOURCE_DIR}/src/Console
-	${CMAKE_CURRENT_SOURCE_DIR}/src/Graphics
-	${CMAKE_CURRENT_SOURCE_DIR}/src/Input
-	${CMAKE_CURRENT_SOURCE_DIR}/src/AVConsole
-	${CMAKE_CURRENT_SOURCE_DIR}/src/UserDialogs
-	${CMAKE_CURRENT_SOURCE_DIR}/src/Overlay
-	${CMAKE_CURRENT_SOURCE_DIR}/src/Net
-	${CMAKE_CURRENT_SOURCE_DIR}/src/Physics
-	${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific
-	${CMAKE_CURRENT_SOURCE_DIR}/src/Resources
-	${CMAKE_CURRENT_SOURCE_DIR}/src/Saphir
-	${CMAKE_CURRENT_SOURCE_DIR}/src/Scenes
-	${CMAKE_CURRENT_SOURCE_DIR}/src/Tool
-	${CMAKE_CURRENT_SOURCE_DIR}/src/Vulkan
-)
-
-foreach ( EMERAUDE_DIRECTORY ${EMERAUDE_DIRECTORIES} )
-	file(GLOB_RECURSE EMERAUDE_DIRECTORY_HEADER_FILES ${EMERAUDE_DIRECTORY}/*.hpp)
-	list(APPEND EMERAUDE_HEADER_FILES ${EMERAUDE_DIRECTORY_HEADER_FILES})
-
-	file(GLOB_RECURSE EMERAUDE_DIRECTORY_SOURCE_FILES ${EMERAUDE_DIRECTORY}/*.cpp)
-	list(APPEND EMERAUDE_SOURCE_FILES ${EMERAUDE_DIRECTORY_SOURCE_FILES})
-endforeach ()
+include(PrepareEngineSourceFiles)
 
 # ImGui library source files
 if ( EMERAUDE_ENABLE_IMGUI )
@@ -198,28 +174,16 @@ endif ()
 # JsonCpp library source files
 list(APPEND EMERAUDE_SOURCE_FILES ${JSONCPP_SOURCE_FILES})
 
-# Dialogs source files
-if ( APPLE )
-	list(APPEND EMERAUDE_SOURCE_FILES
-		${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/Desktop/Dialog/Message.mac.mm
-		${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/Desktop/Dialog/OpenFile.mac.mm
-		${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/Desktop/Dialog/SaveFile.mac.mm
-		${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/Desktop/Commands.mac.mm
-	)
-endif ()
-
 
 
 #######################################################################
-# Declare the library target.
-if ( MSVC )
-	add_library(${PROJECT_NAME} SHARED STATIC ${EMERAUDE_SOURCE_FILES})
-else ()
-	add_library(${PROJECT_NAME} SHARED ${EMERAUDE_SOURCE_FILES}
-		src/Libs/ThreadPool.hpp
-		src/Libs/ThreadPool.cpp
-		src/Resources/ContainerInterface.hpp)
-endif ()
+# Declare the library target and configure it per platform.
+
+# NOTE: As the library is published through LGPLv3 licence, this must be a shared library.
+add_library(${PROJECT_NAME} SHARED ${EMERAUDE_SOURCE_FILES})
+
+# TODO: Change this by creating a real API with "emeraude_export.hpp", set all classes/functions like : class MaClasse; class EMERAUDE_API MaClasse;
+#target_compile_definitions(Emeraude PRIVATE EMERAUDE_BUILD_DLL)
 
 target_sources(${PROJECT_NAME} PUBLIC FILE_SET HEADERS BASE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/src FILES ${EMERAUDE_HEADER_FILES})
 
@@ -228,34 +192,33 @@ if ( EMERAUDE_ENABLE_PCH )
 	target_precompile_headers(${PROJECT_NAME} PUBLIC ${EMERAUDE_HEADER_FILES})
 endif ()
 
-target_compile_definitions(${PROJECT_NAME} PRIVATE $<$<CONFIG:Debug>:DEBUG>)
-target_compile_definitions(${PROJECT_NAME} PRIVATE $<$<CONFIG:Release>:NDEBUG>)
+target_link_directories(${PROJECT_NAME} PUBLIC ${LOCAL_LIB_DIR}/lib)
 
-set_target_properties(${PROJECT_NAME} PROPERTIES
-	C_STANDARD 17
-	C_STANDARD_REQUIRED On
-	C_EXTENSIONS On
-	CXX_STANDARD 20
-	CXX_STANDARD_REQUIRED On
-	CXX_EXTENSIONS On # "c++20" -> "gnu++20"
+# Set DEBUG or NDEBUG macro
+target_compile_definitions(${PROJECT_NAME} PRIVATE
+	$<$<CONFIG:Debug>:DEBUG>
+	$<$<CONFIG:Release>:NDEBUG>
 )
-
-if ( APPLE )
-	set_target_properties(${PROJECT_NAME} PROPERTIES
-		FRAMEWORK TRUE
-		FRAMEWORK_VERSION ${PROJECT_VERSION}
-		MACOSX_FRAMEWORK_IDENTIFIER org.ln-isle.emeraude
-		INSTALL_NAME_DIR "@rpath"
-		MACOSX_RPATH TRUE
-	)
-else ()
-	set_target_properties(${PROJECT_NAME} PROPERTIES VERSION ${PROJECT_VERSION} SOVERSION ${PROJECT_VERSION_MAJOR})
-endif ()
-
-
 
 if ( MSVC )
 	message("Configuring C++ compiler (>= MSVC 2022) for Windows ...")
+
+	set_target_properties(${PROJECT_NAME} PROPERTIES
+		C_STANDARD 17 # Next standard will be C23
+		C_STANDARD_REQUIRED On
+		C_EXTENSIONS Off
+		CXX_STANDARD 20 # Next standard will be C++23, then C++26.
+		CXX_STANDARD_REQUIRED On
+		CXX_EXTENSIONS Off
+		VERSION ${PROJECT_VERSION}
+		WINDOWS_EXPORT_ALL_SYMBOLS ON # TODO: Change this by creating a real API with "emeraude_export.hpp"
+	)
+
+	# Windows 7	0x0601
+	# Windows 8	0x0602
+	# Windows 8.1 0x0603
+	# Windows 10/11 0x0A00
+	target_compile_definitions(${PROJECT_NAME} PRIVATE _WIN32_WINNT=0x0A00)
 
 	target_compile_options(${PROJECT_NAME} PRIVATE
 		/wd4100       # Ignore "unreferenced formal parameter" warning
@@ -272,22 +235,40 @@ if ( MSVC )
 		#/GR-          # Disable run-time type information
 		/EHsc		  # Enable exceptions
 		/W4           # Warning level 4
-		/Ob2
-		$<$<CONFIG:Debug>:-DDEBUG
+		$<$<CONFIG:Debug>:
 			/RTC1         # Disable optimizations
 			/Od           # Enable basic run-time checks
 			#/WX           # Treat warnings as errors
 			/Zi
 		>
-		$<$<CONFIG:Relase>:-DNDEBUG
+		$<$<CONFIG:Relase>:
 			/O2           # Optimize for maximum speed
 			/Ob2          # Inline any suitable function
 			/GF           # Enable string pooling
 		>
 	)
-else ( UNIX )
+elseif ( UNIX )
 	if ( APPLE )
 		message("Configuring C++ compiler (>= AppleClang 17.0) for macOS ...")
+
+		set_target_properties(${PROJECT_NAME} PROPERTIES
+			C_STANDARD 17 # Next standard will be C23
+			C_STANDARD_REQUIRED On
+			C_EXTENSIONS Off
+			CXX_STANDARD 20 # Next standard will be C++23, then C++26.
+			CXX_STANDARD_REQUIRED On
+			CXX_EXTENSIONS Off
+			VERSION ${PROJECT_VERSION}
+			SOVERSION ${PROJECT_VERSION_MAJOR}
+			FRAMEWORK TRUE
+			FRAMEWORK_VERSION ${PROJECT_VERSION}
+			MACOSX_FRAMEWORK_IDENTIFIER org.ln-isle.emeraude
+			INSTALL_NAME_DIR "@rpath"
+			MACOSX_RPATH TRUE
+		)
+
+		# Debug include path
+		#target_compile_options(${PROJECT_NAME} PRIVATE -v)
 
 		target_compile_options(${PROJECT_NAME} PRIVATE
 			-Wno-unknown-pragmas
@@ -314,13 +295,23 @@ else ( UNIX )
 	else ()
 		message("Configuring C++ compiler (>= G++13.3) for Linux ...")
 
+		set_target_properties(${PROJECT_NAME} PROPERTIES
+			C_STANDARD 17 # Next standard will be C23
+			C_STANDARD_REQUIRED On
+			C_EXTENSIONS On
+			CXX_STANDARD 20 # Next standard will be C++23, then C++26.
+			CXX_STANDARD_REQUIRED On
+			CXX_EXTENSIONS On
+			VERSION ${PROJECT_VERSION}
+			SOVERSION ${PROJECT_VERSION_MAJOR}
+		)
+
 		target_compile_options(${PROJECT_NAME} PRIVATE
 			-Wno-unknown-pragmas
 			-Wno-unused
 			-fno-exceptions
 			#-fno-rtti
 			$<$<CONFIG:Debug>:
-				-DDEBUG
 				-O0
 				-g
 				-Wall
@@ -329,7 +320,6 @@ else ( UNIX )
 				-Werror
 			>
 			$<$<CONFIG:Relase>:
-				-DNDEBUG
 				-O2
 				-ffast-math
 				-fdata-sections
@@ -344,6 +334,8 @@ else ( UNIX )
 			target_link_options(${PROJECT_NAME} PRIVATE -fsanitize=thread)
 		endif ()
 	endif ()
+else ()
+	message(FATAL_ERROR "Unsupported platform/compiler! NOTE: If you are on Windows be sure to use 'Visual Studio 2022' (>=).")
 endif ()
 
 target_include_directories(${PROJECT_NAME} PUBLIC
@@ -356,11 +348,18 @@ if ( UNIX AND NOT APPLE )
 	target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/portable-file-dialogs)
 endif ()
 
-target_link_directories(${PROJECT_NAME} PUBLIC ${LOCAL_LIB_DIR}/lib)
-
 
 
 ###### Dependencies ######
+
+# Common cmake switch to turn to OFF for ever below dependencies.
+set(BUILD_SHARED_LIBS Off CACHE BOOL "" FORCE)
+
+# Set to what binary the dependencies will be linked.
+set(TARGET_BINARY_FOR_SETUP ${PROJECT_NAME})
+
+# Base dependencies
+include(SetupPostSourcesJsonCpp)
 
 # Magic Enum
 target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/magic_enum/include)
@@ -375,17 +374,9 @@ include(SetupZIP)
 include(SetupPNG)
 
 # Request : zlib
-if ( EMERAUDE_ENABLE_TAGLIB )
+if ( NOT EMERAUDE_BUILD_SERVICES_ONLY )
 	include(SetupTagLib)
 endif ()
-
-include(SetupZLIB)
-
-include(SetupBZIP2)
-
-include(SetupLZMA)
-
-include(SetupZSTD)
 
 if ( NOT EMERAUDE_USE_SYSTEM_LIBS )
 	include(SetupBrotli)
@@ -395,33 +386,13 @@ endif ()
 
 include(SetupJPEG)
 
-include(SetupThreads)
+include(SetupZLIB)
 
-include(SetupPostSourcesJsonCpp)
+include(SetupBZIP2)
 
-include(SetupGLFW3)
+include(SetupLZMA)
 
-include(SetupVulkan)
-
-include(SetupReproc)
-
-if ( EMERAUDE_ENABLE_OPENMP AND NOT APPLE )
-	include(SetupOpenMP)
-endif ()
-
-if ( EMERAUDE_ENABLE_OPENAL )
-	include(SetupOpenAL)
-endif ()
-
-if ( EMERAUDE_ENABLE_SNDFILE )
-	set(BINARY_TARGET_NAME ${PROJECT_NAME})
-
-	include(SetupSndFile)
-endif ()
-
-if ( EMERAUDE_ENABLE_SAMPLERATE )
-	include(SetupSampleRate)
-endif ()
+include(SetupZSTD)
 
 if ( EMERAUDE_ENABLE_ASIO )
 	if ( EMERAUDE_ENABLE_TSAN )
@@ -431,55 +402,75 @@ if ( EMERAUDE_ENABLE_ASIO )
 	endif ()
 endif ()
 
-if ( EMERAUDE_ENABLE_CPUFEATURES )
-	include(SetupCPUFeatures)
+include(SetupSndFile)
+
+include(SetupSampleRate)
+
+include(SetupCPUFeatures)
+
+include(SetupHWLOC)
+
+if ( NOT EMERAUDE_BUILD_SERVICES_ONLY )
+	include(SetupThreads)
+
+	include(SetupVulkan) # Using add_subdirectory()
+
+	include(SetupGLFW) # Using add_subdirectory()
+
+	include(SetupReproc) # Using add_subdirectory()
+
+	include(SetupFastGLTF) # Using add_subdirectory()
+
+	if ( EMERAUDE_ENABLE_OPENMP AND NOT APPLE )
+		include(SetupOpenMP)
+	endif ()
+
+	include(SetupOpenAL)
+
+	if ( EMERAUDE_ENABLE_IMGUI )
+		include(SetupPostSourcesImGui)
+	endif ()
+else ()
+	# NOTE: Work-around for multi-builds
+	if ( EMERAUDE_ENABLE_IMGUI )
+		set(IMGUI_ENABLED On)
+	endif ()
 endif ()
 
-if ( EMERAUDE_ENABLE_HWLOC )
-	include(SetupHWLOC)
-endif ()
-
-if ( EMERAUDE_ENABLE_IMGUI )
-	include(SetupPostSourcesImGui)
-endif ()
-
-if ( EMERAUDE_ENABLE_BULLET )
-	include(SetupBullet)
-endif()
-
-if ( EMERAUDE_ENABLE_FASTGLTF )
-	include(SetupFastGLTF)
-endif()
-
+unset(TARGET_BINARY_FOR_SETUP)
 
 
 ###### Testing ######
 
 if ( EMERAUDE_ENABLE_TESTS )
+	message("Enabling GoogleTest")
+
+	# Fetch GoogleTest
+	include(FetchContent)
+	include(GoogleTest)
+
+	FetchContent_Declare(googletest GIT_REPOSITORY https://github.com/google/googletest.git GIT_TAG v1.17.0)
+
+	if ( NOT EMERAUDE_USE_STATIC_RUNTIME )
+		set(gtest_force_shared_crt On CACHE BOOL "" FORCE)
+	endif ()
+
+	FetchContent_MakeAvailable(googletest)
+
+	# Create the executable
 	file(GLOB_RECURSE TEST_SOURCE_FILES ${CMAKE_CURRENT_SOURCE_DIR}/src/Testing/*.cpp)
 
-	add_executable(EmeraudeTest ${TEST_SOURCE_FILES})
+	add_executable(EmeraudeUnitTests ${TEST_SOURCE_FILES})
 
-	set_target_properties(EmeraudeTest PROPERTIES
-		CXX_STANDARD 20
-		CXX_STANDARD_REQUIRED On
-		CXX_EXTENSIONS On
-	)
+	# Configure the compilation
+	set_target_properties(EmeraudeUnitTests PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED On)
+	target_include_directories(EmeraudeUnitTests PRIVATE ${EMERAUDE_SOURCE_DIR})
+	target_link_libraries(EmeraudeUnitTests PRIVATE ${PROJECT_NAME} gtest_main)
 
-	target_include_directories(EmeraudeTest PRIVATE ${EMERAUDE_SOURCE_DIR})
-	target_link_libraries(EmeraudeTest PRIVATE ${PROJECT_NAME})
-
-	# Enabling google test as sub project
-	set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
-
-	add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/dependencies/googletest gtest)
-
-	target_include_directories(EmeraudeTest PRIVATE ${CMAKE_SOURCE_DIR}/dependencies/googletest)
-	target_link_libraries(EmeraudeTest PRIVATE gtest)
-
+	# Enable the testing
 	enable_testing()
 
-	add_test(NAME EmeraudeTest COMMAND $<TARGET_FILE:EmeraudeTest>)
+	gtest_discover_tests(EmeraudeUnitTests)
 endif ()
 
 

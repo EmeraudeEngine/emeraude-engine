@@ -86,7 +86,8 @@ namespace EmEn::Vulkan
 	VkCommandBuffer
 	CommandPool::allocateCommandBuffer (bool primaryLevel) const noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_allocationMutex};
+		/* [VULKAN-CPU-SYNC] */
+		const std::lock_guard< std::mutex > lock{m_allocationsAccess};
 
 		VkCommandBufferAllocateInfo allocateInfo{};
 		allocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
@@ -116,7 +117,8 @@ namespace EmEn::Vulkan
 	void
 	CommandPool::freeCommandBuffer (VkCommandBuffer commandBufferHandle) const noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_allocationMutex};
+		/* [VULKAN-CPU-SYNC] */
+		const std::lock_guard< std::mutex > lock{m_allocationsAccess};
 
 		/* FIXME: This causes a VK_ERROR_DEVICE_LOST */
 		this->device()->waitIdle("Freeing command buffer from a command pool");

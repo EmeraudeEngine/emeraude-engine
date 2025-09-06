@@ -102,6 +102,9 @@ namespace EmEn::Graphics::Material
 	{
 		public:
 
+			/** @brief Access to the graphics renderer for loading GPU resources. */
+			static Renderer * s_graphicsRenderer;
+
 			/**
 			 * @brief Copy constructor.
 			 * @param copy A reference to the copied instance.

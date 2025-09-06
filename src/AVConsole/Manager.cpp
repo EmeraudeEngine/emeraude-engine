@@ -38,7 +38,6 @@ namespace EmEn::AVConsole
 	using namespace Libs;
 	using namespace Graphics;
 
-	const size_t Manager::ClassUID{getClassUID(ClassId)};
 	const std::string Manager::DefaultViewName{"DefaultView"};
 	const std::string Manager::DefaultSpeakerName{"DefaultSpeaker"};
 
@@ -735,7 +734,7 @@ namespace EmEn::AVConsole
 	{
 		/* NOTE: Don't know what it is, goodbye! */
 		TraceDebug{ClassId} <<
-			"Received an unhandled notification (Code:" << notificationCode << ") from observable '" << whoIs(observable->classUID()) << "' (UID:" << observable->classUID() << ")  ! "
+			"Received an unhandled notification (Code:" << notificationCode << ") from observable (UID:" << observable->classUID() << ")  ! "
 			"Forgetting it ...";
 
 		return false;

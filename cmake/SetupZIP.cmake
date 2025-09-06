@@ -1,25 +1,21 @@
-if ( NOT LIBZIP_ENABLED )
-	if ( EMERAUDE_USE_SYSTEM_LIBS )
-		message("Enabling LibZib library from system ...")
+if ( NOT TARGET_BINARY_FOR_SETUP )
+	message(FATAL_ERROR "TARGET_BINARY_FOR_SETUP is not SET !")
+endif ()
 
-		find_package(PkgConfig REQUIRED)
+if ( EMERAUDE_USE_SYSTEM_LIBS )
+	message("Enabling LibZib library from system ...")
 
-		pkg_check_modules(LIBZIP REQUIRED libzip)
+	find_package(PkgConfig REQUIRED)
 
-		target_include_directories(${PROJECT_NAME} PRIVATE ${LIBZIP_INCLUDE_DIRS})
-		target_link_directories(${PROJECT_NAME} PRIVATE ${LIBZIP_LIBRARY_DIRS})
-		target_link_libraries(${PROJECT_NAME} PRIVATE ${LIBZIP_LIBRARIES})
-	else ()
-		message("Enabling LibZib library from local source ...")
+	pkg_check_modules(LIBZIP REQUIRED libzip)
 
-		if ( MSVC )
-			target_link_libraries(${PROJECT_NAME} PRIVATE ${LOCAL_LIB_DIR}/lib/zip.lib)
-		else ()
-			target_link_libraries(${PROJECT_NAME} PRIVATE ${LOCAL_LIB_DIR}/lib/libzip.a)
-		endif ()
-	endif ()
+	target_include_directories(${TARGET_BINARY_FOR_SETUP} PUBLIC ${LIBZIP_INCLUDE_DIRS})
 
-	set(LIBZIP_ENABLED On)
+	target_link_directories(${TARGET_BINARY_FOR_SETUP} PUBLIC ${LIBZIP_LIBRARY_DIRS})
+
+	target_link_libraries(${TARGET_BINARY_FOR_SETUP} PRIVATE ${LIBZIP_LIBRARIES})
 else ()
-	message("The LibZib library is already enabled.")
+	message("Enabling LibZib library from local source ...")
+
+	target_link_libraries(${TARGET_BINARY_FOR_SETUP} PRIVATE zip)
 endif ()

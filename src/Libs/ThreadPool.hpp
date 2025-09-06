@@ -55,6 +55,17 @@ namespace EmEn::Libs
 			~ThreadPool () noexcept;
 
 			/**
+			 * @brief Returns the number of busy workers.
+			 * @return size_t
+			 */
+			[[nodiscard]]
+			size_t
+			busyWorkers () const noexcept
+			{
+				return m_busyWorkers;
+			}
+
+			/**
 			 * @brief Adds a new task to the pool.
 			 * @param task A reference to a function.
 			 * @return bool

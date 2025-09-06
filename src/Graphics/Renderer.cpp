@@ -52,14 +52,11 @@
 
 namespace EmEn::Graphics
 {
-	using namespace EmEn::Libs;
-	using namespace EmEn::Libs::Math;
-	using namespace EmEn::Libs::PixelFactory;
-	using namespace EmEn::Vulkan;
-	using namespace EmEn::Saphir;
-
-	const size_t Renderer::ClassUID{getClassUID(ClassId)};
-	Renderer * Renderer::s_instance{nullptr};
+	using namespace Libs;
+	using namespace Libs::Math;
+	using namespace Libs::PixelFactory;
+	using namespace Vulkan;
+	using namespace Saphir;
 
 	bool
 	Renderer::initializeSubServices () noexcept
@@ -187,6 +184,45 @@ namespace EmEn::Graphics
 		}
 
 		/* NOTE: Create the swap-chain for presenting images to the screen. */
+		if ( m_primaryServices.arguments().isSwitchPresent("-W", "--window-less") )
+		{
+			m_windowLess = true;
+
+			/* NOTE: Check for multisampling. */
+			auto sampleCount = m_primaryServices.settings().getOrSetDefault< uint32_t >(VideoFramebufferSamplesKey, DefaultVideoFramebufferSamples);
+
+			if ( sampleCount > 1 )
+			{
+				sampleCount = m_device->findSampleCount(sampleCount);
+			}
+
+			m_offscreenView = std::make_shared< RenderTarget::View< ViewMatrices2DUBO > >(
+				"MainOffscreenView",
+				m_window.state().windowWidth,
+				m_window.state().windowHeight,
+				FramebufferPrecisions{8, 8, 8, 8, 24, 0, sampleCount}
+			);
+
+			if ( !m_offscreenView->create(*this) )
+			{
+				Tracer::fatal(ClassId, "Unable to create the offscreen view !");
+
+				return false;
+			}
+
+			/* Create a command pools and command buffers following the offscreen view image. */
+			if ( !this->createCommandSystem() )
+			{
+				m_offscreenView.reset();
+
+				Tracer::fatal(ClassId, "Unable to create the offscreen view command pools and buffers !");
+
+				return false;
+			}
+
+			this->notify(SwapChainCreated);
+		}
+		else
 		{
 			m_swapChain = std::make_shared< SwapChain >(m_device, *this, m_primaryServices.settings());
 			m_swapChain->setIdentifier(ClassId, "Main", "SwapChain");
@@ -208,7 +244,7 @@ namespace EmEn::Graphics
 				return false;
 			}
 
-			this->notify(SwapChainCreated, m_swapChain);
+			this->notify(SwapChainCreated);
 		}
 
 		/* NOTE: Create the main descriptor pool. */
@@ -269,17 +305,17 @@ namespace EmEn::Graphics
 		{
 			auto & settings = m_primaryServices.settings();
 
-			if ( settings.get< bool >(NormalMappingEnabledKey, DefaultNormalMappingEnabled) )
+			if ( settings.getOrSetDefault< bool >(NormalMappingEnabledKey, DefaultNormalMappingEnabled) )
 			{
 				Tracer::info(ClassId, "Normal mapping enabled !");
 			}
 
-			if ( settings.get< bool >(HighQualityLightEnabledKey, DefaultHighQualityLightEnabled) )
+			if ( settings.getOrSetDefault< bool >(HighQualityLightEnabledKey, DefaultHighQualityLightEnabled) )
 			{
 				Tracer::info(ClassId, "High quality light shader code enabled !");
 			}
 
-			if ( settings.get< bool >(HighQualityReflectionEnabledKey, DefaultHighQualityReflectionEnabled) )
+			if ( settings.getOrSetDefault< bool >(HighQualityReflectionEnabledKey, DefaultHighQualityReflectionEnabled) )
 			{
 				Tracer::info(ClassId, "High quality reflection shader code enabled !");
 			}
@@ -296,6 +332,9 @@ namespace EmEn::Graphics
 		size_t error = 0;
 
 		m_serviceInitialized = false;
+
+		/* [VULKAN-CPU-SYNC] Renderer */
+		//const std::lock_guard< Device > lock{*m_device};
 
 		m_device->waitIdle("Renderer::onTerminate()");
 
@@ -338,21 +377,23 @@ namespace EmEn::Graphics
 		}
 
 		/* Terminate sub-services. */
-		for ( auto * service : std::ranges::reverse_view(m_subServicesEnabled) )
 		{
-			if ( service->terminate() )
+			for ( auto * service : std::ranges::reverse_view(m_subServicesEnabled) )
 			{
-				TraceSuccess{ClassId} << service->name() << " sub-service terminated gracefully !";
-			}
-			else
-			{
-				error++;
+				if ( service->terminate() )
+				{
+					TraceSuccess{ClassId} << service->name() << " sub-service terminated gracefully !";
+				}
+				else
+				{
+					error++;
 
-				TraceError{ClassId} << service->name() << " sub-service failed to terminate properly !";
+					TraceError{ClassId} << service->name() << " sub-service failed to terminate properly !";
+				}
 			}
+
+			m_subServicesEnabled.clear();
 		}
-
-		m_subServicesEnabled.clear();
 
 		/* Release the pointer on the device. */
 		m_device.reset();
@@ -364,6 +405,17 @@ namespace EmEn::Graphics
 	Renderer::onRegisterToConsole () noexcept
 	{
 
+	}
+
+	std::shared_ptr< RenderTarget::Abstract >
+	Renderer::mainRenderTarget () const noexcept
+	{
+		if ( m_windowLess )
+		{
+			return m_offscreenView;
+		}
+
+		return m_swapChain;
 	}
 
 	std::shared_ptr< RenderPass >
@@ -423,7 +475,7 @@ namespace EmEn::Graphics
 	bool
 	Renderer::finalizeGraphicsPipeline (const RenderTarget::Abstract & renderTarget, const Program & program, std::shared_ptr< GraphicsPipeline > & graphicsPipeline) noexcept
 	{
-		/* FIXME: Fake hash ! */
+		/* FIXME: This is a fake hash! */
 		const auto hash = GraphicsPipeline::getHash();
 
 		if ( const auto pipelineIt = m_pipelines.find(hash); pipelineIt != m_pipelines.cend() )
@@ -441,6 +493,18 @@ namespace EmEn::Graphics
 		return m_pipelines.emplace(hash, graphicsPipeline).second;
 	}
 
+	bool
+	Renderer::isSwapChainDegraded () const noexcept
+	{
+		/* NOTE: In windowless mode, the swap chain is never degraded. */
+		if ( m_windowLess )
+		{
+			return false;
+		}
+
+		return m_swapChain->status() == SwapChain::Status::Degraded;
+	}
+
 	void
 	Renderer::renderFrame (const std::shared_ptr< Scenes::Scene > & scene, const Overlay::Manager & overlayManager) noexcept
 	{
@@ -449,77 +513,153 @@ namespace EmEn::Graphics
 			return;
 		}
 
-		if ( m_swapChain->status() == SwapChain::Status::Degraded )
+		if ( m_windowLess )
 		{
-			TraceInfo{ClassId} << "The swap-chain is degraded !";
+			m_statistics.start();
 
-			if ( !this->recreateSwapChain() )
+			/* NOTE: Clear all semaphores for the new frame. */
+			m_rendererFrameScope[0].clearSemaphores();
+
+			/* NOTE: Offscreen rendering */
+			if ( scene != nullptr )
+			{
+				if ( this->isShadowMapsEnabled() )
+				{
+					/* [VULKAN-SHADOW] */
+					this->renderShadowMaps(0, *scene);
+				}
+
+				if ( this->isRenderToTexturesEnabled() )
+				{
+					this->renderRenderToTextures(0, *scene);
+				}
+
+				this->renderViews(0, *scene);
+			}
+
+			/* TODO/FIXME: Secure access to the queue. */
+			const auto * queue = this->device()->getQueue(QueueJob::Graphics, QueuePriority::High);
+			const auto fence = m_offscreenView->fence();
+
+			if ( !fence->waitAndReset(250000000) )
+			{
+				TraceDebug{ClassId} << "Unable to wait on render to texture " << m_offscreenView->id() << " !";
+
+				return;
+			}
+
+			/* Then we need the command buffer linked to this image by its index. */
+			const auto commandBuffer = m_rendererFrameScope[0].commandBuffer();
+
+			if ( !commandBuffer->begin(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT) )
 			{
 				return;
 			}
-		}
 
-		m_statistics.start();
+			commandBuffer->beginRenderPass(*m_offscreenView->framebuffer(), m_offscreenView->renderArea(), m_clearColors, VK_SUBPASS_CONTENTS_INLINE);
 
-		const auto imageIndex = m_swapChain->acquireNextImage();
-
-		if ( !imageIndex )
-		{
-			return;
-		}
-
-		/* NOTE: Clear all semaphores for the new frame. */
-		m_rendererFrameScope[imageIndex.value()].clearSemaphores();
-
-		/* NOTE: Offscreen rendering */
-		if ( scene != nullptr )
-		{
-			if ( this->isShadowMapsEnabled() )
+			/* First, render the scene. */
+			if ( scene != nullptr )
 			{
-				/* [VULKAN-SHADOW] */
-				this->renderShadowMaps(imageIndex.value(), *scene);
+				scene->render(m_offscreenView, *commandBuffer);
 			}
 
-			if ( this->isRenderToTexturesEnabled() )
+			/* Then render the overlay system over the 3D-rendered scene. */
+			overlayManager.render(m_offscreenView, *commandBuffer);
+
+			commandBuffer->endRenderPass();
+
+			if ( !commandBuffer->end() )
 			{
-				this->renderRenderToTextures(imageIndex.value(), *scene);
+				return;
 			}
 
-			this->renderViews(imageIndex.value(), *scene);
+			const auto submitted = queue->submit(
+				commandBuffer,
+				SynchInfo{}
+					.withFence(fence->handle())
+			);
+
+			if ( !submitted )
+			{
+				TraceError{ClassId} << "Unable to submit command buffer for render target '" << m_offscreenView->id() << "' !";
+
+				return;
+			}
+
+			m_statistics.stop();
 		}
-
-		/* Then we need the command buffer linked to this image by its index. */
-		const auto commandBuffer = m_rendererFrameScope[imageIndex.value()].commandBuffer();
-
-		if ( !commandBuffer->begin(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT) )
+		else
 		{
-			return;
+			const auto imageIndex = m_swapChain->acquireNextImage();
+
+			if ( !imageIndex )
+			{
+				Tracer::error(ClassId, "Unable to acquire swap chain image !");
+
+				return;
+			}
+
+			m_statistics.start();
+
+			/* NOTE: Clear all semaphores for the new frame. */
+			m_rendererFrameScope[imageIndex.value()].clearSemaphores();
+
+			/* NOTE: Offscreen rendering */
+			if ( scene != nullptr )
+			{
+				if ( this->isShadowMapsEnabled() )
+				{
+					/* [VULKAN-SHADOW] */
+					this->renderShadowMaps(imageIndex.value(), *scene);
+				}
+
+				if ( this->isRenderToTexturesEnabled() )
+				{
+					this->renderRenderToTextures(imageIndex.value(), *scene);
+				}
+
+				this->renderViews(imageIndex.value(), *scene);
+			}
+
+			/* Then we need the command buffer linked to this image by its index. */
+			const auto commandBuffer = m_rendererFrameScope[imageIndex.value()].commandBuffer();
+
+			if ( !commandBuffer->begin(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT) )
+			{
+				return;
+			}
+
+			commandBuffer->beginRenderPass(*m_swapChain->framebuffer(), m_swapChain->renderArea(), m_clearColors, VK_SUBPASS_CONTENTS_INLINE);
+
+			/* First, render the scene. */
+			if ( scene != nullptr )
+			{
+				scene->render(m_swapChain, *commandBuffer);
+			}
+
+			/* Then render the overlay system over the 3D-rendered scene. */
+			overlayManager.render(m_swapChain, *commandBuffer);
+
+			commandBuffer->endRenderPass();
+
+			if ( !commandBuffer->end() )
+			{
+				return;
+			}
+
+			{
+				/* [VULKAN-CPU-SYNC] Renderer */
+				const std::lock_guard< Device > lock{*m_device};
+
+				if ( !m_swapChain->submitCommandBuffer(commandBuffer, imageIndex.value(), m_rendererFrameScope[imageIndex.value()].secondarySemaphores()) )
+				{
+					return;
+				}
+			}
+
+			m_statistics.stop();
 		}
-
-		commandBuffer->beginRenderPass(*m_swapChain->framebuffer(), m_swapChain->renderArea(), m_clearColors, VK_SUBPASS_CONTENTS_INLINE);
-
-		/* First, render the scene. */
-		if ( scene != nullptr )
-		{
-			scene->render(m_swapChain, *commandBuffer);
-		}
-
-		/* Then render the overlay system over the 3D-rendered scene. */
-		overlayManager.render(m_swapChain, *commandBuffer);
-
-		commandBuffer->endRenderPass();
-
-		if ( !commandBuffer->end() )
-		{
-			return;
-		}
-
-		if ( !m_swapChain->submitCommandBuffer(commandBuffer, imageIndex.value(), m_rendererFrameScope[imageIndex.value()].secondarySemaphores()) )
-		{
-			return;
-		}
-
-		m_statistics.stop();
 	}
 
 	std::shared_ptr< CommandBuffer >
@@ -550,6 +690,7 @@ namespace EmEn::Graphics
 	void
 	Renderer::renderShadowMaps (uint32_t frameIndex, Scenes::Scene & scene) noexcept
 	{
+		/* TODO/FIXME: Secure access to the queue. */
 		const auto * queue = this->device()->getQueue(QueueJob::Graphics, QueuePriority::High);
 
 		scene.forEachRenderToShadowMap([&] (const std::shared_ptr< RenderTarget::Abstract > & shadowMap) {
@@ -617,6 +758,7 @@ namespace EmEn::Graphics
 	void
 	Renderer::renderRenderToTextures (uint32_t frameIndex, Scenes::Scene & scene) noexcept
 	{
+		/* TODO/FIXME: Secure access to the queue. */
 		const auto * queue = this->device()->getQueue(QueueJob::Graphics, QueuePriority::High);
 
 		scene.forEachRenderToTexture([&] (const std::shared_ptr< RenderTarget::Abstract > & renderToTexture)
@@ -695,7 +837,7 @@ namespace EmEn::Graphics
 	bool
 	Renderer::onNotification (const ObservableTrait * observable, int notificationCode, const std::any & /*data*/) noexcept
 	{
-		if ( observable->is(Window::ClassUID) )
+		if ( observable->is(Window::getClassUID()) )
 		{
 			switch ( notificationCode )
 			{
@@ -732,7 +874,7 @@ namespace EmEn::Graphics
 
 		/* NOTE: Don't know what it is, goodbye! */
 		TraceDebug{ClassId} <<
-			"Received an unhandled notification (Code:" << notificationCode << ") from observable '" << whoIs(observable->classUID()) << "' (UID:" << observable->classUID() << ")  ! "
+			"Received an unhandled notification (Code:" << notificationCode << ") from observable (UID:" << observable->classUID() << ")  ! "
 			"Forgetting it ...";
 
 		return false;
@@ -741,7 +883,7 @@ namespace EmEn::Graphics
 	bool
 	Renderer::createCommandSystem () noexcept
 	{
-		const auto imageCount = m_swapChain->imageCount();
+		const auto imageCount = m_windowLess ? 1 : m_swapChain->imageCount();
 
 		m_rendererFrameScope.resize(imageCount);
 
@@ -781,6 +923,11 @@ namespace EmEn::Graphics
 	bool
 	Renderer::recreateSwapChain () noexcept
 	{
+		if ( m_windowLess )
+		{
+			return true;
+		}
+
 		//this->destroyCommandSystem();
 
 		/* NOTE: Wait for a valid framebuffer dimension in case of handle minimization. */

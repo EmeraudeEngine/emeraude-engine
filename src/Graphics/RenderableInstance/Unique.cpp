@@ -54,6 +54,7 @@ namespace EmEn::Graphics::RenderableInstance
 
 		Matrix< 4, float > modelMatrix;
 
+		/* NOTE: If world coordinates are a nullptr, we assume to render the object at the origin. */
 		if ( worldCoordinates != nullptr )
 		{
 			modelMatrix = this->isFacingCamera() ?

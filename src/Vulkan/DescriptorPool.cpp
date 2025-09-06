@@ -100,7 +100,8 @@ namespace EmEn::Vulkan
 	VkDescriptorSet
 	DescriptorPool::allocateDescriptorSet (const DescriptorSetLayout & descriptorSetLayout) const noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_allocationMutex};
+		/* [VULKAN-CPU-SYNC] */
+		const std::lock_guard< std::mutex > lock{m_allocationsAccess};
 
 		auto * descriptorSetLayoutHandle = descriptorSetLayout.handle();
 
@@ -132,7 +133,8 @@ namespace EmEn::Vulkan
 	bool
 	DescriptorPool::freeDescriptorSet (VkDescriptorSet descriptorSetHandle) const noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_allocationMutex};
+		/* [VULKAN-CPU-SYNC] */
+		const std::lock_guard< std::mutex > lock{m_allocationsAccess};
 
 		this->device()->waitIdle("Freeing descriptor set");
 

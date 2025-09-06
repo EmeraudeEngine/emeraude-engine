@@ -74,12 +74,12 @@ namespace EmEn::Vulkan
 			 * @param physicalDevice A reference to a physical device smart pointer.
 			 * @param showInformation Enable the device information in the terminal.
 			 */
-			explicit
 			Device (std::string deviceName, const std::shared_ptr< PhysicalDevice > & physicalDevice, bool showInformation) noexcept
 				: NameableTrait{std::move(deviceName)},
-				m_physicalDevice{physicalDevice}
+				m_physicalDevice{physicalDevice},
+				m_showInformation{showInformation}
 			{
-				m_flags[ShowInformation] = showInformation;
+
 			}
 
 			/**
@@ -159,7 +159,7 @@ namespace EmEn::Vulkan
 			bool
 			hasBasicSupport () const noexcept
 			{
-				return m_flags[HasBasicSupport];
+				return m_hasBasicSupport;
 			}
 
 			/**
@@ -265,14 +265,25 @@ namespace EmEn::Vulkan
 			VkSampleCountFlagBits findSampleCount (uint32_t samples) const noexcept;
 
 			/**
-			 * @brief Returns the lock for the device resources access.
-			 * @return std::mutex &
+			 * @brief Lock the access to the device.
+			 * @note std::lock_guard friendly.
+			 * @return void
 			 */
-			[[nodiscard]]
-			std::mutex &
-			deviceAccessLock () const noexcept
+			void
+			lock () const
 			{
-				return m_mutex;
+				m_deviceExternalAccess.lock();
+			}
+
+			/**
+			 * @brief Unlock the access to the device.
+			 * @note std::lock_guard friendly.
+			 * @return void
+			 */
+			void
+			unlock () const
+			{
+				m_deviceExternalAccess.unlock();
 			}
 
 		private:
@@ -314,24 +325,16 @@ namespace EmEn::Vulkan
 			[[nodiscard]]
 			bool createDevice (const DeviceRequirements & requirements, const Libs::StaticVector< VkDeviceQueueCreateInfo, 16 > & queueCreateInfos, const std::vector< const char * > & extensions) noexcept;
 
-			/* Flag names. */
-			static constexpr auto ShowInformation{0UL};
-			static constexpr auto HasBasicSupport{1UL};
-
-			std::shared_ptr< PhysicalDevice > m_physicalDevice;
 			VkDevice m_handle{VK_NULL_HANDLE};
+			std::shared_ptr< PhysicalDevice > m_physicalDevice;
+			std::array< std::shared_ptr< QueueFamilyInterface >, 6 > m_queues;
+
 			Libs::StaticVector< std::shared_ptr< QueueFamilyInterface >, 8 > m_queueFamilies;
 			std::map< QueueJob, std::shared_ptr< QueueFamilyInterface > > m_queueFamilyPerJob;
-			mutable std::mutex m_mutex;
-			std::array< bool, 8 > m_flags{
-				false/*ShowInformation*/,
-				false/*HasBasicSupport*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/
-			};
+
+			mutable std::mutex m_deviceInternalAccess;
+			mutable std::mutex m_deviceExternalAccess;
+			bool m_showInformation{false};
+			bool m_hasBasicSupport{false};
 	};
 }

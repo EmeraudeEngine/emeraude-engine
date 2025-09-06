@@ -31,7 +31,7 @@
 
 namespace EmEn::Animations
 {
-	using namespace EmEn::Libs;
+	using namespace Libs;
 
 	constexpr auto TracerTag{"AnimatableInterface"};
 

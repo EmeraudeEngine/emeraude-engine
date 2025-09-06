@@ -27,7 +27,6 @@
 #pragma once
 
 /* STL inclusions. */
-#include <iostream>
 #include <sstream>
 #include <string>
 
@@ -46,12 +45,17 @@ namespace EmEn::Libs::Network
 			Hostname () noexcept = default;
 
 			/**
-			 * @brief Constructs an hostname.
+			 * @brief Constructs a hostname.
 			 * @warning There is no check with this version.
 			 * @param subdomain The subdomain part of the host [std::move].
 			 * @param domain The domain part of the host [std::move].
 			 */
-			Hostname (std::string subdomain, std::string domain) noexcept;
+			Hostname (std::string subdomain, std::string domain) noexcept
+				: m_subdomain(std::move(subdomain)),
+				m_domain(std::move(domain))
+			{
+
+			}
 
 			/**
 			 * @brief Sets the subdomain part of the host.
@@ -65,7 +69,7 @@ namespace EmEn::Libs::Network
 			}
 
 			/**
-			 * @brief Returns the subdomain part of the host. ie, [www].example.co.uk
+			 * @brief Returns the subdomain part of the host. Example: [www].example.co.uk
 			 * @return const std::string &
 			 */
 			[[nodiscard]]
@@ -87,7 +91,7 @@ namespace EmEn::Libs::Network
 			}
 
 			/**
-			 * @brief Returns the domain part of the host. ie, www.[example.co.uk]
+			 * @brief Returns the domain part of the host. Example: www.[example.co.uk]
 			 * @return const std::string &
 			 */
 			[[nodiscard]]
@@ -98,7 +102,7 @@ namespace EmEn::Libs::Network
 			}
 
 			/**
-			 * @brief Returns the name of the host. ie, [www.example.co.uk]
+			 * @brief Returns the name of the host. Example: [www.example.co.uk]
 			 * @return std::string
 			 */
 			[[nodiscard]]
@@ -114,7 +118,7 @@ namespace EmEn::Libs::Network
 			}
 
 			/**
-			 * @brief Returns the TLD part of the host. ie, www.example.[co.uk]
+			 * @brief Returns the TLD part of the host. Example www.example.[co.uk]
 			 * @return std::string
 			 */
 			[[nodiscard]]
@@ -139,24 +143,38 @@ namespace EmEn::Libs::Network
 			[[nodiscard]]
 			static Hostname fromString (const std::string & string) noexcept;
 
+		private:
+
 			/**
 			 * @brief STL streams printable object.
 			 * @param out A reference to the stream output.
 			 * @param obj A reference to the object to print.
 			 * @return std::ostream &
 			 */
-			friend std::ostream & operator<< (std::ostream & out, const Hostname & obj);
-
-			/**
-			 * @brief Stringifies the object.
-			 * @param obj A reference to the object to print.
-			 * @return std::string
-			 */
-			friend std::string to_string (const Hostname & obj) noexcept;
-
-		private:
+			friend
+			std::ostream &
+			operator<< (std::ostream & out, const Hostname & obj)
+			{
+				return out << obj.name();
+			}
 
 			std::string m_subdomain;
 			std::string m_domain;
 	};
+
+	/**
+	 * @brief Stringifies the object.
+	 * @param obj A reference to the object to print.
+	 * @return std::string
+	 */
+	inline
+	std::string
+	to_string (const Hostname & obj) noexcept
+	{
+		std::stringstream output;
+
+		output << obj;
+
+		return output.str();
+	}
 }

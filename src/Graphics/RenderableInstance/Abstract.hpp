@@ -29,7 +29,6 @@
 /* STL inclusions. */
 #include <cstddef>
 #include <cstdint>
-#include <any>
 #include <unordered_map>
 #include <memory>
 #include <string>
@@ -38,8 +37,6 @@
 
 /* Local inclusions for inheritances. */
 #include "Libs/FlagTrait.hpp"
-#include "Libs/ObservableTrait.hpp"
-#include "Libs/ObserverTrait.hpp"
 
 /* Local inclusions for usages. */
 #include "Libs/Math/CartesianFrame.hpp"
@@ -134,26 +131,11 @@ namespace EmEn::Graphics::RenderableInstance
 
 	/**
 	 * @brief Defines the base of a renderable instance to draw any object in a scene.
-	 * @note [OBS][SHARED-OBSERVER][SHARED-OBSERVABLE]
 	 * @extends EmEn::Libs::FlagTrait A renderable instance is flag-able.
-	 * @extends EmEn::Libs::ObserverTrait A renderable instance needs to observe the renderable loading.
-	 * @extends EmEn::Libs::ObservableTrait A renderable instance is observable as well.
 	 */
-	class Abstract : public std::enable_shared_from_this< Abstract >, public Libs::FlagTrait< uint32_t >, public Libs::ObserverTrait, public Libs::ObservableTrait
+	class Abstract : public std::enable_shared_from_this< Abstract >, public Libs::FlagTrait< uint32_t >
 	{
 		public:
-
-			/** @brief Observable class unique identifier. */
-			static const size_t ClassUID;
-
-			/** @brief Observable notification codes. */
-			enum NotificationCode
-			{
-				/* Declares the renderable ready to go on GPU for rendering. */
-				ReadyToSetupOnGPU,
-				/* Enumeration boundary. */
-				MaxEnum
-			};
 
 			/**
 			 * @brief Copy constructor.
@@ -185,22 +167,6 @@ namespace EmEn::Graphics::RenderableInstance
 			 * @brief Destructs the renderable instance.
 			 */
 			~Abstract () override = default;
-
-			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
-			[[nodiscard]]
-			size_t
-			classUID () const noexcept override
-			{
-				return ClassUID;
-			}
-
-			/** @copydoc EmEn::Libs::ObservableTrait::is() const */
-			[[nodiscard]]
-			bool
-			is (size_t classUID) const noexcept override
-			{
-				return classUID == ClassUID;
-			}
 
 			/**
 			 * @brief Returns whether this instance is ready to cast shadows.
@@ -680,13 +646,10 @@ namespace EmEn::Graphics::RenderableInstance
 			 */
 			virtual void bindInstanceModelLayer (const Vulkan::CommandBuffer & commandBuffer, uint32_t layerIndex) const noexcept = 0;
 
+			/* [VULKAN-CPU-SYNC] TODO: Check if this is useful! */
 			mutable std::mutex m_GPUMemoryAccess;
 
 		private:
-
-			/** @copydoc EmEn::Libs::ObserverTrait::onNotification() */
-			[[nodiscard]]
-			bool onNotification (const ObservableTrait * observable, int notificationCode, const std::any & data) noexcept override;
 
 			[[nodiscard]]
 			RenderTargetProgramsInterface * getOrCreateRenderTargetProgramInterface (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, uint32_t layerCount);
@@ -695,6 +658,5 @@ namespace EmEn::Graphics::RenderableInstance
 			Libs::Math::Matrix< 4, float > m_transformationMatrix;
 			std::unordered_map< std::shared_ptr< const RenderTarget::Abstract >, std::unique_ptr< RenderTargetProgramsInterface > > m_renderTargetPrograms;
 			uint32_t m_frameIndex{0};
-
 	};
 }

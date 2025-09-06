@@ -26,9 +26,6 @@
 
 #pragma once
 
-/* STL inclusions. */
-#include <array>
-
 /* Local inclusions for inheritances. */
 #include "ServiceInterface.hpp"
 
@@ -68,7 +65,7 @@ namespace EmEn
 			bool
 			usable () const noexcept override
 			{
-				return m_flags[ServiceInitialized];
+				return m_serviceInitialized;
 			}
 
 			/**
@@ -114,20 +111,8 @@ namespace EmEn
 			/** @copydoc EmEn::ServiceInterface::onTerminate() */
 			bool onTerminate () noexcept override;
 
-			/* Flag names */
-			static constexpr auto ServiceInitialized{0UL};
-			static constexpr auto ShowInformation{1UL};
-
 			PrimaryServices & m_primaryServices;
-			std::array< bool, 8 > m_flags{
-				false/*ServiceInitialized*/,
-				false/*ShowInformation*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/
-			};
+			bool m_serviceInitialized{false};
+			bool m_showInformation{false};
 	};
 }

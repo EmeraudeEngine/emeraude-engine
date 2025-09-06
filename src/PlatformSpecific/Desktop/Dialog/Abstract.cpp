@@ -31,12 +31,6 @@
 
 namespace EmEn::PlatformSpecific::Desktop::Dialog
 {
-	Abstract::Abstract (std::string title) noexcept
-		: m_title(std::move(title))
-	{
-
-	}
-
 #ifdef IS_LINUX
 	std::vector< std::string >
 	Abstract::convertFilterStructureForPFD (const std::vector< std::pair< std::string, std::vector< std::string > > > & extensionFilters) noexcept

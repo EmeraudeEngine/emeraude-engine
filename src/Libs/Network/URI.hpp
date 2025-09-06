@@ -29,6 +29,7 @@
 /* STL inclusions. */
 #include <filesystem>
 #include <string>
+#include <iostream>
 
 /* Local inclusions for usages. */
 #include "Query.hpp"
@@ -56,14 +57,30 @@ namespace EmEn::Libs::Network
 			 * @brief Constructs a URI from a raw string.
 			 * @param rawURI A reference to a string.
 			 */
-			explicit URI (const std::string & rawURI) noexcept;
+			explicit
+			URI (const std::string & rawURI) noexcept
+			{
+				if ( !this->parseRawString(rawURI) )
+				{
+					std::cerr << "URI::URI(), empty string !" "\n";
+				}
+			}
 
 			/**
 			 * @brief Assignment operator for std::string.
 			 * @param rawURI A reference of a string for URI.
 			 * @return URI &
 			 */
-			URI & operator= (const std::string & rawURI) noexcept;
+			URI &
+			operator= (const std::string & rawURI) noexcept
+			{
+				if ( !this->parseRawString(rawURI) )
+				{
+					std::cerr << "URI::operator=(), empty string !" "\n";
+				}
+
+				return *this;
+			}
 
 			/**
 			 * @brief Sets the scheme of the URI.
@@ -206,21 +223,6 @@ namespace EmEn::Libs::Network
 				return false;
 			}
 
-			/**
-			 * @brief STL streams printable object.
-			 * @param out A reference to the stream output.
-			 * @param obj A reference to the object to print.
-			 * @return std::ostream &
-			 */
-			friend std::ostream & operator<< (std::ostream & out, const URI & obj);
-
-			/**
-			 * @brief Stringifies the object.
-			 * @param obj A reference to the object to print.
-			 * @return std::string
-			 */
-			friend std::string to_string (const URI & obj) noexcept;
-
 		private:
 
 			/**
@@ -270,10 +272,34 @@ namespace EmEn::Libs::Network
 			 */
 			bool parseRawString (std::string rawString) noexcept;
 
+			/**
+			 * @brief STL streams printable object.
+			 * @param out A reference to the stream output.
+			 * @param obj A reference to the object to print.
+			 * @return std::ostream &
+			 */
+			friend std::ostream & operator<< (std::ostream & out, const URI & obj);
+
 			std::string m_scheme;
 			URIDomain m_uriDomain;
 			std::filesystem::path m_path;
 			Query m_query;
 			std::string m_fragment;
 	};
+
+	/**
+	 * @brief Stringifies the object.
+	 * @param obj A reference to the object to print.
+	 * @return std::string
+	 */
+	inline
+	std::string
+	to_string (const URI & obj) noexcept
+	{
+		std::stringstream output;
+
+		output << obj;
+
+		return output.str();
+	}
 }

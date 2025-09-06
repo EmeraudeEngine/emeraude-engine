@@ -26,22 +26,26 @@
 
 #pragma once
 
-/* STL inclusions. */
-#include <cstddef>
-#include <cstdint>
-#include <memory>
-#include <sstream>
-#include <string>
-#include <array>
-#include <vector>
-#include "Libs/std_source_location.hpp"
+/* Engine configuration file. */
+#include "emeraude_config.hpp"
 
-/* Local inclusions for inheritances. */
-#include "ServiceInterface.hpp"
+/* STL inclusions. */
+#include <cstdint>
+#include <iostream>
+#include <sstream>
+#include <vector>
+#include <queue>
+#include <string>
+#include <chrono>
+#include <thread>
+#include <memory>
+#include <condition_variable>
+#include <mutex>
+#include <filesystem>
+#include "Libs/std_source_location.hpp"
 
 /* Local inclusions for usages. */
 #include "Libs/BlobTrait.hpp"
-#include "TracerLogger.hpp"
 #include "Types.hpp"
 
 /* Forward declarations. */
@@ -55,6 +59,212 @@ namespace EmEn
 namespace EmEn
 {
 	/**
+	 * @brief A single entry for the tracer.
+	 */
+	class TracerEntry final
+	{
+		public:
+
+			/**
+			 * @brief Constructs a tracer entry.
+			 * @param severity The severity of the message.
+			 * @param tag The tag to sort and/or filter entries.
+			 * @param message The content of the entry [std::move].
+			 * @param location The location of the message in the code source.
+			 * @param threadId The thread ID.
+			 */
+			TracerEntry (Severity severity, const char * tag, std::string message, const std::source_location & location, const std::thread::id & threadId) noexcept
+				: m_severity{severity},
+				m_tag{tag},
+				m_message{std::move(message)},
+				m_location{location},
+				m_threadId{threadId}
+			{
+
+			}
+
+			/**
+			 * @brief Returns the time of the message.
+			 * @return const time_point< steady_clock > &
+			 */
+			[[nodiscard]]
+			const std::chrono::time_point< std::chrono::steady_clock > &
+			time () const noexcept
+			{
+				return m_time;
+			}
+
+			/**
+			 * @brief Returns the severity of the message.
+			 * @return Severity
+			 */
+			[[nodiscard]]
+			Severity
+			severity () const noexcept
+			{
+				return m_severity;
+			}
+
+			/**
+			 * @brief Returns the tag of the entry.
+			 * @return const char *
+			 */
+			[[nodiscard]]
+			const char *
+			tag () const noexcept
+			{
+				return m_tag;
+			}
+
+			/**
+			 * @brief Returns the message.
+			 * @return const std::string &
+			 */
+			[[nodiscard]]
+			const std::string &
+			message () const noexcept
+			{
+				return m_message;
+			}
+
+			/**
+			 * @brief Returns the location where the entry comes from.
+			 * @return const std::source_location &
+			 */
+			[[nodiscard]]
+			const std::source_location &
+			location () const noexcept
+			{
+				return m_location;
+			}
+
+			/**
+			 * @brief Returns the thread ID where the entry was generated.
+			 * @return const std::thread::id &
+			 */
+			[[nodiscard]]
+			const std::thread::id &
+			threadId () const noexcept
+			{
+				return m_threadId;
+			}
+
+		private:
+
+			std::chrono::time_point< std::chrono::steady_clock > m_time{std::chrono::steady_clock::now()};
+			Severity m_severity{Severity::Info};
+			const char * m_tag{nullptr};
+			std::string m_message;
+			std::source_location m_location;
+			std::thread::id m_threadId;
+	};
+
+	/**
+	 * @brief The tracer logger class.
+	 */
+	class TracerLogger final
+	{
+		public:
+
+			/**
+			 * @brief Constructs the trace logger.
+			 * @param filepath A reference to a path to the log file [std::move].
+			 * @param logFormat The type of log desired. Default Text.
+			 */
+			explicit TracerLogger (std::filesystem::path filepath, LogFormat logFormat = LogFormat::Text) noexcept;
+
+			/**
+			 * @brief Destructs the trace logger.
+			 */
+			~TracerLogger ();
+
+			/**
+			 * @brief Creates a log.
+			 * @param severity The type of log.
+			 * @param tag A pointer to a C-string to describe a tag. This helps for sorting logs.
+			 * @param message A reference to a string for the log content.
+			 * @param location A reference to a source_location.
+			 * @return void
+			 */
+			void
+			push (Severity severity, const char * tag, std::string message, const std::source_location & location) noexcept
+			{
+				{
+					/* NOTE: Lock between the writing logs task in a file and the push/pop method. */
+					const std::lock_guard< std::mutex > lock{m_entriesAccess};
+
+					m_entries.emplace(severity, tag, std::move(message), location, std::this_thread::get_id());
+				}
+
+				/* NOTE: wake up the thread. */
+				m_condition.notify_one();
+			}
+
+			bool
+			start () noexcept
+			{
+				if ( !m_isUsable || m_isRunning )
+				{
+					if constexpr ( IsDebug )
+					{
+						std::cerr << "TraceLogger::start() : Unable to enable the tracer logger !" "\n";
+					}
+
+					return false;
+				}
+
+				m_isRunning = true;
+
+				m_thread = std::thread{&TracerLogger::task, this};
+
+				return true;
+			}
+
+			/**
+			 * @brief Stops the writing task for shutting down the tracer service.
+			 * @return void
+			 */
+			void
+			stop () noexcept
+			{
+				m_isRunning = false;
+
+				m_condition.notify_one();
+			}
+
+			/**
+			 * @brief Clears pending entries.
+			 * @return void
+			 */
+			void
+			clear () noexcept
+			{
+				const std::lock_guard< std::mutex > lock{m_entriesAccess};
+
+				std::queue< TracerEntry > emptyQueue;
+
+				m_entries.swap(emptyQueue);
+			}
+
+		private:
+
+			/**
+			 * @brief Runs the task of writing entries to the log file.
+			 * @return void
+			 */
+			void task () noexcept;
+
+			std::filesystem::path m_filepath;
+			std::queue< TracerEntry > m_entries;
+			LogFormat m_logFormat;
+			std::thread m_thread;
+			std::mutex m_entriesAccess;
+			std::condition_variable m_condition;
+			std::atomic_bool m_isUsable{false};
+			std::atomic_bool m_isRunning{false};
+	};
+
+	/**
 	 * @brief The tracer class is responsible for logging messages, errors, warnings, etc. to the terminal or in a log file.
 	 */
 	class Tracer final
@@ -66,26 +276,6 @@ namespace EmEn
 
 			/* ANSI Escape Codes */
 			static constexpr auto CSI{"\033["};
-
-			enum class ANSIColorCode: uint8_t
-			{
-				Black = 30,
-				Red = 31,
-				Green = 32,
-				Yellow = 33,
-				Blue = 34,
-				Magenta = 35,
-				Cyan = 36,
-				White = 37,
-				BrightBlack = 90,
-				BrightRed = 91,
-				BrightGreen = 92,
-				BrightYellow = 93,
-				BrightBlue = 94,
-				BrightMagenta = 95,
-				BrightCyan = 96,
-				BrightWhite = 97
-			};
 
 			/**
 			 * @brief Copy constructor.
@@ -133,7 +323,7 @@ namespace EmEn
 			[[nodiscard]]
 			static
 			Tracer &
-			instance () noexcept
+			getInstance () noexcept
 			{
 				static auto instance = std::make_unique< Tracer >(PrivateToken{});
 
@@ -141,7 +331,7 @@ namespace EmEn
 			}
 
 			/**
-			 * @brief Setups the tracer for a specific process.
+			 * @brief Sets up the tracer for a specific process.
 			 * @param arguments A reference to the arguments.
 			 * @param processName A string to identify the instance with multi-processes application [std::move].
 			 * @param childProcess Declares a child process.
@@ -150,7 +340,7 @@ namespace EmEn
 			void earlySetup (const Arguments & arguments, std::string processName, bool childProcess) noexcept;
 
 			/**
-			 * @brief Setups the tracer.
+			 * @brief Sets up the tracer.
 			 * @warning This can't be done at startup because the Tracer service is the first to be set up.
 			 * @param arguments A reference to the arguments.
 			 * @param fileSystem A reference to the filesystem service.
@@ -202,7 +392,7 @@ namespace EmEn
 			void
 			enablePrintOnlyErrors (bool state) noexcept
 			{
-				m_flags[PrintOnlyErrors] = state;
+				m_printOnlyErrors = state;
 			}
 
 			/**
@@ -213,7 +403,7 @@ namespace EmEn
 			bool
 			printOnlyErrors () const noexcept
 			{
-				return m_flags[PrintOnlyErrors];
+				return m_printOnlyErrors;
 			}
 
 			/**
@@ -225,7 +415,7 @@ namespace EmEn
 			void
 			enableSourceLocation (bool state) noexcept
 			{
-				m_flags[SourceLocationEnabled] = state;
+				m_sourceLocationEnabled = state;
 			}
 
 			/**
@@ -236,7 +426,7 @@ namespace EmEn
 			bool
 			isSourceLocationEnabled () const noexcept
 			{
-				return m_flags[SourceLocationEnabled];
+				return m_sourceLocationEnabled;
 			}
 
 			/**
@@ -248,7 +438,7 @@ namespace EmEn
 			void
 			enableThreadInfos (bool state) noexcept
 			{
-				m_flags[ThreadInfosEnabled] = state;
+				m_threadInfosEnabled = state;
 			}
 
 			/**
@@ -259,7 +449,7 @@ namespace EmEn
 			bool
 			isThreadInfosEnabled () const noexcept
 			{
-				return m_flags[ThreadInfosEnabled];
+				return m_threadInfosEnabled;
 			}
 
 			/**
@@ -270,7 +460,7 @@ namespace EmEn
 			void
 			disableTracer (bool state) noexcept
 			{
-				m_flags[IsTracerDisabled] = state;
+				m_isTracerDisabled = state;
 			}
 
 			/**
@@ -281,7 +471,7 @@ namespace EmEn
 			bool
 			isTracerDisabled () const noexcept
 			{
-				return m_flags[IsTracerDisabled];
+				return m_isTracerDisabled;
 			}
 
 			/**
@@ -292,7 +482,7 @@ namespace EmEn
 			bool
 			isLoggerRequestedAtStartup () const noexcept
 			{
-				return m_flags[LoggerRequestedAtStartup];
+				return m_loggerRequestedAtStartup;
 			}
 
 			/**
@@ -359,7 +549,7 @@ namespace EmEn
 			void
 			info (const char * tag, std::string_view message, const std::source_location & location = std::source_location::current()) noexcept
 			{
-				Tracer::instance().trace(Severity::Info, tag, message, location);
+				Tracer::getInstance().trace(Severity::Info, tag, message, location);
 			}
 
 			/**
@@ -373,7 +563,7 @@ namespace EmEn
 			void
 			success (const char * tag, std::string_view message, const std::source_location & location = std::source_location::current()) noexcept
 			{
-				Tracer::instance().trace(Severity::Success, tag, message, location);
+				Tracer::getInstance().trace(Severity::Success, tag, message, location);
 			}
 
 			/**
@@ -387,7 +577,7 @@ namespace EmEn
 			void
 			warning (const char * tag, std::string_view message, const std::source_location & location = std::source_location::current()) noexcept
 			{
-				Tracer::instance().trace(Severity::Warning, tag, message, location);
+				Tracer::getInstance().trace(Severity::Warning, tag, message, location);
 			}
 
 			/**
@@ -401,7 +591,7 @@ namespace EmEn
 			void
 			error (const char * tag, std::string_view message, const std::source_location & location = std::source_location::current()) noexcept
 			{
-				Tracer::instance().trace(Severity::Error, tag, message, location);
+				Tracer::getInstance().trace(Severity::Error, tag, message, location);
 			}
 
 			/**
@@ -415,7 +605,7 @@ namespace EmEn
 			void
 			fatal (const char * tag, std::string_view message, const std::source_location & location = std::source_location::current()) noexcept
 			{
-				Tracer::instance().trace(Severity::Fatal, tag, message, location);
+				Tracer::getInstance().trace(Severity::Fatal, tag, message, location);
 			}
 
 			/**
@@ -431,7 +621,7 @@ namespace EmEn
 			{
 				if constexpr ( IsDebug )
 				{
-					Tracer::instance().trace(Severity::Debug, tag, message, location);
+					Tracer::getInstance().trace(Severity::Debug, tag, message, location);
 				}
 			}
 
@@ -447,7 +637,7 @@ namespace EmEn
 			void
 			API (const char * tag, const char * functionName, std::string_view message = {}, const std::source_location & location = std::source_location::current())
 			{
-				Tracer::instance().traceAPI(tag, functionName, message, location);
+				Tracer::getInstance().traceAPI(tag, functionName, message, location);
 			}
 
 			/**
@@ -460,7 +650,7 @@ namespace EmEn
 			void
 			traceGLFW (int error, const char * description) noexcept
 			{
-				Tracer::instance().trace(Severity::Error, "GLFW", (std::stringstream{} << description << " (errno:" << error << ')').str(), {});
+				Tracer::getInstance().trace(Severity::Error, "GLFW", (std::stringstream{} << description << " (errno:" << error << ')').str(), {});
 			}
 
 		private:
@@ -534,15 +724,6 @@ namespace EmEn
 			 * @return bool
 			 */
 			bool filterTag (const char * tag) const noexcept;
-			
-			/* Flag names. */
-			static constexpr auto ServiceInitialized{0UL};
-			static constexpr auto IsChildProcess{1UL};
-			static constexpr auto PrintOnlyErrors{2UL};
-			static constexpr auto SourceLocationEnabled{3UL};
-			static constexpr auto ThreadInfosEnabled{4UL};
-			static constexpr auto IsTracerDisabled{5UL};
-			static constexpr auto LoggerRequestedAtStartup{6UL};
 
 			std::filesystem::path m_cacheDirectory;
 			std::string m_processName;
@@ -551,16 +732,13 @@ namespace EmEn
 			LogFormat m_logFormat{LogFormat::Text};
 			int m_parentProcessID{-1};
 			int m_processID{-1};
-			std::array< bool, 8 > m_flags{
-				false/*ServiceInitialized*/,
-				false/*IsChildProcess*/,
-				false/*PrintOnlyErrors*/,
-				false/*SourceLocationEnabled*/,
-				false/*ThreadInfosEnabled*/,
-				false/*IsTracerDisabled*/,
-				false/*LoggerRequestedAtStartup*/,
-				false/*UNUSED*/
-			};
+			bool m_serviceInitialized{false};
+			bool m_isChildProcess{false};
+			bool m_printOnlyErrors{false};
+			bool m_sourceLocationEnabled{false};
+			bool m_threadInfosEnabled{false};
+			bool m_isTracerDisabled{false};
+			bool m_loggerRequestedAtStartup{false};
 	};
 
 	/* ==================================================================================================================== */
@@ -632,7 +810,7 @@ namespace EmEn
 			 */
 			~TraceDebug ()
 			{
-				Tracer::instance().trace(Severity::Debug, m_tag, this->get(), m_location);
+				Tracer::getInstance().trace(Severity::Debug, m_tag, this->get(), m_location);
 			}
 
 		private:
@@ -738,7 +916,7 @@ namespace EmEn
 			 */
 			~TraceSuccess ()
 			{
-				Tracer::instance().trace(Severity::Success, m_tag, this->get(), m_location);
+				Tracer::getInstance().trace(Severity::Success, m_tag, this->get(), m_location);
 			}
 
 
@@ -812,7 +990,7 @@ namespace EmEn
 			 */
 			~TraceInfo ()
 			{
-				Tracer::instance().trace(Severity::Info, m_tag, this->get(), m_location);
+				Tracer::getInstance().trace(Severity::Info, m_tag, this->get(), m_location);
 			}
 
 		private:
@@ -885,7 +1063,7 @@ namespace EmEn
 			 */
 			~TraceWarning ()
 			{
-				Tracer::instance().trace(Severity::Warning, m_tag, this->get(), m_location);
+				Tracer::getInstance().trace(Severity::Warning, m_tag, this->get(), m_location);
 			}
 
 		private:
@@ -958,7 +1136,7 @@ namespace EmEn
 			 */
 			~TraceError ()
 			{
-				Tracer::instance().trace(Severity::Error, m_tag, this->get(), m_location);
+				Tracer::getInstance().trace(Severity::Error, m_tag, this->get(), m_location);
 			}
 
 		private:
@@ -1037,7 +1215,7 @@ namespace EmEn
 			 */
 			~TraceFatal ()
 			{
-				Tracer::instance().trace(Severity::Fatal, m_tag, this->get(), m_location);
+				Tracer::getInstance().trace(Severity::Fatal, m_tag, this->get(), m_location);
 
 				if ( m_terminate )
 				{
@@ -1126,7 +1304,7 @@ namespace EmEn
 			 */
 			~TraceAPI ()
 			{
-				Tracer::instance().traceAPI(m_tag, m_functionName, this->get(), m_location);
+				Tracer::getInstance().traceAPI(m_tag, m_functionName, this->get(), m_location);
 
 				if ( m_terminate )
 				{

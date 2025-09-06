@@ -40,22 +40,35 @@ class Noise final : public ObservableTrait
 {
 	public:
 
-		static const size_t ClassUID;
-
 		Noise () = default;
 
+		/**
+		 * @brief Returns the unique identifier for this class [Thread-safe].
+		 * @return size_t
+		 */
+		static
+		size_t
+		getClassUID () noexcept
+		{
+			static const size_t classUID = EmEn::Libs::Hash::FNV1a("Noise");
+
+			return classUID;
+		}
+
+		/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
 		[[nodiscard]]
 		size_t
 		classUID () const noexcept override
 		{
-			return ClassUID;
+			return getClassUID();
 		}
 
+		/** @copydoc EmEn::Libs::ObservableTrait::is() const */
 		[[nodiscard]]
 		bool
-		is (size_t uniqueIdentifier) const noexcept override
+		is (size_t classUID) const noexcept override
 		{
-			return ClassUID == uniqueIdentifier;
+			return classUID == getClassUID();
 		}
 
 		void
@@ -64,29 +77,40 @@ class Noise final : public ObservableTrait
 			this->notify(0);
 		}
 };
-
-const size_t Noise::ClassUID{getClassUID("Noise")};
 
 class DummyClass final : public ObservableTrait
 {
 	public:
 
-		static const size_t ClassUID;
-
 		DummyClass () = default;
 
+		/**
+		 * @brief Returns the unique identifier for this class [Thread-safe].
+		 * @return size_t
+		 */
+		static
+		size_t
+		getClassUID () noexcept
+		{
+			static const size_t classUID = EmEn::Libs::Hash::FNV1a("DummyClass");
+
+			return classUID;
+		}
+
+		/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
 		[[nodiscard]]
 		size_t
 		classUID () const noexcept override
 		{
-			return ClassUID;
+			return getClassUID();
 		}
 
+		/** @copydoc EmEn::Libs::ObservableTrait::is() const */
 		[[nodiscard]]
 		bool
-		is (size_t uniqueIdentifier) const noexcept override
+		is (size_t classUID) const noexcept override
 		{
-			return ClassUID == uniqueIdentifier;
+			return classUID == getClassUID();
 		}
 
 		void
@@ -95,8 +119,6 @@ class DummyClass final : public ObservableTrait
 			this->notify(0);
 		}
 };
-
-const size_t DummyClass::ClassUID{getClassUID("DummyClass")};
 
 class Watcher final : public ObserverTrait
 {
@@ -123,14 +145,14 @@ class Watcher final : public ObserverTrait
 		bool
 		onNotification (const ObservableTrait * observable, int /*notificationCode*/, const std::any & /*data*/) noexcept override
 		{
-			if ( observable->is(Noise::ClassUID) )
+			if ( observable->is(Noise::getClassUID()) )
 			{
 				m_noiseEventIntercepted = true;
 
 				return true;
 			}
 
-			if ( observable->is(DummyClass::ClassUID) )
+			if ( observable->is(DummyClass::getClassUID()) )
 			{
 				m_dummyEventIntercepted = true;
 
@@ -150,11 +172,11 @@ TEST(Observer, uniqueIdentifier)
 
 	const DummyClass instanceA{};
 
-	ASSERT_EQ(instanceA.is(DummyClass::ClassUID), true);
+	ASSERT_EQ(instanceA.is(DummyClass::getClassUID()), true);
 
 	const DummyClass instanceB{};
 
-	ASSERT_EQ(instanceB.is(DummyClass::ClassUID), true);
+	ASSERT_EQ(instanceB.is(DummyClass::getClassUID()), true);
 }
 
 TEST(Observer, watch)

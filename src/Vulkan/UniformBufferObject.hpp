@@ -31,16 +31,16 @@
 #include <memory>
 
 /* Local inclusions for inheritances. */
-#include "AbstractHostBuffer.hpp"
+#include "Buffer.hpp"
 
 namespace EmEn::Vulkan
 {
 	/**
 	 * @brief Defines a convenient way to build a uniform buffer object (UBO).
 	 * @note Vulkan guaranteed a minimum size of 16Kb.
-	 * @extends EmEn::Vulkan::AbstractHostBuffer This is a host-side buffer.
+	 * @extends EmEn::Vulkan::Buffer This is a buffer.
 	 */
-	class UniformBufferObject final : public AbstractHostBuffer
+	class UniformBufferObject final : public Buffer
 	{
 		public:
 
@@ -78,7 +78,13 @@ namespace EmEn::Vulkan
 			 * @param blockAlignedSize The size of a block. Default, no sub-objects.
 			 */
 			UniformBufferObject (const std::shared_ptr< Device > & device, VkDeviceSize size, uint32_t blockAlignedSize = 0) noexcept
-				: AbstractHostBuffer{device, 0, size, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT},
+				: Buffer{
+					device,
+					0,
+					size,
+					VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+					VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
+				},
 				m_blockAlignedSize{blockAlignedSize}
 			{
 

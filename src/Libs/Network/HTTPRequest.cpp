@@ -26,63 +26,11 @@
 
 #include "HTTPRequest.hpp"
 
-/* Emeraude-Engine configuration. */
-#include "emeraude_config.hpp"
-
 /* Local inclusions. */
 #include "Libs/String.hpp"
 
 namespace EmEn::Libs::Network
 {
-	HTTPRequest::HTTPRequest (Version version) noexcept
-		: HTTPHeaders(version)
-	{
-
-	}
-
-	HTTPRequest::HTTPRequest (Method method, const URI & resource, Version version) noexcept
-		: HTTPHeaders(version), m_method(method), m_resource(resource)
-	{
-		this->add(Host, to_string(resource.uriDomain().hostname()));
-	}
-
-	HTTPRequest::HTTPRequest (const std::string & rawHeaders) noexcept
-	{
-		if ( !this->parse(rawHeaders) )
-		{
-			std::cerr << __PRETTY_FUNCTION__ << ", unable to parse the HTTP request !" "\n";
-		}
-	}
-
-	void
-	HTTPRequest::setMethod (Method method) noexcept
-	{
-		m_method = method;
-	}
-
-	HTTPRequest::Method
-	HTTPRequest::method () const noexcept
-	{
-		return m_method;
-	}
-
-	void
-	HTTPRequest::setResource (const URI & resource, bool doNotAddHeader) noexcept
-	{
-		m_resource = resource;
-
-		if ( !doNotAddHeader )
-		{
-			this->add(Host, to_string(resource.uriDomain().hostname()));
-		}
-	}
-
-	const URI &
-	HTTPRequest::resource () const noexcept
-	{
-		return m_resource;
-	}
-
 	bool
 	HTTPRequest::isValid () const noexcept
 	{
@@ -106,7 +54,7 @@ namespace EmEn::Libs::Network
 
 		if ( chunks.size() < 2 )
 		{
-			std::cerr << __PRETTY_FUNCTION__ << ", invalid HTTP request : " << line << "\n";
+			std::cerr << "HTTPRequest::parseFirstLine(), invalid HTTP request : " << line << "\n";
 
 			return false;
 		}
@@ -116,7 +64,7 @@ namespace EmEn::Libs::Network
 
 		if ( m_method == Method::NONE )
 		{
-			std::cerr << __PRETTY_FUNCTION__ << ", invalid method for the request : " << line << "\n";
+			std::cerr << "HTTPRequest::parseFirstLine(), invalid method for the request : " << line << "\n";
 
 			return false;
 		}
@@ -136,7 +84,7 @@ namespace EmEn::Libs::Network
 	std::string
 	HTTPRequest::toString () const noexcept
 	{
-		std::stringstream string{};
+		std::stringstream string;
 
 		/* NOTE: HTTP version 0.9 have no header in response. */
 		if ( m_version == Version::HTTP09 )

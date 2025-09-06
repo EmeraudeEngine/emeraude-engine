@@ -116,7 +116,7 @@ namespace EmEn::Libs::Math
 	/**
 	 * @brief Column Major matrix.
 	 * @tparam dim_t The dimension of the vector. This can be 2, 3 or 4.
-	 * @tparam precision_t The data precision, should be a floating point number. Default float.
+	 * @tparam precision_t The data precision should be a floating point number. Default float.
 	 * @note
 	 *	Matrix 2x2 memory layout (column major)
 	 *		[0][2]
@@ -147,7 +147,6 @@ namespace EmEn::Libs::Math
 	 *		[   R][Sy+R][   R][  Ty]
 	 *		[   R][   R][Sz+R][  Tz]
 	 *		[   0][   0][   0][   1]
-	 * @todo Check pertinence of OpenMP pragmas
 	 */
 	template< size_t dim_t, typename precision_t = float >
 	requires (dim_t == 2 || dim_t == 3 || dim_t == 4) && std::is_arithmetic_v< precision_t >
@@ -161,31 +160,12 @@ namespace EmEn::Libs::Math
 			constexpr
 			Matrix () noexcept
 			{
-				if constexpr ( dim_t == 2 )
-				{
-					m_data[M2x2Col0Row0] = 1;
-					m_data[M2x2Col1Row1]  = 1;
-				}
-
-				if constexpr ( dim_t == 3 )
-				{
-					m_data[M3x3Col0Row0] = 1;
-					m_data[M3x3Col1Row1] = 1;
-					m_data[M3x3Col2Row2] = 1;
-				}
-
-				if constexpr ( dim_t == 4 )
-				{
-					m_data[M4x4Col0Row0] = 1;
-					m_data[M4x4Col1Row1] = 1;
-					m_data[M4x4Col2Row2] = 1;
-					m_data[M4x4Col3Row3] = 1;
-				}
+				this->reset();
 			}
 
 			/**
 			 * @brief Constructs a matrix 2x2 with row major entries.
-			 * @note This help the matrix notation.
+			 * @note This helps the matrix notation.
 			 */
 			constexpr
 			Matrix (
@@ -202,7 +182,7 @@ namespace EmEn::Libs::Math
 
 			/**
 			 * @brief Constructs a matrix 3x3 with row major entries.
-			 * @note This help the matrix notation.
+			 * @note This helps the matrix notation.
 			 */
 			constexpr
 			Matrix (
@@ -221,7 +201,7 @@ namespace EmEn::Libs::Math
 
 			/**
 			 * @brief Constructs a matrix 4x4 with row major entries.
-			 * @note This help the matrix notation.
+			 * @note This helps the matrix notation.
 			 */
 			constexpr
 			Matrix (
@@ -406,14 +386,13 @@ namespace EmEn::Libs::Math
 			}
 
 			/**
-			 * @brief Constructs a matrix from C-Style array.
+			 * @brief Constructs a matrix from a C-Style array.
 			 * @warning Unsafe !
 			 * @param data A pointer to a C-Style array containing at least the dimension of the matrix.
 			 */
 			explicit
 			Matrix (std::span< const precision_t, dim_t * dim_t > & data) noexcept
 			{
-				#pragma omp simd
 				for ( size_t index = 0; index < dim_t * dim_t; index++ )
 				{
 					m_data[index] = data[index];
@@ -441,7 +420,6 @@ namespace EmEn::Libs::Math
 			{
 				Matrix matrix;
 
-				#pragma omp simd
 				for ( size_t index = 0; index < dim_t * dim_t; index++ )
 				{
 					matrix.m_data[index] = -m_data[index];
@@ -452,7 +430,7 @@ namespace EmEn::Libs::Math
 
 			/**
 			 * @brief Data accessor.
-			 * @param index The index of matrix element.
+			 * @param index The index of a matrix element.
 			 * @return precision_t &
 			 */
 			precision_t &
@@ -463,7 +441,7 @@ namespace EmEn::Libs::Math
 
 			/**
 			 * @brief Data accessor (const version).
-			 * @param index The index of matrix element.
+			 * @param index The index of a matrix element.
 			 * @return const precision_t &
 			 */
 			[[nodiscard]]
@@ -471,6 +449,38 @@ namespace EmEn::Libs::Math
 			operator[] (size_t index) const noexcept
 			{
 				return m_data[index];
+			}
+
+			/**
+			 * @brief Data accessor.
+			 * @param row The row index.
+			 * @param col The column index.
+			 * @return precision_t &
+			 */
+			[[nodiscard]]
+			constexpr
+			precision_t &
+			operator() (size_t row, size_t col) noexcept
+			{
+				assert(row < dim_t && col < dim_t);
+
+				return m_data[col * dim_t + row];
+			}
+
+			/**
+			 * @brief Data accessor (const version).
+			 * @param row The row index.
+			 * @param col The column index.
+			 * @return const precision_t &
+			 */
+			[[nodiscard]]
+			constexpr
+			const precision_t &
+			operator() (size_t row, size_t col) const noexcept
+			{
+				assert(row < dim_t && col < dim_t);
+
+				return m_data[col * dim_t + row];
 			}
 
 			/**
@@ -485,7 +495,6 @@ namespace EmEn::Libs::Math
 			{
 				if ( this != &operand )
 				{
-					/* NOTE: This should be unrolled by compiler. */
 					for ( size_t index = 0; index < dim_t * dim_t; index++ )
 					{
 						if ( Utility::different(m_data[index], operand.m_data[index]) )
@@ -510,7 +519,6 @@ namespace EmEn::Libs::Math
 			{
 				if ( this != &operand )
 				{
-					/* NOTE: This should be unrolled by compiler. */
 					for ( size_t index = 0; index < dim_t * dim_t; index++ )
 					{
 						if ( m_data[index] != operand.m_data[index] )
@@ -546,7 +554,6 @@ namespace EmEn::Libs::Math
 			{
 				Matrix matrix;
 
-				#pragma omp simd
 				for ( size_t index = 0; index < dim_t * dim_t; index++ )
 				{
 					matrix[index] = m_data[index] + operand.m_data[index];
@@ -563,21 +570,16 @@ namespace EmEn::Libs::Math
 			Matrix &
 			operator+= (const Matrix & operand) noexcept
 			{
-				/* Guard self assignment */
-				if ( this != &operand )
+				for ( size_t index = 0; index < dim_t * dim_t; index++ )
 				{
-					#pragma omp simd
-					for ( size_t index = 0; index < dim_t * dim_t; index++ )
-					{
-						m_data[index] += operand.m_data[index];
-					}
+					m_data[index] += operand.m_data[index];
 				}
 
 				return *this;
 			}
 
 			/**
-			 * @brief Overloads the subtract operator.
+			 * @brief Overloads the subtraction operator.
 			 * @param operand A reference to another matrix.
 			 * @return Matrix
 			 */
@@ -587,7 +589,6 @@ namespace EmEn::Libs::Math
 			{
 				Matrix matrix;
 
-				#pragma omp simd
 				for ( size_t index = 0; index < dim_t * dim_t; index++ )
 				{
 					matrix[index] = m_data[index] - operand.m_data[index];
@@ -597,28 +598,23 @@ namespace EmEn::Libs::Math
 			}
 
 			/**
-			 * @brief Overloads the subtract and assign operator.
+			 * @brief Overloads the subtraction and assign operator.
 			 * @param operand A reference to another matrix.
 			 * @return Matrix
 			 */
 			Matrix &
 			operator-= (const Matrix & operand) noexcept
 			{
-				/* Guard self assignment */
-				if ( this != &operand )
+				for ( size_t index = 0; index < dim_t * dim_t; index++ )
 				{
-					#pragma omp simd
-					for ( size_t index = 0; index < dim_t * dim_t; index++ )
-					{
-						m_data[index] -= operand.m_data[index];
-					}
+					m_data[index] -= operand.m_data[index];
 				}
 
 				return *this;
 			}
 
 			/**
-			 * @brief Overloads the multiply operator.
+			 * @brief Overloads the multiplication operator.
 			 * @param operand A reference to another matrix.
 			 * @return Matrix
 			 */
@@ -628,7 +624,6 @@ namespace EmEn::Libs::Math
 			{
 				Matrix matrix;
 
-				#pragma omp simd
 				for ( size_t columnIndex = 0; columnIndex < dim_t; columnIndex++ )
 				{
 					for ( size_t rowIndex = 0; rowIndex < dim_t; rowIndex++ )
@@ -655,17 +650,30 @@ namespace EmEn::Libs::Math
 			Matrix &
 			operator*= (const Matrix & operand) noexcept
 			{
-				/* Guard self assignment */
-				if ( this != &operand )
+				std::array< precision_t, dim_t * dim_t > data;
+
+				for ( size_t col = 0; col < dim_t; ++col )
 				{
-					*this = *this * operand;
+					for ( size_t row = 0; row < dim_t; ++row )
+					{
+						precision_t sum = 0;
+
+						for ( size_t i = 0; i < dim_t; ++i )
+						{
+							sum += m_data[i * dim_t + row] * operand.m_data[col * dim_t + i];
+						}
+
+						data[col * dim_t + row] = sum;
+					}
 				}
+
+				m_data = data;
 
 				return *this;
 			}
 
 			/**
-			 * @brief Overloads the multiply operator.
+			 * @brief Overloads the multiplication operator.
 			 * @param operand A value.
 			 * @return Matrix
 			 */
@@ -675,7 +683,6 @@ namespace EmEn::Libs::Math
 			{
 				Matrix matrix;
 
-				#pragma omp simd
 				for ( size_t index = 0; index < dim_t * dim_t; index++ )
 				{
 					matrix.m_data[index] = m_data[index] * operand;
@@ -692,7 +699,6 @@ namespace EmEn::Libs::Math
 			Matrix &
 			operator*= (precision_t operand) noexcept
 			{
-				#pragma omp simd
 				for ( size_t index = 0; index < dim_t * dim_t; index++ )
 				{
 					m_data[index] *= operand;
@@ -702,7 +708,7 @@ namespace EmEn::Libs::Math
 			}
 
 			/**
-			 * @brief Overloads the multiply operator.
+			 * @brief Overloads the multiplication operator.
 			 * @param operand A reference to a vector.
 			 * @return Vector< dim_t, precision_t >
 			 */
@@ -822,10 +828,10 @@ namespace EmEn::Libs::Math
 			 * @brief Resets matrix to identity.
 			 * @return void
 			 */
+			constexpr
 			void
 			reset () noexcept
 			{
-				#pragma omp simd
 				for ( size_t columnIndex = 0; columnIndex < dim_t; columnIndex++ )
 				{
 					for ( size_t rowIndex = 0; rowIndex < dim_t; rowIndex++ )
@@ -843,157 +849,16 @@ namespace EmEn::Libs::Math
 			bool
 			isIdentity () const noexcept
 			{
-				if constexpr ( dim_t == 2 )
+				for ( size_t col = 0; col < dim_t; ++col )
 				{
-					if ( Utility::different(m_data[0], static_cast< precision_t >(1)) )
+					for ( size_t row = 0; row < dim_t; ++row )
 					{
-						return false;
-					}
+						const precision_t expected = row == col ? 1 : 0;
 
-					if ( Utility::different(m_data[1], static_cast< precision_t >(0)) )
-					{
-						return false;
-					}
-
-					if ( Utility::different(m_data[2], static_cast< precision_t >(0)) )
-					{
-						return false;
-					}
-
-					if ( Utility::different(m_data[3], static_cast< precision_t >(1)) )
-					{
-						return false;
-					}
-				}
-
-				if constexpr ( dim_t == 3 )
-				{
-					if ( Utility::different(m_data[0], static_cast< precision_t >(1)) )
-					{
-						return false;
-					}
-
-					if ( Utility::different(m_data[1], static_cast< precision_t >(0)) )
-					{
-						return false;
-					}
-
-					if ( Utility::different(m_data[2], static_cast< precision_t >(0)) )
-					{
-						return false;
-					}
-
-					if ( Utility::different(m_data[3], static_cast< precision_t >(0)) )
-					{
-						return false;
-					}
-
-					if ( Utility::different(m_data[4], static_cast< precision_t >(1)) )
-					{
-						return false;
-					}
-
-					if ( Utility::different(m_data[5], static_cast< precision_t >(0)) )
-					{
-						return false;
-					}
-
-					if ( Utility::different(m_data[6], static_cast< precision_t >(0)) )
-					{
-						return false;
-					}
-
-					if ( Utility::different(m_data[7], static_cast< precision_t >(0)) )
-					{
-						return false;
-					}
-
-					if ( Utility::different(m_data[8], static_cast< precision_t >(1)) )
-					{
-						return false;
-					}
-				}
-
-				if constexpr ( dim_t == 4 )
-				{
-					if ( Utility::different(m_data[0], static_cast< precision_t >(1)) )
-					{
-						return false;
-					}
-
-					if ( Utility::different(m_data[1], static_cast< precision_t >(0)) )
-					{
-						return false;
-					}
-
-					if ( Utility::different(m_data[2], static_cast< precision_t >(0)) )
-					{
-						return false;
-					}
-
-					if ( Utility::different(m_data[3], static_cast< precision_t >(0)) )
-					{
-						return false;
-					}
-
-					if ( Utility::different(m_data[4], static_cast< precision_t >(0)) )
-					{
-						return false;
-					}
-
-					if ( Utility::different(m_data[5], static_cast< precision_t >(1)) )
-					{
-						return false;
-					}
-
-					if ( Utility::different(m_data[6], static_cast< precision_t >(0)) )
-					{
-						return false;
-					}
-
-					if ( Utility::different(m_data[7], static_cast< precision_t >(0)) )
-					{
-						return false;
-					}
-
-					if ( Utility::different(m_data[8], static_cast< precision_t >(0)) )
-					{
-						return false;
-					}
-
-					if ( Utility::different(m_data[9], static_cast< precision_t >(0)) )
-					{
-						return false;
-					}
-
-					if ( Utility::different(m_data[10], static_cast< precision_t >(1)) )
-					{
-						return false;
-					}
-
-					if ( Utility::different(m_data[11], static_cast< precision_t >(0)) )
-					{
-						return false;
-					}
-
-					if ( Utility::different(m_data[12], static_cast< precision_t >(0)) )
-					{
-						return false;
-					}
-
-					if ( Utility::different(m_data[13], static_cast< precision_t >(0)) )
-					{
-						return false;
-					}
-
-					if ( Utility::different(m_data[14], static_cast< precision_t >(0)) )
-					{
-						return false;
-					}
-
-					if ( Utility::different(m_data[15], static_cast< precision_t >(1)) )
-					{
-						return false;
+						if ( Utility::different((*this)(row, col), expected) )
+						{
+							return false;
+						}
 					}
 				}
 
@@ -1087,7 +952,6 @@ namespace EmEn::Libs::Math
 			{
 				assert(row < dim_t);
 
-				#pragma omp simd
 				for ( size_t index = 0; index < dim_t; index++ )
 				{
 					m_data[(index * dim_t) + row] = vector[index];
@@ -1107,7 +971,6 @@ namespace EmEn::Libs::Math
 
 				Vector< dim_t, precision_t > vector;
 
-				#pragma omp simd
 				for ( size_t index = 0; index < dim_t; index++ )
 				{
 					vector[index] = m_data[(index * dim_t) + row];
@@ -1189,7 +1052,6 @@ namespace EmEn::Libs::Math
 
 				const auto shift = dim_t * col;
 
-				#pragma omp simd
 				for ( size_t index = 0; index < dim_t; index++ )
 				{
 					m_data[shift + index] = vector[index];
@@ -1211,7 +1073,6 @@ namespace EmEn::Libs::Math
 
 				const auto shift = dim_t * col;
 
-				#pragma omp simd
 				for ( size_t index = 0; index < dim_t; index++ )
 				{
 					vector[index] = m_data[shift + index];
@@ -1314,7 +1175,6 @@ namespace EmEn::Libs::Math
 			{
 				Vector< dim_t, precision_t > vector;
 
-				#pragma omp simd
 				for ( size_t index = 0; index < dim_t; index++ )
 				{
 					vector[index] = m_data[index + (index * dim_t)];
@@ -1340,8 +1200,6 @@ namespace EmEn::Libs::Math
 				{
 					precision_t determinantValue = 0;
 
-					/* FIXME: GCC crash */
-					//#pragma omp simd
 					for ( size_t index = 0; index < dim_t; index++ )
 					{
 						const auto value = m_data[index * dim_t];
@@ -1451,7 +1309,6 @@ namespace EmEn::Libs::Math
 			{
 				auto value = 0;
 
-				#pragma omp simd
 				for ( size_t index = 0; index < dim_t; index++ )
 				{
 					value += m_data[index + (index * dim_t)];
@@ -1561,9 +1418,9 @@ namespace EmEn::Libs::Math
 				if constexpr ( dim_t == 2 )
 				{
 					inverse.m_data[M2x2Col0Row0] = m_data[M2x2Col1Row1] * invD;
-					inverse.m_data[M2x2Col0Row1] = m_data[M2x2Col1Row0] * invD;
+					inverse.m_data[M2x2Col0Row1] = -m_data[M2x2Col1Row0] * invD;
 
-					inverse.m_data[M2x2Col1Row0] = m_data[M2x2Col0Row1] * invD;
+					inverse.m_data[M2x2Col1Row0] = -m_data[M2x2Col0Row1] * invD;
 					inverse.m_data[M2x2Col1Row1] = m_data[M2x2Col0Row0] * invD;
 				}
 
@@ -1947,7 +1804,7 @@ namespace EmEn::Libs::Math
 			/**
 			 * @brief Returns a rotation matrix around Y.
 			 * @note Only usable in 3D.
-			 * Layout 4x4 :
+			 * Layout 4x4:
 			 *		c0	c1	c2	c3
 			 *   r0 [ cos][  0 ][ sin][  0 ]
 			 *   r1 [  0 ][  1 ][  0 ][  0 ]
@@ -1990,7 +1847,7 @@ namespace EmEn::Libs::Math
 			/**
 			 * @brief Returns a rotation matrix around Z.
 			 * @note Use this version to perform a simple 2D rotation.
-			 * Layout 4x4 :
+			 * Layout 4x4:
 			 *		c0	c1	c2	c3
 			 *   r0 [ cos][-sin][  0 ][  0 ]
 			 *   r1 [ sin][ cos][  0 ][  0 ]
@@ -2403,9 +2260,9 @@ namespace EmEn::Libs::Math
 
 			/**
 			 * @brief Returns a lookAt view 4x4 matrix.
-			 * @param eye A reference to a Vector< 3, precision_t > for the "eye" direction.
-			 * @param center A reference to a Vector< 3, precision_t > for the "eye" position.
-			 * @param up A reference to a Vector< 3, precision_t > for the upward direction from the "eye".
+			 * @param eye A reference to a vector for the "eye" direction.
+			 * @param center A reference to a vector for the "eye" position.
+			 * @param up A reference to a vector for the upward direction from the "eye".
 			 * @return Matrix< 4, precision_t >
 			 */
 			[[nodiscard]]
@@ -2413,30 +2270,36 @@ namespace EmEn::Libs::Math
 			Matrix
 			lookAt (const Vector< 3, precision_t > & eye, const Vector< 3, precision_t > & center, const Vector< 3, precision_t > & up) noexcept requires (dim_t == 4)
 			{
-				auto forward = (center - eye).normalize();
-
-				/* Left = forward x up */
-				auto left = Vector< 3, precision_t >::crossProduct(forward, up);
-				left.normalize();
-
-				/* Recompute up as: upward = side x forward */
-				auto upward = Vector< 3, precision_t >::crossProduct(left, forward);
+				const auto f = (center - eye).normalize();
+				const auto s = Vector< 3, precision_t >::crossProduct(f, up).normalize();
+				const auto u = Vector< 3, precision_t >::crossProduct(s, f);
 
 				Matrix matrix;
-				matrix.setColumn(0, left[X], left[Y], left[Z], 0);
-				matrix.setColumn(1, upward[X], upward[Y], upward[Z], 0);
-				matrix.setColumn(2, -forward[X], -forward[Y], -forward[Z], -0);
-				//matrix.setColumn(3, -eye[X], -eye[Y], -eye[Z], -1);
-				matrix *= Matrix::translation(-eye[X], -eye[Y], -eye[Z]);
+
+				matrix(0, 0) = s[X];
+				matrix(0, 1) = s[Y];
+				matrix(0, 2) = s[Z];
+
+				matrix(1, 0) = u[X];
+				matrix(1, 1) = u[Y];
+				matrix(1, 2) = u[Z];
+
+				matrix(2, 0) = -f[X];
+				matrix(2, 1) = -f[Y];
+				matrix(2, 2) = -f[Z];
+
+				matrix(0, 3) = -Vector<3, precision_t>::dotProduct(s, eye);
+				matrix(1, 3) = -Vector<3, precision_t>::dotProduct(u, eye);
+				matrix(2, 3) =  Vector<3, precision_t>::dotProduct(f, eye);
 
 				return matrix;
 			}
 
 			/**
 			 * @brief Returns a lookAt view 4x4 matrix.
-			 * @param eye A reference to a Vector< 4, precision_t > for the "eye" direction.
-			 * @param center A reference to a Vector< 4, precision_t > for the "eye" position.
-			 * @param up A reference to a Vector< 4, precision_t > for the upward direction from the "eye".
+			 * @param eye A reference to a vector for the "eye" direction.
+			 * @param center A reference to a vector for the "eye" position.
+			 * @param up A reference to a vector for the upward direction from the "eye".
 			 * @return Matrix< 4, precision_t >
 			 */
 			[[nodiscard]]
@@ -2444,21 +2307,27 @@ namespace EmEn::Libs::Math
 			Matrix
 			lookAt (const Vector< 4, precision_t > & eye, const Vector< 4, precision_t > & center, const Vector< 4, precision_t > & up) noexcept requires (dim_t == 4)
 			{
-				auto forward = (center - eye).normalize();
-
-				/* Left = forward x up */
-				auto left = Vector< 4, precision_t >::crossProduct(forward, up);
-				left.normalize();
-
-				/* Recompute up as: upward = side x forward */
-				auto upward = Vector< 4, precision_t >::crossProduct(left, forward);
+				const auto f = (center - eye).normalize();
+				const auto s = Vector< 4, precision_t >::crossProduct(f, up).normalize();
+				const auto u = Vector< 4, precision_t >::crossProduct(s, f);
 
 				Matrix matrix;
-				matrix.setColumn(0, left);
-				matrix.setColumn(1, upward);
-				matrix.setColumn(2, -forward);
-				//matrix.setColumn(3, -eye);
-				matrix *= Matrix::translation(-eye[X], -eye[Y], -eye[Z]);
+
+				matrix(0, 0) = s[X];
+				matrix(0, 1) = s[Y];
+				matrix(0, 2) = s[Z];
+
+				matrix(1, 0) = u[X];
+				matrix(1, 1) = u[Y];
+				matrix(1, 2) = u[Z];
+
+				matrix(2, 0) = -f[X];
+				matrix(2, 1) = -f[Y];
+				matrix(2, 2) = -f[Z];
+
+				matrix(0, 3) = -Vector<4, precision_t>::dotProduct(s, eye);
+				matrix(1, 3) = -Vector<4, precision_t>::dotProduct(u, eye);
+				matrix(2, 3) =  Vector<4, precision_t>::dotProduct(f, eye);
 
 				return matrix;
 			}
@@ -2472,7 +2341,6 @@ namespace EmEn::Libs::Math
 			void
 			copy (precision_t * target) const noexcept
 			{
-				#pragma omp simd
 				for ( size_t index = 0; index < dim_t * dim_t; index++ )
 				{
 					target[index] = m_data[index];
@@ -2529,7 +2397,7 @@ namespace EmEn::Libs::Math
 			std::array< precision_t, dim_t * dim_t > m_data{0};
 	};
 
-	/* NOTE: Trait and concept to check a matrix in template. */
+	/* NOTE: Trait and concept to check a matrix in the template. */
 	template< typename T >
 	inline constexpr bool is_matrix_v = false;
 

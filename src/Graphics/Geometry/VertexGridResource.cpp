@@ -30,23 +30,13 @@
 #include "Libs/FastJSON.hpp"
 #include "Vulkan/TransferManager.hpp"
 
-/* Defining the resource manager class id. */
-template<>
-const char * const EmEn::Resources::Container< EmEn::Graphics::Geometry::VertexGridResource >::ClassId{"VertexGridContainer"};
-
-/* Defining the resource manager ClassUID. */
-template<>
-const size_t EmEn::Resources::Container< EmEn::Graphics::Geometry::VertexGridResource >::ClassUID{getClassUID(ClassId)};
-
 namespace EmEn::Graphics::Geometry
 {
-	using namespace EmEn::Libs;
-	using namespace EmEn::Libs::Math;
-	using namespace EmEn::Libs::VertexFactory;
-	using namespace EmEn::Libs::PixelFactory;
-	using namespace EmEn::Vulkan;
-
-	const size_t VertexGridResource::ClassUID{getClassUID(ClassId)};
+	using namespace Libs;
+	using namespace Libs::Math;
+	using namespace Libs::VertexFactory;
+	using namespace Libs::PixelFactory;
+	using namespace Vulkan;
 
 	bool
 	VertexGridResource::createOnHardware (TransferManager & transferManager) noexcept
@@ -145,10 +135,10 @@ namespace EmEn::Graphics::Geometry
 	bool
 	VertexGridResource::createVideoMemoryBuffers (TransferManager & transferManager, const std::vector< float > & vertexAttributes, uint32_t vertexCount, uint32_t vertexElementCount, const std::vector< uint32_t > & indices) noexcept
 	{
-		m_vertexBufferObject = std::make_unique< VertexBufferObject >(transferManager.device(), vertexCount, vertexElementCount);
+		m_vertexBufferObject = std::make_unique< VertexBufferObject >(transferManager.device(), vertexCount, vertexElementCount, false);
 		m_vertexBufferObject->setIdentifier(ClassId, this->name(), "VertexBufferObject");
 
-		if ( !m_vertexBufferObject->create(transferManager, vertexAttributes) )
+		if ( !m_vertexBufferObject->createOnHardware() || !m_vertexBufferObject->transferData(transferManager, vertexAttributes) )
 		{
 			Tracer::error(ClassId, "Unable to create the vertex buffer object (VBO) !");
 
@@ -160,7 +150,7 @@ namespace EmEn::Graphics::Geometry
 		m_indexBufferObject = std::make_unique< IndexBufferObject >(transferManager.device(), static_cast< uint32_t >(indices.size()));
 		m_indexBufferObject->setIdentifier(ClassId, this->name(), "IndexBufferObject");
 
-		if ( !m_indexBufferObject->create(transferManager, indices) )
+		if ( !m_indexBufferObject->createOnHardware() || !m_indexBufferObject->transferData(transferManager, indices) )
 		{
 			Tracer::error(ClassId, "Unable to get an index buffer object (IBO) !");
 
@@ -210,13 +200,13 @@ namespace EmEn::Graphics::Geometry
 	}
 
 	bool
-	VertexGridResource::load () noexcept
+	VertexGridResource::load (Resources::ServiceProvider & /*serviceProvider*/) noexcept
 	{
 		return this->load(DefaultSize, DefaultDivision, DefaultUVMultiplier);
 	}
 
 	bool
-	VertexGridResource::load (const Json::Value & data) noexcept
+	VertexGridResource::load (Resources::ServiceProvider & /*serviceProvider*/, const Json::Value & data) noexcept
 	{
 		return this->load(
 			FastJSON::getValue< float >(data, JKSize).value_or(DefaultSize),

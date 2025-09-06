@@ -40,15 +40,15 @@
 
 namespace EmEn::Graphics::RenderTarget
 {
-	using namespace EmEn::Libs;
-	using namespace EmEn::Vulkan;
+	using namespace Libs;
+	using namespace Vulkan;
 
 	constexpr auto TracerTag{"RenderTarget"};
 
 	bool
 	Abstract::create (Renderer & renderer) noexcept
 	{
-		if ( m_flags[EnableSyncPrimitive] )
+		if ( m_enableSyncPrimitive )
 		{
 			m_fence = std::make_shared< Sync::Fence >(renderer.device(), VK_FENCE_CREATE_SIGNALED_BIT);
 			m_fence->setIdentifier(TracerTag, this->id(), "Fence");
@@ -75,7 +75,7 @@ namespace EmEn::Graphics::RenderTarget
 			}
 		}
 
-		m_flags[RenderOutOfDate] = true;
+		m_renderOutOfDate = true;
 
 		return this->onCreate(renderer);
 	}
@@ -85,7 +85,7 @@ namespace EmEn::Graphics::RenderTarget
 	{
 		this->onDestroy();
 
-		if ( m_flags[EnableSyncPrimitive] )
+		if ( m_enableSyncPrimitive )
 		{
 			if ( m_semaphore != nullptr )
 			{

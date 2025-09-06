@@ -178,23 +178,36 @@ namespace EmEn::Libs
 			 */
 			StaticVector (StaticVector && other) noexcept(std::is_nothrow_move_constructible_v< data_t >)
 			{
-				try
+				if constexpr (std::is_nothrow_move_constructible_v< data_t >)
 				{
 					for ( size_type index = 0; index < other.m_size; ++index )
 					{
-						new (this->data() + m_size) data_t(std::move(other[index]));
+						new (this->data() + index) data_t(std::move(other[index]));
+					}
 
-						++m_size;
+					m_size = other.m_size;
+
+					other.clear();
+				}
+				else
+				{
+					try
+					{
+						for ( size_type index = 0; index < other.m_size; ++index )
+						{
+							new (this->data() + m_size) data_t(std::move(other[index]));
+							++m_size;
+						}
+
+						other.clear();
+					}
+					catch (...)
+					{
+						this->clear();
+
+						throw;
 					}
 				}
-				catch (...)
-				{
-					this->clear();
-					throw;
-				}
-
-				m_size = other.m_size;
-				other.m_size = 0;
 			}
 
 			/**

@@ -29,6 +29,7 @@
 /* STL inclusions. */
 #include <string>
 #include <ostream>
+#include <sstream>
 #include <vector>
 #include <filesystem>
 
@@ -50,7 +51,18 @@ namespace EmEn::PlatformSpecific
 			/** 
 			 * @brief Constructs a system info structure.
 			 */
-			SystemInfo () noexcept;
+			SystemInfo () noexcept
+			{
+				if ( this->fetchOSInformation() )
+				{
+					m_informationFound = true;
+				}
+
+				if ( this->fetchCPUInformation() )
+				{
+					m_informationFound = true;
+				}
+			}
 
 			/**
 			 * @brief Declares a GPU device.
@@ -133,21 +145,6 @@ namespace EmEn::PlatformSpecific
 			[[nodiscard]]
 			static std::filesystem::path getRealApplicationDir () noexcept;
 
-			/**
-			 * @brief STL streams printable object.
-			 * @param out A reference to the stream output.
-			 * @param obj A reference to the object to print.
-			 * @return std::ostream &
-			 */
-			friend std::ostream & operator<< (std::ostream & out, const SystemInfo & obj);
-
-			/**
-			 * @brief Stringifies the object.
-			 * @param obj A reference to the object to print.
-			 * @return std::string
-			 */
-			friend std::string to_string (const SystemInfo & obj) noexcept;
-
 		private:
 
 			/**
@@ -190,9 +187,33 @@ namespace EmEn::PlatformSpecific
 			[[nodiscard]]
 			static size_t getCurrentRSS () noexcept;
 
+			/**
+			 * @brief STL streams printable object.
+			 * @param out A reference to the stream output.
+			 * @param obj A reference to the object to print.
+			 * @return std::ostream &
+			 */
+			friend std::ostream & operator<< (std::ostream & out, const SystemInfo & obj);
+
 			OperatingSystem m_OSInformation{};
 			CPU m_CPUInformation{};
 			std::vector< GPUDevice > m_GPUDevices;
 			bool m_informationFound{false};
 	};
+
+	/**
+	 * @brief Stringifies the object.
+	 * @param obj A reference to the object to print.
+	 * @return std::string
+	 */
+	inline
+	std::string
+	to_string (const SystemInfo & obj) noexcept
+	{
+		std::stringstream output;
+
+		output << obj;
+
+		return output.str();
+	}
 }

@@ -28,19 +28,18 @@
 
 /* STL inclusions. */
 #include <cstdint>
-#include <vector>
 #include <memory>
 
 /* Local inclusions for inheritances. */
-#include "AbstractDeviceBuffer.hpp"
+#include "Buffer.hpp"
 
 namespace EmEn::Vulkan
 {
 	/**
 	 * @brief Defines a convenient way to build an index buffer object (IBO).
-	 * @extends EmEn::Vulkan::AbstractDeviceBuffer This is a device-side buffer.
+	 * @extends EmEn::Vulkan::Buffer This is a buffer.
 	 */
-	class IndexBufferObject final : public AbstractDeviceBuffer
+	class IndexBufferObject final : public Buffer
 	{
 		public:
 
@@ -50,7 +49,13 @@ namespace EmEn::Vulkan
 			 * @param indexCount The number of indices the buffer will hold
 			 */
 			IndexBufferObject (const std::shared_ptr< Device > & device, uint32_t indexCount) noexcept
-				: AbstractDeviceBuffer{device, 0, indexCount * sizeof(uint32_t), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT},
+				: Buffer{
+					device,
+					0,
+					indexCount * sizeof(uint32_t),
+					VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+					VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT
+				},
 				m_indexCount{indexCount}
 			{
 
@@ -66,15 +71,6 @@ namespace EmEn::Vulkan
 			{
 				return m_indexCount;
 			}
-
-			/**
-			 * @brief Creates an index buffer object with initial data.
-			 * @param transferManager A reference to a transfer manager.
-			 * @param data A reference to a vector.
-			 * @return bool
-			 */
-			[[nodiscard]]
-			bool create (TransferManager & transferManager, const std::vector< uint32_t > & data) noexcept;
 
 		private:
 

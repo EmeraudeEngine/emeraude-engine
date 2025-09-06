@@ -39,9 +39,15 @@
 /* Local inclusions for usages. */
 #include "Types.hpp"
 
+/* Forward declarations. */
+namespace EmEn
+{
+	class FileSystem;
+}
+
 namespace EmEn::Resources
 {
-	/** @brief This structure represent a resource definition in a store. It holds the way to load it. */
+	/** @brief This structure represents a resource definition in a store. It holds the way to load it. */
 	class BaseInformation final
 	{
 		public:
@@ -77,7 +83,7 @@ namespace EmEn::Resources
 			}
 
 			/**
-			 * @brief Returns where the resource come from.
+			 * @brief Returns where the resource comes from.
 			 * @return SourceType
 			 */
 			[[nodiscard]]
@@ -106,10 +112,11 @@ namespace EmEn::Resources
 
 			/**
 			 * @brief Parses a JSON node to extract resource information.
+			 * @param fileSystem A reference to the file system service.
 			 * @param resourceDefinition A reference to a JSON node.
 			 * @return bool
 			 */
-			bool parse (const Json::Value & resourceDefinition) noexcept;
+			bool parse (const FileSystem & fileSystem, const Json::Value & resourceDefinition) noexcept;
 
 		private:
 
@@ -129,10 +136,11 @@ namespace EmEn::Resources
 
 			/**
 			 * @brief Gets the resource data from the JSON node.
+			 * @param fileSystem A reference to the file system service.
 			 * @param resourceDefinition A reference to a JSON node.
 			 * @return bool
 			 */
-			bool parseData (const Json::Value & resourceDefinition) noexcept;
+			bool parseData (const FileSystem & fileSystem, const Json::Value & resourceDefinition) noexcept;
 
 			/* JSON keys */
 			static constexpr auto NameKey{"Name"};

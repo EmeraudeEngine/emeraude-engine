@@ -79,6 +79,9 @@ namespace EmEn::Graphics::TextureResource
 	{
 		public:
 
+			/** @brief Access to the graphics renderer for loading GPU resources. */
+			static Renderer * s_graphicsRenderer;
+
 			/**
 			 * @brief Destructs the abstract texture resource.
 			 */

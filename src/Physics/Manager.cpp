@@ -46,11 +46,11 @@ namespace EmEn::Physics
 	bool
 	Manager::onInitialize () noexcept
 	{
-		m_flags[AccelerationAvailable] =
-			!m_primaryServices.arguments().get("--disable-physics-acceleration").isPresent() &&
-			m_primaryServices.settings().get< bool >(EnablePhysicsAccelerationKey, DefaultEnablePhysicsAcceleration);
+		m_accelerationAvailable =
+			!m_primaryServices.arguments().isSwitchPresent("--disable-physics-acceleration") &&
+			m_primaryServices.settings().getOrSetDefault< bool >(EnablePhysicsAccelerationKey, DefaultEnablePhysicsAcceleration);
 
-		if ( !m_flags[AccelerationAvailable] )
+		if ( !m_accelerationAvailable )
 		{
 			Tracer::warning(ClassId, "Physics acceleration disabled at startup.");
 
@@ -128,7 +128,7 @@ namespace EmEn::Physics
 			return false;
 		}
 
-		m_flags[ServiceInitialized] = true;
+		m_serviceInitialized = true;
 
 		return true;
 	}
@@ -138,7 +138,7 @@ namespace EmEn::Physics
 	{
 		size_t error = 0;
 
-		m_flags[ServiceInitialized] = false;
+		m_serviceInitialized = false;
 
 		m_pipelines.clear();
 		m_pipelineLayouts.clear();

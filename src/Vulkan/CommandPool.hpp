@@ -187,6 +187,6 @@ namespace EmEn::Vulkan
 
 			VkCommandPool m_handle{VK_NULL_HANDLE};
 			VkCommandPoolCreateInfo m_createInfo{};
-			mutable std::mutex m_allocationMutex;
+			mutable std::mutex m_allocationsAccess;
 	};
 }

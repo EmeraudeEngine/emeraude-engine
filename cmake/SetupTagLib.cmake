@@ -1,25 +1,27 @@
-if ( NOT TAGLIB_ENABLED )
-	if ( EMERAUDE_USE_SYSTEM_LIBS )
-		message("Enabling TagLib library from system ...")
+if ( NOT TARGET_BINARY_FOR_SETUP )
+	message(FATAL_ERROR "TARGET_BINARY_FOR_SETUP is not SET !")
+endif ()
 
-		find_package(PkgConfig REQUIRED)
+if ( EMERAUDE_USE_SYSTEM_LIBS )
+	message("Enabling TagLib library from system ...")
 
-		pkg_check_modules(TAGLIB REQUIRED taglib)
+	find_package(PkgConfig REQUIRED)
 
-		target_include_directories(${PROJECT_NAME} PRIVATE ${TAGLIB_INCLUDE_DIRS})
-		target_link_directories(${PROJECT_NAME} PRIVATE ${TAGLIB_LIBRARY_DIRS})
-		target_link_libraries(${PROJECT_NAME} PRIVATE ${TAGLIB_LIBRARIES})
-	else ()
-		message("Enabling TagLib library from local source ...")
+	pkg_check_modules(TAGLIB REQUIRED taglib)
 
-		if ( MSVC )
-			target_link_libraries(${PROJECT_NAME} PRIVATE ${LOCAL_LIB_DIR}/lib/tag.lib)
-		else ()
-			target_link_libraries(${PROJECT_NAME} PRIVATE ${LOCAL_LIB_DIR}/lib/libtag.a)
-		endif ()
-	endif ()
+	target_include_directories(${TARGET_BINARY_FOR_SETUP} PUBLIC ${TAGLIB_INCLUDE_DIRS})
 
-	set(TAGLIB_ENABLED On)
+	target_link_directories(${TARGET_BINARY_FOR_SETUP} PUBLIC ${TAGLIB_LIBRARY_DIRS})
+
+	target_link_libraries(${TARGET_BINARY_FOR_SETUP} PRIVATE ${TAGLIB_LIBRARIES})
 else ()
-	message("The TagLib library is already enabled.")
+	message("Enabling TagLib library from local source ...")
+
+	if ( MSVC )
+		target_compile_definitions(${TARGET_BINARY_FOR_SETUP} PRIVATE TAGLIB_STATIC)
+
+		target_link_libraries(${TARGET_BINARY_FOR_SETUP} PRIVATE ${LOCAL_LIB_DIR}/lib/tag.lib)
+	else ()
+		target_link_libraries(${TARGET_BINARY_FOR_SETUP} PRIVATE ${LOCAL_LIB_DIR}/lib/libtag.a)
+	endif ()
 endif ()

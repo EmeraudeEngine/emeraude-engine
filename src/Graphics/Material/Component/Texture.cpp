@@ -40,12 +40,13 @@
 
 namespace EmEn::Graphics::Material::Component
 {
-	using namespace EmEn::Libs;
-	using namespace EmEn::Libs::Math;
-	using namespace EmEn::Saphir;
+	using namespace Libs;
+	using namespace Libs::Math;
+	using namespace Saphir;
 
-	Texture::Texture (const char * samplerName, std::string variableName, const Json::Value & data, const FillingType & fillingType, Resources::Manager & resources) noexcept
-		: m_samplerName(samplerName), m_variableName(std::move(variableName))
+	Texture::Texture (const char * samplerName, std::string variableName, const Json::Value & data, const FillingType & fillingType, Resources::ServiceProvider & serviceProvider) noexcept
+		: m_samplerName{samplerName},
+		m_variableName{std::move(variableName)}
 	{
 		if ( !data.isMember(JKResourceName) )
 		{
@@ -67,23 +68,23 @@ namespace EmEn::Graphics::Material::Component
 		switch ( fillingType )
 		{
 			case FillingType::Gradient :
-				m_texture = resources.container< TextureResource::Texture1D >()->getResource(textureResourceName);
+				m_texture = serviceProvider.container< TextureResource::Texture1D >()->getResource(textureResourceName);
 				break;
 
 			case FillingType::Texture :
-				m_texture = resources.container< TextureResource::Texture2D >()->getResource(textureResourceName);
+				m_texture = serviceProvider.container< TextureResource::Texture2D >()->getResource(textureResourceName);
 				break;
 
 			case FillingType::VolumeTexture :
-				m_texture = resources.container< TextureResource::Texture3D >()->getResource(textureResourceName);
+				m_texture = serviceProvider.container< TextureResource::Texture3D >()->getResource(textureResourceName);
 				break;
 
 			case FillingType::Cubemap :
-				m_texture = resources.container< TextureResource::TextureCubemap >()->getResource(textureResourceName);
+				m_texture = serviceProvider.container< TextureResource::TextureCubemap >()->getResource(textureResourceName);
 				break;
 
 			case FillingType::AnimatedTexture :
-				m_texture = resources.container< TextureResource::AnimatedTexture2D >()->getResource(textureResourceName);
+				m_texture = serviceProvider.container< TextureResource::AnimatedTexture2D >()->getResource(textureResourceName);
 				break;
 
 			case FillingType::Value :

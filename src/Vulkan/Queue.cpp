@@ -33,12 +33,13 @@
 
 namespace EmEn::Vulkan
 {
-	using namespace EmEn::Libs;
+	using namespace Libs;
 
 	bool
 	Queue::submit (const std::shared_ptr< CommandBuffer > & commandBuffer) const noexcept
 	{
-		const VkCommandBuffer commandBufferHandle = commandBuffer->handle();
+		VkCommandBuffer commandBufferHandle = commandBuffer->handle();
+
 		const VkSubmitInfo submitInfo
 		{
 			.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
@@ -52,7 +53,8 @@ namespace EmEn::Vulkan
 			.pSignalSemaphores = VK_NULL_HANDLE,
 		};
 
-		const std::lock_guard< std::mutex > lock{m_access};
+		/* [VULKAN-CPU-SYNC] */
+		const std::lock_guard< std::mutex > lock{m_queueAccess};
 
 		if ( const auto result = vkQueueSubmit(m_handle, 1, &submitInfo, VK_NULL_HANDLE); result != VK_SUCCESS )
 		{
@@ -74,7 +76,8 @@ namespace EmEn::Vulkan
             return false;
         }
 
-        const VkCommandBuffer commandBufferHandle = commandBuffer->handle();
+        VkCommandBuffer commandBufferHandle = commandBuffer->handle();
+
         const VkSubmitInfo submitInfo
 		{
             .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
@@ -88,7 +91,8 @@ namespace EmEn::Vulkan
             .pSignalSemaphores = synchInfo.signalSemaphores.data(),
         };
 
-        const std::lock_guard< std::mutex > lock{m_access};
+		/* [VULKAN-CPU-SYNC] */
+        const std::lock_guard< std::mutex > lock{m_queueAccess};
 
 		if ( const auto result = vkQueueSubmit(m_handle, 1, &submitInfo, synchInfo.fence); result != VK_SUCCESS )
         {
@@ -103,7 +107,8 @@ namespace EmEn::Vulkan
 	bool
 	Queue::present (const VkPresentInfoKHR * presentInfo, bool & swapChainRecreationNeeded) const noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_access};
+		/* [VULKAN-CPU-SYNC] */
+		const std::lock_guard< std::mutex > lock{m_queueAccess};
 
 		switch ( vkQueuePresentKHR(m_handle, presentInfo) )
 		{
@@ -134,9 +139,10 @@ namespace EmEn::Vulkan
 	bool
 	Queue::waitIdle () const noexcept
 	{
-		const auto result = vkQueueWaitIdle(m_handle);
+		/* [VULKAN-CPU-SYNC] */
+		const std::lock_guard< std::mutex > lock{m_queueAccess};
 
-		if ( result != VK_SUCCESS )
+		if ( const auto result = vkQueueWaitIdle(m_handle); result != VK_SUCCESS )
 		{
 			TraceError{ClassId} << "Unable to wait the queue to complete : " << vkResultToCString(result) << " !";
 

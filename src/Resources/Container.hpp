@@ -38,22 +38,95 @@
 #include <utility>
 
 /* Local inclusions for inheritances. */
-#include "ContainerInterface.hpp"
+#include "Libs/NameableTrait.hpp"
+#include "Libs/ObservableTrait.hpp"
 #include "Libs/ObserverTrait.hpp"
 
 /* Local inclusions for usages. */
 #include "Libs/ThreadPool.hpp"
-#include "Libs/ObservableTrait.hpp"
 #include "Libs/IO/IO.hpp"
-#include "BaseInformation.hpp"
-#include "PrimaryServices.hpp"
-#include "LoadingRequest.hpp"
 #include "Net/Manager.hpp"
-#include "Stores.hpp"
+#include "PrimaryServices.hpp"
+#include "ServiceProvider.hpp"
+#include "LoadingRequest.hpp"
 #include "Types.hpp"
 
 namespace EmEn::Resources
 {
+	/**
+	 * @brief The common interface for all resource containers.
+	 * @extends EmEn::Libs::NameableTrait A container is nameable.
+	 * @extends EmEn::Libs::ObservableTrait A container can be observed.
+	 */
+	class ContainerInterface : public Libs::NameableTrait, public Libs::ObservableTrait
+	{
+		public:
+
+			/**
+			 * @brief Destructs the container interface.
+			 */
+			~ContainerInterface () override = default;
+
+			/**
+			 * @brief Sets the verbosity state for the container.
+			 * @param state The state.
+			 * @return void
+			 */
+			virtual void setVerbosity (bool state) noexcept = 0;
+
+			/**
+			 * @brief Initializes the container.
+			 * @return bool
+			 */
+			virtual bool initialize () noexcept = 0;
+
+			/**
+			 * @brief Destroys the container.
+			 * @return bool
+			 */
+			virtual bool terminate () noexcept = 0;
+
+			/**
+			 * @brief Returns the total memory consumed by loaded resources in bytes from the container.
+			 * @return size_t
+			 */
+			[[nodiscard]]
+			virtual size_t memoryOccupied () const noexcept = 0;
+
+			/**
+			 * @brief Returns the total memory consumed by loaded, but unused resources in bytes from the container.
+			 * @return size_t
+			 */
+			[[nodiscard]]
+			virtual size_t unusedMemoryOccupied () const noexcept = 0;
+
+			/**
+			 * @brief Clean up every unused resource and returns the number of removed resources.
+			 * @return size_t
+			 */
+			virtual size_t unloadUnusedResources () noexcept = 0;
+
+			/**
+			 * @brief Returns the complexity of the resource.
+			 * @return DepComplexity
+			 */
+			[[nodiscard]]
+			virtual DepComplexity complexity () const noexcept = 0;
+
+		protected:
+
+			/**
+			 * @brief Constructs a container interface.
+			 * @param name A reference to a string.
+			 */
+			explicit
+			ContainerInterface (const std::string & name) noexcept
+				: NameableTrait{name}
+			{
+
+			}
+	};
+
 	/**
 	 * @brief The resource manager template is responsible for loading asynchronous resources with dependencies and hold their lifetime.
 	 * @note [OBS][STATIC-OBSERVABLE]
@@ -65,18 +138,6 @@ namespace EmEn::Resources
 	class Container final : public ContainerInterface, public Libs::ObserverTrait
 	{
 		public:
-
-			/**
-			 * @brief Class identifier.
-			 * @note Explicitly declared in each template usage.
-			 */
-			static const char * const ClassId;
-
-			/**
-			 * @brief Observable class unique identifier.
-			 * @note Explicitly declared in each template usage.
-			 */
-			static const size_t ClassUID;
 
 			/** @brief Observable notification codes. */
 			enum NotificationCode
@@ -94,17 +155,30 @@ namespace EmEn::Resources
 			 * @brief Constructs a resource manager for a specific resource from the template parameter.
 			 * @param [OBS][STATIC-OBSERVER]
 			 * @param primaryServices A reference to the primary services.
-			 * @param resourcesStores A reference to the service responsible for local resource stores.
+			 * @param serviceProvider A reference to the resource manager as a service provider.
+			 * @param store A reference to the store.
 			 * @param serviceName The name of the service.
-			 * @param storeName The name of the resource store.
 			 */
-			Container (PrimaryServices & primaryServices, const Stores & resourcesStores, const char * serviceName, std::string storeName = "") noexcept
+			Container (const char * serviceName, PrimaryServices & primaryServices, ServiceProvider & serviceProvider, const std::shared_ptr< std::unordered_map< std::string, BaseInformation > > & store) noexcept
 				: ContainerInterface{serviceName},
 				m_primaryServices{primaryServices},
-				m_resourcesStores{resourcesStores},
-				m_storeName{std::move(storeName)}
+				m_serviceProvider{serviceProvider},
+				m_localStore{store}
 			{
 				this->observe(&m_primaryServices.netManager());
+			}
+
+			/**
+			 * @brief Returns the unique identifier for this class [Thread-safe].
+			 * @return size_t
+			 */
+			static
+			size_t
+			getClassUID () noexcept
+			{
+				static const size_t classUID = EmEn::Libs::Hash::FNV1a(resource_t::ClassId);
+
+				return classUID;
 			}
 
 			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
@@ -112,7 +186,7 @@ namespace EmEn::Resources
 			size_t
 			classUID () const noexcept override
 			{
-				return ClassUID;
+				return getClassUID();
 			}
 
 			/** @copydoc EmEn::Libs::ObservableTrait::is() const */
@@ -120,14 +194,7 @@ namespace EmEn::Resources
 			bool
 			is (size_t classUID) const noexcept override
 			{
-				if ( ClassUID == 0UL )
-				{
-					Tracer::error(resource_t::ClassId, "The unique class identifier has not been set !");
-
-					return false;
-				}
-
-				return classUID == ClassUID;
+				return classUID == getClassUID();
 			}
 
 			/** @copydoc EmEn::Resources::ContainerInterface::setVerbosity(bool) noexcept */
@@ -243,6 +310,11 @@ namespace EmEn::Resources
 			bool
 			isResourceExists (const std::string & resourceName) const noexcept
 			{
+				if ( m_localStore == nullptr )
+				{
+					return false;
+				}
+
 				const std::lock_guard< std::mutex > scopeLock{m_resourcesAccess};
 
 				/* First, check in live resources.
@@ -252,13 +324,7 @@ namespace EmEn::Resources
 					return true;
 				}
 
-				/* If there is a local store for this resource, we check inside. */
-				if ( m_storeName.empty() )
-				{
-					return false;
-				}
-
-				return m_resourcesStores.store(m_storeName).contains(resourceName);
+				return m_localStore->contains(resourceName);
 			}
 
 			/**
@@ -268,11 +334,14 @@ namespace EmEn::Resources
 			std::vector< std::string >
 			getResourceNames () const noexcept
 			{
-				const auto & resourceStore = m_resourcesStores.store(m_storeName);
+				if ( m_localStore == nullptr )
+				{
+					return {};
+				}
 
 				std::vector< std::string > names;
 
-				for ( const auto & name : resourceStore | std::views::keys )
+				for ( const auto & name : *m_localStore | std::views::keys )
 				{
 					names.emplace_back(name);
 				}
@@ -338,22 +407,15 @@ namespace EmEn::Resources
 					return true;
 				}
 
-				if ( m_storeName.empty() )
-				{
-					return false;
-				}
-
 				/* If not already loaded, check in store for loading. */
-				const auto & store = m_resourcesStores.store(m_storeName);
-
-				if ( store.empty() )
+				if ( m_localStore == nullptr )
 				{
 					return false;
 				}
 
-				const auto & resourceIt = store.find(resourceName);
+				const auto & resourceIt = m_localStore->find(resourceName);
 
-				if ( resourceIt == store.cend() )
+				if ( resourceIt == m_localStore->cend() )
 				{
 					return false;
 				}
@@ -397,7 +459,7 @@ namespace EmEn::Resources
 			}
 
 			/**
-			 * @brief Returns a resource by its name. If the resource is unloaded, a thread will take care of it unless "asyncLoad" argument is set to "false".
+			 * @brief Returns a resource by its name. If the resource is unloaded, a thread will take care of it unless the "asyncLoad" argument is set to "false".
 			 * @note The default resource of the store will be returned if nothing was found. A warning trace will be generated.
 			 * @param resourceName A reference to a string for the resource name.
 			 * @param asyncLoad Load the resource asynchronously. Default true.
@@ -424,30 +486,19 @@ namespace EmEn::Resources
 					}
 				}
 
-				if ( m_storeName.empty() )
-				{
-					TraceWarning{resource_t::ClassId} <<
-						"The resource '" << resourceName << "' doesn't exists and doesn't have a local store ! "
-						"Use Resource::create() function instead.";
-
-					return this->getDefaultResourceUnlocked();
-				}
-
 				/* If not already loaded, check in store for loading. */
-				const auto & store = m_resourcesStores.store(m_storeName);
-
-				if ( store.empty() )
+				if ( m_localStore == nullptr )
 				{
 					TraceWarning{resource_t::ClassId} <<
-						"The '" << m_storeName << "' store is empty, unable to get '" << resourceName << "' ! "
+						"The store is empty, unable to get '" << resourceName << "' ! "
 						"Use Resource::create() function instead.";
 
 					return this->getDefaultResourceUnlocked();
 				}
 
-				const auto & resourceIt = store.find(resourceName);
+				const auto & resourceIt = m_localStore->find(resourceName);
 
-				if ( resourceIt == store.cend() )
+				if ( resourceIt == m_localStore->cend() )
 				{
 					/* The resource is definitively not present. */
 					TraceWarning{resource_t::ClassId} <<
@@ -602,14 +653,17 @@ namespace EmEn::Resources
 			std::shared_ptr< resource_t >
 			getRandomResource (bool asyncLoad = true) noexcept
 			{
-				if ( m_storeName.empty() )
+				if ( m_localStore == nullptr )
 				{
-					/* NOTE: Will lock the resource mutex. */
-					return this->getDefaultResource();
+					return nullptr;
 				}
 
 				/* NOTE: Will lock the resource mutex. */
-				return this->getResource(m_resourcesStores.randomName(m_storeName), asyncLoad);
+				const auto random = Libs::Utility::quickRandom< size_t >(0, m_localStore->size());
+
+				const auto randomResourceName = std::next(std::begin(*m_localStore), static_cast< long >(random))->first;
+
+				return this->getResource(randomResourceName, asyncLoad);
 			}
 
 		private:
@@ -618,18 +672,14 @@ namespace EmEn::Resources
 			bool
 			initialize () noexcept override
 			{
+				if ( m_localStore == nullptr )
+				{
+					return true;
+				}
+
 				if ( m_verboseEnabled )
 				{
-					if ( m_storeName.empty() )
-					{
-						TraceInfo{resource_t::ClassId} << "The resource type '" << resource_t::ClassId << "' has no local store.";
-					}
-					else
-					{
-						const auto & store = m_resourcesStores.store(m_storeName);
-
-						TraceInfo{resource_t::ClassId} << "The resource type '" << resource_t::ClassId << "' has " << store.size() <<" entries in the local store '" << m_storeName << "' available.";
-					}
+					TraceInfo{resource_t::ClassId} << "The resource type '" << resource_t::ClassId << "' has " << m_localStore->size() <<" entries in the local store available.";
 				}
 
 				return true;
@@ -639,18 +689,14 @@ namespace EmEn::Resources
 			bool
 			terminate () noexcept override
 			{
+				if ( m_localStore == nullptr )
+				{
+					return true;
+				}
+
 				if ( m_verboseEnabled )
 				{
-					if ( m_storeName.empty() )
-					{
-						TraceInfo{resource_t::ClassId} << "The resource type '" << resource_t::ClassId << "' has no local store. Nothing to unload.";
-					}
-					else
-					{
-						const auto & store = m_resourcesStores.store(m_storeName);
-
-						TraceInfo{resource_t::ClassId} << "The resource type '" << resource_t::ClassId << "' has " << store.size() << " entries in the local store '" << m_storeName << "' to check for unload.";
-					}
+					TraceInfo{resource_t::ClassId} << "The resource type '" << resource_t::ClassId << "' has " << m_localStore->size() << " entries in the local store to check for unload.";
 				}
 
 				{
@@ -667,7 +713,7 @@ namespace EmEn::Resources
 			bool
 			onNotification (const ObservableTrait * observable, int notificationCode, const std::any & data) noexcept override
 			{
-				if ( observable->is(Net::Manager::ClassUID) )
+				if ( observable->is(Net::Manager::getClassUID()) )
 				{
 					if ( notificationCode == Net::Manager::FileDownloaded )
 					{
@@ -743,16 +789,13 @@ namespace EmEn::Resources
 				}
 
 				/* First, check in store if the resource exists. */
-				if ( !m_storeName.empty() )
+				if ( m_localStore != nullptr && m_localStore->contains(resourceName) )
 				{
-					if ( m_resourcesStores.store(m_storeName).contains(resourceName) )
-					{
-						TraceWarning{resource_t::ClassId} <<
-							resource_t::ClassId << " resource named '" << resourceName << "' already exists in " << m_storeName << " store ! "
-							"Use get() function instead.";
+					TraceWarning{resource_t::ClassId} <<
+						resource_t::ClassId << " resource named '" << resourceName << "' already exists in local store ! "
+						"Use get() function instead.";
 
-						return nullptr;
-					}
+					return nullptr;
 				}
 
 				/* Checks in loaded resources. */
@@ -805,7 +848,7 @@ namespace EmEn::Resources
 				/* Creates and load the resource. */
 				auto defaultResource = std::make_shared< resource_t >(Default);
 
-				if ( !defaultResource->load() )
+				if ( !defaultResource->load(m_serviceProvider) )
 				{
 					TraceFatal{resource_t::ClassId} << "The default resource '" << resource_t::ClassId << "' can't be loaded !";
 
@@ -852,18 +895,11 @@ namespace EmEn::Resources
 				}
 
 				/* If not already loaded, check in store for loading. */
-				if ( !m_storeName.empty() )
+				if ( m_localStore != nullptr )
 				{
-					const auto & store = m_resourcesStores.store(m_storeName);
-
-					if ( !store.empty() )
+					if ( const auto resourceIt = m_localStore->find(resourceName); resourceIt != m_localStore->cend() )
 					{
-						const auto resourceIt = store.find(resourceName);
-
-						if ( resourceIt != store.cend() )
-						{
-							return this->pushInLoadingQueue(resourceIt->second, !asyncLoad);
-						}
+						return this->pushInLoadingQueue(resourceIt->second, !asyncLoad);
 					}
 				}
 
@@ -986,7 +1022,7 @@ namespace EmEn::Resources
 							TraceInfo{resource_t::ClassId} << "Loading the resource (" << resource_t::ClassId << ") '" << infos.name() << "'... [CONTAINER]";
 						}
 
-						success = request.resource()->load(std::filesystem::path{infos.data().asString()});
+						success = request.resource()->load(m_serviceProvider, std::filesystem::path{infos.data().asString()});
 						break;
 
 					/* This is direct data with a JsonCPP way of representing the data. */
@@ -996,7 +1032,7 @@ namespace EmEn::Resources
 							TraceInfo{resource_t::ClassId} << "Loading the resource (" << resource_t::ClassId << ") '" << infos.name() << "'... [CONTAINER]";
 						}
 
-						success = request.resource()->load(infos.data());
+						success = request.resource()->load(m_serviceProvider, infos.data());
 						break;
 
 					/* This should never happen! ExternalData must be processed before. */
@@ -1030,8 +1066,8 @@ namespace EmEn::Resources
 			}
 
 			PrimaryServices & m_primaryServices;
-			const Stores & m_resourcesStores;
-			std::string m_storeName;
+			ServiceProvider & m_serviceProvider;
+			std::shared_ptr< std::unordered_map< std::string, BaseInformation > > m_localStore;
 			std::unordered_map< std::string, std::shared_ptr< resource_t > > m_resources;
 			std::unordered_map< int, LoadingRequest< resource_t > > m_externalResources;
 			mutable std::mutex m_resourcesAccess;

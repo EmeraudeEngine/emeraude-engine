@@ -68,17 +68,17 @@ namespace EmEn::Saphir::Generator
 				m_lightGenerator(settings, renderPassType),
 				m_scene(&scene)
 			{
-				if ( settings.get< bool >(NormalMappingEnabledKey, DefaultNormalMappingEnabled) )
+				if ( settings.getOrSetDefault< bool >(NormalMappingEnabledKey, DefaultNormalMappingEnabled) )
 				{
 					this->enableFlag(NormalMappingEnabled);
 				}
 
-				if ( settings.get< bool >(HighQualityLightEnabledKey, DefaultHighQualityLightEnabled) )
+				if ( settings.getOrSetDefault< bool >(HighQualityLightEnabledKey, DefaultHighQualityLightEnabled) )
 				{
 					this->enableFlag(HighQualityLightEnabled);
 				}
 
-				if ( settings.get< bool >(HighQualityReflectionEnabledKey, DefaultHighQualityReflectionEnabled) )
+				if ( settings.getOrSetDefault< bool >(HighQualityReflectionEnabledKey, DefaultHighQualityReflectionEnabled) )
 				{
 					this->enableFlag(HighQualityReflectionEnabled);
 				}

@@ -352,27 +352,27 @@ namespace EmEn::Graphics::RenderTarget
 				return true;
 			}
 
-			/** @copydoc EmEn::Resources::ResourceTrait::load() */
+			/** @copydoc EmEn::Resources::ResourceTrait::load(Resources::ServiceProvider &) */
 			bool
-			load () noexcept override
+			load (Resources::ServiceProvider & /*serviceProvider*/) noexcept override
 			{
 				Tracer::warning(ClassId, "This resource cannot be loaded from a storage !");
 
 				return false;
 			}
 
-			/** @copydoc EmEn::Resources::ResourceTrait::load(const std::filesystem::path &) */
+			/** @copydoc EmEn::Resources::ResourceTrait::load(Resources::ServiceProvider &, const std::filesystem::path &) */
 			bool
-			load (const std::filesystem::path & /*filepath*/) noexcept override
+			load (Resources::ServiceProvider & serviceProvider, const std::filesystem::path & /*filepath*/) noexcept override
 			{
-				return this->load();
+				return this->load(serviceProvider);
 			}
 
-			/** @copydoc EmEn::Resources::ResourceTrait::load(const Json::Value &) */
+			/** @copydoc EmEn::Resources::ResourceTrait::load(Resources::ServiceProvider &, const Json::Value &) */
 			bool
-			load (const Json::Value & /*data*/) noexcept override
+			load (Resources::ServiceProvider & serviceProvider, const Json::Value & /*data*/) noexcept override
 			{
-				return this->load();
+				return this->load(serviceProvider);
 			}
 
 			/** @copydoc EmEn::Resources::ResourceTrait::memoryOccupied() const noexcept */
@@ -482,7 +482,7 @@ namespace EmEn::Graphics::RenderTarget
 				m_viewMatrices.create(managers.graphicsRenderer, this->id());
 			}
 
-			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::onSourceDisconnected() */
+			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::onInputDeviceDisconnected() */
 			void
 			onInputDeviceDisconnected (AVConsole::AVManagers & /*managers*/, AbstractVirtualDevice * /*sourceDevice*/) noexcept override
 			{

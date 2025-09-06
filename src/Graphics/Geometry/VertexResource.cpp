@@ -31,23 +31,13 @@
 #include "Libs/VertexFactory/FileIO.hpp"
 #include "Vulkan/TransferManager.hpp"
 
-/* Defining the resource manager class id. */
-template<>
-const char * const EmEn::Resources::Container< EmEn::Graphics::Geometry::VertexResource >::ClassId{"VertexContainer"};
-
-/* Defining the resource manager ClassUID. */
-template<>
-const size_t EmEn::Resources::Container< EmEn::Graphics::Geometry::VertexResource >::ClassUID{getClassUID(ClassId)};
-
 namespace EmEn::Graphics::Geometry
 {
-	using namespace EmEn::Libs;
-	using namespace EmEn::Libs::Math;
-	using namespace EmEn::Libs::VertexFactory;
-	using namespace EmEn::Libs::PixelFactory;
-	using namespace EmEn::Vulkan;
-
-	const size_t VertexResource::ClassUID{getClassUID(ClassId)};
+	using namespace Libs;
+	using namespace Libs::Math;
+	using namespace Libs::VertexFactory;
+	using namespace Libs::PixelFactory;
+	using namespace Vulkan;
 
 	bool
 	VertexResource::createOnHardware (TransferManager & transferManager) noexcept
@@ -106,10 +96,10 @@ namespace EmEn::Graphics::Geometry
 	bool
 	VertexResource::createVideoMemoryBuffers (TransferManager & transferManager, const std::vector< float > & vertexAttributes, uint32_t vertexCount, uint32_t vertexElementCount) noexcept
 	{
-		m_vertexBufferObject = std::make_unique< VertexBufferObject >(transferManager.device(), vertexCount, vertexElementCount);
+		m_vertexBufferObject = std::make_unique< VertexBufferObject >(transferManager.device(), vertexCount, vertexElementCount, false);
 		m_vertexBufferObject->setIdentifier(ClassId, this->name(), "VertexBufferObject");
 
-		if ( !m_vertexBufferObject->create(transferManager, vertexAttributes) )
+		if ( !m_vertexBufferObject->createOnHardware() || !m_vertexBufferObject->transferData(transferManager, vertexAttributes) )
 		{
 			Tracer::error(ClassId, "Unable to create the vertex buffer object (VBO) !");
 
@@ -165,7 +155,7 @@ namespace EmEn::Graphics::Geometry
 	}
 
 	bool
-	VertexResource::load () noexcept
+	VertexResource::load (Resources::ServiceProvider & /*serviceProvider*/) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
@@ -181,7 +171,7 @@ namespace EmEn::Graphics::Geometry
 	}
 
 	bool
-	VertexResource::load (const std::filesystem::path & filepath) noexcept
+	VertexResource::load (Resources::ServiceProvider & /*serviceProvider*/, const std::filesystem::path & filepath) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
@@ -202,7 +192,7 @@ namespace EmEn::Graphics::Geometry
 	}
 
 	bool
-	VertexResource::load (const Json::Value & /*data*/) noexcept
+	VertexResource::load (Resources::ServiceProvider & /*serviceProvider*/, const Json::Value & /*data*/) noexcept
 	{
 		if ( !this->beginLoading() )
 		{

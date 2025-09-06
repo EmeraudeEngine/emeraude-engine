@@ -59,6 +59,13 @@ namespace EmEn
 		{
 			class Abstract;
 		}
+
+		class Renderer;
+	}
+
+	namespace Audio
+	{
+		class Manager;
 	}
 
 	namespace Scenes
@@ -89,8 +96,11 @@ namespace EmEn::Scenes::Component
 				MaxEnum
 			};
 
-			/** @brief Observable class unique identifier. */
-			static const size_t ClassUID;
+			/** @brief Access to the graphics renderer for GPU loading. */
+			static Graphics::Renderer * s_graphicsRenderer;
+
+			/** @brief Access to the audio manager for getting audio sources. */
+			static Audio::Manager * s_audioManager;
 
 			static constexpr Libs::Math::Space3D::AACuboid< float > NullBoundingBox{};
 			static constexpr Libs::Math::Space3D::Sphere< float > NullBoundingSphere{};
@@ -126,12 +136,25 @@ namespace EmEn::Scenes::Component
 			 */
 			~Abstract () override = default;
 
+			/**
+			 * @brief Returns the unique identifier for this class [Thread-safe].
+			 * @return size_t
+			 */
+			static
+			size_t
+			getClassUID () noexcept
+			{
+				static const size_t classUID = EmEn::Libs::Hash::FNV1a("Component");
+
+				return classUID;
+			}
+
 			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
 			[[nodiscard]]
 			size_t
 			classUID () const noexcept override
 			{
-				return ClassUID;
+				return getClassUID();
 			}
 
 			/** @copydoc EmEn::Libs::ObservableTrait::is() const */
@@ -139,7 +162,7 @@ namespace EmEn::Scenes::Component
 			bool
 			is (size_t classUID) const noexcept override
 			{
-				return classUID == ClassUID;
+				return classUID == getClassUID();
 			}
 
 			/**
@@ -195,7 +218,7 @@ namespace EmEn::Scenes::Component
 			}
 
 			/**
-			 * @brief Returns to the renderable, if component is visual.
+			 * @brief Returns the renderable if the component is visual.
 			 * @warning Can be a null pointer!
 			 * @return const Graphics::Renderable::Interface *
 			 */
@@ -246,7 +269,7 @@ namespace EmEn::Scenes::Component
 			virtual bool initialize (const Json::Value & jsonData) noexcept;
 
 			/**
-			 * @brief Returns to the renderable instance, if component is visual.
+			 * @brief Returns the renderable if the component is visual.
 			 * @warning Can be a null pointer!
 			 * @return std::shared_ptr< Graphics::RenderableInstance::Abstract >
 			 */
@@ -260,7 +283,7 @@ namespace EmEn::Scenes::Component
 
 			/**
 			 * @brief Returns the local bounding box of this component.
-			 * @note Can be invalid. On non-overridden method, this will return a null bounding box.
+			 * @note Can be invalid. On a non-overridden method, this will return a null bounding box.
 			 * @return const Libs::Math::Space3D::AACuboid< float > &
 			 */
 			[[nodiscard]]

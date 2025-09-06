@@ -26,6 +26,9 @@
 
 #include "Device.hpp"
 
+/* Third-party inclusions. */
+#include "magic_enum/magic_enum.hpp"
+
 /* Local inclusions. */
 #include "Utility.hpp"
 #include "Instance.hpp"
@@ -36,33 +39,35 @@
 
 namespace EmEn::Vulkan
 {
-	using namespace EmEn::Libs;
-	using namespace EmEn::Graphics;
+	using namespace Libs;
+	using namespace Graphics;
 
 	bool
 	Device::create (const DeviceRequirements & requirements, const std::vector< const char * > & extensions) noexcept
 	{
-		if ( m_flags[ShowInformation] )
+		if ( m_showInformation )
 		{
-			TraceInfo{ClassId} << getItemListAsString("Device", m_physicalDevice->getExtensions(nullptr));
+			TraceInfo{ClassId} <<
+				"Creation of the logical device from the physical device '" << m_physicalDevice->deviceName() << "':" "\n" <<
+				getItemListAsString("Device", m_physicalDevice->getExtensions(nullptr)) <<
+				"The requirements for creation:" "\n" << requirements;
 		}
 
-		/* Queue creation definitions. */
 		StaticVector< VkDeviceQueueCreateInfo, 16 > queueCreateInfos;
 
-		/* Check queues availabilities and possibilities against requirements. */
+		/* NOTE: Check queues availabilities and configure them against the requirements. */
 		if ( !this->prepareQueues(requirements, queueCreateInfos) )
 		{
-			Tracer::error(ClassId, "Unable to have a suitable queue configuration for the device !");
+			Tracer::fatal(ClassId, "Unable to have a suitable queue configuration for the logical device !");
 
 			return false;
 		}
 
-		if ( m_flags[ShowInformation] )
+		if ( m_showInformation )
 		{
 			TraceInfo info{ClassId};
 
-			info << "Device configuration : " "\n";
+			info << "Logical device queue configuration: " "\n";
 
 			for ( const auto & queueFamily : m_queueFamilies )
 			{
@@ -71,7 +76,7 @@ namespace EmEn::Vulkan
 
 			for ( const auto & [job, queue] : m_queueFamilyPerJob )
 			{
-				info << "'" << to_cstring(job) << "' job will be performed on queue family #" << queue->index() << "." "\n";
+				info << "'" << magic_enum::enum_name(job) << "' job will be performed on queue family #" << queue->index() << "." "\n";
 			}
 		}
 
@@ -84,9 +89,9 @@ namespace EmEn::Vulkan
 		}
 
 		/* Retrieve every created queue. */
-		auto device = this->shared_from_this();
+		const auto device = this->shared_from_this();
 
-		for ( auto & queueFamily : m_queueFamilies )
+		for ( const auto & queueFamily : m_queueFamilies )
 		{
 			if ( !queueFamily->retrieveQueuesFromDevice(device) )
 			{
@@ -101,36 +106,14 @@ namespace EmEn::Vulkan
 		return true;
 	}
 
-	void
-	Device::destroy () noexcept
-	{
-		if ( m_handle == VK_NULL_HANDLE )
-		{
-			return;
-		}
-
-		this->waitIdle("Destroying the device !");
-
-		m_queueFamilyPerJob.clear();
-		m_queueFamilies.clear();
-
-		vkDestroyDevice(m_handle, nullptr);
-
-		m_handle = VK_NULL_HANDLE;
-
-		m_physicalDevice.reset();
-
-		this->setDestroyed();
-	}
-
 	bool
 	Device::declareQueuesFromSingleQueueFamily (const DeviceRequirements & requirements, const VkQueueFamilyProperties2 & queueFamilyProperty) noexcept
 	{
-		auto queueFamily = queueFamilyProperty.queueFamilyProperties.queueCount > 1 ?
+		const auto queueFamily = queueFamilyProperty.queueFamilyProperties.queueCount > 1 ?
 			m_queueFamilies.emplace_back(std::make_shared< QueueFamily >(0, queueFamilyProperty.queueFamilyProperties.queueCount)) :
 			m_queueFamilies.emplace_back(std::make_shared< QueueFamilySQ >(0));
 
-		m_flags[HasBasicSupport] = true;
+		m_hasBasicSupport = true;
 
 		/* NOTE: Without a transfer nothing is possible! This should never happen! */
 		if ( (queueFamilyProperty.queueFamilyProperties.queueFlags & VK_QUEUE_TRANSFER_BIT) == 0 )
@@ -193,7 +176,7 @@ namespace EmEn::Vulkan
 
 			const auto maxQueueCount = queueFamilyProperties[queueFamilyIndex].queueFamilyProperties.queueCount;
 
-			auto queueFamily = maxQueueCount > 1 ?
+			const auto queueFamily = maxQueueCount > 1 ?
 				m_queueFamilies.emplace_back(std::make_shared< QueueFamily >(queueFamilyIndex, maxQueueCount)) :
 				m_queueFamilies.emplace_back(std::make_shared< QueueFamilySQ >(queueFamilyIndex));
 
@@ -267,18 +250,18 @@ namespace EmEn::Vulkan
 
 		if ( requirements.needsTransfer() && !m_queueFamilyPerJob.contains(QueueJob::Transfer) )
 		{
-			switch ( requirements.jobHint() )
+			switch ( requirements.deviceWorkType() )
 			{
-				case DeviceJobHint::General :
+				case DeviceWorkType::General :
 					TraceError{ClassId} << "The physical device '" << this->name() << "' has no queue for separate transfer !";
 
 					return false;
 
-				case DeviceJobHint::Graphics :
+				case DeviceWorkType::Graphics :
 					m_queueFamilyPerJob[QueueJob::Transfer] = m_queueFamilyPerJob[QueueJob::Graphics];
 					break;
 
-				case DeviceJobHint::Compute :
+				case DeviceWorkType::Compute :
 					m_queueFamilyPerJob[QueueJob::Transfer] = m_queueFamilyPerJob[QueueJob::Compute];
 					break;
 			}
@@ -290,16 +273,11 @@ namespace EmEn::Vulkan
 	bool
 	Device::prepareQueues (const DeviceRequirements & requirements, StaticVector< VkDeviceQueueCreateInfo, 16 > & queueCreateInfos) noexcept
 	{
-		if ( m_flags[ShowInformation] )
-		{
-			TraceInfo{ClassId} << requirements;
-		}
-
 		const auto & queueFamilyProperties = m_physicalDevice->queueFamilyPropertiesVK11();
 
 		if ( queueFamilyProperties.empty() )
 		{
-			TraceError{ClassId} << "The physical device '" << this->name() << "' has no family queue !";
+			TraceFatal{ClassId} << "The physical device '" << this->name() << "' has no family queue !";
 
 			return false;
 		}
@@ -307,7 +285,7 @@ namespace EmEn::Vulkan
 		/* Check queue family requirements. */
 		if ( queueFamilyProperties.size() == 1 )
 		{
-			if ( m_flags[ShowInformation] )
+			if ( m_showInformation )
 			{
 				TraceInfo{ClassId} <<
 				   "The physical device '" << this->name() << "' has a basic support. "
@@ -321,7 +299,7 @@ namespace EmEn::Vulkan
 		}
 		else
 		{
-			if ( m_flags[ShowInformation] )
+			if ( m_showInformation )
 			{
 				TraceInfo{ClassId} << "The physical device '" << this->name() << "' has an advanced support.";
 			}
@@ -339,54 +317,54 @@ namespace EmEn::Vulkan
 			{
 				StaticVector< std::pair< QueueJob, float >, 16 > structure;
 
-				for ( const auto & job : m_queueFamilyPerJob )
+				for ( const auto & [jobType, family] : m_queueFamilyPerJob )
 				{
-					if ( job.second != queueFamily )
+					if ( family != queueFamily )
 					{
 						continue;
 					}
 
-					switch ( job.first )
+					switch ( jobType )
 					{
 						case QueueJob::Graphics :
 							for ( auto priority : requirements.graphicsQueuePriorities() )
 							{
-								structure.emplace_back(job.first, priority);
+								structure.emplace_back(jobType, priority);
 							}
 							break;
 
 						case QueueJob::GraphicsTransfer :
 							for ( auto priority : requirements.graphicsTransferQueuePriorities() )
 							{
-								structure.emplace_back(job.first, priority);
+								structure.emplace_back(jobType, priority);
 							}
 							break;
 
 						case QueueJob::Presentation :
 							for ( auto priority : requirements.presentationQueuePriorities() )
 							{
-								structure.emplace_back(job.first, priority);
+								structure.emplace_back(jobType, priority);
 							}
 							break;
 
 						case QueueJob::Compute :
 							for ( auto priority : requirements.computeQueuePriorities() )
 							{
-								structure.emplace_back(job.first, priority);
+								structure.emplace_back(jobType, priority);
 							}
 							break;
 
 						case QueueJob::ComputeTransfer :
 							for ( auto priority : requirements.computeTransferQueuePriorities() )
 							{
-								structure.emplace_back(job.first, priority);
+								structure.emplace_back(jobType, priority);
 							}
 							break;
 
 						case QueueJob::Transfer :
 							for ( auto priority : requirements.transferQueuePriorities() )
 							{
-								structure.emplace_back(job.first, priority);
+								structure.emplace_back(jobType, priority);
 							}
 							break;
 					}
@@ -394,7 +372,7 @@ namespace EmEn::Vulkan
 
 				if ( structure.empty() )
 				{
-					if ( m_flags[ShowInformation] )
+					if ( m_showInformation )
 					{
 						TraceInfo{ClassId} << "There is no queue required for queue family #" << queueFamily->index() << " !";
 					}
@@ -424,15 +402,17 @@ namespace EmEn::Vulkan
 		createInfo.flags = 0;
 		createInfo.queueCreateInfoCount = static_cast< uint32_t >(queueCreateInfos.size());
 		createInfo.pQueueCreateInfos = queueCreateInfos.data();
-		createInfo.enabledLayerCount = 0; // NOTE: Device layer is ignored (Device layer deprecation)
-		createInfo.ppEnabledLayerNames = nullptr; // ...
+		{
+			/* NOTE: These fields must stay unused, the validation layers for
+			 * device is deprecated after Vulkan 1.0 (Device Layer Deprecation). */
+			createInfo.enabledLayerCount = 0;
+			createInfo.ppEnabledLayerNames = nullptr;
+		}
 		createInfo.enabledExtensionCount = static_cast< uint32_t >(extensions.size());
 		createInfo.ppEnabledExtensionNames = extensions.data();
 		createInfo.pEnabledFeatures = nullptr; // VULKAN 1.0 API feature
 
-		const auto result = vkCreateDevice(m_physicalDevice->handle(), &createInfo, nullptr, &m_handle);
-
-		if ( result != VK_SUCCESS )
+		if ( const auto result = vkCreateDevice(m_physicalDevice->handle(), &createInfo, nullptr, &m_handle); result != VK_SUCCESS )
 		{
 			TraceFatal{ClassId} << "Unable to create a logical device : " << vkResultToCString(result) << " !";
 
@@ -440,6 +420,25 @@ namespace EmEn::Vulkan
 		}
 
 		return true;
+	}
+
+	void
+	Device::destroy () noexcept
+	{
+		if ( m_handle != VK_NULL_HANDLE )
+		{
+			this->waitIdle("Destroying the logical device !");
+
+			vkDestroyDevice(m_handle, nullptr);
+
+			m_handle = VK_NULL_HANDLE;
+		}
+
+		m_queueFamilyPerJob.clear();
+		m_queueFamilies.clear();
+		m_physicalDevice.reset();
+
+		this->setDestroyed();
 	}
 
 	uint32_t
@@ -497,24 +496,19 @@ namespace EmEn::Vulkan
 	void
 	Device::waitIdle (const char * location) const noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_mutex};
-
 		if ( m_handle == VK_NULL_HANDLE )
 		{
-			TraceError{ClassId} <<
-				"The device is gone !" "\n"
-				"Call location : " << location;
+			TraceFatal{ClassId} << "The device is gone ! Call location:" "\n" << location;
 
 			return;
 		}
 
-		const auto result = vkDeviceWaitIdle(m_handle);
+		/* [VULKAN-CPU-SYNC] */
+		const std::lock_guard< std::mutex > lock{m_deviceInternalAccess};
 
-		if ( result != VK_SUCCESS )
+		if ( const auto result = vkDeviceWaitIdle(m_handle); result != VK_SUCCESS )
 		{
-			TraceError{ClassId} <<
-				"Unable to wait the device " << m_handle << " : " << vkResultToCString(result) << " !" "\n"
-				"Call location : " << location;
+			TraceError{ClassId} << "Unable to wait the device " << m_handle << " : " << vkResultToCString(result) << " ! Call location:" "\n" << location;
 		}
 	}
 
@@ -539,7 +533,7 @@ namespace EmEn::Vulkan
 	{
 		for ( const auto & format : formats )
 		{
-			auto formatProperties = m_physicalDevice->getFormatProperties(format);
+			const auto formatProperties = m_physicalDevice->getFormatProperties(format);
 
 			switch ( tiling )
 			{
@@ -577,36 +571,32 @@ namespace EmEn::Vulkan
 	VkSampleCountFlagBits
 	Device::findSampleCount (uint32_t samples) const noexcept
 	{
-		const auto maxSamples = m_physicalDevice->getMaxAvailableSampleCount();
-
-		if ( samples > static_cast< uint32_t >(maxSamples) )
+		if ( const auto maxSamples = m_physicalDevice->getMaxAvailableSampleCount(); samples > static_cast< uint32_t >(maxSamples) )
 		{
 			return maxSamples;
 		}
 
 		switch ( samples )
 		{
-			case 1 :
-				return VK_SAMPLE_COUNT_1_BIT;
-
-			case 2 :
-				return VK_SAMPLE_COUNT_2_BIT;
-
-			case 4 :
-				return VK_SAMPLE_COUNT_4_BIT;
-
-			case 8 :
-				return VK_SAMPLE_COUNT_8_BIT;
-
-			case 16 :
-				return VK_SAMPLE_COUNT_16_BIT;
+			case 64 :
+				return VK_SAMPLE_COUNT_64_BIT;
 
 			case 32 :
 				return VK_SAMPLE_COUNT_32_BIT;
 
-			case 64 :
-				return VK_SAMPLE_COUNT_64_BIT;
+			case 16 :
+				return VK_SAMPLE_COUNT_16_BIT;
 
+			case 8 :
+				return VK_SAMPLE_COUNT_8_BIT;
+
+			case 4 :
+				return VK_SAMPLE_COUNT_4_BIT;
+
+			case 2 :
+				return VK_SAMPLE_COUNT_2_BIT;
+
+			case 1 :
 			default :
 				return VK_SAMPLE_COUNT_1_BIT;
 		}

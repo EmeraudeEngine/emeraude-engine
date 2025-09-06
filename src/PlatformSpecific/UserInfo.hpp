@@ -29,6 +29,7 @@
 /* STL inclusions. */
 #include <string>
 #include <ostream>
+#include <sstream>
 #include <filesystem>
 
 namespace EmEn::PlatformSpecific
@@ -92,6 +93,8 @@ namespace EmEn::PlatformSpecific
 				return m_homePath;
 			}
 
+		private:
+
 			/**
 			 * @brief STL streams printable object.
 			 * @param out A reference to the stream output.
@@ -100,18 +103,25 @@ namespace EmEn::PlatformSpecific
 			 */
 			friend std::ostream & operator<< (std::ostream & out, const UserInfo & obj);
 
-			/**
-			 * @brief Stringifies the object.
-			 * @param obj A reference to the object to print.
-			 * @return std::string
-			 */
-			friend std::string to_string (const UserInfo & obj) noexcept;
-
-		private:
-
 			std::string m_name;
 			std::string m_accountName;
 			std::filesystem::path m_homePath;
 			bool m_informationFound{false};
 	};
+
+	/**
+	 * @brief Stringifies the object.
+	 * @param obj A reference to the object to print.
+	 * @return std::string
+	 */
+	inline
+	std::string
+	to_string (const UserInfo & obj) noexcept
+	{
+		std::stringstream output;
+
+		output << obj;
+
+		return output.str();
+	}
 }

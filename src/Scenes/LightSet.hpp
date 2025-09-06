@@ -28,7 +28,6 @@
 
 /* STL inclusions. */
 #include <cstddef>
-#include <array>
 #include <set>
 #include <map>
 #include <memory>
@@ -79,10 +78,8 @@ namespace EmEn::Scenes
 			/** @brief Class identifier. */
 			static constexpr auto ClassId{"LightSet"};
 
-			/** @brief Observable class unique identifier. */
-			static const size_t ClassUID;
-
 			/* Default variables. */
+			static constexpr auto DefaultStaticLightingName{"Default"};
 			static constexpr auto DefaultLightPercentToAmbient{0.1F};
 			static constexpr auto DefaultAmbientLightIntensity{0.1F};
 
@@ -136,12 +133,25 @@ namespace EmEn::Scenes
 			 */
 			~LightSet () override = default;
 
+			/**
+			 * @brief Returns the unique identifier for this class [Thread-safe].
+			 * @return size_t
+			 */
+			static
+			size_t
+			getClassUID () noexcept
+			{
+				static const size_t classUID = EmEn::Libs::Hash::FNV1a(ClassId);
+
+				return classUID;
+			}
+
 			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
 			[[nodiscard]]
 			size_t
 			classUID () const noexcept override
 			{
-				return ClassUID;
+				return getClassUID();
 			}
 
 			/** @copydoc EmEn::Libs::ObservableTrait::is() const */
@@ -149,7 +159,7 @@ namespace EmEn::Scenes
 			bool
 			is (size_t classUID) const noexcept override
 			{
-				return classUID == ClassUID;
+				return classUID == getClassUID();
 			}
 
 			/**
@@ -160,7 +170,7 @@ namespace EmEn::Scenes
 			std::mutex &
 			mutex () const noexcept
 			{
-				return m_lightAccess;
+				return m_lightsAccess;
 			}
 
 			/**
@@ -170,7 +180,7 @@ namespace EmEn::Scenes
 			void
 			enable () noexcept
 			{
-				m_flags[Enabled] = true;
+				m_enabled = true;
 			}
 
 			/**
@@ -181,7 +191,7 @@ namespace EmEn::Scenes
 			bool
 			isEnabled () const noexcept
 			{
-				return m_flags[Enabled];
+				return m_enabled;
 			}
 
 			/**
@@ -213,30 +223,30 @@ namespace EmEn::Scenes
 			bool terminate (Scene & scene) noexcept;
 
 			/**
-			 * @brief Enables the use of a static lighting incorporated to the shaders.
+			 * @brief Enables the use of static lighting incorporated to the shaders.
 			 * @param state The state.
 			 * @return void
 			 */
 			void
 			setStaticLightingState (bool state) noexcept
 			{
-				m_flags[UseStaticLighting] = state;
+				m_useStaticLighting = state;
 
-				if ( m_flags[UseStaticLighting] )
+				if ( state )
 				{
 					this->getOrCreateDefaultStaticLighting();
 				}
 			}
 
 			/**
-			 * @brief Returns whether a static lighting is used.
+			 * @brief Returns whether static lighting is used.
 			 * @return bool
 			 */
 			[[nodiscard]]
 			bool
 			isUsingStaticLighting () const noexcept
 			{
-				return m_flags[UseStaticLighting];
+				return m_useStaticLighting;
 			}
 
 			/**
@@ -274,7 +284,7 @@ namespace EmEn::Scenes
 
 			/**
 			 * @brief Sets a base ambient light for the scene.
-			 * @note This will have an effect even if no light are in the scene.
+			 * @note This will have an effect even if no light is in the scene.
 			 * @param color The color of the global basis ambient light.
 			 * @return void
 			 */
@@ -341,13 +351,13 @@ namespace EmEn::Scenes
 			 * light color instead of the ambient component of each light source.
 			 * FIXME: Re-enable this features !
 			 * @param state Enable or disable the computation.
-			 * @param factor The percent of each color light. Default 10%.
+			 * @param factor The percentage of each color light. Default 10%.
 			 * @return void
 			 */
 			void
 			enableAmbientGenerationFromLights (bool state, float factor = DefaultLightPercentToAmbient) noexcept
 			{
-				m_flags[CreateAmbientFromLights] = state;
+				m_createAmbientFromLights = state;
 				m_lightPercentToAmbient = Libs::Math::clampToUnit(factor);
 			}
 
@@ -359,7 +369,7 @@ namespace EmEn::Scenes
 			void
 			enableLightDistanceForAmbientGeneration (bool state) noexcept
 			{
-				m_flags[UseLightDistance] = state;
+				m_useLightDistance = state;
 			}
 
 			/**
@@ -455,7 +465,7 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			 * @brief Returns the percent of each light color to use for ambient light calculation.
+			 * @brief Returns the percentage of each light color to use for ambient light calculation.
 			 * @return float
 			 */
 			[[nodiscard]]
@@ -473,7 +483,7 @@ namespace EmEn::Scenes
 			bool
 			useLightDistance () const noexcept
 			{
-				return m_flags[UseLightDistance];
+				return m_useLightDistance;
 			}
 
 			/**
@@ -551,15 +561,6 @@ namespace EmEn::Scenes
 			 */
 			friend std::ostream & operator<< (std::ostream & out, const LightSet & obj);
 
-			static constexpr auto DefaultStaticLightingName{"Default"};
-
-			/* Flag names */
-			static constexpr auto Enabled{0UL};
-			static constexpr auto Initialized{1UL};
-			static constexpr auto UseStaticLighting{2UL};
-			static constexpr auto CreateAmbientFromLights{3UL};
-			static constexpr auto UseLightDistance{4UL};
-
 			std::shared_ptr< Graphics::SharedUniformBuffer > m_directionalLightBuffer;
 			std::shared_ptr< Graphics::SharedUniformBuffer > m_pointLightBuffer;
 			std::shared_ptr< Graphics::SharedUniformBuffer > m_spotLightBuffer;
@@ -571,17 +572,12 @@ namespace EmEn::Scenes
 			Libs::PixelFactory::Color< float > m_ambientLightColor{Libs::PixelFactory::Black};
 			float m_ambientLightIntensity{DefaultAmbientLightIntensity};
 			float m_lightPercentToAmbient{DefaultLightPercentToAmbient};
-			mutable std::mutex m_lightAccess;
-			std::array< bool, 8 > m_flags{
-				false/*Enabled*/,
-				false/*Initialized*/,
-				false/*UseStaticLighting*/,
-				false/*CreateAmbientFromLights*/,
-				false/*UseLightDistance*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/
-			};
+			mutable std::mutex m_lightsAccess;
+			bool m_initialized{false};
+			bool m_enabled{false};
+			bool m_useStaticLighting{false};
+			bool m_createAmbientFromLights{false};
+			bool m_useLightDistance{false};
 	};
 
 	/**

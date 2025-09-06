@@ -1,30 +1,30 @@
-if ( NOT HWLOC_ENABLED )
-	if ( EMERAUDE_USE_SYSTEM_LIBS )
-		message("Enabling HWLOC library from system ...")
+if ( NOT TARGET_BINARY_FOR_SETUP )
+	message(FATAL_ERROR "TARGET_BINARY_FOR_SETUP is not SET !")
+endif ()
 
-		find_package(PkgConfig REQUIRED)
+if ( EMERAUDE_USE_SYSTEM_LIBS )
+	message("Enabling HWLOC library from system ...")
 
-		pkg_check_modules(HWLOC REQUIRED hwloc)
+	find_package(PkgConfig REQUIRED)
 
-		target_include_directories(${PROJECT_NAME} PRIVATE ${HWLOC_INCLUDE_DIRS})
-		target_link_directories(${PROJECT_NAME} PRIVATE ${HWLOC_LIBRARY_DIRS})
-		target_link_libraries(${PROJECT_NAME} PRIVATE ${HWLOC_LIBRARIES})
+	pkg_check_modules(HWLOC REQUIRED hwloc)
+
+	target_include_directories(${TARGET_BINARY_FOR_SETUP} PUBLIC ${HWLOC_INCLUDE_DIRS})
+
+	target_link_directories(${TARGET_BINARY_FOR_SETUP} PUBLIC ${HWLOC_LIBRARY_DIRS})
+
+	target_link_libraries(${TARGET_BINARY_FOR_SETUP} PRIVATE ${HWLOC_LIBRARIES})
+else ()
+	message("Enabling HWLOC library from local source ...")
+
+	if ( MSVC )
+		target_link_libraries(${TARGET_BINARY_FOR_SETUP} PRIVATE ${LOCAL_LIB_DIR}/lib/hwloc.lib)
 	else ()
-		message("Enabling HWLOC library from local source ...")
 
-		if ( MSVC )
-			target_link_libraries(${PROJECT_NAME} PRIVATE ${LOCAL_LIB_DIR}/lib/hwloc.lib)
-		else ()
+		target_link_libraries(${TARGET_BINARY_FOR_SETUP} PRIVATE ${LOCAL_LIB_DIR}/lib/libhwloc.a)
 
-			target_link_libraries(${PROJECT_NAME} PRIVATE ${LOCAL_LIB_DIR}/lib/libhwloc.a)
-
-			if ( APPLE )
-				target_link_libraries(${PROJECT_NAME} PRIVATE "-framework IOKit")
-			endif ()
+		if ( APPLE )
+			target_link_libraries(${TARGET_BINARY_FOR_SETUP} PRIVATE "-framework CoreFoundation -framework IOKit")
 		endif ()
 	endif ()
-
-	set(HWLOC_ENABLED On) # Complete the "emeraude_config.hpp" file
-else ()
-	message("The HWLOC library is already enabled.")
 endif ()

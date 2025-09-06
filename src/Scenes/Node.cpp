@@ -46,8 +46,6 @@ namespace EmEn::Scenes
 	using namespace Graphics;
 	using namespace Physics;
 
-	const size_t Node::ClassUID{getClassUID(ClassId)};
-
 	void
 	Node::setPosition (const Vector< 3, float > & position, TransformSpace transformSpace) noexcept
 	{
@@ -635,7 +633,7 @@ namespace EmEn::Scenes
 		{
 			const auto * node = this;
 
-			/* While parent is not root. */
+			/* While a parent is not root. */
 			while ( node != nullptr )
 			{
 				reversedTree.emplace(node->localCoordinates());
@@ -967,13 +965,13 @@ namespace EmEn::Scenes
 	bool
 	Node::onUnhandledNotification (const ObservableTrait * observable, int notificationCode, const std::any & data) noexcept
 	{
-		if ( observable->is(Component::Abstract::ClassUID) || observable->is(PhysicalObjectProperties::ClassUID) )
+		if ( observable->is(Component::Abstract::getClassUID()) || observable->is(PhysicalObjectProperties::getClassUID()) )
 		{
 			/* NOTE: Avoid an automatic observer release. */
 			return true;
 		}
 
-		if ( observable->is(ClassUID) )
+		if ( observable->is(Node::getClassUID()) )
 		{
 			if ( std::ranges::any_of(m_children, [observable] (const auto & subNode) {return subNode.second.get() == observable;}) )
 			{
@@ -983,9 +981,9 @@ namespace EmEn::Scenes
 			}
 		}
 
-		/* NOTE: Don't know what is it, goodbye! */
+		/* NOTE: Don't know what it is, goodbye! */
 		TraceDebug{ClassId} <<
-			"Received an unhandled notification (Code:" << notificationCode << ") from observable '" << whoIs(observable->classUID()) << "' (UID:" << observable->classUID() << ")  ! "
+			"Received an unhandled notification (Code:" << notificationCode << ") from observable (UID:" << observable->classUID() << ")  ! "
 			"Forgetting it ...";
 
 		return false;

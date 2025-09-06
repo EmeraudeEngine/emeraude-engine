@@ -101,6 +101,7 @@ namespace EmEn::Graphics::Geometry
 
 		const auto & parameters = m_generationParameters;
 
+		// FIXME: Crash here with MSVC on DEBUG !! Check generateCuboid() for buffer overflow
 		return m_resources->container< IndexedVertexResource >()->getOrCreateResourceAsync(resourceName, [width, height, depth, parameters] (IndexedVertexResource & newGeometry) {
 			auto shape = ShapeGenerator::generateCuboid< float, uint32_t >(width, height, depth, parameters.getShapeBuilderOptions());
 

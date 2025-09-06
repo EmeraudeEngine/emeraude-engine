@@ -309,14 +309,12 @@ namespace EmEn::Vulkan
 			bool recreateOnHardware (const Graphics::RenderTarget::Abstract & renderTarget, uint32_t width, uint32_t height) noexcept;
 
 			/**
-			 * @brief Recreates the graphics pipeline for a specific renderable instance.
-			 * @todo Check this version !
+			 * @brief Recreates the graphics pipeline.
 			 * @param renderTarget A reference to a render target to query the viewport.
-			 * @param renderableInstance A reference to the renderable instance to query options.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool recreateOnHardware (const Graphics::RenderTarget::Abstract & renderTarget, const Graphics::RenderableInstance::Abstract & renderableInstance) noexcept;
+			bool recreateOnHardware (const Graphics::RenderTarget::Abstract & renderTarget) noexcept;
 
 			/**
 			 * @brief Returns the pipeline vulkan handle.

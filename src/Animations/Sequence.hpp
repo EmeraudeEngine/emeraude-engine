@@ -72,7 +72,7 @@ namespace EmEn::Animations
 			bool
 			isPlaying () const noexcept override
 			{
-				return m_flags[IsPlaying];
+				return m_isPlaying;
 			}
 
 			/** @copydoc EmEn::Animations::AnimationInterface::isPaused() */
@@ -80,7 +80,7 @@ namespace EmEn::Animations
 			bool
 			isPaused () const noexcept override
 			{
-				return !m_flags[IsPlaying];
+				return !m_isPlaying;
 			}
 
 			/** @copydoc EmEn::Animations::AnimationInterface::isFinished() */
@@ -193,16 +193,7 @@ namespace EmEn::Animations
 			uint32_t m_elapsedTime{0};
 			float m_noise{0.0F};
 			KeyFrames m_keyFrames;
-			std::array< bool, 8 > m_flags{
-				false/*IsPlaying*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/
-			};
+			bool m_isPlaying{false};
 	};
 
 	inline

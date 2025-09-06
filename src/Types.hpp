@@ -71,7 +71,34 @@ namespace EmEn
 	 * @return const char *
 	 */
 	[[nodiscard]]
-	const char * to_cstring (Severity value) noexcept;
+	inline
+	const char *
+	to_cstring (Severity value) noexcept
+	{
+		switch ( value )
+		{
+			case Severity::Debug :
+				return DebugString;
+
+			case Severity::Info :
+				return InfoString;
+
+			case Severity::Success :
+				return SuccessString;
+
+			case Severity::Warning :
+				return WarningString;
+
+			case Severity::Error :
+				return ErrorString;
+
+			case Severity::Fatal :
+				return FatalString;
+
+			default:
+				return "Unknown";
+		}
+	}
 
 	/**
 	 * @brief Returns a string version of the enum value.
@@ -104,7 +131,25 @@ namespace EmEn
 	 * @return const char *
 	 */
 	[[nodiscard]]
-	const char * to_cstring (LogFormat value) noexcept;
+	inline
+	const char *
+	to_cstring (LogFormat value) noexcept
+	{
+		switch ( value )
+		{
+			case LogFormat::Text :
+				return TextString;
+
+			case LogFormat::JSON :
+				return JSONString;
+
+			case LogFormat::HTML :
+				return HTMLString;
+
+			default:
+				return "Text";
+		}
+	}
 
 	/**
 	 * @brief Returns a string version of the enum value.
@@ -125,5 +170,45 @@ namespace EmEn
 	 * @return LogFormat
 	 */
 	[[nodiscard]]
-	LogFormat to_LogFormat (const std::string & value) noexcept;
+	inline
+	LogFormat
+	to_LogFormat (const std::string & value) noexcept
+	{
+		if ( value == TextString )
+		{
+			return LogFormat::Text;
+		}
+
+		if ( value == JSONString )
+		{
+			return LogFormat::JSON;
+		}
+
+		if ( value == HTMLString )
+		{
+			return LogFormat::HTML;
+		}
+
+		return LogFormat::Text;
+	}
+
+	enum class ANSIColorCode : uint8_t
+	{
+		Black = 30,
+		Red = 31,
+		Green = 32,
+		Yellow = 33,
+		Blue = 34,
+		Magenta = 35,
+		Cyan = 36,
+		White = 37,
+		BrightBlack = 90,
+		BrightRed = 91,
+		BrightGreen = 92,
+		BrightYellow = 93,
+		BrightBlue = 94,
+		BrightMagenta = 95,
+		BrightCyan = 96,
+		BrightWhite = 97
+	};
 }

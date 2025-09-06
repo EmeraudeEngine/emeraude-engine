@@ -216,7 +216,8 @@ namespace EmEn::Vulkan
 			m_scissors.resize(1);
 		}
 
-		m_scissors[0].offset = {0, 0};
+		m_scissors[0].offset.x = 0;
+		m_scissors[0].offset.y = 0;
 		m_scissors[0].extent.width = width;
 		m_scissors[0].extent.height = height;
 
@@ -844,7 +845,7 @@ namespace EmEn::Vulkan
 	}
 
 	bool
-	GraphicsPipeline::recreateOnHardware (const RenderTarget::Abstract & renderTarget, const RenderableInstance::Abstract & /*renderableInstance*/) noexcept
+	GraphicsPipeline::recreateOnHardware (const RenderTarget::Abstract & renderTarget) noexcept
 	{
 		if ( !this->hasDevice() )
 		{

@@ -47,10 +47,8 @@
 
 namespace EmEn::Saphir
 {
-	using namespace EmEn::Libs;
-	using namespace EmEn::Vulkan;
-
-	const size_t ShaderManager::ClassUID{getClassUID(ClassId)};
+	using namespace Libs;
+	using namespace Vulkan;
 
 	bool
 	ShaderManager::onInitialize () noexcept
@@ -59,10 +57,10 @@ namespace EmEn::Saphir
 		{
 			auto & settings = m_primaryServices.settings();
 
-			m_flags[ShowInformation] = settings.get< bool >(VkShowInformationKey, DefaultVkShowInformation);
-			m_flags[ShowSourceCode] = settings.get< bool >(ShowSourceCodeKey, DefaultShowSourceCode);
-			m_flags[SourceCodeCacheEnabled] = settings.get< bool >(SourceCodeCacheEnabledKey, DefaultSourceCodeCacheEnabled);
-			m_flags[BinaryCacheEnabled] = settings.get< bool >(BinaryCacheEnabledKey, DefaultBinaryCacheEnabled);
+			m_flags[ShowInformation] = settings.getOrSetDefault< bool >(VkShowInformationKey, DefaultVkShowInformation);
+			m_flags[ShowSourceCode] = settings.getOrSetDefault< bool >(ShowSourceCodeKey, DefaultShowSourceCode);
+			m_flags[SourceCodeCacheEnabled] = settings.getOrSetDefault< bool >(SourceCodeCacheEnabledKey, DefaultSourceCodeCacheEnabled);
+			m_flags[BinaryCacheEnabled] = settings.getOrSetDefault< bool >(BinaryCacheEnabledKey, DefaultBinaryCacheEnabled);
 		}
 
 		/* Shader source cache directory. */
@@ -86,7 +84,7 @@ namespace EmEn::Saphir
 		}
 
 		/* Checks shader cache. */
-		if ( m_primaryServices.arguments().get("--clear-shader-cache").isPresent() )
+		if ( m_primaryServices.arguments().isSwitchPresent("--clear-shader-cache") )
 		{
 			this->clearCache();
 		}

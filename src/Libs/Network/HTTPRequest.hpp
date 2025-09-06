@@ -94,7 +94,12 @@ namespace EmEn::Libs::Network
 			 * @brief Constructs an HTTP request.
 			 * @param version The HTTP version. Default HTTP 1.1.
 			 */
-			explicit HTTPRequest (Version version = Version::HTTP11) noexcept;
+			explicit
+			HTTPRequest (Version version = Version::HTTP11) noexcept
+				: HTTPHeaders{version}
+			{
+
+			}
 
 			/**
 			 * @brief Constructs an HTTP request.
@@ -102,13 +107,26 @@ namespace EmEn::Libs::Network
 			 * @param resource The resource of the request.
 			 * @param version The HTTP version. Default HTTP 1.1.
 			 */
-			HTTPRequest (Method method, const URI & resource, Version version = Version::HTTP11) noexcept;
+			HTTPRequest (Method method, const URI & resource, Version version = Version::HTTP11) noexcept
+				: HTTPHeaders{version},
+				m_method{method},
+				m_resource{resource}
+			{
+				this->add(Host, to_string(resource.uriDomain().hostname()));
+			}
 
 			/**
 			 * @brief Constructs an HTTP request from a raw string.
 			 * @param rawHeaders A reference to string.
 			 */
-			explicit HTTPRequest (const std::string & rawHeaders) noexcept;
+			explicit
+			HTTPRequest (const std::string & rawHeaders) noexcept
+			{
+				if ( !this->parse(rawHeaders) )
+				{
+					std::cerr << "HTTPRequest::HTTPRequest(), unable to parse the HTTP request !" "\n";
+				}
+			}
 
 			/** @copydoc EmEn::Libs::Network::HTTPHeaders::isValid() */
 			[[nodiscard]]
@@ -123,29 +141,50 @@ namespace EmEn::Libs::Network
 			 * @param method The method of the request.
 			 * @return void
 			 */
-			void setMethod (Method method) noexcept;
+			void
+			setMethod (Method method) noexcept
+			{
+				m_method = method;
+			}
 
 			/**
 			 * @brief Returns the request method.
 			 * @return Method
 			 */
 			[[nodiscard]]
-			Method method () const noexcept;
+			Method
+			method () const noexcept
+			{
+				return m_method;
+			}
 
 			/**
 			 * @brief Sets the request resource.
-			 * @param resource A reference to an URI.
+			 * @param resource A reference to a URI.
 			 * @param doNotAddHeader Disable the automatic adding of "Host:" header.
 			 * @return void
 			 */
-			void setResource (const URI & resource, bool doNotAddHeader = false) noexcept;
+			void
+			setResource (const URI & resource, bool doNotAddHeader = false) noexcept
+			{
+				m_resource = resource;
+
+				if ( !doNotAddHeader )
+				{
+					this->add(Host, to_string(resource.uriDomain().hostname()));
+				}
+			}
 
 			/**
 			 * @brief Returns the request resource.
 			 * @return const URI &
 			 */
 			[[nodiscard]]
-			const URI & resource () const noexcept;
+			const URI &
+			resource () const noexcept
+			{
+				return m_resource;
+			}
 
 			/**
 			 * @brief Converts an enum type method to a C-String.

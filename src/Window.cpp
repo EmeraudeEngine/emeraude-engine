@@ -28,9 +28,6 @@
 
 /* STL inclusions. */
 #include <cmath>
-#include <exception>
-#include <iostream>
-#include <utility>
 
 /* Local inclusions. */
 #include "Vulkan/Instance.hpp"
@@ -39,23 +36,33 @@
 
 namespace EmEn
 {
-	using namespace EmEn::Libs;
+	using namespace Libs;
 	using namespace Graphics;
 	using namespace Vulkan;
-
-	const size_t Window::ClassUID{getClassUID(ClassId)};
 
 	bool
 	Window::onInitialize () noexcept
 	{
-		m_flags[ShowInformation] = m_primaryServices.settings().get< bool >(VideoWindowShowInformationKey, DefaultVideoWindowShowInformation);
-		m_flags[SaveWindowPropertiesAtExit] = m_primaryServices.settings().get< bool >(VideoSavePropertiesAtExitKey, DefaultVideoSavePropertiesAtExit);
+		m_showInformation = m_primaryServices.settings().getOrSetDefault< bool >(VideoWindowShowInformationKey, DefaultVideoWindowShowInformation);
+		m_windowLess = m_primaryServices.arguments().isSwitchPresent("-W", "--window-less");
+		m_saveWindowPropertiesAtExit = m_primaryServices.settings().getOrSetDefault< bool >(VideoSavePropertiesAtExitKey, DefaultVideoSavePropertiesAtExit);
 
 		if ( !m_instance.usable() )
 		{
 			Tracer::fatal(ClassId, "There is no vulkan instance available !");
 
 			return false;
+		}
+
+		if ( m_windowLess )
+		{
+			TraceInfo{ClassId} << "Creating a fake window ...";
+
+			this->initializeState(true);
+
+			this->notify(Created);
+
+			return true;
 		}
 
 		/* Checks monitor presence. */
@@ -66,24 +73,24 @@ namespace EmEn
 			return false;
 		}
 
-		/* NOTE: One multi monitors system, the preferred monitor will be used to display the window and fetch physical information. */
-		const auto preferredMonitor = m_primaryServices.settings().get< int32_t >(VideoPreferredMonitorKey, DefaultVideoPreferredMonitor);
+		/* NOTE: One multi monitors system, the preferred monitor, will be used to display the window and fetch physical information. */
+		const auto preferredMonitor = m_primaryServices.settings().getOrSetDefault< int32_t >(VideoPreferredMonitorKey, DefaultVideoPreferredMonitor);
 
 		/* NOTE: Disabling OpenGL context creation for Vulkan API */
 		glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 
-		/* Creating window in window or fullscreen mode */
-		if ( m_primaryServices.settings().get< bool >(VideoFullscreenEnabledKey, DefaultVideoFullscreenEnabled) )
+		/* Creating the window in windowed or fullscreen mode */
+		if ( m_primaryServices.settings().getOrSetDefault< bool >(VideoFullscreenEnabledKey, DefaultVideoFullscreenEnabled) )
 		{
-			const auto fullscreenWidth = m_primaryServices.settings().get< int32_t >(VideoFullscreenWidthKey, DefaultVideoFullscreenWidth);
-			const auto fullscreenHeight = m_primaryServices.settings().get< int32_t >(VideoFullscreenHeightKey, DefaultVideoFullscreenHeight);
-			const auto refreshRate = m_primaryServices.settings().get< int32_t >(VideoFullscreenRefreshRateKey, DefaultVideoFullscreenRefreshRate);
+			const auto fullscreenWidth = m_primaryServices.settings().getOrSetDefault< int32_t >(VideoFullscreenWidthKey, DefaultVideoFullscreenWidth);
+			const auto fullscreenHeight = m_primaryServices.settings().getOrSetDefault< int32_t >(VideoFullscreenHeightKey, DefaultVideoFullscreenHeight);
+			const auto refreshRate = m_primaryServices.settings().getOrSetDefault< int32_t >(VideoFullscreenRefreshRateKey, DefaultVideoFullscreenRefreshRate);
 
 			if ( refreshRate > 0 )
 			{
 				glfwWindowHint(GLFW_REFRESH_RATE, refreshRate);
 
-				if ( m_flags[ShowInformation] )
+				if ( m_showInformation )
 				{
 					TraceInfo{ClassId} << refreshRate << "Hz monitor refresh rate requested.";
 				}
@@ -103,7 +110,7 @@ namespace EmEn
 			{
 				Tracer::fatal(ClassId, "Unable to get a valid fullscreen window !");
 
-				/* NOTE: Set back settings to default to avoid failing start in loop. */
+				/* NOTE: Set back settings by default to avoid failing start in loop. */
 				m_primaryServices.settings().set< int32_t >(VideoFullscreenWidthKey, DefaultVideoFullscreenWidth);
 				m_primaryServices.settings().set< int32_t >(VideoFullscreenHeightKey, DefaultVideoFullscreenHeight);
 
@@ -112,14 +119,14 @@ namespace EmEn
 		}
 		else
 		{
-            const auto windowWidth = m_primaryServices.settings().get< int32_t >(VideoWindowWidthKey, DefaultVideoWindowWidth);
-            const auto windowHeight = m_primaryServices.settings().get< int32_t >(VideoWindowHeightKey, DefaultVideoWindowHeight);
-			const auto frameless = m_primaryServices.settings().get< bool >(VideoWindowFramelessKey, DefaultVideoWindowFrameless);
+            const auto windowWidth = m_primaryServices.settings().getOrSetDefault< int32_t >(VideoWindowWidthKey, DefaultVideoWindowWidth);
+            const auto windowHeight = m_primaryServices.settings().getOrSetDefault< int32_t >(VideoWindowHeightKey, DefaultVideoWindowHeight);
+			const auto frameless = m_primaryServices.settings().getOrSetDefault< bool >(VideoWindowFramelessKey, DefaultVideoWindowFrameless);
 
 			/* GLFW_RESIZABLE specifies whether the windowed mode window
 			 * will be resizable by the user. The window will still be resizable
 			 * using the glfwSetWindowSize function. Possible values are
-			 * GLFW_TRUE and GLFW_FALSE. This hint is ignored for full screen
+			 * GLFW_TRUE and GLFW_FALSE. This hint is ignored for fullscreen
 			 * and undecorated windows. */
 			glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
 
@@ -181,15 +188,15 @@ namespace EmEn
 
 			if constexpr ( IsLinux )
 			{
-				/* GLFW_X11_CLASS_NAME and GLFW_X11_INSTANCE_NAME specifies the desired ASCII
-				 * encoded class and instance parts of the ICCCM WM_CLASS window property. */
+				/* GLFW_X11_CLASS_NAME and GLFW_X11_INSTANCE_NAME specifies the desired ASCII-encoded
+				 * class and instance parts of the ICCCM WM_CLASS window property. */
 				glfwWindowHintString(GLFW_X11_CLASS_NAME, EngineName);
 				glfwWindowHintString(GLFW_X11_INSTANCE_NAME, ENGINE_NAME "_instance"); // FIXME: Check to pass the application name here.
 			}
 
 			if constexpr ( IsWindows )
 			{
-				/* GLFW_COCOA_RETINA_FRAMEBUFFER specifies whether to use full resolution framebuffers on Retina displays.
+				/* GLFW_COCOA_RETINA_FRAMEBUFFER specifies whether to use full-resolution framebuffers on Retina displays.
 				 * Possible values are GLFW_TRUE and GLFW_FALSE. This is ignored on other platforms. */
 				glfwWindowHint(GLFW_COCOA_RETINA_FRAMEBUFFER, GLFW_TRUE);
 				/* GLFW_COCOA_FRAME_NAME specifies the UTF-8 encoded name to use for autosaving the window frame, or if
@@ -221,19 +228,19 @@ namespace EmEn
 
 		if ( this->isFullscreenMode() )
 		{
-			const auto gamma = m_primaryServices.settings().get< float >(VideoFullscreenGammaKey, DefaultVideoFullscreenGamma);
+			const auto gamma = m_primaryServices.settings().getOrSetDefault< float >(VideoFullscreenGammaKey, DefaultVideoFullscreenGamma);
 
 			this->setGamma(gamma, preferredMonitor);
 		}
 		else
 		{
-			if ( m_primaryServices.settings().get< bool >(VideoWindowAlwaysCenterOnStartupKey, DefaultVideoWindowAlwaysCenterOnStartup) )
+			if ( m_primaryServices.settings().getOrSetDefault< bool >(VideoWindowAlwaysCenterOnStartupKey, DefaultVideoWindowAlwaysCenterOnStartup) )
 			{
-				const auto windowWidth = m_primaryServices.settings().get< uint32_t >(VideoWindowWidthKey, DefaultVideoWindowWidth);
-				const auto windowHeight = m_primaryServices.settings().get< uint32_t >(VideoWindowHeightKey, DefaultVideoWindowHeight);
+				const auto windowWidth = m_primaryServices.settings().getOrSetDefault< uint32_t >(VideoWindowWidthKey, DefaultVideoWindowWidth);
+				const auto windowHeight = m_primaryServices.settings().getOrSetDefault< uint32_t >(VideoWindowHeightKey, DefaultVideoWindowHeight);
 				const auto centeredPosition = Window::getCenteredPosition({windowWidth, windowHeight}, preferredMonitor);
 
-				if ( m_flags[ShowInformation] )
+				if ( m_showInformation )
 				{
 					TraceInfo{ClassId} << "Center the window position to X: " << centeredPosition[0] << ", Y: " << centeredPosition[1] << " ...";
 				}
@@ -242,10 +249,10 @@ namespace EmEn
 			}
 			else
 			{
-				const auto XPosition = m_primaryServices.settings().get< int32_t >(VideoWindowXPositionKey, DefaultVideoWindowXPosition);
-				const auto YPosition = m_primaryServices.settings().get< int32_t >(VideoWindowYPositionKey, DefaultVideoWindowYPosition);
+				const auto XPosition = m_primaryServices.settings().getOrSetDefault< int32_t >(VideoWindowXPositionKey, DefaultVideoWindowXPosition);
+				const auto YPosition = m_primaryServices.settings().getOrSetDefault< int32_t >(VideoWindowYPositionKey, DefaultVideoWindowYPosition);
 
-				if ( m_flags[ShowInformation] )
+				if ( m_showInformation )
 				{
 					TraceInfo{ClassId} << "Setting window position to X: " << XPosition << ", Y: " << YPosition << " ...";
 				}
@@ -253,12 +260,12 @@ namespace EmEn
 				this->setPosition(XPosition, YPosition);
 			}
 
-			const auto gamma = m_primaryServices.settings().get< float >(VideoWindowGammaKey, DefaultVideoWindowGamma);
+			const auto gamma = m_primaryServices.settings().getOrSetDefault< float >(VideoWindowGammaKey, DefaultVideoWindowGamma);
 
 			this->setGamma(gamma, preferredMonitor);
 		}
 
-		const auto useNativeCode = m_primaryServices.settings().get< bool >(GLFWEnableNativeCodeForVkSurfaceKey, DefaultEnableNativeCodeForVkSurface);
+		const auto useNativeCode = m_primaryServices.settings().getOrSetDefault< bool >(GLFWEnableNativeCodeForVkSurfaceKey, DefaultEnableNativeCodeForVkSurface);
 
 		if ( !this->createSurface(useNativeCode) )
 		{
@@ -267,12 +274,12 @@ namespace EmEn
 			return false;
 		}
 
-		this->initializeState();
+		this->initializeState(false);
 
 		/* NOTE: The window starts non-visible. */
 		glfwShowWindow(m_handle.get());
 
-		if ( m_flags[ShowInformation] )
+		if ( m_showInformation )
 		{
 			TraceInfo{ClassId} <<
 				this->getWindowStateString(false) << "\n" <<
@@ -296,9 +303,9 @@ namespace EmEn
 	{
 		this->releaseNativeWindow();
 
-		if ( m_flags[SaveWindowPropertiesAtExit] )
+		if ( m_saveWindowPropertiesAtExit )
 		{
-			if ( m_flags[ShowInformation] )
+			if ( m_showInformation )
 			{
 				Tracer::info(ClassId, "Saving the window properties ...");
 			}
@@ -341,7 +348,10 @@ namespace EmEn
 	void
 	Window::setTitle (const std::string & title) noexcept
 	{
-		glfwSetWindowTitle(m_handle.get(), title.c_str());
+		if ( !m_windowLess )
+		{
+			glfwSetWindowTitle(m_handle.get(), title.c_str());
+		}
 
 		this->notify(TitleChanged, title);
 	}
@@ -349,6 +359,13 @@ namespace EmEn
 	bool
 	Window::resize (int32_t width, int32_t height) const noexcept
 	{
+		if ( m_windowLess )
+		{
+			Tracer::warning(ClassId, "This is a windowless instance, the resize is disabled!");
+
+			return false;
+		}
+
 		if ( width <= 0 || height <= 0 )
 		{
 			TraceError{ClassId} << width << "x" << height << " is an invalid resolution.";
@@ -406,6 +423,13 @@ namespace EmEn
 	bool
 	Window::setPosition (int32_t xPosition, int32_t yPosition) noexcept
 	{
+		if ( m_windowLess )
+		{
+			Tracer::warning(ClassId, "This is a windowless instance, the position is disabled!");
+
+			return false;
+		}
+
 		glfwSetWindowPos(m_handle.get(),xPosition,yPosition);
 
 		switch ( glfwGetError(nullptr) )
@@ -435,8 +459,8 @@ namespace EmEn
 		auto * monitor = Window::getMonitor(desiredMonitor);
 
 		/* Get the monitor virtual position and dimensions and the window dimension. */
-		const auto desktopPosition = Window::getDesktopPosition(monitor);
-		const auto desktopSize = Window::getDesktopSize(monitor);
+		const auto desktopPosition = this->getDesktopPosition(monitor);
+		const auto desktopSize = this->getDesktopSize(monitor);
 
 		TraceDebug{ClassId} <<
 			"Desktop position (X: " << desktopPosition[0] << ", Y: " << desktopPosition[1] << ")" "\n"
@@ -453,19 +477,29 @@ namespace EmEn
 	bool
 	Window::isVisibleOnDesktop () const noexcept
 	{
+		if ( m_windowLess )
+		{
+			return false;
+		}
+
 		return glfwGetWindowAttrib(m_handle.get(), GLFW_VISIBLE) == GLFW_TRUE;
 	}
 
 	bool
 	Window::isIconified () const noexcept
 	{
+		if ( m_windowLess )
+		{
+			return false;
+		}
+
 		return glfwGetWindowAttrib(m_handle.get(), GLFW_ICONIFIED) == GLFW_TRUE;
 	}
 
 	void
 	Window::iconify () const noexcept
 	{
-		if ( this->isIconified() )
+		if ( m_windowLess || this->isIconified() )
 		{
 			return;
 		}
@@ -476,7 +510,7 @@ namespace EmEn
 	void
 	Window::getBackOnDesktop () const noexcept
 	{
-		if ( this->isVisibleOnDesktop() )
+		if ( m_windowLess || this->isVisibleOnDesktop() )
 		{
 			return;
 		}
@@ -487,6 +521,11 @@ namespace EmEn
 	bool
 	Window::isSizeMaximized () const noexcept
 	{
+		if ( m_windowLess )
+		{
+			return false;
+		}
+
 		return glfwGetWindowAttrib(m_handle.get(), GLFW_MAXIMIZED) == GLFW_TRUE;
 	}
 
@@ -499,7 +538,7 @@ namespace EmEn
 	void
 	Window::maximizeSize () const noexcept
 	{
-		if ( this->isSizeMaximized() )
+		if ( m_windowLess || this->isSizeMaximized() )
 		{
 			return;
 		}
@@ -510,7 +549,7 @@ namespace EmEn
 	void
 	Window::restoreSize () const noexcept
 	{
-		if ( this->isSizeReduced() )
+		if ( m_windowLess || this->isSizeReduced() )
 		{
 			return;
 		}
@@ -521,19 +560,29 @@ namespace EmEn
 	bool
 	Window::isFocused () const noexcept
 	{
+		if ( m_windowLess )
+		{
+			return false;
+		}
+
 		return glfwGetWindowAttrib(m_handle.get(), GLFW_FOCUSED) == GLFW_TRUE;
 	}
 
 	bool
 	Window::isBlurred () const noexcept
 	{
+		if ( m_windowLess )
+		{
+			return false;
+		}
+
 		return !this->isFocused();
 	}
 
 	void
 	Window::focus () const noexcept
 	{
-		if ( this->isFocused() )
+		if ( m_windowLess || this->isFocused() )
 		{
 			return;
 		}
@@ -544,6 +593,11 @@ namespace EmEn
 	bool
 	Window::isVisible () const noexcept
 	{
+		if ( m_windowLess )
+		{
+			return false;
+		}
+
 		return glfwGetWindowAttrib(m_handle.get(), GLFW_VISIBLE) == GLFW_TRUE;
 	}
 
@@ -556,7 +610,7 @@ namespace EmEn
 	void
 	Window::hide () const noexcept
 	{
-		if ( this->isHidden() )
+		if ( m_windowLess || this->isHidden() )
 		{
 			return;
 		}
@@ -567,7 +621,7 @@ namespace EmEn
 	void
 	Window::show () const noexcept
 	{
-		if ( this->isVisible() )
+		if ( m_windowLess || this->isVisible() )
 		{
 			return;
 		}
@@ -578,6 +632,13 @@ namespace EmEn
 	void
 	Window::setGamma (float value, int32_t desiredMonitor) const noexcept
 	{
+		if ( m_windowLess )
+		{
+			Tracer::warning(ClassId, "This is a windowless instance, the gamma is disabled!");
+
+			return;
+		}
+
 		auto * monitor = Window::getMonitor(desiredMonitor);
 
 		if ( monitor != nullptr )
@@ -589,7 +650,7 @@ namespace EmEn
 	void
 	Window::switchToFullscreenMode (bool useNativeResolution, int32_t desiredMonitor) const noexcept
 	{
-		if ( this->isFullscreenMode() )
+		if ( m_windowLess || this->isFullscreenMode() )
 		{
 			return;
 		}
@@ -606,7 +667,7 @@ namespace EmEn
 			settings.set<uint32_t>(VideoWindowHeightKey, currentSize[1]);
 		}
 
-		const auto refreshRate = settings.get< int32_t >(VideoFullscreenRefreshRateKey, DefaultVideoFullscreenRefreshRate);
+		const auto refreshRate = settings.getOrSetDefault< int32_t >(VideoFullscreenRefreshRateKey, DefaultVideoFullscreenRefreshRate);
 
 		if ( useNativeResolution )
 		{
@@ -622,8 +683,8 @@ namespace EmEn
 		}
 		else
 		{
-			auto width = settings.get< int32_t >(VideoFullscreenWidthKey, DefaultVideoFullscreenWidth);
-			auto height = settings.get< int32_t >(VideoFullscreenHeightKey, DefaultVideoFullscreenHeight);
+			auto width = settings.getOrSetDefault< int32_t >(VideoFullscreenWidthKey, DefaultVideoFullscreenWidth);
+			auto height = settings.getOrSetDefault< int32_t >(VideoFullscreenHeightKey, DefaultVideoFullscreenHeight);
 
 			if ( width == 0 || height == 0 )
 			{
@@ -648,11 +709,12 @@ namespace EmEn
 	void
 	Window::switchToWindowedMode () const noexcept
 	{
-		if ( this->isWindowedMode() )
+		if ( m_windowLess || this->isWindowedMode() )
 		{
 			return;
 		}
 
+		/* TODO: Be sure of why const-settings here ! */
 		const auto & settings = m_primaryServices.settings();
 		const auto windowWidth = settings.get< int32_t >(VideoWindowWidthKey, DefaultVideoWindowWidth);
 		const auto windowHeight = settings.get< int32_t >(VideoWindowHeightKey, DefaultVideoWindowHeight);
@@ -671,6 +733,11 @@ namespace EmEn
 	bool
 	Window::isFullscreenMode () const noexcept
 	{
+		if ( m_windowLess )
+		{
+			return false;
+		}
+
 		/* If there is no monitor attached to the handle,
 		 * so this is not a fullscreen mode. */
 		return glfwGetWindowMonitor(m_handle.get()) != nullptr;
@@ -679,6 +746,11 @@ namespace EmEn
 	std::array< int32_t, 2 >
 	Window::getPosition () const noexcept
 	{
+		if ( m_windowLess )
+		{
+			return {0, 0};
+		}
+
 		int xPosition = -1;
 		int yPosition = -1;
 
@@ -702,6 +774,11 @@ namespace EmEn
 	std::array< uint32_t, 2 >
 	Window::getSize () const noexcept
 	{
+		if ( m_windowLess )
+		{
+			return {m_state.windowWidth, m_state.windowHeight};
+		}
+
 		int widthPts = -1;
 		int heightPts = -1;
 
@@ -728,6 +805,16 @@ namespace EmEn
 	std::array< uint32_t, 4 >
 	Window::getBorderSize () const noexcept
 	{
+		if ( m_windowLess )
+		{
+			return {
+				static_cast< uint32_t >(m_state.borderLeftSize),
+				static_cast< uint32_t >(m_state.borderTopSize),
+				static_cast< uint32_t >(m_state.borderRightSize),
+				static_cast< uint32_t >(m_state.borderBottomSize)
+			};
+		}
+
 		int leftPts = -1;
 		int topPts = -1;
 		int rightPts = -1;
@@ -756,8 +843,13 @@ namespace EmEn
 	}
 
 	std::array< int32_t, 2 >
-	Window::getDesktopPosition (GLFWmonitor * monitor) noexcept
+	Window::getDesktopPosition (GLFWmonitor * monitor) const noexcept
 	{
+		if ( m_windowLess )
+		{
+			return {0, 0};
+		}
+
 		/* Get the proper monitor to query */
 		if ( monitor == nullptr )
 		{
@@ -792,8 +884,14 @@ namespace EmEn
 	}
 
 	std::array< uint32_t, 2 >
-	Window::getDesktopSize (GLFWmonitor * monitor) noexcept
+	Window::getDesktopSize (GLFWmonitor * monitor) const noexcept
 	{
+		if ( m_windowLess )
+		{
+			/* NOTE: Deluxe monitor! */
+			return {4096, 4096};
+		}
+
 		/* Get the proper monitor to query */
 		if ( monitor == nullptr )
 		{
@@ -824,6 +922,11 @@ namespace EmEn
 	std::array< uint32_t, 2 >
 	Window::getFramebufferSize (bool applyScale) const noexcept
 	{
+		if ( m_windowLess )
+		{
+			return {m_state.windowWidth, m_state.windowHeight};
+		}
+
 		int widthPx = -1;
 		int heightPx = -1;
 
@@ -862,6 +965,11 @@ namespace EmEn
 	std::array< float, 2 >
 	Window::getContentScale () const noexcept
 	{
+		if ( m_windowLess )
+		{
+			return {m_state.contentXScale, m_state.contentYScale};
+		}
+
 		std::array< float, 2 > scale{0.0F, 0.0F};
 
 		glfwGetWindowContentScale(m_handle.get(), scale.data(), scale.data()+1);
@@ -968,6 +1076,11 @@ namespace EmEn
 	std::string
 	Window::getWindowAttribString () const noexcept
 	{
+		if ( m_windowLess )
+		{
+			return "Windowless mode!";
+		}
+
 		return (std::stringstream{} <<
 			"Window related attributes :" "\n"
 			" - GLFW_FOCUSED : " << glfwGetWindowAttrib(m_handle.get(), GLFW_FOCUSED) << "\n"
@@ -1058,39 +1171,66 @@ namespace EmEn
 	}
 
 	void
-	Window::initializeState () noexcept
+	Window::initializeState (bool fakeWindow) noexcept
 	{
-		/* The position (top left) of the window in the desktop screen. */
-		const auto position = this->getPosition();
+		if ( fakeWindow )
+		{
+			/* The position (top left) of the window in the desktop screen. */
+			m_state.windowXPosition = 0;
+			m_state.windowYPosition = 0;
 
-		m_state.windowXPosition = position[0];
-		m_state.windowYPosition = position[1];
+			/* The window dimension expressed in the OS/desktop screen. */
+			m_state.windowWidth = DefaultVideoWindowWidth;
+			m_state.windowHeight = DefaultVideoWindowHeight;
 
-		/* The window dimension expressed in the OS/desktop screen. */
-		const auto size = this->getSize();
+			/* The window borders sizes (Depend on the OS/desktop). */
+			m_state.borderLeftSize = 0;
+			m_state.borderTopSize = 0;
+			m_state.borderRightSize = 0;
+			m_state.borderBottomSize = 0;
 
-		m_state.windowWidth = size[0];
-		m_state.windowHeight = size[1];
+			/* The content scale factor from the desktop (HDPI screen). */
+			m_state.contentXScale = 1.0F;
+			m_state.contentYScale = 1.0F;
 
-		/* The window borders sizes (Depend on the OS/desktop). */
-		const auto borderSize = this->getBorderSize();
+			/* The framebuffer of the window expressed in pixels. */
+			m_state.framebufferWidth = DefaultVideoWindowWidth;
+			m_state.framebufferHeight = DefaultVideoWindowHeight;
+		}
+		else
+		{
+			/* The position (top left) of the window in the desktop screen. */
+			const auto position = this->getPosition();
 
-		m_state.borderLeftSize = static_cast< int32_t >(borderSize[0]);
-		m_state.borderTopSize = static_cast< int32_t >(borderSize[1]);
-		m_state.borderRightSize = static_cast< int32_t >(borderSize[2]);
-		m_state.borderBottomSize = static_cast< int32_t >(borderSize[3]);
+			m_state.windowXPosition = position[0];
+			m_state.windowYPosition = position[1];
 
-		/* The content scale factor from the desktop (HDPI screen). */
-		const auto scale = this->getContentScale();
+			/* The window dimension expressed in the OS/desktop screen. */
+			const auto size = this->getSize();
 
-		m_state.contentXScale = scale[0];
-		m_state.contentYScale = scale[1];
+			m_state.windowWidth = size[0];
+			m_state.windowHeight = size[1];
 
-		/* The framebuffer of the window expressed in pixels. */
-		const auto framebufferSize = this->getFramebufferSize(); // Gives incorrect data at startup.
+			/* The window borders sizes (Depend on the OS/desktop). */
+			const auto borderSize = this->getBorderSize();
 
-		m_state.framebufferWidth = framebufferSize[0];
-		m_state.framebufferHeight = framebufferSize[1];
+			m_state.borderLeftSize = static_cast< int32_t >(borderSize[0]);
+			m_state.borderTopSize = static_cast< int32_t >(borderSize[1]);
+			m_state.borderRightSize = static_cast< int32_t >(borderSize[2]);
+			m_state.borderBottomSize = static_cast< int32_t >(borderSize[3]);
+
+			/* The content scale factor from the desktop (HDPI screen). */
+			const auto scale = this->getContentScale();
+
+			m_state.contentXScale = scale[0];
+			m_state.contentYScale = scale[1];
+
+			/* The framebuffer of the window expressed in pixels. */
+			const auto framebufferSize = this->getFramebufferSize(); // Gives incorrect data at startup.
+
+			m_state.framebufferWidth = framebufferSize[0];
+			m_state.framebufferHeight = framebufferSize[1];
+		}
 	}
 
 	bool
@@ -1105,7 +1245,7 @@ namespace EmEn
 			return false;
 		}
 
-		if ( m_flags[ShowInformation] )
+		if ( m_showInformation )
 		{
 			TraceInfo{ClassId} << monitors.size() << " monitor(s) available(s).";
 		}
@@ -1113,7 +1253,7 @@ namespace EmEn
 		for ( auto * monitor : monitors )
 		{
 			/* NOTE: Display monitors information. */
-			if ( m_flags[ShowInformation] )
+			if ( m_showInformation )
 			{
 				const auto modes = Window::getMonitorModes(monitor);
 
@@ -1170,7 +1310,7 @@ namespace EmEn
 		}
 
 		const auto monitorIndex = desiredMonitorIndex < 0 ?
-			m_primaryServices.settings().get< uint32_t >(VideoPreferredMonitorKey, DefaultVideoPreferredMonitor) :
+			m_primaryServices.settings().getOrSetDefault< uint32_t >(VideoPreferredMonitorKey, DefaultVideoPreferredMonitor) :
 			static_cast< uint32_t >(desiredMonitorIndex);
 
 		if ( monitorIndex >= monitors.size() )
@@ -1341,7 +1481,7 @@ namespace EmEn
 		}
 
 		/* We clear the close bit.
-		 * The engine window itself is the running state. */
+		 * The engine window itself is in the running state. */
 		glfwSetWindowShouldClose(window, GLFW_FALSE);
 
 		/* Send the signal to the engine */

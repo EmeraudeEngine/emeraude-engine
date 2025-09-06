@@ -87,9 +87,6 @@ namespace EmEn
 			/** @brief Class identifier. */
 			static constexpr auto ClassId{"WindowService"};
 
-			/** @brief Observable class unique identifier. */
-			static const size_t ClassUID;
-
 			/**
 			 * @brief Structure to keep the state of the window geometry.
 			 */
@@ -157,12 +154,25 @@ namespace EmEn
 
 			}
 
+			/**
+			 * @brief Returns the unique identifier for this class [Thread-safe].
+			 * @return size_t
+			 */
+			static
+			size_t
+			getClassUID () noexcept
+			{
+				static const size_t classUID = EmEn::Libs::Hash::FNV1a(ClassId);
+
+				return classUID;
+			}
+
 			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
 			[[nodiscard]]
 			size_t
 			classUID () const noexcept override
 			{
-				return ClassUID;
+				return getClassUID();
 			}
 
 			/** @copydoc EmEn::Libs::ObservableTrait::is() const */
@@ -170,7 +180,7 @@ namespace EmEn
 			bool
 			is (size_t classUID) const noexcept override
 			{
-				return classUID == ClassUID;
+				return classUID == getClassUID();
 			}
 
 			/** @copydoc EmEn::ServiceInterface::usable() */
@@ -555,7 +565,7 @@ namespace EmEn
 			 * @return std::array< int32_t, 2 >
 			 */
 			[[nodiscard]]
-			static std::array< int32_t, 2 > getDesktopPosition (GLFWmonitor * monitor = nullptr) noexcept;
+			std::array< int32_t, 2 > getDesktopPosition (GLFWmonitor * monitor = nullptr) const noexcept;
 
 			/**
 			 * @brief Returns the desktop resolution.
@@ -563,7 +573,7 @@ namespace EmEn
 			 * @return std::array< uint32_t, 2 >
 			 */
 			[[nodiscard]]
-			static std::array< uint32_t, 2 > getDesktopSize (GLFWmonitor * monitor = nullptr) noexcept;
+			std::array< uint32_t, 2 > getDesktopSize (GLFWmonitor * monitor = nullptr) const noexcept;
 
 		private:
 
@@ -587,9 +597,10 @@ namespace EmEn
 
 			/**
 			 * @brief Saves the least minimum info on the window state at creation.
+			 * @param fakeWindow Declare a fake window
 			 * @return void
 			 */
-			void initializeState () noexcept;
+			void initializeState (bool fakeWindow) noexcept;
 
 			/**
 			 * @brief Checks monitors information and keeps it to a static member from here.
@@ -735,25 +746,14 @@ namespace EmEn
 			[[nodiscard]]
 			std::array< int32_t, 2 > getCenteredPosition (const std::array< uint32_t , 2 > & windowSize, int32_t desiredMonitor = -1) const noexcept;
 
-			/* Flag names. */
-			static constexpr auto ShowInformation{0UL};
-			static constexpr auto SaveWindowPropertiesAtExit{1UL};
-
 			PrimaryServices & m_primaryServices;
 			const Vulkan::Instance & m_instance;
 			std::string m_title;
 			State m_state{};
 			std::unique_ptr< GLFWwindow, std::function< void (GLFWwindow *) > > m_handle;
 			std::unique_ptr< Vulkan::Surface > m_surface;
-			std::array< bool, 8 > m_flags{
-				false/*ShowInformation*/,
-				false/*SaveWindowPropertiesAtExit*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/
-			};
+			bool m_showInformation{false};
+			bool m_windowLess{false};
+			bool m_saveWindowPropertiesAtExit{false};
 	};
 }

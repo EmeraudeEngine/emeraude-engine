@@ -104,7 +104,12 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 			 * @brief Constructs an abstract dialog.
 			 * @param title A string to name the dialog [std::move].
 			 */
-			explicit Abstract (std::string title) noexcept;
+			explicit
+			Abstract (std::string title) noexcept
+				: m_title{std::move(title)}
+			{
+
+			}
 
 #ifdef IS_LINUX
 			/**

@@ -24,9 +24,11 @@
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
 
-#include "Window.hpp"
+/* Emeraude-Engine configuration. */
+#include "emeraude_config.hpp"
 
 #if IS_WINDOWS
+#include "Window.hpp"
 
 /* Third-party inclusions. */
 #define GLFW_EXPOSE_NATIVE_WIN32

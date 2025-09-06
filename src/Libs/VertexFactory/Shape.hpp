@@ -392,7 +392,7 @@ namespace EmEn::Libs::VertexFactory
 			}
 
 			/**
-			 * @brief Returns whether texture coordinates is available.
+			 * @brief Returns whether texture coordinates are available.
 			 * @return bool
 			 */
 			[[nodiscard]]
@@ -430,12 +430,18 @@ namespace EmEn::Libs::VertexFactory
 					return false;
 				}
 
-				#pragma omp parallel for default(none) shared(uScale, vScale, wScale)
-				for ( const auto & triangle : m_triangles )
+				const auto trianglesCount = static_cast< int64_t >(m_triangles.size());
+				const auto & trianglesRef = m_triangles;
+				auto & verticesRef = m_vertices;
+
+				#pragma omp parallel for default(none) shared(uScale, vScale, wScale, trianglesCount, trianglesRef, verticesRef)
+				for ( int64_t triangleIndex = 0; triangleIndex < trianglesCount; ++triangleIndex )
 				{
+					const auto & triangle = trianglesRef[triangleIndex];
+
 					for ( index_data_t vertexIndex = 0; vertexIndex < 3; ++vertexIndex )
 					{
-						auto & currentVertex = m_vertices[triangle.vertexIndex(vertexIndex)];
+						auto & currentVertex = verticesRef[triangle.vertexIndex(vertexIndex)];
 
 						auto textureCoordinates = TextureCoordinates::generateCubicCoordinates(currentVertex.position(), currentVertex.normal());
 						textureCoordinates[Math::U] *= uScale;
@@ -465,12 +471,18 @@ namespace EmEn::Libs::VertexFactory
 					return false;
 				}
 
-				#pragma omp parallel for default(none)
-				for ( auto & triangle : m_triangles )
+				const auto trianglesCount = static_cast< int64_t >(m_triangles.size());
+				auto & trianglesRef = m_triangles;
+				const auto & verticesRef = m_vertices;
+
+				#pragma omp parallel for default(none) shared(trianglesCount, trianglesRef, verticesRef)
+				for ( int64_t triangleIndex = 0; triangleIndex < trianglesCount; ++triangleIndex )
 				{
-					const auto & vertexA = m_vertices[triangle.vertexIndex(0)];
-					const auto & vertexB = m_vertices[triangle.vertexIndex(1)];
-					const auto & vertexC = m_vertices[triangle.vertexIndex(2)];
+					auto & triangle = trianglesRef[triangleIndex];
+
+					const auto & vertexA = verticesRef[triangle.vertexIndex(0)];
+					const auto & vertexB = verticesRef[triangle.vertexIndex(1)];
+					const auto & vertexC = verticesRef[triangle.vertexIndex(2)];
 
 					/* Compute the surface normal. */
 					const auto normal = Math::Vector< 3, vertex_data_t >::normal(
@@ -507,12 +519,18 @@ namespace EmEn::Libs::VertexFactory
 					return false;
 				}
 
-				#pragma omp parallel for default(none)
-				for ( auto & triangle : m_triangles )
+				const auto trianglesCount = static_cast< int64_t >(m_triangles.size());
+				auto & trianglesRef = m_triangles;
+				const auto & verticesRef = m_vertices;
+
+				#pragma omp parallel for default(none) shared(trianglesCount, trianglesRef, verticesRef)
+				for ( int64_t triangleIndex = 0; triangleIndex < trianglesCount; ++triangleIndex )
 				{
-					const auto & vertexA = m_vertices[triangle.vertexIndex(0)];
-					const auto & vertexB = m_vertices[triangle.vertexIndex(1)];
-					const auto & vertexC = m_vertices[triangle.vertexIndex(2)];
+					auto & triangle = trianglesRef[triangleIndex];
+
+					const auto & vertexA = verticesRef[triangle.vertexIndex(0)];
+					const auto & vertexB = verticesRef[triangle.vertexIndex(1)];
+					const auto & vertexC = verticesRef[triangle.vertexIndex(2)];
 
 					/* Compute the surface tangent. */
 					const auto tangent = Math::Vector< 3, vertex_data_t >::tangent(
@@ -553,12 +571,17 @@ namespace EmEn::Libs::VertexFactory
 					return false;
 				}
 
-				#pragma omp parallel for default(none)
-				for ( auto & triangle : m_triangles )
+				const auto trianglesCount = static_cast< int64_t >(m_triangles.size());
+				auto & trianglesRef = m_triangles;
+				const auto & verticesRef = m_vertices;
+
+#pragma omp parallel for default(none) shared(trianglesCount, trianglesRef, verticesRef)
+				for ( int64_t triangleIndex = 0; triangleIndex < trianglesCount; ++triangleIndex )
 				{
-					const auto & vertexA = m_vertices[triangle.vertexIndex(0)];
-					const auto & vertexB = m_vertices[triangle.vertexIndex(1)];
-					const auto & vertexC = m_vertices[triangle.vertexIndex(2)];
+					auto & triangle = trianglesRef[triangleIndex];
+					const auto & vertexA = verticesRef[triangle.vertexIndex(0)];
+					const auto & vertexB = verticesRef[triangle.vertexIndex(1)];
+					const auto & vertexC = verticesRef[triangle.vertexIndex(2)];
 
 					/* Compute the surface tangent. */
 					const auto tangent = Math::Vector< 3, vertex_data_t >::tangent(
@@ -586,8 +609,9 @@ namespace EmEn::Libs::VertexFactory
 			}
 
 			/**
-			 * @brief Computes normal vector for every vertex.
+			 * @brief Computes a normal vector for every vertex.
 			 * @warning Geometry must have normal vectors computed for every triangle.
+			 * @todo Optimize this function
 			 * @return bool
 			 */
 			bool
@@ -600,19 +624,22 @@ namespace EmEn::Libs::VertexFactory
 					return false;
 				}
 
-				const auto verticesCount = m_vertices.size();
+				/* NOTE: Using 'int64_t' for OpenMP. */
+				const auto verticesCount = static_cast< int64_t >(m_vertices.size());
+				auto & verticesRef = m_vertices;
+				const auto & trianglesRef = m_triangles;
 
-				#pragma omp parallel for default(none) shared(verticesCount)
-				for ( index_data_t globalVertexIndex = 0; globalVertexIndex < verticesCount; ++globalVertexIndex )
+				#pragma omp parallel for default(none) shared(verticesCount, verticesRef, trianglesRef)
+				for ( int64_t globalVertexIndex = 0; globalVertexIndex < verticesCount; ++globalVertexIndex )
 				{
 					Math::Vector< 3, vertex_data_t > normal;
 
 					/* We look for every triangle sharing this vertex, add every vector, then normalize. */
-					for ( const auto & triangle : m_triangles )
+					for ( const auto & triangle : trianglesRef )
 					{
 						for ( index_data_t vertexIndex = 0; vertexIndex < 3; ++vertexIndex )
 						{
-							if ( triangle.vertexIndex(vertexIndex) != globalVertexIndex )
+							if ( triangle.vertexIndex(vertexIndex) != static_cast< index_data_t >(globalVertexIndex) )
 							{
 								continue;
 							}
@@ -623,7 +650,7 @@ namespace EmEn::Libs::VertexFactory
 						}
 					}
 
-					m_vertices[globalVertexIndex].setNormal(normal.normalize());
+					verticesRef[globalVertexIndex].setNormal(normal.normalize());
 				}
 
 				return true;
@@ -632,6 +659,7 @@ namespace EmEn::Libs::VertexFactory
 			/**
 			 * @brief Computes tangent vector for every vertex.
 			 * @warning Geometry must have tangent vectors computed for every triangle.
+			 * @todo Optimize this function
 			 * @return bool
 			 */
 			bool
@@ -644,19 +672,21 @@ namespace EmEn::Libs::VertexFactory
 					return false;
 				}
 
-				const auto verticesCount = m_vertices.size();
+				const auto verticesCount = static_cast< int64_t >(m_vertices.size());
+				auto & verticesRef = m_vertices;
+				const auto & trianglesRef = m_triangles;
 
-				#pragma omp parallel for default(none) shared(verticesCount)
-				for ( index_data_t globalVertexIndex = 0; globalVertexIndex < verticesCount; ++globalVertexIndex )
+				#pragma omp parallel for default(none) shared(verticesCount, verticesRef, trianglesRef)
+				for ( int64_t globalVertexIndex = 0; globalVertexIndex < verticesCount; ++globalVertexIndex )
 				{
 					Math::Vector< 3, vertex_data_t > tangent;
 
 					/* We look for every triangle sharing this vertex, add every vector, then normalize. */
-					for ( const auto & triangle : m_triangles )
+					for ( const auto & triangle : trianglesRef )
 					{
 						for ( index_data_t vertexIndex = 0; vertexIndex < 3; ++vertexIndex )
 						{
-							if ( triangle.vertexIndex(vertexIndex) != globalVertexIndex )
+							if ( triangle.vertexIndex(vertexIndex) != static_cast< index_data_t >(globalVertexIndex) )
 							{
 								continue;
 							}
@@ -667,7 +697,7 @@ namespace EmEn::Libs::VertexFactory
 						}
 					}
 
-					m_vertices[globalVertexIndex].setTangent(tangent.normalize());
+					verticesRef[globalVertexIndex].setTangent(tangent.normalize());
 				}
 
 				return true;
@@ -677,6 +707,7 @@ namespace EmEn::Libs::VertexFactory
 			 * @brief Computes normal and tangent vectors for every vertex.
 			 * @note If normals are present, use Shape::computeVertexTangent() instead.
 			 * @warning Geometry must have normal and tangent vectors computed for every triangle.
+			 * @todo Optimize this function
 			 * @return bool
 			 */
 			bool
@@ -689,20 +720,22 @@ namespace EmEn::Libs::VertexFactory
 					return false;
 				}
 
-				const auto verticesCount = m_vertices.size();
+				const auto verticesCount = static_cast< int64_t >(m_vertices.size());
+				auto & verticesRef = m_vertices;
+				const auto & trianglesRef = m_triangles;
 
-				#pragma omp parallel for default(none) shared(verticesCount)
-				for ( index_data_t globalVertexIndex = 0; globalVertexIndex < verticesCount; ++globalVertexIndex )
+				#pragma omp parallel for default(none) shared(verticesCount, verticesRef, trianglesRef)
+				for ( int64_t globalVertexIndex = 0; globalVertexIndex < verticesCount; ++globalVertexIndex )
 				{
 					Math::Vector< 3, vertex_data_t > tangent{};
 					Math::Vector< 3, vertex_data_t > normal{};
 
 					/* We look for every triangle sharing this vertex, add every vector, then normalize. */
-					for ( const auto & triangle : m_triangles )
+					for ( const auto & triangle : trianglesRef )
 					{
 						for ( index_data_t vertexIndex = 0; vertexIndex < 3; ++vertexIndex )
 						{
-							if ( triangle.vertexIndex(vertexIndex) != globalVertexIndex )
+							if ( triangle.vertexIndex(vertexIndex) != static_cast< index_data_t >(globalVertexIndex) )
 							{
 								continue;
 							}
@@ -712,8 +745,8 @@ namespace EmEn::Libs::VertexFactory
 						}
 					}
 
-					m_vertices[globalVertexIndex].setTangent(tangent.normalize());
-					m_vertices[globalVertexIndex].setNormal(normal.normalize());
+					verticesRef[globalVertexIndex].setTangent(tangent.normalize());
+					verticesRef[globalVertexIndex].setNormal(normal.normalize());
 				}
 
 				return true;
@@ -858,7 +891,7 @@ namespace EmEn::Libs::VertexFactory
 				m_vertexColors.clear();
 				m_vertexColors.emplace_back(color);
 
-				/* Sets color pointer to index 0, the unique color. */
+				/* Sets a color pointer to index 0, the unique color. */
 				for ( auto & triangle : m_triangles )
 				{
 					for ( index_data_t vertexIndex = 0; vertexIndex < 3; ++vertexIndex )
@@ -1549,7 +1582,7 @@ namespace EmEn::Libs::VertexFactory
 				/* Link with the shared edge if it found. */
 				if ( sharedIndex < std::numeric_limits< index_data_t >::max() )
 				{
-					/* Sets to new inserted edge the index of the shared edge found. */
+					/* Sets to the new inserted edge the index of the shared edge found. */
 					m_edges.back().setSharedIndex(sharedIndex);
 
 					/* Save the index of the new edge to the shared edge found. */

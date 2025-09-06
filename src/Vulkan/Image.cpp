@@ -167,26 +167,9 @@ namespace EmEn::Vulkan
 			return false;
 		}
 
-		/* Get an available staging buffer to prepare the transfer */
-		const auto stagingBuffer = transferManager.getStagingBuffer(pixmap.bytes());
-
-		if ( stagingBuffer == nullptr )
-		{
-			return false;
-		}
-
-		/* NOTE: Already locked, but gives the ability to unlock the staging buffer automatically at function exit. */
-		const std::lock_guard< StagingBuffer > lock{*stagingBuffer};
-
-		if ( !stagingBuffer->writeData({pixmap.data().data(), pixmap.bytes()}) )
-		{
-			TraceError{ClassId} << "Unable to write " << pixmap.bytes() << " bytes of data in the staging buffer !";
-
-			return false;
-		}
-
-		/* Transfer the image data from host memory to device memory. */
-		return transferManager.transfer(*stagingBuffer, *this);
+		return transferManager.transfer(*this, pixmap.bytes(), [&pixmap] (const StagingBuffer & stagingBuffer) {
+			return stagingBuffer.writeData({pixmap.data().data(), pixmap.bytes()});
+		});
 	}
 
 	bool
@@ -210,34 +193,24 @@ namespace EmEn::Vulkan
 			return sum + pixmap.bytes();
 		});
 
-		/* Get an available staging buffer to prepare the transfer */
-		const auto stagingBuffer = transferManager.getStagingBuffer(totalBytes);
-
-		if ( stagingBuffer == nullptr )
-		{
-			return false;
-		}
-
-		/* NOTE: Already locked, but gives the ability to unlock the staging buffer automatically at function exit. */
-		const std::lock_guard< StagingBuffer > lock{*stagingBuffer};
-
 		/* NOTE: We will write all 6 pixmaps next to each others in the staging buffer. */
-		size_t offset = 0;
+		return transferManager.transfer(*this, totalBytes, [&pixmaps] (const StagingBuffer & stagingBuffer) {
+			size_t offset = 0;
 
-		for ( const auto & pixmap : pixmaps )
-		{
-			if ( !stagingBuffer->writeData({pixmap.data().data(), pixmap.bytes(), offset}) )
+			for ( const auto & pixmap : pixmaps )
 			{
-				TraceError{ClassId} << "Unable to write " << pixmap.bytes() << " bytes of data in the staging buffer !";
+				if ( !stagingBuffer.writeData({pixmap.data().data(), pixmap.bytes(), offset}) )
+				{
+					TraceError{ClassId} << "Unable to write " << pixmap.bytes() << " bytes of data in the staging buffer !";
 
-				return false;
+					return false;
+				}
+
+				offset += pixmap.bytes();
 			}
 
-			offset += pixmap.bytes();
-		}
-
-		/* Transfer the image data from host memory to device memory. */
-		return transferManager.transfer(*stagingBuffer, *this);
+			return true;
+		});
 	}
 
 	bool
@@ -254,33 +227,23 @@ namespace EmEn::Vulkan
 			return sum + frame.first.bytes();
 		});
 
-		/* Get an available staging buffer to prepare the transfer */
-		const auto stagingBuffer = transferManager.getStagingBuffer(totalBytes);
+		return transferManager.transfer(*this, totalBytes, [&frames] (const StagingBuffer & stagingBuffer) {
+			size_t offset = 0;
 
-		if ( stagingBuffer == nullptr )
-		{
-			return false;
-		}
-
-		/* NOTE: Already locked, but gives the ability to unlock the staging buffer automatically at function exit. */
-		const std::lock_guard< StagingBuffer > lock{*stagingBuffer};
-
-		size_t offset = 0;
-
-		for ( const auto & pixmap : std::ranges::views::keys(frames) )
-		{
-			if ( !stagingBuffer->writeData({pixmap.data().data(), pixmap.bytes(), offset}) )
+			for ( const auto & pixmap : std::ranges::views::keys(frames) )
 			{
-				TraceError{ClassId} << "Unable to write " << pixmap.bytes() << " bytes of data in the staging buffer !";
+				if ( !stagingBuffer.writeData({pixmap.data().data(), pixmap.bytes(), offset}) )
+				{
+					TraceError{ClassId} << "Unable to write " << pixmap.bytes() << " bytes of data in the staging buffer !";
 
-				return false;
+					return false;
+				}
+
+				offset += pixmap.bytes();
 			}
 
-			offset += pixmap.bytes();
-		}
-
-		/* Transfer the image data from host memory to device memory. */
-		return transferManager.transfer(*stagingBuffer, *this);
+			return true;
+		});
 	}
 
 	bool
@@ -293,26 +256,9 @@ namespace EmEn::Vulkan
 			return false;
 		}
 
-		/* Get an available staging buffer to prepare the transfer */
-		const auto stagingBuffer = transferManager.getStagingBuffer(memoryRegion.bytes());
-
-		if ( stagingBuffer == nullptr )
-		{
-			return false;
-		}
-
-		/* NOTE: Already locked, but gives the ability to unlock the staging buffer automatically at function exit. */
-		const std::lock_guard< StagingBuffer > lock{*stagingBuffer};
-
-		if ( !stagingBuffer->writeData(memoryRegion) )
-		{
-			TraceError{ClassId} << "Unable to write " << memoryRegion.bytes() << " bytes of data in the staging buffer !";
-
-			return false;
-		}
-
-		/* Transfer the image data from host memory to device memory. */
-		return transferManager.transfer(*stagingBuffer, *this);
+		return transferManager.transfer(*this, memoryRegion.bytes(), [&memoryRegion] (const StagingBuffer & stagingBuffer) {
+			return stagingBuffer.writeData(memoryRegion);
+		});
 	}
 
 	bool

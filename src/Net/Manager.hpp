@@ -28,7 +28,6 @@
 
 /* STL inclusions. */
 #include <cstddef>
-#include <array>
 #include <map>
 #include <string>
 #include <vector>
@@ -57,7 +56,7 @@ namespace EmEn::Net
 	 * @brief The network manager service class.
 	 * @note [OBS][STATIC-OBSERVABLE]
 	 * @extends EmEn::ServiceInterface This is a service.
-	 * @extends EmEn::Libs::ObservableTrait This is a service is observable
+	 * @extends EmEn::Libs::ObservableTrait This service is observable
 	 */
 	class Manager final : public ServiceInterface, public Libs::ObservableTrait
 	{
@@ -65,9 +64,6 @@ namespace EmEn::Net
 
 			/** @brief Class identifier. */
 			static constexpr auto ClassId{"Net::ManagerService"};
-
-			/** @brief Observable class unique identifier. */
-			static const size_t ClassUID;
 
 			/** @brief Observable notification codes. */
 			enum NotificationCode
@@ -95,12 +91,25 @@ namespace EmEn::Net
 
 			}
 
+			/**
+			 * @brief Returns the unique identifier for this class [Thread-safe].
+			 * @return size_t
+			 */
+			static
+			size_t
+			getClassUID () noexcept
+			{
+				static const size_t classUID = EmEn::Libs::Hash::FNV1a(ClassId);
+
+				return classUID;
+			}
+
 			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
 			[[nodiscard]]
 			size_t
 			classUID () const noexcept override
 			{
-				return ClassUID;
+				return getClassUID();
 			}
 
 			/** @copydoc EmEn::Libs::ObservableTrait::is() const */
@@ -108,7 +117,7 @@ namespace EmEn::Net
 			bool
 			is (size_t classUID) const noexcept override
 			{
-				return classUID == ClassUID;
+				return classUID == getClassUID();
 			}
 
 			/** @copydoc EmEn::ServiceInterface::usable() */
@@ -116,7 +125,7 @@ namespace EmEn::Net
 			bool
 			usable () const noexcept override
 			{
-				return m_flags[ServiceInitialized];
+				return m_serviceInitialized;
 			}
 
 			/**
@@ -195,25 +204,25 @@ namespace EmEn::Net
 			}
 
 			/**
-			 * @brief Controls download information output from Net::Manager in console.
+			 * @brief Controls download information output from Net::Manager in the console.
 			 * @param state The state of the option.
 			 * @return void
 			 */
 			void
 			showProgressionInConsole (bool state) noexcept
 			{
-				m_flags[ShowProgression] = state;
+				m_showProgression = state;
 			}
 
 			/**
-			 * @brief Returns whether the Net::Manager is printing download information in console.
+			 * @brief Returns whether the Net::Manager is printing download information in the console.
 			 * @return bool
 			 */
 			[[nodiscard]]
 			bool
 			showProgressionInConsole () const noexcept
 			{
-				return m_flags[ShowProgression];
+				return m_showProgression;
 			}
 
 		private:
@@ -259,14 +268,8 @@ namespace EmEn::Net
 			 */
 			bool clearDownloadCache () noexcept;
 
-			/* Flag names. */
-			static constexpr auto ServiceInitialized{0UL};
-			static constexpr auto DownloadEnabled{1UL};
-			static constexpr auto ShowProgression{2UL};
-
 			static constexpr auto DownloadCacheDirectory{"downloads"};
 			static constexpr auto DownloadCacheDBFilename{"downloads_db.json"};
-
 			static constexpr auto FileDataBaseKey{"FileDataBase"};
 			static constexpr auto FileURLKey{"FileURL"};
 			static constexpr auto CacheIdKey{"CacheId"};
@@ -279,15 +282,8 @@ namespace EmEn::Net
 			std::map< std::string, CachedDownloadItem > m_downloadCache;
 			size_t m_nextCacheItemId{1};
 			std::vector< DownloadItem > m_downloadItems;
-			std::array< bool, 8 > m_flags{
-				false/*ServiceInitialized*/,
-				false/*DownloadEnabled*/,
-				false/*ShowProgression*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/
-			};
+			bool m_serviceInitialized{false};
+			bool m_downloadEnabled{false};
+			bool m_showProgression{false};
 	};
 }

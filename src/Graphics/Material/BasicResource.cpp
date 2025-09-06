@@ -38,26 +38,16 @@
 #include "Helpers.hpp"
 #include "Tracer.hpp"
 
-/* Defining the resource manager class id. */
-template<>
-const char * const EmEn::Resources::Container< EmEn::Graphics::Material::BasicResource >::ClassId{"BasicResourceContainer"};
-
-/* Defining the resource manager ClassUID. */
-template<>
-const size_t EmEn::Resources::Container< EmEn::Graphics::Material::BasicResource >::ClassUID{getClassUID(ClassId)};
-
 namespace EmEn::Graphics::Material
 {
-	using namespace EmEn::Libs;
-	using namespace EmEn::Libs::Math;
-	using namespace EmEn::Saphir;
-	using namespace EmEn::Saphir::Keys;
-	using namespace EmEn::Vulkan;
-
-	const size_t BasicResource::ClassUID{getClassUID(ClassId)};
+	using namespace Libs;
+	using namespace Libs::Math;
+	using namespace Saphir;
+	using namespace Saphir::Keys;
+	using namespace Vulkan;
 
 	bool
-	BasicResource::load () noexcept
+	BasicResource::load (Resources::ServiceProvider & /*serviceProvider*/) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
@@ -73,7 +63,7 @@ namespace EmEn::Graphics::Material
 	}
 
 	bool
-	BasicResource::load (const Json::Value & data) noexcept
+	BasicResource::load (Resources::ServiceProvider & serviceProvider, const Json::Value & data) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
@@ -111,7 +101,7 @@ namespace EmEn::Graphics::Material
 			case FillingType::Cubemap :
 			case FillingType::AnimatedTexture :
 			{
-				m_textureComponent = std::make_unique< Component::Texture >(Uniform::PrimarySampler, SurfaceColor, componentData, fillingType, *Resources::Manager::instance());
+				m_textureComponent = std::make_unique< Component::Texture >(Uniform::PrimarySampler, SurfaceColor, componentData, fillingType, serviceProvider);
 
 				const auto textureResource = m_textureComponent->textureResource();
 

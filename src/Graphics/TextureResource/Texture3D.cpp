@@ -33,20 +33,10 @@
 #include "Vulkan/Sampler.hpp"
 #include "Graphics/Renderer.hpp"
 
-/* Defining the resource manager class id. */
-template<>
-const char * const EmEn::Resources::Container< EmEn::Graphics::TextureResource::Texture3D >::ClassId{"Texture3DContainer"};
-
-/* Defining the resource manager ClassUID. */
-template<>
-const size_t EmEn::Resources::Container< EmEn::Graphics::TextureResource::Texture3D >::ClassUID{getClassUID(ClassId)};
-
 namespace EmEn::Graphics::TextureResource
 {
 	using namespace EmEn::Libs;
 	using namespace EmEn::Vulkan;
-
-	const size_t Texture3D::ClassUID{getClassUID(ClassId)};
 
 	bool
 	Texture3D::isCreated () const noexcept
@@ -116,7 +106,7 @@ namespace EmEn::Graphics::TextureResource
 	}
 
 	bool
-	Texture3D::load () noexcept
+	Texture3D::load (Resources::ServiceProvider & /*serviceProvider*/) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
@@ -147,13 +137,16 @@ namespace EmEn::Graphics::TextureResource
 	}
 
 	bool
-	Texture3D::load (const std::filesystem::path & filepath) noexcept
+	Texture3D::load (Resources::ServiceProvider & serviceProvider, const std::filesystem::path & filepath) noexcept
 	{
-		return this->load(Resources::Manager::instance()->container< ImageResource >()->getResource(getResourceNameFromFilepath(filepath, "Images"), true));
+		return this->load(serviceProvider.container< ImageResource >()->getResource(
+			ResourceTrait::getResourceNameFromFilepath(filepath, "Images"),
+			true)
+		);
 	}
 
 	bool
-	Texture3D::load (const Json::Value & /*data*/) noexcept
+	Texture3D::load (Resources::ServiceProvider & /*serviceProvider*/, const Json::Value & /*data*/) noexcept
 	{
 		/* NOTE: This resource has no local store,
 		 * so this method won't be called from a resource container! */

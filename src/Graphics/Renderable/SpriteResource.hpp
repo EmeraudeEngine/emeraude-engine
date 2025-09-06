@@ -39,7 +39,8 @@
 namespace EmEn::Graphics::Renderable
 {
 	/**
-	 * @brief This class provides a high level object to describe a sprite (2D) in the 3D world.
+	 * @brief This class provides a high-level object to describe a sprite (2D) in the 3D world.
+	 * @note The animation is limited to 120 frames.
 	 * @extends EmEn::Graphics::Renderable::Interface Adds the ability to be rendered in the 3D world.
 	 */
 	class SpriteResource final : public Interface
@@ -52,9 +53,6 @@ namespace EmEn::Graphics::Renderable
 
 			/** @brief Class identifier. */
 			static constexpr auto ClassId{"SpriteResource"};
-
-			/** @brief Observable class unique identifier. */
-			static const size_t ClassUID;
 
 			/** @brief Defines the resource dependency complexity. */
 			static constexpr auto Complexity{Resources::DepComplexity::Complex};
@@ -71,12 +69,25 @@ namespace EmEn::Graphics::Renderable
 
 			}
 
+			/**
+			 * @brief Returns the unique identifier for this class [Thread-safe].
+			 * @return size_t
+			 */
+			static
+			size_t
+			getClassUID () noexcept
+			{
+				static const size_t classUID = EmEn::Libs::Hash::FNV1a(ClassId);
+
+				return classUID;
+			}
+
 			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
 			[[nodiscard]]
 			size_t
 			classUID () const noexcept override
 			{
-				return ClassUID;
+				return getClassUID();
 			}
 
 			/** @copydoc EmEn::Libs::ObservableTrait::is() const */
@@ -84,7 +95,7 @@ namespace EmEn::Graphics::Renderable
 			bool
 			is (size_t classUID) const noexcept override
 			{
-				return classUID == ClassUID;
+				return classUID == getClassUID();
 			}
 
 			/** @copydoc EmEn::Graphics::Renderable::Interface::layerCount() const */
@@ -166,11 +177,11 @@ namespace EmEn::Graphics::Renderable
 				return ClassId;
 			}
 
-			/** @copydoc EmEn::Resources::ResourceTrait::load() */
-			bool load () noexcept override;
+			/** @copydoc EmEn::Resources::ResourceTrait::load(Resources::ServiceProvider &) */
+			bool load (Resources::ServiceProvider & serviceProvider) noexcept override;
 
-			/** @copydoc EmEn::Resources::ResourceTrait::load(const Json::Value &) */
-			bool load (const Json::Value & data) noexcept override;
+			/** @copydoc EmEn::Resources::ResourceTrait::load(Resources::Manager &, const Json::Value &) */
+			bool load (Resources::ServiceProvider & serviceProvider, const Json::Value & data) noexcept override;
 
 			/** @copydoc EmEn::Resources::ResourceTrait::memoryOccupied() const noexcept */
 			[[nodiscard]]
@@ -182,13 +193,14 @@ namespace EmEn::Graphics::Renderable
 
 			/**
 			 * @brief Loads a sprite resource from a material.
+			 * @param serviceProvider A reference to the resource manager through a service provider.
 			 * @param material A reference to a material resource smart pointer.
 			 * @param centerAtBottom Set the sprite center to the bottom of the quad. Default false.
 			 * @param flip Flip the sprite picture. Default false.
-			 * @param rasterizationOptions A reference to a rasterization options. Defaults.
+			 * @param rasterizationOptions A reference to rasterization options. Defaults.
 			 * @return bool
 			 */
-			bool load (const std::shared_ptr< Material::Interface > & material, bool centerAtBottom = false, bool flip = false, const RasterizationOptions & rasterizationOptions = {}) noexcept;
+			bool load (Resources::ServiceProvider & serviceProvider, const std::shared_ptr< Material::Interface > & material, bool centerAtBottom = false, bool flip = false, const RasterizationOptions & rasterizationOptions = {}) noexcept;
 
 			/**
 			 * @brief Sets the site of the sprite.
@@ -212,7 +224,7 @@ namespace EmEn::Graphics::Renderable
 			}
 
 			/**
-			 * @brief Returns the number of frame from the material.
+			 * @brief Returns the number of frames from the material.
 			 * @note Will return 1 if no material is associated.
 			 * @return size_t
 			 */
@@ -258,12 +270,13 @@ namespace EmEn::Graphics::Renderable
 			/**
 			 * @brief Prepares the geometry resource for the sprite.
 			 * @note This geometry resource will be shared between all sprites.
+			 * @param serviceProvider A reference to the resource manager through a service provider.
 			 * @param isAnimated Set texture coordinates to 3D if so.
-			 * @param centerAtBottom Set the geometry center at bottom for specific sprites.
+			 * @param centerAtBottom Set the geometry center at the bottom for specific sprites.
 			 * @param flip Flip the UV on X axis.
 			 * @return bool
 			 */
-			bool prepareGeometry (bool isAnimated, bool centerAtBottom, bool flip) noexcept;
+			bool prepareGeometry (Resources::ServiceProvider & serviceProvider, bool isAnimated, bool centerAtBottom, bool flip) noexcept;
 
 			/**
 			 * @brief Attaches the material resource.
@@ -277,8 +290,7 @@ namespace EmEn::Graphics::Renderable
 			static constexpr auto JKCenterAtBottomKey{"CenterAtBottom"};
 			static constexpr auto JKFlipKey{"Flip"};
 
-			static constexpr uint32_t MaxFrames{120};
-			static std::mutex s_lockGeometryLoading;
+			static inline std::mutex s_lockGeometryLoading;
 
 			std::shared_ptr< Geometry::Interface > m_geometry;
 			std::shared_ptr< Material::Interface > m_material;

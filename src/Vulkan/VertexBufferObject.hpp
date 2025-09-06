@@ -28,18 +28,17 @@
 
 /* STL inclusions. */
 #include <cstdint>
-#include <vector>
 
 /* Local inclusions for inheritances. */
-#include "AbstractDeviceBuffer.hpp"
+#include "Buffer.hpp"
 
 namespace EmEn::Vulkan
 {
 	/**
 	 * @brief Defines a convenient way to build a vertex buffer object (VBO).
-	 * @extends EmEn::Vulkan::AbstractDeviceBuffer This is a device-side buffer.
+	 * @extends EmEn::Vulkan::Buffer This is a buffer.
 	 */
-	class VertexBufferObject final : public AbstractDeviceBuffer
+	class VertexBufferObject final : public Buffer
 	{
 		public:
 
@@ -50,11 +49,18 @@ namespace EmEn::Vulkan
 			 * @brief Constructs a vertex buffer object (VBO).
 			 * @warning The buffer assumes we will only use float value.
 			 * @param device A reference to the device smart pointer.
-			 * @param vertexCount The number of vertices that buffer will hold.
+			 * @param vertexCount The number of vertices that the buffer will hold.
 			 * @param vertexElementCount The number of sub-elements that composes one vertex.
+			 * @param hostVisible Defines if the VBO must be host visible.
 			 */
-			VertexBufferObject (const std::shared_ptr< Device > & device, uint32_t vertexCount, uint32_t vertexElementCount) noexcept
-				: AbstractDeviceBuffer{device, 0, vertexCount * vertexElementCount * sizeof(float), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT},
+			VertexBufferObject (const std::shared_ptr< Device > & device, uint32_t vertexCount, uint32_t vertexElementCount, bool hostVisible) noexcept
+				: Buffer{
+					device,
+					0,
+					vertexCount * vertexElementCount * sizeof(float),
+					VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+					static_cast< uint32_t >(hostVisible ? VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT : VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
+				},
 				m_vertexCount{vertexCount},
 				m_vertexElementCount{vertexElementCount}
 			{
@@ -62,7 +68,7 @@ namespace EmEn::Vulkan
 			}
 
 			/**
-			 * @brief Returns the number of vertices in this buffer.
+			 * @brief Returns the number of vertices in the buffer.
 			 * @return uint32_t
 			 */
 			[[nodiscard]]
@@ -73,7 +79,7 @@ namespace EmEn::Vulkan
 			}
 
 			/**
-			 * @brief Returns the number of sub-elements of one vertex in this buffer.
+			 * @brief Returns the number of elements (floats) composing one complete vertex.
 			 * @return uint32_t
 			 */
 			[[nodiscard]]
@@ -84,7 +90,7 @@ namespace EmEn::Vulkan
 			}
 
 			/**
-			 * @brief Returns the total number of elements in this buffer.
+			 * @brief Returns the number of elements (floats) in the buffer.
 			 * @note Same as VertexBufferObject::vertexCount() * VertexBufferObject::vertexElementCount().
 			 * @return uint32_t
 			 */
@@ -94,24 +100,6 @@ namespace EmEn::Vulkan
 			{
 				return m_vertexCount * m_vertexElementCount;
 			}
-
-			/**
-			 * @brief Creates a vertex buffer object with initial data.
-			 * @param transferManager A reference to a transfer manager.
-			 * @param data A reference to a vector.
-			 * @return bool
-			 */
-			[[nodiscard]]
-			bool create (TransferManager & transferManager, const std::vector< float > & data) noexcept;
-
-			/**
-			 * @brief Updates the vertex buffer object with data.
-			 * @param transferManager  A reference to a transfer manager.
-			 * @param data A reference to a vector.
-			 * @return bool
-			 */
-			[[nodiscard]]
-			bool writeData (TransferManager & transferManager, const std::vector< float > & data) noexcept;
 
 		private:
 

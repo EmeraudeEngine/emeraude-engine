@@ -19,6 +19,32 @@ namespace EmEn::Graphics::RenderableInstance
 		public:
 
 			/**
+			 * @brief Copy constructor.
+			 * @param copy A reference to the copied instance.
+			 */
+			RenderTargetProgramsInterface (const RenderTargetProgramsInterface & copy) noexcept = delete;
+
+			/**
+			 * @brief Move constructor.
+			 * @param copy A reference to the copied instance.
+			 */
+			RenderTargetProgramsInterface (RenderTargetProgramsInterface && copy) noexcept = delete;
+
+			/**
+			 * @brief Copy assignment.
+			 * @param copy A reference to the copied instance.
+			 * @return RenderTargetProgramsInterface &
+			 */
+			RenderTargetProgramsInterface & operator= (const RenderTargetProgramsInterface & copy) noexcept = delete;
+
+			/**
+			 * @brief Move assignment.
+			 * @param copy A reference to the copied instance.
+			 * @return Abstract &
+			 */
+			RenderTargetProgramsInterface & operator= (RenderTargetProgramsInterface && copy) noexcept = delete;
+
+			/**
 			 * @brief Destructs a render target program interface.
 			 */
 			virtual ~RenderTargetProgramsInterface () = default;
@@ -62,17 +88,17 @@ namespace EmEn::Graphics::RenderableInstance
 			virtual bool isReadyToRender () const noexcept = 0;
 
 			/**
-			 * @return Sets these render target programs ready to cast shadows.
+			 * @return Sets these render target programs ready for shadow casting.
 			 * @return void
 			 */
-			virtual void setReadyToCastShadows () noexcept = 0;
+			virtual void setReadyForShadowCasting () noexcept = 0;
 
 			/**
-			 * @brief Returns whether this render target to program is ready to cast shadows.
+			 * @brief Returns whether this render target to the program is ready for shadow casting.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			virtual bool isReadyToCastShadows () const noexcept = 0;
+			virtual bool isReadyForShadowCasting () const noexcept = 0;
 
 			/**
 			 * @breif Returns the number of layers to render the renderable instance.
@@ -105,6 +131,14 @@ namespace EmEn::Graphics::RenderableInstance
 			 */
 			[[nodiscard]]
 			virtual std::shared_ptr< Saphir::Program > shadowCastingProgram (uint32_t layer) const noexcept = 0;
+
+			/**
+			 * @brief Refreshes all programs for this renderable instance.
+			 * @param renderTarget A reference to the render target smart pointer.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			virtual bool refreshGraphicsPipelines (const std::shared_ptr< RenderTarget::Abstract > & renderTarget) const noexcept = 0;
 
 		protected:
 

@@ -38,9 +38,7 @@
 
 namespace EmEn::Audio
 {
-	using namespace EmEn::Libs;
-
-	const size_t TrackMixer::ClassUID{getClassUID(ClassId)};
+	using namespace Libs;
 
 	bool
 	TrackMixer::enableSourceEvents () noexcept
@@ -60,7 +58,7 @@ namespace EmEn::Audio
 			//AL_EVENT_TYPE_DISCONNECTED_SOFT
 		};
 
-		OpenAL::alEventControlSOFT(events.size(), events.data(), AL_TRUE);
+		OpenAL::alEventControlSOFT(static_cast< ALsizei >(events.size()), events.data(), AL_TRUE);
 
 		return true;
 	}
@@ -104,7 +102,7 @@ namespace EmEn::Audio
 		}
 
 		/* Sets master volume. */
-		this->setVolume(m_primaryServices.settings().get< float >(AudioMusicVolumeKey, DefaultAudioMusicVolume));
+		this->setVolume(m_primaryServices.settings().getOrSetDefault< float >(AudioMusicVolumeKey, DefaultAudioMusicVolume));
 
 		/* NOTE: Allocating track sources (to volume 0) */
 		m_trackA = std::make_unique< Source >();
@@ -475,7 +473,7 @@ namespace EmEn::Audio
 	bool
 	TrackMixer::onNotification (const ObservableTrait * observable, int notificationCode, const std::any & /*data*/) noexcept
 	{
-		if ( observable->is(MusicResource::ClassUID) )
+		if ( observable->is(MusicResource::getClassUID()) )
 		{
 			if ( m_loadingTrack != nullptr )
 			{
@@ -515,7 +513,7 @@ namespace EmEn::Audio
 
 		/* NOTE: Don't know what it is, goodbye! */
 		TraceDebug{ClassId} <<
-			"Received an unhandled notification (Code:" << notificationCode << ") from observable '" << whoIs(observable->classUID()) << "' (UID:" << observable->classUID() << ")  ! "
+			"Received an unhandled notification (Code:" << notificationCode << ") from observable (UID:" << observable->classUID() << ")  ! "
 			"Forgetting it ...";
 
 		return false;

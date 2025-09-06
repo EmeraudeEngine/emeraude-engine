@@ -77,9 +77,6 @@ namespace EmEn::Audio
 			/** @brief Class identifier. */
 			static constexpr auto ClassId{"AudioManagerService"};
 
-			/** @brief Observable class unique identifier. */
-			static const size_t ClassUID;
-
 			/** @brief Observable notification codes. */
 			enum NotificationCode
 			{
@@ -100,22 +97,25 @@ namespace EmEn::Audio
 				m_primaryServices{primaryServices},
 				m_resourceManager{resourceManager}
 			{
-				if ( s_instance != nullptr )
-				{
-					std::cerr << __PRETTY_FUNCTION__ << ", constructor called twice !" "\n";
 
-					std::terminate();
-				}
-
-				s_instance = this;
 			}
 
 			/**
 			 * @brief Destructs the audio manager.
 			 */
-			~Manager () override
+			~Manager () override = default;
+
+			/**
+			 * @brief Returns the unique identifier for this class [Thread-safe].
+			 * @return size_t
+			 */
+			static
+			size_t
+			getClassUID () noexcept
 			{
-				s_instance = nullptr;
+				static const size_t classUID = EmEn::Libs::Hash::FNV1a(ClassId);
+
+				return classUID;
 			}
 
 			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
@@ -123,7 +123,7 @@ namespace EmEn::Audio
 			size_t
 			classUID () const noexcept override
 			{
-				return ClassUID;
+				return getClassUID();
 			}
 
 			/** @copydoc EmEn::Libs::ObservableTrait::is() const */
@@ -131,7 +131,7 @@ namespace EmEn::Audio
 			bool
 			is (size_t classUID) const noexcept override
 			{
-				return classUID == ClassUID;
+				return classUID == getClassUID();
 			}
 
 			/** @copydoc EmEn::ServiceInterface::usable() */
@@ -194,17 +194,6 @@ namespace EmEn::Audio
 			void enableAudio (bool state) noexcept;
 
 			/**
-			 * @brief Returns the main state of the audio manager.
-			 * @return bool
-			 */
-			[[nodiscard]]
-			bool
-			isAudioEnabled () const noexcept
-			{
-				return m_audioEnabled;
-			}
-
-			/**
 			 * @brief Returns a list a available output audio devices.
 			 * @return bool
 			 */
@@ -250,39 +239,17 @@ namespace EmEn::Audio
 			std::string getAPIInformation () const noexcept;
 
 			/**
-			 * @brief Returns the frequency playback.
-			 * @return Frequency
-			 */
-			[[nodiscard]]
-			Libs::WaveFactory::Frequency
-			frequencyPlayback () const noexcept
-			{
-				return m_playbackFrequency;
-			}
-
-			/**
-			 * @brief Returns the music chunk size for streaming.
-			 * @return size_t
-			 */
-			[[nodiscard]]
-			size_t
-			musicChunkSize () const noexcept
-			{
-				return m_musicChunkSize;
-			}
-
-			/**
-			 * @brief Sets the master volume.
+			 * @brief Sets the main level.
 			 * @param gain The gain from 0.0 to 1.0.
 			 */
-			void setMasterVolume (float gain) noexcept;
+			void setMainLevel (float gain) noexcept;
 
 			/**
-			 * @brief Returns the master volume.
+			 * @brief Returns the  main level.
 			 * @return float
 			 */
 			[[nodiscard]]
-			float masterVolume () noexcept;
+			float mainLevel () const noexcept;
 
 			/**
 			 * @brief Changes the sound properties.
@@ -355,25 +322,64 @@ namespace EmEn::Audio
 			[[nodiscard]]
 			SourceRequest requestSource () noexcept;
 
-			[[nodiscard]]
-			static
-			bool
-			audioDisabled () noexcept
-			{
-				return s_audioDisabled;
-			}
-
 			/**
-			 * @brief Returns the instance of the audio manager.
-			 * @todo This method must be removed!
-			 * @return Manager *
+			 * @brief Returns the playback frequency.
+			 * @return Frequency
 			 */
 			[[nodiscard]]
 			static
-			Manager *
-			instance () noexcept
+			Libs::WaveFactory::Frequency
+			frequencyPlayback () noexcept
 			{
-				return s_instance; // FIXME: Remove this
+				return s_playbackFrequency;
+			}
+
+			/**
+			 * @brief Returns the record frequency.
+			 * @return Frequency
+			 */
+			[[nodiscard]]
+			static
+			Libs::WaveFactory::Frequency
+			recordFrequency () noexcept
+			{
+				return s_recordFrequency;
+			}
+
+			/**
+			 * @brief Returns the music chunk size for streaming.
+			 * @return size_t
+			 */
+			[[nodiscard]]
+			static
+			size_t
+			musicChunkSize () noexcept
+			{
+				return s_musicChunkSize;
+			}
+
+			/**
+			 * @brief Returns whether the audio layer is disabled.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			static
+			bool
+			isAudioSystemAvailable () noexcept
+			{
+				return s_audioSystemAvailable;
+			}
+
+			/**
+			 * @brief Returns the main state of the audio manager.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			static
+			bool
+			isAudioEnabled () noexcept
+			{
+				return s_audioEnabled;
 			}
 
 		private:
@@ -472,14 +478,16 @@ namespace EmEn::Audio
 			 */
 			bool saveContextAttributes () noexcept;
 
-			/* Flag names. */
-			static constexpr auto ServiceInitialized{0UL};
-			static constexpr auto ShowInformation{1UL};
-			static constexpr auto AudioDisabledAtStartup{2UL};
-			static constexpr auto Enabled{3UL};
+			static inline Libs::WaveFactory::Frequency s_playbackFrequency{Libs::WaveFactory::Frequency::PCM48000Hz};
+			static inline Libs::WaveFactory::Frequency s_recordFrequency{Libs::WaveFactory::Frequency::PCM48000Hz};
+			static inline size_t s_musicChunkSize{DefaultAudioMusicChunkSize};
 
-			static Manager * s_instance;
-			static bool s_audioDisabled;
+			/** @brief No audio device found to play sound. */
+			static inline bool s_audioSystemAvailable{false};
+			/** @brief No audio capture device found to record sound. */
+			static inline bool s_audioCaptureAvailable{false};
+			/** @brief Dynamic switch for audio playback. Even if the audio system is available. */
+			static inline bool s_audioEnabled{false};
 
 			PrimaryServices & m_primaryServices;
 			Resources::Manager & m_resourceManager;
@@ -497,15 +505,8 @@ namespace EmEn::Audio
 			std::vector< std::shared_ptr< Source > > m_allSources;
 			std::vector< Source * > m_availableSources;
 			mutable std::mutex m_sourcePoolMutex;
-			Libs::WaveFactory::Frequency m_playbackFrequency{Libs::WaveFactory::Frequency::PCM48000Hz};
-			Libs::WaveFactory::Frequency m_recordFrequency{Libs::WaveFactory::Frequency::PCM48000Hz};
-			size_t m_musicChunkSize{DefaultAudioMusicChunkSize};
 			bool m_serviceInitialized{false};
 			bool m_showInformation{false};
-			bool m_audioSystemAvailable{false}; /* No audio device found to play sound. */
-			bool m_audioCaptureAvailable{false}; /* No audio capture device found to record sound. */
-			bool m_audioEnabled{false}; /* Dynamic switch for audio playback. Even if the audio system is available. */
 			bool m_usingAdvancedEnumeration{false};
-			bool m_isRecording{false};
 	};
 }

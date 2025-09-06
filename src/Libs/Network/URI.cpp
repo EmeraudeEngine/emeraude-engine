@@ -26,10 +26,8 @@
 
 #include "URI.hpp"
 
-/* Emeraude-Engine configuration. */
-#include "emeraude_config.hpp"
-
 /* STL inclusions. */
+#include <iostream>
 #include <sstream>
 
 /* Local inclusions. */
@@ -37,25 +35,6 @@
 
 namespace EmEn::Libs::Network
 {
-	URI::URI (const std::string & rawString) noexcept
-	{
-		if ( !this->parseRawString(rawString) )
-		{
-			std::cerr << __PRETTY_FUNCTION__ << ", empty string !" "\n";
-		}
-	}
-
-	URI &
-	URI::operator= (const std::string & rawString) noexcept
-	{
-		if ( !this->parseRawString(rawString) )
-		{
-			std::cerr << __PRETTY_FUNCTION__ << ", empty string !" "\n";
-		}
-
-		return *this;
-	}
-
 	bool
 	URI::parseRawString (std::string rawString) noexcept
 	{
@@ -78,7 +57,7 @@ namespace EmEn::Libs::Network
 			return false;
 		}
 
-		/* NOTE: Pre-check for simple path. */
+		/* NOTE: Pre-check for a simple path. */
 		if ( this->checkSimplePath(rawString) )
 		{
 			return false;
@@ -148,7 +127,7 @@ namespace EmEn::Libs::Network
 
 			if ( chunks.size() > 2 )
 			{
-				std::cerr << __PRETTY_FUNCTION__ << ", multiple '#' char found in the URL !" "\n";
+				std::cerr << "URI::extractFragment(), multiple '#' char found in the URL !" "\n";
 			}
 		}
 
@@ -166,7 +145,7 @@ namespace EmEn::Libs::Network
 
 			if ( chunks.size() > 2 )
 			{
-				std::cerr << __PRETTY_FUNCTION__ << ", multiple '?' char found in the URL !" "\n";
+				std::cerr << "URI::extractQuery(), multiple '?' char found in the URL !" "\n";
 			}
 		}
 
@@ -176,7 +155,7 @@ namespace EmEn::Libs::Network
 	std::string
 	URI::extractURIDomain (const std::string & string) noexcept
 	{
-		std::string tmpBase{};
+		std::string tmpBase;
 
 		for ( const auto & base : URIDomain::Bases )
 		{
@@ -211,7 +190,7 @@ namespace EmEn::Libs::Network
 	std::string
 	URI::resource () const noexcept
 	{
-		std::stringstream string{};
+		std::stringstream string;
 
 		if ( !m_path.empty() )
 		{
@@ -259,15 +238,5 @@ namespace EmEn::Libs::Network
 		}
 
 		return out;
-	}
-
-	std::string
-	to_string (const URI & obj) noexcept
-	{
-		std::stringstream output;
-
-		output << obj;
-
-		return output.str();
 	}
 }

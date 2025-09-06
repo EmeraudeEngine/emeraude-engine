@@ -140,7 +140,7 @@ namespace EmEn::Saphir
 	}
 
 	std::string
-	LightGenerator::Variable (const char * componentName) noexcept
+	LightGenerator::variable (const char * componentName) noexcept
 	{
 		std::stringstream output;
 		output << ShaderVariable::Light << '.' << componentName;

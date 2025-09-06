@@ -35,7 +35,7 @@ There are other submodules compiled directly with the final binary :
    - "Microsoft Windows 11" using "MSVC 19.43.34812.0" compiler ("Visual Studio 2022 Community Edition")
  - CMake 3.25.1+ to generate the project
  - Python 3
- - Vulkan SDK 1.3.296.0 from https://vulkan.lunarg.com/sdk/home
+ - Vulkan SDK 1.4.309.0 from https://vulkan.lunarg.com/sdk/home
 
 Note: Further information will come here to complete dependent pieces of software and libraries installation. 
 But this shouldn't be complicated to resolve problems described by CMake logs.

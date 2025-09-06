@@ -66,7 +66,7 @@ namespace EmEn::Physics
 				return false;
 			}
 
-			TraceDebug{ClassId} << "Sphere (" << movableEntityB.name() << ") to sphere (" << movableEntityA.name() << ") collision !\nMTV : " << minimalTranslationVector;
+			//TraceDebug{ClassId} << "Sphere (" << movableEntityB.name() << ") to sphere (" << movableEntityA.name() << ") collision !\nMTV : " << minimalTranslationVector;
 
 			movableEntityA.move(-minimalTranslationVector, TransformSpace::World);
 		}
@@ -77,7 +77,7 @@ namespace EmEn::Physics
 				return false;
 			}
 
-			TraceDebug{ClassId} << "Box (" << movableEntityB.name() << ") to box (" << movableEntityA.name() << ") collision !\nMTV : " << minimalTranslationVector;
+			//TraceDebug{ClassId} << "Box (" << movableEntityB.name() << ") to box (" << movableEntityA.name() << ") collision !\nMTV : " << minimalTranslationVector;
 		}
 
 		/* NOTE: Collision mid-point must be done after the move back! */

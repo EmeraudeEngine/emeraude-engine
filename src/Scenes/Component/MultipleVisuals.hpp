@@ -38,6 +38,7 @@
 
 /* Local inclusions for usages. */
 #include "Graphics/RenderableInstance/Multiple.hpp"
+#include "Graphics/Renderer.hpp"
 
 namespace EmEn::Scenes::Component
 {
@@ -45,7 +46,7 @@ namespace EmEn::Scenes::Component
 	 * @brief Defines a renderable instance suitable for the scene node tree.
 	 * @note [OBS][SHARED-OBSERVER]
 	 * @extends EmEn::Scenes::Component::Abstract The base class for each entity component.
-	 * @extends EmEn::Libs::ObserverTrait This class must dispatch modifications from renderable instance to the entity.
+	 * @extends EmEn::Libs::ObserverTrait This class must dispatch modifications from a renderable instance to the entity.
 	 */
 	class MultipleVisuals final : public Abstract, public Libs::ObserverTrait
 	{
@@ -63,10 +64,11 @@ namespace EmEn::Scenes::Component
 			 */
 			MultipleVisuals (std::string name, const AbstractEntity & parentEntity, const std::shared_ptr< Graphics::Renderable::Interface > & renderable, std::vector< Libs::Math::CartesianFrame< float > > coordinates) noexcept
 				: Abstract{std::move(name), parentEntity},
-				m_renderableInstance{std::make_shared< Graphics::RenderableInstance::Multiple >(renderable, coordinates, renderable->isSprite() ? Graphics::RenderableInstance::FacingCamera : Graphics::RenderableInstance::None)},
+				m_renderableInterface{renderable},
+				m_renderableInstance{std::make_shared< Graphics::RenderableInstance::Multiple >(s_graphicsRenderer->device(), renderable, coordinates, renderable->isSprite() ? Graphics::RenderableInstance::FacingCamera : Graphics::RenderableInstance::None)},
 				m_coordinates{std::move(coordinates)}
 			{
-				this->observe(m_renderableInstance.get());
+				this->observe(renderable.get());
 			}
 
 			/** @copydoc EmEn::Scenes::Component::Abstract::getRenderableInstance() const */
@@ -132,6 +134,7 @@ namespace EmEn::Scenes::Component
 			[[nodiscard]]
 			bool onNotification (const ObservableTrait * observable, int notificationCode, const std::any & data) noexcept override;
 
+			std::weak_ptr< Graphics::Renderable::Interface > m_renderableInterface;
 			std::shared_ptr< Graphics::RenderableInstance::Multiple > m_renderableInstance;
 			std::vector< Libs::Math::CartesianFrame< float > > m_coordinates;
 	};

@@ -1,47 +1,35 @@
-if ( NOT FREETYPE_ENABLED )
-	if ( EMERAUDE_USE_SYSTEM_LIBS )
-		message("Enabling FreeType library from system ...")
+if ( NOT TARGET_BINARY_FOR_SETUP )
+	message(FATAL_ERROR "TARGET_BINARY_FOR_SETUP is not SET !")
+endif ()
 
-		# NOTE: https://cmake.org/cmake/help/latest/module/FindFreetype.html
-		find_package(Freetype REQUIRED)
+if ( EMERAUDE_USE_SYSTEM_LIBS )
+	message("Enabling FreeType library from system ...")
 
-		target_include_directories(${PROJECT_NAME} PUBLIC ${FREETYPE_INCLUDE_DIRS})
-		target_link_libraries(${PROJECT_NAME} PRIVATE Freetype::Freetype)
-	else ()
+	# NOTE: https://cmake.org/cmake/help/latest/module/FindFreetype.html
+	find_package(Freetype REQUIRED)
 
-		message("Enabling FreeType library from local source ...")
+	target_include_directories(${TARGET_BINARY_FOR_SETUP} PUBLIC ${FREETYPE_INCLUDE_DIRS})
 
-		target_include_directories(${PROJECT_NAME} PUBLIC ${LOCAL_LIB_DIR}/include/freetype2)
-
-		if ( MSVC )
-			if ( CMAKE_BUILD_TYPE MATCHES Debug )
-				target_link_libraries(${PROJECT_NAME} PRIVATE ${LOCAL_LIB_DIR}/lib/freetyped.lib)
-			else ()
-				target_link_libraries(${PROJECT_NAME} PRIVATE ${LOCAL_LIB_DIR}/lib/freetype.lib)
-			endif ()
-		else ()
-			if ( CMAKE_BUILD_TYPE MATCHES Debug )
-				target_link_libraries(${PROJECT_NAME} PRIVATE ${LOCAL_LIB_DIR}/lib/libfreetyped.a)
-			else ()
-				target_link_libraries(${PROJECT_NAME} PRIVATE ${LOCAL_LIB_DIR}/lib/libfreetype.a)
-			endif ()
-
-
-		endif ()
-	endif ()
-
-	set(FREETYPE_ENABLED On)
-
-	if ( UNIX AND NOT APPLE )
-		message("Enabling Fontconfig library from system ...")
-
-		find_package(Fontconfig REQUIRED)
-
-		target_include_directories(${PROJECT_NAME} PRIVATE ${Fontconfig_INCLUDE_DIRS})
-		target_link_libraries(${PROJECT_NAME} PRIVATE ${Fontconfig_LIBRARIES})
-
-		set(FONTCONFIG_ENABLED On)
-	endif ()
+	target_link_libraries(${TARGET_BINARY_FOR_SETUP} PRIVATE Freetype::Freetype)
 else ()
-	message("The FreeType library is already enabled.")
+
+	message("Enabling FreeType library from local source ...")
+
+	target_include_directories(${TARGET_BINARY_FOR_SETUP} PUBLIC ${LOCAL_LIB_DIR}/include/freetype2)
+
+	if ( CMAKE_BUILD_TYPE MATCHES Debug )
+		target_link_libraries(${TARGET_BINARY_FOR_SETUP} PRIVATE freetyped)
+	else ()
+		target_link_libraries(${TARGET_BINARY_FOR_SETUP} PRIVATE freetype)
+	endif ()
+endif ()
+
+if ( UNIX AND NOT APPLE )
+	message("Enabling Fontconfig library from system ...")
+
+	find_package(Fontconfig REQUIRED)
+
+	target_include_directories(${TARGET_BINARY_FOR_SETUP} PUBLIC ${Fontconfig_INCLUDE_DIRS})
+
+	target_link_libraries(${TARGET_BINARY_FOR_SETUP} PRIVATE ${Fontconfig_LIBRARIES})
 endif ()

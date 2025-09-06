@@ -36,27 +36,18 @@
 #include "Graphics/Material/Helpers.hpp"
 #include "Resources/Manager.hpp"
 
-/* Defining the resource manager class id. */
-template<>
-const char * const EmEn::Resources::Container< EmEn::Graphics::Renderable::SpriteResource >::ClassId{"SpriteContainer"};
-
-/* Defining the resource manager ClassUID. */
-template<>
-const size_t EmEn::Resources::Container< EmEn::Graphics::Renderable::SpriteResource >::ClassUID{getClassUID(ClassId)};
-
 namespace EmEn::Graphics::Renderable
 {
-	using namespace EmEn::Libs;
-	using namespace EmEn::Libs::Math;
-	using namespace EmEn::Libs::VertexFactory;
+	using namespace Libs;
+	using namespace Libs::Math;
+	using namespace Libs::VertexFactory;
 	using namespace Saphir;
 	using namespace Saphir::Keys;
 
-	const size_t SpriteResource::ClassUID{getClassUID(ClassId)};
-	std::mutex SpriteResource::s_lockGeometryLoading{};
+	constexpr uint32_t MaxFrames{120};
 
 	bool
-	SpriteResource::load () noexcept
+	SpriteResource::load (Resources::ServiceProvider & serviceProvider) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
@@ -65,14 +56,14 @@ namespace EmEn::Graphics::Renderable
 
 		this->setReadyForInstantiation(false);
 
-		if ( !this->prepareGeometry(false, false, false) )
+		if ( !this->prepareGeometry(serviceProvider, false, false, false) )
 		{
 			Tracer::error(ClassId, "Unable to get default Geometry to generate the default Sprite !");
 
 			return this->setLoadSuccess(false);
 		}
 
-		if ( !this->setMaterial(Resources::Manager::instance()->container< Material::BasicResource >()->getDefaultResource()) )
+		if ( !this->setMaterial(serviceProvider.container< Material::BasicResource >()->getDefaultResource()) )
 		{
 			return this->setLoadSuccess(false);
 		}
@@ -81,7 +72,7 @@ namespace EmEn::Graphics::Renderable
 	}
 
 	bool
-	SpriteResource::load (const Json::Value & data) noexcept
+	SpriteResource::load (Resources::ServiceProvider & serviceProvider, const Json::Value & data) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
@@ -90,11 +81,9 @@ namespace EmEn::Graphics::Renderable
 
 		this->setReadyForInstantiation(false);
 
-		auto * manager = Resources::Manager::instance();
-
-		const auto materialResource = manager->container< Material::BasicResource >()->getOrCreateResource(
+		const auto materialResource = serviceProvider.container< Material::BasicResource >()->getOrCreateResource(
 			"SpriteMaterial" + this->name(),
-			[&data, manager] (Material::BasicResource & newMaterial)
+			[&data, &serviceProvider] (Material::BasicResource & newMaterial)
 			{
 				if ( !data.isMember(Material::JKData) || !data[Material::JKData].isObject() )
 				{
@@ -112,7 +101,7 @@ namespace EmEn::Graphics::Renderable
 					{
 						case FillingType::Texture :
 						{
-							const auto textureResource = manager->container< TextureResource::Texture2D >()->getResource(FastJSON::getValue< std::string >(componentData, Material::JKName).value_or(Resources::Default));
+							const auto textureResource = serviceProvider.container< TextureResource::Texture2D >()->getResource(FastJSON::getValue< std::string >(componentData, Material::JKName).value_or(Resources::Default));
 
 							if ( !newMaterial.setTexture(textureResource, true) )
 							{
@@ -123,7 +112,7 @@ namespace EmEn::Graphics::Renderable
 
 						case FillingType::AnimatedTexture :
 						{
-							const auto textureResource = manager->container< TextureResource::AnimatedTexture2D >()->getResource(FastJSON::getValue< std::string >(componentData, Material::JKName).value_or(Resources::Default));
+							const auto textureResource = serviceProvider.container< TextureResource::AnimatedTexture2D >()->getResource(FastJSON::getValue< std::string >(componentData, Material::JKName).value_or(Resources::Default));
 
 							if ( !newMaterial.setTexture(textureResource, true) )
 							{
@@ -180,7 +169,7 @@ namespace EmEn::Graphics::Renderable
 		const auto centerAtBottom = FastJSON::getValue< bool >(data, JKCenterAtBottomKey).value_or(false);
 		const auto flip = FastJSON::getValue< bool >(data, JKFlipKey).value_or(false);
 
-		if ( !this->prepareGeometry(isAnimated, centerAtBottom, flip) )
+		if ( !this->prepareGeometry(serviceProvider, isAnimated, centerAtBottom, flip) )
 		{
 			Tracer::error(ClassId, "Unable to get default Geometry to generate the default Sprite !");
 
@@ -193,14 +182,14 @@ namespace EmEn::Graphics::Renderable
 	}
 
 	bool
-	SpriteResource::load (const std::shared_ptr< Material::Interface > & material, bool centerAtBottom, bool flip, const RasterizationOptions & /*rasterizationOptions*/) noexcept
+	SpriteResource::load (Resources::ServiceProvider & serviceProvider, const std::shared_ptr< Material::Interface > & material, bool centerAtBottom, bool flip, const RasterizationOptions & /*rasterizationOptions*/) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
 			return false;
 		}
 
-		if ( !this->prepareGeometry(material->isAnimated(), centerAtBottom, flip) )
+		if ( !this->prepareGeometry(serviceProvider, material->isAnimated(), centerAtBottom, flip) )
 		{
 			Tracer::error(ClassId, "Unable to get default Geometry to generate the default Sprite !");
 
@@ -221,21 +210,21 @@ namespace EmEn::Graphics::Renderable
 	}
 
 	bool
-	SpriteResource::prepareGeometry (bool isAnimated, bool centerAtBottom, bool flip) noexcept
+	SpriteResource::prepareGeometry (Resources::ServiceProvider & serviceProvider, bool isAnimated, bool centerAtBottom, bool flip) noexcept
 	{
 		const std::lock_guard< std::mutex > lock{s_lockGeometryLoading};
 
 		std::stringstream resourceName;
 		resourceName << "QuadSprite" << isAnimated << centerAtBottom << flip;
 
-		int flags = Geometry::EnableNormal | Geometry::EnablePrimaryTextureCoordinates;
+		uint32_t flags = Geometry::EnableNormal | Geometry::EnablePrimaryTextureCoordinates;
 
 		if ( isAnimated )
 		{
 			flags |= Geometry::Enable3DPrimaryTextureCoordinates;
 		}
 
-		const auto geometryResource = Resources::Manager::instance()->container< Geometry::IndexedVertexResource >()->getOrCreateResource(
+		const auto geometryResource = serviceProvider.container< Geometry::IndexedVertexResource >()->getOrCreateResource(
 			resourceName.str(),
 			[isAnimated, centerAtBottom, flip] (Geometry::IndexedVertexResource & newGeometry)
 			{

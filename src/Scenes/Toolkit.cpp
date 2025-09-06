@@ -26,30 +26,13 @@
 
 #include "Toolkit.hpp"
 
-/* STL inclusions. */
-#include <array>
-#include <cstddef>
-#include <memory>
-#include <string>
-#include <vector>
-
-/* Local inclusions. */
-#include "Libs/Math/Base.hpp"
-#include "Libs/Math/CartesianFrame.hpp"
-#include "Libs/Math/Vector.hpp"
-#include "Libs/BlobTrait.hpp"
-#include "Libs/Utility.hpp"
-#include "Node.hpp"
-#include "Scenes/Scene.hpp"
-#include "StaticEntity.hpp"
-
 namespace EmEn::Scenes
 {
-	using namespace EmEn::Libs;
-	using namespace EmEn::Libs::Math;
-	using namespace EmEn::Libs::PixelFactory;
-	using namespace EmEn::Libs::VertexFactory;
-	using namespace EmEn::Graphics;
+	using namespace Libs;
+	using namespace Libs::Math;
+	using namespace Libs::PixelFactory;
+	using namespace Libs::VertexFactory;
+	using namespace Graphics;
 
 	size_t Toolkit::s_autoEntityCount{0};
 

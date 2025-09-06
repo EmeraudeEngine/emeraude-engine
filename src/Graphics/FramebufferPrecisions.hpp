@@ -50,13 +50,13 @@ namespace EmEn::Graphics
 
 			/**
 			 * @brief Constructs a framebuffer precisions.
-			 * @param redBits A value for red channel bits precision of the color buffer.
-			 * @param greenBits A value for green channel bits precision of the color buffer.
-			 * @param blueBits A value for blue channel bits precision of the color buffer.
-			 * @param alphaBits A value for alpha channel bits precision of the color buffer.
+			 * @param redBits A value for the red channel bits precision of the color buffer.
+			 * @param greenBits A value for the green channel bits precision of the color buffer.
+			 * @param blueBits A value for the blue channel bits precision of the color buffer.
+			 * @param alphaBits A value for the alpha channel bits precision of the color buffer.
 			 * @param depthBits A value for bits precision of the depth buffer.
 			 * @param stencilBits A value for bits precision of the stencil buffer.
-			 * @param samples The number of sampler of the color buffer.
+			 * @param samples The number of samples for the color buffer.
 			 */
 			FramebufferPrecisions (uint32_t redBits, uint32_t greenBits, uint32_t blueBits, uint32_t alphaBits, uint32_t depthBits, uint32_t stencilBits, uint32_t samples) noexcept
 				: m_redBits{redBits},
@@ -76,7 +76,7 @@ namespace EmEn::Graphics
 			 * @param colorBits A value for channel bits precision of the color buffer.
 			 * @param depthBits A value for bits precision of the depth buffer.
 			 * @param stencilBits A value for bits precision of the stencil buffer.
-			 * @param samples The number of sampler of the color buffer.
+			 * @param samples The number of samples for the color buffer.
 			 */
 			FramebufferPrecisions (uint32_t colorCount, uint32_t colorBits, uint32_t depthBits, uint32_t stencilBits, uint32_t samples) noexcept
 				: m_redBits{colorCount >= 1 ? colorBits : 0},

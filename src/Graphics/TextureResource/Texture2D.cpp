@@ -33,20 +33,10 @@
 #include "Vulkan/Sampler.hpp"
 #include "Graphics/Renderer.hpp"
 
-/* Defining the resource manager class id. */
-template<>
-const char * const EmEn::Resources::Container< EmEn::Graphics::TextureResource::Texture2D >::ClassId{"Texture2DContainer"};
-
-/* Defining the resource manager ClassUID. */
-template<>
-const size_t EmEn::Resources::Container< EmEn::Graphics::TextureResource::Texture2D >::ClassUID{getClassUID(ClassId)};
-
 namespace EmEn::Graphics::TextureResource
 {
 	using namespace EmEn::Libs;
 	using namespace EmEn::Vulkan;
-
-	const size_t Texture2D::ClassUID{getClassUID(ClassId)};
 
 	bool
 	Texture2D::isCreated () const noexcept
@@ -81,7 +71,7 @@ namespace EmEn::Graphics::TextureResource
 
 		const auto mipLevels = std::min(
 			Image::getMIPLevels(m_localData->width(), m_localData->height()),
-			settings.get< uint32_t >(GraphicsTextureMipMappingLevelsKey, DefaultGraphicsTextureMipMappingLevels)
+			settings.getOrSetDefault< uint32_t >(GraphicsTextureMipMappingLevelsKey, DefaultGraphicsTextureMipMappingLevels)
 		);
 
 		/* Create a Vulkan image. */
@@ -191,14 +181,14 @@ namespace EmEn::Graphics::TextureResource
 	}
 
 	bool
-	Texture2D::load () noexcept
+	Texture2D::load (Resources::ServiceProvider & serviceProvider) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
 			return false;
 		}
 
-		m_localData = Resources::Manager::instance()->container< ImageResource >()->getDefaultResource();
+		m_localData = serviceProvider.container< ImageResource >()->getDefaultResource();
 
 		if ( !this->addDependency(m_localData) )
 		{
@@ -209,16 +199,19 @@ namespace EmEn::Graphics::TextureResource
 	}
 
 	bool
-	Texture2D::load (const std::filesystem::path & filepath) noexcept
+	Texture2D::load (Resources::ServiceProvider & serviceProvider, const std::filesystem::path & filepath) noexcept
 	{
-		return this->load(Resources::Manager::instance()->container< ImageResource >()->getResource(getResourceNameFromFilepath(filepath, "Images"), true));
+		return this->load(serviceProvider.container< ImageResource >()->getResource(
+			ResourceTrait::getResourceNameFromFilepath(filepath, "Images"),
+			true)
+		);
 	}
 
 	bool
-	Texture2D::load (const Json::Value & /*data*/) noexcept
+	Texture2D::load (Resources::ServiceProvider & /*serviceProvider*/, const Json::Value & /*data*/) noexcept
 	{
 		/* NOTE: This resource has no local store,
-		 * so this method won't be called from a resource container ! */
+		 * so this method won't be called from a resource container! */
 		Tracer::error(ClassId, "This type of resource is not intended to be loaded this way !");
 
 		return false;

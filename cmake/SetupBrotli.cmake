@@ -1,25 +1,14 @@
-if ( NOT BROTLI_ENABLED )
-	if ( EMERAUDE_USE_SYSTEM_LIBS )
-		# NOTE: Brotli is unnecessary from system, freetype as system library will do the job.
-	else ()
-		message("Enabling bzip2 library from local source ...")
+if ( NOT TARGET_BINARY_FOR_SETUP )
+	message(FATAL_ERROR "TARGET_BINARY_FOR_SETUP is not SET !")
+endif ()
 
-		if ( MSVC )
-			target_link_libraries(${PROJECT_NAME} PRIVATE
-				${LOCAL_LIB_DIR}/lib/brotlidec.lib
-				${LOCAL_LIB_DIR}/lib/brotlienc.lib
-				${LOCAL_LIB_DIR}/lib/brotlicommon.lib
-			)
-		else ()
-			target_link_libraries(${PROJECT_NAME} PRIVATE
-				${LOCAL_LIB_DIR}/lib/libbrotlidec.a
-				${LOCAL_LIB_DIR}/lib/libbrotlienc.a
-				${LOCAL_LIB_DIR}/lib/libbrotlicommon.a
-			)
-		endif ()
-	endif ()
+# NOTE: Brotli is unnecessary from system, freetype as system library will do the job.
+if ( NOT EMERAUDE_USE_SYSTEM_LIBS )
+	message("Enabling brotli library from local source ...")
 
-	set(BROTLI_ENABLED On)
-else ()
-	message("The Brotli library is already enabled.")
+	target_link_libraries(${TARGET_BINARY_FOR_SETUP} PRIVATE
+		brotlidec
+		brotlienc
+		brotlicommon
+	)
 endif ()

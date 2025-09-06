@@ -67,12 +67,12 @@ namespace EmEn::Saphir
 			 * @brief Construct the light model generator.
 			 * @param settings A reference to the settings.
 			 * @param renderPassType The render pass type to know which kind of render is implied.
-			 * @param fragmentColor The fragment color name produced at the end of light application. Default "fragmentColor".
+			 * @param fragmentColor The fragment color name produced at the end of the light application. Default "fragmentColor".
 			 */
 			LightGenerator (Settings & settings, Graphics::RenderPassType renderPassType, const char * fragmentColor = FragmentColor) noexcept
 				: m_renderPassType{renderPassType},
-				m_PCFSample{settings.get< uint32_t >(GraphicsShadowMappingPCFSampleKey, DefaultGraphicsShadowMappingPCFSample)},
-				m_PCFRadius{settings.get< float >(GraphicsShadowMappingPCFRadiusKey, DefaultGraphicsShadowMappingPCFRadius)},
+				m_PCFSample{settings.getOrSetDefault< uint32_t >(GraphicsShadowMappingPCFSampleKey, DefaultGraphicsShadowMappingPCFSample)},
+				m_PCFRadius{settings.getOrSetDefault< float >(GraphicsShadowMappingPCFRadiusKey, DefaultGraphicsShadowMappingPCFRadius)},
 				m_fragmentColor{fragmentColor}
 			{
 				if ( m_renderPassType == Graphics::RenderPassType::SimplePass )
@@ -149,7 +149,7 @@ namespace EmEn::Saphir
 
 			/**
 			 * @brief Declares the variable used by the fragment shader to get the surface opacity.
-			 * @param amountVariableName A reference to a string for GLSL variable holding the surface opacity amount.
+			 * @param amountVariableName A reference to a string for the GLSL variable holding the surface opacity amount.
 			 * @return void
 			 */
 			void
@@ -188,7 +188,7 @@ namespace EmEn::Saphir
 			 * @brief Declares the variable used by the fragment shader to get the surface normal map sampler.
 			 * @param normalMap A reference to string for GLSL variable holding the surface normal map.
 			 * @param textureCoordinates A reference to the used texture coordinates. Default, the first one.
-			 * @param scale A reference to string for GLSL variable holding the normal map scale. Default 1.0.
+			 * @param scale A reference to string for the GLSL variable holding the normal map scale. Default 1.0.
 			 * @return void
 			 */
 			void
@@ -211,8 +211,8 @@ namespace EmEn::Saphir
 
 			/**
 			 * @brief Declares the variable used by the fragment shader to get the surface reflection map sampler and amount.
-			 * @param colorVariableName A reference to string for GLSL variable holding the surface reflection sample.
-			 * @param amountVariableName A reference to string for GLSL variable holding the reflection amount. Default 0.5.
+			 * @param colorVariableName A reference to string for the GLSL variable holding the surface reflection sample.
+			 * @param amountVariableName A reference to string for the GLSL variable holding the reflection amount. Default 0.5.
 			 * @return void
 			 */
 			void
@@ -289,7 +289,7 @@ namespace EmEn::Saphir
 			Graphics::RenderPassType checkRenderPassType () const noexcept;
 
 			/**
-			 * @brief Generate the vertex shader code to fetch data from shadow map.
+			 * @brief Generate the vertex shader code to fetch data from a shadow map.
 			 * @param generator A reference to the shader generator.
 			 * @param vertexShader A reference to the vertex shader.
 			 * @param isCubemap Define the shadow map as a cubemap.
@@ -475,7 +475,7 @@ namespace EmEn::Saphir
 			 * @return std::string
 			 */
 			[[nodiscard]]
-			static std::string Variable (const char * componentName) noexcept;
+			static std::string variable (const char * componentName) noexcept;
 
 			/* Flag names. */
 			static constexpr auto DiscardUnlitFragment{0UL};
@@ -485,7 +485,7 @@ namespace EmEn::Saphir
 			static constexpr auto UseReflection{4UL};
 			static constexpr auto EnableAmbientNoise{5UL};
 
-			/* Light shader block specific keys. */
+			/* Light shader block-specific keys. */
 			static constexpr auto LightBlock{"LightBlock"};
 			static constexpr auto LightFactor{"lightFactor"};
 			static constexpr auto DiffuseFactor{"diffuseFactor"};

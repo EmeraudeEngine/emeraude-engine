@@ -30,6 +30,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <vector>
+#include <numeric>
 
 namespace EmEn::Libs::Time::Statistics
 {
@@ -77,45 +78,69 @@ namespace EmEn::Libs::Time::Statistics
 			 * @return uint64_t
 			 */
 			[[nodiscard]]
-			uint64_t duration () const noexcept;
+			uint64_t
+			duration () const noexcept
+			{
+				return m_durations[this->getPreviousIndex(m_durationIndex)];
+			}
 
 			/**
 			 * @brief Returns the average duration in milliseconds.
 			 * @return double
 			 */
 			[[nodiscard]]
-			double averageDuration () const noexcept;
+			double
+			averageDuration () const noexcept
+			{
+				return std::accumulate(m_durations.cbegin(), m_durations.cend(), 0.0) / static_cast< double >(m_range);
+			}
 
 			/**
 			 * @brief Returns the last executions count per second registered.
 			 * @return uint32_t
 			 */
 			[[nodiscard]]
-			uint32_t executionsPerSecond () const noexcept;
+			uint32_t
+			executionsPerSecond () const noexcept
+			{
+				return m_executionsPerSeconds[this->getPreviousIndex(m_EPSIndex)];
+			}
 
 			/**
 			 * @brief Returns the average executions count per second registered.
 			 * @return double
 			 */
 			[[nodiscard]]
-			double averageExecutionsPerSecond () const noexcept;
+			double
+			averageExecutionsPerSecond () const noexcept
+			{
+				return std::accumulate(m_executionsPerSeconds.cbegin(), m_executionsPerSeconds.cend(), 0.0) / static_cast< double >(m_range);
+			}
 
 			/**
 			 * @brief Returns the range of samples for averaging.
 			 * @return size_t
 			 */
 			[[nodiscard]]
-			size_t range () const noexcept;
+			size_t
+			range () const noexcept
+			{
+				return m_range;
+			}
 
 			/**
-			 * @brief Returns the number of stat taken.
+			 * @brief Returns the number of stats taken.
 			 * @return size_t
 			 */
 			[[nodiscard]]
-			size_t topCount () const noexcept;
+			size_t
+			topCount () const noexcept
+			{
+				return m_topCount;
+			}
 
 			/**
-			 * @brief Prints statistics in console.
+			 * @brief Prints statistics in the console.
 			 * @return void
 			 */
 			void print () const noexcept;
@@ -135,10 +160,17 @@ namespace EmEn::Libs::Time::Statistics
 		protected:
 
 			/**
-			 * @brief Constructs a statistics.
+			 * @brief Constructs statistics.
 			 * @param range The range of statistics to make an average.
 			 */
-			explicit Abstract (size_t range) noexcept;
+			explicit
+			Abstract (size_t range) noexcept
+				: m_range{std::max< size_t >(range, 1)},
+				m_durations(m_range, 0UL),
+				m_executionsPerSeconds(m_range, 0U)
+			{
+
+			}
 
 			/**
 			 * @brief Increments the index.
@@ -164,7 +196,7 @@ namespace EmEn::Libs::Time::Statistics
 
 			/**
 			 * @brief Inserts an execution count per seconds.
-			 * @param count The number of execution.
+			 * @param count The amount of execution.
 			 * @return void
 			 */
 			void insertEPS (uint32_t count) noexcept;
@@ -172,8 +204,8 @@ namespace EmEn::Libs::Time::Statistics
 		private:
 
 			size_t m_range{1};
-			std::vector< uint64_t > m_durations{};
-			std::vector< uint32_t > m_executionsPerSeconds{};
+			std::vector< uint64_t > m_durations;
+			std::vector< uint32_t > m_executionsPerSeconds;
 			size_t m_topCount{0};
 			size_t m_durationIndex{0};
 			size_t m_EPSIndex{0};

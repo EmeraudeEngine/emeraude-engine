@@ -43,7 +43,7 @@ namespace EmEn::Audio
 	Source::Source () noexcept
 	{
 		/* NOTE: Fake a source ID to silent all methods. */
-		if ( Manager::audioDisabled() )
+		if ( !Manager::isAudioSystemAvailable() )
 		{
 			*(this->identifierPointer()) = 1;
 
@@ -73,7 +73,7 @@ namespace EmEn::Audio
 	bool
 	Source::prepareEffectSlot (int channel) noexcept
 	{
-		if ( Manager::audioDisabled() )
+		if ( !Manager::isAudioSystemAvailable() )
 		{
 			return false;
 		}
@@ -114,7 +114,7 @@ namespace EmEn::Audio
 	void
 	Source::setPosition (const Vector< 3, float > & position) noexcept
 	{
-		if ( Manager::audioDisabled() || !this->isCreated() )
+		if ( !Manager::isAudioSystemAvailable() || !this->isCreated() )
 		{
 			return;
 		}
@@ -125,7 +125,7 @@ namespace EmEn::Audio
 	void
 	Source::setPosition (const Vector< 4, float > & position) noexcept
 	{
-		if ( Manager::audioDisabled() || !this->isCreated() )
+		if ( !Manager::isAudioSystemAvailable() || !this->isCreated() )
 		{
 			return;
 		}
@@ -136,7 +136,7 @@ namespace EmEn::Audio
 	void
 	Source::setPosition (float x, float y, float z) noexcept
 	{
-		if ( Manager::audioDisabled() || !this->isCreated() )
+		if ( !Manager::isAudioSystemAvailable() || !this->isCreated() )
 		{
 			return;
 		}
@@ -149,7 +149,7 @@ namespace EmEn::Audio
 	{
 		Vector< 3, float > position;
 
-		if ( !Manager::audioDisabled() )
+		if ( Manager::isAudioSystemAvailable() )
 		{
 			if ( this->isCreated() )
 			{
@@ -167,7 +167,7 @@ namespace EmEn::Audio
 	void
 	Source::setDirection (const Vector< 3, float > & direction) noexcept
 	{
-		if ( Manager::audioDisabled() || !this->isCreated() )
+		if ( !Manager::isAudioSystemAvailable() || !this->isCreated() )
 		{
 			return;
 		}
@@ -178,7 +178,7 @@ namespace EmEn::Audio
 	void
 	Source::setDirection (const Vector< 4, float > & direction) noexcept
 	{
-		if ( Manager::audioDisabled() || !this->isCreated() )
+		if ( !Manager::isAudioSystemAvailable() || !this->isCreated() )
 		{
 			return;
 		}
@@ -189,7 +189,7 @@ namespace EmEn::Audio
 	void
 	Source::setDirection (float x, float y, float z) noexcept
 	{
-		if ( Manager::audioDisabled() || !this->isCreated() )
+		if ( !Manager::isAudioSystemAvailable() || !this->isCreated() )
 		{
 			return;
 		}
@@ -202,7 +202,7 @@ namespace EmEn::Audio
 	{
 		Vector< 3, float > direction;
 
-		if ( !Manager::audioDisabled() )
+		if ( Manager::isAudioSystemAvailable() )
 		{
 			if ( this->isCreated() )
 			{
@@ -220,7 +220,7 @@ namespace EmEn::Audio
 	void
 	Source::setVelocity (const Vector< 3, float > & velocity) noexcept
 	{
-		if ( Manager::audioDisabled() || !this->isCreated() )
+		if ( !Manager::isAudioSystemAvailable() || !this->isCreated() )
 		{
 			return;
 		}
@@ -231,7 +231,7 @@ namespace EmEn::Audio
 	void
 	Source::setVelocity (const Vector< 4, float > & velocity) noexcept
 	{
-		if ( Manager::audioDisabled() || !this->isCreated() )
+		if ( !Manager::isAudioSystemAvailable() || !this->isCreated() )
 		{
 			return;
 		}
@@ -242,7 +242,7 @@ namespace EmEn::Audio
 	void
 	Source::setVelocity (float x, float y, float z) noexcept
 	{
-		if ( Manager::audioDisabled() || !this->isCreated() )
+		if ( !Manager::isAudioSystemAvailable() || !this->isCreated() )
 		{
 			return;
 		}
@@ -255,7 +255,7 @@ namespace EmEn::Audio
 	{
 		Vector< 3, float > velocity;
 
-		if ( !Manager::audioDisabled() )
+		if ( Manager::isAudioSystemAvailable() )
 		{
 			if ( this->isCreated() )
 			{
@@ -273,7 +273,7 @@ namespace EmEn::Audio
 	void
 	Source::setGain (float gain) noexcept
 	{
-		if ( Manager::audioDisabled() || !this->isCreated() )
+		if ( !Manager::isAudioSystemAvailable() || !this->isCreated() )
 		{
 			return;
 		}
@@ -291,7 +291,7 @@ namespace EmEn::Audio
 	void
 	Source::boundsGain (float minGain, float maxGain) noexcept
 	{
-		if ( Manager::audioDisabled() || !this->isCreated() )
+		if ( !Manager::isAudioSystemAvailable() || !this->isCreated() )
 		{
 			return;
 		}
@@ -303,7 +303,7 @@ namespace EmEn::Audio
 	void
 	Source::setReferenceDistance (float distance) noexcept
 	{
-		if ( Manager::audioDisabled() || !this->isCreated() )
+		if ( !Manager::isAudioSystemAvailable() || !this->isCreated() )
 		{
 			return;
 		}
@@ -323,7 +323,7 @@ namespace EmEn::Audio
 	void
 	Source::setRolloffFactor (float factor) noexcept
 	{
-		if ( Manager::audioDisabled() || !this->isCreated() )
+		if ( !Manager::isAudioSystemAvailable() || !this->isCreated() )
 		{
 			return;
 		}
@@ -342,7 +342,7 @@ namespace EmEn::Audio
 	void
 	Source::setMaxDistance (float distance) noexcept
 	{
-		if ( Manager::audioDisabled() || !this->isCreated() )
+		if ( !Manager::isAudioSystemAvailable() || !this->isCreated() )
 		{
 			return;
 		}
@@ -363,7 +363,7 @@ namespace EmEn::Audio
 	void
 	Source::setCone (float innerAngle, float outerAngle, float outerGain, float gainFacingAway) noexcept
 	{
-		if ( Manager::audioDisabled() || !this->isCreated() )
+		if ( !Manager::isAudioSystemAvailable() || !this->isCreated() )
 		{
 			return;
 		}
@@ -387,7 +387,7 @@ namespace EmEn::Audio
 	void
 	Source::setPitch (float pitch) noexcept
 	{
-		if ( Manager::audioDisabled() || !this->isCreated() )
+		if ( !Manager::isAudioSystemAvailable() || !this->isCreated() )
 		{
 			return;
 		}
@@ -398,7 +398,7 @@ namespace EmEn::Audio
 	void
 	Source::setAirAbsorption (int factor) noexcept
 	{
-		if ( Manager::audioDisabled() || !this->isCreated() )
+		if ( !Manager::isAudioSystemAvailable() || !this->isCreated() )
 		{
 			return;
 		}
@@ -431,7 +431,7 @@ namespace EmEn::Audio
 	float
 	Source::setRandomPitch (float minPitch, float maxPitch) noexcept
 	{
-		if ( Manager::audioDisabled() || !this->isCreated() )
+		if ( !Manager::isAudioSystemAvailable() || !this->isCreated() )
 		{
 			return 1.0F;
 		}
@@ -450,7 +450,7 @@ namespace EmEn::Audio
 	void
 	Source::setMuteState (bool state) noexcept
 	{
-		if ( Manager::audioDisabled() || !this->isCreated() )
+		if ( !Manager::isAudioSystemAvailable() || !this->isCreated() )
 		{
 			return;
 		}
@@ -473,7 +473,7 @@ namespace EmEn::Audio
 	void
 	Source::setRelativeState (bool state) noexcept
 	{
-		if ( Manager::audioDisabled() || !this->isCreated() )
+		if ( !Manager::isAudioSystemAvailable() || !this->isCreated() )
 		{
 			return;
 		}
@@ -573,7 +573,7 @@ namespace EmEn::Audio
 	bool
 	Source::enableDirectFilter (const std::shared_ptr< Filters::Abstract > & filter) noexcept
 	{
-		if ( Manager::audioDisabled() || !OpenAL::isEFXAvailable() )
+		if ( !Manager::isAudioSystemAvailable() || !OpenAL::isEFXAvailable() )
 		{
 			return false;
 		}
@@ -595,7 +595,7 @@ namespace EmEn::Audio
 	void
 	Source::disableDirectFilter () noexcept
 	{
-		if ( Manager::audioDisabled() || !OpenAL::isEFXAvailable() )
+		if ( !Manager::isAudioSystemAvailable() || !OpenAL::isEFXAvailable() )
 		{
 			return;
 		}
@@ -608,7 +608,7 @@ namespace EmEn::Audio
 	bool
 	Source::play (const std::shared_ptr< PlayableInterface > & playableInterface, PlayMode mode) noexcept
 	{
-		if ( !Manager::instance()->isAudioEnabled() )
+		if ( !Manager::isAudioEnabled() )
 		{
 			return false;
 		}
@@ -699,7 +699,7 @@ namespace EmEn::Audio
 	void
 	Source::pause () noexcept
 	{
-		if ( Manager::audioDisabled() )
+		if ( !Manager::isAudioSystemAvailable() )
 		{
 			return;
 		}
@@ -717,7 +717,7 @@ namespace EmEn::Audio
 	void
 	Source::resume () noexcept
 	{
-		if ( Manager::audioDisabled() )
+		if ( !Manager::isAudioSystemAvailable() )
 		{
 			return;
 		}
@@ -735,7 +735,7 @@ namespace EmEn::Audio
 	void
 	Source::rewind () noexcept
 	{
-		if ( Manager::audioDisabled() )
+		if ( !Manager::isAudioSystemAvailable() )
 		{
 			return;
 		}
@@ -757,7 +757,7 @@ namespace EmEn::Audio
 	void
 	Source::stop () noexcept
 	{
-		if ( Manager::audioDisabled() )
+		if ( !Manager::isAudioSystemAvailable() )
 		{
 			return;
 		}
@@ -794,7 +794,7 @@ namespace EmEn::Audio
 	void
 	Source::clearStream () const noexcept
 	{
-		if ( Manager::audioDisabled() )
+		if ( !Manager::isAudioSystemAvailable() )
 		{
 			return;
 		}
@@ -832,7 +832,7 @@ namespace EmEn::Audio
 	{
 		auto value = defaultValue;
 
-		if ( !Manager::audioDisabled() )
+		if ( Manager::isAudioSystemAvailable() )
 		{
 			if ( this->isCreated() )
 			{
@@ -858,7 +858,7 @@ namespace EmEn::Audio
 	{
 		auto value = defaultValue;
 
-		if ( !Manager::audioDisabled() )
+		if ( Manager::isAudioSystemAvailable() )
 		{
 			if ( this->isCreated() )
 			{

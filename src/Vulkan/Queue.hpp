@@ -52,7 +52,7 @@ namespace EmEn::Vulkan
 	struct SynchInfo
 	{
 		/**
-		 * @brief Adds a wait info for semaphores.
+		 * @brief Adds a wait info structure for semaphores.
 		 * @param semaphores A list of semaphore handles.
 		 * @param stages A list of flag mask for stages to wait.
 		 * @return SynchInfo &
@@ -67,7 +67,7 @@ namespace EmEn::Vulkan
 		}
 
 		/**
-		 * @brief Adds a signal info for semaphores.
+		 * @brief Adds a signal info structure for semaphores.
 		 * @param semaphores A list of semaphore handles.
 		 * @return SynchInfo &
 		 */
@@ -109,6 +109,8 @@ namespace EmEn::Vulkan
 			/** @brief Class identifier. */
 			static constexpr auto ClassId{"VulkanQueue"};
 
+			static inline std::atomic_int s_queueInstanceCounter{0};
+
 			/**
 			 * @brief Constructs a device queue.
 			 * @param queue The handle of the queue.
@@ -118,6 +120,10 @@ namespace EmEn::Vulkan
 				: m_handle{queue},
 				m_familyQueueIndex{familyQueueIndex}
 			{
+				const int count = ++s_queueInstanceCounter;
+
+				TraceDebug{ClassId} << "New Queue created! Handle: " << static_cast< void * >(m_handle) << ". Instance count: " << count;
+
 				this->setCreated();
 			}
 
@@ -154,18 +160,7 @@ namespace EmEn::Vulkan
 			}
 
 			/**
-			 * @brief Returns the vulkan queue handle.
-			 * @return VkQueue
-			 */
-			[[nodiscard]]
-			VkQueue
-			handle () const noexcept
-			{
-				return m_handle;
-			}
-
-			/**
-			 * @brief Returns the queue family index of the physical device is used by this queue.
+			 * @brief Returns this queue uses the queue family index of the physical device.
 			 * @return uint32_t
 			 */
 			[[nodiscard]]
@@ -193,8 +188,7 @@ namespace EmEn::Vulkan
 			bool submit (const std::shared_ptr< CommandBuffer > & commandBuffer, const SynchInfo & synchInfo) const noexcept;
 
 			/**
-			 * @brief Submits a present info.
-			 * @FIXME Bad design.
+			 * @brief Submits a present info structure.
 			 * @param presentInfo A pointer to a presentInfo structure.
 			 * @param swapChainRecreationNeeded A bool to switch on bad presentation.
 			 * @return bool
@@ -203,9 +197,9 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Waits for the queue to complete work.
+			 * @note Don't use this method of synchronization.
 			 * @return void
 			 */
-			[[deprecated("Don't use this method of synchronization.")]]
 			[[nodiscard]]
 			bool waitIdle () const noexcept;
 
@@ -213,6 +207,6 @@ namespace EmEn::Vulkan
 
 			VkQueue m_handle;
 			uint32_t m_familyQueueIndex;
-			mutable std::mutex m_access;
+			mutable std::mutex m_queueAccess;
 	};
 }

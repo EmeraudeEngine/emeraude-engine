@@ -27,8 +27,6 @@
 #pragma once
 
 /* STL inclusions. */
-#include <cstddef>
-#include <array>
 #include <vector>
 #include <string>
 #include <filesystem>
@@ -73,26 +71,10 @@ namespace EmEn
 				m_userInfo{userInfo},
 				m_organizationName{identification.applicationOrganization()},
 				m_applicationName{identification.applicationName()},
-				m_applicationReverseId{identification.applicationReverseId()}
+				m_applicationReverseId{identification.applicationReverseId()},
+				m_childProcess{childProcess}
 			{
-				if ( s_instance != nullptr )
-				{
-					std::cerr << __PRETTY_FUNCTION__ << ", constructor called twice !" "\n";
 
-					std::terminate();
-				}
-
-				s_instance = this;
-
-				m_flags[ChildProcess] = childProcess;
-			}
-
-			/**
-			 * @brief Destructs the file system.
-			 */
-			~FileSystem () override
-			{
-				s_instance = nullptr;
 			}
 
 			/** @copydoc EmEn::ServiceInterface::usable() */
@@ -100,7 +82,7 @@ namespace EmEn
 			bool
 			usable () const noexcept override
 			{
-				return m_flags[ServiceInitialized];
+				return m_serviceInitialized;
 			}
 
 			/**
@@ -126,7 +108,7 @@ namespace EmEn
 			}
 
 			/**
-			 * @brief Returns the parent directory of the binary with an append to the path.
+			 * @brief Returns the parent directory of the binary with an appending to the path.
 			 * @param append A reference to a string.
 			 * @return std::filesystem::path
 			 */
@@ -152,7 +134,7 @@ namespace EmEn
 			}
 
 			/**
-			 * @brief Returns the home directory of the current user with an append to the path.
+			 * @brief Returns the home directory of the current user with an appending to the path.
 			 * @param append A reference to a string.
 			 * @return std::filesystem::path
 			 */
@@ -178,7 +160,7 @@ namespace EmEn
 			}
 
 			/**
-			 * @brief Returns the user data directory for the application of the current user with an append to the path.
+			 * @brief Returns the user data directory for the application of the current user with an appending to the path.
 			 * @param append A reference to a string.
 			 * @return std::filesystem::path
 			 */
@@ -204,7 +186,7 @@ namespace EmEn
 			}
 
 			/**
-			 * @brief Returns the config directory of this application with an append to the path.
+			 * @brief Returns the config directory of this application with an appending to the path.
 			 * @param append A reference to a string.
 			 * @return std::filesystem::path
 			 */
@@ -230,7 +212,7 @@ namespace EmEn
 			}
 
 			/**
-			 * @brief Returns the cache directory of this application with an append to the path.
+			 * @brief Returns the cache directory of this application with an appending to the path.
 			 * @param append A reference to a string.
 			 * @return std::filesystem::path
 			 */
@@ -263,20 +245,6 @@ namespace EmEn
 			 */
 			[[nodiscard]]
 			std::filesystem::path getFilepathFromDataDirectories (const std::string & path, const std::string & filename) const noexcept;
-
-			/**
-			 * @brief Returns the instance of the file system.
-			 * @todo This method must be removed!
-			 * @return FileSystem *
-			 */
-			//[[deprecated("This method must be removed !")]]
-			[[nodiscard]]
-			static
-			FileSystem *
-			instance () noexcept
-			{
-				return s_instance; // FIXME: Remove this
-			}
 
 		private:
 
@@ -336,7 +304,7 @@ namespace EmEn
 			 * @brief Verifies the requirements for a searched directory.
 			 * @param directory A reference to a directory.
 			 * @param createDirectory If no directory was found, create it.
-			 * @param writableRequested Is directory need to be writable.
+			 * @param writableRequested Is the directory needed to be writable?
 			 * @return bool
 			 */
 			[[nodiscard]]
@@ -346,7 +314,7 @@ namespace EmEn
 			 * @brief Registers a directory when tested.
 			 * @param directoryPath A reference to a filesystem path.
 			 * @param createDirectory If no directory was found, create it.
-			 * @param writableRequested Is directory needed to be writable?
+			 * @param writableRequested Is the directory needed to be writable?
 			 * @param finalDirectoryPath A reference to a filesystem path.
 			 * @return bool
 			 */
@@ -367,9 +335,6 @@ namespace EmEn
 			static constexpr auto ShowInformation{2UL};
 			static constexpr auto StandAlone{3UL};
 
-			/** @brief Singleton pointer. */
-			static FileSystem * s_instance;
-
 			const Arguments & m_arguments;
 			const PlatformSpecific::UserInfo & m_userInfo;
 			std::string m_organizationName;
@@ -382,16 +347,10 @@ namespace EmEn
 			std::filesystem::path m_configDirectory;
 			std::filesystem::path m_cacheDirectory;
 			std::vector< std::filesystem::path > m_dataDirectories;
-			std::array< bool, 8 > m_flags{
-				false/*ServiceInitialized*/,
-				false/*ChildProcess*/,
-				false/*ShowInformation*/,
-				false/*StandAlone*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/
-			};
+			bool m_serviceInitialized{false};
+			bool m_childProcess{false};
+			bool m_showInformation{false};
+			bool m_standAlone{false};
 	};
 
 	inline

@@ -44,7 +44,12 @@ namespace EmEn::Libs::Time::Elapsed
 			 * @brief Construct a scope timer in nanoseconds.
 			 * @param duration A reference where the duration will be accumulated in nanoseconds.
 			 */
-			explicit ScopeCPUTime (uint64_t & duration) noexcept;
+			explicit
+			ScopeCPUTime (uint64_t & duration) noexcept
+				: m_duration{duration}
+			{
+
+			}
 
 			/** @brief Deleted copy constructor. */
 			ScopeCPUTime (const ScopeCPUTime &) = delete;
@@ -59,7 +64,26 @@ namespace EmEn::Libs::Time::Elapsed
 			ScopeCPUTime & operator= (const ScopeCPUTime &&) = delete;
 
 			/** @brief Destructor. */
-			~ScopeCPUTime ();
+			~ScopeCPUTime ()
+			{
+				if constexpr ( CLOCKS_PER_SEC == 1000 )
+				{
+					/* Duration is expressed in milliseconds. */
+					m_duration += (std::clock() - m_start) * 1000000;
+				}
+
+				if constexpr ( CLOCKS_PER_SEC == 1000000 )
+				{
+					/* Duration is expressed in microseconds. */
+					m_duration += (std::clock() - m_start) * 1000;
+				}
+
+				if constexpr ( CLOCKS_PER_SEC == 1000000000 )
+				{
+					/* Duration is expressed in nanoseconds. */
+					m_duration += std::clock() - m_start;
+				}
+			}
 
 		private:
 

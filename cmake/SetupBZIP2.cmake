@@ -1,24 +1,24 @@
-if ( NOT BZIP2_ENABLED )
-	if ( EMERAUDE_USE_SYSTEM_LIBS )
-		message("Enabling bzip2 library from system ...")
+if ( NOT TARGET_BINARY_FOR_SETUP )
+	message(FATAL_ERROR "TARGET_BINARY_FOR_SETUP is not SET !")
+endif ()
 
-		# NOTE: https://cmake.org/cmake/help/latest/module/FindBZip2.html
-		find_package(BZip2 REQUIRED)
+if ( EMERAUDE_USE_SYSTEM_LIBS )
+	message("Enabling bzip2 library from system ...")
 
-		target_include_directories(${PROJECT_NAME} PRIVATE ${BZIP2_INCLUDE_DIRS})
-		target_link_directories(${PROJECT_NAME} PRIVATE ${BZIP2_LIBRARIES})
-		target_link_libraries(${PROJECT_NAME} PRIVATE BZip2::BZip2)
-	else ()
-		message("Enabling bzip2 library from local source ...")
+	# NOTE: https://cmake.org/cmake/help/latest/module/FindBZip2.html
+	find_package(BZip2 REQUIRED)
 
-		if ( MSVC )
-			target_link_libraries(${PROJECT_NAME} PRIVATE ${LOCAL_LIB_DIR}/lib/bz2_static.lib)
-		else ()
-			target_link_libraries(${PROJECT_NAME} PRIVATE ${LOCAL_LIB_DIR}/lib/libbz2_static.a)
-		endif ()
-	endif ()
+	target_include_directories(${TARGET_BINARY_FOR_SETUP} PUBLIC ${BZIP2_INCLUDE_DIRS})
 
-	set(BZIP2_ENABLED On)
+	target_link_directories(${TARGET_BINARY_FOR_SETUP} PUBLIC ${BZIP2_LIBRARIES})
+
+	target_link_libraries(${TARGET_BINARY_FOR_SETUP} PRIVATE BZip2::BZip2)
 else ()
-	message("The bzip2 library is already enabled.")
+	message("Enabling bzip2 library from local source ...")
+
+	if ( MSVC )
+		target_link_libraries(${TARGET_BINARY_FOR_SETUP} PRIVATE ${LOCAL_LIB_DIR}/lib/bz2_static.lib)
+	else ()
+		target_link_libraries(${TARGET_BINARY_FOR_SETUP} PRIVATE ${LOCAL_LIB_DIR}/lib/libbz2_static.a)
+	endif ()
 endif ()

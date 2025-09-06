@@ -27,9 +27,9 @@
 #pragma once
 
 /* STL inclusions. */
-#include <iostream>
 #include <map>
 #include <string>
+#include <sstream>
 
 namespace EmEn::Libs::Network
 {
@@ -50,7 +50,12 @@ namespace EmEn::Libs::Network
 			 * @warning There is no check with this version.
 			 * @param variables Query variables.
 			 */
-			explicit Query (const std::map< std::string, std::string > & variables) noexcept;
+			explicit
+			Query (const std::map< std::string, std::string > & variables) noexcept
+				: m_variables{variables}
+			{
+
+			}
 
 			/**
 			 * @brief Replaces the query variables.
@@ -105,6 +110,8 @@ namespace EmEn::Libs::Network
 			[[nodiscard]]
 			static Query fromString (const std::string & string) noexcept;
 
+		private:
+
 			/**
 			 * @brief STL streams printable object.
 			 * @param out A reference to the stream output.
@@ -113,15 +120,22 @@ namespace EmEn::Libs::Network
 			 */
 			friend std::ostream & operator<< (std::ostream & out, const Query & obj);
 
-			/**
-			 * @brief Stringifies the object.
-			 * @param obj A reference to the object to print.
-			 * @return std::string
-			 */
-			friend std::string to_string (const Query & obj) noexcept;
-
-		private:
-
-			std::map< std::string, std::string > m_variables{};
+			std::map< std::string, std::string > m_variables;
 	};
+
+	/**
+	 * @brief Stringifies the object.
+	 * @param obj A reference to the object to print.
+	 * @return std::string
+	 */
+	inline
+	std::string
+	to_string (const Query & obj) noexcept
+	{
+		std::stringstream output;
+
+		output << obj;
+
+		return output.str();
+	}
 }

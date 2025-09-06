@@ -41,9 +41,7 @@
 
 namespace EmEn::Net
 {
-	using namespace EmEn::Libs;
-
-	const size_t Manager::ClassUID{getClassUID(ClassId)};
+	using namespace Libs;
 
 	bool
 	Manager::onInitialize () noexcept
@@ -52,7 +50,7 @@ namespace EmEn::Net
 
 		if ( IO::isDirectoryUsable(m_downloadCacheDirectory) )
 		{
-			m_flags[DownloadEnabled] = true;
+			m_downloadEnabled = true;
 
 			return this->checkDownloadCacheDBFile();
 		}
@@ -64,7 +62,7 @@ namespace EmEn::Net
 			TraceWarning{ClassId} << "There is no internet connexion yet.";
 		}
 
-		m_flags[ServiceInitialized] = true;
+		m_serviceInitialized = true;
 
 		return true;
 	}
@@ -72,7 +70,7 @@ namespace EmEn::Net
 	bool
 	Manager::onTerminate () noexcept
 	{
-		m_flags[ServiceInitialized] = false;
+		m_serviceInitialized = false;
 
 		return this->updateDownloadCacheDBFile();
 	}
@@ -187,7 +185,7 @@ namespace EmEn::Net
 
 		for ( const auto & file : files )
 		{
-			/* Check file item JSON keys presence. */
+			/* Check the file item JSON keys presence. */
 			if ( !file.isMember(FileURLKey) || !file.isMember(CacheIdKey) || !file.isMember(FilenameKey) || !file.isMember(FilesizeKey) )
 			{
 				TraceWarning{ClassId} << "A file description in the download cache db file has not the required keys !";

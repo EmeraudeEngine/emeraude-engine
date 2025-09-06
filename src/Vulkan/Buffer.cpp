@@ -27,12 +27,14 @@
 #include "Buffer.hpp"
 
 /* Local inclusions. */
+#include "Vulkan/TransferManager.hpp"
+#include "Vulkan/StagingBuffer.hpp"
 #include "Utility.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::Vulkan
 {
-	using namespace EmEn::Libs;
+	using namespace Libs;
 
 	bool
 	Buffer::createOnHardware () noexcept
@@ -142,5 +144,110 @@ namespace EmEn::Vulkan
 		this->setDestroyed();
 
 		return true;
+	}
+
+	bool
+	Buffer::transferData (TransferManager & transferManager, const MemoryRegion & memoryRegion) noexcept
+	{
+		if ( !this->isCreated() )
+		{
+			Tracer::error(ClassId, "The buffer is not created ! Use one of the Buffer::create() methods first.");
+
+			return false;
+		}
+
+		return transferManager.transfer(*this, memoryRegion.bytes(), [&memoryRegion] (const StagingBuffer & stagingBuffer) {
+			return stagingBuffer.writeData(memoryRegion);
+		});
+	}
+
+	bool
+	Buffer::writeData (const MemoryRegion & memoryRegion) const noexcept
+	{
+		if ( !this->isHostVisible() )
+		{
+			Tracer::error(ClassId, "This buffer is not host visible! You can't write data directly to it.");
+
+			return false;
+		}
+
+		/* [VULKAN-CPU-SYNC] */
+		const std::lock_guard< std::mutex > lock{m_hostMemoryAccess};
+
+		if ( !this->isCreated() )
+		{
+			Tracer::error(ClassId, "The buffer is not created ! Use one of the Buffer::create() methods first.");
+
+			return false;
+		}
+
+		/* Lock the buffer for access. */
+		auto * pointer = this->deviceMemory()->mapMemory(memoryRegion.offset(), memoryRegion.bytes());
+
+		if ( pointer == nullptr )
+		{
+			TraceError{ClassId} << "Unable to map the buffer from offset " << memoryRegion.offset() << " for " << memoryRegion.bytes() << " bytes.";
+
+			return false;
+		}
+
+		/* Raw data copy... */
+		std::memcpy(pointer, memoryRegion.source(), memoryRegion.bytes());
+
+		/* Unlock the buffer. */
+		this->deviceMemory()->unmapMemory();
+
+		return true;
+	}
+
+	bool
+	Buffer::writeData (const std::vector< MemoryRegion > & memoryRegions) noexcept
+	{
+		if ( !this->isHostVisible() )
+		{
+			Tracer::error(ClassId, "This buffer is not host visible! You can't write data directly to it.");
+
+			return false;
+		}
+
+		/* [VULKAN-CPU-SYNC] */
+		const std::lock_guard< std::mutex > lock{m_hostMemoryAccess};
+
+		if ( !this->isCreated() )
+		{
+			Tracer::error(ClassId, "The buffer is not created ! Use one of the Buffer::create() methods first.");
+
+			return false;
+		}
+
+		if ( memoryRegions.empty() )
+		{
+			Tracer::error(ClassId, "No memory region to write !");
+
+			return false;
+		}
+
+		/* TODO: Check for performance improvement on mapping the buffer once with larger boundaries. */
+
+		/* Raw data copy... */
+		return std::ranges::all_of(memoryRegions, [&] (const auto & memoryRegion) {
+			/* Lock the buffer for access. */
+			auto * pointer = this->deviceMemory()->mapMemory(memoryRegion.offset(), this->bytes());
+
+			if ( pointer == nullptr )
+			{
+				TraceError{ClassId} << "Unable to map the buffer from offset " << memoryRegion.offset() << " for " << this->bytes() << " bytes.";
+
+				return false;
+			}
+
+			/* Raw data copy... */
+			std::memcpy(pointer, memoryRegion.source(), memoryRegion.bytes());
+
+			/* Unlock the buffer. */
+			this->deviceMemory()->unmapMemory();
+
+			return true;
+		});
 	}
 }

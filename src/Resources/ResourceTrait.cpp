@@ -37,7 +37,7 @@
 
 namespace EmEn::Resources
 {
-	using namespace EmEn::Libs;
+	using namespace Libs;
 
 	constexpr auto TracerTag{"ResourceChain"};
 
@@ -196,7 +196,7 @@ namespace EmEn::Resources
 		/* NOTE: Adds the dependency to wait for being loaded ... */
 		m_dependenciesToWaitFor.push_back(dependency);
 
-		/* ... then set this resource as parent of the dependency (double-link). */
+		/* ... then set this resource as the parent of the dependency (double-link). */
 		dependency->m_parentsToNotify.push_back(this->shared_from_this());
 
 		if ( s_verboseEnabled )
@@ -232,7 +232,7 @@ namespace EmEn::Resources
 	{
 		const std::lock_guard< std::mutex > lock{m_dependenciesAccess};
 
-		/* NOTE: First, we check the resource current status. */
+		/* NOTE: First, we check the current resource status. */
 		switch ( m_status )
 		{
 			/* For these statuses, there is no need to check dependencies now. */
@@ -384,7 +384,7 @@ namespace EmEn::Resources
 	}
 
 	bool
-	ResourceTrait::load (const std::filesystem::path & filepath) noexcept
+	ResourceTrait::load (ServiceProvider & serviceProvider, const std::filesystem::path & filepath) noexcept
 	{
 		const auto root = FastJSON::getRootFromFile(filepath);
 
@@ -401,11 +401,9 @@ namespace EmEn::Resources
 		}
 
 		/* Checks if additional stores before loading (optional) */
-		auto * manager = Manager::instance();
+		serviceProvider.update(root.value());
 
-		manager->stores().update(root.value(), manager->verbosityEnabled());
-
-		return this->load(root.value());
+		return this->load(serviceProvider, root.value());
 	}
 
 	std::string

@@ -30,16 +30,18 @@
 #include <memory>
 
 /* Local inclusions for inheritances. */
-#include "Libs/LockableTrait.hpp"
-#include "AbstractHostBuffer.hpp"
+#include "Buffer.hpp"
+
+/* Local inclusions for usages. */
+#include "Vulkan/Sync/Fence.hpp"
 
 namespace EmEn::Vulkan
 {
 	/**
-	 * @brief This buffer is intended to push data all-purposes buffer from CPU to GPU specific buffer.
-	 * @extends EmEn::Vulkan::AbstractHostBuffer This is a host-side buffer.
+	 * @brief This buffer is intended to push data all-purposes buffer from CPU to GPU-specific buffer.
+	 * @extends EmEn::Vulkan::Buffer This is a buffer.
 	 */
-	class StagingBuffer final : public Libs::LockableTrait, public AbstractHostBuffer
+	class StagingBuffer final : public Buffer
 	{
 		public:
 
@@ -53,9 +55,49 @@ namespace EmEn::Vulkan
 			 */
 			explicit
 			StagingBuffer (const std::shared_ptr< Device > & device, VkDeviceSize size = 0) noexcept
-				: AbstractHostBuffer{device, 0, size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT}
+				: Buffer{
+					device,
+					0,
+					size,
+					VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+					VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
+				}
 			{
+				m_fence = std::make_unique< Sync::Fence >(device, VK_FENCE_CREATE_SIGNALED_BIT);
+				m_fence->setIdentifier(ClassId, "TMP", "Fence");
 
+				if ( !m_fence->createOnHardware() )
+				{
+					Tracer::error(ClassId, "Unable to create the render target fence !");
+
+					m_fence.reset();
+				}
 			}
+
+			/**
+			 * @brief Returns if the buffer is free to move data.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isFree () const noexcept
+			{
+				return m_fence->getStatus() == Sync::FenceStatus::Ready;
+			}
+
+			/**
+			 * @brief Returns the fence pointer.
+			 * @return Sync::Fence *
+			 */
+			[[nodiscard]]
+			Sync::Fence *
+			fence () const noexcept
+			{
+				return m_fence.get();
+			}
+
+		private:
+
+			std::unique_ptr< Sync::Fence > m_fence;
 	};
 }

@@ -52,11 +52,11 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Constructs a device requirements.
-			 * @param deviceJobHint A hint for the device's main job.
+			 * @param workType A hint for the device's main job.
 			 */
 			explicit
-			DeviceRequirements (DeviceJobHint deviceJobHint) noexcept
-				: m_deviceJobHint{deviceJobHint}
+			DeviceRequirements (DeviceWorkType workType) noexcept
+				: m_deviceWorkType{workType}
 			{
 				/* NOTE: Device features from Vulkan 1.3 API. */
 				m_featuresVK13.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
@@ -77,10 +77,10 @@ namespace EmEn::Vulkan
 			 * @return DeviceJobHint
 			 */
 			[[nodiscard]]
-			DeviceJobHint
-			jobHint () const noexcept
+			DeviceWorkType
+			deviceWorkType () const noexcept
 			{
-				return m_deviceJobHint;
+				return m_deviceWorkType;
 			}
 
 			/**
@@ -389,7 +389,7 @@ namespace EmEn::Vulkan
 			 */
 			friend std::ostream & operator<< (std::ostream & out, const DeviceRequirements & obj);
 
-			DeviceJobHint m_deviceJobHint;
+			const DeviceWorkType m_deviceWorkType;
 			VkPhysicalDeviceFeatures2 m_features{};
 			VkPhysicalDeviceVulkan11Features m_featuresVK11{};
 			VkPhysicalDeviceVulkan12Features m_featuresVK12{};

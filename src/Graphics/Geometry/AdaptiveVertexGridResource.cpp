@@ -30,23 +30,13 @@
 #include "Vulkan/TransferManager.hpp"
 #include "Constants.hpp"
 
-/* Defining the resource manager class id. */
-template<>
-const char * const EmEn::Resources::Container< EmEn::Graphics::Geometry::AdaptiveVertexGridResource >::ClassId{"AdaptiveVertexGridContainer"};
-
-/* Defining the resource manager ClassUID. */
-template<>
-const size_t EmEn::Resources::Container< EmEn::Graphics::Geometry::AdaptiveVertexGridResource >::ClassUID{getClassUID(ClassId)};
-
 namespace EmEn::Graphics::Geometry
 {
-	using namespace EmEn::Libs;
-	using namespace EmEn::Libs::Math;
-	using namespace EmEn::Libs::VertexFactory;
-	using namespace EmEn::Libs::PixelFactory;
-	using namespace EmEn::Vulkan;
-
-	const size_t AdaptiveVertexGridResource::ClassUID{getClassUID(ClassId)};
+	using namespace Libs;
+	using namespace Libs::Math;
+	using namespace Libs::VertexFactory;
+	using namespace Libs::PixelFactory;
+	using namespace Vulkan;
 
 	bool
 	AdaptiveVertexGridResource::createOnHardware (TransferManager & transferManager) noexcept
@@ -71,10 +61,10 @@ namespace EmEn::Graphics::Geometry
 		/* NOTE: Requesting a VBO using data. */
 		const auto vertexElementCount = getElementCountFromFlags(this->flags());
 
-		m_vertexBufferObject = std::make_unique< VertexBufferObject >(transferManager.device(), static_cast< uint32_t >(m_localData.size()), vertexElementCount);
+		m_vertexBufferObject = std::make_unique< VertexBufferObject >(transferManager.device(), static_cast< uint32_t >(m_localData.size()), vertexElementCount, false);
 		m_vertexBufferObject->setIdentifier(ClassId, this->name(), "VertexBufferObject");
 
-		if ( !m_vertexBufferObject->create(transferManager, m_localData) )
+		if ( !m_vertexBufferObject->createOnHardware() || !m_vertexBufferObject->transferData(transferManager, m_localData) )
 		{
 			Tracer::error(ClassId, "Unable to create the vertex buffer object (VBO) !");
 
@@ -87,7 +77,7 @@ namespace EmEn::Graphics::Geometry
 		m_indexBufferObject = std::make_unique< IndexBufferObject >(transferManager.device(), static_cast< uint32_t >(m_indices.size()));
 		m_indexBufferObject->setIdentifier(ClassId, this->name(), "IndexBufferObject");
 
-		if ( !m_indexBufferObject->create(transferManager, m_indices) )
+		if ( !m_indexBufferObject->createOnHardware() || !m_indexBufferObject->transferData(transferManager, m_indices) )
 		{
 			Tracer::error(ClassId, "Unable to get an index buffer object (IBO) !");
 
@@ -146,7 +136,7 @@ namespace EmEn::Graphics::Geometry
 	}
 
 	bool
-	AdaptiveVertexGridResource::load () noexcept
+	AdaptiveVertexGridResource::load (Resources::ServiceProvider & /*serviceProvider*/) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
@@ -159,7 +149,7 @@ namespace EmEn::Graphics::Geometry
 	}
 
 	bool
-	AdaptiveVertexGridResource::load (const Json::Value & /*data*/) noexcept
+	AdaptiveVertexGridResource::load (Resources::ServiceProvider & /*serviceProvider*/, const Json::Value & /*data*/) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
@@ -355,7 +345,7 @@ namespace EmEn::Graphics::Geometry
 			}
 		}
 
-		/* FIXME: For now the secondary texture are the same as primary. */
+		/* FIXME: For now the secondary texture is the same as the primary. */
 		if ( this->isFlagEnabled(EnableSecondaryTextureCoordinates) )
 		{
 			if ( this->isFlagEnabled(Enable3DSecondaryTextureCoordinates) )

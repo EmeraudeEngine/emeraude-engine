@@ -48,6 +48,9 @@ namespace EmEn::Graphics::Geometry
 	{
 		public:
 
+			/** @brief Access to the graphics renderer for loading GPU resources. */
+			static Renderer * s_graphicsRenderer;
+
 			/**
 			 * @brief Returns whether the tangent space is present in local data.
 			 * @return bool

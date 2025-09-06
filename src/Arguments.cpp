@@ -26,10 +26,6 @@
 
 #include "Arguments.hpp"
 
-/* STL inclusions. */
-#include <cstring>
-#include <iostream>
-
 /* Local inclusions. */
 #if IS_WINDOWS
 #include "PlatformSpecific/Helpers.hpp"
@@ -39,189 +35,7 @@
 
 namespace EmEn
 {
-	using namespace EmEn::Libs;
-
-	Arguments::Arguments (int argc, char * * argv, bool childProcess) noexcept
-		: ServiceInterface(ClassId)
-	{
-		m_flags[ChildProcess] = childProcess;
-
-		/* NOTE: Create a copy of main() arguments. */
-		if ( argc > 0 && argv != nullptr )
-		{
-			m_rawArguments.reserve(argc);
-
-			for ( int argIndex = 0; argIndex < argc; argIndex++ )
-			{
-				m_rawArguments.emplace_back(argv[argIndex]);
-			}
-		}
-	}
-
-#if IS_WINDOWS
-	Arguments::Arguments (int argc, wchar_t * * wargv, bool childProcess) noexcept
-		: ServiceInterface(ClassId)
-	{
-		m_flags[ChildProcess] = childProcess;
-
-		/* NOTE: Create a copy of main() arguments. */
-		if ( argc > 0 && wargv != nullptr )
-		{
-			m_rawArguments.reserve(argc);
-
-			for ( int argIndex = 0; argIndex < argc; argIndex++ )
-			{
-				std::wstring tmp{wargv[argIndex]};
-
-				m_rawArguments.emplace_back(PlatformSpecific::convertWideToUTF8(tmp));
-			}
-		}
-	}
-#endif
-
-	Arguments::~Arguments ()
-	{
-		if ( m_argv != nullptr )
-		{
-			for ( int argIndex = 0; argIndex < m_argc; argIndex++ )
-			{
-				delete[] m_argv[argIndex];
-
-				m_argv[argIndex] = nullptr;
-			}
-
-			delete[] m_argv;
-
-			m_argv = nullptr;
-		}
-	}
-
-	void
-	Arguments::addArgument (const std::string & argument) noexcept
-	{
-		m_rawArguments.emplace_back(argument);
-
-		if ( argument.find_first_of('=') != std::string::npos )
-		{
-			const auto list = String::explode(argument, '=');
-
-			m_arguments.emplace(list[0], list[1]);
-		}
-		else
-		{
-			m_arguments.emplace(argument, "1");
-		}
-	}
-
-	void
-	Arguments::recreateRawArguments () const noexcept
-	{
-		m_argc = static_cast< int >(m_rawArguments.size());
-		m_argv = new char * [static_cast< size_t >(m_argc)];
-
-		for ( auto it = m_rawArguments.cbegin(); it != m_rawArguments.cend(); ++it )
-		{
-			const auto argIndex = std::distance(m_rawArguments.cbegin(), it);
-			const auto strlen = it->size();
-
-			m_argv[argIndex] = new char[strlen + 1];
-
-			strncpy(m_argv[argIndex], it->data(), strlen);
-
-			m_argv[argIndex][strlen] = '\0';
-		}
-	}
-
-	int
-	Arguments::getArgc () const noexcept
-	{
-		if ( m_argv == nullptr )
-		{
-			this->recreateRawArguments();
-		}
-
-		return m_argc;
-	}
-
-	char * *
-	Arguments::getArgv () const noexcept
-	{
-		if ( m_argv == nullptr )
-		{
-			this->recreateRawArguments();
-		}
-
-		return m_argv;
-	}
-
-	Argument
-	Arguments::get (const std::string & name) const noexcept
-	{
-		const auto argIt = m_arguments.find(name);
-
-		if ( argIt == m_arguments.cend() )
-		{
-			return Argument{false};
-		}
-
-		return argIt->second;
-	}
-
-	Argument
-	Arguments::get (const std::string & name, const std::string & alternateName) const noexcept
-	{
-		auto argIt = m_arguments.find(name);
-
-		if ( argIt != m_arguments.cend() )
-		{
-			return argIt->second;
-		}
-
-		argIt = m_arguments.find(alternateName);
-
-		if ( argIt != m_arguments.cend() )
-		{
-			return argIt->second;
-		}
-
-		return Argument{false};
-	}
-
-	Argument
-	Arguments::get (const std::vector< std::string > & namesList) const noexcept
-	{
-		for ( const auto & name : namesList )
-		{
-			const auto argIt = m_arguments.find(name);
-
-			if ( argIt != m_arguments.cend() )
-			{
-				return argIt->second;
-			}
-		}
-
-		return Argument{false};
-	}
-
-	std::string
-	Arguments::packForCommandLine () const noexcept
-	{
-		std::stringstream output;
-
-		for ( const auto & [name, argument] : m_arguments )
-		{
-			if ( argument.isSwitch() )
-			{
-				output << name << ' ';
-			}
-			else
-			{
-				output << name << '=' << argument << ' ';
-			}
-		}
-
-		return output.str();
-	}
+	using namespace Libs;
 
 	bool
 	Arguments::onInitialize () noexcept
@@ -243,7 +57,7 @@ namespace EmEn
 
 			if ( !value.starts_with('-') )
 			{
-				std::cerr << "Invalid argument : " << value << '\n';
+				TraceError{ClassId} << "Invalid argument : " << value;
 
 				continue;
 			}
@@ -251,44 +65,42 @@ namespace EmEn
 			/* NOTE: Checking the form --xxx=yyy */
 			if ( value.find_first_of('=') != std::string::npos )
 			{
-				auto chunks = String::explode(value, '=', false);
-
-				m_arguments.emplace(std::piecewise_construct, std::forward_as_tuple(chunks[0]), std::forward_as_tuple(chunks[1]));
+				if ( const auto chunks = String::explode(value, '=', false); chunks.size() >= 2 )
+				{
+					m_arguments.emplace(chunks[0], chunks[1]);
+				}
+				else if ( chunks.size() == 1 )
+				{
+					m_arguments.emplace(chunks[0], "");
+				}
 
 				continue;
 			}
 
-			auto nextArgIt = std::next(argIt);
-
 			/* NOTE: Checking the form --xxx yyy */
-			if ( nextArgIt != m_rawArguments.cend() && !nextArgIt->starts_with('-') )
+			if ( auto nextArgIt = std::next(argIt); nextArgIt != m_rawArguments.cend() && !nextArgIt->starts_with('-') )
 			{
 				const auto & nextValue = *nextArgIt;
 
 				/* We assume the arg is the parameter value. */
-				m_arguments.emplace(std::piecewise_construct, std::forward_as_tuple(value), std::forward_as_tuple(nextValue));
+				m_arguments.emplace(value, nextValue);
 
 				++argIt;
 
 				continue;
 			}
 
-			/* NOTE: we put "1" to make argument returning true when calling ArgumentValue::isPresent(). */
-			m_arguments.emplace(std::piecewise_construct, std::forward_as_tuple(value), std::forward_as_tuple(true));
-		}
-
-		if ( !m_flags[ChildProcess] )
-		{
-			m_flags[ShowInformation] = this->get("--verbose").isPresent();
+			/* NOTE: Simple switch. */
+			m_switches.emplace(value);
 		}
 
 		/* NOTE: At this point, the tracer is not yet initialized. */
-		if ( m_flags[ShowInformation] )
+		if ( this->isSwitchPresent("--verbose") )
 		{
-			std::cout << *this << '\n';
+			TraceInfo{ClassId} << *this;
 		}
 
-		m_flags[ServiceInitialized] = true;
+		m_serviceInitialized = true;
 
 		return true;
 	}
@@ -296,11 +108,102 @@ namespace EmEn
 	bool
 	Arguments::onTerminate () noexcept
 	{
-		m_flags[ServiceInitialized] = false;
+		m_serviceInitialized = false;
 
 		m_rawArguments.clear();
 		m_arguments.clear();
 
 		return true;
+	}
+
+	void
+	Arguments::addSwitch (std::string_view name, bool completeRawArguments) noexcept
+	{
+		m_switches.emplace(name);
+
+		if ( completeRawArguments )
+		{
+			m_rawArguments.emplace_back(name);
+		}
+	}
+
+	void
+	Arguments::addArgument (std::string_view name, std::string_view value, bool completeRawArguments) noexcept
+	{
+		m_arguments.emplace(name, value);
+
+		if ( completeRawArguments )
+		{
+			std::stringstream rawArgument;
+			rawArgument << name << '=' << value;
+
+			m_rawArguments.emplace_back(rawArgument.str());
+		}
+	}
+
+	bool
+	Arguments::isSwitchPresent (std::string_view argument) const noexcept
+	{
+		return m_switches.contains(argument.data());
+	}
+
+	bool
+	Arguments::isSwitchPresent (std::string_view argument, std::string_view alternateArgument) const noexcept
+	{
+		if ( m_switches.contains(argument.data()) )
+		{
+			return true;
+		}
+
+		return m_switches.contains(alternateArgument.data());
+	}
+
+	std::optional< std::string >
+	Arguments::get (std::string_view argument) const noexcept
+	{
+		if ( const auto argIt = m_arguments.find(argument); argIt != m_arguments.cend() )
+		{
+			return argIt->second;
+		}
+
+		return std::nullopt;
+	}
+
+	std::optional< std::string >
+	Arguments::get (std::string_view argument, std::string_view alternateArgument) const noexcept
+	{
+		auto argIt = m_arguments.find(argument);
+
+		if ( argIt != m_arguments.cend() )
+		{
+			return argIt->second;
+		}
+
+		argIt = m_arguments.find(alternateArgument);
+
+		if ( argIt != m_arguments.cend() )
+		{
+			return argIt->second;
+		}
+
+		return std::nullopt;
+	}
+
+	std::string
+	Arguments::packForCommandLine () const noexcept
+	{
+		std::stringstream output;
+
+		for ( const auto & name : m_switches )
+		{
+			output << name << ' ';
+		}
+
+		for ( const auto & [name, argument] : m_arguments )
+		{
+			output << name << '=' << argument << ' ';
+		}
+
+		return output.str();
 	}
 }

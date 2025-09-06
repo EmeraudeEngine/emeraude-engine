@@ -50,7 +50,7 @@ namespace EmEn::Graphics
 	bool
 	VertexBufferFormatManager::onTerminate () noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_building};
+		const std::lock_guard< std::mutex > lock{m_listAccess};
 
 		m_flags[ServiceInitialized] = false;
 
@@ -169,7 +169,7 @@ namespace EmEn::Graphics
 	std::shared_ptr< VertexBufferFormat >
 	VertexBufferFormatManager::getVertexBufferFormat (const Saphir::VertexShader & vertexShader, Topology topology, uint32_t geometryFlagBits) noexcept
 	{
-		const std::lock_guard lock{m_building};
+		const std::lock_guard lock{m_listAccess};
 
 		m_stagingVertexBufferFormat = std::make_shared< VertexBufferFormat >();
 
@@ -452,7 +452,7 @@ namespace EmEn::Graphics
 	std::shared_ptr< VertexBufferFormat >
 	VertexBufferFormatManager::getVertexBufferFormat (const Saphir::VertexShader & vertexShader, const Geometry::Interface & geometry) noexcept
 	{
-		const std::lock_guard lock{m_building};
+		const std::lock_guard lock{m_listAccess};
 		
 		m_stagingVertexBufferFormat = std::make_shared< VertexBufferFormat >();
 		

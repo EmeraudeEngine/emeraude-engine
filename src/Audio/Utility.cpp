@@ -88,12 +88,7 @@ namespace EmEn::Audio
 	void
 	alFlushErrors () noexcept
 	{
-		ALenum error = alGetError();
-
-		while ( error != AL_NO_ERROR )
-		{
-			error = alGetError();
-		}
+		while (alGetError() != AL_NO_ERROR);
 	}
 
 	bool
@@ -117,12 +112,7 @@ namespace EmEn::Audio
 	void
 	alcFlushErrors (ALCdevice * device) noexcept
 	{
-		ALCenum error = alcGetError(device);
-
-		while ( error != ALC_NO_ERROR )
-		{
-			error = alcGetError(device);
-		}
+		while (alcGetError(device) != ALC_NO_ERROR);
 	}
 
 	std::string

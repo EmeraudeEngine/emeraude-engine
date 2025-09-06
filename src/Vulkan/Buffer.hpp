@@ -35,6 +35,13 @@
 
 /* Local inclusions for usages. */
 #include "DeviceMemory.hpp"
+#include "MemoryRegion.hpp"
+
+/* Forward declarations. */
+namespace EmEn::Vulkan
+{
+	class TransferManager;
+}
 
 namespace EmEn::Vulkan
 {
@@ -139,6 +146,17 @@ namespace EmEn::Vulkan
 			}
 
 			/**
+			 * @brief Returns whether the buffer can be read or written by the CPU directly.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isHostVisible () const noexcept
+			{
+				return (m_memoryPropertyFlag & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) != 0;
+			}
+
+			/**
 			 * @brief Returns the buffer vulkan handle.
 			 * @return VkBuffer
 			 */
@@ -206,6 +224,113 @@ namespace EmEn::Vulkan
 			}
 
 			/**
+			 * @brief Writes data into the device (GPU side) video memory.
+			 * @param transferManager A reference to a transfer manager.
+			 * @param memoryRegion A reference to the memory region.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool transferData (TransferManager & transferManager, const MemoryRegion & memoryRegion) noexcept;
+
+			/**
+			 * @brief Writes data into the device (GPU side) video memory.
+			 * @param transferManager  A reference to a transfer manager.
+			 * @param data A reference to a vector.
+			 * @return bool
+			 */
+			template< typename data_t >
+			[[nodiscard]]
+			bool
+			transferData (TransferManager & transferManager, const std::vector< data_t > & data) noexcept
+			{
+				const auto bytes = data.size() * sizeof(data_t);
+
+				if ( !this->transferData(transferManager, MemoryRegion{data.data(), bytes}) )
+				{
+					TraceError{ClassId} << "Unable to transfer " << bytes << " bytes into the buffer !";
+
+					return false;
+				}
+
+				return true;
+			}
+
+			/**
+			 * @brief Writes data into the host (CPU side) video memory.
+			 * @warning Only available for host buffers.
+			 * @param memoryRegion A reference to a memory region to perform the copy from source to destination.
+			 * @return bool
+			 */
+			bool writeData (const MemoryRegion & memoryRegion) const noexcept;
+
+			/**
+			 * @brief Writes data into the host (CPU side) video memory.
+			 * @warning Only available for host buffers.
+			 * @param memoryRegions A reference to a list of memory region to perform the copy from source to destination.
+			 * @return bool
+			 */
+			bool writeData (const std::vector< MemoryRegion > & memoryRegions) noexcept;
+
+			/**
+			 * @brief Writes data into the host (CPU side) video memory.
+			 * @warning Only available for host buffers.
+			 * @param data A reference to a vector.
+			 * @return bool
+			 */
+			template< typename data_t >
+			[[nodiscard]]
+			bool
+			writeData (const std::vector< data_t > & data) noexcept
+			{
+				const auto bytes = data.size() * sizeof(data_t);
+
+				if ( !this->writeData(MemoryRegion{data.data(), bytes}) )
+				{
+					TraceError{ClassId} << "Unable to write " << bytes << " bytes into the buffer !";
+
+					return false;
+				}
+
+				return true;
+			}
+
+			/**
+			 * @brief Maps the video memory to be able to write in it.
+			 * @warning Only available for host buffers.
+			 * @param offset The beginning of the map.
+			 * @param size The size of the mapping.
+			 * @return void *
+			 */
+			template< typename pointer_t >
+			[[nodiscard]]
+			pointer_t *
+			mapMemory (VkDeviceSize offset = 0, VkDeviceSize size = VK_WHOLE_SIZE) const noexcept
+			{
+				if ( !this->isHostVisible() )
+				{
+					Tracer::error(ClassId, "This buffer is not host visible! You can't map it.");
+
+					return nullptr;
+				}
+
+				return static_cast< pointer_t * >(this->deviceMemory()->mapMemory(offset, size));
+			}
+
+			/**
+			 * @brief Unmaps the video memory.
+			 * @warning Only available for host buffers.
+			 * @return void
+			 */
+			void
+			unmapMemory () const noexcept
+			{
+				if ( this->isHostVisible() )
+				{
+					this->deviceMemory()->unmapMemory();
+				}
+			}
+
+			/**
 			 * @brief Returns the descriptor buffer info.
 			 * @param offset Where to start in the buffer.
 			 * @param range The data length after offset.
@@ -215,7 +340,7 @@ namespace EmEn::Vulkan
 			VkDescriptorBufferInfo
 			getDescriptorInfo (uint32_t /*offset*/, uint32_t range) const noexcept
 			{
-				/* FIXME: Setting the offset to break some scenes ! */
+				/* FIXME: Setting the offset breaks some scenes! */
 
 				VkDescriptorBufferInfo descriptorInfo{};
 				descriptorInfo.buffer = m_handle;
@@ -225,7 +350,39 @@ namespace EmEn::Vulkan
 				return descriptorInfo;
 			}
 
-		protected:
+			/**
+			 * @brief Constructs a host buffer visible by the CPU.
+			 * @param device A reference to a device smart pointer.
+			 * @param createFlags The createInfo flags.
+			 * @param size The size in bytes.
+			 * @param usageFlags The buffer usage flags.
+			 * @return Buffer
+			 */
+			[[nodiscard]]
+			static
+			Buffer
+			createHostBuffer (const std::shared_ptr< Device > & device, VkBufferCreateFlags createFlags, VkDeviceSize size, VkBufferUsageFlags usageFlags) noexcept
+			{
+				return {device, createFlags, size, usageFlags, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT};
+			}
+
+			/**
+			 * @brief Constructs a device buffer visible only by the GPU.
+			 * @param device A reference to a device smart pointer.
+			 * @param createFlags The createInfo flags.
+			 * @param size The size in bytes.
+			 * @param usageFlags The buffer usage flags.
+			 * @return Buffer
+			 */
+			[[nodiscard]]
+			static
+			Buffer
+			createDeviceBuffer (const std::shared_ptr< Device > & device, VkBufferCreateFlags createFlags, VkDeviceSize size, VkBufferUsageFlags usageFlags) noexcept
+			{
+				return {device, createFlags, size, usageFlags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT};
+			}
+
+		private:
 
 			/**
 			 * @brief Returns the device memory pointer.
@@ -238,11 +395,10 @@ namespace EmEn::Vulkan
 				return m_deviceMemory.get();
 			}
 
-		private:
-
 			VkBuffer m_handle{VK_NULL_HANDLE};
 			VkBufferCreateInfo m_createInfo{};
 			VkMemoryPropertyFlags m_memoryPropertyFlag;
 			std::unique_ptr< DeviceMemory > m_deviceMemory;
+			mutable std::mutex m_hostMemoryAccess;
 	};
 }

@@ -33,12 +33,12 @@
 
 namespace EmEn::Saphir
 {
-	using namespace EmEn::Libs;
-	using namespace EmEn::Libs::Math;
-	using namespace EmEn::Libs::PixelFactory;
-	using namespace EmEn::Graphics;
-	using namespace EmEn::Saphir::Keys;
-	using namespace EmEn::Vulkan;
+	using namespace Libs;
+	using namespace Libs::Math;
+	using namespace Libs::PixelFactory;
+	using namespace Graphics;
+	using namespace Saphir::Keys;
+	using namespace Vulkan;
 
 	bool
 	LightGenerator::generateGouraudVertexShader (Generator::Abstract & generator, VertexShader & vertexShader, LightType lightType, bool enableShadowMap) const noexcept
@@ -115,9 +115,9 @@ namespace EmEn::Saphir
 
 			Code{vertexShader} <<
 				"if ( " << LightFactor << " > 0.0 )" << Line::End <<
-				"	" << Variable(DiffuseFactor) << " = max(dot(-" << RayDirectionViewSpace << ", " << ShaderVariable::NormalViewSpace << "), 0.0) * " << LightFactor << ';' << Line::End <<
+				"	" << LightGenerator::variable(DiffuseFactor) << " = max(dot(-" << RayDirectionViewSpace << ", " << ShaderVariable::NormalViewSpace << "), 0.0) * " << LightFactor << ';' << Line::End <<
 				"else" << Line::End <<
-				"	" << Variable(DiffuseFactor) << " = 0.0;" << Line::End;
+				"	" << LightGenerator::variable(DiffuseFactor) << " = 0.0;" << Line::End;
 		}
 
 		if ( !m_surfaceSpecularColor.empty() )
@@ -132,15 +132,15 @@ namespace EmEn::Saphir
 			}
 
 			Code{vertexShader} <<
-				"if ( " << Variable(DiffuseFactor) << " > 0.0 ) " << Line::End <<
+				"if ( " << LightGenerator::variable(DiffuseFactor) << " > 0.0 ) " << Line::End <<
 				'{' << Line::End <<
 				"	const vec3 R = reflect(" << RayDirectionViewSpace << ", " << ShaderVariable::NormalViewSpace << ");" << Line::End <<
 				"	const vec3 V = normalize(-" << ShaderVariable::PositionViewSpace << ".xyz);" << Line::End <<
-				"	" << Variable(SpecularFactor) << " = pow(max(dot(R, V), 0.0), " << m_surfaceShininessAmount << ") * " << LightFactor << ';' << Line::End <<
+				"	" << LightGenerator::variable(SpecularFactor) << " = pow(max(dot(R, V), 0.0), " << m_surfaceShininessAmount << ") * " << LightFactor << ';' << Line::End <<
 				'}' << Line::End <<
 				"else" << Line::End <<
 				'{' << Line::End <<
-				"	" << Variable(SpecularFactor) << " = 0.0;" << Line::End <<
+				"	" << LightGenerator::variable(SpecularFactor) << " = 0.0;" << Line::End <<
 				'}';
 		}
 
@@ -165,7 +165,7 @@ namespace EmEn::Saphir
 		
 		if ( m_flags[DiscardUnlitFragment] )
 		{
-			Code{fragmentShader} << "if ( " << Variable(DiffuseFactor) << " <= 0.0 ) { discard; }" << Line::End;
+			Code{fragmentShader} << "if ( " << LightGenerator::variable(DiffuseFactor) << " <= 0.0 ) { discard; }" << Line::End;
 		}
 
 		/* TODO: Test this code ! */
@@ -174,7 +174,7 @@ namespace EmEn::Saphir
 			fragmentShader.addComment("Compute the shadow influence over the light factor.");
 
 			Code{fragmentShader} <<
-				"if ( " << Variable(DiffuseFactor) << " > 0.0 )" << Line::End <<
+				"if ( " << LightGenerator::variable(DiffuseFactor) << " > 0.0 )" << Line::End <<
 				'{';
 
 			switch ( lightType )
@@ -182,7 +182,7 @@ namespace EmEn::Saphir
 				case LightType::Directional :
 					//fragmentShader.declare(Declaration::Uniform{Declaration::VariableType::Sampler2DShadow, Uniform::ShadowMapSampler});
 
-					Code{fragmentShader} << this->generate2DShadowMapCode(Uniform::ShadowMapSampler, Variable(ShaderBlock::Component::PositionLightSpace), DepthTextureFunction::TextureGather) << Line::End;
+					Code{fragmentShader} << this->generate2DShadowMapCode(Uniform::ShadowMapSampler, LightGenerator::variable(ShaderBlock::Component::PositionLightSpace), DepthTextureFunction::TextureGather) << Line::End;
 					break;
 
 				case LightType::Point :
@@ -197,20 +197,20 @@ namespace EmEn::Saphir
 				case LightType::Spot :
 					//gen.declare(Declaration::Uniform{Declaration::VariableType::Sampler2DShadow, Uniform::ShadowMapSampler});
 
-					Code{fragmentShader} << this->generate2DShadowMapCode(Uniform::ShadowMapSampler, Variable(ShaderBlock::Component::PositionLightSpace), DepthTextureFunction::TextureProj) << Line::End;
+					Code{fragmentShader} << this->generate2DShadowMapCode(Uniform::ShadowMapSampler, LightGenerator::variable(ShaderBlock::Component::PositionLightSpace), DepthTextureFunction::TextureProj) << Line::End;
 					break;
 			}
 
-			Code{fragmentShader} << Variable(DiffuseFactor) << " *= shadowFactor;";
+			Code{fragmentShader} << LightGenerator::variable(DiffuseFactor) << " *= shadowFactor;";
 
 			if ( !m_surfaceSpecularColor.empty() )
 			{
-				Code{fragmentShader} << Variable(SpecularFactor) << " *= shadowFactor;";
+				Code{fragmentShader} << LightGenerator::variable(SpecularFactor) << " *= shadowFactor;";
 			}
 
 			Code{fragmentShader} << '}' << Line::End;
 		}
 
-		return this->generateFinalFragmentOutput(fragmentShader, Variable(DiffuseFactor), Variable(SpecularFactor));
+		return this->generateFinalFragmentOutput(fragmentShader, LightGenerator::variable(DiffuseFactor), LightGenerator::variable(SpecularFactor));
 	}
 }

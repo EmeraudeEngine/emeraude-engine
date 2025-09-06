@@ -36,9 +36,7 @@
 #include <vector>
 
 /* Third-party inclusions. */
-#ifdef SAMPLERATE_ENABLED
-	#include <samplerate.h>
-#endif
+#include <samplerate.h>
 
 /* Local inclusions. */
 #include "Types.hpp"
@@ -96,7 +94,6 @@ namespace EmEn::Libs::WaveFactory
 	bool
 	Processor::resample (Frequency frequency) noexcept
 	{
-#ifdef SAMPLERATE_ENABLED
 		if ( !m_wave.isValid() )
 		{
 			std::cerr << __PRETTY_FUNCTION__ << ", no wave to resample !" "\n";
@@ -144,10 +141,5 @@ namespace EmEn::Libs::WaveFactory
 		m_wave.m_frequency = frequency;
 
 		return true;
-#else
-		std::cerr << __PRETTY_FUNCTION__ << ", libsamplerate is not available !" "\n";
-
-		return false;
-#endif
 	}
 }

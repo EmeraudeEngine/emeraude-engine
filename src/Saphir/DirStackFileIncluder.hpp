@@ -37,7 +37,7 @@
 namespace EmEn::Saphir
 {
 	/**
-	 * @brief Default include class for normal include convention of search backward
+	 * @brief Default includes class for normal include convention of search backward
 	 * through the stack of active include paths (for nested includes).
 	 * Can be overridden to customize.
 	 */

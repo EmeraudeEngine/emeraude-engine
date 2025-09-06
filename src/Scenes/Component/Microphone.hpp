@@ -33,9 +33,6 @@
 #include "AVConsole/AbstractVirtualDevice.hpp"
 #include "Abstract.hpp"
 
-/* Local inclusions for usages. */
-#include "Audio/Manager.hpp"
-
 namespace EmEn::Scenes::Component
 {
 	/**
@@ -127,18 +124,16 @@ namespace EmEn::Scenes::Component
 
 	inline
 	std::ostream &
-	operator<< (std::ostream & out, const Microphone & /*microphone*/)
+	operator<< (std::ostream & out, const Microphone & obj)
 	{
-		std::array< ALfloat, 12 > properties{0};
-
-		Audio::Manager::instance()->listenerProperties(properties);
+		const auto coordinates = obj.getWorldCoordinates();
+		const auto velocity = obj.getWorldVelocity();
 
 		return out <<
 			"Audio Listener information" "\n"
-			"Position: " << properties[0] << ", " << properties[1] << ", " << properties[2] << "\n"
-			"Forward: " << properties[3] << ", " << properties[4] << ", " << properties[5] << "\n"
-			"Upward: " << properties[6] << ", " << properties[7] << ", " << properties[8] << "\n"
-			"Velocity: " << properties[9] << ", " << properties[10] << ", " << properties[11] << '\n';
+			"Position: " << coordinates.position() << "\n"
+			"Forward: " << coordinates.forwardVector() << "\n"
+			"Velocity: " << velocity << "\n";
 	}
 
 	/**

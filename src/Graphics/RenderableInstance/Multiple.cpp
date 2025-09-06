@@ -32,17 +32,18 @@
 #include <mutex>
 
 /* Local inclusions. */
+#include "Graphics/Renderer.hpp"
 #include "Graphics/ViewMatricesInterface.hpp"
 #include "Vulkan/CommandBuffer.hpp"
 #include "Vulkan/TransferManager.hpp"
 
 namespace EmEn::Graphics::RenderableInstance
 {
-	using namespace EmEn::Libs;
-	using namespace EmEn::Libs::Math;
-	using namespace EmEn::Vulkan;
+	using namespace Libs;
+	using namespace Libs::Math;
+	using namespace Vulkan;
 
-	Multiple::Multiple (const std::shared_ptr< Renderable::Interface > & renderable, const std::vector< CartesianFrame< float > > & instanceLocations, uint32_t flagBits) noexcept
+	Multiple::Multiple (const std::shared_ptr< Device > & device, const std::shared_ptr< Renderable::Interface > & renderable, const std::vector< CartesianFrame< float > > & instanceLocations, uint32_t flagBits) noexcept
 		: Abstract{renderable, EnableInstancing | flagBits},
 		m_instanceCount{static_cast< uint32_t >(instanceLocations.size())},
 		m_activeInstanceCount{m_instanceCount}
@@ -68,11 +69,7 @@ namespace EmEn::Graphics::RenderableInstance
 		{
 			/* Create a vertex buffer object to hold locations in video memory
 			 * according to the size of local data. */
-			if ( this->createOnHardware(*TransferManager::instance(GPUWorkType::Graphics)) )
-			{
-				this->observe(renderable.get());
-			}
-			else
+			if ( !this->createOnHardware(device) )
 			{
 				this->setBroken("Unable to create the model matrices VBO !");
 			}
@@ -83,7 +80,7 @@ namespace EmEn::Graphics::RenderableInstance
 		}
 	}
 
-	Multiple::Multiple (const std::shared_ptr< Renderable::Interface > & renderable, uint32_t instanceCount, uint32_t flagBits) noexcept
+	Multiple::Multiple (const std::shared_ptr< Device > & device, const std::shared_ptr< Renderable::Interface > & renderable, uint32_t instanceCount, uint32_t flagBits) noexcept
 		: Abstract{renderable, EnableInstancing | flagBits},
 		m_instanceCount{instanceCount}
 	{
@@ -108,11 +105,7 @@ namespace EmEn::Graphics::RenderableInstance
 
 		/* Create a vertex buffer object to hold locations in video memory
 		 * according to the size of local data. */
-		if ( this->createOnHardware(*TransferManager::instance(GPUWorkType::Graphics)) )
-		{
-			this->observe(renderable.get());
-		}
-		else
+		if ( !this->createOnHardware(device) )
 		{
 			this->setBroken("Unable to create the model matrices VBO !");
 		}
@@ -294,8 +287,9 @@ namespace EmEn::Graphics::RenderableInstance
 	}
 
 	bool
-	Multiple::createOnHardware (TransferManager & transferManager) noexcept
+	Multiple::createOnHardware (const std::shared_ptr< Device > & device) noexcept
 	{
+		/* [VULKAN-CPU-SYNC] */
 		const std::lock_guard< std::mutex > lock{m_GPUMemoryAccess};
 
 		if ( this->isModelMatricesCreated() )
@@ -306,10 +300,10 @@ namespace EmEn::Graphics::RenderableInstance
 		const auto vertexElementCount = this->isFacingCamera() ? SpriteVBOElementCount : MeshVBOElementCount;
 		const auto vertexCount = static_cast< uint32_t >(m_localData.size() / vertexElementCount);
 
-		m_vertexBufferObject = std::make_unique< VertexBufferObject >(transferManager.device(), vertexCount, vertexElementCount);
+		m_vertexBufferObject = std::make_unique< VertexBufferObject >(device, vertexCount, vertexElementCount, true);
 		m_vertexBufferObject->setIdentifier(ClassId, "MultipleInstance??", "VertexBufferObject");
 
-		if ( !m_vertexBufferObject->create(transferManager, m_localData) )
+		if ( !m_vertexBufferObject->createOnHardware() || !m_vertexBufferObject->writeData(m_localData) )
 		{
 			Tracer::error(ClassId, "Unable to create the vertex buffer object (VBO) !");
 
@@ -324,8 +318,9 @@ namespace EmEn::Graphics::RenderableInstance
 	}
 
 	bool
-	Multiple::updateVideoMemory (TransferManager & transferManager) noexcept
+	Multiple::updateVideoMemory () noexcept
 	{
+		/* [VULKAN-CPU-SYNC] */
 		const std::lock_guard< std::mutex > lock{m_GPUMemoryAccess};
 
 		if constexpr ( IsDebug )
@@ -343,7 +338,7 @@ namespace EmEn::Graphics::RenderableInstance
 			return true;
 		}
 
-		if ( !m_vertexBufferObject->writeData(transferManager, m_localData) )
+		if ( !m_vertexBufferObject->writeData(m_localData) )
 		{
 			Tracer::error(ClassId, "Unable to write data to the VBO.");
 

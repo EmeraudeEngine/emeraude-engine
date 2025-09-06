@@ -118,6 +118,11 @@ namespace EmEn::Libs
 	{
 		std::unique_lock< std::mutex > lock{m_queueAccess};
 
+		if constexpr ( ThreadPoolDebugEnabled )
+		{
+			std::cout << "[ThreadPool-debug] Waiting for " << m_busyWorkers << " to finish (" << m_tasks.size() << " tasks left) ..." "\n";
+		}
+
 		/* NOTE: The wait condition is that the task file is empty
 		 * and no worker is currently executing a task. */
 		m_completion_condition.wait(lock, [this] {
@@ -156,9 +161,11 @@ namespace EmEn::Libs
 			{
 				Time::Elapsed::PrintScopeRealTime stat{"[ThreadPool-debug] Task finished"};
 
-				std::cout << "[ThreadPool-debug] Task running on thread #" << std::this_thread::get_id() << " ..." "\n";
+				std::cout << "[ThreadPool-debug] Thread #" << std::this_thread::get_id() << " running ... (" << m_busyWorkers << " busy workers, " << m_tasks.size() << " tasks left)" "\n";
 
 				task();
+
+				std::cout << "[ThreadPool-debug] Thread #" << std::this_thread::get_id() << " finished. (" << m_busyWorkers << " busy workers, " << m_tasks.size() << " tasks left)" "\n";
 			}
 			else
 			{
@@ -167,6 +174,7 @@ namespace EmEn::Libs
 
 			{
 				std::unique_lock< std::mutex > lock{m_queueAccess};
+
 				--m_busyWorkers;
 
 				/* NOTE: If it was the last task in progress AND the queue is empty,

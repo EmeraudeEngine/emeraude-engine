@@ -26,22 +26,12 @@
 
 #include "ColorBackgroundResource.hpp"
 
-/* Defining the resource manager class id. */
-template<>
-const char * const EmEn::Resources::Container< EmEn::Graphics::Renderable::ColorBackgroundResource >::ClassId{"ColorBackgroundContainer"};
-
-/* Defining the resource manager ClassUID. */
-template<>
-const size_t EmEn::Resources::Container< EmEn::Graphics::Renderable::ColorBackgroundResource >::ClassUID{getClassUID(ClassId)};
-
 namespace EmEn::Graphics::Renderable
 {
-	using namespace EmEn::Libs;
-
-	const size_t ColorBackgroundResource::ClassUID{getClassUID(ClassId)};
+	using namespace Libs;
 
 	bool
-	ColorBackgroundResource::load () noexcept
+	ColorBackgroundResource::load (Resources::ServiceProvider & /*serviceProvider*/) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
@@ -54,7 +44,7 @@ namespace EmEn::Graphics::Renderable
 	}
 
 	bool
-	ColorBackgroundResource::load (const Json::Value & /*data*/) noexcept
+	ColorBackgroundResource::load (Resources::ServiceProvider & /*serviceProvider*/, const Json::Value & /*data*/) noexcept
 	{
 		if ( !this->beginLoading() )
 		{

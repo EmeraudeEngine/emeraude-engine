@@ -29,16 +29,214 @@
 /* STL inclusions. */
 #include <string>
 #include <vector>
+#include <sstream>
 
 /* Local inclusions for inheritances. */
 #include "Libs/NameableTrait.hpp"
 
 /* Local inclusions for usages. */
-#include "ArgumentDoc.hpp"
-#include "ShortcutDoc.hpp"
+#include "Input/Types.hpp"
 
 namespace EmEn
 {
+	/**
+	 * @brief Base class for the help service documentation.
+	 */
+	class AbstractDoc
+	{
+		public:
+
+			/**
+			 * @brief Copy constructor.
+			 * @param copy A reference to the copied instance.
+			 */
+			AbstractDoc (const AbstractDoc & copy) noexcept = default;
+
+			/**
+			 * @brief Move constructor.
+			 * @param copy A reference to the copied instance.
+			 */
+			AbstractDoc (AbstractDoc && copy) noexcept = default;
+
+			/**
+			 * @brief Copy assignment.
+			 * @param copy A reference to the copied instance.
+			 * @return AbstractDoc &
+			 */
+			AbstractDoc & operator= (const AbstractDoc & copy) noexcept = default;
+
+			/**
+			 * @brief Move assignment.
+			 * @param copy A reference to the copied instance.
+			 * @return AbstractDoc &
+			 */
+			AbstractDoc & operator= (AbstractDoc && copy) noexcept = default;
+
+			/**
+			 * @brief The virtual destructor.
+			 */
+			virtual ~AbstractDoc () = default;
+
+			/**
+			 * @brief Returns the description.
+			 * @return const std::string &
+			 */
+			[[nodiscard]]
+			const std::string &
+			description () const noexcept
+			{
+				return m_description;
+			}
+
+		protected:
+
+			/**
+			 * @brief Constructs base documentation.
+			 * @param description A reference to a string [std::move].
+			 */
+			explicit
+			AbstractDoc (std::string description) noexcept
+				: m_description{std::move(description)}
+			{
+
+			}
+
+		private:
+
+			std::string m_description;
+	};
+
+	/**
+	 * @brief Class for argument documentation.
+	 * @extends EmEn::AbstractDoc The base documentation class.
+	 */
+	class ArgumentDoc final : public AbstractDoc
+	{
+		public:
+
+			/**
+			 * @brief Constructs an argumentation documentation.
+			 * @param description A reference to a string [std::move].
+			 * @param longName A reference to as string for the long name [std::move].
+			 * @param shortName A char for the short name. Default none.
+			 * @param options A reference to a string vector as options for the argument. Default none.
+			 */
+			ArgumentDoc (std::string description, std::string longName, char shortName = 0, const std::vector< std::string > & options = {}) noexcept
+				: AbstractDoc{std::move(description)},
+				m_longName{std::move(longName)},
+				m_shortName{shortName},
+				m_options{options}
+			{
+
+			}
+
+			/**
+			 * @brief Returns the argument long name.
+			 * @return const std::string &
+			 */
+			[[nodiscard]]
+			const std::string &
+			longName () const noexcept
+			{
+				return m_longName;
+			}
+
+			/**
+			 * @brief Returns the argument short name.
+			 * @return char
+			 */
+			[[nodiscard]]
+			char
+			shortName () const noexcept
+			{
+				return m_shortName;
+			}
+
+			/**
+			 * @brief Returns the list of options for the arguments. (optional)
+			 * @return const std::vector< std::string > &
+			 */
+			[[nodiscard]]
+			const std::vector< std::string > &
+			options () const noexcept
+			{
+				return m_options;
+			}
+
+		private:
+
+			/**
+			 * @brief STL streams printable object.
+			 * @param out A reference to the stream output.
+			 * @param obj A reference to the object to print.
+			 * @return std::ostream &
+			 */
+			friend std::ostream & operator<< (std::ostream & out, const ArgumentDoc & obj);
+
+			std::string m_longName;
+			char m_shortName;
+			std::vector< std::string > m_options;
+	};
+
+	/**
+ 	 * @brief Class for shortcut documentation.
+	 * @extends EmEn::AbstractDoc The base documentation class.
+	 */
+	class ShortcutDoc final : public AbstractDoc
+	{
+		public:
+
+			/**
+			 * @brief Constructs shortcut documentation.
+			 * @param description A reference to a string.
+			 * @param key The main key for the shortcut.
+			 * @param modifiers The additional modifiers. Default none.
+			 */
+			ShortcutDoc (const std::string & description, Input::Key key, int modifiers = 0) noexcept
+				: AbstractDoc{description},
+				m_key{key},
+				m_modifiers{modifiers}
+			{
+
+			}
+
+			/**
+			 * @brief Returns the main key of the shortcut.
+			 * @return EmEn::Input::Key
+			 */
+			[[nodiscard]]
+			Input::Key
+			key () const noexcept
+			{
+				return m_key;
+			}
+
+			/**
+			 * @brief Returns the mask of modifier for shortcut.
+			 * @note 0 means no modifier needed.
+			 * @return int
+			 */
+			[[nodiscard]]
+			int
+			modifiers () const noexcept
+			{
+				return m_modifiers;
+			}
+
+		private:
+
+			/**
+			 * @brief STL streams printable object.
+			 * @param out A reference to the stream output.
+			 * @param obj A reference to the object to print.
+			 * @return std::ostream &
+			 */
+			friend std::ostream & operator<< (std::ostream & out, const ShortcutDoc & obj);
+
+			Input::Key m_key;
+			int m_modifiers;
+	};
+
 	/**
 	 * @brief This class holds help for an application.
 	 */
@@ -50,7 +248,7 @@ namespace EmEn
 			static constexpr auto ClassId{"Help"};
 
 			/**
-			 * @brief Constructs the Help service.
+			 * @brief Constructs a help service.
 			 * @param name A reference to a string [std::move].
 			 */
 			explicit
@@ -62,7 +260,7 @@ namespace EmEn
 
 			/**
 			 * @brief Adds a new argument to the help.
-			 * @param argumentDoc A reference to a ArgumentDoc instance.
+			 * @param argumentDoc A reference to an ArgumentDoc instance.
 			 * @return void
 			 */
 			void
@@ -160,4 +358,100 @@ namespace EmEn
 			std::vector< ArgumentDoc > m_argumentDocs;
 			std::vector< ShortcutDoc > m_shortcutDocs;
 	};
+
+	inline
+	std::ostream &
+	operator<< (std::ostream & out, const ArgumentDoc & obj)
+	{
+		const auto shortPresent = obj.shortName() != 0;
+		const auto longPresent = !obj.longName().empty();
+
+		if ( shortPresent )
+		{
+			out << '-' << obj.shortName();
+		}
+		else
+		{
+			out << '\t';
+		}
+
+		if ( longPresent )
+		{
+			if ( shortPresent )
+			{
+				out << ", ";
+			}
+
+			out << "--" << obj.longName();
+		}
+
+		if ( !obj.options().empty() )
+		{
+			for ( const auto &option: obj.options() )
+			{
+				out << " [" << option << "]";
+			}
+		}
+
+		return out << " : " << obj.description();
+	}
+
+	/**
+	 * @brief Stringifies the object.
+	 * @param obj A reference to the object to print.
+	 * @return std::string
+	 */
+	inline
+	std::string
+	to_string (const ArgumentDoc & obj) noexcept
+	{
+		std::stringstream output;
+
+		output << obj;
+
+		return output.str();
+	}
+
+	inline
+	std::ostream &
+	operator<< (std::ostream & out, const ShortcutDoc & obj)
+	{
+		if ( Input::isKeyboardModifierPressed(Input::ModKeyShift, obj.modifiers()) )
+		{
+			out << "SHIFT + ";
+		}
+
+		if ( Input::isKeyboardModifierPressed(Input::ModKeyControl, obj.modifiers()) )
+		{
+			out << "CTRL + ";
+		}
+
+		if ( Input::isKeyboardModifierPressed(Input::ModKeyAlt, obj.modifiers()) )
+		{
+			out << "ALT + ";
+		}
+
+		if ( Input::isKeyboardModifierPressed(Input::ModKeySuper, obj.modifiers()) )
+		{
+			out << "SUPER + ";
+		}
+
+		return out << to_cstring(obj.key()) << " : " << obj.description();
+	}
+
+	/**
+	 * @brief Stringifies the object.
+	 * @param obj A reference to the object to print.
+	 * @return std::string
+	 */
+	inline
+	std::string
+	to_string (const ShortcutDoc & obj) noexcept
+	{
+		std::stringstream output;
+
+		output << obj;
+
+		return output.str();
+	}
 }

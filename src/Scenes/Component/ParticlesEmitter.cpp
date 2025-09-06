@@ -31,11 +31,11 @@
 
 namespace EmEn::Scenes::Component
 {
-	using namespace EmEn::Libs;
-	using namespace EmEn::Libs::Math;
-	using namespace EmEn::Animations;
-	using namespace EmEn::Physics;
-	using namespace EmEn::Graphics;
+	using namespace Libs;
+	using namespace Libs::Math;
+	using namespace Animations;
+	using namespace Physics;
+	using namespace Graphics;
 
 	void
 	ParticlesEmitter::processLogics (const Scene & scene) noexcept
@@ -146,7 +146,7 @@ namespace EmEn::Scenes::Component
 		}
 
 		m_renderableInstance->setActiveInstanceCount(activeInstanceCount);
-		m_renderableInstance->updateVideoMemory(scene.AVConsoleManager().graphicsRenderer().transferManager());
+		m_renderableInstance->updateVideoMemory();
 	}
 
 	bool
@@ -194,16 +194,11 @@ namespace EmEn::Scenes::Component
 	bool
 	ParticlesEmitter::onNotification (const ObservableTrait * observable, int notificationCode, const std::any & /*data*/) noexcept
 	{
-		if ( observable == m_renderableInstance.get() )
+		if ( observable == m_renderableInterface.lock().get() )
 		{
-			switch ( notificationCode )
+			if ( notificationCode == Resources::ResourceTrait::LoadFinished )
 			{
-				case RenderableInstance::Abstract::ReadyToSetupOnGPU :
-					this->notify(ComponentContentModified);
-					break;
-
-				default:
-					break;
+				this->notify(ComponentContentModified);
 			}
 
 			return true;

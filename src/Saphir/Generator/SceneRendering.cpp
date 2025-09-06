@@ -75,6 +75,7 @@ namespace EmEn::Saphir::Generator
 		{
 			if ( m_renderPassType == RenderPassType::SimplePass && m_scene->lightSet().isUsingStaticLighting() )
 			{
+				/* FIXME: Check where to put the name of the static lighting! */
 				const auto * staticLighting = m_scene->lightSet().getStaticLightingPointer();
 
 				if ( staticLighting == nullptr )

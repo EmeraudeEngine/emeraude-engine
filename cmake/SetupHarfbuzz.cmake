@@ -1,23 +1,13 @@
-if ( NOT HARFBUZZ_ENABLED )
-	if ( EMERAUDE_USE_SYSTEM_LIBS )
-		# NOTE: Harfbuzz is unnecessary from system, freetype as system library will do the job.
-	else ()
-		message("Enabling Harfbuzz library from local source ...")
+if ( NOT TARGET_BINARY_FOR_SETUP )
+	message(FATAL_ERROR "TARGET_BINARY_FOR_SETUP is not SET !")
+endif ()
 
-		if ( MSVC )
-			target_link_libraries(${PROJECT_NAME} PRIVATE
-				${LOCAL_LIB_DIR}/lib/harfbuzz.lib
-				${LOCAL_LIB_DIR}/lib/harfbuzz-subset.lib
-			)
-		else ()
-			target_link_libraries(${PROJECT_NAME} PRIVATE
-				${LOCAL_LIB_DIR}/lib/libharfbuzz.a
-				${LOCAL_LIB_DIR}/lib/libharfbuzz-subset.a
-			)
-		endif ()
-	endif ()
+# NOTE: Harfbuzz is unnecessary from system, freetype as system library will do the job.
+if ( NOT EMERAUDE_USE_SYSTEM_LIBS )
+	message("Enabling Harfbuzz library from local source ...")
 
-	set(HARFBUZZ_ENABLED On)
-else ()
-	message("The Harfbuzz library is already enabled.")
+	target_link_libraries(${TARGET_BINARY_FOR_SETUP} PRIVATE
+		harfbuzz
+		harfbuzz-subset
+	)
 endif ()

@@ -63,14 +63,12 @@
 
 namespace EmEn::Overlay
 {
-	using namespace EmEn::Libs;
-	using namespace EmEn::Libs::Math;
-	using namespace EmEn::Libs::VertexFactory;
-	using namespace EmEn::Saphir;
-	using namespace EmEn::Graphics;
-	using namespace EmEn::Vulkan;
-
-	const size_t Manager::ClassUID{getClassUID(ClassId)};
+	using namespace Libs;
+	using namespace Libs::Math;
+	using namespace Libs::VertexFactory;
+	using namespace Saphir;
+	using namespace Graphics;
+	using namespace Vulkan;
 
 	bool
 	Manager::onKeyPress (int32_t key, int32_t scancode, int32_t modifiers, bool repeat) noexcept
@@ -285,7 +283,7 @@ namespace EmEn::Overlay
 	bool
 	Manager::generateShaderProgram () noexcept
 	{
-		Generator::OverlayRendering generator{m_graphicsRenderer.swapChain(), m_surfaceGeometry, Generator::OverlayRendering::ColorConversion::ToLinear};
+		Generator::OverlayRendering generator{m_graphicsRenderer.mainRenderTarget(), m_surfaceGeometry, Generator::OverlayRendering::ColorConversion::ToLinear};
 
 		if ( !generator.generateShaderProgram(m_graphicsRenderer) )
 		{
@@ -320,7 +318,7 @@ namespace EmEn::Overlay
 			inputManager.removePointerListener(this);
 		}
 
-		m_flags[Enabled] = state;
+		m_enabled = state;
 	}
 
 	bool
@@ -357,7 +355,7 @@ namespace EmEn::Overlay
 		}
 #endif
 
-		m_flags[ServiceInitialized] = true;
+		m_serviceInitialized = true;
 
 		return true;
 	}
@@ -365,7 +363,7 @@ namespace EmEn::Overlay
 	bool
 	Manager::onTerminate () noexcept
 	{
-		m_flags[ServiceInitialized] = false;
+		m_serviceInitialized = false;
 
 #ifdef IMGUI_ENABLED
 		TraceInfo{ClassId} << "Releasing ImGUI library ...";
@@ -386,7 +384,7 @@ namespace EmEn::Overlay
 	std::shared_ptr< UIScreen >
 	Manager::createScreen (const std::string & name, bool enableKeyboardListener, bool enablePointerListener) noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_screensMutex};
+		const std::lock_guard< std::mutex > lock{m_screensAccess};
 
 		if constexpr ( IsDebug )
 		{
@@ -409,6 +407,7 @@ namespace EmEn::Overlay
 
 		m_screens[name] = screen;
 
+		std::cout << "ClassUID: " << this->classUID() << " : " << getClassUID() << " : " << getClassUID() << std::endl;
 		this->notify(UIScreenCreated, screen);
 
 		return screen;
@@ -436,7 +435,7 @@ namespace EmEn::Overlay
 	bool
 	Manager::destroyScreen (const std::string & name) noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_screensMutex};
+		const std::lock_guard< std::mutex > lock{m_screensAccess};
 
 		const auto screenIt = m_screens.find(name);
 
@@ -459,7 +458,7 @@ namespace EmEn::Overlay
 	void
 	Manager::clearScreens () noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_screensMutex};
+		const std::lock_guard< std::mutex > lock{m_screensAccess};
 
 		/* [ERASE IN LOOP] */
 		auto screenIt = m_screens.begin();
@@ -620,8 +619,8 @@ namespace EmEn::Overlay
 		auto & settings = m_primaryServices.settings();
 
 		const auto & windowState = m_window.state();
-		const auto forceScaleX = settings.get< float >(VideoOverlayForceScaleXKey, DefaultVideoOverlayForceScale);
-		const auto forceScaleY = settings.get< float >(VideoOverlayForceScaleYKey, DefaultVideoOverlayForceScale);
+		const auto forceScaleX = settings.getOrSetDefault< float >(VideoOverlayForceScaleXKey, DefaultVideoOverlayForceScale);
+		const auto forceScaleY = settings.getOrSetDefault< float >(VideoOverlayForceScaleYKey, DefaultVideoOverlayForceScale);
 
 		/* NOTE: This structure is shared with all screens and surfaces. */
 		m_framebufferProperties.updateProperties(
@@ -676,7 +675,7 @@ namespace EmEn::Overlay
 			return false;
 		}
 
-		if ( !m_program->graphicsPipeline()->recreateOnHardware(*m_graphicsRenderer.swapChain(), m_framebufferProperties.width(), m_framebufferProperties.height()) )
+		if ( !m_program->graphicsPipeline()->recreateOnHardware(*m_graphicsRenderer.mainRenderTarget(), m_framebufferProperties.width(), m_framebufferProperties.height()) )
 		{
 			TraceError{ClassId} << "Unable to recreate the graphics pipeline with the new size !" "\n" << m_framebufferProperties;
 
@@ -700,7 +699,7 @@ namespace EmEn::Overlay
 	void
 	Manager::render (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const CommandBuffer & commandBuffer) const noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_screensMutex};
+		const std::lock_guard< std::mutex > lock{m_screensAccess};
 
 		/* Check if the overlay is enabled or there is something to render. */
 		if ( !this->isEnabled() || m_screens.empty() )
@@ -762,7 +761,7 @@ namespace EmEn::Overlay
 	bool
 	Manager::onNotification (const ObservableTrait * observable, int notificationCode, const std::any & /*data*/) noexcept
 	{
-		if ( observable->is(Window::ClassUID) )
+		if ( observable->is(Window::getClassUID()) )
 		{
 			switch ( notificationCode )
 			{
@@ -794,9 +793,9 @@ namespace EmEn::Overlay
 			return true;
 		}
 
-		/* NOTE: Don't know what is it, goodbye! */
+		/* NOTE: Don't know what it is, goodbye! */
 		TraceDebug{ClassId} <<
-			"Received an unhandled notification (Code:" << notificationCode << ") from observable '" << whoIs(observable->classUID()) << "' (UID:" << observable->classUID() << ")  ! "
+			"Received an unhandled notification (Code:" << notificationCode << ") from observable (UID:" << observable->classUID() << ")  ! "
 			"Forgetting it ...";
 
 		return false;

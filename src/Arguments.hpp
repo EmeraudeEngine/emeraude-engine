@@ -26,21 +26,27 @@
 
 #pragma once
 
+/* Engine configuration file. */
+#include "emeraude_config.hpp"
+
 /* STL inclusions. */
-#include <cstddef>
-#include <array>
 #include <map>
+#include <set>
 #include <vector>
 #include <string>
 #include <sstream>
 #include <algorithm>
 #include <filesystem>
+#include <optional>
+#include <functional>
 
 /* Local inclusions for inheritances. */
 #include "ServiceInterface.hpp"
 
-/* Local inclusions. */
-#include "Argument.hpp"
+/* Local inclusions for usages. */
+#ifdef IS_WINDOWS
+#include "PlatformSpecific/Helpers.hpp"
+#endif
 
 namespace EmEn
 {
@@ -61,7 +67,21 @@ namespace EmEn
 			 * @param argv The argument value from the standard C/C++ main() function.
 			 * @param childProcess Declares a child process.
 			 */
-			Arguments (int argc, char * * argv, bool childProcess) noexcept;
+			Arguments (int argc, char * * argv, bool childProcess) noexcept
+				: ServiceInterface{ClassId},
+				m_childProcess{childProcess}
+			{
+				/* NOTE: Create a copy of main() arguments. */
+				if ( argc > 0 && argv != nullptr )
+				{
+					m_rawArguments.reserve(argc);
+
+					for ( int argIndex = 0; argIndex < argc; argIndex++ )
+					{
+						m_rawArguments.emplace_back(argv[argIndex]);
+					}
+				}
+			}
 
 #if IS_WINDOWS
 			/**
@@ -71,28 +91,43 @@ namespace EmEn
 			 * @param wargv The argument value from the standard C/C++ main() function.
 			 * @param childProcess Declares a child process.
 			 */
-			Arguments (int argc, wchar_t * * wargv, bool childProcess) noexcept;
-#endif
+			Arguments (int argc, wchar_t * * wargv, bool childProcess) noexcept
+				: ServiceInterface{ClassId},
+				m_childProcess{childProcess}
+			{
+				/* NOTE: Create a copy of main() arguments. */
+				if ( argc > 0 && wargv != nullptr )
+				{
+					m_rawArguments.reserve(argc);
 
-			/**
-			 * @brief Destructs the argument service.
-			 */
-			~Arguments () override;
+					for ( int argIndex = 0; argIndex < argc; argIndex++ )
+					{
+						std::wstring tmp{wargv[argIndex]};
+
+						m_rawArguments.emplace_back(PlatformSpecific::convertWideToUTF8(tmp));
+					}
+				}
+			}
+#endif
 
 			/** @copydoc EmEn::ServiceInterface::usable() */
 			[[nodiscard]]
 			bool
 			usable () const noexcept override
 			{
-				return m_flags[ServiceInitialized];
+				return m_serviceInitialized;
 			}
 
 			/**
-			 * @brief Adds an argument.
-			 * @param argument A reference to a string.
-			 * @return void
+			 * @brief Returns the application executable path.
+			 * @return const std::filesystem::path &
 			 */
-			void addArgument (const std::string & argument) noexcept;
+			[[nodiscard]]
+			const std::filesystem::path &
+			binaryFilepath () const noexcept
+			{
+				return m_binaryFilepath;
+			}
 
 			/**
 			 * @brief Returns a list of argument copies.
@@ -107,11 +142,12 @@ namespace EmEn
 
 			/**
 			 * @brief Returns whether a raw argument is present.
+			 * @param argument A string view.
 			 * @return bool
 			 */
 			[[nodiscard]]
 			bool
-			isRawArgumentPresent (const std::string & argument) const noexcept
+			isRawArgumentPresent (std::string_view argument) const noexcept
 			{
 				return std::ranges::any_of(m_rawArguments, [&argument] (const auto & currentArgument) {
 					return currentArgument == argument;
@@ -119,54 +155,66 @@ namespace EmEn
 			}
 
 			/**
-			 * @brief Returns the argument count from the standard C main function.
-			 * @return int
+			 * @brief Returns whether is arguments is for a child process.
+			 * @return bool
 			 */
 			[[nodiscard]]
-			int getArgc () const noexcept;
-
-			/**
-			 * @brief Returns the argument values from the standard C main function.
-			 * @return char * *
-			 */
-			[[nodiscard]]
-			char * * getArgv () const noexcept;
-
-			/**
-			 * @brief Returns a parsed argument from the command line. Unique name version.
-			 * @param name A reference to a string to define the argument name from the command line.
-			 * @return Argument
-			 */
-			[[nodiscard]]
-			Argument get (const std::string & name) const noexcept;
-
-			/**
-			 * @brief Returns a parsed argument from the command line. The name is short version.
-			 * @param name A reference to a string defining the argument name from the command line.
-			 * @param alternateName A reference to a string for an alternate name.
-			 * @return Argument
-			 */
-			[[nodiscard]]
-			Argument get (const std::string & name, const std::string & alternateName) const noexcept;
-
-			/**
-			 * @brief Returns a parsed argument from the command line. Multiple name versions.
-			 * @param namesList A reference to a vector of string defining all possible argument names from the command line.
-			 * @return Argument
-			 */
-			[[nodiscard]]
-			Argument get (const std::vector< std::string > & namesList) const noexcept;
-
-			/**
-			 * @brief Returns the argument map.
-			 * @return const std::map< std::string, Argument > &
-			 */
-			[[nodiscard]]
-			const std::map< std::string, Argument > &
-			argumentList () const noexcept
+			bool
+			isChildProcess () const noexcept
 			{
-				return m_arguments;
+				return m_childProcess;
 			}
+
+			/**
+			 * @brief Adds a switch.
+			 * @param name A string view.
+			 * @param completeRawArguments Set the switch to the raw arguments. Default true.
+			 * @return void
+			 */
+			void addSwitch (std::string_view name, bool completeRawArguments = true) noexcept;
+
+			/**
+			 * @brief Adds an argument.
+			 * @param name A string view.
+			 * @param value A string view.
+			 * @param completeRawArguments Set the switch to the raw arguments. Default true.
+			 * @return void
+			 */
+			void addArgument (std::string_view name, std::string_view value, bool completeRawArguments = true) noexcept;
+
+			/**
+			 * @brief Returns whether a switch is present in the argument.
+			 * @param argument A string view.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool isSwitchPresent (std::string_view argument) const noexcept;
+
+			/**
+			 * @brief Returns whether a switch is present in the argument.
+			 * @param argument A string view.
+			 * @param alternateArgument A string view for an alternate argument name.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool isSwitchPresent (std::string_view argument, std::string_view alternateArgument) const noexcept;
+
+			/**
+			 * @brief Returns a parsed argument from the command line.
+			 * @param argument A string view.
+			 * @return std::optional< std::string >
+			 */
+			[[nodiscard]]
+			std::optional< std::string > get (std::string_view argument) const noexcept;
+
+			/**
+			 * @brief Returns a parsed argument from the command line.
+			 * @param argument A string view.
+			 * @param alternateArgument A string view for an alternate argument name.
+			 * @return std::optional< std::string >
+			 */
+			[[nodiscard]]
+			std::optional< std::string > get (std::string_view argument, std::string_view alternateArgument) const noexcept;
 
 			/**
 			 * @brief Packs arguments to use in a command line.
@@ -176,14 +224,37 @@ namespace EmEn
 			std::string packForCommandLine () const noexcept;
 
 			/**
-			 * @brief Returns the application executable path.
-			 * @return const std::filesystem::path &
+			 * @brief For each switch present.
+			 * @param lambda A reference to a function using the signature "bool method (const std::string &, const std::string &)".
+			 * @return void
 			 */
-			[[nodiscard]]
-			const std::filesystem::path &
-			binaryFilepath () const noexcept
+			void
+			forEachSwitch (const std::function< bool (const std::string & name) > & lambda) const noexcept
 			{
-				return m_binaryFilepath;
+				for ( const auto & name : m_switches )
+				{
+					if ( lambda(name))
+					{
+						break;
+					}
+				}
+			}
+
+			/**
+			 * @brief For each argument present.
+			 * @param lambda A reference to a function using the signature "bool method (const std::string &, const std::string &)".
+			 * @return void
+			 */
+			void
+			forEachArgument (const std::function< bool (const std::string & name, const std::string & value) > & lambda) const noexcept
+			{
+				for ( const auto & [name, value] : m_arguments )
+				{
+					if ( lambda(name, value))
+					{
+						break;
+					}
+				}
 			}
 
 		private:
@@ -193,12 +264,6 @@ namespace EmEn
 
 			/** @copydoc EmEn::ServiceInterface::onTerminate() */
 			bool onTerminate () noexcept override;
-
-			/**
-			 * @brief Recreates argc and argv from the main parameters after modifications.
-			 * @return void
-			 */
-			void recreateRawArguments () const noexcept;
 
 			/**
 			 * @brief STL streams printable object.
@@ -211,51 +276,49 @@ namespace EmEn
 			/* Flag names */
 			static constexpr auto ServiceInitialized{0UL};
 			static constexpr auto ChildProcess{1UL};
-			static constexpr auto ShowInformation{2UL};
 
-			std::vector< std::string > m_rawArguments;
-			mutable int m_argc{0};
-			mutable char * * m_argv{nullptr};
 			std::filesystem::path m_binaryFilepath;
-			std::map< std::string, Argument > m_arguments;
-			std::array< bool, 8 > m_flags{
-				false/*ServiceInitialized*/,
-				false/*ChildProcess*/,
-				false/*ShowInformation*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/
-			};
+			std::vector< std::string > m_rawArguments;
+			std::set< std::string > m_switches;
+			std::map< std::string, std::string, std::less<> > m_arguments;
+			bool m_serviceInitialized{false};
+			const bool m_childProcess{false};
 	};
 
 	inline
 	std::ostream &
 	operator<< (std::ostream & out, const Arguments & obj)
 	{
-		if ( obj.m_arguments.empty() )
+		if ( obj.m_switches.empty() )
 		{
-			return out << "Executable arguments : NONE" "\n";
+			out << "Executable switches : NONE" "\n";
 		}
-
-		out << "Executable arguments :" "\n";
-
-		for ( const auto & [name, argument] : obj.m_arguments )
+		else
 		{
-			if ( argument.isSwitch() )
+			out << "Executable switches :" "\n";
+
+			for ( const auto & name : obj.m_switches )
 			{
 				out << name << '\n';
 			}
-			else
+		}
+
+		if ( obj.m_arguments.empty() )
+		{
+			out << "Executable arguments : NONE" "\n";
+		}
+		else
+		{
+			out << "Executable arguments :" "\n";
+
+			for ( const auto & [name, value] : obj.m_arguments )
 			{
-				out << name << " = " << argument << '\n';
+				out << name << " = " << value << '\n';
 			}
 		}
 
 		return out;
 	}
-
 	/**
 	 * @brief Stringifies the object.
 	 * @param obj A reference to the object to print.

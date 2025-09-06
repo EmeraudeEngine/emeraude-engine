@@ -37,7 +37,7 @@ namespace EmEn::Audio
 
 	Buffer::Buffer () noexcept
 	{
-		if ( Manager::audioDisabled() )
+		if ( !Manager::isAudioSystemAvailable() )
 		{
 			*(this->identifierPointer()) =  1;
 
@@ -74,7 +74,7 @@ namespace EmEn::Audio
 			return false;
 		}
 
-		if ( Manager::audioDisabled() )
+		if ( !Manager::isAudioSystemAvailable() )
 		{
 			return true;
 		}
@@ -139,7 +139,7 @@ namespace EmEn::Audio
 	{
 		auto value = -1;
 
-		if ( !Manager::audioDisabled() )
+		if ( Manager::isAudioSystemAvailable() )
 		{
 			if ( this->isCreated() )
 			{
@@ -159,7 +159,7 @@ namespace EmEn::Audio
 	{
 		auto value = -1;
 
-		if ( !Manager::audioDisabled() )
+		if ( Manager::isAudioSystemAvailable() )
 		{
 			if ( this->isCreated() )
 			{
@@ -179,7 +179,7 @@ namespace EmEn::Audio
 	{
 		auto value = -1;
 
-		if ( !Manager::audioDisabled() )
+		if ( Manager::isAudioSystemAvailable() )
 		{
 			if ( this->isCreated() )
 			{
@@ -199,7 +199,7 @@ namespace EmEn::Audio
 	{
 		auto value = -1;
 
-		if ( !Manager::audioDisabled() )
+		if ( Manager::isAudioSystemAvailable() )
 		{
 			if ( this->isCreated() )
 			{

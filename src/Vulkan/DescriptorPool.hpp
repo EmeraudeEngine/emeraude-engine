@@ -177,6 +177,6 @@ namespace EmEn::Vulkan
 			VkDescriptorPool m_handle{VK_NULL_HANDLE};
 			VkDescriptorPoolCreateInfo m_createInfo{};
 			std::vector< VkDescriptorPoolSize > m_descriptorPoolSizes;
-			mutable std::mutex m_allocationMutex;
+			mutable std::mutex m_allocationsAccess;
 	};
 }

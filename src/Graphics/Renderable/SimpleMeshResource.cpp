@@ -31,37 +31,25 @@
 #include "Graphics/Material/BasicResource.hpp"
 #include "Resources/Manager.hpp"
 
-/* Defining the resource manager class id. */
-template<>
-const char * const EmEn::Resources::Container< EmEn::Graphics::Renderable::SimpleMeshResource >::ClassId{"SimpleMeshContainer"};
-
-/* Defining the resource manager ClassUID. */
-template<>
-const size_t EmEn::Resources::Container< EmEn::Graphics::Renderable::SimpleMeshResource >::ClassUID{getClassUID(ClassId)};
-
 namespace EmEn::Graphics::Renderable
 {
-	using namespace EmEn::Libs;
-	using namespace EmEn::Libs::Math;
-
-	const size_t SimpleMeshResource::ClassUID{getClassUID(ClassId)};
+	using namespace Libs;
+	using namespace Libs::Math;
 
 	bool
-	SimpleMeshResource::load () noexcept
+	SimpleMeshResource::load (Resources::ServiceProvider & serviceProvider) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
 			return false;
 		}
 
-		auto * manager = Resources::Manager::instance();
-
-		if ( !this->setGeometry(manager->container< Geometry::VertexResource >()->getRandomResource()) )
+		if ( !this->setGeometry(serviceProvider.container< Geometry::VertexResource >()->getRandomResource()) )
 		{
 			return this->setLoadSuccess(false);
 		}
 
-		if ( !this->setMaterial(manager->container< Material::BasicResource >()->getRandomResource()) )
+		if ( !this->setMaterial(serviceProvider.container< Material::BasicResource >()->getRandomResource()) )
 		{
 			return this->setLoadSuccess(false);
 		}
@@ -70,7 +58,7 @@ namespace EmEn::Graphics::Renderable
 	}
 
 	bool
-	SimpleMeshResource::load (const Json::Value & /*data*/) noexcept
+	SimpleMeshResource::load (Resources::ServiceProvider & /*serviceProvider*/, const Json::Value & /*data*/) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
@@ -145,14 +133,14 @@ namespace EmEn::Graphics::Renderable
 	}
 
 	std::shared_ptr< SimpleMeshResource >
-	SimpleMeshResource::getOrCreate (const std::shared_ptr< Geometry::Interface > & geometryResource, const std::shared_ptr< Material::Interface > & materialResource, std::string resourceName) noexcept
+	SimpleMeshResource::getOrCreate (Resources::ServiceProvider & serviceProvider, const std::shared_ptr< Geometry::Interface > & geometryResource, const std::shared_ptr< Material::Interface > & materialResource, std::string resourceName) noexcept
 	{
 		if ( resourceName.empty() )
 		{
 			resourceName = (std::stringstream{} << "Mesh(" << geometryResource->name() << ',' << materialResource->name() << ')').str();
 		}
 
-		return Resources::Manager::instance()->container< SimpleMeshResource >()->getOrCreateResource(resourceName, [&geometryResource, &materialResource] (SimpleMeshResource & newMesh) {
+		return serviceProvider.container< SimpleMeshResource >()->getOrCreateResource(resourceName, [&geometryResource, &materialResource] (SimpleMeshResource & newMesh) {
 			return newMesh.load(geometryResource, materialResource);
 		});
 	}

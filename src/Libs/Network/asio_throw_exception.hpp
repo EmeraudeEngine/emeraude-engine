@@ -43,7 +43,7 @@ namespace asio::detail
 	void
 	throw_exception (const exception_t & exception)
 	{
-		std::cerr << __PRETTY_FUNCTION__ << '\n' << "ASIO stack message : " << exception.what() << '\n';
+		std::cerr << "throw_exception(), ASIO stack message : " << exception.what() << '\n';
 
 		//std::terminate();
 	}

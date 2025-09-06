@@ -35,24 +35,14 @@
 #include "Graphics/TextureResource/Abstract.hpp"
 #include "Resources/Manager.hpp"
 
-/* Defining the resource manager class id. */
-template<>
-const char * const EmEn::Resources::Container< EmEn::Graphics::CubemapResource >::ClassId{"CubemapContainer"};
-
-/* Defining the resource manager ClassUID. */
-template<>
-const size_t EmEn::Resources::Container< EmEn::Graphics::CubemapResource >::ClassUID{getClassUID(ClassId)};
-
 namespace EmEn::Graphics
 {
-	using namespace EmEn::Libs;
-	using namespace EmEn::Libs::Math;
-	using namespace EmEn::Libs::PixelFactory;
-
-	const size_t CubemapResource::ClassUID{getClassUID(ClassId)};
+	using namespace Libs;
+	using namespace Libs::Math;
+	using namespace Libs::PixelFactory;
 
 	bool
-	CubemapResource::load () noexcept
+	CubemapResource::load (Resources::ServiceProvider & /*serviceProvider*/) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
@@ -88,12 +78,12 @@ namespace EmEn::Graphics
 	}
 
 	bool
-	CubemapResource::load (const std::filesystem::path & filepath) noexcept
+	CubemapResource::load (Resources::ServiceProvider & serviceProvider, const std::filesystem::path & filepath) noexcept
 	{
 		/* Check for a JSON file. */
 		if ( IO::getFileExtension(filepath) == "json" )
 		{
-			return ResourceTrait::load(filepath);
+			return ResourceTrait::load(serviceProvider, filepath);
 		}
 		
 		/* Tries to read the pixmap. */
@@ -110,7 +100,7 @@ namespace EmEn::Graphics
 	}
 
 	bool
-	CubemapResource::load (const Json::Value & data) noexcept
+	CubemapResource::load (Resources::ServiceProvider & serviceProvider, const Json::Value & data) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
@@ -135,9 +125,11 @@ namespace EmEn::Graphics
 			return this->setLoadSuccess(false);
 		}
 
+		const auto & fileSystem = serviceProvider.fileSystem();
+
 		if ( data[PackedKey].asBool() )
 		{
-			const auto filepath = FileSystem::instance()->getFilepathFromDataDirectories("data-stores/Cubemaps", this->name() + '.' + PackedKey + '.' + fileFormat);
+			const auto filepath = fileSystem.getFilepathFromDataDirectories("data-stores/Cubemaps", this->name() + '.' + PackedKey + '.' + fileFormat);
 
 			if ( filepath.empty() )
 			{
@@ -158,7 +150,7 @@ namespace EmEn::Graphics
 
 		for ( size_t faceIndex = 0; faceIndex < CubemapFaceCount; faceIndex++ )
 		{
-			const auto filepath = FileSystem::instance()->getFilepathFromDataDirectories("data-stores/Cubemaps", this->name() + '.' + CubemapFaceNames.at(faceIndex) + '.' + fileFormat);
+			const auto filepath = fileSystem.getFilepathFromDataDirectories("data-stores/Cubemaps", this->name() + '.' + CubemapFaceNames.at(faceIndex) + '.' + fileFormat);
 
 			if ( filepath.empty() )
 			{

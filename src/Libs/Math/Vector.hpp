@@ -62,7 +62,6 @@ namespace EmEn::Libs::Math
 	 * @tparam precision_t The data precision should be a floating point number. Default float.
 	 * @note For position, the fourth component should be 1, and for a direction, it should be 0.
 	 * In that way, translation with matrices won't affect direction vectors.
-	 * @todo Check pertinence of OpenMP pragmas
 	 */
 	template< size_t dim_t, typename precision_t = float >
 	requires (dim_t == 2 || dim_t == 3 || dim_t == 4) && std::is_arithmetic_v< precision_t >
@@ -201,7 +200,7 @@ namespace EmEn::Libs::Math
 			}
 
 			/**
-			 * @brief Constructs a vector from STL array.
+			 * @brief Constructs a vector from an STL array.
 			 * @param data A std::array of N value.
 			 */
 			explicit
@@ -213,7 +212,7 @@ namespace EmEn::Libs::Math
 			}
 
 			/**
-			 * @brief Constructs a vector from C-Style array.
+			 * @brief Constructs a vector from a C-Style array.
 			 * @param data A pointer to a C-Style containing at least the dimension of the vector.
 			 */
 			explicit
@@ -235,7 +234,7 @@ namespace EmEn::Libs::Math
 
 			/**
 			 * @brief Builds a Vector< dim_t, precision_t > using a raw definition from a std::string.
-			 * @warning Bad-formatted string will result to an origin vector.
+			 * @warning Bad-formatted string will result in an origin vector.
 			 * @param str The string containing the vector definition.
 			 * @param separator A char to specify the value separator. Default is white space.
 			 * @param offset An index where to execute copying values. Default is 0.
@@ -250,7 +249,6 @@ namespace EmEn::Libs::Math
 					return;
 				}
 
-				#pragma omp simd
 				for ( size_t index = 0; index < dim_t; index++ )
 				{
 					m_data[index] = String::toNumber< precision_t >(chunks[offset + index]);
@@ -351,7 +349,6 @@ namespace EmEn::Libs::Math
 			{
 				Vector vector;
 
-				#pragma omp simd
 				for ( size_t index = 0; index < dim_t; index++ )
 				{
 					vector.m_data[index] = -m_data[index];
@@ -362,7 +359,7 @@ namespace EmEn::Libs::Math
 
 			/**
 			 * @brief Data accessor.
-			 * @param index The index of vector element.
+			 * @param index The index of a vector element.
 			 * @return precision_t &
 			 */
 			precision_t &
@@ -373,7 +370,7 @@ namespace EmEn::Libs::Math
 
 			/**
 			 * @brief Data accessor (const version).
-			 * @param index The index of vector element.
+			 * @param index The index of a vector element.
 			 * @return const precision_t &
 			 */
 			[[nodiscard]]
@@ -491,7 +488,6 @@ namespace EmEn::Libs::Math
 			{
 				Vector vector;
 
-				#pragma omp simd
 				for ( size_t index = 0; index < dim_t; index++ )
 				{
 					vector.m_data[index] = m_data[index] + operand.m_data[index];
@@ -508,11 +504,10 @@ namespace EmEn::Libs::Math
 			[[nodiscard]]
 			constexpr
 			Vector
-			operator+ (const precision_t & operand) const noexcept
+			operator+ (precision_t operand) const noexcept
 			{
 				Vector vector;
 
-				#pragma omp simd
 				for ( size_t index = 0; index < dim_t; index++ )
 				{
 					vector.m_data[index] = m_data[index] + operand;
@@ -529,7 +524,6 @@ namespace EmEn::Libs::Math
 			Vector &
 			operator+= (const Vector & operand) noexcept
 			{
-				#pragma omp simd
 				for ( size_t index = 0; index < dim_t; index++ )
 				{
 					m_data[index] += operand.m_data[index];
@@ -544,9 +538,8 @@ namespace EmEn::Libs::Math
 			 * @return Vector &
 			 */
 			Vector &
-			operator+= (const precision_t & operand) noexcept
+			operator+= (precision_t operand) noexcept
 			{
-				#pragma omp simd
 				for ( size_t index = 0; index < dim_t; index++ )
 				{
 					m_data[index] += operand;
@@ -567,7 +560,6 @@ namespace EmEn::Libs::Math
 			{
 				Vector vector;
 
-				#pragma omp simd
 				for ( size_t index = 0; index < dim_t; index++ )
 				{
 					vector.m_data[index] = m_data[index] - operand.m_data[index];
@@ -584,11 +576,10 @@ namespace EmEn::Libs::Math
 			[[nodiscard]]
 			constexpr
 			Vector
-			operator- (const precision_t & operand) const noexcept
+			operator- (precision_t operand) const noexcept
 			{
 				Vector vector;
 
-				#pragma omp simd
 				for ( size_t index = 0; index < dim_t; index++ )
 				{
 					vector.m_data[index] = m_data[index] - operand;
@@ -605,7 +596,6 @@ namespace EmEn::Libs::Math
 			Vector &
 			operator-= (const Vector & operand) noexcept
 			{
-				#pragma omp simd
 				for ( size_t index = 0; index < dim_t; index++ )
 				{
 					m_data[index] -= operand.m_data[index];
@@ -620,9 +610,8 @@ namespace EmEn::Libs::Math
 			 * @return Vector &
 			 */
 			Vector &
-			operator-= (const precision_t & operand) noexcept
+			operator-= (precision_t operand) noexcept
 			{
-				#pragma omp simd
 				for ( size_t index = 0; index < dim_t; index++ )
 				{
 					m_data[index] -= operand;
@@ -643,7 +632,6 @@ namespace EmEn::Libs::Math
 			{
 				Vector vector;
 
-				#pragma omp simd
 				for ( size_t index = 0; index < dim_t; index++ )
 				{
 					vector.m_data[index] = m_data[index] * operand.m_data[index];
@@ -660,11 +648,10 @@ namespace EmEn::Libs::Math
 			[[nodiscard]]
 			constexpr
 			Vector
-			operator* (const precision_t & operand) const noexcept
+			operator* (precision_t operand) const noexcept
 			{
 				Vector vector;
 
-				#pragma omp simd
 				for ( size_t index = 0; index < dim_t; index++ )
 				{
 					vector.m_data[index] = m_data[index] * operand;
@@ -681,7 +668,6 @@ namespace EmEn::Libs::Math
 			Vector &
 			operator*= (const Vector & operand) noexcept
 			{
-				#pragma omp simd
 				for ( size_t index = 0; index < dim_t; index++ )
 				{
 					m_data[index] *= operand.m_data[index];
@@ -696,9 +682,8 @@ namespace EmEn::Libs::Math
 			 * @return Vector &
 			 */
 			Vector &
-			operator*= (const precision_t & operand) noexcept
+			operator*= (precision_t operand) noexcept
 			{
-				#pragma omp simd
 				for ( size_t index = 0; index < dim_t; index++ )
 				{
 					m_data[index] *= operand;
@@ -716,13 +701,12 @@ namespace EmEn::Libs::Math
 			[[nodiscard]]
 			constexpr
 			Vector
-			operator/ (const precision_t & operand) const noexcept
+			operator/ (precision_t operand) const noexcept
 			{
 				Vector vector;
 
 				if ( Utility::isZero(operand) )
 				{
-					#pragma omp simd
 					for ( size_t index = 0; index < dim_t; index++ )
 					{
 						vector.m_data[index] = std::numeric_limits< precision_t >::quiet_NaN();
@@ -730,7 +714,6 @@ namespace EmEn::Libs::Math
 				}
 				else
 				{
-					#pragma omp simd
 					for ( size_t index = 0; index < dim_t; index++ )
 					{
 						vector.m_data[index] = m_data[index] / operand;
@@ -747,9 +730,8 @@ namespace EmEn::Libs::Math
 			 * @return Vector &
 			 */
 			Vector &
-			operator/= (const precision_t & operand) noexcept
+			operator/= (precision_t operand) noexcept
 			{
-				#pragma omp simd
 				for ( size_t index = 0; index < dim_t; index++ )
 				{
 					m_data[index] /= operand;
@@ -872,11 +854,7 @@ namespace EmEn::Libs::Math
 			void
 			swap (Vector & target) noexcept
 			{
-				#pragma omp simd
-				for ( size_t index = 0; index < dim_t; index++ )
-				{
-					std::swap(m_data[index], target.m_data[index]);
-				}
+				m_data.swap(target.m_data);
 			}
 
 			/**
@@ -886,7 +864,6 @@ namespace EmEn::Libs::Math
 			Vector &
 			inverse () noexcept
 			{
-				#pragma omp simd
 				for ( size_t index = 0; index < dim_t; index++ )
 				{
 					m_data[index] = -m_data[index];
@@ -964,7 +941,6 @@ namespace EmEn::Libs::Math
 			{
 				precision_t value = 0;
 
-				#pragma omp simd
 				for ( size_t index = 0; index < dim_t; index++ )
 				{
 					value += m_data[index] * m_data[index];
@@ -1106,7 +1082,7 @@ namespace EmEn::Libs::Math
 			/**
 			 * @brief Rescales the vector 2 length to unit (Snap to dominant axis).
 			 * @warning This version is mathematically incorrect due to integer usage.
-			 * This will however make the vector point to the highest direction.
+			 * This will, however, make the vector point to the highest direction.
 			 * @return Vector
 			 */
 			[[nodiscard]]
@@ -1132,7 +1108,7 @@ namespace EmEn::Libs::Math
 			/**
 			 * @brief Rescales the vector 3|4 length to unit (Snap to dominant axis).
 			 * @warning This version is mathematically incorrect due to integer usage.
-			 * This will however make the vector point to the highest direction.
+			 * This will, however, make the vector point to the highest direction.
 			 * @return Vector
 			 */
 			[[nodiscard]]
@@ -1165,8 +1141,8 @@ namespace EmEn::Libs::Math
 			 * @brief Performs a dot-product between two vectors.
 			 * @note A value close to 1.0 or -1.0 means that the vectors tend to be parallel.
 			 * A value close to 0.0 means that the vectors tend to be perpendicular.
-			 * @param lhs A Vector as first operand.
-			 * @param rhs A Vector as second operand.
+			 * @param lhs A Vector as the first operand.
+			 * @param rhs A Vector as the second operand.
 			 * @return precision_t
 			 */
 			[[nodiscard]]
@@ -1177,7 +1153,6 @@ namespace EmEn::Libs::Math
 			{
 				precision_t value = 0;
 
-				#pragma omp simd
 				for ( size_t index = 0; index < dim_t; index++ )
 				{
 					value += lhs.m_data[index] * rhs.m_data[index];
@@ -1189,8 +1164,8 @@ namespace EmEn::Libs::Math
 			/**
 			 * @brief Performs a cross-product between two vectors.
 			 * @note Specialization for vector 2.
-			 * @param lhs A Vector as first operand.
-			 * @param rhs A Vector as second operand.
+			 * @param lhs A Vector as the first operand.
+			 * @param rhs A Vector as the second operand.
 			 * @return precision_t
 			 */
 			[[nodiscard]]
@@ -1204,8 +1179,8 @@ namespace EmEn::Libs::Math
 			/**
 			 * @brief Performs a cross-product between two vectors.
 			 * @note Specialization for vector 3.
-			 * @param lhs A Vector as first operand.
-			 * @param rhs A Vector as second operand.
+			 * @param lhs A Vector as the first operand.
+			 * @param rhs A Vector as the second operand.
 			 * @return Vector
 			 */
 			[[nodiscard]]
@@ -1361,8 +1336,8 @@ namespace EmEn::Libs::Math
 			/**
 			 * @brief Returns the angle between two vectors in radian.
 			 * @note You can use Math::Degree() to convert the result.
-			 * @param vectorA A Vector as first operand.
-			 * @param vectorB A Vector as second operand.
+			 * @param vectorA A Vector as the first operand.
+			 * @param vectorB A Vector as the second operand.
 			 * @return precision_t
 			 */
 			[[nodiscard]]
@@ -1414,7 +1389,7 @@ namespace EmEn::Libs::Math
 			 * @brief Returns the refracted vector in a surface.
 			 * @param incident The Vector to refract.
 			 * @param normal A reference to a Vector representing the surface normal where the refraction occurs.
-			 * @param eta Specifies the ratio of indices of refraction.
+			 * @param eta Specifies the indices of refraction ratio.
 			 * @return Vector
 			 */
 			[[nodiscard]]
@@ -1516,13 +1491,13 @@ namespace EmEn::Libs::Math
 			 * @return Vector
 			 */
 			[[nodiscard]]
+			constexpr
 			static
 			Vector
 			midPoint (const Vector & lhs, const Vector & rhs) noexcept
 			{
 				Vector result;
 
-				#pragma omp simd
 				for ( size_t index = 0; index < dim_t; ++index )
 				{
 					result[index] = (lhs[index] + rhs[index]) * static_cast< precision_t >(0.5);
@@ -1585,19 +1560,19 @@ namespace EmEn::Libs::Math
 			}
 
 			/**
-			 * @brief Returns a vector that is made from the largest components of two vectors.
+			 * @brief Returns a vector made from the largest components of two vectors.
 			 * @param a first vector.
 			 * @param b second vector.
 			 * @return Vector
 			 */
 			[[nodiscard]]
+			constexpr
 			static
 			Vector
 			min (const Vector & a, const Vector & b) noexcept
 			{
 				Vector vector;
 
-				#pragma omp simd
 				for ( size_t index = 0; index < dim_t; index++ )
 				{
 					vector.m_data[index] = std::min(a[index], b[index]);
@@ -1607,19 +1582,19 @@ namespace EmEn::Libs::Math
 			}
 
 			/**
-			 * @brief Returns a vector that is made from the smallest components of two vectors.
+			 * @brief Returns a vector made from the smallest components of two vectors.
 			 * @param a first vector.
 			 * @param b second vector.
 			 * @return Vector
 			 */
 			[[nodiscard]]
+			constexpr
 			static
 			Vector
 			max (const Vector & a, const Vector & b) noexcept
 			{
 				Vector vector;
 
-				#pragma omp simd
 				for ( size_t index = 0; index < dim_t; index++ )
 				{
 					vector.m_data[index] = std::max(a[index], b[index]);
@@ -1704,7 +1679,6 @@ namespace EmEn::Libs::Math
 			void
 			copy (precision_t * target) const noexcept
 			{
-				#pragma omp simd
 				for ( size_t index = 0; index < dim_t; index++ )
 				{
 					target[index] = m_data[index]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic): We use raw data here.
@@ -1732,7 +1706,7 @@ namespace EmEn::Libs::Math
 			}
 
 			/**
-			 * @brief Vector constant pointing toward positive X axis.
+			 * @brief Vector constant pointing toward the positive X axis.
 			 * @note In world space, this point to the right.
 			 * @param distance The distance in the axis. Default 1.
 			 * @return Vector
@@ -1764,7 +1738,7 @@ namespace EmEn::Libs::Math
 			}
 
 			/**
-			 * @brief Vector constant pointing toward negative X axis.
+			 * @brief Vector constant pointing toward the negative X axis.
 			 * @note In world space, this point to the left.
 			 * @param distance The distance in the axis. Default 1.
 			 * @return Vector
@@ -1915,7 +1889,7 @@ namespace EmEn::Libs::Math
 
 			/**
 			 * @brief Returns a random vector.
-			 * @warning This version use the unreliable old C rand() function. Use EmEn::Libs::Vector::random class instead.
+			 * @warning This version uses the unreliable old C rand() function. Use EmEn::Libs::Vector::random class instead.
 			 * @param min The minimum value.
 			 * @param max The maximum value.
 			 * @return Vector
@@ -2118,7 +2092,6 @@ namespace EmEn::Libs::Math
 			{
 				Vector result;
 
-				#pragma omp simd
 				for ( size_t i = 0; i < dim_t; ++i )
 				{
 					result[i] = std::abs(m_data[i]);
@@ -2141,7 +2114,6 @@ namespace EmEn::Libs::Math
 			{
 				Vector result;
 
-				#pragma omp simd
 				for ( size_t i = 0; i < dim_t; ++i )
 				{
 					result.m_data[i] = std::clamp(m_data[i], minVal, maxVal);
@@ -2152,7 +2124,7 @@ namespace EmEn::Libs::Math
 
 			/**
 			 * @brief Restricts each component of the vector between the corresponding min/max vector components.
-			 * @note The behavior if minVec[i] > maxVec[i] is defined by std::clamp.
+			 * @note The behavior of minVec[i] > maxVec[i] is defined by std::clamp.
 			 * @param minVec The vector containing the minimum bounds for each component.
 			 * @param maxVec The vector containing the maximum bounds for each component.
 			 * @return Vector
@@ -2164,7 +2136,6 @@ namespace EmEn::Libs::Math
 			{
 				Vector result;
 
-				#pragma omp simd
 				for ( size_t i = 0; i < dim_t; ++i )
 				{
 					result.m_data[i] = std::clamp(m_data[i], minVec.m_data[i], maxVec.m_data[i]);
@@ -2239,7 +2210,7 @@ namespace EmEn::Libs::Math
 			std::array< precision_t, dim_t > m_data{};
 	};
 
-	/* NOTE: Trait and concept to check a vector in template. */
+	/* NOTE: Trait and concept to check a vector in the template. */
 	template< typename T >
 	inline constexpr bool is_vector_v = false;
 

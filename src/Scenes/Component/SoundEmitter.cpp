@@ -74,7 +74,7 @@ namespace EmEn::Scenes::Component
 	bool
 	SoundEmitter::onNotification (const ObservableTrait * observable, int notificationCode, const std::any & /*data*/) noexcept
 	{
-		if ( observable->is(SoundResource::ClassUID) )
+		if ( observable->is(SoundResource::getClassUID()) )
 		{
 			switch ( notificationCode )
 			{
@@ -99,7 +99,7 @@ namespace EmEn::Scenes::Component
 
 		/* NOTE: Don't know what it is, goodbye! */
 		TraceDebug{ClassId} <<
-			"Received an unhandled notification (Code:" << notificationCode << ") from observable '" << whoIs(observable->classUID()) << "' (UID:" << observable->classUID() << ")  ! "
+			"Received an unhandled notification (Code:" << notificationCode << ") from observable (UID:" << observable->classUID() << ")  ! "
 			"Forgetting it ...";
 
 		return false;
@@ -212,7 +212,12 @@ namespace EmEn::Scenes::Component
 	{
 		if ( m_source == nullptr )
 		{
-			m_source = Manager::instance()->requestSource();
+			if ( s_audioManager == nullptr )
+			{
+				return;
+			}
+
+			m_source = s_audioManager->requestSource();
 		}
 
 		if ( m_source != nullptr )

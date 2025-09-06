@@ -191,7 +191,7 @@ namespace EmEn::Vulkan::Sync
 			FenceStatus getStatus () const noexcept;
 
 			/**
-			 * @brief Waits for fence to be signaled.
+			 * @brief Waits for a fence to be signaled.
 			 * @param timeout A duration in nanoseconds for timeout. Default close to infinity (584 years).
 			 * @return bool
 			 */

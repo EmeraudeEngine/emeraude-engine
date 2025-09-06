@@ -33,20 +33,10 @@
 #include "Vulkan/Sampler.hpp"
 #include "Graphics/Renderer.hpp"
 
-/* Defining the resource manager class id. */
-template<>
-const char * const EmEn::Resources::Container< EmEn::Graphics::TextureResource::TextureCubemap >::ClassId{"TextureCubemapContainer"};
-
-/* Defining the resource manager ClassUID. */
-template<>
-const size_t EmEn::Resources::Container< EmEn::Graphics::TextureResource::TextureCubemap >::ClassUID{getClassUID(ClassId)};
-
 namespace EmEn::Graphics::TextureResource
 {
-	using namespace EmEn::Libs;
-	using namespace EmEn::Vulkan;
-
-	const size_t TextureCubemap::ClassUID{getClassUID(ClassId)};
+	using namespace Libs;
+	using namespace Vulkan;
 
 	bool
 	TextureCubemap::isCreated () const noexcept
@@ -187,14 +177,14 @@ namespace EmEn::Graphics::TextureResource
 	}
 
 	bool
-	TextureCubemap::load () noexcept
+	TextureCubemap::load (Resources::ServiceProvider & serviceProvider) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
 			return false;
 		}
 
-		m_localData = Resources::Manager::instance()->container< CubemapResource >()->getDefaultResource();
+		m_localData = serviceProvider.container< CubemapResource >()->getDefaultResource();
 
 		if ( !this->addDependency(m_localData) )
 		{
@@ -205,13 +195,16 @@ namespace EmEn::Graphics::TextureResource
 	}
 
 	bool
-	TextureCubemap::load (const std::filesystem::path & filepath) noexcept
+	TextureCubemap::load (Resources::ServiceProvider & serviceProvider, const std::filesystem::path & filepath) noexcept
 	{
-		return this->load(Resources::Manager::instance()->container< CubemapResource >()->getResource(getResourceNameFromFilepath(filepath, "Cubemaps"), true));
+		return this->load(serviceProvider.container< CubemapResource >()->getResource(
+			ResourceTrait::getResourceNameFromFilepath(filepath, "Cubemaps"),
+			true)
+		);
 	}
 
 	bool
-	TextureCubemap::load (const Json::Value & /*data*/) noexcept
+	TextureCubemap::load (Resources::ServiceProvider & /*serviceProvider*/, const Json::Value & /*data*/) noexcept
 	{
 		/* NOTE: This resource has no local store,
 		 * so this method won't be called from a resource container! */

@@ -36,9 +36,9 @@
 
 namespace EmEn
 {
-	using namespace EmEn::Libs;
-	using namespace EmEn::Libs::Math;
-	using namespace EmEn::Libs::PixelFactory;
+	using namespace Libs;
+	using namespace Libs::Math;
+	using namespace Libs::PixelFactory;
 
 	bool
 	Notifier::onInitialize () noexcept
@@ -73,8 +73,8 @@ namespace EmEn
 		m_surface->frontPixmap().fill(Transparent);
 
 		{
-			//m_font = Resources::Manager::instance()->container< Graphics::FontResource >()->getResource("old", false);
-			m_font = Resources::Manager::instance()->container< Graphics::FontResource >()->getDefaultResource();
+			//m_font = m_resourceManager.container< Graphics::FontResource >()->getResource("old", false);
+			m_font = m_resourceManager.container< Graphics::FontResource >()->getDefaultResource();
 
 			m_processor.setPixmap(m_surface->frontPixmap());
 			m_processor.setFont(m_font->font(), 16U);
@@ -141,6 +141,7 @@ namespace EmEn
 	void
 	Notifier::renderNotifications () noexcept
 	{
+		/* [VULKAN-CPU-SYNC] */
 		const std::lock_guard< std::mutex > lock{m_surface->frontFramebufferMutex()};
 
 		if ( m_surface->frontPixmap().fill(m_clearColor) )
@@ -168,6 +169,7 @@ namespace EmEn
 	void
 	Notifier::clearDisplay () const noexcept
 	{
+		/* [VULKAN-CPU-SYNC] */
 		const std::lock_guard< std::mutex > lock{m_surface->frontFramebufferMutex()};
 
 		if ( m_surface->frontPixmap().fill(m_clearColor) )
@@ -181,6 +183,7 @@ namespace EmEn
 	{
 		/* NOTE: Removes all notifications. */
 		{
+			/* [VULKAN-CPU-SYNC] */
 			const std::lock_guard< std::mutex > lock{m_notificationAccess};
 
 			m_notifications.clear();
@@ -193,7 +196,7 @@ namespace EmEn
 	bool
 	Notifier::onNotification (const ObservableTrait * observable, int notificationCode, const std::any & /*data*/) noexcept
 	{
-		if ( observable->is(Overlay::Manager::ClassUID) )
+		if ( observable->is(Overlay::Manager::getClassUID()) )
 		{
 			if ( notificationCode == Overlay::Manager::OverlayResized )
 			{

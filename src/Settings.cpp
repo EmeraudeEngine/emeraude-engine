@@ -30,7 +30,6 @@
 #include <ctime>
 #include <exception>
 #include <fstream>
-#include <stack>
 
 /* Local inclusions. */
 #include "Libs/FastJSON.hpp"
@@ -42,22 +41,18 @@
 
 namespace EmEn
 {
-	using namespace EmEn::Libs;
-
-	Settings * Settings::s_instance{nullptr};
+	using namespace Libs;
 
 	bool
 	Settings::onInitialize () noexcept
 	{
 		/* NOTE: In read-only, settings service is a copy from another process. */
-		if ( !m_flags[ChildProcess] )
+		if ( !m_childProcess )
 		{
-			m_flags[ShowInformation] = m_arguments.get("--verbose").isPresent();
+			m_showInformation = m_arguments.isSwitchPresent("--verbose");
 		}
 
-		const auto argument = m_arguments.get("--settings-filepath");
-
-		if ( argument.isPresent() )
+		if ( const auto argument = m_arguments.get("--settings-filepath") )
 		{
 			m_filepath = argument.value();
 		}
@@ -73,7 +68,7 @@ namespace EmEn
 			return false;
 		}
 
-		if ( m_flags[ShowInformation] )
+		if ( m_showInformation )
 		{
 			TraceInfo{ClassId} << "Loading settings from file '" << m_filepath.string() << "' ...";
 		}
@@ -81,7 +76,7 @@ namespace EmEn
 		/* Checks the file presence, if not, it will be created and uses the default engine values. */
 		if ( !IO::fileExists(m_filepath) )
 		{
-			if ( !m_flags[ChildProcess] )
+			if ( !m_childProcess )
 			{
 				TraceWarning{ClassId} <<
 					"Settings file " << m_filepath << " doesn't exist." "\n"
@@ -94,26 +89,30 @@ namespace EmEn
 		}
 
 		/* Reading the file ... */
-		if ( !this->readFile(m_filepath) )
 		{
-			TraceError{ClassId} << "Unable to read settings file from '" << m_filepath.string() << "' path !";
+			const std::unique_lock< std::shared_mutex > lock{m_storeAccess};
 
-			this->saveAtExit(false);
+			if ( !this->readFile(m_filepath) )
+			{
+				TraceError{ClassId} << "Unable to read settings file from '" << m_filepath.string() << "' path !";
 
-			return false;
+				this->saveAtExit(false);
+
+				return false;
+			}
 		}
 
-		if ( m_arguments.get("--disable-settings-autosave").isPresent() )
+		if ( m_arguments.isSwitchPresent("--disable-settings-autosave") )
 		{
 			this->saveAtExit(false);
 		}
 
-		if ( m_flags[ShowInformation] )
+		if ( m_showInformation )
 		{
 			TraceInfo{ClassId} << *this;
 		}
 
-		m_flags[ServiceInitialized] = true;
+		m_serviceInitialized = true;
 
 		return true;
 	}
@@ -121,7 +120,7 @@ namespace EmEn
 	bool
 	Settings::onTerminate () noexcept
 	{
-		m_flags[ServiceInitialized] = false;
+		m_serviceInitialized = false;
 
 		if ( this->isSaveAtExitEnabled() )
 		{
@@ -131,6 +130,8 @@ namespace EmEn
 
 				return false;
 			}
+
+			const std::shared_lock< std::shared_mutex > lock{m_storeAccess};
 
 			if ( !this->writeFile(m_filepath) )
 			{
@@ -145,8 +146,21 @@ namespace EmEn
 		return true;
 	}
 
+	std::pair< std::string_view, std::string_view >
+	Settings::parseAccessKey (std::string_view settingPath) noexcept
+	{
+		const auto lastSlash = settingPath.find_last_of('/');
+
+		if ( lastSlash == std::string::npos )
+		{
+			return {"", settingPath};
+		}
+
+		return {settingPath.substr(0, lastSlash), settingPath.substr(lastSlash + 1)};
+	}
+
 	bool
-	Settings::readLevel (const Json::Value & data, SettingStore & store) noexcept
+	Settings::readLevel (const Json::Value & data, const std::string & key) noexcept
 	{
 		const auto toAny = [] (const Json::Value & item) -> std::any {
 			if ( item.isBool() )
@@ -189,13 +203,20 @@ namespace EmEn
 
 		for ( const auto & name : data.getMemberNames() )
 		{
-			const auto & items = data[name];
-
-			if ( items.isObject() )
+			if ( const auto & items = data[name]; items.isObject() )
 			{
-				auto & subStore = store.getOrCreateSubStore(name);
+				std::stringstream keyStream;
 
-				if ( !this->readLevel(items, subStore) )
+				if ( key.empty() )
+				{
+					keyStream << name;
+				}
+				else
+				{
+					keyStream << key << '/' << name;
+				}
+
+				if ( !this->readLevel(items, keyStream.str()) )
 				{
 					return false;
 				}
@@ -204,12 +225,12 @@ namespace EmEn
 			{
 				for ( const auto & item : items )
 				{
-					store.setVariableInArray(name, toAny(item));
+					m_stores[key].setVariableInArray(name, toAny(item));
 				}
 			}
 			else
 			{
-				store.setVariable(name, toAny(items));
+				m_stores[key].setVariable(name, toAny(items));
 			}
 		}
 
@@ -228,30 +249,12 @@ namespace EmEn
 			return false;
 		}
 
-		return this->readLevel(root.value(), m_store);
+		return this->readLevel(root.value(), "");
 	}
 
 	bool
-	Settings::writeLevel (const SettingStore & store, Json::Value & data) const noexcept
+	Settings::writeFile (const std::filesystem::path & filepath) const noexcept
 	{
-		if ( store.empty() )
-		{
-			data = Json::objectValue;
-
-			return true;
-		}
-
-		/* Write sub-store at this level. */
-		for ( const auto & [name, subStore] : store.subStores() )
-		{
-			auto & json = data[name];
-
-			if ( !this->writeLevel(subStore, json) )
-			{
-				return false;
-			}
-		}
-
 		const auto toJson = [] (const std::any & item) -> Json::Value {
 			if ( item.type() == typeid(bool) )
 			{
@@ -291,30 +294,20 @@ namespace EmEn
 			return Json::stringValue;
 		};
 
-		/* Write variables at this level. */
-		for ( const auto & [name, value] : store.variables() )
-		{
-			data[name] = toJson(value);
-		}
+		const auto getLevel = [] (Json::Value & root, const std::string & key) -> Json::Value & {
+			Json::Value * current = &root;
 
-		/* Write array at this level. */
-		for ( const auto & [name, values] : store.arrays() )
-		{
-			data[name] = Json::arrayValue;
-
-			for ( const auto & value : values )
+			if ( const auto sections = String::explode(key, '/', false); !sections.empty() )
 			{
-				data[name].append(toJson(value));
+				for ( const auto & section : sections )
+				{
+					current = &(*current)[section];
+				}
 			}
-		}
+			return *current;
+		};
 
-		return true;
-	}
-
-	bool
-	Settings::writeFile (const std::filesystem::path & filepath) const noexcept
-	{
-		Json::Value root{};
+		Json::Value root;
 
 		/* 1. JSON File header. */
 		root[VersionKey] = VersionString;
@@ -330,11 +323,26 @@ namespace EmEn
 		}
 
 		/* 2. JSON File body. */
-		if ( !this->writeLevel(m_store, root) )
+		for ( const auto & [key, store] : m_stores )
 		{
-			Tracer::error(ClassId, "Unable to generate a store JSON data.");
+			auto & data = getLevel(root, std::string{key});
 
-			return false;
+			/* Write variables at this level. */
+			for ( const auto & [name, value] : store.variables() )
+			{
+				data[name] = toJson(value);
+			}
+
+			/* Write an array at this level. */
+			for ( const auto & [name, values] : store.arrays() )
+			{
+				data[name] = Json::arrayValue;
+
+				for ( const auto & value : values )
+				{
+					data[name].append(toJson(value));
+				}
+			}
 		}
 
 		/* 3. File writing. */
@@ -362,136 +370,58 @@ namespace EmEn
 		}
 	}
 
-	const SettingStore *
-	Settings::parseKey (const std::string & key, std::string & variableName) const noexcept
-	{
-		if ( key.find('/') != std::string::npos )
-		{
-			const auto sections = String::explode(key, '/', false);
-			const auto * currentStore = &m_store;
-
-			for ( const auto & section : sections )
-			{
-				/* If a sub-store exists with this name, we continue a depth below. */
-				if ( currentStore->subStoreExists(section) )
-				{
-					currentStore = currentStore->getSubStorePointer(section);
-				}
-				else if ( currentStore->variableExists(section) || currentStore->arrayExists(section) )
-				{
-					variableName = section;
-
-					return currentStore;
-				}
-				else
-				{
-					return nullptr;
-				}
-			}
-		}
-
-		if ( m_store.variableExists(key) && m_store.arrayExists(key) && m_store.subStoreExists(key) )
-		{
-			return nullptr;
-		}
-
-		variableName = key;
-
-		return &m_store;
-	}
-
-	SettingStore *
-	Settings::parseKey (const std::string & key, std::string & variableName) noexcept
-	{
-		if ( key.find('/') == std::string::npos )
-		{
-			return &m_store;
-		}
-
-		auto sections = String::explode(key, '/', false);
-		auto * currentStore = &m_store;
-
-		/* Remove the last section which is the variable name. */
-		variableName = sections.back();
-		sections.pop_back();
-
-		for ( const auto & section : sections )
-		{
-			/* If a sub-store exists with this name, we continue a depth below. */
-			if ( currentStore->subStoreExists(section) )
-			{
-				currentStore = currentStore->getSubStorePointer(section);
-			}
-			else
-			{
-				currentStore = &currentStore->getOrCreateSubStore(section);
-			}
-		}
-
-		return currentStore;
-	}
-
 	bool
-	Settings::variableExists (const std::string & key) const noexcept
+	Settings::variableExists (std::string_view settingPath) const noexcept
 	{
-		std::string name;
+		const std::shared_lock< std::shared_mutex > lock{m_storeAccess};
 
-		const auto * store = this->parseKey(key, name);
+		const auto & [key, variableName] = Settings::parseAccessKey(settingPath);
 
-		if ( store == nullptr )
+		const auto storeIt = m_stores.find(key);
+
+		if ( storeIt == m_stores.end() )
 		{
 			return false;
 		}
 
-		return store->variableExists(name);
+		return storeIt->second.variableExists(variableName);
 	}
 
 	bool
-	Settings::arrayExists (const std::string & key) const noexcept
+	Settings::arrayExists (std::string_view settingPath) const noexcept
 	{
-		std::string name;
+		const std::shared_lock< std::shared_mutex > lock{m_storeAccess};
 
-		const auto * store = this->parseKey(key, name);
+		const auto & [key, variableName] = Settings::parseAccessKey(settingPath);
 
-		if ( store == nullptr )
+		const auto storeIt = m_stores.find(key);
+
+		if ( storeIt == m_stores.end() )
 		{
 			return false;
 		}
 
-		return store->arrayExists(name);
-	}
-
-	bool
-	Settings::storeExists (const std::string & key) const noexcept
-	{
-		std::string name;
-
-		const auto * store = this->parseKey(key, name);
-
-		if ( store == nullptr )
-		{
-			return false;
-		}
-
-		return store->subStoreExists(name);
+		return storeIt->second.arrayExists(variableName);
 	}
 
 	std::any
-	Settings::get (const std::string & key) const noexcept
+	Settings::getVariable (std::string_view settingPath) const noexcept
 	{
-		std::string name;
+		const auto & [key, variableName] = Settings::parseAccessKey(settingPath);
 
-		const auto * store = this->parseKey(key, name);
+		const auto storeIt = m_stores.find(key);
 
-		if ( store == nullptr )
+		if ( storeIt == m_stores.end() )
 		{
+			/* NOTE: The store do not exist. */
 			return {};
 		}
 
-		const auto * value = store->getValuePointer(name);
+		const auto * value = storeIt->second.getValuePointer(variableName);
 
 		if ( value == nullptr )
 		{
+			/* NOTE: The variable do not exist. */
 			return {};
 		}
 
@@ -499,23 +429,35 @@ namespace EmEn
 	}
 
 	bool
-	Settings::isArrayEmpty (const std::string & key) const noexcept
+	Settings::isArrayEmpty (std::string_view settingPath) const noexcept
 	{
-		std::string name{};
+		const std::shared_lock< std::shared_mutex > lock{m_storeAccess};
 
-		const auto * store = this->parseKey(key, name);
+		const auto & [key, variableName] = Settings::parseAccessKey(settingPath);
 
-		if ( store == nullptr || !store->arrayExists(name) )
+		const auto storeIt = m_stores.find(key);
+
+		if ( storeIt == m_stores.end() )
 		{
-			return true;
+			/* NOTE: The store do not exist. */
+			return false;
 		}
 
-		return store->getArrayPointer(name)->empty();
+		const auto * array = storeIt->second.getArrayPointer(variableName);
+
+		if ( array == nullptr )
+		{
+			return false;
+		}
+
+		return array->empty();
 	}
 
 	bool
 	Settings::save () const noexcept
 	{
+		const std::shared_lock< std::shared_mutex > lock{m_storeAccess};
+
 		if ( m_filepath.empty() )
 		{
 			Tracer::warning(ClassId, "No filepath was used to read config !");
@@ -529,14 +471,7 @@ namespace EmEn
 	std::ostream &
 	operator<< (std::ostream & out, const Settings & obj)
 	{
-		auto dashes = [&out] (size_t depth) {
-			out << ' ';
-
-			for ( size_t i = 0; i < depth; i++ )
-			{
-				out << "----";
-			}
-		};
+		const std::shared_lock< std::shared_mutex > lock{obj.m_storeAccess};
 
 		auto printValue = [] (const std::any & value) -> std::string {
 			if ( value.type() == typeid(std::string) )
@@ -572,48 +507,29 @@ namespace EmEn
 			return "UNHANDLED";
 		};
 
-		struct node_t
-		{
-			size_t depth;
-			std::string name;
-			const SettingStore * store;
-		};
-
-		std::stack< node_t > stores;
-
-		/* Sets the top Store */
-		stores.emplace(node_t{
-			.depth = 0,
-			.name = "Root",
-			.store = &obj.m_store
-		});
-
 		out << "Settings (" << obj.m_filepath << ") :" "\n";
 
 		/* Crawling inside all stores. */
-		while ( !stores.empty() )
+		for ( const auto & [key, store] : obj.m_stores )
 		{
-			/* Get a copy and remove it from the stack.*/
-			const auto node = stores.top();
-			stores.pop();
-
-			dashes(node.depth);
-
-			out << " [" << node.name << "]" "\n";
+			if ( key.empty() )
+			{
+				out << "*(ROOT)*" "\n";
+			}
+			else
+			{
+				out << "[" << key << "]" "\n";
+			}
 
 			/* Print every variable */
-			for ( const auto & [name, value] : node.store->variables() )
+			for ( const auto & [name, value] : store.variables() )
 			{
-				dashes(node.depth + 1);
-
 				out << "  " << name << " = " << printValue(value) << '\n';
 			}
 
-			/* Print every arrays */
-			for ( const auto & [name, values] : node.store->arrays() )
+			/* Print every array */
+			for ( const auto & [name, values] : store.arrays() )
 			{
-				dashes(node.depth + 1);
-
 				std::string output;
 
 				for ( const auto & value : values )
@@ -622,16 +538,6 @@ namespace EmEn
 				}
 
 				out << "  " << name << " = [" << output << "]" "\n";
-			}
-
-			/* Then load every sub stores from this store for the next loop cycle. */
-			for ( const auto & [name, subStore] : node.store->subStores() )
-			{
-				stores.emplace(node_t{
-					.depth = node.depth + 1,
-					.name = name,
-					.store = &subStore
-				});
 			}
 		}
 

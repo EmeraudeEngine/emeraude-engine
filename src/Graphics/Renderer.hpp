@@ -43,17 +43,17 @@
 #include "ServiceInterface.hpp"
 
 /* Local inclusions for usages. */
+#include "ExternalInput.hpp"
 #include "Libs/PixelFactory/Color.hpp"
 #include "Libs/Time/Statistics/RealTime.hpp"
+#include "RenderTarget/Abstract.hpp"
+#include "RendererFrameScope.hpp"
+#include "Saphir/ShaderManager.hpp"
+#include "SharedUBOManager.hpp"
+#include "VertexBufferFormatManager.hpp"
 #include "Vulkan/Instance.hpp"
 #include "Vulkan/LayoutManager.hpp"
 #include "Vulkan/TransferManager.hpp"
-#include "RenderTarget/Abstract.hpp"
-#include "Saphir/ShaderManager.hpp"
-#include "SharedUBOManager.hpp"
-#include "ExternalInput.hpp"
-#include "RendererFrameScope.hpp"
-#include "VertexBufferFormatManager.hpp"
 #include "Window.hpp"
 
 /* Forward declarations. */
@@ -61,13 +61,13 @@ namespace EmEn
 {
 	namespace Vulkan
 	{
-		class SwapChain;
 		class Device;
 		class DescriptorPool;
 		class CommandPool;
 		class CommandBuffer;
 		class GraphicsPipeline;
 		class Sampler;
+		class SwapChain;
 	}
 
 	namespace Graphics
@@ -128,9 +128,6 @@ namespace EmEn::Graphics
 			/** @brief Class identifier. */
 			static constexpr auto ClassId{"RendererService"};
 
-			/** @brief Observable class unique identifier. */
-			static const size_t ClassUID;
-
 			/** @brief Observable notification codes. */
 			enum NotificationCode
 			{
@@ -154,21 +151,9 @@ namespace EmEn::Graphics
 				m_vulkanInstance{instance},
 				m_window{window},
 				m_shaderManager{primaryServices},
-				m_transferManager{Vulkan::GPUWorkType::Graphics},
-				m_layoutManager{Vulkan::GPUWorkType::Graphics},
-				m_sharedUBOManager{*this}
+				m_sharedUBOManager{*this},
+				m_debugMode{m_vulkanInstance.isDebugModeEnabled()}
 			{
-				if ( s_instance != nullptr )
-				{
-					std::cerr << __PRETTY_FUNCTION__ << ", constructor called twice !" "\n";
-
-					std::terminate();
-				}
-
-				s_instance = this;
-
-				m_debugMode = m_vulkanInstance.isDebugModeEnabled();
-
 				/* Framebuffer clear color value. */
 				this->setClearColor(Libs::PixelFactory::Black);
 
@@ -181,9 +166,19 @@ namespace EmEn::Graphics
 			/**
 			 * @brief Destructs the graphics renderer.
 			 */
-			~Renderer () override
+			~Renderer () override = default;
+
+			/**
+			 * @brief Returns the unique identifier for this class [Thread-safe].
+			 * @return size_t
+			 */
+			static
+			size_t
+			getClassUID () noexcept
 			{
-				s_instance = nullptr;
+				static const size_t classUID = EmEn::Libs::Hash::FNV1a(ClassId);
+
+				return classUID;
 			}
 
 			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
@@ -191,7 +186,7 @@ namespace EmEn::Graphics
 			size_t
 			classUID () const noexcept override
 			{
-				return ClassUID;
+				return getClassUID();
 			}
 
 			/** @copydoc EmEn::Libs::ObservableTrait::is() const */
@@ -199,7 +194,7 @@ namespace EmEn::Graphics
 			bool
 			is (size_t classUID) const noexcept override
 			{
-				return classUID == ClassUID;
+				return classUID == getClassUID();
 			}
 
 			/** @copydoc EmEn::ServiceInterface::usable() */
@@ -240,6 +235,13 @@ namespace EmEn::Graphics
 			{
 				return m_debugMode;
 			}
+
+			/**
+			 * @brief Returns whether the swap chain is degraded.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool isSwapChainDegraded () const noexcept;
 
 			/**
 			 * @brief Controls the state of shadow maps rendering.
@@ -545,15 +547,11 @@ namespace EmEn::Graphics
 			}
 
 			/**
-			 * @brief Returns the swap chain.
-			 * @return std::shared_ptr< Vulkan::SwapChain >
+			 * @brief Returns the main render target. The swap chain or an offscreen view.
+			 * @return std::shared_ptr< RenderTarget::Abstract >
 			 */
 			[[nodiscard]]
-			std::shared_ptr< Vulkan::SwapChain >
-			swapChain () const noexcept
-			{
-				return m_swapChain;
-			}
+			std::shared_ptr< RenderTarget::Abstract > mainRenderTarget () const noexcept;
 
 			/**
 			 * @brief Returns rendering statistics.
@@ -603,17 +601,11 @@ namespace EmEn::Graphics
 			void renderFrame (const std::shared_ptr< Scenes::Scene > & scene, const Overlay::Manager & overlayManager) noexcept;
 
 			/**
-			 * @brief Returns the instance of the graphics renderer.
-			 * @todo This method must be removed!
-			 * @return Renderer *
+			 * @brief Recreates the swap-chain.
+			 * @return bool
 			 */
 			[[nodiscard]]
-			static
-			Renderer *
-			instance () noexcept
-			{
-				return s_instance; // FIXME: Remove this
-			}
+			bool recreateSwapChain () noexcept;
 
 		private:
 
@@ -680,21 +672,6 @@ namespace EmEn::Graphics
 			 */
 			void destroyCommandSystem () noexcept;
 
-			/**
-			 * @brief Recreates the swap-chain.
-			 * @return bool
-			 */
-			[[nodiscard]]
-			bool recreateSwapChain () noexcept;
-
-			/* Flag names. */
-			static constexpr auto ServiceInitialized{0UL};
-			static constexpr auto DebugMode{1UL};
-			static constexpr auto ShadowMapsEnabled{2UL};
-			static constexpr auto RenderToTexturesEnabled{3UL};
-
-			static Renderer * s_instance;
-
 			PrimaryServices & m_primaryServices;
 			Vulkan::Instance & m_vulkanInstance;
 			Window & m_window;
@@ -711,6 +688,7 @@ namespace EmEn::Graphics
 			std::shared_ptr< Vulkan::CommandPool > m_offScreenCommandPool;
 			std::map< std::shared_ptr< RenderTarget::Abstract >, std::shared_ptr< Vulkan::CommandBuffer > > m_offScreenCommandBuffers;
 			std::shared_ptr< Vulkan::SwapChain > m_swapChain;
+			std::shared_ptr< RenderTarget::Abstract > m_offscreenView;
 			std::map< size_t, std::shared_ptr< Saphir::Program > > m_programs;
 			std::map< size_t, std::shared_ptr< Vulkan::GraphicsPipeline > > m_pipelines;
 			std::map< std::string, std::shared_ptr< Vulkan::RenderPass > > m_renderPasses;
@@ -719,6 +697,7 @@ namespace EmEn::Graphics
 			std::array< VkClearValue, 2 > m_clearColors{};
 			bool m_serviceInitialized{false};
 			bool m_debugMode{false};
+			bool m_windowLess{false};
 			bool m_shadowMapsEnabled{true};
 			bool m_renderToTexturesEnabled{true};
 	};

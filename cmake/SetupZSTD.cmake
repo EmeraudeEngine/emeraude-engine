@@ -1,25 +1,25 @@
-if ( NOT ZSTD_ENABLED )
-	if ( EMERAUDE_USE_SYSTEM_LIBS )
-		message("Enabling Zstd library from system ...")
+if ( NOT TARGET_BINARY_FOR_SETUP )
+	message(FATAL_ERROR "TARGET_BINARY_FOR_SETUP is not SET !")
+endif ()
 
-		find_package(PkgConfig REQUIRED)
+if ( EMERAUDE_USE_SYSTEM_LIBS )
+	message("Enabling ZSTD library from system ...")
 
-		pkg_check_modules(ZSTD REQUIRED libzstd)
+	find_package(PkgConfig REQUIRED)
 
-		target_include_directories(${PROJECT_NAME} PRIVATE ${ZSTD_INCLUDE_DIRS})
-		target_link_directories(${PROJECT_NAME} PRIVATE ${ZSTD_LIBRARY_DIRS})
-		target_link_libraries(${PROJECT_NAME} PRIVATE ${ZSTD_LIBRARIES})
-	else ()
-		message("Enabling Zstd library from local source ...")
+	pkg_check_modules(ZSTD REQUIRED libzstd)
 
-		if ( MSVC )
-			#target_link_libraries(${PROJECT_NAME} PRIVATE ${LOCAL_LIB_DIR}/lib/zstd.lib)
-		else ()
-			target_link_libraries(${PROJECT_NAME} PRIVATE ${LOCAL_LIB_DIR}/lib/libzstd.a)
-		endif ()
-	endif ()
+	target_include_directories(${TARGET_BINARY_FOR_SETUP} PUBLIC ${ZSTD_INCLUDE_DIRS})
 
-	set(ZSTD_ENABLED On)
+	target_link_directories(${TARGET_BINARY_FOR_SETUP} PUBLIC ${ZSTD_LIBRARY_DIRS})
+
+	target_link_libraries(${TARGET_BINARY_FOR_SETUP} PRIVATE ${ZSTD_LIBRARIES})
 else ()
-	message("The Zstd library is already enabled.")
+	message("Enabling ZSTD library from local source ...")
+
+	if ( MSVC )
+		target_link_libraries(${TARGET_BINARY_FOR_SETUP} PRIVATE ${LOCAL_LIB_DIR}/lib/zstd_static.lib)
+	else ()
+		target_link_libraries(${TARGET_BINARY_FOR_SETUP} PRIVATE ${LOCAL_LIB_DIR}/lib/libzstd.a)
+	endif ()
 endif ()

@@ -105,7 +105,7 @@ namespace EmEn::Vulkan
 			Queue *
 			queue (QueueJob /*job*/, QueuePriority /*priority*/) noexcept override
 			{
-				// FIXME : Use parameters to get the right queue !
+				// FIXME: Use parameters to get the right queue!
 				return m_queues[0].get();
 			}
 

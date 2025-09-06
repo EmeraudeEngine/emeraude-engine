@@ -52,15 +52,15 @@ namespace EmEn
 			std::cerr << ClassId << ", " << m_arguments.name() << " service failed to execute !";
 		}
 
-		Tracer::instance().earlySetup(m_arguments, m_processName, false);
+		Tracer::getInstance().earlySetup(m_arguments, m_processName, false);
 
-		if ( m_arguments.get("--verbose").isPresent() )
+		if ( m_arguments.isSwitchPresent("--verbose") )
 		{
 			m_flags[ShowInformation] = true;
 		}
 	}
 
-	PrimaryServices::PrimaryServices (int argc, char * * argv, const Identification & identification, std::string processName, const std::vector< std::string > & additionalArguments) noexcept
+	PrimaryServices::PrimaryServices (int argc, char * * argv, const Identification & identification, std::string processName, const std::vector< std::pair< std::string, std::string > > & additionalArguments) noexcept
 		: m_processName{std::move(processName)},
 		m_arguments{argc, argv, true},
 		m_fileSystem{m_arguments, m_userInfo, identification, true},
@@ -74,13 +74,20 @@ namespace EmEn
 		{
 			if ( !additionalArguments.empty() )
 			{
-				for ( const auto & argument: additionalArguments )
+				for ( const auto & [name, value] : additionalArguments )
 				{
-					m_arguments.addArgument(argument);
+					if ( value.empty() )
+					{
+						m_arguments.addSwitch(name);
+					}
+					else
+					{
+						m_arguments.addArgument(name, value);
+					}
 				}
 			}
 
-			Tracer::instance().earlySetup(m_arguments, m_processName, true);
+			Tracer::getInstance().earlySetup(m_arguments, m_processName, true);
 		}
 		else
 		{
@@ -102,15 +109,15 @@ namespace EmEn
 			std::cerr << ClassId << ", " << m_arguments.name() << " service failed to execute !";
 		}
 
-		Tracer::instance().earlySetup(m_arguments, m_processName, false);
+		Tracer::getInstance().earlySetup(m_arguments, m_processName, false);
 
-		if ( m_arguments.get("--verbose").isPresent() )
+		if ( m_arguments.isSwitchPresent("--verbose") )
 		{
 			m_flags[ShowInformation] = true;
 		}
 	}
 
-	PrimaryServices::PrimaryServices (int argc, wchar_t * * wargv, const Identification & identification, const std::string & processName, const std::vector< std::string > & additionalArguments) noexcept
+	PrimaryServices::PrimaryServices (int argc, wchar_t * * wargv, const Identification & identification, const std::string & processName, const std::vector< std::pair< std::string, std::string > > & additionalArguments) noexcept
 		: m_processName{std::move(processName)},
 		m_arguments{argc, wargv, true},
 		m_fileSystem{m_arguments, m_userInfo, identification, true},
@@ -124,13 +131,20 @@ namespace EmEn
 		{
 			if ( !additionalArguments.empty() )
 			{
-				for ( const auto & argument: additionalArguments )
+				for ( const auto & [name, value] : additionalArguments )
 				{
-					m_arguments.addArgument(argument);
+					if ( value.empty() )
+					{
+						m_arguments.addSwitch(name);
+					}
+					else
+					{
+						m_arguments.addArgument(name, value);
+					}
 				}
 			}
 
-			Tracer::instance().earlySetup(m_arguments, m_processName, true);
+			Tracer::getInstance().earlySetup(m_arguments, m_processName, true);
 		}
 		else
 		{
@@ -178,7 +192,7 @@ namespace EmEn
 			TraceSuccess{ClassId} << m_settings.name() << " primary service up [" << m_processName << "] !";
 
 			/* NOTE: Now the core settings are initialized, we can update the tracer service configuration. */
-			Tracer::instance().lateSetup(m_arguments, m_fileSystem, m_settings);
+			Tracer::getInstance().lateSetup(m_arguments, m_fileSystem, m_settings);
 		}
 		else
 		{

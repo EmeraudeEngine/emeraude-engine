@@ -209,8 +209,7 @@ namespace EmEn::Scenes
 			virtual void scaleZ (float factor, Libs::Math::TransformSpace transformSpace) noexcept = 0;
 
 			/**
-			 * @brief Points the backward (Z- axis) of the coordinates system toward the target.
-			 * @note Use this for pointing a camera.
+			 * @brief Points the backward (Negative Z axis) of the coordinates system toward the target.
 			 * @param target A position to look at.
 			 * @param flipZAxis Flip the final Z axis.
 			 * @return void

@@ -30,23 +30,13 @@
 #include "Resources/Manager.hpp"
 #include "Tracer.hpp"
 
-/* Defining the resource manager class id. */
-template<>
-const char * const EmEn::Resources::Container< EmEn::Graphics::Renderable::DynamicSkyResource >::ClassId{"DynamicSkyContainer"};
-
-/* Defining the resource manager ClassUID. */
-template<>
-const size_t EmEn::Resources::Container< EmEn::Graphics::Renderable::DynamicSkyResource >::ClassUID{getClassUID(ClassId)};
-
 namespace EmEn::Graphics::Renderable
 {
-	using namespace EmEn::Libs;
-	using namespace EmEn::Libs::Math;
-
-	const size_t DynamicSkyResource::ClassUID{getClassUID(ClassId)};
+	using namespace Libs;
+	using namespace Libs::Math;
 
 	bool
-	DynamicSkyResource::load () noexcept
+	DynamicSkyResource::load (Resources::ServiceProvider & /*serviceProvider*/) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
@@ -59,7 +49,7 @@ namespace EmEn::Graphics::Renderable
 	}
 
 	bool
-	DynamicSkyResource::load (const Json::Value &) noexcept
+	DynamicSkyResource::load (Resources::ServiceProvider & /*serviceProvider*/, const Json::Value & /*data*/) noexcept
 	{
 		if ( !this->beginLoading() )
 		{

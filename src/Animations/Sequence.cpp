@@ -440,7 +440,7 @@ namespace EmEn::Animations
 			return false;
 		}
 
-		m_flags[IsPlaying] = true;
+		m_isPlaying = true;
 
 		return true;
 	}
@@ -448,9 +448,9 @@ namespace EmEn::Animations
 	bool
 	Sequence::pause () noexcept
 	{
-		if ( m_flags[IsPlaying] )
+		if ( m_isPlaying )
 		{
-			m_flags[IsPlaying] = false;
+			m_isPlaying = false;
 
 			return true;
 		}
@@ -461,7 +461,7 @@ namespace EmEn::Animations
 	Variant
 	Sequence::getNextValue () noexcept
 	{
-		if ( !m_flags[IsPlaying] )
+		if ( !m_isPlaying )
 		{
 			return {};
 		}
@@ -557,7 +557,7 @@ namespace EmEn::Animations
 			else
 			{
 				/* NOTE: The sequence has reached the end. */
-				m_flags[IsPlaying] = false;
+				m_isPlaying = false;
 
 				m_elapsedTime = m_duration;
 			}

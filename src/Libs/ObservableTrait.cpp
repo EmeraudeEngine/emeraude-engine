@@ -34,10 +34,6 @@
 
 namespace EmEn::Libs
 {
-	std::mutex ObservableTrait::s_UIDMutex{};
-
-	size_t ObservableTrait::s_nextClassUID{1UL};
-
 	ObservableTrait::~ObservableTrait ()
 	{
 		/* NOTE: Wait for Observable::notify() to finish. */
@@ -71,10 +67,8 @@ namespace EmEn::Libs
 
 		while ( observerIt != m_observers.end() )
 		{
-			auto * observer = *observerIt;
-
 			/* If onNotification() returns false, we automatically remove the observer. */
-			if ( !observer->onNotification(this, notificationCode, data) )
+			if ( auto * observer = *observerIt; !observer->onNotification(this, notificationCode, data) )
 			{
 				observer->m_observables.erase(this);
 
@@ -87,64 +81,4 @@ namespace EmEn::Libs
 			}
 		}
 	}
-
-#if defined(DEBUG) && IS_LINUX
-	std::unique_ptr< std::map< size_t, const char * > > ObservableTrait::s_classUIDs{nullptr};
-
-	const char *
-	ObservableTrait::whoIs (size_t UID) noexcept
-	{
-		if ( s_classUIDs == nullptr )
-		{
-			return "UNALLOCATED_MAP";
-		}
-
-		const auto item = s_classUIDs->find(UID);
-
-		if ( item != s_classUIDs->cend() )
-		{
-			return item->second;
-		}
-
-		return "UNREGISTERED_ITEM";
-	}
-
-	size_t
-	ObservableTrait::getClassUID (const char * label) noexcept
-	{
-		/* NOTE: Lock the call to this function to be sure having a unique class identifier. */
-		const std::lock_guard< std::mutex > lock{s_UIDMutex};
-
-		const auto UID = s_nextClassUID++;
-
-		if ( s_classUIDs == nullptr )
-		{
-			s_classUIDs = std::make_unique< std::map< size_t, const char * > >();
-
-			/* NOTE: As a special engine debug feature, we register the
-			 * release of memory allocation at application exit. */
-			atexit([] () {
-				s_classUIDs.reset();
-			});
-		}
-
-		if constexpr ( ObserverDebugEnabled )
-		{
-			std::cout << "Linking UID: " << UID << " to item '" << label << "'" "\n";
-		}
-
-		s_classUIDs->emplace(UID, label);
-
-		return UID;
-	}
-#else
-	size_t
-	ObservableTrait::getClassUID (const char * /*label*/) noexcept
-	{
-		/* NOTE: Lock the call to this function to be sure having a unique class identifier. */
-		const std::lock_guard< std::mutex > lock{s_UIDMutex};
-
-		return s_nextClassUID++;
-	}
-#endif
 }

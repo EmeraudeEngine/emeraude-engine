@@ -35,37 +35,19 @@
 #include <cstddef>
 
 /* Third-party inclusions. */
-#ifdef CPUFEATURES_ENABLED
-	#if IS_ARM_ARCH
-		#include "cpu_features/cpuinfo_aarch64.h"
-	#else
-		#include "cpu_features/cpuinfo_x86.h"
-	#endif
+#if IS_ARM_ARCH
+	#include "cpu_features/cpuinfo_aarch64.h"
+#else
+	#include "cpu_features/cpuinfo_x86.h"
 #endif
-#ifdef HWLOC_ENABLED
-	#include "hwloc.h"
-#endif
+#include "hwloc.h"
 
 namespace EmEn::PlatformSpecific
 {
-	SystemInfo::SystemInfo () noexcept
-	{
-		if ( this->fetchOSInformation() )
-		{
-			m_informationFound = true;
-		}
-
-		if ( this->fetchCPUInformation() )
-		{
-			m_informationFound = true;
-		}
-	}
-
 	bool
 	SystemInfo::fetchCPUInformation () noexcept
 	{
-#ifdef CPUFEATURES_ENABLED
-	#if IS_ARM_ARCH
+#if IS_ARM_ARCH
 		const auto cpuInfo = cpu_features::GetAarch64Info();
 
         m_CPUInformation.vendorName = "Apple";
@@ -75,7 +57,7 @@ namespace EmEn::PlatformSpecific
         m_CPUInformation.family = -1;
         m_CPUInformation.model = cpuInfo.part;
         m_CPUInformation.stepping = cpuInfo.revision;
-	#else
+#else
 		const auto cpuInfo = cpu_features::GetX86Info();
 
 		m_CPUInformation.vendorName = cpuInfo.vendor;
@@ -85,10 +67,8 @@ namespace EmEn::PlatformSpecific
 		m_CPUInformation.family = cpuInfo.family;
 		m_CPUInformation.model = cpuInfo.model;
 		m_CPUInformation.stepping = cpuInfo.stepping;
-	#endif
 #endif
 
-#ifdef HWLOC_ENABLED
 		{
 			hwloc_topology_t topology = nullptr;
 
@@ -117,7 +97,6 @@ namespace EmEn::PlatformSpecific
 
 			hwloc_topology_destroy(topology);
 		}
-#endif
 
 		return m_CPUInformation.physicalCores > 0;
 	}
@@ -191,15 +170,5 @@ namespace EmEn::PlatformSpecific
 		}
 
 		return out;
-	}
-
-	std::string
-	to_string (const SystemInfo & obj) noexcept
-	{
-		std::stringstream output;
-
-		output << obj;
-
-		return output.str();
 	}
 }

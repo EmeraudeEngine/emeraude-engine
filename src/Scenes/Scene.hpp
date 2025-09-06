@@ -107,9 +107,6 @@ namespace EmEn::Scenes
 			/** @brief Class identifier. */
 			static constexpr auto ClassId{"Scene"};
 
-			/** @brief Observable class unique identifier. */
-			static const size_t ClassUID;
-
 			/**
 			 * @brief Constructs a scene.
 			 * @param graphicsRenderer A reference to the graphics renderer.
@@ -375,7 +372,7 @@ namespace EmEn::Scenes
 			addEnvironmentEffect (const std::shared_ptr< Saphir::EffectInterface > & effect) noexcept
 			{
 				/* We don't want to notify an effect twice. */
-				// FIXME: Use a std::set so !
+				// FIXME: Use a std::set so!
 				if ( m_environmentEffects.contains(effect) )
 				{
 					return;
@@ -794,7 +791,7 @@ namespace EmEn::Scenes
 			std::shared_ptr< StaticEntity >
 			findStaticEntity (const std::string & staticEntityName) const noexcept
 			{
-				auto staticEntityIt = m_staticEntities.find(staticEntityName);
+				const auto staticEntityIt = m_staticEntities.find(staticEntityName);
 
 				if ( staticEntityIt == m_staticEntities.end() )
 				{
@@ -814,8 +811,6 @@ namespace EmEn::Scenes
 			void
 			forEachModifiers (function_t && processModifier) const noexcept requires (std::is_invocable_v< function_t, const Component::AbstractModifier & >)
 			{
-				//const std::lock_guard< std::mutex > lock{m_modifierAccess};
-
 				for ( const auto & modifierWeak : m_modifiers )
 				{
 					if ( const auto modifier = modifierWeak.lock() )
@@ -872,9 +867,10 @@ namespace EmEn::Scenes
 			/**
 			 * @brief Shows a compass.
 			 * @note This a debug utility.
+			 * @param resourceManager A reference to the resource manager.
 			 * @return bool
 			 */
-			bool enableCompassDisplay () noexcept;
+			bool enableCompassDisplay (Resources::Manager & resourceManager) noexcept;
 
 			/**
 			 * @brief Removes the scene compass.
@@ -894,16 +890,18 @@ namespace EmEn::Scenes
 			/**
 			 * @brief Toggles the display of the scene compass.
 			 * @note This a debug utility.
+			 * @param resourceManager A reference to the resource manager.
 			 * @return bool
 			 */
-			bool toggleCompassDisplay () noexcept;
+			bool toggleCompassDisplay (Resources::Manager & resourceManager) noexcept;
 
 			/**
 			 * @brief Shows the ground zero of the scene.
 			 * @note This a debug utility.
+			 * @param resourceManager A reference to the resource manager.
 			 * @return bool
 			 */
-			bool enableGroundZeroDisplay () noexcept;
+			bool enableGroundZeroDisplay (Resources::Manager & resourceManager) noexcept;
 
 			/**
 			 * @brief Removes the ground zero of the scene.
@@ -923,16 +921,18 @@ namespace EmEn::Scenes
 			/**
 			 * @brief Toggles the display of ground zero.
 			 * @note This a debug utility.
+			 * @param resourceManager A reference to the resource manager.
 			 * @return void
 			 */
-			void toggleGroundZeroDisplay () noexcept;
+			void toggleGroundZeroDisplay (Resources::Manager & resourceManager) noexcept;
 
 			/**
 			 * @brief Shows the scene boundary planes.
 			 * @note This a debug utility.
+			 * @param resourceManager A reference to the resource manager.
 			 * @return bool
 			 */
-			bool enableBoundaryPlanesDisplay () noexcept;
+			bool enableBoundaryPlanesDisplay (Resources::Manager & resourceManager) noexcept;
 
 			/**
 			 * @brief Removes the scene boundary planes.
@@ -952,16 +952,16 @@ namespace EmEn::Scenes
 			/**
 			 * @brief Toggles the display of scene boundary planes.
 			 * @note This a debug utility.
+			 * @param resourceManager A reference to the resource manager.
 			 * @return void
 			 */
-			void toggleBoundaryPlanesDisplay () noexcept;
+			void toggleBoundaryPlanesDisplay (Resources::Manager & resourceManager) noexcept;
 
 			/**
 			 * @brief Refreshes all renderable instances used in the scene.
-			 * @param renderTarget A reference to a render target smart pointer.
-			 * @return void
+			 * @return bool
 			 */
-			void refreshRenderableInstances (const std::shared_ptr< Graphics::RenderTarget::Abstract > & renderTarget) const noexcept;
+			bool refreshRenderableInstances () const noexcept;
 
 			/**
 			 * @brief Applies scene modifiers on a node.
@@ -1004,23 +1004,96 @@ namespace EmEn::Scenes
 			bool onNotification (const Libs::ObservableTrait * observable, int notificationCode, const std::any & data) noexcept override;
 
 			/**
-			 * @brief Updates the render lists from a point of view.
-			 * @param renderTarget A reference to the render target smart pointer.
-			 * @param readStateIndex The render state valid index to read data.
-			 * @param isShadowCasting Enable the shadow map render list.
-			 * @return bool
+			 * @brief Check if a renderable instance is ready for shadow casting.
+			 * @param renderTarget A reference to the render target smart-pointer.
+			 * @param renderableInstance A reference to the renderable instance smart-pointer.
+			 * @return bool. True to ignore this renderable instance.
 			 */
-			bool populateRenderLists (const std::shared_ptr< Graphics::RenderTarget::Abstract > & renderTarget, uint32_t readStateIndex, bool isShadowCasting) noexcept;
+			[[nodiscard]]
+			bool
+			checkRenderableInstanceForShadowCasting (const std::shared_ptr< Graphics::RenderTarget::Abstract > & renderTarget, const std::shared_ptr< Graphics::RenderableInstance::Abstract > & renderableInstance) const noexcept
+			{
+				/* Check whether the renderable instance is ready for shadow casting. */
+				if ( renderableInstance->isReadyToCastShadows(renderTarget) )
+				{
+					return false; // Render
+				}
+
+				/* If it still unloaded. */
+				if ( !renderableInstance->renderable()->isReadyForInstantiation() )
+				{
+					return true; // Continue
+				}
+
+				if ( this->getRenderableInstanceReadyForShadowCasting(renderableInstance, renderTarget) )
+				{
+					return false; // Render
+				}
+
+				/* If the object cannot be loaded, mark it as broken! */
+				renderableInstance->setBroken("Unable to get ready for shadow casting !");
+
+				return true; // Continue
+			}
 
 			/**
-			 * @brief Inserts a renderable instance in render lists for shadow casting.
+			 * @brief Updates the shadow casting render list from the point of view of a light to prepare only the useful data to make a render with it.
+			 * @param renderTarget A reference to the render target smart pointer.
+			 * @param readStateIndex The render state valid index to read data.
+			 * @return bool
+			 */
+			bool populateShadowCastingRenderList (const std::shared_ptr< Graphics::RenderTarget::Abstract > & renderTarget, uint32_t readStateIndex) noexcept;
+
+			/**
+			 * @brief Check if a renderable instance is ready for rendering.
+			 * @param renderTarget A reference to the render target smart-pointer.
+			 * @param renderableInstance A reference to the renderable instance smart-pointer.
+			 * @return bool. True to ignore this renderable instance.
+			 */
+			[[nodiscard]]
+			bool
+			checkRenderableInstanceForRendering (const std::shared_ptr< Graphics::RenderTarget::Abstract > & renderTarget, const std::shared_ptr< Graphics::RenderableInstance::Abstract > & renderableInstance) const noexcept
+			{
+				/* Check whether the renderable instance is ready for shadow casting. */
+				if ( renderableInstance->isReadyToRender(renderTarget) )
+				{
+					return false; // Render
+				}
+
+				/* If it still unloaded. */
+				if ( !renderableInstance->renderable()->isReadyForInstantiation() )
+				{
+					return true; // Continue
+				}
+
+				if ( this->getRenderableInstanceReadyForRendering(renderableInstance, renderTarget) )
+				{
+					return false; // Render
+				}
+
+				/* If the object cannot be loaded, mark it as broken! */
+				renderableInstance->setBroken("Unable to get ready for rendering !");
+
+				return true; // Continue
+			}
+
+			/**
+			 * @brief Updates the render lists from a point of view of a camera to prepare only the useful data to make a render with it.
+			 * @param renderTarget A reference to the render target smart pointer.
+			 * @param readStateIndex The render state valid index to read data.
+			 * @return bool
+			 */
+			bool populateRenderLists (const std::shared_ptr< Graphics::RenderTarget::Abstract > & renderTarget, uint32_t readStateIndex) noexcept;
+
+			/**
+			 * @brief Inserts a renderable instance in the render batch list for shadow casting.
 			 * @param renderTarget A reference to the render target smart pointer.
 			 * @param renderableInstance A reference to a renderable instance.
 			 * @param worldCoordinates A pointer to a cartesian frame. A 'nullptr' means origin.
 			 * @param distance The distance from the camera.
 			 * @return void
 			 */
-			void insertInShadowCastLists (const std::shared_ptr< Graphics::RenderTarget::Abstract > & renderTarget, const std::shared_ptr< Graphics::RenderableInstance::Abstract > & renderableInstance, const Libs::Math::CartesianFrame< float > * worldCoordinates, float distance) noexcept;
+			void insertIntoShadowCastingRenderList (const std::shared_ptr< Graphics::RenderTarget::Abstract > & renderTarget, const std::shared_ptr< Graphics::RenderableInstance::Abstract > & renderableInstance, const Libs::Math::CartesianFrame< float > * worldCoordinates, float distance) noexcept;
 
 			/**
 			 * @brief Inserts a renderable instance in render lists.
@@ -1030,18 +1103,17 @@ namespace EmEn::Scenes
 			 * @param distance The distance from the camera.
 			 * @return void
 			 */
-			void insertInRenderLists (const std::shared_ptr< Graphics::RenderTarget::Abstract > & renderTarget, const std::shared_ptr< Graphics::RenderableInstance::Abstract > & renderableInstance, const Libs::Math::CartesianFrame< float > * worldCoordinates, float distance) noexcept;
+			void insertIntoRenderLists (const std::shared_ptr< Graphics::RenderTarget::Abstract > & renderTarget, const std::shared_ptr< Graphics::RenderableInstance::Abstract > & renderableInstance, const Libs::Math::CartesianFrame< float > * worldCoordinates, float distance) noexcept;
 
 			/**
-			 * @brief Renders a specific selection of objects;
+			 * @brief Renders a list of objects Z-sorted that uses lighting.
 			 * @param renderTarget A reference to the render target smart pointer.
 			 * @param readStateIndex The render state valid index to read data.
 			 * @param commandBuffer A reference to the command buffer.
-			 * @param unlightedObjects A reference to an unlighted renderable list.
-			 * @param lightedObjects A reference to a lighted renderable list.
+			 * @param renderBatches A reference to a render batch.
 			 * @return void
 			 */
-			void renderSelection (const std::shared_ptr< Graphics::RenderTarget::Abstract > & renderTarget, uint32_t readStateIndex, const Vulkan::CommandBuffer & commandBuffer, const RenderBatch::List & unlightedObjects, const RenderBatch::List & lightedObjects) const noexcept;
+			void renderLightedSelection (const std::shared_ptr< Graphics::RenderTarget::Abstract > & renderTarget, uint32_t readStateIndex, const Vulkan::CommandBuffer & commandBuffer, const RenderBatch::List & renderBatches) const noexcept;
 
 			/**
 			 * @brief Loops over each renderable instance of the scene
@@ -1132,20 +1204,6 @@ namespace EmEn::Scenes
 			void clipWithBoundingBox (const std::shared_ptr< AbstractEntity > & entity) const noexcept;
 
 			/**
-			 * @brief Checks a renderable instance for rendering.
-			 * @param renderableInstance A reference to a renderable instance smart pointer.
-			 * @return void
-			 */
-			void checkRenderableInstance (const std::shared_ptr< Graphics::RenderableInstance::Abstract > & renderableInstance) noexcept;
-
-			/**
-			 * @brief Initializes a renderable instance with the scene render targets.
-			 * @param renderableInstance A reference to a renderable instance smart pointer.
-			 * @return void
-			 */
-			void initializeRenderableInstance (const std::shared_ptr< Graphics::RenderableInstance::Abstract > & renderableInstance) const noexcept;
-
-			/**
 			 * @brief Initializes a render target with renderable instances.
 			 * @param renderTarget A reference to a render target smart pointer.
 			 * @return void
@@ -1178,7 +1236,7 @@ namespace EmEn::Scenes
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool getRenderableInstanceReadyForRender (const std::shared_ptr< Graphics::RenderableInstance::Abstract > & renderableInstance, const std::shared_ptr< Graphics::RenderTarget::Abstract > & renderTarget) const noexcept;
+			bool getRenderableInstanceReadyForRendering (const std::shared_ptr< Graphics::RenderableInstance::Abstract > & renderableInstance, const std::shared_ptr< Graphics::RenderTarget::Abstract > & renderTarget) const noexcept;
 
 			static constexpr auto CompassDisplay{"+Compass"};
 			static constexpr auto GroundZeroPlaneDisplay{"+GroundZeroPlane"};
