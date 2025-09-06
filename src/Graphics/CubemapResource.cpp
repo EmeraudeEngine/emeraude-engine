@@ -52,7 +52,7 @@ namespace EmEn::Graphics
 	const size_t CubemapResource::ClassUID{getClassUID(ClassId)};
 
 	bool
-	CubemapResource::load () noexcept
+	CubemapResource::load (Resources::Manager & /*resourceManager*/) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
@@ -88,12 +88,12 @@ namespace EmEn::Graphics
 	}
 
 	bool
-	CubemapResource::load (const std::filesystem::path & filepath) noexcept
+	CubemapResource::load (Resources::Manager & resourceManager, const std::filesystem::path & filepath) noexcept
 	{
 		/* Check for a JSON file. */
 		if ( IO::getFileExtension(filepath) == "json" )
 		{
-			return ResourceTrait::load(filepath);
+			return ResourceTrait::load(resourceManager, filepath);
 		}
 		
 		/* Tries to read the pixmap. */
@@ -110,7 +110,7 @@ namespace EmEn::Graphics
 	}
 
 	bool
-	CubemapResource::load (const Json::Value & data) noexcept
+	CubemapResource::load (Resources::Manager & resourceManager, const Json::Value & data) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
@@ -135,9 +135,11 @@ namespace EmEn::Graphics
 			return this->setLoadSuccess(false);
 		}
 
+		const auto & fileSystem = resourceManager.primaryServices().fileSystem();
+
 		if ( data[PackedKey].asBool() )
 		{
-			const auto filepath = FileSystem::instance()->getFilepathFromDataDirectories("data-stores/Cubemaps", this->name() + '.' + PackedKey + '.' + fileFormat);
+			const auto filepath = fileSystem.getFilepathFromDataDirectories("data-stores/Cubemaps", this->name() + '.' + PackedKey + '.' + fileFormat);
 
 			if ( filepath.empty() )
 			{
@@ -158,7 +160,7 @@ namespace EmEn::Graphics
 
 		for ( size_t faceIndex = 0; faceIndex < CubemapFaceCount; faceIndex++ )
 		{
-			const auto filepath = FileSystem::instance()->getFilepathFromDataDirectories("data-stores/Cubemaps", this->name() + '.' + CubemapFaceNames.at(faceIndex) + '.' + fileFormat);
+			const auto filepath = fileSystem.getFilepathFromDataDirectories("data-stores/Cubemaps", this->name() + '.' + CubemapFaceNames.at(faceIndex) + '.' + fileFormat);
 
 			if ( filepath.empty() )
 			{

@@ -212,10 +212,11 @@ namespace EmEn::Audio
 
 			/**
 			 * @brief Loads a sound set from a JSON file.
+			 * @param resourceManager A reference to the resource manager.
 			 * @param filepath The path to the filesystem path.
 			 * @return bool
 			 */
-			bool loadSoundSet (const std::filesystem::path & filepath) noexcept;
+			bool loadSoundSet (Resources::Manager & resourceManager, const std::filesystem::path & filepath) noexcept;
 
 			/**
 			 * @brief Reset the current sound set.

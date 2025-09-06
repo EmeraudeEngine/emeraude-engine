@@ -128,7 +128,7 @@ namespace EmEn::Input
 			bool
 			usable () const noexcept override
 			{
-				return m_flags[ServiceInitialized];
+				return m_serviceInitialized;
 			}
 
 			/**
@@ -177,7 +177,7 @@ namespace EmEn::Input
 
 			/**
 			 * @brief Controls whether the keyboard events are sent to listeners.
-			 * @note This is a global switch, but doesn't affect the keyboard controller direct state reading.
+			 * @note This is a global switch but doesn't affect the keyboard controller direct state reading.
 			 * @param state The state.
 			 * @return void
 			 */
@@ -191,12 +191,12 @@ namespace EmEn::Input
 			bool
 			isListeningKeyboard () const noexcept
 			{
-				return m_flags[IsListeningKeyboard];
+				return m_isListeningKeyboard;
 			}
 
 			/**
 			 * @brief @brief Controls whether the pointer events are sent to listeners.
-			 * @note This is a global switch, but doesn't affect the pointer controller direct state reading.
+			 * @note This is a global switch but doesn't affect the pointer controller direct state reading.
 			 * @param state The state.
 			 * @return void
 			 */
@@ -210,7 +210,7 @@ namespace EmEn::Input
 			bool
 			isListeningPointer () const noexcept
 			{
-				return m_flags[IsListeningPointer];
+				return m_isListeningPointer;
 			}
 
 			/**
@@ -221,7 +221,7 @@ namespace EmEn::Input
 			bool
 			isPointerLocked () const noexcept
 			{
-				return m_flags[PointerLocked];
+				return m_pointerLocked;
 			}
 
 			/**
@@ -235,7 +235,8 @@ namespace EmEn::Input
 			{
 				m_pointerScalingFactors[0] = xScale;
 				m_pointerScalingFactors[1] = yScale;
-				m_flags[PointerCoordinatesScalingEnabled] = true;
+
+				m_pointerCoordinatesScalingEnabled = true;
 			}
 
 			/**
@@ -247,7 +248,8 @@ namespace EmEn::Input
 			{
 				m_pointerScalingFactors[0] = 1.0;
 				m_pointerScalingFactors[1] = 1.0;
-				m_flags[PointerCoordinatesScalingEnabled] = false;
+
+				m_pointerCoordinatesScalingEnabled = false;
 			}
 
 			/**
@@ -258,11 +260,11 @@ namespace EmEn::Input
 			bool
 			isPointerScalingEnabled () const noexcept
 			{
-				return m_flags[PointerCoordinatesScalingEnabled];
+				return m_pointerCoordinatesScalingEnabled;
 			}
 
 			/**
-			 * @brief Enables the copy of keyboard state.
+			 * @brief Enables the copy of the keyboard state.
 			 * @note Direct query of the keyboard state must be done on the main-thread.
 			 * @param state The state.
 			 * @return void
@@ -270,22 +272,22 @@ namespace EmEn::Input
 			void
 			enableCopyKeyboardState (bool state) noexcept
 			{
-				m_flags[CopyKeyboardStateEnabled] = state;
+				m_copyKeyboardStateEnabled = state;
 			}
 
 			/**
-			 * @brief Returns whether the copy of keyboard state is enabled.
+			 * @brief Returns whether the copy of the keyboard state is enabled.
 			 * @return bool
 			 */
 			[[nodiscard]]
 			bool
 			isCopyKeyboardStateEnabled () const noexcept
 			{
-				return m_flags[CopyKeyboardStateEnabled];
+				return m_copyKeyboardStateEnabled;
 			}
 
 			/**
-			 * @brief Enables the copy of pointer state.
+			 * @brief Enables the copy of the pointer state.
 			 * @note Direct query of the pointer state must be done on the main-thread.
 			 * @param state The state.
 			 * @return void
@@ -293,18 +295,18 @@ namespace EmEn::Input
 			void
 			enableCopyPointerState (bool state) noexcept
 			{
-				m_flags[CopyPointerStateEnabled] = state;
+				m_copyPointerStateEnabled = state;
 			}
 
 			/**
-			 * @brief Returns whether the copy of pointer state is enabled.
+			 * @brief Returns whether the copy of the pointer state is enabled.
 			 * @return bool
 			 */
 			[[nodiscard]]
 			bool
 			isCopyPointerStateEnabled () const noexcept
 			{
-				return m_flags[CopyPointerStateEnabled];
+				return m_copyPointerStateEnabled;
 			}
 
 			/**
@@ -316,7 +318,7 @@ namespace EmEn::Input
 			void
 			enableCopyJoysticksState (bool state) noexcept
 			{
-				m_flags[CopyJoysticksStateEnabled] = state;
+				m_copyJoysticksStateEnabled = state;
 			}
 
 			/**
@@ -327,7 +329,7 @@ namespace EmEn::Input
 			bool
 			isCopyJoysticksStateEnabled () const noexcept
 			{
-				return m_flags[CopyJoysticksStateEnabled];
+				return m_copyJoysticksStateEnabled;
 			}
 
 			/**
@@ -339,29 +341,29 @@ namespace EmEn::Input
 			void
 			enableCopyGamepadsState (bool state) noexcept
 			{
-				m_flags[CopyGamepadsStateEnabled] = state;
+				m_copyGamepadsStateEnabled = state;
 			}
 
 			/**
-			 * @brief Returns whether the copy of gamepad state is enabled.
+			 * @brief Returns whether the copy of the gamepad state is enabled.
 			 * @return bool
 			 */
 			[[nodiscard]]
 			bool
 			isCopyGamepadsStateEnabled () const noexcept
 			{
-				return m_flags[CopyGamepadsStateEnabled];
+				return m_copyGamepadsStateEnabled;
 			}
 
 			/**
-			 * @brief Hides the mouse cursor and the manager will only serve listeners in relative mode.
+			 * @brief Hides the mouse cursor, and the manager will only serve listeners in relative mode.
 			 * @note The mouse move event will give the difference on the X and Y axis.
 			 * @return void
 			 */
 			void lockPointer () noexcept;
 
 			/**
-			 * @brief Shows the mouse cursor and the manager will only serve listeners in absolute mode.
+			 * @brief Shows the mouse cursor, and the manager will only serve listeners in absolute mode.
 			 * @note The mouse move event will give the absolute pointer XY coordinates on the screen.
 			 * @return void
 			 */
@@ -547,19 +549,6 @@ namespace EmEn::Input
 			 */
 			static void joystickCallback (int jid, int event) noexcept;
 
-			/* Flag names. */
-			static constexpr auto ServiceInitialized{0UL};
-			static constexpr auto ShowInformation{1UL};
-			static constexpr auto WindowLinked{2UL};
-			static constexpr auto IsListeningKeyboard{3UL};
-			static constexpr auto IsListeningPointer{4UL};
-			static constexpr auto PointerLocked{5UL};
-			static constexpr auto PointerCoordinatesScalingEnabled{6UL};
-			static constexpr auto CopyKeyboardStateEnabled{7UL};
-			static constexpr auto CopyPointerStateEnabled{8UL};
-			static constexpr auto CopyJoysticksStateEnabled{9UL};
-			static constexpr auto CopyGamepadsStateEnabled{10UL};
-
 			static constexpr auto GameControllerDBFile{"gamecontrollerdb.txt"};
 
 			inline static Manager * s_instance{nullptr};
@@ -575,23 +564,16 @@ namespace EmEn::Input
 			std::set< int > m_gamepadIDs;
 			std::array< double, 2 > m_pointerScalingFactors{1.0, 1.0};
 			std::array< double, 2 > m_lastPointerCoordinates{0.0, 0.0};
-			std::array< bool, 16 > m_flags{
-				false/*ServiceInitialized*/,
-				false/*ShowInformation*/,
-				false/*WindowLinked*/,
-				false/*IsListeningKeyboard*/,
-				false/*IsListeningPointer*/,
-				false/*PointerLocked*/,
-				false/*PointerCoordinatesScalingEnabled*/,
-				false/*CopyKeyboardStateEnabled*/,
-				false/*CopyPointerStateEnabled*/,
-				false/*CopyJoysticksStateEnabled*/,
-				false/*CopyGamepadsStateEnabled*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/
-			};
+			bool m_serviceInitialized{false};
+			bool m_showInformation{false};
+			bool m_windowLinked{false};
+			bool m_isListeningKeyboard{false};
+			bool m_isListeningPointer{false};
+			bool m_pointerLocked{false};
+			bool m_pointerCoordinatesScalingEnabled{false};
+			bool m_copyKeyboardStateEnabled{false};
+			bool m_copyPointerStateEnabled{false};
+			bool m_copyJoysticksStateEnabled{false};
+			bool m_copyGamepadsStateEnabled{false};
 	};
 }

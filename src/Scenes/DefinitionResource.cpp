@@ -42,19 +42,19 @@ const size_t EmEn::Resources::Container< EmEn::Scenes::DefinitionResource >::Cla
 
 namespace EmEn::Scenes
 {
-	using namespace EmEn::Libs;
-	using namespace EmEn::Graphics;
+	using namespace Libs;
+	using namespace Graphics;
 
 	const size_t DefinitionResource::ClassUID{getClassUID(ClassId)};
 
 	bool
-	DefinitionResource::load () noexcept
+	DefinitionResource::load (Resources::Manager & /*resourceManager*/) noexcept
 	{
 		return false;
 	}
 
 	bool
-	DefinitionResource::load (const std::filesystem::path & filepath) noexcept
+	DefinitionResource::load (Resources::Manager & resourceManager, const std::filesystem::path & filepath) noexcept
 	{
 		const auto rootCheck = FastJSON::getRootFromFile(filepath);
 
@@ -68,15 +68,13 @@ namespace EmEn::Scenes
 		const auto & root = rootCheck.value();
 
 		/* Checks if additional stores before loading (optional) */
-		auto * manager = Resources::Manager::instance();
+		resourceManager.stores().update(resourceManager, root);
 
-		manager->stores().update(root, manager->verbosityEnabled());
-
-		return this->load(root);
+		return this->load(resourceManager, root);
 	}
 
 	bool
-	DefinitionResource::load (const Json::Value & data) noexcept
+	DefinitionResource::load (Resources::Manager & /*resourceManager*/, const Json::Value & data) noexcept
 	{
 		m_root = data;
 
@@ -138,7 +136,7 @@ namespace EmEn::Scenes
 		}
 
 		/* Checks for global scene properties. */
-		auto properties = m_root[FastJSON::PropertiesKey];
+		const auto properties = m_root[FastJSON::PropertiesKey];
 
 		scene.setPhysicalEnvironmentProperties({
 			FastJSON::getValue< float >(properties, SurfaceGravityKey).value_or(Physics::Gravity::Earth< float >),
@@ -152,121 +150,12 @@ namespace EmEn::Scenes
 	bool
 	DefinitionResource::readBackground (Scene & /*scene*/) noexcept
 	{
-		/*if ( !m_root.isMember(BackgroundKey) || !m_root[BackgroundKey].isObject() )
-		{
-			Tracer::warning(ClassId, Blob() << "There is no '" << BackgroundKey << "' definition or is invalid !");
-
-			return false;
-		}
-
-		auto background = m_root[BackgroundKey];
-
-		if ( !background.isMember(FastJSON::TypeKey) || !background[FastJSON::TypeKey].isString() )
-		{
-			Tracer::error(ClassId, "There is no background type or is invalid !");
-
-			return false;
-		}
-
-		if ( !background.isMember(FastJSON::DataKey) || !background[FastJSON::DataKey].isObject() )
-		{
-			Tracer::error(ClassId, "There is no background data or is invalid !");
-
-			return false;
-		}
-
-		auto type = background[FastJSON::TypeKey].asString();
-
-		if ( std::strcmp(type.c_str(), Renderable::SkyBoxResource::ClassId) == 0 )
-		{
-			auto name = scene.name() + Renderable::SkyBoxResource::ClassId;
-
-			auto backgroundResource = Resources::Manager::instance()->skyboxManager().create(name);
-
-			if ( !backgroundResource->load(background[FastJSON::DataKey]) )
-			{
-				Tracer::error(ClassId, Blob() << "Unable to load Skybox '" << name << "'.");
-
-				return false;
-			}
-
-			scene.setBackground(backgroundResource);
-		}
-		else
-		{
-			Tracer::warning(ClassId, Blob() << "Background type '" << type << "' is not handled !");
-
-			return false;
-		}*/
-
 		return true;
 	}
 
 	bool
 	DefinitionResource::readSceneArea (Scene & /*scene*/) noexcept
 	{
-		/*if ( !m_root.isMember(SceneAreaKey) || !m_root[SceneAreaKey].isObject() )
-		{
-			Tracer::warning(ClassId, Blob() << "There is no '" << SceneAreaKey << "' definition or is invalid !");
-
-			return false;
-		}
-
-		auto sceneArea = m_root[SceneAreaKey];
-
-		if ( !sceneArea.isMember(FastJSON::TypeKey) || !sceneArea[FastJSON::TypeKey].isString() )
-		{
-			Tracer::error(ClassId, "There is no scene area type or is invalid !");
-
-			return false;
-		}
-
-		if ( !sceneArea.isMember(FastJSON::DataKey) || !sceneArea[FastJSON::DataKey].isObject() )
-		{
-			Tracer::error(ClassId, "There is no scene area data or is invalid !");
-
-			return false;
-		}
-
-		auto type = sceneArea[FastJSON::TypeKey].asString();
-
-		if ( std::strcmp(type.c_str(), Renderable::BasicFloorResource::ClassId) == 0 )
-		{
-			auto name = scene.name() + Renderable::BasicFloorResource::ClassId;
-
-			auto sceneAreaResource = Resources::Manager::instance()->basicFloorManager().create(name);
-
-			if ( !sceneAreaResource->load(sceneArea[FastJSON::DataKey]) )
-			{
-				Tracer::error(ClassId, Blob() << "Unable to load BasicFloor '" << name << "'.");
-
-				return false;
-			}
-
-			scene.setSceneArea(sceneAreaResource);
-		}
-		else if ( std::strcmp(type.c_str(), Renderable::TerrainResource::ClassId) == 0 )
-		{
-			auto name = scene.name() + Renderable::TerrainResource::ClassId;
-
-			auto sceneAreaResource = Resources::Manager::instance()->terrainManager().create(name);
-
-			if ( !sceneAreaResource->load(sceneArea[FastJSON::DataKey]) )
-			{
-				Tracer::error(ClassId, Blob() << "Unable to load Terrain '" << name << "'.");
-
-				return false;
-			}
-
-			scene.setSceneArea(sceneAreaResource);
-		}
-		else
-		{
-			Tracer::warning(ClassId, Blob() << "Scene area type '" << type << "' is not handled !");
-
-			return false;
-		}*/
-
 		return true;
 	}
 }

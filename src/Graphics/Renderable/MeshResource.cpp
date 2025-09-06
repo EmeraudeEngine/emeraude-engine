@@ -96,19 +96,19 @@ namespace EmEn::Graphics::Renderable
 	}
 
 	bool
-	MeshResource::load () noexcept
+	MeshResource::load (Resources::Manager & resourceManager) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
 			return false;
 		}
 
-		if ( !this->setGeometry(Resources::Manager::instance()->container< VertexResource >()->getDefaultResource()) )
+		if ( !this->setGeometry(resourceManager.container< VertexResource >()->getDefaultResource()) )
 		{
 			return this->setLoadSuccess(false);
 		}
 
-		if ( !this->setMaterial(Resources::Manager::instance()->container< BasicResource >()->getDefaultResource(), {}, 0) )
+		if ( !this->setMaterial(resourceManager.container< BasicResource >()->getDefaultResource(), {}, 0) )
 		{
 			return this->setLoadSuccess(false);
 		}
@@ -229,20 +229,18 @@ namespace EmEn::Graphics::Renderable
 	}
 
 	bool
-	MeshResource::load (const Json::Value & data) noexcept
+	MeshResource::load (Resources::Manager & resourceManager, const Json::Value & data) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
 			return false;
 		}
 
-		auto * resources = Resources::Manager::instance();
-
 		/* FIXME: Physics properties from Mesh definitions. */
 		//this->parseOptions(data);
 
 		/* Parse geometry definition. */
-		const auto geometryResource = this->parseGeometry(*resources, data);
+		const auto geometryResource = this->parseGeometry(resourceManager, data);
 
 		if ( geometryResource == nullptr )
 		{
@@ -281,8 +279,8 @@ namespace EmEn::Graphics::Renderable
 
 		for ( const auto & layerRule : layerRules )
 		{
-			/* Parse material definition and get default if error occurs. */
-			auto materialResource = MeshResource::parseLayer(*resources, layerRule);
+			/* Parse material definition and get default if an error occurs. */
+			auto materialResource = MeshResource::parseLayer(resourceManager, layerRule);
 
 			/* Gets a default material. */
 			if ( materialResource == nullptr )
@@ -292,9 +290,7 @@ namespace EmEn::Graphics::Renderable
 				return this->setLoadSuccess(false);
 			}
 
-			auto layerRasterizationOptions = MeshResource::parseLayerOptions(layerRule);
-
-			if ( !this->addMaterial(materialResource, layerRasterizationOptions, 0) )
+			if ( !this->addMaterial(materialResource, MeshResource::parseLayerOptions(layerRule), 0) )
 			{
 				Tracer::error(ClassId, "Unable to add material layer !");
 
@@ -416,20 +412,20 @@ namespace EmEn::Graphics::Renderable
 	}
 
 	std::shared_ptr< MeshResource >
-	MeshResource::getOrCreate (const std::shared_ptr< Geometry::Interface > & geometryResource, const std::shared_ptr< Material::Interface > & materialResource, std::string resourceName) noexcept
+	MeshResource::getOrCreate (Resources::Manager & resourceManager, const std::shared_ptr< Geometry::Interface > & geometryResource, const std::shared_ptr< Material::Interface > & materialResource, std::string resourceName) noexcept
 	{
 		if ( resourceName.empty() )
 		{
 			resourceName = (std::stringstream{} << "Mesh(" << geometryResource->name() << ',' << materialResource->name() << ')').str();
 		}
 
-		return Resources::Manager::instance()->container< MeshResource >()->getOrCreateResource(resourceName, [&geometryResource, &materialResource] (MeshResource & newMesh) {
+		return resourceManager.container< MeshResource >()->getOrCreateResource(resourceName, [&geometryResource, &materialResource] (MeshResource & newMesh) {
 			return newMesh.load(geometryResource, materialResource);
 		});
 	}
 
 	std::shared_ptr< MeshResource >
-	MeshResource::getOrCreate (const std::shared_ptr< Geometry::Interface > & geometryResource, const std::vector< std::shared_ptr< Material::Interface > > & materialResources, std::string resourceName) noexcept
+	MeshResource::getOrCreate (Resources::Manager & resourceManager, const std::shared_ptr< Geometry::Interface > & geometryResource, const std::vector< std::shared_ptr< Material::Interface > > & materialResources, std::string resourceName) noexcept
 	{
 		if ( resourceName.empty() )
 		{
@@ -447,7 +443,7 @@ namespace EmEn::Graphics::Renderable
 			resourceName = output.str();
 		}
 
-		return Resources::Manager::instance()->container< MeshResource >()->getOrCreateResource(resourceName, [&geometryResource, &materialResources] (MeshResource & newMesh) {
+		return resourceManager.container< MeshResource >()->getOrCreateResource(resourceName, [&geometryResource, &materialResources] (MeshResource & newMesh) {
 			return newMesh.load(geometryResource, materialResources);
 		});
 	}

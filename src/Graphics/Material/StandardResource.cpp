@@ -67,17 +67,17 @@ const size_t EmEn::Resources::Container< EmEn::Graphics::Material::StandardResou
 
 namespace EmEn::Graphics::Material
 {
-	using namespace EmEn::Libs;
-	using namespace EmEn::Libs::Math;
-	using namespace EmEn::Saphir;
-	using namespace EmEn::Saphir::Keys;
-	using namespace EmEn::Graphics::Material::Component;
-	using namespace EmEn::Vulkan;
+	using namespace Libs;
+	using namespace Libs::Math;
+	using namespace Saphir;
+	using namespace Saphir::Keys;
+	using namespace Graphics::Material::Component;
+	using namespace Vulkan;
 
 	const size_t StandardResource::ClassUID{getClassUID(ClassId)};
 
 	bool
-	StandardResource::load () noexcept
+	StandardResource::load (Resources::Manager & /*resourceManager*/) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
@@ -461,58 +461,56 @@ namespace EmEn::Graphics::Material
 	}
 
 	bool
-	StandardResource::load (const Json::Value & data) noexcept
+	StandardResource::load (Resources::Manager & resourceManager, const Json::Value & data) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
 			return false;
 		}
 
-		auto * resources = Resources::Manager::instance();
-
-		if ( !this->parseAmbientComponent(data, *resources) )
+		if ( !this->parseAmbientComponent(data, resourceManager) )
 		{
 			TraceError{ClassId} << "Error while parsing the ambient component for material '" << this->name() << "' resource from JSON file !" "\n" "Data : " << data;
 
 			return this->setLoadSuccess(false);
 		}
 
-		if ( !this->parseDiffuseComponent(data, *resources) )
+		if ( !this->parseDiffuseComponent(data, resourceManager) )
 		{
 			TraceError{ClassId} << "Error while parsing the diffuse component for material '" << this->name() << "' resource from JSON file !" "\n" "Data : " << data;
 
 			return this->setLoadSuccess(false);
 		}
 
-		if ( !this->parseSpecularComponent(data, *resources) )
+		if ( !this->parseSpecularComponent(data, resourceManager) )
 		{
 			TraceError{ClassId} << "Error while parsing the specular component for material '" << this->name() << "' resource from JSON file !" "\n" "Data : " << data;
 
 			return this->setLoadSuccess(false);
 		}
 
-		if ( !this->parseAutoIlluminationComponent(data, *resources) )
+		if ( !this->parseAutoIlluminationComponent(data, resourceManager) )
 		{
 			TraceError{ClassId} << "Error while parsing the auto-illumination component for material '" << this->name() << "' resource from JSON file !" "\n" "Data : " << data;
 
 			return this->setLoadSuccess(false);
 		}
 
-		if ( !this->parseOpacityComponent(data, *resources) )
+		if ( !this->parseOpacityComponent(data, resourceManager) )
 		{
 			TraceError{ClassId} << "Error while parsing the opacity component for material '" << this->name() << "' resource from JSON file !" "\n" "Data : " << data;
 
 			return this->setLoadSuccess(false);
 		}
 
-		if ( !this->parseNormalComponent(data, *resources) )
+		if ( !this->parseNormalComponent(data, resourceManager) )
 		{
 			TraceError{ClassId} << "Error while parsing the normal component for material '" << this->name() << "' resource from JSON file !" "\n" "Data : " << data;
 
 			return this->setLoadSuccess(false);
 		}
 
-		if ( !this->parseReflectionComponent(data, *resources) )
+		if ( !this->parseReflectionComponent(data, resourceManager) )
 		{
 			TraceError{ClassId} << "Error while parsing the reflection component for material '" << this->name() << "' resource from JSON file !" "\n" "Data : " << data;
 

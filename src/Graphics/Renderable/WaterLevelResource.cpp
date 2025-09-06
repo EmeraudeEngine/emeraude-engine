@@ -40,13 +40,13 @@ const size_t EmEn::Resources::Container< EmEn::Graphics::Renderable::WaterLevelR
 
 namespace EmEn::Graphics::Renderable
 {
-	using namespace EmEn::Libs;
-	using namespace EmEn::Libs::Math;
+	using namespace Libs;
+	using namespace Libs::Math;
 
 	const size_t WaterLevelResource::ClassUID{getClassUID(ClassId)};
 
 	bool
-	WaterLevelResource::load () noexcept
+	WaterLevelResource::load (Resources::Manager & resourceManager) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
@@ -67,7 +67,7 @@ namespace EmEn::Graphics::Renderable
 			return this->setLoadSuccess(false);
 		}
 
-		if ( !this->setMaterial(Resources::Manager::instance()->container< Material::BasicResource >()->getDefaultResource()) )
+		if ( !this->setMaterial(resourceManager.container< Material::BasicResource >()->getDefaultResource()) )
 		{
 			return this->setLoadSuccess(false);
 		}
@@ -76,7 +76,7 @@ namespace EmEn::Graphics::Renderable
 	}
 
 	bool
-	WaterLevelResource::load (const Json::Value & /*data*/) noexcept
+	WaterLevelResource::load (Resources::Manager & /*resourceManager*/, const Json::Value & /*data*/) noexcept
 	{
 		if ( !this->beginLoading() )
 		{

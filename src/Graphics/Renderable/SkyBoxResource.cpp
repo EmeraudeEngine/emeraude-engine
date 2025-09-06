@@ -42,30 +42,28 @@ const size_t EmEn::Resources::Container< EmEn::Graphics::Renderable::SkyBoxResou
 
 namespace EmEn::Graphics::Renderable
 {
-	using namespace EmEn::Libs;
-	using namespace EmEn::Libs::Math;
-	using namespace EmEn::Libs::PixelFactory;
-	using namespace EmEn::Graphics::Material;
+	using namespace Libs;
+	using namespace Libs::Math;
+	using namespace Libs::PixelFactory;
+	using namespace Graphics::Material;
 
 	const size_t SkyBoxResource::ClassUID{getClassUID(ClassId)};
 
 	bool
-	SkyBoxResource::load () noexcept
+	SkyBoxResource::load (Resources::Manager & resourceManager) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
 			return false;
 		}
 
-		if ( !this->setGeometry(getSkyBoxGeometry()) )
+		if ( !this->setGeometry(SkyBoxResource::getSkyBoxGeometry(resourceManager)) )
 		{
 			return this->setLoadSuccess(false);
 		}
 
-		auto * resources = Resources::Manager::instance();
-
-		const auto materialResource = resources->container< BasicResource >()->getOrCreateResource("DefaultSkyboxMaterial", [resources] (BasicResource & newMaterial) {
-			if ( !newMaterial.setTexture(resources->container< TextureResource::TextureCubemap >()->getDefaultResource()) )
+		const auto materialResource = resourceManager.container< BasicResource >()->getOrCreateResource("DefaultSkyboxMaterial", [&resourceManager] (BasicResource & newMaterial) {
+			if ( !newMaterial.setTexture(resourceManager.container< TextureResource::TextureCubemap >()->getDefaultResource()) )
 			{
 				return false;
 			}
@@ -82,14 +80,14 @@ namespace EmEn::Graphics::Renderable
 	}
 
 	bool
-	SkyBoxResource::load (const Json::Value & data) noexcept
+	SkyBoxResource::load (Resources::Manager & resourceManager, const Json::Value & data) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
 			return false;
 		}
 
-		if ( !this->setGeometry(getSkyBoxGeometry()) )
+		if ( !this->setGeometry(SkyBoxResource::getSkyBoxGeometry(resourceManager)) )
 		{
 			return this->setLoadSuccess(false);
 		}
@@ -103,10 +101,8 @@ namespace EmEn::Graphics::Renderable
 
 		const auto textureName = data[TextureKey].asString();
 
-		auto * resources = Resources::Manager::instance();
-
-		const auto materialResource = resources->container< BasicResource >()->getOrCreateResource(textureName + "SkyboxMaterial", [&] (BasicResource & newMaterial) {
-			if ( !newMaterial.setTexture(resources->container< TextureResource::TextureCubemap >()->getResource(textureName, this->isDirectLoading())) )
+		const auto materialResource = resourceManager.container< BasicResource >()->getOrCreateResource(textureName + "SkyboxMaterial", [&] (BasicResource & newMaterial) {
+			if ( !newMaterial.setTexture(resourceManager.container< TextureResource::TextureCubemap >()->getResource(textureName, this->isDirectLoading())) )
 			{
 				return false;
 			}
@@ -131,14 +127,14 @@ namespace EmEn::Graphics::Renderable
 	}
 
 	bool
-	SkyBoxResource::load (const std::shared_ptr< Material::Interface > & material) noexcept
+	SkyBoxResource::load (Resources::Manager & resourceManager, const std::shared_ptr< Material::Interface > & material) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
 			return false;
 		}
 
-		if ( !this->setGeometry(getSkyBoxGeometry()) )
+		if ( !this->setGeometry(SkyBoxResource::getSkyBoxGeometry(resourceManager) ) )
 		{
 			return this->setLoadSuccess(false);
 		}

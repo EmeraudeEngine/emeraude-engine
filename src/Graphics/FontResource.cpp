@@ -44,13 +44,13 @@ const size_t EmEn::Resources::Container< EmEn::Graphics::FontResource >::ClassUI
 
 namespace EmEn::Graphics
 {
-	using namespace EmEn::Libs;
-	using namespace EmEn::Libs::PixelFactory;
+	using namespace Libs;
+	using namespace Libs::PixelFactory;
 
 	const size_t FontResource::ClassUID{getClassUID(ClassId)};
 
 	bool
-	FontResource::load () noexcept
+	FontResource::load (Resources::Manager & /*resourceManager*/) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
@@ -87,7 +87,7 @@ namespace EmEn::Graphics
 	}
 
 	bool
-	FontResource::load (const std::filesystem::path & filepath) noexcept
+	FontResource::load (Resources::Manager & /*resourceManager*/, const std::filesystem::path & filepath) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
@@ -98,7 +98,7 @@ namespace EmEn::Graphics
 	}
 
 	bool
-	FontResource::load (const Json::Value & /*data*/) noexcept
+	FontResource::load (Resources::Manager & /*resourceManager*/, const Json::Value & /*data*/) noexcept
 	{
 		if ( !this->beginLoading() )
 		{

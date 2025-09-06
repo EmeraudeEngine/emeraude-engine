@@ -52,15 +52,9 @@ const size_t EmEn::Resources::Container< EmEn::Audio::MusicResource >::ClassUID{
 
 namespace EmEn::Audio
 {
-	using namespace EmEn::Libs;
+	using namespace Libs;
 
 	const size_t MusicResource::ClassUID{getClassUID(ClassId)};
-
-	MusicResource::MusicResource (const std::string & name, uint32_t resourceFlags) noexcept
-		: ResourceTrait(name, resourceFlags)
-	{
-
-	}
 
 	bool
 	MusicResource::onDependenciesLoaded () noexcept
@@ -119,7 +113,7 @@ namespace EmEn::Audio
 	}
 
 	bool
-	MusicResource::load () noexcept
+	MusicResource::load (Resources::Manager & /*resourceManager*/) noexcept
 	{
 		if ( Manager::audioDisabled() )
 		{
@@ -148,7 +142,7 @@ namespace EmEn::Audio
 	}
 
 	bool
-	MusicResource::load (const std::filesystem::path & filepath) noexcept
+	MusicResource::load (Resources::Manager & /*resourceManager*/, const std::filesystem::path & filepath) noexcept
 	{
 		if ( Manager::audioDisabled() )
 		{
@@ -217,7 +211,7 @@ namespace EmEn::Audio
 	}
 
 	bool
-	MusicResource::load (const Json::Value & /*data*/) noexcept
+	MusicResource::load (Resources::Manager & /*resourceManager*/, const Json::Value & /*data*/) noexcept
 	{
 		if ( Manager::audioDisabled() )
 		{

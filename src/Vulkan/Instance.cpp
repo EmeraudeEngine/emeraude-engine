@@ -35,6 +35,7 @@
 /* Third-party inclusions. */
 #define GLFW_INCLUDE_NONE
 #include "GLFW/glfw3.h"
+#include "magic_enum/magic_enum.hpp"
 
 /* Local inclusions. */
 #include "PhysicalDevice.hpp"
@@ -53,17 +54,17 @@ namespace EmEn::Vulkan
 	void
 	Instance::readSettings () noexcept
 	{
-		m_flags[ShowInformation] = m_primaryServices.settings().get< bool >(VkShowInformationKey, DefaultVkShowInformation);
+		m_flags[ShowInformation] = m_primaryServices.settings().getOrSetDefault< bool >(VkShowInformationKey, DefaultVkShowInformation);
 
 		m_flags[DebugMode] =
 			m_primaryServices.arguments().get("--debug-vulkan").isPresent() ||
-			m_primaryServices.settings().get< bool >(VkInstanceEnableDebugKey, DefaultVkInstanceEnableDebug);
+			m_primaryServices.settings().getOrSetDefault< bool >(VkInstanceEnableDebugKey, DefaultVkInstanceEnableDebug);
 
 		/* NOTE: Only if the validation layer is enabled. */
 		if ( this->isDebugModeEnabled() )
 		{
 			/* Enable the vulkan debug messenger. */
-			m_flags[UseDebugMessenger] = m_primaryServices.settings().get< bool >(VkInstanceUseDebugMessengerKey, DefaultVkInstanceUseDebugMessenger);
+			m_flags[UseDebugMessenger] = m_primaryServices.settings().getOrSetDefault< bool >(VkInstanceUseDebugMessengerKey, DefaultVkInstanceUseDebugMessenger);
 
 			if ( this->isUsingDebugMessenger() )
 			{
@@ -282,6 +283,8 @@ namespace EmEn::Vulkan
 		/* NOTE: Save a copy of validation layers in settings for an easy settings edition. */
 		if ( settings.isArrayEmpty(VkInstanceAvailableValidationLayersKey) )
 		{
+			settings.clearArray(VkInstanceAvailableValidationLayersKey);
+
 			for ( const auto & availableValidationLayer : availableValidationLayers )
 			{
 				settings.setInArray(VkInstanceAvailableValidationLayersKey, availableValidationLayer.layerName);
@@ -319,7 +322,7 @@ namespace EmEn::Vulkan
 			}
 		}
 
-		/* NOTE: Here we check if the desired validations layers ara available and create the vector for the instance createInfo.  */
+		/* NOTE: Here we check if the desired validations layers are available and create the vector for the instance createInfo.  */
 		m_requiredValidationLayers = Instance::getSupportedValidationLayers(desiredValidationLayers, availableValidationLayers);
 
 		if ( m_requiredValidationLayers.empty() )
@@ -537,7 +540,7 @@ namespace EmEn::Vulkan
 	}
 
 	std::map< size_t, std::shared_ptr< PhysicalDevice > >
-	Instance::getScoredGraphicsDevices (Window * window) const noexcept
+	Instance::getScoredGraphicsDevices (Window * window, DeviceRunMode runMode) const noexcept
 	{
 		std::map< size_t, std::shared_ptr< PhysicalDevice > > graphicsDevices{};
 
@@ -554,14 +557,14 @@ namespace EmEn::Vulkan
 			{
 				window->surface()->update(physicalDevice);
 
-				if ( !this->checkDeviceCompatibility(physicalDevice, RunningMode::Performance, window, score) )
+				if ( !Instance::checkDeviceCompatibility(physicalDevice, runMode, window, score) )
 				{
 					continue;
 				}
 			}
 			else
 			{
-				if ( !this->checkDeviceCompatibility(physicalDevice, RunningMode::Performance, VK_QUEUE_GRAPHICS_BIT, score) )
+				if ( !Instance::checkDeviceCompatibility(physicalDevice, runMode, VK_QUEUE_GRAPHICS_BIT, score) )
 				{
 					continue;
 				}
@@ -572,7 +575,7 @@ namespace EmEn::Vulkan
 				continue;
 			}
 
-			if ( !this->checkDeviceForRequiredExtensions(physicalDevice, m_requiredGraphicsDeviceExtensions, score) )
+			if ( !Instance::checkDeviceForRequiredExtensions(physicalDevice, m_requiredGraphicsDeviceExtensions, score) )
 			{
 				continue;
 			}
@@ -598,19 +601,30 @@ namespace EmEn::Vulkan
 			return m_graphicsDevice;
 		}
 
-		const auto scoredDevices = this->getScoredGraphicsDevices(window);
+		auto & settings = m_primaryServices.settings();
+		const auto runModeString = settings.getOrSetDefault< std::string >(VkDeviceAutoSelectModeKey, DefaultVkDeviceAutoSelectMode);
+		const auto forceGPUName = settings.getOrSetDefault< std::string >(VkDeviceForceGPUKey);
+		const auto showInformation = settings.getOrSetDefault< bool >(VkShowInformationKey, DefaultVkShowInformation);
+
+		/* NOTE: Get a list of available devices. */
+		const auto scoredDevices = this->getScoredGraphicsDevices(window, magic_enum::enum_cast< DeviceRunMode >(runModeString).value());
 
 		/* NOTE: Returns the device with the highest score. */
-		if ( scoredDevices.empty() )
+		if ( !scoredDevices.empty() )
+		{
+			settings.clearArray(VkDeviceAvailableGPUsKey);
+
+			for ( const auto & physicalDevice : scoredDevices | std::views::values )
+			{
+				settings.setInArray(VkDeviceAvailableGPUsKey, physicalDevice->deviceName());
+			}
+		}
+		else
 		{
 			Tracer::error(ClassId, "There is no physical device compatible with Vulkan.");
 
 			return {};
 		}
-
-		auto & settings = m_primaryServices.settings();
-		const auto forceGPUName =settings.get< std::string >(VkDeviceForceGPUKey);
-		const bool showInformation = settings.get< bool >(VkShowInformationKey, DefaultVkShowInformation);
 
 		std::shared_ptr< PhysicalDevice > selectedPhysicalDevice;
 
@@ -629,7 +643,7 @@ namespace EmEn::Vulkan
 			}
 		}
 
-		/* NOTE: If no GPU was forced, or not found, which the best one. */
+		/* NOTE: If no GPU was forced or not found, which the best one. */
 		if ( selectedPhysicalDevice == nullptr )
 		{
 			selectedPhysicalDevice = scoredDevices.rbegin()->second;
@@ -642,7 +656,7 @@ namespace EmEn::Vulkan
 		logicalDevice->setIdentifier(ClassId, (std::stringstream{} << selectedPhysicalDevice->propertiesVK10().deviceName << "(Graphics)").str(), "Device");
 
 		/* [VULKAN-API-SETUP] Graphics device features configuration. */
-		DeviceRequirements requirements{DeviceJobHint::Graphics};
+		DeviceRequirements requirements{DeviceWorkType::Graphics};
 		requirements.featuresVK10().fillModeNonSolid = VK_TRUE; // Required for wireframe mode!
 		if constexpr ( !IsMacOS )
 		{
@@ -691,17 +705,17 @@ namespace EmEn::Vulkan
 		{
 			size_t score = 0;
 
-			if ( !this->checkDeviceCompatibility(physicalDevice, RunningMode::Performance, VK_QUEUE_COMPUTE_BIT, score) )
+			if ( !Instance::checkDeviceCompatibility(physicalDevice, DeviceRunMode::Performance, VK_QUEUE_COMPUTE_BIT, score) )
 			{
 				continue;
 			}
 
-			if ( !this->checkDevicesFeaturesForCompute(physicalDevice, score) )
+			if ( !Instance::checkDevicesFeaturesForCompute(physicalDevice, score) )
 			{
 				continue;
 			}
 
-			if ( !this->checkDeviceForRequiredExtensions(physicalDevice, requiredExtensions, score) )
+			if ( !Instance::checkDeviceForRequiredExtensions(physicalDevice, requiredExtensions, score) )
 			{
 				continue;
 			}
@@ -723,8 +737,8 @@ namespace EmEn::Vulkan
 		}
 
 		auto & settings = m_primaryServices.settings();
-		//const auto forceGPUName =settings.get< std::string >(VkDeviceForceGPUKey);
-		const bool showInformation = settings.get< bool >(VkShowInformationKey, DefaultVkShowInformation);
+		//const auto forceGPUName =settings.getOrSetDefault< std::string >(VkDeviceForceGPUKey);
+		const bool showInformation = settings.getOrSetDefault< bool >(VkShowInformationKey, DefaultVkShowInformation);
 
 		const auto & selectedPhysicalDevice = scoredDevices.rbegin()->second;
 
@@ -736,7 +750,7 @@ namespace EmEn::Vulkan
 		auto logicalDevice = std::make_shared< Device >(selectedPhysicalDevice->propertiesVK10().deviceName, selectedPhysicalDevice, showInformation);
 		logicalDevice->setIdentifier(ClassId, (std::stringstream{} << selectedPhysicalDevice->propertiesVK10().deviceName << "(Physics)").str(), "Device");
 
-		DeviceRequirements requirements{DeviceJobHint::Compute};
+		DeviceRequirements requirements{DeviceWorkType::Compute};
 		requirements.requireComputeQueues({1.0F}, {0.5F});
 		requirements.requireTransferQueues({1.0F});
 
@@ -781,11 +795,11 @@ namespace EmEn::Vulkan
 	}
 
 	void
-	Instance::modulateDeviceScoring (const VkPhysicalDeviceProperties & deviceProperties, RunningMode runningMode, size_t & score) const noexcept
+	Instance::modulateDeviceScoring (const VkPhysicalDeviceProperties & deviceProperties, DeviceRunMode runMode, size_t & score) noexcept
 	{
-		switch ( runningMode )
+		switch ( runMode )
 		{
-			case RunningMode::Performance :
+			case DeviceRunMode::Performance :
 				switch ( deviceProperties.deviceType )
 				{
 					case VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU :
@@ -805,7 +819,7 @@ namespace EmEn::Vulkan
 				}
 				break;
 
-			case RunningMode::PowerSaving :
+			case DeviceRunMode::PowerSaving :
 				switch ( deviceProperties.deviceType )
 				{
 					case VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU :
@@ -829,7 +843,7 @@ namespace EmEn::Vulkan
 				}
 				break;
 
-			case RunningMode::DontCare :
+			case DeviceRunMode::DontCare :
 				switch ( deviceProperties.deviceType )
 				{
 					case VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU :
@@ -848,7 +862,7 @@ namespace EmEn::Vulkan
 	}
 
 	bool
-	Instance::checkDeviceCompatibility (const std::shared_ptr< PhysicalDevice > & physicalDevice, RunningMode runningMode, VkQueueFlagBits type, size_t & score) const noexcept
+	Instance::checkDeviceCompatibility (const std::shared_ptr< PhysicalDevice > & physicalDevice, DeviceRunMode runMode, VkQueueFlagBits type, size_t & score) noexcept
 	{
 		for ( const auto & queueFamilyProperty : physicalDevice->queueFamilyPropertiesVK11() )
 		{
@@ -857,7 +871,7 @@ namespace EmEn::Vulkan
 				continue;
 			}
 
-			this->modulateDeviceScoring(physicalDevice->propertiesVK10(), runningMode, score);
+			Instance::modulateDeviceScoring(physicalDevice->propertiesVK10(), runMode, score);
 
 			return true;
 		}
@@ -866,7 +880,7 @@ namespace EmEn::Vulkan
 	}
 
 	bool
-	Instance::checkDeviceCompatibility (const std::shared_ptr< PhysicalDevice > & physicalDevice, RunningMode runningMode, const Window * window, size_t & score) const noexcept
+	Instance::checkDeviceCompatibility (const std::shared_ptr< PhysicalDevice > & physicalDevice, DeviceRunMode runMode, const Window * window, size_t & score) noexcept
 	{
 		for ( const auto & queueFamilyProperty : physicalDevice->queueFamilyPropertiesVK11() )
 		{
@@ -885,7 +899,7 @@ namespace EmEn::Vulkan
 			score += window->surface()->formats().size();
 			score += window->surface()->presentModes().size();
 
-			this->modulateDeviceScoring(physicalDevice->propertiesVK10(), runningMode, score);
+			Instance::modulateDeviceScoring(physicalDevice->propertiesVK10(), runMode, score);
 
 			return true;
 		}
@@ -944,7 +958,7 @@ namespace EmEn::Vulkan
 		if ( features.sampleRateShading == 0 )
 		{
 			// TODO: Maybe incorrect assertion !
-			if ( m_primaryServices.settings().get< uint32_t >(VideoFramebufferSamplesKey, DefaultVideoFramebufferSamples) > 1 )
+			if ( m_primaryServices.settings().getOrSetDefault< uint32_t >(VideoFramebufferSamplesKey, DefaultVideoFramebufferSamples) > 1 )
 			{
 				TraceError{ClassId} <<
 					"MSAA is enabled in settings !"
@@ -1296,7 +1310,7 @@ namespace EmEn::Vulkan
 	}
 
 	bool
-	Instance::checkDevicesFeaturesForCompute (const std::shared_ptr< PhysicalDevice > & /*physicalDevice*/, size_t & /*score*/) const noexcept
+	Instance::checkDevicesFeaturesForCompute (const std::shared_ptr< PhysicalDevice > & /*physicalDevice*/, size_t & /*score*/) noexcept
 	{
 		//const auto & properties = physicalDevice->properties();
 		//const auto & features = physicalDevice->features();
@@ -1305,7 +1319,7 @@ namespace EmEn::Vulkan
 	}
 
 	bool
-	Instance::checkDeviceForRequiredExtensions (const std::shared_ptr< PhysicalDevice > & physicalDevice, const std::vector< const char * > & requiredExtensions, size_t & score) const noexcept
+	Instance::checkDeviceForRequiredExtensions (const std::shared_ptr< PhysicalDevice > & physicalDevice, const std::vector< const char * > & requiredExtensions, size_t & score) noexcept
 	{
 		const auto & properties = physicalDevice->propertiesVK10();
 		const auto & extensions = physicalDevice->getExtensions();
@@ -1325,7 +1339,7 @@ namespace EmEn::Vulkan
 
 		for ( const auto & requiredExtension : requiredExtensions )
 		{
-			auto found = std::ranges::any_of(extensions, [requiredExtension] (const auto & extension) {
+			const auto found = std::ranges::any_of(extensions, [requiredExtension] (const auto & extension) {
 				return std::strcmp(requiredExtension, extension.extensionName) == 0;
 			});
 

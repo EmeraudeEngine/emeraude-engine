@@ -220,14 +220,14 @@ namespace EmEn::Graphics::TextureResource
 	}
 
 	bool
-	AnimatedTexture2D::load () noexcept
+	AnimatedTexture2D::load (Resources::Manager & resourceManager) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
 			return false;
 		}
 
-		m_localData = Resources::Manager::instance()->container< MovieResource >()->getDefaultResource();
+		m_localData = resourceManager.container< MovieResource >()->getDefaultResource();
 
 		if ( !this->addDependency(m_localData) )
 		{
@@ -238,11 +238,11 @@ namespace EmEn::Graphics::TextureResource
 	}
 
 	bool
-	AnimatedTexture2D::load (const std::filesystem::path & filepath) noexcept
+	AnimatedTexture2D::load (Resources::Manager & resourceManager, const std::filesystem::path & filepath) noexcept
 	{
 		/* Looking for a movie resource by extracting the resource name from filepath.
 		 * NOTE: The loading process is synchronous here. */
-		const auto movieResource = Resources::Manager::instance()->container< MovieResource >()->getResource(
+		const auto movieResource = resourceManager.container< MovieResource >()->getResource(
 			getResourceNameFromFilepath(filepath, "Movies"),
 			false
 		);
@@ -251,7 +251,7 @@ namespace EmEn::Graphics::TextureResource
 	}
 
 	bool
-	AnimatedTexture2D::load (const Json::Value & /*data*/) noexcept
+	AnimatedTexture2D::load (Resources::Manager & /*resourceManager*/, const Json::Value & /*data*/) noexcept
 	{
 		/* NOTE: This resource has no local store,
 		 * so this method won't be called from a resource container! */

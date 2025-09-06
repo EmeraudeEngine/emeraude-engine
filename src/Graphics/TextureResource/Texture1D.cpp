@@ -123,14 +123,14 @@ namespace EmEn::Graphics::TextureResource
 	}
 
 	bool
-	Texture1D::load () noexcept
+	Texture1D::load (Resources::Manager & resourceManager) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
 			return false;
 		}
 
-		m_localData = Resources::Manager::instance()->container< ImageResource >()->getDefaultResource();
+		m_localData = resourceManager.container< ImageResource >()->getDefaultResource();
 
 		if ( !this->addDependency(m_localData) )
 		{
@@ -141,13 +141,16 @@ namespace EmEn::Graphics::TextureResource
 	}
 
 	bool
-	Texture1D::load (const std::filesystem::path & filepath) noexcept
+	Texture1D::load (Resources::Manager & resourceManager, const std::filesystem::path & filepath) noexcept
 	{
-		return this->load(Resources::Manager::instance()->container< ImageResource >()->getResource(getResourceNameFromFilepath(filepath, "Images"), true));
+		return this->load(resourceManager.container< ImageResource >()->getResource(
+			getResourceNameFromFilepath(filepath, "Images"),
+			true)
+		);
 	}
 
 	bool
-	Texture1D::load (const Json::Value & /*data*/) noexcept
+	Texture1D::load (Resources::Manager & /*resourceManager*/, const Json::Value & /*data*/) noexcept
 	{
 		/* NOTE: This resource has no local store,
 		 * so this method won't be called from a resource container! */

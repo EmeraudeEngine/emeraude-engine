@@ -46,14 +46,8 @@ namespace EmEn::Audio
 
 	const size_t SoundResource::ClassUID{getClassUID(ClassId)};
 
-	SoundResource::SoundResource (const std::string & name, uint32_t resourceFlags) noexcept
-		: ResourceTrait(name, resourceFlags)
-	{
-
-	}
-
 	bool
-	SoundResource::load () noexcept
+	SoundResource::load (Resources::Manager & /*resourceManager*/) noexcept
 	{
 		if ( Manager::audioDisabled() )
 		{
@@ -82,7 +76,7 @@ namespace EmEn::Audio
 	}
 
 	bool
-	SoundResource::load (const std::filesystem::path & filepath) noexcept
+	SoundResource::load (Resources::Manager & /*resourceManager*/, const std::filesystem::path & filepath) noexcept
 	{
 		if ( Manager::audioDisabled() )
 		{
@@ -157,7 +151,7 @@ namespace EmEn::Audio
 	}
 
 	bool
-	SoundResource::load (const Json::Value & /*data*/) noexcept
+	SoundResource::load (Resources::Manager & /*resourceManager*/, const Json::Value & /*data*/) noexcept
 	{
 		if ( Manager::audioDisabled() )
 		{

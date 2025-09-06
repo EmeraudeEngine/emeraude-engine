@@ -47,7 +47,7 @@ namespace EmEn
 	{
 		auto & settings = m_primaryServices.settings();
 		
-		m_flags[ShowInformation] = settings.get< bool >(GLFWShowInformationKey, DefaultGLFWShowInformation);
+		m_flags[ShowInformation] = settings.getOrSetDefault< bool >(GLFWShowInformationKey, DefaultGLFWShowInformation);
 
 		glfwSetErrorCallback(Tracer::traceGLFW);
 
@@ -70,9 +70,9 @@ namespace EmEn
 
 		if constexpr ( IsLinux )
 		{
-			const auto enableWaylandLibDecor = settings.get< bool >(GLFWWaylandEnableLibDecorKey, DefaultGLFWWaylandEnableLibDecor);
-			const auto useX11XCB = settings.get< bool >(GLFWX11UseXCBInsteadOfXLibKey, DefaultGLFWX11UseXCBInsteadOfXLib);
-			const auto usePlatform = settings.get< std::string >(GLFWUsePlatformKey, DefaultGLFWUsePlatform);
+			const auto enableWaylandLibDecor = settings.getOrSetDefault< bool >(GLFWWaylandEnableLibDecorKey, DefaultGLFWWaylandEnableLibDecor);
+			const auto useX11XCB = settings.getOrSetDefault< bool >(GLFWX11UseXCBInsteadOfXLibKey, DefaultGLFWX11UseXCBInsteadOfXLib);
+			const auto usePlatform = settings.getOrSetDefault< std::string >(GLFWUsePlatformKey, DefaultGLFWUsePlatform);
 
 			int platform = GLFW_ANY_PLATFORM;
 			

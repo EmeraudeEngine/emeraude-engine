@@ -60,7 +60,12 @@ namespace EmEn::Audio
 			 * @param name The name of the resource.
 			 * @param resourceFlags The resource flag bits. Default none. (Unused yet)
 			 */
-			explicit MusicResource (const std::string & name, uint32_t resourceFlags = 0) noexcept;
+			explicit
+			MusicResource (const std::string & name, uint32_t resourceFlags = 0) noexcept
+				: ResourceTrait{name, resourceFlags}
+			{
+
+			}
 
 			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
 			[[nodiscard]]
@@ -102,14 +107,14 @@ namespace EmEn::Audio
 				return ClassId;
 			}
 
-			/** @copydoc EmEn::Resources::ResourceTrait::load() */
-			bool load () noexcept override;
+			/** @copydoc EmEn::Resources::ResourceTrait::load(Resources::Manager &) */
+			bool load (Resources::Manager & resourceManager) noexcept override;
 
-			/** @copydoc EmEn::Resources::ResourceTrait::load(const std::filesystem::path &) */
-			bool load (const std::filesystem::path & filepath) noexcept override;
+			/** @copydoc EmEn::Resources::ResourceTrait::load(Resources::Manager &, const std::filesystem::path &) */
+			bool load (Resources::Manager & resourceManager, const std::filesystem::path & filepath) noexcept override;
 
-			/** @copydoc EmEn::Resources::ResourceTrait::load(const Json::Value &) */
-			bool load (const Json::Value & data) noexcept override;
+			/** @copydoc EmEn::Resources::ResourceTrait::load(Resources::Manager &, const Json::Value &) */
+			bool load (Resources::Manager & resourceManager, const Json::Value & data) noexcept override;
 
 			/** @copydoc EmEn::Resources::ResourceTrait::memoryOccupied() const noexcept */
 			[[nodiscard]]

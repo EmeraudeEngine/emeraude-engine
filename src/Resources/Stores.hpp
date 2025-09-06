@@ -35,9 +35,9 @@
 #include "BaseInformation.hpp"
 
 /* Forward declarations. */
-namespace EmEn
+namespace EmEn::Resources
 {
-	class FileSystem;
+	class Manager;
 }
 
 namespace EmEn::Resources
@@ -81,7 +81,7 @@ namespace EmEn::Resources
 
 			/**
 			 * @brief Reads the resource index.
-			 * @param fileSystem A reference to the fileSystem services.
+			 * @param fileSystem A reference to the file system services.
 			 * @param verbose Enable verbosity.
 			 * @return bool
 			 */
@@ -89,11 +89,11 @@ namespace EmEn::Resources
 
 			/**
 			 * @brief Updates resource store from another resource JSON definition.
+			 * @param resourceManager A reference to the resource manager.
 			 * @param root The resource JSON object.
-			 * @param verbose Enable verbosity. Default false.
 			 * @return void
 			 */
-			void update (const Json::Value & root, bool verbose /*= false*/) noexcept;
+			void update (const Manager & resourceManager, const Json::Value & root) noexcept;
 
 			/**
 			 * @brief Returns a random resource from a named store.
@@ -102,14 +102,6 @@ namespace EmEn::Resources
 			 */
 			[[nodiscard]]
 			std::string randomName (const std::string & storeName) const noexcept;
-
-			/**
-			 * @brief Returns the resource name list.
-			 * @warning Copy !
-			 * @return std::vector< std::string >
-			 */
-			[[nodiscard]]
-			std::vector< std::string > resourceNames () const noexcept;
 
 			/**
 			 * @brief Returns whether the string buffer is JSON data or not.
@@ -131,12 +123,13 @@ namespace EmEn::Resources
 
 			/**
 			 * @brief Parses a store JSON object to list available resources on disk.
+			 * @param fileSystem A reference to the file system services.
 			 * @param storesObject A reference to a JSON value.
 			 * @param verbose Enable the reading verbosity in the console.
 			 * @return size_t
 			 */
 			[[nodiscard]]
-			size_t parseStores (const Json::Value & storesObject, bool verbose) noexcept;
+			size_t parseStores (const FileSystem & fileSystem, const Json::Value & storesObject, bool verbose) noexcept;
 
 			/**
 			* @brief STL streams printable object.

@@ -108,14 +108,14 @@ namespace EmEn::Graphics::Renderable
 				return ClassId;
 			}
 
-			/** @copydoc EmEn::Resources::ResourceTrait::load() */
-			bool load () noexcept override;
+			/** @copydoc EmEn::Resources::ResourceTrait::load(Resources::Manager &) */
+			bool load (Resources::Manager & resourceManager) noexcept override;
 
-			/** @copydoc EmEn::Resources::ResourceTrait::load(const std::filesystem::path &) */
-			bool load (const std::filesystem::path & filepath) noexcept override;
+			/** @copydoc EmEn::Resources::ResourceTrait::load(Resources::Manager &, const std::filesystem::path &) */
+			bool load (Resources::Manager & resourceManager, const std::filesystem::path & filepath) noexcept override;
 
-			/** @copydoc EmEn::Resources::ResourceTrait::load(const Json::Value &) */
-			bool load (const Json::Value & data) noexcept override;
+			/** @copydoc EmEn::Resources::ResourceTrait::load(Resources::Manager &, const Json::Value &) */
+			bool load (Resources::Manager & resourceManager, const Json::Value & data) noexcept override;
 
 			/** @copydoc EmEn::Resources::ResourceTrait::memoryOccupied() const noexcept */
 			[[nodiscard]]
@@ -218,8 +218,8 @@ namespace EmEn::Graphics::Renderable
 
 			/**
 			 * @brief Loads a basic floor by using parameters to generate the ground and a material to paint it.
-			 * @param size The size of the whole size of one dimension of the grid. i.e. If the size is 1024, the grid will be from +512 to -512.
-			 * @param division How many cell in one dimension.
+			 * @param size The size of the whole size of one dimension of the grid. I.e., If the size is 1024, the grid will be from +512 to -512.
+			 * @param division How many cells in one dimension.
 			 * @param materialResource A reference to a material smart pointer.
 			 * @param UVMultiplier Texture coordinates multiplier.
 			 * @return bool
@@ -228,8 +228,8 @@ namespace EmEn::Graphics::Renderable
 
 			/**
 			 * @brief Loads a basic floor by using parameters to generate the ground with diamond square and a material to paint it.
-			 * @param size The size of the whole size of one dimension of the grid. i.e. If the size is 1024, the grid will be from +512 to -512.
-			 * @param division How many cell in one dimension.
+			 * @param size The size of the whole size of one dimension of the grid. I.e., If the size is 1024, the grid will be from +512 to -512.
+			 * @param division How many cells in one dimension.
 			 * @param factor Set diamond square factor parameter.
 			 * @param roughness Set the diamond square roughness parameter. A value from 0.0 to 1.0
 			 * @param seed Randomize generation.
@@ -241,9 +241,9 @@ namespace EmEn::Graphics::Renderable
 
 			/**
 			 * @brief Loads a basic floor by using parameters to generate the ground with diamond square and a material to paint it.
-			 * @param size The size of the whole size of one dimension of the grid. i.e. If the size is 1024, the grid will be from +512 to -512.
-			 * @param division How many cell in one dimension.
-			 * @param noiseSize Set perlin noise size parameter.
+			 * @param size The size of the whole size of one dimension of the grid. I.e., If the size is 1024, the grid will be from +512 to -512.
+			 * @param division How many cells in one dimension.
+			 * @param noiseSize Set the perlin noise size parameter.
 			 * @param noiseFactor Set perlin noise factor parameter.
 			 * @param materialResource A reference to a material smart pointer.
 			 * @param UVMultiplier Texture coordinates multiplier.
@@ -252,10 +252,10 @@ namespace EmEn::Graphics::Renderable
 			bool loadPerlinNoise (float size, uint32_t division, float noiseSize, float noiseFactor, const std::shared_ptr< Material::Interface > & materialResource, float UVMultiplier = 1.0F) noexcept;
 
 			/**
-			 * @brief Loads a basic floor by using parameters to generate the ground with displacement map and a material to paint it.
+			 * @brief Loads a basic floor by using parameters to generate the ground with a displacement map and a material to paint it.
 			 * @tparam pixmapData_t The type used within the pixmap.
-			 * @param size The size of the whole size of one dimension of the grid. i.e. If the size is 1024, the grid will be from +512 to -512.
-			 * @param division How many cell in one dimension.
+			 * @param size The size of the whole size of one dimension of the grid. I.e., If the size is 1024, the grid will be from +512 to -512.
+			 * @param division How many cells in one dimension.
 			 * @param displacementMap A pixmap to use as a displacement map.
 			 * @param displacementFactor Factor of displacement.
 			 * @param materialResource A reference to a material smart pointer.

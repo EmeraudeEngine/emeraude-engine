@@ -154,8 +154,7 @@ namespace EmEn::Graphics
 				m_vulkanInstance{instance},
 				m_window{window},
 				m_shaderManager{primaryServices},
-				m_transferManager{Vulkan::GPUWorkType::Graphics},
-				m_layoutManager{Vulkan::GPUWorkType::Graphics},
+				m_transferManager{Vulkan::DeviceWorkType::Graphics},
 				m_sharedUBOManager{*this}
 			{
 				if ( s_instance != nullptr )
@@ -240,6 +239,13 @@ namespace EmEn::Graphics
 			{
 				return m_debugMode;
 			}
+
+			/**
+			 * @brief Returns whether the swap chain is degraded.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool isSwapChainDegraded () const noexcept;
 
 			/**
 			 * @brief Controls the state of shadow maps rendering.
@@ -603,6 +609,13 @@ namespace EmEn::Graphics
 			void renderFrame (const std::shared_ptr< Scenes::Scene > & scene, const Overlay::Manager & overlayManager) noexcept;
 
 			/**
+			 * @brief Recreates the swap-chain.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool recreateSwapChain () noexcept;
+
+			/**
 			 * @brief Returns the instance of the graphics renderer.
 			 * @todo This method must be removed!
 			 * @return Renderer *
@@ -679,13 +692,6 @@ namespace EmEn::Graphics
 			 * @return void
 			 */
 			void destroyCommandSystem () noexcept;
-
-			/**
-			 * @brief Recreates the swap-chain.
-			 * @return bool
-			 */
-			[[nodiscard]]
-			bool recreateSwapChain () noexcept;
 
 			/* Flag names. */
 			static constexpr auto ServiceInitialized{0UL};

@@ -75,20 +75,20 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Constructs the transfer manager.
-			 * @param type The GPU work type.
+			 * @param deviceWorkType The GPU work type.
 			 */
 			explicit
-			TransferManager (GPUWorkType type) noexcept
+			TransferManager (DeviceWorkType deviceWorkType) noexcept
 				: ServiceInterface{ClassId}
 			{
-				if ( s_instances.at(static_cast< size_t >(type)) != nullptr )
+				if ( s_instances.at(static_cast< size_t >(deviceWorkType)) != nullptr )
 				{
 					std::cerr << __PRETTY_FUNCTION__ << ", constructor called twice !" "\n";
 
 					std::terminate();
 				}
 
-				s_instances.at(static_cast< size_t >(type)) = this;
+				s_instances.at(static_cast< size_t >(deviceWorkType)) = this;
 			}
 
 			/**
@@ -112,7 +112,7 @@ namespace EmEn::Vulkan
 			bool
 			usable () const noexcept override
 			{
-				return m_flags[ServiceInitialized];
+				return m_serviceInitialized;
 			}
 
 			/**
@@ -186,16 +186,16 @@ namespace EmEn::Vulkan
 			/**
 			 * @brief Returns the instance of the transfer manager.
 			 * @todo This method must be removed!
-			 * @param type The transfer work type.
+			 * @param deviceWorkType The transfer work type.
 			 * @return TransferManager *
 			 */
 			//[[deprecated("This method must be removed !")]]
 			[[nodiscard]]
 			static
 			TransferManager *
-			instance (GPUWorkType type) noexcept
+			instance (DeviceWorkType deviceWorkType) noexcept
 			{
-				return s_instances.at(static_cast< size_t >(type)); // FIXME: Remove this
+				return s_instances.at(static_cast< size_t >(deviceWorkType)); // FIXME: Remove this
 			}
 
 		private:
@@ -227,7 +227,7 @@ namespace EmEn::Vulkan
 			static constexpr auto ServiceInitialized{1UL};
 			static constexpr auto SeparatedQueues{2UL};
 
-			static std::array< TransferManager *, 2 > s_instances;
+			static std::array< TransferManager *, 3 > s_instances;
 
 			std::shared_ptr< Device > m_device;
 			std::vector< std::shared_ptr< StagingBuffer > > m_stagingBuffers;
@@ -236,15 +236,7 @@ namespace EmEn::Vulkan
 			/* FIXME: Check the usefulness of these mutexes since we use a device mutex to access queues. */
 			std::mutex m_stagingBufferMutex;
 			std::mutex m_transferMutex;
-			std::array< bool, 8 > m_flags{
-				false/*Debug*/,
-				false/*ServiceInitialized*/,
-				false/*SeparatedQueues*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/
-			};
+			bool m_serviceInitialized{false};
+			bool m_separatedQueues{false};
 	};
 }

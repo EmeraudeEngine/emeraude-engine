@@ -126,7 +126,7 @@ namespace EmEn::Graphics::RenderTarget
 			bool
 			isRenderOutOfDate () const noexcept
 			{
-				return m_flags[RenderOutOfDate];
+				return m_renderOutOfDate;
 			}
 
 			/**
@@ -137,7 +137,7 @@ namespace EmEn::Graphics::RenderTarget
 			bool
 			isAutomaticRendering () const noexcept
 			{
-				return m_flags[AutomaticRendering];
+				return m_automaticRendering;
 			}
 
 			/**
@@ -148,11 +148,11 @@ namespace EmEn::Graphics::RenderTarget
 			void
 			setAutomaticRenderingState (bool state) noexcept
 			{
-				m_flags[AutomaticRendering] = state;
+				m_automaticRendering = state;
 
 				if ( this->isAutomaticRendering() )
 				{
-					m_flags[RenderOutOfDate] = true;
+					m_renderOutOfDate = true;
 				}
 			}
 
@@ -169,7 +169,7 @@ namespace EmEn::Graphics::RenderTarget
 					return;
 				}
 
-				m_flags[RenderOutOfDate] = true;
+				m_renderOutOfDate = true;
 			}
 
 			/**
@@ -185,7 +185,7 @@ namespace EmEn::Graphics::RenderTarget
 					return;
 				}
 
-				m_flags[RenderOutOfDate] = false;
+				m_renderOutOfDate = false;
 			}
 
 			/**
@@ -233,7 +233,7 @@ namespace EmEn::Graphics::RenderTarget
 			}
 
 			/**
-			 * @brief Returns the render to target semaphore for CPU/GPU synchronization.
+			 * @brief Returns the fence associated with this render target for CPU/GPU synchronization.
 			 * @return std::shared_ptr< Vulkan::Sync::Fence >
 			 */
 			[[nodiscard]]
@@ -244,7 +244,7 @@ namespace EmEn::Graphics::RenderTarget
 			}
 
 			/**
-			 * @brief Returns the render to target semaphore for GPU/GPU synchronization.
+			 * @brief Returns the semaphore associated with this render target for GPU/GPU synchronization.
 			 * @return std::shared_ptr< Vulkan::Sync::Semaphore >
 			 */
 			[[nodiscard]]
@@ -306,14 +306,14 @@ namespace EmEn::Graphics::RenderTarget
 			virtual std::shared_ptr< Vulkan::ImageView > imageView () const noexcept = 0;
 
 			/**
-			 * @brief Returns the const access to view matrices object.
+			 * @brief Returns the const access to the view matrices interface.
 			 * @return const ViewMatricesInterface &
 			 */
 			[[nodiscard]]
 			virtual const ViewMatricesInterface & viewMatrices () const noexcept = 0;
 
 			/**
-			 * @brief Returns the access to view matrices object.
+			 * @brief Returns the access to the view matrices interface.
 			 * @return ViewMatricesInterface &
 			 */
 			[[nodiscard]]
@@ -345,9 +345,10 @@ namespace EmEn::Graphics::RenderTarget
 					.offset = {.x = 0, .y = 0},
 					.extent = {.width = extent.width, .height = extent.height}
 				},
-				m_renderType{renderType}
+				m_renderType{renderType},
+				m_enableSyncPrimitive(enableSyncPrimitives)
 			{
-				m_flags[EnableSyncPrimitive] = enableSyncPrimitives;
+
 			}
 
 			/**
@@ -450,26 +451,14 @@ namespace EmEn::Graphics::RenderTarget
 
 		private:
 
-			/* Flag names. */
-			static constexpr auto EnableSyncPrimitive{0UL};
-			static constexpr auto RenderOutOfDate{1UL};
-			static constexpr auto AutomaticRendering{2UL};
-
 			FramebufferPrecisions m_precisions;
 			VkExtent3D m_extent{};
 			VkRect2D m_renderArea{};
 			RenderTargetType m_renderType;
 			std::shared_ptr< Vulkan::Sync::Fence > m_fence;
 			std::shared_ptr< Vulkan::Sync::Semaphore > m_semaphore;
-			std::array< bool, 8 > m_flags{
-				false/*EnableSyncPrimitive*/,
-				false/*RenderOutOfDate*/,
-				false/*AutomaticRendering*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/
-			};
+			bool m_enableSyncPrimitive{false};
+			bool m_renderOutOfDate{false};
+			bool m_automaticRendering{false};
 	};
 }

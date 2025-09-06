@@ -134,11 +134,11 @@ namespace EmEn::Graphics::Renderable
 				return ClassId;
 			}
 
-			/** @copydoc EmEn::Resources::ResourceTrait::load() */
-			bool load () noexcept override;
+			/** @copydoc EmEn::Resources::ResourceTrait::load(Resources::Manager &) */
+			bool load (Resources::Manager & resourceManager) noexcept override;
 
-			/** @copydoc EmEn::Resources::ResourceTrait::load(const Json::Value &) */
-			bool load (const Json::Value & data) noexcept override;
+			/** @copydoc EmEn::Resources::ResourceTrait::load(Resources::Manager &, const Json::Value &) */
+			bool load (Resources::Manager & resourceManager, const Json::Value & data) noexcept override;
 
 			/** @copydoc EmEn::Resources::ResourceTrait::memoryOccupied() const noexcept */
 			[[nodiscard]]
@@ -150,10 +150,11 @@ namespace EmEn::Graphics::Renderable
 
 			/**
 			 * @brief Loads a skybox with a material resource.
+			 * @param resourceManager A reference to the resource manager.
 			 * @param material A reference to a material smart pointer.
 			 * @return bool
 			 */
-			bool load (const std::shared_ptr< Material::Interface > & material) noexcept;
+			bool load (Resources::Manager & resourceManager, const std::shared_ptr< Material::Interface > & material) noexcept;
 
 		private:
 

@@ -41,7 +41,6 @@
 
 /* Local inclusions for usages. */
 #include "Libs/StaticVector.hpp"
-#include "Types.hpp"
 
 /* Forward declarations. */
 namespace EmEn::Vulkan
@@ -66,12 +65,9 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Constructs a descriptor set layout manager service.
-			 * @param type The GPU work type.
 			 */
-			explicit
-			LayoutManager (GPUWorkType type) noexcept
-				: ServiceInterface{ClassId},
-				m_type{type}
+			LayoutManager () noexcept
+				: ServiceInterface{ClassId}
 			{
 
 			}
@@ -151,7 +147,6 @@ namespace EmEn::Vulkan
 			std::shared_ptr< Device > m_device;
 			std::map< std::string, std::shared_ptr< DescriptorSetLayout > > m_descriptorSetLayouts;
 			std::map< std::string, std::shared_ptr< PipelineLayout > > m_pipelineLayouts;
-			GPUWorkType m_type;
 			std::array< bool, 8 > m_flags{
 				false/*ServiceInitialized*/,
 				false/*UNUSED*/,

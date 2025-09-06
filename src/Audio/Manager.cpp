@@ -119,12 +119,12 @@ namespace EmEn::Audio
 		auto & settings = m_primaryServices.settings();
 		
 		/* First, read setting for a desired output audio device. */
-		m_selectedOutputDeviceName = settings.get< std::string >(AudioDeviceNameKey, DefaultAudioDeviceName);
+		m_selectedOutputDeviceName = settings.getOrSetDefault< std::string >(AudioDeviceNameKey, DefaultAudioDeviceName);
 
 		/* Then, check the audio system. */
 		bool forceDefaultDevice = false;
 
-		if ( !settings.get< bool >(AudioForceDefaultDeviceKey, DefaultAudioForceDefaultDevice) )
+		if ( !settings.getOrSetDefault< bool >(AudioForceDefaultDeviceKey, DefaultAudioForceDefaultDevice) )
 		{
 			if ( this->queryOutputDevices(true) || this->queryOutputDevices(false) )
 			{
@@ -153,7 +153,7 @@ namespace EmEn::Audio
 		}
 
 		/* Checks configuration file */
-		const auto frequency = WaveFactory::toFrequency(settings.get< int32_t >(AudioPlaybackFrequencyKey, DefaultAudioPlaybackFrequency));
+		const auto frequency = WaveFactory::toFrequency(settings.getOrSetDefault< int32_t >(AudioPlaybackFrequencyKey, DefaultAudioPlaybackFrequency));
 
 		if ( frequency == WaveFactory::Frequency::Invalid )
 		{
@@ -199,10 +199,10 @@ namespace EmEn::Audio
 
 		const std::array attributeList{
 			ALC_FREQUENCY, static_cast< int >(m_playbackFrequency),
-			ALC_REFRESH, settings.get< int32_t >(OpenALRefreshRateKey, DefaultOpenALRefreshRate),
-			ALC_SYNC, settings.get< int32_t >(OpenALSyncStateKey, DefaultOpenALSyncState),
-			ALC_MONO_SOURCES, settings.get< int32_t >(OpenALMaxMonoSourceCountKey, DefaultOpenALMaxMonoSourceCount),
-			ALC_STEREO_SOURCES, settings.get< int32_t >(OpenALMaxStereoSourceCountKey, DefaultOpenALMaxStereoSourceCount),
+			ALC_REFRESH, settings.getOrSetDefault< int32_t >(OpenALRefreshRateKey, DefaultOpenALRefreshRate),
+			ALC_SYNC, settings.getOrSetDefault< int32_t >(OpenALSyncStateKey, DefaultOpenALSyncState),
+			ALC_MONO_SOURCES, settings.getOrSetDefault< int32_t >(OpenALMaxMonoSourceCountKey, DefaultOpenALMaxMonoSourceCount),
+			ALC_STEREO_SOURCES, settings.getOrSetDefault< int32_t >(OpenALMaxStereoSourceCountKey, DefaultOpenALMaxStereoSourceCount),
 			0
 		};
 
@@ -226,7 +226,7 @@ namespace EmEn::Audio
 		OpenAL::installExtensionEvents();
 
 		/* OpenAL EFX extensions. */
-		if ( settings.get< bool >(OpenALUseEFXExtensionsKey, DefaultOpenALUseEFXExtensions) )
+		if ( settings.getOrSetDefault< bool >(OpenALUseEFXExtensionsKey, DefaultOpenALUseEFXExtensions) )
 		{
 			OpenAL::installExtensionSystemEvents(m_outputDevice);
 
@@ -305,7 +305,7 @@ namespace EmEn::Audio
 		auto & settings = m_primaryServices.settings();
 
 		/* First, read setting for a desired input audio device. */
-		m_selectedInputDeviceName = settings.get< std::string >(AudioRecorderDeviceNameKey, DefaultAudioRecorderDeviceName);
+		m_selectedInputDeviceName = settings.getOrSetDefault< std::string >(AudioRecorderDeviceNameKey, DefaultAudioRecorderDeviceName);
 
 		/* Then, check the audio capture system. */
 		if ( !this->queryInputDevices() )
@@ -326,8 +326,8 @@ namespace EmEn::Audio
 		}
 
 		/* Checks configuration file */
-		const auto frequency = WaveFactory::toFrequency(settings.get< int32_t >(RecorderFrequencyKey, DefaultRecorderFrequency));
-		const auto bufferSize = settings.get< int32_t >(RecorderBufferSizeKey, DefaultRecorderBufferSize);
+		const auto frequency = WaveFactory::toFrequency(settings.getOrSetDefault< int32_t >(RecorderFrequencyKey, DefaultRecorderFrequency));
+		const auto bufferSize = settings.getOrSetDefault< int32_t >(RecorderBufferSizeKey, DefaultRecorderBufferSize);
 
 		if ( frequency == WaveFactory::Frequency::Invalid )
 		{
@@ -363,9 +363,9 @@ namespace EmEn::Audio
 	{
 		auto & settings = m_primaryServices.settings();
 
-		m_showInformation = settings.get< bool >(OpenALShowInformationKey, DefaultOpenALShowInformation);
+		m_showInformation = settings.getOrSetDefault< bool >(OpenALShowInformationKey, DefaultOpenALShowInformation);
 
-		if ( m_primaryServices.arguments().get("--disable-audio").isPresent() || !settings.get< bool >(AudioEnableKey, DefaultAudioEnable) )
+		if ( m_primaryServices.arguments().get("--disable-audio").isPresent() || !settings.getOrSetDefault< bool >(AudioEnableKey, DefaultAudioEnable) )
 		{
 			s_audioDisabled = true;
 			m_serviceInitialized = true;
@@ -390,7 +390,7 @@ namespace EmEn::Audio
 		}
 
 		/* NOTE: Select a capture audio device. */
-		if ( settings.get< bool >(AudioRecorderEnableKey, DefaultAudioRecorderEnable) )
+		if ( settings.getOrSetDefault< bool >(AudioRecorderEnableKey, DefaultAudioRecorderEnable) )
 		{
 			if ( this->setupAudioInputDevice() )
 			{
@@ -404,9 +404,9 @@ namespace EmEn::Audio
 
 		/* NOTE: Set up the audio configuration. */
 		this->setMetersPerUnit(1.0F);
-		this->setMasterVolume(settings.get< float >(AudioMasterVolumeKey, DefaultAudioMasterVolume));
+		this->setMasterVolume(settings.getOrSetDefault< float >(AudioMasterVolumeKey, DefaultAudioMasterVolume));
 		m_playbackFrequency = WaveFactory::toFrequency(m_contextAttributes[ALC_FREQUENCY]); /* NOTE: Be sure of the playback frequency allowed by this OpenAL context. */
-		m_musicChunkSize = settings.get< uint32_t >(AudioMusicChunkSizeKey, DefaultAudioMusicChunkSize);
+		m_musicChunkSize = settings.getOrSetDefault< uint32_t >(AudioMusicChunkSizeKey, DefaultAudioMusicChunkSize);
 
 		/* NOTE: Create a default source. */
 		m_defaultSource = std::make_shared< Source >();
@@ -599,6 +599,13 @@ namespace EmEn::Audio
 			const auto soundResource = m_resourceManager
 				.container< SoundResource >()
 				->getResource(resourceName);
+
+			if ( !soundResource->isLoaded() )
+			{
+				TraceDebug{ClassId} << "The sound resource '" << resourceName << "' is not yet loaded ! Skipping ...";
+
+				return;
+			}
 
 			m_defaultSource->setGain(gain);
 			m_defaultSource->play(soundResource, mode);

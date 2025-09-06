@@ -269,17 +269,17 @@ namespace EmEn::Graphics
 		{
 			auto & settings = m_primaryServices.settings();
 
-			if ( settings.get< bool >(NormalMappingEnabledKey, DefaultNormalMappingEnabled) )
+			if ( settings.getOrSetDefault< bool >(NormalMappingEnabledKey, DefaultNormalMappingEnabled) )
 			{
 				Tracer::info(ClassId, "Normal mapping enabled !");
 			}
 
-			if ( settings.get< bool >(HighQualityLightEnabledKey, DefaultHighQualityLightEnabled) )
+			if ( settings.getOrSetDefault< bool >(HighQualityLightEnabledKey, DefaultHighQualityLightEnabled) )
 			{
 				Tracer::info(ClassId, "High quality light shader code enabled !");
 			}
 
-			if ( settings.get< bool >(HighQualityReflectionEnabledKey, DefaultHighQualityReflectionEnabled) )
+			if ( settings.getOrSetDefault< bool >(HighQualityReflectionEnabledKey, DefaultHighQualityReflectionEnabled) )
 			{
 				Tracer::info(ClassId, "High quality reflection shader code enabled !");
 			}
@@ -441,6 +441,12 @@ namespace EmEn::Graphics
 		return m_pipelines.emplace(hash, graphicsPipeline).second;
 	}
 
+	bool
+	Renderer::isSwapChainDegraded () const noexcept
+	{
+		return m_swapChain->status() == SwapChain::Status::Degraded;
+	}
+
 	void
 	Renderer::renderFrame (const std::shared_ptr< Scenes::Scene > & scene, const Overlay::Manager & overlayManager) noexcept
 	{
@@ -449,24 +455,14 @@ namespace EmEn::Graphics
 			return;
 		}
 
-		if ( m_swapChain->status() == SwapChain::Status::Degraded )
-		{
-			TraceInfo{ClassId} << "The swap-chain is degraded !";
-
-			if ( !this->recreateSwapChain() )
-			{
-				return;
-			}
-		}
-
-		m_statistics.start();
-
 		const auto imageIndex = m_swapChain->acquireNextImage();
 
 		if ( !imageIndex )
 		{
 			return;
 		}
+
+		m_statistics.start();
 
 		/* NOTE: Clear all semaphores for the new frame. */
 		m_rendererFrameScope[imageIndex.value()].clearSemaphores();

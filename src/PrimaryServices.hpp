@@ -37,7 +37,6 @@
 #include "PlatformSpecific/SystemInfo.hpp"
 #include "PlatformSpecific/UserInfo.hpp"
 #include "Arguments.hpp"
-#include "Tracer.hpp"
 #include "FileSystem.hpp"
 #include "Settings.hpp"
 #include "Net/Manager.hpp"

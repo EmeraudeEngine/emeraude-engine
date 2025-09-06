@@ -341,7 +341,7 @@ namespace EmEn::Scenes
 					}
 				}
 
-				m_renderStateCoordinates[writeStateIndex] = m_logicStateCoordinates;
+				m_renderStateCoordinates[writeStateIndex] = this->getWorldCoordinates();
 			}
 
 			/** @copydoc EmEn::Scenes::AbstractEntity::getWorldCoordinatesStateForRendering(uint32_t) const */

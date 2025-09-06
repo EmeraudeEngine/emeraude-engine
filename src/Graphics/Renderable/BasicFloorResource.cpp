@@ -43,10 +43,10 @@ const size_t EmEn::Resources::Container< EmEn::Graphics::Renderable::BasicFloorR
 
 namespace EmEn::Graphics::Renderable
 {
-	using namespace EmEn::Libs;
-	using namespace EmEn::Libs::Math;
-	using namespace EmEn::Libs::VertexFactory;
-	using namespace EmEn::Scenes;
+	using namespace Libs;
+	using namespace Libs::Math;
+	using namespace Libs::VertexFactory;
+	using namespace Scenes;
 
 	const size_t BasicFloorResource::ClassUID{getClassUID(ClassId)};
 
@@ -90,7 +90,7 @@ namespace EmEn::Graphics::Renderable
 	}
 
 	bool
-	BasicFloorResource::load () noexcept
+	BasicFloorResource::load (Resources::Manager & resourceManager) noexcept
 	{
 		/* 1. Creating a default GridGeometry. */
 		const auto defaultGeometry = std::make_shared< Geometry::VertexGridResource >("DefaultBasicFloorGeometry");
@@ -103,7 +103,7 @@ namespace EmEn::Graphics::Renderable
 		}
 
 		/* 2. Retrieving the default material. */
-		const auto defaultMaterial = Resources::Manager::instance()->container< Material::StandardResource >()->getDefaultResource();
+		const auto defaultMaterial = resourceManager.container< Material::StandardResource >()->getDefaultResource();
 
 		if ( defaultMaterial == nullptr )
 		{
@@ -117,7 +117,7 @@ namespace EmEn::Graphics::Renderable
 	}
 
 	bool
-	BasicFloorResource::load (const std::filesystem::path & filepath) noexcept
+	BasicFloorResource::load (Resources::Manager & resourceManager, const std::filesystem::path & filepath) noexcept
 	{
 		const auto rootCheck = FastJSON::getRootFromFile(filepath);
 
@@ -131,9 +131,7 @@ namespace EmEn::Graphics::Renderable
 		const auto & root = rootCheck.value();
 
 		/* Checks if additional stores before loading (optional) */
-		auto * manager = Resources::Manager::instance();
-
-		manager->stores().update(root, manager->verbosityEnabled());
+		resourceManager.stores().update(resourceManager, root);
 
 		if ( !root.isMember(DefinitionResource::SceneAreaKey) )
 		{
@@ -142,7 +140,7 @@ namespace EmEn::Graphics::Renderable
 			return this->setLoadSuccess(false);
 		}
 
-		auto sceneAreaObject = root[DefinitionResource::SceneAreaKey];
+		const auto & sceneAreaObject = root[DefinitionResource::SceneAreaKey];
 
 		if ( !sceneAreaObject.isMember(FastJSON::TypeKey) && !sceneAreaObject[FastJSON::TypeKey].isString() )
 		{
@@ -158,14 +156,12 @@ namespace EmEn::Graphics::Renderable
 			return this->setLoadSuccess(false);
 		}
 
-		return this->load(sceneAreaObject[FastJSON::DataKey]);
+		return this->load(resourceManager, sceneAreaObject[FastJSON::DataKey]);
 	}
 
 	bool
-	BasicFloorResource::load (const Json::Value & data) noexcept
+	BasicFloorResource::load (Resources::Manager & resourceManager, const Json::Value & data) noexcept
 	{
-		auto * resources = Resources::Manager::instance();
-
 		/* 1. Creating a geometry. */
 		/* Checks size option. */
 		if ( !data.isMember(SizeKey) || !data[SizeKey].isNumeric() )
@@ -201,7 +197,7 @@ namespace EmEn::Graphics::Renderable
 			{
 				const auto imageName = subData[ImageNameKey].asString();
 
-				const auto imageResource = resources->container< ImageResource >()->getResource(imageName);
+				const auto imageResource = resourceManager.container< ImageResource >()->getResource(imageName);
 
 				if ( imageResource != nullptr )
 				{
@@ -279,7 +275,7 @@ namespace EmEn::Graphics::Renderable
 		{
 			const auto name = data[MaterialNameKey].asString();
 
-			materialResource = resources->container< Material::StandardResource >()->getResource(name);
+			materialResource = resourceManager.container< Material::StandardResource >()->getResource(name);
 		}
 		else
 		{

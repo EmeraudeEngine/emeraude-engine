@@ -28,33 +28,26 @@
 
 /* STL inclusions. */
 #include <cstdint>
-#include <string>
 
 namespace EmEn::Vulkan
 {
-	/**
-	 * @brief The GPU work type enumeration.
-	 */
-	enum class GPUWorkType : uint8_t
+	/** @brief The device work type enumeration. */
+	enum class DeviceWorkType : uint8_t
 	{
-		Graphics = 0,
-		Physics = 1
+		General,
+		Graphics,
+		Compute
 	};
 
-	/**
-	 * @brief The RunningMode enum
-	 */
-	enum class RunningMode : uint8_t
+	/** @brief The device run mode enumeration. */
+	enum class DeviceRunMode : uint8_t
 	{
+		DontCare,
 		Performance,
 		PowerSaving,
-		DontCare
 	};
 
-	/**
-	 * @brief This enumeration describe the purpose of
-	 * a queue from the engine point of view.
-	 */
+	/** @brief This enumeration describes the purpose of a queue from the engine point of view. */
 	enum class QueueJob : uint8_t
 	{
 		Graphics,
@@ -65,51 +58,11 @@ namespace EmEn::Vulkan
 		Transfer
 	};
 
-	static constexpr auto GraphicsString{"Graphics"};
-	static constexpr auto GraphicsTransferString{"GraphicsTransfer"};
-	static constexpr auto PresentationString{"Presentation"};
-	static constexpr auto ComputeString{"Compute"};
-	static constexpr auto ComputeTransferString{"ComputeTransfer"};
-	static constexpr auto TransferString{"Transfer"};
-
-	/**
-	 * @brief Returns a C-String version of the enum value.
-	 * @param value The enum value.
-	 * @return const char *
-	 */
-	[[nodiscard]]
-	const char * to_cstring (QueueJob value) noexcept;
-
-	/**
-	 * @brief Returns a string version of the enum value.
-	 * @param value The enum value.
-	 * @return std::string
-	 */
-	[[nodiscard]]
-	inline
-	std::string
-	to_string (QueueJob value)
-	{
-		return {to_cstring(value)};
-	}
-
-	/**
-	 * @brief The queue priority enum
-	 */
+	/** @brief The queue priority enum */
 	enum class QueuePriority : uint8_t
 	{
 		High,
 		Medium,
 		Low
-	};
-
-	/**
-	 * @brief A hint for the main job of the device.
-	 */
-	enum class DeviceJobHint : uint8_t
-	{
-		General,
-		Graphics,
-		Compute
 	};
 }

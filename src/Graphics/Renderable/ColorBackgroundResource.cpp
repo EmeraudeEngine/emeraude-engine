@@ -36,12 +36,12 @@ const size_t EmEn::Resources::Container< EmEn::Graphics::Renderable::ColorBackgr
 
 namespace EmEn::Graphics::Renderable
 {
-	using namespace EmEn::Libs;
+	using namespace Libs;
 
 	const size_t ColorBackgroundResource::ClassUID{getClassUID(ClassId)};
 
 	bool
-	ColorBackgroundResource::load () noexcept
+	ColorBackgroundResource::load (Resources::Manager & /*resourceManager*/) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
@@ -54,7 +54,7 @@ namespace EmEn::Graphics::Renderable
 	}
 
 	bool
-	ColorBackgroundResource::load (const Json::Value & /*data*/) noexcept
+	ColorBackgroundResource::load (Resources::Manager & /*resourceManager*/, const Json::Value & /*data*/) noexcept
 	{
 		if ( !this->beginLoading() )
 		{

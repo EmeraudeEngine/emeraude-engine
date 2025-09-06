@@ -43,12 +43,12 @@ const size_t EmEn::Resources::Container< EmEn::Graphics::ImageResource >::ClassU
 
 namespace EmEn::Graphics
 {
-	using namespace EmEn::Libs;
+	using namespace Libs;
 
 	const size_t ImageResource::ClassUID{getClassUID(ClassId)};
 
 	bool
-	ImageResource::load () noexcept
+	ImageResource::load (Resources::Manager & /*resourceManager*/) noexcept
 	{
 		constexpr size_t DefaultSize{32};
 
@@ -75,7 +75,7 @@ namespace EmEn::Graphics
 	}
 
 	bool
-	ImageResource::load (const std::filesystem::path & filepath) noexcept
+	ImageResource::load (Resources::Manager & /*resourceManager*/, const std::filesystem::path & filepath) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
@@ -102,7 +102,7 @@ namespace EmEn::Graphics
 	}
 
 	bool
-	ImageResource::load (const Json::Value & /*data*/) noexcept
+	ImageResource::load (Resources::Manager & /*resourceManager*/, const Json::Value & /*data*/) noexcept
 	{
 		if ( !this->beginLoading() )
 		{

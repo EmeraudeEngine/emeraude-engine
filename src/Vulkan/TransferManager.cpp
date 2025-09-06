@@ -45,9 +45,9 @@
 
 namespace EmEn::Vulkan
 {
-	using namespace EmEn::Libs;
+	using namespace Libs;
 
-	std::array< TransferManager *, 2 > TransferManager::s_instances{nullptr, nullptr};
+	std::array< TransferManager *, 3 > TransferManager::s_instances{nullptr, nullptr, nullptr};
 
 	bool
 	TransferManager::onInitialize () noexcept
@@ -76,7 +76,7 @@ namespace EmEn::Vulkan
 		/* Read the queue configuration from the device. */
 		if ( !m_device->hasBasicSupport() )
 		{
-			m_flags[SeparatedQueues] = true;
+			m_separatedQueues = true;
 
 			m_specificCommandPool = std::make_shared< CommandPool >(m_device, m_device->getGraphicsFamilyIndex(), true, false, false);
 			m_specificCommandPool->setIdentifier(ClassId, "Specific", "CommandPool");
@@ -95,7 +95,7 @@ namespace EmEn::Vulkan
 			m_specificCommandPool = m_transferCommandPool;
 		}
 
-		m_flags[ServiceInitialized] = true;
+		m_serviceInitialized = true;
 
 		return true;
 	}
@@ -106,7 +106,7 @@ namespace EmEn::Vulkan
 		const std::lock_guard< std::mutex > lockA{m_stagingBufferMutex};
 		const std::lock_guard< std::mutex > lockB{m_transferMutex};
 
-		m_flags[ServiceInitialized] = false;
+		m_serviceInitialized = false;
 
 		/* FIXME: Seems unnecessary */
 		m_device->waitIdle("Destroying a transfer manager");
@@ -222,10 +222,7 @@ namespace EmEn::Vulkan
 			return stagingBuffer;
 		}
 
-		if ( m_flags[Debug] )
-		{
-			TraceInfo{ClassId} << "No existing staging buffer available for now." "\n" << this->getStagingBuffersStatistics();
-		}
+		TraceDebug{ClassId} << "No existing staging buffer available for now." "\n" << this->getStagingBuffersStatistics();
 
 		return nullptr;
 	}

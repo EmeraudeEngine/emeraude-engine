@@ -32,7 +32,7 @@
 /* Local inclusions. */
 #include "Libs/FastJSON.hpp"
 #include "Libs/IO/IO.hpp"
-#include "PrimaryServices.hpp"
+#include "Manager.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::Resources
@@ -119,7 +119,7 @@ namespace EmEn::Resources
 				continue;
 			}
 
-			const auto resourcesRead = this->parseStores(storesObject, verbose);
+			const auto resourcesRead = this->parseStores(fileSystem, storesObject, verbose);
 
 			TraceSuccess{ClassId} << resourcesRead << " resources added !";
 
@@ -130,7 +130,7 @@ namespace EmEn::Resources
 	}
 
 	void
-	Stores::update (const Json::Value & root, bool verbose) noexcept
+	Stores::update (const Manager & resourceManager, const Json::Value & root) noexcept
 	{
 		if ( !root.isObject() )
 		{
@@ -153,7 +153,7 @@ namespace EmEn::Resources
 			return;
 		}
 
-		m_registeredResources += this->parseStores(stores, verbose);
+		m_registeredResources += this->parseStores(resourceManager.primaryServices().fileSystem(), stores, resourceManager.verbosityEnabled());
 	}
 
 	std::string
@@ -216,7 +216,7 @@ namespace EmEn::Resources
 	}
 
 	size_t
-	Stores::parseStores (const Json::Value & storesObject, bool verbose) noexcept
+	Stores::parseStores (const FileSystem & fileSystem, const Json::Value & storesObject, bool verbose) noexcept
 	{
 		size_t resourcesRegistered = 0;
 
@@ -249,7 +249,7 @@ namespace EmEn::Resources
 				/* Checks the data source to load it. */
 				BaseInformation baseInformation{};
 
-				if ( !baseInformation.parse(resourceDefinition) )
+				if ( !baseInformation.parse(fileSystem, resourceDefinition) )
 				{
 					TraceError{ClassId} <<
 						"Invalid resource in '" << storeName << "' store ! "

@@ -50,7 +50,7 @@ namespace EmEn::Graphics::Material::Component
 {
 	/**
 	 * @brief The texture component type.
-	 * @extends EmEn::Graphics::Material::Component::Interface This class describe a component type.
+	 * @extends EmEn::Graphics::Material::Component::Interface This class describes a component type.
 	 */
 	class Texture final : public Interface
 	{
@@ -82,7 +82,7 @@ namespace EmEn::Graphics::Material::Component
 			 * @brief Constructs a texture component from json data.
 			 * @param samplerName A C-string for the name of the sampler uniform.
 			 * @param variableName A string [std::move].
-			 * @param data A reference to a json value.
+			 * @param data A reference to a JSON value.
 			 * @param fillingType A reference to a texture filling type.
 			 * @param resources A reference to the resource manager.
 			 */

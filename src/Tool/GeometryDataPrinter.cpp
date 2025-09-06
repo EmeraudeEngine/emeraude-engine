@@ -202,7 +202,7 @@ namespace EmEn::Tool
 			out.close();
 		}
 
-		Tracer::instance().disableTracer(true);
+		Tracer::getInstance().disableTracer(true);
 
 		return true;
 	}

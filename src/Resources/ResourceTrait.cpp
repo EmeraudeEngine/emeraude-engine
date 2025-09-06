@@ -37,7 +37,7 @@
 
 namespace EmEn::Resources
 {
-	using namespace EmEn::Libs;
+	using namespace Libs;
 
 	constexpr auto TracerTag{"ResourceChain"};
 
@@ -384,7 +384,7 @@ namespace EmEn::Resources
 	}
 
 	bool
-	ResourceTrait::load (const std::filesystem::path & filepath) noexcept
+	ResourceTrait::load (Manager & resourceManager, const std::filesystem::path & filepath) noexcept
 	{
 		const auto root = FastJSON::getRootFromFile(filepath);
 
@@ -401,11 +401,9 @@ namespace EmEn::Resources
 		}
 
 		/* Checks if additional stores before loading (optional) */
-		auto * manager = Manager::instance();
+		resourceManager.stores().update(resourceManager, root.value());
 
-		manager->stores().update(root.value(), manager->verbosityEnabled());
-
-		return this->load(root.value());
+		return this->load(resourceManager, root.value());
 	}
 
 	std::string

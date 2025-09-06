@@ -620,8 +620,8 @@ namespace EmEn::Overlay
 		auto & settings = m_primaryServices.settings();
 
 		const auto & windowState = m_window.state();
-		const auto forceScaleX = settings.get< float >(VideoOverlayForceScaleXKey, DefaultVideoOverlayForceScale);
-		const auto forceScaleY = settings.get< float >(VideoOverlayForceScaleYKey, DefaultVideoOverlayForceScale);
+		const auto forceScaleX = settings.getOrSetDefault< float >(VideoOverlayForceScaleXKey, DefaultVideoOverlayForceScale);
+		const auto forceScaleY = settings.getOrSetDefault< float >(VideoOverlayForceScaleYKey, DefaultVideoOverlayForceScale);
 
 		/* NOTE: This structure is shared with all screens and surfaces. */
 		m_framebufferProperties.updateProperties(

@@ -931,7 +931,7 @@ namespace EmEn
 			Physics::Manager m_physicsManager{m_primaryServices, m_vulkanInstance}; /* [SECONDARY] */
 			Audio::Manager m_audioManager{m_primaryServices, m_resourceManager}; /* [SECONDARY] */
 			Overlay::Manager m_overlayManager{m_primaryServices, m_window, m_graphicsRenderer}; /* [SECONDARY] */
-			Notifier m_notifier{m_overlayManager}; /* [SECONDARY] */
+			Notifier m_notifier{m_resourceManager, m_overlayManager}; /* [SECONDARY] */
 			Scenes::Manager m_sceneManager{m_primaryServices, m_resourceManager, m_inputManager, m_graphicsRenderer, m_audioManager}; /* [SECONDARY] */
 			std::vector< ServiceInterface * > m_primaryServicesEnabled;
 			std::vector< ServiceInterface * > m_secondaryServicesEnabled;

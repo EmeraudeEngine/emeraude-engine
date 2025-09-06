@@ -30,15 +30,17 @@
 #include "emeraude_config.hpp"
 
 /* STL inclusions. */
-#include <cstddef>
-#include <array>
+#include <map>
+#include <vector>
+#include <string>
+#include <any>
 #include <filesystem>
+#include <shared_mutex>
 
 /* Local inclusion for inheritances. */
 #include "ServiceInterface.hpp"
 
 /* Local inclusion for usages. */
-#include "SettingStore.hpp"
 #include "Tracer.hpp"
 
 /* Forward declarations. */
@@ -55,6 +57,197 @@ namespace Json
 
 namespace EmEn
 {
+	/** @brief Types allowed by settings. */
+	template< typename variable_t >
+	concept SettingType = std::is_same_v< variable_t, bool > ||
+						  std::is_same_v< variable_t, int32_t > ||
+						  std::is_same_v< variable_t, uint32_t > ||
+						  std::is_same_v< variable_t, int64_t > ||
+						  std::is_same_v< variable_t, uint64_t > ||
+						  std::is_same_v< variable_t, float > ||
+						  std::is_same_v< variable_t, double > ||
+						  std::is_same_v< variable_t, std::string >;
+
+	/**
+	 * @brief The setting store class.
+	 */
+	class SettingStore final
+	{
+		friend class Settings;
+
+		public:
+
+			/** @brief Class identifier. */
+			static constexpr auto ClassId{"SettingStore"};
+
+			/**
+			 * @brief Constructs a default setting store.
+			 */
+			SettingStore () noexcept = default;
+
+			/**
+			 * @brief Returns variables.
+			 * @return const std::map< std::string, std::any, std::less<> > &
+			 */
+			[[nodiscard]]
+			const std::map< std::string, std::any, std::less<> > &
+			variables () const noexcept
+			{
+				return m_variables;
+			}
+
+			/**
+			 * @brief Returns arrays variables.
+			 * @return const std::map< std::string, std::vector< std::any >, std::less<> > &
+			 */
+			[[nodiscard]]
+			const std::map< std::string, std::vector< std::any >, std::less<> > &
+			arrays () const noexcept
+			{
+				return m_arrays;
+			}
+
+			/**
+			 * @brief Sets an "any" variable in store.
+			 * @param name A reference to a string for the variable name.
+			 * @param value A reference to a std::any.
+			 * @return void
+			 */
+			void
+			setVariable (const std::string & name, const std::any & value)
+			{
+				m_variables[name] = value;
+			}
+
+			/**
+			 * @brief Sets an "any" variable in an array store.
+			 * @param name A reference to a string for the variable name.
+			 * @param value A reference to a std::any.
+			 * @return void
+			 */
+			void
+			setVariableInArray (const std::string & name, const std::any & value)
+			{
+				m_arrays[name].emplace_back(value);
+			}
+
+			/**
+			 * @brief Clears an array if the variable is an array.
+			 * @param variableName A reference to a string for the variable name.
+			 * @return void
+			 */
+			void
+			clearArray (std::string_view variableName) noexcept
+			{
+				if ( const auto arrayIt = m_arrays.find(variableName); arrayIt != m_arrays.end() )
+				{
+					arrayIt->second.clear();
+				}
+			}
+
+			/**
+			 * @brief Removes a variable from store data.
+			 * @param name A reference to a string for the variable name.
+			 * @return void
+			 */
+			void
+			removeKey (const std::string & name) noexcept
+			{
+				m_variables.erase(name);
+				m_arrays.erase(name);
+			}
+
+			/**
+			 * @brief Returns whether the store is empty.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			empty () const noexcept
+			{
+				return m_variables.empty() && m_arrays.empty();
+			}
+
+			/**
+			 * @brief Checks whether a variable is present in the store.
+			 * @param variableName A reference to a string for the variable name.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			variableExists (std::string_view variableName) const noexcept
+			{
+				return m_variables.contains(variableName);
+			}
+
+			/**
+			 * @brief Checks whether an array is present in the store.
+			 * @param variableName A reference to a string for the array name.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			arrayExists (std::string_view variableName) const noexcept
+			{
+				return m_arrays.contains(variableName);
+			}
+
+			/**
+			 * @brief Gets the value of a variable.
+			 * @param variableName A reference to a string for the variable name.
+			 * @return const std::any *
+			 */
+			[[nodiscard]]
+			const std::any *
+			getValuePointer (std::string_view variableName) const noexcept
+			{
+				const auto variableIt = m_variables.find(variableName);
+
+				if ( variableIt == m_variables.cend() )
+				{
+					return nullptr;
+				}
+
+				return &variableIt->second;
+			}
+
+			/**
+			 * @brief Returns const access to an array of variable.
+			 * @param variableName A reference to a string for the array name.
+			 * @return const std::vector< std::any > *
+			 */
+			[[nodiscard]]
+			const std::vector< std::any > *
+			getArrayPointer (std::string_view variableName) const noexcept
+			{
+				const auto arrayIt = m_arrays.find(variableName);
+
+				if ( arrayIt == m_arrays.cend() )
+				{
+					return nullptr;
+				}
+
+				return &arrayIt->second;
+			}
+
+			/**
+			 * @brief Clears store data.
+			 * @return void
+			 */
+			void
+			clear () noexcept
+			{
+				m_variables.clear();
+				m_arrays.clear();
+			}
+
+		private:
+
+			/* TODO: Simplify by using only "std::map< std::string, std::any, std::less<> > m_data;" and rework accessors. */
+			std::map< std::string, std::any, std::less<> > m_variables;
+			std::map< std::string, std::vector< std::any >, std::less<> > m_arrays;
+	};
+
 	/**
 	 * @brief The settings service class.
 	 * @extends EmEn::ServiceInterface This is a service.
@@ -73,7 +266,7 @@ namespace EmEn
 			/**
 			 * @brief Constructs a settings manager.
 			 * @param arguments A reference to application arguments.
-			 * @param fileSystem A reference to file system.
+			 * @param fileSystem A reference to the file system.
 			 * @param childProcess Declares a child process.
 			 */
 			Settings (const Arguments & arguments, const FileSystem & fileSystem, bool childProcess) noexcept
@@ -81,37 +274,25 @@ namespace EmEn
 				m_arguments{arguments},
 				m_fileSystem{fileSystem}
 			{
-				if ( s_instance != nullptr )
+				m_childProcess = childProcess;
+
+				if ( !m_childProcess )
 				{
-					std::cerr << __PRETTY_FUNCTION__ << ", constructor called twice !" "\n";
-
-					std::terminate();
-				}
-
-				s_instance = this;
-
-				m_flags[ChildProcess] = childProcess;
-
-				if ( !m_flags[ChildProcess] )
-				{
-					m_flags[SaveAtExit] = true;
+					m_saveAtExit = true;
 				}
 			}
 
 			/**
 			 * @brief Destructs the settings manager.
 			 */
-			~Settings () override
-			{
-				s_instance = nullptr;
-			}
+			~Settings () override = default;
 
 			/** @copydoc EmEn::ServiceInterface::usable() */
 			[[nodiscard]]
 			bool
 			usable () const noexcept override
 			{
-				if ( !m_flags[ServiceInitialized] )
+				if ( !m_serviceInitialized )
 				{
 					return false;
 				}
@@ -125,7 +306,7 @@ namespace EmEn
 			 */
 			[[nodiscard]]
 			const std::filesystem::path &
-			filepath () noexcept
+			filepath () const noexcept
 			{
 				return m_filepath;
 			}
@@ -138,7 +319,7 @@ namespace EmEn
 			void
 			saveAtExit (bool state) noexcept
 			{
-				m_flags[SaveAtExit] = state;
+				m_saveAtExit = state;
 			}
 
 			/**
@@ -149,7 +330,7 @@ namespace EmEn
 			bool
 			isSaveAtExitEnabled () const noexcept
 			{
-				return m_flags[SaveAtExit];
+				return m_saveAtExit;
 			}
 
 			/**
@@ -160,648 +341,162 @@ namespace EmEn
 			bool
 			isChildProcess () const noexcept
 			{
-				return m_flags[ChildProcess];
-			}
-
-			/**
-			 * @brief Checks the present of a variable in the settings.
-			 * @param key The key in settings to check.
-			 * @return bool
-			 */
-			[[nodiscard]]
-			bool variableExists (const std::string & key) const noexcept;
-
-			/**
-			 * @brief Checks the present of an array in the settings.
-			 * @param key The key in settings to check.
-			 * @return bool
-			 */
-			[[nodiscard]]
-			bool arrayExists (const std::string & key) const noexcept;
-
-			/**
-			 * @brief Checks the present of a store in the settings.
-			 * @param key The store name in settings to check.
-			 * @return bool
-			 */
-			[[nodiscard]]
-			bool storeExists (const std::string & key) const noexcept;
-
-			/**
-			 * @brief Returns a single variable from settings.
-			 * @tparam variable_t The variable type.
-			 * @param key A reference to a string for the variable name.
-			 * @param defaultValue The default value. Default none.
-			 * @return variable_t
-			 */
-			template< typename variable_t >
-			[[nodiscard]]
-			variable_t
-			get (const std::string & key, const variable_t & defaultValue = {}) const noexcept requires ( std::is_same_v< variable_t, bool > || std::is_same_v< variable_t, int32_t > || std::is_same_v< variable_t, uint32_t > || std::is_same_v< variable_t, int64_t > || std::is_same_v< variable_t, uint64_t > || std::is_same_v< variable_t, float > || std::is_same_v< variable_t, double > || std::is_same_v< variable_t, std::string > )
-			{
-				const auto value = this->get(key);
-
-				if ( value.has_value() )
-				{
-					if constexpr ( std::is_same_v< variable_t, bool > )
-					{
-						if ( value.type() == typeid(variable_t) )
-						{
-							return std::any_cast< variable_t >(value);
-						}
-
-						if ( value.type() == typeid(int32_t) )
-						{
-							return std::any_cast< int32_t >(value) > 0;
-						}
-
-						if ( value.type() == typeid(uint32_t) )
-						{
-							return std::any_cast< uint32_t >(value) > 0;
-						}
-
-						if ( value.type() == typeid(int64_t) )
-						{
-							return std::any_cast< int64_t >(value) > 0;
-						}
-
-						if ( value.type() == typeid(uint64_t) )
-						{
-							return std::any_cast< uint64_t >(value) > 0;
-						}
-					}
-
-					if constexpr ( std::is_same_v< variable_t, int32_t > )
-					{
-						if ( value.type() == typeid(variable_t) )
-						{
-							return std::any_cast< variable_t >(value);
-						}
-
-						if ( value.type() == typeid(bool) )
-						{
-							return std::any_cast< bool >(value) ? 1 : 0;
-						}
-
-						if ( value.type() == typeid(uint32_t) )
-						{
-							/* NOTE: Possible loss of precision on high number. */
-							return static_cast< variable_t >(std::any_cast< uint32_t >(value));
-						}
-
-						if ( value.type() == typeid(int64_t) )
-						{
-							/* NOTE: Possible loss of precision on high number. */
-							return static_cast< variable_t >(std::any_cast< int64_t >(value));
-						}
-
-						if ( value.type() == typeid(uint64_t) )
-						{
-							/* NOTE: Possible loss of precision on high number. */
-							return static_cast< variable_t >(std::any_cast< uint64_t >(value));
-						}
-					}
-
-					if constexpr ( std::is_same_v< variable_t, uint32_t > )
-					{
-						if ( value.type() == typeid(variable_t) )
-						{
-							return std::any_cast< variable_t >(value);
-						}
-
-						if ( value.type() == typeid(bool) )
-						{
-							return std::any_cast< bool >(value) ? 1 : 0;
-						}
-
-						if ( value.type() == typeid(int32_t) )
-						{
-							const auto signedValue = std::any_cast< int32_t >(value);
-
-							return signedValue >= 0 ? static_cast< variable_t >(signedValue) : defaultValue;
-						}
-
-						if ( value.type() == typeid(int64_t) )
-						{
-							const auto signedValue = std::any_cast< int64_t >(value);
-
-							/* NOTE: Possible loss of precision on high number. */
-							return signedValue >= 0 ? static_cast< variable_t >(signedValue) : defaultValue;
-						}
-
-						if ( value.type() == typeid(uint64_t) )
-						{
-							/* NOTE: Possible loss of precision on high number. */
-							return static_cast< variable_t >(std::any_cast< uint64_t >(value));
-						}
-					}
-
-					if constexpr ( std::is_same_v< variable_t, int64_t > )
-					{
-						if ( value.type() == typeid(variable_t) )
-						{
-							return std::any_cast< variable_t >(value);
-						}
-
-						if ( value.type() == typeid(bool) )
-						{
-							return std::any_cast< bool >(value) ? 1 : 0;
-						}
-
-						if ( value.type() == typeid(int32_t) )
-						{
-							return static_cast< variable_t >(std::any_cast< int32_t >(value));
-						}
-
-						if ( value.type() == typeid(uint32_t) )
-						{
-							return static_cast< variable_t >(std::any_cast< uint32_t >(value));
-						}
-
-						if ( value.type() == typeid(uint64_t) )
-						{
-							/* NOTE: Possible loss of precision on high number. */
-							return static_cast< variable_t >(std::any_cast< uint64_t >(value));
-						}
-					}
-
-					if constexpr ( std::is_same_v< variable_t, uint64_t > )
-					{
-						if ( value.type() == typeid(variable_t) )
-						{
-							return std::any_cast< variable_t >(value);
-						}
-
-						if ( value.type() == typeid(bool) )
-						{
-							return std::any_cast< bool >(value) ? 1 : 0;
-						}
-
-						if ( value.type() == typeid(int32_t) )
-						{
-							const auto signedValue = std::any_cast< int32_t >(value);
-
-							return signedValue >= 0 ? static_cast< variable_t >(signedValue) : defaultValue;
-						}
-
-						if ( value.type() == typeid(uint32_t) )
-						{
-							return static_cast< variable_t >(std::any_cast< uint32_t >(value));
-						}
-
-						if ( value.type() == typeid(int64_t) )
-						{
-							const auto signedValue = std::any_cast< int64_t >(value);
-
-							return signedValue >= 0 ? static_cast< variable_t >(signedValue) : defaultValue;
-						}
-					}
-
-					if constexpr ( std::is_same_v< variable_t, float > )
-					{
-						if ( value.type() == typeid(variable_t) )
-						{
-							return std::any_cast< variable_t >(value);
-						}
-
-						if ( value.type() == typeid(double) )
-						{
-							/* NOTE: Possible loss of precision on high number. */
-							return static_cast< variable_t >(std::any_cast< double >(value));
-						}
-
-						if ( value.type() == typeid(bool) )
-						{
-							return std::any_cast< bool >(value) ? 1 : 0;
-						}
-
-						if ( value.type() == typeid(int32_t) )
-						{
-							return static_cast< variable_t >(std::any_cast< int32_t >(value));
-						}
-
-						if ( value.type() == typeid(uint32_t) )
-						{
-							return static_cast< variable_t >(std::any_cast< uint32_t >(value));
-						}
-
-						if ( value.type() == typeid(int64_t) )
-						{
-							/* NOTE: Possible loss of precision on high number. */
-							return static_cast< variable_t >(std::any_cast< int64_t >(value));
-						}
-
-						if ( value.type() == typeid(uint64_t) )
-						{
-							/* NOTE: Possible loss of precision on high number. */
-							return static_cast< variable_t >(std::any_cast< uint64_t >(value));
-						}
-					}
-
-					if constexpr ( std::is_same_v< variable_t, double > )
-					{
-						if ( value.type() == typeid(variable_t) )
-						{
-							return std::any_cast< variable_t >(value);
-						}
-
-						if ( value.type() == typeid(float) )
-						{
-							return static_cast< variable_t >(std::any_cast< float >(value));
-						}
-
-						if ( value.type() == typeid(bool) )
-						{
-							return std::any_cast< bool >(value) ? 1 : 0;
-						}
-
-						if ( value.type() == typeid(int32_t) )
-						{
-							return static_cast< variable_t >(std::any_cast< int32_t >(value));
-						}
-
-						if ( value.type() == typeid(uint32_t) )
-						{
-							return static_cast< variable_t >(std::any_cast< uint32_t >(value));
-						}
-
-						if ( value.type() == typeid(int64_t) )
-						{
-							return static_cast< variable_t >(std::any_cast< int64_t >(value));
-						}
-
-						if ( value.type() == typeid(uint64_t) )
-						{
-							return static_cast< variable_t >(std::any_cast< uint64_t >(value));
-						}
-					}
-
-					if constexpr ( std::is_same_v< variable_t, std::string > )
-					{
-						if ( value.type() == typeid(variable_t) )
-						{
-							return std::any_cast< variable_t >(value);
-						}
-					}
-				}
-
-				if ( !m_flags[ChildProcess] )
-				{
-					TraceWarning{ClassId} << "The key '" << key << "' doesn't exists in the settings file and won't be saved because access is read-only.";
-				}
-
-				return defaultValue;
-			}
-
-			/**
-			 * @brief Returns a single variable from settings.
-			 * @tparam variable_t The variable type.
-			 * @param key A reference to a string for the variable name.
-			 * @param defaultValue The default value. Default none.
-			 * @return variable_t
-			 */
-			template< typename variable_t >
-			[[nodiscard]]
-			variable_t
-			get (const std::string & key, const variable_t & defaultValue = {}) noexcept requires ( std::is_same_v< variable_t, bool > || std::is_same_v< variable_t, int32_t > || std::is_same_v< variable_t, uint32_t > || std::is_same_v< variable_t, int64_t > || std::is_same_v< variable_t, uint64_t > || std::is_same_v< variable_t, float > || std::is_same_v< variable_t, double > || std::is_same_v< variable_t, std::string > )
-			{
-				const auto value = this->get(key);
-
-				if ( value.has_value() )
-				{
-					if constexpr ( std::is_same_v< variable_t, bool > )
-					{
-						if ( value.type() == typeid(variable_t) )
-						{
-							return std::any_cast< variable_t >(value);
-						}
-
-						if ( value.type() == typeid(int32_t) )
-						{
-							return std::any_cast< int32_t >(value) > 0;
-						}
-
-						if ( value.type() == typeid(uint32_t) )
-						{
-							return std::any_cast< uint32_t >(value) > 0;
-						}
-
-						if ( value.type() == typeid(int64_t) )
-						{
-							return std::any_cast< int64_t >(value) > 0;
-						}
-
-						if ( value.type() == typeid(uint64_t) )
-						{
-							return std::any_cast< uint64_t >(value) > 0;
-						}
-					}
-
-					if constexpr ( std::is_same_v< variable_t, int32_t > )
-					{
-						if ( value.type() == typeid(variable_t) )
-						{
-							return std::any_cast< variable_t >(value);
-						}
-
-						if ( value.type() == typeid(bool) )
-						{
-							return std::any_cast< bool >(value) ? 1 : 0;
-						}
-
-						if ( value.type() == typeid(uint32_t) )
-						{
-							/* NOTE: Possible loss of precision on high number. */
-							return static_cast< variable_t >(std::any_cast< uint32_t >(value));
-						}
-
-						if ( value.type() == typeid(int64_t) )
-						{
-							/* NOTE: Possible loss of precision on high number. */
-							return static_cast< variable_t >(std::any_cast< int64_t >(value));
-						}
-
-						if ( value.type() == typeid(uint64_t) )
-						{
-							/* NOTE: Possible loss of precision on high number. */
-							return static_cast< variable_t >(std::any_cast< uint64_t >(value));
-						}
-					}
-
-					if constexpr ( std::is_same_v< variable_t, uint32_t > )
-					{
-						if ( value.type() == typeid(variable_t) )
-						{
-							return std::any_cast< variable_t >(value);
-						}
-
-						if ( value.type() == typeid(bool) )
-						{
-							return std::any_cast< bool >(value) ? 1 : 0;
-						}
-
-						if ( value.type() == typeid(int32_t) )
-						{
-							const auto signedValue = std::any_cast< int32_t >(value);
-
-							return signedValue >= 0 ? static_cast< variable_t >(signedValue) : defaultValue;
-						}
-
-						if ( value.type() == typeid(int64_t) )
-						{
-							const auto signedValue = std::any_cast< int64_t >(value);
-
-							/* NOTE: Possible loss of precision on high number. */
-							return signedValue >= 0 ? static_cast< variable_t >(signedValue) : defaultValue;
-						}
-
-						if ( value.type() == typeid(uint64_t) )
-						{
-							/* NOTE: Possible loss of precision on high number. */
-							return static_cast< variable_t >(std::any_cast< uint64_t >(value));
-						}
-					}
-
-					if constexpr ( std::is_same_v< variable_t, int64_t > )
-					{
-						if ( value.type() == typeid(variable_t) )
-						{
-							return std::any_cast< variable_t >(value);
-						}
-
-						if ( value.type() == typeid(bool) )
-						{
-							return std::any_cast< bool >(value) ? 1 : 0;
-						}
-
-						if ( value.type() == typeid(int32_t) )
-						{
-							return static_cast< variable_t >(std::any_cast< int32_t >(value));
-						}
-
-						if ( value.type() == typeid(uint32_t) )
-						{
-							return static_cast< variable_t >(std::any_cast< uint32_t >(value));
-						}
-
-						if ( value.type() == typeid(uint64_t) )
-						{
-							/* NOTE: Possible loss of precision on high number. */
-							return static_cast< variable_t >(std::any_cast< uint64_t >(value));
-						}
-					}
-
-					if constexpr ( std::is_same_v< variable_t, uint64_t > )
-					{
-						if ( value.type() == typeid(variable_t) )
-						{
-							return std::any_cast< variable_t >(value);
-						}
-
-						if ( value.type() == typeid(bool) )
-						{
-							return std::any_cast< bool >(value) ? 1 : 0;
-						}
-
-						if ( value.type() == typeid(int32_t) )
-						{
-							const auto signedValue = std::any_cast< int32_t >(value);
-
-							return signedValue >= 0 ? static_cast< variable_t >(signedValue) : defaultValue;
-						}
-
-						if ( value.type() == typeid(uint32_t) )
-						{
-							return static_cast< variable_t >(std::any_cast< uint32_t >(value));
-						}
-
-						if ( value.type() == typeid(int64_t) )
-						{
-							const auto signedValue = std::any_cast< int64_t >(value);
-
-							return signedValue >= 0 ? static_cast< variable_t >(signedValue) : defaultValue;
-						}
-					}
-
-					if constexpr ( std::is_same_v< variable_t, float > )
-					{
-						if ( value.type() == typeid(variable_t) )
-						{
-							return std::any_cast< variable_t >(value);
-						}
-
-						if ( value.type() == typeid(double) )
-						{
-							/* NOTE: Possible loss of precision on high number. */
-							return static_cast< variable_t >(std::any_cast< double >(value));
-						}
-
-						if ( value.type() == typeid(bool) )
-						{
-							return std::any_cast< bool >(value) ? 1 : 0;
-						}
-
-						if ( value.type() == typeid(int32_t) )
-						{
-							return static_cast< variable_t >(std::any_cast< int32_t >(value));
-						}
-
-						if ( value.type() == typeid(uint32_t) )
-						{
-							return static_cast< variable_t >(std::any_cast< uint32_t >(value));
-						}
-
-						if ( value.type() == typeid(int64_t) )
-						{
-							/* NOTE: Possible loss of precision on high number. */
-							return static_cast< variable_t >(std::any_cast< int64_t >(value));
-						}
-
-						if ( value.type() == typeid(uint64_t) )
-						{
-							/* NOTE: Possible loss of precision on high number. */
-							return static_cast< variable_t >(std::any_cast< uint64_t >(value));
-						}
-					}
-
-					if constexpr ( std::is_same_v< variable_t, double > )
-					{
-						if ( value.type() == typeid(variable_t) )
-						{
-							return std::any_cast< variable_t >(value);
-						}
-
-						if ( value.type() == typeid(float) )
-						{
-							return static_cast< variable_t >(std::any_cast< float >(value));
-						}
-
-						if ( value.type() == typeid(bool) )
-						{
-							return std::any_cast< bool >(value) ? 1 : 0;
-						}
-
-						if ( value.type() == typeid(int32_t) )
-						{
-							return static_cast< variable_t >(std::any_cast< int32_t >(value));
-						}
-
-						if ( value.type() == typeid(uint32_t) )
-						{
-							return static_cast< variable_t >(std::any_cast< uint32_t >(value));
-						}
-
-						if ( value.type() == typeid(int64_t) )
-						{
-							return static_cast< variable_t >(std::any_cast< int64_t >(value));
-						}
-
-						if ( value.type() == typeid(uint64_t) )
-						{
-							return static_cast< variable_t >(std::any_cast< uint64_t >(value));
-						}
-					}
-
-					if constexpr ( std::is_same_v< variable_t, std::string > )
-					{
-						if ( value.type() == typeid(variable_t) )
-						{
-							return std::any_cast< variable_t >(value);
-						}
-					}
-				}
-
-				this->set(key, defaultValue);
-
-				return defaultValue;
-			}
-
-			/**
-			 * @brief Saves the settings in the file.
-			 * @return bool
-			 */
-			[[nodiscard]]
-			bool save () const noexcept;
-
-			/**
-			 * @brief Clears the settings.
-			 * @return void
-			 */
-			void
-			clear () noexcept
-			{
-				m_store.clear();
+				return m_childProcess;
 			}
 
 			/**
 			 * @brief Sets a value in the store.
 			 * @tparam variable_t The type of the value.
-			 * @param key A reference to a string for the variable name.
+			 * @param settingPath A string view.
 			 * @param value A reference to a value to save.
 			 * @return void
 			 */
-			template< typename variable_t >
+			template< SettingType variable_t >
 			void
-			set (const std::string & key, const variable_t & value) noexcept requires ( std::is_same_v< variable_t, bool > || std::is_same_v< variable_t, int32_t > || std::is_same_v< variable_t, uint32_t > || std::is_same_v< variable_t, int64_t > || std::is_same_v< variable_t, uint64_t > || std::is_same_v< variable_t, float > || std::is_same_v< variable_t, double > || std::is_same_v< variable_t, std::string > )
+			set (std::string_view settingPath, const variable_t & value) noexcept
 			{
-				std::string name{};
+				const std::unique_lock< std::shared_mutex > lock{m_storeAccess};
 
-				this->parseKey(key, name)->setVariable(name, value);
+				const auto & [key, variableName] = Settings::parseAccessKey(settingPath);
+
+				m_stores[std::string{key}].setVariable(std::string{variableName}, value);
 			}
 
 			/** @copydoc EmEn::Settings::set(const std::string & key, const variable_t & value) noexcept */
 			void
-			set (const std::string & key, const char * value) noexcept
+			set (std::string_view settingPath, const char * value) noexcept
 			{
-				this->set(key, std::string{value});
+				this->set(settingPath, std::string{value});
 			}
 
 			/**
 			 * @brief Sets a value in an array of the store.
 			 * @tparam variable_t The type of the value.
-			 * @param key A reference to a string for the array name.
+			 * @param settingPath A string view.
 			 * @param value A reference to a value to save.
 			 * @return void
 			 */
-			template< typename variable_t >
+			template< SettingType variable_t >
 			void
-			setInArray (const std::string & key, const variable_t & value) noexcept requires ( std::is_same_v< variable_t, bool > || std::is_same_v< variable_t, int32_t > || std::is_same_v< variable_t, uint32_t > || std::is_same_v< variable_t, int64_t > || std::is_same_v< variable_t, uint64_t > || std::is_same_v< variable_t, float > || std::is_same_v< variable_t, double > || std::is_same_v< variable_t, std::string > )
+			setInArray (std::string_view settingPath, const variable_t & value) noexcept
 			{
-				std::string name{};
+				const std::unique_lock< std::shared_mutex > lock{m_storeAccess};
 
-				this->parseKey(key, name)->setVariableInArray(name, value);
+				const auto & [key, variableName] = Settings::parseAccessKey(settingPath);
+
+				m_stores[std::string{key}].setVariableInArray(std::string{variableName}, value);
 			}
 
 			/** @copydoc EmEn::Settings::setInArray(const std::string & key, const variable_t & value) noexcept */
 			void
-			setInArray (const std::string & key, const char * value) noexcept
+			setInArray (std::string_view settingPath, const char * value) noexcept
 			{
-				this->setInArray(key, std::string{value});
+				this->setInArray(settingPath, std::string{value});
+			}
+
+			/**
+			 * @brief Checks the present of a variable in the settings.
+			 * @param settingPath A string view.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool variableExists (std::string_view settingPath) const noexcept;
+
+			/**
+			 * @brief Checks the present of an array in the settings.
+			 * @param settingPath A string view.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool arrayExists (std::string_view settingPath) const noexcept;
+
+			/**
+			 * @brief Returns whether a variable as an array is empty.
+			 * @param settingPath A string view.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool isArrayEmpty (std::string_view settingPath) const noexcept;
+
+			/**
+			 * @brief Returns a variable from settings with a key.
+			 * @tparam variable_t The variable type.
+			 * @param key A reference to a string for the variable name.
+			 * @param defaultValue The default value. Default none.
+			 * @return variable_t
+			 */
+			template< SettingType variable_t >
+			[[nodiscard]]
+			variable_t
+			get (const std::string & key, const variable_t & defaultValue = {}) const noexcept
+			{
+				const std::shared_lock< std::shared_mutex > lock{m_storeAccess};
+
+				if ( const auto value = this->getVariable(key); value.has_value() )
+				{
+					return Settings::convertAnyTo< variable_t >(value, defaultValue);
+				}
+
+				return defaultValue;
+			}
+
+			/**
+			 * @brief Returns a single variable from settings.
+			 * @tparam variable_t The variable type.
+			 * @param key A reference to a string for the variable name.
+			 * @param defaultValue The default value. Default none.
+			 * @return variable_t
+			 */
+			template< SettingType variable_t >
+			[[nodiscard]]
+			variable_t
+			getOrSetDefault (const std::string & key, const variable_t & defaultValue = {}) noexcept
+			{
+				const std::unique_lock< std::shared_mutex > lock{m_storeAccess};
+
+				const auto [storeKey, variableName] = Settings::parseAccessKey(key);
+
+				auto & store = m_stores[std::string{storeKey}];
+
+				if ( const auto * valuePtr = store.getValuePointer(variableName) )
+				{
+					return Settings::convertAnyTo< variable_t >(*valuePtr, defaultValue);
+				}
+
+				store.setVariable(std::string{variableName}, defaultValue);
+
+				return defaultValue;
 			}
 
 			/**
 			 * @brief Returns a vector of typed data.
 			 * @note If one or more item of the array do not fit the desired type, it will be ignored.
 			 * @tparam variable_t The type of the value.
-			 * @param key A reference to a string for the variable name.
+			 * @param settingPath A string view.
 			 * @return std::vector< std::string >
 			 */
-			template< typename variable_t >
+			template< SettingType variable_t >
 			[[nodiscard]]
-			std::vector< std::string >
-			getArrayAs (const std::string & key) const noexcept requires ( std::is_same_v< variable_t, bool > || std::is_same_v< variable_t, int32_t > || std::is_same_v< variable_t, uint32_t > || std::is_same_v< variable_t, int64_t > || std::is_same_v< variable_t, uint64_t > || std::is_same_v< variable_t, float > || std::is_same_v< variable_t, double > || std::is_same_v< variable_t, std::string > )
+			std::vector< variable_t >
+			getArrayAs (std::string_view settingPath) const noexcept
 			{
-				std::string name;
+				const std::shared_lock< std::shared_mutex > lock{m_storeAccess};
 
-				const auto * store = this->parseKey(key, name);
+				const auto & [key, variableName] = Settings::parseAccessKey(settingPath);
 
-				/* NOTE : Check if the variable is actually an array. */
-				if ( store == nullptr || !store->arrayExists(name) )
+				const auto storeIt = m_stores.find(key);
+
+				if ( storeIt == m_stores.end() )
 				{
 					return {};
 				}
 
-				const auto * array = store->getArrayPointer(name);
+				const auto * array = storeIt->second.getArrayPointer(variableName);
+
+				if ( array == nullptr )
+				{
+					return {};
+				}
 
 				std::vector< variable_t > list;
 				list.reserve(array->size());
@@ -812,14 +507,14 @@ namespace EmEn
 					{
 						if ( item.type() == typeid(double) )
 						{
-							list.emplace_back(static_cast< float >(std::any_cast< double >(item)));
+							list.push_back(static_cast< float >(std::any_cast< double >(item)));
 						}
 					}
 					else
 					{
 						if ( item.type() == typeid(variable_t) )
 						{
-							list.emplace_back(std::any_cast< variable_t >(item));
+							list.push_back(std::any_cast< variable_t >(item));
 						}
 					}
 				}
@@ -828,24 +523,67 @@ namespace EmEn
 			}
 
 			/**
-			 * @brief Returns whether a variable as an array is empty.
-			 * @param key A reference to a string for the variable name.
+			 * @brief Empties an existing array.
+			 * @param settingPath A string view.
+			 * @return void
+			 */
+			void
+			clearArray (std::string_view settingPath) noexcept
+			{
+				const std::unique_lock< std::shared_mutex > lock{m_storeAccess};
+
+				const auto & [key, variableName] = Settings::parseAccessKey(settingPath);
+
+				const auto storeIt = m_stores.find(key);
+
+				if ( storeIt == m_stores.end() )
+				{
+					return;
+				}
+
+				storeIt->second.clearArray(variableName);
+			}
+
+			/**
+			 * @brief Removes a key from settings.
+			 * @param settingPath A string view.
+			 * @return void
+			 */
+			void
+			removeKey (std::string_view settingPath) noexcept
+			{
+				const std::unique_lock< std::shared_mutex > lock{m_storeAccess};
+
+				const auto & [key, variableName] = Settings::parseAccessKey(settingPath);
+
+				const auto storeIt = m_stores.find(key);
+
+				if ( storeIt == m_stores.end() )
+				{
+					return;
+				}
+
+				storeIt->second.removeKey(std::string{variableName});
+			}
+
+			/**
+			 * @brief Clears the settings.
+			 * @return void
+			 */
+			void
+			clear () noexcept
+			{
+				const std::unique_lock< std::shared_mutex > lock{m_storeAccess};
+
+				m_stores.clear();
+			}
+
+			/**
+			 * @brief Saves the settings in the file.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool isArrayEmpty (const std::string & key) const noexcept;
-
-			/**
-			 * @brief Returns the instance of the settings manager.
-			 * @return Settings *
-			 */
-			[[nodiscard]]
-			static
-			Settings *
-			instance () noexcept
-			{
-				return s_instance;
-			}
+			bool save () const noexcept;
 
 		private:
 
@@ -856,21 +594,286 @@ namespace EmEn
 			bool onTerminate () noexcept override;
 
 			/**
+			 * @brief Parses a raw key to get the store name and the variable.
+			 * @param settingPath A string view.
+			 * @return std::pair< std::string_view, std::string_view >
+			 */
+			[[nodiscard]]
+			static std::pair< std::string_view, std::string_view > parseAccessKey (std::string_view settingPath) noexcept;
+
+			/**
 			 * @brief Returns a variable from settings.
-			 * @param key The name of the configuration key.
+			 * @param settingPath A string view.
 			 * @return std::string
 			 */
 			[[nodiscard]]
-			std::any get (const std::string & key) const noexcept;
+			std::any getVariable (std::string_view settingPath) const noexcept;
+
+			/**
+			 * @brief Converts std::any to the desired type for Settings::get() and Settings::getOrSetDefault().
+			 * @tparam variable_t The type of the variable.
+			 * @param value A reference to as std::any.
+			 * @param defaultValue A reference to a default value.
+			 * @return variable_t
+			 */
+			template< SettingType variable_t >
+			[[nodiscard]]
+			static
+			variable_t
+			convertAnyTo (const std::any & value, const variable_t & defaultValue)
+			{
+				if constexpr ( std::is_same_v< variable_t, bool > )
+				{
+					if ( value.type() == typeid(variable_t) )
+					{
+						return std::any_cast< variable_t >(value);
+					}
+
+					if ( value.type() == typeid(int32_t) )
+					{
+						return std::any_cast< int32_t >(value) > 0;
+					}
+
+					if ( value.type() == typeid(uint32_t) )
+					{
+						return std::any_cast< uint32_t >(value) > 0;
+					}
+
+					if ( value.type() == typeid(int64_t) )
+					{
+						return std::any_cast< int64_t >(value) > 0;
+					}
+
+					if ( value.type() == typeid(uint64_t) )
+					{
+						return std::any_cast< uint64_t >(value) > 0;
+					}
+				}
+
+				if constexpr ( std::is_same_v< variable_t, int32_t > )
+				{
+					if ( value.type() == typeid(variable_t) )
+					{
+						return std::any_cast< variable_t >(value);
+					}
+
+					if ( value.type() == typeid(bool) )
+					{
+						return std::any_cast< bool >(value) ? 1 : 0;
+					}
+
+					if ( value.type() == typeid(uint32_t) )
+					{
+						/* NOTE: Possible loss of precision on high number. */
+						return static_cast< variable_t >(std::any_cast< uint32_t >(value));
+					}
+
+					if ( value.type() == typeid(int64_t) )
+					{
+						/* NOTE: Possible loss of precision on high number. */
+						return static_cast< variable_t >(std::any_cast< int64_t >(value));
+					}
+
+					if ( value.type() == typeid(uint64_t) )
+					{
+						/* NOTE: Possible loss of precision on high number. */
+						return static_cast< variable_t >(std::any_cast< uint64_t >(value));
+					}
+				}
+
+				if constexpr ( std::is_same_v< variable_t, uint32_t > )
+				{
+					if ( value.type() == typeid(variable_t) )
+					{
+						return std::any_cast< variable_t >(value);
+					}
+
+					if ( value.type() == typeid(bool) )
+					{
+						return std::any_cast< bool >(value) ? 1 : 0;
+					}
+
+					if ( value.type() == typeid(int32_t) )
+					{
+						const auto signedValue = std::any_cast< int32_t >(value);
+
+						return signedValue >= 0 ? static_cast< variable_t >(signedValue) : defaultValue;
+					}
+
+					if ( value.type() == typeid(int64_t) )
+					{
+						const auto signedValue = std::any_cast< int64_t >(value);
+
+						/* NOTE: Possible loss of precision on high number. */
+						return signedValue >= 0 ? static_cast< variable_t >(signedValue) : defaultValue;
+					}
+
+					if ( value.type() == typeid(uint64_t) )
+					{
+						/* NOTE: Possible loss of precision on high number. */
+						return static_cast< variable_t >(std::any_cast< uint64_t >(value));
+					}
+				}
+
+				if constexpr ( std::is_same_v< variable_t, int64_t > )
+				{
+					if ( value.type() == typeid(variable_t) )
+					{
+						return std::any_cast< variable_t >(value);
+					}
+
+					if ( value.type() == typeid(bool) )
+					{
+						return std::any_cast< bool >(value) ? 1 : 0;
+					}
+
+					if ( value.type() == typeid(int32_t) )
+					{
+						return static_cast< variable_t >(std::any_cast< int32_t >(value));
+					}
+
+					if ( value.type() == typeid(uint32_t) )
+					{
+						return static_cast< variable_t >(std::any_cast< uint32_t >(value));
+					}
+
+					if ( value.type() == typeid(uint64_t) )
+					{
+						/* NOTE: Possible loss of precision on high number. */
+						return static_cast< variable_t >(std::any_cast< uint64_t >(value));
+					}
+				}
+
+				if constexpr ( std::is_same_v< variable_t, uint64_t > )
+				{
+					if ( value.type() == typeid(variable_t) )
+					{
+						return std::any_cast< variable_t >(value);
+					}
+
+					if ( value.type() == typeid(bool) )
+					{
+						return std::any_cast< bool >(value) ? 1 : 0;
+					}
+
+					if ( value.type() == typeid(int32_t) )
+					{
+						const auto signedValue = std::any_cast< int32_t >(value);
+
+						return signedValue >= 0 ? static_cast< variable_t >(signedValue) : defaultValue;
+					}
+
+					if ( value.type() == typeid(uint32_t) )
+					{
+						return static_cast< variable_t >(std::any_cast< uint32_t >(value));
+					}
+
+					if ( value.type() == typeid(int64_t) )
+					{
+						const auto signedValue = std::any_cast< int64_t >(value);
+
+						return signedValue >= 0 ? static_cast< variable_t >(signedValue) : defaultValue;
+					}
+				}
+
+				if constexpr ( std::is_same_v< variable_t, float > )
+				{
+					if ( value.type() == typeid(variable_t) )
+					{
+						return std::any_cast< variable_t >(value);
+					}
+
+					if ( value.type() == typeid(double) )
+					{
+						/* NOTE: Possible loss of precision on high number. */
+						return static_cast< variable_t >(std::any_cast< double >(value));
+					}
+
+					if ( value.type() == typeid(bool) )
+					{
+						return std::any_cast< bool >(value) ? 1 : 0;
+					}
+
+					if ( value.type() == typeid(int32_t) )
+					{
+						return static_cast< variable_t >(std::any_cast< int32_t >(value));
+					}
+
+					if ( value.type() == typeid(uint32_t) )
+					{
+						return static_cast< variable_t >(std::any_cast< uint32_t >(value));
+					}
+
+					if ( value.type() == typeid(int64_t) )
+					{
+						/* NOTE: Possible loss of precision on high number. */
+						return static_cast< variable_t >(std::any_cast< int64_t >(value));
+					}
+
+					if ( value.type() == typeid(uint64_t) )
+					{
+						/* NOTE: Possible loss of precision on high number. */
+						return static_cast< variable_t >(std::any_cast< uint64_t >(value));
+					}
+				}
+
+				if constexpr ( std::is_same_v< variable_t, double > )
+				{
+					if ( value.type() == typeid(variable_t) )
+					{
+						return std::any_cast< variable_t >(value);
+					}
+
+					if ( value.type() == typeid(float) )
+					{
+						return static_cast< variable_t >(std::any_cast< float >(value));
+					}
+
+					if ( value.type() == typeid(bool) )
+					{
+						return std::any_cast< bool >(value) ? 1 : 0;
+					}
+
+					if ( value.type() == typeid(int32_t) )
+					{
+						return static_cast< variable_t >(std::any_cast< int32_t >(value));
+					}
+
+					if ( value.type() == typeid(uint32_t) )
+					{
+						return static_cast< variable_t >(std::any_cast< uint32_t >(value));
+					}
+
+					if ( value.type() == typeid(int64_t) )
+					{
+						return static_cast< variable_t >(std::any_cast< int64_t >(value));
+					}
+
+					if ( value.type() == typeid(uint64_t) )
+					{
+						return static_cast< variable_t >(std::any_cast< uint64_t >(value));
+					}
+				}
+
+				if constexpr ( std::is_same_v< variable_t, std::string > )
+				{
+					if ( value.type() == typeid(variable_t) )
+					{
+						return std::any_cast< variable_t >(value);
+					}
+				}
+
+				return defaultValue;
+			}
 
 			/**
 			 * @brief Reads a sublevel of the settings file.
 			 * @param data A reference to the JSON node for the level to read.
-			 * @param store A reference to the setting store.
+			 * @param key A reference to a string.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool readLevel (const Json::Value & data, SettingStore & store) noexcept;
+			bool readLevel (const Json::Value & data, const std::string & key) noexcept;
 
 			/**
 			 * @brief Reads a settings file.
@@ -881,42 +884,12 @@ namespace EmEn
 			bool readFile (const std::filesystem::path & filepath) noexcept;
 
 			/**
-			 * @brief Writes a sublevel to a settings file.
-			 * @param store A reference to the current store.
-			 * @param data A reference to the JSON node being written.
-			 * @return bool
-			 */
-			[[nodiscard]]
-			bool writeLevel (const SettingStore & store, Json::Value & data) const noexcept;
-
-			/**
 			 * @brief Writes a settings file.
 			 * @param filepath A reference to a path.
 			 * @return bool
 			 */
 			[[nodiscard]]
 			bool writeFile (const std::filesystem::path & filepath) const noexcept;
-
-			/**
-			 * @brief Parse a JSON path key a returns the store and the last part of the path.
-			 * @note This method will return nullptr, if the store is not found or the last
-			 * part is not part of variables from the store or a store itself.
-			 * @param key A reference to a string for the JSON path key.
-			 * @param variableName A reference to the string for the variable name.
-			 * @return const SettingStore *
-			 */
-			[[nodiscard]]
-			const SettingStore * parseKey (const std::string & key, std::string & variableName) const noexcept;
-
-			/**
-			 * @brief Parse a JSON path key a returns the store and the last part of the path.
-			 * @note This version will build the path.
-			 * @param key A reference to a string for the JSON path key.
-			 * @param variableName A reference to the string for the variable name.
-			 * @return SettingStore *
-			 */
-			[[nodiscard]]
-			SettingStore * parseKey (const std::string & key, std::string & variableName) noexcept;
 
 			/**
 			 * @brief STL streams printable object.
@@ -926,28 +899,15 @@ namespace EmEn
 			 */
 			friend std::ostream & operator<< (std::ostream & out, const Settings & obj);
 
-			static Settings * s_instance;
-
-			/* Flag names. */
-			static constexpr auto ServiceInitialized{0UL};
-			static constexpr auto ChildProcess{1UL};
-			static constexpr auto ShowInformation{2UL};
-			static constexpr auto SaveAtExit{3UL};
-
 			const Arguments & m_arguments;
 			const FileSystem & m_fileSystem;
-			SettingStore m_store;
+			std::map< std::string, SettingStore, std::less<> > m_stores;
 			std::filesystem::path m_filepath;
-			std::array< bool, 8 > m_flags{
-				false/*ServiceInitialized*/,
-				false/*ChildProcess*/,
-				false/*ShowInformation*/,
-				false/*SaveAtExit*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/
-			};
+			mutable std::shared_mutex m_storeAccess;
+			bool m_serviceInitialized{false};
+			bool m_childProcess{false};
+			bool m_showInformation{false};
+			bool m_saveAtExit{false};
 	};
 
 	/**

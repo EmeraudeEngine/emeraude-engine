@@ -66,13 +66,11 @@ namespace EmEn::Graphics::RenderableInstance
 
 		if ( this->updateLocalData(instanceLocations, 0) )
 		{
+			auto * transferManager = TransferManager::instance(DeviceWorkType::Graphics);
+
 			/* Create a vertex buffer object to hold locations in video memory
 			 * according to the size of local data. */
-			if ( this->createOnHardware(*TransferManager::instance(GPUWorkType::Graphics)) )
-			{
-				this->observe(renderable.get());
-			}
-			else
+			if ( transferManager == nullptr || !this->createOnHardware(*transferManager) )
 			{
 				this->setBroken("Unable to create the model matrices VBO !");
 			}
@@ -108,11 +106,9 @@ namespace EmEn::Graphics::RenderableInstance
 
 		/* Create a vertex buffer object to hold locations in video memory
 		 * according to the size of local data. */
-		if ( this->createOnHardware(*TransferManager::instance(GPUWorkType::Graphics)) )
-		{
-			this->observe(renderable.get());
-		}
-		else
+		auto * transferManager = TransferManager::instance(DeviceWorkType::Graphics);
+
+		if ( transferManager == nullptr || !this->createOnHardware(*transferManager) )
 		{
 			this->setBroken("Unable to create the model matrices VBO !");
 		}

@@ -30,38 +30,15 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
-#include <array>
 #include <vector>
 #include <memory>
 #include <type_traits>
 
 /* Local inclusions for usage. */
-#include "AbstractEntity.hpp"
-#include "BuiltEntity.hpp"
-#include "Component/Abstract.hpp"
-#include "Component/AbstractLightEmitter.hpp"
-#include "Component/Camera.hpp"
-#include "Component/DirectionalLight.hpp"
-#include "Component/PointLight.hpp"
-#include "Component/SphericalPushModifier.hpp"
-#include "Component/SpotLight.hpp"
-#include "Component/Visual.hpp"
-#include "Constants.hpp"
-#include "Graphics/Geometry/Interface.hpp"
 #include "Graphics/Geometry/ResourceGenerator.hpp"
-#include "Graphics/Material/Interface.hpp"
-#include "Graphics/Renderable/MeshResource.hpp"
 #include "Graphics/Renderable/SimpleMeshResource.hpp"
-#include "Libs/Math/Base.hpp"
-#include "Libs/Math/CartesianFrame.hpp"
-#include "Libs/Math/Vector.hpp"
-#include "Node.hpp"
-#include "Physics/Physics.hpp"
-#include "Libs/PixelFactory/Color.hpp"
-#include "Resources/Manager.hpp"
 #include "Scenes/Scene.hpp"
-#include "StaticEntity.hpp"
-#include "Libs/VertexFactory/Shape.hpp"
+#include "BuiltEntity.hpp"
 
 namespace EmEn::Scenes
 {
@@ -93,14 +70,28 @@ namespace EmEn::Scenes
 
 			/**
 			 * @brief Constructs the toolkit to help at building a scene.
+			 * @param resourceManager A reference to the resource manager.
 			 * @param scene A reference to a scene smart pointer.
 			 */
 			explicit
-			Toolkit (const std::shared_ptr< Scene > & scene = {}) noexcept
-				: m_scene{scene}
+			Toolkit (Resources::Manager & resourceManager, const std::shared_ptr< Scene > & scene = {}) noexcept
+				: m_resourceManager{resourceManager},
+				m_scene{scene}
 			{
 
 			}
+
+			/**
+			 * @brief Gives access to the resource manager.
+			 * @return Resources::Manager &
+			 */
+			[[nodiscard]]
+			Resources::Manager &
+			resourceManager () const noexcept
+			{
+				return m_resourceManager;
+			}
+
 			/**
 			 * @brief Enables or disable the debug mode. This will force debugging over all created things.
 			 * @param state The state.
@@ -109,7 +100,7 @@ namespace EmEn::Scenes
 			Toolkit &
 			enableDebug (bool state) noexcept
 			{
-				m_flags[Debug] = state;
+				m_debug = state;
 
 				return *this;
 			}
@@ -122,7 +113,7 @@ namespace EmEn::Scenes
 			bool
 			isDebugEnabled () const noexcept
 			{
-				return m_flags[Debug];
+				return m_debug;
 			}
 
 			/**
@@ -149,7 +140,7 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			 * @brief Sets the cursor position of the builder at world location.
+			 * @brief Sets the cursor position of the builder at the world location.
 			 * @param xPosition The position on X axis.
 			 * @param yPosition The position on Y axis.
 			 * @param zPosition The position on Z axis.
@@ -165,7 +156,7 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			 * @brief Sets the cursor position of the builder at world location using a vector.
+			 * @brief Sets the cursor position of the builder at the world location using a vector.
 			 * @param position A vector to define the position.
 			 * @return Toolkit &
 			 */
@@ -179,8 +170,8 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			 * @brief Sets the cursor position of the builder at world location using coordinates.
-			 * @param coordinates A coordinates to extract the position from.
+			 * @brief Sets the cursor position of the builder at the world location using coordinates.
+			 * @param coordinates A reference to a cartesian frame to extract the position from.
 			 * @return Toolkit &
 			 */
 			Toolkit &
@@ -218,7 +209,7 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			 * @brief Sets a node where next entity component will be generated instead of creating a new one.
+			 * @brief Sets a node where the next entity component will be generated instead of creating a new one.
 			 * @param node A reference to a scene node smart pointer.
 			 * @return Toolkit &
 			 */
@@ -246,7 +237,7 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			 * @brief Reset the entity generation state of the toolkit to default.
+			 * @brief Reset the entity generation state of the toolkit by default.
 			 * @return Toolkit &
 			 */
 			Toolkit &
@@ -383,7 +374,7 @@ namespace EmEn::Scenes
 
 				if ( showModel )
 				{
-					entity->enableVisualDebug(VisualDebugType::Camera);
+					entity->enableVisualDebug(m_resourceManager, VisualDebugType::Camera);
 				}
 
 				return {entity, component};
@@ -556,7 +547,7 @@ namespace EmEn::Scenes
 			 * @tparam entity_t The type of entity, a scene node or a static entity. Default, 'StaticEntity'.
 			 * @param entityName A reference to a string.
 			 * @param meshResource A mesh resource smart pointer. Default mesh resource.
-			 * @param enablePhysicalProperties Enable physicals properties on the new component. Default true.
+			 * @param enablePhysicalProperties Enable physical properties on the new component. Default true.
 			 * @param enableLighting Enable the lighting. Default true.
 			 * @return BuiltEntity< entity_t, Component::Visual >
 			 */
@@ -573,7 +564,7 @@ namespace EmEn::Scenes
 
 				if ( meshResource == nullptr )
 				{
-					meshResource = Resources::Manager::instance()->container< Graphics::Renderable::MeshResource >()->getDefaultResource();
+					meshResource = m_resourceManager.container< Graphics::Renderable::MeshResource >()->getDefaultResource();
 				}
 
 				return {entity, entity->newVisual(meshResource, enablePhysicalProperties, enableLighting, entityName)};
@@ -584,7 +575,7 @@ namespace EmEn::Scenes
 			 * @tparam entity_t The type of entity, a scene node or a static entity. Default, 'StaticEntity'.
 			 * @param entityName A reference to a string.
 			 * @param simpleMeshResource A simple mesh resource smart pointer. Default simple mesh resource.
-			 * @param enablePhysicalProperties Enable physicals properties on the new component. Default true.
+			 * @param enablePhysicalProperties Enable physical properties on the new component. Default true.
 			 * @param enableLighting Enable the lighting. Default true.
 			 * @return BuiltEntity< entity_t, Component::Visual >
 			 */
@@ -601,7 +592,7 @@ namespace EmEn::Scenes
 
 				if ( simpleMeshResource == nullptr )
 				{
-					simpleMeshResource = Resources::Manager::instance()->container< Graphics::Renderable::SimpleMeshResource >()->getDefaultResource();
+					simpleMeshResource = m_resourceManager.container< Graphics::Renderable::SimpleMeshResource >()->getDefaultResource();
 				}
 
 				return {entity, entity->newVisual(simpleMeshResource, enablePhysicalProperties, enableLighting, entityName)};
@@ -613,7 +604,7 @@ namespace EmEn::Scenes
 			 * @param entityName A reference to a string.
 			 * @param geometryResource A geometry smart pointer. Default geometry resource.
 			 * @param materialResource A material smart pointer. Default material resource.
-			 * @param enablePhysicalProperties Enable physicals properties on the new component. Default true.
+			 * @param enablePhysicalProperties Enable physical properties on the new component. Default true.
 			 * @param enableLighting Enable the lighting. Default true.
 			 * @return BuiltEntity< entity_t, Component::Visual >
 			 */
@@ -621,26 +612,24 @@ namespace EmEn::Scenes
 			BuiltEntity< entity_t, Component::Visual >
 			generateMeshInstance (const std::string & entityName, std::shared_ptr< Graphics::Geometry::Interface > geometryResource = nullptr, std::shared_ptr< Graphics::Material::Interface > materialResource = nullptr, bool enablePhysicalProperties = true, bool enableLighting = true) noexcept requires (std::is_base_of_v< AbstractEntity, entity_t >)
 			{
-				auto * resources = Resources::Manager::instance();
-
 				if ( geometryResource == nullptr )
 				{
-					geometryResource = resources->container< Graphics::Geometry::IndexedVertexResource >()->getDefaultResource();
+					geometryResource = m_resourceManager.container< Graphics::Geometry::IndexedVertexResource >()->getDefaultResource();
 				}
 
 				if ( materialResource == nullptr )
 				{
-					materialResource = resources->container< Graphics::Material::BasicResource >()->getDefaultResource();
+					materialResource = m_resourceManager.container< Graphics::Material::BasicResource >()->getDefaultResource();
 				}
 
 				if ( geometryResource->subGeometryCount() > 1 )
 				{
-					const auto meshResource = Graphics::Renderable::MeshResource::getOrCreate(geometryResource, materialResource);
+					const auto meshResource = Graphics::Renderable::MeshResource::getOrCreate(m_resourceManager, geometryResource, materialResource);
 
 					return generateMeshInstance< entity_t >(entityName, meshResource, enablePhysicalProperties, enableLighting);
 				}
 
-				const auto simpleMeshResource = Graphics::Renderable::SimpleMeshResource::getOrCreate(geometryResource, materialResource);
+				const auto simpleMeshResource = Graphics::Renderable::SimpleMeshResource::getOrCreate(m_resourceManager, geometryResource, materialResource);
 
 				return generateMeshInstance< entity_t >(entityName, simpleMeshResource, enablePhysicalProperties, enableLighting);
 			}
@@ -652,7 +641,7 @@ namespace EmEn::Scenes
 			 * @param entityName A reference to a string.
 			 * @param shape A reference to a vertex factory shape.
 			 * @param materialResource A reference to a material smart pointer. Default material resource.
-			 * @param enablePhysicalProperties Enable physicals properties on the new component. Default true.
+			 * @param enablePhysicalProperties Enable physical properties on the new component. Default true.
 			 * @param enableLighting Enable the lighting. Default true.
 			 * @return BuiltEntity< entity_t, Component::Visual >
 			 */
@@ -662,7 +651,7 @@ namespace EmEn::Scenes
 			{
 				using namespace Graphics;
 
-				const Geometry::ResourceGenerator generator{*Resources::Manager::instance(), Geometry::EnableTangentSpace | Geometry::EnablePrimaryTextureCoordinates};
+				const Geometry::ResourceGenerator generator{m_resourceManager, Geometry::EnableTangentSpace | Geometry::EnablePrimaryTextureCoordinates};
 
 				const auto geometryResource = generator.shape(shape, entityName);
 
@@ -679,7 +668,7 @@ namespace EmEn::Scenes
 			 * @tparam entity_t The type of entity, a scene node or a static entity. Default, 'StaticEntity'.
 			 * @param entityName A reference to a string.
 			 * @param spriteResource A sprite resource smart pointer. Default sprite resource.
-			 * @param enablePhysicalProperties Enable physicals properties on the new component. Default true.
+			 * @param enablePhysicalProperties Enable physical properties on the new component. Default true.
 			 * @param enableLighting Enable the lighting. Default true.
 			 * @return BuiltEntity< entity_t, Component::Visual >
 			 */
@@ -696,7 +685,7 @@ namespace EmEn::Scenes
 
 				if ( spriteResource == nullptr )
 				{
-					spriteResource = Resources::Manager::instance()->container< Graphics::Renderable::SpriteResource >()->getDefaultResource();
+					spriteResource = m_resourceManager.container< Graphics::Renderable::SpriteResource >()->getDefaultResource();
 				}
 
 				return {entity, entity->newVisual(spriteResource, enablePhysicalProperties, enableLighting, entityName)};
@@ -709,7 +698,7 @@ namespace EmEn::Scenes
 			 * @param entityName A reference to a string.
 			 * @param size The dimension of the cuboid.
 			 * @param materialResource A material resource. Default random.
-			 * @param enablePhysicalProperties Enable physicals properties on the new component. Default true.
+			 * @param enablePhysicalProperties Enable physical properties on the new component. Default true.
 			 * @param enableLighting Enable the lighting. Default true.
 			 * @return BuiltEntity< entity_t, Component::Visual >
 			 */
@@ -717,12 +706,12 @@ namespace EmEn::Scenes
 			BuiltEntity< entity_t, Component::Visual >
 			generateCuboidInstance (const std::string & entityName, const Libs::Math::Vector< 3, float > & size, const std::shared_ptr< Graphics::Material::Interface > & materialResource = nullptr, bool enablePhysicalProperties = true, bool enableLighting = true) noexcept requires (std::is_base_of_v< AbstractEntity, entity_t >)
 			{
-				using namespace EmEn::Libs;
-				using namespace EmEn::Libs::Math;
+				using namespace Libs;
+				using namespace Libs::Math;
 				using namespace Graphics;
 				using namespace Physics;
 
-				const Geometry::ResourceGenerator generator{*Resources::Manager::instance(), Geometry::EnableTangentSpace | Geometry::EnablePrimaryTextureCoordinates};
+				const Geometry::ResourceGenerator generator{m_resourceManager, Geometry::EnableTangentSpace | Geometry::EnablePrimaryTextureCoordinates};
 
 				const auto geometryResource = generator.cuboid(size, entityName);
 
@@ -754,7 +743,7 @@ namespace EmEn::Scenes
 			 * @param entityName A reference to a string.
 			 * @param size The uniform size of the cube.
 			 * @param materialResource A material resource. Default random.
-			 * @param enablePhysicalProperties Enable physicals properties on the new component. Default true.
+			 * @param enablePhysicalProperties Enable physical properties on the new component. Default true.
 			 * @param enableLighting Enable the lighting. Default true.
 			 * @return BuiltEntity< entity_t, Component::Visual >
 			 */
@@ -773,7 +762,7 @@ namespace EmEn::Scenes
 			 * @param radius The radius of the sphere.
 			 * @param materialResource A reference to a material smart pointer. Default nullptr.
 			 * @param useGeodesic Use a geodesic sphere instead of a classic one. Default, 'false'.
-			 * @param enablePhysicalProperties Enable physicals properties on the new component. Default true.
+			 * @param enablePhysicalProperties Enable physical properties on the new component. Default true.
 			 * @param enableLighting Enable the lighting. Default true.
 			 * @return BuiltEntity< entity_t, Component::Visual >
 			 */
@@ -781,12 +770,12 @@ namespace EmEn::Scenes
 			BuiltEntity< entity_t, Component::Visual >
 			generateSphereInstance (const std::string & entityName, float radius, const std::shared_ptr< Graphics::Material::Interface > & materialResource = nullptr, bool useGeodesic = false, bool enablePhysicalProperties = true, bool enableLighting = true) noexcept requires (std::is_base_of_v< AbstractEntity, entity_t >)
 			{
-				using namespace EmEn::Libs;
-				using namespace EmEn::Libs::Math;
-				using namespace EmEn::Graphics;
-				using namespace EmEn::Physics;
+				using namespace Libs;
+				using namespace Libs::Math;
+				using namespace Graphics;
+				using namespace Physics;
 
-				const Geometry::ResourceGenerator generator{*Resources::Manager::instance(), Geometry::EnableTangentSpace | Geometry::EnablePrimaryTextureCoordinates};
+				const Geometry::ResourceGenerator generator{m_resourceManager, Geometry::EnableTangentSpace | Geometry::EnablePrimaryTextureCoordinates};
 
 				const auto geometryResource = useGeodesic ?
 					generator.geodesicSphere(radius, 2, entityName) :
@@ -834,8 +823,8 @@ namespace EmEn::Scenes
 			BuiltEntity< entity_t, Component::SphericalPushModifier >
 			generateSphericalPushModifier (const std::string & entityName, float magnitude) noexcept requires (std::is_base_of_v< AbstractEntity, entity_t >)
 			{
-				using namespace EmEn::Libs;
-				using namespace EmEn::Libs::Math;
+				using namespace Libs;
+				using namespace Libs::Math;
 
 				/* Create the entity. */
 				auto entity = this->generateEntity< entity_t >(entityName);
@@ -869,21 +858,13 @@ namespace EmEn::Scenes
 
 			static size_t s_autoEntityCount;
 
+			Resources::Manager & m_resourceManager;
 			std::shared_ptr< Scene > m_scene;
 			GenPolicy m_nodeGenerationPolicy{GenPolicy::Simple};
 			std::shared_ptr< Node > m_previousNode{};
 			GenPolicy m_staticEntityGenerationPolicy{GenPolicy::Simple};
 			std::shared_ptr< StaticEntity > m_previousStaticEntity{};
 			Libs::Math::CartesianFrame< float > m_cursorFrame{};
-			std::array< bool, 8 > m_flags{
-				false/*Debug*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/
-			};
+			bool m_debug{false};
 	};
 }

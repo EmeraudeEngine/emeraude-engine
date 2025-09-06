@@ -102,14 +102,14 @@ namespace EmEn::Graphics
 				return ClassId;
 			}
 
-			/** @copydoc EmEn::Resources::ResourceTrait::load() */
-			bool load () noexcept override;
+			/** @copydoc EmEn::Resources::ResourceTrait::load(Resources::Manager &) */
+			bool load (Resources::Manager & resourceManager) noexcept override;
 
-			/** @copydoc EmEn::Resources::ResourceTrait::load(const std::filesystem::path &) */
-			bool load (const std::filesystem::path & filepath) noexcept override;
+			/** @copydoc EmEn::Resources::ResourceTrait::load(Resources::Manager &, const std::filesystem::path &) */
+			bool load (Resources::Manager & resourceManager, const std::filesystem::path & filepath) noexcept override;
 
-			/** @copydoc EmEn::Resources::ResourceTrait::load(const Json::Value &) */
-			bool load (const Json::Value & data) noexcept override;
+			/** @copydoc EmEn::Resources::ResourceTrait::load(Resources::Manager &, const Json::Value &) */
+			bool load (Resources::Manager & resourceManager, const Json::Value & data) noexcept override;
 
 			/** @copydoc EmEn::Resources::ResourceTrait::memoryOccupied() const noexcept */
 			[[nodiscard]]
@@ -243,17 +243,19 @@ namespace EmEn::Graphics
 
 			/**
 			 * @brief Loads a movie based on a numerical sequence of files.
+			 * @param resourceManager A reference to the resource manager.
 			 * @param data A reference to a JSON value.
 			 * @return bool
 			 */
-			bool loadParametric (const Json::Value & data) noexcept;
+			bool loadParametric (Resources::Manager & resourceManager, const Json::Value & data) noexcept;
 
 			/**
 			 * @brief Loads a manual version of a movie.
+			 * @param resourceManager A reference to the resource manager.
 			 * @param data A reference to a JSON value.
 			 * @return bool
 			 */
-			bool loadManual (const Json::Value & data) noexcept;
+			bool loadManual (Resources::Manager & resourceManager, const Json::Value & data) noexcept;
 
 			/**
 			 * @brief Updates the full duration of the movie.

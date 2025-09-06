@@ -40,11 +40,11 @@ namespace EmEn::Vulkan
 	Sampler::Sampler (const std::shared_ptr< Device > & device, Settings & settings, VkSamplerCreateFlags createFlags) noexcept
 		: AbstractDeviceDependentObject{device}
 	{
-		const auto magFilter = settings.get< std::string >(GraphicsTextureMagFilteringKey, DefaultGraphicsTextureFiltering);
-		const auto minFilter = settings.get< std::string >(GraphicsTextureMinFilteringKey, DefaultGraphicsTextureFiltering);
-		const auto mipmapMode = settings.get< std::string >(GraphicsTextureMipFilteringKey, DefaultGraphicsTextureFiltering);
-		const auto mipLevels = settings.get< float >(GraphicsTextureMipMappingLevelsKey, DefaultGraphicsTextureMipMappingLevels);
-		const auto anisotropyLevels = settings.get< float >(GraphicsTextureAnisotropyLevelsKey, DefaultGraphicsTextureAnisotropy);
+		const auto magFilter = settings.getOrSetDefault< std::string >(GraphicsTextureMagFilteringKey, DefaultGraphicsTextureFiltering);
+		const auto minFilter = settings.getOrSetDefault< std::string >(GraphicsTextureMinFilteringKey, DefaultGraphicsTextureFiltering);
+		const auto mipmapMode = settings.getOrSetDefault< std::string >(GraphicsTextureMipFilteringKey, DefaultGraphicsTextureFiltering);
+		const auto mipLevels = settings.getOrSetDefault< float >(GraphicsTextureMipMappingLevelsKey, DefaultGraphicsTextureMipMappingLevels);
+		const auto anisotropyLevels = settings.getOrSetDefault< float >(GraphicsTextureAnisotropyLevelsKey, DefaultGraphicsTextureAnisotropy);
 
 		m_createInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
 		m_createInfo.pNext = nullptr;

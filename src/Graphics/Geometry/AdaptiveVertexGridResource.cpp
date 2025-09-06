@@ -40,11 +40,11 @@ const size_t EmEn::Resources::Container< EmEn::Graphics::Geometry::AdaptiveVerte
 
 namespace EmEn::Graphics::Geometry
 {
-	using namespace EmEn::Libs;
-	using namespace EmEn::Libs::Math;
-	using namespace EmEn::Libs::VertexFactory;
-	using namespace EmEn::Libs::PixelFactory;
-	using namespace EmEn::Vulkan;
+	using namespace Libs;
+	using namespace Libs::Math;
+	using namespace Libs::VertexFactory;
+	using namespace Libs::PixelFactory;
+	using namespace Vulkan;
 
 	const size_t AdaptiveVertexGridResource::ClassUID{getClassUID(ClassId)};
 
@@ -146,7 +146,7 @@ namespace EmEn::Graphics::Geometry
 	}
 
 	bool
-	AdaptiveVertexGridResource::load () noexcept
+	AdaptiveVertexGridResource::load (Resources::Manager & /*resourceManager*/) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
@@ -159,7 +159,7 @@ namespace EmEn::Graphics::Geometry
 	}
 
 	bool
-	AdaptiveVertexGridResource::load (const Json::Value & /*data*/) noexcept
+	AdaptiveVertexGridResource::load (Resources::Manager & /*resourceManager*/, const Json::Value & /*data*/) noexcept
 	{
 		if ( !this->beginLoading() )
 		{

@@ -31,7 +31,7 @@
 
 namespace EmEn
 {
-	using namespace EmEn::Libs;
+	using namespace Libs;
 	
 	void
 	CursorAtlas::setCursor (Window & window, CursorType cursorType) noexcept
@@ -125,16 +125,16 @@ namespace EmEn
 	void
 	CursorAtlas::clear () noexcept
 	{
-		for ( const auto & cursorPair : m_standardCursors )
+		for ( const auto & cursor : m_standardCursors | std::views::values )
 		{
-			glfwDestroyCursor(cursorPair.second);
+			glfwDestroyCursor(cursor);
 		}
 
 		m_standardCursors.clear();
 
-		for ( const auto & cursorPair : m_customCursors )
+		for ( const auto & cursor : m_customCursors | std::views::values )
 		{
-			glfwDestroyCursor(cursorPair.second);
+			glfwDestroyCursor(cursor);
 		}
 
 		m_customCursors.clear();

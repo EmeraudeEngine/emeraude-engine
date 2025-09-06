@@ -40,13 +40,13 @@ const size_t EmEn::Resources::Container< EmEn::Graphics::Renderable::DynamicSkyR
 
 namespace EmEn::Graphics::Renderable
 {
-	using namespace EmEn::Libs;
-	using namespace EmEn::Libs::Math;
+	using namespace Libs;
+	using namespace Libs::Math;
 
 	const size_t DynamicSkyResource::ClassUID{getClassUID(ClassId)};
 
 	bool
-	DynamicSkyResource::load () noexcept
+	DynamicSkyResource::load (Resources::Manager & /*resourceManager*/) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
@@ -59,7 +59,7 @@ namespace EmEn::Graphics::Renderable
 	}
 
 	bool
-	DynamicSkyResource::load (const Json::Value &) noexcept
+	DynamicSkyResource::load (Resources::Manager & /*resourceManager*/, const Json::Value & /*data*/) noexcept
 	{
 		if ( !this->beginLoading() )
 		{

@@ -62,16 +62,11 @@ namespace EmEn::Scenes::Component
 	bool
 	Visual::onNotification (const ObservableTrait * observable, int notificationCode, const std::any & /*data*/) noexcept
 	{
-		if ( observable == m_renderableInstance.get() )
+		if ( observable == m_renderableInterface.lock().get() )
 		{
-			switch ( notificationCode )
+			if ( notificationCode == Resources::ResourceTrait::LoadFinished )
 			{
-				case RenderableInstance::Abstract::ReadyToSetupOnGPU :
-					this->notify(ComponentContentModified);
-					break;
-
-				default:
-					break;
+				this->notify(ComponentContentModified);
 			}
 
 			return true;

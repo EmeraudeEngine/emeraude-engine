@@ -48,7 +48,7 @@
 
 namespace EmEn::Input
 {
-	using namespace EmEn::Libs;
+	using namespace Libs;
 	using namespace Vulkan;
 
 	const size_t Manager::ClassUID{getClassUID(ClassId)};
@@ -68,7 +68,7 @@ namespace EmEn::Input
 			glfwSetInputMode(window, GLFW_STICKY_KEYS, GLFW_TRUE);
 			glfwSetInputMode(window, GLFW_LOCK_KEY_MODS, GLFW_TRUE);
 
-			m_flags[IsListeningKeyboard] = true;
+			m_isListeningKeyboard = true;
 		}
 
 		/* Pointer listeners. */
@@ -82,7 +82,7 @@ namespace EmEn::Input
 			/* TODO: Make it optional */
 			glfwSetInputMode(window, GLFW_STICKY_MOUSE_BUTTONS, GLFW_TRUE);
 
-			m_flags[IsListeningPointer] = true;
+			m_isListeningPointer = true;
 		}
 
 		/* Misc. listeners. */
@@ -90,7 +90,7 @@ namespace EmEn::Input
 		glfwSetDropCallback(window, dropCallback);
 		glfwSetJoystickCallback(joystickCallback);
 
-		m_flags[WindowLinked] = true;
+		m_windowLinked = true;
 	}
 
 	void
@@ -112,13 +112,13 @@ namespace EmEn::Input
 		glfwSetDropCallback(window, nullptr);
 		glfwSetJoystickCallback(nullptr);
 
-		m_flags[WindowLinked] = false;
+		m_windowLinked = false;
 	}
 
 	void
 	Manager::enableKeyboardListening (bool state) noexcept
 	{
-		if ( m_flags[IsListeningKeyboard] == state )
+		if ( m_isListeningKeyboard == state )
 		{
 			return;
 		}
@@ -143,13 +143,13 @@ namespace EmEn::Input
 			glfwSetCharCallback(window, nullptr);
 		}
 
-		m_flags[IsListeningKeyboard] = state;
+		m_isListeningKeyboard = state;
 	}
 
 	void
 	Manager::enablePointerListening (bool state) noexcept
 	{
-		if ( m_flags[IsListeningPointer] == state )
+		if ( m_isListeningPointer == state )
 		{
 			return;
 		}
@@ -178,7 +178,7 @@ namespace EmEn::Input
 			glfwSetScrollCallback(window, nullptr);
 		}
 
-		m_flags[IsListeningPointer] = state;
+		m_isListeningPointer = state;
 	}
 
 	std::array< float, 2 >
@@ -195,7 +195,7 @@ namespace EmEn::Input
 
 		glfwGetCursorPos(window, &xPosition, &yPosition);
 
-		if ( s_instance->m_flags[PointerCoordinatesScalingEnabled] )
+		if ( s_instance->m_pointerCoordinatesScalingEnabled )
 		{
 			xPosition *= s_instance->m_pointerScalingFactors[0];
 			yPosition *= s_instance->m_pointerScalingFactors[1];
@@ -401,7 +401,7 @@ namespace EmEn::Input
 				"[AbsoluteMode] X:" << xPosition << ", Y:" << yPosition << '\n';
 		}
 
-		if ( s_instance->m_flags[PointerCoordinatesScalingEnabled] )
+		if ( s_instance->m_pointerCoordinatesScalingEnabled )
 		{
 			xPosition *= s_instance->m_pointerScalingFactors[0];
 			yPosition *= s_instance->m_pointerScalingFactors[1];
@@ -644,7 +644,7 @@ namespace EmEn::Input
 	bool
 	Manager::onInitialize () noexcept
 	{
-		m_flags[ShowInformation] = m_primaryServices.settings().get< bool >(InputShowInformationKey, DefaultInputShowInformation);
+		m_showInformation = m_primaryServices.settings().getOrSetDefault< bool >(InputShowInformationKey, DefaultInputShowInformation);
 
 		if ( !m_window.usable() )
 		{
@@ -664,7 +664,7 @@ namespace EmEn::Input
 
 			if ( !IO::fileExists(filepath) )
 			{
-				if ( m_flags[ShowInformation] )
+				if ( m_showInformation )
 				{
 					TraceInfo{ClassId} << "The file " << filepath << " is not present there !";
 				}
@@ -686,7 +686,7 @@ namespace EmEn::Input
 				continue;
 			}
 
-			if ( m_flags[ShowInformation] )
+			if ( m_showInformation )
 			{
 				TraceSuccess{ClassId} << "Update input devices from " << filepath << " succeed !";
 			}
@@ -711,7 +711,7 @@ namespace EmEn::Input
 			{
 				m_gamepadIDs.emplace(jid);
 
-				if ( m_flags[ShowInformation] )
+				if ( m_showInformation )
 				{
 					TraceSuccess{ClassId} << "Gamepad '" << glfwGetGamepadName(jid) << "' (GUID:" <<  glfwGetJoystickGUID(jid) << ") available at slot #" << jid;
 				}
@@ -720,14 +720,14 @@ namespace EmEn::Input
 			{
 				m_joystickIDs.emplace(jid);
 
-				if ( m_flags[ShowInformation] )
+				if ( m_showInformation )
 				{
 					TraceSuccess{ClassId} << "Joystick '" << glfwGetJoystickName(jid) << "' (GUID:" <<  glfwGetJoystickGUID(jid) << ") available at slot #" << jid;
 				}
 			}
 		}
 
-		m_flags[ServiceInitialized] = true;
+		m_serviceInitialized = true;
 
 		return true;
 	}
@@ -735,7 +735,7 @@ namespace EmEn::Input
 	bool
 	Manager::onTerminate () noexcept
 	{
-		m_flags[ServiceInitialized] = false;
+		m_serviceInitialized = false;
 
 		if ( !m_window.usable() )
 		{
@@ -753,17 +753,17 @@ namespace EmEn::Input
 	void
 	Manager::pollSystemEvents () const noexcept
 	{
-		if ( m_flags[CopyKeyboardStateEnabled] )
+		if ( this->isCopyKeyboardStateEnabled() )
 		{
 			KeyboardController::readDeviceState(m_window);
 		}
 
-		if ( m_flags[CopyPointerStateEnabled] )
+		if ( this->isCopyPointerStateEnabled() )
 		{
 			PointerController::readDeviceState(m_window);
 		}
 
-		if ( m_flags[CopyJoysticksStateEnabled] )
+		if ( this->isCopyJoysticksStateEnabled() )
 		{
 			for ( const auto & joystickID : m_joystickIDs )
 			{
@@ -771,7 +771,7 @@ namespace EmEn::Input
 			}
 		}
 
-		if ( m_flags[CopyGamepadsStateEnabled] )
+		if ( this->isCopyGamepadsStateEnabled() )
 		{
 			for ( const auto & gamepadID : m_gamepadIDs )
 			{
@@ -786,7 +786,7 @@ namespace EmEn::Input
 	Manager::waitSystemEvents (double until) noexcept
 	{
 		/* This function is blocking the
-		 * process by waiting an event from a system. */
+		 * process by waiting for an event from a system. */
 		if ( until > 0.0 )
 		{
 			glfwWaitEventsTimeout(until);
@@ -861,7 +861,7 @@ namespace EmEn::Input
 			glfwSetInputMode(window, GLFW_RAW_MOUSE_MOTION, GLFW_TRUE);
 		}
 
-		m_flags[PointerLocked] = true;
+		m_pointerLocked = true;
 	}
 
 	void
@@ -876,6 +876,6 @@ namespace EmEn::Input
 			glfwSetInputMode(window, GLFW_RAW_MOUSE_MOTION, GLFW_FALSE);
 		}
 
-		m_flags[PointerLocked] = false;
+		m_pointerLocked = false;
 	}
 }

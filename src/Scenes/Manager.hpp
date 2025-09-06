@@ -272,10 +272,10 @@ namespace EmEn::Scenes
 			SceneLoading loadScene (const std::shared_ptr< DefinitionResource > & sceneDefinition) noexcept;
 
 			/**
-			 * @brief Launches the process to refresh all scenes.
-			 * @return void
+			 * @brief Refreshes the active scene.
+			 * @return bool
 			 */
-			void refreshScenes () const noexcept;
+			bool refreshActiveScene () const noexcept;
 
 			/**
 			 * @brief Disables and delete a scene.

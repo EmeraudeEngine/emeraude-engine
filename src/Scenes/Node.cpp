@@ -635,7 +635,7 @@ namespace EmEn::Scenes
 		{
 			const auto * node = this;
 
-			/* While parent is not root. */
+			/* While a parent is not root. */
 			while ( node != nullptr )
 			{
 				reversedTree.emplace(node->localCoordinates());

@@ -104,7 +104,7 @@ namespace EmEn::Audio
 		}
 
 		/* Sets master volume. */
-		this->setVolume(m_primaryServices.settings().get< float >(AudioMusicVolumeKey, DefaultAudioMusicVolume));
+		this->setVolume(m_primaryServices.settings().getOrSetDefault< float >(AudioMusicVolumeKey, DefaultAudioMusicVolume));
 
 		/* NOTE: Allocating track sources (to volume 0) */
 		m_trackA = std::make_unique< Source >();

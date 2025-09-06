@@ -52,6 +52,12 @@
 #include "Stores.hpp"
 #include "Types.hpp"
 
+/* Forward declarations. */
+namespace EmEn::Resources
+{
+	class Manager;
+}
+
 namespace EmEn::Resources
 {
 	/**
@@ -94,13 +100,15 @@ namespace EmEn::Resources
 			 * @brief Constructs a resource manager for a specific resource from the template parameter.
 			 * @param [OBS][STATIC-OBSERVER]
 			 * @param primaryServices A reference to the primary services.
+			 * @param resourceManager A reference to the resource manager.
 			 * @param resourcesStores A reference to the service responsible for local resource stores.
 			 * @param serviceName The name of the service.
 			 * @param storeName The name of the resource store.
 			 */
-			Container (PrimaryServices & primaryServices, const Stores & resourcesStores, const char * serviceName, std::string storeName = "") noexcept
+			Container (PrimaryServices & primaryServices, Manager & resourceManager, const Stores & resourcesStores, const char * serviceName, std::string storeName = "") noexcept
 				: ContainerInterface{serviceName},
 				m_primaryServices{primaryServices},
+				m_resourceManager{resourceManager},
 				m_resourcesStores{resourcesStores},
 				m_storeName{std::move(storeName)}
 			{
@@ -805,7 +813,7 @@ namespace EmEn::Resources
 				/* Creates and load the resource. */
 				auto defaultResource = std::make_shared< resource_t >(Default);
 
-				if ( !defaultResource->load() )
+				if ( !defaultResource->load(m_resourceManager) )
 				{
 					TraceFatal{resource_t::ClassId} << "The default resource '" << resource_t::ClassId << "' can't be loaded !";
 
@@ -986,7 +994,7 @@ namespace EmEn::Resources
 							TraceInfo{resource_t::ClassId} << "Loading the resource (" << resource_t::ClassId << ") '" << infos.name() << "'... [CONTAINER]";
 						}
 
-						success = request.resource()->load(std::filesystem::path{infos.data().asString()});
+						success = request.resource()->load(m_resourceManager, std::filesystem::path{infos.data().asString()});
 						break;
 
 					/* This is direct data with a JsonCPP way of representing the data. */
@@ -996,7 +1004,7 @@ namespace EmEn::Resources
 							TraceInfo{resource_t::ClassId} << "Loading the resource (" << resource_t::ClassId << ") '" << infos.name() << "'... [CONTAINER]";
 						}
 
-						success = request.resource()->load(infos.data());
+						success = request.resource()->load(m_resourceManager, infos.data());
 						break;
 
 					/* This should never happen! ExternalData must be processed before. */
@@ -1030,6 +1038,7 @@ namespace EmEn::Resources
 			}
 
 			PrimaryServices & m_primaryServices;
+			Manager & m_resourceManager;
 			const Stores & m_resourcesStores;
 			std::string m_storeName;
 			std::unordered_map< std::string, std::shared_ptr< resource_t > > m_resources;

@@ -36,9 +36,9 @@
 
 namespace EmEn
 {
-	using namespace EmEn::Libs;
-	using namespace EmEn::Libs::Math;
-	using namespace EmEn::Libs::PixelFactory;
+	using namespace Libs;
+	using namespace Libs::Math;
+	using namespace Libs::PixelFactory;
 
 	bool
 	Notifier::onInitialize () noexcept
@@ -73,8 +73,8 @@ namespace EmEn
 		m_surface->frontPixmap().fill(Transparent);
 
 		{
-			//m_font = Resources::Manager::instance()->container< Graphics::FontResource >()->getResource("old", false);
-			m_font = Resources::Manager::instance()->container< Graphics::FontResource >()->getDefaultResource();
+			//m_font = m_resourceManager.container< Graphics::FontResource >()->getResource("old", false);
+			m_font = m_resourceManager.container< Graphics::FontResource >()->getDefaultResource();
 
 			m_processor.setPixmap(m_surface->frontPixmap());
 			m_processor.setFont(m_font->font(), 16U);

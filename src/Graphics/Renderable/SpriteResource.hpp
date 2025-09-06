@@ -166,11 +166,11 @@ namespace EmEn::Graphics::Renderable
 				return ClassId;
 			}
 
-			/** @copydoc EmEn::Resources::ResourceTrait::load() */
-			bool load () noexcept override;
+			/** @copydoc EmEn::Resources::ResourceTrait::load(Resources::Manager &) */
+			bool load (Resources::Manager & resourceManager) noexcept override;
 
-			/** @copydoc EmEn::Resources::ResourceTrait::load(const Json::Value &) */
-			bool load (const Json::Value & data) noexcept override;
+			/** @copydoc EmEn::Resources::ResourceTrait::load(Resources::Manager &, const Json::Value &) */
+			bool load (Resources::Manager & resourceManager, const Json::Value & data) noexcept override;
 
 			/** @copydoc EmEn::Resources::ResourceTrait::memoryOccupied() const noexcept */
 			[[nodiscard]]
@@ -182,13 +182,14 @@ namespace EmEn::Graphics::Renderable
 
 			/**
 			 * @brief Loads a sprite resource from a material.
+			 * @param resourceManager A reference to the resource manager.
 			 * @param material A reference to a material resource smart pointer.
 			 * @param centerAtBottom Set the sprite center to the bottom of the quad. Default false.
 			 * @param flip Flip the sprite picture. Default false.
-			 * @param rasterizationOptions A reference to a rasterization options. Defaults.
+			 * @param rasterizationOptions A reference to rasterization options. Defaults.
 			 * @return bool
 			 */
-			bool load (const std::shared_ptr< Material::Interface > & material, bool centerAtBottom = false, bool flip = false, const RasterizationOptions & rasterizationOptions = {}) noexcept;
+			bool load (Resources::Manager & resourceManager, const std::shared_ptr< Material::Interface > & material, bool centerAtBottom = false, bool flip = false, const RasterizationOptions & rasterizationOptions = {}) noexcept;
 
 			/**
 			 * @brief Sets the site of the sprite.
@@ -212,7 +213,7 @@ namespace EmEn::Graphics::Renderable
 			}
 
 			/**
-			 * @brief Returns the number of frame from the material.
+			 * @brief Returns the number of frames from the material.
 			 * @note Will return 1 if no material is associated.
 			 * @return size_t
 			 */
@@ -258,12 +259,13 @@ namespace EmEn::Graphics::Renderable
 			/**
 			 * @brief Prepares the geometry resource for the sprite.
 			 * @note This geometry resource will be shared between all sprites.
+			 * @param resourceManager A reference to the resource manager.
 			 * @param isAnimated Set texture coordinates to 3D if so.
-			 * @param centerAtBottom Set the geometry center at bottom for specific sprites.
+			 * @param centerAtBottom Set the geometry center at the bottom for specific sprites.
 			 * @param flip Flip the UV on X axis.
 			 * @return bool
 			 */
-			bool prepareGeometry (bool isAnimated, bool centerAtBottom, bool flip) noexcept;
+			bool prepareGeometry (Resources::Manager & resourceManager, bool isAnimated, bool centerAtBottom, bool flip) noexcept;
 
 			/**
 			 * @brief Attaches the material resource.

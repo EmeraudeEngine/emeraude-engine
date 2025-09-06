@@ -63,49 +63,38 @@
 
 namespace EmEn::Resources
 {
-	using namespace EmEn::Libs;
-
-	Manager * Manager::s_instance{nullptr};
+	using namespace Libs;
 
 	Manager::Manager (PrimaryServices & primaryServices) noexcept
 		: ServiceInterface{ClassId},
 		m_primaryServices{primaryServices}
 	{
-		if ( s_instance != nullptr )
-		{
-			std::cerr << __PRETTY_FUNCTION__ << ", constructor called twice !" "\n";
-
-			std::terminate();
-		}
-
-		s_instance = this;
-
-		m_containers.emplace(typeid(Audio::SoundResource), std::make_unique< Sounds >(m_primaryServices, m_stores, "Sound manager", "Sounds"));
-		m_containers.emplace(typeid(Audio::MusicResource), std::make_unique< Musics >(m_primaryServices, m_stores, "Music manager", "Musics"));
-		m_containers.emplace(typeid(Graphics::FontResource), std::make_unique< Fonts >(m_primaryServices, m_stores, "Font manager", "Fonts"));
-		m_containers.emplace(typeid(Graphics::ImageResource), std::make_unique< Images >(m_primaryServices, m_stores, "Image manager", "Images"));
-		m_containers.emplace(typeid(Graphics::CubemapResource), std::make_unique< Cubemaps >(m_primaryServices, m_stores, "Cubemap manager", "Cubemaps"));
-		m_containers.emplace(typeid(Graphics::MovieResource), std::make_unique< Movies >(m_primaryServices, m_stores, "Movie manager", "Movies"));
-		m_containers.emplace(typeid(Graphics::TextureResource::Texture1D), std::make_unique< Texture1Ds >(m_primaryServices, m_stores, "Texture 1D manager", "Images"));
-		m_containers.emplace(typeid(Graphics::TextureResource::Texture2D), std::make_unique< Texture2Ds >(m_primaryServices, m_stores, "Texture 2D manager", "Images"));
-		m_containers.emplace(typeid(Graphics::TextureResource::Texture3D), std::make_unique< Texture3Ds >(m_primaryServices, m_stores, "Texture 3D manager", "Images"));
-		m_containers.emplace(typeid(Graphics::TextureResource::TextureCubemap), std::make_unique< TextureCubemaps >(m_primaryServices, m_stores, "Texture cubemap manager", "Cubemaps"));
-		m_containers.emplace(typeid(Graphics::TextureResource::AnimatedTexture2D), std::make_unique< AnimatedTexture2Ds >(m_primaryServices, m_stores, "Animated texture 2D manager", "Movies"));
-		m_containers.emplace(typeid(Graphics::Geometry::VertexResource), std::make_unique< VertexGeometries >(m_primaryServices, m_stores, "Geometry manager", "Geometries"));
-		m_containers.emplace(typeid(Graphics::Geometry::IndexedVertexResource), std::make_unique< IndexedVertexGeometries >(m_primaryServices, m_stores, "Indexed geometry manager", "Geometries"));
-		m_containers.emplace(typeid(Graphics::Geometry::VertexGridResource), std::make_unique< VertexGridGeometries >(m_primaryServices, m_stores, "Grid geometry manager", "Geometries"));
-		m_containers.emplace(typeid(Graphics::Geometry::AdaptiveVertexGridResource), std::make_unique< AdaptiveVertexGridGeometries >(m_primaryServices, m_stores, "Adaptive grid geometry manager", "Geometries"));
-		m_containers.emplace(typeid(Graphics::Material::BasicResource), std::make_unique< BasicMaterials >(m_primaryServices, m_stores, "Basic material manager", "Materials"));
-		m_containers.emplace(typeid(Graphics::Material::StandardResource), std::make_unique< StandardMaterials >(m_primaryServices, m_stores, "Standard material manager", "Materials"));
-		m_containers.emplace(typeid(Graphics::Renderable::SimpleMeshResource), std::make_unique< SimpleMeshes >(m_primaryServices, m_stores, "Simple mesh manager", "Meshes"));
-		m_containers.emplace(typeid(Graphics::Renderable::MeshResource), std::make_unique< Meshes >(m_primaryServices, m_stores, "Mesh manager", "Meshes"));
-		m_containers.emplace(typeid(Graphics::Renderable::SpriteResource), std::make_unique< Sprites >(m_primaryServices, m_stores, "Sprite manager", "Sprites"));
-		m_containers.emplace(typeid(Graphics::Renderable::SkyBoxResource), std::make_unique< SkyBoxes >(m_primaryServices, m_stores, "Skybox manager", "Backgrounds"));
-		m_containers.emplace(typeid(Graphics::Renderable::DynamicSkyResource), std::make_unique< DynamicSkies >(m_primaryServices, m_stores, "Dynamic sky manager", "Backgrounds"));
-		m_containers.emplace(typeid(Graphics::Renderable::BasicFloorResource), std::make_unique< BasicFloors >(m_primaryServices, m_stores, "BasicFloor manager", "SceneAreas"));
-		m_containers.emplace(typeid(Graphics::Renderable::TerrainResource), std::make_unique< Terrains >(m_primaryServices, m_stores, "Terrain manager", "SceneAreas"));
-		m_containers.emplace(typeid(Graphics::Renderable::WaterLevelResource), std::make_unique< WaterLevels >(m_primaryServices, m_stores, "Water level manager", "SeaLevels"));
-		m_containers.emplace(typeid(Scenes::DefinitionResource), std::make_unique< SceneDefinitions >(m_primaryServices, m_stores, "Scene definition manager", "Scenes"));
+		m_containers.emplace(typeid(Audio::SoundResource), std::make_unique< Sounds >(m_primaryServices, *this, m_stores, "Sound manager", "Sounds"));
+		m_containers.emplace(typeid(Audio::MusicResource), std::make_unique< Musics >(m_primaryServices, *this, m_stores, "Music manager", "Musics"));
+		m_containers.emplace(typeid(Graphics::FontResource), std::make_unique< Fonts >(m_primaryServices, *this, m_stores, "Font manager", "Fonts"));
+		m_containers.emplace(typeid(Graphics::ImageResource), std::make_unique< Images >(m_primaryServices, *this, m_stores, "Image manager", "Images"));
+		m_containers.emplace(typeid(Graphics::CubemapResource), std::make_unique< Cubemaps >(m_primaryServices, *this, m_stores, "Cubemap manager", "Cubemaps"));
+		m_containers.emplace(typeid(Graphics::MovieResource), std::make_unique< Movies >(m_primaryServices, *this, m_stores, "Movie manager", "Movies"));
+		m_containers.emplace(typeid(Graphics::TextureResource::Texture1D), std::make_unique< Texture1Ds >(m_primaryServices, *this, m_stores, "Texture 1D manager", "Images"));
+		m_containers.emplace(typeid(Graphics::TextureResource::Texture2D), std::make_unique< Texture2Ds >(m_primaryServices, *this, m_stores, "Texture 2D manager", "Images"));
+		m_containers.emplace(typeid(Graphics::TextureResource::Texture3D), std::make_unique< Texture3Ds >(m_primaryServices, *this, m_stores, "Texture 3D manager", "Images"));
+		m_containers.emplace(typeid(Graphics::TextureResource::TextureCubemap), std::make_unique< TextureCubemaps >(m_primaryServices, *this, m_stores, "Texture cubemap manager", "Cubemaps"));
+		m_containers.emplace(typeid(Graphics::TextureResource::AnimatedTexture2D), std::make_unique< AnimatedTexture2Ds >(m_primaryServices, *this, m_stores, "Animated texture 2D manager", "Movies"));
+		m_containers.emplace(typeid(Graphics::Geometry::VertexResource), std::make_unique< VertexGeometries >(m_primaryServices, *this, m_stores, "Geometry manager", "Geometries"));
+		m_containers.emplace(typeid(Graphics::Geometry::IndexedVertexResource), std::make_unique< IndexedVertexGeometries >(m_primaryServices, *this, m_stores, "Indexed geometry manager", "Geometries"));
+		m_containers.emplace(typeid(Graphics::Geometry::VertexGridResource), std::make_unique< VertexGridGeometries >(m_primaryServices, *this, m_stores, "Grid geometry manager", "Geometries"));
+		m_containers.emplace(typeid(Graphics::Geometry::AdaptiveVertexGridResource), std::make_unique< AdaptiveVertexGridGeometries >(m_primaryServices, *this, m_stores, "Adaptive grid geometry manager", "Geometries"));
+		m_containers.emplace(typeid(Graphics::Material::BasicResource), std::make_unique< BasicMaterials >(m_primaryServices, *this, m_stores, "Basic material manager", "Materials"));
+		m_containers.emplace(typeid(Graphics::Material::StandardResource), std::make_unique< StandardMaterials >(m_primaryServices, *this, m_stores, "Standard material manager", "Materials"));
+		m_containers.emplace(typeid(Graphics::Renderable::SimpleMeshResource), std::make_unique< SimpleMeshes >(m_primaryServices, *this, m_stores, "Simple mesh manager", "Meshes"));
+		m_containers.emplace(typeid(Graphics::Renderable::MeshResource), std::make_unique< Meshes >(m_primaryServices, *this, m_stores, "Mesh manager", "Meshes"));
+		m_containers.emplace(typeid(Graphics::Renderable::SpriteResource), std::make_unique< Sprites >(m_primaryServices, *this, m_stores, "Sprite manager", "Sprites"));
+		m_containers.emplace(typeid(Graphics::Renderable::SkyBoxResource), std::make_unique< SkyBoxes >(m_primaryServices, *this, m_stores, "Skybox manager", "Backgrounds"));
+		m_containers.emplace(typeid(Graphics::Renderable::DynamicSkyResource), std::make_unique< DynamicSkies >(m_primaryServices, *this, m_stores, "Dynamic sky manager", "Backgrounds"));
+		m_containers.emplace(typeid(Graphics::Renderable::BasicFloorResource), std::make_unique< BasicFloors >(m_primaryServices, *this, m_stores, "BasicFloor manager", "SceneAreas"));
+		m_containers.emplace(typeid(Graphics::Renderable::TerrainResource), std::make_unique< Terrains >(m_primaryServices, *this, m_stores, "Terrain manager", "SceneAreas"));
+		m_containers.emplace(typeid(Graphics::Renderable::WaterLevelResource), std::make_unique< WaterLevels >(m_primaryServices, *this, m_stores, "Water level manager", "SeaLevels"));
+		m_containers.emplace(typeid(Scenes::DefinitionResource), std::make_unique< SceneDefinitions >(m_primaryServices, *this, m_stores, "Scene definition manager", "Scenes"));
 	}
 
 	size_t
@@ -171,7 +160,7 @@ namespace EmEn::Resources
 	void
 	Manager::setVerbosity (bool state) noexcept
 	{
-		m_flags[VerbosityEnabled] = state;
+		m_verbosityEnabled = state;
 
 		ResourceTrait::s_verboseEnabled = state;
 
@@ -184,14 +173,14 @@ namespace EmEn::Resources
 	bool
 	Manager::onInitialize () noexcept
 	{
-		m_flags[VerbosityEnabled] = m_primaryServices.settings().get< bool >(ResourcesShowInformationKey, DefaultResourcesShowInformation);
-		m_flags[DownloadingAllowed] = m_primaryServices.settings().get< bool >(ResourcesDownloadEnabledKey, DefaultResourcesDownloadEnabled);
-		m_flags[QuietConversion] = m_primaryServices.settings().get< bool >(ResourcesQuietConversionKey, DefaultResourcesQuietConversion);
+		m_verbosityEnabled = m_primaryServices.settings().getOrSetDefault< bool >(ResourcesShowInformationKey, DefaultResourcesShowInformation);
+		m_downloadingAllowed = m_primaryServices.settings().getOrSetDefault< bool >(ResourcesDownloadEnabledKey, DefaultResourcesDownloadEnabled);
+		m_quietConversion = m_primaryServices.settings().getOrSetDefault< bool >(ResourcesQuietConversionKey, DefaultResourcesQuietConversion);
 
 		/* NOTE: Initialize the store service. */
-		if ( m_stores.initialize(m_primaryServices.fileSystem(), m_flags[VerbosityEnabled]) )
+		if ( m_stores.initialize(m_primaryServices.fileSystem(), m_verbosityEnabled) )
 		{
-			if ( m_flags[VerbosityEnabled] )
+			if ( m_verbosityEnabled )
 			{
 				TraceInfo{ClassId} << m_stores;
 			}
@@ -202,13 +191,13 @@ namespace EmEn::Resources
 		}
 
 		/* NOTE: Transfers flags. */
-		ResourceTrait::s_verboseEnabled = m_flags[VerbosityEnabled];
-		ResourceTrait::s_quietConversion = m_flags[QuietConversion];
+		ResourceTrait::s_verboseEnabled = m_verbosityEnabled;
+		ResourceTrait::s_quietConversion = m_quietConversion;
 
 		/* NOTE: Initialize every resource manager. */
 		for ( const auto & resourceContainer : m_containers | std::views::values )
 		{
-			resourceContainer->setVerbosity(m_flags[VerbosityEnabled]);
+			resourceContainer->setVerbosity(m_verbosityEnabled);
 
 			if ( resourceContainer->initialize() )
 			{
@@ -220,7 +209,7 @@ namespace EmEn::Resources
 			}
 		}
 
-		m_flags[Initialized] = true;
+		m_serviceInitialized = true;
 
 		return true;
 	}
@@ -228,7 +217,7 @@ namespace EmEn::Resources
 	bool
 	Manager::onTerminate () noexcept
 	{
-		m_flags[Initialized] = false;
+		m_serviceInitialized = false;
 
 		/* Terminate primary services. */
 		for ( const auto & resourceContainer : m_containers | std::views::values )

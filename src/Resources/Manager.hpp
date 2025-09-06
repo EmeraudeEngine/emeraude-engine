@@ -29,7 +29,6 @@
 /* STL inclusions. */
 #include <cstddef>
 #include <map>
-#include <array>
 #include <typeindex>
 
 /* Local inclusions for inheritances. */
@@ -66,20 +65,23 @@ namespace EmEn::Resources
 			 */
 			explicit Manager (PrimaryServices & primaryServices) noexcept;
 
-			/**
-			 * @brief Destructs the resource manager.
-			 */
-			~Manager () override
-			{
-				s_instance = nullptr;
-			}
-
 			/** @copydoc EmEn::ServiceInterface::usable() */
 			[[nodiscard]]
 			bool
 			usable () const noexcept override
 			{
-				return m_flags[Initialized];
+				return m_serviceInitialized;
+			}
+
+			/**
+			 * @brief Gives access to the primary services.
+			 * @return PrimaryServices &
+			 */
+			[[nodiscard]]
+			PrimaryServices &
+			primaryServices () const noexcept
+			{
+				return m_primaryServices;
 			}
 
 			/**
@@ -97,7 +99,7 @@ namespace EmEn::Resources
 			bool
 			verbosityEnabled () const noexcept
 			{
-				return m_flags[VerbosityEnabled];
+				return m_verbosityEnabled;
 			}
 
 			/**
@@ -186,18 +188,6 @@ namespace EmEn::Resources
 				return static_cast< const Container< resource_t > * >(it->second.get());
 			}
 
-			/**
-			 * @brief Returns the instance of the resource manager.
-			 * @return Manager *
-			 */
-			[[nodiscard]]
-			static
-			Manager *
-			instance () noexcept
-			{
-				return s_instance;
-			}
-
 		private:
 
 			/** @copydoc EmEn::ServiceInterface::onInitialize() */
@@ -206,26 +196,13 @@ namespace EmEn::Resources
 			/** @copydoc EmEn::ServiceInterface::onTerminate() */
 			bool onTerminate () noexcept override;
 
-			static Manager * s_instance;
-
-			/* Flag names. */
-			static constexpr auto Initialized{0UL};
-			static constexpr auto VerbosityEnabled{1UL};
-			static constexpr auto DownloadingAllowed{2UL};
-			static constexpr auto QuietConversion{3UL};
-
 			PrimaryServices & m_primaryServices;
 			Stores m_stores;
 			std::map< std::type_index, std::unique_ptr< ContainerInterface > > m_containers;
-			std::array< bool, 8 > m_flags{
-				false/*Initialized*/,
-				false/*VerbosityEnabled*/,
-				false/*DownloadingAllowed*/,
-				false/*QuietConversion*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/
-			};
+			bool m_serviceInitialized{false};
+			bool m_verbosityEnabled{false};
+			bool m_downloadingAllowed{false};
+			bool m_quietConversion{false};
+
 	};
 }

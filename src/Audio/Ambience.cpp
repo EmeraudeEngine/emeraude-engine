@@ -355,7 +355,7 @@ namespace EmEn::Audio
 	}
 
 	bool
-	Ambience::loadSoundSet (const std::filesystem::path & filepath) noexcept
+	Ambience::loadSoundSet (Resources::Manager & resourceManager, const std::filesystem::path & filepath) noexcept
 	{
 		const auto rootCheck = FastJSON::getRootFromFile(filepath);
 
@@ -368,7 +368,7 @@ namespace EmEn::Audio
 
 		const auto & root = rootCheck.value();
 
-		auto * soundManager = Resources::Manager::instance()->container< SoundResource >();
+		auto * soundManager = resourceManager.container< SoundResource >();
 
 		/* 1. Read base sound set information. */
 		this->setChannelCount(FastJSON::getValue< size_t >(root, JKChannelCount).value_or(DefaultChannelCount));
