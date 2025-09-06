@@ -55,6 +55,9 @@ namespace EmEn
 			constexpr auto DefaultVkInstanceUseDebugMessenger{true};
 
 			/* Vulkan device */
+			constexpr auto VkDeviceAvailableGPUsKey{"API/Vulkan/Device/AvailableGPUs"};
+			constexpr auto VkDeviceAutoSelectModeKey{"API/Vulkan/Device/AutoSelectMode"};
+			constexpr auto DefaultVkDeviceAutoSelectMode{"Performance"};
 			constexpr auto VkDeviceForceGPUKey{"API/Vulkan/Device/ForceGPU"};
 
 		/* OpenAL */

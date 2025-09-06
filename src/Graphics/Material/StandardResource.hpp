@@ -83,9 +83,6 @@ namespace EmEn::Graphics::Material
 			static constexpr auto SurfaceNormalVector{"SurfaceNormalVector"};
 			static constexpr auto SurfaceReflectionColor{"SurfaceReflectionColor"};
 
-			/** @brief Observable class unique identifier. */
-			static const size_t ClassUID;
-
 			/** @brief Defines the resource dependency complexity. */
 			static constexpr auto Complexity{Resources::DepComplexity::Few};
 
@@ -135,12 +132,25 @@ namespace EmEn::Graphics::Material
 				this->destroyFromHardware();
 			}
 
+			/**
+			 * @brief Returns the unique identifier for this class [Thread-safe].
+			 * @return size_t
+			 */
+			static
+			size_t
+			getClassUID () noexcept
+			{
+				static const size_t classUID = EmEn::Libs::Hash::FNV1a(ClassId);
+
+				return classUID;
+			}
+
 			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
 			[[nodiscard]]
 			size_t
 			classUID () const noexcept override
 			{
-				return ClassUID;
+				return getClassUID();
 			}
 
 			/** @copydoc EmEn::Libs::ObservableTrait::is() const */
@@ -148,7 +158,7 @@ namespace EmEn::Graphics::Material
 			bool
 			is (size_t classUID) const noexcept override
 			{
-				return classUID == ClassUID;
+				return classUID == getClassUID();
 			}
 
 			/** @copydoc EmEn::Resources::ResourceTrait::classLabel() const */
@@ -159,11 +169,11 @@ namespace EmEn::Graphics::Material
 				return ClassId;
 			}
 
-			/** @copydoc EmEn::Resources::ResourceTrait::load() */
-			bool load () noexcept override;
+			/** @copydoc EmEn::Resources::ResourceTrait::load(Resources::ServiceProvider &) */
+			bool load (Resources::ServiceProvider & serviceProvider) noexcept override;
 
-			/** @copydoc EmEn::Resources::ResourceTrait::load(const Json::Value &) */
-			bool load (const Json::Value & data) noexcept override;
+			/** @copydoc EmEn::Resources::ResourceTrait::load(Resources::Manager &, const Json::Value &) */
+			bool load (Resources::ServiceProvider & serviceProvider, const Json::Value & data) noexcept override;
 
 			/** @copydoc EmEn::Resources::ResourceTrait::memoryOccupied() const noexcept */
 			[[nodiscard]]
@@ -479,65 +489,65 @@ namespace EmEn::Graphics::Material
 			/**
 			 * @brief Parses the ambient component from JSON data.
 			 * @param data A reference to the JSON data.
-			 * @param resources A reference to the resource manager.
+			 * @param serviceProvider A reference to the resource manager through a service provider.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool parseAmbientComponent (const Json::Value & data, Resources::Manager & resources) noexcept;
+			bool parseAmbientComponent (const Json::Value & data, Resources::ServiceProvider & serviceProvider) noexcept;
 
 			/**
 			 * @brief Parses the diffuse component from JSON data.
 			 * @param data A reference to the JSON data.
-			 * @param resources A reference to the resource manager.
+			 * @param serviceProvider A reference to the resource manager through a service provider.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool parseDiffuseComponent (const Json::Value & data, Resources::Manager & resources) noexcept;
+			bool parseDiffuseComponent (const Json::Value & data, Resources::ServiceProvider & serviceProvider) noexcept;
 
 			/**
 			 * @brief Parses the specular component from JSON data.
 			 * @param data A reference to the JSON data.
-			 * @param resources A reference to the resource manager.
+			 * @param serviceProvider A reference to the resource manager through a service provider.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool parseSpecularComponent (const Json::Value & data, Resources::Manager & resources) noexcept;
+			bool parseSpecularComponent (const Json::Value & data, Resources::ServiceProvider & serviceProvider) noexcept;
 
 			/**
 			 * @brief Parses the opacity component from JSON data.
 			 * @param data A reference to the JSON data.
-			 * @param resources A reference to the resource manager.
+			 * @param serviceProvider A reference to the resource manager through a service provider.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool parseOpacityComponent (const Json::Value & data, Resources::Manager & resources) noexcept;
+			bool parseOpacityComponent (const Json::Value & data, Resources::ServiceProvider & serviceProvider) noexcept;
 
 			/**
 			 * @brief Parses the auto-illumination component from JSON data.
 			 * @param data A reference to the JSON data.
-			 * @param resources A reference to the resource manager.
+			 * @param serviceProvider A reference to the resource manager through a service provider.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool parseAutoIlluminationComponent (const Json::Value & data, Resources::Manager & resources) noexcept;
+			bool parseAutoIlluminationComponent (const Json::Value & data, Resources::ServiceProvider & serviceProvider) noexcept;
 
 			/**
 			 * @brief Parses the normal component from JSON data.
 			 * @param data A reference to the JSON data.
-			 * @param resources A reference to the resource manager.
+			 * @param serviceProvider A reference to the resource manager through a service provider.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool parseNormalComponent (const Json::Value & data, Resources::Manager & resources) noexcept;
+			bool parseNormalComponent (const Json::Value & data, Resources::ServiceProvider & serviceProvider) noexcept;
 
 			/**
 			 * @brief Parses the reflection component from JSON data.
 			 * @param data A reference to the JSON data.
-			 * @param resources A reference to the resource manager.
+			 * @param serviceProvider A reference to the resource manager through a service provider.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool parseReflectionComponent (const Json::Value & data, Resources::Manager & resources) noexcept;
+			bool parseReflectionComponent (const Json::Value & data, Resources::ServiceProvider & serviceProvider) noexcept;
 
 			/**
 			 * @brief Creates the necessary data onto the GPU for this material.

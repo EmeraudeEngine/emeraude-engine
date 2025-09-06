@@ -40,19 +40,9 @@
 #include "Resources/Manager.hpp"
 #include "ImageResource.hpp"
 
-/* Defining the resource manager class id. */
-template<>
-const char * const EmEn::Resources::Container< EmEn::Graphics::MovieResource >::ClassId{"MovieContainer"};
-
-/* Defining the resource manager ClassUID. */
-template<>
-const size_t EmEn::Resources::Container< EmEn::Graphics::MovieResource >::ClassUID{getClassUID(ClassId)};
-
 namespace EmEn::Graphics
 {
-	using namespace EmEn::Libs;
-
-	const size_t MovieResource::ClassUID{getClassUID(ClassId)};
+	using namespace Libs;
 
 	/* JSON key. */
 	constexpr auto JKBaseFrameName{"BaseFrameName"};
@@ -66,7 +56,7 @@ namespace EmEn::Graphics
 	constexpr auto JKImage{"Image"};
 
 	bool
-	MovieResource::load () noexcept
+	MovieResource::load (Resources::ServiceProvider & /*serviceProvider*/) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
@@ -107,12 +97,12 @@ namespace EmEn::Graphics
 	}
 
 	bool
-	MovieResource::load (const std::filesystem::path & filepath) noexcept
+	MovieResource::load (Resources::ServiceProvider & serviceProvider, const std::filesystem::path & filepath) noexcept
 	{
 		/* Check for a JSON file. */
 		if ( IO::getFileExtension(filepath) == "json" )
 		{
-			return ResourceTrait::load(filepath);
+			return ResourceTrait::load(serviceProvider, filepath);
 		}
 
 		/* Tries to read a movie (mp4, mpg, avi, ...) file. */
@@ -127,7 +117,7 @@ namespace EmEn::Graphics
 	}
 
 	bool
-	MovieResource::load (const Json::Value & data) noexcept
+	MovieResource::load (Resources::ServiceProvider & serviceProvider, const Json::Value & data) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
@@ -137,7 +127,7 @@ namespace EmEn::Graphics
 		/* Checks the load in the parametric way. */
 		if ( data.isMember(JKBaseFrameName) )
 		{
-			if ( !this->loadParametric(data) )
+			if ( !this->loadParametric(serviceProvider, data) )
 			{
 				TraceError{ClassId} << "Unable to load the animated texture with parametric key '" << JKBaseFrameName << "' !";
 
@@ -147,7 +137,7 @@ namespace EmEn::Graphics
 		/* Checks the load in the manual way. */
 		else if ( data.isMember(JKFrames) )
 		{
-			if ( !this->loadManual(data) )
+			if ( !this->loadManual(serviceProvider, data) )
 			{
 				TraceError{ClassId} << "Unable to load the animated texture with manual key '" << JKFrames << "' !";
 
@@ -196,7 +186,7 @@ namespace EmEn::Graphics
 	}
 
 	bool
-	MovieResource::loadParametric (const Json::Value & data) noexcept
+	MovieResource::loadParametric (Resources::ServiceProvider & serviceProvider, const Json::Value & data) noexcept
 	{
 		/* Checks the base name of animation files. */
 		const auto basename = FastJSON::getValue< std::string >(data, JKBaseFrameName);
@@ -240,7 +230,7 @@ namespace EmEn::Graphics
 		m_looping = FastJSON::getValue< bool >(data, JKIsLooping).value_or(true);
 
 		/* Gets all frames images. */
-		auto * imageContainer = Resources::Manager::instance()->container< ImageResource >();
+		auto * imageContainer = serviceProvider.container< ImageResource >();
 
 		for ( uint32_t frameIndex = 0; frameIndex < frameCount; frameIndex++ )
 		{
@@ -264,7 +254,7 @@ namespace EmEn::Graphics
 	}
 
 	bool
-	MovieResource::loadManual (const Json::Value & data) noexcept
+	MovieResource::loadManual (Resources::ServiceProvider & serviceProvider, const Json::Value & data) noexcept
 	{
 		if ( !data.isMember(JKFrames) || !data[JKFrames].isArray() )
 		{
@@ -273,7 +263,7 @@ namespace EmEn::Graphics
 			return false;
 		}
 
-		auto * images = Resources::Manager::instance()->container< ImageResource >();
+		auto * images = serviceProvider.container< ImageResource >();
 
 		for ( const auto & frame : data[JKFrames] )
 		{

@@ -32,6 +32,11 @@
 /* Forward declarations */
 namespace EmEn
 {
+	namespace Resources
+	{
+		class Manager;
+	}
+
 	namespace Graphics
 	{
 		class ImageResource;
@@ -47,7 +52,7 @@ namespace EmEn::Scenes
 {
 	/**
 	 * @brief The vignetting lens effect class;
-	 * @extends EmEn::FramebufferEffectInterface This is a framebuffer effect.
+	 * @extends EmEn::Saphir::FramebufferEffectInterface This is a framebuffer effect.
 	 */
 	class VignettingLensEffect final : public Saphir::FramebufferEffectInterface
 	{
@@ -58,9 +63,10 @@ namespace EmEn::Scenes
 
 			/**
 			 * @brief Constructs a vignetting lens effect.
+			 * @param resourceManager A reference to the resource manager.
 			 * @param strength The strength of the effect. Default 1.
 			 */
-			explicit VignettingLensEffect (float strength = 1.0F) noexcept;
+			explicit VignettingLensEffect (Resources::Manager & resourceManager, float strength = 1.0F) noexcept;
 
 			/** @copydoc EmEn::Saphir::FramebufferEffectInterface::generateFragmentShaderCode() */
 			[[nodiscard]]

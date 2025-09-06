@@ -41,9 +41,7 @@
 
 namespace EmEn::Net
 {
-	using namespace EmEn::Libs;
-
-	const size_t Manager::ClassUID{getClassUID(ClassId)};
+	using namespace Libs;
 
 	bool
 	Manager::onInitialize () noexcept

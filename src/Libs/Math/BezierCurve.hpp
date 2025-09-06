@@ -102,19 +102,17 @@ namespace EmEn::Libs::Math
 
 				const auto timeStep = 1.0F / static_cast< float >(segments);
 
-				auto timePoint = 0.0F;
-
-				/* NOTE: we use the segment count + 1 here. */
+				/* NOTE: We are using segment count + 1 here. */
 				for ( size_t index = 0; index <= segments; index++ )
 				{
+					/* More precise calculation to avoid error accumulation */
+					const auto timePoint = std::min(1.0F, static_cast< float >(index) * timeStep);
 					const auto interpolatedPoint = this->synthesizePoint(timePoint);
 
 					if ( !callback(timePoint, interpolatedPoint) )
 					{
 						return false;
 					}
-
-					timePoint += timeStep;
 				}
 
 				return true;
@@ -131,92 +129,71 @@ namespace EmEn::Libs::Math
 			Vector< dim_t, number_t >
 			synthesizePoint (float globalTimePoint) const noexcept
 			{
+				/* Case where the curve has only one quadratic segment. */
+				if ( m_points.size() == 3 && !m_closed )
+				{
+				    return Vector< dim_t, number_t >::quadraticBezierInterpolation(m_points[0], m_points[1], m_points[2], globalTimePoint);
+				}
+
+				/* Managing extreme cases for open curves. */
 				if ( !m_closed )
 				{
-					if ( globalTimePoint <= 0.0F )
-					{
-						return *m_points.cbegin();
-					}
+				    if ( globalTimePoint <= 0.0F )
+				    {
+					    return m_points.front();
+				    }
 
-					if ( globalTimePoint >= 1.0F )
-					{
-						return *m_points.crbegin();
-					}
+				    if ( globalTimePoint >= 1.0F )
+				    {
+					    return m_points.back();
+				    }
 				}
 
-				if ( m_points.size() == 3 )
+				const size_t pointCount = m_points.size();
+
+				/* For an open curve, we have N-2 segments for N points. For a closed curve, we have N segments. */
+				const size_t numSegments = m_closed ? pointCount : pointCount - 2;
+
+				/* Safety if not enough points for a segment */
+				if ( numSegments == 0 )
 				{
-					return Vector< dim_t, number_t >::quadraticBezierInterpolation(m_points[0], m_points[1], m_points[2], globalTimePoint);
+					return m_points.front();
 				}
 
-				const auto pointCount = m_closed ? m_points.size() : m_points.size() - 1;
-				const auto segmentSize = 1.0F / pointCount;
+				/* Calculate which segment we are in and the local time (between 0 and 1) in this segment. */
+				const float scaledTime = globalTimePoint * numSegments;
+				size_t segmentIndex = static_cast< size_t >(std::floor(scaledTime));
 
-				const auto pointIndex = static_cast< size_t >(std::round(globalTimePoint / segmentSize));
-
-				Vector< dim_t, number_t > pointA;
-				Vector< dim_t, number_t > pointB;
-				Vector< dim_t, number_t > pointC;
-
-				float sizeA;
-				float sizeB;
-
-				if ( pointIndex == 0 )
+				/* Ensure the index does not overflow due to inaccuracies on globalTimePoint = 1.0 */
+				if ( segmentIndex >= numSegments )
 				{
-					if ( m_closed )
-					{
-						pointA = m_points[m_points.size() - 1];
-						pointB = m_points[pointIndex];
-						pointC = m_points[pointIndex+1];
-
-						sizeA = (m_points.size() - 1) * segmentSize;
-						sizeB = (pointIndex + 1) * segmentSize;
-					}
-					else
-					{
-						pointA = m_points[pointIndex];
-						pointB = m_points[pointIndex+1];
-						pointC = m_points[pointIndex+2];
-
-						sizeA = 0.0F;
-						sizeB = (pointIndex + 2) * segmentSize;
-					}
+				    segmentIndex = numSegments - 1;
 				}
-				else if ( pointIndex == pointCount )
+
+				const float localTimePoint = scaledTime - static_cast< float >(segmentIndex);
+
+				Vector< dim_t, number_t > pointA, pointB, pointC;
+
+				if ( m_closed )
 				{
-					if ( m_closed )
-					{
-						pointA = m_points[pointIndex-1];
-						pointB = m_points[pointIndex];
-						pointC = m_points[0];
-
-						sizeA = (pointIndex + 1) * segmentSize;
-						sizeB = 0.0F;
-					}
-					else
-					{
-						pointA = m_points[pointIndex-2];
-						pointB = m_points[pointIndex-1];
-						pointC = m_points[pointIndex];
-
-						sizeA = (pointIndex - 2) * segmentSize;
-						sizeB = pointIndex * segmentSize;
-					}
+				    /* For a closed curve, we loop over the points using the modulo.
+				     * The segment 'i' is formed by (midpoint(Pi, Pi+1), Pi+1, midpoint(Pi+1, Pi+2))
+				     * For simplicity, we can consider the segment i as (Pi, Pi+1, Pi+2) */
+				    pointA = m_points[segmentIndex % pointCount];
+				    pointB = m_points[(segmentIndex + 1) % pointCount];
+				    pointC = m_points[(segmentIndex + 2) % pointCount];
 				}
 				else
 				{
-					pointA = m_points[pointIndex-1];
-					pointB = m_points[pointIndex];
-					pointC = m_points[pointIndex+1];
-
-					sizeA = (pointIndex - 1) * segmentSize;
-					sizeB = (pointIndex + 1) * segmentSize;
+				    /* For an open curve, the segment 'i' is (Pi, Pi+1, Pi+2) */
+				    pointA = m_points[segmentIndex];
+				    pointB = m_points[segmentIndex + 1];
+				    pointC = m_points[segmentIndex + 2];
 				}
 
-				const auto normalizedStart = globalTimePoint - sizeA;
-				const auto normalizedEnd = sizeB - sizeA;
-				const auto localTimePoint = clampToUnit(normalizedStart / normalizedEnd);
-
+				/* NOTE: This logic assumes a chain of quadratic Bézier curves where P_i, P_i+1, P_i+2 form a curve.
+				 * Another interpretation (Catmull-Rom type) would use the points differently (e.g. P_i+1 is the control point).
+				 * The above logic is simple and avoids crashes. */
 				return Vector< dim_t, number_t >::quadraticBezierInterpolation(pointA, pointB, pointC, localTimePoint);
 			}
 

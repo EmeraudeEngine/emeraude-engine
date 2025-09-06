@@ -899,7 +899,7 @@ namespace EmEn
 			 * @param data Pointer to possible data.
 			 * @return bool
 			 */
-			virtual bool onAppNotification (const Libs::ObservableTrait * observable, int notificationCode, const std::any & data) noexcept = 0;
+			virtual bool onAppNotification (const ObservableTrait * observable, int notificationCode, const std::any & data) noexcept = 0;
 
 			/**
 			 * @brief Called when files have been loaded.
@@ -921,7 +921,7 @@ namespace EmEn
 			Help m_coreHelp{"Core engine"};
 			PrimaryServices m_primaryServices; /* SystemInfo, UserInfo, Arguments, Tracer, FileSystem, Settings and NetworkManager. */
 			Console::Controller m_consoleController{m_primaryServices}; /* [PRIMARY] */
-			Resources::Manager m_resourceManager{m_primaryServices}; /* [PRIMARY] */
+			Resources::Manager m_resourceManager{m_primaryServices, m_graphicsRenderer}; /* [PRIMARY] */
 			User m_user{m_primaryServices}; /* [PRIMARY] */
 			PlatformManager m_platformManager{m_primaryServices}; /* [SECONDARY] */
 			Vulkan::Instance m_vulkanInstance{m_identification, m_primaryServices}; /* [SECONDARY] */
@@ -931,7 +931,7 @@ namespace EmEn
 			Physics::Manager m_physicsManager{m_primaryServices, m_vulkanInstance}; /* [SECONDARY] */
 			Audio::Manager m_audioManager{m_primaryServices, m_resourceManager}; /* [SECONDARY] */
 			Overlay::Manager m_overlayManager{m_primaryServices, m_window, m_graphicsRenderer}; /* [SECONDARY] */
-			Notifier m_notifier{m_overlayManager}; /* [SECONDARY] */
+			Notifier m_notifier{m_resourceManager, m_overlayManager}; /* [SECONDARY] */
 			Scenes::Manager m_sceneManager{m_primaryServices, m_resourceManager, m_inputManager, m_graphicsRenderer, m_audioManager}; /* [SECONDARY] */
 			std::vector< ServiceInterface * > m_primaryServicesEnabled;
 			std::vector< ServiceInterface * > m_secondaryServicesEnabled;

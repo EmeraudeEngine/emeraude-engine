@@ -480,10 +480,11 @@ namespace EmEn::Scenes
 
 			/**
 			 * @brief Enables a visual debug for this entity.
+			 * @param resourceManager A reference to the resource manager.
 			 * @param type The type of visual debug.
 			 * @return void
 			 */
-			void enableVisualDebug (VisualDebugType type) noexcept;
+			void enableVisualDebug (Resources::Manager & resourceManager, VisualDebugType type) noexcept;
 
 			/**
 			 * @brief Disable a visual debug for this entity.
@@ -494,10 +495,11 @@ namespace EmEn::Scenes
 
 			/**
 			 * @brief Toggle the visibility of a debug and returns the current state.
+			 * @param resourceManager A reference to the resource manager.
 			 * @param type The type of visual debug.
 			 * @return bool
 			 */
-			bool toggleVisualDebug (VisualDebugType type) noexcept;
+			bool toggleVisualDebug (Resources::Manager & resourceManager, VisualDebugType type) noexcept;
 
 			/**
 			 * @brief Returns whether a visual debug is displayed.

@@ -38,10 +38,8 @@
 
 namespace EmEn::Physics
 {
-	using namespace EmEn::Libs;
-	using namespace EmEn::Libs::Math;
-
-	const size_t PhysicalObjectProperties::ClassUID{getClassUID(ClassId)};
+	using namespace Libs;
+	using namespace Libs::Math;
 
 	bool
 	PhysicalObjectProperties::setMass (float value, bool fireEvents) noexcept

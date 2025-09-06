@@ -52,14 +52,11 @@
 
 namespace EmEn::Graphics
 {
-	using namespace EmEn::Libs;
-	using namespace EmEn::Libs::Math;
-	using namespace EmEn::Libs::PixelFactory;
-	using namespace EmEn::Vulkan;
-	using namespace EmEn::Saphir;
-
-	const size_t Renderer::ClassUID{getClassUID(ClassId)};
-	Renderer * Renderer::s_instance{nullptr};
+	using namespace Libs;
+	using namespace Libs::Math;
+	using namespace Libs::PixelFactory;
+	using namespace Vulkan;
+	using namespace Saphir;
 
 	bool
 	Renderer::initializeSubServices () noexcept
@@ -269,17 +266,17 @@ namespace EmEn::Graphics
 		{
 			auto & settings = m_primaryServices.settings();
 
-			if ( settings.get< bool >(NormalMappingEnabledKey, DefaultNormalMappingEnabled) )
+			if ( settings.getOrSetDefault< bool >(NormalMappingEnabledKey, DefaultNormalMappingEnabled) )
 			{
 				Tracer::info(ClassId, "Normal mapping enabled !");
 			}
 
-			if ( settings.get< bool >(HighQualityLightEnabledKey, DefaultHighQualityLightEnabled) )
+			if ( settings.getOrSetDefault< bool >(HighQualityLightEnabledKey, DefaultHighQualityLightEnabled) )
 			{
 				Tracer::info(ClassId, "High quality light shader code enabled !");
 			}
 
-			if ( settings.get< bool >(HighQualityReflectionEnabledKey, DefaultHighQualityReflectionEnabled) )
+			if ( settings.getOrSetDefault< bool >(HighQualityReflectionEnabledKey, DefaultHighQualityReflectionEnabled) )
 			{
 				Tracer::info(ClassId, "High quality reflection shader code enabled !");
 			}
@@ -441,6 +438,12 @@ namespace EmEn::Graphics
 		return m_pipelines.emplace(hash, graphicsPipeline).second;
 	}
 
+	bool
+	Renderer::isSwapChainDegraded () const noexcept
+	{
+		return m_swapChain->status() == SwapChain::Status::Degraded;
+	}
+
 	void
 	Renderer::renderFrame (const std::shared_ptr< Scenes::Scene > & scene, const Overlay::Manager & overlayManager) noexcept
 	{
@@ -449,24 +452,14 @@ namespace EmEn::Graphics
 			return;
 		}
 
-		if ( m_swapChain->status() == SwapChain::Status::Degraded )
-		{
-			TraceInfo{ClassId} << "The swap-chain is degraded !";
-
-			if ( !this->recreateSwapChain() )
-			{
-				return;
-			}
-		}
-
-		m_statistics.start();
-
 		const auto imageIndex = m_swapChain->acquireNextImage();
 
 		if ( !imageIndex )
 		{
 			return;
 		}
+
+		m_statistics.start();
 
 		/* NOTE: Clear all semaphores for the new frame. */
 		m_rendererFrameScope[imageIndex.value()].clearSemaphores();
@@ -695,7 +688,7 @@ namespace EmEn::Graphics
 	bool
 	Renderer::onNotification (const ObservableTrait * observable, int notificationCode, const std::any & /*data*/) noexcept
 	{
-		if ( observable->is(Window::ClassUID) )
+		if ( observable->is(Window::getClassUID()) )
 		{
 			switch ( notificationCode )
 			{
@@ -732,7 +725,7 @@ namespace EmEn::Graphics
 
 		/* NOTE: Don't know what it is, goodbye! */
 		TraceDebug{ClassId} <<
-			"Received an unhandled notification (Code:" << notificationCode << ") from observable '" << whoIs(observable->classUID()) << "' (UID:" << observable->classUID() << ")  ! "
+			"Received an unhandled notification (Code:" << notificationCode << ") from observable (UID:" << observable->classUID() << ")  ! "
 			"Forgetting it ...";
 
 		return false;

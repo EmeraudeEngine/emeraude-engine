@@ -224,7 +224,7 @@ namespace EmEn::Input
 			[[nodiscard]]
 			bool usable () const noexcept;
 
-			static std::array< JoystickState, DeviceCount > s_devicesState;
+			inline static std::array< JoystickState, DeviceCount > s_devicesState{};
 
 			int32_t m_deviceID{-1};
 			float m_threshold{0.15F};

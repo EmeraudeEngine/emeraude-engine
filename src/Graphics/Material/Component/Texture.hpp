@@ -50,7 +50,7 @@ namespace EmEn::Graphics::Material::Component
 {
 	/**
 	 * @brief The texture component type.
-	 * @extends EmEn::Graphics::Material::Component::Interface This class describe a component type.
+	 * @extends EmEn::Graphics::Material::Component::Interface This class describes a component type.
 	 */
 	class Texture final : public Interface
 	{
@@ -65,7 +65,7 @@ namespace EmEn::Graphics::Material::Component
 			 * @param texture A reference to a texture resource smart pointer.
 			 * @param UVWChannel The texture channel to use on geometry. Default 0.
 			 * @param UVWScale A reference to a vector to scale the texture coordinates. Default 1.0 in all directions.
-			 * @param enableAlpha Enable the alpha channel for opacity/blending. Request a 4 channels texture. Default false.
+			 * @param enableAlpha Enable the alpha channel for opacity/blending. Request a 4-channel texture. Default false.
 			 */
 			Texture (const char * samplerName, std::string variableName, const std::shared_ptr< TextureResource::Abstract > & texture, uint32_t UVWChannel = 0, const Libs::Math::Vector< 3, float > & UVWScale = {1.0F, 1.0F, 1.0F}, bool enableAlpha = false) noexcept
 				: m_samplerName{samplerName},
@@ -82,11 +82,11 @@ namespace EmEn::Graphics::Material::Component
 			 * @brief Constructs a texture component from json data.
 			 * @param samplerName A C-string for the name of the sampler uniform.
 			 * @param variableName A string [std::move].
-			 * @param data A reference to a json value.
+			 * @param data A reference to a JSON value.
 			 * @param fillingType A reference to a texture filling type.
-			 * @param resources A reference to the resource manager.
+			 * @param serviceProvider A reference to the resource manager through a service provider.
 			 */
-			Texture (const char * samplerName, std::string variableName, const Json::Value & data, const FillingType & fillingType, Resources::Manager & resources) noexcept;
+			Texture (const char * samplerName, std::string variableName, const Json::Value & data, const FillingType & fillingType, Resources::ServiceProvider & serviceProvider) noexcept;
 
 			/** @copydoc EmEn::Graphics::Material::Component::Interface::create() */
 			[[nodiscard]]

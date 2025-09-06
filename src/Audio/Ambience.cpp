@@ -54,7 +54,7 @@ namespace EmEn::Audio
 	{
 		if ( this->requestLoopChannel() )
 		{
-			m_loopedSource = Manager::instance()->requestSource();
+			m_loopedSource = m_audioManager.requestSource();
 
 			if ( m_loopedSource == nullptr )
 			{
@@ -83,11 +83,9 @@ namespace EmEn::Audio
 			{
 				m_channels.clear();
 
-				auto * audioManager = Manager::instance();
-
 				for ( size_t channelIndex = 0; channelIndex < m_channelCount; channelIndex++ )
 				{
-					auto source = audioManager->requestSource();
+					auto source = m_audioManager.requestSource();
 
 					if ( source == nullptr )
 					{
@@ -284,7 +282,7 @@ namespace EmEn::Audio
 	bool
 	Ambience::onNotification (const ObservableTrait * observable, int notificationCode, const std::any & /*data*/) noexcept
 	{
-		if ( observable->is(SoundResource::ClassUID) )
+		if ( observable->is(SoundResource::getClassUID()) )
 		{
 			switch ( notificationCode )
 			{
@@ -307,9 +305,9 @@ namespace EmEn::Audio
 			return false;
 		}
 
-		/* NOTE: Don't know what is it, goodbye! */
+		/* NOTE: Don't know what it is, goodbye! */
 		TraceDebug{ClassId} <<
-			"Received an unhandled notification (Code:" << notificationCode << ") from observable '" << ObservableTrait::whoIs(observable->classUID()) << "' (UID:" << observable->classUID() << ")  ! "
+			"Received an unhandled notification (Code:" << notificationCode << ") from observable (UID:" << observable->classUID() << ")  ! "
 			"Forgetting it ...";
 
 		return false;
@@ -355,7 +353,7 @@ namespace EmEn::Audio
 	}
 
 	bool
-	Ambience::loadSoundSet (const std::filesystem::path & filepath) noexcept
+	Ambience::loadSoundSet (Resources::Manager & resourceManager, const std::filesystem::path & filepath) noexcept
 	{
 		const auto rootCheck = FastJSON::getRootFromFile(filepath);
 
@@ -368,7 +366,7 @@ namespace EmEn::Audio
 
 		const auto & root = rootCheck.value();
 
-		auto * soundManager = Resources::Manager::instance()->container< SoundResource >();
+		auto * soundManager = resourceManager.container< SoundResource >();
 
 		/* 1. Read base sound set information. */
 		this->setChannelCount(FastJSON::getValue< size_t >(root, JKChannelCount).value_or(DefaultChannelCount));

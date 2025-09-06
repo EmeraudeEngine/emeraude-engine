@@ -30,23 +30,13 @@
 #include "Resources/Manager.hpp"
 #include "Graphics/Material/BasicResource.hpp"
 
-/* Defining the resource manager class id. */
-template<>
-const char * const EmEn::Resources::Container< EmEn::Graphics::Renderable::WaterLevelResource >::ClassId{"WaterLevelContainer"};
-
-/* Defining the resource manager ClassUID. */
-template<>
-const size_t EmEn::Resources::Container< EmEn::Graphics::Renderable::WaterLevelResource >::ClassUID{getClassUID(ClassId)};
-
 namespace EmEn::Graphics::Renderable
 {
-	using namespace EmEn::Libs;
-	using namespace EmEn::Libs::Math;
-
-	const size_t WaterLevelResource::ClassUID{getClassUID(ClassId)};
+	using namespace Libs;
+	using namespace Libs::Math;
 
 	bool
-	WaterLevelResource::load () noexcept
+	WaterLevelResource::load (Resources::ServiceProvider & serviceProvider) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
@@ -67,7 +57,7 @@ namespace EmEn::Graphics::Renderable
 			return this->setLoadSuccess(false);
 		}
 
-		if ( !this->setMaterial(Resources::Manager::instance()->container< Material::BasicResource >()->getDefaultResource()) )
+		if ( !this->setMaterial(serviceProvider.container< Material::BasicResource >()->getDefaultResource()) )
 		{
 			return this->setLoadSuccess(false);
 		}
@@ -76,7 +66,7 @@ namespace EmEn::Graphics::Renderable
 	}
 
 	bool
-	WaterLevelResource::load (const Json::Value & /*data*/) noexcept
+	WaterLevelResource::load (Resources::ServiceProvider & /*serviceProvider*/, const Json::Value & /*data*/) noexcept
 	{
 		if ( !this->beginLoading() )
 		{

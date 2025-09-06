@@ -51,9 +51,6 @@ namespace EmEn::Graphics::Renderable
 			/** @brief Class identifier. */
 			static constexpr auto ClassId{"BasicFloorResource"};
 
-			/** @brief Observable class unique identifier. */
-			static const size_t ClassUID;
-
 			static constexpr auto DefaultSize{1024.0F};
 			static constexpr auto DefaultDivision{16};
 			static constexpr uint32_t DefaultGeometryFlags{Geometry::EnableTangentSpace | Geometry::EnableVertexColor | Geometry::EnablePrimaryTextureCoordinates | Geometry::EnablePrimitiveRestart};
@@ -84,12 +81,25 @@ namespace EmEn::Graphics::Renderable
 
 			}
 
+			/**
+			 * @brief Returns the unique identifier for this class [Thread-safe].
+			 * @return size_t
+			 */
+			static
+			size_t
+			getClassUID () noexcept
+			{
+				static const size_t classUID = EmEn::Libs::Hash::FNV1a(ClassId);
+
+				return classUID;
+			}
+
 			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
 			[[nodiscard]]
 			size_t
 			classUID () const noexcept override
 			{
-				return ClassUID;
+				return getClassUID();
 			}
 
 			/** @copydoc EmEn::Libs::ObservableTrait::is() const */
@@ -97,7 +107,7 @@ namespace EmEn::Graphics::Renderable
 			bool
 			is (size_t classUID) const noexcept override
 			{
-				return classUID == ClassUID;
+				return classUID == getClassUID();
 			}
 
 			/** @copydoc EmEn::Resources::ResourceTrait::classLabel() const */
@@ -108,14 +118,14 @@ namespace EmEn::Graphics::Renderable
 				return ClassId;
 			}
 
-			/** @copydoc EmEn::Resources::ResourceTrait::load() */
-			bool load () noexcept override;
+			/** @copydoc EmEn::Resources::ResourceTrait::load(Resources::ServiceProvider &) */
+			bool load (Resources::ServiceProvider & serviceProvider) noexcept override;
 
-			/** @copydoc EmEn::Resources::ResourceTrait::load(const std::filesystem::path &) */
-			bool load (const std::filesystem::path & filepath) noexcept override;
+			/** @copydoc EmEn::Resources::ResourceTrait::load(Resources::ServiceProvider &, const std::filesystem::path &) */
+			bool load (Resources::ServiceProvider & serviceProvider, const std::filesystem::path & filepath) noexcept override;
 
-			/** @copydoc EmEn::Resources::ResourceTrait::load(const Json::Value &) */
-			bool load (const Json::Value & data) noexcept override;
+			/** @copydoc EmEn::Resources::ResourceTrait::load(Resources::Manager &, const Json::Value &) */
+			bool load (Resources::ServiceProvider & serviceProvider, const Json::Value & data) noexcept override;
 
 			/** @copydoc EmEn::Resources::ResourceTrait::memoryOccupied() const noexcept */
 			[[nodiscard]]
@@ -218,8 +228,8 @@ namespace EmEn::Graphics::Renderable
 
 			/**
 			 * @brief Loads a basic floor by using parameters to generate the ground and a material to paint it.
-			 * @param size The size of the whole size of one dimension of the grid. i.e. If the size is 1024, the grid will be from +512 to -512.
-			 * @param division How many cell in one dimension.
+			 * @param size The size of the whole size of one dimension of the grid. I.e., If the size is 1024, the grid will be from +512 to -512.
+			 * @param division How many cells in one dimension.
 			 * @param materialResource A reference to a material smart pointer.
 			 * @param UVMultiplier Texture coordinates multiplier.
 			 * @return bool
@@ -228,8 +238,8 @@ namespace EmEn::Graphics::Renderable
 
 			/**
 			 * @brief Loads a basic floor by using parameters to generate the ground with diamond square and a material to paint it.
-			 * @param size The size of the whole size of one dimension of the grid. i.e. If the size is 1024, the grid will be from +512 to -512.
-			 * @param division How many cell in one dimension.
+			 * @param size The size of the whole size of one dimension of the grid. I.e., If the size is 1024, the grid will be from +512 to -512.
+			 * @param division How many cells in one dimension.
 			 * @param factor Set diamond square factor parameter.
 			 * @param roughness Set the diamond square roughness parameter. A value from 0.0 to 1.0
 			 * @param seed Randomize generation.
@@ -241,9 +251,9 @@ namespace EmEn::Graphics::Renderable
 
 			/**
 			 * @brief Loads a basic floor by using parameters to generate the ground with diamond square and a material to paint it.
-			 * @param size The size of the whole size of one dimension of the grid. i.e. If the size is 1024, the grid will be from +512 to -512.
-			 * @param division How many cell in one dimension.
-			 * @param noiseSize Set perlin noise size parameter.
+			 * @param size The size of the whole size of one dimension of the grid. I.e., If the size is 1024, the grid will be from +512 to -512.
+			 * @param division How many cells in one dimension.
+			 * @param noiseSize Set the perlin noise size parameter.
 			 * @param noiseFactor Set perlin noise factor parameter.
 			 * @param materialResource A reference to a material smart pointer.
 			 * @param UVMultiplier Texture coordinates multiplier.
@@ -252,10 +262,10 @@ namespace EmEn::Graphics::Renderable
 			bool loadPerlinNoise (float size, uint32_t division, float noiseSize, float noiseFactor, const std::shared_ptr< Material::Interface > & materialResource, float UVMultiplier = 1.0F) noexcept;
 
 			/**
-			 * @brief Loads a basic floor by using parameters to generate the ground with displacement map and a material to paint it.
+			 * @brief Loads a basic floor by using parameters to generate the ground with a displacement map and a material to paint it.
 			 * @tparam pixmapData_t The type used within the pixmap.
-			 * @param size The size of the whole size of one dimension of the grid. i.e. If the size is 1024, the grid will be from +512 to -512.
-			 * @param division How many cell in one dimension.
+			 * @param size The size of the whole size of one dimension of the grid. I.e., If the size is 1024, the grid will be from +512 to -512.
+			 * @param division How many cells in one dimension.
 			 * @param displacementMap A pixmap to use as a displacement map.
 			 * @param displacementFactor Factor of displacement.
 			 * @param materialResource A reference to a material smart pointer.

@@ -28,9 +28,9 @@
 
 namespace EmEn::Scenes::Component
 {
-	using namespace EmEn::Libs;
-	using namespace EmEn::Libs::Math;
-	using namespace EmEn::Animations;
+	using namespace Libs;
+	using namespace Libs::Math;
+	using namespace Animations;
 
 	void
 	Microphone::updateDeviceFromCoordinates (const CartesianFrame< float > & worldCoordinates, const Vector< 3, float > & worldVelocity) noexcept

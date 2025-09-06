@@ -43,8 +43,6 @@
 
 namespace EmEn::Input
 {
-	std::array< JoystickState, DeviceCount > JoystickController::s_devicesState{};
-
 	bool
 	JoystickController::usable () const noexcept
 	{

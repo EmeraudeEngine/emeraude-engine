@@ -34,19 +34,17 @@
 
 namespace EmEn::Scenes::Component
 {
-	using namespace EmEn::Libs;
-	using namespace EmEn::Libs::Math;
-	using namespace EmEn::Animations;
-	using namespace EmEn::Graphics;
-	using namespace EmEn::Saphir;
+	using namespace Libs;
+	using namespace Libs::Math;
+	using namespace Animations;
+	using namespace Saphir;
+	using namespace Graphics;
 
 	void
 	DirectionalLight::onOutputDeviceConnected (AVConsole::AVManagers & /*managers*/, AbstractVirtualDevice * targetDevice) noexcept
 	{
-		const auto maxDistance = Settings::instance()->get< float >(GraphicsShadowMappingMaxDistanceKey, DefaultGraphicsShadowMappingMaxDistance);
-
 		targetDevice->updateDeviceFromCoordinates(this->getWorldCoordinates(), this->getWorldVelocity());
-		targetDevice->updateProperties(false, maxDistance, 0.0F);
+		targetDevice->updateProperties(false, s_maxDistance, 0.0F);
 	}
 
 	bool

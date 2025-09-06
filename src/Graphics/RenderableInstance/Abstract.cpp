@@ -53,8 +53,6 @@ namespace EmEn::Graphics::RenderableInstance
 
 	constexpr auto TracerTag{"RenderableInstance"};
 
-	const size_t Abstract::ClassUID{getClassUID("AbstractRenderableInstance")};
-
 	bool
 	Abstract::isReadyToCastShadows (const std::shared_ptr< RenderTarget::Abstract > & renderTarget) const noexcept
 	{
@@ -65,7 +63,7 @@ namespace EmEn::Graphics::RenderableInstance
 			return false;
 		}
 
-		return renderTargetIt->second->isReadyToCastShadows();
+		return renderTargetIt->second->isReadyForShadowCasting();
 	}
 
 	bool
@@ -149,7 +147,7 @@ namespace EmEn::Graphics::RenderableInstance
 			renderTargetProgram->setShadowCastingProgram(layerIndex, generator.shaderProgram());
 		}
 
-		renderTargetProgram->setReadyToCastShadows();
+		renderTargetProgram->setReadyForShadowCasting();
 
 		return true;
 	}
@@ -283,7 +281,7 @@ namespace EmEn::Graphics::RenderableInstance
 	bool
 	Abstract::refreshGraphicsPipelines (const std::shared_ptr< RenderTarget::Abstract > & renderTarget) noexcept
 	{
-		/*const std::lock_guard< std::mutex > lock{m_GPUMemoryAccess};
+		const std::lock_guard< std::mutex > lock{m_GPUMemoryAccess};
 
 		const auto renderTargetIt = m_renderTargetPrograms.find(renderTarget);
 
@@ -292,22 +290,7 @@ namespace EmEn::Graphics::RenderableInstance
 			return false;
 		}
 
-		uint32_t error = 0;
-
-		for ( const auto & programs : std::ranges::views::values(renderTargetIt->second.renderPasses) )
-		{
-			for ( const auto & program : programs )
-			{
-				if ( !program->graphicsPipeline()->recreateOnHardware(*renderTarget, *this) )
-				{
-					error++;
-				}
-			}
-		}
-
-		return error == 0;*/
-
-		return false;
+		return renderTargetIt->second->refreshGraphicsPipelines(renderTarget);
 	}
 
 	void
@@ -483,37 +466,5 @@ namespace EmEn::Graphics::RenderableInstance
 		this->pushMatrices(commandBuffer, *pipelineLayout, *program, readStateIndex, renderTarget->viewMatrices(), worldCoordinates);
 
 		commandBuffer.draw(*m_renderable->geometry(), layerIndex, this->instanceCount());
-	}
-
-	bool
-	Abstract::onNotification (const ObservableTrait * observable, int notificationCode, const std::any & /*data*/) noexcept
-	{
-		if ( observable == m_renderable.get() )
-		{
-			switch ( notificationCode )
-			{
-				case Resources::ResourceTrait::LoadFinished :
-					this->notify(ReadyToSetupOnGPU, this->shared_from_this());
-					break;
-
-				case Resources::ResourceTrait::LoadFailed :
-				{
-					std::stringstream errorMessage;
-					errorMessage <<
-						"Unable to load the renderable '" << m_renderable->name() << "' ! "
-						"Set the renderable instance as broken.";
-
-					this->setBroken(errorMessage.str());
-				}
-					break;
-
-				default:
-					break;
-			}
-
-			return true;
-		}
-
-		return false;
 	}
 }

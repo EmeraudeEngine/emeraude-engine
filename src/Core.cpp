@@ -174,6 +174,11 @@ namespace EmEn
 				continue;
 			}
 
+			if ( m_graphicsRenderer.isSwapChainDegraded() && !m_graphicsRenderer.recreateSwapChain() )
+			{
+				Tracer::fatal(ClassId, "Unable to recreate the swap chain !");
+			}
+
 			{
 				const Time::Elapsed::PrintScopeRealTimeThreshold stat{"renderingTask", 1000.0 / 30.0};
 
@@ -464,7 +469,7 @@ namespace EmEn
 		}
 
 		/* Print startup general information. */
-		if ( m_primaryServices.settings().get< bool >(CoreShowInformationKey, DefaultCoreShowInformation) )
+		if ( m_primaryServices.settings().getOrSetDefault< bool >(CoreShowInformationKey, DefaultCoreShowInformation) )
 		{
 			Tracer::info(ClassId, m_primaryServices.information());
 		}
@@ -560,6 +565,12 @@ namespace EmEn
 
 			this->observe(&m_graphicsRenderer);
 			this->observe(&m_graphicsRenderer.shaderManager());
+
+			/* FIXME: Check a better way to give the access ... */
+			Geometry::Interface::s_graphicsRenderer = &m_graphicsRenderer;
+			TextureResource::Abstract::s_graphicsRenderer = &m_graphicsRenderer;
+			Material::Interface::s_graphicsRenderer = &m_graphicsRenderer;
+			Component::Abstract::s_graphicsRenderer = &m_graphicsRenderer;
 		}
 		else
 		{
@@ -588,6 +599,9 @@ namespace EmEn
 			m_audioManager.registerToObject(*this);
 
 			this->observe(&m_audioManager.trackMixer());
+
+			/* FIXME: Check a better way to give the access ... */
+			Component::Abstract::s_audioManager = &m_audioManager;
 		}
 		else
 		{
@@ -937,7 +951,10 @@ namespace EmEn
 				{
 					m_audioManager.play("switch_on");
 
-					m_sceneManager.refreshScenes();
+					if ( !m_sceneManager.refreshActiveScene() )
+					{
+						Tracer::error(ClassId, "Unable to refresh the active scene !");
+					}
 				}
 					return true;
 
@@ -1229,7 +1246,15 @@ namespace EmEn
 			switch ( notificationCode )
 			{
 				case Renderer::SwapChainRecreated :
-					m_sceneManager.refreshScenes();
+					/* FIXME: Should be removed ! */
+					if ( m_sceneManager.refreshActiveScene() )
+					{
+						Tracer::info(ClassId, "Refreshing the active scene ...");
+					}
+					else
+					{
+						Tracer::info(ClassId, "No active scene !");
+					}
 					break;
 
 				case Renderer::SwapChainCreated :

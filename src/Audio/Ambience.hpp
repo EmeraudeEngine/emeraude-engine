@@ -36,6 +36,7 @@
 #include "Libs/Utility.hpp"
 #include "AmbienceChannel.hpp"
 #include "AmbienceSound.hpp"
+#include "Manager.hpp"
 
 namespace EmEn::Audio
 {
@@ -53,8 +54,14 @@ namespace EmEn::Audio
 
 			/**
 			 * @brief Constructs an ambience.
+			 * @param audioManager A reference to the audio manager to request sources.
 			 */
-			Ambience () noexcept = default;
+			explicit
+			Ambience (Manager & audioManager) noexcept
+				: m_audioManager{audioManager}
+			{
+
+			}
 
 			/**
 			 * @brief Copy constructor.
@@ -212,10 +219,11 @@ namespace EmEn::Audio
 
 			/**
 			 * @brief Loads a sound set from a JSON file.
+			 * @param resourceManager A reference to the resource manager.
 			 * @param filepath The path to the filesystem path.
 			 * @return bool
 			 */
-			bool loadSoundSet (const std::filesystem::path & filepath) noexcept;
+			bool loadSoundSet (Resources::Manager & resourceManager, const std::filesystem::path & filepath) noexcept;
 
 			/**
 			 * @brief Reset the current sound set.
@@ -304,6 +312,7 @@ namespace EmEn::Audio
 			static constexpr auto DefaultMinDelay{500};
 			static constexpr auto DefaultMaxDelay{3000};
 
+			Manager & m_audioManager;
 			std::shared_ptr< Source > m_loopedSource;
 			std::vector< AmbienceChannel > m_channels;
 			std::shared_ptr< Filters::Abstract > m_directFilter;

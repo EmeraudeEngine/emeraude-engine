@@ -1,3 +1,7 @@
+if ( NOT TARGET_BINARY_FOR_SETUP )
+	message(FATAL_ERROR "TARGET_BINARY_FOR_SETUP is not SET !")
+endif ()
+
 if ( EMERAUDE_USE_SYSTEM_LIBS )
 	message("Enabling LibJPEG-turbo library from system ...")
 
@@ -5,16 +9,16 @@ if ( EMERAUDE_USE_SYSTEM_LIBS )
 
 	pkg_check_modules(JPEG REQUIRED libjpeg)
 
-	target_include_directories(${PROJECT_NAME} PRIVATE ${JPEG_INCLUDE_DIRS})
-	target_link_directories(${PROJECT_NAME} PRIVATE ${JPEG_LIBRARY_DIRS})
-	target_link_libraries(${PROJECT_NAME} PRIVATE ${JPEG_LIBRARIES})
+	target_include_directories(${TARGET_BINARY_FOR_SETUP} PUBLIC ${JPEG_INCLUDE_DIRS})
+	target_link_directories(${TARGET_BINARY_FOR_SETUP} PUBLIC ${JPEG_LIBRARY_DIRS})
+	target_link_libraries(${TARGET_BINARY_FOR_SETUP} PUBLIC ${JPEG_LIBRARIES})
 else ()
 	message("Enabling LibJPEG-turbo library from local source ...")
 
 	if ( MSVC )
-		target_link_libraries(${PROJECT_NAME} PRIVATE ${LOCAL_LIB_DIR}/lib/jpeg-static.lib)
+		target_link_libraries(${TARGET_BINARY_FOR_SETUP} PUBLIC jpeg-static)
 	else ()
-		target_link_libraries(${PROJECT_NAME} PRIVATE ${LOCAL_LIB_DIR}/lib/libjpeg.a)
+		target_link_libraries(${TARGET_BINARY_FOR_SETUP} PUBLIC jpeg)
 	endif ()
 endif ()
 

@@ -97,17 +97,17 @@ namespace EmEn::Graphics::RenderableInstance
 				return m_isReadyToRender;
 			}
 
-			/** @copydoc EmEn::Graphics::RenderableInstance::RenderTargetProgramsInterface::setReadyToCastShadows() */
+			/** @copydoc EmEn::Graphics::RenderableInstance::RenderTargetProgramsInterface::setReadyForShadowCasting() */
 			void
-			setReadyToCastShadows () noexcept override
+			setReadyForShadowCasting () noexcept override
 			{
 				m_isReadyToCastShadows = true;
 			}
 
-			/** @copydoc EmEn::Graphics::RenderableInstance::RenderTargetProgramsInterface::isReadyToCastShadows() const */
+			/** @copydoc EmEn::Graphics::RenderableInstance::RenderTargetProgramsInterface::isReadyForShadowCasting() const */
 			[[nodiscard]]
 			bool
-			isReadyToCastShadows () const noexcept override
+			isReadyForShadowCasting () const noexcept override
 			{
 				return m_isReadyToCastShadows;
 			}
@@ -163,6 +163,42 @@ namespace EmEn::Graphics::RenderableInstance
 				}
 
 				return  m_layers[layer].shadowCastingProgram;
+			}
+
+			/** @copydoc EmEn::Graphics::RenderableInstance::RenderTargetProgramsInterface::refreshGraphicsPipelines() const */
+			[[nodiscard]]
+			bool
+			refreshGraphicsPipelines (const std::shared_ptr< RenderTarget::Abstract > & renderTarget) const noexcept override
+			{
+				uint32_t errors = 0;
+
+				for ( const auto & layer : m_layers )
+				{
+					for ( const auto & program : layer.renderPrograms )
+					{
+						if ( program == nullptr )
+						{
+							continue;
+						}
+
+						if ( !program->graphicsPipeline()->recreateOnHardware(*renderTarget) )
+						{
+							errors++;
+						}
+					}
+
+					if ( layer.shadowCastingProgram != nullptr && !layer.shadowCastingProgram->graphicsPipeline()->recreateOnHardware(*renderTarget) )
+					{
+						errors++;
+					}
+
+					if ( layer.TBNSpaceProgram != nullptr && !layer.TBNSpaceProgram->graphicsPipeline()->recreateOnHardware(*renderTarget) )
+					{
+						errors++;
+					}
+				}
+
+				return errors == 0;
 			}
 
 		private:

@@ -31,13 +31,12 @@
 
 /* STL inclusions. */
 #include <cstddef>
-#include <any>
-#include <set>
 #include <mutex>
-#if defined(DEBUG) && IS_LINUX
-#include <map>
-#include <memory>
-#endif
+#include <set>
+#include <any>
+
+/* Local inclusions for usages */
+#include "Libs/Hash/FNV1a.hpp"
 
 /* Forward declarations. */
 namespace EmEn::Libs
@@ -121,33 +120,12 @@ namespace EmEn::Libs
 
 			/**
 			 * @brief Returns whether the observable unique identifier matches.
-			 * @note The ID should be asked once per class with Observable::getClassUID() and stored as a static.
+			 * @note The ID should be asked once per class with Observable::getClassUID() and stored as static.
 			 * @param classUID A number to identify a kind of class.
 			 * @return bool
 			 */
 			[[nodiscard]]
 			virtual bool is (size_t classUID) const noexcept = 0;
-
-#if defined(DEBUG) && IS_LINUX
-			/**
-			 * @brief Returns the label registered when generation the UID to use to debug the Observer::onNotification().
-			 * @note This debugging method will return:
-			 *  - "UNALLOCATED_MAP" if the function is called before any observable creation.
-			 *  - "UNREGISTERED_ITEM" if the UID doesn't exist.
-			 *  - "FEATURE_UNAVAILABLE" if the system is other than Linux.
-			 * @param UID An observable UID.
-			 * @return const char *
-			 */
-			[[nodiscard]]
-			static const char * whoIs (size_t UID) noexcept;
-#else
-			[[nodiscard]]
-			static const char *
-			whoIs (size_t /*UID*/) noexcept
-			{
-				return "FEATURE_UNAVAILABLE";
-			}
-#endif
 
 		protected:
 
@@ -163,14 +141,6 @@ namespace EmEn::Libs
 			 * @return void
 			 */
 			void notify (int notificationCode, const std::any & data = {}) noexcept;
-
-			/**
-			 * @brief Returns a unique identifier for observable and register a label with it [Thread-safe].
-			 * @param label A pointer to a C-string.
-			 * @return size_t
-			 */
-			[[nodiscard]]
-			static size_t getClassUID (const char * label) noexcept;
 
 		private:
 
@@ -195,12 +165,6 @@ namespace EmEn::Libs
 			{
 				m_observers.erase(observer);
 			}
-
-			static std::mutex s_UIDMutex;
-			static size_t s_nextClassUID;
-#if defined(DEBUG) && IS_LINUX
-			static std::unique_ptr< std::map< size_t, const char * > > s_classUIDs;
-#endif
 
 			std::set< ObserverTrait * > m_observers;
 			mutable std::mutex m_notificationMutex;

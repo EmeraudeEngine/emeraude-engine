@@ -63,7 +63,27 @@ namespace EmEn::Resources
 	 * @return const char *
 	 */
 	[[nodiscard]]
-	const char * to_cstring (SourceType value) noexcept;
+	inline
+	const char *
+	to_cstring (SourceType value) noexcept
+	{
+		switch ( value )
+		{
+			case SourceType::Undefined :
+				return UndefinedString;
+
+			case SourceType::LocalData :
+				return LocalDataString;
+
+			case SourceType::ExternalData :
+				return ExternalDataString;
+
+			case SourceType::DirectData :
+				return DirectDataString;
+		}
+
+		return UndefinedString;
+	}
 
 	/**
 	 * @brief Returns a string version of the enum value.
@@ -84,7 +104,27 @@ namespace EmEn::Resources
 	 * @return ComponentType
 	 */
 	[[nodiscard]]
-	SourceType to_SourceType (const std::string & value) noexcept;
+	inline
+	SourceType
+	to_SourceType (const std::string & value) noexcept
+	{
+		if ( value == LocalDataString )
+		{
+			return SourceType::LocalData;
+		}
+
+		if ( value == ExternalDataString )
+		{
+			return SourceType::ExternalData;
+		}
+
+		if ( value == DirectDataString )
+		{
+			return SourceType::DirectData;
+		}
+
+		return SourceType::Undefined;
+	}
 
 	/** @brief This enum defines every stage of resource loading. */
 	enum class Status : uint8_t
@@ -96,7 +136,7 @@ namespace EmEn::Resources
 		/* Define a resource being manually attached with dependencies. */
 		ManualEnqueuing = 2,
 		/* Define a resource being loaded.
-		 * NOTE: In this stage, this is no more possible to add new dependency. */
+		 * NOTE: At this stage, this is no more possible to add a new dependency. */
 		Loading = 3,
 		/* Define a resource fully loaded with all dependencies. */
 		Loaded = 4,
@@ -117,7 +157,33 @@ namespace EmEn::Resources
 	 * @return const char *
 	 */
 	[[nodiscard]]
-	const char * to_cstring (Status value) noexcept;
+	inline
+	const char *
+	to_cstring (Status value) noexcept
+	{
+		switch ( value )
+		{
+			case Status::Unloaded :
+				return UnloadedString;
+
+			case Status::Enqueuing :
+				return EnqueuingString;
+
+			case Status::ManualEnqueuing :
+				return ManualEnqueuingString;
+
+			case Status::Loading :
+				return LoadingString;
+
+			case Status::Loaded :
+				return LoadedString;
+
+			case Status::Failed :
+				return FailedString;
+		}
+
+		return nullptr;
+	}
 
 	/**
 	 * @brief Returns a string version of the enum value.

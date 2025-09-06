@@ -76,9 +76,6 @@ namespace EmEn::Audio
 			/** @brief Class identifier. */
 			static constexpr auto ClassId{"TrackMixerService"};
 
-			/** @brief Observable class unique identifier. */
-			static const size_t ClassUID;
-
 			/** @brief Define the track mixer user state (Not OpenAL). */
 			enum class UserState : uint8_t
 			{
@@ -118,12 +115,25 @@ namespace EmEn::Audio
 
 			}
 
+			/**
+			 * @brief Returns the unique identifier for this class [Thread-safe].
+			 * @return size_t
+			 */
+			static
+			size_t
+			getClassUID () noexcept
+			{
+				static const size_t classUID = EmEn::Libs::Hash::FNV1a(ClassId);
+
+				return classUID;
+			}
+
 			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
 			[[nodiscard]]
 			size_t
 			classUID () const noexcept override
 			{
-				return ClassUID;
+				return getClassUID();
 			}
 
 			/** @copydoc EmEn::Libs::ObservableTrait::is() const */
@@ -131,7 +141,7 @@ namespace EmEn::Audio
 			bool
 			is (size_t classUID) const noexcept override
 			{
-				return classUID == ClassUID;
+				return classUID == getClassUID();
 			}
 
 			/** @copydoc EmEn::ServiceInterface::usable() */

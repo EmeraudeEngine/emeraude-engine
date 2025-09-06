@@ -35,19 +35,16 @@
 
 namespace EmEn::Scenes::Component
 {
-	using namespace EmEn::Libs;
-	using namespace EmEn::Libs::Math;
-	using namespace EmEn::Animations;
-	using namespace EmEn::Graphics;
-	using namespace EmEn::Saphir;
+	using namespace Libs;
+	using namespace Libs::Math;
+	using namespace Animations;
+	using namespace Graphics;
+	using namespace Saphir;
 
 	void
 	PointLight::onOutputDeviceConnected (AVConsole::AVManagers & /*managers*/, AbstractVirtualDevice * targetDevice) noexcept
 	{
-		const auto maxDistance =
-			m_radius > 0.0F ?
-			m_radius :
-			Settings::instance()->get< float >(GraphicsShadowMappingMaxDistanceKey, DefaultGraphicsShadowMappingMaxDistance);
+		const auto maxDistance = m_radius > 0.0F ? m_radius : s_maxDistance;
 
 		targetDevice->updateDeviceFromCoordinates(this->getWorldCoordinates(), this->getWorldVelocity());
 		targetDevice->updateProperties(true, maxDistance, 90.0F);

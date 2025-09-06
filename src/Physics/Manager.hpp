@@ -87,7 +87,7 @@ namespace EmEn::Physics
 			bool
 			usable () const noexcept override
 			{
-				return m_flags[ServiceInitialized];
+				return m_serviceInitialized;
 			}
 
 			/**
@@ -172,7 +172,7 @@ namespace EmEn::Physics
 			bool
 			isPhysicsAccelerationAvailable () const noexcept
 			{
-				return m_flags[AccelerationAvailable];
+				return m_accelerationAvailable;
 			}
 
 		private:
@@ -188,30 +188,18 @@ namespace EmEn::Physics
 			 */
 			void clearCommandBuffers () noexcept;
 
-			/* Flag names. */
-			static constexpr auto ServiceInitialized{0UL};
-			static constexpr auto AccelerationAvailable{1UL};
-
 			PrimaryServices & m_primaryServices;
 			Vulkan::Instance & m_vulkanInstance;
 			std::shared_ptr< Vulkan::Device > m_device;
-			Vulkan::TransferManager m_transferManager{Vulkan::GPUWorkType::Physics};
-			Vulkan::LayoutManager m_layoutManager{Vulkan::GPUWorkType::Physics};
+			Vulkan::TransferManager m_transferManager;
+			Vulkan::LayoutManager m_layoutManager;
 			std::vector< ServiceInterface * > m_subServicesEnabled;
 			std::shared_ptr< Vulkan::DescriptorPool > m_descriptorPool;
 			std::shared_ptr< Vulkan::CommandPool > m_commandPool;
 			std::vector< std::shared_ptr< Vulkan::CommandBuffer > > m_commandBuffers;
 			std::map< size_t, std::shared_ptr< Vulkan::PipelineLayout > > m_pipelineLayouts;
 			std::map< size_t, std::shared_ptr< Vulkan::ComputePipeline > > m_pipelines;
-			std::array< bool, 8 > m_flags{
-				false/*ServiceInitialized*/,
-				false/*AccelerationAvailable*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/
-			};
+			bool m_serviceInitialized{false};
+			bool m_accelerationAvailable{false};
 	};
 }

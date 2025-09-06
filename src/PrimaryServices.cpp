@@ -52,7 +52,7 @@ namespace EmEn
 			std::cerr << ClassId << ", " << m_arguments.name() << " service failed to execute !";
 		}
 
-		Tracer::instance().earlySetup(m_arguments, m_processName, false);
+		Tracer::getInstance().earlySetup(m_arguments, m_processName, false);
 
 		if ( m_arguments.get("--verbose").isPresent() )
 		{
@@ -80,7 +80,7 @@ namespace EmEn
 				}
 			}
 
-			Tracer::instance().earlySetup(m_arguments, m_processName, true);
+			Tracer::getInstance().earlySetup(m_arguments, m_processName, true);
 		}
 		else
 		{
@@ -102,7 +102,7 @@ namespace EmEn
 			std::cerr << ClassId << ", " << m_arguments.name() << " service failed to execute !";
 		}
 
-		Tracer::instance().earlySetup(m_arguments, m_processName, false);
+		Tracer::getInstance().earlySetup(m_arguments, m_processName, false);
 
 		if ( m_arguments.get("--verbose").isPresent() )
 		{
@@ -130,7 +130,7 @@ namespace EmEn
 				}
 			}
 
-			Tracer::instance().earlySetup(m_arguments, m_processName, true);
+			Tracer::getInstance().earlySetup(m_arguments, m_processName, true);
 		}
 		else
 		{
@@ -178,7 +178,7 @@ namespace EmEn
 			TraceSuccess{ClassId} << m_settings.name() << " primary service up [" << m_processName << "] !";
 
 			/* NOTE: Now the core settings are initialized, we can update the tracer service configuration. */
-			Tracer::instance().lateSetup(m_arguments, m_fileSystem, m_settings);
+			Tracer::getInstance().lateSetup(m_arguments, m_fileSystem, m_settings);
 		}
 		else
 		{

@@ -291,18 +291,33 @@ namespace EmEn::Vulkan
 				return m_status;
 			}
 
+			/**
+			 * @brief Updates properties of the swap chain.
+			 * @note This version is used on window resize with previous parameters.
+			 * @return void
+			 */
+			void updateProperties () noexcept;
+
 		private:
 
 			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::updateDeviceFromCoordinates() */
 			void updateDeviceFromCoordinates (const Libs::Math::CartesianFrame< float > & worldCoordinates, const Libs::Math::Vector< 3, float > & worldVelocity) noexcept override;
 
 			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::updateProperties() */
-			void updateProperties (bool isPerspectiveProjection, float distance, float fovOrNear) noexcept override;
+			void
+			updateProperties (bool isPerspectiveProjection, float distance, float fovOrNear) noexcept override
+			{
+				m_distance = distance;
+				m_fovOrNear = fovOrNear;
+				m_isPerspectiveProjection = isPerspectiveProjection;
+
+				this->updateProperties();
+			}
 
 			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::onInputDeviceConnected() */
 			void onInputDeviceConnected (AVConsole::AVManagers & managers, AbstractVirtualDevice * sourceDevice) noexcept override;
 
-			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::onSourceDisconnected() */
+			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::onInputDeviceDisconnected() */
 			void onInputDeviceDisconnected (AVConsole::AVManagers & managers, AbstractVirtualDevice * sourceDevice) noexcept override;
 
 			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::onCreate() */
@@ -447,8 +462,11 @@ namespace EmEn::Vulkan
 			uint32_t m_currentFrame{0};
 			Libs::StaticVector< Frame, 5 > m_frames;
 			Graphics::ViewMatrices2DUBO m_viewMatrices;
+			float m_distance{0.0F};
+			float m_fovOrNear{0.0F};
 			bool m_showInformation{false};
 			bool m_tripleBufferingEnabled{false};
 			bool m_VSyncEnabled{false};
+			bool m_isPerspectiveProjection{false};
 	};
 }

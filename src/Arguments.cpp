@@ -26,10 +26,6 @@
 
 #include "Arguments.hpp"
 
-/* STL inclusions. */
-#include <cstring>
-#include <iostream>
-
 /* Local inclusions. */
 #if IS_WINDOWS
 #include "PlatformSpecific/Helpers.hpp"
@@ -39,61 +35,85 @@
 
 namespace EmEn
 {
-	using namespace EmEn::Libs;
+	using namespace Libs;
 
-	Arguments::Arguments (int argc, char * * argv, bool childProcess) noexcept
-		: ServiceInterface(ClassId)
+	bool
+	Arguments::onInitialize () noexcept
 	{
-		m_flags[ChildProcess] = childProcess;
-
-		/* NOTE: Create a copy of main() arguments. */
-		if ( argc > 0 && argv != nullptr )
+		if ( m_rawArguments.empty() )
 		{
-			m_rawArguments.reserve(argc);
+			TraceError{ClassId} << "There is no argument to evaluate !";
 
-			for ( int argIndex = 0; argIndex < argc; argIndex++ )
-			{
-				m_rawArguments.emplace_back(argv[argIndex]);
-			}
+			return false;
 		}
+
+		auto argIt = m_rawArguments.cbegin();
+
+		m_binaryFilepath = *argIt;
+
+		for ( ++argIt; argIt != m_rawArguments.cend(); ++argIt )
+		{
+			const auto & value = *argIt;
+
+			if ( !value.starts_with('-') )
+			{
+				TraceError{ClassId} << "Invalid argument : " << value;
+
+				continue;
+			}
+
+			/* NOTE: Checking the form --xxx=yyy */
+			if ( value.find_first_of('=') != std::string::npos )
+			{
+				if ( const auto chunks = String::explode(value, '=', false); chunks.size() >= 2 )
+				{
+					m_arguments.emplace(chunks[0], chunks[1]);
+				}
+				else if ( chunks.size() == 1 )
+				{
+					m_arguments.emplace(chunks[0], "");
+				}
+
+				continue;
+			}
+
+			/* NOTE: Checking the form --xxx yyy */
+			if ( auto nextArgIt = std::next(argIt); nextArgIt != m_rawArguments.cend() && !nextArgIt->starts_with('-') )
+			{
+				const auto & nextValue = *nextArgIt;
+
+				/* We assume the arg is the parameter value. */
+				m_arguments.emplace(value, nextValue);
+
+				++argIt;
+
+				continue;
+			}
+
+			/* NOTE: we put "true" to make argument returning true when calling ArgumentValue::isPresent(). */
+			m_arguments.emplace(value, true);
+		}
+
+		/* NOTE: At this point, the tracer is not yet initialized. */
+		if ( this->get("--verbose").isPresent() )
+		{
+			TraceInfo{ClassId} << *this;
+		}
+
+		m_serviceInitialized = true;
+
+		return true;
 	}
 
-#if IS_WINDOWS
-	Arguments::Arguments (int argc, wchar_t * * wargv, bool childProcess) noexcept
-		: ServiceInterface(ClassId)
+	bool
+	Arguments::onTerminate () noexcept
 	{
-		m_flags[ChildProcess] = childProcess;
+		m_serviceInitialized = false;
 
-		/* NOTE: Create a copy of main() arguments. */
-		if ( argc > 0 && wargv != nullptr )
-		{
-			m_rawArguments.reserve(argc);
+		m_rawArguments.clear();
+		m_arguments.clear();
 
-			for ( int argIndex = 0; argIndex < argc; argIndex++ )
-			{
-				std::wstring tmp{wargv[argIndex]};
-
-				m_rawArguments.emplace_back(PlatformSpecific::convertWideToUTF8(tmp));
-			}
-		}
-	}
-#endif
-
-	Arguments::~Arguments ()
-	{
-		if ( m_argv != nullptr )
-		{
-			for ( int argIndex = 0; argIndex < m_argc; argIndex++ )
-			{
-				delete[] m_argv[argIndex];
-
-				m_argv[argIndex] = nullptr;
-			}
-
-			delete[] m_argv;
-
-			m_argv = nullptr;
-		}
+		return true;
 	}
 
 	void
@@ -103,61 +123,25 @@ namespace EmEn
 
 		if ( argument.find_first_of('=') != std::string::npos )
 		{
-			const auto list = String::explode(argument, '=');
-
-			m_arguments.emplace(list[0], list[1]);
+			if ( const auto chunks = String::explode(argument, '='); chunks.size() >= 2 )
+			{
+				m_arguments.emplace(chunks[0], chunks[1]);
+			}
+			else if ( chunks.size() == 1 )
+			{
+				m_arguments.emplace(chunks[0], "");
+			}
 		}
 		else
 		{
-			m_arguments.emplace(argument, "1");
+			m_arguments.emplace(argument, true);
 		}
-	}
-
-	void
-	Arguments::recreateRawArguments () const noexcept
-	{
-		m_argc = static_cast< int >(m_rawArguments.size());
-		m_argv = new char * [static_cast< size_t >(m_argc)];
-
-		for ( auto it = m_rawArguments.cbegin(); it != m_rawArguments.cend(); ++it )
-		{
-			const auto argIndex = std::distance(m_rawArguments.cbegin(), it);
-			const auto strlen = it->size();
-
-			m_argv[argIndex] = new char[strlen + 1];
-
-			strncpy(m_argv[argIndex], it->data(), strlen);
-
-			m_argv[argIndex][strlen] = '\0';
-		}
-	}
-
-	int
-	Arguments::getArgc () const noexcept
-	{
-		if ( m_argv == nullptr )
-		{
-			this->recreateRawArguments();
-		}
-
-		return m_argc;
-	}
-
-	char * *
-	Arguments::getArgv () const noexcept
-	{
-		if ( m_argv == nullptr )
-		{
-			this->recreateRawArguments();
-		}
-
-		return m_argv;
 	}
 
 	Argument
-	Arguments::get (const std::string & name) const noexcept
+	Arguments::get (std::string_view argument) const noexcept
 	{
-		const auto argIt = m_arguments.find(name);
+		const auto argIt = m_arguments.find(argument);
 
 		if ( argIt == m_arguments.cend() )
 		{
@@ -168,16 +152,16 @@ namespace EmEn
 	}
 
 	Argument
-	Arguments::get (const std::string & name, const std::string & alternateName) const noexcept
+	Arguments::get (std::string_view argument, std::string_view alternateArgument) const noexcept
 	{
-		auto argIt = m_arguments.find(name);
+		auto argIt = m_arguments.find(argument);
 
 		if ( argIt != m_arguments.cend() )
 		{
 			return argIt->second;
 		}
 
-		argIt = m_arguments.find(alternateName);
+		argIt = m_arguments.find(alternateArgument);
 
 		if ( argIt != m_arguments.cend() )
 		{
@@ -192,9 +176,7 @@ namespace EmEn
 	{
 		for ( const auto & name : namesList )
 		{
-			const auto argIt = m_arguments.find(name);
-
-			if ( argIt != m_arguments.cend() )
+			if ( const auto argIt = m_arguments.find(name); argIt != m_arguments.cend() )
 			{
 				return argIt->second;
 			}
@@ -221,86 +203,5 @@ namespace EmEn
 		}
 
 		return output.str();
-	}
-
-	bool
-	Arguments::onInitialize () noexcept
-	{
-		if ( m_rawArguments.empty() )
-		{
-			TraceError{ClassId} << "There is no argument to evaluate !";
-
-			return false;
-		}
-
-		auto argIt = m_rawArguments.cbegin();
-
-		m_binaryFilepath = *argIt;
-
-		for ( ++argIt; argIt != m_rawArguments.cend(); ++argIt )
-		{
-			const auto & value = *argIt;
-
-			if ( !value.starts_with('-') )
-			{
-				std::cerr << "Invalid argument : " << value << '\n';
-
-				continue;
-			}
-
-			/* NOTE: Checking the form --xxx=yyy */
-			if ( value.find_first_of('=') != std::string::npos )
-			{
-				auto chunks = String::explode(value, '=', false);
-
-				m_arguments.emplace(std::piecewise_construct, std::forward_as_tuple(chunks[0]), std::forward_as_tuple(chunks[1]));
-
-				continue;
-			}
-
-			auto nextArgIt = std::next(argIt);
-
-			/* NOTE: Checking the form --xxx yyy */
-			if ( nextArgIt != m_rawArguments.cend() && !nextArgIt->starts_with('-') )
-			{
-				const auto & nextValue = *nextArgIt;
-
-				/* We assume the arg is the parameter value. */
-				m_arguments.emplace(std::piecewise_construct, std::forward_as_tuple(value), std::forward_as_tuple(nextValue));
-
-				++argIt;
-
-				continue;
-			}
-
-			/* NOTE: we put "1" to make argument returning true when calling ArgumentValue::isPresent(). */
-			m_arguments.emplace(std::piecewise_construct, std::forward_as_tuple(value), std::forward_as_tuple(true));
-		}
-
-		if ( !m_flags[ChildProcess] )
-		{
-			m_flags[ShowInformation] = this->get("--verbose").isPresent();
-		}
-
-		/* NOTE: At this point, the tracer is not yet initialized. */
-		if ( m_flags[ShowInformation] )
-		{
-			std::cout << *this << '\n';
-		}
-
-		m_flags[ServiceInitialized] = true;
-
-		return true;
-	}
-
-	bool
-	Arguments::onTerminate () noexcept
-	{
-		m_flags[ServiceInitialized] = false;
-
-		m_rawArguments.clear();
-		m_arguments.clear();
-
-		return true;
 	}
 }

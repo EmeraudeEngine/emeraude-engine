@@ -99,7 +99,7 @@ namespace EmEn::Resources
 	}
 
 	bool
-	BaseInformation::parseData (const Json::Value & resourceDefinition) noexcept
+	BaseInformation::parseData (const FileSystem & fileSystem, const Json::Value & resourceDefinition) noexcept
 	{
 		if ( !resourceDefinition.isMember(DataKey) )
 		{
@@ -122,11 +122,19 @@ namespace EmEn::Resources
 			case SourceType::LocalData :
 				if ( data.isString() )
 				{
-#if IS_WINDOWS
-					const auto filepath = FileSystem::instance()->getFilepathFromDataDirectories(DataStores, String::replace('/', IO::Separator, data.asString()));
-#else
-					const auto filepath = FileSystem::instance()->getFilepathFromDataDirectories(DataStores, data.asString());
-#endif
+					std::string filename;
+
+					if constexpr ( IsWindows )
+					{
+						filename = String::replace('/', IO::Separator, data.asString());
+					}
+					else
+					{
+						filename = data.asString();
+					}
+
+					const auto filepath = fileSystem.getFilepathFromDataDirectories(DataStores, filename);
+
 					if ( filepath.empty() )
 					{
 						TraceError{ClassId} << data << " for '" << DataKey << "' key (" << LocalDataString << ") point to an invalid location.";
@@ -193,7 +201,7 @@ namespace EmEn::Resources
 	}
 
 	bool
-	BaseInformation::parse (const Json::Value & resourceDefinition) noexcept
+	BaseInformation::parse (const FileSystem & fileSystem, const Json::Value & resourceDefinition) noexcept
 	{
 		/* 1. Check resource name. */
 		if ( !this->parseName(resourceDefinition) )
@@ -208,7 +216,7 @@ namespace EmEn::Resources
 		}
 
 		/* 3. Check resource data. */
-		if ( !this->parseData(resourceDefinition) )
+		if ( !this->parseData(fileSystem, resourceDefinition) )
 		{
 			/* Invalid the resource */
 			m_source = SourceType::Undefined;

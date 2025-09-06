@@ -32,30 +32,14 @@
 #include "Manager.hpp"
 #include "Tracer.hpp"
 
-/* Defining the resource manager ClassId. */
-template<>
-const char * const EmEn::Resources::Container< EmEn::Audio::SoundResource >::ClassId{"SoundContainer"};
-
-/* Defining the resource manager ClassUID. */
-template<>
-const size_t EmEn::Resources::Container< EmEn::Audio::SoundResource >::ClassUID{getClassUID(ClassId)};
-
 namespace EmEn::Audio
 {
-	using namespace EmEn::Libs;
-
-	const size_t SoundResource::ClassUID{getClassUID(ClassId)};
-
-	SoundResource::SoundResource (const std::string & name, uint32_t resourceFlags) noexcept
-		: ResourceTrait(name, resourceFlags)
-	{
-
-	}
+	using namespace Libs;
 
 	bool
-	SoundResource::load () noexcept
+	SoundResource::load (Resources::ServiceProvider & /*serviceProvider*/) noexcept
 	{
-		if ( Manager::audioDisabled() )
+		if ( !Manager::isAudioSystemAvailable() )
 		{
 			return true;
 		}
@@ -65,7 +49,7 @@ namespace EmEn::Audio
 			return false;
 		}
 
-		const auto frequencyPlayback = Manager::instance()->frequencyPlayback();
+		const auto frequencyPlayback = Manager::frequencyPlayback();
 		const auto oneSecond = 1U * static_cast< size_t >(frequencyPlayback);
 
 		if ( !m_localData.initialize(oneSecond, WaveFactory::Channels::Mono, frequencyPlayback) )
@@ -82,9 +66,9 @@ namespace EmEn::Audio
 	}
 
 	bool
-	SoundResource::load (const std::filesystem::path & filepath) noexcept
+	SoundResource::load (Resources::ServiceProvider & /*serviceProvider*/, const std::filesystem::path & filepath) noexcept
 	{
-		if ( Manager::audioDisabled() )
+		if ( !Manager::isAudioSystemAvailable() )
 		{
 			return true;
 		}
@@ -101,7 +85,7 @@ namespace EmEn::Audio
 			return this->setLoadSuccess(false);
 		}
 
-		const auto frequencyPlayback = Manager::instance()->frequencyPlayback();
+		const auto frequencyPlayback = Manager::frequencyPlayback();
 
 		/* Checks if the sound is valid for the engine.
 		 * It must be mono and meet the audio engine frequency. */
@@ -110,7 +94,7 @@ namespace EmEn::Audio
 			/* Copy the buffer in float (single precision) format. */
 			WaveFactory::Processor processor{m_localData};
 
-			/* Launch a mix down process... */
+			/* Launch a mix-down process... */
 			if ( m_localData.channels() != WaveFactory::Channels::Mono )
 			{
 				if ( !s_quietConversion )
@@ -157,9 +141,9 @@ namespace EmEn::Audio
 	}
 
 	bool
-	SoundResource::load (const Json::Value & /*data*/) noexcept
+	SoundResource::load (Resources::ServiceProvider & /*serviceProvider*/, const Json::Value & /*data*/) noexcept
 	{
-		if ( Manager::audioDisabled() )
+		if ( !Manager::isAudioSystemAvailable() )
 		{
 			return true;
 		}

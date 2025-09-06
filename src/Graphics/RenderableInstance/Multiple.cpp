@@ -32,17 +32,18 @@
 #include <mutex>
 
 /* Local inclusions. */
+#include "Graphics/Renderer.hpp"
 #include "Graphics/ViewMatricesInterface.hpp"
 #include "Vulkan/CommandBuffer.hpp"
 #include "Vulkan/TransferManager.hpp"
 
 namespace EmEn::Graphics::RenderableInstance
 {
-	using namespace EmEn::Libs;
-	using namespace EmEn::Libs::Math;
-	using namespace EmEn::Vulkan;
+	using namespace Libs;
+	using namespace Libs::Math;
+	using namespace Vulkan;
 
-	Multiple::Multiple (const std::shared_ptr< Renderable::Interface > & renderable, const std::vector< CartesianFrame< float > > & instanceLocations, uint32_t flagBits) noexcept
+	Multiple::Multiple (Renderer & graphicsRenderer, const std::shared_ptr< Renderable::Interface > & renderable, const std::vector< CartesianFrame< float > > & instanceLocations, uint32_t flagBits) noexcept
 		: Abstract{renderable, EnableInstancing | flagBits},
 		m_instanceCount{static_cast< uint32_t >(instanceLocations.size())},
 		m_activeInstanceCount{m_instanceCount}
@@ -68,11 +69,7 @@ namespace EmEn::Graphics::RenderableInstance
 		{
 			/* Create a vertex buffer object to hold locations in video memory
 			 * according to the size of local data. */
-			if ( this->createOnHardware(*TransferManager::instance(GPUWorkType::Graphics)) )
-			{
-				this->observe(renderable.get());
-			}
-			else
+			if ( !this->createOnHardware(graphicsRenderer.transferManager()) )
 			{
 				this->setBroken("Unable to create the model matrices VBO !");
 			}
@@ -83,7 +80,7 @@ namespace EmEn::Graphics::RenderableInstance
 		}
 	}
 
-	Multiple::Multiple (const std::shared_ptr< Renderable::Interface > & renderable, uint32_t instanceCount, uint32_t flagBits) noexcept
+	Multiple::Multiple (Renderer & graphicsRenderer, const std::shared_ptr< Renderable::Interface > & renderable, uint32_t instanceCount, uint32_t flagBits) noexcept
 		: Abstract{renderable, EnableInstancing | flagBits},
 		m_instanceCount{instanceCount}
 	{
@@ -108,11 +105,7 @@ namespace EmEn::Graphics::RenderableInstance
 
 		/* Create a vertex buffer object to hold locations in video memory
 		 * according to the size of local data. */
-		if ( this->createOnHardware(*TransferManager::instance(GPUWorkType::Graphics)) )
-		{
-			this->observe(renderable.get());
-		}
-		else
+		if ( !this->createOnHardware(graphicsRenderer.transferManager()) )
 		{
 			this->setBroken("Unable to create the model matrices VBO !");
 		}

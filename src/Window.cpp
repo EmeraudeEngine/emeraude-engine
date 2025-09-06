@@ -28,9 +28,6 @@
 
 /* STL inclusions. */
 #include <cmath>
-#include <exception>
-#include <iostream>
-#include <utility>
 
 /* Local inclusions. */
 #include "Vulkan/Instance.hpp"
@@ -39,17 +36,15 @@
 
 namespace EmEn
 {
-	using namespace EmEn::Libs;
+	using namespace Libs;
 	using namespace Graphics;
 	using namespace Vulkan;
-
-	const size_t Window::ClassUID{getClassUID(ClassId)};
 
 	bool
 	Window::onInitialize () noexcept
 	{
-		m_flags[ShowInformation] = m_primaryServices.settings().get< bool >(VideoWindowShowInformationKey, DefaultVideoWindowShowInformation);
-		m_flags[SaveWindowPropertiesAtExit] = m_primaryServices.settings().get< bool >(VideoSavePropertiesAtExitKey, DefaultVideoSavePropertiesAtExit);
+		m_flags[ShowInformation] = m_primaryServices.settings().getOrSetDefault< bool >(VideoWindowShowInformationKey, DefaultVideoWindowShowInformation);
+		m_flags[SaveWindowPropertiesAtExit] = m_primaryServices.settings().getOrSetDefault< bool >(VideoSavePropertiesAtExitKey, DefaultVideoSavePropertiesAtExit);
 
 		if ( !m_instance.usable() )
 		{
@@ -66,18 +61,18 @@ namespace EmEn
 			return false;
 		}
 
-		/* NOTE: One multi monitors system, the preferred monitor will be used to display the window and fetch physical information. */
-		const auto preferredMonitor = m_primaryServices.settings().get< int32_t >(VideoPreferredMonitorKey, DefaultVideoPreferredMonitor);
+		/* NOTE: One multi monitors system, the preferred monitor, will be used to display the window and fetch physical information. */
+		const auto preferredMonitor = m_primaryServices.settings().getOrSetDefault< int32_t >(VideoPreferredMonitorKey, DefaultVideoPreferredMonitor);
 
 		/* NOTE: Disabling OpenGL context creation for Vulkan API */
 		glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 
-		/* Creating window in window or fullscreen mode */
-		if ( m_primaryServices.settings().get< bool >(VideoFullscreenEnabledKey, DefaultVideoFullscreenEnabled) )
+		/* Creating the window in windowed or fullscreen mode */
+		if ( m_primaryServices.settings().getOrSetDefault< bool >(VideoFullscreenEnabledKey, DefaultVideoFullscreenEnabled) )
 		{
-			const auto fullscreenWidth = m_primaryServices.settings().get< int32_t >(VideoFullscreenWidthKey, DefaultVideoFullscreenWidth);
-			const auto fullscreenHeight = m_primaryServices.settings().get< int32_t >(VideoFullscreenHeightKey, DefaultVideoFullscreenHeight);
-			const auto refreshRate = m_primaryServices.settings().get< int32_t >(VideoFullscreenRefreshRateKey, DefaultVideoFullscreenRefreshRate);
+			const auto fullscreenWidth = m_primaryServices.settings().getOrSetDefault< int32_t >(VideoFullscreenWidthKey, DefaultVideoFullscreenWidth);
+			const auto fullscreenHeight = m_primaryServices.settings().getOrSetDefault< int32_t >(VideoFullscreenHeightKey, DefaultVideoFullscreenHeight);
+			const auto refreshRate = m_primaryServices.settings().getOrSetDefault< int32_t >(VideoFullscreenRefreshRateKey, DefaultVideoFullscreenRefreshRate);
 
 			if ( refreshRate > 0 )
 			{
@@ -103,7 +98,7 @@ namespace EmEn
 			{
 				Tracer::fatal(ClassId, "Unable to get a valid fullscreen window !");
 
-				/* NOTE: Set back settings to default to avoid failing start in loop. */
+				/* NOTE: Set back settings by default to avoid failing start in loop. */
 				m_primaryServices.settings().set< int32_t >(VideoFullscreenWidthKey, DefaultVideoFullscreenWidth);
 				m_primaryServices.settings().set< int32_t >(VideoFullscreenHeightKey, DefaultVideoFullscreenHeight);
 
@@ -112,14 +107,14 @@ namespace EmEn
 		}
 		else
 		{
-            const auto windowWidth = m_primaryServices.settings().get< int32_t >(VideoWindowWidthKey, DefaultVideoWindowWidth);
-            const auto windowHeight = m_primaryServices.settings().get< int32_t >(VideoWindowHeightKey, DefaultVideoWindowHeight);
-			const auto frameless = m_primaryServices.settings().get< bool >(VideoWindowFramelessKey, DefaultVideoWindowFrameless);
+            const auto windowWidth = m_primaryServices.settings().getOrSetDefault< int32_t >(VideoWindowWidthKey, DefaultVideoWindowWidth);
+            const auto windowHeight = m_primaryServices.settings().getOrSetDefault< int32_t >(VideoWindowHeightKey, DefaultVideoWindowHeight);
+			const auto frameless = m_primaryServices.settings().getOrSetDefault< bool >(VideoWindowFramelessKey, DefaultVideoWindowFrameless);
 
 			/* GLFW_RESIZABLE specifies whether the windowed mode window
 			 * will be resizable by the user. The window will still be resizable
 			 * using the glfwSetWindowSize function. Possible values are
-			 * GLFW_TRUE and GLFW_FALSE. This hint is ignored for full screen
+			 * GLFW_TRUE and GLFW_FALSE. This hint is ignored for fullscreen
 			 * and undecorated windows. */
 			glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
 
@@ -181,15 +176,15 @@ namespace EmEn
 
 			if constexpr ( IsLinux )
 			{
-				/* GLFW_X11_CLASS_NAME and GLFW_X11_INSTANCE_NAME specifies the desired ASCII
-				 * encoded class and instance parts of the ICCCM WM_CLASS window property. */
+				/* GLFW_X11_CLASS_NAME and GLFW_X11_INSTANCE_NAME specifies the desired ASCII-encoded
+				 * class and instance parts of the ICCCM WM_CLASS window property. */
 				glfwWindowHintString(GLFW_X11_CLASS_NAME, EngineName);
 				glfwWindowHintString(GLFW_X11_INSTANCE_NAME, ENGINE_NAME "_instance"); // FIXME: Check to pass the application name here.
 			}
 
 			if constexpr ( IsWindows )
 			{
-				/* GLFW_COCOA_RETINA_FRAMEBUFFER specifies whether to use full resolution framebuffers on Retina displays.
+				/* GLFW_COCOA_RETINA_FRAMEBUFFER specifies whether to use full-resolution framebuffers on Retina displays.
 				 * Possible values are GLFW_TRUE and GLFW_FALSE. This is ignored on other platforms. */
 				glfwWindowHint(GLFW_COCOA_RETINA_FRAMEBUFFER, GLFW_TRUE);
 				/* GLFW_COCOA_FRAME_NAME specifies the UTF-8 encoded name to use for autosaving the window frame, or if
@@ -221,16 +216,16 @@ namespace EmEn
 
 		if ( this->isFullscreenMode() )
 		{
-			const auto gamma = m_primaryServices.settings().get< float >(VideoFullscreenGammaKey, DefaultVideoFullscreenGamma);
+			const auto gamma = m_primaryServices.settings().getOrSetDefault< float >(VideoFullscreenGammaKey, DefaultVideoFullscreenGamma);
 
 			this->setGamma(gamma, preferredMonitor);
 		}
 		else
 		{
-			if ( m_primaryServices.settings().get< bool >(VideoWindowAlwaysCenterOnStartupKey, DefaultVideoWindowAlwaysCenterOnStartup) )
+			if ( m_primaryServices.settings().getOrSetDefault< bool >(VideoWindowAlwaysCenterOnStartupKey, DefaultVideoWindowAlwaysCenterOnStartup) )
 			{
-				const auto windowWidth = m_primaryServices.settings().get< uint32_t >(VideoWindowWidthKey, DefaultVideoWindowWidth);
-				const auto windowHeight = m_primaryServices.settings().get< uint32_t >(VideoWindowHeightKey, DefaultVideoWindowHeight);
+				const auto windowWidth = m_primaryServices.settings().getOrSetDefault< uint32_t >(VideoWindowWidthKey, DefaultVideoWindowWidth);
+				const auto windowHeight = m_primaryServices.settings().getOrSetDefault< uint32_t >(VideoWindowHeightKey, DefaultVideoWindowHeight);
 				const auto centeredPosition = Window::getCenteredPosition({windowWidth, windowHeight}, preferredMonitor);
 
 				if ( m_flags[ShowInformation] )
@@ -242,8 +237,8 @@ namespace EmEn
 			}
 			else
 			{
-				const auto XPosition = m_primaryServices.settings().get< int32_t >(VideoWindowXPositionKey, DefaultVideoWindowXPosition);
-				const auto YPosition = m_primaryServices.settings().get< int32_t >(VideoWindowYPositionKey, DefaultVideoWindowYPosition);
+				const auto XPosition = m_primaryServices.settings().getOrSetDefault< int32_t >(VideoWindowXPositionKey, DefaultVideoWindowXPosition);
+				const auto YPosition = m_primaryServices.settings().getOrSetDefault< int32_t >(VideoWindowYPositionKey, DefaultVideoWindowYPosition);
 
 				if ( m_flags[ShowInformation] )
 				{
@@ -253,12 +248,12 @@ namespace EmEn
 				this->setPosition(XPosition, YPosition);
 			}
 
-			const auto gamma = m_primaryServices.settings().get< float >(VideoWindowGammaKey, DefaultVideoWindowGamma);
+			const auto gamma = m_primaryServices.settings().getOrSetDefault< float >(VideoWindowGammaKey, DefaultVideoWindowGamma);
 
 			this->setGamma(gamma, preferredMonitor);
 		}
 
-		const auto useNativeCode = m_primaryServices.settings().get< bool >(GLFWEnableNativeCodeForVkSurfaceKey, DefaultEnableNativeCodeForVkSurface);
+		const auto useNativeCode = m_primaryServices.settings().getOrSetDefault< bool >(GLFWEnableNativeCodeForVkSurfaceKey, DefaultEnableNativeCodeForVkSurface);
 
 		if ( !this->createSurface(useNativeCode) )
 		{
@@ -606,7 +601,7 @@ namespace EmEn
 			settings.set<uint32_t>(VideoWindowHeightKey, currentSize[1]);
 		}
 
-		const auto refreshRate = settings.get< int32_t >(VideoFullscreenRefreshRateKey, DefaultVideoFullscreenRefreshRate);
+		const auto refreshRate = settings.getOrSetDefault< int32_t >(VideoFullscreenRefreshRateKey, DefaultVideoFullscreenRefreshRate);
 
 		if ( useNativeResolution )
 		{
@@ -622,8 +617,8 @@ namespace EmEn
 		}
 		else
 		{
-			auto width = settings.get< int32_t >(VideoFullscreenWidthKey, DefaultVideoFullscreenWidth);
-			auto height = settings.get< int32_t >(VideoFullscreenHeightKey, DefaultVideoFullscreenHeight);
+			auto width = settings.getOrSetDefault< int32_t >(VideoFullscreenWidthKey, DefaultVideoFullscreenWidth);
+			auto height = settings.getOrSetDefault< int32_t >(VideoFullscreenHeightKey, DefaultVideoFullscreenHeight);
 
 			if ( width == 0 || height == 0 )
 			{
@@ -653,6 +648,7 @@ namespace EmEn
 			return;
 		}
 
+		/* TODO: Be sure of why const-settings here ! */
 		const auto & settings = m_primaryServices.settings();
 		const auto windowWidth = settings.get< int32_t >(VideoWindowWidthKey, DefaultVideoWindowWidth);
 		const auto windowHeight = settings.get< int32_t >(VideoWindowHeightKey, DefaultVideoWindowHeight);
@@ -1170,7 +1166,7 @@ namespace EmEn
 		}
 
 		const auto monitorIndex = desiredMonitorIndex < 0 ?
-			m_primaryServices.settings().get< uint32_t >(VideoPreferredMonitorKey, DefaultVideoPreferredMonitor) :
+			m_primaryServices.settings().getOrSetDefault< uint32_t >(VideoPreferredMonitorKey, DefaultVideoPreferredMonitor) :
 			static_cast< uint32_t >(desiredMonitorIndex);
 
 		if ( monitorIndex >= monitors.size() )
@@ -1341,7 +1337,7 @@ namespace EmEn
 		}
 
 		/* We clear the close bit.
-		 * The engine window itself is the running state. */
+		 * The engine window itself is in the running state. */
 		glfwSetWindowShouldClose(window, GLFW_FALSE);
 
 		/* Send the signal to the engine */

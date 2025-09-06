@@ -32,14 +32,16 @@
 
 namespace EmEn::Scenes::Component
 {
-	using namespace EmEn::Libs;
-	using namespace EmEn::Libs::Math;
-	using namespace EmEn::Graphics;
-	using namespace EmEn::Physics;
+	using namespace Libs;
+	using namespace Libs::Math;
+	using namespace Audio;
+	using namespace Graphics;
+	using namespace Physics;
 
 	constexpr auto TracerTag{"EntityComponent"};
 
-	const size_t Abstract::ClassUID{getClassUID("AbstractEntityComponent")};
+	Renderer * Abstract::s_graphicsRenderer{nullptr};
+	Manager * Abstract::s_audioManager{nullptr};
 
 	bool
 	Abstract::initialize (const Json::Value & /*unused*/) noexcept

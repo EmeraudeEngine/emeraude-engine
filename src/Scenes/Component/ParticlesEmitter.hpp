@@ -34,6 +34,7 @@
 
 /* Local inclusions for inheritances. */
 #include "Abstract.hpp"
+#include "Libs/ObserverTrait.hpp"
 
 /* Local inclusions for usages. */
 #include "Libs/Time/TimedEvent.hpp"
@@ -43,10 +44,10 @@
 namespace EmEn::Scenes::Component
 {
 	/**
-	 * @brief A class that build a particles generator with mesh or sprite instance.
+	 * @brief A class that build a particle generator with a mesh or sprite instance.
 	 * @note [OBS][SHARED-OBSERVER]
 	 * @extends EmEn::Scenes::Component::Abstract The base class for each entity component.
-	 * @extends EmEn::Libs::ObserverTrait This class must dispatch modifications from renderable instance to the entity.
+	 * @extends EmEn::Libs::ObserverTrait This class must dispatch modifications from a renderable instance to the entity.
 	 */
 	class ParticlesEmitter final : public Abstract, public Libs::ObserverTrait
 	{
@@ -77,13 +78,14 @@ namespace EmEn::Scenes::Component
 			 */
 			ParticlesEmitter (std::string name, const AbstractEntity & parentEntity, const std::shared_ptr< Graphics::Renderable::Interface > & renderable, uint32_t instanceCount) noexcept
 				: Abstract{std::move(name), parentEntity},
-				m_renderableInstance{std::make_shared< Graphics::RenderableInstance::Multiple >(renderable, instanceCount, renderable->isSprite() ? Graphics::RenderableInstance::FacingCamera : Graphics::RenderableInstance::None)},
+				m_renderableInterface{renderable},
+				m_renderableInstance{std::make_shared< Graphics::RenderableInstance::Multiple >(*s_graphicsRenderer, renderable, instanceCount, renderable->isSprite() ? Graphics::RenderableInstance::FacingCamera : Graphics::RenderableInstance::None)},
 				m_particleLimit{instanceCount}
 			{
 				/* NOTE: Prepare local data at the fixed size. */
 				m_particles.resize(m_particleLimit);
 
-				this->observe(m_renderableInstance.get());
+				this->observe(renderable.get());
 			}
 
 			/** @copydoc EmEn::Scenes::Component::Abstract::getRenderableInstance() const */
@@ -475,15 +477,16 @@ namespace EmEn::Scenes::Component
 			static constexpr auto IsCollisionDisabled{UnusedFlag + 4UL};
 			static constexpr auto ConstrainedToEmitterSpace{UnusedFlag + 5UL};
 
-			enum class PhysicsSimulationFunction
+			enum class PhysicsSimulationFunction : uint8_t
 			{
 				Default,
 				Simple,
 				Full
 			};
 
+			std::weak_ptr< Graphics::Renderable::Interface > m_renderableInterface;
 			std::shared_ptr< Graphics::RenderableInstance::Multiple > m_renderableInstance;
-			Physics::PhysicalObjectProperties m_particlePhysicalProperties{};
+			Physics::PhysicalObjectProperties m_particlePhysicalProperties;
 			std::vector< Physics::Particle > m_particles;
 			std::unique_ptr< Libs::Time::TimedEvent< uint64_t, std::micro > > m_timedEvent;
 			std::function< bool (Physics::Particle &) > m_customPhysicsSimulationSimpleFunction;

@@ -246,7 +246,7 @@ namespace EmEn::Libs::VertexFactory
 				}
 
 				/* Generate triangles. */
-				Shape< number_t > shape{triangles.size() * 3, 1, triangles.size()};
+				Shape< number_t > shape{static_cast< uint32_t >(triangles.size()) * 3U, 1U, static_cast< uint32_t >(triangles.size())};
 
 				ShapeBuilder< number_t > builder{shape};
 

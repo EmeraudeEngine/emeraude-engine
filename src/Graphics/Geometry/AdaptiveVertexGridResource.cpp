@@ -30,23 +30,13 @@
 #include "Vulkan/TransferManager.hpp"
 #include "Constants.hpp"
 
-/* Defining the resource manager class id. */
-template<>
-const char * const EmEn::Resources::Container< EmEn::Graphics::Geometry::AdaptiveVertexGridResource >::ClassId{"AdaptiveVertexGridContainer"};
-
-/* Defining the resource manager ClassUID. */
-template<>
-const size_t EmEn::Resources::Container< EmEn::Graphics::Geometry::AdaptiveVertexGridResource >::ClassUID{getClassUID(ClassId)};
-
 namespace EmEn::Graphics::Geometry
 {
-	using namespace EmEn::Libs;
-	using namespace EmEn::Libs::Math;
-	using namespace EmEn::Libs::VertexFactory;
-	using namespace EmEn::Libs::PixelFactory;
-	using namespace EmEn::Vulkan;
-
-	const size_t AdaptiveVertexGridResource::ClassUID{getClassUID(ClassId)};
+	using namespace Libs;
+	using namespace Libs::Math;
+	using namespace Libs::VertexFactory;
+	using namespace Libs::PixelFactory;
+	using namespace Vulkan;
 
 	bool
 	AdaptiveVertexGridResource::createOnHardware (TransferManager & transferManager) noexcept
@@ -146,7 +136,7 @@ namespace EmEn::Graphics::Geometry
 	}
 
 	bool
-	AdaptiveVertexGridResource::load () noexcept
+	AdaptiveVertexGridResource::load (Resources::ServiceProvider & /*serviceProvider*/) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
@@ -159,7 +149,7 @@ namespace EmEn::Graphics::Geometry
 	}
 
 	bool
-	AdaptiveVertexGridResource::load (const Json::Value & /*data*/) noexcept
+	AdaptiveVertexGridResource::load (Resources::ServiceProvider & /*serviceProvider*/, const Json::Value & /*data*/) noexcept
 	{
 		if ( !this->beginLoading() )
 		{

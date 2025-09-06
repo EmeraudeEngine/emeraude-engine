@@ -36,20 +36,20 @@
 
 namespace EmEn::Graphics::TextureResource
 {
-	using namespace EmEn::Libs;
-	using namespace EmEn::Libs::PixelFactory;
-	using namespace EmEn::Vulkan;
+	using namespace Libs;
+	using namespace Libs::PixelFactory;
+	using namespace Vulkan;
 
 	constexpr auto TracerTag{"AbstractTextureResource"};
+
+	Renderer * Abstract::s_graphicsRenderer{nullptr};
 
 	VkDescriptorImageInfo
 	Abstract::getDescriptorInfo () const noexcept
 	{
 		VkDescriptorImageInfo descriptorInfo{};
 
-		const auto & textureSampler = this->sampler();
-
-		if ( textureSampler == nullptr )
+		if ( const auto & sampler = this->sampler(); sampler == nullptr )
 		{
 			Tracer::error(TracerTag, "The texture has no sampler !");
 
@@ -57,12 +57,10 @@ namespace EmEn::Graphics::TextureResource
 		}
 		else
 		{
-			descriptorInfo.sampler = textureSampler->handle();
+			descriptorInfo.sampler = sampler->handle();
 		}
 
-		const auto & textureImageView = this->imageView();
-
-		if ( textureImageView == nullptr )
+		if ( const auto & imageView = this->imageView(); imageView == nullptr )
 		{
 			Tracer::error(TracerTag, "The texture has no image view !");
 
@@ -70,12 +68,10 @@ namespace EmEn::Graphics::TextureResource
 		}
 		else
 		{
-			descriptorInfo.imageView = textureImageView->handle();
+			descriptorInfo.imageView = imageView->handle();
 		}
 
-		const auto & textureImage = this->image();
-
-		if ( textureImage == nullptr )
+		if ( const auto & image = this->image(); image == nullptr )
 		{
 			Tracer::error(TracerTag, "The texture has no image !");
 
@@ -83,7 +79,7 @@ namespace EmEn::Graphics::TextureResource
 		}
 		else
 		{
-			descriptorInfo.imageLayout = textureImage->currentImageLayout();
+			descriptorInfo.imageLayout = image->currentImageLayout();
 		}
 
 		return descriptorInfo;
@@ -92,8 +88,15 @@ namespace EmEn::Graphics::TextureResource
 	bool
 	Abstract::onDependenciesLoaded () noexcept
 	{
+		if ( s_graphicsRenderer == nullptr )
+		{
+			TraceError{TracerTag} << "The static renderer pointer is null !";
+
+			return false;
+		}
+
 		/* NOTE: Ensure the texture is on the video memory. */
-		if ( !this->isCreated() && !this->createOnHardware(*Renderer::instance()) )
+		if ( !this->isCreated() && !this->createOnHardware(*s_graphicsRenderer) )
 		{
 			TraceError{TracerTag} << "Unable to load texture resource (" << this->classLabel() << ") '" << this->name() << "' !";
 

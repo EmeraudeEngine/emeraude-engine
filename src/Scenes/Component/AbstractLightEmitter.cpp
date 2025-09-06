@@ -31,9 +31,11 @@
 
 namespace EmEn::Scenes::Component
 {
-	using namespace EmEn::Libs;
-	using namespace EmEn::Libs::Math;
-	using namespace EmEn::Graphics;
+	using namespace Libs;
+	using namespace Libs::Math;
+	using namespace Graphics;
+
+	float AbstractLightEmitter::s_maxDistance{DefaultGraphicsShadowMappingMaxDistance};
 
 	Matrix< 4, float >
 	AbstractLightEmitter::getLightSpaceMatrix () const noexcept

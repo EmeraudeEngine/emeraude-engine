@@ -1,5 +1,5 @@
 /*
- * src/Vulkan/Types.cpp
+* src/Libs/Hash/FNV1a.hpp
  * This file is part of Emeraude-Engine
  *
  * Copyright (C) 2010-2025 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
@@ -24,35 +24,41 @@
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
 
-#include "Types.hpp"
+#pragma once
 
-namespace EmEn::Vulkan
+/* STL inclusions. */
+#include <cstddef>
+#include <string_view>
+
+namespace EmEn::Libs::Hash
 {
-	const char *
-	to_cstring (QueueJob value) noexcept
+	/**
+	 * @brief Hashes a string using the FNV-1a algorithm.
+	 * @param string A string view.
+	 * @return std::size_t
+	 */
+	[[nodiscard]]
+	constexpr
+	std::size_t
+	FNV1a (const std::string_view string) noexcept
 	{
-		switch ( value )
+		constexpr std::size_t OffsetBasis{14695981039346656037ULL};
+		constexpr std::size_t Prime{1099511628211ULL};
+
+		std::size_t value = OffsetBasis;
+
+		for ( const char character : string )
 		{
-			case QueueJob::Graphics :
-				return GraphicsString;
-
-			case QueueJob::GraphicsTransfer :
-				return GraphicsTransferString;
-
-			case QueueJob::Presentation :
-				return PresentationString;
-
-			case QueueJob::Compute :
-				return ComputeString;
-
-			case QueueJob::ComputeTransfer :
-				return ComputeTransferString;
-
-			case QueueJob::Transfer :
-				return TransferString;
-
-			default:
-				return "Unknown";
+			value = (value ^ static_cast< std::size_t >(character)) * Prime;
 		}
+
+		return value;
 	}
+}
+
+constexpr
+std::size_t
+operator""_hash (const char * string, std::size_t)
+{
+	return EmEn::Libs::Hash::FNV1a(string);
 }

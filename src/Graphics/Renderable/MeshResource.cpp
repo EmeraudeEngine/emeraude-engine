@@ -32,22 +32,12 @@
 #include "Graphics/Material/Materials.hpp"
 #include "Resources/Manager.hpp"
 
-/* Defining the resource manager class id. */
-template<>
-const char * const EmEn::Resources::Container< EmEn::Graphics::Renderable::MeshResource >::ClassId{"MeshContainer"};
-
-/* Defining the resource manager ClassUID. */
-template<>
-const size_t EmEn::Resources::Container< EmEn::Graphics::Renderable::MeshResource >::ClassUID{getClassUID(ClassId)};
-
 namespace EmEn::Graphics::Renderable
 {
-	using namespace EmEn::Libs;
-	using namespace EmEn::Libs::Math;
-	using namespace EmEn::Graphics::Geometry;
-	using namespace EmEn::Graphics::Material;
-
-	const size_t MeshResource::ClassUID{getClassUID(ClassId)};
+	using namespace Libs;
+	using namespace Libs::Math;
+	using namespace Graphics::Geometry;
+	using namespace Graphics::Material;
 
 	bool
 	MeshResource::isOpaque (uint32_t layerIndex) const noexcept
@@ -96,19 +86,19 @@ namespace EmEn::Graphics::Renderable
 	}
 
 	bool
-	MeshResource::load () noexcept
+	MeshResource::load (Resources::ServiceProvider & serviceProvider) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
 			return false;
 		}
 
-		if ( !this->setGeometry(Resources::Manager::instance()->container< VertexResource >()->getDefaultResource()) )
+		if ( !this->setGeometry(serviceProvider.container< VertexResource >()->getDefaultResource()) )
 		{
 			return this->setLoadSuccess(false);
 		}
 
-		if ( !this->setMaterial(Resources::Manager::instance()->container< BasicResource >()->getDefaultResource(), {}, 0) )
+		if ( !this->setMaterial(serviceProvider.container< BasicResource >()->getDefaultResource(), {}, 0) )
 		{
 			return this->setLoadSuccess(false);
 		}
@@ -117,7 +107,7 @@ namespace EmEn::Graphics::Renderable
 	}
 
 	std::shared_ptr< Geometry::Interface >
-	MeshResource::parseGeometry (Resources::Manager & resources, const Json::Value & data) noexcept
+	MeshResource::parseGeometry (Resources::ServiceProvider & serviceProvider, const Json::Value & data) noexcept
 	{
 		/* Checks size option */
 		if ( data.isMember(BaseSizeKey) )
@@ -141,10 +131,10 @@ namespace EmEn::Graphics::Renderable
 			{
 				TraceError{ClassId} << "The key '" << GeometryTypeKey << "' for '" << VertexResource::ClassId << "' is not present or not a string !";
 
-				return resources.container< VertexResource >()->getDefaultResource();
+				return serviceProvider.container< VertexResource >()->getDefaultResource();
 			}
 
-			return resources.container< VertexResource >()->getResource(geometryResourceName.value());
+			return serviceProvider.container< VertexResource >()->getResource(geometryResourceName.value());
 		}
 
 		if ( geometryType == IndexedVertexResource::ClassId )
@@ -153,19 +143,19 @@ namespace EmEn::Graphics::Renderable
 			{
 				TraceError{ClassId} << "The key '" << GeometryTypeKey << "' for '" << IndexedVertexResource::ClassId << "' is not present or not a string !";
 
-				return resources.container< IndexedVertexResource >()->getDefaultResource();
+				return serviceProvider.container< IndexedVertexResource >()->getDefaultResource();
 			}
 
-			return resources.container< IndexedVertexResource >()->getResource(geometryResourceName.value());
+			return serviceProvider.container< IndexedVertexResource >()->getResource(geometryResourceName.value());
 		}
 
 		TraceWarning{ClassId} << "Geometry resource type '" << geometryType << "' is not handled !";
 
-		return resources.container< IndexedVertexResource >()->getDefaultResource();
+		return serviceProvider.container< IndexedVertexResource >()->getDefaultResource();
 	}
 
 	std::shared_ptr< Material::Interface >
-	MeshResource::parseLayer (Resources::Manager & resources, const Json::Value & data) noexcept
+	MeshResource::parseLayer (Resources::ServiceProvider & serviceProvider, const Json::Value & data) noexcept
 	{
 		const auto materialType = FastJSON::getValidatedStringValue(data, MaterialTypeKey, Material::Types).value_or(BasicResource::ClassId);
 		const auto materialResourceName = FastJSON::getValue< std::string >(data, MaterialNameKey);
@@ -176,20 +166,20 @@ namespace EmEn::Graphics::Renderable
 			{
 				TraceError{ClassId} << "The key '" << MaterialNameKey << "' for '" << StandardResource::ClassId << "' is not present or not a string !";
 
-				return resources.container< StandardResource >()->getDefaultResource();
+				return serviceProvider.container< StandardResource >()->getDefaultResource();
 			}
 
-			return resources.container< StandardResource >()->getResource(materialResourceName.value());
+			return serviceProvider.container< StandardResource >()->getResource(materialResourceName.value());
 		}
 
 		if ( !materialResourceName )
 		{
 			TraceError{ClassId} << "The key '" << MaterialNameKey << "' for '" << BasicResource::ClassId << "' is not present or not a string !";
 
-			return resources.container< BasicResource >()->getDefaultResource();
+			return serviceProvider.container< BasicResource >()->getDefaultResource();
 		}
 
-		return resources.container< BasicResource >()->getResource(materialResourceName.value());
+		return serviceProvider.container< BasicResource >()->getResource(materialResourceName.value());
 	}
 
 	RasterizationOptions
@@ -229,20 +219,18 @@ namespace EmEn::Graphics::Renderable
 	}
 
 	bool
-	MeshResource::load (const Json::Value & data) noexcept
+	MeshResource::load (Resources::ServiceProvider & serviceProvider, const Json::Value & data) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
 			return false;
 		}
 
-		auto * resources = Resources::Manager::instance();
-
 		/* FIXME: Physics properties from Mesh definitions. */
 		//this->parseOptions(data);
 
 		/* Parse geometry definition. */
-		const auto geometryResource = this->parseGeometry(*resources, data);
+		const auto geometryResource = this->parseGeometry(serviceProvider, data);
 
 		if ( geometryResource == nullptr )
 		{
@@ -281,8 +269,8 @@ namespace EmEn::Graphics::Renderable
 
 		for ( const auto & layerRule : layerRules )
 		{
-			/* Parse material definition and get default if error occurs. */
-			auto materialResource = MeshResource::parseLayer(*resources, layerRule);
+			/* Parse material definition and get default if an error occurs. */
+			auto materialResource = MeshResource::parseLayer(serviceProvider, layerRule);
 
 			/* Gets a default material. */
 			if ( materialResource == nullptr )
@@ -292,9 +280,7 @@ namespace EmEn::Graphics::Renderable
 				return this->setLoadSuccess(false);
 			}
 
-			auto layerRasterizationOptions = MeshResource::parseLayerOptions(layerRule);
-
-			if ( !this->addMaterial(materialResource, layerRasterizationOptions, 0) )
+			if ( !this->addMaterial(materialResource, MeshResource::parseLayerOptions(layerRule), 0) )
 			{
 				Tracer::error(ClassId, "Unable to add material layer !");
 
@@ -416,20 +402,20 @@ namespace EmEn::Graphics::Renderable
 	}
 
 	std::shared_ptr< MeshResource >
-	MeshResource::getOrCreate (const std::shared_ptr< Geometry::Interface > & geometryResource, const std::shared_ptr< Material::Interface > & materialResource, std::string resourceName) noexcept
+	MeshResource::getOrCreate (Resources::ServiceProvider & serviceProvider, const std::shared_ptr< Geometry::Interface > & geometryResource, const std::shared_ptr< Material::Interface > & materialResource, std::string resourceName) noexcept
 	{
 		if ( resourceName.empty() )
 		{
 			resourceName = (std::stringstream{} << "Mesh(" << geometryResource->name() << ',' << materialResource->name() << ')').str();
 		}
 
-		return Resources::Manager::instance()->container< MeshResource >()->getOrCreateResource(resourceName, [&geometryResource, &materialResource] (MeshResource & newMesh) {
+		return serviceProvider.container< MeshResource >()->getOrCreateResource(resourceName, [&geometryResource, &materialResource] (MeshResource & newMesh) {
 			return newMesh.load(geometryResource, materialResource);
 		});
 	}
 
 	std::shared_ptr< MeshResource >
-	MeshResource::getOrCreate (const std::shared_ptr< Geometry::Interface > & geometryResource, const std::vector< std::shared_ptr< Material::Interface > > & materialResources, std::string resourceName) noexcept
+	MeshResource::getOrCreate (Resources::ServiceProvider & serviceProvider, const std::shared_ptr< Geometry::Interface > & geometryResource, const std::vector< std::shared_ptr< Material::Interface > > & materialResources, std::string resourceName) noexcept
 	{
 		if ( resourceName.empty() )
 		{
@@ -447,7 +433,7 @@ namespace EmEn::Graphics::Renderable
 			resourceName = output.str();
 		}
 
-		return Resources::Manager::instance()->container< MeshResource >()->getOrCreateResource(resourceName, [&geometryResource, &materialResources] (MeshResource & newMesh) {
+		return serviceProvider.container< MeshResource >()->getOrCreateResource(resourceName, [&geometryResource, &materialResources] (MeshResource & newMesh) {
 			return newMesh.load(geometryResource, materialResources);
 		});
 	}

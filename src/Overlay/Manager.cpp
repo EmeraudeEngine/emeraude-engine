@@ -63,14 +63,12 @@
 
 namespace EmEn::Overlay
 {
-	using namespace EmEn::Libs;
-	using namespace EmEn::Libs::Math;
-	using namespace EmEn::Libs::VertexFactory;
-	using namespace EmEn::Saphir;
-	using namespace EmEn::Graphics;
-	using namespace EmEn::Vulkan;
-
-	const size_t Manager::ClassUID{getClassUID(ClassId)};
+	using namespace Libs;
+	using namespace Libs::Math;
+	using namespace Libs::VertexFactory;
+	using namespace Saphir;
+	using namespace Graphics;
+	using namespace Vulkan;
 
 	bool
 	Manager::onKeyPress (int32_t key, int32_t scancode, int32_t modifiers, bool repeat) noexcept
@@ -409,6 +407,7 @@ namespace EmEn::Overlay
 
 		m_screens[name] = screen;
 
+		std::cout << "ClassUID: " << this->classUID() << " : " << getClassUID() << " : " << getClassUID() << std::endl;
 		this->notify(UIScreenCreated, screen);
 
 		return screen;
@@ -620,8 +619,8 @@ namespace EmEn::Overlay
 		auto & settings = m_primaryServices.settings();
 
 		const auto & windowState = m_window.state();
-		const auto forceScaleX = settings.get< float >(VideoOverlayForceScaleXKey, DefaultVideoOverlayForceScale);
-		const auto forceScaleY = settings.get< float >(VideoOverlayForceScaleYKey, DefaultVideoOverlayForceScale);
+		const auto forceScaleX = settings.getOrSetDefault< float >(VideoOverlayForceScaleXKey, DefaultVideoOverlayForceScale);
+		const auto forceScaleY = settings.getOrSetDefault< float >(VideoOverlayForceScaleYKey, DefaultVideoOverlayForceScale);
 
 		/* NOTE: This structure is shared with all screens and surfaces. */
 		m_framebufferProperties.updateProperties(
@@ -762,7 +761,7 @@ namespace EmEn::Overlay
 	bool
 	Manager::onNotification (const ObservableTrait * observable, int notificationCode, const std::any & /*data*/) noexcept
 	{
-		if ( observable->is(Window::ClassUID) )
+		if ( observable->is(Window::getClassUID()) )
 		{
 			switch ( notificationCode )
 			{
@@ -794,9 +793,9 @@ namespace EmEn::Overlay
 			return true;
 		}
 
-		/* NOTE: Don't know what is it, goodbye! */
+		/* NOTE: Don't know what it is, goodbye! */
 		TraceDebug{ClassId} <<
-			"Received an unhandled notification (Code:" << notificationCode << ") from observable '" << whoIs(observable->classUID()) << "' (UID:" << observable->classUID() << ")  ! "
+			"Received an unhandled notification (Code:" << notificationCode << ") from observable (UID:" << observable->classUID() << ")  ! "
 			"Forgetting it ...";
 
 		return false;

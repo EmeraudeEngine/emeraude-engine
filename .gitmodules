@@ -10,9 +10,6 @@
 [submodule "dependencies/glfw"]
 	path = dependencies/glfw
 	url = https://github.com/EmeraudeEngine/glfw.git
-[submodule "dependencies/googletest"]
-	path = dependencies/googletest
-	url = https://github.com/google/googletest.git
 [submodule "dependencies/glslang"]
 	path = dependencies/glslang
 	url = https://github.com/KhronosGroup/glslang.git

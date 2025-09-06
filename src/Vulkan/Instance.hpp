@@ -138,7 +138,7 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Returns a reference to the selected graphics device smart pointer.
-			 * @warning This can be nullptr !
+			 * @warning This can be nullptr!
 			 * @return const std::shared_ptr< Device > &
 			 */
 			[[nodiscard]]
@@ -150,7 +150,7 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Returns a reference to the selected compute device smart pointer.
-			 * @warning This can be nullptr !
+			 * @warning This can be nullptr!
 			 * @return const std::shared_ptr< Device > &
 			 */
 			[[nodiscard]]
@@ -183,7 +183,7 @@ namespace EmEn::Vulkan
 			}
 
 			/**
-			 * @brief Returns whether the dynamic state extensions was enabled.
+			 * @brief Returns whether the dynamic extensions state was enabled.
 			 * @return bool
 			 */
 			[[nodiscard]]
@@ -221,7 +221,7 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Returns a list of validation layers available from Vulkan.
-			 * @note This method follow the vkEnumerateDeviceLayerProperties() deprecation.
+			 * @note This method follows the vkEnumerateDeviceLayerProperties() deprecation.
 			 * @return std::vector< VkLayerProperties >
 			 */
 			[[nodiscard]]
@@ -238,10 +238,10 @@ namespace EmEn::Vulkan
 			/**
 			 * @brief Finds a suitable color buffer format.
 			 * @param device A reference to a device smart pointer.
-			 * @param redBits The bit depth for red component.
-			 * @param greenBits The bit depth for green component.
-			 * @param blueBits The bit depth for blue component.
-			 * @param alphaBits The bit depth for alpha component.
+			 * @param redBits The bit depth for the red component.
+			 * @param greenBits The bit depth for the green component.
+			 * @param blueBits The bit depth for the blue component.
+			 * @param alphaBits The bit depth for the alpha component.
 			 * @return VkFormat
 			 */
 			[[nodiscard]]
@@ -309,23 +309,24 @@ namespace EmEn::Vulkan
 			void readSettings () noexcept;
 
 			/**
-			 * @brief Prepares a list of physical device available on the computer.
+			 * @brief Prepares a list of a physical device available on the computer.
 			 * @return bool
 			 */
 			[[nodiscard]]
 			bool preparePhysicalDevices () noexcept;
 
 			/**
-			 * @brief Returns a list of a scored graphics capable devices.
+			 * @brief Returns a list of a scored graphics-capable device.
 			 * @param window A pointer to the current Window.
+			 * @param runMode The running mode desired for sorting devices.
 			 * @return std::map< size_t, std::shared_ptr< PhysicalDevice > >
 			 */
 			[[nodiscard]]
-			std::map< size_t, std::shared_ptr< PhysicalDevice > > getScoredGraphicsDevices (Window * window) const noexcept;
+			std::map< size_t, std::shared_ptr< PhysicalDevice > > getScoredGraphicsDevices (Window * window, DeviceRunMode runMode) const noexcept;
 
 			/**
 			 * @brief Configures the list of required validation layers.
-			 * @note This method follow the vkEnumerateDeviceLayerProperties() deprecation.
+			 * @note This method follows the vkEnumerateDeviceLayerProperties() deprecation.
 			 * @return void
 			 */
 			void configureValidationLayers () noexcept;
@@ -339,38 +340,38 @@ namespace EmEn::Vulkan
 			/**
 			 * @brief Modulates the device score against a running strategy.
 			 * @param deviceProperties A vulkan struct for the device properties.
-			 * @param runningMode The desired running mode.
+			 * @param runMode The desired running mode.
 			 * @param score A reference to the score.
 			 * @return void
 			 */
-			void modulateDeviceScoring (const VkPhysicalDeviceProperties & deviceProperties, RunningMode runningMode, size_t & score) const noexcept;
+			static void modulateDeviceScoring (const VkPhysicalDeviceProperties & deviceProperties, DeviceRunMode runMode, size_t & score) noexcept;
 
 			/**
 			 * @brief Checks the physical device type for use as a specific purpose
 			 * @param physicalDevice A reference to the physical device smart pointer.
-			 * @param runningMode The desired running mode.
+			 * @param runMode The desired running mode.
 			 * @param type The desired queue type.
-			 * @param score A reference to a score to sort preferred device.
+			 * @param score A reference to a score to sort the preferred device.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool checkDeviceCompatibility (const std::shared_ptr< PhysicalDevice > & physicalDevice, RunningMode runningMode, VkQueueFlagBits type, size_t & score) const noexcept;
+			static bool checkDeviceCompatibility (const std::shared_ptr< PhysicalDevice > & physicalDevice, DeviceRunMode runMode, VkQueueFlagBits type, size_t & score) noexcept;
 
 			/**
 			 * @brief Checks the physical device type for use as a graphics device with presentation supported.
 			 * @param physicalDevice A reference to the physical device smart pointer.
-			 * @param runningMode The desired running mode.
+			 * @param runMode The desired running mode.
 			 * @param window A pointer to the window where rendering will be displayed.
-			 * @param score A reference to a score to sort preferred device.
+			 * @param score A reference to a score to sort the preferred device.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool checkDeviceCompatibility (const std::shared_ptr< PhysicalDevice > & physicalDevice, RunningMode runningMode, const Window * window, size_t & score) const noexcept;
+			static bool checkDeviceCompatibility (const std::shared_ptr< PhysicalDevice > & physicalDevice, DeviceRunMode runMode, const Window * window, size_t & score) noexcept;
 
 			/**
 			 * @brief Checks the device features presence for a specialized device selector.
 			 * @param physicalDevice A reference to the physical device smart pointer.
-			 * @param score A reference to a score to sort preferred device.
+			 * @param score A reference to a score to sort the preferred device.
 			 * @return bool
 			 */
 			[[nodiscard]]
@@ -379,21 +380,21 @@ namespace EmEn::Vulkan
 			/**
 			 * @brief Checks the device features presence for a specialized device selector.
 			 * @param physicalDevice A reference to the physical device smart pointer.
-			 * @param score A reference to a score to sort preferred device.
+			 * @param score A reference to a score to sort the preferred device.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool checkDevicesFeaturesForCompute (const std::shared_ptr< PhysicalDevice > & physicalDevice, size_t & score) const noexcept;
+			static bool checkDevicesFeaturesForCompute (const std::shared_ptr< PhysicalDevice > & physicalDevice, size_t & score) noexcept;
 
 			/**
 			 * @brief Checks the device extensions presence for a specialized device selector.
 			 * @param physicalDevice A reference to the physical device smart pointer.
 			 * @param requiredExtensions A reference to a list of required extensions.
-			 * @param score A reference to a score to sort preferred device.
+			 * @param score A reference to a score to sort the preferred device.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool checkDeviceForRequiredExtensions (const std::shared_ptr< PhysicalDevice > & physicalDevice, const std::vector< const char * > & requiredExtensions, size_t & score) const noexcept;
+			static bool checkDeviceForRequiredExtensions (const std::shared_ptr< PhysicalDevice > & physicalDevice, const std::vector< const char * > & requiredExtensions, size_t & score) noexcept;
 
 			/* Flag names. */
 			static constexpr auto ShowInformation{0UL};
