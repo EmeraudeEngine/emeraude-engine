@@ -26,9 +26,6 @@
 
 #include "HTTPResponse.hpp"
 
-/* Emeraude-Engine configuration. */
-#include "emeraude_config.hpp"
-
 /* STL inclusions. */
 #include <iostream>
 
@@ -37,56 +34,6 @@
 
 namespace EmEn::Libs::Network
 {
-	HTTPResponse::HTTPResponse () noexcept
-		: HTTPHeaders(Version::HTTP11)
-	{
-
-	}
-
-	HTTPResponse::HTTPResponse (Version version) noexcept
-		: HTTPHeaders(version)
-	{
-
-	}
-
-	HTTPResponse::HTTPResponse (int code, std::string text, Version version) noexcept
-		: HTTPHeaders(version), m_codeResponse(code), m_textResponse(std::move(text))
-	{
-
-	}
-
-	HTTPResponse::HTTPResponse (const std::string & rawHeaders) noexcept
-	{
-		if ( !this->parse(rawHeaders) )
-		{
-			std::cerr << __PRETTY_FUNCTION__ << ", unable to parse the HTTP response !" "\n";
-		}
-	}
-
-	void
-	HTTPResponse::setCodeResponse (int code) noexcept
-	{
-		m_codeResponse = code;
-	}
-
-	int
-	HTTPResponse::codeResponse () const noexcept
-	{
-		return m_codeResponse;
-	}
-
-	void
-	HTTPResponse::setTextResponse (const std::string & text) noexcept
-	{
-		m_textResponse = text;
-	}
-
-	const std::string &
-	HTTPResponse::textResponse () const noexcept
-	{
-		return m_textResponse;
-	}
-
 	bool
 	HTTPResponse::isValid () const noexcept
 	{
@@ -110,7 +57,7 @@ namespace EmEn::Libs::Network
 
 		if ( chunks.size() != 3 )
 		{
-			std::cerr << __PRETTY_FUNCTION__ << ", invalid HTTP response : " << line << "\n";
+			std::cerr << "HTTPResponse::parseFirstLine(), invalid HTTP response : " << line << "\n";
 
 			return false;
 		}
@@ -140,9 +87,9 @@ namespace EmEn::Libs::Network
 
 		output << HTTPHeaders::version(m_version) << ' ' << m_codeResponse << ' ' << m_textResponse << Separator;
 
-		for ( const auto & header : m_headers )
+		for ( const auto & [name, value] : m_headers )
 		{
-			output << header.first << ": " << header.second << Separator;
+			output << name << ": " << value << Separator;
 		}
 
 		output << Separator;

@@ -27,9 +27,9 @@
 #pragma once
 
 /* STL inclusions. */
-#include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <chrono>
 
 /* Local inclusions for inheritances. */
 #include "Abstract.hpp"

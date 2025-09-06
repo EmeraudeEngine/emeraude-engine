@@ -33,12 +33,6 @@
 
 namespace EmEn::Libs::Network
 {
-	Hostname::Hostname (std::string subdomain, std::string domain) noexcept
-		: m_subdomain(std::move(subdomain)), m_domain(std::move(domain))
-	{
-
-	}
-
 	Hostname
 	Hostname::fromString (const std::string & string) noexcept
 	{
@@ -89,29 +83,11 @@ namespace EmEn::Libs::Network
 	std::string
 	Hostname::tld () const noexcept
 	{
-		const auto position = m_domain.find('.');
-
-		if ( position != std::string::npos )
+		if ( const auto position = m_domain.find('.'); position != std::string::npos )
 		{
 			return m_domain.substr(position + 1);
 		}
 
 		return {};
-	}
-
-	std::ostream &
-	operator<< (std::ostream & out, const Hostname & obj)
-	{
-		return out << obj.name();
-	}
-
-	std::string
-	to_string (const Hostname & obj) noexcept
-	{
-		std::stringstream output;
-
-		output << obj;
-
-		return output.str();
 	}
 }

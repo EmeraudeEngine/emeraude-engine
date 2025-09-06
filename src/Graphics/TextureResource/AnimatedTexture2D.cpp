@@ -33,20 +33,10 @@
 #include "Vulkan/Sampler.hpp"
 #include "Graphics/Renderer.hpp"
 
-/* Defining the resource manager class id. */
-template<>
-const char * const EmEn::Resources::Container< EmEn::Graphics::TextureResource::AnimatedTexture2D >::ClassId{"AnimatedTexture2DContainer"};
-
-/* Defining the resource manager ClassUID. */
-template<>
-const size_t EmEn::Resources::Container< EmEn::Graphics::TextureResource::AnimatedTexture2D >::ClassUID{getClassUID(ClassId)};
-
 namespace EmEn::Graphics::TextureResource
 {
 	using namespace EmEn::Libs;
 	using namespace EmEn::Vulkan;
-
-	const size_t AnimatedTexture2D::ClassUID{getClassUID(ClassId)};
 
 	bool
 	AnimatedTexture2D::isCreated () const noexcept
@@ -220,14 +210,14 @@ namespace EmEn::Graphics::TextureResource
 	}
 
 	bool
-	AnimatedTexture2D::load () noexcept
+	AnimatedTexture2D::load (Resources::ServiceProvider & serviceProvider) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
 			return false;
 		}
 
-		m_localData = Resources::Manager::instance()->container< MovieResource >()->getDefaultResource();
+		m_localData = serviceProvider.container< MovieResource >()->getDefaultResource();
 
 		if ( !this->addDependency(m_localData) )
 		{
@@ -238,12 +228,12 @@ namespace EmEn::Graphics::TextureResource
 	}
 
 	bool
-	AnimatedTexture2D::load (const std::filesystem::path & filepath) noexcept
+	AnimatedTexture2D::load (Resources::ServiceProvider & serviceProvider, const std::filesystem::path & filepath) noexcept
 	{
-		/* Looking for a movie resource by extracting the resource name from filepath.
+		/* Looking for a movie resource by extracting the resource name from the filepath.
 		 * NOTE: The loading process is synchronous here. */
-		const auto movieResource = Resources::Manager::instance()->container< MovieResource >()->getResource(
-			getResourceNameFromFilepath(filepath, "Movies"),
+		const auto movieResource = serviceProvider.container< MovieResource >()->getResource(
+			ResourceTrait::getResourceNameFromFilepath(filepath, "Movies"),
 			false
 		);
 
@@ -251,7 +241,7 @@ namespace EmEn::Graphics::TextureResource
 	}
 
 	bool
-	AnimatedTexture2D::load (const Json::Value & /*data*/) noexcept
+	AnimatedTexture2D::load (Resources::ServiceProvider & /*serviceProvider*/, const Json::Value & /*data*/) noexcept
 	{
 		/* NOTE: This resource has no local store,
 		 * so this method won't be called from a resource container! */

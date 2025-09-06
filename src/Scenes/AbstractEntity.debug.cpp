@@ -48,15 +48,13 @@ namespace EmEn::Scenes
 	constexpr auto CameraDebugName{"+EntityCamera"};
 
 	void
-	AbstractEntity::enableVisualDebug (VisualDebugType type) noexcept
+	AbstractEntity::enableVisualDebug (Resources::Manager & resourceManager, VisualDebugType type) noexcept
 	{
 		if ( this->isVisualDebugEnabled(type) )
 		{
 			return;
 		}
-
-		auto * resources = Resources::Manager::instance();
-
+		
 		const char * label = nullptr;
 		std::shared_ptr< Renderable::MeshResource > meshResource;
 
@@ -64,27 +62,27 @@ namespace EmEn::Scenes
 		{
 			case VisualDebugType::Axis :
 				label = AxisDebugName;
-				meshResource = AbstractEntity::getAxisVisualDebug(*resources);
+				meshResource = AbstractEntity::getAxisVisualDebug(resourceManager);
 				break;
 
 			case VisualDebugType::Velocity :
 				label = VelocityDebugName;
-				meshResource = AbstractEntity::getVelocityVisualDebug(*resources);
+				meshResource = AbstractEntity::getVelocityVisualDebug(resourceManager);
 				break;
 
 			case VisualDebugType::BoundingBox :
 				label = BoundingBoxDebugName;
-				meshResource = AbstractEntity::getBoundingBoxVisualDebug(*resources);
+				meshResource = AbstractEntity::getBoundingBoxVisualDebug(resourceManager);
 				break;
 
 			case VisualDebugType::BoundingSphere :
 				label = BoundingSphereDebugName;
-				meshResource = AbstractEntity::getBoundingSphereVisualDebug(*resources);
+				meshResource = AbstractEntity::getBoundingSphereVisualDebug(resourceManager);
 				break;
 
 			case VisualDebugType::Camera :
 				label = CameraDebugName;
-				meshResource = AbstractEntity::getCameraVisualDebug(*resources);
+				meshResource = AbstractEntity::getCameraVisualDebug(resourceManager);
 				break;
 		}
 
@@ -166,7 +164,7 @@ namespace EmEn::Scenes
 	}
 
 	bool
-	AbstractEntity::toggleVisualDebug (VisualDebugType type) noexcept
+	AbstractEntity::toggleVisualDebug (Resources::Manager & resourceManager, VisualDebugType type) noexcept
 	{
 		if ( this->isVisualDebugEnabled(type) )
 		{
@@ -175,7 +173,7 @@ namespace EmEn::Scenes
 			return false;
 		}
 
-		this->enableVisualDebug(type);
+		this->enableVisualDebug(resourceManager, type);
 
 		return true;
 	}

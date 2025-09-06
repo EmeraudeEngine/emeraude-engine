@@ -220,7 +220,7 @@ namespace EmEn::Saphir::Generator
 			}
 		}
 
-		/* FIXME: Only to get the width/height. This can become a dynamic state ! */
+		/* FIXME: Only to get the width/height. This can become a dynamic state! */
 		const auto & extent = m_renderTarget->extent();
 
 		if ( !graphicsPipeline->configureViewportState(extent.width, extent.height) )
@@ -230,7 +230,7 @@ namespace EmEn::Saphir::Generator
 			return false;
 		}
 
-		/* FIXME: Only to get the framebuffer sampler. This can become a dynamic state or a global settings. ! */
+		/* FIXME: Only to get the framebuffer sampler. This can become a dynamic state or global settings. ! */
 		if ( !graphicsPipeline->configureMultisampleState(*m_renderTarget) )
 		{
 			Tracer::error(TracerTag, "Unable to configure the graphics pipeline multisample state !");

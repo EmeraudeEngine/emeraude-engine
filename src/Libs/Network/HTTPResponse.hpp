@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* STL inclusions. */
+#include <iostream>
+
 /* Local inclusions for usages. */
 #include "HTTPHeaders.hpp"
 
@@ -39,42 +42,64 @@ namespace EmEn::Libs::Network
 	{
 		public:
 
-			static constexpr auto Date = "Date";
-			static constexpr auto Server = "Server";
-			static constexpr auto LastModified = "Last-Modified";
-			static constexpr auto ETag = "DateETag";
-			static constexpr auto AcceptRanges = "Accept-Ranges";
-			static constexpr auto ContentLength = "Content-Length";
-			static constexpr auto Connection = "Connection";
-			static constexpr auto ContentType = "Content-Type";
-			static constexpr auto TransferEncoding = "Transfer-Encoding";
-			static constexpr auto ContentEncoding = "Content-Encoding";
+			static constexpr auto Date{"Date"};
+			static constexpr auto Server{"Server"};
+			static constexpr auto LastModified{"Last-Modified"};
+			static constexpr auto ETag{"DateETag"};
+			static constexpr auto AcceptRanges{"Accept-Ranges"};
+			static constexpr auto ContentLength{"Content-Length"};
+			static constexpr auto Connection {"Connection"};
+			static constexpr auto ContentType {"Content-Type"};
+			static constexpr auto TransferEncoding{"Transfer-Encoding"};
+			static constexpr auto ContentEncoding {"Content-Encoding"};
 
 			/**
 			 * @brief Constructs a default HTTP response.
 			 */
-			HTTPResponse () noexcept;
+			HTTPResponse () noexcept
+				: HTTPHeaders{Version::HTTP11}
+			{
+
+			}
 
 			/**
 			 * @brief Constructs an HTTP response.
 			 * @param version The HTTP version.
 			 */
-			explicit HTTPResponse (Version version) noexcept;
+			explicit
+			HTTPResponse (Version version) noexcept
+				: HTTPHeaders{version}
+			{
+
+			}
 
 			/**
 			 * @brief Constructs an HTTP response.
-			 * @param codeResponse The code of the HTTP response.
-			 * @param textResponse The text of the HTTP response [std::move].
+			 * @param code The code of the HTTP response.
+			 * @param text The text of the HTTP response [std::move].
 			 * @param version The HTTP version. Default HTTP 1.1.
 			 */
-			HTTPResponse (int code, std::string text, Version version = Version::HTTP11) noexcept;
+			HTTPResponse (int code, std::string text, Version version = Version::HTTP11) noexcept
+				: HTTPHeaders{version},
+				m_codeResponse{code},
+				m_textResponse{std::move(text)}
+			{
+
+			}
 
 			/**
 			 * @brief Constructs an HTTP response from raw headers.
 			 * @param rawHeaders A reference to string.
 			 * @return void
 			 */
-			explicit HTTPResponse (const std::string & rawHeaders) noexcept;
+			explicit
+			HTTPResponse (const std::string & rawHeaders) noexcept
+			{
+				if ( !this->parse(rawHeaders) )
+				{
+					std::cerr << "HTTPResponse(), unable to parse the HTTP response !" "\n";
+				}
+			}
 
 			/** @copydoc EmEn::Libs::Network::HTTPHeaders::isValid() */
 			[[nodiscard]]
@@ -89,28 +114,44 @@ namespace EmEn::Libs::Network
 			 * @param code The code value.
 			 * @return void
 			 */
-			void setCodeResponse (int code) noexcept;
+			void
+			setCodeResponse (int code) noexcept
+			{
+				m_codeResponse = code;
+			}
 
 			/**
 			 * @brief Sets the HTTP text response.
 			 * @param text The code text.
 			 * @return void
 			 */
-			void setTextResponse (const std::string & text) noexcept;
+			void
+			setTextResponse (const std::string & text) noexcept
+			{
+				m_textResponse = text;
+			}
 
 			/**
 			 * @brief Returns the HTTP code response.
 			 * @return int
 			 */
 			[[nodiscard]]
-			int codeResponse () const noexcept;
+			int
+			codeResponse () const noexcept
+			{
+				return m_codeResponse;
+			}
 
 			/**
 			 * @brief Returns the HTTP text response.
 			 * @return const std::string &
 			 */
 			[[nodiscard]]
-			const std::string & textResponse () const noexcept;
+			const std::string &
+			textResponse () const noexcept
+			{
+				return m_textResponse;
+			}
 
 		private:
 
@@ -118,6 +159,6 @@ namespace EmEn::Libs::Network
 			bool parseFirstLine (const std::string & line) noexcept override;
 
 			int m_codeResponse{0};
-			std::string m_textResponse{};
+			std::string m_textResponse;
 	};
 }

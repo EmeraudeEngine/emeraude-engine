@@ -33,12 +33,12 @@
 
 namespace EmEn::Saphir
 {
-	using namespace EmEn::Libs;
-	using namespace EmEn::Libs::Math;
-	using namespace EmEn::Libs::PixelFactory;
-	using namespace EmEn::Graphics;
-	using namespace EmEn::Saphir::Keys;
-	using namespace EmEn::Vulkan;
+	using namespace Libs;
+	using namespace Libs::Math;
+	using namespace Libs::PixelFactory;
+	using namespace Graphics;
+	using namespace Saphir::Keys;
+	using namespace Vulkan;
 	
 	bool
 	LightGenerator::generatePhongBlinnWithNormalMapVertexShader (Generator::Abstract & generator, VertexShader & vertexShader, LightType lightType, bool enableShadowMap) const noexcept
@@ -53,7 +53,7 @@ namespace EmEn::Saphir
 
 			lightBlock.addMember(Declaration::VariableType::FloatVector3, RayDirectionViewSpace, GLSL::Smooth);
 
-			Code{vertexShader, Location::Output} << Variable(RayDirectionViewSpace) << " = normalize((" << MatrixPC(PushConstant::Component::ViewMatrix) << " * " << this->lightDirectionWorldSpace() << ").xyz);";
+			Code{vertexShader, Location::Output} << LightGenerator::variable(RayDirectionViewSpace) << " = normalize((" << MatrixPC(PushConstant::Component::ViewMatrix) << " * " << this->lightDirectionWorldSpace() << ").xyz);";
 		}
 		else
 		{
@@ -68,17 +68,17 @@ namespace EmEn::Saphir
 
 			Code{vertexShader} << "const vec4 " << LightPositionViewSpace << " = " << MatrixPC(PushConstant::Component::ViewMatrix) << " * " << this->lightPositionWorldSpace() << ';';
 
-			Code{vertexShader, Location::Output} << Variable(Distance) << " = " << ShaderVariable::PositionViewSpace << ".xyz - " << LightPositionViewSpace << ".xyz;";
+			Code{vertexShader, Location::Output} << LightGenerator::variable(Distance) << " = " << ShaderVariable::PositionViewSpace << ".xyz - " << LightPositionViewSpace << ".xyz;";
 		}
 
 		if ( lightType == LightType::Spot )
 		{
 			lightBlock.addMember(Declaration::VariableType::FloatVector3, SpotLightDirectionViewSpace, GLSL::Smooth);
 
-			Code{vertexShader, Location::Output} << Variable(SpotLightDirectionViewSpace) << " = normalize((" << MatrixPC(PushConstant::Component::ViewMatrix) << " * " << this->lightDirectionWorldSpace() << ").xyz);";
+			Code{vertexShader, Location::Output} << LightGenerator::variable(SpotLightDirectionViewSpace) << " = normalize((" << MatrixPC(PushConstant::Component::ViewMatrix) << " * " << this->lightDirectionWorldSpace() << ").xyz);";
 		}
 
-		/* NOTE: For all light type. */
+		/* NOTE: For all light types. */
 		if ( !vertexShader.requestSynthesizeInstruction(ShaderVariable::NormalViewSpace, VariableScope::ToNextStage) )
 		{
 			return false;
@@ -89,7 +89,7 @@ namespace EmEn::Saphir
 			return false;
 		}
 
-		/* NOTE: Other type of light already compute the position in view space. */
+		/* NOTE: Another type of light already computes the position in view space. */
 		if ( !m_surfaceSpecularColor.empty() && lightType == LightType::Directional )
 		{
 			if ( !vertexShader.requestSynthesizeInstruction(ShaderVariable::PositionViewSpace, VariableScope::ToNextStage) )
@@ -123,13 +123,13 @@ namespace EmEn::Saphir
 		{
 			fragmentShader.addComment("Compute the ray direction in view space.");
 
-			Code{fragmentShader} << "const vec3 " << RayDirectionViewSpace << " = normalize(" << Variable(Distance) << ");";
+			Code{fragmentShader} << "const vec3 " << RayDirectionViewSpace << " = normalize(" << LightGenerator::variable(Distance) << ");";
 
 			rayDirectionViewSpace = RayDirectionViewSpace;
 		}
 		else
 		{
-			rayDirectionViewSpace = Variable(RayDirectionViewSpace);
+			rayDirectionViewSpace = LightGenerator::variable(RayDirectionViewSpace);
 		}
 
 		/* Discard backward normal sample code. */
@@ -155,7 +155,7 @@ namespace EmEn::Saphir
 			Code{fragmentShader} <<
 				"if ( " << this->lightRadius() << " > 0.0 ) " << Line::End <<
 				'{' << Line::End <<
-				"	const vec3 DR = abs(" << Variable(Distance) << ") / " << this->lightRadius() << ';' << Line::Blank <<
+				"	const vec3 DR = abs(" << LightGenerator::variable(Distance) << ") / " << this->lightRadius() << ';' << Line::Blank <<
 
 				"	" << LightFactor << " *= max(1.0 - dot(DR, DR), 0.0);" << Line::End <<
 				'}' << Line::End;
@@ -177,7 +177,7 @@ namespace EmEn::Saphir
 			Code{fragmentShader} <<
 				"if ( " << LightFactor << " > 0.0 )" << Line::End <<
 				'{' << Line::End <<
-				"	const float theta = dot(" << rayDirectionViewSpace << ", " << Variable(SpotLightDirectionViewSpace) << ");" << Line::End <<
+				"	const float theta = dot(" << rayDirectionViewSpace << ", " << LightGenerator::variable(SpotLightDirectionViewSpace) << ");" << Line::End <<
 				"	const float epsilon = " << innerCosAngle << " - " << outerCosAngle << ";" << Line::End <<
 				"	const float spotFactor = clamp((theta - " << outerCosAngle << ") / epsilon, 0.0, 1.0);" << Line::End <<
 				"	" << LightFactor << " *= spotFactor;" << Line::End <<
@@ -199,7 +199,7 @@ namespace EmEn::Saphir
 				case LightType::Directional :
 					//gen.declare(Declaration::Uniform{Declaration::VariableType::Sampler2DShadow, Uniform::ShadowMapSampler});
 
-					Code{fragmentShader} << this->generate2DShadowMapCode(Uniform::ShadowMapSampler, Variable(ShaderBlock::Component::PositionLightSpace), DepthTextureFunction::TextureGather) << Line::Blank;
+					Code{fragmentShader} << this->generate2DShadowMapCode(Uniform::ShadowMapSampler, LightGenerator::variable(ShaderBlock::Component::PositionLightSpace), DepthTextureFunction::TextureGather) << Line::Blank;
 					break;
 
 				case LightType::Point :
@@ -212,7 +212,7 @@ namespace EmEn::Saphir
 				case LightType::Spot :
 					//gen.declare(Declaration::Uniform{Declaration::VariableType::Sampler2DShadow, Uniform::ShadowMapSampler});
 
-					Code{fragmentShader} << this->generate2DShadowMapCode(Uniform::ShadowMapSampler, Variable(ShaderBlock::Component::PositionLightSpace), DepthTextureFunction::TextureProj) << Line::End;
+					Code{fragmentShader} << this->generate2DShadowMapCode(Uniform::ShadowMapSampler, LightGenerator::variable(ShaderBlock::Component::PositionLightSpace), DepthTextureFunction::TextureProj) << Line::End;
 					break;
 			}
 

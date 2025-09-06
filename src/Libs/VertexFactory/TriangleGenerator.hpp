@@ -51,7 +51,8 @@ namespace EmEn::Libs::VertexFactory
 			 * @brief Constructs a triangle generator.
 			 * @param verticesCount Reserve data for adding vertex. Optional.
 			 */
-			explicit TriangleGenerator (size_t verticesCount = 0) noexcept
+			explicit
+			TriangleGenerator (size_t verticesCount = 0) noexcept
 			{
 				if ( verticesCount > 0 )
 				{
@@ -65,7 +66,7 @@ namespace EmEn::Libs::VertexFactory
 			 * @return void
 			 */
 			void
-			addVertex (const Libs::Math::Vector< 3, number_t > & vertex) noexcept
+			addVertex (const Math::Vector< 3, number_t > & vertex) noexcept
 			{
 				m_vertices.emplace_back(vertex);
 			}
@@ -76,7 +77,7 @@ namespace EmEn::Libs::VertexFactory
 			 * @return void
 			 */
 			void
-			addVertices (const std::vector< Libs::Math::Vector< 3, number_t > > & vertices) noexcept
+			addVertices (const std::vector< Math::Vector< 3, number_t > > & vertices) noexcept
 			{
 				m_vertices.insert(m_vertices.end(), vertices.cbegin(), vertices.cend());
 			}
@@ -84,8 +85,8 @@ namespace EmEn::Libs::VertexFactory
 			/**
 			 * @brief Adds a list of vertex.
 			 * @FIXME Remove internal triangles.
-			 * @warning  Bad algorithm.
-			 * @param enableReduction Removes central vertices, before creating the envelope.
+			 * @warning Bad algorithm.
+			 * @param enableReduction Removes central vertices before creating the envelope.
 			 * @return Shape< type_t >
 			 */
 			Shape< number_t >
@@ -102,7 +103,7 @@ namespace EmEn::Libs::VertexFactory
 					this->verticesReduction();
 				}
 
-				/* Generate every triangle possibilities. */
+				/* Generate every triangle possibility. */
 				std::set< std::array< size_t, 3 >, decltype([] (const std::array< size_t, 3 > & lhs, const std::array< size_t, 3 > & rhs) {
 					if ( lhs[0] != rhs[0] && lhs[0] != rhs[1] && lhs[0] != rhs[2])
 					{
@@ -178,7 +179,7 @@ namespace EmEn::Libs::VertexFactory
 
 				const auto aggregate = this->getDistancesAggregate();
 
-				/* Generate every triangle possibilities. */
+				/* Generate every triangle possibility. */
 #ifdef __clang__
 				auto compare = [] (const std::array< size_t, 3 > & lhs, const std::array< size_t, 3 > & rhs)
 				{
@@ -246,7 +247,7 @@ namespace EmEn::Libs::VertexFactory
 				}
 
 				/* Generate triangles. */
-				Shape< number_t > shape{triangles.size() * 3, 1, triangles.size()};
+				Shape< number_t > shape{static_cast< uint32_t >(triangles.size()) * 3U, 1U, static_cast< uint32_t >(triangles.size())};
 
 				ShapeBuilder< number_t > builder{shape};
 
@@ -424,6 +425,6 @@ namespace EmEn::Libs::VertexFactory
 				}
 			}
 
-			std::vector< Libs::Math::Vector< 3, number_t > > m_vertices{};
+			std::vector< Math::Vector< 3, number_t > > m_vertices;
 	};
 }

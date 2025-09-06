@@ -49,12 +49,12 @@
 
 namespace EmEn
 {
-	using namespace EmEn::Libs;
-	using namespace EmEn::Vulkan;
-	using namespace EmEn::Graphics;
-	using namespace EmEn::Scenes;
-	using namespace EmEn::Input;
-	using namespace EmEn::Resources;
+	using namespace Libs;
+	using namespace Vulkan;
+	using namespace Graphics;
+	using namespace Scenes;
+	using namespace Input;
+	using namespace Resources;
 
 	Core::Core (int argc, char * * argv, const char * applicationName, const Version & applicationVersion, const char * applicationOrganization, const char * applicationDomain) noexcept
 		: KeyboardListenerInterface(false, false),
@@ -116,9 +116,9 @@ namespace EmEn
 	{
 		const std::chrono::duration< uint64_t, std::micro > logicsUpdateFrequency{EngineUpdateCycleDurationUS< uint64_t >};
 
-		while ( m_flags[IsLogicsLoopRunning] )
+		while ( m_isLogicsLoopRunning )
 		{
-			if ( m_flags[Paused] )
+			if ( m_paused )
 			{
 				std::this_thread::sleep_for(std::chrono::milliseconds{100});
 
@@ -165,13 +165,18 @@ namespace EmEn
 	{
 		uint64_t frames = 0;
 
-		while ( m_flags[IsRenderingLoopRunning] )
+		while ( m_isRenderingLoopRunning )
 		{
-			if ( m_flags[Paused] )
+			if ( m_paused )
 			{
 				std::this_thread::sleep_for(std::chrono::milliseconds{100});
 
 				continue;
+			}
+
+			if ( m_graphicsRenderer.isSwapChainDegraded() && !m_graphicsRenderer.recreateSwapChain() )
+			{
+				Tracer::fatal(ClassId, "Unable to recreate the swap chain !");
 			}
 
 			{
@@ -232,7 +237,7 @@ namespace EmEn
 
 				Tracer::success(ClassId, "Engine at application level initialized !");
 
-				m_flags[IsMainLoopRunning] = true;
+				m_isMainLoopRunning = true;
 
 				break;
 		}
@@ -265,7 +270,7 @@ namespace EmEn
 		}
 
 		/* NOTE: This is the engine main loop. */
-		while ( m_flags[IsMainLoopRunning] )
+		while ( m_isMainLoopRunning )
 		{
 			const Time::Elapsed::PrintScopeRealTimeThreshold stat{"MainLoop", 1000.0 / 60};
 
@@ -279,7 +284,7 @@ namespace EmEn
 
 			/* NOTE: Checks whether the engine is running or paused.
 			 * If not, we wait for a wake-up event with a blocking function. */
-			if ( m_flags[Paused] )
+			if ( m_paused )
 			{
 				/* Stop all timers of an active scene. */
 				m_sceneManager.withExclusiveActiveScene([&] (const auto & activeScene) {
@@ -287,7 +292,7 @@ namespace EmEn
 				}, true);
 
 				/* Wait until an event release the pause state. */
-				while ( m_flags[Paused] )
+				while ( m_paused )
 				{
 					/* Let the child class get the call event from the main loop. */
 					this->onMainLoopCycle();
@@ -376,6 +381,7 @@ namespace EmEn
 		/* Registering core help. */
 		{
 			m_coreHelp.registerArgument("Show this help.", "help", 'h');
+			m_coreHelp.registerArgument("Disable the window for server version.", "window-less", 'W');
 			m_coreHelp.registerArgument("Disable audio layer.", "disable-audio");
 			m_coreHelp.registerArgument("Display only logs which tags appears. TAG is a list of words separated by comma.", "filter-tag", 't', {"TAG"});
 			m_coreHelp.registerArgument("Set a custom core settings file. FILE_PATH is where to get the settings file and should be writable.", "settings-filepath", 0, {"FILE_PATH"});
@@ -420,7 +426,7 @@ namespace EmEn
 
 		if ( m_primaryServices.arguments().get("-h", "--help").isPresent() )
 		{
-			m_flags[ShowHelp] = true;
+			m_showHelp = true;
 
 			return false;
 		}
@@ -464,7 +470,7 @@ namespace EmEn
 		}
 
 		/* Print startup general information. */
-		if ( m_primaryServices.settings().get< bool >(CoreShowInformationKey, DefaultCoreShowInformation) )
+		if ( m_primaryServices.settings().getOrSetDefault< bool >(CoreShowInformationKey, DefaultCoreShowInformation) )
 		{
 			Tracer::info(ClassId, m_primaryServices.information());
 		}
@@ -560,6 +566,12 @@ namespace EmEn
 
 			this->observe(&m_graphicsRenderer);
 			this->observe(&m_graphicsRenderer.shaderManager());
+
+			/* FIXME: Check a better way to give the access ... */
+			Geometry::Interface::s_graphicsRenderer = &m_graphicsRenderer;
+			TextureResource::Abstract::s_graphicsRenderer = &m_graphicsRenderer;
+			Material::Interface::s_graphicsRenderer = &m_graphicsRenderer;
+			Component::Abstract::s_graphicsRenderer = &m_graphicsRenderer;
 		}
 		else
 		{
@@ -588,6 +600,9 @@ namespace EmEn
 			m_audioManager.registerToObject(*this);
 
 			this->observe(&m_audioManager.trackMixer());
+
+			/* FIXME: Check a better way to give the access ... */
+			Component::Abstract::s_audioManager = &m_audioManager;
 		}
 		else
 		{
@@ -692,7 +707,7 @@ namespace EmEn
 	void
 	Core::pause () noexcept
 	{
-		if ( m_flags[Paused]  )
+		if ( m_paused  )
 		{
 			return;
 		}
@@ -705,19 +720,19 @@ namespace EmEn
 		this->onPause();
 
 		/* Pause the core engine last. */
-		m_flags[Paused] = true;
+		m_paused = true;
 	}
 
 	void
 	Core::resume () noexcept
 	{
-		if ( !m_flags[Paused] )
+		if ( !m_paused )
 		{
 			return;
 		}
 
 		/* Pause the core engine first. */
-		m_flags[Paused] = false;
+		m_paused = false;
 
 		/* Dispatch the resume event,
 		 * first by sending the event,
@@ -743,11 +758,11 @@ namespace EmEn
 		this->onStop();
 
 		/* Stopping the logics and rendering loops. */
-		m_flags[IsLogicsLoopRunning] = false;
-		m_flags[IsRenderingLoopRunning] = false;
+		m_isLogicsLoopRunning = false;
+		m_isRenderingLoopRunning = false;
 
 		/* Stopping the main loop. */
-		m_flags[IsMainLoopRunning] = false;
+		m_isMainLoopRunning = false;
 	}
 
 	unsigned int
@@ -879,7 +894,7 @@ namespace EmEn
 		/* NOTE: Pause the engine. */
 		if ( !repeat && key == KeyPause )
 		{
-			if ( m_flags[Paused] )
+			if ( m_paused )
 			{
 				this->resume();
 			}
@@ -937,7 +952,10 @@ namespace EmEn
 				{
 					m_audioManager.play("switch_on");
 
-					m_sceneManager.refreshScenes();
+					if ( !m_sceneManager.refreshActiveScene() )
+					{
+						Tracer::error(ClassId, "Unable to refresh the active scene !");
+					}
 				}
 					return true;
 
@@ -1072,7 +1090,7 @@ namespace EmEn
 		}
 
 		/* NOTE: If the application does not catch any key, we let the core having a default behavior. */
-		if ( m_flags[PreventDefaultKeyBehaviors] )
+		if ( m_preventDefaultKeyBehaviors )
 		{
 			return false;
 		}
@@ -1196,7 +1214,7 @@ namespace EmEn
 
 				case Window::OSNotifiesWindowLostFocus :
 				case Window::OSNotifiesWindowHidden :
-					if ( m_flags[Pausable] )
+					if ( m_pausable )
 					{
 						this->pause();
 					}
@@ -1229,7 +1247,15 @@ namespace EmEn
 			switch ( notificationCode )
 			{
 				case Renderer::SwapChainRecreated :
-					m_sceneManager.refreshScenes();
+					/* FIXME: Should be removed! */
+					if ( m_sceneManager.refreshActiveScene() )
+					{
+						Tracer::info(ClassId, "Refreshing the active scene ...");
+					}
+					else
+					{
+						Tracer::info(ClassId, "No active scene !");
+					}
 					break;
 
 				case Renderer::SwapChainCreated :

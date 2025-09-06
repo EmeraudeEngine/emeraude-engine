@@ -35,22 +35,12 @@
 #include "Graphics/Material/StandardResource.hpp"
 #include "Scenes/DefinitionResource.hpp"
 
-/* Defining the resource manager class id. */
-template<>
-const char * const EmEn::Resources::Container< EmEn::Graphics::Renderable::TerrainResource >::ClassId{"TerrainContainer"};
-
-/* Defining the resource manager ClassUID. */
-template<>
-const size_t EmEn::Resources::Container< EmEn::Graphics::Renderable::TerrainResource >::ClassUID{getClassUID(ClassId)};
-
 namespace EmEn::Graphics::Renderable
 {
-	using namespace EmEn::Libs;
-	using namespace EmEn::Libs::Math;
-	using namespace EmEn::Libs::VertexFactory;
-	using namespace EmEn::Scenes;
-
-	const size_t TerrainResource::ClassUID{getClassUID(ClassId)};
+	using namespace Libs;
+	using namespace Libs::Math;
+	using namespace Libs::VertexFactory;
+	using namespace Scenes;
 
 	/*void
 	Terrain::updateVisibility (const CartesianFrame< float > & coordinates) noexcept
@@ -158,7 +148,7 @@ namespace EmEn::Graphics::Renderable
 	}
 
 	bool
-	TerrainResource::load () noexcept
+	TerrainResource::load (Resources::ServiceProvider & serviceProvider) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
@@ -170,7 +160,7 @@ namespace EmEn::Graphics::Renderable
 			return this->setLoadSuccess(false);
 		}
 
-		if ( !this->setMaterial(Resources::Manager::instance()->container< Material::StandardResource >()->getDefaultResource()) )
+		if ( !this->setMaterial(serviceProvider.container< Material::StandardResource >()->getDefaultResource()) )
 		{
 			m_localData.clear();
 
@@ -181,7 +171,7 @@ namespace EmEn::Graphics::Renderable
 	}
 
 	bool
-	TerrainResource::load (const std::filesystem::path & filepath) noexcept
+	TerrainResource::load (Resources::ServiceProvider & serviceProvider, const std::filesystem::path & filepath) noexcept
 	{
 		const auto rootCheck = FastJSON::getRootFromFile(filepath);
 
@@ -195,9 +185,7 @@ namespace EmEn::Graphics::Renderable
 		const auto & root = rootCheck.value();
 
 		/* Checks if additional stores before loading (optional) */
-		auto * manager = Resources::Manager::instance();
-
-		manager->stores().update(root, manager->verbosityEnabled());
+		serviceProvider.update(root);
 
 		if ( !root.isMember(DefinitionResource::SceneAreaKey) )
 		{
@@ -206,7 +194,7 @@ namespace EmEn::Graphics::Renderable
 			return this->setLoadSuccess(false);
 		}
 
-		auto sceneAreaObject = root[DefinitionResource::SceneAreaKey];
+		const auto & sceneAreaObject = root[DefinitionResource::SceneAreaKey];
 
 		if ( !sceneAreaObject.isMember(FastJSON::TypeKey) && !sceneAreaObject[FastJSON::TypeKey].isString() )
 		{
@@ -222,18 +210,16 @@ namespace EmEn::Graphics::Renderable
 			return this->setLoadSuccess(false);
 		}
 
-		return this->load(sceneAreaObject[FastJSON::DataKey]);
+		return this->load(serviceProvider, sceneAreaObject[FastJSON::DataKey]);
 	}
 
 	bool
-	TerrainResource::load (const Json::Value & data) noexcept
+	TerrainResource::load (Resources::ServiceProvider & serviceProvider, const Json::Value & data) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
 			return false;
 		}
-
-		auto * resources = Resources::Manager::instance();
 
 		/* First, we check every key from JSON data. */
 
@@ -305,7 +291,7 @@ namespace EmEn::Graphics::Renderable
 		/* The material. */
 		std::shared_ptr< Material::Interface > materialResource{};
 
-		auto * materials = resources->container< Material::StandardResource >();
+		auto * materials = serviceProvider.container< Material::StandardResource >();
 
 		const auto materialName = FastJSON::getValue< std::string >(data, MaterialNameKey);
 
@@ -339,11 +325,9 @@ namespace EmEn::Graphics::Renderable
 		/* Checks for geometry relief generation options. */
 		if ( data.isMember(HeightMapKey) )
 		{
-			auto heightMapping = data[HeightMapKey];
-
-			if ( heightMapping.isArray() )
+			if ( auto heightMapping = data[HeightMapKey]; heightMapping.isArray() )
 			{
-				auto * images = resources->container< ImageResource >();
+				auto * images = serviceProvider.container< ImageResource >();
 
 				for ( const auto & iteration : heightMapping )
 				{
@@ -373,7 +357,7 @@ namespace EmEn::Graphics::Renderable
 
 					/* Checks the mode for leveling the vertices. */
 					const auto modeString = FastJSON::getValidatedStringValue(iteration, FastJSON::ModeKey, PointTransformationModes).value_or("Replace");
-					const auto mode = magic_enum::enum_cast< EmEn::Libs::VertexFactory::PointTransformationMode >(modeString).value();
+					const auto mode = magic_enum::enum_cast< PointTransformationMode >(modeString).value();
 
 					/* Applies the height map on the geometry. */
 					m_localData.applyDisplacementMapping(imageResource->data(), inverse ? -scale : scale, mode);

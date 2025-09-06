@@ -1,5 +1,5 @@
 /*
- * src/Libs/KVParser/Section.hpp
+* src/Libs/Hash/FNV1a.hpp
  * This file is part of Emeraude-Engine
  *
  * Copyright (C) 2010-2025 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
@@ -27,36 +27,38 @@
 #pragma once
 
 /* STL inclusions. */
-#include <map>
-#include <string>
+#include <cstddef>
+#include <string_view>
 
-/* Local inclusions. */
-#include "Variable.hpp"
-
-namespace EmEn::Libs::KVParser
+namespace EmEn::Libs::Hash
 {
-	class Section final
+	/**
+	 * @brief Hashes a string using the FNV-1a algorithm.
+	 * @param string A string view.
+	 * @return std::size_t
+	 */
+	[[nodiscard]]
+	constexpr
+	std::size_t
+	FNV1a (const std::string_view string) noexcept
 	{
-		friend class Parser;
+		constexpr std::size_t OffsetBasis{14695981039346656037ULL};
+		constexpr std::size_t Prime{1099511628211ULL};
 
-		public:
+		std::size_t value = OffsetBasis;
 
-			using Variables = std::map< std::string, Variable >;
+		for ( const char character : string )
+		{
+			value = (value ^ static_cast< std::size_t >(character)) * Prime;
+		}
 
-			Section () noexcept = default;
+		return value;
+	}
+}
 
-			void addVariable (const std::string & key, const Variable & variable) noexcept;
-
-			[[nodiscard]]
-			size_t getVariableCount () const noexcept;
-
-			[[nodiscard]]
-			Variable variable (const std::string & key) const noexcept;
-
-		private:
-
-			void write (std::ofstream & file) const noexcept;
-
-			Variables m_variables{};
-	};
+constexpr
+std::size_t
+operator""_hash (const char * string, std::size_t)
+{
+	return EmEn::Libs::Hash::FNV1a(string);
 }

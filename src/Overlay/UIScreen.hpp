@@ -49,8 +49,8 @@ namespace EmEn::Overlay
 {
 	/**
 	 * @brief Defines an overlaying screen object.
-	 * @details There is no physical properties. This is just a group of surfaces and dispatch input event to it.
-	 * @exception EmEn::Libs::NameableTrait A UI screen have a name.
+	 * @details There are no physical properties. This is just a group of surfaces and dispatch input event to it.
+	 * @exception EmEn::Libs::NameableTrait A UI screen has a name.
 	 */
 	class UIScreen final : public Libs::NameableTrait
 	{
@@ -70,10 +70,11 @@ namespace EmEn::Overlay
 			UIScreen (std::string name, const FramebufferProperties & framebufferProperties, Graphics::Renderer & graphicsRenderer, bool enableKeyboardListener, bool enablePointerListener) noexcept
 				: NameableTrait{std::move(name)},
 				m_graphicsRenderer{graphicsRenderer},
-				m_framebufferProperties{framebufferProperties}
+				m_framebufferProperties{framebufferProperties},
+				m_isListeningKeyboard{enableKeyboardListener},
+				m_isListeningPointer{enablePointerListener}
 			{
-				m_flags[IsListeningKeyboard] = enableKeyboardListener;
-				m_flags[IsListeningPointer] = enablePointerListener;
+
 			}
 
 			/**
@@ -95,7 +96,7 @@ namespace EmEn::Overlay
 			void
 			setVisibility (bool state) noexcept
 			{
-				m_flags[IsVisible] = state;
+				m_isVisible = state;
 			}
 
 			/**
@@ -106,7 +107,7 @@ namespace EmEn::Overlay
 			bool
 			isVisible () const noexcept
 			{
-				return m_flags[IsVisible];
+				return m_isVisible;
 			}
 
 			/**
@@ -117,7 +118,7 @@ namespace EmEn::Overlay
 			void
 			enableKeyboardListening (bool state) noexcept
 			{
-				m_flags[IsListeningKeyboard] = state;
+				m_isListeningKeyboard = state;
 			}
 
 			/**
@@ -128,7 +129,7 @@ namespace EmEn::Overlay
 			bool
 			isListeningKeyboard () const noexcept
 			{
-				return m_flags[IsListeningKeyboard];
+				return m_isListeningKeyboard;
 			}
 
 			/**
@@ -139,7 +140,7 @@ namespace EmEn::Overlay
 			void
 			enablePointerListening (bool state) noexcept
 			{
-				m_flags[IsListeningPointer] = state;
+				m_isListeningPointer = state;
 			}
 
 			/**
@@ -150,7 +151,7 @@ namespace EmEn::Overlay
 			bool
 			isListeningPointer () const noexcept
 			{
-				return m_flags[IsListeningPointer];
+				return m_isListeningPointer;
 			}
 
 			/**
@@ -158,7 +159,7 @@ namespace EmEn::Overlay
 			 * @tparam surface_t The type of surface.
 			 * @tparam ctor_args The type of surface constructor optional arguments.
 			 * @param name A reference to a string.
-			 * @param args Additional arguments to pass to specific surface constructor. Default none.
+			 * @param args Additional arguments to pass to a specific surface constructor. Default none.
 			 * @return std::shared_ptr< surface_t >
 			 */
 			template< typename surface_t, typename... ctor_args >
@@ -207,7 +208,7 @@ namespace EmEn::Overlay
 			bool updateVideoMemory (bool windowResized) noexcept;
 
 			/**
-			 * @brief Render this screen. Test for visibility is done by the manager.
+			 * @brief Render this screen. The manager does tests for visibility.
 			 * @param renderTarget A reference to a render target smart pointer.
 			 * @param commandBuffer A reference to a command buffer.
 			 * @param pipelineLayout A reference to the overlay manager pipeline layout.
@@ -310,7 +311,7 @@ namespace EmEn::Overlay
 
 			/**
 			 * @brief Transfers the key press event to surfaces.
-			 * @param key The keyboard universal key code. I.e, QWERTY keyboard 'A' key gives the ASCII code '65' on all platform.
+			 * @param key The keyboard universal key code. Example, QWERTY keyboard 'A' key gives the ASCII code '65' on all platforms.
 			 * @param scancode The OS dependent scancode.
 			 * @param modifiers The modifier keys mask.
 			 * @param repeat Repeat state.
@@ -320,7 +321,7 @@ namespace EmEn::Overlay
 
 			/**
 			 * @brief Transfers the key release event to surfaces.
-			 * @param key The keyboard universal key code. I.e, QWERTY keyboard 'A' key gives the ASCII code '65' on all platform.
+			 * @param key The keyboard universal key code. Example, QWERTY keyboard 'A' key gives the ASCII code '65' on all platforms.
 			 * @param scancode The OS dependent scancode..
 			 * @param modifiers The modifier keys mask.
 			 * @return bool
@@ -328,7 +329,7 @@ namespace EmEn::Overlay
 			bool onKeyRelease (int32_t key, int32_t scancode, int32_t modifiers) const noexcept;
 
 			/**
-			 * @brief Transfers the character typed event to surfaces.
+			 * @brief Transfers the character-typed event to surfaces.
 			 * @param unicode The Unicode number.
 			 * @return bool
 			 */
@@ -387,28 +388,16 @@ namespace EmEn::Overlay
 			 * @return std::ostream &
 			 */
 			friend std::ostream & operator<< (std::ostream & out, const UIScreen & obj);
-
-			/* Flag names. */
-			static constexpr auto IsVisible{0UL};
-			static constexpr auto IsListeningKeyboard{1UL};
-			static constexpr auto IsListeningPointer{2UL};
-
+			
 			Graphics::Renderer & m_graphicsRenderer;
 			const FramebufferProperties & m_framebufferProperties;
 			std::map< std::string, std::shared_ptr< Surface > > m_surfaces;
 			std::vector< std::shared_ptr< Surface > > m_sortedSurfaces;
 			std::shared_ptr< Surface > m_inputExclusiveSurface;
 			mutable std::mutex m_surfacesMutex;
-			std::array< bool, 8 > m_flags{
-				false/*IsVisible*/,
-				false/*IsListeningKeyboard*/,
-				false/*IsListeningPointer*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/
-			};
+			bool m_isVisible{false};
+			bool m_isListeningKeyboard{false};
+			bool m_isListeningPointer{false};
 	};
 
 	/**

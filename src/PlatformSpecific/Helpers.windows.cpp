@@ -24,9 +24,11 @@
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
 
-#include "Helpers.hpp"
+/* Emeraude-Engine configuration. */
+#include "emeraude_config.hpp"
 
 #if IS_WINDOWS
+#include "Helpers.hpp"
 
 /* STL inclusions. */
 #include <iostream>

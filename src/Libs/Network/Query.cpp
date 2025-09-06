@@ -35,12 +35,6 @@
 
 namespace EmEn::Libs::Network
 {
-	Query::Query (const std::map< std::string, std::string > & variables) noexcept
-		: m_variables(variables)
-	{
-
-	}
-
 	Query
 	Query::fromString (const std::string & string) noexcept
 	{
@@ -70,20 +64,10 @@ namespace EmEn::Libs::Network
 	{
 		std::vector< std::string > variables(obj.m_variables.size());
 
-		std::transform(obj.m_variables.cbegin(), obj.m_variables.cend(), std::back_inserter(variables), [] (const auto & variable) {
+		std::ranges::transform(obj.m_variables, std::back_inserter(variables), [] (const auto & variable) {
 			return variable.first + '=' + variable.second;
 		});
 
 		return out << String::implode(variables, '&');
-	}
-
-	std::string
-	to_string (const Query & obj) noexcept
-	{
-		std::stringstream output;
-
-		output << obj;
-
-		return output.str();
 	}
 }

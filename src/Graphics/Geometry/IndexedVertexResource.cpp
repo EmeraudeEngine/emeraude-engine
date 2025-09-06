@@ -31,24 +31,14 @@
 #include "Libs/VertexFactory/FileIO.hpp"
 #include "Vulkan/TransferManager.hpp"
 
-/* Defining the resource manager class id. */
-template<>
-const char * const EmEn::Resources::Container< EmEn::Graphics::Geometry::IndexedVertexResource >::ClassId{"IndexedVertexResourceContainer"};
-
-/* Defining the resource manager ClassUID. */
-template<>
-const size_t EmEn::Resources::Container< EmEn::Graphics::Geometry::IndexedVertexResource >::ClassUID{getClassUID(ClassId)};
-
 namespace EmEn::Graphics::Geometry
 {
-	using namespace EmEn::Libs;
-	using namespace EmEn::Libs::Math;
-	using namespace EmEn::Libs::VertexFactory;
-	using namespace EmEn::Libs::PixelFactory;
-	using namespace EmEn::Libs::VertexFactory;
-	using namespace EmEn::Vulkan;
-
-	const size_t IndexedVertexResource::ClassUID{getClassUID(ClassId)};
+	using namespace Libs;
+	using namespace Libs::Math;
+	using namespace Libs::VertexFactory;
+	using namespace Libs::PixelFactory;
+	using namespace Libs::VertexFactory;
+	using namespace Vulkan;
 
 	bool
 	IndexedVertexResource::createOnHardware (TransferManager & transferManager) noexcept
@@ -169,7 +159,7 @@ namespace EmEn::Graphics::Geometry
 	}
 
 	bool
-	IndexedVertexResource::load () noexcept
+	IndexedVertexResource::load (Resources::ServiceProvider & /*serviceProvider*/) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
@@ -185,7 +175,7 @@ namespace EmEn::Graphics::Geometry
 	}
 
 	bool
-	IndexedVertexResource::load (const std::filesystem::path & filepath) noexcept
+	IndexedVertexResource::load (Resources::ServiceProvider & /*serviceProvider*/, const std::filesystem::path & filepath) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
@@ -214,7 +204,7 @@ namespace EmEn::Graphics::Geometry
 	}
 
 	bool
-	IndexedVertexResource::load (const Json::Value & /*data*/) noexcept
+	IndexedVertexResource::load (Resources::ServiceProvider & /*serviceProvider*/, const Json::Value & /*data*/) noexcept
 	{
 		if ( !this->beginLoading() )
 		{

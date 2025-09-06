@@ -96,14 +96,22 @@ namespace EmEn::Libs::Network
 			 * @param version The HTTP version enum.
 			 * @return void
 			 */
-			void setVersion (Version version) noexcept;
+			void
+			setVersion (Version version) noexcept
+			{
+				m_version = version;
+			}
 
 			/**
 			 * @brief Returns the HTTP version in use.
 			 * @return Version
 			 */
 			[[nodiscard]]
-			Version version () const noexcept;
+			Version
+			version () const noexcept
+			{
+				return m_version;
+			}
 
 			/**
 			 * @brief Adds a new header line.
@@ -111,7 +119,11 @@ namespace EmEn::Libs::Network
 			 * @param value The value of the header.
 			 * @return void
 			 */
-			void add (const std::string & key, const std::string & value) noexcept;
+			void
+			add (const std::string & key, const std::string & value) noexcept
+			{
+				m_headers.emplace(key, value);
+			}
 
 			/**
 			 * @brief Returns the value of a header.
@@ -162,10 +174,15 @@ namespace EmEn::Libs::Network
 		protected:
 
 			/**
-			 * @brief Constructs an HTTP headers.
+			 * @brief Constructs an HTTP header.
 			 * @param version The HTTP version.
 			 */
-			explicit HTTPHeaders (Version version = Version::HTTP09) noexcept;
+			explicit
+			HTTPHeaders (Version version = Version::HTTP09) noexcept
+				: m_version{version}
+			{
+
+			}
 
 			/**
 			 * @brief Parses the first line of HTTP Headers.
@@ -175,6 +192,6 @@ namespace EmEn::Libs::Network
 			virtual bool parseFirstLine (const std::string & line) noexcept = 0;
 
 			Version m_version;
-			std::unordered_map< std::string, std::string > m_headers{};
+			std::unordered_map< std::string, std::string > m_headers;
 	};
 }

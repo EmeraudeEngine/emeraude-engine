@@ -30,23 +30,13 @@
 #include "Libs/FastJSON.hpp"
 #include "Vulkan/TransferManager.hpp"
 
-/* Defining the resource manager class id. */
-template<>
-const char * const EmEn::Resources::Container< EmEn::Graphics::Geometry::VertexGridResource >::ClassId{"VertexGridContainer"};
-
-/* Defining the resource manager ClassUID. */
-template<>
-const size_t EmEn::Resources::Container< EmEn::Graphics::Geometry::VertexGridResource >::ClassUID{getClassUID(ClassId)};
-
 namespace EmEn::Graphics::Geometry
 {
-	using namespace EmEn::Libs;
-	using namespace EmEn::Libs::Math;
-	using namespace EmEn::Libs::VertexFactory;
-	using namespace EmEn::Libs::PixelFactory;
-	using namespace EmEn::Vulkan;
-
-	const size_t VertexGridResource::ClassUID{getClassUID(ClassId)};
+	using namespace Libs;
+	using namespace Libs::Math;
+	using namespace Libs::VertexFactory;
+	using namespace Libs::PixelFactory;
+	using namespace Vulkan;
 
 	bool
 	VertexGridResource::createOnHardware (TransferManager & transferManager) noexcept
@@ -210,13 +200,13 @@ namespace EmEn::Graphics::Geometry
 	}
 
 	bool
-	VertexGridResource::load () noexcept
+	VertexGridResource::load (Resources::ServiceProvider & /*serviceProvider*/) noexcept
 	{
 		return this->load(DefaultSize, DefaultDivision, DefaultUVMultiplier);
 	}
 
 	bool
-	VertexGridResource::load (const Json::Value & data) noexcept
+	VertexGridResource::load (Resources::ServiceProvider & /*serviceProvider*/, const Json::Value & data) noexcept
 	{
 		return this->load(
 			FastJSON::getValue< float >(data, JKSize).value_or(DefaultSize),

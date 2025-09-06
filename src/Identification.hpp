@@ -181,10 +181,10 @@ namespace EmEn
 
 		private:
 
-			std::string m_applicationName;
-			Libs::Version m_applicationVersion;
-			std::string m_applicationOrganization;
-			std::string m_applicationDomain;
+			const std::string m_applicationName;
+			const Libs::Version m_applicationVersion;
+			const std::string m_applicationOrganization;
+			const std::string m_applicationDomain;
 			std::string m_engineId;
 			std::string m_applicationId;
 			std::string m_applicationReverseId;

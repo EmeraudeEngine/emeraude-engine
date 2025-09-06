@@ -35,20 +35,16 @@
 
 namespace EmEn::Scenes::Component
 {
-	using namespace EmEn::Libs;
-	using namespace EmEn::Libs::Math;
-	using namespace EmEn::Animations;
-	using namespace EmEn::Graphics;
-	using namespace EmEn::Saphir;
+	using namespace Libs;
+	using namespace Libs::Math;
+	using namespace Animations;
+	using namespace Graphics;
+	using namespace Saphir;
 
 	void
 	SpotLight::onOutputDeviceConnected (AVConsole::AVManagers & /*managers*/, AbstractVirtualDevice * targetDevice) noexcept
 	{
-		const auto maxDistance =
-			m_radius > 0.0F ?
-			m_radius :
-			Settings::instance()->get< float >(GraphicsShadowMappingMaxDistanceKey, DefaultGraphicsShadowMappingMaxDistance);
-
+		const auto maxDistance = m_radius > 0.0F ? m_radius : s_maxDistance;
 		const auto fov = Degree(2.0F * Radian(m_outerAngle));
 
 		targetDevice->updateDeviceFromCoordinates(this->getWorldCoordinates(), this->getWorldVelocity());
@@ -251,8 +247,8 @@ namespace EmEn::Scenes::Component
 
 		if ( m_shadowMap != nullptr )
 		{
+			const auto maxDistance = m_radius > 0.0F ? m_radius : s_maxDistance;
 			const auto fov = Degree(2.0F * Radian(m_outerAngle));
-			const auto maxDistance = Settings::instance()->get< float >(GraphicsShadowMappingMaxDistanceKey, DefaultGraphicsShadowMappingMaxDistance);
 
 			this->updateProperties(true, maxDistance, fov);
 		}

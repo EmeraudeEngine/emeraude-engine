@@ -43,13 +43,12 @@
 #include "Graphics/Renderable/SeaLevelInterface.hpp"
 #include "Resources/Manager.hpp"
 #include "PrimaryServices.hpp"
+#include "Scenes/Component/AbstractLightEmitter.hpp"
 
 namespace EmEn::Scenes
 {
 	using namespace Libs;
 	using namespace Graphics;
-
-	const size_t Manager::ClassUID{getClassUID(ClassId)};
 
 	bool
 	Manager::onInitialize () noexcept
@@ -57,6 +56,8 @@ namespace EmEn::Scenes
 		m_initialized = true;
 
 		this->registerToConsole();
+
+		Component::AbstractLightEmitter::s_maxDistance = m_primaryServices.settings().getOrSetDefault< float >(GraphicsShadowMappingMaxDistanceKey, DefaultGraphicsShadowMappingMaxDistance);
 
 		return true;
 	}
@@ -365,7 +366,7 @@ namespace EmEn::Scenes
 		}
 
 		/* Loads the scene definition from the file. */
-		if ( !sceneDefinition->load(filepath) )
+		if ( !sceneDefinition->load(m_resourceManager, filepath) )
 		{
 			TraceError{ClassId} << "Unable to load Definition from '" << filepath << "' file ! Loading cancelled ...";
 
@@ -404,20 +405,21 @@ namespace EmEn::Scenes
 		return {scene, sceneDefinition};
 	}
 
-	void
-	Manager::refreshScenes () const noexcept
+	bool
+	Manager::refreshActiveScene () const noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_sceneListAccess};
+		const std::unique_lock lock{m_activeSceneSharedAccess};
 
-		/* FIXME: Check back this shit ! */
-		for ( const auto & scene : std::ranges::views::values(m_scenes) )
+		if ( m_activeScene == nullptr )
 		{
-			TraceInfo{ClassId} << "Refreshing scene '" << scene->name() << "' ...";
+			Tracer::info(ClassId, "There is no active scene !");
 
-			scene->forEachRenderToView([&scene] (const auto & renderTarget) {
-				scene->refreshRenderableInstances(renderTarget);
-			});
+			return true;
 		}
+
+		TraceInfo{ClassId} << "Refreshing scene '" << m_activeScene->name() << "' ...";
+
+		return m_activeScene->refreshRenderableInstances();
 	}
 
 	bool

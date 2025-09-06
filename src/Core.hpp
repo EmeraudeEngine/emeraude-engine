@@ -214,7 +214,7 @@ namespace EmEn
 			bool
 			showHelp () const noexcept
 			{
-				return m_flags[ShowHelp];
+				return m_showHelp;
 			}
 
 			/**
@@ -581,7 +581,7 @@ namespace EmEn
 			void
 			preventDefaultKeyBehaviors () noexcept
 			{
-				m_flags[PreventDefaultKeyBehaviors] = true;
+				m_preventDefaultKeyBehaviors = true;
 			}
 
 			/**
@@ -620,37 +620,6 @@ namespace EmEn
 			 */
 			[[nodiscard]]
 			bool dumpFramebuffer () const noexcept;
-
-			/**
-			 * @brief Sets a flag value for the user application.
-			 * @param flag The flag. Must be between 8 and 15.
-			 * @param state The state.
-			 */
-			void
-			setFlag (size_t flag, bool state) noexcept
-			{
-				if ( flag >= 8 && flag <= 15 )
-				{
-					m_flags[flag] = state;
-				}
-			}
-
-			/**
-			 * @brief Returns a flags value.
-			 * @param flag The flag. Can be from 0 to 15.
-			 * @return bool
-			 */
-			[[nodiscard]]
-			bool
-			getFlag (size_t flag) const noexcept
-			{
-				if ( flag <= 15 )
-				{
-					return m_flags[flag];
-				}
-
-				return false;
-			}
 
 			/**
 			 * @brief Changes the cursor representation on screen with standard types.
@@ -899,7 +868,7 @@ namespace EmEn
 			 * @param data Pointer to possible data.
 			 * @return bool
 			 */
-			virtual bool onAppNotification (const Libs::ObservableTrait * observable, int notificationCode, const std::any & data) noexcept = 0;
+			virtual bool onAppNotification (const ObservableTrait * observable, int notificationCode, const std::any & data) noexcept = 0;
 
 			/**
 			 * @brief Called when files have been loaded.
@@ -908,20 +877,11 @@ namespace EmEn
 			 */
 			virtual void onOpenFiles (const std::vector< std::filesystem::path > & filepaths) noexcept = 0;
 
-			/* Flag names */
-			static constexpr auto IsMainLoopRunning{0UL};
-			static constexpr auto IsLogicsLoopRunning{1UL};
-			static constexpr auto IsRenderingLoopRunning{2UL};
-			static constexpr auto Pausable{3UL};
-			static constexpr auto Paused{4UL};
-			static constexpr auto ShowHelp{5UL};
-			static constexpr auto PreventDefaultKeyBehaviors{6UL};
-
 			Identification m_identification;
 			Help m_coreHelp{"Core engine"};
 			PrimaryServices m_primaryServices; /* SystemInfo, UserInfo, Arguments, Tracer, FileSystem, Settings and NetworkManager. */
 			Console::Controller m_consoleController{m_primaryServices}; /* [PRIMARY] */
-			Resources::Manager m_resourceManager{m_primaryServices}; /* [PRIMARY] */
+			Resources::Manager m_resourceManager{m_primaryServices, m_graphicsRenderer}; /* [PRIMARY] */
 			User m_user{m_primaryServices}; /* [PRIMARY] */
 			PlatformManager m_platformManager{m_primaryServices}; /* [SECONDARY] */
 			Vulkan::Instance m_vulkanInstance{m_identification, m_primaryServices}; /* [SECONDARY] */
@@ -931,7 +891,7 @@ namespace EmEn
 			Physics::Manager m_physicsManager{m_primaryServices, m_vulkanInstance}; /* [SECONDARY] */
 			Audio::Manager m_audioManager{m_primaryServices, m_resourceManager}; /* [SECONDARY] */
 			Overlay::Manager m_overlayManager{m_primaryServices, m_window, m_graphicsRenderer}; /* [SECONDARY] */
-			Notifier m_notifier{m_overlayManager}; /* [SECONDARY] */
+			Notifier m_notifier{m_resourceManager, m_overlayManager}; /* [SECONDARY] */
 			Scenes::Manager m_sceneManager{m_primaryServices, m_resourceManager, m_inputManager, m_graphicsRenderer, m_audioManager}; /* [SECONDARY] */
 			std::vector< ServiceInterface * > m_primaryServicesEnabled;
 			std::vector< ServiceInterface * > m_secondaryServicesEnabled;
@@ -944,24 +904,12 @@ namespace EmEn
 			StartupMode m_startupMode{StartupMode::Continue};
 			/* TODO: Set messages in ImGUI. */
 			std::queue< std::string > m_messages;
-			std::array< bool, 16 > m_flags{
-				true/*IsMainLoopRunning*/,
-				true/*IsLogicsLoopRunning*/,
-				true/*IsRenderingLoopRunning*/,
-				false/*Pausable*/,
-				false/*Paused*/,
-				false/*ShowHelp*/,
-				false/*PreventDefaultKeyBehaviors*/,
-				false/*UNUSED*/,
-				/* Flags for user application. */
-				false/*RESERVED*/,
-				false/*RESERVED*/,
-				false/*RESERVED*/,
-				false/*RESERVED*/,
-				false/*RESERVED*/,
-				false/*RESERVED*/,
-				false/*RESERVED*/,
-				false/*RESERVED*/,
-			};
+			bool m_isMainLoopRunning{true};
+			bool m_isLogicsLoopRunning{true};
+			bool m_isRenderingLoopRunning{true};
+			bool m_pausable{false};
+			bool m_paused{false};
+			bool m_showHelp{false};
+			bool m_preventDefaultKeyBehaviors{false};
 	};
 }

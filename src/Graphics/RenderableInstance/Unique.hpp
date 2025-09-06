@@ -34,8 +34,8 @@
 #include "Abstract.hpp"
 
 /* Local inclusions for usages. */
-#include "Graphics/Renderable/Interface.hpp"
 #include "Libs/Math/CartesianFrame.hpp"
+#include "Graphics/Renderable/Interface.hpp"
 
 namespace EmEn::Graphics::RenderableInstance
 {
@@ -59,7 +59,7 @@ namespace EmEn::Graphics::RenderableInstance
 			Unique (const std::shared_ptr< Renderable::Interface > & renderable, uint32_t flagBits = 0) noexcept
 				: Abstract{renderable, flagBits}
 			{
-				this->observe(renderable.get());
+
 			}
 
 			/** @copydoc EmEn::Graphics::RenderableInstance::Abstract::isModelMatricesCreated() const */

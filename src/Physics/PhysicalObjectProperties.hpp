@@ -57,9 +57,6 @@ namespace EmEn::Physics
 			/** @brief Class identifier. */
 			static constexpr auto ClassId{"PhysicalObjectProperties"};
 
-			/** @brief Observable class unique identifier. */
-			static const size_t ClassUID;
-
 			/* JSON keys */
 			static constexpr auto MassKey{"Mass"};
 			static constexpr auto SurfaceKey{"Surface"};
@@ -100,7 +97,8 @@ namespace EmEn::Physics
 			 * @param bounciness A scalar of the bounciness of the object when hitting something. Default 50%.
 			 * @param stickiness A scalar of the stickiness of the object when hitting something. Default 50%.
 			 */
-			explicit PhysicalObjectProperties (float mass, float surface, float dragCoefficient, float bounciness = DefaultBounciness, float stickiness = DefaultStickiness) noexcept
+			explicit
+			PhysicalObjectProperties (float mass, float surface, float dragCoefficient, float bounciness = DefaultBounciness, float stickiness = DefaultStickiness) noexcept
 				: m_mass{mass},
 				m_inverseMass{1.0F / m_mass},
 				m_surface{surface},
@@ -111,12 +109,25 @@ namespace EmEn::Physics
 
 			}
 
+			/**
+			 * @brief Returns the unique identifier for this class [Thread-safe].
+			 * @return size_t
+			 */
+			static
+			size_t
+			getClassUID () noexcept
+			{
+				static const size_t classUID = EmEn::Libs::Hash::FNV1a(ClassId);
+
+				return classUID;
+			}
+
 			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
 			[[nodiscard]]
 			size_t
 			classUID () const noexcept override
 			{
-				return ClassUID;
+				return getClassUID();
 			}
 
 			/** @copydoc EmEn::Libs::ObservableTrait::is() const */
@@ -124,7 +135,7 @@ namespace EmEn::Physics
 			bool
 			is (size_t classUID) const noexcept override
 			{
-				return classUID == ClassUID;
+				return classUID == getClassUID();
 			}
 
 			/**

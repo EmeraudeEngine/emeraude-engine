@@ -48,19 +48,6 @@
 
 namespace EmEn::PlatformSpecific
 {
-	SystemInfo::SystemInfo () noexcept
-	{
-		if ( this->fetchOSInformation() )
-		{
-			m_informationFound = true;
-		}
-
-		if ( this->fetchCPUInformation() )
-		{
-			m_informationFound = true;
-		}
-	}
-
 	bool
 	SystemInfo::fetchCPUInformation () noexcept
 	{
@@ -191,15 +178,5 @@ namespace EmEn::PlatformSpecific
 		}
 
 		return out;
-	}
-
-	std::string
-	to_string (const SystemInfo & obj) noexcept
-	{
-		std::stringstream output;
-
-		output << obj;
-
-		return output.str();
 	}
 }

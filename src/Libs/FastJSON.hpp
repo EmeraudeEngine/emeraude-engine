@@ -87,7 +87,7 @@ namespace EmEn::Libs::FastJSON
 
 	/**
 	 * @brief Creates a compact standard string from a JSON node.
-	 * @param root A reference to a json value.
+	 * @param root A reference to a JSON value.
 	 * @return std::string
 	 */
 	[[nodiscard]]
@@ -95,8 +95,8 @@ namespace EmEn::Libs::FastJSON
 
 	/**
 	 * @brief Gets a JSON array from a JSON node.
-	 * @param parentNode A reference to a json node.
-	 * @param key The json key name.
+	 * @param parentNode A reference to a JSON node.
+	 * @param key The JSON key name.
 	 * @return std::optional< Json::Value >
 	 */
 	[[nodiscard]]
@@ -131,8 +131,8 @@ namespace EmEn::Libs::FastJSON
 
 	/**
 	 * @brief Gets a JSON object from a JSON node.
-	 * @param parentNode A reference to a json node.
-	 * @param key The json key name.
+	 * @param parentNode A reference to a JSON node.
+	 * @param key The JSON key name.
 	 * @return std::optional< Json::Value >
 	 */
 	[[nodiscard]]
@@ -313,7 +313,7 @@ namespace EmEn::Libs::FastJSON
 	};
 
 	/**
-	 * @brief Helpers to constructs a multiple same parameters objects like vectors or matrices.
+	 * @brief Helpers to construct multiple same parameters objects like vectors or matrices.
 	 * @tparam object_t The type of object to instantiate.
 	 * @tparam parameter_count The number of parameters.
 	 * @tparam Is
@@ -462,9 +462,9 @@ namespace EmEn::Libs::FastJSON
 	}
 
 	/**
-	 * @brief Gets a string from a json node using a list of valid terms.
-	 * @param data A reference to a json value.
-	 * @param key The json key name.
+	 * @brief Gets a string from a JSON node using a list of valid terms.
+	 * @param data A reference to a v value.
+	 * @param key The JSON key name.
 	 * @param possibleValues An array of allowed string values.
 	 * @return std::optional< std::string >, The string value if it's found and valid, otherwise std::nullopt.
 	 */

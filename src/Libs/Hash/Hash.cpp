@@ -27,10 +27,10 @@
 #include "Hash.hpp"
 
 /* STL inclusions. */
-#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
+#include <array>
 #include <string>
 
 /* Local inclusions. */

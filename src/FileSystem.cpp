@@ -37,19 +37,17 @@
 
 namespace EmEn
 {
-	using namespace EmEn::Libs;
-
-	FileSystem * FileSystem::s_instance{nullptr};
+	using namespace Libs;
 
 	bool
 	FileSystem::onInitialize () noexcept
 	{
-		if ( !m_flags[ChildProcess] )
+		if ( !m_childProcess )
 		{
-			m_flags[ShowInformation] = m_arguments.get("--verbose").isPresent();
+			m_showInformation = m_arguments.get("--verbose").isPresent();
 		}
 
-		m_flags[StandAlone] = m_arguments.get("--standalone").isPresent();
+		m_standAlone = m_arguments.get("--standalone").isPresent();
 
 		if ( m_organizationName.empty() || m_applicationName.empty() )
 		{
@@ -100,12 +98,12 @@ namespace EmEn
 			return false;
 		}
 
-		if ( m_flags[ShowInformation] )
+		if ( m_showInformation )
 		{
 			TraceInfo{ClassId} << *this;
 		}
 
-		m_flags[ServiceInitialized] = true;
+		m_serviceInitialized = true;
 
 		return true;
 	}
@@ -113,7 +111,7 @@ namespace EmEn
 	bool
 	FileSystem::onTerminate () noexcept
 	{
-		m_flags[ServiceInitialized] = false;
+		m_serviceInitialized = false;
 
 		return true;
 	}
@@ -144,7 +142,7 @@ namespace EmEn
 	bool
 	FileSystem::checkUserDataDirectory () noexcept
 	{
-		if ( m_flags[ShowInformation] )
+		if ( m_showInformation )
 		{
 			Tracer::info(ClassId, "Looking for user data directories ...");
 		}
@@ -166,7 +164,7 @@ namespace EmEn
 		}
 
 		/* Check next to binary. */
-		if ( m_flags[StandAlone] )
+		if ( m_standAlone )
 		{
 			auto directoryPath = m_binaryDirectory;
 			directoryPath.append("data");
@@ -175,21 +173,27 @@ namespace EmEn
 		}
 
 		auto directoryPath = m_userDirectory;
-#if IS_LINUX
-		directoryPath.append(".local");
-		directoryPath.append("share");
-		directoryPath.append(m_organizationName);
-		directoryPath.append(m_applicationName);
-#elif IS_MACOS
-		directoryPath.append("Library");
-		directoryPath.append("Application Support");
-		directoryPath.append(m_applicationReverseId);
-#elif IS_WINDOWS
-		directoryPath.append("AppData");
-		directoryPath.append("Roaming");
-		directoryPath.append(m_organizationName);
-		directoryPath.append(m_applicationName);
-#endif
+
+		if constexpr  ( IsLinux )
+		{
+			directoryPath.append(".local");
+			directoryPath.append("share");
+			directoryPath.append(m_organizationName);
+			directoryPath.append(m_applicationName);
+		}
+		else if constexpr ( IsMacOS )
+		{
+			directoryPath.append("Library");
+			directoryPath.append("Application Support");
+			directoryPath.append(m_applicationReverseId);
+		}
+		else if constexpr ( IsWindows )
+		{
+			directoryPath.append("AppData");
+			directoryPath.append("Roaming");
+			directoryPath.append(m_organizationName);
+			directoryPath.append(m_applicationName);
+		}
 
 		return registerDirectory(directoryPath, true, true, m_userDataDirectory);
 	}
@@ -197,7 +201,7 @@ namespace EmEn
 	bool
 	FileSystem::checkConfigDirectory () noexcept
 	{
-		if ( m_flags[ShowInformation] )
+		if ( m_showInformation )
 		{
 			Tracer::info(ClassId, "Looking for config directories ...");
 		}
@@ -211,7 +215,7 @@ namespace EmEn
 		}
 
 		/* Check next to binary. */
-		if ( m_flags[StandAlone] )
+		if ( m_standAlone )
 		{
 			auto directoryPath = m_binaryDirectory;
 			directoryPath.append("config");
@@ -225,20 +229,26 @@ namespace EmEn
 		if ( !m_userDirectory.empty() )
 		{
 			auto directoryPath = m_userDirectory;
-#if IS_LINUX
-			directoryPath.append(".config");
-			directoryPath.append(m_organizationName);
-			directoryPath.append(m_applicationName);
-#elif IS_MACOS
-			directoryPath.append("Library");
-			directoryPath.append("Preferences");
-			directoryPath.append(m_applicationReverseId);
-#elif IS_WINDOWS
-			directoryPath.append("AppData");
-			directoryPath.append("Local");
-			directoryPath.append(m_organizationName);
-			directoryPath.append(m_applicationName);
-#endif
+
+			if constexpr  ( IsLinux )
+			{
+				directoryPath.append(".config");
+				directoryPath.append(m_organizationName);
+				directoryPath.append(m_applicationName);
+			}
+			else if constexpr ( IsMacOS )
+			{
+				directoryPath.append("Library");
+				directoryPath.append("Preferences");
+				directoryPath.append(m_applicationReverseId);
+			}
+			else if constexpr ( IsWindows )
+			{
+				directoryPath.append("AppData");
+				directoryPath.append("Local");
+				directoryPath.append(m_organizationName);
+				directoryPath.append(m_applicationName);
+			}
 
 			paths.emplace_back(directoryPath);
 		}
@@ -259,7 +269,7 @@ namespace EmEn
 	bool
 	FileSystem::checkCacheDirectory () noexcept
 	{
-		if ( m_flags[ShowInformation] )
+		if ( m_showInformation )
 		{
 			Tracer::info(ClassId, "Looking for cache directories ...");
 		}
@@ -273,7 +283,7 @@ namespace EmEn
 		}
 
 		/* Check next to binary. */
-		if ( m_flags[StandAlone] )
+		if ( m_standAlone )
 		{
 			auto directoryPath = m_binaryDirectory;
 			directoryPath.append("cache");
@@ -287,21 +297,26 @@ namespace EmEn
 		if ( !m_userDirectory.empty() )
 		{
 			auto directoryPath = m_userDirectory;
-#if IS_LINUX
-			directoryPath.append(".cache");
-			directoryPath.append(m_organizationName);
-			directoryPath.append(m_applicationName);
-#elif IS_MACOS
-			directoryPath.append("Library");
-			directoryPath.append("Caches");
-			directoryPath.append(m_applicationReverseId);
-#elif IS_WINDOWS
-			directoryPath.append("AppData");
-			directoryPath.append("Local");
-			directoryPath.append(m_organizationName);
-			directoryPath.append(m_applicationName);
-#endif
 
+			if constexpr  ( IsLinux )
+			{
+				directoryPath.append(".cache");
+				directoryPath.append(m_organizationName);
+				directoryPath.append(m_applicationName);
+			}
+			else if constexpr ( IsMacOS )
+			{
+				directoryPath.append("Library");
+				directoryPath.append("Caches");
+				directoryPath.append(m_applicationReverseId);
+			}
+			else if constexpr ( IsWindows )
+			{
+				directoryPath.append("AppData");
+				directoryPath.append("Local");
+				directoryPath.append(m_organizationName);
+				directoryPath.append(m_applicationName);
+			}
 
 			paths.emplace_back(directoryPath);
 		}
@@ -322,7 +337,7 @@ namespace EmEn
 	bool
 	FileSystem::checkDataDirectories () noexcept
 	{
-		if ( m_flags[ShowInformation] )
+		if ( m_showInformation )
 		{
 			Tracer::info(ClassId, "Looking for data directories ...");
 		}
@@ -355,7 +370,7 @@ namespace EmEn
 		}
 
 		/* Check next to binary [FORCED]. */
-		if ( m_flags[StandAlone] )
+		if ( m_standAlone )
 		{
 			auto directoryPath = m_binaryDirectory;
 			directoryPath.append("data");
@@ -370,41 +385,49 @@ namespace EmEn
 			return true;
 		}
 
-#if IS_LINUX
+		/* NOTE: POSIX folders. */
+		if constexpr  ( IsLinux || IsMacOS )
 		{
-			std::filesystem::path directoryPath{"/usr/share/games"};
-			directoryPath.append(m_applicationName);
+			{
+				std::filesystem::path directoryPath{"/usr/share/games"};
+				directoryPath.append(m_applicationName);
 
-			paths.emplace_back(directoryPath);
+				paths.emplace_back(directoryPath);
+			}
+
+			{
+				std::filesystem::path directoryPath{"/usr/local/share/games"};
+				directoryPath.append(m_applicationName);
+
+				paths.emplace_back(directoryPath);
+			}
 		}
-
-		{
-			std::filesystem::path directoryPath{"/usr/local/share/games"};
-			directoryPath.append(m_applicationName);
-
-			paths.emplace_back(directoryPath);
-		}
-#endif
 
 		/* Check for standard OS config directories. */
 		if ( !m_userDirectory.empty() )
 		{
 			auto directoryPath = m_userDirectory;
-#if IS_LINUX
-			directoryPath.append(".local");
-			directoryPath.append("share");
-			directoryPath.append(m_organizationName);
-			directoryPath.append(m_applicationName);
-#elif IS_MACOS
-			directoryPath.append("Library");
-			directoryPath.append("Application Support");
-			directoryPath.append(m_applicationReverseId);
-#elif IS_WINDOWS
-			directoryPath.append("AppData");
-			directoryPath.append("Local");
-			directoryPath.append(m_organizationName);
-			directoryPath.append(m_applicationName);
-#endif
+
+			if constexpr  ( IsLinux )
+			{
+				directoryPath.append(".local");
+				directoryPath.append("share");
+				directoryPath.append(m_organizationName);
+				directoryPath.append(m_applicationName);
+			}
+			else if constexpr ( IsMacOS )
+			{
+				directoryPath.append("Library");
+				directoryPath.append("Application Support");
+				directoryPath.append(m_applicationReverseId);
+			}
+			else if constexpr ( IsWindows )
+			{
+				directoryPath.append("AppData");
+				directoryPath.append("Local");
+				directoryPath.append(m_organizationName);
+				directoryPath.append(m_applicationName);
+			}
 
 			paths.emplace_back(directoryPath);
 		}
@@ -412,10 +435,14 @@ namespace EmEn
 		/* Check next to binary. */
 		{
 			std::filesystem::path nextBinaryDirectory = m_binaryDirectory;
-#if IS_MACOS
-			nextBinaryDirectory.append("..");
-			nextBinaryDirectory.append("Resources");
-#endif
+
+			/* NOTE: Specific to the bundle .app */
+			if constexpr ( IsMacOS )
+			{
+				nextBinaryDirectory.append("..");
+				nextBinaryDirectory.append("Resources");
+			}
+
 			nextBinaryDirectory.append("data");
 
 			if ( this->checkDirectoryRequirements(nextBinaryDirectory, true, false) )
@@ -446,7 +473,7 @@ namespace EmEn
 		if ( IO::directoryExists(directory) )
 		{
 			/* If the directory exists, but we need permission to write to it,
-			 * we test and if the permission is revoked we skip it. */
+			 * we test, and if the permission is revoked, we skip it. */
 			if ( writableRequested && !IO::writable(directory) )
 			{
 				TraceError{ClassId} << "The directory '" << directory.string() << "' exists, but it's not writable !";
@@ -459,7 +486,7 @@ namespace EmEn
 			/* NOTE: If no directory was found, we try to create the default one. */
 			if ( createDirectory )
 			{
-				/* If we can't write the directory, we set an error ! */
+				/* If we can't write the directory, we set an error! */
 				if ( !IO::createDirectory(directory) )
 				{
 					TraceError{ClassId} << "Unable to create the directory '" << directory.string() << "' !";
@@ -469,7 +496,7 @@ namespace EmEn
 			}
 			else
 			{
-				if ( m_flags[ShowInformation] )
+				if ( m_showInformation )
 				{
 					TraceInfo{ClassId} << "Trying to use directory '" << directory.string() << "', but doesn't exists ...";
 				}
@@ -478,7 +505,7 @@ namespace EmEn
 			}
 		}
 
-		if ( m_flags[ShowInformation] )
+		if ( m_showInformation )
 		{
 			TraceSuccess{ClassId} << "The directory '" << directory.string() << "' is valid !";
 		}

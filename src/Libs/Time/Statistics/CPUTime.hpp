@@ -27,7 +27,6 @@
 #pragma once
 
 /* STL inclusions. */
-#include <cstdint>
 #include <ctime>
 
 /* Local inclusions. */
@@ -47,10 +46,19 @@ namespace EmEn::Libs::Time::Statistics
 			 * @brief Constructs a stat counter in CPU time.
 			 * @param range The range of statistics to make an average. Default no averaging.
 			 */
-			explicit CPUTime (size_t range = 1) noexcept;
+			explicit
+			CPUTime (size_t range = 1) noexcept
+				: Abstract{range}
+			{
+
+			}
 
 			/** @copydoc EmEn::Libs::Time::Statistics::Abstract::start() */
-			void start () noexcept override;
+			void
+			start () noexcept override
+			{
+				m_startTime = std::clock();
+			}
 
 			/** @copydoc EmEn::Libs::Time::Statistics::Abstract::stop() */
 			void stop () noexcept override;

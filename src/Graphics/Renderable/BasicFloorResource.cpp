@@ -30,25 +30,16 @@
 #include "Libs/FastJSON.hpp"
 #include "Resources/Manager.hpp"
 #include "Graphics/ImageResource.hpp"
+#include "Graphics/Material/BasicResource.hpp"
 #include "Graphics/Material/StandardResource.hpp"
 #include "Scenes/DefinitionResource.hpp"
 
-/* Defining the resource manager class id. */
-template<>
-const char * const EmEn::Resources::Container< EmEn::Graphics::Renderable::BasicFloorResource >::ClassId{"BasicFloorContainer"};
-
-/* Defining the resource manager ClassUID. */
-template<>
-const size_t EmEn::Resources::Container< EmEn::Graphics::Renderable::BasicFloorResource >::ClassUID{getClassUID(ClassId)};
-
 namespace EmEn::Graphics::Renderable
 {
-	using namespace EmEn::Libs;
-	using namespace EmEn::Libs::Math;
-	using namespace EmEn::Libs::VertexFactory;
-	using namespace EmEn::Scenes;
-
-	const size_t BasicFloorResource::ClassUID{getClassUID(ClassId)};
+	using namespace Libs;
+	using namespace Libs::Math;
+	using namespace Libs::VertexFactory;
+	using namespace Scenes;
 
 	float
 	BasicFloorResource::getLevelAt (const Vector< 3, float > & worldPosition) const noexcept
@@ -90,7 +81,7 @@ namespace EmEn::Graphics::Renderable
 	}
 
 	bool
-	BasicFloorResource::load () noexcept
+	BasicFloorResource::load (Resources::ServiceProvider & serviceProvider) noexcept
 	{
 		/* 1. Creating a default GridGeometry. */
 		const auto defaultGeometry = std::make_shared< Geometry::VertexGridResource >("DefaultBasicFloorGeometry");
@@ -103,7 +94,7 @@ namespace EmEn::Graphics::Renderable
 		}
 
 		/* 2. Retrieving the default material. */
-		const auto defaultMaterial = Resources::Manager::instance()->container< Material::StandardResource >()->getDefaultResource();
+		const auto defaultMaterial = serviceProvider.container< Material::BasicResource >()->getDefaultResource();
 
 		if ( defaultMaterial == nullptr )
 		{
@@ -117,7 +108,7 @@ namespace EmEn::Graphics::Renderable
 	}
 
 	bool
-	BasicFloorResource::load (const std::filesystem::path & filepath) noexcept
+	BasicFloorResource::load (Resources::ServiceProvider & serviceProvider, const std::filesystem::path & filepath) noexcept
 	{
 		const auto rootCheck = FastJSON::getRootFromFile(filepath);
 
@@ -131,9 +122,7 @@ namespace EmEn::Graphics::Renderable
 		const auto & root = rootCheck.value();
 
 		/* Checks if additional stores before loading (optional) */
-		auto * manager = Resources::Manager::instance();
-
-		manager->stores().update(root, manager->verbosityEnabled());
+		serviceProvider.update(root);
 
 		if ( !root.isMember(DefinitionResource::SceneAreaKey) )
 		{
@@ -142,7 +131,7 @@ namespace EmEn::Graphics::Renderable
 			return this->setLoadSuccess(false);
 		}
 
-		auto sceneAreaObject = root[DefinitionResource::SceneAreaKey];
+		const auto & sceneAreaObject = root[DefinitionResource::SceneAreaKey];
 
 		if ( !sceneAreaObject.isMember(FastJSON::TypeKey) && !sceneAreaObject[FastJSON::TypeKey].isString() )
 		{
@@ -158,14 +147,12 @@ namespace EmEn::Graphics::Renderable
 			return this->setLoadSuccess(false);
 		}
 
-		return this->load(sceneAreaObject[FastJSON::DataKey]);
+		return this->load(serviceProvider, sceneAreaObject[FastJSON::DataKey]);
 	}
 
 	bool
-	BasicFloorResource::load (const Json::Value & data) noexcept
+	BasicFloorResource::load (Resources::ServiceProvider & serviceProvider, const Json::Value & data) noexcept
 	{
-		auto * resources = Resources::Manager::instance();
-
 		/* 1. Creating a geometry. */
 		/* Checks size option. */
 		if ( !data.isMember(SizeKey) || !data[SizeKey].isNumeric() )
@@ -201,7 +188,7 @@ namespace EmEn::Graphics::Renderable
 			{
 				const auto imageName = subData[ImageNameKey].asString();
 
-				const auto imageResource = resources->container< ImageResource >()->getResource(imageName);
+				const auto imageResource = serviceProvider.container< ImageResource >()->getResource(imageName);
 
 				if ( imageResource != nullptr )
 				{
@@ -270,7 +257,7 @@ namespace EmEn::Graphics::Renderable
 			}
 		}
 
-		/* Gets the resource from geometry store. */
+		/* Gets the resource from the geometry store. */
 		std::shared_ptr< Material::Interface > materialResource;
 
 		const auto materialType = data[MaterialTypeKey].asString();
@@ -279,7 +266,7 @@ namespace EmEn::Graphics::Renderable
 		{
 			const auto name = data[MaterialNameKey].asString();
 
-			materialResource = resources->container< Material::StandardResource >()->getResource(name);
+			materialResource = serviceProvider.container< Material::StandardResource >()->getResource(name);
 		}
 		else
 		{

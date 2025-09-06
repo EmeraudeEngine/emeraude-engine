@@ -44,7 +44,7 @@ namespace EmEn::Scenes::Component
 	 * @brief Defines a component for the visual part of an entity.
 	 * @note [OBS][SHARED-OBSERVER]
 	 * @extends EmEn::Scenes::Component::Abstract The base class for each entity component.
-	 * @extends EmEn::Libs::ObserverTrait This class must dispatch modifications from renderable instance to the entity.
+	 * @extends EmEn::Libs::ObserverTrait This class must dispatch modifications from a renderable instance to the entity.
 	 */
 	class Visual final : public Abstract, public Libs::ObserverTrait
 	{
@@ -61,9 +61,10 @@ namespace EmEn::Scenes::Component
 			 */
 			Visual (std::string name, const AbstractEntity & parentEntity, const std::shared_ptr< Graphics::Renderable::Interface > & renderable) noexcept
 				: Abstract{std::move(name), parentEntity},
-				m_renderableInstance(std::make_shared< Graphics::RenderableInstance::Unique >(renderable, renderable->isSprite() ? Graphics::RenderableInstance::FacingCamera : Graphics::RenderableInstance::None))
+				m_renderableInterface{renderable},
+				m_renderableInstance{std::make_shared< Graphics::RenderableInstance::Unique >(renderable, renderable->isSprite() ? Graphics::RenderableInstance::FacingCamera : Graphics::RenderableInstance::None)}
 			{
-				this->observe(m_renderableInstance.get());
+				this->observe(renderable.get());
 			}
 
 			/** @copydoc EmEn::Scenes::Component::Abstract::getRenderableInstance() const */
@@ -133,6 +134,7 @@ namespace EmEn::Scenes::Component
 			[[nodiscard]]
 			bool onNotification (const ObservableTrait * observable, int notificationCode, const std::any & data) noexcept override;
 
+			std::weak_ptr< Graphics::Renderable::Interface > m_renderableInterface;
 			std::shared_ptr< Graphics::RenderableInstance::Unique > m_renderableInstance;
 	};
 }

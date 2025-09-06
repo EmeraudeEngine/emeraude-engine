@@ -26,6 +26,9 @@
 
 #include "Device.hpp"
 
+/* Third-party inclusions. */
+#include "magic_enum/magic_enum.hpp"
+
 /* Local inclusions. */
 #include "Utility.hpp"
 #include "Instance.hpp"
@@ -71,7 +74,7 @@ namespace EmEn::Vulkan
 
 			for ( const auto & [job, queue] : m_queueFamilyPerJob )
 			{
-				info << "'" << to_cstring(job) << "' job will be performed on queue family #" << queue->index() << "." "\n";
+				info << "'" << magic_enum::enum_name(job) << "' job will be performed on queue family #" << queue->index() << "." "\n";
 			}
 		}
 
@@ -267,18 +270,18 @@ namespace EmEn::Vulkan
 
 		if ( requirements.needsTransfer() && !m_queueFamilyPerJob.contains(QueueJob::Transfer) )
 		{
-			switch ( requirements.jobHint() )
+			switch ( requirements.deviceWorkType() )
 			{
-				case DeviceJobHint::General :
+				case DeviceWorkType::General :
 					TraceError{ClassId} << "The physical device '" << this->name() << "' has no queue for separate transfer !";
 
 					return false;
 
-				case DeviceJobHint::Graphics :
+				case DeviceWorkType::Graphics :
 					m_queueFamilyPerJob[QueueJob::Transfer] = m_queueFamilyPerJob[QueueJob::Graphics];
 					break;
 
-				case DeviceJobHint::Compute :
+				case DeviceWorkType::Compute :
 					m_queueFamilyPerJob[QueueJob::Transfer] = m_queueFamilyPerJob[QueueJob::Compute];
 					break;
 			}

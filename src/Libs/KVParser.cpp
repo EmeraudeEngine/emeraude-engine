@@ -1,5 +1,5 @@
 /*
- * src/Libs/KVParser/Parser.cpp
+ * src/Libs/KVParser.cpp
  * This file is part of Emeraude-Engine
  *
  * Copyright (C) 2010-2025 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
@@ -24,22 +24,15 @@
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
 
-#include "Parser.hpp"
+#include "KVParser.hpp"
 
-/* STL inclusions. */
-#include <fstream>
-#include <iostream>
-
-/* Local inclusions. */
-#include "Libs/String.hpp"
-
-namespace EmEn::Libs::KVParser
+namespace EmEn::Libs
 {
 	std::string
-	Parser::parseSectionTitle (const std::string & line) noexcept
+	KVParser::parseSectionTitle (const std::string & line) noexcept
 	{
-		auto start = line.find_first_of('[');
-		auto length = line.find_last_of(']');
+		const auto start = line.find_first_of('[');
+		const auto length = line.find_last_of(']');
 
 		if ( start != std::string::npos && length != std::string::npos )
 		{
@@ -49,10 +42,10 @@ namespace EmEn::Libs::KVParser
 		return {};
 	}
 
-	Parser::LineType
-	Parser::getLineType (const std::string & line) noexcept
+	KVParser::LineType
+	KVParser::getLineType (const std::string & line) noexcept
 	{
-		for ( auto character : line )
+		for ( const auto character : line )
 		{
 			switch ( character )
 			{
@@ -77,39 +70,23 @@ namespace EmEn::Libs::KVParser
 		return LineType::None;
 	}
 
-	Parser::Sections &
-	Parser::sections () noexcept
+	KVSection &
+	KVParser::section (const std::string & label) noexcept
 	{
-		return m_sections;
-	}
-
-	const Parser::Sections &
-	Parser::sections () const noexcept
-	{
-		return m_sections;
-	}
-
-	Section &
-	Parser::section (const std::string & label) noexcept
-	{
-		const auto sectionIt = m_sections.find(label);
-
-		if ( sectionIt != m_sections.cend() )
+		if ( const auto sectionIt = m_sections.find(label); sectionIt != m_sections.cend() )
 		{
 			return sectionIt->second;
 		}
 
-		return m_sections[label] = Section();
+		return m_sections[label];
 	}
 
 	bool
-	Parser::read (const std::string & filepath) noexcept
+	KVParser::read (const std::string & filepath) noexcept
 	{
-		std::ifstream file{filepath};
-
-		if ( file.is_open() )
+		if ( std::ifstream file{filepath}; file.is_open() )
 		{
-			std::string line{};
+			std::string line;
 
 			/* This is the default section. */
 			auto * currentSection = &this->section("main");
@@ -117,31 +94,23 @@ namespace EmEn::Libs::KVParser
 			/* Count the sections. */
 			while ( std::getline(file, line) )
 			{
-				switch ( Parser::getLineType(line) )
+				switch ( KVParser::getLineType(line) )
 				{
 					case LineType::SectionTitle :
-					{
-						auto sectionName = Parser::parseSectionTitle(line);
-
-						if ( !sectionName.empty() )
+						if ( auto sectionName = KVParser::parseSectionTitle(line); !sectionName.empty() )
 						{
 							currentSection = &this->section(sectionName);
 						}
-					}
 						break;
 
 					case LineType::Definition :
-					{
-						auto equalSignPosition = line.find_first_of('=');
-
-						if ( equalSignPosition != std::string::npos )
+						if ( auto equalSignPosition = line.find_first_of('='); equalSignPosition != std::string::npos )
 						{
 							auto key = String::trim(line.substr(0, equalSignPosition));
 							auto value = String::trim(line.substr(equalSignPosition + 1));
 
-							currentSection->addVariable(key, Variable{value});
+							currentSection->addVariable(key, KVVariable{value});
 						}
-					}
 						break;
 
 					case LineType::None :
@@ -161,17 +130,18 @@ namespace EmEn::Libs::KVParser
 	}
 
 	bool
-	Parser::write (const std::string & filepath) noexcept
+	KVParser::write (const std::string & filepath) const noexcept
 	{
-		std::ofstream file{filepath, std::ios::out | std::ios::trunc};
-
-		if ( file.is_open() )
+		if ( std::ofstream file{filepath, std::ios::out | std::ios::trunc}; file.is_open() )
 		{
-			for ( const auto & section : m_sections )
+			for ( const auto & [sectionName, section] : m_sections )
 			{
-				file << "[" << section.first << "]" "\n";
+				file << "[" << sectionName << "]" "\n";
 
-				section.second.write(file);
+				for ( const auto & [variableName, variable] : section.variables() )
+				{
+					file << variableName << " = " << variable.asString() << "\n";
+				}
 
 				file << "\n";
 			}

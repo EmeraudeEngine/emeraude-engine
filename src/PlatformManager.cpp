@@ -47,7 +47,7 @@ namespace EmEn
 	{
 		auto & settings = m_primaryServices.settings();
 		
-		m_flags[ShowInformation] = settings.get< bool >(GLFWShowInformationKey, DefaultGLFWShowInformation);
+		m_showInformation = settings.getOrSetDefault< bool >(GLFWShowInformationKey, DefaultGLFWShowInformation);
 
 		glfwSetErrorCallback(Tracer::traceGLFW);
 
@@ -70,9 +70,9 @@ namespace EmEn
 
 		if constexpr ( IsLinux )
 		{
-			const auto enableWaylandLibDecor = settings.get< bool >(GLFWWaylandEnableLibDecorKey, DefaultGLFWWaylandEnableLibDecor);
-			const auto useX11XCB = settings.get< bool >(GLFWX11UseXCBInsteadOfXLibKey, DefaultGLFWX11UseXCBInsteadOfXLib);
-			const auto usePlatform = settings.get< std::string >(GLFWUsePlatformKey, DefaultGLFWUsePlatform);
+			const auto enableWaylandLibDecor = settings.getOrSetDefault< bool >(GLFWWaylandEnableLibDecorKey, DefaultGLFWWaylandEnableLibDecor);
+			const auto useX11XCB = settings.getOrSetDefault< bool >(GLFWX11UseXCBInsteadOfXLibKey, DefaultGLFWX11UseXCBInsteadOfXLib);
+			const auto usePlatform = settings.getOrSetDefault< std::string >(GLFWUsePlatformKey, DefaultGLFWUsePlatform);
 
 			int platform = GLFW_ANY_PLATFORM;
 			
@@ -96,7 +96,7 @@ namespace EmEn
 			glfwInitHint(GLFW_WAYLAND_LIBDECOR, enableWaylandLibDecor ? GLFW_WAYLAND_PREFER_LIBDECOR : GLFW_WAYLAND_DISABLE_LIBDECOR);
 
 			/* GLFW_X11_XCB_VULKAN_SURFACE specifies whether to prefer the VK_KHR_xcb_surface extension for creating
-			 * Vulkan surfaces, or whether to use the VK_KHR_xlib_surface extension. Possible values are GLFW_TRUE and GLFW_FALSE.
+			 * Vulkan surface, or whether to use the VK_KHR_xlib_surface extension. Possible values are GLFW_TRUE and GLFW_FALSE.
 			 * This is ignored on other platforms. */
 			glfwInitHint(GLFW_X11_XCB_VULKAN_SURFACE, useX11XCB);
 		}
@@ -116,7 +116,7 @@ namespace EmEn
 			return false;
 		}
 
-		if ( m_flags[ShowInformation] )
+		if ( m_showInformation )
 		{
 			int glfwMajor = 0;
 			int glfwMin = 0;
@@ -127,7 +127,7 @@ namespace EmEn
 			TraceSuccess{ClassId} << "GLFW version : " << glfwMajor << '.' << glfwMin << '.' << glfwRev << " initialized !";
 		}
 
-		m_flags[ServiceInitialized] = true;
+		m_serviceInitialized = true;
 
 		return true;
 	}
@@ -135,7 +135,7 @@ namespace EmEn
 	bool
 	PlatformManager::onTerminate () noexcept
 	{
-		m_flags[ServiceInitialized] = false;
+		m_serviceInitialized = false;
 
 		glfwTerminate();
 

@@ -46,7 +46,7 @@ namespace EmEn::Scenes
 	{
 		bool identifiedObservable = false;
 
-		if ( observable->is(Component::Abstract::ClassUID) )
+		if ( observable->is(Component::Abstract::getClassUID()) )
 		{
 			identifiedObservable = true;
 
@@ -62,7 +62,7 @@ namespace EmEn::Scenes
 			}
 		}
 
-		if ( observable->is(PhysicalObjectProperties::ClassUID) )
+		if ( observable->is(PhysicalObjectProperties::getClassUID()) )
 		{
 			identifiedObservable = true;
 
@@ -97,7 +97,7 @@ namespace EmEn::Scenes
 		if ( !this->isFlagEnabled(BoundingPrimitivesOverridden) )
 		{
 			/* Reset the bounding box to make a valid
-			 * bounding boxes merging from entities. */
+			 * bounding box merging from entities. */
 			m_boundingBox.reset();
 			m_boundingSphere.reset();
 		}

@@ -82,20 +82,20 @@ namespace EmEn::Graphics
 	}
 
 	/** @brief Defines the render type to sort out what involves the rendering. */
-	enum class RenderPassType : uint32_t
+	enum class RenderPassType : uint8_t
 	{
 		/* No light code. */
-		SimplePass,
+		SimplePass = 0,
 		/* Split light pass code. */
-		AmbientPass,
-		DirectionalLightPass,
-		DirectionalLightPassNoShadow,
-		PointLightPass,
-		PointLightPassNoShadow,
-		SpotLightPass,
-		SpotLightPassNoShadow,
+		AmbientPass = 1,
+		DirectionalLightPass = 2,
+		DirectionalLightPassNoShadow = 3,
+		PointLightPass = 4,
+		PointLightPassNoShadow = 5,
+		SpotLightPass = 6,
+		SpotLightPassNoShadow = 7,
 		/* Enum value for invalid type. */
-		None = std::numeric_limits< uint32_t >::max()
+		None = std::numeric_limits< uint8_t >::max()
 	};
 
 	constexpr auto SimplePassString{"SimplePass"};

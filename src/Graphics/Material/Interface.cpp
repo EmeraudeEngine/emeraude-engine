@@ -35,9 +35,11 @@
 
 namespace EmEn::Graphics::Material
 {
-	using namespace EmEn::Libs;
+	using namespace Libs;
 
 	constexpr auto TracerTag{"MaterialInterface"};
+
+	Renderer * Interface::s_graphicsRenderer{nullptr};
 
 	void
 	Interface::enableBlendingFromJson (const Json::Value & data) noexcept
@@ -68,7 +70,14 @@ namespace EmEn::Graphics::Material
 	bool
 	Interface::onDependenciesLoaded () noexcept
 	{
-		if ( !this->isCreated() && !this->createOnHardware(*Renderer::instance()) )
+		if ( s_graphicsRenderer == nullptr )
+		{
+			TraceError{TracerTag} << "The static renderer pointer is null !";
+
+			return false;
+		}
+
+		if ( !this->isCreated() && !this->createOnHardware(*s_graphicsRenderer) )
 		{
 			TraceError{TracerTag} << "Unable to load material resource (" << this->classLabel() << ") '" << this->name() << "' !";
 

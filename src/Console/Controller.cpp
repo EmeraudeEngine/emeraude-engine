@@ -32,9 +32,8 @@
 
 namespace EmEn::Console
 {
-	using namespace EmEn::Libs;
+	using namespace Libs;
 
-	const size_t Controller::ClassUID{getClassUID(ClassId)};
 	Controller * Controller::s_instance{nullptr};
 
 	bool

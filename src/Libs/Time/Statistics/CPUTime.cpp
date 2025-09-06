@@ -26,28 +26,8 @@
 
 #include "CPUTime.hpp"
 
-/* STL inclusions. */
-#include <cstddef>
-#include <ctime>
-
-/* Local inclusions. */
-#include "Abstract.hpp"
-
 namespace EmEn::Libs::Time::Statistics
 {
-	CPUTime::CPUTime (size_t range) noexcept
-		: Abstract(range)
-	{
-
-	}
-
-	void
-	CPUTime::start () noexcept
-	{
-		m_startTime = std::clock();
-	}
-
-
 	void
 	CPUTime::stop () noexcept
 	{

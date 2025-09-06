@@ -55,7 +55,7 @@ namespace EmEn::Graphics::Renderable
 			 * @brief Constructs a mesh layer.
 			 * @param layerName A string for the layer name [std::move].
 			 * @param material A reference to a material for this layer.
-			 * @param options A reference to a rasterization options.
+			 * @param options A reference to rasterization options.
 			 * @param renderableFlags The renderable level flags.
 			 */
 			MeshLayer (std::string layerName, const std::shared_ptr< Material::Interface > & material, const RasterizationOptions & options, uint32_t renderableFlags) noexcept
@@ -108,7 +108,7 @@ namespace EmEn::Graphics::Renderable
 	};
 
 	/**
-	 * @brief This class provides a high level object to describe a physical object in the 3D world.
+	 * @brief This class provides a high-level object to describe a physical object in the 3D world.
 	 * @extends EmEn::Graphics::Renderable::Interface Adds the ability to be rendered in the 3D world.
 	 */
 	class MeshResource final : public Interface
@@ -121,9 +121,6 @@ namespace EmEn::Graphics::Renderable
 
 			/** @brief Class identifier. */
 			static constexpr auto ClassId{"MeshResource"};
-
-			/** @brief Observable class unique identifier. */
-			static const size_t ClassUID;
 
 			/** @brief Defines the resource dependency complexity. */
 			static constexpr auto Complexity{Resources::DepComplexity::Complex};
@@ -140,12 +137,25 @@ namespace EmEn::Graphics::Renderable
 
 			}
 
+			/**
+			 * @brief Returns the unique identifier for this class [Thread-safe].
+			 * @return size_t
+			 */
+			static
+			size_t
+			getClassUID () noexcept
+			{
+				static const size_t classUID = EmEn::Libs::Hash::FNV1a(ClassId);
+
+				return classUID;
+			}
+
 			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
 			[[nodiscard]]
 			size_t
 			classUID () const noexcept override
 			{
-				return ClassUID;
+				return getClassUID();
 			}
 
 			/** @copydoc EmEn::Libs::ObservableTrait::is() const */
@@ -153,7 +163,7 @@ namespace EmEn::Graphics::Renderable
 			bool
 			is (size_t classUID) const noexcept override
 			{
-				return classUID == ClassUID;
+				return classUID == getClassUID();
 			}
 
 			/** @copydoc EmEn::Graphics::Renderable::Interface::layerCount() const */
@@ -218,11 +228,11 @@ namespace EmEn::Graphics::Renderable
 				return ClassId;
 			}
 
-			/** @copydoc EmEn::Resources::ResourceTrait::load() */
-			bool load () noexcept override;
+			/** @copydoc EmEn::Resources::ResourceTrait::load(Resources::ServiceProvider &) */
+			bool load (Resources::ServiceProvider & serviceProvider) noexcept override;
 
-			/** @copydoc EmEn::Resources::ResourceTrait::load(const Json::Value &) */
-			bool load (const Json::Value & data) noexcept override;
+			/** @copydoc EmEn::Resources::ResourceTrait::load(Resources::Manager &, const Json::Value &) */
+			bool load (Resources::ServiceProvider & serviceProvider, const Json::Value & data) noexcept override;
 
 			/** @copydoc EmEn::Resources::ResourceTrait::memoryOccupied() const noexcept */
 			[[nodiscard]]
@@ -236,48 +246,50 @@ namespace EmEn::Graphics::Renderable
 			 * @brief Loads a mesh resource from a geometry and a material. This will produce a single layer mesh.
 			 * @param geometry A reference to a geometry resource smart pointer.
 			 * @param material A reference to a material resource smart pointer.
-			 * @param rasterizationOptions A reference to a rasterization options. Defaults.
+			 * @param rasterizationOptions A reference to rasterization options. Defaults.
 			 * @return bool
 			 */
 			bool load (const std::shared_ptr< Geometry::Interface > & geometry, const std::shared_ptr< Material::Interface > & material, const RasterizationOptions & rasterizationOptions = {}) noexcept;
 
 			/**
-			 * @brief Loads a mesh resource from a geometry and a materials list. This will produce a multiple layers mesh.
+			 * @brief Loads a mesh resource from a geometry and a materials list. This will produce a mesh with multiple layers.
 			 * @param geometry A reference to a geometry resource smart pointer.
-			 * @param materialList A reference to a list of material resource smart pointer.
+			 * @param materialList A reference to a list of a material resource smart pointer.
 			 * @param rasterizationOptions A reference to a list of rasterization options. Defaults.
 			 * @return bool
 			 */
 			bool load (const std::shared_ptr< Geometry::Interface > & geometry, const std::vector< std::shared_ptr< Material::Interface > > & materialList, const std::vector< RasterizationOptions > & rasterizationOptions = {}) noexcept;
 
 			/**
-			 * @brief Gives a hint for the mesh size. This is not effective by itself, you can use it for scale a scene node.
+			 * @brief Gives a hint for the mesh size. This is not effective by itself, you can use it to scale a scene node.
 			 * @return float
 			 */
 			[[nodiscard]]
 			float baseSize () const noexcept;
 
 			/**
-			 * @brief Creates a unique mesh or returns the existing one with same parameters.
+			 * @brief Creates a unique mesh or returns the existing one with the same parameters.
 			 * The resource name will be based on sub-resource names.
+			 * @param serviceProvider A reference to the resource manager through a service provider.
 			 * @param geometryResource A reference to a geometry resource smart pointer.
 			 * @param materialResource A reference to a material resource smart pointer.
 			 * @param resourceName A string. Default auto generated name.
 			 * @return std::shared_ptr< MeshResource >
 			 */
 			[[nodiscard]]
-			static std::shared_ptr< MeshResource > getOrCreate (const std::shared_ptr< Geometry::Interface > & geometryResource, const std::shared_ptr< Material::Interface > & materialResource, std::string resourceName = {}) noexcept;
+			static std::shared_ptr< MeshResource > getOrCreate (Resources::ServiceProvider & serviceProvider, const std::shared_ptr< Geometry::Interface > & geometryResource, const std::shared_ptr< Material::Interface > & materialResource, std::string resourceName = {}) noexcept;
 
 			/**
-			 * @brief Creates a unique mesh or returns the existing one with same parameters.
+			 * @brief Creates a unique mesh or returns the existing one with the same parameters.
 			 * The resource name will be based on sub-resource names.
+			 * @param serviceProvider A reference to the resource manager through a service provider.
 			 * @param geometryResource A reference to a geometry resource smart pointer.
 			 * @param materialResources A reference to a material resource smart pointer list.
 			 * @param resourceName A string. Default auto generated name.
 			 * @return std::shared_ptr< MeshResource >
 			 */
 			[[nodiscard]]
-			static std::shared_ptr< MeshResource > getOrCreate (const std::shared_ptr< Geometry::Interface > & geometryResource, const std::vector< std::shared_ptr< Material::Interface > > & materialResources, std::string resourceName = {}) noexcept;
+			static std::shared_ptr< MeshResource > getOrCreate (Resources::ServiceProvider & serviceProvider, const std::shared_ptr< Geometry::Interface > & geometryResource, const std::vector< std::shared_ptr< Material::Interface > > & materialResources, std::string resourceName = {}) noexcept;
 
 		private:
 
@@ -291,7 +303,7 @@ namespace EmEn::Graphics::Renderable
 			/**
 			 * @brief Sets the material resource.
 			 * @param material A reference to a material resource smart pointer.
-			 * @param options A reference to a rasterization options.
+			 * @param options A reference to rasterization options.
 			 * @param flags The renderable level flags.
 			 * @return bool
 			 */
@@ -306,7 +318,7 @@ namespace EmEn::Graphics::Renderable
 			/**
 			 * @brief Adds a layer with a material and rasterization options.
 			 * @param material A reference to a material resource smart pointer.
-			 * @param options A reference to a rasterization options.
+			 * @param options A reference to rasterization options.
 			 * @param flags The renderable level flags.
 			 * @return bool
 			 */
@@ -314,19 +326,19 @@ namespace EmEn::Graphics::Renderable
 
 			/**
 			 * @brief Parses a JSON stream to get the geometry information.
-			 * @param resources A reference to the resource manager.
+			 * @param serviceProvider A reference to the resource manager through a service provider.
 			 * @param data A reference to a JSON node.
 			 * @return std::shared_ptr< Geometry::Interface >
 			 */
-			std::shared_ptr< Geometry::Interface > parseGeometry (Resources::Manager & resources, const Json::Value & data) noexcept;
+			std::shared_ptr< Geometry::Interface > parseGeometry (Resources::ServiceProvider & serviceProvider, const Json::Value & data) noexcept;
 
 			/**
 			 * @brief Parses a JSON stream to get the material information.
-			 * @param resources A reference to the resource manager.
+			 * @param serviceProvider A reference to the resource manager through a service provider.
 			 * @param data A reference to a JSON node.
 			 * @return std::shared_ptr< Material::Interface >
 			 */
-			static std::shared_ptr< Material::Interface > parseLayer (Resources::Manager & resources, const Json::Value & data) noexcept;
+			static std::shared_ptr< Material::Interface > parseLayer (Resources::ServiceProvider & serviceProvider, const Json::Value & data) noexcept;
 
 			/**
 			 * @brief Parses a JSON stream to get the mesh options.

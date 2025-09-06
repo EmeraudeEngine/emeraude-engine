@@ -37,32 +37,32 @@ namespace EmEn::Graphics::Geometry
 	{
 		None = 0U,
 		/* Vertex attributes present in local data. */
-		/** @brief This flags tells the geometry to have normals in vertex attributes. */
+		/** @brief This flag tells the geometry to have normals in vertex attributes. */
 		EnableNormal = 1U << 0,
 		/**
-		 * @brief This flags tells the geometry to have tangents, bi-normals and normals (TBN) in vertex attributes.
+		 * @brief This flag tells the geometry to have tangents, bi-normals and normals (TBN) in vertex attributes.
 		 * @note Overrides GeometryFlagBits::EnableNormal flag.
 		 */
 		EnableTangentSpace = 1U << 1,
-		/** @brief This flags tells the geometry to have primary texture coordinates in vertex attributes. */
+		/** @brief This flag tells the geometry to have primary texture coordinates in vertex attributes. */
 		EnablePrimaryTextureCoordinates = 1U << 2,
-		/** @brief This flags tells the geometry to have secondary texture coordinates in vertex attributes. */
+		/** @brief This flag tells the geometry to have secondary texture coordinates in vertex attributes. */
 		EnableSecondaryTextureCoordinates = 1U << 3,
-		/** @brief This flags tells the geometry to have vertex colors in vertex attributes. */
+		/** @brief This flag tells the geometry to have vertex colors in vertex attributes. */
 		EnableVertexColor = 1U << 4,
-		/** @brief This flags tells the geometry uses influence indexes to a uniform buffer for skeletal animations. */
+		/** @brief This flag tells the geometry uses influence indexes to a uniform buffer for skeletal animations. */
 		EnableInfluence = 1U << 5,
-		/** @brief This flags tells the geometry to have weights in vertex attributes. */
+		/** @brief This flag tells the geometry to have weights in vertex attributes. */
 		EnableWeight = 1U << 6,
-		/** @brief This flags tells the primary texture coordinates are expressed in 3D (UVW) instead of 2D (UV). */
+		/** @brief This flag tells the primary texture coordinates are expressed in 3D (UVW) instead of 2D (UV). */
 		Enable3DPrimaryTextureCoordinates = 1U << 7,
-		/** @brief This flags tells the secondary texture coordinates are expressed in 3D (UVW) instead of 2D (UV). */
+		/** @brief This flag tells the secondary texture coordinates are expressed in 3D (UVW) instead of 2D (UV). */
 		Enable3DSecondaryTextureCoordinates = 1U << 8,
-		/** @brief This flags tells the VBO uses dynamic updates. */
+		/** @brief This flag tells the VBO uses dynamic updates. */
 		EnableDynamicVertexBuffer = 1U << 9,
-		/** @brief This flags tells the vertex positions are expressed in world coordinates. */
+		/** @brief This flag tells the vertex positions are expressed in world coordinates. */
 		EnableAbsolutePosition = 1U << 10,
-		/** @brief This flags tells the index buffer uses the special index to restart primitives. */
+		/** @brief This flag tells the index buffer uses the special index to restart primitives. */
 		EnablePrimitiveRestart = 1U << 11
 	};
 

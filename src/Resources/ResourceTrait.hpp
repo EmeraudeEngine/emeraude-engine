@@ -47,6 +47,7 @@
 #include "Libs/ObservableTrait.hpp"
 
 /* Local inclusions for usages. */
+#include "ServiceProvider.hpp"
 #include "Types.hpp"
 
 namespace EmEn::Resources
@@ -74,7 +75,7 @@ namespace EmEn::Resources
 
 			/** @brief Enables resource information in the terminal. */
 			inline static bool s_verboseEnabled{false};
-			/** @brief Enables the resources conversion warning messages in the console. */
+			/** @brief Enables the resource conversion warning messages in the console. */
 			inline static bool s_quietConversion{true};
 
 			/**
@@ -205,32 +206,35 @@ namespace EmEn::Resources
 			}
 
 			/**
-			 * @brief Returns the label of resource class.
+			 * @brief Returns the label of a resource class.
 			 * @return const char *
 			 */
 			[[nodiscard]]
 			virtual const char * classLabel () const noexcept = 0;
 
 			/**
-			 * @brief Loads a fully functional dummy resource.
+			 * @brief Loads a fully functional default resource.
+			 * @param serviceProvider A reference to the resource manager through a service provider.
 			 * @return bool
 			 */
-			virtual bool load () noexcept = 0;
+			virtual bool load (ServiceProvider & serviceProvider) noexcept = 0;
 
 			/**
 			 * @brief Loads a resource from a disk file.
 			 * @note If not overridden, this method will open the file and tries to read a JSON data and call the load(data) after.
+			 * @param serviceProvider A reference to the resource manager through a service provider.
 			 * @param filepath A reference to a filesystem path.
 			 * @return bool
 			 */
-			virtual bool load (const std::filesystem::path & filepath) noexcept;
+			virtual bool load (ServiceProvider & serviceProvider, const std::filesystem::path & filepath) noexcept;
 
 			/**
 			 * @brief Loads a resource from a JsonCPP object.
+			 * @param serviceProvider A reference to the resource manager through a service provider.
 			 * @param data A reference to a JsonCPP object.
 			 * @return bool
 			 */
-			virtual bool load (const Json::Value & data) noexcept = 0;
+			virtual bool load (ServiceProvider & serviceProvider, const Json::Value & data) noexcept = 0;
 
 			/**
 			 * @brief When the resource is loaded in memory, this method returns the size in bytes occupied in RAM.
@@ -259,7 +263,7 @@ namespace EmEn::Resources
 			}
 
 			/**
-			 * @brief Returns whether the resource use direct loading mode from manager.
+			 * @brief Returns whether the resource uses direct loading mode from the manager.
 			 * @return Status
 			 */
 			[[nodiscard]]
@@ -327,7 +331,7 @@ namespace EmEn::Resources
 
 			/**
 			 * @brief This private method is called from a child resource through m_parents set to relaunch the parent resource dependencies check.
-			 * @param dependency A pointer to the loaded dependency. Suitable to unlink the resource from dependency set.
+			 * @param dependency A pointer to the loaded dependency. Suitable to unlink the resource from a dependency set.
 			 * @return void
 			 */
 			void dependencyLoaded (const std::shared_ptr< ResourceTrait > & dependency) noexcept;

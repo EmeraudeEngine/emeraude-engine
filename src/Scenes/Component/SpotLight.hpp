@@ -142,7 +142,7 @@ namespace EmEn::Scenes::Component
 			Saphir::Declaration::UniformBlock getUniformBlock (uint32_t set, uint32_t binding, bool useShadow) const noexcept override;
 
 			/**
-			 * @brief Set the radius of light area.
+			 * @brief Set the radius of the light area.
 			 * @param radius
 			 */
 			void
@@ -163,7 +163,7 @@ namespace EmEn::Scenes::Component
 			void setConeAngles (float innerAngle, float outerAngle = 0.0F) noexcept;
 
 			/**
-			 * @brief Returns the radius of light area.
+			 * @brief Returns the radius of the light area.
 			 * @return float
 			 */
 			[[nodiscard]]

@@ -50,6 +50,8 @@ namespace EmEn::Libs
 	void
 	ObserverTrait::observe (ObservableTrait * observable) noexcept
 	{
+		const std::lock_guard< std::mutex > lock{observable->m_notificationMutex};
+
 		const auto result = m_observables.emplace(observable);
 
 		if ( !result.second )

@@ -392,7 +392,7 @@ namespace EmEn::Libs::VertexFactory
 			}
 
 			/**
-			 * @brief Returns whether texture coordinates is available.
+			 * @brief Returns whether texture coordinates are available.
 			 * @return bool
 			 */
 			[[nodiscard]]
@@ -586,7 +586,7 @@ namespace EmEn::Libs::VertexFactory
 			}
 
 			/**
-			 * @brief Computes normal vector for every vertex.
+			 * @brief Computes a normal vector for every vertex.
 			 * @warning Geometry must have normal vectors computed for every triangle.
 			 * @return bool
 			 */
@@ -858,7 +858,7 @@ namespace EmEn::Libs::VertexFactory
 				m_vertexColors.clear();
 				m_vertexColors.emplace_back(color);
 
-				/* Sets color pointer to index 0, the unique color. */
+				/* Sets a color pointer to index 0, the unique color. */
 				for ( auto & triangle : m_triangles )
 				{
 					for ( index_data_t vertexIndex = 0; vertexIndex < 3; ++vertexIndex )
@@ -1549,7 +1549,7 @@ namespace EmEn::Libs::VertexFactory
 				/* Link with the shared edge if it found. */
 				if ( sharedIndex < std::numeric_limits< index_data_t >::max() )
 				{
-					/* Sets to new inserted edge the index of the shared edge found. */
+					/* Sets to the new inserted edge the index of the shared edge found. */
 					m_edges.back().setSharedIndex(sharedIndex);
 
 					/* Save the index of the new edge to the shared edge found. */

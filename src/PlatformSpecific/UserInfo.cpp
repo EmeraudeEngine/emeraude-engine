@@ -47,14 +47,4 @@ namespace EmEn::PlatformSpecific
 
 		return out;
 	}
-
-	std::string
-	to_string (const UserInfo & obj) noexcept
-	{
-		std::stringstream output;
-
-		output << obj;
-
-		return output.str();
-	}
 }

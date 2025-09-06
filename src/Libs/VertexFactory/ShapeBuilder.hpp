@@ -53,7 +53,7 @@ namespace EmEn::Libs::VertexFactory
 	};
 
 	/**
-	 * @brief The shape builder construct a geometry shape by providing the structure by triangles.
+	 * @brief The shape builder constructs a geometry shape by providing the structure by triangles.
 	 * @tparam vertex_data_t The precision type of vertex data. Default float.
 	 * @tparam index_data_t The precision type of index data. Default uint32_t.
 	 */

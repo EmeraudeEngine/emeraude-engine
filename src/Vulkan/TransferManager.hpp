@@ -28,7 +28,6 @@
 
 /* STL inclusions. */
 #include <cstddef>
-#include <array>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -39,9 +38,6 @@
 
 /* Local inclusions for inheritances. */
 #include "ServiceInterface.hpp"
-
-/* Local inclusions for usages. */
-#include "Types.hpp"
 
 /* Forward declarations. */
 namespace EmEn
@@ -75,44 +71,24 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Constructs the transfer manager.
-			 * @param type The GPU work type.
 			 */
-			explicit
-			TransferManager (GPUWorkType type) noexcept
+			TransferManager () noexcept
 				: ServiceInterface{ClassId}
 			{
-				if ( s_instances.at(static_cast< size_t >(type)) != nullptr )
-				{
-					std::cerr << __PRETTY_FUNCTION__ << ", constructor called twice !" "\n";
 
-					std::terminate();
-				}
-
-				s_instances.at(static_cast< size_t >(type)) = this;
 			}
 
 			/**
 			 * @brief Destructs the transfer manager.
 			 */
-			~TransferManager () override
-			{
-				for ( auto & pointer : s_instances )
-				{
-					if ( pointer == this )
-					{
-						pointer = nullptr;
-
-						break;
-					}
-				}
-			}
+			~TransferManager () override = default;
 
 			/** @copydoc EmEn::ServiceInterface::usable() */
 			[[nodiscard]]
 			bool
 			usable () const noexcept override
 			{
-				return m_flags[ServiceInitialized];
+				return m_serviceInitialized;
 			}
 
 			/**
@@ -174,7 +150,7 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Transfer a buffer from the CPU to the GPU.
-			 * @note This version will generate mip-mapping on the GPU and is using two command buffer (transfer and graphics).
+			 * @note This version will generate mip-mapping on the GPU and is using two command buffers (transfer and graphics).
 			 * @param stagingBuffer A reference to the staging buffer (CPU side).
 			 * @param dstImage A reference to the destination image (GPU side).
 			 * @param offset The offset in the staging buffer where the date to copy starts. Default 0.
@@ -182,21 +158,6 @@ namespace EmEn::Vulkan
 			 */
 			[[nodiscard]]
 			bool transfer (const StagingBuffer & stagingBuffer, Image & dstImage, VkDeviceSize offset = 0) noexcept;
-
-			/**
-			 * @brief Returns the instance of the transfer manager.
-			 * @todo This method must be removed!
-			 * @param type The transfer work type.
-			 * @return TransferManager *
-			 */
-			//[[deprecated("This method must be removed !")]]
-			[[nodiscard]]
-			static
-			TransferManager *
-			instance (GPUWorkType type) noexcept
-			{
-				return s_instances.at(static_cast< size_t >(type)); // FIXME: Remove this
-			}
 
 		private:
 
@@ -222,13 +183,6 @@ namespace EmEn::Vulkan
 			[[nodiscard]]
 			std::shared_ptr< StagingBuffer > searchFreeStagingBuffer (size_t bytes) const noexcept;
 
-			/* Flag names. */
-			static constexpr auto Debug{0UL};
-			static constexpr auto ServiceInitialized{1UL};
-			static constexpr auto SeparatedQueues{2UL};
-
-			static std::array< TransferManager *, 2 > s_instances;
-
 			std::shared_ptr< Device > m_device;
 			std::vector< std::shared_ptr< StagingBuffer > > m_stagingBuffers;
 			std::shared_ptr< CommandPool > m_transferCommandPool;
@@ -236,15 +190,7 @@ namespace EmEn::Vulkan
 			/* FIXME: Check the usefulness of these mutexes since we use a device mutex to access queues. */
 			std::mutex m_stagingBufferMutex;
 			std::mutex m_transferMutex;
-			std::array< bool, 8 > m_flags{
-				false/*Debug*/,
-				false/*ServiceInitialized*/,
-				false/*SeparatedQueues*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/
-			};
+			bool m_serviceInitialized{false};
+			bool m_separatedQueues{false};
 	};
 }

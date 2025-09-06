@@ -45,9 +45,9 @@
 
 namespace EmEn::Vulkan
 {
-	using namespace EmEn::Libs;
-	using namespace EmEn::Libs::Math;
-	using namespace EmEn::Graphics;
+	using namespace Libs;
+	using namespace Libs::Math;
+	using namespace Graphics;
 
 	SwapChain::SwapChain (const std::shared_ptr< Device > & device, Renderer & renderer, Settings & settings) noexcept
 		: AbstractDeviceDependentObject{device},
@@ -58,7 +58,7 @@ namespace EmEn::Vulkan
 
 		/* NOTE: Check for multisampling. */
 		{
-			const auto sampleCount = settings.get< uint32_t >(VideoFramebufferSamplesKey, DefaultVideoFramebufferSamples);
+			const auto sampleCount = settings.getOrSetDefault< uint32_t >(VideoFramebufferSamplesKey, DefaultVideoFramebufferSamples);
 
 			if ( sampleCount > 1 )
 			{
@@ -66,9 +66,9 @@ namespace EmEn::Vulkan
 			}
 		}
 
-		m_showInformation = settings.get< bool >(VkShowInformationKey, DefaultVkShowInformation);
-		m_tripleBufferingEnabled = settings.get< bool >(VideoEnableTripleBufferingKey, DefaultVideoEnableTripleBuffering);
-		m_VSyncEnabled = settings.get< bool >(VideoEnableVSyncKey, DefaultVideoEnableVSync);
+		m_showInformation = settings.getOrSetDefault< bool >(VkShowInformationKey, DefaultVkShowInformation);
+		m_tripleBufferingEnabled = settings.getOrSetDefault< bool >(VideoEnableTripleBufferingKey, DefaultVideoEnableTripleBuffering);
+		m_VSyncEnabled = settings.getOrSetDefault< bool >(VideoEnableVSyncKey, DefaultVideoEnableVSync);
 	}
 
 	bool
@@ -252,6 +252,8 @@ namespace EmEn::Vulkan
 
 			return false;
 		}
+
+		this->updateProperties();
 
 		if ( m_showInformation )
 		{
@@ -995,19 +997,19 @@ namespace EmEn::Vulkan
 	}
 
 	void
-	SwapChain::updateProperties (bool isPerspectiveProjection, float distance, float fovOrNear) noexcept
+	SwapChain::updateProperties () noexcept
 	{
 		const auto & extent = this->extent();
 		const auto width = static_cast< float >(extent.width);
 		const auto height = static_cast< float >(extent.height);
 
-		if ( isPerspectiveProjection )
+		if ( m_isPerspectiveProjection )
 		{
-			m_viewMatrices.updatePerspectiveViewProperties(width, height, distance, fovOrNear);
+			m_viewMatrices.updatePerspectiveViewProperties(width, height, m_distance, m_fovOrNear);
 		}
 		else
 		{
-			m_viewMatrices.updateOrthographicViewProperties(width, height, distance, fovOrNear);
+			m_viewMatrices.updateOrthographicViewProperties(width, height, m_distance, m_fovOrNear);
 		}
 	}
 }

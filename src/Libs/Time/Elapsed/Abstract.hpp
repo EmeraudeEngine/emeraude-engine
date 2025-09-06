@@ -74,28 +74,44 @@ namespace EmEn::Libs::Time::Elapsed
 			 * @return uint64_t
 			 */
 			[[nodiscard]]
-			uint64_t duration () const noexcept;
+			uint64_t
+			duration () const noexcept
+			{
+				return m_duration;
+			}
 
 			/**
 			 * @brief Returns the duration in seconds.
 			 * @return double
 			 */
 			[[nodiscard]]
-			double seconds () const noexcept;
+			double
+			seconds () const noexcept
+			{
+				return static_cast< double >(m_duration) / 1000000000.0;
+			}
 
 			/**
 			 * @brief Returns the duration in milliseconds.
 			 * @return double
 			 */
 			[[nodiscard]]
-			double milliseconds () const noexcept;
+			double
+			milliseconds () const noexcept
+			{
+				return static_cast< double >(m_duration) / 1000000.0;
+			}
 
 			/**
 			 * @brief Returns the duration in microseconds.
 			 * @return double
 			 */
 			[[nodiscard]]
-			double microseconds () const noexcept;
+			double
+			microseconds () const noexcept
+			{
+				return static_cast< double >(m_duration) / 1000.0;
+			}
 
 			/**
 			 * @brief Starts a measurement.
@@ -121,7 +137,11 @@ namespace EmEn::Libs::Time::Elapsed
 			 * @param duration The duration in nanoseconds.
 			 * @return void
 			 */
-			void setDuration (uint64_t duration) noexcept;
+			void
+			setDuration (uint64_t duration) noexcept
+			{
+				m_duration = duration;
+			}
 
 		private:
 

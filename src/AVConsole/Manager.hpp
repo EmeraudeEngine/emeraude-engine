@@ -83,9 +83,6 @@ namespace EmEn::AVConsole
 			/** @brief Observable class identification. */
 			static constexpr auto ClassId{"AVConsole"};
 
-			/** @brief Observable class unique identifier. */
-			static const size_t ClassUID;
-
 			/** @brief The reserved name for the default view device. */
 			static const std::string DefaultViewName;
 			static const std::string DefaultSpeakerName;
@@ -98,12 +95,25 @@ namespace EmEn::AVConsole
 			 */
 			Manager (const std::string & name, Graphics::Renderer & graphicsRenderer, Audio::Manager & audioManager) noexcept;
 
+			/**
+			 * @brief Returns the unique identifier for this class [Thread-safe].
+			 * @return size_t
+			 */
+			static
+			size_t
+			getClassUID () noexcept
+			{
+				static const size_t classUID = EmEn::Libs::Hash::FNV1a(ClassId);
+
+				return classUID;
+			}
+
 			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
 			[[nodiscard]]
 			size_t
 			classUID () const noexcept override
 			{
-				return ClassUID;
+				return getClassUID();
 			}
 
 			/** @copydoc EmEn::Libs::ObservableTrait::is() const */
@@ -111,7 +121,7 @@ namespace EmEn::AVConsole
 			bool
 			is (size_t classUID) const noexcept override
 			{
-				return classUID == ClassUID;
+				return classUID == getClassUID();
 			}
 
 			/**

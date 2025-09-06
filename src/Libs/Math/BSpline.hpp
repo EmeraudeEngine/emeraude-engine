@@ -27,6 +27,7 @@
 #pragma once
 
 /* STL inclusions. */
+#include <cstdint>
 #include <cstddef>
 #include <functional>
 #include <iostream>
@@ -34,11 +35,167 @@
 #include <vector>
 
 /* Local inclusions. */
-#include "BSplinePoint.hpp"
 #include "Vector.hpp"
 
 namespace EmEn::Libs::Math
 {
+	/**
+	 * @brief The CurveType enum
+	 */
+	enum class CurveType : uint8_t
+	{
+		None,
+		BezierQuadratic,
+		BezierCubic
+	};
+
+	/**
+	 * @brief The B-Spline point class.
+	 * @tparam dim_t The dimension of the vector. This can be 2, 3 or 4.
+	 * @tparam number_t The type of number. Default float.
+	 */
+	template< size_t dim_t, typename number_t = float >
+	requires (dim_t == 2 || dim_t == 3 || dim_t == 4) && std::is_arithmetic_v< number_t >
+	class BSplinePoint final
+	{
+		public:
+
+			/**
+			 * @brief Constructs a B-Spline point.
+			 * @param position A reference to a vector.
+			 * @param curveType The curve type.
+			 * @param segments The number of segments.
+			 */
+			BSplinePoint (const Vector< dim_t, number_t > & position, CurveType curveType, size_t segments) noexcept
+				: m_position(position), m_curveType(curveType), m_segments(segments)
+			{
+
+			}
+
+			/**
+			 * @brief Constructs a B-Spline point.
+			 * @param position A reference to a vector.
+			 * @param handle A reference to a vector.
+			 * @param curveType The curve type.
+			 * @param segments The number of segments.
+			 */
+			BSplinePoint (const Vector< dim_t, number_t > & position, const Vector< dim_t, number_t > & handle, CurveType curveType, size_t segments) noexcept
+				: m_position(position), m_handleIn(-handle), m_handleOut(handle), m_curveType(curveType), m_segments(segments)
+			{
+
+			}
+
+			/**
+			 * @brief Constructs a B-Spline point.
+			 * @param position A reference to a vector.
+			 * @param handleIn A reference to a vector.
+			 * @param handleOut A reference to a vector.
+			 * @param curveType The curve type.
+			 * @param segments The number of segments.
+			 */
+			BSplinePoint (const Vector< dim_t, number_t > & position, const Vector< dim_t, number_t > & handleIn, const Vector< dim_t, number_t > & handleOut, CurveType curveType, size_t segments) noexcept
+				: m_position(position), m_handleIn(handleIn), m_handleOut(handleOut), m_curveType(curveType), m_segments(segments)
+			{
+
+			}
+
+			/**
+			 * @brief Sets the curve type.
+			 * @param curveType The curve type.
+			 * @return BSplinePoint &
+			 */
+			BSplinePoint &
+			setCurveType (CurveType curveType) noexcept
+			{
+				m_curveType = curveType;
+
+				return *this;
+			}
+
+			/**
+			 * @brief Returns the curve type.
+			 * @return CurveType
+			 */
+			[[nodiscard]]
+			CurveType
+			curveType () const noexcept
+			{
+				return m_curveType;
+			}
+
+			/**
+			 * @brief Sets the number of segments.
+			 * @param segments The number of segments.
+			 * @return BSplinePoint &
+			 */
+			BSplinePoint &
+			setSegments (size_t segments) noexcept
+			{
+				if ( segments < 1 )
+				{
+					std::cerr << __PRETTY_FUNCTION__ << ", segment should at least be 1 !" "\n";
+				}
+				else
+				{
+					m_segments = segments;
+				}
+
+				return *this;
+			}
+
+			/**
+			 * @brief Returns the number of segments.
+			 * @return size_t
+			 */
+			[[nodiscard]]
+			size_t
+			segments () const noexcept
+			{
+				return m_segments;
+			}
+
+			/**
+			 * @brief Returns the position.
+			 * @return const Vector< dim_t, type_t > &
+			 */
+			[[nodiscard]]
+			const Vector< dim_t, number_t > &
+			position () const noexcept
+			{
+				return m_position;
+			}
+
+			/**
+			 * @brief Returns the "in" handle.
+			 * @return const Vector< dim_t, type_t > &
+			 */
+			[[nodiscard]]
+			const Vector< dim_t, number_t > &
+			handleIn () const noexcept
+			{
+				return m_handleIn;
+			}
+
+			/**
+			 * @brief Returns the "out" handle.
+			 * @return const Vector< dim_t, type_t > &
+			 */
+			[[nodiscard]]
+			const Vector< dim_t, number_t > &
+			handleOut () const noexcept
+			{
+				return m_handleOut;
+			}
+
+		private:
+
+			Vector< dim_t, number_t > m_position;
+			Vector< dim_t, number_t > m_handleIn{};
+			Vector< dim_t, number_t > m_handleOut{};
+			CurveType m_curveType{CurveType::None};
+			size_t m_segments{1};
+	};
+
 	/**
 	 * @brief The BSpline class.
 	 * @tparam dim_t The dimension of the vector. This can be 2, 3 or 4.
@@ -259,7 +416,7 @@ namespace EmEn::Libs::Math
 			bool
 			synthesizeLinear (const Callback & callback, const BSplinePoint< dim_t, number_t > & currentPoint, const BSplinePoint< dim_t, number_t > & nextPoint, float & currentTime, float timeStep) const noexcept
 			{
-				/* Time step along a segment. */
+				/* Time to step along a segment. */
 				const auto factorStep = 1.0F / currentPoint.segments();
 
 				auto factor = 0.0F;
@@ -291,7 +448,7 @@ namespace EmEn::Libs::Math
 			bool
 			synthesizeQuadratic (const Callback & callback, const BSplinePoint< dim_t, number_t > & currentPoint, const BSplinePoint< dim_t, number_t > & nextPoint, float & currentTime, float timeStep) const noexcept
 			{
-				/* Time step along a segment. */
+				/* Time to step along a segment. */
 				const auto factorStep = 1.0F / currentPoint.segments();
 
 				auto factor = 0.0F;
@@ -326,7 +483,7 @@ namespace EmEn::Libs::Math
 			bool
 			synthesizeCubic (const Callback & callback, const BSplinePoint< dim_t, number_t > & currentPoint, const BSplinePoint< dim_t, number_t > & nextPoint, float & currentTime, float timeStep) const noexcept
 			{
-				/* Time step along a segment. */
+				/* Time to step along a segment. */
 				const auto factorStep = 1.0F / currentPoint.segments();
 
 				auto factor = 0.0F;

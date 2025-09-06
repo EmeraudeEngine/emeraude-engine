@@ -39,7 +39,9 @@
 #include "Libs/PixelFactory/TextProcessor.hpp"
 #include "Overlay/Manager.hpp"
 #include "Overlay/Surface.hpp"
+#include "Resources/Manager.hpp"
 
+/* Forward declarations. */
 namespace EmEn::Graphics
 {
 	class FontResource;
@@ -61,19 +63,18 @@ namespace EmEn
 			/** @brief Class identifier. */
 			static constexpr auto ClassId{"NotifierService"};
 
-			/** @brief Observable class unique identifier. */
-			static const size_t ClassUID;
-
 			static constexpr uint32_t DefaultDuration{3000};
 			static constexpr auto ScreenName{"NotifierScreen"};
 
 			/**
 			 * @brief Constructs the notifier service.
+			 * @param resourceManager A reference to the resource manager.
 			 * @param overlayManager A reference to the overlay manager.
 			 */
 			explicit
-			Notifier (Overlay::Manager & overlayManager) noexcept
+			Notifier (Resources::Manager & resourceManager, Overlay::Manager & overlayManager) noexcept
 				: ServiceInterface{ClassId},
+				m_resourceManager{resourceManager},
 				m_overlayManager{overlayManager}
 			{
 
@@ -173,6 +174,7 @@ namespace EmEn
 			 */
 			void clearDisplay () const noexcept;
 
+			Resources::Manager & m_resourceManager;
 			Overlay::Manager & m_overlayManager;
 			std::shared_ptr< Overlay::UIScreen > m_screen;
 			std::shared_ptr< Overlay::Surface > m_surface;

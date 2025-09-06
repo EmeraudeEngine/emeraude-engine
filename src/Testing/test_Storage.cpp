@@ -1,5 +1,5 @@
 /*
-* src/Testing/test_Storage.cpp
+* src/Testing/test_StaticVector.cpp
  * This file is part of Emeraude-Engine
  *
  * Copyright (C) 2010-2025 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
@@ -30,7 +30,7 @@
 #include <algorithm>
 
 /* Local inclusions. */
-#include "Libs/Storage.hpp"
+#include "Libs/StaticVector.hpp"
 
 namespace EmEn::Libs
 {
@@ -87,7 +87,7 @@ namespace EmEn::Libs
 	int LifetimeTracker::move_constructor_calls = 0;
 	int LifetimeTracker::destructor_calls = 0;
 
-	class StorageTest : public ::testing::Test
+	class StaticVectorTest : public ::testing::Test
 	{
 		protected:
 
@@ -98,18 +98,18 @@ namespace EmEn::Libs
 		    }
 	};
 
-	TEST_F (StorageTest, DefaultConstructor)
+	TEST_F (StaticVectorTest, DefaultConstructor)
 	{
-	    Storage< int, 10 > s;
+	    StaticVector< int, 10 > s;
 	    ASSERT_TRUE(s.empty());
 	    ASSERT_EQ(s.size(), 0);
 	    ASSERT_EQ(s.capacity(), 10);
 	    ASSERT_EQ(s.max_size(), 10);
 	}
 
-	TEST_F (StorageTest, SizeConstructor)
+	TEST_F (StaticVectorTest, SizeConstructor)
 	{
-	    Storage< int, 10 > s(5);
+	    StaticVector< int, 10 > s(5);
 	    ASSERT_FALSE(s.empty());
 	    ASSERT_EQ(s.size(), 5);
 
@@ -119,9 +119,9 @@ namespace EmEn::Libs
 	    }
 	}
 
-	TEST_F (StorageTest, PushBackAndAccess)
+	TEST_F (StaticVectorTest, PushBackAndAccess)
 	{
-	    Storage< int, 5 > s;
+	    StaticVector< int, 5 > s;
 	    s.push_back(10);
 	    s.push_back(20);
 
@@ -132,9 +132,9 @@ namespace EmEn::Libs
 	    ASSERT_EQ(s.back(), 20);
 	}
 
-	TEST_F (StorageTest, PopBack)
+	TEST_F (StaticVectorTest, PopBack)
 	{
-	    Storage< int, 5 > s;
+	    StaticVector< int, 5 > s;
 	    s.push_back(10);
 	    s.push_back(20);
 
@@ -149,9 +149,9 @@ namespace EmEn::Libs
 	    ASSERT_TRUE(s.empty());
 	}
 
-	TEST_F (StorageTest, Clear)
+	TEST_F (StaticVectorTest, Clear)
 	{
-	    Storage< int, 5 > s;
+	    StaticVector< int, 5 > s;
 	    s.push_back(1);
 	    s.push_back(2);
 	    s.clear();
@@ -160,9 +160,9 @@ namespace EmEn::Libs
 	    ASSERT_EQ(s.size(), 0);
 	}
 
-	TEST_F (StorageTest, EmplaceBack)
+	TEST_F (StaticVectorTest, EmplaceBack)
 	{
-	    Storage< std::string, 5 > s;
+	    StaticVector< std::string, 5 > s;
 	    s.emplace_back("hello");
 	    s.emplace_back(5, 'c'); // "ccccc"
 
@@ -171,9 +171,9 @@ namespace EmEn::Libs
 	    ASSERT_EQ(s[1], "ccccc");
 	}
 
-	TEST_F (StorageTest, CapacityLimit)
+	TEST_F (StaticVectorTest, CapacityLimit)
 	{
-	    Storage< int, 3 > s;
+	    StaticVector< int, 3 > s;
 	    s.push_back(1);
 	    s.push_back(2);
 	    s.push_back(3);
@@ -187,9 +187,9 @@ namespace EmEn::Libs
 #endif
 	}
 
-	TEST_F (StorageTest, AtBoundsCheck)
+	TEST_F (StaticVectorTest, AtBoundsCheck)
 	{
-	    Storage< int, 5 > s;
+	    StaticVector< int, 5 > s;
 	    s.push_back(10);
 
 	    ASSERT_EQ(s.at(0), 10);
@@ -201,13 +201,13 @@ namespace EmEn::Libs
 #endif
 	}
 
-	TEST_F (StorageTest, CopyConstructor)
+	TEST_F (StaticVectorTest, CopyConstructor)
 	{
-	    Storage< int, 10 > s1;
+	    StaticVector< int, 10 > s1;
 	    s1.push_back(10);
 	    s1.push_back(20);
 
-	    Storage<int, 10> s2(s1);
+	    StaticVector<int, 10> s2(s1);
 
 	    ASSERT_EQ(s1.size(), 2);
 	    ASSERT_EQ(s2.size(), 2);
@@ -217,13 +217,13 @@ namespace EmEn::Libs
 	    ASSERT_EQ(s1[0], 10);
 	}
 
-	TEST_F (StorageTest, CopyAssignment)
+	TEST_F (StaticVectorTest, CopyAssignment)
 	{
-	    Storage< int, 10 > s1;
+	    StaticVector< int, 10 > s1;
 	    s1.push_back(10);
 	    s1.push_back(20);
 
-	    Storage< int, 10 > s2;
+	    StaticVector< int, 10 > s2;
 	    s2.push_back(99);
 
 	    s2 = s1;
@@ -232,26 +232,26 @@ namespace EmEn::Libs
 	    ASSERT_EQ(s2[0], 10);
 	}
 
-	TEST_F (StorageTest, MoveConstructor)
+	TEST_F (StaticVectorTest, MoveConstructor)
 	{
-	    Storage< std::string, 10 > s1;
+	    StaticVector< std::string, 10 > s1;
 	    s1.push_back("hello");
 	    s1.push_back("world");
 
-	    Storage< std::string, 10 > s2(std::move(s1));
+	    StaticVector< std::string, 10 > s2(std::move(s1));
 
 	    ASSERT_EQ(s2.size(), 2);
 	    ASSERT_EQ(s2[0], "hello");
 	    ASSERT_TRUE(s1.empty());
 	}
 
-	TEST_F (StorageTest, MoveAssignment)
+	TEST_F (StaticVectorTest, MoveAssignment)
 	{
-	    Storage< std::string, 10 > s1;
+	    StaticVector< std::string, 10 > s1;
 	    s1.push_back("hello");
 	    s1.push_back("world");
 
-	    Storage< std::string, 10 > s2;
+	    StaticVector< std::string, 10 > s2;
 	    s2 = std::move(s1);
 
 	    ASSERT_EQ(s2.size(), 2);
@@ -259,13 +259,13 @@ namespace EmEn::Libs
 	    ASSERT_TRUE(s1.empty());
 	}
 
-	TEST_F (StorageTest, Swap)
+	TEST_F (StaticVectorTest, Swap)
 	{
-	    Storage< int, 10 > s1;
+	    StaticVector< int, 10 > s1;
 	    s1.push_back(1);
 	    s1.push_back(2);
 
-	    Storage< int, 10 > s2;
+	    StaticVector< int, 10 > s2;
 	    s2.push_back(99);
 
 	    s1.swap(s2);
@@ -276,9 +276,9 @@ namespace EmEn::Libs
 	    ASSERT_EQ(s2[0], 1);
 	}
 
-	TEST_F (StorageTest, IteratorsAndSTLAlgos)
+	TEST_F (StaticVectorTest, IteratorsAndSTLAlgos)
 	{
-	    Storage< int, 10 > s;
+	    StaticVector< int, 10 > s;
 	    s.push_back(10);
 	    s.push_back(20);
 	    s.push_back(30);
@@ -296,10 +296,10 @@ namespace EmEn::Libs
 	    ASSERT_EQ(*it, 20);
 	}
 
-	TEST_F (StorageTest, LifetimeTracker_PushAndPop)
+	TEST_F (StaticVectorTest, LifetimeTracker_PushAndPop)
 	{
 	    {
-	        Storage<LifetimeTracker, 5> s;
+	        StaticVector<LifetimeTracker, 5> s;
 	        s.emplace_back(1);
 	        s.emplace_back(2);
 
@@ -315,35 +315,35 @@ namespace EmEn::Libs
 	    ASSERT_EQ(LifetimeTracker::destructor_calls, 2);
 	}
 
-	TEST_F (StorageTest, LifetimeTracker_Copy)
+	TEST_F (StaticVectorTest, LifetimeTracker_Copy)
 	{
-	    Storage< LifetimeTracker, 5 > s1;
+	    StaticVector< LifetimeTracker, 5 > s1;
 	    s1.emplace_back(1);
 	    s1.emplace_back(2);
 	    LifetimeTracker::reset();
 
-	    Storage< LifetimeTracker, 5 > s2(s1);
+	    StaticVector< LifetimeTracker, 5 > s2(s1);
 	    ASSERT_EQ(LifetimeTracker::copy_constructor_calls, 2);
 	    ASSERT_EQ(LifetimeTracker::constructor_calls, 0);
 	    ASSERT_EQ(LifetimeTracker::destructor_calls, 0);
 	}
 
-	TEST_F (StorageTest, LifetimeTracker_Move)
+	TEST_F (StaticVectorTest, LifetimeTracker_Move)
 	{
-	    Storage< LifetimeTracker, 5 > s1;
+	    StaticVector< LifetimeTracker, 5 > s1;
 	    s1.emplace_back(1);
 	    s1.emplace_back(2);
 	    LifetimeTracker::reset();
 
-	    Storage< LifetimeTracker, 5 > s2(std::move(s1));
+	    StaticVector< LifetimeTracker, 5 > s2(std::move(s1));
 	    ASSERT_EQ(LifetimeTracker::move_constructor_calls, 2);
 	    ASSERT_EQ(LifetimeTracker::constructor_calls, 0);
 	    ASSERT_EQ(LifetimeTracker::destructor_calls, 0);
 	}
 
-	TEST_F (StorageTest, LifetimeTracker_Resize)
+	TEST_F (StaticVectorTest, LifetimeTracker_Resize)
 	{
-	    Storage< LifetimeTracker, 10 > s;
+	    StaticVector< LifetimeTracker, 10 > s;
 	    s.resize(5);
 	    ASSERT_EQ(LifetimeTracker::constructor_calls, 5);
 	    ASSERT_EQ(s.size(), 5);

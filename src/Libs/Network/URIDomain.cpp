@@ -26,9 +26,6 @@
 
 #include "URIDomain.hpp"
 
-/* Emeraude-Engine configuration. */
-#include "emeraude_config.hpp"
-
 /* STL inclusions. */
 #include <array>
 #include <iostream>
@@ -39,17 +36,11 @@
 
 namespace EmEn::Libs::Network
 {
-	URIDomain::URIDomain (Hostname hostname, uint32_t port, std::string base, std::string user, std::string password, const std::map< std::string, std::string > & options) noexcept
-		: m_base(std::move(base)), m_username(std::move(user)), m_password(std::move(password)), m_options(options), m_hostname(std::move(hostname)), m_port(port)
-	{
-
-	}
-
 	URIDomain::URIDomain (std::string rawString) noexcept
 	{
 		if ( rawString.empty() )
 		{
-			std::cerr << __PRETTY_FUNCTION__ << ", empty string !" "\n";
+			std::cerr << "URIDomain::URIDomain(), empty string !" "\n";
 
 			return;
 		}
@@ -89,13 +80,18 @@ namespace EmEn::Libs::Network
 				this->setPort(String::toNumber< unsigned int >(chunks[1]));
 
 				/* NOTE: The ':' char was separating the user information. */
-				return m_port == 0 ? string : chunks[0];
+				if ( m_port == 0 )
+				{
+					return string;
+				}
+
+				return chunks[0];
 
 			case 1 :
 				return chunks[0];
 
 			default:
-				std::cerr << __PRETTY_FUNCTION__ << ", invalid URI domain, multiple ':' char found !" "\n";
+				std::cerr << "URIDomain::extractPort(), invalid URI domain, multiple ':' char found !" "\n";
 
 				return string;
 		}
@@ -139,7 +135,7 @@ namespace EmEn::Libs::Network
 				return chunks[0];
 
 			default:
-				std::cerr << __PRETTY_FUNCTION__ << ", invalid URI domain, multiple '@' char found !" "\n";
+				std::cerr << "URIDomain::extractUserInfos(), invalid URI domain, multiple '@' char found !" "\n";
 
 				return string;
 		}
@@ -157,7 +153,7 @@ namespace EmEn::Libs::Network
 
 			if ( option.size() != 2 )
 			{
-				std::cerr << __PRETTY_FUNCTION__ << ", invalid URI domain option '" << chunks[index] << "' !" "\n";
+				std::cerr << "URIDomain::parseUserInfos(), invalid URI domain option '" << chunks[index] << "' !" "\n";
 
 				continue;
 			}
@@ -180,7 +176,7 @@ namespace EmEn::Libs::Network
 				break;
 
 			default:
-				std::cerr << __PRETTY_FUNCTION__ << ", invalid URI domain, multiple ':' char found in user informations !" "\n";
+				std::cerr << "URIDomain::parseUserInfos(), invalid URI domain, multiple ':' char found in user information !" "\n";
 
 				break;
 		}
@@ -189,28 +185,30 @@ namespace EmEn::Libs::Network
 	std::string
 	URIDomain::userinfo () const noexcept
 	{
-		auto output = m_username;
+		std::stringstream output;
+
+		output << m_username;
 
 		if ( !m_password.empty() )
 		{
-			output += ':' + m_password;
+			output << ':' << m_password;
 		}
 
 		if ( !m_options.empty() )
 		{
-			for ( const auto &option: m_options )
+			for ( const auto & [name, value]: m_options )
 			{
-				output += ';' + option.first + '=' + option.second;
+				output << ';' << name << '=' << value;
 			}
 		}
 
-		return output;
+		return output.str();
 	}
 
 	std::string
 	URIDomain::host () const noexcept
 	{
-		std::stringstream string{};
+		std::stringstream string;
 
 		string << m_hostname;
 
@@ -255,15 +253,5 @@ namespace EmEn::Libs::Network
 		}
 
 		return out;
-	}
-
-	std::string
-	to_string (const URIDomain & obj) noexcept
-	{
-		std::stringstream output;
-
-		output << obj;
-
-		return output.str();
 	}
 }

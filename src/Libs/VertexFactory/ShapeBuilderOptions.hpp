@@ -126,7 +126,7 @@ namespace EmEn::Libs::VertexFactory
 			/**
 			 * @brief Uses a global normal vector.
 			 * @note This will disable the normals automatic generation.
-			 * @param normal A reference to a vector 3.
+			 * @param normal A reference to vector 3.
 			 * @return void
 			 */
 			void
@@ -140,7 +140,7 @@ namespace EmEn::Libs::VertexFactory
 			}
 
 			/**
-			 * @brief Returns whether a global normal is in use.
+			 * @brief Returns whether global normal is in use.
 			 * @return bool
 			 */
 			[[nodiscard]]
@@ -374,7 +374,7 @@ namespace EmEn::Libs::VertexFactory
 			}
 
 			/**
-			 * @brief Returns whether the geometry must be centered at bottom.
+			 * @brief Returns whether the geometry must be centered at the bottom.
 			 * @return bool
 			 */
 			[[nodiscard]]
@@ -385,7 +385,7 @@ namespace EmEn::Libs::VertexFactory
 			}
 
 			/**
-			 * @brief Enables or disables the geometry flipping at the end of generation.
+			 * @brief Enables or disables the geometry flipping at the end of the generation.
 			 * @param state The state.
 			 * @return void
 			 */

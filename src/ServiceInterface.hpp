@@ -26,9 +26,6 @@
 
 #pragma once
 
-/* Engine configuration file. */
-#include "emeraude_config.hpp"
-
 /* STL inclusions. */
 #include <iostream>
 #include <string>
@@ -97,7 +94,7 @@ namespace EmEn
 			{
 				if ( this->usable() )
 				{
-					/* NOTE: This should never happen ! */
+					/* NOTE: This should never happen! */
 					std::cerr <<
 						"The service '" << this->name() << "' looks like already initialized !" "\n"
 						"The method ServiceInterface::usable() must dynamically report if the service has been initialized and usable !" "\n";

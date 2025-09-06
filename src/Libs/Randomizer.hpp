@@ -109,11 +109,25 @@ namespace EmEn::Libs
 
 				if constexpr ( std::is_integral_v< number_t > )
 				{
-					std::uniform_int_distribution< number_t > distribution{min, max};
-
-					for ( auto & value : range )
+					if constexpr (std::is_same_v< number_t, int8_t > || std::is_same_v< number_t, uint8_t > ||
+								  std::is_same_v< number_t, char >   || std::is_same_v< number_t, signed char > ||
+								  std::is_same_v< number_t, unsigned char > || std::is_same_v< number_t, char8_t >)
 					{
-						value = distribution(m_generator);
+						std::uniform_int_distribution< int > distribution{static_cast< int >(min), static_cast< int >(max)};
+
+						for ( auto & value : range )
+						{
+							value = static_cast<number_t>(distribution(m_generator));
+						}
+					}
+					else
+					{
+						std::uniform_int_distribution< number_t > distribution{min, max};
+
+						for ( auto & value : range )
+						{
+							value = distribution(m_generator);
+						}
 					}
 				}
 				else

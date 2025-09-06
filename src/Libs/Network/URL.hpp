@@ -46,17 +46,36 @@ namespace EmEn::Libs::Network
 			URL () noexcept = default;
 
 			/**
-			 * @brief Constructs an URL from a string.
+			 * @brief Constructs a URL from a string.
 			 * @param path A reference to a string.
 			 */
-			explicit URL (const std::string & path) noexcept;
+			explicit
+			URL (const std::string & path) noexcept
+				: URI{path}
+			{
+
+			}
 
 			/**
 			 * @brief Returns whether the URL is valid.
 			 * @return bool.
 			 */
 			[[nodiscard]]
-			bool isValid () const noexcept;
+			bool
+			isValid () const noexcept
+			{
+				if ( this->scheme().empty() )
+				{
+					return false;
+				}
+
+				if ( this->uriDomain().empty() )
+				{
+					return false;
+				}
+
+				return true;
+			}
 
 			/**
 			 * @brief Returns whether the URL is valid.
@@ -64,6 +83,11 @@ namespace EmEn::Libs::Network
 			 * @return bool.
 			 */
 			[[nodiscard]]
-			static bool isURL (const std::string & path) noexcept;
+			static
+			bool
+			isURL (const std::string & path) noexcept
+			{
+				return URL{path}.isValid();
+			}
 	};
 }
