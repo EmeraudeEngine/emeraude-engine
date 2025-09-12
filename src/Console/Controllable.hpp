@@ -124,7 +124,7 @@ namespace EmEn::Console
 			}
 
 			/**
-			 * @brief Register a command for this console controllable object.
+			 * @brief Register a command for this console-controllable object.
 			 * @param commandNames The way of calling the command inside the console.
 			 * @param binding The binding to execute in the command.
 			 * @param help A way to explain that command. By default, "NoHelp" will be displayed.
@@ -138,7 +138,7 @@ namespace EmEn::Console
 			void unbindCommand (const std::string & commandNames) noexcept;
 
 			/**
-			 * @brief Register this controllable object directly to the console.
+			 * @brief Register this controllable object directly in the console.
 			 * @return bool
 			 */
 			bool registerToConsole () noexcept;

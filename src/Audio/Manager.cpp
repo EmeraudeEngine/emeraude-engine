@@ -404,7 +404,7 @@ namespace EmEn::Audio
 
 		/* NOTE: Set up the audio configuration. */
 		this->setMetersPerUnit(1.0F);
-		this->setMasterVolume(settings.getOrSetDefault< float >(AudioMasterVolumeKey, DefaultAudioMasterVolume));
+		this->setMainLevel(settings.getOrSetDefault< float >(AudioMasterVolumeKey, DefaultAudioMasterVolume));
 		m_playbackFrequency = WaveFactory::toFrequency(m_contextAttributes[ALC_FREQUENCY]); /* NOTE: Be sure of the playback frequency allowed by this OpenAL context. */
 		m_musicChunkSize = settings.getOrSetDefault< uint32_t >(AudioMusicChunkSizeKey, DefaultAudioMusicChunkSize);
 
@@ -736,7 +736,7 @@ namespace EmEn::Audio
 	}
 
 	void
-	Manager::setMasterVolume (float gain) noexcept
+	Manager::setMainLevel (float gain) noexcept
 	{
 		if ( !m_audioSystemAvailable )
 		{
@@ -747,7 +747,7 @@ namespace EmEn::Audio
 	}
 
 	float
-	Manager::masterVolume () noexcept
+	Manager::mainLevel () const noexcept
 	{
 		ALfloat gain = 0.0F;
 

@@ -272,17 +272,17 @@ namespace EmEn::Audio
 			}
 
 			/**
-			 * @brief Sets the master volume.
+			 * @brief Sets the main level.
 			 * @param gain The gain from 0.0 to 1.0.
 			 */
-			void setMasterVolume (float gain) noexcept;
+			void setMainLevel (float gain) noexcept;
 
 			/**
-			 * @brief Returns the master volume.
+			 * @brief Returns the  main level.
 			 * @return float
 			 */
 			[[nodiscard]]
-			float masterVolume () noexcept;
+			float mainLevel () const noexcept;
 
 			/**
 			 * @brief Changes the sound properties.

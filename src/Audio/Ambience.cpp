@@ -54,7 +54,7 @@ namespace EmEn::Audio
 	{
 		if ( this->requestLoopChannel() )
 		{
-			m_loopedSource = Manager::instance()->requestSource();
+			m_loopedSource = m_audioManager.requestSource();
 
 			if ( m_loopedSource == nullptr )
 			{
@@ -83,11 +83,9 @@ namespace EmEn::Audio
 			{
 				m_channels.clear();
 
-				auto * audioManager = Manager::instance();
-
 				for ( size_t channelIndex = 0; channelIndex < m_channelCount; channelIndex++ )
 				{
-					auto source = audioManager->requestSource();
+					auto source = m_audioManager.requestSource();
 
 					if ( source == nullptr )
 					{
