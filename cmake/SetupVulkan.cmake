@@ -16,10 +16,15 @@ elseif ( APPLE )
 		message(FATAL_ERROR "The Vulkan SDK is not found in '${VULKAN_SDK_PATH}' ! You can download it from: https://sdk.lunarg.com/sdk/download/${VULKAN_SDK_VERSION}/mac/vulkansdk-macos-${VULKAN_SDK_VERSION}.zip")
 	endif ()
 
-	find_package(Vulkan REQUIRED COMPONENTS MoltenVK)
+	find_package(Vulkan REQUIRED)
 
 	target_include_directories(${TARGET_BINARY_FOR_SETUP} PUBLIC ${Vulkan_INCLUDE_DIRS})
-	target_link_libraries(${TARGET_BINARY_FOR_SETUP} PUBLIC Vulkan::Vulkan Vulkan::MoltenVK "-framework Metal")
+	target_link_libraries(${TARGET_BINARY_FOR_SETUP} PUBLIC Vulkan::Vulkan)
+
+	# Fails on M4, because it integrate MoltenVK inside the binary.
+	#find_package(Vulkan REQUIRED COMPONENTS MoltenVK)
+	#target_include_directories(${TARGET_BINARY_FOR_SETUP} PUBLIC ${Vulkan_INCLUDE_DIRS})
+	#target_link_libraries(${TARGET_BINARY_FOR_SETUP} PUBLIC Vulkan::Vulkan Vulkan::MoltenVK "-framework Metal" "-framework AppKit" "-framework QuartzCore" "-framework IOSurface" "-framework Foundation")
 
 	# On some project, the clang compiler refuse to look at '/usr/local/include'
 	target_compile_options(${TARGET_BINARY_FOR_SETUP} PUBLIC "-I/usr/local/include")
