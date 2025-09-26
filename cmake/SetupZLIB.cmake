@@ -25,5 +25,3 @@ else ()
 		target_link_libraries(${TARGET_BINARY_FOR_SETUP} PUBLIC ${LOCAL_LIB_DIR}/lib/libz.a) # Change to 'z' when new version of zlib will be released
 	endif ()
 endif ()
-
-set(ZLIB_ENABLED On)

@@ -161,14 +161,7 @@ namespace EmEn::Libs::WaveFactory
 			bool
 			readFile (const std::filesystem::path & filepath) noexcept
 			{
-				#ifdef SNDFILE_ENABLED
 				std::cerr << __PRETTY_FUNCTION__ << ", this precision format is not handled to write '" << filepath << "' !" "\n";
-				#else
-				std::cerr <<
-					__PRETTY_FUNCTION__ << '\n' <<
-					"Unable to read the sound file '" << filepath << "'. "
-					"Libsndfile is not available ! Compile the engine with -DEMERAUDE_ENABLE_SNDFILE=1" "\n";
-				#endif
 
 				return false;
 			}
@@ -181,14 +174,7 @@ namespace EmEn::Libs::WaveFactory
 			bool
 			writeFile (const std::filesystem::path & filepath) noexcept
 			{
-				#ifdef SNDFILE_ENABLED
 				std::cerr << __PRETTY_FUNCTION__ << ", this precision format is not handled to write '" << filepath << "' !" "\n";
-				#else
-				std::cerr <<
-					__PRETTY_FUNCTION__ << '\n' <<
-					"Unable to write the sound file '" << filepath << "'. "
-					"Libsndfile is not available ! Compile the engine with -DEMERAUDE_ENABLE_SNDFILE=1" "\n";
-				#endif
 
 				return false;
 			}
@@ -447,15 +433,11 @@ namespace EmEn::Libs::WaveFactory
 			Frequency m_frequency = Frequency::Invalid;
 	};
 
-#ifdef SNDFILE_ENABLED
-
 	template<>
 	bool Wave< int16_t >::readFile (const std::filesystem::path & filepath) noexcept;
 
 	template<>
 	bool Wave< int16_t >::writeFile (const std::filesystem::path & filepath) noexcept;
-
-#endif
 
 	/**
 	 * @brief Converts a wave format to another one.

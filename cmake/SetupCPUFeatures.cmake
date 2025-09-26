@@ -15,6 +15,3 @@ endif ()
 		target_link_libraries(${TARGET_BINARY_FOR_SETUP} PUBLIC ${LOCAL_LIB_DIR}/lib/libcpu_features.a)
 	endif ()
 #endif ()
-
-set(CPUFEATURES_ENABLED On)
-

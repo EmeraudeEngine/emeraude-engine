@@ -32,5 +32,3 @@ else ()
 	target_link_directories(${TARGET_BINARY_FOR_SETUP} PUBLIC ${SNDFILE_LIBRARY_DIRS})
 	target_link_libraries(${TARGET_BINARY_FOR_SETUP} PUBLIC ${SNDFILE_LIBRARIES})
 endif ()
-
-set(SNDFILE_ENABLED On)

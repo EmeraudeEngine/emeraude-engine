@@ -21,5 +21,3 @@ else ()
 		target_link_libraries(${TARGET_BINARY_FOR_SETUP} PUBLIC ${LOCAL_LIB_DIR}/lib/libsamplerate.a)
 	endif ()
 endif ()
-
-set(SAMPLERATE_ENABLED On)

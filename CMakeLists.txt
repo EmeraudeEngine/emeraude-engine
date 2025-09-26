@@ -50,24 +50,16 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/$<CONFIG>")
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/$<CONFIG>")
 
 # Emeraude libraries project variables and options.
+set(EMERAUDE_INTERNET_CHECK_DOMAIN "google.com" CACHE STRING "Web domain to check internet connexion (Default google.com).")
+set(EMERAUDE_COMPILATION_DIR "" CACHE STRING "Declare where the project is compiled. For macOS this should point the 'package.app' in the compilation folder.")
 option(EMERAUDE_ENABLE_TESTS "Enable the Emeraude-Engine testing suite (Default Off)." Off)
 option(EMERAUDE_ENABLE_PCH "Enable 'PreCompiled Headers' feature to speed up the compilation (Default Off)." Off)
 option(EMERAUDE_USE_STATIC_RUNTIME "Build Emeraude-Engine with the static MSVC runtime (Windows Only, Default Off)." Off)
 option(EMERAUDE_USE_SYSTEM_LIBS "Use the system for common libraries instead of the embedded ones (Deprecated, Default Off)." Off)
-set(EMERAUDE_INTERNET_CHECK_DOMAIN "google.com" CACHE STRING "Web domain to check internet connexion (Default google.com).")
-set(EMERAUDE_COMPILATION_DIR "" CACHE STRING "Declare where the project is compiled. For macOS this should point the 'package.app' in the compilation folder.")
+option(EMERAUDE_ENABLE_TSAN "Enable 'ThreadSanitizer' library. Adds a dev tool to trace data race [SYSTEM] (Linux only, Default Off)." Off)
 set(EMERAUDE_ENABLE_OPENMP On CACHE BOOL "Enable 'libomp' library [SYSTEM] (Default On).")
-set(EMERAUDE_ENABLE_SNDFILE On CACHE BOOL "Enable 'libsndfile' library. Adds the ability to read a wide range of sound formats [SYSTEM] (Default On).")
-set(EMERAUDE_ENABLE_SAMPLERATE On CACHE BOOL "Enable 'libsamplerate' library. Adds the ability to resample a sound on the fly to meet OpenAL settings [SYSTEM|LOCAL] (Default On).")
 set(EMERAUDE_ENABLE_ASIO On CACHE BOOL "Enable 'libasio' library. Adds the networking ability [SYSTEM|LOCAL] (Default On).")
-set(EMERAUDE_ENABLE_CPUFEATURES On CACHE BOOL "Enable 'cpu_features' library. Adds the cpu identification ability [LOCAL] (Default On).")
-set(EMERAUDE_ENABLE_HWLOC On CACHE BOOL "Enable 'HWLOC' library. Adds the cpu cores/threads info ability [SYSTEM|LOCAL] (Default On).")
-set(EMERAUDE_ENABLE_OPENAL On CACHE BOOL "Enable 'libopenal' library. Adds the audio to the engine [LOCAL] (Default On).")
-set(EMERAUDE_ENABLE_TAGLIB On CACHE BOOL "Enable 'libtaglib' library. Adds the ability to read media file tags [SYSTEM] (Default On).")
 set(EMERAUDE_ENABLE_IMGUI Off CACHE BOOL "Enable 'libimgui' library. Adds a GUI to the engine [LOCAL] (Default Off).")
-set(EMERAUDE_ENABLE_BULLET Off CACHE BOOL "Enable 'libBullet' library. Adds the Bullet physics engine [SYSTEM] (Default Off).")
-set(EMERAUDE_ENABLE_FASTGLTF Off CACHE BOOL "Enable 'fastgltf' library. Adds a glTF file format reader [SYSTEM] (Default Off).")
-set(EMERAUDE_ENABLE_TSAN Off CACHE BOOL "Enable 'ThreadSanitizer' library. Adds a dev tool to trace data race [SYSTEM] (Linux only, Default Off).")
 # Debug preprocessor macros control (Ignored in Release).
 option(EMERAUDE_DEBUG_OBSERVER_PATTERN "Enable the debug output of observer pattern (Default Off)." Off)
 option(EMERAUDE_DEBUG_PIXEL_FACTORY "Enable the debug output of pixel factory library (Default Off)." Off)
@@ -382,7 +374,7 @@ include(SetupZIP)
 include(SetupPNG)
 
 # Request : zlib
-if ( NOT EMERAUDE_BUILD_SERVICES_ONLY AND EMERAUDE_ENABLE_TAGLIB )
+if ( NOT EMERAUDE_BUILD_SERVICES_ONLY )
 	include(SetupTagLib)
 endif ()
 
@@ -410,6 +402,14 @@ if ( EMERAUDE_ENABLE_ASIO )
 	endif ()
 endif ()
 
+include(SetupSndFile)
+
+include(SetupSampleRate)
+
+include(SetupCPUFeatures)
+
+include(SetupHWLOC)
+
 if ( NOT EMERAUDE_BUILD_SERVICES_ONLY )
 	include(SetupThreads)
 
@@ -419,41 +419,22 @@ if ( NOT EMERAUDE_BUILD_SERVICES_ONLY )
 
 	include(SetupReproc) # Using add_subdirectory()
 
+	include(SetupFastGLTF) # Using add_subdirectory()
+
 	if ( EMERAUDE_ENABLE_OPENMP AND NOT APPLE )
 		include(SetupOpenMP)
 	endif ()
 
-	if ( EMERAUDE_ENABLE_OPENAL )
-		include(SetupOpenAL)
-	endif ()
-
-	if ( EMERAUDE_ENABLE_SNDFILE )
-		include(SetupSndFile)
-	endif ()
-
-	if ( EMERAUDE_ENABLE_SAMPLERATE )
-		include(SetupSampleRate)
-	endif ()
-
-	if ( EMERAUDE_ENABLE_CPUFEATURES )
-		include(SetupCPUFeatures)
-	endif ()
-
-	if ( EMERAUDE_ENABLE_HWLOC )
-		include(SetupHWLOC)
-	endif ()
+	include(SetupOpenAL)
 
 	if ( EMERAUDE_ENABLE_IMGUI )
 		include(SetupPostSourcesImGui)
 	endif ()
-
-	if ( EMERAUDE_ENABLE_BULLET )
-		include(SetupBullet)
-	endif()
-
-	if ( EMERAUDE_ENABLE_FASTGLTF )
-		include(SetupFastGLTF) # Using add_subdirectory()
-	endif()
+else ()
+	# NOTE: Work-around for multi-builds
+	if ( EMERAUDE_ENABLE_IMGUI )
+		set(IMGUI_ENABLED On)
+	endif ()
 endif ()
 
 unset(TARGET_BINARY_FOR_SETUP)

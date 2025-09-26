@@ -29,5 +29,3 @@ else ()
 		endif ()
 	endif ()
 endif ()
-
-set(PNG_ENABLED On)

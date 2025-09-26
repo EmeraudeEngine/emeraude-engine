@@ -23,8 +23,6 @@ else ()
 	endif ()
 endif ()
 
-set(FREETYPE_ENABLED On)
-
 if ( UNIX AND NOT APPLE )
 	message("Enabling Fontconfig library from system ...")
 
@@ -32,6 +30,4 @@ if ( UNIX AND NOT APPLE )
 
 	target_include_directories(${TARGET_BINARY_FOR_SETUP} PUBLIC ${Fontconfig_INCLUDE_DIRS})
 	target_link_libraries(${TARGET_BINARY_FOR_SETUP} PUBLIC ${Fontconfig_LIBRARIES})
-
-	set(FONTCONFIG_ENABLED On)
 endif ()

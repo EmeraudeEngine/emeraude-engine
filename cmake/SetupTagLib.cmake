@@ -23,6 +23,3 @@ else ()
 		target_link_libraries(${TARGET_BINARY_FOR_SETUP} PUBLIC ${LOCAL_LIB_DIR}/lib/libtag.a)
 	endif ()
 endif ()
-
-set(TAGLIB_ENABLED On)
-

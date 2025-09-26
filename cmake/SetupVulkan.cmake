@@ -72,5 +72,3 @@ set(ENABLE_EXCEPTIONS Off CACHE BOOL "" FORCE)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/dependencies/glslang EXCLUDE_FROM_ALL)
 
 target_link_libraries(${TARGET_BINARY_FOR_SETUP} PUBLIC SPIRV glslang)
-
-set(VULKAN_ENABLED On)

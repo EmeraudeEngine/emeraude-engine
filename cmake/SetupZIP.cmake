@@ -17,6 +17,3 @@ else ()
 
 	target_link_libraries(${TARGET_BINARY_FOR_SETUP} PUBLIC zip)
 endif ()
-
-set(LIBZIP_ENABLED On)
-

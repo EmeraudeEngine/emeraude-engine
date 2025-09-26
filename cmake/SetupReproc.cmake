@@ -28,5 +28,3 @@ target_include_directories(${TARGET_BINARY_FOR_SETUP} PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/reproc/reproc++/include
 )
 target_link_libraries(${TARGET_BINARY_FOR_SETUP} PUBLIC reproc reproc++)
-
-set(REPROC_ENABLED On)

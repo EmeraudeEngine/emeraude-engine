@@ -29,5 +29,3 @@ else ()
 		target_link_libraries(${TARGET_BINARY_FOR_SETUP} PUBLIC ${LOCAL_LIB_DIR}/lib/libopenal.a)
 	endif ()
 endif ()
-
-set(OPENAL_ENABLED On)

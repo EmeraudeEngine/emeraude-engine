@@ -26,5 +26,3 @@ else ()
 		endif ()
 	endif ()
 endif ()
-
-set(HWLOC_ENABLED On)

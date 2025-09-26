@@ -21,5 +21,3 @@ else ()
 		target_link_libraries(${TARGET_BINARY_FOR_SETUP} PUBLIC jpeg)
 	endif ()
 endif ()
-
-set(JPEG_ENABLED On)

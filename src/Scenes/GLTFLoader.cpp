@@ -26,17 +26,11 @@
 
 #include "GLTFLoader.hpp"
 
-/* Application configuration. */
-#include "emeraude_config.hpp"
-
 /* 3rd inclusions. */
-#ifdef FASTGLTF_ENABLED
 #include "fastgltf/core.hpp"
-#endif
 
 namespace EmEn::Scenes
 {
-#ifdef FASTGLTF_ENABLED
 	bool
 	GLTFLoader::load (const std::filesystem::path & filepath) noexcept
 	{
@@ -49,11 +43,4 @@ namespace EmEn::Scenes
 
 		return true;
 	}
-#else
-	bool
-	GLTFLoader::load (const std::filesystem::path & /*filepath*/) noexcept
-	{
-		return false;
-	}
-#endif
 }

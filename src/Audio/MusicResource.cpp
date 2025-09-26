@@ -26,14 +26,9 @@
 
 #include "MusicResource.hpp"
 
-/* Engine configuration file. */
-#include "emeraude_config.hpp"
-
 /* Third-party inclusions. */
-#ifdef TAGLIB_ENABLED
-	#include "taglib/tag.h"
-	#include "taglib/fileref.h"
-#endif
+#include "taglib/tag.h"
+#include "taglib/fileref.h"
 
 /* Local inclusions. */
 #include "Libs/WaveFactory/Processor.hpp"
@@ -73,7 +68,6 @@ namespace EmEn::Audio
 	void
 	MusicResource::readMetaData (const std::filesystem::path & filepath) noexcept
 	{
-#ifdef TAGLIB_ENABLED
 		const TagLib::FileRef file(filepath.c_str());
 
 		if ( file.isNull() )
@@ -94,12 +88,6 @@ namespace EmEn::Audio
 
 		m_title = tag->title().to8Bit(true);
 		m_artist = tag->artist().to8Bit(true);
-#else
-		TraceWarning{ClassId} << "TagLib has been disabled! Unable to read audio metadata from '" << filepath << "' !";
-
-		m_title = "UnknownTitle";
-		m_artist = "UnknownArtist";
-#endif
 	}
 
 	bool

@@ -34,9 +34,7 @@
 #include <iostream>
 
 /* Third-party inclusions. */
-#ifdef SNDFILE_ENABLED
-	#include "sndfile.h"
-#endif
+#include "sndfile.h"
 
 /* Local inclusions. */
 #include "Libs/IO/IO.hpp"
@@ -44,8 +42,6 @@
 
 namespace EmEn::Libs::WaveFactory
 {
-#ifdef SNDFILE_ENABLED
-
 	template<>
 	bool
 	Wave< int16_t >::readFile (const std::filesystem::path & filepath) noexcept
@@ -79,7 +75,7 @@ namespace EmEn::Libs::WaveFactory
 
 		/* 2. Read information. */
 		const auto samples = static_cast< size_t >(soundFileInfos.frames);
-		auto channels = toChannels(soundFileInfos.channels);
+		const auto channels = toChannels(soundFileInfos.channels);
 		const auto frequency = toFrequency(soundFileInfos.samplerate);
 
 		if ( channels == Channels::Invalid )
@@ -157,5 +153,4 @@ namespace EmEn::Libs::WaveFactory
 
 		return true;
 	}
-#endif
 }
