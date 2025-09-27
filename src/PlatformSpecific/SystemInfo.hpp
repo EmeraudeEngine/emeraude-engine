@@ -29,6 +29,7 @@
 /* STL inclusions. */
 #include <string>
 #include <ostream>
+#include <sstream>
 #include <vector>
 #include <filesystem>
 

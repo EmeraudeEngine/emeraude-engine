@@ -22,7 +22,7 @@ else ()
 		target_link_libraries(${TARGET_BINARY_FOR_SETUP} PUBLIC ${LOCAL_LIB_DIR}/lib/libhwloc.a)
 
 		if ( APPLE )
-			target_link_libraries(${TARGET_BINARY_FOR_SETUP} PUBLIC "-framework IOKit")
+			target_link_libraries(${TARGET_BINARY_FOR_SETUP} PUBLIC "-framework CoreFoundation -framework IOKit")
 		endif ()
 	endif ()
 endif ()
