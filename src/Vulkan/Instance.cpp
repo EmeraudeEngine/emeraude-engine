@@ -655,8 +655,22 @@ namespace EmEn::Vulkan
 		auto logicalDevice = std::make_shared< Device >(selectedPhysicalDevice->propertiesVK10().deviceName, selectedPhysicalDevice, showInformation);
 		logicalDevice->setIdentifier(ClassId, (std::stringstream{} << selectedPhysicalDevice->propertiesVK10().deviceName << "(Graphics)").str(), "Device");
 
+		/* Check window */
+		if ( window != nullptr )
+		{
+			if ( !window->usable() )
+			{
+				Tracer::error(ClassId, "The window is not usable !");
+
+				return {};
+			}
+
+			/* NOTE: Be sure the selected device is the one that update the surface. */
+			window->surface()->update(logicalDevice);
+		}
+
 		/* [VULKAN-API-SETUP] Graphics device features configuration. */
-		DeviceRequirements requirements{DeviceWorkType::Graphics};
+		DeviceRequirements requirements{true, window, false};
 		requirements.featuresVK10().fillModeNonSolid = VK_TRUE; // Required for wireframe mode!
 		if constexpr ( !IsMacOS )
 		{
@@ -665,16 +679,6 @@ namespace EmEn::Vulkan
 		}
 		requirements.featuresVK10().samplerAnisotropy = VK_TRUE;
 		requirements.featuresVK13().shaderDemoteToHelperInvocation = VK_TRUE;
-		requirements.requireGraphicsQueues({1.0F}, {0.5F});
-		requirements.requireTransferQueues({1.0F});
-
-		if ( window != nullptr && window->usable() )
-		{
-			/* NOTE: Be sure the selected device is the one that update the surface. */
-			window->surface()->update(logicalDevice);
-
-			requirements.requirePresentationQueues({1.0F}, window->surface()->handle(), false);
-		}
 
 		if ( !logicalDevice->create(requirements, m_requiredGraphicsDeviceExtensions) )
 		{
@@ -750,9 +754,7 @@ namespace EmEn::Vulkan
 		auto logicalDevice = std::make_shared< Device >(selectedPhysicalDevice->propertiesVK10().deviceName, selectedPhysicalDevice, showInformation);
 		logicalDevice->setIdentifier(ClassId, (std::stringstream{} << selectedPhysicalDevice->propertiesVK10().deviceName << "(Physics)").str(), "Device");
 
-		DeviceRequirements requirements{DeviceWorkType::Compute};
-		requirements.requireComputeQueues({1.0F}, {0.5F});
-		requirements.requireTransferQueues({1.0F});
+		DeviceRequirements requirements{false, nullptr, true};
 
 		if ( !logicalDevice->create(requirements, requiredExtensions) )
 		{

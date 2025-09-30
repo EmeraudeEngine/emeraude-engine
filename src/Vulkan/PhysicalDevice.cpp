@@ -623,16 +623,14 @@ namespace EmEn::Vulkan
 					flags.emplace_back("VideoDecode");
 				}
 
-#ifdef VK_ENABLE_BETA_EXTENSIONS
 				if ( (familyQueue.queueFamilyProperties.queueFlags & VK_QUEUE_VIDEO_ENCODE_BIT_KHR) != 0 )
 				{
 					flags.emplace_back("VideoEncode");
 				}
-#endif
 
-				/* Optical flow are fundamental algorithms in computer vision (CV) area.
+				/* Optical flow is fundamental algorithms in computer vision (CV) area.
 				 * This extension allows applications to estimate 2D displacement of pixels between two frames.
-				 * For use with : NVIDIA Optical Flow SDK Version 5 */
+				 * For use with: NVIDIA Optical Flow SDK Version 5 */
 				if ( (familyQueue.queueFamilyProperties.queueFlags & VK_QUEUE_OPTICAL_FLOW_BIT_NV) != 0 )
 				{
 					flags.emplace_back("OpticalFlow");

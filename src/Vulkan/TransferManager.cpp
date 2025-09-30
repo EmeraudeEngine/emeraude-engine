@@ -53,7 +53,7 @@ namespace EmEn::Vulkan
 			return false;
 		}
 
-		m_transferCommandPool = std::make_shared< CommandPool >(m_device, m_device->getTransferFamilyIndex(), true, false, false);
+		m_transferCommandPool = std::make_shared< CommandPool >(m_device, m_device->getGraphicsTransferFamilyIndex(), true, false, false);
 		m_transferCommandPool->setIdentifier(ClassId, "Transfer", "CommandPool");
 
 		if ( !m_transferCommandPool->createOnHardware() )
@@ -232,7 +232,7 @@ namespace EmEn::Vulkan
 			return false;
 		}
 
-		auto * queue = m_device->getQueue(QueueJob::Transfer, QueuePriority::Medium);
+		auto * queue = m_device->getGraphicsTransferQueue(QueuePriority::Medium);
 
 		if ( !queue->submit(commandBuffer, SynchInfo{}.withFence(fence->handle())) )
 		{
@@ -335,7 +335,7 @@ namespace EmEn::Vulkan
 
 			if ( commandBuffer->end() )
 			{
-				auto * queue = m_device->getQueue(QueueJob::Transfer, QueuePriority::Medium);
+				auto * queue = m_device->getGraphicsTransferQueue(QueuePriority::Medium);
 
 				VkSemaphore semaphoreHandle = transferCompleteSemaphore.handle();
 
@@ -462,7 +462,7 @@ namespace EmEn::Vulkan
 
 			if ( commandBuffer->end() )
 			{
-				auto * queue = m_device->getQueue(QueueJob::GraphicsTransfer, QueuePriority::Medium);
+				auto * queue = m_device->getGraphicsQueue(QueuePriority::Medium);
 
 				VkSemaphore semaphoreHandle = transferCompleteSemaphore.handle();
 				VkPipelineStageFlags waitStage = VK_PIPELINE_STAGE_TRANSFER_BIT;

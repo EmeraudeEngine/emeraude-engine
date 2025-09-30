@@ -538,7 +538,7 @@ namespace EmEn::Graphics
 			}
 
 			/* TODO/FIXME: Secure access to the queue. */
-			const auto * queue = this->device()->getQueue(QueueJob::Graphics, QueuePriority::High);
+			const auto * queue = this->device()->getGraphicsAndPresentationQueue(QueuePriority::High);
 			const auto fence = m_offscreenView->fence();
 
 			if ( !fence->waitAndReset(250000000) )
@@ -691,7 +691,7 @@ namespace EmEn::Graphics
 	Renderer::renderShadowMaps (uint32_t frameIndex, Scenes::Scene & scene) noexcept
 	{
 		/* TODO/FIXME: Secure access to the queue. */
-		const auto * queue = this->device()->getQueue(QueueJob::Graphics, QueuePriority::High);
+		const auto * queue = this->device()->getGraphicsQueue(QueuePriority::High);
 
 		scene.forEachRenderToShadowMap([&] (const std::shared_ptr< RenderTarget::Abstract > & shadowMap) {
 			if constexpr ( IsDebug )
@@ -759,7 +759,7 @@ namespace EmEn::Graphics
 	Renderer::renderRenderToTextures (uint32_t frameIndex, Scenes::Scene & scene) noexcept
 	{
 		/* TODO/FIXME: Secure access to the queue. */
-		const auto * queue = this->device()->getQueue(QueueJob::Graphics, QueuePriority::High);
+		const auto * queue = this->device()->getGraphicsQueue(QueuePriority::High);
 
 		scene.forEachRenderToTexture([&] (const std::shared_ptr< RenderTarget::Abstract > & renderToTexture)
 		{

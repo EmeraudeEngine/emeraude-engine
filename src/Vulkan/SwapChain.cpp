@@ -832,7 +832,7 @@ namespace EmEn::Vulkan
 			const StaticVector< VkPipelineStageFlags, 16 > waitStages(waitSemaphores.size(), VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
 
 			const auto submitted = this->device()
-				->getQueue(QueueJob::Graphics, QueuePriority::High)
+				->getGraphicsQueue(QueuePriority::High)
 				->submit(
 					commandBuffer,
 					SynchInfo{}
@@ -861,7 +861,7 @@ namespace EmEn::Vulkan
 			presentInfo.pImageIndices = &imageIndex;
 			presentInfo.pResults = nullptr;
 
-			if ( !this->device()->getQueue(QueueJob::Presentation, QueuePriority::High)->present(&presentInfo, swapChainRecreationNeeded) )
+			if ( !this->device()->getGraphicsAndPresentationQueue(QueuePriority::High)->present(&presentInfo, swapChainRecreationNeeded) )
 			{
 				if ( swapChainRecreationNeeded )
 				{
