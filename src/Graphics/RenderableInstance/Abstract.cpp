@@ -56,7 +56,7 @@ namespace EmEn::Graphics::RenderableInstance
 	bool
 	Abstract::isReadyToCastShadows (const std::shared_ptr< RenderTarget::Abstract > & renderTarget) const noexcept
 	{
-		/* [VULKAN-CPU-SYNC] */
+		/* [VULKAN-CPU-SYNC] Maybe useless */
 		const std::lock_guard< std::mutex > lock{m_GPUMemoryAccess};
 
 		const auto renderTargetIt = m_renderTargetPrograms.find(renderTarget);
@@ -72,7 +72,7 @@ namespace EmEn::Graphics::RenderableInstance
 	bool
 	Abstract::isReadyToRender (const std::shared_ptr< RenderTarget::Abstract > & renderTarget) const noexcept
 	{
-		/* [VULKAN-CPU-SYNC] */
+		/* [VULKAN-CPU-SYNC] Maybe useless */
 		const std::lock_guard< std::mutex > lock{m_GPUMemoryAccess};
 
 		const auto renderTargetIt = m_renderTargetPrograms.find(renderTarget);
@@ -88,7 +88,7 @@ namespace EmEn::Graphics::RenderableInstance
 	RenderTargetProgramsInterface *
 	Abstract::getOrCreateRenderTargetProgramInterface (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, uint32_t layerCount)
 	{
-		/* [VULKAN-CPU-SYNC] */
+		/* [VULKAN-CPU-SYNC] Maybe useless */
 		const std::lock_guard< std::mutex > lock{m_GPUMemoryAccess};
 
 		if ( layerCount > 1 )
@@ -290,7 +290,7 @@ namespace EmEn::Graphics::RenderableInstance
 	bool
 	Abstract::refreshGraphicsPipelines (const std::shared_ptr< RenderTarget::Abstract > & renderTarget) noexcept
 	{
-		/* [VULKAN-CPU-SYNC] */
+		/* [VULKAN-CPU-SYNC] Maybe useless */
 		const std::lock_guard< std::mutex > lock{m_GPUMemoryAccess};
 
 		const auto renderTargetIt = m_renderTargetPrograms.find(renderTarget);
@@ -306,7 +306,7 @@ namespace EmEn::Graphics::RenderableInstance
 	void
 	Abstract::destroyGraphicsPipelines (const std::shared_ptr< RenderTarget::Abstract > & renderTarget) noexcept
 	{
-		/* [VULKAN-CPU-SYNC] */
+		/* [VULKAN-CPU-SYNC] Maybe useless */
 		const std::lock_guard< std::mutex > lock{m_GPUMemoryAccess};
 
 		m_renderTargetPrograms.erase(renderTarget);
@@ -315,7 +315,7 @@ namespace EmEn::Graphics::RenderableInstance
 	void
 	Abstract::castShadows (uint32_t readStateIndex, const std::shared_ptr< RenderTarget::Abstract > & renderTarget, uint32_t layerIndex, const CartesianFrame< float > * worldCoordinates, const CommandBuffer & commandBuffer) const noexcept
 	{
-		/* [VULKAN-CPU-SYNC] */
+		/* [VULKAN-CPU-SYNC] Maybe useless */
 		const std::lock_guard< std::mutex > lock{m_GPUMemoryAccess};
 
 		const auto renderTargetProgramsIt = m_renderTargetPrograms.find(renderTarget);
@@ -361,7 +361,7 @@ namespace EmEn::Graphics::RenderableInstance
 	void
 	Abstract::render (uint32_t readStateIndex, const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const Scenes::Component::AbstractLightEmitter * lightEmitter, RenderPassType renderPassType, uint32_t layerIndex, const CartesianFrame< float > * worldCoordinates, const CommandBuffer & commandBuffer) const noexcept
 	{
-		/* [VULKAN-CPU-SYNC] */
+		/* [VULKAN-CPU-SYNC] Maybe useless */
 		const std::lock_guard< std::mutex > lock{m_GPUMemoryAccess};
 
 		const auto renderTargetProgramsIt = m_renderTargetPrograms.find(renderTarget);
@@ -439,7 +439,7 @@ namespace EmEn::Graphics::RenderableInstance
 	void
 	Abstract::renderTBNSpace (uint32_t readStateIndex, const std::shared_ptr< RenderTarget::Abstract > & renderTarget, uint32_t layerIndex, const CartesianFrame< float > * worldCoordinates, const CommandBuffer & commandBuffer) const noexcept
 	{
-		/* [VULKAN-CPU-SYNC] */
+		/* [VULKAN-CPU-SYNC] Maybe useless */
 		const std::lock_guard< std::mutex > lock{m_GPUMemoryAccess};
 
 		const auto renderTargetProgramsIt = m_renderTargetPrograms.find(renderTarget);

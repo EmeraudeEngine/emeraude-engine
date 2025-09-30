@@ -289,7 +289,7 @@ namespace EmEn::Graphics::RenderableInstance
 	bool
 	Multiple::createOnHardware (const std::shared_ptr< Device > & device) noexcept
 	{
-		/* [VULKAN-CPU-SYNC] */
+		/* [VULKAN-CPU-SYNC] Maybe useless */
 		const std::lock_guard< std::mutex > lock{m_GPUMemoryAccess};
 
 		if ( this->isModelMatricesCreated() )
@@ -320,7 +320,7 @@ namespace EmEn::Graphics::RenderableInstance
 	bool
 	Multiple::updateVideoMemory () noexcept
 	{
-		/* [VULKAN-CPU-SYNC] */
+		/* [VULKAN-CPU-SYNC] Maybe useless */
 		const std::lock_guard< std::mutex > lock{m_GPUMemoryAccess};
 
 		if constexpr ( IsDebug )

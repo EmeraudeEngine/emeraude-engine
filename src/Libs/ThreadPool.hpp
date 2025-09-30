@@ -88,7 +88,7 @@ namespace EmEn::Libs
 
 			std::vector< std::thread > m_workers;
 			std::queue< std::function< void () > > m_tasks;
-			std::mutex m_queueAccess;
+			std::mutex m_threadAccess;
 			std::condition_variable m_condition;
 			std::condition_variable m_completion_condition;
 			size_t m_busyWorkers{0};

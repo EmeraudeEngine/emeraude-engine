@@ -47,26 +47,6 @@
 namespace EmEn::Vulkan
 {
 	/**
-	 * @brief swap-chain frame structure.
-	 */
-	struct Frame
-	{
-		/* Framebuffer configuration holder. */
-		std::unique_ptr< Framebuffer > framebuffer;
-		/* Color buffer */
-		std::shared_ptr< Image > colorImage;
-		std::shared_ptr< ImageView > colorImageView;
-		/* Depth+Stencil buffers. */
-		std::shared_ptr< Image > depthStencilImage;
-		std::shared_ptr< ImageView > depthImageView;
-		std::shared_ptr< ImageView > stencilImageView;
-		/* Synchronization. */
-		std::unique_ptr< Sync::Semaphore > imageAvailableSemaphore;
-		std::unique_ptr< Sync::Semaphore > renderFinishedSemaphore;
-		std::unique_ptr< Sync::Fence > inFlightFence;
-	};
-
-	/**
 	 * @brief The vulkan swap-chain class.
 	 * @extends EmEn::Vulkan::AbstractDeviceDependentObject This object needs a device.
 	 * @extends EmEn::Graphics::RenderTarget::Abstract This is a render target.
@@ -158,7 +138,7 @@ namespace EmEn::Vulkan
 			const Framebuffer *
 			framebuffer () const noexcept override
 			{
-				return m_frames[m_currentFrame].framebuffer.get();
+				return m_frames[m_acquiredImageIndex].framebuffer.get();
 			}
 
 			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::image() const */
@@ -166,7 +146,7 @@ namespace EmEn::Vulkan
 			std::shared_ptr< Image >
 			image () const noexcept override
 			{
-				return m_frames[m_currentFrame].colorImage;
+				return m_frames[m_acquiredImageIndex].colorImage;
 			}
 
 			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::imageView() const */
@@ -174,7 +154,7 @@ namespace EmEn::Vulkan
 			std::shared_ptr< ImageView >
 			imageView () const noexcept override
 			{
-				return m_frames[m_currentFrame].colorImageView;
+				return m_frames[m_acquiredImageIndex].colorImageView;
 			}
 
 			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::viewMatrices() const */
@@ -266,19 +246,23 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Acquires the next image index available in the swap-chain.
+			 * @param imageAvailableSemaphore A pointer to the previous frame semaphore.
+			 * @param timeout The timeout to acquire an image.
 			 * @return std::optional< uint32_t >
 			 */
 			[[nodiscard]]
-			std::optional< uint32_t > acquireNextImage () noexcept;
+			std::optional< uint32_t > acquireNextImage (const Sync::Semaphore * imageAvailableSemaphore, uint64_t timeout) noexcept;
 
 			/**
 			 * @brief Submits command buffer to the current rendering image.
 			 * @param commandBuffer A reference to a command buffer smart pointer.
 			 * @param imageIndex The current rendering image index.
 			 * @param callerWaitSemaphores A reference to a semaphore container.
+			 * @param renderFinishedSemaphore A pointer to semaphore to signal.
+			 * @param inFlightFence A pointer to the in-flight fence.
 			 * @return bool
 			 */
-			bool submitCommandBuffer (const std::shared_ptr< CommandBuffer > & commandBuffer, const uint32_t & imageIndex, const Libs::StaticVector< VkSemaphore, 16 > & callerWaitSemaphores) noexcept;
+			bool submitCommandBuffer (const std::shared_ptr< CommandBuffer > & commandBuffer, const uint32_t & imageIndex, const Libs::StaticVector< VkSemaphore, 16 > & callerWaitSemaphores, const Sync::Semaphore * renderFinishedSemaphore, const Sync::Fence * inFlightFence) noexcept;
 
 			/**
 			 * @brief Returns the current status of the swap-chain.
@@ -447,11 +431,20 @@ namespace EmEn::Vulkan
 			void destroyFramebuffer () noexcept;
 
 			/**
-			 * @brief Creates the synchronization primitives.
-			 * @return bool
+			 * @brief swap-chain frame structure.
 			 */
-			[[nodiscard]]
-			bool createSynchronizationPrimitives () noexcept;
+			struct Frame
+			{
+				/* Framebuffer configuration holder. */
+				std::unique_ptr< Framebuffer > framebuffer;
+				/* Color buffer */
+				std::shared_ptr< Image > colorImage;
+				std::shared_ptr< ImageView > colorImageView;
+				/* Depth+Stencil buffers. */
+				std::shared_ptr< Image > depthStencilImage;
+				std::shared_ptr< ImageView > depthImageView;
+				std::shared_ptr< ImageView > stencilImageView;
+			};
 
 			Graphics::Renderer & m_renderer;
 			VkSwapchainKHR m_handle{VK_NULL_HANDLE};
@@ -459,7 +452,7 @@ namespace EmEn::Vulkan
 			Status m_status{Status::Uninitialized};
 			uint32_t m_sampleCount{1};
 			uint32_t m_imageCount{0};
-			uint32_t m_currentFrame{0};
+			uint32_t m_acquiredImageIndex{0};
 			Libs::StaticVector< Frame, 5 > m_frames;
 			Graphics::ViewMatrices2DUBO m_viewMatrices;
 			float m_distance{0.0F};

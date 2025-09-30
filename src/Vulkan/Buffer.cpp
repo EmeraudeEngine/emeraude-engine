@@ -28,13 +28,56 @@
 
 /* Local inclusions. */
 #include "Vulkan/TransferManager.hpp"
-#include "Vulkan/StagingBuffer.hpp"
+#include "Vulkan/Device.hpp"
 #include "Utility.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::Vulkan
 {
 	using namespace Libs;
+
+	Buffer::Buffer (Buffer && other) noexcept
+		: AbstractDeviceDependentObject{other.device()},
+		m_handle{other.m_handle},
+		m_createInfo{other.m_createInfo},
+		m_memoryPropertyFlag{other.m_memoryPropertyFlag},
+		m_deviceMemory{std::move(other.m_deviceMemory)}
+	{
+		other.m_handle = VK_NULL_HANDLE;
+
+		if ( other.isCreated() )
+		{
+			this->setCreated();
+
+			other.setDestroyed();
+		}
+	}
+
+	Buffer &
+	Buffer::operator= (Buffer && other) noexcept
+	{
+		if ( this != &other )
+		{
+			this->destroyFromHardware();
+
+			this->setDeviceForMove(other.device());
+			m_handle = other.m_handle;
+			m_createInfo = other.m_createInfo;
+			m_memoryPropertyFlag = other.m_memoryPropertyFlag;
+			m_deviceMemory = std::move(other.m_deviceMemory);
+
+			other.m_handle = VK_NULL_HANDLE;
+
+			if ( other.isCreated() )
+			{
+				this->setCreated();
+
+				other.setDestroyed();
+			}
+		}
+
+		return *this;
+	}
 
 	bool
 	Buffer::createOnHardware () noexcept
@@ -46,14 +89,7 @@ namespace EmEn::Vulkan
 			return false;
 		}
 
-		auto result = vkCreateBuffer(
-			this->device()->handle(),
-			&m_createInfo,
-			VK_NULL_HANDLE,
-			&m_handle
-		);
-
-		if ( result != VK_SUCCESS )
+		if ( const auto result = vkCreateBuffer(this->device()->handle(), &m_createInfo, VK_NULL_HANDLE, &m_handle); result != VK_SUCCESS )
 		{
 			TraceError{ClassId} << "Unable to create a buffer : " << vkResultToCString(result) << " !";
 
@@ -70,11 +106,7 @@ namespace EmEn::Vulkan
 		memoryRequirement.sType = VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2;
 		memoryRequirement.pNext = VK_NULL_HANDLE;
 
-		vkGetBufferMemoryRequirements2(
-			this->device()->handle(),
-			&info,
-			&memoryRequirement
-		);
+		vkGetBufferMemoryRequirements2(this->device()->handle(), &info, &memoryRequirement);
 
 		m_deviceMemory = std::make_unique< DeviceMemory >(this->device(), memoryRequirement, m_memoryPropertyFlag);
 		m_deviceMemory->setIdentifier(ClassId, this->identifier(), "DeviceMemory");
@@ -89,14 +121,7 @@ namespace EmEn::Vulkan
 		}
 
 		/* Bind the buffer to the device memory */
-		result = vkBindBufferMemory(
-			this->device()->handle(),
-			m_handle,
-			m_deviceMemory->handle(),
-			0// offset
-		);
-
-		if ( result != VK_SUCCESS )
+		if ( const auto result = vkBindBufferMemory(this->device()->handle(), m_handle, m_deviceMemory->handle(), 0); result != VK_SUCCESS )
 		{
 			TraceError{ClassId} <<
 				"Unable to bind the buffer " << m_handle << " to the device memory " << m_deviceMemory->handle() <<
@@ -130,13 +155,7 @@ namespace EmEn::Vulkan
 
 		if ( m_handle != VK_NULL_HANDLE )
 		{
-			this->device()->waitIdle("Destroying a buffer");
-
-			vkDestroyBuffer(
-				this->device()->handle(),
-				m_handle,
-				VK_NULL_HANDLE
-			);
+			vkDestroyBuffer(this->device()->handle(), m_handle, VK_NULL_HANDLE);
 
 			m_handle = VK_NULL_HANDLE;
 		}
@@ -156,7 +175,7 @@ namespace EmEn::Vulkan
 			return false;
 		}
 
-		return transferManager.transfer(*this, memoryRegion.bytes(), [&memoryRegion] (const StagingBuffer & stagingBuffer) {
+		return transferManager.transferBuffer(*this, memoryRegion.bytes(), [&memoryRegion] (const Buffer & stagingBuffer) {
 			return stagingBuffer.writeData(memoryRegion);
 		});
 	}
@@ -171,7 +190,7 @@ namespace EmEn::Vulkan
 			return false;
 		}
 
-		/* [VULKAN-CPU-SYNC] */
+		/* [VULKAN-CPU-SYNC] CHECK */
 		const std::lock_guard< std::mutex > lock{m_hostMemoryAccess};
 
 		if ( !this->isCreated() )
@@ -182,7 +201,7 @@ namespace EmEn::Vulkan
 		}
 
 		/* Lock the buffer for access. */
-		auto * pointer = this->deviceMemory()->mapMemory(memoryRegion.offset(), memoryRegion.bytes());
+		auto * pointer = m_deviceMemory->mapMemory(memoryRegion.offset(), memoryRegion.bytes());
 
 		if ( pointer == nullptr )
 		{
@@ -195,7 +214,7 @@ namespace EmEn::Vulkan
 		std::memcpy(pointer, memoryRegion.source(), memoryRegion.bytes());
 
 		/* Unlock the buffer. */
-		this->deviceMemory()->unmapMemory();
+		m_deviceMemory->unmapMemory();
 
 		return true;
 	}
@@ -210,7 +229,7 @@ namespace EmEn::Vulkan
 			return false;
 		}
 
-		/* [VULKAN-CPU-SYNC] */
+		/* [VULKAN-CPU-SYNC] CHECK */
 		const std::lock_guard< std::mutex > lock{m_hostMemoryAccess};
 
 		if ( !this->isCreated() )
@@ -232,7 +251,7 @@ namespace EmEn::Vulkan
 		/* Raw data copy... */
 		return std::ranges::all_of(memoryRegions, [&] (const auto & memoryRegion) {
 			/* Lock the buffer for access. */
-			auto * pointer = this->deviceMemory()->mapMemory(memoryRegion.offset(), this->bytes());
+			auto * pointer = m_deviceMemory->mapMemory(memoryRegion.offset(), this->bytes());
 
 			if ( pointer == nullptr )
 			{
@@ -245,7 +264,7 @@ namespace EmEn::Vulkan
 			std::memcpy(pointer, memoryRegion.source(), memoryRegion.bytes());
 
 			/* Unlock the buffer. */
-			this->deviceMemory()->unmapMemory();
+			m_deviceMemory->unmapMemory();
 
 			return true;
 		});

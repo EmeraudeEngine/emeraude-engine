@@ -103,6 +103,7 @@ namespace EmEn::Vulkan
 				m_createInfo.samples = samples;
 				m_createInfo.tiling = imageTiling;
 				m_createInfo.usage = usageFlags;
+				/* TODO: If one day we had to share a buffer between a dedicated compute and graphics family, we need to describe it here. */
 				m_createInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 				m_createInfo.queueFamilyIndexCount = 0;
 				m_createInfo.pQueueFamilyIndices = nullptr;
@@ -136,12 +137,14 @@ namespace EmEn::Vulkan
 			/**
 			 * @brief Copy assignment.
 			 * @param copy A reference to the copied instance.
+			 * @return Image &
 			 */
 			Image & operator= (const Image & copy) noexcept = delete;
 
 			/**
 			 * @brief Move assignment.
 			 * @param copy A reference to the copied instance.
+			 * @return Image &
 			 */
 			Image & operator= (Image && copy) noexcept = delete;
 

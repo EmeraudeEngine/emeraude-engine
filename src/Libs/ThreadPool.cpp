@@ -39,6 +39,8 @@ namespace EmEn::Libs
 {
 	ThreadPool::ThreadPool (size_t threadCount)
 	{
+		m_workers.reserve(threadCount);
+
 		for ( size_t index = 0; index < threadCount; ++index )
 		{
 			m_workers.emplace_back(&ThreadPool::worker, this);
@@ -58,7 +60,7 @@ namespace EmEn::Libs
 		}
 
 		{
-			std::unique_lock< std::mutex > scopeLock{m_queueAccess};
+			std::unique_lock< std::mutex > scopeLock{m_threadAccess};
 
 			m_stop = true;
 		}
@@ -91,7 +93,7 @@ namespace EmEn::Libs
 	ThreadPool::enqueue (std::function< void () > task)
 	{
 		{
-			std::unique_lock< std::mutex > scopeLock{m_queueAccess};
+			std::unique_lock< std::mutex > scopeLock{m_threadAccess};
 
 			if ( m_stop )
 			{
@@ -116,7 +118,7 @@ namespace EmEn::Libs
 	void
 	ThreadPool::wait ()
 	{
-		std::unique_lock< std::mutex > lock{m_queueAccess};
+		std::unique_lock< std::mutex > lock{m_threadAccess};
 
 		if constexpr ( ThreadPoolDebugEnabled )
 		{
@@ -138,7 +140,7 @@ namespace EmEn::Libs
 			std::function< void () > task;
 
 			{
-				std::unique_lock< std::mutex > lock{m_queueAccess};
+				std::unique_lock< std::mutex > lock{m_threadAccess};
 
 				m_condition.wait(lock, [this] {
 					return m_stop || !m_tasks.empty();
@@ -159,13 +161,19 @@ namespace EmEn::Libs
 
 			if constexpr ( ThreadPoolDebugEnabled )
 			{
-				Time::Elapsed::PrintScopeRealTime stat{"[ThreadPool-debug] Task finished"};
+				std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
 				std::cout << "[ThreadPool-debug] Thread #" << std::this_thread::get_id() << " running ... (" << m_busyWorkers << " busy workers, " << m_tasks.size() << " tasks left)" "\n";
 
-				task();
+				{
+					Time::Elapsed::PrintScopeRealTime stat{"[ThreadPool-debug] Task finished"};
+
+					task();
+				}
 
 				std::cout << "[ThreadPool-debug] Thread #" << std::this_thread::get_id() << " finished. (" << m_busyWorkers << " busy workers, " << m_tasks.size() << " tasks left)" "\n";
+
+				std::this_thread::sleep_for(std::chrono::milliseconds(500));
 			}
 			else
 			{
@@ -173,7 +181,7 @@ namespace EmEn::Libs
 			}
 
 			{
-				std::unique_lock< std::mutex > lock{m_queueAccess};
+				std::unique_lock< std::mutex > lock{m_threadAccess};
 
 				--m_busyWorkers;
 

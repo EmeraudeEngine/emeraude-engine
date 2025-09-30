@@ -290,9 +290,7 @@ namespace EmEn::Vulkan
 	{
 		VkImageFormatProperties imageFormatProperties{};
 
-		auto result = vkGetPhysicalDeviceImageFormatProperties(m_physicalDevice, format, type, tiling, usage, flags, &imageFormatProperties);
-
-		if ( result != VK_SUCCESS )
+		if ( const auto result = vkGetPhysicalDeviceImageFormatProperties(m_physicalDevice, format, type, tiling, usage, flags, &imageFormatProperties); result != VK_SUCCESS )
 		{
 			TraceError{ClassId} << "Unable to get image format properties : " << vkResultToCString(result) << " !";
 		}
@@ -369,9 +367,7 @@ namespace EmEn::Vulkan
 	{
 		VkBool32 supported = VK_FALSE;
 
-		auto result = vkGetPhysicalDeviceSurfaceSupportKHR(m_physicalDevice, queueFamilyIndex, surface, &supported);
-
-		if ( result != VK_SUCCESS )
+		if ( const auto result = vkGetPhysicalDeviceSurfaceSupportKHR(m_physicalDevice, queueFamilyIndex, surface, &supported); result != VK_SUCCESS )
 		{
 			TraceError{ClassId} << "Unable to get surface support : " << vkResultToCString(result) << " !";
 		}
@@ -384,9 +380,7 @@ namespace EmEn::Vulkan
 	{
 		VkSurfaceCapabilitiesKHR surfaceCapabilities{};
 
-		auto result = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(m_physicalDevice, surface, &surfaceCapabilities);
-
-		if ( result != VK_SUCCESS )
+		if ( const auto result = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(m_physicalDevice, surface, &surfaceCapabilities); result != VK_SUCCESS )
 		{
 			TraceError{ClassId} << "Unable to get surface capabilities : " << vkResultToCString(result) << " !";
 		}
@@ -401,9 +395,7 @@ namespace EmEn::Vulkan
 
 		uint32_t count = 0;
 
-		auto result = vkGetPhysicalDeviceSurfaceFormatsKHR(m_physicalDevice, surface, &count, nullptr);
-
-		if ( result == VK_SUCCESS )
+		if ( auto result = vkGetPhysicalDeviceSurfaceFormatsKHR(m_physicalDevice, surface, &count, nullptr); result == VK_SUCCESS )
 		{
 			if ( count > 0 )
 			{
@@ -432,9 +424,7 @@ namespace EmEn::Vulkan
 
 		uint32_t count = 0;
 
-		auto result = vkGetPhysicalDeviceSurfacePresentModesKHR(m_physicalDevice, surface, &count, nullptr);
-
-		if ( result == VK_SUCCESS )
+		if ( auto result = vkGetPhysicalDeviceSurfacePresentModesKHR(m_physicalDevice, surface, &count, nullptr); result == VK_SUCCESS )
 		{
 			if ( count > 0 )
 			{
@@ -463,9 +453,7 @@ namespace EmEn::Vulkan
 
 		uint32_t count = 0;
 
-		auto result = vkGetPhysicalDevicePresentRectanglesKHR(m_physicalDevice, surface, &count, nullptr);
-
-		if ( result == VK_SUCCESS )
+		if ( auto result = vkGetPhysicalDevicePresentRectanglesKHR(m_physicalDevice, surface, &count, nullptr); result == VK_SUCCESS )
 		{
 			if ( count > 0 )
 			{
@@ -514,9 +502,7 @@ namespace EmEn::Vulkan
 
 		uint32_t count = 0;
 
-		auto result = vkEnumerateDeviceLayerProperties(m_physicalDevice, &count, nullptr);
-
-		if ( result == VK_SUCCESS )
+		if ( auto result = vkEnumerateDeviceLayerProperties(m_physicalDevice, &count, nullptr); result == VK_SUCCESS )
 		{
 			if ( count > 0 )
 			{
@@ -623,16 +609,14 @@ namespace EmEn::Vulkan
 					flags.emplace_back("VideoDecode");
 				}
 
-#ifdef VK_ENABLE_BETA_EXTENSIONS
 				if ( (familyQueue.queueFamilyProperties.queueFlags & VK_QUEUE_VIDEO_ENCODE_BIT_KHR) != 0 )
 				{
 					flags.emplace_back("VideoEncode");
 				}
-#endif
 
-				/* Optical flow are fundamental algorithms in computer vision (CV) area.
+				/* Optical flow is fundamental algorithms in computer vision (CV) area.
 				 * This extension allows applications to estimate 2D displacement of pixels between two frames.
-				 * For use with : NVIDIA Optical Flow SDK Version 5 */
+				 * For use with: NVIDIA Optical Flow SDK Version 5 */
 				if ( (familyQueue.queueFamilyProperties.queueFlags & VK_QUEUE_OPTICAL_FLOW_BIT_NV) != 0 )
 				{
 					flags.emplace_back("OpticalFlow");

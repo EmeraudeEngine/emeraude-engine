@@ -141,7 +141,7 @@ namespace EmEn
 	void
 	Notifier::renderNotifications () noexcept
 	{
-		/* [VULKAN-CPU-SYNC] */
+		/* [VULKAN-CPU-SYNC] Maybe useless */
 		const std::lock_guard< std::mutex > lock{m_surface->frontFramebufferMutex()};
 
 		if ( m_surface->frontPixmap().fill(m_clearColor) )
@@ -150,14 +150,14 @@ namespace EmEn
 			{
 				std::stringstream buffer;
 
-				m_notificationAccess.lock();
-
-				for ( const auto & [message, delay] : std::ranges::reverse_view(m_notifications))
 				{
-					buffer << message << '\n';
-				}
+					const std::lock_guard< std::mutex > lockNotifications{m_notificationAccess};
 
-				m_notificationAccess.unlock();
+					for ( const auto & [message, delay] : std::ranges::reverse_view(m_notifications))
+					{
+						buffer << message << '\n';
+					}
+				}
 
 				m_processor.write(buffer.str());
 			}
@@ -169,7 +169,7 @@ namespace EmEn
 	void
 	Notifier::clearDisplay () const noexcept
 	{
-		/* [VULKAN-CPU-SYNC] */
+		/* [VULKAN-CPU-SYNC] Maybe useless */
 		const std::lock_guard< std::mutex > lock{m_surface->frontFramebufferMutex()};
 
 		if ( m_surface->frontPixmap().fill(m_clearColor) )
@@ -183,7 +183,6 @@ namespace EmEn
 	{
 		/* NOTE: Removes all notifications. */
 		{
-			/* [VULKAN-CPU-SYNC] */
 			const std::lock_guard< std::mutex > lock{m_notificationAccess};
 
 			m_notifications.clear();

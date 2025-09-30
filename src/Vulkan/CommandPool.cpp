@@ -33,7 +33,7 @@
 
 namespace EmEn::Vulkan
 {
-	using namespace EmEn::Libs;
+	using namespace Libs;
 
 	bool
 	CommandPool::createOnHardware () noexcept
@@ -45,9 +45,7 @@ namespace EmEn::Vulkan
 			return false;
 		}
 
-		const auto result = vkCreateCommandPool(this->device()->handle(), &m_createInfo, nullptr, &m_handle);
-
-		if ( result != VK_SUCCESS )
+		if ( const auto result = vkCreateCommandPool(this->device()->handle(), &m_createInfo, nullptr, &m_handle); result != VK_SUCCESS )
 		{
 			TraceError{ClassId} << "Unable to create command pool : " << vkResultToCString(result) << " !";
 
@@ -71,8 +69,6 @@ namespace EmEn::Vulkan
 
 		if ( m_handle != VK_NULL_HANDLE )
 		{
-			this->device()->waitIdle("Destroying a command pool");
-
 			vkDestroyCommandPool(this->device()->handle(), m_handle, nullptr);
 
 			m_handle = VK_NULL_HANDLE;
@@ -86,8 +82,18 @@ namespace EmEn::Vulkan
 	VkCommandBuffer
 	CommandPool::allocateCommandBuffer (bool primaryLevel) const noexcept
 	{
-		/* [VULKAN-CPU-SYNC] */
-		const std::lock_guard< std::mutex > lock{m_allocationsAccess};
+		if constexpr ( IsDebug )
+		{
+			if ( !this->isCreated() )
+			{
+				Tracer::fatal(ClassId, "The command pool is not created! Unable to allocate command buffer.");
+
+				return VK_NULL_HANDLE;
+			}
+		}
+
+		/* [VULKAN-CPU-SYNC] vkAllocateCommandBuffers() */
+		const std::lock_guard< std::mutex > lock{m_commandPoolAccess};
 
 		VkCommandBufferAllocateInfo allocateInfo{};
 		allocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
@@ -98,13 +104,7 @@ namespace EmEn::Vulkan
 
 		VkCommandBuffer commandBufferHandle = VK_NULL_HANDLE;
 
-		const auto result = vkAllocateCommandBuffers(
-			this->device()->handle(),
-			&allocateInfo,
-			&commandBufferHandle
-		);
-
-		if ( result != VK_SUCCESS )
+		if ( const auto result = vkAllocateCommandBuffers(this->device()->handle(), &allocateInfo, &commandBufferHandle); result != VK_SUCCESS )
 		{
 			TraceError{ClassId} << "Unable to allocate a command buffer : " << vkResultToCString(result) << " !";
 
@@ -117,16 +117,61 @@ namespace EmEn::Vulkan
 	void
 	CommandPool::freeCommandBuffer (VkCommandBuffer commandBufferHandle) const noexcept
 	{
-		/* [VULKAN-CPU-SYNC] */
-		const std::lock_guard< std::mutex > lock{m_allocationsAccess};
+		if constexpr ( IsDebug )
+		{
+			if ( !this->isCreated() )
+			{
+				Tracer::fatal(ClassId, "The command pool is not created! Unable to free command buffer.");
 
-		/* FIXME: This causes a VK_ERROR_DEVICE_LOST */
-		this->device()->waitIdle("Freeing command buffer from a command pool");
+				return;
+			}
+		}
 
-		vkFreeCommandBuffers(
-			this->device()->handle(),
-			m_handle,
-			1, &commandBufferHandle
-		);
+		//std::cout << "[DEADLOCK-TRACKING] Try to acquire for vkFreeCommandBuffers() ..." << std::endl;
+
+		/* [VULKAN-CPU-SYNC] vkFreeCommandBuffers() */
+		const std::lock_guard< std::mutex > lock{m_commandPoolAccess};
+
+		//std::cout << "[DEADLOCK-TRACKING] Call to vkFreeCommandBuffers() ..." << std::endl;
+
+		if constexpr ( IsDebug )
+		{
+			if ( commandBufferHandle == VK_NULL_HANDLE )
+			{
+				Tracer::fatal(ClassId, "Trying to free a command buffer with a null pointer handle.");
+
+				return;
+			}
+		}
+
+		vkFreeCommandBuffers(this->device()->handle(), m_handle, 1, &commandBufferHandle);
+
+		//std::cout << "[DEADLOCK-TRACKING] vkFreeCommandBuffers() passed!" << std::endl;
+	}
+
+	bool
+	CommandPool::reset () const noexcept
+	{
+		if constexpr ( IsDebug )
+		{
+			if ( !this->isCreated() )
+			{
+				Tracer::fatal(ClassId, "The command pool is not created! Unable to reset this command pool.");
+
+				return false;
+			}
+		}
+
+		/* [VULKAN-CPU-SYNC] vkResetCommandPool() */
+		const std::lock_guard< std::mutex > lock{m_commandPoolAccess};
+
+		if ( const auto result = vkResetCommandPool(this->device()->handle(), m_handle, VK_COMMAND_POOL_RESET_RELEASE_RESOURCES_BIT); result != VK_SUCCESS )
+		{
+			TraceError{ClassId} << "Unable to reset the command pool : " << vkResultToCString(result) << " !";
+
+			return false;
+		}
+
+		return true;
 	}
 }

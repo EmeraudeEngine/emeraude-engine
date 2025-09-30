@@ -86,7 +86,7 @@ namespace EmEn::Vulkan::Sync
 			/**
 			 * @brief Constructs a fence.
 			 * @param device A reference to a smart pointer of the device.
-			 * @param createFlags The createInfo flags. Default VK_FENCE_CREATE_SIGNALED_BIT.
+			 * @param createFlags The creation flags. Default VK_FENCE_CREATE_SIGNALED_BIT.
 			 */
 			explicit
 			Fence (const std::shared_ptr< Device > & device, VkFenceCreateFlags createFlags = VK_FENCE_CREATE_SIGNALED_BIT) noexcept
@@ -113,7 +113,7 @@ namespace EmEn::Vulkan::Sync
 			 * @brief Copy constructor.
 			 * @param copy A reference to the copied instance.
 			 */
-			Fence (const Fence & copy) noexcept = default;
+			Fence (const Fence & copy) noexcept = delete;
 
 			/**
 			 * @brief Move constructor.
@@ -124,12 +124,14 @@ namespace EmEn::Vulkan::Sync
 			/**
 			 * @brief Copy assignment.
 			 * @param copy A reference to the copied instance.
+			 * @return Fence &
 			 */
-			Fence & operator= (const Fence & copy) noexcept = default;
+			Fence & operator= (const Fence & copy) noexcept = delete;
 
 			/**
 			 * @brief Move assignment.
 			 * @param copy A reference to the copied instance.
+			 * @return Fence &
 			 */
 			Fence & operator= (Fence && copy) noexcept = default;
 
@@ -177,13 +179,6 @@ namespace EmEn::Vulkan::Sync
 			bool reset () const noexcept;
 
 			/**
-			 * @brief Sets the fence as signaled.
-			 * @return bool
-			 */
-			[[nodiscard]]
-			bool signal () const noexcept;
-
-			/**
 			 * @brief Returns the fence status.
 			 * @return Status
 			 */
@@ -217,7 +212,7 @@ namespace EmEn::Vulkan::Sync
 			static bool waitForAll (const std::shared_ptr< Device > & device, const std::vector< VkFence > & fences, uint64_t timeout = std::numeric_limits< uint64_t >::max()) noexcept;
 
 			/**
-			 * @brief Waits for any of fences to be signaled and returns it.
+			 * @brief Waits for any of the fences to be signaled and returns it.
 			 * @param device A reference to the device smart pointer.
 			 * @param fences A reference to a vector of fences.
 			 * @param timeout A duration in nanoseconds for timeout. Default close to infinity (584 years).

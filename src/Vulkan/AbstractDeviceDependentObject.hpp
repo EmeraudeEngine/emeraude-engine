@@ -32,8 +32,11 @@
 /* Local inclusions for inheritances. */
 #include "AbstractObject.hpp"
 
-/* Local inclusions for usages. */
-#include "Device.hpp"
+/* Forward declarations. */
+namespace EmEn::Vulkan
+{
+	class Device;
+}
 
 namespace EmEn::Vulkan
 {
@@ -79,22 +82,14 @@ namespace EmEn::Vulkan
 			 * @return std::shared_ptr< Device >
 			 */
 			[[nodiscard]]
-			std::shared_ptr< Device >
-			device () const noexcept
-			{
-				return m_device;
-			}
+			std::shared_ptr< Device > device () const noexcept;
 
 			/**
 			 * @brief Returns whether a device is present.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool
-			hasDevice () const noexcept
-			{
-				return m_device != nullptr && m_device->handle() != VK_NULL_HANDLE;
-			}
+			bool hasDevice () const noexcept;
 
 			/**
 			 * @brief Creates the object in the device.
@@ -114,22 +109,17 @@ namespace EmEn::Vulkan
 			 * @brief Constructs a device dependent Vulkan object.
 			 * @param device A reference to the device smart pointer where the object will be used.
 			 */
-			explicit
-			AbstractDeviceDependentObject (const std::shared_ptr< Device > & device) noexcept
-				: m_device{device}
-			{
-				if constexpr ( IsDebug )
-				{
-					if ( m_device == nullptr )
-					{
-						Tracer::error("VulkanDeviceDependentObject", "Device is null !");
-					}
+			explicit AbstractDeviceDependentObject (const std::shared_ptr< Device > & device) noexcept;
 
-					if ( !m_device->isCreated() )
-					{
-						Tracer::warning("VulkanDeviceDependentObject", "Device is not yet usable !");
-					}
-				}
+			/**
+			 * @brief Sets the device for move operation.
+			 * @param device A reference to the device smart pointer.
+			 * @return void
+			 */
+			void
+			setDeviceForMove (const std::shared_ptr< Device > & device) noexcept
+			{
+				m_device = device;
 			}
 
 		private:

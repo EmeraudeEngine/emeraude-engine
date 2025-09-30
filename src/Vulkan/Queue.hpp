@@ -113,11 +113,13 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Constructs a device queue.
+			 * @param device A reference to a device smart pointer.
 			 * @param queue The handle of the queue.
 			 * @param familyQueueIndex Set which family queue is used to create this queue.
 			 */
-			Queue (VkQueue queue, uint32_t familyQueueIndex) noexcept
-				: m_handle{queue},
+			Queue (const std::shared_ptr< Device > & device, VkQueue queue, uint32_t familyQueueIndex) noexcept
+				: m_device{device},
+				m_handle{queue},
 				m_familyQueueIndex{familyQueueIndex}
 			{
 				const int count = ++s_queueInstanceCounter;
@@ -156,6 +158,8 @@ namespace EmEn::Vulkan
 			 */
 			~Queue () override
 			{
+				m_device.reset();
+
 				this->setDestroyed();
 			}
 
@@ -176,7 +180,7 @@ namespace EmEn::Vulkan
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool submit (const std::shared_ptr< CommandBuffer > & commandBuffer) const noexcept;
+			bool submit (const CommandBuffer & commandBuffer) const noexcept;
 
 			/**
 			 * @brief Submits a command buffer to the queue with synchronization info.
@@ -185,7 +189,7 @@ namespace EmEn::Vulkan
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool submit (const std::shared_ptr< CommandBuffer > & commandBuffer, const SynchInfo & synchInfo) const noexcept;
+			bool submit (const CommandBuffer & commandBuffer, const SynchInfo & synchInfo) const noexcept;
 
 			/**
 			 * @brief Submits a present info structure.
@@ -205,8 +209,8 @@ namespace EmEn::Vulkan
 
 		private:
 
+			std::shared_ptr< Device > m_device;
 			VkQueue m_handle;
 			uint32_t m_familyQueueIndex;
-			mutable std::mutex m_queueAccess;
 	};
 }

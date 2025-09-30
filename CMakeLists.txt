@@ -33,7 +33,7 @@ endif ()
 
 project(
 	${BINARY_NAME}
-	VERSION 0.7.51
+	VERSION 0.7.52
 	DESCRIPTION "Emeraude Engine is an open-source (LGPLv3) 3D Graphics engine using Vulkan and written in C++20."
 	HOMEPAGE_URL "https://github.com/EmeraudeEngine/emeraude-engine"
 	LANGUAGES C CXX
@@ -56,7 +56,11 @@ option(EMERAUDE_ENABLE_TESTS "Enable the Emeraude-Engine testing suite (Default 
 option(EMERAUDE_ENABLE_PCH "Enable 'PreCompiled Headers' feature to speed up the compilation (Default Off)." Off)
 option(EMERAUDE_USE_STATIC_RUNTIME "Build Emeraude-Engine with the static MSVC runtime (Windows Only, Default Off)." Off)
 option(EMERAUDE_USE_SYSTEM_LIBS "Use the system for common libraries instead of the embedded ones (Deprecated, Default Off)." Off)
-option(EMERAUDE_ENABLE_TSAN "Enable 'ThreadSanitizer' library. Adds a dev tool to trace data race [SYSTEM] (Linux only, Default Off)." Off)
+option(EMERAUDE_ENABLE_ASAN "Enable 'AddressSanitizer' library. Adds a dev tool to detects memory errors [SYSTEM] (Linux only, Default Off)." Off)
+option(EMERAUDE_ENABLE_MSAN "Enable 'MemorySanitizer' library. Adds a dev tool to detects memory corruption [SYSTEM] (Linux only, Default Off)." Off)
+option(EMERAUDE_ENABLE_LSAN "Enable 'LeakSanitizer' library. Adds a dev tool to detects memory leak [SYSTEM] (Linux only, Default Off)." Off)
+option(EMERAUDE_ENABLE_TSAN "Enable 'ThreadSanitizer' library. Adds a dev tool to detects data race [SYSTEM] (Linux only, Default Off)." Off)
+option(EMERAUDE_ENABLE_UBSAN "Enable 'UndefinedBehaviorSanitizer' library. Adds a dev tool to detects undefined behavior [SYSTEM] (Linux only, Default Off)." Off)
 option(EMERAUDE_ENABLE_OPENMP "Enable 'libomp' library [SYSTEM] (Default On)." On)
 option(EMERAUDE_ENABLE_ASIO "Enable 'libasio' library. Adds the networking ability [SYSTEM|LOCAL] (Default On)." On)
 option(EMERAUDE_ENABLE_IMGUI "Enable 'libimgui' library. Adds a GUI to the engine [LOCAL] (Default Off)." Off)
@@ -70,7 +74,7 @@ option(EMERAUDE_DEBUG_POINTER_INPUT "Enable printing of events to the console fr
 option(EMERAUDE_DEBUG_WINDOW_EVENTS "Enable printing of events to the console from window events (Default Off)." Off)
 option(EMERAUDE_DEBUG_VULKAN_TRACKING "Enable printing of Vulkan objects lifespan (Default Off)." Off)
 option(EMERAUDE_DEBUG_THREAD_POOL "Enable printing of ThreadPool (Default Off)." Off)
-
+set(EMERAUDE_DEBUG_THREAD_POOL_N "1" CACHE STRING "When debugging ThreadPool, force the number of threads (Default 1).")
 
 
 # Force the compilation directory for testing (Only if empty)
@@ -327,11 +331,39 @@ elseif ( UNIX )
 			>
 		)
 
+		if ( EMERAUDE_ENABLE_ASAN )
+			message("Enabling AddressSanitizer tools ...")
+
+			target_compile_options(${PROJECT_NAME} PUBLIC -fsanitize=address)
+			target_link_options(${PROJECT_NAME} PUBLIC -fsanitize=address)
+		endif ()
+
+		if ( EMERAUDE_ENABLE_MSAN )
+			message("Enabling MemorySanitizer tools ...")
+
+			target_compile_options(${PROJECT_NAME} PUBLIC -fsanitize=memory)
+			target_link_options(${PROJECT_NAME} PUBLIC -fsanitize=memory)
+		endif ()
+
+		if ( EMERAUDE_ENABLE_LSAN )
+			message("Enabling LeakSanitizer tools ...")
+
+			target_compile_options(${PROJECT_NAME} PUBLIC -fsanitize=leak)
+			target_link_options(${PROJECT_NAME} PUBLIC -fsanitize=leak)
+		endif ()
+
 		if ( EMERAUDE_ENABLE_TSAN )
 			message("Enabling ThreadSanitizer tools ...")
 
-			target_compile_options(${PROJECT_NAME} PRIVATE -fsanitize=thread)
-			target_link_options(${PROJECT_NAME} PRIVATE -fsanitize=thread)
+			target_compile_options(${PROJECT_NAME} PUBLIC -fsanitize=thread)
+			target_link_options(${PROJECT_NAME} PUBLIC -fsanitize=thread)
+		endif ()
+
+		if ( EMERAUDE_ENABLE_UBSAN )
+			message("Enabling UndefinedBehaviorSanitizer tools ...")
+
+			target_compile_options(${PROJECT_NAME} PUBLIC -fsanitize=undefined -fsanitize=integer -fsanitize=nullability)
+			target_link_options(${PROJECT_NAME} PUBLIC -fsanitize=undefined -fsanitize=integer -fsanitize=nullability)
 		endif ()
 	endif ()
 else ()

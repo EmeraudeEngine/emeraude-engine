@@ -407,7 +407,6 @@ namespace EmEn::Overlay
 
 		m_screens[name] = screen;
 
-		std::cout << "ClassUID: " << this->classUID() << " : " << getClassUID() << " : " << getClassUID() << std::endl;
 		this->notify(UIScreenCreated, screen);
 
 		return screen;

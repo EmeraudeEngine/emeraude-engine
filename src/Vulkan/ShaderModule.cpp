@@ -88,8 +88,6 @@ namespace EmEn::Vulkan
 
 		if ( m_handle != VK_NULL_HANDLE )
 		{
-			this->device()->waitIdle("Destroying a shader module");
-
 			vkDestroyShaderModule(this->device()->handle(), m_handle, nullptr);
 
 			m_handle = VK_NULL_HANDLE;

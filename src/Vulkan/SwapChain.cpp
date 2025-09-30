@@ -37,7 +37,7 @@
 /* Local inclusions. */
 #include "Vulkan/Framebuffer.hpp"
 #include "Vulkan/ImageView.hpp"
-#include "Vulkan/Queue.hpp"
+#include "Vulkan/Device.hpp"
 #include "Vulkan/Utility.hpp"
 #include "Graphics/Renderer.hpp"
 #include "Settings.hpp"
@@ -88,24 +88,9 @@ namespace EmEn::Vulkan
 		m_createInfo.imageExtent = this->chooseSwapExtent(capabilities);
 		m_createInfo.imageArrayLayers = 1;
 		m_createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-		//auto index = device->getFamilyQueueIndex(VK_QUEUE_GRAPHICS_BIT);
-
-		//QueueFamilyIndices indices = this->findQueueFamilies(m_device->physicalDeviceHandle());
-
-		//uint32_t queueFamilyIndices[] = {indices.graphicsFamily.value(), indices.presentFamily.value()};
-
-		//if ( indices.graphicsFamily != indices.presentFamily )
-		//{
-		//	m_createInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
-		//	m_createInfo.queueFamilyIndexCount = 2;
-		//	m_createInfo.pQueueFamilyIndices = queueFamilyIndices;
-		//}
-		//else
-		{
-			m_createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE; /* Performance! */
-			m_createInfo.queueFamilyIndexCount = 0; /* Optional */
-			m_createInfo.pQueueFamilyIndices = nullptr; /* Optional */
-		}
+		m_createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE; /* NOTE: Graphics and presentation (99.9%) are from the same family. */
+		m_createInfo.queueFamilyIndexCount = 0;
+		m_createInfo.pQueueFamilyIndices = nullptr;
 		m_createInfo.preTransform = capabilities.currentTransform; /* NOTE: No transformation. Check "supportedTransforms" in "capabilities" */
 		m_createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
 		m_createInfo.presentMode = this->choosePresentMode();
@@ -195,15 +180,6 @@ namespace EmEn::Vulkan
 			return false;
 		}
 
-		if ( !this->createSynchronizationPrimitives() )
-		{
-			Tracer::error(ClassId, "Unable to create synchronization primitives !");
-
-			m_status = Status::Failure;
-
-			return false;
-		}
-
 		this->setCreated();
 
 		m_status = Status::Ready;
@@ -220,8 +196,6 @@ namespace EmEn::Vulkan
 
 			return;
 		}
-
-		this->device()->waitIdle("Destroying the swap chain");
 
 		m_status = Status::Uninitialized;
 
@@ -282,13 +256,7 @@ namespace EmEn::Vulkan
 			/* Clear the depth+stencil buffer. */
 			frame.depthImageView->destroyFromHardware();
 			frame.depthStencilImage->destroyFromHardware();
-
-			/* Reset the image fence. */
-			frame.inFlightFence->destroyFromHardware();
-			frame.inFlightFence->createOnHardware();
 		}
-
-		m_currentFrame = 0;
 	}
 
 	void
@@ -388,13 +356,7 @@ namespace EmEn::Vulkan
 	{
 		std::vector< VkImage > imageHandles{m_imageCount, VK_NULL_HANDLE};
 
-		const auto result = vkGetSwapchainImagesKHR(
-			this->device()->handle(),
-			m_handle,
-			&m_imageCount, imageHandles.data()
-		);
-
-		if ( result != VK_SUCCESS )
+		if ( const auto result = vkGetSwapchainImagesKHR(this->device()->handle(), m_handle, &m_imageCount, imageHandles.data()); result != VK_SUCCESS )
 		{
 			TraceFatal{ClassId} << "Unable to get images from the swap chain : " << vkResultToCString(result) << " !";
 
@@ -527,7 +489,7 @@ namespace EmEn::Vulkan
 					.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
 					.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
 					.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-					.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
+					.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
 				});
 
 				subPass.setDepthStencilAttachment(1, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
@@ -692,100 +654,36 @@ namespace EmEn::Vulkan
 		return true;
 	}
 
-	bool
-	SwapChain::createSynchronizationPrimitives () noexcept
-	{
-		for ( size_t imageIndex = 0; imageIndex < m_imageCount; ++imageIndex )
-		{
-			auto & frame = m_frames[imageIndex];
-
-			frame.imageAvailableSemaphore = std::make_unique< Sync::Semaphore >(this->device());
-#if IS_MACOS
-			frame.framebuffer->setIdentifier(ClassId, (std::stringstream{} << "Frame" << imageIndex << "ImageAvailable").str(), "Semaphore");
-#else
-			frame.imageAvailableSemaphore->setIdentifier(ClassId, std::format("Frame{}ImageAvailable", imageIndex), "Semaphore");
-#endif
-
-			if ( !frame.imageAvailableSemaphore->createOnHardware() )
-			{
-				TraceError{ClassId} << "Unable to create a semaphore #" << imageIndex << " for image available !";
-
-				return false;
-			}
-
-			frame.renderFinishedSemaphore = std::make_unique< Sync::Semaphore >(this->device());
-#if IS_MACOS
-			frame.framebuffer->setIdentifier(ClassId, (std::stringstream{} << "Frame" << imageIndex << "RenderFinished").str(), "Semaphore");
-#else
-			frame.renderFinishedSemaphore->setIdentifier(ClassId, std::format("Frame{}RenderFinished", imageIndex), "Semaphore");
-#endif
-
-			if ( !frame.renderFinishedSemaphore->createOnHardware() )
-			{
-				TraceError{ClassId} << "Unable to create a semaphore #" << imageIndex << " for image finished !";
-
-				return false;
-			}
-
-			frame.inFlightFence = std::make_unique< Sync::Fence >(this->device());
-#if IS_MACOS
-			frame.framebuffer->setIdentifier(ClassId, (std::stringstream{} << "Frame" << imageIndex << "ImageInFlight").str(), "Fence");
-#else
-			frame.inFlightFence->setIdentifier(ClassId, std::format("Frame{}ImageInFlight", imageIndex), "Fence");
-#endif
-
-			if ( !frame.inFlightFence->createOnHardware() )
-			{
-				TraceError{ClassId} << "Unable to create a fence #" << imageIndex << " for in-flight !";
-
-				return false;
-			}
-		}
-
-		return true;
-	}
-
 	std::optional< uint32_t >
-	SwapChain::acquireNextImage () noexcept
+	SwapChain::acquireNextImage (const Sync::Semaphore * imageAvailableSemaphore, uint64_t timeout) noexcept
 	{
 		if ( m_status != Status::Ready )
 		{
 			return std::nullopt;
 		}
 
-		const auto & currentFrame = m_frames.at(m_currentFrame);
-
-		if ( !currentFrame.inFlightFence->wait() )
-		{
-			Tracer::error(ClassId, "Something wrong happens while waiting the fence !");
-
-			return std::nullopt;
-		}
-
-		uint32_t imageIndex = 0;
-
 		const auto result = vkAcquireNextImageKHR(
 			this->device()->handle(),
 			m_handle,
-			std::numeric_limits< uint64_t >::max(),
-			currentFrame.imageAvailableSemaphore->handle(),
+			timeout,
+			imageAvailableSemaphore->handle(),
 			VK_NULL_HANDLE,
-			&imageIndex
+			&m_acquiredImageIndex
 		);
 
 		switch ( result )
 		{
 			case VK_SUCCESS :
-				return imageIndex;
+				return m_acquiredImageIndex;
 
 			case VK_TIMEOUT :
-				TraceWarning{ClassId} << "VK_TIMEOUT @ acquisition for image #" << imageIndex << " !";
+				TraceWarning{ClassId} << "VK_TIMEOUT at image acquisition!";
 
 				return std::nullopt;
 
 			case VK_ERROR_OUT_OF_DATE_KHR :
 			case VK_SUBOPTIMAL_KHR :
-				TraceError{ClassId} << vkResultToCString(result) << " @ acquisition for image #" << imageIndex << " !";
+				TraceError{ClassId} << vkResultToCString(result) << " at image acquisition!";
 
 				m_status = Status::Degraded;
 
@@ -799,46 +697,27 @@ namespace EmEn::Vulkan
 	}
 
 	bool
-	SwapChain::submitCommandBuffer (const std::shared_ptr< CommandBuffer > & commandBuffer, const uint32_t & imageIndex, const StaticVector< VkSemaphore, 16 > & callerWaitSemaphores) noexcept
+	SwapChain::submitCommandBuffer (const std::shared_ptr< CommandBuffer > & commandBuffer, const uint32_t & imageIndex, const StaticVector< VkSemaphore, 16 > & callerWaitSemaphores, const Sync::Semaphore * renderFinishedSemaphore, const Sync::Fence * inFlightFence) noexcept
 	{
 		if ( m_status != Status::Ready )
 		{
 			return false;
 		}
 
-		if ( !m_frames.at(imageIndex).inFlightFence->wait() )
-		{
-			TraceError{ClassId} << "Something wrong happens while waiting the fence for image #" << imageIndex << " !";
-
-			return false;
-		}
-
-		const auto & currentFrame = m_frames.at(m_currentFrame);
-
-		if ( !currentFrame.inFlightFence->reset() )
-		{
-			TraceError{ClassId} << " Unable to reset in-flight fence for image " << m_currentFrame << " !" "\n";
-
-			return false;
-		}
-
-		auto * const signalSemaphoreHandle = currentFrame.renderFinishedSemaphore->handle();
+		auto signalSemaphoreHandle = renderFinishedSemaphore->handle();
 
 		/* Submit */
 		{
-			StaticVector< VkSemaphore, 16 > waitSemaphores = callerWaitSemaphores;
-			waitSemaphores.emplace_back(currentFrame.imageAvailableSemaphore->handle());
-
-			const StaticVector< VkPipelineStageFlags, 16 > waitStages(waitSemaphores.size(), VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
+			const StaticVector< VkPipelineStageFlags, 16 > waitStages(callerWaitSemaphores.size(), VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
 
 			const auto submitted = this->device()
-				->getQueue(QueueJob::Graphics, QueuePriority::High)
+				->getGraphicsQueue(QueuePriority::High)
 				->submit(
-					commandBuffer,
+					*commandBuffer,
 					SynchInfo{}
-						.waits(waitSemaphores, waitStages)
+						.waits(callerWaitSemaphores, waitStages)
 						.signals({&signalSemaphoreHandle, 1})
-						.withFence(currentFrame.inFlightFence->handle())
+						.withFence(inFlightFence->handle())
 				);
 
 			if ( !submitted )
@@ -849,8 +728,6 @@ namespace EmEn::Vulkan
 
 		/* Present */
 		{
-			bool swapChainRecreationNeeded = false;
-
 			VkPresentInfoKHR presentInfo{};
 			presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
 			presentInfo.pNext = nullptr;
@@ -861,7 +738,9 @@ namespace EmEn::Vulkan
 			presentInfo.pImageIndices = &imageIndex;
 			presentInfo.pResults = nullptr;
 
-			if ( !this->device()->getQueue(QueueJob::Presentation, QueuePriority::High)->present(&presentInfo, swapChainRecreationNeeded) )
+			bool swapChainRecreationNeeded = false;
+
+			if ( !this->device()->getGraphicsQueue(QueuePriority::High)->present(&presentInfo, swapChainRecreationNeeded) )
 			{
 				if ( swapChainRecreationNeeded )
 				{
@@ -871,9 +750,6 @@ namespace EmEn::Vulkan
 				return false;
 			}
 		}
-
-		/* TODO: Check if this is correct to skip the current frame index, when swap-chain has failed to present the image. */
-		m_currentFrame = (m_currentFrame + 1) % m_imageCount;
 
 		return true;
 	}

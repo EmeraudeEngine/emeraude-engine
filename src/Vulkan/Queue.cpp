@@ -27,6 +27,7 @@
 #include "Queue.hpp"
 
 /* Local inclusions. */
+#include "Device.hpp"
 #include "CommandBuffer.hpp"
 #include "Utility.hpp"
 #include "Tracer.hpp"
@@ -36,9 +37,9 @@ namespace EmEn::Vulkan
 	using namespace Libs;
 
 	bool
-	Queue::submit (const std::shared_ptr< CommandBuffer > & commandBuffer) const noexcept
+	Queue::submit (const CommandBuffer & commandBuffer) const noexcept
 	{
-		VkCommandBuffer commandBufferHandle = commandBuffer->handle();
+		VkCommandBuffer commandBufferHandle = commandBuffer.handle();
 
 		const VkSubmitInfo submitInfo
 		{
@@ -53,8 +54,8 @@ namespace EmEn::Vulkan
 			.pSignalSemaphores = VK_NULL_HANDLE,
 		};
 
-		/* [VULKAN-CPU-SYNC] */
-		const std::lock_guard< std::mutex > lock{m_queueAccess};
+		/* [VULKAN-CPU-SYNC] vkQueueSubmit() */
+		const std::lock_guard< Device > lock{*m_device};
 
 		if ( const auto result = vkQueueSubmit(m_handle, 1, &submitInfo, VK_NULL_HANDLE); result != VK_SUCCESS )
 		{
@@ -67,7 +68,7 @@ namespace EmEn::Vulkan
 	}
 
     bool
-	Queue::submit (const std::shared_ptr< CommandBuffer > & commandBuffer, const SynchInfo & synchInfo) const noexcept
+	Queue::submit (const CommandBuffer & commandBuffer, const SynchInfo & synchInfo) const noexcept
     {
         if ( synchInfo.waitSemaphores.size() != synchInfo.waitStages.size() )
         {
@@ -76,7 +77,7 @@ namespace EmEn::Vulkan
             return false;
         }
 
-        VkCommandBuffer commandBufferHandle = commandBuffer->handle();
+        VkCommandBuffer commandBufferHandle = commandBuffer.handle();
 
         const VkSubmitInfo submitInfo
 		{
@@ -91,8 +92,8 @@ namespace EmEn::Vulkan
             .pSignalSemaphores = synchInfo.signalSemaphores.data(),
         };
 
-		/* [VULKAN-CPU-SYNC] */
-        const std::lock_guard< std::mutex > lock{m_queueAccess};
+		/* [VULKAN-CPU-SYNC] vkQueueSubmit() */
+		const std::lock_guard< Device > lock{*m_device};
 
 		if ( const auto result = vkQueueSubmit(m_handle, 1, &submitInfo, synchInfo.fence); result != VK_SUCCESS )
         {
@@ -107,8 +108,8 @@ namespace EmEn::Vulkan
 	bool
 	Queue::present (const VkPresentInfoKHR * presentInfo, bool & swapChainRecreationNeeded) const noexcept
 	{
-		/* [VULKAN-CPU-SYNC] */
-		const std::lock_guard< std::mutex > lock{m_queueAccess};
+		/* [VULKAN-CPU-SYNC] vkQueuePresentKHR() */
+		const std::lock_guard< Device > lock{*m_device};
 
 		switch ( vkQueuePresentKHR(m_handle, presentInfo) )
 		{
@@ -139,8 +140,8 @@ namespace EmEn::Vulkan
 	bool
 	Queue::waitIdle () const noexcept
 	{
-		/* [VULKAN-CPU-SYNC] */
-		const std::lock_guard< std::mutex > lock{m_queueAccess};
+		/* [VULKAN-CPU-SYNC] vkQueueWaitIdle() */
+		const std::lock_guard< Device > lock{*m_device};
 
 		if ( const auto result = vkQueueWaitIdle(m_handle); result != VK_SUCCESS )
 		{

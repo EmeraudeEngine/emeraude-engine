@@ -37,6 +37,7 @@
 #include "Vulkan/Image.hpp"
 #include "Vulkan/ImageView.hpp"
 #include "Vulkan/Instance.hpp"
+#include "Vulkan/Device.hpp"
 
 namespace EmEn::Graphics::RenderTarget
 {

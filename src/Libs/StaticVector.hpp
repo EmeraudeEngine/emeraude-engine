@@ -42,6 +42,7 @@
 #include <initializer_list>
 #include <algorithm>
 #include <compare>
+#include <iostream>
 
 namespace EmEn::Libs
 {
@@ -911,7 +912,7 @@ namespace EmEn::Libs
 					{
 						for ( size_type index = newSize; index < oldSize; ++index )
 						{
-							this->data()[index].~T();
+							this->data()[index].~data_t();
 						}
 					}
 				}
@@ -953,6 +954,8 @@ namespace EmEn::Libs
 #if defined(__cpp_exceptions)
 					throw std::length_error{"StaticVector::emplace_back: Capacity exceeded!"};
 #else
+					std::cerr << "StaticVector::emplace_back: Capacity (" << max_capacity << ") exceeded!" << std::endl;
+
 					std::abort();
 #endif
 				}

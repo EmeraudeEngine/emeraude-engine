@@ -344,6 +344,11 @@ namespace EmEn
 			return;
 		}
 
+		if ( m_logger != nullptr )
+		{
+			m_logger->push(severity, tag, std::string{message}, location);
+		}
+
 		std::stringstream trace;
 
 		trace << '[' << to_string(severity) << "][" << tag << ']';
@@ -359,6 +364,8 @@ namespace EmEn
 		{
 			this->injectProcessInfo(trace);
 		}
+
+		const std::lock_guard< std::mutex > lock{m_consoleAccess};
 
 		switch ( severity )
 		{
@@ -377,16 +384,19 @@ namespace EmEn
 				std::cerr << trace.str() << '\n';
 				break;
 		}
-
-		if ( m_logger != nullptr )
-		{
-			m_logger->push(severity, tag, std::string{message}, location);
-		}
 	}
 
 	void
 	Tracer::traceAPI (const char * tag, const char * functionName, std::string_view message, const std::source_location & location) const noexcept
 	{
+		if ( m_logger != nullptr )
+		{
+			std::stringstream logMessage{};
+			logMessage << functionName << "() : " << message;
+
+			m_logger->push(Severity::Info, tag, logMessage.str(), location);
+		}
+
 		std::stringstream trace;
 
 		trace << "[" << tag << "] ";
@@ -410,15 +420,9 @@ namespace EmEn
 			this->injectProcessInfo(trace);
 		}
 
+		const std::lock_guard< std::mutex > lock{m_consoleAccess};
+
 		std::cout << trace.str() << "\n";
-
-		if ( m_logger != nullptr )
-		{
-			std::stringstream logMessage{};
-			logMessage << functionName << "() : " << message;
-
-			m_logger->push(Severity::Info, tag, logMessage.str(), location);
-		}
 	}
 
 	void

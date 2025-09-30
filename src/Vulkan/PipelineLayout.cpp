@@ -146,13 +146,7 @@ namespace EmEn::Vulkan
 
 		if ( m_handle != VK_NULL_HANDLE )
 		{
-			this->device()->waitIdle("Destroying a pipeline layout");
-
-			vkDestroyPipelineLayout(
-				this->device()->handle(),
-				m_handle,
-				VK_NULL_HANDLE
-			);
+			vkDestroyPipelineLayout(this->device()->handle(), m_handle, VK_NULL_HANDLE);
 
 			m_handle = VK_NULL_HANDLE;
 		}

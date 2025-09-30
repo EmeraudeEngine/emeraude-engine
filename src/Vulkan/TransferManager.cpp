@@ -26,18 +26,9 @@
 
 #include "TransferManager.hpp"
 
-/* STL inclusions. */
-#include <sstream>
-
 /* Local inclusions. */
-#include "Sync/ImageMemoryBarrier.hpp"
-#include "Sync/Semaphore.hpp"
 #include "Device.hpp"
-#include "Queue.hpp"
 #include "CommandBuffer.hpp"
-#include "Buffer.hpp"
-#include "Image.hpp"
-#include "StagingBuffer.hpp"
 
 namespace EmEn::Vulkan
 {
@@ -48,12 +39,12 @@ namespace EmEn::Vulkan
 	{
 		if ( m_device == nullptr || !m_device->isCreated() )
 		{
-			Tracer::error(ClassId, "No device set !");
+			Tracer::error(ClassId, "No valid device set at startup !");
 
 			return false;
 		}
 
-		m_transferCommandPool = std::make_shared< CommandPool >(m_device, m_device->getTransferFamilyIndex(), true, false, false);
+		m_transferCommandPool = std::make_shared< CommandPool >(m_device, m_device->getGraphicsTransferFamilyIndex(), true, true, false);
 		m_transferCommandPool->setIdentifier(ClassId, "Transfer", "CommandPool");
 
 		if ( !m_transferCommandPool->createOnHardware() )
@@ -65,28 +56,20 @@ namespace EmEn::Vulkan
 			return false;
 		}
 
-		/* FIXME: Check the idea beyond this with the new queue system. */
-
 		/* Read the queue configuration from the device. */
 		if ( !m_device->hasBasicSupport() )
 		{
-			m_separatedQueues = true;
+			m_graphicsCommandPool = std::make_shared< CommandPool >(m_device, m_device->getGraphicsFamilyIndex(), true, true, false);
+			m_graphicsCommandPool->setIdentifier(ClassId, "Specific", "CommandPool");
 
-			m_specificCommandPool = std::make_shared< CommandPool >(m_device, m_device->getGraphicsFamilyIndex(), true, false, false);
-			m_specificCommandPool->setIdentifier(ClassId, "Specific", "CommandPool");
-
-			if ( !m_specificCommandPool->createOnHardware() )
+			if ( !m_graphicsCommandPool->createOnHardware() )
 			{
 				Tracer::error(ClassId, "Unable to create the specific command pool !");
 
-				m_specificCommandPool.reset();
+				m_graphicsCommandPool.reset();
 
 				return false;
 			}
-		}
-		else
-		{
-			m_specificCommandPool = m_transferCommandPool;
 		}
 
 		m_serviceInitialized = true;
@@ -97,393 +80,178 @@ namespace EmEn::Vulkan
 	bool
 	TransferManager::onTerminate () noexcept
 	{
-		/* [VULKAN-CPU-SYNC] */
-		//const std::lock_guard< Device > lock{*m_device};
-
 		m_serviceInitialized = false;
 
-		/* FIXME: Seems unnecessary */
-		m_device->waitIdle("Destroying a transfer manager");
+		m_device->waitIdle("TransferManager::onTerminate()");
 
-		m_specificCommandPool.reset();
+		m_bufferTransferOperations.clear();
+		m_imageTransferOperations.clear();
+
+		m_graphicsCommandPool.reset();
 		m_transferCommandPool.reset();
-
-		m_stagingBuffers.clear();
 
 		m_device.reset();
 
 		return true;
 	}
 
-	std::string
-	TransferManager::getStagingBuffersStatistics () const noexcept
+	BufferTransferOperation *
+	TransferManager::getAndReserveBufferTransferOperation (size_t requiredBytes) noexcept
 	{
-		std::stringstream output;
-
-		output << "Allocated staging buffers :" "\n";
-
-		for ( const auto & stagingBuffer : m_stagingBuffers )
-		{
-			output << " - Buffer @" << stagingBuffer.get() << " size " << stagingBuffer->bytes() << " bytes" "\n";
-		}
-
-		return output.str();
-	}
-
-	std::shared_ptr< StagingBuffer >
-	TransferManager::getAndReserveStagingBuffer (size_t bytes) noexcept
-	{
-		TraceInfo{ClassId} << this->getStagingBuffersStatistics();
+		BufferTransferOperation * operation = nullptr;
 
 		/* Try to get an existing one with the right size... */
-		for ( const auto & stagingBuffer : m_stagingBuffers )
+		for ( auto & transferOperation : m_bufferTransferOperations )
 		{
-			if ( !stagingBuffer->isFree() )
+			if ( !transferOperation.isAvailable() )
 			{
 				continue;
 			}
 
-			if ( bytes <= stagingBuffer->bytes() )
+			if ( requiredBytes <= transferOperation.bytes() )
 			{
-				return stagingBuffer;
+				TraceDebug{ClassId} << "Re-use a buffer transfer operation of " << transferOperation.bytes() << " bytes for " << requiredBytes << " bytes! (A)";
+
+				operation = &transferOperation;
+
+				break;
 			}
 		}
 
 		/* Try to get a free one for reallocation. */
-		for ( const auto & stagingBuffer : m_stagingBuffers )
+		if ( operation == nullptr )
 		{
-			if ( !stagingBuffer->isFree() )
+			for ( auto & transferOperation : m_bufferTransferOperations )
 			{
-				continue;
-			}
-
-			if ( bytes > stagingBuffer->bytes() )
-			{
-				if ( !stagingBuffer->recreateOnHardware(bytes) )
+				if ( !transferOperation.isAvailable() )
 				{
 					continue;
 				}
-			}
 
-			return stagingBuffer;
+				if ( requiredBytes > transferOperation.bytes() )
+				{
+					TraceDebug{ClassId} << "Resizing buffer transfer operation (" << transferOperation.bytes() << " bytes -> " << requiredBytes << " bytes) ...";
+
+					if ( !transferOperation.expanseStagingBufferCapacityTo(requiredBytes) )
+					{
+						continue;
+					}
+				}
+				else
+				{
+					TraceDebug{ClassId} << "Re-use a buffer transfer operation of " << transferOperation.bytes() << " bytes for " << requiredBytes << " bytes! (B)";
+				}
+
+				operation = &transferOperation;
+
+				break;
+			}
 		}
 
 		/* ... Or create a new one. */
-		auto stagingBuffer = std::make_shared< StagingBuffer >(m_device, bytes);
-		stagingBuffer->setIdentifier(ClassId, (std::stringstream{} << m_stagingBuffers.size() << "Bytes").str(), "StagingBuffer");
-
-		if ( !stagingBuffer->createOnHardware() )
+		if ( operation == nullptr )
 		{
-			TraceError{ClassId} << "Unable to create a new staging buffer of " << bytes << " bytes !";
+			TraceDebug{ClassId} << "Creating a new buffer transfer operation of " << requiredBytes << " bytes ...";
+
+			auto & transferOperation = m_bufferTransferOperations.emplace_back();
+
+			if ( !transferOperation.createOnHardware(m_transferCommandPool, requiredBytes) )
+			{
+				TraceError{ClassId} << "Unable to create a new staging buffer of " << requiredBytes << " bytes !";
+
+				return nullptr;
+			}
+
+			operation = &transferOperation;
+		}
+
+		if ( !operation->setRequestedForTransfer() )
+		{
+			TraceError{ClassId} << "Unable to get an available buffer transfer operation !";
 
 			return nullptr;
 		}
 
-		m_stagingBuffers.emplace_back(stagingBuffer);
-
-		return stagingBuffer;
+		return operation;
 	}
 
-	bool
-	TransferManager::transfer (const StagingBuffer & stagingBuffer, const Buffer & dstBuffer, VkDeviceSize offset) noexcept
+	ImageTransferOperation *
+	TransferManager::getAndReserveImageTransferOperation (size_t requiredBytes) noexcept
 	{
-		const auto * fence = stagingBuffer.fence();
+		ImageTransferOperation * operation = nullptr;
 
-		if ( !fence->reset() )
+		/* Try to get an existing one with the right size... */
+		for ( auto & transferOperation : m_imageTransferOperations )
 		{
-			return false;
-		}
-
-		if constexpr ( IsDebug )
-		{
-			const auto endCopyOffset = offset + dstBuffer.bytes();
-
-			if ( endCopyOffset > stagingBuffer.bytes() )
+			if ( !transferOperation.isAvailable() )
 			{
-				const auto overflow = endCopyOffset - stagingBuffer.bytes();
+				continue;
+			}
 
-				TraceError{ClassId} <<
-					"Source buffer overflow with " << overflow << " bytes !" "\n"
-					"(offset:" << offset << " + length:" << dstBuffer.bytes() << ") > srcBuffer:" << stagingBuffer.bytes();
+			if ( requiredBytes <= transferOperation.bytes() )
+			{
+				TraceDebug{ClassId} << "Re-use an image transfer operation of " << transferOperation.bytes() << " bytes for " << requiredBytes << " bytes! (A)";
 
-				return false;
+				operation = &transferOperation;
+
+				break;
 			}
 		}
 
-		const auto commandBuffer = std::make_shared< CommandBuffer >(m_transferCommandPool, true);
-		commandBuffer->setIdentifier(ClassId, "ToBuffer", "CommandBuffer");
-
-		if ( !commandBuffer->isCreated() )
+		/* Try to get a free one for reallocation. */
+		if ( operation == nullptr )
 		{
-			Tracer::error(ClassId, "Unable to create a transfer command buffer !");
-
-			return false;
-		}
-
-		if ( !commandBuffer->begin(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT) )
-		{
-			return false;
-		}
-
-		commandBuffer->copy(stagingBuffer, dstBuffer, offset, 0, dstBuffer.bytes());
-
-		if ( !commandBuffer->end() )
-		{
-			return false;
-		}
-
-		auto * queue = m_device->getQueue(QueueJob::Transfer, QueuePriority::Medium);
-
-		if ( !queue->submit(commandBuffer, SynchInfo{}.withFence(fence->handle())) )
-		{
-			Tracer::error(ClassId, "Unable to transfer a buffer !");
-
-			return false;
-		}
-
-		return true;
-	}
-
-	bool
-	TransferManager::transfer (const StagingBuffer & stagingBuffer, Image & dstImage, VkDeviceSize /*offset*/) noexcept
-	{
-		const auto * fence = stagingBuffer.fence();
-
-		if ( !fence->reset() )
-		{
-			return false;
-		}
-
-		Sync::Semaphore transferCompleteSemaphore{m_device};
-
-		if ( !transferCompleteSemaphore.createOnHardware() )
-		{
-			Tracer::error(ClassId, "Unable to create the semaphore for image transfer !");
-
-			return false;
-		}
-
-		constexpr VkImageAspectFlags aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-		const auto baseWidth = dstImage.createInfo().extent.width;
-		const auto baseHeight = dstImage.createInfo().extent.height;
-		const auto pixelBytes = dstImage.pixelBytes();
-		const auto layerCount = dstImage.createInfo().arrayLayers;
-		const auto mipLevelCount = dstImage.createInfo().mipLevels;
-
-		/* NOTE: Work on the transfer queue. */
-		{
-			const auto commandBuffer = std::make_shared< CommandBuffer >(m_transferCommandPool, true);
-			commandBuffer->setIdentifier(ClassId, "StagingBufferToImage", "CommandBuffer");
-
-			if ( !commandBuffer->begin(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT) )
+			for ( auto & transferOperation : m_imageTransferOperations )
 			{
-				return false;
-			}
-
-			/* Prepare the image layout to receive data. */
-			{
-				Sync::ImageMemoryBarrier barrier{
-					dstImage,
-					VK_ACCESS_NONE, VK_ACCESS_TRANSFER_WRITE_BIT,
-					VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
-				};
-				barrier.setIdentifier(ClassId, "BaseImage", "ImageMemoryBarrier");
-
-				commandBuffer->pipelineBarrier(barrier, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
-			}
-
-			for ( uint32_t layerIndex = 0; layerIndex < layerCount; layerIndex++ )
-			{
-				const uint32_t layerOffset = layerIndex * (baseWidth * baseHeight * pixelBytes);
-
-				VkBufferImageCopy bufferImageCopy{};
-				bufferImageCopy.bufferOffset = layerOffset;
-				bufferImageCopy.bufferRowLength = 0;
-				bufferImageCopy.bufferImageHeight = 0;
-				bufferImageCopy.imageSubresource.aspectMask = aspectMask;
-				bufferImageCopy.imageSubresource.mipLevel = 0; /* NOTE: We copy only the first level. */
-				bufferImageCopy.imageSubresource.baseArrayLayer = layerIndex;
-				bufferImageCopy.imageSubresource.layerCount = 1;
-				bufferImageCopy.imageOffset.x = 0;
-				bufferImageCopy.imageOffset.y = 0;
-				bufferImageCopy.imageOffset.z = 0;
-				bufferImageCopy.imageExtent.width = baseWidth;
-				bufferImageCopy.imageExtent.height = baseHeight;
-				bufferImageCopy.imageExtent.depth = 1;
-
-				vkCmdCopyBufferToImage(
-					commandBuffer->handle(),
-					stagingBuffer.handle(),
-					dstImage.handle(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-					1, &bufferImageCopy
-				);
-			}
-
-			if ( mipLevelCount > 1 )
-			{
-				/* NOTE: Set the base image as a source for the next mip-map level. */
-				Sync::ImageMemoryBarrier barrier{
-					dstImage,
-					VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT,
-					VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-					aspectMask
-				};
-				barrier.setIdentifier(ClassId, "PrepareMipMapping", "ImageMemoryBarrier");
-
-				commandBuffer->pipelineBarrier(barrier, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
-			}
-
-			if ( commandBuffer->end() )
-			{
-				auto * queue = m_device->getQueue(QueueJob::Transfer, QueuePriority::Medium);
-
-				VkSemaphore semaphoreHandle = transferCompleteSemaphore.handle();
-
-				if ( !queue->submit(commandBuffer, SynchInfo{}.signals({&semaphoreHandle, 1})) )
+				if ( !transferOperation.isAvailable() )
 				{
-					Tracer::error(ClassId, "Unable to transfer an image (1/2) !");
-
-					return false;
+					continue;
 				}
 
-				dstImage.setCurrentImageLayout(mipLevelCount > 1 ? VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL : VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-			}
-			else
-			{
-				Tracer::error(ClassId, "Unable to finish the command buffer to transfer an image !");
-
-				return false;
-			}
-
-			/* FIXME: This causes a VK_ERROR_DEVICE_LOST (smart-pointer gone) */
-		}
-
-		/* NOTE: Work on the graphics queue. */
-		{
-			const auto commandBuffer = std::make_shared< CommandBuffer >(m_specificCommandPool, true);
-			commandBuffer->setIdentifier(ClassId, "PrepareImage", "CommandBuffer");
-
-			if ( !commandBuffer->begin(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT) )
-			{
-				return false;
-			}
-
-			if ( mipLevelCount > 1 )
-			{
-				for ( uint32_t layerIndex = 0; layerIndex < layerCount; layerIndex++ )
+				if ( requiredBytes > transferOperation.bytes() )
 				{
-					for ( uint32_t mipLevelIndex = 1; mipLevelIndex < mipLevelCount; mipLevelIndex++ )
+					TraceDebug{ClassId} << "Resizing image transfer operation (" << transferOperation.bytes() << " bytes -> " << requiredBytes << " bytes) ...";
+
+					if ( !transferOperation.expanseStagingBufferCapacityTo(requiredBytes) )
 					{
-						VkImageBlit imageBlit{};
-
-						// Source image, base level or previous mip-map level.
-						imageBlit.srcSubresource.aspectMask = aspectMask;
-						imageBlit.srcSubresource.mipLevel = mipLevelIndex - 1;
-						imageBlit.srcSubresource.baseArrayLayer = layerIndex;
-						imageBlit.srcSubresource.layerCount = layerCount;
-						imageBlit.srcOffsets[1].x = static_cast< int32_t >(baseWidth >> (mipLevelIndex - 1));
-						imageBlit.srcOffsets[1].y = static_cast< int32_t >(baseHeight >> (mipLevelIndex - 1));
-						imageBlit.srcOffsets[1].z = 1;
-
-						// Destination mip-map level.
-						imageBlit.dstSubresource.aspectMask = aspectMask;
-						imageBlit.dstSubresource.mipLevel = mipLevelIndex;
-						imageBlit.dstSubresource.baseArrayLayer = layerIndex;
-						imageBlit.dstSubresource.layerCount = layerCount;
-						imageBlit.dstOffsets[1].x = static_cast< int32_t >(baseWidth >> mipLevelIndex);
-						imageBlit.dstOffsets[1].y = static_cast< int32_t >(baseHeight >> mipLevelIndex);
-						imageBlit.dstOffsets[1].z  = 1;
-
-						{
-							Sync::ImageMemoryBarrier barrier{
-								dstImage,
-								VK_ACCESS_TRANSFER_READ_BIT, VK_ACCESS_TRANSFER_WRITE_BIT,
-								VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-								aspectMask
-							};
-							barrier.targetMipLevel(mipLevelIndex);
-							barrier.targetLayer(layerIndex);
-							barrier.setIdentifier(ClassId, "MipMapLevelBeforeBlit", "ImageMemoryBarrier");
-
-							commandBuffer->pipelineBarrier(barrier, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
-						}
-
-						vkCmdBlitImage(
-							commandBuffer->handle(),
-							dstImage.handle(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-							dstImage.handle(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-							1, &imageBlit,
-							VK_FILTER_LINEAR // VK_FILTER_CUBIC_EXT
-						);
-
-						{
-							Sync::ImageMemoryBarrier barrier{
-								dstImage,
-								VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT,
-								VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-								aspectMask
-							};
-							barrier.targetMipLevel(mipLevelIndex);
-							barrier.targetLayer(layerIndex);
-							barrier.setIdentifier(ClassId, "MipMapLevelAfterBlit", "ImageMemoryBarrier");
-
-							commandBuffer->pipelineBarrier(barrier, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
-						}
+						continue;
 					}
 				}
-
-				/* Prepare the image layout to be used by a fragment shader. */
+				else
 				{
-					/* Prepare the image layout to be used by a fragment shader. */
-					Sync::ImageMemoryBarrier barrier{
-						dstImage,
-						VK_ACCESS_TRANSFER_READ_BIT, VK_ACCESS_SHADER_READ_BIT,
-						VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-						aspectMask
-					};
-					barrier.setIdentifier(ClassId, "FinalImage", "ImageMemoryBarrier");
-
-					commandBuffer->pipelineBarrier(barrier, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
-				}
-			}
-			else
-			{
-				/* Prepare the image layout to be used by a fragment shader. */
-				Sync::ImageMemoryBarrier barrier{
-					dstImage,
-					VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
-					VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-					aspectMask
-				};
-				barrier.setIdentifier(ClassId, "FinalImage", "ImageMemoryBarrier");
-
-				commandBuffer->pipelineBarrier(barrier, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
-			}
-
-			if ( commandBuffer->end() )
-			{
-				auto * queue = m_device->getQueue(QueueJob::GraphicsTransfer, QueuePriority::Medium);
-
-				VkSemaphore semaphoreHandle = transferCompleteSemaphore.handle();
-				VkPipelineStageFlags waitStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
-
-				if ( !queue->submit(commandBuffer, SynchInfo{}.waits({&semaphoreHandle, 1}, {&waitStage, 1}).withFence(fence->handle())) )
-				{
-					Tracer::error(ClassId, "Unable to transfer an image (2/2) !");
-
-					return false;
+					TraceDebug{ClassId} << "Re-use an image transfer operation of " << transferOperation.bytes() << " bytes for " << requiredBytes << " bytes! (B)";
 				}
 
-				dstImage.setCurrentImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-			}
-			else
-			{
-				Tracer::error(ClassId, "Unable to finish the command buffer to finalize the image !");
+				operation = &transferOperation;
 
-				return false;
+				break;
 			}
 		}
 
-		return true;
+		/* ... Or create a new one. */
+		if ( operation == nullptr )
+		{
+			TraceDebug{ClassId} << "Creating an image buffer transfer operation of " << requiredBytes << " bytes ...";
+
+			auto & transferOperation = m_imageTransferOperations.emplace_back();
+
+			if ( !transferOperation.createOnHardware(m_transferCommandPool, m_graphicsCommandPool, requiredBytes) )
+			{
+				TraceError{ClassId} << "Unable to create a new staging buffer of " << requiredBytes << " bytes !";
+
+				return nullptr;
+			}
+
+			operation = &transferOperation;
+		}
+
+		if ( !operation->setRequestedForTransfer() )
+		{
+			TraceError{ClassId} << "Unable to get an available image transfer operation !";
+
+			return nullptr;
+		}
+
+		return operation;
 	}
 }

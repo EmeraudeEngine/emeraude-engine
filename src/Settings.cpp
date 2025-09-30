@@ -28,7 +28,6 @@
 
 /* STL inclusions. */
 #include <ctime>
-#include <exception>
 #include <fstream>
 
 /* Local inclusions. */

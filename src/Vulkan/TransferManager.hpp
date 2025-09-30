@@ -37,6 +37,8 @@
 
 /* Local inclusions for inheritances. */
 #include "ServiceInterface.hpp"
+#include "BufferTransferOperation.hpp"
+#include "ImageTransferOperation.hpp"
 #include "Tracer.hpp"
 
 /* Forward declarations. */
@@ -48,7 +50,6 @@ namespace EmEn
 		class CommandPool;
 		class Buffer;
 		class Image;
-		class StagingBuffer;
 	}
 
 	class Arguments;
@@ -114,7 +115,7 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Transfer data to a buffer inside the GPU memory.
-			 * @tparam function_t The type of lambda to describe the data to write. Signature: bool (const StagingBuffer &).
+			 * @tparam function_t The type of lambda to describe the data to write. Signature: bool (const Buffer &).
 			 * @param targetBuffer A writable reference to the destination buffer.
 			 * @param requiredBytes The amount of data to write in bytes.
 			 * @param writeData A reference to a function to write data into the staging buffer.
@@ -122,14 +123,28 @@ namespace EmEn::Vulkan
 			 */
 			template< typename function_t >
 			bool
-			transfer (Buffer & targetBuffer, size_t requiredBytes, function_t && writeData) noexcept requires (std::is_invocable_v< function_t, const StagingBuffer & >)
+			transferBuffer (Buffer & targetBuffer, size_t requiredBytes, function_t && writeData) noexcept requires (std::is_invocable_v< function_t, const Buffer & >)
 			{
-				/* [VULKAN-CPU-SYNC] */
-				std::cout << "[" << std::this_thread::get_id() << "] TransferManager::transfer(Buffer), wait the device lock ..." << std::endl;
-				const std::lock_guard< Device > lock{*m_device};
-				std::cout << "[" << std::this_thread::get_id() << "] Lock acquired !" << std::endl;
+				/* [VULKAN-CPU-SYNC] Transfer to GPU (Abusive lock!) */
+				const std::lock_guard< std::mutex > lock{m_transferOperationsAccess};
 
-				const auto stagingBuffer = this->getAndReserveStagingBuffer(requiredBytes);
+				if ( !this->usable() )
+				{
+					TraceError{ClassId} << "The transfer manager is not usable !";
+
+					return false;
+				}
+
+				TraceDebug{ClassId} << "Initialize a buffer transfer operation for " << requiredBytes << " bytes (Buffer:" << targetBuffer.identifier() << ") ...";
+
+				const auto transferOperation = this->getAndReserveBufferTransferOperation(requiredBytes);
+
+				if ( transferOperation == nullptr )
+				{
+					return false;
+				}
+
+				auto * stagingBuffer = transferOperation->stagingBuffer();
 
 				if ( stagingBuffer == nullptr )
 				{
@@ -143,12 +158,12 @@ namespace EmEn::Vulkan
 					return false;
 				}
 
-				return this->transfer(*stagingBuffer, targetBuffer, 0);
+				return transferOperation->transfer(m_device, targetBuffer, 0);
 			}
 
 			/**
 			 * @brief Transfer data to an image inside the GPU memory.
-			 * @tparam function_t The type of lambda to describe the data to write. Signature: bool (const StagingBuffer &).
+			 * @tparam function_t The type of lambda to describe the data to write. Signature: bool (const Buffer &).
 			 * @param targetImage A writable reference to the destination buffer.
 			 * @param requiredBytes The amount of data to write in bytes.
 			 * @param writeData A reference to a function to write data into the staging buffer.
@@ -156,14 +171,28 @@ namespace EmEn::Vulkan
 			 */
 			template< typename function_t >
 			bool
-			transfer (Image & targetImage, size_t requiredBytes, function_t && writeData) noexcept requires (std::is_invocable_v< function_t, const StagingBuffer & >)
+			transferImage (Image & targetImage, size_t requiredBytes, function_t && writeData) noexcept requires (std::is_invocable_v< function_t, const Buffer & >)
 			{
-				/* [VULKAN-CPU-SYNC] */
-				std::cout << "[" << std::this_thread::get_id() << "] TransferManager::transfer(Buffer), wait the device lock ..." << std::endl;
-				const std::lock_guard< Device > lock{*m_device};
-				std::cout << "[" << std::this_thread::get_id() << "] Lock acquired !" << std::endl;
+				/* [VULKAN-CPU-SYNC] Transfer to GPU (Abusive lock!) */
+				const std::lock_guard< std::mutex > lock{m_transferOperationsAccess};
 
-				const auto stagingBuffer = this->getAndReserveStagingBuffer(requiredBytes);
+				if ( !this->usable() )
+				{
+					TraceError{ClassId} << "The transfer manager is not usable !";
+
+					return false;
+				}
+
+				TraceDebug{ClassId} << "Initialize an image transfer operation for " << requiredBytes << " bytes (Image:" << targetImage.identifier() << ") ...";
+
+				const auto transferOperation = this->getAndReserveImageTransferOperation(requiredBytes);
+
+				if ( transferOperation == nullptr )
+				{
+					return false;
+				}
+
+				auto * stagingBuffer = transferOperation->stagingBuffer();
 
 				if ( stagingBuffer == nullptr )
 				{
@@ -177,15 +206,8 @@ namespace EmEn::Vulkan
 					return false;
 				}
 
-				return this->transfer(*stagingBuffer, targetImage, 0);
+				return transferOperation->transfer(m_device, targetImage, 0);
 			}
-
-			/**
-			 * @brief Returns a string with the allocated staging buffers.
-			 * @return std::string
-			 */
-			[[nodiscard]]
-			std::string getStagingBuffersStatistics () const noexcept;
 
 		private:
 
@@ -196,39 +218,27 @@ namespace EmEn::Vulkan
 			bool onTerminate () noexcept override;
 
 			/**
-			 * @brief Returns a locked staging buffer.
-			 * @param bytes The size in bytes of the buffer.
-			 * @return std::shared_ptr< StagingBuffer >
+			 * @brief Returns a locked buffer transfer operation.
+			 * @param requiredBytes The size in bytes of the buffer.
+			 * @return BufferTransferOperation *
 			 */
 			[[nodiscard]]
-			std::shared_ptr< StagingBuffer > getAndReserveStagingBuffer (size_t bytes) noexcept;
+			BufferTransferOperation * getAndReserveBufferTransferOperation (size_t requiredBytes) noexcept;
 
 			/**
-			 * @brief Transfer a buffer from the CPU to the GPU.
-			 * @param stagingBuffer A reference to the staging buffer (CPU side).
-			 * @param dstBuffer A reference to the destination buffer (GPU side).
-			 * @param offset The offset in the staging buffer where the date to copy starts. Default 0.
-			 * @return bool
+			 * @brief Returns a locked image transfer operation.
+			 * @param requiredBytes The size in bytes of the buffer.
+			 * @return ImageTransferOperation *
 			 */
 			[[nodiscard]]
-			bool transfer (const StagingBuffer & stagingBuffer, const Buffer & dstBuffer, VkDeviceSize offset = 0) noexcept;
-
-			/**
-			 * @brief Transfer a buffer from the CPU to the GPU.
-			 * @note This version will generate mip-mapping on the GPU and is using two command buffers (transfer and graphics).
-			 * @param stagingBuffer A reference to the staging buffer (CPU side).
-			 * @param dstImage A reference to the destination image (GPU side).
-			 * @param offset The offset in the staging buffer where the date to copy starts. Default 0.
-			 * @return bool
-			 */
-			[[nodiscard]]
-			bool transfer (const StagingBuffer & stagingBuffer, Image & dstImage, VkDeviceSize offset = 0) noexcept;
+			ImageTransferOperation * getAndReserveImageTransferOperation (size_t requiredBytes) noexcept;
 
 			std::shared_ptr< Device > m_device;
 			std::shared_ptr< CommandPool > m_transferCommandPool;
-			std::shared_ptr< CommandPool > m_specificCommandPool;
-			std::vector< std::shared_ptr< StagingBuffer > > m_stagingBuffers;
+			std::shared_ptr< CommandPool > m_graphicsCommandPool;
+			std::vector< BufferTransferOperation > m_bufferTransferOperations;
+			std::vector< ImageTransferOperation > m_imageTransferOperations;
+			mutable std::mutex m_transferOperationsAccess;
 			bool m_serviceInitialized{false};
-			bool m_separatedQueues{false};
 	};
 }

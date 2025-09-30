@@ -81,13 +81,7 @@ namespace EmEn::Vulkan
 
 		if ( m_handle != VK_NULL_HANDLE )
 		{
-			this->device()->waitIdle("Destroying descriptor pool");
-
-			vkDestroyDescriptorPool(
-				this->device()->handle(),
-				m_handle,
-				VK_NULL_HANDLE
-			);
+			vkDestroyDescriptorPool(this->device()->handle(), m_handle, VK_NULL_HANDLE);
 
 			m_handle = VK_NULL_HANDLE;
 		}
@@ -100,8 +94,8 @@ namespace EmEn::Vulkan
 	VkDescriptorSet
 	DescriptorPool::allocateDescriptorSet (const DescriptorSetLayout & descriptorSetLayout) const noexcept
 	{
-		/* [VULKAN-CPU-SYNC] */
-		const std::lock_guard< std::mutex > lock{m_allocationsAccess};
+		/* [VULKAN-CPU-SYNC] vkAllocateDescriptorSets() */
+		const std::lock_guard< std::mutex > lock{m_descriptorPoolAccess};
 
 		auto * descriptorSetLayoutHandle = descriptorSetLayout.handle();
 
@@ -114,13 +108,7 @@ namespace EmEn::Vulkan
 
 		VkDescriptorSet descriptorSetHandle = VK_NULL_HANDLE;
 
-		const auto result = vkAllocateDescriptorSets(
-			this->device()->handle(),
-			&allocateInfo,
-			&descriptorSetHandle
-		);
-
-		if ( result != VK_SUCCESS )
+		if ( const auto result = vkAllocateDescriptorSets(this->device()->handle(), &allocateInfo, &descriptorSetHandle); result != VK_SUCCESS )
 		{
 			TraceError{ClassId} << "Unable to allocate a descriptor set : " << vkResultToCString(result) << " !";
 
@@ -133,20 +121,28 @@ namespace EmEn::Vulkan
 	bool
 	DescriptorPool::freeDescriptorSet (VkDescriptorSet descriptorSetHandle) const noexcept
 	{
-		/* [VULKAN-CPU-SYNC] */
-		const std::lock_guard< std::mutex > lock{m_allocationsAccess};
+		/* [VULKAN-CPU-SYNC] vkFreeDescriptorSets() */
+		const std::lock_guard< std::mutex > lock{m_descriptorPoolAccess};
 
-		this->device()->waitIdle("Freeing descriptor set");
-
-		const auto result = vkFreeDescriptorSets(
-			this->device()->handle(),
-			m_handle,
-			1, &descriptorSetHandle
-		);
-
-		if ( result != VK_SUCCESS )
+		if ( const auto result = vkFreeDescriptorSets(this->device()->handle(), m_handle, 1, &descriptorSetHandle); result != VK_SUCCESS )
 		{
 			TraceError{ClassId} << "Unable to allocate a descriptor set : " << vkResultToCString(result) << " !";
+
+			return false;
+		}
+
+		return true;
+	}
+
+	bool
+	DescriptorPool::reset () const noexcept
+	{
+		/* [VULKAN-CPU-SYNC] vkResetDescriptorPool() */
+		const std::lock_guard< std::mutex > lock{m_descriptorPoolAccess};
+
+		if ( const auto result = vkResetDescriptorPool(this->device()->handle(), m_handle, 0); result != VK_SUCCESS )
+		{
+			TraceError{ClassId} << "Unable to reset the descriptor pool : " << vkResultToCString(result) << " !";
 
 			return false;
 		}

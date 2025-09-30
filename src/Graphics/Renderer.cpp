@@ -59,6 +59,91 @@ namespace EmEn::Graphics
 	using namespace Saphir;
 
 	bool
+	RendererFrameScope::initialize (const std::shared_ptr< Device > & device, uint32_t frameIndex) noexcept
+	{
+		const auto frameName = RendererFrameScope::getFrameName(frameIndex);
+
+		m_frameIndex = frameIndex;
+
+		m_commandPool = std::make_shared< CommandPool >(device, device->getGraphicsFamilyIndex(), false, true, false);
+		m_commandPool->setIdentifier(ClassId, frameName, "CommandPool");
+
+		if ( !m_commandPool->createOnHardware() )
+		{
+			TraceError{ClassId} << "Unable to create the command pool #" << m_frameIndex << " !";
+
+			return false;
+		}
+
+		m_commandBuffer = std::make_shared< CommandBuffer >(m_commandPool);
+		m_commandBuffer->setIdentifier(ClassId, frameName, "CommandBuffer");
+
+		if ( !m_commandBuffer->isCreated() )
+		{
+			TraceError{ClassId} << "Unable to create the command buffer #" << m_frameIndex << " !";
+
+			return false;
+		}
+
+		m_inFlightFence = std::make_unique< Sync::Fence >(device, VK_FENCE_CREATE_SIGNALED_BIT);
+#if IS_MACOS
+		m_inFlightFence->setIdentifier(ClassId, (std::stringstream{} << "Frame" << frameIndex << "ImageInFlight").str(), "Fence");
+#else
+		m_inFlightFence->setIdentifier(ClassId, std::format("Frame{}ImageInFlight", frameIndex), "Fence");
+#endif
+
+		if ( !m_inFlightFence->createOnHardware() )
+		{
+			TraceError{ClassId} << "Unable to create a fence #" << frameIndex << " for in-flight !";
+
+			return false;
+		}
+
+		m_imageAvailableSemaphore = std::make_unique< Sync::Semaphore >(device);
+#if IS_MACOS
+		m_imageAvailableSemaphore->setIdentifier(ClassId, (std::stringstream{} << "Frame" << frameIndex << "ImageAvailable").str(), "Semaphore");
+#else
+		m_imageAvailableSemaphore->setIdentifier(ClassId, std::format("Frame{}ImageAvailable", frameIndex), "Semaphore");
+#endif
+
+		if ( !m_imageAvailableSemaphore->createOnHardware() )
+		{
+			TraceError{ClassId} << "Unable to create a semaphore #" << frameIndex << " for image available !";
+
+			return false;
+		}
+
+		m_renderFinishedSemaphore = std::make_unique< Sync::Semaphore >(device);
+#if IS_MACOS
+		m_renderFinishedSemaphore->setIdentifier(ClassId, (std::stringstream{} << "Frame" << frameIndex << "RenderFinished").str(), "Semaphore");
+#else
+		m_renderFinishedSemaphore->setIdentifier(ClassId, std::format("Frame{}RenderFinished", frameIndex), "Semaphore");
+#endif
+
+		if ( !m_renderFinishedSemaphore->createOnHardware() )
+		{
+			TraceError{ClassId} << "Unable to create a semaphore #" << frameIndex << " for image finished !";
+
+			return false;
+		}
+
+		return true;
+	}
+
+	void
+	RendererFrameScope::declareSemaphore (const std::shared_ptr< Sync::Semaphore > & semaphore, bool primary) noexcept
+	{
+		const auto handle = semaphore->handle();
+
+		if ( primary )
+		{
+			m_primarySemaphores.emplace_back(handle);
+		}
+
+		m_secondarySemaphores.emplace_back(handle);
+	}
+
+	bool
 	Renderer::initializeSubServices () noexcept
 	{
 		/* Initialize the graphics shader manager. */
@@ -329,14 +414,11 @@ namespace EmEn::Graphics
 	bool
 	Renderer::onTerminate () noexcept
 	{
-		size_t error = 0;
-
 		m_serviceInitialized = false;
 
-		/* [VULKAN-CPU-SYNC] Renderer */
-		//const std::lock_guard< Device > lock{*m_device};
-
 		m_device->waitIdle("Renderer::onTerminate()");
+
+		size_t error = 0;
 
 		/* NOTE: Stacked resources on the runtime. */
 		{
@@ -382,13 +464,13 @@ namespace EmEn::Graphics
 			{
 				if ( service->terminate() )
 				{
-					TraceSuccess{ClassId} << service->name() << " sub-service terminated gracefully !";
+					TraceSuccess{ClassId} << service->name() << " sub-service terminated gracefully!";
 				}
 				else
 				{
 					error++;
 
-					TraceError{ClassId} << service->name() << " sub-service failed to terminate properly !";
+					TraceError{ClassId} << service->name() << " sub-service failed to terminate properly!";
 				}
 			}
 
@@ -537,13 +619,12 @@ namespace EmEn::Graphics
 				this->renderViews(0, *scene);
 			}
 
-			/* TODO/FIXME: Secure access to the queue. */
-			const auto * queue = this->device()->getQueue(QueueJob::Graphics, QueuePriority::High);
+			const auto * queue = this->device()->getGraphicsQueue(QueuePriority::High);
 			const auto fence = m_offscreenView->fence();
 
-			if ( !fence->waitAndReset(250000000) )
+			if ( !fence->waitAndReset(m_timeout) )
 			{
-				TraceDebug{ClassId} << "Unable to wait on render to texture " << m_offscreenView->id() << " !";
+				TraceDebug{ClassId} << "Unable to wait on frame " << m_offscreenView->id() << " !";
 
 				return;
 			}
@@ -575,7 +656,7 @@ namespace EmEn::Graphics
 			}
 
 			const auto submitted = queue->submit(
-				commandBuffer,
+				*commandBuffer,
 				SynchInfo{}
 					.withFence(fence->handle())
 			);
@@ -591,19 +672,41 @@ namespace EmEn::Graphics
 		}
 		else
 		{
-			const auto imageIndex = m_swapChain->acquireNextImage();
+			/* NOTE: Wait for the current frame to complete. */
+			auto & currentFrameScope = m_rendererFrameScope[m_currentFrameIndex];
 
-			if ( !imageIndex )
+			if ( !currentFrameScope.inFlightFence()->wait(m_timeout) )
+			{
+				TraceError{ClassId} << "Something wrong happens while waiting the fence for image #" << m_currentFrameIndex << " !";
+
+				std::abort();
+
+				return;
+			}
+
+			if ( !currentFrameScope.inFlightFence()->reset() )
+			{
+				TraceError{ClassId} << " Unable to reset in-flight fence for image " << m_currentFrameIndex << " !" "\n";
+
+				return;
+			}
+
+			/* NOTE: Get the new frame to render to. */
+			const auto frameIndexOpt = m_swapChain->acquireNextImage(currentFrameScope.imageAvailableSemaphore(), m_timeout);
+
+			if ( !frameIndexOpt )
 			{
 				Tracer::error(ClassId, "Unable to acquire swap chain image !");
 
 				return;
 			}
 
+			const uint32_t frameIndex = frameIndexOpt.value();
+
 			m_statistics.start();
 
 			/* NOTE: Clear all semaphores for the new frame. */
-			m_rendererFrameScope[imageIndex.value()].clearSemaphores();
+			currentFrameScope.clearSemaphores();
 
 			/* NOTE: Offscreen rendering */
 			if ( scene != nullptr )
@@ -611,19 +714,19 @@ namespace EmEn::Graphics
 				if ( this->isShadowMapsEnabled() )
 				{
 					/* [VULKAN-SHADOW] */
-					this->renderShadowMaps(imageIndex.value(), *scene);
+					this->renderShadowMaps(m_currentFrameIndex, *scene);
 				}
 
 				if ( this->isRenderToTexturesEnabled() )
 				{
-					this->renderRenderToTextures(imageIndex.value(), *scene);
+					this->renderRenderToTextures(m_currentFrameIndex, *scene);
 				}
 
-				this->renderViews(imageIndex.value(), *scene);
+				this->renderViews(m_currentFrameIndex, *scene);
 			}
 
 			/* Then we need the command buffer linked to this image by its index. */
-			const auto commandBuffer = m_rendererFrameScope[imageIndex.value()].commandBuffer();
+			const auto commandBuffer = currentFrameScope.commandBuffer();
 
 			if ( !commandBuffer->begin(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT) )
 			{
@@ -648,26 +751,33 @@ namespace EmEn::Graphics
 				return;
 			}
 
-			{
-				/* [VULKAN-CPU-SYNC] Renderer */
-				const std::lock_guard< Device > lock{*m_device};
+			currentFrameScope.secondarySemaphores().emplace_back(currentFrameScope.imageAvailableSemaphore()->handle());
 
-				if ( !m_swapChain->submitCommandBuffer(commandBuffer, imageIndex.value(), m_rendererFrameScope[imageIndex.value()].secondarySemaphores()) )
-				{
-					return;
-				}
+			const auto result = m_swapChain->submitCommandBuffer(
+				commandBuffer,
+				frameIndex,
+				currentFrameScope.secondarySemaphores(),
+				currentFrameScope.renderFinishedSemaphore(),
+				currentFrameScope.inFlightFence()
+			);
+
+			if ( !result )
+			{
+				TraceError{ClassId} << "Unable to submit the command buffer for swap-chain frame #" << frameIndex << " !";
+
+				return;
 			}
 
 			m_statistics.stop();
+
+			m_currentFrameIndex = (m_currentFrameIndex + 1) % m_rendererFrameScope.size();
 		}
 	}
 
 	std::shared_ptr< CommandBuffer >
 	Renderer::getCommandBuffer (const std::shared_ptr< RenderTarget::Abstract > & renderTarget) noexcept
 	{
-		const auto commandBufferIt = m_offScreenCommandBuffers.find(renderTarget);
-
-		if ( commandBufferIt != m_offScreenCommandBuffers.cend() )
+		if ( const auto commandBufferIt = m_offScreenCommandBuffers.find(renderTarget); commandBufferIt != m_offScreenCommandBuffers.cend() )
 		{
 			return commandBufferIt->second;
 		}
@@ -688,10 +798,10 @@ namespace EmEn::Graphics
 	}
 
 	void
-	Renderer::renderShadowMaps (uint32_t frameIndex, Scenes::Scene & scene) noexcept
+	Renderer::renderShadowMaps (uint32_t CPUFrameIndex, Scenes::Scene & scene) noexcept
 	{
 		/* TODO/FIXME: Secure access to the queue. */
-		const auto * queue = this->device()->getQueue(QueueJob::Graphics, QueuePriority::High);
+		const auto * queue = this->device()->getGraphicsQueue(QueuePriority::High);
 
 		scene.forEachRenderToShadowMap([&] (const std::shared_ptr< RenderTarget::Abstract > & shadowMap) {
 			if constexpr ( IsDebug )
@@ -704,14 +814,14 @@ namespace EmEn::Graphics
 				}
 			}
 
-			const auto fence = shadowMap->fence();
+			/*const auto fence = shadowMap->fence();
 
 			if ( !fence->waitAndReset(250000000) )
 			{
 				TraceDebug{ClassId} << "Unable to wait on shadow map " << shadowMap->id() << " !";
 
 				return;
-			}
+			}*/
 
 			const auto commandBuffer = this->getCommandBuffer(shadowMap);
 
@@ -738,10 +848,10 @@ namespace EmEn::Graphics
 			const auto semaphoreHandle = shadowMap->semaphore()->handle();
 
 			const auto submitted = queue->submit(
-				commandBuffer,
+				*commandBuffer,
 				SynchInfo{}
 					.signals({&semaphoreHandle, 1})
-					.withFence(fence->handle())
+					//.withFence(fence->handle())
 			);
 
 			if ( !submitted )
@@ -751,15 +861,15 @@ namespace EmEn::Graphics
 				return;
 			}
 
-			m_rendererFrameScope[frameIndex].declareSemaphore(shadowMap->semaphore(), true);
+			m_rendererFrameScope[CPUFrameIndex].declareSemaphore(shadowMap->semaphore(), true);
 		});
 	}
 
 	void
-	Renderer::renderRenderToTextures (uint32_t frameIndex, Scenes::Scene & scene) noexcept
+	Renderer::renderRenderToTextures (uint32_t CPUFrameIndex, Scenes::Scene & scene) noexcept
 	{
 		/* TODO/FIXME: Secure access to the queue. */
-		const auto * queue = this->device()->getQueue(QueueJob::Graphics, QueuePriority::High);
+		const auto * queue = this->device()->getGraphicsQueue(QueuePriority::High);
 
 		scene.forEachRenderToTexture([&] (const std::shared_ptr< RenderTarget::Abstract > & renderToTexture)
 		{
@@ -773,14 +883,14 @@ namespace EmEn::Graphics
 				}
 			}
 
-			const auto fence = renderToTexture->fence();
+			/*const auto fence = renderToTexture->fence();
 
 			if ( !fence->waitAndReset(250000000) )
 			{
 				TraceDebug{ClassId} << "Unable to wait on render to texture " << renderToTexture->id() << " !";
 
 				return;
-			}
+			}*/
 
 			const auto commandBuffer = this->getCommandBuffer(renderToTexture);
 
@@ -806,15 +916,15 @@ namespace EmEn::Graphics
 
 			const auto signalSemaphoreHandle = renderToTexture->semaphore()->handle();
 
-			const auto & waitSemaphores = m_rendererFrameScope[frameIndex].primarySemaphores();
+			const auto & waitSemaphores = m_rendererFrameScope[CPUFrameIndex].primarySemaphores();
 			const StaticVector< VkPipelineStageFlags, 16 > waitStages(waitSemaphores.size(), VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
 
 			const auto submitted = queue->submit(
-				commandBuffer,
+				*commandBuffer,
 				SynchInfo{}
 					.waits(waitSemaphores, waitStages)
 					.signals({&signalSemaphoreHandle, 1})
-					.withFence(fence->handle())
+					//.withFence(fence->handle())
 			);
 
 			if ( !submitted )
@@ -824,7 +934,7 @@ namespace EmEn::Graphics
 				return;
 			}
 
-			m_rendererFrameScope[frameIndex].declareSemaphore(renderToTexture->semaphore(), false);
+			m_rendererFrameScope[CPUFrameIndex].declareSemaphore(renderToTexture->semaphore(), false);
 		});
 	}
 
@@ -913,8 +1023,6 @@ namespace EmEn::Graphics
 	void
 	Renderer::destroyCommandSystem () noexcept
 	{
-		m_device->waitIdle("Destroying the renderer command pool");
-
 		m_offScreenCommandPool.reset();
 
 		m_rendererFrameScope.clear();
@@ -927,6 +1035,8 @@ namespace EmEn::Graphics
 		{
 			return true;
 		}
+
+		this->device()->waitIdle("The swap chain recreation.");
 
 		//this->destroyCommandSystem();
 
