@@ -40,7 +40,6 @@
 #include "DeviceMemory.hpp"
 #include "MemoryRegion.hpp"
 #include "TransferManager.hpp"
-#include "StagingBuffer.hpp"
 #include "Utility.hpp"
 #include "Tracer.hpp"
 
@@ -167,7 +166,7 @@ namespace EmEn::Vulkan
 			return false;
 		}
 
-		return transferManager.transfer(*this, pixmap.bytes(), [&pixmap] (const StagingBuffer & stagingBuffer) {
+		return transferManager.transferImage(*this, pixmap.bytes(), [&pixmap] (const Buffer & stagingBuffer) {
 			return stagingBuffer.writeData({pixmap.data().data(), pixmap.bytes()});
 		});
 	}
@@ -194,7 +193,7 @@ namespace EmEn::Vulkan
 		});
 
 		/* NOTE: We will write all 6 pixmaps next to each others in the staging buffer. */
-		return transferManager.transfer(*this, totalBytes, [&pixmaps] (const StagingBuffer & stagingBuffer) {
+		return transferManager.transferImage(*this, totalBytes, [&pixmaps] (const Buffer & stagingBuffer) {
 			size_t offset = 0;
 
 			for ( const auto & pixmap : pixmaps )
@@ -227,7 +226,7 @@ namespace EmEn::Vulkan
 			return sum + frame.first.bytes();
 		});
 
-		return transferManager.transfer(*this, totalBytes, [&frames] (const StagingBuffer & stagingBuffer) {
+		return transferManager.transferImage(*this, totalBytes, [&frames] (const Buffer & stagingBuffer) {
 			size_t offset = 0;
 
 			for ( const auto & pixmap : std::ranges::views::keys(frames) )
@@ -256,7 +255,7 @@ namespace EmEn::Vulkan
 			return false;
 		}
 
-		return transferManager.transfer(*this, memoryRegion.bytes(), [&memoryRegion] (const StagingBuffer & stagingBuffer) {
+		return transferManager.transferImage(*this, memoryRegion.bytes(), [&memoryRegion] (const Buffer & stagingBuffer) {
 			return stagingBuffer.writeData(memoryRegion);
 		});
 	}
@@ -289,13 +288,7 @@ namespace EmEn::Vulkan
 
 		if ( m_handle != VK_NULL_HANDLE )
 		{
-			this->device()->waitIdle("Destroying an image");
-
-			vkDestroyImage(
-				this->device()->handle(),
-				m_handle,
-				VK_NULL_HANDLE
-			);
+			vkDestroyImage(this->device()->handle(), m_handle, VK_NULL_HANDLE);
 
 			m_handle = VK_NULL_HANDLE;
 		}

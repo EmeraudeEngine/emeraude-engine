@@ -1,5 +1,5 @@
 /*
- * src/Vulkan/QueueFamilySQ.cpp
+* src/Vulkan/AbstractDeviceDependentObject.cpp
  * This file is part of Emeraude-Engine
  *
  * Copyright (C) 2010-2025 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
@@ -23,45 +23,39 @@
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
-
-#include "QueueFamilySQ.hpp"
+#include "AbstractDeviceDependentObject.hpp"
 
 /* Local inclusions. */
-#include "Device.hpp"
+#include "Vulkan/Device.hpp"
 
 namespace EmEn::Vulkan
 {
-	VkDeviceQueueCreateInfo
-	QueueFamilySQ::getCreateInfo (VkDeviceQueueCreateFlags createFlag) const noexcept
+	AbstractDeviceDependentObject::AbstractDeviceDependentObject (const std::shared_ptr< Device > & device) noexcept
+		: m_device{device}
 	{
-		VkDeviceQueueCreateInfo createInfo{};
-		createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-		createInfo.pNext = nullptr;
-		createInfo.flags = createFlag;
-		createInfo.queueFamilyIndex = m_queueFamilyIndex;
-		createInfo.queueCount = 1;
-		createInfo.pQueuePriorities = &m_queuePriority;
+		if constexpr ( IsDebug )
+		{
+			if ( m_device == nullptr )
+			{
+				Tracer::error("VulkanDeviceDependentObject", "Device is null !");
+			}
 
-		return createInfo;
+			if ( !m_device->isCreated() )
+			{
+				Tracer::warning("VulkanDeviceDependentObject", "Device is not yet usable !");
+			}
+		}
+	}
+
+	std::shared_ptr< Device >
+	AbstractDeviceDependentObject::device () const noexcept
+	{
+		return m_device;
 	}
 
 	bool
-	QueueFamilySQ::retrieveQueuesFromDevice (const std::shared_ptr< Device > & device) noexcept
+	AbstractDeviceDependentObject::hasDevice () const noexcept
 	{
-		VkQueue queueHandle{};
-
-		vkGetDeviceQueue(device->handle(), m_queueFamilyIndex, 0, &queueHandle);
-
-		if ( queueHandle == VK_NULL_HANDLE )
-		{
-			TraceError{ClassId} << "Unable to retrieve the queue (family #" << m_queueFamilyIndex << ") from the device  !";
-
-			return false;
-		}
-
-		m_queue = std::make_unique< Queue >(queueHandle, m_queueFamilyIndex);
-		m_queue->setIdentifier(ClassId, (std::stringstream{} << m_queueFamilyIndex << ".0").str(), "Queue");
-
-		return true;
+		return m_device != nullptr && m_device->handle() != VK_NULL_HANDLE;
 	}
 }

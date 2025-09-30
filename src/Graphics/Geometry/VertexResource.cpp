@@ -76,12 +76,6 @@ namespace EmEn::Graphics::Geometry
 			this->vertexColorEnabled() ? VertexColorType::RGBA : VertexColorType::None
 		);
 
-		TraceDebug{ClassId} <<
-			"Buffer statistics." "\n"
-			"Vertex count : " << m_localData.vertexCount() << "\n"
-			"Vertex buffer (VBO) size : " << vertexAttributes.size() << "\n"
-			"Vertex element count : " << vertexElementCount;
-
 		if ( vertexAttributes.empty() || vertexElementCount == 0 )
 		{
 			Tracer::error(ClassId, "Buffers creation fails !");

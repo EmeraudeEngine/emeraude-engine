@@ -492,11 +492,11 @@ namespace EmEn::Audio
 
 		if ( m_trackMixer.terminate() )
 		{
-			TraceSuccess{ClassId} << m_trackMixer.name() << " primary service terminated gracefully !";
+			TraceSuccess{ClassId} << m_trackMixer.name() << " primary service terminated gracefully!";
 		}
 		else
 		{
-			TraceError{ClassId} << m_trackMixer.name() << " primary service failed to terminate properly !";
+			TraceError{ClassId} << m_trackMixer.name() << " primary service failed to terminate properly!";
 		}
 
 		m_defaultSource.reset();

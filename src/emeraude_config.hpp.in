@@ -187,6 +187,7 @@ namespace EmEn
     #endif
 
     constexpr bool ThreadPoolDebugEnabled{@EMERAUDE_DEBUG_THREAD_POOL@};
+    constexpr unsigned int ThreadPoolDebugEnabledNumThreads{@EMERAUDE_DEBUG_THREAD_POOL_N@};
 }
 
 #undef ON

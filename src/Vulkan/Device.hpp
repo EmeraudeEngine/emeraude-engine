@@ -41,8 +41,11 @@
 #include "Libs/NameableTrait.hpp"
 
 /* Local inclusions for usage. */
+#include <ranges>
+
 #include "Libs/StaticVector.hpp"
 #include "PhysicalDevice.hpp"
+#include "Queue.hpp"
 #include "Types.hpp"
 
 /* Forward declarations. */
@@ -50,12 +53,110 @@ namespace EmEn::Vulkan
 {
 	class Instance;
 	class DeviceRequirements;
-	class QueueFamilyInterface;
-	class Queue;
 }
 
 namespace EmEn::Vulkan
 {
+	/** @brief Structure to sort queues by priority. */
+	class DeviceQueueConfiguration final
+	{
+		public:
+
+			/** @brief Class identifier. */
+			static constexpr auto ClassId{"VulkanDeviceQueueConfiguration"};
+
+			/**
+			 * @brief Constructs a default queue configuration for a device.
+			 */
+			DeviceQueueConfiguration () noexcept = default;
+
+			/**
+			 * @brief Set the family queue index for this job from the logical device analysis.
+			 * @param queueFamilyIndex An unsigned integer.
+			 * @return void
+			 */
+			void
+			setQueueFamilyIndex (uint32_t queueFamilyIndex) noexcept
+			{
+				m_queueFamilyIndex = queueFamilyIndex;
+			}
+
+			/**
+			 * @brief Returns the queue family index for this job.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			uint32_t
+			queueFamilyIndex () const noexcept
+			{
+				return m_queueFamilyIndex;
+			}
+
+			/**
+			 * @brief Registers a queue to the configuration.
+			 * @param queue A pointer to a queue.
+			 * @param priority The priority of the queue.
+			 * @return void
+			 */
+			void
+			registerQueue (Queue * queue, QueuePriority priority) noexcept
+			{
+				m_queueByPriorities[static_cast< uint32_t >(priority)].second.emplace_back(queue);
+			}
+
+			/**
+			 * @brief Returns queue priority structure.
+			 * @return const Libs::StaticVector< Queue *, 16 > &
+			 */
+			[[nodiscard]]
+			const Libs::StaticVector< Queue *, 16 > &
+			queues (QueuePriority priority) const noexcept
+			{
+				return m_queueByPriorities[static_cast< uint32_t >(priority)].second;
+			}
+
+			/**
+			 * @brief Returns a queue by priority.
+			 * @param priority The priority desired. High, Medium or Low.
+			 * @return Queue *
+			 */
+			[[nodiscard]]
+			Queue * queue (QueuePriority priority) const noexcept;
+
+			/**
+			 * @brief Returns whether this configuration is enabled/available in the device.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			enabled () const noexcept
+			{
+				return std::ranges::any_of(m_queueByPriorities, [] (const auto & queueList) {
+					return !queueList.second.empty();
+				});
+			}
+
+			/**
+			 * @brief Clears data and links.
+			 * @return void
+			 */
+			void
+			clear () noexcept
+			{
+				m_queueFamilyIndex = 0;
+
+				for ( auto & queueList : m_queueByPriorities | std::views::values )
+				{
+					queueList.clear();
+				}
+			}
+
+		private:
+
+			uint32_t m_queueFamilyIndex{0};
+			mutable std::array< std::pair< std::atomic< uint32_t >, Libs::StaticVector< Queue *, 16 > >, 3 > m_queueByPriorities;
+	};
+
 	/**
 	 * @brief Defines a logical device from a physical device.
 	 * @extends EmEn::Vulkan::AbstractObject This is the device, so a simple object is ok.
@@ -130,17 +231,6 @@ namespace EmEn::Vulkan
 			void destroy () noexcept;
 
 			/**
-			 * @brief Returns the physical device smart pointer.
-			 * @return std::shared_ptr< PhysicalDevice >
-			 */
-			[[nodiscard]]
-			std::shared_ptr< PhysicalDevice >
-			physicalDevice () const noexcept
-			{
-				return m_physicalDevice;
-			}
-
-			/**
 			 * @brief Returns the device handle.
 			 * @return VkDevice
 			 */
@@ -152,6 +242,17 @@ namespace EmEn::Vulkan
 			}
 
 			/**
+			 * @brief Returns the physical device smart pointer.
+			 * @return std::shared_ptr< PhysicalDevice >
+			 */
+			[[nodiscard]]
+			std::shared_ptr< PhysicalDevice >
+			physicalDevice () const noexcept
+			{
+				return m_physicalDevice;
+			}
+
+			/**
 			 * @brief Returns whether the device has only one family queue for all.
 			 * @return bool
 			 */
@@ -159,7 +260,7 @@ namespace EmEn::Vulkan
 			bool
 			hasBasicSupport () const noexcept
 			{
-				return m_hasBasicSupport;
+				return m_basicSupport;
 			}
 
 			/**
@@ -170,16 +271,40 @@ namespace EmEn::Vulkan
 			bool
 			hasGraphicsQueues () const noexcept
 			{
-				return m_queueFamilyPerJob.contains(QueueJob::Graphics);
+				return m_graphicsQueueConfiguration.enabled();
 			}
 
 			/**
-			 * @brief Returns the queue family index for graphics.
-			 * @warning Be sure of calling hasGraphicsQueues() before trusting the index.
+			 * @brief Returns the queue family index for graphics queues.
+			 * @note This may return the same family queue index from another configuration.
+			 * @warning Be sure of calling Device::hasGraphicsQueues() before trusting the index.
 			 * @return uint32_t
 			 */
 			[[nodiscard]]
-			uint32_t getGraphicsFamilyIndex () const noexcept;
+			uint32_t
+			getGraphicsFamilyIndex () const noexcept
+			{
+				return m_graphicsQueueConfiguration.queueFamilyIndex();
+			}
+
+			/**
+			 * @brief Returns a graphics queue.
+			 * @note This may return the same queue as another configuration.
+			 * @warning This may return a nullptr!
+			 * @param priority The priority of the queue.
+			 * @return Queue *
+			 */
+			[[nodiscard]]
+			Queue *
+			getGraphicsQueue (QueuePriority priority) const noexcept
+			{
+				if ( !m_graphicsQueueConfiguration.enabled() )
+				{
+					return nullptr;
+				}
+
+				return m_graphicsQueueConfiguration.queue(priority);
+			}
 
 			/**
 			 * @brief Returns whether the device has been set up for compute queues.
@@ -189,46 +314,155 @@ namespace EmEn::Vulkan
 			bool
 			hasComputeQueues () const noexcept
 			{
-				return m_queueFamilyPerJob.contains(QueueJob::Compute);
+				return m_computeQueueConfiguration.enabled();
 			}
 
 			/**
 			 * @brief Returns the queue family index for compute queues.
-			 * @warning Be sure of calling hasComputeQueues() before trusting the index.
+			 * @note This may return the same family queue index from another configuration.
+			 * @warning Be sure of calling Device::hasComputeQueues() before trusting the index.
 			 * @return uint32_t
 			 */
 			[[nodiscard]]
-			uint32_t getComputeFamilyIndex () const noexcept;
+			uint32_t
+			getComputeFamilyIndex () const noexcept
+			{
+				return m_computeQueueConfiguration.queueFamilyIndex();
+			}
 
 			/**
-			 * @brief Returns whether the device has been set up to have a separated transfer queue.
+			 * @brief Returns a compute queue.
+			 * @note This may return the same queue as another configuration.
+			 * @warning This may return a nullptr!
+			 * @param priority The priority of the queue.
+			 * @return Queue *
+			 */
+			[[nodiscard]]
+			Queue *
+			getComputeQueue (QueuePriority priority) const noexcept
+			{
+				if ( !m_computeQueueConfiguration.enabled() )
+				{
+					return nullptr;
+				}
+
+				return m_computeQueueConfiguration.queue(priority);
+			}
+
+			/**
+			 * @brief Returns whether the device has been set up for transfer-only queues.
 			 * @return bool
 			 */
 			[[nodiscard]]
 			bool
 			hasTransferQueues () const noexcept
 			{
-				return m_queueFamilyPerJob.contains(QueueJob::Transfer);
+				return m_transferQueueConfiguration.enabled();
 			}
 
 			/**
-			 * @brief Returns the queue family index for transfer-only queues.
-			 * @warning Be sure of calling hasTransferQueues() before trusting the index.
+			 * @brief Returns the transfer-only queue family index.
+			 * @note This may return the same family queue index from another configuration.
+			 * @warning Be sure of calling Device::hasTransferQueues() before trusting the index.
 			 * @return uint32_t
 			 */
 			[[nodiscard]]
-			uint32_t getTransferFamilyIndex () const noexcept;
+			uint32_t
+			getTransferFamilyIndex () const noexcept
+			{
+				return m_transferQueueConfiguration.queueFamilyIndex();
+			}
 
 			/**
-			 * @brief Returns a queue for a specific purpose.
-			 * @note This can return always the same queue for a basic device.
-			 * @warning This can also return nullptr.
-			 * @param job The requested job type from the queue.
+			 * @brief Returns a transfer-only queue.
+			 * @note This may return the same queue as another configuration.
+			 * @warning This may return a nullptr!
 			 * @param priority The priority of the queue.
 			 * @return Queue *
 			 */
 			[[nodiscard]]
-			Queue * getQueue (QueueJob job, QueuePriority priority) const noexcept;
+			Queue *
+			getTransferQueue (QueuePriority priority) const noexcept
+			{
+				if ( !m_transferQueueConfiguration.enabled() )
+				{
+					return nullptr;
+				}
+
+				return m_transferQueueConfiguration.queue(priority);
+			}
+
+			/**
+			 * @brief Returns the transfer-only queue family index for graphics if available.
+			 * @note This may return the same family queue index from the graphics configuration.
+			 * @return uint32_t
+			 */
+			[[nodiscard]]
+			uint32_t
+			getGraphicsTransferFamilyIndex () const noexcept
+			{
+				if ( !m_transferQueueConfiguration.enabled() )
+				{
+					return m_graphicsQueueConfiguration.queueFamilyIndex();
+				}
+
+				return m_transferQueueConfiguration.queueFamilyIndex();
+			}
+
+			/**
+			 * @brief Returns a transfer-only queue for graphics if available.
+			 * @note This may return a queue from the graphics configuration.
+			 * @warning This may return a nullptr!
+			 * @param priority The priority of the queue.
+			 * @return Queue *
+			 */
+			[[nodiscard]]
+			Queue *
+			getGraphicsTransferQueue (QueuePriority priority) const noexcept
+			{
+				if ( !m_transferQueueConfiguration.enabled() )
+				{
+					return m_graphicsQueueConfiguration.queue(priority);
+				}
+
+				return m_transferQueueConfiguration.queue(priority);
+			}
+
+			/**
+			 * @brief Returns the transfer-only queue family index for compute if available.
+			 * @note This may return the same family queue index from the compute configuration.
+			 * @return uint32_t
+			 */
+			[[nodiscard]]
+			uint32_t
+			getComputeTransferFamilyIndex () const noexcept
+			{
+				if ( !m_transferQueueConfiguration.enabled() )
+				{
+					return m_computeQueueConfiguration.queueFamilyIndex();
+				}
+
+				return m_transferQueueConfiguration.queueFamilyIndex();
+			}
+
+			/**
+			 * @brief Returns a transfer-only queue for compute if available.
+			 * @note This may return a queue from the compute configuration.
+			 * @warning This may return a nullptr!
+			 * @param priority The priority of the queue.
+			 * @return Queue *
+			 */
+			[[nodiscard]]
+			Queue *
+			getComputeTransferQueue (QueuePriority priority) const noexcept
+			{
+				if ( !m_transferQueueConfiguration.enabled() )
+				{
+					return m_computeQueueConfiguration.queue(priority);
+				}
+
+				return m_transferQueueConfiguration.queue(priority);
+			}
 
 			/**
 			 * @brief Waits for a device to become idle.
@@ -272,7 +506,7 @@ namespace EmEn::Vulkan
 			void
 			lock () const
 			{
-				m_deviceExternalAccess.lock();
+				m_logicalDeviceAccess.lock();
 			}
 
 			/**
@@ -283,37 +517,60 @@ namespace EmEn::Vulkan
 			void
 			unlock () const
 			{
-				m_deviceExternalAccess.unlock();
+				m_logicalDeviceAccess.unlock();
 			}
 
 		private:
 
 			/**
-			 * @brief Prepares queues configuration from requirements.
-			 * @param requirements A reference to a device requirement.
-			 * @param queueCreateInfos A reference to a list of CreateInfo for Vulkan queues to complete.
-			 * @return bool
+			 * @brief Adds a queue family to the createInfos list and returns the number of queues in this family.
+			 * @return uint32_t
 			 */
 			[[nodiscard]]
-			bool prepareQueues (const DeviceRequirements & requirements, Libs::StaticVector< VkDeviceQueueCreateInfo, 16 > & queueCreateInfos) noexcept;
+			static
+			uint32_t addQueueFamilyToCreateInfo (uint32_t queueFamilyIndex, const Libs::StaticVector<VkQueueFamilyProperties2, 8>& queueFamilyProperties, Libs::StaticVector< VkDeviceQueueCreateInfo, 8 > & queueCreateInfos, std::map< uint32_t, Libs::StaticVector< float, 16 > > & queuePriorities) noexcept;
 
 			/**
-			 * @brief Declares queues for a device with a single queue family.
-			 * @param requirements A reference to a device requirement.
-			 * @param queueFamilyProperty A reference to the queue family properties.
+			 * @brief Prepares queues for a graphics and compute device.
+			 * @param requirements A reference to the device requirements.
+			 * @param queueFamilyProperties A reference to the family properties.
+			 * @param queueCreateInfos A writable reference to the queue creation information vector.
+			 * @param queuePriorities A writable reference to a map for queue priorities.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool declareQueuesFromSingleQueueFamily (const DeviceRequirements & requirements, const VkQueueFamilyProperties2 & queueFamilyProperty) noexcept;
+			bool searchGraphicsAndComputeQueueConfiguration (const DeviceRequirements & requirements, const Libs::StaticVector< VkQueueFamilyProperties2, 8 > & queueFamilyProperties, Libs::StaticVector< VkDeviceQueueCreateInfo, 8 > & queueCreateInfos, std::map< uint32_t, Libs::StaticVector< float, 16 > > & queuePriorities) noexcept;
 
 			/**
-			 * @brief Declares queues for a device with multiple queue family.
-			 * @param requirements A reference to a device requirement.
-			 * @param queueFamilyProperties A reference to a vector of queue family properties.
+			 * @brief Prepares queues for a graphics device.
+			 * @param requirements A reference to the device requirements.
+			 * @param queueFamilyProperties A reference to the family properties.
+			 * @param queueCreateInfos A writable reference to the queue creation information vector.
+			 * @param queuePriorities A writable reference to a map for queue priorities.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool declareQueuesFromMultipleQueueFamilies (const DeviceRequirements & requirements, const Libs::StaticVector< VkQueueFamilyProperties2, 8 > & queueFamilyProperties) noexcept;
+			bool searchGraphicsQueueConfiguration (const DeviceRequirements & requirements, const Libs::StaticVector< VkQueueFamilyProperties2, 8 > & queueFamilyProperties, Libs::StaticVector< VkDeviceQueueCreateInfo, 8 > & queueCreateInfos, std::map< uint32_t, Libs::StaticVector< float, 16 > > & queuePriorities) noexcept;
+
+			/**
+			 * @brief Prepares queues for a compute device.
+			 * @param queueFamilyProperties A reference to the family properties.
+			 * @param queueCreateInfos A writable reference to the queue creation information vector.
+			 * @param queuePriorities A writable reference to a map for queue priorities.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool searchComputeQueueConfiguration (const Libs::StaticVector< VkQueueFamilyProperties2, 8 > & queueFamilyProperties, Libs::StaticVector< VkDeviceQueueCreateInfo, 8 > & queueCreateInfos, std::map< uint32_t, Libs::StaticVector< float, 16 > > & queuePriorities) noexcept;
+
+			/**
+			 * @brief Prepares transfer-only queues for the device (optional).
+			 * @param queueFamilyProperties A reference to the family properties.
+			 * @param queueCreateInfos A writable reference to the queue creation information vector.
+			 * @param queuePriorities A writable reference to a map for queue priorities.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool searchTransferOnlyQueueConfiguration (const Libs::StaticVector< VkQueueFamilyProperties2, 8 > & queueFamilyProperties, Libs::StaticVector< VkDeviceQueueCreateInfo, 8 > & queueCreateInfos, std::map< uint32_t, Libs::StaticVector< float, 16 > > & queuePriorities) noexcept;
 
 			/**
 			 * @brief Creates the device with the defined and verified queues.
@@ -323,18 +580,25 @@ namespace EmEn::Vulkan
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool createDevice (const DeviceRequirements & requirements, const Libs::StaticVector< VkDeviceQueueCreateInfo, 16 > & queueCreateInfos, const std::vector< const char * > & extensions) noexcept;
+			bool createDevice (const DeviceRequirements & requirements, const Libs::StaticVector< VkDeviceQueueCreateInfo, 8 > & queueCreateInfos, const std::vector< const char * > & extensions) noexcept;
+
+			/**
+			 * @brief Installs queues generated from the device.
+			 * @param queuePriorityValues A reference to a map for the initial priorities selected.
+			 * @param configuration A writable reference to the current configuration.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool installQueues (const std::map< uint32_t, Libs::StaticVector< float, 16 > > & queuePriorityValues, DeviceQueueConfiguration & configuration) noexcept;
 
 			VkDevice m_handle{VK_NULL_HANDLE};
 			std::shared_ptr< PhysicalDevice > m_physicalDevice;
-			std::array< std::shared_ptr< QueueFamilyInterface >, 6 > m_queues;
-
-			Libs::StaticVector< std::shared_ptr< QueueFamilyInterface >, 8 > m_queueFamilies;
-			std::map< QueueJob, std::shared_ptr< QueueFamilyInterface > > m_queueFamilyPerJob;
-
-			mutable std::mutex m_deviceInternalAccess;
-			mutable std::mutex m_deviceExternalAccess;
+			Libs::StaticVector< std::unique_ptr< Queue >, 32 > m_queues;
+			DeviceQueueConfiguration m_graphicsQueueConfiguration;
+			DeviceQueueConfiguration m_computeQueueConfiguration;
+			DeviceQueueConfiguration m_transferQueueConfiguration;
+			mutable std::mutex m_logicalDeviceAccess;
 			bool m_showInformation{false};
-			bool m_hasBasicSupport{false};
+			bool m_basicSupport{false};
 	};
 }

@@ -93,11 +93,11 @@ namespace EmEn
 		{
 			if ( service->terminate() )
 			{
-				TraceSuccess{ClassId} << service->name() << " primary service terminated gracefully !";
+				TraceSuccess{ClassId} << service->name() << " primary service terminated gracefully!";
 			}
 			else
 			{
-				TraceError{ClassId} << service->name() << " primary service failed to terminate properly !";
+				TraceError{ClassId} << service->name() << " primary service failed to terminate properly!";
 			}
 		}
 
@@ -779,13 +779,13 @@ namespace EmEn
 		{
 			if ( userService->terminate() )
 			{
-				TraceSuccess{ClassId} << userService->name() << " user service terminated gracefully !";
+				TraceSuccess{ClassId} << userService->name() << " user service terminated gracefully!";
 			}
 			else
 			{
 				error++;
 
-				TraceError{ClassId} << userService->name() << " user service failed to terminate properly !";
+				TraceError{ClassId} << userService->name() << " user service failed to terminate properly!";
 			}
 		}
 
@@ -799,13 +799,13 @@ namespace EmEn
 		{
 			if ( service->terminate() )
 			{
-				TraceSuccess{ClassId} << service->name() << " secondary service terminated gracefully !";
+				TraceSuccess{ClassId} << service->name() << " secondary service terminated gracefully!";
 			}
 			else
 			{
 				error++;
 
-				TraceError{ClassId} << service->name() << " secondary service failed to terminate properly !";
+				TraceError{ClassId} << service->name() << " secondary service failed to terminate properly!";
 			}
 		}
 

@@ -48,14 +48,16 @@ namespace EmEn::Vulkan
 	};
 
 	/** @brief This enumeration describes the purpose of a queue from the engine point of view. */
-	enum class QueueJob : uint8_t
+	enum class QueueFamilyJob : uint8_t
 	{
-		Graphics = 0,
-		GraphicsTransfer = 1,
-		Presentation = 2,
-		Compute = 3,
-		ComputeTransfer = 4,
-		Transfer = 5
+		/** @brief The graphics and presentation queues. */
+		GraphicsAndPresentation = 0,
+		/** @brief The graphics queues for offscreen application. */
+		Graphics = 1,
+		/** @brief The compute queues. */
+		Compute = 2,
+		/** @brief The dedicated queues to transfer. */
+		Transfer = 3
 	};
 
 	/** @brief The queue priority enum */

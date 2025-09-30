@@ -154,13 +154,13 @@ namespace EmEn::Physics
 		{
 			if ( service->terminate() )
 			{
-				TraceSuccess{ClassId} << service->name() << " sub-service terminated gracefully !";
+				TraceSuccess{ClassId} << service->name() << " sub-service terminated gracefully!";
 			}
 			else
 			{
 				error++;
 
-				TraceError{ClassId} << service->name() << " sub-service failed to terminate properly !";
+				TraceError{ClassId} << service->name() << " sub-service failed to terminate properly!";
 			}
 		}
 
@@ -178,8 +178,6 @@ namespace EmEn::Physics
 		{
 			return;
 		}
-
-		m_device->waitIdle("Clearing the command buffers");
 
 		// FIXME !!! Check with the bit flag a command pool creation.
 		//m_commandPool->freeCommandBuffers(static_cast< uint32_t >(m_commandBuffers.size()), m_commandBuffers.data());

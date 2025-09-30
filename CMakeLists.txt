@@ -8,7 +8,7 @@ cmake_policy(SET CMP0091 NEW) # MSVC runtime library flags are selected by an ab
 # Adds custom CMake scripts/modules
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
-message("Using CMake ${CMAKE_VERSION}")
+message("[EmeraudeEngine] Using CMake ${CMAKE_VERSION}")
 
 #######################################################################
 # Configure the parallel job count.
@@ -17,7 +17,7 @@ cmake_host_system_information(RESULT DETECTED_JOB_COUNT QUERY NUMBER_OF_PHYSICAL
 set(JOB_COUNT ${DETECTED_JOB_COUNT} CACHE STRING "The number of job used for compilation. Default auto.")
 set(CMAKE_BUILD_PARALLEL_LEVEL ${JOB_COUNT})
 
-message("Job processes used : ${CMAKE_BUILD_PARALLEL_LEVEL}")
+message("[EmeraudeEngine] Job processes used : ${CMAKE_BUILD_PARALLEL_LEVEL}")
 
 
 
@@ -33,7 +33,7 @@ endif ()
 
 project(
 	${BINARY_NAME}
-	VERSION 0.7.51
+	VERSION 0.7.52
 	DESCRIPTION "Emeraude Engine is an open-source (LGPLv3) 3D Graphics engine using Vulkan and written in C++20."
 	HOMEPAGE_URL "https://github.com/EmeraudeEngine/emeraude-engine"
 	LANGUAGES C CXX
@@ -43,6 +43,8 @@ set_property(GLOBAL PROPERTY USE_FOLDERS On)
 
 set(CMAKE_VERBOSE_MAKEFILE On)
 set(CMAKE_EXPORT_COMPILE_COMMANDS On)
+
+message("[EmeraudeEngine] Build type : ${CMAKE_BUILD_TYPE}")
 
 # Configure output directory by compilation type.
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/$<CONFIG>")
@@ -54,9 +56,13 @@ set(EMERAUDE_INTERNET_CHECK_DOMAIN "google.com" CACHE STRING "Web domain to chec
 set(EMERAUDE_COMPILATION_DIR "" CACHE STRING "Declare where the project is compiled. For macOS this should point the 'package.app' in the compilation folder.")
 option(EMERAUDE_ENABLE_TESTS "Enable the Emeraude-Engine testing suite (Default Off)." Off)
 option(EMERAUDE_ENABLE_PCH "Enable 'PreCompiled Headers' feature to speed up the compilation (Default Off)." Off)
-option(EMERAUDE_USE_STATIC_RUNTIME "Build Emeraude-Engine with the static MSVC runtime (Windows Only, Default Off)." Off)
+option(EMERAUDE_USE_STATIC_RUNTIME "Build Emeraude-Engine with the static MSVC runtime (Windows only, Default Off)." Off)
 option(EMERAUDE_USE_SYSTEM_LIBS "Use the system for common libraries instead of the embedded ones (Deprecated, Default Off)." Off)
-option(EMERAUDE_ENABLE_TSAN "Enable 'ThreadSanitizer' library. Adds a dev tool to trace data race [SYSTEM] (Linux only, Default Off)." Off)
+option(EMERAUDE_ENABLE_ASAN "Enable 'AddressSanitizer' library. Adds a dev tool to detects memory errors [SYSTEM] (Linux only, Default Off)." Off)
+option(EMERAUDE_ENABLE_MSAN "Enable 'MemorySanitizer' library. Adds a dev tool to detects memory corruption [SYSTEM] (Linux only, Default Off)." Off)
+option(EMERAUDE_ENABLE_LSAN "Enable 'LeakSanitizer' library. Adds a dev tool to detects memory leak [SYSTEM] (Linux only, Default Off)." Off)
+option(EMERAUDE_ENABLE_TSAN "Enable 'ThreadSanitizer' library. Adds a dev tool to detects data race [SYSTEM] (Linux only, Default Off)." Off)
+option(EMERAUDE_ENABLE_UBSAN "Enable 'UndefinedBehaviorSanitizer' library. Adds a dev tool to detects undefined behavior [SYSTEM] (Linux only, Default Off)." Off)
 option(EMERAUDE_ENABLE_OPENMP "Enable 'libomp' library [SYSTEM] (Default On)." On)
 option(EMERAUDE_ENABLE_ASIO "Enable 'libasio' library. Adds the networking ability [SYSTEM|LOCAL] (Default On)." On)
 option(EMERAUDE_ENABLE_IMGUI "Enable 'libimgui' library. Adds a GUI to the engine [LOCAL] (Default Off)." Off)
@@ -70,12 +76,12 @@ option(EMERAUDE_DEBUG_POINTER_INPUT "Enable printing of events to the console fr
 option(EMERAUDE_DEBUG_WINDOW_EVENTS "Enable printing of events to the console from window events (Default Off)." Off)
 option(EMERAUDE_DEBUG_VULKAN_TRACKING "Enable printing of Vulkan objects lifespan (Default Off)." Off)
 option(EMERAUDE_DEBUG_THREAD_POOL "Enable printing of ThreadPool (Default Off)." Off)
-
+set(EMERAUDE_DEBUG_THREAD_POOL_N "1" CACHE STRING "When debugging ThreadPool, force the number of threads (Default 1).")
 
 
 # Force the compilation directory for testing (Only if empty)
 if ( EMERAUDE_ENABLE_TESTS AND "${EMERAUDE_COMPILATION_DIR}" STREQUAL "" )
-	message(STATUS "EMERAUDE_ENABLE_TESTS has been enabled but the EMERAUDE_COMPILATION_DIR is not set. Forcing to : '${CMAKE_BINARY_DIR}/${CMAKE_BUILD_TYPE}'.")
+	message(STATUS "[EmeraudeEngine] EMERAUDE_ENABLE_TESTS has been enabled but the EMERAUDE_COMPILATION_DIR is not set. Forcing to : '${CMAKE_BINARY_DIR}/${CMAKE_BUILD_TYPE}'.")
 
 	set(EMERAUDE_COMPILATION_DIR "${CMAKE_BINARY_DIR}/${CMAKE_BUILD_TYPE}" CACHE STRING "" FORCE)
 endif ()
@@ -90,17 +96,17 @@ set(EMERAUDE_DEPENDENCIES_DIR ${TEMP_DIR} CACHE STRING "Emeraude-Engine dependen
 
 # Common libraries directory
 if ( UNIX AND NOT APPLE )
-	message("Linux platform detected !")
+	message("[EmeraudeEngine] Linux platform detected !")
 
 	if ( NOT DEFINED APP_ARCH )
 		set(APP_ARCH "x86_64")
 	endif ()
 
-	message("Linux platform targets arch ${APP_ARCH}")
+	message("[EmeraudeEngine] Linux platform targets arch ${APP_ARCH}")
 
-	set(LOCAL_LIB_DIR ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/linux.${APP_ARCH}-${CMAKE_BUILD_TYPE} CACHE STRING "Final directory for local libraries for Linux.")
+	set(LOCAL_LIB_DIR "${CMAKE_CURRENT_SOURCE_DIR}/dependencies/linux.${APP_ARCH}-${CMAKE_BUILD_TYPE}" CACHE STRING "Final directory for local libraries for Linux.")
 elseif ( APPLE )
-	message("Apple platform detected ! macOS architecture : ${CMAKE_OSX_ARCHITECTURES}, default target SDK : ${CMAKE_OSX_DEPLOYMENT_TARGET}")
+	message("[EmeraudeEngine] Apple platform detected ! macOS architecture : ${CMAKE_OSX_ARCHITECTURES}, default target SDK : ${CMAKE_OSX_DEPLOYMENT_TARGET}")
 
 	if ( "${CMAKE_OSX_ARCHITECTURES}" STREQUAL "x86_64" )
 		set(APP_ARCH "x86_64")
@@ -109,37 +115,47 @@ elseif ( APPLE )
 		set(APP_ARCH "arm64")
 		set(APP_OSX_DEPLOYMENT_TARGET "12.0" CACHE STRING "Minimum SDK for macOS.")
 	else ()
-		message(FATAL_ERROR "Please specify the architecture for macOS with -DCMAKE_OSX_ARCHITECTURES=x86_64 or -DCMAKE_OSX_ARCHITECTURES=arm64 !")
+		message(FATAL_ERROR "[EmeraudeEngine] Please specify the architecture for macOS with -DCMAKE_OSX_ARCHITECTURES=x86_64 or -DCMAKE_OSX_ARCHITECTURES=arm64 !")
 	endif ()
 
 	# NOTE: TO be sure
 	set(CMAKE_OSX_ARCHITECTURES ${APP_ARCH})
 	set(CMAKE_OSX_DEPLOYMENT_TARGET ${APP_OSX_DEPLOYMENT_TARGET})
 
-	message("Apple platform targets arch ${APP_ARCH} with SDK ${APP_OSX_DEPLOYMENT_TARGET}")
+	message("[EmeraudeEngine] Apple platform targets arch ${APP_ARCH} with SDK ${APP_OSX_DEPLOYMENT_TARGET}")
 
-	set(LOCAL_LIB_DIR ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/mac.${APP_ARCH}-${CMAKE_BUILD_TYPE} CACHE STRING "Final directory for local libraries for macOS.")
+	set(LOCAL_LIB_DIR "${CMAKE_CURRENT_SOURCE_DIR}/dependencies/mac.${APP_ARCH}-${CMAKE_BUILD_TYPE}" CACHE STRING "Final directory for local libraries for macOS.")
 elseif ( MSVC )
-	message("Windows platform detected !")
+	message("[EmeraudeEngine] Windows platform detected !")
 
 	if ( NOT DEFINED APP_ARCH )
 		set(APP_ARCH "x86_64")
 	endif ()
 
-	message("Windows platform targets arch ${APP_ARCH}")
+	message("[EmeraudeEngine] Windows platform targets arch ${APP_ARCH}")
 
 	if ( EMERAUDE_USE_STATIC_RUNTIME )
 		message("[EmeraudeEngine] Using static MSVC Runtime library!")
 
-		# Set /MT or /MTd
-		set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
-		set(LOCAL_LIB_DIR ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/windows.${APP_ARCH}-${CMAKE_BUILD_TYPE}-MT CACHE STRING "Final directory for local libraries for Windows.")
+		if ( NOT CMAKE_MSVC_RUNTIME_LIBRARY )
+			# Set /MT or /MTd compiler flag.
+			set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+		else ()
+			message("[EmeraudeEngine] CMAKE_MSVC_RUNTIME_LIBRARY variable already setup from top project. Skipping ...")
+		endif ()
+
+		set(LOCAL_LIB_DIR "${CMAKE_CURRENT_SOURCE_DIR}/dependencies/windows.${APP_ARCH}-${CMAKE_BUILD_TYPE}-MT" CACHE STRING "Final directory for local libraries for Windows.")
 	else ()
 		message("[EmeraudeEngine] Using dynamic MSVC Runtime library!")
 
-		# Default behavior : /MD or /MDd
-		set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
-		set(LOCAL_LIB_DIR ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/windows.${APP_ARCH}-${CMAKE_BUILD_TYPE}-MD CACHE STRING "Final directory for local libraries for Windows.")
+		if ( NOT CMAKE_MSVC_RUNTIME_LIBRARY )
+			# Set /MD or /MDd compiler flag (Default behavior).
+			set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
+		else ()
+			message("[EmeraudeEngine] CMAKE_MSVC_RUNTIME_LIBRARY variable already setup from top project. Skipping ...")
+		endif ()
+
+		set(LOCAL_LIB_DIR "${CMAKE_CURRENT_SOURCE_DIR}/dependencies/windows.${APP_ARCH}-${CMAKE_BUILD_TYPE}-MD" CACHE STRING "Final directory for local libraries for Windows.")
 	endif ()
 endif ()
 
@@ -201,7 +217,7 @@ target_compile_definitions(${PROJECT_NAME} PRIVATE
 )
 
 if ( MSVC )
-	message("Configuring C++ compiler (>= MSVC 2022) for Windows ...")
+	message("[EmeraudeEngine] Configuring C++ compiler (>= MSVC 2022) for Windows ...")
 
 	set_target_properties(${PROJECT_NAME} PROPERTIES
 		C_STANDARD 17 # Next standard will be C23
@@ -249,7 +265,7 @@ if ( MSVC )
 	)
 elseif ( UNIX )
 	if ( APPLE )
-		message("Configuring C++ compiler (>= AppleClang 17.0) for macOS ...")
+		message("[EmeraudeEngine] Configuring C++ compiler (>= AppleClang 17.0) for macOS ...")
 
 		set_target_properties(${PROJECT_NAME} PROPERTIES
 			C_STANDARD 17 # Next standard will be C23
@@ -293,7 +309,7 @@ elseif ( UNIX )
 			>
 		)
 	else ()
-		message("Configuring C++ compiler (>= G++13.3) for Linux ...")
+		message("[EmeraudeEngine] Configuring C++ compiler (>= G++13.3) for Linux ...")
 
 		set_target_properties(${PROJECT_NAME} PROPERTIES
 			C_STANDARD 17 # Next standard will be C23
@@ -317,7 +333,7 @@ elseif ( UNIX )
 				-Wall
 				-Wextra
 				-Wpedantic
-				-Werror
+				#-Werror
 			>
 			$<$<CONFIG:Relase>:
 				-O2
@@ -327,15 +343,43 @@ elseif ( UNIX )
 			>
 		)
 
-		if ( EMERAUDE_ENABLE_TSAN )
-			message("Enabling ThreadSanitizer tools ...")
+		if ( EMERAUDE_ENABLE_ASAN )
+			message("[EmeraudeEngine] Enabling AddressSanitizer tools ...")
 
-			target_compile_options(${PROJECT_NAME} PRIVATE -fsanitize=thread)
-			target_link_options(${PROJECT_NAME} PRIVATE -fsanitize=thread)
+			target_compile_options(${PROJECT_NAME} PUBLIC -fsanitize=address)
+			target_link_options(${PROJECT_NAME} PUBLIC -fsanitize=address)
+		endif ()
+
+		if ( EMERAUDE_ENABLE_MSAN )
+			message("[EmeraudeEngine] Enabling MemorySanitizer tools ...")
+
+			target_compile_options(${PROJECT_NAME} PUBLIC -fsanitize=memory)
+			target_link_options(${PROJECT_NAME} PUBLIC -fsanitize=memory)
+		endif ()
+
+		if ( EMERAUDE_ENABLE_LSAN )
+			message("[EmeraudeEngine] Enabling LeakSanitizer tools ...")
+
+			target_compile_options(${PROJECT_NAME} PUBLIC -fsanitize=leak)
+			target_link_options(${PROJECT_NAME} PUBLIC -fsanitize=leak)
+		endif ()
+
+		if ( EMERAUDE_ENABLE_TSAN )
+			message("[EmeraudeEngine] Enabling ThreadSanitizer tools ...")
+
+			target_compile_options(${PROJECT_NAME} PUBLIC -fsanitize=thread)
+			target_link_options(${PROJECT_NAME} PUBLIC -fsanitize=thread)
+		endif ()
+
+		if ( EMERAUDE_ENABLE_UBSAN )
+			message("[EmeraudeEngine] Enabling UndefinedBehaviorSanitizer tools ...")
+
+			target_compile_options(${PROJECT_NAME} PUBLIC -fsanitize=undefined -fsanitize=integer -fsanitize=nullability)
+			target_link_options(${PROJECT_NAME} PUBLIC -fsanitize=undefined -fsanitize=integer -fsanitize=nullability)
 		endif ()
 	endif ()
 else ()
-	message(FATAL_ERROR "Unsupported platform/compiler! NOTE: If you are on Windows be sure to use 'Visual Studio 2022' (>=).")
+	message(FATAL_ERROR "[EmeraudeEngine] Unsupported platform/compiler! NOTE: If you are on Windows be sure to use 'Visual Studio 2022' (>=).")
 endif ()
 
 target_include_directories(${PROJECT_NAME} PUBLIC
@@ -396,7 +440,7 @@ include(SetupZSTD)
 
 if ( EMERAUDE_ENABLE_ASIO )
 	if ( EMERAUDE_ENABLE_TSAN )
-		message(WARNING "Disabling ASIO when ThreadSanitizer is requested !")
+		message(WARNING "[EmeraudeEngine] Disabling ASIO when ThreadSanitizer is requested !")
 	else ()
 		include(SetupASIO)
 	endif ()
@@ -443,7 +487,7 @@ unset(TARGET_BINARY_FOR_SETUP)
 ###### Testing ######
 
 if ( EMERAUDE_ENABLE_TESTS )
-	message("Enabling GoogleTest")
+	message("[EmeraudeEngine] Enabling GoogleTest")
 
 	# Fetch GoogleTest
 	include(FetchContent)
@@ -480,7 +524,7 @@ endif ()
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/src/emeraude_config.hpp.in ${CMAKE_BINARY_DIR}/include/emeraude_config.hpp)
 
 if ( EMERAUDE_ENABLE_TSAN )
-	message("Use env variable : TSAN_OPTIONS=\"suppressions=tsan_suppressions.txt\"")
+	message("[EmeraudeEngine] Use env variable : TSAN_OPTIONS=\"suppressions=tsan_suppressions.txt\"")
 
 	file(
 		COPY ${CMAKE_CURRENT_SOURCE_DIR}/resources/tsan_suppressions.txt
@@ -489,6 +533,14 @@ if ( EMERAUDE_ENABLE_TSAN )
 endif ()
 
 if ( NOT "${EMERAUDE_COMPILATION_DIR}" STREQUAL "" )
+	# Copy debug file
+	add_custom_target(copy_debug_files ALL
+		COMMAND $<$<CONFIG:Debug>:${CMAKE_COMMAND} -E copy_if_different
+		"${CMAKE_CURRENT_SOURCE_DIR}/resources/vk_layer_settings.txt"
+		"${EMERAUDE_COMPILATION_DIR}/vk_layer_settings.txt" >
+		VERBATIM
+	)
+
 	# Copy 'gamecontrollerdb.txt' in the compilation directory.
 	if ( APPLE )
 		file(
@@ -502,14 +554,6 @@ if ( NOT "${EMERAUDE_COMPILATION_DIR}" STREQUAL "" )
 		)
 	endif ()
 
-	# Copy debug file
-	if ( CMAKE_BUILD_TYPE MATCHES Debug )
-		file(
-			COPY ${CMAKE_CURRENT_SOURCE_DIR}/resources/vk_layer_settings.txt
-			DESTINATION ${EMERAUDE_COMPILATION_DIR}
-		)
-	endif ()
-
 	# Copy test files
 	if ( EMERAUDE_ENABLE_TESTS )
 		file(
@@ -518,5 +562,5 @@ if ( NOT "${EMERAUDE_COMPILATION_DIR}" STREQUAL "" )
 		)
 	endif ()
 else ()
-	message(STATUS "EMERAUDE_COMPILATION_DIR is not set, the compilation directory won't have all files for development ! This is a sub-project warning !")
+	message(STATUS "[EmeraudeEngine] EMERAUDE_COMPILATION_DIR is not set, the compilation directory won't have all files for development ! This is a sub-project warning !")
 endif ()

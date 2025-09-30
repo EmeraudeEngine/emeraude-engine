@@ -47,10 +47,10 @@
 #include "Libs/PixelFactory/Color.hpp"
 #include "Libs/Time/Statistics/RealTime.hpp"
 #include "RenderTarget/Abstract.hpp"
-#include "RendererFrameScope.hpp"
 #include "Saphir/ShaderManager.hpp"
 #include "SharedUBOManager.hpp"
 #include "VertexBufferFormatManager.hpp"
+#include "Vulkan/Sync/Fence.hpp"
 #include "Vulkan/Instance.hpp"
 #include "Vulkan/LayoutManager.hpp"
 #include "Vulkan/TransferManager.hpp"
@@ -114,6 +114,167 @@ namespace EmEn
 namespace EmEn::Graphics
 {
 	/**
+	 * @brief Declares the scope of one renderer frame.
+	 */
+	class RendererFrameScope final
+	{
+		public:
+
+			/** @brief Class identifier. */
+			static constexpr auto ClassId{"RendererFrameScope"};
+
+			/**
+			 * @brief Constructs a render frame scope.
+			 */
+			RendererFrameScope () noexcept = default;
+
+			/**
+			 * @brief Initializes the command pool and the command buffer.
+			 * @param device A reference to the graphics device smart pointer.
+			 * @param frameIndex The frame index.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool initialize (const std::shared_ptr< Vulkan::Device > & device, uint32_t frameIndex) noexcept;
+
+			/**
+			 * @brief Declares semaphore to wait.
+			 * @param semaphore A reference to a semaphore smart pointer.
+			 * @param primary Is a primary resource to wait?
+			 * @return void
+			 */
+			void declareSemaphore (const std::shared_ptr< Vulkan::Sync::Semaphore > & semaphore, bool primary) noexcept;
+
+			/**
+			 * @brief Returns the command pool smart pointer.
+			 * @return std::shared_ptr< Vulkan::CommandPool >
+			 */
+			[[nodiscard]]
+			std::shared_ptr< Vulkan::CommandPool >
+			commandPool () const noexcept
+			{
+				return m_commandPool;
+			}
+
+			/**
+			 * @brief Returns the command buffer smart pointer.
+			 * @return std::shared_ptr< Vulkan::CommandPool >
+			 */
+			[[nodiscard]]
+			std::shared_ptr< Vulkan::CommandBuffer >
+			commandBuffer () const noexcept
+			{
+				return m_commandBuffer;
+			}
+
+			/**
+			 * @brief Returns the frame index.
+			 * @return uint32_t
+			 */
+			[[nodiscard]]
+			uint32_t
+			frameIndex () const noexcept
+			{
+				return m_frameIndex;
+			}
+
+			/**
+			 * @brief Returns primary semaphores ready to use with vkQueueSubmit().
+			 * @return Libs::Storage< VkSemaphore, 16 > &
+			 */
+			[[nodiscard]]
+			Libs::StaticVector< VkSemaphore, 16 > &
+			primarySemaphores () noexcept
+			{
+				return m_primarySemaphores;
+			}
+
+			/**
+			 * @brief Returns secondary semaphores ready to use with vkQueueSubmit().
+			 * @return Libs::Storage< VkSemaphore, 16 > &
+			 */
+			[[nodiscard]]
+			Libs::StaticVector< VkSemaphore, 16 > &
+			secondarySemaphores () noexcept
+			{
+				return m_secondarySemaphores;
+			}
+
+			/**
+			 * @brief Returns the in-flight fence.
+			 * @return Vulkan::Sync::Fence *
+			 */
+			[[nodiscard]]
+			Vulkan::Sync::Fence *
+			inFlightFence () const noexcept
+			{
+				return m_inFlightFence.get();
+			}
+
+			/**
+			 * @brief Returns the image available semaphore.
+			 * @return Vulkan::Sync::Semaphore *
+			 */
+			[[nodiscard]]
+			Vulkan::Sync::Semaphore *
+			imageAvailableSemaphore () const noexcept
+			{
+				return m_imageAvailableSemaphore.get();
+			}
+
+			/**
+			 * @brief Returns the image finished semaphore.
+			 * @return Vulkan::Sync::Semaphore *
+			 */
+			[[nodiscard]]
+			Vulkan::Sync::Semaphore *
+			renderFinishedSemaphore () const noexcept
+			{
+				return m_renderFinishedSemaphore.get();
+			}
+
+			/**
+			 * @brief Clears all semaphores for a next frame usage.
+			 * @return void
+			 */
+			void
+			clearSemaphores () noexcept
+			{
+				m_primarySemaphores.clear();
+				m_secondarySemaphores.clear();
+			}
+
+		private:
+
+			/**
+			 * @brief Returns the frame name.
+			 * @param frameIndex The number of the frame.
+			 * @return std::string
+			 */
+			[[nodiscard]]
+			static
+			std::string
+			getFrameName (uint32_t frameIndex) noexcept
+			{
+				std::stringstream frameName;
+
+				frameName << "Frame" << frameIndex;
+
+				return frameName.str();
+			}
+
+			std::shared_ptr< Vulkan::CommandPool > m_commandPool;
+			std::shared_ptr< Vulkan::CommandBuffer > m_commandBuffer;
+			Libs::StaticVector< VkSemaphore, 16 > m_primarySemaphores;
+			Libs::StaticVector< VkSemaphore, 16 > m_secondarySemaphores;
+			/* Synchronization. */
+			std::unique_ptr< Vulkan::Sync::Fence > m_inFlightFence;
+			std::unique_ptr< Vulkan::Sync::Semaphore > m_imageAvailableSemaphore;
+			std::unique_ptr< Vulkan::Sync::Semaphore > m_renderFinishedSemaphore;
+			uint32_t m_frameIndex{0};
+	};
+
+	/**
 	 * @brief The graphics renderer service class.
 	 * @note [OBS][STATIC-OBSERVER][STATIC-OBSERVABLE]
 	 * @extends EmEn::ServiceInterface The renderer is a service.
@@ -152,6 +313,7 @@ namespace EmEn::Graphics
 				m_window{window},
 				m_shaderManager{primaryServices},
 				m_sharedUBOManager{*this},
+				m_timeout{std::chrono::duration_cast< std::chrono::nanoseconds >(std::chrono::milliseconds(5000)).count()},
 				m_debugMode{m_vulkanInstance.isDebugModeEnabled()}
 			{
 				/* Framebuffer clear color value. */
@@ -638,27 +800,27 @@ namespace EmEn::Graphics
 
 			/**
 			 * @brief Updates every shadow map from the scene.
-			 * @param frameIndex The current frame index in the swap-chain.
+			 * @param CPUFrameIndex The current frame index in the swap-chain.
 			 * @param scene A reference to the scene.
 			 * @return void
 			 */
-			void renderShadowMaps (uint32_t frameIndex, Scenes::Scene & scene) noexcept;
+			void renderShadowMaps (uint32_t CPUFrameIndex, Scenes::Scene & scene) noexcept;
 
 			/**
 			 * @brief Updates every dynamic texture2Ds from the scene.
-			 * @param frameIndex The current frame index in the swap-chain.
+			 * @param CPUFrameIndex The current frame index in the swap-chain.
 			 * @param scene A reference to the scene.
 			 * @return void
 			 */
-			void renderRenderToTextures (uint32_t frameIndex, Scenes::Scene & scene) noexcept;
+			void renderRenderToTextures (uint32_t CPUFrameIndex, Scenes::Scene & scene) noexcept;
 
 			/**
 			 * @brief Updates every off-screen view from the scene.
-			 * @param frameIndex The current frame index in the swap-chain.
+			 * @param CPUFrameIndex The current frame index in the swap-chain.
 			 * @param scene A reference to the scene.
 			 * @return void
 			 */
-			void renderViews (uint32_t frameIndex, Scenes::Scene & scene) noexcept;
+			void renderViews (uint32_t CPUFrameIndex, Scenes::Scene & scene) noexcept;
 
 			/**
 			 * @brief Creates command pools and buffers according to the swap chain image count.
@@ -684,7 +846,7 @@ namespace EmEn::Graphics
 			ExternalInput m_externalInput;
 			std::vector< ServiceInterface * > m_subServicesEnabled;
 			std::shared_ptr< Vulkan::DescriptorPool > m_descriptorPool;
-			std::vector< RendererFrameScope > m_rendererFrameScope;
+			Libs::StaticVector< RendererFrameScope, 5 > m_rendererFrameScope;
 			std::shared_ptr< Vulkan::CommandPool > m_offScreenCommandPool;
 			std::map< std::shared_ptr< RenderTarget::Abstract >, std::shared_ptr< Vulkan::CommandBuffer > > m_offScreenCommandBuffers;
 			std::shared_ptr< Vulkan::SwapChain > m_swapChain;
@@ -695,6 +857,8 @@ namespace EmEn::Graphics
 			std::map< size_t, std::shared_ptr< Vulkan::Sampler > > m_samplers;
 			Libs::Time::Statistics::RealTime< std::chrono::high_resolution_clock > m_statistics{30};
 			std::array< VkClearValue, 2 > m_clearColors{};
+			uint32_t m_currentFrameIndex{0};
+			const uint64_t m_timeout;
 			bool m_serviceInitialized{false};
 			bool m_debugMode{false};
 			bool m_windowLess{false};

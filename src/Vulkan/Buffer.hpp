@@ -73,6 +73,7 @@ namespace EmEn::Vulkan
 				m_createInfo.flags = createFlags;
 				m_createInfo.size = size;
 				m_createInfo.usage = usageFlags;
+				/* TODO: If one day we had to share a buffer between a dedicated compute and graphics family, we need to describe it here. */
 				m_createInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 				m_createInfo.queueFamilyIndexCount = 0;
 				m_createInfo.pQueueFamilyIndices = nullptr;
@@ -100,9 +101,9 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Move constructor.
-			 * @param copy A reference to the copied instance.
+			 * @param other A reference to the copied instance.
 			 */
-			Buffer (Buffer && copy) noexcept = delete;
+			Buffer (Buffer && other) noexcept;
 
 			/**
 			 * @brief Copy assignment.
@@ -112,9 +113,9 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Move assignment.
-			 * @param copy A reference to the copied instance.
+			 * @param other A reference to the copied instance.
 			 */
-			Buffer & operator= (Buffer && copy) noexcept = delete;
+			Buffer & operator= (Buffer && other) noexcept;
 
 			/**
 			 * @brief Destructs the buffer.
@@ -313,7 +314,7 @@ namespace EmEn::Vulkan
 					return nullptr;
 				}
 
-				return static_cast< pointer_t * >(this->deviceMemory()->mapMemory(offset, size));
+				return static_cast< pointer_t * >(m_deviceMemory->mapMemory(offset, size));
 			}
 
 			/**
@@ -326,7 +327,7 @@ namespace EmEn::Vulkan
 			{
 				if ( this->isHostVisible() )
 				{
-					this->deviceMemory()->unmapMemory();
+					m_deviceMemory->unmapMemory();
 				}
 			}
 
@@ -383,17 +384,6 @@ namespace EmEn::Vulkan
 			}
 
 		private:
-
-			/**
-			 * @brief Returns the device memory pointer.
-			 * @return const DeviceMemory *
-			 */
-			[[nodiscard]]
-			const DeviceMemory *
-			deviceMemory () const noexcept
-			{
-				return m_deviceMemory.get();
-			}
 
 			VkBuffer m_handle{VK_NULL_HANDLE};
 			VkBufferCreateInfo m_createInfo{};

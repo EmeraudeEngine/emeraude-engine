@@ -732,6 +732,7 @@ namespace EmEn
 			LogFormat m_logFormat{LogFormat::Text};
 			int m_parentProcessID{-1};
 			int m_processID{-1};
+			mutable std::mutex m_consoleAccess;
 			bool m_serviceInitialized{false};
 			bool m_isChildProcess{false};
 			bool m_printOnlyErrors{false};

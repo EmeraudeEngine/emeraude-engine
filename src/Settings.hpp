@@ -70,6 +70,7 @@ namespace EmEn
 
 	/**
 	 * @brief The setting store class.
+	 * @note This class is private details of Settings and should never be accessed outside Settings.
 	 */
 	class SettingStore final
 	{
@@ -353,7 +354,7 @@ namespace EmEn
 			 */
 			template< SettingType variable_t >
 			void
-			set (std::string_view settingPath, const variable_t & value) noexcept
+			set (std::string_view settingPath, const variable_t & value)
 			{
 				const std::unique_lock< std::shared_mutex > lock{m_storeAccess};
 
@@ -362,9 +363,9 @@ namespace EmEn
 				m_stores[std::string{key}].setVariable(std::string{variableName}, value);
 			}
 
-			/** @copydoc EmEn::Settings::set(const std::string & key, const variable_t & value) noexcept */
+			/** @copydoc EmEn::Settings::set(const std::string & key, const variable_t & value) */
 			void
-			set (std::string_view settingPath, const char * value) noexcept
+			set (std::string_view settingPath, const char * value)
 			{
 				this->set(settingPath, std::string{value});
 			}
@@ -378,7 +379,7 @@ namespace EmEn
 			 */
 			template< SettingType variable_t >
 			void
-			setInArray (std::string_view settingPath, const variable_t & value) noexcept
+			setInArray (std::string_view settingPath, const variable_t & value)
 			{
 				const std::unique_lock< std::shared_mutex > lock{m_storeAccess};
 
@@ -387,9 +388,9 @@ namespace EmEn
 				m_stores[std::string{key}].setVariableInArray(std::string{variableName}, value);
 			}
 
-			/** @copydoc EmEn::Settings::setInArray(const std::string & key, const variable_t & value) noexcept */
+			/** @copydoc EmEn::Settings::setInArray(const std::string & key, const variable_t & value) */
 			void
-			setInArray (std::string_view settingPath, const char * value) noexcept
+			setInArray (std::string_view settingPath, const char * value)
 			{
 				this->setInArray(settingPath, std::string{value});
 			}
@@ -450,7 +451,7 @@ namespace EmEn
 			template< SettingType variable_t >
 			[[nodiscard]]
 			variable_t
-			getOrSetDefault (const std::string & key, const variable_t & defaultValue = {}) noexcept
+			getOrSetDefault (const std::string & key, const variable_t & defaultValue = {})
 			{
 				const std::unique_lock< std::shared_mutex > lock{m_storeAccess};
 
@@ -528,7 +529,7 @@ namespace EmEn
 			 * @return void
 			 */
 			void
-			clearArray (std::string_view settingPath) noexcept
+			clearArray (std::string_view settingPath)
 			{
 				const std::unique_lock< std::shared_mutex > lock{m_storeAccess};
 
@@ -550,7 +551,7 @@ namespace EmEn
 			 * @return void
 			 */
 			void
-			removeKey (std::string_view settingPath) noexcept
+			removeKey (std::string_view settingPath)
 			{
 				const std::unique_lock< std::shared_mutex > lock{m_storeAccess};
 
@@ -571,7 +572,7 @@ namespace EmEn
 			 * @return void
 			 */
 			void
-			clear () noexcept
+			clear ()
 			{
 				const std::unique_lock< std::shared_mutex > lock{m_storeAccess};
 

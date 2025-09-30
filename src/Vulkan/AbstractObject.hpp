@@ -33,7 +33,6 @@
 #include <iostream>
 #include <sstream>
 #include <string>
-#include <array>
 #include <map>
 
 /* Third-party inclusions. */
@@ -158,12 +157,12 @@ namespace EmEn::Vulkan
 				{
 					const auto * identifier = this->identifier().empty() ? "***UNIDENTIFIED***" : this->identifier().data();
 
-					if ( !m_flags[Created] )
+					if ( !m_isCreated )
 					{
 						TraceError{"VulkanObject"} << "A Vulkan object ('" << identifier << "' " << this << ") was not correctly constructed !";
 					}
 
-					if ( !m_flags[Destroyed] )
+					if ( !m_isDestroyed )
 					{
 						TraceError{"VulkanObject"} << "A Vulkan object ('" << identifier << "' " << this << ") is not correctly destroyed !";
 					}
@@ -174,14 +173,14 @@ namespace EmEn::Vulkan
 				}
 				else
 				{
-					if ( !m_flags[Created] )
+					if ( !m_isCreated )
 					{
-						TraceError{"VulkanObject"} << "A Vulkan object (" << this->identifier() << ") was not correctly constructed !";
+						TraceError{"VulkanObject"} << "A Vulkan object was not correctly constructed !";
 					}
 
-					if ( !m_flags[Destroyed] )
+					if ( !m_isDestroyed )
 					{
-						TraceError{"VulkanObject"} << "A Vulkan object (" << this->identifier() << ") is not correctly destroyed !";
+						TraceError{"VulkanObject"} << "A Vulkan object is not correctly destroyed !";
 					}
 				}
 			}
@@ -225,10 +224,10 @@ namespace EmEn::Vulkan
 			bool
 			isCreated () const noexcept
 			{
-				return m_flags[Created];
+				return m_isCreated;
 			}
 
-			static std::map< void *, std::string > s_tracking;
+			static inline std::map< void *, std::string > s_tracking{};
 
 		protected:
 
@@ -252,7 +251,7 @@ namespace EmEn::Vulkan
 			void
 			setCreated () noexcept
 			{
-				m_flags[Created] = true;
+				m_isCreated = true;
 			}
 
 			/**
@@ -262,26 +261,14 @@ namespace EmEn::Vulkan
 			void
 			setDestroyed () noexcept
 			{
-				m_flags[Destroyed] = true;
+				m_isDestroyed = true;
 			}
 
 		private:
-
-			/* Flag names. */
-			static constexpr auto Created{0UL};
-			static constexpr auto Destroyed{1UL};
-
+			
 			[[no_unique_address]]
 			Identifier m_identifier; /* NOTE: In release mode, this shouldn't take any memory space. */
-			std::array< bool, 8 > m_flags{
-				false/*Created*/,
-				false/*Destroyed*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/
-			};
+			bool m_isCreated{false};
+			bool m_isDestroyed{false};
 	};
 }

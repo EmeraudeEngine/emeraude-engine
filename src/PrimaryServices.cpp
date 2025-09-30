@@ -156,7 +156,14 @@ namespace EmEn
 	bool
 	PrimaryServices::initialize () noexcept
 	{
-		m_threadPool = std::make_shared< ThreadPool >(std::thread::hardware_concurrency());
+		if constexpr ( ThreadPoolDebugEnabled )
+		{
+			m_threadPool = std::make_shared< ThreadPool >(ThreadPoolDebugEnabledNumThreads);
+		}
+		else
+		{
+			m_threadPool = std::make_shared< ThreadPool >(std::thread::hardware_concurrency());
+		}
 
 		/* Initialize the file system to reach every useful directory. */
 		if ( m_fileSystem.initialize(m_servicesEnabled) )

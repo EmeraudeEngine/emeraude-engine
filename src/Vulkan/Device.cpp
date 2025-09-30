@@ -33,14 +33,85 @@
 #include "Utility.hpp"
 #include "Instance.hpp"
 #include "DeviceRequirements.hpp"
-#include "QueueFamily.hpp"
-#include "QueueFamilySQ.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::Vulkan
 {
 	using namespace Libs;
 	using namespace Graphics;
+
+	Queue *
+	DeviceQueueConfiguration::queue (QueuePriority priority) const noexcept
+	{
+		std::array< uint8_t, 3 > searchOrder{};
+
+		switch ( priority )
+		{
+			/* NOTE: High -> Medium -> Low */
+			case QueuePriority::High:
+				searchOrder = {0, 1, 2};
+				break;
+
+				/* NOTE: Medium -> High -> Low */
+			case QueuePriority::Medium:
+				searchOrder = {1, 0, 2};
+				break;
+
+				/* NOTE: Low -> Medium -> High */
+			case QueuePriority::Low:
+			default:
+				searchOrder = {2, 1, 0};
+				break;
+		}
+
+		for ( const uint8_t priorityIndex : searchOrder )
+		{
+			if ( auto & [nextQueueIndex, queueList] = m_queueByPriorities[priorityIndex]; !queueList.empty() )
+			{
+				const uint32_t index = nextQueueIndex.fetch_add(1) % queueList.size();
+
+				return queueList[index];
+			}
+		}
+
+		return nullptr;
+	}
+
+	bool
+	Device::installQueues (const std::map< uint32_t, StaticVector< float, 16 > > & queuePriorityValues, DeviceQueueConfiguration & configuration) noexcept
+	{
+		const auto queueFamilyIndex = configuration.queueFamilyIndex();
+
+		const auto valuesIt = queuePriorityValues.find(queueFamilyIndex);
+
+		if ( valuesIt == queuePriorityValues.end() )
+		{
+			return false;
+		}
+
+		const auto queueCount = valuesIt->second.size();
+
+		for ( uint32_t queueIndex = 0; queueIndex < queueCount; queueIndex++ )
+		{
+			VkQueue queueHandle;
+
+			vkGetDeviceQueue(m_handle, queueFamilyIndex, queueIndex, &queueHandle);
+
+			if ( queueHandle == VK_NULL_HANDLE )
+			{
+				TraceError{ClassId} << "Unable to retrieve the queue #" << queueIndex << " (family #" << queueFamilyIndex << ") from the device  !";
+
+				return false;
+			}
+
+			const auto & queue = m_queues.emplace_back(std::make_unique< Queue >(this->shared_from_this(), queueHandle, queueFamilyIndex));
+			queue->setIdentifier(ClassId, (std::stringstream{} << queueFamilyIndex << '.' << queueIndex).str(), "Queue");
+
+			configuration.registerQueue(queue.get(), QueuePriority::High);
+		}
+
+		return true;
+	}
 
 	bool
 	Device::create (const DeviceRequirements & requirements, const std::vector< const char * > & extensions) noexcept
@@ -53,226 +124,6 @@ namespace EmEn::Vulkan
 				"The requirements for creation:" "\n" << requirements;
 		}
 
-		StaticVector< VkDeviceQueueCreateInfo, 16 > queueCreateInfos;
-
-		/* NOTE: Check queues availabilities and configure them against the requirements. */
-		if ( !this->prepareQueues(requirements, queueCreateInfos) )
-		{
-			Tracer::fatal(ClassId, "Unable to have a suitable queue configuration for the logical device !");
-
-			return false;
-		}
-
-		if ( m_showInformation )
-		{
-			TraceInfo info{ClassId};
-
-			info << "Logical device queue configuration: " "\n";
-
-			for ( const auto & queueFamily : m_queueFamilies )
-			{
-				info << "Queue family #" << queueFamily->index() << " enabled !" "\n";
-			}
-
-			for ( const auto & [job, queue] : m_queueFamilyPerJob )
-			{
-				info << "'" << magic_enum::enum_name(job) << "' job will be performed on queue family #" << queue->index() << "." "\n";
-			}
-		}
-
-		/* Logical device creation. */
-		if ( !this->createDevice(requirements, queueCreateInfos, extensions) )
-		{
-			Tracer::error(ClassId, "Logical device creation failed !");
-
-			return false;
-		}
-
-		/* Retrieve every created queue. */
-		const auto device = this->shared_from_this();
-
-		for ( const auto & queueFamily : m_queueFamilies )
-		{
-			if ( !queueFamily->retrieveQueuesFromDevice(device) )
-			{
-				TraceError{ClassId} << "Unable to retrieve queue for queue family #" << queueFamily->index() << " of the device " << m_handle << " (" << this->identifier() << ") !";
-
-				return false;
-			}
-		}
-
-		this->setCreated();
-
-		return true;
-	}
-
-	bool
-	Device::declareQueuesFromSingleQueueFamily (const DeviceRequirements & requirements, const VkQueueFamilyProperties2 & queueFamilyProperty) noexcept
-	{
-		const auto queueFamily = queueFamilyProperty.queueFamilyProperties.queueCount > 1 ?
-			m_queueFamilies.emplace_back(std::make_shared< QueueFamily >(0, queueFamilyProperty.queueFamilyProperties.queueCount)) :
-			m_queueFamilies.emplace_back(std::make_shared< QueueFamilySQ >(0));
-
-		m_hasBasicSupport = true;
-
-		/* NOTE: Without a transfer nothing is possible! This should never happen! */
-		if ( (queueFamilyProperty.queueFamilyProperties.queueFlags & VK_QUEUE_TRANSFER_BIT) == 0 )
-		{
-			TraceFatal{ClassId} << "The physical device '" << this->name() << "' has no queue for transfer !";
-
-			return false;
-		}
-
-		m_queueFamilyPerJob[QueueJob::Transfer] = queueFamily;
-
-		if ( requirements.needsGraphics() )
-		{
-			if ( (queueFamilyProperty.queueFamilyProperties.queueFlags & VK_QUEUE_GRAPHICS_BIT) == 0 )
-			{
-				TraceError{ClassId} << "The physical device '" << this->name() << "' has no queue for graphics !";
-
-				return false;
-			}
-
-			m_queueFamilyPerJob[QueueJob::Graphics] = queueFamily;
-			m_queueFamilyPerJob[QueueJob::GraphicsTransfer] = queueFamily;
-
-			if ( requirements.needsPresentation() )
-			{
-				if ( !m_physicalDevice->getSurfaceSupport(requirements.surface(), 0) )
-				{
-					TraceFatal{ClassId} << "The physical device '" << this->name() << "' has no queue for presentation !";
-
-					return false;
-				}
-
-				m_queueFamilyPerJob[QueueJob::Presentation] = queueFamily;
-			}
-		}
-
-		if ( requirements.needsCompute() )
-		{
-			if ( (queueFamilyProperty.queueFamilyProperties.queueFlags & VK_QUEUE_COMPUTE_BIT) == 0 )
-			{
-				TraceError{ClassId} << "The physical device '" << this->name() << "' has no queue for compute !";
-
-				return false;
-			}
-
-			m_queueFamilyPerJob[QueueJob::Compute] = queueFamily;
-			m_queueFamilyPerJob[QueueJob::ComputeTransfer] = queueFamily;
-		}
-
-		return true;
-	}
-
-	bool
-	Device::declareQueuesFromMultipleQueueFamilies (const DeviceRequirements & requirements, const StaticVector< VkQueueFamilyProperties2, 8 > & queueFamilyProperties) noexcept
-	{
-		/* Loop over all existing queue families in the physical device. */
-		for ( uint32_t queueFamilyIndex = 0; queueFamilyIndex < queueFamilyProperties.size(); queueFamilyIndex++ )
-		{
-			const auto & flag = queueFamilyProperties[queueFamilyIndex].queueFamilyProperties.queueFlags;
-
-			const auto maxQueueCount = queueFamilyProperties[queueFamilyIndex].queueFamilyProperties.queueCount;
-
-			const auto queueFamily = maxQueueCount > 1 ?
-				m_queueFamilies.emplace_back(std::make_shared< QueueFamily >(queueFamilyIndex, maxQueueCount)) :
-				m_queueFamilies.emplace_back(std::make_shared< QueueFamilySQ >(queueFamilyIndex));
-
-			if ( (flag & VK_QUEUE_GRAPHICS_BIT) != 0 )
-			{
-				if ( requirements.needsGraphics() )
-				{
-					/* If no graphic queue has been registered, or if the queue family is exclusive to graphics. */
-					if ( !m_queueFamilyPerJob.contains(QueueJob::Graphics) || (flag & VK_QUEUE_COMPUTE_BIT) == 0 )
-					{
-						m_queueFamilyPerJob[QueueJob::Graphics] = queueFamily;
-
-						if ( (flag & VK_QUEUE_TRANSFER_BIT) != 0 )
-						{
-							m_queueFamilyPerJob[QueueJob::GraphicsTransfer] = queueFamily;
-						}
-					}
-				}
-
-				if ( !requirements.tryPresentationSeparateFromGraphics() && requirements.needsPresentation() && m_physicalDevice->getSurfaceSupport(requirements.surface(), queueFamilyIndex) )
-				{
-					m_queueFamilyPerJob[QueueJob::Presentation] = queueFamily;
-				}
-			}
-			else if ( requirements.tryPresentationSeparateFromGraphics() && requirements.needsPresentation() && m_physicalDevice->getSurfaceSupport(requirements.surface(), queueFamilyIndex) )
-			{
-				m_queueFamilyPerJob[QueueJob::Presentation] = queueFamily;
-			}
-
-			if ( requirements.needsCompute() && (flag & VK_QUEUE_COMPUTE_BIT) != 0 )
-			{
-				/* If no compute queue has been registered, or if the queue family is exclusive to compute. */
-				if ( !m_queueFamilyPerJob.contains(QueueJob::Compute) || (flag & VK_QUEUE_GRAPHICS_BIT) == 0 )
-				{
-					m_queueFamilyPerJob[QueueJob::Compute] = queueFamily;
-
-					if ( (flag & VK_QUEUE_TRANSFER_BIT) != 0 )
-					{
-						m_queueFamilyPerJob[QueueJob::ComputeTransfer] = queueFamily;
-					}
-				}
-			}
-
-			if ( requirements.needsTransfer() && (flag & VK_QUEUE_TRANSFER_BIT) != 0 && (flag & VK_QUEUE_GRAPHICS_BIT) == 0 && (flag & VK_QUEUE_COMPUTE_BIT) == 0 )
-			{
-				m_queueFamilyPerJob[QueueJob::Transfer] = queueFamily;
-			}
-		}
-
-		/* Check if every need is met. */
-		if ( requirements.needsGraphics() && !m_queueFamilyPerJob.contains(QueueJob::Graphics) )
-		{
-			TraceError{ClassId} << "The physical device '" << this->name() << "' has no queue for graphics !";
-
-			return false;
-		}
-
-		if ( requirements.needsPresentation() && !m_queueFamilyPerJob.contains(QueueJob::Presentation) )
-		{
-			TraceError{ClassId} << "The physical device '" << this->name() << "' has no queue for presentation !";
-
-			return false;
-		}
-
-		if ( requirements.needsCompute() && !m_queueFamilyPerJob.contains(QueueJob::Compute) )
-		{
-			TraceError{ClassId} << "The physical device '" << this->name() << "' has no queue for compute !";
-
-			return false;
-		}
-
-		if ( requirements.needsTransfer() && !m_queueFamilyPerJob.contains(QueueJob::Transfer) )
-		{
-			switch ( requirements.deviceWorkType() )
-			{
-				case DeviceWorkType::General :
-					TraceError{ClassId} << "The physical device '" << this->name() << "' has no queue for separate transfer !";
-
-					return false;
-
-				case DeviceWorkType::Graphics :
-					m_queueFamilyPerJob[QueueJob::Transfer] = m_queueFamilyPerJob[QueueJob::Graphics];
-					break;
-
-				case DeviceWorkType::Compute :
-					m_queueFamilyPerJob[QueueJob::Transfer] = m_queueFamilyPerJob[QueueJob::Compute];
-					break;
-			}
-		}
-
-		return true;
-	}
-
-	bool
-	Device::prepareQueues (const DeviceRequirements & requirements, StaticVector< VkDeviceQueueCreateInfo, 16 > & queueCreateInfos) noexcept
-	{
 		const auto & queueFamilyProperties = m_physicalDevice->queueFamilyPropertiesVK11();
 
 		if ( queueFamilyProperties.empty() )
@@ -282,118 +133,410 @@ namespace EmEn::Vulkan
 			return false;
 		}
 
-		/* Check queue family requirements. */
-		if ( queueFamilyProperties.size() == 1 )
-		{
-			if ( m_showInformation )
-			{
-				TraceInfo{ClassId} <<
-				   "The physical device '" << this->name() << "' has a basic support. "
-				   "There will be only one queue family and maybe only one queue at all.";
-			}
+		m_basicSupport = queueFamilyProperties.size() <= 1;
 
-			if ( !this->declareQueuesFromSingleQueueFamily(requirements, queueFamilyProperties[0]) )
+		std::map< uint32_t, StaticVector< float, 16 > > queuePriorityValues;
+		StaticVector< VkDeviceQueueCreateInfo, 8 > queueCreateInfos;
+
+		/* NOTE: Split the strategy search for queue family. */
+		if ( requirements.needsGraphics() && requirements.needsCompute() )
+		{
+			Tracer::info(ClassId, "Create a device requiring both graphics and compute capabilities !");
+
+			if ( !this->searchGraphicsAndComputeQueueConfiguration(requirements, queueFamilyProperties, queueCreateInfos, queuePriorityValues) )
 			{
+				Tracer::error(ClassId, "Unable to found a graphics and compute capable configuration for this device!");
+
+				return false;
+			}
+		}
+		else if ( requirements.needsGraphics() )
+		{
+			Tracer::info(ClassId, "Create a device requiring graphics capabilities !");
+
+			if ( !this->searchGraphicsQueueConfiguration(requirements, queueFamilyProperties, queueCreateInfos, queuePriorityValues) )
+			{
+				Tracer::error(ClassId, "Unable to found a graphics capable configuration for this device!");
+
+				return false;
+			}
+		}
+		else if ( requirements.needsCompute() )
+		{
+			Tracer::info(ClassId, "Create a device requiring compute capabilities !");
+
+			if ( !this->searchComputeQueueConfiguration(queueFamilyProperties, queueCreateInfos, queuePriorityValues) )
+			{
+				Tracer::error(ClassId, "Unable to found a compute capable configuration for this device!");
+
 				return false;
 			}
 		}
 		else
 		{
-			if ( m_showInformation )
+			Tracer::error(ClassId, "No queue requirement for this device!");
+
+			return false;
+		}
+
+		const auto transferOnlyQueueFamilyFound = this->searchTransferOnlyQueueConfiguration(queueFamilyProperties, queueCreateInfos, queuePriorityValues);
+
+		/* Logical device creation. */
+		if ( !this->createDevice(requirements, queueCreateInfos, extensions) )
+		{
+			Tracer::error(ClassId, "Logical device creation failed !");
+
+			return false;
+		}
+
+		/* NOTE: Register the queue to the graphics/transfer configuration. */
+		if ( requirements.needsGraphics() && !this->installQueues(queuePriorityValues, m_graphicsQueueConfiguration) )
+		{
+			return false;
+		}
+
+		/* NOTE: Register the queue to the compute/transfer configuration. */
+		if ( requirements.needsCompute() && !this->installQueues(queuePriorityValues, m_computeQueueConfiguration) )
+		{
+			return false;
+		}
+
+		if ( !transferOnlyQueueFamilyFound )
+		{
+			Tracer::info(ClassId, "No queue transfer-only queue available with this device!");
+		}
+		else if ( !this->installQueues(queuePriorityValues, m_transferQueueConfiguration) )
+		{
+			return false;
+		}
+
+		if ( m_showInformation )
+		{
+			const std::array< std::pair< const DeviceQueueConfiguration &, std::string >, 3 > purposes{{
+				{m_graphicsQueueConfiguration, "Graphics"},
+				{m_computeQueueConfiguration, "Compute"},
+				{m_transferQueueConfiguration, "Transfer"}
+			}};
+
+			TraceInfo info{ClassId};
+
+			if ( m_basicSupport )
 			{
-				TraceInfo{ClassId} << "The physical device '" << this->name() << "' has an advanced support.";
+				info << "The physical device has basic hardware capabilities." "\n";
+			}
+			else
+			{
+				info << "The physical device has advanced hardware capabilities." "\n";
 			}
 
-			if ( !this->declareQueuesFromMultipleQueueFamilies(requirements, queueFamilyProperties) )
+			info << "Logical device queue configuration: " "\n";
+
+			for ( const auto & [configuration, purpose] : purposes )
 			{
-				return false;
+				if ( configuration.enabled() )
+				{
+					constexpr std::array< QueuePriority, 3 > priorities{
+						QueuePriority::High,
+						QueuePriority::Medium,
+						QueuePriority::Low
+					};
+
+					info << purpose << " enabled with family #" << configuration.queueFamilyIndex() << "." "\n";
+
+					for ( const auto priority : priorities )
+					{
+						const auto & queues = configuration.queues(priority);
+
+						info << " - " << magic_enum::enum_name(priority) << " priority: " << queues.size() << " queue(s)." "\n";
+					}
+				}
+				else
+				{
+					info << purpose <<" disabled." "\n";
+				}
 			}
 		}
 
-		/* Check queue count requirements. */
-		for ( auto & queueFamily : m_queueFamilies )
+		this->setCreated();
+
+		return true;
+	}
+
+	uint32_t
+	Device::addQueueFamilyToCreateInfo (uint32_t queueFamilyIndex, const StaticVector< VkQueueFamilyProperties2, 8 > & queueFamilyProperties, StaticVector< VkDeviceQueueCreateInfo, 8 > & queueCreateInfos, std::map< uint32_t, StaticVector< float, 16 > > & queuePriorities) noexcept
+	{
+		/* NOTE: Avoid adding the same family twice. */
+		for ( const auto & createInfo : queueCreateInfos )
 		{
-			if ( !queueFamily->hasSingleQueue() )
+			if ( createInfo.queueFamilyIndex == queueFamilyIndex )
 			{
-				StaticVector< std::pair< QueueJob, float >, 16 > structure;
+				return createInfo.queueCount;
+			}
+		}
 
-				for ( const auto & [jobType, family] : m_queueFamilyPerJob )
-				{
-					if ( family != queueFamily )
-					{
-						continue;
-					}
+		const uint32_t queueCount = queueFamilyProperties[queueFamilyIndex].queueFamilyProperties.queueCount;
 
-					switch ( jobType )
-					{
-						case QueueJob::Graphics :
-							for ( auto priority : requirements.graphicsQueuePriorities() )
-							{
-								structure.emplace_back(jobType, priority);
-							}
-							break;
+		auto & priorities = queuePriorities[queueFamilyIndex];
+		priorities.resize(queueCount, 1.0F); /* NOTE: Default priority. */
 
-						case QueueJob::GraphicsTransfer :
-							for ( auto priority : requirements.graphicsTransferQueuePriorities() )
-							{
-								structure.emplace_back(jobType, priority);
-							}
-							break;
+		VkDeviceQueueCreateInfo createInfo{};
+		createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+		createInfo.pNext = nullptr;
+		createInfo.flags = 0; // VK_DEVICE_QUEUE_CREATE_PROTECTED_BIT
+		createInfo.queueFamilyIndex = queueFamilyIndex;
+		createInfo.queueCount = queueCount;
+		createInfo.pQueuePriorities = priorities.data();
 
-						case QueueJob::Presentation :
-							for ( auto priority : requirements.presentationQueuePriorities() )
-							{
-								structure.emplace_back(jobType, priority);
-							}
-							break;
+		queueCreateInfos.emplace_back(createInfo);
 
-						case QueueJob::Compute :
-							for ( auto priority : requirements.computeQueuePriorities() )
-							{
-								structure.emplace_back(jobType, priority);
-							}
-							break;
+		return queueCount;
+	}
 
-						case QueueJob::ComputeTransfer :
-							for ( auto priority : requirements.computeTransferQueuePriorities() )
-							{
-								structure.emplace_back(jobType, priority);
-							}
-							break;
+	bool
+	Device::searchGraphicsAndComputeQueueConfiguration (const DeviceRequirements & requirements, const StaticVector< VkQueueFamilyProperties2, 8 > & queueFamilyProperties, StaticVector< VkDeviceQueueCreateInfo, 8 > & queueCreateInfos, std::map< uint32_t, StaticVector< float, 16 > > & queuePriorities) noexcept
+	{
+		/* 1. Discovering the best candidates. */
+		std::optional< uint32_t > bestGraphicsIndex;
+		std::optional< uint32_t > bestComputeIndex;
 
-						case QueueJob::Transfer :
-							for ( auto priority : requirements.transferQueuePriorities() )
-							{
-								structure.emplace_back(jobType, priority);
-							}
-							break;
-					}
-				}
+		/* NOTE: We look for the best indices for each task.
+		 * Priority 1: A dedicated queue (e.g., graphics-only).
+		 * Priority 2: A queue that supports the task (e.g., graphics + compute). */
+		for ( uint32_t index = 0; index < queueFamilyProperties.size(); ++index )
+		{
+		    const auto & properties = queueFamilyProperties[index].queueFamilyProperties;
+		    const bool hasGraphics = (properties.queueFlags & VK_QUEUE_GRAPHICS_BIT) != 0;
+		    const bool hasCompute = (properties.queueFlags & VK_QUEUE_COMPUTE_BIT) != 0;
 
-				if ( structure.empty() )
-				{
-					if ( m_showInformation )
-					{
-						TraceInfo{ClassId} << "There is no queue required for queue family #" << queueFamily->index() << " !";
-					}
+		    /* NOTE: Check presentation support if necessary for graphics files. */
+		    bool presentationSupport = true;
 
-					continue;
-				}
+		    if ( requirements.needsPresentation() )
+		    {
+		        presentationSupport = m_physicalDevice->getSurfaceSupport(requirements.surface(), index);
+		    }
 
-				if ( !queueFamily->declareQueueStructure(structure) )
-				{
-					return false;
-				}
+		    if ( hasGraphics && presentationSupport )
+		    {
+		        if ( !bestGraphicsIndex.has_value() )
+		        {
+		        	/* NOTE: If we don't have a candidate yet, we'll take this one. */
+		            bestGraphicsIndex = index;
+		        }
+		        else if ( !hasCompute )
+		        {
+		        	TraceDebug{ClassId} << "The device has a graphics dedicated queue family at index #" << index;
+
+		        	/* NOTE: If we find a DEDICATED graphics queue (without computing), it's even better! */
+		            bestGraphicsIndex = index;
+		        }
+		    }
+
+		    if ( hasCompute )
+		    {
+		    	/* NOTE: Same idea but for compute here. */
+		        if ( !bestComputeIndex.has_value() )
+		        {
+		            bestComputeIndex = index;
+		        }
+		        else if ( !hasGraphics )
+		        {
+		        	TraceDebug{ClassId} << "The device has a compute dedicated queue family at index #" << index;
+
+		            bestComputeIndex = index;
+		        }
+		    }
+		}
+
+		if ( !bestGraphicsIndex.has_value() )
+		{
+			Tracer::debug(ClassId, "The device lacks a graphics queue family!");
+
+		    return false;
+		}
+
+		if ( !bestComputeIndex.has_value() )
+		{
+			Tracer::debug(ClassId, "The device lacks a compute queue family!");
+
+			return false;
+		}
+
+		if ( *bestGraphicsIndex != *bestComputeIndex )
+		{
+			{
+				const auto queueCount = Device::addQueueFamilyToCreateInfo(*bestGraphicsIndex, queueFamilyProperties, queueCreateInfos, queuePriorities);
+
+				m_graphicsQueueConfiguration.setQueueFamilyIndex(*bestGraphicsIndex);
+
+				TraceSuccess{ClassId} << "Graphics configured with queue family index #" << *bestGraphicsIndex << " (queue count: " << queueCount << ").";
 			}
 
-			queueCreateInfos.emplace_back(queueFamily->getCreateInfo(0));
+			{
+				const auto queueCount = Device::addQueueFamilyToCreateInfo(*bestComputeIndex, queueFamilyProperties, queueCreateInfos, queuePriorities);
+
+				m_computeQueueConfiguration.setQueueFamilyIndex(*bestComputeIndex);
+
+				TraceSuccess{ClassId} << "Compute configured with queue family index #" << *bestComputeIndex << " (queue count: " << queueCount << ").";
+			}
+		}
+		else
+		{
+			const uint32_t universalIndex = *bestGraphicsIndex;
+
+			const auto queueCount = Device::addQueueFamilyToCreateInfo(universalIndex, queueFamilyProperties, queueCreateInfos, queuePriorities);
+
+			m_graphicsQueueConfiguration.setQueueFamilyIndex(universalIndex);
+
+			m_computeQueueConfiguration.setQueueFamilyIndex(universalIndex);
+
+			TraceSuccess{ClassId} << "Graphics and compute configured with queue family index #" << universalIndex << " (queue count: " << queueCount << ").";
 		}
 
 		return true;
 	}
 
 	bool
-	Device::createDevice (const DeviceRequirements & requirements, const StaticVector< VkDeviceQueueCreateInfo, 16 > & queueCreateInfos, const std::vector< const char * > & extensions) noexcept
+	Device::searchGraphicsQueueConfiguration (const DeviceRequirements & requirements, const StaticVector< VkQueueFamilyProperties2, 8 > & queueFamilyProperties, StaticVector< VkDeviceQueueCreateInfo, 8 > & queueCreateInfos, std::map< uint32_t, StaticVector< float, 16 > > & queuePriorities) noexcept
+	{
+		std::optional< uint32_t > bestGraphicsIndex;
+
+		for ( uint32_t index = 0; index < queueFamilyProperties.size(); index++ )
+		{
+			const auto & properties = queueFamilyProperties[index].queueFamilyProperties;
+			const bool hasGraphics = (properties.queueFlags & VK_QUEUE_GRAPHICS_BIT) != 0;
+			const bool hasCompute = (properties.queueFlags & VK_QUEUE_COMPUTE_BIT) != 0;
+
+			if ( !hasGraphics )
+			{
+				continue;
+			}
+
+			if ( requirements.needsPresentation() && !m_physicalDevice->getSurfaceSupport(requirements.surface(), index) )
+			{
+				continue;
+			}
+
+			if ( !bestGraphicsIndex.has_value() )
+			{
+				bestGraphicsIndex = index;
+			}
+			else if ( !hasCompute )
+			{
+				TraceDebug{ClassId} << "The device has a graphics dedicated queue family at index #" << index;
+
+				/* NOTE: We found a dedicated family (without computing), no need to look any further. */
+				bestGraphicsIndex = index;
+
+				break;
+			}
+		}
+
+		if ( !bestGraphicsIndex.has_value() )
+		{
+			Tracer::debug(ClassId, "The device lacks a graphics queue family!");
+
+			return false;
+		}
+
+		const auto queueCount = Device::addQueueFamilyToCreateInfo(bestGraphicsIndex.value(), queueFamilyProperties, queueCreateInfos, queuePriorities);
+
+		m_graphicsQueueConfiguration.setQueueFamilyIndex(bestGraphicsIndex.value());
+
+		TraceSuccess{ClassId} << "Graphics configured with queue family index #" << bestGraphicsIndex.value() << " (queue count: " << queueCount << ").";
+
+		return true;
+	}
+
+	bool
+	Device::searchComputeQueueConfiguration (const StaticVector< VkQueueFamilyProperties2, 8 > & queueFamilyProperties, StaticVector< VkDeviceQueueCreateInfo, 8 > & queueCreateInfos, std::map< uint32_t, StaticVector< float, 16 > > & queuePriorities) noexcept
+	{
+		std::optional< uint32_t > bestComputeIndex;
+
+		for ( uint32_t index = 0; index < queueFamilyProperties.size(); index++ )
+		{
+			const auto & properties = queueFamilyProperties[index].queueFamilyProperties;
+			const bool hasGraphics = (properties.queueFlags & VK_QUEUE_GRAPHICS_BIT) != 0;
+			const bool hasCompute = (properties.queueFlags & VK_QUEUE_COMPUTE_BIT) != 0;
+
+			if ( !hasCompute )
+			{
+				continue;
+			}
+
+			if ( !bestComputeIndex.has_value() )
+			{
+				bestComputeIndex = index;
+			}
+			else if ( !hasGraphics )
+			{
+				TraceDebug{ClassId} << "The device has a compute dedicated queue family at index #" << index;
+
+				/* NOTE: We found a dedicated family (without graphics), no need to look any further. */
+				bestComputeIndex = index;
+
+				break;
+			}
+		}
+
+		if ( !bestComputeIndex.has_value() )
+		{
+			Tracer::debug(ClassId, "The device lacks a compute queue family!");
+
+			return false;
+		}
+
+		const auto queueCount = Device::addQueueFamilyToCreateInfo(bestComputeIndex.value(), queueFamilyProperties, queueCreateInfos, queuePriorities);
+
+		m_computeQueueConfiguration.setQueueFamilyIndex(bestComputeIndex.value());
+
+		TraceSuccess{ClassId} << "Compute configured with queue family index #" << bestComputeIndex.value() << " (queue count: " << queueCount << ").";
+
+		return true;
+	}
+
+	bool
+	Device::searchTransferOnlyQueueConfiguration (const StaticVector< VkQueueFamilyProperties2, 8 > & queueFamilyProperties, StaticVector< VkDeviceQueueCreateInfo, 8 > & queueCreateInfos, std::map< uint32_t, StaticVector< float, 16 > > & queuePriorities) noexcept
+	{
+		std::optional< uint32_t > transferIndex;
+
+		for ( uint32_t index = 0; index < queueFamilyProperties.size(); index++ )
+		{
+			const auto & properties = queueFamilyProperties[index].queueFamilyProperties;
+
+			/* Check the transfer-only capabilities... */
+			if ( (properties.queueFlags & VK_QUEUE_TRANSFER_BIT) == 0 )
+			{
+				continue;
+			}
+
+			/* ... and only the transfer-only capabilities. */
+			if ( properties.queueFlags & ~(VK_QUEUE_TRANSFER_BIT | VK_QUEUE_SPARSE_BINDING_BIT) )
+			{
+				continue;
+			}
+
+			transferIndex = index;
+		}
+
+		if ( !transferIndex.has_value() )
+		{
+			Tracer::debug(ClassId, "The device lacks a transfer-only queue family!");
+
+			return false;
+		}
+
+		const auto queueCount = Device::addQueueFamilyToCreateInfo(transferIndex.value(), queueFamilyProperties, queueCreateInfos, queuePriorities);
+
+		m_transferQueueConfiguration.setQueueFamilyIndex(transferIndex.value());
+
+		TraceSuccess{ClassId} << "Transfer-only configured with queue family index #" << transferIndex.value() << " (queue count: " << queueCount << ").";
+
+		return true;
+	}
+
+	bool
+	Device::createDevice (const DeviceRequirements & requirements, const StaticVector< VkDeviceQueueCreateInfo, 8 > & queueCreateInfos, const std::vector< const char * > & extensions) noexcept
 	{
 		/* Creates the logical device from the physical device information. */
 		VkDeviceCreateInfo createInfo{};
@@ -404,7 +547,7 @@ namespace EmEn::Vulkan
 		createInfo.pQueueCreateInfos = queueCreateInfos.data();
 		{
 			/* NOTE: These fields must stay unused, the validation layers for
-			 * device is deprecated after Vulkan 1.0 (Device Layer Deprecation). */
+			 * a device are deprecated after Vulkan 1.0 (Device Layer Deprecation). */
 			createInfo.enabledLayerCount = 0;
 			createInfo.ppEnabledLayerNames = nullptr;
 		}
@@ -427,6 +570,7 @@ namespace EmEn::Vulkan
 	{
 		if ( m_handle != VK_NULL_HANDLE )
 		{
+			/* [VULKAN-CPU-SYNC] vkDestroyDevice() through waidIdle() */
 			this->waitIdle("Destroying the logical device !");
 
 			vkDestroyDevice(m_handle, nullptr);
@@ -434,63 +578,13 @@ namespace EmEn::Vulkan
 			m_handle = VK_NULL_HANDLE;
 		}
 
-		m_queueFamilyPerJob.clear();
-		m_queueFamilies.clear();
+		m_graphicsQueueConfiguration.clear();
+		m_computeQueueConfiguration.clear();
+		m_queues.clear();
+
 		m_physicalDevice.reset();
 
 		this->setDestroyed();
-	}
-
-	uint32_t
-	Device::getGraphicsFamilyIndex () const noexcept
-	{
-		const auto queueFamilyIt = m_queueFamilyPerJob.find(QueueJob::Graphics);
-
-		if ( queueFamilyIt == m_queueFamilyPerJob.cend() )
-		{
-			return 0;
-		}
-
-		return queueFamilyIt->second->index();
-	}
-
-	uint32_t
-	Device::getComputeFamilyIndex () const noexcept
-	{
-		const auto queueFamilyIt = m_queueFamilyPerJob.find(QueueJob::Compute);
-
-		if ( queueFamilyIt == m_queueFamilyPerJob.cend() )
-		{
-			return 0;
-		}
-
-		return queueFamilyIt->second->index();
-	}
-
-	uint32_t
-	Device::getTransferFamilyIndex () const noexcept
-	{
-		const auto queueFamilyIt = m_queueFamilyPerJob.find(QueueJob::Transfer);
-
-		if ( queueFamilyIt == m_queueFamilyPerJob.cend() )
-		{
-			return 0;
-		}
-
-		return queueFamilyIt->second->index();
-	}
-
-	Queue *
-	Device::getQueue (QueueJob deviceJobType, QueuePriority priority) const noexcept
-	{
-		const auto queueFamilyIt = m_queueFamilyPerJob.find(deviceJobType);
-
-		if ( queueFamilyIt == m_queueFamilyPerJob.cend() )
-		{
-			return nullptr;
-		}
-
-		return queueFamilyIt->second->queue(deviceJobType, priority);
 	}
 
 	void
@@ -503,13 +597,19 @@ namespace EmEn::Vulkan
 			return;
 		}
 
-		/* [VULKAN-CPU-SYNC] */
-		const std::lock_guard< std::mutex > lock{m_deviceInternalAccess};
+		/* [VULKAN-CPU-SYNC] vkDeviceWaitIdle() */
+		//std::cout << "[DEADLOCK-TRACKING] Try to acquire for vkDeviceWaitIdle() ..." << std::endl;
+
+		const std::lock_guard< std::mutex > lock{m_logicalDeviceAccess};
+
+		//std::cout << "[DEADLOCK-TRACKING] Call to vkDeviceWaitIdle() ..." << std::endl;
 
 		if ( const auto result = vkDeviceWaitIdle(m_handle); result != VK_SUCCESS )
 		{
 			TraceError{ClassId} << "Unable to wait the device " << m_handle << " : " << vkResultToCString(result) << " ! Call location:" "\n" << location;
 		}
+
+		//std::cout << "[DEADLOCK-TRACKING] vkDeviceWaitIdle() == VK_SUCCESS" << std::endl;
 	}
 
 	uint32_t

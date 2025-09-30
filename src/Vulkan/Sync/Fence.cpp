@@ -62,9 +62,7 @@ namespace EmEn::Vulkan::Sync
 			return false;
 		}
 
-		const auto result = vkCreateFence(this->device()->handle(), &m_createInfo, nullptr, &m_handle);
-
-		if ( result != VK_SUCCESS )
+		if ( const auto result = vkCreateFence(this->device()->handle(), &m_createInfo, nullptr, &m_handle); result != VK_SUCCESS )
 		{
 			TraceError{ClassId} << "Unable to create a fence : " << vkResultToCString(result) << " !";
 
@@ -88,8 +86,6 @@ namespace EmEn::Vulkan::Sync
 
 		if (  m_handle != VK_NULL_HANDLE )
 		{
-			this->device()->waitIdle("Destroying a fence");
-
 			vkDestroyFence(this->device()->handle(), m_handle, nullptr);
 
 			m_handle = VK_NULL_HANDLE;
@@ -110,31 +106,7 @@ namespace EmEn::Vulkan::Sync
 			return false;
 		}
 
-		const auto result = vkResetFences(this->device()->handle(), 1, &m_handle);
-
-		if ( result != VK_SUCCESS )
-		{
-			TraceError{ClassId} << "Unable to reset the fence : " << vkResultToCString(result) << " !";
-
-			return false;
-		}
-
-		return true;
-	}
-
-	bool
-	Fence::signal () const noexcept
-	{
-		if ( !this->hasDevice() )
-		{
-			Tracer::error(ClassId, "No device to signal this fence !");
-
-			return false;
-		}
-
-		const auto result = vkResetFences(this->device()->handle(), 1, &m_handle);
-
-		if ( result != VK_SUCCESS )
+		if ( const auto result = vkResetFences(this->device()->handle(), 1, &m_handle); result != VK_SUCCESS )
 		{
 			TraceError{ClassId} << "Unable to reset the fence : " << vkResultToCString(result) << " !";
 
@@ -154,9 +126,7 @@ namespace EmEn::Vulkan::Sync
 			return FenceStatus::Error;
 		}
 
-		const auto result = vkGetFenceStatus(this->device()->handle(), m_handle);
-
-		switch ( result )
+		switch ( vkGetFenceStatus(this->device()->handle(), m_handle) )
 		{
 			case VK_SUCCESS :
 				return FenceStatus::Ready;
@@ -180,14 +150,7 @@ namespace EmEn::Vulkan::Sync
 			return false;
 		}
 
-		const auto result = vkWaitForFences(
-			this->device()->handle(),
-			1, &m_handle,
-			VK_FALSE,
-			timeout
-		);
-
-		if ( result != VK_SUCCESS )
+		if ( const auto result = vkWaitForFences(this->device()->handle(), 1, &m_handle, VK_FALSE, timeout); result != VK_SUCCESS )
 		{
 			TraceError{ClassId} << "Unable to wait the fence : " << vkResultToCString(result) << " !";
 
@@ -207,14 +170,7 @@ namespace EmEn::Vulkan::Sync
 			return false;
 		}
 
-		auto result = vkWaitForFences(
-			this->device()->handle(),
-			1, &m_handle,
-			VK_FALSE,
-			timeout
-		);
-
-		switch ( result )
+		switch ( const auto result = vkWaitForFences(this->device()->handle(), 1, &m_handle, VK_FALSE, timeout) )
 		{
 			case VK_SUCCESS :
 				break;
@@ -229,9 +185,7 @@ namespace EmEn::Vulkan::Sync
 				return false;
 		}
 
-		result = vkResetFences(this->device()->handle(), 1, &m_handle);
-
-		if ( result != VK_SUCCESS )
+		if ( const auto result = vkResetFences(this->device()->handle(), 1, &m_handle); result != VK_SUCCESS )
 		{
 			TraceError{ClassId} << "Unable to reset the fence : " << vkResultToCString(result) << " !";
 
@@ -244,14 +198,7 @@ namespace EmEn::Vulkan::Sync
 	bool
 	Fence::waitForAll (const std::shared_ptr< Device > & device, const std::vector< VkFence > & fences, uint64_t timeout) noexcept
 	{
-		const auto result = vkWaitForFences(
-			device->handle(),
-			static_cast< uint32_t >(fences.size()), fences.data(),
-			VK_TRUE,
-			timeout
-		);
-
-		if ( result != VK_SUCCESS )
+		if ( const auto result = vkWaitForFences(device->handle(), static_cast< uint32_t >(fences.size()), fences.data(), VK_TRUE, timeout); result != VK_SUCCESS )
 		{
 			TraceError{ClassId} << "Unable to wait fences : " << vkResultToCString(result) << " !";
 
@@ -264,21 +211,14 @@ namespace EmEn::Vulkan::Sync
 	VkFence
 	Fence::waitForAnyOf (const std::shared_ptr< Device > & device, const std::vector< VkFence > & fences, uint64_t timeout) noexcept
 	{
-		const auto result = vkWaitForFences(
-			device->handle(),
-			static_cast< uint32_t >(fences.size()), fences.data(),
-			VK_FALSE,
-			timeout
-		);
-
-		if ( result != VK_SUCCESS )
+		if ( const auto result = vkWaitForFences(device->handle(), static_cast< uint32_t >(fences.size()), fences.data(), VK_FALSE, timeout); result != VK_SUCCESS )
 		{
 			TraceError{ClassId} << "Unable to wait fences : " << vkResultToCString(result) << " !";
 
 			return VK_NULL_HANDLE;
 		}
 
-		for ( auto * fence : fences )
+		for ( const auto & fence : fences )
 		{
 			if ( vkGetFenceStatus(device->handle(), fence) == VK_SUCCESS )
 			{

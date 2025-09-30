@@ -172,11 +172,17 @@ namespace EmEn::Vulkan
 			 */
 			bool freeDescriptorSet (VkDescriptorSet descriptorSetHandle) const noexcept;
 
+			/**
+			 * @brief Resets the descriptor pool.
+			 * @return bool
+			 */
+			bool reset () const noexcept;
+
 		private:
 
 			VkDescriptorPool m_handle{VK_NULL_HANDLE};
 			VkDescriptorPoolCreateInfo m_createInfo{};
 			std::vector< VkDescriptorPoolSize > m_descriptorPoolSizes;
-			mutable std::mutex m_allocationsAccess;
+			mutable std::mutex m_descriptorPoolAccess;
 	};
 }

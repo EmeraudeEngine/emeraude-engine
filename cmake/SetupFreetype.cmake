@@ -15,13 +15,12 @@ else ()
 
 	message("Enabling FreeType library from local source ...")
 
-	target_include_directories(${TARGET_BINARY_FOR_SETUP} PUBLIC ${LOCAL_LIB_DIR}/include/freetype2)
+	target_include_directories(${TARGET_BINARY_FOR_SETUP} PUBLIC "${LOCAL_LIB_DIR}/include/freetype2")
 
-	if ( CMAKE_BUILD_TYPE MATCHES Debug )
-		target_link_libraries(${TARGET_BINARY_FOR_SETUP} PRIVATE freetyped)
-	else ()
-		target_link_libraries(${TARGET_BINARY_FOR_SETUP} PRIVATE freetype)
-	endif ()
+	target_link_libraries(${TARGET_BINARY_FOR_SETUP} PRIVATE
+		debug freetyped
+		optimized freetype
+	)
 endif ()
 
 if ( UNIX AND NOT APPLE )
@@ -32,4 +31,5 @@ if ( UNIX AND NOT APPLE )
 	target_include_directories(${TARGET_BINARY_FOR_SETUP} PUBLIC ${Fontconfig_INCLUDE_DIRS})
 
 	target_link_libraries(${TARGET_BINARY_FOR_SETUP} PRIVATE ${Fontconfig_LIBRARIES})
+	#target_compile_options(${TARGET_BINARY_FOR_SETUP} PUBLIC ${Fontconfig_COMPILE_OPTIONS})
 endif ()

@@ -39,6 +39,7 @@
 /* Local inclusions for usages. */
 #include "Libs/PixelFactory/Color.hpp"
 #include "CommandPool.hpp"
+#include "Device.hpp"
 
 /* Forward declarations. */
 namespace EmEn
@@ -90,8 +91,8 @@ namespace EmEn::Vulkan
 			 */
 			explicit
 			CommandBuffer (const std::shared_ptr< CommandPool > & commandPool, bool primaryLevel = true) noexcept
-				: m_commandPool(commandPool),
-				m_primaryLevel(primaryLevel)
+				: m_commandPool{commandPool},
+				m_primaryLevel{primaryLevel}
 			{
 				if constexpr ( IsDebug )
 				{
@@ -198,11 +199,11 @@ namespace EmEn::Vulkan
 			 *  - VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT: The command buffer will be rerecorded right after executing it once.
 			 *  - VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT: This is a secondary command buffer that will be entirely within a single render pass.
 			 *  - VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT: The command buffer can be resubmitted while it is also already pending execution.
-			 * @param usage A Vulkan flag for the command buffer usage.
+			 * @param usage A Vulkan flag for the command buffer usage. Default, no flag.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool begin (VkCommandBufferUsageFlagBits usage) const noexcept;
+			bool begin (VkCommandBufferUsageFlagBits usage = VkCommandBufferUsageFlagBits{}) const noexcept;
 
 			/**
 			 * @brief Ends registering commands.
@@ -249,7 +250,7 @@ namespace EmEn::Vulkan
 			 * @brief Registers a fill buffer command.
 			 * @param buffer A reference to the buffer.
 			 * @param dstOffset The byte offset into the buffer at which to execute filling, and must be a multiple of 4.
-			 * @param size The number of bytes to fill, and must be either a multiple of 4, or VK_WHOLE_SIZE to fill the range from offset to the end of the buffer. If VK_WHOLE_SIZE is used and the remaining size of the buffer is not a multiple of 4, then the nearest smaller multiple is used.
+			 * @param size The number of bytes to fill, and must be either a multiple of 4 or VK_WHOLE_SIZE to fill the range from offset to the end of the buffer. If VK_WHOLE_SIZE is used and the remaining size of the buffer is not a multiple of 4, then the nearest smaller multiple is used.
 			 * @param data The 4-byte word written repeatedly to the buffer to fill size bytes of data. The data word is written to memory according to the host endianness.
 			 * @return void
 			 */
@@ -257,19 +258,19 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Registers a buffer to buffer copy command.
-			 * @deprecated This must be done the transferManager !
+			 * @deprecated This must be done by the transfer manager!
 			 * @param src A reference to the buffer.
 			 * @param dst A reference to the buffer.
 			 * @param srcOffset The source buffer start for reading. Default 0.
-			 * @param dstOffset The destination buffer start for writing. default 0.
-			 * @param size The size of copy. Default the whole source buffer.
+			 * @param dstOffset The destination buffer start for writing. Default 0.
+			 * @param size The size of a copy. Default the whole source buffer.
 			 * @return void
 			 */
 			void copy (const Buffer & src, const Buffer & dst, VkDeviceSize srcOffset = 0, VkDeviceSize dstOffset = 0, VkDeviceSize size = VK_WHOLE_SIZE) const noexcept;
 
 			/**
-			 * @brief Registers a image to image copy command.
-			 * @deprecated This must be done the transferManager !
+			 * @brief Registers an image to image copy command.
+			 * @deprecated This must be done by the transfer manager!
 			 * @param src A reference to the image.
 			 * @param dst A reference to the image.
 			 * @return void
@@ -278,7 +279,7 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Registers a buffer to image copy command.
-			 * @deprecated This must be done the transferManager !
+			 * @deprecated This must be done by the transfer manager!
 			 * @param src A reference to the buffer.
 			 * @param dst A reference to the image.
 			 * @param srcOffset The source buffer start for reading. Default 0.
@@ -287,8 +288,8 @@ namespace EmEn::Vulkan
 			void copy (const Buffer & src, const Image & dst, VkDeviceSize srcOffset = 0) const noexcept;
 
 			/**
-			 * @brief Registers an image to buffer copy command.
-			 * @deprecated This must be done the transferManager !
+			 * @brief Registers an image to a buffer copy command.
+			 * @deprecated This must be done by the transfer manager!
 			 * @param src A reference to the image.
 			 * @param dst A reference to the buffer.
 			 * @return void
@@ -297,7 +298,7 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Registers an image to image blit command.
-			 * @deprecated This must be done the transferManager !
+			 * @deprecated This must be done by the transfer manager!
 			 * @param src A reference to the image.
 			 * @param dst A reference to the buffer.
 			 * @return void
@@ -365,7 +366,7 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Set a pipeline memory barrier.
-			 * @param memoryBarrier A reference to memory barrier.
+			 * @param memoryBarrier A reference to the memory barrier.
 			 * @param srcStageMask A bitmask of VkPipelineStageFlagBits specifying the source stages.
 			 * @param dstStageMask A bitmask of VkPipelineStageFlagBits specifying the destination stages.
 			 * @param dependencyFlags
@@ -375,7 +376,7 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Set a pipeline buffer memory barrier.
-			 * @param bufferMemoryBarrier A reference to buffer memory barrier.
+			 * @param bufferMemoryBarrier A reference to a buffer memory barrier.
 			 * @param srcStageMask A bitmask of VkPipelineStageFlagBits specifying the source stages.
 			 * @param dstStageMask A bitmask of VkPipelineStageFlagBits specifying the destination stages.
 			 * @param dependencyFlags
@@ -411,12 +412,12 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Waits for events in command.
-			 * @param events A reference to event list.
+			 * @param events A reference to an event list.
 			 * @param srcFlags A pipeline source stage flags.
 			 * @param dstFlags A pipeline destination stage flags.
-			 * @param memoryBarriers A reference to memory barrier list. Default none.
-			 * @param bufferMemoryBarriers A reference to buffer memory barrier list. Default none.
-			 * @param imageMemoryBarriers A reference to image memory barrier list. Default none.
+			 * @param memoryBarriers A reference to a memory barrier list. Default none.
+			 * @param bufferMemoryBarriers A reference to a buffer memory barrier list. Default none.
+			 * @param imageMemoryBarriers A reference to an image memory barrier list. Default none.
 			 * @return void
 			 */
 			void waitEvents (const std::vector< VkEvent > & events, VkPipelineStageFlags srcFlags, VkPipelineStageFlags dstFlags, const std::vector< VkMemoryBarrier > & memoryBarriers = {}, const std::vector< VkBufferMemoryBarrier > & bufferMemoryBarriers = {}, const std::vector< VkImageMemoryBarrier > & imageMemoryBarriers = {}) const noexcept;
@@ -444,8 +445,8 @@ namespace EmEn::Vulkan
 			void bind (const VertexBufferObject & vertexBufferObject, VkDeviceSize offset = 0) const noexcept;
 
 			/**
-			 * @brief Binds an index buffer objects.
-			 * @param indexBufferObject A reference to a IBO.
+			 * @brief Binds an index buffer object.
+			 * @param indexBufferObject A reference to an IBO.
 			 * @param offset The starting point to read the IBO. Default 0.
 			 * @param indexType The data type of index. Default unsigned int.
 			 * @return void

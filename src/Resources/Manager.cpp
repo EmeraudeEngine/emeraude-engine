@@ -311,11 +311,11 @@ namespace EmEn::Resources
 		{
 			if ( resourceContainer->terminate() )
 			{
-				TraceSuccess{ClassId} << resourceContainer->name() << " primary service terminated gracefully !";
+				TraceSuccess{ClassId} << resourceContainer->name() << " primary service terminated gracefully!";
 			}
 			else
 			{
-				TraceError{ClassId} << resourceContainer->name() << " primary service failed to terminate properly !";
+				TraceError{ClassId} << resourceContainer->name() << " primary service failed to terminate properly!";
 			}
 		}
 
