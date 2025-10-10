@@ -73,8 +73,13 @@ The current version of the Vulkan SDK is 1.4.309.0.
 One day, the Vulkan SDK will be embedded in the repository. For now, you need to install it manually.
 
  - For Linux, use the SDK provided by your distribution.
+```bash 
+sudo apt install libvulkan-dev vulkan-tools vulkan-validationlayers vulkan-validationlayers-dev
+```
  - For macOS, you can download it from https://sdk.lunarg.com/sdk/download/1.4.309.0/mac/vulkansdk-macos-1.4.309.0.zip
  - For Windows, you can download it from https://sdk.lunarg.com/sdk/download/1.4.309.0/windows/VulkanSDK-1.4.309.0-Installer.exe
+
+NOTE: Leave setup options to default and let install files into the default location.
 
 
 # Quick compilation from the terminal
