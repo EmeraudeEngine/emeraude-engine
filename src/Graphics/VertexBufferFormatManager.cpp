@@ -42,8 +42,6 @@ namespace EmEn::Graphics
 	bool
 	VertexBufferFormatManager::onInitialize () noexcept
 	{
-		m_flags[ServiceInitialized] = true;
-
 		return true;
 	}
 
@@ -51,8 +49,6 @@ namespace EmEn::Graphics
 	VertexBufferFormatManager::onTerminate () noexcept
 	{
 		const std::lock_guard< std::mutex > lock{m_listAccess};
-
-		m_flags[ServiceInitialized] = false;
 
 		this->resetBuildingParameters();
 
@@ -438,7 +434,7 @@ namespace EmEn::Graphics
 
 		this->resetBuildingParameters();
 
-		if ( m_flags[PrintGeneratedFormat] )
+		if ( m_printGeneratedFormat )
 		{
 			TraceInfo{ClassId} << "Geometry flags : " "\n" <<
 				Geometry::getFlagsString(geometryFlagBits) << "\n" <<
@@ -735,7 +731,7 @@ namespace EmEn::Graphics
 
 		this->resetBuildingParameters();
 
-		if ( m_flags[PrintGeneratedFormat] )
+		if ( m_printGeneratedFormat )
 		{
 			TraceInfo{ClassId} << "Geometry flags : " "\n" <<
 				Geometry::getFlagsString(geometry.flags()) << "\n" <<

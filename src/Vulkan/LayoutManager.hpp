@@ -72,10 +72,6 @@ namespace EmEn::Vulkan
 
 			}
 
-			/** @copydoc EmEn::ServiceInterface::usable() */
-			[[nodiscard]]
-			bool usable () const noexcept override;
-
 			/**
 			 * @brief Sets the device used by the layout manager.
 			 * @return void
@@ -141,21 +137,8 @@ namespace EmEn::Vulkan
 			/** @copydoc EmEn::ServiceInterface::onTerminate() */
 			bool onTerminate () noexcept override;
 
-			/* Flag names */
-			static constexpr auto ServiceInitialized{0UL};
-
 			std::shared_ptr< Device > m_device;
 			std::map< std::string, std::shared_ptr< DescriptorSetLayout > > m_descriptorSetLayouts;
 			std::map< std::string, std::shared_ptr< PipelineLayout > > m_pipelineLayouts;
-			std::array< bool, 8 > m_flags{
-				false/*ServiceInitialized*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/
-			};
 	};
 }

@@ -363,19 +363,13 @@ namespace EmEn::Audio
 
 		if ( m_primaryServices.arguments().isSwitchPresent("--disable-audio") || !settings.getOrSetDefault< bool >(AudioEnableKey, DefaultAudioEnable) )
 		{
-			m_serviceInitialized = true;
-
 			Tracer::warning(ClassId, "Audio manager disabled at startup.");
 
 			return true;
 		}
 
 		/* NOTE: Select an audio device. */
-		if ( this->setupAudioOutputDevice() )
-		{
-			m_serviceInitialized = true;
-		}
-		else
+		if ( !this->setupAudioOutputDevice() )
 		{
 			Tracer::error(ClassId, "Unable to get an audio device or an audio context! Disabling audio layer.");
 
@@ -480,8 +474,6 @@ namespace EmEn::Audio
 	bool
 	Manager::onTerminate () noexcept
 	{
-		m_serviceInitialized = false;
-
 		s_audioEnabled = false;
 
 		/* NOTE: The audio service wasn't inited. */

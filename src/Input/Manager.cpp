@@ -658,7 +658,6 @@ namespace EmEn::Input
 
 		if ( m_primaryServices.arguments().isSwitchPresent("-W", "--window-less") )
 		{
-			m_serviceInitialized = true;
 			m_windowLess = true;
 
 			return true;
@@ -745,16 +744,12 @@ namespace EmEn::Input
 			}
 		}
 
-		m_serviceInitialized = true;
-
 		return true;
 	}
 
 	bool
 	Manager::onTerminate () noexcept
 	{
-		m_serviceInitialized = false;
-
 		if ( !m_window.usable() )
 		{
 			Tracer::warning(ClassId, "No handle was available !");

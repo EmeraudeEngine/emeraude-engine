@@ -120,14 +120,6 @@ namespace EmEn::Net
 				return classUID == getClassUID();
 			}
 
-			/** @copydoc EmEn::ServiceInterface::usable() */
-			[[nodiscard]]
-			bool
-			usable () const noexcept override
-			{
-				return m_serviceInitialized;
-			}
-
 			/**
 			 * @brief Adds a download request and returns a ticket.
 			 * @param url A reference to the item url to download.
@@ -282,7 +274,6 @@ namespace EmEn::Net
 			std::map< std::string, CachedDownloadItem > m_downloadCache;
 			size_t m_nextCacheItemId{1};
 			std::vector< DownloadItem > m_downloadItems;
-			bool m_serviceInitialized{false};
 			bool m_downloadEnabled{false};
 			bool m_showProgression{false};
 	};

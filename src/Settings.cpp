@@ -111,16 +111,12 @@ namespace EmEn
 			TraceInfo{ClassId} << *this;
 		}
 
-		m_serviceInitialized = true;
-
 		return true;
 	}
 
 	bool
 	Settings::onTerminate () noexcept
 	{
-		m_serviceInitialized = false;
-
 		if ( this->isSaveAtExitEnabled() )
 		{
 			if ( m_filepath.empty() )

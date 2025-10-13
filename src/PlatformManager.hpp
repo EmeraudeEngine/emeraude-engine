@@ -60,14 +60,6 @@ namespace EmEn
 
 			}
 
-			/** @copydoc EmEn::ServiceInterface::usable() */
-			[[nodiscard]]
-			bool
-			usable () const noexcept override
-			{
-				return m_serviceInitialized;
-			}
-
 			/**
 			 * @brief Returns whether GLFW detected a linux platform.
 			 * @return bool
@@ -112,7 +104,6 @@ namespace EmEn
 			bool onTerminate () noexcept override;
 
 			PrimaryServices & m_primaryServices;
-			bool m_serviceInitialized{false};
 			bool m_showInformation{false};
 	};
 }

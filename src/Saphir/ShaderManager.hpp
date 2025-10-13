@@ -142,23 +142,15 @@ namespace EmEn::Saphir
 				return classUID == getClassUID();
 			}
 
-			/** @copydoc EmEn::ServiceInterface::usable() */
-			[[nodiscard]]
-			bool
-			usable () const noexcept override
-			{
-				return m_flags[ServiceInitialized];
-			}
-
 			/**
-			 * @brief Returns whether the print of shader source code in console is enabled.
+			 * @brief Returns whether the print of shader source code in the console is enabled.
 			 * @return bool
 			 */
 			[[nodiscard]]
 			bool
 			showSourceCode () const noexcept
 			{
-				return m_flags[ShowSourceCode];
+				return m_showSourceCode;
 			}
 
 			/**
@@ -323,15 +315,6 @@ namespace EmEn::Saphir
 			[[nodiscard]]
 			static VkShaderStageFlagBits vkShaderType (ShaderType shaderType) noexcept;
 
-			/* Flag names. */
-			static constexpr auto ServiceInitialized{0UL};
-			static constexpr auto ShowInformation{1UL};
-			static constexpr auto ShowSourceCode{2UL};
-			static constexpr auto SourceCodeCacheEnabled{3UL};
-			static constexpr auto BinaryCacheEnabled{4UL};
-			static constexpr auto ForceDefaultVersionAndProfile{5UL};
-			static constexpr auto ForwardCompatible{6UL};
-
 			static constexpr auto ShaderSourcesDirectoryName{"shader-sources"};
 			static constexpr auto ShaderBinariesDirectoryName{"shader-binaries"};
 
@@ -346,15 +329,11 @@ namespace EmEn::Saphir
 			EProfile m_profile{ECoreProfile}; // ENoProfile
 			int m_defaultVersion{100};
 			EShMessages m_messageFilter{static_cast< EShMessages >(EShMsgDefault | EShMsgSpvRules | EShMsgVulkanRules | EShMsgDebugInfo)};
-			std::array< bool, 8 > m_flags{
-				false/*ServiceInitialized*/,
-				false/*ShowInformation*/,
-				false/*ShowSourceCode*/,
-				false/*SourceCodeCacheEnabled*/,
-				false/*BinaryCacheEnabled*/,
-				false/*ForceDefaultVersionAndProfile*/,
-				false/*ForwardCompatible*/,
-				false/*UNUSED*/
-			};
+			bool m_showInformation{false};
+			bool m_showSourceCode{false};
+			bool m_sourceCodeCacheEnabled{false};
+			bool m_binaryCacheEnabled{false};
+			bool m_forceDefaultVersionAndProfile{false};
+			bool m_forwardCompatible{false};
 	};
 }

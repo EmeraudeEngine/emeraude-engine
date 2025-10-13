@@ -53,8 +53,6 @@ namespace EmEn::Scenes
 	bool
 	Manager::onInitialize () noexcept
 	{
-		m_initialized = true;
-
 		this->registerToConsole();
 
 		Component::AbstractLightEmitter::s_maxDistance = m_primaryServices.settings().getOrSetDefault< float >(GraphicsShadowMappingMaxDistanceKey, DefaultGraphicsShadowMappingMaxDistance);
@@ -66,8 +64,6 @@ namespace EmEn::Scenes
 	Manager::onTerminate () noexcept
 	{
 		const std::lock_guard< std::mutex > lock{m_sceneListAccess};
-
-		m_initialized = false;
 
 		/* First, disable the possible current active scene. */
 		this->disableActiveScene();

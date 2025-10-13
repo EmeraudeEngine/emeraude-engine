@@ -195,15 +195,14 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Begins registering commands.
-			 * @note Flags descriptions
+			 * @param vkFlags A Vulkan flag for the command buffer usage. Default none.
 			 *  - VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT: The command buffer will be rerecorded right after executing it once.
 			 *  - VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT: This is a secondary command buffer that will be entirely within a single render pass.
 			 *  - VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT: The command buffer can be resubmitted while it is also already pending execution.
-			 * @param usage A Vulkan flag for the command buffer usage. Default, no flag.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool begin (VkCommandBufferUsageFlagBits usage = VkCommandBufferUsageFlagBits{}) const noexcept;
+			bool begin (VkCommandBufferUsageFlagBits vkFlags = VkCommandBufferUsageFlagBits{}) const noexcept;
 
 			/**
 			 * @brief Ends registering commands.
@@ -214,11 +213,12 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Reset the command buffer.
-			 * @param flags The reset flags. Default none.
+			 * @param vkFlags The reset flags. Default none.
+			 *  - VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT: The command buffer will clear the allocated memory.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool reset (VkCommandBufferResetFlags flags = 0) const noexcept;
+			bool reset (VkCommandBufferResetFlags vkFlags = 0) const noexcept;
 
 			/**
 			 * @brief Registers a render pass begin.

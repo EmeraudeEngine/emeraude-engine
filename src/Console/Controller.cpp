@@ -37,29 +37,14 @@ namespace EmEn::Console
 	Controller * Controller::s_instance{nullptr};
 
 	bool
-	Controller::usable () const noexcept
-	{
-		if ( !m_flags[ServiceInitialized] )
-		{
-			return false;
-		}
-
-		return !m_consoleObjects.empty();
-	}
-
-	bool
 	Controller::onInitialize () noexcept
 	{
-		m_flags[ServiceInitialized] = true;
-
 		return true;
 	}
 
 	bool
 	Controller::onTerminate () noexcept
 	{
-		m_flags[ServiceInitialized] = false;
-
 		m_consoleObjects.clear();
 
 		return true;

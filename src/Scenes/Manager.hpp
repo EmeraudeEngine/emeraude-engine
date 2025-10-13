@@ -222,14 +222,6 @@ namespace EmEn::Scenes
 				return classUID == getClassUID();
 			}
 
-			/** @copydoc EmEn::ServiceInterface::usable() */
-			[[nodiscard]]
-			bool
-			usable () const noexcept override
-			{
-				return m_initialized;
-			}
-
 			/**
 			 * @brief Returns whether a scene exists under the name.
 			 * @param sceneName A reference to a string.
@@ -397,6 +389,5 @@ namespace EmEn::Scenes
 			mutable std::mutex m_sceneListAccess;
 			/** @brief Handle a shared thread-safe access to the member 'm_activeScene', when manipulating the content of a scene. 'Readers' can share the access, while 'Writers' can have an exclusive lock.  */
 			mutable std::shared_mutex m_activeSceneSharedAccess;
-			bool m_initialized{false};
 	};
 }

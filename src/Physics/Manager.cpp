@@ -128,8 +128,6 @@ namespace EmEn::Physics
 			return false;
 		}
 
-		m_serviceInitialized = true;
-
 		return true;
 	}
 
@@ -137,8 +135,6 @@ namespace EmEn::Physics
 	Manager::onTerminate () noexcept
 	{
 		size_t error = 0;
-
-		m_serviceInitialized = false;
 
 		m_pipelines.clear();
 		m_pipelineLayouts.clear();

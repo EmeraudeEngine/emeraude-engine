@@ -183,14 +183,6 @@ namespace EmEn
 				return classUID == getClassUID();
 			}
 
-			/** @copydoc EmEn::ServiceInterface::usable() */
-			[[nodiscard]]
-			bool
-			usable () const noexcept override
-			{
-				return m_handle != nullptr;
-			}
-
 			/**
 			 * @brief Returns the handle of the GLFW window object.
 			 * @return GLFWwindow *

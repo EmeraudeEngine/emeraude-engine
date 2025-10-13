@@ -116,9 +116,7 @@ namespace EmEn::Vulkan
 
 			/* At this point, we create the vulkan instance.
 			 * Beyond this point, Vulkan is in the pipe and usable. */
-			const auto result = vkCreateInstance(&m_createInfo, nullptr, &m_instance);
-
-			if ( result != VK_SUCCESS )
+			if ( const auto result = vkCreateInstance(&m_createInfo, nullptr, &m_instance); result != VK_SUCCESS )
 			{
 				switch ( result )
 				{

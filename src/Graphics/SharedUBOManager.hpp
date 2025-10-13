@@ -64,14 +64,6 @@ namespace EmEn::Graphics
 
 			}
 
-			/** @copydoc EmEn::ServiceInterface::usable() */
-			[[nodiscard]]
-			bool
-			usable () const noexcept override
-			{
-				return m_device != nullptr ? m_flags[ServiceInitialized] : false;
-			}
-
 			/**
 			 * @brief Sets the device that will be used with this manager.
 			 * @param device A reference to a device smart pointer.
@@ -134,21 +126,8 @@ namespace EmEn::Graphics
 			/** @copydoc EmEn::ServiceInterface::onTerminate() */
 			bool onTerminate () noexcept override;
 
-			/* Flag names */
-			static constexpr auto ServiceInitialized{0UL};
-
 			Renderer & m_renderer;
 			std::shared_ptr< Vulkan::Device > m_device;
 			std::map< std::string, std::shared_ptr< SharedUniformBuffer > > m_sharedUniformBuffers;
-			std::array< bool, 8 > m_flags{
-				false/*ServiceInitialized*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/
-			};
 	};
 }

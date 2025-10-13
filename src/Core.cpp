@@ -206,6 +206,9 @@ namespace EmEn
 			std::this_thread::sleep_for(std::chrono::milliseconds(1));
 		}
 
+		/* NOTE: Wait until the device has finished all his pending work. */
+		m_graphicsRenderer.device()->waitIdle("Core::renderingTask()");
+
 		Tracer::success(ClassId, "[THREAD] Rendering process terminated successfully !");
 
 		TraceInfo{ClassId} << "The rendering produced " << frames << " frames.";
@@ -271,6 +274,8 @@ namespace EmEn
 			this->stop();
 		}
 
+		auto lastTop = std::chrono::steady_clock::now();
+
 		/* NOTE: This is the engine main loop. */
 		while ( m_isMainLoopRunning )
 		{
@@ -310,6 +315,15 @@ namespace EmEn
 
 			if constexpr ( IsDebug )
 			{
+				auto currentTime = std::chrono::steady_clock::now();
+
+				if ( auto elapsedTime = currentTime - lastTop; elapsedTime >= std::chrono::seconds(1) )
+				{
+					this->showStatistics();
+
+					lastTop = currentTime;
+				}
+
 				if ( !m_messages.empty() )
 				{
 					this->checkForDialogMessages();
@@ -761,7 +775,9 @@ namespace EmEn
 
 		this->onStop();
 
-		/* Stopping the logics and rendering loops. */
+		Tracer::debug(ClassId, "User-application stopped !");
+
+		/* Stopping the logics and rendering threads. */
 		m_isRenderingLoopRunning = false;
 		m_isLogicsLoopRunning = false;
 
@@ -1382,25 +1398,13 @@ namespace EmEn
 	}
 
 	void
-	Core::showStatistics (double /*elapsedTime*/) const noexcept
+	Core::showStatistics () const noexcept
 	{
-		const auto & rendererStatistics = m_graphicsRenderer.statistics();
+		const auto & stats = m_graphicsRenderer.statistics();
 
-		std::stringstream text;
-
-		text <<
-			"Clock : " << Time::elapsedSeconds() << " seconds elapsed ..." "\n" <<
-			"FPS : " << rendererStatistics.executionsPerSecond() << " [" << rendererStatistics.duration() << " ms]" "\n" <<
-			"FPS (avg) : " << rendererStatistics.averageExecutionsPerSecond() << " [" << rendererStatistics.averageDuration() << " ms]";
-
-		/* VULKAN_DEV */
-		/*if ( m_statisticsDisplay != nullptr )
-		{
-			m_statisticsDisplay->write(text.str(), true);
-		}
-		else*/
-		{
-			std::cout << text.str() << '\n';
-		}
+		std::cout <<
+			"[TIME:" << std::setw(5) << std::setfill(' ') << std::right << Time::elapsedSeconds() << " s]"
+			"[FPS:" << std::setw(4) << std::setfill(' ') << std::right << stats.executionsPerSecond() << ", " << std::setw(3) << std::setfill(' ') << std::right << stats.duration() << " ms]"
+			"[FPS-AVG: " << std::setw(10) << std::setfill(' ') << std::right << stats.averageExecutionsPerSecond() << ", " << std::setw(10) << std::setfill(' ') << std::right << stats.averageDuration() << " ms]" << '\n';
 	}
 }

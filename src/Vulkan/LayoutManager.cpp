@@ -38,23 +38,7 @@
 
 namespace EmEn::Vulkan
 {
-	using namespace EmEn::Libs;
-
-	bool
-	LayoutManager::usable () const noexcept
-	{
-		if ( !m_flags[ServiceInitialized] )
-		{
-			return false;
-		}
-
-		if ( m_device == nullptr )
-		{
-			return false;
-		}
-
-		return m_device->isCreated();
-	}
+	using namespace Libs;
 
 	bool
 	LayoutManager::onInitialize () noexcept
@@ -66,16 +50,12 @@ namespace EmEn::Vulkan
 			return false;
 		}
 
-		m_flags[ServiceInitialized] = true;
-
 		return true;
 	}
 
 	bool
 	LayoutManager::onTerminate () noexcept
 	{
-		m_flags[ServiceInitialized] = false;
-
 		m_descriptorSetLayouts.clear();
 		m_pipelineLayouts.clear();
 

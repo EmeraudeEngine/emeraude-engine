@@ -55,14 +55,6 @@ namespace EmEn::Graphics
 
 			}
 
-			/** @copydoc EmEn::ServiceInterface::usable() */
-			[[nodiscard]]
-			bool
-			usable () const noexcept override
-			{
-				return m_flags[ServiceInitialized];
-			}
-
 		private:
 
 			/** @copydoc EmEn::ServiceInterface::onInitialize() */
@@ -70,19 +62,5 @@ namespace EmEn::Graphics
 
 			/** @copydoc EmEn::ServiceInterface::onTerminate() */
 			bool onTerminate () noexcept override;
-
-			/* Flag names */
-			static constexpr auto ServiceInitialized{0UL};
-
-			std::array< bool, 8 > m_flags{
-				false/*ServiceInitialized*/,
-				false/*Unused*/,
-				false/*Unused*/,
-				false/*Unused*/,
-				false/*Unused*/,
-				false/*Unused*/,
-				false/*Unused*/,
-				false/*Unused*/
-			};
 	};
 }

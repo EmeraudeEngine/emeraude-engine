@@ -62,16 +62,12 @@ namespace EmEn::Net
 			TraceWarning{ClassId} << "There is no internet connexion yet.";
 		}
 
-		m_serviceInitialized = true;
-
 		return true;
 	}
 
 	bool
 	Manager::onTerminate () noexcept
 	{
-		m_serviceInitialized = false;
-
 		return this->updateDownloadCacheDBFile();
 	}
 

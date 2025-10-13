@@ -41,7 +41,6 @@
 /* Local inclusions for usages. */
 #include "Graphics/FramebufferPrecisions.hpp"
 #include "Graphics/Types.hpp"
-#include "Vulkan/Sync/Fence.hpp"
 #include "Vulkan/Sync/Semaphore.hpp"
 
 /* Forward declarations. */
@@ -230,17 +229,6 @@ namespace EmEn::Graphics::RenderTarget
 			renderType () const noexcept
 			{
 				return m_renderType;
-			}
-
-			/**
-			 * @brief Returns the fence associated with this render target for CPU/GPU synchronization.
-			 * @return std::shared_ptr< Vulkan::Sync::Fence >
-			 */
-			[[nodiscard]]
-			std::shared_ptr< Vulkan::Sync::Fence >
-			fence () const noexcept
-			{
-				return m_fence;
 			}
 
 			/**
@@ -455,7 +443,6 @@ namespace EmEn::Graphics::RenderTarget
 			VkExtent3D m_extent{};
 			VkRect2D m_renderArea{};
 			RenderTargetType m_renderType;
-			std::shared_ptr< Vulkan::Sync::Fence > m_fence;
 			std::shared_ptr< Vulkan::Sync::Semaphore > m_semaphore;
 			bool m_enableSyncPrimitive{false};
 			bool m_renderOutOfDate{false};

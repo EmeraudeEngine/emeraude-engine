@@ -35,16 +35,12 @@ namespace EmEn::Graphics
 	{
 		/* FIXME: Complete the method ... */
 
-		m_flags[ServiceInitialized] = true;
-
 		return true;
 	}
 
 	bool
 	ExternalInput::onTerminate () noexcept
 	{
-		m_flags[ServiceInitialized] = false;
-
 		/* FIXME: Complete the method ... */
 
 		return true;

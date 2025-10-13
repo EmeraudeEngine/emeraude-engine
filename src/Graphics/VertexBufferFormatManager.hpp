@@ -76,14 +76,6 @@ namespace EmEn::Graphics
 
 			}
 
-			/** @copydoc EmEn::ServiceInterface::usable() */
-			[[nodiscard]]
-			bool
-			usable () const noexcept override
-			{
-				return m_flags[ServiceInitialized];
-			}
-
 			/**
 			 * @brief Enables the print into the console of generated format. (DEBUG).
 			 * @param state
@@ -92,7 +84,7 @@ namespace EmEn::Graphics
 			void
 			enablePrintGeneratedFormat (bool state) noexcept
 			{
-				m_flags[PrintGeneratedFormat] = state;
+				m_printGeneratedFormat = state;
 			}
 
 			/**
@@ -184,10 +176,6 @@ namespace EmEn::Graphics
 				m_bindingElementCount = 0;
 			}
 
-			/* Flag names */
-			static constexpr auto ServiceInitialized{0UL};
-			static constexpr auto PrintGeneratedFormat{1UL};
-
 			std::vector< std::shared_ptr< VertexBufferFormat > > m_vertexBufferFormats;
 			/* Building parameters */
 			std::mutex m_listAccess;
@@ -195,15 +183,6 @@ namespace EmEn::Graphics
 			uint32_t m_currentBinding{0};
 			uint32_t m_bindingOffset{0};
 			size_t m_bindingElementCount{0};
-			std::array< bool, 8 > m_flags{
-				false/*ServiceInitialized*/,
-				false/*PrintGeneratedFormat*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/
-			};
+			bool m_printGeneratedFormat{false};
 	};
 }

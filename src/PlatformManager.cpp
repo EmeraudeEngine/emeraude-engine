@@ -127,16 +127,12 @@ namespace EmEn
 			TraceSuccess{ClassId} << "GLFW version : " << glfwMajor << '.' << glfwMin << '.' << glfwRev << " initialized !";
 		}
 
-		m_serviceInitialized = true;
-
 		return true;
 	}
 
 	bool
 	PlatformManager::onTerminate () noexcept
 	{
-		m_serviceInitialized = false;
-
 		glfwTerminate();
 
 		/* Removing callback. */

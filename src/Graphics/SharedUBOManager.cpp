@@ -134,16 +134,12 @@ namespace EmEn::Graphics
 			return false;
 		}
 
-		m_flags[ServiceInitialized] = true;
-
 		return true;
 	}
 
 	bool
 	SharedUBOManager::onTerminate () noexcept
 	{
-		m_flags[ServiceInitialized] = false;
-
 		m_sharedUniformBuffers.clear();
 
 		m_device.reset();

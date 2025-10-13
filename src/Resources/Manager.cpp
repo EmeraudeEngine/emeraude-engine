@@ -296,16 +296,12 @@ namespace EmEn::Resources
 			}
 		}
 
-		m_serviceInitialized = true;
-
 		return true;
 	}
 
 	bool
 	Manager::onTerminate () noexcept
 	{
-		m_serviceInitialized = false;
-
 		/* Terminate primary services. */
 		for ( const auto & resourceContainer : m_containers | std::views::values )
 		{

@@ -102,7 +102,14 @@ namespace EmEn
 					return false;
 				}
 
-				return this->onInitialize();
+				if ( !this->onInitialize() )
+				{
+					return false;
+				}
+
+				m_serviceInitialized = true;
+
+				return true;
 			}
 
 			/**
@@ -132,6 +139,8 @@ namespace EmEn
 			bool
 			terminate () noexcept
 			{
+				m_serviceInitialized = false;
+
 				return this->onTerminate();
 			}
 
@@ -141,7 +150,11 @@ namespace EmEn
 			 * @return bool.
 			 */
 			[[nodiscard]]
-			virtual bool usable () const noexcept = 0;
+			bool
+			usable () const noexcept
+			{
+				return m_serviceInitialized;
+			}
 
 		protected:
 
@@ -167,5 +180,9 @@ namespace EmEn
 			 * @return bool
 			 */
 			virtual bool onTerminate () noexcept = 0;
+
+		private:
+
+			bool m_serviceInitialized{false};
 	};
 }

@@ -134,14 +134,6 @@ namespace EmEn::Audio
 				return classUID == getClassUID();
 			}
 
-			/** @copydoc EmEn::ServiceInterface::usable() */
-			[[nodiscard]]
-			bool
-			usable () const noexcept override
-			{
-				return m_serviceInitialized;
-			}
-
 			/**
 			 * @brief Returns the reference to the track mixer service.
 			 * @return TrackMixer &
@@ -505,7 +497,6 @@ namespace EmEn::Audio
 			std::vector< std::shared_ptr< Source > > m_allSources;
 			std::vector< Source * > m_availableSources;
 			mutable std::mutex m_sourcePoolMutex;
-			bool m_serviceInitialized{false};
 			bool m_showInformation{false};
 			bool m_usingAdvancedEnumeration{false};
 	};

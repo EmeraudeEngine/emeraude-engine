@@ -359,14 +359,6 @@ namespace EmEn::Graphics
 				return classUID == getClassUID();
 			}
 
-			/** @copydoc EmEn::ServiceInterface::usable() */
-			[[nodiscard]]
-			bool
-			usable () const noexcept override
-			{
-				return m_serviceInitialized;
-			}
-
 			/**
 			 * @brief Returns the windows.
 			 * @return const Window &
@@ -824,15 +816,16 @@ namespace EmEn::Graphics
 
 			/**
 			 * @brief Creates command pools and buffers according to the swap chain image count.
+			 * @param imageCount The number of frames for the rendering system.
 			 * @return bool
 			 */
-			bool createCommandSystem () noexcept;
+			bool createRenderingSystem (uint32_t imageCount) noexcept;
 
 			/**
 			 * @brief Destroys command pools and buffers.
 			 * @return void
 			 */
-			void destroyCommandSystem () noexcept;
+			void destroyRenderingSystem () noexcept;
 
 			PrimaryServices & m_primaryServices;
 			Vulkan::Instance & m_vulkanInstance;
@@ -846,11 +839,11 @@ namespace EmEn::Graphics
 			ExternalInput m_externalInput;
 			std::vector< ServiceInterface * > m_subServicesEnabled;
 			std::shared_ptr< Vulkan::DescriptorPool > m_descriptorPool;
-			Libs::StaticVector< RendererFrameScope, 5 > m_rendererFrameScope;
-			std::shared_ptr< Vulkan::CommandPool > m_offScreenCommandPool;
-			std::map< std::shared_ptr< RenderTarget::Abstract >, std::shared_ptr< Vulkan::CommandBuffer > > m_offScreenCommandBuffers;
+			std::shared_ptr< Vulkan::CommandPool > m_commandPool;
+			std::map< std::shared_ptr< RenderTarget::Abstract >, std::shared_ptr< Vulkan::CommandBuffer > > m_commandBuffers;
 			std::shared_ptr< Vulkan::SwapChain > m_swapChain;
-			std::shared_ptr< RenderTarget::Abstract > m_offscreenView;
+			std::shared_ptr< RenderTarget::Abstract > m_windowLessView;
+			Libs::StaticVector< RendererFrameScope, 5 > m_rendererFrameScope;
 			std::map< size_t, std::shared_ptr< Saphir::Program > > m_programs;
 			std::map< size_t, std::shared_ptr< Vulkan::GraphicsPipeline > > m_pipelines;
 			std::map< std::string, std::shared_ptr< Vulkan::RenderPass > > m_renderPasses;
@@ -859,7 +852,6 @@ namespace EmEn::Graphics
 			std::array< VkClearValue, 2 > m_clearColors{};
 			uint32_t m_currentFrameIndex{0};
 			const uint64_t m_timeout;
-			bool m_serviceInitialized{false};
 			bool m_debugMode{false};
 			bool m_windowLess{false};
 			bool m_shadowMapsEnabled{true};

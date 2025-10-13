@@ -144,14 +144,6 @@ namespace EmEn::Audio
 				return classUID == getClassUID();
 			}
 
-			/** @copydoc EmEn::ServiceInterface::usable() */
-			[[nodiscard]]
-			bool
-			usable () const noexcept override
-			{
-				return m_serviceInitialized;
-			}
-
 			/**
 			 * @brief Sets the track gain.
 			 * @param volume The gain.
@@ -343,7 +335,6 @@ namespace EmEn::Audio
 			mutable std::mutex m_stateAccess;
 			std::condition_variable m_fadeCv;
 			std::atomic_bool m_stopThread{false};
-			bool m_serviceInitialized{false};
 			bool m_crossFaderEnabled{false};
 			bool m_isFading{false};
 			std::atomic_bool m_requestNextTrack{false};

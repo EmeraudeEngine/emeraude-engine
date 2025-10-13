@@ -125,10 +125,6 @@ namespace EmEn::Console
 				return classUID == getClassUID();
 			}
 
-			/** @copydoc EmEn::ServiceInterface::usable() */
-			[[nodiscard]]
-			bool usable () const noexcept override;
-
 			/**
 			 * @brief Adds a controllable object to the console.
 			 * @param controllable A reference to the controllable object to add.
@@ -210,25 +206,12 @@ namespace EmEn::Console
 			static constexpr auto InputTextName{"Input"};
 			static constexpr auto OutputTextName{"Output"};
 
-			/* Flag names. */
-			static constexpr auto ServiceInitialized{0UL};
-			static constexpr auto DirectInputWasEnabled{1UL};
-			static constexpr auto PointerWasLocked{2UL};
-
 			static Controller * s_instance;
 
 			PrimaryServices & m_primaryServices;
 			std::map< std::string, Controllable * > m_consoleObjects;
 			std::vector< std::string > m_history;
-			std::array< bool, 8 > m_flags{
-				false/*ServiceInitialized*/,
-				false/*DirectInputWasEnabled*/,
-				false/*PointerWasLocked*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/
-			};
+			bool m_directInputWasEnabled{false};
+			bool m_pointerWasLocked{false};
 	};
 }

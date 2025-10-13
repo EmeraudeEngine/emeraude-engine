@@ -355,16 +355,12 @@ namespace EmEn::Overlay
 		}
 #endif
 
-		m_serviceInitialized = true;
-
 		return true;
 	}
 
 	bool
 	Manager::onTerminate () noexcept
 	{
-		m_serviceInitialized = false;
-
 #ifdef IMGUI_ENABLED
 		TraceInfo{ClassId} << "Releasing ImGUI library ...";
 

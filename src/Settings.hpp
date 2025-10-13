@@ -288,19 +288,6 @@ namespace EmEn
 			 */
 			~Settings () override = default;
 
-			/** @copydoc EmEn::ServiceInterface::usable() */
-			[[nodiscard]]
-			bool
-			usable () const noexcept override
-			{
-				if ( !m_serviceInitialized )
-				{
-					return false;
-				}
-
-				return !m_filepath.empty();
-			}
-
 			/**
 			 * @brief Returns the file path for these settings.
 			 * @return const std::filesystem::path &
@@ -905,7 +892,6 @@ namespace EmEn
 			std::map< std::string, SettingStore, std::less<> > m_stores;
 			std::filesystem::path m_filepath;
 			mutable std::shared_mutex m_storeAccess;
-			bool m_serviceInitialized{false};
 			bool m_childProcess{false};
 			bool m_showInformation{false};
 			bool m_saveAtExit{false};

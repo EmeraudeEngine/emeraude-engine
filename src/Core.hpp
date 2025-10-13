@@ -763,10 +763,9 @@ namespace EmEn
 
 			/**
 			 * @brief showStatistics
-			 * @param elapsedTime
 			 * @return void
 			 */
-			void showStatistics (double elapsedTime) const noexcept;
+			void showStatistics () const noexcept;
 
 			/**
 			 * @brief Checks for a message to display in a dialog.

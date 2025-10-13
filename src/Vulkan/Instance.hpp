@@ -105,14 +105,6 @@ namespace EmEn::Vulkan
 				//VK_KHR_VIDEO_DECODE_H265_EXTENSION_NAME,
 			}
 
-			/** @copydoc EmEn::ServiceInterface::usable() */
-			[[nodiscard]]
-			bool
-			usable () const noexcept override
-			{
-				return m_instance != nullptr;
-			}
-
 			/**
 			 * @brief Returns the Vulkan instance handle wrapped in a smart pointer.
 			 * @return VkInstance

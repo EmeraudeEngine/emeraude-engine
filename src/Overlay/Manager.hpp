@@ -130,14 +130,6 @@ namespace EmEn::Overlay
 				return classUID == getClassUID();
 			}
 
-			/** @copydoc EmEn::ServiceInterface::usable() */
-			[[nodiscard]]
-			bool
-			usable () const noexcept override
-			{
-				return m_serviceInitialized;
-			}
-
 			/** @copydoc EmEn::Input::KeyboardListenerInterface::onKeyPress() */
 			bool onKeyPress (int32_t key, int32_t scancode, int32_t modifiers, bool repeat) noexcept override;
 
@@ -438,7 +430,6 @@ namespace EmEn::Overlay
 #endif
 			mutable std::mutex m_physicalRepresentationUpdateMutex;
 			mutable std::mutex m_screensAccess;
-			bool m_serviceInitialized{false};
 			bool m_enabled{false};
 	};
 }

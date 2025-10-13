@@ -64,14 +64,6 @@ namespace EmEn
 
 			}
 
-			/** @copydoc EmEn::ServiceInterface::usable() */
-			[[nodiscard]]
-			bool
-			usable () const noexcept override
-			{
-				return m_flags[ServiceInitialized];
-			}
-
 			/**
 			 * @brief Sets a user identification.
 			 * @param identifier An integer like ID from external platform.
@@ -124,21 +116,8 @@ namespace EmEn
 			/** @copydoc EmEn::ServiceInterface::onTerminate() */
 			bool onTerminate () noexcept override;
 
-			/* Flag names */
-			static constexpr auto ServiceInitialized{0UL};
-
 			PrimaryServices & m_primaryServices;
 			uint64_t m_userID{0};
 			std::string m_username{"John.Doe"};
-			std::array< bool, 8 > m_flags{
-				false/*ServiceInitialized*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/
-			};
 	};
 }

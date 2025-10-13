@@ -74,14 +74,6 @@ namespace EmEn::Resources
 
 			}
 
-			/** @copydoc EmEn::ServiceInterface::usable() */
-			[[nodiscard]]
-			bool
-			usable () const noexcept override
-			{
-				return m_serviceInitialized;
-			}
-
 			/** @copydoc EmEn::Resources::ServiceProvider::update() */
 			bool update (const Json::Value & root) noexcept override;
 
@@ -241,7 +233,6 @@ namespace EmEn::Resources
 			std::unordered_map< std::string, std::shared_ptr< std::unordered_map< std::string, BaseInformation > > > m_localStores;
 			std::map< std::type_index, std::unique_ptr< ContainerInterface > > m_containers;
 			mutable std::mutex m_localStoresAccess;
-			bool m_serviceInitialized{false};
 			bool m_verbosityEnabled{false};
 			bool m_downloadingAllowed{false};
 			bool m_quietConversion{false};

@@ -39,6 +39,8 @@
 
 /* Local inclusions for usages. */
 #include "Libs/StaticVector.hpp"
+#include "Vulkan/Sync/Fence.hpp"
+#include "Vulkan/Framebuffer.hpp"
 #include "Vulkan/CommandBuffer.hpp"
 #include "Graphics/ViewMatrices2DUBO.hpp"
 #include "Graphics/ViewMatrices3DUBO.hpp"
@@ -75,6 +77,14 @@ namespace EmEn::Vulkan
 			 * @param settings A reference to the settings.
 			 */
 			SwapChain (const std::shared_ptr< Device > & device, Graphics::Renderer & renderer, Settings & settings) noexcept;
+
+			/**
+			 * @brief Destructs the swap-chain.
+			 */
+			~SwapChain () override
+			{
+				this->destroyFromHardware();
+			}
 
 			/** @copydoc EmEn::Vulkan::AbstractDeviceDependentObject::createOnHardware() */
 			bool

@@ -84,14 +84,6 @@ namespace EmEn::Vulkan
 			 */
 			~TransferManager () override = default;
 
-			/** @copydoc EmEn::ServiceInterface::usable() */
-			[[nodiscard]]
-			bool
-			usable () const noexcept override
-			{
-				return m_serviceInitialized;
-			}
-
 			/**
 			 * @brief Sets the device used by the transfer manager.
 			 * @return void
@@ -239,6 +231,5 @@ namespace EmEn::Vulkan
 			std::vector< BufferTransferOperation > m_bufferTransferOperations;
 			std::vector< ImageTransferOperation > m_imageTransferOperations;
 			mutable std::mutex m_transferOperationsAccess;
-			bool m_serviceInitialized{false};
 	};
 }

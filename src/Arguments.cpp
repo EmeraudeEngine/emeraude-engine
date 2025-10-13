@@ -100,16 +100,12 @@ namespace EmEn
 			TraceInfo{ClassId} << *this;
 		}
 
-		m_serviceInitialized = true;
-
 		return true;
 	}
 
 	bool
 	Arguments::onTerminate () noexcept
 	{
-		m_serviceInitialized = false;
-
 		m_rawArguments.clear();
 		m_arguments.clear();
 

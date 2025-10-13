@@ -31,16 +31,12 @@ namespace EmEn
 	bool
 	User::onInitialize () noexcept
 	{
-		m_flags[ServiceInitialized] = true;
-
 		return true;
 	}
 
 	bool
 	User::onTerminate () noexcept
 	{
-		m_flags[ServiceInitialized] = false;
-
 		return true;
 	}
 }

@@ -281,24 +281,24 @@ namespace EmEn::Graphics
 				sampleCount = m_device->findSampleCount(sampleCount);
 			}
 
-			m_offscreenView = std::make_shared< RenderTarget::View< ViewMatrices2DUBO > >(
-				"MainOffscreenView",
+			m_windowLessView = std::make_shared< RenderTarget::View< ViewMatrices2DUBO > >(
+				"WindowLessView",
 				m_window.state().windowWidth,
 				m_window.state().windowHeight,
 				FramebufferPrecisions{8, 8, 8, 8, 24, 0, sampleCount}
 			);
 
-			if ( !m_offscreenView->create(*this) )
+			if ( !m_windowLessView->create(*this) )
 			{
-				Tracer::fatal(ClassId, "Unable to create the offscreen view !");
+				Tracer::fatal(ClassId, "Unable to create the window less view !");
 
 				return false;
 			}
 
 			/* Create a command pools and command buffers following the offscreen view image. */
-			if ( !this->createCommandSystem() )
+			if ( !this->createRenderingSystem(1) )
 			{
-				m_offscreenView.reset();
+				m_windowLessView.reset();
 
 				Tracer::fatal(ClassId, "Unable to create the offscreen view command pools and buffers !");
 
@@ -320,7 +320,7 @@ namespace EmEn::Graphics
 			}
 
 			/* Create a command pools and command buffers following the swap-chain images. */
-			if ( !this->createCommandSystem() )
+			if ( !this->createRenderingSystem(m_swapChain->imageCount()) )
 			{
 				m_swapChain.reset();
 
@@ -406,16 +406,12 @@ namespace EmEn::Graphics
 			}
 		}
 
-		m_serviceInitialized = true;
-
 		return true;
 	}
 
 	bool
 	Renderer::onTerminate () noexcept
 	{
-		m_serviceInitialized = false;
-
 		m_device->waitIdle("Renderer::onTerminate()");
 
 		size_t error = 0;
@@ -444,19 +440,12 @@ namespace EmEn::Graphics
 			m_pipelines.clear();
 		}
 
-		this->destroyCommandSystem();
+		m_descriptorPool.reset();
 
-		if ( m_swapChain != nullptr )
-		{
-			m_swapChain->destroyFromHardware();
-			m_swapChain.reset();
-		}
+		this->destroyRenderingSystem();
 
-		if ( m_descriptorPool != nullptr )
-		{
-			m_descriptorPool->destroyFromHardware();
-			m_descriptorPool.reset();
-		}
+		m_swapChain.reset();
+		m_windowLessView.reset();
 
 		/* Terminate sub-services. */
 		{
@@ -494,7 +483,7 @@ namespace EmEn::Graphics
 	{
 		if ( m_windowLess )
 		{
-			return m_offscreenView;
+			return m_windowLessView;
 		}
 
 		return m_swapChain;
@@ -620,11 +609,11 @@ namespace EmEn::Graphics
 			}
 
 			const auto * queue = this->device()->getGraphicsQueue(QueuePriority::High);
-			const auto fence = m_offscreenView->fence();
+			const auto * fence = m_rendererFrameScope[0].inFlightFence();
 
 			if ( !fence->waitAndReset(m_timeout) )
 			{
-				TraceDebug{ClassId} << "Unable to wait on frame " << m_offscreenView->id() << " !";
+				TraceDebug{ClassId} << "Unable to wait on frame " << m_windowLessView->id() << " !";
 
 				return;
 			}
@@ -632,21 +621,21 @@ namespace EmEn::Graphics
 			/* Then we need the command buffer linked to this image by its index. */
 			const auto commandBuffer = m_rendererFrameScope[0].commandBuffer();
 
-			if ( !commandBuffer->begin(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT) )
+			if ( !commandBuffer->begin() )
 			{
 				return;
 			}
 
-			commandBuffer->beginRenderPass(*m_offscreenView->framebuffer(), m_offscreenView->renderArea(), m_clearColors, VK_SUBPASS_CONTENTS_INLINE);
+			commandBuffer->beginRenderPass(*m_windowLessView->framebuffer(), m_windowLessView->renderArea(), m_clearColors, VK_SUBPASS_CONTENTS_INLINE);
 
 			/* First, render the scene. */
 			if ( scene != nullptr )
 			{
-				scene->render(m_offscreenView, *commandBuffer);
+				scene->render(m_windowLessView, *commandBuffer);
 			}
 
 			/* Then render the overlay system over the 3D-rendered scene. */
-			overlayManager.render(m_offscreenView, *commandBuffer);
+			overlayManager.render(m_windowLessView, *commandBuffer);
 
 			commandBuffer->endRenderPass();
 
@@ -663,7 +652,7 @@ namespace EmEn::Graphics
 
 			if ( !submitted )
 			{
-				TraceError{ClassId} << "Unable to submit command buffer for render target '" << m_offscreenView->id() << "' !";
+				TraceError{ClassId} << "Unable to submit command buffer for render target '" << m_windowLessView->id() << "' !";
 
 				return;
 			}
@@ -728,7 +717,7 @@ namespace EmEn::Graphics
 			/* Then we need the command buffer linked to this image by its index. */
 			const auto commandBuffer = currentFrameScope.commandBuffer();
 
-			if ( !commandBuffer->begin(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT) )
+			if ( !commandBuffer->begin() )
 			{
 				return;
 			}
@@ -777,12 +766,12 @@ namespace EmEn::Graphics
 	std::shared_ptr< CommandBuffer >
 	Renderer::getCommandBuffer (const std::shared_ptr< RenderTarget::Abstract > & renderTarget) noexcept
 	{
-		if ( const auto commandBufferIt = m_offScreenCommandBuffers.find(renderTarget); commandBufferIt != m_offScreenCommandBuffers.cend() )
+		if ( const auto commandBufferIt = m_commandBuffers.find(renderTarget); commandBufferIt != m_commandBuffers.cend() )
 		{
 			return commandBufferIt->second;
 		}
 
-		auto commandBuffer = std::make_shared< CommandBuffer >(m_offScreenCommandPool);
+		auto commandBuffer = std::make_shared< CommandBuffer >(m_commandPool);
 		commandBuffer->setIdentifier(ClassId, renderTarget->id(), "CommandBuffer");
 
 		if ( !commandBuffer->isCreated() )
@@ -792,7 +781,7 @@ namespace EmEn::Graphics
 			return {};
 		}
 
-		m_offScreenCommandBuffers.emplace(renderTarget, commandBuffer);
+		m_commandBuffers.emplace(renderTarget, commandBuffer);
 
 		return commandBuffer;
 	}
@@ -814,18 +803,9 @@ namespace EmEn::Graphics
 				}
 			}
 
-			/*const auto fence = shadowMap->fence();
-
-			if ( !fence->waitAndReset(250000000) )
-			{
-				TraceDebug{ClassId} << "Unable to wait on shadow map " << shadowMap->id() << " !";
-
-				return;
-			}*/
-
 			const auto commandBuffer = this->getCommandBuffer(shadowMap);
 
-			if ( !commandBuffer->begin(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT) )
+			if ( !commandBuffer->begin() )
 			{
 				TraceError{ClassId} << "Unable to begin with render target '" << shadowMap->id() << "' command buffer !";
 
@@ -851,7 +831,6 @@ namespace EmEn::Graphics
 				*commandBuffer,
 				SynchInfo{}
 					.signals({&semaphoreHandle, 1})
-					//.withFence(fence->handle())
 			);
 
 			if ( !submitted )
@@ -883,18 +862,9 @@ namespace EmEn::Graphics
 				}
 			}
 
-			/*const auto fence = renderToTexture->fence();
-
-			if ( !fence->waitAndReset(250000000) )
-			{
-				TraceDebug{ClassId} << "Unable to wait on render to texture " << renderToTexture->id() << " !";
-
-				return;
-			}*/
-
 			const auto commandBuffer = this->getCommandBuffer(renderToTexture);
 
-			if ( !commandBuffer->begin(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT) )
+			if ( !commandBuffer->begin() )
 			{
 				TraceError{ClassId} << "Unable to begin with render target '" << renderToTexture->id() << "' command buffer !";
 
@@ -924,7 +894,6 @@ namespace EmEn::Graphics
 				SynchInfo{}
 					.waits(waitSemaphores, waitStages)
 					.signals({&signalSemaphoreHandle, 1})
-					//.withFence(fence->handle())
 			);
 
 			if ( !submitted )
@@ -991,9 +960,17 @@ namespace EmEn::Graphics
 	}
 
 	bool
-	Renderer::createCommandSystem () noexcept
+	Renderer::createRenderingSystem (uint32_t imageCount) noexcept
 	{
-		const auto imageCount = m_windowLess ? 1 : m_swapChain->imageCount();
+		m_commandPool = std::make_shared< CommandPool >(m_device, m_device->getGraphicsFamilyIndex(), false, true, false);
+		m_commandPool->setIdentifier(ClassId, "offScreen", "CommandPool");
+
+		if ( !m_commandPool->createOnHardware() )
+		{
+			TraceError{ClassId} << "Unable to create the off-screen command pool !";
+
+			return false;
+		}
 
 		m_rendererFrameScope.resize(imageCount);
 
@@ -1007,25 +984,15 @@ namespace EmEn::Graphics
 			}
 		}
 
-		m_offScreenCommandPool = std::make_shared< CommandPool >(m_device, m_device->getGraphicsFamilyIndex(), true, true, false);
-		m_offScreenCommandPool->setIdentifier(ClassId, "offScreen", "CommandPool");
-
-		if ( !m_offScreenCommandPool->createOnHardware() )
-		{
-			TraceError{ClassId} << "Unable to create the off-screen command pool !";
-
-			return false;
-		}
-
 		return true;
 	}
 
 	void
-	Renderer::destroyCommandSystem () noexcept
+	Renderer::destroyRenderingSystem () noexcept
 	{
-		m_offScreenCommandPool.reset();
-
 		m_rendererFrameScope.clear();
+
+		m_commandPool.reset();
 	}
 
 	bool

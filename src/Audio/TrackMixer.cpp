@@ -120,27 +120,27 @@ namespace EmEn::Audio
 		m_stopThread = false;
 		m_eventThread = std::thread{&TrackMixer::eventLoop, this};
 
-		m_serviceInitialized = true;
-
 		return true;
 	}
 
 	bool
 	TrackMixer::onTerminate () noexcept
 	{
-		if ( m_serviceInitialized )
+		m_stopThread = true;
+		m_fadeCv.notify_one();
+
+		if ( m_eventThread.joinable() )
 		{
-			m_serviceInitialized = false;
+			m_eventThread.join();
+		}
 
-			m_stopThread = true;
-			m_fadeCv.notify_one();
-
-			if ( m_eventThread.joinable() )
-			{
-				m_eventThread.join();
-			}
-
+		if ( m_trackA != nullptr )
+		{
 			m_trackA->stop();
+		}
+
+		if ( m_trackB != nullptr )
+		{
 			m_trackB->stop();
 		}
 

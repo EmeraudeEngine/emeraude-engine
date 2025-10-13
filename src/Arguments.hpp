@@ -110,14 +110,6 @@ namespace EmEn
 			}
 #endif
 
-			/** @copydoc EmEn::ServiceInterface::usable() */
-			[[nodiscard]]
-			bool
-			usable () const noexcept override
-			{
-				return m_serviceInitialized;
-			}
-
 			/**
 			 * @brief Returns the application executable path.
 			 * @return const std::filesystem::path &
@@ -281,7 +273,6 @@ namespace EmEn
 			std::vector< std::string > m_rawArguments;
 			std::set< std::string > m_switches;
 			std::map< std::string, std::string, std::less<> > m_arguments;
-			bool m_serviceInitialized{false};
 			const bool m_childProcess{false};
 	};
 

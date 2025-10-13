@@ -38,7 +38,7 @@ namespace EmEn::Libs::Time
 	static const std::chrono::time_point< std::chrono::steady_clock > ProgramStaringTime{std::chrono::steady_clock::now()};
 
 	/**
-	 * @brief Returns the elapsed time in seconds since the start of th program.
+	 * @brief Returns the elapsed time in seconds since the start of the program.
 	 * @return int64_t
 	 */
 	inline
@@ -49,7 +49,7 @@ namespace EmEn::Libs::Time
 	}
 
 	/**
-	 * @brief Returns the elapsed time in milliseconds since the start of th program.
+	 * @brief Returns the elapsed time in milliseconds since the start of the program.
 	 * @return int64_t
 	 */
 	inline
@@ -60,7 +60,7 @@ namespace EmEn::Libs::Time
 	}
 
 	/**
-	 * @brief Returns the elapsed time in nanoseconds since the start of th program.
+	 * @brief Returns the elapsed time in nanoseconds since the start of the program.
 	 * @return int64_t
 	 */
 	inline

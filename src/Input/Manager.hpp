@@ -133,14 +133,6 @@ namespace EmEn::Input
 				return classUID == getClassUID();
 			}
 
-			/** @copydoc EmEn::ServiceInterface::usable() */
-			[[nodiscard]]
-			bool
-			usable () const noexcept override
-			{
-				return m_serviceInitialized;
-			}
-
 			/**
 			 * @brief Returns a keyboard controller.
 			 * @return const KeyboardController &
@@ -574,7 +566,6 @@ namespace EmEn::Input
 			std::set< int > m_gamepadIDs;
 			std::array< double, 2 > m_pointerScalingFactors{1.0, 1.0};
 			std::array< double, 2 > m_lastPointerCoordinates{0.0, 0.0};
-			bool m_serviceInitialized{false};
 			bool m_showInformation{false};
 			bool m_windowLess{false};
 			bool m_windowLinked{false};

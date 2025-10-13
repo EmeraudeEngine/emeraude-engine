@@ -103,16 +103,12 @@ namespace EmEn
 			TraceInfo{ClassId} << *this;
 		}
 
-		m_serviceInitialized = true;
-
 		return true;
 	}
 
 	bool
 	FileSystem::onTerminate () noexcept
 	{
-		m_serviceInitialized = false;
-
 		return true;
 	}
 

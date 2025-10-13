@@ -77,14 +77,6 @@ namespace EmEn
 
 			}
 
-			/** @copydoc EmEn::ServiceInterface::usable() */
-			[[nodiscard]]
-			bool
-			usable () const noexcept override
-			{
-				return m_serviceInitialized;
-			}
-
 			/**
 			 * @brief Returns the application binary file name.
 			 * @return const std::string &
@@ -347,7 +339,6 @@ namespace EmEn
 			std::filesystem::path m_configDirectory;
 			std::filesystem::path m_cacheDirectory;
 			std::vector< std::filesystem::path > m_dataDirectories;
-			bool m_serviceInitialized{false};
 			bool m_childProcess{false};
 			bool m_showInformation{false};
 			bool m_standAlone{false};

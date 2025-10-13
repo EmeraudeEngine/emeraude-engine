@@ -72,16 +72,12 @@ namespace EmEn::Vulkan
 			}
 		}
 
-		m_serviceInitialized = true;
-
 		return true;
 	}
 
 	bool
 	TransferManager::onTerminate () noexcept
 	{
-		m_serviceInitialized = false;
-
 		m_device->waitIdle("TransferManager::onTerminate()");
 
 		m_bufferTransferOperations.clear();

@@ -57,10 +57,10 @@ namespace EmEn::Saphir
 		{
 			auto & settings = m_primaryServices.settings();
 
-			m_flags[ShowInformation] = settings.getOrSetDefault< bool >(VkShowInformationKey, DefaultVkShowInformation);
-			m_flags[ShowSourceCode] = settings.getOrSetDefault< bool >(ShowSourceCodeKey, DefaultShowSourceCode);
-			m_flags[SourceCodeCacheEnabled] = settings.getOrSetDefault< bool >(SourceCodeCacheEnabledKey, DefaultSourceCodeCacheEnabled);
-			m_flags[BinaryCacheEnabled] = settings.getOrSetDefault< bool >(BinaryCacheEnabledKey, DefaultBinaryCacheEnabled);
+			m_showInformation = settings.getOrSetDefault< bool >(VkShowInformationKey, DefaultVkShowInformation);
+			m_showSourceCode = settings.getOrSetDefault< bool >(ShowSourceCodeKey, DefaultShowSourceCode);
+			m_sourceCodeCacheEnabled = settings.getOrSetDefault< bool >(SourceCodeCacheEnabledKey, DefaultSourceCodeCacheEnabled);
+			m_binaryCacheEnabled = settings.getOrSetDefault< bool >(BinaryCacheEnabledKey, DefaultBinaryCacheEnabled);
 		}
 
 		/* Shader source cache directory. */
@@ -93,7 +93,7 @@ namespace EmEn::Saphir
 			this->readCache();
 		}
 
-		if ( m_flags[ShowInformation] )
+		if ( m_showInformation )
 		{
 			TraceInfo{ClassId} << "GLSLang GLSL version supported : " << glslang::GetGlslVersionString();
 		}
@@ -201,20 +201,13 @@ namespace EmEn::Saphir
 
 		//m_includer.pushExternalLocalDirectory("");
 
-		m_flags[ServiceInitialized] = true;
-
 		return true;
 	}
 
 	bool
 	ShaderManager::onTerminate () noexcept
 	{
-		if ( m_flags[ServiceInitialized] )
-		{
-			m_flags[ServiceInitialized] = false;
-
-			glslang::FinalizeProcess();
-		}
+		glslang::FinalizeProcess();
 
 		m_cachedShaderBinaries.clear();
 		m_cachedShaderSourceCodes.clear();
@@ -226,7 +219,7 @@ namespace EmEn::Saphir
 	bool
 	ShaderManager::cacheShaderSourceCode (const AbstractShader & shader) const noexcept
 	{
-		if ( !m_flags[SourceCodeCacheEnabled] )
+		if ( !m_sourceCodeCacheEnabled )
 		{
 			return true;
 		}
@@ -253,7 +246,7 @@ namespace EmEn::Saphir
 	bool
 	ShaderManager::cacheShaderBinary (const AbstractShader & shader, const std::vector< uint32_t > & binaryCode) const noexcept
 	{
-		if ( !m_flags[BinaryCacheEnabled] )
+		if ( !m_binaryCacheEnabled )
 		{
 			return true;
 		}
@@ -280,7 +273,7 @@ namespace EmEn::Saphir
 	bool
 	ShaderManager::checkBinaryFromCache (const AbstractShader & shader, std::vector< uint32_t > & binaryCode) noexcept
 	{
-		if ( !m_flags[BinaryCacheEnabled] )
+		if ( !m_binaryCacheEnabled )
 		{
 			return false;
 		}
@@ -320,7 +313,7 @@ namespace EmEn::Saphir
 		}
 
 		/* The shader must have a source code before anything else.
-		 * The hash depend on it. */
+		 * The hash depends on it. */
 		if ( !shader.isGenerated() )
 		{
 			TraceError{ClassId} <<
@@ -330,7 +323,7 @@ namespace EmEn::Saphir
 			return {};
 		}
 
-		if ( m_flags[ShowSourceCode] )
+		if ( m_showSourceCode )
 		{
 			TraceInfo{ClassId} << "\n"
 				"****** START OF LOADED GLSL SHADER CODE ******" "\n" <<
@@ -340,10 +333,8 @@ namespace EmEn::Saphir
 
 		const auto shaderHash = shader.hash();
 
-		/* Checks in loaded shader list with the hash. */
-		const auto shaderIt = m_shaderModules.find(shaderHash);
-
-		if ( shaderIt != m_shaderModules.cend() )
+		/* Checks in a loaded shader list with the hash. */
+		if ( const auto shaderIt = m_shaderModules.find(shaderHash); shaderIt != m_shaderModules.cend() )
 		{
 			return shaderIt->second;
 		}
@@ -704,7 +695,7 @@ namespace EmEn::Saphir
 		/* NOTE: Preprocess the source code. */
 		std::string preprocessedSource;
 
-		if ( !glslShader.preprocess(&m_builtInResource, m_defaultVersion, m_profile, m_flags[ForceDefaultVersionAndProfile], m_flags[ForwardCompatible], m_messageFilter, &preprocessedSource, m_includer) )
+		if ( !glslShader.preprocess(&m_builtInResource, m_defaultVersion, m_profile, m_forceDefaultVersionAndProfile, m_forwardCompatible, m_messageFilter, &preprocessedSource, m_includer) )
 		{
 			this->printCompilationErrors(shaderIdentifier, preprocessedSource, glslShader.getInfoLog());
 
@@ -715,7 +706,7 @@ namespace EmEn::Saphir
 			return chrA == '\n' && chrB == '\n';
 		}).begin(),preprocessedSource.end());
 
-		if ( m_flags[ShowSourceCode] )
+		if ( m_showSourceCode )
 		{
 			TraceInfo{ClassId} << "\n"
 				"****** START OF PRE-PROCESSED GLSL SHADER CODE " << shaderIdentifier << " ******" "\n" <<
@@ -728,7 +719,7 @@ namespace EmEn::Saphir
 
 		glslShader.setStrings(&c_string, 1);
 
-		if ( !glslShader.parse(&m_builtInResource, m_defaultVersion, m_profile, m_flags[ForceDefaultVersionAndProfile], m_flags[ForwardCompatible], m_messageFilter, m_includer) )
+		if ( !glslShader.parse(&m_builtInResource, m_defaultVersion, m_profile, m_forceDefaultVersionAndProfile, m_forwardCompatible, m_messageFilter, m_includer) )
 		{
 			this->printCompilationErrors(shaderIdentifier, preprocessedSource, glslShader.getInfoLog());
 

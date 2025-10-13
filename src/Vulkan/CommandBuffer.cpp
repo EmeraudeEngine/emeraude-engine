@@ -39,7 +39,6 @@
 #include "Sync/MemoryBarrier.hpp"
 #include "Sync/ImageMemoryBarrier.hpp"
 #include "Sync/BufferMemoryBarrier.hpp"
-#include "CommandPool.hpp"
 #include "PipelineLayout.hpp"
 #include "DescriptorSet.hpp"
 #include "IndexBufferObject.hpp"
@@ -55,10 +54,10 @@
 
 namespace EmEn::Vulkan
 {
-	using namespace EmEn::Libs;
+	using namespace Libs;
 
 	bool
-	CommandBuffer::begin (VkCommandBufferUsageFlagBits usage) const noexcept
+	CommandBuffer::begin (VkCommandBufferUsageFlagBits vkFlags) const noexcept
 	{
 		if ( !this->isCreated() )
 		{
@@ -70,12 +69,10 @@ namespace EmEn::Vulkan
 		VkCommandBufferBeginInfo beginInfo{};
 		beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 		beginInfo.pNext = nullptr;
-		beginInfo.flags = usage;
+		beginInfo.flags = vkFlags;
 		beginInfo.pInheritanceInfo = nullptr;
 
-		const auto result = vkBeginCommandBuffer(m_handle, &beginInfo);
-
-		if ( result != VK_SUCCESS )
+		if ( const auto result = vkBeginCommandBuffer(m_handle, &beginInfo); result != VK_SUCCESS )
 		{
 			TraceError{ClassId} << "Unable to begin record to the command buffer " << m_handle << " : " << vkResultToCString(result) << " !";
 
@@ -95,9 +92,7 @@ namespace EmEn::Vulkan
 			return false;
 		}
 
-		const auto result = vkEndCommandBuffer(m_handle);
-
-		if ( result != VK_SUCCESS )
+		if ( const auto result = vkEndCommandBuffer(m_handle); result != VK_SUCCESS )
 		{
 			TraceError{ClassId} << "Unable to end record to the command buffer " << m_handle << " : " << vkResultToCString(result) << " !";
 
@@ -108,7 +103,7 @@ namespace EmEn::Vulkan
 	}
 
 	bool
-	CommandBuffer::reset (VkCommandBufferResetFlags flags) const noexcept
+	CommandBuffer::reset (VkCommandBufferResetFlags vkFlags) const noexcept
 	{
 		if ( !this->isCreated() )
 		{
@@ -117,9 +112,7 @@ namespace EmEn::Vulkan
 			return false;
 		}
 
-		const auto result = vkResetCommandBuffer(m_handle, flags);
-
-		if ( result != VK_SUCCESS )
+		if ( const auto result = vkResetCommandBuffer(m_handle, vkFlags); result != VK_SUCCESS )
 		{
 			TraceError{ClassId} << "Unable to reset the command buffer " << m_handle << " : " << vkResultToCString(result) << " !";
 

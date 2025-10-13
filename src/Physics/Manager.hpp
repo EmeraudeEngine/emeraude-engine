@@ -82,14 +82,6 @@ namespace EmEn::Physics
 
 			}
 
-			/** @copydoc EmEn::ServiceInterface::usable() */
-			[[nodiscard]]
-			bool
-			usable () const noexcept override
-			{
-				return m_serviceInitialized;
-			}
-
 			/**
 			 * @brief Returns the reference to the transfer manager.
 			 * @return Vulkan::TransferManager &
@@ -199,7 +191,6 @@ namespace EmEn::Physics
 			std::vector< std::shared_ptr< Vulkan::CommandBuffer > > m_commandBuffers;
 			std::map< size_t, std::shared_ptr< Vulkan::PipelineLayout > > m_pipelineLayouts;
 			std::map< size_t, std::shared_ptr< Vulkan::ComputePipeline > > m_pipelines;
-			bool m_serviceInitialized{false};
 			bool m_accelerationAvailable{false};
 	};
 }

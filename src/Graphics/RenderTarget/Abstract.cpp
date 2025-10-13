@@ -31,7 +31,6 @@
 #include <string>
 
 /* Local inclusions. */
-#include "Graphics/FramebufferPrecisions.hpp"
 #include "Graphics/Renderer.hpp"
 #include "Vulkan/Image.hpp"
 #include "Vulkan/ImageView.hpp"
@@ -50,18 +49,6 @@ namespace EmEn::Graphics::RenderTarget
 	{
 		if ( m_enableSyncPrimitive )
 		{
-			m_fence = std::make_shared< Sync::Fence >(renderer.device(), VK_FENCE_CREATE_SIGNALED_BIT);
-			m_fence->setIdentifier(TracerTag, this->id(), "Fence");
-
-			if ( !m_fence->createOnHardware() )
-			{
-				Tracer::error(TracerTag, "Unable to create the render target fence !");
-
-				m_fence.reset();
-
-				return false;
-			}
-
 			m_semaphore = std::make_shared< Sync::Semaphore >(renderer.device());
 			m_semaphore->setIdentifier(TracerTag, this->id(), "Semaphore");
 
@@ -85,22 +72,7 @@ namespace EmEn::Graphics::RenderTarget
 	{
 		this->onDestroy();
 
-		if ( m_enableSyncPrimitive )
-		{
-			if ( m_semaphore != nullptr )
-			{
-				m_semaphore->destroyFromHardware();
-
-				m_semaphore.reset();
-			}
-
-			if ( m_fence != nullptr )
-			{
-				m_fence->destroyFromHardware();
-
-				m_fence.reset();
-			}
-		}
+		m_semaphore.reset();
 
 		return true;
 	}

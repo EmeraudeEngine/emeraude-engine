@@ -80,14 +80,6 @@ namespace EmEn
 
 			}
 
-			/** @copydoc EmEn::ServiceInterface::usable() */
-			[[nodiscard]]
-			bool
-			usable () const noexcept override
-			{
-				return m_surface != nullptr;
-			}
-
 			/**
 			 * @brief Sets the background color of the notifier display.
 			 * @param color A reference to a color.
