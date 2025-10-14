@@ -127,12 +127,8 @@ namespace EmEn::Vulkan
 			}
 		}
 
-		//std::cout << "[DEADLOCK-TRACKING] Try to acquire for vkFreeCommandBuffers() ..." << std::endl;
-
 		/* [VULKAN-CPU-SYNC] vkFreeCommandBuffers() */
 		const std::lock_guard< std::mutex > lock{m_commandPoolAccess};
-
-		//std::cout << "[DEADLOCK-TRACKING] Call to vkFreeCommandBuffers() ..." << std::endl;
 
 		if constexpr ( IsDebug )
 		{
@@ -145,12 +141,10 @@ namespace EmEn::Vulkan
 		}
 
 		vkFreeCommandBuffers(this->device()->handle(), m_handle, 1, &commandBufferHandle);
-
-		//std::cout << "[DEADLOCK-TRACKING] vkFreeCommandBuffers() passed!" << std::endl;
 	}
 
 	bool
-	CommandPool::reset () const noexcept
+	CommandPool::resetCommandBuffers (bool releaseMemory) const noexcept
 	{
 		if constexpr ( IsDebug )
 		{
@@ -165,7 +159,7 @@ namespace EmEn::Vulkan
 		/* [VULKAN-CPU-SYNC] vkResetCommandPool() */
 		const std::lock_guard< std::mutex > lock{m_commandPoolAccess};
 
-		if ( const auto result = vkResetCommandPool(this->device()->handle(), m_handle, VK_COMMAND_POOL_RESET_RELEASE_RESOURCES_BIT); result != VK_SUCCESS )
+		if ( const auto result = vkResetCommandPool(this->device()->handle(), m_handle, releaseMemory ? VK_COMMAND_POOL_RESET_RELEASE_RESOURCES_BIT : 0); result != VK_SUCCESS )
 		{
 			TraceError{ClassId} << "Unable to reset the command pool : " << vkResultToCString(result) << " !";
 

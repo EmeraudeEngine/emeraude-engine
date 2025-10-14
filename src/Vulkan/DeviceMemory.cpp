@@ -33,7 +33,7 @@
 
 namespace EmEn::Vulkan
 {
-	using namespace EmEn::Libs;
+	using namespace Libs;
 
 	bool
 	DeviceMemory::createOnHardware () noexcept
@@ -51,9 +51,7 @@ namespace EmEn::Vulkan
 		allocateInfo.allocationSize = m_requirement.memoryRequirements.size;
 		allocateInfo.memoryTypeIndex = this->device()->findMemoryType(m_requirement.memoryRequirements.memoryTypeBits, m_propertyFlags);
 
-		const auto result = vkAllocateMemory(this->device()->handle(), &allocateInfo, nullptr, &m_handle);
-
-		if ( result != VK_SUCCESS )
+		if ( const auto result = vkAllocateMemory(this->device()->handle(), &allocateInfo, nullptr, &m_handle); result != VK_SUCCESS )
 		{
 			TraceError{ClassId} <<
 				"Unable to allocate " << m_requirement.memoryRequirements.size << " bytes (alignment:" << m_requirement.memoryRequirements.alignment << " bytes) "
@@ -111,9 +109,7 @@ namespace EmEn::Vulkan
 
 		void * pointer = nullptr;
 
-		const auto result = vkMapMemory(this->device()->handle(), m_handle, offset, size, 0, &pointer);
-
-		if ( result != VK_SUCCESS )
+		if ( const auto result = vkMapMemory(this->device()->handle(), m_handle, offset, size, 0, &pointer); result != VK_SUCCESS )
 		{
 			TraceError{ClassId} << "Unable to map the device memory : " << vkResultToCString(result) << " !";
 

@@ -42,13 +42,14 @@ namespace EmEn::Scenes::Component
 	using namespace Saphir;
 
 	void
-	SpotLight::onOutputDeviceConnected (AVConsole::AVManagers & /*managers*/, AbstractVirtualDevice * targetDevice) noexcept
+	SpotLight::onOutputDeviceConnected (AVConsole::AVManagers & /*managers*/, AbstractVirtualDevice & targetDevice) noexcept
 	{
-		const auto maxDistance = m_radius > 0.0F ? m_radius : s_maxDistance;
-		const auto fov = Degree(2.0F * Radian(m_outerAngle));
-
-		targetDevice->updateDeviceFromCoordinates(this->getWorldCoordinates(), this->getWorldVelocity());
-		targetDevice->updateProperties(true, maxDistance, fov);
+		targetDevice.updateDeviceFromCoordinates(this->getWorldCoordinates(), this->getWorldVelocity());
+		targetDevice.updateProperties(
+			true,
+			m_radius > 0.0F ? m_radius : s_maxDistance,
+			Degree(2.0F * Radian(m_outerAngle))
+		);
 	}
 
 	bool

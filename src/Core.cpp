@@ -1086,6 +1086,11 @@ namespace EmEn
 
 					return true;
 
+				case KeyR :
+					m_graphicsRenderer.toggleOffscreenRendering();
+
+					return true;
+
 				case KeyPad1 :
 					m_window.setGamma(0.8F);
 					return true;

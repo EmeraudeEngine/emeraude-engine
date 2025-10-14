@@ -41,7 +41,7 @@
 
 namespace EmEn::Physics
 {
-	using namespace EmEn::Vulkan;
+	using namespace Vulkan;
 
 	bool
 	Manager::onInitialize () noexcept
@@ -118,7 +118,7 @@ namespace EmEn::Physics
 			return false;
 		}
 
-		m_commandPool = std::make_shared< CommandPool >(m_device, m_device->getComputeFamilyIndex(), false, true, false);
+		m_commandPool = std::make_shared< CommandPool >(m_device, m_device->getComputeFamilyIndex(), true, false, false);
 		m_commandPool->setIdentifier(ClassId, "Main", "CommandPool");
 
 		if ( !m_commandPool->createOnHardware() )

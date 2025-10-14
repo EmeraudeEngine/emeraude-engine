@@ -804,7 +804,7 @@ namespace EmEn::Scenes
 			void
 			expand () noexcept
 			{
-				using namespace EmEn::Libs::Math;
+				using namespace Libs::Math;
 
 				const auto size = this->width() * 0.5F;
 				const auto max = this->maximum();

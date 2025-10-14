@@ -24,6 +24,15 @@
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
 
+/* Project configuration. */
+#include "emeraude_config.hpp"
+
+#if IS_WINDOWS
+	#define VK_USE_PLATFORM_WIN32_KHR
+#endif
+#define VMA_IMPLEMENTATION
+
+/* NOTE: Inverted includes order is required here! */
 #include "Device.hpp"
 
 /* Third-party inclusions. */
@@ -95,7 +104,7 @@ namespace EmEn::Vulkan
 		{
 			VkQueue queueHandle;
 
-			vkGetDeviceQueue(m_handle, queueFamilyIndex, queueIndex, &queueHandle);
+			vkGetDeviceQueue(m_deviceHandle, queueFamilyIndex, queueIndex, &queueHandle);
 
 			if ( queueHandle == VK_NULL_HANDLE )
 			{
@@ -113,8 +122,48 @@ namespace EmEn::Vulkan
 		return true;
 	}
 
+	[[nodiscard]]
 	bool
-	Device::create (const DeviceRequirements & requirements, const std::vector< const char * > & extensions) noexcept
+	Device::createMemoryAllocator () noexcept
+	{
+		VmaAllocatorCreateInfo allocatorCreateInfo{};
+		allocatorCreateInfo.flags = VMA_ALLOCATOR_CREATE_EXT_MEMORY_BUDGET_BIT;
+		allocatorCreateInfo.physicalDevice = m_physicalDevice->handle();
+		allocatorCreateInfo.device = m_deviceHandle;
+		allocatorCreateInfo.preferredLargeHeapBlockSize = 0; /* Default: 256Kb */
+		allocatorCreateInfo.pAllocationCallbacks = VK_NULL_HANDLE;
+		allocatorCreateInfo.pDeviceMemoryCallbacks = VK_NULL_HANDLE;
+		allocatorCreateInfo.pHeapSizeLimit = VK_NULL_HANDLE;
+		allocatorCreateInfo.pVulkanFunctions = VK_NULL_HANDLE;
+		allocatorCreateInfo.instance = m_instance.handle();
+		allocatorCreateInfo.vulkanApiVersion = m_instance.info().pApplicationInfo->apiVersion;
+		allocatorCreateInfo.pTypeExternalMemoryHandleTypes = VK_NULL_HANDLE;
+
+		if ( const auto result = vmaCreateAllocator(&allocatorCreateInfo, &m_memoryAllocatorHandle); result != VK_SUCCESS )
+		{
+			TraceError{ClassId} << "Unable to create a memory allocator : " << vkResultToCString(result) << " !";
+
+			return false;
+		}
+
+		m_useMemoryAllocator = true;
+
+		return true;
+	}
+
+	void
+	Device::destroyMemoryAllocator () noexcept
+	{
+		if ( m_memoryAllocatorHandle != VK_NULL_HANDLE )
+		{
+			vmaDestroyAllocator(m_memoryAllocatorHandle);
+
+			m_memoryAllocatorHandle = VK_NULL_HANDLE;
+		}
+	}
+
+	bool
+	Device::create (const DeviceRequirements & requirements, const std::vector< const char * > & extensions, bool useVMA) noexcept
 	{
 		if ( m_showInformation )
 		{
@@ -184,7 +233,15 @@ namespace EmEn::Vulkan
 		/* Logical device creation. */
 		if ( !this->createDevice(requirements, queueCreateInfos, extensions) )
 		{
-			Tracer::error(ClassId, "Logical device creation failed !");
+			Tracer::error(ClassId, "Logical device creation failed!");
+
+			return false;
+		}
+
+		/* Initialize the vulkan memory allocator. */
+		if ( useVMA && !this->createMemoryAllocator() )
+		{
+			Tracer::error(ClassId, "Unable to create the memory allocator!");
 
 			return false;
 		}
@@ -260,6 +317,38 @@ namespace EmEn::Vulkan
 		this->setCreated();
 
 		return true;
+	}
+
+	void
+	Device::destroy () noexcept
+	{
+		/* NOTE: These vectors should only have simple pointers over the queue vector. */
+		m_transferQueueConfiguration.clear();
+		m_computeQueueConfiguration.clear();
+		m_graphicsQueueConfiguration.clear();
+
+		m_queues.clear();
+
+		if ( m_memoryAllocatorHandle != VK_NULL_HANDLE )
+		{
+			vmaDestroyAllocator(m_memoryAllocatorHandle);
+
+			m_memoryAllocatorHandle = VK_NULL_HANDLE;
+		}
+
+		if ( m_deviceHandle != VK_NULL_HANDLE )
+		{
+			/* [VULKAN-CPU-SYNC] vkDestroyDevice() through waidIdle() */
+			this->waitIdle("Destroying the logical device !");
+
+			vkDestroyDevice(m_deviceHandle, nullptr);
+
+			m_deviceHandle = VK_NULL_HANDLE;
+		}
+
+		m_physicalDevice.reset();
+
+		this->setDestroyed();
 	}
 
 	uint32_t
@@ -555,7 +644,7 @@ namespace EmEn::Vulkan
 		createInfo.ppEnabledExtensionNames = extensions.data();
 		createInfo.pEnabledFeatures = nullptr; // VULKAN 1.0 API feature
 
-		if ( const auto result = vkCreateDevice(m_physicalDevice->handle(), &createInfo, nullptr, &m_handle); result != VK_SUCCESS )
+		if ( const auto result = vkCreateDevice(m_physicalDevice->handle(), &createInfo, nullptr, &m_deviceHandle); result != VK_SUCCESS )
 		{
 			TraceFatal{ClassId} << "Unable to create a logical device : " << vkResultToCString(result) << " !";
 
@@ -566,50 +655,21 @@ namespace EmEn::Vulkan
 	}
 
 	void
-	Device::destroy () noexcept
-	{
-		if ( m_handle != VK_NULL_HANDLE )
-		{
-			/* [VULKAN-CPU-SYNC] vkDestroyDevice() through waidIdle() */
-			this->waitIdle("Destroying the logical device !");
-
-			vkDestroyDevice(m_handle, nullptr);
-
-			m_handle = VK_NULL_HANDLE;
-		}
-
-		m_graphicsQueueConfiguration.clear();
-		m_computeQueueConfiguration.clear();
-		m_queues.clear();
-
-		m_physicalDevice.reset();
-
-		this->setDestroyed();
-	}
-
-	void
 	Device::waitIdle (const char * location) const noexcept
 	{
-		if ( m_handle == VK_NULL_HANDLE )
+		if ( m_deviceHandle == VK_NULL_HANDLE )
 		{
 			TraceFatal{ClassId} << "The device is gone ! Call location:" "\n" << location;
 
 			return;
 		}
 
-		/* [VULKAN-CPU-SYNC] vkDeviceWaitIdle() */
-		//std::cout << "[DEADLOCK-TRACKING] Try to acquire for vkDeviceWaitIdle() ..." << std::endl;
-
 		const std::lock_guard< std::mutex > lock{m_logicalDeviceAccess};
 
-		//std::cout << "[DEADLOCK-TRACKING] Call to vkDeviceWaitIdle() ..." << std::endl;
-
-		if ( const auto result = vkDeviceWaitIdle(m_handle); result != VK_SUCCESS )
+		if ( const auto result = vkDeviceWaitIdle(m_deviceHandle); result != VK_SUCCESS )
 		{
-			TraceError{ClassId} << "Unable to wait the device " << m_handle << " : " << vkResultToCString(result) << " ! Call location:" "\n" << location;
+			TraceError{ClassId} << "Unable to wait the device " << m_deviceHandle << " : " << vkResultToCString(result) << " ! Call location:" "\n" << location;
 		}
-
-		//std::cout << "[DEADLOCK-TRACKING] vkDeviceWaitIdle() == VK_SUCCESS" << std::endl;
 	}
 
 	uint32_t

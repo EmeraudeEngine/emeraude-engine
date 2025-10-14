@@ -34,13 +34,7 @@ namespace EmEn::Vulkan
 		auto device = commandPool->device();
 
 		/* Create the staging buffer. */
-		m_stagingBuffer = std::make_unique< Buffer >(
-			device,
-			0,
-			static_cast< VkDeviceSize >(initialReservedBytes),
-			VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
-		);
+		m_stagingBuffer = std::make_unique< Buffer >(device, 0, static_cast< VkDeviceSize >(initialReservedBytes), VK_BUFFER_USAGE_TRANSFER_SRC_BIT, true);
 		m_stagingBuffer->setIdentifier(ClassId, "StagingBuffer", "Buffer");
 
 		if ( !m_stagingBuffer->createOnHardware() )
@@ -52,8 +46,10 @@ namespace EmEn::Vulkan
 
 		/* Create command buffers. */
 		m_transferCommandBuffer = std::make_unique< CommandBuffer >(commandPool, true);
+		m_transferCommandBuffer->setIdentifier(ClassId, "BufferTransfer", "CommandBuffer");
 
-		/* Create the operation fence. */
+		/* Create the operation fence.
+		 * Here the fence controls the availability when choosing a transfer operation. */
 		m_operationFence = std::make_unique< Sync::Fence >(device, VK_FENCE_CREATE_SIGNALED_BIT);
 		m_operationFence->setIdentifier(ClassId, "OperationCompletion", "Fence");
 
@@ -90,16 +86,16 @@ namespace EmEn::Vulkan
 
 				return false;
 			}
+
+			if ( !m_transferCommandBuffer->isCreated() )
+			{
+				Tracer::error(ClassId, "The transfer command buffer is not created!");
+
+				return false;
+			}
 		}
 
-		if ( !m_transferCommandBuffer->isCreated() )
-		{
-			Tracer::error(ClassId, "Unable to create a transfer command buffer!");
-
-			return false;
-		}
-
-		if ( !m_transferCommandBuffer->begin() )
+		if ( !m_transferCommandBuffer->begin(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT) )
 		{
 			return false;
 		}

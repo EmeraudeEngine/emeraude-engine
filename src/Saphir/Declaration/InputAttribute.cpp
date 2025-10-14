@@ -31,8 +31,8 @@
 
 namespace EmEn::Saphir::Declaration
 {
-	using namespace EmEn::Saphir::Keys;
-	using namespace EmEn::Graphics;
+	using namespace Saphir::Keys;
+	using namespace Graphics;
 
 	Key
 	getVertexAttributeVariableType (VertexAttributeType vertexAttribute) noexcept

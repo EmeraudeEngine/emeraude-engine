@@ -26,23 +26,22 @@
 
 #pragma once
 
-/* Engine configuration file. */
-#include "emeraude_config.hpp"
-
 /* STL inclusions. */
-#include <array>
 #include <cstdint>
+#include <ranges>
+#include <array>
 #include <map>
-#include <mutex>
 #include <memory>
+#include <mutex>
+
+/* Third-party inclusions. */
+#include "vk_mem_alloc.h"
 
 /* Local inclusions for inheritances. */
 #include "AbstractObject.hpp"
 #include "Libs/NameableTrait.hpp"
 
 /* Local inclusions for usage. */
-#include <ranges>
-
 #include "Libs/StaticVector.hpp"
 #include "PhysicalDevice.hpp"
 #include "Queue.hpp"
@@ -99,7 +98,7 @@ namespace EmEn::Vulkan
 			 * @return void
 			 */
 			void
-			registerQueue (Queue * queue, QueuePriority priority) noexcept
+			registerQueue (Queue * queue, QueuePriority priority) const noexcept
 			{
 				m_queueByPriorities[static_cast< uint32_t >(priority)].second.emplace_back(queue);
 			}
@@ -171,12 +170,14 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Constructs a device.
+			 * @param instance A reference to the Vulkan instance.
 			 * @param deviceName A string [std::move].
 			 * @param physicalDevice A reference to a physical device smart pointer.
 			 * @param showInformation Enable the device information in the terminal.
 			 */
-			Device (std::string deviceName, const std::shared_ptr< PhysicalDevice > & physicalDevice, bool showInformation) noexcept
+			Device (const Instance & instance, std::string deviceName, const std::shared_ptr< PhysicalDevice > & physicalDevice, bool showInformation) noexcept
 				: NameableTrait{std::move(deviceName)},
+				m_instance{instance},
 				m_physicalDevice{physicalDevice},
 				m_showInformation{showInformation}
 			{
@@ -219,27 +220,17 @@ namespace EmEn::Vulkan
 			 * @brief Creates the device.
 			 * @param requirements A reference to a device requirement.
 			 * @param extensions A reference to a vector of extensions.
+			 * @param useVMA Use Vulkan Memory Allocator.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool create (const DeviceRequirements & requirements, const std::vector< const char * > & extensions) noexcept;
+			bool create (const DeviceRequirements & requirements, const std::vector< const char * > & extensions, bool useVMA) noexcept;
 
 			/**
 			 * @brief Destroys the device.
 			 * @return void
 			 */
 			void destroy () noexcept;
-
-			/**
-			 * @brief Returns the device handle.
-			 * @return VkDevice
-			 */
-			[[nodiscard]]
-			VkDevice
-			handle () const noexcept
-			{
-				return m_handle;
-			}
 
 			/**
 			 * @brief Returns the physical device smart pointer.
@@ -250,6 +241,39 @@ namespace EmEn::Vulkan
 			physicalDevice () const noexcept
 			{
 				return m_physicalDevice;
+			}
+
+			/**
+			 * @brief Returns the device handle.
+			 * @return VkDevice
+			 */
+			[[nodiscard]]
+			VkDevice
+			handle () const noexcept
+			{
+				return m_deviceHandle;
+			}
+
+			/**
+			 * @brief Returns whether the memory allocator is enabled.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			useMemoryAllocator () const noexcept
+			{
+				return m_useMemoryAllocator;
+			}
+
+			/**
+			 * @brief Returns the memory allocator handle.
+			 * @return VmaAllocator
+			 */
+			[[nodiscard]]
+			VmaAllocator
+			memoryAllocatorHandle () const noexcept
+			{
+				return m_memoryAllocatorHandle;
 			}
 
 			/**
@@ -523,6 +547,20 @@ namespace EmEn::Vulkan
 		private:
 
 			/**
+			 * @brief Creates the Vulkan memory allocator for this device.
+			 * @note The memory allocator is part of the device to follow the recommendation that says one allocator per device.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool createMemoryAllocator () noexcept;
+
+			/**
+			 * @brief Destroys the Vulkan memory allocator for this device.
+			 * @return void
+			 */
+			void destroyMemoryAllocator () noexcept;
+
+			/**
 			 * @brief Adds a queue family to the createInfos list and returns the number of queues in this family.
 			 * @return uint32_t
 			 */
@@ -591,8 +629,10 @@ namespace EmEn::Vulkan
 			[[nodiscard]]
 			bool installQueues (const std::map< uint32_t, Libs::StaticVector< float, 16 > > & queuePriorityValues, DeviceQueueConfiguration & configuration) noexcept;
 
-			VkDevice m_handle{VK_NULL_HANDLE};
+			const Instance & m_instance;
 			std::shared_ptr< PhysicalDevice > m_physicalDevice;
+			VkDevice m_deviceHandle{VK_NULL_HANDLE};
+			VmaAllocator m_memoryAllocatorHandle{VK_NULL_HANDLE};
 			Libs::StaticVector< std::unique_ptr< Queue >, 32 > m_queues;
 			DeviceQueueConfiguration m_graphicsQueueConfiguration;
 			DeviceQueueConfiguration m_computeQueueConfiguration;
@@ -600,5 +640,6 @@ namespace EmEn::Vulkan
 			mutable std::mutex m_logicalDeviceAccess;
 			bool m_showInformation{false};
 			bool m_basicSupport{false};
+			bool m_useMemoryAllocator{false};
 	};
 }

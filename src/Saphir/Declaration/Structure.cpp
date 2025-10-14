@@ -35,8 +35,8 @@
 
 namespace EmEn::Saphir::Declaration
 {
-	using namespace EmEn::Libs;
-	using namespace EmEn::Saphir::Keys;
+	using namespace Libs;
+	using namespace Saphir::Keys;
 
 	bool
 	Structure::addMember (VariableType type, Key name) noexcept

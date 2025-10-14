@@ -49,7 +49,6 @@
 #include "VertexBufferObject.hpp"
 #include "Framebuffer.hpp"
 #include "Image.hpp"
-#include "RenderPass.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::Vulkan

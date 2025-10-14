@@ -28,7 +28,7 @@
 
 namespace EmEn::Graphics
 {
-	using namespace EmEn::Libs;
+	using namespace Libs;
 
 	bool
 	ExternalInput::onInitialize () noexcept

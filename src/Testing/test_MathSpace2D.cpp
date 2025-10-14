@@ -34,7 +34,7 @@
 #include "Libs/Math/Space2D/Circle.hpp"
 #include "Libs/Math/Space2D/AARectangle.hpp"
 
-using namespace EmEn::Libs::Math::Space2D;
+using namespace Libs::Math::Space2D;
 
 using MathTypeList = testing::Types< float, double >;
 

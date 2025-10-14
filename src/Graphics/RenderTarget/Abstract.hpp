@@ -59,6 +59,7 @@ namespace EmEn
 		class RenderPass;
 		class Image;
 		class ImageView;
+		class CommandBuffer;
 	}
 }
 
@@ -257,6 +258,14 @@ namespace EmEn::Graphics::RenderTarget
 			bool destroy () noexcept;
 
 			/**
+			 * @brief Sets the viewport to a command buffer.
+			 * @note This is used when dynamic viewport is used with graphics pipelines.
+			 * @param commandBuffer A reference to the command buffer.
+			 * @return void
+			 */
+			void setViewport (const Vulkan::CommandBuffer & commandBuffer) const noexcept;
+
+			/**
 			 * @brief Returns the aspect ratio of the render target.
 			 * @return float
 			 */
@@ -308,11 +317,11 @@ namespace EmEn::Graphics::RenderTarget
 			virtual ViewMatricesInterface & viewMatrices () noexcept = 0;
 
 			/**
-			 * @brief Returns whether the render target is valid.
+			 * @brief Returns whether the render target is ready to render into.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			virtual bool isValid () const noexcept = 0;
+			virtual bool isReadyForRendering () const noexcept = 0;
 
 		protected:
 

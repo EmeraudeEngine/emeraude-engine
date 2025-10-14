@@ -59,7 +59,7 @@ namespace EmEn::Vulkan
 					0,
 					vertexCount * vertexElementCount * sizeof(float),
 					VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-					static_cast< uint32_t >(hostVisible ? VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT : VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
+					hostVisible
 				},
 				m_vertexCount{vertexCount},
 				m_vertexElementCount{vertexElementCount}

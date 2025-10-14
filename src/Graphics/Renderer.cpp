@@ -34,18 +34,8 @@
 
 /* Local inclusions. */
 #include "Libs/Time/Elapsed/PrintScopeRealTime.hpp"
-#include "Vulkan/Sync/ImageMemoryBarrier.hpp"
-#include "Vulkan/Device.hpp"
-#include "Vulkan/Queue.hpp"
-#include "Vulkan/DescriptorPool.hpp"
-#include "Vulkan/GraphicsPipeline.hpp"
-#include "Vulkan/CommandPool.hpp"
-#include "Vulkan/CommandBuffer.hpp"
-#include "Vulkan/Framebuffer.hpp"
-#include "Vulkan/RenderPass.hpp"
-#include "Vulkan/Sampler.hpp"
 #include "Vulkan/SwapChain.hpp"
-#include "Vulkan/Types.hpp"
+#include "Vulkan/DescriptorPool.hpp"
 #include "Scenes/Scene.hpp"
 #include "PrimaryServices.hpp"
 #include "Overlay/Manager.hpp"
@@ -65,22 +55,13 @@ namespace EmEn::Graphics
 
 		m_frameIndex = frameIndex;
 
-		m_commandPool = std::make_shared< CommandPool >(device, device->getGraphicsFamilyIndex(), false, true, false);
+		/* NOTE: We create a rendering command pool, no individual reset for command buffer. */
+		m_commandPool = std::make_shared< CommandPool >(device, device->getGraphicsFamilyIndex(), true, false, false);
 		m_commandPool->setIdentifier(ClassId, frameName, "CommandPool");
 
 		if ( !m_commandPool->createOnHardware() )
 		{
 			TraceError{ClassId} << "Unable to create the command pool #" << m_frameIndex << " !";
-
-			return false;
-		}
-
-		m_commandBuffer = std::make_shared< CommandBuffer >(m_commandPool);
-		m_commandBuffer->setIdentifier(ClassId, frameName, "CommandBuffer");
-
-		if ( !m_commandBuffer->isCreated() )
-		{
-			TraceError{ClassId} << "Unable to create the command buffer #" << m_frameIndex << " !";
 
 			return false;
 		}
@@ -128,6 +109,29 @@ namespace EmEn::Graphics
 		}
 
 		return true;
+	}
+
+	std::shared_ptr< CommandBuffer >
+	RendererFrameScope::getCommandBuffer (const RenderTarget::Abstract * renderTarget) noexcept
+	{
+		if ( const auto commandBufferIt = m_commandBuffers.find(renderTarget); commandBufferIt != m_commandBuffers.cend() )
+		{
+			return commandBufferIt->second;
+		}
+
+		auto commandBuffer = std::make_shared< CommandBuffer >(m_commandPool, true);
+		commandBuffer->setIdentifier(ClassId, renderTarget->id(), "CommandBuffer");
+
+		if ( !commandBuffer->isCreated() )
+		{
+			TraceError{ClassId} << "Unable to create a command buffer for render target '" << renderTarget->id() << "' !";
+
+			return {};
+		}
+
+		m_commandBuffers.emplace(renderTarget, commandBuffer);
+
+		return commandBuffer;
 	}
 
 	void
@@ -510,15 +514,37 @@ namespace EmEn::Graphics
 	}
 
 	std::shared_ptr< Sampler >
-	Renderer::getSampler (size_t type, VkSamplerCreateFlags createFlags) noexcept
+	Renderer::getSampler (const char * identifier, const std::function< void (Settings & settings, VkSamplerCreateInfo &) > & setupCreateInfo) noexcept
 	{
-		if ( const auto samplerIt = m_samplers.find(type); samplerIt != m_samplers.cend() )
+		if ( const auto samplerIt = m_samplers.find(identifier); samplerIt != m_samplers.cend() )
 		{
 			return samplerIt->second;
 		}
 
-		auto sampler = std::make_shared< Sampler >(m_device, m_primaryServices.settings(), createFlags);
-		sampler->setIdentifier(ClassId, "Main", "Sampler");
+		VkSamplerCreateInfo createInfo{};
+		createInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+		createInfo.pNext = nullptr;
+		createInfo.flags = 0;
+		createInfo.magFilter = VK_FILTER_NEAREST;
+		createInfo.minFilter = VK_FILTER_NEAREST;
+		createInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
+		createInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+		createInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+		createInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+		createInfo.mipLodBias = 0.0F;
+		createInfo.anisotropyEnable = VK_FALSE;
+		createInfo.maxAnisotropy = 1.0F;
+		createInfo.compareEnable = VK_FALSE;
+		createInfo.compareOp = VK_COMPARE_OP_ALWAYS;
+		createInfo.minLod = 0.0F;
+		createInfo.maxLod = VK_LOD_CLAMP_NONE;
+		createInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+		createInfo.unnormalizedCoordinates = VK_FALSE;
+
+		setupCreateInfo(this->primaryServices().settings(), createInfo);
+
+		auto sampler = std::make_shared< Sampler >(m_device, createInfo);
+		sampler->setIdentifier(ClassId, identifier, "Sampler");
 
 		if ( !sampler->createOnHardware() )
 		{
@@ -527,7 +553,7 @@ namespace EmEn::Graphics
 			return nullptr;
 		}
 
-		const auto [samplerPair, success] = m_samplers.emplace(type, sampler);
+		const auto [samplerPair, success] = m_samplers.emplace(identifier, sampler);
 
 		if constexpr ( IsDebug )
 		{
@@ -579,17 +605,34 @@ namespace EmEn::Graphics
 	void
 	Renderer::renderFrame (const std::shared_ptr< Scenes::Scene > & scene, const Overlay::Manager & overlayManager) noexcept
 	{
-		if ( !this->usable() )
+		if ( !m_swapChain->isReadyForRendering() )
 		{
+			Tracer::debug(ClassId, "The swap-chain is not yet ready for rendering !");
+
 			return;
 		}
 
 		if ( m_windowLess )
 		{
-			m_statistics.start();
+			auto & currentFrameScope = m_rendererFrameScope[0];
 
-			/* NOTE: Clear all semaphores for the new frame. */
-			m_rendererFrameScope[0].clearSemaphores();
+			/* NOTE: Wait for the current frame to complete. */
+			if ( currentFrameScope.inFlightFence()->waitAndReset(m_timeout) )
+			{
+				m_statistics.stop();
+
+				currentFrameScope.prepareForNewFrame();
+			}
+			else
+			{
+				TraceError{ClassId} << "Something wrong happens while waiting the fence for image!";
+
+				std::abort();
+
+				return;
+			}
+
+			m_statistics.start();
 
 			/* NOTE: Offscreen rendering */
 			if ( scene != nullptr )
@@ -597,29 +640,21 @@ namespace EmEn::Graphics
 				if ( this->isShadowMapsEnabled() )
 				{
 					/* [VULKAN-SHADOW] */
-					this->renderShadowMaps(0, *scene);
+					this->renderShadowMaps(currentFrameScope, *scene);
 				}
 
 				if ( this->isRenderToTexturesEnabled() )
 				{
-					this->renderRenderToTextures(0, *scene);
+					this->renderRenderToTextures(currentFrameScope, *scene);
 				}
 
-				this->renderViews(0, *scene);
+				this->renderViews(currentFrameScope, *scene);
 			}
 
 			const auto * queue = this->device()->getGraphicsQueue(QueuePriority::High);
-			const auto * fence = m_rendererFrameScope[0].inFlightFence();
-
-			if ( !fence->waitAndReset(m_timeout) )
-			{
-				TraceDebug{ClassId} << "Unable to wait on frame " << m_windowLessView->id() << " !";
-
-				return;
-			}
 
 			/* Then we need the command buffer linked to this image by its index. */
-			const auto commandBuffer = m_rendererFrameScope[0].commandBuffer();
+			const auto commandBuffer = currentFrameScope.getCommandBuffer(m_windowLessView.get());
 
 			if ( !commandBuffer->begin() )
 			{
@@ -644,27 +679,31 @@ namespace EmEn::Graphics
 				return;
 			}
 
-			const auto submitted = queue->submit(
+			const auto submitResult = queue->submit(
 				*commandBuffer,
 				SynchInfo{}
-					.withFence(fence->handle())
+					.withFence(currentFrameScope.inFlightFence()->handle())
 			);
 
-			if ( !submitted )
+			if ( !submitResult )
 			{
 				TraceError{ClassId} << "Unable to submit command buffer for render target '" << m_windowLessView->id() << "' !";
 
 				return;
 			}
-
-			m_statistics.stop();
 		}
 		else
 		{
-			/* NOTE: Wait for the current frame to complete. */
 			auto & currentFrameScope = m_rendererFrameScope[m_currentFrameIndex];
 
-			if ( !currentFrameScope.inFlightFence()->wait(m_timeout) )
+			/* NOTE: Wait for the current frame to complete. */
+			if ( currentFrameScope.inFlightFence()->waitAndReset(m_timeout) )
+			{
+				m_statistics.stop();
+
+				currentFrameScope.prepareForNewFrame();
+			}
+			else
 			{
 				TraceError{ClassId} << "Something wrong happens while waiting the fence for image #" << m_currentFrameIndex << " !";
 
@@ -673,12 +712,7 @@ namespace EmEn::Graphics
 				return;
 			}
 
-			if ( !currentFrameScope.inFlightFence()->reset() )
-			{
-				TraceError{ClassId} << " Unable to reset in-flight fence for image " << m_currentFrameIndex << " !" "\n";
-
-				return;
-			}
+			m_statistics.start();
 
 			/* NOTE: Get the new frame to render to. */
 			const auto frameIndexOpt = m_swapChain->acquireNextImage(currentFrameScope.imageAvailableSemaphore(), m_timeout);
@@ -692,30 +726,25 @@ namespace EmEn::Graphics
 
 			const uint32_t frameIndex = frameIndexOpt.value();
 
-			m_statistics.start();
-
-			/* NOTE: Clear all semaphores for the new frame. */
-			currentFrameScope.clearSemaphores();
-
 			/* NOTE: Offscreen rendering */
 			if ( scene != nullptr )
 			{
 				if ( this->isShadowMapsEnabled() )
 				{
 					/* [VULKAN-SHADOW] */
-					this->renderShadowMaps(m_currentFrameIndex, *scene);
+					this->renderShadowMaps(currentFrameScope, *scene);
 				}
 
 				if ( this->isRenderToTexturesEnabled() )
 				{
-					this->renderRenderToTextures(m_currentFrameIndex, *scene);
+					this->renderRenderToTextures(currentFrameScope, *scene);
 				}
 
-				this->renderViews(m_currentFrameIndex, *scene);
+				this->renderViews(currentFrameScope, *scene);
 			}
 
 			/* Then we need the command buffer linked to this image by its index. */
-			const auto commandBuffer = currentFrameScope.commandBuffer();
+			const auto commandBuffer = currentFrameScope.getCommandBuffer(m_swapChain.get());
 
 			if ( !commandBuffer->begin() )
 			{
@@ -742,7 +771,7 @@ namespace EmEn::Graphics
 
 			currentFrameScope.secondarySemaphores().emplace_back(currentFrameScope.imageAvailableSemaphore()->handle());
 
-			const auto result = m_swapChain->submitCommandBuffer(
+			const auto submitResult = m_swapChain->submitCommandBuffer(
 				commandBuffer,
 				frameIndex,
 				currentFrameScope.secondarySemaphores(),
@@ -750,60 +779,31 @@ namespace EmEn::Graphics
 				currentFrameScope.inFlightFence()
 			);
 
-			if ( !result )
+			if ( !submitResult )
 			{
 				TraceError{ClassId} << "Unable to submit the command buffer for swap-chain frame #" << frameIndex << " !";
 
 				return;
 			}
 
-			m_statistics.stop();
-
 			m_currentFrameIndex = (m_currentFrameIndex + 1) % m_rendererFrameScope.size();
 		}
 	}
 
-	std::shared_ptr< CommandBuffer >
-	Renderer::getCommandBuffer (const std::shared_ptr< RenderTarget::Abstract > & renderTarget) noexcept
-	{
-		if ( const auto commandBufferIt = m_commandBuffers.find(renderTarget); commandBufferIt != m_commandBuffers.cend() )
-		{
-			return commandBufferIt->second;
-		}
-
-		auto commandBuffer = std::make_shared< CommandBuffer >(m_commandPool);
-		commandBuffer->setIdentifier(ClassId, renderTarget->id(), "CommandBuffer");
-
-		if ( !commandBuffer->isCreated() )
-		{
-			TraceError{ClassId} << "Unable to create the off-screen command buffer for render target '" << renderTarget->id() << "' !";
-
-			return {};
-		}
-
-		m_commandBuffers.emplace(renderTarget, commandBuffer);
-
-		return commandBuffer;
-	}
-
 	void
-	Renderer::renderShadowMaps (uint32_t CPUFrameIndex, Scenes::Scene & scene) noexcept
+	Renderer::renderShadowMaps (RendererFrameScope & currentFrameScope, Scenes::Scene & scene) const noexcept
 	{
-		/* TODO/FIXME: Secure access to the queue. */
 		const auto * queue = this->device()->getGraphicsQueue(QueuePriority::High);
 
 		scene.forEachRenderToShadowMap([&] (const std::shared_ptr< RenderTarget::Abstract > & shadowMap) {
-			if constexpr ( IsDebug )
+			if ( !shadowMap->isReadyForRendering() )
 			{
-				if ( !shadowMap->isValid() )
-				{
-					TraceError{ClassId} << "Unable to render shadow map " << shadowMap->id() << " !";
+				TraceDebug{ClassId} << "The shadow map " << shadowMap->id() << " is not yet ready for rendering !";
 
-					return;
-				}
+				return;
 			}
 
-			const auto commandBuffer = this->getCommandBuffer(shadowMap);
+			const auto commandBuffer = currentFrameScope.getCommandBuffer(shadowMap.get());
 
 			if ( !commandBuffer->begin() )
 			{
@@ -840,29 +840,25 @@ namespace EmEn::Graphics
 				return;
 			}
 
-			m_rendererFrameScope[CPUFrameIndex].declareSemaphore(shadowMap->semaphore(), true);
+			currentFrameScope.declareSemaphore(shadowMap->semaphore(), true);
 		});
 	}
 
 	void
-	Renderer::renderRenderToTextures (uint32_t CPUFrameIndex, Scenes::Scene & scene) noexcept
+	Renderer::renderRenderToTextures (RendererFrameScope & currentFrameScope, Scenes::Scene & scene) const noexcept
 	{
-		/* TODO/FIXME: Secure access to the queue. */
 		const auto * queue = this->device()->getGraphicsQueue(QueuePriority::High);
 
 		scene.forEachRenderToTexture([&] (const std::shared_ptr< RenderTarget::Abstract > & renderToTexture)
 		{
-			if constexpr ( IsDebug )
+			if ( !renderToTexture->isReadyForRendering() )
 			{
-				if ( !renderToTexture->isValid() )
-				{
-					TraceError{ClassId} << "Unable to render to texture " << renderToTexture->id() << " !";
+				TraceDebug{ClassId} << "The render-to-texture " << renderToTexture->id() << " is not yet ready for rendering !";
 
-					return;
-				}
+				return;
 			}
 
-			const auto commandBuffer = this->getCommandBuffer(renderToTexture);
+			const auto commandBuffer = currentFrameScope.getCommandBuffer(renderToTexture.get());
 
 			if ( !commandBuffer->begin() )
 			{
@@ -886,7 +882,7 @@ namespace EmEn::Graphics
 
 			const auto signalSemaphoreHandle = renderToTexture->semaphore()->handle();
 
-			const auto & waitSemaphores = m_rendererFrameScope[CPUFrameIndex].primarySemaphores();
+			const auto & waitSemaphores = currentFrameScope.primarySemaphores();
 			const StaticVector< VkPipelineStageFlags, 16 > waitStages(waitSemaphores.size(), VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
 
 			const auto submitted = queue->submit(
@@ -903,12 +899,12 @@ namespace EmEn::Graphics
 				return;
 			}
 
-			m_rendererFrameScope[CPUFrameIndex].declareSemaphore(renderToTexture->semaphore(), false);
+			currentFrameScope.declareSemaphore(renderToTexture->semaphore(), false);
 		});
 	}
 
 	void
-	Renderer::renderViews (uint32_t /*frameIndex*/, Scenes::Scene & /*scene*/) noexcept
+	Renderer::renderViews (RendererFrameScope & /*currentFrameScope*/, Scenes::Scene & /*scene*/) const noexcept
 	{
 
 	}
@@ -962,16 +958,6 @@ namespace EmEn::Graphics
 	bool
 	Renderer::createRenderingSystem (uint32_t imageCount) noexcept
 	{
-		m_commandPool = std::make_shared< CommandPool >(m_device, m_device->getGraphicsFamilyIndex(), false, true, false);
-		m_commandPool->setIdentifier(ClassId, "offScreen", "CommandPool");
-
-		if ( !m_commandPool->createOnHardware() )
-		{
-			TraceError{ClassId} << "Unable to create the off-screen command pool !";
-
-			return false;
-		}
-
 		m_rendererFrameScope.resize(imageCount);
 
 		for ( uint32_t imageIndex = 0; imageIndex < imageCount; imageIndex++ )
@@ -991,8 +977,6 @@ namespace EmEn::Graphics
 	Renderer::destroyRenderingSystem () noexcept
 	{
 		m_rendererFrameScope.clear();
-
-		m_commandPool.reset();
 	}
 
 	bool
@@ -1000,15 +984,11 @@ namespace EmEn::Graphics
 	{
 		if ( m_windowLess )
 		{
+			/* NOTE: There is no swap-chain in window-less mode. */
 			return true;
 		}
 
 		this->device()->waitIdle("The swap chain recreation.");
-
-		//this->destroyCommandSystem();
-
-		/* NOTE: Wait for a valid framebuffer dimension in case of handle minimization. */
-		//m_window.waitValidWindowSize();
 
 		if ( !m_swapChain->recreateOnHardware() )
 		{
@@ -1016,13 +996,6 @@ namespace EmEn::Graphics
 
 			return false;
 		}
-
-		/*if ( !this->createCommandSystem() )
-		{
-			Tracer::fatal(ClassId, "Unable to rebuild the command system !");
-
-			return false;
-		}*/
 
 		this->notify(SwapChainRecreated, m_swapChain);
 

@@ -338,6 +338,7 @@ namespace EmEn::Graphics::RenderableInstance
 			return true;
 		}
 
+		/* TODO: Try to use something always mapped! */
 		if ( !m_vertexBufferObject->writeData(m_localData) )
 		{
 			Tracer::error(ClassId, "Unable to write data to the VBO.");

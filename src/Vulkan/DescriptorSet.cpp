@@ -40,7 +40,7 @@
 
 namespace EmEn::Vulkan
 {
-	using namespace EmEn::Libs;
+	using namespace Libs;
 
 	bool
 	DescriptorSet::create () noexcept

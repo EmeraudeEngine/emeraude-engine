@@ -63,9 +63,9 @@ namespace EmEn::AVConsole
 
 		if ( fireEvents )
 		{
-			targetDevice->onInputDeviceConnected(managers, this);
+			targetDevice->onInputDeviceConnected(managers, *this);
 
-			this->onOutputDeviceConnected(managers, targetDevice.get());
+			this->onOutputDeviceConnected(managers, *targetDevice);
 		}
 
 		return ConnexionResult::Success;
@@ -199,9 +199,9 @@ namespace EmEn::AVConsole
 
 		if ( fireEvents )
 		{
-			targetDevice->onInputDeviceDisconnected(managers, this);
+			targetDevice->onInputDeviceDisconnected(managers, *this);
 
-			this->onOutputDeviceDisconnected(managers, targetDevice.get());
+			this->onOutputDeviceDisconnected(managers, *targetDevice);
 		}
 
 		return ConnexionResult::Success;
@@ -213,6 +213,7 @@ namespace EmEn::AVConsole
 		/* NOTE: We lock IO access on this device. */
 		const std::lock_guard< std::mutex > lockHere{m_IOAccess};
 
+		/* [OFFSCREEN-CLEANUP] Crash here! Attempt to call "shared_from_this" from an invalid pointer. "this" is empty. */
 		const auto thisDevice = this->shared_from_this();
 
 		for ( const auto & deviceWeakPointer : m_inputDevicesConnected )
@@ -226,7 +227,7 @@ namespace EmEn::AVConsole
 
 				if ( fireEvents )
 				{
-					inputDeviceConnected->onOutputDeviceDisconnected(managers, this);
+					inputDeviceConnected->onOutputDeviceDisconnected(managers, *this);
 				}
 			}
 		}
@@ -244,7 +245,7 @@ namespace EmEn::AVConsole
 
 				if ( fireEvents )
 				{
-					outputDeviceConnected->onInputDeviceDisconnected(managers, this);
+					outputDeviceConnected->onInputDeviceDisconnected(managers, *this);
 				}
 			}
 		}

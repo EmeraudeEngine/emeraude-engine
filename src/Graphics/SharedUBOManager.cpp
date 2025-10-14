@@ -32,7 +32,7 @@
 
 namespace EmEn::Graphics
 {
-	using namespace EmEn::Libs;
+	using namespace Libs;
 
 	std::shared_ptr< SharedUniformBuffer >
 	SharedUBOManager::createSharedUniformBuffer (const std::string & name, uint32_t uniformBlockSize, uint32_t maxElementCount) noexcept

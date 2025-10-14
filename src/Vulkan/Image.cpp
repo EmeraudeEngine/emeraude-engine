@@ -27,8 +27,6 @@
 #include "Image.hpp"
 
 /* STL inclusions. */
-#include <cstdint>
-#include <mutex>
 #include <numeric>
 #include <ranges>
 
@@ -37,37 +35,33 @@
 #include "Graphics/ImageResource.hpp"
 #include "Graphics/MovieResource.hpp"
 #include "Device.hpp"
-#include "DeviceMemory.hpp"
-#include "MemoryRegion.hpp"
 #include "TransferManager.hpp"
+#include "MemoryRegion.hpp"
 #include "Utility.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::Vulkan
 {
-	using namespace EmEn::Libs;
+	using namespace Libs;
 
 	std::shared_ptr< Image >
 	Image::createFromSwapChain (const std::shared_ptr< Device > & device, VkImage handle, const VkSwapchainCreateInfoKHR & createInfo) noexcept
 	{
-		auto swapChainImage = std::make_shared< Image >(
+		auto swapChainImage = std::make_shared< Vulkan::Image >(
 			device,
-			VK_IMAGE_TYPE_2D, // Image type
-			createInfo.imageFormat, // Image format (bits description)
-			VkExtent3D{createInfo.imageExtent.width, createInfo.imageExtent.height, 1}, // Image extent
-			createInfo.imageUsage, // Image usage (color, depth, ...)
-			VK_IMAGE_LAYOUT_UNDEFINED, // Layout
-			0, // flags
-			1, // Image mip levels
-			createInfo.imageArrayLayers, // Image array layers
-			VK_SAMPLE_COUNT_1_BIT, // Image multi sampling
-			VK_IMAGE_TILING_OPTIMAL // Image tiling
+			VK_IMAGE_TYPE_2D,
+			createInfo.imageFormat,
+			VkExtent3D{createInfo.imageExtent.width, createInfo.imageExtent.height, 1},
+			createInfo.imageUsage,
+			0,
+			1,
+			createInfo.imageArrayLayers
 		);
 		swapChainImage->setIdentifier(ClassId, "OSBuffer", "Image");
 
 		/* NOTE: Set internal values manually and declare the image as created. */
 		swapChainImage->m_handle = handle;
-		swapChainImage->m_flags[IsSwapChainImage] = true;
+		swapChainImage->m_isSwapChainImage = true;
 		swapChainImage->setCreated();
 
 		return swapChainImage;
@@ -76,10 +70,12 @@ namespace EmEn::Vulkan
 	bool
 	Image::createOnHardware () noexcept
 	{
-		/* NOTE: Special case for swap chain images. */
-		if ( m_flags[IsSwapChainImage] )
+		// NOTE: Special case for swap chain images.
+		if ( m_isSwapChainImage )
 		{
 			Tracer::error(ClassId, "This is an image provided by the swap chain ! No need to create it.");
+
+			this->setCreated();
 
 			return true;
 		}
@@ -91,22 +87,63 @@ namespace EmEn::Vulkan
 			return false;
 		}
 
-		/* 1. Create the hardware image. */
-		auto result = vkCreateImage(
-			this->device()->handle(),
-			&m_createInfo,
-			VK_NULL_HANDLE,
-			&m_handle
-		);
+		const auto result =
+			this->device()->useMemoryAllocator() ?
+			this->createWithVMA() :
+			this->createManually();
 
-		if ( result != VK_SUCCESS )
+		if ( !result )
+		{
+			this->destroyFromHardware();
+
+			return false;
+		}
+
+		this->setCreated();
+
+		return true;
+	}
+
+	bool
+	Image::destroyFromHardware () noexcept
+	{
+		/* NOTE: The OS destroys the swap chain image. */
+		if ( m_isSwapChainImage )
+		{
+			m_handle = VK_NULL_HANDLE;
+
+			this->setDestroyed();
+
+			return true;
+		}
+
+		const auto result =
+			this->device()->useMemoryAllocator() ?
+			this->destroyWithVMA() :
+			this->destroyManually();
+
+		if ( !result )
+		{
+			return false;
+		}
+
+		this->setDestroyed();
+
+		return true;
+	}
+
+	bool
+	Image::createManually () noexcept
+	{
+		// 1. Create the hardware image.
+		if ( const auto result = vkCreateImage(this->device()->handle(), &m_createInfo, VK_NULL_HANDLE, &m_handle); result != VK_SUCCESS )
 		{
 			TraceError{ClassId} << "Unable to create an image : " << vkResultToCString(result) << " !";
 
 			return false;
 		}
 
-		/* Allocate memory for the new image. */
+		// 2. Allocate memory for the new image.
 		VkImageMemoryRequirementsInfo2 info{};
 		info.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_REQUIREMENTS_INFO_2;
 		info.pNext = VK_NULL_HANDLE;
@@ -129,31 +166,80 @@ namespace EmEn::Vulkan
 		{
 			TraceError{ClassId} << "Unable to create a device memory for the image " << m_handle << " !";
 
-			this->destroyFromHardware();
-
 			return false;
 		}
 
-		/* 3. Bind the image to the device memory. */
-		result = vkBindImageMemory(
-			this->device()->handle(),
-			m_handle,
-			m_deviceMemory->handle(),
-			0// offset
-		);
-
-		if ( result != VK_SUCCESS )
+		// 3. Bind the image to the device memory.
+		if ( const auto result = vkBindImageMemory(this->device()->handle(), m_handle, m_deviceMemory->handle(), 0); result != VK_SUCCESS )
 		{
 			TraceError{ClassId} <<
 				"Unable to bind the image " << m_handle << " to the device memory " << m_deviceMemory->handle() <<
 				" : " << vkResultToCString(result) << " !";
 
-			this->destroyFromHardware();
+			return false;
+		}
+
+		return true;
+	}
+
+	bool
+	Image::destroyManually () noexcept
+	{
+		if ( !this->hasDevice() )
+		{
+			TraceError{ClassId} << "No device to destroy the image " << m_handle << " (" << this->identifier() << ") !";
 
 			return false;
 		}
 
-		this->setCreated();
+		if ( m_deviceMemory != nullptr )
+		{
+			m_deviceMemory.reset();
+		}
+
+		if ( m_handle != VK_NULL_HANDLE )
+		{
+			vkDestroyImage(this->device()->handle(), m_handle, VK_NULL_HANDLE);
+
+			m_handle = VK_NULL_HANDLE;
+		}
+
+		return true;
+	}
+
+	bool
+	Image::createWithVMA () noexcept
+	{
+		VmaAllocationCreateInfo allocInfo{};
+		//allocInfo.flags = 0;
+		allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+		//allocInfo.requiredFlags = 0;
+		//allocInfo.preferredFlags = 0;
+		//allocInfo.memoryTypeBits = 0;
+		//allocInfo.pool = VK_NULL_HANDLE; /* Default pool. */
+		//allocInfo.pUserData = nullptr;
+		//allocInfo.priority = 0.5F;
+
+		/* Bind the buffer to the device memory */
+		if ( const auto result = vmaCreateImage(this->device()->memoryAllocatorHandle(), &m_createInfo, &allocInfo, &m_handle, &m_memoryAllocation, nullptr); result != VK_SUCCESS )
+		{
+			TraceError{ClassId} << "Unable to create a buffer with VMA : " << vkResultToCString(result) << " !";
+
+			return false;
+		}
+
+		return true;
+	}
+
+	bool
+	Image::destroyWithVMA () noexcept
+	{
+		if ( m_handle != VK_NULL_HANDLE )
+		{
+			vmaDestroyImage(this->device()->memoryAllocatorHandle(), m_handle, m_memoryAllocation);
+
+			m_handle = VK_NULL_HANDLE;
+		}
 
 		return true;
 	}
@@ -258,43 +344,5 @@ namespace EmEn::Vulkan
 		return transferManager.transferImage(*this, memoryRegion.bytes(), [&memoryRegion] (const Buffer & stagingBuffer) {
 			return stagingBuffer.writeData(memoryRegion);
 		});
-	}
-
-	bool
-	Image::destroyFromHardware () noexcept
-	{
-		/* NOTE: The OS destroys the swap chain image. */
-		if ( m_flags[IsSwapChainImage] )
-		{
-			m_handle = VK_NULL_HANDLE;
-
-			this->setDestroyed();
-
-			return true;
-		}
-
-		if ( !this->hasDevice() )
-		{
-			TraceError{ClassId} << "No device to destroy the image " << m_handle << " (" << this->identifier() << ") !";
-
-			return false;
-		}
-
-		if ( m_deviceMemory != nullptr )
-		{
-			m_deviceMemory->destroyFromHardware();
-			m_deviceMemory.reset();
-		}
-
-		if ( m_handle != VK_NULL_HANDLE )
-		{
-			vkDestroyImage(this->device()->handle(), m_handle, VK_NULL_HANDLE);
-
-			m_handle = VK_NULL_HANDLE;
-		}
-
-		this->setDestroyed();
-
-		return true;
 	}
 }

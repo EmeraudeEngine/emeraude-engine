@@ -31,7 +31,7 @@
 
 namespace EmEn::Console
 {
-	using namespace EmEn::Libs;
+	using namespace Libs;
 
 	Expression::Expression (const std::string & command) noexcept
 	{

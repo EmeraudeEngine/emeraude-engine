@@ -28,7 +28,11 @@
 
 /* STL inclusions. */
 #include <cstdint>
+#include <cstddef>
 #include <memory>
+
+/* Third-party inclusions. */
+#include "vk_mem_alloc.h"
 
 /* Local inclusions for inheritances. */
 #include "AbstractDeviceDependentObject.hpp"
@@ -62,11 +66,11 @@ namespace EmEn::Vulkan
 			 * @param createFlags The createInfo flags.
 			 * @param size The size in bytes.
 			 * @param usageFlags The buffer usage flags.
-			 * @param memoryPropertyFlag The type of memory flags.
+			 * @param hostVisible Tells if the buffer must be accessible by the CPU.
 			 */
-			Buffer (const std::shared_ptr< Device > & device, VkBufferCreateFlags createFlags, VkDeviceSize size, VkBufferUsageFlags usageFlags, VkMemoryPropertyFlags memoryPropertyFlag) noexcept
+			Buffer (const std::shared_ptr< Device > & device, VkBufferCreateFlags createFlags, VkDeviceSize size, VkBufferUsageFlags usageFlags, bool hostVisible) noexcept
 				: AbstractDeviceDependentObject{device},
-				m_memoryPropertyFlag{memoryPropertyFlag}
+				m_hostVisible{hostVisible}
 			{
 				m_createInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
 				m_createInfo.pNext = nullptr;
@@ -83,12 +87,12 @@ namespace EmEn::Vulkan
 			 * @brief Constructs a buffer with a createInfo.
 			 * @param device A reference to a smart pointer of the device.
 			 * @param createInfo A reference to the createInfo.
-			 * @param memoryPropertyFlag The type of memory flags.
+			 * @param hostVisible Tells if the buffer must be accessible by the CPU.
 			 */
-			Buffer (const std::shared_ptr< Device > & device, const VkBufferCreateInfo & createInfo, VkMemoryPropertyFlags memoryPropertyFlag) noexcept
+			Buffer (const std::shared_ptr< Device > & device, const VkBufferCreateInfo & createInfo, bool hostVisible) noexcept
 				: AbstractDeviceDependentObject{device},
 				m_createInfo{createInfo},
-				m_memoryPropertyFlag{memoryPropertyFlag}
+				m_hostVisible{hostVisible}
 			{
 
 			}
@@ -154,7 +158,7 @@ namespace EmEn::Vulkan
 			bool
 			isHostVisible () const noexcept
 			{
-				return (m_memoryPropertyFlag & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) != 0;
+				return m_hostVisible;
 			}
 
 			/**
@@ -211,17 +215,6 @@ namespace EmEn::Vulkan
 			usageFlags () const noexcept
 			{
 				return m_createInfo.usage;
-			}
-
-			/**
-			 * @brief Returns the buffer usage memory property flags.
-			 * @return VkMemoryPropertyFlags
-			 */
-			[[nodiscard]]
-			VkMemoryPropertyFlags
-			memoryPropertyFlags () const noexcept
-			{
-				return m_memoryPropertyFlag;
 			}
 
 			/**
@@ -302,34 +295,31 @@ namespace EmEn::Vulkan
 			 * @param size The size of the mapping.
 			 * @return void *
 			 */
+			void * mapMemory (VkDeviceSize offset = 0, VkDeviceSize size = VK_WHOLE_SIZE) const noexcept;
+
+			/**
+			 * @brief Maps the video memory to be able to write in it with a specific type.
+			 * @warning Only available for host buffers.
+			 * @param offset The beginning of the map.
+			 * @param size The size of the mapping.
+			 * @return pointer_t *
+			 */
 			template< typename pointer_t >
 			[[nodiscard]]
 			pointer_t *
-			mapMemory (VkDeviceSize offset = 0, VkDeviceSize size = VK_WHOLE_SIZE) const noexcept
+			mapMemoryAs (VkDeviceSize offset, VkDeviceSize size) const noexcept
 			{
-				if ( !this->isHostVisible() )
-				{
-					Tracer::error(ClassId, "This buffer is not host visible! You can't map it.");
-
-					return nullptr;
-				}
-
-				return static_cast< pointer_t * >(m_deviceMemory->mapMemory(offset, size));
+				return static_cast< pointer_t * >(this->mapMemory(offset, size));
 			}
 
 			/**
 			 * @brief Unmaps the video memory.
 			 * @warning Only available for host buffers.
+			 * @param offset The beginning of the map.
+			 * @param size The size of the mapping.
 			 * @return void
 			 */
-			void
-			unmapMemory () const noexcept
-			{
-				if ( this->isHostVisible() )
-				{
-					m_deviceMemory->unmapMemory();
-				}
-			}
+			void unmapMemory (VkDeviceSize offset, VkDeviceSize size) const noexcept;
 
 			/**
 			 * @brief Returns the descriptor buffer info.
@@ -351,44 +341,41 @@ namespace EmEn::Vulkan
 				return descriptorInfo;
 			}
 
-			/**
-			 * @brief Constructs a host buffer visible by the CPU.
-			 * @param device A reference to a device smart pointer.
-			 * @param createFlags The createInfo flags.
-			 * @param size The size in bytes.
-			 * @param usageFlags The buffer usage flags.
-			 * @return Buffer
-			 */
-			[[nodiscard]]
-			static
-			Buffer
-			createHostBuffer (const std::shared_ptr< Device > & device, VkBufferCreateFlags createFlags, VkDeviceSize size, VkBufferUsageFlags usageFlags) noexcept
-			{
-				return {device, createFlags, size, usageFlags, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT};
-			}
-
-			/**
-			 * @brief Constructs a device buffer visible only by the GPU.
-			 * @param device A reference to a device smart pointer.
-			 * @param createFlags The createInfo flags.
-			 * @param size The size in bytes.
-			 * @param usageFlags The buffer usage flags.
-			 * @return Buffer
-			 */
-			[[nodiscard]]
-			static
-			Buffer
-			createDeviceBuffer (const std::shared_ptr< Device > & device, VkBufferCreateFlags createFlags, VkDeviceSize size, VkBufferUsageFlags usageFlags) noexcept
-			{
-				return {device, createFlags, size, usageFlags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT};
-			}
-
 		private:
+
+			/**
+			 * @brief Creates the buffer using the Vulkan API.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool createManually () noexcept;
+
+			/**
+			 * @brief Destroys the buffer using the Vulkan API.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool destroyManually () noexcept;
+
+			/**
+			 * @brief Creates the buffer using Vulkan Memory Allocator.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool createWithVMA () noexcept;
+
+			/**
+			 * @brief Destroys the buffer using Vulkan Memory Allocator.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool destroyWithVMA () noexcept;
 
 			VkBuffer m_handle{VK_NULL_HANDLE};
 			VkBufferCreateInfo m_createInfo{};
-			VkMemoryPropertyFlags m_memoryPropertyFlag;
 			std::unique_ptr< DeviceMemory > m_deviceMemory;
+			VmaAllocation m_memoryAllocation{VK_NULL_HANDLE};
 			mutable std::mutex m_hostMemoryAccess;
+			bool m_hostVisible{false};
 	};
 }

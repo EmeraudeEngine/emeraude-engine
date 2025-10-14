@@ -34,7 +34,7 @@
 
 namespace EmEn::Audio
 {
-	using namespace EmEn::Libs;
+	using namespace Libs;
 
 	EffectSlot::EffectSlot () noexcept
 	{

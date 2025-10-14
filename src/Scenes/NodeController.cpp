@@ -39,8 +39,8 @@
 
 namespace EmEn::Scenes
 {
-	using namespace EmEn::Libs;
-	using namespace EmEn::Libs::Math;
+	using namespace Libs;
+	using namespace Libs::Math;
 
 	void
 	NodeController::switchTransformSpace () noexcept

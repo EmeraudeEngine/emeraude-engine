@@ -40,8 +40,8 @@
 
 namespace EmEn::Animations
 {
-	using namespace EmEn::Libs;
-	using namespace EmEn::Libs::Math;
+	using namespace Libs;
+	using namespace Libs::Math;
 
 	Variant
 	Sequence::getLinearInterpolation (const KeyFrames::const_iterator & itStart, const KeyFrames::const_iterator & itEnd, float factor) noexcept

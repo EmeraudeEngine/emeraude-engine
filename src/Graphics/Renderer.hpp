@@ -157,15 +157,12 @@ namespace EmEn::Graphics
 			}
 
 			/**
-			 * @brief Returns the command buffer smart pointer.
+			 * @brief Returns the command buffer smart pointer for a render-target.
+			 * @param renderTarget A pointer to a render target.
 			 * @return std::shared_ptr< Vulkan::CommandPool >
 			 */
 			[[nodiscard]]
-			std::shared_ptr< Vulkan::CommandBuffer >
-			commandBuffer () const noexcept
-			{
-				return m_commandBuffer;
-			}
+			std::shared_ptr< Vulkan::CommandBuffer > getCommandBuffer (const RenderTarget::Abstract * renderTarget) noexcept;
 
 			/**
 			 * @brief Returns the frame index.
@@ -234,14 +231,16 @@ namespace EmEn::Graphics
 			}
 
 			/**
-			 * @brief Clears all semaphores for a next frame usage.
-			 * @return void
+			 * @brief Clears all command buffers and semaphores for a next frame usage.
+			 * @return bool
 			 */
-			void
-			clearSemaphores () noexcept
+			bool
+			prepareForNewFrame () noexcept
 			{
 				m_primarySemaphores.clear();
 				m_secondarySemaphores.clear();
+
+				return m_commandPool->resetCommandBuffers(false);
 			}
 
 		private:
@@ -264,7 +263,7 @@ namespace EmEn::Graphics
 			}
 
 			std::shared_ptr< Vulkan::CommandPool > m_commandPool;
-			std::shared_ptr< Vulkan::CommandBuffer > m_commandBuffer;
+			std::unordered_map< const RenderTarget::Abstract *, std::shared_ptr< Vulkan::CommandBuffer > > m_commandBuffers;
 			Libs::StaticVector< VkSemaphore, 16 > m_primarySemaphores;
 			Libs::StaticVector< VkSemaphore, 16 > m_secondarySemaphores;
 			/* Synchronization. */
@@ -313,7 +312,6 @@ namespace EmEn::Graphics
 				m_window{window},
 				m_shaderManager{primaryServices},
 				m_sharedUBOManager{*this},
-				m_timeout{std::chrono::duration_cast< std::chrono::nanoseconds >(std::chrono::milliseconds(5000)).count()},
 				m_debugMode{m_vulkanInstance.isDebugModeEnabled()}
 			{
 				/* Framebuffer clear color value. */
@@ -442,6 +440,17 @@ namespace EmEn::Graphics
 			}
 
 			/**
+			 * @brief Toggles offscreen-rendering.
+			 * @return void
+			 */
+			void
+			toggleOffscreenRendering () noexcept
+			{
+				m_renderToTexturesEnabled = !m_renderToTexturesEnabled;
+				m_shadowMapsEnabled = m_renderToTexturesEnabled;
+			}
+
+			/**
 			 * @brief Returns the reference to the primary services.
 			 * @return PrimaryServices &
 			 */
@@ -461,28 +470,6 @@ namespace EmEn::Graphics
 			vulkanInstance () const noexcept
 			{
 				return m_vulkanInstance;
-			}
-
-			/**
-			 * @brief Returns the reference to the shader manager service.
-			 * @return Saphir::ShaderManager &
-			 */
-			[[nodiscard]]
-			Saphir::ShaderManager &
-			shaderManager () noexcept
-			{
-				return m_shaderManager;
-			}
-
-			/**
-			 * @brief Returns the reference to the shader manager service.
-			 * @return const Saphir::ShaderManager &
-			 */
-			[[nodiscard]]
-			const Saphir::ShaderManager &
-			shaderManager () const noexcept
-			{
-				return m_shaderManager;
 			}
 
 			/**
@@ -527,6 +514,28 @@ namespace EmEn::Graphics
 			layoutManager () const noexcept
 			{
 				return m_layoutManager;
+			}
+
+			/**
+			 * @brief Returns the reference to the shader manager service.
+			 * @return Saphir::ShaderManager &
+			 */
+			[[nodiscard]]
+			Saphir::ShaderManager &
+			shaderManager () noexcept
+			{
+				return m_shaderManager;
+			}
+
+			/**
+			 * @brief Returns the reference to the shader manager service.
+			 * @return const Saphir::ShaderManager &
+			 */
+			[[nodiscard]]
+			const Saphir::ShaderManager &
+			shaderManager () const noexcept
+			{
+				return m_shaderManager;
 			}
 
 			/**
@@ -739,12 +748,12 @@ namespace EmEn::Graphics
 
 			/**
 			 * @brief Returns or creates a sampler.
-			 * @param type
-			 * @param createFlags The createInfo flags. Default none.
+			 * @param identifier A string.
+			 * @param setupCreateInfo A function to configure the creation info structure.
 			 * @return std::shared_ptr< Vulkan::Sampler >
 			 */
 			[[nodiscard]]
-			std::shared_ptr< Vulkan::Sampler > getSampler (size_t type, VkSamplerCreateFlags createFlags = 0) noexcept;
+			std::shared_ptr< Vulkan::Sampler > getSampler (const char * identifier, const std::function< void (Settings & settings, VkSamplerCreateInfo &) > & setupCreateInfo) noexcept;
 
 			/**
 			 * @brief Render a new frame for the active scene.
@@ -784,35 +793,28 @@ namespace EmEn::Graphics
 			bool initializeSubServices () noexcept;
 
 			/**
-			 * @brief @brief Returns a command buffer for a specific render target.
-			 * @param renderTarget A reference to a render target smart pointer.
-			 * @return std::shared_ptr< Vulkan::CommandBuffer >
-			 */
-			std::shared_ptr< Vulkan::CommandBuffer > getCommandBuffer (const std::shared_ptr< RenderTarget::Abstract > & renderTarget) noexcept;
-
-			/**
 			 * @brief Updates every shadow map from the scene.
-			 * @param CPUFrameIndex The current frame index in the swap-chain.
+			 * @param currentFrameScope A writable reference to the current frame scope, the one being rendered.
 			 * @param scene A reference to the scene.
 			 * @return void
 			 */
-			void renderShadowMaps (uint32_t CPUFrameIndex, Scenes::Scene & scene) noexcept;
+			void renderShadowMaps (RendererFrameScope & currentFrameScope, Scenes::Scene & scene) const noexcept;
 
 			/**
 			 * @brief Updates every dynamic texture2Ds from the scene.
-			 * @param CPUFrameIndex The current frame index in the swap-chain.
+			 * @param currentFrameScope A writable reference to the current frame scope, the one being rendered.
 			 * @param scene A reference to the scene.
 			 * @return void
 			 */
-			void renderRenderToTextures (uint32_t CPUFrameIndex, Scenes::Scene & scene) noexcept;
+			void renderRenderToTextures (RendererFrameScope & currentFrameScope, Scenes::Scene & scene) const noexcept;
 
 			/**
 			 * @brief Updates every off-screen view from the scene.
-			 * @param CPUFrameIndex The current frame index in the swap-chain.
+			 * @param currentFrameScope A writable reference to the current frame scope, the one being rendered.
 			 * @param scene A reference to the scene.
 			 * @return void
 			 */
-			void renderViews (uint32_t CPUFrameIndex, Scenes::Scene & scene) noexcept;
+			void renderViews (RendererFrameScope & currentFrameScope, Scenes::Scene & scene) const noexcept;
 
 			/**
 			 * @brief Creates command pools and buffers according to the swap chain image count.
@@ -831,30 +833,28 @@ namespace EmEn::Graphics
 			Vulkan::Instance & m_vulkanInstance;
 			Window & m_window;
 			std::shared_ptr< Vulkan::Device > m_device;
-			Saphir::ShaderManager m_shaderManager;
 			Vulkan::TransferManager m_transferManager;
 			Vulkan::LayoutManager m_layoutManager;
+			Saphir::ShaderManager m_shaderManager;
 			SharedUBOManager m_sharedUBOManager;
 			VertexBufferFormatManager m_vertexBufferFormatManager;
 			ExternalInput m_externalInput;
 			std::vector< ServiceInterface * > m_subServicesEnabled;
 			std::shared_ptr< Vulkan::DescriptorPool > m_descriptorPool;
-			std::shared_ptr< Vulkan::CommandPool > m_commandPool;
-			std::map< std::shared_ptr< RenderTarget::Abstract >, std::shared_ptr< Vulkan::CommandBuffer > > m_commandBuffers;
 			std::shared_ptr< Vulkan::SwapChain > m_swapChain;
 			std::shared_ptr< RenderTarget::Abstract > m_windowLessView;
 			Libs::StaticVector< RendererFrameScope, 5 > m_rendererFrameScope;
 			std::map< size_t, std::shared_ptr< Saphir::Program > > m_programs;
 			std::map< size_t, std::shared_ptr< Vulkan::GraphicsPipeline > > m_pipelines;
 			std::map< std::string, std::shared_ptr< Vulkan::RenderPass > > m_renderPasses;
-			std::map< size_t, std::shared_ptr< Vulkan::Sampler > > m_samplers;
+			std::map< const char *, std::shared_ptr< Vulkan::Sampler > > m_samplers;
 			Libs::Time::Statistics::RealTime< std::chrono::high_resolution_clock > m_statistics{30};
 			std::array< VkClearValue, 2 > m_clearColors{};
 			uint32_t m_currentFrameIndex{0};
-			const uint64_t m_timeout;
+			const uint64_t m_timeout{std::chrono::duration_cast< std::chrono::nanoseconds >(std::chrono::milliseconds(1000)).count()};
 			bool m_debugMode{false};
 			bool m_windowLess{false};
-			bool m_shadowMapsEnabled{true};
-			bool m_renderToTexturesEnabled{true};
+			bool m_shadowMapsEnabled{false};
+			bool m_renderToTexturesEnabled{false};
 	};
 }

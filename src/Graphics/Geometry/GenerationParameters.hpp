@@ -120,7 +120,7 @@ namespace EmEn::Graphics::Geometry
 			void
 			setTextureCoordinatesMultiplier (float multiplier) noexcept
 			{
-				using namespace EmEn::Libs::Math;
+				using namespace Libs::Math;
 
 				m_textureCoordinatesMultiplier[X] = multiplier;
 				m_textureCoordinatesMultiplier[Y] = multiplier;
@@ -136,7 +136,7 @@ namespace EmEn::Graphics::Geometry
 			void
 			setTextureCoordinatesMultiplier (float xMultiplier, float yMultiplier) noexcept
 			{
-				using namespace EmEn::Libs::Math;
+				using namespace Libs::Math;
 
 				m_textureCoordinatesMultiplier[X] = xMultiplier;
 				m_textureCoordinatesMultiplier[Y] = yMultiplier;
@@ -153,7 +153,7 @@ namespace EmEn::Graphics::Geometry
 			void
 			setTextureCoordinatesMultiplier (float xMultiplier, float yMultiplier, float zMultiplier) noexcept
 			{
-				using namespace EmEn::Libs::Math;
+				using namespace Libs::Math;
 
 				m_textureCoordinatesMultiplier[X] = xMultiplier;
 				m_textureCoordinatesMultiplier[Y] = yMultiplier;

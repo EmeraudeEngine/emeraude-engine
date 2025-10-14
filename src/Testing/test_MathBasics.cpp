@@ -29,7 +29,7 @@
 /* Local inclusions. */
 #include "Libs/Math/Base.hpp"
 
-using namespace EmEn::Libs::Math;
+using namespace Libs::Math;
 
 TEST(Math, clamp)
 {

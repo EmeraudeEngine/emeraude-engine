@@ -37,7 +37,7 @@
 
 namespace EmEn::Vulkan
 {
-	using namespace EmEn::Libs;
+	using namespace Libs;
 
 	bool
 	Surface::update (const std::shared_ptr< PhysicalDevice > & physicalDevice) noexcept
@@ -92,7 +92,7 @@ namespace EmEn::Vulkan
 			return false;
 		}
 
-		auto physicalDevice = device->physicalDevice();
+		const auto physicalDevice = device->physicalDevice();
 
 		m_capabilities = physicalDevice->getSurfaceCapabilities(m_handle);
 		m_formats = physicalDevice->getSurfaceFormats(m_handle);

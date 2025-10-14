@@ -160,6 +160,7 @@ namespace EmEn::Vulkan::Sync
 		return true;
 	}
 
+
 	bool
 	Fence::waitAndReset (uint64_t timeout) const noexcept
 	{
@@ -177,7 +178,8 @@ namespace EmEn::Vulkan::Sync
 
 			case VK_TIMEOUT :
 				TraceError{ClassId} << "The fence exceeded the waiting timeout (" << timeout << " ns) !";
-				break;
+
+				return false;
 
 			default:
 				TraceError{ClassId} << "Unable to wait the fence : " << vkResultToCString(result) << " !";
@@ -194,6 +196,7 @@ namespace EmEn::Vulkan::Sync
 
 		return true;
 	}
+
 
 	bool
 	Fence::waitForAll (const std::shared_ptr< Device > & device, const std::vector< VkFence > & fences, uint64_t timeout) noexcept

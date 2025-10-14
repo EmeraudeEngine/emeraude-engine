@@ -37,12 +37,15 @@
 #include <array>
 #include <stdexcept>
 #include <type_traits>
-#include <new>
 #include <iterator>
 #include <initializer_list>
 #include <algorithm>
-#include <compare>
 #include <iostream>
+
+#if IS_WINDOWS
+#undef min
+#undef max
+#endif
 
 namespace EmEn::Libs
 {
@@ -752,16 +755,16 @@ namespace EmEn::Libs
 			void
 			swap (StaticVector & other) noexcept(std::is_nothrow_move_constructible_v< data_t > && std::is_nothrow_swappable_v< data_t >)
 			{
-				size_type common_size = std::min(m_size, other.m_size);
+				size_type commonSize = std::min(m_size, other.m_size);
 
-				for ( size_type index = 0; index < common_size; ++index )
+				for ( size_type index = 0; index < commonSize; ++index )
 				{
 					std::swap((*this)[index], other[index]);
 				}
 
 				if ( m_size > other.m_size )
 				{
-					for ( size_type index = common_size; index < m_size; ++index )
+					for ( size_type index = commonSize; index < m_size; ++index )
 					{
 						new (other.data() + index) data_t(std::move((*this)[index]));
 						(*this)[index].~data_t();
@@ -769,7 +772,7 @@ namespace EmEn::Libs
 				}
 				else if ( other.m_size > m_size )
 				{
-					for ( size_type index = common_size; index < other.m_size; ++index )
+					for ( size_type index = commonSize; index < other.m_size; ++index )
 					{
 						new (this->data() + index) data_t(std::move(other[index]));
 						other[index].~data_t();

@@ -37,11 +37,11 @@
 
 namespace EmEn::Overlay
 {
-	using namespace EmEn::Libs;
-	using namespace EmEn::Libs::Math;
-	using namespace EmEn::Libs::PixelFactory;
-	using namespace EmEn::Graphics;
-	using namespace EmEn::Vulkan;
+	using namespace Libs;
+	using namespace Libs::Math;
+	using namespace Libs::PixelFactory;
+	using namespace Graphics;
+	using namespace Vulkan;
 
 	bool
 	Surface::isBelowPoint (float positionX, float positionY) const noexcept
@@ -254,8 +254,24 @@ namespace EmEn::Overlay
 	bool
 	Surface::getSampler (Renderer & renderer) noexcept
 	{
-		m_sampler = renderer.getSampler(0, 0);
-		m_sampler->setIdentifier(ClassId, this->name(), "Sampler");
+		m_sampler = renderer.getSampler("OverlaySurface", [] (Settings &, VkSamplerCreateInfo & createInfo) {
+			//createInfo.flags = 0;
+			//createInfo.magFilter = VK_FILTER_NEAREST;
+			//createInfo.minFilter = VK_FILTER_NEAREST;
+			//createInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
+			createInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+			createInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+			createInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+			//createInfo.mipLodBias = 0.0F;
+			//createInfo.anisotropyEnable = VK_FALSE;
+			//createInfo.maxAnisotropy = 1.0F;
+			//createInfo.compareEnable = VK_FALSE;
+			//createInfo.compareOp = VK_COMPARE_OP_ALWAYS;
+			//createInfo.minLod = 0.0F;
+			//createInfo.maxLod = VK_LOD_CLAMP_NONE;
+			createInfo.borderColor = VK_BORDER_COLOR_INT_TRANSPARENT_BLACK;
+			//createInfo.unnormalizedCoordinates = VK_FALSE;
+		});
 
 		if ( m_sampler == nullptr )
 		{
@@ -284,18 +300,12 @@ namespace EmEn::Overlay
 			return false;
 		}
 
-		m_backImage = std::make_shared< Image >(
+		m_backImage = std::make_shared< Vulkan::Image >(
 			renderer.device(),
 			VK_IMAGE_TYPE_2D,
 			Image::getFormat< uint8_t >(m_backLocalData.colorCount()),
 			VkExtent3D{m_backLocalData.width(), m_backLocalData.height(), 1U},
-			VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
-			VK_IMAGE_LAYOUT_UNDEFINED,
-			0,
-			1,
-			1,
-			VK_SAMPLE_COUNT_1_BIT,
-			VK_IMAGE_TILING_OPTIMAL
+			VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT
 		);
 		m_backImage->setIdentifier(ClassId, this->name(), "Image");
 

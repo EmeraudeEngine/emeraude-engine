@@ -59,6 +59,8 @@ namespace EmEn
 			constexpr auto VkDeviceAutoSelectModeKey{"API/Vulkan/Device/AutoSelectMode"};
 			constexpr auto DefaultVkDeviceAutoSelectMode{"Performance"};
 			constexpr auto VkDeviceForceGPUKey{"API/Vulkan/Device/ForceGPU"};
+			constexpr auto VkDeviceUseVMAKey{"API/Vulkan/Device/UseVMA"};
+			constexpr auto DefaultVkDeviceUseVMA{true};
 
 		/* OpenAL */
 		constexpr auto OpenALShowInformationKey{"API/OpenAL/ShowInformation"}; // Logs

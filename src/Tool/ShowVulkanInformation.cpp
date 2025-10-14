@@ -33,7 +33,7 @@
 
 namespace EmEn::Tool
 {
-	using namespace EmEn::Libs;
+	using namespace Libs;
 
 	bool
 	ShowVulkanInformation::execute () noexcept

@@ -96,7 +96,7 @@ namespace EmEn::Graphics
 			/** @copydoc EmEn::Resources::ResourceTrait::classLabel() const */
 			[[nodiscard]]
 			const char *
-				classLabel () const noexcept override
+			classLabel () const noexcept override
 			{
 				return ClassId;
 			}

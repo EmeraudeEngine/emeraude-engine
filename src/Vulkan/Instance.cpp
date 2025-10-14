@@ -596,6 +596,7 @@ namespace EmEn::Vulkan
 		auto & settings = m_primaryServices.settings();
 		const auto runModeString = settings.getOrSetDefault< std::string >(VkDeviceAutoSelectModeKey, DefaultVkDeviceAutoSelectMode);
 		const auto forceGPUName = settings.getOrSetDefault< std::string >(VkDeviceForceGPUKey);
+		const auto useVMA = settings.getOrSetDefault< bool >(VkDeviceUseVMAKey, DefaultVkDeviceUseVMA);
 		const auto showInformation = settings.getOrSetDefault< bool >(VkShowInformationKey, DefaultVkShowInformation);
 
 		/* NOTE: Get a list of available devices. */
@@ -644,7 +645,7 @@ namespace EmEn::Vulkan
 		/* NOTE: Logical device creation for graphics rendering and presentation. */
 		TraceSuccess{ClassId} << "The graphics capable physical device '" << selectedPhysicalDevice->propertiesVK10().deviceName << "' selected ! ";
 
-		auto logicalDevice = std::make_shared< Device >(selectedPhysicalDevice->propertiesVK10().deviceName, selectedPhysicalDevice, showInformation);
+		auto logicalDevice = std::make_shared< Device >(*this, selectedPhysicalDevice->propertiesVK10().deviceName, selectedPhysicalDevice, showInformation);
 		logicalDevice->setIdentifier(ClassId, (std::stringstream{} << selectedPhysicalDevice->propertiesVK10().deviceName << "(Graphics)").str(), "Device");
 
 		/* Check window */
@@ -663,6 +664,8 @@ namespace EmEn::Vulkan
 
 		/* [VULKAN-API-SETUP] Graphics device features configuration. */
 		DeviceRequirements requirements{true, window, false};
+		// FIXME: Check to enable "VK_EXT_non_seamless_cube_map" extension
+		//requirements.featuresVK10().nonSeamlessCubeMap = VK_TRUE; // Required for cubemap rendering
 		requirements.featuresVK10().fillModeNonSolid = VK_TRUE; // Required for wireframe mode!
 		if constexpr ( !IsMacOS )
 		{
@@ -672,7 +675,7 @@ namespace EmEn::Vulkan
 		requirements.featuresVK10().samplerAnisotropy = VK_TRUE;
 		requirements.featuresVK13().shaderDemoteToHelperInvocation = VK_TRUE;
 
-		if ( !logicalDevice->create(requirements, m_requiredGraphicsDeviceExtensions) )
+		if ( !logicalDevice->create(requirements, m_requiredGraphicsDeviceExtensions, useVMA) )
 		{
 			return {};
 		}
@@ -692,6 +695,12 @@ namespace EmEn::Vulkan
 		{
 			return m_computeDevice;
 		}
+
+		auto & settings = m_primaryServices.settings();
+		const auto runModeString = settings.getOrSetDefault< std::string >(VkDeviceAutoSelectModeKey, DefaultVkDeviceAutoSelectMode);
+		const auto forceGPUName = settings.getOrSetDefault< std::string >(VkDeviceForceGPUKey);
+		const auto useVMA = settings.getOrSetDefault< bool >(VkDeviceUseVMAKey, DefaultVkDeviceUseVMA);
+		const auto showInformation = settings.getOrSetDefault< bool >(VkShowInformationKey, DefaultVkShowInformation);
 
 		std::vector< const char * > requiredExtensions;
 
@@ -732,10 +741,6 @@ namespace EmEn::Vulkan
 			return {};
 		}
 
-		auto & settings = m_primaryServices.settings();
-		//const auto forceGPUName = settings.getOrSetDefault< std::string >(VkDeviceForceGPUKey);
-		const bool showInformation = settings.getOrSetDefault< bool >(VkShowInformationKey, DefaultVkShowInformation);
-
 		const auto & selectedPhysicalDevice = scoredDevices.rbegin()->second;
 
 		TraceSuccess{ClassId} <<
@@ -743,12 +748,12 @@ namespace EmEn::Vulkan
 			"Creating the logical compute device ...";
 
 		/* NOTE: Logical device creation for computing. */
-		auto logicalDevice = std::make_shared< Device >(selectedPhysicalDevice->propertiesVK10().deviceName, selectedPhysicalDevice, showInformation);
+		auto logicalDevice = std::make_shared< Device >(*this, selectedPhysicalDevice->propertiesVK10().deviceName, selectedPhysicalDevice, showInformation);
 		logicalDevice->setIdentifier(ClassId, (std::stringstream{} << selectedPhysicalDevice->propertiesVK10().deviceName << "(Physics)").str(), "Device");
 
 		DeviceRequirements requirements{false, nullptr, true};
 
-		if ( !logicalDevice->create(requirements, requiredExtensions) )
+		if ( !logicalDevice->create(requirements, requiredExtensions, useVMA) )
 		{
 			return {};
 		}

@@ -37,10 +37,10 @@
 
 namespace EmEn::Saphir
 {
-	using namespace EmEn::Libs;
-	using namespace EmEn::Saphir::Declaration;
-	using namespace EmEn::Saphir::Keys;
-	using namespace EmEn::Graphics;
+	using namespace Libs;
+	using namespace Saphir::Declaration;
+	using namespace Saphir::Keys;
+	using namespace Graphics;
 
 	bool
 	FragmentShader::declare (const StageInput & declaration) noexcept

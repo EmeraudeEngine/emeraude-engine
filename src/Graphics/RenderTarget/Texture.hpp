@@ -295,61 +295,12 @@ namespace EmEn::Graphics::RenderTarget
 				return this->destroy();
 			}
 
-			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::isValid() */
+			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::isReadyForRendering() const */
 			[[nodiscard]]
 			bool
-			isValid () const noexcept override
+			isReadyForRendering () const noexcept override
 			{
-				if ( m_framebuffer == nullptr || !m_framebuffer->isCreated() )
-				{
-					TraceError{ClassId} << "The render target '" << this->id() << "' (Texture) framebuffer is missing or not created !";
-
-					return false;
-				}
-
-				if ( m_colorImage == nullptr || !m_colorImage->isCreated() )
-				{
-					TraceError{ClassId} << "The render target '" << this->id() << "' (Texture) color image is missing or not created !";
-
-					return false;
-				}
-
-				if ( m_colorImageView == nullptr || !m_colorImageView->isCreated() )
-				{
-					TraceError{ClassId} << "The render target '" << this->id() << "' (Texture) color image view is missing or not created !";
-
-					return false;
-				}
-
-				if ( m_depthStencilImage == nullptr || !m_depthStencilImage->isCreated() )
-				{
-					TraceError{ClassId} << "The render target '" << this->id() << "' (Texture) depth/stencil image is missing or not created !";
-
-					return false;
-				}
-
-				if ( m_depthImageView == nullptr || !m_depthImageView->isCreated() )
-				{
-					TraceError{ClassId} << "The render target '" << this->id() << "' (Texture) depth image view is missing or not created !";
-
-					return false;
-				}
-
-				/*if ( m_stencilImageView == nullptr || !m_stencilImageView->isCreated() )
-				{
-					TraceError{ClassId} << "The render target '" << this->id() << "' (Texture) stencil image view is missing or not created !";
-
-					return false;
-				}*/
-
-				if ( m_sampler == nullptr ||  !m_sampler->isCreated() )
-				{
-					TraceError{ClassId} << "The render target '" << this->id() << "' (Texture) sampler is missing or not created !";
-
-					return false;
-				}
-
-				return true;
+				return m_isReadyForRendering;
 			}
 
 			/** @copydoc EmEn::Resources::ResourceTrait::load(Resources::ServiceProvider &) */
@@ -477,14 +428,14 @@ namespace EmEn::Graphics::RenderTarget
 
 			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::onInputDeviceConnected() */
 			void
-			onInputDeviceConnected (AVConsole::AVManagers & managers, AbstractVirtualDevice * /*sourceDevice*/) noexcept override
+			onInputDeviceConnected (AVConsole::AVManagers & managers, AbstractVirtualDevice & /*sourceDevice*/) noexcept override
 			{
 				m_viewMatrices.create(managers.graphicsRenderer, this->id());
 			}
 
 			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::onInputDeviceDisconnected() */
 			void
-			onInputDeviceDisconnected (AVConsole::AVManagers & /*managers*/, AbstractVirtualDevice * /*sourceDevice*/) noexcept override
+			onInputDeviceDisconnected (AVConsole::AVManagers & /*managers*/, AbstractVirtualDevice & /*sourceDevice*/) noexcept override
 			{
 				m_viewMatrices.destroy();
 			}
@@ -494,22 +445,47 @@ namespace EmEn::Graphics::RenderTarget
 			bool
 			onCreate (Renderer & renderer) noexcept override
 			{
-				if ( !this->createImages(renderer.device()) )
+				/* NOTE: Creation of images and image views and
+				 * get them ready for the render-to-texture. */
+				if ( !this->createImages(renderer) )
 				{
 					return false;
 				}
 
-				/* Create a sampler for the texture. */
-				m_sampler = renderer.getSampler(0, 0);
-				m_sampler->setIdentifier(ClassId, this->name(), "Sampler");
+				/* NOTE: Create a sampler for the texture to be samplable in fragment shaders. */
+				m_sampler = renderer.getSampler("RenderToTexture", [] (Settings & settings, VkSamplerCreateInfo & createInfo) {
+					const auto magFilter = settings.getOrSetDefault< std::string >(GraphicsTextureMagFilteringKey, DefaultGraphicsTextureFiltering);
+					const auto minFilter = settings.getOrSetDefault< std::string >(GraphicsTextureMinFilteringKey, DefaultGraphicsTextureFiltering);
+					const auto mipmapMode = settings.getOrSetDefault< std::string >(GraphicsTextureMipFilteringKey, DefaultGraphicsTextureFiltering);
+					const auto mipLevels = settings.getOrSetDefault< float >(GraphicsTextureMipMappingLevelsKey, DefaultGraphicsTextureMipMappingLevels);
+					const auto anisotropyLevels = settings.getOrSetDefault< float >(GraphicsTextureAnisotropyLevelsKey, DefaultGraphicsTextureAnisotropy);
+
+					//createInfo.flags = 0;
+					createInfo.magFilter = magFilter == "linear" ? VK_FILTER_LINEAR : VK_FILTER_NEAREST;
+					createInfo.minFilter = minFilter == "linear" ? VK_FILTER_LINEAR : VK_FILTER_NEAREST;
+					createInfo.mipmapMode = mipmapMode == "linear" ? VK_SAMPLER_MIPMAP_MODE_LINEAR : VK_SAMPLER_MIPMAP_MODE_NEAREST;
+					//createInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+					//createInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+					//createInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+					//createInfo.mipLodBias = 0.0F;
+					createInfo.anisotropyEnable = anisotropyLevels > 1.0F ? VK_TRUE : VK_FALSE;
+					createInfo.maxAnisotropy = anisotropyLevels;
+					//createInfo.compareEnable = VK_FALSE;
+					//createInfo.compareOp = VK_COMPARE_OP_ALWAYS;
+					//createInfo.minLod = 0.0F;
+					createInfo.maxLod = mipLevels > 0.0F ? mipLevels : VK_LOD_CLAMP_NONE;
+					//createInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+					//createInfo.unnormalizedCoordinates = VK_FALSE;
+				});
 
 				if ( m_sampler == nullptr )
 				{
-					Tracer::error(ClassId, "Unable to get a sampler !");
+					TraceError{ClassId} << "Unable to create a sampler for the render-to-texture '" << this->id() << "' !";
 
 					return false;
 				}
 
+				/* NOTE: Create the render pass and the framebuffer to render into the texture. */
 				const auto renderPass = this->createRenderPass(renderer);
 
 				if ( renderPass == nullptr )
@@ -517,27 +493,173 @@ namespace EmEn::Graphics::RenderTarget
 					return false;
 				}
 
-				return this->createFramebuffer(renderPass);
+				if ( !this->createFramebuffer(renderPass) )
+				{
+					return false;
+				}
+
+				m_isReadyForRendering = true;
+
+				return true;
 			}
 
 			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::onDestroy() */
 			void
 			onDestroy () noexcept override
 			{
-				/* First, destroy the framebuffer. */
+				m_isReadyForRendering = false;
+
 				m_framebuffer.reset();
 
-				/* Next, destroy the sampler. */
 				m_sampler.reset();
 
-				/* Next, destroy the image views. */
 				m_stencilImageView.reset();
 				m_depthImageView.reset();
-				m_colorImageView.reset();
+				m_depthStencilImage.reset();
 
-				/* Finally, destroy the images. */
 				m_depthStencilImage.reset();
 				m_colorImage.reset();
+			}
+
+			/**
+			 * @brief Creates the images and the image views for each swap chain frame.
+			 * @param renderer A reference to the graphics renderer.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			createImages (const Renderer & renderer) noexcept
+			{
+				const auto device = renderer.device();
+
+				/* Color buffer. */
+				if ( this->precisions().colorBits() > 0 )
+				{
+					/* Create the image for a color buffer in video memory. */
+					m_colorImage = std::make_shared< Vulkan::Image >(
+						device,
+						VK_IMAGE_TYPE_2D,
+						Vulkan::Instance::findColorFormat(device, this->precisions()),
+						this->extent(),
+						VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT
+					);
+					m_colorImage->setIdentifier(ClassId, this->name(), "Image");
+
+					if ( !m_colorImage->createOnHardware() )
+					{
+						TraceError{ClassId} << "Unable to create an image (Color buffer) for texture '" << this->id() << "' !";
+
+						return false;
+					}
+
+
+					/* NOTE: Prepare the color buffer to be used directly as a texture. */
+					if ( !renderer.transferManager().transitionImageLayout(*m_colorImage, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) )
+					{
+						Tracer::error(ClassId, "Failed initial color image layout transition!");
+
+						return false;
+					}
+
+					/* NOTE: Set the final image layout for being usable with a material. */
+					//m_colorImage->setCurrentImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+					/* Create a view to exploit the image. */
+					m_colorImageView = std::make_shared< Vulkan::ImageView >(
+						m_colorImage,
+						VK_IMAGE_VIEW_TYPE_2D,
+						VkImageSubresourceRange{
+							.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+							.baseMipLevel = 0,
+							.levelCount = m_colorImage->createInfo().mipLevels,
+							.baseArrayLayer = 0,
+							.layerCount = m_colorImage->createInfo().arrayLayers
+						}
+					);
+					m_colorImageView->setIdentifier(ClassId, this->name(), "ImageView");
+
+					if ( !m_colorImageView->createOnHardware() )
+					{
+						TraceError{ClassId} << "Unable to set the layout transition of the image (Color buffer) for texture '" << this->id() << "' !";
+
+						return false;
+					}
+				}
+
+				/* Depth/stencil buffer. */
+				if ( this->precisions().depthBits() > 0 || this->precisions().stencilBits() > 0 )
+				{
+					/* Create the image for depth/stencil buffer in video memory. */
+					m_depthStencilImage = std::make_shared< Vulkan::Image >(
+						device,
+						VK_IMAGE_TYPE_2D,
+						Vulkan::Instance::findDepthStencilFormat(device, this->precisions()),
+						this->extent(),
+						VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT
+					);
+					m_depthStencilImage->setIdentifier(ClassId, this->name(), "Image");
+
+					if ( !m_depthStencilImage->createOnHardware() )
+					{
+						TraceError{ClassId} << "Unable to create an image (Depth/stencil buffer) for texture '" << this->id() << "' !";
+
+						return false;
+					}
+
+					/* NOTE: Set the final image layout for being usable with a material. */
+					m_depthStencilImage->setCurrentImageLayout(VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
+
+
+					/* Create a view to exploit the depth part of the image. */
+					if ( this->precisions().depthBits() > 0 )
+					{
+						m_depthImageView = std::make_shared< Vulkan::ImageView >(
+							m_depthStencilImage,
+							VK_IMAGE_VIEW_TYPE_2D,
+							VkImageSubresourceRange{
+								.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
+								.baseMipLevel = 0,
+								.levelCount = m_depthStencilImage->createInfo().mipLevels,
+								.baseArrayLayer = 0,
+								.layerCount = m_depthStencilImage->createInfo().arrayLayers
+							}
+						);
+						m_depthImageView->setIdentifier(ClassId, this->name(), "ImageView");
+
+						if ( !m_depthImageView->createOnHardware() )
+						{
+							TraceError{ClassId} << "Unable to create an image view (Depth buffer) for texture '" << this->id() << "' !";
+
+							return false;
+						}
+					}
+
+					/* Create a view to exploit the stencil part of the image. */
+					if ( this->precisions().stencilBits() > 0 )
+					{
+						m_stencilImageView = std::make_shared< Vulkan::ImageView >(
+							m_depthStencilImage,
+							VK_IMAGE_VIEW_TYPE_2D,
+							VkImageSubresourceRange{
+								.aspectMask = VK_IMAGE_ASPECT_STENCIL_BIT,
+								.baseMipLevel = 0,
+								.levelCount = m_depthStencilImage->createInfo().mipLevels,
+								.baseArrayLayer = 0,
+								.layerCount = m_depthStencilImage->createInfo().arrayLayers
+							}
+						);
+						m_stencilImageView->setIdentifier(ClassId, this->name(), "ImageView");
+
+						if ( !m_stencilImageView->createOnHardware() )
+						{
+							TraceError{ClassId} << "Unable to create an image view (Stencil buffer) for texture '" << this->id() << "' !";
+
+							return false;
+						}
+					}
+				}
+
+				return true;
 			}
 
 			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::createRenderPass() */
@@ -594,20 +716,28 @@ namespace EmEn::Graphics::RenderTarget
 					renderPass->addSubPassDependency({
 						.srcSubpass = VK_SUBPASS_EXTERNAL,
 						.dstSubpass = 0,
+						/* Wait for fragment shader reads from previous pass to complete... */
 						.srcStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-						.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
-						.srcAccessMask = VK_ACCESS_NONE,
-						.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+						/* ...before the new pass begins to write in color. */
+						.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
+						/* The access to wait is a shader read. */
+						.srcAccessMask = VK_ACCESS_SHADER_READ_BIT,
+						/* The new access will be a "write" in an attachment. */
+						.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
 						.dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT
 					});
 
 					renderPass->addSubPassDependency({
 						.srcSubpass = 0,
 						.dstSubpass = VK_SUBPASS_EXTERNAL,
-						.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+						/* Wait until the writing in color is finished... */
+						.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+						/* ...before the next pass can read the result into its fragment shader. */
 						.dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-						.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-						.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT,
+						/* The access to make visible is the writing in the attachment. */
+						.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+						/* The next access will be a shader read. */
+						.dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
 						.dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT
 					});
 
@@ -620,133 +750,6 @@ namespace EmEn::Graphics::RenderTarget
 				}
 
 				return renderPass;
-			}
-
-			/**
-			 * @brief Creates the images and the image views for each swap chain frame.
-			 * @param device A reference to the graphics device smart pointer.
-			 * @return bool
-			 */
-			[[nodiscard]]
-			bool
-			createImages (const std::shared_ptr< Vulkan::Device > & device) noexcept
-			{
-				/* Color buffer. */
-				if ( this->precisions().colorBits() > 0 )
-				{
-					/* Create the image for a color buffer in video memory. */
-					m_colorImage = std::make_shared< Vulkan::Image >(
-						device,
-						VK_IMAGE_TYPE_2D,
-						Vulkan::Instance::findColorFormat(device, this->precisions()),
-						this->extent(),
-						VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-						VK_IMAGE_LAYOUT_UNDEFINED
-					);
-					m_colorImage->setIdentifier(ClassId, this->name(), "Image");
-					m_colorImage->setCurrentImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-
-					if ( !m_colorImage->createOnHardware() )
-					{
-						TraceError{ClassId} << "Unable to create an image (Color buffer) for texture '" << this->id() << "' !";
-
-						return false;
-					}
-
-					/* Create a view to exploit the image. */
-					m_colorImageView = std::make_shared< Vulkan::ImageView >(
-						m_colorImage,
-						VK_IMAGE_VIEW_TYPE_2D,
-						VkImageSubresourceRange{
-							.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-							.baseMipLevel = 0,
-							.levelCount = m_colorImage->createInfo().mipLevels,
-							.baseArrayLayer = 0,
-							.layerCount = m_colorImage->createInfo().arrayLayers
-						}
-					);
-					m_colorImageView->setIdentifier(ClassId, this->name(), "ImageView");
-
-					if ( !m_colorImageView->createOnHardware() )
-					{
-						TraceError{ClassId} << "Unable to create an image view (Color buffer) for texture '" << this->id() << "' !";
-
-						return false;
-					}
-				}
-
-				/* Depth/stencil buffer. */
-				if ( this->precisions().depthBits() > 0 || this->precisions().stencilBits() > 0 )
-				{
-					/* Create the image for depth/stencil buffer in video memory. */
-					m_depthStencilImage = std::make_shared< Vulkan::Image >(
-						device,
-						VK_IMAGE_TYPE_2D,
-						Vulkan::Instance::findDepthStencilFormat(device, this->precisions()),
-						this->extent(),
-						VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
-						VK_IMAGE_LAYOUT_UNDEFINED
-					);
-					m_depthStencilImage->setIdentifier(ClassId, this->name(), "Image");
-					m_depthStencilImage->setCurrentImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-
-					if ( !m_depthStencilImage->createOnHardware() )
-					{
-						TraceError{ClassId} << "Unable to create an image (Depth/stencil buffer) for texture '" << this->id() << "' !";
-
-						return false;
-					}
-
-					/* Create a view to exploit the depth part of the image. */
-					if ( this->precisions().depthBits() > 0 )
-					{
-						m_depthImageView = std::make_shared< Vulkan::ImageView >(
-							m_depthStencilImage,
-							VK_IMAGE_VIEW_TYPE_2D,
-							VkImageSubresourceRange{
-								.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
-								.baseMipLevel = 0,
-								.levelCount = m_depthStencilImage->createInfo().mipLevels,
-								.baseArrayLayer = 0,
-								.layerCount = m_depthStencilImage->createInfo().arrayLayers
-							}
-						);
-						m_depthImageView->setIdentifier(ClassId, this->name(), "ImageView");
-
-						if ( !m_depthImageView->createOnHardware() )
-						{
-							TraceError{ClassId} << "Unable to create an image view (Depth buffer) for texture '" << this->id() << "' !";
-
-							return false;
-						}
-					}
-
-					/* Create a view to exploit the stencil part of the image. */
-					if ( this->precisions().stencilBits() > 0 )
-					{
-						m_stencilImageView = std::make_shared< Vulkan::ImageView >(
-							m_depthStencilImage,
-							VK_IMAGE_VIEW_TYPE_2D,
-							VkImageSubresourceRange{
-								.aspectMask = VK_IMAGE_ASPECT_STENCIL_BIT,
-								.baseMipLevel = 0,
-								.levelCount = m_depthStencilImage->createInfo().mipLevels,
-								.baseArrayLayer = 0,
-								.layerCount = m_depthStencilImage->createInfo().arrayLayers
-							}
-						);
-						m_stencilImageView->setIdentifier(ClassId, this->name(), "ImageView");
-
-						if ( !m_stencilImageView->createOnHardware() )
-						{
-							TraceError{ClassId} << "Unable to create an image view (Stencil buffer) for texture '" << this->id() << "' !";
-
-							return false;
-						}
-					}
-				}
-
-				return true;
 			}
 
 			/**
@@ -790,12 +793,13 @@ namespace EmEn::Graphics::RenderTarget
 			}
 
 			std::shared_ptr< Vulkan::Image > m_colorImage;
-			std::shared_ptr< Vulkan::Image > m_depthStencilImage;
 			std::shared_ptr< Vulkan::ImageView > m_colorImageView;
+			std::shared_ptr< Vulkan::Image > m_depthStencilImage;
 			std::shared_ptr< Vulkan::ImageView > m_depthImageView;
 			std::shared_ptr< Vulkan::ImageView > m_stencilImageView;
 			std::shared_ptr< Vulkan::Sampler > m_sampler;
 			std::shared_ptr< Vulkan::Framebuffer > m_framebuffer;
 			view_matrices_t m_viewMatrices;
+			bool m_isReadyForRendering{false};
 	};
 }

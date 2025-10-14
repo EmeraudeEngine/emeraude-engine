@@ -39,8 +39,8 @@
 
 namespace EmEn::Graphics
 {
-	using namespace EmEn::Libs;
-	using namespace EmEn::Vulkan;
+	using namespace Libs;
+	using namespace Vulkan;
 
 	SharedUniformBuffer::SharedUniformBuffer (const std::shared_ptr< Device > & device, uint32_t uniformBlockSize, uint32_t maxElementCount) noexcept
 		: m_device{device},
@@ -77,7 +77,7 @@ namespace EmEn::Graphics
 	{
 		/* NOTE: nvidia GTX 1070 : 65536 bytes and 256 bytes alignment, so 256 optimal elements. */
 		const auto & limits = m_device->physicalDevice()->propertiesVK10().limits;
-		const auto maxUBOSize = limits.maxUniformBufferRange;
+		const auto maxUBOSize = 65536U;//limits.maxUniformBufferRange;
 		const auto minUBOAlignment = limits.minUniformBufferOffsetAlignment;
 
 		m_blockAlignedSize = minUBOAlignment * Math::alignCount(m_uniformBlockSize, static_cast< uint32_t >(minUBOAlignment));
@@ -221,12 +221,14 @@ namespace EmEn::Graphics
 		const auto & limits = m_device->physicalDevice()->propertiesVK10().limits;
 		const auto chunkId = (std::stringstream{} << "Chunk#" << m_uniformBufferObjects.size()).str();
 
-		auto * uniformBufferObject = m_uniformBufferObjects.emplace_back(std::make_unique< UniformBufferObject >(m_device, limits.maxUniformBufferRange, m_blockAlignedSize)).get();
+		constexpr auto UBOMaxSize = 65536;//limits.maxUniformBufferRange;
+
+		auto * uniformBufferObject = m_uniformBufferObjects.emplace_back(std::make_unique< UniformBufferObject >(m_device, UBOMaxSize, m_blockAlignedSize)).get();
 		uniformBufferObject->setIdentifier(ClassId, chunkId, "UniformBufferObject");
 
 		if ( !uniformBufferObject->createOnHardware() )
 		{
-			TraceError{ClassId} << "Unable to create an UBO of " << limits.maxUniformBufferRange << " bytes !";
+			TraceError{ClassId} << "Unable to create an UBO of " << UBOMaxSize << " bytes !";
 
 			return false;
 		}
@@ -242,12 +244,14 @@ namespace EmEn::Graphics
 		const auto & limits = m_device->physicalDevice()->propertiesVK10().limits;
 		const auto chunkId = (std::stringstream{} << "DynamicChunk#" << m_uniformBufferObjects.size()).str();
 
-		auto * uniformBufferObject = m_uniformBufferObjects.emplace_back(std::make_unique< UniformBufferObject >(m_device, limits.maxUniformBufferRange, m_blockAlignedSize)).get();
+		constexpr auto UBOMaxSize = 65536;//limits.maxUniformBufferRange;
+
+		auto * uniformBufferObject = m_uniformBufferObjects.emplace_back(std::make_unique< UniformBufferObject >(m_device, UBOMaxSize, m_blockAlignedSize)).get();
 		uniformBufferObject->setIdentifier(ClassId, chunkId, "UniformBufferObject");
 
 		if ( !uniformBufferObject->createOnHardware() )
 		{
-			TraceError{ClassId} << "Unable to create an UBO of " << limits.maxUniformBufferRange << " bytes !";
+			TraceError{ClassId} << "Unable to create an UBO of " << UBOMaxSize << " bytes !";
 
 			return false;
 		}

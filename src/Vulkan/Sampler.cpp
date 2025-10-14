@@ -29,42 +29,11 @@
 /* Local inclusions. */
 #include "Device.hpp"
 #include "Utility.hpp"
-#include "Settings.hpp"
-#include "SettingKeys.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::Vulkan
 {
-	using namespace EmEn::Libs;
-
-	Sampler::Sampler (const std::shared_ptr< Device > & device, Settings & settings, VkSamplerCreateFlags createFlags) noexcept
-		: AbstractDeviceDependentObject{device}
-	{
-		const auto magFilter = settings.getOrSetDefault< std::string >(GraphicsTextureMagFilteringKey, DefaultGraphicsTextureFiltering);
-		const auto minFilter = settings.getOrSetDefault< std::string >(GraphicsTextureMinFilteringKey, DefaultGraphicsTextureFiltering);
-		const auto mipmapMode = settings.getOrSetDefault< std::string >(GraphicsTextureMipFilteringKey, DefaultGraphicsTextureFiltering);
-		const auto mipLevels = settings.getOrSetDefault< float >(GraphicsTextureMipMappingLevelsKey, DefaultGraphicsTextureMipMappingLevels);
-		const auto anisotropyLevels = settings.getOrSetDefault< float >(GraphicsTextureAnisotropyLevelsKey, DefaultGraphicsTextureAnisotropy);
-
-		m_createInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-		m_createInfo.pNext = nullptr;
-		m_createInfo.flags = createFlags;
-		m_createInfo.magFilter = magFilter == "linear" ? VK_FILTER_LINEAR : VK_FILTER_NEAREST;
-		m_createInfo.minFilter = minFilter == "linear" ? VK_FILTER_LINEAR : VK_FILTER_NEAREST;
-		m_createInfo.mipmapMode = mipmapMode == "linear" ? VK_SAMPLER_MIPMAP_MODE_LINEAR : VK_SAMPLER_MIPMAP_MODE_NEAREST;
-		m_createInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-		m_createInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-		m_createInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-		m_createInfo.mipLodBias = 0.0F;
-		m_createInfo.anisotropyEnable = anisotropyLevels > 1.0F ? VK_TRUE : VK_FALSE;
-		m_createInfo.maxAnisotropy = anisotropyLevels;
-		m_createInfo.compareEnable = VK_FALSE; // For shadow map, must be true.
-		m_createInfo.compareOp = VK_COMPARE_OP_ALWAYS; // For shadow map, must be VK_COMPARE_OP_LESS_OR_EQUAL or VK_COMPARE_OP_LESS
-		m_createInfo.minLod = 0.0F;
-		m_createInfo.maxLod = mipLevels > 0.0F ? mipLevels : VK_LOD_CLAMP_NONE;
-		m_createInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
-		m_createInfo.unnormalizedCoordinates = VK_FALSE;
-	}
+	using namespace Libs;
 
 	bool
 	Sampler::createOnHardware () noexcept
@@ -76,9 +45,7 @@ namespace EmEn::Vulkan
 			return false;
 		}
 
-		const auto result = vkCreateSampler(this->device()->handle(), &m_createInfo, nullptr, &m_handle);
-
-		if ( result != VK_SUCCESS )
+		if ( const auto result = vkCreateSampler(this->device()->handle(), &m_createInfo, nullptr, &m_handle); result != VK_SUCCESS )
 		{
 			TraceError{ClassId} << "Unable to create a sampler : " << vkResultToCString(result) << " !";
 

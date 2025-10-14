@@ -101,6 +101,7 @@ namespace EmEn::Scenes
 			m_lightSet.removeAllLights();
 			m_lightSet.terminate(*this);
 
+			/* [OFFSCREEN-CLEANUP] Crash here! */
 			m_AVConsoleManager.clear();
 		}
 
@@ -241,7 +242,7 @@ namespace EmEn::Scenes
 			{
 				if ( !m_AVConsoleManager.hasPrimaryVideoOutput() )
 				{
-					/* FIXME: Be aware of offscreen view with window less application. */
+					/* FIXME: Be aware of the offscreen view with window less application. */
 					if ( const auto swapChain = m_AVConsoleManager.graphicsRenderer().mainRenderTarget(); swapChain != nullptr )
 					{
 						m_AVConsoleManager.addVideoDevice(swapChain, true);

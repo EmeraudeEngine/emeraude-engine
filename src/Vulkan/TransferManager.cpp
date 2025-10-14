@@ -27,8 +27,9 @@
 #include "TransferManager.hpp"
 
 /* Local inclusions. */
-#include "Device.hpp"
+#include "Sync/ImageMemoryBarrier.hpp"
 #include "CommandBuffer.hpp"
+#include "Device.hpp"
 
 namespace EmEn::Vulkan
 {
@@ -57,7 +58,12 @@ namespace EmEn::Vulkan
 		}
 
 		/* Read the queue configuration from the device. */
-		if ( !m_device->hasBasicSupport() )
+		if ( m_device->hasBasicSupport() )
+		{
+			m_imageLayoutTransitionCommandBuffer = std::make_unique< CommandBuffer >(m_transferCommandPool, true);
+			m_imageLayoutTransitionCommandBuffer->setIdentifier(ClassId, "ImageLayoutTransition", "CommandBuffer");
+		}
+		else
 		{
 			m_graphicsCommandPool = std::make_shared< CommandPool >(m_device, m_device->getGraphicsFamilyIndex(), true, true, false);
 			m_graphicsCommandPool->setIdentifier(ClassId, "Specific", "CommandPool");
@@ -70,6 +76,21 @@ namespace EmEn::Vulkan
 
 				return false;
 			}
+
+			m_imageLayoutTransitionCommandBuffer = std::make_unique< CommandBuffer >(m_graphicsCommandPool, true);
+			m_imageLayoutTransitionCommandBuffer->setIdentifier(ClassId, "ImageLayoutTransition", "CommandBuffer");
+		}
+
+		m_imageLayoutTransitionFence = std::make_unique< Sync::Fence >(m_device);
+		m_imageLayoutTransitionFence->setIdentifier(ClassId, "ImageLayoutTransition", "Fence");
+
+		if ( !m_imageLayoutTransitionFence->createOnHardware() )
+		{
+			Tracer::error(ClassId, "Unable to create the image layout transition fence !");
+
+			m_imageLayoutTransitionFence.reset();
+
+			return false;
 		}
 
 		return true;
@@ -80,6 +101,9 @@ namespace EmEn::Vulkan
 	{
 		m_device->waitIdle("TransferManager::onTerminate()");
 
+		m_imageLayoutTransitionFence.reset();
+		m_imageLayoutTransitionCommandBuffer.reset();
+
 		m_bufferTransferOperations.clear();
 		m_imageTransferOperations.clear();
 
@@ -89,6 +113,102 @@ namespace EmEn::Vulkan
 		m_device.reset();
 
 		return true;
+	}
+
+	bool
+	TransferManager::transitionImageLayout (Image & image, VkImageAspectFlags aspectMask, VkImageLayout oldLayout, VkImageLayout newLayout) const noexcept
+	{
+		const std::lock_guard< std::mutex > lock{m_transferOperationsAccess};
+
+		if ( !m_imageLayoutTransitionFence->reset() )
+		{
+			TraceError{ClassId} << "Unable to reset the image layout transition fence for the image '" << image.identifier() << "' !";
+
+			return false;
+		}
+
+		if ( !m_imageLayoutTransitionCommandBuffer->begin() )
+		{
+			TraceError{ClassId} << "Unable to begin the image layout transition command buffer for the image '" << image.identifier() << "' !";
+
+			return false;
+		}
+
+		VkAccessFlags srcAccessMask = VK_IMAGE_ASPECT_NONE;
+		VkAccessFlags dstAccessMask = VK_IMAGE_ASPECT_NONE;
+
+		VkPipelineStageFlags sourceStage = VK_PIPELINE_STAGE_NONE;
+		VkPipelineStageFlags destinationStage = VK_PIPELINE_STAGE_NONE;
+
+	    if ( oldLayout == VK_IMAGE_LAYOUT_UNDEFINED && newLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL )
+	    {
+	        srcAccessMask = VK_IMAGE_ASPECT_NONE;
+	        dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+
+	        sourceStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+	        destinationStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+	    }
+		else if ( oldLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL && newLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL )
+		{
+	        srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+	        dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+	        sourceStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+	        destinationStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+	    }
+		else if ( oldLayout == VK_IMAGE_LAYOUT_UNDEFINED && newLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL )
+		{
+			srcAccessMask = VK_IMAGE_ASPECT_NONE;
+	        dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+	        sourceStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+	        destinationStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+	    }
+		else if ( oldLayout == VK_IMAGE_LAYOUT_UNDEFINED && newLayout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL )
+		{
+			srcAccessMask = VK_IMAGE_ASPECT_NONE;
+	        dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
+
+	        sourceStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+	        destinationStage = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+	    }
+		else
+	    {
+			TraceError{ClassId} << "Unsupported layout transition for the image '" << image.identifier() << "' !";
+
+	        return false;
+	    }
+
+		const Sync::ImageMemoryBarrier barrier{image, srcAccessMask, dstAccessMask, oldLayout, newLayout, aspectMask};
+
+		m_imageLayoutTransitionCommandBuffer->pipelineBarrier(barrier, sourceStage, destinationStage);
+
+		if ( !m_imageLayoutTransitionCommandBuffer->end() )
+		{
+			TraceError{ClassId} << "Unable to end the image layout transition command buffer for the image '" << image.identifier() << "' !";
+
+			return false;
+		}
+
+		const auto * queue = m_device->getGraphicsQueue(QueuePriority::High);
+
+		if ( !queue->submit(*m_imageLayoutTransitionCommandBuffer, SynchInfo{}.withFence(m_imageLayoutTransitionFence->handle())) )
+		{
+			TraceError{ClassId} << "Unable to submit the image layout transition command buffer for the image '" << image.identifier() << "' !";
+
+			return false;
+		}
+
+		if ( !m_imageLayoutTransitionFence->wait() )
+		{
+			TraceError{ClassId} << "Unable to wait the image layout transition command fence for the image '" << image.identifier() << "' !";
+
+			return false;
+		}
+
+	    image.setCurrentImageLayout(newLayout);
+
+	    return true;
 	}
 
 	BufferTransferOperation *

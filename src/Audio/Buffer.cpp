@@ -33,7 +33,7 @@
 
 namespace EmEn::Audio
 {
-	using namespace EmEn::Libs;
+	using namespace Libs;
 
 	Buffer::Buffer () noexcept
 	{

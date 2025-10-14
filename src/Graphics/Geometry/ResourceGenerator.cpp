@@ -34,10 +34,10 @@
 
 namespace EmEn::Graphics::Geometry
 {
-	using namespace EmEn::Libs;
-	using namespace EmEn::Libs::Math;
-	using namespace EmEn::Libs::PixelFactory;
-	using namespace EmEn::Libs::VertexFactory;
+	using namespace Libs;
+	using namespace Libs::Math;
+	using namespace Libs::PixelFactory;
+	using namespace Libs::VertexFactory;
 
 	std::shared_ptr< IndexedVertexResource >
 	ResourceGenerator::shape (const Shape< float > & shape, const std::string & resourceName) const noexcept

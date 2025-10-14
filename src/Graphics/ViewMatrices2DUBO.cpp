@@ -192,7 +192,7 @@ namespace EmEn::Graphics
 		/* NOTE: Lock between updateVideoMemory() and destroy(). */
 		const std::lock_guard< std::mutex > lock{m_GPUBufferAccessLock};
 
-		auto * pointer = m_uniformBufferObject->mapMemory< float >();
+		auto * pointer = m_uniformBufferObject->mapMemoryAs< float >(0, VK_WHOLE_SIZE);
 
 		if ( pointer == nullptr )
 		{
@@ -201,7 +201,7 @@ namespace EmEn::Graphics
 
 		std::memcpy(pointer, m_renderState[readStateIndex].bufferData.data(), m_renderState[readStateIndex].bufferData.size() * sizeof(float));
 
-		m_uniformBufferObject->unmapMemory();
+		m_uniformBufferObject->unmapMemory(0, VK_WHOLE_SIZE);
 
 		return true;
 	}

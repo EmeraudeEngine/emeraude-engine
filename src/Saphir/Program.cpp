@@ -32,8 +32,8 @@
 
 namespace EmEn::Saphir
 {
-	using namespace EmEn::Libs;
-	using namespace EmEn::Graphics;
+	using namespace Libs;
+	using namespace Graphics;
 
 	bool
 	Program::isComplete () const noexcept

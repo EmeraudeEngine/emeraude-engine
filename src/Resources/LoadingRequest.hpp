@@ -63,7 +63,7 @@ namespace EmEn::Resources
 				: m_baseInformation{std::move(baseInformation)},
 				m_resource{resource}
 			{
-				using namespace EmEn::Libs;
+				using namespace Libs;
 
 				switch ( m_baseInformation.sourceType() )
 				{

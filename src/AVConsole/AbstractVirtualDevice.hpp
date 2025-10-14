@@ -342,12 +342,12 @@ namespace EmEn::AVConsole
 			 * @brief Event fired when a virtual device is connected to input.
 			 * @note This method uses a pointer instead of a reference to ease the dynamic cast. It will never be null.
 			 * @param managers A reference to the audio video managers.
-			 * @param inputDevice A pointer to the virtual device.
+			 * @param inputDevice A reference to the virtual device.
 			 * @return void
 			 */
 			virtual
 			void
-			onInputDeviceConnected (AVManagers & /*managers*/, AbstractVirtualDevice * /*inputDevice*/) noexcept
+			onInputDeviceConnected (AVManagers & /*managers*/, AbstractVirtualDevice & /*inputDevice*/) noexcept
 			{
 
 			}
@@ -356,12 +356,12 @@ namespace EmEn::AVConsole
 			 * @brief Event fired when a virtual device is connected to output.
 			 * @note This method uses a pointer instead of a reference to ease the dynamic cast. It will never be null.
 			 * @param managers A reference to the audio video managers.
-			 * @param outputDevice A pointer to the virtual device.
+			 * @param outputDevice A reference to the virtual device.
 			 * @return void
 			 */
 			virtual
 			void
-			onOutputDeviceConnected (AVManagers & /*managers*/, AbstractVirtualDevice * /*outputDevice*/) noexcept
+			onOutputDeviceConnected (AVManagers & /*managers*/, AbstractVirtualDevice & /*outputDevice*/) noexcept
 			{
 
 			}
@@ -370,12 +370,12 @@ namespace EmEn::AVConsole
 			 * @brief Event fired when a virtual device is disconnected to input.
 			 * @note This method uses a pointer instead of a reference to ease the dynamic cast. It will never be null.
 			 * @param managers A reference to the audio video managers.
-			 * @param inputDevice A pointer to the virtual device.
+			 * @param inputDevice A reference to the virtual device.
 			 * @return void
 			 */
 			virtual
 			void
-			onInputDeviceDisconnected (AVManagers & /*managers*/, AbstractVirtualDevice * /*inputDevice*/) noexcept
+			onInputDeviceDisconnected (AVManagers & /*managers*/, AbstractVirtualDevice & /*inputDevice*/) noexcept
 			{
 
 			}
@@ -384,12 +384,12 @@ namespace EmEn::AVConsole
 			 * @brief Event fired when a virtual device is disconnected to output.
 			 * @note This method uses a pointer instead of a reference to ease the dynamic cast. It will never be null.
 			 * @param managers A reference to the audio video managers.
-			 * @param outputDevice A pointer to the virtual device.
+			 * @param outputDevice A reference to the virtual device.
 			 * @return void
 			 */
 			virtual
 			void
-			onOutputDeviceDisconnected (AVManagers & /*managers*/, AbstractVirtualDevice * /*outputDevice*/) noexcept
+			onOutputDeviceDisconnected (AVManagers & /*managers*/, AbstractVirtualDevice & /*outputDevice*/) noexcept
 			{
 
 			}

@@ -182,7 +182,7 @@ namespace EmEn::Vulkan
 			}
 
 			/**
-			 * @brief Returns whether the presentation is supported by this surface.
+			 * @brief Returns whether this surface supports the presentation.
 			 * @return bool
 			 */
 			[[nodiscard]]

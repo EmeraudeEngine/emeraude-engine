@@ -581,18 +581,12 @@ namespace EmEn::Vulkan
 	SwapChain::createDepthStencilBuffer (const std::shared_ptr< Device > & device, std::shared_ptr< Image > & image, std::shared_ptr< ImageView > & depthImageView, std::shared_ptr< ImageView > & stencilImageView, const std::string & identifier) noexcept
 	{
 		/* Create the depth/stencil buffer. */
-		image = std::make_shared< Image >(
+		image = std::make_shared< Vulkan::Image >(
 			device,
 			VK_IMAGE_TYPE_2D,
 			Instance::findDepthStencilFormat(device, this->precisions()),
 			this->extent(),
-			VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
-			VK_IMAGE_LAYOUT_UNDEFINED,
-			0, // flags
-			1, // Image mip levels
-			1, //m_createInfo.imageArrayLayers, // Image array layers
-			VK_SAMPLE_COUNT_1_BIT,
-			VK_IMAGE_TILING_OPTIMAL
+			VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT
 		);
 		image->setIdentifier(ClassId, identifier + "DepthStencilBuffer", "Image");
 
@@ -852,7 +846,7 @@ namespace EmEn::Vulkan
 	}
 
 	void
-	SwapChain::onInputDeviceConnected (AVConsole::AVManagers & managers, AbstractVirtualDevice * /*sourceDevice*/) noexcept
+	SwapChain::onInputDeviceConnected (AVConsole::AVManagers & managers, AbstractVirtualDevice & /*sourceDevice*/) noexcept
 	{
 		if ( !m_viewMatrices.create(managers.graphicsRenderer, this->id()) )
 		{
@@ -861,7 +855,7 @@ namespace EmEn::Vulkan
 	}
 
 	void
-	SwapChain::onInputDeviceDisconnected (AVConsole::AVManagers & /*managers*/, AbstractVirtualDevice * /*sourceDevice*/) noexcept
+	SwapChain::onInputDeviceDisconnected (AVConsole::AVManagers & /*managers*/, AbstractVirtualDevice & /*sourceDevice*/) noexcept
 	{
 		m_viewMatrices.destroy();
 	}

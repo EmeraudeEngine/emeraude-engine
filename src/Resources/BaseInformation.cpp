@@ -35,7 +35,7 @@
 
 namespace EmEn::Resources
 {
-	using namespace EmEn::Libs;
+	using namespace Libs;
 
 	bool
 	BaseInformation::parseName (const Json::Value & resourceDefinition) noexcept

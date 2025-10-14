@@ -78,12 +78,7 @@ namespace EmEn::Vulkan
 			 * @param blockAlignedSize The size of a block. Default, no sub-objects.
 			 */
 			UniformBufferObject (const std::shared_ptr< Device > & device, VkDeviceSize size, uint32_t blockAlignedSize = 0) noexcept
-				: Buffer{
-					device,
-					0,
-					size,
-					VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-					VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
+				: Buffer{device, 0, size, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, true
 				},
 				m_blockAlignedSize{blockAlignedSize}
 			{

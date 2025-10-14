@@ -27,8 +27,8 @@
 #include "Buffer.hpp"
 
 /* Local inclusions. */
-#include "Vulkan/TransferManager.hpp"
-#include "Vulkan/Device.hpp"
+#include "Device.hpp"
+#include "TransferManager.hpp"
 #include "Utility.hpp"
 #include "Tracer.hpp"
 
@@ -40,8 +40,9 @@ namespace EmEn::Vulkan
 		: AbstractDeviceDependentObject{other.device()},
 		m_handle{other.m_handle},
 		m_createInfo{other.m_createInfo},
-		m_memoryPropertyFlag{other.m_memoryPropertyFlag},
-		m_deviceMemory{std::move(other.m_deviceMemory)}
+		m_deviceMemory{std::move(other.m_deviceMemory)},
+		m_memoryAllocation{other.m_memoryAllocation},
+		m_hostVisible{other.m_hostVisible}
 	{
 		other.m_handle = VK_NULL_HANDLE;
 
@@ -63,8 +64,9 @@ namespace EmEn::Vulkan
 			this->setDeviceForMove(other.device());
 			m_handle = other.m_handle;
 			m_createInfo = other.m_createInfo;
-			m_memoryPropertyFlag = other.m_memoryPropertyFlag;
 			m_deviceMemory = std::move(other.m_deviceMemory);
+			m_memoryAllocation = other.m_memoryAllocation;
+			m_hostVisible = other.m_hostVisible;
 
 			other.m_handle = VK_NULL_HANDLE;
 
@@ -89,44 +91,13 @@ namespace EmEn::Vulkan
 			return false;
 		}
 
-		if ( const auto result = vkCreateBuffer(this->device()->handle(), &m_createInfo, VK_NULL_HANDLE, &m_handle); result != VK_SUCCESS )
+		const auto result =
+			this->device()->useMemoryAllocator() ?
+			this->createWithVMA() :
+			this->createManually();
+
+		if ( !result )
 		{
-			TraceError{ClassId} << "Unable to create a buffer : " << vkResultToCString(result) << " !";
-
-			return false;
-		}
-
-		/* Allocate memory for the new buffer. */
-		VkBufferMemoryRequirementsInfo2 info{};
-		info.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_REQUIREMENTS_INFO_2;
-		info.pNext = VK_NULL_HANDLE;
-		info.buffer = m_handle;
-
-		VkMemoryRequirements2 memoryRequirement{};
-		memoryRequirement.sType = VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2;
-		memoryRequirement.pNext = VK_NULL_HANDLE;
-
-		vkGetBufferMemoryRequirements2(this->device()->handle(), &info, &memoryRequirement);
-
-		m_deviceMemory = std::make_unique< DeviceMemory >(this->device(), memoryRequirement, m_memoryPropertyFlag);
-		m_deviceMemory->setIdentifier(ClassId, this->identifier(), "DeviceMemory");
-
-		if ( !m_deviceMemory->createOnHardware() )
-		{
-			TraceError{ClassId} << "Unable to create a device memory for the buffer " << m_handle << " !";
-
-			this->destroyFromHardware();
-
-			return false;
-		}
-
-		/* Bind the buffer to the device memory */
-		if ( const auto result = vkBindBufferMemory(this->device()->handle(), m_handle, m_deviceMemory->handle(), 0); result != VK_SUCCESS )
-		{
-			TraceError{ClassId} <<
-				"Unable to bind the buffer " << m_handle << " to the device memory " << m_deviceMemory->handle() <<
-				" : " << vkResultToCString(result) << " !";
-
 			this->destroyFromHardware();
 
 			return false;
@@ -140,19 +111,81 @@ namespace EmEn::Vulkan
 	bool
 	Buffer::destroyFromHardware () noexcept
 	{
-		if ( !this->hasDevice() )
+		const auto result =
+			this->device()->useMemoryAllocator() ?
+			this->destroyWithVMA() :
+			this->destroyManually();
+
+		if ( !result )
 		{
-			Tracer::error(ClassId, "No device to destroy this buffer !");
+			return false;
+		}
+
+		this->setDestroyed();
+
+		return true;
+	}
+
+	bool
+	Buffer::createManually () noexcept
+	{
+		/* 1. Create the buffer. */
+		if ( const auto result = vkCreateBuffer(this->device()->handle(), &m_createInfo, VK_NULL_HANDLE, &m_handle); result != VK_SUCCESS )
+		{
+			TraceError{ClassId} << "Unable to create a buffer : " << vkResultToCString(result) << " !";
 
 			return false;
 		}
 
+		/* 2. Allocate memory for the new buffer. */
+		VkBufferMemoryRequirementsInfo2 info{};
+		info.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_REQUIREMENTS_INFO_2;
+		info.pNext = VK_NULL_HANDLE;
+		info.buffer = m_handle;
+
+		VkMemoryRequirements2 memoryRequirement{};
+		memoryRequirement.sType = VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2;
+		memoryRequirement.pNext = VK_NULL_HANDLE;
+
+		vkGetBufferMemoryRequirements2(this->device()->handle(), &info, &memoryRequirement);
+
+		VkMemoryPropertyFlags memoryPropertyFlags = m_hostVisible ?
+			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT :
+			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+
+		m_deviceMemory = std::make_unique< DeviceMemory >(this->device(), memoryRequirement, memoryPropertyFlags);
+		m_deviceMemory->setIdentifier(ClassId, this->identifier(), "DeviceMemory");
+
+		if ( !m_deviceMemory->createOnHardware() )
+		{
+			TraceError{ClassId} << "Unable to create a device memory for the buffer " << m_handle << " !";
+
+			return false;
+		}
+
+		/* 3. Bind the buffer to the device memory. */
+		if ( const auto result = vkBindBufferMemory(this->device()->handle(), m_handle, m_deviceMemory->handle(), 0); result != VK_SUCCESS )
+		{
+			TraceError{ClassId} <<
+				"Unable to bind the buffer " << m_handle << " to the device memory " << m_deviceMemory->handle() <<
+				" : " << vkResultToCString(result) << " !";
+
+			return false;
+		}
+
+		return true;
+	}
+
+	bool
+	Buffer::destroyManually () noexcept
+	{
+		/* First, release memory. */
 		if ( m_deviceMemory != nullptr )
 		{
-			m_deviceMemory->destroyFromHardware();
 			m_deviceMemory.reset();
 		}
 
+		/* Then, destroy the buffer. */
 		if ( m_handle != VK_NULL_HANDLE )
 		{
 			vkDestroyBuffer(this->device()->handle(), m_handle, VK_NULL_HANDLE);
@@ -160,9 +193,96 @@ namespace EmEn::Vulkan
 			m_handle = VK_NULL_HANDLE;
 		}
 
-		this->setDestroyed();
+		return true;
+	}
+
+	bool
+	Buffer::createWithVMA () noexcept
+	{
+		VmaAllocationCreateInfo allocInfo{};
+		if ( m_hostVisible )
+		{
+			allocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+		}
+		allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+		//allocInfo.requiredFlags = 0;
+		//allocInfo.preferredFlags = 0;
+		//allocInfo.memoryTypeBits = 0;
+		//allocInfo.pool = VK_NULL_HANDLE; /* Default pool. */
+		//allocInfo.pUserData = nullptr;
+		//allocInfo.priority = 0.5F;
+
+		/* Bind the buffer to the device memory */
+		if ( const auto result = vmaCreateBuffer(this->device()->memoryAllocatorHandle(), &m_createInfo, &allocInfo, &m_handle, &m_memoryAllocation, nullptr); result != VK_SUCCESS )
+		{
+			TraceError{ClassId} << "Unable to create a buffer with VMA : " << vkResultToCString(result) << " !";
+
+			return false;
+		}
 
 		return true;
+	}
+
+	bool
+	Buffer::destroyWithVMA () noexcept
+	{
+		if ( m_handle != VK_NULL_HANDLE )
+		{
+			vmaDestroyBuffer(this->device()->memoryAllocatorHandle(), m_handle, m_memoryAllocation);
+
+			m_handle = VK_NULL_HANDLE;
+		}
+
+		return true;
+	}
+
+	void *
+	Buffer::mapMemory (VkDeviceSize offset, VkDeviceSize size) const noexcept
+	{
+		if ( !this->isHostVisible() )
+		{
+			Tracer::error(ClassId, "This buffer is not host visible! You can't map it.");
+
+			return nullptr;
+		}
+
+		if ( m_memoryAllocation != VK_NULL_HANDLE )
+		{
+			void * pointer = nullptr;
+
+			if ( const auto result = vmaMapMemory(this->device()->memoryAllocatorHandle(), m_memoryAllocation, &pointer); result != VK_SUCCESS )
+			{
+				TraceError{ClassId} << "Unable to map (VMA) the buffer from offset " << offset << " for " << size << " bytes.";
+
+				return nullptr;
+			}
+
+			return pointer;
+		}
+
+		return m_deviceMemory->mapMemory(offset, size);
+	}
+
+	void
+	Buffer::unmapMemory (VkDeviceSize offset, VkDeviceSize size) const noexcept
+	{
+		if ( !this->isHostVisible() )
+		{
+			return;
+		}
+
+		if ( m_memoryAllocation != VK_NULL_HANDLE )
+		{
+			const auto allocator = this->device()->memoryAllocatorHandle();
+
+			vmaFlushAllocation(allocator, m_memoryAllocation, offset, size);
+
+			vmaUnmapMemory(allocator, m_memoryAllocation);
+		}
+		else
+		{
+			m_deviceMemory->unmapMemory();
+		}
 	}
 
 	bool
@@ -200,21 +320,40 @@ namespace EmEn::Vulkan
 			return false;
 		}
 
-		/* Lock the buffer for access. */
-		auto * pointer = m_deviceMemory->mapMemory(memoryRegion.offset(), memoryRegion.bytes());
-
-		if ( pointer == nullptr )
+		if ( m_memoryAllocation != VK_NULL_HANDLE )
 		{
-			TraceError{ClassId} << "Unable to map the buffer from offset " << memoryRegion.offset() << " for " << memoryRegion.bytes() << " bytes.";
+			const auto allocator = this->device()->memoryAllocatorHandle();
 
-			return false;
+			void * pointer = nullptr;
+
+			if ( const auto result = vmaMapMemory(allocator, m_memoryAllocation, &pointer); result != VK_SUCCESS )
+			{
+				TraceError{ClassId} << "Unable to map (VMA) the buffer from offset " << memoryRegion.offset() << " for " << memoryRegion.bytes() << " bytes.";
+
+				return false;
+			}
+
+			std::memcpy(static_cast< std::byte * >(pointer) + memoryRegion.offset(), memoryRegion.source(), memoryRegion.bytes());
+
+			vmaFlushAllocation(allocator, m_memoryAllocation, memoryRegion.offset(), memoryRegion.bytes());
+
+			vmaUnmapMemory(allocator, m_memoryAllocation);
 		}
+		else
+		{
+			auto * pointer = m_deviceMemory->mapMemory(memoryRegion.offset(), memoryRegion.bytes());
 
-		/* Raw data copy... */
-		std::memcpy(pointer, memoryRegion.source(), memoryRegion.bytes());
+			if ( pointer == nullptr )
+			{
+				TraceError{ClassId} << "Unable to map the buffer from offset " << memoryRegion.offset() << " for " << memoryRegion.bytes() << " bytes.";
 
-		/* Unlock the buffer. */
-		m_deviceMemory->unmapMemory();
+				return false;
+			}
+
+			std::memcpy(pointer, memoryRegion.source(), memoryRegion.bytes());
+
+			m_deviceMemory->unmapMemory();
+		}
 
 		return true;
 	}
@@ -229,7 +368,7 @@ namespace EmEn::Vulkan
 			return false;
 		}
 
-		/* [VULKAN-CPU-SYNC] CHECK */
+		// [VULKAN-CPU-SYNC] CHECK
 		const std::lock_guard< std::mutex > lock{m_hostMemoryAccess};
 
 		if ( !this->isCreated() )
@@ -246,25 +385,42 @@ namespace EmEn::Vulkan
 			return false;
 		}
 
-		/* TODO: Check for performance improvement on mapping the buffer once with larger boundaries. */
+		const auto allocator = this->device()->memoryAllocatorHandle();
 
-		/* Raw data copy... */
+		// TODO: Check for performance improvement on mapping the buffer once with larger boundaries.
 		return std::ranges::all_of(memoryRegions, [&] (const auto & memoryRegion) {
-			/* Lock the buffer for access. */
-			auto * pointer = m_deviceMemory->mapMemory(memoryRegion.offset(), this->bytes());
-
-			if ( pointer == nullptr )
+			if ( m_memoryAllocation != VK_NULL_HANDLE )
 			{
-				TraceError{ClassId} << "Unable to map the buffer from offset " << memoryRegion.offset() << " for " << this->bytes() << " bytes.";
+				void * pointer = nullptr;
 
-				return false;
+				if ( const auto result = vmaMapMemory(allocator, m_memoryAllocation, &pointer); result != VK_SUCCESS )
+				{
+					TraceError{ClassId} << "Unable to map (VMA) the buffer from offset " << memoryRegion.offset() << " for " << this->bytes() << " bytes.";
+
+					return false;
+				}
+
+				std::memcpy(static_cast< std::byte * >(pointer) + memoryRegion.offset(), memoryRegion.source(), memoryRegion.bytes());
+
+				vmaFlushAllocation(allocator, m_memoryAllocation, memoryRegion.offset(), memoryRegion.bytes());
+
+				vmaUnmapMemory(allocator, m_memoryAllocation);
 			}
+			else
+			{
+				auto * pointer = m_deviceMemory->mapMemory(memoryRegion.offset(), this->bytes());
 
-			/* Raw data copy... */
-			std::memcpy(pointer, memoryRegion.source(), memoryRegion.bytes());
+				if ( pointer == nullptr )
+				{
+					TraceError{ClassId} << "Unable to map the buffer from offset " << memoryRegion.offset() << " for " << this->bytes() << " bytes.";
 
-			/* Unlock the buffer. */
-			m_deviceMemory->unmapMemory();
+					return false;
+				}
+
+				std::memcpy(pointer, memoryRegion.source(), memoryRegion.bytes());
+
+				m_deviceMemory->unmapMemory();
+			}
 
 			return true;
 		});

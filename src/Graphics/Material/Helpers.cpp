@@ -43,9 +43,9 @@
 
 namespace EmEn::Graphics::Material
 {
-	using namespace EmEn::Libs;
-	using namespace EmEn::Saphir;
-	using namespace EmEn::Saphir::Keys;
+	using namespace Libs;
+	using namespace Saphir;
+	using namespace Saphir::Keys;
 
 	constexpr auto TracerTag{"MaterialHelpers"};
 

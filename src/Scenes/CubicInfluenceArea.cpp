@@ -34,9 +34,9 @@
 
 namespace EmEn::Scenes
 {
-	using namespace EmEn::Libs;
-	using namespace EmEn::Libs::Math;
-	using namespace EmEn::Physics;
+	using namespace Libs;
+	using namespace Libs::Math;
+	using namespace Physics;
 
 	bool
 	CubicInfluenceArea::isUnderInfluence (const CartesianFrame< float > & worldCoordinates, const Space3D::Sphere< float > & /*worldBoundingSphere*/) const noexcept

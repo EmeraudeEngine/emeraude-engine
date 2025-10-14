@@ -29,7 +29,7 @@
 /* Local inclusions. */
 #include "Libs/Math/CartesianFrame.hpp"
 
-using namespace EmEn::Libs::Math;
+using namespace Libs::Math;
 
 using MathTypeList = testing::Types< float, double >;
 

@@ -29,7 +29,7 @@
 /* Local inclusions. */
 #include "../Libs/NodeTrait.hpp"
 
-using namespace EmEn::Libs;
+using namespace Libs;
 
 TEST(NodeTrait, init)
 {

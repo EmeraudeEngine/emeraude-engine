@@ -38,7 +38,7 @@
 
 namespace EmEn::Vulkan
 {
-	using namespace EmEn::Libs;
+	using namespace Libs;
 
 	PhysicalDevice::PhysicalDevice (const VkPhysicalDevice & physicalDevice) noexcept
 		: m_physicalDevice{physicalDevice}

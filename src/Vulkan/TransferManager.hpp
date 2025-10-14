@@ -42,18 +42,12 @@
 #include "Tracer.hpp"
 
 /* Forward declarations. */
-namespace EmEn
+namespace EmEn::Vulkan
 {
-	namespace Vulkan
-	{
-		class Device;
-		class CommandPool;
-		class Buffer;
-		class Image;
-	}
-
-	class Arguments;
-	class Settings;
+	class Device;
+	class CommandPool;
+	class Buffer;
+	class Image;
 }
 
 namespace EmEn::Vulkan
@@ -61,7 +55,6 @@ namespace EmEn::Vulkan
 	/**
 	 * @brief The transfer manager service class.
 	 * @extends EmEn::ServiceInterface This class is a service.
-	 * @todo Improve with multiple transfers at once on high-end GPU. For now the system is locked to one staging buffer at a time.
 	 */
 	class TransferManager final : public ServiceInterface
 	{
@@ -201,6 +194,17 @@ namespace EmEn::Vulkan
 				return transferOperation->transfer(m_device, targetImage, 0);
 			}
 
+			/**
+			 * @brief Transitions the layout of a Vulkan image.
+			 * @param image A reference to an image.
+			 * @param aspectMask The type of image.
+			 * @param oldLayout The current layout of the image.
+			 * @param newLayout The desired new layout of the image.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool transitionImageLayout (Image & image, VkImageAspectFlags aspectMask, VkImageLayout oldLayout, VkImageLayout newLayout) const noexcept;
+
 		private:
 
 			/** @copydoc EmEn::ServiceInterface::onInitialize() */
@@ -230,6 +234,8 @@ namespace EmEn::Vulkan
 			std::shared_ptr< CommandPool > m_graphicsCommandPool;
 			std::vector< BufferTransferOperation > m_bufferTransferOperations;
 			std::vector< ImageTransferOperation > m_imageTransferOperations;
+			std::unique_ptr< CommandBuffer > m_imageLayoutTransitionCommandBuffer;
+			std::unique_ptr< Sync::Fence > m_imageLayoutTransitionFence;
 			mutable std::mutex m_transferOperationsAccess;
 	};
 }

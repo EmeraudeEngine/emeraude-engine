@@ -340,6 +340,9 @@ namespace EmEn::Graphics::RenderableInstance
 
 		commandBuffer.bind(*program->graphicsPipeline());
 
+		/* NOTE: Set the dynamic viewport. */
+		renderTarget->setViewport(commandBuffer);
+
 		/* Bind view UBO. */
 		if ( this->isFlagEnabled(EnableInstancing) )
 		{

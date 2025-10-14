@@ -97,6 +97,8 @@ namespace EmEn::Vulkan
 
 				this->setCreated();
 
+				m_isReadyForRendering = true;
+
 				return true;
 			}
 
@@ -104,6 +106,8 @@ namespace EmEn::Vulkan
 			bool
 			destroyFromHardware () noexcept override
 			{
+				m_isReadyForRendering = false;
+
 				if ( !this->destroy() )
 				{
 					return false;
@@ -183,13 +187,12 @@ namespace EmEn::Vulkan
 				return m_viewMatrices;
 			}
 
-			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::isValid() const */
+			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::isReadyForRendering() const */
 			[[nodiscard]]
 			bool
-			isValid () const noexcept override
+			isReadyForRendering () const noexcept override
 			{
-				/* FIXME: Add a better check ! */
-				return m_handle != VK_NULL_HANDLE;
+				return m_isReadyForRendering;
 			}
 
 			/**
@@ -309,10 +312,10 @@ namespace EmEn::Vulkan
 			}
 
 			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::onInputDeviceConnected() */
-			void onInputDeviceConnected (AVConsole::AVManagers & managers, AbstractVirtualDevice * sourceDevice) noexcept override;
+			void onInputDeviceConnected (AVConsole::AVManagers & managers, AbstractVirtualDevice & sourceDevice) noexcept override;
 
 			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::onInputDeviceDisconnected() */
-			void onInputDeviceDisconnected (AVConsole::AVManagers & managers, AbstractVirtualDevice * sourceDevice) noexcept override;
+			void onInputDeviceDisconnected (AVConsole::AVManagers & managers, AbstractVirtualDevice & sourceDevice) noexcept override;
 
 			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::onCreate() */
 			[[nodiscard]]
@@ -471,5 +474,6 @@ namespace EmEn::Vulkan
 			bool m_tripleBufferingEnabled{false};
 			bool m_VSyncEnabled{false};
 			bool m_isPerspectiveProjection{false};
+			bool m_isReadyForRendering{false};
 	};
 }

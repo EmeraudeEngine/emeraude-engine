@@ -71,18 +71,15 @@ namespace EmEn::Graphics::TextureResource
 		}
 
 		/* Create a Vulkan image. */
-		m_image = std::make_shared< Image >(
+		m_image = std::make_shared< Vulkan::Image >(
 			renderer.device(),
 			VK_IMAGE_TYPE_2D,
 			Image::getFormat< uint8_t >(m_localData->data(0).colorCount()),
 			VkExtent3D{m_localData->cubeSize(), m_localData->cubeSize(), 1U},
-			VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
-			VK_IMAGE_LAYOUT_UNDEFINED,
-			VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT, /* flags */
-			1, /* mipLevels */
-			static_cast< uint32_t >(CubemapFaceCount), /* arrayLayers */
-			VK_SAMPLE_COUNT_1_BIT,
-			VK_IMAGE_TILING_OPTIMAL
+			VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+			VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT,
+			1,
+			static_cast< uint32_t >(CubemapFaceCount) /* 6 */
 		);
 		m_image->setIdentifier(ClassId, this->name(), "Image");
 
@@ -117,8 +114,31 @@ namespace EmEn::Graphics::TextureResource
 		}
 
 		/* Get a Vulkan sampler. */
-		m_sampler = renderer.getSampler(0, 0);
-		m_sampler->setIdentifier(ClassId, this->name(), "Sampler");
+		m_sampler = renderer.getSampler("Cubemap", [] (Settings & settings, VkSamplerCreateInfo & createInfo) {
+			const auto magFilter = settings.getOrSetDefault< std::string >(GraphicsTextureMagFilteringKey, DefaultGraphicsTextureFiltering);
+			const auto minFilter = settings.getOrSetDefault< std::string >(GraphicsTextureMinFilteringKey, DefaultGraphicsTextureFiltering);
+			const auto mipmapMode = settings.getOrSetDefault< std::string >(GraphicsTextureMipFilteringKey, DefaultGraphicsTextureFiltering);
+			const auto mipLevels = settings.getOrSetDefault< float >(GraphicsTextureMipMappingLevelsKey, DefaultGraphicsTextureMipMappingLevels);
+			const auto anisotropyLevels = settings.getOrSetDefault< float >(GraphicsTextureAnisotropyLevelsKey, DefaultGraphicsTextureAnisotropy);
+
+			// FIXME: Check to enable "VK_EXT_non_seamless_cube_map" extension
+			//createInfo.flags = VK_SAMPLER_CREATE_NON_SEAMLESS_CUBE_MAP_BIT_EXT;
+			createInfo.magFilter = magFilter == "linear" ? VK_FILTER_LINEAR : VK_FILTER_NEAREST;
+			createInfo.minFilter = minFilter == "linear" ? VK_FILTER_LINEAR : VK_FILTER_NEAREST;
+			createInfo.mipmapMode = mipmapMode == "linear" ? VK_SAMPLER_MIPMAP_MODE_LINEAR : VK_SAMPLER_MIPMAP_MODE_NEAREST;
+			//createInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+			//createInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+			//createInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+			//createInfo.mipLodBias = 0.0F;
+			createInfo.anisotropyEnable = anisotropyLevels > 1.0F ? VK_TRUE : VK_FALSE;
+			createInfo.maxAnisotropy = anisotropyLevels;
+			//createInfo.compareEnable = VK_FALSE;
+			//createInfo.compareOp = VK_COMPARE_OP_ALWAYS;
+			//createInfo.minLod = 0.0F;
+			createInfo.maxLod = mipLevels > 0.0F ? mipLevels : VK_LOD_CLAMP_NONE;
+			//createInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+			//createInfo.unnormalizedCoordinates = VK_FALSE;
+		});
 
 		if ( m_sampler == nullptr )
 		{

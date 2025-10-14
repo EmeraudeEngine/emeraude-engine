@@ -35,8 +35,8 @@
 
 namespace EmEn::Saphir
 {
-	using namespace EmEn::Libs;
-	using namespace EmEn::Saphir::Declaration;
+	using namespace Libs;
+	using namespace Saphir::Declaration;
 
 	bool
 	TesselationEvaluationShader::declare (const StageInput & declaration) noexcept

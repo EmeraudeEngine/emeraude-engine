@@ -87,10 +87,10 @@ namespace EmEn::Vulkan
 			/**
 			 * @brief Constructs a command buffer.
 			 * @param commandPool The reference to the command pool smart pointer.
-			 * @param primaryLevel Set command as primary or secondary. Default true.
+			 * @param primaryLevel Set command as primary or secondary.
 			 */
 			explicit
-			CommandBuffer (const std::shared_ptr< CommandPool > & commandPool, bool primaryLevel = true) noexcept
+			CommandBuffer (const std::shared_ptr< CommandPool > & commandPool, bool primaryLevel) noexcept
 				: m_commandPool{commandPool},
 				m_primaryLevel{primaryLevel}
 			{
@@ -196,7 +196,7 @@ namespace EmEn::Vulkan
 			/**
 			 * @brief Begins registering commands.
 			 * @param vkFlags A Vulkan flag for the command buffer usage. Default none.
-			 *  - VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT: The command buffer will be rerecorded right after executing it once.
+			 *  - VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT: The command buffer will be re-recorded right after executing it once.
 			 *  - VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT: This is a secondary command buffer that will be entirely within a single render pass.
 			 *  - VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT: The command buffer can be resubmitted while it is also already pending execution.
 			 * @return bool

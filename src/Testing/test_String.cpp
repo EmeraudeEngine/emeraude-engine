@@ -31,7 +31,7 @@
 #include "Libs/String.hpp"
 #include "Libs/Utility.hpp"
 
-using namespace EmEn::Libs;
+using namespace Libs;
 
 TEST(String, numericLabel)
 {

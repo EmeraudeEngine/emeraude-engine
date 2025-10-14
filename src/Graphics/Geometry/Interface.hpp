@@ -336,7 +336,7 @@ namespace EmEn::Graphics::Geometry
 			Libs::VertexFactory::NormalType
 			getNormalsFormat () const noexcept
 			{
-				using namespace EmEn::Libs::VertexFactory;
+				using namespace Libs::VertexFactory;
 
 				if ( this->isFlagEnabled(EnableTangentSpace) )
 				{
@@ -358,7 +358,7 @@ namespace EmEn::Graphics::Geometry
 			Libs::VertexFactory::TextureCoordinatesType
 			getPrimaryTextureCoordinatesFormat () const noexcept
 			{
-				using namespace EmEn::Libs::VertexFactory;
+				using namespace Libs::VertexFactory;
 
 				if ( !this->isFlagEnabled(EnablePrimaryTextureCoordinates) )
 				{
@@ -375,7 +375,7 @@ namespace EmEn::Graphics::Geometry
 			Libs::VertexFactory::TextureCoordinatesType
 			getSecondaryTextureCoordinatesFormat () const noexcept
 			{
-				using namespace EmEn::Libs::VertexFactory;
+				using namespace Libs::VertexFactory;
 
 				if ( !this->isFlagEnabled(EnableSecondaryTextureCoordinates) )
 				{

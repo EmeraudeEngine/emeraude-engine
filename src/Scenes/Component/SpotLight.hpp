@@ -198,7 +198,7 @@ namespace EmEn::Scenes::Component
 		private:
 
 			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::onOutputDeviceConnected() */
-			void onOutputDeviceConnected (AVConsole::AVManagers & managers, AbstractVirtualDevice * targetDevice) noexcept override;
+			void onOutputDeviceConnected (AVConsole::AVManagers & managers, AbstractVirtualDevice & targetDevice) noexcept override;
 
 			/** @copydoc EmEn::Animations::AnimatableInterface::playAnimation() */
 			bool playAnimation (uint8_t animationID, const Libs::Variant & value, size_t cycle) noexcept override;

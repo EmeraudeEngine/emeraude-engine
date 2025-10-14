@@ -157,10 +157,10 @@ namespace EmEn::Scenes::Component
 	}
 
 	void
-	Camera::onOutputDeviceConnected (AVConsole::AVManagers & /*managers*/, AbstractVirtualDevice * targetDevice) noexcept
+	Camera::onOutputDeviceConnected (AVConsole::AVManagers & /*managers*/, AbstractVirtualDevice & targetDevice) noexcept
 	{
 		/* Initialize the target device with coordinates and camera properties. */
-		targetDevice->updateDeviceFromCoordinates(this->getWorldCoordinates(), this->getWorldVelocity());
+		targetDevice.updateDeviceFromCoordinates(this->getWorldCoordinates(), this->getWorldVelocity());
 
 		if ( this->isPerspectiveProjection() )
 		{

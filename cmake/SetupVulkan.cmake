@@ -50,6 +50,18 @@ message("Vulkan ${Vulkan_VERSION} SDK enabled !")
 message(" - Headers : ${Vulkan_INCLUDE_DIRS}")
 message(" - Binary : ${Vulkan_LIBRARIES}")
 
+
+# Vulkan Memory Allocator
+message("Configuring Vulkan Memory Allocator library as sub-project ...")
+
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/dependencies/VulkanMemoryAllocator EXCLUDE_FROM_ALL)
+
+target_include_directories(${TARGET_BINARY_FOR_SETUP} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/VulkanMemoryAllocator/include)
+
+target_link_libraries(${TARGET_BINARY_FOR_SETUP} PRIVATE VulkanMemoryAllocator)
+
+
+# GLSLang
 message("Configuring GLSLang library as sub-project ...")
 
 if ( NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/glslang/External/spirv-tools )
