@@ -663,6 +663,8 @@ namespace EmEn::Vulkan
 
 		/* [VULKAN-API-SETUP] Graphics device features configuration. */
 		DeviceRequirements requirements{true, window, false};
+		// FIXME: Check to enable "VK_EXT_non_seamless_cube_map" extension
+		//requirements.featuresVK10().nonSeamlessCubeMap = VK_TRUE; // Required for cubemap rendering
 		requirements.featuresVK10().fillModeNonSolid = VK_TRUE; // Required for wireframe mode!
 		if constexpr ( !IsMacOS )
 		{

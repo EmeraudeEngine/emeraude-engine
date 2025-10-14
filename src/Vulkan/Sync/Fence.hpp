@@ -193,6 +193,7 @@ namespace EmEn::Vulkan::Sync
 			[[nodiscard]]
 			bool wait (uint64_t timeout = std::numeric_limits< uint64_t >::max()) const noexcept;
 
+
 			/**
 			 * @brief Waits for a fence to be signaled and reset it.
 			 * @param timeout A duration in nanoseconds for timeout. Default close to infinity (584 years).

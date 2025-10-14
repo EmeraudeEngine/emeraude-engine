@@ -82,14 +82,13 @@ namespace EmEn::Vulkan
 			 * @param format The format of the image.
 			 * @param extent A reference to an VkExtent3D for the image dimensions.
 			 * @param usageFlags The usage purpose of the image.
-			 * @param imageLayout The layout of the image.
 			 * @param createFlags The creation info flags. Default none.
 			 * @param mipLevels The number of mip-levels. Default 1.
 			 * @param arrayLayers The number of array levels. Default 1.
 			 * @param samples The number of samples (multisampling). Default VK_SAMPLE_COUNT_1_BIT.
 			 * @param imageTiling The image tiling (memory layout). Default VK_IMAGE_TILING_OPTIMAL.
 			 */
-			Image (const std::shared_ptr< Device > & device, VkImageType imageType, VkFormat format, const VkExtent3D & extent, VkImageUsageFlags usageFlags, VkImageLayout imageLayout, VkImageCreateFlags createFlags = 0, uint32_t mipLevels = 1, uint32_t arrayLayers = 1, VkSampleCountFlagBits samples = VK_SAMPLE_COUNT_1_BIT, VkImageTiling imageTiling = VK_IMAGE_TILING_OPTIMAL) noexcept
+			Image (const std::shared_ptr< Device > & device, VkImageType imageType, VkFormat format, const VkExtent3D & extent, VkImageUsageFlags usageFlags, VkImageCreateFlags createFlags = 0, uint32_t mipLevels = 1, uint32_t arrayLayers = 1, VkSampleCountFlagBits samples = VK_SAMPLE_COUNT_1_BIT, VkImageTiling imageTiling = VK_IMAGE_TILING_OPTIMAL) noexcept
 				: AbstractDeviceDependentObject{device}
 			{
 				m_createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
@@ -103,11 +102,13 @@ namespace EmEn::Vulkan
 				m_createInfo.samples = samples;
 				m_createInfo.tiling = imageTiling;
 				m_createInfo.usage = usageFlags;
-				/* TODO: If one day we had to share a buffer between a dedicated compute and graphics family, we need to describe it here. */
-				m_createInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-				m_createInfo.queueFamilyIndexCount = 0;
-				m_createInfo.pQueueFamilyIndices = nullptr;
-				m_createInfo.initialLayout = imageLayout;
+				/* TODO: If one day we had to share an image between a dedicated compute and graphics family, we need to describe it here. */
+				{
+					m_createInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+					m_createInfo.queueFamilyIndexCount = 0;
+					m_createInfo.pQueueFamilyIndices = nullptr;
+				}
+				m_createInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED; /* NOTE: The initial layout is undefined by design but can be VK_IMAGE_LAYOUT_PREINITIALIZED. */
 			}
 
 			/**
@@ -186,7 +187,7 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Sets the current image layout.
-			 * @warning This should be call after image manipulation on GPU.
+			 * @warning This should be called after image manipulation on GPU.
 			 * @param imageLayout The Vulkan image layout.
 			 * @return void
 			 */
@@ -561,15 +562,6 @@ namespace EmEn::Vulkan
 			VkImageCreateInfo m_createInfo{};
 			std::unique_ptr< DeviceMemory > m_deviceMemory;
 			VkImageLayout m_currentImageLayout{VK_IMAGE_LAYOUT_UNDEFINED};
-			std::array< bool, 8 > m_flags{
-				false/*IsSwapChainImage*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/
-			};
+			bool m_isSwapChainImage{false};
 	};
 }

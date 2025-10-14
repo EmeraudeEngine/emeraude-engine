@@ -42,12 +42,14 @@ namespace EmEn::Scenes::Component
 	using namespace Saphir;
 
 	void
-	PointLight::onOutputDeviceConnected (AVConsole::AVManagers & /*managers*/, AbstractVirtualDevice * targetDevice) noexcept
+	PointLight::onOutputDeviceConnected (AVConsole::AVManagers & /*managers*/, AbstractVirtualDevice & targetDevice) noexcept
 	{
-		const auto maxDistance = m_radius > 0.0F ? m_radius : s_maxDistance;
-
-		targetDevice->updateDeviceFromCoordinates(this->getWorldCoordinates(), this->getWorldVelocity());
-		targetDevice->updateProperties(true, maxDistance, 90.0F);
+		targetDevice.updateDeviceFromCoordinates(this->getWorldCoordinates(), this->getWorldVelocity());
+		targetDevice.updateProperties(
+			true,
+			m_radius > 0.0F ? m_radius : s_maxDistance,
+			90.0F
+		);
 	}
 
 	bool

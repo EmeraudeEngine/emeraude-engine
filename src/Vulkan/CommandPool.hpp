@@ -57,8 +57,8 @@ namespace EmEn::Vulkan
 			 * @brief Constructs a command pool.
 			 * @param device A reference to a smart pointer of a device.
 			 * @param queueFamilyIndex Set which family queue will be used by the command pool.
-			 * @param transientCB Tells command buffer will be short-lived.
-			 * @param enableCBReset Enables the command buffer to be reset into the initial state.
+			 * @param transientCB Tells command buffer will be short-lived. The content of the command buffer will always change.
+			 * @param enableCBReset Enables a command buffer to be reset individually into the initial state instead of waiting the whole command pool to reset.
 			 * @param enableProtectCB Enables the protected memory (Request protectedMemory feature and Vulkan 1.1).
 			 */
 			CommandPool (const std::shared_ptr< Device > & device, uint32_t queueFamilyIndex, bool transientCB, bool enableCBReset, bool enableProtectCB) noexcept
@@ -184,10 +184,10 @@ namespace EmEn::Vulkan
 			void freeCommandBuffer (VkCommandBuffer commandBufferHandle) const noexcept;
 
 			/**
-			 * @brief Resets the command pool.
+			 * @brief Resets command buffer from the command pool.
 			 * @return bool
 			 */
-			bool reset () const noexcept;
+			bool resetCommandBuffers (bool releaseMemory) const noexcept;
 
 		private:
 

@@ -34,7 +34,7 @@
 
 namespace EmEn::Vulkan
 {
-	using namespace EmEn::Libs;
+	using namespace Libs;
 
 	bool
 	Framebuffer::createOnHardware () noexcept
@@ -64,9 +64,7 @@ namespace EmEn::Vulkan
 		m_createInfo.attachmentCount = static_cast< uint32_t >(m_attachments.size());
 		m_createInfo.pAttachments = m_attachments.data();
 
-		const auto result = vkCreateFramebuffer(this->device()->handle(), &m_createInfo, nullptr, &m_handle);
-
-		if ( result != VK_SUCCESS )
+		if ( const auto result = vkCreateFramebuffer(this->device()->handle(), &m_createInfo, nullptr, &m_handle); result != VK_SUCCESS )
 		{
 			TraceError{ClassId} << "Unable to create a framebuffer : " << vkResultToCString(result) << " !";
 

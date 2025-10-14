@@ -32,12 +32,6 @@
 /* Local inclusions for inheritances. */
 #include "AbstractDeviceDependentObject.hpp"
 
-/* Forward declarations. */
-namespace EmEn
-{
-	class Settings;
-}
-
 namespace EmEn::Vulkan
 {
 	/**
@@ -50,14 +44,6 @@ namespace EmEn::Vulkan
 
 			/** @brief Class identifier. */
 			static constexpr auto ClassId{"VulkanSampler"};
-
-			/**
-			 * @brief Constructs a sampler.
-			 * @param device A reference to a smart pointer of the device.
-			 * @param settings A reference to the settings.
-			 * @param createFlags The creation info flags. Default none.
-			 */
-			Sampler (const std::shared_ptr< Device > & device, Settings & settings, VkSamplerCreateFlags createFlags = 0) noexcept;
 
 			/**
 			 * @brief Constructs a sampler with createInfo.

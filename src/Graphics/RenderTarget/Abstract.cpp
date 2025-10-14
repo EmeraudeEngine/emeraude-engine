@@ -54,7 +54,7 @@ namespace EmEn::Graphics::RenderTarget
 
 			if ( !m_semaphore->createOnHardware() )
 			{
-				Tracer::error(TracerTag, "Unable to create the render target semaphore !");
+				Tracer::error(TracerTag, "Unable to create the render target semaphore!");
 
 				m_semaphore.reset();
 
@@ -62,9 +62,18 @@ namespace EmEn::Graphics::RenderTarget
 			}
 		}
 
+		if ( !this->onCreate(renderer) )
+		{
+			Tracer::error(TracerTag, "Unable to create a complete render target! Destroying it...");
+
+			this->destroy();
+
+			return false;
+		}
+
 		m_renderOutOfDate = true;
 
-		return this->onCreate(renderer);
+		return true;
 	}
 
 	bool
@@ -82,18 +91,12 @@ namespace EmEn::Graphics::RenderTarget
 	{
 		const auto instanceID = identifier + "ColorBuffer";
 
-		image = std::make_shared< Image >(
+		image = std::make_shared< Vulkan::Image >(
 			device,
 			VK_IMAGE_TYPE_2D,
 			Instance::findDepthStencilFormat(device, this->precisions()),
 			this->extent(),
-			VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
-			VK_IMAGE_LAYOUT_UNDEFINED,
-			0, // flags
-			1, // Image mip levels
-			1, //m_createInfo.imageArrayLayers, // Image array layers
-			VK_SAMPLE_COUNT_1_BIT,
-			VK_IMAGE_TILING_OPTIMAL
+			VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT
 		);
 		image->setIdentifier(TracerTag, instanceID, "Image");
 
@@ -134,18 +137,12 @@ namespace EmEn::Graphics::RenderTarget
 	{
 		const auto instanceID = identifier + "DepthBuffer";
 
-		image = std::make_shared< Image >(
+		image = std::make_shared< Vulkan::Image >(
 			device,
 			VK_IMAGE_TYPE_2D,
 			Instance::findDepthStencilFormat(device, this->precisions()),
 			this->extent(),
-			VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
-			VK_IMAGE_LAYOUT_UNDEFINED,
-			0, // flags
-			1, // Image mip levels
-			1, //m_createInfo.imageArrayLayers, // Image array layers
-			VK_SAMPLE_COUNT_1_BIT,
-			VK_IMAGE_TILING_OPTIMAL
+			VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT
 		);
 		image->setIdentifier(TracerTag, instanceID, "Image");
 

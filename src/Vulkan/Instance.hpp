@@ -90,6 +90,10 @@ namespace EmEn::Vulkan
 					m_requiredGraphicsDeviceExtensions.emplace_back("VK_KHR_portability_subset");
 				}
 
+				/* NOTE: VK_EXT_non_seamless_cube_map */
+				// FIXME: Check to enable "VK_EXT_non_seamless_cube_map" extension
+				//m_requiredGraphicsDeviceExtensions.emplace_back(VK_EXT_NON_SEAMLESS_CUBE_MAP_EXTENSION_NAME);
+
 				//VK_EXT_BLEND_OPERATION_ADVANCED_EXTENSION_NAME, // Fails on Intel iGPU
 				//VK_EXT_FILTER_CUBIC_EXTENSION_NAME, // Fails on NVidia
 				//VK_KHR_SHARED_PRESENTABLE_IMAGE_EXTENSION_NAME,

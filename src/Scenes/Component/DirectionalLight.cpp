@@ -41,10 +41,10 @@ namespace EmEn::Scenes::Component
 	using namespace Graphics;
 
 	void
-	DirectionalLight::onOutputDeviceConnected (AVConsole::AVManagers & /*managers*/, AbstractVirtualDevice * targetDevice) noexcept
+	DirectionalLight::onOutputDeviceConnected (AVConsole::AVManagers & /*managers*/, AbstractVirtualDevice & targetDevice) noexcept
 	{
-		targetDevice->updateDeviceFromCoordinates(this->getWorldCoordinates(), this->getWorldVelocity());
-		targetDevice->updateProperties(false, s_maxDistance, 0.0F);
+		targetDevice.updateDeviceFromCoordinates(this->getWorldCoordinates(), this->getWorldVelocity());
+		targetDevice.updateProperties(false, s_maxDistance, 0.0F);
 	}
 
 	bool

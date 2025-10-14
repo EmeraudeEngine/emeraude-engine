@@ -105,9 +105,9 @@ namespace EmEn::Scenes::Component
 
 			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::onOutputDeviceConnected() noexcept */
 			void
-			onOutputDeviceConnected (AVConsole::AVManagers & /*managers*/, AbstractVirtualDevice * targetDevice) noexcept override
+			onOutputDeviceConnected (AVConsole::AVManagers & /*managers*/, AbstractVirtualDevice & targetDevice) noexcept override
 			{
-				targetDevice->updateDeviceFromCoordinates(this->getWorldCoordinates(), this->getWorldVelocity());
+				targetDevice.updateDeviceFromCoordinates(this->getWorldCoordinates(), this->getWorldVelocity());
 			}
 
 			/** @copydoc EmEn::Animations::AnimatableInterface::playAnimation() noexcept */

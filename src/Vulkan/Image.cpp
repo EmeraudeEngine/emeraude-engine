@@ -50,24 +50,21 @@ namespace EmEn::Vulkan
 	std::shared_ptr< Image >
 	Image::createFromSwapChain (const std::shared_ptr< Device > & device, VkImage handle, const VkSwapchainCreateInfoKHR & createInfo) noexcept
 	{
-		auto swapChainImage = std::make_shared< Image >(
+		auto swapChainImage = std::make_shared< Vulkan::Image >(
 			device,
-			VK_IMAGE_TYPE_2D, // Image type
-			createInfo.imageFormat, // Image format (bits description)
-			VkExtent3D{createInfo.imageExtent.width, createInfo.imageExtent.height, 1}, // Image extent
-			createInfo.imageUsage, // Image usage (color, depth, ...)
-			VK_IMAGE_LAYOUT_UNDEFINED, // Layout
-			0, // flags
-			1, // Image mip levels
-			createInfo.imageArrayLayers, // Image array layers
-			VK_SAMPLE_COUNT_1_BIT, // Image multi sampling
-			VK_IMAGE_TILING_OPTIMAL // Image tiling
+			VK_IMAGE_TYPE_2D,
+			createInfo.imageFormat,
+			VkExtent3D{createInfo.imageExtent.width, createInfo.imageExtent.height, 1},
+			createInfo.imageUsage,
+			0,
+			1,
+			createInfo.imageArrayLayers
 		);
 		swapChainImage->setIdentifier(ClassId, "OSBuffer", "Image");
 
 		/* NOTE: Set internal values manually and declare the image as created. */
 		swapChainImage->m_handle = handle;
-		swapChainImage->m_flags[IsSwapChainImage] = true;
+		swapChainImage->m_isSwapChainImage = true;
 		swapChainImage->setCreated();
 
 		return swapChainImage;
@@ -77,7 +74,7 @@ namespace EmEn::Vulkan
 	Image::createOnHardware () noexcept
 	{
 		/* NOTE: Special case for swap chain images. */
-		if ( m_flags[IsSwapChainImage] )
+		if ( m_isSwapChainImage )
 		{
 			Tracer::error(ClassId, "This is an image provided by the swap chain ! No need to create it.");
 
@@ -264,7 +261,7 @@ namespace EmEn::Vulkan
 	Image::destroyFromHardware () noexcept
 	{
 		/* NOTE: The OS destroys the swap chain image. */
-		if ( m_flags[IsSwapChainImage] )
+		if ( m_isSwapChainImage )
 		{
 			m_handle = VK_NULL_HANDLE;
 

@@ -160,6 +160,7 @@ namespace EmEn::Vulkan::Sync
 		return true;
 	}
 
+
 	bool
 	Fence::waitAndReset (uint64_t timeout) const noexcept
 	{
@@ -194,6 +195,7 @@ namespace EmEn::Vulkan::Sync
 
 		return true;
 	}
+
 
 	bool
 	Fence::waitForAll (const std::shared_ptr< Device > & device, const std::vector< VkFence > & fences, uint64_t timeout) noexcept

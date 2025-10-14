@@ -38,7 +38,6 @@
 #include "Device.hpp"
 #include "PipelineLayout.hpp"
 #include "ShaderModule.hpp"
-#include "RenderPass.hpp"
 #include "Framebuffer.hpp"
 #include "Utility.hpp"
 #include "Tracer.hpp"
@@ -825,7 +824,7 @@ namespace EmEn::Vulkan
 			return false;
 		}
 
-		if ( !renderTarget.isValid() )
+		if ( !renderTarget.isReadyForRendering() )
 		{
 			TraceError{ClassId} << "The renderable target '" << renderTarget.id() << "' is not valid !";
 
@@ -854,7 +853,7 @@ namespace EmEn::Vulkan
 			return false;
 		}
 
-		if ( !renderTarget.isValid() )
+		if ( !renderTarget.isReadyForRendering() )
 		{
 			TraceError{ClassId} << "The renderable target '" << renderTarget.id() << "' is not valid !";
 

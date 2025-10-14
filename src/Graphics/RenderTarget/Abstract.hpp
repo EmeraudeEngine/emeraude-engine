@@ -308,11 +308,11 @@ namespace EmEn::Graphics::RenderTarget
 			virtual ViewMatricesInterface & viewMatrices () noexcept = 0;
 
 			/**
-			 * @brief Returns whether the render target is valid.
+			 * @brief Returns whether the render target is ready to render into.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			virtual bool isValid () const noexcept = 0;
+			virtual bool isReadyForRendering () const noexcept = 0;
 
 		protected:
 

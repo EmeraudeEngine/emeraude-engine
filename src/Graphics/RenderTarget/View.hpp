@@ -163,54 +163,12 @@ namespace EmEn::Graphics::RenderTarget
 				return m_colorImageView;
 			}
 
-			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::isValid() */
+			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::isReadyForRendering() const */
 			[[nodiscard]]
 			bool
-			isValid () const noexcept override
+			isReadyForRendering () const noexcept override
 			{
-				if ( m_framebuffer == nullptr || !m_framebuffer->isCreated() )
-				{
-					TraceError{ClassId} << "The render target '" << this->id() << "' (View) framebuffer is missing or not created !";
-
-					return false;
-				}
-
-				if ( m_colorImage == nullptr || !m_colorImage->isCreated() )
-				{
-					TraceError{ClassId} << "The render target '" << this->id() << "' (View) color image is missing or not created !";
-
-					return false;
-				}
-
-				if ( m_colorImageView == nullptr || !m_colorImageView->isCreated() )
-				{
-					TraceError{ClassId} << "The render target '" << this->id() << "' (View) color image view is missing or not created !";
-
-					return false;
-				}
-
-				if ( m_depthStencilImage == nullptr || !m_depthStencilImage->isCreated() )
-				{
-					TraceError{ClassId} << "The render target '" << this->id() << "' (View) depth/stencil image is missing or not created !";
-
-					return false;
-				}
-
-				if ( m_depthImageView == nullptr || !m_depthImageView->isCreated() )
-				{
-					TraceError{ClassId} << "The render target '" << this->id() << "' (View) depth image view is missing or not created !";
-
-					return false;
-				}
-
-				if ( m_stencilImageView == nullptr || !m_stencilImageView->isCreated() )
-				{
-					TraceError{ClassId} << "The render target '" << this->id() << "' (View) stencil image view is missing or not created !";
-
-					return false;
-				}
-
-				return true;
+				return m_isReadyForRendering;
 			}
 
 			/**
@@ -273,14 +231,14 @@ namespace EmEn::Graphics::RenderTarget
 
 			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::onInputDeviceConnected() */
 			void
-			onInputDeviceConnected (AVConsole::AVManagers & AVManagers, AbstractVirtualDevice * /*sourceDevice*/) noexcept override
+			onInputDeviceConnected (AVConsole::AVManagers & AVManagers, AbstractVirtualDevice & /*sourceDevice*/) noexcept override
 			{
 				m_viewMatrices.create(AVManagers.graphicsRenderer, this->id());
 			}
 
 			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::onInputDeviceDisconnected() */
 			void
-			onInputDeviceDisconnected (AVConsole::AVManagers & /*AVManagers*/, AbstractVirtualDevice * /*sourceDevice*/) noexcept override
+			onInputDeviceDisconnected (AVConsole::AVManagers & /*AVManagers*/, AbstractVirtualDevice & /*sourceDevice*/) noexcept override
 			{
 				m_viewMatrices.destroy();
 			}
@@ -290,10 +248,8 @@ namespace EmEn::Graphics::RenderTarget
 			bool
 			onCreate (Renderer & renderer) noexcept override
 			{
-				if ( !this->createImages(renderer.device()) )
+				if ( !this->createImages(renderer) )
 				{
-					TraceError{ClassId} << "Unable to create image buffers for view '" << this->id() << "' !";
-
 					return false;
 				}
 
@@ -304,23 +260,29 @@ namespace EmEn::Graphics::RenderTarget
 					return false;
 				}
 
-				return this->createFramebuffer(renderPass);
+				if ( !this->createFramebuffer(renderPass) )
+				{
+					return false;
+				}
+
+				m_isReadyForRendering = true;
+
+				return true;
 			}
 
 			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::onDestroy() */
 			void
 			onDestroy () noexcept override
 			{
-				/* First, destroy the framebuffer. */
+				m_isReadyForRendering = false;
+
 				m_framebuffer.reset();
 
-				/* Next, destroy the image views. */
 				m_stencilImageView.reset();
 				m_depthImageView.reset();
-				m_colorImageView.reset();
-
-				/* Finally, destroy the images. */
 				m_depthStencilImage.reset();
+
+				m_colorImageView.reset();
 				m_colorImage.reset();
 			}
 
@@ -399,13 +361,15 @@ namespace EmEn::Graphics::RenderTarget
 
 			/**
 			 * @brief Creates the images and the image views for each swap chain frame.
-			 * @param device A reference to the graphics device smart pointer.
+			 * @param renderer A reference to the graphics renderer.
 			 * @return bool
 			 */
 			[[nodiscard]]
 			bool
-			createImages (const std::shared_ptr< Vulkan::Device > & device) noexcept
+			createImages (const Renderer & renderer) noexcept
 			{
+				const auto device = renderer.device();
+
 				/* Color buffer. */
 				if ( this->precisions().colorBits() > 0 )
 				{
@@ -416,7 +380,6 @@ namespace EmEn::Graphics::RenderTarget
 						Vulkan::Instance::findColorFormat(device, this->precisions()),
 						this->extent(),
 						VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
-						VK_IMAGE_LAYOUT_UNDEFINED,
 						0,
 						1,
 						1,
@@ -462,8 +425,7 @@ namespace EmEn::Graphics::RenderTarget
 						VK_IMAGE_TYPE_2D,
 						Vulkan::Instance::findDepthStencilFormat(device, this->precisions()),
 						this->extent(),
-						VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
-						VK_IMAGE_LAYOUT_UNDEFINED
+						VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT
 					);
 					m_depthStencilImage->setIdentifier(ClassId, this->id(), "Image");
 
@@ -567,11 +529,12 @@ namespace EmEn::Graphics::RenderTarget
 			}
 
 			std::shared_ptr< Vulkan::Image > m_colorImage;
-			std::shared_ptr< Vulkan::Image > m_depthStencilImage;
 			std::shared_ptr< Vulkan::ImageView > m_colorImageView;
+			std::shared_ptr< Vulkan::Image > m_depthStencilImage;
 			std::shared_ptr< Vulkan::ImageView > m_depthImageView;
 			std::shared_ptr< Vulkan::ImageView > m_stencilImageView;
 			std::shared_ptr< Vulkan::Framebuffer > m_framebuffer;
 			view_matrices_t m_viewMatrices;
+			bool m_isReadyForRendering{false};
 	};
 }

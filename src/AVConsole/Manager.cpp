@@ -424,69 +424,6 @@ namespace EmEn::AVConsole
 		return true;
 	}
 
-	/*bool
-	Manager::createDefaultViewNoLock (Settings & settings) noexcept
-	{
-		if ( m_virtualVideoDevices.contains(DefaultViewName) )
-		{
-			return true;
-		}
-
-		const auto isFullscreen = settings.get< bool >(VideoFullscreenEnabledKey, DefaultVideoFullscreenEnabled);
-
-		const auto width = isFullscreen ?
-			settings.get< uint32_t >(VideoFullscreenWidthKey, DefaultVideoFullscreenWidth) :
-			settings.get< uint32_t >(VideoWindowWidthKey, DefaultVideoWindowWidth);
-
-		const auto height = isFullscreen ?
-			settings.get< uint32_t >(VideoFullscreenHeightKey, DefaultVideoFullscreenHeight) :
-			settings.get< uint32_t >(VideoWindowHeightKey, DefaultVideoWindowHeight);
-
-		const FramebufferPrecisions precisions{
-			settings.get< uint32_t >(VideoFramebufferRedBitsKey, DefaultVideoFramebufferRedBits),
-			settings.get< uint32_t >(VideoFramebufferGreenBitsKey, DefaultVideoFramebufferGreenBits),
-			settings.get< uint32_t >(VideoFramebufferBlueBitsKey, DefaultVideoFramebufferBlueBits),
-			settings.get< uint32_t >(VideoFramebufferAlphaBitsKey, DefaultVideoFramebufferAlphaBits),
-			settings.get< uint32_t >(VideoFramebufferDepthBitsKey, DefaultVideoFramebufferDepthBits),
-			settings.get< uint32_t >(VideoFramebufferStencilBitsKey, DefaultVideoFramebufferStencilBits),
-			settings.get< uint32_t >(VideoFramebufferSamplesKey, DefaultVideoFramebufferSamples)
-		};
-
-		const auto renderTarget = std::make_shared< RenderTarget::View< ViewMatrices2DUBO > >(DefaultViewName, width, height, precisions);
-
-		if ( !renderTarget->create(m_AVManagers.graphicsRenderer) )
-		{
-			TraceError{ClassId} << "Unable to create the default render to view '" << DefaultViewName << "' !";
-
-			return false;
-		}
-
-		if ( !this->addVideoDeviceNoLock(renderTarget, true) )
-		{
-			TraceError{ClassId} << "Unable to add the default render to view '" << DefaultViewName << "' as a virtual video device !";
-
-			return false;
-		}
-
-		return true;
-	}*/
-
-	/*bool
-	Manager::createDefaultSpeakerNoLock (Audio::Manager & audioManager, Settings & settings) noexcept
-	{
-		if ( m_virtualAudioDevices.contains(DefaultSpeakerName) )
-		{
-			return true;
-		}
-
-		if ( !audioManager.usable() )
-		{
-			return false;
-		}
-
-		return this->addAudioDeviceNoLock(std::make_shared< Audio::HardwareOutput >(DefaultSpeakerName, audioManager), true);
-	}*/
-
 	bool
 	Manager::autoConnectPrimaryVideoDevices () noexcept
 	{
@@ -694,38 +631,7 @@ namespace EmEn::AVConsole
 		m_primaryOutputVideoDeviceId.clear();
 		m_primaryInputVideoDeviceId.clear();
 
-		/* Clearing the video devices. */
-		for ( const auto & device : m_virtualVideoDevices | std::views::values )
-		{
-			if ( device == nullptr )
-			{
-				Tracer::error(ClassId, "Invalid video device !");
-
-				continue;
-			}
-
-			TraceDebug{ClassId} << "Disconnecting video device '" << device->id() << "' ... ";
-
-			device->disconnectFromAll(m_AVManagers, false);
-		}
-
 		m_virtualVideoDevices.clear();
-
-		/* Clearing the audio devices. */
-		for ( const auto & device : m_virtualAudioDevices | std::views::values )
-		{
-			if ( device == nullptr )
-			{
-				Tracer::error(ClassId, "Invalid audio device !");
-
-				continue;
-			}
-
-			TraceDebug{ClassId} << "Disconnecting audio device '" << device->id() << "' ... ";
-
-			device->disconnectFromAll(m_AVManagers, false);
-		}
-
 		m_virtualAudioDevices.clear();
 	}
 

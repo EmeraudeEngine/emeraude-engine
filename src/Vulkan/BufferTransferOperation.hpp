@@ -162,6 +162,11 @@ namespace EmEn::Vulkan
 					return false;
 				}
 
+				if ( !m_transferCommandBuffer->reset() )
+				{
+					return false;
+				}
+
 				return m_operationFence->reset();
 			}
 
