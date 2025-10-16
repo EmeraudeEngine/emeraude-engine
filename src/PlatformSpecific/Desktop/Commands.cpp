@@ -32,7 +32,7 @@
 
 namespace EmEn::PlatformSpecific::Desktop
 {
-	using namespace EmEn::Libs::Network;
+	using namespace Libs::Network;
 
 	constexpr auto TracerTag{"DesktopCommand"};
 

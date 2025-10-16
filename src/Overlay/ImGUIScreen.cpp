@@ -38,7 +38,7 @@
 
 namespace EmEn::Overlay
 {
-	using namespace EmEn::Vulkan;
+	using namespace Vulkan;
 
 	void
 	ImGUIScreen::render (const CommandBuffer & commandBuffer) const noexcept

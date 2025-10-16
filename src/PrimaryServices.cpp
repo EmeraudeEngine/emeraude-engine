@@ -37,7 +37,7 @@
 
 namespace EmEn
 {
-	using namespace EmEn::Libs;
+	using namespace Libs;
 
 	PrimaryServices::PrimaryServices (int argc, char * * argv, const Identification & identification) noexcept
 		: m_processName{"main"},

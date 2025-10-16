@@ -31,7 +31,7 @@
 
 namespace EmEn::Animations
 {
-	using namespace EmEn::Libs;
+	using namespace Libs;
 
 	void
 	RandomValue::setValue (const Variant & minimum, const Variant & maximum) noexcept

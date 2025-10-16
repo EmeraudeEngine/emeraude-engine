@@ -36,7 +36,7 @@
 
 namespace EmEn::Vulkan
 {
-	using namespace EmEn::Libs;
+	using namespace Libs;
 
 	DebugMessenger::DebugMessenger (const Instance & instance) noexcept
 		: m_instance{instance},

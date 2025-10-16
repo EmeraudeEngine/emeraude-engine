@@ -35,8 +35,8 @@
 
 namespace EmEn::Graphics::TextureResource
 {
-	using namespace EmEn::Libs;
-	using namespace EmEn::Vulkan;
+	using namespace Libs;
+	using namespace Vulkan;
 
 	bool
 	AnimatedTexture2D::isCreated () const noexcept

@@ -29,8 +29,8 @@
 /* Local inclusions. */
 #include "Libs/PixelFactory/Color.hpp"
 
-using namespace EmEn::Libs;
-using namespace EmEn::Libs::PixelFactory;
+using namespace Libs;
+using namespace Libs::PixelFactory;
 
 TEST(PixelFactoryColor, ColorFromInteger)
 {

@@ -33,7 +33,7 @@
 
 namespace EmEn::Saphir::Declaration
 {
-	using namespace EmEn::Saphir::Keys;
+	using namespace Saphir::Keys;
 
 	std::string
 	OutputBlock::sourceCode () const noexcept

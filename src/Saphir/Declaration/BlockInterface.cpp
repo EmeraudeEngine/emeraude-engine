@@ -31,7 +31,7 @@
 
 namespace EmEn::Saphir::Declaration
 {
-	using namespace EmEn::Saphir::Keys;
+	using namespace Saphir::Keys;
 
 	bool
 	BlockInterface::addStructure (Key name, const Structure & structure) noexcept

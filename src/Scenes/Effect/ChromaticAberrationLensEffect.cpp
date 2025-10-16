@@ -34,8 +34,8 @@
 
 namespace EmEn::Scenes
 {
-	using namespace EmEn::Libs;
-	using namespace EmEn::Libs::Math;
+	using namespace Libs;
+	using namespace Libs::Math;
 	using namespace Saphir;
 	using namespace Saphir::Keys;
 	using namespace Graphics;

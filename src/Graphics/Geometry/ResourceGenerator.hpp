@@ -150,7 +150,7 @@ namespace EmEn::Graphics::Geometry
 			std::shared_ptr< IndexedVertexResource >
 			cuboid (const Libs::Math::Vector< 3, float > & size, const std::string & resourceName = {}) const noexcept
 			{
-				using namespace EmEn::Libs::Math;
+				using namespace Libs::Math;
 
 				return this->cuboid(size[X], size[Y], size[Z], resourceName);
 			}

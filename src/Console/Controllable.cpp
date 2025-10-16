@@ -37,7 +37,7 @@
 
 namespace EmEn::Console
 {
-	using namespace EmEn::Libs;
+	using namespace Libs;
 
 	constexpr auto TracerTag{"Controllable"};
 

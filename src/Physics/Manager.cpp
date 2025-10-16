@@ -41,7 +41,7 @@
 
 namespace EmEn::Physics
 {
-	using namespace EmEn::Vulkan;
+	using namespace Vulkan;
 
 	bool
 	Manager::onInitialize () noexcept

@@ -33,7 +33,7 @@
 
 namespace EmEn::Audio::Effects
 {
-	using namespace EmEn::Libs;
+	using namespace Libs;
 
 	Reverb::Reverb () noexcept
 	{

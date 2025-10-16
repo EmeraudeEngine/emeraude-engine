@@ -34,7 +34,7 @@
 
 namespace EmEn::Vulkan
 {
-	using namespace EmEn::Libs;
+	using namespace Libs;
 
 	size_t ComputePipeline::s_fakeHash = 0;
 

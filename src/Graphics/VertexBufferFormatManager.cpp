@@ -37,7 +37,7 @@
 
 namespace EmEn::Graphics
 {
-	using namespace EmEn::Libs;
+	using namespace Libs;
 
 	bool
 	VertexBufferFormatManager::onInitialize () noexcept

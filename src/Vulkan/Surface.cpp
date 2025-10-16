@@ -37,7 +37,7 @@
 
 namespace EmEn::Vulkan
 {
-	using namespace EmEn::Libs;
+	using namespace Libs;
 
 	bool
 	Surface::update (const std::shared_ptr< PhysicalDevice > & physicalDevice) noexcept

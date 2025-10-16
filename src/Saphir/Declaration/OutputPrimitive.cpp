@@ -31,7 +31,7 @@
 
 namespace EmEn::Saphir::Declaration
 {
-	using namespace EmEn::Saphir::Keys;
+	using namespace Saphir::Keys;
 
 	Key
 	OutputPrimitive::name () const noexcept

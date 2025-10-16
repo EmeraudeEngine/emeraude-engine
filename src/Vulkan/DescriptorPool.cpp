@@ -34,7 +34,7 @@
 
 namespace EmEn::Vulkan
 {
-	using namespace EmEn::Libs;
+	using namespace Libs;
 
 	bool
 	DescriptorPool::createOnHardware() noexcept

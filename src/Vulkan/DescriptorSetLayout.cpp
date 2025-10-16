@@ -36,7 +36,7 @@
 
 namespace EmEn::Vulkan
 {
-	using namespace EmEn::Libs;
+	using namespace Libs;
 
 	bool
 	DescriptorSetLayout::createOnHardware () noexcept

@@ -40,7 +40,7 @@
 
 namespace EmEn
 {
-	using namespace EmEn::Libs;
+	using namespace Libs;
 
 	bool
 	PlatformManager::onInitialize () noexcept

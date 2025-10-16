@@ -37,11 +37,11 @@
 
 namespace EmEn::Overlay
 {
-	using namespace EmEn::Libs;
-	using namespace EmEn::Libs::Math;
-	using namespace EmEn::Libs::PixelFactory;
-	using namespace EmEn::Graphics;
-	using namespace EmEn::Vulkan;
+	using namespace Libs;
+	using namespace Libs::Math;
+	using namespace Libs::PixelFactory;
+	using namespace Graphics;
+	using namespace Vulkan;
 
 	bool
 	Surface::isBelowPoint (float positionX, float positionY) const noexcept

@@ -32,10 +32,10 @@
 
 namespace EmEn::Saphir::Generator
 {
-	using namespace EmEn::Libs;
-	using namespace EmEn::Graphics;
-	using namespace EmEn::Vulkan;
-	using namespace EmEn::Saphir::Keys;
+	using namespace Libs;
+	using namespace Graphics;
+	using namespace Vulkan;
+	using namespace Saphir::Keys;
 
 	bool
 	TBNSpaceRendering::onGenerateShadersCode (Program & program) noexcept

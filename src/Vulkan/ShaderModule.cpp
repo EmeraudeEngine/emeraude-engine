@@ -33,7 +33,7 @@
 
 namespace EmEn::Vulkan
 {
-	using namespace EmEn::Libs;
+	using namespace Libs;
 
 	bool
 	ShaderModule::createOnHardware () noexcept

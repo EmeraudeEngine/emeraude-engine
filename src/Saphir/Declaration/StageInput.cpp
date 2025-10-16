@@ -34,7 +34,7 @@
 
 namespace EmEn::Saphir::Declaration
 {
-	using namespace EmEn::Saphir::Keys;
+	using namespace Saphir::Keys;
 
 	std::string
 	StageInput::sourceCode () const noexcept

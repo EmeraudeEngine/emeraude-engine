@@ -31,7 +31,7 @@
 
 namespace EmEn::Saphir::Declaration::Member
 {
-	using namespace EmEn::Saphir::Keys;
+	using namespace Saphir::Keys;
 
 	uint32_t
 	BufferBackedBlock::bytes () const noexcept

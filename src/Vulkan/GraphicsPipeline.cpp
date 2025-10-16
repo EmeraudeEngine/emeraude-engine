@@ -44,9 +44,9 @@
 
 namespace EmEn::Vulkan
 {
-	using namespace EmEn::Libs;
-	using namespace EmEn::Graphics;
-	using namespace EmEn::Saphir;
+	using namespace Libs;
+	using namespace Graphics;
+	using namespace Saphir;
 
 	size_t GraphicsPipeline::s_fakeHash{0};
 

@@ -39,8 +39,8 @@
 
 namespace EmEn::Graphics
 {
-	using namespace EmEn::Libs;
-	using namespace EmEn::Vulkan;
+	using namespace Libs;
+	using namespace Vulkan;
 
 	SharedUniformBuffer::SharedUniformBuffer (const std::shared_ptr< Device > & device, uint32_t uniformBlockSize, uint32_t maxElementCount) noexcept
 		: m_device{device},

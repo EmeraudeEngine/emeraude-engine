@@ -37,7 +37,7 @@
 
 namespace EmEn::Vulkan
 {
-	using namespace EmEn::Libs;
+	using namespace Libs;
 
 	bool
 	PipelineLayout::operator== (const PipelineLayout & operand) const noexcept

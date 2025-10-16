@@ -38,8 +38,8 @@
 
 namespace EmEn::Saphir::Declaration
 {
-	using namespace EmEn::Libs;
-	using namespace EmEn::Saphir::Keys;
+	using namespace Libs;
+	using namespace Saphir::Keys;
 
 	uint32_t
 	PushConstantBlock::bytes () const noexcept

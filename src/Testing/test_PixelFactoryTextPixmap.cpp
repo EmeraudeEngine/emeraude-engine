@@ -32,9 +32,9 @@
 #include "Libs/PixelFactory/TextProcessor.hpp"
 #include "Constants.hpp"
 
-using namespace EmEn::Libs;
-using namespace EmEn::Libs::PixelFactory;
-using namespace EmEn::Libs::Time::Elapsed;
+using namespace Libs;
+using namespace Libs::PixelFactory;
+using namespace Libs::Time::Elapsed;
 
 static constexpr auto LoremIpsum =
 	"This is dummy text." "\n"

@@ -31,8 +31,8 @@
 
 namespace EmEn::Physics
 {
-	using namespace EmEn::Libs;
-	using namespace EmEn::Libs::Math;
+	using namespace Libs;
+	using namespace Libs::Math;
 
 	void
 	MovableTrait::setMinimalVelocity (const Vector< 3, float > & velocity) noexcept

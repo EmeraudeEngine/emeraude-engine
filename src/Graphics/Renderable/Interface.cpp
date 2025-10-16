@@ -31,9 +31,9 @@
 
 namespace EmEn::Graphics::Renderable
 {
-	using namespace EmEn::Libs;
-	using namespace EmEn::Libs::Math;
-	using namespace EmEn::Resources;
+	using namespace Libs;
+	using namespace Libs::Math;
+	using namespace Resources;
 
 	constexpr auto TracerTag{"RenderableInterface"};
 

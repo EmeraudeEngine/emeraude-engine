@@ -32,7 +32,7 @@
 
 namespace EmEn::Saphir::Declaration
 {
-	using namespace EmEn::Libs;
+	using namespace Libs;
 
 	const char * ShaderBlockTracerTag = "ShaderBlock";
 

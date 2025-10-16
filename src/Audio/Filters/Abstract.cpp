@@ -33,7 +33,7 @@
 
 namespace EmEn::Audio::Filters
 {
-	using namespace EmEn::Libs;
+	using namespace Libs;
 
 	constexpr auto TracerTag{"AbstractFilter"};
 

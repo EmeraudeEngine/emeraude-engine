@@ -40,9 +40,9 @@
 
 namespace EmEn::Overlay
 {
-	using namespace EmEn::Libs;
-	using namespace EmEn::Graphics;
-	using namespace EmEn::Vulkan;
+	using namespace Libs;
+	using namespace Graphics;
+	using namespace Vulkan;
 
 	bool
 	UIScreen::updateVideoMemory (bool windowResized) noexcept

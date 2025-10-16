@@ -203,7 +203,7 @@ namespace EmEn::Graphics
 			float
 			fieldOfView () const noexcept override
 			{
-				using namespace EmEn::Libs::Math;
+				using namespace Libs::Math;
 
 				constexpr auto Rad2Deg = HalfRevolution< float > / std::numbers::pi_v< float >;
 

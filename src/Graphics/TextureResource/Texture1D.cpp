@@ -34,7 +34,7 @@
 
 namespace EmEn::Graphics::TextureResource
 {
-	using namespace EmEn::Libs;
+	using namespace Libs;
 	using namespace Vulkan;
 
 	bool
