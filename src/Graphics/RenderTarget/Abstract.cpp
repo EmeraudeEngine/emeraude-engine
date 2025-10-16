@@ -86,6 +86,20 @@ namespace EmEn::Graphics::RenderTarget
 		return true;
 	}
 
+	void
+	Abstract::setViewport (const CommandBuffer & commandBuffer) const noexcept
+	{
+		VkViewport viewport{};
+		viewport.x = 0.0F;
+		viewport.y = 0.0F;
+		viewport.width = static_cast< float >(m_extent.width);
+		viewport.height = static_cast< float >(m_extent.height);
+		viewport.minDepth = 0.0F;
+		viewport.maxDepth = 1.0F;
+
+		vkCmdSetViewport(commandBuffer.handle(), 0, 1, &viewport);
+	}
+
 	bool
 	Abstract::createColorBuffer (const std::shared_ptr< Device > & device, std::shared_ptr< Image > & image, std::shared_ptr< ImageView > & imageView, const std::string & identifier) const noexcept
 	{

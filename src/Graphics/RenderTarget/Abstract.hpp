@@ -59,6 +59,7 @@ namespace EmEn
 		class RenderPass;
 		class Image;
 		class ImageView;
+		class CommandBuffer;
 	}
 }
 
@@ -255,6 +256,14 @@ namespace EmEn::Graphics::RenderTarget
 			 * @return bool
 			 */
 			bool destroy () noexcept;
+
+			/**
+			 * @brief Sets the viewport to a command buffer.
+			 * @note This is used when dynamic viewport is used with graphics pipelines.
+			 * @param commandBuffer A reference to the command buffer.
+			 * @return void
+			 */
+			void setViewport (const Vulkan::CommandBuffer & commandBuffer) const noexcept;
 
 			/**
 			 * @brief Returns the aspect ratio of the render target.
