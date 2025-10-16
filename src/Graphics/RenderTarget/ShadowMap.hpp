@@ -267,7 +267,7 @@ namespace EmEn::Graphics::RenderTarget
 					createInfo.compareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
 					//createInfo.minLod = 0.0F;
 					//createInfo.maxLod = VK_LOD_CLAMP_NONE;
-					createInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+					createInfo.borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
 					//createInfo.unnormalizedCoordinates = VK_FALSE;
 				});
 
@@ -418,7 +418,7 @@ namespace EmEn::Graphics::RenderTarget
 					renderPass->addSubPassDependency({
 						.srcSubpass = VK_SUBPASS_EXTERNAL,
 						.dstSubpass = 0,
-						.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, //VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+						.srcStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
 						.dstStageMask = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
 						.srcAccessMask = VK_ACCESS_SHADER_READ_BIT,
 						.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
