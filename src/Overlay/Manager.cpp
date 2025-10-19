@@ -677,7 +677,7 @@ namespace EmEn::Overlay
 			return false;
 		}
 
-		/* NOTE: Update all screen, according to the new framebuffer. */
+		/* NOTE: Update all screens, according to the new framebuffer. */
 		for ( const auto & [name, screen] : m_screens )
 		{
 			if ( !screen->updateVideoMemory(true) )
@@ -687,6 +687,13 @@ namespace EmEn::Overlay
 				screen->setVisibility(false);
 			}
 		}
+
+		const auto & windowState = m_window.state();
+
+		this->notify(OverlayResized, std::array< uint32_t, 2 >{
+		   windowState.framebufferWidth,
+		   windowState.framebufferHeight
+		});
 
 		return true;
 	}
@@ -758,31 +765,13 @@ namespace EmEn::Overlay
 	{
 		if ( observable->is(Window::getClassUID()) )
 		{
-			switch ( notificationCode )
+			if ( notificationCode == Window::Created )
 			{
-				case Window::Created :
-					this->updateFramebufferProperties();
-					break;
-
-				case Window::OSNotifiesFramebufferResized :
-				case Window::OSRequestsToRescaleContentBy :
-					if ( this->updatePhysicalRepresentation() )
-					{
-						const auto & windowState = m_window.state();
-
-						this->notify(OverlayResized, std::array< uint32_t, 2 >{
-						   windowState.framebufferWidth,
-						   windowState.framebufferHeight
-						});
-					}
-					break;
-
-				default :
-					if constexpr ( ObserverDebugEnabled )
-					{
-						TraceDebug{ClassId} << "Event #" << notificationCode << " from the window ignored.";
-					}
-					break;
+				this->updateFramebufferProperties();
+			}
+			else if constexpr ( ObserverDebugEnabled )
+			{
+				TraceDebug{ClassId} << "Event #" << notificationCode << " from the window ignored.";
 			}
 
 			return true;

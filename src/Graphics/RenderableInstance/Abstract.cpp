@@ -356,7 +356,7 @@ namespace EmEn::Graphics::RenderableInstance
 
 		this->bindInstanceModelLayer(commandBuffer, layerIndex);
 
-		this->pushMatrices(commandBuffer, *pipelineLayout, *program, readStateIndex, renderTarget->viewMatrices(), worldCoordinates);
+		this->pushMatricesForShadowCasting(commandBuffer, *pipelineLayout, *program, readStateIndex, renderTarget->viewMatrices(), worldCoordinates);
 
 		commandBuffer.draw(*m_renderable->geometry(), layerIndex, this->instanceCount());
 	}
@@ -395,7 +395,7 @@ namespace EmEn::Graphics::RenderableInstance
 		this->bindInstanceModelLayer(commandBuffer, layerIndex);
 
 		/* Configure the push constants. */
-		this->pushMatrices(commandBuffer, *pipelineLayout, *program, readStateIndex, renderTarget->viewMatrices(), worldCoordinates);
+		this->pushMatricesForRendering(commandBuffer, *pipelineLayout, *program, readStateIndex, renderTarget->viewMatrices(), worldCoordinates);
 
 		uint32_t setOffset = 0;
 
@@ -426,7 +426,7 @@ namespace EmEn::Graphics::RenderableInstance
 			*material->descriptorSet(),
 			*pipelineLayout,
 			VK_PIPELINE_BIND_POINT_GRAPHICS,
-			setOffset++
+			setOffset//++
 		);
 
 		if ( material->isAnimated() )
@@ -480,7 +480,7 @@ namespace EmEn::Graphics::RenderableInstance
 
 		this->bindInstanceModelLayer(commandBuffer, layerIndex);
 
-		this->pushMatrices(commandBuffer, *pipelineLayout, *program, readStateIndex, renderTarget->viewMatrices(), worldCoordinates);
+		this->pushMatricesForRendering(commandBuffer, *pipelineLayout, *program, readStateIndex, renderTarget->viewMatrices(), worldCoordinates);
 
 		commandBuffer.draw(*m_renderable->geometry(), layerIndex, this->instanceCount());
 	}

@@ -44,12 +44,12 @@ namespace EmEn::Scenes::Component
 
 			/**
 			 * @brief Constructs a directional push modifier.
-			 * @param name The name of the modifier [std::move].
+			 * @param componentName A reference to a string.
 			 * @param parentEntity A reference to the parent entity.
 			 * @param direction A reference to a vector.
 			 */
-			DirectionalPushModifier (std::string name, const AbstractEntity & parentEntity, const Libs::Math::Vector< 3, float > & direction) noexcept
-				: AbstractModifier{std::move(name), parentEntity},
+			DirectionalPushModifier (const std::string & componentName, const AbstractEntity & parentEntity, const Libs::Math::Vector< 3, float > & direction) noexcept
+				: AbstractModifier{componentName, parentEntity},
 				m_direction{direction}
 			{
 

@@ -279,13 +279,7 @@ namespace EmEn::Overlay
 			std::shared_ptr< UIScreen > screen (const std::string & screenName) noexcept;
 
 			/**
-			 * @brief Updates necessary data in video memory.
-			 * @return bool
-			 */
-			bool updateVideoMemory () noexcept;
-
-			/**
-			 * @brief Draws actives screens over the 3D render.
+			 * @brief Draws active screens over the 3D render.
 			 * @param renderTarget A reference to a render target smart pointer.
 			 * @param commandBuffer A reference to a command buffer.
 			 * @return void
@@ -356,6 +350,19 @@ namespace EmEn::Overlay
 			}
 
 			/**
+			 * @brief Updates necessary data in video memory.
+			 * @return bool
+			 */
+			bool updateVideoMemory () noexcept;
+
+			/**
+			 * @brief Updates all overlay screens physical representation with new framebuffer properties.
+			 * @note This is a 'super' Manager::updateVideoMemory() version.
+			 * @return bool
+			 */
+			bool updatePhysicalRepresentation () noexcept;
+
+			/**
 			 * @brief Gets or creates the descriptor set layout for this surface.
 			 * @note The descriptor set layout is common for all the overlay.
 			 * @warning Can be nullptr!
@@ -389,13 +396,6 @@ namespace EmEn::Overlay
 			 */
 			[[nodiscard]]
 			bool generateShaderProgram () noexcept;
-
-			/**
-			 * @brief Updates all overlay screens physical representation with a new framebuffer properties.
-			 * @note This is a 'super' Manager::updateVideoMemory() version.
-			 * @return bool
-			 */
-			bool updatePhysicalRepresentation () noexcept;
 
 #ifdef IMGUI_ENABLED
 

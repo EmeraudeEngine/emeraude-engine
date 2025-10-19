@@ -89,7 +89,6 @@ namespace EmEn::Overlay
 				continue;
 			}
 
-			/* [VULKAN-PUSH-CONSTANT:4] Push the transformation matrix. */
 			vkCmdPushConstants(
 				commandBuffer.handle(),
 				pipelineLayout.handle(),

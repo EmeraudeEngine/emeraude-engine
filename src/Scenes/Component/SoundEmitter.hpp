@@ -65,12 +65,12 @@ namespace EmEn::Scenes::Component
 			/**
 			 * @brief Constructs a sound emitter.
 			 * @note [OBS][SHARED-OBSERVER]
-			 * @param name The name of the renderable instance [std::move].
+			 * @param componentName A reference to a string.
 			 * @param parentEntity A reference to the parent entity.
 			 * @param permanent Set the sound emitter regularly in use. Default false.
 			 */
-			SoundEmitter (std::string name, const AbstractEntity & parentEntity, bool permanent = false) noexcept
-				: Abstract{std::move(name), parentEntity}
+			SoundEmitter (const std::string & componentName, const AbstractEntity & parentEntity, bool permanent = false) noexcept
+				: Abstract{componentName, parentEntity}
 			{
 				this->setFlag(KeepInactiveSourceAlive, permanent);
 			}

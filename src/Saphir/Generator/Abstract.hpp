@@ -28,7 +28,6 @@
 
 /* STL inclusions. */
 #include <cstdint>
-#include <vector>
 #include <string>
 #include <memory>
 
@@ -215,7 +214,7 @@ namespace EmEn::Saphir::Generator
 			}
 
 			/**
-			 * @brief Returns whether the generator have access to the renderable instance.
+			 * @brief Returns whether the generator has access to the renderable instance.
 			 * @return bool
 			 */
 			[[nodiscard]]
@@ -368,6 +367,8 @@ namespace EmEn::Saphir::Generator
 			 */
 			[[nodiscard]]
 			bool generateShaderProgram (Graphics::Renderer & renderer, const std::string & GLSLVersion = DefaultGLSLVersion, const std::string & GLSLProfile = DefaultGLSLProfile) noexcept;
+
+
 
 		protected:
 

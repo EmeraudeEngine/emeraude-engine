@@ -107,12 +107,15 @@ namespace EmEn::Audio
 			bool
 			isCreated () const noexcept override
 			{
-				if ( this->identifier() <= 0 )
+				/* NOTE: Relaxed method for some OpenAL version. */
+				/*if ( this->identifier() <= 0 )
 				{
 					return false;
 				}
 
-				return alIsSource(this->identifier()) == AL_TRUE;
+				return alIsSource(this->identifier()) == AL_TRUE;*/
+
+				return this->identifier() > 0;
 			}
 
 			/**

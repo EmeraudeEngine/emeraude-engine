@@ -51,7 +51,7 @@ namespace EmEn::Vulkan
 
 	SwapChain::SwapChain (const std::shared_ptr< Device > & device, Renderer & renderer, Settings & settings) noexcept
 		: AbstractDeviceDependentObject{device},
-		Abstract(ClassId, {}, {}, RenderTargetType::View, AVConsole::ConnexionType::Input, false),
+		Abstract(ClassId, {}, {}, RenderTargetType::View, AVConsole::ConnexionType::Input, false, false),
 		m_renderer{renderer}
 	{
 		m_renderer.window().surface()->update(device);
@@ -116,7 +116,7 @@ namespace EmEn::Vulkan
 
 		if ( result != VK_SUCCESS )
 		{
-			TraceFatal{ClassId} << "Unable to create the swap chain : " << vkResultToCString(result) << " !";
+			TraceFatal{ClassId} << "Unable to create the swap-chain : " << vkResultToCString(result) << " !";
 
 			return false;
 		}
@@ -144,7 +144,7 @@ namespace EmEn::Vulkan
 
 		if ( !this->hasDevice() || window.surface() == nullptr )
 		{
-			Tracer::fatal(ClassId, "No device or window surface to create the swap chain !");
+			Tracer::fatal(ClassId, "No device or window surface to create the swap-chain !");
 
 			return false;
 		}
@@ -155,7 +155,7 @@ namespace EmEn::Vulkan
 
 		if ( !this->createBaseSwapChain(window) )
 		{
-			Tracer::error(ClassId, "Unable to create the base of the swap chain !");
+			Tracer::error(ClassId, "Unable to create the base of the swap-chain !");
 
 			m_status = Status::Failure;
 
@@ -164,7 +164,7 @@ namespace EmEn::Vulkan
 
 		if ( !this->prepareFrameData() )
 		{
-			Tracer::error(ClassId, "Unable to prepare data to complete the swap chain !");
+			Tracer::error(ClassId, "Unable to prepare data to complete the swap-chain !");
 
 			m_status = Status::Failure;
 
@@ -192,7 +192,7 @@ namespace EmEn::Vulkan
 	{
 		if ( !this->hasDevice() )
 		{
-			TraceError{ClassId} << "No device to destroy the swap chain " << m_handle << " (" << this->identifier() << ") !";
+			TraceError{ClassId} << "No device to destroy the swap-chain " << m_handle << " (" << this->identifier() << ") !";
 
 			return;
 		}
@@ -207,19 +207,23 @@ namespace EmEn::Vulkan
 	}
 
 	bool
-	SwapChain::recreateOnHardware () noexcept
+	SwapChain::refresh () noexcept
 	{
+		/* The old framebuffer must be throw away. */
 		this->resetFramebuffer();
 
+		/* Prepare a new swap-chain. */
 		m_status = Status::UnderConstruction;
 
+		/* The base swap-chain needs to re-analyze the system surface. */
 		if ( !this->createBaseSwapChain(m_renderer.window(), m_handle) )
 		{
-			Tracer::error(ClassId, "Unable to recreate the base of the swap chain !");
+			Tracer::error(ClassId, "Unable to recreate the base of the swap-chain !");
 
 			return false;
 		}
 
+		/* Now we are fine to rebuild the new framebuffer. */
 		if ( !this->createFramebuffer() )
 		{
 			Tracer::error(ClassId, "Unable to complete the framebuffer !");
@@ -227,12 +231,8 @@ namespace EmEn::Vulkan
 			return false;
 		}
 
-		this->updateProperties();
-
-		if ( m_showInformation )
-		{
-			TraceSuccess{ClassId} << "The swap chain " << m_handle << " (" << this->identifier() << ") is successfully recreated !";
-		}
+		/* This will rework the view-related matrices. */
+		this->updateSizeProperties();
 
 		m_status = Status::Ready;
 
@@ -271,7 +271,7 @@ namespace EmEn::Vulkan
 		/* NOTE: Only one image is possible. */
 		if ( capabilities.minImageCount == 1 && capabilities.minImageCount == capabilities.maxImageCount )
 		{
-			Tracer::error(ClassId, "The swap chain can only use 1 image. Disabling double buffering and V-Sync !");
+			Tracer::error(ClassId, "The swap-chain can only use 1 image. Disabling double buffering and V-Sync !");
 
 			m_tripleBufferingEnabled = false;
 			m_VSyncEnabled = false;
@@ -331,19 +331,17 @@ namespace EmEn::Vulkan
 	bool
 	SwapChain::prepareFrameData () noexcept
 	{
-		/* NOTE: Will set the image count for the swap chain. */
-		const auto result = vkGetSwapchainImagesKHR(this->device()->handle(), m_handle, &m_imageCount, nullptr);
-
-		if ( result != VK_SUCCESS )
+		/* NOTE: Will set the image count for the swap-chain. */
+		if ( const auto result = vkGetSwapchainImagesKHR(this->device()->handle(), m_handle, &m_imageCount, nullptr); result != VK_SUCCESS )
 		{
-			TraceFatal{ClassId} << "Unable to get image count from the swap chain : " << vkResultToCString(result) << " !";
+			TraceFatal{ClassId} << "Unable to get image count from the swap-chain : " << vkResultToCString(result) << " !";
 
 			return false;
 		}
 
 		if ( m_showInformation )
 		{
-			TraceInfo{ClassId} << "The swap chain is using " << m_imageCount << " images.";
+			TraceInfo{ClassId} << "The swap-chain will use " << m_imageCount << " images.";
 		}
 
 		m_frames.resize(m_imageCount);
@@ -358,7 +356,7 @@ namespace EmEn::Vulkan
 
 		if ( const auto result = vkGetSwapchainImagesKHR(this->device()->handle(), m_handle, &m_imageCount, imageHandles.data()); result != VK_SUCCESS )
 		{
-			TraceFatal{ClassId} << "Unable to get images from the swap chain : " << vkResultToCString(result) << " !";
+			TraceFatal{ClassId} << "Unable to get images from the swap-chain : " << vkResultToCString(result) << " !";
 
 			return {};
 		}
@@ -513,22 +511,22 @@ namespace EmEn::Vulkan
 	{
 		if ( m_imageCount == 0 )
 		{
-			Tracer::error(ClassId, "No image count to create the swap chain !");
+			Tracer::error(ClassId, "No image count to create the swap-chain !");
 
 			return false;
 		}
 
 		if ( !this->createImageArray() )
 		{
-			Tracer::error(ClassId, "Unable to create the swap chain images !");
+			Tracer::error(ClassId, "Unable to create the swap-chain images !");
 
 			return false;
 		}
 
-		/* Create the render pass base on the first set of images (this is the swap chain, all images are technically the same) */
+		/* Create the render pass base on the first set of images (this is the swap-chain, all images are technically the same) */
 		if ( !this->createFramebufferArray(this->createRenderPass(m_renderer)) )
 		{
-			Tracer::error(ClassId, "Unable to create the swap chain framebuffer !");
+			Tracer::error(ClassId, "Unable to create the swap-chain framebuffer !");
 
 			return false;
 		}
@@ -541,7 +539,7 @@ namespace EmEn::Vulkan
 	{
 		const auto instanceId = identifier + "ColorBuffer";
 
-		/* NOTE: Create an image from existing data from the swap chain. */
+		/* NOTE: Create an image from existing data from the swap-chain. */
 		image = Image::createFromSwapChain(this->device(), swapChainImage, m_createInfo);
 		image->setIdentifier(ClassId, instanceId, "Image");
 
@@ -667,85 +665,67 @@ namespace EmEn::Vulkan
 
 		switch ( result )
 		{
+			/* NOTE: These codes below are considered as a success. */
 			case VK_SUCCESS :
 				return m_acquiredImageIndex;
 
-			case VK_TIMEOUT :
-				TraceWarning{ClassId} << "VK_TIMEOUT at image acquisition!";
+			case VK_NOT_READY :
+				Tracer::warning(ClassId, "The swap-chain is not ready!");
+
+				m_status = Status::Uninitialized;
 
 				return std::nullopt;
 
-			case VK_ERROR_OUT_OF_DATE_KHR :
 			case VK_SUBOPTIMAL_KHR :
-				TraceError{ClassId} << vkResultToCString(result) << " at image acquisition!";
+				Tracer::debug(ClassId, "vkAcquireNextImageKHR(), the swap-chain is degraded!");
+
+				m_status = Status::Degraded;
+
+				return m_acquiredImageIndex;
+
+			case VK_TIMEOUT :
+				TraceWarning{ClassId} << "The acquisition of the next image was canceled by the " << timeout << " ns timeout!";
+
+				return std::nullopt;
+
+			/* NOTE: These codes below are considered as an error. */
+			case VK_ERROR_OUT_OF_DATE_KHR :
+				TraceError{ClassId} << "The swap-chain is out of date !";
 
 				m_status = Status::Degraded;
 
 				return std::nullopt;
 
+			case VK_ERROR_DEVICE_LOST :
+			case VK_ERROR_FULL_SCREEN_EXCLUSIVE_MODE_LOST_EXT :
+			case VK_ERROR_OUT_OF_DEVICE_MEMORY :
+			case VK_ERROR_OUT_OF_HOST_MEMORY :
+			case VK_ERROR_SURFACE_LOST_KHR :
+			case VK_ERROR_UNKNOWN :
+			case VK_ERROR_VALIDATION_FAILED_EXT :
 			default:
-				TraceError{ClassId} << "Error from the swap chain : " << vkResultToCString(result) << " !";
+				TraceError{ClassId} << "Error from the swap-chain : " << vkResultToCString(result) << " !";
+
+				m_status = Status::Failure;
 
 				return std::nullopt;
 		}
 	}
 
-	bool
-	SwapChain::submitCommandBuffer (const std::shared_ptr< CommandBuffer > & commandBuffer, const uint32_t & imageIndex, const StaticVector< VkSemaphore, 16 > & callerWaitSemaphores, const Sync::Semaphore * renderFinishedSemaphore, const Sync::Fence * inFlightFence) noexcept
+	void
+	SwapChain::present (const uint32_t & imageIndex, const Queue * queue, VkSemaphore renderFinishedSemaphore) noexcept
 	{
-		if ( m_status != Status::Ready )
-		{
-			return false;
-		}
+		VkPresentInfoKHR presentInfo{};
+		presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+		presentInfo.pNext = nullptr;
+		presentInfo.waitSemaphoreCount = 1;
+		presentInfo.pWaitSemaphores = &renderFinishedSemaphore;
+		presentInfo.swapchainCount = 1;
+		presentInfo.pSwapchains = &m_handle;
+		presentInfo.pImageIndices = &imageIndex;
+		presentInfo.pResults = nullptr;
 
-		auto signalSemaphoreHandle = renderFinishedSemaphore->handle();
-
-		/* Submit */
-		{
-			const StaticVector< VkPipelineStageFlags, 16 > waitStages(callerWaitSemaphores.size(), VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
-
-			const auto submitted = this->device()
-				->getGraphicsQueue(QueuePriority::High)
-				->submit(
-					*commandBuffer,
-					SynchInfo{}
-						.waits(callerWaitSemaphores, waitStages)
-						.signals({&signalSemaphoreHandle, 1})
-						.withFence(inFlightFence->handle())
-				);
-
-			if ( !submitted )
-			{
-				return false;
-			}
-		}
-
-		/* Present */
-		{
-			VkPresentInfoKHR presentInfo{};
-			presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-			presentInfo.pNext = nullptr;
-			presentInfo.waitSemaphoreCount = 1;
-			presentInfo.pWaitSemaphores = &signalSemaphoreHandle;
-			presentInfo.swapchainCount = 1;
-			presentInfo.pSwapchains = &m_handle;
-			presentInfo.pImageIndices = &imageIndex;
-			presentInfo.pResults = nullptr;
-
-			bool swapChainRecreationNeeded = false;
-
-			if ( !this->device()->getGraphicsQueue(QueuePriority::High)->present(&presentInfo, swapChainRecreationNeeded) )
-			{
-				if ( swapChainRecreationNeeded )
-				{
-					m_status = Status::Degraded;
-				}
-
-				return false;
-			}
-		}
-
-		return true;
+		queue->present(&presentInfo, m_status);
 	}
 
 	VkPresentModeKHR
@@ -805,7 +785,7 @@ namespace EmEn::Vulkan
 			{
 				if ( m_showInformation )
 				{
-					TraceInfo{ClassId} << "The swap chain will use MAILBOX as presentation mode.";
+					TraceInfo{ClassId} << "The swap-chain will use MAILBOX as presentation mode.";
 				}
 
 				return VK_PRESENT_MODE_MAILBOX_KHR;
@@ -817,7 +797,7 @@ namespace EmEn::Vulkan
 			{
 				if ( m_showInformation )
 				{
-					TraceInfo{ClassId} << "The swap chain will use FIFO_RELAXED as presentation mode.";
+					TraceInfo{ClassId} << "The swap-chain will use FIFO_RELAXED as presentation mode.";
 				}
 
 				return VK_PRESENT_MODE_FIFO_RELAXED_KHR;
@@ -829,7 +809,7 @@ namespace EmEn::Vulkan
 			{
 				if ( m_showInformation )
 				{
-					TraceInfo{ClassId} << "The swap chain will use IMMEDIATE as presentation mode.";
+					TraceInfo{ClassId} << "The swap-chain will use IMMEDIATE as presentation mode.";
 				}
 
 				return VK_PRESENT_MODE_IMMEDIATE_KHR;
@@ -838,11 +818,51 @@ namespace EmEn::Vulkan
 
 		if ( m_showInformation )
 		{
-			TraceInfo{ClassId} << "The swap chain will use FIFO as presentation mode.";
+			TraceInfo{ClassId} << "The swap-chain will use FIFO as presentation mode.";
 		}
 
 		/* Default presentation mode (Always available). */
 		return VK_PRESENT_MODE_FIFO_KHR;
+	}
+
+	void
+	SwapChain::updateVideoDeviceProperties (float fovOrNear, float distanceOrFar, bool isOrthographicProjection) noexcept
+	{
+		m_isPerspectiveProjection = !isOrthographicProjection;
+
+		this->updateViewRangesProperties(fovOrNear, distanceOrFar);
+	}
+
+	void
+	SwapChain::updateViewRangesProperties (float fovOrNear, float distanceOrFar) noexcept
+	{
+		m_fovOrNear = fovOrNear;
+		m_distanceOrFar = distanceOrFar;
+
+		this->updateSizeProperties();
+	}
+
+	void
+	SwapChain::updateSizeProperties () noexcept
+	{
+		const auto & extent = this->extent();
+		const auto width = static_cast< float >(extent.width);
+		const auto height = static_cast< float >(extent.height);
+
+		if ( m_isPerspectiveProjection )
+		{
+			m_viewMatrices.updatePerspectiveViewProperties(width, height, m_fovOrNear, m_distanceOrFar);
+		}
+		else
+		{
+			m_viewMatrices.updateOrthographicViewProperties(width, height, m_fovOrNear, m_distanceOrFar);
+		}
+	}
+
+	void
+	SwapChain::updateDeviceFromCoordinates (const CartesianFrame< float > & worldCoordinates, const Vector< 3, float > & worldVelocity) noexcept
+	{
+		m_viewMatrices.updateViewCoordinates(worldCoordinates, worldVelocity);
 	}
 
 	void
@@ -858,28 +878,5 @@ namespace EmEn::Vulkan
 	SwapChain::onInputDeviceDisconnected (AVConsole::AVManagers & /*managers*/, AbstractVirtualDevice & /*sourceDevice*/) noexcept
 	{
 		m_viewMatrices.destroy();
-	}
-
-	void
-	SwapChain::updateDeviceFromCoordinates (const CartesianFrame< float > & worldCoordinates, const Vector< 3, float > & worldVelocity) noexcept
-	{
-		m_viewMatrices.updateViewCoordinates(worldCoordinates, worldVelocity);
-	}
-
-	void
-	SwapChain::updateProperties () noexcept
-	{
-		const auto & extent = this->extent();
-		const auto width = static_cast< float >(extent.width);
-		const auto height = static_cast< float >(extent.height);
-
-		if ( m_isPerspectiveProjection )
-		{
-			m_viewMatrices.updatePerspectiveViewProperties(width, height, m_distance, m_fovOrNear);
-		}
-		else
-		{
-			m_viewMatrices.updateOrthographicViewProperties(width, height, m_distance, m_fovOrNear);
-		}
 	}
 }

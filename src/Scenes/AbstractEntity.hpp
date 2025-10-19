@@ -677,12 +677,12 @@ namespace EmEn::Scenes
 
 			/**
 			 * @brief Constructs an abstract entity.
-			 * @param name The name of the entity [std::move].
-			 * @param sceneTimeMS The scene current time in milliseconds.
+			 * @param entityName A string [std::move].
+			 * @param sceneTimepointMS The scene current timepoint in milliseconds.
 			 */
-			AbstractEntity (std::string name, uint32_t sceneTimeMS) noexcept
-				: NameableTrait{std::move(name)},
-				m_birthTime{sceneTimeMS}
+			AbstractEntity (std::string entityName, uint32_t sceneTimepointMS) noexcept
+				: NameableTrait{std::move(entityName)},
+				m_birthTime{sceneTimepointMS}
 			{
 
 			}
@@ -858,7 +858,7 @@ namespace EmEn::Scenes
 			Libs::Math::Space3D::AACuboid< float > m_boundingBox;
 			Libs::Math::Space3D::Sphere< float > m_boundingSphere;
 			Physics::PhysicalObjectProperties m_physicalObjectProperties;
-			uint32_t m_birthTime{0};
+			const uint32_t m_birthTime{0};
 			size_t m_lastUpdatedMoveCycle{0};
 			mutable std::mutex m_componentsAccess;
 	};

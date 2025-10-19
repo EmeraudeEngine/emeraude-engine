@@ -315,7 +315,7 @@ namespace EmEn::Scenes
 	}
 
 	std::shared_ptr< RenderTarget::View< ViewMatrices2DUBO > >
-	Scene::createRenderToView (const std::string & name, uint32_t width, uint32_t height, const FramebufferPrecisions & precisions, bool primaryDevice) noexcept
+	Scene::createRenderToView (const std::string & name, uint32_t width, uint32_t height, const FramebufferPrecisions & precisions, bool isOrthographicProjection, bool primaryDevice) noexcept
 	{
 		const std::lock_guard< std::mutex > lock{m_renderToViewAccess};
 
@@ -327,7 +327,7 @@ namespace EmEn::Scenes
 		}
 
 		/* Create the render target. */
-		auto renderTarget = std::make_shared< RenderTarget::View< ViewMatrices2DUBO > >(name, width, height, precisions);
+		auto renderTarget = std::make_shared< RenderTarget::View< ViewMatrices2DUBO > >(name, width, height, precisions, isOrthographicProjection);
 
 		if ( !renderTarget->create(m_AVConsoleManager.graphicsRenderer()) )
 		{
@@ -349,7 +349,7 @@ namespace EmEn::Scenes
 	}
 
 	std::shared_ptr< RenderTarget::View< ViewMatrices3DUBO > >
-	Scene::createRenderToCubicView (const std::string & name, uint32_t size, const FramebufferPrecisions & precisions, bool primaryDevice) noexcept
+	Scene::createRenderToCubicView (const std::string & name, uint32_t size, const FramebufferPrecisions & precisions, bool isOrthographicProjection, bool primaryDevice) noexcept
 	{
 		const std::lock_guard< std::mutex > lock{m_renderToViewAccess};
 
@@ -362,7 +362,7 @@ namespace EmEn::Scenes
 		}
 
 		/* Create the render target. */
-		auto renderTarget = std::make_shared< RenderTarget::View< ViewMatrices3DUBO > >(name, size, precisions);
+		auto renderTarget = std::make_shared< RenderTarget::View< ViewMatrices3DUBO > >(name, size, precisions, isOrthographicProjection);
 
 		if ( !renderTarget->create(m_AVConsoleManager.graphicsRenderer()) )
 		{
@@ -384,7 +384,7 @@ namespace EmEn::Scenes
 	}
 
 	std::shared_ptr< RenderTarget::Texture< ViewMatrices2DUBO > >
-	Scene::createRenderToTexture2D (const std::string & name, uint32_t width, uint32_t height, uint32_t colorCount) noexcept
+	Scene::createRenderToTexture2D (const std::string & name, uint32_t width, uint32_t height, uint32_t colorCount, bool isOrthographicProjection) noexcept
 	{
 		const std::lock_guard< std::mutex > lock{m_renderToTextureAccess};
 
@@ -398,7 +398,7 @@ namespace EmEn::Scenes
 		}
 
 		/* Create the render target. */
-		auto renderTarget = std::make_shared< RenderTarget::Texture< ViewMatrices2DUBO > >(name, width, height, colorCount);
+		auto renderTarget = std::make_shared< RenderTarget::Texture< ViewMatrices2DUBO > >(name, width, height, colorCount, isOrthographicProjection);
 
 		if ( !renderTarget->enableManualLoading() )
 		{
@@ -427,7 +427,7 @@ namespace EmEn::Scenes
 	}
 
 	std::shared_ptr< RenderTarget::Texture< ViewMatrices3DUBO > >
-	Scene::createRenderToCubemap (const std::string & name, uint32_t size, uint32_t colorCount) noexcept
+	Scene::createRenderToCubemap (const std::string & name, uint32_t size, uint32_t colorCount, bool isOrthographicProjection) noexcept
 	{
 		const std::lock_guard< std::mutex > lock{m_renderToTextureAccess};
 
@@ -441,7 +441,7 @@ namespace EmEn::Scenes
 		}
 
 		/* Create the render target. */
-		auto renderTarget = std::make_shared< RenderTarget::Texture< ViewMatrices3DUBO > >(name, size, colorCount);
+		auto renderTarget = std::make_shared< RenderTarget::Texture< ViewMatrices3DUBO > >(name, size, colorCount, isOrthographicProjection);
 
 		if ( !renderTarget->enableManualLoading() )
 		{
@@ -470,7 +470,7 @@ namespace EmEn::Scenes
 	}
 
 	std::shared_ptr< RenderTarget::ShadowMap< ViewMatrices2DUBO > >
-	Scene::createRenderToShadowMap (const std::string & name, uint32_t resolution) noexcept
+	Scene::createRenderToShadowMap (const std::string & name, uint32_t resolution, bool isOrthographicProjection) noexcept
 	{
 		const std::lock_guard< std::mutex > lock{m_renderToShadowMapAccess};
 
@@ -484,7 +484,7 @@ namespace EmEn::Scenes
 		}
 
 		/* Create the render target. */
-		auto renderTarget = std::make_shared< RenderTarget::ShadowMap< ViewMatrices2DUBO > >(name, resolution);
+		auto renderTarget = std::make_shared< RenderTarget::ShadowMap< ViewMatrices2DUBO > >(name, resolution, isOrthographicProjection, true);
 
 		if ( !renderTarget->create(m_AVConsoleManager.graphicsRenderer()) )
 		{
@@ -506,7 +506,7 @@ namespace EmEn::Scenes
 	}
 
 	std::shared_ptr< RenderTarget::ShadowMap< ViewMatrices3DUBO > >
-	Scene::createRenderToCubicShadowMap (const std::string & name, uint32_t resolution) noexcept
+	Scene::createRenderToCubicShadowMap (const std::string & name, uint32_t resolution, bool isOrthographicProjection) noexcept
 	{
 		const std::lock_guard< std::mutex > lock{m_renderToShadowMapAccess};
 
@@ -520,7 +520,7 @@ namespace EmEn::Scenes
 		}
 
 		/* Create the render target. */
-		auto renderTarget = std::make_shared< RenderTarget::ShadowMap< ViewMatrices3DUBO > >(name, resolution);
+		auto renderTarget = std::make_shared< RenderTarget::ShadowMap< ViewMatrices3DUBO > >(name, resolution, isOrthographicProjection);
 
 		if ( !renderTarget->create(m_AVConsoleManager.graphicsRenderer()) )
 		{

@@ -108,9 +108,7 @@ namespace EmEn
 		constexpr auto AudioEnableKey{"Core/Audio/Enable"};
 		constexpr auto DefaultAudioEnable{true};
 		constexpr auto AudioDeviceNameKey{"Core/Audio/DeviceName"};
-		constexpr auto DefaultAudioDeviceName{""};
-		constexpr auto AudioForceDefaultDeviceKey{"Core/Audio/ForceDefaultDevice"};
-		constexpr auto DefaultAudioForceDefaultDevice{false};
+		constexpr auto DefaultAudioDeviceName{"AutoDetect"};
 		constexpr auto AudioPlaybackFrequencyKey{"Core/Audio/PlaybackFrequency"};
 		constexpr auto DefaultAudioPlaybackFrequency{48000};
 		constexpr auto AudioMasterVolumeKey{"Core/Audio/MasterVolume"};
@@ -126,7 +124,7 @@ namespace EmEn
 			constexpr auto AudioRecorderEnableKey{"Core/Audio/Recorder/Enable"};
 			constexpr auto DefaultAudioRecorderEnable{false};
 			constexpr auto AudioRecorderDeviceNameKey{"Core/Audio/Recorder/DeviceName"};
-			constexpr auto DefaultAudioRecorderDeviceName{""};
+			constexpr auto DefaultAudioRecorderDeviceName{"AutoDetect"};
 			constexpr auto RecorderFrequencyKey{"Core/Audio/Recorder/Frequency"};
 			constexpr auto DefaultRecorderFrequency{48000};
 			constexpr auto RecorderBufferSizeKey{"Core/Audio/Recorder/BufferSize"};
@@ -225,7 +223,7 @@ namespace EmEn
 			constexpr auto GraphicsShadowMappingPCFRadiusKey{"Core/Graphics/ShadowMapping/PCFRadius"};
 			constexpr auto DefaultGraphicsShadowMappingPCFRadius{1.0F};
 			constexpr auto GraphicsShadowMappingMaxDistanceKey{"Core/Graphics/ShadowMapping/MaxDistance"};
-			constexpr auto DefaultGraphicsShadowMappingMaxDistance{5000.0F}; /* NOTE: 5 Km */
+			constexpr auto DefaultGraphicsShadowMappingMaxDistance{100.0F};
 
 			/* Shader */
 			constexpr auto ShowSourceCodeKey{"Core/Graphics/Shader/ShowSourceCode"}; // Logs

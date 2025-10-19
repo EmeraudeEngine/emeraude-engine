@@ -55,12 +55,12 @@ namespace EmEn::Scenes::Component
 
 			/**
 			 * @brief Constructs a visual component.
-			 * @param name The name of the renderable instance.
+			 * @param componentName A reference to a string.
 			 * @param parentEntity A reference to the parent entity.
 			 * @param renderable A reference to a renderable smart pointer.
 			 */
-			Visual (std::string name, const AbstractEntity & parentEntity, const std::shared_ptr< Graphics::Renderable::Interface > & renderable) noexcept
-				: Abstract{std::move(name), parentEntity},
+			Visual (const std::string & componentName, const AbstractEntity & parentEntity, const std::shared_ptr< Graphics::Renderable::Interface > & renderable) noexcept
+				: Abstract{componentName, parentEntity},
 				m_renderableInterface{renderable},
 				m_renderableInstance{std::make_shared< Graphics::RenderableInstance::Unique >(renderable, renderable->isSprite() ? Graphics::RenderableInstance::FacingCamera : Graphics::RenderableInstance::None)}
 			{

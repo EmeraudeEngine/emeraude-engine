@@ -29,6 +29,9 @@
 /* Local inclusions for inheritances. */
 #include "Abstract.hpp"
 
+/* Local inclusions for usages. */
+#include "Graphics/RenderTarget/Abstract.hpp"
+
 namespace EmEn::Saphir::Generator
 {
 	/**
@@ -49,7 +52,8 @@ namespace EmEn::Saphir::Generator
 			 * @param layerIndex The renderable instance layer index.
 			 */
 			ShadowCasting (const std::shared_ptr< const Graphics::RenderTarget::Abstract > & renderTarget, const std::shared_ptr< const Graphics::RenderableInstance::Abstract > & renderableInstance, uint32_t layerIndex) noexcept
-				: Abstract(ClassId, renderTarget, renderableInstance, layerIndex)
+				: Abstract{ClassId, renderTarget, renderableInstance, layerIndex},
+				m_enableColorOutput{renderTarget->isDebug()}
 			{
 				if ( renderableInstance->instancingEnabled() )
 				{
@@ -60,16 +64,6 @@ namespace EmEn::Saphir::Generator
 				{
 					this->enableFlag(IsRenderableFacingCamera);
 				}
-			}
-
-			/**
-			 * @brief Enables color output to show the depth.
-			 * @return void
-			 */
-			void
-			enableColorOutput () noexcept
-			{
-				m_enableColorOutput = true;
 			}
 
 		private:

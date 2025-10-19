@@ -57,13 +57,13 @@ namespace EmEn::Scenes::Component
 
 			/**
 			 * @brief Constructs a multiple visuals component.
-			 * @param name The name of the renderable instance [std::move].
+			 * @param componentName A reference to a string.
 			 * @param parentEntity A reference to the parent entity.
 			 * @param renderable A reference to a renderable smart pointer.
 			 * @param coordinates A list of sub-coordinates [std::move].
 			 */
-			MultipleVisuals (std::string name, const AbstractEntity & parentEntity, const std::shared_ptr< Graphics::Renderable::Interface > & renderable, std::vector< Libs::Math::CartesianFrame< float > > coordinates) noexcept
-				: Abstract{std::move(name), parentEntity},
+			MultipleVisuals (const std::string & componentName, const AbstractEntity & parentEntity, const std::shared_ptr< Graphics::Renderable::Interface > & renderable, std::vector< Libs::Math::CartesianFrame< float > > coordinates) noexcept
+				: Abstract{componentName, parentEntity},
 				m_renderableInterface{renderable},
 				m_renderableInstance{std::make_shared< Graphics::RenderableInstance::Multiple >(s_graphicsRenderer->device(), renderable, coordinates, renderable->isSprite() ? Graphics::RenderableInstance::FacingCamera : Graphics::RenderableInstance::None)},
 				m_coordinates{std::move(coordinates)}

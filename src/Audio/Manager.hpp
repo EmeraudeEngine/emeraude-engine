@@ -390,27 +390,29 @@ namespace EmEn::Audio
 			 * @param useExtendedAPI Use the extended API version of querying audio devices.
 			 * @return bool
 			 */
-			bool queryOutputDevices (bool useExtendedAPI) noexcept;
+			bool selectedOutputDevice (bool useExtendedAPI) noexcept;
 
 			/**
 			 * @brief Queries the available basic audio device and save it.
 			 * @return bool
 			 */
-			bool queryInputDevices () noexcept;
+			bool selectInputDevice () noexcept;
 
 			/**
 			 * @brief Selects an output audio device to play sound and create a context with it.
+			 * @param settings A reference to the settings.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool setupAudioOutputDevice () noexcept;
+			bool setupAudioOutputDevice (Settings & settings) noexcept;
 
 			/**
 			 * @brief Selects an input audio device to record sound.
+			 * @param settings A reference to the settings.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool setupAudioInputDevice () noexcept;
+			bool setupAudioInputDevice (Settings & settings) noexcept;
 
 			/**
 			 * @brief Release an unused source.

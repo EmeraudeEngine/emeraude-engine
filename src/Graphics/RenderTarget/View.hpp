@@ -61,9 +61,18 @@ namespace EmEn::Graphics::RenderTarget
 			 * @param width The width of the view.
 			 * @param height The height of the view.
 			 * @param precisions A structure to describe framebuffer precisions.
+			 * @param isOrthographicProjection Set orthographic projection instead of perspective.
 			 */
-			View (const std::string & name, uint32_t width, uint32_t height, const FramebufferPrecisions & precisions = {}) noexcept requires (std::is_same_v< view_matrices_t, ViewMatrices2DUBO >)
-				: Abstract{name, precisions, {width, height, 1}, RenderTargetType::View, AVConsole::ConnexionType::Both, true}
+			View (const std::string & name, uint32_t width, uint32_t height, const FramebufferPrecisions & precisions, bool isOrthographicProjection) noexcept requires (std::is_same_v< view_matrices_t, ViewMatrices2DUBO >)
+				: Abstract{
+					name,
+					precisions,
+					{width, height, 1U},
+					RenderTargetType::View,
+					AVConsole::ConnexionType::Both,
+					isOrthographicProjection,
+					true
+				}
 			{
 
 			}
@@ -73,11 +82,38 @@ namespace EmEn::Graphics::RenderTarget
 			 * @param name A reference to a string for the name of the video device.
 			 * @param size The size of the cubemap.
 			 * @param precisions A structure to describe framebuffer precisions.
+			 * @param isOrthographicProjection Set orthographic projection instead of perspective.
 			 */
-			View (const std::string & name, uint32_t size, const FramebufferPrecisions & precisions = {}) noexcept requires (std::is_same_v< view_matrices_t, ViewMatrices3DUBO >)
-				: Abstract{name, precisions, {size, size, 1}, RenderTargetType::CubicView, AVConsole::ConnexionType::Both, true}
+			View (const std::string & name, uint32_t size, const FramebufferPrecisions & precisions, bool isOrthographicProjection) noexcept requires (std::is_same_v< view_matrices_t, ViewMatrices3DUBO >)
+				: Abstract{
+					name,
+					precisions,
+					{size, size, 1},
+					RenderTargetType::CubicView,
+					AVConsole::ConnexionType::Both,
+					isOrthographicProjection,
+					true
+				}
 			{
 
+			}
+
+			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::updateViewRangesProperties() */
+			void
+			updateViewRangesProperties (float fovOrNear, float distanceOrFar) noexcept override
+			{
+				const auto & extent = this->extent();
+				const auto width = static_cast< float >(extent.width);
+				const auto height = static_cast< float >(extent.width);
+
+				if ( this->isOrthographicProjection() )
+				{
+					m_viewMatrices.updatePerspectiveViewProperties(width, height, fovOrNear, distanceOrFar);
+				}
+				else
+				{
+					m_viewMatrices.updateOrthographicViewProperties(width, height, fovOrNear, distanceOrFar);
+				}
 			}
 
 			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::aspectRatio() */
@@ -171,6 +207,14 @@ namespace EmEn::Graphics::RenderTarget
 				return m_isReadyForRendering;
 			}
 
+			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::isDebug() const */
+			[[nodiscard]]
+			bool
+			isDebug () const noexcept override
+			{
+				return false;
+			}
+
 			/**
 			 * @brief Gives access to the main hardware depth stencil image of the render target.
 			 * @return std::shared_ptr< Vulkan::Image >
@@ -206,27 +250,20 @@ namespace EmEn::Graphics::RenderTarget
 
 		private:
 
+			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::updateVideoDeviceProperties() */
+			void
+			updateVideoDeviceProperties (float fovOrNear, float distanceOrFar, bool isOrthographicProjection) noexcept override
+			{
+				this->setOrthographicProjection(isOrthographicProjection);
+
+				this->updateViewRangesProperties(fovOrNear, distanceOrFar);
+			}
+
 			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::updateDeviceFromCoordinates() */
 			void
 			updateDeviceFromCoordinates (const Libs::Math::CartesianFrame< float > & worldCoordinates, const Libs::Math::Vector< 3, float > & worldVelocity) noexcept override
 			{
 				m_viewMatrices.updateViewCoordinates(worldCoordinates, worldVelocity);
-			}
-
-			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::updateProperties() */
-			void
-			updateProperties (bool isPerspectiveProjection, float distance, float fovOrNear) noexcept override
-			{
-				const auto & extent = this->extent();
-
-				if ( isPerspectiveProjection )
-				{
-					m_viewMatrices.updatePerspectiveViewProperties(static_cast< float >(extent.width), static_cast< float >(extent.height), distance, fovOrNear);
-				}
-				else
-				{
-					m_viewMatrices.updateOrthographicViewProperties(static_cast< float >(extent.width), static_cast< float >(extent.height), distance, fovOrNear);
-				}
 			}
 
 			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::onInputDeviceConnected() */
@@ -292,7 +329,7 @@ namespace EmEn::Graphics::RenderTarget
 			createRenderPass (Renderer & renderer) const noexcept override
 			{
 				/* FIXME: The identifier must reflect the enabled attachments !!! */
-				auto renderPass = renderer.getRenderPass(ViewRender, 0);
+				auto renderPass = renderer.getRenderPass("ViewRender", 0);
 
 				if ( !renderPass->isCreated() )
 				{
@@ -335,6 +372,7 @@ namespace EmEn::Graphics::RenderTarget
 						subPass.setDepthStencilAttachment(1, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
 					}
 
+					/* Configure the subpass. */
 					renderPass->addSubPass(subPass);
 
 					//VkSubpassDependency subpassDependency{};

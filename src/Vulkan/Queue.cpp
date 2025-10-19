@@ -106,32 +106,37 @@ namespace EmEn::Vulkan
     }
 
 	bool
-	Queue::present (const VkPresentInfoKHR * presentInfo, bool & swapChainRecreationNeeded) const noexcept
+	Queue::present (const VkPresentInfoKHR * presentInfo, Status & swapChainStatus) const noexcept
 	{
 		/* [VULKAN-CPU-SYNC] vkQueuePresentKHR() */
 		const std::lock_guard< Device > lock{*m_device};
 
-		switch ( vkQueuePresentKHR(m_handle, presentInfo) )
+		switch ( const auto result = vkQueuePresentKHR(m_handle, presentInfo) )
 		{
 			case VK_SUCCESS :
 				return true;
 
-			case VK_ERROR_OUT_OF_DATE_KHR :
-				Tracer::info(ClassId, "VK_ERROR_OUT_OF_DATE_KHR @ presentation !");
-
-				swapChainRecreationNeeded = true;
-
-				return false;
-
 			case VK_SUBOPTIMAL_KHR :
-				Tracer::info(ClassId, "VK_SUBOPTIMAL_KHR @ presentation !");
+				Tracer::warning(ClassId, "vkQueuePresentKHR(), the swap-chain is sub-optimal!");
 
-				swapChainRecreationNeeded = true;
+				swapChainStatus = Status::Degraded;
+
+				return true;
+
+			case VK_ERROR_OUT_OF_DATE_KHR :
+				Tracer::error(ClassId, "vkQueuePresentKHR(), the swap-chain is out of date!");
+
+				swapChainStatus = Status::Degraded;
 
 				return false;
 
+			case VK_ERROR_DEVICE_LOST :
+			case VK_ERROR_SURFACE_LOST_KHR :
+			case VK_ERROR_FULL_SCREEN_EXCLUSIVE_MODE_LOST_EXT :
 			default :
-				Tracer::error(ClassId, "Unable to present an image !");
+				TraceError{ClassId} << "Unable to present an image : " << vkResultToCString(result) << " !";
+
+				swapChainStatus = Status::Failure;
 
 				return false;
 		}

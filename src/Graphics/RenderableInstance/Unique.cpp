@@ -42,16 +42,13 @@ namespace EmEn::Graphics::RenderableInstance
 	using namespace Vulkan;
 
 	void
-	Unique::pushMatrices (const CommandBuffer & commandBuffer, const PipelineLayout & pipelineLayout, const Saphir::Program & program, uint32_t readStateIndex, const ViewMatricesInterface & viewMatrices, const CartesianFrame< float > * worldCoordinates) const noexcept
+	Unique::pushMatricesForShadowCasting (const CommandBuffer & commandBuffer, const PipelineLayout & pipelineLayout, const Saphir::Program & program, uint32_t readStateIndex, const ViewMatricesInterface & viewMatrices, const CartesianFrame< float > * worldCoordinates) const noexcept
 	{
-		constexpr uint32_t MatrixBytes{Matrix4Alignment * sizeof(float)};
-
 		const VkShaderStageFlags stageFlags = program.hasGeometryShader() ?
 			VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_GEOMETRY_BIT :
 			VK_SHADER_STAGE_VERTEX_BIT;
 
-		const auto & viewMatrix = viewMatrices.viewMatrix(readStateIndex, this->isUsingInfinityView(), 0);
-
+		/* Prepare the model matrix (M). */
 		Matrix< 4, float > modelMatrix;
 
 		/* NOTE: If world coordinates are a nullptr, we assume to render the object at the origin. */
@@ -67,17 +64,64 @@ namespace EmEn::Graphics::RenderableInstance
 			modelMatrix *= this->transformationMatrix();
 		}
 
-		/* [VULKAN-PUSH-CONSTANT:4] Push camera-related matrices. */
+		/* Prepare the view matrix (V). */
+		const auto & viewMatrix = viewMatrices.viewMatrix(readStateIndex, this->isUsingInfinityView(), 0);
+
+		/* Prepare the projection matrix (P). */
+		const auto & projectionMatrix = viewMatrices.projectionMatrix(readStateIndex);
+
+		/* Compute the model view projection matrix (MVP). */
+		const auto modelViewProjectionMatrix = projectionMatrix * viewMatrix * modelMatrix;
+
+		vkCmdPushConstants(
+			commandBuffer.handle(),
+			pipelineLayout.handle(),
+			stageFlags,
+			0,
+			MatrixBytes,
+			modelViewProjectionMatrix.data()
+		);
+	}
+
+	void
+	Unique::pushMatricesForRendering (const CommandBuffer & commandBuffer, const PipelineLayout & pipelineLayout, const Saphir::Program & program, uint32_t readStateIndex, const ViewMatricesInterface & viewMatrices, const CartesianFrame< float > * worldCoordinates) const noexcept
+	{
+		const VkShaderStageFlags stageFlags = program.hasGeometryShader() ?
+			VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_GEOMETRY_BIT :
+			VK_SHADER_STAGE_VERTEX_BIT;
+
+		/* Prepare the model matrix (M). */
+		Matrix< 4, float > modelMatrix;
+
+		/* NOTE: If world coordinates are a nullptr, we assume to render the object at the origin. */
+		if ( worldCoordinates != nullptr )
+		{
+			modelMatrix = this->isFacingCamera() ?
+				worldCoordinates->getSpriteModelMatrix(viewMatrices.position(readStateIndex)) :
+				worldCoordinates->getModelMatrix();
+		}
+
+		if ( this->isFlagEnabled(ApplyTransformationMatrix) )
+		{
+			modelMatrix *= this->transformationMatrix();
+		}
+
+		/* Prepare the view matrix (V). */
+		const auto & viewMatrix = viewMatrices.viewMatrix(readStateIndex, this->isUsingInfinityView(), 0);
+
+		/* Prepare the projection matrix (P). */
+		const auto & projectionMatrix = viewMatrices.projectionMatrix(readStateIndex);
+
 		if ( program.wasAdvancedMatricesEnabled() )
 		{
 			if constexpr ( MergePushConstants )
 			{
-				/* NOTE: Create a single buffer for 2x mat4x4. */
+				/* Create a single buffer for 2x mat4x4. */
 				std::array< float, 32 > buffer{};
 				std::memcpy(buffer.data(), viewMatrix.data(), MatrixBytes);
 				std::memcpy(&buffer[Matrix4Alignment], modelMatrix.data(), MatrixBytes);
 
-				/* NOTE: Push the view matrix (V) and the model matrix (M). */
+				/* Push the view matrix (V) and the model matrix (M) in a single call. */
 				vkCmdPushConstants(
 					commandBuffer.handle(),
 					pipelineLayout.handle(),
@@ -89,7 +133,7 @@ namespace EmEn::Graphics::RenderableInstance
 			}
 			else
 			{
-				/* NOTE: Push the view matrix (V). */
+				/* Push the view matrix (V). */
 				vkCmdPushConstants(
 					commandBuffer.handle(),
 					pipelineLayout.handle(),
@@ -99,7 +143,7 @@ namespace EmEn::Graphics::RenderableInstance
 					viewMatrix.data()
 				);
 
-				/* NOTE: Push the model matrix (M). */
+				/* Push the model matrix (M). */
 				vkCmdPushConstants(
 					commandBuffer.handle(),
 					pipelineLayout.handle(),
@@ -112,9 +156,10 @@ namespace EmEn::Graphics::RenderableInstance
 		}
 		else
 		{
-			const auto modelViewProjectionMatrix = viewMatrices.projectionMatrix(readStateIndex) * viewMatrix * modelMatrix;
+			/* Compute the model view projection matrix (MVP). */
+			const auto modelViewProjectionMatrix = projectionMatrix * viewMatrix * modelMatrix;
 
-			/* NOTE: Push the model view projection matrix (MVP). */
+			/* Push the model view projection matrix (MVP). */
 			vkCmdPushConstants(
 				commandBuffer.handle(),
 				pipelineLayout.handle(),

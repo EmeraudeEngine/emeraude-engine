@@ -187,7 +187,7 @@ namespace EmEn::Scenes::Component
 
 			/**
 			 * @brief Returns the influence area interface of the modifier.
-			 * @warning  can be null !
+			 * @warning Can be null!
 			 * @return shared_ptr< InfluenceAreaInterface >
 			 */
 			[[nodiscard]]
@@ -217,11 +217,11 @@ namespace EmEn::Scenes::Component
 
 			/**
 			 * @brief Constructs a modifier.
-			 * @param name The name of the modifier [std::move].
+			 * @param componentName A reference to a string.
 			 * @param parentEntity A reference to the parent entity.
 			 */
-			AbstractModifier (std::string name, const AbstractEntity & parentEntity) noexcept
-				: Abstract{std::move(name), parentEntity}
+			AbstractModifier (const std::string & componentName, const AbstractEntity & parentEntity) noexcept
+				: Abstract{componentName, parentEntity}
 			{
 				this->enable(true);
 			}

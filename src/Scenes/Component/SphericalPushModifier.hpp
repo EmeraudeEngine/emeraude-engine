@@ -48,11 +48,11 @@ namespace EmEn::Scenes::Component
 
 			/**
 			 * @brief Constructs a spherical push modifier.
-			 * @param name The name of the modifier [std::move].
+			 * @param componentName A reference to a string.
 			 * @param parentEntity A reference to the parent entity.
 			 */
-			SphericalPushModifier (std::string name, const AbstractEntity & parentEntity) noexcept
-				: AbstractModifier{std::move(name), parentEntity}
+			SphericalPushModifier (const std::string & componentName, const AbstractEntity & parentEntity) noexcept
+				: AbstractModifier{componentName, parentEntity}
 			{
 
 			}

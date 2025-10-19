@@ -109,7 +109,6 @@ namespace EmEn::Vulkan
 			return item->handle();
 		});
 
-		/* [VULKAN-PUSH-CONSTANT:3] Declare push constants requested for the pipeline. */
 		m_createInfo.setLayoutCount = static_cast< uint32_t >(setLayouts.size());
 		m_createInfo.pSetLayouts = setLayouts.data();
 		m_createInfo.pushConstantRangeCount = static_cast< uint32_t >(m_pushConstantRanges.size());

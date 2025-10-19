@@ -47,12 +47,12 @@ namespace EmEn::Scenes::Component
 
 			/**
 			 * @brief Constructs a directional light.
-			 * @param name The name of the component [std::move].
+			 * @param componentName A reference to a string.
 			 * @param parentEntity A reference to the parent entity.
 			 * @param shadowMapResolution Enable the shadow map by specifying the resolution. Default, no shadow map.
 			 */
-			DirectionalLight (std::string name, const AbstractEntity & parentEntity, uint32_t shadowMapResolution = 0) noexcept
-				: AbstractLightEmitter{std::move(name), parentEntity, shadowMapResolution}
+			DirectionalLight (const std::string & componentName, const AbstractEntity & parentEntity, uint32_t shadowMapResolution = 0) noexcept
+				: AbstractLightEmitter{componentName, parentEntity, shadowMapResolution}
 			{
 
 			}
@@ -147,11 +147,34 @@ namespace EmEn::Scenes::Component
 
 		private:
 
-			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::onOutputDeviceConnected() */
-			void onOutputDeviceConnected (AVConsole::AVManagers & managers, AbstractVirtualDevice & targetDevice) noexcept override;
-
 			/** @copydoc EmEn::Animations::AnimatableInterface::playAnimation() */
 			bool playAnimation (uint8_t animationID, const Libs::Variant & value, size_t cycle) noexcept override;
+
+			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::getFovOrNear() */
+			[[nodiscard]]
+			float
+			getFovOrNear () const noexcept override
+			{
+				/* NOTE: A directional light returns the near value. */
+				return 0.0F;
+			}
+
+			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::getDistanceOrFar() */
+			[[nodiscard]]
+			float
+			getDistanceOrFar () const noexcept override
+			{
+				/* NOTE: A directional light returns the far value. */
+				return s_maxDistance;
+			}
+
+			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::isOrthographicProjection() */
+			[[nodiscard]]
+			bool
+			isOrthographicProjection () const noexcept override
+			{
+				return true;
+			}
 
 			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::onVideoMemoryUpdate() */
 			[[nodiscard]]

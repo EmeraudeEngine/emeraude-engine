@@ -190,10 +190,10 @@ namespace EmEn::Graphics
 			}
 
 			/** @copydoc EmEn::Graphics::ViewMatricesInterface::updatePerspectiveViewProperties() */
-			void updatePerspectiveViewProperties (float width, float height, float distance, float fov) noexcept override;
+			void updatePerspectiveViewProperties (float width, float height, float fov, float distance) noexcept override;
 
 			/** @copydoc EmEn::Graphics::ViewMatricesInterface::updateOrthographicViewProperties() */
-			void updateOrthographicViewProperties (float width, float height, float farDistance, float nearDistance) noexcept override;
+			void updateOrthographicViewProperties (float width, float height, float nearDistance, float farDistance) noexcept override;
 
 			/** @copydoc EmEn::Graphics::ViewMatricesInterface::updateViewCoordinates() */
 			void updateViewCoordinates (const Libs::Math::CartesianFrame< float > & coordinates, const Libs::Math::Vector< 3, float > & velocity) noexcept override;

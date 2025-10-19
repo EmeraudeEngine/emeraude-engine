@@ -276,40 +276,44 @@ namespace EmEn::Scenes
 			 * @brief Creates a render to a shadow map (Texture2D) device.
 			 * @param name A reference to a string to name the virtual video device.
 			 * @param resolution The resolution of the shadow map.
+			 * @param isOrthographicProjection Set an orthographic projection instead of perspective.
 			 * @return std::shared_ptr< Graphics::RenderTarget::ShadowMap< Graphics::ViewMatrices2DUBO > >
 			 */
 			[[nodiscard]]
-			std::shared_ptr< Graphics::RenderTarget::ShadowMap< Graphics::ViewMatrices2DUBO > > createRenderToShadowMap (const std::string & name, uint32_t resolution) noexcept;
+			std::shared_ptr< Graphics::RenderTarget::ShadowMap< Graphics::ViewMatrices2DUBO > > createRenderToShadowMap (const std::string & name, uint32_t resolution, bool isOrthographicProjection) noexcept;
 
 			/**
 			 * @brief Creates a render to a cubic shadow map (Cubemap) device.
 			 * @param name A reference to a string to name the virtual video device.
 			 * @param resolution The resolution of the shadow map.
+			 * @param isOrthographicProjection Set an orthographic projection instead of perspective.
 			 * @return std::shared_ptr< Graphics::RenderTarget::ShadowMap< Graphics::ViewMatrices3DUBO > >
 			 */
 			[[nodiscard]]
-			std::shared_ptr< Graphics::RenderTarget::ShadowMap< Graphics::ViewMatrices3DUBO > > createRenderToCubicShadowMap (const std::string & name, uint32_t resolution) noexcept;
+			std::shared_ptr< Graphics::RenderTarget::ShadowMap< Graphics::ViewMatrices3DUBO > > createRenderToCubicShadowMap (const std::string & name, uint32_t resolution, bool isOrthographicProjection) noexcept;
 
 			/**
 			 * @brief Creates a render to a texture 2D device.
 			 * @param name A reference to a string to name the virtual video device.
 			 * @param width The width of the surface.
 			 * @param height The height of the surface.
-			 * @param colorCount The number of color channels desired for the texture2Ds. Default 4.
+			 * @param colorCount The number of color channels desired for the texture2Ds.
+			 * @param isOrthographicProjection Set an orthographic projection instead of perspective.
 			 * @return std::shared_ptr< Graphics::RenderTarget::Texture< Graphics::ViewMatrices2DUBO > >
 			 */
 			[[nodiscard]]
-			std::shared_ptr< Graphics::RenderTarget::Texture< Graphics::ViewMatrices2DUBO > > createRenderToTexture2D (const std::string & name, uint32_t width, uint32_t height, uint32_t colorCount = 4) noexcept;
+			std::shared_ptr< Graphics::RenderTarget::Texture< Graphics::ViewMatrices2DUBO > > createRenderToTexture2D (const std::string & name, uint32_t width, uint32_t height, uint32_t colorCount, bool isOrthographicProjection) noexcept;
 
 			/**
 			 * @brief Creates a render to cubemap device.
 			 * @param name A reference to a string to name the virtual video device.
 			 * @param size The size of the cubemap.
-			 * @param colorCount The number of color channels desired for the texture2Ds. Default 4.
+			 * @param colorCount The number of color channels desired for the texture2Ds.
+			 * @param isOrthographicProjection Set an orthographic projection instead of perspective.
 			 * @return std::shared_ptr< Graphics::RenderTarget::Texture::Texture< Graphics::ViewMatrices3DUBO > >
 			 */
 			[[nodiscard]]
-			std::shared_ptr< Graphics::RenderTarget::Texture< Graphics::ViewMatrices3DUBO > > createRenderToCubemap (const std::string & name, uint32_t size, uint32_t colorCount = 4) noexcept;
+			std::shared_ptr< Graphics::RenderTarget::Texture< Graphics::ViewMatrices3DUBO > > createRenderToCubemap (const std::string & name, uint32_t size, uint32_t colorCount, bool isOrthographicProjection) noexcept;
 
 			/**
 			 * @brief Creates a render-to-view (Texture 2D) device.
@@ -317,22 +321,24 @@ namespace EmEn::Scenes
 			 * @param width The width of the surface.
 			 * @param height The height of the surface.
 			 * @param precisions A reference to a framebuffer precisions structure.
+			 * @param isOrthographicProjection Set an orthographic projection instead of perspective.
 			 * @param primaryDevice Set the device as the primary output. Default false.
 			 * @return std::shared_ptr< Graphics::RenderTarget::View< Graphics::ViewMatrices2DUBO > >
 			 */
 			[[nodiscard]]
-			std::shared_ptr< Graphics::RenderTarget::View< Graphics::ViewMatrices2DUBO > > createRenderToView (const std::string & name, uint32_t width, uint32_t height, const Graphics::FramebufferPrecisions & precisions = {}, bool primaryDevice = false) noexcept;
+			std::shared_ptr< Graphics::RenderTarget::View< Graphics::ViewMatrices2DUBO > > createRenderToView (const std::string & name, uint32_t width, uint32_t height, const Graphics::FramebufferPrecisions & precisions, bool isOrthographicProjection, bool primaryDevice = false) noexcept;
 
 			/**
 			 * @brief Creates a render to cubic view (Cubemap) device.
 			 * @param name A reference to a string to name the virtual video device.
 			 * @param size The size of the cubemap.
 			 * @param precisions A reference to a framebuffer precisions structure.
+			 * @param isOrthographicProjection Set an orthographic projection instead of perspective.
 			 * @param primaryDevice Set the device as the primary output. Default false.
 			 * @return std::shared_ptr< Graphics::RenderTarget::View< Graphics::ViewMatrices3DUBO > >
 			 */
 			[[nodiscard]]
-			std::shared_ptr< Graphics::RenderTarget::View< Graphics::ViewMatrices3DUBO > > createRenderToCubicView (const std::string & name, uint32_t size, const Graphics::FramebufferPrecisions & precisions = {}, bool primaryDevice = false) noexcept;
+			std::shared_ptr< Graphics::RenderTarget::View< Graphics::ViewMatrices3DUBO > > createRenderToCubicView (const std::string & name, uint32_t size, const Graphics::FramebufferPrecisions & precisions, bool isOrthographicProjection, bool primaryDevice = false) noexcept;
 
 			/**
 			 * @brief Creates a static entity in the scene.

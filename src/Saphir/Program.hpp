@@ -93,7 +93,7 @@ namespace EmEn::Saphir
 			}
 
 			/**
-			 * @brief Returns whether the program use tesselation technics.
+			 * @brief Returns whether the program uses tesselation technics.
 			 * @return bool
 			 */
 			[[nodiscard]]

@@ -42,6 +42,7 @@
 #include "Vulkan/Sync/Fence.hpp"
 #include "Vulkan/Framebuffer.hpp"
 #include "Vulkan/CommandBuffer.hpp"
+#include "Vulkan/Types.hpp"
 #include "Graphics/ViewMatrices2DUBO.hpp"
 #include "Graphics/ViewMatrices3DUBO.hpp"
 #include "Window.hpp"
@@ -59,16 +60,6 @@ namespace EmEn::Vulkan
 
 			/** @brief Class identifier. */
 			static constexpr auto ClassId{"VulkanSwapChain"};
-
-			/** @brief The swap-chain status enumeration. */
-			enum class Status: uint8_t
-			{
-				Uninitialized,
-				Ready,
-				Degraded,
-				UnderConstruction,
-				Failure
-			};
 
 			/**
 			 * @brief Constructs a swap-chain.
@@ -97,8 +88,6 @@ namespace EmEn::Vulkan
 
 				this->setCreated();
 
-				m_isReadyForRendering = true;
-
 				return true;
 			}
 
@@ -106,8 +95,6 @@ namespace EmEn::Vulkan
 			bool
 			destroyFromHardware () noexcept override
 			{
-				m_isReadyForRendering = false;
-
 				if ( !this->destroy() )
 				{
 					return false;
@@ -125,6 +112,9 @@ namespace EmEn::Vulkan
 			{
 				return AVConsole::VideoType::View;
 			}
+
+			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::updateViewRangesProperties() */
+			void updateViewRangesProperties (float fovOrNear, float distanceOrFar) noexcept override;
 
 			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::aspectRatio() */
 			[[nodiscard]]
@@ -192,15 +182,16 @@ namespace EmEn::Vulkan
 			bool
 			isReadyForRendering () const noexcept override
 			{
-				return m_isReadyForRendering;
+				return this->isCreated() && m_status == Status::Ready;
 			}
 
-			/**
-			 * @brief Recreates the swap-chain.
-			 * @return bool
-			 */
+			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::isDebug() const */
 			[[nodiscard]]
-			bool recreateOnHardware () noexcept;
+			bool
+			isDebug () const noexcept override
+			{
+				return m_showInformation;
+			}
 
 			/**
 			 * @brief Returns the swap-chain vulkan handle.
@@ -258,26 +249,6 @@ namespace EmEn::Vulkan
 			}
 
 			/**
-			 * @brief Acquires the next image index available in the swap-chain.
-			 * @param imageAvailableSemaphore A pointer to the previous frame semaphore.
-			 * @param timeout The timeout to acquire an image.
-			 * @return std::optional< uint32_t >
-			 */
-			[[nodiscard]]
-			std::optional< uint32_t > acquireNextImage (const Sync::Semaphore * imageAvailableSemaphore, uint64_t timeout) noexcept;
-
-			/**
-			 * @brief Submits command buffer to the current rendering image.
-			 * @param commandBuffer A reference to a command buffer smart pointer.
-			 * @param imageIndex The current rendering image index.
-			 * @param callerWaitSemaphores A reference to a semaphore container.
-			 * @param renderFinishedSemaphore A pointer to semaphore to signal.
-			 * @param inFlightFence A pointer to the in-flight fence.
-			 * @return bool
-			 */
-			bool submitCommandBuffer (const std::shared_ptr< CommandBuffer > & commandBuffer, const uint32_t & imageIndex, const Libs::StaticVector< VkSemaphore, 16 > & callerWaitSemaphores, const Sync::Semaphore * renderFinishedSemaphore, const Sync::Fence * inFlightFence) noexcept;
-
-			/**
 			 * @brief Returns the current status of the swap-chain.
 			 * @return Status
 			 */
@@ -289,27 +260,37 @@ namespace EmEn::Vulkan
 			}
 
 			/**
-			 * @brief Updates properties of the swap chain.
-			 * @note This version is used on window resize with previous parameters.
+			 * @brief Recreates the swap-chain when a resize occurs or properties change.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool refresh () noexcept;
+
+			/**
+			 * @brief Acquires the next image index available in the swap-chain.
+			 * @param imageAvailableSemaphore A pointer to the previous frame semaphore.
+			 * @param timeout The timeout to acquire an image.
+			 * @return std::optional< uint32_t >
+			 */
+			[[nodiscard]]
+			std::optional< uint32_t > acquireNextImage (const Sync::Semaphore * imageAvailableSemaphore, uint64_t timeout) noexcept;
+
+			/**
+			 * @brief Presents an rendered image.
+			 * @param imageIndex The current rendering image index.
+			 * @param queue The graphics queue to present the image.
+			 * @param renderFinishedSemaphore A semaphore handle to wait the signal for a finished render.
 			 * @return void
 			 */
-			void updateProperties () noexcept;
+			void present (const uint32_t & imageIndex, const Queue * queue, VkSemaphore renderFinishedSemaphore) noexcept;
 
 		private:
 
+			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::updateVideoDeviceProperties() */
+			void updateVideoDeviceProperties (float fovOrNear, float distanceOrFar, bool isOrthographicProjection) noexcept override;
+
 			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::updateDeviceFromCoordinates() */
 			void updateDeviceFromCoordinates (const Libs::Math::CartesianFrame< float > & worldCoordinates, const Libs::Math::Vector< 3, float > & worldVelocity) noexcept override;
-
-			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::updateProperties() */
-			void
-			updateProperties (bool isPerspectiveProjection, float distance, float fovOrNear) noexcept override
-			{
-				m_distance = distance;
-				m_fovOrNear = fovOrNear;
-				m_isPerspectiveProjection = isPerspectiveProjection;
-
-				this->updateProperties();
-			}
 
 			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::onInputDeviceConnected() */
 			void onInputDeviceConnected (AVConsole::AVManagers & managers, AbstractVirtualDevice & sourceDevice) noexcept override;
@@ -350,6 +331,13 @@ namespace EmEn::Vulkan
 			 * @return void
 			 */
 			void destroyBaseSwapChain () noexcept;
+
+			/**
+			 * @brief Updates properties of the swap chain.
+			 * @note This version is used on window resize with previous parameters.
+			 * @return void
+			 */
+			void updateSizeProperties () noexcept;
 
 			/**
 			 * @brief Returns the best surface format.
@@ -468,12 +456,11 @@ namespace EmEn::Vulkan
 			uint32_t m_acquiredImageIndex{0};
 			Libs::StaticVector< Frame, 5 > m_frames;
 			Graphics::ViewMatrices2DUBO m_viewMatrices;
-			float m_distance{0.0F};
 			float m_fovOrNear{0.0F};
+			float m_distanceOrFar{0.0F};
 			bool m_showInformation{false};
+			bool m_isPerspectiveProjection{false};
 			bool m_tripleBufferingEnabled{false};
 			bool m_VSyncEnabled{false};
-			bool m_isPerspectiveProjection{false};
-			bool m_isReadyForRendering{false};
 	};
 }

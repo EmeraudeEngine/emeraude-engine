@@ -174,11 +174,6 @@ namespace EmEn
 				continue;
 			}
 
-			if ( m_graphicsRenderer.isSwapChainDegraded() && !m_graphicsRenderer.recreateSwapChain() )
-			{
-				Tracer::fatal(ClassId, "Unable to recreate the swap chain !");
-			}
-
 			{
 				const Time::Elapsed::PrintScopeRealTimeThreshold stat{"renderingTask", 1000.0 / 30.0};
 
@@ -212,6 +207,22 @@ namespace EmEn
 		Tracer::success(ClassId, "[THREAD] Rendering process terminated successfully !");
 
 		TraceInfo{ClassId} << "The rendering produced " << frames << " frames.";
+	}
+
+	void
+	Core::refreshApplicationSurface () noexcept
+	{
+		if ( !m_sceneManager.refreshActiveScene() )
+		{
+			Tracer::error(ClassId, "Unable to refresh the active scene!");
+		}
+
+		if ( !m_overlayManager.updatePhysicalRepresentation() )
+		{
+			Tracer::error(ClassId, "Unable to refresh the overlay manager!");
+		}
+
+		this->notify(ApplicationSurfaceRefreshed);
 	}
 
 	bool
@@ -285,6 +296,12 @@ namespace EmEn
 			 * DirectInput: Copy the state of every input
 			 * device to use it in the engine cycle. */
 			m_inputManager.pollSystemEvents();
+
+			/* NOTE: If the swap-chain has been refreshed, we refresh the application according to the new framebuffer. */
+			if ( m_graphicsRenderer.checkSwapChainRefresh() )
+			{
+				this->refreshApplicationSurface();
+			}
 
 			/* Let the child class get the call event from the main loop. */
 			this->onMainLoopCycle();
@@ -582,7 +599,6 @@ namespace EmEn
 
 			m_graphicsRenderer.registerToObject(*this);
 
-			this->observe(&m_graphicsRenderer);
 			this->observe(&m_graphicsRenderer.shaderManager());
 
 			/* FIXME: Check a better way to give the access ... */
@@ -624,9 +640,7 @@ namespace EmEn
 		}
 		else
 		{
-			TraceWarning{ClassId} <<
-				m_audioManager.name() << " service failed to execute !" "\n"
-				"No audio available !";
+			TraceWarning{ClassId} << m_audioManager.name() << " service failed to execute, no audio available !";
 		}
 
 		/* Initialization of the overlay manager. */
@@ -969,14 +983,10 @@ namespace EmEn
 					return true;
 
 				case KeyF2 :
-				{
 					m_audioManager.play("switch_on");
 
-					if ( !m_sceneManager.refreshActiveScene() )
-					{
-						Tracer::error(ClassId, "Unable to refresh the active scene !");
-					}
-				}
+					this->refreshApplicationSurface();
+
 					return true;
 
 				case KeyF3 :
@@ -1087,6 +1097,8 @@ namespace EmEn
 					return true;
 
 				case KeyR :
+					Tracer::info(ClassId, "Toggling offscreen rendering ...");
+
 					m_graphicsRenderer.toggleOffscreenRendering();
 
 					return true;
@@ -1267,45 +1279,19 @@ namespace EmEn
 			return true;
 		}
 
-		if ( observable == &m_graphicsRenderer )
-		{
-			switch ( notificationCode )
-			{
-				case Renderer::SwapChainRecreated :
-					/* FIXME: Should be removed! */
-					if ( m_sceneManager.refreshActiveScene() )
-					{
-						Tracer::info(ClassId, "Refreshing the active scene ...");
-					}
-					else
-					{
-						Tracer::info(ClassId, "No active scene !");
-					}
-					break;
-
-				case Renderer::SwapChainCreated :
-				case Renderer::SwapChainDestroyed :
-				default:
-					TraceDebug{ClassId} << "Receiving an event from '" << Renderer::ClassId << "' (code:" << notificationCode << ") ...";
-					break;
-			}
-
-			return true;
-		}
-
 		if ( observable == &m_graphicsRenderer.shaderManager() )
 		{
 			switch ( notificationCode )
 			{
 				case Saphir::ShaderManager::ShaderCompilationSucceed :
-					this->notifyUser(BlobTrait{} << "Shader '" << std::any_cast< std::string >(data) << "' compilation succeeded !");
+					this->notifyUser(BlobTrait{} << "Shader '" << std::any_cast< std::string >(data) << "' compilation succeeded!");
 					break;
 
 				case Saphir::ShaderManager::ShaderCompilationFailed :
 				{
-					const auto shaderDetails = std::any_cast< std::pair< std::string, std::string > >(data);
+					const auto [identifier, sourceCode] = std::any_cast< std::pair< std::string, std::string > >(data);
 
-					this->onShaderCompilationFailed(shaderDetails.first, shaderDetails.second);
+					this->onShaderCompilationFailed(identifier, sourceCode);
 				}
 					break;
 

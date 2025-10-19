@@ -40,13 +40,6 @@ namespace EmEn::Scenes::Component
 	using namespace Saphir;
 	using namespace Graphics;
 
-	void
-	DirectionalLight::onOutputDeviceConnected (AVConsole::AVManagers & /*managers*/, AbstractVirtualDevice & targetDevice) noexcept
-	{
-		targetDevice.updateDeviceFromCoordinates(this->getWorldCoordinates(), this->getWorldVelocity());
-		targetDevice.updateProperties(false, s_maxDistance, 0.0F);
-	}
-
 	bool
 	DirectionalLight::playAnimation (uint8_t animationID, const Variant & value, size_t /*cycle*/) noexcept
 	{
@@ -147,16 +140,14 @@ namespace EmEn::Scenes::Component
 			m_buffer[DirectionOffset + 2] = direction.z();
 		}
 
-		const auto resolution = this->shadowMapResolution();
-
-		if ( resolution > 0 )
+		if ( const auto resolution = this->shadowMapResolution(); resolution > 0 )
 		{
 			/* [VULKAN-SHADOW] TODO: Reuse shadow maps + remove it from console on failure */
-			m_shadowMap = scene.createRenderToShadowMap(this->name() + ShadowMapName, resolution);
+			m_shadowMap = scene.createRenderToShadowMap(this->name() + ShadowMapName, resolution, this->isOrthographicProjection());
 
 			if ( m_shadowMap != nullptr )
 			{
-				if ( this->connect(scene.AVConsoleManager().managers(), m_shadowMap, true) != AVConsole::ConnexionResult::Success )
+				if ( this->connect(scene.AVConsoleManager().managers(), m_shadowMap, true) == AVConsole::ConnexionResult::Success )
 				{
 					TraceSuccess{ClassId} << "2D shadow map (" << resolution << "px²) successfully created for directional light '" << this->name() << "'.";
 

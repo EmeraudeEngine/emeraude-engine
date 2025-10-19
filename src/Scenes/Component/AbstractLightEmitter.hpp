@@ -419,13 +419,13 @@ namespace EmEn::Scenes::Component
 
 			/**
 			 * @brief Constructs an abstract light emitter.
-			 * @param name The name of the light.
+			 * @param componentName A reference to a string.
 			 * @param parentEntity A reference to the parent entity.
 			 * @param shadowMapResolution The shadow map resolution. 0 means no shadow casting.
 			 */
-			AbstractLightEmitter (const std::string & name, const AbstractEntity & parentEntity, uint32_t shadowMapResolution) noexcept
-				: Abstract{name, parentEntity},
-				AbstractVirtualDevice{name, AVConsole::DeviceType::Video, AVConsole::ConnexionType::Output},
+			AbstractLightEmitter (const std::string & componentName, const AbstractEntity & parentEntity, uint32_t shadowMapResolution) noexcept
+				: Abstract{componentName, parentEntity},
+				AbstractVirtualDevice{componentName, AVConsole::DeviceType::Video, AVConsole::ConnexionType::Output},
 				m_shadowMapResolution{shadowMapResolution}
 			{
 				this->enableFlag(Enabled);
@@ -433,9 +433,6 @@ namespace EmEn::Scenes::Component
 
 			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::updateDeviceFromCoordinates() */
 			void updateDeviceFromCoordinates (const Libs::Math::CartesianFrame< float > & worldCoordinates, const Libs::Math::Vector< 3, float > & worldVelocity) noexcept final;
-
-			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::updateProperties() */
-			void updateProperties (bool isPerspectiveProjection, float distance, float fovOrNear) noexcept final;
 
 			/**
 			 * @brief Adds the light to the shared uniform buffer.
@@ -467,6 +464,30 @@ namespace EmEn::Scenes::Component
 			static constexpr auto ShadowMapName{"ShadowMapSampler"};
 
 		private:
+
+			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::onOutputDeviceConnected() */
+			void onOutputDeviceConnected (AVConsole::AVManagers & managers, AbstractVirtualDevice & targetDevice) noexcept final;
+
+			/**
+			 * @brief Returns the field of view or the near value to update projection matrix.
+			 * @return float
+			 */
+			[[nodiscard]]
+			virtual float getFovOrNear () const noexcept = 0;
+
+			/**
+			 * @brief Returns the distance or the far value to update projection matrix.
+			 * @return float
+			 */
+			[[nodiscard]]
+			virtual float getDistanceOrFar () const noexcept = 0;
+
+			/**
+			 * @brief Returns the type of projection matrix.
+			 * @return float
+			 */
+			[[nodiscard]]
+			virtual bool isOrthographicProjection () const noexcept = 0;
 
 			/**
 			 * @brief Event when the video memory is updating.

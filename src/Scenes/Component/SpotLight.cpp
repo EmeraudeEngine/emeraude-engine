@@ -41,17 +41,6 @@ namespace EmEn::Scenes::Component
 	using namespace Graphics;
 	using namespace Saphir;
 
-	void
-	SpotLight::onOutputDeviceConnected (AVConsole::AVManagers & /*managers*/, AbstractVirtualDevice & targetDevice) noexcept
-	{
-		targetDevice.updateDeviceFromCoordinates(this->getWorldCoordinates(), this->getWorldVelocity());
-		targetDevice.updateProperties(
-			true,
-			m_radius > 0.0F ? m_radius : s_maxDistance,
-			Degree(2.0F * Radian(m_outerAngle))
-		);
-	}
-
 	bool
 	SpotLight::playAnimation (uint8_t animationID, const Variant & value, size_t /*cycle*/) noexcept
 	{
@@ -74,11 +63,11 @@ namespace EmEn::Scenes::Component
 				return true;
 
 			case InnerAngle :
-				this->setInnerAngle(value.asFloat());
+				this->setConeAngles(value.asFloat(), this->outerAngle());
 				return true;
 
 			case OuterAngle :
-				this->setOuterAngle(value.asFloat());
+				this->setConeAngles(this->innerAngle(), value.asFloat());
 				return true;
 
 			default:
@@ -170,16 +159,14 @@ namespace EmEn::Scenes::Component
 			m_buffer[DirectionOffset + 2] = direction.z();
 		}
 
-		const auto resolution = this->shadowMapResolution();
-
-		if ( resolution > 0 )
+		if ( const auto resolution = this->shadowMapResolution(); resolution > 0 )
 		{
 			/* [VULKAN-SHADOW] TODO: Reuse shadow maps + remove it from console on failure */
-			m_shadowMap = scene.createRenderToShadowMap(this->name() + ShadowMapName, resolution);
+			m_shadowMap = scene.createRenderToShadowMap(this->name() + ShadowMapName, resolution, this->isOrthographicProjection());
 
 			if ( m_shadowMap != nullptr )
 			{
-				if ( this->connect(scene.AVConsoleManager().managers(), m_shadowMap, true) != AVConsole::ConnexionResult::Success )
+				if ( this->connect(scene.AVConsoleManager().managers(), m_shadowMap, true) == AVConsole::ConnexionResult::Success )
 				{
 					TraceSuccess{ClassId} << "2D shadow map (" << resolution << "px²) successfully created for spotlight '" << this->name() << "'.";
 
@@ -221,6 +208,21 @@ namespace EmEn::Scenes::Component
 	}
 
 	void
+	SpotLight::setRadius (float radius) noexcept
+	{
+		m_radius = std::abs(radius);
+
+		m_buffer[RadiusOffset] = m_radius;
+
+		if ( m_shadowMap != nullptr )
+		{
+			m_shadowMap->updateViewRangesProperties(this->getFovOrNear(), this->getDistanceOrFar());
+		}
+
+		this->requestVideoMemoryUpdate();
+	}
+
+	void
 	SpotLight::setConeAngles (float innerAngle, float outerAngle) noexcept
 	{
 		if ( outerAngle <= 0.0F )
@@ -232,26 +234,17 @@ namespace EmEn::Scenes::Component
 			std::swap(innerAngle, outerAngle);
 		}
 
-		this->setInnerAngle(innerAngle);
+		m_innerAngle = innerAngle;
+		m_outerAngle = outerAngle;
 
-		this->setOuterAngle(outerAngle);
-
-		this->requestVideoMemoryUpdate();
-	}
-
-	void
-	SpotLight::setOuterAngle (float angle) noexcept
-	{
-		m_outerAngle = angle;
-
+		m_buffer[InnerCosAngleOffset] = std::cos(Radian(m_innerAngle));
 		m_buffer[OuterCosAngleOffset] = std::cos(Radian(m_outerAngle));
 
 		if ( m_shadowMap != nullptr )
 		{
-			const auto maxDistance = m_radius > 0.0F ? m_radius : s_maxDistance;
-			const auto fov = Degree(2.0F * Radian(m_outerAngle));
-
-			this->updateProperties(true, maxDistance, fov);
+			m_shadowMap->updateViewRangesProperties(this->getFovOrNear(), this->getDistanceOrFar());
 		}
+
+		this->requestVideoMemoryUpdate();
 	}
 }

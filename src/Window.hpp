@@ -126,7 +126,7 @@ namespace EmEn
 				OSNotifiesWindowSizeMaximized,
 				OSNotifiesWindowSizeMinimized,
 				OSNotifiesWindowResized,
-				OSNotifiesFramebufferResized,
+				OSNotifiesFramebufferResized, /* This is the most important notification. */
 				OSRequestsToRescaleContentBy,
 				OSRequestsToRefreshContent,
 				OSRequestsToTerminate,

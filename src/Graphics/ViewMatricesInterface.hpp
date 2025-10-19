@@ -179,18 +179,18 @@ namespace EmEn::Graphics
 			 * @param fov The field of view in degrees.
 			 * @return void
 			 */
-			virtual void updatePerspectiveViewProperties (float width, float height, float distance, float fov) noexcept = 0;
+			virtual void updatePerspectiveViewProperties (float width, float height, float fov, float distance) noexcept = 0;
 
 			/**
 			 * @brief Updates view properties with an orthographic projection.
 			 * @note This should be called when the viewport changes.
 			 * @param width The width of the viewport.
 			 * @param height The height of the viewport.
-			 * @param farDistance The maximal distance of the viewport for perspective calculation.
 			 * @param nearDistance The minimal distance of the viewport for orthographic calculation.
+			 * @param farDistance The maximal distance of the viewport for perspective calculation.
 			 * @return void
 			 */
-			virtual void updateOrthographicViewProperties (float width, float height, float farDistance, float nearDistance) noexcept = 0;
+			virtual void updateOrthographicViewProperties (float width, float height, float nearDistance, float farDistance) noexcept = 0;
 
 			/**
 			 * @brief Updates the view coordinates. This should be called everytime the point of view moves.

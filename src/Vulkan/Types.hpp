@@ -67,4 +67,14 @@ namespace EmEn::Vulkan
 		Medium = 1,
 		Low = 2
 	};
+
+	/** @brief The swap-chain status enumeration. */
+	enum class Status : uint8_t
+	{
+		Uninitialized = 0,
+		Ready = 1,
+		Degraded = 2,
+		UnderConstruction = 3,
+		Failure = 4
+	};
 }

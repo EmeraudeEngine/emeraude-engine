@@ -93,6 +93,7 @@ namespace EmEn
 				ExecutionPaused,
 				ExecutionResumed,
 				ExecutionStopped,
+				ApplicationSurfaceRefreshed,
 				/* Enumeration boundary. */
 				MaxEnum
 			};
@@ -748,6 +749,12 @@ namespace EmEn
 			 * @return void
 			 */
 			void renderingTask () noexcept;
+
+			/**
+			 * @brief Refreshes the application surface.
+			 * @return void
+			 */
+			void refreshApplicationSurface () noexcept;
 
 			/**
 			 * @brief Terminates the engine execution.

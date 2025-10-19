@@ -37,6 +37,28 @@ namespace EmEn::Scenes::Component
 
 	float AbstractLightEmitter::s_maxDistance{DefaultGraphicsShadowMappingMaxDistance};
 
+	void
+	AbstractLightEmitter::updateDeviceFromCoordinates (const CartesianFrame< float > & worldCoordinates, const Vector< 3, float > & worldVelocity) noexcept
+	{
+		if ( !this->hasOutputConnected() )
+		{
+			return;
+		}
+
+		/* NOTE: We send the new light coordinates to update the matrices of render targets. */
+		this->forEachOutputs([&worldCoordinates, &worldVelocity] (const auto & output) {
+			output->updateDeviceFromCoordinates(worldCoordinates, worldVelocity);
+		});
+	}
+
+	void
+	AbstractLightEmitter::onOutputDeviceConnected (AVConsole::AVManagers & /*managers*/, AbstractVirtualDevice & targetDevice) noexcept
+	{
+		/* When the shadow map is connected, we initialize it with coordinates and light properties. */
+		targetDevice.updateVideoDeviceProperties(this->getFovOrNear(), this->getDistanceOrFar(), this->isOrthographicProjection());
+		targetDevice.updateDeviceFromCoordinates(this->getWorldCoordinates(), this->getWorldVelocity());
+	}
+
 	Matrix< 4, float >
 	AbstractLightEmitter::getLightSpaceMatrix () const noexcept
 	{
@@ -48,32 +70,6 @@ namespace EmEn::Scenes::Component
 		const auto & viewMatrices = this->shadowMap()->viewMatrices();
 
 		return RenderTarget::ScaleBiasMatrix * viewMatrices.projectionMatrix() * viewMatrices.viewMatrix(false, 0);
-	}
-
-	void
-	AbstractLightEmitter::updateDeviceFromCoordinates (const CartesianFrame< float > & worldCoordinates, const Vector< 3, float > & worldVelocity) noexcept
-	{
-		if ( !this->hasOutputConnected() )
-		{
-			return;
-		}
-
-		this->forEachOutputs([&worldCoordinates, &worldVelocity] (const auto & output) {
-			output->updateDeviceFromCoordinates(worldCoordinates, worldVelocity);
-		});
-	}
-
-	void
-	AbstractLightEmitter::updateProperties (bool isPerspectiveProjection, float distance, float fovOrNear) noexcept
-	{
-		if ( !this->hasOutputConnected() )
-		{
-			return;
-		}
-
-		this->forEachOutputs([isPerspectiveProjection, distance, fovOrNear] (const auto & output) {
-			output->updateProperties(isPerspectiveProjection, distance, fovOrNear);
-		});
 	}
 
 	bool

@@ -28,7 +28,6 @@
 
 /* STL inclusions. */
 #include <cstdint>
-#include <array>
 #include <memory>
 #include <string>
 
@@ -81,10 +80,6 @@ namespace EmEn::Graphics::RenderTarget
 	class Abstract : public AVConsole::AbstractVirtualDevice
 	{
 		public:
-
-			static constexpr auto ViewRender{"ViewRender"};
-			static constexpr auto TextureRender{"TextureRender"};
-			static constexpr auto ShadowRender{"ShadowRender"};
 
 			/**
 			 * @brief Copy constructor.
@@ -244,6 +239,28 @@ namespace EmEn::Graphics::RenderTarget
 			}
 
 			/**
+			 * @brief Changes the projection type.
+			 * @param state The state.
+			 * @return void
+			 */
+			void
+			setOrthographicProjection (bool state) noexcept
+			{
+				m_isOrthographicProjection = state;
+			}
+
+			/**
+			 * @brief Returns whether the render target uses a orthographic projection.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isOrthographicProjection () const noexcept
+			{
+				return m_isOrthographicProjection;
+			}
+
+			/**
 			 * @brief Creates the render target in the video memory.
 			 * @param renderer A reference to the graphics renderer.
 			 * @return bool
@@ -259,11 +276,20 @@ namespace EmEn::Graphics::RenderTarget
 
 			/**
 			 * @brief Sets the viewport to a command buffer.
-			 * @note This is used when dynamic viewport is used with graphics pipelines.
+			 * @note This is used when the dynamic viewport is used with graphics pipelines.
 			 * @param commandBuffer A reference to the command buffer.
 			 * @return void
 			 */
 			void setViewport (const Vulkan::CommandBuffer & commandBuffer) const noexcept;
+
+			/**
+			 * @brief Updates the render target view range properties.
+			 * @note This version doesn't change the projection type.
+			 * @param fovOrNear The field of view if the render target uses a perspective projection or near value for orthographic projection.
+			 * @param distanceOrFar The distance if the render target uses a perspective projection or far value for orthographic projection.
+			 * @return void
+			 */
+			virtual void updateViewRangesProperties (float fovOrNear, float distanceOrFar) noexcept = 0;
 
 			/**
 			 * @brief Returns the aspect ratio of the render target.
@@ -323,6 +349,13 @@ namespace EmEn::Graphics::RenderTarget
 			[[nodiscard]]
 			virtual bool isReadyForRendering () const noexcept = 0;
 
+			/**
+			 * @brief Returns whether the shadow map is in debug mode.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			virtual bool isDebug () const noexcept = 0;
+
 		protected:
 
 			/**
@@ -331,10 +364,11 @@ namespace EmEn::Graphics::RenderTarget
 			 * @param precisions The framebuffer precisions.
 			 * @param extent The framebuffer dimensions.
 			 * @param renderType The type of render.
-			 * @param enableSyncPrimitives Enable the creation of global sync primitive for this render target.
 			 * @param allowedConnexionType The type of connexion this virtual device allows.
+			 * @param isOrthographicProjection Set orthographic projection instead of perspective.
+			 * @param enableSyncPrimitives Enable the creation of global sync primitive for this render target.
 			 */
-			Abstract (const std::string & deviceName, const FramebufferPrecisions & precisions, const VkExtent3D & extent, RenderTargetType renderType, AVConsole::ConnexionType allowedConnexionType, bool enableSyncPrimitives) noexcept
+			Abstract (const std::string & deviceName, const FramebufferPrecisions & precisions, const VkExtent3D & extent, RenderTargetType renderType, AVConsole::ConnexionType allowedConnexionType, bool isOrthographicProjection, bool enableSyncPrimitives) noexcept
 				: AbstractVirtualDevice{deviceName, AVConsole::DeviceType::Video, allowedConnexionType},
 				m_precisions{precisions},
 				m_extent{extent},
@@ -343,7 +377,8 @@ namespace EmEn::Graphics::RenderTarget
 					.extent = {.width = extent.width, .height = extent.height}
 				},
 				m_renderType{renderType},
-				m_enableSyncPrimitive(enableSyncPrimitives)
+				m_isOrthographicProjection{isOrthographicProjection},
+				m_enableSyncPrimitive{enableSyncPrimitives}
 			{
 
 			}
@@ -453,6 +488,7 @@ namespace EmEn::Graphics::RenderTarget
 			VkRect2D m_renderArea{};
 			RenderTargetType m_renderType;
 			std::shared_ptr< Vulkan::Sync::Semaphore > m_semaphore;
+			bool m_isOrthographicProjection{false};
 			bool m_enableSyncPrimitive{false};
 			bool m_renderOutOfDate{false};
 			bool m_automaticRendering{false};

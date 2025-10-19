@@ -73,13 +73,13 @@ namespace EmEn::Scenes::Component
 
 			/**
 			 * @brief Constructs a camera.
-			 * @param name The name of the component.
+			 * @param componentName A reference to a string.
 			 * @param parentEntity A reference to the parent entity.
 			 * @param perspective Use a perspective projection.
 			 */
-			Camera (const std::string & name, const AbstractEntity & parentEntity, bool perspective = true) noexcept
-				: Abstract{name, parentEntity},
-				AbstractVirtualDevice{name, AVConsole::DeviceType::Video, AVConsole::ConnexionType::Output}
+			Camera (const std::string & componentName, const AbstractEntity & parentEntity, bool perspective = true) noexcept
+				: Abstract{componentName, parentEntity},
+				AbstractVirtualDevice{componentName, AVConsole::DeviceType::Video, AVConsole::ConnexionType::Output}
 			{
 				this->setFlag(PerspectiveProjection, perspective);
 			}
@@ -131,24 +131,6 @@ namespace EmEn::Scenes::Component
 			}
 
 			/**
-			 * @brief Sets the field of view in degrees.
-			 * @param degrees A value between 0.0 and 360.0.
-			 * @return void
-			 */
-			void setFieldOfView (float degrees) noexcept;
-
-			/**
-			 * @brief Returns the field of view in degrees.
-			 * @return float
-			 */
-			[[nodiscard]]
-			float
-			fieldOfView () const noexcept
-			{
-				return m_fov;
-			}
-
-			/**
 			 * @brief Returns whether the camera is using a perspective projection.
 			 * @return bool
 			 */
@@ -173,17 +155,17 @@ namespace EmEn::Scenes::Component
 			/**
 			 * @brief Sets a perspective projection.
 			 * @param fov The field of view in degrees.
-			 * @param maxViewableDistance The distance of view. If not given, settings will be used.
+			 * @param distance The distance of view.
 			 * @return void
 			 */
-			void setPerspectiveProjection (float fov, float maxViewableDistance = 0.0F) noexcept;
+			void setPerspectiveProjection (float fov, float distance) noexcept;
 
 			/**
-			 * @brief Sets an orthographic projection.
-			 * @param size The size of the render.
+			 * @brief Sets the field of view in degrees.
+			 * @param degrees A value between 0.0 and 360.0.
 			 * @return void
 			 */
-			void setOrthographicProjection (float size) noexcept;
+			void setFieldOfView (float degrees) noexcept;
 
 			/**
 			 * @brief Updates the field of view by degrees.
@@ -197,6 +179,24 @@ namespace EmEn::Scenes::Component
 			}
 
 			/**
+			 * @brief Returns the field of view in degrees.
+			 * @return float
+			 */
+			[[nodiscard]]
+			float
+			fieldOfView () const noexcept
+			{
+				return m_fov;
+			}
+
+			/**
+			 * @brief Sets the maximal distance of the view.
+			 * @param distance The maximal distance of the view.
+			 * @return void
+			 */
+			void setDistance (float distance) noexcept;
+
+			/**
 			 * @brief Returns the maximal distance of the view.
 			 * @return float
 			 */
@@ -208,11 +208,48 @@ namespace EmEn::Scenes::Component
 			}
 
 			/**
-			 * @brief Sets the maximal distance of the view.
-			 * @param distance The maximal distance of the view.
+			 * @brief Sets an orthographic projection.
+			 * @param near The near distance.
+			 * @param far The far distance.
 			 * @return void
 			 */
-			void setDistance (float distance) noexcept;
+			void setOrthographicProjection (float near, float far) noexcept;
+
+			/**
+			 * @brief Sets the near parameter for an orthographic projection camera.
+			 * @param distance A distance.
+			 * @return void
+			 */
+			void setNear (float distance) noexcept;
+
+			/**
+			 * @brief Returns the near parameter of an orthographic projection camera.
+			 * @return float
+			 */
+			[[nodiscard]]
+			float
+			getNear () const noexcept
+			{
+				return m_near;
+			}
+
+			/**
+			 * @brief Sets the far parameter for an orthographic projection camera.
+			 * @param distance A distance.
+			 * @return void
+			 */
+			void setFar (float distance) noexcept;
+
+			/**
+			 * @brief Returns the far parameter of an orthographic projection camera.
+			 * @return float
+			 */
+			[[nodiscard]]
+			float
+			getFar () const noexcept
+			{
+				return m_far;
+			}
 
 			/**
 			 * @brief Returns the lens effect list.
@@ -263,14 +300,17 @@ namespace EmEn::Scenes::Component
 			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::updateDeviceFromCoordinates() */
 			void updateDeviceFromCoordinates (const Libs::Math::CartesianFrame< float > & worldCoordinates, const Libs::Math::Vector< 3, float > & worldVelocity) noexcept override;
 
-			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::updateProperties() */
-			void updateProperties (bool isPerspectiveProjection, float distance, float fovOrNear) noexcept override;
-
 			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::onOutputDeviceConnected() */
 			void onOutputDeviceConnected (AVConsole::AVManagers & managers, AbstractVirtualDevice & targetDevice) noexcept override;
 
 			/** @copydoc EmEn::Animations::AnimatableInterface::playAnimation() */
 			bool playAnimation (uint8_t animationID, const Libs::Variant & value, size_t cycle) noexcept override;
+
+			/**
+			 * @brief Updates render targets connected to this camera.
+			 * @return void
+			 */
+			void updateAllVideoDeviceProperties () const noexcept;
 
 			/**
 			 * @brief STL streams printable object.
@@ -286,6 +326,8 @@ namespace EmEn::Scenes::Component
 			Saphir::FramebufferEffectsList m_lensEffects;
 			float m_fov{DefaultGraphicsFieldOfView};
 			float m_distance{DefaultGraphicsMaxViewableDistance};
+			float m_near{0.0F};
+			float m_far{DefaultGraphicsMaxViewableDistance};
 	};
 
 	inline

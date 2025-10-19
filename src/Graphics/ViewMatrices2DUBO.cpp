@@ -29,7 +29,6 @@
 /* STL inclusions. */
 #include <cmath>
 #include <cstring>
-#include <ostream>
 
 /* Local inclusions. */
 #include "Graphics/Renderer.hpp"
@@ -42,11 +41,11 @@ namespace EmEn::Graphics
 	using namespace Vulkan;
 
 	void
-	ViewMatrices2DUBO::updatePerspectiveViewProperties (float width, float height, float distance, float fov) noexcept
+	ViewMatrices2DUBO::updatePerspectiveViewProperties (float width, float height, float fov, float distance) noexcept
 	{
 		if ( width * height <= 0.0 )
 		{
-			TraceError{ClassId} << "The view size is invalid ! Width: " << width << ", height: " << height << ", distance: " << distance << ", FOV: " << fov;
+			TraceError{ClassId} << "The view size (" << width << " X " << height << ") is invalid!";
 
 			return;
 		}
@@ -67,15 +66,22 @@ namespace EmEn::Graphics
 
 		m_logicState.projection = Matrix< 4, float >::perspectiveProjection(fov, aspectRatio, m_logicState.bufferData[ViewNearOffset], m_logicState.bufferData[ViewDistanceOffset]);
 
+		TraceDebug{ClassId} <<
+			"Perspective projection:" "\n"
+			"Size: " << width << " X " << height << "\n"
+			"Distance: " << distance << "\n"
+			"Field of view: " << fov << "\n"
+			"Matrix: " << m_logicState.projection;
+
 		std::memcpy(&m_logicState.bufferData[ProjectionMatrixOffset], m_logicState.projection.data(), Matrix4Alignment * sizeof(float));
 	}
 
 	void
-	ViewMatrices2DUBO::updateOrthographicViewProperties (float width, float height, float farDistance, float nearDistance) noexcept
+	ViewMatrices2DUBO::updateOrthographicViewProperties (float width, float height, float nearDistance, float farDistance) noexcept
 	{
 		if ( width * height <= 0.0 )
 		{
-			TraceError{ClassId} << "The view size is invalid ! Width: " << width << ", height: " << height << ", farDistance: " << farDistance << ", nearDistance: " << nearDistance;
+			TraceError{ClassId} << "The view size (" << width << " X " << height << ") is invalid!";
 
 			return;
 		}
@@ -92,6 +98,13 @@ namespace EmEn::Graphics
 			-m_logicState.bufferData[ViewDistanceOffset], m_logicState.bufferData[ViewDistanceOffset],
 			m_logicState.bufferData[ViewNearOffset], m_logicState.bufferData[ViewDistanceOffset]
 		);
+
+		TraceDebug{ClassId} <<
+			"Orthographic projection:" "\n"
+			"Size: " << width << " X " << height << "\n"
+			"Near distance: " << nearDistance << "\n"
+			"Far distance: " << farDistance << "\n"
+			"Matrix: " << m_logicState.projection;
 
 		std::memcpy(&m_logicState.bufferData[ProjectionMatrixOffset], m_logicState.projection.data(), Matrix4Alignment * sizeof(float));
 	}

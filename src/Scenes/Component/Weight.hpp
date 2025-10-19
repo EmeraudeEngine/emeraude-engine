@@ -39,7 +39,7 @@
 namespace EmEn::Scenes::Component
 {
 	/**
-	 * @brief Dummy entity to add artificially physics properties to a Node.
+	 * @brief Dummy entity to add artificial physics properties to a Node.
 	 * @extends EmEn::Scenes::Component::Abstract The base class for each entity component.
 	 */
 	class Weight final : public Abstract
@@ -61,23 +61,23 @@ namespace EmEn::Scenes::Component
 
 			/**
 			 * @brief Constructs a weight component to artificially physical properties to a scene node.
-			 * @param name The name of the component [std::move].
+			 * @param componentName A reference to a string.
 			 * @param parentEntity A reference to the parent entity.
 			 */
-			Weight (std::string name, const AbstractEntity & parentEntity) noexcept
-				: Abstract{std::move(name), parentEntity}
+			Weight (const std::string & componentName, const AbstractEntity & parentEntity) noexcept
+				: Abstract{componentName, parentEntity}
 			{
 
 			}
 
 			/**
 			 * @brief Constructs a weight component to artificially physical properties to a scene node.
-			 * @param name The name of the component [std::move].
+			 * @param componentName A reference to a string.
 			 * @param parentEntity A reference to the parent entity.
 			 * @param initialProperties Set initial physical properties.
 			 */
-			Weight (std::string name, const AbstractEntity & parentEntity, const Physics::PhysicalObjectProperties & initialProperties) noexcept
-				: Abstract{std::move(name), parentEntity}
+			Weight (const std::string & componentName, const AbstractEntity & parentEntity, const Physics::PhysicalObjectProperties & initialProperties) noexcept
+				: Abstract{componentName, parentEntity}
 			{
 				this->physicalObjectProperties().setProperties(initialProperties);
 			}

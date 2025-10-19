@@ -280,17 +280,8 @@ namespace EmEn::AVConsole
 			std::string getConnexionState () const noexcept;
 
 			/**
-			 * @brief Updates the device from object coordinates in world space holding it.
-			 * @param worldCoordinates A reference to the coordinates of the device.
-			 * @param worldVelocity A reference to the velocity vector of the device.
-			 * @return void
-			 */
-			virtual void updateDeviceFromCoordinates (const Libs::Math::CartesianFrame< float > & worldCoordinates, const Libs::Math::Vector< 3, float > & worldVelocity) noexcept = 0;
-
-			/**
 			 * @brief Returns the video device type.
-			 * @note Ignored on audio device.
-			 * @todo This should not be here !
+			 * @warning Ignored on audio device.
 			 * @return VideoType
 			 */
 			[[nodiscard]]
@@ -298,28 +289,36 @@ namespace EmEn::AVConsole
 			VideoType
 			videoType () const noexcept
 			{
-				/* NOTE: A video device should override this method! */
+				/* NOTE: Only a video device should override this method! */
 				assert(m_type == DeviceType::Audio);
 
 				return VideoType::NotVideoDevice;
 			}
 
 			/**
-			 * @brief Updates the video device properties.
-			 * @note Ignored on audio device.
-			 * @todo This should not be here !
-			 * @param isPerspectiveProjection Declares the perspective type of the image.
-			 * @param distance The maximal distance of the view.
-			 * @param fovOrNear The field of view. Ignored if the projection is orthographic and can be used as a near-value override.
+			 * @brief Updates the video device properties to change render targets matrices.
+			 * @note This can be used to transfer through a video device chain.
+			 * @warning Ignored on audio device.
+			 * @param fovOrNear The field of view if the render target uses a perspective projection or near value for orthographic projection.
+			 * @param distanceOrFar The distance if the render target uses a perspective projection or far value for orthographic projection.
+			 * @param isOrthographicProjection Orthographic projection instead of perspective.
 			 * @return void
 			 */
 			virtual
 			void
-			updateProperties (bool /*isPerspectiveProjection*/, float /*distance*/, float /*fovOrNear*/) noexcept
+			updateVideoDeviceProperties (float fovOrNear, float distanceOrFar, bool isOrthographicProjection) noexcept
 			{
-				/* NOTE: A video device should override this method! */
+				/* NOTE: Only a video device should override this method! */
 				assert(m_type == DeviceType::Audio);
 			}
+
+			/**
+			 * @brief Updates the device from object coordinates in world space holding it.
+			 * @param worldCoordinates A reference to the coordinates of the device.
+			 * @param worldVelocity A reference to the velocity vector of the device.
+			 * @return void
+			 */
+			virtual void updateDeviceFromCoordinates (const Libs::Math::CartesianFrame< float > & worldCoordinates, const Libs::Math::Vector< 3, float > & worldVelocity) noexcept = 0;
 
 		protected:
 

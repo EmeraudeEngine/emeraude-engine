@@ -83,6 +83,7 @@ namespace EmEn
 
 namespace EmEn::Graphics::RenderableInstance
 {
+	constexpr uint32_t MatrixBytes{Matrix4Alignment * sizeof(float)};
 	constexpr bool MergePushConstants{true};
 
 	/** @brief Renderable instance flag bits. */
@@ -598,7 +599,7 @@ namespace EmEn::Graphics::RenderableInstance
 			}
 
 			/**
-			 * @brief Configures push constant into the command buffer.
+			 * @brief Configures the push constant into the command buffer for shadow casting.
 			 * @param commandBuffer A reference to the command buffer.
 			 * @param pipelineLayout A reference to the pipeline layout.
 			 * @param program A reference to the program.
@@ -607,7 +608,19 @@ namespace EmEn::Graphics::RenderableInstance
 			 * @param worldCoordinates A pointer to the world coordinates of the instance. A nullptr means at the origin of the world.
 			 * @return void
 			 */
-			virtual void pushMatrices (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::PipelineLayout & pipelineLayout, const Saphir::Program & program, uint32_t readStateIndex, const ViewMatricesInterface & viewMatrices, const Libs::Math::CartesianFrame< float > * worldCoordinates) const noexcept = 0;
+			virtual void pushMatricesForShadowCasting (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::PipelineLayout & pipelineLayout, const Saphir::Program & program, uint32_t readStateIndex, const ViewMatricesInterface & viewMatrices, const Libs::Math::CartesianFrame< float > * worldCoordinates) const noexcept = 0;
+
+			/**
+			 * @brief Configures the push constant into the command buffer for rendering.
+			 * @param commandBuffer A reference to the command buffer.
+			 * @param pipelineLayout A reference to the pipeline layout.
+			 * @param program A reference to the program.
+			 * @param readStateIndex The render state-valid index to read data.
+			 * @param viewMatrices A reference to the view matrices.
+			 * @param worldCoordinates A pointer to the world coordinates of the instance. A nullptr means at the origin of the world.
+			 * @return void
+			 */
+			virtual void pushMatricesForRendering (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::PipelineLayout & pipelineLayout, const Saphir::Program & program, uint32_t readStateIndex, const ViewMatricesInterface & viewMatrices, const Libs::Math::CartesianFrame< float > * worldCoordinates) const noexcept = 0;
 
 			/**
 			 * @brief Returns the number of instances to draw.

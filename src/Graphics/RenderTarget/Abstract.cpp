@@ -26,10 +26,6 @@
 
 #include "Abstract.hpp"
 
-/* STL inclusions. */
-#include <memory>
-#include <string>
-
 /* Local inclusions. */
 #include "Graphics/Renderer.hpp"
 #include "Vulkan/Image.hpp"

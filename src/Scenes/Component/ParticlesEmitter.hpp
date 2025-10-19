@@ -72,13 +72,13 @@ namespace EmEn::Scenes::Component
 
 			/**
 			 * @brief Construct a ParticlesEmitter resource.
-			 * @param name The resource name [std::move].
+			 * @param componentName A reference to a string.
 			 * @param parentEntity A reference to the parent entity.
 			 * @param renderable The rendered object by this particle emitter.
 			 * @param instanceCount A fixed instance count.
 			 */
-			ParticlesEmitter (std::string name, const AbstractEntity & parentEntity, const std::shared_ptr< Graphics::Renderable::Interface > & renderable, uint32_t instanceCount) noexcept
-				: Abstract{std::move(name), parentEntity},
+			ParticlesEmitter (const std::string & componentName, const AbstractEntity & parentEntity, const std::shared_ptr< Graphics::Renderable::Interface > & renderable, uint32_t instanceCount) noexcept
+				: Abstract{componentName, parentEntity},
 				m_renderableInterface{renderable},
 				m_renderableInstance{std::make_shared< Graphics::RenderableInstance::Multiple >(s_graphicsRenderer->device(), renderable, instanceCount, renderable->isSprite() ? Graphics::RenderableInstance::FacingCamera : Graphics::RenderableInstance::None)},
 				m_particleLimit{instanceCount}
@@ -148,8 +148,8 @@ namespace EmEn::Scenes::Component
 			 * @param mass The mass in kilograms.
 			 * @param surface The average surface in square meters.
 			 * @param dragCoefficient The drag coefficient.
-			 * @param bounciness A scalar of the bounciness of the object when hitting something. Default 50%.
-			 * @param stickiness A scalar of the stickiness of the object when hitting something. Default 50%.
+			 * @param bounciness A bounciness scalar of the object when hitting something. Default 50%.
+			 * @param stickiness A stickiness scalar of the object when hitting something. Default 50%.
 			 * @return void
 			 */
 			void

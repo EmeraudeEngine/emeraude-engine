@@ -100,33 +100,34 @@ namespace EmEn::Saphir::Generator
 		}
 
 		/* Generate the fragment shader stage. */
-		if ( this->generateFragmentShader(program) )
+		if ( m_enableColorOutput )
 		{
-			if ( this->debuggingEnabled() )
+			if ( this->generateFragmentShader(program) )
 			{
-				const auto * shader = program.fragmentShader();
+				if ( this->debuggingEnabled() )
+				{
+					const auto * shader = program.fragmentShader();
 
-				TraceSuccess{ClassId} << "Fragment shader source '" << shader->name() << "' code generated.";
+					TraceSuccess{ClassId} << "Fragment shader source '" << shader->name() << "' code generated.";
 
-				TraceDebug{ClassId} << "\n" <<
-					"****** START OF GENERATED GLSL FRAGMENT SHADER CODE ******" "\n" <<
-					SourceCodeParser::parse(shader->sourceCode()) <<
-					"****** END OF GENERATED GLSL FRAGMENT SHADER CODE ******" "\n" <<
-					shader->getDeclarationStats() << "\n";
+					TraceDebug{ClassId} << "\n" <<
+						"****** START OF GENERATED GLSL FRAGMENT SHADER CODE ******" "\n" <<
+						SourceCodeParser::parse(shader->sourceCode()) <<
+						"****** END OF GENERATED GLSL FRAGMENT SHADER CODE ******" "\n" <<
+						shader->getDeclarationStats() << "\n";
+				}
 			}
-		}
-		else
-		{
-			Tracer::error(ClassId, "Unable to generate source code for the fragment shader stage !");
+			else
+			{
+				Tracer::error(ClassId, "Unable to generate source code for the fragment shader stage !");
 
-			return false;
+				return false;
+			}
 		}
 
 		if ( this->debuggingEnabled() )
 		{
-			const auto shaderList = program.getShaderList();
-
-			for ( const auto & shader: shaderList )
+			for ( const auto & shader: program.getShaderList() )
 			{
 				TraceDebug{ClassId} <<
 					to_string(shader->type()) << " '" << shader->name() << "' generated into "
@@ -217,7 +218,7 @@ namespace EmEn::Saphir::Generator
 	bool
 	ShadowCasting::generateFragmentShader (Program & program) noexcept
 	{
-		auto * fragmentShader = program.initFragmentShader(this->name( ) + "FragmentShader");
+		auto * fragmentShader = program.initFragmentShader(this->name( ) + "FragmentShaderDEBUG");
 		fragmentShader->setExtensionBehavior("GL_ARB_separate_shader_objects", "enable");
 
 		if ( this->renderTarget()->isCubemap() )
@@ -238,28 +239,15 @@ namespace EmEn::Saphir::Generator
 
 			Code{*fragmentShader} << "const float distance = distance(" << ShaderVariable::FragCoord << ", " << position << ") / " << viewProperties << ".w;";
 
-			/* Fragment as a color output for visualization. */
-			if ( m_enableColorOutput )
-			{
-				fragmentShader->declareDefaultOutputFragment();
+			fragmentShader->declareDefaultOutputFragment();
 
-				Code{*fragmentShader, Location::Output} << ShaderVariable::OutputFragment << " = vec4(distance, distance, distance, 1.0);";
-			}
-
-			Code{*fragmentShader, Location::Output} << "gl_FragDepth = distance;";
+			Code{*fragmentShader, Location::Output} << ShaderVariable::OutputFragment << " = vec4(distance, distance, distance, 1.0);";
 		}
 		else
 		{
-			/* Fragment as a color output for visualization. */
-			if ( m_enableColorOutput )
-			{
-				fragmentShader->declareDefaultOutputFragment();
+			fragmentShader->declareDefaultOutputFragment();
 
-				Code{*fragmentShader, Location::Output} << ShaderVariable::OutputFragment << " = vec4(gl_FragCoord.z, gl_FragCoord.z, gl_FragCoord.z, 1.0);";
-			}
-
-			/* NOTE: Already done by the default behavior. */
-			Code{*fragmentShader, Location::Output} << "gl_FragDepth = gl_FragCoord.z;";
+			Code{*fragmentShader, Location::Output} << ShaderVariable::OutputFragment << " = vec4(gl_FragCoord.z, gl_FragCoord.z, gl_FragCoord.z, 1.0);";
 		}
 
 		return fragmentShader->generateSourceCode(*this);
@@ -275,18 +263,44 @@ namespace EmEn::Saphir::Generator
 			return false;
 		}
 
+		/* Configure the rasterizer */
+		{
+			VkPipelineRasterizationStateCreateInfo createInfo{};
+			createInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+			createInfo.pNext = nullptr;
+			createInfo.flags = 0;
+			createInfo.depthClampEnable = VK_FALSE;
+			createInfo.rasterizerDiscardEnable = VK_FALSE;
+			createInfo.polygonMode = VK_POLYGON_MODE_FILL;
+			createInfo.cullMode = VK_CULL_MODE_NONE;
+			createInfo.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+			createInfo.depthBiasEnable = VK_TRUE;
+			createInfo.depthBiasConstantFactor = 1.25F;
+			createInfo.depthBiasClamp = 0.0F;
+			createInfo.depthBiasSlopeFactor = 1.75F;
+			createInfo.lineWidth = 1.0F;
+
+			if ( !graphicsPipeline.configureRasterizationState(createInfo) )
+			{
+				Tracer::error(ClassId, "Unable to configure the graphics pipeline rasterization state !");
+
+				return false;
+			}
+		}
+
+		/* Configure the depth/stencil buffer */
 		{
 			VkPipelineDepthStencilStateCreateInfo createInfo{};
 			createInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
 			createInfo.pNext = nullptr;
 			createInfo.flags = 0;
-			createInfo.depthTestEnable = VK_FALSE;
-			createInfo.depthWriteEnable = VK_FALSE;
+			createInfo.depthTestEnable = VK_TRUE;
+			createInfo.depthWriteEnable = VK_TRUE;
 			createInfo.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
 			createInfo.depthBoundsTestEnable = VK_FALSE;
 			createInfo.stencilTestEnable = VK_FALSE;
 			createInfo.minDepthBounds = 0.0F;
-			createInfo.maxDepthBounds = 1.0F;
+			createInfo.maxDepthBounds = 0.0F;
 
 			if ( !graphicsPipeline.configureDepthStencilState(createInfo) )
 			{

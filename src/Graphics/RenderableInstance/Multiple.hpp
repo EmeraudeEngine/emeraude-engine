@@ -151,8 +151,11 @@ namespace EmEn::Graphics::RenderableInstance
 
 		private:
 
-			/** @copydoc EmEn::Graphics::RenderableInstance::Abstract::pushMatrices() */
-			void pushMatrices (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::PipelineLayout & pipelineLayout, const Saphir::Program & program, uint32_t readStateIndex, const ViewMatricesInterface & viewMatrices, const Libs::Math::CartesianFrame< float > * worldCoordinates) const noexcept override;
+			/** @copydoc EmEn::Graphics::RenderableInstance::Abstract::pushMatricesForShadowCasting() const noexcept */
+			void pushMatricesForShadowCasting (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::PipelineLayout & pipelineLayout, const Saphir::Program & program, uint32_t readStateIndex, const ViewMatricesInterface & viewMatrices, const Libs::Math::CartesianFrame< float > * worldCoordinates) const noexcept override;
+
+			/** @copydoc EmEn::Graphics::RenderableInstance::Abstract::pushMatricesForRendering() const noexcept */
+			void pushMatricesForRendering (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::PipelineLayout & pipelineLayout, const Saphir::Program & program, uint32_t readStateIndex, const ViewMatricesInterface & viewMatrices, const Libs::Math::CartesianFrame< float > * worldCoordinates) const noexcept override;
 
 			/** @copydoc EmEn::Graphics::RenderableInstance::Abstract::instanceCount() */
 			[[nodiscard]]

@@ -65,8 +65,8 @@ namespace EmEn::Saphir
 			return false;
 		}
 
-		/* NOTE: The fragment shader is mandatory! */
-		if ( m_fragmentShader == nullptr || !m_fragmentShader->isGenerated() )
+		/* NOTE: The fragment shader is optional! */
+		if ( m_fragmentShader != nullptr && !m_fragmentShader->isGenerated() )
 		{
 			return false;
 		}

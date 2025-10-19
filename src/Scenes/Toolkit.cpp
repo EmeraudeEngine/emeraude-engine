@@ -173,16 +173,14 @@ namespace EmEn::Scenes
 	std::vector< CartesianFrame< float > >
 	Toolkit::generateRandomCoordinates (size_t count, float min, float max) noexcept
 	{
-		Randomizer< float > randomizer;
-
 		std::vector< CartesianFrame< float > > coordinates{count};
 
 		for ( auto & coordinate : coordinates )
 		{
 			coordinate.setPosition(
-				randomizer.value(min, max),
-				randomizer.value(min, max),
-				randomizer.value(min, max)
+				m_randomizer.value(min, max),
+				m_randomizer.value(min, max),
+				m_randomizer.value(min, max)
 			);
 		}
 

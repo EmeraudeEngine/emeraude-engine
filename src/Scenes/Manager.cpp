@@ -408,12 +408,12 @@ namespace EmEn::Scenes
 
 		if ( m_activeScene == nullptr )
 		{
-			Tracer::info(ClassId, "There is no active scene !");
+			Tracer::info(ClassId, "There is no active scene!");
 
 			return true;
 		}
 
-		TraceInfo{ClassId} << "Refreshing scene '" << m_activeScene->name() << "' ...";
+		TraceInfo{ClassId} << "Refreshing the active scene '" << m_activeScene->name() << "' ...";
 
 		return m_activeScene->refreshRenderableInstances();
 	}

@@ -335,7 +335,6 @@ namespace EmEn::Saphir::Generator
 	bool
 	Abstract::declareMatrixPushConstantBlock (AbstractShader & shader) const noexcept
 	{
-		/* [VULKAN-PUSH-CONSTANT:1] Declare push constant usage by analyzing needs. */
 		Declaration::PushConstantBlock pushConstantBlock{PushConstant::Type::Matrices, PushConstant::Matrices};
 
 		if ( m_shaderProgram->wasInstancingEnabled() )
@@ -373,7 +372,6 @@ namespace EmEn::Saphir::Generator
 	void
 	Abstract::generatePushConstantRanges (const StaticVector< Declaration::PushConstantBlock, 4 > & pushConstantBlocks, StaticVector< VkPushConstantRange, 4 > & pushConstantRanges, VkShaderStageFlags stageFlags) noexcept
 	{
-		/* [VULKAN-PUSH-CONSTANT:2] Prepare the push constants declaration for the pipeline. */
 		uint32_t offset = 0;
 
 		for ( const auto & pushConstantBlock : pushConstantBlocks )

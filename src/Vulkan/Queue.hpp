@@ -37,6 +37,7 @@
 
 /* Local inclusions for usages. */
 #include "Libs/StaticVector.hpp"
+#include "Types.hpp"
 
 namespace EmEn::Vulkan
 {
@@ -194,10 +195,10 @@ namespace EmEn::Vulkan
 			/**
 			 * @brief Submits a present info structure.
 			 * @param presentInfo A pointer to a presentInfo structure.
-			 * @param swapChainRecreationNeeded A bool to switch on bad presentation.
+			 * @param swapChainStatus A writable reference to the swap-chain status.
 			 * @return bool
 			 */
-			bool present (const VkPresentInfoKHR * presentInfo, bool & swapChainRecreationNeeded) const noexcept;
+			bool present (const VkPresentInfoKHR * presentInfo, Status & swapChainStatus) const noexcept;
 
 			/**
 			 * @brief Waits for the queue to complete work.

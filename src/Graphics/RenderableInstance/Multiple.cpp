@@ -175,9 +175,7 @@ namespace EmEn::Graphics::RenderableInstance
 	Multiple::updateLocalData (const std::vector< CartesianFrame< float > > & instanceLocations, uint32_t instanceOffset) noexcept
 	{
 		/* Check against the local data. */
-		const auto endOffset = instanceOffset + instanceLocations.size();
-
-		if ( endOffset > m_instanceCount )
+		if ( const auto endOffset = instanceOffset + instanceLocations.size(); endOffset > m_instanceCount )
 		{
 			TraceError{ClassId} << "Instance range out of bounds (" << instanceOffset << " + " << instanceLocations.size() << "(=" << endOffset << ") > " << m_instanceCount << ") !";
 
@@ -353,28 +351,29 @@ namespace EmEn::Graphics::RenderableInstance
 	}
 
 	void
-	Multiple::pushMatrices (const CommandBuffer & commandBuffer, const PipelineLayout & pipelineLayout, const Saphir::Program & program, uint32_t readStateIndex, const ViewMatricesInterface & viewMatrices, const CartesianFrame< float > * /*worldCoordinates*/) const noexcept
+	Multiple::pushMatricesForShadowCasting (const CommandBuffer & commandBuffer, const PipelineLayout & pipelineLayout, const Saphir::Program & program, uint32_t readStateIndex, const ViewMatricesInterface & viewMatrices, const CartesianFrame< float > * /*worldCoordinates*/) const noexcept
 	{
-		constexpr uint32_t MatrixBytes{Matrix4Alignment * sizeof(float)};
-
 		const VkShaderStageFlags stageFlags = program.hasGeometryShader() ?
 			VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_GEOMETRY_BIT :
 			VK_SHADER_STAGE_VERTEX_BIT;
 
+		/* Prepare the view matrix (V). */
 		const auto & viewMatrix = viewMatrices.viewMatrix(readStateIndex,this->isUsingInfinityView(), 0);
+
+		/* Compute the view projection matrix (VP).
+		 * NOTE: The model matrix will be extracted on the GPU from the second vertex array buffer (VBO). */
 		const auto viewProjectionMatrix = viewMatrices.projectionMatrix(readStateIndex) * viewMatrix;
 
-		/* [VULKAN-PUSH-CONSTANT:4] Push camera-related matrices. */
-		if ( program.wasAdvancedMatricesEnabled() || program.wasBillBoardingEnabled() )
+		if ( program.wasBillBoardingEnabled() )
 		{
 			if constexpr ( MergePushConstants )
 			{
-				/* NOTE: Create a single buffer for 2x mat4x4. */
+				/* Create a single buffer for 2x mat4x4. */
 				std::array< float, 32 > buffer{};
 				std::memcpy(buffer.data(), viewMatrix.data(), MatrixBytes);
 				std::memcpy(&buffer[Matrix4Alignment], viewProjectionMatrix.data(), MatrixBytes);
 
-				/* NOTE: Push the view matrix (V) and the view projection matrix (VP). */
+				/* Push the view matrix (V) and the view projection matrix (VP) in a single call. */
 				vkCmdPushConstants(
 					commandBuffer.handle(),
 					pipelineLayout.handle(),
@@ -386,7 +385,7 @@ namespace EmEn::Graphics::RenderableInstance
 			}
 			else
 			{
-				/* NOTE: Push the view matrix (V). */
+				/* Push the view matrix (V). */
 				vkCmdPushConstants(
 					commandBuffer.handle(),
 					pipelineLayout.handle(),
@@ -396,7 +395,7 @@ namespace EmEn::Graphics::RenderableInstance
 					viewMatrix.data()
 				);
 
-				/* NOTE: Push the view projection matrix (VP). */
+				/* Push the view projection matrix (VP). */
 				vkCmdPushConstants(
 					commandBuffer.handle(),
 					pipelineLayout.handle(),
@@ -409,7 +408,77 @@ namespace EmEn::Graphics::RenderableInstance
 		}
 		else
 		{
-			/* NOTE: Push the view projection matrix (VP). */
+			/* Push the view projection matrix (VP). */
+			vkCmdPushConstants(
+				commandBuffer.handle(),
+				pipelineLayout.handle(),
+				stageFlags,
+				0,
+				MatrixBytes,
+				viewProjectionMatrix.data()
+			);
+		}
+	}
+
+	void
+	Multiple::pushMatricesForRendering (const CommandBuffer & commandBuffer, const PipelineLayout & pipelineLayout, const Saphir::Program & program, uint32_t readStateIndex, const ViewMatricesInterface & viewMatrices, const CartesianFrame< float > * /*worldCoordinates*/) const noexcept
+	{
+		const VkShaderStageFlags stageFlags = program.hasGeometryShader() ?
+			VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_GEOMETRY_BIT :
+			VK_SHADER_STAGE_VERTEX_BIT;
+
+		/* Prepare the view matrix (V). */
+		const auto & viewMatrix = viewMatrices.viewMatrix(readStateIndex,this->isUsingInfinityView(), 0);
+
+		/* Compute the view projection matrix (VP).
+		 * NOTE: The model matrix will be extracted on the GPU from the second vertex array buffer (VBO). */
+		const auto viewProjectionMatrix = viewMatrices.projectionMatrix(readStateIndex) * viewMatrix;
+
+		if ( program.wasAdvancedMatricesEnabled() || program.wasBillBoardingEnabled() )
+		{
+			if constexpr ( MergePushConstants )
+			{
+				/* Create a single buffer for 2x mat4x4. */
+				std::array< float, 32 > buffer{};
+				std::memcpy(buffer.data(), viewMatrix.data(), MatrixBytes);
+				std::memcpy(&buffer[Matrix4Alignment], viewProjectionMatrix.data(), MatrixBytes);
+
+				/* Push the view matrix (V) and the view projection matrix (VP) in a single call. */
+				vkCmdPushConstants(
+					commandBuffer.handle(),
+					pipelineLayout.handle(),
+					stageFlags,
+					0,
+					MatrixBytes * 2,
+					buffer.data()
+				);
+			}
+			else
+			{
+				/* Push the view matrix (V). */
+				vkCmdPushConstants(
+					commandBuffer.handle(),
+					pipelineLayout.handle(),
+					stageFlags,
+					0,
+					MatrixBytes,
+					viewMatrix.data()
+				);
+
+				/* Push the view projection matrix (VP). */
+				vkCmdPushConstants(
+					commandBuffer.handle(),
+					pipelineLayout.handle(),
+					stageFlags,
+					MatrixBytes,
+					MatrixBytes,
+					viewProjectionMatrix.data()
+				);
+			}
+		}
+		else
+		{
+			/* Push the view projection matrix (VP). */
 			vkCmdPushConstants(
 				commandBuffer.handle(),
 				pipelineLayout.handle(),

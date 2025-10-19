@@ -277,26 +277,15 @@ namespace EmEn::Graphics
 	 * @brief The graphics renderer service class.
 	 * @note [OBS][STATIC-OBSERVER][STATIC-OBSERVABLE]
 	 * @extends EmEn::ServiceInterface The renderer is a service.
-	 * @extends EmEn::Libs::ObservableTrait The renderer is a service.
 	 * @extends EmEn::Libs::ObserverTrait The renderer needs to observe handle changes, for instance.
 	 * @extends EmEn::Console::Controllable The console can control the renderer.
 	 */
-	class Renderer final : public ServiceInterface, public Libs::ObservableTrait, public Libs::ObserverTrait, public Console::Controllable
+	class Renderer final : public ServiceInterface, public Libs::ObserverTrait, public Console::Controllable
 	{
 		public:
 
 			/** @brief Class identifier. */
 			static constexpr auto ClassId{"RendererService"};
-
-			/** @brief Observable notification codes. */
-			enum NotificationCode
-			{
-				SwapChainCreated,
-				SwapChainRecreated,
-				SwapChainDestroyed,
-				/* Enumeration boundary. */
-				MaxEnum
-			};
 
 			/**
 			 * @brief Constructs the graphics renderer.
@@ -341,22 +330,6 @@ namespace EmEn::Graphics
 				return classUID;
 			}
 
-			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
-			[[nodiscard]]
-			size_t
-			classUID () const noexcept override
-			{
-				return getClassUID();
-			}
-
-			/** @copydoc EmEn::Libs::ObservableTrait::is() const */
-			[[nodiscard]]
-			bool
-			is (size_t classUID) const noexcept override
-			{
-				return classUID == getClassUID();
-			}
-
 			/**
 			 * @brief Returns the windows.
 			 * @return const Window &
@@ -387,13 +360,6 @@ namespace EmEn::Graphics
 			{
 				return m_debugMode;
 			}
-
-			/**
-			 * @brief Returns whether the swap chain is degraded.
-			 * @return bool
-			 */
-			[[nodiscard]]
-			bool isSwapChainDegraded () const noexcept;
 
 			/**
 			 * @brief Controls the state of shadow maps rendering.
@@ -756,19 +722,30 @@ namespace EmEn::Graphics
 			std::shared_ptr< Vulkan::Sampler > getSampler (const char * identifier, const std::function< void (Settings & settings, VkSamplerCreateInfo &) > & setupCreateInfo) noexcept;
 
 			/**
+			 * @brief Checks if the swap-chain has been refreshed and reset the marker.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			checkSwapChainRefresh () noexcept
+			{
+				if ( m_swapChainRefreshed )
+				{
+					m_swapChainRefreshed = false;
+
+					return true;
+				}
+
+				return false;
+			}
+
+			/**
 			 * @brief Render a new frame for the active scene.
 			 * @param scene A reference to the scene smart pointer.
 			 * @param overlayManager A reference to the overlay manager.
 			 * @return void
 			 */
 			void renderFrame (const std::shared_ptr< Scenes::Scene > & scene, const Overlay::Manager & overlayManager) noexcept;
-
-			/**
-			 * @brief Recreates the swap-chain.
-			 * @return bool
-			 */
-			[[nodiscard]]
-			bool recreateSwapChain () noexcept;
 
 		private:
 
@@ -784,6 +761,13 @@ namespace EmEn::Graphics
 
 			/** @copydoc EmEn::Console::Controllable::onRegisterToConsole. */
 			void onRegisterToConsole () noexcept override;
+
+			/**
+			 * @brief Refresh the graphics renderer framebuffer.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool refreshFramebuffer () noexcept;
 
 			/**
 			 * @brief Initialize all sub services of the renderer.
@@ -854,7 +838,8 @@ namespace EmEn::Graphics
 			const uint64_t m_timeout{std::chrono::duration_cast< std::chrono::nanoseconds >(std::chrono::milliseconds(1000)).count()};
 			bool m_debugMode{false};
 			bool m_windowLess{false};
-			bool m_shadowMapsEnabled{false};
-			bool m_renderToTexturesEnabled{false};
+			bool m_shadowMapsEnabled{true};
+			bool m_renderToTexturesEnabled{true};
+			bool m_swapChainRefreshed{false};
 	};
 }

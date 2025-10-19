@@ -47,12 +47,12 @@ namespace EmEn::Scenes::Component
 
 			/**
 			 * @brief Constructs a spotlight.
-			 * @param name The name of the component.
+			 * @param componentName A reference to a string.
 			 * @param parentEntity A reference to the parent entity.
 			 * @param shadowMapResolution Enable the shadow map by specifying the resolution. Default, no shadow map.
 			 */
-			SpotLight (std::string name, const AbstractEntity & parentEntity, uint32_t shadowMapResolution = 0) noexcept
-				: AbstractLightEmitter{std::move(name), parentEntity, shadowMapResolution}
+			SpotLight (const std::string & componentName, const AbstractEntity & parentEntity, uint32_t shadowMapResolution = 0) noexcept
+				: AbstractLightEmitter{componentName, parentEntity, shadowMapResolution}
 			{
 				this->setConeAngles(30.0F, 35.0F);
 			}
@@ -145,15 +145,7 @@ namespace EmEn::Scenes::Component
 			 * @brief Set the radius of the light area.
 			 * @param radius
 			 */
-			void
-			setRadius (float radius) noexcept
-			{
-				m_radius = std::abs(radius);
-
-				m_buffer[RadiusOffset] = m_radius;
-
-				this->requestVideoMemoryUpdate();
-			}
+			void setRadius (float radius) noexcept;
 
 			/**
 			 * @brief Sets the inner and the outer angles of the light cone.
@@ -197,11 +189,34 @@ namespace EmEn::Scenes::Component
 
 		private:
 
-			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::onOutputDeviceConnected() */
-			void onOutputDeviceConnected (AVConsole::AVManagers & managers, AbstractVirtualDevice & targetDevice) noexcept override;
-
 			/** @copydoc EmEn::Animations::AnimatableInterface::playAnimation() */
 			bool playAnimation (uint8_t animationID, const Libs::Variant & value, size_t cycle) noexcept override;
+
+			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::getFovOrNear() */
+			[[nodiscard]]
+			float
+			getFovOrNear () const noexcept override
+			{
+				/* NOTE: A spotlight returns the field of view in degrees. */
+				return Libs::Math::Degree(2.0F * Libs::Math::Radian(m_outerAngle));
+			}
+
+			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::getDistanceOrFar() */
+			[[nodiscard]]
+			float
+			getDistanceOrFar () const noexcept override
+			{
+				/* NOTE: A spotlight returns the distance. */
+				return m_radius > 0.0F ? m_radius : s_maxDistance;
+			}
+
+			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::isOrthographicProjection() */
+			[[nodiscard]]
+			bool
+			isOrthographicProjection () const noexcept override
+			{
+				return false;
+			}
 
 			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::onVideoMemoryUpdate() */
 			[[nodiscard]]
@@ -226,24 +241,6 @@ namespace EmEn::Scenes::Component
 			{
 				m_buffer[IntensityOffset] = intensity;
 			}
-
-			/**
-			 * @brief Sets the inner angle of the cone where light is 100%.
-			 * @param angle The angle in degree.
-			 */
-			void
-			setInnerAngle (float angle) noexcept
-			{
-				m_innerAngle = angle;
-
-				m_buffer[InnerCosAngleOffset] = std::cos(Libs::Math::Radian(m_innerAngle));
-			}
-
-			/**
-			 * @brief Sets the outer angle of the cone until the light is off.
-			 * @param angle The angle in degree.
-			 */
-			void setOuterAngle (float angle) noexcept;
 
 			/**
 			 * @brief STL streams printable object.

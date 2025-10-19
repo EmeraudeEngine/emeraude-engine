@@ -38,7 +38,6 @@
 #include "Graphics/Geometry/ResourceGenerator.hpp"
 #include "Graphics/Renderable/SimpleMeshResource.hpp"
 #include "Scenes/Scene.hpp"
-#include "BuiltEntity.hpp"
 
 namespace EmEn::Scenes
 {
@@ -59,6 +58,76 @@ namespace EmEn::Scenes
 	};
 
 	/**
+	 * @brief Class representing temporarily the link between a based-class entity and a new component.
+	 * @tparam entity_t The type of entity.
+	 * @tparam component_t The type of component.
+	 */
+	template< typename entity_t, typename component_t >
+	requires (std::is_base_of_v< AbstractEntity, entity_t >, std::is_base_of_v< Component::Abstract, component_t >)
+	class BuiltEntity final
+	{
+		public:
+
+			/** @brief Class identifier. */
+			static constexpr auto ClassId{"BuiltEntity"};
+
+			/**
+			 * @brief Constructs a default built entity.
+			 */
+			BuiltEntity () = default;
+
+			/**
+			 * @brief Constructs a built entity.
+			 * @param entity A smart pointer over a scene entity.
+			 * @param component A smart pointer over the build component.
+			 */
+			BuiltEntity (std::shared_ptr< entity_t > entity, std::shared_ptr< component_t > component) noexcept
+				: m_entity{std::move(entity)},
+				m_component{std::move(component)}
+			{
+
+			}
+
+			/**
+			 * @brief Returns whether the built entity is valid.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isValid () const noexcept
+			{
+				return !static_cast< bool >(m_entity == nullptr || m_component == nullptr);
+			}
+
+			/**
+			 * @brief Returns the node or static entity smart-pointer.
+			 * @return std::shared_ptr< entity_t >
+			 */
+			[[nodiscard]]
+			std::shared_ptr< entity_t >
+			entity () const noexcept
+			{
+				return m_entity;
+			}
+
+			/**
+			 * @brief Returns the component smart-pointer.
+			 * @return std::shared_ptr< component_t >
+			 */
+			[[nodiscard]]
+			std::shared_ptr< component_t >
+			component () const noexcept
+			{
+				return m_component;
+			}
+
+		private:
+
+			std::shared_ptr< entity_t > m_entity;
+			std::shared_ptr< component_t > m_component;
+	};
+
+	/**
 	 * @brief This class eases the build of a scene.
 	 */
 	class Toolkit final
@@ -70,12 +139,14 @@ namespace EmEn::Scenes
 
 			/**
 			 * @brief Constructs the toolkit to help at building a scene.
+			 * @param settings A reference to the settings.
 			 * @param resourceManager A reference to the resource manager.
 			 * @param scene A reference to a scene smart pointer.
 			 */
 			explicit
-			Toolkit (Resources::Manager & resourceManager, const std::shared_ptr< Scene > & scene = {}) noexcept
-				: m_resourceManager{resourceManager},
+			Toolkit (Settings & settings, Resources::Manager & resourceManager, const std::shared_ptr< Scene > & scene = {}) noexcept
+				: m_settings{settings},
+				m_resourceManager{resourceManager},
 				m_scene{scene}
 			{
 
@@ -368,9 +439,11 @@ namespace EmEn::Scenes
 					return {};
 				}
 
+				const auto distance = m_settings.getOrSetDefault< float >(GraphicsMaxViewableDistanceKey, DefaultGraphicsMaxViewableDistance);
+
 				/* Create the camera component. */
 				auto component = entity->newCamera(true, primaryDevice, entityName);
-				component->setPerspectiveProjection(fov);
+				component->setPerspectiveProjection(fov, distance);
 
 				if ( showModel )
 				{
@@ -849,7 +922,7 @@ namespace EmEn::Scenes
 			 * @return std::vector< Libs::Math::Coordinates< float > >
 			 */
 			[[nodiscard]]
-			static std::vector< Libs::Math::CartesianFrame< float > > generateRandomCoordinates (size_t count, float min, float max) noexcept;
+			std::vector< Libs::Math::CartesianFrame< float > > generateRandomCoordinates (size_t count, float min, float max) noexcept;
 
 		private:
 
@@ -858,13 +931,15 @@ namespace EmEn::Scenes
 
 			static size_t s_autoEntityCount;
 
+			Settings & m_settings;
 			Resources::Manager & m_resourceManager;
 			std::shared_ptr< Scene > m_scene;
 			GenPolicy m_nodeGenerationPolicy{GenPolicy::Simple};
-			std::shared_ptr< Node > m_previousNode{};
+			std::shared_ptr< Node > m_previousNode;
 			GenPolicy m_staticEntityGenerationPolicy{GenPolicy::Simple};
-			std::shared_ptr< StaticEntity > m_previousStaticEntity{};
-			Libs::Math::CartesianFrame< float > m_cursorFrame{};
+			std::shared_ptr< StaticEntity > m_previousStaticEntity;
+			Libs::Math::CartesianFrame< float > m_cursorFrame;
+			Libs::Randomizer< float > m_randomizer;
 			bool m_debug{false};
 	};
 }

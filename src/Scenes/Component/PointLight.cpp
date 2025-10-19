@@ -41,17 +41,6 @@ namespace EmEn::Scenes::Component
 	using namespace Graphics;
 	using namespace Saphir;
 
-	void
-	PointLight::onOutputDeviceConnected (AVConsole::AVManagers & /*managers*/, AbstractVirtualDevice & targetDevice) noexcept
-	{
-		targetDevice.updateDeviceFromCoordinates(this->getWorldCoordinates(), this->getWorldVelocity());
-		targetDevice.updateProperties(
-			true,
-			m_radius > 0.0F ? m_radius : s_maxDistance,
-			90.0F
-		);
-	}
-
 	bool
 	PointLight::playAnimation (uint8_t identifier, const Variant & value, size_t /*cycle*/) noexcept
 	{
@@ -162,16 +151,14 @@ namespace EmEn::Scenes::Component
 			m_buffer[PositionOffset + 2] = position.z();
 		}
 
-		const auto resolution = this->shadowMapResolution();
-
-		if ( resolution > 0 )
+		if ( const auto resolution = this->shadowMapResolution(); resolution > 0 )
 		{
 			/* [VULKAN-SHADOW] TODO: Reuse shadow maps + remove it from console on failure */
-			m_shadowMap = scene.createRenderToCubicShadowMap(this->name() + ShadowMapName, resolution);
+			m_shadowMap = scene.createRenderToCubicShadowMap(this->name() + ShadowMapName, resolution, this->isOrthographicProjection());
 
 			if ( m_shadowMap != nullptr )
 			{
-				if ( this->connect(scene.AVConsoleManager().managers(), m_shadowMap, true) != AVConsole::ConnexionResult::Success )
+				if ( this->connect(scene.AVConsoleManager().managers(), m_shadowMap, true) == AVConsole::ConnexionResult::Success )
 				{
 					TraceSuccess{ClassId} << "Cubic shadow map (" << resolution << "px³) successfully created for point light '" << this->name() << "'.";
 
@@ -218,6 +205,11 @@ namespace EmEn::Scenes::Component
 		m_radius = std::abs(radius);
 
 		m_buffer[RadiusOffset] = m_radius;
+
+		if ( m_shadowMap != nullptr )
+		{
+			m_shadowMap->updateViewRangesProperties(this->getFovOrNear(), this->getDistanceOrFar());
+		}
 
 		this->requestVideoMemoryUpdate();
 	}

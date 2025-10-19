@@ -71,15 +71,17 @@ namespace EmEn::Graphics::RenderTarget
 			 * @param name The name of the texture for debugging.
 			 * @param width The width of the texture.
 			 * @param width The height of the texture.
-			 * @param colorCount The number of color channels desired. Default 4.
+			 * @param colorCount The number of color channels desired.
+			 * @param isOrthographicProjection Set orthographic projection instead of perspective.
 			 */
-			Texture (const std::string & name, uint32_t width, uint32_t height, uint32_t colorCount = 4) noexcept requires (std::is_same_v< view_matrices_t, ViewMatrices2DUBO >)
+			Texture (const std::string & name, uint32_t width, uint32_t height, uint32_t colorCount, bool isOrthographicProjection) noexcept requires (std::is_same_v< view_matrices_t, ViewMatrices2DUBO >)
 				: RenderTarget::Abstract{
 					name,
-					{colorCount, 8, 32, 0, 1},
-					{width, height, 1},
+					{colorCount, 8U, 32U, 0U, 1U},
+					{width, height, 1U},
 					RenderTargetType::Texture,
 					AVConsole::ConnexionType::Both,
+					isOrthographicProjection,
 					true
 				},
 				TextureResource::Abstract{name, 0}
@@ -91,10 +93,19 @@ namespace EmEn::Graphics::RenderTarget
 			 * @brief Constructs a render to cubemap.
 			 * @param name A reference to a string for the name of the video device.
 			 * @param size The size of the cubemap.
-			 * @param colorCount The number of color channels desired. Default 4.
+			 * @param colorCount The number of color channels desired.
+			 * @param isOrthographicProjection Set orthographic projection instead of perspective.
 			 */
-			Texture (const std::string & name, uint32_t size, uint32_t colorCount = 4) noexcept requires (std::is_same_v< view_matrices_t, ViewMatrices3DUBO >)
-				: RenderTarget::Abstract{name, {colorCount, 8, 32, 0, 1}, {size, size, 1}, RenderTargetType::Cubemap, AVConsole::ConnexionType::Both, true},
+			Texture (const std::string & name, uint32_t size, uint32_t colorCount, bool isOrthographicProjection) noexcept requires (std::is_same_v< view_matrices_t, ViewMatrices3DUBO >)
+				: RenderTarget::Abstract{
+					name,
+					{colorCount, 8U, 32U, 0U, 1U},
+					{size, size, 1U},
+					RenderTargetType::Cubemap,
+					AVConsole::ConnexionType::Both,
+					isOrthographicProjection,
+					true
+				},
 				TextureResource::Abstract{name, 0}
 			{
 
@@ -134,6 +145,26 @@ namespace EmEn::Graphics::RenderTarget
 			classLabel () const noexcept override
 			{
 				return ClassId;
+			}
+
+			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::updateViewRangesProperties() */
+			void
+			updateViewRangesProperties (float fovOrNear, float distanceOrFar) noexcept override
+			{
+				//Tracer::info(ClassId, "[RENDER-TO-TEXTURE] Configured from render-target system.");
+
+				const auto & extent = this->extent();
+				const auto width = static_cast< float >(extent.width);
+				const auto height = static_cast< float >(extent.width);
+
+				if ( this->isOrthographicProjection() )
+				{
+					m_viewMatrices.updatePerspectiveViewProperties(width, height, fovOrNear, distanceOrFar);
+				}
+				else
+				{
+					m_viewMatrices.updateOrthographicViewProperties(width, height, fovOrNear, distanceOrFar);
+				}
 			}
 
 			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::aspectRatio() */
@@ -303,6 +334,14 @@ namespace EmEn::Graphics::RenderTarget
 				return m_isReadyForRendering;
 			}
 
+			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::isDebug() const */
+			[[nodiscard]]
+			bool
+			isDebug () const noexcept override
+			{
+				return false;
+			}
+
 			/** @copydoc EmEn::Resources::ResourceTrait::load(Resources::ServiceProvider &) */
 			bool
 			load (Resources::ServiceProvider & /*serviceProvider*/) noexcept override
@@ -403,27 +442,24 @@ namespace EmEn::Graphics::RenderTarget
 
 		private:
 
+			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::updateVideoDeviceProperties() */
+			void
+			updateVideoDeviceProperties (float fovOrNear, float distanceOrFar, bool isOrthographicProjection) noexcept override
+			{
+				//Tracer::info(ClassId, "[RENDER-TO-TEXTURE] Configured from the AVDevice.");
+
+				this->setOrthographicProjection(isOrthographicProjection);
+
+				this->updateViewRangesProperties(fovOrNear, distanceOrFar);
+			}
+
 			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::updateDeviceFromCoordinates() */
 			void
 			updateDeviceFromCoordinates (const Libs::Math::CartesianFrame< float > & worldCoordinates, const Libs::Math::Vector< 3, float > & worldVelocity) noexcept override
 			{
+				//Tracer::info(ClassId, "[RENDER-TO-TEXTURE] Coordinates updated from the AVDevice.");
+
 				m_viewMatrices.updateViewCoordinates(worldCoordinates, worldVelocity);
-			}
-
-			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::updateProperties() */
-			void
-			updateProperties (bool isPerspectiveProjection, float distance, float fovOrNear) noexcept override
-			{
-				const auto & extent = this->extent();
-
-				if ( isPerspectiveProjection )
-				{
-					m_viewMatrices.updatePerspectiveViewProperties(static_cast< float >(extent.width), static_cast< float >(extent.height), distance, fovOrNear);
-				}
-				else
-				{
-					m_viewMatrices.updateOrthographicViewProperties(static_cast< float >(extent.width), static_cast< float >(extent.height), distance, fovOrNear);
-				}
 			}
 
 			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::onInputDeviceConnected() */
@@ -541,7 +577,10 @@ namespace EmEn::Graphics::RenderTarget
 						VK_IMAGE_TYPE_2D,
 						Vulkan::Instance::findColorFormat(device, this->precisions()),
 						this->extent(),
-						VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT
+						VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+						this->isCubemap() ? VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT : 0,
+						1,
+						this->isCubemap() ? 6 : 1
 					);
 					m_colorImage->setIdentifier(ClassId, this->name(), "Image");
 
@@ -585,8 +624,14 @@ namespace EmEn::Graphics::RenderTarget
 						return false;
 					}
 				}
+				else
+				{
+					TraceError{ClassId} << "No color bits requested for texture '" << this->id() << "' !";
 
-				/* Depth/stencil buffer. */
+					return false;
+				}
+
+				/* Depth/stencil buffer (optional). */
 				if ( this->precisions().depthBits() > 0 || this->precisions().stencilBits() > 0 )
 				{
 					/* Create the image for depth/stencil buffer in video memory. */
@@ -668,7 +713,7 @@ namespace EmEn::Graphics::RenderTarget
 			createRenderPass (Renderer & renderer) const noexcept override
 			{
 				/* FIXME: The identifier must reflect the enabled attachments !!! */
-				auto renderPass = renderer.getRenderPass(TextureRender, 0);
+				auto renderPass = renderer.getRenderPass("TextureRender", 0);
 
 				if ( !renderPass->isCreated() )
 				{
@@ -676,7 +721,7 @@ namespace EmEn::Graphics::RenderTarget
 					Vulkan::RenderSubPass subPass{VK_PIPELINE_BIND_POINT_GRAPHICS, 0};
 
 					/* Color buffer. */
-					if ( this->precisions().colorBits() > 0 )
+					if ( m_colorImage != nullptr )
 					{
 						renderPass->addAttachmentDescription(VkAttachmentDescription{
 							.flags = 0,
@@ -692,9 +737,15 @@ namespace EmEn::Graphics::RenderTarget
 
 						subPass.addColorAttachment(0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 					}
+					else
+					{
+						TraceError{ClassId} << "color depth image is not created for texture '" << this->id() << "' !";
 
-					/* Depth/Stencil buffer. */
-					if ( this->precisions().depthBits() > 0 || this->precisions().stencilBits() > 0 )
+						return nullptr;
+					}
+
+					/* Depth/Stencil buffer (optional). */
+					if ( m_depthStencilImage != nullptr )
 					{
 						renderPass->addAttachmentDescription(VkAttachmentDescription{
 							.flags = 0,
@@ -764,22 +815,46 @@ namespace EmEn::Graphics::RenderTarget
 				m_framebuffer = std::make_shared< Vulkan::Framebuffer >(renderPass, this->extent());
 				m_framebuffer->setIdentifier(ClassId, this->name(), "Framebuffer");
 
-				/* Color buffer. */
-				if ( this->precisions().colorBits() > 0 )
+				/* Attach the color buffer. */
+				if ( m_colorImageView != nullptr )
 				{
 					m_framebuffer->addAttachment(m_colorImageView->handle());
 				}
+				else
+				{
+					TraceError{ClassId} << "The color image view is not created for texture '" << this->id() << "' !";
 
-				/* Depth buffer. */
-				if ( this->precisions().depthBits() > 0 )
+					return false;
+				}
+
+				/* Attach the depth buffer, if present. */
+				if ( m_depthImageView != nullptr )
 				{
 					m_framebuffer->addAttachment(m_depthImageView->handle());
 				}
+				else if constexpr ( IsDebug )
+				{
+					if ( this->precisions().depthBits() > 0 )
+					{
+						TraceError{ClassId} << "The depth image view is not created for texture '" << this->id() << "', but was requested !";
 
-				/* Stencil buffer. */
-				if ( this->precisions().stencilBits() > 0 )
+						return false;
+					}
+				}
+
+				/* Attach the stencil buffer, if present. */
+				if ( m_stencilImageView != nullptr )
 				{
 					m_framebuffer->addAttachment(m_stencilImageView->handle());
+				}
+				else if constexpr ( IsDebug )
+				{
+					if ( this->precisions().stencilBits() > 0 )
+					{
+						TraceError{ClassId} << "The stencil image view is not created for texture '" << this->id() << "', but was requested !";
+
+						return false;
+					}
 				}
 
 				if ( !m_framebuffer->createOnHardware() )

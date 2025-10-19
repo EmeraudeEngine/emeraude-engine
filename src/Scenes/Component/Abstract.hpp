@@ -350,11 +350,11 @@ namespace EmEn::Scenes::Component
 
 			/**
 			 * @brief Constructs an abstract entity component.
-			 * @param name The name of the component [std::move].
+			 * @param componentName A reference to a string.
 			 * @param parentEntity A reference to the parent entity.
 			 */
-			Abstract (std::string name, const AbstractEntity & parentEntity) noexcept
-				: NameableTrait{std::move(name)},
+			Abstract (const std::string & componentName, const AbstractEntity & parentEntity) noexcept
+				: NameableTrait{componentName},
 				m_parentEntity{parentEntity}
 			{
 

@@ -33,7 +33,7 @@ endif ()
 
 project(
 	${BINARY_NAME}
-	VERSION 0.7.54
+	VERSION 0.8.0
 	DESCRIPTION "Emeraude Engine is an open-source (LGPLv3) 3D Graphics engine using Vulkan and written in C++20."
 	HOMEPAGE_URL "https://github.com/EmeraudeEngine/emeraude-engine"
 	LANGUAGES C CXX
@@ -58,6 +58,7 @@ option(EMERAUDE_ENABLE_TESTS "Enable the Emeraude-Engine testing suite (Default 
 option(EMERAUDE_ENABLE_PCH "Enable 'PreCompiled Headers' feature to speed up the compilation (Default Off)." Off)
 option(EMERAUDE_USE_STATIC_RUNTIME "Build Emeraude-Engine with the static MSVC runtime (Windows only, Default Off)." Off)
 option(EMERAUDE_USE_SYSTEM_LIBS "Use the system for common libraries instead of the embedded ones (Deprecated, Default Off)." Off)
+option(EMERAUDE_USE_SYSTEM_OPENAL "Use the system OpenAL-Soft library (Default Off)." Off)
 option(EMERAUDE_ENABLE_ASAN "Enable 'AddressSanitizer' library. Adds a dev tool to detects memory errors [SYSTEM] (Linux only, Default Off)." Off)
 option(EMERAUDE_ENABLE_MSAN "Enable 'MemorySanitizer' library. Adds a dev tool to detects memory corruption [SYSTEM] (Linux only, Default Off)." Off)
 option(EMERAUDE_ENABLE_LSAN "Enable 'LeakSanitizer' library. Adds a dev tool to detects memory leak [SYSTEM] (Linux only, Default Off)." Off)

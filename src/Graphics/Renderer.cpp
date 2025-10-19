@@ -61,7 +61,7 @@ namespace EmEn::Graphics
 
 		if ( !m_commandPool->createOnHardware() )
 		{
-			TraceError{ClassId} << "Unable to create the command pool #" << m_frameIndex << " !";
+			TraceError{ClassId} << "Unable to create the command pool #" << m_frameIndex << '!';
 
 			return false;
 		}
@@ -75,7 +75,7 @@ namespace EmEn::Graphics
 
 		if ( !m_inFlightFence->createOnHardware() )
 		{
-			TraceError{ClassId} << "Unable to create a fence #" << frameIndex << " for in-flight !";
+			TraceError{ClassId} << "Unable to create a fence #" << frameIndex << " for in-flight!";
 
 			return false;
 		}
@@ -89,7 +89,7 @@ namespace EmEn::Graphics
 
 		if ( !m_imageAvailableSemaphore->createOnHardware() )
 		{
-			TraceError{ClassId} << "Unable to create a semaphore #" << frameIndex << " for image available !";
+			TraceError{ClassId} << "Unable to create a semaphore #" << frameIndex << " for image available!";
 
 			return false;
 		}
@@ -103,7 +103,7 @@ namespace EmEn::Graphics
 
 		if ( !m_renderFinishedSemaphore->createOnHardware() )
 		{
-			TraceError{ClassId} << "Unable to create a semaphore #" << frameIndex << " for image finished !";
+			TraceError{ClassId} << "Unable to create a semaphore #" << frameIndex << " for image finished!";
 
 			return false;
 		}
@@ -153,13 +153,13 @@ namespace EmEn::Graphics
 		/* Initialize the graphics shader manager. */
 		if ( m_shaderManager.initialize(m_subServicesEnabled) )
 		{
-			TraceSuccess{ClassId} << m_shaderManager.name() << " service up !";
+			TraceSuccess{ClassId} << m_shaderManager.name() << " service up!";
 		}
 		else
 		{
 			TraceFatal{ClassId} <<
-				m_shaderManager.name() << " service failed to execute !" "\n"
-				"The engine is unable to produce GLSL shaders !";
+				m_shaderManager.name() << " service failed to execute!" "\n"
+				"The engine is unable to produce GLSL shaders!";
 
 			return false;
 		}
@@ -169,11 +169,11 @@ namespace EmEn::Graphics
 
 		if ( m_transferManager.initialize(m_subServicesEnabled) )
 		{
-			TraceSuccess{ClassId} << m_transferManager.name() << " service up !";
+			TraceSuccess{ClassId} << m_transferManager.name() << " service up!";
 		}
 		else
 		{
-			TraceFatal{ClassId} << m_transferManager.name() << " service failed to execute !";
+			TraceFatal{ClassId} << m_transferManager.name() << " service failed to execute!";
 
 			return false;
 		}
@@ -183,11 +183,11 @@ namespace EmEn::Graphics
 
 		if ( m_layoutManager.initialize(m_subServicesEnabled) )
 		{
-			TraceSuccess{ClassId} << m_layoutManager.name() << " service up !";
+			TraceSuccess{ClassId} << m_layoutManager.name() << " service up!";
 		}
 		else
 		{
-			TraceFatal{ClassId} << m_layoutManager.name() << " service failed to execute !";
+			TraceFatal{ClassId} << m_layoutManager.name() << " service failed to execute!";
 
 			return false;
 		}
@@ -197,11 +197,11 @@ namespace EmEn::Graphics
 
 		if ( m_sharedUBOManager.initialize(m_subServicesEnabled) )
 		{
-			TraceSuccess{ClassId} << m_sharedUBOManager.name() << " service up !";
+			TraceSuccess{ClassId} << m_sharedUBOManager.name() << " service up!";
 		}
 		else
 		{
-			TraceFatal{ClassId} << m_sharedUBOManager.name() << " service failed to execute !";
+			TraceFatal{ClassId} << m_sharedUBOManager.name() << " service failed to execute!";
 
 			return false;
 		}
@@ -209,11 +209,11 @@ namespace EmEn::Graphics
 		/* Initialize vertex buffer format manager. */
 		if ( m_vertexBufferFormatManager.initialize(m_subServicesEnabled) )
 		{
-			TraceSuccess{ClassId} << m_vertexBufferFormatManager.name() << " service up !";
+			TraceSuccess{ClassId} << m_vertexBufferFormatManager.name() << " service up!";
 		}
 		else
 		{
-			TraceFatal{ClassId} << m_vertexBufferFormatManager.name() << " service failed to execute !";
+			TraceFatal{ClassId} << m_vertexBufferFormatManager.name() << " service failed to execute!";
 
 			return false;
 		}
@@ -221,13 +221,13 @@ namespace EmEn::Graphics
 		/* Initialize video input. */
 		if ( m_externalInput.initialize(m_subServicesEnabled) )
 		{
-			TraceSuccess{ClassId} << m_externalInput.name() << " service up !";
+			TraceSuccess{ClassId} << m_externalInput.name() << " service up!";
 		}
 		else
 		{
 			TraceWarning{ClassId} <<
-				m_externalInput.name() << " service failed to execute !" "\n"
-				"No video input available !";
+				m_externalInput.name() << " service failed to execute!" "\n"
+				"No video input available!";
 		}
 
 		return true;
@@ -244,14 +244,14 @@ namespace EmEn::Graphics
 
 			if ( m_device == nullptr )
 			{
-				Tracer::fatal(ClassId, "Unable to find a suitable graphics device !");
+				Tracer::fatal(ClassId, "Unable to find a suitable graphics device!");
 
 				return false;
 			}
 		}
 		else
 		{
-			Tracer::fatal(ClassId, "The Vulkan instance is not usable to select a graphics device !");
+			Tracer::fatal(ClassId, "The Vulkan instance is not usable to select a graphics device!");
 
 			return false;
 		}
@@ -267,7 +267,7 @@ namespace EmEn::Graphics
 		 */
 		if ( !this->initializeSubServices() )
 		{
-			Tracer::fatal(ClassId, "Unable to initialize renderer sub-services properly !");
+			Tracer::fatal(ClassId, "Unable to initialize renderer sub-services properly!");
 
 			return false;
 		}
@@ -289,12 +289,13 @@ namespace EmEn::Graphics
 				"WindowLessView",
 				m_window.state().windowWidth,
 				m_window.state().windowHeight,
-				FramebufferPrecisions{8, 8, 8, 8, 24, 0, sampleCount}
+				FramebufferPrecisions{8, 8, 8, 8, 24, 0, sampleCount},
+				false
 			);
 
 			if ( !m_windowLessView->create(*this) )
 			{
-				Tracer::fatal(ClassId, "Unable to create the window less view !");
+				Tracer::fatal(ClassId, "Unable to create the window less view!");
 
 				return false;
 			}
@@ -304,12 +305,10 @@ namespace EmEn::Graphics
 			{
 				m_windowLessView.reset();
 
-				Tracer::fatal(ClassId, "Unable to create the offscreen view command pools and buffers !");
+				Tracer::fatal(ClassId, "Unable to create the offscreen view command pools and buffers!");
 
 				return false;
 			}
-
-			this->notify(SwapChainCreated);
 		}
 		else
 		{
@@ -318,7 +317,7 @@ namespace EmEn::Graphics
 
 			if ( !m_swapChain->createOnHardware() )
 			{
-				Tracer::fatal(ClassId, "Unable to create the swap-chain !");
+				Tracer::fatal(ClassId, "Unable to create the swap-chain!");
 
 				return false;
 			}
@@ -328,12 +327,10 @@ namespace EmEn::Graphics
 			{
 				m_swapChain.reset();
 
-				Tracer::fatal(ClassId, "Unable to create the swap-chain command pools and buffers !");
+				Tracer::fatal(ClassId, "Unable to create the swap-chain command pools and buffers!");
 
 				return false;
 			}
-
-			this->notify(SwapChainCreated);
 		}
 
 		/* NOTE: Create the main descriptor pool. */
@@ -382,7 +379,7 @@ namespace EmEn::Graphics
 
 			if ( !m_descriptorPool->createOnHardware() )
 			{
-				Tracer::fatal(ClassId, "Unable to create the descriptor pool !");
+				Tracer::fatal(ClassId, "Unable to create the descriptor pool!");
 
 				return false;
 			}
@@ -396,17 +393,17 @@ namespace EmEn::Graphics
 
 			if ( settings.getOrSetDefault< bool >(NormalMappingEnabledKey, DefaultNormalMappingEnabled) )
 			{
-				Tracer::info(ClassId, "Normal mapping enabled !");
+				Tracer::info(ClassId, "Normal mapping enabled.");
 			}
 
 			if ( settings.getOrSetDefault< bool >(HighQualityLightEnabledKey, DefaultHighQualityLightEnabled) )
 			{
-				Tracer::info(ClassId, "High quality light shader code enabled !");
+				Tracer::info(ClassId, "High quality light shader code enabled.");
 			}
 
 			if ( settings.getOrSetDefault< bool >(HighQualityReflectionEnabledKey, DefaultHighQualityReflectionEnabled) )
 			{
-				Tracer::info(ClassId, "High quality reflection shader code enabled !");
+				Tracer::info(ClassId, "High quality reflection shader code enabled.");
 			}
 		}
 
@@ -548,7 +545,7 @@ namespace EmEn::Graphics
 
 		if ( !sampler->createOnHardware() )
 		{
-			Tracer::error(ClassId, "Unable to create a sampler !");
+			Tracer::error(ClassId, "Unable to create a sampler!");
 
 			return nullptr;
 		}
@@ -559,7 +556,7 @@ namespace EmEn::Graphics
 		{
 			if ( !success )
 			{
-				Tracer::fatal(ClassId, "Unable to insert the sampler into map !");
+				Tracer::fatal(ClassId, "Unable to insert the sampler into map!");
 
 				return {};
 			}
@@ -590,28 +587,9 @@ namespace EmEn::Graphics
 		return m_pipelines.emplace(hash, graphicsPipeline).second;
 	}
 
-	bool
-	Renderer::isSwapChainDegraded () const noexcept
-	{
-		/* NOTE: In windowless mode, the swap chain is never degraded. */
-		if ( m_windowLess )
-		{
-			return false;
-		}
-
-		return m_swapChain->status() == SwapChain::Status::Degraded;
-	}
-
 	void
 	Renderer::renderFrame (const std::shared_ptr< Scenes::Scene > & scene, const Overlay::Manager & overlayManager) noexcept
 	{
-		if ( !m_swapChain->isReadyForRendering() )
-		{
-			Tracer::debug(ClassId, "The swap-chain is not yet ready for rendering !");
-
-			return;
-		}
-
 		if ( m_windowLess )
 		{
 			auto & currentFrameScope = m_rendererFrameScope[0];
@@ -648,7 +626,7 @@ namespace EmEn::Graphics
 					this->renderRenderToTextures(currentFrameScope, *scene);
 				}
 
-				this->renderViews(currentFrameScope, *scene);
+				//this->renderViews(currentFrameScope, *scene);
 			}
 
 			const auto * queue = this->device()->getGraphicsQueue(QueuePriority::High);
@@ -694,10 +672,26 @@ namespace EmEn::Graphics
 		}
 		else
 		{
+			/* 1. If the swap-chain was marked degraded, we rebuild it and skip this frame. */
+			if ( m_swapChain->status() == Status::Degraded )
+			{
+				Tracer::info(ClassId, "The swap-chain is degraded, refreshing it...");
+
+				if ( !this->refreshFramebuffer() )
+				{
+					Tracer::fatal(ClassId, "Unable to refresh the swap-chain!");
+
+					std::abort();
+				}
+
+				/* Let this image drop. */
+				return;
+			}
+
 			auto & currentFrameScope = m_rendererFrameScope[m_currentFrameIndex];
 
-			/* NOTE: Wait for the current frame to complete. */
-			if ( currentFrameScope.inFlightFence()->waitAndReset(m_timeout) )
+			/* 2. Wait for the previous use of this frame's resources to complete. */
+			if ( currentFrameScope.inFlightFence()->wait(m_timeout) )
 			{
 				m_statistics.stop();
 
@@ -705,24 +699,33 @@ namespace EmEn::Graphics
 			}
 			else
 			{
-				TraceError{ClassId} << "Something wrong happens while waiting the fence for image #" << m_currentFrameIndex << " !";
+				TraceError{ClassId} << "Something wrong happens while waiting the fence for image #" << m_currentFrameIndex << '!';
 
 				std::abort();
 
 				return;
 			}
 
-			m_statistics.start();
-
-			/* NOTE: Get the new frame to render to. */
+			/* 3. Get the new frame to render to. */
 			const auto frameIndexOpt = m_swapChain->acquireNextImage(currentFrameScope.imageAvailableSemaphore(), m_timeout);
 
 			if ( !frameIndexOpt )
 			{
-				Tracer::error(ClassId, "Unable to acquire swap chain image !");
+				Tracer::error(ClassId, "Unable to acquire swap-chain image (likely out of date)!");
 
 				return;
 			}
+
+			/* 4. Reset the fence. */
+			if ( !currentFrameScope.inFlightFence()->reset() )
+			{
+				TraceError{ClassId} << "Something wrong happens while reset the fence for image #" << m_currentFrameIndex << '!';
+
+				return;
+			}
+
+			/* 5. The new frame rendering is starting now. */
+			m_statistics.start();
 
 			const uint32_t frameIndex = frameIndexOpt.value();
 
@@ -740,7 +743,7 @@ namespace EmEn::Graphics
 					this->renderRenderToTextures(currentFrameScope, *scene);
 				}
 
-				this->renderViews(currentFrameScope, *scene);
+				//this->renderViews(currentFrameScope, *scene);
 			}
 
 			/* Then we need the command buffer linked to this image by its index. */
@@ -769,21 +772,29 @@ namespace EmEn::Graphics
 				return;
 			}
 
-			currentFrameScope.secondarySemaphores().emplace_back(currentFrameScope.imageAvailableSemaphore()->handle());
-
-			const auto submitResult = m_swapChain->submitCommandBuffer(
-				commandBuffer,
-				frameIndex,
-				currentFrameScope.secondarySemaphores(),
-				currentFrameScope.renderFinishedSemaphore(),
-				currentFrameScope.inFlightFence()
-			);
-
-			if ( !submitResult )
+			/* 6. Submit the work on the GPU and present. */
 			{
-				TraceError{ClassId} << "Unable to submit the command buffer for swap-chain frame #" << frameIndex << " !";
+				const auto * queue = this->device()->getGraphicsQueue(QueuePriority::High);
 
-				return;
+				currentFrameScope.secondarySemaphores().emplace_back(currentFrameScope.imageAvailableSemaphore()->handle());
+
+				const StaticVector< VkPipelineStageFlags, 16 > waitStages(
+					currentFrameScope.secondarySemaphores().size(),
+					VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
+				);
+
+				auto renderFinishedSemaphoreHandle = currentFrameScope.renderFinishedSemaphore()->handle();
+
+				if ( !queue->submit(*commandBuffer, SynchInfo{}
+						.waits(currentFrameScope.secondarySemaphores(), waitStages)
+						.signals({&renderFinishedSemaphoreHandle, 1})
+						.withFence(currentFrameScope.inFlightFence()->handle())
+					) )
+				{
+					return;
+				}
+
+				m_swapChain->present(frameIndex, queue, renderFinishedSemaphoreHandle);
 			}
 
 			m_currentFrameIndex = (m_currentFrameIndex + 1) % m_rendererFrameScope.size();
@@ -798,7 +809,7 @@ namespace EmEn::Graphics
 		scene.forEachRenderToShadowMap([&] (const std::shared_ptr< RenderTarget::Abstract > & shadowMap) {
 			if ( !shadowMap->isReadyForRendering() )
 			{
-				TraceDebug{ClassId} << "The shadow map " << shadowMap->id() << " is not yet ready for rendering !";
+				TraceDebug{ClassId} << "The shadow map " << shadowMap->id() << " is not yet ready for rendering!";
 
 				return;
 			}
@@ -807,7 +818,7 @@ namespace EmEn::Graphics
 
 			if ( !commandBuffer->begin() )
 			{
-				TraceError{ClassId} << "Unable to begin with render target '" << shadowMap->id() << "' command buffer !";
+				TraceError{ClassId} << "Unable to begin with render target '" << shadowMap->id() << "' command buffer!";
 
 				return;
 			}
@@ -820,7 +831,7 @@ namespace EmEn::Graphics
 
 			if ( !commandBuffer->end() )
 			{
-				TraceError{ClassId} << "Unable to finish the command buffer for render target '" << shadowMap->id() << " !";
+				TraceError{ClassId} << "Unable to finish the command buffer for render target '" << shadowMap->id() << '!';
 
 				return;
 			}
@@ -853,7 +864,7 @@ namespace EmEn::Graphics
 		{
 			if ( !renderToTexture->isReadyForRendering() )
 			{
-				TraceDebug{ClassId} << "The render-to-texture " << renderToTexture->id() << " is not yet ready for rendering !";
+				TraceDebug{ClassId} << "The render-to-texture " << renderToTexture->id() << " is not yet ready for rendering!";
 
 				return;
 			}
@@ -862,7 +873,7 @@ namespace EmEn::Graphics
 
 			if ( !commandBuffer->begin() )
 			{
-				TraceError{ClassId} << "Unable to begin with render target '" << renderToTexture->id() << "' command buffer !";
+				TraceError{ClassId} << "Unable to begin with render target '" << renderToTexture->id() << "' command buffer!";
 
 				return;
 			}
@@ -875,7 +886,7 @@ namespace EmEn::Graphics
 
 			if ( !commandBuffer->end() )
 			{
-				TraceError{ClassId} << "Unable to finish the command buffer for render target '" << renderToTexture->id() << " !";
+				TraceError{ClassId} << "Unable to finish the command buffer for render target '" << renderToTexture->id() << "' !";
 
 				return;
 			}
@@ -916,24 +927,12 @@ namespace EmEn::Graphics
 		{
 			switch ( notificationCode )
 			{
-				/* Updates the handle surface information. */
 				case Window::OSNotifiesFramebufferResized :
 				case Window::OSRequestsToRescaleContentBy :
-				{
-					const auto device = this->device();
-
-					if ( device == nullptr )
+					if ( m_windowLess )
 					{
-						Tracer::info(ClassId, "Vulkan instance is not fully initialized ! The device is not selected yet ...");
-
-						break;
+						// TODO: Resize the framebuffer to the right size!
 					}
-
-					if ( !m_window.surface()->update(device->physicalDevice()) )
-					{
-						Tracer::error(ClassId, "Unable to update the handle surface from a framebuffer resized !");
-					}
-				}
 					break;
 
 				default :
@@ -949,7 +948,7 @@ namespace EmEn::Graphics
 
 		/* NOTE: Don't know what it is, goodbye! */
 		TraceDebug{ClassId} <<
-			"Received an unhandled notification (Code:" << notificationCode << ") from observable (UID:" << observable->classUID() << ")  ! "
+			"Received an unhandled notification (Code:" << notificationCode << ") from observable (UID:" << observable->classUID() << ")! "
 			"Forgetting it ...";
 
 		return false;
@@ -964,7 +963,7 @@ namespace EmEn::Graphics
 		{
 			if ( !m_rendererFrameScope[imageIndex].initialize(m_device, imageIndex) )
 			{
-				TraceError{ClassId} << "Unable to create the render frame scope #" << imageIndex << " !";
+				TraceError{ClassId} << "Unable to create the render frame scope #" << imageIndex << '!';
 
 				return false;
 			}
@@ -980,24 +979,23 @@ namespace EmEn::Graphics
 	}
 
 	bool
-	Renderer::recreateSwapChain () noexcept
+	Renderer::refreshFramebuffer () noexcept
 	{
-		if ( m_windowLess )
-		{
-			/* NOTE: There is no swap-chain in window-less mode. */
-			return true;
-		}
+		this->device()->waitIdle("Refreshing the framebuffer.");
 
-		this->device()->waitIdle("The swap chain recreation.");
-
-		if ( !m_swapChain->recreateOnHardware() )
+		if ( !m_window.surface()->update(this->device()->physicalDevice()) )
 		{
-			Tracer::fatal(ClassId, "Unable to rebuild the swap chain !");
+			Tracer::error(ClassId, "Unable to update the handle surface from a framebuffer resized!");
 
 			return false;
 		}
 
-		this->notify(SwapChainRecreated, m_swapChain);
+		if ( !m_swapChain->refresh() )
+		{
+			return false;
+		}
+
+		m_swapChainRefreshed = true;
 
 		return true;
 	}

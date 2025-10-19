@@ -2,8 +2,8 @@ if ( NOT TARGET_BINARY_FOR_SETUP )
 	message(FATAL_ERROR "TARGET_BINARY_FOR_SETUP is not SET !")
 endif ()
 
-if ( EMERAUDE_USE_SYSTEM_LIBS )
-	message("Enabling OpenAL library from system ...")
+if ( EMERAUDE_USE_SYSTEM_OPENAL )
+	message("Enabling OpenAL-Soft library library from system ...")
 
 	find_package(OpenAL REQUIRED)
 

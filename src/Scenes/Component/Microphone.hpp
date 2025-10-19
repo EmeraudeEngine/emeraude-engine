@@ -50,12 +50,12 @@ namespace EmEn::Scenes::Component
 
 			/**
 			 * @brief Constructs a microphone.
-			 * @param name The name of the component.
+			 * @param componentName A reference to a string.
 			 * @param parentEntity A reference to the parent entity.
 			 */
-			Microphone (const std::string & name, const AbstractEntity & parentEntity) noexcept
-				: Abstract{name, parentEntity},
-				AbstractVirtualDevice{name, AVConsole::DeviceType::Audio, AVConsole::ConnexionType::Output}
+			Microphone (const std::string & componentName, const AbstractEntity & parentEntity) noexcept
+				: Abstract{componentName, parentEntity},
+				AbstractVirtualDevice{componentName, AVConsole::DeviceType::Audio, AVConsole::ConnexionType::Output}
 			{
 
 			}

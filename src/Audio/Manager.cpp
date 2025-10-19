@@ -44,7 +44,7 @@ namespace EmEn::Audio
 	using namespace Libs::Math;
 
 	bool
-	Manager::queryOutputDevices (bool useExtendedAPI) noexcept
+	Manager::selectedOutputDevice (bool useExtendedAPI) noexcept
 	{
 		/* NOTE: Check for the audio device enumeration. */
 		const char * extensionName = useExtendedAPI ? "ALC_ENUMERATE_ALL_EXT" : "ALC_ENUMERATION_EXT";
@@ -77,15 +77,12 @@ namespace EmEn::Audio
 
 		if ( m_availableOutputDevices.empty() )
 		{
-			/* No device at all... */
-			m_selectedOutputDeviceName.clear();
-
 			return false;
 		}
 
 		const auto * defaultDeviceName = alcGetString(nullptr, useExtendedAPI ? ALC_DEFAULT_ALL_DEVICES_SPECIFIER : ALC_DEFAULT_DEVICE_SPECIFIER);
 
-		if ( m_selectedOutputDeviceName.empty() )
+		if ( m_selectedOutputDeviceName.empty() || m_selectedOutputDeviceName == DefaultAudioDeviceName )
 		{
 			m_selectedOutputDeviceName.assign(defaultDeviceName);
 		}
@@ -110,42 +107,29 @@ namespace EmEn::Audio
 	}
 
 	bool
-	Manager::setupAudioOutputDevice () noexcept
+	Manager::setupAudioOutputDevice (Settings & settings) noexcept
 	{
-		auto & settings = m_primaryServices.settings();
-		
-		/* First, read setting for a desired output audio device. */
+		/* Read setting for a desired output audio device. */
 		m_selectedOutputDeviceName = settings.getOrSetDefault< std::string >(AudioDeviceNameKey, DefaultAudioDeviceName);
 
-		/* Then, check the audio system. */
-		bool forceDefaultDevice = false;
-
-		if ( !settings.getOrSetDefault< bool >(AudioForceDefaultDeviceKey, DefaultAudioForceDefaultDevice) )
+		/* NOTE: Check the requested device or fall back to default. */
+		if ( !this->selectedOutputDevice(true) && !this->selectedOutputDevice(false) )
 		{
-			if ( this->queryOutputDevices(true) || this->queryOutputDevices(false) )
-			{
-				if ( m_showInformation )
-				{
-					std::cout << "[OpenAL] Audio devices:" "\n";
+			Tracer::error(ClassId, "There is no audio output device on the system!");
 
-					for ( const auto & deviceName : m_availableOutputDevices )
-					{
-						std::cout << " - " << deviceName << '\n';
-					}
-
-					std::cout << "Default: " << m_selectedOutputDeviceName << '\n';
-				}
-			}
-			else
-			{
-				forceDefaultDevice = true;
-
-				Tracer::warning(ClassId, "There is no audio system found by querying! Let OpenAL open a default itself ...");
-			}
+			return false;
 		}
-		else
+
+		if ( m_showInformation )
 		{
-			forceDefaultDevice = true;
+			std::cout << "[OpenAL] Audio devices:" "\n";
+
+			for ( const auto & deviceName : m_availableOutputDevices )
+			{
+				std::cout << " - " << deviceName << '\n';
+			}
+
+			std::cout << "Default: " << m_selectedOutputDeviceName << '\n';
 		}
 
 		/* Checks configuration file */
@@ -161,27 +145,13 @@ namespace EmEn::Audio
 		}
 
 		/* NOTE: Opening the output audio device. */
-		if ( forceDefaultDevice )
+		m_outputDevice = alcOpenDevice(m_selectedOutputDeviceName.c_str());
+
+		if ( alcGetErrors(m_outputDevice, "alcOpenDevice()", __FILE__, __LINE__) || m_outputDevice == nullptr )
 		{
-			m_outputDevice = alcOpenDevice(nullptr);
+			TraceError{ClassId} << "Unable to open the output audio device '" << m_selectedOutputDeviceName << "' !";
 
-			if ( alcGetErrors(m_outputDevice, "alcOpenDevice(NULL)", __FILE__, __LINE__) || m_outputDevice == nullptr )
-			{
-				TraceError{ClassId} << "Unable to open the default output audio device !";
-
-				return false;
-			}
-		}
-		else
-		{
-			m_outputDevice = alcOpenDevice(m_selectedOutputDeviceName.c_str());
-
-			if ( alcGetErrors(m_outputDevice, "alcOpenDevice(deviceName)", __FILE__, __LINE__) || m_outputDevice == nullptr )
-			{
-				TraceError{ClassId} << "Unable to open the selected output audio device '" << m_selectedOutputDeviceName << "' !";
-
-				return false;
-			}
+			return false;
 		}
 
 		if ( m_usingAdvancedEnumeration )
@@ -233,7 +203,7 @@ namespace EmEn::Audio
 	}
 
 	bool
-	Manager::queryInputDevices () noexcept
+	Manager::selectInputDevice () noexcept
 	{
 		/* NOTE: Check for the audio device enumeration. */
 		if ( alcIsExtensionPresent(nullptr, "ALC_EXT_CAPTURE") == ALC_FALSE )
@@ -263,15 +233,12 @@ namespace EmEn::Audio
 
 		if ( m_availableInputDevices.empty() )
 		{
-			/* No device at all... */
-			m_selectedInputDeviceName.clear();
-
 			return false;
 		}
 
 		const auto * defaultDeviceName = alcGetString(nullptr, ALC_CAPTURE_DEFAULT_DEVICE_SPECIFIER);
 
-		if ( m_selectedInputDeviceName.empty() )
+		if ( m_selectedInputDeviceName.empty() || m_selectedInputDeviceName == DefaultAudioRecorderDeviceName )
 		{
 			m_selectedInputDeviceName.assign(defaultDeviceName);
 		}
@@ -296,16 +263,16 @@ namespace EmEn::Audio
 	}
 
 	bool
-	Manager::setupAudioInputDevice () noexcept
+	Manager::setupAudioInputDevice (Settings & settings) noexcept
 	{
-		auto & settings = m_primaryServices.settings();
-
 		/* First, read setting for a desired input audio device. */
 		m_selectedInputDeviceName = settings.getOrSetDefault< std::string >(AudioRecorderDeviceNameKey, DefaultAudioRecorderDeviceName);
 
 		/* Then, check the audio capture system. */
-		if ( !this->queryInputDevices() )
+		if ( !this->selectInputDevice() )
 		{
+			Tracer::error(ClassId, "There is no audio input device on the system!");
+
 			return false;
 		}
 
@@ -369,9 +336,9 @@ namespace EmEn::Audio
 		}
 
 		/* NOTE: Select an audio device. */
-		if ( !this->setupAudioOutputDevice() )
+		if ( !this->setupAudioOutputDevice(settings) )
 		{
-			Tracer::error(ClassId, "Unable to get an audio device or an audio context! Disabling audio layer.");
+			Tracer::error(ClassId, "Unable to get an audio device or an audio context! Disabling the audio layer.");
 
 			/* NOTE: Disable the previously enabled state. */
 			s_audioSystemAvailable = false;
@@ -382,7 +349,7 @@ namespace EmEn::Audio
 		/* NOTE: Select a capture audio device. */
 		if ( settings.getOrSetDefault< bool >(AudioRecorderEnableKey, DefaultAudioRecorderEnable) )
 		{
-			if ( this->setupAudioInputDevice() )
+			if ( this->setupAudioInputDevice(settings) )
 			{
 				m_audioRecorder.configure(m_inputDevice, WaveFactory::Channels::Mono, s_recordFrequency);
 			}
@@ -396,7 +363,8 @@ namespace EmEn::Audio
 		this->setMetersPerUnit(1.0F);
 		this->setMainLevel(settings.getOrSetDefault< float >(AudioMasterVolumeKey, DefaultAudioMasterVolume));
 
-		s_playbackFrequency = WaveFactory::toFrequency(m_contextAttributes[ALC_FREQUENCY]); /* NOTE: Be sure of the playback frequency allowed by this OpenAL context. */
+		/* NOTE: Be sure of the playback frequency allowed by this OpenAL context. */
+		s_playbackFrequency = WaveFactory::toFrequency(m_contextAttributes[ALC_FREQUENCY]);
 		s_musicChunkSize = settings.getOrSetDefault< uint32_t >(AudioMusicChunkSizeKey, DefaultAudioMusicChunkSize);
 
 		/* NOTE: Create a default source. */
@@ -429,7 +397,7 @@ namespace EmEn::Audio
 
 		if ( m_allSources.empty() )
 		{
-			Tracer::error(ClassId, "No audio source available at all! Disabling audio layer.");
+			Tracer::error(ClassId, "No audio source available at all! Disabling th audio layer.");
 
 			/* NOTE: Disable the previously enabled state. */
 			s_audioSystemAvailable = false;

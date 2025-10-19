@@ -29,6 +29,9 @@
 /* STL inclusions. */
 #include <cmath>
 
+/* Local inclusions. */
+#include "Tracer.hpp"
+
 namespace EmEn::Scenes::Component
 {
 	using namespace Libs;
@@ -38,28 +41,69 @@ namespace EmEn::Scenes::Component
 	using namespace Graphics;
 
 	void
-	Camera::setPerspectiveProjection (float fov, float maxViewableDistance) noexcept
+	Camera::updateDeviceFromCoordinates (const CartesianFrame< float > & worldCoordinates, const Vector< 3, float > & worldVelocity) noexcept
 	{
-		this->enableFlag(PerspectiveProjection);
-
-		m_fov = std::abs(fov);
-
-		if ( maxViewableDistance > 0.0F )
+		if ( !this->hasOutputConnected() )
 		{
-			m_distance = maxViewableDistance;
+			return;
 		}
 
-		this->updateProperties(true, m_distance, m_fov);
+		/* NOTE: We send the new camera coordinates to update the matrices of render targets. */
+		this->forEachOutputs([&worldCoordinates, &worldVelocity] (const auto & output) {
+			output->updateDeviceFromCoordinates(worldCoordinates, worldVelocity);
+		});
 	}
 
 	void
-	Camera::setOrthographicProjection (float size) noexcept
+	Camera::onOutputDeviceConnected (AVConsole::AVManagers & /*managers*/, AbstractVirtualDevice & targetDevice) noexcept
 	{
-		this->disableFlag(PerspectiveProjection);
+		/* When a new render target is connected, we initialize it with coordinates and camera properties. */
+		if ( this->isPerspectiveProjection() )
+		{
+			targetDevice.updateVideoDeviceProperties(m_fov, m_distance, false);
+		}
+		else
+		{
+			targetDevice.updateVideoDeviceProperties(m_near, m_far, true);
+		}
 
-		m_distance = std::abs(size);
+		targetDevice.updateDeviceFromCoordinates(this->getWorldCoordinates(), this->getWorldVelocity());
+	}
 
-		this->updateProperties(false, m_distance, 0.0F);
+	void
+	Camera::updateAllVideoDeviceProperties () const noexcept
+	{
+		if ( this->isPerspectiveProjection() )
+		{
+			this->forEachOutputs([&] (const auto & output) {
+				output->updateVideoDeviceProperties(m_fov, m_distance, false);
+			});
+		}
+		else
+		{
+			this->forEachOutputs([&] (const auto & output) {
+				output->updateVideoDeviceProperties(m_near, m_far, true);
+			});
+		}
+	}
+
+	void
+	Camera::setPerspectiveProjection (float fov, float distance) noexcept
+	{
+		this->enableFlag(PerspectiveProjection);
+
+		m_fov = std::min(std::abs(fov), FullRevolution< float >);
+
+		if ( distance >= 0.0F )
+		{
+			m_distance = distance;
+		}
+
+		/* Update existing connected render targets. */
+		if ( this->hasOutputConnected() )
+		{
+			this->updateAllVideoDeviceProperties();
+		}
 	}
 
 	void
@@ -67,24 +111,64 @@ namespace EmEn::Scenes::Component
 	{
 		m_fov = std::min(std::abs(degrees), FullRevolution< float >);
 
-		if ( this->isPerspectiveProjection() )
+		/* Update existing connected render targets only if perspective projection is enabled. */
+		if ( this->hasOutputConnected() && this->isPerspectiveProjection() )
 		{
-			this->updateProperties(true, m_distance, m_fov);
+			this->updateAllVideoDeviceProperties();
 		}
 	}
 
 	void
 	Camera::setDistance (float distance) noexcept
 	{
-		m_distance = std::abs(distance);
-
-		if ( this->isPerspectiveProjection() )
+		if ( distance >= 0.0F )
 		{
-			this->updateProperties(true, m_distance, m_fov);
+			m_distance = distance;
 		}
-		else
+
+		/* Update existing connected render targets (only if perspective projection is enabled). */
+		if ( this->hasOutputConnected() && this->isPerspectiveProjection() )
 		{
-			this->updateProperties(false, m_distance, 0.0F);
+			this->updateAllVideoDeviceProperties();
+		}
+	}
+
+	void
+	Camera::setOrthographicProjection (float near, float far) noexcept
+	{
+		this->disableFlag(PerspectiveProjection);
+
+		m_near = std::min(0.0F, near);
+		m_far = std::max(0.0F, far);
+
+		/* Update existing connected render targets. */
+		if ( this->hasOutputConnected() )
+		{
+			this->updateAllVideoDeviceProperties();
+		}
+	}
+
+	void
+	Camera::setNear (float distance) noexcept
+	{
+		m_near = std::min(0.0F, distance);
+
+		/* Update existing connected render targets (only for orthographic projection is enabled). */
+		if ( this->hasOutputConnected() && this->isOrthographicProjection() )
+		{
+			this->updateAllVideoDeviceProperties();
+		}
+	}
+
+	void
+	Camera::setFar (float distance) noexcept
+	{
+		m_far = std::max(0.0F, distance);
+
+		/* Update existing connected render targets (only for orthographic projection is enabled). */
+		if ( this->hasOutputConnected() && this->isOrthographicProjection() )
+		{
+			this->updateAllVideoDeviceProperties();
 		}
 	}
 
@@ -128,48 +212,6 @@ namespace EmEn::Scenes::Component
 		m_lensEffects.clear();
 
 		this->notify(LensEffectsChanged);
-	}
-
-	void
-	Camera::updateDeviceFromCoordinates (const CartesianFrame< float > & worldCoordinates, const Vector< 3, float > & worldVelocity) noexcept
-	{
-		if ( !this->hasOutputConnected() )
-		{
-			return;
-		}
-
-		this->forEachOutputs([&worldCoordinates, &worldVelocity] (const auto & output) {
-			output->updateDeviceFromCoordinates(worldCoordinates, worldVelocity);
-		});
-	}
-
-	void
-	Camera::updateProperties (bool isPerspectiveProjection, float distance, float fovOrNear) noexcept
-	{
-		if ( !this->hasOutputConnected() )
-		{
-			return;
-		}
-
-		this->forEachOutputs([isPerspectiveProjection, distance, fovOrNear] (const auto & output) {
-			output->updateProperties(isPerspectiveProjection, distance, fovOrNear);
-		});
-	}
-
-	void
-	Camera::onOutputDeviceConnected (AVConsole::AVManagers & /*managers*/, AbstractVirtualDevice & targetDevice) noexcept
-	{
-		/* Initialize the target device with coordinates and camera properties. */
-		targetDevice.updateDeviceFromCoordinates(this->getWorldCoordinates(), this->getWorldVelocity());
-
-		if ( this->isPerspectiveProjection() )
-		{
-			this->updateProperties(true, m_distance, m_fov);
-		}
-		else
-		{
-			this->updateProperties(false, m_distance, 0.0F);
-		}
 	}
 
 	bool
