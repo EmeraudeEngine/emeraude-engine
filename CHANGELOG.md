@@ -1,5 +1,22 @@
 # Development history log
 
+## Beta version 0.8.0
+ - Stable on all platforms
+ - Improve offscreen rendering (WIP)
+ - Minor fix for OpenAL initialization.
+ - Split the push constants between rendering and shadow casting.
+ - Fixed GPU freezing issue on Linux.
+ - New framebuffer system relying solely on the Vulkan swap chain.
+
+## Beta version 0.7.54
+ - Update project information.
+ - Improve command pools and buffers usage in the renderer.
+ - Improve sampler creation by purpose.
+ - Update ShadowMap render target.
+ - Simplify using namespace.
+ - Add Vulkan Memory Allocator.
+ - Update direct external dependencies.
+
 ## Beta version 0.7.53
  - Update the CommandPool with CommandBuffer usage, removing all the throwaway command buffers.
  - Fix a premature resource cleanup on GPU when exiting with the new CPU/GPU synchronization code.

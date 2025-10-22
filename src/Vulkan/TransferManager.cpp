@@ -226,7 +226,7 @@ namespace EmEn::Vulkan
 
 			if ( requiredBytes <= transferOperation.bytes() )
 			{
-				TraceDebug{ClassId} << "Re-use a buffer transfer operation of " << transferOperation.bytes() << " bytes for " << requiredBytes << " bytes! (A)";
+				//TraceDebug{ClassId} << "Re-use a buffer transfer operation of " << transferOperation.bytes() << " bytes for " << requiredBytes << " bytes! (A)";
 
 				operation = &transferOperation;
 
@@ -246,17 +246,17 @@ namespace EmEn::Vulkan
 
 				if ( requiredBytes > transferOperation.bytes() )
 				{
-					TraceDebug{ClassId} << "Resizing buffer transfer operation (" << transferOperation.bytes() << " bytes -> " << requiredBytes << " bytes) ...";
+					//TraceDebug{ClassId} << "Resizing buffer transfer operation (" << transferOperation.bytes() << " bytes -> " << requiredBytes << " bytes) ...";
 
 					if ( !transferOperation.expanseStagingBufferCapacityTo(requiredBytes) )
 					{
 						continue;
 					}
 				}
-				else
+				/*else
 				{
 					TraceDebug{ClassId} << "Re-use a buffer transfer operation of " << transferOperation.bytes() << " bytes for " << requiredBytes << " bytes! (B)";
-				}
+				}*/
 
 				operation = &transferOperation;
 
@@ -267,7 +267,7 @@ namespace EmEn::Vulkan
 		/* ... Or create a new one. */
 		if ( operation == nullptr )
 		{
-			TraceDebug{ClassId} << "Creating a new buffer transfer operation of " << requiredBytes << " bytes ...";
+			//TraceDebug{ClassId} << "Creating a new buffer transfer operation of " << requiredBytes << " bytes ...";
 
 			auto & transferOperation = m_bufferTransferOperations.emplace_back();
 
@@ -306,7 +306,7 @@ namespace EmEn::Vulkan
 
 			if ( requiredBytes <= transferOperation.bytes() )
 			{
-				TraceDebug{ClassId} << "Re-use an image transfer operation of " << transferOperation.bytes() << " bytes for " << requiredBytes << " bytes! (A)";
+				//TraceDebug{ClassId} << "Re-use an image transfer operation of " << transferOperation.bytes() << " bytes for " << requiredBytes << " bytes! (A)";
 
 				operation = &transferOperation;
 
@@ -326,17 +326,17 @@ namespace EmEn::Vulkan
 
 				if ( requiredBytes > transferOperation.bytes() )
 				{
-					TraceDebug{ClassId} << "Resizing image transfer operation (" << transferOperation.bytes() << " bytes -> " << requiredBytes << " bytes) ...";
+					//TraceDebug{ClassId} << "Resizing image transfer operation (" << transferOperation.bytes() << " bytes -> " << requiredBytes << " bytes) ...";
 
 					if ( !transferOperation.expanseStagingBufferCapacityTo(requiredBytes) )
 					{
 						continue;
 					}
 				}
-				else
+				/*else
 				{
 					TraceDebug{ClassId} << "Re-use an image transfer operation of " << transferOperation.bytes() << " bytes for " << requiredBytes << " bytes! (B)";
-				}
+				}*/
 
 				operation = &transferOperation;
 
@@ -347,7 +347,7 @@ namespace EmEn::Vulkan
 		/* ... Or create a new one. */
 		if ( operation == nullptr )
 		{
-			TraceDebug{ClassId} << "Creating an image buffer transfer operation of " << requiredBytes << " bytes ...";
+			//TraceDebug{ClassId} << "Creating an image buffer transfer operation of " << requiredBytes << " bytes ...";
 
 			auto & transferOperation = m_imageTransferOperations.emplace_back();
 

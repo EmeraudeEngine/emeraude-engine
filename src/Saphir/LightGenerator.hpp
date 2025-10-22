@@ -292,11 +292,11 @@ namespace EmEn::Saphir
 			 * @brief Generate the vertex shader code to fetch data from a shadow map.
 			 * @param generator A reference to the shader generator.
 			 * @param vertexShader A reference to the vertex shader.
-			 * @param isCubemap Define the shadow map as a cubemap.
+			 * @param shadowCubemap State the shadow map is a cubemap.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool generateVertexShaderShadowMapCode (Generator::Abstract & generator, VertexShader & vertexShader, bool isCubemap) const noexcept;
+			bool generateVertexShaderShadowMapCode (Generator::Abstract & generator, VertexShader & vertexShader, bool shadowCubemap) const noexcept;
 
 			/**
 			 * @brief Generates the ambient component light which is the same for every light.

@@ -204,7 +204,7 @@ namespace EmEn::Saphir
 			}
 
 			default:
-				// FIXME: Fix this this !
+				/* TODO: Fix this! */
 				return {0, 0, Declaration::MemoryLayout::Std140, nullptr, nullptr};
 		}
 	}
@@ -522,10 +522,10 @@ namespace EmEn::Saphir
 	}
 
 	bool
-	LightGenerator::generateVertexShaderShadowMapCode (Generator::Abstract & generator, VertexShader & vertexShader, bool isCubemap) const noexcept
+	LightGenerator::generateVertexShaderShadowMapCode (Generator::Abstract & generator, VertexShader & vertexShader, bool shadowCubemap) const noexcept
 	{
 		/* NOTE: For point light. */
-		if ( isCubemap )
+		if ( shadowCubemap )
 		{
 			if ( !vertexShader.declare(Declaration::StageOutput{generator.getNextShaderVariableLocation(), GLSL::FloatVector4, "DirectionWorldSpace", GLSL::Smooth}) )
 			{

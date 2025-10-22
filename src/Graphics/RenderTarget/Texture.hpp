@@ -151,8 +151,6 @@ namespace EmEn::Graphics::RenderTarget
 			void
 			updateViewRangesProperties (float fovOrNear, float distanceOrFar) noexcept override
 			{
-				//Tracer::info(ClassId, "[RENDER-TO-TEXTURE] Configured from render-target system.");
-
 				const auto & extent = this->extent();
 				const auto width = static_cast< float >(extent.width);
 				const auto height = static_cast< float >(extent.width);
@@ -446,8 +444,6 @@ namespace EmEn::Graphics::RenderTarget
 			void
 			updateVideoDeviceProperties (float fovOrNear, float distanceOrFar, bool isOrthographicProjection) noexcept override
 			{
-				//Tracer::info(ClassId, "[RENDER-TO-TEXTURE] Configured from the AVDevice.");
-
 				this->setOrthographicProjection(isOrthographicProjection);
 
 				this->updateViewRangesProperties(fovOrNear, distanceOrFar);
@@ -457,8 +453,6 @@ namespace EmEn::Graphics::RenderTarget
 			void
 			updateDeviceFromCoordinates (const Libs::Math::CartesianFrame< float > & worldCoordinates, const Libs::Math::Vector< 3, float > & worldVelocity) noexcept override
 			{
-				//Tracer::info(ClassId, "[RENDER-TO-TEXTURE] Coordinates updated from the AVDevice.");
-
 				m_viewMatrices.updateViewCoordinates(worldCoordinates, worldVelocity);
 			}
 

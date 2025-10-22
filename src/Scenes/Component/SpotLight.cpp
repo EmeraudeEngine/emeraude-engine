@@ -105,7 +105,7 @@ namespace EmEn::Scenes::Component
 		m_buffer[PositionOffset+1] = position.y();
 		m_buffer[PositionOffset+2] = position.z();
 
-		const auto & direction = worldCoordinates.backwardVector();
+		const auto direction = worldCoordinates.forwardVector();
 
 		m_buffer[DirectionOffset+0] = direction.x();
 		m_buffer[DirectionOffset+1] = direction.y();
@@ -152,7 +152,7 @@ namespace EmEn::Scenes::Component
 			m_buffer[PositionOffset + 1] = position.y();
 			m_buffer[PositionOffset + 2] = position.z();
 
-			const auto & direction = worldCoordinates.backwardVector();
+			const auto direction = worldCoordinates.forwardVector();
 
 			m_buffer[DirectionOffset + 0] = direction.x();
 			m_buffer[DirectionOffset + 1] = direction.y();

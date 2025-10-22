@@ -118,7 +118,7 @@ namespace EmEn::Saphir::Generator
 			~Abstract () override = default;
 
 			/**
-			 * @brief Enables debugging. This will print stats and generated source code.
+			 * @brief Enables debugging. This will print stats of the generated source code.
 			 * @param state The state
 			 * @return void
 			 */
@@ -465,8 +465,8 @@ namespace EmEn::Saphir::Generator
 			 * @note The render target descriptor set layout is already present.
 			 * @param renderer A reference to the renderer.
 			 * @param setIndexes A reference to a set indexes structure.
-			 * @param descriptorSetLayouts A reference to as list of descriptor set layouts to complete.
-			 * @param pushConstantRanges A reference to as list of push constant ranges to complete.
+			 * @param descriptorSetLayouts A reference to as a list of descriptor set layouts to complete.
+			 * @param pushConstantRanges A reference to as a list of push constant ranges to complete.
 			 * @return bool
 			 */
 			[[nodiscard]]

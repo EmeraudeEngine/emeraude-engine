@@ -211,7 +211,7 @@ namespace EmEn::Scenes
 			/**
 			 * @brief Points the backward (Negative Z axis) of the coordinates system toward the target.
 			 * @param target A position to look at.
-			 * @param flipZAxis Flip the final Z axis.
+			 * @param flipZAxis Flip the final Z axis. Normal behavior is false.
 			 * @return void
 			 */
 			virtual void lookAt (const Libs::Math::Vector< 3, float > & target, bool flipZAxis) noexcept = 0;

@@ -323,7 +323,7 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Returns a list of a scored graphics-capable device.
-			 * @param window A pointer to the current Window.
+			 * @param window A pointer to the current Window. This can be nullptr.
 			 * @param runMode The running mode desired for sorting devices.
 			 * @return std::map< size_t, std::shared_ptr< PhysicalDevice > >
 			 */

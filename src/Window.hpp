@@ -184,6 +184,17 @@ namespace EmEn
 			}
 
 			/**
+			 * @brief Returns whether the application started in window less mode.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isWindowLessMode () const noexcept
+			{
+				return m_windowLess;
+			}
+
+			/**
 			 * @brief Returns the handle of the GLFW window object.
 			 * @return GLFWwindow *
 			 */
@@ -465,7 +476,7 @@ namespace EmEn
 			}
 
 			/**
-			 * @brief Returns the position, in screen coordinates, of the upper-left corner of the content area of the window.
+			 * @brief Returns the position, in screen coordinates of the window content area upper-left corner.
 			 * @warning Do not use this function to respond to window events. Data are updated after the event in GLFW.  Use Window::state() instead.
 			 * @return std::array< int32_t, 2 >
 			 */
@@ -473,7 +484,7 @@ namespace EmEn
 			std::array< int32_t, 2 > getPosition () const noexcept;
 
 			/**
-			 * @brief Returns the size, in screen coordinates, of the content area of the window.
+			 * @brief Returns the size, in screen coordinates of the window content area.
 			 * @warning Do not use this function to respond to window events. Data are updated after the event in GLFW.  Use Window::state() instead.
 			 * @return std::array< uint32_t, 2 >
 			 */
@@ -552,7 +563,7 @@ namespace EmEn
 			void disableTitleBar () noexcept;
 
 			/**
-			 * @brief Returns the position, in screen coordinates, of the upper-left corner of the content area of the window.
+			 * @brief Returns the position, in screen coordinates of the window content area upper-left corner.
 			 * @param monitor A pointer to the monitor. Default primary.
 			 * @return std::array< int32_t, 2 >
 			 */

@@ -333,11 +333,11 @@ namespace EmEn::Vulkan
 			void destroyBaseSwapChain () noexcept;
 
 			/**
-			 * @brief Updates properties of the swap chain.
-			 * @note This version is used on window resize with previous parameters.
+			 * @brief Updates the view aspect ratio of the swap-chain.
+			 * @note This version can be used alone to refresh the aspect ratio when a window resize occurs.
 			 * @return void
 			 */
-			void updateSizeProperties () noexcept;
+			void updateViewProperties () noexcept;
 
 			/**
 			 * @brief Returns the best surface format.

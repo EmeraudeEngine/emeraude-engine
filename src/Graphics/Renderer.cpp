@@ -236,11 +236,13 @@ namespace EmEn::Graphics
 	bool
 	Renderer::onInitialize () noexcept
 	{
+		m_windowLess = m_primaryServices.arguments().isSwitchPresent("-W", "--window-less");
+
 		/* NOTE: Graphics device selection from the vulkan instance.
 		 * The Vulkan instance doesn't directly create a device on its initialization. */
 		if ( m_vulkanInstance.usable() )
 		{
-			m_device = m_vulkanInstance.getGraphicsDevice(&m_window);
+			m_device = m_vulkanInstance.getGraphicsDevice(m_windowLess ? nullptr : &m_window);
 
 			if ( m_device == nullptr )
 			{
@@ -273,10 +275,8 @@ namespace EmEn::Graphics
 		}
 
 		/* NOTE: Create the swap-chain for presenting images to the screen. */
-		if ( m_primaryServices.arguments().isSwitchPresent("-W", "--window-less") )
+		if ( m_windowLess )
 		{
-			m_windowLess = true;
-
 			/* NOTE: Check for multisampling. */
 			auto sampleCount = m_primaryServices.settings().getOrSetDefault< uint32_t >(VideoFramebufferSamplesKey, DefaultVideoFramebufferSamples);
 

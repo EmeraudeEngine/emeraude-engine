@@ -190,12 +190,13 @@ namespace EmEn::Graphics::RenderableInstance
 			return false;
 		}
 
+		/* NOTE: These tests only exist in debug mode because they are already performed beyond isReadyForInstantiation(). */
 		if constexpr ( IsDebug )
 		{
-			/* NOTE: This test only exists in debug mode because it is already performed beyond isReadyForInstantiation(). */
 			if ( layerCount == 0 )
 			{
 				std::stringstream errorMessage;
+
 				errorMessage <<
 					"The renderable interface has no layer ! It must have at least one. "
 					"Unable to setup the renderable instance '" << m_renderable->name() << "' for rendering.";
@@ -206,12 +207,10 @@ namespace EmEn::Graphics::RenderableInstance
 			}
 
 			/* NOTE: The geometry interface is the same for every layer of the renderable interface. */
-			const auto * geometry = m_renderable->geometry();
-
-			/* NOTE: This test only exists in debug mode because it is already performed beyond isReadyForInstantiation(). */
-			if ( geometry == nullptr )
+			if ( const auto * geometry = m_renderable->geometry(); geometry == nullptr )
 			{
 				std::stringstream errorMessage;
+
 				errorMessage <<
 					"The renderable interface has no geometry interface ! "
 					"Unable to setup the renderable instance '" << m_renderable->name() << "' for rendering.";

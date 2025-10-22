@@ -120,7 +120,7 @@ namespace EmEn::Vulkan
 					return false;
 				}
 
-				TraceDebug{ClassId} << "Initialize a buffer transfer operation for " << requiredBytes << " bytes (Buffer:" << targetBuffer.identifier() << ") ...";
+				//TraceDebug{ClassId} << "Initialize a buffer transfer operation for " << requiredBytes << " bytes (Buffer:" << targetBuffer.identifier() << ") ...";
 
 				const auto transferOperation = this->getAndReserveBufferTransferOperation(requiredBytes);
 
@@ -168,7 +168,7 @@ namespace EmEn::Vulkan
 					return false;
 				}
 
-				TraceDebug{ClassId} << "Initialize an image transfer operation for " << requiredBytes << " bytes (Image:" << targetImage.identifier() << ") ...";
+				//TraceDebug{ClassId} << "Initialize an image transfer operation for " << requiredBytes << " bytes (Image:" << targetImage.identifier() << ") ...";
 
 				const auto transferOperation = this->getAndReserveImageTransferOperation(requiredBytes);
 

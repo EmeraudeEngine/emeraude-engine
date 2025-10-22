@@ -44,16 +44,25 @@ namespace EmEn::PlatformSpecific::Desktop
 	constexpr auto TracerTag{"Commands"};
 
 	bool
-	runDesktopApplication (const std::string & argument) noexcept
+	runDesktopApplication (const std::string & executable, const std::string & argument) noexcept
 	{
-		if ( argument.empty() )
+		if ( executable.empty() )
 		{
-			Tracer::error(TracerTag, "No argument to open with desktop terminal.");
+			Tracer::error(TracerTag, "No executable to run!");
 
 			return false;
 		}
 
-		/*const std::array< const char *, 3 > args{"open", argument.data(), nullptr};
+		std::vector< const char * > args;
+		args.reserve(5);
+		args.push_back("open");
+		args.push_back("-a");
+		args.push_back(executable.data());
+		if ( !argument.empty() )
+		{
+			args.push_back(argument.data());
+		}
+		args.push_back(nullptr);
 
 		const auto [exitCode, errorCode] = reproc::run(args.data());
 
@@ -62,7 +71,20 @@ namespace EmEn::PlatformSpecific::Desktop
 			TraceError{TracerTag} << "Failed to run a subprocess : " << errorCode.message();
 
 			return false;
-		}*/
+		}
+
+		return true;
+	}
+
+	bool
+	runDefaultDesktopApplication (const std::string & argument) noexcept
+	{
+		if ( argument.empty() )
+		{
+			Tracer::error(TracerTag, "No argument to open with desktop terminal.");
+
+			return false;
+		}
 
 		std::stringstream commandStream;
 		commandStream << "open \"" << argument << "\"";

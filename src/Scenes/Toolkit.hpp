@@ -337,13 +337,13 @@ namespace EmEn::Scenes
 			/**
 			 * @brief Generates a new scene node pointing toward a location and using the cursor.
 			 * @param entityName A reference to a string for the entity name. Default auto-generated.
-			 * @param pointTo The position where the node points to.
+			 * @param lookAt The position where the node points to.
 			 * @param genPolicy Set the entity generation policy. Default, 'Simple'.
 			 * @param movable Set the movable property of the node. Default, 'true'.
 			 * @return std::shared_ptr< Node >
 			 */
 			[[nodiscard]]
-			std::shared_ptr< Node > generateNode (const Libs::Math::Vector< 3, float > & pointTo, const std::string & entityName = {}, GenPolicy genPolicy = GenPolicy::Simple, bool movable = true) noexcept;
+			std::shared_ptr< Node > generateNode (const Libs::Math::Vector< 3, float > & lookAt, const std::string & entityName = {}, GenPolicy genPolicy = GenPolicy::Simple, bool movable = true) noexcept;
 
 			/**
 			 * @brief Generates a new static entity using the cursor.
@@ -357,12 +357,12 @@ namespace EmEn::Scenes
 			/**
 			 * @brief Generates a new static entity pointing toward a location and using the cursor.
 			 * @param entityName A reference to a string for the entity name. Default auto-generated.
-			 * @param pointTo The position where the node points to.
+			 * @param lookAt The position where the node points to.
 			 * @param genPolicy Set the entity generation policy. Default, 'Simple'.
 			 * @return std::shared_ptr< StaticEntity >
 			 */
 			[[nodiscard]]
-			std::shared_ptr< StaticEntity > generateStaticEntity (const Libs::Math::Vector< 3, float > & pointTo, const std::string & entityName = {}, GenPolicy genPolicy = GenPolicy::Simple) noexcept;
+			std::shared_ptr< StaticEntity > generateStaticEntity (const Libs::Math::Vector< 3, float > & lookAt, const std::string & entityName = {}, GenPolicy genPolicy = GenPolicy::Simple) noexcept;
 
 			/**
 			 * @brief Generates a new entity using the cursor.
@@ -394,7 +394,7 @@ namespace EmEn::Scenes
 			 * @brief Generates a new entity pointing toward a location and using the cursor.
 			 * @note Shortcut to Toolkit::generateNode() and Toolkit:: generateStaticEntity().
 			 * @tparam entity_t The type of entity, a scene node or a static entity. Default, 'StaticEntity'.
-			 * @param pointTo The position where the entity points to.
+			 * @param lookAt The position where the entity points to.
 			 * @param entityName A reference to a string for the entity name. Default, auto-generated.
 			 * @param genPolicy Set the entity generation policy. Default, 'Simple'.
 			 * @return std::shared_ptr< entity_t >
@@ -402,16 +402,16 @@ namespace EmEn::Scenes
 			template< typename entity_t = StaticEntity >
 			[[nodiscard]]
 			std::shared_ptr< entity_t >
-			generateEntity (const Libs::Math::Vector< 3, float > & pointTo, const std::string & entityName = {}, GenPolicy genPolicy = GenPolicy::Simple) noexcept requires (std::is_base_of_v< AbstractEntity, entity_t >)
+			generateEntity (const Libs::Math::Vector< 3, float > & lookAt, const std::string & entityName = {}, GenPolicy genPolicy = GenPolicy::Simple) noexcept requires (std::is_base_of_v< AbstractEntity, entity_t >)
 			{
 				if constexpr ( std::is_same_v< entity_t, Node > )
 				{
-					return this->generateNode(pointTo, entityName, genPolicy);
+					return this->generateNode(lookAt, entityName, genPolicy);
 				}
 
 				if constexpr ( std::is_same_v< entity_t, StaticEntity > )
 				{
-					return this->generateStaticEntity(pointTo, entityName, genPolicy);
+					return this->generateStaticEntity(lookAt, entityName, genPolicy);
 				}
 
 				return nullptr;
@@ -422,17 +422,17 @@ namespace EmEn::Scenes
 			 * @tparam entity_t The type of entity, a scene node or a static entity. Default, 'StaticEntity'.
 			 * @param entityName The used for the node and the camera component.
 			 * @param fov The camera field of view expressed in degrees. Default 85.0.
-			 * @param pointTo A position where the camera should initially look at. Default, [0,0,0].
+			 * @param lookAt A position where the camera should initially look at. Default, [0,0,0].
 			 * @param primaryDevice Set the camera as the primary device. Default, 'false'.
 			 * @param showModel Enables a model to visualize the camera. Default, 'false'.
 			 * @return BuiltEntity< entity_t, Component::Camera >
 			 */
 			template< typename entity_t = StaticEntity >
 			BuiltEntity< entity_t, Component::Camera >
-			generatePerspectiveCamera (const std::string & entityName, float fov = DefaultGraphicsFieldOfView, const Libs::Math::Vector< 3, float > & pointTo = {}, bool primaryDevice = false, bool showModel = false) noexcept requires (std::is_base_of_v< AbstractEntity, entity_t >)
+			generatePerspectiveCamera (const std::string & entityName, float fov = DefaultGraphicsFieldOfView, const Libs::Math::Vector< 3, float > & lookAt = {}, bool primaryDevice = false, bool showModel = false) noexcept requires (std::is_base_of_v< AbstractEntity, entity_t >)
 			{
 				/* Create the entity. */
-				auto entity = this->generateEntity< entity_t >(pointTo, entityName);
+				auto entity = this->generateEntity< entity_t >(lookAt, entityName);
 
 				if ( entity == nullptr )
 				{
@@ -458,17 +458,17 @@ namespace EmEn::Scenes
 			 * @tparam entity_t The type of entity, a scene node or a static entity. Default, 'StaticEntity'.
 			 * @param entityName The used for the node and the camera component.
 			 * @param size The square size of the capture. Default 1.0.
-			 * @param pointTo A position where the camera should initially look at. Default, [0,0,0].
+			 * @param lookAt A position where the camera should initially look at. Default, [0,0,0].
 			 * @param primaryDevice Declare this camera as the primary video device. Default, 'false'.
 			 * @param showModel Display a model to visualize the camera. Default, 'false'.
 			 * @return BuiltEntity< Node, Component::Camera >
 			 */
 			template< typename entity_t = StaticEntity >
 			BuiltEntity< entity_t, Component::Camera >
-			generateOrthographicCamera (const std::string & entityName, float size = 1.0F, const Libs::Math::Vector< 3, float > & pointTo = {}, bool primaryDevice = false, bool showModel = false) noexcept requires (std::is_base_of_v< AbstractEntity, entity_t >)
+			generateOrthographicCamera (const std::string & entityName, float size = 1.0F, const Libs::Math::Vector< 3, float > & lookAt = {}, bool primaryDevice = false, bool showModel = false) noexcept requires (std::is_base_of_v< AbstractEntity, entity_t >)
 			{
 				/* Create the entity. */
-				auto entity = this->generateEntity< entity_t >(pointTo, entityName);
+				auto entity = this->generateEntity< entity_t >(lookAt, entityName);
 
 				if ( entity == nullptr )
 				{
@@ -523,7 +523,7 @@ namespace EmEn::Scenes
 			 * @brief Generates a directional light. Like the sun.
 			 * @tparam entity_t The type of entity, a scene node or a static entity. Default, 'StaticEntity'.
 			 * @param entityName The used for the node and the light emitter component.
-			 * @param pointTo Set where the ray should point. Default, world origin.
+			 * @param lookAt Set where the ray should point. Default, world origin.
 			 * @param color The color of the light. Default, white.
 			 * @param intensity The light intensity. Default 1.
 			 * @param shadowMapResolution The shadow map resolution. Default disabled.
@@ -531,10 +531,10 @@ namespace EmEn::Scenes
 			 */
 			template< typename entity_t = StaticEntity >
 			BuiltEntity< entity_t, Component::DirectionalLight >
-			generateDirectionalLight (const std::string & entityName, const Libs::Math::Vector< 3, float > & pointTo = {}, const Libs::PixelFactory::Color< float > & color = Libs::PixelFactory::White, float intensity = Component::AbstractLightEmitter::DefaultIntensity, uint32_t shadowMapResolution = 0) noexcept requires (std::is_base_of_v< AbstractEntity, entity_t >)
+			generateDirectionalLight (const std::string & entityName, const Libs::Math::Vector< 3, float > & lookAt = {}, const Libs::PixelFactory::Color< float > & color = Libs::PixelFactory::White, float intensity = Component::AbstractLightEmitter::DefaultIntensity, uint32_t shadowMapResolution = 0) noexcept requires (std::is_base_of_v< AbstractEntity, entity_t >)
 			{
 				/* Create the entity. */
-				auto entity = this->generateEntity< entity_t >(pointTo, entityName);
+				auto entity = this->generateEntity< entity_t >(lookAt, entityName);
 
 				if ( entity == nullptr )
 				{
@@ -584,7 +584,7 @@ namespace EmEn::Scenes
 			 * @brief Generates a spotlight. Like a ... spotlight ;).
 			 * @tparam entity_t The type of entity, a scene node or a static entity. Default, 'StaticEntity'.
 			 * @param entityName The used for the node and the light emitter component.
-			 * @param pointTo Set where the ray should point. Default, world origin.
+			 * @param lookAt Set where the ray should point. Default, world origin.
 			 * @param innerAngle Define the inner border of the light cone where the light will be emitted at 100% inside. Default 35°.
 			 * @param outerAngle Define the outer border of the light cone where no more light will be emitted outside this range. Default 40°.
 			 * @param color The color of the light. White by default.
@@ -595,10 +595,10 @@ namespace EmEn::Scenes
 			 */
 			template< typename entity_t = StaticEntity >
 			BuiltEntity< entity_t, Component::SpotLight >
-			generateSpotLight (const std::string & entityName, const Libs::Math::Vector< 3, float > & pointTo = {}, float innerAngle = Component::AbstractLightEmitter::DefaultInnerAngle, float outerAngle = Component::AbstractLightEmitter::DefaultOuterAngle, const Libs::PixelFactory::Color< float > & color = Libs::PixelFactory::White, float radius = Component::AbstractLightEmitter::DefaultRadius, float intensity = Component::AbstractLightEmitter::DefaultIntensity, uint32_t shadowMapResolution = 0) noexcept requires (std::is_base_of_v< AbstractEntity, entity_t >)
+			generateSpotLight (const std::string & entityName, const Libs::Math::Vector< 3, float > & lookAt = {}, float innerAngle = Component::AbstractLightEmitter::DefaultInnerAngle, float outerAngle = Component::AbstractLightEmitter::DefaultOuterAngle, const Libs::PixelFactory::Color< float > & color = Libs::PixelFactory::White, float radius = Component::AbstractLightEmitter::DefaultRadius, float intensity = Component::AbstractLightEmitter::DefaultIntensity, uint32_t shadowMapResolution = 0) noexcept requires (std::is_base_of_v< AbstractEntity, entity_t >)
 			{
 				/* Create the entity. */
-				auto entity = this->generateEntity< entity_t >(pointTo, entityName);
+				auto entity = this->generateEntity< entity_t >(lookAt, entityName);
 
 				if ( entity == nullptr )
 				{

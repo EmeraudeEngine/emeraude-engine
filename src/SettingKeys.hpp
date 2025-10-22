@@ -79,6 +79,14 @@ namespace EmEn
 	/* Core */
 	constexpr auto CoreShowInformationKey{"Core/ShowInformation"}; // Logs
 	constexpr auto DefaultCoreShowInformation{false};
+	constexpr auto TextEditorKey{"Core/TextEditor"};
+#if IS_LINUX
+	constexpr auto DefaultTextEditor{"gedit"};
+#elif IS_WINDOWS
+	constexpr auto DefaultTextEditor{"notepad"};
+#elif IS_MACOS
+	constexpr auto DefaultTextEditor{"TextEdit"};
+#endif
 
 		/* Tracer */
 		constexpr auto TracerPrintOnlyErrorsKey{"Core/Tracer/PrintOnlyErrors"};

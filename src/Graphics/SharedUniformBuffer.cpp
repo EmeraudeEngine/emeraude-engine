@@ -218,6 +218,7 @@ namespace EmEn::Graphics
 	bool
 	SharedUniformBuffer::addBuffer () noexcept
 	{
+		/* TODO: Check this code (this doesn't work with desktop AMD graphics card) */
 		const auto & limits = m_device->physicalDevice()->propertiesVK10().limits;
 		const auto chunkId = (std::stringstream{} << "Chunk#" << m_uniformBufferObjects.size()).str();
 

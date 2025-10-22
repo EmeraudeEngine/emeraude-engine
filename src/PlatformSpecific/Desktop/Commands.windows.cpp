@@ -29,8 +29,7 @@
 #if IS_WINDOWS
 
 /* STL inclusions. */
-#include <cstdlib>
-#include <sstream>
+#include <vector>
 
 /* Third-party inclusions. */
 #include <windows.h>
@@ -45,7 +44,42 @@ namespace EmEn::PlatformSpecific::Desktop
 	constexpr auto TracerTag{"Commands"};
 
 	bool
-	runDesktopApplication (const std::string & argument) noexcept
+	runDesktopApplication (const std::string & executable, const std::string & argument) noexcept
+	{
+		if ( executable.empty() )
+		{
+			Tracer::error(TracerTag, "No executable to run!");
+
+			return false;
+		}
+
+		std::vector< const char * > args;
+		args.reserve(7);
+		args.push_back("cmd.exe");
+		args.push_back("/c");
+		args.push_back("start");
+		args.push_back(""); /* Requested by "start" */
+		args.push_back(executable.data());
+		if ( !argument.empty() )
+		{
+			args.push_back(argument.data());
+		}
+		args.push_back(nullptr);
+
+		const auto [exitCode, errorCode] = reproc::run(args.data());
+
+		if ( exitCode != 0 )
+		{
+			TraceError{TracerTag} << "Failed to run a subprocess : " << errorCode.message();
+
+			return false;
+		}
+
+		return true;
+	}
+
+	bool
+	runDefaultDesktopApplication (const std::string & argument) noexcept
 	{
 		if ( argument.empty() )
 		{
@@ -54,7 +88,14 @@ namespace EmEn::PlatformSpecific::Desktop
 			return false;
 		}
 
-		const std::array< const char *, 3 > args{"start", argument.data(), nullptr};
+		std::vector< const char * > args;
+		args.reserve(6);
+		args.push_back("cmd.exe");
+		args.push_back("/c");
+		args.push_back("start");
+		args.push_back(""); /* Requested by "start" */
+		args.push_back(argument.data());
+		args.push_back(nullptr);
 
 		const auto [exitCode, errorCode] = reproc::run(args.data());
 

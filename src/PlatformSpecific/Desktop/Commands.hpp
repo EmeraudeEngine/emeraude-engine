@@ -37,6 +37,7 @@
 /* Forward declarations. */
 namespace EmEn
 {
+	class Settings;
 	class Window;
 }
 
@@ -68,7 +69,7 @@ namespace EmEn::PlatformSpecific::Desktop
 	bool openURL (const std::string & url) noexcept;
 
 	/**
-	 * @brief Tries to open a file in an external program.
+	 * @brief Tries to open a file with an external program.
 	 * @param filepath A reference to a path.
 	 * @return bool
 	 */
@@ -82,6 +83,14 @@ namespace EmEn::PlatformSpecific::Desktop
 	bool openFolder (const std::filesystem::path & filepath) noexcept;
 
 	/**
+	 * @brief Tries to open a file with an external text editor.
+	 * @param settings A reference to the settings.
+	 * @param filepath A reference to a path.
+	 * @return bool
+	 */
+	bool openTextFile (Settings & settings, const std::filesystem::path & filepath) noexcept;
+
+	/**
 	 * @brief Tries to open the directory of a file in an external file browser.
 	 * @param filepath A reference to a path.
 	 * @return bool
@@ -89,11 +98,21 @@ namespace EmEn::PlatformSpecific::Desktop
 	bool showInFolder (const std::filesystem::path & filepath) noexcept;
 
 	/**
-	 * @brief Tries to open the directory of a file in an external file browser.
+	 * @brief Runs a desktop application with arguments.
+	 * @note This is used to run an application aside to the user attention.
+	 * @param executable A reference to a string.
 	 * @param argument A reference to a string.
 	 * @return bool
 	 */
-	bool runDesktopApplication (const std::string & argument) noexcept;
+	bool runDesktopApplication (const std::string & executable, const std::string & argument) noexcept;
+
+	/**
+	 * @brief Tries to open a file using the default desktop application.
+	 * @note This is used to run an application aside for to the user attention.
+	 * @param argument A reference to a string.
+	 * @return bool
+	 */
+	bool runDefaultDesktopApplication (const std::string & argument) noexcept;
 
 	/**
 	 * @brief Makes the taskbar icon of the application flashing to alert the user.

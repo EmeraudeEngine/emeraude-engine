@@ -88,7 +88,7 @@ namespace EmEn::Scenes::Component
 			this->updateDeviceFromCoordinates(worldCoordinates, this->getWorldVelocity());
 		}
 
-		const auto & direction = worldCoordinates.backwardVector();
+		const auto direction = worldCoordinates.forwardVector();
 
 		m_buffer[DirectionOffset+0] = direction.x();
 		m_buffer[DirectionOffset+1] = direction.y();
@@ -133,7 +133,7 @@ namespace EmEn::Scenes::Component
 		{
 			const auto worldCoordinates = this->getWorldCoordinates();
 
-			const auto & direction = worldCoordinates.backwardVector();
+			const auto direction = worldCoordinates.forwardVector();
 
 			m_buffer[DirectionOffset + 0] = direction.x();
 			m_buffer[DirectionOffset + 1] = direction.y();

@@ -269,15 +269,15 @@ namespace EmEn
 				return;
 			}
 
-			if ( argument.value().empty() )
+			if ( argument.has_value() )
+			{
+				this->enableLogger(std::filesystem::path{argument.value()});
+			}
+			else
 			{
 				const auto logFilepath = this->generateLogFilepath(m_processName);
 
 				this->enableLogger(logFilepath);
-			}
-			else
-			{
-				this->enableLogger(std::filesystem::path{argument.value()});
 			}
 		}
 	}

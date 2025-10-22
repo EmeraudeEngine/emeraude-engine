@@ -28,6 +28,8 @@
 
 /* Local inclusions. */
 #include "Libs/Network/URL.hpp"
+#include "Settings.hpp"
+#include "SettingKeys.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::PlatformSpecific::Desktop
@@ -77,7 +79,7 @@ namespace EmEn::PlatformSpecific::Desktop
 			return false;
 		}
 
-		return runDesktopApplication(url);
+		return runDefaultDesktopApplication(url);
 	}
 
 	bool
@@ -90,7 +92,22 @@ namespace EmEn::PlatformSpecific::Desktop
 			return false;
 		}
 
-		return runDesktopApplication(filepath.string());
+		return runDefaultDesktopApplication(filepath.string());
+	}
+
+	bool
+	openTextFile (Settings & settings, const std::filesystem::path & filepath) noexcept
+	{
+		if ( !is_regular_file(filepath) )
+		{
+			TraceWarning{TracerTag} << "The file '" << filepath.string() << "' does not exist !";
+
+			return false;
+		}
+
+		const auto textEditor = settings.getOrSetDefault< std::string >(TextEditorKey, DefaultTextEditor);
+
+		return runDesktopApplication(textEditor, filepath.string());
 	}
 
 	bool
@@ -103,7 +120,7 @@ namespace EmEn::PlatformSpecific::Desktop
 			return false;
 		}
 
-		return runDesktopApplication(filepath.string());
+		return runDefaultDesktopApplication(filepath.string());
 	}
 
 	bool
@@ -116,6 +133,6 @@ namespace EmEn::PlatformSpecific::Desktop
 			return false;
 		}
 
-		return runDesktopApplication(filepath.parent_path().string());
+		return runDefaultDesktopApplication(filepath.parent_path().string());
 	}
 }

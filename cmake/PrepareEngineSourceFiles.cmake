@@ -358,7 +358,7 @@ else ()
             ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/Desktop/Dialog/SaveFile.mac.mm
             ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/Desktop/Commands.mac.mm
             # ROOT
-            ${CMAKE_CURRENT_SOURCE_DIR}/src/Window.mac.cpp
+            ${CMAKE_CURRENT_SOURCE_DIR}/src/Window.mac.mm
         )
     endif ()
 

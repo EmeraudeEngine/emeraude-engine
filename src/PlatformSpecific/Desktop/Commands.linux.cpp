@@ -43,7 +43,31 @@ namespace EmEn::PlatformSpecific::Desktop
 	constexpr auto TracerTag{"Commands"};
 
 	bool
-	runDesktopApplication (const std::string & argument) noexcept
+	runDesktopApplication (const std::string & executable, const std::string & argument) noexcept
+	{
+		if ( executable.empty() )
+		{
+			Tracer::error(TracerTag, "No executable to run!");
+
+			return false;
+		}
+
+		const std::array< const char *, 3 > args{executable.data(), argument.data(), nullptr};
+
+		const auto [exitCode, errorCode] = reproc::run(args.data());
+
+		if ( exitCode != 0 )
+		{
+			TraceError{TracerTag} << "Failed to run a subprocess : " << errorCode.message();
+
+			return false;
+		}
+
+		return true;
+	}
+
+	bool
+	runDefaultDesktopApplication (const std::string & argument) noexcept
 	{
 		if ( argument.empty() )
 		{

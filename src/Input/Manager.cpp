@@ -758,7 +758,10 @@ namespace EmEn::Input
 		}
 
 		/* Disables every callback. */
-		this->unlinkWindowCallbacks();
+		if ( !m_windowLess )
+		{
+			this->unlinkWindowCallbacks();
+		}
 
 		return true;
 	}

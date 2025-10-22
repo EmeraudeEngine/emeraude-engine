@@ -68,7 +68,10 @@ namespace EmEn
 			}
 		}
 
-		glfwSetCursor(window.handle(), cursorIt->second);
+		if ( !window.isWindowLessMode() )
+		{
+			glfwSetCursor(window.handle(), cursorIt->second);
+		}
 	}
 
 	void
@@ -87,7 +90,10 @@ namespace EmEn
 			cursorIt = m_customCursors.emplace(label, glfwCreateCursor(&cursorImage, hotSpot[0], hotSpot[1])).first;
 		}
 
-		glfwSetCursor(window.handle(), cursorIt->second);
+		if ( !window.isWindowLessMode() )
+		{
+			glfwSetCursor(window.handle(), cursorIt->second);
+		}
 	}
 
 	void
@@ -113,12 +119,20 @@ namespace EmEn
 			cursorIt = m_customCursors.emplace(label, glfwCreateCursor(&cursorImage, hotSpot[0], hotSpot[1])).first;
 		}
 
-		glfwSetCursor(window.handle(), cursorIt->second);
+		if ( !window.isWindowLessMode() )
+		{
+			glfwSetCursor(window.handle(), cursorIt->second);
+		}
 	}
 
 	void
 	CursorAtlas::resetCursor (Window & window) noexcept
 	{
+		if ( window.isWindowLessMode() )
+		{
+			return;
+		}
+
 		glfwSetCursor(window.handle(), nullptr);
 	}
 

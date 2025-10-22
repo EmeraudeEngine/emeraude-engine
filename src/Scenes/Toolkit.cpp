@@ -106,7 +106,7 @@ namespace EmEn::Scenes
 	}
 
 	std::shared_ptr< Node >
-	Toolkit::generateNode (const Vector< 3, float > & pointTo, const std::string & entityName, GenPolicy genPolicy, bool movable) noexcept
+	Toolkit::generateNode (const Vector< 3, float > & lookAt, const std::string & entityName, GenPolicy genPolicy, bool movable) noexcept
 	{
 		auto node = this->generateNode(entityName, genPolicy, movable);
 
@@ -115,7 +115,7 @@ namespace EmEn::Scenes
 			return nullptr;
 		}
 
-		node->lookAt(pointTo, true);
+		node->lookAt(lookAt, false);
 
 		return node;
 	}
@@ -156,7 +156,7 @@ namespace EmEn::Scenes
 	}
 
 	std::shared_ptr< StaticEntity >
-	Toolkit::generateStaticEntity (const Vector< 3, float > & pointTo, const std::string & entityName, GenPolicy genPolicy) noexcept
+	Toolkit::generateStaticEntity (const Vector< 3, float > & lookAt, const std::string & entityName, GenPolicy genPolicy) noexcept
 	{
 		auto staticEntity = this->generateStaticEntity(entityName, genPolicy);
 
@@ -165,7 +165,7 @@ namespace EmEn::Scenes
 			return nullptr;
 		}
 
-		staticEntity->lookAt(pointTo, true);
+		staticEntity->lookAt(lookAt, false);
 
 		return staticEntity;
 	}

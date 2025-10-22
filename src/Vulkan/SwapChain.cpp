@@ -232,7 +232,7 @@ namespace EmEn::Vulkan
 		}
 
 		/* This will rework the view-related matrices. */
-		this->updateSizeProperties();
+		this->updateViewProperties();
 
 		m_status = Status::Ready;
 
@@ -839,11 +839,11 @@ namespace EmEn::Vulkan
 		m_fovOrNear = fovOrNear;
 		m_distanceOrFar = distanceOrFar;
 
-		this->updateSizeProperties();
+		this->updateViewProperties();
 	}
 
 	void
-	SwapChain::updateSizeProperties () noexcept
+	SwapChain::updateViewProperties () noexcept
 	{
 		const auto & extent = this->extent();
 		const auto width = static_cast< float >(extent.width);

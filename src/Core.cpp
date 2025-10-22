@@ -1019,13 +1019,14 @@ namespace EmEn
 
 				case KeyF5 :
 				{
-					this->notifyUser("Opening settings file ...");
-
 					auto & settings = this->primaryServices().settings();
 
+					this->notifyUser("Opening settings file ...");
+
+					/* NOTE: First disable the settings auto-save to prevent erasing possible changes made by the user. */
 					settings.saveAtExit(false);
 
-					PlatformSpecific::Desktop::openFile(settings.filepath());
+					PlatformSpecific::Desktop::openTextFile(settings, settings.filepath());
 				}
 					return true;
 
