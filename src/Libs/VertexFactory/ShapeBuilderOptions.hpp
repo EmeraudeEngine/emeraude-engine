@@ -52,20 +52,26 @@ namespace EmEn::Libs::VertexFactory
 		public:
 
 			/**
-			 * @brief Constructs a shape builder options structure.
-			 * @param enableNormals Enable normals attributes. Default false.
-			 * @param enableTextureCoordinates Enable texture coordinates attributes. Default false.
-			 * @param vertexColorsEnabled Enable vertex colors attributes. Default false.
-			 * @param influencesEnabled Enable influences attributes. Default false.
-			 * @param weightsEnabled Enable weights attributes. Default false.
+			 * @brief Constructs a default shape builder options structure.
 			 */
-			ShapeBuilderOptions (bool enableNormals = false, bool enableTextureCoordinates = false, bool vertexColorsEnabled = false, bool influencesEnabled = false, bool weightsEnabled = false) noexcept
+			ShapeBuilderOptions () noexcept = default;
+
+			/**
+			 * @brief Constructs a shape builder options structure.
+			 * @param enableNormals Enable normals attributes.
+			 * @param enableTextureCoordinates Enable texture coordinates attributes.
+			 * @param vertexColorsEnabled Enable vertex colors attributes.
+			 * @param influencesEnabled Enable influences attributes.
+			 * @param weightsEnabled Enable weights attributes.
+			 */
+			ShapeBuilderOptions (bool enableNormals, bool enableTextureCoordinates, bool vertexColorsEnabled, bool influencesEnabled, bool weightsEnabled) noexcept
+				: m_normalsEnabled{enableNormals},
+				m_textureCoordinatesEnabled{enableTextureCoordinates},
+				m_vertexColorsEnabled{vertexColorsEnabled},
+				m_influencesEnabled{influencesEnabled},
+				m_weightsEnabled{weightsEnabled}
 			{
-				m_flags[NormalsEnabled] = enableNormals;
-				m_flags[TextureCoordinatesEnabled] = enableTextureCoordinates;
-				m_flags[VertexColorsEnabled] = vertexColorsEnabled;
-				m_flags[InfluencesEnabled] = influencesEnabled;
-				m_flags[WeightsEnabled] = weightsEnabled;
+
 			}
 
 			/**
@@ -76,7 +82,7 @@ namespace EmEn::Libs::VertexFactory
 			bool
 			isNormalsEnabled () const noexcept
 			{
-				return m_flags[NormalsEnabled];
+				return m_normalsEnabled;
 			}
 
 			/**
@@ -87,7 +93,7 @@ namespace EmEn::Libs::VertexFactory
 			bool
 			isTextureCoordinatesEnabled () const noexcept
 			{
-				return m_flags[TextureCoordinatesEnabled];
+				return m_textureCoordinatesEnabled;
 			}
 
 			/**
@@ -98,7 +104,7 @@ namespace EmEn::Libs::VertexFactory
 			bool
 			isVertexColorsEnabled () const noexcept
 			{
-				return m_flags[VertexColorsEnabled];
+				return m_vertexColorsEnabled;
 			}
 
 			/**
@@ -109,7 +115,7 @@ namespace EmEn::Libs::VertexFactory
 			bool
 			isInfluencesEnabled () const noexcept
 			{
-				return m_flags[InfluencesEnabled];
+				return m_influencesEnabled;
 			}
 
 			/**
@@ -120,7 +126,7 @@ namespace EmEn::Libs::VertexFactory
 			bool
 			isWeightsEnabled () const noexcept
 			{
-				return m_flags[WeightsEnabled];
+				return m_weightsEnabled;
 			}
 
 			/**
@@ -132,9 +138,9 @@ namespace EmEn::Libs::VertexFactory
 			void
 			enableGlobalNormal (const Math::Vector< 3, vertex_data_t > & normal) noexcept
 			{
-				m_flags[NormalsEnabled] = true;
-				m_flags[GlobalNormalEnabled] = true;
-				m_flags[NormalsGenerationEnabled] = false;
+				m_normalsEnabled = true;
+				m_globalNormalEnabled = true;
+				m_normalsGenerationEnabled = false;
 
 				m_globalNormal = normal;
 			}
@@ -147,7 +153,7 @@ namespace EmEn::Libs::VertexFactory
 			bool
 			isGlobalNormalEnabled () const noexcept
 			{
-				return m_flags[GlobalNormalEnabled];
+				return m_globalNormalEnabled;
 			}
 
 			/**
@@ -169,9 +175,9 @@ namespace EmEn::Libs::VertexFactory
 			void
 			enableNormalsGeneration () noexcept
 			{
-				m_flags[NormalsEnabled] = true;
-				m_flags[GlobalNormalEnabled] = false;
-				m_flags[NormalsGenerationEnabled] = true;
+				m_normalsEnabled = true;
+				m_globalNormalEnabled = false;
+				m_normalsGenerationEnabled = true;
 			}
 
 			/**
@@ -182,7 +188,7 @@ namespace EmEn::Libs::VertexFactory
 			bool
 			isNormalsGenerationEnabled () const noexcept
 			{
-				return m_flags[NormalsGenerationEnabled];
+				return m_normalsGenerationEnabled;
 			}
 
 			/**
@@ -192,8 +198,8 @@ namespace EmEn::Libs::VertexFactory
 			void
 			enableTextureCoordinatesGeneration () noexcept
 			{
-				m_flags[TextureCoordinatesEnabled] = true;
-				m_flags[TextureCoordinatesGenerationEnabled] = true;
+				m_textureCoordinatesEnabled = true;
+				m_textureCoordinatesGenerationEnabled = true;
 			}
 
 			/**
@@ -204,7 +210,7 @@ namespace EmEn::Libs::VertexFactory
 			bool
 			isTextureCoordinatesGenerationEnabled () const noexcept
 			{
-				return m_flags[TextureCoordinatesGenerationEnabled];
+				return m_textureCoordinatesGenerationEnabled;
 			}
 		
 			/**
@@ -216,9 +222,9 @@ namespace EmEn::Libs::VertexFactory
 			void
 			enableGlobalVertexColor (const Math::Vector< 4, vertex_data_t > & vertexColor) noexcept
 			{
-				m_flags[TextureCoordinatesEnabled] = true;
-				m_flags[GlobalVertexColorEnabled] = true;
-				m_flags[VertexColorsGenerationEnabled] = false;
+				m_textureCoordinatesEnabled = true;
+				m_globalVertexColorEnabled = true;
+				m_vertexColorsGenerationEnabled = false;
 
 				m_globalVertexColor = vertexColor;
 			}
@@ -243,7 +249,7 @@ namespace EmEn::Libs::VertexFactory
 			bool
 			isGlobalVertexColorEnabled () const noexcept
 			{
-				return m_flags[GlobalVertexColorEnabled];
+				return m_globalVertexColorEnabled;
 			}
 
 			/**
@@ -265,9 +271,9 @@ namespace EmEn::Libs::VertexFactory
 			void
 			enableVertexColorsGeneration () noexcept
 			{
-				m_flags[TextureCoordinatesEnabled] = true;
-				m_flags[GlobalVertexColorEnabled] = false;
-				m_flags[VertexColorsGenerationEnabled] = true;
+				m_textureCoordinatesEnabled = true;
+				m_globalVertexColorEnabled = false;
+				m_vertexColorsGenerationEnabled = true;
 			}
 
 			/**
@@ -278,7 +284,7 @@ namespace EmEn::Libs::VertexFactory
 			bool
 			isVertexColorsGenerationEnabled () const noexcept
 			{
-				return m_flags[VertexColorsGenerationEnabled];
+				return m_vertexColorsGenerationEnabled;
 			}
 
 			/**
@@ -289,7 +295,7 @@ namespace EmEn::Libs::VertexFactory
 			void
 			setUniformTextureCoordinates (bool state) noexcept
 			{
-				m_flags[UniformTextureCoordinates] = state;
+				m_uniformTextureCoordinates = state;
 			}
 
 			/**
@@ -348,7 +354,7 @@ namespace EmEn::Libs::VertexFactory
 			void
 			enableDataEconomy (bool state) noexcept
 			{
-				m_flags[DataEconomyEnabled] = state;
+				m_dataEconomyEnabled = state;
 			}
 
 			/**
@@ -359,7 +365,7 @@ namespace EmEn::Libs::VertexFactory
 			bool
 			dataEconomyEnabled () const noexcept
 			{
-				return m_flags[DataEconomyEnabled];
+				return m_dataEconomyEnabled;
 			}
 
 			/**
@@ -370,7 +376,7 @@ namespace EmEn::Libs::VertexFactory
 			void
 			setCenterAtBottom (bool state) noexcept
 			{
-				m_flags[CenterAtBottom] = state;
+				m_centerAtBottom = state;
 			}
 
 			/**
@@ -381,7 +387,7 @@ namespace EmEn::Libs::VertexFactory
 			bool
 			isCenteredAtBottom () const noexcept
 			{
-				return m_flags[CenterAtBottom];
+				return m_centerAtBottom;
 			}
 
 			/**
@@ -392,7 +398,7 @@ namespace EmEn::Libs::VertexFactory
 			void
 			enableGeometryFlipping (bool state) noexcept
 			{
-				m_flags[FlipGeometry] = state;
+				m_flipGeometry = state;
 			}
 
 			/**
@@ -403,7 +409,7 @@ namespace EmEn::Libs::VertexFactory
 			bool
 			isGeometryFlippingEnabled () const noexcept
 			{
-				return m_flags[FlipGeometry];
+				return m_flipGeometry;
 			}
 
 			/**
@@ -417,19 +423,20 @@ namespace EmEn::Libs::VertexFactory
 				m_globalNormal = {0.0, 0.0, -1.0};
 				m_textureCoordinatesMultiplier = {1.0, 1.0, 1.0};
 
-				m_flags[NormalsEnabled] = false;
-				m_flags[TextureCoordinatesEnabled] = false;
-				m_flags[VertexColorsEnabled] = false;
-				m_flags[InfluencesEnabled] = false;
-				m_flags[WeightsEnabled] = false;
-				m_flags[GlobalNormalEnabled] = false;
-				m_flags[NormalsGenerationEnabled] = false;
-				m_flags[GlobalVertexColorEnabled] = false;
-				m_flags[VertexColorsGenerationEnabled] = false;
-				m_flags[DataEconomyEnabled] = true;
-				m_flags[CenterAtBottom] = false;
-				m_flags[UniformTextureCoordinates] = false;
-				m_flags[FlipGeometry] = false;
+				m_normalsEnabled = false;
+				m_textureCoordinatesEnabled = false;
+				m_vertexColorsEnabled = false;
+				m_influencesEnabled = false;
+				m_weightsEnabled = false;
+				m_globalNormalEnabled = false;
+				m_normalsGenerationEnabled = false;
+				m_textureCoordinatesGenerationEnabled = false;
+				m_globalVertexColorEnabled = false;
+				m_vertexColorsGenerationEnabled = false;
+				m_dataEconomyEnabled = true;
+				m_centerAtBottom = false;
+				m_uniformTextureCoordinates = false;
+				m_flipGeometry = false;
 			}
 
 			/**
@@ -446,20 +453,20 @@ namespace EmEn::Libs::VertexFactory
 
 				return out <<
 					"Shape builder options:" "\n"
-					"Normals enabled : " << ( obj.m_flags[NormalsEnabled] ? "Yes" : "No" ) << "\n"
-					"Texture coordinates enabled : " << ( obj.m_flags[TextureCoordinatesEnabled] ? "Yes" : "No" ) << "\n"
-					"Vertex colors enabled : " << ( obj.m_flags[VertexColorsEnabled] ? "Yes" : "No" ) << "\n"
-					"Influences enabled : " << ( obj.m_flags[InfluencesEnabled] ? "Yes" : "No" ) << "\n"
-					"Weights enabled : " << ( obj.m_flags[WeightsEnabled] ? "Yes" : "No" ) << "\n"
-					"Use global normal : " << ( obj.m_flags[GlobalNormalEnabled] ? "Yes" : "No" ) << "\n"
+					"Normals enabled : " << ( obj.m_normalsEnabled ? "Yes" : "No" ) << "\n"
+					"Texture coordinates enabled : " << ( obj.m_textureCoordinatesEnabled ? "Yes" : "No" ) << "\n"
+					"Vertex colors enabled : " << ( obj.m_vertexColorsEnabled ? "Yes" : "No" ) << "\n"
+					"Influences enabled : " << ( obj.m_influencesEnabled ? "Yes" : "No" ) << "\n"
+					"Weights enabled : " << ( obj.m_weightsEnabled ? "Yes" : "No" ) << "\n"
+					"Use global normal : " << ( obj.m_globalNormalEnabled ? "Yes" : "No" ) << "\n"
 					"Global normal vector : " << obj.m_globalNormal << "\n"
-					"Generate normals : " << ( obj.m_flags[NormalsGenerationEnabled] ? "Yes" : "No" ) << "\n"
-					"Use global vertex color : " << ( obj.m_flags[GlobalVertexColorEnabled] ? "Yes" : "No" ) << "\n"
+					"Generate normals : " << ( obj.m_normalsGenerationEnabled ? "Yes" : "No" ) << "\n"
+					"Use global vertex color : " << ( obj.m_globalVertexColorEnabled ? "Yes" : "No" ) << "\n"
 					"Global vertex color : " << obj.m_globalVertexColor << "\n"
-					"Generate vertex colors : " << ( obj.m_flags[VertexColorsGenerationEnabled] ? "Yes" : "No" ) << "\n"
-					"Data economy enabled : " << ( obj.m_flags[DataEconomyEnabled] ? "Yes" : "No" ) << "\n"
-					"Center at bottom : " << ( obj.m_flags[CenterAtBottom] ? "Yes" : "No" ) << "\n"
-					"Uniform texture coordinates : " << ( obj.m_flags[UniformTextureCoordinates] ? "Yes" : "No" ) << "\n"
+					"Generate vertex colors : " << ( obj.m_vertexColorsGenerationEnabled ? "Yes" : "No" ) << "\n"
+					"Data economy enabled : " << ( obj.m_dataEconomyEnabled ? "Yes" : "No" ) << "\n"
+					"Center at bottom : " << ( obj.m_centerAtBottom ? "Yes" : "No" ) << "\n"
+					"Uniform texture coordinates : " << ( obj.m_uniformTextureCoordinates ? "Yes" : "No" ) << "\n"
 					"UVW multipliers : " << obj.m_textureCoordinatesMultiplier << "\n"
 				;
 			}
@@ -482,42 +489,22 @@ namespace EmEn::Libs::VertexFactory
 
 		private:
 
-			/* Flag names. */
-			static constexpr auto NormalsEnabled{0UL};
-			static constexpr auto TextureCoordinatesEnabled{1UL};
-			static constexpr auto VertexColorsEnabled{2UL};
-			static constexpr auto InfluencesEnabled{3UL};
-			static constexpr auto WeightsEnabled{4UL};
-			static constexpr auto GlobalNormalEnabled{5UL};
-			static constexpr auto NormalsGenerationEnabled{6UL};
-			static constexpr auto TextureCoordinatesGenerationEnabled{7UL};
-			static constexpr auto GlobalVertexColorEnabled{8UL};
-			static constexpr auto VertexColorsGenerationEnabled{9UL};
-			static constexpr auto DataEconomyEnabled{10UL};
-			static constexpr auto CenterAtBottom{11UL};
-			static constexpr auto UniformTextureCoordinates{12UL};
-			static constexpr auto FlipGeometry{13UL};
-
 			Math::Vector< 4, vertex_data_t > m_globalVertexColor{0.5, 0.5, 0.5, 1.0};
 			Math::Vector< 3, vertex_data_t > m_globalNormal{0.0, 0.0, -1.0};
 			Math::Vector< 3, vertex_data_t > m_textureCoordinatesMultiplier{1.0, 1.0, 1.0};
-			std::array< bool, 16 > m_flags{
-				false/*NormalsEnabled*/,
-				false/*TextureCoordinatesEnabled*/,
-				false/*VertexColorsEnabled*/,
-				false/*InfluencesEnabled*/,
-				false/*WeightsEnabled*/,
-				false/*GlobalNormalEnabled*/,
-				false/*NormalsGenerationEnabled*/,
-				false/*TextureCoordinatesGenerationEnabled*/,
-				false/*GlobalVertexColorEnabled*/,
-				false/*VertexColorsGenerationEnabled*/,
-				true/*DataEconomyEnabled*/,
-				false/*CenterAtBottom*/,
-				false/*UniformTextureCoordinates*/,
-				false/*FlipGeometry*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/
-			};
+			bool m_normalsEnabled{false};
+			bool m_textureCoordinatesEnabled{false};
+			bool m_vertexColorsEnabled{false};
+			bool m_influencesEnabled{false};
+			bool m_weightsEnabled{false};
+			bool m_globalNormalEnabled{false};
+			bool m_normalsGenerationEnabled{false};
+			bool m_textureCoordinatesGenerationEnabled{false};
+			bool m_globalVertexColorEnabled{false};
+			bool m_vertexColorsGenerationEnabled{false};
+			bool m_dataEconomyEnabled{true};
+			bool m_centerAtBottom{false};
+			bool m_uniformTextureCoordinates{false};
+			bool m_flipGeometry{false};
 	};
 }

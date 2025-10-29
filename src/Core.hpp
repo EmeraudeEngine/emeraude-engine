@@ -778,7 +778,7 @@ namespace EmEn
 			 * @brief Checks for a message to display in a dialog.
 			 * @return void
 			 */
-			void checkForDialogMessages () noexcept;
+			void displayCoreMessages () noexcept;
 
 			/**
 			 * @brief Overridable event when a shader fails to compile.
@@ -792,7 +792,7 @@ namespace EmEn
 			{
 				this->notifyUser(Libs::BlobTrait{} << "Shader '" << shaderIdentifier << "' compilation failed !");
 
-				m_messages.emplace(sourceCode);
+				m_coreMessages.emplace(sourceCode);
 			}
 
 			/**
@@ -909,7 +909,7 @@ namespace EmEn
 			size_t m_cycle{0};
 			StartupMode m_startupMode{StartupMode::Continue};
 			/* TODO: Set messages in ImGUI. */
-			std::queue< std::string > m_messages;
+			std::queue< std::string > m_coreMessages;
 			bool m_isMainLoopRunning{true};
 			bool m_isLogicsLoopRunning{true};
 			bool m_isRenderingLoopRunning{true};

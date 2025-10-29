@@ -89,7 +89,7 @@ namespace EmEn::Graphics::Geometry
 
 			/**
 			 * @brief Sets the global vertex color for mesh generation.
-			 * @note Vertex color attribute must be enabled, this method only change the color.
+			 * @note Vertex color attribute must be enabled, this method only changes the color.
 			 * @param globalVertexColor A reference to a PixelFactory color.
 			 * @return void
 			 */
@@ -98,7 +98,7 @@ namespace EmEn::Graphics::Geometry
 			{
 				m_globalVertexColor = globalVertexColor;
 
-				m_flags[GlobalVertexColorSet] = true;
+				m_globalVertexColorSet = true;
 			}
 
 			/**
@@ -179,7 +179,7 @@ namespace EmEn::Graphics::Geometry
 			void
 			setCenterAtBottom (bool state) noexcept
 			{
-				m_flags[CenterAtBottom] = state;
+				m_centerAtBottom = state;
 			}
 
 			/**
@@ -190,7 +190,7 @@ namespace EmEn::Graphics::Geometry
 			void
 			setFlipGeometry (bool state) noexcept
 			{
-				m_flags[FlipGeometry] = state;
+				m_flipGeometry = state;
 			}
 
 			/**
@@ -245,7 +245,7 @@ namespace EmEn::Graphics::Geometry
 			bool
 			isCenteredAtBottom () const noexcept
 			{
-				return m_flags[CenterAtBottom];
+				return m_centerAtBottom;
 			}
 
 			/**
@@ -256,7 +256,7 @@ namespace EmEn::Graphics::Geometry
 			bool
 			flipGeometry () const noexcept
 			{
-				return m_flags[FlipGeometry];
+				return m_flipGeometry;
 			}
 
 			/**
@@ -275,24 +275,12 @@ namespace EmEn::Graphics::Geometry
 
 		private:
 
-			/* Flag names. */
-			static constexpr auto CenterAtBottom{0UL};
-			static constexpr auto FlipGeometry{1UL};
-			static constexpr auto GlobalVertexColorSet{2UL};
-
 			VertexColorGenMode m_vertexColorGenMode{VertexColorGenMode::UseRandom};
 			Libs::PixelFactory::Color< float > m_globalVertexColor{Libs::PixelFactory::Magenta};
 			Libs::Math::Matrix< 4, float > m_transformMatrix;
 			Libs::Math::Vector< 3, float > m_textureCoordinatesMultiplier{1.0F, 1.0F, 1.0F};
-			std::array< bool, 8 > m_flags{
-				false/*CenterAtBottom*/,
-				false/*FlipGeometry*/,
-				false/*GlobalVertexColorSet*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/
-			};
+			bool m_centerAtBottom{false};
+			bool m_flipGeometry{false};
+			bool m_globalVertexColorSet{false};
 	};
 }

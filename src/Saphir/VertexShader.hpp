@@ -31,7 +31,6 @@
 #include <string>
 #include <vector>
 #include <set>
-#include <array>
 #include <utility>
 
 /* Local inclusions for inheritances. */
@@ -173,7 +172,7 @@ namespace EmEn::Saphir
 			void
 			enableInstancing () noexcept
 			{
-				m_flags[InstancingEnabled] = true;
+				m_instancingEnabled = true;
 			}
 
 			/**
@@ -184,7 +183,7 @@ namespace EmEn::Saphir
 			bool
 			isInstancingEnabled () const noexcept
 			{
-				return m_flags[InstancingEnabled];
+				return m_instancingEnabled;
 			}
 
 			/**
@@ -194,7 +193,7 @@ namespace EmEn::Saphir
 			void
 			enableAdvancedMatrices () noexcept
 			{
-				m_flags[AdvancedMatricesEnabled] = true;
+				m_advancedMatricesEnabled = true;
 			}
 
 			/**
@@ -205,7 +204,7 @@ namespace EmEn::Saphir
 			bool
 			isAdvancedMatricesEnabled () const noexcept
 			{
-				return m_flags[AdvancedMatricesEnabled];
+				return m_advancedMatricesEnabled;
 			}
 
 			/**
@@ -215,7 +214,7 @@ namespace EmEn::Saphir
 			void
 			enableBillBoarding () noexcept
 			{
-				m_flags[BillBoardingEnabled] = true;
+				m_billBoardingEnabled = true;
 			}
 
 			/**
@@ -226,7 +225,7 @@ namespace EmEn::Saphir
 			bool
 			isBillBoardingEnabled () const noexcept
 			{
-				return m_flags[BillBoardingEnabled];
+				return m_billBoardingEnabled;
 			}
 
 		private:
@@ -420,26 +419,14 @@ namespace EmEn::Saphir
 			[[nodiscard]]
 			static Declaration::Function generateGetBillBoardModelMatrixFunction () noexcept;
 
-			/* Flag names */
-			static constexpr auto InstancingEnabled{0UL};
-			static constexpr auto AdvancedMatricesEnabled{1UL};
-			static constexpr auto BillBoardingEnabled{2UL};
-
 			std::vector< std::pair< const char *, std::string > > m_uniquePreparations; // ie normalMatrix for VBO
 			std::vector< std::pair< const char *, VariableScope > > m_requests;
 			std::vector< Declaration::InputAttribute > m_inputAttributes;
 			std::vector< Declaration::StageOutput > m_stageOutputs;
 			std::vector< Declaration::OutputBlock > m_outputBlocks;
 			std::set< Graphics::VertexAttributeType > m_vertexAttributes;
-			std::array< bool, 8 > m_flags{
-				false/*InstancingEnabled*/,
-				false/*AdvancedMatricesEnabled*/,
-				false/*BillBoardingEnabled*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/
-			};
+			bool m_instancingEnabled{false};
+			bool m_advancedMatricesEnabled{false};
+			bool m_billBoardingEnabled{false};
 	};
 }

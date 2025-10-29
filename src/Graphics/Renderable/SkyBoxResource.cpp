@@ -59,7 +59,7 @@ namespace EmEn::Graphics::Renderable
 			}
 
 			return newMaterial.setManualLoadSuccess(true);
-		}, ComputesPrimaryTextureCoordinates | PrimaryTextureCoordinatesUses3D);
+		}, ComputePrimaryTextureCoordinates | PrimaryTextureCoordinatesUses3D);
 
 		if ( !this->setMaterial(materialResource) )
 		{
@@ -98,7 +98,7 @@ namespace EmEn::Graphics::Renderable
 			}
 
 			return newMaterial.setManualLoadSuccess(true);
-		}, ComputesPrimaryTextureCoordinates | PrimaryTextureCoordinatesUses3D);
+		}, ComputePrimaryTextureCoordinates | PrimaryTextureCoordinatesUses3D);
 
 		if ( !this->setMaterial(materialResource) )
 		{

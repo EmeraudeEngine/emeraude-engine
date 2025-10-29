@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_config.hpp"
+
 /* STL inclusions. */
 #include <cstddef>
 #include <array>
@@ -372,17 +375,11 @@ namespace EmEn::Input
 			void unlockPointer () noexcept;
 
 			/**
-			 * @brief Gets events from the system.
-			 * @return void
-			 */
-			void pollSystemEvents () const noexcept;
-
-			/**
 			 * @brief Waits for a system event.
 			 * @param until Sets a duration until the cancellation of the waiting.
 			 * @return void
 			 */
-			void waitSystemEvents (double until = 0.0) noexcept;
+			void waitSystemEvents (double until = 0.0) const noexcept;
 
 			/**
 			 * @brief Adds an object the keyboard can control, like a player.
@@ -423,6 +420,21 @@ namespace EmEn::Input
 			 * @return void
 			 */
 			void removeAllPointerListeners () noexcept;
+
+#if IS_MACOS
+			/**
+			 * @brief Installs macOS-specific gesture handlers (pinch-to-zoom, etc.).
+			 * @param window The GLFW window to monitor
+			 * @return void
+			 */
+			void installMacOSGestureHandlers (GLFWwindow * window) noexcept;
+
+			/**
+			 * @brief Removes macOS gesture handlers.
+			 * @return void
+			 */
+			void removeMacOSGestureHandlers () noexcept;
+#endif
 
 		private:
 

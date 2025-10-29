@@ -52,7 +52,14 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 			 * @param buttonLayout The button layout type. Default "OK".
 			 * @param messageType The type of message. Default "Info".
 			 */
-			Message (const std::string & title, std::string message, ButtonLayout buttonLayout = ButtonLayout::OK, MessageType messageType = MessageType::Info) noexcept;
+			Message (const std::string & title, std::string message, ButtonLayout buttonLayout = ButtonLayout::OK, MessageType messageType = MessageType::Info) noexcept
+				: Abstract{title},
+				m_message{std::move(message)},
+				m_buttonLayout{buttonLayout},
+				m_messageType{messageType}
+			{
+
+			}
 
 			/** @copydoc EmEn::PlatformSpecific::Desktop::Dialog::Abstract::execute() */
 			bool execute (Window * window) noexcept override;
@@ -62,7 +69,11 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 			 * @return Answer
 			 */
 			[[nodiscard]]
-			Answer getUserAnswer () const noexcept;
+			Answer
+			getUserAnswer () const noexcept
+			{
+				return m_userAnswer;
+			}
 
 		private:
 

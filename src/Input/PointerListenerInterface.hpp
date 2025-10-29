@@ -28,7 +28,6 @@
 
 /* STL inclusions. */
 #include <cstdint>
-#include <array>
 
 namespace EmEn::Input
 {
@@ -79,7 +78,7 @@ namespace EmEn::Input
 			void
 			enablePointerListening (bool state) noexcept
 			{
-				m_flags[Enabled] = state;
+				m_enabled = state;
 			}
 
 			/**
@@ -90,7 +89,7 @@ namespace EmEn::Input
 			bool
 			isListeningPointer () const noexcept
 			{
-				return m_flags[Enabled];
+				return m_enabled;
 			}
 
 			/**
@@ -101,7 +100,7 @@ namespace EmEn::Input
 			void
 			propagateProcessedEvent (bool state) noexcept
 			{
-				m_flags[PropagateProcessedEvent] = state;
+				m_propagateProcessedEvent = state;
 			}
 
 			/**
@@ -112,7 +111,7 @@ namespace EmEn::Input
 			bool
 			isPropagatingProcessedEvents () const noexcept
 			{
-				return m_flags[PropagateProcessedEvent];
+				return m_propagateProcessedEvent;
 			}
 
 			/**
@@ -122,7 +121,7 @@ namespace EmEn::Input
 			void
 			enableRelativeMode () noexcept
 			{
-				m_flags[IsRelativeMode] = true;
+				m_isRelativeMode = true;
 			}
 
 			/**
@@ -132,29 +131,29 @@ namespace EmEn::Input
 			void
 			enableAbsoluteMode () noexcept
 			{
-				m_flags[IsRelativeMode] = false;
+				m_isRelativeMode = false;
 			}
 
 			/**
-			 * @brief Returns whether the pointer use the relative mode.
+			 * @brief Returns whether the pointer uses the relative mode.
 			 * @return bool
 			 */
 			[[nodiscard]]
 			bool
 			isRelativeModeEnabled () const noexcept
 			{
-				return m_flags[IsRelativeMode];
+				return m_isRelativeMode;
 			}
 
 			/**
-			 * @brief Returns whether the pointer use the absolute mode.
+			 * @brief Returns whether the pointer uses the absolute mode.
 			 * @return bool
 			 */
 			[[nodiscard]]
 			bool
 			isAbsoluteModeEnabled () const noexcept
 			{
-				return !m_flags[IsRelativeMode];
+				return !m_isRelativeMode;
 			}
 
 			/**
@@ -165,7 +164,7 @@ namespace EmEn::Input
 			void
 			lockListenerOnMoveEvents (bool state) noexcept
 			{
-				m_flags[LockListenerOnMoveEvents] = state;
+				m_listenerLockedOnMoveEvents = state;
 			}
 
 			/**
@@ -176,7 +175,7 @@ namespace EmEn::Input
 			bool
 			isListenerLockedOnMoveEvents () const noexcept
 			{
-				return m_flags[LockListenerOnMoveEvents];
+				return m_listenerLockedOnMoveEvents;
 			}
 
 		protected:
@@ -185,10 +184,12 @@ namespace EmEn::Input
 			 * @brief Constructs a pointer input listener interface.
 			 * @param enableProcessedEventPropagation Enable the listener to propagate events event if they are processed.
 			 * @param enableRelativeMode Enable the relative coordinate mode.
-			 * @param enableMoveEventTracking Enable the move event tracking.
+			 * @param lockListenerOnMoveEvents Enable the move event tracking.
 			 */
-			PointerListenerInterface (bool enableProcessedEventPropagation, bool enableRelativeMode, bool enableMoveEventTracking) noexcept
-				: m_flags({true, enableProcessedEventPropagation, enableRelativeMode, enableMoveEventTracking, false, false, false, false})
+			PointerListenerInterface (bool enableProcessedEventPropagation, bool enableRelativeMode, bool lockListenerOnMoveEvents) noexcept
+				: m_propagateProcessedEvent{enableProcessedEventPropagation},
+				m_isRelativeMode{enableRelativeMode},
+				m_listenerLockedOnMoveEvents(lockListenerOnMoveEvents)
 			{
 
 			}
@@ -276,30 +277,19 @@ namespace EmEn::Input
 			 * @param positionY The Y position of the pointer according to absolute or relative mode.
 			 * @param xOffset The X offset of the wheel.
 			 * @param yOffset The Y offset of the wheel.
+			 * @param modifiers The keyboard modifiers pressed during the scroll (Ctrl, Shift, Alt, etc.).
 			 * @return bool
 			 */
 			virtual
 			bool
-			onMouseWheel (float /*positionX*/, float /*positionY*/, float /*xOffset*/, float /*yOffset*/) noexcept
+			onMouseWheel (float /*positionX*/, float /*positionY*/, float /*xOffset*/, float /*yOffset*/, int32_t /*modifiers*/ = 0) noexcept
 			{
 				return false;
 			}
 
-			/* Flag names. */
-			static constexpr auto Enabled{0UL};
-			static constexpr auto PropagateProcessedEvent{1UL};
-			static constexpr auto IsRelativeMode{2UL};
-			static constexpr auto LockListenerOnMoveEvents{3UL};
-
-			std::array< bool, 8 > m_flags{
-				true/*Enabled*/,
-				false/*PropagateProcessedEvent*/,
-				false/*IsRelativeMode*/,
-				false/*LockListenerOnMoveEvents*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/
-			};
+			bool m_enabled{true};
+			bool m_propagateProcessedEvent{false};
+			bool m_isRelativeMode{false};
+			bool m_listenerLockedOnMoveEvents{false};
 	};
 }

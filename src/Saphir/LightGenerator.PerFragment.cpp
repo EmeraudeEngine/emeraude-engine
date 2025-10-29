@@ -142,7 +142,7 @@ namespace EmEn::Saphir
 				"	" << LightFactor << " *= max(1.0 - dot(DR, DR), 0.0);" << Line::End <<
 				'}' << Line::End;
 
-			if ( m_flags[DiscardUnlitFragment] )
+			if ( m_discardUnlitFragment )
 			{
 				Code{fragmentShader} << "if ( " << LightFactor << " <= 0.0 ) { discard; }" << Line::End;
 			}
@@ -165,7 +165,7 @@ namespace EmEn::Saphir
 				"	" << LightFactor << " *= spotFactor;" << Line::End <<
 				'}' << Line::End;
 
-			if ( m_flags[DiscardUnlitFragment] )
+			if ( m_discardUnlitFragment )
 			{
 				Code{fragmentShader} << "if ( " << LightFactor << " <= 0.0 ) { discard; }" << Line::End;
 			}

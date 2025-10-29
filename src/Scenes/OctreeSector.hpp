@@ -87,9 +87,10 @@ namespace EmEn::Scenes
 			 */
 			OctreeSector (const Libs::Math::Vector< 3, float > & maximum, const Libs::Math::Vector< 3, float > & minimum, size_t maxElementPerSector = DefaultSectorElementLimit, bool enableAutoCollapse = false) noexcept
 				: AACuboid{maximum, minimum},
-				m_maxElementPerSector{std::max< size_t >(DefaultSectorElementLimit, maxElementPerSector)}
+				m_maxElementPerSector{std::max< size_t >(DefaultSectorElementLimit, maxElementPerSector)},
+				m_autoCollapseEnabled{enableAutoCollapse}
 			{
-				m_flags[AutoCollapseEnabled] = enableAutoCollapse;
+				
 			}
 
 			/**
@@ -103,9 +104,10 @@ namespace EmEn::Scenes
 				: AACuboid{maximum, minimum},
 				m_parentSector{parentSector},
 				m_slot{slot},
-				m_maxElementPerSector{parentSector->m_maxElementPerSector}
+				m_maxElementPerSector{parentSector->m_maxElementPerSector},
+				m_autoCollapseEnabled{parentSector->m_autoCollapseEnabled}
 			{
-				m_flags[AutoCollapseEnabled] = parentSector->m_flags[AutoCollapseEnabled];
+
 			}
 
 			/**
@@ -158,7 +160,7 @@ namespace EmEn::Scenes
 			bool
 			isLeaf () const noexcept
 			{
-				return !m_flags[IsExpanded];
+				return !m_isExpanded;
 			}
 
 			/**
@@ -169,7 +171,7 @@ namespace EmEn::Scenes
 			bool
 			isExpanded () const noexcept
 			{
-				return m_flags[IsExpanded];
+				return m_isExpanded;
 			}
 
 			/**
@@ -216,7 +218,7 @@ namespace EmEn::Scenes
 			bool
 			autoCollapseEnabled () const noexcept
 			{
-				return m_flags[AutoCollapseEnabled];
+				return m_autoCollapseEnabled;
 			}
 
 			/**
@@ -390,7 +392,7 @@ namespace EmEn::Scenes
 			void
 			reserve (size_t depth) noexcept
 			{
-				if ( m_flags[AutoCollapseEnabled] )
+				if ( m_autoCollapseEnabled )
 				{
 					Tracer::warning(ClassId, "Automatic empty subsectors removal is enabled !");
 
@@ -481,7 +483,7 @@ namespace EmEn::Scenes
 				}
 
 				/* NOTE: If the root sector is not split down, there is no need to check. */
-				if ( !m_flags[IsExpanded] )
+				if ( !m_isExpanded )
 				{
 					return true;
 				}
@@ -672,7 +674,7 @@ namespace EmEn::Scenes
 			getDeepestSubSector (const std::shared_ptr< element_t > & element) const noexcept
 			{
 				/* NOTE: If there is no subsector below this one. */
-				if ( !m_flags[IsExpanded] )
+				if ( !m_isExpanded )
 				{
 					return this;
 				}
@@ -703,17 +705,17 @@ namespace EmEn::Scenes
 			isStillLeaf () noexcept
 			{
 				/* If the number of elements exceeds the sector limit, we split down the sector. */
-				if ( !m_flags[IsExpanded] && m_elements.size() > m_maxElementPerSector )
+				if ( !m_isExpanded && m_elements.size() > m_maxElementPerSector )
 				{
 					this->expand();
 
 					return false;
 				}
 
-				if ( m_flags[AutoCollapseEnabled] )
+				if ( m_autoCollapseEnabled )
 				{
 					/* If the number of elements is below the sector limit, we merge the subsectors. */
-					if ( m_flags[IsExpanded] && m_elements.size() < m_maxElementPerSector / 2 )
+					if ( m_isExpanded && m_elements.size() < m_maxElementPerSector / 2 )
 					{
 						this->collapse();
 
@@ -880,7 +882,7 @@ namespace EmEn::Scenes
 					}
 				}
 
-				m_flags[IsExpanded] = true;
+				m_isExpanded = true;
 			}
 
 			/**
@@ -895,7 +897,7 @@ namespace EmEn::Scenes
 					subSector.reset();
 				}
 
-				m_flags[IsExpanded] = false;
+				m_isExpanded = false;
 			}
 
 			/**
@@ -992,15 +994,7 @@ namespace EmEn::Scenes
 			std::unordered_set< std::shared_ptr< element_t > > m_elements;
 			size_t m_slot{std::numeric_limits< size_t >::max()};
 			size_t m_maxElementPerSector;
-			std::array< bool, 8 > m_flags{
-				false/*IsExpanded*/,
-				false/*AutoCollapseEnabled*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/
-			};
+			const bool m_autoCollapseEnabled{false};
+			bool m_isExpanded{false};
 	};
 }

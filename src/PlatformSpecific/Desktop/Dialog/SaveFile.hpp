@@ -28,7 +28,6 @@
 
 /* STL inclusions. */
 #include <utility>
-#include <array>
 
 /* Local inclusions for inheritances. */
 #include "Abstract.hpp"
@@ -49,7 +48,12 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 			 * @brief Constructs a file box.
 			 * @param title A reference to a string.
 			 */
-			explicit SaveFile (const std::string & title);
+			explicit
+			SaveFile (const std::string & title) noexcept
+				: Abstract{title}
+			{
+
+			}
 
 			/** @copydoc EmEn::PlatformSpecific::Desktop::Dialog::Abstract::execute() */
 			bool execute (Window * window) noexcept override;
@@ -96,7 +100,7 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 			bool
 			hasBeenCanceled () const noexcept
 			{
-				return m_flags[Canceled];
+				return m_canceled;
 			}
 
 			/**
@@ -112,21 +116,9 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 
 		private:
 
-			/* Flag names. */
-			static constexpr auto Canceled{0UL};
-
 			std::vector< std::pair< std::string, std::vector< std::string > > > m_extensionFilters;
 			std::string m_filepath;
 			std::string m_defaultFilename{"untitled"};
-			std::array< bool, 8 > m_flags{
-				false/*Canceled*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/
-			};
+			bool m_canceled{false};
 	};
 }

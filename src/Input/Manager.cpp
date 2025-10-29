@@ -77,6 +77,11 @@ namespace EmEn::Input
 			glfwSetCursorEnterCallback(window, cursorEnterCallback);
 			glfwSetScrollCallback(window, scrollCallback);
 
+#if IS_MACOS
+			/* Install macOS-specific gesture handlers for pinch-to-zoom */
+			this->installMacOSGestureHandlers(window);
+#endif
+
 			/* TODO: Make it optional */
 			glfwSetInputMode(window, GLFW_STICKY_MOUSE_BUTTONS, GLFW_TRUE);
 
@@ -105,6 +110,11 @@ namespace EmEn::Input
 		glfwSetCursorPosCallback(window, nullptr);
 		glfwSetCursorEnterCallback(window, nullptr);
 		glfwSetScrollCallback(window, nullptr);
+
+#if IS_MACOS
+		/* Remove macOS gesture handlers */
+		this->removeMacOSGestureHandlers();
+#endif
 
 		/* Misc. listeners. */
 		glfwSetDropCallback(window, nullptr);
@@ -550,10 +560,42 @@ namespace EmEn::Input
 		const auto xOffsetF = static_cast< float >(xOffset);
 		const auto yOffsetF = static_cast< float >(yOffset);
 
+		/* NOTE: Retrieve keyboard modifiers (Ctrl, Shift, Alt, Super) during scroll */
+		int32_t modifiers = 0;
+		const auto leftCtrl = glfwGetKey(window, GLFW_KEY_LEFT_CONTROL);
+		const auto rightCtrl = glfwGetKey(window, GLFW_KEY_RIGHT_CONTROL);
+		const auto leftShift = glfwGetKey(window, GLFW_KEY_LEFT_SHIFT);
+		const auto rightShift = glfwGetKey(window, GLFW_KEY_RIGHT_SHIFT);
+
+		if ( leftCtrl == GLFW_PRESS || rightCtrl == GLFW_PRESS )
+		{
+			modifiers |= GLFW_MOD_CONTROL;
+		}
+		if ( leftShift == GLFW_PRESS || rightShift == GLFW_PRESS )
+		{
+			modifiers |= GLFW_MOD_SHIFT;
+		}
+		if ( glfwGetKey(window, GLFW_KEY_LEFT_ALT) == GLFW_PRESS || glfwGetKey(window, GLFW_KEY_RIGHT_ALT) == GLFW_PRESS )
+		{
+			modifiers |= GLFW_MOD_ALT;
+		}
+		if ( glfwGetKey(window, GLFW_KEY_LEFT_SUPER) == GLFW_PRESS || glfwGetKey(window, GLFW_KEY_RIGHT_SUPER) == GLFW_PRESS )
+		{
+			modifiers |= GLFW_MOD_SUPER;
+		}
+
+		/* DEBUG: Log modifiers */
+		TraceInfo{ClassId} <<
+			"[SCROLL DEBUG] xOffset=" << xOffset <<
+			", yOffset=" << yOffset <<
+			", leftCtrl=" << leftCtrl <<
+			", rightCtrl=" << rightCtrl <<
+			", modifiers=" << modifiers << '\n';
+
 		if ( s_instance->m_moveEventsTracking != nullptr )
 		{
 			/* NOTE: If the move is locked on one listener, checks for listening or relative mode is already done. */
-			s_instance->m_moveEventsTracking->onMouseWheel(position[0], position[1], xOffsetF, yOffsetF);
+			s_instance->m_moveEventsTracking->onMouseWheel(position[0], position[1], xOffsetF, yOffsetF, modifiers);
 		}
 		else
 		{
@@ -564,7 +606,7 @@ namespace EmEn::Input
 					continue;
 				}
 
-				const auto eventProcessed = listener->onMouseWheel(position[0], position[1], xOffsetF, yOffsetF);
+				const auto eventProcessed = listener->onMouseWheel(position[0], position[1], xOffsetF, yOffsetF, modifiers);
 
 				if ( eventProcessed && !listener->isPropagatingProcessedEvents() )
 				{
@@ -767,7 +809,7 @@ namespace EmEn::Input
 	}
 
 	void
-	Manager::pollSystemEvents () const noexcept
+	Manager::waitSystemEvents (double until) const noexcept
 	{
 		if ( !m_windowLess )
 		{
@@ -798,14 +840,7 @@ namespace EmEn::Input
 			}
 		}
 
-		glfwPollEvents();
-	}
-
-	void
-	Manager::waitSystemEvents (double until) noexcept
-	{
-		/* This function is blocking the
-		 * process by waiting for an event from a system. */
+		/* This function is blocking the process by waiting for an event from a system. */
 		if ( until > 0.0 )
 		{
 			glfwWaitEventsTimeout(until);

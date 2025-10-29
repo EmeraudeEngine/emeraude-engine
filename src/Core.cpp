@@ -40,7 +40,6 @@
 #include "Libs/Time/Time.hpp"
 #include "Libs/Version.hpp"
 #include "PlatformSpecific/Desktop/Dialog/Message.hpp"
-#include "PlatformSpecific/Desktop/Dialog/OpenFile.hpp"
 #include "PlatformSpecific/Desktop/Commands.hpp"
 #include "Tool/GeometryDataPrinter.hpp"
 #include "Tool/ShowVulkanInformation.hpp"
@@ -103,9 +102,6 @@ namespace EmEn
 
 		m_primaryServicesEnabled.clear();
 
-		/* FIXME: This shouldn't be here! */
-		m_resourceManager.unloadUnusedResources();
-
 		m_primaryServices.terminate();
 
 		Tracer::success(ClassId, "*** Core level terminated ***");
@@ -120,7 +116,8 @@ namespace EmEn
 		{
 			if ( m_paused )
 			{
-				std::this_thread::sleep_for(std::chrono::milliseconds{100});
+				/* NOTE: Fake an engine cycle update based on 30Hz. */
+				std::this_thread::sleep_for(std::chrono::milliseconds{33});
 
 				continue;
 			}
@@ -128,7 +125,8 @@ namespace EmEn
 			const auto top = std::chrono::steady_clock::now();
 
 			{
-				const Time::Elapsed::PrintScopeRealTimeThreshold stat{"logicsTask", 1000.0 / 60.0};
+				/* NOTE: Print a warning if this loop takes more than 16.66 ms, which means we are below 60Hz. */
+				const Time::Elapsed::PrintScopeRealTimeThreshold stat{"logicsTask", EngineUpdateCycleDurationMS< double >};
 
 				/* User-application cyclic update. */
 				this->onProcessLogics(m_cycle);
@@ -148,10 +146,8 @@ namespace EmEn
 				m_cycle++;
 			}
 
-			const auto duration = std::chrono::steady_clock::now() - top;
-
 			/* NOTE: Let sleep the thread until the next update. */
-			if ( duration < logicsUpdateFrequency )
+			if ( const auto duration = std::chrono::steady_clock::now() - top; duration < logicsUpdateFrequency )
 			{
 				std::this_thread::sleep_for(logicsUpdateFrequency - duration);
 			}
@@ -169,12 +165,14 @@ namespace EmEn
 		{
 			if ( m_paused )
 			{
-				std::this_thread::sleep_for(std::chrono::milliseconds{100});
+				/* NOTE: Fake a frame rendering time based on an ideal 30 FPS rendering. */
+				std::this_thread::sleep_for(std::chrono::milliseconds{33});
 
 				continue;
 			}
 
 			{
+				/* NOTE: Print a warning if this loop takes more than 33.33 ms, which means we are below 30 FPS. */
 				const Time::Elapsed::PrintScopeRealTimeThreshold stat{"renderingTask", 1000.0 / 30.0};
 
 				/* NOTE: Ask for a shared-access to the scene content prevening to lock the "logic thread" and draw the scene. */
@@ -197,8 +195,6 @@ namespace EmEn
 
 				frames++;
 			}
-
-			std::this_thread::sleep_for(std::chrono::milliseconds(1));
 		}
 
 		/* NOTE: Wait until the device has finished all his pending work. */
@@ -259,8 +255,7 @@ namespace EmEn
 		}
 
 		/* NOTE: Create the logic loop and the rendering loop into threads
-		 * automatically joined at the end of this function.
-		 * TODO: We can use std::jthread instead to auto join threads at the end, but macOS SDK 12.0 doesn't provide std::jthread. */
+		 * automatically joined at the end of this function. */
 		std::thread logicsThread{[this] {
 			this->logicsTask();
 		}};
@@ -290,12 +285,9 @@ namespace EmEn
 		/* NOTE: This is the engine main loop. */
 		while ( m_isMainLoopRunning )
 		{
-			const Time::Elapsed::PrintScopeRealTimeThreshold stat{"MainLoop", 1000.0 / 60};
-
 			/* EventInput: Update user events.
-			 * DirectInput: Copy the state of every input
-			 * device to use it in the engine cycle. */
-			m_inputManager.pollSystemEvents();
+			 * DirectInput: Copy the state of every input device to use it in the engine cycle. */
+			m_inputManager.waitSystemEvents(0.010);
 
 			/* NOTE: If the swap-chain has been refreshed, we refresh the application according to the new framebuffer. */
 			if ( m_graphicsRenderer.checkSwapChainRefresh() )
@@ -321,7 +313,7 @@ namespace EmEn
 					/* Let the child class get the call event from the main loop. */
 					this->onMainLoopCycle();
 
-					m_inputManager.waitSystemEvents(0.16);
+					m_inputManager.waitSystemEvents();
 				}
 
 				/* Restart all timers of the active scene. */
@@ -341,14 +333,11 @@ namespace EmEn
 					lastTop = currentTime;
 				}
 
-				if ( !m_messages.empty() )
+				if ( !m_coreMessages.empty() )
 				{
-					this->checkForDialogMessages();
+					this->displayCoreMessages();
 				}
 			}
-
-			/* TODO: Create a policy to throttle the main loop according to the engine usage. */
-			std::this_thread::sleep_for(std::chrono::milliseconds(1));
 		}
 
 		/* NOTE: Be sure all threads from the pool finish their work. */
@@ -377,11 +366,11 @@ namespace EmEn
 	}
 
 	void
-	Core::checkForDialogMessages () noexcept
+	Core::displayCoreMessages () noexcept
 	{
 		using namespace PlatformSpecific::Desktop::Dialog;
 
-		const auto error = m_messages.front();
+		const auto error = m_coreMessages.front();
 
 		Message dialog{
 			"Internal engine message !",
@@ -390,7 +379,7 @@ namespace EmEn
 			MessageType::Info
 		};
 
-		m_messages.pop();
+		m_coreMessages.pop();
 
 		this->pause();
 
@@ -906,11 +895,6 @@ namespace EmEn
 			system(command.c_str());
 		}
 
-		while ( glfwGetKey(m_window.handle(), GLFW_KEY_SPACE) == GLFW_PRESS)
-		{
-			glfwPollEvents();
-		}
-
 		while ( true )
 		{
 			glfwWaitEvents();
@@ -1023,7 +1007,7 @@ namespace EmEn
 
 					this->notifyUser("Opening settings file ...");
 
-					/* NOTE: First disable the settings auto-save to prevent erasing possible changes made by the user. */
+					/* NOTE: First, disable the settings auto-save to prevent erasing possible changes made by the user. */
 					settings.saveAtExit(false);
 
 					PlatformSpecific::Desktop::openTextFile(settings, settings.filepath());

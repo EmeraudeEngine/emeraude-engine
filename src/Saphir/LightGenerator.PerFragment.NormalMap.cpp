@@ -133,7 +133,7 @@ namespace EmEn::Saphir
 		}
 
 		/* Discard backward normal sample code. */
-		if ( !m_flags[UseStaticLighting] )
+		if ( !m_useStaticLighting )
 		{
 			Code{fragmentShader} << "if ( dot(-" << rayDirectionViewSpace << ", " << ShaderVariable::NormalViewSpace << ") < -0.33 ) { discard; }";
 		}
@@ -160,7 +160,7 @@ namespace EmEn::Saphir
 				"	" << LightFactor << " *= max(1.0 - dot(DR, DR), 0.0);" << Line::End <<
 				'}' << Line::End;
 
-			if ( m_flags[DiscardUnlitFragment] )
+			if ( m_discardUnlitFragment )
 			{
 				Code{fragmentShader} << "if ( " << LightFactor << " <= 0.0 ) { discard; }" << Line::End;
 			}
@@ -183,7 +183,7 @@ namespace EmEn::Saphir
 				"	" << LightFactor << " *= spotFactor;" << Line::End <<
 				'}' << Line::End;
 
-			if ( m_flags[DiscardUnlitFragment] )
+			if ( m_discardUnlitFragment )
 			{
 				Code{fragmentShader} << "if ( " << LightFactor << " <= 0.0 ) { discard; }" << Line::End;
 			}

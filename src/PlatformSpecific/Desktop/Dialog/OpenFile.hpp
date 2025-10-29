@@ -28,7 +28,6 @@
 
 /* STL inclusions. */
 #include <utility>
-#include <array>
 
 /* Local inclusions for inheritances. */
 #include "Abstract.hpp"
@@ -51,7 +50,14 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 			 * @param selectFolder Select folders instead of files. Default false.
 			 * @param multiSelect Allow multiple selection. Default false.
 			 */
-			explicit OpenFile (const std::string & title, bool selectFolder = false, bool multiSelect = false);
+			explicit
+			OpenFile (const std::string & title, bool selectFolder = false, bool multiSelect = false) noexcept
+				: Abstract{title},
+				m_selectFolder{selectFolder},
+				m_multiSelect{multiSelect}
+			{
+
+			}
 
 			/** @copydoc EmEn::PlatformSpecific::Desktop::Dialog::Abstract::execute() */
 			bool execute (Window * window) noexcept override;
@@ -98,7 +104,7 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 			bool
 			hasBeenCanceled () const noexcept
 			{
-				return m_flags[Canceled];
+				return m_canceled;
 			}
 
 			/**
@@ -114,22 +120,10 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 
 		private:
 
-			/* Flag names. */
-			static constexpr auto Canceled{0UL};
-			static constexpr auto SelectFolder{1UL};
-			static constexpr auto MultiSelect{2UL};
-
 			std::vector< std::pair< std::string, std::vector< std::string > > > m_extensionFilters;
 			std::vector< std::string > m_filepaths;
-			std::array< bool, 8 > m_flags{
-				false/*Canceled*/,
-				false/*SelectFolder*/,
-				false/*MultiSelect*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/
-			};
+			bool m_canceled{false};
+			bool m_selectFolder{false};
+			bool m_multiSelect{false};
 	};
 }

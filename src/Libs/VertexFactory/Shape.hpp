@@ -32,7 +32,6 @@
 /* STL inclusions. */
 #include <cstdint>
 #include <algorithm>
-#include <array>
 #include <iostream>
 #include <limits>
 #include <sstream>
@@ -195,7 +194,8 @@ namespace EmEn::Libs::VertexFactory
 				m_boundingBox.reset();
 				m_boundingSphere.reset();
 				m_farthestDistance = 0;
-				m_flags[TextureCoordinatesDeclared] = false;
+				m_textureCoordinatesDeclared = false;
+				m_computeEdges = false;
 			}
 
 			/**
@@ -399,7 +399,7 @@ namespace EmEn::Libs::VertexFactory
 			bool
 			isTextureCoordinatesAvailable () const noexcept
 			{
-				return m_flags[TextureCoordinatesDeclared];
+				return m_textureCoordinatesDeclared;
 			}
 
 			/**
@@ -452,7 +452,7 @@ namespace EmEn::Libs::VertexFactory
 					}
 				}
 
-				m_flags[TextureCoordinatesDeclared] = true;
+				m_textureCoordinatesDeclared = true;
 
 				return true;
 			}
@@ -960,8 +960,8 @@ namespace EmEn::Libs::VertexFactory
 			{
 				this->clear();
 
-				m_flags[TextureCoordinatesDeclared] = textureCoordinatesDeclared;
-				m_flags[ComputeEdges] = computeEdges;
+				m_textureCoordinatesDeclared = textureCoordinatesDeclared;
+				m_computeEdges = computeEdges;
 
 				if ( !buildFunction(m_groups, m_vertices, m_triangles) )
 				{
@@ -1369,7 +1369,7 @@ namespace EmEn::Libs::VertexFactory
 			{
 				m_vertices.emplace_back(position, normal, textureCoordinates);
 
-				m_flags[TextureCoordinatesDeclared] = true;
+				m_textureCoordinatesDeclared = true;
 
 				return static_cast< index_data_t >(m_vertices.size() - 1);
 			}
@@ -1885,14 +1885,7 @@ namespace EmEn::Libs::VertexFactory
 			/* NOTE: This is the max distance between [0,0,0] and the farthest vertex.
 			 * This is different from the fourth component of the centroid (m_boundingSphere). */
 			vertex_data_t m_farthestDistance{0};
-			std::array< bool, 8 > m_flags{
-				false/*TextureCoordinatesDeclared*/,
-				false/*ComputeEdges*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/
-			};
+			bool m_textureCoordinatesDeclared{false};
+			bool m_computeEdges{false};
 	};
 }

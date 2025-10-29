@@ -310,6 +310,7 @@ namespace EmEn
 
 		return out;
 	}
+
 	/**
 	 * @brief Stringifies the object.
 	 * @param obj A reference to the object to print.

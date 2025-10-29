@@ -119,9 +119,9 @@ namespace EmEn::Graphics::Material
 					return false;
 				}
 
-				this->enableFlag(TexturingEnabled);
+				this->enableFlag(TextureEnabled);
 				// FIXME: Check UVW channel number
-				this->enableFlag(UsesPrimaryTextureCoordinates);
+				this->enableFlag(UsePrimaryTextureCoordinates);
 			}
 				return true;
 
@@ -173,9 +173,9 @@ namespace EmEn::Graphics::Material
 					return false;
 				}
 
-				this->enableFlag(TexturingEnabled);
+				this->enableFlag(TextureEnabled);
 				// FIXME: Check UVW channel number
-				this->enableFlag(UsesPrimaryTextureCoordinates);
+				this->enableFlag(UsePrimaryTextureCoordinates);
 			}
 				return true;
 
@@ -226,9 +226,9 @@ namespace EmEn::Graphics::Material
 					return false;
 				}
 
-				this->enableFlag(TexturingEnabled);
+				this->enableFlag(TextureEnabled);
 				// FIXME: Check UVW channel number
-				this->enableFlag(UsesPrimaryTextureCoordinates);
+				this->enableFlag(UsePrimaryTextureCoordinates);
 
 				this->setShininess(FastJSON::getValue< float >(data[SpecularString], JKShininess).value_or(DefaultShininess));
 			}
@@ -285,9 +285,9 @@ namespace EmEn::Graphics::Material
 				}
 
 				this->enableFlag(BlendingEnabled);
-				this->enableFlag(TexturingEnabled);
+				this->enableFlag(TextureEnabled);
 				// FIXME: Check UVW channel number
-				this->enableFlag(UsesPrimaryTextureCoordinates);
+				this->enableFlag(UsePrimaryTextureCoordinates);
 
 				this->setOpacity(FastJSON::getValue< float >(data[OpacityString], JKAmount).value_or(DefaultOpacity));
 			}
@@ -342,9 +342,9 @@ namespace EmEn::Graphics::Material
 					return false;
 				}
 
-				this->enableFlag(TexturingEnabled);
+				this->enableFlag(TextureEnabled);
 				// FIXME: Check UVW channel number
-				this->enableFlag(UsesPrimaryTextureCoordinates);
+				this->enableFlag(UsePrimaryTextureCoordinates);
 
 				this->setAutoIlluminationAmount(FastJSON::getValue< float >(data[AutoIlluminationString], JKAmount).value_or(DefaultAutoIlluminationAmount));
 			}
@@ -387,9 +387,9 @@ namespace EmEn::Graphics::Material
 					return false;
 				}
 
-				this->enableFlag(TexturingEnabled);
+				this->enableFlag(TextureEnabled);
 				// FIXME: Check UVW channel number
-				this->enableFlag(UsesPrimaryTextureCoordinates);
+				this->enableFlag(UsePrimaryTextureCoordinates);
 
 				this->setNormalScale(FastJSON::getValue< float >(data[NormalString], JKScale).value_or(DefaultNormalScale));
 			}
@@ -432,9 +432,9 @@ namespace EmEn::Graphics::Material
 					return false;
 				}
 
-				this->enableFlag(TexturingEnabled);
+				this->enableFlag(TextureEnabled);
 				// FIXME: Check UVW channel number
-				this->enableFlag(UsesPrimaryTextureCoordinates);
+				this->enableFlag(UsePrimaryTextureCoordinates);
 
 				this->setReflectionAmount(FastJSON::getValue< float >(data[ReflectionString], JKAmount).value_or(DefaultReflectionAmount));
 			}
@@ -589,7 +589,7 @@ namespace EmEn::Graphics::Material
 			return false;
 		}
 
-		this->enableFlag(Created);
+		this->enableFlag(IsCreated);
 
 		return true;
 	}
@@ -768,7 +768,7 @@ namespace EmEn::Graphics::Material
 			return false;
 		}
 
-		m_flags[VideoMemoryUpdateRequested] = false;
+		m_videoMemoryUpdated = false;
 
 		return true;
 	}
@@ -809,7 +809,7 @@ namespace EmEn::Graphics::Material
 	bool
 	StandardResource::isCreated () const noexcept
 	{
-		return this->isFlagEnabled(Created);
+		return this->isFlagEnabled(IsCreated);
 	}
 
 	bool
@@ -833,7 +833,7 @@ namespace EmEn::Graphics::Material
 	uint32_t
 	StandardResource::frameCount () const noexcept
 	{
-		if ( !this->isFlagEnabled(Animated) )
+		if ( !this->isFlagEnabled(IsAnimated) )
 		{
 			return 1;
 		}
@@ -846,7 +846,7 @@ namespace EmEn::Graphics::Material
 	uint32_t
 	StandardResource::duration () const noexcept
 	{
-		if ( !this->isFlagEnabled(Animated) )
+		if ( !this->isFlagEnabled(IsAnimated) )
 		{
 			return 0;
 		}
@@ -1364,8 +1364,8 @@ namespace EmEn::Graphics::Material
 			return false;
 		}
 
-		this->enableFlag(TexturingEnabled);
-		this->enableFlag(UsesPrimaryTextureCoordinates);
+		this->enableFlag(TextureEnabled);
+		this->enableFlag(UsePrimaryTextureCoordinates);
 
 		return true;
 	}
@@ -1422,8 +1422,8 @@ namespace EmEn::Graphics::Material
 			return false;
 		}
 
-		this->enableFlag(TexturingEnabled);
-		this->enableFlag(UsesPrimaryTextureCoordinates);
+		this->enableFlag(TextureEnabled);
+		this->enableFlag(UsePrimaryTextureCoordinates);
 
 		return true;
 	}
@@ -1481,8 +1481,8 @@ namespace EmEn::Graphics::Material
 			return false;
 		}
 
-		this->enableFlag(TexturingEnabled);
-		this->enableFlag(UsesPrimaryTextureCoordinates);
+		this->enableFlag(TextureEnabled);
+		this->enableFlag(UsePrimaryTextureCoordinates);
 
 		this->setShininess(shininess);
 
@@ -1544,8 +1544,8 @@ namespace EmEn::Graphics::Material
 		}
 
 		this->enableFlag(BlendingEnabled);
-		this->enableFlag(TexturingEnabled);
-		this->enableFlag(UsesPrimaryTextureCoordinates);
+		this->enableFlag(TextureEnabled);
+		this->enableFlag(UsePrimaryTextureCoordinates);
 
 		this->setOpacity(amount);
 
@@ -1626,8 +1626,8 @@ namespace EmEn::Graphics::Material
 			return false;
 		}
 
-		this->enableFlag(TexturingEnabled);
-		this->enableFlag(UsesPrimaryTextureCoordinates);
+		this->enableFlag(TextureEnabled);
+		this->enableFlag(UsePrimaryTextureCoordinates);
 
 		this->setAutoIlluminationAmount(amount);
 
@@ -1660,8 +1660,8 @@ namespace EmEn::Graphics::Material
 			return false;
 		}
 
-		this->enableFlag(TexturingEnabled);
-		this->enableFlag(UsesPrimaryTextureCoordinates);
+		this->enableFlag(TextureEnabled);
+		this->enableFlag(UsePrimaryTextureCoordinates);
 
 		this->setNormalScale(scale);
 
@@ -1695,8 +1695,8 @@ namespace EmEn::Graphics::Material
 		}
 
 
-		this->enableFlag(TexturingEnabled);
-		this->enableFlag(UsesPrimaryTextureCoordinates);
+		this->enableFlag(TextureEnabled);
+		this->enableFlag(UsePrimaryTextureCoordinates);
 
 		this->setReflectionAmount(amount);
 
@@ -1724,7 +1724,7 @@ namespace EmEn::Graphics::Material
 		m_materialProperties[AmbientColorOffset+2] = color.blue();
 		m_materialProperties[AmbientColorOffset+3] = color.alpha();
 
-		m_flags[VideoMemoryUpdateRequested] = true;
+		m_videoMemoryUpdated = true;
 	}
 	
 	void
@@ -1742,7 +1742,7 @@ namespace EmEn::Graphics::Material
 		m_materialProperties[DiffuseColorOffset+2] = color.blue();
 		m_materialProperties[DiffuseColorOffset+3] = color.alpha();
 
-		m_flags[VideoMemoryUpdateRequested] = true;
+		m_videoMemoryUpdated = true;
 	}
 	
 	void
@@ -1760,7 +1760,7 @@ namespace EmEn::Graphics::Material
 		m_materialProperties[SpecularColorOffset+2] = color.blue();
 		m_materialProperties[SpecularColorOffset+3] = color.alpha();
 
-		m_flags[VideoMemoryUpdateRequested] = true;
+		m_videoMemoryUpdated = true;
 	}
 	
 	void
@@ -1778,7 +1778,7 @@ namespace EmEn::Graphics::Material
 		m_materialProperties[AutoIlluminationColorOffset+2] = color.blue();
 		m_materialProperties[AutoIlluminationColorOffset+3] = color.alpha();
 
-		m_flags[VideoMemoryUpdateRequested] = true;
+		m_videoMemoryUpdated = true;
 	}
 	
 	void
@@ -1793,7 +1793,7 @@ namespace EmEn::Graphics::Material
 
 		m_materialProperties[ShininessOffset] = std::abs(value);
 
-		m_flags[VideoMemoryUpdateRequested] = true;
+		m_videoMemoryUpdated = true;
 	}
 	
 	void
@@ -1808,7 +1808,7 @@ namespace EmEn::Graphics::Material
 
 		m_materialProperties[OpacityOffset] = clampToUnit(value);
 
-		m_flags[VideoMemoryUpdateRequested] = true;
+		m_videoMemoryUpdated = true;
 	}
 
 	void
@@ -1829,7 +1829,7 @@ namespace EmEn::Graphics::Material
 
 		m_materialProperties[AutoIlluminationAmountOffset] = std::abs(value);
 
-		m_flags[VideoMemoryUpdateRequested] = true;
+		m_videoMemoryUpdated = true;
 	}
 	
 	void
@@ -1844,7 +1844,7 @@ namespace EmEn::Graphics::Material
 
 		m_materialProperties[NormalScaleOffset] = value;
 
-		m_flags[VideoMemoryUpdateRequested] = true;
+		m_videoMemoryUpdated = true;
 	}
 	
 	void
@@ -1859,6 +1859,6 @@ namespace EmEn::Graphics::Material
 
 		m_materialProperties[ReflectionAmountOffset] = clampToUnit(value);
 
-		m_flags[VideoMemoryUpdateRequested] = true;
+		m_videoMemoryUpdated = true;
 	}
 }

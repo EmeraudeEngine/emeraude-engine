@@ -157,7 +157,7 @@ namespace EmEn::Overlay
 		}
 
 		/* NOTE: At first creation, we swap automatically. */
-		m_flags[ReadyToSwap] = true;
+		m_readyToSwap = true;
 
 		return this->swapFramebuffers();
 	}
@@ -220,8 +220,8 @@ namespace EmEn::Overlay
 			}
 
 			/* NOTE: The texture size is ok, but now the content is invalid. */
-			m_flags[VideoMemorySizeValid] = true;
-			m_flags[VideoMemoryUpToDate] = false;
+			m_videoMemorySizeValid = true;
+			m_videoMemoryUpToDate = false;
 
 			this->onSurfaceReadyForUsage();
 		}
@@ -243,7 +243,7 @@ namespace EmEn::Overlay
 				return false;
 			}
 
-			m_flags[VideoMemoryUpToDate] = true;
+			m_videoMemoryUpToDate = true;
 		}
 
 		m_framebufferAccess.unlock();
@@ -393,7 +393,7 @@ namespace EmEn::Overlay
 	{
 		const std::lock_guard< std::mutex > lock{m_framebufferAccess};
 
-		if ( !m_flags[ReadyToSwap] )
+		if ( !m_readyToSwap )
 		{
 			TraceWarning{ClassId} << "The surface '" << this->name() << "' is not ready to swap !";
 
@@ -415,7 +415,7 @@ namespace EmEn::Overlay
 		m_backImageView.swap(m_frontImageView);
 		m_backDescriptorSet.swap(m_frontDescriptorSet);
 
-		m_flags[ReadyToSwap] = false;
+		m_readyToSwap = false;
 
 		return true;
 	}
@@ -472,9 +472,9 @@ namespace EmEn::Overlay
 		}
 
 		/* NOTE: Prepare to swap manually or automatically. */
-		m_flags[ReadyToSwap] = true;
+		m_readyToSwap = true;
 
-		if ( m_flags[AutoSwapEnabled] )
+		if ( m_autoSwapEnabled )
 		{
 			return this->swapFramebuffers();
 		}

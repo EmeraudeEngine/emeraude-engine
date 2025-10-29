@@ -43,15 +43,17 @@ namespace EmEn::Graphics::Geometry
 	std::string
 	GenerationParameters::uniqueIdentifier () const noexcept
 	{
-		return (std::stringstream{} <<
+		std::stringstream output;
+		output <<
 			m_globalVertexColor << ',' <<
 			m_transformMatrix << ',' <<
 			m_textureCoordinatesMultiplier << ',' <<
 			this->flags() << ',' <<
-			m_flags[CenterAtBottom] << ',' <<
-			m_flags[FlipGeometry] << ',' <<
-			m_flags[GlobalVertexColorSet]
-		).str();
+			m_centerAtBottom << ',' <<
+			m_flipGeometry << ',' <<
+			m_globalVertexColorSet;
+
+		return output.str();
 	}
 
 	ShapeBuilderOptions< float >
@@ -69,7 +71,7 @@ namespace EmEn::Graphics::Geometry
 		options.enableGeometryFlipping(this->flipGeometry());
 
 		/* NOTE: Set the global vertex color only if the parameter received a color. */
-		if ( m_flags[GlobalVertexColorSet] )
+		if ( m_globalVertexColorSet )
 		{
 			options.enableGlobalVertexColor(m_globalVertexColor);
 		}

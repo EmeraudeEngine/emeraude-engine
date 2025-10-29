@@ -112,8 +112,8 @@ namespace EmEn::Graphics::Material
 					return this->setLoadSuccess(false);
 				}
 
-				this->enableFlag(TexturingEnabled);
-				this->enableFlag(UsesPrimaryTextureCoordinates);
+				this->enableFlag(TextureEnabled);
+				this->enableFlag(UsePrimaryTextureCoordinates);
 				if ( textureResource->request3DTextureCoordinates() )
 				{
 					this->enableFlag(PrimaryTextureCoordinatesUses3D);
@@ -216,7 +216,7 @@ namespace EmEn::Graphics::Material
 			return false;
 		}
 
-		this->enableFlag(Created);
+		this->enableFlag(IsCreated);
 
 		return true;
 	}
@@ -319,7 +319,7 @@ namespace EmEn::Graphics::Material
 	{
 		if ( m_textureComponent != nullptr && m_textureComponent->textureResource()->duration() > 0 )
 		{
-			this->enableFlag(Animated);
+			this->enableFlag(IsAnimated);
 		}
 	}
 
@@ -397,14 +397,12 @@ namespace EmEn::Graphics::Material
 		m_descriptorSet.reset();
 		m_sharedUniformBuffer.reset();
 		m_sharedUBOIndex = 0;
-		m_flags[DynamicColorEnabled] = false;
-		m_flags[EnableAutoIllumination] = false;
 	}
 
 	uint32_t
 	BasicResource::frameCount () const noexcept
 	{
-		if ( !this->isFlagEnabled(Animated) || m_textureComponent == nullptr )
+		if ( !this->isFlagEnabled(IsAnimated) || m_textureComponent == nullptr )
 		{
 			return 1;
 		}
@@ -422,7 +420,7 @@ namespace EmEn::Graphics::Material
 	uint32_t
 	BasicResource::duration () const noexcept
 	{
-		if ( !this->isFlagEnabled(Animated) || m_textureComponent == nullptr )
+		if ( !this->isFlagEnabled(IsAnimated) || m_textureComponent == nullptr )
 		{
 			return 0;
 		}
@@ -440,7 +438,7 @@ namespace EmEn::Graphics::Material
 	uint32_t
 	BasicResource::frameIndexAt (uint32_t sceneTime) const noexcept
 	{
-		if ( !this->isFlagEnabled(Animated) || m_textureComponent == nullptr )
+		if ( !this->isFlagEnabled(IsAnimated) || m_textureComponent == nullptr )
 		{
 			return 0;
 		}
@@ -484,7 +482,7 @@ namespace EmEn::Graphics::Material
 	std::string
 	BasicResource::fragmentColor () const noexcept
 	{
-		if ( m_flags[EnableOpacity] )
+		if ( this->isFlagEnabled(OpacityEnabled) )
 		{
 			std::stringstream surfaceColor;
 			surfaceColor << "vec4(" << SurfaceColor << ".rgb, " << MaterialUB(UniformBlock::Component::Opacity) << ')';
@@ -510,12 +508,12 @@ namespace EmEn::Graphics::Material
 		lightGenerator.declareSurfaceDiffuse(SurfaceColor);
 		lightGenerator.declareSurfaceSpecular(MaterialUB(UniformBlock::Component::SpecularColor), MaterialUB(UniformBlock::Component::Shininess));
 
-		if ( m_flags[EnableOpacity] )
+		if ( this->isFlagEnabled(OpacityEnabled) )
 		{
 			lightGenerator.declareSurfaceOpacity(MaterialUB(UniformBlock::Component::Opacity));
 		}
 
-		if ( m_flags[EnableAutoIllumination] )
+		if ( this->isFlagEnabled(AutoIlluminationEnabled) )
 		{
 			lightGenerator.declareSurfaceAutoIllumination(MaterialUB(UniformBlock::Component::AutoIlluminationAmount));
 		}
@@ -592,7 +590,7 @@ namespace EmEn::Graphics::Material
 
 		if ( this->usingVertexColors() )
 		{
-			if ( m_flags[DynamicColorEnabled] )
+			if ( this->isFlagEnabled(DynamicColorEnabled) )
 			{
 				Code{fragmentShader, Location::Top} << "const vec4 " << m_textureComponent->variableName() << " = texture(" << m_textureComponent->samplerName() << ", " << texCoordVariable << ") * " << MaterialUB(UniformBlock::Component::DiffuseColor) << " * " << ShaderVariable::PrimaryVertexColor << ';';
 			}
@@ -601,7 +599,7 @@ namespace EmEn::Graphics::Material
 				Code{fragmentShader, Location::Top} << "const vec4 " << m_textureComponent->variableName() << " = texture(" << m_textureComponent->samplerName() << ", " << texCoordVariable << ") * " << ShaderVariable::PrimaryVertexColor << ';';
 			}
 		}
-		else if ( m_flags[DynamicColorEnabled] )
+		else if ( this->isFlagEnabled(DynamicColorEnabled) )
 		{
 			Code{fragmentShader, Location::Top} << "const vec4 " << m_textureComponent->variableName() << " = texture(" << m_textureComponent->samplerName() << ", " << texCoordVariable << ") * " << MaterialUB(UniformBlock::Component::DiffuseColor) << ';';
 		}
@@ -618,7 +616,7 @@ namespace EmEn::Graphics::Material
 	{
 		if ( this->usingVertexColors() )
 		{
-			if ( m_flags[DynamicColorEnabled] )
+			if ( this->isFlagEnabled(DynamicColorEnabled) )
 			{
 				Code{fragmentShader, Location::Top} << "const vec4 " << SurfaceColor << " = " << MaterialUB(UniformBlock::Component::DiffuseColor) << " * " << ShaderVariable::PrimaryVertexColor << ';';
 			}
@@ -684,13 +682,13 @@ namespace EmEn::Graphics::Material
 			return;
 		}
 
-		this->enableFlag(UsesVertexColors);
+		this->enableFlag(UseVertexColors);
 	}
 
 	bool
 	BasicResource::setColor (const PixelFactory::Color< float > & color) noexcept
 	{
-		if ( this->isCreated() && !m_flags[DynamicColorEnabled] )
+		if ( this->isCreated() && !this->isFlagEnabled(DynamicColorEnabled) )
 		{
 			TraceWarning{ClassId} <<
 				"The resource '" << this->name() << "' is created without the dynamic color enabled ! "
@@ -704,7 +702,7 @@ namespace EmEn::Graphics::Material
 		m_materialProperties[DiffuseColorOffset+2] = color.blue();
 		m_materialProperties[DiffuseColorOffset+3] = color.alpha();
 
-		m_flags[DynamicColorEnabled] = true;
+		this->enableFlag(DynamicColorEnabled);
 
 		return this->updateVideoMemory();
 	}
@@ -731,8 +729,8 @@ namespace EmEn::Graphics::Material
 		m_textureComponent = std::make_unique< Component::Texture >(Uniform::PrimarySampler, SurfaceColor, texture);
 		m_textureComponent->enableAlpha(enableAlpha);
 
-		this->enableFlag(TexturingEnabled);
-		this->enableFlag(UsesPrimaryTextureCoordinates);
+		this->enableFlag(TextureEnabled);
+		this->enableFlag(UsePrimaryTextureCoordinates);
 		if ( texture->request3DTextureCoordinates() )
 		{
 			this->enableFlag(PrimaryTextureCoordinatesUses3D);
@@ -776,7 +774,7 @@ namespace EmEn::Graphics::Material
 	bool
 	BasicResource::setOpacity (float value) noexcept
 	{
-		if ( this->isCreated() && !m_flags[EnableOpacity] )
+		if ( this->isCreated() && !this->isFlagEnabled(OpacityEnabled) )
 		{
 			TraceWarning{ClassId} << "The resource '" << this->name() << "' is already created ! Changing the state of opacity or its value is disallowed.";
 
@@ -787,7 +785,7 @@ namespace EmEn::Graphics::Material
 
 		m_materialProperties[OpacityOffset] = clampToUnit(value);
 
-		m_flags[EnableOpacity] = true;
+		this->enableFlag(OpacityEnabled);
 
 		return this->updateVideoMemory();
 	}
@@ -795,7 +793,7 @@ namespace EmEn::Graphics::Material
 	bool
 	BasicResource::setAutoIlluminationAmount (float amount) noexcept
 	{
-		if ( this->isCreated() && !m_flags[EnableAutoIllumination] )
+		if ( this->isCreated() && !this->isFlagEnabled(AutoIlluminationEnabled) )
 		{
 			TraceWarning{ClassId} << "The resource '" << this->name() << "' is already created ! Unable to enable the auto-illumination or change the value.";
 
@@ -804,7 +802,7 @@ namespace EmEn::Graphics::Material
 
 		m_materialProperties[AutoIlluminationOffset] = amount;
 
-		m_flags[EnableAutoIllumination] = true;
+		this->enableFlag(AutoIlluminationEnabled);
 
 		return this->updateVideoMemory();
 	}

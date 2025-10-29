@@ -43,7 +43,7 @@ namespace EmEn::Saphir
 	std::string
 	LightGenerator::lightPositionWorldSpace () const noexcept
 	{
-		if ( m_flags[UseStaticLighting] )
+		if ( m_useStaticLighting )
 		{
 			return m_staticLighting->positionVec4();
 		}
@@ -54,7 +54,7 @@ namespace EmEn::Saphir
 	std::string
 	LightGenerator::lightDirectionWorldSpace () const noexcept
 	{
-		if ( m_flags[UseStaticLighting] )
+		if ( m_useStaticLighting )
 		{
 			return m_staticLighting->directionVec4();
 		}
@@ -65,7 +65,7 @@ namespace EmEn::Saphir
 	std::string
 	LightGenerator::ambientLightColor () const noexcept
 	{
-		if ( m_flags[UseStaticLighting] )
+		if ( m_useStaticLighting )
 		{
 			return m_staticLighting->ambientColorVec4();
 		}
@@ -76,7 +76,7 @@ namespace EmEn::Saphir
 	std::string
 	LightGenerator::ambientLightIntensity () const noexcept
 	{
-		if ( m_flags[UseStaticLighting] )
+		if ( m_useStaticLighting )
 		{
 			return std::to_string(m_staticLighting->ambientIntensity());
 		}
@@ -87,7 +87,7 @@ namespace EmEn::Saphir
 	std::string
 	LightGenerator::lightIntensity () const noexcept
 	{
-		if ( m_flags[UseStaticLighting] )
+		if ( m_useStaticLighting )
 		{
 			return std::to_string(m_staticLighting->intensity());
 		}
@@ -98,7 +98,7 @@ namespace EmEn::Saphir
 	std::string
 	LightGenerator::lightRadius () const noexcept
 	{
-		if ( m_flags[UseStaticLighting] )
+		if ( m_useStaticLighting )
 		{
 			return std::to_string(m_staticLighting->radius());
 		}
@@ -109,7 +109,7 @@ namespace EmEn::Saphir
 	std::string
 	LightGenerator::lightInnerCosAngle () const noexcept
 	{
-		if ( m_flags[UseStaticLighting] )
+		if ( m_useStaticLighting )
 		{
 			return std::to_string(m_staticLighting->innerCosAngle());
 		}
@@ -120,7 +120,7 @@ namespace EmEn::Saphir
 	std::string
 	LightGenerator::lightOuterCosAngle () const noexcept
 	{
-		if ( m_flags[UseStaticLighting] )
+		if ( m_useStaticLighting )
 		{
 			return std::to_string(m_staticLighting->outerCosAngle());
 		}
@@ -131,7 +131,7 @@ namespace EmEn::Saphir
 	std::string
 	LightGenerator::lightColor () const noexcept
 	{
-		if ( m_flags[UseStaticLighting] )
+		if ( m_useStaticLighting )
 		{
 			return m_staticLighting->colorVec4();
 		}
@@ -276,14 +276,14 @@ namespace EmEn::Saphir
 				return false;
 		}
 
-		if ( !m_flags[UseStaticLighting] && !vertexShader.declare(LightGenerator::getUniformBlock(lightSetIndex, 0, lightType, enableShadowMap)) )
+		if ( !m_useStaticLighting && !vertexShader.declare(LightGenerator::getUniformBlock(lightSetIndex, 0, lightType, enableShadowMap)) )
 		{
 			return false;
 		}
 
 		if ( generator.highQualityLightEnabled() )
 		{
-			if ( generator.normalMappingEnabled() && m_flags[UseNormalMapping] )
+			if ( generator.normalMappingEnabled() && m_useNormalMapping )
 			{
 				return this->generatePhongBlinnWithNormalMapVertexShader(generator, vertexShader, lightType, enableShadowMap);
 			}
@@ -317,7 +317,7 @@ namespace EmEn::Saphir
 
 				this->generateAmbientFragmentShader(fragmentShader);
 
-				if ( m_flags[UseOpacity] )
+				if ( m_useOpacity )
 				{
 					Code{fragmentShader, Location::Output} << m_fragmentColor << ".a = " << m_surfaceOpacityAmount << ';';
 				}
@@ -355,14 +355,14 @@ namespace EmEn::Saphir
 				return false;
 		}
 
-		if ( !m_flags[UseStaticLighting] && !fragmentShader.declare(LightGenerator::getUniformBlock(lightSetIndex, 0, lightType, enableShadowMap)) )
+		if ( !m_useStaticLighting && !fragmentShader.declare(LightGenerator::getUniformBlock(lightSetIndex, 0, lightType, enableShadowMap)) )
 		{
 			return false;
 		}
 
 		if ( generator.highQualityLightEnabled() )
 		{
-			if ( generator.normalMappingEnabled() && m_flags[UseNormalMapping] )
+			if ( generator.normalMappingEnabled() && m_useNormalMapping )
 			{
 				return this->generatePhongBlinnWithNormalMapFragmentShader(generator, fragmentShader, lightType, enableShadowMap);
 			}
@@ -455,7 +455,7 @@ namespace EmEn::Saphir
 			}
 		}
 
-		if ( m_flags[DiscardUnlitFragment] )
+		if ( m_discardUnlitFragment )
 		{
 			code << "if ( shadowFactor <= 0.0 ) { discard; }" "\n\n";
 		}
@@ -513,7 +513,7 @@ namespace EmEn::Saphir
 				"}" "\n\n";
 		}
 
-		if ( m_flags[DiscardUnlitFragment] )
+		if ( m_discardUnlitFragment )
 		{
 			code << "if ( shadowFactor <= 0.0 ) { discard; }" "\n\n";
 		}
@@ -580,7 +580,7 @@ namespace EmEn::Saphir
 			surfaceColor = m_surfaceAmbientColor;
 		}
 
-		if ( m_flags[EnableAmbientNoise] )
+		if ( m_enableAmbientNoise )
 		{
 			Declaration::Function random{"random", GLSL::Float};
 			random.addInParameter(GLSL::FloatVector2, "st");
@@ -598,7 +598,7 @@ namespace EmEn::Saphir
 			intensity = this->ambientLightIntensity();
 		}
 
-		if ( m_flags[UseReflection] )
+		if ( m_useReflection )
 		{
 			Code{fragmentShader} << m_fragmentColor << " += mix(" << surfaceColor << ", " << m_surfaceReflectionColor << ", " << m_surfaceReflectionAmount << ") * (" << this->ambientLightColor() << " * " << intensity << ");";
 		}
@@ -623,7 +623,7 @@ namespace EmEn::Saphir
 			return false;
 		}
 
-		if ( m_flags[UseOpacity] )
+		if ( m_useOpacity )
 		{
 			Code{fragmentShader, Location::Top} << "vec4 " << m_fragmentColor << " = vec4(0.0, 0.0, 0.0, " << m_surfaceOpacityAmount << ");";
 		}
@@ -632,14 +632,14 @@ namespace EmEn::Saphir
 			Code{fragmentShader, Location::Top} << "vec4 " << m_fragmentColor << " = vec4(0.0, 0.0, 0.0, 1.0);";
 		}
 
-		if ( m_flags[UseStaticLighting] )
+		if ( m_useStaticLighting )
 		{
 			this->generateAmbientFragmentShader(fragmentShader);
 		}
 
-		const auto finaleDiffuseFactor = m_flags[UseOpacity] ? diffuseFactor + " * " + m_surfaceOpacityAmount : diffuseFactor;
+		const auto finaleDiffuseFactor = m_useOpacity ? diffuseFactor + " * " + m_surfaceOpacityAmount : diffuseFactor;
 
-		if ( m_flags[UseReflection] )
+		if ( m_useReflection )
 		{
 			Code{fragmentShader} << m_fragmentColor << " += mix(" << m_surfaceDiffuseColor << ", " << m_surfaceReflectionColor << ", " << m_surfaceReflectionAmount << ") * (" << this->lightColor() << " * " << this->lightIntensity() << " * " << finaleDiffuseFactor << ");";
 		}
@@ -650,9 +650,9 @@ namespace EmEn::Saphir
 
 		if ( !m_surfaceSpecularColor.empty() )
 		{
-			const auto finaleSpecularFactor = m_flags[UseOpacity] ? specularFactor + " * " + m_surfaceOpacityAmount : specularFactor;
+			const auto finaleSpecularFactor = m_useOpacity ? specularFactor + " * " + m_surfaceOpacityAmount : specularFactor;
 
-			if ( m_flags[UseReflection] )
+			if ( m_useReflection )
 			{
 				Code{fragmentShader} << m_fragmentColor << " += mix(" << m_surfaceSpecularColor << ", " << m_surfaceReflectionColor << ", " << m_surfaceReflectionAmount << ") * (" << this->lightIntensity() << " * " << finaleSpecularFactor << ");";
 			}

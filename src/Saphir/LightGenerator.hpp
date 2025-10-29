@@ -77,7 +77,7 @@ namespace EmEn::Saphir
 			{
 				if ( m_renderPassType == Graphics::RenderPassType::SimplePass )
 				{
-					m_flags[UseStaticLighting] = true;
+					m_useStaticLighting = true;
 				}
 			}
 
@@ -101,7 +101,7 @@ namespace EmEn::Saphir
 			setStaticLighting (const StaticLighting * staticLighting) noexcept
 			{
 				m_staticLighting = staticLighting;
-				m_flags[UseStaticLighting] = true;
+				m_useStaticLighting = true;
 			}
 
 			/**
@@ -157,7 +157,7 @@ namespace EmEn::Saphir
 			{
 				m_surfaceOpacityAmount = amountVariableName;
 
-				m_flags[UseOpacity] = true;
+				m_useOpacity = true;
 			}
 
 			/**
@@ -181,7 +181,7 @@ namespace EmEn::Saphir
 			{
 				m_surfaceNormalVector = vectorVariableName;
 
-				m_flags[UseNormalMapping] = true;
+				m_useNormalMapping = true;
 			}
 
 			/**
@@ -206,7 +206,7 @@ namespace EmEn::Saphir
 					m_normalMapScale = scale;
 				}
 
-				m_flags[UseNormalMapping] = true;
+				m_useNormalMapping = true;
 			}
 
 			/**
@@ -229,7 +229,7 @@ namespace EmEn::Saphir
 					m_surfaceReflectionAmount = amountVariableName;
 				}
 
-				m_flags[UseReflection] = true;
+				m_useReflection = true;
 			}
 
 			/**
@@ -477,14 +477,6 @@ namespace EmEn::Saphir
 			[[nodiscard]]
 			static std::string variable (const char * componentName) noexcept;
 
-			/* Flag names. */
-			static constexpr auto DiscardUnlitFragment{0UL};
-			static constexpr auto UseStaticLighting{1UL};
-			static constexpr auto UseNormalMapping{2UL};
-			static constexpr auto UseOpacity{3UL};
-			static constexpr auto UseReflection{4UL};
-			static constexpr auto EnableAmbientNoise{5UL};
-
 			/* Light shader block-specific keys. */
 			static constexpr auto LightBlock{"LightBlock"};
 			static constexpr auto LightFactor{"lightFactor"};
@@ -513,16 +505,11 @@ namespace EmEn::Saphir
 			std::string m_surfaceReflectionColor;
 			std::string m_surfaceReflectionAmount;
 			const StaticLighting * m_staticLighting{nullptr};
-			/* FIXME: Remove unused flags. */
-			std::array< bool, 8 > m_flags{
-				true/*DiscardUnlitFragment*/,
-				false/*UseStaticLighting*/,
-				false/*UseNormalMapping*/,
-				false/*UseOpacity*/,
-				false/*UseReflection*/,
-				false/*EnableAmbientNoise*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/
-			};
+			bool m_discardUnlitFragment{true};
+			bool m_useStaticLighting{false};
+			bool m_useNormalMapping{false};
+			bool m_useOpacity{false};
+			bool m_useReflection{false};
+			bool m_enableAmbientNoise{false};
 	};
 }

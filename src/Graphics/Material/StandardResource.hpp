@@ -582,9 +582,6 @@ namespace EmEn::Graphics::Material
 			[[nodiscard]]
 			static const char * textCoords (const Component::Texture * component) noexcept;
 
-			/* Flag names. */
-			static constexpr auto VideoMemoryUpdateRequested{0UL};
-
 			/* Uniform buffer object offset to write data. */
 			static constexpr auto AmbientColorOffset{0UL};
 			static constexpr auto DiffuseColorOffset{4UL};
@@ -629,16 +626,8 @@ namespace EmEn::Graphics::Material
 			std::shared_ptr< SharedUniformBuffer > m_sharedUniformBuffer;
 			float m_alphaThresholdToDiscard{0.1F};
 			uint32_t m_sharedUBOIndex{0};
-			std::array< bool, 8 > m_flags{
-				true/*VideoMemoryUpdateRequested*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/
-			};
+			/* TODO: Unify video memory update mechanism between all materials. */
+			bool m_videoMemoryUpdated{false};
 	};
 }
 

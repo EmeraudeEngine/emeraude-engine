@@ -56,7 +56,7 @@ namespace EmEn
 
 		if ( m_arguments.isSwitchPresent("--verbose") )
 		{
-			m_flags[ShowInformation] = true;
+			m_showInformation = true;
 		}
 	}
 
@@ -65,10 +65,9 @@ namespace EmEn
 		m_arguments{argc, argv, true},
 		m_fileSystem{m_arguments, m_userInfo, identification, true},
 		m_settings{m_arguments, m_fileSystem, true},
-		m_networkManager{m_fileSystem, m_threadPool}
+		m_networkManager{m_fileSystem, m_threadPool},
+		m_childProcess{true}
 	{
-		m_flags[ChildProcess] = true;
-
 		/* NOTE: This must be done immediately! */
 		if ( m_arguments.initialize(m_servicesEnabled) )
 		{
@@ -113,7 +112,7 @@ namespace EmEn
 
 		if ( m_arguments.isSwitchPresent("--verbose") )
 		{
-			m_flags[ShowInformation] = true;
+			m_showInformation = true;
 		}
 	}
 
@@ -122,10 +121,9 @@ namespace EmEn
 		m_arguments{argc, wargv, true},
 		m_fileSystem{m_arguments, m_userInfo, identification, true},
 		m_settings{m_arguments, m_fileSystem, true},
-		m_networkManager{m_fileSystem, m_threadPool}
+		m_networkManager{m_fileSystem, m_threadPool},
+		m_childProcess{true}
 	{
-		m_flags[ChildProcess] = true;
-
 		/* NOTE: This must be done immediately! */
 		if ( m_arguments.initialize(m_servicesEnabled) )
 		{

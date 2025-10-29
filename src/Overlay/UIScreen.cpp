@@ -352,12 +352,12 @@ namespace EmEn::Overlay
 	}
 
 	bool
-	UIScreen::onMouseWheel (float positionX, float positionY, float xOffset, float yOffset) const noexcept
+	UIScreen::onMouseWheel (float positionX, float positionY, float xOffset, float yOffset, int32_t modifiers) const noexcept
 	{
-		const auto dispatchEvent = [positionX, positionY, xOffset, yOffset] (const std::shared_ptr< Surface > & surface) -> bool {
+		const auto dispatchEvent = [positionX, positionY, xOffset, yOffset, modifiers] (const std::shared_ptr< Surface > & surface) -> bool {
 			if ( surface->isVisible() && surface->isListeningPointer() && surface->isBelowPoint(positionX, positionY) )
 			{
-				return surface->onMouseWheel(positionX, positionY, xOffset, yOffset);
+				return surface->onMouseWheel(positionX, positionY, xOffset, yOffset, modifiers);
 			}
 
 			return false;

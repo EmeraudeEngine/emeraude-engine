@@ -428,7 +428,7 @@ namespace EmEn::Libs::VertexFactory
 				ShapeBuilder builder{geometry, options};
 				builder.beginConstruction(ConstructionMode::Triangles);
 
-				if ( m_flags[UseMDLNormal] )
+				if ( m_useNormal )
 				{
 					builder.options().enableDataEconomy(false);
 
@@ -509,13 +509,8 @@ namespace EmEn::Libs::VertexFactory
 			std::vector< mdl_texCoord_t > m_textureCoordinates;
 			std::vector< mdl_triangle_t > m_triangles;
 			std::vector< mdl_frame_t > m_frames;
-			std::vector< uint32_t > m_texID{};
-			int32_t m_iSkin = 0;
-			std::array< bool, 4 > m_flags{
-				true/*UseMDLNormal*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-			};
+			std::vector< uint32_t > m_texID;
+			int32_t m_skin{0};
+			bool m_useNormal{true};
 	};
 }

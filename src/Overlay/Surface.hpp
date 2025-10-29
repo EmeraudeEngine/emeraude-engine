@@ -72,7 +72,7 @@ namespace EmEn::Overlay
 				m_rectangle{rectangle},
 				m_depth{depth}
 			{
-				m_flags[IsVisible] = visible;
+				m_isVisible = visible;
 
 				this->updateModelMatrix();
 			}
@@ -265,7 +265,7 @@ namespace EmEn::Overlay
 			void
 			show () noexcept
 			{
-				m_flags[IsVisible] = true;
+				m_isVisible = true;
 			}
 
 			/**
@@ -275,7 +275,7 @@ namespace EmEn::Overlay
 			void
 			hide () noexcept
 			{
-				m_flags[IsVisible] = false;
+				m_isVisible = false;
 			}
 
 			/**
@@ -286,7 +286,7 @@ namespace EmEn::Overlay
 			bool
 			isVisible () const noexcept
 			{
-				return m_flags[IsVisible];
+				return m_isVisible;
 			}
 
 			/**
@@ -297,7 +297,7 @@ namespace EmEn::Overlay
 			bool
 			isVideoMemorySizeValid () const noexcept
 			{
-				return m_flags[VideoMemorySizeValid];
+				return m_videoMemorySizeValid;
 			}
 
 			/**
@@ -308,7 +308,7 @@ namespace EmEn::Overlay
 			bool
 			isVideoMemoryUpToDate () const noexcept
 			{
-				return m_flags[VideoMemoryUpToDate];
+				return m_videoMemoryUpToDate;
 			}
 
 			/**
@@ -318,8 +318,8 @@ namespace EmEn::Overlay
 			void
 			invalidate () noexcept
 			{
-				m_flags[VideoMemorySizeValid] = false;
-				m_flags[VideoMemoryUpToDate] = false;
+				m_videoMemorySizeValid = false;
+				m_videoMemoryUpToDate = false;
 			}
 
 			/**
@@ -329,7 +329,7 @@ namespace EmEn::Overlay
 			void
 			setVideoMemoryOutdated () noexcept
 			{
-				m_flags[VideoMemoryUpToDate] = false;
+				m_videoMemoryUpToDate = false;
 			}
 
 			/**
@@ -340,7 +340,7 @@ namespace EmEn::Overlay
 			void
 			enableKeyboardListening (bool state) noexcept
 			{
-				m_flags[IsListeningKeyboard] = state;
+				m_isListeningKeyboard = state;
 			}
 
 			/**
@@ -351,7 +351,7 @@ namespace EmEn::Overlay
 			bool
 			isListeningKeyboard () const noexcept
 			{
-				return m_flags[IsListeningKeyboard];
+				return m_isListeningKeyboard;
 			}
 
 			/**
@@ -362,7 +362,7 @@ namespace EmEn::Overlay
 			void
 			enablePointerListening (bool state) noexcept
 			{
-				m_flags[IsListeningPointer] = state;
+				m_isListeningPointer = state;
 			}
 
 			/**
@@ -373,7 +373,7 @@ namespace EmEn::Overlay
 			bool
 			isListeningPointer () const noexcept
 			{
-				return m_flags[IsListeningPointer];
+				return m_isListeningPointer;
 			}
 
 			/**
@@ -384,7 +384,7 @@ namespace EmEn::Overlay
 			void
 			lockPointerMoveEvents (bool state) noexcept
 			{
-				m_flags[LockPointerMoveEvents] = state;
+				m_lockPointerMoveEvents = state;
 			}
 
 			/**
@@ -395,7 +395,7 @@ namespace EmEn::Overlay
 			bool
 			isPointerMoveEventsLocked () const noexcept
 			{
-				return m_flags[LockPointerMoveEvents];
+				return m_lockPointerMoveEvents;
 			}
 
 			/**
@@ -406,7 +406,7 @@ namespace EmEn::Overlay
 			void
 			setPointerOverState (bool state) noexcept
 			{
-				m_flags[IsPointerWasOver] = state;
+				m_isPointerWasOver = state;
 			}
 
 			/**
@@ -417,7 +417,7 @@ namespace EmEn::Overlay
 			bool
 			isPointerWasOver () const noexcept
 			{
-				return m_flags[IsPointerWasOver];
+				return m_isPointerWasOver;
 			}
 
 			/**
@@ -428,7 +428,7 @@ namespace EmEn::Overlay
 			void
 			setFocusedState (bool state) noexcept
 			{
-				m_flags[IsFocused] = state;
+				m_isFocused = state;
 			}
 
 			/**
@@ -439,7 +439,7 @@ namespace EmEn::Overlay
 			bool
 			isFocused () const noexcept
 			{
-				return m_flags[IsFocused];
+				return m_isFocused;
 			}
 
 			/**
@@ -451,7 +451,7 @@ namespace EmEn::Overlay
 			void
 			enableEventBlocking (bool state) noexcept
 			{
-				m_flags[IsOpaque] = state;
+				m_isOpaque = state;
 			}
 
 			/**
@@ -462,7 +462,7 @@ namespace EmEn::Overlay
 			bool
 			isBlockingEvent () const noexcept
 			{
-				return m_flags[IsOpaque];
+				return m_isOpaque;
 			}
 
 			/**
@@ -473,7 +473,7 @@ namespace EmEn::Overlay
 			void
 			enableEventBlockingAlphaTest (bool state) noexcept
 			{
-				m_flags[IsAlphaTestEnabled] = state;
+				m_isAlphaTestEnabled = state;
 			}
 
 			/**
@@ -484,7 +484,7 @@ namespace EmEn::Overlay
 			bool
 			isBlockingEventWithAlphaTest () const noexcept
 			{
-				return m_flags[IsAlphaTestEnabled];
+				return m_isAlphaTestEnabled;
 			}
 
 			/**
@@ -703,11 +703,12 @@ namespace EmEn::Overlay
 			 * @param positionY The pointer Y modifiers the mouse wheel occurred.
 			 * @param xOffset The scroll distance on the X axis.
 			 * @param yOffset The scroll distance on the Y axis.
+			 * @param modifiers The keyboard modifiers pressed during the scroll (Ctrl, Shift, Alt, etc.).
 			 * @return bool
 			 */
 			virtual
 			bool
-			onMouseWheel (float /*positionX*/, float /*positionY*/, float /*xOffset*/, float /*yOffset*/) noexcept
+			onMouseWheel (float /*positionX*/, float /*positionY*/, float /*xOffset*/, float /*yOffset*/, int32_t /*modifiers*/ = 0) noexcept
 			{
 				return this->isBlockingEvent();
 			}
@@ -814,24 +815,20 @@ namespace EmEn::Overlay
 			mutable std::mutex m_framebufferAccess;
 			float m_depth{0.0F};
 			float m_alphaThreshold{0.1F};
-			std::array< bool, 16 > m_flags{
-				false/*VideoMemorySizeValid*/,
-				false/*VideoMemoryUpToDate*/,
-				false/*IsVisible*/,
-				false/*IsListeningKeyboard*/,
-				false/*IsListeningPointer*/,
-				false/*LockPointerMoveEvents*/,
-				false/*IsPointerWasOver*/,
-				false/*IsFocused*/,
-				false/*IsOpaque*/,
-				false/*IsAlphaTestEnabled*/,
-				false/*ProcessUnblockedPointerEvents*/,
-				false/*AutoSwapEnabled*/,
-				false/*ReadyToSwap*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/
-			};
+			bool m_videoMemorySizeValid{false};
+			bool m_videoMemoryUpToDate{false};
+			bool m_autoSwapEnabled{false};
+			bool m_readyToSwap{false};
+			bool m_isVisible{false};
+			bool m_isListeningKeyboard{false};
+			bool m_isListeningPointer{false};
+			bool m_isFocused{false};
+			bool m_isOpaque{false};
+			bool m_isAlphaTestEnabled{false};
+			bool m_lockPointerMoveEvents{false};
+			bool m_processUnblockedPointerEvents{false};
+			bool m_isPointerWasOver{false};
+
 	};
 
 	inline

@@ -28,7 +28,6 @@
 
 /* STL inclusions. */
 #include <cstdint>
-#include <array>
 #include <iostream>
 
 namespace EmEn::Input
@@ -79,7 +78,7 @@ namespace EmEn::Input
 			void
 			enableKeyboardListening (bool state) noexcept
 			{
-				m_flags[Enabled] = state;
+				m_enabled = state;
 			}
 
 			/**
@@ -90,7 +89,7 @@ namespace EmEn::Input
 			bool
 			isListeningKeyboard () const noexcept
 			{
-				return m_flags[Enabled];
+				return m_enabled;
 			}
 
 			/**
@@ -101,7 +100,7 @@ namespace EmEn::Input
 			void
 			propagateProcessedEvent (bool state) noexcept
 			{
-				m_flags[PropagateProcessedEvent] = state;
+				m_propagateProcessedEvent = state;
 			}
 
 			/**
@@ -112,7 +111,7 @@ namespace EmEn::Input
 			bool
 			isPropagatingProcessedEvents () const noexcept
 			{
-				return m_flags[PropagateProcessedEvent];
+				return m_propagateProcessedEvent;
 			}
 
 			/**
@@ -122,7 +121,7 @@ namespace EmEn::Input
 			void
 			enableTextMode (bool state) noexcept
 			{
-				m_flags[TextMode] = state;
+				m_textModeEnabled = state;
 			}
 
 			/**
@@ -133,7 +132,7 @@ namespace EmEn::Input
 			bool
 			isTextModeEnabled () const noexcept
 			{
-				return m_flags[TextMode];
+				return m_textModeEnabled;
 			}
 
 		protected:
@@ -144,7 +143,8 @@ namespace EmEn::Input
 			 * @param enableTextMode Enable text mode. This will enable the character typing callback.
 			 */
 			KeyboardListenerInterface (bool enableProcessedEventPropagation, bool enableTextMode) noexcept
-				: m_flags{{true, enableProcessedEventPropagation, enableTextMode, false, false, false, false, false}}
+				: m_propagateProcessedEvent{enableProcessedEventPropagation},
+				m_textModeEnabled{enableTextMode}
 			{
 
 			}
@@ -197,20 +197,8 @@ namespace EmEn::Input
 				return false;
 			}
 
-			/* Flag names. */
-			static constexpr auto Enabled{0UL};
-			static constexpr auto PropagateProcessedEvent{1UL};
-			static constexpr auto TextMode{2UL};
-
-			std::array< bool, 8 > m_flags{
-				true/*Enabled*/,
-				false/*PropagateProcessedEvent*/,
-				false/*TextMode*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/
-			};
+			bool m_enabled{true};
+			bool m_propagateProcessedEvent{false};
+			bool m_textModeEnabled{false};
 	};
 }

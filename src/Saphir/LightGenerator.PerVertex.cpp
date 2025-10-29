@@ -163,7 +163,7 @@ namespace EmEn::Saphir
 	{
 		//TraceDebug{ClassId} << "Generating '" << to_string(lightType) << "' fragment shader [PerVertex][NormalMap:" << m_flags[UseNormalMapping] << "][ShadowMapSampler:" << enableShadowMap << "] ...";
 		
-		if ( m_flags[DiscardUnlitFragment] )
+		if ( m_discardUnlitFragment )
 		{
 			Code{fragmentShader} << "if ( " << LightGenerator::variable(DiffuseFactor) << " <= 0.0 ) { discard; }" << Line::End;
 		}

@@ -73,10 +73,10 @@ namespace EmEn::Tool
 			m_quality = String::toNumber< uint64_t >(arg.value());
 		}
 		
-		m_flags[EnableNormals] = arguments.isSwitchPresent("--enable-normals");
-		m_flags[EnableTangentSpace] = arguments.isSwitchPresent("--enable-tangent-space");
-		m_flags[EnableTexCoords] = arguments.isSwitchPresent("--enable-tex-coords");
-		m_flags[Enable3DTexCoords] = arguments.isSwitchPresent("--enable-3d-tex-coords");
+		m_enableNormals = arguments.isSwitchPresent("--enable-normals");
+		m_enableTangentSpace = arguments.isSwitchPresent("--enable-tangent-space");
+		m_enableTexCoords = arguments.isSwitchPresent("--enable-tex-coords");
+		m_enable3DTexCoords = arguments.isSwitchPresent("--enable-3d-tex-coords");
 	}
 
 	bool
@@ -196,11 +196,11 @@ namespace EmEn::Tool
 		NormalType normals;
 		TextureCoordinatesType textureCoordinates;
 
-		if ( m_flags[EnableTangentSpace] )
+		if ( m_enableTangentSpace )
 		{
 			normals = NormalType::TBNSpace;
 		}
-		else if ( m_flags[EnableNormals] )
+		else if ( m_enableNormals )
 		{
 			normals = NormalType::Normal;
 		}
@@ -209,9 +209,9 @@ namespace EmEn::Tool
 			normals = NormalType::None;
 		}
 
-		if ( m_flags[EnableTexCoords] )
+		if ( m_enableTexCoords )
 		{
-			textureCoordinates = m_flags[Enable3DTexCoords] ?
+			textureCoordinates = m_enable3DTexCoords ?
 				TextureCoordinatesType::UVW :
 				TextureCoordinatesType::UV;
 		}

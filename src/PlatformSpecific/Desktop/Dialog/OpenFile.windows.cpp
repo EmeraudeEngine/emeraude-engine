@@ -73,7 +73,7 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 		}
 
 		/* NOTE: Set dialog options. */
-		if ( m_flags[SelectFolder] || m_flags[MultiSelect] )
+		if ( m_selectFolder || m_multiSelect )
 		{
 			FILEOPENDIALOGOPTIONS options = 0;
 
@@ -85,12 +85,12 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 				return false;
 			}
 
-			if ( m_flags[SelectFolder] )
+			if ( m_selectFolder )
 			{
 				options |= FOS_PICKFOLDERS;
 			}
 
-			if ( m_flags[MultiSelect] )
+			if ( m_multiSelect )
 			{
 				options |= FOS_ALLOWMULTISELECT;
 			}

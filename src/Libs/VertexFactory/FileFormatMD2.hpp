@@ -407,7 +407,7 @@ namespace EmEn::Libs::VertexFactory
 				 * +Z = UP = OpenGL Y+
 				 * So the triangle and normal a rearranged at insertion in the native format. */
 
-				if ( m_flags[UseMD2Normal] )
+				if ( m_useNormal )
 				{
 					builder.options().enableDataEconomy(false);
 
@@ -476,11 +476,6 @@ namespace EmEn::Libs::VertexFactory
 			std::vector< md2_triangle_t > m_triangles;
 			std::vector< md2_frame_t > m_frames;
 			std::vector< int > m_GLCommands{};
-			std::array< bool, 4 > m_flags{
-				true/*UseMD2Normal*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-			};
+			bool m_useNormal{true};
 	};
 }

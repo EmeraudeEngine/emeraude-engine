@@ -149,7 +149,7 @@ namespace EmEn::Overlay
 			bool onButtonRelease (float positionX, float positionY, int32_t buttonNumber, int32_t modifiers) noexcept override;
 
 			/** @copydoc EmEn::Input::PointerListenerInterface::onMouseWheel() */
-			bool onMouseWheel (float positionX, float positionY, float xOffset, float yOffset) noexcept override;
+			bool onMouseWheel (float positionX, float positionY, float xOffset, float yOffset, int32_t modifiers = 0) noexcept override;
 
 			/**
 			 * @brief Returns the reference to the primary services.

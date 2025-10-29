@@ -78,7 +78,7 @@ namespace EmEn::Overlay
 			void
 			setVisibility (bool state) noexcept
 			{
-				m_flags[IsVisible] = state;
+				m_isVisible = state;
 			}
 
 			/**
@@ -89,7 +89,7 @@ namespace EmEn::Overlay
 			bool
 			isVisible () const noexcept
 			{
-				return m_flags[IsVisible];
+				return m_isVisible;
 			}
 
 			/**
@@ -101,20 +101,8 @@ namespace EmEn::Overlay
 
 		private:
 
-			/* Flag names. */
-			static constexpr auto IsVisible{0UL};
-
 			std::function< void () > m_drawFunction;
-			std::array< bool, 8 > m_flags{
-				false/*IsVisible*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/
-			};
+			bool m_isVisible{false};
 	};
 }
 

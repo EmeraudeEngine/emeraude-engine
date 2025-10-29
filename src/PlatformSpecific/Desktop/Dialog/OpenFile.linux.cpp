@@ -40,15 +40,13 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 	OpenFile::execute (Window * /*window*/) noexcept
 	{
 		/* NOTE: This mode selects a folder. */
-		if ( m_flags[SelectFolder] )
+		if ( m_selectFolder )
 		{
 			pfd::select_folder dialog{this->title()};
 
-			const auto filepath = dialog.result();
-
-			if ( filepath.empty() )
+			if ( const auto filepath = dialog.result(); filepath.empty() )
 			{
-				m_flags[Canceled] = true;
+				m_canceled = true;
 			}
 			else
 			{
@@ -62,14 +60,12 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 			this->title(),
 			{},
 			OpenFile::convertFilterStructureForPFD(m_extensionFilters),
-			m_flags[MultiSelect] ? pfd::opt::multiselect : pfd::opt::none
+			m_multiSelect ? pfd::opt::multiselect : pfd::opt::none
 		};
 
-		const auto filepaths = dialog.result();
-
-		if ( filepaths.empty() )
+		if ( const auto filepaths = dialog.result(); filepaths.empty() )
 		{
-			m_flags[Canceled] = true;
+			m_canceled = true;
 		}
 		else
 		{

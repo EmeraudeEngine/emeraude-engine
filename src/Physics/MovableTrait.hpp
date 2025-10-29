@@ -282,7 +282,7 @@ namespace EmEn::Physics
 			 * This will in order:
 			 *  - Apply gravity force to acceleration vector.
 			 *  - Apply drag force to acceleration vector.
-			 *  - Add acceleration vector to velocity vector.
+			 *  - Add the acceleration vector to the velocity vector.
 			 * Then will return true if a movement occurs.
 			 * @param envProperties A reference to physical environment properties.
 			 * @return bool
@@ -298,7 +298,7 @@ namespace EmEn::Physics
 			void
 			setMovingAbility (bool state) noexcept
 			{
-				m_flags[IsMovable] = state;
+				m_isMovable = state;
 
 				if ( !state )
 				{
@@ -314,7 +314,7 @@ namespace EmEn::Physics
 			bool
 			isMovable () const noexcept
 			{
-				return m_flags[IsMovable];
+				return m_isMovable;
 			}
 
 			/**
@@ -325,18 +325,18 @@ namespace EmEn::Physics
 			void
 			setAlwaysComputePhysicsState (bool state) noexcept
 			{
-				m_flags[AlwaysComputePhysics] = state;
+				m_alwaysComputePhysics = state;
 			}
 
 			/**
-			 * @brief Returns whether this movable trait always compute physics.
+			 * @brief Returns whether this movable trait always computes physics.
 			 * @return bool
 			 */
 			[[nodiscard]]
 			bool
 			alwaysComputePhysics () const noexcept
 			{
-				return m_flags[AlwaysComputePhysics];
+				return m_alwaysComputePhysics;
 			}
 
 			/**
@@ -346,7 +346,7 @@ namespace EmEn::Physics
 			void
 			enableFreeFlyMode (bool state) noexcept
 			{
-				m_flags[FreeFlyModeEnabled] = state;
+				m_freeFlyModeEnabled = state;
 			}
 
 			/**
@@ -357,7 +357,7 @@ namespace EmEn::Physics
 			bool
 			isFreeFlyModeEnabled () const noexcept
 			{
-				return m_flags[FreeFlyModeEnabled];
+				return m_freeFlyModeEnabled;
 			}
 
 			/**
@@ -435,11 +435,6 @@ namespace EmEn::Physics
 
 		private:
 
-			/* Flag names */
-			static constexpr auto IsMovable{0UL};
-			static constexpr auto AlwaysComputePhysics{1UL};
-			static constexpr auto FreeFlyModeEnabled{2UL};
-
 			Libs::Math::Vector< 3, float > m_lastWorldPosition;
 			Libs::Math::Vector< 3, float > m_linearVelocity;
 			Libs::Math::Vector< 3, float > m_angularVelocity; // Omega
@@ -448,15 +443,8 @@ namespace EmEn::Physics
 			float m_angularSpeed{0.0F};
 			Collider m_collider;
 			uint32_t m_inertCheckCount{0};
-			std::array< bool, 8 > m_flags{
-				true/*IsMovable*/,
-				false/*AlwaysComputePhysics*/,
-				false/*FreeFlyModeEnabled*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/
-			};
+			bool m_isMovable{true};
+			bool m_alwaysComputePhysics{false};
+			bool m_freeFlyModeEnabled{false};
 	};
 }

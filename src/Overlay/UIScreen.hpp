@@ -369,9 +369,10 @@ namespace EmEn::Overlay
 			 * @param positionY The Y position of the cursor.
 			 * @param xOffset The mouse wheel x offset.
 			 * @param yOffset The mouse wheel y offset.
+			 * @param modifiers The keyboard modifiers pressed during the scroll.
 			 * @return bool
 			 */
-			bool onMouseWheel (float positionX, float positionY, float xOffset, float yOffset) const noexcept;
+			bool onMouseWheel (float positionX, float positionY, float xOffset, float yOffset, int32_t modifiers = 0) const noexcept;
 
 		private:
 

@@ -33,7 +33,7 @@
 namespace EmEn::Graphics
 {
 	/**
-	 * @brief The post process class to add effect on the final render.
+	 * @brief The post-processor class to add effect on the final render.
 	 * @todo WIP. This is a relic from the OpenGL version and must be rewrite from the ground.
 	 */
 	class PostProcessor final
@@ -146,10 +146,6 @@ namespace EmEn::Graphics
 			 */
 			bool buildFramebuffer (unsigned int width, unsigned int height, unsigned int colorBufferBits, unsigned int depthBufferBits, unsigned int stencilBufferBits, unsigned int samples) noexcept;
 
-			/* Flag names. */
-			static constexpr auto ServiceInitialized{0UL};
-			static constexpr auto UpdateRequested{1UL};
-
 			//Framebuffer m_framebuffer;
 			//std::shared_ptr< Vulkan::Texture2D > m_colorBuffer;
 			//RenderBufferObject m_extraBuffer;
@@ -157,15 +153,5 @@ namespace EmEn::Graphics
 			Saphir::FramebufferEffectsList m_effectsList;
 			//std::shared_ptr< Program > m_program;
 			//RasterizationMode m_rasterizationMode;
-			std::array< bool, 8 > m_flags{
-				false/*ServiceInitialized*/,
-				false/*UpdateRequested*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/
-			};
 	};
 }

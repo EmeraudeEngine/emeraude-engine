@@ -74,24 +74,25 @@ namespace EmEn
 namespace EmEn::Graphics::Material
 {
 	/** @brief Material interface flag bits. */
-	enum MaterialFlagBits
+	enum MaterialFlagBits : uint32_t
 	{
-		Created = 1,
-		BlendingEnabled = 2,
-		TexturingEnabled = 4,
-		Animated = 8,
-		HighQualityReflection = 16,
-		NormalMapping = 32,
-		Displacement = 64,
-		UsesPrimaryTextureCoordinates = 128,
-		ComputesPrimaryTextureCoordinates = 256,
-		PrimaryTextureCoordinatesUses3D = 512,
-		UsesSecondaryTextureCoordinates = 1024,
-		ComputesSecondaryTextureCoordinates = 2048,
-		SecondaryTextureCoordinatesUses3D = 4096,
-		UsesNormals = 8192,
-		UsesTangentSpace = 16384, /* Overrides UsesNormals */
-		UsesVertexColors = 32768
+		None = 0U,
+		IsCreated = 1U << 0,
+		TextureEnabled = 1U << 1,
+		UsePrimaryTextureCoordinates = 1U << 2,
+		ComputePrimaryTextureCoordinates = 1U << 3,
+		PrimaryTextureCoordinatesUses3D = 1U << 4,
+		UseSecondaryTextureCoordinates = 1U << 5,
+		ComputeSecondaryTextureCoordinates = 1U << 6,
+		SecondaryTextureCoordinatesUses3D = 1U << 7,
+		BlendingEnabled = 1U << 8,
+		OpacityEnabled = 1U << 9,
+		AutoIlluminationEnabled = 1U << 10,
+		UseNormalVectors = 1U << 11,
+		UseTangentSpace = 1U << 12, /* Overrides MaterialFlagBits::UseNormalVectors */
+		UseVertexColors = 1U << 13,
+		DynamicColorEnabled = 1U << 14,
+		IsAnimated = 1U << 15
 	};
 
 	/**
@@ -145,7 +146,7 @@ namespace EmEn::Graphics::Material
 			bool
 			isAnimated () const noexcept
 			{
-				return this->isFlagEnabled(Animated);
+				return this->isFlagEnabled(IsAnimated);
 			}
 
 			/**
@@ -168,7 +169,7 @@ namespace EmEn::Graphics::Material
 			bool
 			usingTexture () const noexcept
 			{
-				return this->isFlagEnabled(TexturingEnabled);
+				return this->isFlagEnabled(TextureEnabled);
 			}
 
 			/**
@@ -179,12 +180,12 @@ namespace EmEn::Graphics::Material
 			bool
 			usingPrimaryTextureCoordinates () const noexcept
 			{
-				if ( !this->isFlagEnabled(TexturingEnabled) )
+				if ( !this->isFlagEnabled(TextureEnabled) )
 				{
 					return false;
 				}
 
-				return this->isFlagEnabled(UsesPrimaryTextureCoordinates);
+				return this->isFlagEnabled(UsePrimaryTextureCoordinates);
 			}
 
 			/**
@@ -195,12 +196,12 @@ namespace EmEn::Graphics::Material
 			bool
 			computesPrimaryTextureCoordinates () const noexcept
 			{
-				if ( !this->isFlagEnabled(TexturingEnabled) )
+				if ( !this->isFlagEnabled(TextureEnabled) )
 				{
 					return false;
 				}
 
-				return this->isFlagEnabled(ComputesPrimaryTextureCoordinates);
+				return this->isFlagEnabled(ComputePrimaryTextureCoordinates);
 			}
 
 			/**
@@ -211,7 +212,7 @@ namespace EmEn::Graphics::Material
 			bool
 			primaryTextureCoordinatesUses3D () const noexcept
 			{
-				if ( !this->isFlagEnabled(TexturingEnabled) )
+				if ( !this->isFlagEnabled(TextureEnabled) )
 				{
 					return false;
 				}
@@ -227,12 +228,12 @@ namespace EmEn::Graphics::Material
 			bool
 			usingSecondaryTextureCoordinates () const noexcept
 			{
-				if ( !this->isFlagEnabled(TexturingEnabled) )
+				if ( !this->isFlagEnabled(TextureEnabled) )
 				{
 					return false;
 				}
 
-				return this->isFlagEnabled(UsesSecondaryTextureCoordinates);
+				return this->isFlagEnabled(UseSecondaryTextureCoordinates);
 			}
 
 			/**
@@ -243,12 +244,12 @@ namespace EmEn::Graphics::Material
 			bool
 			computesSecondaryTextureCoordinates () const noexcept
 			{
-				if ( !this->isFlagEnabled(TexturingEnabled) )
+				if ( !this->isFlagEnabled(TextureEnabled) )
 				{
 					return false;
 				}
 
-				return this->isFlagEnabled(ComputesSecondaryTextureCoordinates);
+				return this->isFlagEnabled(ComputeSecondaryTextureCoordinates);
 			}
 
 			/**
@@ -259,7 +260,7 @@ namespace EmEn::Graphics::Material
 			bool
 			secondaryTextureCoordinatesUses3D () const noexcept
 			{
-				if ( !this->isFlagEnabled(TexturingEnabled) )
+				if ( !this->isFlagEnabled(TextureEnabled) )
 				{
 					return false;
 				}
@@ -275,12 +276,12 @@ namespace EmEn::Graphics::Material
 			bool
 			usingNormals () const noexcept
 			{
-				if ( this->isFlagEnabled(UsesTangentSpace) )
+				if ( this->isFlagEnabled(UseTangentSpace) )
 				{
 					return true;
 				}
 
-				return this->isFlagEnabled(UsesNormals);
+				return this->isFlagEnabled(UseNormalVectors);
 			}
 
 			/**
@@ -291,7 +292,7 @@ namespace EmEn::Graphics::Material
 			bool
 			usingTangentSpace () const noexcept
 			{
-				return this->isFlagEnabled(UsesTangentSpace);
+				return this->isFlagEnabled(UseTangentSpace);
 			}
 
 			/**
@@ -302,7 +303,7 @@ namespace EmEn::Graphics::Material
 			bool
 			usingVertexColors () const noexcept
 			{
-				return this->isFlagEnabled(UsesVertexColors);
+				return this->isFlagEnabled(UseVertexColors);
 			}
 
 			/**

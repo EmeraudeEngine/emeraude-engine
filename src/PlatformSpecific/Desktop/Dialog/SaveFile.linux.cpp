@@ -50,7 +50,7 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 
 		if ( m_filepath.empty() )
 		{
-			m_flags[Canceled] = true;
+			m_canceled = true;
 		}
 
 		return true;

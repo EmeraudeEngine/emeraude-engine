@@ -28,7 +28,6 @@
 
 /* STL inclusions. */
 #include <cstdint>
-#include <array>
 #include <filesystem>
 
 /* Local inclusions for usages. */
@@ -87,7 +86,7 @@ namespace EmEn::Libs::PixelFactory
 			bool
 			invertYAxis () const noexcept
 			{
-				return m_flags[InvertYAxis];
+				return m_invertYAxis;
 			}
 
 			/**
@@ -115,18 +114,6 @@ namespace EmEn::Libs::PixelFactory
 
 		private:
 
-			/* Flag names. */
-			static constexpr auto InvertYAxis{0UL};
-
-			std::array< bool, 8 > m_flags{
-				false/*InvertYAxis*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/
-			};
+			bool m_invertYAxis{false};
 	};
 }

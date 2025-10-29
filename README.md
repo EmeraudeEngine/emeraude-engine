@@ -125,7 +125,6 @@ cd ../../..
 # Bugs and TODO-list
 
 - GENERAL
-  - Remove all "std::array< bool, n >". (WIP)
   - Remove all invalid noexcept keyword. (WIP)
   - Increase inlining. (WIP)
   - Improve functions args to use "std::move" when useful.

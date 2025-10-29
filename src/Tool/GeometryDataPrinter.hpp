@@ -70,26 +70,15 @@ namespace EmEn::Tool
 			[[nodiscard]]
 			std::string printData () const noexcept;
 
-			/* Flag names */
-			static constexpr auto EnableNormals{0UL};
-			static constexpr auto EnableTangentSpace{1UL};
-			static constexpr auto EnableTexCoords{2UL};
-			static constexpr auto Enable3DTexCoords{3UL};
-
 			std::string m_outputFile;
 			Libs::VertexFactory::Shape< float, uint32_t > m_shape;
 			Graphics::ShapeType m_shapeType{Graphics::ShapeType::Cube};
 			float m_baseSize{1.0F};
 			float m_baseLength{4.0F};
 			uint32_t m_quality{8};
-			std::array< bool, 8 > m_flags{
-				false/*EnableNormals*/,
-				false/*EnableTangentSpace*/,
-				false/*EnableTexCoords*/,
-				false/*Enable3DTexCoords*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/
-			};
+			bool m_enableNormals{false};
+			bool m_enableTangentSpace{false};
+			bool m_enableTexCoords{false};
+			bool m_enable3DTexCoords{false};
 	};
 }

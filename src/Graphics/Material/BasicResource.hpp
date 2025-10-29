@@ -169,7 +169,7 @@ namespace EmEn::Graphics::Material
 			bool
 			isCreated () const noexcept override
 			{
-				return this->isFlagEnabled(Created);
+				return this->isFlagEnabled(IsCreated);
 			}
 
 			/** @copydoc EmEn::Graphics::Material::Interface::isComplex() */
@@ -461,11 +461,6 @@ namespace EmEn::Graphics::Material
 			[[nodiscard]]
 			bool generateFragmentShaderCodeWithoutTexture (Saphir::FragmentShader & fragmentShader) const noexcept;
 
-			/* Flag names. */
-			static constexpr auto DynamicColorEnabled{0UL};
-			static constexpr auto EnableOpacity{1UL};
-			static constexpr auto EnableAutoIllumination{2UL};
-
 			/* Uniform buffer object offset to write data. */
 			static constexpr auto DiffuseColorOffset{0UL};
 			static constexpr auto SpecularColorOffset{4UL};
@@ -495,16 +490,8 @@ namespace EmEn::Graphics::Material
 			std::unique_ptr< Vulkan::DescriptorSet > m_descriptorSet;
 			std::shared_ptr< SharedUniformBuffer > m_sharedUniformBuffer;
 			uint32_t m_sharedUBOIndex{0};
-			std::array< bool, 8 > m_flags{
-				false/*DynamicColorEnabled*/,
-				false/*EnableOpacity*/,
-				false/*EnableAutoIllumination*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/
-			};
+			/* TODO: Unify video memory update mechanism between all materials. */
+			bool m_videoMemoryUpdated{false};
 	};
 }
 

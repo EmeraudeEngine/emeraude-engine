@@ -251,7 +251,7 @@ namespace EmEn::Overlay
 	}
 
 	bool
-	Manager::onMouseWheel (float positionX, float positionY, float xOffset, float yOffset) noexcept
+	Manager::onMouseWheel (float positionX, float positionY, float xOffset, float yOffset, int32_t modifiers) noexcept
 	{
 		if ( m_screens.empty() )
 		{
@@ -265,7 +265,7 @@ namespace EmEn::Overlay
 				return false;
 			}
 
-			return m_inputExclusiveScreen->onMouseWheel(positionX, positionY, xOffset, yOffset);
+			return m_inputExclusiveScreen->onMouseWheel(positionX, positionY, xOffset, yOffset, modifiers);
 		}
 
 		return std::ranges::any_of(m_screens, [&] (const auto & pair) {
@@ -276,7 +276,7 @@ namespace EmEn::Overlay
 				return false;
 			}
 
-			return screen->onMouseWheel(positionX, positionY, xOffset, yOffset);
+			return screen->onMouseWheel(positionX, positionY, xOffset, yOffset, modifiers);
 		});
 	}
 

@@ -29,7 +29,6 @@
 /* STL inclusions. */
 #include <vector>
 #include <string>
-#include <array>
 
 /* Local inclusions for usages. */
 #include "Libs/ThreadPool.hpp"
@@ -265,11 +264,6 @@ namespace EmEn
 
 		private:
 
-			/* Flag names. */
-			static constexpr auto Initialized{0UL};
-			static constexpr auto ChildProcess{1UL};
-			static constexpr auto ShowInformation{2UL};
-
 			std::string m_processName;
 			std::shared_ptr< Libs::ThreadPool > m_threadPool;
 			PlatformSpecific::SystemInfo m_systemInfo;
@@ -279,15 +273,7 @@ namespace EmEn
 			Settings m_settings;
 			Net::Manager m_networkManager;
 			std::vector< ServiceInterface * > m_servicesEnabled;
-			std::array< bool, 8 > m_flags{
-				false/*Initialized*/,
-				false/*ChildProcess*/,
-				false/*ShowInformation*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/,
-				false/*UNUSED*/
-			};
+			bool m_childProcess{false};
+			bool m_showInformation{false};
 	};
 }
