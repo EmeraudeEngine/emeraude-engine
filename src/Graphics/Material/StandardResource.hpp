@@ -129,7 +129,7 @@ namespace EmEn::Graphics::Material
 			 */
 			~StandardResource () override
 			{
-				this->destroyFromHardware();
+				this->destroy();
 			}
 
 			/**
@@ -182,16 +182,6 @@ namespace EmEn::Graphics::Material
 			{
 				return sizeof(*this);
 			}
-
-			/** @copydoc EmEn::Graphics::Material::Interface::createOnHardware() */
-			bool createOnHardware (Renderer & renderer) noexcept override;
-
-			/** @copydoc EmEn::Graphics::Material::Interface::destroyFromHardware() */
-			void destroyFromHardware () noexcept override;
-
-			/** @copydoc EmEn::Graphics::Material::Interface::isCreated() */
-			[[nodiscard]]
-			bool isCreated () const noexcept override;
 
 			/** @copydoc EmEn::Graphics::Material::Interface::isCreated() */
 			[[nodiscard]]
@@ -467,6 +457,13 @@ namespace EmEn::Graphics::Material
 
 		private:
 
+			/** @copydoc EmEn::Graphics::Material::Interface::create() noexcept */
+			[[nodiscard]]
+			bool create (Renderer & renderer) noexcept override;
+
+			/** @copydoc EmEn::Graphics::Material::Interface::destroy() noexcept */
+			void destroy () noexcept override;
+
 			/** @copydoc EmEn::Graphics::Material::Interface::getSharedUniformBufferIdentifier() */
 			[[nodiscard]]
 			std::string getSharedUniformBufferIdentifier () const noexcept override;
@@ -482,9 +479,6 @@ namespace EmEn::Graphics::Material
 			/** @copydoc EmEn::Graphics::Material::Interface::createDescriptorSet() */
 			[[nodiscard]]
 			bool createDescriptorSet (Renderer & renderer, const Vulkan::UniformBufferObject & uniformBufferObject) noexcept override;
-
-			/** @copydoc EmEn::Graphics::Material::Interface::onMaterialLoaded() */
-			void onMaterialLoaded () noexcept override;
 
 			/**
 			 * @brief Parses the ambient component from JSON data.
@@ -548,14 +542,6 @@ namespace EmEn::Graphics::Material
 			 */
 			[[nodiscard]]
 			bool parseReflectionComponent (const Json::Value & data, Resources::ServiceProvider & serviceProvider) noexcept;
-
-			/**
-			 * @brief Creates the necessary data onto the GPU for this material.
-			 * @param renderer A reference to the graphics renderer.
-			 * @return bool
-			 */
-			[[nodiscard]]
-			bool createVideoMemory (Renderer & renderer) noexcept;
 
 			/**
 			 * @brief Updates the UBO with material properties.

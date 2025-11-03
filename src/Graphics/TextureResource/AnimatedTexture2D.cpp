@@ -60,7 +60,7 @@ namespace EmEn::Graphics::TextureResource
 	}
 
 	bool
-	AnimatedTexture2D::createOnHardware (Renderer & renderer) noexcept
+	AnimatedTexture2D::createTexture (Renderer & renderer) noexcept
 	{
 		for ( const auto & pixmap: m_localData->frames() | std::views::keys )
 		{
@@ -150,7 +150,7 @@ namespace EmEn::Graphics::TextureResource
 	}
 
 	bool
-	AnimatedTexture2D::destroyFromHardware () noexcept
+	AnimatedTexture2D::destroyTexture () noexcept
 	{
 		if ( m_image != nullptr )
 		{

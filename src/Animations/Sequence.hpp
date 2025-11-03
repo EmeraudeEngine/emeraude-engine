@@ -53,12 +53,12 @@ namespace EmEn::Animations
 
 			/**
 			 * @brief Constructs a sequence.
-			 * @param duration The sequence duration in milliseconds.
-			 * @param repeat The number of sequence repetition, -1 is infinite. Default infinite.
+			 * @param durationMS The sequence duration in milliseconds.
+			 * @param repeat The number of sequence repetitions, -1 is infinite. Default infinite.
 			 */
 			explicit
-			Sequence (uint32_t duration, int32_t repeat = -1) noexcept
-				: m_duration{duration},
+			Sequence (uint32_t durationMS, int32_t repeat = -1) noexcept
+				: m_durationMS{durationMS},
 				m_repeat{repeat}
 			{
 
@@ -88,7 +88,7 @@ namespace EmEn::Animations
 			bool
 			isFinished () const noexcept override
 			{
-				return m_repeat == 0 && m_elapsedTime >= m_duration;
+				return m_repeat == 0 && m_elapsedTime >= m_durationMS;
 			}
 
 			/** @copydoc EmEn::Animations::AnimationInterface::play() */
@@ -188,7 +188,7 @@ namespace EmEn::Animations
 			/* Flag names. */
 			static constexpr auto IsPlaying{0UL};
 
-			uint32_t m_duration;
+			uint32_t m_durationMS;
 			int32_t m_repeat;
 			uint32_t m_elapsedTime{0};
 			float m_noise{0.0F};

@@ -27,14 +27,12 @@
 #pragma once
 
 /* Local inclusions for inheritances. */
-#include "Abstract.hpp"
+#include "Vulkan/TextureInterface.hpp"
+#include "Graphics/RenderTarget/Abstract.hpp"
 
 /* Local inclusions for usages. */
-#include "Vulkan/Framebuffer.hpp"
-#include "Vulkan/Image.hpp"
-#include "Vulkan/ImageView.hpp"
-#include "Vulkan/Sampler.hpp"
 #include "Vulkan/Instance.hpp"
+#include "Vulkan/Framebuffer.hpp"
 #include "Graphics/Renderer.hpp"
 #include "Graphics/ViewMatrices2DUBO.hpp"
 #include "Graphics/ViewMatrices3DUBO.hpp"
@@ -53,11 +51,12 @@ namespace EmEn::Graphics::RenderTarget
 	/**
 	 * @brief The shadow map template to handle 2D and cubemap render target.
 	 * @tparam view_matrices_t The type of matrix interface.
+	 * @extends EmEn::Vulkan::TextureInterface This is a texture.
 	 * @extends EmEn::Graphics::RenderTarget::Abstract This is a render target.
 	 */
 	template< typename view_matrices_t >
 	requires (std::is_base_of_v< ViewMatricesInterface, view_matrices_t >)
-	class ShadowMap final : public Abstract
+	class ShadowMap final : public Vulkan::TextureInterface, public Abstract
 	{
 		public:
 
@@ -103,6 +102,136 @@ namespace EmEn::Graphics::RenderTarget
 				}
 			{
 
+			}
+
+			/** @copydoc EmEn::Vulkan::TextureInterface::isCreated() const noexcept */
+			[[nodiscard]]
+			bool
+			isCreated () const noexcept override
+			{
+				/* NOTE: Extra checks. */
+				if constexpr ( IsDebug )
+				{
+					if ( m_depthImage == nullptr || !m_depthImage->isCreated() )
+					{
+						return false;
+					}
+
+					if ( m_depthImageView == nullptr || !m_depthImageView->isCreated() )
+					{
+						return false;
+					}
+
+					if ( this->isCubemap() )
+					{
+						if ( m_depthCubeImageView == nullptr || !m_depthCubeImageView->isCreated() )
+						{
+							return false;
+						}
+					}
+				}
+
+				if ( m_sampler == nullptr || !m_sampler->isCreated() )
+				{
+					return false;
+				}
+
+				if ( m_framebuffer == nullptr || !m_framebuffer->isCreated() )
+				{
+					return false;
+				}
+
+				return true;
+			}
+
+			/** @copydoc EmEn::Vulkan::TextureInterface::type() const noexcept */
+			[[nodiscard]]
+			Vulkan::TextureType
+			type () const noexcept override
+			{
+				if constexpr ( std::is_same_v< view_matrices_t, ViewMatrices3DUBO > )
+				{
+					return Vulkan::TextureType::TextureCube;
+				}
+				else
+				{
+					return Vulkan::TextureType::Texture2D;
+				}
+			}
+
+			/** @copydoc EmEn::Vulkan::TextureInterface::dimensions() const noexcept */
+			[[nodiscard]]
+			uint32_t
+			dimensions () const noexcept override
+			{
+				if constexpr ( std::is_same_v< view_matrices_t, ViewMatrices3DUBO > )
+				{
+					return 3;
+				}
+				else
+				{
+					return 2;
+				}
+			}
+
+			/** @copydoc EmEn::Vulkan::TextureInterface::isCubemapTexture() const noexcept */
+			[[nodiscard]]
+			bool
+			isCubemapTexture () const noexcept override
+			{
+				if constexpr ( std::is_same_v< view_matrices_t, ViewMatrices3DUBO > )
+				{
+					return true;
+				}
+				else
+				{
+					return false;
+				}
+			}
+
+			/** @copydoc EmEn::Vulkan::TextureInterface::image() const noexcept */
+			[[nodiscard]]
+			std::shared_ptr< Vulkan::Image >
+			image () const noexcept override
+			{
+				return m_depthImage;
+			}
+
+			/** @copydoc EmEn::Vulkan::TextureInterface::imageView() const noexcept */
+			[[nodiscard]]
+			std::shared_ptr< Vulkan::ImageView >
+			imageView () const noexcept override
+			{
+				/* NOTE: As a texture request, we give the right image view with cubemap. */
+				if ( this->isCubemap() && m_depthCubeImageView != nullptr )
+				{
+					return m_depthCubeImageView;
+				}
+
+				return m_depthImageView;
+			}
+
+			/** @copydoc EmEn::Vulkan::TextureInterface::sampler() const noexcept */
+			[[nodiscard]]
+			std::shared_ptr< Vulkan::Sampler >
+			sampler () const noexcept override
+			{
+				return m_sampler;
+			}
+
+			/** @copydoc EmEn::Vulkan::TextureInterface::request3DTextureCoordinates() const noexcept */
+			[[nodiscard]]
+			bool
+			request3DTextureCoordinates () const noexcept override
+			{
+				if constexpr ( std::is_same_v< view_matrices_t, ViewMatrices3DUBO >  )
+				{
+					return true;
+				}
+				else
+				{
+					return false;
+				}
 			}
 
 			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::updateViewRangesProperties() */
@@ -182,39 +311,12 @@ namespace EmEn::Graphics::RenderTarget
 				return AVConsole::VideoType::ShadowMap;
 			}
 
-			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::framebuffer() */
+			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::framebuffer() const */
 			[[nodiscard]]
 			const Vulkan::Framebuffer *
 			framebuffer () const noexcept override
 			{
 				return m_framebuffer.get();
-			}
-
-			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::image() */
-			[[nodiscard]]
-			std::shared_ptr< Vulkan::Image >
-			image () const noexcept override
-			{
-				return m_depthImage;
-			}
-
-			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::imageView() */
-			[[nodiscard]]
-			std::shared_ptr< Vulkan::ImageView >
-			imageView () const noexcept override
-			{
-				return m_depthImageView;
-			}
-
-			/**
-			 * @brief Returns the shadow map compare sampler.
-			 * @return std::shared_ptr< Vulkan::Sampler >
-			 */
-			[[nodiscard]]
-			std::shared_ptr< Vulkan::Sampler >
-			sampler () const noexcept
-			{
-				return m_sampler;
 			}
 
 			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::isReadyForRendering() const */
@@ -330,13 +432,18 @@ namespace EmEn::Graphics::RenderTarget
 			{
 				m_isReadyForRendering = false;
 
+				/* The main framebuffer. */
 				m_framebuffer.reset();
 
+				/* The texture sampler. */
 				m_sampler.reset();
 
+				/* The depth/stencil buffers. */
+				m_depthCubeImageView.reset();
 				m_depthImageView.reset();
 				m_depthImage.reset();
 
+				/* The color buffer (Debug). */
 				m_debugImageView.reset();
 				m_debugImage.reset();
 			}
@@ -422,7 +529,9 @@ namespace EmEn::Graphics::RenderTarget
 
 					m_depthImageView = std::make_shared< Vulkan::ImageView >(
 						m_depthImage,
-						this->isCubemap() ? VK_IMAGE_VIEW_TYPE_CUBE : VK_IMAGE_VIEW_TYPE_2D,
+						/* NOTE: Here we use VK_IMAGE_VIEW_TYPE_2D_ARRAY instead
+						 * of VK_IMAGE_VIEW_TYPE_CUBE when rendering to a cubemap for the multiview feature. */
+						this->isCubemap() ? VK_IMAGE_VIEW_TYPE_2D_ARRAY : VK_IMAGE_VIEW_TYPE_2D,
 						VkImageSubresourceRange{
 							.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
 							.baseMipLevel = 0,
@@ -438,6 +547,31 @@ namespace EmEn::Graphics::RenderTarget
 						TraceError{ClassId} << "Unable to create an image view (Depth buffer) for shadow map '" << this->id() << "' !";
 
 						return false;
+					}
+
+					/* NOTE: Create a specific view for reading
+					 * the cubemap in shaders according to the multiview feature. */
+					if ( this->isCubemap() )
+					{
+						m_depthCubeImageView = std::make_shared< Vulkan::ImageView >(
+							m_depthImage,
+							VK_IMAGE_VIEW_TYPE_CUBE,
+							VkImageSubresourceRange{
+								.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
+								.baseMipLevel = 0,
+								.levelCount = m_depthImage->createInfo().mipLevels, /* Must be 1 */
+								.baseArrayLayer = 0,
+								.layerCount = 6
+							}
+						);
+						m_depthCubeImageView->setIdentifier(ClassId, this->id(), "CubeImageView");
+
+						if ( !m_depthCubeImageView->createOnHardware() )
+						{
+							TraceError{ClassId} << "Unable to create a cube image view (Depth buffer) for shadow map '" << this->id() << "' !";
+
+							return false;
+						}
 					}
 				}
 				else
@@ -534,6 +668,12 @@ namespace EmEn::Graphics::RenderTarget
 						.dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT
 					});
 
+					/* Enable multiview for cubemap rendering (Vulkan 1.1+) */
+					if ( this->isCubemap() )
+					{
+						renderPass->enableMultiview();
+					}
+
 					if ( !renderPass->createOnHardware() )
 					{
 						TraceError{ClassId} << "Unable to create the render pass for shadow map '" << this->id() << "' !";
@@ -599,6 +739,7 @@ namespace EmEn::Graphics::RenderTarget
 			std::shared_ptr< Vulkan::ImageView > m_debugImageView;
 			std::shared_ptr< Vulkan::Image > m_depthImage;
 			std::shared_ptr< Vulkan::ImageView > m_depthImageView;
+			std::shared_ptr< Vulkan::ImageView > m_depthCubeImageView;
 			std::shared_ptr< Vulkan::Sampler > m_sampler;
 			std::shared_ptr< Vulkan::Framebuffer > m_framebuffer;
 			view_matrices_t m_viewMatrices;

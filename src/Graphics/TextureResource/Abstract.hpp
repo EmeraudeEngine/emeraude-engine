@@ -26,10 +26,8 @@
 
 #pragma once
 
-/* Third-party inclusions. */
-#include <vulkan/vulkan.h>
-
 /* Local inclusions for inheritances. */
+#include "Vulkan/TextureInterface.hpp"
 #include "Resources/ResourceTrait.hpp"
 
 /* Local inclusions for usages. */
@@ -37,45 +35,19 @@
 #include "Libs/PixelFactory/Pixmap.hpp"
 
 /* Forward declarations. */
-namespace EmEn
+namespace EmEn::Graphics
 {
-	namespace Vulkan
-	{
-		class Framebuffer;
-		class RenderPass;
-		class Image;
-		class ImageView;
-		class Sampler;
-	}
-
-	namespace Graphics
-	{
-		class Renderer;
-	}
+	class Renderer;
 }
 
 namespace EmEn::Graphics::TextureResource
 {
 	/**
-	 * @brief Higher level texture type enumeration.
-	 * @todo Adds every type of texture (Multisampling, shadows, non-float, ...)
-	 */
-	enum class Type: uint8_t
-	{
-		Texture1D = 0,
-		Texture2D = 1,
-		Texture3D = 2,
-		TextureCube = 3,
-		Texture1DArray = 4,
-		Texture2DArray = 5,
-		TextureCubeArray = 6
-	};
-
-	/**
-	 * @brief This is the base class for every vulkan texture resource.
+	 * @brief This is the base class for every vulkan texture resource loaded from disk.
+	 * @extends EmEn::Vulkan::TextureInterface This provides GPU texture capabilities.
 	 * @extends EmEn::Resources::ResourceTrait This is a loadable resource.
 	 */
-	class Abstract : public Resources::ResourceTrait
+	class Abstract : public Vulkan::TextureInterface, public Resources::ResourceTrait
 	{
 		public:
 
@@ -114,40 +86,18 @@ namespace EmEn::Graphics::TextureResource
 			Abstract & operator= (Abstract && copy) noexcept = delete;
 
 			/**
-			 * @brief Returns the descriptor image info.
-			 * @todo Remove this !
-			 * @return VkDescriptorBufferInfo
-			 */
-			[[nodiscard]]
-			VkDescriptorImageInfo getDescriptorInfo () const noexcept;
-
-			/**
-			 * @brief Returns whether the image is ready.
-			 * @return bool
-			 */
-			[[nodiscard]]
-			virtual bool isCreated () const noexcept = 0;
-
-			/**
-			 * @brief Creates the image buffer from local data to video memory.
+			 * @brief Creates the texture objects in the video memory.
 			 * @param renderer A reference to the graphics renderer.
 			 * @return bool
 			 */
-			virtual bool createOnHardware (Renderer & renderer) noexcept = 0;
+			[[nodiscard]]
+			virtual bool createTexture (Renderer & renderer) noexcept = 0;
 
 			/**
-			 * @brief Destroys the image from video memory.
+			 * @brief Destroys the texture objects from the video memory.
 			 * @return bool
 			 */
-			virtual bool destroyFromHardware () noexcept = 0;
-
-			/**
-			 * @brief Returns the final texture type.
-			 * @note This is useful for shader generation to get the right sampler/texture type conversion.
-			 * @return Type
-			 */
-			[[nodiscard]]
-			virtual Type type () const noexcept = 0;
+			virtual bool destroyTexture () noexcept = 0;
 
 			/**
 			 * @brief Returns whether the texture is grayscale or not.
@@ -164,95 +114,6 @@ namespace EmEn::Graphics::TextureResource
 			 */
 			[[nodiscard]]
 			virtual Libs::PixelFactory::Color< float > averageColor () const noexcept = 0;
-
-			/**
-			 * @brief Returns the dimensions for use with texture coordinates. Should be 1, 2 or 3.
-			 * @return uint32_t
-			 */
-			[[nodiscard]]
-			virtual uint32_t dimensions () const noexcept = 0;
-
-			/**
-			 * @brief Returns whether the texture is a cubemap.
-			 * @return bool
-			 */
-			[[nodiscard]]
-			virtual
-			bool
-			isCubemapTexture () const noexcept
-			{
-				return false;
-			}
-
-			/**
-			 * @brief Returns the number frame.
-			 * @return uint32_t
-			 */
-			[[nodiscard]]
-			virtual
-			uint32_t
-			frameCount () const noexcept
-			{
-				if ( !this->isLoaded() )
-				{
-					return 0;
-				}
-
-				return 1;
-			}
-
-			/**
-			 * @brief Returns the duration in milliseconds.
-			 * @return uint32_t
-			 */
-			[[nodiscard]]
-			virtual
-			uint32_t
-			duration () const noexcept
-			{
-				return 0;
-			}
-
-			/**
-			 * @brief Returns the index of the frame at a specific time.
-			 * @param sceneTime The current scene time in milliseconds.
-			 * @return uint32_t
-			 */
-			[[nodiscard]]
-			virtual
-			uint32_t
-			frameIndexAt (uint32_t /*sceneTime*/) const noexcept
-			{
-				return 0;
-			}
-
-			/**
-			 * @brief Returns the image of the texture.
-			 * @return std::shared_ptr< Vulkan::Image >
-			 */
-			[[nodiscard]]
-			virtual std::shared_ptr< Vulkan::Image > image () const noexcept = 0;
-
-			/**
-			 * @brief Returns the image view of the texture.
-			 * @return std::shared_ptr< Vulkan::ImageView >
-			 */
-			[[nodiscard]]
-			virtual std::shared_ptr< Vulkan::ImageView > imageView () const noexcept = 0;
-
-			/**
-			 * @brief Returns the sampler used by of the texture.
-			 * @return std::shared_ptr< Vulkan::Sampler >
-			 */
-			[[nodiscard]]
-			virtual std::shared_ptr< Vulkan::Sampler > sampler () const noexcept = 0;
-
-			/**
-			 * @brief Returns whether the texture needs 3D texture coordinates to be fully functional.
-			 * @return bool
-			 */
-			[[nodiscard]]
-			virtual bool request3DTextureCoordinates () const noexcept = 0;
 
 			/**
 			 * @brief Validates a pixmap for Vulkan requirements.

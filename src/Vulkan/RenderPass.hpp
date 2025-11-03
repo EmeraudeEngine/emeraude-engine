@@ -283,6 +283,24 @@ namespace EmEn::Vulkan
 				return m_createInfo;
 			}
 
+			/**
+			 * @brief Enables multiview rendering for cubemap (6 views).
+			 * @note This requires Vulkan 1.1+ and multiview feature enabled.
+			 * @return void
+			 */
+			void enableMultiview () noexcept;
+
+			/**
+			 * @brief Returns whether multiview is enabled.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isMultiviewEnabled () const noexcept
+			{
+				return m_multiviewEnabled;
+			}
+
 		private:
 
 			/**
@@ -297,5 +315,9 @@ namespace EmEn::Vulkan
 			Libs::StaticVector< VkAttachmentDescription, 8 > m_attachmentDescriptions;
 			Libs::StaticVector< RenderSubPass, 4 > m_renderSubPasses;
 			Libs::StaticVector< VkSubpassDependency, 8 > m_subPassDependencies;
+			VkRenderPassMultiviewCreateInfo m_multiviewCreateInfo{};
+			uint32_t m_viewMask{0};
+			uint32_t m_correlationMask{0};
+			bool m_multiviewEnabled{false};
 	};
 }

@@ -103,7 +103,7 @@ namespace EmEn::Graphics::Renderable
 						{
 							const auto textureResource = serviceProvider.container< TextureResource::Texture2D >()->getResource(FastJSON::getValue< std::string >(componentData, Material::JKName).value_or(Resources::Default));
 
-							if ( !newMaterial.setTexture(textureResource, true) )
+							if ( !newMaterial.setTextureResource(textureResource, true) )
 							{
 								return newMaterial.setManualLoadSuccess(false);
 							}
@@ -114,7 +114,7 @@ namespace EmEn::Graphics::Renderable
 						{
 							const auto textureResource = serviceProvider.container< TextureResource::AnimatedTexture2D >()->getResource(FastJSON::getValue< std::string >(componentData, Material::JKName).value_or(Resources::Default));
 
-							if ( !newMaterial.setTexture(textureResource, true) )
+							if ( !newMaterial.setTextureResource(textureResource, true) )
 							{
 								return newMaterial.setManualLoadSuccess(false);
 							}

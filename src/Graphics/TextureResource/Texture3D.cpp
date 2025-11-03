@@ -60,7 +60,7 @@ namespace EmEn::Graphics::TextureResource
 	}
 
 	bool
-	Texture3D::createOnHardware (Renderer & /*renderer*/) noexcept
+	Texture3D::createTexture (Renderer & /*renderer*/) noexcept
 	{
 		Tracer::error(ClassId, "Not yet implemented !");
 
@@ -68,7 +68,7 @@ namespace EmEn::Graphics::TextureResource
 	}
 
 	bool
-	Texture3D::destroyFromHardware () noexcept
+	Texture3D::destroyTexture () noexcept
 	{
 		if ( m_image != nullptr )
 		{

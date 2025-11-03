@@ -71,14 +71,6 @@ namespace EmEn::Graphics::Material::Component
 				return true;
 			}
 
-			/** @copydoc EmEn::Graphics::Material::Component::Interface::isCreated() */
-			[[nodiscard]]
-			bool
-			isCreated () const noexcept override
-			{
-				return true;
-			}
-
 			/** @copydoc EmEn::Graphics::Material::Component::Interface::variableName() */
 			[[nodiscard]]
 			const std::string &
@@ -103,7 +95,15 @@ namespace EmEn::Graphics::Material::Component
 				return m_color.alpha() >= 1.0F;
 			}
 
-			/** @copydoc EmEn::Graphics::Material::Component::Interface::textureResource() */
+			/** @copydoc EmEn::Graphics::Material::Component::Interface::texture() const noexcept */
+			[[nodiscard]]
+			std::shared_ptr< Vulkan::TextureInterface >
+			texture () const noexcept override
+			{
+				return nullptr;
+			}
+
+			/** @copydoc EmEn::Graphics::Material::Component::Interface::textureResource() const noexcept */
 			[[nodiscard]]
 			std::shared_ptr< TextureResource::Abstract >
 			textureResource () const noexcept override

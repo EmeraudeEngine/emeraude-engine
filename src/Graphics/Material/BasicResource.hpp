@@ -104,7 +104,7 @@ namespace EmEn::Graphics::Material
 			 */
 			~BasicResource () override
 			{
-				this->destroyFromHardware();
+				this->destroy();
 			}
 
 			/**
@@ -156,20 +156,6 @@ namespace EmEn::Graphics::Material
 			memoryOccupied () const noexcept override
 			{
 				return sizeof(*this);
-			}
-
-			/** @copydoc EmEn::Graphics::Material::Interface::createOnHardware() */
-			bool createOnHardware (Renderer & renderer) noexcept override;
-
-			/** @copydoc EmEn::Graphics::Material::Interface::destroyFromHardware() */
-			void destroyFromHardware () noexcept override;
-
-			/** @copydoc EmEn::Graphics::Material::Interface::isCreated() */
-			[[nodiscard]]
-			bool
-			isCreated () const noexcept override
-			{
-				return this->isFlagEnabled(IsCreated);
 			}
 
 			/** @copydoc EmEn::Graphics::Material::Interface::isComplex() */
@@ -291,12 +277,20 @@ namespace EmEn::Graphics::Material
 			bool setColor (const Libs::PixelFactory::Color< float > & color) noexcept;
 
 			/**
-			 * @brief Sets a texture as material appearance.
+			 * @brief Sets a texture resource as material appearance.
 			 * @param texture A reference to a texture resource smart pointer.
 			 * @param enableAlpha Enable the use of alpha channel for opacity/blending operation. Default false.
 			 * @return bool
 			 */
-			bool setTexture (const std::shared_ptr< TextureResource::Abstract > & texture, bool enableAlpha = false) noexcept;
+			bool setTextureResource (const std::shared_ptr< TextureResource::Abstract > & texture, bool enableAlpha = false) noexcept;
+
+			/**
+			 * @brief Sets a texture interface as material appearance.
+			 * @param texture A reference to a texture interface smart pointer.
+			 * @param enableAlpha Enable the use of alpha channel for opacity/blending operation. Default false.
+			 * @return bool
+			 */
+			bool setTexture (const std::shared_ptr< Vulkan::TextureInterface > & texture, bool enableAlpha = false) noexcept;
 
 			/**
 			 * @brief Sets a color for the specular component.
@@ -411,6 +405,13 @@ namespace EmEn::Graphics::Material
 
 		private:
 
+			/** @copydoc EmEn::Graphics::Material::Interface::create() noexcept */
+			[[nodiscard]]
+			bool create (Renderer & renderer) noexcept override;
+
+			/** @copydoc EmEn::Graphics::Material::Interface::destroy() noexcept */
+			void destroy () noexcept override;
+
 			/** @copydoc EmEn::Graphics::Material::Interface::getSharedUniformBufferIdentifier() */
 			[[nodiscard]]
 			std::string getSharedUniformBufferIdentifier () const noexcept override;
@@ -427,17 +428,6 @@ namespace EmEn::Graphics::Material
 			[[nodiscard]]
 			bool createDescriptorSet (Renderer & renderer, const Vulkan::UniformBufferObject & uniformBufferObject) noexcept override;
 
-			/** @copydoc EmEn::Graphics::Material::Interface::onMaterialLoaded() */
-			void onMaterialLoaded () noexcept override;
-
-			/**
-			 * @brief Creates the necessary data onto the GPU for this material.
-			 * @param renderer A reference to the graphics renderer.
-			 * @return bool
-			 */
-			[[nodiscard]]
-			bool createVideoMemory (Renderer & renderer) noexcept;
-
 			/**
 			 * @brief Updates the UBO with material properties.
 			 * @return void
@@ -447,7 +437,7 @@ namespace EmEn::Graphics::Material
 			/**
 			 * @brief Generates the fragment shader code using a texture.
 			 * @param fragmentShader A reference to the fragment shader.
-			 * @param materialSet The set number of the material.
+			 * @param materialSet The set index of the material.
 			 * @return bool
 			 */
 			[[nodiscard]]

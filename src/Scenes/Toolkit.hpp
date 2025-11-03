@@ -523,7 +523,6 @@ namespace EmEn::Scenes
 			 * @brief Generates a directional light. Like the sun.
 			 * @tparam entity_t The type of entity, a scene node or a static entity. Default, 'StaticEntity'.
 			 * @param entityName The used for the node and the light emitter component.
-			 * @param lookAt Set where the ray should point. Default, world origin.
 			 * @param color The color of the light. Default, white.
 			 * @param intensity The light intensity. Default 1.
 			 * @param shadowMapResolution The shadow map resolution. Default disabled.
@@ -531,10 +530,10 @@ namespace EmEn::Scenes
 			 */
 			template< typename entity_t = StaticEntity >
 			BuiltEntity< entity_t, Component::DirectionalLight >
-			generateDirectionalLight (const std::string & entityName, const Libs::Math::Vector< 3, float > & lookAt = {}, const Libs::PixelFactory::Color< float > & color = Libs::PixelFactory::White, float intensity = Component::AbstractLightEmitter::DefaultIntensity, uint32_t shadowMapResolution = 0) noexcept requires (std::is_base_of_v< AbstractEntity, entity_t >)
+			generateDirectionalLight (const std::string & entityName, const Libs::PixelFactory::Color< float > & color = Libs::PixelFactory::White, float intensity = Component::AbstractLightEmitter::DefaultIntensity, uint32_t shadowMapResolution = 0) noexcept requires (std::is_base_of_v< AbstractEntity, entity_t >)
 			{
 				/* Create the entity. */
-				auto entity = this->generateEntity< entity_t >(lookAt, entityName);
+				auto entity = this->generateEntity< entity_t >(entityName);
 
 				if ( entity == nullptr )
 				{

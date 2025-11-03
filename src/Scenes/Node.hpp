@@ -493,26 +493,24 @@ namespace EmEn::Scenes
 			 * @brief Creates a sub node at given coordinates.
 			 * @warning If the node already exists, the method will return a null pointer.
 			 * @param name A reference to a string.
-			 * @param sceneTimeMS The scene current time in milliseconds.
-			 * @param coordinates Set the coordinates of the new node. Default Origin.
+			 * @param coordinates Set the coordinates of the new node.
+			 * @param sceneTimeMS The scene current time in milliseconds. Default 0.
 			 * @return std::shared_ptr< Node >
 			 */
 			[[nodiscard]]
-			std::shared_ptr< Node > createChild (const std::string & name, uint32_t sceneTimeMS, const Libs::Math::CartesianFrame< float > & coordinates = {}) noexcept;
+			std::shared_ptr< Node > createChild (const std::string & name, const Libs::Math::CartesianFrame< float > & coordinates, uint32_t sceneTimeMS = 0) noexcept;
 
 			/**
-			 * @brief Creates a sub node at a given position.
+			 * @brief Creates a sub node at given coordinates.
 			 * @warning If the node already exists, the method will return a null pointer.
 			 * @param name A reference to a string.
-			 * @param sceneTimeMS The scene current time in milliseconds.
-			 * @param position Set the position of the new node.
 			 * @return std::shared_ptr< Node >
 			 */
 			[[nodiscard]]
 			std::shared_ptr< Node >
-			createChild (const std::string & name, uint32_t sceneTimeMS, const Libs::Math::Vector< 3, float > & position) noexcept
+			createChild (const std::string & name) noexcept
 			{
-				return this->createChild(name, sceneTimeMS, Libs::Math::CartesianFrame< float >{position});
+				return this->createChild(name, Libs::Math::CartesianFrame(), 0);
 			}
 
 			/**

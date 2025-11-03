@@ -673,6 +673,7 @@ namespace EmEn::Vulkan
 			requirements.featuresVK10().geometryShader = VK_TRUE; // Required for TBN space display
 		}
 		requirements.featuresVK10().samplerAnisotropy = VK_TRUE;
+		requirements.featuresVK11().multiview = VK_TRUE; // Required for cubemap render-to-texture (Vulkan 1.1+)
 		requirements.featuresVK13().shaderDemoteToHelperInvocation = VK_TRUE;
 
 		if ( !logicalDevice->create(requirements, m_requiredGraphicsDeviceExtensions, useVMA) )

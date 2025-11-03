@@ -177,15 +177,8 @@ namespace EmEn::Graphics::Material
 	}
 
 	bool
-	BasicResource::createOnHardware (Renderer & renderer) noexcept
+	BasicResource::create (Renderer & renderer) noexcept
 	{
-		if ( this->isCreated() )
-		{
-			TraceWarning{ClassId} << "The resource '" << this->name() << "' is already created !";
-
-			return true;
-		}
-
 		/* Component creation (optional). */
 		if ( this->usingTexture() )
 		{
@@ -198,12 +191,33 @@ namespace EmEn::Graphics::Material
 
 				return false;
 			}
+
+			/* Check if the texture (the interface) is animated. */
+			if ( m_textureComponent->texture()->duration() > 0 )
+			{
+				this->enableFlag(IsAnimated);
+			}
 		}
 
-		/* Create the material UBO, sampler, descriptor set ... */
-		if ( !this->createVideoMemory(renderer) )
+		const auto identifier = this->getSharedUniformBufferIdentifier();
+
+		if ( !this->createElementInSharedBuffer(renderer, identifier) )
 		{
-			Tracer::error(ClassId, "Unable to the material onto the GPU !");
+			TraceError{ClassId} << "Unable to create the data inside the shared uniform buffer '" << identifier << "' for material '" << this->name() << "' !";
+
+			return false;
+		}
+
+		if ( !this->createDescriptorSetLayout(renderer.layoutManager(), identifier) )
+		{
+			TraceError{ClassId} << "Unable to create the descriptor set layout for material '" << this->name() << "' !";
+
+			return false;
+		}
+
+		if ( !this->createDescriptorSet(renderer, *m_sharedUniformBuffer->uniformBufferObject(m_sharedUBOIndex)) )
+		{
+			TraceError{ClassId} << "Unable to create the descriptor set for material '" << this->name() << "' !";
 
 			return false;
 		}
@@ -215,8 +229,6 @@ namespace EmEn::Graphics::Material
 
 			return false;
 		}
-
-		this->enableFlag(IsCreated);
 
 		return true;
 	}
@@ -303,50 +315,12 @@ namespace EmEn::Graphics::Material
 
 		if ( this->usingTexture() )
 		{
-			if ( !m_descriptorSet->writeCombinedImageSampler(1, *m_textureComponent->textureResource()) )
+			if ( !m_descriptorSet->writeCombinedImageSampler(1, *m_textureComponent->texture()) )
 			{
 				TraceError{ClassId} << "Unable to write the sampler to the descriptor set for material '" << this->name() << "' !";
 
 				return false;
 			}
-		}
-
-		return true;
-	}
-
-	void
-	BasicResource::onMaterialLoaded () noexcept
-	{
-		if ( m_textureComponent != nullptr && m_textureComponent->textureResource()->duration() > 0 )
-		{
-			this->enableFlag(IsAnimated);
-		}
-	}
-
-	bool
-	BasicResource::createVideoMemory (Renderer & renderer) noexcept
-	{
-		const auto identifier = this->getSharedUniformBufferIdentifier();
-
-		if ( !this->createElementInSharedBuffer(renderer, identifier) )
-		{
-			TraceError{ClassId} << "Unable to create the data inside the shared uniform buffer '" << identifier << "' for material '" << this->name() << "' !";
-
-			return false;
-		}
-
-		if ( !this->createDescriptorSetLayout(renderer.layoutManager(), identifier) )
-		{
-			TraceError{ClassId} << "Unable to create the descriptor set layout for material '" << this->name() << "' !";
-
-			return false;
-		}
-
-		if ( !this->createDescriptorSet(renderer, *m_sharedUniformBuffer->uniformBufferObject(m_sharedUBOIndex)) )
-		{
-			TraceError{ClassId} << "Unable to create the descriptor set for material '" << this->name() << "' !";
-
-			return false;
 		}
 
 		return true;
@@ -371,7 +345,7 @@ namespace EmEn::Graphics::Material
 	}
 
 	void
-	BasicResource::destroyFromHardware () noexcept
+	BasicResource::destroy () noexcept
 	{
 		if ( m_sharedUniformBuffer != nullptr )
 		{
@@ -708,8 +682,9 @@ namespace EmEn::Graphics::Material
 	}
 
 	bool
-	BasicResource::setTexture (const std::shared_ptr< TextureResource::Abstract > & texture, bool enableAlpha) noexcept
+	BasicResource::setTextureResource (const std::shared_ptr< TextureResource::Abstract > & texture, bool enableAlpha) noexcept
 	{
+		/* NOTE: Prevent modifying a material already created. */
 		if ( this->isCreated() )
 		{
 			TraceWarning{ClassId} <<
@@ -722,6 +697,32 @@ namespace EmEn::Graphics::Material
 		if ( !this->addDependency(texture) )
 		{
 			TraceError{ClassId} << "Unable to link the texture '" << texture->name() << "' dependency to material '" << this->name() << "' !";
+
+			return false;
+		}
+
+		m_textureComponent = std::make_unique< Component::Texture >(Uniform::PrimarySampler, SurfaceColor, texture);
+		m_textureComponent->enableAlpha(enableAlpha);
+
+		this->enableFlag(TextureEnabled);
+		this->enableFlag(UsePrimaryTextureCoordinates);
+		if ( texture->request3DTextureCoordinates() )
+		{
+			this->enableFlag(PrimaryTextureCoordinatesUses3D);
+		}
+
+		return true;
+	}
+
+	bool
+	BasicResource::setTexture (const std::shared_ptr< TextureInterface > & texture, bool enableAlpha) noexcept
+	{
+		/* NOTE: Prevent modifying a material already created. */
+		if ( this->isCreated() )
+		{
+			TraceWarning{ClassId} <<
+				"The resource '" << this->name() << "' is created ! "
+				"Unable to set a texture.";
 
 			return false;
 		}

@@ -293,7 +293,7 @@ namespace EmEn::Graphics
 				false
 			);
 
-			if ( !m_windowLessView->create(*this) )
+			if ( !m_windowLessView->createRenderTarget(*this) )
 			{
 				Tracer::fatal(ClassId, "Unable to create the window less view!");
 

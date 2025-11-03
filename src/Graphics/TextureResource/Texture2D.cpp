@@ -60,7 +60,7 @@ namespace EmEn::Graphics::TextureResource
 	}
 
 	bool
-	Texture2D::createOnHardware (Renderer & renderer) noexcept
+	Texture2D::createTexture (Renderer & renderer) noexcept
 	{
 		if ( !this->validateTexture(m_localData->data(), !renderer.vulkanInstance().isStandardTextureCheckEnabled()) )
 		{
@@ -153,7 +153,7 @@ namespace EmEn::Graphics::TextureResource
 	}
 
 	bool
-	Texture2D::destroyFromHardware () noexcept
+	Texture2D::destroyTexture () noexcept
 	{
 		if ( m_image != nullptr )
 		{

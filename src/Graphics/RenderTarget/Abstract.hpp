@@ -38,9 +38,9 @@
 #include "AVConsole/AbstractVirtualDevice.hpp"
 
 /* Local inclusions for usages. */
+#include "Vulkan/Sync/Semaphore.hpp"
 #include "Graphics/FramebufferPrecisions.hpp"
 #include "Graphics/Types.hpp"
-#include "Vulkan/Sync/Semaphore.hpp"
 
 /* Forward declarations. */
 namespace EmEn
@@ -111,6 +111,20 @@ namespace EmEn::Graphics::RenderTarget
 			 * @brief Destructs an abstract render target.
 			 */
 			~Abstract () override = default;
+
+			/**
+			 * @brief Creates the render target objects in the video memory.
+			 * @param renderer A reference to the graphics renderer.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool createRenderTarget (Renderer & renderer) noexcept;
+
+			/**
+			 * @brief Destroys the render target objects from the video memory.
+			 * @return bool
+			 */
+			bool destroyRenderTarget () noexcept;
 
 			/**
 			 * @brief Returns whether the render target is out of date.
@@ -250,7 +264,7 @@ namespace EmEn::Graphics::RenderTarget
 			}
 
 			/**
-			 * @brief Returns whether the render target uses a orthographic projection.
+			 * @brief Returns whether the render target uses an orthographic projection.
 			 * @return bool
 			 */
 			[[nodiscard]]
@@ -259,20 +273,6 @@ namespace EmEn::Graphics::RenderTarget
 			{
 				return m_isOrthographicProjection;
 			}
-
-			/**
-			 * @brief Creates the render target in the video memory.
-			 * @param renderer A reference to the graphics renderer.
-			 * @return bool
-			 */
-			[[nodiscard]]
-			bool create (Renderer & renderer) noexcept;
-
-			/**
-			 * @brief Destroys the render target from the video memory.
-			 * @return bool
-			 */
-			bool destroy () noexcept;
 
 			/**
 			 * @brief Sets the viewport to a command buffer.
@@ -306,27 +306,11 @@ namespace EmEn::Graphics::RenderTarget
 			virtual bool isCubemap () const noexcept = 0;
 
 			/**
-			 * @brief Returns the framebuffer.
+			 * @brief Gives access to the framebuffer for the rendering process.
 			 * @return const Vulkan::Framebuffer *
 			 */
 			[[nodiscard]]
 			virtual const Vulkan::Framebuffer * framebuffer () const noexcept = 0;
-
-			/**
-			 * @brief Gives access to the main hardware image object of the render target.
-			 * @deprecated
-			 * @return std::shared_ptr< Vulkan::Image >
-			 */
-			[[nodiscard]]
-			virtual std::shared_ptr< Vulkan::Image > image () const noexcept = 0;
-
-			/**
-			 * @brief Gives access to the main hardware image view object of the render target.
-			 * @deprecated
-			 * @return std::shared_ptr< Vulkan::ImageView >
-			 */
-			[[nodiscard]]
-			virtual std::shared_ptr< Vulkan::ImageView > imageView () const noexcept = 0;
 
 			/**
 			 * @brief Returns the const access to the view matrices interface.

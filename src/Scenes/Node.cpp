@@ -697,7 +697,7 @@ namespace EmEn::Scenes
 	}
 
 	std::shared_ptr< Node >
-	Node::createChild (const std::string & name, uint32_t sceneTimeMS, const CartesianFrame< float > & coordinates) noexcept
+	Node::createChild (const std::string & name, const CartesianFrame< float > & coordinates, uint32_t sceneTimeMS) noexcept
 	{
 		if ( name == Root )
 		{

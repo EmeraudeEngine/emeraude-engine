@@ -28,9 +28,6 @@
 
 /* Local inclusions. */
 #include "Libs/PixelFactory/Processor.hpp"
-#include "Vulkan/Image.hpp"
-#include "Vulkan/ImageView.hpp"
-#include "Vulkan/Sampler.hpp"
 #include "Graphics/Renderer.hpp"
 #include "Tracer.hpp"
 
@@ -44,47 +41,6 @@ namespace EmEn::Graphics::TextureResource
 
 	Renderer * Abstract::s_graphicsRenderer{nullptr};
 
-	VkDescriptorImageInfo
-	Abstract::getDescriptorInfo () const noexcept
-	{
-		VkDescriptorImageInfo descriptorInfo{};
-
-		if ( const auto & sampler = this->sampler(); sampler == nullptr )
-		{
-			Tracer::error(TracerTag, "The texture has no sampler !");
-
-			descriptorInfo.sampler = VK_NULL_HANDLE;
-		}
-		else
-		{
-			descriptorInfo.sampler = sampler->handle();
-		}
-
-		if ( const auto & imageView = this->imageView(); imageView == nullptr )
-		{
-			Tracer::error(TracerTag, "The texture has no image view !");
-
-			descriptorInfo.imageView = VK_NULL_HANDLE;
-		}
-		else
-		{
-			descriptorInfo.imageView = imageView->handle();
-		}
-
-		if ( const auto & image = this->image(); image == nullptr )
-		{
-			Tracer::error(TracerTag, "The texture has no image !");
-
-			descriptorInfo.imageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-		}
-		else
-		{
-			descriptorInfo.imageLayout = image->currentImageLayout();
-		}
-
-		return descriptorInfo;
-	}
-
 	bool
 	Abstract::onDependenciesLoaded () noexcept
 	{
@@ -96,7 +52,7 @@ namespace EmEn::Graphics::TextureResource
 		}
 
 		/* NOTE: Ensure the texture is on the video memory. */
-		if ( !this->isCreated() && !this->createOnHardware(*s_graphicsRenderer) )
+		if ( !this->isCreated() && !this->createTexture(*s_graphicsRenderer) )
 		{
 			TraceError{TracerTag} << "Unable to load texture resource (" << this->classLabel() << ") '" << this->name() << "' !";
 

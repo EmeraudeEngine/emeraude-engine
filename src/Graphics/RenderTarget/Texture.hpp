@@ -33,15 +33,12 @@
 #include <string>
 
 /* Local inclusions for inheritances. */
+#include "Vulkan/TextureInterface.hpp"
 #include "Graphics/RenderTarget/Abstract.hpp"
-#include "Graphics/TextureResource/Abstract.hpp"
 
 /* Local inclusions for usages. */
-#include "Vulkan/Framebuffer.hpp"
-#include "Vulkan/Image.hpp"
-#include "Vulkan/ImageView.hpp"
-#include "Vulkan/Sampler.hpp"
 #include "Vulkan/Instance.hpp"
+#include "Vulkan/Framebuffer.hpp"
 #include "Graphics/Renderer.hpp"
 #include "Graphics/ViewMatrices2DUBO.hpp"
 #include "Graphics/ViewMatrices3DUBO.hpp"
@@ -51,12 +48,12 @@ namespace EmEn::Graphics::RenderTarget
 	/**
 	 * @brief The render to texture template.
 	 * @tparam view_matrices_t The type of matrix interface.
+	 * @extends EmEn::Vulkan::TextureInterface This is a texture.
 	 * @extends EmEn::Graphics::RenderTarget::Abstract This is a render target.
-	 * @extends EmEn::Graphics::TextureResource::Abstract This is a usable texture.
 	 */
 	template< typename view_matrices_t >
 	requires (std::is_base_of_v< ViewMatricesInterface, view_matrices_t >)
-	class Texture final : public Abstract, public TextureResource::Abstract
+	class Texture final : public Vulkan::TextureInterface, public Abstract
 	{
 		public:
 
@@ -75,7 +72,7 @@ namespace EmEn::Graphics::RenderTarget
 			 * @param isOrthographicProjection Set orthographic projection instead of perspective.
 			 */
 			Texture (const std::string & name, uint32_t width, uint32_t height, uint32_t colorCount, bool isOrthographicProjection) noexcept requires (std::is_same_v< view_matrices_t, ViewMatrices2DUBO >)
-				: RenderTarget::Abstract{
+				: Abstract{
 					name,
 					{colorCount, 8U, 32U, 0U, 1U},
 					{width, height, 1U},
@@ -83,8 +80,7 @@ namespace EmEn::Graphics::RenderTarget
 					AVConsole::ConnexionType::Both,
 					isOrthographicProjection,
 					true
-				},
-				TextureResource::Abstract{name, 0}
+				}
 			{
 
 			}
@@ -97,7 +93,7 @@ namespace EmEn::Graphics::RenderTarget
 			 * @param isOrthographicProjection Set orthographic projection instead of perspective.
 			 */
 			Texture (const std::string & name, uint32_t size, uint32_t colorCount, bool isOrthographicProjection) noexcept requires (std::is_same_v< view_matrices_t, ViewMatrices3DUBO >)
-				: RenderTarget::Abstract{
+				: Abstract{
 					name,
 					{colorCount, 8U, 32U, 0U, 1U},
 					{size, size, 1U},
@@ -105,46 +101,154 @@ namespace EmEn::Graphics::RenderTarget
 					AVConsole::ConnexionType::Both,
 					isOrthographicProjection,
 					true
-				},
-				TextureResource::Abstract{name, 0}
+				}
 			{
 
 			}
 
-			/**
-			 * @brief Constructor version for resource manager.
-			 * @param name A reference to a string for the resource name.
-			 */
-			explicit
-			Texture (const std::string & name) noexcept
-				: Texture{name, 64, 4}
-			{
-				Tracer::warning(ClassId, "This resource are not intended to build that way !");
-			}
-
-
-			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
-			[[nodiscard]]
-			size_t
-			classUID () const noexcept override
-			{
-				return std::numeric_limits< size_t >::max();
-			}
-
-			/** @copydoc EmEn::Libs::ObservableTrait::is() const */
+			/** @copydoc EmEn::Vulkan::TextureInterface::isCreated() const noexcept */
 			[[nodiscard]]
 			bool
-			is (size_t classUID) const noexcept override
+			isCreated () const noexcept override
 			{
-				return classUID == std::numeric_limits< size_t >::max();
+				/* NOTE: Extra checks. */
+				if constexpr ( IsDebug )
+				{
+					if ( m_colorImage == nullptr || !m_colorImage->isCreated() )
+					{
+						return false;
+					}
+
+					if ( m_colorImageView == nullptr || !m_colorImageView->isCreated() )
+					{
+						return false;
+					}
+
+					if ( this->isCubemap() )
+					{
+						if ( m_colorCubeImageView == nullptr || !m_colorCubeImageView->isCreated() )
+						{
+							return false;
+						}
+					}
+
+					/*if ( m_depthStencilImage == nullptr || !m_depthStencilImage->isCreated() )
+					{
+						return false;
+					}
+
+					if ( m_depthImageView == nullptr || !m_depthImageView->isCreated() )
+					{
+						return false;
+					}
+
+					if ( m_stencilImageView == nullptr || !m_stencilImageView->isCreated() )
+					{
+						return false;
+					}*/
+				}
+
+				if ( m_sampler == nullptr || !m_sampler->isCreated() )
+				{
+					return false;
+				}
+
+				if ( m_framebuffer == nullptr || !m_framebuffer->isCreated() )
+				{
+					return false;
+				}
+
+				return true;
 			}
 
-			/** @copydoc EmEn::Resources::ResourceTrait::classLabel() const */
+			/** @copydoc EmEn::Vulkan::TextureInterface::type() const noexcept */
 			[[nodiscard]]
-			const char *
-			classLabel () const noexcept override
+			Vulkan::TextureType
+			type () const noexcept override
 			{
-				return ClassId;
+				if constexpr ( std::is_same_v< view_matrices_t, ViewMatrices3DUBO > )
+				{
+					return Vulkan::TextureType::TextureCube;
+				}
+				else
+				{
+					return Vulkan::TextureType::Texture2D;
+				}
+			}
+
+			/** @copydoc EmEn::Vulkan::TextureInterface::dimensions() const noexcept */
+			[[nodiscard]]
+			uint32_t
+			dimensions () const noexcept override
+			{
+				if constexpr ( std::is_same_v< view_matrices_t, ViewMatrices3DUBO > )
+				{
+					return 3;
+				}
+				else
+				{
+					return 2;
+				}
+			}
+
+			/** @copydoc EmEn::Vulkan::TextureInterface::isCubemapTexture() const noexcept */
+			[[nodiscard]]
+			bool
+			isCubemapTexture () const noexcept override
+			{
+				if constexpr ( std::is_same_v< view_matrices_t, ViewMatrices3DUBO > )
+				{
+					return true;
+				}
+				else
+				{
+					return false;
+				}
+			}
+
+			/** @copydoc EmEn::Vulkan::TextureInterface::image() const noexcept */
+			[[nodiscard]]
+			std::shared_ptr< Vulkan::Image >
+			image () const noexcept override
+			{
+				return m_colorImage;
+			}
+
+			/** @copydoc EmEn::Vulkan::TextureInterface::imageView() const noexcept */
+			[[nodiscard]]
+			std::shared_ptr< Vulkan::ImageView >
+			imageView () const noexcept override
+			{
+				/* NOTE: As a texture request, we give the right image view with cubemap. */
+				if ( this->isCubemap() && m_colorCubeImageView != nullptr )
+				{
+					return m_colorCubeImageView;
+				}
+
+				return m_colorImageView;
+			}
+
+			/** @copydoc EmEn::Vulkan::TextureInterface::sampler() const noexcept */
+			[[nodiscard]]
+			std::shared_ptr< Vulkan::Sampler >
+			sampler () const noexcept override
+			{
+				return m_sampler;
+			}
+
+			/** @copydoc EmEn::Vulkan::TextureInterface::request3DTextureCoordinates() const noexcept */
+			[[nodiscard]]
+			bool
+			request3DTextureCoordinates () const noexcept override
+			{
+				if constexpr ( std::is_same_v< view_matrices_t, ViewMatrices3DUBO >  )
+				{
+					return true;
+				}
+				else
+				{
+					return false;
+				}
 			}
 
 			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::updateViewRangesProperties() */
@@ -216,36 +320,6 @@ namespace EmEn::Graphics::RenderTarget
 				return m_viewMatrices;
 			}
 
-			/** @copydoc EmEn::Graphics::TextureResource::Abstract::type() */
-			[[nodiscard]]
-			TextureResource::Type
-			type () const noexcept override
-			{
-				if constexpr ( std::is_same_v< view_matrices_t, ViewMatrices3DUBO >  )
-				{
-					return TextureResource::Type::TextureCube;
-				}
-				else
-				{
-					return TextureResource::Type::Texture2D;
-				}
-			}
-
-			/** @copydoc EmEn::Graphics::TextureResource::Abstract::request3DTextureCoordinates() */
-			[[nodiscard]]
-			bool
-			request3DTextureCoordinates () const noexcept override
-			{
-				if constexpr ( std::is_same_v< view_matrices_t, ViewMatrices3DUBO >  )
-				{
-					return true;
-				}
-				else
-				{
-					return false;
-				}
-			}
-
 			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::videoType() */
 			[[nodiscard]]
 			AVConsole::VideoType
@@ -254,74 +328,12 @@ namespace EmEn::Graphics::RenderTarget
 				return AVConsole::VideoType::Texture;
 			}
 
-			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::framebuffer() */
+			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::framebuffer() const */
 			[[nodiscard]]
 			const Vulkan::Framebuffer *
 			framebuffer () const noexcept override
 			{
 				return m_framebuffer.get();
-			}
-
-			/** @copydoc EmEn::Graphics::TextureResource::Abstract::image() */
-			[[nodiscard]]
-			std::shared_ptr< Vulkan::Image >
-			image () const noexcept override
-			{
-				return m_colorImage;
-			}
-
-			/** @copydoc EmEn::Graphics::TextureResource::Abstract::imageView() */
-			[[nodiscard]]
-			std::shared_ptr< Vulkan::ImageView >
-			imageView () const noexcept override
-			{
-				return m_colorImageView;
-			}
-
-			/** @copydoc EmEn::Graphics::TextureResource::Abstract::sampler() */
-			[[nodiscard]]
-			std::shared_ptr< Vulkan::Sampler >
-			sampler () const noexcept override
-			{
-				return m_sampler;
-			}
-
-			/** @copydoc EmEn::Graphics::TextureResource::Abstract::isCreated() */
-			[[nodiscard]]
-			bool
-			isCreated () const noexcept override
-			{
-				if ( m_colorImage == nullptr || !m_colorImage->isCreated() )
-				{
-					return false;
-				}
-
-				if ( m_colorImageView == nullptr || !m_colorImageView->isCreated() )
-				{
-					return false;
-				}
-
-				if ( m_sampler == nullptr || !m_sampler->isCreated() )
-				{
-					return false;
-				}
-
-				return true;
-			}
-
-			/** @copydoc EmEn::Graphics::TextureResource::Abstract::createOnHardware() */
-			[[nodiscard]]
-			bool
-			createOnHardware (Renderer & renderer) noexcept override
-			{
-				return this->create(renderer);
-			}
-
-			/** @copydoc EmEn::Graphics::TextureResource::Abstract::destroyFromHardware() */
-			bool
-			destroyFromHardware () noexcept override
-			{
-				return this->destroy();
 			}
 
 			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::isReadyForRendering() const */
@@ -338,104 +350,6 @@ namespace EmEn::Graphics::RenderTarget
 			isDebug () const noexcept override
 			{
 				return false;
-			}
-
-			/** @copydoc EmEn::Resources::ResourceTrait::load(Resources::ServiceProvider &) */
-			bool
-			load (Resources::ServiceProvider & /*serviceProvider*/) noexcept override
-			{
-				Tracer::warning(ClassId, "This resource cannot be loaded from a storage !");
-
-				return false;
-			}
-
-			/** @copydoc EmEn::Resources::ResourceTrait::load(Resources::ServiceProvider &, const std::filesystem::path &) */
-			bool
-			load (Resources::ServiceProvider & serviceProvider, const std::filesystem::path & /*filepath*/) noexcept override
-			{
-				return this->load(serviceProvider);
-			}
-
-			/** @copydoc EmEn::Resources::ResourceTrait::load(Resources::ServiceProvider &, const Json::Value &) */
-			bool
-			load (Resources::ServiceProvider & serviceProvider, const Json::Value & /*data*/) noexcept override
-			{
-				return this->load(serviceProvider);
-			}
-
-			/** @copydoc EmEn::Resources::ResourceTrait::memoryOccupied() const noexcept */
-			[[nodiscard]]
-			size_t
-			memoryOccupied () const noexcept override
-			{
-				return sizeof(*this);
-			}
-
-			/** @copydoc EmEn::Graphics::TextureResource::Abstract::isGrayScale() */
-			[[nodiscard]]
-			bool
-			isGrayScale () const noexcept override
-			{
-				/* FIXME: Scan the createInfo */
-				return false;
-			}
-
-			/** @copydoc EmEn::Graphics::TextureResource::Abstract::averageColor() */
-			[[nodiscard]]
-			Libs::PixelFactory::Color< float >
-			averageColor () const noexcept override
-			{
-				/* FIXME: Compute average color from video memory texture2Ds. */
-				return Libs::PixelFactory::Grey;
-			}
-
-			/** @copydoc EmEn::Graphics::TextureResource::Abstract::dimensions() */
-			[[nodiscard]]
-			uint32_t
-			dimensions () const noexcept override
-			{
-				return this->isCubemap() ? 3 : 2;
-			}
-
-			/** @copydoc EmEn::Graphics::TextureResource::Abstract::isCubemapTexture() */
-			[[nodiscard]]
-			bool
-			isCubemapTexture () const noexcept override
-			{
-				return this->isCubemap();
-			}
-
-			/**
-			 * @brief Gives access to the main hardware depth stencil image of the render target.
-			 * @return std::shared_ptr< Vulkan::Image >
-			 */
-			[[nodiscard]]
-			std::shared_ptr< Vulkan::Image >
-			depthStencilImage () const noexcept
-			{
-				return m_depthStencilImage;
-			}
-
-			/**
-			 * @brief Gives access to the main hardware depth image view object of the render target.
-			 * @return std::shared_ptr< Vulkan::ImageView >
-			 */
-			[[nodiscard]]
-			std::shared_ptr< Vulkan::ImageView >
-			depthImageView () const noexcept
-			{
-				return m_depthImageView;
-			}
-
-			/**
-			 * @brief Gives access to the main hardware stencil image view object of the render target.
-			 * @return std::shared_ptr< Vulkan::ImageView >
-			 */
-			[[nodiscard]]
-			std::shared_ptr< Vulkan::ImageView >
-			stencilImageView () const noexcept
-			{
-				return m_stencilImageView;
 			}
 
 		private:
@@ -539,15 +453,20 @@ namespace EmEn::Graphics::RenderTarget
 			{
 				m_isReadyForRendering = false;
 
+				/* The main framebuffer. */
 				m_framebuffer.reset();
 
+				/* The texture sampler. */
 				m_sampler.reset();
 
+				/* The depth/stencil buffers. */
 				m_stencilImageView.reset();
 				m_depthImageView.reset();
 				m_depthStencilImage.reset();
 
-				m_depthStencilImage.reset();
+				/* The color buffer. */
+				m_colorCubeImageView.reset();
+				m_colorImageView.reset();
 				m_colorImage.reset();
 			}
 
@@ -576,7 +495,7 @@ namespace EmEn::Graphics::RenderTarget
 						1,
 						this->isCubemap() ? 6 : 1
 					);
-					m_colorImage->setIdentifier(ClassId, this->name(), "Image");
+					m_colorImage->setIdentifier(ClassId, this->id(), "Image");
 
 					if ( !m_colorImage->createOnHardware() )
 					{
@@ -585,22 +504,12 @@ namespace EmEn::Graphics::RenderTarget
 						return false;
 					}
 
-
-					/* NOTE: Prepare the color buffer to be used directly as a texture. */
-					if ( !renderer.transferManager().transitionImageLayout(*m_colorImage, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) )
-					{
-						Tracer::error(ClassId, "Failed initial color image layout transition!");
-
-						return false;
-					}
-
-					/* NOTE: Set the final image layout for being usable with a material. */
-					//m_colorImage->setCurrentImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-
 					/* Create a view to exploit the image. */
 					m_colorImageView = std::make_shared< Vulkan::ImageView >(
 						m_colorImage,
-						VK_IMAGE_VIEW_TYPE_2D,
+						/* NOTE: Here we use VK_IMAGE_VIEW_TYPE_2D_ARRAY instead
+						 * of VK_IMAGE_VIEW_TYPE_CUBE when rendering to a cubemap for the multiview feature. */
+						this->isCubemap() ? VK_IMAGE_VIEW_TYPE_2D_ARRAY : VK_IMAGE_VIEW_TYPE_2D,
 						VkImageSubresourceRange{
 							.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
 							.baseMipLevel = 0,
@@ -609,13 +518,38 @@ namespace EmEn::Graphics::RenderTarget
 							.layerCount = m_colorImage->createInfo().arrayLayers
 						}
 					);
-					m_colorImageView->setIdentifier(ClassId, this->name(), "ImageView");
+					m_colorImageView->setIdentifier(ClassId, this->id(), "ImageView");
 
 					if ( !m_colorImageView->createOnHardware() )
 					{
-						TraceError{ClassId} << "Unable to set the layout transition of the image (Color buffer) for texture '" << this->id() << "' !";
+						TraceError{ClassId} << "Unable to create an image view (Color buffer) for texture '" << this->id() << "' !";
 
 						return false;
+					}
+
+					/* NOTE: Create a specific view for reading
+					 * the cubemap in shaders according to the multiview feature. */
+					if ( this->isCubemap() )
+					{
+						m_colorCubeImageView = std::make_shared< Vulkan::ImageView >(
+							m_colorImage,
+							VK_IMAGE_VIEW_TYPE_CUBE,
+							VkImageSubresourceRange{
+								.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+								.baseMipLevel = 0,
+								.levelCount = m_colorImage->createInfo().mipLevels,
+								.baseArrayLayer = 0,
+								.layerCount = 6
+							}
+						);
+						m_colorCubeImageView->setIdentifier(ClassId, this->id(), "CubeImageView");
+
+						if ( !m_colorCubeImageView->createOnHardware() )
+						{
+							TraceError{ClassId} << "Unable to create a cube image view (Color buffer) for texture '" << this->id() << "' !";
+
+							return false;
+						}
 					}
 				}
 				else
@@ -636,7 +570,7 @@ namespace EmEn::Graphics::RenderTarget
 						this->extent(),
 						VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT
 					);
-					m_depthStencilImage->setIdentifier(ClassId, this->name(), "Image");
+					m_depthStencilImage->setIdentifier(ClassId, this->id(), "Image");
 
 					if ( !m_depthStencilImage->createOnHardware() )
 					{
@@ -647,7 +581,6 @@ namespace EmEn::Graphics::RenderTarget
 
 					/* NOTE: Set the final image layout for being usable with a material. */
 					m_depthStencilImage->setCurrentImageLayout(VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
-
 
 					/* Create a view to exploit the depth part of the image. */
 					if ( this->precisions().depthBits() > 0 )
@@ -663,7 +596,7 @@ namespace EmEn::Graphics::RenderTarget
 								.layerCount = m_depthStencilImage->createInfo().arrayLayers
 							}
 						);
-						m_depthImageView->setIdentifier(ClassId, this->name(), "ImageView");
+						m_depthImageView->setIdentifier(ClassId, this->id(), "ImageView");
 
 						if ( !m_depthImageView->createOnHardware() )
 						{
@@ -687,7 +620,7 @@ namespace EmEn::Graphics::RenderTarget
 								.layerCount = m_depthStencilImage->createInfo().arrayLayers
 							}
 						);
-						m_stencilImageView->setIdentifier(ClassId, this->name(), "ImageView");
+						m_stencilImageView->setIdentifier(ClassId, this->id(), "ImageView");
 
 						if ( !m_stencilImageView->createOnHardware() )
 						{
@@ -786,6 +719,12 @@ namespace EmEn::Graphics::RenderTarget
 						.dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT
 					});
 
+					/* Enable multiview for cubemap rendering (Vulkan 1.1+) */
+					if ( this->isCubemap() )
+					{
+						renderPass->enableMultiview();
+					}
+
 					if ( !renderPass->createOnHardware() )
 					{
 						TraceError{ClassId} << "Unable to create the render pass for texture '" << this->id() << "' !";
@@ -807,7 +746,7 @@ namespace EmEn::Graphics::RenderTarget
 			createFramebuffer (const std::shared_ptr< Vulkan::RenderPass > & renderPass) noexcept
 			{
 				m_framebuffer = std::make_shared< Vulkan::Framebuffer >(renderPass, this->extent());
-				m_framebuffer->setIdentifier(ClassId, this->name(), "Framebuffer");
+				m_framebuffer->setIdentifier(ClassId, this->id(), "Framebuffer");
 
 				/* Attach the color buffer. */
 				if ( m_colorImageView != nullptr )
@@ -863,6 +802,7 @@ namespace EmEn::Graphics::RenderTarget
 
 			std::shared_ptr< Vulkan::Image > m_colorImage;
 			std::shared_ptr< Vulkan::ImageView > m_colorImageView;
+			std::shared_ptr< Vulkan::ImageView > m_colorCubeImageView;
 			std::shared_ptr< Vulkan::Image > m_depthStencilImage;
 			std::shared_ptr< Vulkan::ImageView > m_depthImageView;
 			std::shared_ptr< Vulkan::ImageView > m_stencilImageView;

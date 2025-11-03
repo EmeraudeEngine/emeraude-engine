@@ -197,7 +197,7 @@ namespace EmEn::Scenes
 
 			const std::string name{"DefaultCamera"};
 
-			if ( m_rootNode->createChild(name + "Node", m_lifetimeMS)->newCamera(true, true, name) == nullptr )
+			if ( m_rootNode->createChild(name + "Node", {}, m_lifetimeMS)->newCamera(true, true, name) == nullptr )
 			{
 				Tracer::error(ClassId, "Scene initialization error : Unable to create a default camera !");
 
@@ -211,7 +211,7 @@ namespace EmEn::Scenes
 
 			const std::string name{"DefaultMicrophone"};
 
-			if ( m_rootNode->createChild(name + "Node", m_lifetimeMS)->newMicrophone(true, name) == nullptr )
+			if ( m_rootNode->createChild(name + "Node", {}, m_lifetimeMS)->newMicrophone(true, name) == nullptr )
 			{
 				Tracer::error(ClassId, "Scene initialization error : Unable to create a default microphone !");
 
@@ -329,7 +329,7 @@ namespace EmEn::Scenes
 		/* Create the render target. */
 		auto renderTarget = std::make_shared< RenderTarget::View< ViewMatrices2DUBO > >(name, width, height, precisions, isOrthographicProjection);
 
-		if ( !renderTarget->create(m_AVConsoleManager.graphicsRenderer()) )
+		if ( !renderTarget->createRenderTarget(m_AVConsoleManager.graphicsRenderer()) )
 		{
 			TraceError{ClassId} << "Unable to create the render to view '" << name << "' !";
 
@@ -364,7 +364,7 @@ namespace EmEn::Scenes
 		/* Create the render target. */
 		auto renderTarget = std::make_shared< RenderTarget::View< ViewMatrices3DUBO > >(name, size, precisions, isOrthographicProjection);
 
-		if ( !renderTarget->create(m_AVConsoleManager.graphicsRenderer()) )
+		if ( !renderTarget->createRenderTarget(m_AVConsoleManager.graphicsRenderer()) )
 		{
 			TraceError{ClassId} << "Unable to create the render to cubic view '" << name << "' !";
 
@@ -400,14 +400,7 @@ namespace EmEn::Scenes
 		/* Create the render target. */
 		auto renderTarget = std::make_shared< RenderTarget::Texture< ViewMatrices2DUBO > >(name, width, height, colorCount, isOrthographicProjection);
 
-		if ( !renderTarget->enableManualLoading() )
-		{
-			return {};
-		}
-
-		const auto success = renderTarget->createOnHardware(m_AVConsoleManager.graphicsRenderer());
-
-		if ( !renderTarget->setManualLoadSuccess(success) )
+		if ( !renderTarget->createRenderTarget(m_AVConsoleManager.graphicsRenderer()) )
 		{
 			TraceError{ClassId} << "Unable to create the render to texture 2D '" << name << "' !";
 
@@ -443,14 +436,7 @@ namespace EmEn::Scenes
 		/* Create the render target. */
 		auto renderTarget = std::make_shared< RenderTarget::Texture< ViewMatrices3DUBO > >(name, size, colorCount, isOrthographicProjection);
 
-		if ( !renderTarget->enableManualLoading() )
-		{
-			return {};
-		}
-
-		const auto success = renderTarget->createOnHardware(m_AVConsoleManager.graphicsRenderer());
-
-		if ( !renderTarget->setManualLoadSuccess(success) )
+		if ( !renderTarget->createRenderTarget(m_AVConsoleManager.graphicsRenderer()) )
 		{
 			TraceError{ClassId} << "Unable to create the render to cubemap '" << name << "' !";
 
@@ -486,7 +472,7 @@ namespace EmEn::Scenes
 		/* Create the render target. */
 		auto renderTarget = std::make_shared< RenderTarget::ShadowMap< ViewMatrices2DUBO > >(name, resolution, isOrthographicProjection, true);
 
-		if ( !renderTarget->create(m_AVConsoleManager.graphicsRenderer()) )
+		if ( !renderTarget->createRenderTarget(m_AVConsoleManager.graphicsRenderer()) )
 		{
 			TraceError{ClassId} << "Unable to create the render to shadow map '" << name << "' !";
 
@@ -522,7 +508,7 @@ namespace EmEn::Scenes
 		/* Create the render target. */
 		auto renderTarget = std::make_shared< RenderTarget::ShadowMap< ViewMatrices3DUBO > >(name, resolution, isOrthographicProjection);
 
-		if ( !renderTarget->create(m_AVConsoleManager.graphicsRenderer()) )
+		if ( !renderTarget->createRenderTarget(m_AVConsoleManager.graphicsRenderer()) )
 		{
 			TraceError{ClassId} << "Unable to create the render to cubic shadow map '" << name << "' !";
 

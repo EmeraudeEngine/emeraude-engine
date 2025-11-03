@@ -53,7 +53,7 @@ namespace EmEn::Graphics::Renderable
 		}
 
 		const auto materialResource = serviceProvider.container< BasicResource >()->getOrCreateResource("DefaultSkyboxMaterial", [&serviceProvider] (BasicResource & newMaterial) {
-			if ( !newMaterial.setTexture(serviceProvider.container< TextureResource::TextureCubemap >()->getDefaultResource()) )
+			if ( !newMaterial.setTextureResource(serviceProvider.container< TextureResource::TextureCubemap >()->getDefaultResource()) )
 			{
 				return false;
 			}
@@ -92,7 +92,7 @@ namespace EmEn::Graphics::Renderable
 		const auto textureName = data[TextureKey].asString();
 
 		const auto materialResource = serviceProvider.container< BasicResource >()->getOrCreateResource(textureName + "SkyboxMaterial", [&] (BasicResource & newMaterial) {
-			if ( !newMaterial.setTexture(serviceProvider.container< TextureResource::TextureCubemap >()->getResource(textureName, this->isDirectLoading())) )
+			if ( !newMaterial.setTextureResource(serviceProvider.container< TextureResource::TextureCubemap >()->getResource(textureName, this->isDirectLoading())) )
 			{
 				return false;
 			}

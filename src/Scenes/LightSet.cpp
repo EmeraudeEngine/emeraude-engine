@@ -420,7 +420,7 @@ namespace EmEn::Scenes
 		staticLighting
 			.setAmbientParameters(Blue, 0.005F)
 			.setLightParameters(White, 1.5F)
-			.setAsDirectionalLight({1.0F, 0.0F, 0.0F});
+			.setAsDirectionalLight({0.0F, 1.0F, 0.0F}, true);
 
 		return m_staticLighting.emplace(DefaultStaticLightingName, staticLighting).first->second;
 	}

@@ -41,6 +41,35 @@ namespace EmEn::Graphics::Material
 
 	Renderer * Interface::s_graphicsRenderer{nullptr};
 
+	bool
+	Interface::onDependenciesLoaded () noexcept
+	{
+		if ( s_graphicsRenderer == nullptr )
+		{
+			Tracer::error(TracerTag, "The static renderer pointer is null !");
+
+			return false;
+		}
+
+		if ( this->isCreated() )
+		{
+			TraceWarning{TracerTag} << "The material resource '" << this->name() << "' is already created !";
+
+			return true;
+		}
+
+		if ( !this->create(*s_graphicsRenderer) )
+		{
+			TraceError{TracerTag} << "Unable to load the material resource '" << this->name() << "' into the GPU!";
+
+			return false;
+		}
+
+		this->enableFlag(IsCreated);
+
+		return true;
+	}
+
 	void
 	Interface::enableBlendingFromJson (const Json::Value & data) noexcept
 	{
@@ -65,27 +94,5 @@ namespace EmEn::Graphics::Material
 		const auto size = this->getUniformBlock(0, 0).bytes();
 
 		return renderer.sharedUBOManager().createSharedUniformBuffer(identifier, size);
-	}
-
-	bool
-	Interface::onDependenciesLoaded () noexcept
-	{
-		if ( s_graphicsRenderer == nullptr )
-		{
-			TraceError{TracerTag} << "The static renderer pointer is null !";
-
-			return false;
-		}
-
-		if ( !this->isCreated() && !this->createOnHardware(*s_graphicsRenderer) )
-		{
-			TraceError{TracerTag} << "Unable to load material resource (" << this->classLabel() << ") '" << this->name() << "' !";
-
-			return false;
-		}
-
-		this->onMaterialLoaded();
-
-		return true;
 	}
 }

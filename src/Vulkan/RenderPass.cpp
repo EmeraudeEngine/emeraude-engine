@@ -102,6 +102,28 @@ namespace EmEn::Vulkan
 		return description;
 	}
 
+	void
+	RenderPass::enableMultiview () noexcept
+	{
+		/* Configure for 6 views (cubemap faces) */
+		m_viewMask = 0b00111111; /* 6 bits for 6 faces */
+		m_correlationMask = 0b00111111;
+
+		m_multiviewCreateInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_MULTIVIEW_CREATE_INFO;
+		m_multiviewCreateInfo.pNext = nullptr;
+		m_multiviewCreateInfo.subpassCount = 1;
+		m_multiviewCreateInfo.pViewMasks = &m_viewMask;
+		m_multiviewCreateInfo.dependencyCount = 0;
+		m_multiviewCreateInfo.pViewOffsets = nullptr;
+		m_multiviewCreateInfo.correlationMaskCount = 1;
+		m_multiviewCreateInfo.pCorrelationMasks = &m_correlationMask;
+
+		// Chain into pNext
+		m_multiviewCreateInfo.pNext = m_createInfo.pNext;
+		m_createInfo.pNext = &m_multiviewCreateInfo;
+		m_multiviewEnabled = true;
+	}
+
 	StaticVector< VkSubpassDescription, 4 >
 	RenderPass::getSubPassDescriptions () const noexcept
 	{

@@ -43,6 +43,7 @@ namespace EmEn
 		class ImageView;
 		class Sampler;
 		class UniformBufferObject;
+		class TextureInterface;
 	}
 
 	namespace Graphics::TextureResource
@@ -179,7 +180,7 @@ namespace EmEn::Vulkan
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool writeSampler (uint32_t bindingIndex, const Graphics::TextureResource::Abstract & texture) const noexcept;
+			bool writeSampler (uint32_t bindingIndex, const TextureInterface & texture) const noexcept;
 
 			/**
 			 * @brief Writes a sampled texture to the descriptor set.
@@ -188,7 +189,7 @@ namespace EmEn::Vulkan
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool writeCombinedImageSampler (uint32_t bindingIndex, const Graphics::TextureResource::Abstract & texture) const noexcept;
+			bool writeCombinedImageSampler (uint32_t bindingIndex, const TextureInterface & texture) const noexcept;
 
 			/**
 			* @brief Writes a sampled texture to the descriptor set.
