@@ -128,7 +128,7 @@ namespace EmEn::Scenes
 		/* Checks for global scene properties. */
 		const auto properties = m_root[FastJSON::PropertiesKey];
 
-		scene.setPhysicalEnvironmentProperties({
+		scene.setEnvironmentPhysicalProperties({
 			FastJSON::getValue< float >(properties, SurfaceGravityKey).value_or(Physics::Gravity::Earth< float >),
 			FastJSON::getValue< float >(properties, AtmosphericDensityKey).value_or(Physics::Density::EarthStandardAir< float >),
 			FastJSON::getValue< float >(properties, PlanetRadiusKey).value_or(Physics::Radius::Earth< float >)

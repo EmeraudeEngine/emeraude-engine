@@ -145,10 +145,39 @@ namespace EmEn::Scenes::Component
 			[[nodiscard]]
 			Saphir::Declaration::UniformBlock getUniformBlock (uint32_t set, uint32_t binding, bool useShadow) const noexcept override;
 
+			/**
+			 * @brief Sets the light direction from the coordinate direction instead of the position to origin.
+			 * @param state The state.
+			 * @brief void
+			 */
+			void
+			useDirectionVector (bool state) noexcept
+			{
+				m_useDirectionVector = state;
+			}
+
+			/**
+			 * @brief Returns whether the light direction is using the coordinate direction instead of the position to origin.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isUsingDirectionVector () const noexcept
+			{
+				return m_useDirectionVector;
+			}
+
 		private:
 
 			/** @copydoc EmEn::Animations::AnimatableInterface::playAnimation() */
 			bool playAnimation (uint8_t animationID, const Libs::Variant & value, size_t cycle) noexcept override;
+
+			/**
+			 * @brief Sets the light direction into the buffer.
+			 * @brief A reference to a cartesian frame for the light location.
+			 * @return void
+			 */
+			void setDirection (const Libs::Math::CartesianFrame< float > & worldCoordinates) noexcept;
 
 			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::getFovOrNear() */
 			[[nodiscard]]
@@ -218,6 +247,7 @@ namespace EmEn::Scenes::Component
 				0.0F, 0.0F, 1.0F, 0.0F,
 				0.0F, 0.0F, 0.0F, 1.0F
 			};
+			bool m_useDirectionVector{false};
 	};
 
 	inline

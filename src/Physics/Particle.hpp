@@ -28,7 +28,6 @@
 
 /* STL inclusions */
 #include <cstdint>
-#include <unordered_set>
 #include <memory>
 
 /* Local inclusions for inheritances. */
@@ -37,7 +36,6 @@
 /* Local inclusions. */
 #include "Scenes/Component/Abstract.hpp"
 #include "Scenes/Component/AbstractModifier.hpp"
-#include "PhysicalEnvironmentProperties.hpp"
 
 namespace EmEn::Physics
 {
@@ -299,7 +297,7 @@ namespace EmEn::Physics
 			 * @param worldCoordinates A reference to a cartesian frame according to the particle emitter location.
 			 * @return bool
 			 */
-			bool updateSimulation (const Scenes::Scene & scene, const PhysicalObjectProperties & particleProperties, const Libs::Math::CartesianFrame< float > & worldCoordinates) noexcept;
+			bool updateSimulation (const Scenes::Scene & scene, const BodyPhysicalProperties & particleProperties, const Libs::Math::CartesianFrame< float > & worldCoordinates) noexcept;
 
 			/**
 			 * @brief Updates the particles position and properties.

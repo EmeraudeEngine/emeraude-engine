@@ -261,20 +261,6 @@ namespace EmEn::Libs
 			}
 
 			/**
-			 * @brief Creates a sub node at a given position.
-			 * @warning If the node already exists, the method will return a null pointer.
-			 * @param name A reference to a string.
-			 * @param position Set the position of the new node.
-			 * @return std::shared_ptr< NodeTrait >
-			 */
-			[[nodiscard]]
-			std::shared_ptr< NodeTrait >
-			createChild (const std::string & name, const Math::Vector< 3, precision_t > & position) noexcept
-			{
-				return this->createChild(name, Math::CartesianFrame< precision_t >{position});
-			}
-
-			/**
 			 * @brief Returns a child by its name.
 			 * @warning Can be nullptr !
 			 * @param name A reference to a string.

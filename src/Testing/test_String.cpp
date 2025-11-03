@@ -31,7 +31,7 @@
 #include "Libs/String.hpp"
 #include "Libs/Utility.hpp"
 
-using namespace Libs;
+using namespace EmEn::Libs;
 
 TEST(String, numericLabel)
 {
@@ -330,4 +330,274 @@ TEST(String, doubleVectorSerialization)
 	{
 		ASSERT_EQ(sourceData.at(index), recoveredData.at(index));
 	}
+}
+
+TEST(String, trimEdgeCases)
+{
+	/* Empty string */
+	ASSERT_EQ(String::trim(""), "");
+
+	/* Only whitespace */
+	ASSERT_EQ(String::trim("   \t\n  "), "");
+
+	/* No whitespace */
+	ASSERT_EQ(String::trim("NoSpaces"), "NoSpaces");
+
+	/* Whitespace in middle only */
+	ASSERT_EQ(String::trim("Hello World"), "Hello World");
+}
+
+TEST(String, padEdgeCases)
+{
+	/* Target length smaller than source */
+	ASSERT_EQ(String::pad("LongString", 5, '-', String::Side::Right), "LongString");
+
+	/* Target length equal to source */
+	ASSERT_EQ(String::pad("Exact", 5, '-', String::Side::Left), "Exact");
+
+	/* Empty string - Should fill entirely with padding */
+	ASSERT_EQ(String::pad("", 5, '*', String::Side::Both), "*****");
+
+	/* Single character padding on both sides */
+	ASSERT_EQ(String::pad("X", 5, '-', String::Side::Both), "--X--");
+
+	/* Odd padding distribution */
+	ASSERT_EQ(String::pad("AB", 7, '*', String::Side::Both), "**AB***");
+}
+
+TEST(String, explodeEdgeCases)
+{
+	/* Delimiter not found */
+	const auto result1 = String::explode("NoDelimiterHere", "XXX");
+	ASSERT_EQ(result1.size(), 1);
+	ASSERT_EQ(result1[0], "NoDelimiterHere");
+
+	/* Empty string */
+	const auto result2 = String::explode("", ",");
+	ASSERT_EQ(result2.size(), 1);
+	ASSERT_EQ(result2[0], "");
+
+	/* Three dashes with -- delimiter */
+	const auto result3 = String::explode("---", "--");
+	ASSERT_EQ(result3.size(), 2);
+	ASSERT_EQ(result3[0], "");
+	ASSERT_EQ(result3[1], "-");
+
+	/* Delimiter at start and end - final empty segment not included when delimiter is at end */
+	const auto result4 = String::explode("--content--", "--");
+	ASSERT_EQ(result4.size(), 2);
+	ASSERT_EQ(result4[0], "");
+	ASSERT_EQ(result4[1], "content");
+}
+
+TEST(String, implodeEdgeCases)
+{
+	/* Empty vector */
+	const std::vector< std::string > empty;
+	ASSERT_EQ(String::implode(empty), "");
+	ASSERT_EQ(String::implode(empty, ' '), "");
+
+	/* Single element */
+	const std::vector< std::string > single{"Alone"};
+	ASSERT_EQ(String::implode(single, ','), "Alone");
+
+	/* Empty strings in vector - default behavior (keep empty) */
+	const std::vector< std::string > withEmpty{"", "middle", ""};
+	ASSERT_EQ(String::implode(withEmpty, '|'), "|middle|");
+
+	/* Empty strings in vector - with ignoreEmpty = true */
+	ASSERT_EQ(String::implode(withEmpty, '|', true), "middle");
+
+	/* All empty strings - default behavior */
+	const std::vector< std::string > allEmpty{"", "", ""};
+	ASSERT_EQ(String::implode(allEmpty, '-'), "--");
+
+	/* All empty strings - with ignoreEmpty = true */
+	ASSERT_EQ(String::implode(allEmpty, '-', true), "");
+
+	/* Mixed content with ignoreEmpty = true */
+	const std::vector< std::string > mixed{"first", "", "second", "", "", "third"};
+	ASSERT_EQ(String::implode(mixed, ' ', false), "first  second   third");
+	ASSERT_EQ(String::implode(mixed, ' ', true), "first second third");
+}
+
+TEST(String, replaceEdgeCases)
+{
+	/* Pattern not found */
+	ASSERT_EQ(String::replace("notfound", "new", "test string"), "test string");
+
+	/* Count = 0 (replace all) */
+	ASSERT_EQ(String::replace("a", "X", "aaa", 0), "XXX");
+
+	/* Replace with empty string */
+	ASSERT_EQ(String::replace("bad", "", "bad bad bad"), "  ");
+
+	/* Empty source string */
+	ASSERT_EQ(String::replace("any", "thing", ""), "");
+}
+
+TEST(String, removeCharsEdgeCases)
+{
+	/* Character not in string */
+	ASSERT_EQ(String::removeChars("Hello", 'z'), "Hello");
+
+	/* Empty string */
+	ASSERT_EQ(String::removeChars("", 'a'), "");
+
+	/* All characters removed */
+	ASSERT_EQ(String::removeChars("aaaa", 'a'), "");
+
+	/* Multiple character set removal */
+	ASSERT_EQ(String::removeChars("Test123", "Test"), "123");
+}
+
+TEST(String, fileOperationsEdgeCases)
+{
+	/* Empty path */
+	ASSERT_EQ(String::removeFileExtension(""), "");
+	ASSERT_EQ(String::extractFilename(""), "");
+
+	/* No extension */
+	ASSERT_EQ(String::removeFileExtension("file_without_ext"), "file_without_ext");
+
+	/* Multiple dots */
+	ASSERT_EQ(String::removeFileExtension("archive.tar.gz"), "archive.tar");
+	ASSERT_EQ(String::extractFilename("/path/to/archive.tar.gz"), "archive.tar.gz");
+
+	/* Dot at start (hidden file) */
+	ASSERT_EQ(String::extractFilename("/home/.hidden"), ".hidden");
+
+	/* Only filename, no path */
+	ASSERT_EQ(String::extractFilename("justfile.txt"), "justfile.txt");
+}
+
+TEST(String, extractNumbersEdgeCases)
+{
+	/* No numbers */
+	ASSERT_EQ(String::extractNumbers("No digits here!"), "");
+
+	/* Only numbers */
+	ASSERT_EQ(String::extractNumbers("123 456 789"), "123 456 789");
+
+	/* Negative numbers */
+	ASSERT_EQ(String::extractNumbers("Temperature is -15.5 degrees"), "15.5");
+}
+
+TEST(String, extractTagsEdgeCases)
+{
+	/* No tags */
+	const auto empty = String::extractTags("No tags in this string");
+	ASSERT_EQ(empty.size(), 0);
+
+	/* Nested tags */
+	const auto nested = String::extractTags("Text {OUTER{INNER}} end");
+	ASSERT_TRUE(nested.size() > 0);
+
+	/* Unclosed tag */
+	const auto unclosed = String::extractTags("Start {UNCLOSED string");
+	ASSERT_EQ(unclosed.size(), 0);
+
+	/* Adjacent tags */
+	const auto adjacent = String::extractTags("{TAG1}{TAG2}{TAG3}");
+	ASSERT_EQ(adjacent.size(), 3);
+}
+
+TEST(String, leftRightEdgeCases)
+{
+	const std::string source{"Sample text for testing"};
+
+	/* Pattern not found */
+	ASSERT_EQ(String::left(source, "NOTFOUND"), source);
+	ASSERT_EQ(String::right(source, "NOTFOUND"), "");
+
+	/* Pattern at start */
+	ASSERT_EQ(String::left(source, "Sample"), "");
+
+	/* Pattern at end */
+	ASSERT_EQ(String::right(source, "testing"), "");
+
+	/* Empty pattern */
+	ASSERT_EQ(String::left(source, ""), source);
+}
+
+TEST(String, toNumberInvalid)
+{
+	/* Invalid integer string should return 0 or throw depending on implementation */
+	ASSERT_EQ(String::toNumber< int >("not_a_number"), 0);
+	ASSERT_EQ(String::toNumber< int >(""), 0);
+
+	/* Overflow values */
+	ASSERT_EQ(String::toNumber< int8_t >("999"), 0); // Would overflow int8_t
+
+	/* Mixed content */
+	ASSERT_EQ(String::toNumber< int >("123abc"), 123); // May parse partial
+}
+
+TEST(String, concatMultipleTypes)
+{
+	/* More than 2 arguments via chaining */
+	const auto result1 = String::concat(String::concat("Count: ", 42), " items");
+	ASSERT_EQ(result1, "Count: 42 items");
+
+	/* Boolean values */
+	ASSERT_EQ(String::concat("Result: ", true), "Result: 1");
+	ASSERT_EQ(String::concat("Failed: ", false), "Failed: 0");
+
+	/* Mixed precision floats */
+	ASSERT_EQ(String::concat("Pi: ", 3.14159F).substr(0, 9), "Pi: 3.141");
+}
+
+TEST(String, vectorSerializationEdgeCases)
+{
+	/* Empty vector */
+	const std::vector< int > emptyVec;
+	const auto serializedEmpty = String::serializeVector(emptyVec);
+	const auto recoveredEmpty = String::deserializeVector< int >(serializedEmpty);
+	ASSERT_EQ(recoveredEmpty.size(), 0);
+
+	/* Single element */
+	const std::vector< int > singleVec{42};
+	const auto serializedSingle = String::serializeVector(singleVec);
+	const auto recoveredSingle = String::deserializeVector< int >(serializedSingle);
+	ASSERT_EQ(recoveredSingle.size(), 1);
+	ASSERT_EQ(recoveredSingle[0], 42);
+
+	/* Negative and zero values */
+	const std::vector< int > mixedVec{-100, 0, 100};
+	const auto serializedMixed = String::serializeVector(mixedVec);
+	const auto recoveredMixed = String::deserializeVector< int >(serializedMixed);
+	ASSERT_EQ(recoveredMixed.size(), 3);
+	ASSERT_EQ(recoveredMixed[0], -100);
+	ASSERT_EQ(recoveredMixed[1], 0);
+	ASSERT_EQ(recoveredMixed[2], 100);
+}
+
+TEST(String, ucfirstEdgeCases)
+{
+	/* Already uppercase */
+	ASSERT_EQ(String::ucfirst("ALLCAPS"), "ALLCAPS");
+
+	/* Single character */
+	ASSERT_EQ(String::ucfirst("a"), "A");
+	ASSERT_EQ(String::ucfirst("Z"), "Z");
+
+	/* Empty string */
+	ASSERT_EQ(String::ucfirst(""), "");
+
+	/* Special characters at start */
+	ASSERT_EQ(String::ucfirst("123test"), "123test");
+	ASSERT_EQ(String::ucfirst("!hello"), "!hello");
+}
+
+TEST(String, unicodeToUTF8Range)
+{
+	/* ASCII range */
+	ASSERT_EQ(String::unicodeToUTF8(65), "A");
+	ASSERT_EQ(String::unicodeToUTF8(97), "a");
+
+	/* Latin extended */
+	ASSERT_EQ(String::unicodeToUTF8(233), "é");
+
+	/* Emoji range (if supported) */
+	ASSERT_EQ(String::unicodeToUTF8(128512).empty(), false); // 😀
 }

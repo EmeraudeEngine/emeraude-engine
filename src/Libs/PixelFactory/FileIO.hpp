@@ -129,6 +129,7 @@ namespace EmEn::Libs::PixelFactory::FileIO
 		if ( extension == "tga" )
 		{
 			FileFormatTarga< pixel_data_t, dimension_t > fileFormat;
+			fileFormat.setRLECompression(true);
 
 			return fileFormat.writeFile(filepath, pixmap);
 		}

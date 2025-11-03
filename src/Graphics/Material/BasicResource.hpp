@@ -35,7 +35,7 @@
 /* Local inclusions for usages. */
 #include "Resources/Container.hpp"
 #include "Graphics/SharedUniformBuffer.hpp"
-#include "Physics/PhysicalSurfaceProperties.hpp"
+#include "Physics/SurfacePhysicalProperties.hpp"
 #include "Component/Texture.hpp"
 
 namespace EmEn::Graphics::Material
@@ -104,7 +104,7 @@ namespace EmEn::Graphics::Material
 			 */
 			~BasicResource () override
 			{
-				this->destroyFromHardware();
+				this->destroy();
 			}
 
 			/**
@@ -158,20 +158,6 @@ namespace EmEn::Graphics::Material
 				return sizeof(*this);
 			}
 
-			/** @copydoc EmEn::Graphics::Material::Interface::createOnHardware() */
-			bool createOnHardware (Renderer & renderer) noexcept override;
-
-			/** @copydoc EmEn::Graphics::Material::Interface::destroyFromHardware() */
-			void destroyFromHardware () noexcept override;
-
-			/** @copydoc EmEn::Graphics::Material::Interface::isCreated() */
-			[[nodiscard]]
-			bool
-			isCreated () const noexcept override
-			{
-				return this->isFlagEnabled(IsCreated);
-			}
-
 			/** @copydoc EmEn::Graphics::Material::Interface::isComplex() */
 			[[nodiscard]]
 			bool
@@ -194,16 +180,16 @@ namespace EmEn::Graphics::Material
 
 			/** @copydoc EmEn::Graphics::Material::Interface::physicalSurfaceProperties() const */
 			[[nodiscard]]
-			const Physics::PhysicalSurfaceProperties &
-			physicalSurfaceProperties () const noexcept override
+			const Physics::SurfacePhysicalProperties &
+			surfacePhysicalProperties () const noexcept override
 			{
 				return m_physicalSurfaceProperties;
 			}
 
 			/** @copydoc EmEn::Graphics::Material::Interface::physicalSurfaceProperties() */
 			[[nodiscard]]
-			Physics::PhysicalSurfaceProperties &
-			physicalSurfaceProperties () noexcept override
+			Physics::SurfacePhysicalProperties &
+			surfacePhysicalProperties () noexcept override
 			{
 				return m_physicalSurfaceProperties;
 			}
@@ -291,12 +277,20 @@ namespace EmEn::Graphics::Material
 			bool setColor (const Libs::PixelFactory::Color< float > & color) noexcept;
 
 			/**
-			 * @brief Sets a texture as material appearance.
+			 * @brief Sets a texture resource as material appearance.
 			 * @param texture A reference to a texture resource smart pointer.
 			 * @param enableAlpha Enable the use of alpha channel for opacity/blending operation. Default false.
 			 * @return bool
 			 */
-			bool setTexture (const std::shared_ptr< TextureResource::Abstract > & texture, bool enableAlpha = false) noexcept;
+			bool setTextureResource (const std::shared_ptr< TextureResource::Abstract > & texture, bool enableAlpha = false) noexcept;
+
+			/**
+			 * @brief Sets a texture interface as material appearance.
+			 * @param texture A reference to a texture interface smart pointer.
+			 * @param enableAlpha Enable the use of alpha channel for opacity/blending operation. Default false.
+			 * @return bool
+			 */
+			bool setTexture (const std::shared_ptr< Vulkan::TextureInterface > & texture, bool enableAlpha = false) noexcept;
 
 			/**
 			 * @brief Sets a color for the specular component.
@@ -411,6 +405,13 @@ namespace EmEn::Graphics::Material
 
 		private:
 
+			/** @copydoc EmEn::Graphics::Material::Interface::create() noexcept */
+			[[nodiscard]]
+			bool create (Renderer & renderer) noexcept override;
+
+			/** @copydoc EmEn::Graphics::Material::Interface::destroy() noexcept */
+			void destroy () noexcept override;
+
 			/** @copydoc EmEn::Graphics::Material::Interface::getSharedUniformBufferIdentifier() */
 			[[nodiscard]]
 			std::string getSharedUniformBufferIdentifier () const noexcept override;
@@ -427,17 +428,6 @@ namespace EmEn::Graphics::Material
 			[[nodiscard]]
 			bool createDescriptorSet (Renderer & renderer, const Vulkan::UniformBufferObject & uniformBufferObject) noexcept override;
 
-			/** @copydoc EmEn::Graphics::Material::Interface::onMaterialLoaded() */
-			void onMaterialLoaded () noexcept override;
-
-			/**
-			 * @brief Creates the necessary data onto the GPU for this material.
-			 * @param renderer A reference to the graphics renderer.
-			 * @return bool
-			 */
-			[[nodiscard]]
-			bool createVideoMemory (Renderer & renderer) noexcept;
-
 			/**
 			 * @brief Updates the UBO with material properties.
 			 * @return void
@@ -447,7 +437,7 @@ namespace EmEn::Graphics::Material
 			/**
 			 * @brief Generates the fragment shader code using a texture.
 			 * @param fragmentShader A reference to the fragment shader.
-			 * @param materialSet The set number of the material.
+			 * @param materialSet The set index of the material.
 			 * @return bool
 			 */
 			[[nodiscard]]
@@ -475,7 +465,7 @@ namespace EmEn::Graphics::Material
 			static constexpr auto DefaultOpacity{1.0F};
 			static constexpr auto DefaultAutoIllumination{0.0F};
 
-			Physics::PhysicalSurfaceProperties m_physicalSurfaceProperties;
+			Physics::SurfacePhysicalProperties m_physicalSurfaceProperties;
 			std::unique_ptr< Component::Texture > m_textureComponent;
 			BlendingMode m_blendingMode{BlendingMode::None};
 			std::array< float, 12 > m_materialProperties{

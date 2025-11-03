@@ -29,9 +29,69 @@
 /* Local inclusions. */
 #include "Libs/Math/Space2D/Line.hpp"
 #include "Libs/Math/Space2D/Triangle.hpp"
+#include "Libs/Math/Space2D/Segment.hpp"
+#include "Libs/StaticVector.hpp"
+#include "SegmentSegment.hpp"
 
 namespace EmEn::Libs::Math::Space2D
 {
+	/**
+	 * @brief Checks if a line is intersecting a triangle and gives the intersection points.
+	 * @tparam precision_t The data precision. Default float.
+	 * @param line A reference to a line.
+	 * @param triangle A reference to a triangle.
+	 * @param intersections A writable container of intersection points.
+	 * @return int The number of intersection points.
+	 */
+	template< typename precision_t = float >
+	[[nodiscard]]
+	int
+	isIntersecting (const Line< precision_t > & line, const Triangle< precision_t > & triangle, StaticVector< Point< precision_t >, 4 > & intersections) noexcept requires (std::is_floating_point_v< precision_t >)
+	{
+		intersections.clear();
+
+		const auto & points = triangle.points();
+		constexpr precision_t epsilon = precision_t{1e-4};
+
+		for ( size_t index = 0; index < 3; ++index )
+		{
+			Segment< precision_t > edge(points[index], points[(index + 1) % 3]);
+			Point< precision_t > intersection;
+
+			// Convert segment to line for intersection test
+			Line< precision_t > edgeLine(edge.startPoint(), (edge.endPoint() - edge.startPoint()).normalized());
+
+			if ( isIntersecting(line, edgeLine, intersection) )
+			{
+				// Check if intersection point is actually on the segment
+				const auto t = Vector< 2, precision_t >::dotProduct(intersection - edge.startPoint(), edge.endPoint() - edge.startPoint()) /
+				               (edge.endPoint() - edge.startPoint()).lengthSquared();
+
+				if ( t >= 0 && t <= 1 )
+				{
+					// Check for duplicate points (avoid adding same vertex twice)
+					bool isDuplicate = false;
+					const precision_t epsilonSq = epsilon * epsilon;
+					for ( const auto & existing : intersections )
+					{
+						if ( (intersection - existing).lengthSquared() < epsilonSq )
+						{
+							isDuplicate = true;
+							break;
+						}
+					}
+
+					if ( !isDuplicate )
+					{
+						intersections.push_back(intersection);
+					}
+				}
+			}
+		}
+
+		return intersections.size();
+	}
+
 	/**
 	 * @brief Checks if a line is intersecting a triangle.
 	 * @tparam precision_t The data precision. Default float.
@@ -41,51 +101,29 @@ namespace EmEn::Libs::Math::Space2D
 	 */
 	template< typename precision_t = float >
 	[[nodiscard]]
-	static
 	bool
 	isIntersecting (const Line< precision_t > & line, const Triangle< precision_t > & triangle) noexcept requires (std::is_floating_point_v< precision_t >)
 	{
-		// TODO...
+		StaticVector< Point< precision_t >, 4 > intersections;
 
-		return false;
+		return isIntersecting(line, triangle, intersections) > 0;
 	}
 
-	/**
-	 * @brief Checks if a line is intersecting a triangle and gives the intersection point.
-	 * @tparam precision_t The data precision. Default float.
-	 * @param line A reference to a line.
-	 * @param triangle A reference to a triangle.
-	 * @param intersection A writable reference to a vector for the intersection if method returns true.
-	 * @return bool
-	 */
+	/** @copydoc EmEn::Libs::Math::Space2D::isIntersecting(const Line< precision_t > &, const Triangle< precision_t > &) noexcept */
 	template< typename precision_t = float >
 	[[nodiscard]]
-	static
-	bool
-	isIntersecting (const Line< precision_t > & line, const Triangle< precision_t > & triangle, Point< precision_t > & intersection) noexcept requires (std::is_floating_point_v< precision_t >)
-	{
-		// TODO...
-
-		return false;
-	}
-
-	/** @copydoc EmEn::Libs::Math::Space2D::isIntersecting(const Line< precision_t > &, Triangle< precision_t > &) noexcept */
-	template< typename precision_t = float >
-	[[nodiscard]]
-	static
 	bool
 	isIntersecting (const Triangle< precision_t > & triangle, const Line< precision_t > & line) noexcept requires (std::is_floating_point_v< precision_t >)
 	{
 		return isIntersecting(line, triangle);
 	}
 
-	/** @copydoc EmEn::Libs::Math::Space2D::isIntersecting(const Line< precision_t > &, Triangle< precision_t > &, Point< precision_t > &) noexcept */
+	/** @copydoc EmEn::Libs::Math::Space2D::isIntersecting(const Line< precision_t > &, const Triangle< precision_t > &, StaticVector< Point< precision_t >, 4 > &) noexcept */
 	template< typename precision_t = float >
 	[[nodiscard]]
-	static
-	bool
-	isIntersecting (const Triangle< precision_t > & triangle, const Line< precision_t > & line, Point< precision_t > & intersection) noexcept requires (std::is_floating_point_v< precision_t >)
+	int
+	isIntersecting (const Triangle< precision_t > & triangle, const Line< precision_t > & line, StaticVector< Point< precision_t >, 4 > & intersections) noexcept requires (std::is_floating_point_v< precision_t >)
 	{
-		return isIntersecting(line, triangle, intersection);
+		return isIntersecting(line, triangle, intersections);
 	}
 }

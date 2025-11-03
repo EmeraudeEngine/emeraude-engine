@@ -37,7 +37,7 @@ namespace EmEn::Libs::Math::Space3D
 	/**
 	 * @brief Vector specialization of a point in 3D space.
 	 */
-	template< typename precisions_t >
-	requires (std::is_floating_point_v< precisions_t >)
-	using Point = Vector< 3, precisions_t >;
+	template< typename precision_t >
+	requires (std::is_floating_point_v< precision_t >)
+	using Point = Vector< 3, precision_t >;
 }

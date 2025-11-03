@@ -2552,9 +2552,9 @@ namespace EmEn::Libs::PixelFactory
 				}
 				else
 				{
-					constexpr auto maxValue = std::numeric_limits< float >::max();
+					constexpr auto maxValue = static_cast< float >(std::numeric_limits< pixel_data_t >::max());
 
-					return static_cast< pixel_data_t >(std::max(0.0F, std::min(maxValue, (value * maxValue) + 0.5F)));
+					return static_cast< pixel_data_t >(std::max(0.0F, std::min(maxValue, value * maxValue + 0.5F)));
 				}
 			}
 

@@ -27,12 +27,14 @@
 #pragma once
 
 /* STL inclusions. */
+#include <array>
 #include <iostream>
 
 /* Local inclusions. */
 #include "Libs/Math/Space3D/Triangle.hpp"
 #include "Libs/Math/Space3D/Sphere.hpp"
 #include "Libs/Math/Space3D/AACuboid.hpp"
+#include "Libs/Math/Space3D/SAT.hpp"
 
 namespace EmEn::Libs::Math::Space3D
 {
@@ -57,48 +59,12 @@ namespace EmEn::Libs::Math::Space3D
 		const auto & pA = triangleA.points();
 		const auto & pB = triangleB.points();
 
-		/* NOTE: Gather the axes to be tested (the normals of each side of the two triangles). */
-		std::array< Vector< 2, precision_t >, 6 > axes = {
-			(pA[1] - pA[0]).perpendicular(),
-			(pA[2] - pA[1]).perpendicular(),
-			(pA[0] - pA[2]).perpendicular(),
-			(pB[1] - pB[0]).perpendicular(),
-			(pB[2] - pB[1]).perpendicular(),
-			(pB[0] - pB[2]).perpendicular()
-		};
+		std::array< Vector< 3, precision_t >, 3 > verticesA = {pA[0], pA[1], pA[2]};
+		std::array< Vector< 3, precision_t >, 3 > verticesB = {pB[0], pB[1], pB[2]};
 
-		/* NOTE: Utility function to project a triangle onto an axis */
-		auto project = [] (const std::array< Point< precision_t >, 3 > & points, const Vector< 2, precision_t > & axis)
-		{
-			precision_t min = Vector< 2, precision_t >::dotProduct(points[0], axis);
-			precision_t max = min;
+		Vector< 3, precision_t > mtv;
 
-			for ( size_t i = 1; i < 3; ++i )
-			{
-				precision_t p = Vector< 2, precision_t >::dotProduct(points[i], axis);
-
-				min = std::min(min, p);
-				max = std::max(max, p);
-			}
-
-			return std::make_pair(min, max);
-		};
-
-		for ( const auto & axis : axes )
-		{
-			const auto projectionA = project(pA, axis);
-			const auto projectionB = project(pB, axis);
-
-			/* NOTE: Check if there is a "gap" between the projections.
-			 * If there is one, we have found an axis of separation, so no collision. */
-			if ( projectionA.second < projectionB.first || projectionB.second < projectionA.first )
-			{
-				return false; // Pas de collision
-			}
-		}
-
-		/* NOTE: If no separating axis was found, the triangles are in collision. */
-		return true;
+		return SAT::checkCollision(verticesA, verticesB, mtv);
 	}
 
 	/**
@@ -122,73 +88,12 @@ namespace EmEn::Libs::Math::Space3D
 		}
 
 		const auto & pA = triangleA.points();
-	    const auto & pB = triangleB.points();
+		const auto & pB = triangleB.points();
 
-	    precision_t overlap = std::numeric_limits< precision_t >::max();
-	    Vector< 2, precision_t > smallestAxis;
+		std::array< Vector< 3, precision_t >, 3 > verticesA = {pA[0], pA[1], pA[2]};
+		std::array< Vector< 3, precision_t >, 3 > verticesB = {pB[0], pB[1], pB[2]};
 
-	    std::array< Vector< 2, precision_t >, 6 > axes = {
-	        (pA[1] - pA[0]).perpendicular(),
-	        (pA[2] - pA[1]).perpendicular(),
-	        (pA[0] - pA[2]).perpendicular(),
-	        (pB[1] - pB[0]).perpendicular(),
-	        (pB[2] - pB[1]).perpendicular(),
-	        (pB[0] - pB[2]).perpendicular()
-	    };
-
-	    auto project = [] (const std::array< Point< precision_t >, 3 > & points, const Vector< 2, precision_t > & axis)
-		{
-	        precision_t min = Vector< 2, precision_t >::dotProduct(points[0], axis);
-	        precision_t max = min;
-
-	        for ( size_t i = 1; i < 3; ++i )
-	        {
-	            precision_t p = Vector< 2, precision_t >::dotProduct(points[i], axis);
-
-	            min = std::min(min, p);
-	            max = std::max(max, p);
-	        }
-
-	        return std::make_pair(min, max);
-	    };
-
-	    for ( const auto & axis : axes )
-	    {
-	        const auto projectionA = project(pA, axis);
-	        const auto projectionB = project(pB, axis);
-
-	        if ( projectionA.second < projectionB.first || projectionB.second < projectionA.first )
-	        {
-	            minimumTranslationVector.reset();
-
-	            return false;
-	        }
-
-	        const precision_t currentOverlap = std::min(projectionA.second, projectionB.second) - std::max(projectionA.first, projectionB.first);
-
-	        if ( currentOverlap < overlap )
-	        {
-	            overlap = currentOverlap;
-	            smallestAxis = axis;
-	        }
-	    }
-
-		/* NOTE: Collision confirmed, we're building the MTV.
-	     * Ensure the thrust vector is pointing in the correct direction. */
-	    const Vector< 2, precision_t > centerA = (pA[0] + pA[1] + pA[2]) / 3.0f;
-	    const Vector< 2, precision_t > centerB = (pB[0] + pB[1] + pB[2]) / 3.0f;
-	    const auto direction = centerB - centerA;
-
-	    if ( Vector< 2, precision_t >::dotProduct(direction, smallestAxis) < 0 )
-	    {
-	    	/* NOTE: Reverse the axis if necessary. */
-	        smallestAxis = -smallestAxis;
-	    }
-
-	    /* NOTE: The MTV is the axis of smallest overlap multiplied by this value. The 2D result is converted to 3D for output. */
-	    minimumTranslationVector = (smallestAxis * overlap).toVector3();
-
-	    return true;
+		return SAT::checkCollision(verticesA, verticesB, minimumTranslationVector);
 	}
 
 	/**
@@ -207,8 +112,6 @@ namespace EmEn::Libs::Math::Space3D
 		{
 			return false;
 		}
-
-		std::cout << "Sphere A : " << sphereA << "\nSphereB : " << sphereB << "\n";
 
 		const auto D = Vector< 3, precision_t >::distanceSquared(sphereA.position(), sphereB.position());
 		const auto sumOfRadii = sphereA.radius() + sphereB.radius();
@@ -330,19 +233,25 @@ namespace EmEn::Libs::Math::Space3D
 		{
 			const precision_t push = (cuboidA.centroid()[X] < cuboidB.centroid()[X]) ? -overlapX : overlapX;
 
-			minimumTranslationVector.set(push, 0, 0);
+			minimumTranslationVector[X] = push;
+			minimumTranslationVector[Y] = 0;
+			minimumTranslationVector[Z] = 0;
 		}
 		else if ( overlapY < overlapZ )
 		{
 			const precision_t push = (cuboidA.centroid()[Y] < cuboidB.centroid()[Y]) ? -overlapY : overlapY;
 
-			minimumTranslationVector.set(0, push, 0);
+			minimumTranslationVector[X] = 0;
+			minimumTranslationVector[Y] = push;
+			minimumTranslationVector[Z] = 0;
 		}
 		else
 		{
 			const precision_t push = (cuboidA.centroid()[Z] < cuboidB.centroid()[Z]) ? -overlapZ : overlapZ;
 
-			minimumTranslationVector.set(0, 0, push);
+			minimumTranslationVector[X] = 0;
+			minimumTranslationVector[Y] = 0;
+			minimumTranslationVector[Z] = push;
 		}
 
 		return true;

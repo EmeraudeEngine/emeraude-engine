@@ -68,23 +68,23 @@ namespace EmEn::Graphics::Material::Component
 		switch ( fillingType )
 		{
 			case FillingType::Gradient :
-				m_texture = serviceProvider.container< TextureResource::Texture1D >()->getResource(textureResourceName);
+				m_textureResource = serviceProvider.container< TextureResource::Texture1D >()->getResource(textureResourceName);
 				break;
 
 			case FillingType::Texture :
-				m_texture = serviceProvider.container< TextureResource::Texture2D >()->getResource(textureResourceName);
+				m_textureResource = serviceProvider.container< TextureResource::Texture2D >()->getResource(textureResourceName);
 				break;
 
 			case FillingType::VolumeTexture :
-				m_texture = serviceProvider.container< TextureResource::Texture3D >()->getResource(textureResourceName);
+				m_textureResource = serviceProvider.container< TextureResource::Texture3D >()->getResource(textureResourceName);
 				break;
 
 			case FillingType::Cubemap :
-				m_texture = serviceProvider.container< TextureResource::TextureCubemap >()->getResource(textureResourceName);
+				m_textureResource = serviceProvider.container< TextureResource::TextureCubemap >()->getResource(textureResourceName);
 				break;
 
 			case FillingType::AnimatedTexture :
-				m_texture = serviceProvider.container< TextureResource::AnimatedTexture2D >()->getResource(textureResourceName);
+				m_textureResource = serviceProvider.container< TextureResource::AnimatedTexture2D >()->getResource(textureResourceName);
 				break;
 
 			case FillingType::Value :
@@ -96,19 +96,20 @@ namespace EmEn::Graphics::Material::Component
 				return;
 		}
 
-		if ( m_texture == nullptr )
+		if ( m_textureResource == nullptr )
 		{
 			TraceError{ClassId} << "Unable to find " << to_cstring(fillingType) << " '" << textureResourceName << "' !";
 
 			return;
 		}
 
+		/* NOTE: Make a copy for the texture interface smart-point. */
+		m_texture = m_textureResource;
+
 		/* Check the optional UVW channel. */
 		if ( data.isMember(JKChannel) )
 		{
-			const auto & jsonNode = data[JKChannel];
-
-			if ( jsonNode.isNumeric() )
+			if ( const auto & jsonNode = data[JKChannel]; jsonNode.isNumeric() )
 			{
 				m_UVWChannel = jsonNode.asUInt();
 			}
@@ -123,9 +124,7 @@ namespace EmEn::Graphics::Material::Component
 		/* Check the optional UVW scale. */
 		if ( data.isMember(JKUVWScale) )
 		{
-			const auto & jsonNode = data[JKUVWScale];
-
-			if ( jsonNode.isArray() )
+			if ( const auto & jsonNode = data[JKUVWScale]; jsonNode.isArray() )
 			{
 				for ( auto index = 0; index < 3; index++ )
 				{
@@ -147,9 +146,7 @@ namespace EmEn::Graphics::Material::Component
 
 		if ( data.isMember(JKEnableAlpha) )
 		{
-			const auto & jsonNode = data[JKEnableAlpha];
-
-			if ( jsonNode.isBool() )
+			if ( const auto & jsonNode = data[JKEnableAlpha]; jsonNode.isBool() )
 			{
 				m_alphaEnabled = jsonNode.asBool();
 			}
@@ -165,17 +162,25 @@ namespace EmEn::Graphics::Material::Component
 	{
 		m_binding = binding++;
 
+		/* NOTE: A texture component must have the texture interface! */
 		if ( m_texture == nullptr )
 		{
 			return false;
 		}
 
-		if ( m_texture->isCreated() )
+		/* NOTE: A texture component can only create a texture
+		 * on hardware if a texture resource is used. */
+		if ( m_textureResource != nullptr )
 		{
-			return true;
+			if ( m_textureResource->isCreated() )
+			{
+				return true;
+			}
+
+			return m_textureResource->createTexture(renderer);
 		}
 
-		return m_texture->createOnHardware(renderer);
+		return m_texture->isCreated();
 	}
 
 	Key
@@ -185,25 +190,25 @@ namespace EmEn::Graphics::Material::Component
 
 		switch ( m_texture->type() )
 		{
-			case TextureResource::Type::Texture1D :
+			case Vulkan::TextureType::Texture1D :
 				return GLSL::Sampler1D;
 
-			case TextureResource::Type::Texture2D :
+			case Vulkan::TextureType::Texture2D :
 				return GLSL::Sampler2D;
 
-			case TextureResource::Type::Texture3D :
+			case Vulkan::TextureType::Texture3D :
 				return GLSL::Sampler3D;
 
-			case TextureResource::Type::TextureCube :
+			case Vulkan::TextureType::TextureCube :
 				return GLSL::SamplerCube;
 
-			case TextureResource::Type::Texture1DArray :
+			case Vulkan::TextureType::Texture1DArray :
 				return GLSL::Sampler1DArray;
 
-			case TextureResource::Type::Texture2DArray :
+			case Vulkan::TextureType::Texture2DArray :
 				return GLSL::Sampler2DArray;
 
-			case TextureResource::Type::TextureCubeArray :
+			case Vulkan::TextureType::TextureCubeArray :
 				return GLSL::SamplerCubeArray;
 		}
 

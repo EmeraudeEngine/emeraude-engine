@@ -84,94 +84,94 @@ namespace EmEn::Libs::Math::Space3D
 			return false;
 		}
 
-	    const auto & spherePos = sphere.position();
-	    const auto & min = cuboid.minimum();
-	    const auto & max = cuboid.maximum();
+		const auto & spherePos = sphere.position();
+		const auto & min = cuboid.minimum();
+		const auto & max = cuboid.maximum();
 
-	    /* NOTE: Find the point on the cuboid closest to the center of the sphere. */
-	    const Point< precision_t > closestPoint{
-	        std::max(min[X], std::min(spherePos[X], max[X])),
-	        std::max(min[Y], std::min(spherePos[Y], max[Y])),
-	        std::max(min[Z], std::min(spherePos[Z], max[Z]))
-	    };
+		/* NOTE: Find the point on the cuboid closest to the center of the sphere. */
+		const Point< precision_t > closestPoint{
+			std::max(min[X], std::min(spherePos[X], max[X])),
+			std::max(min[Y], std::min(spherePos[Y], max[Y])),
+			std::max(min[Z], std::min(spherePos[Z], max[Z]))
+		};
 
-	    /* NOTE: Check collision using distance squared. */
-	    const auto delta = spherePos - closestPoint;
-	    const auto distanceSq = delta.lengthSquared();
+		/* NOTE: Check collision using distance squared. */
+		const auto delta = spherePos - closestPoint;
+		const auto distanceSq = delta.lengthSquared();
 
-	    if ( distanceSq > sphere.squaredRadius() )
-	    {
-	        minimumTranslationVector.reset();
+		if ( distanceSq > sphere.squaredRadius() )
+		{
+			minimumTranslationVector.reset();
 
-	        return false;
-	    }
+			return false;
+		}
 
 		/* NOTE: The center of the sphere is outside the cuboid. */
-	    if ( distanceSq > std::numeric_limits<precision_t>::epsilon() )
-	    {
-	        const auto distance = std::sqrt(distanceSq);
-	        const auto overlap = sphere.radius() - distance;
-	        minimumTranslationVector = (delta / distance) * overlap;
-	    }
-	    /* NOTE: The center of the sphere is inside the cuboid */
-	    else
-	    {
-	        /* NOTE: We need to find the closest face to "push" the sphere out. */
-	    	std::array< precision_t, 6 > overlaps = {
-	            (max[X] - spherePos[X]) + sphere.radius(),
-	            (spherePos[X] - min[X]) + sphere.radius(),
-	            (max[Y] - spherePos[Y]) + sphere.radius(),
-	            (spherePos[Y] - min[Y]) + sphere.radius(),
-	            (max[Z] - spherePos[Z]) + sphere.radius(),
-	            (spherePos[Z] - min[Z]) + sphere.radius()
-	        };
+		if ( distanceSq > std::numeric_limits<precision_t>::epsilon() )
+		{
+			const auto distance = std::sqrt(distanceSq);
+			const auto overlap = sphere.radius() - distance;
+			minimumTranslationVector = (delta / distance) * overlap;
+		}
+		/* NOTE: The center of the sphere is inside the cuboid */
+		else
+		{
+			/* NOTE: We need to find the closest face to "push" the sphere out. */
+			std::array< precision_t, 6 > overlaps = {
+				(max[X] - spherePos[X]) + sphere.radius(),
+				(spherePos[X] - min[X]) + sphere.radius(),
+				(max[Y] - spherePos[Y]) + sphere.radius(),
+				(spherePos[Y] - min[Y]) + sphere.radius(),
+				(max[Z] - spherePos[Z]) + sphere.radius(),
+				(spherePos[Z] - min[Z]) + sphere.radius()
+			};
 
-	        /* NOTE: We are looking for the smallest push. */
-	        precision_t minOverlap = overlaps[0];
+			/* NOTE: We are looking for the smallest push. */
+			precision_t minOverlap = overlaps[0];
 
-	        int minIndex = 0;
+			int minIndex = 0;
 
-	        for ( int i = 1; i < 6; ++i )
-	        {
-	            if ( overlaps[i] < minOverlap )
-	            {
-	                minOverlap = overlaps[i];
-	                minIndex = i;
-	            }
-	        }
-	        
-	        switch ( minIndex )
-	        {
-	            case 0:
-	        		minimumTranslationVector = Vector< 3, precision_t >::positiveX(minOverlap);
-	        		break;
-	        		
-	            case 1:
-	        		minimumTranslationVector = Vector< 3, precision_t >::negativeX(minOverlap);
-	        		break;
-	        		
-	            case 2:
-	        		minimumTranslationVector = Vector< 3, precision_t >::positiveY(minOverlap);
-	        		break;
-	        		
-	            case 3:
-	        		minimumTranslationVector = Vector< 3, precision_t >::negativeY(minOverlap);
-	        		break;
-	        		
-	            case 4:
-	        		minimumTranslationVector = Vector< 3, precision_t >::positiveZ(minOverlap);
-	        		break;
-	        		
-	            case 5:
-	        		minimumTranslationVector = Vector< 3, precision_t >::negativeZ(minOverlap);
-	        		break;
-	        		
-				default:
-	        		break;
+			for ( int i = 1; i < 6; ++i )
+			{
+				if ( overlaps[i] < minOverlap )
+				{
+					minOverlap = overlaps[i];
+					minIndex = i;
+				}
 			}
-	    }
+			
+			switch ( minIndex )
+			{
+				case 0:
+					minimumTranslationVector = Vector< 3, precision_t >::positiveX(minOverlap);
+					break;
+					
+				case 1:
+					minimumTranslationVector = Vector< 3, precision_t >::negativeX(minOverlap);
+					break;
+					
+				case 2:
+					minimumTranslationVector = Vector< 3, precision_t >::positiveY(minOverlap);
+					break;
+					
+				case 3:
+					minimumTranslationVector = Vector< 3, precision_t >::negativeY(minOverlap);
+					break;
+					
+				case 4:
+					minimumTranslationVector = Vector< 3, precision_t >::positiveZ(minOverlap);
+					break;
+					
+				case 5:
+					minimumTranslationVector = Vector< 3, precision_t >::negativeZ(minOverlap);
+					break;
+					
+				default:
+					break;
+			}
+		}
 
-	    return true;
+		return true;
 	}
 
 	/** @copydoc EmEn::Libs::Math::Space3D::isColliding(const Sphere< precision_t > &, const AACuboid< precision_t > &) noexcept */

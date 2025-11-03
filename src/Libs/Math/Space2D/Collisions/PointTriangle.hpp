@@ -28,6 +28,7 @@
 
 /* Local inclusions. */
 #include "Libs/Math/Space2D/Triangle.hpp"
+#include "Libs/Math/Space2D/Point.hpp"
 
 namespace EmEn::Libs::Math::Space2D
 {
@@ -71,9 +72,46 @@ namespace EmEn::Libs::Math::Space2D
 	bool
 	isColliding (const Point< precision_t > & point, const Triangle< precision_t > & triangle, Vector< 2, precision_t > & minimumTranslationVector) noexcept requires (std::is_floating_point_v< precision_t >)
 	{
-		// TODO ...
+		if ( !isColliding(point, triangle) )
+		{
+			return false;
+		}
 
-		return false;
+		precision_t min_dist_sq = std::numeric_limits< precision_t >::max();
+
+		for ( size_t index = 0; index < 3; ++index )
+		{
+			const auto & p1 = triangle.points()[index];
+			const auto & p2 = triangle.points()[(index + 1) % 3];
+			
+			const auto edge = p2 - p1;
+			const auto point_vec = point - p1;
+			
+			precision_t t = Vector< 2, precision_t >::dotProduct(point_vec, edge) / edge.lengthSquared();
+			t = std::clamp(t, static_cast< precision_t >(0), static_cast< precision_t >(1));
+			
+			const auto closest_point = p1 + edge * t;
+			const auto dist_sq = (point - closest_point).lengthSquared();
+
+			if ( dist_sq < min_dist_sq )
+			{
+				min_dist_sq = dist_sq;
+				minimumTranslationVector = point - closest_point;
+			}
+		}
+		
+		// The MTV should push the point out of the triangle.
+		// We need to determine the correct direction.
+		// A simple way is to check the vector from the triangle's centroid to the point.
+		auto centroid = (triangle.points()[0] + triangle.points()[1] + triangle.points()[2]) / 3.0;
+		auto direction = point - centroid;
+
+		if ( Vector< 2, precision_t >::dotProduct(direction, minimumTranslationVector) < 0 )
+		{
+			minimumTranslationVector = -minimumTranslationVector;
+		}
+
+		return true;
 	}
 
 	/** @copydoc EmEn::Libs::Math::Space2D::isColliding(const Point< precision_t > &, const Triangle< precision_t > &) noexcept */
@@ -91,6 +129,13 @@ namespace EmEn::Libs::Math::Space2D
 	bool
 	isColliding (const Triangle< precision_t > & triangle, const Point< precision_t > & point, Vector< 2, precision_t > & minimumTranslationVector) noexcept requires (std::is_floating_point_v< precision_t >)
 	{
-		return isColliding(point, triangle, minimumTranslationVector);
+		const bool result = isColliding(point, triangle, minimumTranslationVector);
+
+		if ( result )
+		{
+			minimumTranslationVector = -minimumTranslationVector;
+		}
+
+		return result;
 	}
 }

@@ -192,7 +192,6 @@ cd ../../..
 - LIBRARIES AND EXTERNAL DEPENDENCIES
   - Determine a native 3D format for loading speedup.
   - Finish 3D formats loading/reading.
-  - Add RLE to the Targa image format.
 
 - VULKAN SPECIFIC
   - Find a better way to detect the UBO max capacity. For now the limit is hard-coded to 65,536 bytes.

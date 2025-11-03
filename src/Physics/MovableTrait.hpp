@@ -28,11 +28,10 @@
 
 /* STL inclusions. */
 #include <cstdint>
-#include <array>
 
 /* Local inclusions for usages. */
-#include "PhysicalEnvironmentProperties.hpp"
-#include "PhysicalObjectProperties.hpp"
+#include "EnvironmentPhysicalProperties.hpp"
+#include "BodyPhysicalProperties.hpp"
 #include "Collider.hpp"
 
 namespace EmEn::Physics
@@ -205,6 +204,74 @@ namespace EmEn::Physics
 			}
 
 			/**
+			 * @brief [PHYSICS-NEW-SYSTEM] Applies a linear impulse directly to the velocity.
+			 * @note Impulse = instant change in momentum (J = m*Δv). Used by constraint solver.
+			 * @param impulse The impulse vector in N·s.
+			 * @return void
+			 */
+			void
+			applyLinearImpulse (const Libs::Math::Vector< 3, float > & impulse) noexcept
+			{
+				if ( !m_isMovable )
+				{
+					return;
+				}
+
+				m_linearVelocity += impulse * this->getBodyPhysicalProperties().inverseMass();
+				m_linearSpeed = m_linearVelocity.length();
+			}
+
+			/**
+			 * @brief [PHYSICS-NEW-SYSTEM] Applies an angular impulse directly to the angular velocity.
+			 * @note Angular impulse L = I * Δω. Used by constraint solver for rotational response.
+			 * @param angularImpulse The angular impulse vector.
+			 * @return void
+			 */
+			void
+			applyAngularImpulse (const Libs::Math::Vector< 3, float > & angularImpulse) noexcept
+			{
+				if ( !m_isMovable || !m_rotationEnabled )
+				{
+					return;
+				}
+
+				m_angularVelocity += m_inverseWorldInertia * angularImpulse;
+				m_angularSpeed = m_angularVelocity.length();
+			}
+
+			/**
+			 * @brief [PHYSICS-NEW-SYSTEM] Updates the inverse world inertia tensor from the current orientation.
+			 * @note Call this after rotation changes. I_world = R * I_local * R^T.
+			 * @param rotationMatrix The current orientation as a 3x3 rotation matrix.
+			 * @return void
+			 */
+			void
+			updateInverseWorldInertia (const Libs::Math::Matrix< 3, float > & rotationMatrix) noexcept
+			{
+				const auto & localInertia = this->getBodyPhysicalProperties().inertiaTensor();
+
+				// Transform inertia tensor to world space: I_world = R * I_local * R^T
+				auto rotationTransposed = rotationMatrix;
+				rotationTransposed.transpose();
+				auto worldInertia = rotationMatrix * localInertia * rotationTransposed;
+
+				// Compute and cache the inverse
+				m_inverseWorldInertia = worldInertia.inverse();
+			}
+
+			/**
+			 * @brief [PHYSICS-NEW-SYSTEM] Returns the inverse world inertia tensor.
+			 * @note This is the cached transformed and inverted inertia tensor.
+			 * @return const Libs::Math::Matrix< 3, float > &
+			 */
+			[[nodiscard]]
+			const Libs::Math::Matrix< 3, float > &
+			inverseWorldInertia () const noexcept
+			{
+				return m_inverseWorldInertia;
+			}
+
+			/**
 			 * @brief Sets the center of mass.
 			 * @param centerOfMass A reference to a vector.
 			 * @return void
@@ -287,7 +354,7 @@ namespace EmEn::Physics
 			 * @param envProperties A reference to physical environment properties.
 			 * @return bool
 			 */
-			bool updateSimulation (const PhysicalEnvironmentProperties & envProperties) noexcept;
+			bool updateSimulation (const EnvironmentPhysicalProperties & envProperties) noexcept;
 
 			/**
 			 * @brief Sets whether this is affected by all physical interactions.
@@ -315,6 +382,36 @@ namespace EmEn::Physics
 			isMovable () const noexcept
 			{
 				return m_isMovable;
+			}
+
+			/**
+			 * @brief Enables or disables rotation physics for this entity.
+			 * @note When disabled, torque will not be applied and collisions won't induce rotation.
+			 *       Disabling rotation will also reset angular velocity to zero.
+			 * @param state True to enable rotation, false to disable.
+			 * @return void
+			 */
+			void
+			enableRotationPhysics (bool state) noexcept
+			{
+				m_rotationEnabled = state;
+
+				if ( !state )
+				{
+					m_angularVelocity.reset();
+					m_angularSpeed = 0.0F;
+				}
+			}
+
+			/**
+			 * @brief Returns whether rotation physics is enabled for this entity.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isRotationPhysicsEnabled () const noexcept
+			{
+				return m_rotationEnabled;
 			}
 
 			/**
@@ -369,6 +466,17 @@ namespace EmEn::Physics
 			bool checkSimulationInertia () noexcept;
 
 			/**
+			 * @brief Returns the world position (public accessor for physics engine).
+			 * @return Libs::Math::Vector< 3, float >
+			 */
+			[[nodiscard]]
+			Libs::Math::Vector< 3, float >
+			worldPosition () const noexcept
+			{
+				return this->getWorldPosition();
+			}
+
+			/**
 			 * @brief Returns the world velocity of the entity.
 			 * @note If not override, velocity is null.
 			 * @return Libs::Math::Vector< float >
@@ -385,6 +493,13 @@ namespace EmEn::Physics
 			virtual Libs::Math::Vector< 3, float > getWorldCenterOfMass () const noexcept = 0;
 
 			/**
+			 * @brief Returns the object physical properties for the physics simulation.
+			 * @return const BodyPhysicalProperties &
+			 */
+			[[nodiscard]]
+			virtual const BodyPhysicalProperties & getBodyPhysicalProperties () const noexcept = 0;
+
+			/**
 			 * @brief Events when this movable has hit something.
 			 * @param impactForce The force of impact.
 			 * @return void
@@ -397,6 +512,23 @@ namespace EmEn::Physics
 			 */
 			virtual void onImpulse () noexcept = 0;
 
+			/**
+			 * @brief Moves the entity in the scene from physics simulation.
+			 * @note This should make a call to LocatableInterface::move() final object method.
+			 * @param positionDelta A reference to a delta vector to add to current position.
+			 * @return void
+			 */
+			virtual void moveFromPhysics (const Libs::Math::Vector< 3, float > & positionDelta) noexcept = 0;
+
+			/**
+			 * @brief Rotates the entity int the scene from physics simulation.
+			 * @note This should make a call to LocatableInterface::rotate() final object method.
+			 * @param radianAngle An angle in radian.
+			 * @param worldDirection A reference to a vector.
+			 * @return Libs::Math::Vector< 3, float >
+			 */
+			virtual void rotateFromPhysics (float radianAngle, const Libs::Math::Vector< 3, float > & worldDirection) noexcept = 0;
+
 		protected:
 
 			/**
@@ -405,33 +537,11 @@ namespace EmEn::Physics
 			MovableTrait () noexcept = default;
 
 			/**
-			 * @brief Returns the object physical properties for the physics simulation.
-			 * @return Libs::Math::Vector< 3, float >
-			 */
-			[[nodiscard]]
-			virtual const PhysicalObjectProperties & getObjectProperties () const noexcept = 0;
-
-			/**
 			 * @brief Returns the world position for the physics simulation.
 			 * @return Libs::Math::Vector< 3, float >
 			 */
 			[[nodiscard]]
 			virtual Libs::Math::Vector< 3, float > getWorldPosition () const noexcept = 0;
-
-			/**
-			 * @brief Gives the new world position after simulation computed.
-			 * @param worldPosition A reference to a vector.
-			 * @return void
-			 */
-			virtual void simulatedMove (const Libs::Math::Vector< 3, float > & worldPosition) noexcept = 0;
-
-			/**
-			 * @brief Gives the new world orientation after simulation computed.
-			 * @param radianAngle
-			 * @param worldDirection
-			 * @return Libs::Math::Vector< 3, float >
-			 */
-			virtual void simulatedRotation (float radianAngle, const Libs::Math::Vector< 3, float > & worldDirection) noexcept = 0;
 
 		private:
 
@@ -439,11 +549,13 @@ namespace EmEn::Physics
 			Libs::Math::Vector< 3, float > m_linearVelocity;
 			Libs::Math::Vector< 3, float > m_angularVelocity; // Omega
 			Libs::Math::Vector< 3, float > m_centerOfMass;
+			Libs::Math::Matrix< 3, float > m_inverseWorldInertia; // Cached I^-1 in world space
 			float m_linearSpeed{0.0F};
 			float m_angularSpeed{0.0F};
 			Collider m_collider;
 			uint32_t m_inertCheckCount{0};
 			bool m_isMovable{true};
+			bool m_rotationEnabled{false};
 			bool m_alwaysComputePhysics{false};
 			bool m_freeFlyModeEnabled{false};
 	};

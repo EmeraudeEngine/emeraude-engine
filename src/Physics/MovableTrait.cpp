@@ -61,7 +61,7 @@ namespace EmEn::Physics
 	void
 	MovableTrait::addForce (const Vector< 3, float > & force) noexcept
 	{
-		const auto & objectProperties = getObjectProperties();
+		const auto & objectProperties = this->getBodyPhysicalProperties();
 
 		/* NOTE: If the object mass is null, we discard the force. */
 		if ( objectProperties.isMassNull() )
@@ -74,39 +74,33 @@ namespace EmEn::Physics
 	}
 
 	void
-	MovableTrait::addTorque (const Vector< 3, float > & /*torque*/) noexcept
+	MovableTrait::addTorque (const Vector< 3, float > & torque) noexcept
 	{
-		const auto & objectProperties = getObjectProperties();
+		const auto & objectProperties = this->getBodyPhysicalProperties();
 
-		/* NOTE: If the object mass is null, we discard the force. */
+		/* NOTE: If the object mass is null, we discard the torque. */
 		if ( objectProperties.isMassNull() )
 		{
 			return;
 		}
 
-		/* NOTE: (Vector)Torque = (Matrix)Inertia * (Vector)Angular Acceleration (T = I * w)
-		 * => "w = T / I" */
-		/*const auto & cube = this->getWorldBoundingBox();
+		/* NOTE: (Vector)Torque = (Matrix)Inertia * (Vector)Angular Acceleration (T = I * α)
+		 * => "α = I⁻¹ * T"
+		 *
+		 * The inertia tensor is stored in PhysicalObjectProperties.
+		 * For a solid cuboid, it should be set as:
+		 * Ixx = (m * (h² + d²)) / 12
+		 * Iyy = (m * (w² + d²)) / 12
+		 * Izz = (m * (w² + h²)) / 12
+		 */
+		const auto & inertia = objectProperties.inertiaTensor();
 
-		const float sqWith = cube.width() * cube.width();
-		const float sqHeight = cube.height() * cube.height();
-		const float sqDepth = cube.depth() * cube.depth();
-
-		const float inertiaValue = (objectProperties.mass() * (sqWith + sqHeight + sqDepth)) / 12.0F;
-
-		//float ix = cube.width() * cube.width();
-		//cube so all dimensions equal, but other objects may not be
-		//const float inertiaValue = (physicalObjectProperties.mass() * (ix + ix + ix)) / 12.0F;
-
-		Matrix< 3, float > inertia{};
-		inertia[M3x3Col0Row0] = inertiaValue;
-		inertia[M3x3Col1Row1] = inertiaValue;
-		inertia[M3x3Col2Row2] = inertiaValue;
-
+		/* Calculate angular acceleration from torque: α = I⁻¹ * T */
 		const auto angularAcceleration = inertia.inverse() * torque;
 
-		m_angularVelocity += angularAcceleration;
-		m_angularSpeed = m_angularVelocity.length();*/
+		/* Apply angular acceleration (scaled by timestep). */
+		m_angularVelocity += angularAcceleration * EngineUpdateCycleDurationS< float >;
+		m_angularSpeed = m_angularVelocity.length();
 
 		this->onImpulse();
 	}
@@ -114,7 +108,7 @@ namespace EmEn::Physics
 	float
 	MovableTrait::deflect (const Vector< 3, float > & surfaceNormal, float surfaceBounciness) noexcept
 	{
-		const auto & objectProperties = getObjectProperties();
+		const auto & objectProperties = this->getBodyPhysicalProperties();
 
 		const auto currentSpeed = m_linearSpeed;
 		const auto incidentVector = m_linearVelocity.normalized();
@@ -141,9 +135,9 @@ namespace EmEn::Physics
 	}
 
 	bool
-	MovableTrait::updateSimulation (const PhysicalEnvironmentProperties & envProperties) noexcept
+	MovableTrait::updateSimulation (const EnvironmentPhysicalProperties & envProperties) noexcept
 	{
-		const auto & objectProperties = getObjectProperties();
+		const auto & objectProperties = this->getBodyPhysicalProperties();
 
 		/* Apply the gravity. */
 		if ( !this->isFreeFlyModeEnabled() && !objectProperties.isMassNull() )
@@ -173,38 +167,39 @@ namespace EmEn::Physics
 		if ( m_linearSpeed > 0.0F )
 		{
 			/* Dispatch the final move to the entity according to the new velocity. */
-			this->simulatedMove(m_linearVelocity * EngineUpdateCycleDurationS< float >);
+			this->moveFromPhysics(m_linearVelocity * EngineUpdateCycleDurationS< float >);
 
 			isMoveOccurs = true;
 		}
 
-		/* Apply the drag force on rotation if there is angular speed. */
-		if ( m_angularSpeed > 0.0F )
+		/* Apply the drag force on rotation if there is angular speed and rotation is enabled. */
+		if ( m_rotationEnabled && m_angularSpeed > 0.0F )
 		{
 			/*
-			 * Td = drag torque
-			 * B = angular drag coefficient
-			 * V = volume of a submerged portion of polyhedron
-			 * Vt = total volume of polyhedron
-			 * L = approximation of the average width of the polyhedron
-			 * w = angular velocity
-			 * Td = B * m * (V / Vt) * L^2 * w */
-
-			// TODO: Find the correct way to apply a drag force on rotation.
-			//constexpr auto dragMagnitude = 0.95F;
-
-			//m_angularVelocity *= dragMagnitude;
-
-			/*
-			 * Drag torque is calculated by multiplying the drag force acting
-			 * on the cylinder by the distance between the force and the axis of rotation.
-			 * This distance is known as the lever arm and is typically denoted by the symbol "r".
-			 * The formula for drag torque is: Drag torque = Drag force x Lever arm.
-			 * Reference: https://www.physicsforums.com/threads/drag-torque-of-rotating-cylinder.413114/
+			 * Angular drag is implemented as a simple damping coefficient.
+			 * A more physically accurate implementation would use:
+			 * Td = B * m * (V / Vt) * L^2 * w
+			 * Where:
+			 *   Td = drag torque
+			 *   B = angular drag coefficient
+			 *   V = volume of a submerged portion of polyhedron
+			 *   Vt = total volume of polyhedron
+			 *   L = approximation of the average width of the polyhedron
+			 *   w = angular velocity
+			 *
+			 * For now, we use a simplified damping approach where the angular drag coefficient
+			 * (0.0 to 1.0) determines how much angular velocity is retained each frame.
+			 * 0.0 = no drag (perpetual rotation), 1.0 = immediate stop.
 			 */
+			const auto angularDrag = objectProperties.angularDragCoefficient();
 
-			/* Dispatch the final rotation to the entity according to the new angular speed. */
-			this->simulatedRotation(2.0F * std::numbers::pi_v< float > / EngineUpdateCycleDurationS< float >, m_angularVelocity);
+			/* Apply damping: velocity *= (1 - drag) */
+			const auto dampingFactor = 1.0F - angularDrag;
+			m_angularVelocity *= dampingFactor;
+			m_angularSpeed = m_angularVelocity.length();
+
+			/* Dispatch the final rotation to the entity according to the new angular velocity. */
+			this->rotateFromPhysics(2.0F * std::numbers::pi_v< float > / EngineUpdateCycleDurationS< float >, m_angularVelocity);
 
 			isMoveOccurs = true;
 		}

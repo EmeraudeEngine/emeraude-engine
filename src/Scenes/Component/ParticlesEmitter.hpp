@@ -148,14 +148,15 @@ namespace EmEn::Scenes::Component
 			 * @param mass The mass in kilograms.
 			 * @param surface The average surface in square meters.
 			 * @param dragCoefficient The drag coefficient.
+			 * @param angularDrag The angular drag coefficient.
 			 * @param bounciness A bounciness scalar of the object when hitting something. Default 50%.
 			 * @param stickiness A stickiness scalar of the object when hitting something. Default 50%.
 			 * @return void
 			 */
 			void
-			setParticlePhysicalProperties (float mass, float surface, float dragCoefficient, float bounciness = 0.5F, float stickiness = 0.5F) noexcept
+			setParticlePhysicalProperties (float mass, float surface, float dragCoefficient, float angularDrag, float bounciness = 0.5F, float stickiness = 0.5F) noexcept
 			{
-				m_particlePhysicalProperties.setProperties(mass, surface, dragCoefficient, bounciness, stickiness);
+				m_particlePhysicalProperties.setProperties(mass, surface, dragCoefficient, angularDrag, bounciness, stickiness, {});
 			}
 
 			/**
@@ -163,7 +164,7 @@ namespace EmEn::Scenes::Component
 			 * @return const Physics::PhysicalObjectProperties &
 			 */
 			[[nodiscard]]
-			const Physics::PhysicalObjectProperties &
+			const Physics::BodyPhysicalProperties &
 			particlePhysicalProperties () const noexcept
 			{
 				return m_particlePhysicalProperties;
@@ -390,7 +391,7 @@ namespace EmEn::Scenes::Component
 			 * @return void
 			 */
 			void
-			setCustomPhysicsSimulationFunction (const std::function< bool (const Physics::PhysicalEnvironmentProperties &, const Physics::PhysicalObjectProperties &, const Libs::Math::CartesianFrame< float > &, Physics::Particle &) > & function) noexcept
+			setCustomPhysicsSimulationFunction (const std::function< bool (const Physics::EnvironmentPhysicalProperties &, const Physics::BodyPhysicalProperties &, const Libs::Math::CartesianFrame< float > &, Physics::Particle &) > & function) noexcept
 			{
 				m_customPhysicsSimulationFullFunction = function;
 
@@ -487,11 +488,11 @@ namespace EmEn::Scenes::Component
 
 			std::weak_ptr< Graphics::Renderable::Interface > m_renderableInterface;
 			std::shared_ptr< Graphics::RenderableInstance::Multiple > m_renderableInstance;
-			Physics::PhysicalObjectProperties m_particlePhysicalProperties;
+			Physics::BodyPhysicalProperties m_particlePhysicalProperties;
 			std::vector< Physics::Particle > m_particles;
 			std::unique_ptr< Libs::Time::TimedEvent< uint64_t, std::micro > > m_timedEvent;
 			std::function< bool (Physics::Particle &) > m_customPhysicsSimulationSimpleFunction;
-			std::function< bool (const Physics::PhysicalEnvironmentProperties &, const Physics::PhysicalObjectProperties &, const Libs::Math::CartesianFrame< float > &, Physics::Particle & particle) > m_customPhysicsSimulationFullFunction;
+			std::function< bool (const Physics::EnvironmentPhysicalProperties &, const Physics::BodyPhysicalProperties &, const Libs::Math::CartesianFrame< float > &, Physics::Particle & particle) > m_customPhysicsSimulationFullFunction;
 			uint32_t m_particleLimit;
 			uint32_t m_particleGeneratedPerCycle{1};
 			uint32_t m_minimumParticleLifetime{1};

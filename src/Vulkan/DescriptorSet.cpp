@@ -170,7 +170,7 @@ namespace EmEn::Vulkan
 	}
 
 	bool
-	DescriptorSet::writeSampler (uint32_t bindingIndex, const Graphics::TextureResource::Abstract & texture) const noexcept
+	DescriptorSet::writeSampler (uint32_t bindingIndex, const TextureInterface & texture) const noexcept
 	{
 		if ( !this->isCreated() )
 		{
@@ -216,7 +216,7 @@ namespace EmEn::Vulkan
 	}
 
 	bool
-	DescriptorSet::writeCombinedImageSampler (uint32_t bindingIndex, const Graphics::TextureResource::Abstract & texture) const noexcept
+	DescriptorSet::writeCombinedImageSampler (uint32_t bindingIndex, const TextureInterface & texture) const noexcept
 	{
 		if ( !texture.isCreated() )
 		{

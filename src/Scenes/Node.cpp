@@ -697,7 +697,7 @@ namespace EmEn::Scenes
 	}
 
 	std::shared_ptr< Node >
-	Node::createChild (const std::string & name, uint32_t sceneTimeMS, const CartesianFrame< float > & coordinates) noexcept
+	Node::createChild (const std::string & name, const CartesianFrame< float > & coordinates, uint32_t sceneTimeMS) noexcept
 	{
 		if ( name == Root )
 		{
@@ -965,7 +965,7 @@ namespace EmEn::Scenes
 	bool
 	Node::onUnhandledNotification (const ObservableTrait * observable, int notificationCode, const std::any & data) noexcept
 	{
-		if ( observable->is(Component::Abstract::getClassUID()) || observable->is(PhysicalObjectProperties::getClassUID()) )
+		if ( observable->is(Component::Abstract::getClassUID()) || observable->is(BodyPhysicalProperties::getClassUID()) )
 		{
 			/* NOTE: Avoid an automatic observer release. */
 			return true;

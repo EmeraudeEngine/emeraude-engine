@@ -52,7 +52,7 @@
 #include "Graphics/RenderTarget/ShadowMap.hpp"
 #include "Graphics/RenderTarget/Texture.hpp"
 #include "Graphics/RenderTarget/View.hpp"
-#include "Audio/SoundEnvironmentProperties.hpp"
+#include "Physics/ConstraintSolver.hpp"
 #include "Saphir/EffectInterface.hpp"
 #include "AVConsole/Manager.hpp"
 #include "LightSet.hpp"
@@ -76,6 +76,12 @@ namespace EmEn
 	}
 }
 
+/* [PHYSICS-NEW-SYSTEM] Toggle between old position-based collision resolution and new impulse-based solver.
+ * Set to 1 to enable the Sequential Impulse Solver (ConstraintSolver).
+ * Set to 0 to use the legacy position correction system.
+ * NOTE: When enabled, the old resolveCollisions() is automatically disabled for dynamic objects. */
+#define ENABLE_NEW_PHYSICS_SYSTEM 0
+
 namespace EmEn::Scenes
 {
 	/** @brief Structure to configure the scene octree initialization. */
@@ -98,7 +104,6 @@ namespace EmEn::Scenes
 	 * @extends EmEn::Libs::NameableTrait A scene is a named object in the engine.
 	 * @extends EmEn::Libs::Time::EventTrait A scene can have timed events.
 	 * @extends EmEn::Libs::ObserverTrait The scene will observe the scene node tree and static entity list.
-	 * @extends EmEn::Libs::ObservableTrait Scene will notify its content change.
 	 */
 	class Scene final : public Libs::NameableTrait, public Libs::Time::EventTrait< uint32_t, std::milli >, public Libs::ObserverTrait
 	{
@@ -262,14 +267,14 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			 * @brief Sets the scene physical environment properties.
-			 * @param properties A reference to a physical environment properties.
+			 * @brief Sets the scene environment physical properties.
+			 * @param properties A reference to the environment physical properties.
 			 * @return void
 			 */
 			void
-			setPhysicalEnvironmentProperties (const Physics::PhysicalEnvironmentProperties & properties) noexcept
+			setEnvironmentPhysicalProperties (const Physics::EnvironmentPhysicalProperties & properties) noexcept
 			{
-				m_physicalEnvironmentProperties = properties;
+				m_environmentPhysicalProperties = properties;
 			}
 
 			/**
@@ -535,24 +540,24 @@ namespace EmEn::Scenes
 
 			/**
 			 * @brief Returns the scene physical environment properties.
-			 * @return const Physics::PhysicalEnvironmentProperties &
+			 * @return const Physics::EnvironmentPhysicalProperties &
 			 */
 			[[nodiscard]]
-			const Physics::PhysicalEnvironmentProperties &
+			const Physics::EnvironmentPhysicalProperties &
 			physicalEnvironmentProperties () const noexcept
 			{
-				return m_physicalEnvironmentProperties;
+				return m_environmentPhysicalProperties;
 			}
 
 			/**
 			 * @brief Returns the scene physical environment properties.
-			 * @return Physics::PhysicalEnvironmentProperties &
+			 * @return Physics::EnvironmentPhysicalProperties &
 			 */
 			[[nodiscard]]
-			Physics::PhysicalEnvironmentProperties &
+			Physics::EnvironmentPhysicalProperties &
 			physicalEnvironmentProperties () noexcept
 			{
-				return m_physicalEnvironmentProperties;
+				return m_environmentPhysicalProperties;
 			}
 
 			/**
@@ -1193,21 +1198,23 @@ namespace EmEn::Scenes
 			 * @param sector A reference to the current sector tested.
 			 * @return void
 			 */
-			void sectorCollisionTest (const OctreeSector< AbstractEntity, true > & sector) noexcept;
+			void sectorCollisionTest (const OctreeSector< AbstractEntity, true > & sector, std::vector< Physics::ContactManifold > & manifolds) noexcept;
 
 			/**
-			 * @brief Checks if a scene node is clipping with the scene area boundaries.
+			 * @brief [PHYSICS-NEW-SYSTEM] Checks if a scene node is clipping with the scene area boundaries.
 			 * @param entity A reference to an entity smart pointer.
+			 * @param manifolds Vector to store contact manifolds for boundary collisions (new physics system).
 			 * @return void
 			 */
-			void clipWithBoundingSphere (const std::shared_ptr< AbstractEntity > & entity) const noexcept;
+			void clipWithBoundingSphere (const std::shared_ptr< AbstractEntity > & entity, std::vector< Physics::ContactManifold > & manifolds) const noexcept;
 
 			/**
-			 * @brief Checks if a scene node is clipping with the scene area boundaries.
+			 * @brief [PHYSICS-NEW-SYSTEM] Checks if a scene node is clipping with the scene area boundaries.
 			 * @param entity A reference to an entity smart pointer.
+			 * @param manifolds Vector to store contact manifolds for boundary collisions (new physics system).
 			 * @return void
 			 */
-			void clipWithBoundingBox (const std::shared_ptr< AbstractEntity > & entity) const noexcept;
+			void clipWithBoundingBox (const std::shared_ptr< AbstractEntity > & entity, std::vector< Physics::ContactManifold > & manifolds) const noexcept;
 
 			/**
 			 * @brief Initializes a render target with renderable instances.
@@ -1279,9 +1286,9 @@ namespace EmEn::Scenes
 
 			/* NOTE: Scene setup data. */
 			Saphir::EffectsList m_environmentEffects;
-			Physics::PhysicalEnvironmentProperties m_physicalEnvironmentProperties{Physics::PhysicalEnvironmentProperties::Earth()};
-			Audio::SoundEnvironmentProperties m_soundEnvironmentProperties;
-			Libs::Randomizer< float > m_randomizer; /* NOTE: Keep a randomizer active for this scene. */
+			Physics::EnvironmentPhysicalProperties m_environmentPhysicalProperties{Physics::EnvironmentPhysicalProperties::Earth()};
+			Physics::ConstraintSolver m_constraintSolver{8, 3}; /* [PHYSICS-NEW-SYSTEM] Sequential impulse solver for rigid body physics. */
+			Libs::Randomizer< float > m_randomizer; /* Keep a randomizer active for this scene. */
 			float m_boundary{0};
 			uint64_t m_lifetimeUS{0};
 			uint32_t m_lifetimeMS{0};

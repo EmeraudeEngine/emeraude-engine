@@ -719,7 +719,7 @@ namespace EmEn::Audio
 	}
 
 	void
-	Manager::setSoundEnvironmentProperties (const SoundEnvironmentProperties & properties) noexcept
+	Manager::setEnvironmentSoundProperties (const Physics::EnvironmentPhysicalProperties & properties) noexcept
 	{
 		if ( !s_audioSystemAvailable )
 		{
@@ -729,17 +729,6 @@ namespace EmEn::Audio
 		this->setDopplerFactor(properties.dopplerFactor());
 		this->setSpeedOfSound(properties.speedOfSound());
 		this->setDistanceModel(properties.distanceModel());
-	}
-
-	SoundEnvironmentProperties
-	Manager::getSoundEnvironmentProperties () const noexcept
-	{
-		SoundEnvironmentProperties properties;
-		properties.setDopplerFactor(this->dopplerFactor());
-		properties.setSpeedOfSound(this->speedOfSound());
-		properties.setDistanceModel(this->distanceModel());
-
-		return properties;
 	}
 
 	void

@@ -26,9 +26,13 @@
 
 #pragma once
 
+/* STL inclusions. */
+#include <array>
+
 /* Local inclusions. */
 #include "Libs/Math/Space2D/Triangle.hpp"
 #include "Libs/Math/Space2D/AARectangle.hpp"
+#include "Libs/Math/Space2D/SAT.hpp"
 
 namespace EmEn::Libs::Math::Space2D
 {
@@ -44,9 +48,22 @@ namespace EmEn::Libs::Math::Space2D
 	bool
 	isColliding (const Triangle< precision_t > & triangle, const AARectangle< precision_t > & rectangle) noexcept requires (std::is_floating_point_v< precision_t >)
 	{
-		// TODO ...
+		Vector< 2, precision_t > MTV;
 
-		return false;
+		std::array< Vector< 2, precision_t >, 3 > triangleVertices = {
+			triangle.pointA(),
+			triangle.pointB(),
+			triangle.pointC()
+		};
+
+		std::array< Vector< 2, precision_t >, 4 > rectangleVertices = {
+			Vector< 2, precision_t >{rectangle.left(), rectangle.top()},
+			Vector< 2, precision_t >{rectangle.right(), rectangle.top()},
+			Vector< 2, precision_t >{rectangle.right(), rectangle.bottom()},
+			Vector< 2, precision_t >{rectangle.left(), rectangle.bottom()}
+		};
+
+		return SAT::checkCollision(triangleVertices, rectangleVertices, MTV);
 	}
 
 	/**
@@ -62,9 +79,20 @@ namespace EmEn::Libs::Math::Space2D
 	bool
 	isColliding (const Triangle< precision_t > & triangle, const AARectangle< precision_t > & rectangle, Vector< 2, precision_t > & minimumTranslationVector) noexcept requires (std::is_floating_point_v< precision_t >)
 	{
-		// TODO ...
+		std::array< Vector< 2, precision_t >, 3 > triangleVertices = {
+			triangle.pointA(),
+			triangle.pointB(),
+			triangle.pointC()
+		};
 
-		return false;
+		std::array< Vector< 2, precision_t >, 4 > rectangleVertices = {
+			Vector< 2, precision_t >{rectangle.left(), rectangle.top()},
+			Vector< 2, precision_t >{rectangle.right(), rectangle.top()},
+			Vector< 2, precision_t >{rectangle.right(), rectangle.bottom()},
+			Vector< 2, precision_t >{rectangle.left(), rectangle.bottom()}
+		};
+
+		return SAT::checkCollision(triangleVertices, rectangleVertices, minimumTranslationVector);
 	}
 
 	/** @copydoc EmEn::Libs::Math::Space2D::isColliding(const Triangle< precision_t > &, const AARectangle< precision_t > &) noexcept */
@@ -82,6 +110,13 @@ namespace EmEn::Libs::Math::Space2D
 	bool
 	isColliding (const AARectangle< precision_t > & rectangle, const Triangle< precision_t > & triangle, Vector< 2, precision_t > & minimumTranslationVector) noexcept requires (std::is_floating_point_v< precision_t >)
 	{
-		return isColliding(triangle, rectangle, minimumTranslationVector);
+		const bool result = isColliding(triangle, rectangle, minimumTranslationVector);
+
+		if ( result )
+		{
+			minimumTranslationVector = -minimumTranslationVector;
+		}
+
+		return result;
 	}
 }

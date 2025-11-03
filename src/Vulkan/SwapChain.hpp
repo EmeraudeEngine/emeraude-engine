@@ -39,7 +39,6 @@
 
 /* Local inclusions for usages. */
 #include "Libs/StaticVector.hpp"
-#include "Vulkan/Sync/Fence.hpp"
 #include "Vulkan/Framebuffer.hpp"
 #include "Vulkan/CommandBuffer.hpp"
 #include "Vulkan/Types.hpp"
@@ -77,11 +76,11 @@ namespace EmEn::Vulkan
 				this->destroyFromHardware();
 			}
 
-			/** @copydoc EmEn::Vulkan::AbstractDeviceDependentObject::createOnHardware() */
+			/** @copydoc EmEn::Vulkan::AbstractDeviceDependentObject::createOnHardware() noexcept */
 			bool
 			createOnHardware () noexcept override
 			{
-				if ( !this->create(m_renderer) )
+				if ( !this->createRenderTarget(m_renderer) )
 				{
 					return false;
 				}
@@ -91,11 +90,11 @@ namespace EmEn::Vulkan
 				return true;
 			}
 
-			/** @copydoc EmEn::Vulkan::AbstractDeviceDependentObject::destroyFromHardware() */
+			/** @copydoc EmEn::Vulkan::AbstractDeviceDependentObject::destroyFromHardware() noexcept */
 			bool
 			destroyFromHardware () noexcept override
 			{
-				if ( !this->destroy() )
+				if ( !this->destroyRenderTarget() )
 				{
 					return false;
 				}
@@ -105,7 +104,7 @@ namespace EmEn::Vulkan
 				return true;
 			}
 
-			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::videoType() const */
+			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::videoType() const noexcept */
 			[[nodiscard]]
 			AVConsole::VideoType
 			videoType () const noexcept override
@@ -113,10 +112,10 @@ namespace EmEn::Vulkan
 				return AVConsole::VideoType::View;
 			}
 
-			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::updateViewRangesProperties() */
+			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::updateViewRangesProperties() noexcept */
 			void updateViewRangesProperties (float fovOrNear, float distanceOrFar) noexcept override;
 
-			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::aspectRatio() */
+			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::aspectRatio() const noexcept */
 			[[nodiscard]]
 			float
 			aspectRatio () const noexcept override
@@ -129,7 +128,7 @@ namespace EmEn::Vulkan
 				return static_cast< float >(this->extent().width) / static_cast< float >(this->extent().height);
 			}
 
-			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::isCubemap() const */
+			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::isCubemap() const noexcept */
 			[[nodiscard]]
 			bool
 			isCubemap () const noexcept override
@@ -137,7 +136,7 @@ namespace EmEn::Vulkan
 				return false;
 			}
 
-			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::framebuffer() const */
+			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::framebuffer() const noexcept */
 			[[nodiscard]]
 			const Framebuffer *
 			framebuffer () const noexcept override
@@ -145,23 +144,7 @@ namespace EmEn::Vulkan
 				return m_frames[m_acquiredImageIndex].framebuffer.get();
 			}
 
-			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::image() const */
-			[[nodiscard]]
-			std::shared_ptr< Image >
-			image () const noexcept override
-			{
-				return m_frames[m_acquiredImageIndex].colorImage;
-			}
-
-			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::imageView() const */
-			[[nodiscard]]
-			std::shared_ptr< ImageView >
-			imageView () const noexcept override
-			{
-				return m_frames[m_acquiredImageIndex].colorImageView;
-			}
-
-			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::viewMatrices() const */
+			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::viewMatrices() const noexcept */
 			[[nodiscard]]
 			const Graphics::ViewMatrices2DUBO &
 			viewMatrices () const noexcept override
@@ -169,7 +152,7 @@ namespace EmEn::Vulkan
 				return m_viewMatrices;
 			}
 
-			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::viewMatrices() */
+			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::viewMatrices() noexcept */
 			[[nodiscard]]
 			Graphics::ViewMatrices2DUBO &
 			viewMatrices () noexcept override

@@ -64,19 +64,19 @@ namespace EmEn::Libs::Math::Space3D
 		/* NOTE: the segments are parallel. */
 		if ( a <= epsilon && e <= epsilon )
 		{
-		    return Vector< 3, precision_t >::distanceSquared(p1, p2) <= epsilon;
+			return Vector< 3, precision_t >::distanceSquared(p1, p2) <= epsilon;
 		}
 
 		/* NOTE: Segment A is a point. */
 		if ( a <= epsilon )
 		{
-		    return Point< precision_t >::distanceSquaredToLine(p1, p2, d2) <= epsilon;
+			return p1.distanceSquaredToLine(p2, d2.normalized()) <= epsilon;
 		}
 
 		/* NOTE: Segment B is a point. */
 		if ( e <= epsilon )
 		{
-		    return Point< precision_t >::distanceSquaredToLine(p2, p1, d1) <= epsilon;
+			return p2.distanceSquaredToLine(p1, d1.normalized()) <= epsilon;
 		}
 
 		const auto c = Vector< 3, precision_t >::dotProduct(d1, r);
@@ -88,21 +88,21 @@ namespace EmEn::Libs::Math::Space3D
 		/* NOTE: Lines are parallel if the denominator is close to zero. */
 		if ( denom > -epsilon && denom < epsilon )
 		{
-		    /* NOTE: In this case, the segments only intersect if they are collinear.
-		     * We check whether the points are aligned. */
-		    const auto cross = Vector< 3, precision_t >::crossProduct(d1, r);
+			/* NOTE: In this case, the segments only intersect if they are collinear.
+			 * We check whether the points are aligned. */
+			const auto cross = Vector< 3, precision_t >::crossProduct(d1, r);
 
-		    if ( cross.lengthSquared() > epsilon )
-		    {
-		    	/* Non-collinear */
-		        return false;
-		    }
+			if ( cross.lengthSquared() > epsilon )
+			{
+				/* Non-collinear */
+				return false;
+			}
 
-		    /* NOTE: If they are collinear, there is an intersection if they overlap. */
-		    const auto t0 = Vector< 3, precision_t >::dotProduct(p2 - p1, d1) / a;
-		    const auto t1 = t0 + Vector< 3, precision_t >::dotProduct(d2, d1) / a;
+			/* NOTE: If they are collinear, there is an intersection if they overlap. */
+			const auto t0 = Vector< 3, precision_t >::dotProduct(p2 - p1, d1) / a;
+			const auto t1 = t0 + Vector< 3, precision_t >::dotProduct(d2, d1) / a;
 
-		    return (std::max(static_cast<precision_t>(0), std::min(t0, t1)) <= std::min(static_cast<precision_t>(1), std::max(t0, t1)));
+			return (std::max(static_cast<precision_t>(0), std::min(t0, t1)) <= std::min(static_cast<precision_t>(1), std::max(t0, t1)));
 		}
 
 		s = (b * f - c * e) / denom;
@@ -112,10 +112,10 @@ namespace EmEn::Libs::Math::Space3D
 		 * (s and t between 0 and 1) and if these points coincide. */
 		if ( s >= 0 && s <= 1 && t >= 0 && t <= 1 )
 		{
-		    const auto closestPointA = p1 + d1 * s;
-		    const auto closestPointB = p2 + d2 * t;
+			const auto closestPointA = p1 + d1 * s;
+			const auto closestPointB = p2 + d2 * t;
 
-		    return Vector< 3, precision_t >::distanceSquared(closestPointA, closestPointB) <= epsilon;
+			return Vector< 3, precision_t >::distanceSquared(closestPointA, closestPointB) <= epsilon;
 		}
 
 		return false;

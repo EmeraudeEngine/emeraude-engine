@@ -162,6 +162,6 @@ namespace EmEn::Libs::Math::Space2D
 		private:
 
 			Point< precision_t > m_origin{0, 0};
-			Vector< 3, precision_t > m_direction{1, 0};
+			Vector< 2, precision_t > m_direction{1, 0};
 	};
 }

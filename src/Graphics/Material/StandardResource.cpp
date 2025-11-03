@@ -535,15 +535,8 @@ namespace EmEn::Graphics::Material
 	}
 
 	bool
-	StandardResource::createOnHardware (Renderer & renderer) noexcept
+	StandardResource::create (Renderer & renderer) noexcept
 	{
-		if ( this->isCreated() )
-		{
-			TraceWarning{ClassId} << "The material resource '" << this->name() << "' is already created !";
-
-			return true;
-		}
-
 		if ( m_components.empty() )
 		{
 			TraceError{ClassId} << "The material resource '" << this->name() << "' has no component !";
@@ -573,10 +566,25 @@ namespace EmEn::Graphics::Material
 			}
 		}
 
-		/* Create the material UBO, sampler, descriptor set ... */
-		if ( !this->createVideoMemory(renderer) )
+		const auto identifier = this->getSharedUniformBufferIdentifier();
+
+		if ( !this->createElementInSharedBuffer(renderer, identifier) )
 		{
-			Tracer::error(ClassId, "Unable to the material onto the GPU !");
+			TraceError{ClassId} << "Unable to create the data inside the shared uniform buffer '" << identifier << "' for material '" << this->name() << "' !";
+
+			return false;
+		}
+
+		if ( !this->createDescriptorSetLayout(renderer.layoutManager(), identifier) )
+		{
+			TraceError{ClassId} << "Unable to create the descriptor set layout for material '" << this->name() << "' !";
+
+			return false;
+		}
+
+		if ( !this->createDescriptorSet(renderer, *m_sharedUniformBuffer->uniformBufferObject(m_sharedUBOIndex)) )
+		{
+			TraceError{ClassId} << "Unable to create the descriptor set for material '" << this->name() << "' !";
 
 			return false;
 		}
@@ -588,8 +596,6 @@ namespace EmEn::Graphics::Material
 
 			return false;
 		}
-
-		this->enableFlag(IsCreated);
 
 		return true;
 	}
@@ -707,49 +713,12 @@ namespace EmEn::Graphics::Material
 				continue;
 			}
 
-			const auto texture = component->textureResource();
-
-			if ( !m_descriptorSet->writeCombinedImageSampler(bindingPoint++, *texture) )
+			if ( !m_descriptorSet->writeCombinedImageSampler(bindingPoint++, *component->texture()) )
 			{
-				TraceError{ClassId} << "Unable to write the texture object '" << texture->name() << "' to the descriptor set of material '" << this->name() << "' !";
+				TraceError{ClassId} << "Unable to write the texture to the descriptor set of material '" << this->name() << "' !";
 
 				return false;
 			}
-		}
-
-		return true;
-	}
-
-	void
-	StandardResource::onMaterialLoaded () noexcept
-	{
-		// Nothing to do for now
-	}
-
-	bool
-	StandardResource::createVideoMemory (Renderer & renderer) noexcept
-	{
-		const auto identifier = this->getSharedUniformBufferIdentifier();
-
-		if ( !this->createElementInSharedBuffer(renderer, identifier) )
-		{
-			TraceError{ClassId} << "Unable to create the data inside the shared uniform buffer '" << identifier << "' for material '" << this->name() << "' !";
-
-			return false;
-		}
-
-		if ( !this->createDescriptorSetLayout(renderer.layoutManager(), identifier) )
-		{
-			TraceError{ClassId} << "Unable to create the descriptor set layout for material '" << this->name() << "' !";
-
-			return false;
-		}
-
-		if ( !this->createDescriptorSet(renderer, *m_sharedUniformBuffer->uniformBufferObject(m_sharedUBOIndex)) )
-		{
-			TraceError{ClassId} << "Unable to create the descriptor set for material '" << this->name() << "' !";
-
-			return false;
 		}
 
 		return true;
@@ -774,9 +743,8 @@ namespace EmEn::Graphics::Material
 	}
 
 	void
-	StandardResource::destroyFromHardware () noexcept
+	StandardResource::destroy () noexcept
 	{
-		/* FIXME: Crash here on application closing ! */
 		m_sharedUniformBuffer->removeElement(this);
 
 		/* Reset to defaults. */
@@ -807,25 +775,19 @@ namespace EmEn::Graphics::Material
 	}
 
 	bool
-	StandardResource::isCreated () const noexcept
-	{
-		return this->isFlagEnabled(IsCreated);
-	}
-
-	bool
 	StandardResource::isComplex () const noexcept
 	{
 		return this->isComponentPresent(ComponentType::Reflection);
 	}
 
-	const Physics::PhysicalSurfaceProperties &
-	StandardResource::physicalSurfaceProperties () const noexcept
+	const Physics::SurfacePhysicalProperties &
+	StandardResource::surfacePhysicalProperties () const noexcept
 	{
 		return m_physicalSurfaceProperties;
 	}
 
-	Physics::PhysicalSurfaceProperties &
-	StandardResource::physicalSurfaceProperties () noexcept
+	Physics::SurfacePhysicalProperties &
+	StandardResource::surfacePhysicalProperties () noexcept
 	{
 		return m_physicalSurfaceProperties;
 	}

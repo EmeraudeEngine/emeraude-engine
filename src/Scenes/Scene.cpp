@@ -197,7 +197,7 @@ namespace EmEn::Scenes
 
 			const std::string name{"DefaultCamera"};
 
-			if ( m_rootNode->createChild(name + "Node", m_lifetimeMS)->newCamera(true, true, name) == nullptr )
+			if ( m_rootNode->createChild(name + "Node", {}, m_lifetimeMS)->newCamera(true, true, name) == nullptr )
 			{
 				Tracer::error(ClassId, "Scene initialization error : Unable to create a default camera !");
 
@@ -211,7 +211,7 @@ namespace EmEn::Scenes
 
 			const std::string name{"DefaultMicrophone"};
 
-			if ( m_rootNode->createChild(name + "Node", m_lifetimeMS)->newMicrophone(true, name) == nullptr )
+			if ( m_rootNode->createChild(name + "Node", {}, m_lifetimeMS)->newMicrophone(true, name) == nullptr )
 			{
 				Tracer::error(ClassId, "Scene initialization error : Unable to create a default microphone !");
 
@@ -220,7 +220,7 @@ namespace EmEn::Scenes
 		}
 
 		/* Set audio properties for this scene. */
-		m_AVConsoleManager.audioManager().setSoundEnvironmentProperties(m_soundEnvironmentProperties);
+		m_AVConsoleManager.audioManager().setEnvironmentSoundProperties(m_environmentPhysicalProperties);
 
 		return true;
 	}
@@ -329,7 +329,7 @@ namespace EmEn::Scenes
 		/* Create the render target. */
 		auto renderTarget = std::make_shared< RenderTarget::View< ViewMatrices2DUBO > >(name, width, height, precisions, isOrthographicProjection);
 
-		if ( !renderTarget->create(m_AVConsoleManager.graphicsRenderer()) )
+		if ( !renderTarget->createRenderTarget(m_AVConsoleManager.graphicsRenderer()) )
 		{
 			TraceError{ClassId} << "Unable to create the render to view '" << name << "' !";
 
@@ -364,7 +364,7 @@ namespace EmEn::Scenes
 		/* Create the render target. */
 		auto renderTarget = std::make_shared< RenderTarget::View< ViewMatrices3DUBO > >(name, size, precisions, isOrthographicProjection);
 
-		if ( !renderTarget->create(m_AVConsoleManager.graphicsRenderer()) )
+		if ( !renderTarget->createRenderTarget(m_AVConsoleManager.graphicsRenderer()) )
 		{
 			TraceError{ClassId} << "Unable to create the render to cubic view '" << name << "' !";
 
@@ -400,14 +400,7 @@ namespace EmEn::Scenes
 		/* Create the render target. */
 		auto renderTarget = std::make_shared< RenderTarget::Texture< ViewMatrices2DUBO > >(name, width, height, colorCount, isOrthographicProjection);
 
-		if ( !renderTarget->enableManualLoading() )
-		{
-			return {};
-		}
-
-		const auto success = renderTarget->createOnHardware(m_AVConsoleManager.graphicsRenderer());
-
-		if ( !renderTarget->setManualLoadSuccess(success) )
+		if ( !renderTarget->createRenderTarget(m_AVConsoleManager.graphicsRenderer()) )
 		{
 			TraceError{ClassId} << "Unable to create the render to texture 2D '" << name << "' !";
 
@@ -443,14 +436,7 @@ namespace EmEn::Scenes
 		/* Create the render target. */
 		auto renderTarget = std::make_shared< RenderTarget::Texture< ViewMatrices3DUBO > >(name, size, colorCount, isOrthographicProjection);
 
-		if ( !renderTarget->enableManualLoading() )
-		{
-			return {};
-		}
-
-		const auto success = renderTarget->createOnHardware(m_AVConsoleManager.graphicsRenderer());
-
-		if ( !renderTarget->setManualLoadSuccess(success) )
+		if ( !renderTarget->createRenderTarget(m_AVConsoleManager.graphicsRenderer()) )
 		{
 			TraceError{ClassId} << "Unable to create the render to cubemap '" << name << "' !";
 
@@ -486,7 +472,7 @@ namespace EmEn::Scenes
 		/* Create the render target. */
 		auto renderTarget = std::make_shared< RenderTarget::ShadowMap< ViewMatrices2DUBO > >(name, resolution, isOrthographicProjection, true);
 
-		if ( !renderTarget->create(m_AVConsoleManager.graphicsRenderer()) )
+		if ( !renderTarget->createRenderTarget(m_AVConsoleManager.graphicsRenderer()) )
 		{
 			TraceError{ClassId} << "Unable to create the render to shadow map '" << name << "' !";
 
@@ -522,7 +508,7 @@ namespace EmEn::Scenes
 		/* Create the render target. */
 		auto renderTarget = std::make_shared< RenderTarget::ShadowMap< ViewMatrices3DUBO > >(name, resolution, isOrthographicProjection);
 
-		if ( !renderTarget->create(m_AVConsoleManager.graphicsRenderer()) )
+		if ( !renderTarget->createRenderTarget(m_AVConsoleManager.graphicsRenderer()) )
 		{
 			TraceError{ClassId} << "Unable to create the render to cubic shadow map '" << name << "' !";
 
@@ -814,7 +800,20 @@ namespace EmEn::Scenes
 		/* Launch the collision test step. */
 		if ( m_physicsOctree != nullptr )
 		{
-			this->sectorCollisionTest(*m_physicsOctree);
+#if ENABLE_NEW_PHYSICS_SYSTEM
+			/* [PHYSICS-NEW-SYSTEM]
+			 * New impulse-based collision resolution system.
+			 * FIXME: Poor memory management ! */
+			std::vector< ContactManifold > manifolds;
+
+			/* Detect collisions and generate contact manifolds. */
+			this->sectorCollisionTest(*m_physicsOctree, manifolds);
+#else
+			/* [PHYSICS-OLD-SYSTEM] Legacy collision detection. */
+			std::vector< ContactManifold > manifolds;
+
+			this->sectorCollisionTest(*m_physicsOctree, manifolds);
+#endif
 
 			/* Final collisions check against scene boundaries and ground,
 			 * then resolve all collisions detected on movable entities. */
@@ -832,19 +831,29 @@ namespace EmEn::Scenes
 				{
 					if ( entity->sphereCollisionIsEnabled() )
 					{
-						this->clipWithBoundingSphere(entity);
+						/* [PHYSICS-NEW-SYSTEM] Pass manifolds vector for boundary collision handling. */
+						this->clipWithBoundingSphere(entity, manifolds);
 					}
 					else
 					{
-						this->clipWithBoundingBox(entity);
+						/* [PHYSICS-NEW-SYSTEM] Pass manifolds vector for boundary collision handling. */
+						this->clipWithBoundingBox(entity, manifolds);
 					}
 				}
 
-				/* Resolve accumulated collisions from the entity collider. */
+				/* Reset collider and resolve collisions. */
 				if ( auto & collider = movableEntity->collider(); collider.hasCollisions() )
 				{
-					/* NOTE: Collisions resolution can resume the physics simulation. */
+#if ENABLE_NEW_PHYSICS_SYSTEM
+					/* [PHYSICS-NEW-SYSTEM] Do NOT resolve collisions here.
+					 * All collisions (dynamic AND boundaries) are handled by the ConstraintSolver via impulses.
+					 * Boundary hard clipping is still performed (prevents leaving world cube),
+					 * but velocity correction is done through manifolds by the solver. */
+					collider.reset();  // Clear collision list without resolving
+#else
+					/* [PHYSICS-OLD-SYSTEM] Resolve all collisions with position correction. */
 					collider.resolveCollisions(*entity);
+#endif
 				}
 
 				/* This movable entity will never check for a simulation pause. */
@@ -859,6 +868,15 @@ namespace EmEn::Scenes
 					entity->pauseSimulation(true);
 				}
 			}
+
+#if ENABLE_NEW_PHYSICS_SYSTEM
+			/* Resolve contact constraints with Sequential Impulse Solver. */
+			if ( !manifolds.empty() )
+			{
+				/* FIXME: Invalid deltaTime. */
+				m_constraintSolver.solve(manifolds, EngineUpdateCycleDurationS< float >);
+			}
+#endif
 		}
 
 		m_cycle++;
@@ -1047,7 +1065,7 @@ namespace EmEn::Scenes
 	}
 
 	void
-	Scene::sectorCollisionTest (const OctreeSector< AbstractEntity, true > & sector) noexcept
+	Scene::sectorCollisionTest (const OctreeSector< AbstractEntity, true > & sector, std::vector< ContactManifold > & manifolds) noexcept
 	{
 		/* No element present. */
 		if ( sector.empty() )
@@ -1061,7 +1079,7 @@ namespace EmEn::Scenes
 			//#pragma omp parallel for
 			for ( const auto & subSector : sector.subSectors() )
 			{
-				this->sectorCollisionTest(*subSector);
+				this->sectorCollisionTest(*subSector, manifolds);
 			}
 
 			return;
@@ -1105,7 +1123,13 @@ namespace EmEn::Scenes
 					 * We will check the collision from entity A. */
 					if ( entityBHasMovableAbility )
 					{
+#if ENABLE_NEW_PHYSICS_SYSTEM
+						/* [PHYSICS-NEW-SYSTEM] Generate contact manifolds for impulse-based resolution. */
+						colliderA.checkCollisionAgainstMovableWithManifold(*entityA, *entityB, manifolds);
+#else
+						/* [PHYSICS-OLD-SYSTEM] Store collisions for position-based correction. */
 						colliderA.checkCollisionAgainstMovable(*entityA, *entityB);
+#endif
 					}
 					else
 					{
@@ -1140,8 +1164,299 @@ namespace EmEn::Scenes
 		}
 	}
 
+#if ENABLE_NEW_PHYSICS_SYSTEM
 	void
-	Scene::clipWithBoundingSphere (const std::shared_ptr< AbstractEntity > & entity) const noexcept
+	Scene::clipWithBoundingSphere (const std::shared_ptr< AbstractEntity > & entity, std::vector< ContactManifold > & manifolds) const noexcept
+	{
+		const auto worldCoordinates = entity->getWorldCoordinates();
+		const auto & worldPosition = worldCoordinates.position();
+
+		if ( m_sceneAreaResource != nullptr )
+		{
+			const auto groundLevel = m_sceneAreaResource->getLevelAt(worldPosition);
+			const auto minimalYPosition = worldPosition[Y] + entity->getWorldBoundingSphere().radius();
+
+			if ( minimalYPosition >= groundLevel )
+			{
+				/* Create manifold for velocity correction (bounce). */
+				const auto penetrationDepth = minimalYPosition - groundLevel;
+				const auto normal = m_sceneAreaResource->getNormalAt(worldPosition);
+				// Contact point: move from sphere center along normal (pointing downward from A to B)
+				const auto contactPoint = worldPosition + normal * entity->getWorldBoundingSphere().radius();
+
+				ContactManifold manifold{entity->getMovableTrait()}; // Ground = infinite mass static entity
+				manifold.addContact(contactPoint, normal, penetrationDepth);
+				manifolds.push_back(manifold);
+
+				entity->setYPosition(groundLevel - entity->getWorldBoundingSphere().radius(), TransformSpace::World);
+			}
+		}
+
+		/* Compute the max boundary. */
+		const auto boundaryLimit = m_boundary - entity->getWorldBoundingSphere().radius();
+
+		/* X-Axis test. */
+		if ( std::abs(worldPosition[X]) > boundaryLimit )
+		{
+			if ( worldPosition[X] > boundaryLimit )
+			{
+				/* [ALWAYS] Hard clipping - prevents entity from leaving the world cube. */
+				entity->setXPosition(boundaryLimit, TransformSpace::World);
+
+				/* [PHYSICS-NEW-SYSTEM] Create manifold for velocity correction (bounce). */
+				const auto penetrationDepth = worldPosition[X] - boundaryLimit;
+				const Vector< 3, float > contactPoint{boundaryLimit, worldPosition[Y], worldPosition[Z]};
+
+				ContactManifold manifold{entity->getMovableTrait()}; // World boundary = infinite mass
+				manifold.addContact(contactPoint, Vector< 3, float >::negativeX(), penetrationDepth);
+				manifolds.push_back(manifold);
+			}
+			else
+			{
+				/* [ALWAYS] Hard clipping - prevents entity from leaving the world cube. */
+				entity->setXPosition(-boundaryLimit, TransformSpace::World);
+
+				/* [PHYSICS-NEW-SYSTEM] Create manifold for velocity correction (bounce). */
+				const auto penetrationDepth = -boundaryLimit - worldPosition[X];
+				const Vector< 3, float > contactPoint{-boundaryLimit, worldPosition[Y], worldPosition[Z]};
+
+				ContactManifold manifold{entity->getMovableTrait()}; // World boundary = infinite mass
+				manifold.addContact(contactPoint, Vector< 3, float >::positiveX(), penetrationDepth);
+				manifolds.push_back(manifold);
+			}
+		}
+
+		/* Y-Axis test. */
+		if ( std::abs(worldPosition[Y]) > boundaryLimit )
+		{
+			if ( worldPosition[Y] > boundaryLimit )
+			{
+				/* [ALWAYS] Hard clipping - prevents entity from leaving the world cube. */
+				entity->setYPosition(boundaryLimit, TransformSpace::World);
+
+				/* [PHYSICS-NEW-SYSTEM] Create manifold for velocity correction (bounce). */
+				const auto penetrationDepth = worldPosition[Y] - boundaryLimit;
+				const Vector< 3, float > contactPoint{worldPosition[X], boundaryLimit, worldPosition[Z]};
+
+				ContactManifold manifold{entity->getMovableTrait()}; // World boundary = infinite mass
+				manifold.addContact(contactPoint, Vector< 3, float >::negativeY(), penetrationDepth);
+				manifolds.push_back(manifold);
+			}
+			else
+			{
+				auto * movableTrait = entity->getMovableTrait();
+
+				/* [PHYSICS-NEW-SYSTEM] Hard clipping and manifold creation - but only if falling.
+				 * This allows ascending while preventing falling through the bottom boundary. */
+				if ( movableTrait->linearVelocity()[Y] >= 0.0F )
+				{
+					entity->setYPosition(-boundaryLimit, TransformSpace::World);
+
+					/* Create manifold for velocity correction (bounce). */
+					const auto penetrationDepth = -boundaryLimit - worldPosition[Y];
+					const Vector< 3, float > contactPoint{worldPosition[X], -boundaryLimit, worldPosition[Z]};
+
+					ContactManifold manifold{movableTrait}; // World boundary = infinite mass
+					manifold.addContact(contactPoint, Vector< 3, float >::positiveY(), penetrationDepth);
+					manifolds.push_back(manifold);
+				}
+			}
+		}
+
+		/* Z-Axis test. */
+		if ( std::abs(worldPosition[Z]) > boundaryLimit )
+		{
+			if ( worldPosition[Z] > boundaryLimit )
+			{
+				/* [ALWAYS] Hard clipping - prevents entity from leaving the world cube. */
+				entity->setZPosition(boundaryLimit, TransformSpace::World);
+
+				/* [PHYSICS-NEW-SYSTEM] Create manifold for velocity correction (bounce). */
+				const auto penetrationDepth = worldPosition[Z] - boundaryLimit;
+				const Vector< 3, float > contactPoint{worldPosition[X], worldPosition[Y], boundaryLimit};
+
+				ContactManifold manifold{entity->getMovableTrait()}; // World boundary = infinite mass
+				manifold.addContact(contactPoint, Vector< 3, float >::negativeZ(), penetrationDepth);
+				manifolds.push_back(manifold);
+			}
+			else
+			{
+				/* [ALWAYS] Hard clipping - prevents entity from leaving the world cube. */
+				entity->setZPosition(-boundaryLimit, TransformSpace::World);
+
+				/* [PHYSICS-NEW-SYSTEM] Create manifold for velocity correction (bounce). */
+				const auto penetrationDepth = -boundaryLimit - worldPosition[Z];
+				const Vector< 3, float > contactPoint{worldPosition[X], worldPosition[Y], -boundaryLimit};
+
+				ContactManifold manifold{entity->getMovableTrait()}; // World boundary = infinite mass
+				manifold.addContact(contactPoint, Vector< 3, float >::positiveZ(), penetrationDepth);
+				manifolds.push_back(manifold);
+			}
+		}
+	}
+
+	void
+	Scene::clipWithBoundingBox (const std::shared_ptr< AbstractEntity > & entity, std::vector< ContactManifold > & manifolds) const noexcept
+	{
+		const auto worldCoordinates = entity->getWorldCoordinates();
+		const auto & worldPosition = worldCoordinates.position();
+		const auto AABB = entity->getWorldBoundingBox();
+
+		/* Running the subtest first. */
+		if ( m_sceneAreaResource != nullptr )
+		{
+			/* Gets the four points of the box bottom. */
+			const std::array< Vector< 3, float >, 4 > points{
+				AABB.bottomSouthEast(),
+				AABB.bottomSouthWest(),
+				AABB.bottomNorthWest(),
+				AABB.bottomNorthEast()
+			};
+
+			/* These will keep the deepest collision of the four points. */
+			const Vector< 3, float > * collisionPosition = nullptr;
+			auto highestDistance = 0.0F;
+
+			for ( const auto & position : points )
+			{
+				const auto groundLevel = m_sceneAreaResource->getLevelAt(position);
+				const auto distance = groundLevel - position[Y];
+
+				if ( distance <= highestDistance )
+				{
+					collisionPosition = &position;
+					highestDistance = distance;
+				}
+			}
+
+			if ( collisionPosition != nullptr )
+			{
+				auto * movableTrait = entity->getMovableTrait();
+
+				/* [PHYSICS-NEW-SYSTEM] Hard clipping and manifold creation - but only if falling.
+				 * This allows jumping/ascending while preventing falling through. */
+				if ( movableTrait->linearVelocity()[Y] >= 0.0F )
+				{
+					entity->moveY(highestDistance, TransformSpace::World);
+
+					/* Create manifold for velocity correction (bounce). */
+					const auto penetrationDepth = -highestDistance; // highestDistance is negative when penetrating
+					auto contactPoint = *collisionPosition;
+					contactPoint[Y] += highestDistance; // Move to surface
+					const auto normal = m_sceneAreaResource->getNormalAt(*collisionPosition);
+
+					ContactManifold manifold{movableTrait}; // Ground = infinite mass static entity
+					manifold.addContact(contactPoint, normal, penetrationDepth);
+					manifolds.push_back(manifold);
+				}
+			}
+		}
+
+		/* X-Axis test */
+		if ( AABB.maximum(X) > m_boundary )
+		{
+			const auto delta = AABB.maximum(X) - m_boundary;
+
+			/* [ALWAYS] Hard clipping - prevents entity from leaving the world cube. */
+			entity->moveX(-delta, TransformSpace::World);
+
+			/* [PHYSICS-NEW-SYSTEM] Create manifold for velocity correction (bounce). */
+			const auto penetrationDepth = delta;
+			const Vector< 3, float > contactPoint{m_boundary, worldPosition[Y], worldPosition[Z]};
+
+			ContactManifold manifold{entity->getMovableTrait()}; // World boundary = infinite mass
+			manifold.addContact(contactPoint, Vector< 3, float >::negativeX(), penetrationDepth);
+			manifolds.push_back(manifold);
+		}
+		else if ( AABB.minimum(X) < -m_boundary )
+		{
+			const auto delta = std::abs(AABB.minimum(X)) - m_boundary;
+
+			/* [ALWAYS] Hard clipping - prevents entity from leaving the world cube. */
+			entity->moveX(delta, TransformSpace::World);
+
+			/* [PHYSICS-NEW-SYSTEM] Create manifold for velocity correction (bounce). */
+			const auto penetrationDepth = delta;
+			const Vector< 3, float > contactPoint{-m_boundary, worldPosition[Y], worldPosition[Z]};
+
+			ContactManifold manifold{entity->getMovableTrait()}; // World boundary = infinite mass
+			manifold.addContact(contactPoint, Vector< 3, float >::positiveX(), penetrationDepth);
+			manifolds.push_back(manifold);
+		}
+
+		/* Y-Axis test */
+		if ( AABB.maximum(Y) > m_boundary )
+		{
+			const auto delta = AABB.maximum(Y) - m_boundary;
+
+			/* [ALWAYS] Hard clipping - prevents entity from leaving the world cube. */
+			entity->moveY(-delta, TransformSpace::World);
+
+			/* [PHYSICS-NEW-SYSTEM] Create manifold for velocity correction (bounce). */
+			const auto penetrationDepth = delta;
+			const Vector< 3, float > contactPoint{worldPosition[X], m_boundary, worldPosition[Z]};
+
+			ContactManifold manifold{entity->getMovableTrait()}; // World boundary = infinite mass
+			manifold.addContact(contactPoint, Vector< 3, float >::negativeY(), penetrationDepth);
+			manifolds.push_back(manifold);
+		}
+		else if ( AABB.minimum(Y) <= -m_boundary )
+		{
+			const auto delta = std::abs(AABB.minimum(Y)) - m_boundary;
+
+			auto * movableTrait = entity->getMovableTrait();
+
+			/* [PHYSICS-NEW-SYSTEM] Hard clipping and manifold creation - but only if falling.
+			 * This allows ascending while preventing falling through the bottom boundary. */
+			if ( movableTrait->linearVelocity()[Y] >= 0.0F )
+			{
+				entity->moveY(delta, TransformSpace::World);
+
+				/* Create manifold for velocity correction (bounce). */
+				const auto penetrationDepth = delta;
+				const Vector< 3, float > contactPoint{worldPosition[X], -m_boundary, worldPosition[Z]};
+
+				ContactManifold manifold{movableTrait}; // World boundary = infinite mass
+				manifold.addContact(contactPoint, Vector< 3, float >::positiveY(), penetrationDepth);
+				manifolds.push_back(manifold);
+			}
+		}
+
+		/* Z-Axis test */
+		if ( AABB.maximum(Z) > m_boundary )
+		{
+			const auto delta = AABB.maximum(Z) - m_boundary;
+
+			/* [ALWAYS] Hard clipping - prevents entity from leaving the world cube. */
+			entity->moveZ(-delta, TransformSpace::World);
+
+			/* [PHYSICS-NEW-SYSTEM] Create manifold for velocity correction (bounce). */
+			const auto penetrationDepth = delta;
+			const Vector< 3, float > contactPoint{worldPosition[X], worldPosition[Y], m_boundary};
+
+			ContactManifold manifold{entity->getMovableTrait()}; // World boundary = infinite mass
+			manifold.addContact(contactPoint, Vector< 3, float >::negativeZ(), penetrationDepth);
+			manifolds.push_back(manifold);
+		}
+		else if ( AABB.minimum(Z) < -m_boundary )
+		{
+			const auto delta = std::abs(AABB.minimum(Z)) - m_boundary;
+
+			/* [ALWAYS] Hard clipping - prevents entity from leaving the world cube. */
+			entity->moveZ(delta, TransformSpace::World);
+
+			/* [PHYSICS-NEW-SYSTEM] Create manifold for velocity correction (bounce). */
+			const auto penetrationDepth = delta;
+			const Vector< 3, float > contactPoint{worldPosition[X], worldPosition[Y], -m_boundary};
+
+			ContactManifold manifold{entity->getMovableTrait()}; // World boundary = infinite mass
+			manifold.addContact(contactPoint, Vector< 3, float >::positiveZ(), penetrationDepth);
+			manifolds.push_back(manifold);
+		}
+	}
+#else
+	void
+	Scene::clipWithBoundingSphere (const std::shared_ptr< AbstractEntity > & entity, std::vector< ContactManifold > & /*manifolds*/) const noexcept
 	{
 		const auto worldCoordinates = entity->getWorldCoordinates();
 		const auto & worldPosition = worldCoordinates.position();
@@ -1216,7 +1531,7 @@ namespace EmEn::Scenes
 	}
 
 	void
-	Scene::clipWithBoundingBox (const std::shared_ptr< AbstractEntity > & entity) const noexcept
+	Scene::clipWithBoundingBox (const std::shared_ptr< AbstractEntity > & entity, std::vector< ContactManifold > & /*manifolds*/) const noexcept
 	{
 		const auto worldCoordinates = entity->getWorldCoordinates();
 		const auto & worldPosition = worldCoordinates.position();
@@ -1313,6 +1628,7 @@ namespace EmEn::Scenes
 			collider.addCollision(CollisionType::SceneBoundary, nullptr, worldPosition, Vector< 3, float >::positiveZ());
 		}
 	}
+#endif
 
 	void
 	Scene::insertIntoShadowCastingRenderList (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const std::shared_ptr< RenderableInstance::Abstract > & renderableInstance, const CartesianFrame< float > * worldCoordinates, float distance) noexcept

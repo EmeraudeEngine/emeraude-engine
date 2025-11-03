@@ -41,7 +41,7 @@ namespace EmEn::Graphics::RenderTarget
 	constexpr auto TracerTag{"RenderTarget"};
 
 	bool
-	Abstract::create (Renderer & renderer) noexcept
+	Abstract::createRenderTarget (Renderer & renderer) noexcept
 	{
 		if ( m_enableSyncPrimitive )
 		{
@@ -62,7 +62,7 @@ namespace EmEn::Graphics::RenderTarget
 		{
 			Tracer::error(TracerTag, "Unable to create a complete render target! Destroying it...");
 
-			this->destroy();
+			this->destroyRenderTarget();
 
 			return false;
 		}
@@ -73,7 +73,7 @@ namespace EmEn::Graphics::RenderTarget
 	}
 
 	bool
-	Abstract::destroy () noexcept
+	Abstract::destroyRenderTarget () noexcept
 	{
 		this->onDestroy();
 

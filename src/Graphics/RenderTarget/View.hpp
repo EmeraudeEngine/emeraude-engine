@@ -30,19 +30,20 @@
 #include "Graphics/RenderTarget/Abstract.hpp"
 
 /* Local inclusions for usages. */
-#include "Graphics/Renderer.hpp"
-#include "Graphics/ViewMatrices2DUBO.hpp"
-#include "Graphics/ViewMatrices3DUBO.hpp"
+#include "Vulkan/Instance.hpp"
+#include "Vulkan/Device.hpp"
 #include "Vulkan/Framebuffer.hpp"
 #include "Vulkan/Image.hpp"
 #include "Vulkan/ImageView.hpp"
-#include "Vulkan/Instance.hpp"
-#include "Vulkan/Device.hpp"
+#include "Graphics/Renderer.hpp"
+#include "Graphics/ViewMatrices2DUBO.hpp"
+#include "Graphics/ViewMatrices3DUBO.hpp"
 
 namespace EmEn::Graphics::RenderTarget
 {
 	/**
 	 * @brief The render to view template.
+	 * @fixme A view has no point with cubemap compatibility.
 	 * @tparam view_matrices_t The type of matrix interface.
 	 * @extends EmEn::Graphics::RenderTarget::Abstract This is a render target.
 	 */
@@ -181,22 +182,6 @@ namespace EmEn::Graphics::RenderTarget
 			framebuffer () const noexcept override
 			{
 				return m_framebuffer.get();
-			}
-
-			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::image() */
-			[[nodiscard]]
-			std::shared_ptr< Vulkan::Image >
-			image () const noexcept override
-			{
-				return m_colorImage;
-			}
-
-			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::imageView() */
-			[[nodiscard]]
-			std::shared_ptr< Vulkan::ImageView >
-			imageView () const noexcept override
-			{
-				return m_colorImageView;
 			}
 
 			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::isReadyForRendering() const */
@@ -435,7 +420,7 @@ namespace EmEn::Graphics::RenderTarget
 					/* Create a view to exploit the image. */
 					m_colorImageView = std::make_shared< Vulkan::ImageView >(
 						m_colorImage,
-						VK_IMAGE_VIEW_TYPE_2D,
+						this->isCubemap() ? VK_IMAGE_VIEW_TYPE_CUBE : VK_IMAGE_VIEW_TYPE_2D,
 						VkImageSubresourceRange{
 							.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
 							.baseMipLevel = 0,

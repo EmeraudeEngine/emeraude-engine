@@ -70,8 +70,81 @@ namespace EmEn::Graphics::TextureResource
 			 */
 			~AnimatedTexture2D () override
 			{
-				this->destroyFromHardware();
+				this->destroyTexture();
 			}
+
+			/** @copydoc EmEn::Vulkan::TextureInterface::isCreated() const noexcept */
+			[[nodiscard]]
+			bool isCreated () const noexcept override;
+
+			/** @copydoc EmEn::Vulkan::TextureInterface::type() const noexcept */
+			[[nodiscard]]
+			Vulkan::TextureType
+			type () const noexcept override
+			{
+				return Vulkan::TextureType::Texture2DArray;
+			}
+
+			/** @copydoc EmEn::Vulkan::TextureInterface::dimensions() const noexcept */
+			[[nodiscard]]
+			uint32_t
+			dimensions () const noexcept override
+			{
+				return 2;
+			}
+
+			/** @copydoc EmEn::Vulkan::TextureInterface::isCubemapTexture() const noexcept */
+			[[nodiscard]]
+			bool
+			isCubemapTexture () const noexcept override
+			{
+				return false;
+			}
+
+			/** @copydoc EmEn::Vulkan::TextureInterface::image() const noexcept */
+			[[nodiscard]]
+			std::shared_ptr< Vulkan::Image >
+			image () const noexcept override
+			{
+				return m_image;
+			}
+
+			/** @copydoc EmEn::Vulkan::TextureInterface::imageView() const noexcept */
+			[[nodiscard]]
+			std::shared_ptr< Vulkan::ImageView >
+			imageView () const noexcept override
+			{
+				return m_imageView;
+			}
+
+			/** @copydoc EmEn::Vulkan::TextureInterface::sampler() const noexcept */
+			[[nodiscard]]
+			std::shared_ptr< Vulkan::Sampler >
+			sampler () const noexcept override
+			{
+				return m_sampler;
+			}
+
+			/** @copydoc EmEn::Vulkan::TextureInterface::request3DTextureCoordinates() const noexcept */
+			[[nodiscard]]
+			bool
+			request3DTextureCoordinates () const noexcept override
+			{
+				/* NOTE: The frame index is accessed by the W coordinate. */
+				return true;
+			}
+
+			/** @copydoc EmEn::Vulkan::TextureInterface::frameCount() const noexcept */
+			[[nodiscard]]
+			uint32_t frameCount () const noexcept override;
+
+			/** @copydoc EmEn::Vulkan::TextureInterface::duration() const noexcept */
+			[[nodiscard]]
+			uint32_t duration () const noexcept override;
+
+			/** @copydoc EmEn::Vulkan::TextureInterface::frameIndexAt() const noexcept */
+			[[nodiscard]]
+			uint32_t frameIndexAt (uint32_t sceneTime) const noexcept override;
 
 			/**
 			 * @brief Returns the unique identifier for this class [Thread-safe].
@@ -102,23 +175,11 @@ namespace EmEn::Graphics::TextureResource
 				return classUID == getClassUID();
 			}
 
-			/** @copydoc EmEn::Graphics::TextureResource::Abstract::isCreated() */
-			[[nodiscard]]
-			bool isCreated () const noexcept override;
+			/** @copydoc EmEn::Graphics::TextureResource::Abstract::createTexture() */
+			bool createTexture (Renderer & renderer) noexcept override;
 
-			/** @copydoc EmEn::Graphics::TextureResource::Abstract::createOnHardware() */
-			bool createOnHardware (Renderer & renderer) noexcept override;
-
-			/** @copydoc EmEn::Graphics::TextureResource::Abstract::destroyFromHardware() */
-			bool destroyFromHardware () noexcept override;
-
-			/** @copydoc EmEn::Graphics::TextureResource::Abstract::type() */
-			[[nodiscard]]
-			Type
-			type () const noexcept override
-			{
-				return Type::Texture2DArray;
-			}
+			/** @copydoc EmEn::Graphics::TextureResource::Abstract::destroyTexture() */
+			bool destroyTexture () noexcept override;
 
 			/** @copydoc EmEn::Graphics::TextureResource::Abstract::isGrayScale() */
 			[[nodiscard]]
@@ -127,58 +188,6 @@ namespace EmEn::Graphics::TextureResource
 			/** @copydoc EmEn::Graphics::TextureResource::Abstract::averageColor() */
 			[[nodiscard]]
 			Libs::PixelFactory::Color< float > averageColor () const noexcept override;
-
-			/** @copydoc EmEn::Graphics::TextureResource::Abstract::dimensions() */
-			[[nodiscard]]
-			uint32_t
-			dimensions () const noexcept override
-			{
-				return 2;
-			}
-
-			/** @copydoc EmEn::Graphics::TextureResource::Abstract::frameCount() */
-			[[nodiscard]]
-			uint32_t frameCount () const noexcept override;
-
-			/** @copydoc EmEn::Graphics::TextureResource::Abstract::duration() */
-			[[nodiscard]]
-			uint32_t duration () const noexcept override;
-
-			/** @copydoc EmEn::Graphics::TextureResource::Abstract::frameIndexAt() */
-			[[nodiscard]]
-			uint32_t frameIndexAt (uint32_t sceneTime) const noexcept override;
-
-			/** @copydoc EmEn::Graphics::TextureResource::Abstract::image() */
-			[[nodiscard]]
-			std::shared_ptr< Vulkan::Image >
-			image () const noexcept override
-			{
-				return m_image;
-			}
-
-			/** @copydoc EmEn::Graphics::TextureResource::Abstract::imageView() */
-			[[nodiscard]]
-			std::shared_ptr< Vulkan::ImageView >
-			imageView () const noexcept override
-			{
-				return m_imageView;
-			}
-
-			/** @copydoc EmEn::Graphics::TextureResource::Abstract::sampler() */
-			[[nodiscard]]
-			std::shared_ptr< Vulkan::Sampler >
-			sampler () const noexcept override
-			{
-				return m_sampler;
-			}
-
-			/** @copydoc EmEn::Graphics::TextureResource::Abstract::request3DTextureCoordinates() */
-			[[nodiscard]]
-			bool
-			request3DTextureCoordinates () const noexcept override
-			{
-				return true;
-			}
 
 			/** @copydoc EmEn::Resources::ResourceTrait::classLabel() const */
 			[[nodiscard]]

@@ -26,12 +26,8 @@
 
 #include "Weight.hpp"
 
-/* STL inclusions. */
-#include <cstddef>
-#include <string>
-
 /* Local inclusions. */
-#include "Physics/PhysicalObjectProperties.hpp"
+#include "Physics/BodyPhysicalProperties.hpp"
 #include "Scenes/Scene.hpp"
 
 namespace EmEn::Scenes::Component
@@ -51,23 +47,27 @@ namespace EmEn::Scenes::Component
 		switch ( animationID )
 		{
 			case Mass :
-				this->physicalObjectProperties().setMass(value.asFloat());
+				this->bodyPhysicalProperties().setMass(value.asFloat());
 				return true;
 
 			case Surface :
-				this->physicalObjectProperties().setSurface(value.asFloat());
+				this->bodyPhysicalProperties().setSurface(value.asFloat());
 				return true;
 
 			case DragCoefficient :
-				this->physicalObjectProperties().setDragCoefficient(value.asFloat());
+				this->bodyPhysicalProperties().setDragCoefficient(value.asFloat());
+				return true;
+
+			case AngularDragCoefficient :
+				this->bodyPhysicalProperties().setAngularDragCoefficient(value.asFloat());
 				return true;
 
 			case Bounciness :
-				this->physicalObjectProperties().setBounciness(value.asFloat());
+				this->bodyPhysicalProperties().setBounciness(value.asFloat());
 				return true;
 
 			case Stickiness :
-				this->physicalObjectProperties().setStickiness(value.asFloat());
+				this->bodyPhysicalProperties().setStickiness(value.asFloat());
 				return true;
 
 			default :

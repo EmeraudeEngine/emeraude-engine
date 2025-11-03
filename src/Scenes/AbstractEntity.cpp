@@ -62,11 +62,11 @@ namespace EmEn::Scenes
 			}
 		}
 
-		if ( observable->is(PhysicalObjectProperties::getClassUID()) )
+		if ( observable->is(BodyPhysicalProperties::getClassUID()) )
 		{
 			identifiedObservable = true;
 
-			if ( notificationCode == PhysicalObjectProperties::PropertiesChanged )
+			if ( notificationCode == BodyPhysicalProperties::PropertiesChanged )
 			{
 				this->updateEntityProperties();
 			}
@@ -89,8 +89,10 @@ namespace EmEn::Scenes
 		auto surface = 0.0F;
 		auto mass = 0.0F;
 		auto dragCoefficient = 0.0F;
+		auto angularDragCoefficient = 0.0F;
 		auto bounciness = 0.0F;
 		auto stickiness = 0.0F;
+		auto inertiaTensor = Matrix< 3, float >::identity();
 
 		this->setRenderingAbilityState(false);
 
@@ -112,17 +114,20 @@ namespace EmEn::Scenes
 
 			if ( component->isPhysicalPropertiesEnabled() )
 			{
-				const auto & physicalObjectProperties = component->physicalObjectProperties();
+				const auto & bodyPhysicalProperties = component->bodyPhysicalProperties();
 
 				/* Gets physical properties of a component only if it's a physical object. */
-				if ( !physicalObjectProperties.isMassNull() )
+				if ( !bodyPhysicalProperties.isMassNull() )
 				{
-					surface += physicalObjectProperties.surface();
-					mass += physicalObjectProperties.mass();
+					surface += bodyPhysicalProperties.surface();
+					mass += bodyPhysicalProperties.mass();
 
-					dragCoefficient += physicalObjectProperties.dragCoefficient();
-					bounciness += physicalObjectProperties.bounciness();
-					stickiness += physicalObjectProperties.stickiness();
+					dragCoefficient += bodyPhysicalProperties.dragCoefficient();
+					angularDragCoefficient += bodyPhysicalProperties.angularDragCoefficient();
+					bounciness += bodyPhysicalProperties.bounciness();
+					stickiness += bodyPhysicalProperties.stickiness();
+					/* FIXME: How to combine this ! */
+					inertiaTensor = bodyPhysicalProperties.inertiaTensor();
 
 					physicalEntityCount++;
 				}
@@ -145,21 +150,24 @@ namespace EmEn::Scenes
 		{
 			const auto div = static_cast< float >(physicalEntityCount);
 
-			m_physicalObjectProperties.setProperties(
+			m_bodyPhysicalProperties.setProperties(
 				mass,
 				surface,
 				dragCoefficient / div,
+				angularDragCoefficient / div,
 				clampToUnit(bounciness / div),
-				clampToUnit(stickiness / div)
+				clampToUnit(stickiness / div),
+				/* FIXME: Incorrect ! */
+				inertiaTensor
 			);
 
-			this->setPhysicalObjectPropertiesState(true);
+			this->setBodyPhysicalPropertiesState(true);
 		}
 		else
 		{
-			m_physicalObjectProperties.reset();
+			m_bodyPhysicalProperties.reset();
 
-			this->setPhysicalObjectPropertiesState(false);
+			this->setBodyPhysicalPropertiesState(false);
 		}
 
 		/* NOTE: Update bounding primitive visual representations. */
@@ -241,7 +249,7 @@ namespace EmEn::Scenes
 		this->updateEntityProperties();
 
 		this->observe(component.get());
-		this->observe(&component->physicalObjectProperties()); // NOTE: Don't know if observing non-physical object is useful.
+		this->observe(&component->bodyPhysicalProperties()); // NOTE: Don't know if observing non-physical object is useful.
 
 		this->notify(ComponentCreated, component);
 
@@ -254,7 +262,7 @@ namespace EmEn::Scenes
 		auto * pointer = component.get();
 
 		this->forget(pointer);
-		this->forget(&pointer->physicalObjectProperties());
+		this->forget(&pointer->bodyPhysicalProperties());
 
 		if ( typeid(*pointer) == typeid(Component::Camera) )
 		{
@@ -725,7 +733,7 @@ namespace EmEn::Scenes
 	}
 
 	std::shared_ptr< Component::Weight >
-	AbstractEntity::newWeight (const PhysicalObjectProperties & initialProperties, const std::string & componentName) noexcept
+	AbstractEntity::newWeight (const BodyPhysicalProperties & initialProperties, const std::string & componentName) noexcept
 	{
 		if ( !this->checkComponentNameAvailability(componentName) )
 		{

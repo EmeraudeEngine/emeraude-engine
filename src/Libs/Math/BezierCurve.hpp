@@ -79,8 +79,8 @@ namespace EmEn::Libs::Math
 
 			/**
 			 * @brief Creates a line from the control point.
-			 * @param segments The number of segment to synthesize the line.
-			 * @param callback A function which receive the point and the interval on the line.
+			 * @param segments The number of segments to synthesize the line.
+			 * @param callback A function that receives the point and the interval on the line.
 			 * @return bool
 			 */
 			bool

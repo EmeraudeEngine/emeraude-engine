@@ -76,6 +76,20 @@ namespace EmEn::Scenes::Component
 	}
 
 	void
+	DirectionalLight::setDirection (const CartesianFrame< float > & worldCoordinates) noexcept
+	{
+		const auto direction = m_useDirectionVector ?
+			/* Use the world coordinates forward vector ... */
+			worldCoordinates.forwardVector() :
+			/* ... Or the inverse normalized position vector. */
+			-worldCoordinates.position().normalized();
+
+		m_buffer[DirectionOffset+0] = direction.x();
+		m_buffer[DirectionOffset+1] = direction.y();
+		m_buffer[DirectionOffset+2] = direction.z();
+	}
+
+	void
 	DirectionalLight::move (const CartesianFrame< float > & worldCoordinates) noexcept
 	{
 		if ( !this->isEnabled() )
@@ -88,11 +102,7 @@ namespace EmEn::Scenes::Component
 			this->updateDeviceFromCoordinates(worldCoordinates, this->getWorldVelocity());
 		}
 
-		const auto direction = worldCoordinates.forwardVector();
-
-		m_buffer[DirectionOffset+0] = direction.x();
-		m_buffer[DirectionOffset+1] = direction.y();
-		m_buffer[DirectionOffset+2] = direction.z();
+		this->setDirection(worldCoordinates);
 
 		this->requestVideoMemoryUpdate();
 	}
@@ -130,15 +140,7 @@ namespace EmEn::Scenes::Component
 		}
 
 		/* Initialize the data buffer. */
-		{
-			const auto worldCoordinates = this->getWorldCoordinates();
-
-			const auto direction = worldCoordinates.forwardVector();
-
-			m_buffer[DirectionOffset + 0] = direction.x();
-			m_buffer[DirectionOffset + 1] = direction.y();
-			m_buffer[DirectionOffset + 2] = direction.z();
-		}
+		this->setDirection(this->getWorldCoordinates());
 
 		if ( const auto resolution = this->shadowMapResolution(); resolution > 0 )
 		{

@@ -34,6 +34,12 @@
 #include "Libs/Math/Vector.hpp"
 #include "Collision.hpp"
 
+/* Forward declarations. */
+namespace EmEn::Physics
+{
+	class ContactManifold;
+}
+
 namespace EmEn::Physics
 {
 	/**
@@ -66,6 +72,15 @@ namespace EmEn::Physics
 			 * @return bool
 			 */
 			bool checkCollisionAgainstStatic (Scenes::AbstractEntity & movableEntityA, Scenes::AbstractEntity & staticEntityB) noexcept;
+
+			/**
+			 * @brief [PHYSICS-NEW-SYSTEM] Checks collision and creates a contact manifold if collision occurs.
+			 * @param movableEntityA Reference to first movable entity.
+			 * @param movableEntityB Reference to second movable entity.
+			 * @param outManifolds Vector to store generated manifolds.
+			 * @return bool True if collision detected.
+			 */
+			bool checkCollisionAgainstMovableWithManifold (Scenes::AbstractEntity & movableEntityA, Scenes::AbstractEntity & movableEntityB, std::vector< ContactManifold > & outManifolds) noexcept;
 
 			/**
 			 * @brief Adds a collision to the collection.

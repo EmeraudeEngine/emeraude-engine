@@ -58,7 +58,7 @@ namespace EmEn::Libs::Math::Space2D
 			explicit
 			constexpr
 			Segment (const Point< precision_t > & endPoint) noexcept
-				: m_points({0, 0}, endPoint)
+				: m_points{{Point< precision_t >{0, 0}, endPoint}}
 			{
 
 			}
@@ -70,7 +70,7 @@ namespace EmEn::Libs::Math::Space2D
 			 */
 			constexpr
 			Segment (const Point< precision_t > & startPoint, const Point< precision_t > & endPoint) noexcept
-				: m_points(startPoint, endPoint)
+				: m_points{{startPoint, endPoint}}
 			{
 
 			}

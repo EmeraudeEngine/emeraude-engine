@@ -68,7 +68,7 @@ namespace EmEn::Scenes
 					break;
 				}
 
-				parent = m_previousNode->createChild(name, m_scene->lifetimeMS(), m_cursorFrame);
+				parent = m_previousNode->createChild(name, m_cursorFrame, m_scene->lifetimeMS());
 				break;
 
 			default:
@@ -76,7 +76,7 @@ namespace EmEn::Scenes
 				break;
 		}
 
-		auto childNode = parent->createChild(name, m_scene->lifetimeMS(), m_cursorFrame);
+		auto childNode = parent->createChild(name, m_cursorFrame, m_scene->lifetimeMS());
 
 		if ( childNode == nullptr )
 		{

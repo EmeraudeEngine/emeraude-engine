@@ -93,14 +93,17 @@ namespace EmEn::Saphir
 
 			/**
 			 * @brief Configures the static light as a directional.
-			 * @param direction A reference to a vector for the light direction in world space.
+			 * @param vector A reference to a vector in world coordinates.
+			 * @param isDirection Tells the vector is the direction instead of position. Default false.
 			 * @return void
 			 */
 			void
-			setAsDirectionalLight (const Libs::Math::Vector< 3, float > & direction) noexcept
+			setAsDirectionalLight (const Libs::Math::Vector< 3, float > & vector, bool isDirection = false) noexcept
 			{
 				m_type = Graphics::LightType::Directional;
-				m_direction = direction.normalized();
+				m_direction = isDirection ?
+					vector.normalized() :
+					-vector.normalized();
 			}
 
 			/**

@@ -84,6 +84,9 @@ namespace EmEn::Vulkan
 				/* VK_KHR_SWAPCHAIN_EXTENSION_NAME = "VK_KHR_swapchain" */
 				m_requiredGraphicsDeviceExtensions.emplace_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
 
+				/* VK_KHR_MULTIVIEW_EXTENSION_NAME = "VK_KHR_multiview" */
+				m_requiredGraphicsDeviceExtensions.emplace_back(VK_KHR_MULTIVIEW_EXTENSION_NAME);
+
 				if constexpr ( IsMacOS )
 				{
 					/* VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME = "VK_KHR_portability_subset" */

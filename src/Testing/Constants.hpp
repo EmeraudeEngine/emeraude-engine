@@ -44,3 +44,4 @@ static const std::filesystem::path SmallPatternRBG_2{"./test-assets/126x126-RGB_
 static const std::filesystem::path SmallPatternRBG_3{"./test-assets/126x126-RGB_pattern003.png"};
 static const std::filesystem::path MediumPatternRBG_1{"./test-assets/256x256-RGB_pattern001.png"};
 static const std::filesystem::path SmallRGBA{"./test-assets/64x64-RGBA.png"};
+static const std::filesystem::path LargeRGB_RLE_Targa{"./test-assets/1700x1280-RGB_RLE.tga"};

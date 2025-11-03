@@ -59,7 +59,7 @@ namespace EmEn::Graphics::Material::Component
 			static constexpr auto ClassId{"Texture"};
 
 			/**
-			 * @brief Constructs a texture component.
+			 * @brief Constructs a texture component from a resource.
 			 * @param samplerName A C-string for the name of the sampler uniform.
 			 * @param variableName A string [std::move].
 			 * @param texture A reference to a texture resource smart pointer.
@@ -71,6 +71,28 @@ namespace EmEn::Graphics::Material::Component
 				: m_samplerName{samplerName},
 				m_variableName{std::move(variableName)},
 				m_texture{texture},
+				m_textureResource{texture},
+				m_UVWScale{UVWScale},
+				m_UVWChannel{UVWChannel},
+				m_alphaEnabled{enableAlpha}
+			{
+
+			}
+
+			/**
+			 * @brief Constructs a texture component from a texture interface (lower-level).
+			 * @param samplerName A C-string for the name of the sampler uniform.
+			 * @param variableName A string [std::move].
+			 * @param texture A reference to a texture interface smart pointer.
+			 * @param UVWChannel The texture channel to use on geometry. Default 0.
+			 * @param UVWScale A reference to a vector to scale the texture coordinates. Default 1.0 in all directions.
+			 * @param enableAlpha Enable the alpha channel for opacity/blending. Request a 4-channel texture. Default false.
+			 */
+			Texture (const char * samplerName, std::string variableName, const std::shared_ptr< Vulkan::TextureInterface > & texture, uint32_t UVWChannel = 0, const Libs::Math::Vector< 3, float > & UVWScale = {1.0F, 1.0F, 1.0F}, bool enableAlpha = false) noexcept
+				: m_samplerName{samplerName},
+				m_variableName{std::move(variableName)},
+				m_texture{texture},
+				m_textureResource{nullptr},
 				m_UVWScale{UVWScale},
 				m_UVWChannel{UVWChannel},
 				m_alphaEnabled{enableAlpha}
@@ -91,19 +113,6 @@ namespace EmEn::Graphics::Material::Component
 			/** @copydoc EmEn::Graphics::Material::Component::Interface::create() */
 			[[nodiscard]]
 			bool create (Renderer & renderer, uint32_t & binding) noexcept override;
-
-			/** @copydoc EmEn::Graphics::Material::Component::Interface::isCreated() */
-			[[nodiscard]]
-			bool
-			isCreated () const noexcept override
-			{
-				if ( m_texture == nullptr )
-				{
-					return false;
-				}
-
-				return m_texture->isCreated();
-			}
 
 			/** @copydoc EmEn::Graphics::Material::Component::Interface::variableName() */
 			[[nodiscard]]
@@ -129,12 +138,20 @@ namespace EmEn::Graphics::Material::Component
 				return !m_alphaEnabled;
 			}
 
-			/** @copydoc EmEn::Graphics::Material::Component::Interface::textureResource() */
+			/** @copydoc EmEn::Graphics::Material::Component::Interface::texture() const noexcept */
+			[[nodiscard]]
+			std::shared_ptr< Vulkan::TextureInterface >
+			texture () const noexcept override
+			{
+				return m_texture;
+			}
+
+			/** @copydoc EmEn::Graphics::Material::Component::Interface::textureResource() const noexcept */
 			[[nodiscard]]
 			std::shared_ptr< TextureResource::Abstract >
 			textureResource () const noexcept override
 			{
-				return m_texture;
+				return m_textureResource;
 			}
 
 			/** @copydoc EmEn::Graphics::Material::Component::Interface::getSampler() */
@@ -146,14 +163,28 @@ namespace EmEn::Graphics::Material::Component
 			}
 
 			/**
-			 * @brief Sets a texture.
+			 * @brief Sets a texture interface.
+			 * @note No resource loading behavior, useful for render-to-texture.
+			 * @param texture A reference to a texture interface smart pointer.
+			 * @return void
+			 */
+			void
+			setTexture (const std::shared_ptr< Vulkan::TextureInterface > & texture) noexcept
+			{
+				m_texture = texture;
+				m_textureResource.reset();
+			}
+
+			/**
+			 * @brief Sets a texture resource with a loading dependency.
 			 * @param texture A reference to a texture resource smart pointer.
 			 * @return void
 			 */
 			void
-			setTexture (const std::shared_ptr< TextureResource::Abstract > & texture) noexcept
+			setTextureResource (const std::shared_ptr< TextureResource::Abstract > & texture) noexcept
 			{
 				m_texture = texture;
+				m_textureResource = texture;
 			}
 
 			/**
@@ -208,6 +239,16 @@ namespace EmEn::Graphics::Material::Component
 			bool
 			isVolumetricTexture () const noexcept
 			{
+				if constexpr ( IsDebug )
+				{
+					if ( m_texture == nullptr )
+					{
+						TraceError{ClassId} << "The texture interface is nullptr!";
+
+						return false;
+					}
+				}
+
 				return m_texture->request3DTextureCoordinates();
 			}
 
@@ -280,7 +321,8 @@ namespace EmEn::Graphics::Material::Component
 
 			const char * m_samplerName;
 			std::string m_variableName;
-			std::shared_ptr< TextureResource::Abstract > m_texture{};
+			std::shared_ptr< Vulkan::TextureInterface > m_texture;
+			std::shared_ptr< TextureResource::Abstract > m_textureResource;
 			Libs::Math::Vector< 3, float > m_UVWScale{1.0F, 1.0F, 1.0F};
 			uint32_t m_UVWChannel{0};
 			uint32_t m_binding{0};
@@ -296,7 +338,7 @@ namespace EmEn::Graphics::Material::Component
 			"Variable name: " << obj.m_variableName << "\n"
 			"Texture type (component level): " << obj.textureType() << "\n"
 			"Is volumetric texture ? (component level): " << ( obj.isVolumetricTexture() ? "yes" : "no" ) << "\n"
-			"Texture resource name: " << obj.m_texture->name() << "\n"
+			"Texture resource name: " << ( obj.m_textureResource != nullptr ? obj.m_textureResource->name() : "N/A (TextureInterface)" ) << "\n"
 			"UVW scale: " << obj.m_UVWScale << "\n"
 			"Alpha channel enabled: " << ( obj.m_alphaEnabled ? "yes" : "no" ) << "\n"
 			"Binding point : " << obj.m_binding << "\n";

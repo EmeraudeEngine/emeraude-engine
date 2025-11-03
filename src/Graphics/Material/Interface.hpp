@@ -44,7 +44,7 @@ namespace EmEn
 
 	namespace Physics
 	{
-		class PhysicalSurfaceProperties;
+		class SurfacePhysicalProperties;
 	}
 
 	namespace Saphir
@@ -205,7 +205,7 @@ namespace EmEn::Graphics::Material
 			}
 
 			/**
-			 * @brief Returns whether the material primary texture coordinates are expressed in 3D.
+			 * @brief Returns whether the primary texture coordinates are expressed in 3D.
 			 * @return bool
 			 */
 			[[nodiscard]]
@@ -314,24 +314,15 @@ namespace EmEn::Graphics::Material
 			void enableBlendingFromJson (const Json::Value & data) noexcept;
 
 			/**
-			 * @brief Creates the material in the video memory.
-			 * @param renderer A reference to the graphics renderer.
-			 * @return bool
-			 */
-			virtual bool createOnHardware (Renderer & renderer) noexcept = 0;
-
-			/**
-			 * @brief Releases the material from the video memory.
-			 * @return void
-			 */
-			virtual void destroyFromHardware () noexcept = 0;
-
-			/**
 			 * @brief Returns whether the material is usable.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			virtual bool isCreated () const noexcept = 0;
+			bool
+			isCreated () const noexcept
+			{
+				return this->isFlagEnabled(IsCreated);
+			}
 
 			/**
 			 * @brief Returns whether the material needs individual matrices to work.
@@ -341,7 +332,7 @@ namespace EmEn::Graphics::Material
 			virtual bool isComplex () const noexcept = 0;
 
 			/**
-			 * @brief Setups the light generator with this material.
+			 * @brief Configures the light generator with this material.
 			 * @param lightGenerator A reference to the light generator.
 			 * @return bool
 			 */
@@ -369,17 +360,17 @@ namespace EmEn::Graphics::Material
 
 			/**
 			 * @brief Returns the physical surface properties.
-			 * @return const Physics::PhysicalSurfaceProperties &
+			 * @return const Physics::SurfacePhysicalProperties &
 			 */
 			[[nodiscard]]
-			virtual const Physics::PhysicalSurfaceProperties & physicalSurfaceProperties () const noexcept = 0;
+			virtual const Physics::SurfacePhysicalProperties & surfacePhysicalProperties () const noexcept = 0;
 
 			/**
 			 * @brief Returns the physical surface properties.
-			 * @return Physics::PhysicalSurfaceProperties &
+			 * @return Physics::SurfacePhysicalProperties &
 			 */
 			[[nodiscard]]
-			virtual Physics::PhysicalSurfaceProperties & physicalSurfaceProperties () noexcept = 0;
+			virtual Physics::SurfacePhysicalProperties & surfacePhysicalProperties () noexcept = 0;
 
 			/**
 			 * @brief Returns the number of frames.
@@ -495,6 +486,20 @@ namespace EmEn::Graphics::Material
 			std::shared_ptr< SharedUniformBuffer > getSharedUniformBuffer (Renderer & renderer, const std::string & identifier) const noexcept;
 
 			/**
+			 * @brief Creates the material objects in the video memory.
+			 * @param renderer A reference to the graphics renderer.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			virtual bool create (Renderer & renderer) noexcept = 0;
+
+			/**
+			 * @brief Destroys the material objects from the video memory.
+			 * @return bool
+			 */
+			virtual void destroy () noexcept = 0;
+
+			/**
 			 * @brief Returns the shared uniform buffer identifier corresponding to this material.
 			 * @return std::string
 			 */
@@ -528,15 +533,9 @@ namespace EmEn::Graphics::Material
 			[[nodiscard]]
 			virtual bool createDescriptorSet (Renderer & renderer, const Vulkan::UniformBufferObject & uniformBufferObject) noexcept = 0;
 
-			/**
-			 * @brief Events for child class when the material is loaded on GPU.
-			 * @return void
-			 */
-			virtual void onMaterialLoaded () noexcept = 0;
-
 		private:
 
-			/** @copydoc EmEn::Resources::ResourceTrait::onDependenciesLoaded() */
+			/** @copydoc EmEn::Resources::ResourceTrait::onDependenciesLoaded() noexcept */
 			[[nodiscard]]
 			bool onDependenciesLoaded () noexcept override;
 	};

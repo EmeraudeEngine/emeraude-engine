@@ -34,7 +34,7 @@
 #include "Libs/ObserverTrait.hpp"
 #include "Libs/ObservableTrait.hpp"
 
-using namespace Libs;
+using namespace EmEn::Libs;
 
 class Noise final : public ObservableTrait
 {

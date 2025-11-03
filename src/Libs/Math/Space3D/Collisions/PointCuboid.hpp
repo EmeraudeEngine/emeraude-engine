@@ -141,7 +141,7 @@ namespace EmEn::Libs::Math::Space3D
 			minOverlap = distToNegZ;
 			minimumTranslationVector = Vector< 3, precision_t >::negativeZ(minOverlap);
 		}
-    
+	
 		return true;
 	}
 

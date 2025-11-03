@@ -28,6 +28,7 @@
 
 /* Local inclusions. */
 #include "Libs/Math/Space2D/AARectangle.hpp"
+#include "Libs/Math/Space2D/Point.hpp"
 
 namespace EmEn::Libs::Math::Space2D
 {
@@ -43,18 +44,11 @@ namespace EmEn::Libs::Math::Space2D
 	bool
 	isColliding (const Point< precision_t > & point, const AARectangle< precision_t > & rectangle) noexcept requires (std::is_floating_point_v< precision_t >)
 	{
-		if ( point[X] < rectangle.left() || point[X] > rectangle.right() )
-		{
-			return false;
-		}
+		const auto min = rectangle.topLeft();
+		const auto max = rectangle.bottomRight();
 
-		/* NOTE: Positive Y goes downward. */
-		if ( point[Y] < rectangle.top() || point[Y] > rectangle.bottom() )
-		{
-			return false;
-		}
-
-		return true;
+		return (point.x() >= min.x() && point.x() <= max.x() &&
+				point.y() >= min.y() && point.y() <= max.y());
 	}
 
 	/**
@@ -70,9 +64,40 @@ namespace EmEn::Libs::Math::Space2D
 	bool
 	isColliding (const Point< precision_t > & point, const AARectangle< precision_t > & rectangle, Vector< 2, precision_t > & minimumTranslationVector) noexcept requires (std::is_floating_point_v< precision_t >)
 	{
-		// TODO ...
+		if ( !isColliding(point, rectangle) )
+		{
+			return false;
+		}
 
-		return false;
+		const auto min = rectangle.topLeft();
+		const auto max = rectangle.bottomRight();
+
+		const precision_t dist_left = point.x() - min.x();
+		const precision_t dist_right = max.x() - point.x();
+		const precision_t dist_top = point.y() - min.y();
+		const precision_t dist_bottom = max.y() - point.y();
+
+		precision_t min_dist = dist_left;
+		minimumTranslationVector = {-dist_left, 0};
+
+		if ( dist_right < min_dist )
+		{
+			min_dist = dist_right;
+			minimumTranslationVector = {dist_right, 0};
+		}
+
+		if ( dist_top < min_dist )
+		{
+			min_dist = dist_top;
+			minimumTranslationVector = {0, -dist_top};
+		}
+
+		if ( dist_bottom < min_dist )
+		{
+			minimumTranslationVector = {0, dist_bottom};
+		}
+
+		return true;
 	}
 
 	/** @copydoc EmEn::Libs::Math::Space2D::isColliding(const Point< precision_t > &, const AARectangle< precision_t > &) noexcept */
@@ -90,6 +115,13 @@ namespace EmEn::Libs::Math::Space2D
 	bool
 	isColliding (const AARectangle< precision_t > & rectangle, const Point< precision_t > & point, Vector< 2, precision_t > & minimumTranslationVector) noexcept requires (std::is_floating_point_v< precision_t >)
 	{
-		return isColliding(point, rectangle);
+		const bool result = isColliding(point, rectangle, minimumTranslationVector);
+
+		if ( result )
+		{
+			minimumTranslationVector = -minimumTranslationVector;
+		}
+
+		return result;
 	}
 }

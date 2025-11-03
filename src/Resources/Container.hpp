@@ -560,12 +560,14 @@ namespace EmEn::Resources
 				/* Already defines that the resource is in manual loading mode. */
 				if ( !newResource->enableManualLoading() )
 				{
+					TraceError{resource_t::ClassId} << "The manual loading for resource '" << resourceName << "' has been already set !";
+
 					return nullptr;
 				}
 
 				if ( !createFunction(*newResource) )
 				{
-					TraceError{resource_t::ClassId} << "The manual loading function has return an error !";
+					TraceError{resource_t::ClassId} << "The manual loading function for resource '" << resourceName << "' has returned an error !";
 
 					return nullptr;
 				}
@@ -576,12 +578,14 @@ namespace EmEn::Resources
 					case Status::Enqueuing :
 					case Status::ManualEnqueuing :
 						TraceError{resource_t::ClassId} <<
-							"The manual resource '" << resourceName << " is still in creation mode !"
+							"The manual resource '" << resourceName << "' is still in creation mode!"
 							"A manual loading should ends with a call to ResourceTrait::setManualLoadSuccess() or ResourceTrait::load().";
 
 						return nullptr;
 
 					case Status::Failed :
+						TraceError{resource_t::ClassId} << "The manual resource '" << resourceName << "' has failed to load!";
+
 						return nullptr;
 
 					default :

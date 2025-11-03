@@ -31,16 +31,25 @@
 #include <memory>
 #include <string>
 
+/* Local inclusions. */
 #include "Saphir/Declaration/Sampler.hpp"
 
-namespace EmEn::Graphics
+namespace EmEn
 {
-	namespace TextureResource
+	namespace Vulkan
 	{
-		class Abstract;
+		class TextureInterface;
 	}
 
-	class Renderer;
+	namespace Graphics
+	{
+		namespace TextureResource
+		{
+			class Abstract;
+		}
+
+		class Renderer;
+	}
 }
 
 namespace EmEn::Graphics::Material::Component
@@ -102,13 +111,6 @@ namespace EmEn::Graphics::Material::Component
 			virtual bool create (Renderer & renderer, uint32_t & binding) noexcept = 0;
 
 			/**
-			 * @brief Returns whether the component is created.
-			 * @return bool
-			 */
-			[[nodiscard]]
-			virtual bool isCreated () const noexcept = 0;
-
-			/**
 			 * @brief Return the variable name.
 			 * @return const std::string &
 			 */
@@ -130,15 +132,23 @@ namespace EmEn::Graphics::Material::Component
 			virtual bool isOpaque () const noexcept = 0;
 
 			/**
-			 * @brief Returns the texture resource.
+			 * @brief Returns the texture interface.
 			 * @return std::shared_ptr< TextureResource::Abstract >
 			 */
 			[[nodiscard]]
-			virtual std::shared_ptr<TextureResource::Abstract> textureResource() const noexcept = 0;
+			virtual std::shared_ptr< Vulkan::TextureInterface > texture () const noexcept = 0;
+
+			/**
+			 * @brief Returns the texture resource for the loading system.
+			 * @note A texture is not necessarily loaded from the disk, and this can be nullptr.
+			 * @return std::shared_ptr< TextureResource::Abstract >
+			 */
+			[[nodiscard]]
+			virtual std::shared_ptr< TextureResource::Abstract > textureResource () const noexcept = 0;
 
 			/**
 			 * @brief Returns a sample declaration for the GLSL code.
-			 * @warning Check for the component type being a texture before !
+			 * @warning Check for the component type being a texture before!
 			 * @param materialSet The material descriptor set index.
 			 * @return Saphir::Declaration::Sampler
 			 */

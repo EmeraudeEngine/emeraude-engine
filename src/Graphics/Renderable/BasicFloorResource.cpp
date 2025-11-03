@@ -57,8 +57,6 @@ namespace EmEn::Graphics::Renderable
 	Vector< 3, float >
 	BasicFloorResource::getLevelAt (float positionX, float positionZ, float deltaY) const noexcept
 	{
-		/* NOTE: If no geometry available,
-		 * we send the -Y boundary limit. */
 		if ( m_geometry == nullptr )
 		{
 			return {positionX, 0.0F + deltaY, positionZ};
@@ -70,8 +68,6 @@ namespace EmEn::Graphics::Renderable
 	Vector< 3, float >
 	BasicFloorResource::getNormalAt (const Vector< 3, float > & worldPosition) const noexcept
 	{
-		/* NOTE: If no geometry available,
-		 * we send a y+ normal vector. */
 		if ( m_geometry == nullptr )
 		{
 			return Vector< 3, float >::positiveY();

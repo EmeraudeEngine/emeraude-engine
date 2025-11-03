@@ -60,7 +60,7 @@ namespace EmEn::Graphics::TextureResource
 	}
 
 	bool
-	TextureCubemap::createOnHardware (Renderer & renderer) noexcept
+	TextureCubemap::createTexture (Renderer & renderer) noexcept
 	{
 		for ( const auto & pixmap: m_localData->faces() )
 		{
@@ -151,7 +151,7 @@ namespace EmEn::Graphics::TextureResource
 	}
 
 	bool
-	TextureCubemap::destroyFromHardware () noexcept
+	TextureCubemap::destroyTexture () noexcept
 	{
 		if ( m_image != nullptr )
 		{

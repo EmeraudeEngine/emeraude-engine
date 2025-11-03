@@ -29,7 +29,7 @@
 /* Local inclusions. */
 #include "Libs/Hash/Hash.hpp"
 
-using namespace Libs;
+using namespace EmEn::Libs;
 
 TEST(Hash, md5)
 {

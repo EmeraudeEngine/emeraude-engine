@@ -390,7 +390,7 @@ namespace EmEn::Physics
 	}
 
 	bool
-	Particle::updateSimulation (const Scenes::Scene & scene, const PhysicalObjectProperties & particleProperties, const CartesianFrame< float > & worldCoordinates) noexcept
+	Particle::updateSimulation (const Scenes::Scene & scene, const BodyPhysicalProperties & particleProperties, const CartesianFrame< float > & worldCoordinates) noexcept
 	{
 		if ( particleProperties.isMassNull() )
 		{
@@ -404,7 +404,7 @@ namespace EmEn::Physics
 			m_linearVelocity += force * particleProperties.inverseMass() * EngineUpdateCycleDurationS< float >;
 		});
 
-		const PhysicalEnvironmentProperties & envProperties = scene.physicalEnvironmentProperties();
+		const EnvironmentPhysicalProperties & envProperties = scene.physicalEnvironmentProperties();
 
 		/* Apply gravity. */
 		m_linearVelocity[Y] += envProperties.steppedSurfaceGravity();

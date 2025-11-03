@@ -128,6 +128,27 @@ namespace EmEn::Libs::Math::Space3D
 			}
 
 			/**
+			 * @brief Returns the point array.
+			 * @note The layout is [bottomSouthEast, bottomNorthEast, bottomSouthWest, bottomNorthWest, topSouthEast, topNorthEast, topSouthWest, topNorthWest].
+			 * @return std::array< Point< precision_t >, 4 > &
+			 */
+			[[nodiscard]]
+			std::array< Point< precision_t >, 8 >
+			points () const noexcept
+			{
+				return {
+					this->bottomSouthEast(),
+					this->bottomNorthEast(),
+					this->bottomSouthWest(),
+					this->bottomNorthWest(),
+					this->topSouthEast(),
+					this->topNorthEast(),
+					this->topSouthWest(),
+					this->topNorthWest()
+				};
+			}
+
+			/**
 			 * @brief Sets the absolute volume of the box from its center.
 			 * @param value The maximal value in every direction.
 			 * @return void

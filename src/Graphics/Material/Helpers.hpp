@@ -170,11 +170,11 @@ namespace EmEn::Graphics::Material
 
 	/**
 	 * @brief Parses the base of a component structure from JSON data.
-	 * @param data A reference to the json value.
+	 * @param data A reference to the JSON value.
 	 * @param componentName A string for the componentName.
 	 * @param fillingType A reference to filling type to complete, if succeeded.
 	 * @param componentData A reference to componentName data to complete, if succeeded.
-	 * @param optional Set the component as optional and will not return error if not present. Default false.
+	 * @param optional Set the component as optional and will not return an error if not present. Default false.
 	 * @return bool
 	 */
 	[[nodiscard]]
@@ -182,7 +182,7 @@ namespace EmEn::Graphics::Material
 
 	/**
 	 * @brief Parses from an identified color component JSON data.
-	 * @param data A reference to the json value.
+	 * @param data A reference to the JSON value.
 	 * @return Libraries::PixelFactory::Color< float >
 	 */
 	[[nodiscard]]
@@ -190,7 +190,7 @@ namespace EmEn::Graphics::Material
 
 	/**
 	 * @brief Parses from an identified color component JSON data.
-	 * @param data A reference to the json value.
+	 * @param data A reference to the JSON value.
 	 * @return float
 	 */
 	[[nodiscard]]
@@ -198,9 +198,9 @@ namespace EmEn::Graphics::Material
 
 	/**
 	 * @brief Parses a component as a value.
-	 * @param data A reference to the json value.
+	 * @param data A reference to the JSON value.
 	 * @param componentType A C-String point to the targeted component.
-	 * @param value A reference to the value to complete, if succeed.
+	 * @param value A reference to the value to complete, if succeeded.
 	 * @return bool
 	 */
 	[[nodiscard]]

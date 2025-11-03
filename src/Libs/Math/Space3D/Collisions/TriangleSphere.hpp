@@ -60,16 +60,16 @@ namespace EmEn::Libs::Math::Space3D
 			return a + (ab * clampedT);
 		};
 
-	    const auto & triPoints = triangle.points();
-	    const auto & A = triPoints[0];
-	    const auto & B = triPoints[1];
-	    const auto & C = triPoints[2];
-	    const auto & S = sphere.position();
+		const auto & triPoints = triangle.points();
+		const auto & A = triPoints[0];
+		const auto & B = triPoints[1];
+		const auto & C = triPoints[2];
+		const auto & S = sphere.position();
 
-	    /* NOTE: Find the closest point on the plane of the triangle. */
-	    const auto normal = Vector< 3, precision_t >::normal(A, B, C);
-	    const auto distanceToPlane = Vector< 3, precision_t >::dotProduct(S - A, normal);
-	    const auto pointOnPlane = S - (normal * distanceToPlane);
+		/* NOTE: Find the closest point on the plane of the triangle. */
+		const auto normal = Vector< 3, precision_t >::normal(A, B, C);
+		const auto distanceToPlane = Vector< 3, precision_t >::dotProduct(S - A, normal);
+		const auto pointOnPlane = S - (normal * distanceToPlane);
 
 		/* NOTE: Check if this point is inside the triangle (using the "same side" technique with the vector product). */
 		const auto c1 = Vector< 3, precision_t >::dotProduct(Vector< 3, precision_t >::crossProduct(B - A, pointOnPlane - A), normal);
@@ -108,8 +108,8 @@ namespace EmEn::Libs::Math::Space3D
 			}
 		}
 
-	    /* NOTE: Compare the final distance to the radius of the sphere. */
-	    return Vector< 3, precision_t >::distanceSquared(S, closestPoint) <= sphere.squaredRadius();
+		/* NOTE: Compare the final distance to the radius of the sphere. */
+		return Vector< 3, precision_t >::distanceSquared(S, closestPoint) <= sphere.squaredRadius();
 	}
 
 	/**
@@ -135,21 +135,21 @@ namespace EmEn::Libs::Math::Space3D
 		/* NOTE: The logic to find the closest point is the same as the previous function. */
 		auto closestPointOnSegment = [] (const Point< precision_t > & point, const Point< precision_t > & a, const Point< precision_t > & b)
 		{
-		    const auto ab = b - a;
-		    const auto ap = point - a;
+			const auto ab = b - a;
+			const auto ap = point - a;
 
-		    /* NOTE: Handle the case where the segment has zero lengths. */
-		    const auto lenSq = ab.lengthSquared();
+			/* NOTE: Handle the case where the segment has zero lengths. */
+			const auto lenSq = ab.lengthSquared();
 
-		    if ( lenSq < std::numeric_limits< precision_t >::epsilon() )
-		    {
+			if ( lenSq < std::numeric_limits< precision_t >::epsilon() )
+			{
 				return a;
 			}
 
 			const precision_t t = Vector< 3, precision_t >::dotProduct(ap, ab) / lenSq;
-		    const precision_t clampedT = std::clamp(t, static_cast< precision_t >(0), static_cast< precision_t >(1));
+			const precision_t clampedT = std::clamp(t, static_cast< precision_t >(0), static_cast< precision_t >(1));
 			
-		    return a + (ab * clampedT);
+			return a + (ab * clampedT);
 		};
 
 		const auto & triPoints = triangle.points();
@@ -170,30 +170,30 @@ namespace EmEn::Libs::Math::Space3D
 
 		if ( c1 >= 0 && c2 >= 0 && c3 >= 0 )
 		{
-		    closestPoint = pointOnPlane;
+			closestPoint = pointOnPlane;
 		}
 		else
 		{
-		    const auto pAB = closestPointOnSegment(S, A, B);
-		    const auto pBC = closestPointOnSegment(S, B, C);
-		    const auto pCA = closestPointOnSegment(S, C, A);
+			const auto pAB = closestPointOnSegment(S, A, B);
+			const auto pBC = closestPointOnSegment(S, B, C);
+			const auto pCA = closestPointOnSegment(S, C, A);
 
-		    const auto dAB = Vector< 3, precision_t >::distanceSquared(S, pAB);
-		    const auto dBC = Vector< 3, precision_t >::distanceSquared(S, pBC);
-		    const auto dCA = Vector< 3, precision_t >::distanceSquared(S, pCA);
+			const auto dAB = Vector< 3, precision_t >::distanceSquared(S, pAB);
+			const auto dBC = Vector< 3, precision_t >::distanceSquared(S, pBC);
+			const auto dCA = Vector< 3, precision_t >::distanceSquared(S, pCA);
 
-		    if ( dAB < dBC && dAB < dCA )
-		    {
-		        closestPoint = pAB;
-		    }
+			if ( dAB < dBC && dAB < dCA )
+			{
+				closestPoint = pAB;
+			}
 			else if ( dBC < dCA )
 			{
-		        closestPoint = pBC;
-		    }
+				closestPoint = pBC;
+			}
 			else
 			{
-		        closestPoint = pCA;
-		    }
+				closestPoint = pCA;
+			}
 		}
 
 		/* NOTE: End of search for the nearest point.
@@ -204,9 +204,9 @@ namespace EmEn::Libs::Math::Space3D
 		if ( distanceSq > sphere.squaredRadius() )
 		{
 			/* No collision. */
-		    minimumTranslationVector.reset();
+			minimumTranslationVector.reset();
 
-		    return false;
+			return false;
 		}
 
 		/* NOTE: Collision confirmed, MTV calculated. */
@@ -215,13 +215,13 @@ namespace EmEn::Libs::Math::Space3D
 
 		if ( distance > std::numeric_limits< precision_t >::epsilon() )
 		{
-		    /* NOTE: The direction of the MTV is that of the delta vector (from the nearest point to the center of the sphere). */
-		    minimumTranslationVector = (delta / distance) * overlap;
+			/* NOTE: The direction of the MTV is that of the delta vector (from the nearest point to the center of the sphere). */
+			minimumTranslationVector = (delta / distance) * overlap;
 		}
 		else
 		{
-		    /* NOTE: The center of the sphere is on the triangle. We push along the normal of the triangle. */
-		    minimumTranslationVector = normal * sphere.radius();
+			/* NOTE: The center of the sphere is on the triangle. We push along the normal of the triangle. */
+			minimumTranslationVector = normal * sphere.radius();
 		}
 
 		return true;

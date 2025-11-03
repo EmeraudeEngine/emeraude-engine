@@ -44,9 +44,14 @@ namespace EmEn::Libs::Math::Space2D
 	bool
 	isColliding (const Circle< precision_t > & circle, const AARectangle< precision_t > & rectangle) noexcept requires (std::is_floating_point_v< precision_t >)
 	{
-		// TODO ...
+		// Find the closest point on the rectangle to the circle center
+		const precision_t clampedX = std::max(rectangle.left(), std::min(circle.position().x(), rectangle.right()));
+		const precision_t clampedY = std::max(rectangle.top(), std::min(circle.position().y(), rectangle.bottom()));
+		const Point< precision_t > closestPoint{clampedX, clampedY};
 
-		return false;
+		const auto distanceSq = (circle.position() - closestPoint).lengthSquared();
+
+		return distanceSq <= circle.radius() * circle.radius();
 	}
 
 	/**
@@ -62,9 +67,56 @@ namespace EmEn::Libs::Math::Space2D
 	bool
 	isColliding (const Circle< precision_t > & circle, const AARectangle< precision_t > & rectangle, Vector< 2, precision_t > & minimumTranslationVector) noexcept requires (std::is_floating_point_v< precision_t >)
 	{
-		// TODO ...
+		// Find the closest point on the rectangle to the circle center
+		const precision_t clampedX = std::max(rectangle.left(), std::min(circle.position().x(), rectangle.right()));
+		const precision_t clampedY = std::max(rectangle.top(), std::min(circle.position().y(), rectangle.bottom()));
+		const Point< precision_t > closestPoint{clampedX, clampedY};
 
-		return false;
+		const auto delta = circle.position() - closestPoint;
+		const auto distanceSq = delta.lengthSquared();
+
+		if ( distanceSq > circle.radius() * circle.radius() )
+		{
+			return false;
+		}
+
+		if ( distanceSq < std::numeric_limits< precision_t >::epsilon() )
+		{
+			/* Circle center is inside the rectangle. */
+			const precision_t dist_left = circle.position().x() - rectangle.left();
+			const precision_t dist_right = rectangle.right() - circle.position().x();
+			const precision_t dist_top = circle.position().y() - rectangle.top();
+			const precision_t dist_bottom = rectangle.bottom() - circle.position().y();
+
+			precision_t min_dist = dist_left;
+			minimumTranslationVector = Vector< 2, precision_t >{-(min_dist + circle.radius()), 0};
+
+			if ( dist_right < min_dist )
+			{
+				min_dist = dist_right;
+				minimumTranslationVector = Vector< 2, precision_t >{min_dist + circle.radius(), 0};
+			}
+
+			if ( dist_top < min_dist )
+			{
+				min_dist = dist_top;
+				minimumTranslationVector = Vector< 2, precision_t >{0, -(min_dist + circle.radius())};
+			}
+
+			if ( dist_bottom < min_dist )
+			{
+				minimumTranslationVector = Vector< 2, precision_t >{0, dist_bottom + circle.radius()};
+			}
+		}
+		else
+		{
+			const auto distance = std::sqrt(distanceSq);
+			const auto overlap = circle.radius() - distance;
+
+			minimumTranslationVector = (delta / distance) * overlap;
+		}
+
+		return true;
 	}
 
 	/** @copydoc EmEn::Libs::Math::Space2D::isColliding(const Circle< precision_t > &, const AARectangle< precision_t > &) noexcept */
@@ -82,6 +134,13 @@ namespace EmEn::Libs::Math::Space2D
 	bool
 	isColliding (const AARectangle< precision_t > & rectangle, const Circle< precision_t > & circle, Vector< 2, precision_t > & minimumTranslationVector) noexcept requires (std::is_floating_point_v< precision_t >)
 	{
-		return isColliding(circle, rectangle, minimumTranslationVector);
+		const bool result = isColliding(circle, rectangle, minimumTranslationVector);
+
+		if ( result )
+		{
+			minimumTranslationVector = -minimumTranslationVector;
+		}
+
+		return result;
 	}
 }

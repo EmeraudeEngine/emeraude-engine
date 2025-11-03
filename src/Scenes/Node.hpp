@@ -305,7 +305,7 @@ namespace EmEn::Scenes
 				return classUID;
 			}
 
-			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
+			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const noexcept */
 			[[nodiscard]]
 			size_t
 			classUID () const noexcept override
@@ -313,7 +313,7 @@ namespace EmEn::Scenes
 				return getClassUID();
 			}
 
-			/** @copydoc EmEn::Libs::ObservableTrait::is() const */
+			/** @copydoc EmEn::Libs::ObservableTrait::is() const noexcept */
 			[[nodiscard]]
 			bool
 			is (size_t classUID) const noexcept override
@@ -321,7 +321,7 @@ namespace EmEn::Scenes
 				return classUID == getClassUID();
 			}
 
-			/** @copydoc EmEn::Scenes::AbstractEntity::hasMovableAbility() const */
+			/** @copydoc EmEn::Scenes::AbstractEntity::hasMovableAbility() const noexcept */
 			[[nodiscard]]
 			bool
 			hasMovableAbility () const noexcept override
@@ -329,7 +329,7 @@ namespace EmEn::Scenes
 				return true;
 			}
 
-			/** @copydoc EmEn::Scenes::AbstractEntity::isMoving() const */
+			/** @copydoc EmEn::Scenes::AbstractEntity::isMoving() const noexcept */
 			[[nodiscard]]
 			bool
 			isMoving () const noexcept override
@@ -337,7 +337,7 @@ namespace EmEn::Scenes
 				return this->hasVelocity();
 			}
 
-			/** @copydoc EmEn::Scenes::AbstractEntity::publishStateForRendering(uint32_t) */
+			/** @copydoc EmEn::Scenes::AbstractEntity::publishStateForRendering(uint32_t) noexcept */
 			void
 			publishStateForRendering (uint32_t writeStateIndex) noexcept override
 			{
@@ -354,7 +354,7 @@ namespace EmEn::Scenes
 				m_renderStateCoordinates[writeStateIndex] = this->getWorldCoordinates();
 			}
 
-			/** @copydoc EmEn::Scenes::AbstractEntity::getWorldCoordinatesStateForRendering(uint32_t) const */
+			/** @copydoc EmEn::Scenes::AbstractEntity::getWorldCoordinatesStateForRendering(uint32_t) const noexcept */
 			[[nodiscard]]
 			const Libs::Math::CartesianFrame< float > &
 			getWorldCoordinatesStateForRendering (uint32_t readStateIndex) const noexcept override
@@ -362,7 +362,7 @@ namespace EmEn::Scenes
 				return m_renderStateCoordinates[readStateIndex];
 			}
 
-			/** @copydoc EmEn::Scenes::AbstractEntity::getMovableTrait() */
+			/** @copydoc EmEn::Scenes::AbstractEntity::getMovableTrait() noexcept */
 			[[nodiscard]]
 			MovableTrait *
 			getMovableTrait () noexcept override
@@ -370,7 +370,7 @@ namespace EmEn::Scenes
 				return this;
 			}
 
-			/** @copydoc EmEn::Scenes::AbstractEntity::getMovableTrait() const */
+			/** @copydoc EmEn::Scenes::AbstractEntity::getMovableTrait() const noexcept */
 			[[nodiscard]]
 			const MovableTrait *
 			getMovableTrait () const noexcept override
@@ -378,22 +378,31 @@ namespace EmEn::Scenes
 				return this;
 			}
 
-			/** @copydoc EmEn::Physics::MovableTrait::getWorldVelocity() const */
+			/** @copydoc EmEn::Physics::MovableTrait::getWorldVelocity() const noexcept */
 			[[nodiscard]]
 			Libs::Math::Vector< 3, float > getWorldVelocity () const noexcept override;
 
-			/** @copydoc EmEn::Physics::MovableTrait::getWorldCenterOfMass() const */
+			/** @copydoc EmEn::Physics::MovableTrait::getWorldCenterOfMass() const noexcept */
 			[[nodiscard]]
 			Libs::Math::Vector< 3, float > getWorldCenterOfMass () const noexcept override;
 
-			/** @copydoc EmEn::Physics::MovableTrait::onHit() */
+			/** @copydoc EmEn::Physics::MovableTrait::getBodyPhysicalProperties() const noexcept */
+			[[nodiscard]]
+			const Physics::BodyPhysicalProperties &
+			getBodyPhysicalProperties () const noexcept override
+			{
+				/* NOTE: Returns the physical object properties from the abstract entity. */
+				return this->bodyPhysicalProperties();
+			}
+
+			/** @copydoc EmEn::Physics::MovableTrait::onHit() noexcept */
 			void
 			onHit (float impactForce) noexcept override
 			{
 				this->notify(NodeCollision, impactForce);
 			}
 
-			/** @copydoc EmEn::Physics::MovableTrait::onImpulse() */
+			/** @copydoc EmEn::Physics::MovableTrait::onImpulse() noexcept */
 			void
 			onImpulse () noexcept override
 			{
@@ -493,26 +502,24 @@ namespace EmEn::Scenes
 			 * @brief Creates a sub node at given coordinates.
 			 * @warning If the node already exists, the method will return a null pointer.
 			 * @param name A reference to a string.
-			 * @param sceneTimeMS The scene current time in milliseconds.
-			 * @param coordinates Set the coordinates of the new node. Default Origin.
+			 * @param coordinates Set the coordinates of the new node.
+			 * @param sceneTimeMS The scene current time in milliseconds. Default 0.
 			 * @return std::shared_ptr< Node >
 			 */
 			[[nodiscard]]
-			std::shared_ptr< Node > createChild (const std::string & name, uint32_t sceneTimeMS, const Libs::Math::CartesianFrame< float > & coordinates = {}) noexcept;
+			std::shared_ptr< Node > createChild (const std::string & name, const Libs::Math::CartesianFrame< float > & coordinates, uint32_t sceneTimeMS = 0) noexcept;
 
 			/**
-			 * @brief Creates a sub node at a given position.
+			 * @brief Creates a sub node at given coordinates.
 			 * @warning If the node already exists, the method will return a null pointer.
 			 * @param name A reference to a string.
-			 * @param sceneTimeMS The scene current time in milliseconds.
-			 * @param position Set the position of the new node.
 			 * @return std::shared_ptr< Node >
 			 */
 			[[nodiscard]]
 			std::shared_ptr< Node >
-			createChild (const std::string & name, uint32_t sceneTimeMS, const Libs::Math::Vector< 3, float > & position) noexcept
+			createChild (const std::string & name) noexcept
 			{
-				return this->createChild(name, sceneTimeMS, Libs::Math::CartesianFrame< float >{position});
+				return this->createChild(name, Libs::Math::CartesianFrame(), 0);
 			}
 
 			/**
@@ -626,14 +633,6 @@ namespace EmEn::Scenes
 
 		private:
 
-			/** @copydoc EmEn::Physics::MovableTrait::getObjectProperties() */
-			[[nodiscard]]
-			const Physics::PhysicalObjectProperties &
-			getObjectProperties () const noexcept override
-			{
-				return this->physicalObjectProperties();
-			}
-
 			/** @copydoc EmEn::Physics::MovableTrait::getWorldPosition() */
 			[[nodiscard]]
 			Libs::Math::Vector< 3, float >
@@ -642,16 +641,16 @@ namespace EmEn::Scenes
 				return this->getWorldCoordinates().position();
 			}
 
-			/** @copydoc EmEn::Physics::MovableTrait::simulatedMove() */
+			/** @copydoc EmEn::Physics::MovableTrait::moveFromPhysics() */
 			void
-			simulatedMove (const Libs::Math::Vector< 3, float > & worldPosition) noexcept override
+			moveFromPhysics (const Libs::Math::Vector< 3, float > & worldPosition) noexcept override
 			{
 				this->move(worldPosition, Libs::Math::TransformSpace::World);
 			}
 
-			/** @copydoc EmEn::Physics::MovableTrait::simulatedRotation() */
+			/** @copydoc EmEn::Physics::MovableTrait::rotateFromPhysics() */
 			void
-			simulatedRotation (float radianAngle, const Libs::Math::Vector< 3, float > & worldDirection) noexcept override
+			rotateFromPhysics (float radianAngle, const Libs::Math::Vector< 3, float > & worldDirection) noexcept override
 			{
 				this->rotate(Libs::Math::Degree(radianAngle), worldDirection, Libs::Math::TransformSpace::Local);
 			}

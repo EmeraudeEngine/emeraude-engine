@@ -37,7 +37,7 @@ namespace EmEn::Libs::Math::Space2D
 	/**
 	 * @brief Vector specialization of a point in 2D space.
 	 */
-	template< typename precisions_t >
-	requires (std::is_arithmetic_v< precisions_t >)
-	using Point = Vector< 2, precisions_t >;
+	template< typename precision_t >
+	requires (std::is_arithmetic_v< precision_t >)
+	using Point = Vector< 2, precision_t >;
 }

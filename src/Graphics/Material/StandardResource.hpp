@@ -35,7 +35,7 @@
 
 /* Local inclusions for usages. */
 #include "Resources/Container.hpp"
-#include "Physics/PhysicalSurfaceProperties.hpp"
+#include "Physics/SurfacePhysicalProperties.hpp"
 #include "Component/Interface.hpp"
 
 /* Forward declarations. */
@@ -129,7 +129,7 @@ namespace EmEn::Graphics::Material
 			 */
 			~StandardResource () override
 			{
-				this->destroyFromHardware();
+				this->destroy();
 			}
 
 			/**
@@ -183,16 +183,6 @@ namespace EmEn::Graphics::Material
 				return sizeof(*this);
 			}
 
-			/** @copydoc EmEn::Graphics::Material::Interface::createOnHardware() */
-			bool createOnHardware (Renderer & renderer) noexcept override;
-
-			/** @copydoc EmEn::Graphics::Material::Interface::destroyFromHardware() */
-			void destroyFromHardware () noexcept override;
-
-			/** @copydoc EmEn::Graphics::Material::Interface::isCreated() */
-			[[nodiscard]]
-			bool isCreated () const noexcept override;
-
 			/** @copydoc EmEn::Graphics::Material::Interface::isCreated() */
 			[[nodiscard]]
 			bool isComplex () const noexcept override;
@@ -211,11 +201,11 @@ namespace EmEn::Graphics::Material
 
 			/** @copydoc EmEn::Graphics::Material::Interface::physicalSurfaceProperties() const */
 			[[nodiscard]]
-			const Physics::PhysicalSurfaceProperties & physicalSurfaceProperties () const noexcept override;
+			const Physics::SurfacePhysicalProperties & surfacePhysicalProperties () const noexcept override;
 
 			/** @copydoc EmEn::Graphics::Material::Interface::physicalSurfaceProperties() */
 			[[nodiscard]]
-			Physics::PhysicalSurfaceProperties & physicalSurfaceProperties () noexcept override;
+			Physics::SurfacePhysicalProperties & surfacePhysicalProperties () noexcept override;
 
 			/** @copydoc EmEn::Graphics::Material::Interface::frameCount() */
 			[[nodiscard]]
@@ -467,6 +457,13 @@ namespace EmEn::Graphics::Material
 
 		private:
 
+			/** @copydoc EmEn::Graphics::Material::Interface::create() noexcept */
+			[[nodiscard]]
+			bool create (Renderer & renderer) noexcept override;
+
+			/** @copydoc EmEn::Graphics::Material::Interface::destroy() noexcept */
+			void destroy () noexcept override;
+
 			/** @copydoc EmEn::Graphics::Material::Interface::getSharedUniformBufferIdentifier() */
 			[[nodiscard]]
 			std::string getSharedUniformBufferIdentifier () const noexcept override;
@@ -482,9 +479,6 @@ namespace EmEn::Graphics::Material
 			/** @copydoc EmEn::Graphics::Material::Interface::createDescriptorSet() */
 			[[nodiscard]]
 			bool createDescriptorSet (Renderer & renderer, const Vulkan::UniformBufferObject & uniformBufferObject) noexcept override;
-
-			/** @copydoc EmEn::Graphics::Material::Interface::onMaterialLoaded() */
-			void onMaterialLoaded () noexcept override;
 
 			/**
 			 * @brief Parses the ambient component from JSON data.
@@ -550,14 +544,6 @@ namespace EmEn::Graphics::Material
 			bool parseReflectionComponent (const Json::Value & data, Resources::ServiceProvider & serviceProvider) noexcept;
 
 			/**
-			 * @brief Creates the necessary data onto the GPU for this material.
-			 * @param renderer A reference to the graphics renderer.
-			 * @return bool
-			 */
-			[[nodiscard]]
-			bool createVideoMemory (Renderer & renderer) noexcept;
-
-			/**
 			 * @brief Updates the UBO with material properties.
 			 * @return void
 			 */
@@ -604,7 +590,7 @@ namespace EmEn::Graphics::Material
 			static constexpr auto DefaultNormalScale{1.0F};
 			static constexpr auto DefaultReflectionAmount{0.5F};
 
-			Physics::PhysicalSurfaceProperties m_physicalSurfaceProperties{};
+			Physics::SurfacePhysicalProperties m_physicalSurfaceProperties{};
 			std::unordered_map< ComponentType, std::unique_ptr< Component::Interface > > m_components{};
 			BlendingMode m_blendingMode{BlendingMode::None};
 			std::array< float, 24 > m_materialProperties{

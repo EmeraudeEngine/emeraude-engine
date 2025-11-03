@@ -387,9 +387,9 @@ namespace EmEn::Animations
 	void
 	Sequence::addKeyFrame (uint32_t timeCode, const Variant & value, InterpolationType interpolation) noexcept
 	{
-		if ( timeCode > m_duration )
+		if ( timeCode > m_durationMS )
 		{
-			TraceWarning{ClassId} << "The time code at " << timeCode << "ms is out of the timeline (" << m_duration << "ms) !";
+			TraceWarning{ClassId} << "The time code at " << timeCode << "ms is out of the timeline (" << m_durationMS << "ms) !";
 
 			return;
 		}
@@ -404,7 +404,7 @@ namespace EmEn::Animations
 	void
 	Sequence::addKeyFrame (float position, const Variant & value, InterpolationType interpolation) noexcept
 	{
-		const auto timePoint = static_cast< float >(m_duration) * clampToUnit(position);
+		const auto timePoint = static_cast< float >(m_durationMS) * clampToUnit(position);
 
 		this->addKeyFrame(static_cast< uint32_t >(std::round(timePoint)), value, interpolation);
 	}
@@ -412,9 +412,9 @@ namespace EmEn::Animations
 	void
 	Sequence::setCurrentTime (uint32_t timeCode) noexcept
 	{
-		if ( timeCode > m_duration )
+		if ( timeCode > m_durationMS )
 		{
-			TraceWarning{ClassId} << "The time code at " << timeCode << "ms is out of the timeline (" << m_duration << "ms) !";
+			TraceWarning{ClassId} << "The time code at " << timeCode << "ms is out of the timeline (" << m_durationMS << "ms) !";
 
 			return;
 		}
@@ -425,7 +425,7 @@ namespace EmEn::Animations
 	void
 	Sequence::setCurrentTime (float position) noexcept
 	{
-		const auto timePoint = static_cast< float >(m_duration) * clampToUnit(position);
+		const auto timePoint = static_cast< float >(m_durationMS) * clampToUnit(position);
 
 		this->setCurrentTime(static_cast< uint32_t >(std::round(timePoint)));
 	}
@@ -535,7 +535,7 @@ namespace EmEn::Animations
 		m_elapsedTime += EngineUpdateCycleDurationMS< uint32_t >;
 
 		/* Checks for the end of the cycle. */
-		if ( m_elapsedTime < m_duration )
+		if ( m_elapsedTime < m_durationMS )
 		{
 			return;
 		}
@@ -559,7 +559,7 @@ namespace EmEn::Animations
 				/* NOTE: The sequence has reached the end. */
 				m_isPlaying = false;
 
-				m_elapsedTime = m_duration;
+				m_elapsedTime = m_durationMS;
 			}
 		}
 	}

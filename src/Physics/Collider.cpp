@@ -32,6 +32,7 @@
 #include "Libs/Math/OrientedCuboid.hpp"
 #include "Scenes/AbstractEntity.hpp"
 #include "Physics/MovableTrait.hpp"
+#include "Physics/ContactManifold.hpp"
 
 namespace EmEn::Physics
 {
@@ -144,7 +145,21 @@ namespace EmEn::Physics
 					auto * movableTrait = targetEntity.getMovableTrait();
 					const auto speedAtHit = movableTrait->deflect(collision.direction(), 1.0F);
 
-					movableTrait->onHit(speedAtHit * targetEntity.physicalObjectProperties().mass());
+					movableTrait->onHit(speedAtHit * targetEntity.bodyPhysicalProperties().mass());
+
+					/* Angular momentum transfer for boundary collision.
+					 * Apply torque based on off-center impact. */
+					if ( movableTrait->isRotationPhysicsEnabled() )
+					{
+						const auto leverArm = collision.position() - targetEntity.getWorldCoordinates().position();
+						const auto impulseMagnitude = speedAtHit * targetEntity.bodyPhysicalProperties().mass();
+						const auto impulseForce = collision.direction().scaled(impulseMagnitude);
+						const auto torque = Vector< 3, float >::crossProduct(leverArm, impulseForce);
+
+						/* Apply torque with a reduction factor for gameplay stability. */
+						constexpr auto torqueReductionFactor = 0.01F;
+						movableTrait->addTorque(torque * torqueReductionFactor);
+					}
 				}
 					break;
 
@@ -154,7 +169,21 @@ namespace EmEn::Physics
 					auto * movableTrait = targetEntity.getMovableTrait();
 					const auto speedAtHit = movableTrait->deflect(collision.direction(), 0.5F);
 
-					movableTrait->onHit(speedAtHit * targetEntity.physicalObjectProperties().mass());
+					movableTrait->onHit(speedAtHit * targetEntity.bodyPhysicalProperties().mass());
+
+					/* Angular momentum transfer for ground collision.
+					 * Apply torque based on off-center impact. */
+					if ( movableTrait->isRotationPhysicsEnabled() )
+					{
+						const auto leverArm = collision.position() - targetEntity.getWorldCoordinates().position();
+						const auto impulseMagnitude = speedAtHit * targetEntity.bodyPhysicalProperties().mass();
+						const auto impulseForce = collision.direction().scaled(impulseMagnitude);
+						const auto torque =  Vector< 3, float >::crossProduct(leverArm, impulseForce);
+
+						/* Apply torque with a reduction factor for gameplay stability. */
+						constexpr auto torqueReductionFactor = 0.01F;
+						movableTrait->addTorque(torque * torqueReductionFactor);
+					}
 				}
 					break;
 
@@ -162,27 +191,42 @@ namespace EmEn::Physics
 				case CollisionType::StaticEntity :
 				{
 					auto * movableTrait = targetEntity.getMovableTrait();
-					const auto speedAtHit = movableTrait->deflect(collision.direction(), collision.entity()->physicalObjectProperties().bounciness());
+					const auto speedAtHit = movableTrait->deflect(collision.direction(), collision.entity()->bodyPhysicalProperties().bounciness());
 
-					movableTrait->onHit(speedAtHit * targetEntity.physicalObjectProperties().mass());
+					movableTrait->onHit(speedAtHit * targetEntity.bodyPhysicalProperties().mass());
+
+					/* Angular momentum transfer for static entity collision.
+					 * Apply torque based on off-center impact.
+					 * Static objects act as infinite mass, so only the moving object gains rotation. */
+					if ( movableTrait->isRotationPhysicsEnabled() )
+					{
+						const auto leverArm = collision.position() - targetEntity.getWorldCoordinates().position();
+						const auto impulseMagnitude = speedAtHit * targetEntity.bodyPhysicalProperties().mass() * (1.0F + collision.entity()->bodyPhysicalProperties().bounciness());
+						const auto impulseForce = collision.direction().scaled(impulseMagnitude);
+						const auto torque =  Vector< 3, float >::crossProduct(leverArm, impulseForce);
+
+						/* Apply torque with a reduction factor for gameplay stability. */
+						constexpr auto torqueReductionFactor = 0.01F;
+						movableTrait->addTorque(torque * torqueReductionFactor);
+					}
 				}
 					break;
 
 				/* NOTE: Both entities are movable, we modify both trajectories. */
 				case CollisionType::MovableEntity :
 				{
-					const auto & objectAProperties = targetEntity.physicalObjectProperties();
-					const auto & objectBProperties = collision.entity()->physicalObjectProperties();
+					const auto & objectAProperties = targetEntity.bodyPhysicalProperties();
+					const auto & objectBProperties = collision.entity()->bodyPhysicalProperties();
 
 					auto * movableTraitA = targetEntity.getMovableTrait();
 					auto * movableTraitB = collision.entity()->getMovableTrait();
 
-					/* Force transfer. Momentum problem.
+					/* Linear momentum transfer.
 					 * TODO: Incorrect impact forces distribution.
 					 * NOTE : https://www.youtube.com/watch?v=VVC_9Qi6zvw */
 					const auto totalMass = objectAProperties.mass() + objectBProperties.mass();
-					const auto speedMassA = movableTraitA->linearSpeed() * targetEntity.physicalObjectProperties().mass();
-					const auto speedMassB = movableTraitB->linearSpeed() * collision.entity()->physicalObjectProperties().mass();
+					const auto speedMassA = movableTraitA->linearSpeed() * targetEntity.bodyPhysicalProperties().mass();
+					const auto speedMassB = movableTraitB->linearSpeed() * collision.entity()->bodyPhysicalProperties().mass();
 					const auto force = (speedMassA - speedMassB) / totalMass;
 					const auto totalSpeedMass = speedMassA + speedMassB;
 
@@ -195,6 +239,55 @@ namespace EmEn::Physics
 					movableTraitB->addAcceleration(-collision.direction().scaled(force + transferredSpeedA));
 					movableTraitB->stopMovement();
 					movableTraitB->onHit(totalSpeedMass);
+
+					/* Angular momentum transfer.
+					 * Calculate torque at collision point: τ = r × F
+					 * Where r is the lever arm from center of mass to collision point.
+					 */
+					if ( movableTraitA->isRotationPhysicsEnabled() || movableTraitB->isRotationPhysicsEnabled() )
+					{
+						const auto positionA = targetEntity.getWorldCoordinates().position();
+						const auto positionB = collision.entity()->getWorldCoordinates().position();
+
+						/* Calculate lever arms (from center of mass to collision point). */
+						const auto leverArmA = collision.position() - positionA;
+						const auto leverArmB = collision.position() - positionB;
+
+						/* Calculate the impulse magnitude based on the relative velocity and masses.
+						 * J = impulse magnitude = (1 + e) * m_eff * v_rel
+						 * where e = coefficient of restitution (average bounciness)
+						 * m_eff = effective mass = (m_A * m_B) / (m_A + m_B)
+						 * v_rel = relative velocity at collision point
+						 */
+						const auto averageBounciness = (objectAProperties.bounciness() + objectBProperties.bounciness()) * 0.5F;
+						const auto effectiveMass = (objectAProperties.mass() * objectBProperties.mass()) / totalMass;
+
+						/* Relative linear velocity. */
+						const auto relativeVelocity = movableTraitA->linearVelocity() - movableTraitB->linearVelocity();
+						const auto relativeSpeed =  Vector< 3, float >::dotProduct(relativeVelocity, collision.direction());
+
+						/* Calculate impulse force along collision normal. */
+						const auto impulseMagnitude = (1.0F + averageBounciness) * effectiveMass * relativeSpeed;
+						const auto impulseForce = collision.direction().scaled(impulseMagnitude);
+
+						/* Calculate and apply torque: τ = r × F */
+						const auto torqueA =  Vector< 3, float >::crossProduct(leverArmA, impulseForce);
+						const auto torqueB =  Vector< 3, float >::crossProduct(leverArmB, -impulseForce);
+
+						/* Apply torque with a reduction factor for gameplay stability. */
+						constexpr auto torqueReductionFactor = 0.01F;
+
+						/* Apply torques to both entities (only if rotation is enabled). */
+						if ( movableTraitA->isRotationPhysicsEnabled() )
+						{
+							movableTraitA->addTorque(torqueA * torqueReductionFactor);
+						}
+
+						if ( movableTraitB->isRotationPhysicsEnabled() )
+						{
+							movableTraitB->addTorque(torqueB * torqueReductionFactor);
+						}
+					}
 				}
 					break;
 			}
@@ -251,5 +344,78 @@ namespace EmEn::Physics
 		// TODO ...
 
 		return false;
+	}
+
+	bool
+	Collider::checkCollisionAgainstMovableWithManifold (AbstractEntity & movableEntityA, AbstractEntity & movableEntityB, std::vector< ContactManifold > & outManifolds) noexcept
+	{
+		if constexpr ( IsDebug )
+		{
+			if ( &movableEntityA == &movableEntityB )
+			{
+				Tracer::error(ClassId, "Collision search on the same entity detected !");
+
+				return false;
+			}
+		}
+
+		auto * movableA = movableEntityA.getMovableTrait();
+		auto * movableB = movableEntityB.getMovableTrait();
+
+		if ( !movableA || !movableB )
+		{
+			return false;
+		}
+
+		Vector< 3, float > minimalTranslationVector;
+		auto collisionOverflow = 0.0F;
+
+		/* Sphere-to-sphere collision detection. */
+		if ( movableEntityA.sphereCollisionIsEnabled() && movableEntityB.sphereCollisionIsEnabled() )
+		{
+			const auto sphereA = movableEntityA.getWorldBoundingSphere();
+			const auto sphereB = movableEntityB.getWorldBoundingSphere();
+
+			if ( !Space3D::isColliding(sphereA, sphereB, minimalTranslationVector) )
+			{
+				return false;
+			}
+
+			// MTV length is the penetration depth
+			collisionOverflow = minimalTranslationVector.length();
+		}
+		/* Box-to-box collision detection. */
+		else
+		{
+			if ( !isBoxCollisionWith(movableEntityB, movableEntityA, collisionOverflow, minimalTranslationVector) )
+			{
+				return false;
+			}
+		}
+
+		/* Create contact manifold. */
+		ContactManifold manifold(movableA, movableB);
+
+		/* Compute contact point position (midpoint between the two entities). */
+		const auto collisionPosition = Vector< 3, float >::midPoint(
+			movableEntityA.getWorldCoordinates().position(),
+			movableEntityB.getWorldCoordinates().position()
+		);
+
+		/* Normal points from A to B (direction to separate objects).
+		 * The MTV returned by collision detection points from B to A,
+		 * so we need to negate it to get the proper contact normal. */
+		auto contactNormal = -minimalTranslationVector.normalize();
+
+		/* Penetration depth. */
+		float penetration = collisionOverflow;
+
+		/* Add contact to manifold. */
+		manifold.addContact(collisionPosition, contactNormal, penetration);
+
+		/* Add manifold to output vector. */
+		outManifolds.push_back(manifold);
+
+		return true;
 	}
 }

@@ -36,6 +36,8 @@
 #include <vector>
 #include <limits>
 #include <type_traits>
+#include <charconv>
+#include <cerrno>
 
 /* Local inclusions for usages. */
 #include "Utility.hpp"
@@ -145,29 +147,36 @@ namespace EmEn::Libs::String
 	 * @tparam delimiter_t The type of value to insert as delimiter.
 	 * @param list A reference to a vector of string.
 	 * @param delimiter A reference to a value to insert between each part.
+	 * @param ignoreEmpty If true, empty strings in the list are skipped (default: false).
 	 * @return std::string
 	 */
 	template< typename delimiter_t >
 	[[nodiscard]]
-	std::string implode (const std::vector< std::string > & list, const delimiter_t & delimiter) noexcept
+	std::string
+	implode (const std::vector< std::string > & list, const delimiter_t & delimiter, bool ignoreEmpty = false) noexcept
 	{
+		if ( list.empty() )
+		{
+			return {};
+		}
+
 		std::stringstream output;
+		bool isFirst = true;
 
 		for ( const auto & item : list )
 		{
-			if ( item.empty() )
+			if ( ignoreEmpty && item.empty() )
 			{
 				continue;
 			}
 
-			if ( output.tellp() == 0 )
+			if ( !isFirst )
 			{
-				output << item;
+				output << delimiter;
 			}
-			else
-			{
-				output << delimiter << item;
-			}
+
+			output << item;
+			isFirst = false;
 		}
 
 		return output.str();
@@ -202,42 +211,22 @@ namespace EmEn::Libs::String
 	 * @param search A character.
 	 * @param replace A character.
 	 * @param input A reference to the target string.
+	 * @param limit The limit of search occurrence (0 = replace all, default).
 	 * @return std::string
 	 */
 	[[nodiscard]]
-	std::string replace (char search, char replace, const std::string & input) noexcept;
-
-	/**
-	 * @brief Replaces a character by another one inside a string.
-	 * @param search A character.
-	 * @param replace A character.
-	 * @param input A reference to the target string.
-	 * @param limit The limit of search occurrence.
-	 * @return std::string
-	 */
-	[[nodiscard]]
-	std::string replace (char search, char replace, const std::string & input, size_t limit) noexcept;
+	std::string replace (char search, char replace, const std::string & input, size_t limit = 0) noexcept;
 
 	/**
 	 * @brief Replaces a piece of string by another one inside a string.
 	 * @param search A reference to a string to seek the part to replace.
 	 * @param replace A reference to a string to set the replacing part.
 	 * @param input A reference to the target string.
+	 * @param limit The limit of search occurrence (0 = replace all, default).
 	 * @return std::string
 	 */
 	[[nodiscard]]
-	std::string replace (const std::string & search, const std::string & replace, const std::string & input) noexcept;
-
-	/**
-	 * @brief Replaces a piece of string by another one inside a string.
-	 * @param search A reference to a string to seek the part to replace.
-	 * @param replace A reference to a string to set the replacing part.
-	 * @param input A reference to the target string.
-	 * @param limit The limit of search occurrence.
-	 * @return std::string
-	 */
-	[[nodiscard]]
-	std::string replace (const std::string & search, const std::string & replace, const std::string & input, size_t limit) noexcept;
+	std::string replace (const std::string & search, const std::string & replace, const std::string & input, size_t limit = 0) noexcept;
 
 	/**
 	 * @brief Removes every occurrence of a character in a string and returns it.
@@ -376,84 +365,121 @@ namespace EmEn::Libs::String
 	number_t
 	toNumber (const std::string & stringValue) noexcept requires (std::is_arithmetic_v< number_t >)
 	{
+#if defined(__APPLE__) && defined(__MACH__)
+		/* macOS fallback: use C API which doesn't throw exceptions */
+
+		if ( stringValue.empty() )
+		{
+			return 0;
+		}
+
+		const char * str = stringValue.c_str();
+		char* endptr = nullptr;
+		errno = 0;
+
 		if constexpr ( std::is_same_v< number_t, float > )
 		{
-			return std::stof(stringValue, nullptr);
+			const float result = std::strtof(str, &endptr);
+			if ( endptr == str || errno == ERANGE )
+			{
+				return 0;
+			}
+			return result;
 		}
 
 		if constexpr ( std::is_same_v< number_t, double > )
 		{
-			return std::stod(stringValue, nullptr);
+			const double result = std::strtod(str, &endptr);
+			if ( endptr == str || errno == ERANGE )
+			{
+				return 0;
+			}
+			return result;
 		}
 
 		if constexpr ( std::is_same_v< number_t, long double > )
 		{
-			return std::stold(stringValue, nullptr);
-		}
-
-		/* NOTE: Same as 'int8_t', 'int16_t' */
-		/* WARNING: 'signed char' !== 'char' */
-		if constexpr ( std::is_same_v< number_t, signed char > || std::is_same_v< number_t, char > || std::is_same_v< number_t, short int > )
-		{
-			const int integer = std::stoi(stringValue, nullptr, 10);
-
-			if ( integer < std::numeric_limits< number_t >::min() )
+			const long double result = std::strtold(str, &endptr);
+			if ( endptr == str || errno == ERANGE )
 			{
-				return std::numeric_limits< number_t >::min();
+				return 0;
 			}
+			return result;
+		}
 
-			if ( integer > std::numeric_limits< number_t >::max() )
+		if constexpr ( std::is_integral_v< number_t > )
+		{
+			if constexpr ( std::is_unsigned_v< number_t > )
 			{
-				return std::numeric_limits< number_t >::max();
+				const unsigned long long result = std::strtoull(str, &endptr, 10);
+				if ( endptr == str || errno == ERANGE )
+				{
+					return 0;
+				}
+
+				if ( result > std::numeric_limits< number_t >::max() )
+				{
+					return 0;
+				}
+
+				return static_cast< number_t >(result);
 			}
-
-			return static_cast< number_t >(integer);
-		}
-
-		/* NOTE: Same as 'int32_t' */
-		if constexpr ( std::is_same_v< number_t, int > )
-		{
-			return std::stoi(stringValue, nullptr, 10);
-		}
-
-		/* NOTE: Same as 'int64_t' */
-		if constexpr ( std::is_same_v< number_t, long int > )
-		{
-			return std::stol(stringValue, nullptr, 10);
-		}
-
-		/* NOTE: Same as 'int128_t' */
-		if constexpr ( std::is_same_v< number_t, long long int > )
-		{
-			return std::stoll(stringValue, nullptr, 10);
-		}
-
-		/* NOTE: Same as 'uint8_t', 'uint16_t', 'uint32_t' */
-		if constexpr ( std::is_same_v< number_t, unsigned char > || std::is_same_v< number_t, unsigned short int > || std::is_same_v< number_t, unsigned int > )
-		{
-			const unsigned long int integer = std::stoul(stringValue, nullptr, 10);
-
-			if ( integer > std::numeric_limits< number_t >::max() )
+			else
 			{
-				return std::numeric_limits< number_t >::max();
+				const long long result = std::strtoll(str, &endptr, 10);
+				if ( endptr == str || errno == ERANGE )
+				{
+					return 0;
+				}
+
+				if ( result < std::numeric_limits< number_t >::min() || result > std::numeric_limits< number_t >::max() )
+				{
+					return 0;
+				}
+
+				return static_cast< number_t >(result);
 			}
-
-			return static_cast< number_t >(integer);
-		}
-
-		/* NOTE: Same as 'uint64_t' */
-		if constexpr ( std::is_same_v< number_t, unsigned long int > )
-		{
-			return std::stoul(stringValue, nullptr, 10);
-		}
-
-		/* NOTE: Same as 'uint128_t' */
-		if constexpr ( std::is_same_v< number_t, unsigned long long int > )
-		{
-			return std::stoull(stringValue, nullptr, 10);
 		}
 
 		return 0;
+#else
+		/* Modern platforms: use std::from_chars (no exceptions, faster) */
+
+		if ( stringValue.empty() )
+		{
+			return 0;
+		}
+
+		const char * start = stringValue.data();
+		const char * end = start + stringValue.size();
+		number_t result{};
+
+		if constexpr ( std::is_floating_point_v< number_t > )
+		{
+			/* Note: std::from_chars for floats requires C++17 and good library support */
+			auto [ptr, ec] = std::from_chars(start, end, result);
+
+			if ( ec == std::errc::invalid_argument || ec == std::errc::result_out_of_range )
+			{
+				return 0;
+			}
+
+			return result;
+		}
+		else if constexpr ( std::is_integral_v< number_t > )
+		{
+			auto [ptr, ec] = std::from_chars(start, end, result);
+
+			if ( ec == std::errc::invalid_argument || ec == std::errc::result_out_of_range )
+			{
+				return 0;
+			}
+
+			return result;
+		}
+
+		return 0;
+#endif
 	}
 
 	/**
@@ -522,6 +548,20 @@ namespace EmEn::Libs::String
 	}
 
 	/**
+	 * @brief Concatenates a C-string to a string.
+	 * @param str A reference to a string.
+	 * @param append A C-string to append
+	 * @return std::string
+	 */
+	[[nodiscard]]
+	inline
+	std::string
+	concat (const std::string & str, const char * append) noexcept
+	{
+		return str + append;
+	}
+
+	/**
 	 * @brief Concatenates something to a string.
 	 * @tparam data_t The type of data.
 	 * @param str A reference to a string.
@@ -533,7 +573,7 @@ namespace EmEn::Libs::String
 	std::string
 	concat (const std::string & str, data_t append) noexcept
 	{
-		return str.append(std::to_string(append));
+		return str + std::to_string(append);
 	}
 
 	/**

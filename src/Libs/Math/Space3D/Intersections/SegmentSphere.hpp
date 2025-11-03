@@ -95,8 +95,8 @@ namespace EmEn::Libs::Math::Space3D
 			return false;
 		}
 
-		const auto & segmentStart = segment.start();
-		const auto & segmentEnd = segment.end();
+		const auto & segmentStart = segment.startPoint();
+		const auto & segmentEnd = segment.endPoint();
 		const auto & center = sphere.position();
 		const auto radius = sphere.radius();
 
@@ -114,7 +114,7 @@ namespace EmEn::Libs::Math::Space3D
 		/* NOTE: If the discriminant is negative, the line never intersects the sphere. */
 		if ( discriminant < 0 )
 		{
-		    return false;
+			return false;
 		}
 
 		/* NOTE: Solving the equation to find the intersection points t1 and t2. */
@@ -128,17 +128,17 @@ namespace EmEn::Libs::Math::Space3D
 		/* NOTE: Case 1: The first intersection point (t1) is on the segment. */
 		if ( t1 >= 0 && t1 <= 1 )
 		{
-		    intersection = segmentStart + segmentDirection * t1;
+			intersection = segmentStart + segmentDirection * t1;
 
-		    return true;
+			return true;
 		}
 
 		/* NOTE: Case 2: The second intersection point (t2) is on the segment. This happens if the segment starts inside the sphere. */
 		if ( t2 >= 0 && t2 <= 1 )
 		{
-		    intersection = segmentStart + segmentDirection * t2;
+			intersection = segmentStart + segmentDirection * t2;
 
-		    return true;
+			return true;
 		}
 
 		/* NOTE: Case 3: The segment is entirely contained within the sphere (t1 < 0 and t2 > 1).
@@ -146,9 +146,9 @@ namespace EmEn::Libs::Math::Space3D
 		 * We can consider the starting point as a valid intersection point. */
 		if ( t1 < 0 && t2 > 1 )
 		{
-		    intersection = segmentStart;
+			intersection = segmentStart;
 
-		    return true;
+			return true;
 		}
 
 		/* NOTE: No intersection point was found on the segment. */
