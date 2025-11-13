@@ -35,7 +35,7 @@
 
 /* Local inclusions for usages. */
 #include "Resources/Container.hpp"
-#include "Physics/PhysicalSurfaceProperties.hpp"
+#include "Physics/SurfacePhysicalProperties.hpp"
 #include "Component/Interface.hpp"
 
 /* Forward declarations. */
@@ -201,11 +201,11 @@ namespace EmEn::Graphics::Material
 
 			/** @copydoc EmEn::Graphics::Material::Interface::physicalSurfaceProperties() const */
 			[[nodiscard]]
-			const Physics::PhysicalSurfaceProperties & physicalSurfaceProperties () const noexcept override;
+			const Physics::SurfacePhysicalProperties & surfacePhysicalProperties () const noexcept override;
 
 			/** @copydoc EmEn::Graphics::Material::Interface::physicalSurfaceProperties() */
 			[[nodiscard]]
-			Physics::PhysicalSurfaceProperties & physicalSurfaceProperties () noexcept override;
+			Physics::SurfacePhysicalProperties & surfacePhysicalProperties () noexcept override;
 
 			/** @copydoc EmEn::Graphics::Material::Interface::frameCount() */
 			[[nodiscard]]
@@ -590,7 +590,7 @@ namespace EmEn::Graphics::Material
 			static constexpr auto DefaultNormalScale{1.0F};
 			static constexpr auto DefaultReflectionAmount{0.5F};
 
-			Physics::PhysicalSurfaceProperties m_physicalSurfaceProperties{};
+			Physics::SurfacePhysicalProperties m_physicalSurfaceProperties{};
 			std::unordered_map< ComponentType, std::unique_ptr< Component::Interface > > m_components{};
 			BlendingMode m_blendingMode{BlendingMode::None};
 			std::array< float, 24 > m_materialProperties{

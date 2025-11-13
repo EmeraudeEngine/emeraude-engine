@@ -35,7 +35,7 @@
 /* Local inclusions for usages. */
 #include "Resources/Container.hpp"
 #include "Graphics/SharedUniformBuffer.hpp"
-#include "Physics/PhysicalSurfaceProperties.hpp"
+#include "Physics/SurfacePhysicalProperties.hpp"
 #include "Component/Texture.hpp"
 
 namespace EmEn::Graphics::Material
@@ -180,16 +180,16 @@ namespace EmEn::Graphics::Material
 
 			/** @copydoc EmEn::Graphics::Material::Interface::physicalSurfaceProperties() const */
 			[[nodiscard]]
-			const Physics::PhysicalSurfaceProperties &
-			physicalSurfaceProperties () const noexcept override
+			const Physics::SurfacePhysicalProperties &
+			surfacePhysicalProperties () const noexcept override
 			{
 				return m_physicalSurfaceProperties;
 			}
 
 			/** @copydoc EmEn::Graphics::Material::Interface::physicalSurfaceProperties() */
 			[[nodiscard]]
-			Physics::PhysicalSurfaceProperties &
-			physicalSurfaceProperties () noexcept override
+			Physics::SurfacePhysicalProperties &
+			surfacePhysicalProperties () noexcept override
 			{
 				return m_physicalSurfaceProperties;
 			}
@@ -465,7 +465,7 @@ namespace EmEn::Graphics::Material
 			static constexpr auto DefaultOpacity{1.0F};
 			static constexpr auto DefaultAutoIllumination{0.0F};
 
-			Physics::PhysicalSurfaceProperties m_physicalSurfaceProperties;
+			Physics::SurfacePhysicalProperties m_physicalSurfaceProperties;
 			std::unique_ptr< Component::Texture > m_textureComponent;
 			BlendingMode m_blendingMode{BlendingMode::None};
 			std::array< float, 12 > m_materialProperties{

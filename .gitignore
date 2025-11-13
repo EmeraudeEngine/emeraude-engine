@@ -5,6 +5,7 @@ Thumbs.db
 .vscode
 .vs
 .yarn
+.claude
 
 # Files backup
 *.orig

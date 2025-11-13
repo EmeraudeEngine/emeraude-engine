@@ -29,7 +29,7 @@
 /* Local inclusions. */
 #include "Libs/Math/LineFormula.hpp"
 
-using namespace Libs::Math;
+using namespace EmEn::Libs::Math;
 
 using MathTypeList = testing::Types< int, float, double >;
 

@@ -32,9 +32,9 @@
 #include "Libs/PixelFactory/Pixmap.hpp"
 #include "Constants.hpp"
 
-using namespace Libs;
-using namespace Libs::PixelFactory;
-using namespace Libs::Time::Elapsed;
+using namespace EmEn::Libs;
+using namespace EmEn::Libs::PixelFactory;
+using namespace EmEn::Libs::Time::Elapsed;
 
 TEST(PixelFactoryProcessor, scale)
 {

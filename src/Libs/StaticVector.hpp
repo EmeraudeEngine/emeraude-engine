@@ -191,7 +191,7 @@ namespace EmEn::Libs
 
 					m_size = other.m_size;
 
-					other.clear();
+					other.m_size = 0;
 				}
 				else
 				{
@@ -203,7 +203,7 @@ namespace EmEn::Libs
 							++m_size;
 						}
 
-						other.clear();
+						other.m_size = 0;
 					}
 					catch (...)
 					{

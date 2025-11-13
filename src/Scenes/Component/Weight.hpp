@@ -34,7 +34,7 @@
 #include "Abstract.hpp"
 
 /* Local inclusions for usages. */
-#include "Physics/PhysicalObjectProperties.hpp"
+#include "Physics/BodyPhysicalProperties.hpp"
 
 namespace EmEn::Scenes::Component
 {
@@ -55,6 +55,7 @@ namespace EmEn::Scenes::Component
 				Mass,
 				Surface,
 				DragCoefficient,
+				AngularDragCoefficient,
 				Bounciness,
 				Stickiness
 			};
@@ -76,10 +77,10 @@ namespace EmEn::Scenes::Component
 			 * @param parentEntity A reference to the parent entity.
 			 * @param initialProperties Set initial physical properties.
 			 */
-			Weight (const std::string & componentName, const AbstractEntity & parentEntity, const Physics::PhysicalObjectProperties & initialProperties) noexcept
+			Weight (const std::string & componentName, const AbstractEntity & parentEntity, const Physics::BodyPhysicalProperties & initialProperties) noexcept
 				: Abstract{componentName, parentEntity}
 			{
-				this->physicalObjectProperties().setProperties(initialProperties);
+				this->bodyPhysicalProperties().setProperties(initialProperties);
 			}
 
 			/** @copydoc EmEn::Scenes::Component::Abstract::getComponentType() */

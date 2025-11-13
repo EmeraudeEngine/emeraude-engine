@@ -52,7 +52,7 @@
 #include "Graphics/RenderTarget/ShadowMap.hpp"
 #include "Graphics/RenderTarget/Texture.hpp"
 #include "Graphics/RenderTarget/View.hpp"
-#include "Audio/SoundEnvironmentProperties.hpp"
+#include "Physics/ConstraintSolver.hpp"
 #include "Saphir/EffectInterface.hpp"
 #include "AVConsole/Manager.hpp"
 #include "LightSet.hpp"
@@ -262,14 +262,14 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			 * @brief Sets the scene physical environment properties.
-			 * @param properties A reference to a physical environment properties.
+			 * @brief Sets the scene environment physical properties.
+			 * @param properties A reference to the environment physical properties.
 			 * @return void
 			 */
 			void
-			setPhysicalEnvironmentProperties (const Physics::PhysicalEnvironmentProperties & properties) noexcept
+			setEnvironmentPhysicalProperties (const Physics::EnvironmentPhysicalProperties & properties) noexcept
 			{
-				m_physicalEnvironmentProperties = properties;
+				m_environmentPhysicalProperties = properties;
 			}
 
 			/**
@@ -535,24 +535,24 @@ namespace EmEn::Scenes
 
 			/**
 			 * @brief Returns the scene physical environment properties.
-			 * @return const Physics::PhysicalEnvironmentProperties &
+			 * @return const Physics::EnvironmentPhysicalProperties &
 			 */
 			[[nodiscard]]
-			const Physics::PhysicalEnvironmentProperties &
+			const Physics::EnvironmentPhysicalProperties &
 			physicalEnvironmentProperties () const noexcept
 			{
-				return m_physicalEnvironmentProperties;
+				return m_environmentPhysicalProperties;
 			}
 
 			/**
 			 * @brief Returns the scene physical environment properties.
-			 * @return Physics::PhysicalEnvironmentProperties &
+			 * @return Physics::EnvironmentPhysicalProperties &
 			 */
 			[[nodiscard]]
-			Physics::PhysicalEnvironmentProperties &
+			Physics::EnvironmentPhysicalProperties &
 			physicalEnvironmentProperties () noexcept
 			{
-				return m_physicalEnvironmentProperties;
+				return m_environmentPhysicalProperties;
 			}
 
 			/**
@@ -1193,7 +1193,7 @@ namespace EmEn::Scenes
 			 * @param sector A reference to the current sector tested.
 			 * @return void
 			 */
-			void sectorCollisionTest (const OctreeSector< AbstractEntity, true > & sector) noexcept;
+			void sectorCollisionTest (const OctreeSector< AbstractEntity, true > & sector, std::vector< Physics::ContactManifold > & manifolds) noexcept;
 
 			/**
 			 * @brief Checks if a scene node is clipping with the scene area boundaries.
@@ -1279,9 +1279,9 @@ namespace EmEn::Scenes
 
 			/* NOTE: Scene setup data. */
 			Saphir::EffectsList m_environmentEffects;
-			Physics::PhysicalEnvironmentProperties m_physicalEnvironmentProperties{Physics::PhysicalEnvironmentProperties::Earth()};
-			Audio::SoundEnvironmentProperties m_soundEnvironmentProperties;
-			Libs::Randomizer< float > m_randomizer; /* NOTE: Keep a randomizer active for this scene. */
+			Physics::EnvironmentPhysicalProperties m_environmentPhysicalProperties{Physics::EnvironmentPhysicalProperties::Earth()};
+			Physics::ConstraintSolver m_constraintSolver{8, 3}; /* [PHYSICS-NEW-SYSTEM] Sequential impulse solver for rigid body physics. */
+			Libs::Randomizer< float > m_randomizer; /* Keep a randomizer active for this scene. */
 			float m_boundary{0};
 			uint64_t m_lifetimeUS{0};
 			uint32_t m_lifetimeMS{0};

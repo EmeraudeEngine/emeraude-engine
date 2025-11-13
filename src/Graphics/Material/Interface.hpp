@@ -44,7 +44,7 @@ namespace EmEn
 
 	namespace Physics
 	{
-		class PhysicalSurfaceProperties;
+		class SurfacePhysicalProperties;
 	}
 
 	namespace Saphir
@@ -360,17 +360,17 @@ namespace EmEn::Graphics::Material
 
 			/**
 			 * @brief Returns the physical surface properties.
-			 * @return const Physics::PhysicalSurfaceProperties &
+			 * @return const Physics::SurfacePhysicalProperties &
 			 */
 			[[nodiscard]]
-			virtual const Physics::PhysicalSurfaceProperties & physicalSurfaceProperties () const noexcept = 0;
+			virtual const Physics::SurfacePhysicalProperties & surfacePhysicalProperties () const noexcept = 0;
 
 			/**
 			 * @brief Returns the physical surface properties.
-			 * @return Physics::PhysicalSurfaceProperties &
+			 * @return Physics::SurfacePhysicalProperties &
 			 */
 			[[nodiscard]]
-			virtual Physics::PhysicalSurfaceProperties & physicalSurfaceProperties () noexcept = 0;
+			virtual Physics::SurfacePhysicalProperties & surfacePhysicalProperties () noexcept = 0;
 
 			/**
 			 * @brief Returns the number of frames.

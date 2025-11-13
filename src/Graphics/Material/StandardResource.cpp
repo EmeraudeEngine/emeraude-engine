@@ -780,14 +780,14 @@ namespace EmEn::Graphics::Material
 		return this->isComponentPresent(ComponentType::Reflection);
 	}
 
-	const Physics::PhysicalSurfaceProperties &
-	StandardResource::physicalSurfaceProperties () const noexcept
+	const Physics::SurfacePhysicalProperties &
+	StandardResource::surfacePhysicalProperties () const noexcept
 	{
 		return m_physicalSurfaceProperties;
 	}
 
-	Physics::PhysicalSurfaceProperties &
-	StandardResource::physicalSurfaceProperties () noexcept
+	Physics::SurfacePhysicalProperties &
+	StandardResource::surfacePhysicalProperties () noexcept
 	{
 		return m_physicalSurfaceProperties;
 	}

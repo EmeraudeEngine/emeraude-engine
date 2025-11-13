@@ -230,10 +230,10 @@ namespace EmEn::Scenes::Component
 			 * @return const Physics::PhysicalObjectProperties &
 			 */
 			[[nodiscard]]
-			const Physics::PhysicalObjectProperties &
-			physicalObjectProperties () const noexcept
+			const Physics::BodyPhysicalProperties &
+			bodyPhysicalProperties () const noexcept
 			{
-				return m_physicalObjectProperties;
+				return m_bodyPhysicalProperties;
 			}
 
 			/**
@@ -241,10 +241,10 @@ namespace EmEn::Scenes::Component
 			 * @return Physics::PhysicalObjectProperties &
 			 */
 			[[nodiscard]]
-			Physics::PhysicalObjectProperties &
-			physicalObjectProperties () noexcept
+			Physics::BodyPhysicalProperties &
+			bodyPhysicalProperties () noexcept
 			{
-				return m_physicalObjectProperties;
+				return m_bodyPhysicalProperties;
 			}
 
 			/**
@@ -363,6 +363,6 @@ namespace EmEn::Scenes::Component
 		private:
 
 			const AbstractEntity & m_parentEntity;
-			Physics::PhysicalObjectProperties m_physicalObjectProperties;
+			Physics::BodyPhysicalProperties m_bodyPhysicalProperties;
 	};
 }

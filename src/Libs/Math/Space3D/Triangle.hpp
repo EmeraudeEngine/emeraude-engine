@@ -118,7 +118,7 @@ namespace EmEn::Libs::Math::Space3D
 			 * @return void
 			 */
 			void
-			setPointA (const Point< precision_t > & point) const noexcept
+			setPointA (const Point< precision_t > & point) noexcept
 			{
 				m_points[0] = point;
 			}
@@ -139,7 +139,7 @@ namespace EmEn::Libs::Math::Space3D
 			 * @return void
 			 */
 			void
-			setPointB (const Point< precision_t > & point) const noexcept
+			setPointB (const Point< precision_t > & point) noexcept
 			{
 				m_points[1] = point;
 			}
@@ -160,7 +160,7 @@ namespace EmEn::Libs::Math::Space3D
 			 * @return void
 			 */
 			void
-			setPointC (const Point< precision_t > & point) const noexcept
+			setPointC (const Point< precision_t > & point) noexcept
 			{
 				m_points[2] = point;
 			}

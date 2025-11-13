@@ -43,11 +43,11 @@
 
 /* Local inclusions for usages. */
 #include "Libs/WaveFactory/Types.hpp"
+#include "Physics/EnvironmentPhysicalProperties.hpp"
 #include "Audio/TrackMixer.hpp"
 #include "Audio/AudioRecorder.hpp"
 #include "SettingKeys.hpp"
 #include "Source.hpp"
-#include "SoundEnvironmentProperties.hpp"
 #include "Types.hpp"
 
 /* Forward declarations. */
@@ -245,17 +245,10 @@ namespace EmEn::Audio
 
 			/**
 			 * @brief Changes the sound properties.
-			 * @param properties A reference to a sound environment property structure.
+			 * @param properties A reference to an environment physical property structure.
 			 * @return void
 			 */
-			void setSoundEnvironmentProperties (const SoundEnvironmentProperties & properties) noexcept;
-
-			/**
-			 * @brief Returns the actual sound properties.
-			 * @return SoundEnvironmentProperties
-			 */
-			[[nodiscard]]
-			SoundEnvironmentProperties getSoundEnvironmentProperties () const noexcept;
+			void setEnvironmentSoundProperties (const Physics::EnvironmentPhysicalProperties & properties) noexcept;
 
 			/**
 			 * @brief Sets the listener properties.

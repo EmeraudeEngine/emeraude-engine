@@ -220,7 +220,7 @@ namespace EmEn::Scenes
 		}
 
 		/* Set audio properties for this scene. */
-		m_AVConsoleManager.audioManager().setSoundEnvironmentProperties(m_soundEnvironmentProperties);
+		m_AVConsoleManager.audioManager().setEnvironmentSoundProperties(m_environmentPhysicalProperties);
 
 		return true;
 	}
@@ -800,7 +800,17 @@ namespace EmEn::Scenes
 		/* Launch the collision test step. */
 		if ( m_physicsOctree != nullptr )
 		{
-			this->sectorCollisionTest(*m_physicsOctree);
+			/* FIXME: Poor memory management ! */
+			/* [PHYSICS-NEW-SYSTEM] New structure to hold collisions for resolution. */
+			std::vector< ContactManifold > manifolds;
+
+			this->sectorCollisionTest(*m_physicsOctree, manifolds);
+
+			/* Resolve contact constraints with Sequential Impulse Solver. */
+			if ( !manifolds.empty() )
+			{
+				m_constraintSolver.solve(manifolds, EngineUpdateCycleDurationS< float >);
+			}
 
 			/* Final collisions check against scene boundaries and ground,
 			 * then resolve all collisions detected on movable entities. */
@@ -826,10 +836,10 @@ namespace EmEn::Scenes
 					}
 				}
 
-				/* Resolve accumulated collisions from the entity collider. */
+				/* Reset collider (old collision system, kept for boundary clipping). */
 				if ( auto & collider = movableEntity->collider(); collider.hasCollisions() )
 				{
-					/* NOTE: Collisions resolution can resume the physics simulation. */
+					/* NOTE: Boundary collisions are still handled by the old system. */
 					collider.resolveCollisions(*entity);
 				}
 
@@ -1033,7 +1043,7 @@ namespace EmEn::Scenes
 	}
 
 	void
-	Scene::sectorCollisionTest (const OctreeSector< AbstractEntity, true > & sector) noexcept
+	Scene::sectorCollisionTest (const OctreeSector< AbstractEntity, true > & sector, std::vector< ContactManifold > & manifolds) noexcept
 	{
 		/* No element present. */
 		if ( sector.empty() )
@@ -1047,7 +1057,7 @@ namespace EmEn::Scenes
 			//#pragma omp parallel for
 			for ( const auto & subSector : sector.subSectors() )
 			{
-				this->sectorCollisionTest(*subSector);
+				this->sectorCollisionTest(*subSector, manifolds);
 			}
 
 			return;
@@ -1091,7 +1101,9 @@ namespace EmEn::Scenes
 					 * We will check the collision from entity A. */
 					if ( entityBHasMovableAbility )
 					{
+						/* [PHYSICS-NEW-SYSTEM] The new system use manifolds. */
 						colliderA.checkCollisionAgainstMovable(*entityA, *entityB);
+						//colliderA.checkCollisionAgainstMovableWithManifold(*entityA, *entityB, manifolds);
 					}
 					else
 					{

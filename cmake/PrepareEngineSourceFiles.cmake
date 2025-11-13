@@ -25,6 +25,7 @@ set(EMERAUDE_HEADER_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/Math/Space2D/Collisions/CircleRectangle.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/Math/Space2D/Collisions/PointCircle.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/Math/Space2D/Collisions/PointRectangle.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/Math/Space2D/Collisions/PointSegment.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/Math/Space2D/Collisions/PointTriangle.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/Math/Space2D/Collisions/SamePrimitive.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/Math/Space2D/Collisions/TriangleCircle.hpp
@@ -41,6 +42,7 @@ set(EMERAUDE_HEADER_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/Math/Space2D/Circle.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/Math/Space2D/Line.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/Math/Space2D/Point.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/Math/Space2D/SAT.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/Math/Space2D/Segment.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/Math/Space2D/Triangle.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/Math/Space3D/Collisions/PointCuboid.hpp

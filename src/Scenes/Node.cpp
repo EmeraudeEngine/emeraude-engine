@@ -965,7 +965,7 @@ namespace EmEn::Scenes
 	bool
 	Node::onUnhandledNotification (const ObservableTrait * observable, int notificationCode, const std::any & data) noexcept
 	{
-		if ( observable->is(Component::Abstract::getClassUID()) || observable->is(PhysicalObjectProperties::getClassUID()) )
+		if ( observable->is(Component::Abstract::getClassUID()) || observable->is(BodyPhysicalProperties::getClassUID()) )
 		{
 			/* NOTE: Avoid an automatic observer release. */
 			return true;

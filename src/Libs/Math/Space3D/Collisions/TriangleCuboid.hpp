@@ -49,75 +49,75 @@ namespace EmEn::Libs::Math::Space3D
 			return false;
 		}
 
-	    const auto & triPoints = triangle.points();
-	    const auto cuboidPoints = cuboid.points();
+		const auto & triPoints = triangle.points();
+		const auto cuboidPoints = cuboid.points();
 
-	    /* NOTE: Utility function to project a set of points onto an axis. */
-	    auto project = [] (const auto & points, const Vector< 3, precision_t > & axis)
+		/* NOTE: Utility function to project a set of points onto an axis. */
+		auto project = [] (const auto & points, const Vector< 3, precision_t > & axis)
 		{
-	        precision_t min = Vector< 3, precision_t >::dotProduct(points[0], axis);
-	        precision_t max = min;
+			precision_t min = Vector< 3, precision_t >::dotProduct(points[0], axis);
+			precision_t max = min;
 
-	        for ( size_t i = 1; i < points.size(); ++i )
-	        {
-	            precision_t p = Vector< 3, precision_t >::dotProduct(points[i], axis);
+			for ( size_t i = 1; i < points.size(); ++i )
+			{
+				precision_t p = Vector< 3, precision_t >::dotProduct(points[i], axis);
 
-	            min = std::min(min, p);
-	            max = std::max(max, p);
-	        }
+				min = std::min(min, p);
+				max = std::max(max, p);
+			}
 
-	        return std::make_pair(min, max);
-	    };
+			return std::make_pair(min, max);
+		};
 
 		/* NOTE: Define all axes to be tested (13 in total). */
-	    std::array< Vector< 3, precision_t >, 13 > axes;
+		std::array< Vector< 3, precision_t >, 13 > axes;
 
 		/* NOTE: 3 axes of the cuboid normals (X, Y, Z). */
-	    axes[0] = Vector< 3, precision_t >::positiveX();
-	    axes[1] = Vector< 3, precision_t >::positiveY();
-	    axes[2] = Vector< 3, precision_t >::positiveZ();
+		axes[0] = Vector< 3, precision_t >::positiveX();
+		axes[1] = Vector< 3, precision_t >::positiveY();
+		axes[2] = Vector< 3, precision_t >::positiveZ();
 
 		/* NOTE: 1 axis of the triangle normal. */
-	    const auto & p0 = triPoints[0];
-	    const auto & p1 = triPoints[1];
-	    const auto & p2 = triPoints[2];
-	    axes[3] = Vector< 3, precision_t >::normal(p0, p1, p2);
+		const auto & p0 = triPoints[0];
+		const auto & p1 = triPoints[1];
+		const auto & p2 = triPoints[2];
+		axes[3] = Vector< 3, precision_t >::normal(p0, p1, p2);
 
-	    /* NOTE: 9 axes from the vector products between the edges of the two shapes. */
+		/* NOTE: 9 axes from the vector products between the edges of the two shapes. */
 		std::array< Vector< 3, precision_t >, 3 > triEdges{
-	    	p1 - p0,
-	    	p2 - p1,
-	    	p0 - p2
-	    };
+			p1 - p0,
+			p2 - p1,
+			p0 - p2
+		};
 
-	    size_t axisIndex = 4;
-	    for ( const auto & edge : triEdges )
-	    {
-	        axes[axisIndex++] = Vector< 3, precision_t >::crossProduct(edge, axes[0]);
-	        axes[axisIndex++] = Vector< 3, precision_t >::crossProduct(edge, axes[1]);
-	        axes[axisIndex++] = Vector< 3, precision_t >::crossProduct(edge, axes[2]);
-	    }
+		size_t axisIndex = 4;
+		for ( const auto & edge : triEdges )
+		{
+			axes[axisIndex++] = Vector< 3, precision_t >::crossProduct(edge, axes[0]);
+			axes[axisIndex++] = Vector< 3, precision_t >::crossProduct(edge, axes[1]);
+			axes[axisIndex++] = Vector< 3, precision_t >::crossProduct(edge, axes[2]);
+		}
 
-	    /* Test the separation on each axis */
-	    for ( const auto & axis : axes )
-	    {
-	        /* NOTE: We ignore the zero axes that may result from a vector product */
-	        if ( axis.isZero() )
-	        {
-	            continue;
-	        }
+		/* Test the separation on each axis */
+		for ( const auto & axis : axes )
+		{
+			/* NOTE: We ignore the zero axes that may result from a vector product */
+			if ( axis.isZero() )
+			{
+				continue;
+			}
 
-	        const auto projA = project(triPoints, axis);
-	        const auto projB = project(cuboidPoints, axis);
+			const auto projA = project(triPoints, axis);
+			const auto projB = project(cuboidPoints, axis);
 
-	        /* NOTE: If the projections do not overlap, a separation axis has been found. */
-	        if ( projA.second < projB.first || projB.second < projA.first )
-	        {
-	            return false;
-	        }
-	    }
+			/* NOTE: If the projections do not overlap, a separation axis has been found. */
+			if ( projA.second < projB.first || projB.second < projA.first )
+			{
+				return false;
+			}
+		}
 
-	    return true;
+		return true;
 	}
 
 	/**
@@ -149,18 +149,18 @@ namespace EmEn::Libs::Math::Space3D
 		/* NOTE: Utility function to project a set of points onto an axis. */
 		auto project = [] (const auto & points, const Vector< 3, precision_t > & axis)
 		{
-		    precision_t min = Vector< 3, precision_t >::dotProduct(points[0], axis);
-		    precision_t max = min;
+			precision_t min = Vector< 3, precision_t >::dotProduct(points[0], axis);
+			precision_t max = min;
 
-		    for ( size_t i = 1; i < points.size(); ++i )
-		    {
-		        precision_t p = Vector< 3, precision_t >::dotProduct(points[i], axis);
+			for ( size_t i = 1; i < points.size(); ++i )
+			{
+				precision_t p = Vector< 3, precision_t >::dotProduct(points[i], axis);
 
-		        min = std::min(min, p);
-		        max = std::max(max, p);
-		    }
+				min = std::min(min, p);
+				max = std::max(max, p);
+			}
 
-		    return std::make_pair(min, max);
+			return std::make_pair(min, max);
 		};
 
 		/* NOTE: Define all axes to be tested (13 in total). */
@@ -184,38 +184,38 @@ namespace EmEn::Libs::Math::Space3D
 		
 		for ( const auto & edge : triEdges )
 		{
-		    axes[axisIndex++] = Vector< 3, precision_t >::crossProduct(edge, axes[0]).normalize();
-		    axes[axisIndex++] = Vector< 3, precision_t >::crossProduct(edge, axes[1]).normalize();
-		    axes[axisIndex++] = Vector< 3, precision_t >::crossProduct(edge, axes[2]).normalize();
+			axes[axisIndex++] = Vector< 3, precision_t >::crossProduct(edge, axes[0]).normalize();
+			axes[axisIndex++] = Vector< 3, precision_t >::crossProduct(edge, axes[1]).normalize();
+			axes[axisIndex++] = Vector< 3, precision_t >::crossProduct(edge, axes[2]).normalize();
 		}
 
 		/* NOTE: Test separation and overlap on each axis. */
 		for ( const auto & axis : axes )
 		{
-		    if ( axis.isZero() )
+			if ( axis.isZero() )
 			{
-		    	continue;
+				continue;
 			}
 
 			const auto projA = project(triPoints, axis);
-		    const auto projB = project(cuboidPoints, axis);
+			const auto projB = project(cuboidPoints, axis);
 
-		    if ( projA.second < projB.first || projB.second < projA.first )
-		    {
-		        minimumTranslationVector.reset();
+			if ( projA.second < projB.first || projB.second < projA.first )
+			{
+				minimumTranslationVector.reset();
 
-		    	/* NOTE: Separation axis found, no collision */
-		        return false;
-		    }
+				/* NOTE: Separation axis found, no collision */
+				return false;
+			}
 
 			/* NOTE: Calculate the overlap and update it if it is the smallest. */
-		    const precision_t currentOverlap = std::min(projA.second, projB.second) - std::max(projA.first, projB.first);
+			const precision_t currentOverlap = std::min(projA.second, projB.second) - std::max(projA.first, projB.first);
 
-		    if ( currentOverlap < overlap )
-		    {
-		        overlap = currentOverlap;
-		        smallestAxis = axis;
-		    }
+			if ( currentOverlap < overlap )
+			{
+				overlap = currentOverlap;
+				smallestAxis = axis;
+			}
 		}
 
 		/* NOTE: Collision confirmed, we build the MTV. Make sure the axle is pointing in the right direction for thrust. */
@@ -224,7 +224,7 @@ namespace EmEn::Libs::Math::Space3D
 
 		if ( Vector< 3, precision_t >::dotProduct(centerB - centerA, smallestAxis) < 0 )
 		{
-		    smallestAxis = -smallestAxis;
+			smallestAxis = -smallestAxis;
 		}
 
 		minimumTranslationVector = smallestAxis * overlap;

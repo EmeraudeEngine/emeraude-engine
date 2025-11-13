@@ -28,46 +28,10 @@
 
 /* Local inclusions. */
 #include "Libs/Math/Space2D/Line.hpp"
+#include "Libs/Math/Space2D/Point.hpp"
 
 namespace EmEn::Libs::Math::Space2D
 {
-	/**
-	 * @brief Checks if lines are intersecting.
-	 * @tparam precision_t The data precision. Default float.
-	 * @param lineA A reference to a line.
-	 * @param lineB A reference to a line.
-	 * @return bool
-	 */
-	/*template< typename precision_t = float >
-	[[nodiscard]]
-	static
-	bool
-	isIntersecting (const Line< precision_t > & lineA, const Line< precision_t > & lineB) noexcept requires (std::is_floating_point_v< precision_t >)
-	{
-		// TODO...
-
-		return false;
-	}*/
-
-	/**
-	 * @brief Checks if lines are intersecting and gives the intersection point.
-	 * @tparam precision_t The data precision. Default float.
-	 * @param lineA A reference to a line.
-	 * @param lineB A reference to a line.
-	 * @param intersection A writable reference to a vector for the intersection if method returns true.
-	 * @return bool
-	 */
-	/*template< typename precision_t = float >
-	[[nodiscard]]
-	static
-	bool
-	isIntersecting (const Line< precision_t > & lineA, const Line< precision_t > & lineB, Point< precision_t > & intersection) noexcept requires (std::is_floating_point_v< precision_t >)
-	{
-		// TODO...
-
-		return false;
-	}*/
-
 	/**
 	 * @brief Finds the intersection between two lines using the "Cramer" method.
 	 * @tparam precision_t The data precision. Default float.
@@ -84,7 +48,6 @@ namespace EmEn::Libs::Math::Space2D
 	 */
 	template< typename precision_t = float >
 	[[nodiscard]]
-	static
 	bool
 	isIntersecting (precision_t ax, precision_t ay, precision_t bx, precision_t by, precision_t cx, precision_t cy, precision_t dx, precision_t dy, Point< precision_t > & intersection) noexcept requires (std::is_arithmetic_v< precision_t >)
 	{
@@ -112,5 +75,43 @@ namespace EmEn::Libs::Math::Space2D
 		intersection[Y] = (c1 * dir_cd_y - dir_ab_y * c2) / det;
 
 		return true;
+	}
+
+	/**
+	 * @brief Checks if lines are intersecting and gives the intersection point.
+	 * @tparam precision_t The data precision. Default float.
+	 * @param lineA A reference to a line.
+	 * @param lineB A reference to a line.
+	 * @param intersection A writable reference to a vector for the intersection if method returns true.
+	 * @return bool
+	 */
+	template< typename precision_t = float >
+	[[nodiscard]]
+	bool
+	isIntersecting (const Line< precision_t > & lineA, const Line< precision_t > & lineB, Point< precision_t > & intersection) noexcept requires (std::is_floating_point_v< precision_t >)
+	{
+		const auto p1 = lineA.origin();
+		const auto p2 = lineA.origin() + lineA.direction();
+		const auto p3 = lineB.origin();
+		const auto p4 = lineB.origin() + lineB.direction();
+
+		return isIntersecting(p1.x(), p1.y(), p2.x(), p2.y(), p3.x(), p3.y(), p4.x(), p4.y(), intersection);
+	}
+
+	/**
+	 * @brief Checks if lines are intersecting.
+	 * @tparam precision_t The data precision. Default float.
+	 * @param lineA A reference to a line.
+	 * @param lineB A reference to a line.
+	 * @return bool
+	 */
+	template< typename precision_t = float >
+	[[nodiscard]]
+	bool
+	isIntersecting (const Line< precision_t > & lineA, const Line< precision_t > & lineB) noexcept requires (std::is_floating_point_v< precision_t >)
+	{
+		Point< precision_t > dummy;
+
+		return isIntersecting(lineA, lineB, dummy);
 	}
 }

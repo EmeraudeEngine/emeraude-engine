@@ -29,27 +29,10 @@
 /* Local inclusions. */
 #include "Libs/Math/Space2D/Segment.hpp"
 #include "Libs/Math/Space2D/Circle.hpp"
+#include "Libs/Math/Space2D/Point.hpp"
 
 namespace EmEn::Libs::Math::Space2D
 {
-	/**
-	 * @brief Checks if a segment intersects a circle.
-	 * @tparam precision_t The data precision. Default float.
-	 * @param segment A reference to a segment.
-	 * @param circle A reference to a circle.
-	 * @return bool
-	 */
-	template< typename precision_t = float >
-	[[nodiscard]]
-	static
-	bool
-	isIntersecting (const Segment< precision_t > & segment, const Circle< precision_t > & circle) noexcept requires (std::is_floating_point_v< precision_t >)
-	{
-		// TODO ...
-
-		return false;
-	}
-
 	/**
 	 * @brief Checks if a segment intersects a circle and gives the intersection point.
 	 * @tparam precision_t The data precision. Default float.
@@ -60,81 +43,97 @@ namespace EmEn::Libs::Math::Space2D
 	 */
 	template< typename precision_t = float >
 	[[nodiscard]]
-	static
 	bool
 	isIntersecting (const Segment< precision_t > & segment, const Circle< precision_t > & circle, Point< precision_t > & intersection) noexcept requires (std::is_floating_point_v< precision_t >)
 	{
-		const Point< precision_t > segmentStart = segment.start();
-		const Point< precision_t > segmentDirection = segment.end() - segmentStart;
-		const Point< precision_t > centerToStart = segmentStart - circle.position();
+		const auto d = segment.endPoint() - segment.startPoint();
+		const auto f = segment.startPoint() - circle.position();
 
-		const precision_t a = segmentDirection.lengthSquared();
-		const precision_t b = 2 * Vector<2, precision_t>::dotProduct(segmentDirection, centerToStart);
-		const precision_t c = centerToStart.lengthSquared() - (circle.radius() * circle.radius());
+		const precision_t a = Vector< 2, precision_t >::dotProduct(d, d);
+		const precision_t b = 2 * Vector< 2, precision_t >::dotProduct(f, d);
+		const precision_t c = Vector< 2, precision_t >::dotProduct(f, f) - circle.radius() * circle.radius();
 
-		if ( std::abs(a) < std::numeric_limits< precision_t >::epsilon() )
-		{
-			/* NOTE: The segment is a point, it cannot intersect a circumference. */
-			return false;
-		}
-
-		const precision_t discriminant = b * b - 4 * a * c;
+		precision_t discriminant = b * b - 4 * a * c;
 
 		if ( discriminant < 0 )
 		{
-			/* NOTE: No real solution, the line never intersects the circle. */
+			/* No intersection with circle boundary. Check if segment is completely inside. */
+			const precision_t distStartSq = (segment.startPoint() - circle.position()).lengthSquared();
+			const precision_t distEndSq = (segment.endPoint() - circle.position()).lengthSquared();
+			const precision_t radiusSq = circle.radius() * circle.radius();
+
+			/* If both endpoints are inside the circle, the segment is inside and "intersects" */
+			if ( distStartSq <= radiusSq && distEndSq <= radiusSq )
+			{
+				/* Set intersection to the start point of the segment */
+				intersection = segment.startPoint();
+				return true;
+			}
+
 			return false;
 		}
 
-		const precision_t sqrtDiscriminant = std::sqrt(discriminant);
-		const precision_t inv2a = static_cast< precision_t >(1) / (2 * a);
+		discriminant = std::sqrt(discriminant);
+		const precision_t t1 = (-b - discriminant) / (2 * a);
+		const precision_t t2 = (-b + discriminant) / (2 * a);
 
-		/* NOTE: The two potential intersection points of the infinite line with the circle. */
-		const precision_t t1 = (-b - sqrtDiscriminant) * inv2a;
-		const precision_t t2 = (-b + sqrtDiscriminant) * inv2a;
-
-		precision_t t_final = std::numeric_limits< precision_t >::max();
-		bool intersectionFound = false;
-
-		/* NOTE: We are looking for the smallest valid value of 't' (between 0 and 1). */
 		if ( t1 >= 0 && t1 <= 1 )
 		{
-			t_final = t1;
-			intersectionFound = true;
+			intersection = segment.startPoint() + d * t1;
+
+			return true;
 		}
 
-		/* NOTE: t2 is necessarily greater than t1. If t1 is valid, t2 cannot be a better solution.
-		 * We only check t2 if t1 is not in the interval [0,1]. */
-		if ( t2 >= 0 && t2 <= 1 && t2 < t_final )
+		if ( t2 >= 0 && t2 <= 1 )
 		{
-			t_final = t2;
-			intersectionFound = true;
+			intersection = segment.startPoint() + d * t2;
+
+			return true;
 		}
 
-		if ( intersectionFound )
-		{
-			intersection = segmentStart + segmentDirection * t_final;
+		/* No intersection on segment boundaries. Check if segment is completely inside circle. */
+		const precision_t distStartSq = (segment.startPoint() - circle.position()).lengthSquared();
+		const precision_t radiusSq = circle.radius() * circle.radius();
 
+		if ( distStartSq <= radiusSq )
+		{
+			/* Start point is inside, so the whole segment must be inside */
+			intersection = segment.startPoint();
 			return true;
 		}
 
 		return false;
 	}
 
-	/** @copydoc EmEn::Libs::Math::Space2D::isIntersecting(const Segment< precision_t > &, Circle< precision_t > &) noexcept */
+	/**
+	 * @brief Checks if a segment intersects a circle.
+	 * @tparam precision_t The data precision. Default float.
+	 * @param segment A reference to a segment.
+	 * @param circle A reference to a circle.
+	 * @return bool
+	 */
 	template< typename precision_t = float >
 	[[nodiscard]]
-	static
+	bool
+	isIntersecting (const Segment< precision_t > & segment, const Circle< precision_t > & circle) noexcept requires (std::is_floating_point_v< precision_t >)
+	{
+		Point< precision_t > dummy;
+
+		return isIntersecting(segment, circle, dummy);
+	}
+
+	/** @copydoc EmEn::Libs::Math::Space2D::isIntersecting(const Segment< precision_t > &, const Circle< precision_t > &) noexcept */
+	template< typename precision_t = float >
+	[[nodiscard]]
 	bool
 	isIntersecting (const Circle< precision_t > & circle, const Segment< precision_t > & segment) noexcept requires (std::is_floating_point_v< precision_t >)
 	{
 		return isIntersecting(segment, circle);
 	}
 
-	/** @copydoc EmEn::Libs::Math::Space2D::isIntersecting(const Segment< precision_t > &, Circle< precision_t > &, Point< precision_t > &) noexcept */
+	/** @copydoc EmEn::Libs::Math::Space2D::isIntersecting(const Segment< precision_t > &, const Circle< precision_t > &, Point< precision_t > &) noexcept */
 	template< typename precision_t = float >
 	[[nodiscard]]
-	static
 	bool
 	isIntersecting (const Circle< precision_t > & circle, const Segment< precision_t > & segment, Point< precision_t > & intersection) noexcept requires (std::is_floating_point_v< precision_t >)
 	{

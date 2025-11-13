@@ -38,9 +38,9 @@
 #include "Libs/Time/Elapsed/PrintScopeRealTime.hpp"
 #include "Libs/Utility.hpp"
 
-using namespace Libs;
-using namespace Libs::Compression;
-using namespace Libs::Time::Elapsed;
+using namespace EmEn::Libs;
+using namespace EmEn::Libs::Compression;
+using namespace EmEn::Libs::Time::Elapsed;
 
 [[nodiscard]]
 std::string

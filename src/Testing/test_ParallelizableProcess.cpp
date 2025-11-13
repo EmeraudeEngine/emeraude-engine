@@ -36,8 +36,8 @@
 #include "Libs/Time/Elapsed/PrintScopeRealTime.hpp"
 #include "Libs/Utility.hpp"
 
-using namespace Libs;
-using namespace Libs::Time::Elapsed;
+using namespace EmEn::Libs;
+using namespace EmEn::Libs::Time::Elapsed;
 
 /*class Fibonnizzer final : public ParallelizableTrait< size_t >
 {

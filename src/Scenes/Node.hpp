@@ -305,7 +305,7 @@ namespace EmEn::Scenes
 				return classUID;
 			}
 
-			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
+			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const noexcept */
 			[[nodiscard]]
 			size_t
 			classUID () const noexcept override
@@ -313,7 +313,7 @@ namespace EmEn::Scenes
 				return getClassUID();
 			}
 
-			/** @copydoc EmEn::Libs::ObservableTrait::is() const */
+			/** @copydoc EmEn::Libs::ObservableTrait::is() const noexcept */
 			[[nodiscard]]
 			bool
 			is (size_t classUID) const noexcept override
@@ -321,7 +321,7 @@ namespace EmEn::Scenes
 				return classUID == getClassUID();
 			}
 
-			/** @copydoc EmEn::Scenes::AbstractEntity::hasMovableAbility() const */
+			/** @copydoc EmEn::Scenes::AbstractEntity::hasMovableAbility() const noexcept */
 			[[nodiscard]]
 			bool
 			hasMovableAbility () const noexcept override
@@ -329,7 +329,7 @@ namespace EmEn::Scenes
 				return true;
 			}
 
-			/** @copydoc EmEn::Scenes::AbstractEntity::isMoving() const */
+			/** @copydoc EmEn::Scenes::AbstractEntity::isMoving() const noexcept */
 			[[nodiscard]]
 			bool
 			isMoving () const noexcept override
@@ -337,7 +337,7 @@ namespace EmEn::Scenes
 				return this->hasVelocity();
 			}
 
-			/** @copydoc EmEn::Scenes::AbstractEntity::publishStateForRendering(uint32_t) */
+			/** @copydoc EmEn::Scenes::AbstractEntity::publishStateForRendering(uint32_t) noexcept */
 			void
 			publishStateForRendering (uint32_t writeStateIndex) noexcept override
 			{
@@ -354,7 +354,7 @@ namespace EmEn::Scenes
 				m_renderStateCoordinates[writeStateIndex] = this->getWorldCoordinates();
 			}
 
-			/** @copydoc EmEn::Scenes::AbstractEntity::getWorldCoordinatesStateForRendering(uint32_t) const */
+			/** @copydoc EmEn::Scenes::AbstractEntity::getWorldCoordinatesStateForRendering(uint32_t) const noexcept */
 			[[nodiscard]]
 			const Libs::Math::CartesianFrame< float > &
 			getWorldCoordinatesStateForRendering (uint32_t readStateIndex) const noexcept override
@@ -362,7 +362,7 @@ namespace EmEn::Scenes
 				return m_renderStateCoordinates[readStateIndex];
 			}
 
-			/** @copydoc EmEn::Scenes::AbstractEntity::getMovableTrait() */
+			/** @copydoc EmEn::Scenes::AbstractEntity::getMovableTrait() noexcept */
 			[[nodiscard]]
 			MovableTrait *
 			getMovableTrait () noexcept override
@@ -370,7 +370,7 @@ namespace EmEn::Scenes
 				return this;
 			}
 
-			/** @copydoc EmEn::Scenes::AbstractEntity::getMovableTrait() const */
+			/** @copydoc EmEn::Scenes::AbstractEntity::getMovableTrait() const noexcept */
 			[[nodiscard]]
 			const MovableTrait *
 			getMovableTrait () const noexcept override
@@ -378,22 +378,31 @@ namespace EmEn::Scenes
 				return this;
 			}
 
-			/** @copydoc EmEn::Physics::MovableTrait::getWorldVelocity() const */
+			/** @copydoc EmEn::Physics::MovableTrait::getWorldVelocity() const noexcept */
 			[[nodiscard]]
 			Libs::Math::Vector< 3, float > getWorldVelocity () const noexcept override;
 
-			/** @copydoc EmEn::Physics::MovableTrait::getWorldCenterOfMass() const */
+			/** @copydoc EmEn::Physics::MovableTrait::getWorldCenterOfMass() const noexcept */
 			[[nodiscard]]
 			Libs::Math::Vector< 3, float > getWorldCenterOfMass () const noexcept override;
 
-			/** @copydoc EmEn::Physics::MovableTrait::onHit() */
+			/** @copydoc EmEn::Physics::MovableTrait::getBodyPhysicalProperties() const noexcept */
+			[[nodiscard]]
+			const Physics::BodyPhysicalProperties &
+			getBodyPhysicalProperties () const noexcept override
+			{
+				/* NOTE: Returns the physical object properties from the abstract entity. */
+				return this->bodyPhysicalProperties();
+			}
+
+			/** @copydoc EmEn::Physics::MovableTrait::onHit() noexcept */
 			void
 			onHit (float impactForce) noexcept override
 			{
 				this->notify(NodeCollision, impactForce);
 			}
 
-			/** @copydoc EmEn::Physics::MovableTrait::onImpulse() */
+			/** @copydoc EmEn::Physics::MovableTrait::onImpulse() noexcept */
 			void
 			onImpulse () noexcept override
 			{
@@ -623,14 +632,6 @@ namespace EmEn::Scenes
 			}
 
 		private:
-
-			/** @copydoc EmEn::Physics::MovableTrait::getObjectProperties() */
-			[[nodiscard]]
-			const Physics::PhysicalObjectProperties &
-			getObjectProperties () const noexcept override
-			{
-				return this->physicalObjectProperties();
-			}
 
 			/** @copydoc EmEn::Physics::MovableTrait::getWorldPosition() */
 			[[nodiscard]]

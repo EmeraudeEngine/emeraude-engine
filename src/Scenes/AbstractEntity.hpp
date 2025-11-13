@@ -49,7 +49,7 @@
 #include "Graphics/Renderable/MeshResource.hpp"
 #include "Graphics/Renderable/SpriteResource.hpp"
 #include "Graphics/Material/BasicResource.hpp"
-#include "Physics/PhysicalObjectProperties.hpp"
+#include "Physics/BodyPhysicalProperties.hpp"
 #include "Component/Camera.hpp"
 #include "Component/DirectionalLight.hpp"
 #include "Component/DirectionalPushModifier.hpp"
@@ -182,22 +182,22 @@ namespace EmEn::Scenes
 
 			/**
 			 * @brief Returns the physical properties.
-			 * @return const PhysicalObjectProperties &
+			 * @return const Physics::BodyPhysicalProperties &
 			 */
-			const Physics::PhysicalObjectProperties &
-			physicalObjectProperties () const noexcept
+			const Physics::BodyPhysicalProperties &
+			bodyPhysicalProperties () const noexcept
 			{
-				return m_physicalObjectProperties;
+				return m_bodyPhysicalProperties;
 			}
 
 			/**
 			 * @brief Returns the writable physical properties.
-			 * @return PhysicalObjectProperties &
+			 * @return Physics::BodyPhysicalProperties &
 			 */
-			Physics::PhysicalObjectProperties &
-			physicalObjectProperties () noexcept
+			Physics::BodyPhysicalProperties &
+			bodyPhysicalProperties () noexcept
 			{
-				return m_physicalObjectProperties;
+				return m_bodyPhysicalProperties;
 			}
 
 			/**
@@ -468,7 +468,7 @@ namespace EmEn::Scenes
 			 * @param componentName The name of the component. Default "Weight".
 			 * @return std::shared_ptr< Component::Weight >
 			 */
-			std::shared_ptr< Component::Weight > newWeight (const Physics::PhysicalObjectProperties & initialProperties, const std::string & componentName = "Weight") noexcept;
+			std::shared_ptr< Component::Weight > newWeight (const Physics::BodyPhysicalProperties & initialProperties, const std::string & componentName = "Weight") noexcept;
 
 			/**
 			 * @brief This will override the computation of bounding primitives.
@@ -570,9 +570,9 @@ namespace EmEn::Scenes
 			 */
 			[[nodiscard]]
 			bool
-			hasPhysicalObjectProperties () const noexcept
+			hasBodyPhysicalProperties () const noexcept
 			{
-				return this->isFlagEnabled(HasPhysicalObjectProperties);
+				return this->isFlagEnabled(HasBodyPhysicalProperties);
 			}
 
 			/**
@@ -669,7 +669,7 @@ namespace EmEn::Scenes
 			static constexpr auto BoundingPrimitivesOverridden{0UL};
 			static constexpr auto IsDeflector{1UL};
 			static constexpr auto IsRenderable{2UL};
-			static constexpr auto HasPhysicalObjectProperties{3UL};
+			static constexpr auto HasBodyPhysicalProperties{3UL};
 			static constexpr auto SphereCollisionEnabled{4UL};
 			static constexpr auto IsSimulationPaused{5UL};
 			static constexpr auto IsCollisionDisabled{6UL};
@@ -711,9 +711,9 @@ namespace EmEn::Scenes
 			 * @return void
 			 */
 			void
-			setPhysicalObjectPropertiesState (bool state) noexcept
+			setBodyPhysicalPropertiesState (bool state) noexcept
 			{
-				this->setFlag(HasPhysicalObjectProperties, state);
+				this->setFlag(HasBodyPhysicalProperties, state);
 			}
 
 			/**
@@ -857,7 +857,7 @@ namespace EmEn::Scenes
 			std::map< std::string, std::shared_ptr< Component::Abstract > > m_components;
 			Libs::Math::Space3D::AACuboid< float > m_boundingBox;
 			Libs::Math::Space3D::Sphere< float > m_boundingSphere;
-			Physics::PhysicalObjectProperties m_physicalObjectProperties;
+			Physics::BodyPhysicalProperties m_bodyPhysicalProperties;
 			const uint32_t m_birthTime{0};
 			size_t m_lastUpdatedMoveCycle{0};
 			mutable std::mutex m_componentsAccess;

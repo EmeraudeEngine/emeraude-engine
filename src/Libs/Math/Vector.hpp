@@ -390,36 +390,13 @@ namespace EmEn::Libs::Math
 			bool
 			operator== (const Vector & operand) const noexcept requires (std::is_floating_point_v< precision_t > )
 			{
-				if ( this != &operand )
-				{
-					if ( Utility::different(m_data[X], operand.m_data[X]) )
-					{
-						return false;
-					}
+				if (this == &operand) return true;
 
-					if ( Utility::different(m_data[Y], operand.m_data[Y]) )
-					{
-						return false;
-					}
-
-					if constexpr ( dim_t == 3 || dim_t == 4 )
-					{
-						if ( Utility::different(m_data[Z], operand.m_data[Z]) )
-						{
-							return false;
-						}
-					}
-
-					if constexpr ( dim_t == 4 )
-					{
-						if ( Utility::different(m_data[W], operand.m_data[W]) )
-						{
-							return false;
-						}
-					}
+				bool result = true;
+				for (size_t i = 0; i < dim_t; ++i) {
+					result = result && Utility::equal(m_data[i], operand.m_data[i]);
 				}
-
-				return true;
+				return result;
 			}
 
 			/**
@@ -432,36 +409,13 @@ namespace EmEn::Libs::Math
 			bool
 			operator== (const Vector & operand) const noexcept requires (std::is_integral_v< precision_t > )
 			{
-				if ( this != &operand )
-				{
-					if ( m_data[X] != operand.m_data[X] )
-					{
-						return false;
-					}
-
-					if ( m_data[Y] != operand.m_data[Y] )
-					{
-						return false;
-					}
-
-					if constexpr ( dim_t == 3 || dim_t == 4 )
-					{
-						if ( m_data[Z] != operand.m_data[Z] )
-						{
-							return false;
-						}
-					}
-
-					if constexpr ( dim_t == 4 )
-					{
-						if ( m_data[W] != operand.m_data[W] )
-						{
-							return false;
-						}
-					}
+				if (this == &operand) return true;
+				
+				bool result = true;
+				for (size_t i = 0; i < dim_t; ++i) {
+					result = result && (m_data[i] == operand.m_data[i]);
 				}
-
-				return true;
+				return result;
 			}
 
 			/**
@@ -732,6 +686,10 @@ namespace EmEn::Libs::Math
 			Vector &
 			operator/= (precision_t operand) noexcept
 			{
+				if (Utility::isZero(operand)) {
+					return *this;
+				}
+
 				for ( size_t index = 0; index < dim_t; index++ )
 				{
 					m_data[index] /= operand;
@@ -989,23 +947,20 @@ namespace EmEn::Libs::Math
 				const auto absX = std::abs(m_data[X]);
 				const auto absY = std::abs(m_data[Y]);
 
-				if ( absX != 0 || absY != 0 )
+				if ( absX == 0 && absY == 0 )
 				{
-					if ( absX >= absY )
-					{
-						m_data[X] = m_data[X] > 0 ? 1 : -1;
-						m_data[Y] = 0;
-					}
-					else
-					{
-						m_data[X] = 0;
-						m_data[Y] = m_data[Y] > 0 ? 1 : -1;
-					}
+					m_data[X] = 0;
+					m_data[Y] = 0;
+				}
+				else if ( absX >= absY )
+				{
+					m_data[X] = m_data[X] > 0 ? 1 : -1;
+					m_data[Y] = 0;
 				}
 				else
 				{
 					m_data[X] = 0;
-					m_data[Y] = 0;
+					m_data[Y] = m_data[Y] > 0 ? 1 : -1;
 				}
 
 				return *this;
@@ -1024,32 +979,29 @@ namespace EmEn::Libs::Math
 				const auto absY = std::abs(m_data[Y]);
 				const auto absZ = std::abs(m_data[Z]);
 
-				if ( absX != 0 || absY != 0 || absZ != 0 )
+				if ( absX == 0 && absY == 0 && absZ == 0 )
 				{
-					if ( absX >= absY && absX >= absZ )
-					{
-						m_data[X] = m_data[X] > 0 ? 1 : -1;
-						m_data[Y] = 0;
-						m_data[Z] = 0;
-					}
-					else if ( absY >= absZ )
-					{
-						m_data[X] = 0;
-						m_data[Y] = m_data[Y] > 0 ? 1 : -1;
-						m_data[Z] = 0;
-					}
-					else
-					{
-						m_data[X] = 0;
-						m_data[Y] = 0;
-						m_data[Z] = m_data[Z] > 0 ? 1 : -1;
-					}
+					m_data[X] = 0;
+					m_data[Y] = 0;
+					m_data[Z] = 0;
+				}
+				else if ( absX >= absY && absX >= absZ )
+				{
+					m_data[X] = m_data[X] > 0 ? 1 : -1;
+					m_data[Y] = 0;
+					m_data[Z] = 0;
+				}
+				else if ( absY >= absZ )
+				{
+					m_data[X] = 0;
+					m_data[Y] = m_data[Y] > 0 ? 1 : -1;
+					m_data[Z] = 0;
 				}
 				else
 				{
 					m_data[X] = 0;
 					m_data[Y] = 0;
-					m_data[Z] = 0;
+					m_data[Z] = m_data[Z] > 0 ? 1 : -1;
 				}
 
 				/* NOTE: If the vector is dimension 4, the last component must be set to zero. */
@@ -1089,20 +1041,9 @@ namespace EmEn::Libs::Math
 			Vector
 			normalized () const noexcept requires (dim_t == 2 && std::is_integral_v< precision_t >)
 			{
-				const auto absX = std::abs(m_data[X]);
-				const auto absY = std::abs(m_data[Y]);
-
-				if ( absX != 0 || absY != 0 )
-				{
-					if ( absX >= absY )
-					{
-						return {m_data[X] > 0 ? 1 : -1, 0};
-					}
-
-					return {0, m_data[Y] > 0 ? 1 : -1};
-				}
-
-				return {};
+				auto copy = *this;
+				copy.normalize();
+				return copy;
 			}
 
 			/**
@@ -1115,26 +1056,9 @@ namespace EmEn::Libs::Math
 			Vector
 			normalized () const noexcept requires ((dim_t == 3 || dim_t == 4) && std::is_integral_v< precision_t >)
 			{
-				const auto absX = std::abs(m_data[X]);
-				const auto absY = std::abs(m_data[Y]);
-				const auto absZ = std::abs(m_data[Z]);
-
-				if ( absX != 0 || absY != 0 || absZ != 0 )
-				{
-					if ( absX >= absY && absX >= absZ )
-					{
-						return {m_data[X] > 0 ? 1 : -1, 0, 0};
-					}
-
-					if ( absY >= absZ )
-					{
-						return {0, m_data[Y] > 0 ? 1 : -1, 0};
-					}
-
-					return {0, 0, m_data[Z] > 0 ? 1 : -1};
-				}
-
-				return {};
+				auto copy = *this;
+				copy.normalize();
+				return copy;
 			}
 
 			/**
@@ -1203,7 +1127,7 @@ namespace EmEn::Libs::Math
 						(lhs.m_data[Y] * rhs.m_data[Z]) - (lhs.m_data[Z] * rhs.m_data[Y]),
 						(lhs.m_data[Z] * rhs.m_data[X]) - (lhs.m_data[X] * rhs.m_data[Z]),
 						(lhs.m_data[X] * rhs.m_data[Y]) - (lhs.m_data[Y] * rhs.m_data[X]),
-						0.0F
+						static_cast<precision_t>(0)
 					};
 				}
 				else
@@ -1280,7 +1204,7 @@ namespace EmEn::Libs::Math
 					return (*this - point).length();
 				}
 
-				const auto p = point + (Vector::dotProduct(*this - point, direction) * direction);
+				const auto p = point + (direction * Vector::dotProduct(*this - point, direction));
 
 				return (*this - p).length();
 			}
@@ -1301,7 +1225,7 @@ namespace EmEn::Libs::Math
 					return (*this - point).lengthSquared();
 				}
 
-				const auto p = point + (Vector::dotProduct(*this - point, direction) * direction);
+				const auto p = point + (direction * Vector::dotProduct(*this - point, direction));
 
 				return (*this - p).lengthSquared();
 			}

@@ -796,13 +796,16 @@ namespace EmEn::Scenes
 
 				if ( entity.isValid() && enablePhysicalProperties )
 				{
-					entity.component()->physicalObjectProperties().setProperties(
-						size[X] * size[Y] * size[Z] * materialResource->physicalSurfaceProperties().density() * SI::Kilogram< float >,
-						size[X] * size[Y],
-						DragCoefficient::Cube< float >,
-						Half< float >,
-						Half< float >
-					);
+					entity.component()
+						->bodyPhysicalProperties().setProperties(
+							size[X] * size[Y] * size[Z] * materialResource->surfacePhysicalProperties().density() * SI::Kilogram< float >,
+							size[X] * size[Y],
+							DragCoefficient::Cube< float >,
+							Half< float >,
+							Half< float >,
+							Half< float >,
+							{}
+						);
 				}
 
 				return entity;
@@ -869,15 +872,18 @@ namespace EmEn::Scenes
 						Space3D::Sphere{radius}
 					);
 
-					const auto density = materialResource == nullptr ? 1.0F : materialResource->physicalSurfaceProperties().density();
+					const auto density = materialResource == nullptr ? 1.0F : materialResource->surfacePhysicalProperties().density();
 
-					entity.component()->physicalObjectProperties().setProperties(
-						sphereVolume(radius) * density * SI::Kilogram< float >,
-						circleArea(radius) * SI::Meter< float >,
-						DragCoefficient::Sphere< float >,
-						Half< float >,
-						Half< float >
-					);
+					entity.component()
+						->bodyPhysicalProperties().setProperties(
+							sphereVolume(radius) * density * SI::Kilogram< float >,
+							circleArea(radius) * SI::Meter< float >,
+							DragCoefficient::Sphere< float >,
+							Half< float >,
+							Half< float >,
+							Half< float >,
+							{}
+						);
 				}
 
 				return entity;

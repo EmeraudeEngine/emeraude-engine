@@ -127,7 +127,7 @@ namespace EmEn::Libs::Math::Space3D
 		/* NOTE: Calculate the determinant. If close to zero, the line is parallel to the plane of the triangle. */
 		const auto pVec = Vector< 3, precision_t >::crossProduct(direction, edge2);
 		const auto det = Vector< 3, precision_t >::dotProduct(edge1, pVec);
-    
+	
 		if ( std::abs(det) < std::numeric_limits< precision_t >::epsilon() )
 		{
 			intersection.reset();
@@ -161,10 +161,10 @@ namespace EmEn::Libs::Math::Space3D
 
 		/* NOTE: An intersection exists. We calculate 't' to find the point. */
 		const auto t = Vector< 3, precision_t >::dotProduct(edge2, qVec) * invDet;
-    
+	
 		/* NOTE: Calculate the coordinates of the intersection point. */
 		intersection = origin + direction * t;
-    
+	
 		return true;
 	}
 

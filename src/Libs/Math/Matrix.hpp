@@ -754,7 +754,7 @@ namespace EmEn::Libs::Math
 			 */
 			[[nodiscard]]
 			bool
-			equal (const Matrix & operand, precision_t epsilon = std::numeric_limits< precision_t >::epsilon()) const noexcept
+			equal (const Matrix & operand, precision_t epsilon = std::numeric_limits< precision_t >::epsilon()) const noexcept requires (std::is_floating_point_v< precision_t >)
 			{
 				if ( this != &operand )
 				{
@@ -778,7 +778,7 @@ namespace EmEn::Libs::Math
 			 */
 			[[nodiscard]]
 			bool
-			different (const Matrix & operand, precision_t epsilon = std::numeric_limits< precision_t >::epsilon()) const noexcept
+			different (const Matrix & operand, precision_t epsilon = std::numeric_limits< precision_t >::epsilon()) const noexcept requires (std::is_floating_point_v< precision_t >)
 			{
 				return !this->equal(operand, epsilon);
 			}
@@ -793,7 +793,7 @@ namespace EmEn::Libs::Math
 			[[nodiscard]]
 			static
 			bool
-			equal (const Matrix & a, const Matrix & b, precision_t epsilon = std::numeric_limits< precision_t >::epsilon()) noexcept
+			equal (const Matrix & a, const Matrix & b, precision_t epsilon = std::numeric_limits< precision_t >::epsilon()) noexcept requires (std::is_floating_point_v< precision_t >)
 			{
 				if ( &a != &b )
 				{
@@ -819,7 +819,7 @@ namespace EmEn::Libs::Math
 			[[nodiscard]]
 			static
 			bool
-			different (const Matrix & a, const Matrix & b, precision_t epsilon = std::numeric_limits< precision_t >::epsilon()) noexcept
+			different (const Matrix & a, const Matrix & b, precision_t epsilon = std::numeric_limits< precision_t >::epsilon()) noexcept requires (std::is_floating_point_v< precision_t >)
 			{
 				return !Matrix::equal(a, b, epsilon);
 			}
@@ -855,9 +855,19 @@ namespace EmEn::Libs::Math
 					{
 						const precision_t expected = row == col ? 1 : 0;
 
-						if ( Utility::different((*this)(row, col), expected) )
+						if constexpr ( std::is_floating_point_v< precision_t > )
 						{
-							return false;
+							if ( Utility::different((*this)(row, col), expected) )
+							{
+								return false;
+							}
+						}
+						else
+						{
+							if ( (*this)(row, col) != expected )
+							{
+								return false;
+							}
 						}
 					}
 				}
@@ -2182,7 +2192,7 @@ namespace EmEn::Libs::Math
 
 			/**
 			 * @brief Returns an orthographic projection 4x4 matrix.
-			 * @note OpenGL compliant (right-handed). Tested against glm::orthoRH().
+			 * @note Vulkan compliant (right-handed).
 			 * @param xLeft Negative X distance.
 			 * @param xRight Positive X distance.
 			 * @param yBottom Negative Y distance.
@@ -2221,6 +2231,7 @@ namespace EmEn::Libs::Math
 
 			/**
 			 * @brief Returns an orthographic projection 4x4 matrix.
+			 * @note Vulkan compliant (right-handed).
 			 * @param fov Field of view in degree.
 			 * @param aspectRatio The aspect ratio of the viewport.
 			 * @param zNear Limit for nearest vertices. Must be positive.

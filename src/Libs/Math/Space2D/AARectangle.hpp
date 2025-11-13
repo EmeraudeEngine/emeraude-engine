@@ -177,13 +177,13 @@ namespace EmEn::Libs::Math::Space2D
 			}
 
 			/**
-			 * @brief Returns the point array.
+			 * @brief Returns the poit array.
 			 * @note The layout is  [topLeft, bottomLeft, topRight, bottomRight].
 			 * @return std::array< Point< precision_t >, 4 > &
 			 */
 			[[nodiscard]]
 			std::array< Point< precision_t >, 4 >
-			points () noexcept
+			points () const noexcept
 			{
 				return {
 					this->topLeft(),
@@ -773,6 +773,6 @@ namespace EmEn::Libs::Math::Space2D
 
 		private:
 
-			std::array< precision_t, 4 > m_data{0, 0, 1, 1};
+			std::array< precision_t, 4 > m_data{0, 0, 0, 0};
 	};
 }

@@ -43,7 +43,7 @@ namespace EmEn::Libs::String
 
 				if ( end == std::string::npos )
 				{
-					return source;
+					return {};
 				}
 
 				return {source, 0, end + 1};
@@ -55,7 +55,7 @@ namespace EmEn::Libs::String
 
 				if ( start == std::string::npos )
 				{
-					return source;
+					return {};
 				}
 
 				return {source, start, source.size() - start};
@@ -68,7 +68,7 @@ namespace EmEn::Libs::String
 
 				if ( start == std::string::npos || end == std::string::npos )
 				{
-					return source;
+					return {};
 				}
 
 				return {source, start, end - start + 1};
@@ -118,6 +118,12 @@ namespace EmEn::Libs::String
 	{
 		std::vector< std::string > list{};
 
+		/* Special case: empty string should return a vector with one empty string */
+		if ( source.empty() )
+		{
+			return {""};
+		}
+
 		size_t startOffset = 0;
 		size_t endOffset = 0;
 
@@ -156,6 +162,12 @@ namespace EmEn::Libs::String
 	explode (const std::string & source, const std::string & separator, bool keepEmpty, unsigned int limit) noexcept
 	{
 		std::vector< std::string > list{};
+
+		/* Special case: empty string should return a vector with one empty string */
+		if ( source.empty() )
+		{
+			return {""};
+		}
 
 		size_t startOffset = 0;
 		size_t endOffset = 0;
@@ -249,26 +261,25 @@ namespace EmEn::Libs::String
 	}
 
 	std::string
-	replace (char search, char replace, const std::string & input) noexcept
-	{
-		std::string output{input};
-
-		for ( auto & character : output )
-		{
-			if ( character == search )
-			{
-				character = replace;
-			}
-		}
-
-		return output;
-	}
-
-	std::string
 	replace (char search, char replace, const std::string & input, size_t limit) noexcept
 	{
 		std::string output{input};
 
+		/* limit = 0 means replace all */
+		if ( limit == 0 )
+		{
+			for ( auto & character : output )
+			{
+				if ( character == search )
+				{
+					character = replace;
+				}
+			}
+
+			return output;
+		}
+
+		/* Replace up to limit occurrences */
 		for ( auto & character : output )
 		{
 			if ( character != search )
@@ -290,29 +301,26 @@ namespace EmEn::Libs::String
 	}
 
 	std::string
-	replace (const std::string & search, const std::string & replace, const std::string & input) noexcept
-	{
-		std::string output{input};
-
-		size_t pos = 0;
-
-		while ( ( pos = output.find(search, pos) ) != std::string::npos )
-		{
-			output.replace(pos, search.length(), replace);
-
-			pos += replace.length();
-		}
-
-		return output;
-	}
-
-	std::string
 	replace (const std::string & search, const std::string & replace, const std::string & input, size_t limit) noexcept
 	{
 		std::string output{input};
 
 		size_t pos = 0;
 
+		/* limit = 0 means replace all */
+		if ( limit == 0 )
+		{
+			while ( ( pos = output.find(search, pos) ) != std::string::npos )
+			{
+				output.replace(pos, search.length(), replace);
+
+				pos += replace.length();
+			}
+
+			return output;
+		}
+
+		/* Replace up to limit occurrences */
 		while ( limit > 0 && ( pos = output.find(search, pos) ) != std::string::npos )
 		{
 			limit--;
@@ -474,11 +482,17 @@ namespace EmEn::Libs::String
 	std::string
 	left (const std::string & source, const std::string & match) noexcept
 	{
+		/* Empty match means everything is "to the left" */
+		if ( match.empty() )
+		{
+			return source;
+		}
+
 		const auto pos = source.find(match);
 
 		if ( pos == std::string::npos )
 		{
-			return {};
+			return source;
 		}
 
 		return source.substr(0, pos);

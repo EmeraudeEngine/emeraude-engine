@@ -26,10 +26,14 @@
 
 #pragma once
 
+/* STL inclusions. */
+#include <array>
+
 /* Local inclusions. */
 #include "Libs/Math/Space2D/Triangle.hpp"
 #include "Libs/Math/Space2D/Circle.hpp"
 #include "Libs/Math/Space2D/AARectangle.hpp"
+#include "Libs/Math/Space2D/SAT.hpp"
 
 namespace EmEn::Libs::Math::Space2D
 {
@@ -45,9 +49,12 @@ namespace EmEn::Libs::Math::Space2D
 	bool
 	isColliding (const Triangle< precision_t > & triangleA, const Triangle< precision_t > & triangleB) noexcept requires (std::is_floating_point_v< precision_t >)
 	{
-		// TODO ...
+		Vector< 2, precision_t > MTV;
 
-		return false;
+		std::array< Vector< 2, precision_t >, 3 > verticesA = {triangleA.pointA(), triangleA.pointB(), triangleA.pointC()};
+		std::array< Vector< 2, precision_t >, 3 > verticesB = {triangleB.pointA(), triangleB.pointB(), triangleB.pointC()};
+
+		return SAT::checkCollision(verticesA, verticesB, MTV);
 	}
 
 	/**
@@ -63,9 +70,10 @@ namespace EmEn::Libs::Math::Space2D
 	bool
 	isColliding (const Triangle< precision_t > & triangleA, const Triangle< precision_t > & triangleB, Vector< 2, precision_t > & minimumTranslationVector) noexcept requires (std::is_floating_point_v< precision_t >)
 	{
-		// TODO ...
+		std::array< Vector< 2, precision_t >, 3 > verticesA = {triangleA.pointA(), triangleA.pointB(), triangleA.pointC()};
+		std::array< Vector< 2, precision_t >, 3 > verticesB = {triangleB.pointA(), triangleB.pointB(), triangleB.pointC()};
 
-		return false;
+		return SAT::checkCollision(verticesA, verticesB, minimumTranslationVector);
 	}
 
 	/**
@@ -80,9 +88,11 @@ namespace EmEn::Libs::Math::Space2D
 	bool
 	isColliding (const Circle< precision_t > & circleA, const Circle< precision_t > & circleB) noexcept requires (std::is_floating_point_v< precision_t >)
 	{
-		// TODO ...
+		const auto distanceSq = Vector< 2, precision_t >::distanceSquared(circleA.position(), circleB.position());
+		const auto radiiSum = circleA.radius() + circleB.radius();
+		const auto radiiSumSq = radiiSum * radiiSum;
 
-		return false;
+		return distanceSq <= radiiSumSq;
 	}
 
 	/**
@@ -98,9 +108,29 @@ namespace EmEn::Libs::Math::Space2D
 	bool
 	isColliding (const Circle< precision_t > & circleA, const Circle< precision_t > & circleB, Vector< 2, precision_t > & minimumTranslationVector) noexcept requires (std::is_floating_point_v< precision_t >)
 	{
-		// TODO ...
+		const auto delta = circleB.position() - circleA.position();
+		const auto distanceSq = delta.lengthSquared();
+		const auto radiiSum = circleA.radius() + circleB.radius();
 
-		return false;
+		if ( distanceSq > radiiSum * radiiSum )
+		{
+			return false;
+		}
+
+		const auto distance = std::sqrt(distanceSq);
+		const auto overlap = radiiSum - distance;
+
+		if ( distance > std::numeric_limits< precision_t >::epsilon() )
+		{
+			minimumTranslationVector = (delta / distance) * overlap;
+		}
+		else
+		{
+			/* Circles are at the same position, push apart along X-axis. */
+			minimumTranslationVector = Vector< 2, precision_t >{radiiSum, 0};
+		}
+
+		return true;
 	}
 
 	/**
@@ -115,9 +145,18 @@ namespace EmEn::Libs::Math::Space2D
 	bool
 	isColliding (const AARectangle< precision_t > & rectangleA, const AARectangle< precision_t > & rectangleB) noexcept requires (std::is_floating_point_v< precision_t >)
 	{
-		// TODO ...
+		const auto minAx = rectangleA.left();
+		const auto minAy = rectangleA.top();
+		const auto maxAx = rectangleA.right();
+		const auto maxAy = rectangleA.bottom();
 
-		return false;
+		const auto minBx = rectangleB.left();
+		const auto minBy = rectangleB.top();
+		const auto maxBx = rectangleB.right();
+		const auto maxBy = rectangleB.bottom();
+
+		return !(maxAx < minBx || minAx > maxBx ||
+				 maxAy < minBy || minAy > maxBy);
 	}
 
 	/**
@@ -133,8 +172,38 @@ namespace EmEn::Libs::Math::Space2D
 	bool
 	isColliding (const AARectangle< precision_t > & rectangleA, const AARectangle< precision_t > & rectangleB, Vector< 2, precision_t > & minimumTranslationVector) noexcept requires (std::is_floating_point_v< precision_t >)
 	{
-		// TODO ...
+		if ( !isColliding(rectangleA, rectangleB) )
+		{
+			return false;
+		}
 
-		return false;
+		const auto minAx = rectangleA.left();
+		const auto minAy = rectangleA.top();
+		const auto maxAx = rectangleA.right();
+		const auto maxAy = rectangleA.bottom();
+
+		const auto minBx = rectangleB.left();
+		const auto minBy = rectangleB.top();
+		const auto maxBx = rectangleB.right();
+		const auto maxBy = rectangleB.bottom();
+
+		const precision_t overlapX1 = maxAx - minBx;
+		const precision_t overlapX2 = maxBx - minAx;
+		const precision_t overlapY1 = maxAy - minBy;
+		const precision_t overlapY2 = maxBy - minAy;
+
+		const precision_t overlapX = std::min(overlapX1, overlapX2);
+		const precision_t overlapY = std::min(overlapY1, overlapY2);
+
+		if ( overlapX < overlapY )
+		{
+			minimumTranslationVector = {(overlapX1 < overlapX2) ? -overlapX : overlapX, 0};
+		}
+		else
+		{
+			minimumTranslationVector = {0, (overlapY1 < overlapY2) ? -overlapY : overlapY};
+		}
+
+		return true;
 	}
 }
