@@ -32,6 +32,8 @@
 #include <string>
 
 /* Local inclusions. */
+#include "Vulkan/Device.hpp"
+#include "Settings.hpp"
 #include "SettingKeys.hpp"
 
 namespace EmEn::Graphics
@@ -86,6 +88,23 @@ namespace EmEn::Graphics
 				m_depthBits{depthBits},
 				m_stencilBits{stencilBits},
 				m_samples{samples}
+			{
+
+			}
+
+			/**
+			 * @brief Constructs a framebuffer precisions from settings
+			 * @param device A reference to a smart pointer of the device.
+			 * @param settings A reference to the settings.
+			 */
+			FramebufferPrecisions (const std::shared_ptr< Vulkan::Device > & device, Settings & settings) noexcept
+				: m_redBits{settings.getOrSetDefault< uint32_t >(VideoFramebufferRedBitsKey, DefaultVideoFramebufferRedBits)},
+				m_greenBits{settings.getOrSetDefault< uint32_t >(VideoFramebufferGreenBitsKey, DefaultVideoFramebufferGreenBits)},
+				m_blueBits{settings.getOrSetDefault< uint32_t >(VideoFramebufferBlueBitsKey, DefaultVideoFramebufferBlueBits)},
+				m_alphaBits{settings.getOrSetDefault< uint32_t >(VideoFramebufferAlphaBitsKey, DefaultVideoFramebufferAlphaBits)},
+				m_depthBits{settings.getOrSetDefault< uint32_t >(VideoFramebufferDepthBitsKey, DefaultVideoFramebufferDepthBits)},
+				m_stencilBits{settings.getOrSetDefault< uint32_t >(VideoFramebufferStencilBitsKey, DefaultVideoFramebufferStencilBits)},
+				m_samples{device->checkMultisampleCount(settings.getOrSetDefault< uint32_t >(VideoFramebufferSamplesKey, DefaultVideoFramebufferSamples))}
 			{
 
 			}

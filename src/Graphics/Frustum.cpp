@@ -26,10 +26,6 @@
 
 #include "Frustum.hpp"
 
-/* STL inclusions. */
-#include <ostream>
-#include <string>
-
 /* Local inclusions. */
 #include "Libs/Math/Matrix.hpp"
 
@@ -38,270 +34,129 @@ namespace EmEn::Graphics
 	using namespace Libs;
 	using namespace Libs::Math;
 
-	bool Frustum::s_enableFrustumTest{true};
-
-	void
-	Frustum::updateProperties (float /*farDistance*/) noexcept
-	{
-		/* FIXME: Empty function */
-	}
-
 	void
 	Frustum::update (const Matrix< 4, float > & viewProjectionMatrix) noexcept
 	{
-	    const auto rowA = viewProjectionMatrix.row(0); // X
-	    const auto rowB = viewProjectionMatrix.row(1); // Y
-	    const auto rowC = viewProjectionMatrix.row(2); // Z
-	    const auto rowD = viewProjectionMatrix.row(3); // W
+		// Extract frustum planes from view-projection matrix using Gribb-Hartmann method.
+		// The matrix is in column-major format (OpenGL style).
+		// Each plane equation is: ax + by + cz + d = 0
 
-	    auto createPlane = [] (const Vector< 4, float > & planeVec) -> Plane< float >
+		// Left plane: row3 + row0
 		{
-	        const auto normal3D = planeVec.toVector3();
-	        const auto magnitude = normal3D.length();
-
-	    	if ( magnitude < std::numeric_limits< float >::epsilon() * 100.0F )
-	    	{
-	            return {};
-	        }
-
-	        const auto normalizedNormal = normal3D / magnitude;
-	        const auto normalizedDistance = planeVec[3] / magnitude;
-
-	        return {normalizedNormal, normalizedDistance};
-	    };
-
-	    // Left Plane (w' + x' >= 0)
-	    m_planes[Left] = createPlane(rowD + rowA);
-
-	    // Right Plane (w' - x' >= 0)
-	    m_planes[Right] = createPlane(rowD - rowA);
-
-	    // Bottom Plane (w' - y' >= 0) --- +Y = Down
-	    m_planes[Bottom] = createPlane(rowD - rowB);
-
-	    // Top Plane (w' + y' >= 0) --- +Y = Down
-	    m_planes[Top] = createPlane(rowD + rowB);
-
-	    // Near Plane (z' >= 0) --- Z in [0, 1]
-	    m_planes[Near] = createPlane(rowC);
-
-	    // Far Plane (w' - z' >= 0) --- Z in [0, 1]
-	    m_planes[Far] = createPlane(rowD - rowC);
-	}
-
-	Frustum::Result
-	Frustum::isCollidingWith (const Vector< 3, float > & point) const noexcept
-	{
-		if ( !s_enableFrustumTest )
-		{
-			return Result::Inside;
+			const auto a = viewProjectionMatrix[3] + viewProjectionMatrix[0];
+			const auto b = viewProjectionMatrix[7] + viewProjectionMatrix[4];
+			const auto c = viewProjectionMatrix[11] + viewProjectionMatrix[8];
+			const auto d = viewProjectionMatrix[15] + viewProjectionMatrix[12];
+			const auto length = std::sqrt(a * a + b * b + c * c);
+			m_planes[Left] = Plane< float >(Vector< 3, float >(a / length, b / length, c / length), d / length);
 		}
 
+		// Right plane: row3 - row0
+		{
+			const auto a = viewProjectionMatrix[3] - viewProjectionMatrix[0];
+			const auto b = viewProjectionMatrix[7] - viewProjectionMatrix[4];
+			const auto c = viewProjectionMatrix[11] - viewProjectionMatrix[8];
+			const auto d = viewProjectionMatrix[15] - viewProjectionMatrix[12];
+			const auto length = std::sqrt(a * a + b * b + c * c);
+			m_planes[Right] = Plane< float >(Vector< 3, float >(a / length, b / length, c / length), d / length);
+		}
+
+		// Bottom plane: row3 + row1
+		{
+			const auto a = viewProjectionMatrix[3] + viewProjectionMatrix[1];
+			const auto b = viewProjectionMatrix[7] + viewProjectionMatrix[5];
+			const auto c = viewProjectionMatrix[11] + viewProjectionMatrix[9];
+			const auto d = viewProjectionMatrix[15] + viewProjectionMatrix[13];
+			const auto length = std::sqrt(a * a + b * b + c * c);
+			m_planes[Bottom] = Plane< float >(Vector< 3, float >(a / length, b / length, c / length), d / length);
+		}
+
+		// Top plane: row3 - row1
+		{
+			const auto a = viewProjectionMatrix[3] - viewProjectionMatrix[1];
+			const auto b = viewProjectionMatrix[7] - viewProjectionMatrix[5];
+			const auto c = viewProjectionMatrix[11] - viewProjectionMatrix[9];
+			const auto d = viewProjectionMatrix[15] - viewProjectionMatrix[13];
+			const auto length = std::sqrt(a * a + b * b + c * c);
+			m_planes[Top] = Plane< float >(Vector< 3, float >(a / length, b / length, c / length), d / length);
+		}
+
+		// Near plane: row3 + row2
+		{
+			const auto a = viewProjectionMatrix[3] + viewProjectionMatrix[2];
+			const auto b = viewProjectionMatrix[7] + viewProjectionMatrix[6];
+			const auto c = viewProjectionMatrix[11] + viewProjectionMatrix[10];
+			const auto d = viewProjectionMatrix[15] + viewProjectionMatrix[14];
+			const auto length = std::sqrt(a * a + b * b + c * c);
+			m_planes[Near] = Plane< float >(Vector< 3, float >(a / length, b / length, c / length), d / length);
+		}
+
+		// Far plane: row3 - row2
+		{
+			const auto a = viewProjectionMatrix[3] - viewProjectionMatrix[2];
+			const auto b = viewProjectionMatrix[7] - viewProjectionMatrix[6];
+			const auto c = viewProjectionMatrix[11] - viewProjectionMatrix[10];
+			const auto d = viewProjectionMatrix[15] - viewProjectionMatrix[14];
+			const auto length = std::sqrt(a * a + b * b + c * c);
+			m_planes[Far] = Plane< float >(Vector< 3, float >(a / length, b / length, c / length), d / length);
+		}
+	}
+
+	bool
+	Frustum::isSeeing (const Vector< 3, float > & point) const noexcept
+	{
+		// A point is visible if it's on the positive side of all frustum planes.
+		// The signed distance is positive when the point is on the side of the normal.
 		for ( const auto & plane : m_planes )
 		{
-			const auto & normal = plane.normal();
-
-			/* Dot product */
-			const auto coordX = normal[X] * point[X];
-			const auto coordY = normal[Y] * point[Y];
-			const auto coordZ = normal[Z] * point[Z];
-
-			if ( coordX + coordY + coordZ + plane.distance() <= 0.0F )
+			if ( plane.getSignedDistanceTo(point) < 0.0F )
 			{
-				return Result::Outside;
+				return false;
 			}
 		}
 
-		return Result::Inside;
+		return true;
 	}
 
-	Frustum::Result
-	Frustum::isCollidingWith (const Space3D::Sphere< float > & sphere) const noexcept
+	bool
+	Frustum::isSeeing (const Space3D::Sphere< float > & sphere) const noexcept
 	{
-		if ( !s_enableFrustumTest )
-		{
-			return Result::Inside;
-		}
-
-		const auto & position = sphere.position();
-
-		const auto radius = sphere.radius();
-
+		// A sphere is visible if its center is within radius distance from all planes.
+		// For each plane, we check if: signedDistance(center) >= -radius
+		// This means the sphere intersects or is inside the frustum.
 		for ( const auto & plane : m_planes )
 		{
-			const auto & normal = plane.normal();
-
-			/* Dot product */
-			const auto coordX = normal[X] * position[X];
-			const auto coordY = normal[Y] * position[Y];
-			const auto coordZ = normal[Z] * position[Z];
-
-			const auto distance = coordX + coordY + coordZ + plane.distance();
-
-			if ( distance < -radius )
+			if ( plane.getSignedDistanceTo(sphere.position()) < -sphere.radius() )
 			{
-				return Result::Outside;
-			}
-
-			if ( distance < radius )
-			{
-				return Result::Intersect;
+				return false;
 			}
 		}
 
-		return Result::Inside;
+		return true;
 	}
 
-	Frustum::Result
-	Frustum::isCollidingWith (const Space3D::AACuboid< float > & box) const noexcept
+	bool
+	Frustum::isSeeing (const Space3D::AACuboid< float > & aabb) const noexcept
 	{
-		if ( !s_enableFrustumTest )
-		{
-			return Result::Inside;
-		}
-
-		const auto & max = box.maximum();
-		const auto & min = box.minimum();
-
-		/* centroid */
-		{
-			const auto midpoint = Vector< 3, float >::midPoint(max, min);
-
-			if ( this->isCollidingWith(Vector< 3, float >(midpoint[X], midpoint[Y], midpoint[Z])) == Result::Inside )
-			{
-				return Result::Intersect;
-			}
-		}
-
-		if ( this->isCollidingWith(Vector< 3, float >(max[X], max[Y], max[Z])) == Result::Inside )
-		{
-			return Result::Intersect;
-		}
-
-		if ( this->isCollidingWith(Vector< 3, float >(max[X], max[Y], min[Z])) == Result::Inside )
-		{
-			return Result::Intersect;
-		}
-
-		if ( this->isCollidingWith(Vector< 3, float >(max[X], min[Y], max[Z])) == Result::Inside )
-		{
-			return Result::Intersect;
-		}
-
-		if ( this->isCollidingWith(Vector< 3, float >(max[X], min[Y], min[Z])) == Result::Inside )
-		{
-			return Result::Intersect;
-		}
-
-		if ( this->isCollidingWith(Vector< 3, float >(min[X], max[Y], max[Z])) == Result::Inside )
-		{
-			return Result::Intersect;
-		}
-
-		if ( this->isCollidingWith(Vector< 3, float >(min[X], max[Y], min[Z])) == Result::Inside )
-		{
-			return Result::Intersect;
-		}
-
-		if ( this->isCollidingWith(Vector< 3, float >(min[X], min[Y], max[Z])) == Result::Inside )
-		{
-			return Result::Intersect;
-		}
-
-		if ( this->isCollidingWith(Vector< 3, float >(min[X], min[Y], min[Z])) == Result::Inside )
-		{
-			return Result::Intersect;
-		}
-
-		return Result::Outside;
-	}
-
-	Frustum::Result
-	Frustum::isCollidingWith (float coordX, float coordY, float coordZ, float size) const noexcept
-	{
-		if ( !s_enableFrustumTest )
-		{
-			return Result::Inside;
-		}
-
+		// For each plane, we test the "p-vertex" (the corner closest to the plane).
+		// The p-vertex is chosen based on the plane's normal direction:
+		// - If normal component is positive, use maximum; otherwise use minimum.
+		// If the p-vertex is outside (negative side), the whole AABB is outside.
 		for ( const auto & plane : m_planes )
 		{
-			const auto & normal = plane.normal();
+			// Compute the p-vertex (positive vertex) based on plane normal
+			Vector< 3, float > pVertex;
+			pVertex[X] = plane.normal()[X] >= 0.0F ? aabb.maximum()[X] : aabb.minimum()[X];
+			pVertex[Y] = plane.normal()[Y] >= 0.0F ? aabb.maximum()[Y] : aabb.minimum()[Y];
+			pVertex[Z] = plane.normal()[Z] >= 0.0F ? aabb.maximum()[Z] : aabb.minimum()[Z];
 
-			const auto posX = normal[X] * (coordX + size);
-			const auto negX = normal[X] * (coordX - size);
-
-			const auto posY = normal[Y] * (coordY + size);
-			const auto negY = normal[Y] * (coordY - size);
-
-			const auto posZ = normal[Z] * (coordZ + size);
-			const auto negZ = normal[Z] * (coordZ - size);
-
-			if ( negX +  negY +  negZ + plane.distance() > 0.0F )
+			// If the p-vertex is on the negative side of the plane, the AABB is outside
+			if ( plane.getSignedDistanceTo(pVertex) < 0.0F )
 			{
-				continue;
+				return false;
 			}
-
-			if ( posX +  negY +  negZ + plane.distance() > 0.0F )
-			{
-				continue;
-			}
-
-			if ( negX +  posY +  negZ + plane.distance() > 0.0F )
-			{
-				continue;
-			}
-
-			if ( posX +  posY +  negZ + plane.distance() > 0.0F )
-			{
-				continue;
-			}
-
-			if ( negX +  negY +  posZ + plane.distance() > 0.0F )
-			{
-				continue;
-			}
-
-			if ( posX +  negY +  posZ + plane.distance() > 0.0F )
-			{
-				continue;
-			}
-
-			if ( negX +  posY +  posZ + plane.distance() > 0.0F )
-			{
-				continue;
-			}
-
-			if ( posX +  posY +  posZ + plane.distance() > 0.0F )
-			{
-				continue;
-			}
-
-			return Result::Outside;
 		}
 
-		return Result::Inside;
-	}
-
-	std::ostream &
-	operator<< (std::ostream & out, const Frustum & obj)
-	{
-		return out << "Frustum data :" "\n"
-			"Right " << obj.m_planes[Frustum::Right] <<
-			"Left " << obj.m_planes[Frustum::Left] <<
-			"Bottom " << obj.m_planes[Frustum::Bottom] <<
-			"Top " << obj.m_planes[Frustum::Top] <<
-			"Far " << obj.m_planes[Frustum::Far] <<
-			"Near " << obj.m_planes[Frustum::Near];
-	}
-
-	std::string
-	to_string (const Frustum & obj)
-	{
-		std::stringstream output;
-
-		output << obj;
-
-		return output.str();
+		return true;
 	}
 }

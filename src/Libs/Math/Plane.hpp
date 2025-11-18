@@ -99,13 +99,24 @@ namespace EmEn::Libs::Math
 			 */
 			[[nodiscard]]
 			data_t
-			getDistanceBetween (const Vector< 3, data_t > & point) const noexcept
+			getDistanceTo (const Vector< 3, data_t > & point) const noexcept
 			{
-				return std::abs(m_normal.dotProduct(point) + m_distance);
+				return std::abs(Vector< 3, data_t >::dotProduct(m_normal, point) + m_distance);
 			}
 
 			/**
-			 * @brief Returns the normal to the plane.
+			 * @brief Returns the signed distance from a point to the plane.
+			 * @param point A reference to a vector.
+			 * @return data_t Positive if point is on the side of the normal, negative otherwise.
+			 */
+			[[nodiscard]]
+			data_t
+			getSignedDistanceTo (const Vector< 3, data_t > & point) const noexcept
+			{
+				return Vector< 3, data_t >::dotProduct(m_normal, point) + m_distance;
+			}
+
+			/** @brief Returns the normal to the plane.
 			 * @return const Vector< 3, data_t > &
 			 */
 			[[nodiscard]]

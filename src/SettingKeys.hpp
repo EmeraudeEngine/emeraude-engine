@@ -206,10 +206,10 @@ namespace EmEn
 			constexpr auto DefaultVideoEnableMLAA{false};
 
 		/* Graphics */
-		constexpr auto GraphicsMaxViewableDistanceKey{"Core/Graphics/MaxViewableDistance"};
-		constexpr auto DefaultGraphicsMaxViewableDistance{100000.0F}; /* NOTE: 100 Km */
+		constexpr auto GraphicsViewDistanceKey{"Core/Graphics/ViewDistance"};
+		constexpr auto DefaultGraphicsViewDistance{10000.0F}; /* NOTE: 10km */
 		constexpr auto GraphicsFieldOfViewKey{"Core/Graphics/FieldOfView"};
-		constexpr auto DefaultGraphicsFieldOfView{85.0F}; /* NOTE: 100 Km */
+		constexpr auto DefaultGraphicsFieldOfView{85.0F}; /* NOTE: 85° */
 
 			/* Texture */
 			constexpr auto GraphicsTextureMagFilteringKey{"Core/Graphics/Texture/MagFilter"};
@@ -220,6 +220,8 @@ namespace EmEn
 			constexpr auto DefaultGraphicsTextureMipMappingLevels{1};
 			constexpr auto GraphicsTextureAnisotropyLevelsKey{"Core/Graphics/Texture/AnisotropyLevels"};
 			constexpr auto DefaultGraphicsTextureAnisotropy{0};
+			constexpr auto GraphicsTextureViewDistanceKey{"Core/Graphics/Texture/ViewDistance"};
+			constexpr auto DefaultGraphicsTextureViewDistance{5000.0F}; /* NOTE: 5km */
 
 			/* Shadow Mapping */
 			constexpr auto GraphicsShadowMappingEnabledKey{"Core/Graphics/ShadowMapping/Enabled"};
@@ -230,8 +232,8 @@ namespace EmEn
 			constexpr auto DefaultGraphicsShadowMappingPCFSample{0U};
 			constexpr auto GraphicsShadowMappingPCFRadiusKey{"Core/Graphics/ShadowMapping/PCFRadius"};
 			constexpr auto DefaultGraphicsShadowMappingPCFRadius{1.0F};
-			constexpr auto GraphicsShadowMappingMaxDistanceKey{"Core/Graphics/ShadowMapping/MaxDistance"};
-			constexpr auto DefaultGraphicsShadowMappingMaxDistance{100.0F};
+			constexpr auto GraphicsShadowMappingViewDistanceKey{"Core/Graphics/ShadowMapping/ViewDistance"};
+			constexpr auto DefaultGraphicsShadowMappingViewDistance{5000.0F}; /* NOTE: 5km */
 
 			/* Shader */
 			constexpr auto ShowSourceCodeKey{"Core/Graphics/Shader/ShowSourceCode"}; // Logs

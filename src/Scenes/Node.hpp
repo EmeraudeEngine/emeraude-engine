@@ -277,19 +277,24 @@ namespace EmEn::Scenes
 			[[nodiscard]]
 			Libs::Math::Space3D::Sphere< float > getWorldBoundingSphere () const noexcept override;
 
-			/** @copydoc EmEn::Scenes::LocatableInterface::enableSphereCollision(bool) */
-			void
-			enableSphereCollision (bool state) noexcept override
-			{
-				this->setFlag(SphereCollisionEnabled, state);
-			}
-
-			/** @copydoc EmEn::Scenes::LocatableInterface::sphereCollisionIsEnabled() const */
+			/** @copydoc EmEn::Scenes::LocatableInterface::isVisibleTo(const Graphics::Frustum &) const */
 			[[nodiscard]]
 			bool
-			sphereCollisionIsEnabled () const noexcept override
+			isVisibleTo (const Graphics::Frustum & frustum) const noexcept override
 			{
-				return this->isFlagEnabled(SphereCollisionEnabled);
+				switch ( this->collisionDetectionModel() )
+				{
+					case CollisionDetectionModel::Point :
+						return frustum.isSeeing(this->getWorldPosition());
+
+					case CollisionDetectionModel::Sphere :
+						return frustum.isSeeing(this->getWorldBoundingSphere());
+
+					case CollisionDetectionModel::AABB :
+						return frustum.isSeeing(this->getWorldBoundingBox());
+				}
+
+				return true;
 			}
 
 			/**
@@ -587,23 +592,6 @@ namespace EmEn::Scenes
 			 * @return void
 			 */
 			void trimTree () noexcept;
-
-			/**
-			 * @brief Checks is this node is visible to frustum.
-			 * @param frustum The frustum where the node is tested.
-			 * @return bool
-			 */
-			[[nodiscard]]
-			bool
-			isVisible (const Graphics::Frustum & frustum) const noexcept
-			{
-				if ( this->sphereCollisionIsEnabled() )
-				{
-					return frustum.isCollidingWith(this->getWorldBoundingSphere()) != Graphics::Frustum::Result::Outside;
-				}
-
-				return frustum.isCollidingWith(this->getWorldBoundingBox()) != Graphics::Frustum::Result::Outside;
-			}
 
 			/**
 			 * @brief Speeds up the node forward. This is a shortcut.

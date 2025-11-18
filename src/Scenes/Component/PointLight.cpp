@@ -154,7 +154,7 @@ namespace EmEn::Scenes::Component
 		if ( const auto resolution = this->shadowMapResolution(); resolution > 0 )
 		{
 			/* [VULKAN-SHADOW] TODO: Reuse shadow maps + remove it from console on failure */
-			m_shadowMap = scene.createRenderToCubicShadowMap(this->name() + ShadowMapName, resolution, this->isOrthographicProjection());
+			m_shadowMap = scene.createRenderToCubicShadowMap(this->name() + ShadowMapName, resolution, this->getDistanceOrFar(), this->isOrthographicProjection());
 
 			if ( m_shadowMap != nullptr )
 			{

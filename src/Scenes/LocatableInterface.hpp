@@ -31,8 +31,23 @@
 #include "Libs/Math/Space3D/AACuboid.hpp"
 #include "Libs/Math/Space3D/Sphere.hpp"
 
+namespace EmEn::Graphics
+{
+	class Frustum;
+}
+
 namespace EmEn::Scenes
 {
+	/**
+	 * @brief Type of collision detection.
+	 */
+	enum class CollisionDetectionModel : uint8_t
+	{
+		Point,
+		Sphere,
+		AABB
+	};
+
 	/**
 	 * @brief The LocatableInterface class is used to locate something in the 3D world and set its coordinates.
 	 */
@@ -272,17 +287,25 @@ namespace EmEn::Scenes
 			virtual Libs::Math::Space3D::Sphere< float > getWorldBoundingSphere () const noexcept = 0;
 
 			/**
-			 * @brief Enables the sphere collision simplification.
+			 * @brief Sets how to detect collisions with this location.
 			 * @return state The state.
 			 */
-			virtual void enableSphereCollision (bool state) noexcept = 0;
+			virtual void setCollisionDetectionModel (CollisionDetectionModel model) noexcept = 0;
 
 			/**
-			 * @brief Returns whether the sphere collision is enabled or not.
+			 * @brief Returns how collisions are detected by this location.
+			 * @return CollisionDetectionModel
+			 */
+			[[nodiscard]]
+			virtual CollisionDetectionModel collisionDetectionModel () const noexcept = 0;
+
+			/**
+			 * @brief Returns whether this metaobject is inside the frustum.
+			 * @param frustum A reference to a render-target frustum.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			virtual bool sphereCollisionIsEnabled () const noexcept = 0;
+			virtual bool isVisibleTo (const Graphics::Frustum & frustum) const noexcept = 0;
 
 		protected:
 

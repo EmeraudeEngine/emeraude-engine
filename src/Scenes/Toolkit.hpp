@@ -439,7 +439,7 @@ namespace EmEn::Scenes
 					return {};
 				}
 
-				const auto distance = m_settings.getOrSetDefault< float >(GraphicsMaxViewableDistanceKey, DefaultGraphicsMaxViewableDistance);
+				const auto distance = m_settings.getOrSetDefault< float >(GraphicsViewDistanceKey, DefaultGraphicsViewDistance);
 
 				/* Create the camera component. */
 				auto component = entity->newCamera(true, primaryDevice, entityName);
@@ -865,7 +865,8 @@ namespace EmEn::Scenes
 
 				if ( entity.isValid() && enablePhysicalProperties )
 				{
-					entity.entity()->enableSphereCollision(true);
+					entity.entity()->setCollisionDetectionModel(CollisionDetectionModel::Sphere);
+
 					/* FIXME: The bounding sphere is incorrectly computed from the geometry! */
 					entity.entity()->overrideBoundingPrimitives(
 						Space3D::AACuboid{radius},

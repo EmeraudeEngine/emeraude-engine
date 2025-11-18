@@ -315,7 +315,7 @@ namespace EmEn::Scenes
 	}
 
 	std::shared_ptr< RenderTarget::View< ViewMatrices2DUBO > >
-	Scene::createRenderToView (const std::string & name, uint32_t width, uint32_t height, const FramebufferPrecisions & precisions, bool isOrthographicProjection, bool primaryDevice) noexcept
+	Scene::createRenderToView (const std::string & name, uint32_t width, uint32_t height, const FramebufferPrecisions & precisions, float viewDistance, bool isOrthographicProjection, bool primaryDevice) noexcept
 	{
 		const std::lock_guard< std::mutex > lock{m_renderToViewAccess};
 
@@ -326,8 +326,9 @@ namespace EmEn::Scenes
 			return {};
 		}
 
-		/* Create the render target. */
-		auto renderTarget = std::make_shared< RenderTarget::View< ViewMatrices2DUBO > >(name, width, height, precisions, isOrthographicProjection);
+		/* Create the render target.
+		 * TODO: Get the view distance value from settings. */
+		auto renderTarget = std::make_shared< RenderTarget::View< ViewMatrices2DUBO > >(name, width, height, precisions, viewDistance, isOrthographicProjection);
 
 		if ( !renderTarget->createRenderTarget(m_AVConsoleManager.graphicsRenderer()) )
 		{
@@ -349,7 +350,7 @@ namespace EmEn::Scenes
 	}
 
 	std::shared_ptr< RenderTarget::View< ViewMatrices3DUBO > >
-	Scene::createRenderToCubicView (const std::string & name, uint32_t size, const FramebufferPrecisions & precisions, bool isOrthographicProjection, bool primaryDevice) noexcept
+	Scene::createRenderToCubicView (const std::string & name, uint32_t size, const FramebufferPrecisions & precisions, float viewDistance, bool isOrthographicProjection, bool primaryDevice) noexcept
 	{
 		const std::lock_guard< std::mutex > lock{m_renderToViewAccess};
 
@@ -361,8 +362,9 @@ namespace EmEn::Scenes
 			return {};
 		}
 
-		/* Create the render target. */
-		auto renderTarget = std::make_shared< RenderTarget::View< ViewMatrices3DUBO > >(name, size, precisions, isOrthographicProjection);
+		/* Create the render target.
+		 * TODO: Get the view distance value from settings. */
+		auto renderTarget = std::make_shared< RenderTarget::View< ViewMatrices3DUBO > >(name, size, precisions, viewDistance, isOrthographicProjection);
 
 		if ( !renderTarget->createRenderTarget(m_AVConsoleManager.graphicsRenderer()) )
 		{
@@ -384,7 +386,7 @@ namespace EmEn::Scenes
 	}
 
 	std::shared_ptr< RenderTarget::Texture< ViewMatrices2DUBO > >
-	Scene::createRenderToTexture2D (const std::string & name, uint32_t width, uint32_t height, uint32_t colorCount, bool isOrthographicProjection) noexcept
+	Scene::createRenderToTexture2D (const std::string & name, uint32_t width, uint32_t height, uint32_t colorCount, float viewDistance, bool isOrthographicProjection) noexcept
 	{
 		const std::lock_guard< std::mutex > lock{m_renderToTextureAccess};
 
@@ -397,8 +399,9 @@ namespace EmEn::Scenes
 			return {};
 		}
 
-		/* Create the render target. */
-		auto renderTarget = std::make_shared< RenderTarget::Texture< ViewMatrices2DUBO > >(name, width, height, colorCount, isOrthographicProjection);
+		/* Create the render target.
+		 * TODO: Get the view distance value from settings. */
+		auto renderTarget = std::make_shared< RenderTarget::Texture< ViewMatrices2DUBO > >(name, width, height, colorCount, viewDistance, isOrthographicProjection);
 
 		if ( !renderTarget->createRenderTarget(m_AVConsoleManager.graphicsRenderer()) )
 		{
@@ -420,7 +423,7 @@ namespace EmEn::Scenes
 	}
 
 	std::shared_ptr< RenderTarget::Texture< ViewMatrices3DUBO > >
-	Scene::createRenderToCubemap (const std::string & name, uint32_t size, uint32_t colorCount, bool isOrthographicProjection) noexcept
+	Scene::createRenderToCubemap (const std::string & name, uint32_t size, uint32_t colorCount, float viewDistance, bool isOrthographicProjection) noexcept
 	{
 		const std::lock_guard< std::mutex > lock{m_renderToTextureAccess};
 
@@ -433,8 +436,9 @@ namespace EmEn::Scenes
 			return {};
 		}
 
-		/* Create the render target. */
-		auto renderTarget = std::make_shared< RenderTarget::Texture< ViewMatrices3DUBO > >(name, size, colorCount, isOrthographicProjection);
+		/* Create the render target.
+		 * TODO: Get the view distance value from settings. */
+		auto renderTarget = std::make_shared< RenderTarget::Texture< ViewMatrices3DUBO > >(name, size, colorCount, viewDistance, isOrthographicProjection);
 
 		if ( !renderTarget->createRenderTarget(m_AVConsoleManager.graphicsRenderer()) )
 		{
@@ -456,7 +460,7 @@ namespace EmEn::Scenes
 	}
 
 	std::shared_ptr< RenderTarget::ShadowMap< ViewMatrices2DUBO > >
-	Scene::createRenderToShadowMap (const std::string & name, uint32_t resolution, bool isOrthographicProjection) noexcept
+	Scene::createRenderToShadowMap (const std::string & name, uint32_t resolution, float viewDistance, bool isOrthographicProjection) noexcept
 	{
 		const std::lock_guard< std::mutex > lock{m_renderToShadowMapAccess};
 
@@ -469,8 +473,9 @@ namespace EmEn::Scenes
 			return {};
 		}
 
-		/* Create the render target. */
-		auto renderTarget = std::make_shared< RenderTarget::ShadowMap< ViewMatrices2DUBO > >(name, resolution, isOrthographicProjection, true);
+		/* Create the render target.
+		 * TODO: Get the view distance value from settings. */
+		auto renderTarget = std::make_shared< RenderTarget::ShadowMap< ViewMatrices2DUBO > >(name, resolution, viewDistance, isOrthographicProjection, true);
 
 		if ( !renderTarget->createRenderTarget(m_AVConsoleManager.graphicsRenderer()) )
 		{
@@ -492,7 +497,7 @@ namespace EmEn::Scenes
 	}
 
 	std::shared_ptr< RenderTarget::ShadowMap< ViewMatrices3DUBO > >
-	Scene::createRenderToCubicShadowMap (const std::string & name, uint32_t resolution, bool isOrthographicProjection) noexcept
+	Scene::createRenderToCubicShadowMap (const std::string & name, uint32_t resolution, float viewDistance, bool isOrthographicProjection) noexcept
 	{
 		const std::lock_guard< std::mutex > lock{m_renderToShadowMapAccess};
 
@@ -506,7 +511,7 @@ namespace EmEn::Scenes
 		}
 
 		/* Create the render target. */
-		auto renderTarget = std::make_shared< RenderTarget::ShadowMap< ViewMatrices3DUBO > >(name, resolution, isOrthographicProjection);
+		auto renderTarget = std::make_shared< RenderTarget::ShadowMap< ViewMatrices3DUBO > >(name, resolution, viewDistance, isOrthographicProjection);
 
 		if ( !renderTarget->createRenderTarget(m_AVConsoleManager.graphicsRenderer()) )
 		{
@@ -829,7 +834,7 @@ namespace EmEn::Scenes
 				/* Check collision against scene boundaries. */
 				if ( !entity->isSimulationPaused() )
 				{
-					if ( entity->sphereCollisionIsEnabled() )
+					if ( entity->collisionDetectionModel() == CollisionDetectionModel::Sphere )
 					{
 						/* [PHYSICS-NEW-SYSTEM] Pass manifolds vector for boundary collision handling. */
 						this->clipWithBoundingSphere(entity, manifolds);
@@ -1631,7 +1636,7 @@ namespace EmEn::Scenes
 #endif
 
 	void
-	Scene::insertIntoShadowCastingRenderList (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const std::shared_ptr< RenderableInstance::Abstract > & renderableInstance, const CartesianFrame< float > * worldCoordinates, float distance) noexcept
+	Scene::insertIntoShadowCastingRenderList (const std::shared_ptr< RenderableInstance::Abstract > & renderableInstance, const CartesianFrame< float > * worldCoordinates, float distance) noexcept
 	{
 		/* This is a raw pointer to the renderable interface. */
 		const auto * renderable = renderableInstance->renderable();
@@ -1665,7 +1670,7 @@ namespace EmEn::Scenes
 	}
 
 	void
-	Scene::insertIntoRenderLists (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const std::shared_ptr< RenderableInstance::Abstract > & renderableInstance, const CartesianFrame< float > * worldCoordinates, float distance) noexcept
+	Scene::insertIntoRenderLists (const std::shared_ptr< RenderableInstance::Abstract > & renderableInstance, const CartesianFrame< float > * worldCoordinates, float distance) noexcept
 	{
 		/* This is a raw pointer to the renderable interface. */
 		const auto * renderable = renderableInstance->renderable();
@@ -1722,24 +1727,50 @@ namespace EmEn::Scenes
 	}
 
 	bool
+	Scene::checkRenderableInstanceForShadowCasting (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const std::shared_ptr< RenderableInstance::Abstract > & renderableInstance) const noexcept
+	{
+		/* Check whether the renderable instance is ready for shadow casting. */
+		if ( renderableInstance->isReadyToCastShadows(renderTarget) )
+		{
+			return false; // Render
+		}
+
+		/* If it still unloaded. */
+		if ( !renderableInstance->renderable()->isReadyForInstantiation() )
+		{
+			return true; // Continue
+		}
+
+		if ( this->getRenderableInstanceReadyForShadowCasting(renderableInstance, renderTarget) )
+		{
+			return false; // Render
+		}
+
+		/* If the object cannot be loaded, mark it as broken! */
+		renderableInstance->setBroken("Unable to get ready for shadow casting !");
+
+		return true; // Continue
+	}
+
+	bool
 	Scene::populateShadowCastingRenderList (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, uint32_t readStateIndex) noexcept
 	{
-		/* FIXME: TODO integrate the max viewable distance and the frustum culling. */
-
 		/* NOTE: Clean the render list before. */
 		m_renderLists[Shadows].clear();
 
 		/* NOTE: The camera position doesn't move during calculation. */
 		const auto & cameraPosition = renderTarget->viewMatrices().position();
+		const auto & frustum = renderTarget->viewMatrices().frustum(0);
+		const auto viewDistance = renderTarget->viewDistance();
 
-		for ( const auto & visualComponent : m_sceneVisualComponents )
+		for ( const auto & component : m_sceneVisualComponents )
 		{
-			if ( visualComponent == nullptr )
+			if ( component == nullptr )
 			{
 				continue;
 			}
 
-			const auto renderableInstance = visualComponent->getRenderableInstance();
+			const auto renderableInstance = component->getRenderableInstance();
 
 			if ( renderableInstance == nullptr )
 			{
@@ -1751,7 +1782,7 @@ namespace EmEn::Scenes
 				continue;
 			}
 
-			this->insertIntoShadowCastingRenderList(renderTarget, renderableInstance, nullptr, 0.0F);
+			this->insertIntoShadowCastingRenderList(renderableInstance, nullptr, 0.0F);
 		}
 
 		/* Sorting renderable objects from scene static entities. */
@@ -1787,7 +1818,15 @@ namespace EmEn::Scenes
 						continue;
 					}
 
-					this->insertIntoShadowCastingRenderList(renderTarget, renderableInstance, &worldCoordinates, Vector< 3, float >::distance(cameraPosition, worldCoordinates.position()));
+					/* Render-target distance check and frustum culling check. */
+					const auto distance = Vector< 3, float >::distance(cameraPosition, worldCoordinates.position());
+
+					if ( distance > viewDistance || !staticEntity->isVisibleTo(frustum) )
+					{
+						continue;
+					}
+
+					this->insertIntoShadowCastingRenderList(renderableInstance, &worldCoordinates, distance);
 				}
 			}
 		}
@@ -1830,7 +1869,15 @@ namespace EmEn::Scenes
 						continue;
 					}
 
-					this->insertIntoShadowCastingRenderList(renderTarget, renderableInstance, &worldCoordinates, Vector< 3, float >::distance(cameraPosition, worldCoordinates.position()));
+					/* Render-target distance check and frustum culling check. */
+					const auto distance = Vector< 3, float >::distance(cameraPosition, worldCoordinates.position());
+
+					if ( distance > viewDistance || !node->isVisibleTo(frustum) )
+					{
+						continue;
+					}
+
+					this->insertIntoShadowCastingRenderList(renderableInstance, &worldCoordinates, distance);
 				}
 			}
 		}
@@ -1840,10 +1887,34 @@ namespace EmEn::Scenes
 	}
 
 	bool
+	Scene::checkRenderableInstanceForRendering (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const std::shared_ptr< RenderableInstance::Abstract > & renderableInstance) const noexcept
+	{
+		/* Check whether the renderable instance is ready for shadow casting. */
+		if ( renderableInstance->isReadyToRender(renderTarget) )
+		{
+			return false; // Render
+		}
+
+		/* If it still unloaded. */
+		if ( !renderableInstance->renderable()->isReadyForInstantiation() )
+		{
+			return true; // Continue
+		}
+
+		if ( this->getRenderableInstanceReadyForRendering(renderableInstance, renderTarget) )
+		{
+			return false; // Render
+		}
+
+		/* If the object cannot be loaded, mark it as broken! */
+		renderableInstance->setBroken("Unable to get ready for rendering !");
+
+		return true; // Continue
+	}
+
+	bool
 	Scene::populateRenderLists (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, uint32_t readStateIndex) noexcept
 	{
-		/* FIXME: TODO integrate the max viewable distance and the frustum culling. */
-
 		/* NOTE: Clean render lists before. */
 		m_renderLists[Opaque].clear();
 		m_renderLists[Translucent].clear();
@@ -1852,15 +1923,17 @@ namespace EmEn::Scenes
 
 		/* NOTE: The camera position doesn't move during calculation. */
 		const auto & cameraPosition = renderTarget->viewMatrices().position();
+		const auto & frustum = renderTarget->viewMatrices().frustum(0);
+		const auto viewDistance = renderTarget->viewDistance();
 
-		for ( const auto & visualComponent : m_sceneVisualComponents )
+		for ( const auto & component : m_sceneVisualComponents )
 		{
-			if ( visualComponent == nullptr )
+			if ( component == nullptr )
 			{
 				continue;
 			}
 
-			const auto renderableInstance = visualComponent->getRenderableInstance();
+			const auto renderableInstance = component->getRenderableInstance();
 
 			if ( renderableInstance == nullptr )
 			{
@@ -1872,7 +1945,9 @@ namespace EmEn::Scenes
 				continue;
 			}
 
-			this->insertIntoRenderLists(renderTarget, renderableInstance, nullptr, 0.0F);
+			/* NOTE: Scene visual is the skybox or the ground, frustum culling step is not relevant here. */
+
+			this->insertIntoRenderLists(renderableInstance, nullptr, 0.0F);
 		}
 
 		/* Sorting renderable objects from scene static entities. */
@@ -1908,7 +1983,15 @@ namespace EmEn::Scenes
 						continue;
 					}
 
-					this->insertIntoRenderLists(renderTarget, renderableInstance, &worldCoordinates, Vector< 3, float >::distance(cameraPosition, worldCoordinates.position()));
+					/* Render-target distance check and frustum culling check. */
+					const auto distance = Vector< 3, float >::distance(cameraPosition, worldCoordinates.position());
+
+					if ( distance > viewDistance || !staticEntity->isVisibleTo(frustum) )
+					{
+						continue;
+					}
+
+					this->insertIntoRenderLists(renderableInstance, &worldCoordinates, distance);
 				}
 			}
 		}
@@ -1951,7 +2034,15 @@ namespace EmEn::Scenes
 						continue;
 					}
 
-					this->insertIntoRenderLists(renderTarget, renderableInstance, &worldCoordinates, Vector< 3, float >::distance(cameraPosition, worldCoordinates.position()));
+					/* Render-target distance check and frustum culling check. */
+					const auto distance = Vector< 3, float >::distance(cameraPosition, worldCoordinates.position());
+
+					if ( distance > viewDistance || !node->isVisibleTo(frustum) )
+					{
+						continue;
+					}
+
+					this->insertIntoRenderLists(renderableInstance, &worldCoordinates, distance);
 				}
 			}
 		}

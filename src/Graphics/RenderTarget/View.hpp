@@ -62,13 +62,15 @@ namespace EmEn::Graphics::RenderTarget
 			 * @param width The width of the view.
 			 * @param height The height of the view.
 			 * @param precisions A structure to describe framebuffer precisions.
+			 * @param viewDistance The max viewable distance in meters.
 			 * @param isOrthographicProjection Set orthographic projection instead of perspective.
 			 */
-			View (const std::string & name, uint32_t width, uint32_t height, const FramebufferPrecisions & precisions, bool isOrthographicProjection) noexcept requires (std::is_same_v< view_matrices_t, ViewMatrices2DUBO >)
+			View (const std::string & name, uint32_t width, uint32_t height, const FramebufferPrecisions & precisions, float viewDistance, bool isOrthographicProjection) noexcept requires (std::is_same_v< view_matrices_t, ViewMatrices2DUBO >)
 				: Abstract{
 					name,
 					precisions,
 					{width, height, 1U},
+					viewDistance,
 					RenderTargetType::View,
 					AVConsole::ConnexionType::Both,
 					isOrthographicProjection,
@@ -83,13 +85,15 @@ namespace EmEn::Graphics::RenderTarget
 			 * @param name A reference to a string for the name of the video device.
 			 * @param size The size of the cubemap.
 			 * @param precisions A structure to describe framebuffer precisions.
+			 * @param viewDistance The max viewable distance in meters.
 			 * @param isOrthographicProjection Set orthographic projection instead of perspective.
 			 */
-			View (const std::string & name, uint32_t size, const FramebufferPrecisions & precisions, bool isOrthographicProjection) noexcept requires (std::is_same_v< view_matrices_t, ViewMatrices3DUBO >)
+			View (const std::string & name, uint32_t size, const FramebufferPrecisions & precisions, float viewDistance, bool isOrthographicProjection) noexcept requires (std::is_same_v< view_matrices_t, ViewMatrices3DUBO >)
 				: Abstract{
 					name,
 					precisions,
 					{size, size, 1},
+					viewDistance,
 					RenderTargetType::CubicView,
 					AVConsole::ConnexionType::Both,
 					isOrthographicProjection,
@@ -115,6 +119,8 @@ namespace EmEn::Graphics::RenderTarget
 				{
 					m_viewMatrices.updateOrthographicViewProperties(width, height, fovOrNear, distanceOrFar);
 				}
+
+				this->setViewDistance(distanceOrFar);
 			}
 
 			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::aspectRatio() */
@@ -406,7 +412,7 @@ namespace EmEn::Graphics::RenderTarget
 						0,
 						1,
 						1,
-						device->findSampleCount(this->precisions().samples())
+						Vulkan::Device::getSampleCountFlag(this->precisions().samples())
 					);
 					m_colorImage->setIdentifier(ClassId, this->id(), "Image");
 

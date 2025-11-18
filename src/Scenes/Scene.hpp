@@ -281,21 +281,23 @@ namespace EmEn::Scenes
 			 * @brief Creates a render to a shadow map (Texture2D) device.
 			 * @param name A reference to a string to name the virtual video device.
 			 * @param resolution The resolution of the shadow map.
+			 * @param viewDistance The max viewable distance of the render target in meters.
 			 * @param isOrthographicProjection Set an orthographic projection instead of perspective.
 			 * @return std::shared_ptr< Graphics::RenderTarget::ShadowMap< Graphics::ViewMatrices2DUBO > >
 			 */
 			[[nodiscard]]
-			std::shared_ptr< Graphics::RenderTarget::ShadowMap< Graphics::ViewMatrices2DUBO > > createRenderToShadowMap (const std::string & name, uint32_t resolution, bool isOrthographicProjection) noexcept;
+			std::shared_ptr< Graphics::RenderTarget::ShadowMap< Graphics::ViewMatrices2DUBO > > createRenderToShadowMap (const std::string & name, uint32_t resolution, float viewDistance, bool isOrthographicProjection) noexcept;
 
 			/**
 			 * @brief Creates a render to a cubic shadow map (Cubemap) device.
 			 * @param name A reference to a string to name the virtual video device.
 			 * @param resolution The resolution of the shadow map.
+			 * @param viewDistance The max viewable distance of the render target in meters.
 			 * @param isOrthographicProjection Set an orthographic projection instead of perspective.
 			 * @return std::shared_ptr< Graphics::RenderTarget::ShadowMap< Graphics::ViewMatrices3DUBO > >
 			 */
 			[[nodiscard]]
-			std::shared_ptr< Graphics::RenderTarget::ShadowMap< Graphics::ViewMatrices3DUBO > > createRenderToCubicShadowMap (const std::string & name, uint32_t resolution, bool isOrthographicProjection) noexcept;
+			std::shared_ptr< Graphics::RenderTarget::ShadowMap< Graphics::ViewMatrices3DUBO > > createRenderToCubicShadowMap (const std::string & name, uint32_t resolution, float viewDistance, bool isOrthographicProjection) noexcept;
 
 			/**
 			 * @brief Creates a render to a texture 2D device.
@@ -303,22 +305,24 @@ namespace EmEn::Scenes
 			 * @param width The width of the surface.
 			 * @param height The height of the surface.
 			 * @param colorCount The number of color channels desired for the texture2Ds.
+			 * @param viewDistance The max viewable distance of the render target in meters.
 			 * @param isOrthographicProjection Set an orthographic projection instead of perspective.
 			 * @return std::shared_ptr< Graphics::RenderTarget::Texture< Graphics::ViewMatrices2DUBO > >
 			 */
 			[[nodiscard]]
-			std::shared_ptr< Graphics::RenderTarget::Texture< Graphics::ViewMatrices2DUBO > > createRenderToTexture2D (const std::string & name, uint32_t width, uint32_t height, uint32_t colorCount, bool isOrthographicProjection) noexcept;
+			std::shared_ptr< Graphics::RenderTarget::Texture< Graphics::ViewMatrices2DUBO > > createRenderToTexture2D (const std::string & name, uint32_t width, uint32_t height, uint32_t colorCount, float viewDistance, bool isOrthographicProjection) noexcept;
 
 			/**
 			 * @brief Creates a render to cubemap device.
 			 * @param name A reference to a string to name the virtual video device.
 			 * @param size The size of the cubemap.
 			 * @param colorCount The number of color channels desired for the texture2Ds.
+			 * @param viewDistance The max viewable distance of the render target in meters.
 			 * @param isOrthographicProjection Set an orthographic projection instead of perspective.
 			 * @return std::shared_ptr< Graphics::RenderTarget::Texture::Texture< Graphics::ViewMatrices3DUBO > >
 			 */
 			[[nodiscard]]
-			std::shared_ptr< Graphics::RenderTarget::Texture< Graphics::ViewMatrices3DUBO > > createRenderToCubemap (const std::string & name, uint32_t size, uint32_t colorCount, bool isOrthographicProjection) noexcept;
+			std::shared_ptr< Graphics::RenderTarget::Texture< Graphics::ViewMatrices3DUBO > > createRenderToCubemap (const std::string & name, uint32_t size, uint32_t colorCount, float viewDistance, bool isOrthographicProjection) noexcept;
 
 			/**
 			 * @brief Creates a render-to-view (Texture 2D) device.
@@ -326,24 +330,26 @@ namespace EmEn::Scenes
 			 * @param width The width of the surface.
 			 * @param height The height of the surface.
 			 * @param precisions A reference to a framebuffer precisions structure.
+			 * @param viewDistance The max viewable distance of the render target in meters.
 			 * @param isOrthographicProjection Set an orthographic projection instead of perspective.
 			 * @param primaryDevice Set the device as the primary output. Default false.
 			 * @return std::shared_ptr< Graphics::RenderTarget::View< Graphics::ViewMatrices2DUBO > >
 			 */
 			[[nodiscard]]
-			std::shared_ptr< Graphics::RenderTarget::View< Graphics::ViewMatrices2DUBO > > createRenderToView (const std::string & name, uint32_t width, uint32_t height, const Graphics::FramebufferPrecisions & precisions, bool isOrthographicProjection, bool primaryDevice = false) noexcept;
+			std::shared_ptr< Graphics::RenderTarget::View< Graphics::ViewMatrices2DUBO > > createRenderToView (const std::string & name, uint32_t width, uint32_t height, const Graphics::FramebufferPrecisions & precisions, float viewDistance, bool isOrthographicProjection, bool primaryDevice = false) noexcept;
 
 			/**
 			 * @brief Creates a render to cubic view (Cubemap) device.
 			 * @param name A reference to a string to name the virtual video device.
 			 * @param size The size of the cubemap.
 			 * @param precisions A reference to a framebuffer precisions structure.
+			 * @param viewDistance The max viewable distance of the render target in meters.
 			 * @param isOrthographicProjection Set an orthographic projection instead of perspective.
 			 * @param primaryDevice Set the device as the primary output. Default false.
 			 * @return std::shared_ptr< Graphics::RenderTarget::View< Graphics::ViewMatrices3DUBO > >
 			 */
 			[[nodiscard]]
-			std::shared_ptr< Graphics::RenderTarget::View< Graphics::ViewMatrices3DUBO > > createRenderToCubicView (const std::string & name, uint32_t size, const Graphics::FramebufferPrecisions & precisions, bool isOrthographicProjection, bool primaryDevice = false) noexcept;
+			std::shared_ptr< Graphics::RenderTarget::View< Graphics::ViewMatrices3DUBO > > createRenderToCubicView (const std::string & name, uint32_t size, const Graphics::FramebufferPrecisions & precisions, float viewDistance, bool isOrthographicProjection, bool primaryDevice = false) noexcept;
 
 			/**
 			 * @brief Creates a static entity in the scene.
@@ -1021,31 +1027,7 @@ namespace EmEn::Scenes
 			 * @return bool. True to ignore this renderable instance.
 			 */
 			[[nodiscard]]
-			bool
-			checkRenderableInstanceForShadowCasting (const std::shared_ptr< Graphics::RenderTarget::Abstract > & renderTarget, const std::shared_ptr< Graphics::RenderableInstance::Abstract > & renderableInstance) const noexcept
-			{
-				/* Check whether the renderable instance is ready for shadow casting. */
-				if ( renderableInstance->isReadyToCastShadows(renderTarget) )
-				{
-					return false; // Render
-				}
-
-				/* If it still unloaded. */
-				if ( !renderableInstance->renderable()->isReadyForInstantiation() )
-				{
-					return true; // Continue
-				}
-
-				if ( this->getRenderableInstanceReadyForShadowCasting(renderableInstance, renderTarget) )
-				{
-					return false; // Render
-				}
-
-				/* If the object cannot be loaded, mark it as broken! */
-				renderableInstance->setBroken("Unable to get ready for shadow casting !");
-
-				return true; // Continue
-			}
+			bool checkRenderableInstanceForShadowCasting (const std::shared_ptr< Graphics::RenderTarget::Abstract > & renderTarget, const std::shared_ptr< Graphics::RenderableInstance::Abstract > & renderableInstance) const noexcept;
 
 			/**
 			 * @brief Updates the shadow casting render list from the point of view of a light to prepare only the useful data to make a render with it.
@@ -1062,31 +1044,7 @@ namespace EmEn::Scenes
 			 * @return bool. True to ignore this renderable instance.
 			 */
 			[[nodiscard]]
-			bool
-			checkRenderableInstanceForRendering (const std::shared_ptr< Graphics::RenderTarget::Abstract > & renderTarget, const std::shared_ptr< Graphics::RenderableInstance::Abstract > & renderableInstance) const noexcept
-			{
-				/* Check whether the renderable instance is ready for shadow casting. */
-				if ( renderableInstance->isReadyToRender(renderTarget) )
-				{
-					return false; // Render
-				}
-
-				/* If it still unloaded. */
-				if ( !renderableInstance->renderable()->isReadyForInstantiation() )
-				{
-					return true; // Continue
-				}
-
-				if ( this->getRenderableInstanceReadyForRendering(renderableInstance, renderTarget) )
-				{
-					return false; // Render
-				}
-
-				/* If the object cannot be loaded, mark it as broken! */
-				renderableInstance->setBroken("Unable to get ready for rendering !");
-
-				return true; // Continue
-			}
+			bool checkRenderableInstanceForRendering (const std::shared_ptr< Graphics::RenderTarget::Abstract > & renderTarget, const std::shared_ptr< Graphics::RenderableInstance::Abstract > & renderableInstance) const noexcept;
 
 			/**
 			 * @brief Updates the render lists from a point of view of a camera to prepare only the useful data to make a render with it.
@@ -1098,23 +1056,21 @@ namespace EmEn::Scenes
 
 			/**
 			 * @brief Inserts a renderable instance in the render batch list for shadow casting.
-			 * @param renderTarget A reference to the render target smart pointer.
 			 * @param renderableInstance A reference to a renderable instance.
 			 * @param worldCoordinates A pointer to a cartesian frame. A 'nullptr' means origin.
 			 * @param distance The distance from the camera.
 			 * @return void
 			 */
-			void insertIntoShadowCastingRenderList (const std::shared_ptr< Graphics::RenderTarget::Abstract > & renderTarget, const std::shared_ptr< Graphics::RenderableInstance::Abstract > & renderableInstance, const Libs::Math::CartesianFrame< float > * worldCoordinates, float distance) noexcept;
+			void insertIntoShadowCastingRenderList (const std::shared_ptr< Graphics::RenderableInstance::Abstract > & renderableInstance, const Libs::Math::CartesianFrame< float > * worldCoordinates, float distance) noexcept;
 
 			/**
 			 * @brief Inserts a renderable instance in render lists.
-			 * @param renderTarget A reference to the render target smart pointer.
 			 * @param renderableInstance A reference to a renderable instance.
 			 * @param worldCoordinates A pointer to a cartesian frame. A 'nullptr' means origin.
 			 * @param distance The distance from the camera.
 			 * @return void
 			 */
-			void insertIntoRenderLists (const std::shared_ptr< Graphics::RenderTarget::Abstract > & renderTarget, const std::shared_ptr< Graphics::RenderableInstance::Abstract > & renderableInstance, const Libs::Math::CartesianFrame< float > * worldCoordinates, float distance) noexcept;
+			void insertIntoRenderLists (const std::shared_ptr< Graphics::RenderableInstance::Abstract > & renderableInstance, const Libs::Math::CartesianFrame< float > * worldCoordinates, float distance) noexcept;
 
 			/**
 			 * @brief Renders a list of objects Z-sorted that uses lighting.

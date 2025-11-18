@@ -94,7 +94,7 @@ namespace EmEn::Scenes::Component
 			/** @copydoc EmEn::Scenes::Component::Abstract::boundingBox() const */
 			[[nodiscard]]
 			const Libs::Math::Space3D::AACuboid< float > &
-			boundingBox () const noexcept override
+			localBoundingBox () const noexcept override
 			{
 				return m_renderableInstance->renderable()->boundingBox();
 			}
@@ -102,7 +102,7 @@ namespace EmEn::Scenes::Component
 			/** @copydoc EmEn::Scenes::Component::Abstract::boundingSphere() const */
 			[[nodiscard]]
 			const Libs::Math::Space3D::Sphere< float > &
-			boundingSphere () const noexcept override
+			localBoundingSphere () const noexcept override
 			{
 				return m_renderableInstance->renderable()->boundingSphere();
 			}

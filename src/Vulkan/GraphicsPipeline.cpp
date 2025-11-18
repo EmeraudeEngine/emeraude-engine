@@ -349,7 +349,7 @@ namespace EmEn::Vulkan
 		m_multisampleState.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
 		m_multisampleState.pNext = nullptr;
 		m_multisampleState.flags = flags;
-		m_multisampleState.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+		m_multisampleState.rasterizationSamples = Device::getSampleCountFlag(samples);
 		m_multisampleState.sampleShadingEnable = VK_FALSE;
 		m_multisampleState.minSampleShading = 1.0F;
 		m_multisampleState.pSampleMask = nullptr;

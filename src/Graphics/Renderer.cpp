@@ -277,12 +277,13 @@ namespace EmEn::Graphics
 		/* NOTE: Create the swap-chain for presenting images to the screen. */
 		if ( m_windowLess )
 		{
-			/* NOTE: Check for multisampling. */
+			const auto viewDistance = m_primaryServices.settings().getOrSetDefault< float >(GraphicsViewDistanceKey, DefaultGraphicsViewDistance);
 			auto sampleCount = m_primaryServices.settings().getOrSetDefault< uint32_t >(VideoFramebufferSamplesKey, DefaultVideoFramebufferSamples);
 
+			/* NOTE: Check for multisampling. */
 			if ( sampleCount > 1 )
 			{
-				sampleCount = m_device->findSampleCount(sampleCount);
+				sampleCount = m_device->checkMultisampleCount(sampleCount);
 			}
 
 			m_windowLessView = std::make_shared< RenderTarget::View< ViewMatrices2DUBO > >(
@@ -290,6 +291,7 @@ namespace EmEn::Graphics
 				m_window.state().windowWidth,
 				m_window.state().windowHeight,
 				FramebufferPrecisions{8, 8, 8, 8, 24, 0, sampleCount},
+				viewDistance,
 				false
 			);
 
@@ -312,7 +314,7 @@ namespace EmEn::Graphics
 		}
 		else
 		{
-			m_swapChain = std::make_shared< SwapChain >(m_device, *this, m_primaryServices.settings());
+			m_swapChain = std::make_shared< SwapChain >(*this, m_primaryServices.settings());
 			m_swapChain->setIdentifier(ClassId, "Main", "SwapChain");
 
 			if ( !m_swapChain->createOnHardware() )

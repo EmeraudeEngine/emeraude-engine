@@ -325,9 +325,9 @@ namespace EmEn::Scenes::Component
 		
 			Saphir::FramebufferEffectsList m_lensEffects;
 			float m_fov{DefaultGraphicsFieldOfView};
-			float m_distance{DefaultGraphicsMaxViewableDistance};
+			float m_distance{DefaultGraphicsViewDistance};
 			float m_near{0.0F};
-			float m_far{DefaultGraphicsMaxViewableDistance};
+			float m_far{DefaultGraphicsViewDistance};
 	};
 
 	inline

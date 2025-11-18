@@ -135,8 +135,8 @@ namespace EmEn::Scenes
 				if ( !this->isFlagEnabled(BoundingPrimitivesOverridden) )
 				{
 					/* Merge the component local bounding shapes to the scene node local bounding shapes. */
-					m_boundingBox.merge(component->boundingBox());
-					m_boundingSphere.merge(component->boundingSphere());
+					m_boundingBox.merge(component->localBoundingBox());
+					m_boundingSphere.merge(component->localBoundingSphere());
 				}
 			}
 		}

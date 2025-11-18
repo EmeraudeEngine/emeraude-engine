@@ -49,26 +49,24 @@ namespace EmEn::Vulkan
 	using namespace Libs::Math;
 	using namespace Graphics;
 
-	SwapChain::SwapChain (const std::shared_ptr< Device > & device, Renderer & renderer, Settings & settings) noexcept
-		: AbstractDeviceDependentObject{device},
-		Abstract(ClassId, {}, {}, RenderTargetType::View, AVConsole::ConnexionType::Input, false, false),
-		m_renderer{renderer}
+	SwapChain::SwapChain (Renderer & renderer, Settings & settings) noexcept
+		: AbstractDeviceDependentObject{renderer.device()},
+		Abstract{
+			ClassId,
+			{renderer.device(), settings},
+			{},
+			settings.getOrSetDefault< float >(GraphicsViewDistanceKey, DefaultGraphicsViewDistance),
+			RenderTargetType::View,
+			AVConsole::ConnexionType::Input,
+			false,
+			false
+		},
+		m_renderer{renderer},
+		m_showInformation{settings.getOrSetDefault< bool >(VkShowInformationKey, DefaultVkShowInformation)},
+		m_tripleBufferingEnabled{settings.getOrSetDefault< bool >(VideoEnableTripleBufferingKey, DefaultVideoEnableTripleBuffering)},
+		m_VSyncEnabled{settings.getOrSetDefault< bool >(VideoEnableVSyncKey, DefaultVideoEnableVSync)}
 	{
-		m_renderer.window().surface()->update(device);
-
-		/* NOTE: Check for multisampling. */
-		{
-			const auto sampleCount = settings.getOrSetDefault< uint32_t >(VideoFramebufferSamplesKey, DefaultVideoFramebufferSamples);
-
-			if ( sampleCount > 1 )
-			{
-				m_sampleCount = device->findSampleCount(sampleCount);
-			}
-		}
-
-		m_showInformation = settings.getOrSetDefault< bool >(VkShowInformationKey, DefaultVkShowInformation);
-		m_tripleBufferingEnabled = settings.getOrSetDefault< bool >(VideoEnableTripleBufferingKey, DefaultVideoEnableTripleBuffering);
-		m_VSyncEnabled = settings.getOrSetDefault< bool >(VideoEnableVSyncKey, DefaultVideoEnableVSync);
+		m_renderer.window().surface()->update(renderer.device());
 	}
 
 	bool
@@ -97,21 +95,12 @@ namespace EmEn::Vulkan
 		m_createInfo.clipped = VK_TRUE;
 		m_createInfo.oldSwapchain = oldSwapChain;
 
-		const auto result = vkCreateSwapchainKHR(
-			this->device()->handle(),
-			&m_createInfo,
-			nullptr,
-			&m_handle
-		);
+		const auto result = vkCreateSwapchainKHR(this->device()->handle(), &m_createInfo, nullptr, &m_handle);
 
 		/* NOTE: Destroy the previous swap chain if exists. */
 		if ( m_createInfo.oldSwapchain != VK_NULL_HANDLE )
 		{
-			vkDestroySwapchainKHR(
-				this->device()->handle(),
-				m_createInfo.oldSwapchain,
-				nullptr
-			);
+			vkDestroySwapchainKHR(this->device()->handle(), m_createInfo.oldSwapchain, nullptr);
 		}
 
 		if ( result != VK_SUCCESS )
@@ -247,15 +236,68 @@ namespace EmEn::Vulkan
 		for ( const auto & frame : m_frames )
 		{
 			/* Clear the framebuffer. */
-			frame.framebuffer->destroyFromHardware();
+			if ( frame.framebuffer != nullptr )
+			{
+				frame.framebuffer->destroyFromHardware();
+			}
+
+			/* Clear the MSAA specific resources. */
+			if ( this->isMultisamplingEnabled() )
+			{
+				/* Clear MSAA color buffer. */
+				if ( frame.MSAAColorImageView != nullptr )
+				{
+					frame.MSAAColorImageView->destroyFromHardware();
+				}
+
+				if ( frame.MSAAColorImage != nullptr )
+				{
+					frame.MSAAColorImage->destroyFromHardware();
+				}
+
+				/* Clear MSAA depth+stencil buffer. */
+				if ( frame.MSAADepthImageView != nullptr )
+				{
+					frame.MSAADepthImageView->destroyFromHardware();
+				}
+
+				if ( frame.MSAAStencilImageView != nullptr )
+				{
+					frame.MSAAStencilImageView->destroyFromHardware();
+				}
+
+				if ( frame.MSAADepthStencilImage != nullptr )
+				{
+					frame.MSAADepthStencilImage->destroyFromHardware();
+				}
+			}
 
 			/* Clear the color buffer. */
-			frame.colorImageView->destroyFromHardware();
-			frame.colorImage->destroyFromHardware();
+			if ( frame.colorImageView != nullptr )
+			{
+				frame.colorImageView->destroyFromHardware();
+			}
+
+			if ( frame.colorImage != nullptr )
+			{
+				frame.colorImage->destroyFromHardware();
+			}
 
 			/* Clear the depth+stencil buffer. */
-			frame.depthImageView->destroyFromHardware();
-			frame.depthStencilImage->destroyFromHardware();
+			if ( frame.stencilImageView != nullptr )
+			{
+				frame.stencilImageView->destroyFromHardware();
+			}
+
+			if ( frame.depthImageView != nullptr )
+			{
+				frame.depthImageView->destroyFromHardware();
+			}
+
+			if ( frame.depthStencilImage != nullptr )
+			{
+				frame.depthStencilImage->destroyFromHardware();
+			}
 		}
 	}
 
@@ -387,7 +429,7 @@ namespace EmEn::Vulkan
 			const auto identifier = std::format("Frame{}", imageIndex);
 #endif
 
-			/* Create the frame N color buffer, actually only the image view. */
+			/* Create the frame N color buffer (swapchain image, used as resolve target when MSAA is enabled). */
 			if ( !this->createColorBuffer(swapChainImages[imageIndex], frame.colorImage, frame.colorImageView, identifier) )
 			{
 				TraceFatal{ClassId} << "Unable to create the color buffer #" << imageIndex << " !";
@@ -395,17 +437,144 @@ namespace EmEn::Vulkan
 				return false;
 			}
 
+			/* Create MSAA color buffer if multisampling is enabled. */
+			if ( this->isMultisamplingEnabled() )
+			{
+				const auto msaaIdentifier = identifier + "MSAAColorBuffer";
+
+				/* Create MSAA color image. */
+				frame.MSAAColorImage = std::make_shared< Image >(
+					this->device(),
+					VK_IMAGE_TYPE_2D,
+					m_createInfo.imageFormat,
+					VkExtent3D{this->extent().width, this->extent().height, 1},
+					VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT,
+					0,
+					1,
+					1,
+					Device::getSampleCountFlag(this->precisions().samples())
+				);
+				frame.MSAAColorImage->setIdentifier(ClassId, msaaIdentifier, "Image");
+
+				if ( !frame.MSAAColorImage->createOnHardware() )
+				{
+					TraceFatal{ClassId} << "Unable to create MSAA color image #" << imageIndex << " !";
+
+					return false;
+				}
+
+				/* Create MSAA color image view. */
+				const auto & imageCreateInfo = frame.MSAAColorImage->createInfo();
+
+				frame.MSAAColorImageView = std::make_shared< ImageView >(
+					frame.MSAAColorImage,
+					VK_IMAGE_VIEW_TYPE_2D,
+					VkImageSubresourceRange{
+						.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+						.baseMipLevel = 0,
+						.levelCount = imageCreateInfo.mipLevels,
+						.baseArrayLayer = 0,
+						.layerCount = imageCreateInfo.arrayLayers
+					}
+				);
+				frame.MSAAColorImageView->setIdentifier(ClassId, msaaIdentifier, "ImageView");
+
+				if ( !frame.MSAAColorImageView->createOnHardware() )
+				{
+					TraceFatal{ClassId} << "Unable to create MSAA color image view #" << imageIndex << " !";
+
+					return false;
+				}
+			}
+
 			if ( !requestDepthStencilBuffer )
 			{
 				continue;
 			}
 
-			/* Create the frame N depth/stencil buffer. */
+			/* Create the frame N depth/stencil buffer (used as resolve target when MSAA is enabled). */
 			if ( !this->createDepthStencilBuffer(this->device(), frame.depthStencilImage, frame.depthImageView, frame.stencilImageView, identifier) )
 			{
 				TraceFatal{ClassId} << "Unable to create the depth buffer #" << imageIndex << " !";
 
 				return false;
+			}
+
+			/* Create MSAA depth/stencil buffer if multisampling is enabled. */
+			if ( this->isMultisamplingEnabled() )
+			{
+				const auto msaaIdentifier = identifier + "MSAADepthStencilBuffer";
+
+				/* Create MSAA depth/stencil image. */
+				frame.MSAADepthStencilImage = std::make_shared< Image >(
+					this->device(),
+					VK_IMAGE_TYPE_2D,
+					Instance::findDepthStencilFormat(this->device(), this->precisions()),
+					VkExtent3D{this->extent().width, this->extent().height, 1},
+					VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT,
+					0,
+					1,
+					1,
+					Device::getSampleCountFlag(this->precisions().samples())
+				);
+				frame.MSAADepthStencilImage->setIdentifier(ClassId, msaaIdentifier, "Image");
+
+				if ( !frame.MSAADepthStencilImage->createOnHardware() )
+				{
+					TraceFatal{ClassId} << "Unable to create MSAA depth/stencil image #" << imageIndex << " !";
+
+					return false;
+				}
+
+				/* Create MSAA depth image view. */
+				const auto & imageCreateInfo = frame.MSAADepthStencilImage->createInfo();
+
+				if ( this->precisions().depthBits() > 0 )
+				{
+					frame.MSAADepthImageView = std::make_shared< ImageView >(
+						frame.MSAADepthStencilImage,
+						VK_IMAGE_VIEW_TYPE_2D,
+						VkImageSubresourceRange{
+							.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
+							.baseMipLevel = 0,
+							.levelCount = imageCreateInfo.mipLevels,
+							.baseArrayLayer = 0,
+							.layerCount = imageCreateInfo.arrayLayers
+						}
+					);
+					frame.MSAADepthImageView->setIdentifier(ClassId, msaaIdentifier + "Depth", "ImageView");
+
+					if ( !frame.MSAADepthImageView->createOnHardware() )
+					{
+						TraceFatal{ClassId} << "Unable to create MSAA depth image view #" << imageIndex << " !";
+
+						return false;
+					}
+				}
+
+				/* Create MSAA stencil image view if requested. */
+				if ( this->precisions().stencilBits() > 0 )
+				{
+					frame.MSAAStencilImageView = std::make_shared< ImageView >(
+						frame.MSAADepthStencilImage,
+						VK_IMAGE_VIEW_TYPE_2D,
+						VkImageSubresourceRange{
+							.aspectMask = VK_IMAGE_ASPECT_STENCIL_BIT,
+							.baseMipLevel = 0,
+							.levelCount = imageCreateInfo.mipLevels,
+							.baseArrayLayer = 0,
+							.layerCount = imageCreateInfo.arrayLayers
+						}
+					);
+					frame.MSAAStencilImageView->setIdentifier(ClassId, msaaIdentifier + "Stencil", "ImageView");
+
+					if ( !frame.MSAAStencilImageView->createOnHardware() )
+					{
+						TraceFatal{ClassId} << "Unable to create MSAA stencil image view #" << imageIndex << " !";
+
+						return false;
+					}
+				}
 			}
 		}
 
@@ -428,11 +597,32 @@ namespace EmEn::Vulkan
 			frame.framebuffer->setIdentifier(ClassId, std::format("Frame{}", imageIndex), "Framebuffer");
 #endif
 
-			/* Color buffer. */
-			frame.framebuffer->addAttachment(frame.colorImageView->handle());
+			if ( this->isMultisamplingEnabled() )
+			{
+				/* MSAA mode: 4 attachments in order. */
 
-			/* Depth/Stencil buffer. */
-			frame.framebuffer->addAttachment(frame.depthImageView->handle());
+				/* Attachment 0: MSAA Color buffer. */
+				frame.framebuffer->addAttachment(frame.MSAAColorImageView->handle());
+
+				/* Attachment 1: MSAA Depth/Stencil buffer. */
+				frame.framebuffer->addAttachment(frame.MSAADepthImageView->handle());
+
+				/* Attachment 2: Color Resolve buffer (swapchain image). */
+				frame.framebuffer->addAttachment(frame.colorImageView->handle());
+
+				/* Attachment 3: Depth/Stencil Resolve buffer. */
+				frame.framebuffer->addAttachment(frame.depthImageView->handle());
+			}
+			else
+			{
+				/* Standard mode: 2 attachments. */
+
+				/* Attachment 0: Color buffer (swapchain image). */
+				frame.framebuffer->addAttachment(frame.colorImageView->handle());
+
+				/* Attachment 1: Depth/Stencil buffer. */
+				frame.framebuffer->addAttachment(frame.depthImageView->handle());
+			}
 
 			if ( !frame.framebuffer->createOnHardware() )
 			{
@@ -455,42 +645,125 @@ namespace EmEn::Vulkan
 			/* Prepare a subpass for the render pass. */
 			RenderSubPass subPass{VK_PIPELINE_BIND_POINT_GRAPHICS, 0};
 
-			/* Color buffer. */
+			if ( this->isMultisamplingEnabled() )
 			{
-				const auto & colorBufferCreateInfo = m_frames.front().colorImage->createInfo();
+				/* MSAA rendering: render to MSAA attachments, then resolve to swapchain images. */
 
-				renderPass->addAttachmentDescription(VkAttachmentDescription{
-					.flags = 0,
-					.format = colorBufferCreateInfo.format,
-					.samples = colorBufferCreateInfo.samples,
-					.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-					.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-					.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-					.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-					.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-					.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
-				});
+				/* Attachment 0: MSAA Color buffer (multisampled). */
+				{
+					const auto & msaaColorBufferCreateInfo = m_frames.front().MSAAColorImage->createInfo();
 
-				subPass.addColorAttachment(0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+					renderPass->addAttachmentDescription(VkAttachmentDescription{
+						.flags = 0,
+						.format = msaaColorBufferCreateInfo.format,
+						.samples = msaaColorBufferCreateInfo.samples,
+						.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+						.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE, /* Don't need to store MSAA buffer, only the resolved one. */
+						.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+						.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+						.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+						.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+					});
+
+					subPass.addColorAttachment(0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+				}
+
+				/* Attachment 1: MSAA Depth/Stencil buffer (multisampled). */
+				{
+					const auto & msaaDepthStencilBufferCreateInfo = m_frames.front().MSAADepthStencilImage->createInfo();
+
+					renderPass->addAttachmentDescription(VkAttachmentDescription{
+						.flags = 0,
+						.format = msaaDepthStencilBufferCreateInfo.format,
+						.samples = msaaDepthStencilBufferCreateInfo.samples,
+						.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+						.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE, /* Don't need to store MSAA buffer. */
+						.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+						.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+						.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+						.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+					});
+
+					subPass.setDepthStencilAttachment(1, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
+				}
+
+				/* Attachment 2: Color Resolve buffer (swapchain image, single sample). */
+				{
+					const auto & colorBufferCreateInfo = m_frames.front().colorImage->createInfo();
+
+					renderPass->addAttachmentDescription(VkAttachmentDescription{
+						.flags = 0,
+						.format = colorBufferCreateInfo.format,
+						.samples = colorBufferCreateInfo.samples,
+						.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE, /* We don't care about the previous content. */
+						.storeOp = VK_ATTACHMENT_STORE_OP_STORE, /* Store the resolved result. */
+						.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+						.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+						.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+						.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR /* Ready for presentation. */
+					});
+
+					subPass.addResolveAttachment(2, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+				}
+
+				/* Attachment 3: Depth/Stencil Resolve buffer (single sample) - Optional but included for completeness. */
+				{
+					const auto & depthStencilBufferCreateInfo = m_frames.front().depthStencilImage->createInfo();
+
+					renderPass->addAttachmentDescription(VkAttachmentDescription{
+						.flags = 0,
+						.format = depthStencilBufferCreateInfo.format,
+						.samples = depthStencilBufferCreateInfo.samples,
+						.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+						.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE, /* Usually don't need the resolved depth. */
+						.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+						.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+						.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+						.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+					});
+				}
 			}
-
-			/* Depth/Stencil buffer. */
+			else
 			{
-				const auto & depthStencilBufferCreateInfo = m_frames.front().depthStencilImage->createInfo();
+				/* Standard rendering without MSAA. */
 
-				renderPass->addAttachmentDescription(VkAttachmentDescription{
-					.flags = 0,
-					.format = depthStencilBufferCreateInfo.format,
-					.samples = depthStencilBufferCreateInfo.samples,
-					.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-					.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-					.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-					.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-					.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-					.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
-				});
+				/* Attachment 0: Color buffer (swapchain image). */
+				{
+					const auto & colorBufferCreateInfo = m_frames.front().colorImage->createInfo();
 
-				subPass.setDepthStencilAttachment(1, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
+					renderPass->addAttachmentDescription(VkAttachmentDescription{
+						.flags = 0,
+						.format = colorBufferCreateInfo.format,
+						.samples = colorBufferCreateInfo.samples,
+						.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+						.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+						.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+						.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+						.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+						.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
+					});
+
+					subPass.addColorAttachment(0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+				}
+
+				/* Attachment 1: Depth/Stencil buffer. */
+				{
+					const auto & depthStencilBufferCreateInfo = m_frames.front().depthStencilImage->createInfo();
+
+					renderPass->addAttachmentDescription(VkAttachmentDescription{
+						.flags = 0,
+						.format = depthStencilBufferCreateInfo.format,
+						.samples = depthStencilBufferCreateInfo.samples,
+						.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+						.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+						.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+						.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+						.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+						.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+					});
+
+					subPass.setDepthStencilAttachment(1, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
+				}
 			}
 
 			renderPass->addSubPass(subPass);
@@ -857,6 +1130,8 @@ namespace EmEn::Vulkan
 		{
 			m_viewMatrices.updateOrthographicViewProperties(width, height, m_fovOrNear, m_distanceOrFar);
 		}
+
+		this->setViewDistance(m_distanceOrFar);
 	}
 
 	void

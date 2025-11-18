@@ -34,9 +34,7 @@ namespace EmEn::Scenes::Component
 	using namespace Libs;
 	using namespace Libs::Math;
 	using namespace Graphics;
-
-	float AbstractLightEmitter::s_maxDistance{DefaultGraphicsShadowMappingMaxDistance};
-
+	
 	void
 	AbstractLightEmitter::updateDeviceFromCoordinates (const CartesianFrame< float > & worldCoordinates, const Vector< 3, float > & worldVelocity) noexcept
 	{

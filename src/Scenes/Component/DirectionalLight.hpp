@@ -194,7 +194,7 @@ namespace EmEn::Scenes::Component
 			getDistanceOrFar () const noexcept override
 			{
 				/* NOTE: A directional light returns the far value. */
-				return s_maxDistance;
+				return DefaultGraphicsShadowMappingViewDistance;
 			}
 
 			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::isOrthographicProjection() */

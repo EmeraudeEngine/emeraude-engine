@@ -67,14 +67,16 @@ namespace EmEn::Graphics::RenderTarget
 			 * @brief Constructs a shadow map.
 			 * @param deviceName A reference to a string.
 			 * @param resolution The shadow map resolution.
+			 * @param viewDistance The max viewable distance in meters.
 			 * @param isOrthographicProjection Set orthographic projection instead of perspective.
 			 * @param debug Print the z-depth into the color buffer for debugging.
 			 */
-			ShadowMap (const std::string & deviceName, uint32_t resolution, bool isOrthographicProjection, bool debug) noexcept requires (std::is_same_v< view_matrices_t, ViewMatrices2DUBO >)
+			ShadowMap (const std::string & deviceName, uint32_t resolution, float viewDistance, bool isOrthographicProjection, bool debug) noexcept requires (std::is_same_v< view_matrices_t, ViewMatrices2DUBO >)
 				: Abstract {
 					deviceName,
 					{debug ? 8U : 0U, debug ? 8U : 0U, debug ? 8U : 0U, debug ? 8U : 0U, 32U, 0U, 1U},
 					{resolution, resolution, 1},
+					viewDistance,
 					RenderTargetType::ShadowMap,
 					AVConsole::ConnexionType::Input,
 					isOrthographicProjection,
@@ -88,13 +90,15 @@ namespace EmEn::Graphics::RenderTarget
 			 * @brief Constructs a shadow cubemap.
 			 * @param deviceName A reference to a string.
 			 * @param resolution The shadow map resolution.
+			 * @param viewDistance The max viewable distance in meters.
 			 * @param isOrthographicProjection Set orthographic projection instead of perspective.
 			 */
-			ShadowMap (const std::string & deviceName, uint32_t resolution, bool isOrthographicProjection) noexcept requires (std::is_same_v< view_matrices_t, ViewMatrices3DUBO >)
+			ShadowMap (const std::string & deviceName, uint32_t resolution, float viewDistance, bool isOrthographicProjection) noexcept requires (std::is_same_v< view_matrices_t, ViewMatrices3DUBO >)
 				: Abstract{
 					deviceName,
 					{0U, 0U, 0U, 0U, 32U, 0U, 1U},
 					{resolution, resolution, 1},
+					viewDistance,
 					RenderTargetType::ShadowCubemap,
 					AVConsole::ConnexionType::Input,
 					isOrthographicProjection,
@@ -250,6 +254,8 @@ namespace EmEn::Graphics::RenderTarget
 				{
 					m_viewMatrices.updatePerspectiveViewProperties(width, height, fovOrNear, distanceOrFar);
 				}
+
+				this->setViewDistance(distanceOrFar);
 			}
 
 			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::aspectRatio() */

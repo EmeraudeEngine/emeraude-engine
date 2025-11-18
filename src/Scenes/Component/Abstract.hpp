@@ -287,8 +287,9 @@ namespace EmEn::Scenes::Component
 			 * @return const Libs::Math::Space3D::AACuboid< float > &
 			 */
 			[[nodiscard]]
-			virtual const Libs::Math::Space3D::AACuboid< float > &
-			boundingBox () const noexcept
+			virtual
+			const Libs::Math::Space3D::AACuboid< float > &
+			localBoundingBox () const noexcept
 			{
 				return NullBoundingBox;
 			}
@@ -299,8 +300,9 @@ namespace EmEn::Scenes::Component
 			 * @return const Libs::Math::Space3D::Sphere< float > &
 			 */
 			[[nodiscard]]
-			virtual const Libs::Math::Space3D::Sphere< float > &
-			boundingSphere () const noexcept
+			virtual
+			const Libs::Math::Space3D::Sphere< float > &
+			localBoundingSphere () const noexcept
 			{
 				return NullBoundingSphere;
 			}

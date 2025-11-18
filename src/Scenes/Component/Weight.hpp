@@ -99,18 +99,18 @@ namespace EmEn::Scenes::Component
 				return strcmp(ClassId, classID) == 0;
 			}
 
-			/** @copydoc EmEn::Scenes::Component::Abstract::boundingBox() const */
+			/** @copydoc EmEn::Scenes::Component::Abstract::localBoundingBox() const */
 			[[nodiscard]]
 			const Libs::Math::Space3D::AACuboid< float > &
-			boundingBox () const noexcept override
+			localBoundingBox () const noexcept override
 			{
 				return m_boundingBox;
 			}
 
-			/** @copydoc EmEn::Scenes::Component::Abstract::boundingSphere() const */
+			/** @copydoc EmEn::Scenes::Component::Abstract::localBoundingSphere() const */
 			[[nodiscard]]
 			const Libs::Math::Space3D::Sphere< float > &
-			boundingSphere () const noexcept override
+			localBoundingSphere () const noexcept override
 			{
 				return m_boundingSphere;
 			}

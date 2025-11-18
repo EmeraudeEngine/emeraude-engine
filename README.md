@@ -1,207 +1,292 @@
 # Emeraude Engine
 
-This project is a cross-platform engine to render a scene in 3D using the Vulkan API and written in C++20. There is an audio layer and a minimal physics simulation layer.
+![License](https://img.shields.io/badge/license-LGPLv3-blue.svg)
+![Version](https://img.shields.io/badge/version-0.8.31-green.svg)
+![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-lightgrey.svg)
 
-This library provides :
-- a scene manager based on a node system.
-- a resources manager to load data hierarchically.
-- a material manager with auto-generated shaders
-- an overlay manager to draw on screen.
-- ...
+A modern, cross-platform 3D graphics engine built with **Vulkan API** and **C++20**. Emeraude Engine provides a complete framework for building 3D applications with integrated audio, physics simulation, and advanced rendering capabilities.
 
-The name comes from a DOS game called "The Legend of Kyrandia" which makes extensive use of gemstones. As a child, I was a fan of emeralds in this game.
+## Features
 
-This software is distributed under the LGPLv3 license.
+- **Scene Graph System:** Hierarchical node-based scene management with transform inheritance
+- **Resource Management:** Efficient hierarchical resource loading and caching system
+- **Material System:** Automatic shader generation with customizable material properties
+- **Audio Layer:** 3D spatial audio with sound effects and ambient tracks
+- **Physics Simulation:** Basic rigid body physics and collision detection
+- **Overlay System:** 2D rendering for UI elements and debug information
+- **ImGui Integration:** Built-in debug UI and development tools
+- **Multi-Platform:** Native support for Linux, macOS, and Windows
 
+## About
 
-# Tools requirements
+The name "Emeraude" (French for "emerald") is inspired by "The Legend of Kyrandia," a classic DOS game that prominently featured gemstones. This engine aims to capture the same sense of wonder and visual richness.
 
-- CMake 3.25.1+, to generate the project.
-- Python 3+, to configure some external dependencies.
-- A C++20 compiler, the engine is maintained from :
-   - "Debian 13 (GNU/Linux)" using "G++ 14.2.0" compiler
-   - "Ubuntu 24.04 LTS (GNU/Linux)" using "G++ 13.3.0" compiler
-   - "Apple macOS Sequoia 15.5" using "Apple Clang 17.0" compiler and the minimal SDK version 12.0
-   - "Microsoft Windows 11" using "MSVC 19.43.34812.0" compiler ("Visual Studio 2022 Community Edition")
-
-The engine is written with CLion, but it is not mandatory to use it. You can use any other IDE that supports CMake.
+**License:** LGPLv3 - Free for both open-source and commercial projects
 
 
-# External dependencies
+## Requirements
 
-## Precompiled binaries
+### Build Tools
 
-The engine needs some external libraries, most of them are provided by the external repository https://github.com/EmeraudeEngine/ext-deps-generator
-This project builds the Debug and Release binaries in its "output/" directory. These folders must be copied or symlinked into the "dependencies/" folder of the engine and are helping to speed up the overall compilation.
-See the README.md file of the external repository for more information.
+- **CMake:** 3.25.1 or higher
+- **Python:** 3.0 or higher (for dependency configuration)
+- **C++20 Compiler:**
+  - **Linux:** GCC 13.3.0+ or GCC 14.2.0+
+    - Tested on Debian 13 and Ubuntu 24.04 LTS
+  - **macOS:** Apple Clang 17.0+ with SDK 12.0+
+    - Tested on macOS Sequoia 15.5
+  - **Windows:** MSVC 19.43+ (Visual Studio 2022)
+    - Tested on Windows 11
 
-The result should be something like, for Linux:
-- `./projet-nihil/dependencies/emeraude-engine/dependencies/linux.x86_64.Release`
-- `./projet-nihil/dependencies/emeraude-engine/dependencies/linux.x86_64.Debug`
-- 
-or for macOS:
-- `./projet-nihil/dependencies/emeraude-engine/dependencies/mac.arm64.Release`
-- `./projet-nihil/dependencies/emeraude-engine/dependencies/mac.arm64.Debug`
-- `./projet-nihil/dependencies/emeraude-engine/dependencies/mac.x86_64.Release`
-- `./projet-nihil/dependencies/emeraude-engine/dependencies/mac.x86_64.Debug`
-- 
-or for Windows:
-- `./projet-nihil/dependencies/emeraude-engine/dependencies/windows.x86_64.Release-MD`
-- `./projet-nihil/dependencies/emeraude-engine/dependencies/windows.x86_64.Debug-MD`
-- `./projet-nihil/dependencies/emeraude-engine/dependencies/windows.x86_64.Release-MT`
-- `./projet-nihil/dependencies/emeraude-engine/dependencies/windows.x86_64.Debug-MT`
+**IDE Support:** While the engine is developed with CLion, any CMake-compatible IDE will work (Visual Studio, VSCode, Qt Creator, etc.).
 
-NOTE: These binaries can be downloaded with ZIP archives from https://drive.google.com/drive/folders/1nDv35NuAPEg-XAGQIMZ7uCoqK3SK0VxZ?usp=drive_link
-But don't expect the URL will last forever or be stable.
 
-## Git submodules
+## Dependencies
 
-There are other dependencies compiled directly with the final binary:
- - Asio, 1.36.0 (https://github.com/chriskohlhoff/asio)
- - fastgltf, 0.9.0~ (https://github.com/spnda/fastgltf)
- - GLFW, ~master(2025.07.17) (https://github.com/EmeraudeEngine/glfw.git) [FORK]
- - Glslang, 16.0.0 (https://github.com/KhronosGroup/glslang.git)
- - ImGui, 1.92.4 (https://github.com/ocornut/imgui.git)
- - JsonCpp, 1.9.7~ (https://github.com/open-source-parsers/jsoncpp.git)
- - libsndfile, 1.2.2 (https://github.com/libsndfile/libsndfile) [SYSTEM+BINARY]
- - magic_enum, 0.9.7~ (https://github.com/Neargye/magic_enum)
- - Portable File Dialogs, unversioned (https://github.com/samhocevar/portable-file-dialogs.git)
- - reproc, 14.2.4~ (https://github.com/DaanDeMeyer/reproc)
- - SDL_GameControllerDB, unversioned (https://github.com/gabomdq/SDL_GameControllerDB.git)
- - Vulkan Memory Allocator, 3.3.0~ (https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator)
+### Precompiled External Libraries
 
-## The Vulkan SDK
+The engine requires several precompiled external libraries provided by [ext-deps-generator](https://github.com/EmeraudeEngine/ext-deps-generator). This separate repository builds Debug and Release binaries that must be copied or symlinked into the engine's `dependencies/` folder to significantly speed up compilation.
 
-The current version of the Vulkan SDK is 1.4.309.0.
+**Setup Instructions:**
 
-One day, the Vulkan SDK will be embedded in the repository. For now, you need to install it manually.
+1. Clone and build the ext-deps-generator repository (see its README for details)
+2. Copy or symlink the output directories to your engine's dependencies folder
 
- - For Linux, use the SDK provided by your distribution.
-```bash 
+**Expected directory structure:**
+
+**Linux:**
+```
+<your-project>/dependencies/emeraude-engine/dependencies/
+├── linux.x86_64.Release/
+└── linux.x86_64.Debug/
+```
+
+**macOS:**
+```
+<your-project>/dependencies/emeraude-engine/dependencies/
+├── mac.arm64.Release/
+├── mac.arm64.Debug/
+├── mac.x86_64.Release/
+└── mac.x86_64.Debug/
+```
+
+**Windows:**
+```
+<your-project>/dependencies/emeraude-engine/dependencies/
+├── windows.x86_64.Release-MD/
+├── windows.x86_64.Debug-MD/
+├── windows.x86_64.Release-MT/
+└── windows.x86_64.Debug-MT/
+```
+
+**Quick Download:** Pre-built binaries are available as ZIP archives from [Google Drive](https://drive.google.com/drive/folders/1nDv35NuAPEg-XAGQIMZ7uCoqK3SK0VxZ?usp=drive_link) (note: this URL may change or become unavailable in the future).
+
+### Git Submodules
+
+The following dependencies are included as git submodules and compiled directly with the engine:
+
+| Library | Version | Repository |
+|---------|---------|------------|
+| **Asio** | 1.36.0 | [github.com/chriskohlhoff/asio](https://github.com/chriskohlhoff/asio) |
+| **fastgltf** | 0.9.0~ | [github.com/spnda/fastgltf](https://github.com/spnda/fastgltf) |
+| **GLFW** | master(2025.07.17) | [github.com/EmeraudeEngine/glfw](https://github.com/EmeraudeEngine/glfw.git) [FORK] |
+| **Glslang** | 16.0.0 | [github.com/KhronosGroup/glslang](https://github.com/KhronosGroup/glslang.git) |
+| **ImGui** | 1.92.4 | [github.com/ocornut/imgui](https://github.com/ocornut/imgui.git) |
+| **JsonCpp** | 1.9.7~ | [github.com/open-source-parsers/jsoncpp](https://github.com/open-source-parsers/jsoncpp.git) |
+| **libsndfile** | 1.2.2 | [github.com/libsndfile/libsndfile](https://github.com/libsndfile/libsndfile) |
+| **magic_enum** | 0.9.7~ | [github.com/Neargye/magic_enum](https://github.com/Neargye/magic_enum) |
+| **Portable File Dialogs** | unversioned | [github.com/samhocevar/portable-file-dialogs](https://github.com/samhocevar/portable-file-dialogs.git) |
+| **reproc** | 14.2.4~ | [github.com/DaanDeMeyer/reproc](https://github.com/DaanDeMeyer/reproc) |
+| **SDL_GameControllerDB** | unversioned | [github.com/gabomdq/SDL_GameControllerDB](https://github.com/gabomdq/SDL_GameControllerDB.git) |
+| **Vulkan Memory Allocator** | 3.3.0~ | [github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator](https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator) |
+
+### Vulkan SDK
+
+**Required Version:** 1.4.309.0
+
+The Vulkan SDK must be installed manually (future versions may include it in the repository).
+
+**Installation:**
+
+**Linux:**
+```bash
 sudo apt install libvulkan-dev vulkan-tools vulkan-validationlayers vulkan-validationlayers-dev
 ```
- - For macOS, you can download it from https://sdk.lunarg.com/sdk/download/1.4.309.0/mac/vulkansdk-macos-1.4.309.0.zip
- - For Windows, you can download it from https://sdk.lunarg.com/sdk/download/1.4.309.0/windows/VulkanSDK-1.4.309.0-Installer.exe
 
-NOTE: Leave setup options to default and let install files into the default location.
+**macOS:**
+Download from: https://sdk.lunarg.com/sdk/download/1.4.309.0/mac/vulkansdk-macos-1.4.309.0.zip
+
+**Windows:**
+Download from: https://sdk.lunarg.com/sdk/download/1.4.309.0/windows/VulkanSDK-1.4.309.0-Installer.exe
+
+**Note:** Use default installation options and install to the default location.
 
 
-# Quick compilation from the terminal
+## Building from Source
 
-## Release compilation
+### Quick Start
 
+**1. Clone the repository with submodules:**
 ```bash
 git clone --recurse-submodules https://github.com/EmeraudeEngine/emeraude-engine.git
-cmake -S ./emeraude-engine -B ./emeraude-engine/cmake-build-release -DCMAKE_BUILD_TYPE=Release
-cmake --build ./emeraude-engine/cmake-build-release --config Release
+cd emeraude-engine
 ```
 
-This will produce the release shared library.
-
-## Debug compilation
-
+**2. Build Release version:**
 ```bash
-git clone --recurse-submodules https://github.com/EmeraudeEngine/emeraude-engine.git
-cmake -S ./emeraude-engine -B ./emeraude-engine/cmake-build-debug -DCMAKE_BUILD_TYPE=Debug
-cmake --build ./emeraude-engine/cmake-build-debug --config Debug
+cmake -S . -B cmake-build-release -DCMAKE_BUILD_TYPE=Release
+cmake --build cmake-build-release --config Release
 ```
 
-This will produce the debug shared library.
+This produces the optimized shared library in `cmake-build-release/Release/`.
 
+**3. Build Debug version:**
+```bash
+cmake -S . -B cmake-build-debug -DCMAKE_BUILD_TYPE=Debug
+cmake --build cmake-build-debug --config Debug
+```
 
-# Troubleshooting
+This produces the debug shared library with symbols in `cmake-build-debug/Debug/`.
 
-## Glslang library
+### Build Options
 
-If CMake returns some problems concerning this library, you have to finish its installation (once) by executing a local python script.
+- **EMERAUDE_BUILD_SERVICES_ONLY:** Build only engine services without full rendering (default: OFF)
+
+Example:
+```bash
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DEMERАUDE_BUILD_SERVICES_ONLY=ON
+```
+
+## Troubleshooting
+
+### Glslang Configuration Issues
+
+If CMake reports errors related to Glslang, you need to run its configuration script once:
 
 ```bash
-cd ./emeraude-engine/dependencies/glslang
+cd dependencies/glslang
 ./update_glslang_sources.py
-cd ../../..
+cd ../..
 ```
 
+Then re-run CMake configuration.
 
-# Bugs and TODO-list
+### Submodule Issues
 
-- GENERAL
-  - Remove all invalid noexcept keyword. (WIP)
-  - Increase inlining. (WIP)
-  - Improve functions args to use "std::move" when useful.
-  - Rewrite libs Observer/Observable pattern with the idea of static and shared objects.
-  - Replace all "std::stringstream" by "std::format" (C++20) for simple keys, names or identifiers creation. WARNING: This doesn't work under macOS for targeting older SDKs.
-  - Check for light coherence, create a built-in scene with a fixed directional light and multiple materials.
-  - Issue on Linux with X11, multi-monitors and NVIDIA proprietary driver. More info: https://forums.developer.nvidia.com/t/external-monitor-freezes-when-using-dedicated-gpu/265406
+If submodules weren't cloned properly:
 
-- RENDERING SYSTEM
-  - Enable additional render targets next to the main one to create shadow maps, 2D textures and reflections. (WIP)
-  - Study and create the cubemap rendering (single-pass) to be able to produce reflections and shadow cubemap.
-  - Improve the rendering branches to reduce cost.
-  - Check sprite blending.
-  - Check sprite texture clamping to edges.
-  - Re-enable the screenshot from the engine.
+```bash
+git submodule update --init --recursive
+```
 
-- AUDIO SYSTEM
-  - Check to stop sound from an inactive scene. (Shared with SCENE section)
+### Missing Dependencies
 
-- PHYSICS SYSTEM
-  - Enable the rotational physics. (WIP)
-  - Create a particle system using Compute Shader.
+Ensure you've installed the Vulkan SDK and copied/symlinked the precompiled dependencies as described in the Dependencies section above.
 
-- RESOURCES SYSTEM
-  - Merge Font from PixelFactory and FontResource.
-  - Check the direct data description with the JSON resource description.
-  - Check the store resource addition from the JSON resource description. (WIP)
 
-- OVERLAY SYSTEM
-  - Rework ComposedSurface from overlay to create a native menu.
-  - Rewrite the TextWriter class.
+## Usage Example
 
-- SCENE SYSTEM
-  - Create a shared dynamic uniform buffer for static entities instead of using push_constants as they normally won't move between frames. Thus, it will only hold the model matrix.
-  - Check enable/disable audio on scene switching. (Shared with the AUDIO section)
+```cpp
+#include <EmEn/Core.hpp>
 
-- ANIMATION SYSTEM
-  - (Prior) Check all animatable properties for all objects.
-  - Remove Variant for "std::any"
+class MyApplication : public EmEn::Core {
+public:
+    void initialize() override {
+        // Set up your scene
+        auto scene = getSceneManager()->createScene("MainScene");
 
-- CONSOLE SYSTEM
-  - Bring back a useful console behavior.
+        // Load resources
+        auto model = getResourceManager()->load("models/mymodel.gltf");
 
-- LIGHTING AND SHADOWING
-  - Fix the ambient light update against the render target which uses it.
-  - Re-enable the ambient light color generated by the averaging active light color.
-  - Check the ambient light color generated by a texture.
-  - Check what the light matrix for a shadow map is and how to update it. Hint, this is an MVP matrix from the light point of view.
-  - Check light radius against entities to discard some useless rendering.
-  - Shadow maps: Create a re-usable shadow map for ephemere lights.
+        // Create scene nodes
+        auto rootNode = scene->getRootNode();
+        auto entityNode = rootNode->createChild("Entity");
+        entityNode->attachModel(model);
 
-- SHADERS CODE AND GENERATION
-  - Check source and binary caches.
-  - Prepare a way to use manual GLSL sources.
-  - Re-enable normal calculation bypass when the surface is not facing a light.
-  - Re-enable shadow maps. Depends on the offscreen rendering completion, but most of the code is done. (WIP)
-  
-- MATERIAL
-  - Create a shared dynamic uniform buffer when a material does not use sampler. EDIT: Pay attention to the real benefit of that solution.
-  - Create a material editor in JavaScript (application side). EDIT: Should be a tool for the engine.
+        // Configure lighting
+        auto light = scene->createDirectionalLight();
+        light->setDirection({0.0f, -1.0f, -0.5f});
+    }
 
-- TEXTURING
-  - Finish 1D and 3D textures.
-  
-- LIBRARIES AND EXTERNAL DEPENDENCIES
-  - Determine a native 3D format for loading speedup.
-  - Finish 3D formats loading/reading.
+    void update(float deltaTime) override {
+        // Update game logic
+    }
+};
 
-- VULKAN SPECIFIC
-  - Find a better way to detect the UBO max capacity. For now the limit is hard-coded to 65,536 bytes.
-  - Implement descriptorIndexing from Vulkan 1.2 API.
-  - Implement VK_KHR_synchronization2 and VK_KHR_dynamic_rendering from Vulkan 1.3 API.
-  - Check validation layers and debug messenger relationship. (According to khronos, this is valid to create the debug messenger without validation layers)
-  - Fix texture loading. (UINT → UNORM) Convert data before? or not?
-  - Use of a separated image from a sampler in GLSL when useful.
-  - Find a better solution to handle shared uniform buffer objects.
-  - Find a better way to create and store a descriptor set layout.
-  - Find a way to order the rendering by pipeline layout to reduce the binding cost per draw. See VK_KHR_dynamic_rendering from Vulkan 1.1 API extension, upgraded in Vulkan 1.2 API and core in Vulkan 1.3 API.
-  - Check for the right way to push constant from the right shader declaration to the right stage in vulkan. (GraphicsShaderGenerator.cpp:254)
-  - Analyze UBO and instanced VBO usage and make a better and global shared UBO/VBO optimization for short life entity.
+int main() {
+    MyApplication app;
+    app.run();
+    return 0;
+}
+```
+
+## Current Development Status
+
+Emeraude Engine is actively developed and includes the following systems:
+
+**Completed:**
+- Core rendering pipeline with Vulkan
+- Scene graph and node management
+- Resource loading (GLTF, textures, audio)
+- Basic physics simulation
+- Audio playback and 3D spatial audio
+- ImGui integration for debugging
+
+**In Progress:**
+- Advanced shadow mapping (WIP)
+- Offscreen render targets for reflections and effects (WIP)
+- Enhanced physics with rotation (WIP)
+- Shader caching optimization
+
+**Planned:**
+- Cubemap rendering for environment mapping
+- Compute shader-based particle systems
+- Advanced animation system
+- Material editor tool
+
+For detailed development tasks and known issues, please check the [GitHub Issues](https://github.com/EmeraudeEngine/emeraude-engine/issues) page.
+
+## Known Issues
+
+- **Linux/X11:** Multi-monitor setup with NVIDIA proprietary drivers may cause freezing. See [NVIDIA Forums](https://forums.developer.nvidia.com/t/external-monitor-freezes-when-using-dedicated-gpu/265406) for workarounds.
+- **macOS:** `std::format` (C++20) incompatible with older SDK targets (< 13.0). Engine uses `std::stringstream` as fallback.
+
+## Contributing
+
+Contributions are welcome! Please:
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+Please ensure your code follows the existing style and includes appropriate tests.
+
+## Documentation
+
+- **API Documentation:** Coming soon
+- **Wiki:** [GitHub Wiki](https://github.com/EmeraudeEngine/emeraude-engine/wiki) (coming soon)
+- **Examples:** Check the `examples/` directory for sample applications
+
+## License
+
+This project is licensed under the **GNU Lesser General Public License v3.0 (LGPLv3)**.
+
+This means you can:
+- Use the engine in both open-source and commercial projects
+- Link against the library without requiring your code to be open-source
+- Modify the engine itself (modifications must be released under LGPLv3)
+
+See the [LICENSE](LICENSE) file for full details.
+
+## Support and Community
+
+- **Issues:** Report bugs and request features on [GitHub Issues](https://github.com/EmeraudeEngine/emeraude-engine/issues)
+- **Discussions:** Join conversations on [GitHub Discussions](https://github.com/EmeraudeEngine/emeraude-engine/discussions)
+
+## Acknowledgments
+
+- Inspired by "The Legend of Kyrandia" and its beautiful gem-based aesthetic
+- Built with love for the open-source game development community
+- Thanks to all contributors and users of the engine

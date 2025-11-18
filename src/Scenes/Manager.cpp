@@ -55,8 +55,6 @@ namespace EmEn::Scenes
 	{
 		this->registerToConsole();
 
-		Component::AbstractLightEmitter::s_maxDistance = m_primaryServices.settings().getOrSetDefault< float >(GraphicsShadowMappingMaxDistanceKey, DefaultGraphicsShadowMappingMaxDistance);
-
 		return true;
 	}
 

@@ -34,6 +34,7 @@
 #include "Scenes/LocatableInterface.hpp"
 
 /* Local inclusions. */
+#include "Graphics/Frustum.hpp"
 #include "Scenes/Component/Abstract.hpp"
 #include "Scenes/Component/AbstractModifier.hpp"
 
@@ -184,19 +185,27 @@ namespace EmEn::Physics
 				return Scenes::Component::Abstract::NullBoundingSphere;
 			}
 
-			/** @copydoc EmEn::Scenes::LocatableInterface::enableSphereCollision(bool) */
+			/** @copydoc EmEn::Scenes::LocatableInterface::setCollisionDetectionModel(Scenes::CollisionDetectionModel) */
 			void
-			enableSphereCollision (bool /*state*/) noexcept override
+			setCollisionDetectionModel (Scenes::CollisionDetectionModel /*model*/) noexcept override
 			{
 
 			}
 
-			/** @copydoc EmEn::Scenes::LocatableInterface::sphereCollisionIsEnabled() const */
+			/** @copydoc EmEn::Scenes::LocatableInterface::collisionDetectionModel() const */
+			[[nodiscard]]
+			Scenes::CollisionDetectionModel
+			collisionDetectionModel () const noexcept override
+			{
+				return Scenes::CollisionDetectionModel::Point;
+			}
+
+			/** @copydoc EmEn::Scenes::LocatableInterface::isVisibleTo(const Graphics::Frustum &) const */
 			[[nodiscard]]
 			bool
-			sphereCollisionIsEnabled () const noexcept override
+			isVisibleTo (const Graphics::Frustum & frustum) const noexcept override
 			{
-				return true;
+				return frustum.isSeeing(m_cartesianFrame.position());
 			}
 
 			/**

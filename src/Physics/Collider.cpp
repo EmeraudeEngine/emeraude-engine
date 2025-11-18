@@ -57,7 +57,7 @@ namespace EmEn::Physics
 		auto collisionOverflow = 0.0F;
 
 		/* TODO: Add sphere <> box collision. */
-		if ( movableEntityA.sphereCollisionIsEnabled() && movableEntityB.sphereCollisionIsEnabled() )
+		if ( movableEntityA.collisionDetectionModel() == CollisionDetectionModel::Sphere && movableEntityB.collisionDetectionModel() == CollisionDetectionModel::Sphere )
 		{
 			const auto sphereA = movableEntityA.getWorldBoundingSphere();
 			const auto sphereB = movableEntityB.getWorldBoundingSphere();
@@ -99,7 +99,7 @@ namespace EmEn::Physics
 		auto collisionOverflow = 0.0F;
 
 		/* TODO: Add sphere <> box collision. */
-		if ( movableEntityA.sphereCollisionIsEnabled() && staticEntityB.sphereCollisionIsEnabled() )
+		if ( movableEntityA.collisionDetectionModel() == CollisionDetectionModel::Sphere && staticEntityB.collisionDetectionModel() == CollisionDetectionModel::Sphere )
 		{
 			//TraceDebug{ClassId} << "Sphere (" << staticEntityB.name() << ") to sphere (" << movableEntityA.name() << ") collision ...";
 
@@ -371,7 +371,7 @@ namespace EmEn::Physics
 		auto collisionOverflow = 0.0F;
 
 		/* Sphere-to-sphere collision detection. */
-		if ( movableEntityA.sphereCollisionIsEnabled() && movableEntityB.sphereCollisionIsEnabled() )
+		if ( movableEntityA.collisionDetectionModel() == CollisionDetectionModel::Sphere && movableEntityB.collisionDetectionModel() == CollisionDetectionModel::Sphere )
 		{
 			const auto sphereA = movableEntityA.getWorldBoundingSphere();
 			const auto sphereB = movableEntityB.getWorldBoundingSphere();

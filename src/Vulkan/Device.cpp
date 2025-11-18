@@ -728,14 +728,20 @@ namespace EmEn::Vulkan
 		return VK_FORMAT_UNDEFINED;
 	}
 
-	VkSampleCountFlagBits
-	Device::findSampleCount (uint32_t samples) const noexcept
+	uint32_t
+	Device::checkMultisampleCount (uint32_t samples) const noexcept
 	{
 		if ( const auto maxSamples = m_physicalDevice->getMaxAvailableSampleCount(); samples > static_cast< uint32_t >(maxSamples) )
 		{
 			return maxSamples;
 		}
 
+		return Device::getSampleCountFlag(samples);
+	}
+
+	VkSampleCountFlagBits
+	Device::getSampleCountFlag (uint32_t samples) noexcept
+	{
 		switch ( samples )
 		{
 			case 64 :

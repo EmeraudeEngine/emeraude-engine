@@ -253,6 +253,27 @@ namespace EmEn::Graphics::RenderTarget
 			}
 
 			/**
+			 * @brief Sets the render target maximum viewable distance in meters.
+			 * @return void
+			 */
+			void
+			setViewDistance (float meters) noexcept
+			{
+				m_viewDistance = meters;
+			}
+
+			/**
+			 * @brief Returns the render target maximum viewable distance in meters.
+			 * @return float
+			 */
+			[[nodiscard]]
+			float
+			viewDistance () const noexcept
+			{
+				return m_viewDistance;
+			}
+
+			/**
 			 * @brief Changes the projection type.
 			 * @param state The state.
 			 * @return void
@@ -347,12 +368,13 @@ namespace EmEn::Graphics::RenderTarget
 			 * @param deviceName A reference to a string for the name of the video device.
 			 * @param precisions The framebuffer precisions.
 			 * @param extent The framebuffer dimensions.
+			 * @param viewDistance The max viewable distance in meters.
 			 * @param renderType The type of render.
 			 * @param allowedConnexionType The type of connexion this virtual device allows.
 			 * @param isOrthographicProjection Set orthographic projection instead of perspective.
 			 * @param enableSyncPrimitives Enable the creation of global sync primitive for this render target.
 			 */
-			Abstract (const std::string & deviceName, const FramebufferPrecisions & precisions, const VkExtent3D & extent, RenderTargetType renderType, AVConsole::ConnexionType allowedConnexionType, bool isOrthographicProjection, bool enableSyncPrimitives) noexcept
+			Abstract (const std::string & deviceName, const FramebufferPrecisions & precisions, const VkExtent3D & extent, float viewDistance, RenderTargetType renderType, AVConsole::ConnexionType allowedConnexionType, bool isOrthographicProjection, bool enableSyncPrimitives) noexcept
 				: AbstractVirtualDevice{deviceName, AVConsole::DeviceType::Video, allowedConnexionType},
 				m_precisions{precisions},
 				m_extent{extent},
@@ -360,6 +382,7 @@ namespace EmEn::Graphics::RenderTarget
 					.offset = {.x = 0, .y = 0},
 					.extent = {.width = extent.width, .height = extent.height}
 				},
+				m_viewDistance{viewDistance},
 				m_renderType{renderType},
 				m_isOrthographicProjection{isOrthographicProjection},
 				m_enableSyncPrimitive{enableSyncPrimitives}
@@ -470,6 +493,7 @@ namespace EmEn::Graphics::RenderTarget
 			FramebufferPrecisions m_precisions;
 			VkExtent3D m_extent{};
 			VkRect2D m_renderArea{};
+			float m_viewDistance{DefaultGraphicsViewDistance};
 			RenderTargetType m_renderType;
 			std::shared_ptr< Vulkan::Sync::Semaphore > m_semaphore;
 			bool m_isOrthographicProjection{false};

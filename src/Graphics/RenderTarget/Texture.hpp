@@ -69,13 +69,15 @@ namespace EmEn::Graphics::RenderTarget
 			 * @param width The width of the texture.
 			 * @param width The height of the texture.
 			 * @param colorCount The number of color channels desired.
+			 * @param viewDistance The max viewable distance in meters.
 			 * @param isOrthographicProjection Set orthographic projection instead of perspective.
 			 */
-			Texture (const std::string & name, uint32_t width, uint32_t height, uint32_t colorCount, bool isOrthographicProjection) noexcept requires (std::is_same_v< view_matrices_t, ViewMatrices2DUBO >)
+			Texture (const std::string & name, uint32_t width, uint32_t height, uint32_t colorCount, float viewDistance, bool isOrthographicProjection) noexcept requires (std::is_same_v< view_matrices_t, ViewMatrices2DUBO >)
 				: Abstract{
 					name,
 					{colorCount, 8U, 32U, 0U, 1U},
 					{width, height, 1U},
+					viewDistance,
 					RenderTargetType::Texture,
 					AVConsole::ConnexionType::Both,
 					isOrthographicProjection,
@@ -90,13 +92,15 @@ namespace EmEn::Graphics::RenderTarget
 			 * @param name A reference to a string for the name of the video device.
 			 * @param size The size of the cubemap.
 			 * @param colorCount The number of color channels desired.
+			 * @param viewDistance The max viewable distance in meters.
 			 * @param isOrthographicProjection Set orthographic projection instead of perspective.
 			 */
-			Texture (const std::string & name, uint32_t size, uint32_t colorCount, bool isOrthographicProjection) noexcept requires (std::is_same_v< view_matrices_t, ViewMatrices3DUBO >)
+			Texture (const std::string & name, uint32_t size, uint32_t colorCount, float viewDistance, bool isOrthographicProjection) noexcept requires (std::is_same_v< view_matrices_t, ViewMatrices3DUBO >)
 				: Abstract{
 					name,
 					{colorCount, 8U, 32U, 0U, 1U},
 					{size, size, 1U},
+					viewDistance,
 					RenderTargetType::Cubemap,
 					AVConsole::ConnexionType::Both,
 					isOrthographicProjection,
@@ -267,6 +271,8 @@ namespace EmEn::Graphics::RenderTarget
 				{
 					m_viewMatrices.updateOrthographicViewProperties(width, height, fovOrNear, distanceOrFar);
 				}
+
+				this->setViewDistance(distanceOrFar);
 			}
 
 			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::aspectRatio() */

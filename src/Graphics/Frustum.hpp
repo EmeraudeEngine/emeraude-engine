@@ -28,7 +28,6 @@
 
 /* STL inclusions. */
 #include <array>
-#include <cstdint>
 #include <string>
 
 /* Local inclusions for usages. */
@@ -42,18 +41,10 @@ namespace EmEn::Graphics
 {
 	/**
 	 * @brief The Frustum class
-	 * @todo WIP
 	 */
 	class Frustum final
 	{
 		public:
-
-			enum class Result : uint8_t
-			{
-				Outside,
-				Intersect,
-				Inside
-			};
 
 			static constexpr auto Right{0};
 			static constexpr auto Left{1};
@@ -66,99 +57,36 @@ namespace EmEn::Graphics
 			Frustum () noexcept = default;
 
 			/**
-			 * @brief Declares the far distance of the frustum.
-			 * @note Lazy way of keeping the far distance.
-			 * @param farDistance The distance of the camera.
-			 * @return void
-			 */
-			void updateProperties (float farDistance) noexcept;
-
-			/**
 			 * @brief Updates the frustum geometry when the camera moves.
 			 * @param viewProjectionMatrix
 			 */
 			void update (const Libs::Math::Matrix< 4, float > & viewProjectionMatrix) noexcept;
 
 			/**
-			 * @brief Updates the frustum geometry.
-			 * @param projection A reference to a projection matrix.
-			 * @param view A reference to a view matrix.
-			 * @return void
-			 */
-			void
-			update (const Libs::Math::Matrix< 4, float > & projection, const Libs::Math::Matrix< 4, float > & view) noexcept
-			{
-				this->update(projection * view);
-			}
-
-			/**
 			 * @brief Checks a point against the Frustum.
-			 * @param point
-			 * @return Result
+			 * @param point A reference to a vector.
+			 * @return bool
 			 */
 			[[nodiscard]]
-			Result isCollidingWith (const Libs::Math::Vector< 3, float > & point) const noexcept;
+			bool isSeeing (const Libs::Math::Vector< 3, float > & point) const noexcept;
 
 			/**
 			 * @brief Checks a sphere against the Frustum.
-			 * @param sphere
-			 * @return Result
+			 * @param sphere A reference to a sphere.
+			 * @return bool
 			 */
 			[[nodiscard]]
-			Result isCollidingWith (const Libs::Math::Space3D::Sphere< float > & sphere) const noexcept;
+			bool isSeeing (const Libs::Math::Space3D::Sphere< float > & sphere) const noexcept;
 
 			/**
 			 * @brief Checks an axis aligned bounding box against the Frustum.
-			 * @FIXME May be it could be useful to separate Intersect and Inside case ! ² Not perfect...
-			 * @param box A reference to an axis aligned bounding box.
-			 * @return Result
-			 */
-			[[nodiscard]]
-			Result isCollidingWith (const Libs::Math::Space3D::AACuboid< float > & box) const noexcept;
-
-			/**
-			 * @brief Checks a ??? against the Frustum.
-			 * @param coordX
-			 * @param coordY
-			 * @param coordZ
-			 * @param size
-			 * @return Result
-			 */
-			[[nodiscard]]
-			Result isCollidingWith (float coordX, float coordY, float coordZ, float size) const noexcept;
-
-			/**
-			 * @brief setTestState
-			 * @param state
-			 */
-			static
-			void
-			setTestState (bool state) noexcept
-			{
-				s_enableFrustumTest = state;
-			}
-
-			/**
-			 * @brief isTestEnabled
+			 * @param aabb A reference to an axis aligned bounding box.
 			 * @return bool
 			 */
-			static
-			bool
-			isTestEnabled () noexcept
-			{
-				return s_enableFrustumTest;
-			}
+			[[nodiscard]]
+			bool isSeeing (const Libs::Math::Space3D::AACuboid< float > & aabb) const noexcept;
 
-			/**
-			 * @brief toggleTestState
-			 * @return bool
-			 */
-			static
-			bool
-			toggleTestState () noexcept
-			{
-				return s_enableFrustumTest = !s_enableFrustumTest;
-			}
+		private:
 
 			/**
 			 * @brief STL streams printable object.
@@ -168,19 +96,35 @@ namespace EmEn::Graphics
 			 */
 			friend std::ostream & operator<< (std::ostream & out, const Frustum & obj);
 
-			/**
-			 * @brief Stringifies the object.
-			 * @param obj A reference to the object to print.
-			 * @return std::string
-			 */
-			friend std::string to_string (const Frustum & obj);
-
-		private:
-
-			static constexpr auto PlaneCount{6UL};
-
-			static bool s_enableFrustumTest;
-
-			std::array< Libs::Math::Plane< float >, PlaneCount > m_planes{};
+			std::array< Libs::Math::Plane< float >, 6 > m_planes{};
 	};
+
+	inline
+	std::ostream &
+	operator<< (std::ostream & out, const Frustum & obj)
+	{
+		return out << "Frustum data :" "\n"
+			"Right " << obj.m_planes[Frustum::Right] <<
+			"Left " << obj.m_planes[Frustum::Left] <<
+			"Bottom " << obj.m_planes[Frustum::Bottom] <<
+			"Top " << obj.m_planes[Frustum::Top] <<
+			"Far " << obj.m_planes[Frustum::Far] <<
+			"Near " << obj.m_planes[Frustum::Near];
+	}
+
+	/**
+	 * @brief Stringifies the object.
+	 * @param obj A reference to the object to print.
+	 * @return std::string
+	 */
+	inline
+	std::string
+	to_string (const Frustum & obj)
+	{
+		std::stringstream output;
+
+		output << obj;
+
+		return output.str();
+	}
 }

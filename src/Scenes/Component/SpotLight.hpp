@@ -207,7 +207,7 @@ namespace EmEn::Scenes::Component
 			getDistanceOrFar () const noexcept override
 			{
 				/* NOTE: A spotlight returns the distance. */
-				return m_radius > 0.0F ? m_radius : s_maxDistance;
+				return m_radius > 0.0F ? m_radius : DefaultGraphicsShadowMappingViewDistance;
 			}
 
 			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::isOrthographicProjection() */

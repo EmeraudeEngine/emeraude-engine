@@ -515,12 +515,20 @@ namespace EmEn::Vulkan
 			VkFormat findSupportedFormat (const std::vector< VkFormat > & formats, VkImageTiling tiling, VkFormatFeatureFlags featureFlags) const noexcept;
 
 			/**
-			 * @brief Finds the right Vulkan token for multisampling.
+			 * @brief Returns the available samples against the desired for multisampling rendering.
 			 * @param samples The number of samples desired.
 			 * @return VkSampleCountFlagBits
 			 */
 			[[nodiscard]]
-			VkSampleCountFlagBits findSampleCount (uint32_t samples) const noexcept;
+			uint32_t checkMultisampleCount (uint32_t samples) const noexcept;
+
+			/**
+			 * @brief Returns sample flag for Vulkan.
+			 * @param samples The number of samples desired.
+			 * @return VkSampleCountFlagBits
+			 */
+			[[nodiscard]]
+			static VkSampleCountFlagBits getSampleCountFlag (uint32_t samples) noexcept;
 
 			/**
 			 * @brief Lock the access to the device.

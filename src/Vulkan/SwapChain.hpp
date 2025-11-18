@@ -62,11 +62,10 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Constructs a swap-chain.
-			 * @param device A reference to a smart pointer of the device in use with the swap-chain.
 			 * @param renderer A reference to the graphics renderer.
 			 * @param settings A reference to the settings.
 			 */
-			SwapChain (const std::shared_ptr< Device > & device, Graphics::Renderer & renderer, Settings & settings) noexcept;
+			SwapChain (Graphics::Renderer & renderer, Settings & settings) noexcept;
 
 			/**
 			 * @brief Destructs the swap-chain.
@@ -199,17 +198,6 @@ namespace EmEn::Vulkan
 			}
 
 			/**
-			 * @brief Returns the number of samples in use.
-			 * @return uint32_t
-			 */
-			[[nodiscard]]
-			uint32_t
-			sampleCount () const noexcept
-			{
-				return m_sampleCount;
-			}
-
-			/**
 			 * @brief Returns whether the multisampling is enabled and effective.
 			 * @return bool
 			 */
@@ -217,7 +205,7 @@ namespace EmEn::Vulkan
 			bool
 			isMultisamplingEnabled () const noexcept
 			{
-				return this->sampleCount() > 1;
+				return this->precisions().samples() > 1;
 			}
 
 			/**
@@ -421,10 +409,17 @@ namespace EmEn::Vulkan
 			{
 				/* Framebuffer configuration holder. */
 				std::unique_ptr< Framebuffer > framebuffer;
-				/* Color buffer */
+				/* MSAA Color buffer (multisampled) */
+				std::shared_ptr< Image > MSAAColorImage;
+				std::shared_ptr< ImageView > MSAAColorImageView;
+				/* MSAA Depth+Stencil buffers (multisampled) */
+				std::shared_ptr< Image > MSAADepthStencilImage;
+				std::shared_ptr< ImageView > MSAADepthImageView;
+				std::shared_ptr< ImageView > MSAAStencilImageView;
+				/* Color buffer (resolve target, swapchain image) */
 				std::shared_ptr< Image > colorImage;
 				std::shared_ptr< ImageView > colorImageView;
-				/* Depth+Stencil buffers. */
+				/* Depth+Stencil buffers (resolve target) */
 				std::shared_ptr< Image > depthStencilImage;
 				std::shared_ptr< ImageView > depthImageView;
 				std::shared_ptr< ImageView > stencilImageView;
@@ -434,7 +429,6 @@ namespace EmEn::Vulkan
 			VkSwapchainKHR m_handle{VK_NULL_HANDLE};
 			VkSwapchainCreateInfoKHR m_createInfo{};
 			Status m_status{Status::Uninitialized};
-			uint32_t m_sampleCount{1};
 			uint32_t m_imageCount{0};
 			uint32_t m_acquiredImageIndex{0};
 			Libs::StaticVector< Frame, 5 > m_frames;

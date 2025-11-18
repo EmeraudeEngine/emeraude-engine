@@ -180,6 +180,21 @@ namespace EmEn::Scenes
 				return m_boundingSphere;
 			}
 
+			/** @copydoc EmEn::Scenes::LocatableInterface::setCollisionDetectionModel(Scenes::CollisionDetectionModel) */
+			void
+			setCollisionDetectionModel (CollisionDetectionModel model) noexcept override
+			{
+				m_collisionDetectionModel = model;
+			}
+
+			/** @copydoc EmEn::Scenes::LocatableInterface::collisionDetectionModel() const */
+			[[nodiscard]]
+			CollisionDetectionModel
+			collisionDetectionModel () const noexcept override
+			{
+				return m_collisionDetectionModel;
+			}
+
 			/**
 			 * @brief Returns the physical properties.
 			 * @return const Physics::BodyPhysicalProperties &
@@ -670,10 +685,9 @@ namespace EmEn::Scenes
 			static constexpr auto IsDeflector{1UL};
 			static constexpr auto IsRenderable{2UL};
 			static constexpr auto HasBodyPhysicalProperties{3UL};
-			static constexpr auto SphereCollisionEnabled{4UL};
-			static constexpr auto IsSimulationPaused{5UL};
-			static constexpr auto IsCollisionDisabled{6UL};
-			static constexpr auto NextFlag{7UL};
+			static constexpr auto IsSimulationPaused{4UL};
+			static constexpr auto IsCollisionDisabled{5UL};
+			static constexpr auto NextFlag{6UL};
 
 			/**
 			 * @brief Constructs an abstract entity.
@@ -860,6 +874,7 @@ namespace EmEn::Scenes
 			Physics::BodyPhysicalProperties m_bodyPhysicalProperties;
 			const uint32_t m_birthTime{0};
 			size_t m_lastUpdatedMoveCycle{0};
+			CollisionDetectionModel m_collisionDetectionModel{CollisionDetectionModel::Sphere};
 			mutable std::mutex m_componentsAccess;
 	};
 }

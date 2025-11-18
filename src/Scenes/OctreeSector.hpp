@@ -450,12 +450,20 @@ namespace EmEn::Scenes
 			{
 				if constexpr ( enable_volume )
 				{
-					if ( element->sphereCollisionIsEnabled() )
+					switch ( element->collisionDetectionModel() )
 					{
-						return this->insertWithPrimitive(element, element->getWorldBoundingSphere());
-					}
+						case CollisionDetectionModel::Point :
+							return this->insertWithPrimitive(element, element->getWorldCoordinates().position());
 
-					return this->insertWithPrimitive(element, element->getWorldBoundingBox());
+						case CollisionDetectionModel::Sphere :
+							return this->insertWithPrimitive(element, element->getWorldBoundingSphere());
+
+						case CollisionDetectionModel::AABB :
+							return this->insertWithPrimitive(element, element->getWorldBoundingBox());
+
+						default:
+							return false;
+					}
 				}
 				else
 				{
@@ -488,14 +496,23 @@ namespace EmEn::Scenes
 					return true;
 				}
 
+				/* TODO: Verify the specific check when not using volume. */
 				if constexpr ( enable_volume )
 				{
-					if ( element->sphereCollisionIsEnabled() )
+					switch ( element->collisionDetectionModel() )
 					{
-						return this->checkElementOverlapWithPrimitive(element, element->getWorldBoundingSphere());
-					}
+						case CollisionDetectionModel::Point :
+							return this->checkElementOverlapWithPrimitive(element, element->getWorldCoordinates().position());
 
-					return this->checkElementOverlapWithPrimitive(element, element->getWorldBoundingBox());
+						case CollisionDetectionModel::Sphere :
+							return this->checkElementOverlapWithPrimitive(element, element->getWorldBoundingSphere());
+
+						case CollisionDetectionModel::AABB :
+							return this->checkElementOverlapWithPrimitive(element, element->getWorldBoundingBox());
+
+						default:
+							return false;
+					}
 				}
 				else
 				{
