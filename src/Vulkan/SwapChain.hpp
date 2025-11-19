@@ -175,6 +175,10 @@ namespace EmEn::Vulkan
 				return m_showInformation;
 			}
 
+			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::capture() */
+			[[nodiscard]]
+			std::array< Libs::PixelFactory::Pixmap< uint8_t >, 3 > capture (TransferManager & transferManager, bool keepAlpha, bool withDepthBuffer, bool withStencilBuffer) const noexcept override;
+
 			/**
 			 * @brief Returns the swap-chain vulkan handle.
 			 * @return VkSwapchainKHR

@@ -35,6 +35,7 @@
 #endif
 
 /* Local inclusions. */
+#include "Libs/PixelFactory/Processor.hpp"
 #include "Vulkan/Framebuffer.hpp"
 #include "Vulkan/ImageView.hpp"
 #include "Vulkan/Device.hpp"
@@ -47,6 +48,7 @@ namespace EmEn::Vulkan
 {
 	using namespace Libs;
 	using namespace Libs::Math;
+	using namespace Libs::PixelFactory;
 	using namespace Graphics;
 
 	SwapChain::SwapChain (Renderer & renderer, Settings & settings) noexcept
@@ -85,7 +87,7 @@ namespace EmEn::Vulkan
 		m_createInfo.imageColorSpace = surfaceFormat.colorSpace;
 		m_createInfo.imageExtent = this->chooseSwapExtent(capabilities);
 		m_createInfo.imageArrayLayers = 1;
-		m_createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+		m_createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT; /* USAGE_TRANSFER_SRC enable the screenshot capabilities. FIXME: check for performances. */
 		m_createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE; /* NOTE: Graphics and presentation (99.9%) are from the same family. */
 		m_createInfo.queueFamilyIndexCount = 0;
 		m_createInfo.pQueueFamilyIndices = nullptr;
@@ -1153,5 +1155,54 @@ namespace EmEn::Vulkan
 	SwapChain::onInputDeviceDisconnected (AVConsole::AVManagers & /*managers*/, AbstractVirtualDevice & /*sourceDevice*/) noexcept
 	{
 		m_viewMatrices.destroy();
+	}
+
+	std::array< Pixmap< uint8_t >, 3 >
+	SwapChain::capture (TransferManager & transferManager, bool keepAlpha, bool withDepthBuffer, bool withStencilBuffer) const noexcept
+	{
+		std::array< Pixmap< uint8_t >, 3 > result;
+
+		if ( m_acquiredImageIndex >= m_frames.size() )
+		{
+			TraceError{ClassId} << "Invalid acquired image index for capture!";
+
+			return result;
+		}
+
+		const auto & frame = m_frames[m_acquiredImageIndex];
+
+		// Capture color buffer
+		if ( frame.colorImage )
+		{
+			if ( !transferManager.downloadImage(*frame.colorImage, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_IMAGE_ASPECT_COLOR_BIT, result[0]) )
+			{
+				TraceError{ClassId} << "Failed to capture color buffer!";
+
+				return result;
+			}
+
+			result[0] = Processor< uint8_t >::toRGB(result[0]);
+			result[0] = Processor< uint8_t >::swapChannels(result[0], false);
+		}
+
+		// Capture depth buffer if requested and available
+		if ( withDepthBuffer && frame.depthImageView )
+		{
+			if ( !transferManager.downloadImage(*frame.depthStencilImage, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_IMAGE_ASPECT_DEPTH_BIT, result[1]) )
+			{
+				TraceWarning{ClassId} << "Failed to capture depth buffer!";
+			}
+		}
+
+		// Capture stencil buffer if requested and available
+		if ( withStencilBuffer && frame.stencilImageView )
+		{
+			if ( !transferManager.downloadImage(*frame.depthStencilImage, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_IMAGE_ASPECT_STENCIL_BIT, result[2]) )
+			{
+				TraceWarning{ClassId} << "Failed to capture stencil buffer!";
+			}
+		}
+
+		return result;
 	}
 }

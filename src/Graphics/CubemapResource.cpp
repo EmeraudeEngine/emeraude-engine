@@ -48,29 +48,91 @@ namespace EmEn::Graphics
 		{
 			return false;
 		}
-		
-		constexpr size_t size{32};
 
-		constexpr std::array< Color< float >, CubemapFaceCount > colors{
-			Red, Cyan,
-			Green, Magenta,
-			Blue, Yellow
-		};
-
-		for ( size_t faceIndex = 0; faceIndex < CubemapFaceCount; faceIndex++ )
+		if constexpr ( IsDebug )
 		{
-			if ( !m_faces.at(faceIndex).initialize(size, size, ChannelMode::RGBA) )
-			{
-				TraceError{ClassId} << "Unable to load the default pixmap for face #" << faceIndex << " !";
+			constexpr size_t size{32};
 
-				return this->setLoadSuccess(false);
+			constexpr std::array< Color< float >, CubemapFaceCount > colors{
+				Red, Cyan,
+				Green, Magenta,
+				Blue, Yellow
+			};
+
+			for ( size_t faceIndex = 0; faceIndex < CubemapFaceCount; faceIndex++ )
+			{
+				if ( !m_faces.at(faceIndex).initialize(size, size, ChannelMode::RGBA) )
+				{
+					TraceError{ClassId} << "Unable to load the default pixmap for face #" << faceIndex << " !";
+
+					return this->setLoadSuccess(false);
+				}
+
+				if ( !m_faces.at(faceIndex).fill(colors.at(faceIndex)) )
+				{
+					TraceError{ClassId} << "Unable to fill the default pixmap for face #" << faceIndex << " !";
+
+					return this->setLoadSuccess(false);
+				}
 			}
+		}
+		else
+		{
+			constexpr size_t size{512};
 
-			if ( !m_faces.at(faceIndex).fill(colors.at(faceIndex)) )
+			/* Create a retro sunset gradient (orange -> pink -> purple -> dark blue). */
+			Gradient< float, float > sunsetGradient;
+			sunsetGradient.addColorAt(0.0F, Color< float >{0.05F, 0.05F, 0.15F, 1.0F});  /* Top: Dark blue */
+			sunsetGradient.addColorAt(0.3F, Color< float >{0.3F, 0.1F, 0.4F, 1.0F});     /* Purple */
+			sunsetGradient.addColorAt(0.5F, Color< float >{0.9F, 0.3F, 0.4F, 1.0F});     /* Pink/Rose */
+			sunsetGradient.addColorAt(0.7F, Color< float >{1.0F, 0.5F, 0.2F, 1.0F});     /* Orange */
+			sunsetGradient.addColorAt(1.0F, Color< float >{0.95F, 0.8F, 0.6F, 1.0F});    /* Bottom: Light orange/yellow */
+
+			for ( size_t faceIndex = 0; faceIndex < CubemapFaceCount; faceIndex++ )
 			{
-				TraceError{ClassId} << "Unable to fill the default pixmap for face #" << faceIndex << " !";
+				if ( !m_faces.at(faceIndex).initialize(size, size, ChannelMode::RGBA) )
+				{
+					TraceError{ClassId} << "Unable to load the default pixmap for face #" << faceIndex << " !";
 
-				return this->setLoadSuccess(false);
+					return this->setLoadSuccess(false);
+				}
+
+				/* Apply gradient differently based on face orientation. */
+				switch ( faceIndex )
+				{
+					case 0: /* PositiveX (Right) */
+					case 1: /* NegativeX (Left) */
+					case 4: /* PositiveZ (Front) */
+					case 5: /* NegativeZ (Back) */
+						/* Side faces: horizontal gradient (left to right). */
+						if ( !m_faces.at(faceIndex).fillHorizontal(sunsetGradient) )
+						{
+							TraceError{ClassId} << "Unable to fill gradient for face #" << faceIndex << " !";
+
+							return this->setLoadSuccess(false);
+						}
+						break;
+
+					case 2: /* PositiveY (Top) */
+						/* Top face: solid dark blue (sky). */
+						if ( !m_faces.at(faceIndex).fill(Color< float >{0.05F, 0.05F, 0.15F, 1.0F}) )
+						{
+							TraceError{ClassId} << "Unable to fill top face !";
+
+							return this->setLoadSuccess(false);
+						}
+						break;
+
+					case 3: /* NegativeY (Bottom) */
+						/* Bottom face: solid light orange (horizon glow). */
+						if ( !m_faces.at(faceIndex).fill(Color< float >{0.95F, 0.8F, 0.6F, 1.0F}) )
+						{
+							TraceError{ClassId} << "Unable to fill bottom face !";
+
+							return this->setLoadSuccess(false);
+						}
+						break;
+				}
 			}
 		}
 

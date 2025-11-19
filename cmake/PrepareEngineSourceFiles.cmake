@@ -146,6 +146,7 @@ set(EMERAUDE_HEADER_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/WaveFactory/Wave.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/BlobTrait.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/FastJSON.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/FileTimestamps.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/FlagArrayTrait.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/FlagTrait.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/KVParser.hpp
@@ -215,6 +216,7 @@ set(EMERAUDE_SOURCE_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/WaveFactory/Processor.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/WaveFactory/Wave.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/FastJSON.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/FileTimestamps.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/KVParser.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/ObservableTrait.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/ObserverTrait.cpp

@@ -285,7 +285,6 @@ For detailed development tasks and known issues, please check the [GitHub Issues
 ## Known Issues
 
 - **Linux/X11:** Multi-monitor setup with NVIDIA proprietary drivers may cause freezing. See [NVIDIA Forums](https://forums.developer.nvidia.com/t/external-monitor-freezes-when-using-dedicated-gpu/265406) for workarounds.
-- **macOS:** `std::format` (C++20) incompatible with older SDK targets (< 13.0). Engine uses `std::stringstream` as fallback.
 
 ## Contributing
 

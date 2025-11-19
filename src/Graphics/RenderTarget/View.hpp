@@ -206,6 +206,16 @@ namespace EmEn::Graphics::RenderTarget
 				return false;
 			}
 
+			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::isDebug() const */
+			[[nodiscard]]
+			std::array< Libs::PixelFactory::Pixmap< uint8_t >, 3 >
+			capture (Vulkan::TransferManager & transferManager, bool keepAlpha, bool withDepthBuffer, bool withStencilBuffer) const noexcept override
+			{
+				// TODO ...
+
+				return {};
+			}
+
 			/**
 			 * @brief Gives access to the main hardware depth stencil image of the render target.
 			 * @return std::shared_ptr< Vulkan::Image >

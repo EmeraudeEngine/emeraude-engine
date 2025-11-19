@@ -429,7 +429,7 @@ namespace EmEn
 			m_coreHelp.registerShortcut("Clean up unused resources from managers.", KeyF9, ModKeyShift);
 			m_coreHelp.registerShortcut("Suspend core thread execution for 3 seconds.", KeyF10, ModKeyShift);
 			m_coreHelp.registerShortcut("Toggle the window fullscreen mode.", KeyF11, ModKeyShift);
-			m_coreHelp.registerShortcut("Unused yet. Reserved by the core.", KeyF12, ModKeyShift);
+			m_coreHelp.registerShortcut("Take a screenshot.", KeyF12, ModKeyShift);
 		}
 
 		if ( m_primaryServices.initialize() )
@@ -1077,7 +1077,7 @@ namespace EmEn
 					return true;
 
 				case KeyF12 :
-					this->notifyUser("Core reserved SHIFT+F12 shortcut hit.");
+					this->screenshot();
 
 					return true;
 
@@ -1143,19 +1143,40 @@ namespace EmEn
 	}
 
 	bool
-	Core::screenshot (bool /*depth*/, bool /*stencil*/) noexcept
+	Core::screenshot () noexcept
 	{
 		/* Gets the capture directory. */
-		const auto captures = m_primaryServices.fileSystem().userDataDirectory("Captures");
+		auto captureDirectory = m_primaryServices.fileSystem().userDataDirectory("captures");
 
-		if ( !IO::writable(captures) )
+		if ( !IO::writable(captureDirectory) )
 		{
-			TraceError{ClassId} << "Unable to write in captures directory '" << captures << "' !";
+			TraceError{ClassId} << "Unable to write in captures directory " << captureDirectory << " !";
 
 			return false;
 		}
 
-		/* FIXME: TODO with vulkan */
+		const auto images = m_graphicsRenderer.captureFramebuffer(false, false);
+
+		if ( !images[0].isValid() )
+		{
+			Tracer::error(ClassId, "Unable to capture the framebuffer !");
+
+			return false;
+		}
+
+		std::stringstream filename;
+		filename << std::chrono::duration_cast< std::chrono::seconds >(std::chrono::system_clock::now().time_since_epoch()).count() << ".png";
+
+		const auto filepath = captureDirectory.append(filename.str());
+
+		if ( !PixelFactory::FileIO::write(images[0], filepath) )
+		{
+			TraceError{ClassId} << "Unable to write the screenshot " << filepath << " !";
+
+			return false;
+		}
+
+		TraceSuccess{ClassId} << "The screenshot is saved to " << filepath;
 
 		return true;
 	}

@@ -38,6 +38,7 @@
 #include "AVConsole/AbstractVirtualDevice.hpp"
 
 /* Local inclusions for usages. */
+#include "Libs/PixelFactory/Pixmap.hpp"
 #include "Vulkan/Sync/Semaphore.hpp"
 #include "Graphics/FramebufferPrecisions.hpp"
 #include "Graphics/Types.hpp"
@@ -59,6 +60,7 @@ namespace EmEn
 		class Image;
 		class ImageView;
 		class CommandBuffer;
+		class TransferManager;
 	}
 }
 
@@ -360,6 +362,17 @@ namespace EmEn::Graphics::RenderTarget
 			 */
 			[[nodiscard]]
 			virtual bool isDebug () const noexcept = 0;
+
+			/**
+			 * @brief Captures the GPU buffer to save into a pixmap.
+			 * @param transferManager A reference to the transfer manager.
+			 * @param keepAlpha Keep the alpha channel from the GPU memory.
+			 * @param withDepthBuffer Enable the depth buffer to be captured, if exists.
+			 * @param withStencilBuffer Enable the stencil buffer to be captured, if exists.
+			 * @return std::array< Libs::PixelFactory::Pixmap< uint8_t >, 3 > Array containing [0] = color, [1] = depth (optional), [2] = stencil (optional)
+			 */
+			[[nodiscard]]
+			virtual std::array< Libs::PixelFactory::Pixmap< uint8_t >, 3 > capture (Vulkan::TransferManager & transferManager, bool keepAlpha, bool withDepthBuffer, bool withStencilBuffer) const noexcept = 0;
 
 		protected:
 

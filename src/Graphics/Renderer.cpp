@@ -1001,4 +1001,15 @@ namespace EmEn::Graphics
 
 		return true;
 	}
+
+	std::array< Pixmap< uint8_t >, 3 >
+	Renderer::captureFramebuffer (bool keepAlpha, bool withDepthBuffer, bool withStencilBuffer) noexcept
+	{
+		if ( m_swapChain == nullptr || !m_transferManager.usable() )
+		{
+			return {};
+		}
+
+		return m_swapChain->capture(m_transferManager, keepAlpha, withDepthBuffer, withStencilBuffer);
+	}
 }

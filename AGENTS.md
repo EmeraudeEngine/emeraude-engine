@@ -2411,8 +2411,10 @@ class MyCustomComponent : public Component {
     *   One class per file pair (`.hpp`/`.cpp`) unless classes are tightly coupled.
 
 3.  **Error Handling:**
-    *   Use exceptions for critical errors that cannot be recovered (e.g., Vulkan device creation failure).
-    *   Return error codes or `std::optional` for expected failures (e.g., resource not found).
+    *   **IMPORTANT:** The engine does NOT use C++ exceptions. All exception handling is disabled in the build configuration.
+    *   Use `std::error_code` for error propagation with STL functions (e.g., `std::filesystem::last_write_time(path, ec)`).
+    *   Return error codes, `std::optional`, or `std::expected` (C++23) for expected failures (e.g., resource not found).
+    *   Use `noexcept` on functions that are guaranteed not to throw.
     *   Log errors with appropriate severity levels (ERROR, WARNING, INFO, DEBUG).
     *   Validate all public API inputs and provide clear error messages.
     *   Never silently ignore errors; always log or propagate them.
@@ -2434,7 +2436,20 @@ class MyCustomComponent : public Component {
         4. Headers from the same module
     *   Use angle brackets (`<>`) for external libraries, quotes (`""`) for engine headers.
 
-6.  **Threading and Concurrency:**
+6.  **Comments:**
+    *   Use C-style block comments `/* */` for all code comments (single-line and multi-line).
+    *   Do NOT use C++-style `//` comments in the codebase.
+    *   End single-line comments with a period: `/* This is a comment. */`
+    *   For inline comments after code, use the same style: `bytesPerPixel = 4; /* Depth as float32. */`
+    *   Multi-line comments should follow this format:
+        ```cpp
+        /* This is a longer comment
+         * that spans multiple lines.
+         * Each line should start with an asterisk. */
+        ```
+    *   Doxygen documentation comments use `/** */` for API documentation (as per existing convention).
+
+7.  **Threading and Concurrency:**
     *   Be explicit about thread safety in documentation.
     *   Use mutexes, locks, and atomic operations appropriately.
     *   Avoid global mutable state; prefer thread-local storage or explicit synchronization.

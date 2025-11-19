@@ -107,6 +107,17 @@ namespace EmEn::Resources
 			}
 
 			/**
+			 * @brief Returns whether the resources dynamic scan is enabled.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isUsingDynamicScan () const noexcept
+			{
+				return m_useDynamicScan;
+			}
+
+			/**
 			 * @brief Returns the total memory consumed by loaded resources in bytes from all containers.
 			 * @return size_t
 			 */
@@ -176,6 +187,22 @@ namespace EmEn::Resources
 			bool readResourceIndexes () noexcept;
 
 			/**
+			 * @brief Scans resource directories dynamically to build local stores.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool scanResourceDirectories () noexcept;
+
+			/**
+			 * @brief Determines the store name for a given file based on its properties.
+			 * @param filepath A reference to the filesystem path.
+			 * @param dataStoreDirectory A reference to the base data-stores directory.
+			 * @return std::string Store name or empty string if undetermined.
+			 */
+			[[nodiscard]]
+			static std::string determineStoreForFile (const std::filesystem::path & filepath, const std::filesystem::path & dataStoreDirectory) noexcept;
+
+			/**
 			 * @brief Parses a store JSON object to list available resources on disk.
 			 * @param fileSystem A reference to the file system services.
 			 * @param storesObject A reference to a JSON value.
@@ -236,6 +263,7 @@ namespace EmEn::Resources
 			bool m_verbosityEnabled{false};
 			bool m_downloadingAllowed{false};
 			bool m_quietConversion{false};
+			bool m_useDynamicScan{false};
 	};
 
 	inline

@@ -341,6 +341,16 @@ namespace EmEn::Graphics::RenderTarget
 				return m_debugImage != nullptr;
 			}
 
+			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::isDebug() const */
+			[[nodiscard]]
+			std::array< Libs::PixelFactory::Pixmap< uint8_t >, 3 >
+			capture (Vulkan::TransferManager & transferManager, bool keepAlpha, bool withDepthBuffer, bool withStencilBuffer) const noexcept override
+			{
+				// TODO ...
+
+				return {};
+			}
+
 		private:
 
 			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::updateVideoDeviceProperties() */

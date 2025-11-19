@@ -747,6 +747,16 @@ namespace EmEn::Graphics
 			 */
 			void renderFrame (const std::shared_ptr< Scenes::Scene > & scene, const Overlay::Manager & overlayManager) noexcept;
 
+			/**
+			 * @brief Captures the framebuffer.
+			 * @param keepAlpha Keep the alpha channel from the GPU memory. Default false.
+			 * @param withDepthBuffer Enable to capture the depth buffer. Default false.
+			 * @param withStencilBuffer Enable to capture the stencil buffer. Default false.
+			 * @return std::array< Libs::PixelFactory::Pixmap< uint8_t >, 3 >
+			 */
+			[[nodiscard]]
+			std::array< Libs::PixelFactory::Pixmap< uint8_t >, 3 > captureFramebuffer (bool keepAlpha = false, bool withDepthBuffer = false, bool withStencilBuffer = false) noexcept;
+
 		private:
 
 			/** @copydoc EmEn::ServiceInterface::onInitialize() */
