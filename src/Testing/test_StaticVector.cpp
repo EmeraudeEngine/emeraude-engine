@@ -422,7 +422,7 @@ namespace EmEn::Libs
 	    StaticVector< int, 10 > s1{1, 2, 3};
 	    StaticVector< int, 10 > s2{7, 8, 9, 10};
 
-	    s1.quickSwap(s2);
+	    s1.quick_swap(s2);
 
 	    ASSERT_EQ(s1.size(), 4);
 	    ASSERT_EQ(s1[0], 7);
@@ -526,5 +526,116 @@ namespace EmEn::Libs
 
 	    ASSERT_EQ(s2.size(), 2);
 	    ASSERT_EQ(s2[0].value, 1);
+	}
+
+	TEST_F (StaticVectorTest, Erase_SingleElement)
+	{
+	    StaticVector< int, 10 > vec{1, 2, 3, 4, 5};
+
+	    auto it = vec.erase(vec.begin() + 2);
+
+	    ASSERT_EQ(vec.size(), 4);
+	    ASSERT_EQ(vec[0], 1);
+	    ASSERT_EQ(vec[1], 2);
+	    ASSERT_EQ(vec[2], 4);
+	    ASSERT_EQ(vec[3], 5);
+	    ASSERT_EQ(*it, 4);
+	}
+
+	TEST_F (StaticVectorTest, Erase_FirstElement)
+	{
+	    StaticVector< int, 10 > vec{1, 2, 3, 4, 5};
+
+	    auto it = vec.erase(vec.begin());
+
+	    ASSERT_EQ(vec.size(), 4);
+	    ASSERT_EQ(vec[0], 2);
+	    ASSERT_EQ(vec[1], 3);
+	    ASSERT_EQ(vec[2], 4);
+	    ASSERT_EQ(vec[3], 5);
+	    ASSERT_EQ(*it, 2);
+	}
+
+	TEST_F (StaticVectorTest, Erase_LastElement)
+	{
+	    StaticVector< int, 10 > vec{1, 2, 3, 4, 5};
+
+	    auto it = vec.erase(vec.end() - 1);
+
+	    ASSERT_EQ(vec.size(), 4);
+	    ASSERT_EQ(vec[0], 1);
+	    ASSERT_EQ(vec[1], 2);
+	    ASSERT_EQ(vec[2], 3);
+	    ASSERT_EQ(vec[3], 4);
+	    ASSERT_EQ(it, vec.end());
+	}
+
+	TEST_F (StaticVectorTest, Erase_Range)
+	{
+	    StaticVector< int, 10 > vec{1, 2, 3, 4, 5, 6, 7};
+
+	    auto it = vec.erase(vec.begin() + 2, vec.begin() + 5);
+
+	    ASSERT_EQ(vec.size(), 4);
+	    ASSERT_EQ(vec[0], 1);
+	    ASSERT_EQ(vec[1], 2);
+	    ASSERT_EQ(vec[2], 6);
+	    ASSERT_EQ(vec[3], 7);
+	    ASSERT_EQ(*it, 6);
+	}
+
+	TEST_F (StaticVectorTest, Erase_EmptyRange)
+	{
+	    StaticVector< int, 10 > vec{1, 2, 3, 4, 5};
+
+	    auto it = vec.erase(vec.begin() + 2, vec.begin() + 2);
+
+	    ASSERT_EQ(vec.size(), 5);
+	    ASSERT_EQ(vec[0], 1);
+	    ASSERT_EQ(vec[1], 2);
+	    ASSERT_EQ(vec[2], 3);
+	    ASSERT_EQ(vec[3], 4);
+	    ASSERT_EQ(vec[4], 5);
+	    ASSERT_EQ(*it, 3);
+	}
+
+	TEST_F (StaticVectorTest, Erase_WithLifetimeTracker)
+	{
+	    StaticVector< LifetimeTracker, 10 > vec;
+	    vec.emplace_back(1);
+	    vec.emplace_back(2);
+	    vec.emplace_back(3);
+	    vec.emplace_back(4);
+	    vec.emplace_back(5);
+
+	    LifetimeTracker::reset();
+
+	    vec.erase(vec.begin() + 2);
+
+	    ASSERT_EQ(vec.size(), 4);
+	    ASSERT_EQ(vec[0].value, 1);
+	    ASSERT_EQ(vec[1].value, 2);
+	    ASSERT_EQ(vec[2].value, 4);
+	    ASSERT_EQ(vec[3].value, 5);
+	    ASSERT_EQ(LifetimeTracker::destructor_calls, 1);
+	}
+
+	TEST_F (StaticVectorTest, Erase_RangeWithLifetimeTracker)
+	{
+	    StaticVector< LifetimeTracker, 10 > vec;
+	    vec.emplace_back(1);
+	    vec.emplace_back(2);
+	    vec.emplace_back(3);
+	    vec.emplace_back(4);
+	    vec.emplace_back(5);
+
+	    LifetimeTracker::reset();
+
+	    vec.erase(vec.begin() + 1, vec.begin() + 4);
+
+	    ASSERT_EQ(vec.size(), 2);
+	    ASSERT_EQ(vec[0].value, 1);
+	    ASSERT_EQ(vec[1].value, 5);
+	    ASSERT_EQ(LifetimeTracker::destructor_calls, 3);
 	}
 }

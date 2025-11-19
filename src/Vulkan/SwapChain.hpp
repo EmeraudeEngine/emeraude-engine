@@ -103,12 +103,12 @@ namespace EmEn::Vulkan
 				return true;
 			}
 
-			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::videoType() const noexcept */
+			/** @copydoc EmEn::Scenes::AVConsole::AbstractVirtualDevice::videoType() const noexcept */
 			[[nodiscard]]
-			AVConsole::VideoType
+			Scenes::AVConsole::VideoType
 			videoType () const noexcept override
 			{
-				return AVConsole::VideoType::View;
+				return Scenes::AVConsole::VideoType::View;
 			}
 
 			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::updateViewRangesProperties() noexcept */
@@ -167,13 +167,9 @@ namespace EmEn::Vulkan
 				return this->isCreated() && m_status == Status::Ready;
 			}
 
-			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::isDebug() const */
+			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::capture() */
 			[[nodiscard]]
-			bool
-			isDebug () const noexcept override
-			{
-				return m_showInformation;
-			}
+			std::array< Libs::PixelFactory::Pixmap< uint8_t >, 3 > capture (TransferManager & transferManager, uint32_t layerIndex, bool keepAlpha, bool withDepthBuffer, bool withStencilBuffer) const noexcept override;
 
 			/**
 			 * @brief Returns the swap-chain vulkan handle.
@@ -257,17 +253,17 @@ namespace EmEn::Vulkan
 
 		private:
 
-			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::updateVideoDeviceProperties() */
+			/** @copydoc EmEn::Scenes::AVConsole::AbstractVirtualDevice::updateVideoDeviceProperties() */
 			void updateVideoDeviceProperties (float fovOrNear, float distanceOrFar, bool isOrthographicProjection) noexcept override;
 
-			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::updateDeviceFromCoordinates() */
+			/** @copydoc EmEn::Scenes::AVConsole::AbstractVirtualDevice::updateDeviceFromCoordinates() */
 			void updateDeviceFromCoordinates (const Libs::Math::CartesianFrame< float > & worldCoordinates, const Libs::Math::Vector< 3, float > & worldVelocity) noexcept override;
 
-			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::onInputDeviceConnected() */
-			void onInputDeviceConnected (AVConsole::AVManagers & managers, AbstractVirtualDevice & sourceDevice) noexcept override;
+			/** @copydoc EmEn::Scenes::AVConsole::AbstractVirtualDevice::onInputDeviceConnected() */
+			void onInputDeviceConnected (Scenes::AVConsole::AVManagers & managers, AbstractVirtualDevice & sourceDevice) noexcept override;
 
-			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::onInputDeviceDisconnected() */
-			void onInputDeviceDisconnected (AVConsole::AVManagers & managers, AbstractVirtualDevice & sourceDevice) noexcept override;
+			/** @copydoc EmEn::Scenes::AVConsole::AbstractVirtualDevice::onInputDeviceDisconnected() */
+			void onInputDeviceDisconnected (Scenes::AVConsole::AVManagers & managers, AbstractVirtualDevice & sourceDevice) noexcept override;
 
 			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::onCreate() */
 			[[nodiscard]]

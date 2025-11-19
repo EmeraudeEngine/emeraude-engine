@@ -158,11 +158,12 @@ namespace EmEn::Saphir::Declaration
 			/**
 			 * @brief Adds an array member to the block.
 			 * @param structure A reference to a structure.
+			 * @param name A C-string to set the name of the member.
 			 * @param arraySize The size of the array.
 			 * @param layout The layout to use. Default nullptr.
 			 * @return bool
 			 */
-			bool addArrayMember (const Structure & structure, uint32_t arraySize, Key layout = nullptr) noexcept;
+			bool addArrayMember (const Structure & structure, Key name, uint32_t arraySize, Key layout = nullptr) noexcept;
 
 			/**
 			 * @brief Returns the list of members.
@@ -207,7 +208,7 @@ namespace EmEn::Saphir::Declaration
 			uint32_t m_set;
 			uint32_t m_binding;
 			MemoryLayout m_memoryLayout;
-			MatrixStorageOrder m_matrixStorageOrder = MatrixStorageOrder::Default;
-			std::vector< std::pair< Key, Member::BufferBackedBlock > > m_members{};
+			MatrixStorageOrder m_matrixStorageOrder{MatrixStorageOrder::Default};
+			std::vector< std::pair< Key, Member::BufferBackedBlock > > m_members;
 	};
 }

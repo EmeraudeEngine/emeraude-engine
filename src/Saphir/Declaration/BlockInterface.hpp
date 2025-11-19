@@ -115,9 +115,9 @@ namespace EmEn::Saphir::Declaration
 			 */
 			[[nodiscard]]
 			const std::unordered_map< Key, Structure > &
-			structures () const noexcept
+			structureDeclaration () const noexcept
 			{
-				return m_structures;
+				return m_structureDeclarations;
 			}
 
 		protected:
@@ -143,13 +143,13 @@ namespace EmEn::Saphir::Declaration
 			 * @param structure A reference to a structure.
 			 * @return bool
 			 */
-			bool addStructure (Key name, const Structure & structure) noexcept;
+			bool addStructureDeclaration (Key name, const Structure & structure) noexcept;
 
 		private:
 
 			Key m_name;
 			std::string m_instanceName;
 			uint32_t m_arraySize;
-			std::unordered_map< Key, Structure > m_structures{};
+			std::unordered_map< Key, Structure > m_structureDeclarations;
 	};
 }

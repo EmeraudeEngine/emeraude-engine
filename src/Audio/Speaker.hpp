@@ -30,7 +30,7 @@
 #include <string>
 
 /* Local inclusions for inheritances. */
-#include "AVConsole/AbstractVirtualDevice.hpp"
+#include "Scenes/AVConsole/AbstractVirtualDevice.hpp"
 
 /* Local inclusions for usages. */
 #include "Libs/Math/CartesianFrame.hpp"
@@ -40,9 +40,9 @@ namespace EmEn::Audio
 {
 	/**
 	 * @brief The Speaker class
-	 * @extends EmEn::AVConsole::AbstractVirtualDevice This is a virtual audio device.
+	 * @extends EmEn::Scenes::AVConsole::AbstractVirtualDevice This is a virtual audio device.
 	 */
-	class Speaker final : public AVConsole::AbstractVirtualDevice
+	class Speaker final : public Scenes::AVConsole::AbstractVirtualDevice
 	{
 		public:
 
@@ -54,7 +54,7 @@ namespace EmEn::Audio
 
 		private:
 
-			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::updateDeviceFromCoordinates() */
+			/** @copydoc EmEn::Scenes::AVConsole::AbstractVirtualDevice::updateDeviceFromCoordinates() */
 			void updateDeviceFromCoordinates (const Libs::Math::CartesianFrame< float > & worldCoordinates, const Libs::Math::Vector< 3, float > & worldVelocity) noexcept override;
 	};
 }

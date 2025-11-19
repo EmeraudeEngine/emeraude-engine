@@ -84,9 +84,7 @@ namespace EmEn::Graphics::Material
 	std::shared_ptr< SharedUniformBuffer >
 	Interface::getSharedUniformBuffer (Renderer & renderer, const std::string & identifier) const noexcept
 	{
-		auto sharedUniformBuffer = renderer.sharedUBOManager().getSharedUniformBuffer(identifier);
-
-		if ( sharedUniformBuffer != nullptr )
+		if ( auto sharedUniformBuffer = renderer.sharedUBOManager().getSharedUniformBuffer(identifier); sharedUniformBuffer != nullptr )
 		{
 			return sharedUniformBuffer;
 		}

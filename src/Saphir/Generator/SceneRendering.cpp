@@ -73,6 +73,13 @@ namespace EmEn::Saphir::Generator
 		/* Configure the light generator with the material for all shaders. */
 		if ( this->isFlagEnabled(IsLightingEnabled) )
 		{
+			if ( m_scene == nullptr )
+			{
+				Tracer::error(ClassId, "There is not scene to query light information from !");
+
+				return false;
+			}
+
 			if ( m_renderPassType == RenderPassType::SimplePass && m_scene->lightSet().isUsingStaticLighting() )
 			{
 				/* FIXME: Check where to put the name of the static lighting! */

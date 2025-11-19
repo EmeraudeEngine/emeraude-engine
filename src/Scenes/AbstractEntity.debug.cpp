@@ -94,7 +94,11 @@ namespace EmEn::Scenes
 		}
 
 		/* NOTE: Create an instance of this visual debug mesh. */
-		const auto meshInstance = this->newVisual(meshResource, false, true, label);
+		const auto meshInstance = this->componentBuilder< Component::Visual >(label)
+			 .setup([] (auto & component) {
+				 component.enablePhysicalProperties(false);
+				 component.getRenderableInstance()->enableLighting();
+			 }).build(meshResource);
 
 		if ( meshInstance == nullptr )
 		{
@@ -184,19 +188,19 @@ namespace EmEn::Scenes
 		switch ( type )
 		{
 			case VisualDebugType::Axis :
-				return m_components.contains(AxisDebugName);
+				return this->containsComponent(AxisDebugName);
 
 			case VisualDebugType::Velocity :
-				return m_components.contains(VelocityDebugName);
+				return this->containsComponent(VelocityDebugName);
 
 			case VisualDebugType::BoundingBox :
-				return m_components.contains(BoundingBoxDebugName);
+				return this->containsComponent(BoundingBoxDebugName);
 
 			case VisualDebugType::BoundingSphere :
-				return m_components.contains(BoundingSphereDebugName);
+				return this->containsComponent(BoundingSphereDebugName);
 
 			case VisualDebugType::Camera :
-				return m_components.contains(CameraDebugName);
+				return this->containsComponent(CameraDebugName);
 		}
 
 		return false;
@@ -207,11 +211,11 @@ namespace EmEn::Scenes
 	{
 		/* Update axis. */
 		{
-			const auto visualDebugIt = m_components.find(AxisDebugName);
+			const auto component = this->getComponent(AxisDebugName);
 
-			if ( visualDebugIt != m_components.cend() )
+			if ( component != nullptr )
 			{
-				const auto renderableInstance = visualDebugIt->second->getRenderableInstance();
+				const auto renderableInstance = component->getRenderableInstance();
 
 				if ( m_boundingSphere.isValid() )
 				{
@@ -226,11 +230,11 @@ namespace EmEn::Scenes
 
 		/* Update bounding box. */
 		{
-			const auto visualDebugIt = m_components.find(BoundingBoxDebugName);
+			const auto component = this->getComponent(BoundingBoxDebugName);
 
-			if ( visualDebugIt != m_components.cend() )
+			if ( component != nullptr )
 			{
-				const auto renderableInstance = visualDebugIt->second->getRenderableInstance();
+				const auto renderableInstance = component->getRenderableInstance();
 
 				renderableInstance->setTransformationMatrix(
 					Matrix< 4, float >::translation(m_boundingBox.centroid()) *
@@ -241,11 +245,11 @@ namespace EmEn::Scenes
 
 		/* Update bounding sphere. */
 		{
-			const auto visualDebugIt = m_components.find(BoundingSphereDebugName);
+			const auto component = this->getComponent(BoundingSphereDebugName);
 
-			if ( visualDebugIt != m_components.cend() )
+			if ( component != nullptr )
 			{
-				const auto renderableInstance = visualDebugIt->second->getRenderableInstance();
+				const auto renderableInstance = component->getRenderableInstance();
 
 				renderableInstance->setTransformationMatrix(
 					Matrix< 4, float >::translation(m_boundingSphere.position()) *

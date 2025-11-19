@@ -37,6 +37,7 @@
 #include "Graphics/RenderTarget/Abstract.hpp"
 
 /* Local inclusions for usages. */
+#include "Libs/PixelFactory/Processor.hpp"
 #include "Vulkan/Instance.hpp"
 #include "Vulkan/Framebuffer.hpp"
 #include "Graphics/Renderer.hpp"
@@ -47,6 +48,7 @@ namespace EmEn::Graphics::RenderTarget
 {
 	/**
 	 * @brief The render to texture template.
+	 * @todo A render-to-texture being part of it's own rendering creates validation layer bugs! Example: Camera filming the TV where it shows the image.
 	 * @tparam view_matrices_t The type of matrix interface.
 	 * @extends EmEn::Vulkan::TextureInterface This is a texture.
 	 * @extends EmEn::Graphics::RenderTarget::Abstract This is a render target.
@@ -79,7 +81,7 @@ namespace EmEn::Graphics::RenderTarget
 					{width, height, 1U},
 					viewDistance,
 					RenderTargetType::Texture,
-					AVConsole::ConnexionType::Both,
+					Scenes::AVConsole::ConnexionType::Both,
 					isOrthographicProjection,
 					true
 				}
@@ -102,7 +104,7 @@ namespace EmEn::Graphics::RenderTarget
 					{size, size, 1U},
 					viewDistance,
 					RenderTargetType::Cubemap,
-					AVConsole::ConnexionType::Both,
+					Scenes::AVConsole::ConnexionType::Both,
 					isOrthographicProjection,
 					true
 				}
@@ -265,11 +267,11 @@ namespace EmEn::Graphics::RenderTarget
 
 				if ( this->isOrthographicProjection() )
 				{
-					m_viewMatrices.updatePerspectiveViewProperties(width, height, fovOrNear, distanceOrFar);
+					m_viewMatrices.updateOrthographicViewProperties(width, height, fovOrNear, distanceOrFar);
 				}
 				else
 				{
-					m_viewMatrices.updateOrthographicViewProperties(width, height, fovOrNear, distanceOrFar);
+					m_viewMatrices.updatePerspectiveViewProperties(width, height, fovOrNear, distanceOrFar);
 				}
 
 				this->setViewDistance(distanceOrFar);
@@ -326,12 +328,12 @@ namespace EmEn::Graphics::RenderTarget
 				return m_viewMatrices;
 			}
 
-			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::videoType() */
+			/** @copydoc EmEn::Scenes::AVConsole::AbstractVirtualDevice::videoType() */
 			[[nodiscard]]
-			AVConsole::VideoType
+			Scenes::AVConsole::VideoType
 			videoType () const noexcept override
 			{
-				return AVConsole::VideoType::Texture;
+				return Scenes::AVConsole::VideoType::Texture;
 			}
 
 			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::framebuffer() const */
@@ -350,17 +352,72 @@ namespace EmEn::Graphics::RenderTarget
 				return m_isReadyForRendering;
 			}
 
-			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::isDebug() const */
+			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::capture() */
 			[[nodiscard]]
-			bool
-			isDebug () const noexcept override
+			std::array< Libs::PixelFactory::Pixmap< uint8_t >, 3 >
+			capture (Vulkan::TransferManager & transferManager, uint32_t layerIndex, bool keepAlpha, bool withDepthBuffer, bool withStencilBuffer) const noexcept override
 			{
-				return false;
+				std::array< Libs::PixelFactory::Pixmap< uint8_t >, 3 > result{};
+
+				/* NOTE: Validate layer index for cubemaps and single-layer textures. */
+				const uint32_t maxLayers = this->isCubemap() ? 6 : 1;
+
+				if ( layerIndex >= maxLayers )
+				{
+					if ( maxLayers == 1 && layerIndex > 0 )
+					{
+						TraceWarning{ClassId} << "Single-layer texture does not support layer " << layerIndex << ". Using layer 0 instead for texture '" << this->id() << "'.";
+
+						layerIndex = 0;
+					}
+					else
+					{
+						TraceError{ClassId} << "Invalid layer index " << layerIndex << " (max: " << maxLayers - 1 << ") for texture '" << this->id() << "' !";
+
+						return result;
+					}
+				}
+
+				/* Capture color buffer. */
+				if ( m_colorImage != nullptr && m_colorImage->isCreated() )
+				{
+					if ( !transferManager.downloadImage(*m_colorImage, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_ASPECT_COLOR_BIT, result[0]) )
+					{
+						TraceError{ClassId} << "Failed to capture color buffer for texture '" << this->id() << "' !";
+						return result;
+					}
+
+					/* Convert to RGB if alpha is not requested. */
+					if ( !keepAlpha )
+					{
+						result[0] = Libs::PixelFactory::Processor< uint8_t >::toRGB(result[0]);
+					}
+				}
+
+				/* Capture depth buffer (optional). */
+				if ( withDepthBuffer && m_depthStencilImage != nullptr && m_depthStencilImage->isCreated() && this->precisions().depthBits() > 0 )
+				{
+					if ( !transferManager.downloadImage(*m_depthStencilImage, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_IMAGE_ASPECT_DEPTH_BIT, result[1]) )
+					{
+						TraceWarning{ClassId} << "Failed to capture depth buffer for texture '" << this->id() << "' !";
+					}
+				}
+
+				/* Capture stencil buffer (optional). */
+				if ( withStencilBuffer && m_depthStencilImage != nullptr && m_depthStencilImage->isCreated() && this->precisions().stencilBits() > 0 )
+				{
+					if ( !transferManager.downloadImage(*m_depthStencilImage, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_IMAGE_ASPECT_STENCIL_BIT, result[2]) )
+					{
+						TraceWarning{ClassId} << "Failed to capture stencil buffer for texture '" << this->id() << "' !";
+					}
+				}
+
+				return result;
 			}
 
 		private:
 
-			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::updateVideoDeviceProperties() */
+			/** @copydoc EmEn::Scenes::AVConsole::AbstractVirtualDevice::updateVideoDeviceProperties() */
 			void
 			updateVideoDeviceProperties (float fovOrNear, float distanceOrFar, bool isOrthographicProjection) noexcept override
 			{
@@ -369,23 +426,23 @@ namespace EmEn::Graphics::RenderTarget
 				this->updateViewRangesProperties(fovOrNear, distanceOrFar);
 			}
 
-			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::updateDeviceFromCoordinates() */
+			/** @copydoc EmEn::Scenes::AVConsole::AbstractVirtualDevice::updateDeviceFromCoordinates() */
 			void
 			updateDeviceFromCoordinates (const Libs::Math::CartesianFrame< float > & worldCoordinates, const Libs::Math::Vector< 3, float > & worldVelocity) noexcept override
 			{
 				m_viewMatrices.updateViewCoordinates(worldCoordinates, worldVelocity);
 			}
 
-			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::onInputDeviceConnected() */
+			/** @copydoc EmEn::Scenes::AVConsole::AbstractVirtualDevice::onInputDeviceConnected() */
 			void
-			onInputDeviceConnected (AVConsole::AVManagers & managers, AbstractVirtualDevice & /*sourceDevice*/) noexcept override
+			onInputDeviceConnected (Scenes::AVConsole::AVManagers & managers, AbstractVirtualDevice & /*sourceDevice*/) noexcept override
 			{
 				m_viewMatrices.create(managers.graphicsRenderer, this->id());
 			}
 
-			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::onInputDeviceDisconnected() */
+			/** @copydoc EmEn::Scenes::AVConsole::AbstractVirtualDevice::onInputDeviceDisconnected() */
 			void
-			onInputDeviceDisconnected (AVConsole::AVManagers & /*managers*/, AbstractVirtualDevice & /*sourceDevice*/) noexcept override
+			onInputDeviceDisconnected (Scenes::AVConsole::AVManagers & /*managers*/, AbstractVirtualDevice & /*sourceDevice*/) noexcept override
 			{
 				m_viewMatrices.destroy();
 			}
@@ -533,6 +590,17 @@ namespace EmEn::Graphics::RenderTarget
 						return false;
 					}
 
+					/* NOTE: Perform an initial layout transition from UNDEFINED to SHADER_READ_ONLY_OPTIMAL.
+					 * This allows the texture to be used immediately in descriptors/materials.
+					 * The RenderPass will transition to COLOR_ATTACHMENT_OPTIMAL when rendering,
+					 * then back to SHADER_READ_ONLY_OPTIMAL when done. */
+					if ( !renderer.transferManager().transitionImageLayout(*m_colorImage, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) )
+					{
+						TraceError{ClassId} << "Unable to transition color image to SHADER_READ_ONLY_OPTIMAL for texture '" << this->id() << "' !";
+
+						return false;
+					}
+
 					/* NOTE: Create a specific view for reading
 					 * the cubemap in shaders according to the multiview feature. */
 					if ( this->isCubemap() )
@@ -574,9 +642,12 @@ namespace EmEn::Graphics::RenderTarget
 						VK_IMAGE_TYPE_2D,
 						Vulkan::Instance::findDepthStencilFormat(device, this->precisions()),
 						this->extent(),
-						VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT
+						VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+						0, // No special flags for depth/stencil cubemap arrays
+						1, // Single mip level
+						this->isCubemap() ? 6 : 1 // 6 layers for cubemap, 1 for regular 2D
 					);
-					m_depthStencilImage->setIdentifier(ClassId, this->id(), "Image");
+					m_depthStencilImage->setIdentifier(ClassId, this->id(), "DepthStencilImage");
 
 					if ( !m_depthStencilImage->createOnHardware() )
 					{
@@ -593,7 +664,7 @@ namespace EmEn::Graphics::RenderTarget
 					{
 						m_depthImageView = std::make_shared< Vulkan::ImageView >(
 							m_depthStencilImage,
-							VK_IMAGE_VIEW_TYPE_2D,
+							this->isCubemap() ? VK_IMAGE_VIEW_TYPE_2D_ARRAY : VK_IMAGE_VIEW_TYPE_2D,
 							VkImageSubresourceRange{
 								.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
 								.baseMipLevel = 0,
@@ -602,7 +673,7 @@ namespace EmEn::Graphics::RenderTarget
 								.layerCount = m_depthStencilImage->createInfo().arrayLayers
 							}
 						);
-						m_depthImageView->setIdentifier(ClassId, this->id(), "ImageView");
+						m_depthImageView->setIdentifier(ClassId, this->id(), "DepthImageView");
 
 						if ( !m_depthImageView->createOnHardware() )
 						{
@@ -617,7 +688,7 @@ namespace EmEn::Graphics::RenderTarget
 					{
 						m_stencilImageView = std::make_shared< Vulkan::ImageView >(
 							m_depthStencilImage,
-							VK_IMAGE_VIEW_TYPE_2D,
+							this->isCubemap() ? VK_IMAGE_VIEW_TYPE_2D_ARRAY : VK_IMAGE_VIEW_TYPE_2D,
 							VkImageSubresourceRange{
 								.aspectMask = VK_IMAGE_ASPECT_STENCIL_BIT,
 								.baseMipLevel = 0,
@@ -626,7 +697,7 @@ namespace EmEn::Graphics::RenderTarget
 								.layerCount = m_depthStencilImage->createInfo().arrayLayers
 							}
 						);
-						m_stencilImageView->setIdentifier(ClassId, this->id(), "ImageView");
+						m_stencilImageView->setIdentifier(ClassId, this->id(), "StencilImageView");
 
 						if ( !m_stencilImageView->createOnHardware() )
 						{
@@ -645,98 +716,99 @@ namespace EmEn::Graphics::RenderTarget
 			std::shared_ptr< Vulkan::RenderPass >
 			createRenderPass (Renderer & renderer) const noexcept override
 			{
-				/* FIXME: The identifier must reflect the enabled attachments !!! */
-				auto renderPass = renderer.getRenderPass("TextureRender", 0);
+				/* Create a new RenderPass for this texture render target. */
+				auto renderPass = std::make_shared< Vulkan::RenderPass >(renderer.device(), 0);
+				renderPass->setIdentifier(ClassId, this->id(), "RenderPass");
 
-				if ( !renderPass->isCreated() )
+				/* Prepare a subPass for the render pass. */
+				Vulkan::RenderSubPass subPass{VK_PIPELINE_BIND_POINT_GRAPHICS, 0};
+
+				/* Color buffer. */
+				if ( m_colorImage != nullptr )
 				{
-					/* Prepare a subPass for the render pass. */
-					Vulkan::RenderSubPass subPass{VK_PIPELINE_BIND_POINT_GRAPHICS, 0};
-
-					/* Color buffer. */
-					if ( m_colorImage != nullptr )
-					{
-						renderPass->addAttachmentDescription(VkAttachmentDescription{
-							.flags = 0,
-							.format = m_colorImage->createInfo().format,
-							.samples = VK_SAMPLE_COUNT_1_BIT,
-							.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-							.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-							.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-							.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-							.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-							.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
-						});
-
-						subPass.addColorAttachment(0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-					}
-					else
-					{
-						TraceError{ClassId} << "color depth image is not created for texture '" << this->id() << "' !";
-
-						return nullptr;
-					}
-
-					/* Depth/Stencil buffer (optional). */
-					if ( m_depthStencilImage != nullptr )
-					{
-						renderPass->addAttachmentDescription(VkAttachmentDescription{
-							.flags = 0,
-							.format = m_depthStencilImage->createInfo().format,
-							.samples = VK_SAMPLE_COUNT_1_BIT,
-							.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-							.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-							.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-							.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-							.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-							.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
-						});
-
-						subPass.setDepthStencilAttachment(1, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
-					}
-
-					renderPass->addSubPass(subPass);
-
-					renderPass->addSubPassDependency({
-						.srcSubpass = VK_SUBPASS_EXTERNAL,
-						.dstSubpass = 0,
-						/* Wait for fragment shader reads from previous pass to complete... */
-						.srcStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-						/* ...before the new pass begins to write in color. */
-						.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
-						/* The access to wait is a shader read. */
-						.srcAccessMask = VK_ACCESS_SHADER_READ_BIT,
-						/* The new access will be a "write" in an attachment. */
-						.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-						.dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT
+					renderPass->addAttachmentDescription(VkAttachmentDescription{
+						.flags = 0,
+						.format = m_colorImage->createInfo().format,
+						.samples = VK_SAMPLE_COUNT_1_BIT,
+						.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+						.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+						.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+						.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+						/* The image starts in SHADER_READ_ONLY_OPTIMAL (transitioned at creation),
+						 * transitions to COLOR_ATTACHMENT_OPTIMAL during rendering,
+						 * then back to SHADER_READ_ONLY_OPTIMAL when done. */
+						.initialLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+						.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
 					});
 
-					renderPass->addSubPassDependency({
-						.srcSubpass = 0,
-						.dstSubpass = VK_SUBPASS_EXTERNAL,
-						/* Wait until the writing in color is finished... */
-						.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
-						/* ...before the next pass can read the result into its fragment shader. */
-						.dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-						/* The access to make visible is the writing in the attachment. */
-						.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-						/* The next access will be a shader read. */
-						.dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
-						.dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT
+					subPass.addColorAttachment(0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+				}
+				else
+				{
+					TraceError{ClassId} << "color depth image is not created for texture '" << this->id() << "' !";
+
+					return nullptr;
+				}
+
+				/* Depth/Stencil buffer (optional). */
+				if ( m_depthStencilImage != nullptr )
+				{
+					renderPass->addAttachmentDescription(VkAttachmentDescription{
+						.flags = 0,
+						.format = m_depthStencilImage->createInfo().format,
+						.samples = VK_SAMPLE_COUNT_1_BIT,
+						.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+						.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+						.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+						.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+						.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+						.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
 					});
 
-					/* Enable multiview for cubemap rendering (Vulkan 1.1+) */
-					if ( this->isCubemap() )
-					{
-						renderPass->enableMultiview();
-					}
+					subPass.setDepthStencilAttachment(1, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
+				}
 
-					if ( !renderPass->createOnHardware() )
-					{
-						TraceError{ClassId} << "Unable to create the render pass for texture '" << this->id() << "' !";
+				renderPass->addSubPass(subPass);
 
-						return nullptr;
-					}
+				renderPass->addSubPassDependency({
+					.srcSubpass = VK_SUBPASS_EXTERNAL,
+					.dstSubpass = 0,
+					/* Wait for fragment shader reads from previous pass to complete... */
+					.srcStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+					/* ...before the new pass begins to write in color. */
+					.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
+					/* The access to wait is a shader read. */
+					.srcAccessMask = VK_ACCESS_SHADER_READ_BIT,
+					/* The new access will be a "write" in an attachment. */
+					.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+					.dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT
+				});
+
+				renderPass->addSubPassDependency({
+					.srcSubpass = 0,
+					.dstSubpass = VK_SUBPASS_EXTERNAL,
+					/* Wait until the writing in color is finished... */
+					.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+					/* ...before the next pass can read the result into its fragment shader. */
+					.dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+					/* The access to make visible is the writing in the attachment. */
+					.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+					/* The next access will be a shader read. */
+					.dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
+					.dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT
+				});
+
+				/* Enable multiview for cubemap rendering (Vulkan 1.1+) */
+				if ( this->isCubemap() )
+				{
+					renderPass->enableMultiview();
+				}
+
+				if ( !renderPass->createOnHardware() )
+				{
+					TraceError{ClassId} << "Unable to create the render pass for texture '" << this->id() << "' !";
+
+					return nullptr;
 				}
 
 				return renderPass;

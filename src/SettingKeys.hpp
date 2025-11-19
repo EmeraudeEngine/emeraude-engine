@@ -111,6 +111,8 @@ namespace EmEn
 		constexpr auto DefaultResourcesDownloadEnabled{true};
 		constexpr auto ResourcesQuietConversionKey{"Core/Resources/QuietConversion"}; // Logs
 		constexpr auto DefaultResourcesQuietConversion{true};
+		constexpr auto ResourcesUseDynamicScanKey{"Core/Resources/UseDynamicScan"};
+		constexpr auto DefaultResourcesUseDynamicScan{true};
 
 		/* Audio layer */
 		constexpr auto AudioEnableKey{"Core/Audio/Enable"};

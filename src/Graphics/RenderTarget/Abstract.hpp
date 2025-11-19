@@ -35,9 +35,10 @@
 #include <vulkan/vulkan.h>
 
 /* Local inclusions for inheritances. */
-#include "AVConsole/AbstractVirtualDevice.hpp"
+#include "Scenes/AVConsole/AbstractVirtualDevice.hpp"
 
 /* Local inclusions for usages. */
+#include "Libs/PixelFactory/Pixmap.hpp"
 #include "Vulkan/Sync/Semaphore.hpp"
 #include "Graphics/FramebufferPrecisions.hpp"
 #include "Graphics/Types.hpp"
@@ -59,6 +60,9 @@ namespace EmEn
 		class Image;
 		class ImageView;
 		class CommandBuffer;
+		class TransferManager;
+		class LayoutManager;
+		class DescriptorSetLayout;
 	}
 }
 
@@ -75,9 +79,9 @@ namespace EmEn::Graphics::RenderTarget
 
 	/**
 	 * @brief The base class for all render targets.
-	 * @extends EmEn::AVConsole::AbstractVirtualDevice This is a virtual video device.
+	 * @extends EmEn::Scenes::AVConsole::AbstractVirtualDevice This is a virtual video device.
 	 */
-	class Abstract : public AVConsole::AbstractVirtualDevice
+	class Abstract : public Scenes::AVConsole::AbstractVirtualDevice
 	{
 		public:
 
@@ -355,11 +359,26 @@ namespace EmEn::Graphics::RenderTarget
 			virtual bool isReadyForRendering () const noexcept = 0;
 
 			/**
-			 * @brief Returns whether the shadow map is in debug mode.
-			 * @return bool
+			 * @brief Captures the GPU buffer to save into a pixmap.
+			 * @note For single-layer textures, if layer > 0, a warning is printed and layer 0 is captured instead.
+			 * @note For cubemaps: layer 0=+X, 1=-X, 2=+Y, 3=-Y, 4=+Z, 5=-Z
+			 * @param transferManager A reference to the transfer manager.
+			 * @param layerIndex The layer index to capture (for cubemaps and texture arrays).
+			 * @param keepAlpha Keep the alpha channel from the GPU memory.
+			 * @param withDepthBuffer Enable the depth buffer to be captured, if exists.
+			 * @param withStencilBuffer Enable the stencil buffer to be captured, if exists.
+			 * @return std::array< Libs::PixelFactory::Pixmap< uint8_t >, 3 > Array containing [0] = color, [1] = depth (optional), [2] = stencil (optional)
 			 */
 			[[nodiscard]]
-			virtual bool isDebug () const noexcept = 0;
+			virtual std::array< Libs::PixelFactory::Pixmap< uint8_t >, 3 > capture (Vulkan::TransferManager & transferManager, uint32_t layerIndex, bool keepAlpha, bool withDepthBuffer, bool withStencilBuffer) const noexcept = 0;
+
+			/**
+			 * @brief Returns the descriptor set layout for render-targets.
+			 * @param layoutManager A reference to the layout manager.
+			 * @return std::shared_ptr< Vulkan::DescriptorSetLayout >
+			 */
+			[[nodiscard]]
+			static std::shared_ptr< Vulkan::DescriptorSetLayout > getDescriptorSetLayout (Vulkan::LayoutManager & layoutManager) noexcept;
 
 		protected:
 
@@ -374,8 +393,8 @@ namespace EmEn::Graphics::RenderTarget
 			 * @param isOrthographicProjection Set orthographic projection instead of perspective.
 			 * @param enableSyncPrimitives Enable the creation of global sync primitive for this render target.
 			 */
-			Abstract (const std::string & deviceName, const FramebufferPrecisions & precisions, const VkExtent3D & extent, float viewDistance, RenderTargetType renderType, AVConsole::ConnexionType allowedConnexionType, bool isOrthographicProjection, bool enableSyncPrimitives) noexcept
-				: AbstractVirtualDevice{deviceName, AVConsole::DeviceType::Video, allowedConnexionType},
+			Abstract (const std::string & deviceName, const FramebufferPrecisions & precisions, const VkExtent3D & extent, float viewDistance, RenderTargetType renderType, Scenes::AVConsole::ConnexionType allowedConnexionType, bool isOrthographicProjection, bool enableSyncPrimitives) noexcept
+				: AbstractVirtualDevice{deviceName, Scenes::AVConsole::DeviceType::Video, allowedConnexionType},
 				m_precisions{precisions},
 				m_extent{extent},
 				m_renderArea{

@@ -497,6 +497,7 @@ namespace EmEn::Saphir
 					constexpr auto DrawID = "gl_DrawID"; // Requires GLSL 4.60 or ARB_shader_draw_parameters
 					constexpr auto BaseVertex = "gl_BaseVertex"; // Requires GLSL 4.60 or ARB_shader_draw_parameters
 					constexpr auto BaseInstance = "gl_BaseInstance"; // Requires GLSL 4.60 or ARB_shader_draw_parameters
+					constexpr auto ViewIndex = "gl_ViewIndex"; // Requires VK_KHR_multiview (This is not a Core GLSL feature)
 				}
 				/*
 					out gl_PerVertex
@@ -847,6 +848,25 @@ namespace EmEn::Saphir
 		std::stringstream output;
 
 		output << Keys::UniformBlock::View << '.' << componentName;
+
+		return output.str();
+	}
+
+	/**
+	 * @brief Returns the full variable name from an indexed view uniform block.
+	 * @note This version use the multiview extension.
+	 * @param memberName The uniform block component name. See Keys::UniformBlock::Component.
+	 * @param componentName The uniform block component name. See Keys::UniformBlock::Component.
+	 * @return std::string
+	 */
+	[[nodiscard]]
+	inline
+	std::string
+	CubeViewUB (const char * memberName, const char * componentName) noexcept
+	{
+		std::stringstream output;
+
+		output << Keys::UniformBlock::View << '.' << memberName << '[' << Keys::GLSL::Vertex::In::ViewIndex << ']' << '.' << componentName;
 
 		return output.str();
 	}

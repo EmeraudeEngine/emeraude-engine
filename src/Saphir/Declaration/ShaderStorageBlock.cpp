@@ -40,7 +40,7 @@ namespace EmEn::Saphir::Declaration
 		std::stringstream code;
 
 		/* Check if structure are requested. */
-		const auto & structures = this->structures();
+		const auto & structures = this->structureDeclaration();
 
 		if ( !structures.empty() )
 		{

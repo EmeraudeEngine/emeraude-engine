@@ -1,5 +1,5 @@
 /*
- * src/AVConsole/Types.hpp
+ * src/Scenes/AVConsole/Types.hpp
  * This file is part of Emeraude-Engine
  *
  * Copyright (C) 2010-2025 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
@@ -42,13 +42,13 @@ namespace EmEn
 		class Manager;
 	}
 
-	namespace AVConsole
+	namespace Scenes::AVConsole
 	{
 		class AbstractVirtualDevice;
 	}
 }
 
-namespace EmEn::AVConsole
+namespace EmEn::Scenes::AVConsole
 {
 	/** @brief Contains reference to the audio video. */
 	struct AVManagers

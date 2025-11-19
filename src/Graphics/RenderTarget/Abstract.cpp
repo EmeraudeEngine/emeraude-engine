@@ -27,10 +27,11 @@
 #include "Abstract.hpp"
 
 /* Local inclusions. */
-#include "Graphics/Renderer.hpp"
 #include "Vulkan/Image.hpp"
 #include "Vulkan/ImageView.hpp"
 #include "Vulkan/Instance.hpp"
+#include "Vulkan/DescriptorSetLayout.hpp"
+#include "Graphics/Renderer.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::Graphics::RenderTarget
@@ -221,5 +222,28 @@ namespace EmEn::Graphics::RenderTarget
 		}
 
 		return true;
+	}
+
+	std::shared_ptr< DescriptorSetLayout >
+	Abstract::getDescriptorSetLayout (LayoutManager & layoutManager) noexcept
+	{
+		/* NOTE: Create a unique identifier for the descriptor set layout. */
+		const std::string UUID{"RenderTargets"};
+
+		auto descriptorSetLayout = layoutManager.getDescriptorSetLayout(UUID);
+
+		if ( descriptorSetLayout == nullptr )
+		{
+			descriptorSetLayout = layoutManager.prepareNewDescriptorSetLayout(UUID);
+			descriptorSetLayout->setIdentifier(TracerTag, UUID, "DescriptorSetLayout");
+			descriptorSetLayout->declareUniformBuffer(0, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
+
+			if ( !layoutManager.createDescriptorSetLayout(descriptorSetLayout) )
+			{
+				return nullptr;
+			}
+		}
+
+		return descriptorSetLayout;
 	}
 }

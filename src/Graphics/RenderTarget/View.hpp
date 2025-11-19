@@ -30,6 +30,7 @@
 #include "Graphics/RenderTarget/Abstract.hpp"
 
 /* Local inclusions for usages. */
+#include "Libs/PixelFactory/Processor.hpp"
 #include "Vulkan/Instance.hpp"
 #include "Vulkan/Device.hpp"
 #include "Vulkan/Framebuffer.hpp"
@@ -72,7 +73,7 @@ namespace EmEn::Graphics::RenderTarget
 					{width, height, 1U},
 					viewDistance,
 					RenderTargetType::View,
-					AVConsole::ConnexionType::Both,
+					Scenes::AVConsole::ConnexionType::Both,
 					isOrthographicProjection,
 					true
 				}
@@ -95,7 +96,7 @@ namespace EmEn::Graphics::RenderTarget
 					{size, size, 1},
 					viewDistance,
 					RenderTargetType::CubicView,
-					AVConsole::ConnexionType::Both,
+					Scenes::AVConsole::ConnexionType::Both,
 					isOrthographicProjection,
 					true
 				}
@@ -174,12 +175,12 @@ namespace EmEn::Graphics::RenderTarget
 				return m_viewMatrices;
 			}
 
-			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::videoType() */
+			/** @copydoc EmEn::Scenes::AVConsole::AbstractVirtualDevice::videoType() */
 			[[nodiscard]]
-			AVConsole::VideoType
+			Scenes::AVConsole::VideoType
 			videoType () const noexcept override
 			{
-				return AVConsole::VideoType::View;
+				return Scenes::AVConsole::VideoType::View;
 			}
 
 			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::framebuffer() */
@@ -198,12 +199,54 @@ namespace EmEn::Graphics::RenderTarget
 				return m_isReadyForRendering;
 			}
 
-			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::isDebug() const */
+			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::capture() */
 			[[nodiscard]]
-			bool
-			isDebug () const noexcept override
+			std::array< Libs::PixelFactory::Pixmap< uint8_t >, 3 >
+			capture (Vulkan::TransferManager & transferManager, uint32_t layerIndex, bool keepAlpha, bool withDepthBuffer, bool withStencilBuffer) const noexcept override
 			{
-				return false;
+				std::array< Libs::PixelFactory::Pixmap< uint8_t >, 3 > result{};
+
+				/* View has only single-layer images (not cubemaps or arrays), similar to SwapChain. */
+				if ( layerIndex > 0 )
+				{
+					TraceWarning{ClassId} << "View does not support layered images. Layer " << layerIndex << " requested, using layer 0 instead for view '" << this->id() << "'.";
+				}
+
+				/* Capture color buffer. */
+				if ( m_colorImage != nullptr && m_colorImage->isCreated() )
+				{
+					if ( !transferManager.downloadImage(*m_colorImage, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_ASPECT_COLOR_BIT, result[0]) )
+					{
+						TraceError{ClassId} << "Failed to capture color buffer for view '" << this->id() << "' !";
+						return result;
+					}
+
+					/* Convert to RGB if alpha is not requested. */
+					if ( !keepAlpha )
+					{
+						result[0] = Libs::PixelFactory::Processor< uint8_t >::toRGB(result[0]);
+					}
+				}
+
+				/* Capture depth buffer (optional). */
+				if ( withDepthBuffer && m_depthStencilImage != nullptr && m_depthStencilImage->isCreated() && this->precisions().depthBits() > 0 )
+				{
+					if ( !transferManager.downloadImage(*m_depthStencilImage, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_IMAGE_ASPECT_DEPTH_BIT, result[1]) )
+					{
+						TraceWarning{ClassId} << "Failed to capture depth buffer for view '" << this->id() << "' !";
+					}
+				}
+
+				/* Capture stencil buffer (optional). */
+				if ( withStencilBuffer && m_depthStencilImage != nullptr && m_depthStencilImage->isCreated() && this->precisions().stencilBits() > 0 )
+				{
+					if ( !transferManager.downloadImage(*m_depthStencilImage, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_IMAGE_ASPECT_STENCIL_BIT, result[2]) )
+					{
+						TraceWarning{ClassId} << "Failed to capture stencil buffer for view '" << this->id() << "' !";
+					}
+				}
+
+				return result;
 			}
 
 			/**
@@ -241,7 +284,7 @@ namespace EmEn::Graphics::RenderTarget
 
 		private:
 
-			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::updateVideoDeviceProperties() */
+			/** @copydoc EmEn::Scenes::AVConsole::AbstractVirtualDevice::updateVideoDeviceProperties() */
 			void
 			updateVideoDeviceProperties (float fovOrNear, float distanceOrFar, bool isOrthographicProjection) noexcept override
 			{
@@ -250,23 +293,23 @@ namespace EmEn::Graphics::RenderTarget
 				this->updateViewRangesProperties(fovOrNear, distanceOrFar);
 			}
 
-			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::updateDeviceFromCoordinates() */
+			/** @copydoc EmEn::Scenes::AVConsole::AbstractVirtualDevice::updateDeviceFromCoordinates() */
 			void
 			updateDeviceFromCoordinates (const Libs::Math::CartesianFrame< float > & worldCoordinates, const Libs::Math::Vector< 3, float > & worldVelocity) noexcept override
 			{
 				m_viewMatrices.updateViewCoordinates(worldCoordinates, worldVelocity);
 			}
 
-			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::onInputDeviceConnected() */
+			/** @copydoc EmEn::Scenes::AVConsole::AbstractVirtualDevice::onInputDeviceConnected() */
 			void
-			onInputDeviceConnected (AVConsole::AVManagers & AVManagers, AbstractVirtualDevice & /*sourceDevice*/) noexcept override
+			onInputDeviceConnected (Scenes::AVConsole::AVManagers & AVManagers, AbstractVirtualDevice & /*sourceDevice*/) noexcept override
 			{
 				m_viewMatrices.create(AVManagers.graphicsRenderer, this->id());
 			}
 
-			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::onInputDeviceDisconnected() */
+			/** @copydoc EmEn::Scenes::AVConsole::AbstractVirtualDevice::onInputDeviceDisconnected() */
 			void
-			onInputDeviceDisconnected (AVConsole::AVManagers & /*AVManagers*/, AbstractVirtualDevice & /*sourceDevice*/) noexcept override
+			onInputDeviceDisconnected (Scenes::AVConsole::AVManagers & /*AVManagers*/, AbstractVirtualDevice & /*sourceDevice*/) noexcept override
 			{
 				m_viewMatrices.destroy();
 			}
@@ -319,70 +362,68 @@ namespace EmEn::Graphics::RenderTarget
 			std::shared_ptr< Vulkan::RenderPass >
 			createRenderPass (Renderer & renderer) const noexcept override
 			{
-				/* FIXME: The identifier must reflect the enabled attachments !!! */
-				auto renderPass = renderer.getRenderPass("ViewRender", 0);
+				/* Create a new RenderPass for this view render target. */
+				auto renderPass = std::make_shared< Vulkan::RenderPass >(renderer.device(), 0);
+				renderPass->setIdentifier(ClassId, this->id(), "RenderPass");
 
-				if ( !renderPass->isCreated() )
+				/* Prepare a subpass for the render pass. */
+				Vulkan::RenderSubPass subPass{VK_PIPELINE_BIND_POINT_GRAPHICS, 0};
+
+				/* Color buffer. */
+				if ( this->precisions().colorBits() > 0 )
 				{
-					/* Prepare a subpass for the render pass. */
-					Vulkan::RenderSubPass subPass{VK_PIPELINE_BIND_POINT_GRAPHICS, 0};
+					renderPass->addAttachmentDescription(VkAttachmentDescription{
+						.flags = 0,
+						.format = m_colorImage->createInfo().format,
+						.samples = VK_SAMPLE_COUNT_1_BIT,
+						.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+						.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+						.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+						.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+						.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+						.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
+					});
 
-					/* Color buffer. */
-					if ( this->precisions().colorBits() > 0 )
-					{
-						renderPass->addAttachmentDescription(VkAttachmentDescription{
-							.flags = 0,
-							.format = m_colorImage->createInfo().format,
-							.samples = VK_SAMPLE_COUNT_1_BIT,
-							.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-							.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-							.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-							.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-							.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-							.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
-						});
+					subPass.addColorAttachment(0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+				}
 
-						subPass.addColorAttachment(0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-					}
+				/* Depth/Stencil buffer. */
+				if ( this->precisions().depthBits() > 0 || this->precisions().stencilBits() > 0 )
+				{
+					renderPass->addAttachmentDescription(VkAttachmentDescription{
+						.flags = 0,
+						.format = m_depthStencilImage->createInfo().format,
+						.samples = VK_SAMPLE_COUNT_1_BIT,
+						.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+						.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+						.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+						.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+						.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+						.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+					});
 
-					/* Depth/Stencil buffer. */
-					if ( this->precisions().depthBits() > 0 || this->precisions().stencilBits() > 0 )
-					{
-						renderPass->addAttachmentDescription(VkAttachmentDescription{
-							.flags = 0,
-							.format = m_depthStencilImage->createInfo().format,
-							.samples = VK_SAMPLE_COUNT_1_BIT,
-							.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-							.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-							.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-							.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-							.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-							.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
-						});
+					subPass.setDepthStencilAttachment(1, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
+				}
 
-						subPass.setDepthStencilAttachment(1, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
-					}
+				/* Configure the subpass. */
+				renderPass->addSubPass(subPass);
 
-					/* Configure the subpass. */
-					renderPass->addSubPass(subPass);
+				//VkSubpassDependency subpassDependency{};
+				//subpassDependency.srcSubpass = VK_SUBPASS_EXTERNAL;
+				//subpassDependency.dstSubpass = 0;
+				//subpassDependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+				//subpassDependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+				//subpassDependency.srcAccessMask = 0;
+				//subpassDependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+				//subpassDependency.dependencyFlags = 0;
 
-					//VkSubpassDependency subpassDependency{};
-					//subpassDependency.srcSubpass = VK_SUBPASS_EXTERNAL;
-					//subpassDependency.dstSubpass = 0;
-					//subpassDependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-					//subpassDependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-					//subpassDependency.srcAccessMask = 0;
-					//subpassDependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-					//subpassDependency.dependencyFlags = 0;
+				//renderPass->addSubpassDependency(subpassDependency);
 
-					//renderPass->addSubpassDependency(subpassDependency);
+				if ( !renderPass->createOnHardware() )
+				{
+					TraceError{ClassId} << "Unable to create the render pass for view '" << this->id() << "' !";
 
-					if ( !renderPass->createOnHardware() )
-					{
-						TraceError{ClassId} << "Unable to create the render pass for view '" << this->id() << "' !";
-
-						return nullptr;
-					}
+					return nullptr;
 				}
 
 				return renderPass;

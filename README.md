@@ -131,23 +131,65 @@ Download from: https://sdk.lunarg.com/sdk/download/1.4.309.0/windows/VulkanSDK-1
 
 ### Quick Start
 
-**1. Clone the repository with submodules:**
+Choose your platform and copy-paste the entire block:
+
+**Linux:**
 ```bash
 git clone --recurse-submodules https://github.com/EmeraudeEngine/emeraude-engine.git
 cd emeraude-engine
+cmake -S . -B cmake-build-release -G "Ninja" -DCMAKE_BUILD_TYPE=Release
+cmake --build cmake-build-release --config Release
 ```
 
-**2. Build Release version:**
+**macOS (Apple Silicon M1/M2/M3):**
 ```bash
-cmake -S . -B cmake-build-release -DCMAKE_BUILD_TYPE=Release
+git clone --recurse-submodules https://github.com/EmeraudeEngine/emeraude-engine.git
+cd emeraude-engine
+cmake -S . -B cmake-build-release -G "Ninja" -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES=arm64
+cmake --build cmake-build-release --config Release
+```
+
+**macOS (Intel):**
+```bash
+git clone --recurse-submodules https://github.com/EmeraudeEngine/emeraude-engine.git
+cd emeraude-engine
+cmake -S . -B cmake-build-release -G "Ninja" -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES=x86_64
+cmake --build cmake-build-release --config Release
+```
+
+**Windows:**
+```bash
+git clone --recurse-submodules https://github.com/EmeraudeEngine/emeraude-engine.git
+cd emeraude-engine
+cmake -S . -B cmake-build-release -G "Visual Studio 17 2022" -A x64
 cmake --build cmake-build-release --config Release
 ```
 
 This produces the optimized shared library in `cmake-build-release/Release/`.
 
-**3. Build Debug version:**
+### Build Debug Version (Optional)
+
+**Linux:**
 ```bash
-cmake -S . -B cmake-build-debug -DCMAKE_BUILD_TYPE=Debug
+cmake -S . -B cmake-build-debug -G "Ninja" -DCMAKE_BUILD_TYPE=Debug
+cmake --build cmake-build-debug --config Debug
+```
+
+**macOS (Apple Silicon):**
+```bash
+cmake -S . -B cmake-build-debug -G "Ninja" -DCMAKE_BUILD_TYPE=Debug -DCMAKE_OSX_ARCHITECTURES=arm64
+cmake --build cmake-build-debug --config Debug
+```
+
+**macOS (Intel):**
+```bash
+cmake -S . -B cmake-build-debug -G "Ninja" -DCMAKE_BUILD_TYPE=Debug -DCMAKE_OSX_ARCHITECTURES=x86_64
+cmake --build cmake-build-debug --config Debug
+```
+
+**Windows:**
+```bash
+cmake -S . -B cmake-build-debug -G "Visual Studio 17 2022" -A x64
 cmake --build cmake-build-debug --config Debug
 ```
 
@@ -285,7 +327,6 @@ For detailed development tasks and known issues, please check the [GitHub Issues
 ## Known Issues
 
 - **Linux/X11:** Multi-monitor setup with NVIDIA proprietary drivers may cause freezing. See [NVIDIA Forums](https://forums.developer.nvidia.com/t/external-monitor-freezes-when-using-dedicated-gpu/265406) for workarounds.
-- **macOS:** `std::format` (C++20) incompatible with older SDK targets (< 13.0). Engine uses `std::stringstream` as fallback.
 
 ## Contributing
 

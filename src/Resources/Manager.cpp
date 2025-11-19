@@ -233,20 +233,233 @@ namespace EmEn::Resources
 		return true;
 	}
 
+	std::string
+	Manager::determineStoreForFile (const std::filesystem::path & filepath, const std::filesystem::path & dataStoreDirectory) noexcept
+	{
+		/* Extract file extension for type detection. */
+		const auto extension = filepath.extension().string();
+
+		/* For JSON files, we need to inspect the parent directory name
+		 * as they usually contain configuration data for different resource types. */
+		if ( extension == ".json" )
+		{
+			/* Get the parent directory name relative to data-stores/
+			 * This typically corresponds to a store name (e.g., "Backgrounds", "Materials"). */
+			const auto relativePath = std::filesystem::relative(filepath.parent_path(), dataStoreDirectory);
+
+			if ( !relativePath.empty() )
+			{
+				/* Return the first component of the relative path as the store name. */
+				return relativePath.begin()->string();
+			}
+
+			return {};
+		}
+
+		/* Map common file extensions to their corresponding stores. */
+		static const std::unordered_map< std::string, std::string > extensionToStore = {
+			/* Image formats → Images store */
+			{".png", "Images"}, {".jpg", "Images"}, {".jpeg", "Images"},
+			{".bmp", "Images"}, {".tga", "Images"}, {".dds", "Images"},
+			{".webp", "Images"}, {".gif", "Images"},
+
+			/* Audio formats → Sounds or Musics store (we'll default to Sounds) */
+			{".wav", "Sounds"}, {".ogg", "Sounds"}, {".mp3", "Sounds"},
+			{".flac", "Musics"}, {".opus", "Musics"}, {".aiff", "Musics"},
+
+			/* 3D Model formats → Meshes store */
+			{".gltf", "Meshes"}, {".glb", "Meshes"}, {".obj", "Meshes"},
+			{".fbx", "Meshes"}, {".dae", "Meshes"},
+
+			/* Font formats → Fonts store */
+			{".ttf", "Fonts"}, {".otf", "Fonts"}, {".woff", "Fonts"}, {".woff2", "Fonts"},
+
+			/* Video formats → Movies store */
+			{".mp4", "Movies"}, {".webm", "Movies"}, {".mkv", "Movies"},
+			{".avi", "Movies"}, {".mov", "Movies"},
+		};
+
+		const auto it = extensionToStore.find(extension);
+
+		if ( it != extensionToStore.end() )
+		{
+			return it->second;
+		}
+
+		/* If we can't determine the store from extension,
+		 * try using the parent directory name. */
+		const auto relativePath = std::filesystem::relative(filepath.parent_path(), dataStoreDirectory);
+
+		if ( !relativePath.empty() )
+		{
+			return relativePath.begin()->string();
+		}
+
+		return {};
+	}
+
+	bool
+	Manager::scanResourceDirectories () noexcept
+	{
+		const auto & fileSystem = m_primaryServices.fileSystem();
+		size_t resourcesFound = 0;
+
+		/* For each data directory pointed by the file system. */
+		for ( auto dataStoreDirectory : fileSystem.dataDirectories() )
+		{
+			dataStoreDirectory.append(DataStores);
+
+			if ( !IO::directoryExists(dataStoreDirectory) )
+			{
+				/* No "data-stores/" in this data directory. */
+				continue;
+			}
+
+			if ( m_verbosityEnabled )
+			{
+				TraceInfo{ClassId} << "Scanning directory: " << dataStoreDirectory;
+			}
+
+			/* First, iterate over first-level directories which represent stores. */
+			for ( const auto & storeEntry : std::filesystem::directory_iterator(dataStoreDirectory) )
+			{
+				if ( !is_directory(storeEntry.path()) )
+				{
+					/* This entry is not a directory, skip it (e.g., ResourcesIndex.json files). */
+					continue;
+				}
+
+				const auto storeName = storeEntry.path().filename().string();
+
+				/* Skip hidden directories (starting with dot). */
+				if ( storeName.starts_with('.') )
+				{
+					continue;
+				}
+
+				if ( m_verbosityEnabled )
+				{
+					TraceInfo{ClassId} << "Scanning store directory: " << storeName;
+				}
+
+				/* Create or retrieve the store. */
+				if ( !m_localStores.contains(storeName) )
+				{
+					m_localStores[storeName] = std::make_shared< std::unordered_map< std::string, BaseInformation > >();
+
+					if ( m_verbosityEnabled )
+					{
+						TraceInfo{ClassId} << "Creating store '" << storeName << "' from dynamic scan";
+					}
+				}
+
+				const auto & store = m_localStores[storeName];
+				const auto & storeDirectory = storeEntry.path();
+
+				/* Now, recursively scan files within this store directory. */
+				for ( const auto & fileEntry : std::filesystem::recursive_directory_iterator(storeDirectory) )
+				{
+					if ( !is_regular_file(fileEntry.path()) )
+					{
+						/* This entry is not a file (could be a directory or symlink). */
+						continue;
+					}
+
+					const auto & filepath = fileEntry.path();
+					const auto filename = filepath.filename().string();
+
+					/* Skip hidden files (starting with dot). */
+					if ( filename.starts_with('.') )
+					{
+						continue;
+					}
+
+					/* Calculate relative path from the store directory (not data-stores).
+					 * This will be used as the resource name and preserve subdirectory structure.
+					 * Examples:
+					 *   - data-stores/Images/texture.png -> resourceName = "texture"
+					 *   - data-stores/Images/Murs/briques001.png -> resourceName = "Murs/briques001"
+					 */
+					const auto relativePathFromStore = std::filesystem::relative(filepath, storeDirectory);
+					const auto resourceName = relativePathFromStore.parent_path() / relativePathFromStore.stem();
+					const auto resourceNameStr = resourceName.string();
+
+					/* Calculate relative path from data-stores directory for the "Data" field. */
+					const auto relativePath = std::filesystem::relative(filepath, dataStoreDirectory);
+
+					/* Check if resource already exists (might have been loaded from JSON index). */
+					if ( store->contains(resourceNameStr) )
+					{
+						/* Resource already registered, skip it. */
+						continue;
+					}
+
+					/* Create a JSON-like structure for BaseInformation parsing. */
+					Json::Value resourceDefinition;
+					resourceDefinition["Name"] = resourceNameStr;
+					resourceDefinition["Source"] = "LocalData";
+					resourceDefinition["Data"] = relativePath.string();
+
+					/* Parse and add to store. */
+					BaseInformation baseInformation;
+
+					if ( baseInformation.parse(fileSystem, resourceDefinition) )
+					{
+						store->emplace(resourceNameStr, baseInformation);
+						resourcesFound++;
+
+						if ( m_verbosityEnabled )
+						{
+							TraceInfo{ClassId} << "Registered '" << resourceNameStr << "' in '" << storeName << "' store";
+						}
+					}
+					else
+					{
+						TraceWarning{ClassId} << "Failed to parse resource information for: " << filepath;
+					}
+				}
+			}
+		}
+
+		if ( m_verbosityEnabled || resourcesFound > 0 )
+		{
+			TraceSuccess{ClassId} << "Dynamic scan found " << resourcesFound << " resources across all stores";
+		}
+
+		return resourcesFound > 0;
+	}
+
 	bool
 	Manager::onInitialize () noexcept
 	{
 		m_verbosityEnabled = m_primaryServices.settings().getOrSetDefault< bool >(ResourcesShowInformationKey, DefaultResourcesShowInformation);
 		m_downloadingAllowed = m_primaryServices.settings().getOrSetDefault< bool >(ResourcesDownloadEnabledKey, DefaultResourcesDownloadEnabled);
 		m_quietConversion = m_primaryServices.settings().getOrSetDefault< bool >(ResourcesQuietConversionKey, DefaultResourcesQuietConversion);
+		m_useDynamicScan = m_primaryServices.settings().getOrSetDefault< bool >(ResourcesUseDynamicScanKey, DefaultResourcesUseDynamicScan);
 
 		/* NOTE: Initialize the store service. */
 		{
 			const std::lock_guard< std::mutex > lock{m_localStoresAccess};
 
-			if ( !this->readResourceIndexes() )
+			if ( m_useDynamicScan )
 			{
-				TraceWarning{ClassId} << "No local resources available !";
+				/* Dynamic scan mode: Scan directories to discover resources automatically. */
+				TraceDebug{ClassId} << "Using dynamic resource scanning...";
+
+				if ( !this->scanResourceDirectories() )
+				{
+					TraceWarning{ClassId} << "No local resources available from dynamic scan !";
+				}
+			}
+			else
+			{
+				/* Index mode: Use pre-generated JSON indexes for faster loading. */
+				TraceDebug{ClassId} << "Using JSON-based resource indexing...";
+
+				if ( !this->readResourceIndexes() )
+				{
+					TraceWarning{ClassId} << "No local resources available from indexes !";
+				}
 			}
 
 			m_containers.emplace(typeid(Audio::SoundResource), std::make_unique< Sounds >("Sound manager", m_primaryServices, *this, this->getLocalStore("Sounds")));
@@ -327,7 +540,7 @@ namespace EmEn::Resources
 
 		for ( auto storeIt = storesObject.begin(); storeIt != storesObject.end(); ++storeIt )
 		{
-			auto storeName = storeIt.name();
+			const auto storeName = storeIt.name();
 
 			/* Checks if the store is a JSON array, ie : "Meshes":[{},{},...] */
 			if ( !storeIt->isArray() )

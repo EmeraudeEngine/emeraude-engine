@@ -57,7 +57,7 @@ namespace EmEn::Graphics::Geometry
 	}
 
 	ShapeBuilderOptions< float >
-	GenerationParameters::getShapeBuilderOptions () const noexcept
+	GenerationParameters::getShapeBuilderOptions (bool enableNormalsGeneration, bool enableTextureCoordinatesGeneration, bool enableVertexColorsGeneration) const noexcept
 	{
 		ShapeBuilderOptions< float > options{
 			this->isFlagEnabled(EnableNormal),
@@ -69,6 +69,21 @@ namespace EmEn::Graphics::Geometry
 		options.setTextureCoordinatesMultiplier(m_textureCoordinatesMultiplier);
 		options.setCenterAtBottom(this->isCenteredAtBottom());
 		options.enableGeometryFlipping(this->flipGeometry());
+
+		if ( enableNormalsGeneration && this->isFlagEnabled(EnableNormal) )
+		{
+			options.enableNormalsGeneration();
+		}
+
+		if ( enableTextureCoordinatesGeneration && this->isFlagEnabled(EnablePrimaryTextureCoordinates) || this->isFlagEnabled(EnableSecondaryTextureCoordinates) )
+		{
+			options.enableTextureCoordinatesGeneration();
+		}
+
+		if ( enableVertexColorsGeneration && this->isFlagEnabled(EnableVertexColor) )
+		{
+			options.enableVertexColorsGeneration();
+		}
 
 		/* NOTE: Set the global vertex color only if the parameter received a color. */
 		if ( m_globalVertexColorSet )

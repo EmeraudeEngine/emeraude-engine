@@ -33,7 +33,7 @@ endif ()
 
 project(
 	${BINARY_NAME}
-	VERSION 0.8.32
+	VERSION 0.8.33
 	DESCRIPTION "Emeraude Engine is an open-source (LGPLv3) 3D Graphics engine using Vulkan and written in C++20."
 	HOMEPAGE_URL "https://github.com/EmeraudeEngine/emeraude-engine"
 	LANGUAGES C CXX
@@ -515,7 +515,9 @@ if ( EMERAUDE_ENABLE_TESTS )
 	# Enable the testing
 	enable_testing()
 
-	gtest_discover_tests(EmeraudeUnitTests)
+	gtest_discover_tests(EmeraudeUnitTests
+		WORKING_DIRECTORY ${EMERAUDE_COMPILATION_DIR}
+	)
 endif ()
 
 
@@ -536,9 +538,9 @@ endif ()
 if ( NOT "${EMERAUDE_COMPILATION_DIR}" STREQUAL "" )
 	# Copy debug file
 	add_custom_target(copy_debug_files ALL
-		COMMAND $<$<CONFIG:Debug>:${CMAKE_COMMAND} -E copy_if_different
+		COMMAND $<$<CONFIG:Debug>:${CMAKE_COMMAND}> -E copy_if_different
 		"${CMAKE_CURRENT_SOURCE_DIR}/resources/vk_layer_settings.txt"
-		"${EMERAUDE_COMPILATION_DIR}/vk_layer_settings.txt" >
+		"${EMERAUDE_COMPILATION_DIR}/vk_layer_settings.txt"
 		VERBATIM
 	)
 

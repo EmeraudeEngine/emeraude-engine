@@ -1,5 +1,5 @@
 /*
- * src/AVConsole/Manager.cpp
+ * src/Scenes/AVConsole/Manager.cpp
  * This file is part of Emeraude-Engine
  *
  * Copyright (C) 2010-2025 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
@@ -33,7 +33,7 @@
 /* Local inclusions. */
 #include "Tracer.hpp"
 
-namespace EmEn::AVConsole
+namespace EmEn::Scenes::AVConsole
 {
 	using namespace Libs;
 	using namespace Graphics;

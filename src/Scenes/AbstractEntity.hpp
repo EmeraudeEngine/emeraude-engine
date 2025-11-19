@@ -29,7 +29,6 @@
 /* STL inclusions. */
 #include <cstddef>
 #include <cstdint>
-#include <map>
 #include <vector>
 #include <string>
 #include <any>
@@ -80,8 +79,80 @@ namespace EmEn::Scenes
 		Camera,
 	};
 
+	/* Forward declaration for ComponentBuilder. */
+	class AbstractEntity;
+
+	/**
+	 * @brief Builder for creating components with a fluent API.
+	 * @tparam component_t The type of component to build.
+	 */
+	template< typename component_t >
+	class ComponentBuilder final
+	{
+		public:
+
+			/**
+			 * @brief Constructs a component builder.
+			 * @param entity A reference to the entity that will own the component.
+			 * @param componentName The name of the component.
+			 */
+			ComponentBuilder (AbstractEntity & entity, std::string componentName) noexcept
+				: m_entity{entity},
+				m_componentName{std::move(componentName)}
+			{
+
+			}
+
+			/**
+			 * @brief Sets up the component with a custom function.
+			 * @tparam function_t The type of setup function. Signature: void (component_t &)
+			 * @param setupFunction The function to execute after component construction.
+			 * @return ComponentBuilder &
+			 */
+			template< typename function_t >
+			ComponentBuilder &
+			setup (function_t && setupFunction) noexcept requires (std::is_invocable_v< function_t, component_t & >)
+			{
+				m_setupFunction = std::forward< function_t >(setupFunction);
+
+				return *this;
+			}
+
+			/**
+			 * @brief Marks the component as a primary device (for cameras and microphones).
+			 * @return ComponentBuilder &
+			 */
+			ComponentBuilder &
+			asPrimary () noexcept
+			{
+				m_isPrimaryDevice = true;
+
+				return *this;
+			}
+
+			/**
+			 * @brief Builds and adds the component to the entity.
+			 * @tparam ctor_args The types of constructor arguments.
+			 * @param args Constructor arguments for the component (forwarded after componentName and entity).
+			 * @return std::shared_ptr< component_t >
+			 */
+			template< typename... ctor_args >
+			std::shared_ptr< component_t >
+			build (ctor_args &&... args) noexcept requires (std::is_base_of_v< Component::Abstract, component_t >);
+
+		private:
+
+			AbstractEntity & m_entity;
+			std::string m_componentName;
+			std::function< void(component_t &) > m_setupFunction{nullptr};
+			bool m_isPrimaryDevice{false};
+	};
+
 	/**
 	 * @brief Defines the base of an entity in the 3D world composed with components.
+	 * @note [THREAD-SAFETY] This class is NOT thread-safe. Each entity instance must be
+	 *       accessed by only one thread at a time. The caller is responsible for ensuring
+	 *       thread-safety if entities are shared across threads.
 	 * @note [OBS][SHARED-OBSERVER][SHARED-OBSERVABLE]
 	 * @extends EmEn::Libs::FlagArrayTrait Each component has 8 flags, 2 are used by this base class.
 	 * @extends EmEn::Libs::NameableTrait An entity is nameable.
@@ -117,9 +188,9 @@ namespace EmEn::Scenes
 				SpotLightDestroyed,
 				SoundEmitterCreated,
 				SoundEmitterDestroyed,
-				VisualComponentCreated,
+				VisualCreated,
 				VisualComponentDestroyed,
-				MultipleVisualsComponentCreated,
+				MultipleVisualsCreated,
 				MultipleVisualsComponentDestroyed,
 				ParticlesEmitterCreated,
 				ParticlesEmitterDestroyed,
@@ -132,6 +203,9 @@ namespace EmEn::Scenes
 				/* Enumeration boundary. */
 				MaxEnum
 			};
+
+			/** @brief Maximum number of components per entity. */
+			static constexpr size_t MaxComponentCount{8};
 
 			/**
 			 * @brief Copy constructor.
@@ -216,50 +290,112 @@ namespace EmEn::Scenes
 			}
 
 			/**
+			 * @brief Returns whether the entity have component.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			hasComponent () const noexcept
+			{
+				return !m_components.empty();
+			}
+
+			/**
 			 * @brief Returns whether a named component exists in the entity.
 			 * @param name The name of the component.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool containsComponent (const std::string & name) const noexcept;
+			bool
+			containsComponent (const std::string & name) const noexcept
+			{
+				return std::ranges::any_of(m_components, [&name] (const auto & component) {
+					return component->name() == name;
+				});
+			}
 
 			/**
-			 * @brief Returns whether a component is part of this entity.
-			 * @param component A reference to the component smart pointer.
+			 * @brief Returns the smart-pointer on an abstract component smart-pointer.
+			 * @param name The name of the component.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool containsComponent (const std::shared_ptr< Component::Abstract > & component) const noexcept;
+			std::shared_ptr< Component::Abstract > getComponent (const std::string & name) noexcept;
 
 			/**
-			 * @brief Returns the component list of this entity.
-			 * @return const std::map< std::string, std::shared_ptr< Component::Abstract > > &
-			 */
-			[[nodiscard]]
-			const std::map< std::string, std::shared_ptr< Component::Abstract > > &
-			components () const noexcept
-			{
-				return m_components;
-			}
-
-			/**
-			 * @brief Returns the component list of this entity.
-			 * @return std::map< std::string, std::shared_ptr< Component::Abstract > > &
-			 */
-			[[nodiscard]]
-			std::map< std::string, std::shared_ptr< Component::Abstract > > &
-			components () noexcept
-			{
-				return m_components;
-			}
-
-			/**
-			 * @brief Returns a possible named component from the entity.
+			 * @brief Gets a component by name with automatic type casting.
+			 * @tparam component_t The expected type of the component.
 			 * @param name The name of the component.
-			 * @return std::shared_ptr< Component::Abstract >
+			 * @return std::shared_ptr< component_t > The component cast to the specified type, or nullptr if not found or wrong type.
 			 */
-			[[nodiscard]]
-			std::shared_ptr< Component::Abstract > getComponent (const std::string & name) const noexcept;
+			template< typename component_t >
+			std::shared_ptr< component_t >
+			getComponent (const std::string & name) noexcept requires (std::is_base_of_v< Component::Abstract, component_t >)
+			{
+				for ( const auto & component : m_components )
+				{
+					if ( component->name() == name )
+					{
+						return std::dynamic_pointer_cast< component_t >(component);
+					}
+				}
+
+				return nullptr;
+			}
+
+			/**
+			 * @brief Gets all components of a specific type.
+			 * @tparam component_t The type of components to retrieve.
+			 * @return Libs::StaticVector< std::shared_ptr< component_t >, MaxComponentCount > Vector of all components matching the type.
+			 */
+			template< typename component_t >
+			Libs::StaticVector< std::shared_ptr< component_t >, MaxComponentCount >
+			getComponentsOfType () noexcept requires (std::is_base_of_v< Component::Abstract, component_t >)
+			{
+				Libs::StaticVector< std::shared_ptr< component_t >, MaxComponentCount > result;
+
+				for ( const auto & component : m_components )
+				{
+					if ( auto casted = std::dynamic_pointer_cast< component_t >(component) )
+					{
+						result.push_back(casted);
+					}
+				}
+
+				return result;
+			}
+
+			/**
+			 * @brief Executes a function per component with thread-safe access.
+			 * @tparam function_t The type of function. Signature: void (Component::Abstract &)
+			 * @param processComponent The function to execute.
+			 * @return void
+			 */
+			template< typename function_t >
+			void
+			forEachComponent (function_t && processComponent) noexcept requires (std::is_invocable_v< function_t, Component::Abstract & >)
+			{
+				for ( const auto & component : m_components )
+				{
+					processComponent(*component.get());
+				}
+			}
+
+			/**
+			 * @brief Executes a function per component with thread-safe access.
+			 * @tparam function_t The type of function. Signature: void (const Component::Abstract &)
+			 * @param processComponent The function to execute.
+			 * @return void
+			 */
+			template< typename function_t >
+			void
+			forEachComponent (function_t && processComponent) const noexcept requires (std::is_invocable_v< function_t, const Component::Abstract & >)
+			{
+				for ( const auto & component : m_components )
+				{
+					processComponent(*component.get());
+				}
+			}
 
 			/**
 			 * @brief Removes a component by his name from this entity. Returns 'true' whether the component existed.
@@ -269,221 +405,23 @@ namespace EmEn::Scenes
 			bool removeComponent (const std::string & name) noexcept;
 
 			/**
-			 * @brief Removes a component by its pointer from this entity. Returns 'true' whether the component existed.
-			 * @param component The name of the component.
-			 * @return bool
-			 */
-			bool removeComponent (const std::shared_ptr< Component::Abstract > & component) noexcept;
-
-			/**
 			 * @brief Removes all components.
 			 * @return void
 			 */
 			void clearComponents () noexcept;
 
 			/**
-			 * @brief Reads something on each component of the entity.
-			 * @param lambda A reference to a function using the signature "bool method (const Component::Abstract & component)".
-			 * @return void
+			 * @brief Creates a component builder for fluent API construction.
+			 * @tparam component_t The type of component to build.
+			 * @param componentName The name of the component.
+			 * @return ComponentBuilder< component_t >
 			 */
-			void forEachComponent (const std::function< bool (const Component::Abstract & component) > & lambda) const noexcept;
-
-			/**
-			 * @brief Reads something on each component of the entity.
-			 * @param lambda A reference to a function using the signature "bool method (const Component::Abstract & component, int index)".
-			 * @return void
-			 */
-			void forEachComponent (const std::function< bool (const Component::Abstract & component, size_t index) > & lambda) const noexcept;
-
-			/**
-			 * @brief Modifies something on each component of the entity.
-			 * @param lambda A reference to a function using the signature "bool method (const Component::Abstract & component)".
-			 * @return void
-			 */
-			void forEachComponent (const std::function< bool (Component::Abstract & component) > & lambda) noexcept;
-
-			/**
-			 * @brief Modifies something on each component of the entity.
-			 * @param lambda A reference to a function using the signature "bool method (const Component::Abstract & component, int index)".
-			 * @return void
-			 */
-			void forEachComponent (const std::function< bool (Component::Abstract & component, size_t index) > & lambda) noexcept;
-
-			/**
-			 * @brief Creates a camera.
-			 * @param perspective Set up a perspective projection to the camera. Default true.
-			 * @param primaryDevice Declare this device as a primary one. Default false.
-			 * @param componentName The name of the component. Default "Camera".
-			 * @return std::shared_ptr< Component::Camera >
-			 */
-			std::shared_ptr< Component::Camera > newCamera (bool perspective = true, bool primaryDevice = false, const std::string & componentName = "Camera") noexcept;
-
-			/**
-			 * @brief Creates a camera as a primary device, using a perspective projection [SHORTCUT].
-			 * @param componentName The name of the component. Default "PrimaryPerspectiveCamera".
-			 * @return std::shared_ptr< Component::Camera >
-			 */
-			std::shared_ptr< Component::Camera >
-			newPrimaryPerspectiveCamera (const std::string & componentName = "PrimaryPerspectiveCamera") noexcept
+			template< typename component_t >
+			ComponentBuilder< component_t >
+			componentBuilder (const std::string & componentName) noexcept
 			{
-				return this->newCamera(true, true, componentName);
+				return ComponentBuilder< component_t >(*this, componentName);
 			}
-
-			/**
-			 * @brief Creates a camera as a primary device, using an orthographic projection [SHORTCUT].
-			 * @param componentName The name of the component. Default "PrimaryOrthographicCamera".
-			 * @return std::shared_ptr< Component::Camera >
-			 */
-			std::shared_ptr< Component::Camera >
-			newPrimaryOrthographicCamera (const std::string & componentName = "PrimaryOrthographicCamera") noexcept
-			{
-				return this->newCamera(false, true, componentName);
-			}
-
-			/**
-			 * @brief Creates a camera using a perspective projection [SHORTCUT].
-			 * @param componentName The name of the component. Default "PerspectiveCamera".
-			 * @return std::shared_ptr< Component::Camera >
-			 */
-			std::shared_ptr< Component::Camera >
-			newPerspectiveCamera (const std::string & componentName = "PerspectiveCamera") noexcept
-			{
-				return this->newCamera(true, false, componentName);
-			}
-
-			/**
-			 * @brief Creates a camera using an orthographic projection [SHORTCUT].
-			 * @param componentName The name of the component. Default "OrthographicCamera".
-			 * @return std::shared_ptr< Component::Camera >
-			 */
-			std::shared_ptr< Component::Camera >
-			newOrthographicCamera (const std::string & componentName = "OrthographicCamera") noexcept
-			{
-				return this->newCamera(false, false, componentName);
-			}
-
-			/**
-			 * @brief Creates a microphone.
-			 * @param componentName The name of the component. Default "Microphone".
-			 * @param primaryDevice Set this device as the primary one. Default false.
-			 * @return std::shared_ptr< Component::Microphone >
-			 */
-			std::shared_ptr< Component::Microphone > newMicrophone (bool primaryDevice = false, const std::string & componentName = "Microphone") noexcept;
-
-			/**
-			 * @brief Creates a microphone as a primary device [SHORTCUT].
-			 * @param componentName The name of the component. Default "PrimaryMicrophone".
-			 * @return std::shared_ptr< Component::Microphone >
-			 */
-			std::shared_ptr< Component::Camera >
-			newPrimaryMicrophone (const std::string & componentName = "PrimaryMicrophone") noexcept
-			{
-				return this->newCamera(true, true, componentName);
-			}
-
-			/**
-			 * @brief Creates a directional light emitter.
-			 * @param shadowMapResolution The shadow map resolution. Default, no shadow map.
-			 * @param componentName The name of the component. Default "DirectionalLight".
-			 * @return std::shared_ptr< Component::DirectionalLight >
-			 */
-			std::shared_ptr< Component::DirectionalLight > newDirectionalLight (uint32_t shadowMapResolution = 0, const std::string & componentName = "DirectionalLight") noexcept;
-
-			/**
-			 * @brief Creates a point light emitter.
-			 * @param shadowMapResolution The shadow map resolution. Default, no shadow map.
-			 * @param componentName The name of the component. Default "PointLight".
-			 * @return std::shared_ptr< Component::PointLight >
-			 */
-			std::shared_ptr< Component::PointLight > newPointLight (uint32_t shadowMapResolution = 0, const std::string & componentName = "PointLight") noexcept;
-
-			/**
-			 * @brief Creates a spotlight emitter.
-			 * @param shadowMapResolution The shadow map resolution. Default, no shadow map.
-			 * @param componentName The name of the component. Default "SpotLight".
-			 * @return std::shared_ptr< Component::SpotLight >
-			 */
-			std::shared_ptr< Component::SpotLight > newSpotLight (uint32_t shadowMapResolution = 0, const std::string & componentName = "SpotLight") noexcept;
-
-			/**
-			 * @brief Creates a sound emitter.
-			 * @param componentName The name of the component. Default "SoundEmitter".
-			 * @return std::shared_ptr< Component::SoundEmitter >
-			 */
-			std::shared_ptr< Component::SoundEmitter > newSoundEmitter (const std::string & componentName = "SoundEmitter") noexcept;
-
-			/**
-			 * @brief Creates a sound emitter and provide a sound.
-			 * @param resource A reference to a sound resource smart pointer to play.
-			 * @param gain Set the playback volume.
-			 * @param loop Set the loop state.
-			 * @param componentName The name of the component. Default "SoundEmitter".
-			 * @return std::shared_ptr< Component::SoundEmitter >
-			 */
-			std::shared_ptr< Component::SoundEmitter > newSoundEmitter (const std::shared_ptr< Audio::SoundResource > & resource, float gain, bool loop, const std::string & componentName = "SoundEmitter") noexcept;
-
-			/**
-			 * @brief Creates a visual instance.
-			 * @param resource A reference to a renderable interface smart pointer.
-			 * @param enablePhysicalProperties Enable physical properties on the new component. Default true.
-			 * @param enableLighting Enable the lighting on the visual. Default true.
-			 * @param componentName A reference to a string for the name of the component. Default "Visual".
-			 * @return std::shared_ptr< Component::Visual >
-			 */
-			std::shared_ptr< Component::Visual > newVisual (const std::shared_ptr< Graphics::Renderable::Interface > & resource, bool enablePhysicalProperties = true, bool enableLighting = true, const std::string & componentName = "Visual") noexcept;
-
-			/**
-			 * @brief Creates a visual instances.
-			 * @note Version for multiple underlying renderable object instances.
-			 * @param resource A reference to a renderable interface smart pointer.
-			 * @param coordinates An array of coordinates to place instances.
-			 * @param enablePhysicalProperties Enable physical properties on the new component. Default true.
-			 * @param enableLighting Enable the lighting on the visual. Default true.
-			 * @param componentName The name of the component. Default "MultipleVisuals".
-			 * @return std::shared_ptr< Component::MultipleVisuals >
-			 */
-			std::shared_ptr< Component::MultipleVisuals > newVisual (const std::shared_ptr< Graphics::Renderable::Interface > & resource, const std::vector< Libs::Math::CartesianFrame< float > > & coordinates, bool enablePhysicalProperties = true, bool enableLighting = true, const std::string & componentName = "MultipleVisuals") noexcept;
-
-			/**
-			 * @brief Creates a particle emitter using a sprite resource.
-			 * @param resource a reference to a sprite resource smart pointer.
-			 * @param maxParticleCount The limit of particles allowed to be generated at once.
-			 * @param componentName The name of the component. Default "ParticlesEmitter".
-			 * @return std::shared_ptr< Component::ParticlesEmitter >
-			 */
-			std::shared_ptr< Component::ParticlesEmitter > newParticlesEmitter (const std::shared_ptr< Graphics::Renderable::SpriteResource > & resource, uint32_t maxParticleCount, const std::string & componentName = "ParticlesEmitter") noexcept;
-
-			/**
-			 * @brief Creates a particles emitter using a mesh resource.
-			 * @param resource a reference to a mesh resource smart pointer.
-			 * @param maxParticleCount The limit of particles allowed to be generated at once.
-			 * @param componentName The name of the component. Default "ParticlesEmitter".
-			 * @return std::shared_ptr< Component::ParticlesEmitter >
-			 */
-			std::shared_ptr< Component::ParticlesEmitter > newParticlesEmitter (const std::shared_ptr< Graphics::Renderable::MeshResource > & resource, uint32_t maxParticleCount, const std::string & componentName = "ParticlesEmitter") noexcept;
-
-			/**
-			 * @brief Creates a directional push modifier.
-			 * @param componentName The name of the component. Default "DirectionalPushModifier".
-			 * @return std::shared_ptr< Component::DirectionalPushModifier >
-			 */
-			std::shared_ptr< Component::DirectionalPushModifier > newDirectionalPushModifier (const std::string & componentName = "DirectionalPushModifier") noexcept;
-
-			/**
-			 * @brief Creates a spherical push modifier.
-			 * @param componentName The name of the component. Default "SphericalPushModifier".
-			 * @return std::shared_ptr< Component::SphericalPushModifier >
-			 */
-			std::shared_ptr< Component::SphericalPushModifier > newSphericalPushModifier (const std::string & componentName = "SphericalPushModifier") noexcept;
-
-			/**
-			 * @brief Creates a weight with customized properties.
-			 * @note This component will automatically enable the physical properties.
-			 * @param initialProperties A reference to a physical object property.
-			 * @param componentName The name of the component. Default "Weight".
-			 * @return std::shared_ptr< Component::Weight >
-			 */
-			std::shared_ptr< Component::Weight > newWeight (const Physics::BodyPhysicalProperties & initialProperties, const std::string & componentName = "Weight") noexcept;
 
 			/**
 			 * @brief This will override the computation of bounding primitives.
@@ -680,6 +618,10 @@ namespace EmEn::Scenes
 
 		protected:
 
+			/* Friend declarations */
+			template< typename component_t >
+			friend class ComponentBuilder;
+
 			/* Flag names */
 			static constexpr auto BoundingPrimitivesOverridden{0UL};
 			static constexpr auto IsDeflector{1UL};
@@ -758,20 +700,11 @@ namespace EmEn::Scenes
 			void updateEntityProperties () noexcept;
 
 			/**
-			 * @brief Before creating a new component, this function is called to know if the component name is available.
-			 * @param name The name of the component.
-			 * @return bool
-			 */
-			[[nodiscard]]
-			bool checkComponentNameAvailability (const std::string & name) const noexcept;
-
-			/**
 			 * @brief Adds a component in the entity.
-			 * @param name The name of the new component.
 			 * @param component A reference to the component smart pointer.
 			 * @return bool
 			 */
-			bool addComponent (const std::string & name, const std::shared_ptr< Component::Abstract > & component) noexcept;
+			bool addComponent (const std::shared_ptr< Component::Abstract > & component) noexcept;
 
 			/**
 			 * @brief Prepares to remove a component from the entity.
@@ -868,13 +801,87 @@ namespace EmEn::Scenes
 			 */
 			virtual void onLocationDataUpdate () noexcept = 0;
 
-			std::map< std::string, std::shared_ptr< Component::Abstract > > m_components;
+			Libs::StaticVector< std::shared_ptr< Component::Abstract >, MaxComponentCount > m_components;
 			Libs::Math::Space3D::AACuboid< float > m_boundingBox;
 			Libs::Math::Space3D::Sphere< float > m_boundingSphere;
 			Physics::BodyPhysicalProperties m_bodyPhysicalProperties;
 			const uint32_t m_birthTime{0};
 			size_t m_lastUpdatedMoveCycle{0};
 			CollisionDetectionModel m_collisionDetectionModel{CollisionDetectionModel::Sphere};
-			mutable std::mutex m_componentsAccess;
 	};
+
+	template< typename component_t >
+	template< typename... ctor_args >
+	std::shared_ptr< component_t >
+	ComponentBuilder< component_t >::build (ctor_args &&... args) noexcept requires (std::is_base_of_v< Component::Abstract, component_t >)
+	{
+		/* Create the component. */
+		auto component = std::make_shared< component_t >(m_componentName, m_entity, std::forward< ctor_args >(args)...);
+
+		/* Execute setup function if provided. */
+		if ( m_setupFunction )
+		{
+			m_setupFunction(*component);
+		}
+
+		/* Add component to entity. */
+		if ( !m_entity.addComponent(component) )
+		{
+			return nullptr;
+		}
+
+		/* Send appropriate notifications based on component type. */
+		if constexpr ( std::is_same_v< component_t, Component::Camera > )
+		{
+			m_entity.notify(m_isPrimaryDevice ? AbstractEntity::PrimaryCameraCreated : AbstractEntity::CameraCreated, component);
+		}
+		else if constexpr ( std::is_same_v< component_t, Component::Microphone > )
+		{
+			m_entity.notify(m_isPrimaryDevice ? AbstractEntity::PrimaryMicrophoneCreated : AbstractEntity::MicrophoneCreated, component);
+		}
+		else if constexpr ( std::is_same_v< component_t, Component::DirectionalLight > )
+		{
+			m_entity.notify(AbstractEntity::DirectionalLightCreated, component);
+		}
+		else if constexpr ( std::is_same_v< component_t, Component::PointLight > )
+		{
+			m_entity.notify(AbstractEntity::PointLightCreated, component);
+		}
+		else if constexpr ( std::is_same_v< component_t, Component::SpotLight > )
+		{
+			m_entity.notify(AbstractEntity::SpotLightCreated, component);
+		}
+		else if constexpr ( std::is_same_v< component_t, Component::SoundEmitter > )
+		{
+			m_entity.notify(AbstractEntity::SoundEmitterCreated, component);
+		}
+		else if constexpr ( std::is_same_v< component_t, Component::Visual > )
+		{
+			m_entity.notify(AbstractEntity::VisualCreated, component);
+		}
+		else if constexpr ( std::is_same_v< component_t, Component::MultipleVisuals > )
+		{
+			m_entity.notify(AbstractEntity::MultipleVisualsCreated, component);
+		}
+		else if constexpr ( std::is_same_v< component_t, Component::ParticlesEmitter > )
+		{
+			m_entity.notify(AbstractEntity::ParticlesEmitterCreated, component);
+		}
+		else if constexpr ( std::is_same_v< component_t, Component::DirectionalPushModifier > )
+		{
+			m_entity.notify(AbstractEntity::ModifierCreated, std::static_pointer_cast< Component::AbstractModifier >(component));
+			m_entity.notify(AbstractEntity::DirectionalPushModifierCreated, component);
+		}
+		else if constexpr ( std::is_same_v< component_t, Component::SphericalPushModifier > )
+		{
+			m_entity.notify(AbstractEntity::ModifierCreated, std::static_pointer_cast< Component::AbstractModifier >(component));
+			m_entity.notify(AbstractEntity::SphericalPushModifierCreated, component);
+		}
+		else if constexpr ( std::is_same_v< component_t, Component::Weight > )
+		{
+			m_entity.notify(AbstractEntity::WeightCreated, component);
+		}
+
+		return component;
+	}
 }

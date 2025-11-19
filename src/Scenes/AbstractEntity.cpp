@@ -26,9 +26,6 @@
 
 #include "AbstractEntity.hpp"
 
-/* STL inclusions. */
-#include <ranges>
-
 /* Local inclusions. */
 #include "Tracer.hpp"
 
@@ -104,7 +101,7 @@ namespace EmEn::Scenes
 			m_boundingSphere.reset();
 		}
 
-		for ( const auto & component : std::ranges::views::values(m_components) )
+		for ( const auto & component : m_components )
 		{
 			/* Checks render ability. */
 			if ( component->isRenderable() )
@@ -191,59 +188,24 @@ namespace EmEn::Scenes
 	void
 	AbstractEntity::onContainerMove (const CartesianFrame< float > & worldCoordinates) noexcept
 	{
-		const std::lock_guard< std::mutex > lockGuard{m_componentsAccess};
-
 		/* NOTE: Dispatch the move to every component. */
-		for ( const auto & component: m_components | std::views::values )
+		for ( const auto & component : m_components )
 		{
 			component->move(worldCoordinates);
 		}
 	}
 
 	bool
-	AbstractEntity::containsComponent (const std::string & name) const noexcept
+	AbstractEntity::addComponent (const std::shared_ptr< Component::Abstract > & component) noexcept
 	{
-		const std::lock_guard< std::mutex > lockGuard{m_componentsAccess};
-
-		return m_components.contains(name);
-	}
-
-	bool
-	AbstractEntity::containsComponent (const std::shared_ptr< Component::Abstract > & component) const noexcept
-	{
-		const std::lock_guard< std::mutex > lockGuard{m_componentsAccess};
-
-		return std::ranges::any_of(m_components, [component] (const auto & pair) {
-			return pair.second == component;
-		});
-	}
-
-	bool
-	AbstractEntity::checkComponentNameAvailability (const std::string & name) const noexcept
-	{
-		if ( m_components.contains(name) )
+		if ( m_components.full() )
 		{
-			TraceWarning{TracerTag} <<
-				"A component using the '" << name << "' is already present in this entity ! "
-				"Creation cancelled.";
+			TraceError{TracerTag} << "Unable to add a new component !";
 
 			return false;
 		}
 
-		return true;
-	}
-
-	bool
-	AbstractEntity::addComponent (const std::string & name, const std::shared_ptr< Component::Abstract > & component) noexcept
-	{
-		const std::lock_guard< std::mutex > lockGuard{m_componentsAccess};
-
-		if ( !m_components.emplace(name, component).second )
-		{
-			TraceError{TracerTag} << "Unable to create the component '" << name << "' !";
-
-			return false;
-		}
+		m_components.push_back(component);
 
 		/* NOTE: First update properties before sending any signals. */
 		this->updateEntityProperties();
@@ -292,467 +254,47 @@ namespace EmEn::Scenes
 		this->notify(ComponentDestroyed);
 	}
 
+	std::shared_ptr< Component::Abstract >
+	AbstractEntity::getComponent (const std::string & name) noexcept
+	{
+		for ( auto componentIt = m_components.begin(); componentIt != m_components.end(); ++componentIt )
+		{
+			if ( (*componentIt)->name() == name )
+			{
+				return *componentIt;
+			}
+		}
+
+		return nullptr;
+	}
+
 	bool
 	AbstractEntity::removeComponent (const std::string & name) noexcept
 	{
-		const std::lock_guard< std::mutex > lockGuard{m_componentsAccess};
-
-		const auto componentIt = m_components.find(name);
-
-		if ( componentIt == m_components.end() )
-		{
-			TraceWarning{TracerTag} <<
-				"No named component '" << name << "' exists. "
-				"Deletion skipped.";
-
-			return false;
-		}
-
-		this->unlinkComponent(componentIt->second);
-
-		m_components.erase(componentIt);
-
-		this->updateEntityProperties();
-
-		return true;
-	}
-
-	bool
-	AbstractEntity::removeComponent (const std::shared_ptr< Component::Abstract > & component) noexcept
-	{
-		const std::lock_guard< std::mutex > lockGuard{m_componentsAccess};
-
 		for ( auto componentIt = m_components.begin(); componentIt != m_components.end(); ++componentIt )
 		{
-			if ( componentIt->second != component )
+			if ( (*componentIt)->name() == name )
 			{
-				continue;
+				m_components.erase(componentIt);
+
+				return true;
 			}
-
-			this->unlinkComponent(componentIt->second);
-
-			m_components.erase(componentIt);
-
-			this->updateEntityProperties();
-
-			return true;
 		}
 
-		TraceWarning{TracerTag} <<
-			"Component " << component.get() << " doesn't exist. "
-			"Deletion skipped.";
-
 		return false;
-	}
-
-	std::shared_ptr< Component::Abstract >
-	AbstractEntity::getComponent (const std::string & name) const noexcept
-	{
-		const std::lock_guard< std::mutex > lockGuard{m_componentsAccess};
-
-		const auto componentIt = m_components.find(name);
-
-		return componentIt != m_components.cend() ? componentIt->second : nullptr;
 	}
 
 	void
 	AbstractEntity::clearComponents () noexcept
 	{
-		const std::lock_guard< std::mutex > lockGuard{m_componentsAccess};
-
-		auto componentIt = std::begin(m_components);
-
-		while ( componentIt != std::end(m_components) )
+		for ( const auto & component : m_components )
 		{
-			this->unlinkComponent(componentIt->second);
-
-			componentIt = m_components.erase(componentIt);
+			this->unlinkComponent(component);
 		}
+
+		m_components.clear();
 
 		this->updateEntityProperties();
-	}
-
-	void
-	AbstractEntity::forEachComponent (const std::function< bool (const Component::Abstract & component) > & lambda) const noexcept
-	{
-		const std::lock_guard< std::mutex > lockGuard{m_componentsAccess};
-
-		for ( const auto & component : std::ranges::views::values(m_components) )
-		{
-			if ( lambda(*component))
-			{
-				break;
-			}
-		}
-	}
-
-	void
-	AbstractEntity::forEachComponent (const std::function< bool (const Component::Abstract & component, size_t index) > & lambda) const noexcept
-	{
-		const std::lock_guard< std::mutex > lockGuard{m_componentsAccess};
-
-		for ( auto componentIt = m_components.cbegin(); componentIt != m_components.cend(); ++componentIt )
-		{
-			const auto index = std::distance(m_components.cbegin(), componentIt);
-
-			if ( !lambda(*componentIt->second, index) )
-			{
-				break;
-			}
-		}
-	}
-
-	void
-	AbstractEntity::forEachComponent (const std::function< bool (Component::Abstract & component) > & lambda) noexcept
-	{
-		const std::lock_guard< std::mutex > lockGuard{m_componentsAccess};
-
-		for ( const auto & component : std::ranges::views::values(m_components) )
-		{
-			if ( lambda(*component))
-			{
-				break;
-			}
-		}
-	}
-
-	void
-	AbstractEntity::forEachComponent (const std::function< bool (Component::Abstract & component, size_t index) > & lambda) noexcept
-	{
-		const std::lock_guard< std::mutex > lockGuard{m_componentsAccess};
-
-		for ( auto componentIt = m_components.begin(); componentIt != m_components.end(); ++componentIt )
-		{
-			const auto index = std::distance(m_components.begin(), componentIt);
-
-			if ( !lambda(*componentIt->second, index) )
-			{
-				break;
-			}
-		}
-	}
-
-	std::shared_ptr< Component::Camera >
-	AbstractEntity::newCamera (bool perspective, bool primaryDevice, const std::string & componentName) noexcept
-	{
-		if ( !this->checkComponentNameAvailability(componentName) )
-		{
-			return nullptr;
-		}
-
-		auto component = std::make_shared< Component::Camera >(componentName, *this, perspective);
-
-		/* Registering the smart pointer. */
-		if ( !this->addComponent(componentName, component) )
-		{
-			return nullptr;
-		}
-
-		/* Notify the camera creation. */
-		this->notify(primaryDevice ? PrimaryCameraCreated : CameraCreated, component);
-
-		return component;
-	}
-
-	std::shared_ptr< Component::Microphone >
-	AbstractEntity::newMicrophone (bool primaryDevice, const std::string & componentName) noexcept
-	{
-		if ( !this->checkComponentNameAvailability(componentName) )
-		{
-			return nullptr;
-		}
-
-		auto component = std::make_shared< Component::Microphone >(componentName, *this);
-
-		/* Registering the smart pointer. */
-		if ( !this->addComponent(componentName, component) )
-		{
-			return nullptr;
-		}
-
-		/* Notify the creation. */
-		this->notify(primaryDevice ? PrimaryMicrophoneCreated : MicrophoneCreated, component);
-
-		return component;
-	}
-
-	std::shared_ptr< Component::DirectionalLight >
-	AbstractEntity::newDirectionalLight (uint32_t shadowMapResolution, const std::string & componentName) noexcept
-	{
-		if ( !this->checkComponentNameAvailability(componentName) )
-		{
-			return nullptr;
-		}
-
-		auto component = std::make_shared< Component::DirectionalLight >(componentName, *this, shadowMapResolution);
-
-		/* Registering the smart pointer. */
-		if ( !this->addComponent(componentName, component) )
-		{
-			return nullptr;
-		}
-
-		/* Notify the creation. */
-		this->notify(DirectionalLightCreated, component);
-
-		return component;
-	}
-
-	std::shared_ptr< Component::PointLight >
-	AbstractEntity::newPointLight (uint32_t shadowMapResolution, const std::string & componentName) noexcept
-	{
-		if ( !this->checkComponentNameAvailability(componentName) )
-		{
-			return nullptr;
-		}
-
-		auto component = std::make_shared< Component::PointLight >(componentName, *this, shadowMapResolution);
-
-		/* Registering the smart pointer. */
-		if ( !this->addComponent(componentName, component) )
-		{
-			return nullptr;
-		}
-
-		/* Notify the creation. */
-		this->notify(PointLightCreated, component);
-
-		return component;
-	}
-
-	std::shared_ptr< Component::SpotLight >
-	AbstractEntity::newSpotLight (uint32_t shadowMapResolution, const std::string & componentName) noexcept
-	{
-		if ( !this->checkComponentNameAvailability(componentName) )
-		{
-			return nullptr;
-		}
-
-		auto component = std::make_shared< Component::SpotLight >(componentName, *this, shadowMapResolution);
-
-		/* Registering the smart pointer. */
-		if ( !this->addComponent(componentName, component) )
-		{
-			return nullptr;
-		}
-
-		/* Notify the creation. */
-		this->notify(SpotLightCreated, component);
-
-		return component;
-	}
-
-	std::shared_ptr< Component::SoundEmitter >
-	AbstractEntity::newSoundEmitter (const std::string & componentName) noexcept
-	{
-		if ( !this->checkComponentNameAvailability(componentName) )
-		{
-			return nullptr;
-		}
-
-		auto component = std::make_shared< Component::SoundEmitter >(componentName, *this);
-
-		/* Registering the smart pointer. */
-		if ( !this->addComponent(componentName, component) )
-		{
-			return nullptr;
-		}
-
-		/* Notify the creation. */
-		this->notify(SoundEmitterCreated, component);
-
-		return component;
-	}
-
-	std::shared_ptr< Component::SoundEmitter >
-	AbstractEntity::newSoundEmitter (const std::shared_ptr< Audio::SoundResource > & resource, float gain, bool loop, const std::string & componentName) noexcept
-	{
-		auto component = this->newSoundEmitter(componentName);
-
-		component->play(resource, gain, loop);
-
-		return component;
-	}
-
-	std::shared_ptr< Component::Visual >
-	AbstractEntity::newVisual (const std::shared_ptr< Renderable::Interface > & resource, bool enablePhysicalProperties, bool enableLighting, const std::string & componentName) noexcept
-	{
-		/* If no name were passed, we use the resource name. */
-		const auto name = componentName.empty() ? resource->name() : componentName;
-
-		if ( !this->checkComponentNameAvailability(name) )
-		{
-			return nullptr;
-		}
-
-		auto component = std::make_shared< Component::Visual >(name, *this, resource);
-		component->enablePhysicalProperties(enablePhysicalProperties);
-
-		if ( enableLighting )
-		{
-			component->getRenderableInstance()->enableLighting();
-		}
-
-		/* Registering the smart pointer. */
-		if ( !this->addComponent(name, component) )
-		{
-			return nullptr;
-		}
-
-		/* Notify the creation. */
-		this->notify(VisualComponentCreated, component);
-
-		return component;
-	}
-
-	std::shared_ptr< Component::MultipleVisuals >
-	AbstractEntity::newVisual (const std::shared_ptr< Renderable::Interface > & resource, const std::vector< CartesianFrame< float > > & coordinates, bool enablePhysicalProperties, bool enableLighting, const std::string & componentName) noexcept
-	{
-		/* If no name were passed, we use the mesh name. */
-		const auto name = componentName.empty() ? resource->name() : componentName;
-
-		if ( !this->checkComponentNameAvailability(name) )
-		{
-			return nullptr;
-		}
-
-		auto component = std::make_shared< Component::MultipleVisuals >(name, *this, resource, coordinates);
-		component->enablePhysicalProperties(enablePhysicalProperties);
-
-		if ( enableLighting )
-		{
-			component->getRenderableInstance()->enableLighting();
-		}
-
-		/* Registering the smart pointer. */
-		if ( !this->addComponent(name, component) )
-		{
-			return nullptr;
-		}
-
-		/* Notify the creation. */
-		this->notify(MultipleVisualsComponentCreated, component);
-
-		return component;
-	}
-
-	std::shared_ptr< Component::ParticlesEmitter >
-	AbstractEntity::newParticlesEmitter (const std::shared_ptr< Renderable::SpriteResource > & resource, uint32_t maxParticleCount, const std::string & componentName) noexcept
-	{
-		/* If no name were passed, we use the resource name. */
-		const auto name = componentName.empty() ? resource->name() : componentName;
-
-		if ( !this->checkComponentNameAvailability(name) )
-		{
-			return nullptr;
-		}
-
-		auto component = std::make_shared< Component::ParticlesEmitter >(name, *this, resource, maxParticleCount);
-
-		/* Registering the smart pointer. */
-		if ( !this->addComponent(name, component) )
-		{
-			return nullptr;
-		}
-
-		/* Notify the creation. */
-		this->notify(ParticlesEmitterCreated, component);
-
-		return component;
-	}
-
-	std::shared_ptr< Component::ParticlesEmitter >
-	AbstractEntity::newParticlesEmitter (const std::shared_ptr< Renderable::MeshResource > & resource, uint32_t maxParticleCount, const std::string & componentName) noexcept
-	{
-		/* If no name were passed, we use the resource name. */
-		const auto name = componentName.empty() ? resource->name() : componentName;
-
-		if ( !this->checkComponentNameAvailability(name) )
-		{
-			return nullptr;
-		}
-
-		auto component = std::make_shared< Component::ParticlesEmitter >(name, *this, resource, maxParticleCount);
-
-		/* Registering the smart pointer. */
-		if ( !this->addComponent(name, component) )
-		{
-			return nullptr;
-		}
-
-		/* Notify the creation. */
-		this->notify(ParticlesEmitterCreated, component);
-
-		return component;
-	}
-
-	std::shared_ptr< Component::DirectionalPushModifier >
-	AbstractEntity::newDirectionalPushModifier (const std::string & componentName) noexcept
-	{
-		if ( !this->checkComponentNameAvailability(componentName) )
-		{
-			return nullptr;
-		}
-
-		auto component = std::make_shared< Component::DirectionalPushModifier >(componentName, *this, this->getWorldCoordinates().backwardVector());
-
-		/* Registering the smart pointer. */
-		if ( !this->addComponent(componentName, component) )
-		{
-			return nullptr;
-		}
-
-		/* Notify the creation. */
-		this->notify(ModifierCreated, std::static_pointer_cast< Component::AbstractModifier >(component));
-		this->notify(DirectionalPushModifierCreated, component);
-
-		return component;
-	}
-
-	std::shared_ptr< Component::SphericalPushModifier >
-	AbstractEntity::newSphericalPushModifier (const std::string & componentName) noexcept
-	{
-		if ( !this->checkComponentNameAvailability(componentName) )
-		{
-			return nullptr;
-		}
-
-		auto component = std::make_shared< Component::SphericalPushModifier >(componentName, *this);
-
-		/* Registering the smart pointer. */
-		if ( !this->addComponent(componentName, component) )
-		{
-			return nullptr;
-		}
-
-		/* Notify the creation. */
-		this->notify(ModifierCreated, std::static_pointer_cast< Component::AbstractModifier >(component));
-		this->notify(SphericalPushModifierCreated, component);
-
-		return component;
-	}
-
-	std::shared_ptr< Component::Weight >
-	AbstractEntity::newWeight (const BodyPhysicalProperties & initialProperties, const std::string & componentName) noexcept
-	{
-		if ( !this->checkComponentNameAvailability(componentName) )
-		{
-			return nullptr;
-		}
-
-		auto component = std::make_shared< Component::Weight >(componentName, *this, initialProperties);
-		component->enablePhysicalProperties(true);
-
-		/* Registering the smart pointer. */
-		if ( !this->addComponent(componentName, component) )
-		{
-			return nullptr;
-		}
-
-		/* Notify the creation. */
-		this->notify(WeightCreated, component);
-
-		return component;
 	}
 
 	bool
@@ -763,17 +305,17 @@ namespace EmEn::Scenes
 
 		while ( componentIt != m_components.end() )
 		{
-			if ( componentIt->second->shouldBeRemoved() )
+			if ( (*componentIt)->shouldBeRemoved() )
 			{
-				TraceWarning{TracerTag} << "Removing automatically component '" << componentIt->second->name() << "' ...";
+				TraceWarning{TracerTag} << "Removing automatically a component from entity '" << this->name() << "' ...";
 
-				this->unlinkComponent(componentIt->second);
+				this->unlinkComponent(*componentIt);
 
 				componentIt = m_components.erase(componentIt);
 			}
 			else
 			{
-				componentIt->second->processLogics(scene);
+				(*componentIt)->processLogics(scene);
 
 				++componentIt;
 			}

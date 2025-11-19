@@ -37,7 +37,7 @@ namespace EmEn::Vulkan
 		auto device = transferCommandPool->device();
 
 		/* Create the staging buffer. */
-		m_stagingBuffer = std::make_unique< Buffer >(device, 0, static_cast< VkDeviceSize >(initialReservedBytes), VK_BUFFER_USAGE_TRANSFER_SRC_BIT, true);
+		m_stagingBuffer = std::make_unique< Buffer >(device, 0, static_cast< VkDeviceSize >(initialReservedBytes), VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, true);
 		m_stagingBuffer->setIdentifier(ClassId, "StagingBuffer", "Buffer");
 
 		if ( !m_stagingBuffer->createOnHardware() )

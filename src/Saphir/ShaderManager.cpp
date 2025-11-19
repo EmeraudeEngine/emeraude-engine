@@ -323,7 +323,7 @@ namespace EmEn::Saphir
 			return {};
 		}
 
-		if ( m_showSourceCode )
+		if ( this->showSourceCode() )
 		{
 			TraceInfo{ClassId} << "\n"
 				"****** START OF LOADED GLSL SHADER CODE ******" "\n" <<
@@ -706,7 +706,7 @@ namespace EmEn::Saphir
 			return chrA == '\n' && chrB == '\n';
 		}).begin(),preprocessedSource.end());
 
-		if ( m_showSourceCode )
+		if ( this->showSourceCode() )
 		{
 			TraceInfo{ClassId} << "\n"
 				"****** START OF PRE-PROCESSED GLSL SHADER CODE " << shaderIdentifier << " ******" "\n" <<

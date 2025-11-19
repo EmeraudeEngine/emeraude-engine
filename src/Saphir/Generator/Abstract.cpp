@@ -138,8 +138,7 @@ namespace EmEn::Saphir::Generator
 		/* Prepare the descriptor set a layout for the view. */
 		if ( setIndexes.isSetEnabled(SetType::PerView) )
 		{
-			/* FIXME: This could be general for render target type. */
-			const auto descriptorSetLayout = ViewMatricesInterface::getDescriptorSetLayout(renderer.layoutManager());
+			const auto descriptorSetLayout = RenderTarget::Abstract::getDescriptorSetLayout(renderer.layoutManager());
 
 			if ( descriptorSetLayout == nullptr )
 			{
@@ -261,7 +260,12 @@ namespace EmEn::Saphir::Generator
 	bool
 	Abstract::generateShaderProgram (Renderer & renderer, const std::string & GLSLVersion, const std::string & GLSLProfile) noexcept
 	{
-		this->enableDebugging(renderer.shaderManager().showSourceCode());
+		if ( renderer.shaderManager().showSourceCode() )
+		{
+			Tracer::debug(TracerTag, "Enabling shader generator logs...");
+
+			this->enableDebugging(true);
+		}
 
 		/* NOTE: Declare a new program. */
 		m_shaderProgram = std::make_shared< Program >(this->name(), GLSLVersion, GLSLProfile);
@@ -279,9 +283,7 @@ namespace EmEn::Saphir::Generator
 
 		if ( this->isRenderableInstanceAvailable() )
 		{
-			const auto * geometry = this->getGeometryInterface();
-
-			if ( !m_shaderProgram->createVertexBufferFormat(renderer.vertexBufferFormatManager(), geometry) )
+			if ( !m_shaderProgram->createVertexBufferFormat(renderer.vertexBufferFormatManager(), this->getGeometryInterface()) )
 			{
 				Tracer::error(TracerTag, "Unable to create the vertex buffer format !");
 
@@ -413,16 +415,20 @@ namespace EmEn::Saphir::Generator
 
 		if ( m_renderTarget->isCubemap() )
 		{
-			/* FIXME: Rework this to split common data between each cubemap faces ! */
-			Declaration::Structure structure{Struct::CubemapFace, UniformBlock::Component::Instance};
-			structure.addMember(Declaration::VariableType::Matrix4, UniformBlock::Component::ProjectionMatrix);
-			structure.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::PositionWorldSpace);
-			structure.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::Velocity);
-			structure.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::ViewProperties);
-			structure.addMember(Declaration::VariableType::FloatVector4, "_padding");
-
 			Declaration::UniformBlock uniformBlock{setIndex, binding, Declaration::MemoryLayout::Std140, UniformBlock::Type::CubemapView, UniformBlock::View};
-			uniformBlock.addArrayMember(structure, 6);
+			{
+				/* FIXME: Rework this to split common data between each cubemap faces ! */
+				Declaration::Structure structure{Struct::CubemapFace};
+				structure.addMember(Declaration::VariableType::Matrix4, UniformBlock::Component::ProjectionMatrix);
+				structure.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::PositionWorldSpace);
+				structure.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::Velocity);
+				structure.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::ViewProperties);
+				structure.addMember(Declaration::VariableType::FloatVector4, "_padding");
+
+				uniformBlock.addArrayMember(structure, UniformBlock::Component::Instance, 6);
+			}
+			uniformBlock.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::AmbientLightColor);
+			uniformBlock.addMember(Declaration::VariableType::Float, UniformBlock::Component::AmbientLightIntensity);
 
 			return shader.declare(uniformBlock);
 		}

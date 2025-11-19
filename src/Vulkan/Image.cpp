@@ -252,7 +252,7 @@ namespace EmEn::Vulkan
 			return false;
 		}
 
-		return transferManager.transferImage(*this, pixmap.bytes(), [&pixmap] (const Buffer & stagingBuffer) {
+		return transferManager.uploadImage(*this, pixmap.bytes(), [&pixmap] (const Buffer & stagingBuffer) {
 			return stagingBuffer.writeData({pixmap.data().data(), pixmap.bytes()});
 		});
 	}
@@ -279,7 +279,7 @@ namespace EmEn::Vulkan
 		});
 
 		/* NOTE: We will write all 6 pixmaps next to each others in the staging buffer. */
-		return transferManager.transferImage(*this, totalBytes, [&pixmaps] (const Buffer & stagingBuffer) {
+		return transferManager.uploadImage(*this, totalBytes, [&pixmaps] (const Buffer & stagingBuffer) {
 			size_t offset = 0;
 
 			for ( const auto & pixmap : pixmaps )
@@ -312,7 +312,7 @@ namespace EmEn::Vulkan
 			return sum + frame.first.bytes();
 		});
 
-		return transferManager.transferImage(*this, totalBytes, [&frames] (const Buffer & stagingBuffer) {
+		return transferManager.uploadImage(*this, totalBytes, [&frames] (const Buffer & stagingBuffer) {
 			size_t offset = 0;
 
 			for ( const auto & pixmap : std::ranges::views::keys(frames) )
@@ -341,7 +341,7 @@ namespace EmEn::Vulkan
 			return false;
 		}
 
-		return transferManager.transferImage(*this, memoryRegion.bytes(), [&memoryRegion] (const Buffer & stagingBuffer) {
+		return transferManager.uploadImage(*this, memoryRegion.bytes(), [&memoryRegion] (const Buffer & stagingBuffer) {
 			return stagingBuffer.writeData(memoryRegion);
 		});
 	}

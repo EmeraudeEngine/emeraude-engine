@@ -708,6 +708,19 @@ namespace EmEn::Libs
 			}
 
 			/**
+			 * @brief Checks if the container is full.
+			 * @return `true` if the container is full, `false` otherwise.
+			 * @complexity Constant, O(1).
+			 */
+			[[nodiscard]]
+			constexpr
+			bool
+			full () const noexcept
+			{
+				return m_size == max_capacity;
+			}
+
+			/**
 			 * @brief Returns the number of elements in the container.
 			 * @return The number of elements.
 			 * @complexity Constant, O(1).
@@ -789,7 +802,7 @@ namespace EmEn::Libs
 			 * @complexity Linear in capacity, O(Capacity).
 			 */
 			void
-			quickSwap (StaticVector & other) noexcept requires (std::is_trivially_copyable_v< data_t >)
+			quick_swap (StaticVector & other) noexcept requires (std::is_trivially_copyable_v< data_t >)
 			{
 				alignas(data_t) std::array< std::byte, sizeof(data_t) * max_capacity > temp_data;
 
@@ -1010,6 +1023,75 @@ namespace EmEn::Libs
 					}
 				}
 			}
+
+		/**
+		 * @brief Erases the element at the specified position.
+		 * @param pos Iterator to the element to remove.
+		 * @return Iterator following the last removed element.
+		 * @note Calling erase with an invalid iterator results in undefined behavior.
+		 * @complexity Linear in the distance between pos and the end, O(N).
+		 */
+		constexpr
+		iterator
+		erase (iterator pos) noexcept(std::is_nothrow_move_assignable_v< data_t >)
+		{
+			assert(pos >= this->begin() && pos < this->end() && "StaticVector::erase: Iterator out of range!");
+
+			if ( pos < this->end() - 1 )
+			{
+				std::move(pos + 1, this->end(), pos);
+			}
+
+			--m_size;
+
+			if constexpr (!std::is_trivially_destructible_v< data_t >)
+			{
+				this->data()[m_size].~data_t();
+			}
+
+			return pos;
+		}
+
+		/**
+		 * @brief Erases the elements in the range [first, last).
+		 * @param first Iterator to the first element to remove.
+		 * @param last Iterator to the element following the last element to remove.
+		 * @return Iterator following the last removed element.
+		 * @note Calling erase with invalid iterators results in undefined behavior.
+		 * @complexity Linear in the distance between first and the end, O(N).
+		 */
+		constexpr
+		iterator
+		erase (iterator first, iterator last) noexcept(std::is_nothrow_move_assignable_v< data_t >)
+		{
+			assert(first >= this->begin() && first <= this->end() && "StaticVector::erase: First iterator out of range!");
+			assert(last >= first && last <= this->end() && "StaticVector::erase: Last iterator out of range!");
+
+			if ( first == last )
+			{
+				return first;
+			}
+
+			size_type numToErase = static_cast< size_type >(last - first);
+
+			if ( last < this->end() )
+			{
+				std::move(last, this->end(), first);
+			}
+
+			size_type oldSize = m_size;
+			m_size -= numToErase;
+
+			if constexpr (!std::is_trivially_destructible_v< data_t >)
+			{
+				for ( size_type index = m_size; index < oldSize; ++index )
+				{
+					this->data()[index].~data_t();
+				}
+			}
+
+			return first;
+		}
 
 		private:
 

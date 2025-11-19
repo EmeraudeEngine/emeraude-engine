@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_config.hpp"
+
 /* STL inclusions. */
 #include <cstddef>
 #include <array>
@@ -89,7 +92,7 @@ namespace EmEn::Graphics
 			const Libs::Math::Matrix< 4, float > &
 			viewMatrix (bool infinity, size_t index) const noexcept override
 			{
-				if ( index >= CubemapFaceIndexes.size() )
+				if ( index >= CubemapFaceCount )
 				{
 					Tracer::error(ClassId, "Index overflow !");
 
@@ -106,7 +109,7 @@ namespace EmEn::Graphics
 			{
 				if constexpr ( IsDebug )
 				{
-					if ( index >= CubemapFaceIndexes.size() )
+					if ( index >= CubemapFaceCount )
 					{
 						Tracer::error(ClassId, "Index overflow !");
 
@@ -155,7 +158,7 @@ namespace EmEn::Graphics
 			const Frustum &
 			frustum (size_t index) const noexcept override
 			{
-				if ( index >= CubemapFaceIndexes.size() )
+				if ( index >= CubemapFaceCount )
 				{
 					Tracer::error(ClassId, "Index overflow !");
 
@@ -165,14 +168,14 @@ namespace EmEn::Graphics
 				return m_logicState.frustums[index];
 			}
 
-			/** @copydoc EmEn::Graphics::ViewMatricesInterface::frustum(uint32_t, size_t) */
+			/** @copydoc EmEn::Graphics::ViewMatricesInterface::frustum(uint32_t, size_t) const */
 			[[nodiscard]]
 			const Frustum &
 			frustum (uint32_t readStateIndex, size_t index) const noexcept override
 			{
 				if constexpr ( IsDebug )
 				{
-					if ( index >= CubemapFaceIndexes.size() )
+					if ( index >= CubemapFaceCount )
 					{
 						Tracer::error(ClassId, "Index overflow !");
 
@@ -275,30 +278,47 @@ namespace EmEn::Graphics
 			 */
 			friend std::ostream & operator<< (std::ostream & out, const ViewMatrices3DUBO & obj);
 
+			/** @brief Total number of elements in the UBO buffer. */
 			static constexpr auto ViewUBOElementCount = Matrix4Alignment + (5 * VectorAlignment);
+			/** @brief Total size in bytes of the UBO buffer. */
 			static constexpr auto ViewUBOSize = ViewUBOElementCount * sizeof(float);
 
+			/** @brief Offset of the projection matrix in the buffer. */
 			static constexpr auto ProjectionMatrixOffset{0UL};
+			/** @brief Offset of the world position in the buffer. */
 			static constexpr auto WorldPositionOffset{16UL};
+			/** @brief Offset of the velocity vector in the buffer. */
 			static constexpr auto VelocityVectorOffset{20UL};
+			/** @brief Offset of the view properties in the buffer. */
 			static constexpr auto ViewPropertiesOffset{24UL};
+			/** @brief Offset of the view width in the buffer. */
 			static constexpr auto ViewWidthOffset{24UL};
+			/** @brief Offset of the view height in the buffer. */
 			static constexpr auto ViewHeightOffset{25UL};
+			/** @brief Offset of the near plane distance in the buffer. */
 			static constexpr auto ViewNearOffset{26UL};
+			/** @brief Offset of the far plane distance in the buffer. */
 			static constexpr auto ViewDistanceOffset{27UL};
+			/** @brief Offset of the ambient light color in the buffer. */
 			static constexpr auto AmbientLightColorOffset{28UL};
+			/** @brief Offset of the ambient light intensity in the buffer. */
 			static constexpr auto AmbientLightIntensityOffset{32UL};
 
-			static const std::array< Libs::Math::Matrix< 4, float >, CubemapFaceIndexes.size() > CubemapOrientation;
-			static const std::array< Libs::Math::Matrix< 4, float >, CubemapFaceIndexes.size() > ShadowCubemapOrientation;
+			/** @brief Orientation matrices for the 6 faces of a standard cubemap. */
+			static const std::array< Libs::Math::Matrix< 4, float >, CubemapFaceCount > CubemapOrientation;
+			/** @brief Orientation matrices for the 6 faces of a shadow cubemap. */
+			static const std::array< Libs::Math::Matrix< 4, float >, CubemapFaceCount > ShadowCubemapOrientation;
 
+			/**
+			 * @brief Internal state structure holding view matrices and related data for all 6 cubemap faces.
+			 */
 			struct DataState
 			{
-				Libs::Math::Matrix< 4, float > projection;
-				std::array< Libs::Math::Matrix< 4, float >, CubemapFaceIndexes.size() > views{};
-				std::array< Libs::Math::Matrix< 4, float >, CubemapFaceIndexes.size() > infinityViews{};
-				Libs::Math::Vector< 3, float > position;
-				std::array< Frustum, CubemapFaceIndexes.size() > frustums{};
+				Libs::Math::Matrix< 4, float > projection;                               /**< Projection matrix for 3D cubemap. */
+				std::array< Libs::Math::Matrix< 4, float >, CubemapFaceCount > views{}; /**< View matrices for each cubemap face. */
+				std::array< Libs::Math::Matrix< 4, float >, CubemapFaceCount > infinityViews{}; /**< View matrices for infinite distance (skybox). */
+				Libs::Math::Vector< 3, float > position;                                  /**< Camera position in world space. */
+				std::array< Frustum, CubemapFaceCount > frustums{};                      /**< Frustums for each cubemap face. */
 				std::array< float, ViewUBOElementCount > bufferData{
 					/* Projection matrix. */
 					1.0F, 0.0F, 0.0F, 0.0F,
@@ -318,18 +338,38 @@ namespace EmEn::Graphics
 				};
 			};
 
-			DataState m_logicState;
-			std::array< DataState, 2 > m_renderState;
-			std::unique_ptr< Vulkan::UniformBufferObject > m_uniformBufferObject;
-			std::unique_ptr< Vulkan::DescriptorSet > m_descriptorSet;
-			mutable std::mutex m_memoryAccess;
+			DataState m_logicState;                                              /**< Current logic state (write). */
+			std::array< DataState, 2 > m_renderState;                           /**< Double-buffered render states (read). */
+			std::unique_ptr< Vulkan::UniformBufferObject > m_uniformBufferObject; /**< Vulkan UBO for GPU memory. */
+			std::unique_ptr< Vulkan::DescriptorSet > m_descriptorSet;           /**< Vulkan descriptor set. */
+			mutable std::mutex m_memoryAccess;                                   /**< Mutex for GPU memory access synchronization. */
 	};
 
 	inline
 	std::ostream &
-	operator<< (std::ostream & out, const ViewMatrices3DUBO & /*obj*/)
+	operator<< (std::ostream & out, const ViewMatrices3DUBO & obj)
 	{
-		return out << "NOT YET";
+		out <<
+			"3D View matrices data : " "\n"
+			"World position " << obj.m_logicState.position << "\n"
+			"Projection " << obj.m_logicState.projection;
+
+		for ( uint32_t viewIndex = 0; viewIndex < CubemapFaceCount; ++viewIndex )
+		{
+			out << "Face #" << viewIndex << "\n"
+				"\t" "View " << obj.m_logicState.views[viewIndex] <<
+				"\t" "Infinity view " << obj.m_logicState.infinityViews[viewIndex] <<
+				"\t" << obj.m_logicState.frustums[viewIndex];
+		}
+
+		out << "Buffer data for GPU : " "\n";
+
+		for ( size_t index = 0; index < obj.m_logicState.bufferData.size(); index += 4 )
+		{
+			out << '[' << obj.m_logicState.bufferData[index+0] << ", " << obj.m_logicState.bufferData[index+1] << ", " << obj.m_logicState.bufferData[index+2] << ", " << obj.m_logicState.bufferData[index+3] << "]" "\n";
+		}
+
+		return out;
 	}
 
 	/**

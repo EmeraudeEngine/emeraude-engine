@@ -26,13 +26,9 @@
 
 #pragma once
 
-/* STL inclusions. */
-#include <memory>
-
 /* Local inclusions for usages. */
 #include "Libs/PixelFactory/Color.hpp"
 #include "Libs/Math/CartesianFrame.hpp"
-#include "Vulkan/LayoutManager.hpp"
 #include "Vulkan/DescriptorSet.hpp"
 #include "Frustum.hpp"
 
@@ -83,14 +79,6 @@ namespace EmEn::Graphics
 			virtual ~ViewMatricesInterface () = default;
 
 			/**
-			 * @brief Returns the descriptor set layout for this view.
-			 * @param layoutManager A reference to the layout manager.
-			 * @return std::shared_ptr< Vulkan::DescriptorSetLayout >
-			 */
-			[[nodiscard]]
-			static std::shared_ptr< Vulkan::DescriptorSetLayout > getDescriptorSetLayout (Vulkan::LayoutManager & layoutManager) noexcept;
-			
-			/**
 			 * @brief Returns the projection matrix.
 			 * @return const Matrix< 4, float > &
 			 */
@@ -108,21 +96,21 @@ namespace EmEn::Graphics
 			/**
 			 * @brief Returns the view matrix.
 			 * @param infinity Gives the view matrix for infinite view.
-			 * @param index The index of the matrix for the cubemap view.
+			 * @param viewIndex The index of the matrix for the cubemap view.
 			 * @return const Matrix< 4, float > &
 			 */
 			[[nodiscard]]
-			virtual const Libs::Math::Matrix< 4, float > & viewMatrix (bool infinity, size_t index) const noexcept = 0;
+			virtual const Libs::Math::Matrix< 4, float > & viewMatrix (bool infinity, size_t viewIndex) const noexcept = 0;
 
 			/**
 			 * @brief Returns the view matrix.
 			 * @param readStateIndex The render state-valid index to read data.
 			 * @param infinity Gives the view matrix for infinite view.
-			 * @param index The index of the matrix for the cubemap view.
+			 * @param viewIndex The index of the matrix for the cubemap view.
 			 * @return const Matrix< 4, float > &
 			 */
 			[[nodiscard]]
-			virtual const Libs::Math::Matrix< 4, float > & viewMatrix (uint32_t readStateIndex, bool infinity, size_t index) const noexcept = 0;
+			virtual const Libs::Math::Matrix< 4, float > & viewMatrix (uint32_t readStateIndex, bool infinity, size_t viewIndex) const noexcept = 0;
 
 			/**
 			 * @brief Returns the position of the point of view.
@@ -141,20 +129,20 @@ namespace EmEn::Graphics
 
 			/**
 			 * @brief Returns the const access to the frustum for object clipping.
-			 * @param index The index of the frustum for the cubemap view.
+			 * @param viewIndex The index of the frustum for the cubemap view.
 			 * @return Frustum
 			 */
 			[[nodiscard]]
-			virtual const Frustum & frustum (size_t index) const noexcept = 0;
+			virtual const Frustum & frustum (size_t viewIndex) const noexcept = 0;
 
 			/**
 			 * @brief Returns the const access to the frustum for object clipping.
 			 * @param readStateIndex The render state-valid index to read data.
-			 * @param index The index of the frustum for the cubemap view.
+			 * @param viewIndex The index of the frustum for the cubemap view.
 			 * @return Frustum
 			 */
 			[[nodiscard]]
-			virtual const Frustum & frustum (uint32_t readStateIndex, size_t index) const noexcept = 0;
+			virtual const Frustum & frustum (uint32_t readStateIndex, size_t viewIndex) const noexcept = 0;
 
 			/**
 			 * @brief Returns the aspect ratio of the view.
@@ -201,7 +189,7 @@ namespace EmEn::Graphics
 			virtual void updateViewCoordinates (const Libs::Math::CartesianFrame< float > & coordinates, const Libs::Math::Vector< 3, float > & velocity) noexcept = 0;
 
 			/**
-			 * @briefs Update optional ambient color and intensity.
+			 * @brief Updates optional ambient color and intensity.
 			 * @param color A reference to a color.
 			 * @param intensity The light intensity.
 			 * @return void

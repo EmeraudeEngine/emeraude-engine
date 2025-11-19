@@ -32,7 +32,7 @@ namespace EmEn::Audio
 	using namespace Libs::Math;
 
 	Speaker::Speaker (const std::string & name) noexcept
-		: AbstractVirtualDevice(name, AVConsole::DeviceType::Audio, AVConsole::ConnexionType::Input)
+		: AbstractVirtualDevice{name, Scenes::AVConsole::DeviceType::Audio, Scenes::AVConsole::ConnexionType::Input}
 	{
 
 	}

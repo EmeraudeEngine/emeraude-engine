@@ -442,8 +442,16 @@ namespace EmEn::Scenes
 				const auto distance = m_settings.getOrSetDefault< float >(GraphicsViewDistanceKey, DefaultGraphicsViewDistance);
 
 				/* Create the camera component. */
-				auto component = entity->newCamera(true, primaryDevice, entityName);
-				component->setPerspectiveProjection(fov, distance);
+				auto builder = entity->template componentBuilder< Component::Camera >(entityName);
+
+				if ( primaryDevice )
+				{
+					builder.asPrimary();
+				}
+
+				auto component = builder.setup([fov, distance] (auto & camera) {
+					camera.setPerspectiveProjection(fov, distance);
+				}).build();
 
 				if ( showModel )
 				{
@@ -476,12 +484,20 @@ namespace EmEn::Scenes
 				}
 
 				/* Create the camera component. */
-				auto component = entity->newCamera(false, primaryDevice, entityName);
-				component->setOrthographicProjection(size);
+				auto builder = entity->template componentBuilder< Component::Camera >(entityName);
+
+				if ( primaryDevice )
+				{
+					builder.asPrimary();
+				}
+
+				auto component = builder.setup([size] (auto & camera) {
+					camera.setOrthographicProjection(-size, size);
+				}).build();
 
 				if ( showModel )
 				{
-					entity->enableVisualDebug(VisualDebugType::Camera);
+					entity->enableVisualDebug(m_resourceManager, VisualDebugType::Camera);
 				}
 
 				return {entity, component};
@@ -507,13 +523,23 @@ namespace EmEn::Scenes
 					return {};
 				}
 
+				const auto distance = m_settings.getOrSetDefault< float >(GraphicsViewDistanceKey, DefaultGraphicsViewDistance);
+
 				/* Create the camera component. */
-				auto component = entity->newCamera(true, primaryDevice, entityName);
-				component->setPerspectiveProjection(Libs::Math::QuartRevolution< float >);
+				auto builder = entity->template componentBuilder< Component::Camera >(entityName);
+
+				if ( primaryDevice )
+				{
+					builder.asPrimary();
+				}
+
+				auto component = builder.setup([distance] (auto & camera) {
+					camera.setPerspectiveProjection(90.0F, distance);
+				}).build();
 
 				if ( showModel )
 				{
-					entity->enableVisualDebug(VisualDebugType::Camera);
+					entity->enableVisualDebug(m_resourceManager, VisualDebugType::Camera);
 				}
 
 				return {entity, component};
@@ -541,9 +567,11 @@ namespace EmEn::Scenes
 				}
 
 				/* Create the light component. */
-				auto component = entity->newDirectionalLight(shadowMapResolution, entityName);
-				component->setColor(color);
-				component->setIntensity(intensity);
+				auto component = entity->template componentBuilder< Component::DirectionalLight >(entityName)
+					.setup([color, intensity] (auto & light) {
+						light.setColor(color);
+						light.setIntensity(intensity);
+					}).build(shadowMapResolution);
 
 				return {entity, component};
 			}
@@ -571,10 +599,12 @@ namespace EmEn::Scenes
 				}
 
 				/* Create the light component. */
-				auto component = entity->newPointLight(shadowMapResolution, entityName);
-				component->setColor(color);
-				component->setRadius(radius);
-				component->setIntensity(intensity);
+				auto component = entity->template componentBuilder< Component::PointLight >(entityName)
+					.setup([color, radius, intensity] (auto & light) {
+						light.setColor(color);
+						light.setRadius(radius);
+						light.setIntensity(intensity);
+					}).build(shadowMapResolution);
 
 				return {entity, component};
 			}
@@ -605,11 +635,13 @@ namespace EmEn::Scenes
 				}
 
 				/* Create the light component. */
-				auto component = entity->newSpotLight(shadowMapResolution, entityName);
-				component->setColor(color);
-				component->setConeAngles(innerAngle, outerAngle);
-				component->setRadius(radius);
-				component->setIntensity(intensity);
+				auto component = entity->template componentBuilder< Component::SpotLight >(entityName)
+					.setup([color, innerAngle, outerAngle, radius, intensity] (auto & light) {
+						light.setColor(color);
+						light.setConeAngles(innerAngle, outerAngle);
+						light.setRadius(radius);
+						light.setIntensity(intensity);
+					}).build(shadowMapResolution);
 
 				return {entity, component};
 			}
@@ -639,7 +671,17 @@ namespace EmEn::Scenes
 					meshResource = m_resourceManager.container< Graphics::Renderable::MeshResource >()->getDefaultResource();
 				}
 
-				return {entity, entity->newVisual(meshResource, enablePhysicalProperties, enableLighting, entityName)};
+				auto component = entity->template componentBuilder< Component::Visual >(entityName)
+					.setup([enablePhysicalProperties, enableLighting] (auto & visual) {
+						visual.enablePhysicalProperties(enablePhysicalProperties);
+
+						if ( enableLighting )
+						{
+							visual.getRenderableInstance()->enableLighting();
+						}
+					}).build(meshResource);
+
+				return {entity, component};
 			}
 
 			/**
@@ -667,7 +709,17 @@ namespace EmEn::Scenes
 					simpleMeshResource = m_resourceManager.container< Graphics::Renderable::SimpleMeshResource >()->getDefaultResource();
 				}
 
-				return {entity, entity->newVisual(simpleMeshResource, enablePhysicalProperties, enableLighting, entityName)};
+				auto component = entity->template componentBuilder< Component::Visual >(entityName)
+					.setup([enablePhysicalProperties, enableLighting] (auto & visual) {
+						visual.enablePhysicalProperties(enablePhysicalProperties);
+
+						if ( enableLighting )
+						{
+							visual.getRenderableInstance()->enableLighting();
+						}
+					}).build(simpleMeshResource);
+
+				return {entity, component};
 			}
 
 			/**
@@ -760,7 +812,17 @@ namespace EmEn::Scenes
 					spriteResource = m_resourceManager.container< Graphics::Renderable::SpriteResource >()->getDefaultResource();
 				}
 
-				return {entity, entity->newVisual(spriteResource, enablePhysicalProperties, enableLighting, entityName)};
+				auto component = entity->template componentBuilder< Component::Visual >(entityName)
+					.setup([enablePhysicalProperties, enableLighting] (auto & visual) {
+						visual.enablePhysicalProperties(enablePhysicalProperties);
+
+						if ( enableLighting )
+						{
+							visual.getRenderableInstance()->enableLighting();
+						}
+					}).build(spriteResource);
+
+				return {entity, component};
 			}
 
 			/**
@@ -914,8 +976,10 @@ namespace EmEn::Scenes
 				}
 
 				/* Create the modifier component. */
-				auto component = entity->newSphericalPushModifier(entityName);
-				component->setMagnitude(magnitude);
+				auto component = entity->template componentBuilder< Component::SphericalPushModifier >(entityName)
+					.setup([magnitude] (auto & modifier) {
+						modifier.setMagnitude(magnitude);
+					}).build();
 
 				return {entity, component};
 			}

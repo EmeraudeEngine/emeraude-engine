@@ -295,7 +295,7 @@ namespace EmEn::Vulkan
 			return false;
 		}
 
-		return transferManager.transferBuffer(*this, memoryRegion.bytes(), [&memoryRegion] (const Buffer & stagingBuffer) {
+		return transferManager.uploadBuffer(*this, memoryRegion.bytes(), [&memoryRegion] (const Buffer & stagingBuffer) {
 			return stagingBuffer.writeData(memoryRegion);
 		});
 	}

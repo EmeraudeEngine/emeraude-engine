@@ -33,11 +33,11 @@
 
 /* Local inclusions for inheritances. */
 #include "Abstract.hpp"
-#include "AVConsole/AbstractVirtualDevice.hpp"
+#include "Scenes/AVConsole/AbstractVirtualDevice.hpp"
 
 /* Local inclusions for usages. */
 #include "Libs/PixelFactory/Color.hpp"
-#include "AVConsole/Types.hpp"
+#include "Scenes/AVConsole/Types.hpp"
 #include "Graphics/SharedUniformBuffer.hpp"
 #include "Graphics/RenderTarget/ShadowMap.hpp"
 
@@ -65,7 +65,7 @@ namespace EmEn::Scenes::Component
 	/**
 	 * @brief Base class of light emitters.
 	 * @extends EmEn::Scenes::Component::Abstract The base class for each entity component.
-	 * @extends EmEn::AVConsole::AbstractVirtualDevice This can act as a virtual video device.
+	 * @extends EmEn::Scenes::AVConsole::AbstractVirtualDevice This can act as a virtual video device.
 	 */
 	class AbstractLightEmitter : public Abstract, public AVConsole::AbstractVirtualDevice
 	{
@@ -122,7 +122,7 @@ namespace EmEn::Scenes::Component
 			 */
 			~AbstractLightEmitter () override = default;
 
-			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::videoType() */
+			/** @copydoc EmEn::Scenes::AVConsole::AbstractVirtualDevice::videoType() */
 			[[nodiscard]]
 			AVConsole::VideoType
 			videoType () const noexcept override
@@ -429,7 +429,7 @@ namespace EmEn::Scenes::Component
 				this->enableFlag(Enabled);
 			}
 
-			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::updateDeviceFromCoordinates() */
+			/** @copydoc EmEn::Scenes::AVConsole::AbstractVirtualDevice::updateDeviceFromCoordinates() */
 			void updateDeviceFromCoordinates (const Libs::Math::CartesianFrame< float > & worldCoordinates, const Libs::Math::Vector< 3, float > & worldVelocity) noexcept final;
 
 			/**
@@ -463,7 +463,7 @@ namespace EmEn::Scenes::Component
 
 		private:
 
-			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::onOutputDeviceConnected() */
+			/** @copydoc EmEn::Scenes::AVConsole::AbstractVirtualDevice::onOutputDeviceConnected() */
 			void onOutputDeviceConnected (AVConsole::AVManagers & managers, AbstractVirtualDevice & targetDevice) noexcept final;
 
 			/**

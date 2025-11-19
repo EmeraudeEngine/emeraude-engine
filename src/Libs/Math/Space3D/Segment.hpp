@@ -58,7 +58,7 @@ namespace EmEn::Libs::Math::Space3D
 			explicit
 			constexpr
 			Segment (const Point< precision_t > & endPoint) noexcept
-				: m_points({{}, endPoint})
+				: m_points{Point<precision_t>{}, endPoint}
 			{
 
 			}

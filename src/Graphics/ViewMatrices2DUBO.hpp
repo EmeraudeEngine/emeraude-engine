@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_config.hpp"
+
 /* STL inclusions. */
 #include <cstddef>
 #include <array>
@@ -254,27 +257,42 @@ namespace EmEn::Graphics
 			 */
 			friend std::ostream & operator<< (std::ostream & out, const ViewMatrices2DUBO & obj);
 
+			/** @brief Total number of elements in the UBO buffer. */
 			static constexpr auto ViewUBOElementCount = Matrix4Alignment + (5 * VectorAlignment);
+			/** @brief Total size in bytes of the UBO buffer. */
 			static constexpr auto ViewUBOSize = ViewUBOElementCount * sizeof(float);
 
+			/** @brief Offset of the projection matrix in the buffer. */
 			static constexpr auto ProjectionMatrixOffset{0UL};
+			/** @brief Offset of the world position in the buffer. */
 			static constexpr auto WorldPositionOffset{16UL};
+			/** @brief Offset of the velocity vector in the buffer. */
 			static constexpr auto VelocityVectorOffset{20UL};
+			/** @brief Offset of the view properties in the buffer. */
 			static constexpr auto ViewPropertiesOffset{24UL};
+			/** @brief Offset of the view width in the buffer. */
 			static constexpr auto ViewWidthOffset{24UL};
+			/** @brief Offset of the view height in the buffer. */
 			static constexpr auto ViewHeightOffset{25UL};
+			/** @brief Offset of the near plane distance in the buffer. */
 			static constexpr auto ViewNearOffset{26UL};
+			/** @brief Offset of the far plane distance in the buffer. */
 			static constexpr auto ViewDistanceOffset{27UL};
+			/** @brief Offset of the ambient light color in the buffer. */
 			static constexpr auto AmbientLightColorOffset{28UL};
+			/** @brief Offset of the ambient light intensity in the buffer. */
 			static constexpr auto AmbientLightIntensityOffset{32UL};
 
+			/**
+			 * @brief Internal state structure holding view matrices and related data.
+			 */
 			struct DataState
 			{
-				Libs::Math::Matrix< 4, float > projection;
-				Libs::Math::Matrix< 4, float > view;
-				Libs::Math::Matrix< 4, float > infinityView;
-				Libs::Math::Vector< 3, float > position;
-				Frustum frustum;
+				Libs::Math::Matrix< 4, float > projection;      /**< Projection matrix for 2D view. */
+				Libs::Math::Matrix< 4, float > view;            /**< View matrix. */
+				Libs::Math::Matrix< 4, float > infinityView;    /**< View matrix for infinite distance (skybox). */
+				Libs::Math::Vector< 3, float > position;        /**< Camera position in world space. */
+				Frustum frustum;                                 /**< Frustum for culling. */
 				std::array< float, ViewUBOElementCount > bufferData{
 					/* Projection matrix. */
 					1.0F, 0.0F, 0.0F, 0.0F,
@@ -294,11 +312,11 @@ namespace EmEn::Graphics
 				};
 			};
 
-			DataState m_logicState;
-			std::array< DataState, 2 > m_renderState;
-			std::unique_ptr< Vulkan::UniformBufferObject > m_uniformBufferObject;
-			std::unique_ptr< Vulkan::DescriptorSet > m_descriptorSet;
-			mutable std::mutex m_GPUBufferAccessLock;
+			DataState m_logicState;                                              /**< Current logic state (write). */
+			std::array< DataState, 2 > m_renderState;                           /**< Double-buffered render states (read). */
+			std::unique_ptr< Vulkan::UniformBufferObject > m_uniformBufferObject; /**< Vulkan UBO for GPU memory. */
+			std::unique_ptr< Vulkan::DescriptorSet > m_descriptorSet;           /**< Vulkan descriptor set. */
+			mutable std::mutex m_GPUBufferAccessLock;                            /**< Mutex for GPU buffer access synchronization. */
 	};
 
 	inline

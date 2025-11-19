@@ -30,7 +30,7 @@
 #include <string>
 
 /* Local inclusions for inheritances. */
-#include "AVConsole/AbstractVirtualDevice.hpp"
+#include "Scenes/AVConsole/AbstractVirtualDevice.hpp"
 #include "Abstract.hpp"
 
 namespace EmEn::Scenes::Component
@@ -39,7 +39,7 @@ namespace EmEn::Scenes::Component
 	 * @brief This class defines a physical point of capturing sound in the world.
 	 * Like ears from a creature or microphone from a camera.
 	 * @extends EmEn::Scenes::Component::Abstract The base class for each entity component.
-	 * @extends EmEn::AVConsole::AbstractVirtualDevice This is a virtual audio device.
+	 * @extends EmEn::Scenes::AVConsole::AbstractVirtualDevice This is a virtual audio device.
 	 */
 	class Microphone final : public Abstract, public AVConsole::AbstractVirtualDevice
 	{
@@ -100,10 +100,10 @@ namespace EmEn::Scenes::Component
 
 		private:
 
-			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::updateDeviceFromCoordinates() noexcept */
+			/** @copydoc EmEn::Scenes::AVConsole::AbstractVirtualDevice::updateDeviceFromCoordinates() noexcept */
 			void updateDeviceFromCoordinates (const Libs::Math::CartesianFrame< float > & worldCoordinates, const Libs::Math::Vector< 3, float > & worldVelocity) noexcept override;
 
-			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::onOutputDeviceConnected() noexcept */
+			/** @copydoc EmEn::Scenes::AVConsole::AbstractVirtualDevice::onOutputDeviceConnected() noexcept */
 			void
 			onOutputDeviceConnected (AVConsole::AVManagers & /*managers*/, AbstractVirtualDevice & targetDevice) noexcept override
 			{

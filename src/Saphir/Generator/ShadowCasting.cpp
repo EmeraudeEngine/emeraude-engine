@@ -99,32 +99,6 @@ namespace EmEn::Saphir::Generator
 			}
 		}
 
-		/* Generate the fragment shader stage. */
-		if ( m_enableColorOutput )
-		{
-			if ( this->generateFragmentShader(program) )
-			{
-				if ( this->debuggingEnabled() )
-				{
-					const auto * shader = program.fragmentShader();
-
-					TraceSuccess{ClassId} << "Fragment shader source '" << shader->name() << "' code generated.";
-
-					TraceDebug{ClassId} << "\n" <<
-						"****** START OF GENERATED GLSL FRAGMENT SHADER CODE ******" "\n" <<
-						SourceCodeParser::parse(shader->sourceCode()) <<
-						"****** END OF GENERATED GLSL FRAGMENT SHADER CODE ******" "\n" <<
-						shader->getDeclarationStats() << "\n";
-				}
-			}
-			else
-			{
-				Tracer::error(ClassId, "Unable to generate source code for the fragment shader stage !");
-
-				return false;
-			}
-		}
-
 		if ( this->debuggingEnabled() )
 		{
 			for ( const auto & shader: program.getShaderList() )

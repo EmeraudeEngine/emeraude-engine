@@ -39,22 +39,38 @@ namespace EmEn::Saphir::Declaration
 	{
 		std::stringstream code;
 
-		/* Check if structure are requested. */
-		const auto & structures = this->structures();
+		/* Check if structure declarations are requested. */
+		const auto & structureDeclarations = this->structureDeclaration();
 
-		if ( !structures.empty() )
+		if ( !structureDeclarations.empty() )
 		{
-			for ( const auto & structure: structures | std::views::values )
+			for ( const auto & declaration : structureDeclarations | std::views::values )
 			{
-				code << structure.sourceCode();
+				code << declaration.sourceCode();
 			}
 		}
 
 		code << this->getLayoutQualifier() << GLSL::Uniform << ' ' << this->name() << "\n" "{" "\n";
 
-		for ( const auto & bufferBackedBlock: this->members() | std::views::values )
+		for ( const auto & [name, bufferBackedBlock] : this->members() )
 		{
-			code << '\t' << bufferBackedBlock.sourceCode();
+			/* NOTE: Wizardy for structures, which is not a regular buffer backed block member.
+			 * Go to AbstractBufferBackedBlock::addArrayMember() for declaration. */
+			if ( bufferBackedBlock.type() == VariableType::Structure )
+			{
+				code << '\t' << name << ' ' << bufferBackedBlock.name();
+
+				if ( bufferBackedBlock.arraySize() > 0 )
+				{
+					code << '[' << bufferBackedBlock.arraySize() << ']';
+				}
+
+				code << ";" "\n";
+			}
+			else
+			{
+				code << '\t' << bufferBackedBlock.sourceCode();
+			}
 		}
 
 		code << '}';

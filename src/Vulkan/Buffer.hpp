@@ -291,8 +291,8 @@ namespace EmEn::Vulkan
 			/**
 			 * @brief Maps the video memory to be able to write in it.
 			 * @warning Only available for host buffers.
-			 * @param offset The beginning of the map.
-			 * @param size The size of the mapping.
+			 * @param offset The beginning of the map. Default 0.
+			 * @param size The size of the mapping. Default whole size.
 			 * @return void *
 			 */
 			void * mapMemory (VkDeviceSize offset = 0, VkDeviceSize size = VK_WHOLE_SIZE) const noexcept;
@@ -300,14 +300,14 @@ namespace EmEn::Vulkan
 			/**
 			 * @brief Maps the video memory to be able to write in it with a specific type.
 			 * @warning Only available for host buffers.
-			 * @param offset The beginning of the map.
-			 * @param size The size of the mapping.
+			 * @param offset The beginning of the map. Default 0.
+			 * @param size The size of the mapping. Default whole size.
 			 * @return pointer_t *
 			 */
 			template< typename pointer_t >
 			[[nodiscard]]
 			pointer_t *
-			mapMemoryAs (VkDeviceSize offset, VkDeviceSize size) const noexcept
+			mapMemoryAs (VkDeviceSize offset = 0, VkDeviceSize size = VK_WHOLE_SIZE) const noexcept
 			{
 				return static_cast< pointer_t * >(this->mapMemory(offset, size));
 			}
@@ -315,11 +315,11 @@ namespace EmEn::Vulkan
 			/**
 			 * @brief Unmaps the video memory.
 			 * @warning Only available for host buffers.
-			 * @param offset The beginning of the map.
-			 * @param size The size of the mapping.
+			 * @param offset The beginning of the map. Default 0.
+			 * @param size The size of the mapping. Default whole size.
 			 * @return void
 			 */
-			void unmapMemory (VkDeviceSize offset, VkDeviceSize size) const noexcept;
+			void unmapMemory (VkDeviceSize offset = 0, VkDeviceSize size = VK_WHOLE_SIZE) const noexcept;
 
 			/**
 			 * @brief Returns the descriptor buffer info.

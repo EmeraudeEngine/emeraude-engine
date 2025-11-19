@@ -609,11 +609,9 @@ namespace EmEn
 
 			/**
 			 * @brief Takes a screenshot and save it in the image folder of the current OS user.
-			 * @param depth A boolean to capture Z-Depth in an aside file. Default is false.
-			 * @param stencil A boolean to capture stencil in an aside file. Default is false.
 			 * @return bool
 			 */
-			bool screenshot (bool depth = false, bool stencil = false) noexcept;
+			bool screenshot () noexcept;
 
 			/**
 			 * @brief Returns a capture of every framebuffer.

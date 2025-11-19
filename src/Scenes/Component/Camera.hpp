@@ -33,11 +33,11 @@
 #include <memory>
 
 /* Local inclusions for inheritances. */
-#include "AVConsole/AbstractVirtualDevice.hpp"
+#include "Scenes/AVConsole/AbstractVirtualDevice.hpp"
 #include "Abstract.hpp"
 
 /* Local inclusions for usages. */
-#include "AVConsole/Types.hpp"
+#include "Scenes/AVConsole/Types.hpp"
 #include "Saphir/FramebufferEffectInterface.hpp"
 #include "SettingKeys.hpp"
 
@@ -46,8 +46,9 @@ namespace EmEn::Scenes::Component
 	/**
 	 * @brief This class defines a physical point of view to capture image in the world.
 	 * @note [OBS][SHARED-OBSERVABLE]
+	 * @todo Checks if this is the camera to hold the idea of using ortho or perspective projection.
 	 * @extends EmEn::Scenes::Component::Abstract The base class for each entity component.
-	 * @extends EmEn::AVConsole::AbstractVirtualDevice This is a virtual video device.
+	 * @extends EmEn::Scenes::AVConsole::AbstractVirtualDevice This is a virtual video device.
 	 */
 	class Camera final : public Abstract, public AVConsole::AbstractVirtualDevice
 	{
@@ -122,7 +123,7 @@ namespace EmEn::Scenes::Component
 				return false;
 			}
 
-			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::videoType() */
+			/** @copydoc EmEn::Scenes::AVConsole::AbstractVirtualDevice::videoType() */
 			[[nodiscard]]
 			AVConsole::VideoType
 			videoType () const noexcept override
@@ -297,10 +298,10 @@ namespace EmEn::Scenes::Component
 
 		private:
 		
-			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::updateDeviceFromCoordinates() */
+			/** @copydoc EmEn::Scenes::AVConsole::AbstractVirtualDevice::updateDeviceFromCoordinates() */
 			void updateDeviceFromCoordinates (const Libs::Math::CartesianFrame< float > & worldCoordinates, const Libs::Math::Vector< 3, float > & worldVelocity) noexcept override;
 
-			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::onOutputDeviceConnected() */
+			/** @copydoc EmEn::Scenes::AVConsole::AbstractVirtualDevice::onOutputDeviceConnected() */
 			void onOutputDeviceConnected (AVConsole::AVManagers & managers, AbstractVirtualDevice & targetDevice) noexcept override;
 
 			/** @copydoc EmEn::Animations::AnimatableInterface::playAnimation() */

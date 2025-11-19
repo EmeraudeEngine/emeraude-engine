@@ -30,7 +30,7 @@
 #include <ostream>
 
 /* Local inclusions. */
-#include "AVConsole/Manager.hpp"
+#include "Scenes/AVConsole/Manager.hpp"
 #include "Saphir/LightGenerator.hpp"
 #include "Vulkan/DescriptorSetLayout.hpp"
 #include "Vulkan/SwapChain.hpp"

@@ -29,7 +29,7 @@
 /* Local inclusions. */
 #include "Libs/Math/Space3D/Collisions/PointSphere.hpp"
 #include "Saphir/LightGenerator.hpp"
-#include "AVConsole/Manager.hpp"
+#include "Scenes/AVConsole/Manager.hpp"
 #include "Scenes/Scene.hpp"
 #include "Tracer.hpp"
 

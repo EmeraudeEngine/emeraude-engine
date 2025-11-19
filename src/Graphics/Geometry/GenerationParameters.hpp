@@ -268,10 +268,13 @@ namespace EmEn::Graphics::Geometry
 
 			/**
 			 * @brief Creates and returns an option structure for the shape builder.
+			 * @param enableNormalsGeneration Enable the auto-generation of normal, if attribute is requested.
+			 * @param enableTextureCoordinatesGeneration Enable the auto-generation of texture coordinates from the vertex position, if attribute is requested.
+			 * @param enableVertexColorsGeneration Enable the auto-generation of vertex color from the vertex position, if attribute is requested.
 			 * @return Libraries::VertexFactory::ShapeBuilderOptions< float >
 			 */
 			[[nodiscard]]
-			Libs::VertexFactory::ShapeBuilderOptions< float > getShapeBuilderOptions () const noexcept;
+			Libs::VertexFactory::ShapeBuilderOptions< float > getShapeBuilderOptions (bool enableNormalsGeneration, bool enableTextureCoordinatesGeneration, bool enableVertexColorsGeneration) const noexcept;
 
 		private:
 

@@ -27,14 +27,14 @@
 #pragma once
 
 /* Local inclusions for inheritances. */
-#include "AVConsole/AbstractVirtualDevice.hpp"
+#include "Scenes/AVConsole/AbstractVirtualDevice.hpp"
 
 namespace EmEn::Graphics::RenderTarget
 {
 	/**
 	 * @brief The base class for all render target filters.
 	 * @TODO Work in progress...
-	 * @extends EmEn::AVConsole::AbstractVirtualDevice This is a virtual video device.
+	 * @extends EmEn::Scenes::AVConsole::AbstractVirtualDevice This is a virtual video device.
 	 */
 	class AbstractFilter : public AVConsole::AbstractVirtualDevice
 	{

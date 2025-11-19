@@ -60,7 +60,7 @@ namespace EmEn::Graphics::Geometry
 			 */
 			explicit
 			ResourceGenerator (Resources::Manager & resources, uint32_t geometryFlags = 0) noexcept
-				: m_resources{&resources},
+				: m_resources{resources},
 				m_generationParameters{geometryFlags}
 			{
 
@@ -348,7 +348,7 @@ namespace EmEn::Graphics::Geometry
 			[[nodiscard]]
 			std::string generateResourceName (const char * type, const std::string & values) const noexcept;
 
-			Resources::Manager * m_resources{nullptr};
+			Resources::Manager & m_resources;
 			GenerationParameters m_generationParameters;
 	};
 }

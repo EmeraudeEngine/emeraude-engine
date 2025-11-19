@@ -49,10 +49,21 @@ namespace EmEn::Saphir::Declaration
 			/**
 			 * @brief Constructs a GLSL struct.
 			 * @param name A C-string to set the name of the structure.
+			 */
+			explicit
+			Structure (Key name) noexcept
+				: m_name{name}
+			{
+
+			}
+
+			/**
+			 * @brief Constructs a GLSL struct.
+			 * @param name A C-string to set the name of the structure.
 			 * @param instanceName A C-string to set the instance name of the structure to call it into the code. Default nullptr.
 			 */
 			explicit
-			Structure (Key name, Key instanceName = nullptr) noexcept
+			Structure (Key name, Key instanceName) noexcept
 				: m_name{name},
 				m_instanceName{instanceName}
 			{

@@ -69,7 +69,7 @@ namespace EmEn::Saphir::Declaration
 	{
 		uint32_t size = 0;
 
-		for ( const auto & structure: this->structures() | std::views::values )
+		for ( const auto & structure: this->structureDeclaration() | std::views::values )
 		{
 			size += structure.bytes();
 		}
@@ -119,7 +119,7 @@ namespace EmEn::Saphir::Declaration
 			return false;
 		}
 
-		if ( !this->addStructure(structure.name(), structure) )
+		if ( !this->addStructureDeclaration(structure.name(), structure) )
 		{
 			return false;
 		}
@@ -158,10 +158,8 @@ namespace EmEn::Saphir::Declaration
 	}
 
 	bool
-	AbstractBufferBackedBlock::addArrayMember (const Structure & structure, uint32_t arraySize, Key layout) noexcept
+	AbstractBufferBackedBlock::addArrayMember (const Structure & structure, Key name, uint32_t arraySize, Key layout) noexcept
 	{
-		const auto * name = structure.instanceName().c_str();
-
 		if ( Utility::contains(m_members, name) )
 		{
 			TraceError{TracerTag} << "This buffer backed block has already a member named '" << name << "' !";
@@ -174,14 +172,17 @@ namespace EmEn::Saphir::Declaration
 			return false;
 		}
 
-		if ( !this->addStructure(structure.name(), structure) )
+		/* NOTE: Copy the structure for declaration.
+		 * Go to UniformBlock::sourceCode () for generation. */
+		if ( !this->addStructureDeclaration(structure.name(), structure) )
 		{
 			return false;
 		}
 
+		/* NOTE: Wizardy for structures, which is not a regular buffer backed block member. */
 		m_members.emplace_back(
 			std::piecewise_construct,
-			std::forward_as_tuple(name),
+			std::forward_as_tuple(structure.name()),
 			std::forward_as_tuple(VariableType::Structure, name, layout, arraySize)
 		);
 

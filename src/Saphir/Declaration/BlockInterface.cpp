@@ -34,16 +34,16 @@ namespace EmEn::Saphir::Declaration
 	using namespace Saphir::Keys;
 
 	bool
-	BlockInterface::addStructure (Key name, const Structure & structure) noexcept
+	BlockInterface::addStructureDeclaration (Key name, const Structure & structure) noexcept
 	{
-		if ( m_structures.contains(name) )
+		if ( m_structureDeclarations.contains(name) )
 		{
 			TraceError{"BlockInterface"} << "This block interface has already declared a structure named '" << name << "' !";
 
 			return false;
 		}
 
-		m_structures.emplace(name, structure);
+		m_structureDeclarations.emplace(name, structure);
 
 		return true;
 	}

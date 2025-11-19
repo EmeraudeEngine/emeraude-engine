@@ -1,5 +1,5 @@
 /*
- * src/AVConsole/Manager.hpp
+ * src/Scenes/AVConsole/Manager.hpp
  * This file is part of Emeraude-Engine
  *
  * Copyright (C) 2010-2025 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
@@ -51,7 +51,7 @@ namespace EmEn
 	class Settings;
 }
 
-namespace EmEn::AVConsole
+namespace EmEn::Scenes::AVConsole
 {
 	/**
 	 * @brief The audio/video manager links every virtual audio/video input/output from a scene.

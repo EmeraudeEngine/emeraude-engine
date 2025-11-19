@@ -37,8 +37,8 @@
 #include "Vulkan/SwapChain.hpp"
 #include "Vulkan/DescriptorPool.hpp"
 #include "Scenes/Scene.hpp"
-#include "PrimaryServices.hpp"
 #include "Overlay/Manager.hpp"
+#include "PrimaryServices.hpp"
 
 namespace EmEn::Graphics
 {
@@ -238,6 +238,12 @@ namespace EmEn::Graphics
 	{
 		m_windowLess = m_primaryServices.arguments().isSwitchPresent("-W", "--window-less");
 
+		/* NOTE: Reserve capacity for cache maps to avoid rehashing during initialization.
+		 * Typical usage patterns: ~30-50 samplers, ~50-100 pipelines/programs. */
+		m_samplers.reserve(50);
+		m_pipelines.reserve(100);
+		m_programs.reserve(100);
+
 		/* NOTE: Graphics device selection from the vulkan instance.
 		 * The Vulkan instance doesn't directly create a device on its initialization. */
 		if ( m_vulkanInstance.usable() )
@@ -428,13 +434,6 @@ namespace EmEn::Graphics
 
 			m_samplers.clear();
 
-			for ( const auto & renderPass: m_renderPasses | std::views::values )
-			{
-				renderPass->destroyFromHardware();
-			}
-
-			m_renderPasses.clear();
-
 			for ( const auto & pipeline: m_pipelines | std::views::values )
 			{
 				pipeline->destroyFromHardware();
@@ -492,28 +491,8 @@ namespace EmEn::Graphics
 		return m_swapChain;
 	}
 
-	std::shared_ptr< RenderPass >
-	Renderer::getRenderPass (const std::string & identifier, VkRenderPassCreateFlags createFlags) noexcept
-	{
-		const auto uniqueIdentifier = (std::stringstream{} << identifier << '+' << createFlags).str();
-
-		const auto renderPassIt = m_renderPasses.find(uniqueIdentifier);
-
-		if ( renderPassIt == m_renderPasses.cend() )
-		{
-			auto renderPass = std::make_shared< RenderPass >(this->device(), createFlags);
-			renderPass->setIdentifier(ClassId, uniqueIdentifier, "RenderPass");
-
-			m_renderPasses.emplace(uniqueIdentifier, renderPass);
-
-			return renderPass;
-		}
-
-		return renderPassIt->second;
-	}
-
 	std::shared_ptr< Sampler >
-	Renderer::getSampler (const char * identifier, const std::function< void (Settings & settings, VkSamplerCreateInfo &) > & setupCreateInfo) noexcept
+	Renderer::getSampler (const std::string & identifier, const std::function< void (Settings & settings, VkSamplerCreateInfo &) > & setupCreateInfo) noexcept
 	{
 		if ( const auto samplerIt = m_samplers.find(identifier); samplerIt != m_samplers.cend() )
 		{
@@ -543,7 +522,7 @@ namespace EmEn::Graphics
 		setupCreateInfo(this->primaryServices().settings(), createInfo);
 
 		auto sampler = std::make_shared< Sampler >(m_device, createInfo);
-		sampler->setIdentifier(ClassId, identifier, "Sampler");
+		sampler->setIdentifier(ClassId, identifier.c_str(), "Sampler");
 
 		if ( !sampler->createOnHardware() )
 		{
@@ -659,9 +638,15 @@ namespace EmEn::Graphics
 				return;
 			}
 
+			const StaticVector< VkPipelineStageFlags, 16 > waitStages(
+				currentFrameScope.secondarySemaphores().size(),
+				VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT
+			);
+
 			const auto submitResult = queue->submit(
 				*commandBuffer,
 				SynchInfo{}
+					.waits(currentFrameScope.secondarySemaphores(), waitStages)
 					.withFence(currentFrameScope.inFlightFence()->handle())
 			);
 
@@ -778,12 +763,18 @@ namespace EmEn::Graphics
 			{
 				const auto * queue = this->device()->getGraphicsQueue(QueuePriority::High);
 
-				currentFrameScope.secondarySemaphores().emplace_back(currentFrameScope.imageAvailableSemaphore()->handle());
+				/* Build wait stages: FRAGMENT_SHADER for render-to-textures, COLOR_ATTACHMENT_OUTPUT for swapchain */
+				StaticVector< VkPipelineStageFlags, 16 > waitStages;
 
-				const StaticVector< VkPipelineStageFlags, 16 > waitStages(
-					currentFrameScope.secondarySemaphores().size(),
-					VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
-				);
+				/* All render-to-texture semaphores wait at FRAGMENT_SHADER stage (when we sample the texture) */
+				for ( size_t i = 0; i < currentFrameScope.secondarySemaphores().size(); ++i )
+				{
+					waitStages.emplace_back(VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+				}
+
+				/* Add swapchain image available semaphore and wait at COLOR_ATTACHMENT_OUTPUT stage */
+				currentFrameScope.secondarySemaphores().emplace_back(currentFrameScope.imageAvailableSemaphore()->handle());
+				waitStages.emplace_back(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
 
 				auto renderFinishedSemaphoreHandle = currentFrameScope.renderFinishedSemaphore()->handle();
 
@@ -1000,5 +991,16 @@ namespace EmEn::Graphics
 		m_swapChainRefreshed = true;
 
 		return true;
+	}
+
+	std::array< Pixmap< uint8_t >, 3 >
+	Renderer::captureFramebuffer (bool keepAlpha, bool withDepthBuffer, bool withStencilBuffer) noexcept
+	{
+		if ( m_swapChain == nullptr || !m_transferManager.usable() )
+		{
+			return {};
+		}
+
+		return m_swapChain->capture(m_transferManager, 0, keepAlpha, withDepthBuffer, withStencilBuffer);
 	}
 }

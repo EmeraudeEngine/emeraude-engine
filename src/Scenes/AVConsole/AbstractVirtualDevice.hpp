@@ -1,5 +1,5 @@
 /*
- * src/AVConsole/AbstractVirtualDevice.hpp
+ * src/Scenes/AVConsole/AbstractVirtualDevice.hpp
  * This file is part of Emeraude-Engine
  *
  * Copyright (C) 2010-2025 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
@@ -38,7 +38,7 @@
 #include "Libs/Math/CartesianFrame.hpp"
 #include "Types.hpp"
 
-namespace EmEn::AVConsole
+namespace EmEn::Scenes::AVConsole
 {
 	/**
 	 * @brief This is the base class of each virtual multimedia device in the 3D world.

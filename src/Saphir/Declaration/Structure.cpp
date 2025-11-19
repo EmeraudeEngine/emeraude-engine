@@ -30,13 +30,16 @@
 #include <sstream>
 
 /* Local inclusions. */
+#include <ranges>
+
+
 #include "Libs/Utility.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::Saphir::Declaration
 {
 	using namespace Libs;
-	using namespace Saphir::Keys;
+	using namespace Keys;
 
 	bool
 	Structure::addMember (VariableType type, Key name) noexcept
@@ -64,9 +67,9 @@ namespace EmEn::Saphir::Declaration
 
 		code << GLSL::Struct << ' ' << m_name << "\n" "{" "\n";
 
-		for ( const auto & variable : m_members )
+		for ( const auto & value : m_members | std::views::values )
 		{
-			code << '\t' << variable.second.sourceCode() << '\n';
+			code << '\t' << value.sourceCode();
 		}
 
 		code << '}';

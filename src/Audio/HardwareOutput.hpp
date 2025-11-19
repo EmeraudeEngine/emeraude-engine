@@ -30,7 +30,7 @@
 #include <string>
 
 /* Local inclusions for inheritances. */
-#include "AVConsole/AbstractVirtualDevice.hpp"
+#include "Scenes/AVConsole/AbstractVirtualDevice.hpp"
 
 /* Local inclusions for usages. */
 #include "Libs/Math/CartesianFrame.hpp"
@@ -41,9 +41,9 @@ namespace EmEn::Audio
 {
 	/**
 	 * @brief The hardware output class.
-	 * @extends EmEn::AVConsole::AbstractVirtualDevice This is a virtual audio device.
+	 * @extends EmEn::Scenes::AVConsole::AbstractVirtualDevice This is a virtual audio device.
 	 */
-	class HardwareOutput final : public AVConsole::AbstractVirtualDevice
+	class HardwareOutput final : public Scenes::AVConsole::AbstractVirtualDevice
 	{
 		public:
 
@@ -56,7 +56,7 @@ namespace EmEn::Audio
 			 * @param audioManager A reference to the audioManager.
 			 */
 			HardwareOutput (const std::string & name, Manager & audioManager) noexcept
-				: AbstractVirtualDevice{name, AVConsole::DeviceType::Audio, AVConsole::ConnexionType::Input},
+				: AbstractVirtualDevice{name, Scenes::AVConsole::DeviceType::Audio, Scenes::AVConsole::ConnexionType::Input},
 				m_audioManager{&audioManager}
 			{
 
@@ -64,7 +64,7 @@ namespace EmEn::Audio
 
 		private:
 
-			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::updateDeviceFromCoordinates() */
+			/** @copydoc EmEn::Scenes::AVConsole::AbstractVirtualDevice::updateDeviceFromCoordinates() */
 			void updateDeviceFromCoordinates (const Libs::Math::CartesianFrame< float > & worldCoordinates, const Libs::Math::Vector< 3, float > & worldVelocity) noexcept override;
 
 			Manager * m_audioManager{nullptr};

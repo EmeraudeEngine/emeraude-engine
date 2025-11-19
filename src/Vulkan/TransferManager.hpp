@@ -108,7 +108,7 @@ namespace EmEn::Vulkan
 			 */
 			template< typename function_t >
 			bool
-			transferBuffer (Buffer & targetBuffer, size_t requiredBytes, function_t && writeData) noexcept requires (std::is_invocable_v< function_t, const Buffer & >)
+			uploadBuffer (Buffer & targetBuffer, size_t requiredBytes, function_t && writeData) noexcept requires (std::is_invocable_v< function_t, const Buffer & >)
 			{
 				/* [VULKAN-CPU-SYNC] Transfer to GPU (Abusive lock!) */
 				const std::lock_guard< std::mutex > lock{m_transferOperationsAccess};
@@ -156,7 +156,7 @@ namespace EmEn::Vulkan
 			 */
 			template< typename function_t >
 			bool
-			transferImage (Image & targetImage, size_t requiredBytes, function_t && writeData) noexcept requires (std::is_invocable_v< function_t, const Buffer & >)
+			uploadImage (Image & targetImage, size_t requiredBytes, function_t && writeData) noexcept requires (std::is_invocable_v< function_t, const Buffer & >)
 			{
 				/* [VULKAN-CPU-SYNC] Transfer to GPU (Abusive lock!) */
 				const std::lock_guard< std::mutex > lock{m_transferOperationsAccess};
@@ -204,6 +204,17 @@ namespace EmEn::Vulkan
 			 */
 			[[nodiscard]]
 			bool transitionImageLayout (Image & image, VkImageAspectFlags aspectMask, VkImageLayout oldLayout, VkImageLayout newLayout) const noexcept;
+
+			/**
+			 * @brief Downloads an image from GPU memory to a pixmap.
+			 * @param sourceImage A reference to the source image in GPU memory.
+			 * @param currentLayout The current layout of the source image.
+			 * @param aspectMask The aspect flags (color, depth, or stencil).
+			 * @param pixmap A reference to the destination pixmap to fill with data.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool downloadImage (const Image & sourceImage, VkImageLayout currentLayout, VkImageAspectFlags aspectMask, Libs::PixelFactory::Pixmap< uint8_t > & pixmap) noexcept;
 
 		private:
 

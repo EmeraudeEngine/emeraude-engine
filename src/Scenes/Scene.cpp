@@ -170,17 +170,16 @@ namespace EmEn::Scenes
 
 			while ( (currentNode = crawler.nextNode()) != nullptr )
 			{
-				for ( const auto & component: currentNode->components() | std::views::values )
-				{
-					if ( component->isComponent(Component::Camera::ClassId) )
+				currentNode->forEachComponent([&hasCamera, &hasMicrophone] (const Component::Abstract & component) {
+					if ( component.isComponent(Component::Camera::ClassId) )
 					{
 						hasCamera = true;
 					}
-					else if ( component->isComponent(Component::Microphone::ClassId) )
+					else if ( component.isComponent(Component::Microphone::ClassId) )
 					{
 						hasMicrophone = true;
 					}
-				}
+				});
 
 				/* Stop looking in the node tree if at least
 				 * one camera and one microphone are found. */
@@ -195,9 +194,10 @@ namespace EmEn::Scenes
 		{
 			Tracer::warning(ClassId, "There is no camera in the scene ! Creating a default camera ...");
 
-			const std::string name{"DefaultCamera"};
+			const auto camera = m_rootNode->createChild("DefaultCameraNode", {}, m_lifetimeMS)
+				->componentBuilder< Component::Camera >("DefaultCamera").asPrimary().build(true);
 
-			if ( m_rootNode->createChild(name + "Node", {}, m_lifetimeMS)->newCamera(true, true, name) == nullptr )
+			if ( camera == nullptr )
 			{
 				Tracer::error(ClassId, "Scene initialization error : Unable to create a default camera !");
 
@@ -209,9 +209,10 @@ namespace EmEn::Scenes
 		{
 			Tracer::warning(ClassId, "There is no microphone in the scene ! Creating a default microphone ...");
 
-			const std::string name{"DefaultMicrophone"};
+			const auto microphone = m_rootNode->createChild("DefaultMicrophoneNode", {}, m_lifetimeMS)
+				->componentBuilder< Component::Microphone >("DefaultMicrophone").asPrimary().build();
 
-			if ( m_rootNode->createChild(name + "Node", {}, m_lifetimeMS)->newMicrophone(true, name) == nullptr )
+			if ( microphone == nullptr )
 			{
 				Tracer::error(ClassId, "Scene initialization error : Unable to create a default microphone !");
 
@@ -475,7 +476,7 @@ namespace EmEn::Scenes
 
 		/* Create the render target.
 		 * TODO: Get the view distance value from settings. */
-		auto renderTarget = std::make_shared< RenderTarget::ShadowMap< ViewMatrices2DUBO > >(name, resolution, viewDistance, isOrthographicProjection, true);
+		auto renderTarget = std::make_shared< RenderTarget::ShadowMap< ViewMatrices2DUBO > >(name, resolution, viewDistance, isOrthographicProjection);
 
 		if ( !renderTarget->createRenderTarget(m_AVConsoleManager.graphicsRenderer()) )
 		{
@@ -1799,23 +1800,17 @@ namespace EmEn::Scenes
 
 				const auto & worldCoordinates = staticEntity->getWorldCoordinatesStateForRendering(readStateIndex);
 
-				for ( const auto & component: staticEntity->components() | std::views::values )
-				{
-					if ( component == nullptr )
-					{
-						continue;
-					}
-
-					const auto renderableInstance = component->getRenderableInstance();
+				staticEntity->forEachComponent([&] (const Component::Abstract & component) {
+					const auto renderableInstance = component.getRenderableInstance();
 
 					if ( renderableInstance == nullptr )
 					{
-						continue;
+						return;
 					}
 
 					if ( this->checkRenderableInstanceForShadowCasting(renderTarget, renderableInstance) )
 					{
-						continue;
+						return;
 					}
 
 					/* Render-target distance check and frustum culling check. */
@@ -1823,11 +1818,11 @@ namespace EmEn::Scenes
 
 					if ( distance > viewDistance || !staticEntity->isVisibleTo(frustum) )
 					{
-						continue;
+						return;
 					}
 
 					this->insertIntoShadowCastingRenderList(renderableInstance, &worldCoordinates, distance);
-				}
+				});
 			}
 		}
 
@@ -1850,23 +1845,17 @@ namespace EmEn::Scenes
 
 				const auto & worldCoordinates = node->getWorldCoordinatesStateForRendering(readStateIndex);
 
-				for ( const auto & component: node->components() | std::views::values )
-				{
-					if ( component == nullptr )
-					{
-						continue;
-					}
-
-					const auto renderableInstance = component->getRenderableInstance();
+				node->forEachComponent([&] (const Component::Abstract & component) {
+					const auto renderableInstance = component.getRenderableInstance();
 
 					if ( renderableInstance == nullptr )
 					{
-						continue;
+						return;
 					}
 
 					if ( this->checkRenderableInstanceForShadowCasting(renderTarget, renderableInstance) )
 					{
-						continue;
+						return;
 					}
 
 					/* Render-target distance check and frustum culling check. */
@@ -1874,11 +1863,11 @@ namespace EmEn::Scenes
 
 					if ( distance > viewDistance || !node->isVisibleTo(frustum) )
 					{
-						continue;
+						return;
 					}
 
 					this->insertIntoShadowCastingRenderList(renderableInstance, &worldCoordinates, distance);
-				}
+				});
 			}
 		}
 
@@ -1964,23 +1953,17 @@ namespace EmEn::Scenes
 
 				const auto & worldCoordinates = staticEntity->getWorldCoordinatesStateForRendering(readStateIndex);
 
-				for ( const auto & component: staticEntity->components() | std::views::values )
-				{
-					if ( component == nullptr )
-					{
-						continue;
-					}
-
-					const auto renderableInstance = component->getRenderableInstance();
+				staticEntity->forEachComponent([&] (const Component::Abstract & component) {
+					const auto renderableInstance = component.getRenderableInstance();
 
 					if ( renderableInstance == nullptr )
 					{
-						continue;
+						return;
 					}
 
 					if ( this->checkRenderableInstanceForRendering(renderTarget, renderableInstance) )
 					{
-						continue;
+						return;
 					}
 
 					/* Render-target distance check and frustum culling check. */
@@ -1988,11 +1971,11 @@ namespace EmEn::Scenes
 
 					if ( distance > viewDistance || !staticEntity->isVisibleTo(frustum) )
 					{
-						continue;
+						return;
 					}
 
 					this->insertIntoRenderLists(renderableInstance, &worldCoordinates, distance);
-				}
+				});
 			}
 		}
 
@@ -2015,23 +1998,17 @@ namespace EmEn::Scenes
 
 				const auto & worldCoordinates = node->getWorldCoordinatesStateForRendering(readStateIndex);
 
-				for ( const auto & component: node->components() | std::views::values )
-				{
-					if ( component == nullptr )
-					{
-						continue;
-					}
-
-					const auto renderableInstance = component->getRenderableInstance();
+				node->forEachComponent([&] (const Component::Abstract & component) {
+					const auto renderableInstance = component.getRenderableInstance();
 
 					if ( renderableInstance == nullptr )
 					{
-						continue;
+						return;
 					}
 
 					if ( this->checkRenderableInstanceForRendering(renderTarget, renderableInstance) )
 					{
-						continue;
+						return;
 					}
 
 					/* Render-target distance check and frustum culling check. */
@@ -2039,11 +2016,11 @@ namespace EmEn::Scenes
 
 					if ( distance > viewDistance || !node->isVisibleTo(frustum) )
 					{
-						continue;
+						return;
 					}
 
 					this->insertIntoRenderLists(renderableInstance, &worldCoordinates, distance);
-				}
+				});
 			}
 		}
 
@@ -2506,10 +2483,7 @@ namespace EmEn::Scenes
 				continue;
 			}
 
-			if ( !function(renderableInstance) )
-			{
-				return;
-			}
+			function(renderableInstance);
 		}
 
 		/* Check renderable objects from scene static entities. */
@@ -2525,27 +2499,16 @@ namespace EmEn::Scenes
 				}
 
 				/* Go through each entity component to update visuals. */
-				for ( const auto & [name, component] : staticEntity->components() )
-				{
-					if ( !component->isRenderable() )
-					{
-						continue;
-					}
-
-					const auto renderableInstance = component->getRenderableInstance();
+				staticEntity->forEachComponent([&function] (const Component::Abstract & component) {
+					const auto renderableInstance = component.getRenderableInstance();
 
 					if ( renderableInstance == nullptr )
 					{
-						TraceError{ClassId} << "The static entity '" << staticEntity->name() << "' component '" << name << "' renderable instance pointer is null !";
-
-						continue;
-					}
-
-					if ( !function(renderableInstance) )
-					{
 						return;
 					}
-				}
+
+					function(renderableInstance);
+				});
 			}
 		}
 
@@ -2567,27 +2530,16 @@ namespace EmEn::Scenes
 				}
 
 				/* Go through each entity component to update visuals. */
-				for ( const auto & [name, component] : node->components() )
-				{
-					if ( !component->isRenderable() )
-					{
-						continue;
-					}
-
-					const auto renderableInstance = component->getRenderableInstance();
+				node->forEachComponent([&function] (const Component::Abstract & component) {
+					const auto renderableInstance = component.getRenderableInstance();
 
 					if ( renderableInstance == nullptr )
 					{
-						TraceError{ClassId} << "The scene node '" << node->name() << "' component '" << name << "' renderable instance pointer is null !";
-
-						continue;
-					}
-
-					if ( !function(renderableInstance) )
-					{
 						return;
 					}
-				}
+
+					function(renderableInstance);
+				});
 			}
 		}
 	}
@@ -2768,14 +2720,13 @@ namespace EmEn::Scenes
 						"[Node:" << currentNode->name() << "]"
 						"[Location: " << currentNode->getWorldCoordinates().position() << "] ";
 
-					if ( !currentNode->components().empty() )
+					if ( currentNode->hasComponent() )
 					{
 						output << '\n';
 
-						for ( const auto & component : std::ranges::views::values(currentNode->components()) )
-						{
-							output << pad << "   {" << component->getComponentType() << ":" << component->name() << "}" "\n";
-						}
+						currentNode->forEachComponent([&output] (const Component::Abstract & component) {
+							output << "   {" << component.getComponentType() << ":" << component.name() << "}" "\n";
+						});
 					}
 					else
 					{
@@ -2812,20 +2763,19 @@ namespace EmEn::Scenes
 			{
 				for ( auto staticEntityIt = m_staticEntities.cbegin(); staticEntityIt != m_staticEntities.cend(); ++staticEntityIt )
 				{
-					const auto & instance = staticEntityIt->second;
+					const auto & staticEntity = staticEntityIt->second;
 
 					output <<
 						"[Static entity #" << std::distance(m_staticEntities.cbegin(), staticEntityIt) << ":" << staticEntityIt->first << "]"
-						"[Location: " << instance->getWorldCoordinates().position() << "] ";
+						"[Location: " << staticEntity->getWorldCoordinates().position() << "] ";
 
-					if ( !instance->components().empty() )
+					if ( staticEntity->hasComponent() )
 					{
 						output << '\n';
 
-						for ( const auto & component : std::ranges::views::values(instance->components()) )
-						{
-							output << "   {" << component->getComponentType() << ":" << component->name() << "}" "\n";
-						}
+						staticEntity->forEachComponent([&output] (const Component::Abstract & component) {
+							output << "   {" << component.getComponentType() << ":" << component.name() << "}" "\n";
+						});
 					}
 					else
 					{

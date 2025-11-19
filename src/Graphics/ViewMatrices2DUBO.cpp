@@ -140,7 +140,7 @@ namespace EmEn::Graphics
 	bool
 	ViewMatrices2DUBO::create (Renderer & renderer, const std::string & instanceID) noexcept
 	{
-		auto descriptorSetLayout = ViewMatricesInterface::getDescriptorSetLayout(renderer.layoutManager());
+		auto descriptorSetLayout = RenderTarget::Abstract::getDescriptorSetLayout(renderer.layoutManager());
 
 		if ( descriptorSetLayout == nullptr )
 		{

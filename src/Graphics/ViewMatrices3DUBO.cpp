@@ -155,7 +155,7 @@ namespace EmEn::Graphics
 	bool
 	ViewMatrices3DUBO::create (Renderer & renderer, const std::string & instanceID) noexcept
 	{
-		const auto descriptorSetLayout = ViewMatricesInterface::getDescriptorSetLayout(renderer.layoutManager());
+		const auto descriptorSetLayout = RenderTarget::Abstract::getDescriptorSetLayout(renderer.layoutManager());
 
 		if ( descriptorSetLayout == nullptr )
 		{
@@ -174,7 +174,7 @@ namespace EmEn::Graphics
 			return false;
 		}
 
-		m_descriptorSet = std::make_unique< DescriptorSet >(renderer.descriptorPool(), ViewMatricesInterface::getDescriptorSetLayout(renderer.layoutManager()));
+		m_descriptorSet = std::make_unique< DescriptorSet >(renderer.descriptorPool(), descriptorSetLayout);
 		m_descriptorSet->setIdentifier(ClassId, instanceID, "DescriptorSet");
 
 		if ( !m_descriptorSet->create() )

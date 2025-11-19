@@ -46,7 +46,7 @@ namespace EmEn::Saphir::Declaration
 	{
 		uint32_t size = 0;
 
-		for ( const auto & structure : this->structures() | std::views::values )
+		for ( const auto & structure : this->structureDeclaration() | std::views::values )
 		{
 			size += structure.bytes();
 		}

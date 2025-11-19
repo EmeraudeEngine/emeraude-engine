@@ -85,14 +85,10 @@ namespace EmEn::Graphics::Material
 		switch ( fillingType )
 		{
 			case FillingType::Color :
-			{
-				const auto color = parseColorComponent(componentData);
-
-				if ( !this->setColor(color) )
+				if ( const auto color = parseColorComponent(componentData); !this->setColor(color) )
 				{
 					return this->setLoadSuccess(false);
 				}
-			}
 				break;
 
 			case FillingType::Gradient :

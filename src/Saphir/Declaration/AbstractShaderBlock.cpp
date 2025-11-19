@@ -88,7 +88,7 @@ namespace EmEn::Saphir::Declaration
 			return false;
 		}
 
-		if ( !this->addStructure(structure.name(), structure) )
+		if ( !this->addStructureDeclaration(structure.name(), structure) )
 		{
 			return false;
 		}
@@ -143,7 +143,7 @@ namespace EmEn::Saphir::Declaration
 			return false;
 		}
 
-		if ( !this->addStructure(structure.name(), structure) )
+		if ( !this->addStructureDeclaration(structure.name(), structure) )
 		{
 			return false;
 		}

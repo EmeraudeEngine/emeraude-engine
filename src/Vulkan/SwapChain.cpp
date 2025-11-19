@@ -35,6 +35,7 @@
 #endif
 
 /* Local inclusions. */
+#include "Libs/PixelFactory/Processor.hpp"
 #include "Vulkan/Framebuffer.hpp"
 #include "Vulkan/ImageView.hpp"
 #include "Vulkan/Device.hpp"
@@ -47,6 +48,7 @@ namespace EmEn::Vulkan
 {
 	using namespace Libs;
 	using namespace Libs::Math;
+	using namespace Libs::PixelFactory;
 	using namespace Graphics;
 
 	SwapChain::SwapChain (Renderer & renderer, Settings & settings) noexcept
@@ -57,7 +59,7 @@ namespace EmEn::Vulkan
 			{},
 			settings.getOrSetDefault< float >(GraphicsViewDistanceKey, DefaultGraphicsViewDistance),
 			RenderTargetType::View,
-			AVConsole::ConnexionType::Input,
+			Scenes::AVConsole::ConnexionType::Input,
 			false,
 			false
 		},
@@ -85,7 +87,7 @@ namespace EmEn::Vulkan
 		m_createInfo.imageColorSpace = surfaceFormat.colorSpace;
 		m_createInfo.imageExtent = this->chooseSwapExtent(capabilities);
 		m_createInfo.imageArrayLayers = 1;
-		m_createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+		m_createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT; /* USAGE_TRANSFER_SRC enable the screenshot capabilities. FIXME: check for performances. */
 		m_createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE; /* NOTE: Graphics and presentation (99.9%) are from the same family. */
 		m_createInfo.queueFamilyIndexCount = 0;
 		m_createInfo.pQueueFamilyIndices = nullptr;
@@ -429,7 +431,7 @@ namespace EmEn::Vulkan
 			const auto identifier = std::format("Frame{}", imageIndex);
 #endif
 
-			/* Create the frame N color buffer (swapchain image, used as resolve target when MSAA is enabled). */
+			/* Create the frame N color buffer (swap-chain image, used as resolve target when MSAA is enabled). */
 			if ( !this->createColorBuffer(swapChainImages[imageIndex], frame.colorImage, frame.colorImageView, identifier) )
 			{
 				TraceFatal{ClassId} << "Unable to create the color buffer #" << imageIndex << " !";
@@ -607,7 +609,7 @@ namespace EmEn::Vulkan
 				/* Attachment 1: MSAA Depth/Stencil buffer. */
 				frame.framebuffer->addAttachment(frame.MSAADepthImageView->handle());
 
-				/* Attachment 2: Color Resolve buffer (swapchain image). */
+				/* Attachment 2: Color Resolve buffer (swap-chain image). */
 				frame.framebuffer->addAttachment(frame.colorImageView->handle());
 
 				/* Attachment 3: Depth/Stencil Resolve buffer. */
@@ -617,7 +619,7 @@ namespace EmEn::Vulkan
 			{
 				/* Standard mode: 2 attachments. */
 
-				/* Attachment 0: Color buffer (swapchain image). */
+				/* Attachment 0: Color buffer (swap-chain image). */
 				frame.framebuffer->addAttachment(frame.colorImageView->handle());
 
 				/* Attachment 1: Depth/Stencil buffer. */
@@ -638,142 +640,141 @@ namespace EmEn::Vulkan
 	std::shared_ptr< RenderPass >
 	SwapChain::createRenderPass (Renderer & renderer) const noexcept
 	{
-		auto renderPass = renderer.getRenderPass(ClassId, 0);
+		/* Create a new RenderPass for this swap chain. */
+		auto renderPass = std::make_shared< RenderPass >(renderer.device(), 0);
+		renderPass->setIdentifier(ClassId, "SwapChain", "RenderPass");
 
-		if ( !renderPass->isCreated() )
+		/* Prepare a subpass for the render pass. */
+		RenderSubPass subPass{VK_PIPELINE_BIND_POINT_GRAPHICS, 0};
+
+		if ( this->isMultisamplingEnabled() )
 		{
-			/* Prepare a subpass for the render pass. */
-			RenderSubPass subPass{VK_PIPELINE_BIND_POINT_GRAPHICS, 0};
+			/* MSAA rendering: render to MSAA attachments, then resolve to swap-chain images. */
 
-			if ( this->isMultisamplingEnabled() )
+			/* Attachment 0: MSAA Color buffer (multisampled). */
 			{
-				/* MSAA rendering: render to MSAA attachments, then resolve to swapchain images. */
+				const auto & msaaColorBufferCreateInfo = m_frames.front().MSAAColorImage->createInfo();
 
-				/* Attachment 0: MSAA Color buffer (multisampled). */
-				{
-					const auto & msaaColorBufferCreateInfo = m_frames.front().MSAAColorImage->createInfo();
+				renderPass->addAttachmentDescription(VkAttachmentDescription{
+					.flags = 0,
+					.format = msaaColorBufferCreateInfo.format,
+					.samples = msaaColorBufferCreateInfo.samples,
+					.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+					.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE, /* Don't need to store MSAA buffer, only the resolved one. */
+					.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+					.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+					.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+					.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+				});
 
-					renderPass->addAttachmentDescription(VkAttachmentDescription{
-						.flags = 0,
-						.format = msaaColorBufferCreateInfo.format,
-						.samples = msaaColorBufferCreateInfo.samples,
-						.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-						.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE, /* Don't need to store MSAA buffer, only the resolved one. */
-						.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-						.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-						.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-						.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
-					});
-
-					subPass.addColorAttachment(0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-				}
-
-				/* Attachment 1: MSAA Depth/Stencil buffer (multisampled). */
-				{
-					const auto & msaaDepthStencilBufferCreateInfo = m_frames.front().MSAADepthStencilImage->createInfo();
-
-					renderPass->addAttachmentDescription(VkAttachmentDescription{
-						.flags = 0,
-						.format = msaaDepthStencilBufferCreateInfo.format,
-						.samples = msaaDepthStencilBufferCreateInfo.samples,
-						.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-						.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE, /* Don't need to store MSAA buffer. */
-						.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-						.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-						.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-						.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
-					});
-
-					subPass.setDepthStencilAttachment(1, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
-				}
-
-				/* Attachment 2: Color Resolve buffer (swapchain image, single sample). */
-				{
-					const auto & colorBufferCreateInfo = m_frames.front().colorImage->createInfo();
-
-					renderPass->addAttachmentDescription(VkAttachmentDescription{
-						.flags = 0,
-						.format = colorBufferCreateInfo.format,
-						.samples = colorBufferCreateInfo.samples,
-						.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE, /* We don't care about the previous content. */
-						.storeOp = VK_ATTACHMENT_STORE_OP_STORE, /* Store the resolved result. */
-						.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-						.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-						.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-						.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR /* Ready for presentation. */
-					});
-
-					subPass.addResolveAttachment(2, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-				}
-
-				/* Attachment 3: Depth/Stencil Resolve buffer (single sample) - Optional but included for completeness. */
-				{
-					const auto & depthStencilBufferCreateInfo = m_frames.front().depthStencilImage->createInfo();
-
-					renderPass->addAttachmentDescription(VkAttachmentDescription{
-						.flags = 0,
-						.format = depthStencilBufferCreateInfo.format,
-						.samples = depthStencilBufferCreateInfo.samples,
-						.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-						.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE, /* Usually don't need the resolved depth. */
-						.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-						.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-						.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-						.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
-					});
-				}
-			}
-			else
-			{
-				/* Standard rendering without MSAA. */
-
-				/* Attachment 0: Color buffer (swapchain image). */
-				{
-					const auto & colorBufferCreateInfo = m_frames.front().colorImage->createInfo();
-
-					renderPass->addAttachmentDescription(VkAttachmentDescription{
-						.flags = 0,
-						.format = colorBufferCreateInfo.format,
-						.samples = colorBufferCreateInfo.samples,
-						.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-						.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-						.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-						.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-						.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-						.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
-					});
-
-					subPass.addColorAttachment(0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-				}
-
-				/* Attachment 1: Depth/Stencil buffer. */
-				{
-					const auto & depthStencilBufferCreateInfo = m_frames.front().depthStencilImage->createInfo();
-
-					renderPass->addAttachmentDescription(VkAttachmentDescription{
-						.flags = 0,
-						.format = depthStencilBufferCreateInfo.format,
-						.samples = depthStencilBufferCreateInfo.samples,
-						.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-						.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-						.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-						.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-						.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-						.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
-					});
-
-					subPass.setDepthStencilAttachment(1, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
-				}
+				subPass.addColorAttachment(0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 			}
 
-			renderPass->addSubPass(subPass);
-
-			if ( !renderPass->createOnHardware() )
+			/* Attachment 1: MSAA Depth/Stencil buffer (multisampled). */
 			{
-				Tracer::error(ClassId, "Unable to create a render pass !");
+				const auto & msaaDepthStencilBufferCreateInfo = m_frames.front().MSAADepthStencilImage->createInfo();
 
-				return nullptr;
+				renderPass->addAttachmentDescription(VkAttachmentDescription{
+					.flags = 0,
+					.format = msaaDepthStencilBufferCreateInfo.format,
+					.samples = msaaDepthStencilBufferCreateInfo.samples,
+					.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+					.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE, /* Don't need to store MSAA buffer. */
+					.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+					.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+					.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+					.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+				});
+
+				subPass.setDepthStencilAttachment(1, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
 			}
+
+			/* Attachment 2: Color Resolve buffer (swap-chain image, single sample). */
+			{
+				const auto & colorBufferCreateInfo = m_frames.front().colorImage->createInfo();
+
+				renderPass->addAttachmentDescription(VkAttachmentDescription{
+					.flags = 0,
+					.format = colorBufferCreateInfo.format,
+					.samples = colorBufferCreateInfo.samples,
+					.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE, /* We don't care about the previous content. */
+					.storeOp = VK_ATTACHMENT_STORE_OP_STORE, /* Store the resolved result. */
+					.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+					.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+					.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+					.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR /* Ready for presentation. */
+				});
+
+				subPass.addResolveAttachment(2, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+			}
+
+			/* Attachment 3: Depth/Stencil Resolve buffer (single sample) - Optional but included for completeness. */
+			{
+				const auto & depthStencilBufferCreateInfo = m_frames.front().depthStencilImage->createInfo();
+
+				renderPass->addAttachmentDescription(VkAttachmentDescription{
+					.flags = 0,
+					.format = depthStencilBufferCreateInfo.format,
+					.samples = depthStencilBufferCreateInfo.samples,
+					.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+					.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE, /* Usually don't need the resolved depth. */
+					.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+					.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+					.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+					.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+				});
+			}
+		}
+		else
+		{
+			/* Standard rendering without MSAA. */
+
+			/* Attachment 0: Color buffer (swap-chain image). */
+			{
+				const auto & colorBufferCreateInfo = m_frames.front().colorImage->createInfo();
+
+				renderPass->addAttachmentDescription(VkAttachmentDescription{
+					.flags = 0,
+					.format = colorBufferCreateInfo.format,
+					.samples = colorBufferCreateInfo.samples,
+					.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+					.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+					.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+					.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+					.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+					.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
+				});
+
+				subPass.addColorAttachment(0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+			}
+
+			/* Attachment 1: Depth/Stencil buffer. */
+			{
+				const auto & depthStencilBufferCreateInfo = m_frames.front().depthStencilImage->createInfo();
+
+				renderPass->addAttachmentDescription(VkAttachmentDescription{
+					.flags = 0,
+					.format = depthStencilBufferCreateInfo.format,
+					.samples = depthStencilBufferCreateInfo.samples,
+					.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+					.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+					.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+					.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+					.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+					.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+				});
+
+				subPass.setDepthStencilAttachment(1, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
+			}
+		}
+
+		renderPass->addSubPass(subPass);
+
+		if ( !renderPass->createOnHardware() )
+		{
+			Tracer::error(ClassId, "Unable to create a render pass !");
+
+			return nullptr;
 		}
 
 		return renderPass;
@@ -1141,7 +1142,7 @@ namespace EmEn::Vulkan
 	}
 
 	void
-	SwapChain::onInputDeviceConnected (AVConsole::AVManagers & managers, AbstractVirtualDevice & /*sourceDevice*/) noexcept
+	SwapChain::onInputDeviceConnected (Scenes::AVConsole::AVManagers & managers, AbstractVirtualDevice & /*sourceDevice*/) noexcept
 	{
 		if ( !m_viewMatrices.create(managers.graphicsRenderer, this->id()) )
 		{
@@ -1150,8 +1151,63 @@ namespace EmEn::Vulkan
 	}
 
 	void
-	SwapChain::onInputDeviceDisconnected (AVConsole::AVManagers & /*managers*/, AbstractVirtualDevice & /*sourceDevice*/) noexcept
+	SwapChain::onInputDeviceDisconnected (Scenes::AVConsole::AVManagers & /*managers*/, AbstractVirtualDevice & /*sourceDevice*/) noexcept
 	{
 		m_viewMatrices.destroy();
+	}
+
+	std::array< Pixmap< uint8_t >, 3 >
+	SwapChain::capture (TransferManager & transferManager, uint32_t layerIndex, bool keepAlpha, bool withDepthBuffer, bool withStencilBuffer) const noexcept
+	{
+		std::array< Pixmap< uint8_t >, 3 > result;
+
+		/* SwapChain has only single-layer images (not cubemaps or arrays). */
+		if ( layerIndex > 0 )
+		{
+			TraceWarning{ClassId} << "SwapChain does not support layered images. Layer " << layerIndex << " requested, using layer 0 instead.";
+		}
+
+		if ( m_acquiredImageIndex >= m_frames.size() )
+		{
+			TraceError{ClassId} << "Invalid acquired image index for capture!";
+
+			return result;
+		}
+
+		const auto & frame = m_frames[m_acquiredImageIndex];
+
+		// Capture color buffer
+		if ( frame.colorImage )
+		{
+			if ( !transferManager.downloadImage(*frame.colorImage, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_IMAGE_ASPECT_COLOR_BIT, result[0]) )
+			{
+				TraceError{ClassId} << "Failed to capture color buffer!";
+
+				return result;
+			}
+
+			result[0] = Processor< uint8_t >::toRGB(result[0]);
+			result[0] = Processor< uint8_t >::swapChannels(result[0], false);
+		}
+
+		// Capture depth buffer if requested and available
+		if ( withDepthBuffer && frame.depthImageView )
+		{
+			if ( !transferManager.downloadImage(*frame.depthStencilImage, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_IMAGE_ASPECT_DEPTH_BIT, result[1]) )
+			{
+				TraceWarning{ClassId} << "Failed to capture depth buffer!";
+			}
+		}
+
+		// Capture stencil buffer if requested and available
+		if ( withStencilBuffer && frame.stencilImageView )
+		{
+			if ( !transferManager.downloadImage(*frame.depthStencilImage, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_IMAGE_ASPECT_STENCIL_BIT, result[2]) )
+			{
+				TraceWarning{ClassId} << "Failed to capture stencil buffer!";
+			}
+		}
+
+		return result;
 	}
 }

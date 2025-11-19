@@ -210,6 +210,7 @@ namespace EmEn::Libs::VertexFactory
 			setPosition (const Math::Vector< 3, vertex_data_t > & position) noexcept
 			{
 				m_triangleVertices[m_triangleVertexIndex] = position;
+
 				m_declaredAttributes[PositionDeclared] = true;
 			}
 
@@ -219,6 +220,7 @@ namespace EmEn::Libs::VertexFactory
 				m_triangleVertices[m_triangleVertexIndex][Math::X] = x;
 				m_triangleVertices[m_triangleVertexIndex][Math::Y] = y;
 				m_triangleVertices[m_triangleVertexIndex][Math::Z] = z;
+
 				m_declaredAttributes[PositionDeclared] = true;
 			}
 
@@ -226,6 +228,7 @@ namespace EmEn::Libs::VertexFactory
 			setNormal (const Math::Vector< 3, vertex_data_t > & normal) noexcept
 			{
 				m_triangleNormals[m_triangleVertexIndex] = normal;
+
 				m_declaredAttributes[NormalDeclared] = true;
 			}
 
@@ -235,6 +238,7 @@ namespace EmEn::Libs::VertexFactory
 				m_triangleNormals[m_triangleVertexIndex][Math::X] = x;
 				m_triangleNormals[m_triangleVertexIndex][Math::Y] = y;
 				m_triangleNormals[m_triangleVertexIndex][Math::Z] = z;
+
 				m_declaredAttributes[NormalDeclared] = true;
 			}
 
@@ -242,6 +246,7 @@ namespace EmEn::Libs::VertexFactory
 			setTextureCoordinates (const Math::Vector< 3, vertex_data_t > & textureCoordinates) noexcept
 			{
 				m_triangleTextureCoordinates[m_triangleVertexIndex] = textureCoordinates;
+
 				m_declaredAttributes[TextureCoordinatesDeclared] = true;
 			}
 
@@ -251,6 +256,7 @@ namespace EmEn::Libs::VertexFactory
 				m_triangleTextureCoordinates[m_triangleVertexIndex][Math::X] = u;
 				m_triangleTextureCoordinates[m_triangleVertexIndex][Math::Y] = v;
 				m_triangleTextureCoordinates[m_triangleVertexIndex][Math::Z] = w;
+
 				m_declaredAttributes[TextureCoordinatesDeclared] = true;
 			}
 
@@ -258,6 +264,7 @@ namespace EmEn::Libs::VertexFactory
 			setVertexColor (const Math::Vector< 4, vertex_data_t > & vertexColor) noexcept
 			{
 				m_triangleVertexColors[m_triangleVertexIndex] = vertexColor;
+
 				m_declaredAttributes[VertexColorDeclared] = true;
 			}
 
@@ -268,6 +275,7 @@ namespace EmEn::Libs::VertexFactory
 				m_triangleVertexColors[m_triangleVertexIndex][Math::Y] = vertexColor.green();
 				m_triangleVertexColors[m_triangleVertexIndex][Math::Z] = vertexColor.blue();
 				m_triangleVertexColors[m_triangleVertexIndex][Math::W] = vertexColor.alpha();
+
 				m_declaredAttributes[VertexColorDeclared] = true;
 			}
 
@@ -278,6 +286,7 @@ namespace EmEn::Libs::VertexFactory
 				m_triangleVertexColors[m_triangleVertexIndex][Math::Y] = green;
 				m_triangleVertexColors[m_triangleVertexIndex][Math::Z] = blue;
 				m_triangleVertexColors[m_triangleVertexIndex][Math::W] = alpha;
+
 				m_declaredAttributes[VertexColorDeclared] = true;
 			}
 
@@ -307,6 +316,7 @@ namespace EmEn::Libs::VertexFactory
 					return false;
 				}
 
+				/* The vertex position will be never optional. */
 				if ( !m_declaredAttributes[PositionDeclared] )
 				{
 					std::cerr << "[" << __PRETTY_FUNCTION__ << "] The position attribute is not declared for this vertex !" "\n";
@@ -314,25 +324,63 @@ namespace EmEn::Libs::VertexFactory
 					return false;
 				}
 
-				if ( m_options.isNormalsEnabled() && !this->checkNormal() )
+				/* NOTE: If the normal are requested and not auto generated. */
+				if ( m_options.isNormalsEnabled() && !m_options.isNormalsGenerationEnabled() )
 				{
-					std::cerr << "[" << __PRETTY_FUNCTION__ << "] The normal attribute is not declared for this vertex !" "\n";
+					/* Check for a global normal usage ... */
+					if ( m_options.isGlobalNormalEnabled() )
+					{
+						m_triangleNormals[m_triangleVertexIndex] = m_options.globalNormal();
+					}
+					/* ... Or if the attribute has been declared. */
+					else if ( !m_declaredAttributes[NormalDeclared] )
+					{
+						std::cerr << "[" << __PRETTY_FUNCTION__ << "] The normal attribute is not declared for this vertex !" "\n";
 
-					return false;
+						return false;
+					}
 				}
 
-				if ( m_options.isTextureCoordinatesEnabled() && !this->checkTextureCoordinates() )
+				/* NOTE: If the texture coordinates are requested. */
+				if ( m_options.isTextureCoordinatesEnabled() )
 				{
-					std::cerr << "[" << __PRETTY_FUNCTION__ << "] The texture coordinates attribute is not declared for this vertex !" "\n";
+					/* Check for auto-generation from the position ... */
+					if ( m_options.isTextureCoordinatesGenerationEnabled() )
+					{
+						m_triangleTextureCoordinates[m_triangleVertexIndex] = TextureCoordinates::generateCubicCoordinates(
+							m_triangleVertices[m_triangleVertexIndex],
+							m_options.isNormalsEnabled() ? m_triangleNormals[m_triangleVertexIndex] : Math::Vector< 3, vertex_data_t >::positiveZ()
+						);
+					}
+					/* ... Or if the attribute has been declared. */
+					else if ( !m_declaredAttributes[TextureCoordinatesDeclared] )
+					{
+						std::cerr << "[" << __PRETTY_FUNCTION__ << "] The texture coordinates attribute is not declared for this vertex !" "\n";
 
-					return false;
+						return false;
+					}
 				}
 
-				if ( m_options.isVertexColorsEnabled() && !this->checkVertexColor() )
+				/* NOTE: If the vertex colors are requested. */
+				if ( m_options.isVertexColorsEnabled() )
 				{
-					std::cerr << "[" << __PRETTY_FUNCTION__ << "] The vertex color attribute is not declared for this vertex !" "\n";
+					/* Check for a global vertex color usage ... */
+					if ( m_options.isGlobalVertexColorEnabled() )
+					{
+						m_triangleVertexColors[m_triangleVertexIndex] = m_options.globalVertexColor();
+					}
+					/* ... Or check for auto-generation from the position ... */
+					else if ( m_options.isVertexColorsGenerationEnabled() )
+					{
+						m_triangleVertexColors[m_triangleVertexIndex] = Math::Vector< 4, vertex_data_t >{m_triangleVertices[m_triangleVertexIndex].normalized(), 1};
+					}
+					/* ... Or if the attribute has been declared. */
+					else if ( !m_declaredAttributes[VertexColorDeclared] )
+					{
+						std::cerr << "[" << __PRETTY_FUNCTION__ << "] The vertex color attribute is not declared for this vertex !" "\n";
 
-					return false;
+						return false;
+					}
 				}
 
 				this->newVertexAdded();
@@ -516,75 +564,6 @@ namespace EmEn::Libs::VertexFactory
 			}
 
 		private:
-
-			/**
-			 * @brief Check the normal attribute for one vertex.
-			 * @return bool
-			 */
-			[[nodiscard]]
-			bool
-			checkNormal () noexcept
-			{
-				if ( m_options.isGlobalNormalEnabled() )
-				{
-					m_triangleNormals[m_triangleVertexIndex] = m_options.globalNormal();
-
-					return true;
-				}
-
-				if ( m_options.isNormalsGenerationEnabled() )
-				{
-					return false;
-				}
-
-				return m_declaredAttributes[NormalDeclared];
-			}
-
-			/**
-			 * @brief Check the texture coordinates attribute for one vertex.
-			 * @return bool
-			 */
-			[[nodiscard]]
-			bool
-			checkTextureCoordinates () noexcept
-			{
-				if ( m_options.isTextureCoordinatesGenerationEnabled() )
-				{
-					m_triangleTextureCoordinates[m_triangleVertexIndex] = TextureCoordinates::generateCubicCoordinates(
-						m_triangleVertices[m_triangleVertexIndex],
-						m_options.isNormalsEnabled() ? m_triangleNormals[m_triangleVertexIndex] : Math::Vector< 3, vertex_data_t >::positiveZ()
-					);
-
-					return true;
-				}
-
-				return m_declaredAttributes[TextureCoordinatesDeclared];
-			}
-
-			/**
-			 * @brief Check the vertex color attribute for one vertex.
-			 * @return bool
-			 */
-			[[nodiscard]]
-			bool
-			checkVertexColor () noexcept
-			{
-				if ( m_options.isGlobalVertexColorEnabled() )
-				{
-					m_triangleVertexColors[m_triangleVertexIndex] = m_options.globalVertexColor();
-
-					return true;
-				}
-
-				if ( m_options.isVertexColorsGenerationEnabled() )
-				{
-					m_triangleVertexColors[m_triangleVertexIndex] = Math::Vector< 4, vertex_data_t >{m_triangleVertices[m_triangleVertexIndex].normalized(), 1};
-
-					return true;
-				}
-
-				return m_declaredAttributes[VertexColorDeclared];
-			}
 
 			/**
 			 * @brief Adds a new vertex into the incoming triangle.

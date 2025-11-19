@@ -31,6 +31,7 @@
 #include "Graphics/RenderTarget/Abstract.hpp"
 
 /* Local inclusions for usages. */
+#include "Libs/PixelFactory/Processor.hpp"
 #include "Vulkan/Instance.hpp"
 #include "Vulkan/Framebuffer.hpp"
 #include "Graphics/Renderer.hpp"
@@ -69,16 +70,15 @@ namespace EmEn::Graphics::RenderTarget
 			 * @param resolution The shadow map resolution.
 			 * @param viewDistance The max viewable distance in meters.
 			 * @param isOrthographicProjection Set orthographic projection instead of perspective.
-			 * @param debug Print the z-depth into the color buffer for debugging.
 			 */
-			ShadowMap (const std::string & deviceName, uint32_t resolution, float viewDistance, bool isOrthographicProjection, bool debug) noexcept requires (std::is_same_v< view_matrices_t, ViewMatrices2DUBO >)
+			ShadowMap (const std::string & deviceName, uint32_t resolution, float viewDistance, bool isOrthographicProjection) noexcept requires (std::is_same_v< view_matrices_t, ViewMatrices2DUBO >)
 				: Abstract {
 					deviceName,
-					{debug ? 8U : 0U, debug ? 8U : 0U, debug ? 8U : 0U, debug ? 8U : 0U, 32U, 0U, 1U},
+					{0U, 0U, 0U, 0U, 32U, 0U, 1U},
 					{resolution, resolution, 1},
 					viewDistance,
 					RenderTargetType::ShadowMap,
-					AVConsole::ConnexionType::Input,
+					Scenes::AVConsole::ConnexionType::Input,
 					isOrthographicProjection,
 					true
 				}
@@ -100,7 +100,7 @@ namespace EmEn::Graphics::RenderTarget
 					{resolution, resolution, 1},
 					viewDistance,
 					RenderTargetType::ShadowCubemap,
-					AVConsole::ConnexionType::Input,
+					Scenes::AVConsole::ConnexionType::Input,
 					isOrthographicProjection,
 					true
 				}
@@ -309,12 +309,12 @@ namespace EmEn::Graphics::RenderTarget
 				return m_viewMatrices;
 			}
 
-			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::videoType() */
+			/** @copydoc EmEn::Scenes::AVConsole::AbstractVirtualDevice::videoType() */
 			[[nodiscard]]
-			AVConsole::VideoType
+			Scenes::AVConsole::VideoType
 			videoType () const noexcept override
 			{
-				return AVConsole::VideoType::ShadowMap;
+				return Scenes::AVConsole::VideoType::ShadowMap;
 			}
 
 			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::framebuffer() const */
@@ -333,17 +333,52 @@ namespace EmEn::Graphics::RenderTarget
 				return m_isReadyForRendering;
 			}
 
-			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::isDebug() const */
+			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::capture() */
 			[[nodiscard]]
-			bool
-			isDebug () const noexcept override
+			std::array< Libs::PixelFactory::Pixmap< uint8_t >, 3 >
+			capture (Vulkan::TransferManager & transferManager, uint32_t layerIndex, bool keepAlpha, bool withDepthBuffer, bool withStencilBuffer) const noexcept override
 			{
-				return m_debugImage != nullptr;
+				std::array< Libs::PixelFactory::Pixmap< uint8_t >, 3 > result{};
+
+				/* Validate layer index for cubemaps and single-layer shadow maps. */
+				const uint32_t maxLayers = this->isCubemap() ? 6 : 1;
+
+				if ( layerIndex >= maxLayers )
+				{
+					if ( maxLayers == 1 && layerIndex > 0 )
+					{
+						TraceWarning{ClassId} << "Single-layer shadow map does not support layer " << layerIndex << ". Using layer 0 instead for shadow map '" << this->id() << "'.";
+
+						layerIndex = 0;
+					}
+					else
+					{
+						TraceError{ClassId} << "Invalid layer index " << layerIndex << " (max: " << maxLayers - 1 << ") for shadow map '" << this->id() << "' !";
+
+						return result;
+					}
+				}
+
+				/* NOTE: ShadowMaps don't have color buffers - result[0] remains empty. */
+
+				/* NOTE: Shadow maps are depth-only. We always capture depth regardless of withDepthBuffer flag.
+				 * The depth data goes into result[1] to maintain consistency with the capture() interface. */
+				if ( m_depthImage != nullptr && m_depthImage->isCreated() )
+				{
+					if ( !transferManager.downloadImage(*m_depthImage, VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL, VK_IMAGE_ASPECT_DEPTH_BIT, result[1]) )
+					{
+						TraceWarning{ClassId} << "Failed to capture depth buffer for shadow map '" << this->id() << "' !";
+					}
+				}
+
+				/* NOTE: Stencil is never used for shadow mapping, ignore withStencilBuffer flag. */
+
+				return result;
 			}
 
 		private:
 
-			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::updateVideoDeviceProperties() */
+			/** @copydoc EmEn::Scenes::AVConsole::AbstractVirtualDevice::updateVideoDeviceProperties() */
 			void
 			updateVideoDeviceProperties (float fovOrNear, float distanceOrFar, bool isOrthographicProjection) noexcept override
 			{
@@ -357,23 +392,23 @@ namespace EmEn::Graphics::RenderTarget
 				this->updateViewRangesProperties(fovOrNear, distanceOrFar);
 			}
 
-			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::updateDeviceFromCoordinates() */
+			/** @copydoc EmEn::Scenes::AVConsole::AbstractVirtualDevice::updateDeviceFromCoordinates() */
 			void
 			updateDeviceFromCoordinates (const Libs::Math::CartesianFrame< float > & worldCoordinates, const Libs::Math::Vector< 3, float > & worldVelocity) noexcept override
 			{
 				m_viewMatrices.updateViewCoordinates(worldCoordinates, worldVelocity);
 			}
 
-			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::onInputDeviceConnected() */
+			/** @copydoc EmEn::Scenes::AVConsole::AbstractVirtualDevice::onInputDeviceConnected() */
 			void
-			onInputDeviceConnected (AVConsole::AVManagers & AVManagers, AbstractVirtualDevice & /*sourceDevice*/) noexcept override
+			onInputDeviceConnected (Scenes::AVConsole::AVManagers & AVManagers, AbstractVirtualDevice & /*sourceDevice*/) noexcept override
 			{
 				m_viewMatrices.create(AVManagers.graphicsRenderer, this->id());
 			}
 
-			/** @copydoc EmEn::AVConsole::AbstractVirtualDevice::onInputDeviceDisconnected() */
+			/** @copydoc EmEn::Scenes::AVConsole::AbstractVirtualDevice::onInputDeviceDisconnected() */
 			void
-			onInputDeviceDisconnected (AVConsole::AVManagers & /*AVManagers*/, AbstractVirtualDevice & /*sourceDevice*/) noexcept override
+			onInputDeviceDisconnected (Scenes::AVConsole::AVManagers & /*AVManagers*/, AbstractVirtualDevice & /*sourceDevice*/) noexcept override
 			{
 				m_viewMatrices.destroy();
 			}
@@ -448,10 +483,6 @@ namespace EmEn::Graphics::RenderTarget
 				m_depthCubeImageView.reset();
 				m_depthImageView.reset();
 				m_depthImage.reset();
-
-				/* The color buffer (Debug). */
-				m_debugImageView.reset();
-				m_debugImage.reset();
 			}
 
 			/**
@@ -468,46 +499,7 @@ namespace EmEn::Graphics::RenderTarget
 				/* The debug color buffer (optional). */
 				if ( this->precisions().colorBits() > 0 )
 				{
-					TraceWarning{ClassId} << "Color bits requested for shadow map '" << this->id() << "', debugging enabled.";
-
-					m_debugImage = std::make_shared< Vulkan::Image >(
-						device,
-						VK_IMAGE_TYPE_2D,
-						Vulkan::Instance::findColorFormat(device, this->precisions()),
-						this->extent(),
-						VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-						this->isCubemap() ? VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT : 0,
-						1,
-						this->isCubemap() ? 6 : 1
-					);
-					m_debugImage->setIdentifier(ClassId, this->id(), "Image");
-
-					if ( !m_debugImage->createOnHardware() )
-					{
-						TraceError{ClassId} << "Unable to create an image (DebugColor buffer) for shadow map '" << this->id() << "' !";
-
-						return false;
-					}
-
-					m_debugImageView = std::make_shared< Vulkan::ImageView >(
-						m_debugImage,
-						this->isCubemap() ? VK_IMAGE_VIEW_TYPE_CUBE : VK_IMAGE_VIEW_TYPE_2D,
-						VkImageSubresourceRange{
-							.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-							.baseMipLevel = 0,
-							.levelCount = m_debugImage->createInfo().mipLevels, /* Must be 1 */
-							.baseArrayLayer = 0,
-							.layerCount = m_debugImage->createInfo().arrayLayers /* Must be 1 or 6 (cubemap) */
-						}
-					);
-					m_debugImageView->setIdentifier(ClassId, this->id(), "ImageView");
-
-					if ( !m_debugImageView->createOnHardware() )
-					{
-						TraceError{ClassId} << "Unable to create an image view (DebugColor buffer) for shadow map '" << this->id() << "' !";
-
-						return false;
-					}
+					TraceWarning{ClassId} << "Color bits requested for shadow map '" << this->id() << "', ignoring ...";
 				}
 
 				/* The depth buffer.
@@ -600,92 +592,70 @@ namespace EmEn::Graphics::RenderTarget
 			std::shared_ptr< Vulkan::RenderPass >
 			createRenderPass (Renderer & renderer) const noexcept override
 			{
-				/* FIXME: The identifier must reflect the enabled attachments !!! */
-				auto renderPass = renderer.getRenderPass("ShadowRender", 0);
+				/* Create a new RenderPass for this shadow map render target. */
+				auto renderPass = std::make_shared< Vulkan::RenderPass >(renderer.device(), 0);
+				renderPass->setIdentifier(ClassId, this->id(), "RenderPass");
 
-				if ( !renderPass->isCreated() )
+				/* Prepare a subpass for the render pass. */
+				Vulkan::RenderSubPass subPass{VK_PIPELINE_BIND_POINT_GRAPHICS, 0};
+
+				/* Depth/Stencil buffer. */
+				if ( m_depthImage != nullptr )
 				{
-					/* Prepare a subpass for the render pass. */
-					Vulkan::RenderSubPass subPass{VK_PIPELINE_BIND_POINT_GRAPHICS, 0};
-
-					uint32_t attachmentIndex = 0;
-
-					/* Color buffer. */
-					if ( m_debugImage != nullptr )
-					{
-						renderPass->addAttachmentDescription(VkAttachmentDescription{
-							.flags = 0,
-							.format = m_debugImage->createInfo().format,
-							.samples = VK_SAMPLE_COUNT_1_BIT,
-							.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-							.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-							.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-							.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-							.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-							.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
-						});
-
-						subPass.addColorAttachment(attachmentIndex++, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-					}
-
-					/* Depth/Stencil buffer. */
-					if ( m_depthImage != nullptr )
-					{
-						renderPass->addAttachmentDescription(VkAttachmentDescription{
-							.flags = 0,
-							.format = m_depthImage->createInfo().format,
-							.samples = VK_SAMPLE_COUNT_1_BIT,
-							.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-							.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-							.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-							.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-							.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-							.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL
-						});
-
-						subPass.setDepthStencilAttachment(attachmentIndex, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
-					}
-					else
-					{
-						TraceError{ClassId} << "The depth image is not created for shadow map '" << this->id() << "' !";
-
-						return nullptr;
-					}
-
-					renderPass->addSubPass(subPass);
-
-					renderPass->addSubPassDependency({
-						.srcSubpass = VK_SUBPASS_EXTERNAL,
-						.dstSubpass = 0,
-						.srcStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-						.dstStageMask = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
-						.srcAccessMask = VK_ACCESS_SHADER_READ_BIT,
-						.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-						.dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT
+					renderPass->addAttachmentDescription(VkAttachmentDescription{
+						.flags = 0,
+						.format = m_depthImage->createInfo().format,
+						.samples = VK_SAMPLE_COUNT_1_BIT,
+						.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+						.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+						.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+						.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+						.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+						.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL
 					});
 
-					renderPass->addSubPassDependency({
-						.srcSubpass = 0,
-						.dstSubpass = VK_SUBPASS_EXTERNAL,
-						.srcStageMask = VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
-						.dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-						.srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-						.dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
-						.dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT
-					});
+					subPass.setDepthStencilAttachment(0, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
+				}
+				else
+				{
+					TraceError{ClassId} << "The depth image is not created for shadow map '" << this->id() << "' !";
 
-					/* Enable multiview for cubemap rendering (Vulkan 1.1+) */
-					if ( this->isCubemap() )
-					{
-						renderPass->enableMultiview();
-					}
+					return nullptr;
+				}
 
-					if ( !renderPass->createOnHardware() )
-					{
-						TraceError{ClassId} << "Unable to create the render pass for shadow map '" << this->id() << "' !";
+				renderPass->addSubPass(subPass);
 
-						return nullptr;
-					}
+				renderPass->addSubPassDependency({
+					.srcSubpass = VK_SUBPASS_EXTERNAL,
+					.dstSubpass = 0,
+					.srcStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+					.dstStageMask = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
+					.srcAccessMask = VK_ACCESS_SHADER_READ_BIT,
+					.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+					.dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT
+				});
+
+				renderPass->addSubPassDependency({
+					.srcSubpass = 0,
+					.dstSubpass = VK_SUBPASS_EXTERNAL,
+					.srcStageMask = VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+					.dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+					.srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+					.dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
+					.dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT
+				});
+
+				/* Enable multiview for cubemap rendering (Vulkan 1.1+) */
+				if ( this->isCubemap() )
+				{
+					renderPass->enableMultiview();
+				}
+
+				if ( !renderPass->createOnHardware() )
+				{
+					TraceError{ClassId} << "Unable to create the render pass for shadow map '" << this->id() << "' !";
+
+					return nullptr;
 				}
 
 				return renderPass;
@@ -703,21 +673,6 @@ namespace EmEn::Graphics::RenderTarget
 				/* Prepare the framebuffer. */
 				m_framebuffer = std::make_shared< Vulkan::Framebuffer >(renderPass, this->extent());
 				m_framebuffer->setIdentifier(ClassId, this->id(), "Framebuffer");
-
-				/* Attach the debug color buffer, if present. */
-				if ( m_debugImageView != nullptr )
-				{
-					m_framebuffer->addAttachment(m_debugImageView->handle());
-				}
-				else if constexpr ( IsDebug )
-				{
-					if ( this->precisions().colorBits() > 0 )
-					{
-						TraceError{ClassId} << "The color image view (Debug) is not created for shadow map '" << this->id() << "', but was requested !";
-
-						return false;
-					}
-				}
 
 				/* Attach the depth buffer. */
 				if ( m_depthImageView != nullptr )
@@ -741,8 +696,6 @@ namespace EmEn::Graphics::RenderTarget
 				return true;
 			}
 
-			std::shared_ptr< Vulkan::Image > m_debugImage;
-			std::shared_ptr< Vulkan::ImageView > m_debugImageView;
 			std::shared_ptr< Vulkan::Image > m_depthImage;
 			std::shared_ptr< Vulkan::ImageView > m_depthImageView;
 			std::shared_ptr< Vulkan::ImageView > m_depthCubeImageView;
