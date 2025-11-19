@@ -8,18 +8,23 @@ A modern, cross-platform 3D graphics engine built with **Vulkan API** and **C++2
 
 ## Features
 
-- **Scene Graph System:** Hierarchical node-based scene management with transform inheritance
-- **Resource Management:** Efficient hierarchical resource loading and caching system
-- **Material System:** Automatic shader generation with customizable material properties
-- **Audio Layer:** 3D spatial audio with sound effects and ambient tracks
-- **Physics Simulation:** Basic rigid body physics and collision detection
-- **Overlay System:** 2D rendering for UI elements and debug information
+### Core Systems
+- **Scene Graph System:** Hierarchical node-based scene management with automatic transform inheritance
+- **Resource Management:** Asynchronous loading with automatic fallbacks - never returns null, always provides valid resources
+- **Saphir Shader System:** Automatic GLSL shader generation at runtime based on material properties and geometry - eliminates hundreds of manual shader variants
+- **Audio Layer:** 3D spatial audio using OpenAL with automatic position updates for scene-attached sources
+- **Physics Simulation:** Fixed timestep physics with 4 entity types (Boundaries, Ground, StaticEntity, Nodes) for optimized collision handling
+- **Overlay System:** 2D rendering layer for UI elements and debug information
 - **ImGui Integration:** Built-in debug UI and development tools
 - **Multi-Platform:** Native support for Linux, macOS, and Windows
 
-## About
+### Technical Highlights
+- **Vulkan API 1.2+** for modern graphics rendering
+- **Right-handed Y-down coordinate system** consistent across all subsystems (physics, rendering, audio)
+- **C++20** codebase with modern language features
+- **Zero-cost abstractions** optimized for performance in critical paths
 
-The name "Emeraude" (French for "emerald") is inspired by "The Legend of Kyrandia," a classic DOS game that prominently featured gemstones. This engine aims to capture the same sense of wonder and visual richness.
+## About
 
 **License:** LGPLv3 - Free for both open-source and commercial projects
 
@@ -186,39 +191,70 @@ Ensure you've installed the Vulkan SDK and copied/symlinked the precompiled depe
 
 ## Usage Example
 
+Here's a minimal compilable example to get started:
+
 ```cpp
 #include <EmEn/Core.hpp>
 
 class MyApplication : public EmEn::Core {
 public:
-    void initialize() override {
-        // Set up your scene
-        auto scene = getSceneManager()->createScene("MainScene");
+    MyApplication(int argc, char** argv) noexcept
+        : Core{argc, argv, "MyApp", {1, 0, 0}, "MyOrg", "example.com"} {}
 
-        // Load resources
-        auto model = getResourceManager()->load("models/mymodel.gltf");
-
-        // Create scene nodes
-        auto rootNode = scene->getRootNode();
-        auto entityNode = rootNode->createChild("Entity");
-        entityNode->attachModel(model);
-
-        // Configure lighting
-        auto light = scene->createDirectionalLight();
-        light->setDirection({0.0f, -1.0f, -0.5f});
+private:
+    // Called before graphics/audio initialization
+    bool onBeforeSecondaryServicesInitialization() noexcept override {
+        return false;  // Return false to continue initialization
     }
 
-    void update(float deltaTime) override {
-        // Update game logic
+    // Called when engine is fully initialized - setup your scene here
+    bool onStart() noexcept override {
+        return true;  // Return true to run the application
     }
+
+    // Called when application resumes (e.g., after pause)
+    void onResume() noexcept override {}
+
+    // Called every frame - update game logic here
+    void onProcessLogics(size_t engineCycle) noexcept override {}
+
+    // Called when application pauses
+    void onPause() noexcept override {}
+
+    // Called when application stops
+    void onStop() noexcept override {}
+
+    // Keyboard input handling
+    bool onAppKeyPress(int32_t key, int32_t scancode, int32_t modifiers, bool repeat) noexcept override {
+        return false;  // Return true if event was consumed
+    }
+
+    bool onAppKeyRelease(int32_t key, int32_t scancode, int32_t modifiers) noexcept override {
+        return false;  // Return true if event was consumed
+    }
+
+    // Character input handling (for text input)
+    bool onAppCharacterType(uint32_t unicode) noexcept override {
+        return false;  // Return true if event was consumed
+    }
+
+    // Notification system for observables
+    bool onAppNotification(const ObservableTrait* observable, int notificationCode, const std::any& data) noexcept override {
+        return false;  // Return true to keep observing, false to forget
+    }
+
+    // File open events (drag & drop, system open)
+    void onOpenFiles(const std::vector<std::filesystem::path>& filepaths) noexcept override {}
 };
 
-int main() {
-    MyApplication app;
+int main(int argc, char** argv) {
+    MyApplication app(argc, argv);
     app.run();
     return 0;
 }
 ```
+
+For a complete working example with scene setup, lighting, camera, and animations, see the [projet-nihil](https://github.com/EmeraudeEngine/projet-nihil) repository.
 
 ## Current Development Status
 
@@ -267,7 +303,8 @@ Please ensure your code follows the existing style and includes appropriate test
 
 - **API Documentation:** Coming soon
 - **Wiki:** [GitHub Wiki](https://github.com/EmeraudeEngine/emeraude-engine/wiki) (coming soon)
-- **Examples:** Check the `examples/` directory for sample applications
+- **Examples:** See [projet-nihil](https://github.com/EmeraudeEngine/projet-nihil) for a complete working example
+- **AI Agents:** See [AGENTS.md](AGENTS.md) for guidelines when using AI coding assistants with this project
 
 ## License
 
@@ -287,6 +324,5 @@ See the [LICENSE](LICENSE) file for full details.
 
 ## Acknowledgments
 
-- Inspired by "The Legend of Kyrandia" and its beautiful gem-based aesthetic
 - Built with love for the open-source game development community
 - Thanks to all contributors and users of the engine
