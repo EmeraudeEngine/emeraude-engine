@@ -75,6 +75,8 @@ clang-tidy src/**/*.{cpp,hpp}       # Static analysis
 - `@docs/coordinate-system.md` - Y-down coordinate system (CRITICAL)
 - `@docs/physics-system.md` - 4-entity physics architecture
 - `@docs/resource-management.md` - Fail-safe resource system
+- `@docs/saphir-shader-system.md` - Automatic shader generation
+- `@docs/scene-graph-architecture.md` - Entity-component scene organization
 
 ### Source Code Structure
 - `src/` - Main source organized by subsystems
@@ -148,6 +150,8 @@ For comprehensive information on specific systems, refer to:
 - **Physics System:** @docs/physics-system.md
 - **Resource Management:** @docs/resource-management.md  
 - **Coordinate System:** @docs/coordinate-system.md
+- **Saphir Shader System:** @docs/saphir-shader-system.md
+- **Scene Graph:** @docs/scene-graph-architecture.md
 - **Build Setup:** README.md (dependencies and compilation)
 - **API Reference:** Doxygen comments in header files
 
