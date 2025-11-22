@@ -1017,6 +1017,6 @@ namespace EmEn::Graphics
 			return {};
 		}
 
-		return m_swapChain->capture(m_transferManager, keepAlpha, withDepthBuffer, withStencilBuffer);
+		return m_swapChain->capture(m_transferManager, 0, keepAlpha, withDepthBuffer, withStencilBuffer);
 	}
 }

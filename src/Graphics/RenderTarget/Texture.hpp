@@ -37,6 +37,7 @@
 #include "Graphics/RenderTarget/Abstract.hpp"
 
 /* Local inclusions for usages. */
+#include "Libs/PixelFactory/Processor.hpp"
 #include "Vulkan/Instance.hpp"
 #include "Vulkan/Framebuffer.hpp"
 #include "Graphics/Renderer.hpp"
@@ -358,14 +359,67 @@ namespace EmEn::Graphics::RenderTarget
 				return false;
 			}
 
-			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::isDebug() const */
+			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::capture() */
 			[[nodiscard]]
 			std::array< Libs::PixelFactory::Pixmap< uint8_t >, 3 >
-			capture (Vulkan::TransferManager & transferManager, bool keepAlpha, bool withDepthBuffer, bool withStencilBuffer) const noexcept override
+			capture (Vulkan::TransferManager & transferManager, uint32_t layerIndex, bool keepAlpha, bool withDepthBuffer, bool withStencilBuffer) const noexcept override
 			{
-				// TODO ...
+				std::array< Libs::PixelFactory::Pixmap< uint8_t >, 3 > result{};
 
-				return {};
+				/* Validate layer index for cubemaps and single-layer textures. */
+				const uint32_t maxLayers = this->isCubemap() ? 6 : 1;
+
+				if ( layerIndex >= maxLayers )
+				{
+					if ( maxLayers == 1 && layerIndex > 0 )
+					{
+						TraceWarning{ClassId} << "Single-layer texture does not support layer " << layerIndex << ". Using layer 0 instead for texture '" << this->id() << "'.";
+
+						layerIndex = 0;
+					}
+					else
+					{
+						TraceError{ClassId} << "Invalid layer index " << layerIndex << " (max: " << maxLayers - 1 << ") for texture '" << this->id() << "' !";
+
+						return result;
+					}
+				}
+
+				/* Capture color buffer. */
+				if ( m_colorImage != nullptr && m_colorImage->isCreated() )
+				{
+					if ( !transferManager.downloadImage(*m_colorImage, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_ASPECT_COLOR_BIT, result[0]) )
+					{
+						TraceError{ClassId} << "Failed to capture color buffer for texture '" << this->id() << "' !";
+						return result;
+					}
+
+					/* Convert to RGB if alpha is not requested. */
+					if ( !keepAlpha )
+					{
+						result[0] = Libs::PixelFactory::Processor< uint8_t >::toRGB(result[0]);
+					}
+				}
+
+				/* Capture depth buffer (optional). */
+				if ( withDepthBuffer && m_depthStencilImage != nullptr && m_depthStencilImage->isCreated() && this->precisions().depthBits() > 0 )
+				{
+					if ( !transferManager.downloadImage(*m_depthStencilImage, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_IMAGE_ASPECT_DEPTH_BIT, result[1]) )
+					{
+						TraceWarning{ClassId} << "Failed to capture depth buffer for texture '" << this->id() << "' !";
+					}
+				}
+
+				/* Capture stencil buffer (optional). */
+				if ( withStencilBuffer && m_depthStencilImage != nullptr && m_depthStencilImage->isCreated() && this->precisions().stencilBits() > 0 )
+				{
+					if ( !transferManager.downloadImage(*m_depthStencilImage, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_IMAGE_ASPECT_STENCIL_BIT, result[2]) )
+					{
+						TraceWarning{ClassId} << "Failed to capture stencil buffer for texture '" << this->id() << "' !";
+					}
+				}
+
+				return result;
 			}
 
 		private:
@@ -584,9 +638,12 @@ namespace EmEn::Graphics::RenderTarget
 						VK_IMAGE_TYPE_2D,
 						Vulkan::Instance::findDepthStencilFormat(device, this->precisions()),
 						this->extent(),
-						VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT
+						VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+						0, // No special flags for depth/stencil cubemap arrays
+						1, // Single mip level
+						this->isCubemap() ? 6 : 1 // 6 layers for cubemap, 1 for regular 2D
 					);
-					m_depthStencilImage->setIdentifier(ClassId, this->id(), "Image");
+					m_depthStencilImage->setIdentifier(ClassId, this->id(), "DepthStencilImage");
 
 					if ( !m_depthStencilImage->createOnHardware() )
 					{
@@ -603,7 +660,7 @@ namespace EmEn::Graphics::RenderTarget
 					{
 						m_depthImageView = std::make_shared< Vulkan::ImageView >(
 							m_depthStencilImage,
-							VK_IMAGE_VIEW_TYPE_2D,
+							this->isCubemap() ? VK_IMAGE_VIEW_TYPE_2D_ARRAY : VK_IMAGE_VIEW_TYPE_2D,
 							VkImageSubresourceRange{
 								.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
 								.baseMipLevel = 0,
@@ -612,7 +669,7 @@ namespace EmEn::Graphics::RenderTarget
 								.layerCount = m_depthStencilImage->createInfo().arrayLayers
 							}
 						);
-						m_depthImageView->setIdentifier(ClassId, this->id(), "ImageView");
+						m_depthImageView->setIdentifier(ClassId, this->id(), "DepthImageView");
 
 						if ( !m_depthImageView->createOnHardware() )
 						{
@@ -627,7 +684,7 @@ namespace EmEn::Graphics::RenderTarget
 					{
 						m_stencilImageView = std::make_shared< Vulkan::ImageView >(
 							m_depthStencilImage,
-							VK_IMAGE_VIEW_TYPE_2D,
+							this->isCubemap() ? VK_IMAGE_VIEW_TYPE_2D_ARRAY : VK_IMAGE_VIEW_TYPE_2D,
 							VkImageSubresourceRange{
 								.aspectMask = VK_IMAGE_ASPECT_STENCIL_BIT,
 								.baseMipLevel = 0,
@@ -636,7 +693,7 @@ namespace EmEn::Graphics::RenderTarget
 								.layerCount = m_depthStencilImage->createInfo().arrayLayers
 							}
 						);
-						m_stencilImageView->setIdentifier(ClassId, this->id(), "ImageView");
+						m_stencilImageView->setIdentifier(ClassId, this->id(), "StencilImageView");
 
 						if ( !m_stencilImageView->createOnHardware() )
 						{
@@ -655,8 +712,14 @@ namespace EmEn::Graphics::RenderTarget
 			std::shared_ptr< Vulkan::RenderPass >
 			createRenderPass (Renderer & renderer) const noexcept override
 			{
-				/* FIXME: The identifier must reflect the enabled attachments !!! */
-				auto renderPass = renderer.getRenderPass("TextureRender", 0);
+				/* Build identifier based on actual attachments configuration. */
+				uint32_t identifier = 0;
+				identifier |= (this->precisions().colorBits() > 0) ? 0x01 : 0x00;  // Color attachment present
+				identifier |= (this->precisions().depthBits() > 0) ? 0x02 : 0x00;  // Depth attachment present
+				identifier |= (this->precisions().stencilBits() > 0) ? 0x04 : 0x00; // Stencil attachment present
+				identifier |= this->isCubemap() ? 0x08 : 0x00;                     // Cubemap rendering (multiview)
+
+				auto renderPass = renderer.getRenderPass("TextureRender", identifier);
 
 				if ( !renderPass->isCreated() )
 				{

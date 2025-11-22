@@ -31,6 +31,7 @@
 #include "Graphics/RenderTarget/Abstract.hpp"
 
 /* Local inclusions for usages. */
+#include "Libs/PixelFactory/Processor.hpp"
 #include "Vulkan/Instance.hpp"
 #include "Vulkan/Framebuffer.hpp"
 #include "Graphics/Renderer.hpp"
@@ -344,7 +345,7 @@ namespace EmEn::Graphics::RenderTarget
 			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::isDebug() const */
 			[[nodiscard]]
 			std::array< Libs::PixelFactory::Pixmap< uint8_t >, 3 >
-			capture (Vulkan::TransferManager & transferManager, bool keepAlpha, bool withDepthBuffer, bool withStencilBuffer) const noexcept override
+			capture (Vulkan::TransferManager & transferManager, uint32_t layerIndex, bool keepAlpha, bool withDepthBuffer, bool withStencilBuffer) const noexcept override
 			{
 				// TODO ...
 

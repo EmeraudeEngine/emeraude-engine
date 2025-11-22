@@ -177,7 +177,7 @@ namespace EmEn::Vulkan
 
 			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::capture() */
 			[[nodiscard]]
-			std::array< Libs::PixelFactory::Pixmap< uint8_t >, 3 > capture (TransferManager & transferManager, bool keepAlpha, bool withDepthBuffer, bool withStencilBuffer) const noexcept override;
+			std::array< Libs::PixelFactory::Pixmap< uint8_t >, 3 > capture (TransferManager & transferManager, uint32_t layerIndex, bool keepAlpha, bool withDepthBuffer, bool withStencilBuffer) const noexcept override;
 
 			/**
 			 * @brief Returns the swap-chain vulkan handle.

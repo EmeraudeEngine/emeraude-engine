@@ -365,14 +365,17 @@ namespace EmEn::Graphics::RenderTarget
 
 			/**
 			 * @brief Captures the GPU buffer to save into a pixmap.
+			 * @note For single-layer textures, if layer > 0, a warning is printed and layer 0 is captured instead.
+			 * @note For cubemaps: layer 0=+X, 1=-X, 2=+Y, 3=-Y, 4=+Z, 5=-Z
 			 * @param transferManager A reference to the transfer manager.
+			 * @param layerIndex The layer index to capture (for cubemaps and texture arrays).
 			 * @param keepAlpha Keep the alpha channel from the GPU memory.
 			 * @param withDepthBuffer Enable the depth buffer to be captured, if exists.
 			 * @param withStencilBuffer Enable the stencil buffer to be captured, if exists.
 			 * @return std::array< Libs::PixelFactory::Pixmap< uint8_t >, 3 > Array containing [0] = color, [1] = depth (optional), [2] = stencil (optional)
 			 */
 			[[nodiscard]]
-			virtual std::array< Libs::PixelFactory::Pixmap< uint8_t >, 3 > capture (Vulkan::TransferManager & transferManager, bool keepAlpha, bool withDepthBuffer, bool withStencilBuffer) const noexcept = 0;
+			virtual std::array< Libs::PixelFactory::Pixmap< uint8_t >, 3 > capture (Vulkan::TransferManager & transferManager, uint32_t layerIndex, bool keepAlpha, bool withDepthBuffer, bool withStencilBuffer) const noexcept = 0;
 
 		protected:
 

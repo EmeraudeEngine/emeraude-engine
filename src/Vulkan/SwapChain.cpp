@@ -1158,9 +1158,15 @@ namespace EmEn::Vulkan
 	}
 
 	std::array< Pixmap< uint8_t >, 3 >
-	SwapChain::capture (TransferManager & transferManager, bool keepAlpha, bool withDepthBuffer, bool withStencilBuffer) const noexcept
+	SwapChain::capture (TransferManager & transferManager, uint32_t layerIndex, bool keepAlpha, bool withDepthBuffer, bool withStencilBuffer) const noexcept
 	{
 		std::array< Pixmap< uint8_t >, 3 > result;
+
+		/* SwapChain has only single-layer images (not cubemaps or arrays). */
+		if ( layerIndex > 0 )
+		{
+			TraceWarning{ClassId} << "SwapChain does not support layered images. Layer " << layerIndex << " requested, using layer 0 instead.";
+		}
 
 		if ( m_acquiredImageIndex >= m_frames.size() )
 		{
