@@ -35,7 +35,7 @@
 #include <vulkan/vulkan.h>
 
 /* Local inclusions for inheritances. */
-#include "AVConsole/AbstractVirtualDevice.hpp"
+#include "Scenes/AVConsole/AbstractVirtualDevice.hpp"
 
 /* Local inclusions for usages. */
 #include "Libs/PixelFactory/Pixmap.hpp"

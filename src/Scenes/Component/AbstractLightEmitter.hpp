@@ -33,11 +33,11 @@
 
 /* Local inclusions for inheritances. */
 #include "Abstract.hpp"
-#include "AVConsole/AbstractVirtualDevice.hpp"
+#include "Scenes/AVConsole/AbstractVirtualDevice.hpp"
 
 /* Local inclusions for usages. */
 #include "Libs/PixelFactory/Color.hpp"
-#include "AVConsole/Types.hpp"
+#include "Scenes/AVConsole/Types.hpp"
 #include "Graphics/SharedUniformBuffer.hpp"
 #include "Graphics/RenderTarget/ShadowMap.hpp"
 

@@ -27,7 +27,7 @@
 #include "AbstractLightEmitter.hpp"
 
 /* Local inclusions. */
-#include "AVConsole/Manager.hpp"
+#include "Scenes/AVConsole/Manager.hpp"
 
 namespace EmEn::Scenes::Component
 {

@@ -5,7 +5,6 @@ Thumbs.db
 .vscode
 .vs
 .yarn
-.claude
 
 # Files backup
 *.orig
@@ -17,3 +16,7 @@ dependencies/*
 src/emeraude_config.hpp
 cmake-build-*
 CMakeLists.txt.user
+
+# Claude Code build directories
+.claude-build-debug/
+.claude-build-release/

@@ -79,13 +79,35 @@ clang-tidy src/**/*.{cpp,hpp}       # Static analysis
 - `@docs/scene-graph-architecture.md` - Entity-component scene organization
 
 ### Source Code Structure
-- `src/` - Main source organized by subsystems
-- `src/Vulkan/` - Vulkan abstraction layer
-- `src/Physics/` - Physics simulation and collision
-- `src/Resources/` - Resource management system
-- `src/Saphir/` - Shader generation system
-- `src/Audio/` - OpenAL audio system
-- `src/Scenes/` - Scene graph and entities
+`src/` - Main source organized by subsystems (see CLAUDE.md for complete list)
+
+**Framework Core:**
+- `src/` - Core components (Core, Tracer, Window, Settings, Arguments) (@src/AGENTS.md)
+
+**Core Systems:**
+- `src/Vulkan/` - Vulkan abstraction layer (@src/Vulkan/AGENTS.md)
+- `src/Graphics/` - High-level graphics abstraction (@src/Graphics/AGENTS.md)
+- `src/Saphir/` - Shader generation system (@src/Saphir/AGENTS.md)
+- `src/Physics/` - Physics simulation and collision (@src/Physics/AGENTS.md)
+- `src/Resources/` - Resource management system (@src/Resources/AGENTS.md)
+
+**Scene & Entities:**
+- `src/Scenes/` - Scene graph and entities (@src/Scenes/AGENTS.md)
+- `src/Scenes/AVConsole/` - Audio-Video console (@src/Scenes/AVConsole/AGENTS.md)
+
+**Audio & Input:**
+- `src/Audio/` - OpenAL audio system (@src/Audio/AGENTS.md)
+- `src/Input/` - Input management (@src/Input/AGENTS.md)
+
+**UI & Platform:**
+- `src/Overlay/` - 2D overlay system (@src/Overlay/AGENTS.md)
+- `src/PlatformSpecific/` - OS-specific code (@src/PlatformSpecific/AGENTS.md)
+
+**Foundation & Tools:**
+- `src/Libs/` - Foundational libraries (@src/Libs/AGENTS.md)
+- `src/Net/` - Network downloading (@src/Net/AGENTS.md)
+- `src/Testing/` - Unit tests (@src/Testing/AGENTS.md)
+- `src/Animations/`, `src/Console/`, `src/Tool/` - In development
 
 ### Dependencies and Configuration
 - `dependencies/` - Git submodules and precompiled external libraries

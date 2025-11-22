@@ -76,3 +76,17 @@ VK_LAYER_PATH=./validation ./Emeraude
 - **Thread safety** : CommandPool par thread, CommandBuffer non partagés
 - **Memory barriers** : Transitions d'état correctes pour les images
 - **Validation layers** : Toujours actives en développement
+- **Jamais d'appels directs** : Graphics, Resources, Saphir utilisent abstractions Vulkan
+- **VMA obligatoire** : Toute allocation GPU via VMA, jamais vkAllocateMemory direct
+- **Y-down setup** : Viewport et projection configurés pour Y-down moteur
+
+## 📚 Documentation détaillée
+
+Pour la plateforme Vulkan:
+→ **Vulkan documentation officielle** - Spécifications API complètes
+
+Systèmes liés:
+→ **@docs/coordinate-system.md** - Configuration Y-down pour Vulkan
+→ **@src/Graphics/AGENTS.md** - Utilise abstractions Vulkan (Buffer, Image, Pipeline)
+→ **@src/Saphir/AGENTS.md** - Génère SPIR-V pour pipelines Vulkan
+→ **@src/Resources/AGENTS.md** - Upload GPU via TransferManager

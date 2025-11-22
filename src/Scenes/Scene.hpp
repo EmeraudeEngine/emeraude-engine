@@ -54,7 +54,7 @@
 #include "Graphics/RenderTarget/View.hpp"
 #include "Physics/ConstraintSolver.hpp"
 #include "Saphir/EffectInterface.hpp"
-#include "AVConsole/Manager.hpp"
+#include "Scenes/AVConsole/Manager.hpp"
 #include "LightSet.hpp"
 #include "OctreeSector.hpp"
 #include "StaticEntity.hpp"

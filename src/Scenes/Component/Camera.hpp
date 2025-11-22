@@ -33,11 +33,11 @@
 #include <memory>
 
 /* Local inclusions for inheritances. */
-#include "AVConsole/AbstractVirtualDevice.hpp"
+#include "Scenes/AVConsole/AbstractVirtualDevice.hpp"
 #include "Abstract.hpp"
 
 /* Local inclusions for usages. */
-#include "AVConsole/Types.hpp"
+#include "Scenes/AVConsole/Types.hpp"
 #include "Saphir/FramebufferEffectInterface.hpp"
 #include "SettingKeys.hpp"
 

@@ -42,6 +42,7 @@ ctest -R Physics
 - `ContactManifold.cpp/.hpp` - Structure de données de collision
 - `Collider.cpp/.hpp` - Détection de collision
 - `@docs/physics-system.md` - Architecture détaillée
+- `@docs/coordinate-system.md` - Convention Y-down (CRITIQUE)
 
 ## ⚡ Patterns de développement
 
@@ -63,3 +64,15 @@ ctest -R Physics
 - Calcul de `penetrationDepth` AVANT hard clipping (sol)
 - Mass matters pour StaticEntity (pas de masse infinie)
 - Deux appels séparés au solveur (entités puis sol)
+- **Integration avec Scenes** : Nodes du scene graph héritent de MovableTrait pour physique
+- **Octree spatial** : Scene possède Octree pour broad-phase physique
+
+## 📚 Documentation détaillée
+
+Pour l'architecture complète du système physique:
+→ **@docs/physics-system.md** - Architecture 4-entités détaillée
+
+Systèmes liés:
+→ **@docs/coordinate-system.md** - Convention Y-down (CRITIQUE)
+→ **@src/Scenes/AGENTS.md** - Nodes avec MovableTrait pour physique
+→ **@src/Libs/AGENTS.md** - Math (Vector, Matrix, collision detection)

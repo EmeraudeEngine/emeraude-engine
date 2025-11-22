@@ -28,7 +28,7 @@
 
 /* Local inclusions. */
 #include "Saphir/LightGenerator.hpp"
-#include "AVConsole/Manager.hpp"
+#include "Scenes/AVConsole/Manager.hpp"
 #include "Scenes/Scene.hpp"
 #include "Tracer.hpp"
 

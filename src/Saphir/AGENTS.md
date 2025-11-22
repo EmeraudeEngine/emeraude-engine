@@ -74,3 +74,16 @@ ctest -R Saphir
 - **Fail-safe integration** : Échecs logés mais app continue (pas de crash)
 - **Y-down convention** : Matrices projection configurées pour Vulkan
 - **Thread safety** : Cache protégé, génération peut être parallèle
+- **Utilisé par Graphics et Overlay** : Graphics (3D), Overlay (2D) utilisent Saphir
+- **Génération runtime** : Shaders générés à la demande pendant chargement resources
+
+## 📚 Documentation détaillée
+
+Pour l'architecture complète du système Saphir:
+→ **@docs/saphir-shader-system.md** - Génération paramétrique, compatibilité, cache
+
+Systèmes liés:
+→ **@src/Graphics/AGENTS.md** - Material et Geometry pour génération 3D
+→ **@src/Overlay/AGENTS.md** - Pipeline 2D via OverlayGenerator
+→ **@src/Resources/AGENTS.md** - Génération pendant onDependenciesLoaded()
+→ **@src/Vulkan/AGENTS.md** - Compilation SPIR-V et pipelines

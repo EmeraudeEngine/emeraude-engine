@@ -88,3 +88,16 @@ bool onDependenciesLoaded() override {
 - **Memory management** : `shared_ptr` pour reference counting automatique
 - **Status tracking** : Unloaded → Loading → Loaded/Failed
 - **Cache efficiency** : Clé par nom de ressource pour réutilisation
+- **Integration Net** : URLs détectées → Net télécharge → Resources finalise
+- **Utilisé partout** : Graphics, Audio, Scenes utilisent système Resources
+
+## 📚 Documentation détaillée
+
+Pour l'architecture complète du système de resources:
+→ **@docs/resource-management.md** - Fail-safe, dépendances, lifecycle détaillé
+
+Systèmes liés:
+→ **@src/Net/AGENTS.md** - Téléchargement resources depuis URLs
+→ **@src/Graphics/AGENTS.md** - Geometry, Material, Texture comme resources
+→ **@src/Audio/AGENTS.md** - SoundResource, MusicResource
+→ **@src/Libs/AGENTS.md** - Observer/Observable pattern
