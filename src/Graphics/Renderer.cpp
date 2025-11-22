@@ -238,6 +238,13 @@ namespace EmEn::Graphics
 	{
 		m_windowLess = m_primaryServices.arguments().isSwitchPresent("-W", "--window-less");
 
+		/* NOTE: Reserve capacity for cache maps to avoid rehashing during initialization.
+		 * Typical usage patterns: ~10-20 render passes, ~30-50 samplers, ~50-100 pipelines/programs. */
+		m_renderPasses.reserve(20);
+		m_samplers.reserve(50);
+		m_pipelines.reserve(100);
+		m_programs.reserve(100);
+
 		/* NOTE: Graphics device selection from the vulkan instance.
 		 * The Vulkan instance doesn't directly create a device on its initialization. */
 		if ( m_vulkanInstance.usable() )
@@ -513,7 +520,7 @@ namespace EmEn::Graphics
 	}
 
 	std::shared_ptr< Sampler >
-	Renderer::getSampler (const char * identifier, const std::function< void (Settings & settings, VkSamplerCreateInfo &) > & setupCreateInfo) noexcept
+	Renderer::getSampler (const std::string & identifier, const std::function< void (Settings & settings, VkSamplerCreateInfo &) > & setupCreateInfo) noexcept
 	{
 		if ( const auto samplerIt = m_samplers.find(identifier); samplerIt != m_samplers.cend() )
 		{
@@ -543,7 +550,7 @@ namespace EmEn::Graphics
 		setupCreateInfo(this->primaryServices().settings(), createInfo);
 
 		auto sampler = std::make_shared< Sampler >(m_device, createInfo);
-		sampler->setIdentifier(ClassId, identifier, "Sampler");
+		sampler->setIdentifier(ClassId, identifier.c_str(), "Sampler");
 
 		if ( !sampler->createOnHardware() )
 		{
