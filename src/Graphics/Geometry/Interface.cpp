@@ -44,7 +44,7 @@ namespace EmEn::Graphics::Geometry
 
 	constexpr auto TracerTag{"GeometryInterface"};
 
-	Renderer * Interface::s_graphicsRenderer{nullptr};
+	Renderer * Interface::s_graphicsRenderer = nullptr;
 
 	bool
 	Interface::buildSubGeometries (std::vector< SubGeometry > & subGeometries, uint32_t length) noexcept

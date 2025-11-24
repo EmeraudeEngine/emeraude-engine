@@ -29,6 +29,7 @@
 /* Local inclusions. */
 #include "Libs/PixelFactory/Color.hpp"
 #include "Libs/PixelFactory/FileIO.hpp"
+#include "Libs/PixelFactory/Processor.hpp"
 #include "TextureResource/Abstract.hpp"
 #include "Resources/Manager.hpp"
 #include "Tracer.hpp"
@@ -40,25 +41,51 @@ namespace EmEn::Graphics
 	bool
 	ImageResource::load (Resources::ServiceProvider & /*serviceProvider*/) noexcept
 	{
-		constexpr size_t DefaultSize{32};
-
 		if ( !this->beginLoading() )
 		{
 			return false;
 		}
 
-		if ( !m_pixmap.initialize(DefaultSize, DefaultSize, PixelFactory::ChannelMode::RGB) )
+		constexpr size_t DefaultSize{64};
+
+		if ( !m_pixmap.initialize(DefaultSize, DefaultSize, PixelFactory::ChannelMode::RGBA) )
 		{
 			Tracer::error(ClassId, "Unable to load the default pixmap !");
 
 			return this->setLoadSuccess(false);
 		}
 
-		if ( !m_pixmap.fill(PixelFactory::Magenta) )
+		if constexpr ( IsDebug )
 		{
-			Tracer::error(ClassId, "Unable to fill the default pixmap !");
+			if ( !m_pixmap.fill(PixelFactory::Magenta) )
+			{
+				Tracer::error(ClassId, "Unable to fill the default pixmap !");
 
-			return this->setLoadSuccess(false);
+				return this->setLoadSuccess(false);
+			}
+
+			PixelFactory::Processor processor{m_pixmap};
+
+			processor.drawSegment(
+				Math::Vector< 2, int32_t >{0, 0},
+				Math::Vector< 2, int32_t >{DefaultSize - 1, DefaultSize - 1},
+				PixelFactory::Black
+			);
+
+			processor.drawSegment(
+				Math::Vector< 2, int32_t >{DefaultSize - 1, 0},
+				Math::Vector< 2, int32_t >{0, DefaultSize - 1},
+				PixelFactory::Black
+			);
+		}
+		else
+		{
+			if ( !m_pixmap.perlinNoise(2.0F) )
+			{
+				Tracer::error(ClassId, "Unable to fill the default pixmap !");
+
+				return this->setLoadSuccess(false);
+			}
 		}
 
 		return this->setLoadSuccess(true);

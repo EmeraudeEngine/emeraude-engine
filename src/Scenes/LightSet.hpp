@@ -47,11 +47,6 @@
 /* Forward declarations. */
 namespace EmEn
 {
-	namespace AVConsole
-	{
-		class Manager;
-	}
-
 	namespace Vulkan
 	{
 		class LayoutManager;

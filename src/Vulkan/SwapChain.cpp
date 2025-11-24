@@ -1142,16 +1142,16 @@ namespace EmEn::Vulkan
 	}
 
 	void
-	SwapChain::onInputDeviceConnected (Scenes::AVConsole::AVManagers & managers, AbstractVirtualDevice & /*sourceDevice*/) noexcept
+	SwapChain::onInputDeviceConnected (EngineContext & engineContext, AbstractVirtualDevice & /*sourceDevice*/) noexcept
 	{
-		if ( !m_viewMatrices.create(managers.graphicsRenderer, this->id()) )
+		if ( !m_viewMatrices.create(engineContext.graphicsRenderer, this->id()) )
 		{
 			Tracer::error(ClassId, "Unable to create the view matrices on source device connexion !");
 		}
 	}
 
 	void
-	SwapChain::onInputDeviceDisconnected (Scenes::AVConsole::AVManagers & /*managers*/, AbstractVirtualDevice & /*sourceDevice*/) noexcept
+	SwapChain::onInputDeviceDisconnected (EngineContext & /*engineContext*/, AbstractVirtualDevice & /*sourceDevice*/) noexcept
 	{
 		m_viewMatrices.destroy();
 	}
@@ -1176,7 +1176,7 @@ namespace EmEn::Vulkan
 
 		const auto & frame = m_frames[m_acquiredImageIndex];
 
-		// Capture color buffer
+		/* Capture color buffer. */
 		if ( frame.colorImage )
 		{
 			if ( !transferManager.downloadImage(*frame.colorImage, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_IMAGE_ASPECT_COLOR_BIT, result[0]) )
@@ -1186,11 +1186,14 @@ namespace EmEn::Vulkan
 				return result;
 			}
 
-			result[0] = Processor< uint8_t >::toRGB(result[0]);
+			if ( !keepAlpha )
+			{
+				result[0] = Processor< uint8_t >::toRGB(result[0]);
+			}
 			result[0] = Processor< uint8_t >::swapChannels(result[0], false);
 		}
 
-		// Capture depth buffer if requested and available
+		/* Capture depth buffer if requested and available. */
 		if ( withDepthBuffer && frame.depthImageView )
 		{
 			if ( !transferManager.downloadImage(*frame.depthStencilImage, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_IMAGE_ASPECT_DEPTH_BIT, result[1]) )
@@ -1199,7 +1202,7 @@ namespace EmEn::Vulkan
 			}
 		}
 
-		// Capture stencil buffer if requested and available
+		/* Capture stencil buffer if requested and available. */
 		if ( withStencilBuffer && frame.stencilImageView )
 		{
 			if ( !transferManager.downloadImage(*frame.depthStencilImage, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_IMAGE_ASPECT_STENCIL_BIT, result[2]) )

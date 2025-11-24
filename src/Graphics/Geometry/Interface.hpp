@@ -35,7 +35,7 @@
 #include "Vulkan/VertexBufferObject.hpp"
 #include "Vulkan/IndexBufferObject.hpp"
 #include "Graphics/Types.hpp"
-#include "Types.hpp"
+#include "CoreTypes.hpp"
 #include "SubGeometry.hpp"
 
 namespace EmEn::Graphics::Geometry

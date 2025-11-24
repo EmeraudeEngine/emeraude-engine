@@ -166,7 +166,7 @@ namespace EmEn::Scenes::Component
 
 			if ( m_shadowMap != nullptr )
 			{
-				if ( this->connect(scene.AVConsoleManager().managers(), m_shadowMap, true) == AVConsole::ConnexionResult::Success )
+				if ( this->connect(scene.AVConsoleManager().engineContext(), m_shadowMap, true) == AVConsole::ConnexionResult::Success )
 				{
 					TraceSuccess{ClassId} << "2D shadow map (" << resolution << "px²) successfully created for spotlight '" << this->name() << "'.";
 
@@ -193,7 +193,7 @@ namespace EmEn::Scenes::Component
 	{
 		if ( m_shadowMap != nullptr )
 		{
-			this->disconnect(scene.AVConsoleManager().managers(), m_shadowMap, true);
+			this->disconnect(scene.AVConsoleManager().engineContext(), m_shadowMap, true);
 
 			m_shadowMap.reset();
 		}

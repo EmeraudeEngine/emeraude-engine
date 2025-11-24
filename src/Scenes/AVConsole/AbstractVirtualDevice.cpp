@@ -38,10 +38,8 @@ namespace EmEn::Scenes::AVConsole
 
 	constexpr auto TracerTag{"VirtualDevice"};
 
-	std::atomic< size_t > AbstractVirtualDevice::s_deviceCount{0};
-
 	ConnexionResult
-	AbstractVirtualDevice::connect (AVManagers & managers, const std::shared_ptr< AbstractVirtualDevice > & targetDevice, bool fireEvents) noexcept
+	AbstractVirtualDevice::connect (EngineContext & engineContext, const std::shared_ptr< AbstractVirtualDevice > & targetDevice, bool fireEvents) noexcept
 	{
 		if ( const auto result = this->canConnect(targetDevice); result != ConnexionResult::Success )
 		{
@@ -63,16 +61,16 @@ namespace EmEn::Scenes::AVConsole
 
 		if ( fireEvents )
 		{
-			targetDevice->onInputDeviceConnected(managers, *this);
+			targetDevice->onInputDeviceConnected(engineContext, *this);
 
-			this->onOutputDeviceConnected(managers, *targetDevice);
+			this->onOutputDeviceConnected(engineContext, *targetDevice);
 		}
 
 		return ConnexionResult::Success;
 	}
 
 	ConnexionResult
-	AbstractVirtualDevice::interconnect (AVManagers & managers, const std::shared_ptr< AbstractVirtualDevice > & intermediateDevice, bool fireEvents) noexcept
+	AbstractVirtualDevice::interconnect (EngineContext & engineContext, const std::shared_ptr< AbstractVirtualDevice > & intermediateDevice, bool fireEvents) noexcept
 	{
 		/* 1. Check if connexion is allowed (intermediate must be Both). */
 		if ( intermediateDevice->allowedConnexionType() != ConnexionType::Both )
@@ -100,18 +98,18 @@ namespace EmEn::Scenes::AVConsole
 			}
 
 			/* 3. Disconnect direct link between devices. */
-			if ( const auto result = this->disconnect(managers, outputDevice, fireEvents); result != ConnexionResult::Success )
+			if ( const auto result = this->disconnect(engineContext, outputDevice, fireEvents); result != ConnexionResult::Success )
 			{
 				continue;
 			}
 
 			/* 4. Connect the intermediate device between the disconnected devices. */
-			if ( const auto result = this->connect(managers, intermediateDevice, true); result != ConnexionResult::Success )
+			if ( const auto result = this->connect(engineContext, intermediateDevice, true); result != ConnexionResult::Success )
 			{
 				return result;
 			}
 
-			if ( const auto result = intermediateDevice->connect(managers, outputDevice, true); result != ConnexionResult::Success )
+			if ( const auto result = intermediateDevice->connect(engineContext, outputDevice, true); result != ConnexionResult::Success )
 			{
 				return result;
 			}
@@ -125,7 +123,7 @@ namespace EmEn::Scenes::AVConsole
 	}
 
 	ConnexionResult
-	AbstractVirtualDevice::interconnect (AVManagers & managers, const std::shared_ptr< AbstractVirtualDevice > & intermediateDevice, const std::string & outputDeviceName, bool fireEvents) noexcept
+	AbstractVirtualDevice::interconnect (EngineContext & engineContext, const std::shared_ptr< AbstractVirtualDevice > & intermediateDevice, const std::string & outputDeviceName, bool fireEvents) noexcept
 	{
 		/* 1. Check the existence of the device inside outputs. */
 		if ( m_outputDevicesConnected.empty() )
@@ -162,18 +160,18 @@ namespace EmEn::Scenes::AVConsole
 		}
 
 		/* 3. Disconnect the direct link between the devices. */
-		if ( const auto result = this->disconnect(managers, outputDeviceIt->lock(), fireEvents); result != ConnexionResult::Success )
+		if ( const auto result = this->disconnect(engineContext, outputDeviceIt->lock(), fireEvents); result != ConnexionResult::Success )
 		{
 			return result;
 		}
 
 		/* 4. Connect the intermediate device between the disconnected devices. */
-		if ( const auto result = this->connect(managers, intermediateDevice, fireEvents); result != ConnexionResult::Success )
+		if ( const auto result = this->connect(engineContext, intermediateDevice, fireEvents); result != ConnexionResult::Success )
 		{
 			return result;
 		}
 
-		if ( const auto result = intermediateDevice->connect(managers, outputDeviceIt->lock(), fireEvents); result != ConnexionResult::Success )
+		if ( const auto result = intermediateDevice->connect(engineContext, outputDeviceIt->lock(), fireEvents); result != ConnexionResult::Success )
 		{
 			return result;
 		}
@@ -182,7 +180,7 @@ namespace EmEn::Scenes::AVConsole
 	}
 
 	ConnexionResult
-	AbstractVirtualDevice::disconnect (AVManagers & managers, const std::shared_ptr< AbstractVirtualDevice > & targetDevice, bool fireEvents) noexcept
+	AbstractVirtualDevice::disconnect (EngineContext & engineContext, const std::shared_ptr< AbstractVirtualDevice > & targetDevice, bool fireEvents) noexcept
 	{
 		{
 			const std::scoped_lock lock{m_IOAccess, targetDevice->m_IOAccess};
@@ -199,16 +197,16 @@ namespace EmEn::Scenes::AVConsole
 
 		if ( fireEvents )
 		{
-			targetDevice->onInputDeviceDisconnected(managers, *this);
+			targetDevice->onInputDeviceDisconnected(engineContext, *this);
 
-			this->onOutputDeviceDisconnected(managers, *targetDevice);
+			this->onOutputDeviceDisconnected(engineContext, *targetDevice);
 		}
 
 		return ConnexionResult::Success;
 	}
 
 	void
-	AbstractVirtualDevice::disconnectFromAll (AVManagers & managers, bool fireEvents) noexcept
+	AbstractVirtualDevice::disconnectFromAll (EngineContext & engineContext, bool fireEvents) noexcept
 	{
 		/* NOTE: We lock IO access on this device. */
 		const std::lock_guard< std::mutex > lockHere{m_IOAccess};
@@ -227,7 +225,7 @@ namespace EmEn::Scenes::AVConsole
 
 				if ( fireEvents )
 				{
-					inputDeviceConnected->onOutputDeviceDisconnected(managers, *this);
+					inputDeviceConnected->onOutputDeviceDisconnected(engineContext, *this);
 				}
 			}
 		}
@@ -245,7 +243,7 @@ namespace EmEn::Scenes::AVConsole
 
 				if ( fireEvents )
 				{
-					outputDeviceConnected->onInputDeviceDisconnected(managers, *this);
+					outputDeviceConnected->onInputDeviceDisconnected(engineContext, *this);
 				}
 			}
 		}

@@ -150,9 +150,10 @@ namespace EmEn::Scenes
 
 	/**
 	 * @brief Defines the base of an entity in the 3D world composed with components.
-	 * @note [THREAD-SAFETY] This class is NOT thread-safe. Each entity instance must be
-	 *       accessed by only one thread at a time. The caller is responsible for ensuring
-	 *       thread-safety if entities are shared across threads.
+	 * @note [THREAD-SAFETY] Access to m_components is thread-safe (protected by m_componentsMutex).
+	 *       Other members are NOT thread-safe. Each entity instance should be accessed by only
+	 *       one thread at a time for operations not involving m_components. The caller is responsible
+	 *       for ensuring thread-safety if entities are shared across threads.
 	 * @note [OBS][SHARED-OBSERVER][SHARED-OBSERVABLE]
 	 * @extends EmEn::Libs::FlagArrayTrait Each component has 8 flags, 2 are used by this base class.
 	 * @extends EmEn::Libs::NameableTrait An entity is nameable.
@@ -270,6 +271,17 @@ namespace EmEn::Scenes
 			}
 
 			/**
+			 * @brief Returns the parent scene where the entity live.
+			 * @return const Scene &
+			 */
+			[[nodiscard]]
+			const Scene &
+			parentScene () const noexcept
+			{
+				return m_scene;
+			}
+
+			/**
 			 * @brief Returns the physical properties.
 			 * @return const Physics::BodyPhysicalProperties &
 			 */
@@ -297,6 +309,7 @@ namespace EmEn::Scenes
 			bool
 			hasComponent () const noexcept
 			{
+				std::lock_guard< std::mutex > lock(m_componentsMutex);
 				return !m_components.empty();
 			}
 
@@ -309,6 +322,7 @@ namespace EmEn::Scenes
 			bool
 			containsComponent (const std::string & name) const noexcept
 			{
+				std::lock_guard< std::mutex > lock(m_componentsMutex);
 				return std::ranges::any_of(m_components, [&name] (const auto & component) {
 					return component->name() == name;
 				});
@@ -332,6 +346,7 @@ namespace EmEn::Scenes
 			std::shared_ptr< component_t >
 			getComponent (const std::string & name) noexcept requires (std::is_base_of_v< Component::Abstract, component_t >)
 			{
+				std::lock_guard< std::mutex > lock(m_componentsMutex);
 				for ( const auto & component : m_components )
 				{
 					if ( component->name() == name )
@@ -352,6 +367,7 @@ namespace EmEn::Scenes
 			Libs::StaticVector< std::shared_ptr< component_t >, MaxComponentCount >
 			getComponentsOfType () noexcept requires (std::is_base_of_v< Component::Abstract, component_t >)
 			{
+				std::lock_guard< std::mutex > lock(m_componentsMutex);
 				Libs::StaticVector< std::shared_ptr< component_t >, MaxComponentCount > result;
 
 				for ( const auto & component : m_components )
@@ -375,6 +391,7 @@ namespace EmEn::Scenes
 			void
 			forEachComponent (function_t && processComponent) noexcept requires (std::is_invocable_v< function_t, Component::Abstract & >)
 			{
+				std::lock_guard< std::mutex > lock(m_componentsMutex);
 				for ( const auto & component : m_components )
 				{
 					processComponent(*component.get());
@@ -391,6 +408,7 @@ namespace EmEn::Scenes
 			void
 			forEachComponent (function_t && processComponent) const noexcept requires (std::is_invocable_v< function_t, const Component::Abstract & >)
 			{
+				std::lock_guard< std::mutex > lock(m_componentsMutex);
 				for ( const auto & component : m_components )
 				{
 					processComponent(*component.get());
@@ -633,11 +651,13 @@ namespace EmEn::Scenes
 
 			/**
 			 * @brief Constructs an abstract entity.
+			 * @param scene A reference to the scene this entity belongs to.
 			 * @param entityName A string [std::move].
 			 * @param sceneTimepointMS The scene current timepoint in milliseconds.
 			 */
-			AbstractEntity (std::string entityName, uint32_t sceneTimepointMS) noexcept
+			AbstractEntity (const Scene & scene, std::string entityName, uint32_t sceneTimepointMS) noexcept
 				: NameableTrait{std::move(entityName)},
+				m_scene{scene},
 				m_birthTime{sceneTimepointMS}
 			{
 
@@ -700,14 +720,15 @@ namespace EmEn::Scenes
 			void updateEntityProperties () noexcept;
 
 			/**
-			 * @brief Adds a component in the entity.
+			 * @brief Links a component to the entity.
 			 * @param component A reference to the component smart pointer.
+			 * @param isPrimaryDevice Set to true if this is a primary AV device (Camera/Microphone). Default false.
 			 * @return bool
 			 */
-			bool addComponent (const std::shared_ptr< Component::Abstract > & component) noexcept;
+			bool linkComponent (const std::shared_ptr< Component::Abstract > & component, bool isPrimaryDevice = false) noexcept;
 
 			/**
-			 * @brief Prepares to remove a component from the entity.
+			 * @brief Prepares to unlink a component from the entity.
 			 * @param component A reference to a component smart pointer.
 			 * @return void
 			 */
@@ -801,7 +822,9 @@ namespace EmEn::Scenes
 			 */
 			virtual void onLocationDataUpdate () noexcept = 0;
 
+			const Scene & m_scene;
 			Libs::StaticVector< std::shared_ptr< Component::Abstract >, MaxComponentCount > m_components;
+			mutable std::mutex m_componentsMutex;
 			Libs::Math::Space3D::AACuboid< float > m_boundingBox;
 			Libs::Math::Space3D::Sphere< float > m_boundingSphere;
 			Physics::BodyPhysicalProperties m_bodyPhysicalProperties;
@@ -824,62 +847,11 @@ namespace EmEn::Scenes
 			m_setupFunction(*component);
 		}
 
-		/* Add component to entity. */
-		if ( !m_entity.addComponent(component) )
+		/* Link component to entity. The linkComponent() method handles all notifications
+		 * in the .cpp file to ensure std::any typeinfo consistency across dynamic library boundaries. */
+		if ( !m_entity.linkComponent(component, m_isPrimaryDevice) )
 		{
 			return nullptr;
-		}
-
-		/* Send appropriate notifications based on component type. */
-		if constexpr ( std::is_same_v< component_t, Component::Camera > )
-		{
-			m_entity.notify(m_isPrimaryDevice ? AbstractEntity::PrimaryCameraCreated : AbstractEntity::CameraCreated, component);
-		}
-		else if constexpr ( std::is_same_v< component_t, Component::Microphone > )
-		{
-			m_entity.notify(m_isPrimaryDevice ? AbstractEntity::PrimaryMicrophoneCreated : AbstractEntity::MicrophoneCreated, component);
-		}
-		else if constexpr ( std::is_same_v< component_t, Component::DirectionalLight > )
-		{
-			m_entity.notify(AbstractEntity::DirectionalLightCreated, component);
-		}
-		else if constexpr ( std::is_same_v< component_t, Component::PointLight > )
-		{
-			m_entity.notify(AbstractEntity::PointLightCreated, component);
-		}
-		else if constexpr ( std::is_same_v< component_t, Component::SpotLight > )
-		{
-			m_entity.notify(AbstractEntity::SpotLightCreated, component);
-		}
-		else if constexpr ( std::is_same_v< component_t, Component::SoundEmitter > )
-		{
-			m_entity.notify(AbstractEntity::SoundEmitterCreated, component);
-		}
-		else if constexpr ( std::is_same_v< component_t, Component::Visual > )
-		{
-			m_entity.notify(AbstractEntity::VisualCreated, component);
-		}
-		else if constexpr ( std::is_same_v< component_t, Component::MultipleVisuals > )
-		{
-			m_entity.notify(AbstractEntity::MultipleVisualsCreated, component);
-		}
-		else if constexpr ( std::is_same_v< component_t, Component::ParticlesEmitter > )
-		{
-			m_entity.notify(AbstractEntity::ParticlesEmitterCreated, component);
-		}
-		else if constexpr ( std::is_same_v< component_t, Component::DirectionalPushModifier > )
-		{
-			m_entity.notify(AbstractEntity::ModifierCreated, std::static_pointer_cast< Component::AbstractModifier >(component));
-			m_entity.notify(AbstractEntity::DirectionalPushModifierCreated, component);
-		}
-		else if constexpr ( std::is_same_v< component_t, Component::SphericalPushModifier > )
-		{
-			m_entity.notify(AbstractEntity::ModifierCreated, std::static_pointer_cast< Component::AbstractModifier >(component));
-			m_entity.notify(AbstractEntity::SphericalPushModifierCreated, component);
-		}
-		else if constexpr ( std::is_same_v< component_t, Component::Weight > )
-		{
-			m_entity.notify(AbstractEntity::WeightCreated, component);
 		}
 
 		return component;

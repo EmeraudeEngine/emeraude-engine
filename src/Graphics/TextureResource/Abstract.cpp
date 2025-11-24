@@ -39,7 +39,7 @@ namespace EmEn::Graphics::TextureResource
 
 	constexpr auto TracerTag{"AbstractTextureResource"};
 
-	Renderer * Abstract::s_graphicsRenderer{nullptr};
+	Renderer * Abstract::s_graphicsRenderer = nullptr;
 
 	bool
 	Abstract::onDependenciesLoaded () noexcept

@@ -336,7 +336,7 @@ namespace EmEn::Graphics::RenderTarget
 			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::capture() */
 			[[nodiscard]]
 			std::array< Libs::PixelFactory::Pixmap< uint8_t >, 3 >
-			capture (Vulkan::TransferManager & transferManager, uint32_t layerIndex, bool keepAlpha, bool withDepthBuffer, bool withStencilBuffer) const noexcept override
+			capture (Vulkan::TransferManager & transferManager, uint32_t layerIndex, bool /*keepAlpha*/, bool /*withDepthBuffer*/, bool /*withStencilBuffer*/) const noexcept override
 			{
 				std::array< Libs::PixelFactory::Pixmap< uint8_t >, 3 > result{};
 
@@ -401,14 +401,14 @@ namespace EmEn::Graphics::RenderTarget
 
 			/** @copydoc EmEn::Scenes::AVConsole::AbstractVirtualDevice::onInputDeviceConnected() */
 			void
-			onInputDeviceConnected (Scenes::AVConsole::AVManagers & AVManagers, AbstractVirtualDevice & /*sourceDevice*/) noexcept override
+			onInputDeviceConnected (EngineContext & engineContext, AbstractVirtualDevice & /*sourceDevice*/) noexcept override
 			{
-				m_viewMatrices.create(AVManagers.graphicsRenderer, this->id());
+				m_viewMatrices.create(engineContext.graphicsRenderer, this->id());
 			}
 
 			/** @copydoc EmEn::Scenes::AVConsole::AbstractVirtualDevice::onInputDeviceDisconnected() */
 			void
-			onInputDeviceDisconnected (Scenes::AVConsole::AVManagers & /*AVManagers*/, AbstractVirtualDevice & /*sourceDevice*/) noexcept override
+			onInputDeviceDisconnected (EngineContext & /*engineContext*/, AbstractVirtualDevice & /*sourceDevice*/) noexcept override
 			{
 				m_viewMatrices.destroy();
 			}

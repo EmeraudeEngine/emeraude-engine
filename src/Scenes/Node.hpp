@@ -121,9 +121,10 @@ namespace EmEn::Scenes
 
 			/**
 			 * @brief Constructs the root node.
+			 * @param scene A reference to the scene this entity belongs to.
 			 */
-			Node () noexcept
-				: AbstractEntity{Root, 0}
+			Node (const Scene & scene) noexcept
+				: AbstractEntity{scene, Root, 0}
 			{
 				this->setMovingAbility(false);
 			}
@@ -136,7 +137,7 @@ namespace EmEn::Scenes
 			 * @param coordinates A reference to a coordinate. Default Origin.
 			 */
 			Node (std::string name, const std::shared_ptr< Node > & parent, uint32_t sceneTimeMS, const Libs::Math::CartesianFrame< float > & coordinates = {}) noexcept
-				: AbstractEntity{std::move(name), sceneTimeMS},
+				: AbstractEntity{parent->parentScene(), std::move(name), sceneTimeMS},
 				m_parent{parent},
 				m_logicStateCoordinates{coordinates}
 			{

@@ -125,7 +125,7 @@ namespace EmEn::Scenes
 			 */
 			Scene (Graphics::Renderer & graphicsRenderer, Audio::Manager & audioManager, const std::string & name, float boundary, const std::shared_ptr< Graphics::Renderable::AbstractBackground > & background = nullptr, const std::shared_ptr< Graphics::Renderable::SceneAreaInterface > & sceneArea = nullptr, const std::shared_ptr< Graphics::Renderable::SeaLevelInterface > & seaLevel = nullptr, const SceneOctreeOptions & octreeOptions = {}) noexcept
 				: NameableTrait{name},
-				m_rootNode{std::make_shared< Node >()},
+				m_rootNode{std::make_shared< Node >(*this)},
 				m_backgroundResource{background},
 				m_sceneAreaResource{sceneArea},
 				m_seaLevelResource{seaLevel},
@@ -499,6 +499,28 @@ namespace EmEn::Scenes
 			AVConsoleManager () noexcept
 			{
 				return m_AVConsoleManager;
+			}
+
+			/**
+			 * @brief Returns the engine context containing graphics renderer and audio manager references.
+			 * @return const EngineContext &
+			 */
+			[[nodiscard]]
+			const EngineContext &
+			engineContext () const noexcept
+			{
+				return m_AVConsoleManager.engineContext();
+			}
+
+			/**
+			 * @brief Returns the engine context containing graphics renderer and audio manager references.
+			 * @return EngineContext &
+			 */
+			[[nodiscard]]
+			EngineContext &
+			engineContext () noexcept
+			{
+				return m_AVConsoleManager.engineContext();
 			}
 
 			/**

@@ -38,7 +38,7 @@
 /* Local inclusions for usages. */
 #include "Window.hpp"
 #include "Graphics/ImageResource.hpp"
-#include "Types.hpp"
+#include "CoreTypes.hpp"
 
 namespace EmEn
 {

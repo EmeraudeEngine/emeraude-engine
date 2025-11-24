@@ -89,12 +89,13 @@ namespace EmEn::Scenes
 
 			/**
 			 * @brief Constructs a static entity.
+			 * @param scene A reference to the scene this entity belongs to.
 			 * @param name A reference to a string to name the entity in the scene.
 			 * @param sceneTimeMS The scene current time in milliseconds.
 			 * @param coordinates The location of the static entity. Default origin.
 			 */
-			StaticEntity (const std::string & name, uint32_t sceneTimeMS, const Libs::Math::CartesianFrame< float > & coordinates = {}) noexcept
-				: AbstractEntity{name, sceneTimeMS},
+			StaticEntity (const Scene & scene, const std::string & name, uint32_t sceneTimeMS, const Libs::Math::CartesianFrame< float > & coordinates = {}) noexcept
+				: AbstractEntity{scene, name, sceneTimeMS},
 				m_logicStateCoordinates{coordinates}
 			{
 

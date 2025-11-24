@@ -382,7 +382,7 @@ namespace EmEn::Resources
 					 */
 					const auto relativePathFromStore = std::filesystem::relative(filepath, storeDirectory);
 					const auto resourceName = relativePathFromStore.parent_path() / relativePathFromStore.stem();
-					const auto resourceNameStr = resourceName.string();
+					const auto resourceNameStr = resourceName.generic_string();
 
 					/* Calculate relative path from data-stores directory for the "Data" field. */
 					const auto relativePath = std::filesystem::relative(filepath, dataStoreDirectory);
@@ -444,7 +444,7 @@ namespace EmEn::Resources
 			if ( m_useDynamicScan )
 			{
 				/* Dynamic scan mode: Scan directories to discover resources automatically. */
-				TraceDebug{ClassId} << "Using dynamic resource scanning...";
+				TraceDebug{ClassId} << "Using dynamic resource scanning ...";
 
 				if ( !this->scanResourceDirectories() )
 				{
@@ -454,7 +454,7 @@ namespace EmEn::Resources
 			else
 			{
 				/* Index mode: Use pre-generated JSON indexes for faster loading. */
-				TraceDebug{ClassId} << "Using JSON-based resource indexing...";
+				TraceDebug{ClassId} << "Using JSON-based resource indexing ...";
 
 				if ( !this->readResourceIndexes() )
 				{

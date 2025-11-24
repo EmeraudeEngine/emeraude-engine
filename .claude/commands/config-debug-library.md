@@ -14,16 +14,19 @@ Configure the project for Debug build without enabling tests.
    - macOS: Add appropriate architecture flag (arm64 or x86_64)
 
 2. **Configure Debug build:**
-   ```bash
-   # Linux example:
-   cmake -S . -B .claude-build-debug -G "Ninja" -DCMAKE_BUILD_TYPE=Debug
+```bash
+# Linux example:
+cmake -S . -B .claude-build-debug -DCMAKE_BUILD_TYPE=Debug -G "Ninja"
 
-   # macOS (Apple Silicon) example:
-   cmake -S . -B .claude-build-debug -G "Ninja" -DCMAKE_BUILD_TYPE=Debug -DCMAKE_OSX_ARCHITECTURES=arm64
+# macOS (Apple Silicon) example:
+cmake -S . -B .claude-build-debug -DCMAKE_BUILD_TYPE=Debug -DCMAKE_OSX_ARCHITECTURES=arm64 -G "Ninja"
 
-   # Windows example:
-   cmake -S . -B .claude-build-debug -G "Visual Studio 17 2022" -A x64
-   ```
+# macOS (Intel) example:
+cmake -S . -B .claude-build-debug -DCMAKE_BUILD_TYPE=Debug -DCMAKE_OSX_ARCHITECTURES=x86_64 -G "Ninja"
+
+# Windows example:
+cmake -S . -B .claude-build-debug -DCMAKE_BUILD_TYPE=Debug -G "Visual Studio 17 2022" -A x64
+```
 
 3. **Report configuration results:**
    - Generator used

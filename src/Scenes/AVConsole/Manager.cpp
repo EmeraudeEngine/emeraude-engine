@@ -44,7 +44,7 @@ namespace EmEn::Scenes::AVConsole
 	Manager::Manager (const std::string & name, Renderer & graphicsRenderer, Audio::Manager & audioManager) noexcept
 		: NameableTrait{name + ClassId},
 		Controllable{ClassId},
-		m_AVManagers{graphicsRenderer, audioManager}
+		m_engineContext{graphicsRenderer, audioManager}
 	{
 		/* Console commands bindings. */
 		this->bindCommand("listDevices", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
@@ -228,7 +228,7 @@ namespace EmEn::Scenes::AVConsole
 			return false;
 		}
 
-		device->disconnectFromAll(m_AVManagers, true);
+		device->disconnectFromAll(m_engineContext, true);
 
 		if ( m_virtualVideoDevices.erase(device->id()) <= 0 )
 		{
@@ -256,7 +256,7 @@ namespace EmEn::Scenes::AVConsole
 			return false;
 		}
 
-		device->disconnectFromAll(m_AVManagers, true);
+		device->disconnectFromAll(m_engineContext, true);
 
 		if ( m_virtualAudioDevices.erase(device->id()) <= 0 )
 		{
@@ -339,7 +339,7 @@ namespace EmEn::Scenes::AVConsole
 			return true;
 		}
 
-		switch ( sourceDevice->connect(m_AVManagers, targetDevice, true) )
+		switch ( sourceDevice->connect(m_engineContext, targetDevice, true) )
 		{
 			case ConnexionResult::Success :
 				TraceSuccess{ClassId} << "The video device '" << sourceDeviceId << "' is connected to '" << targetDeviceId << "' !";
@@ -398,7 +398,7 @@ namespace EmEn::Scenes::AVConsole
 			return true;
 		}
 
-		switch ( sourceDevice->connect(m_AVManagers, targetDevice, true) )
+		switch ( sourceDevice->connect(m_engineContext, targetDevice, true) )
 		{
 			case ConnexionResult::Success :
 				TraceSuccess{ClassId} << "The audio device '" << sourceDeviceId << "' is connected to '" << targetDeviceId << "' !";

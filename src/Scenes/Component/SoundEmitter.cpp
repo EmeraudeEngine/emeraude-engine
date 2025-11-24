@@ -212,12 +212,7 @@ namespace EmEn::Scenes::Component
 	{
 		if ( m_source == nullptr )
 		{
-			if ( s_audioManager == nullptr )
-			{
-				return;
-			}
-
-			m_source = s_audioManager->requestSource();
+			m_source = this->engineContext().audioManager.requestSource();
 		}
 
 		if ( m_source != nullptr )

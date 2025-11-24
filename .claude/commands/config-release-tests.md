@@ -14,16 +14,19 @@ Configure the project for Release build with Google Tests enabled.
    - macOS: Add appropriate architecture flag (arm64 or x86_64)
 
 2. **Configure Release build with tests:**
-   ```bash
-   # Linux example:
-   cmake -S . -B .claude-build-release -G "Ninja" -DCMAKE_BUILD_TYPE=Release -DEMERAUDE_ENABLE_TESTS:BOOL=ON
+```bash
+# Linux example:
+cmake -S . -B .claude-build-release -DCMAKE_BUILD_TYPE=Release -DEMERAUDE_ENABLE_TESTS:BOOL=ON -G "Ninja"
 
-   # macOS (Apple Silicon) example:
-   cmake -S . -B .claude-build-release -G "Ninja" -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES=arm64 -DEMERAUDE_ENABLE_TESTS:BOOL=ON
+# macOS (Apple Silicon) example:
+cmake -S . -B .claude-build-release -DCMAKE_BUILD_TYPE=Release -DEMERAUDE_ENABLE_TESTS:BOOL=ON -DCMAKE_OSX_ARCHITECTURES=arm64 -G "Ninja"
 
-   # Windows example:
-   cmake -S . -B .claude-build-release -G "Visual Studio 17 2022" -A x64 -DEMERAUDE_ENABLE_TESTS:BOOL=ON
-   ```
+# macOS (Intel) example:
+cmake -S . -B .claude-build-release -DCMAKE_BUILD_TYPE=Release -DEMERAUDE_ENABLE_TESTS:BOOL=ON -DCMAKE_OSX_ARCHITECTURES=x86_64 -G "Ninja"
+
+# Windows example:
+cmake -S . -B .claude-build-release -DCMAKE_BUILD_TYPE=Release -DEMERAUDE_ENABLE_TESTS:BOOL=ON -G "Visual Studio 17 2022" -A x64 
+```
 
 3. **Report configuration results:**
    - Generator used

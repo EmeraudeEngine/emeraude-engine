@@ -50,13 +50,6 @@ namespace EmEn
 
 namespace EmEn::Scenes::AVConsole
 {
-	/** @brief Contains reference to the audio video. */
-	struct AVManagers
-	{
-		Graphics::Renderer & graphicsRenderer;
-		Audio::Manager & audioManager;
-	};
-
 	/** @brief Enumerates device types. */
 	enum class DeviceType: int8_t
 	{

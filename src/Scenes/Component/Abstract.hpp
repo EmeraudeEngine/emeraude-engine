@@ -44,6 +44,7 @@
 #include "Libs/Math/Space3D/AACuboid.hpp"
 #include "Libs/Math/Space3D/Sphere.hpp"
 #include "Physics/MovableTrait.hpp"
+#include "CoreTypes.hpp"
 
 /* Forward declarations. */
 namespace EmEn
@@ -59,13 +60,6 @@ namespace EmEn
 		{
 			class Abstract;
 		}
-
-		class Renderer;
-	}
-
-	namespace Audio
-	{
-		class Manager;
 	}
 
 	namespace Scenes
@@ -95,12 +89,6 @@ namespace EmEn::Scenes::Component
 				ComponentContentModified,
 				MaxEnum
 			};
-
-			/** @brief Access to the graphics renderer for GPU loading. */
-			static Graphics::Renderer * s_graphicsRenderer;
-
-			/** @brief Access to the audio manager for getting audio sources. */
-			static Audio::Manager * s_audioManager;
 
 			static constexpr Libs::Math::Space3D::AACuboid< float > NullBoundingBox{};
 			static constexpr Libs::Math::Space3D::Sphere< float > NullBoundingSphere{};
@@ -198,6 +186,13 @@ namespace EmEn::Scenes::Component
 			{
 				return m_parentEntity;
 			}
+
+			/**
+			 * @brief Returns the engine context from the parent entity's scene.
+			 * @return const EngineContext &
+			 */
+			[[nodiscard]]
+			const EngineContext & engineContext () const noexcept;
 
 			/**
 			 * @brief Returns whether the parent entity has the movable trait.

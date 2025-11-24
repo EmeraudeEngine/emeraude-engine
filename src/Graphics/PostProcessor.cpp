@@ -68,7 +68,7 @@ namespace EmEn::Graphics
 	}
 
 	void
-	PostProcessor::setEffectsList (const FramebufferEffectsList & effectsList) noexcept
+	PostProcessor::setEffectsList (const FramebufferEffectsList & /*effectsList*/) noexcept
 	{
 
 	}

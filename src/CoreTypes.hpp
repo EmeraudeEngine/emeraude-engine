@@ -30,8 +30,50 @@
 #include <cstdint>
 #include <string>
 
+/* Forward declarations. */
 namespace EmEn
 {
+	namespace Graphics
+	{
+		class Renderer;
+	}
+
+	namespace Audio
+	{
+		class Manager;
+	}
+}
+
+namespace EmEn
+{
+	/**
+	 * @brief Context object containing engine-level services needed by various subsystems.
+	 * @note All references are guaranteed to be valid for the lifetime of the engine.
+	 */
+	struct EngineContext
+	{
+		Graphics::Renderer & graphicsRenderer;
+		Audio::Manager & audioManager;
+
+		EngineContext (Graphics::Renderer & renderer, Audio::Manager & audioManager) noexcept
+			: graphicsRenderer{renderer},
+			audioManager{audioManager}
+		{
+
+		}
+
+		/**
+		 * @brief Non-copyable, non-movable (contains references)
+		 */
+		EngineContext (const EngineContext & ) = delete;
+
+		/**
+		 * @brief Non-copyable, non-movable (contains references)
+		 * @return EngineContext &
+		 */
+		EngineContext & operator= (const EngineContext & ) = delete;
+	};
+
 	/**
 	 * @brief Standard cursor handled automatically by GLFW.
 	 */

@@ -32,7 +32,7 @@
 #include <vector>
 
 /* Local inclusions for usages. */
-#include "../Types.hpp" // Global types
+#include "../CoreTypes.hpp" // Global types
 
 namespace EmEn::Console
 {

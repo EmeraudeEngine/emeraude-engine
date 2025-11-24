@@ -536,7 +536,7 @@ namespace EmEn::Scenes
 	std::shared_ptr< StaticEntity >
 	Scene::createStaticEntity (const std::string & name, const CartesianFrame< float > & coordinates) noexcept
 	{
-		auto staticEntity = std::make_shared< StaticEntity >(name, m_lifetimeMS, coordinates);
+		auto staticEntity = std::make_shared< StaticEntity >(*this, name, m_lifetimeMS, coordinates);
 
 		m_staticEntities.emplace(name, staticEntity);
 
@@ -2262,7 +2262,6 @@ namespace EmEn::Scenes
 		{
 			case AbstractEntity::ModifierCreated :
 				m_modifiers.emplace(std::any_cast< std::shared_ptr< Component::AbstractModifier > >(data));
-
 				return true;
 
 			case AbstractEntity::ModifierDestroyed :

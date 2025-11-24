@@ -158,7 +158,7 @@ namespace EmEn::Scenes::Component
 
 			if ( m_shadowMap != nullptr )
 			{
-				if ( this->connect(scene.AVConsoleManager().managers(), m_shadowMap, true) == AVConsole::ConnexionResult::Success )
+				if ( this->connect(scene.AVConsoleManager().engineContext(), m_shadowMap, true) == AVConsole::ConnexionResult::Success )
 				{
 					TraceSuccess{ClassId} << "Cubic shadow map (" << resolution << "px³) successfully created for point light '" << this->name() << "'.";
 
@@ -185,7 +185,7 @@ namespace EmEn::Scenes::Component
 	{
 		if ( m_shadowMap != nullptr )
 		{
-			this->disconnect(scene.AVConsoleManager().managers(), m_shadowMap, true);
+			this->disconnect(scene.AVConsoleManager().engineContext(), m_shadowMap, true);
 
 			m_shadowMap.reset();
 		}

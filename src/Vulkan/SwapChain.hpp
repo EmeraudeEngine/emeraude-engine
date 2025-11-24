@@ -260,10 +260,10 @@ namespace EmEn::Vulkan
 			void updateDeviceFromCoordinates (const Libs::Math::CartesianFrame< float > & worldCoordinates, const Libs::Math::Vector< 3, float > & worldVelocity) noexcept override;
 
 			/** @copydoc EmEn::Scenes::AVConsole::AbstractVirtualDevice::onInputDeviceConnected() */
-			void onInputDeviceConnected (Scenes::AVConsole::AVManagers & managers, AbstractVirtualDevice & sourceDevice) noexcept override;
+			void onInputDeviceConnected (EngineContext & engineContext, AbstractVirtualDevice & sourceDevice) noexcept override;
 
 			/** @copydoc EmEn::Scenes::AVConsole::AbstractVirtualDevice::onInputDeviceDisconnected() */
-			void onInputDeviceDisconnected (Scenes::AVConsole::AVManagers & managers, AbstractVirtualDevice & sourceDevice) noexcept override;
+			void onInputDeviceDisconnected (EngineContext & engineContext, AbstractVirtualDevice & sourceDevice) noexcept override;
 
 			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::onCreate() */
 			[[nodiscard]]

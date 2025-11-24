@@ -36,6 +36,7 @@
 
 /* Local inclusions for usages. */
 #include "Libs/Math/CartesianFrame.hpp"
+#include "CoreTypes.hpp"
 #include "Types.hpp"
 
 namespace EmEn::Scenes::AVConsole
@@ -227,50 +228,50 @@ namespace EmEn::Scenes::AVConsole
 			/**
 			 * @brief Connects a virtual device to output.
 			 * @note this[Output] -> target[Input]
-			 * @param managers A reference to the audio video managers.
+			 * @param engineContext A reference to the audio video managers.
 			 * @param targetDevice A reference to a virtual device smart pointer.
 			 * @param fireEvents Set to fire or not events on connexion.
 			 * @return ConnexionResult
 			 */
-			ConnexionResult connect (AVManagers & managers, const std::shared_ptr< AbstractVirtualDevice > & targetDevice, bool fireEvents) noexcept;
+			ConnexionResult connect (EngineContext & engineContext, const std::shared_ptr< AbstractVirtualDevice > & targetDevice, bool fireEvents) noexcept;
 
 			/**
 			 * @brief Interconnects a virtual device between all existing outputs.
 			 * @note this[Output] -> target[Input]
-			 * @param managers A reference to the audio video managers.
+			 * @param engineContext A reference to the audio video managers.
 			 * @param intermediateDevice A reference to a virtual device smart pointer.
 			 * @param fireEvents Set to fire or not events on connexion.
 			 * @return ConnexionResult
 			 */
-			ConnexionResult interconnect (AVManagers & managers, const std::shared_ptr< AbstractVirtualDevice > & intermediateDevice, bool fireEvents) noexcept;
+			ConnexionResult interconnect (EngineContext & engineContext, const std::shared_ptr< AbstractVirtualDevice > & intermediateDevice, bool fireEvents) noexcept;
 
 			/**
 			 * @brief Interconnects a virtual device between a specific output.
 			 * @note this[Output] -> target[Input]
-			 * @param managers A reference to the audio video managers.
+			 * @param engineContext A reference to the audio video managers.
 			 * @param intermediateDevice A reference to a virtual device smart pointer.
 			 * @param outputDeviceName A reference to a string to filter an output. If this device does not exist, the method will perform no connexion.
 			 * @param fireEvents Set to fire or not events on connexion.
 			 * @return ConnexionResult
 			 */
-			ConnexionResult interconnect (AVManagers & managers, const std::shared_ptr< AbstractVirtualDevice > & intermediateDevice, const std::string & outputDeviceName, bool fireEvents) noexcept;
+			ConnexionResult interconnect (EngineContext & engineContext, const std::shared_ptr< AbstractVirtualDevice > & intermediateDevice, const std::string & outputDeviceName, bool fireEvents) noexcept;
 
 			/**
 			 * @brief Disconnects the output of this virtual device from the input of a virtual device.
-			 * @param managers A reference to the audio video managers.
+			 * @param engineContext A reference to the audio video managers.
 			 * @param targetDevice A reference to a virtual device smart pointer.
 			 * @param fireEvents Set to fire or not events on disconnection.
 			 * @return ConnexionResult
 			 */
-			ConnexionResult disconnect (AVManagers & managers, const std::shared_ptr< AbstractVirtualDevice > & targetDevice, bool fireEvents) noexcept;
+			ConnexionResult disconnect (EngineContext & engineContext, const std::shared_ptr< AbstractVirtualDevice > & targetDevice, bool fireEvents) noexcept;
 
 			/**
 			 * @brief Disconnects the device from everything.
-			 * @param managers A reference to the audio video managers.
+			 * @param engineContext A reference to the audio video managers.
 			 * @param fireEvents Set to fire or not events on disconnection.
 			 * @return void
 			 */
-			void disconnectFromAll (AVManagers & managers, bool fireEvents) noexcept;
+			void disconnectFromAll (EngineContext & engineContext, bool fireEvents) noexcept;
 
 			/**
 			 * @brief Returns a printable state of connexions.
@@ -306,7 +307,7 @@ namespace EmEn::Scenes::AVConsole
 			 */
 			virtual
 			void
-			updateVideoDeviceProperties (float fovOrNear, float distanceOrFar, bool isOrthographicProjection) noexcept
+			updateVideoDeviceProperties (float /*fovOrNear*/, float /*distanceOrFar*/, bool /*isOrthographicProjection*/) noexcept
 			{
 				/* NOTE: Only a video device should override this method! */
 				assert(m_type == DeviceType::Audio);
@@ -340,13 +341,13 @@ namespace EmEn::Scenes::AVConsole
 			/**
 			 * @brief Event fired when a virtual device is connected to input.
 			 * @note This method uses a pointer instead of a reference to ease the dynamic cast. It will never be null.
-			 * @param managers A reference to the audio video managers.
+			 * @param engineContext A reference to the audio video managers.
 			 * @param inputDevice A reference to the virtual device.
 			 * @return void
 			 */
 			virtual
 			void
-			onInputDeviceConnected (AVManagers & /*managers*/, AbstractVirtualDevice & /*inputDevice*/) noexcept
+			onInputDeviceConnected (EngineContext & /*engineContext*/, AbstractVirtualDevice & /*inputDevice*/) noexcept
 			{
 
 			}
@@ -354,13 +355,13 @@ namespace EmEn::Scenes::AVConsole
 			/**
 			 * @brief Event fired when a virtual device is connected to output.
 			 * @note This method uses a pointer instead of a reference to ease the dynamic cast. It will never be null.
-			 * @param managers A reference to the audio video managers.
+			 * @param engineContext A reference to the audio video managers.
 			 * @param outputDevice A reference to the virtual device.
 			 * @return void
 			 */
 			virtual
 			void
-			onOutputDeviceConnected (AVManagers & /*managers*/, AbstractVirtualDevice & /*outputDevice*/) noexcept
+			onOutputDeviceConnected (EngineContext & /*engineContext*/, AbstractVirtualDevice & /*outputDevice*/) noexcept
 			{
 
 			}
@@ -368,13 +369,13 @@ namespace EmEn::Scenes::AVConsole
 			/**
 			 * @brief Event fired when a virtual device is disconnected to input.
 			 * @note This method uses a pointer instead of a reference to ease the dynamic cast. It will never be null.
-			 * @param managers A reference to the audio video managers.
+			 * @param engineContext A reference to the audio video managers.
 			 * @param inputDevice A reference to the virtual device.
 			 * @return void
 			 */
 			virtual
 			void
-			onInputDeviceDisconnected (AVManagers & /*managers*/, AbstractVirtualDevice & /*inputDevice*/) noexcept
+			onInputDeviceDisconnected (EngineContext & /*engineContext*/, AbstractVirtualDevice & /*inputDevice*/) noexcept
 			{
 
 			}
@@ -382,13 +383,13 @@ namespace EmEn::Scenes::AVConsole
 			/**
 			 * @brief Event fired when a virtual device is disconnected to output.
 			 * @note This method uses a pointer instead of a reference to ease the dynamic cast. It will never be null.
-			 * @param managers A reference to the audio video managers.
+			 * @param engineContext A reference to the audio video managers.
 			 * @param outputDevice A reference to the virtual device.
 			 * @return void
 			 */
 			virtual
 			void
-			onOutputDeviceDisconnected (AVManagers & /*managers*/, AbstractVirtualDevice & /*outputDevice*/) noexcept
+			onOutputDeviceDisconnected (EngineContext & /*engineContext*/, AbstractVirtualDevice & /*outputDevice*/) noexcept
 			{
 
 			}
@@ -396,23 +397,21 @@ namespace EmEn::Scenes::AVConsole
 		private:
 
 			/**
-			 * @brief Builds a device id.
+			 * @brief Builds a device id using the instance address for uniqueness.
 			 * @param name A reference to a string for the device name.
 			 * @return std::string
 			 */
 			[[nodiscard]]
-			static
 			std::string
 			buildDeviceId (const std::string & name) noexcept
 			{
 				std::stringstream deviceId;
 
-				deviceId << name << '_' << s_deviceCount++;
+				/* Use the memory address of this instance to guarantee uniqueness. */
+				deviceId << name << '_' << std::hex << reinterpret_cast< uintptr_t >(this);
 
 				return deviceId.str();
 			}
-
-			static std::atomic_size_t s_deviceCount;
 
 			const std::string m_id;
 			const DeviceType m_type;

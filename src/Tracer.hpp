@@ -46,7 +46,7 @@
 
 /* Local inclusions for usages. */
 #include "Libs/BlobTrait.hpp"
-#include "Types.hpp"
+#include "CoreTypes.hpp"
 
 /* Forward declarations. */
 namespace EmEn

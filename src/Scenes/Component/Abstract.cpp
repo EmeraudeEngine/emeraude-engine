@@ -27,6 +27,8 @@
 #include "Abstract.hpp"
 
 /* Local inclusions. */
+#include "CoreTypes.hpp"
+#include "Scenes/Scene.hpp"
 #include "Scenes/AbstractEntity.hpp"
 #include "Tracer.hpp"
 
@@ -40,9 +42,6 @@ namespace EmEn::Scenes::Component
 
 	constexpr auto TracerTag{"EntityComponent"};
 
-	Renderer * Abstract::s_graphicsRenderer{nullptr};
-	Manager * Abstract::s_audioManager{nullptr};
-
 	bool
 	Abstract::initialize (const Json::Value & /*unused*/) noexcept
 	{
@@ -55,6 +54,12 @@ namespace EmEn::Scenes::Component
 	Abstract::isParentEntityMovable () const noexcept
 	{
 		return m_parentEntity.hasMovableAbility();
+	}
+
+	const EngineContext &
+	Abstract::engineContext () const noexcept
+	{
+		return m_parentEntity.parentScene().engineContext();
 	}
 
 	const Renderable::Interface *

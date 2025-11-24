@@ -594,7 +594,6 @@ namespace EmEn
 			Geometry::Interface::s_graphicsRenderer = &m_graphicsRenderer;
 			TextureResource::Abstract::s_graphicsRenderer = &m_graphicsRenderer;
 			Material::Interface::s_graphicsRenderer = &m_graphicsRenderer;
-			Component::Abstract::s_graphicsRenderer = &m_graphicsRenderer;
 		}
 		else
 		{
@@ -623,9 +622,6 @@ namespace EmEn
 			m_audioManager.registerToObject(*this);
 
 			this->observe(&m_audioManager.trackMixer());
-
-			/* FIXME: Check a better way to give the access ... */
-			Component::Abstract::s_audioManager = &m_audioManager;
 		}
 		else
 		{

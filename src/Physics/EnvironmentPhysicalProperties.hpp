@@ -118,7 +118,7 @@ namespace EmEn::Physics
 			 */
 			[[nodiscard]]
 			float
-			atmosphericDensity (float altitude = 0.0F, float temperature = 20.0F) const noexcept
+			atmosphericDensity (/*float altitude = 0.0F, float temperature = 20.0F*/) const noexcept
 			{
 				// FIXME: TODO ...
 

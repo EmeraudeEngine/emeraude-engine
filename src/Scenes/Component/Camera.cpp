@@ -55,7 +55,7 @@ namespace EmEn::Scenes::Component
 	}
 
 	void
-	Camera::onOutputDeviceConnected (AVConsole::AVManagers & /*managers*/, AbstractVirtualDevice & targetDevice) noexcept
+	Camera::onOutputDeviceConnected (EngineContext & /*engineContext*/, AbstractVirtualDevice & targetDevice) noexcept
 	{
 		/* When a new render target is connected, we initialize it with coordinates and camera properties. */
 		if ( this->isPerspectiveProjection() )

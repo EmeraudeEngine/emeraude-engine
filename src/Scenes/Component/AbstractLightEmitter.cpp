@@ -50,7 +50,7 @@ namespace EmEn::Scenes::Component
 	}
 
 	void
-	AbstractLightEmitter::onOutputDeviceConnected (AVConsole::AVManagers & /*managers*/, AbstractVirtualDevice & targetDevice) noexcept
+	AbstractLightEmitter::onOutputDeviceConnected (EngineContext & /*engineContext*/, AbstractVirtualDevice & targetDevice) noexcept
 	{
 		/* When the shadow map is connected, we initialize it with coordinates and light properties. */
 		targetDevice.updateVideoDeviceProperties(this->getFovOrNear(), this->getDistanceOrFar(), this->isOrthographicProjection());

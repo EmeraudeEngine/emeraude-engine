@@ -81,7 +81,7 @@ namespace EmEn::Scenes::AVConsole
 
 
 			/** @brief Observable class identification. */
-			static constexpr auto ClassId{"AVConsole"};
+			static constexpr auto ClassId{"AVConsoleManager"};
 
 			/** @brief The reserved name for the default view device. */
 			static const std::string DefaultViewName;
@@ -126,13 +126,24 @@ namespace EmEn::Scenes::AVConsole
 
 			/**
 			 * @brief Shares the audio video managers.
-			 * @return AVManagers &
+			 * @return const EngineContext &
 			 */
 			[[nodiscard]]
-			AVManagers &
-			managers () noexcept
+			const EngineContext &
+			engineContext () const noexcept
 			{
-				return m_AVManagers;
+				return m_engineContext;
+			}
+
+			/**
+			 * @brief Shares the audio video managers.
+			 * @return EngineContext &
+			 */
+			[[nodiscard]]
+			EngineContext &
+			engineContext () noexcept
+			{
+				return m_engineContext;
 			}
 
 			/**
@@ -143,7 +154,7 @@ namespace EmEn::Scenes::AVConsole
 			Graphics::Renderer &
 			graphicsRenderer () const noexcept
 			{
-				return m_AVManagers.graphicsRenderer;
+				return m_engineContext.graphicsRenderer;
 			}
 
 			/**
@@ -154,7 +165,7 @@ namespace EmEn::Scenes::AVConsole
 			Audio::Manager &
 			audioManager () const noexcept
 			{
-				return m_AVManagers.audioManager;
+				return m_engineContext.audioManager;
 			}
 
 			/**
@@ -489,7 +500,7 @@ namespace EmEn::Scenes::AVConsole
 			 */
 			bool autoSelectPrimaryInputAudioDevice () noexcept;
 
-			AVManagers m_AVManagers;
+			EngineContext m_engineContext;
 			std::unordered_map< std::string, std::shared_ptr< AbstractVirtualDevice > > m_virtualVideoDevices;
 			std::unordered_map< std::string, std::shared_ptr< AbstractVirtualDevice > > m_virtualAudioDevices;
 			std::string m_primaryInputVideoDeviceId; /* Like a camera. */

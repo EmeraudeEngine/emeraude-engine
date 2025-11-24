@@ -14,16 +14,18 @@ Configure the project for Release build without enabling tests.
    - macOS: Add appropriate architecture flag (arm64 or x86_64)
 
 2. **Configure Release build:**
-   ```bash
-   # Linux example:
-   cmake -S . -B .claude-build-release -G "Ninja" -DCMAKE_BUILD_TYPE=Release
+# Linux example:
+cmake -S . -B .claude-build-release -DCMAKE_BUILD_TYPE=Release -G "Ninja"
 
-   # macOS (Apple Silicon) example:
-   cmake -S . -B .claude-build-release -G "Ninja" -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES=arm64
+# macOS (Apple Silicon) example:
+cmake -S . -B .claude-build-release -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES=arm64 -G "Ninja"
 
-   # Windows example:
-   cmake -S . -B .claude-build-release -G "Visual Studio 17 2022" -A x64
-   ```
+# macOS (Intel) example:
+cmake -S . -B .claude-build-release -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES=x86_64 -G "Ninja"
+
+# Windows example:
+cmake -S . -B .claude-build-release -DCMAKE_BUILD_TYPE=Release -G "Visual Studio 17 2022" -A x64
+```
 
 3. **Report configuration results:**
    - Generator used

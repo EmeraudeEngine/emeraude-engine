@@ -464,7 +464,7 @@ namespace EmEn::Scenes::Component
 		private:
 
 			/** @copydoc EmEn::Scenes::AVConsole::AbstractVirtualDevice::onOutputDeviceConnected() */
-			void onOutputDeviceConnected (AVConsole::AVManagers & managers, AbstractVirtualDevice & targetDevice) noexcept final;
+			void onOutputDeviceConnected (EngineContext & engineContext, AbstractVirtualDevice & targetDevice) noexcept final;
 
 			/**
 			 * @brief Returns the field of view or the near value to update projection matrix.

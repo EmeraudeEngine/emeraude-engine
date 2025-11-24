@@ -282,7 +282,6 @@ else ()
         EMERAUDE_DIRECTORIES
         ${CMAKE_CURRENT_SOURCE_DIR}/src/Animations
         ${CMAKE_CURRENT_SOURCE_DIR}/src/Audio
-        ${CMAKE_CURRENT_SOURCE_DIR}/src/AVConsole
         ${CMAKE_CURRENT_SOURCE_DIR}/src/Console
         ${CMAKE_CURRENT_SOURCE_DIR}/src/Graphics
         ${CMAKE_CURRENT_SOURCE_DIR}/src/Input

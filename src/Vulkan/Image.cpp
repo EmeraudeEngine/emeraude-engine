@@ -247,6 +247,13 @@ namespace EmEn::Vulkan
 	bool
 	Image::create (TransferManager & transferManager, const PixelFactory::Pixmap< uint8_t > & pixmap) noexcept
 	{
+		if ( !pixmap.isValid() )
+		{
+			Tracer::error(ClassId, "The pixmap data ara invalid! Skipping transfer ...");
+
+			return false;
+		}
+
 		if ( !this->createOnHardware() )
 		{
 			return false;
@@ -260,12 +267,26 @@ namespace EmEn::Vulkan
 	bool
 	Image::create (TransferManager & transferManager, const std::shared_ptr< Graphics::ImageResource > & imageResource) noexcept
 	{
+		if ( imageResource == nullptr || !imageResource->isLoaded() )
+		{
+			Tracer::error(ClassId, "The image resource is null or not loaded! Skipping transfer ...");
+
+			return false;
+		}
+
 		return this->create(transferManager, imageResource->data());
 	}
 
 	bool
 	Image::create (TransferManager & transferManager, const std::shared_ptr< Graphics::CubemapResource > & cubemapResource) noexcept
 	{
+		if ( cubemapResource == nullptr || !cubemapResource->isLoaded() )
+		{
+			Tracer::error(ClassId, "The image resource is null or not loaded! Skipping transfer ...");
+
+			return false;
+		}
+
 		if ( !this->createOnHardware() )
 		{
 			return false;

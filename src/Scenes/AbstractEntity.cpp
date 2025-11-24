@@ -101,39 +101,42 @@ namespace EmEn::Scenes
 			m_boundingSphere.reset();
 		}
 
-		for ( const auto & component : m_components )
 		{
-			/* Checks render ability. */
-			if ( component->isRenderable() )
+			std::lock_guard< std::mutex > lock(m_componentsMutex);
+			for ( const auto & component : m_components )
 			{
-				this->setRenderingAbilityState(true);
-			}
-
-			if ( component->isPhysicalPropertiesEnabled() )
-			{
-				const auto & bodyPhysicalProperties = component->bodyPhysicalProperties();
-
-				/* Gets physical properties of a component only if it's a physical object. */
-				if ( !bodyPhysicalProperties.isMassNull() )
+				/* Checks render ability. */
+				if ( component->isRenderable() )
 				{
-					surface += bodyPhysicalProperties.surface();
-					mass += bodyPhysicalProperties.mass();
-
-					dragCoefficient += bodyPhysicalProperties.dragCoefficient();
-					angularDragCoefficient += bodyPhysicalProperties.angularDragCoefficient();
-					bounciness += bodyPhysicalProperties.bounciness();
-					stickiness += bodyPhysicalProperties.stickiness();
-					/* FIXME: How to combine this ! */
-					inertiaTensor = bodyPhysicalProperties.inertiaTensor();
-
-					physicalEntityCount++;
+					this->setRenderingAbilityState(true);
 				}
 
-				if ( !this->isFlagEnabled(BoundingPrimitivesOverridden) )
+				if ( component->isPhysicalPropertiesEnabled() )
 				{
-					/* Merge the component local bounding shapes to the scene node local bounding shapes. */
-					m_boundingBox.merge(component->localBoundingBox());
-					m_boundingSphere.merge(component->localBoundingSphere());
+					const auto & bodyPhysicalProperties = component->bodyPhysicalProperties();
+
+					/* Gets physical properties of a component only if it's a physical object. */
+					if ( !bodyPhysicalProperties.isMassNull() )
+					{
+						surface += bodyPhysicalProperties.surface();
+						mass += bodyPhysicalProperties.mass();
+
+						dragCoefficient += bodyPhysicalProperties.dragCoefficient();
+						angularDragCoefficient += bodyPhysicalProperties.angularDragCoefficient();
+						bounciness += bodyPhysicalProperties.bounciness();
+						stickiness += bodyPhysicalProperties.stickiness();
+						/* FIXME: How to combine this ! */
+						inertiaTensor = bodyPhysicalProperties.inertiaTensor();
+
+						physicalEntityCount++;
+					}
+
+					if ( !this->isFlagEnabled(BoundingPrimitivesOverridden) )
+					{
+						/* Merge the component local bounding shapes to the scene node local bounding shapes. */
+						m_boundingBox.merge(component->localBoundingBox());
+						m_boundingSphere.merge(component->localBoundingSphere());
+					}
 				}
 			}
 		}
@@ -189,6 +192,7 @@ namespace EmEn::Scenes
 	AbstractEntity::onContainerMove (const CartesianFrame< float > & worldCoordinates) noexcept
 	{
 		/* NOTE: Dispatch the move to every component. */
+		std::lock_guard< std::mutex > lock(m_componentsMutex);
 		for ( const auto & component : m_components )
 		{
 			component->move(worldCoordinates);
@@ -196,16 +200,19 @@ namespace EmEn::Scenes
 	}
 
 	bool
-	AbstractEntity::addComponent (const std::shared_ptr< Component::Abstract > & component) noexcept
+	AbstractEntity::linkComponent (const std::shared_ptr< Component::Abstract > & component, bool isPrimaryDevice) noexcept
 	{
-		if ( m_components.full() )
 		{
-			TraceError{TracerTag} << "Unable to add a new component !";
+			std::lock_guard< std::mutex > lock(m_componentsMutex);
+			if ( m_components.full() )
+			{
+				TraceError{TracerTag} << "Unable to add a new component !";
 
-			return false;
+				return false;
+			}
+
+			m_components.push_back(component);
 		}
-
-		m_components.push_back(component);
 
 		/* NOTE: First update properties before sending any signals. */
 		this->updateEntityProperties();
@@ -214,6 +221,62 @@ namespace EmEn::Scenes
 		this->observe(&component->bodyPhysicalProperties()); // NOTE: Don't know if observing non-physical object is useful.
 
 		this->notify(ComponentCreated, component);
+
+		/* NOTE: Send specific component type notifications.
+		 * This must be done here (in the .cpp) rather than in the template ComponentBuilder::build()
+		 * to ensure std::any typeinfo consistency when Emeraude is used as a dynamic library. */
+		auto * pointer = component.get();
+
+		if ( typeid(*pointer) == typeid(Component::Camera) )
+		{
+			this->notify(isPrimaryDevice ? PrimaryCameraCreated : CameraCreated, std::static_pointer_cast< Component::Camera >(component));
+		}
+		else if ( typeid(*pointer) == typeid(Component::Microphone) )
+		{
+			this->notify(isPrimaryDevice ? PrimaryMicrophoneCreated : MicrophoneCreated, std::static_pointer_cast< Component::Microphone >(component));
+		}
+		else if ( typeid(*pointer) == typeid(Component::SphericalPushModifier) )
+		{
+			this->notify(ModifierCreated, std::static_pointer_cast< Component::AbstractModifier >(component));
+			this->notify(SphericalPushModifierCreated, std::static_pointer_cast< Component::SphericalPushModifier >(component));
+		}
+		else if ( typeid(*pointer) == typeid(Component::DirectionalPushModifier) )
+		{
+			this->notify(ModifierCreated, std::static_pointer_cast< Component::AbstractModifier >(component));
+			this->notify(DirectionalPushModifierCreated, std::static_pointer_cast< Component::DirectionalPushModifier >(component));
+		}
+		else if ( typeid(*pointer) == typeid(Component::DirectionalLight) )
+		{
+			this->notify(DirectionalLightCreated, std::static_pointer_cast< Component::DirectionalLight >(component));
+		}
+		else if ( typeid(*pointer) == typeid(Component::PointLight) )
+		{
+			this->notify(PointLightCreated, std::static_pointer_cast< Component::PointLight >(component));
+		}
+		else if ( typeid(*pointer) == typeid(Component::SpotLight) )
+		{
+			this->notify(SpotLightCreated, std::static_pointer_cast< Component::SpotLight >(component));
+		}
+		else if ( typeid(*pointer) == typeid(Component::SoundEmitter) )
+		{
+			this->notify(SoundEmitterCreated, std::static_pointer_cast< Component::SoundEmitter >(component));
+		}
+		else if ( typeid(*pointer) == typeid(Component::Visual) )
+		{
+			this->notify(VisualCreated, std::static_pointer_cast< Component::Visual >(component));
+		}
+		else if ( typeid(*pointer) == typeid(Component::MultipleVisuals) )
+		{
+			this->notify(MultipleVisualsCreated, std::static_pointer_cast< Component::MultipleVisuals >(component));
+		}
+		else if ( typeid(*pointer) == typeid(Component::ParticlesEmitter) )
+		{
+			this->notify(ParticlesEmitterCreated, std::static_pointer_cast< Component::ParticlesEmitter >(component));
+		}
+		else if ( typeid(*pointer) == typeid(Component::Weight) )
+		{
+			this->notify(WeightCreated, std::static_pointer_cast< Component::Weight >(component));
+		}
 
 		return true;
 	}
@@ -257,6 +320,7 @@ namespace EmEn::Scenes
 	std::shared_ptr< Component::Abstract >
 	AbstractEntity::getComponent (const std::string & name) noexcept
 	{
+		std::lock_guard< std::mutex > lock(m_componentsMutex);
 		for ( auto componentIt = m_components.begin(); componentIt != m_components.end(); ++componentIt )
 		{
 			if ( (*componentIt)->name() == name )
@@ -271,6 +335,7 @@ namespace EmEn::Scenes
 	bool
 	AbstractEntity::removeComponent (const std::string & name) noexcept
 	{
+		std::lock_guard< std::mutex > lock(m_componentsMutex);
 		for ( auto componentIt = m_components.begin(); componentIt != m_components.end(); ++componentIt )
 		{
 			if ( (*componentIt)->name() == name )
@@ -287,12 +352,15 @@ namespace EmEn::Scenes
 	void
 	AbstractEntity::clearComponents () noexcept
 	{
-		for ( const auto & component : m_components )
 		{
-			this->unlinkComponent(component);
-		}
+			std::lock_guard< std::mutex > lock(m_componentsMutex);
+			for ( const auto & component : m_components )
+			{
+				this->unlinkComponent(component);
+			}
 
-		m_components.clear();
+			m_components.clear();
+		}
 
 		this->updateEntityProperties();
 	}
@@ -301,23 +369,26 @@ namespace EmEn::Scenes
 	AbstractEntity::processLogics (const Scene & scene, size_t engineCycle) noexcept
 	{
 		/* Updates every entity at this Node. */
-		auto componentIt = m_components.begin();
-
-		while ( componentIt != m_components.end() )
 		{
-			if ( (*componentIt)->shouldBeRemoved() )
+			std::lock_guard< std::mutex > lock(m_componentsMutex);
+			auto componentIt = m_components.begin();
+
+			while ( componentIt != m_components.end() )
 			{
-				TraceWarning{TracerTag} << "Removing automatically a component from entity '" << this->name() << "' ...";
+				if ( (*componentIt)->shouldBeRemoved() )
+				{
+					TraceWarning{TracerTag} << "Removing automatically a component from entity '" << this->name() << "' ...";
 
-				this->unlinkComponent(*componentIt);
+					this->unlinkComponent(*componentIt);
 
-				componentIt = m_components.erase(componentIt);
-			}
-			else
-			{
-				(*componentIt)->processLogics(scene);
+					componentIt = m_components.erase(componentIt);
+				}
+				else
+				{
+					(*componentIt)->processLogics(scene);
 
-				++componentIt;
+					++componentIt;
+				}
 			}
 		}
 

@@ -39,7 +39,7 @@ namespace EmEn::Graphics::Material
 
 	constexpr auto TracerTag{"MaterialInterface"};
 
-	Renderer * Interface::s_graphicsRenderer{nullptr};
+	Renderer * Interface::s_graphicsRenderer = nullptr;
 
 	bool
 	Interface::onDependenciesLoaded () noexcept

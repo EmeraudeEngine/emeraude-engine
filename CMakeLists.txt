@@ -33,7 +33,7 @@ endif ()
 
 project(
 	${BINARY_NAME}
-	VERSION 0.8.33
+	VERSION 0.8.34
 	DESCRIPTION "Emeraude Engine is an open-source (LGPLv3) 3D Graphics engine using Vulkan and written in C++20."
 	HOMEPAGE_URL "https://github.com/EmeraudeEngine/emeraude-engine"
 	LANGUAGES C CXX
@@ -288,12 +288,9 @@ elseif ( UNIX )
 		#target_compile_options(${PROJECT_NAME} PRIVATE -v)
 
 		target_compile_options(${PROJECT_NAME} PRIVATE
-			-Wno-unknown-pragmas
-			-Wno-unused
-			-fno-exceptions
-			#-fno-rtti
-			-Wno-nullability-extension # Removes warnings from external dependencies libzip.
-			#-fexperimental-library # Enables std::jthread from STL.
+			#-fno-rtti                  # Disable run-time type information
+			-fno-exceptions             # Disable C++ exception layer
+			#-fexperimental-library     # Enables std::jthread from STL. Creates bugs!
 			$<$<CONFIG:Debug>:
 				-O0
 				-g
@@ -308,6 +305,11 @@ elseif ( UNIX )
 				-fdata-sections
 				-ffunction-sections
 			>
+			-Wno-unknown-pragmas
+			-Wno-unused
+			-Wno-nullability-extension
+			-Wno-nullability-completeness
+			-Wno-gnu-zero-variadic-macro-arguments
 		)
 	else ()
 		message("[EmeraudeEngine] Configuring C++ compiler (>= G++13.3) for Linux ...")
@@ -324,10 +326,8 @@ elseif ( UNIX )
 		)
 
 		target_compile_options(${PROJECT_NAME} PRIVATE
-			-Wno-unknown-pragmas
-			-Wno-unused
-			-fno-exceptions
-			#-fno-rtti
+			#-fno-rtti                  # Disable run-time type information
+			-fno-exceptions             # Disable C++ exception layer
 			$<$<CONFIG:Debug>:
 				-O0
 				-g
@@ -342,6 +342,8 @@ elseif ( UNIX )
 				-fdata-sections
 				-ffunction-sections
 			>
+			-Wno-unknown-pragmas
+			-Wno-unused
 		)
 
 		if ( EMERAUDE_ENABLE_ASAN )
