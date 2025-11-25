@@ -145,10 +145,10 @@ namespace EmEn::Graphics::Renderable
 			}
 
 			/** @copydoc EmEn::Resources::ResourceTrait::load(Resources::ServiceProvider &) */
-			bool load (Resources::ServiceProvider & serviceProvider) noexcept override;
+			bool load (Resources::AbstractServiceProvider & serviceProvider) noexcept override;
 
 			/** @copydoc EmEn::Resources::ResourceTrait::load(Resources::Manager &, const Json::Value &) */
-			bool load (Resources::ServiceProvider & serviceProvider, const Json::Value & data) noexcept override;
+			bool load (Resources::AbstractServiceProvider & serviceProvider, const Json::Value & data) noexcept override;
 
 			/** @copydoc EmEn::Resources::ResourceTrait::memoryOccupied() const noexcept */
 			[[nodiscard]]
@@ -164,7 +164,7 @@ namespace EmEn::Graphics::Renderable
 			 * @param material A reference to a material smart pointer.
 			 * @return bool
 			 */
-			bool load (Resources::ServiceProvider & serviceProvider, const std::shared_ptr< Material::Interface > & material) noexcept;
+			bool load (Resources::AbstractServiceProvider & serviceProvider, const std::shared_ptr< Material::Interface > & material) noexcept;
 
 		private:
 

@@ -105,10 +105,10 @@ namespace EmEn::Graphics::Renderable
 			}
 
 			/** @copydoc EmEn::Resources::ResourceTrait::load(Resources::ServiceProvider &) */
-			bool load (Resources::ServiceProvider & serviceProvider) noexcept override;
+			bool load (Resources::AbstractServiceProvider & serviceProvider) noexcept override;
 
 			/** @copydoc EmEn::Resources::ResourceTrait::load(Resources::Manager &, const Json::Value &) */
-			bool load (Resources::ServiceProvider & serviceProvider, const Json::Value & data) noexcept override;
+			bool load (Resources::AbstractServiceProvider & serviceProvider, const Json::Value & data) noexcept override;
 
 			/** @copydoc EmEn::Resources::ResourceTrait::memoryOccupied() const noexcept */
 			[[nodiscard]]
@@ -207,7 +207,7 @@ namespace EmEn::Graphics::Renderable
 			 * @return std::shared_ptr< SimpleMeshResource >
 			 */
 			[[nodiscard]]
-			static std::shared_ptr< SimpleMeshResource > getOrCreate (Resources::ServiceProvider & serviceProvider, const std::shared_ptr< Geometry::Interface > & geometryResource, const std::shared_ptr< Material::Interface > & materialResource, std::string resourceName = {}) noexcept;
+			static std::shared_ptr< SimpleMeshResource > getOrCreate (Resources::AbstractServiceProvider & serviceProvider, const std::shared_ptr< Geometry::Interface > & geometryResource, const std::shared_ptr< Material::Interface > & materialResource, std::string resourceName = {}) noexcept;
 
 		private:
 

@@ -36,6 +36,7 @@
 #include <tuple>
 #include <unordered_map>
 #include <utility>
+#include <type_traits>
 
 /* Local inclusions for inheritances. */
 #include "Libs/NameableTrait.hpp"
@@ -44,18 +45,32 @@
 
 /* Local inclusions for usages. */
 #include "Libs/IO/IO.hpp"
+#include "Libs/Network/URL.hpp"
+#include "Libs/String.hpp"
 #include "Net/Manager.hpp"
 #include "PrimaryServices.hpp"
-#include "ServiceProvider.hpp"
-#include "LoadingRequest.hpp"
+#include "BaseInformation.hpp"
+#include "ResourceTrait.hpp"
 #include "Types.hpp"
 
 namespace EmEn::Resources
 {
 	/**
-	 * @brief The common interface for all resource containers.
-	 * @extends EmEn::Libs::NameableTrait A container is nameable.
-	 * @extends EmEn::Libs::ObservableTrait A container can be observed.
+	 * @class ContainerInterface
+	 * @brief Abstract base interface for all resource containers in the Emeraude Engine.
+	 *
+	 * This interface defines the common contract for resource management containers across
+	 * different resource types. It provides methods for initialization, termination, memory
+	 * tracking, and resource cleanup. All resource containers must inherit from this interface
+	 * and implement its pure virtual methods.
+	 *
+	 * The interface combines NameableTrait for human-readable identification and ObservableTrait
+	 * for event-based notification patterns, allowing observers to monitor resource lifecycle events.
+	 *
+	 * @see Container Template implementation of this interface
+	 * @see EmEn::Libs::NameableTrait Base class providing naming functionality
+	 * @see EmEn::Libs::ObservableTrait Base class providing observer pattern functionality
+	 * @version 0.8.35
 	 */
 	class ContainerInterface : public Libs::NameableTrait, public Libs::ObservableTrait
 	{
@@ -63,51 +78,100 @@ namespace EmEn::Resources
 
 			/**
 			 * @brief Destructs the container interface.
+			 *
+			 * Virtual destructor ensures proper cleanup of derived container implementations.
+			 *
+			 * @version 0.8.35
 			 */
 			~ContainerInterface () override = default;
 
 			/**
 			 * @brief Sets the verbosity state for the container.
-			 * @param state The state.
-			 * @return void
+			 *
+			 * When enabled, the container will output detailed trace information about resource
+			 * loading, unloading, and lifecycle events. Useful for debugging resource management issues.
+			 *
+			 * @param state True to enable verbose logging, false to disable.
+			 * @version 0.8.35
 			 */
 			virtual void setVerbosity (bool state) noexcept = 0;
 
 			/**
-			 * @brief Initializes the container.
-			 * @return bool
+			 * @brief Initializes the container and prepares it for resource management.
+			 *
+			 * This method is called during the engine startup sequence to set up the container's
+			 * internal state, load the resource store, and prepare for resource loading operations.
+			 * Must be called before any resource operations.
+			 *
+			 * @return True if initialization succeeded, false otherwise.
+			 * @version 0.8.35
 			 */
 			virtual bool initialize () noexcept = 0;
 
 			/**
-			 * @brief Destroys the container.
-			 * @return bool
+			 * @brief Terminates the container and releases all managed resources.
+			 *
+			 * This method is called during engine shutdown to cleanly release all loaded resources,
+			 * free memory, and reset the container state. After termination, the container should not
+			 * be used until re-initialized.
+			 *
+			 * @return True if termination succeeded, false otherwise.
+			 * @version 0.8.35
 			 */
 			virtual bool terminate () noexcept = 0;
 
 			/**
-			 * @brief Returns the total memory consumed by loaded resources in bytes from the container.
-			 * @return size_t
+			 * @brief Returns the total memory consumed by all loaded resources.
+			 *
+			 * Calculates the sum of memory occupied by all resources currently loaded in the container,
+			 * regardless of whether they are actively being used. This includes GPU memory for graphics
+			 * resources, audio buffers, and other resource-specific allocations.
+			 *
+			 * @return Total memory occupied in bytes.
+			 * @see unusedMemoryOccupied() For memory used by unused resources only
+			 * @version 0.8.35
 			 */
 			[[nodiscard]]
 			virtual size_t memoryOccupied () const noexcept = 0;
 
 			/**
-			 * @brief Returns the total memory consumed by loaded, but unused resources in bytes from the container.
-			 * @return size_t
+			 * @brief Returns the total memory consumed by loaded but unused resources.
+			 *
+			 * Calculates memory occupied by resources that are loaded but not currently referenced
+			 * by any external code (use_count == 1, only held by the container). These resources
+			 * are candidates for unloading to free memory.
+			 *
+			 * @return Total unused memory in bytes.
+			 * @see unloadUnusedResources() To free this memory
+			 * @see memoryOccupied() For total memory used by all resources
+			 * @version 0.8.35
 			 */
 			[[nodiscard]]
 			virtual size_t unusedMemoryOccupied () const noexcept = 0;
 
 			/**
-			 * @brief Clean up every unused resource and returns the number of removed resources.
-			 * @return size_t
+			 * @brief Unloads all unused resources to free memory.
+			 *
+			 * Iterates through all loaded resources and removes those that are no longer referenced
+			 * by external code (use_count == 1). This is typically called during memory pressure
+			 * situations or at strategic points in the application lifecycle.
+			 *
+			 * @return Number of resources that were unloaded.
+			 * @see unusedMemoryOccupied() To check memory that would be freed
+			 * @version 0.8.35
 			 */
 			virtual size_t unloadUnusedResources () noexcept = 0;
 
 			/**
-			 * @brief Returns the complexity of the resource.
-			 * @return DepComplexity
+			 * @brief Returns the dependency complexity level of the resource type.
+			 *
+			 * The complexity level indicates how complex the resource's dependency graph is,
+			 * which affects loading order and priority in the resource management system.
+			 * Resources with higher complexity are typically loaded after their dependencies.
+			 *
+			 * @return The DepComplexity level for this resource type.
+			 * @see DepComplexity Enum defining complexity levels
+			 * @version 0.8.35
 			 */
 			[[nodiscard]]
 			virtual DepComplexity complexity () const noexcept = 0;
@@ -115,8 +179,13 @@ namespace EmEn::Resources
 		protected:
 
 			/**
-			 * @brief Constructs a container interface.
-			 * @param name A reference to a string.
+			 * @brief Constructs a container interface with the given name.
+			 *
+			 * Protected constructor ensures only derived classes can instantiate the interface.
+			 * The name is typically the resource type identifier (e.g., "Texture2D", "MeshResource").
+			 *
+			 * @param name Human-readable identifier for this container type.
+			 * @version 0.8.35
 			 */
 			explicit
 			ContainerInterface (const std::string & name) noexcept
@@ -127,38 +196,413 @@ namespace EmEn::Resources
 	};
 
 	/**
-	 * @brief The resource manager template is responsible for loading asynchronous resources with dependencies and hold their lifetime.
-	 * @note [OBS][STATIC-OBSERVABLE]
-	 * @tparam resource_t The type of resources (The resource type is checked by LoadingRequest template).
-	 * @extends EmEn::Resources::ContainerInterface This is a service.
-	 * @extends EmEn::Libs::ObserverTrait The manager observer resource loading.
+	 * @class LoadingRequest
+	 * @brief Encapsulates a resource loading request with download state management.
+	 *
+	 * LoadingRequest handles the complete lifecycle of a resource loading operation, including
+	 * local file access, external URL downloads, and direct data loading. It manages download
+	 * tickets for asynchronous network operations and tracks the loading state through a
+	 * finite state machine.
+	 *
+	 * **Download Ticket States:**
+	 * - DownloadNotRequested (-4): No download needed (local or direct data)
+	 * - DownloadError (-3): Download failed
+	 * - DownloadSuccess (-2): Download completed successfully
+	 * - DownloadPending (-1): Waiting to be submitted to download manager
+	 * - Positive values: Active download ticket from the network manager
+	 *
+	 * **Source Types:**
+	 * - LocalData: Load from filesystem path
+	 * - ExternalData: Download from URL, cache locally, then load
+	 * - DirectData: Load from in-memory JSON data
+	 *
+	 * The request automatically determines the cache filepath for external resources and handles
+	 * the conversion from external URLs to cached local files after successful downloads.
+	 *
+	 * @tparam resource_t Resource type, must derive from ResourceTrait.
+	 * @see Container For the resource container that uses this request type
+	 * @see BaseInformation For resource metadata
+	 * @see SourceType Enum defining resource data sources
+	 * @version 0.8.35
+	 */
+	template< typename resource_t >
+	requires (std::is_base_of_v< ResourceTrait, resource_t >)
+	class LoadingRequest final
+	{
+		public:
+
+			/** @brief Class identifier. */
+			static constexpr auto ClassId{"LoadingRequest"};
+
+			/**
+			 * @brief Constructs a loading request with resource metadata.
+			 *
+			 * Initializes the loading request and sets the appropriate download ticket state based
+			 * on the source type. For external data sources, validates the URL and sets the ticket
+			 * to DownloadPending if valid, or DownloadError if invalid.
+			 *
+			 * @param baseInformation Resource metadata including source type and data location (moved).
+			 * @param resource Shared pointer to the target resource object that will be populated.
+			 * @version 0.8.35
+			 */
+			LoadingRequest (BaseInformation baseInformation, const std::shared_ptr< resource_t > & resource) noexcept
+				: m_baseInformation{std::move(baseInformation)},
+				m_resource{resource}
+			{
+				using namespace Libs;
+
+				switch ( m_baseInformation.sourceType() )
+				{
+					case SourceType::Undefined :
+						Tracer::error(ClassId, "Undefined type for resource request !");
+						break;
+
+					case SourceType::LocalData :
+						break;
+
+					case SourceType::ExternalData :
+					{
+						Network::URL resourceUrl{m_baseInformation.data().asString()};
+
+						if ( resourceUrl.isValid() )
+						{
+							m_downloadTicket = DownloadPending;
+						}
+						else
+						{
+							TraceError{ClassId} << "'" << resourceUrl << "' is not a valid URL ! Download cancelled ...";
+
+							m_downloadTicket = DownloadError;
+						}
+					}
+						break;
+
+					case SourceType::DirectData :
+						break;
+				}
+			}
+
+			/**
+			 * @brief Returns the cache file path for downloaded external resources.
+			 *
+			 * Constructs the filesystem path where downloaded external resources are cached locally.
+			 * The path structure is: `[cache_dir]/data/[resource_type]/[filename]`
+			 *
+			 * Example: `~/.cache/emeraude/data/Texture2D/albedo.png`
+			 *
+			 * @param fileSystem Reference to the filesystem service for cache directory location.
+			 * @return Full filesystem path to the cached resource file.
+			 * @version 0.8.35
+			 */
+			[[nodiscard]]
+			std::filesystem::path
+			cacheFilepath (const FileSystem & fileSystem) const noexcept
+			{
+				std::filesystem::path filepath{fileSystem.cacheDirectory()};
+				filepath.append("data");
+				filepath.append(resource_t::ClassId);
+				filepath.append(Libs::String::extractFilename(m_baseInformation.data().asString()));
+
+				return filepath;
+			}
+
+			/**
+			 * @brief Returns the base information metadata for this request.
+			 *
+			 * @return Const reference to the resource's base information (name, source type, data location).
+			 * @version 0.8.35
+			 */
+			[[nodiscard]]
+			const BaseInformation &
+			baseInformation () const noexcept
+			{
+				return m_baseInformation;
+			}
+
+			/**
+			 * @brief Returns the target resource object for this loading request.
+			 *
+			 * @return Shared pointer to the resource that will be populated when loading completes.
+			 * @version 0.8.35
+			 */
+			[[nodiscard]]
+			std::shared_ptr< resource_t >
+			resource () const noexcept
+			{
+				return m_resource;
+			}
+
+			/**
+			 * @brief Returns the download manager ticket number.
+			 *
+			 * Returns the ticket assigned by the network download manager for tracking this download.
+			 * A return value of 0 indicates no active download (either not needed or already completed).
+			 *
+			 * @return Download ticket number, or 0 if no active download.
+			 * @see isDownloadable() To check if download is pending
+			 * @version 0.8.35
+			 */
+			[[nodiscard]]
+			int
+			downloadTicket () const noexcept
+			{
+				if ( m_downloadTicket < 0 )
+				{
+					return 0;
+				}
+
+				return m_downloadTicket;
+			}
+
+			/**
+			 * @brief Checks if the request is ready to be submitted for download.
+			 *
+			 * Returns true only if this is an external data request currently in the DownloadPending
+			 * state. Requests in this state are waiting to be submitted to the network download manager.
+			 *
+			 * @return True if the request can be submitted for download, false otherwise.
+			 * @version 0.8.35
+			 */
+			[[nodiscard]]
+			bool
+			isDownloadable () const noexcept
+			{
+				if ( m_baseInformation.sourceType() != SourceType::ExternalData ) [[unlikely]]
+				{
+					Tracer::error(ClassId, "This request is not external !");
+
+					return false;
+				}
+
+				return m_downloadTicket == DownloadPending;
+			}
+
+			/**
+			 * @brief Returns the download URL for external data requests.
+			 *
+			 * Extracts and returns the URL from the base information data field. Returns an
+			 * empty URL if this is not an external data request.
+			 *
+			 * @return URL object for the resource download, or empty URL for non-external requests.
+			 * @version 0.8.35
+			 */
+			[[nodiscard]]
+			Libs::Network::URL
+			url () const noexcept
+			{
+				if ( m_baseInformation.sourceType() != SourceType::ExternalData )
+				{
+					return {};
+				}
+
+				return Libs::Network::URL{m_baseInformation.data().asString()};
+			}
+
+			/**
+			 * @brief Checks if the resource download is currently in progress.
+			 *
+			 * Returns true if this is an external data request with a positive download ticket,
+			 * indicating the download has been submitted to the network manager but not yet completed.
+			 *
+			 * @return True if download is active, false otherwise.
+			 * @version 0.8.35
+			 */
+			[[nodiscard]]
+			bool
+			isDownloading () const noexcept
+			{
+				if ( m_baseInformation.sourceType() != SourceType::ExternalData ) [[unlikely]]
+				{
+					Tracer::error(ClassId, "This request is not external !");
+
+					return false;
+				}
+
+				/* NOTE: Check the networkManager ticket.
+				 * If it's still present, the download
+				 * is not yet finished. */
+				if ( m_downloadTicket >= 0 )
+				{
+					return false;
+				}
+
+				return true;
+			}
+
+			/**
+			 * @brief Assigns a download manager ticket to this request.
+			 *
+			 * Updates the request's download ticket after successfully submitting it to the network
+			 * download manager. This transitions the state from DownloadPending to actively downloading.
+			 *
+			 * @param ticket Positive ticket number assigned by the network download manager.
+			 * @pre Request must be in DownloadPending state (ticket == -1).
+			 * @pre Request must be of SourceType::ExternalData.
+			 * @warning Calling with invalid preconditions generates error traces.
+			 * @version 0.8.35
+			 */
+			void
+			setDownloadTicket (int ticket) noexcept
+			{
+				if ( m_baseInformation.sourceType() != SourceType::ExternalData ) [[unlikely]]
+				{
+					Tracer::error(ClassId, "This request is not external !");
+
+					return;
+				}
+
+				if ( m_downloadTicket != DownloadPending ) [[unlikely]]
+				{
+					Tracer::error(ClassId, "Cannot set a ticket to a request which is not in 'DownloadPending' status !");
+
+					return;
+				}
+
+				m_downloadTicket = ticket;
+			}
+
+			/**
+			 * @brief Marks the download as completed (successfully or with error).
+			 *
+			 * Updates the request state after download completion. On success, updates the base
+			 * information to point to the cached local file instead of the original URL. On failure,
+			 * sets the ticket to DownloadError state.
+			 *
+			 * @param fileSystem Reference to filesystem service for cache path resolution.
+			 * @param success True if download succeeded, false if it failed.
+			 * @post On success: ticket becomes DownloadSuccess, baseInformation updated to cache path.
+			 * @post On failure: ticket becomes DownloadError.
+			 * @version 0.8.35
+			 */
+			void
+			setDownloadProcessed (const FileSystem & fileSystem, bool success) noexcept
+			{
+				if ( m_baseInformation.sourceType() != SourceType::ExternalData ) [[unlikely]]
+				{
+					Tracer::error(ClassId, "This request is not external !");
+
+					return;
+				}
+
+				/* Invalidate the networkManager ticket. */
+				if ( success ) [[likely]]
+				{
+					m_downloadTicket = DownloadSuccess;
+
+					m_baseInformation.updateFromDownload(this->cacheFilepath(fileSystem));
+				}
+				else
+				{
+					m_downloadTicket = DownloadError;
+				}
+			}
+
+		private:
+
+			/* Special ticket flags. */
+			static constexpr auto DownloadNotRequested{-4};
+			static constexpr auto DownloadError{-3};
+			static constexpr auto DownloadSuccess{-2};
+			static constexpr auto DownloadPending{-1};
+
+			BaseInformation m_baseInformation;
+			std::shared_ptr< resource_t > m_resource;
+			int m_downloadTicket{DownloadNotRequested};
+	};
+
+	/**
+	 * @class Container
+	 * @brief Thread-safe template container for managing resource lifecycle with async/sync loading.
+	 *
+	 * Container is the core resource management system in Emeraude Engine, providing:
+	 *
+	 * **Thread Safety:**
+	 * - All public methods are thread-safe via internal mutex (m_resourcesAccess)
+	 * - Supports concurrent access from multiple threads
+	 * - Uses RAII lock guards for exception safety
+	 *
+	 * **Loading Modes:**
+	 * - Asynchronous loading via thread pool (default)
+	 * - Synchronous loading on calling thread (asyncLoad=false)
+	 * - Manual loading with custom creation functions
+	 * - Automatic download of external resources with local caching
+	 *
+	 * **Resource Lifecycle:**
+	 * 1. **Creation**: Empty resource allocated in memory
+	 * 2. **Enqueuing**: Request submitted to loading queue
+	 * 3. **Loading**: Data loaded from source (file/network/memory)
+	 * 4. **Ready**: Resource fully loaded and usable
+	 * 5. **Unloading**: Resource freed when no longer referenced
+	 *
+	 * **Observable Pattern:**
+	 * Emits NotificationCode events for monitoring:
+	 * - LoadingProcessStarted: Before a resource begins loading
+	 * - ResourceLoaded: When a resource successfully loads
+	 * - LoadingProcessFinished: After loading completes (success or failure)
+	 * - Progress: Loading progress updates (if supported by resource type)
+	 *
+	 * **Default Resource:**
+	 * Each container maintains a "Default" resource as a fallback when requested resources
+	 * cannot be found or loaded. This ensures robust error handling without null pointers.
+	 *
+	 * **Manual Resources ('+' prefix):**
+	 * Resources with names starting with '+' are "manual" and won't be overridden by store
+	 * entries. Use this for runtime-generated or procedural resources.
+	 *
+	 * **Two-Phase Erasure:**
+	 * The unloadUnusedResources() method uses a two-phase pattern to avoid iterator invalidation
+	 * issues during erase operations, ensuring stable behavior even with complex resource dependencies.
+	 *
+	 * @tparam resource_t Resource type must derive from ResourceTrait.
+	 * @see ContainerInterface Base interface this template implements
+	 * @see LoadingRequest Request object for tracking loading operations
+	 * @see ResourceTrait Required base class for all manageable resources
+	 * @note [OBS] This class is observable via ObservableTrait
+	 * @note [OBSERVER] This class observes the network manager for download notifications
+	 * @version 0.8.35
 	 */
 	template< typename resource_t >
 	class Container final : public ContainerInterface, public Libs::ObserverTrait
 	{
 		public:
 
-			/** @brief Observable notification codes. */
+			/**
+			 * @enum NotificationCode
+			 * @brief Observable event codes for resource lifecycle notifications.
+			 *
+			 * These codes are emitted through the ObservableTrait notify() mechanism, allowing
+			 * observers to monitor resource loading progress and state changes.
+			 *
+			 * @version 0.8.35
+			 */
 			enum NotificationCode
 			{
-				Unknown,
-				LoadingProcessStarted,
-				ResourceLoaded,
-				LoadingProcessFinished,
-				Progress,
+				Unknown,                   ///< Unknown or unspecified notification.
+				LoadingProcessStarted,     ///< Emitted when a resource begins loading.
+				ResourceLoaded,            ///< Emitted when a resource successfully loads (data: resource_t*).
+				LoadingProcessFinished,    ///< Emitted when loading completes (success or failure).
+				Progress,                  ///< Emitted for loading progress updates (if supported).
 				/* Enumeration boundary. */
-				MaxEnum
+				MaxEnum                    ///< Enumeration boundary marker.
 			};
 
 			/**
-			 * @brief Constructs a resource manager for a specific resource from the template parameter.
-			 * @param [OBS][STATIC-OBSERVER]
-			 * @param primaryServices A reference to the primary services.
-			 * @param serviceProvider A reference to the resource manager as a service provider.
-			 * @param store A reference to the store.
-			 * @param serviceName The name of the service.
+			 * @brief Constructs a resource container for the specified resource type.
+			 *
+			 * Initializes the container with necessary engine services and the resource store.
+			 * Automatically registers as an observer of the network manager to handle download
+			 * notifications for external resources.
+			 *
+			 * @param serviceName Human-readable identifier for this container (e.g., "Texture2D").
+			 * @param primaryServices Reference to core engine services (threading, networking, filesystem).
+			 * @param serviceProvider Reference to the resource service provider for loading operations.
+			 * @param store Shared pointer to the resource metadata store (name -> BaseInformation map).
+			 *              Can be nullptr for containers that don't use a predefined store.
+			 * @note [OBS] Container becomes observable and can emit NotificationCode events.
+			 * @note [OBSERVER] Container observes the network manager for download completion.
+			 * @version 0.8.35
 			 */
-			Container (const char * serviceName, PrimaryServices & primaryServices, ServiceProvider & serviceProvider, const std::shared_ptr< std::unordered_map< std::string, BaseInformation > > & store) noexcept
+			Container (const char * serviceName, PrimaryServices & primaryServices, AbstractServiceProvider & serviceProvider, const std::shared_ptr< std::unordered_map< std::string, BaseInformation > > & store) noexcept
 				: ContainerInterface{serviceName},
 				m_primaryServices{primaryServices},
 				m_serviceProvider{serviceProvider},
@@ -168,8 +612,14 @@ namespace EmEn::Resources
 			}
 
 			/**
-			 * @brief Returns the unique identifier for this class [Thread-safe].
-			 * @return size_t
+			 * @brief Returns the unique class identifier for this container type.
+			 *
+			 * Computes a compile-time hash of the resource type's ClassId string using the FNV-1a
+			 * algorithm. This provides a fast, type-safe way to identify container types at runtime.
+			 *
+			 * @return Unique identifier hash for this container specialization.
+			 * @note Thread-safe: uses static local variable initialization.
+			 * @version 0.8.35
 			 */
 			static
 			size_t
@@ -246,32 +696,31 @@ namespace EmEn::Resources
 			{
 				const std::lock_guard< std::mutex > scopeLock{m_resourcesAccess};
 
-				size_t unloadedResources = 0;
-
-				if ( !m_resources.empty() )
+				if ( m_resources.empty() )
 				{
-					for ( auto it = m_resources.begin(); it != m_resources.end(); )
+					return 0;
+				}
+
+				/* NOTE: Two-phase erasure pattern to avoid iterator invalidation issues.
+				 * This fixes problems with animated 2D textures where use_count() could change
+				 * between the check and the erase operation. */
+
+				/* Phase 1: Log debug info for resources still in use. */
+				for ( const auto & [name, resource] : m_resources )
+				{
+					if ( const auto links = resource.use_count(); links > 1 )
 					{
-						const auto links = it->second.use_count();
-
-						if ( links > 1 )
-						{
-							TraceDebug{resource_t::ClassId} << it->second->name() << " is still used " << links << " times !";
-						}
-
-						if ( links == 1 )
-						{
-							unloadedResources++;
-
-							/* FIXME: Fails with some animated 2d textures. */
-							it = m_resources.erase(it);
-						}
-						else
-						{
-							++it;
-						}
+						TraceDebug{resource_t::ClassId} << resource->name() << " is still used " << links << " times !";
 					}
+				}
 
+				/* Phase 2: Erase unused resources using std::erase_if. */
+				const auto unloadedResources = std::erase_if(m_resources, [](const auto & pair) {
+					return pair.second.use_count() == 1;
+				});
+
+				if ( unloadedResources > 0 )
+				{
 					TraceInfo{resource_t::ClassId} << unloadedResources << " resource(s) unloaded !";
 				}
 
@@ -286,9 +735,16 @@ namespace EmEn::Resources
 			}
 
 			/**
-			 * @brief Returns whether a resource is loaded and ready to use.
-			 * @param resourceName A reference to a string.
-			 * @return bool
+			 * @brief Checks if a resource is currently loaded in memory.
+			 *
+			 * Queries only the loaded resource map, not the store. A resource may exist in the
+			 * store but not be loaded yet.
+			 *
+			 * @param resourceName Name of the resource to check.
+			 * @return True if the resource is loaded and ready, false otherwise.
+			 * @see isResourceExists() To check both loaded and unloaded resources
+			 * @note Thread-safe: locks m_resourcesAccess internally.
+			 * @version 0.8.35
 			 */
 			[[nodiscard]]
 			bool
@@ -300,10 +756,17 @@ namespace EmEn::Resources
 			}
 
 			/**
-			 * @brief Returns whether a resource exists.
-			 * First the container will check in loaded resources, then in available (unloaded) resources in the store.
-			 * @param resourceName A reference to a string.
-			 * @return bool
+			 * @brief Checks if a resource exists either loaded or in the store.
+			 *
+			 * Performs a two-stage check:
+			 * 1. Checks loaded resources (fast lookup)
+			 * 2. Checks unloaded resources in the store
+			 *
+			 * @param resourceName Name of the resource to check.
+			 * @return True if resource exists (loaded or available for loading), false otherwise.
+			 * @see isResourceLoaded() To check only loaded resources
+			 * @note Thread-safe: locks m_resourcesAccess internally.
+			 * @version 0.8.35
 			 */
 			[[nodiscard]]
 			bool
@@ -327,8 +790,14 @@ namespace EmEn::Resources
 			}
 
 			/**
-			 * @brief Returns all resource names from the store.
-			 * @return std::vector< std::string >
+			 * @brief Returns all available resource names from the store.
+			 *
+			 * Extracts all resource names from the metadata store. This includes both loaded
+			 * and unloaded resources. Returns an empty vector if no store is configured.
+			 *
+			 * @return Vector of resource names available in the store.
+			 * @note Does not include runtime-created resources not in the store.
+			 * @version 0.8.35
 			 */
 			std::vector< std::string >
 			getResourceNames () const noexcept
@@ -339,21 +808,31 @@ namespace EmEn::Resources
 				}
 
 				std::vector< std::string > names;
+				names.reserve(m_localStore->size());
 
-				for ( const auto & name : *m_localStore | std::views::keys )
-				{
-					names.emplace_back(name);
-				}
+				std::ranges::copy(*m_localStore | std::views::keys, std::back_inserter(names));
 
 				return names;
 			}
 
 			/**
-			 * @brief Creates a new resource.
-			 * @note When creating a new resource, put '+' in front of the resource name to prevent it to be overridden from a store resource.
-			 * @param resourceName A string with the name of the resource.
-			 * @param resourceFlags The resource construction flags. Default none.
-			 * @return std::shared_ptr< resource_t >
+			 * @brief Creates a new empty resource for manual population.
+			 *
+			 * Allocates a new resource object in the Unloaded state. The caller is responsible
+			 * for populating it via the resource's API and calling appropriate loading methods.
+			 *
+			 * **Manual Resource Convention:**
+			 * Prefix the resource name with '+' to mark it as manual and prevent conflicts with
+			 * store resources. Example: "+ProceduralTexture"
+			 *
+			 * @param resourceName Unique name for the new resource. Use '+' prefix for manual resources.
+			 * @param resourceFlags Resource-specific construction flags (default: 0 = no flags).
+			 * @return Shared pointer to the newly created resource, or nullptr on failure.
+			 * @warning Returns nullptr if a resource with this name already exists.
+			 * @see addResource() To add an already-constructed resource
+			 * @see getOrNewResource() To get existing or create new
+			 * @note Thread-safe: locks m_resourcesAccess internally.
+			 * @version 0.8.35
 			 */
 			[[nodiscard]]
 			std::shared_ptr< resource_t >
@@ -365,19 +844,27 @@ namespace EmEn::Resources
 			}
 
 			/**
-			 * @brief Adds a resource manually constructed to the store.
-			 * @note When creating a new resource, put '+' in front of the resource name to prevent it to be overridden from a store resource.
-			 * @param resource The manual resource.
-			 * @return bool
+			 * @brief Adds an externally-constructed resource to the container.
+			 *
+			 * Registers a pre-constructed resource object with the container. Useful for resources
+			 * created outside the normal loading pipeline (procedural generation, runtime compilation, etc.).
+			 *
+			 * **Manual Resource Convention:**
+			 * Use '+' prefix in resource names to avoid conflicts with store resources.
+			 *
+			 * @param resource Shared pointer to the fully-constructed resource to add.
+			 * @return True if resource was successfully added, false if name already exists.
+			 * @warning Returns false and logs error if resource name conflicts with existing resource.
+			 * @see createResource() To create an empty resource
+			 * @note Thread-safe: locks m_resourcesAccess internally.
+			 * @version 0.8.35
 			 */
 			bool
 			addResource (const std::shared_ptr< resource_t > & resource) noexcept
 			{
 				const std::lock_guard< std::mutex > scopeLock{m_resourcesAccess};
 
-				auto loadedIt = m_resources.find(resource->name());
-
-				if ( loadedIt != m_resources.cend() )
+				if ( m_resources.contains(resource->name()) ) [[unlikely]]
 				{
 					TraceError{resource_t::ClassId} << "A resource name '" << resource->name() << "' is already present in the store !";
 
@@ -390,10 +877,20 @@ namespace EmEn::Resources
 			}
 
 			/**
-			 * @brief Preloads asynchronously a resource.
-			 * @param resourceName A string with the name of the resource.
-			 * @param asyncLoad Load the resource asynchronously. Default true.
-			 * @return bool
+			 * @brief Preloads a resource without returning it immediately.
+			 *
+			 * Triggers resource loading without blocking or returning a shared pointer. Useful for
+			 * preloading resources during loading screens or initialization phases. The resource
+			 * will be available in cache when actually requested later.
+			 *
+			 * @param resourceName Name of the resource to preload from the store.
+			 * @param asyncLoad True to load asynchronously in thread pool (default), false for synchronous.
+			 * @return True if preload was successfully initiated, false if resource not found in store.
+			 * @see preloadResources() To preload multiple resources
+			 * @see getResource() To retrieve the preloaded resource later
+			 * @note Returns true immediately for already-loaded resources (no-op).
+			 * @note Thread-safe: locks m_resourcesAccess internally.
+			 * @version 0.8.35
 			 */
 			bool
 			preloadResource (const std::string & resourceName, bool asyncLoad = true)
@@ -423,9 +920,15 @@ namespace EmEn::Resources
 			}
 
 			/**
-			 * @brief Preloads a bunch of resources.
-			 * @param resourceNames A reference to a vector of strings.
-			 * @return uint32_t
+			 * @brief Preloads multiple resources in batch.
+			 *
+			 * Convenience method for preloading a list of resources, typically used during
+			 * level loading or scene initialization.
+			 *
+			 * @param resourceNames Vector of resource names to preload.
+			 * @return Number of resources that failed to preload (0 = all succeeded).
+			 * @see preloadResource() For single resource preloading
+			 * @version 0.8.35
 			 */
 			uint32_t
 			preloadResources (const std::vector< std::string > & resourceNames) noexcept
@@ -444,9 +947,17 @@ namespace EmEn::Resources
 			}
 
 			/**
-			 * @brief Returns the default resource.
-			 * @note The resource should always exist.
-			 * @return std::shared_ptr< resource_t >
+			 * @brief Returns the default fallback resource for this type.
+			 *
+			 * The default resource is automatically created if it doesn't exist and serves as a
+			 * safe fallback when requested resources cannot be found or loaded. This ensures the
+			 * engine can continue running without null pointer crashes.
+			 *
+			 * For example, Texture2D's default is typically a 1x1 magenta texture.
+			 *
+			 * @return Shared pointer to the default resource (never null).
+			 * @note Thread-safe: locks m_resourcesAccess internally.
+			 * @version 0.8.35
 			 */
 			[[nodiscard]]
 			std::shared_ptr< resource_t >
@@ -458,11 +969,34 @@ namespace EmEn::Resources
 			}
 
 			/**
-			 * @brief Returns a resource by its name. If the resource is unloaded, a thread will take care of it unless the "asyncLoad" argument is set to "false".
-			 * @note The default resource of the store will be returned if nothing was found. A warning trace will be generated.
-			 * @param resourceName A reference to a string for the resource name.
-			 * @param asyncLoad Load the resource asynchronously. Default true.
-			 * @return std::shared_ptr< resource_t >
+			 * @brief Returns a resource by name, loading it if necessary.
+			 *
+			 * This is the primary method for accessing resources. It handles the complete resource
+			 * lifecycle transparently:
+			 *
+			 * **Loading Behavior:**
+			 * - If already loaded: Returns immediately
+			 * - If in store: Loads asynchronously (asyncLoad=true) or synchronously (asyncLoad=false)
+			 * - If not found: Returns default resource and logs warning
+			 *
+			 * **Special Names:**
+			 * - "Default": Returns the default resource directly
+			 *
+			 * **External Resources:**
+			 * For external URL resources, automatically:
+			 * 1. Checks local cache first
+			 * 2. Downloads if not cached
+			 * 3. Loads from cache after download
+			 *
+			 * @param resourceName Name of the resource to retrieve.
+			 * @param asyncLoad True for asynchronous loading (default), false for synchronous.
+			 * @return Shared pointer to the requested resource, or default resource if not found.
+			 * @warning Returns default resource (not nullptr) if resource doesn't exist.
+			 * @see getDefaultResource() For accessing the default resource
+			 * @see createResource() To create new resources not in store
+			 * @note Thread-safe: locks m_resourcesAccess internally.
+			 * @note Asynchronous loading returns immediately; check resource status() to monitor progress.
+			 * @version 0.8.35
 			 */
 			[[nodiscard]]
 			std::shared_ptr< resource_t >
@@ -512,11 +1046,19 @@ namespace EmEn::Resources
 			}
 
 			/**
-			 * @brief Returns an existing resource or a new empty one.
-			 * @param resourceName A string with the name of the resource.
-			 * @param resourceFlags The resource construction flags. Default none.
-			 * @param asyncLoad Load the resource asynchronously. Default true.
-			 * @return std::shared_ptr< resource_t >
+			 * @brief Returns an existing resource or creates a new empty one.
+			 *
+			 * Combines get and create operations: tries to load from store first, creates new if not found.
+			 * Useful when you want a resource whether it exists or not.
+			 *
+			 * @param resourceName Name of the resource.
+			 * @param resourceFlags Construction flags if creating new resource (default: 0).
+			 * @param asyncLoad True for async loading if resource is in store (default: true).
+			 * @return Shared pointer to existing or newly created resource.
+			 * @see getResource() To only retrieve existing resources
+			 * @see createResource() To only create new resources
+			 * @note Thread-safe: locks m_resourcesAccess internally.
+			 * @version 0.8.35
 			 */
 			[[nodiscard]]
 			std::shared_ptr< resource_t >
@@ -535,11 +1077,26 @@ namespace EmEn::Resources
 			}
 
 			/**
-			 * @brief Returns an existing resource or use a method to create a new one.
-			 * @param resourceName A string with the name of the resource.
-			 * @param createFunction A reference to a function to create the existent resource.
-			 * @param resourceFlags The resource construction flags. Default none.
-			 * @return std::shared_ptr< resource_t >
+			 * @brief Returns an existing resource or creates one via custom function (synchronous).
+			 *
+			 * If the resource doesn't exist, creates it and invokes the provided function to populate
+			 * it. The function executes synchronously on the calling thread and must fully initialize
+			 * the resource before returning.
+			 *
+			 * **Creation Function Requirements:**
+			 * - Must call resource.enableManualLoading() before custom loading logic
+			 * - Must end with resource.setManualLoadSuccess() or resource.load()
+			 * - Must return true on success, false on failure
+			 *
+			 * @param resourceName Name of the resource.
+			 * @param createFunction Lambda/function to populate the new resource: `bool(resource_t&)`
+			 * @param resourceFlags Construction flags for new resource (default: 0).
+			 * @return Shared pointer to resource on success, default resource on failure.
+			 * @warning Returns default resource if creation function fails or is improperly implemented.
+			 * @see getOrCreateResourceAsync() For asynchronous creation
+			 * @note Thread-safe: locks m_resourcesAccess internally.
+			 * @note Function executes synchronously and blocks until complete.
+			 * @version 0.8.35
 			 */
 			[[nodiscard]]
 			std::shared_ptr< resource_t >
@@ -594,11 +1151,25 @@ namespace EmEn::Resources
 			}
 
 			/**
-			 * @brief Returns an existing resource or use a method to create a new one asynchronously.
-			 * @param resourceName A string with the name of the resource.
-			 * @param createFunction A reference to a function to create the existent resource.
-			 * @param resourceFlags The resource construction flags. Default none.
-			 * @return std::shared_ptr< resource_t >
+			 * @brief Returns an existing resource or creates one via custom function (asynchronous).
+			 *
+			 * Like getOrCreateResource(), but executes the creation function asynchronously in the
+			 * thread pool. Returns immediately with a resource in Enqueuing/ManualEnqueuing state.
+			 * Check resource.status() to monitor completion.
+			 *
+			 * **Creation Function Requirements:**
+			 * - Same as getOrCreateResource()
+			 * - Must be thread-safe (executes on worker thread)
+			 *
+			 * @param resourceName Name of the resource.
+			 * @param createFunction Lambda/function to populate the new resource: `bool(resource_t&)`
+			 * @param resourceFlags Construction flags for new resource (default: 0).
+			 * @return Shared pointer to resource (may still be loading), or nullptr on failure.
+			 * @warning Returns nullptr if manual loading mode cannot be enabled (name conflict).
+			 * @see getOrCreateResource() For synchronous creation
+			 * @note Thread-safe: locks m_resourcesAccess internally.
+			 * @note Returns immediately; loading occurs asynchronously in thread pool.
+			 * @version 0.8.35
 			 */
 			[[nodiscard]]
 			std::shared_ptr< resource_t >
@@ -648,25 +1219,38 @@ namespace EmEn::Resources
 			}
 
 			/**
-			 * @brief Returns a random resource from this manager.
-			 * @param asyncLoad Load the resource asynchronously. Default true.
-			 * @return std::shared_ptr< resource_t >
+			 * @brief Returns a randomly selected resource from the store.
+			 *
+			 * Selects a random resource from the available store entries using fast random number
+			 * generation. Useful for randomized content systems, testing, or procedural generation.
+			 *
+			 * **Performance Note:**
+			 * Uses O(n) iteration through the unordered_map to access random element. For frequent
+			 * random access, consider caching the name list with getResourceNames().
+			 *
+			 * @param asyncLoad True for asynchronous loading (default), false for synchronous.
+			 * @return Shared pointer to randomly selected resource, or nullptr if store is empty.
+			 * @see getResourceNames() For getting all available resource names
+			 * @note Thread-safe: locks m_resourcesAccess internally.
+			 * @version 0.8.35
 			 */
 			[[nodiscard]]
 			std::shared_ptr< resource_t >
 			getRandomResource (bool asyncLoad = true) noexcept
 			{
-				if ( m_localStore == nullptr )
+				if ( m_localStore == nullptr || m_localStore->empty() )
 				{
 					return nullptr;
 				}
 
-				/* NOTE: Will lock the resource mutex. */
-				const auto random = Libs::Utility::quickRandom< size_t >(0, m_localStore->size());
+				/* NOTE: O(n) iteration through unordered_map is unavoidable without maintaining a separate key vector.
+				 * The random index is in range [0, size-1] to avoid off-by-one errors. */
+				const auto randomIndex = Libs::Utility::quickRandom< size_t >(0, m_localStore->size() - 1);
 
-				const auto randomResourceName = std::next(std::begin(*m_localStore), static_cast< long >(random))->first;
+				auto it = m_localStore->begin();
+				std::advance(it, static_cast< std::ptrdiff_t >(randomIndex));
 
-				return this->getResource(randomResourceName, asyncLoad);
+				return this->getResource(it->first, asyncLoad);
 			}
 
 		private:
@@ -773,12 +1357,19 @@ namespace EmEn::Resources
 			}
 
 			/**
-			 * @brief Creates a new resource.
-			 * @note This version does not lock the mutex.
-			 * @note When creating a new resource, put '+' in front of the resource name to prevent it to be overridden from a store resource.
-			 * @param resourceName A string with the name of the resource.
-			 * @param resourceFlags The resource construction flags.
-			 * @return std::shared_ptr< resource_t >
+			 * @brief Internal: Creates a new resource without locking the mutex.
+			 *
+			 * Private version of createResource() for use in contexts where the mutex is already
+			 * locked. Prevents deadlock in methods that need to create resources while holding
+			 * m_resourcesAccess.
+			 *
+			 * @param resourceName Unique name for the new resource.
+			 * @param resourceFlags Resource-specific construction flags.
+			 * @return Shared pointer to the newly created resource, or nullptr on failure.
+			 * @pre Caller must hold m_resourcesAccess lock.
+			 * @warning Not thread-safe: caller must ensure proper locking.
+			 * @see createResource() Thread-safe public version
+			 * @version 0.8.35
 			 */
 			[[nodiscard]]
 			std::shared_ptr< resource_t >
@@ -830,9 +1421,16 @@ namespace EmEn::Resources
 			}
 
 			/**
-			 * @brief Returns the default resource.
-			 * @note This version does not lock the mutex.
-			 * @return std::shared_ptr< resource_t >
+			 * @brief Internal: Returns the default resource without locking the mutex.
+			 *
+			 * Private version of getDefaultResource() for use in contexts where the mutex is already
+			 * locked. Creates the default resource on first access if it doesn't exist.
+			 *
+			 * @return Shared pointer to the default resource (never null).
+			 * @pre Caller must hold m_resourcesAccess lock.
+			 * @warning Not thread-safe: caller must ensure proper locking.
+			 * @see getDefaultResource() Thread-safe public version
+			 * @version 0.8.35
 			 */
 			[[nodiscard]]
 			std::shared_ptr< resource_t >
@@ -874,11 +1472,18 @@ namespace EmEn::Resources
 			}
 
 			/**
-			 * @brief Checks for a previously loaded resource and return it.
-			 * @note Calling methods must lock the resource access.
-			 * @param resourceName A reference to a string.
-			 * @param asyncLoad Load the resource asynchronously.
-			 * @return std::shared_ptr< resource_t >
+			 * @brief Internal: Checks for existing resource or queues it for loading.
+			 *
+			 * Helper method that checks loaded resources first, then queries the store and
+			 * initiates loading if found. Used by methods like getOrNewResource() that need
+			 * to check existence before creating.
+			 *
+			 * @param resourceName Name of the resource to check/load.
+			 * @param asyncLoad True for asynchronous loading, false for synchronous.
+			 * @return Shared pointer to resource if found/loading, nullptr if not in store.
+			 * @pre Caller must hold m_resourcesAccess lock.
+			 * @warning Not thread-safe: caller must ensure proper locking.
+			 * @version 0.8.35
 			 */
 			[[nodiscard]]
 			std::shared_ptr< resource_t >
@@ -910,11 +1515,20 @@ namespace EmEn::Resources
 			}
 
 			/**
-			 * @brief Adds a resource to the loading queue.
-			 * @note Calling methods must lock the resource access.
-			 * @param baseInformation A reference to the base information of the resource to be loaded.
-			 * @param asyncLoad Load the resource asynchronously.
-			 * @return std::shared_ptr< resource_t >
+			 * @brief Internal: Enqueues a resource for loading.
+			 *
+			 * Creates a LoadingRequest and either:
+			 * - For external resources: submits download request or uses cache
+			 * - For local/direct resources: enqueues loading task in thread pool (async) or loads directly (sync)
+			 *
+			 * Handles the complete resource loading pipeline including cache checks for external resources.
+			 *
+			 * @param baseInformation Resource metadata from the store.
+			 * @param asyncLoad True for asynchronous loading, false for synchronous.
+			 * @return Shared pointer to the resource being loaded, or nullptr on failure.
+			 * @pre Caller must hold m_resourcesAccess lock.
+			 * @warning Not thread-safe: caller must ensure proper locking.
+			 * @version 0.8.35
 			 */
 			[[nodiscard]]
 			std::shared_ptr< resource_t >
@@ -1000,10 +1614,21 @@ namespace EmEn::Resources
 			}
 
 			/**
-			 * @brief Task for loading a resource on a thread.
-			 * @note Value must pass the request parameter.
-			 * @param request The loading request.
-			 * @return void
+			 * @brief Internal: Worker task that performs the actual resource loading.
+			 *
+			 * This method runs either on a thread pool worker (async) or the calling thread (sync).
+			 * It dispatches to the appropriate resource loading method based on source type and
+			 * emits observable notifications for monitoring.
+			 *
+			 * **Observable Notifications:**
+			 * - Emits LoadingProcessStarted before loading
+			 * - Emits ResourceLoaded on success (with resource pointer as data)
+			 * - Emits LoadingProcessFinished after completion (regardless of result)
+			 *
+			 * @param request LoadingRequest object (passed by value for thread safety).
+			 * @note Handles LocalData (file paths), DirectData (JSON), but NOT ExternalData (must be downloaded first).
+			 * @warning ExternalData sources trigger an error if called before download completes.
+			 * @version 0.8.35
 			 */
 			void
 			loadingTask (LoadingRequest< resource_t > request) noexcept
@@ -1068,12 +1693,12 @@ namespace EmEn::Resources
 				this->notify(LoadingProcessFinished);
 			}
 
-			PrimaryServices & m_primaryServices;
-			ServiceProvider & m_serviceProvider;
-			std::shared_ptr< std::unordered_map< std::string, BaseInformation > > m_localStore;
-			std::unordered_map< std::string, std::shared_ptr< resource_t > > m_resources;
-			std::unordered_map< int, LoadingRequest< resource_t > > m_externalResources;
-			mutable std::mutex m_resourcesAccess;
-			bool m_verboseEnabled{false};
+			PrimaryServices & m_primaryServices;                                                     ///< Core engine services (threading, networking, filesystem).
+			AbstractServiceProvider & m_serviceProvider;                                          ///< Service provider for resource loading operations.
+			std::shared_ptr< std::unordered_map< std::string, BaseInformation > > m_localStore;  ///< Shared store of available resource metadata (name -> BaseInformation).
+			std::unordered_map< std::string, std::shared_ptr< resource_t > > m_resources;        ///< Map of loaded resources (name -> resource).
+			std::unordered_map< int, LoadingRequest< resource_t > > m_externalResources;         ///< Active download requests (ticket -> request).
+			mutable std::mutex m_resourcesAccess;                                                 ///< Mutex protecting m_resources and m_externalResources.
+			bool m_verboseEnabled{false};                                                         ///< Verbose logging flag for detailed trace output.
 	};
 }

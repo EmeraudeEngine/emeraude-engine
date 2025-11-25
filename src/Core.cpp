@@ -128,9 +128,6 @@ namespace EmEn
 				/* NOTE: Print a warning if this loop takes more than 16.66 ms, which means we are below 60Hz. */
 				const Time::Elapsed::PrintScopeRealTimeThreshold stat{"logicsTask", EngineUpdateCycleDurationMS< double >};
 
-				/* User-application cyclic update. */
-				this->onProcessLogics(m_cycle);
-
 				/* Core-application cyclic update on the active scene only.
 				 * NOTE: It will ask for a shared-access to the active scene
 				 * preventing locking the "rendering thread" for updating the scene logic. */
@@ -141,6 +138,9 @@ namespace EmEn
 					/* Tells the system one snapshot of the logic is ready to be synced. */
 					activeScene->publishStateForRendering();
 				}, true);
+
+				/* User-application cyclic update. */
+				this->onCoreProcessLogics(m_cycle);
 
 				m_lifetime += EngineUpdateCycleDurationUS< uint64_t >;
 				m_cycle++;
@@ -187,7 +187,7 @@ namespace EmEn
 					}
 
 					/* This should only sync UBO for the overlay. */
-					m_overlayManager.updateVideoMemory();
+					m_overlayManager.processFrameUpdates();
 
 					/* Render the scene (optional) and the overlay on top. */
 					m_graphicsRenderer.renderFrame(activeScene, m_overlayManager);
@@ -206,19 +206,22 @@ namespace EmEn
 	}
 
 	void
-	Core::refreshApplicationSurface () noexcept
+	Core::onWindowChanged () noexcept
 	{
-		if ( !m_sceneManager.refreshActiveScene() )
+		/* NOTE: Graphics pipelines no longer need recreation on resize since they use
+		 * dynamic viewport and scissor states. The viewport/scissor are set dynamically
+		 * each frame via vkCmdSetViewport/vkCmdSetScissor in the render commands. */
+
+		if ( !m_overlayManager.onWindowResized() )
 		{
-			Tracer::error(ClassId, "Unable to refresh the active scene!");
+			Tracer::error(ClassId, "Unable to resize the overlay manager!");
 		}
 
-		if ( !m_overlayManager.updatePhysicalRepresentation() )
-		{
-			Tracer::error(ClassId, "Unable to refresh the overlay manager!");
-		}
+		this->onCoreSurfaceRefreshed();
 
-		this->notify(ApplicationSurfaceRefreshed);
+		m_windowChanged = false;
+
+		this->notify(SurfaceRefreshed);
 	}
 
 	bool
@@ -236,7 +239,7 @@ namespace EmEn
 
 			case StartupMode::Continue :
 				/* NOTE: Let the application stop the run. */
-				if ( this->onBeforeSecondaryServicesInitialization() )
+				if ( this->onBeforeCoreSecondaryServicesInitialization() )
 				{
 					return this->terminate() == 0;
 				}
@@ -267,11 +270,14 @@ namespace EmEn
 		Tracer::success(ClassId, "Core level execution started !");
 
 		/* Launch the application level. */
-		if ( this->onStart() )
+		if ( this->onCoreStarted() )
 		{
 			Tracer::success(ClassId, "The application successfully started.");
 
-			this->notify(ExecutionStarted);
+			/* Dispatch the entering in main loop event,
+			 * first by sending the event,
+			 * then directly to the sub application. */
+			this->notify(EnteringMainLoop);
 		}
 		else
 		{
@@ -289,14 +295,14 @@ namespace EmEn
 			 * DirectInput: Copy the state of every input device to use it in the engine cycle. */
 			m_inputManager.waitSystemEvents(0.010);
 
-			/* NOTE: If the swap-chain has been refreshed, we refresh the application according to the new framebuffer. */
-			if ( m_graphicsRenderer.checkSwapChainRefresh() )
+			/* NOTE: Must be done on the main thread. */
+			if ( m_windowChanged )
 			{
-				this->refreshApplicationSurface();
+				this->onWindowChanged();
 			}
 
 			/* Let the child class get the call event from the main loop. */
-			this->onMainLoopCycle();
+			this->onCoreMainLoopCycle();
 
 			/* NOTE: Checks whether the engine is running or paused.
 			 * If not, we wait for a wake-up event with a blocking function. */
@@ -311,7 +317,7 @@ namespace EmEn
 				while ( m_paused )
 				{
 					/* Let the child class get the call event from the main loop. */
-					this->onMainLoopCycle();
+					this->onCoreMainLoopCycle();
 
 					m_inputManager.waitSystemEvents();
 				}
@@ -322,23 +328,36 @@ namespace EmEn
 				}, true);
 			}
 
-			if constexpr ( IsDebug )
+			if ( m_enableStatistics )
 			{
 				auto currentTime = std::chrono::steady_clock::now();
 
 				if ( auto elapsedTime = currentTime - lastTop; elapsedTime >= std::chrono::seconds(1) )
 				{
-					this->showStatistics();
+					const auto & stats = m_graphicsRenderer.statistics();
+
+					std::cout <<
+						"[TIME:" << std::setw(5) << std::setfill(' ') << std::right << Time::elapsedSeconds() << " s]"
+						"[FPS:" << std::setw(4) << std::setfill(' ') << std::right << stats.executionsPerSecond() << ", " << std::setw(3) << std::setfill(' ') << std::right << stats.duration() << " ms]"
+						"[FPS-AVG: " << std::setw(10) << std::setfill(' ') << std::right << stats.averageExecutionsPerSecond() << ", " << std::setw(10) << std::setfill(' ') << std::right << stats.averageDuration() << " ms]" << '\n';
 
 					lastTop = currentTime;
 				}
+			}
 
+			if constexpr ( IsDebug )
+			{
 				if ( !m_coreMessages.empty() )
 				{
 					this->displayCoreMessages();
 				}
 			}
 		}
+
+		/* Dispatch the exiting the main loop event,
+		 * first by sending the event,
+		 * then directly to the sub application. */
+		this->notify(ExitingMainLoop);
 
 		/* NOTE: Be sure all threads from the pool finish their work. */
 		if ( const auto threadPool = m_primaryServices.threadPool(); threadPool != nullptr )
@@ -386,12 +405,6 @@ namespace EmEn
 		dialog.execute(&this->window());
 
 		this->resume();
-	}
-
-	void
-	Core::onMainLoopCycle () noexcept
-	{
-		/* Makes nothing special here. */
 	}
 
 	bool
@@ -499,6 +512,13 @@ namespace EmEn
 			Tracer::info(ClassId, m_primaryServices.information());
 		}
 
+		if ( m_primaryServices.settings().get< bool >(CoreEnableStatisticsKey, DefaultCoreEnableStatistics) )
+		{
+			Tracer::info(ClassId, "Statistics enabled.");
+
+			m_enableStatistics = true;
+		}
+
 		/* Checks if we need to execute the engine in tool mode. */
 		if ( m_primaryServices.arguments().isSwitchPresent(ToolsArg, ToolsLongArg) )
 		{
@@ -588,6 +608,7 @@ namespace EmEn
 
 			m_graphicsRenderer.registerToObject(*this);
 
+			this->observe(&m_graphicsRenderer);
 			this->observe(&m_graphicsRenderer.shaderManager());
 
 			/* FIXME: Check a better way to give the access ... */
@@ -729,12 +750,12 @@ namespace EmEn
 			return;
 		}
 
+		this->onCorePaused();
+
 		/* Dispatch the pause event,
 		 * first by sending the event,
 		 * then directly to the sub application. */
 		this->notify(ExecutionPaused);
-
-		this->onPause();
 
 		/* Pause the core engine last. */
 		m_paused = true;
@@ -751,12 +772,12 @@ namespace EmEn
 		/* Pause the core engine first. */
 		m_paused = false;
 
+		this->onCoreResumed();
+
 		/* Dispatch the resume event,
 		 * first by sending the event,
 		 * then directly to the sub application. */
 		this->notify(ExecutionResumed);
-
-		this->onResume();
 	}
 
 	void
@@ -770,9 +791,9 @@ namespace EmEn
 		/* Dispatch the stop event,
 		 * first by sending the event,
 		 * then directly to the sub application. */
-		this->notify(ExecutionStopped);
+		this->notify(ExecutionStopping);
 
-		this->onStop();
+		this->onBeforeCoreStop();
 
 		Tracer::debug(ClassId, "User-application stopped !");
 
@@ -782,6 +803,11 @@ namespace EmEn
 
 		/* Stopping the main loop. */
 		m_isMainLoopRunning = false;
+
+		/* Dispatch the stopped event,
+		 * first by sending the event,
+		 * then directly to the sub application. */
+		this->notify(ExecutionStopped);
 	}
 
 	unsigned int
@@ -831,15 +857,13 @@ namespace EmEn
 
 		if constexpr ( VulkanTrackingDebugEnabled )
 		{
-			const auto vkAliveObjectCount = AbstractObject::s_tracking.size();
-
-			if ( vkAliveObjectCount > 0 )
+			if ( const auto vkAliveObjectCount = AbstractObject::s_tracking.size(); vkAliveObjectCount > 0 )
 			{
 				std::cerr << "[DEBUG:VK_TRACKING] There is " << vkAliveObjectCount << " Vulkan objects not properly destructed !" "\n";
 
-				for ( auto & alloc : AbstractObject::s_tracking )
+				for ( auto & [address, identifier] : AbstractObject::s_tracking )
 				{
-					std::cerr << "[DEBUG:VK_TRACKING] The Vulkan object @" << alloc.first << " '" << alloc.second << "' still alive !" << "\n";
+					std::cerr << "[DEBUG:VK_TRACKING] The Vulkan object @" << address << " '" << identifier << "' still alive !" << "\n";
 				}
 			}
 			else
@@ -859,7 +883,7 @@ namespace EmEn
 
 		for ( const auto & filepath : filepaths )
 		{
-			TraceInfo{ClassId} << "Check file : " << filepath;
+			TraceDebug{ClassId} << "Check file : " << filepath;
 
 			// TODO : Filter files for the application.
 
@@ -873,7 +897,7 @@ namespace EmEn
 			return;
 		}
 
-		this->onOpenFiles(verifiedFilepaths);
+		this->onCoreOpenFiles(verifiedFilepaths);
 	}
 
 	void
@@ -921,7 +945,7 @@ namespace EmEn
 		}
 
 		/* NOTE: Let the user application consume the event. */
-		return this->onAppKeyPress(key, scancode, modifiers, repeat);
+		return this->onCoreKeyPress(key, scancode, modifiers, repeat);
 	}
 
 	bool
@@ -965,7 +989,7 @@ namespace EmEn
 				case KeyF2 :
 					m_audioManager.play("switch_on");
 
-					this->refreshApplicationSurface();
+					m_windowChanged = true;
 
 					return true;
 
@@ -988,9 +1012,9 @@ namespace EmEn
 				case KeyF4 :
 					if ( !m_window.isFullscreenMode() )
 					{
-						TraceInfo{ClassId} << "Reset window size to default " << DefaultVideoWindowWidth << "X" << DefaultVideoWindowHeight;
+						TraceInfo{ClassId} << "Reset window size to default " << DefaultWindowWidth << "X" << DefaultWindowHeight;
 
-						if ( m_window.resize(DefaultVideoWindowWidth, DefaultVideoWindowHeight) )
+						if ( m_window.resize(DefaultWindowWidth, DefaultWindowHeight) )
 						{
 							m_window.centerPosition();
 						}
@@ -1102,40 +1126,40 @@ namespace EmEn
 		}
 
 		/* NOTE: Let the child application looks for the key pressed. */
-		if ( this->onAppKeyRelease(key, scancode, modifiers) )
+		if ( this->onCoreKeyRelease(key, scancode, modifiers) )
 		{
 			return true;
 		}
 
 		/* NOTE: If the application does not catch any key, we let the core having a default behavior. */
-		if ( m_preventDefaultKeyBehaviors )
+		if ( !m_preventDefaultKeyBehaviors )
 		{
-			return false;
+			switch ( key )
+			{
+				case KeyGraveAccent :
+					// TODO: Re-enable this method
+					//m_console.enable();
+
+					return true;
+
+				case KeyEscape :
+					this->stop();
+
+					return true;
+
+				default:
+					return false;
+			}
 		}
 
-		switch ( key )
-		{
-			case KeyGraveAccent :
-				// TODO: Re-enable this method
-				//m_console.enable();
-
-				return true;
-
-			case KeyEscape :
-				this->stop();
-
-				return true;
-
-			default:
-				return false;
-		}
+		return false;
 	}
 
 	bool
 	Core::onCharacterType (uint32_t unicode) noexcept
 	{
 		/* NOTE: Let the user application consume the event. */
-		return this->onAppCharacterType(unicode);
+		return this->onCoreCharacterType(unicode);
 	}
 
 	bool
@@ -1213,15 +1237,12 @@ namespace EmEn
 			switch ( notificationCode )
 			{
 				case Console::Controller::Exit :
-
 					this->stop();
-
 					break;
 
 				case Console::Controller::HardExit :
 					/* NOTE: Hard cord termination of the program! */
 					std::terminate();
-
 					break;
 
 				default:
@@ -1259,6 +1280,17 @@ namespace EmEn
 					}
 					break;
 
+				/* NOTE: These two notifications indicate framebuffer size or DPI scale changes.
+				 * The resize flow is handled by the Renderer, which observes the Window directly
+				 * and triggers swap chain recreation. Core receives the result via
+				 * Renderer::WindowContentRefreshed notification, which sets m_windowChanged
+				 * and triggers onWindowChanged() on the main thread.
+				 * Responding here would cause race conditions with the render thread. */
+				case Window::OSNotifiesFramebufferResized :
+				case Window::OSRequestsToRescaleContentBy :
+					Tracer::debug(ClassId, "The GLFW API detected a framebuffer content size or scale changes.");
+					break;
+
 				case Window::OSRequestsToTerminate :
 					this->stop();
 					break;
@@ -1276,7 +1308,27 @@ namespace EmEn
 
 		if ( observable == &m_inputManager )
 		{
+			if ( notificationCode == Input::Manager::DroppedFiles )
+			{
+				const auto filepaths = std::any_cast< std::vector< std::filesystem::path > >(data);
+
+				this->openFiles(filepaths);
+			}
+
 			TraceDebug{ClassId} << "Receiving an event from '" << Input::Manager::ClassId << "' (code:" << notificationCode << ") ...";
+
+			return true;
+		}
+
+		if ( observable == &m_graphicsRenderer )
+		{
+			/* NOTE: If the swap-chain has been refreshed, we refresh the application according to the new framebuffer. */
+			if ( notificationCode == Renderer::WindowContentRefreshed )
+			{
+				m_windowChanged = true;
+			}
+
+			TraceDebug{ClassId} << "Receiving an event from '" << Renderer::ClassId << "' (code:" << notificationCode << ") ...";
 
 			return true;
 		}
@@ -1293,7 +1345,7 @@ namespace EmEn
 				{
 					const auto [identifier, sourceCode] = std::any_cast< std::pair< std::string, std::string > >(data);
 
-					this->onShaderCompilationFailed(identifier, sourceCode);
+					this->onCoreShaderCompilationFailed(identifier, sourceCode);
 				}
 					break;
 
@@ -1316,15 +1368,15 @@ namespace EmEn
 					break;
 
 				case Audio::TrackMixer::MusicPaused :
-					this->notifyUser("Music paused !");
+					this->notifyUser("Music paused!");
 					break;
 
 				case Audio::TrackMixer::MusicResumed :
-					this->notifyUser("Music resumed !");
+					this->notifyUser("Music resumed!");
 					break;
 
 				case Audio::TrackMixer::MusicStopped :
-					this->notifyUser("Music stopped !");
+					this->notifyUser("Music stopped!");
 					break;
 
 				default:
@@ -1354,7 +1406,7 @@ namespace EmEn
 			return true;
 		}
 
-		return this->onAppNotification(observable, notificationCode, data);
+		return this->onCoreNotification(observable, notificationCode, data);
 	}
 
 	bool
@@ -1388,16 +1440,5 @@ namespace EmEn
 		TraceWarning{ClassId} << "Unrecognized tools '" << tools << "' !";
 
 		return false;
-	}
-
-	void
-	Core::showStatistics () const noexcept
-	{
-		const auto & stats = m_graphicsRenderer.statistics();
-
-		std::cout <<
-			"[TIME:" << std::setw(5) << std::setfill(' ') << std::right << Time::elapsedSeconds() << " s]"
-			"[FPS:" << std::setw(4) << std::setfill(' ') << std::right << stats.executionsPerSecond() << ", " << std::setw(3) << std::setfill(' ') << std::right << stats.duration() << " ms]"
-			"[FPS-AVG: " << std::setw(10) << std::setfill(' ') << std::right << stats.averageExecutionsPerSecond() << ", " << std::setw(10) << std::setfill(' ') << std::right << stats.averageDuration() << " ms]" << '\n';
 	}
 }

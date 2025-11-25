@@ -30,7 +30,7 @@
 #include <algorithm>
 #include <memory>
 #include <ranges>
-#include <stack>
+#include <vector>
 
 /* Local inclusions. */
 #include "Libs/Math/OrientedCuboid.hpp"
@@ -46,10 +46,20 @@ namespace EmEn::Scenes
 	using namespace Graphics;
 	using namespace Physics;
 
+	Node::~Node () noexcept
+	{
+		const auto parentNode = m_parent.lock();
+
+		if ( parentNode != nullptr )
+		{
+			parentNode->forget(this);
+		}
+	}
+
 	void
 	Node::setPosition (const Vector< 3, float > & position, TransformSpace transformSpace) noexcept
 	{
-		if ( this->isRoot() )
+		if ( this->isRoot() ) [[unlikely]]
 		{
 			return;
 		}
@@ -93,7 +103,7 @@ namespace EmEn::Scenes
 	void
 	Node::setXPosition (float position, TransformSpace transformSpace) noexcept
 	{
-		if ( this->isRoot() )
+		if ( this->isRoot() ) [[unlikely]]
 		{
 			return;
 		}
@@ -137,7 +147,7 @@ namespace EmEn::Scenes
 	void
 	Node::setYPosition (float position, TransformSpace transformSpace) noexcept
 	{
-		if ( this->isRoot() )
+		if ( this->isRoot() ) [[unlikely]]
 		{
 			return;
 		}
@@ -181,7 +191,7 @@ namespace EmEn::Scenes
 	void
 	Node::setZPosition (float position, TransformSpace transformSpace) noexcept
 	{
-		if ( this->isRoot() )
+		if ( this->isRoot() ) [[unlikely]]
 		{
 			return;
 		}
@@ -225,7 +235,7 @@ namespace EmEn::Scenes
 	void
 	Node::move (const Vector< 3, float > & distance, TransformSpace transformSpace) noexcept
 	{
-		if ( this->isRoot() )
+		if ( this->isRoot() ) [[unlikely]]
 		{
 			return;
 		}
@@ -269,7 +279,7 @@ namespace EmEn::Scenes
 	void
 	Node::moveX (float distance, TransformSpace transformSpace) noexcept
 	{
-		if ( this->isRoot() )
+		if ( this->isRoot() ) [[unlikely]]
 		{
 			return;
 		}
@@ -313,7 +323,7 @@ namespace EmEn::Scenes
 	void
 	Node::moveY (float distance, TransformSpace transformSpace) noexcept
 	{
-		if ( this->isRoot() )
+		if ( this->isRoot() ) [[unlikely]]
 		{
 			return;
 		}
@@ -357,7 +367,7 @@ namespace EmEn::Scenes
 	void
 	Node::moveZ (float distance, TransformSpace transformSpace) noexcept
 	{
-		if ( this->isRoot() )
+		if ( this->isRoot() ) [[unlikely]]
 		{
 			return;
 		}
@@ -401,7 +411,7 @@ namespace EmEn::Scenes
 	void
 	Node::rotate (float radian, const Vector< 3, float > & axis, TransformSpace transformSpace) noexcept
 	{
-		if ( this->isRoot() )
+		if ( this->isRoot() ) [[unlikely]]
 		{
 			return;
 		}
@@ -427,7 +437,7 @@ namespace EmEn::Scenes
 	void
 	Node::pitch (float radian, TransformSpace transformSpace) noexcept
 	{
-		if ( this->isRoot() )
+		if ( this->isRoot() ) [[unlikely]]
 		{
 			return;
 		}
@@ -453,7 +463,7 @@ namespace EmEn::Scenes
 	void
 	Node::yaw (float radian, TransformSpace transformSpace) noexcept
 	{
-		if ( this->isRoot() )
+		if ( this->isRoot() ) [[unlikely]]
 		{
 			return;
 		}
@@ -479,7 +489,7 @@ namespace EmEn::Scenes
 	void
 	Node::roll (float radian, TransformSpace transformSpace) noexcept
 	{
-		if ( this->isRoot() )
+		if ( this->isRoot() ) [[unlikely]]
 		{
 			return;
 		}
@@ -505,7 +515,7 @@ namespace EmEn::Scenes
 	void
 	Node::scale (const Vector< 3, float > & factor, TransformSpace transformSpace) noexcept
 	{
-		if ( this->isRoot() )
+		if ( this->isRoot() ) [[unlikely]]
 		{
 			return;
 		}
@@ -528,7 +538,7 @@ namespace EmEn::Scenes
 	void
 	Node::scale (float factor, TransformSpace transformSpace) noexcept
 	{
-		if ( this->isRoot() )
+		if ( this->isRoot() ) [[unlikely]]
 		{
 			return;
 		}
@@ -551,7 +561,7 @@ namespace EmEn::Scenes
 	void
 	Node::scaleX (float factor, TransformSpace transformSpace) noexcept
 	{
-		if ( this->isRoot() )
+		if ( this->isRoot() ) [[unlikely]]
 		{
 			return;
 		}
@@ -574,7 +584,7 @@ namespace EmEn::Scenes
 	void
 	Node::scaleY (float factor, TransformSpace transformSpace) noexcept
 	{
-		if ( this->isRoot() )
+		if ( this->isRoot() ) [[unlikely]]
 		{
 			return;
 		}
@@ -597,7 +607,7 @@ namespace EmEn::Scenes
 	void
 	Node::scaleZ (float factor, TransformSpace transformSpace) noexcept
 	{
-		if ( this->isRoot() )
+		if ( this->isRoot() ) [[unlikely]]
 		{
 			return;
 		}
@@ -620,37 +630,44 @@ namespace EmEn::Scenes
 	CartesianFrame< float >
 	Node::getWorldCoordinates () const noexcept
 	{
-		/* NOTE: As root, return the origin!
-		 * If the parent is the root node, return the frame. */
-		if ( this->isRoot() || this->parent()->isRoot() )
+		/* NOTE: As root, return the origin! */
+		if ( this->isRoot() )
 		{
 			return m_logicStateCoordinates;
 		}
 
-		/* Stack up a reversed tree for each cartesian frame. */
-		std::stack< CartesianFrame< float > > reversedTree;
-
+		/* Check if parent is root without creating shared_ptr twice. */
 		{
-			const auto * node = this;
+			const auto parentNode = m_parent.lock();
 
-			/* While a parent is not root. */
-			while ( node != nullptr )
+			if ( parentNode->isRoot() )
 			{
-				reversedTree.emplace(node->localCoordinates());
-
-				node = node->m_parent.lock().get();
+				return m_logicStateCoordinates;
 			}
+		}
+
+		/* Use vector instead of stack - better cache locality.
+		 * Store pointers to avoid copying CartesianFrame objects.
+		 * Most scene graphs are shallow (depth < 8). */
+		std::vector< const CartesianFrame< float > * > frames;
+		frames.reserve(8);
+
+		const auto * node = this;
+
+		while ( node != nullptr && !node->isRoot() )
+		{
+			frames.push_back(&node->m_logicStateCoordinates);
+			node = node->m_parent.lock().get();
 		}
 
 		Matrix< 4, float > matrix;
 		Vector< 3, float > scalingVector{1.0F, 1.0F, 1.0F};
 
-		while ( !reversedTree.empty() )
+		/* Traverse in reverse (root to leaf). */
+		for ( auto it = frames.rbegin(); it != frames.rend(); ++it )
 		{
-			matrix *= reversedTree.top().getModelMatrix();
-			scalingVector *= reversedTree.top().scalingFactor();
-
-			reversedTree.pop();
+			matrix *= (*it)->getModelMatrix();
+			scalingVector *= (*it)->scalingFactor();
 		}
 
 		return CartesianFrame< float >{matrix, scalingVector};
@@ -694,6 +711,40 @@ namespace EmEn::Scenes
 			this->localBoundingSphere().radius(),
 			this->getWorldCoordinates().position() + this->localBoundingSphere().position()
 		};
+	}
+
+	bool
+	Node::isVisibleTo (const Frustum & frustum) const noexcept
+	{
+		switch ( this->collisionDetectionModel() )
+		{
+			case CollisionDetectionModel::Point :
+				return frustum.isSeeing(this->getWorldPosition());
+
+			case CollisionDetectionModel::Sphere :
+				return frustum.isSeeing(this->getWorldBoundingSphere());
+
+			case CollisionDetectionModel::AABB :
+				return frustum.isSeeing(this->getWorldBoundingBox());
+		}
+
+		return true;
+	}
+
+	void
+	Node::publishStateForRendering (uint32_t writeStateIndex) noexcept
+	{
+		if constexpr ( IsDebug )
+		{
+			if ( writeStateIndex >= m_renderStateCoordinates.size() )
+			{
+				Tracer::error(ClassId, "Index overflow !");
+
+				return;
+			}
+		}
+
+		m_renderStateCoordinates[writeStateIndex] = this->getWorldCoordinates();
 	}
 
 	std::shared_ptr< Node >

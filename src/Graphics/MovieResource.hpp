@@ -113,13 +113,13 @@ namespace EmEn::Graphics
 			}
 
 			/** @copydoc EmEn::Resources::ResourceTrait::load(Resources::ServiceProvider &) */
-			bool load (Resources::ServiceProvider & serviceProvider) noexcept override;
+			bool load (Resources::AbstractServiceProvider & serviceProvider) noexcept override;
 
 			/** @copydoc EmEn::Resources::ResourceTrait::load(Resources::ServiceProvider &, const std::filesystem::path &) */
-			bool load (Resources::ServiceProvider & serviceProvider, const std::filesystem::path & filepath) noexcept override;
+			bool load (Resources::AbstractServiceProvider & serviceProvider, const std::filesystem::path & filepath) noexcept override;
 
 			/** @copydoc EmEn::Resources::ResourceTrait::load(Resources::Manager &, const Json::Value &) */
-			bool load (Resources::ServiceProvider & serviceProvider, const Json::Value & data) noexcept override;
+			bool load (Resources::AbstractServiceProvider & serviceProvider, const Json::Value & data) noexcept override;
 
 			/** @copydoc EmEn::Resources::ResourceTrait::memoryOccupied() const noexcept */
 			[[nodiscard]]
@@ -257,7 +257,7 @@ namespace EmEn::Graphics
 			 * @param data A reference to a JSON value.
 			 * @return bool
 			 */
-			bool loadParametric (Resources::ServiceProvider & serviceProvider, const Json::Value & data) noexcept;
+			bool loadParametric (Resources::AbstractServiceProvider & serviceProvider, const Json::Value & data) noexcept;
 
 			/**
 			 * @brief Loads a manual version of a movie.
@@ -265,7 +265,7 @@ namespace EmEn::Graphics
 			 * @param data A reference to a JSON value.
 			 * @return bool
 			 */
-			bool loadManual (Resources::ServiceProvider & serviceProvider, const Json::Value & data) noexcept;
+			bool loadManual (Resources::AbstractServiceProvider & serviceProvider, const Json::Value & data) noexcept;
 
 			/**
 			 * @brief Updates the full duration of the movie.

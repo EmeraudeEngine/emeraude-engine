@@ -37,7 +37,7 @@ namespace EmEn::Graphics::Renderable
 	using namespace Libs::Math;
 
 	bool
-	SimpleMeshResource::load (Resources::ServiceProvider & serviceProvider) noexcept
+	SimpleMeshResource::load (Resources::AbstractServiceProvider & serviceProvider) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
@@ -58,7 +58,7 @@ namespace EmEn::Graphics::Renderable
 	}
 
 	bool
-	SimpleMeshResource::load (Resources::ServiceProvider & /*serviceProvider*/, const Json::Value & /*data*/) noexcept
+	SimpleMeshResource::load (Resources::AbstractServiceProvider & /*serviceProvider*/, const Json::Value & /*data*/) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
@@ -133,7 +133,7 @@ namespace EmEn::Graphics::Renderable
 	}
 
 	std::shared_ptr< SimpleMeshResource >
-	SimpleMeshResource::getOrCreate (Resources::ServiceProvider & serviceProvider, const std::shared_ptr< Geometry::Interface > & geometryResource, const std::shared_ptr< Material::Interface > & materialResource, std::string resourceName) noexcept
+	SimpleMeshResource::getOrCreate (Resources::AbstractServiceProvider & serviceProvider, const std::shared_ptr< Geometry::Interface > & geometryResource, const std::shared_ptr< Material::Interface > & materialResource, std::string resourceName) noexcept
 	{
 		if ( resourceName.empty() )
 		{

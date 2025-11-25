@@ -27,11 +27,13 @@
 #include "Surface.hpp"
 
 /* Local inclusions. */
+#include "Vulkan/Device.hpp"
 #include "Vulkan/Image.hpp"
 #include "Vulkan/ImageView.hpp"
 #include "Vulkan/Sampler.hpp"
 #include "Vulkan/MemoryRegion.hpp"
 #include "Graphics/Renderer.hpp"
+#include "Libs/PixelFactory/Processor.hpp"
 #include "Manager.hpp"
 #include "Tracer.hpp"
 
@@ -107,7 +109,7 @@ namespace EmEn::Overlay
 		const auto surfaceY = static_cast< uint32_t >(screenY - (static_cast< float >(m_framebufferProperties.height()) * m_rectangle.top()));
 
 		/* Get that pixel color from the pixmap. */
-		const auto pixelColor = m_frontLocalData.safePixel(surfaceX, surfaceY);
+		const auto pixelColor = m_activeBuffer.pixmap.safePixel(surfaceX, surfaceY);
 		const auto blocked = pixelColor.alpha() > m_alphaThreshold;
 
 		return blocked;
@@ -133,14 +135,18 @@ namespace EmEn::Overlay
 		const auto textureWidth = framebuffer.getSurfaceWidth(geometry.width());
 		const auto textureHeight = framebuffer.getSurfaceHeight(geometry.height());
 
-		if ( !m_backLocalData.initialize(textureWidth, textureHeight, ChannelMode::RGBA) )
+		/* NOTE: When memory mapping is enabled, we skip the local pixmap entirely.
+		 * The caller will write directly to the GPU-mapped memory. */
+		if ( !m_memoryMappingEnabled )
 		{
-			TraceError{ClassId} << "Unable to initialize a " << textureWidth << "x" << textureHeight << "px pixmap for the surface '" << this->name() << "' !";
+			if ( !m_activeBuffer.pixmap.initialize(textureWidth, textureHeight, ChannelMode::RGBA) )
+			{
+				TraceError{ClassId} << "Unable to initialize a " << textureWidth << "x" << textureHeight << "px pixmap for the surface '" << this->name() << "' !";
 
-			return false;
+				return false;
+			}
 		}
 
-		/* NOTE: We only need one sampler. */
 		if ( m_sampler == nullptr || !m_sampler->isCreated() )
 		{
 			if ( !this->getSampler(renderer) )
@@ -149,45 +155,27 @@ namespace EmEn::Overlay
 			}
 		}
 
-		if ( !this->createImage(renderer) || !this->createImageView() || !this->createDescriptorSet(renderer) )
+		if ( !this->createFramebufferResources(m_activeBuffer, renderer, textureWidth, textureHeight) )
 		{
-			this->clearBackFramebuffer();
+			m_activeBuffer.destroy();
 
 			return false;
 		}
 
-		/* NOTE: At first creation, we swap automatically. */
-		m_readyToSwap = true;
+		m_videoMemorySizeValid = true;
+		m_videoMemoryUpToDate = true;
 
-		return this->swapFramebuffers();
+		this->onActiveBufferReady(m_activeBuffer);
+
+		return true;
 	}
 
 	bool
 	Surface::destroyFromHardware () noexcept
 	{
-		/* NOTE: Cleaning the back buffer. */
-		this->clearBackFramebuffer();
-
-		/* NOTE: Cleaning the front buffer. */
-		{
-			if ( m_frontDescriptorSet != nullptr )
-			{
-				m_frontDescriptorSet->destroy();
-				m_frontDescriptorSet.reset();
-			}
-
-			if ( m_frontImageView != nullptr )
-			{
-				m_frontImageView->destroyFromHardware();
-				m_frontImageView.reset();
-			}
-
-			if ( m_frontImage != nullptr )
-			{
-				m_frontImage->destroyFromHardware();
-				m_frontImage.reset();
-			}
-		}
+		/* NOTE: Cleaning both buffers. */
+		m_transitionBuffer.destroy();
+		m_activeBuffer.destroy();
 
 		if ( m_sampler != nullptr )
 		{
@@ -199,44 +187,45 @@ namespace EmEn::Overlay
 	}
 
 	bool
-	Surface::updateVideoMemory (Renderer & renderer) noexcept
+	Surface::processUpdates (Renderer & renderer) noexcept
 	{
 		if ( !m_framebufferAccess.try_lock() )
 		{
 			return true;
 		}
 
+		/* Step 1: Handle size changes.
+		 * This is triggered by invalidate() from window resize or manual setSize()/setGeometry(). */
 		if ( !this->isVideoMemorySizeValid() )
 		{
 			this->updateModelMatrix();
 
 			if ( !this->updatePhysicalRepresentation(renderer) )
 			{
-				TraceError{ClassId} << "Unable to update the physical representation of surface '" << this->name() << " !";
+				TraceError{ClassId} << "Unable to update the physical representation of surface '" << this->name() << "' !";
 
 				m_framebufferAccess.unlock();
 
 				return false;
 			}
 
-			/* NOTE: The texture size is ok, but now the content is invalid. */
 			m_videoMemorySizeValid = true;
 			m_videoMemoryUpToDate = false;
-
-			this->onSurfaceReadyForUsage();
 		}
 
-		/* NOTE: Updating the front framebuffer when ready for the application. */
-		if ( m_frontImage != nullptr && !this->isVideoMemoryUpToDate() )
+		/* Step 2: Upload active buffer content to GPU.
+		 * This uploads the active pixmap data to the GPU when setVideoMemoryOutdated() was called.
+		 * NOTE: When memory mapping is enabled, the caller writes directly to the GPU, so we skip this step. */
+		if ( !m_memoryMappingEnabled && m_activeBuffer.image != nullptr && !this->isVideoMemoryUpToDate() )
 		{
 			const MemoryRegion memoryRegion{
-				m_frontLocalData.data().data(),
-				m_frontLocalData.bytes()
+				m_activeBuffer.pixmap.data().data(),
+				m_activeBuffer.pixmap.bytes()
 			};
 
-			if ( !m_frontImage->writeData(renderer.transferManager(), memoryRegion) )
+			if ( !m_activeBuffer.image->writeData(renderer.transferManager(), memoryRegion) )
 			{
-				TraceError{ClassId} << "Unable to update the content of surface '" << this->name() << " !";
+				TraceError{ClassId} << "Unable to update the content of surface '" << this->name() << "' !";
 
 				m_framebufferAccess.unlock();
 
@@ -284,101 +273,135 @@ namespace EmEn::Overlay
 	}
 
 	bool
-	Surface::createImage (Renderer & renderer) noexcept
+	Surface::createFramebufferResources (Framebuffer & buffer, Renderer & renderer, uint32_t width, uint32_t height) const noexcept
 	{
-		if ( !m_backLocalData.isValid() )
+		/* NOTE: When memory mapping is disabled, the pixmap is required.
+		 * When memory mapping is enabled, we skip the pixmap entirely. */
+		if ( !m_memoryMappingEnabled && !buffer.pixmap.isValid() )
 		{
-			TraceError{ClassId} << "The back framebuffer local pixmap is invalid for the surface '" << this->name() << "' ! Unable to create the image for the GPU.";
+			TraceError{ClassId} << "The framebuffer local pixmap is invalid for the surface '" << this->name() << "' ! Unable to create the image for the GPU.";
 
 			return false;
 		}
 
-		if ( m_backImage != nullptr && m_backImage->isCreated() )
+		if ( buffer.image != nullptr && buffer.image->isCreated() )
 		{
-			TraceError{ClassId} << "The back framebuffer image is already created for the surface '" << this->name() << "' ! Destroy it before.";
+			TraceError{ClassId} << "The framebuffer image is already created for the surface '" << this->name() << "' ! Destroy it before.";
 
 			return false;
 		}
 
-		m_backImage = std::make_shared< Vulkan::Image >(
+		/* Create the Vulkan image.
+		 * NOTE: When memory mapping is enabled, we use LINEAR tiling to allow direct CPU access.
+		 * This trades some GPU sampling performance for zero-copy writes from CPU. */
+		const auto imageTiling = m_memoryMappingEnabled ? VK_IMAGE_TILING_LINEAR : VK_IMAGE_TILING_OPTIMAL;
+		const auto imageUsage = m_memoryMappingEnabled ?
+			VK_IMAGE_USAGE_SAMPLED_BIT : /* NOTE: No transfer needed when mapping directly. */
+			VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+
+		/* NOTE: RGBA format (4 channels) is always used for overlay surfaces. */
+		constexpr uint32_t colorCount = 4;
+
+		buffer.image = std::make_shared< Vulkan::Image >(
 			renderer.device(),
 			VK_IMAGE_TYPE_2D,
-			Image::getFormat< uint8_t >(m_backLocalData.colorCount()),
-			VkExtent3D{m_backLocalData.width(), m_backLocalData.height(), 1U},
-			VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT
+			Image::getFormat< uint8_t >(colorCount),
+			VkExtent3D{width, height, 1U},
+			imageUsage,
+			0, /* createFlags */
+			1, /* mipLevels */
+			1, /* arrayLayers */
+			VK_SAMPLE_COUNT_1_BIT,
+			imageTiling,
+			m_memoryMappingEnabled /* hostVisible */
 		);
-		m_backImage->setIdentifier(ClassId, this->name(), "Image");
+		buffer.image->setIdentifier(ClassId, this->name(), "Image");
 
-		if ( !m_backImage->create(renderer.transferManager(), m_backLocalData) )
+		if ( m_memoryMappingEnabled )
 		{
-			TraceError{ClassId} << "Unable to create the back framebuffer image for the surface '" << this->name() << "' !";
+			/* NOTE: When memory mapping is enabled, just create the image on hardware.
+			 * The caller will write directly to the mapped memory. */
+			if ( !buffer.image->createOnHardware() )
+			{
+				TraceError{ClassId} << "Unable to create the framebuffer image for the surface '" << this->name() << "' !";
 
-			m_backImage.reset();
+				buffer.image.reset();
 
-			return false;
+				return false;
+			}
+
+			/* NOTE: Transition the image layout to SHADER_READ_ONLY_OPTIMAL so it can be sampled.
+			 * Unlike the staging buffer path, we don't go through transfer operations. */
+			if ( !renderer.transferManager().transitionImageLayout(
+				*buffer.image,
+				VK_IMAGE_ASPECT_COLOR_BIT,
+				VK_IMAGE_LAYOUT_UNDEFINED,
+				VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) )
+			{
+				TraceError{ClassId} << "Unable to transition the image layout for the surface '" << this->name() << "' !";
+
+				buffer.image.reset();
+
+				return false;
+			}
+		}
+		else
+		{
+			/* NOTE: Standard path: create image and upload pixmap data. */
+			if ( !buffer.image->create(renderer.transferManager(), buffer.pixmap) )
+			{
+				TraceError{ClassId} << "Unable to create the framebuffer image for the surface '" << this->name() << "' !";
+
+				buffer.image.reset();
+
+				return false;
+			}
 		}
 
-		return true;
-	}
-
-	bool
-	Surface::createImageView () noexcept
-	{
-		if ( m_backImageView != nullptr && m_backImageView->isCreated() )
-		{
-			TraceError{ClassId} << "The back framebuffer image view is already created for the surface '" << this->name() << "' ! Destroy it before.";
-
-			return false;
-		}
-
-		m_backImageView = std::make_shared< ImageView >(
-			m_backImage,
+		/* Create the Vulkan image view. */
+		buffer.imageView = std::make_shared< ImageView >(
+			buffer.image,
 			VK_IMAGE_VIEW_TYPE_2D,
 			VkImageSubresourceRange{
 				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
 				.baseMipLevel = 0,
-				.levelCount = m_backImage->createInfo().mipLevels,
+				.levelCount = buffer.image->createInfo().mipLevels,
 				.baseArrayLayer = 0,
-				.layerCount = m_backImage->createInfo().arrayLayers
+				.layerCount = buffer.image->createInfo().arrayLayers
 			}
 		);
-		m_backImageView->setIdentifier(ClassId, this->name(), "ImageView");
+		buffer.imageView->setIdentifier(ClassId, this->name(), "ImageView");
 
-		if ( !m_backImageView->createOnHardware() )
+		if ( !buffer.imageView->createOnHardware() )
 		{
-			TraceError{ClassId} << "Unable to create the back framebuffer image view for the surface '" << this->name() << "' !";
+			TraceError{ClassId} << "Unable to create the framebuffer image view for the surface '" << this->name() << "' !";
 
 			return false;
 		}
 
-		return true;
-	}
-
-	bool
-	Surface::createDescriptorSet (Renderer & renderer) noexcept
-	{
+		/* Create the descriptor set. */
 		const auto descriptorSetLayout = Manager::getDescriptorSetLayout(renderer.layoutManager());
 
 		if ( descriptorSetLayout == nullptr )
 		{
-			TraceError{ClassId} << "Unable to get the back framebuffer overlay descriptor set layout for the surface '" << this->name() << "' !";
+			TraceError{ClassId} << "Unable to get the overlay descriptor set layout for the surface '" << this->name() << "' !";
 
 			return false;
 		}
 
-		m_backDescriptorSet = std::make_unique< DescriptorSet >(renderer.descriptorPool(), descriptorSetLayout);
-		m_backDescriptorSet->setIdentifier(ClassId, this->name(), "DescriptorSet");
+		buffer.descriptorSet = std::make_unique< DescriptorSet >(renderer.descriptorPool(), descriptorSetLayout);
+		buffer.descriptorSet->setIdentifier(ClassId, this->name(), "DescriptorSet");
 
-		if ( !m_backDescriptorSet->create() )
+		if ( !buffer.descriptorSet->create() )
 		{
-			m_backDescriptorSet.reset();
+			buffer.descriptorSet.reset();
 
 			TraceError{ClassId} << "Unable to create the surface descriptor set for the surface '" << this->name() << "' !";
 
 			return false;
 		}
 
-		if ( !m_backDescriptorSet->writeCombinedImageSampler(0, *m_backImage, *m_backImageView, *m_sampler) )
+		if ( !buffer.descriptorSet->writeCombinedImageSampler(0, *buffer.image, *buffer.imageView, *m_sampler) )
 		{
 			TraceError{ClassId} << "Unable to write to the surface descriptor set of the surface '" << this->name() << "' !";
 
@@ -389,57 +412,52 @@ namespace EmEn::Overlay
 	}
 
 	bool
-	Surface::swapFramebuffers () noexcept
+	Surface::isTransitionBufferReady () const noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_framebufferAccess};
-
-		if ( !m_readyToSwap )
+		if ( !m_transitionBufferEnabled )
 		{
-			TraceWarning{ClassId} << "The surface '" << this->name() << "' is not ready to swap !";
+			TraceWarning{ClassId} << "The surface '" << this->name() << "' is not using the transition buffer mode !";
 
 			return false;
 		}
 
-		if ( m_backImage == nullptr || m_backImageView == nullptr || m_backDescriptorSet == nullptr )
-		{
-			TraceError{ClassId} << "The surface '" << this->name() << "' back framebuffer is invalid !";
-
-			return false;
-		}
-
-		/* NOTE: Swap the local data. */
-		std::swap(m_backLocalData, m_frontLocalData);
-
-		/* NOTE: Swap the GPU resource pointers. */
-		m_backImage.swap(m_frontImage);
-		m_backImageView.swap(m_frontImageView);
-		m_backDescriptorSet.swap(m_frontDescriptorSet);
-
-		m_readyToSwap = false;
-
-		return true;
+		return m_transitionBuffer.isValid() && m_transitionBufferStatus != TransitionBufferStatus::Resizing;
 	}
 
-	void
-	Surface::clearBackFramebuffer () noexcept
+	bool
+	Surface::commitTransitionBuffer () noexcept
 	{
-		if ( m_backDescriptorSet != nullptr )
+		if ( !m_transitionBufferEnabled )
 		{
-			m_backDescriptorSet->destroy();
-			m_backDescriptorSet.reset();
+			TraceWarning{ClassId} << "The surface '" << this->name() << "' is not using the transition buffer mode !";
+
+			return false;
 		}
 
-		if ( m_backImageView != nullptr )
+		const std::lock_guard< std::mutex > lock{m_framebufferAccess};
+
+		if ( !m_transitionBuffer.isValid() )
 		{
-			m_backImageView->destroyFromHardware();
-			m_backImageView.reset();
+			TraceError{ClassId} << "The surface '" << this->name() << "' transition buffer is invalid !";
+
+			return false;
 		}
 
-		if ( m_backImage != nullptr )
+		/* NOTE: Swap the buffer structures (transition becomes active, active becomes transition). */
+		std::swap(m_transitionBuffer, m_activeBuffer);
+
+		/* NOTE: After commit, the transition buffer status returns to Ready for next resize. */
+		m_transitionBufferStatus = TransitionBufferStatus::Ready;
+
+		/* NOTE: When memory mapping is enabled, the caller writes directly to GPU memory,
+		 * so the video memory is already up to date. When disabled, mark as outdated
+		 * so the pixmap gets uploaded via staging buffer. */
+		if ( !m_memoryMappingEnabled )
 		{
-			m_backImage->destroyFromHardware();
-			m_backImage.reset();
+			m_videoMemoryUpToDate = false;
 		}
+
+		return true;
 	}
 
 	bool
@@ -451,34 +469,127 @@ namespace EmEn::Overlay
 		const auto textureWidth = framebuffer.getSurfaceWidth(geometry.width());
 		const auto textureHeight = framebuffer.getSurfaceHeight(geometry.height());
 
-		/* NOTE: If the back buffer is different, we prepare it before the swap. */
-		if ( m_backLocalData.width() != textureWidth || m_backLocalData.height() != textureHeight )
+		/* NOTE: Check if resize is actually needed. */
+		if ( m_activeBuffer.matchesSize(textureWidth, textureHeight) )
 		{
-			if ( !m_backLocalData.initialize(textureWidth, textureHeight, ChannelMode::RGBA) )
+			return true;
+		}
+
+		if ( m_transitionBufferEnabled )
+		{
+			/* DOUBLE BUFFER MODE: Prepare transition buffer with new size while
+			 * active buffer continues to be used for rendering. */
+
+			/* NOTE: Signal that resize is in progress (drawing not allowed during recreation). */
+			m_transitionBufferStatus = TransitionBufferStatus::Resizing;
+
+			/* NOTE: When memory mapping is enabled, skip the pixmap entirely.
+			 * When disabled, copy and resize the active buffer content to the transition buffer
+			 * to have a placeholder image while waiting for new content. */
+			if ( !m_memoryMappingEnabled )
 			{
-				TraceError{ClassId} << "Unable to resize the pixmap for the surface '" << this->name() << "' !";
+				if ( !m_disablePixmapCopyInTransitionBuffer && m_activeBuffer.pixmap.isValid() )
+				{
+					m_transitionBuffer.pixmap = Processor< uint8_t >::resize(
+						m_activeBuffer.pixmap,
+						textureWidth,
+						textureHeight,
+						FilteringMode::Linear
+					);
+
+					if ( !m_transitionBuffer.pixmap.isValid() )
+					{
+						TraceWarning{ClassId} << "Unable to resize the active pixmap to transition buffer for the surface '" << this->name() << "'. Initializing empty.";
+
+						if ( !m_transitionBuffer.pixmap.initialize(textureWidth, textureHeight, ChannelMode::RGBA) )
+						{
+							TraceError{ClassId} << "Unable to initialize the transition pixmap for the surface '" << this->name() << "' !";
+
+							return false;
+						}
+					}
+				}
+				else
+				{
+					if ( !m_transitionBuffer.pixmap.initialize(textureWidth, textureHeight, ChannelMode::RGBA) )
+					{
+						TraceError{ClassId} << "Unable to initialize the transition pixmap for the surface '" << this->name() << "' !";
+
+						return false;
+					}
+				}
+			}
+
+			/* NOTE: Wait for GPU to finish using the old transition resources before destroying them. */
+			renderer.device()->waitIdle("Surface::updatePhysicalRepresentation() - transition buffer");
+
+			m_transitionBuffer.destroy();
+
+			if ( !this->createFramebufferResources(m_transitionBuffer, renderer, textureWidth, textureHeight) )
+			{
+				m_transitionBuffer.destroy();
 
 				return false;
 			}
 
-			this->clearBackFramebuffer();
-
-			if ( !this->createImage(renderer) || !this->createImageView() || !this->createDescriptorSet(renderer) )
+			/* NOTE: Set status based on whether we have placeholder content or not.
+			 * If pixmap copy is disabled or memory mapping is enabled, the buffer is empty and waiting for content.
+			 * If pixmap copy is enabled, the buffer has a resized placeholder and is ready. */
+			if ( m_disablePixmapCopyInTransitionBuffer || m_memoryMappingEnabled )
 			{
-				this->clearBackFramebuffer();
+				m_transitionBufferStatus = TransitionBufferStatus::WaitingForContent;
+			}
+			else
+			{
+				m_transitionBufferStatus = TransitionBufferStatus::Ready;
+			}
+
+			/* NOTE: Notify derived classes that the transition buffer is ready for content. */
+			this->onTransitionBufferReady(m_transitionBuffer);
+
+			return true;
+		}
+
+		/* SINGLE BUFFER MODE: Recreate active buffer directly (blocking). */
+		if ( !m_memoryMappingEnabled )
+		{
+			if ( !m_activeBuffer.pixmap.initialize(textureWidth, textureHeight, ChannelMode::RGBA) )
+			{
+				TraceError{ClassId} << "Unable to resize the active pixmap for the surface '" << this->name() << "' !";
 
 				return false;
 			}
 		}
 
-		/* NOTE: Prepare to swap manually or automatically. */
-		m_readyToSwap = true;
+		renderer.device()->waitIdle("Surface::updatePhysicalRepresentation() - active buffer");
 
-		if ( m_autoSwapEnabled )
+		m_activeBuffer.destroy();
+
+		if ( !this->createFramebufferResources(m_activeBuffer, renderer, textureWidth, textureHeight) )
 		{
-			return this->swapFramebuffers();
+			m_activeBuffer.destroy();
+
+			return false;
 		}
+
+		this->onActiveBufferReady(m_activeBuffer);
 
 		return true;
+	}
+
+	std::ostream &
+	operator<< (std::ostream & out, const Surface & obj)
+	{
+		return out << "Surface '" << obj.name() << "' [depth:" << obj.depth() << "] " << obj.geometry() << "Model matrix : " << obj.modelMatrix();
+	}
+
+	std::string
+	to_string (const Surface & obj)
+	{
+		std::stringstream output;
+
+		output << obj;
+
+		return output.str();
 	}
 }

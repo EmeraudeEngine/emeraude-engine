@@ -248,6 +248,12 @@ namespace EmEn::Scenes::Component
 
 		private:
 
+			/** @copydoc EmEn::Scenes::Component::Abstract::onSuspend() */
+			void onSuspend () noexcept override { }
+
+			/** @copydoc EmEn::Scenes::Component::Abstract::onWakeup() */
+			void onWakeup () noexcept override { }
+
 			/* Flag names */
 			static constexpr auto Enabled{UnusedFlag + 0UL};
 

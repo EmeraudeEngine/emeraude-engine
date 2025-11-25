@@ -1,12 +1,12 @@
-# Tool (Utilities) - Development Context
+# Tool (Utilities)
 
 Context spécifique pour le développement des outils utilitaires d'Emeraude Engine.
 
-## 🎯 Vue d'ensemble du module
+## Vue d'ensemble du module
 
 **Statut : PEU UTILISÉ** - Utilitaires annexes utilisant la logique du moteur pour tâches spécifiques, lancés via arguments ligne de commande. Concept présent mais pas activement utilisé.
 
-## 📋 Règles spécifiques à Tool/
+## Règles spécifiques à Tool/
 
 ### Concept: Utilitaires annexes
 - **Pas l'application principale** : Outils pour tâches spécifiques, pas pour lancer le jeu/app
@@ -35,7 +35,7 @@ Context spécifique pour le développement des outils utilitaires d'Emeraude Eng
 - Dispatch selon argument `--tool`
 - Accès aux systèmes moteur (Resources, Graphics, etc.)
 
-## 🛠️ Commandes de développement
+## Commandes de développement
 
 ```bash
 # Lister outils disponibles (si implémenté)
@@ -45,13 +45,13 @@ Context spécifique pour le développement des outils utilitaires d'Emeraude Eng
 ./Emeraude --tool <tool-name> [args...]
 ```
 
-## 🔗 Fichiers importants
+## Fichiers importants
 
 - GeometryDataPrinter - Inspection géométries
 - VulkanCapabilities - Info capacités GPU
 - À documenter lors de l'activation du système
 
-## ⚡ Patterns de développement
+## Patterns de développement
 
 ### Ajout d'un nouvel outil (concept)
 ```cpp
@@ -84,7 +84,7 @@ int main(int argc, char* argv[]) {
 }
 ```
 
-## 🚨 Points d'attention
+## Points d'attention
 
 - **Peu utilisé actuellement** : Concept présent mais pas activement développé
 - **Syntaxe à définir** : Interface CLI exacte à standardiser
@@ -92,11 +92,11 @@ int main(int argc, char* argv[]) {
 - **Pas pour production** : Outils de développement/debug uniquement
 - **Exit propre** : Retourner code exit approprié (0 = succès)
 
-## 📚 Documentation détaillée
+## Documentation détaillée
 
 À créer si le système Tool devient activement utilisé.
 
 Systèmes utilisables par Tools:
-→ **@src/Libs/AGENTS.md** - Bibliothèques fondamentales
-→ **@src/Graphics/AGENTS.md** - Pour outils graphiques
-→ **@src/Resources/AGENTS.md** - Chargement de resources
+- @src/Libs/AGENTS.md** - Bibliothèques fondamentales
+- @src/Graphics/AGENTS.md** - Pour outils graphiques
+- @src/Resources/AGENTS.md** - Chargement de resources

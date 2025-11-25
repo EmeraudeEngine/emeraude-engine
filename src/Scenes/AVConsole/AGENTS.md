@@ -1,12 +1,12 @@
-# AVConsole (Audio Video Console) - Development Context
+# AVConsole (Audio Video Console)
 
 Context spécifique pour le développement du système AVConsole d'Emeraude Engine.
 
-## 🎯 Vue d'ensemble du module
+## Vue d'ensemble du module
 
 Console de mixage audio-vidéo pour gérer les connexions entre caméras, microphones, écouteurs (speakers) et render-targets. Chaque Scene possède son propre AVConsole.
 
-## 📋 Règles spécifiques à AVConsole/
+## Règles spécifiques à AVConsole/
 
 ### Concept: Console de mixage
 - **Audio Video Console** : Abstraction d'une console de mixage AV
@@ -64,7 +64,7 @@ scene->avConsole().bindCameraToTarget("mirror_camera", renderTarget);
 // renderTarget peut être utilisé comme texture sur un mesh (miroir)
 ```
 
-## 🛠️ Commandes de développement
+## Commandes de développement
 
 ```bash
 # Tests AVConsole
@@ -72,7 +72,7 @@ ctest -R AVConsole
 ./test --filter="*AVConsole*"
 ```
 
-## 🔗 Fichiers importants
+## Fichiers importants
 
 - `Manager.cpp/.hpp` - Gestionnaire AVConsole (un par Scene)
 - Intégré dans Scene lifecycle
@@ -80,7 +80,7 @@ ctest -R AVConsole
 - `@src/Scenes/Component/Camera.hpp` - Camera component
 - `@src/Scenes/Component/Microphone.hpp` - Microphone component
 
-## ⚡ Patterns de développement
+## Patterns de développement
 
 ### Multi-caméras avec switch
 ```cpp
@@ -123,7 +123,7 @@ auto listener = playerNode->newMicrophone("player_ears");
 // Position et orientation du listener suivent le Node
 ```
 
-## 🚨 Points d'attention
+## Points d'attention
 
 - **Un AVConsole par Scene** : Pas global, lié à la Scene
 - **Registration automatique** : Ne pas enregistrer manuellement Camera/Microphone
@@ -132,10 +132,10 @@ auto listener = playerNode->newMicrophone("player_ears");
 - **Performance** : Multiples render-targets = multiples render passes (coût GPU)
 - **Audio listener unique** : Un seul listener actif (lié à caméra active généralement)
 
-## 📚 Documentation détaillée
+## Documentation détaillée
 
 Systèmes liés:
-→ **@src/Scenes/AGENTS.md** - Scene graph et components
-→ **@src/Audio/AGENTS.md** - Système audio 3D
-→ **@src/Graphics/AGENTS.md** - Render-targets et rendering
-→ **@docs/scene-graph-architecture.md** - Architecture complète Scenes
+- @src/Scenes/AGENTS.md** - Scene graph et components
+- @src/Audio/AGENTS.md** - Système audio 3D
+- @src/Graphics/AGENTS.md** - Render-targets et rendering
+- @docs/scene-graph-architecture.md** - Architecture complète Scenes

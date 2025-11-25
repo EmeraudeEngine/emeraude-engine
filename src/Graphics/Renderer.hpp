@@ -38,8 +38,8 @@
 
 /* Local inclusions for inheritances. */
 #include "Console/Controllable.hpp"
-#include "Libs/ObservableTrait.hpp"
 #include "Libs/ObserverTrait.hpp"
+#include "Libs/ObservableTrait.hpp"
 #include "ServiceInterface.hpp"
 
 /* Local inclusions for usages. */
@@ -278,6 +278,7 @@ namespace EmEn::Graphics
 	 * @note [OBS][STATIC-OBSERVER][STATIC-OBSERVABLE]
 	 * @extends EmEn::ServiceInterface The renderer is a service.
 	 * @extends EmEn::Libs::ObserverTrait The renderer needs to observe handle changes, for instance.
+	 * @extends EmEn::Libs::ObservableTrait The renderer can notify surface changes.
 	 * @extends EmEn::Console::Controllable The console can control the renderer.
 	 * 
 	 * # Performance Optimizations (Cache Lookups)
@@ -303,12 +304,20 @@ namespace EmEn::Graphics
 	 * **Future consideration:** If dynamic pipeline creation is needed during runtime,
 	 * protect cache modifications with std::shared_mutex (read-write lock).
 	 */
-	class Renderer final : public ServiceInterface, public Libs::ObserverTrait, public Console::Controllable
+	class Renderer final : public ServiceInterface, public Libs::ObserverTrait, public Libs::ObservableTrait, public Console::Controllable
 	{
 		public:
 
 			/** @brief Class identifier. */
 			static constexpr auto ClassId{"RendererService"};
+
+			/** @brief Observable notification codes. */
+			enum NotificationCode
+			{
+				WindowContentRefreshed,
+				/* Enumeration boundary. */
+				MaxEnum
+			};
 
 			/**
 			 * @brief Constructs the graphics renderer.
@@ -351,6 +360,22 @@ namespace EmEn::Graphics
 				static const size_t classUID = EmEn::Libs::Hash::FNV1a(ClassId);
 
 				return classUID;
+			}
+
+			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
+			[[nodiscard]]
+			size_t
+			classUID () const noexcept override
+			{
+				return getClassUID();
+			}
+
+			/** @copydoc EmEn::Libs::ObservableTrait::is() const */
+			[[nodiscard]]
+			bool
+			is (size_t classUID) const noexcept override
+			{
+				return classUID == getClassUID();
 			}
 
 			/**
@@ -736,24 +761,6 @@ namespace EmEn::Graphics
 			std::shared_ptr< Vulkan::Sampler > getSampler (const std::string & identifier, const std::function< void (Settings & settings, VkSamplerCreateInfo &) > & setupCreateInfo) noexcept;
 
 			/**
-			 * @brief Checks if the swap-chain has been refreshed and reset the marker.
-			 * @return bool
-			 */
-			[[nodiscard]]
-			bool
-			checkSwapChainRefresh () noexcept
-			{
-				if ( m_swapChainRefreshed )
-				{
-					m_swapChainRefreshed = false;
-
-					return true;
-				}
-
-				return false;
-			}
-
-			/**
 			 * @brief Render a new frame for the active scene.
 			 * @param scene A reference to the scene smart pointer.
 			 * @param overlayManager A reference to the overlay manager.
@@ -781,7 +788,7 @@ namespace EmEn::Graphics
 
 			/** @copydoc EmEn::Libs::ObserverTrait::onNotification() */
 			[[nodiscard]]
-			bool onNotification (const Libs::ObservableTrait * observable, int notificationCode, const std::any & data) noexcept override;
+			bool onNotification (const ObservableTrait * observable, int notificationCode, const std::any & data) noexcept override;
 
 			/** @copydoc EmEn::Console::Controllable::onRegisterToConsole. */
 			void onRegisterToConsole () noexcept override;
@@ -791,7 +798,7 @@ namespace EmEn::Graphics
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool refreshFramebuffer () noexcept;
+			bool recreateSystem () noexcept;
 
 			/**
 			 * @brief Initialize all sub services of the renderer.
@@ -853,16 +860,17 @@ namespace EmEn::Graphics
 			std::shared_ptr< RenderTarget::Abstract > m_windowLessView;
 			Libs::StaticVector< RendererFrameScope, 5 > m_rendererFrameScope;
 			std::unordered_map< size_t, std::shared_ptr< Saphir::Program > > m_programs;
-			std::unordered_map< size_t, std::shared_ptr< Vulkan::GraphicsPipeline > > m_pipelines;
+			std::unordered_map< size_t, std::shared_ptr< Vulkan::GraphicsPipeline > > m_graphicsPipelines;
 			std::unordered_map< std::string, std::shared_ptr< Vulkan::Sampler > > m_samplers;
 			Libs::Time::Statistics::RealTime< std::chrono::high_resolution_clock > m_statistics{30};
 			std::array< VkClearValue, 2 > m_clearColors{};
 			uint32_t m_currentFrameIndex{0};
 			const uint64_t m_timeout{std::chrono::duration_cast< std::chrono::nanoseconds >(std::chrono::milliseconds(1000)).count()};
+			uint32_t m_graphicsPipelinesBuiltCount{0};
+			uint32_t m_graphicsPipelinesReusedCount{0};
 			bool m_debugMode{false};
 			bool m_windowLess{false};
 			bool m_shadowMapsEnabled{true};
 			bool m_renderToTexturesEnabled{true};
-			bool m_swapChainRefreshed{false};
 	};
 }

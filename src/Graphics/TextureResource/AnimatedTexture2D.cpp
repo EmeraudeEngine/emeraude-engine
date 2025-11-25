@@ -229,7 +229,7 @@ namespace EmEn::Graphics::TextureResource
 	}
 
 	bool
-	AnimatedTexture2D::load (Resources::ServiceProvider & serviceProvider) noexcept
+	AnimatedTexture2D::load (Resources::AbstractServiceProvider & serviceProvider) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
@@ -247,7 +247,7 @@ namespace EmEn::Graphics::TextureResource
 	}
 
 	bool
-	AnimatedTexture2D::load (Resources::ServiceProvider & serviceProvider, const std::filesystem::path & filepath) noexcept
+	AnimatedTexture2D::load (Resources::AbstractServiceProvider & serviceProvider, const std::filesystem::path & filepath) noexcept
 	{
 		/* Looking for a movie resource by extracting the resource name from the filepath.
 		 * NOTE: The loading process is synchronous here. */
@@ -260,7 +260,7 @@ namespace EmEn::Graphics::TextureResource
 	}
 
 	bool
-	AnimatedTexture2D::load (Resources::ServiceProvider & /*serviceProvider*/, const Json::Value & /*data*/) noexcept
+	AnimatedTexture2D::load (Resources::AbstractServiceProvider & /*serviceProvider*/, const Json::Value & /*data*/) noexcept
 	{
 		/* NOTE: This resource has no local store,
 		 * so this method won't be called from a resource container! */

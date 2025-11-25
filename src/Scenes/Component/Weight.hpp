@@ -68,7 +68,7 @@ namespace EmEn::Scenes::Component
 			Weight (const std::string & componentName, const AbstractEntity & parentEntity) noexcept
 				: Abstract{componentName, parentEntity}
 			{
-
+				this->enablePhysicalProperties(true);
 			}
 
 			/**
@@ -80,6 +80,7 @@ namespace EmEn::Scenes::Component
 			Weight (const std::string & componentName, const AbstractEntity & parentEntity, const Physics::BodyPhysicalProperties & initialProperties) noexcept
 				: Abstract{componentName, parentEntity}
 			{
+				this->enablePhysicalProperties(true);
 				this->bodyPhysicalProperties().setProperties(initialProperties);
 			}
 
@@ -175,6 +176,12 @@ namespace EmEn::Scenes::Component
 			}
 
 		private:
+
+			/** @copydoc EmEn::Scenes::Component::Abstract::onSuspend() */
+			void onSuspend () noexcept override { }
+
+			/** @copydoc EmEn::Scenes::Component::Abstract::onWakeup() */
+			void onWakeup () noexcept override { }
 
 			/** @copydoc EmEn::Animations::AnimatableInterface::playAnimation() */
 			bool playAnimation (uint8_t animationID, const Libs::Variant & value, size_t cycle) noexcept override;

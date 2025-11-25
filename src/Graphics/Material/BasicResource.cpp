@@ -47,7 +47,7 @@ namespace EmEn::Graphics::Material
 	using namespace Vulkan;
 
 	bool
-	BasicResource::load (Resources::ServiceProvider & /*serviceProvider*/) noexcept
+	BasicResource::load (Resources::AbstractServiceProvider & /*serviceProvider*/) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
@@ -63,7 +63,7 @@ namespace EmEn::Graphics::Material
 	}
 
 	bool
-	BasicResource::load (Resources::ServiceProvider & serviceProvider, const Json::Value & data) noexcept
+	BasicResource::load (Resources::AbstractServiceProvider & serviceProvider, const Json::Value & data) noexcept
 	{
 		if ( !this->beginLoading() )
 		{

@@ -339,11 +339,12 @@ namespace EmEn::Vulkan
 			}
 
 			/**
-			 * @brief Returns a hash for this graphics pipeline according to constructor params.
+			 * @brief Returns a hash for this graphics pipeline according to configured states.
+			 * @note This should be called after all configure*() methods but before finalize().
 			 * @return size_t
 			 */
 			[[nodiscard]]
-			static size_t getHash () noexcept;
+			size_t getHash () const noexcept;
 
 		private:
 
@@ -360,9 +361,6 @@ namespace EmEn::Vulkan
 			 * @return void
 			 */
 			void defaultColorBlendState () noexcept;
-
-			/* FIXME: Remove this !!!! */
-			static size_t s_fakeHash;
 
 			VkPipeline m_handle{VK_NULL_HANDLE};
 			VkGraphicsPipelineCreateInfo m_createInfo{};

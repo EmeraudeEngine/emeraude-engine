@@ -28,13 +28,16 @@
 
 /* Local inclusions. */
 #include "Graphics/Geometry/ResourceGenerator.hpp"
-#include "Graphics/Renderable/MeshResource.hpp"
-#include "Graphics/Material/BasicResource.hpp"
-#include "Resources/Manager.hpp"
+#include "Graphics/RenderableInstance/Abstract.hpp"
+#include "Component/Visual.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::Scenes
 {
+	namespace Component
+	{
+		class Visual;
+	}
 	using namespace Libs;
 	using namespace Libs::Math;
 	using namespace Graphics;

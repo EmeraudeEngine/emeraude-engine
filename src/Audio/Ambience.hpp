@@ -49,6 +49,16 @@ namespace EmEn::Audio
 	{
 		public:
 
+			/**
+			 * @brief Ambience playback state.
+			 */
+			enum class State : uint8_t
+			{
+				Stopped, /**< Not started or stopped. */
+				Playing, /**< Actively playing sounds. */
+				Paused   /**< Paused (gameplay level, sources kept). */
+			};
+
 			/** @brief Class identifier. */
 			static constexpr auto ClassId{"Ambience"};
 
@@ -100,7 +110,29 @@ namespace EmEn::Audio
 			bool
 			isPlaying () const noexcept
 			{
-				return m_active;
+				return m_state == State::Playing;
+			}
+
+			/**
+			 * @brief Returns whether the ambience is active (playing or paused).
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isActive () const noexcept
+			{
+				return m_state != State::Stopped;
+			}
+
+			/**
+			 * @brief Returns the current playback state.
+			 * @return State
+			 */
+			[[nodiscard]]
+			State
+			state () const noexcept
+			{
+				return m_state;
 			}
 
 			/**
@@ -212,6 +244,93 @@ namespace EmEn::Audio
 			void stop () noexcept;
 
 			/**
+			 * @brief Pauses the ambience if currently playing (gameplay level).
+			 *
+			 * Pauses all audio channels using direct OpenAL control.
+			 * Sources are kept allocated and can be quickly resumed.
+			 * Has no effect if the ambience is not playing or already paused.
+			 *
+			 * @note Use this for gameplay pauses within an active scene.
+			 * @note For scene manager level suspension (releasing sources), use suspend().
+			 *
+			 * @see resume() To continue playback after pause.
+			 * @see suspend() For scene manager level control.
+			 * @version 0.8.35
+			 */
+			void pause () noexcept;
+
+			/**
+			 * @brief Resumes the ambience if it was previously paused (gameplay level).
+			 *
+			 * Resumes all paused audio channels using direct OpenAL control.
+			 * Has no effect if the ambience was not paused.
+			 *
+			 * @note Use this for gameplay resumes within an active scene.
+			 * @note For scene manager level wakeup (reacquiring sources), use wakeup().
+			 *
+			 * @see pause() To pause playback.
+			 * @see wakeup() For scene manager level control.
+			 * @version 0.8.35
+			 */
+			void resume () noexcept;
+
+			/**
+			 * @brief Returns whether the ambience is currently paused (gameplay level).
+			 * @return True if paused, false otherwise.
+			 * @version 0.8.35
+			 */
+			[[nodiscard]]
+			bool
+			isPaused () const noexcept
+			{
+				return m_state == State::Paused;
+			}
+
+			/**
+			 * @brief Suspends the ambience when scene is disabled (scene manager level).
+			 *
+			 * Releases all audio sources back to the pool to free resources.
+			 * The playback state is remembered for restoration on wakeup().
+			 * Has no effect if the ambience is not playing or already suspended.
+			 *
+			 * @note Use this when the scene is disabled by the scene manager.
+			 * @note For gameplay pauses (keeping sources), use pause().
+			 *
+			 * @see wakeup() To restore after suspension.
+			 * @see pause() For gameplay level control.
+			 * @version 0.8.35
+			 */
+			void suspend () noexcept;
+
+			/**
+			 * @brief Wakes up the ambience when scene is re-enabled (scene manager level).
+			 *
+			 * Reacquires audio sources from the pool and restores playback
+			 * if the ambience was playing before suspension.
+			 * Has no effect if the ambience was not suspended.
+			 *
+			 * @note Use this when the scene is re-enabled by the scene manager.
+			 * @note For gameplay resumes (sources were kept), use resume().
+			 *
+			 * @see suspend() To suspend when scene is disabled.
+			 * @see resume() For gameplay level control.
+			 * @version 0.8.35
+			 */
+			void wakeup () noexcept;
+
+			/**
+			 * @brief Returns whether the ambience is currently suspended (scene manager level).
+			 * @return True if suspended, false otherwise.
+			 * @version 0.8.35
+			 */
+			[[nodiscard]]
+			bool
+			isSuspended () const noexcept
+			{
+				return m_suspended;
+			}
+
+			/**
 			 * @brief Updates the logics.
 			 * @return void
 			 */
@@ -219,6 +338,7 @@ namespace EmEn::Audio
 
 			/**
 			 * @brief Loads a sound set from a JSON file.
+			 * @note If a set is already load, it will be replaced.
 			 * @param resourceManager A reference to the resource manager.
 			 * @param filepath The path to the filesystem path.
 			 * @return bool
@@ -323,6 +443,7 @@ namespace EmEn::Audio
 			float m_radius{DefaultRadius};
 			uint32_t m_minDelay{DefaultMinDelay};
 			uint32_t m_maxDelay{DefaultMaxDelay};
-			bool m_active{false};
+			State m_state{State::Stopped};
+			bool m_suspended{false};
 	};
 }

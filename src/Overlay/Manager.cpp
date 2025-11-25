@@ -611,34 +611,41 @@ namespace EmEn::Overlay
 	void
 	Manager::updateFramebufferProperties () noexcept
 	{
-		auto & settings = m_primaryServices.settings();
-
 		const auto & windowState = m_window.state();
-		const auto forceScaleX = settings.getOrSetDefault< float >(VideoOverlayForceScaleXKey, DefaultVideoOverlayForceScale);
-		const auto forceScaleY = settings.getOrSetDefault< float >(VideoOverlayForceScaleYKey, DefaultVideoOverlayForceScale);
 
-		/* NOTE: This structure is shared with all screens and surfaces. */
-		m_framebufferProperties.updateProperties(
-			windowState.framebufferWidth,
-			windowState.framebufferHeight,
-			forceScaleX > 0.0F ? forceScaleX : windowState.contentXScale,
-			forceScaleY > 0.0F ? forceScaleY : windowState.contentYScale
-		);
+		if ( auto & settings = m_primaryServices.settings(); settings.getOrSetDefault< bool >(OverlayForceScaleKey, DefaultOverlayForceScale) )
+		{
+			m_framebufferProperties.updateProperties(
+				windowState.framebufferWidth,
+				windowState.framebufferHeight,
+				settings.getOrSetDefault< float >(OverlayScaleXKey, DefaultOverlayScale),
+				settings.getOrSetDefault< float >(OverlayScaleYKey, DefaultOverlayScale)
+			);
+		}
+		else
+		{
+			m_framebufferProperties.updateProperties(
+				windowState.framebufferWidth,
+				windowState.framebufferHeight,
+				windowState.contentXScale,
+				windowState.contentYScale
+			);
+		}
 	}
 
-	bool
-	Manager::updateVideoMemory () noexcept
+	void
+	Manager::processFrameUpdates () noexcept
 	{
-		/* NOTE: This can collide with the resize event from Manager::updatePhysicalRepresentation() in another thread. */
+		/* NOTE: This can collide with the window resize event from Manager::onWindowResized() in another thread. */
 		const std::lock_guard< std::mutex > lock{m_physicalRepresentationUpdateMutex};
 
 		if ( !this->isEnabled() || m_screens.empty() )
 		{
-			return true;
+			return;
 		}
 
-		size_t errors = 0;
-
+		/* NOTE: Only process VISIBLE screens for performance.
+		 * Hidden screens will be processed when they become visible again. */
 		for ( const auto & screen : m_screens | std::views::values )
 		{
 			if ( !screen->isVisible() )
@@ -646,21 +653,17 @@ namespace EmEn::Overlay
 				continue;
 			}
 
-			if ( !screen->updateVideoMemory(false) )
-			{
-				errors++;
-			}
+			screen->processSurfaceUpdates(false);
 		}
-
-		return errors == 0;
 	}
 
 	bool
-	Manager::updatePhysicalRepresentation () noexcept
+	Manager::onWindowResized () noexcept
 	{
-		/* NOTE: This can collide with the successive call to Manager::updateVideoMemory() the rendering loop. */
+		/* NOTE: This can collide with the successive call to Manager::processFrameUpdates() in the rendering loop. */
 		const std::lock_guard< std::mutex > lock{m_physicalRepresentationUpdateMutex};
 
+		/* Step 1: Update shared framebuffer properties with new window dimensions. */
 		this->updateFramebufferProperties();
 
 		if ( m_program == nullptr )
@@ -670,24 +673,21 @@ namespace EmEn::Overlay
 			return false;
 		}
 
-		if ( !m_program->graphicsPipeline()->recreateOnHardware(*m_graphicsRenderer.mainRenderTarget(), m_framebufferProperties.width(), m_framebufferProperties.height()) )
-		{
-			TraceError{ClassId} << "Unable to recreate the graphics pipeline with the new size !" "\n" << m_framebufferProperties;
+		/* NOTE: Pipeline recreation is no longer needed because viewport and scissor are now dynamic states.
+		 * The viewport/scissor are set dynamically in render() using the current render target extent. */
 
-			return false;
+		/* Step 2: Force ALL screens (visible or not) to recalculate their pixel dimensions.
+		 * The 'true' parameter triggers invalidate() on all surfaces, causing them to
+		 * recreate their transition buffers at the new size.
+		 * NOTE: Surfaces are NOT automatically committed. The active buffer continues to render
+		 * with the old content/size until the application explicitly calls commitTransitionBuffer().
+		 * This allows asynchronous renderers (e.g., CEF) to prepare new content before committing. */
+		for ( const auto & screen : m_screens | std::views::values )
+		{
+			screen->processSurfaceUpdates(true);
 		}
 
-		/* NOTE: Update all screens, according to the new framebuffer. */
-		for ( const auto & [name, screen] : m_screens )
-		{
-			if ( !screen->updateVideoMemory(true) )
-			{
-				TraceError{ClassId} << "The UI screen '" << name << "' physical representation update failed ! Disabling it ...";
-
-				screen->setVisibility(false);
-			}
-		}
-
+		/* Step 3: Notify observers of the resize completion. */
 		const auto & windowState = m_window.state();
 
 		this->notify(OverlayResized, std::array< uint32_t, 2 >{
@@ -719,16 +719,32 @@ namespace EmEn::Overlay
 			}
 		}
 
-		/* NOTE: To avoid locking the render thread, we only try to lock the mutex or skip the render. */
-		if ( !m_physicalRepresentationUpdateMutex.try_lock() )
-		{
-			TraceDebug{ClassId} << "Overlay rendering skipped ..." "\n";
-
-			return;
-		}
+		/* Lock for overlay resizing ! */
+		const std::lock_guard< std::mutex > overlayLock{m_physicalRepresentationUpdateMutex};
 
 		/* Bind the graphics pipeline. */
 		commandBuffer.bind(*m_program->graphicsPipeline());
+
+		/* NOTE: Set dynamic viewport and scissor based on current render target extent. */
+		{
+			const auto & extent3D = renderTarget->extent();
+
+			const VkViewport viewport{
+				.x = 0.0F,
+				.y = 0.0F,
+				.width = static_cast< float >(extent3D.width),
+				.height = static_cast< float >(extent3D.height),
+				.minDepth = 0.0F,
+				.maxDepth = 1.0F
+			};
+			vkCmdSetViewport(commandBuffer.handle(), 0, 1, &viewport);
+
+			const VkRect2D scissor{
+				.offset = {0, 0},
+				.extent = {extent3D.width, extent3D.height}
+			};
+			vkCmdSetScissor(commandBuffer.handle(), 0, 1, &scissor);
+		}
 
 		/* Bind the geometry VBO and the optional IBO. */
 		commandBuffer.bind(*m_surfaceGeometry, 0);
@@ -765,13 +781,27 @@ namespace EmEn::Overlay
 	{
 		if ( observable->is(Window::getClassUID()) )
 		{
-			if ( notificationCode == Window::Created )
+			switch ( notificationCode )
 			{
-				this->updateFramebufferProperties();
-			}
-			else if constexpr ( ObserverDebugEnabled )
-			{
-				TraceDebug{ClassId} << "Event #" << notificationCode << " from the window ignored.";
+				case Window::Created :
+					this->updateFramebufferProperties();
+					break;
+
+					// FIXME: Check if this is useful.
+				/* NOTE: These two notifications invalidate the framebuffer content. */
+				case Window::OSNotifiesFramebufferResized :
+				case Window::OSRequestsToRescaleContentBy :
+				//	/* NOTE: When the window moves to a monitor with a different DPI,
+				//	 * we need to update framebuffer properties and notify observers. */
+				//	this->updatePhysicalRepresentation();
+					break;
+
+				default:
+					if constexpr ( ObserverDebugEnabled )
+					{
+						TraceDebug{ClassId} << "Event #" << notificationCode << " from the window ignored.";
+					}
+					break;
 			}
 
 			return true;

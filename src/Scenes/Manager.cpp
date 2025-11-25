@@ -43,7 +43,6 @@
 #include "Graphics/Renderable/SeaLevelInterface.hpp"
 #include "Resources/Manager.hpp"
 #include "PrimaryServices.hpp"
-#include "Scenes/Component/AbstractLightEmitter.hpp"
 
 namespace EmEn::Scenes
 {
@@ -406,12 +405,10 @@ namespace EmEn::Scenes
 
 		if ( m_activeScene == nullptr )
 		{
-			Tracer::info(ClassId, "There is no active scene!");
-
 			return true;
 		}
 
-		TraceInfo{ClassId} << "Refreshing the active scene '" << m_activeScene->name() << "' ...";
+		TraceDebug{ClassId} << "Refreshing the active scene '" << m_activeScene->name() << "' ...";
 
 		return m_activeScene->refreshRenderableInstances();
 	}

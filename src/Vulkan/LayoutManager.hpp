@@ -28,10 +28,9 @@
 
 /* STL inclusions. */
 #include <cstddef>
-#include <array>
-#include <map>
 #include <memory>
 #include <string>
+#include <unordered_map>
 
 /* Third-party inclusions. */
 #include <vulkan/vulkan.h>
@@ -138,7 +137,7 @@ namespace EmEn::Vulkan
 			bool onTerminate () noexcept override;
 
 			std::shared_ptr< Device > m_device;
-			std::map< std::string, std::shared_ptr< DescriptorSetLayout > > m_descriptorSetLayouts;
-			std::map< std::string, std::shared_ptr< PipelineLayout > > m_pipelineLayouts;
+			std::unordered_map< std::string, std::shared_ptr< DescriptorSetLayout > > m_descriptorSetLayouts;
+			std::unordered_map< std::string, std::shared_ptr< PipelineLayout > > m_pipelineLayouts;
 	};
 }

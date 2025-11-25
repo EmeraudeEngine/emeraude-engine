@@ -86,15 +86,27 @@ namespace EmEn::Graphics::RenderTarget
 	void
 	Abstract::setViewport (const CommandBuffer & commandBuffer) const noexcept
 	{
-		VkViewport viewport{};
-		viewport.x = 0.0F;
-		viewport.y = 0.0F;
-		viewport.width = static_cast< float >(m_extent.width);
-		viewport.height = static_cast< float >(m_extent.height);
-		viewport.minDepth = 0.0F;
-		viewport.maxDepth = 1.0F;
+		/* NOTE: Set dynamic viewport. */
+		{
+			VkViewport viewport{};
+			viewport.x = 0.0F;
+			viewport.y = 0.0F;
+			viewport.width = static_cast< float >(m_extent.width);
+			viewport.height = static_cast< float >(m_extent.height);
+			viewport.minDepth = 0.0F;
+			viewport.maxDepth = 1.0F;
 
-		vkCmdSetViewport(commandBuffer.handle(), 0, 1, &viewport);
+			vkCmdSetViewport(commandBuffer.handle(), 0, 1, &viewport);
+		}
+
+		/* NOTE: Set dynamic scissor. */
+		{
+			VkRect2D scissor{};
+			scissor.offset = {0, 0};
+			scissor.extent = {m_extent.width, m_extent.height};
+
+			vkCmdSetScissor(commandBuffer.handle(), 0, 1, &scissor);
+		}
 	}
 
 	bool

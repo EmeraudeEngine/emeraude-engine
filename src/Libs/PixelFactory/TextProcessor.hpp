@@ -82,6 +82,9 @@ namespace EmEn::Libs::PixelFactory
 				m_pixmap = &pixmap;
 				m_rectangle = pixmap.rectangle();
 
+				/* NOTE: Recalculate text metrics for the new pixmap dimensions. */
+				this->updateMetrics();
+
 				return true;
 			}
 
@@ -288,15 +291,16 @@ namespace EmEn::Libs::PixelFactory
 					m_rectangle.top() + (row * m_textMetrics.lineHeight)
 				);
 
+				/* NOTE: Use blendFreePixel for bounds-safe pixel operations during resize transitions. */
 				for ( dimension_t coordX = 0; coordX < glyphArea.width(); ++coordX )
 				{
 					for ( dimension_t coordY = 0; coordY < glyphArea.height(); ++coordY )
 					{
 						if constexpr ( std::is_floating_point_v< pixel_data_t > )
 						{
-							m_pixmap->blendPixel(
-								glyphArea.offsetX() + coordX,
-								glyphArea.offsetY() + coordY,
+							m_pixmap->blendFreePixel(
+								static_cast< int32_t >(glyphArea.offsetX() + coordX),
+								static_cast< int32_t >(glyphArea.offsetY() + coordY),
 								m_fontColor,
 								m_mode,
 								glyph.pixelElement(coordX, coordY, Channel::Red)
@@ -306,9 +310,9 @@ namespace EmEn::Libs::PixelFactory
 						{
 							const auto value = static_cast< float >(glyph.pixelElement(coordX, coordY, Channel::Red)) / static_cast< float >(std::numeric_limits< pixel_data_t >::max());
 
-							m_pixmap->blendPixel(
-								glyphArea.left() + coordX,
-								glyphArea.top() + coordY,
+							m_pixmap->blendFreePixel(
+								static_cast< int32_t >(glyphArea.left() + coordX),
+								static_cast< int32_t >(glyphArea.top() + coordY),
 								m_fontColor,
 								m_mode,
 								value

@@ -27,8 +27,8 @@
 #include "Multiple.hpp"
 
 /* STL inclusions. */
-#include <cstring>
 #include <array>
+#include <cstring>
 #include <mutex>
 
 /* Local inclusions. */
@@ -114,6 +114,9 @@ namespace EmEn::Graphics::RenderableInstance
 	bool
 	Multiple::updateLocalData (const CartesianFrame< float > & instanceLocation, uint32_t instanceIndex) noexcept
 	{
+		/* [VULKAN-CPU-SYNC] Protects local data (Logic Thread) */
+		const std::lock_guard< std::mutex > lock{m_localDataAccess};
+
 		/* Check against the local data. */
 		if ( instanceIndex >= m_instanceCount )
 		{
@@ -174,6 +177,9 @@ namespace EmEn::Graphics::RenderableInstance
 	bool
 	Multiple::updateLocalData (const std::vector< CartesianFrame< float > > & instanceLocations, uint32_t instanceOffset) noexcept
 	{
+		/* [VULKAN-CPU-SYNC] Protects local data (Logic Thread) */
+		const std::lock_guard< std::mutex > lock{m_localDataAccess};
+
 		/* Check against the local data. */
 		if ( const auto endOffset = instanceOffset + instanceLocations.size(); endOffset > m_instanceCount )
 		{
@@ -238,7 +244,7 @@ namespace EmEn::Graphics::RenderableInstance
 	}
 
 	void
-	Multiple::resetLocalData () noexcept
+	Multiple::resetLocalData() noexcept
 	{
 		const auto limit = m_instanceCount;
 
@@ -285,10 +291,10 @@ namespace EmEn::Graphics::RenderableInstance
 	}
 
 	bool
-	Multiple::createOnHardware (const std::shared_ptr< Device > & device) noexcept
+	Multiple::createOnHardware(const std::shared_ptr< Device > & device) noexcept
 	{
-		/* [VULKAN-CPU-SYNC] Maybe useless */
-		const std::lock_guard< std::mutex > lock{m_GPUMemoryAccess};
+		/* [VULKAN-CPU-SYNC] Protects local data (Render Thread) */
+		const std::lock_guard< std::mutex > lock{m_localDataAccess};
 
 		if ( this->isModelMatricesCreated() )
 		{
@@ -316,10 +322,10 @@ namespace EmEn::Graphics::RenderableInstance
 	}
 
 	bool
-	Multiple::updateVideoMemory () noexcept
+	Multiple::updateVideoMemory() noexcept
 	{
-		/* [VULKAN-CPU-SYNC] Maybe useless */
-		const std::lock_guard< std::mutex > lock{m_GPUMemoryAccess};
+		/* [VULKAN-CPU-SYNC] Protects local data (Render Thread) */
+		const std::lock_guard< std::mutex > lock{m_localDataAccess};
 
 		if constexpr ( IsDebug )
 		{
@@ -351,20 +357,21 @@ namespace EmEn::Graphics::RenderableInstance
 	}
 
 	void
-	Multiple::pushMatricesForShadowCasting (const CommandBuffer & commandBuffer, const PipelineLayout & pipelineLayout, const Saphir::Program & program, uint32_t readStateIndex, const ViewMatricesInterface & viewMatrices, const CartesianFrame< float > * /*worldCoordinates*/) const noexcept
+	Multiple::pushMatricesForShadowCasting (const RenderPassContext & passContext, const PushConstantContext & pushContext, const CartesianFrame< float > * /*worldCoordinates*/) const noexcept
 	{
-		const VkShaderStageFlags stageFlags = program.hasGeometryShader() ?
-			VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_GEOMETRY_BIT :
-			VK_SHADER_STAGE_VERTEX_BIT;
+		/* For cubemap rendering, View/Projection matrices are in UBO indexed by gl_ViewIndex.
+		 * Model matrices are already in the VBO, so nothing to push! */
+		if ( passContext.isCubemap )
+		{
+			/* No push constants needed for cubemap instancing. */
+			return;
+		}
 
-		/* Prepare the view matrix (V). */
-		const auto & viewMatrix = viewMatrices.viewMatrix(readStateIndex,this->isUsingInfinityView(), 0);
+		/* Classic 2D rendering: compute and push VP (Model is in VBO). */
+		const auto & viewMatrix = passContext.viewMatrices->viewMatrix(passContext.readStateIndex, this->isUsingInfinityView(), 0);
+		const auto viewProjectionMatrix = passContext.viewMatrices->projectionMatrix(passContext.readStateIndex) * viewMatrix;
 
-		/* Compute the view projection matrix (VP).
-		 * NOTE: The model matrix will be extracted on the GPU from the second vertex array buffer (VBO). */
-		const auto viewProjectionMatrix = viewMatrices.projectionMatrix(readStateIndex) * viewMatrix;
-
-		if ( program.wasBillBoardingEnabled() )
+		if ( pushContext.useBillboarding )
 		{
 			if constexpr ( MergePushConstants )
 			{
@@ -375,9 +382,9 @@ namespace EmEn::Graphics::RenderableInstance
 
 				/* Push the view matrix (V) and the view projection matrix (VP) in a single call. */
 				vkCmdPushConstants(
-					commandBuffer.handle(),
-					pipelineLayout.handle(),
-					stageFlags,
+					passContext.commandBuffer->handle(),
+					pushContext.pipelineLayout->handle(),
+					pushContext.stageFlags,
 					0,
 					MatrixBytes * 2,
 					buffer.data()
@@ -387,9 +394,9 @@ namespace EmEn::Graphics::RenderableInstance
 			{
 				/* Push the view matrix (V). */
 				vkCmdPushConstants(
-					commandBuffer.handle(),
-					pipelineLayout.handle(),
-					stageFlags,
+					passContext.commandBuffer->handle(),
+					pushContext.pipelineLayout->handle(),
+					pushContext.stageFlags,
 					0,
 					MatrixBytes,
 					viewMatrix.data()
@@ -397,9 +404,9 @@ namespace EmEn::Graphics::RenderableInstance
 
 				/* Push the view projection matrix (VP). */
 				vkCmdPushConstants(
-					commandBuffer.handle(),
-					pipelineLayout.handle(),
-					stageFlags,
+					passContext.commandBuffer->handle(),
+					pushContext.pipelineLayout->handle(),
+					pushContext.stageFlags,
 					MatrixBytes,
 					MatrixBytes,
 					viewProjectionMatrix.data()
@@ -410,9 +417,9 @@ namespace EmEn::Graphics::RenderableInstance
 		{
 			/* Push the view projection matrix (VP). */
 			vkCmdPushConstants(
-				commandBuffer.handle(),
-				pipelineLayout.handle(),
-				stageFlags,
+				passContext.commandBuffer->handle(),
+				pushContext.pipelineLayout->handle(),
+				pushContext.stageFlags,
 				0,
 				MatrixBytes,
 				viewProjectionMatrix.data()
@@ -421,20 +428,21 @@ namespace EmEn::Graphics::RenderableInstance
 	}
 
 	void
-	Multiple::pushMatricesForRendering (const CommandBuffer & commandBuffer, const PipelineLayout & pipelineLayout, const Saphir::Program & program, uint32_t readStateIndex, const ViewMatricesInterface & viewMatrices, const CartesianFrame< float > * /*worldCoordinates*/) const noexcept
+	Multiple::pushMatricesForRendering (const RenderPassContext & passContext, const PushConstantContext & pushContext, const CartesianFrame< float > * /*worldCoordinates*/) const noexcept
 	{
-		const VkShaderStageFlags stageFlags = program.hasGeometryShader() ?
-			VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_GEOMETRY_BIT :
-			VK_SHADER_STAGE_VERTEX_BIT;
+		/* For cubemap rendering, View/Projection matrices are in UBO indexed by gl_ViewIndex.
+		 * Model matrices are already in the VBO, so nothing to push! */
+		if ( passContext.isCubemap )
+		{
+			/* No push constants needed for cubemap instancing. */
+			return;
+		}
 
-		/* Prepare the view matrix (V). */
-		const auto & viewMatrix = viewMatrices.viewMatrix(readStateIndex,this->isUsingInfinityView(), 0);
+		/* Classic 2D rendering: compute and push VP (Model is in VBO). */
+		const auto & viewMatrix = passContext.viewMatrices->viewMatrix(passContext.readStateIndex, this->isUsingInfinityView(), 0);
+		const auto viewProjectionMatrix = passContext.viewMatrices->projectionMatrix(passContext.readStateIndex) * viewMatrix;
 
-		/* Compute the view projection matrix (VP).
-		 * NOTE: The model matrix will be extracted on the GPU from the second vertex array buffer (VBO). */
-		const auto viewProjectionMatrix = viewMatrices.projectionMatrix(readStateIndex) * viewMatrix;
-
-		if ( program.wasAdvancedMatricesEnabled() || program.wasBillBoardingEnabled() )
+		if ( pushContext.useAdvancedMatrices || pushContext.useBillboarding )
 		{
 			if constexpr ( MergePushConstants )
 			{
@@ -445,9 +453,9 @@ namespace EmEn::Graphics::RenderableInstance
 
 				/* Push the view matrix (V) and the view projection matrix (VP) in a single call. */
 				vkCmdPushConstants(
-					commandBuffer.handle(),
-					pipelineLayout.handle(),
-					stageFlags,
+					passContext.commandBuffer->handle(),
+					pushContext.pipelineLayout->handle(),
+					pushContext.stageFlags,
 					0,
 					MatrixBytes * 2,
 					buffer.data()
@@ -457,9 +465,9 @@ namespace EmEn::Graphics::RenderableInstance
 			{
 				/* Push the view matrix (V). */
 				vkCmdPushConstants(
-					commandBuffer.handle(),
-					pipelineLayout.handle(),
-					stageFlags,
+					passContext.commandBuffer->handle(),
+					pushContext.pipelineLayout->handle(),
+					pushContext.stageFlags,
 					0,
 					MatrixBytes,
 					viewMatrix.data()
@@ -467,9 +475,9 @@ namespace EmEn::Graphics::RenderableInstance
 
 				/* Push the view projection matrix (VP). */
 				vkCmdPushConstants(
-					commandBuffer.handle(),
-					pipelineLayout.handle(),
-					stageFlags,
+					passContext.commandBuffer->handle(),
+					pushContext.pipelineLayout->handle(),
+					pushContext.stageFlags,
 					MatrixBytes,
 					MatrixBytes,
 					viewProjectionMatrix.data()
@@ -480,9 +488,9 @@ namespace EmEn::Graphics::RenderableInstance
 		{
 			/* Push the view projection matrix (VP). */
 			vkCmdPushConstants(
-				commandBuffer.handle(),
-				pipelineLayout.handle(),
-				stageFlags,
+				passContext.commandBuffer->handle(),
+				pushContext.pipelineLayout->handle(),
+				pushContext.stageFlags,
 				0,
 				MatrixBytes,
 				viewProjectionMatrix.data()

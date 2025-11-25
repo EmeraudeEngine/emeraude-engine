@@ -47,7 +47,7 @@ namespace EmEn
 	{
 		auto & settings = m_primaryServices.settings();
 		
-		m_showInformation = settings.getOrSetDefault< bool >(GLFWShowInformationKey, DefaultGLFWShowInformation);
+		m_showInformation = settings.getOrSetDefault< bool >(VideoShowInformationKey, DefaultVideoShowInformation);
 
 		glfwSetErrorCallback(Tracer::traceGLFW);
 

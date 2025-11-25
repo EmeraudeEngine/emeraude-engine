@@ -1,12 +1,12 @@
-# Saphir Shader System - Development Context
+# Saphir Shader System
 
 Context spécifique pour le développement du système de génération automatique de shaders d'Emeraude Engine.
 
-## 🎯 Vue d'ensemble du module
+## Vue d'ensemble du module
 
 Saphir génère automatiquement du code GLSL à partir des propriétés de matériaux, des attributs géométriques et du contexte de scène. Il élimine le besoin de centaines de variantes de shaders écrites manuellement.
 
-## 📋 Règles spécifiques à Saphir/
+## Règles spécifiques à Saphir/
 
 ### Philosophie de génération
 - **Génération paramétrique** : Shaders créés à partir d'inconnues (material + geometry + scene)
@@ -26,7 +26,7 @@ Geometry attributes:   [positions, normals, uvs]  // PAS de tangents!
 → ÉCHEC avec log détaillé
 ```
 
-## 🛠️ Commandes de développement
+## Commandes de développement
 
 ```bash
 # Tests spécifiques
@@ -34,7 +34,7 @@ ctest -R Saphir
 ./test --filter="*Shader*"
 ```
 
-## 🔗 Fichiers importants
+## Fichiers importants
 
 - `CodeGeneratorInterface.cpp/.hpp` - Interface base pour tous les générateurs
 - `LightGenerator.cpp/.hpp` - Génération éclairage (PerFragment, PerVertex)
@@ -42,7 +42,7 @@ ctest -R Saphir
 - `ShaderManager.cpp/.hpp` - Coordinateur principal système Saphir
 - `@docs/saphir-shader-system.md` - Architecture complète du système
 
-## ⚡ Patterns de développement
+## Patterns de développement
 
 ### Ajout d'un nouveau générateur
 1. Hériter de `CodeGeneratorInterface`
@@ -62,7 +62,7 @@ ctest -R Saphir
 3. Simplifier matériel OU enrichir géométrie
 4. Tester avec matériel par défaut d'abord
 
-## 🚨 Points d'attention
+## Points d'attention
 
 - **Strict checking** : Material requirements DOIT être satisfait par geometry
 - **Cache par hash** : Inputs identiques → même shader (performance)
@@ -72,13 +72,13 @@ ctest -R Saphir
 - **Utilisé par Graphics et Overlay** : Graphics (3D), Overlay (2D) utilisent Saphir
 - **Génération runtime** : Shaders générés à la demande pendant chargement resources
 
-## 📚 Documentation détaillée
+## Documentation détaillée
 
 Pour l'architecture complète du système Saphir:
-→ **@docs/saphir-shader-system.md** - Génération paramétrique, compatibilité, cache
+- @docs/saphir-shader-system.md** - Génération paramétrique, compatibilité, cache
 
 Systèmes liés:
-→ **@src/Graphics/AGENTS.md** - Material et Geometry pour génération 3D
-→ **@src/Overlay/AGENTS.md** - Pipeline 2D via OverlayGenerator
-→ **@src/Resources/AGENTS.md** - Génération pendant onDependenciesLoaded()
-→ **@src/Vulkan/AGENTS.md** - Compilation SPIR-V et pipelines
+- @src/Graphics/AGENTS.md** - Material et Geometry pour génération 3D
+- @src/Overlay/AGENTS.md** - Pipeline 2D via OverlayGenerator
+- @src/Resources/AGENTS.md** - Génération pendant onDependenciesLoaded()
+- @src/Vulkan/AGENTS.md** - Compilation SPIR-V et pipelines

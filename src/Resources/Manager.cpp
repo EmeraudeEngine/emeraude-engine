@@ -65,6 +65,49 @@ namespace EmEn::Resources
 {
 	using namespace Libs;
 
+	ContainerInterface *
+	Manager::getContainerInternal (const std::type_index & typeIndex) noexcept
+	{
+		const auto containerIt = m_containers.find(typeIndex);
+
+		if ( containerIt == m_containers.end() )
+		{
+			Tracer::fatal(ClassId, "Container does not exist !");
+
+			return nullptr;
+		}
+
+		return containerIt->second.get();
+	}
+
+	const ContainerInterface *
+	Manager::getContainerInternal (const std::type_index & typeIndex) const noexcept
+	{
+		const auto containerIt = m_containers.find(typeIndex);
+
+		if ( containerIt == m_containers.end() )
+		{
+			Tracer::fatal(ClassId, "Container does not exist !");
+
+			return nullptr;
+		}
+
+		return containerIt->second.get();
+	}
+
+	std::shared_ptr< std::unordered_map< std::string, BaseInformation > >
+	Manager::getLocalStore (const std::string & storeName) noexcept
+	{
+		const auto it = m_localStores.find(storeName);
+
+		if ( it == m_localStores.cend() )
+		{
+			return nullptr;
+		}
+
+		return it->second;
+	}
+
 	void
 	Manager::setVerbosity (bool state) noexcept
 	{
@@ -658,5 +701,28 @@ namespace EmEn::Resources
 	Manager::isJSONData (const std::string & buffer) noexcept
 	{
 		return buffer.find('{') != std::string::npos;
+	}
+
+	std::ostream &
+	operator<< (std::ostream & out, const Manager & obj)
+	{
+		out << "Resources stores :" "\n";
+
+		for ( const auto & [name, store] : obj.m_localStores )
+		{
+			out << " - " << name << " (" << store->size() << " resources)" << '\n';
+		}
+
+		return out;
+	}
+
+	std::string
+	to_string (const Manager & obj) noexcept
+	{
+		std::stringstream output;
+
+		output << obj;
+
+		return output.str();
 	}
 }

@@ -1,12 +1,12 @@
-# Vulkan System - Development Context
+# Vulkan System
 
 Context spécifique pour le développement de la couche d'abstraction Vulkan d'Emeraude Engine.
 
-## 🎯 Vue d'ensemble du module
+## Vue d'ensemble du module
 
 Couche d'abstraction Vulkan qui masque la complexité de l'API tout en offrant un contrôle précis pour les applications 3D modernes. JAMAIS d'appels directs à Vulkan depuis le code haut niveau.
 
-## 📋 Règles spécifiques à Vulkan/
+## Règles spécifiques à Vulkan/
 
 ### Abstraction obligatoire
 - **JAMAIS** d'appels directs aux fonctions Vulkan depuis `Graphics/` ou code client
@@ -28,16 +28,30 @@ Couche d'abstraction Vulkan qui masque la complexité de l'API tout en offrant u
 - Viewport Vulkan Y-inversé géré automatiquement
 - Pas de conversion dans les shaders
 
-## 🔗 Fichiers importants
+### Performance: std::span pour APIs de barrières
+
+`CommandBuffer` utilise `std::span` pour les méthodes de synchronisation:
+
+```cpp
+void pipelineBarrier(std::span< const VkImageMemoryBarrier > barriers, ...);
+void waitEvents(std::span< const VkEvent > events, ...);
+```
+
+**Avantages:**
+- Accepte `StaticVector`, `std::vector`, `std::array` sans copie
+- Zero allocation côté appelant avec `StaticVector`
+- Rétro-compatible avec le code existant utilisant `std::vector`
+
+## Fichiers importants
 
 - `Device.cpp/.hpp` - Abstraction du device logique Vulkan
 - `Buffer.cpp/.hpp` - Gestion des buffers avec VMA
 - `Image.cpp/.hpp` - Gestion des textures et images
 - `GraphicsPipeline.cpp/.hpp` - Pipelines de rendu
-- `CommandBuffer.cpp/.hpp` - Enregistrement des commandes
+- `CommandBuffer.cpp/.hpp` - Enregistrement des commandes (utilise std::span)
 - `TransferManager.cpp/.hpp` - Transferts CPU-GPU
 
-## ⚡ Patterns de développement
+## Patterns de développement
 
 ### Création d'une nouvelle ressource GPU
 1. Hériter de `AbstractDeviceDependentObject`
@@ -57,7 +71,7 @@ Couche d'abstraction Vulkan qui masque la complexité de l'API tout en offrant u
 3. Synchronisation par fences pour la cohérence
 4. Batching des petits transferts
 
-## 🚨 Points d'attention
+## Points d'attention
 
 - **Destruction ordonnée** : Détruire les ressources dans l'ordre inverse de création
 - **Thread safety** : CommandPool par thread, CommandBuffer non partagés
@@ -67,13 +81,13 @@ Couche d'abstraction Vulkan qui masque la complexité de l'API tout en offrant u
 - **VMA obligatoire** : Toute allocation GPU via VMA, jamais vkAllocateMemory direct
 - **Y-down setup** : Viewport et projection configurés pour Y-down moteur
 
-## 📚 Documentation détaillée
+## Documentation détaillée
 
 Pour la plateforme Vulkan:
-→ **Vulkan documentation officielle** - Spécifications API complètes
+- Vulkan documentation officielle - Spécifications API complètes
 
 Systèmes liés:
-→ **@docs/coordinate-system.md** - Configuration Y-down pour Vulkan
-→ **@src/Graphics/AGENTS.md** - Utilise abstractions Vulkan (Buffer, Image, Pipeline)
-→ **@src/Saphir/AGENTS.md** - Génère SPIR-V pour pipelines Vulkan
-→ **@src/Resources/AGENTS.md** - Upload GPU via TransferManager
+- @docs/coordinate-system.md - Configuration Y-down pour Vulkan
+- @src/Graphics/AGENTS.md - Utilise abstractions Vulkan (Buffer, Image, Pipeline)
+- @src/Saphir/AGENTS.md - Génère SPIR-V pour pipelines Vulkan
+- @src/Resources/AGENTS.md - Upload GPU via TransferManager

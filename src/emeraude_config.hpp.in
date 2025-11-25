@@ -95,7 +95,7 @@
 
 /* NOTE: Code will use the GCC macro for printing function signature. */
 #ifdef _MSC_VER
-    #define __PRETTY_FUNCTION__ __FUNCSIG__
+	#define __PRETTY_FUNCTION__ __FUNCSIG__
 #endif
 
 #define EMERAUDE_ENGINE 1
@@ -152,42 +152,42 @@ namespace EmEn
 	constexpr bool IsMacOS{IS_MACOS};
 	constexpr auto OSName{OS_NAME};
 
-    constexpr auto EngineName{"@PROJECT_NAME@"};
-    constexpr unsigned int VersionMajor{@PROJECT_VERSION_MAJOR@};
-    constexpr unsigned int VersionMinor{@PROJECT_VERSION_MINOR@};
-    constexpr unsigned int VersionPatch{@PROJECT_VERSION_PATCH@};
-    constexpr auto VersionString{"@PROJECT_VERSION_MAJOR@.@PROJECT_VERSION_MINOR@.@PROJECT_VERSION_PATCH@"};
-    constexpr auto InternetCheckDomain{"@EMERAUDE_INTERNET_CHECK_DOMAIN@"};
-    constexpr auto DefaultUserAgent{"@PROJECT_NAME@/@PROJECT_VERSION_MAJOR@.@PROJECT_VERSION_MINOR@.@PROJECT_VERSION_PATCH@ (" PLATFORM_TARGETED ")"};
+	constexpr auto EngineName{"@PROJECT_NAME@"};
+	constexpr unsigned int VersionMajor{@PROJECT_VERSION_MAJOR@};
+	constexpr unsigned int VersionMinor{@PROJECT_VERSION_MINOR@};
+	constexpr unsigned int VersionPatch{@PROJECT_VERSION_PATCH@};
+	constexpr auto VersionString{"@PROJECT_VERSION_MAJOR@.@PROJECT_VERSION_MINOR@.@PROJECT_VERSION_PATCH@"};
+	constexpr auto InternetCheckDomain{"@EMERAUDE_INTERNET_CHECK_DOMAIN@"};
+	constexpr auto DefaultUserAgent{"@PROJECT_NAME@/@PROJECT_VERSION_MAJOR@.@PROJECT_VERSION_MINOR@.@PROJECT_VERSION_PATCH@ (" PLATFORM_TARGETED ")"};
 
-    #ifdef DEBUG
-    	constexpr bool IsDebug{true};
-        constexpr bool IsRelease{false};
+	#ifdef DEBUG
+		constexpr bool IsDebug{true};
+		constexpr bool IsRelease{false};
 
-        constexpr bool ObserverDebugEnabled{@EMERAUDE_DEBUG_OBSERVER_PATTERN@};
-        constexpr bool PixelFactoryDebugEnabled{@EMERAUDE_DEBUG_PIXEL_FACTORY@};
-        constexpr bool VertexFactoryDebugEnabled{@EMERAUDE_DEBUG_VERTEX_FACTORY@};
-        constexpr bool WaveFactoryDebugEnabled{@EMERAUDE_DEBUG_WAVE_FACTORY@};
-        constexpr bool KeyboardInputDebugEnabled{@EMERAUDE_DEBUG_KEYBOARD_INPUT@};
-        constexpr bool PointerInputDebugEnabled{@EMERAUDE_DEBUG_POINTER_INPUT@};
-        constexpr bool WindowEventsDebugEnabled{@EMERAUDE_DEBUG_WINDOW_EVENTS@};
-        constexpr bool VulkanTrackingDebugEnabled{@EMERAUDE_DEBUG_VULKAN_TRACKING@};
-    #else
-    	constexpr bool IsDebug{false};
-        constexpr bool IsRelease{true};
+		constexpr bool ObserverDebugEnabled{@EMERAUDE_DEBUG_OBSERVER_PATTERN@};
+		constexpr bool PixelFactoryDebugEnabled{@EMERAUDE_DEBUG_PIXEL_FACTORY@};
+		constexpr bool VertexFactoryDebugEnabled{@EMERAUDE_DEBUG_VERTEX_FACTORY@};
+		constexpr bool WaveFactoryDebugEnabled{@EMERAUDE_DEBUG_WAVE_FACTORY@};
+		constexpr bool KeyboardInputDebugEnabled{@EMERAUDE_DEBUG_KEYBOARD_INPUT@};
+		constexpr bool PointerInputDebugEnabled{@EMERAUDE_DEBUG_POINTER_INPUT@};
+		constexpr bool WindowEventsDebugEnabled{@EMERAUDE_DEBUG_WINDOW_EVENTS@};
+		constexpr bool VulkanTrackingDebugEnabled{@EMERAUDE_DEBUG_VULKAN_TRACKING@};
+	#else
+		constexpr bool IsDebug{false};
+		constexpr bool IsRelease{true};
 
-        constexpr bool ObserverDebugEnabled{false};
-        constexpr bool PixelFactoryDebugEnabled{false};
-        constexpr bool VertexFactoryDebugEnabled{false};
-        constexpr bool WaveFactoryDebugEnabled{false};
-        constexpr bool KeyboardInputDebugEnabled{false};
-        constexpr bool PointerInputDebugEnabled{false};
-        constexpr bool WindowEventsDebugEnabled{false};
-        constexpr bool VulkanTrackingDebugEnabled{false};
-    #endif
+		constexpr bool ObserverDebugEnabled{false};
+		constexpr bool PixelFactoryDebugEnabled{false};
+		constexpr bool VertexFactoryDebugEnabled{false};
+		constexpr bool WaveFactoryDebugEnabled{false};
+		constexpr bool KeyboardInputDebugEnabled{false};
+		constexpr bool PointerInputDebugEnabled{false};
+		constexpr bool WindowEventsDebugEnabled{false};
+		constexpr bool VulkanTrackingDebugEnabled{false};
+	#endif
 
-    constexpr bool ThreadPoolDebugEnabled{@EMERAUDE_DEBUG_THREAD_POOL@};
-    constexpr unsigned int ThreadPoolDebugEnabledNumThreads{@EMERAUDE_DEBUG_THREAD_POOL_N@};
+	constexpr bool ThreadPoolDebugEnabled{@EMERAUDE_DEBUG_THREAD_POOL@};
+	constexpr unsigned int ThreadPoolDebugEnabledNumThreads{@EMERAUDE_DEBUG_THREAD_POOL_N@};
 }
 
 #undef ON

@@ -35,13 +35,15 @@
 #include <ranges>
 
 /* Local inclusions. */
+#include "Scenes/Component/AbstractModifier.hpp"
+#include "Scenes/Component/Camera.hpp"
+#include "Scenes/Component/Microphone.hpp"
+#include "Scenes/NodeCrawler.hpp"
 #include "Audio/HardwareOutput.hpp"
 #include "Audio/Manager.hpp"
 #include "Graphics/Renderer.hpp"
 #include "Input/Manager.hpp"
-#include "NodeCrawler.hpp"
 #include "Tracer.hpp"
-#include "Vulkan/SwapChain.hpp" // FIXME: Should not be there
 
 namespace EmEn::Scenes
 {
@@ -57,6 +59,13 @@ namespace EmEn::Scenes
 		/* From 'Scene setup data' */
 		{
 			m_initialized = false;
+
+			/* NOTE: Stop and release ambience. */
+			if ( m_ambience != nullptr )
+			{
+				m_ambience->stop();
+				m_ambience.reset();
+			}
 
 			/* NOTE: Release all shared_ptr. */
 			m_environmentEffects.clear();
@@ -226,9 +235,80 @@ namespace EmEn::Scenes
 		return true;
 	}
 
+	void
+	Scene::suspendAllEntities () noexcept
+	{
+		/* Suspend ambience (release audio sources back to pool). */
+		if ( m_ambience != nullptr )
+		{
+			m_ambience->suspend();
+		}
+
+		/* Suspend all static entities. */
+		{
+			const std::lock_guard< std::mutex > lock{m_staticEntitiesAccess};
+
+			for ( const auto & entity : m_staticEntities | std::views::values )
+			{
+				entity->suspend();
+			}
+		}
+
+		/* Suspend all nodes in the tree. */
+		{
+			const std::lock_guard< std::mutex > lock{m_sceneNodesAccess};
+
+			NodeCrawler< Node > crawler{m_rootNode};
+
+			while ( crawler.hasNextNode() )
+			{
+				if ( auto node = crawler.nextNode() )
+				{
+					node->suspend();
+				}
+			}
+		}
+	}
+
+	void
+	Scene::wakeupAllEntities () noexcept
+	{
+		/* Wakeup ambience (reacquire audio sources from pool). */
+		if ( m_ambience != nullptr )
+		{
+			m_ambience->wakeup();
+		}
+
+		/* Wakeup all static entities. */
+		{
+			const std::lock_guard< std::mutex > lock{m_staticEntitiesAccess};
+
+			for ( const auto & entity : m_staticEntities | std::views::values )
+			{
+				entity->wakeup();
+			}
+		}
+
+		/* Wakeup all nodes in the tree. */
+		{
+			const std::lock_guard< std::mutex > lock{m_sceneNodesAccess};
+
+			NodeCrawler< Node > crawler{m_rootNode};
+
+			while ( crawler.hasNextNode() )
+			{
+				if ( auto node = crawler.nextNode() )
+				{
+					node->wakeup();
+				}
+			}
+		}
+	}
+
 	bool
 	Scene::enable (Input::Manager & inputManager, Settings & /*settings*/) noexcept
 	{
+		/* NOTE: First initialization. */
 		if ( !m_initialized )
 		{
 			this->registerSceneVisualComponents();
@@ -302,6 +382,8 @@ namespace EmEn::Scenes
 
 		inputManager.addKeyboardListener(&m_nodeController);
 
+		this->wakeupAllEntities();
+
 		return true;
 	}
 
@@ -313,6 +395,8 @@ namespace EmEn::Scenes
 		m_nodeController.disconnectDevice();
 
 		inputManager.removeKeyboardListener(&m_nodeController);
+
+		this->suspendAllEntities();
 	}
 
 	std::shared_ptr< RenderTarget::View< ViewMatrices2DUBO > >
@@ -769,6 +853,12 @@ namespace EmEn::Scenes
 		m_lifetimeMS += EngineUpdateCycleDurationMS< uint32_t >;
 
 		m_nodeController.update();
+
+		/* Update audio ambience if active. */
+		if ( m_ambience != nullptr && m_ambience->isPlaying() )
+		{
+			m_ambience->update();
+		}
 
 		/* Update scene static entities logics. */
 		{
@@ -2428,8 +2518,6 @@ namespace EmEn::Scenes
 		uint32_t errorCount = 0;
 
 		this->forEachRenderableInstance([&] (const auto & renderableInstance) {
-			TraceDebug{ClassId} << "Refreshing renderable '" << renderableInstance->renderable()->name() << "' ...";
-
 			this->forEachRenderToShadowMap([&errorCount, &renderableInstance] (const auto & renderTarget) {
 				if ( !renderableInstance->refreshGraphicsPipelines(renderTarget) )
 				{
@@ -2607,12 +2695,12 @@ namespace EmEn::Scenes
 		return true;
 	}
 
-	std::vector< RenderPassType >
+	StaticVector< RenderPassType, MaxPassCount >
 	Scene::prepareRenderPassTypes (const RenderableInstance::Abstract & renderableInstance) const noexcept
 	{
 		const std::lock_guard< std::mutex > lock{m_lightSet.mutex()};
 
-		std::vector< RenderPassType > renderPassTypes;
+		StaticVector< RenderPassType, MaxPassCount > renderPassTypes;
 
 		if ( !m_lightSet.isEnabled() || !renderableInstance.isLightingEnabled() || m_lightSet.isUsingStaticLighting() )
 		{
@@ -2844,5 +2932,63 @@ namespace EmEn::Scenes
 		}
 
 		return output.str();
+	}
+
+	Audio::Ambience &
+	Scene::ambience () noexcept
+	{
+		if ( m_ambience == nullptr )
+		{
+			TraceDebug{ClassId} << "Creating the ambience for the scene '" << this->name() << "' ...";
+
+			m_ambience = std::make_unique< Audio::Ambience >(m_AVConsoleManager.audioManager());
+		}
+
+		return *m_ambience;
+	}
+
+	bool
+	Scene::loadAmbience (Resources::Manager & resourceManager, const std::filesystem::path & filepath) noexcept
+	{
+		return this->ambience().loadSoundSet(resourceManager, filepath);
+	}
+
+	void
+	Scene::startAmbience () const noexcept
+	{
+		if ( m_ambience == nullptr )
+		{
+			TraceDebug{ClassId} << "The scene '" << this->name() << "' doesn't have an Ambience to start!";
+
+			return;
+		}
+
+		m_ambience->start();
+	}
+
+	void
+	Scene::stopAmbience () const noexcept
+	{
+		if ( m_ambience == nullptr )
+		{
+			TraceDebug{ClassId} << "The scene '" << this->name() << "' doesn't have an Ambience to stop!";
+
+			return;
+		}
+
+		m_ambience->stop();
+	}
+
+	void
+	Scene::resetAmbience () const noexcept
+	{
+		if ( m_ambience == nullptr )
+		{
+			TraceDebug{ClassId} << "The scene '" << this->name() << "' doesn't have an Ambience to reset!";
+
+			return;
+		}
+
+		m_ambience->reset();
 	}
 }

@@ -37,7 +37,7 @@ namespace EmEn::Audio
 	using namespace Libs;
 
 	bool
-	SoundResource::load (Resources::ServiceProvider & /*serviceProvider*/) noexcept
+	SoundResource::load (Resources::AbstractServiceProvider & /*serviceProvider*/) noexcept
 	{
 		if ( !Manager::isAudioSystemAvailable() )
 		{
@@ -66,7 +66,7 @@ namespace EmEn::Audio
 	}
 
 	bool
-	SoundResource::load (Resources::ServiceProvider & /*serviceProvider*/, const std::filesystem::path & filepath) noexcept
+	SoundResource::load (Resources::AbstractServiceProvider & /*serviceProvider*/, const std::filesystem::path & filepath) noexcept
 	{
 		if ( !Manager::isAudioSystemAvailable() )
 		{
@@ -141,7 +141,7 @@ namespace EmEn::Audio
 	}
 
 	bool
-	SoundResource::load (Resources::ServiceProvider & /*serviceProvider*/, const Json::Value & /*data*/) noexcept
+	SoundResource::load (Resources::AbstractServiceProvider & /*serviceProvider*/, const Json::Value & /*data*/) noexcept
 	{
 		if ( !Manager::isAudioSystemAvailable() )
 		{

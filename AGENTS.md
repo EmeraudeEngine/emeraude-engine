@@ -1,12 +1,12 @@
 # AGENTS.md - Emeraude Engine
 
-This file follows the AGENTS.md standard convention for AI coding agents and defines the rules and conventions for any AI agent interacting with the `Emeraude Engine` project.
+Rules and conventions for AI agents interacting with Emeraude Engine.
 
-## 🎯 Project Overview
+## Project Overview
 
 Emeraude Engine is a modern, cross-platform 3D graphics engine built with **Vulkan API** and **C++20**. It provides a complete framework for building 3D applications with integrated audio, physics simulation, and advanced rendering capabilities.
 
-### 🏗️ Technical Architecture
+### Technical Architecture
 - **Graphics API:** Vulkan 1.2+ (exclusive)
 - **Language:** C++20 standard
 - **Platforms:** Windows 11, Linux (Debian 13/Ubuntu 24.04), macOS SDK 12.0+
@@ -14,7 +14,7 @@ Emeraude Engine is a modern, cross-platform 3D graphics engine built with **Vulk
 - **Coordinate System:** Right-handed Y-down (consistent across all subsystems)
 - **License:** LGPLv3
 
-### 🎨 Key Systems
+### Key Systems
 - **Saphir Shader System:** Automatic GLSL generation at runtime
 - **Resource Management:** Asynchronous loading with fail-safe fallbacks
 - **Scene Graph:** Hierarchical node-based scene management
@@ -22,7 +22,7 @@ Emeraude Engine is a modern, cross-platform 3D graphics engine built with **Vulk
 - **Audio:** OpenAL-based 3D spatial audio
 - **Overlay:** ImGui integration for UI and debug tools
 
-## 📋 Code Conventions and Standards
+## Code Conventions and Standards
 
 ### Design Philosophy
 
@@ -33,17 +33,17 @@ Emeraude Engine follows three fundamental design principles that guide all archi
 
 The system should be intuitive and predictable. Functions, classes, and APIs should do exactly what their names suggest, without hidden side effects or surprising behaviors.
 
-**Examples:**
+Examples:
 ```cpp
-// ✅ CORRECT: Clear, predictable behavior
+// CORRECT: Clear, predictable behavior
 auto camera = scene->createCamera("main");  // Creates a camera, nothing else
 camera->lookAt(target);                     // Points camera at target
 
-// ✅ CORRECT: Consistent naming conventions
+// CORRECT: Consistent naming conventions
 geometry->getVertexCount();   // get* prefix for accessors
 geometry->setVertexData();    // set* prefix for mutators
 
-// ❌ WRONG: Surprising side effects
+// WRONG: Surprising side effects
 camera->render();  // Should only render, not also create shaders or modify scene
 ```
 
@@ -52,23 +52,22 @@ camera->render();  // Should only render, not also create shaders or modify scen
 
 The architecture should guide developers toward correct, safe implementations by default, making it harder to write buggy or unsafe code.
 
-**Examples:**
+Examples:
 ```cpp
-// ✅ CORRECT: Fail-safe by design (impossible to crash)
+// CORRECT: Fail-safe by design (impossible to crash)
 auto texture = resources.get<TextureResource>("missing.png");
-// → Returns neutral texture if missing, application continues safely
+// Returns neutral texture if missing, application continues safely
 
-// ✅ CORRECT: RAII ensures cleanup (impossible to leak)
+// CORRECT: RAII ensures cleanup (impossible to leak)
 {
     auto buffer = device->createBuffer(size);
     // Automatic destruction, no manual cleanup needed
 }
 
-// ✅ CORRECT: Type safety prevents errors at compile time
+// CORRECT: Type safety prevents errors at compile time
 Vector3 gravity(0, +9.81, 0);  // Y-down enforced by convention
-// No way to accidentally use -9.81 without explicit intent
 
-// ❌ ANTI-PATTERN: Requires manual error checking (easy to forget)
+// ANTI-PATTERN: Requires manual error checking (easy to forget)
 auto texture = loadTexture("file.png");
 if (texture == nullptr) {  // Developer MUST remember to check
     // Handle error...
@@ -80,18 +79,18 @@ if (texture == nullptr) {  // Developer MUST remember to check
 
 High-level (user-facing) APIs must be simple and direct, without complex parameters or convoluted logic. End-user APIs should be trivial to use.
 
-**Examples:**
+Examples:
 ```cpp
-// ✅ CORRECT: Simple API, clear intention, zero complexity
+// CORRECT: Simple API, clear intention, zero complexity
 auto texture = resources.get<TextureResource>("albedo.png");
 camera->lookAt(target);
 
-// ✅ CORRECT: Minimal parameters, intelligent defaults
+// CORRECT: Minimal parameters, intelligent defaults
 auto renderTarget = std::make_shared<RenderTarget::Texture>(
     "MyTarget", precisions, extent, viewDistance
 );
 
-// ❌ WRONG: Too many required parameters (Gulf of Execution)
+// WRONG: Too many required parameters (Gulf of Execution)
 auto texture = resources.get<TextureResource>(
     "albedo.png",
     VK_FORMAT_R8G8B8A8_SRGB,           // Why should user know this?
@@ -101,7 +100,7 @@ auto texture = resources.get<TextureResource>(
     mipmapLevels, arrayLayers
 );
 
-// ❌ WRONG: Complex logic required (Gulf of Execution)
+// WRONG: Complex logic required (Gulf of Execution)
 if (scene->hasCamera()) {
     auto camera = scene->getCamera();
     if (camera->isInitialized()) {
@@ -112,16 +111,16 @@ if (scene->hasCamera()) {
 }
 ```
 
-**Where this applies:**
-- ✅ **User-facing APIs**: Resources, Scene, Camera, Material → Maximum simplicity
-- ⚠️ **Mid-level APIs**: Graphics, Physics → Complexity/control trade-off
-- ❌ **Low-level APIs**: Vulkan abstractions → Complexity acceptable (not exposed)
+Where this applies:
+- User-facing APIs (Resources, Scene, Camera, Material): Maximum simplicity
+- Mid-level APIs (Graphics, Physics): Complexity/control trade-off acceptable
+- Low-level APIs (Vulkan abstractions): Complexity acceptable, not exposed to users
 
-**How these principles apply to Emeraude Engine:**
-- **Fail-safe Resources** = Pit of Success (impossible to crash from nullptr)
-- **Y-down Coordinate System** = Least Astonishment (total consistency, no surprises)
-- **Vulkan Abstraction** = Avoid Gulf of Execution (complexity hidden from users)
-- **RAII Memory Management** = Pit of Success (automatic cleanup, can't forget)
+How these principles apply to Emeraude Engine:
+- Fail-safe Resources = Pit of Success (impossible to crash from nullptr)
+- Y-down Coordinate System = Least Astonishment (total consistency, no surprises)
+- Vulkan Abstraction = Avoid Gulf of Execution (complexity hidden from users)
+- RAII Memory Management = Pit of Success (automatic cleanup, can't forget)
 
 ### General Rules
 1. **Language:** All code, comments, and documentation in standard English
@@ -129,9 +128,28 @@ if (scene->hasCamera()) {
 3. **Code Priorities:** Readability → Maintainability → Scalability → Performance
 4. **C++20 Standard:** All code must adhere to C++20 standard
 5. **Code Formatting:** Use `.clang-format` and `.clang-tidy` configurations
-6. **Documentation:** Doxygen-style comments for all public APIs
+6. **Documentation:** Doxygen-style comments for all public APIs with `@version` tag (see below)
 7. **Dependencies:** No new third-party libraries without explicit approval
 8. **Licensing:** LGPLv3 compatible code only
+
+### Doxygen @version Convention
+
+All Doxygen documentation blocks must include `@version` with the current engine version from CMakeLists.txt:
+
+```cpp
+/**
+ * @brief Description of the class/method.
+ * @param param Description.
+ * @return Description.
+ * @see RelatedClass
+ * @version 0.8.35
+ */
+```
+
+This enables:
+- **Smart refresh detection**: `/update-doxygen-document` skips files where `@version` matches current + no Git changes
+- **Drift detection**: Outdated `@version` + Git changes → documentation needs refresh
+- **Visual freshness indicator**: Developers can quickly see documentation age
 
 ### Critical Project Rules
 - **Coordinate System:** Y-down convention used throughout ALL systems (see @docs/coordinate-system.md)
@@ -140,7 +158,7 @@ if (scene->hasCamera()) {
 - **Memory Management:** Use VMA for GPU memory, RAII for CPU memory
 - **Synchronization:** Careful management of Vulkan fences and semaphores
 
-## 🛠️ Essential Commands
+## Essential Commands
 
 ### Quick Build
 
@@ -188,7 +206,7 @@ External precompiled libraries required:
 - Download from: https://drive.google.com/drive/folders/1nDv35NuAPEg-XAGQIMZ7uCoqK3SK0VxZ
 - Or build using: https://github.com/EmeraudeEngine/ext-deps-generator
 
-## 🔗 Important Files and References
+## Important Files and References
 
 ### Core Documentation
 - `README.md` - Project overview and build instructions
@@ -236,7 +254,52 @@ External precompiled libraries required:
 - `.clang-format` - Code formatting rules
 - `.clang-tidy` - Static analysis configuration
 
-## ⚡ Development Workflows
+## Documentation Maintenance Reminder
+
+**IMPORTANT FOR AI AGENT:** After completing significant work that introduces or modifies:
+- New concepts, patterns, or architectural decisions
+- New classes, systems, or subsystems
+- Modified behaviors or deprecated approaches
+- Bug fixes that reveal important constraints or edge cases
+- Integration points between systems
+
+**You MUST ask the user if the documentation should be updated.**
+
+- **Claude Code:** Use the `/update-docs` command (runs in current conversation context, preserving all nuances)
+- **Other AI agents:** Read `.claude/commands/update-docs.md` for the documentation update methodology, then follow it manually
+
+This ensures knowledge is captured while the context is fresh.
+
+## Development Workflows
+
+### Application Development (Core Inheritance)
+
+Applications inherit from `EmEn::Core` and implement lifecycle callbacks. See `src/Core.hpp:1111-1315`.
+
+**Required callbacks** (pure virtual):
+- `onCoreStarted()` - Scene initialization, return true to start main loop
+- `onCoreProcessLogics(size_t)` - Game logic (runs on separate logic thread)
+
+**Optional callbacks** (have default implementations):
+- `onBeforeCoreSecondaryServicesInitialization()` - Pre-init checks (e.g., --help)
+- `onCorePaused()` / `onCoreResumed()` - Pause handling
+- `onBeforeCoreStop()` - Cleanup before shutdown
+- `onCoreKeyPress()` / `onCoreKeyRelease()` - Keyboard input
+- `onCoreCharacterType()` - Unicode text input
+- `onCoreNotification()` - Observer pattern events
+- `onCoreOpenFiles()` - Drag & drop file handling
+- `onCoreSurfaceRefreshed()` - Window resize handling
+
+**Minimal example:**
+```cpp
+class MyApp : public EmEn::Core {
+public:
+    MyApp(int argc, char** argv) : Core{argc, argv, "MyApp", {1,0,0}, "Org", "org.com"} {}
+private:
+    bool onCoreStarted() noexcept override { return true; }
+    void onCoreProcessLogics(size_t) noexcept override {}
+};
+```
 
 ### Adding New Features
 1. **Design Phase:** Consider architecture impact on existing systems
@@ -263,7 +326,7 @@ External precompiled libraries required:
 - **Thread Safety:** Resources load asynchronously; handle properly
 - **Fallbacks:** System must never crash on missing/corrupt resources
 
-## 🚨 Critical Points of Attention
+## Critical Points of Attention
 
 ### Coordinate System (BREAKING)
 - **Y-DOWN throughout entire engine** - never flip coordinates
@@ -286,7 +349,7 @@ External precompiled libraries required:
 - **Non-Critical:** Resource loading, UI, debug systems
 - **Optimization:** Profile before optimizing; readability first
 
-## 📚 Detailed Documentation
+## Detailed Documentation
 
 For comprehensive information on specific systems, refer to:
 
@@ -296,10 +359,12 @@ For comprehensive information on specific systems, refer to:
 - **Saphir Shader System:** @docs/saphir-shader-system.md
 - **Scene Graph:** @docs/scene-graph-architecture.md
 - **Component Builder Pattern:** @docs/component-builder-pattern.md
+- **Graphics System:** @docs/graphics-system.md
+- **RenderableInstance System:** @docs/renderable-instance-system.md
 - **Build Setup:** README.md (dependencies and compilation)
 - **API Reference:** Doxygen comments in header files
 
-## 🔧 Development Environment
+## Development Environment
 
 ### Required Tools
 - **CMake:** 3.25.1+

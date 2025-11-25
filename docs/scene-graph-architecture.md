@@ -15,6 +15,169 @@ This document provides detailed architecture for the Scene Graph system, the org
 - **AVConsole**: Per-scene manager that detects Camera and Microphone components, linking them to render targets and audio outputs.
 - **LightSet**: Per-scene structure tracking all Light components, synchronizing lighting state with GPU via Uniform Buffer Objects (UBO).
 
+## The Scene Class: Central Orchestrator
+
+The `Scene` class (`src/Scenes/Scene.hpp`) is the main container that manages all aspects of a 3D environment. It orchestrates entities, rendering, physics, and audio-visual connections.
+
+### Scene Responsibilities
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                           Scene                                      │
+├─────────────────────────────────────────────────────────────────────┤
+│ Entity Management:                                                   │
+│   • Root Node (immutable, world origin)                             │
+│   • Node tree (dynamic hierarchical entities)                       │
+│   • StaticEntity map (optimized static geometry)                    │
+├─────────────────────────────────────────────────────────────────────┤
+│ Spatial Partitioning:                                               │
+│   • Rendering Octree (frustum culling, 256 entities/sector default) │
+│   • Physics Octree (collision broad-phase, 32 entities/sector)      │
+├─────────────────────────────────────────────────────────────────────┤
+│ Render Targets:                                                     │
+│   • RenderToView (final output, 2D or cubemap)                      │
+│   • RenderToTexture (RTT for effects, 2D or cubemap)               │
+│   • RenderToShadowMap (shadow casting, 2D or cubemap)              │
+├─────────────────────────────────────────────────────────────────────┤
+│ Rendering Pipeline:                                                 │
+│   • Opaque objects (front-to-back, early-Z optimization)           │
+│   • Opaque lighted objects (per-light passes)                      │
+│   • Translucent objects (back-to-front, correct blending)          │
+│   • Translucent lighted objects                                     │
+│   • Shadow casting pass                                             │
+├─────────────────────────────────────────────────────────────────────┤
+│ Physics Integration:                                                │
+│   • Collision detection via octree broad-phase                      │
+│   • Legacy position-correction OR impulse-based solver              │
+│   • Scene boundary clipping (world cube limits)                     │
+│   • SceneArea ground collision                                      │
+│   • ConstraintSolver for rigid body physics                         │
+├─────────────────────────────────────────────────────────────────────┤
+│ Audio-Visual Management:                                            │
+│   • AVConsole::Manager for Camera↔RenderTarget routing             │
+│   • AVConsole::Manager for Microphone↔AudioOutput routing          │
+│   • LightSet for GPU light data synchronization                    │
+├─────────────────────────────────────────────────────────────────────┤
+│ Scene Resources:                                                    │
+│   • Background (skybox, procedural sky)                            │
+│   • SceneArea (ground/terrain with collision)                       │
+│   • SeaLevel (water plane with buoyancy)                           │
+│   • Environment effects (Saphir post-processing)                    │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### Scene Construction
+
+```cpp
+Scene scene(
+    graphicsRenderer,           // Reference to Graphics::Renderer
+    audioManager,               // Reference to Audio::Manager
+    "MyScene",                  // Unique scene name
+    1000.0f,                    // Boundary (half-size of world cube)
+    backgroundResource,         // Optional skybox (nullptr for none)
+    sceneAreaResource,          // Optional terrain (nullptr for none)
+    seaLevelResource,           // Optional water (nullptr for none)
+    SceneOctreeOptions{         // Optional octree configuration
+        .renderingOctreeAutoExpandAt = 256,
+        .renderingOctreeReserve = 0,
+        .physicsOctreeAutoExpandAt = 32,
+        .physicsOctreeReserve = 3
+    }
+);
+```
+
+### Scene Lifecycle
+
+```
+┌──────────────┐    ┌─────────────────┐    ┌──────────────────┐
+│ Construction │───►│ enable()        │───►│ processLogics()  │
+│              │    │ (initialization)│    │ (per frame)      │
+└──────────────┘    └─────────────────┘    └────────┬─────────┘
+                                                    │
+                    ┌─────────────────┐             │
+                    │ disable()       │◄────────────┘
+                    │ (cleanup)       │
+                    └─────────────────┘
+```
+
+**enable()**: Called when scene becomes active
+- Registers scene visual components (background, terrain, water)
+- Creates default Camera if none exists
+- Creates default Microphone if none exists
+- Connects SwapChain as primary video output
+- Connects default speaker as primary audio output
+- Initializes LightSet
+- Wakes up Ambience (reacquires audio sources from pool)
+- Wakes up all entities (StaticEntities + Nodes) via `wakeup()`
+
+**processLogics()**: Called every logic frame (60 Hz default)
+- Updates scene lifetime counters
+- Processes StaticEntity and Node logic
+- Updates entity positions in octrees
+- Runs physics collision detection
+- Resolves collisions (position-based or impulse-based)
+- Cleans dead nodes from tree
+
+**publishStateForRendering()**: Called after processLogics()
+- Double-buffers all entity states
+- Atomically swaps render state index
+- Enables lock-free rendering
+
+**disable()**: Called when scene becomes inactive
+- Releases NodeController
+- Disconnects input listeners
+- Suspends Ambience (releases audio sources back to pool)
+- Suspends all entities (StaticEntities + Nodes) via `suspend()`
+
+### Render Target Creation
+
+```cpp
+// Create render-to-view (2D perspective)
+auto view = scene.createRenderToView(
+    "MainView",       // Name
+    1920, 1080,       // Resolution
+    precisions,       // Framebuffer precisions
+    1000.0f,          // View distance
+    false,            // Orthographic projection
+    true              // Primary device
+);
+
+// Create render-to-texture (for effects like mirrors, portals)
+auto texture = scene.createRenderToTexture2D(
+    "Mirror",
+    512, 512,
+    4,                // Color channel count
+    500.0f,
+    false
+);
+
+// Create shadow map (for directional/spot lights)
+auto shadowMap = scene.createRenderToShadowMap(
+    "SunShadow",
+    2048,             // Resolution
+    200.0f,           // View distance
+    true              // Orthographic (for directional light)
+);
+
+// Create cubemap variants for point lights
+auto cubicShadowMap = scene.createRenderToCubicShadowMap(...);
+auto cubicView = scene.createRenderToCubicView(...);
+auto cubemap = scene.createRenderToCubemap(...);
+```
+
+### Thread Safety
+
+The Scene class is designed for multi-threaded operation:
+
+| Resource | Protection | Access Pattern |
+|----------|------------|----------------|
+| Node tree | `m_sceneNodesAccess` mutex | Logic thread writes, render thread reads via double-buffer |
+| Static entities | `m_staticEntitiesAccess` mutex | Same as nodes |
+| Rendering octree | `m_renderingOctreeAccess` mutex | Logic thread updates, render thread queries |
+| Physics octree | `m_physicsOctreeAccess` mutex | Logic thread only |
+| Render targets | Per-type mutexes | Creation thread-safe, rendering lock-free |
+| Render state | `m_renderStateIndex` atomic | Lock-free publish/read |
+
 ## Design Philosophy: Generic Containers + Modular Components
 
 ### Core Principle: Entities Are Generic Until Components Define Them
@@ -122,7 +285,7 @@ auto root = scene->root();
 - ✅ **Technically mutable**: Can change position via LocatableInterface, but intended to stay static
 - ✅ **Fast access**: Direct lookup by name (no tree traversal)
 
-**Storage:** `std::unordered_map<std::string, StaticEntity>` in Scene
+**Storage:** `std::map<std::string, std::shared_ptr<StaticEntity>>` in Scene
 
 **Creation:**
 ```cpp
@@ -237,6 +400,15 @@ class Component {
 
     // Called when parent entity moves (event callback)
     virtual void move(const CartesianFrame& newParentLocation);
+
+protected:
+    // Called when scene is suspended (disabled by Scene Manager)
+    // PURE VIRTUAL - must be implemented by all components
+    virtual void onSuspend() = 0;
+
+    // Called when scene wakes up (re-enabled by Scene Manager)
+    // PURE VIRTUAL - must be implemented by all components
+    virtual void onWakeup() = 0;
 };
 ```
 
@@ -244,7 +416,40 @@ class Component {
 - **Multiple components allowed**: Same entity can have multiple Visuals, Lights, etc. (each with unique name)
 - **processLogics()**: Override for per-frame logic (most components don't need it)
 - **move()**: Override if component needs to react to entity movement (most don't need it)
-- **Optional implementation**: Both methods have empty default implementations
+- **onSuspend()/onWakeup()**: MUST be implemented (pure virtual). Release pooled resources in onSuspend(), reacquire in onWakeup(). Empty implementation is valid if no pooled resources.
+
+### Entity Suspend/Wakeup System
+
+When Scene Manager switches scenes, entities are suspended/woken to release pooled resources (e.g., OpenAL audio sources).
+
+**Architecture (Template Method Pattern):**
+
+```cpp
+class AbstractEntity {
+public:
+    void suspend();  // Non-virtual, calls hooks + iterates components
+    void wakeup();   // Non-virtual, calls hooks + iterates components
+
+protected:
+    virtual void onSuspend() {}  // Override for entity-specific cleanup
+    virtual void onWakeup() {}   // Override for entity-specific restoration
+};
+```
+
+**Call Flow:**
+```
+Scene::disable() → entity->suspend() → entity->onSuspend()
+                                     → component->onSuspend() (for each)
+
+Scene::enable()  → entity->wakeup()  → entity->onWakeup()
+                                     → component->onWakeup() (for each)
+```
+
+**Key Implementation: SoundEmitter**
+- `onSuspend()`: Remembers if playing, releases OpenAL source back to pool
+- `onWakeup()`: Reacquires source from pool, restarts playback if was playing
+
+**Note:** AbstractEntity is `friend class` of Component::Abstract to access protected `onSuspend()`/`onWakeup()` methods.
 
 ## Transformations: CartesianFrame System
 
@@ -346,6 +551,57 @@ class Node {
    - ATOMIC SWAP: m_renderFrame = m_activeFrame
    - All Nodes and StaticEntities swapped
    - Scene now ready for next render frame
+```
+
+## Physics Systems: Legacy vs New
+
+The Scene class supports two collision resolution systems, controlled by the `ENABLE_NEW_PHYSICS_SYSTEM` preprocessor flag in `Scene.hpp`.
+
+### Legacy System (ENABLE_NEW_PHYSICS_SYSTEM = 0)
+
+Position-based collision correction:
+
+```cpp
+// In processLogics():
+1. Detect collisions via octree
+2. Store collision data in Collider
+3. At frame end: collider.resolveCollisions() applies position corrections
+```
+
+**Characteristics:**
+- Simple and stable
+- Direct position manipulation
+- No momentum transfer between objects
+- Objects "slide" against each other
+
+### New Impulse-Based System (ENABLE_NEW_PHYSICS_SYSTEM = 1)
+
+Sequential Impulse Solver for realistic physics:
+
+```cpp
+// In processLogics():
+1. Detect collisions → generate ContactManifold
+2. Collect all manifolds (entity-entity + boundary collisions)
+3. ConstraintSolver::solve() applies velocity impulses
+4. Positions naturally correct via integration
+```
+
+**Characteristics:**
+- Physically accurate momentum transfer
+- Bounce and restitution support
+- Multi-body constraint solving (8 iterations, 3 position corrections by default)
+- More complex but more realistic
+
+### Boundary Collision Handling
+
+Both systems handle scene boundary clipping:
+
+```cpp
+// clipWithBoundingSphere() / clipWithBoundingBox()
+- Hard clipping: Prevents entities from leaving world cube
+- Ground collision: Integration with SceneArea terrain
+- New system: Generates manifolds for boundary bounces
+- Old system: Direct position correction + collision record
 ```
 
 ## AVConsole and LightSet: Automatic Management

@@ -157,12 +157,7 @@ namespace EmEn::Vulkan
 				{
 					const auto * identifier = this->identifier().empty() ? "***UNIDENTIFIED***" : this->identifier().data();
 
-					if ( !m_isCreated )
-					{
-						TraceError{"VulkanObject"} << "A Vulkan object ('" << identifier << "' " << this << ") was not correctly constructed !";
-					}
-
-					if ( !m_isDestroyed )
+					if ( m_isCreated && !m_isDestroyed )
 					{
 						TraceError{"VulkanObject"} << "A Vulkan object ('" << identifier << "' " << this << ") is not correctly destroyed !";
 					}
@@ -173,12 +168,7 @@ namespace EmEn::Vulkan
 				}
 				else
 				{
-					if ( !m_isCreated )
-					{
-						TraceError{"VulkanObject"} << "A Vulkan object was not correctly constructed !";
-					}
-
-					if ( !m_isDestroyed )
+					if ( m_isCreated && !m_isDestroyed )
 					{
 						TraceError{"VulkanObject"} << "A Vulkan object is not correctly destroyed !";
 					}

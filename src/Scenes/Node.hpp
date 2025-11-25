@@ -42,86 +42,151 @@
 
 /* Local inclusions for usages. */
 #include "Libs/Variant.hpp"
-#include "Graphics/Frustum.hpp"
 
 namespace EmEn::Scenes
 {
 	/**
-	 * @brief The Node class is the key part to build the scene node tree.
-	 * @note [OBS][SHARED-OBSERVABLE]
+	 * @class Node
+	 * @brief The key element for building the hierarchical scene graph.
+	 *
+	 * Nodes form a tree structure starting from a single root node. Each node maintains:
+	 * - A local coordinate frame (position, rotation, scale) relative to its parent
+	 * - A list of child nodes
+	 * - Components attached to it (visuals, physics bodies, audio sources, etc.)
+	 * - Physics simulation state via MovableTrait
+	 *
+	 * The root node is special: it has no parent, cannot be moved, and represents the world origin.
+	 * All world coordinates are computed by traversing the tree from root to node.
+	 *
+	 * @par Coordinate System
+	 * Uses Y-down coordinate system. Positive Y points downward (gravity direction).
+	 * The downwardVector() method returns the local "down" direction.
+	 *
+	 * @par Observable Notifications
+	 * Nodes emit notifications for lifecycle events:
+	 * - SubNodeCreating/SubNodeCreated: When a child node is added
+	 * - SubNodeDeleting/SubNodeDeleted: When a child node is removed
+	 * - NodeCollision: When physics detects a collision (via onHit)
+	 *
+	 * @par Thread Safety
+	 * Most methods are NOT thread-safe. Only discard() is explicitly thread-safe.
+	 * Scene graph modifications should happen on the main/logic thread.
+	 *
+	 * @par Known Limitations
+	 * - TransformSpace::World is incomplete for nodes deeper than level 1 (direct children of root)
+	 *   in methods: setPosition, setXPosition, setYPosition, setZPosition, move, moveX, moveY, moveZ
+	 * - TransformSpace::Parent and TransformSpace::World are not implemented for scaling operations
+	 *
+	 * @note [OBS][SHARED-OBSERVABLE] This class is observable and uses shared_ptr for self-reference.
 	 * @extends std::enable_shared_from_this A node needs to self-replicate its smart pointer.
 	 * @extends EmEn::Scenes::AbstractEntity A node is an entity of the 3D world.
 	 * @extends EmEn::Physics::MovableTrait A node is a movable entity in the 3D world.
 	 * @extends EmEn::Animations::AnimatableInterface A node can be animated by the engine logics.
+	 * @see Scene, AbstractEntity, Component::Abstract
+	 * @version 0.8.35
 	 */
 	class Node final : public std::enable_shared_from_this< Node >, public AbstractEntity, public Physics::MovableTrait, public Animations::AnimatableInterface
 	{
 		public:
 
-			/** @brief Class identifier. */
+			/**
+			 * @brief Class identifier used for runtime type identification.
+			 * @version 0.8.35
+			 */
 			static constexpr auto ClassId{"Node"};
 
-			/** @brief Observable notification codes. */
+			/**
+			 * @enum NotificationCode
+			 * @brief Observable notification codes emitted during node lifecycle events.
+			 *
+			 * Extends AbstractEntity notification codes. Observers can subscribe to these
+			 * notifications to react to scene graph changes.
+			 * @version 0.8.35
+			 */
 			enum NotificationCode
 			{
-				SubNodeCreating = AbstractEntity::MaxEnum,
-				SubNodeCreated,
-				SubNodeDeleting,
-				SubNodeDeleted,
-				NodeCollision,
+				SubNodeCreating = AbstractEntity::MaxEnum, ///< Emitted before a child node is created. Data: parent shared_ptr.
+				SubNodeCreated,                             ///< Emitted after a child node is created. Data: child shared_ptr.
+				SubNodeDeleting,                            ///< Emitted before a child node is destroyed. Data: child shared_ptr.
+				SubNodeDeleted,                             ///< Emitted after a child node is destroyed. Data: parent shared_ptr.
+				NodeCollision,                              ///< Emitted when physics detects a collision. Data: impact force (float).
 				/* Enumeration boundary. */
-				MaxEnum
+				MaxEnum                                     ///< Marks the end of the enumeration range.
 			};
 
-			/** @brief Animatable Interface key. */
+			/**
+			 * @enum AnimationID
+			 * @brief Animation keys for the AnimatableInterface.
+			 *
+			 * Defines which node properties can be animated by the animation system.
+			 * Organized in three coordinate space groups: Local, Parent, and World.
+			 * Each group supports position, translation, and rotation animations.
+			 * @version 0.8.35
+			 */
 			enum AnimationID : uint8_t
 			{
-				LocalCoordinates,
-				LocalPosition,
-				LocalXPosition,
-				LocalYPosition,
-				LocalZPosition,
-				LocalTranslation,
-				LocalXTranslation,
-				LocalYTranslation,
-				LocalZTranslation,
-				LocalRotation,
-				LocalXRotation,
-				LocalYRotation,
-				LocalZRotation,
+				LocalCoordinates,    ///< Animates the entire local coordinate frame.
+				LocalPosition,       ///< Animates position in local space (absolute).
+				LocalXPosition,      ///< Animates X position in local space.
+				LocalYPosition,      ///< Animates Y position in local space.
+				LocalZPosition,      ///< Animates Z position in local space.
+				LocalTranslation,    ///< Animates translation in local space (relative).
+				LocalXTranslation,   ///< Animates X translation in local space.
+				LocalYTranslation,   ///< Animates Y translation in local space.
+				LocalZTranslation,   ///< Animates Z translation in local space.
+				LocalRotation,       ///< Animates rotation in local space (full rotation).
+				LocalXRotation,      ///< Animates pitch in local space (rotation around X axis).
+				LocalYRotation,      ///< Animates yaw in local space (rotation around Y axis).
+				LocalZRotation,      ///< Animates roll in local space (rotation around Z axis).
 
-				ParentPosition,
-				ParentXPosition,
-				ParentYPosition,
-				ParentZPosition,
-				ParentTranslation,
-				ParentXTranslation,
-				ParentYTranslation,
-				ParentZTranslation,
-				ParentRotation,
-				ParentXRotation,
-				ParentYRotation,
-				ParentZRotation,
+				ParentPosition,      ///< Animates position in parent space (absolute).
+				ParentXPosition,     ///< Animates X position in parent space.
+				ParentYPosition,     ///< Animates Y position in parent space.
+				ParentZPosition,     ///< Animates Z position in parent space.
+				ParentTranslation,   ///< Animates translation in parent space (relative).
+				ParentXTranslation,  ///< Animates X translation in parent space.
+				ParentYTranslation,  ///< Animates Y translation in parent space.
+				ParentZTranslation,  ///< Animates Z translation in parent space.
+				ParentRotation,      ///< Animates rotation in parent space (full rotation).
+				ParentXRotation,     ///< Animates pitch in parent space.
+				ParentYRotation,     ///< Animates yaw in parent space.
+				ParentZRotation,     ///< Animates roll in parent space.
 
-				WorldPosition,
-				WorldXPosition,
-				WorldYPosition,
-				WorldZPosition,
-				WorldTranslation,
-				WorldXTranslation,
-				WorldYTranslation,
-				WorldZTranslation,
-				WorldRotation,
-				WorldXRotation,
-				WorldYRotation,
-				WorldZRotation
+				WorldPosition,       ///< Animates position in world space (absolute).
+				WorldXPosition,      ///< Animates X position in world space.
+				WorldYPosition,      ///< Animates Y position in world space.
+				WorldZPosition,      ///< Animates Z position in world space.
+				WorldTranslation,    ///< Animates translation in world space (relative).
+				WorldXTranslation,   ///< Animates X translation in world space.
+				WorldYTranslation,   ///< Animates Y translation in world space.
+				WorldZTranslation,   ///< Animates Z translation in world space.
+				WorldRotation,       ///< Animates rotation in world space (full rotation).
+				WorldXRotation,      ///< Animates pitch in world space.
+				WorldYRotation,      ///< Animates yaw in world space.
+				WorldZRotation       ///< Animates roll in world space.
 			};
-		
+
+			/**
+			 * @brief Reserved name for the root node.
+			 *
+			 * Child nodes cannot use this name. Attempting to create a child with
+			 * this name will fail and return nullptr.
+			 * @version 0.8.35
+			 */
 			static constexpr auto Root{"root"};
 
 			/**
 			 * @brief Constructs the root node.
-			 * @param scene A reference to the scene this entity belongs to.
+			 *
+			 * Creates the special root node that serves as the world origin.
+			 * The root node has no parent, cannot be moved, and has movement ability
+			 * disabled by default.
+			 *
+			 * @param scene Reference to the scene this node belongs to.
+			 * @post The node is marked as root (m_parent is nullptr).
+			 * @post Movement ability is disabled.
+			 * @see isRoot()
+			 * @version 0.8.35
 			 */
 			Node (const Scene & scene) noexcept
 				: AbstractEntity{scene, Root, 0}
@@ -131,10 +196,19 @@ namespace EmEn::Scenes
 
 			/**
 			 * @brief Constructs a child node.
-			 * @param name The name of the sub child node [std::move].
-			 * @param parent a reference to the smart pointer of the parent.
-			 * @param sceneTimeMS The scene current time in milliseconds.
-			 * @param coordinates A reference to a coordinate. Default Origin.
+			 *
+			 * Creates a new node as a child of the specified parent. The node inherits
+			 * the parent's scene and initializes with the provided local coordinates.
+			 *
+			 * @param name Unique name for this node within its parent's children. Name is moved.
+			 * @param parent Shared pointer to the parent node.
+			 * @param sceneTimeMS Scene timestamp at creation, used for lifetime tracking.
+			 * @param coordinates Initial local coordinate frame relative to parent. Defaults to origin.
+			 * @pre Parent must not be nullptr.
+			 * @pre Name must be unique among siblings.
+			 * @post The node is added to the parent's observer list.
+			 * @see createChild()
+			 * @version 0.8.35
 			 */
 			Node (std::string name, const std::shared_ptr< Node > & parent, uint32_t sceneTimeMS, const Libs::Math::CartesianFrame< float > & coordinates = {}) noexcept
 				: AbstractEntity{parent->parentScene(), std::move(name), sceneTimeMS},
@@ -145,96 +219,192 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			 * @brief Copy constructor.
-			 * @param copy A reference to the copied instance.
+			 * @brief Copy constructor (deleted).
+			 *
+			 * Nodes cannot be copied due to their unique scene graph position and
+			 * observer relationships.
+			 *
+			 * @param copy Reference to the node to copy.
+			 * @version 0.8.35
 			 */
 			Node (const Node & copy) noexcept = delete;
 
 			/**
-			 * @brief Move constructor.
-			 * @param copy A reference to the copied instance.
+			 * @brief Move constructor (deleted).
+			 *
+			 * Nodes cannot be moved due to their embedded position in the scene graph
+			 * and shared_ptr ownership semantics.
+			 *
+			 * @param copy Reference to the node to move.
+			 * @version 0.8.35
 			 */
 			Node (Node && copy) noexcept = delete;
 
 			/**
-			 * @brief Copy assignment.
-			 * @param copy A reference to the copied instance.
-			 * @return Node &
+			 * @brief Copy assignment operator (deleted).
+			 * @param copy Reference to the node to copy.
+			 * @return Node reference.
+			 * @version 0.8.35
 			 */
 			Node & operator= (const Node & copy) noexcept = delete;
 
 			/**
-			 * @brief Move assignment.
-			 * @param copy A reference to the copied instance.
-			 * @return Node &
+			 * @brief Move assignment operator (deleted).
+			 * @param copy Reference to the node to move.
+			 * @return Node reference.
+			 * @version 0.8.35
 			 */
 			Node & operator= (Node && copy) noexcept = delete;
 
 			/**
 			 * @brief Destructs the node.
+			 *
+			 * Automatically unregisters from the parent's observer list if this is not
+			 * the root node. Child nodes and components are destroyed by their shared_ptr
+			 * destructors.
+			 *
+			 * @post Node is removed from parent's observer list.
+			 * @version 0.8.35
 			 */
-			~Node () override
-			{
-				const auto parentNode = m_parent.lock();
+			~Node () override;
 
-				if ( parentNode != nullptr )
-				{
-					parentNode->forget(this);
-				}
-			}
-
-			/** @copydoc EmEn::Scenes::LocatableInterface::setPosition(const Libs::Math::Vector< 3, float > &, Libs::Math::TransformSpace) */
+			/**
+			 * @copydoc EmEn::Scenes::LocatableInterface::setPosition(const Libs::Math::Vector< 3, float > &, Libs::Math::TransformSpace)
+			 * @note Does nothing if called on root node.
+			 * @warning TransformSpace::World is incomplete for nodes deeper than level 1. Currently only works correctly for direct children of root.
+			 * @version 0.8.35
+			 */
 			void setPosition (const Libs::Math::Vector< 3, float > & position, Libs::Math::TransformSpace transformSpace) noexcept override;
 
-			/** @copydoc EmEn::Scenes::LocatableInterface::setXPosition(float, Libs::Math::TransformSpace) */
+			/**
+			 * @copydoc EmEn::Scenes::LocatableInterface::setXPosition(float, Libs::Math::TransformSpace)
+			 * @note Does nothing if called on root node.
+			 * @warning TransformSpace::World is incomplete for nodes deeper than level 1. Currently only works correctly for direct children of root.
+			 * @version 0.8.35
+			 */
 			void setXPosition (float position, Libs::Math::TransformSpace transformSpace) noexcept override;
 
-			/** @copydoc EmEn::Scenes::LocatableInterface::setYPosition(float, Libs::Math::TransformSpace) */
+			/**
+			 * @copydoc EmEn::Scenes::LocatableInterface::setYPosition(float, Libs::Math::TransformSpace)
+			 * @note Does nothing if called on root node.
+			 * @warning TransformSpace::World is incomplete for nodes deeper than level 1. Currently only works correctly for direct children of root.
+			 * @version 0.8.35
+			 */
 			void setYPosition (float position, Libs::Math::TransformSpace transformSpace) noexcept override;
 
-			/** @copydoc EmEn::Scenes::LocatableInterface::setZPosition(float, Libs::Math::TransformSpace) */
+			/**
+			 * @copydoc EmEn::Scenes::LocatableInterface::setZPosition(float, Libs::Math::TransformSpace)
+			 * @note Does nothing if called on root node.
+			 * @warning TransformSpace::World is incomplete for nodes deeper than level 1. Currently only works correctly for direct children of root.
+			 * @version 0.8.35
+			 */
 			void setZPosition (float position, Libs::Math::TransformSpace transformSpace) noexcept override;
 
-			/** @copydoc EmEn::Scenes::LocatableInterface::move(const Libs::Math::Vector< 3, float > &, Libs::Math::TransformSpace) */
+			/**
+			 * @copydoc EmEn::Scenes::LocatableInterface::move(const Libs::Math::Vector< 3, float > &, Libs::Math::TransformSpace)
+			 * @note Does nothing if called on root node.
+			 * @warning TransformSpace::World is incomplete for nodes deeper than level 1. Currently only works correctly for direct children of root.
+			 * @version 0.8.35
+			 */
 			void move (const Libs::Math::Vector< 3, float > & distance, Libs::Math::TransformSpace transformSpace) noexcept override;
 
-			/** @copydoc EmEn::Scenes::LocatableInterface::moveX(float, Libs::Math::TransformSpace) */
+			/**
+			 * @copydoc EmEn::Scenes::LocatableInterface::moveX(float, Libs::Math::TransformSpace)
+			 * @note Does nothing if called on root node.
+			 * @warning TransformSpace::World is incomplete for nodes deeper than level 1. Currently only works correctly for direct children of root.
+			 * @version 0.8.35
+			 */
 			void moveX (float distance, Libs::Math::TransformSpace transformSpace) noexcept override;
 
-			/** @copydoc EmEn::Scenes::LocatableInterface::moveY(float, Libs::Math::TransformSpace) */
+			/**
+			 * @copydoc EmEn::Scenes::LocatableInterface::moveY(float, Libs::Math::TransformSpace)
+			 * @note Does nothing if called on root node.
+			 * @warning TransformSpace::World is incomplete for nodes deeper than level 1. Currently only works correctly for direct children of root.
+			 * @version 0.8.35
+			 */
 			void moveY (float distance, Libs::Math::TransformSpace transformSpace) noexcept override;
 
-			/** @copydoc EmEn::Scenes::LocatableInterface::moveZ(float, Libs::Math::TransformSpace) */
+			/**
+			 * @copydoc EmEn::Scenes::LocatableInterface::moveZ(float, Libs::Math::TransformSpace)
+			 * @note Does nothing if called on root node.
+			 * @warning TransformSpace::World is incomplete for nodes deeper than level 1. Currently only works correctly for direct children of root.
+			 * @version 0.8.35
+			 */
 			void moveZ (float distance, Libs::Math::TransformSpace transformSpace) noexcept override;
 
-			/** @copydoc EmEn::Scenes::LocatableInterface::rotate(float, const Libs::Math::Vector< 3, float > &, Libs::Math::TransformSpace) */
+			/**
+			 * @copydoc EmEn::Scenes::LocatableInterface::rotate(float, const Libs::Math::Vector< 3, float > &, Libs::Math::TransformSpace)
+			 * @note Does nothing if called on root node.
+			 * @version 0.8.35
+			 */
 			void rotate (float radian, const Libs::Math::Vector< 3, float > & axis, Libs::Math::TransformSpace transformSpace) noexcept override;
 
-			/** @copydoc EmEn::Scenes::LocatableInterface::pitch(float, Libs::Math::TransformSpace) */
+			/**
+			 * @copydoc EmEn::Scenes::LocatableInterface::pitch(float, Libs::Math::TransformSpace)
+			 * @note Does nothing if called on root node.
+			 * @version 0.8.35
+			 */
 			void pitch (float radian, Libs::Math::TransformSpace transformSpace) noexcept override;
 
-			/** @copydoc EmEn::Scenes::LocatableInterface::yaw(float, Libs::Math::TransformSpace) */
+			/**
+			 * @copydoc EmEn::Scenes::LocatableInterface::yaw(float, Libs::Math::TransformSpace)
+			 * @note Does nothing if called on root node.
+			 * @version 0.8.35
+			 */
 			void yaw (float radian, Libs::Math::TransformSpace transformSpace) noexcept override;
 
-			/** @copydoc EmEn::Scenes::LocatableInterface::roll(float, Libs::Math::TransformSpace) */
+			/**
+			 * @copydoc EmEn::Scenes::LocatableInterface::roll(float, Libs::Math::TransformSpace)
+			 * @note Does nothing if called on root node.
+			 * @version 0.8.35
+			 */
 			void roll (float radian, Libs::Math::TransformSpace transformSpace) noexcept override;
 
-			/** @copydoc EmEn::Scenes::LocatableInterface::scale(const Libs::Math::Vector< 3, float > &, Libs::Math::TransformSpace) */
+			/**
+			 * @copydoc EmEn::Scenes::LocatableInterface::scale(const Libs::Math::Vector< 3, float > &, Libs::Math::TransformSpace)
+			 * @note Does nothing if called on root node.
+			 * @warning TransformSpace::Parent and TransformSpace::World are not implemented. Only TransformSpace::Local is supported.
+			 * @version 0.8.35
+			 */
 			void scale (const Libs::Math::Vector< 3, float > & factor, Libs::Math::TransformSpace transformSpace) noexcept override;
 
-			/** @copydoc EmEn::Scenes::LocatableInterface::scale(float, Libs::Math::TransformSpace) */
+			/**
+			 * @copydoc EmEn::Scenes::LocatableInterface::scale(float, Libs::Math::TransformSpace)
+			 * @note Does nothing if called on root node.
+			 * @warning TransformSpace::Parent and TransformSpace::World are not implemented. Only TransformSpace::Local is supported.
+			 * @version 0.8.35
+			 */
 			void scale (float factor, Libs::Math::TransformSpace transformSpace) noexcept override;
 
-			/** @copydoc EmEn::Scenes::LocatableInterface::scaleX(float, Libs::Math::TransformSpace) */
+			/**
+			 * @copydoc EmEn::Scenes::LocatableInterface::scaleX(float, Libs::Math::TransformSpace)
+			 * @note Does nothing if called on root node.
+			 * @warning TransformSpace::Parent and TransformSpace::World are not implemented. Only TransformSpace::Local is supported.
+			 * @version 0.8.35
+			 */
 			void scaleX (float factor, Libs::Math::TransformSpace transformSpace) noexcept override;
 
-			/** @copydoc EmEn::Scenes::LocatableInterface::scaleY(float, Libs::Math::TransformSpace) */
+			/**
+			 * @copydoc EmEn::Scenes::LocatableInterface::scaleY(float, Libs::Math::TransformSpace)
+			 * @note Does nothing if called on root node.
+			 * @warning TransformSpace::Parent and TransformSpace::World are not implemented. Only TransformSpace::Local is supported.
+			 * @version 0.8.35
+			 */
 			void scaleY (float factor, Libs::Math::TransformSpace transformSpace) noexcept override;
 
-			/** @copydoc EmEn::Scenes::LocatableInterface::scaleZ(float, Libs::Math::TransformSpace) */
+			/**
+			 * @copydoc EmEn::Scenes::LocatableInterface::scaleZ(float, Libs::Math::TransformSpace)
+			 * @note Does nothing if called on root node.
+			 * @warning TransformSpace::Parent and TransformSpace::World are not implemented. Only TransformSpace::Local is supported.
+			 * @version 0.8.35
+			 */
 			void scaleZ (float factor, Libs::Math::TransformSpace transformSpace) noexcept override;
 
-			/** @copydoc EmEn::Scenes::LocatableInterface::lookAt(const Libs::Math::Vector< 3, float > &, bool) */
+			/**
+			 * @copydoc EmEn::Scenes::LocatableInterface::lookAt(const Libs::Math::Vector< 3, float > &, bool)
+			 * @post Calls onLocationDataUpdate() to propagate changes to children and components.
+			 * @version 0.8.35
+			 */
 			void
 			lookAt (const Libs::Math::Vector< 3, float > & target, bool flipZAxis) noexcept override
 			{
@@ -243,14 +413,20 @@ namespace EmEn::Scenes
 				this->onLocationDataUpdate();
 			}
 
-			/** @copydoc EmEn::Scenes::LocatableInterface::setLocalCoordinates(const Libs::Math::CartesianFrame< float > &) */
+			/**
+			 * @copydoc EmEn::Scenes::LocatableInterface::setLocalCoordinates(const Libs::Math::CartesianFrame< float > &)
+			 * @version 0.8.35
+			 */
 			void
 			setLocalCoordinates (const Libs::Math::CartesianFrame< float > & coordinates) noexcept override
 			{
 				m_logicStateCoordinates = coordinates;
 			}
 
-			/** @copydoc EmEn::Scenes::LocatableInterface::localCoordinates() const */
+			/**
+			 * @copydoc EmEn::Scenes::LocatableInterface::localCoordinates() const
+			 * @version 0.8.35
+			 */
 			[[nodiscard]]
 			const Libs::Math::CartesianFrame< float > &
 			localCoordinates () const noexcept override
@@ -258,7 +434,10 @@ namespace EmEn::Scenes
 				return m_logicStateCoordinates;
 			}
 
-			/** @copydoc EmEn::Scenes::LocatableInterface::localCoordinates() */
+			/**
+			 * @copydoc EmEn::Scenes::LocatableInterface::localCoordinates()
+			 * @version 0.8.35
+			 */
 			[[nodiscard]]
 			Libs::Math::CartesianFrame< float > &
 			localCoordinates () noexcept override
@@ -266,41 +445,49 @@ namespace EmEn::Scenes
 				return m_logicStateCoordinates;
 			}
 
-			/** @copydoc EmEn::Scenes::LocatableInterface::getWorldCoordinates() const */
+			/**
+			 * @copydoc EmEn::Scenes::LocatableInterface::getWorldCoordinates() const
+			 * @note Traverses the scene graph from this node to root to compute world transform.
+			 * @note For root node or direct children of root, returns local coordinates directly.
+			 * @version 0.8.35
+			 */
 			[[nodiscard]]
 			Libs::Math::CartesianFrame< float > getWorldCoordinates () const noexcept override;
 
-			/** @copydoc EmEn::Scenes::LocatableInterface::getWorldBoundingBox() const */
+			/**
+			 * @copydoc EmEn::Scenes::LocatableInterface::getWorldBoundingBox() const
+			 * @return Null box if called on root node.
+			 * @version 0.8.35
+			 */
 			[[nodiscard]]
 			Libs::Math::Space3D::AACuboid< float > getWorldBoundingBox () const noexcept override;
 
-			/** @copydoc EmEn::Scenes::LocatableInterface::getWorldBoundingSphere() const */
+			/**
+			 * @copydoc EmEn::Scenes::LocatableInterface::getWorldBoundingSphere() const
+			 * @return Null sphere if called on root node.
+			 * @version 0.8.35
+			 */
 			[[nodiscard]]
 			Libs::Math::Space3D::Sphere< float > getWorldBoundingSphere () const noexcept override;
 
-			/** @copydoc EmEn::Scenes::LocatableInterface::isVisibleTo(const Graphics::Frustum &) const */
+			/**
+			 * @copydoc EmEn::Scenes::LocatableInterface::isVisibleTo(const Graphics::Frustum &) const
+			 * @note Uses the collision detection model to determine visibility (Point, Sphere, or AABB).
+			 * @version 0.8.35
+			 */
 			[[nodiscard]]
-			bool
-			isVisibleTo (const Graphics::Frustum & frustum) const noexcept override
-			{
-				switch ( this->collisionDetectionModel() )
-				{
-					case CollisionDetectionModel::Point :
-						return frustum.isSeeing(this->getWorldPosition());
-
-					case CollisionDetectionModel::Sphere :
-						return frustum.isSeeing(this->getWorldBoundingSphere());
-
-					case CollisionDetectionModel::AABB :
-						return frustum.isSeeing(this->getWorldBoundingBox());
-				}
-
-				return true;
-			}
+			bool isVisibleTo (const Graphics::Frustum & frustum) const noexcept override;
 
 			/**
-			 * @brief Returns the unique identifier for this class [Thread-safe].
-			 * @return size_t
+			 * @brief Returns the unique identifier for this class.
+			 *
+			 * Computes a compile-time hash of the ClassId string. Used for runtime
+			 * type identification without RTTI.
+			 *
+			 * @return Unique 64-bit hash identifying the Node class.
+			 * @note Thread-safe. Uses static local variable initialized once.
+			 * @see classUID(), is()
+			 * @version 0.8.35
 			 */
 			static
 			size_t
@@ -311,7 +498,10 @@ namespace EmEn::Scenes
 				return classUID;
 			}
 
-			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const noexcept */
+			/**
+			 * @copydoc EmEn::Libs::ObservableTrait::classUID() const noexcept
+			 * @version 0.8.35
+			 */
 			[[nodiscard]]
 			size_t
 			classUID () const noexcept override
@@ -319,7 +509,10 @@ namespace EmEn::Scenes
 				return getClassUID();
 			}
 
-			/** @copydoc EmEn::Libs::ObservableTrait::is() const noexcept */
+			/**
+			 * @copydoc EmEn::Libs::ObservableTrait::is() const noexcept
+			 * @version 0.8.35
+			 */
 			[[nodiscard]]
 			bool
 			is (size_t classUID) const noexcept override
@@ -327,7 +520,11 @@ namespace EmEn::Scenes
 				return classUID == getClassUID();
 			}
 
-			/** @copydoc EmEn::Scenes::AbstractEntity::hasMovableAbility() const noexcept */
+			/**
+			 * @copydoc EmEn::Scenes::AbstractEntity::hasMovableAbility() const noexcept
+			 * @return Always true. Nodes always have physics capability.
+			 * @version 0.8.35
+			 */
 			[[nodiscard]]
 			bool
 			hasMovableAbility () const noexcept override
@@ -335,7 +532,11 @@ namespace EmEn::Scenes
 				return true;
 			}
 
-			/** @copydoc EmEn::Scenes::AbstractEntity::isMoving() const noexcept */
+			/**
+			 * @copydoc EmEn::Scenes::AbstractEntity::isMoving() const noexcept
+			 * @return True if the node has non-zero velocity.
+			 * @version 0.8.35
+			 */
 			[[nodiscard]]
 			bool
 			isMoving () const noexcept override
@@ -343,24 +544,17 @@ namespace EmEn::Scenes
 				return this->hasVelocity();
 			}
 
-			/** @copydoc EmEn::Scenes::AbstractEntity::publishStateForRendering(uint32_t) noexcept */
-			void
-			publishStateForRendering (uint32_t writeStateIndex) noexcept override
-			{
-				if constexpr ( IsDebug )
-				{
-					if ( writeStateIndex >= m_renderStateCoordinates.size() )
-					{
-						Tracer::error(ClassId, "Index overflow !");
+			/**
+			 * @copydoc EmEn::Scenes::AbstractEntity::publishStateForRendering(uint32_t) noexcept
+			 * @note Computes world coordinates and stores them in the render state array for double-buffering.
+			 * @version 0.8.35
+			 */
+			void publishStateForRendering (uint32_t writeStateIndex) noexcept override;
 
-						return;
-					}
-				}
-
-				m_renderStateCoordinates[writeStateIndex] = this->getWorldCoordinates();
-			}
-
-			/** @copydoc EmEn::Scenes::AbstractEntity::getWorldCoordinatesStateForRendering(uint32_t) const noexcept */
+			/**
+			 * @copydoc EmEn::Scenes::AbstractEntity::getWorldCoordinatesStateForRendering(uint32_t) const noexcept
+			 * @version 0.8.35
+			 */
 			[[nodiscard]]
 			const Libs::Math::CartesianFrame< float > &
 			getWorldCoordinatesStateForRendering (uint32_t readStateIndex) const noexcept override
@@ -368,7 +562,11 @@ namespace EmEn::Scenes
 				return m_renderStateCoordinates[readStateIndex];
 			}
 
-			/** @copydoc EmEn::Scenes::AbstractEntity::getMovableTrait() noexcept */
+			/**
+			 * @copydoc EmEn::Scenes::AbstractEntity::getMovableTrait() noexcept
+			 * @return Pointer to this node's MovableTrait interface.
+			 * @version 0.8.35
+			 */
 			[[nodiscard]]
 			MovableTrait *
 			getMovableTrait () noexcept override
@@ -376,7 +574,11 @@ namespace EmEn::Scenes
 				return this;
 			}
 
-			/** @copydoc EmEn::Scenes::AbstractEntity::getMovableTrait() const noexcept */
+			/**
+			 * @copydoc EmEn::Scenes::AbstractEntity::getMovableTrait() const noexcept
+			 * @return Const pointer to this node's MovableTrait interface.
+			 * @version 0.8.35
+			 */
 			[[nodiscard]]
 			const MovableTrait *
 			getMovableTrait () const noexcept override
@@ -384,15 +586,26 @@ namespace EmEn::Scenes
 				return this;
 			}
 
-			/** @copydoc EmEn::Physics::MovableTrait::getWorldVelocity() const noexcept */
+			/**
+			 * @copydoc EmEn::Physics::MovableTrait::getWorldVelocity() const noexcept
+			 * @note Accumulates velocities from this node and all parent nodes up to root.
+			 * @version 0.8.35
+			 */
 			[[nodiscard]]
 			Libs::Math::Vector< 3, float > getWorldVelocity () const noexcept override;
 
-			/** @copydoc EmEn::Physics::MovableTrait::getWorldCenterOfMass() const noexcept */
+			/**
+			 * @copydoc EmEn::Physics::MovableTrait::getWorldCenterOfMass() const noexcept
+			 * @return World origin if called on root node.
+			 * @version 0.8.35
+			 */
 			[[nodiscard]]
 			Libs::Math::Vector< 3, float > getWorldCenterOfMass () const noexcept override;
 
-			/** @copydoc EmEn::Physics::MovableTrait::getBodyPhysicalProperties() const noexcept */
+			/**
+			 * @copydoc EmEn::Physics::MovableTrait::getBodyPhysicalProperties() const noexcept
+			 * @version 0.8.35
+			 */
 			[[nodiscard]]
 			const Physics::BodyPhysicalProperties &
 			getBodyPhysicalProperties () const noexcept override
@@ -401,14 +614,22 @@ namespace EmEn::Scenes
 				return this->bodyPhysicalProperties();
 			}
 
-			/** @copydoc EmEn::Physics::MovableTrait::onHit() noexcept */
+			/**
+			 * @copydoc EmEn::Physics::MovableTrait::onHit() noexcept
+			 * @post Emits NodeCollision notification with impact force as data.
+			 * @version 0.8.35
+			 */
 			void
 			onHit (float impactForce) noexcept override
 			{
 				this->notify(NodeCollision, impactForce);
 			}
 
-			/** @copydoc EmEn::Physics::MovableTrait::onImpulse() noexcept */
+			/**
+			 * @copydoc EmEn::Physics::MovableTrait::onImpulse() noexcept
+			 * @post Resumes physics simulation for this node.
+			 * @version 0.8.35
+			 */
 			void
 			onImpulse () noexcept override
 			{
@@ -416,8 +637,14 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			 * @brief Returns whether the node is the top tree one. The parent pointer is nullptr.
-			 * @return bool.
+			 * @brief Returns whether this node is the root of the scene graph.
+			 *
+			 * The root node has no parent (m_parent is expired weak_ptr) and represents
+			 * the world origin.
+			 *
+			 * @return True if this is the root node, false otherwise.
+			 * @see getRoot(), parent()
+			 * @version 0.8.35
 			 */
 			[[nodiscard]]
 			bool
@@ -427,8 +654,10 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			 * @brief Returns true if the node has no child.
-			 * @return bool
+			 * @brief Returns whether this node has any children.
+			 * @return True if the node has no children, false otherwise.
+			 * @see children()
+			 * @version 0.8.35
 			 */
 			[[nodiscard]]
 			bool
@@ -438,16 +667,23 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			 * @brief Returns the level below the root of this node.
-			 * @return size_t
+			 * @brief Computes the depth of this node in the scene graph.
+			 *
+			 * Traverses from this node to root counting levels.
+			 * Root node has depth 0, direct children have depth 1, etc.
+			 *
+			 * @return Depth level. Root returns 0.
+			 * @version 0.8.35
 			 */
 			[[nodiscard]]
 			size_t getDepth () const noexcept;
 
 			/**
-			 * @brief Returns the parent node smart pointer.
-			 * @warning If the node is root, it will be nullptr.
-			 * @return std::shared_ptr< Node >
+			 * @brief Returns the parent node.
+			 * @return Shared pointer to parent, or nullptr if this is the root node.
+			 * @warning Check for nullptr before dereferencing.
+			 * @see isRoot()
+			 * @version 0.8.35
 			 */
 			[[nodiscard]]
 			std::shared_ptr< Node >
@@ -457,9 +693,11 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			 * @brief Returns the parent node smart pointer.
-			 * @warning If the node is root, it will be nullptr.
-			 * @return std::shared_ptr< const Node >
+			 * @brief Returns the parent node (const version).
+			 * @return Const shared pointer to parent, or nullptr if this is the root node.
+			 * @warning Check for nullptr before dereferencing.
+			 * @see isRoot()
+			 * @version 0.8.35
 			 */
 			[[nodiscard]]
 			std::shared_ptr< const Node >
@@ -469,57 +707,84 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			 * @brief Returns the children nodes.
-			 * @return const std::map< std::string, std::shared_ptr< Node > > &
+			 * @brief Returns the map of child nodes indexed by name.
+			 * @return Const reference to the children map.
+			 * @note Uses heterogeneous lookup (std::less<>) for efficient string_view searches.
+			 * @see createChild(), destroyChild()
+			 * @version 0.8.35
 			 */
 			[[nodiscard]]
-			const std::map< std::string, std::shared_ptr< Node > > &
+			const std::map< std::string, std::shared_ptr< Node >, std::less<> > &
 			children () const noexcept
 			{
 				return m_children;
 			}
 
 			/**
-			 * @brief Returns the children nodes.
-			 * @return std::map< std::string, std::shared_ptr< Node > > &
+			 * @brief Returns the map of child nodes indexed by name (mutable version).
+			 * @return Reference to the children map.
+			 * @note Uses heterogeneous lookup (std::less<>) for efficient string_view searches.
+			 * @see createChild(), destroyChild()
+			 * @version 0.8.35
 			 */
 			[[nodiscard]]
-			std::map< std::string, std::shared_ptr< Node > > &
+			std::map< std::string, std::shared_ptr< Node >, std::less<> > &
 			children () noexcept
 			{
 				return m_children;
 			}
 
 			/**
-			 * @brief Returns the root node.
-			 * @return std::shared_ptr< Node >
+			 * @brief Traverses to the root node of the scene graph.
+			 *
+			 * Walks up the parent chain until reaching the root. If called on root,
+			 * returns itself.
+			 *
+			 * @return Shared pointer to the root node.
+			 * @post Result is never nullptr.
+			 * @version 0.8.35
 			 */
 			[[nodiscard]]
 			std::shared_ptr< Node > getRoot () noexcept;
 
 			/**
-			 * @brief Returns the root node.
-			 * @return std::shared_ptr< const Node >
+			 * @brief Traverses to the root node of the scene graph (const version).
+			 * @return Const shared pointer to the root node.
+			 * @post Result is never nullptr.
+			 * @version 0.8.35
 			 */
 			[[nodiscard]]
 			std::shared_ptr< const Node > getRoot () const noexcept;
 
 			/**
-			 * @brief Creates a sub node at given coordinates.
-			 * @warning If the node already exists, the method will return a null pointer.
-			 * @param name A reference to a string.
-			 * @param coordinates Set the coordinates of the new node.
-			 * @param sceneTimeMS The scene current time in milliseconds. Default 0.
-			 * @return std::shared_ptr< Node >
+			 * @brief Creates a child node with specified coordinates.
+			 *
+			 * Creates a new node as a child of this node. The new node inherits the scene
+			 * and starts observing this parent. Notifies observers with SubNodeCreating
+			 * before creation and SubNodeCreated after.
+			 *
+			 * @param name Unique name for the child (must not be "root" or already exist at this level).
+			 * @param coordinates Initial local coordinates relative to this node.
+			 * @param sceneTimeMS Scene timestamp for creation (affects lifetime tracking). Default 0.
+			 * @return The created node, or nullptr if name is "root" or already exists.
+			 * @note Emits SubNodeCreating and SubNodeCreated notifications.
+			 * @warning The name "root" is reserved and will cause this method to fail.
+			 * @see destroyChild(), findChild()
+			 * @version 3.25.1
 			 */
 			[[nodiscard]]
 			std::shared_ptr< Node > createChild (const std::string & name, const Libs::Math::CartesianFrame< float > & coordinates, uint32_t sceneTimeMS = 0) noexcept;
 
 			/**
-			 * @brief Creates a sub node at given coordinates.
-			 * @warning If the node already exists, the method will return a null pointer.
-			 * @param name A reference to a string.
-			 * @return std::shared_ptr< Node >
+			 * @brief Creates a child node at the origin with default timestamp.
+			 *
+			 * Convenience overload that creates a child with identity coordinates
+			 * and zero timestamp.
+			 *
+			 * @param name Unique name for the child.
+			 * @return Shared pointer to created node, or nullptr if name is invalid or already exists.
+			 * @see createChild(const std::string&, const Libs::Math::CartesianFrame<float>&, uint32_t)
+			 * @version 0.8.35
 			 */
 			[[nodiscard]]
 			std::shared_ptr< Node >
@@ -529,24 +794,44 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			 * @brief Returns a sub node by its name.
-			 * @warning Can be nullptr!
-			 * @param name A reference to a string.
-			 * @return std::shared_ptr< Node >
+			 * @brief Searches for a child node by name.
+			 *
+			 * Performs a map lookup in the children collection. Only searches direct
+			 * children, not descendants.
+			 *
+			 * @param name Name of the child to find.
+			 * @return Shared pointer to the child if found, nullptr otherwise.
+			 * @note Uses heterogeneous lookup, so string_view can be passed efficiently.
+			 * @see createChild(), children()
+			 * @version 0.8.35
 			 */
 			[[nodiscard]]
 			std::shared_ptr< Node > findChild (const std::string & name) const noexcept;
 
 			/**
-			 * @brief Destroys a sub node by its name and returns true if the sub node existed.
-			 * @param name A reference to a string.
-			 * @return bool
+			 * @brief Removes and destroys a child node by name.
+			 *
+			 * Immediately removes the child from this node's children map. The child's
+			 * destructor will be called when all references are released.
+			 *
+			 * @param name Name of the child to destroy.
+			 * @return True if the child existed and was removed, false if not found.
+			 * @post If true, the child is no longer in the children map.
+			 * @note For deferred destruction, use discard() on the child instead.
+			 * @see discard(), destroyChildren()
+			 * @version 0.8.35
 			 */
 			bool destroyChild (const std::string & name) noexcept;
 
 			/**
-			 * @brief Destroys every sub node and their content.
-			 * @return void
+			 * @brief Immediately removes all child nodes.
+			 *
+			 * Clears the children map, destroying all direct children. Descendants are
+			 * destroyed recursively by their parent's destructor.
+			 *
+			 * @post children() returns an empty map.
+			 * @see destroyTree(), destroyChild()
+			 * @version 0.8.35
 			 */
 			void
 			destroyChildren () noexcept
@@ -555,8 +840,14 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			 * @brief Returns for how long this node exists in microseconds.
-			 * @return uint64_t
+			 * @brief Returns how long this node has existed.
+			 *
+			 * Lifetime is accumulated during logic updates (onProcessLogics).
+			 * Incremented by EngineUpdateCycleDurationUS each cycle.
+			 *
+			 * @return Lifetime in microseconds since creation.
+			 * @see onProcessLogics()
+			 * @version 0.8.35
 			 */
 			[[nodiscard]]
 			uint64_t
@@ -566,14 +857,22 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			 * @brief Plans destruction for this Node. Thread-safe.
-			 * @return void
+			 * @brief Marks this node for deferred destruction.
+			 *
+			 * The node will be destroyed during the next trimTree() call, typically
+			 * at the end of the logic cycle. This allows safe removal during iteration.
+			 *
+			 * @note Thread-safe. Can be called from any thread.
+			 * @warning Cannot discard the root node (will log error and do nothing).
+			 * @see trimTree(), isDiscardable()
+			 * @version 3.25.1
 			 */
 			void discard () noexcept;
 
 			/**
 			 * @brief Returns whether the Node will be destroyed in the next cycle processLogics.
 			 * @return bool
+			 * @version 3.25.1
 			 */
 			[[nodiscard]]
 			bool
@@ -585,27 +884,42 @@ namespace EmEn::Scenes
 			/**
 			 * @brief Directly removes all sub nodes below this node.
 			 * @return void
+			 * @version 3.25.1
 			 */
 			void destroyTree () noexcept;
 
 			/**
-			 * @brief Check all sub node below this node for discarded marked ones.
-			 * @return void
+			 * @brief Recursively removes all nodes marked for destruction.
+			 *
+			 * Traverses the subtree depth-first and removes any node where isDiscardable()
+			 * returns true. For each removed node, emits SubNodeDeleting before removal
+			 * and SubNodeDeleted after. Also calls destroyTree() on discarded nodes.
+			 *
+			 * @note Called automatically by Scene at the end of each logic cycle.
+			 * @see discard(), isDiscardable(), destroyTree()
+			 * @version 3.25.1
 			 */
 			void trimTree () noexcept;
 
 			/**
-			 * @brief Speeds up the node forward. This is a shortcut.
-			 * @param power The power of acceleration. This can be negative to decelerate.
-			 * @return void
+			 * @brief Applies a forward force to accelerate the node.
+			 *
+			 * Convenience method that adds a force along the node's forward vector
+			 * (local Z axis, negative direction). Uses world coordinates for physics.
+			 *
+			 * @param power Force magnitude. Positive moves forward, negative moves backward.
+			 * @note Does nothing on root node.
+			 * @see MovableTrait::addForce()
+			 * @version 3.25.1
 			 */
 			void accelerate (float power) noexcept;
 
 			/**
-			 * @brief Returns the distance between two nodes.
-			 * @param nodeA A reference to a node.
-			 * @param nodeB A reference to a node.
-			 * @return float
+			 * @brief Computes the Euclidean distance between two nodes in world space.
+			 * @param nodeA First node.
+			 * @param nodeB Second node.
+			 * @return Distance in world units. Returns 0 if both references point to the same node.
+			 * @version 3.25.1
 			 */
 			[[nodiscard]]
 			static
@@ -622,7 +936,10 @@ namespace EmEn::Scenes
 
 		private:
 
-			/** @copydoc EmEn::Physics::MovableTrait::getWorldPosition() */
+			/**
+			 * @copydoc EmEn::Physics::MovableTrait::getWorldPosition()
+			 * @version 0.8.35
+			 */
 			[[nodiscard]]
 			Libs::Math::Vector< 3, float >
 			getWorldPosition () const noexcept override
@@ -630,43 +947,117 @@ namespace EmEn::Scenes
 				return this->getWorldCoordinates().position();
 			}
 
-			/** @copydoc EmEn::Physics::MovableTrait::moveFromPhysics() */
+			/**
+			 * @copydoc EmEn::Physics::MovableTrait::moveFromPhysics()
+			 * @note Called by physics engine to update node position based on simulation.
+			 * @version 0.8.35
+			 */
 			void
 			moveFromPhysics (const Libs::Math::Vector< 3, float > & worldPosition) noexcept override
 			{
 				this->move(worldPosition, Libs::Math::TransformSpace::World);
 			}
 
-			/** @copydoc EmEn::Physics::MovableTrait::rotateFromPhysics() */
+			/**
+			 * @copydoc EmEn::Physics::MovableTrait::rotateFromPhysics()
+			 * @note Called by physics engine to update node rotation based on simulation.
+			 * @note Converts angle from degrees to radians and uses local space.
+			 * @version 0.8.35
+			 */
 			void
 			rotateFromPhysics (float radianAngle, const Libs::Math::Vector< 3, float > & worldDirection) noexcept override
 			{
 				this->rotate(Libs::Math::Degree(radianAngle), worldDirection, Libs::Math::TransformSpace::Local);
 			}
 
-			/** @copydoc EmEn::Scenes::AbstractEntity::onUnhandledNotification() */
+			/**
+			 * @copydoc EmEn::Scenes::AbstractEntity::onUnhandledNotification()
+			 * @note Handles notifications from child nodes, components, and physical properties.
+			 * @version 0.8.35
+			 */
 			bool onUnhandledNotification (const ObservableTrait * observable, int notificationCode, const std::any & data) noexcept override;
 
-			/** @copydoc EmEn::Animations::AnimatableInterface::playAnimation() */
+			/**
+			 * @copydoc EmEn::Animations::AnimatableInterface::playAnimation()
+			 * @note Supports all AnimationID values for transforming node coordinates.
+			 * @version 0.8.35
+			 */
 			bool playAnimation (uint8_t animationID, const Libs::Variant & value, size_t cycle) noexcept override;
 
-			/** @copydoc EmEn::Scenes::AbstractEntity::onLocationDataUpdate() */
+			/**
+			 * @copydoc EmEn::Scenes::AbstractEntity::onLocationDataUpdate()
+			 * @note Propagates location changes to all components and child nodes recursively.
+			 * @post Resumes physics simulation (pauseSimulation(false)).
+			 * @version 0.8.35
+			 */
 			void onLocationDataUpdate () noexcept override;
 
-			/** @copydoc EmEn::Scenes::AbstractEntity::onProcessLogics() */
+			/**
+			 * @copydoc EmEn::Scenes::AbstractEntity::onProcessLogics()
+			 * @note Updates animations, increments lifetime, applies scene modifiers, and runs physics simulation.
+			 * @version 0.8.35
+			 */
 			bool onProcessLogics (const Scene & scene) noexcept override;
 
-			/** @copydoc EmEn::Scenes::AbstractEntity::onContentModified() */
+			/**
+			 * @copydoc EmEn::Scenes::AbstractEntity::onContentModified()
+			 * @note Emits EntityContentModified notification.
+			 * @version 0.8.35
+			 */
 			void onContentModified () noexcept override;
 
-			/* Flag names. */
+			/**
+			 * @brief Flag bit position for the IsDiscardable flag.
+			 *
+			 * When this flag is set, the node is marked for removal during the next
+			 * trimTree() call.
+			 * @version 0.8.35
+			 */
 			static constexpr auto IsDiscardable{NextFlag + 0UL};
 
-			/* NOTE: If nullptr, this node is the root. */
+			/**
+			 * @brief Weak pointer to parent node.
+			 *
+			 * Expired (nullptr) for the root node. Uses weak_ptr to avoid circular
+			 * references between parent and children.
+			 * @version 0.8.35
+			 */
 			std::weak_ptr< Node > m_parent;
-			std::map< std::string, std::shared_ptr< Node > > m_children;
+
+			/**
+			 * @brief Map of child nodes indexed by name.
+			 *
+			 * Uses heterogeneous lookup (std::less<>) to allow efficient searches
+			 * with string_view. Each child is owned by a shared_ptr.
+			 * @version 0.8.35
+			 */
+			std::map< std::string, std::shared_ptr< Node >, std::less<> > m_children;
+
+			/**
+			 * @brief Local coordinate frame relative to parent.
+			 *
+			 * Contains position, rotation (quaternion), and scaling factor.
+			 * Updated by transformation methods and read during world coordinate computation.
+			 * @version 0.8.35
+			 */
 			Libs::Math::CartesianFrame< float > m_logicStateCoordinates;
+
+			/**
+			 * @brief Double-buffered world coordinates for rendering.
+			 *
+			 * Array of 2 coordinate frames used for interpolation between logic updates.
+			 * Updated by publishStateForRendering() and read by getWorldCoordinatesStateForRendering().
+			 * @version 0.8.35
+			 */
 			std::array< Libs::Math::CartesianFrame< float >, 2 > m_renderStateCoordinates{};
+
+			/**
+			 * @brief Accumulated lifetime in microseconds.
+			 *
+			 * Incremented by EngineUpdateCycleDurationUS during each logic cycle.
+			 * Can be used for time-based effects or debugging.
+			 * @version 0.8.35
+			 */
 			uint64_t m_lifetime{0};
 	};
 }

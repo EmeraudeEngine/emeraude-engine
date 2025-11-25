@@ -208,6 +208,42 @@ namespace EmEn::Scenes::Component
 	}
 
 	void
+	SoundEmitter::onSuspend () noexcept
+	{
+		/* Only suspend if currently playing. */
+		if ( m_source == nullptr || !m_source->isPlaying() )
+		{
+			return;
+		}
+
+		/* Remember we were playing. */
+		this->enableFlag(WasPlayingBeforeSuspend);
+
+		/* Release the source back to the pool. */
+		m_source->stop();
+		m_source->removeSound();
+		m_source.reset();
+	}
+
+	void
+	SoundEmitter::onWakeup () noexcept
+	{
+		/* Only wakeup if we were playing before suspend. */
+		if ( !this->isFlagEnabled(WasPlayingBeforeSuspend) )
+		{
+			return;
+		}
+
+		this->disableFlag(WasPlayingBeforeSuspend);
+
+		/* Reacquire a source and restart playback. */
+		if ( m_attachedSound != nullptr && m_attachedSound->isLoaded() )
+		{
+			this->playAttachedSound();
+		}
+	}
+
+	void
 	SoundEmitter::playAttachedSound () noexcept
 	{
 		if ( m_source == nullptr )

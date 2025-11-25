@@ -326,7 +326,7 @@ namespace EmEn::Audio
 	{
 		auto & settings = m_primaryServices.settings();
 
-		m_showInformation = settings.getOrSetDefault< bool >(OpenALShowInformationKey, DefaultOpenALShowInformation);
+		m_showInformation = settings.getOrSetDefault< bool >(AudioShowInformationKey, DefaultAudioShowInformation);
 
 		if ( m_primaryServices.arguments().isSwitchPresent("--disable-audio") || !settings.getOrSetDefault< bool >(AudioEnableKey, DefaultAudioEnable) )
 		{
@@ -610,14 +610,21 @@ namespace EmEn::Audio
 
 		if ( s_audioSystemAvailable )
 		{
-			if ( m_contextAttributes.empty() )
+			if ( const auto it = m_contextAttributes.find(ALC_MAJOR_VERSION); it == m_contextAttributes.end() )
 			{
 				alcGetIntegerv(m_outputDevice, ALC_MAJOR_VERSION, 1, &major);
-				alcGetIntegerv(m_outputDevice, ALC_MINOR_VERSION, 1, &minor);
 			}
 			else
 			{
 				major = m_contextAttributes.at(ALC_MAJOR_VERSION);
+			}
+
+			if ( const auto it = m_contextAttributes.find(ALC_MINOR_VERSION); it == m_contextAttributes.end() )
+			{
+				alcGetIntegerv(m_outputDevice, ALC_MINOR_VERSION, 1, &minor);
+			}
+			else
+			{
 				minor = m_contextAttributes.at(ALC_MINOR_VERSION);
 			}
 		}
@@ -637,14 +644,21 @@ namespace EmEn::Audio
 
 		if ( s_audioSystemAvailable )
 		{
-			/*if ( m_contextAttributes.empty() )
+			if ( const auto it = m_contextAttributes.find(ALC_EFX_MAJOR_VERSION); it == m_contextAttributes.end() )
 			{
-				alcGetIntegerv(m_device, ALC_MAJOR_VERSION, 1, &major);
-				alcGetIntegerv(m_device, ALC_MINOR_VERSION, 1, &minor);
+				alcGetIntegerv(m_outputDevice, ALC_EFX_MAJOR_VERSION, 1, &major);
 			}
-			else*/
+			else
 			{
 				major = m_contextAttributes.at(ALC_EFX_MAJOR_VERSION);
+			}
+
+			if ( const auto it = m_contextAttributes.find(ALC_EFX_MINOR_VERSION); it == m_contextAttributes.end() )
+			{
+				alcGetIntegerv(m_outputDevice, ALC_EFX_MINOR_VERSION, 1, &minor);
+			}
+			else
+			{
 				minor = m_contextAttributes.at(ALC_EFX_MINOR_VERSION);
 			}
 		}
@@ -888,18 +902,29 @@ namespace EmEn::Audio
 		}
 
 		/* ALC extensions */
-		if ( const auto extensions = String::explode(alcGetString(nullptr, ALC_EXTENSIONS), ' ', false); extensions.empty() )
+		bool extensionFound = false;
+		const auto rawExtensions = alcGetString(nullptr, ALC_EXTENSIONS);
+
+		if ( rawExtensions != nullptr )
+		{
+			const auto extensions = String::explode(rawExtensions, ' ', false);
+
+			if ( !extensions.empty() )
+			{
+				output << "Available ALC extensions :" "\n";
+
+				for ( const auto & extension : extensions )
+				{
+					output << " - " << extension << '\n';
+				}
+
+				extensionFound = true;
+			}
+		}
+
+		if ( !extensionFound )
 		{
 			output << "No ALC extension available !" "\n";
-		}
-		else
-		{
-			output << "Available ALC extensions :" "\n";
-
-			for ( const auto & extension : extensions )
-			{
-				output << " - " << extension << '\n';
-			}
 		}
 
 		return output.str();

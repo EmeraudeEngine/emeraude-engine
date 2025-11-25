@@ -30,21 +30,42 @@
 #include "emeraude_config.hpp"
 
 /* STL inclusions. */
+#include <cstdlib>
 #include <iostream>
+
+/* ASIO configuration - Must be defined before including any ASIO headers. */
+#ifndef ASIO_STANDALONE
+#define ASIO_STANDALONE 1
+#endif
+
+#ifndef ASIO_NO_EXCEPTIONS
+#define ASIO_NO_EXCEPTIONS 1
+#endif
+
+/* Disable coroutines as they require exceptions (co_composed.hpp uses throw). */
+#ifndef ASIO_DISABLE_CO_AWAIT
+#define ASIO_DISABLE_CO_AWAIT 1
+#endif
+
+/* Include ASIO config to get ASIO_SOURCE_LOCATION_DEFAULTED_PARAM macro. */
+#include "asio/detail/config.hpp"
 
 namespace asio::detail
 {
 	/**
 	 * @brief Overrides the asio::detail::throw_exception() method to use the library without C++ exception mechanism.
-	 * @param exception A reference to the ASIO exception template.
-	 * @return void
+	 * @tparam exception_t The exception type.
+	 * @param exception A reference to the ASIO exception.
+	 * @note This function is required when ASIO_NO_EXCEPTIONS is defined.
+	 * The signature must match the declaration in asio/detail/throw_exception.hpp.
 	 */
-	template < typename exception_t >
+	template< typename exception_t >
+	[[noreturn]]
 	void
-	throw_exception (const exception_t & exception)
+	throw_exception (const exception_t & exception ASIO_SOURCE_LOCATION_DEFAULTED_PARAM)
 	{
-		std::cerr << "throw_exception(), ASIO stack message : " << exception.what() << '\n';
+		std::cerr << "[ASIO] Fatal error: " << exception.what() << '\n';
 
-		//std::terminate();
+		std::abort();
 	}
-};
+}

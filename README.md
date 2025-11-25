@@ -90,20 +90,20 @@ The engine requires several precompiled external libraries provided by [ext-deps
 
 The following dependencies are included as git submodules and compiled directly with the engine:
 
-| Library | Version | Repository |
-|---------|---------|------------|
-| **Asio** | 1.36.0 | [github.com/chriskohlhoff/asio](https://github.com/chriskohlhoff/asio) |
-| **fastgltf** | 0.9.0~ | [github.com/spnda/fastgltf](https://github.com/spnda/fastgltf) |
+| Library | Version            | Repository |
+|---------|--------------------|------------|
+| **Asio** | 1.36.0             | [github.com/chriskohlhoff/asio](https://github.com/chriskohlhoff/asio) |
+| **fastgltf** | 0.9.0~             | [github.com/spnda/fastgltf](https://github.com/spnda/fastgltf) |
 | **GLFW** | master(2025.07.17) | [github.com/EmeraudeEngine/glfw](https://github.com/EmeraudeEngine/glfw.git) [FORK] |
-| **Glslang** | 16.0.0 | [github.com/KhronosGroup/glslang](https://github.com/KhronosGroup/glslang.git) |
-| **ImGui** | 1.92.4 | [github.com/ocornut/imgui](https://github.com/ocornut/imgui.git) |
-| **JsonCpp** | 1.9.7~ | [github.com/open-source-parsers/jsoncpp](https://github.com/open-source-parsers/jsoncpp.git) |
-| **libsndfile** | 1.2.2 | [github.com/libsndfile/libsndfile](https://github.com/libsndfile/libsndfile) |
-| **magic_enum** | 0.9.7~ | [github.com/Neargye/magic_enum](https://github.com/Neargye/magic_enum) |
-| **Portable File Dialogs** | unversioned | [github.com/samhocevar/portable-file-dialogs](https://github.com/samhocevar/portable-file-dialogs.git) |
-| **reproc** | 14.2.4~ | [github.com/DaanDeMeyer/reproc](https://github.com/DaanDeMeyer/reproc) |
-| **SDL_GameControllerDB** | unversioned | [github.com/gabomdq/SDL_GameControllerDB](https://github.com/gabomdq/SDL_GameControllerDB.git) |
-| **Vulkan Memory Allocator** | 3.3.0~ | [github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator](https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator) |
+| **Glslang** | 16.0.0             | [github.com/KhronosGroup/glslang](https://github.com/KhronosGroup/glslang.git) |
+| **ImGui** | 1.92.5             | [github.com/ocornut/imgui](https://github.com/ocornut/imgui.git) |
+| **JsonCpp** | 1.9.7~             | [github.com/open-source-parsers/jsoncpp](https://github.com/open-source-parsers/jsoncpp.git) |
+| **libsndfile** | 1.2.2              | [github.com/libsndfile/libsndfile](https://github.com/libsndfile/libsndfile) |
+| **magic_enum** | 0.9.7~             | [github.com/Neargye/magic_enum](https://github.com/Neargye/magic_enum) |
+| **Portable File Dialogs** | unversioned        | [github.com/samhocevar/portable-file-dialogs](https://github.com/samhocevar/portable-file-dialogs.git) |
+| **reproc** | 14.2.5~            | [github.com/DaanDeMeyer/reproc](https://github.com/DaanDeMeyer/reproc) |
+| **SDL_GameControllerDB** | unversioned        | [github.com/gabomdq/SDL_GameControllerDB](https://github.com/gabomdq/SDL_GameControllerDB.git) |
+| **Vulkan Memory Allocator** | 3.3.0~             | [github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator](https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator) |
 
 ### Vulkan SDK
 
@@ -244,49 +244,23 @@ public:
         : Core{argc, argv, "MyApp", {1, 0, 0}, "MyOrg", "example.com"} {}
 
 private:
-    // Called before graphics/audio initialization
-    bool onBeforeSecondaryServicesInitialization() noexcept override {
-        return false;  // Return false to continue initialization
-    }
-
-    // Called when engine is fully initialized - setup your scene here
-    bool onStart() noexcept override {
+    // Required: Called when engine is fully initialized - setup your scene here
+    bool onCoreStarted() noexcept override {
         return true;  // Return true to run the application
     }
 
-    // Called when application resumes (e.g., after pause)
-    void onResume() noexcept override {}
+    // Required: Called every frame - update game logic here (runs on logic thread)
+    void onCoreProcessLogics(size_t engineCycle) noexcept override {}
 
-    // Called every frame - update game logic here
-    void onProcessLogics(size_t engineCycle) noexcept override {}
-
-    // Called when application pauses
-    void onPause() noexcept override {}
-
-    // Called when application stops
-    void onStop() noexcept override {}
-
-    // Keyboard input handling
-    bool onAppKeyPress(int32_t key, int32_t scancode, int32_t modifiers, bool repeat) noexcept override {
-        return false;  // Return true if event was consumed
-    }
-
-    bool onAppKeyRelease(int32_t key, int32_t scancode, int32_t modifiers) noexcept override {
-        return false;  // Return true if event was consumed
-    }
-
-    // Character input handling (for text input)
-    bool onAppCharacterType(uint32_t unicode) noexcept override {
-        return false;  // Return true if event was consumed
-    }
-
-    // Notification system for observables
-    bool onAppNotification(const ObservableTrait* observable, int notificationCode, const std::any& data) noexcept override {
-        return false;  // Return true to keep observing, false to forget
-    }
-
-    // File open events (drag & drop, system open)
-    void onOpenFiles(const std::vector<std::filesystem::path>& filepaths) noexcept override {}
+    // Optional overrides available:
+    // - onBeforeCoreSecondaryServicesInitialization() : Pre-init checks (e.g., --help)
+    // - onCorePaused() / onCoreResumed() : Pause handling
+    // - onBeforeCoreStop() : Cleanup before shutdown
+    // - onCoreKeyPress() / onCoreKeyRelease() : Keyboard input
+    // - onCoreCharacterType() : Text input
+    // - onCoreNotification() : Observer pattern events
+    // - onCoreOpenFiles() : Drag & drop files
+    // - onCoreSurfaceRefreshed() : Window resize handling
 };
 
 int main(int argc, char** argv) {

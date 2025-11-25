@@ -29,19 +29,19 @@
 /* STL inclusions. */
 #include <cstddef>
 #include <cstdint>
-#include <unordered_map>
 #include <memory>
 #include <string>
-#include <vector>
+#include <unordered_map>
 #include "Libs/std_source_location.hpp"
 
 /* Local inclusions for inheritances. */
 #include "Libs/FlagTrait.hpp"
 
 /* Local inclusions for usages. */
-#include "Libs/Math/CartesianFrame.hpp"
 #include "Graphics/Renderable/Interface.hpp"
 #include "Graphics/Types.hpp"
+#include "Libs/Math/CartesianFrame.hpp"
+#include "RenderContext.hpp"
 #include "RenderTargetProgramsInterface.hpp"
 
 /* Forward declarations. */
@@ -97,7 +97,8 @@ namespace EmEn::Graphics::RenderableInstance
 		IsReadyToRender = 1U << 0,
 		/**
 		 * @brief This flag is set when all positions (GPU instancing) are up to date.
-		 * @todo Maybe this functionality is useless now, it was an old behavior to control update video memory buffer frequency.
+		 * @deprecated This flag is legacy and currently unused. Previously controlled video memory buffer update
+		 * frequency.
 		 */
 		ArePositionsSynchronized = 1U << 1,
 		/** @brief This flag is set when the renderable instance can't be loaded in the rendering system and must be removed. */
@@ -132,7 +133,31 @@ namespace EmEn::Graphics::RenderableInstance
 
 	/**
 	 * @brief Defines the base of a renderable instance to draw any object in a scene.
-	 * @extends EmEn::Libs::FlagTrait A renderable instance is flag-able.
+	 *
+	 * A renderable instance represents a specific instantiation of a Renderable::Interface
+	 * ready for drawing in the scene. It holds render state, transformation matrices, and
+	 * per-render-target shader program configurations.
+	 *
+	 * Key responsibilities:
+	 * - Manages shader program generation for shadow casting and scene rendering
+	 * - Handles push constant configuration for different rendering modes
+	 * - Supports GPU instancing, skeletal animation, and multi-layer materials
+	 * - Provides TBN space visualization for debugging
+	 *
+	 * @extends std::enable_shared_from_this Allows safe shared_ptr creation from this pointer.
+	 * @extends EmEn::Libs::FlagTrait Provides flag-based state management (see RenderableInstanceFlagBits).
+	 *
+	 * @note Thread safety: This class uses internal mutex locking for GPU memory access.
+	 * @note Clarification needed: The necessity of mutex locks (m_GPUMemoryAccess) is unclear
+	 *       and marked with [VULKAN-CPU-SYNC] in the implementation.
+	 *
+	 * @todo Check for renderable interface already in video memory to reduce preparation time.
+	 *
+	 * @see Renderable::Interface The underlying renderable data (geometry, materials).
+	 * @see RenderTarget::Abstract The destination for rendering operations.
+	 * @see Unique For single-instance rendering.
+	 * @see Multiple For GPU-instanced rendering with multiple instances.
+	 * @version 0.8.35
 	 */
 	class Abstract : public std::enable_shared_from_this< Abstract >, public Libs::FlagTrait< uint32_t >
 	{
@@ -445,24 +470,48 @@ namespace EmEn::Graphics::RenderableInstance
 			}
 
 			/**
-			 * @brief Gets the renderable instance ready to render in a scene.
-			 * @param renderTarget A reference to the render target smart pointer.
-			 * @param renderer A writable reference to the graphics renderer.
-			 * @return bool
+			 * @brief Prepares the renderable instance for shadow casting.
+			 *
+			 * Generates shadow casting shader programs for each material layer.
+			 * Programs are cached per render target.
+			 *
+			 * @param renderTarget A reference to the shadow map render target.
+			 * @param renderer A writable reference to the graphics renderer for shader generation.
+			 * @return true if preparation succeeded or is pending (renderable not ready yet).
+			 * @return false if an error occurred (instance marked as broken).
+			 *
+			 * @note Returns true immediately if renderable is not ready for instantiation.
+			 *       A loading event will trigger another call when ready.
+			 *
+			 * @see castShadows() To render after preparation.
+			 * @version 0.8.35
 			 */
 			[[nodiscard]]
 			bool getReadyForShadowCasting (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, Renderer & renderer) noexcept;
 
 			/**
-			 * @brief Gets the renderable instance ready to render in a scene.
-			 * @param scene A reference to the scene.
-			 * @param renderTarget A reference to the render target smart pointer.
-			 * @param renderPassTypes A reference to a list of requested render pass types.
-			 * @param renderer A writable reference to the graphics renderer.
-			 * @return bool
+			 * @brief Prepares the renderable instance for scene rendering.
+			 *
+			 * Generates shader programs for each requested render pass type and material layer.
+			 * Programs are cached per render target.
+			 *
+			 * @param scene A reference to the scene (for lighting and environment info).
+			 * @param renderTarget A reference to the render target.
+			 * @param renderPassTypes A list of render pass types to prepare (e.g., Opaque, Transparent).
+			 * @param renderer A writable reference to the graphics renderer for shader generation.
+			 * @return true if preparation succeeded or is pending (renderable not ready yet).
+			 * @return false if an error occurred (instance marked as broken).
+			 *
+			 * @note Returns true immediately if renderable is not ready for instantiation.
+			 *       A loading event will trigger another call when ready.
+			 * @note Also generates TBN space visualization program if DisplayTBNSpaceEnabled flag is set.
+			 *
+			 * @see render() To render after preparation.
+			 * @see getReadyForShadowCasting() For shadow map preparation.
+			 * @version 0.8.35
 			 */
 			[[nodiscard]]
-			bool getReadyForRender (const Scenes::Scene & scene, const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const std::vector< RenderPassType > & renderPassTypes, Renderer & renderer) noexcept;
+			bool getReadyForRender (const Scenes::Scene & scene, const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const Libs::StaticVector< RenderPassType, MaxPassCount > & renderPassTypes, Renderer & renderer) noexcept;
 
 			/**
 			 * @brief Sets the renderable instance broken from a child class.
@@ -479,7 +528,8 @@ namespace EmEn::Graphics::RenderableInstance
 			 * @brief Sets the renderable instance broken from a child class.
 			 * @note This is the debug version.
 			 * @param errorMessage Trace an error message.
-			 * @param location If a message has to be traced, this passes the location. Default auto-generated by the mighty C++ STL.
+			 * @param location If a message has to be traced, this passes the location. Default auto-generated by the
+			 * mighty C++ STL.
 			 * @return void
 			 */
 			void setBroken (const std::string & errorMessage, const std::source_location & location = std::source_location::current()) noexcept;
@@ -493,7 +543,7 @@ namespace EmEn::Graphics::RenderableInstance
 			setTransformationMatrix (const Libs::Math::Matrix< 4, float > & transformationMatrix) noexcept
 			{
 				m_transformationMatrix = transformationMatrix;
-				
+
 				this->enableFlag(ApplyTransformationMatrix);
 			}
 
@@ -523,37 +573,72 @@ namespace EmEn::Graphics::RenderableInstance
 			void destroyGraphicsPipelines (const std::shared_ptr< RenderTarget::Abstract > & renderTarget) noexcept;
 
 			/**
-			 * @brief Draws the instance in a shadow map.
-			 * @param readStateIndex The render state-valid index to read data.
-			 * @param renderTarget A reference to the render target smart pointer.
-			 * @param layerIndex The renderable layer index.
-			 * @param worldCoordinates A pointer to the world coordinates of the instance. A nullptr means at the origin of the world.
-			 * @param commandBuffer A reference to a command buffer.
-			 * @return void
+			 * @brief Draws the instance into a shadow map.
+			 *
+			 * Renders the instance for shadow casting using a simplified pipeline:
+			 * 1. Binds the shadow casting graphics pipeline
+			 * 2. Optionally binds view UBO for GPU instancing
+			 * 3. Configures push constants via pushMatricesForShadowCasting()
+			 * 4. Issues the draw command
+			 *
+			 * @param readStateIndex The render state-valid index to read data (for double/triple buffering).
+			 * @param renderTarget A reference to the shadow map render target.
+			 * @param layerIndex The renderable layer index (for multi-layer materials).
+			 * @param worldCoordinates A pointer to the world coordinates of the instance. nullptr means origin.
+			 * @param commandBuffer A reference to the command buffer recording draw commands.
+			 *
+			 * @note Shadow maps use depth-only rendering without material/lighting bindings.
+			 *
+			 * @see render() For full scene rendering with materials.
+			 * @see pushMatricesForShadowCasting() For push constant strategy.
+			 * @version 0.8.35
 			 */
 			void castShadows (uint32_t readStateIndex, const std::shared_ptr< RenderTarget::Abstract > & renderTarget, uint32_t layerIndex, const Libs::Math::CartesianFrame< float > * worldCoordinates, const Vulkan::CommandBuffer & commandBuffer) const noexcept;
 
 			/**
 			 * @brief Draws the instance in a render target.
-			 * @param readStateIndex The render state-valid index to read data.
+			 *
+			 * Performs the full render pipeline for this instance:
+			 * 1. Binds the graphics pipeline and instance resources
+			 * 2. Configures push constants via pushMatricesForRendering()
+			 * 3. Binds view, light, and material descriptor sets
+			 * 4. Issues the draw command
+			 *
+			 * @param readStateIndex The render state-valid index to read data (for double/triple buffering).
 			 * @param renderTarget A reference to the render target smart pointer.
-			 * @param lightEmitter A pointer to an optional light emitter. TODO: should be a smart pointer.
+			 * @param lightEmitter A pointer to an optional light emitter. Can be nullptr for unlit rendering.
 			 * @param renderPassType The render pass type into the render target.
-			 * @param layerIndex The renderable layer index.
-			 * @param worldCoordinates A pointer to the world coordinates of the instance. A nullptr means at the origin of the world.
-			 * @param commandBuffer A reference to a command buffer.
-			 * @return void
+			 * @param layerIndex The renderable layer index (for multi-layer materials).
+			 * @param worldCoordinates A pointer to the world coordinates of the instance. nullptr means origin.
+			 * @param commandBuffer A reference to the command buffer recording draw commands.
+			 *
+			 * @todo The lightEmitter parameter should be refactored to use a smart pointer for safety.
+			 *
+			 * @see castShadows() For shadow map rendering.
+			 * @see renderTBNSpace() For debug visualization.
+			 * @version 0.8.35
 			 */
 			void render (uint32_t readStateIndex, const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const Scenes::Component::AbstractLightEmitter * lightEmitter, RenderPassType renderPassType, uint32_t layerIndex, const Libs::Math::CartesianFrame< float > * worldCoordinates, const Vulkan::CommandBuffer & commandBuffer) const noexcept;
 
 			/**
-			 * @brief Draws the TBN space over each vertex.
-			 * @param readStateIndex The render state-valid index to read data.
+			 * @brief Renders the Tangent-Bitangent-Normal space vectors for debugging.
+			 *
+			 * Draws colored lines representing the TBN vectors at each vertex:
+			 * - Red: Tangent vector
+			 * - Green: Bitangent vector
+			 * - Blue: Normal vector
+			 *
+			 * @param readStateIndex The render state-valid index to read data (for double/triple buffering).
 			 * @param renderTarget A reference to the render target smart pointer.
 			 * @param layerIndex The renderable layer index.
-			 * @param worldCoordinates A pointer to the world coordinates of the instance. A nullptr means at the origin of the world.
-			 * @param commandBuffer A reference to a command buffer.
-			 * @return void
+			 * @param worldCoordinates A pointer to the world coordinates of the instance. nullptr means origin.
+			 * @param commandBuffer A reference to the command buffer recording draw commands.
+			 *
+			 * @note Only available when DisplayTBNSpaceEnabled flag is set.
+			 * @note Useful for debugging normal mapping and lighting issues.
+			 *
+			 * @see enableDisplayTBNSpace() To enable this visualization.
+			 * @version 0.8.35
 			 */
 			void renderTBNSpace (uint32_t readStateIndex, const std::shared_ptr< RenderTarget::Abstract > & renderTarget, uint32_t layerIndex, const Libs::Math::CartesianFrame< float > * worldCoordinates, const Vulkan::CommandBuffer & commandBuffer) const noexcept;
 
@@ -595,32 +680,39 @@ namespace EmEn::Graphics::RenderableInstance
 				: FlagTrait{flagBits},
 				m_renderable{renderable}
 			{
-
 			}
 
 			/**
-			 * @brief Configures the push constant into the command buffer for shadow casting.
-			 * @param commandBuffer A reference to the command buffer.
-			 * @param pipelineLayout A reference to the pipeline layout.
-			 * @param program A reference to the program.
-			 * @param readStateIndex The render state-valid index to read data.
-			 * @param viewMatrices A reference to the view matrices.
-			 * @param worldCoordinates A pointer to the world coordinates of the instance. A nullptr means at the origin of the world.
-			 * @return void
+			 * @brief Configures push constants for shadow casting.
+			 *
+			 * Each subclass implements a different strategy based on how it stores Model matrices:
+			 * - **Unique**: Computes M from worldCoordinates, pushes M (cubemap) or MVP (classic)
+			 * - **Multiple**: M is in VBO, pushes VP (classic) or nothing (cubemap)
+			 *
+			 * @param passContext The render pass context (command buffer, view matrices, cubemap flag).
+			 * @param pushContext The push constant context (pipeline layout, stage flags, shader options).
+			 * @param worldCoordinates World coordinates of the instance. nullptr means origin.
+			 *
+			 * @see RenderPassContext::isCubemap For cubemap vs classic rendering detection.
 			 */
-			virtual void pushMatricesForShadowCasting (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::PipelineLayout & pipelineLayout, const Saphir::Program & program, uint32_t readStateIndex, const ViewMatricesInterface & viewMatrices, const Libs::Math::CartesianFrame< float > * worldCoordinates) const noexcept = 0;
+			virtual void pushMatricesForShadowCasting (const RenderPassContext & passContext, const PushConstantContext & pushContext, const Libs::Math::CartesianFrame< float > * worldCoordinates) const noexcept = 0;
 
 			/**
-			 * @brief Configures the push constant into the command buffer for rendering.
-			 * @param commandBuffer A reference to the command buffer.
-			 * @param pipelineLayout A reference to the pipeline layout.
-			 * @param program A reference to the program.
-			 * @param readStateIndex The render state-valid index to read data.
-			 * @param viewMatrices A reference to the view matrices.
-			 * @param worldCoordinates A pointer to the world coordinates of the instance. A nullptr means at the origin of the world.
-			 * @return void
+			 * @brief Configures push constants for scene rendering.
+			 *
+			 * Each subclass implements a different strategy based on how it stores Model matrices:
+			 * - **Unique**: Computes M from worldCoordinates, pushes M/V+M/MVP depending on mode
+			 * - **Multiple**: M is in VBO, pushes V+VP/VP or nothing (cubemap)
+			 *
+			 * @param passContext The render pass context (command buffer, view matrices, cubemap flag).
+			 * @param pushContext The push constant context (pipeline layout, stage flags, shader options).
+			 * @param worldCoordinates World coordinates of the instance. nullptr means origin.
+			 *
+			 * @see PushConstantContext::useAdvancedMatrices For lighting mode.
+			 * @see PushConstantContext::useBillboarding For sprite mode.
 			 */
-			virtual void pushMatricesForRendering (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::PipelineLayout & pipelineLayout, const Saphir::Program & program, uint32_t readStateIndex, const ViewMatricesInterface & viewMatrices, const Libs::Math::CartesianFrame< float > * worldCoordinates) const noexcept = 0;
+			virtual void
+			pushMatricesForRendering (const RenderPassContext & passContext, const PushConstantContext & pushContext, const Libs::Math::CartesianFrame< float > * worldCoordinates) const noexcept = 0;
 
 			/**
 			 * @brief Returns the number of instances to draw.
@@ -659,13 +751,27 @@ namespace EmEn::Graphics::RenderableInstance
 			 */
 			virtual void bindInstanceModelLayer (const Vulkan::CommandBuffer & commandBuffer, uint32_t layerIndex) const noexcept = 0;
 
-			/* [VULKAN-CPU-SYNC] TODO: Check if this is useful! */
-			mutable std::mutex m_GPUMemoryAccess;
+			/**
+			 * @brief Mutex protecting local data access (e.g. VBO data in Multiple).
+			 *
+			 * @note Used to synchronize access between Logic thread (updating data) and Render thread (uploading to
+			 * GPU).
+			 */
+			mutable std::mutex m_localDataAccess;
+
+			/**
+			 * @brief Mutex protecting pipeline and render target program access.
+			 *
+			 * @note Used to synchronize access to m_renderTargetPrograms between Logic thread (refresh/destroy) and
+			 * Render thread (use).
+			 */
+			mutable std::mutex m_pipelineAccess;
 
 		private:
 
 			[[nodiscard]]
-			RenderTargetProgramsInterface * getOrCreateRenderTargetProgramInterface (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, uint32_t layerCount);
+			RenderTargetProgramsInterface *
+			getOrCreateRenderTargetProgramInterface (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, uint32_t layerCount);
 
 			const std::shared_ptr< Renderable::Interface > m_renderable;
 			Libs::Math::Matrix< 4, float > m_transformationMatrix;

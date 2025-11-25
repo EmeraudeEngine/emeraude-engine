@@ -44,7 +44,7 @@ namespace EmEn::Graphics::Material::Component
 	using namespace Libs::Math;
 	using namespace Saphir;
 
-	Texture::Texture (const char * samplerName, std::string variableName, const Json::Value & data, const FillingType & fillingType, Resources::ServiceProvider & serviceProvider) noexcept
+	Texture::Texture (const char * samplerName, std::string variableName, const Json::Value & data, const FillingType & fillingType, Resources::AbstractServiceProvider & serviceProvider) noexcept
 		: m_samplerName{samplerName},
 		m_variableName{std::move(variableName)}
 	{

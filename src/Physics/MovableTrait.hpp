@@ -416,6 +416,7 @@ namespace EmEn::Physics
 
 			/**
 			 * @brief Sets whether this movable trait always computes physics.
+			 * @note This means the simulation will never pause on this entity.
 			 * @param state The state.
 			 * @return void
 			 */

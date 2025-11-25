@@ -27,10 +27,10 @@
 #include "DefinitionResource.hpp"
 
 /* Local inclusions. */
-#include "Tracer.hpp"
-#include "Resources/Manager.hpp"
 #include "Libs/FastJSON.hpp"
-#include "Scene.hpp"
+#include "Resources/Manager.hpp"
+#include "Scenes/Scene.hpp"
+#include "Tracer.hpp"
 
 namespace EmEn::Scenes
 {
@@ -38,13 +38,13 @@ namespace EmEn::Scenes
 	using namespace Graphics;
 
 	bool
-	DefinitionResource::load (Resources::ServiceProvider & /*serviceProvider*/) noexcept
+	DefinitionResource::load (Resources::AbstractServiceProvider & /*serviceProvider*/) noexcept
 	{
 		return false;
 	}
 
 	bool
-	DefinitionResource::load (Resources::ServiceProvider & serviceProvider, const std::filesystem::path & filepath) noexcept
+	DefinitionResource::load (Resources::AbstractServiceProvider & serviceProvider, const std::filesystem::path & filepath) noexcept
 	{
 		const auto rootCheck = FastJSON::getRootFromFile(filepath);
 
@@ -64,7 +64,7 @@ namespace EmEn::Scenes
 	}
 
 	bool
-	DefinitionResource::load (Resources::ServiceProvider & /*serviceProvider*/, const Json::Value & data) noexcept
+	DefinitionResource::load (Resources::AbstractServiceProvider & /*serviceProvider*/, const Json::Value & data) noexcept
 	{
 		m_root = data;
 

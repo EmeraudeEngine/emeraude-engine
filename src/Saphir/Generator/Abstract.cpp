@@ -179,7 +179,7 @@ namespace EmEn::Saphir::Generator
 	{
 		/* Create a graphics pipeline base and configure it before letting the renderer handle the final invocation on GPU.  */
 		auto graphicsPipeline = std::make_shared< GraphicsPipeline >(renderer.device());
-		graphicsPipeline->setIdentifier(TracerTag, this->name(), "Pipeline");
+		graphicsPipeline->setIdentifier(TracerTag, this->name(), "GraphicsPipeline");
 
 		{
 			auto shaderModules = renderer.shaderManager().getShaderModules(renderer.device(), m_shaderProgram);
@@ -220,9 +220,7 @@ namespace EmEn::Saphir::Generator
 		}
 
 		/* FIXME: Only to get the width/height. This can become a dynamic state! */
-		const auto & extent = m_renderTarget->extent();
-
-		if ( !graphicsPipeline->configureViewportState(extent.width, extent.height) )
+		if ( const auto & extent = m_renderTarget->extent(); !graphicsPipeline->configureViewportState(extent.width, extent.height) )
 		{
 			Tracer::error(TracerTag, "Unable to configure the graphics pipeline viewport state !");
 

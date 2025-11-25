@@ -47,7 +47,7 @@ namespace EmEn::Graphics::Renderable
 	constexpr uint32_t MaxFrames{120};
 
 	bool
-	SpriteResource::load (Resources::ServiceProvider & serviceProvider) noexcept
+	SpriteResource::load (Resources::AbstractServiceProvider & serviceProvider) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
@@ -72,7 +72,7 @@ namespace EmEn::Graphics::Renderable
 	}
 
 	bool
-	SpriteResource::load (Resources::ServiceProvider & serviceProvider, const Json::Value & data) noexcept
+	SpriteResource::load (Resources::AbstractServiceProvider & serviceProvider, const Json::Value & data) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
@@ -182,7 +182,7 @@ namespace EmEn::Graphics::Renderable
 	}
 
 	bool
-	SpriteResource::load (Resources::ServiceProvider & serviceProvider, const std::shared_ptr< Material::Interface > & material, bool centerAtBottom, bool flip, const RasterizationOptions & /*rasterizationOptions*/) noexcept
+	SpriteResource::load (Resources::AbstractServiceProvider & serviceProvider, const std::shared_ptr< Material::Interface > & material, bool centerAtBottom, bool flip, const RasterizationOptions & /*rasterizationOptions*/) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
@@ -210,7 +210,7 @@ namespace EmEn::Graphics::Renderable
 	}
 
 	bool
-	SpriteResource::prepareGeometry (Resources::ServiceProvider & serviceProvider, bool isAnimated, bool centerAtBottom, bool flip) noexcept
+	SpriteResource::prepareGeometry (Resources::AbstractServiceProvider & serviceProvider, bool isAnimated, bool centerAtBottom, bool flip) noexcept
 	{
 		const std::lock_guard< std::mutex > lock{s_lockGeometryLoading};
 

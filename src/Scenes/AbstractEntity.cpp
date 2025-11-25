@@ -26,7 +26,22 @@
 
 #include "AbstractEntity.hpp"
 
+/* STL inclusions. */
+#include <algorithm>
+
 /* Local inclusions. */
+#include "Component/Camera.hpp"
+#include "Component/DirectionalLight.hpp"
+#include "Component/DirectionalPushModifier.hpp"
+#include "Component/Microphone.hpp"
+#include "Component/MultipleVisuals.hpp"
+#include "Component/ParticlesEmitter.hpp"
+#include "Component/PointLight.hpp"
+#include "Component/SoundEmitter.hpp"
+#include "Component/SphericalPushModifier.hpp"
+#include "Component/SpotLight.hpp"
+#include "Component/Visual.hpp"
+#include "Component/Weight.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::Scenes
@@ -204,7 +219,7 @@ namespace EmEn::Scenes
 	{
 		{
 			std::lock_guard< std::mutex > lock(m_componentsMutex);
-			if ( m_components.full() )
+			if ( m_components.full() ) [[unlikely]]
 			{
 				TraceError{TracerTag} << "Unable to add a new component !";
 
@@ -317,36 +332,54 @@ namespace EmEn::Scenes
 		this->notify(ComponentDestroyed);
 	}
 
-	std::shared_ptr< Component::Abstract >
-	AbstractEntity::getComponent (const std::string & name) noexcept
+	bool
+	AbstractEntity::containsComponent (std::string_view name) const noexcept
 	{
 		std::lock_guard< std::mutex > lock(m_componentsMutex);
-		for ( auto componentIt = m_components.begin(); componentIt != m_components.end(); ++componentIt )
-		{
-			if ( (*componentIt)->name() == name )
-			{
-				return *componentIt;
-			}
-		}
 
-		return nullptr;
+		return std::ranges::any_of(m_components, [&name] (const auto & component) {
+			return component->name() == name;
+		});
+	}
+
+	std::shared_ptr< Component::Abstract >
+	AbstractEntity::getComponent (std::string_view name) noexcept
+	{
+		std::lock_guard< std::mutex > lock(m_componentsMutex);
+
+		auto it = std::ranges::find_if(m_components, [&name] (const auto & component) {
+			return component->name() == name;
+		});
+
+		return (it != m_components.end()) ? *it : nullptr;
 	}
 
 	bool
-	AbstractEntity::removeComponent (const std::string & name) noexcept
+	AbstractEntity::removeComponent (std::string_view name) noexcept
 	{
-		std::lock_guard< std::mutex > lock(m_componentsMutex);
-		for ( auto componentIt = m_components.begin(); componentIt != m_components.end(); ++componentIt )
-		{
-			if ( (*componentIt)->name() == name )
-			{
-				m_components.erase(componentIt);
+		std::shared_ptr< Component::Abstract > componentToUnlink;
 
-				return true;
+		{
+			std::lock_guard< std::mutex > lock(m_componentsMutex);
+
+			auto it = std::ranges::find_if(m_components, [&name] (const auto & component) {
+				return component->name() == name;
+			});
+
+			if ( it == m_components.end() ) [[unlikely]]
+			{
+				return false;
 			}
+
+			componentToUnlink = *it;
+			m_components.erase(it);
 		}
 
-		return false;
+		/* Unlink outside mutex to avoid deadlock if unlinkComponent triggers notifications. */
+		this->unlinkComponent(componentToUnlink);
+		this->updateEntityProperties();
+
+		return true;
 	}
 
 	void
@@ -365,6 +398,36 @@ namespace EmEn::Scenes
 		this->updateEntityProperties();
 	}
 
+	void
+	AbstractEntity::suspend () noexcept
+	{
+		/* Call entity-specific suspend logic. */
+		this->onSuspend();
+
+		/* Suspend all components. */
+		std::lock_guard< std::mutex > lock(m_componentsMutex);
+
+		for ( const auto & component : m_components )
+		{
+			component->onSuspend();
+		}
+	}
+
+	void
+	AbstractEntity::wakeup () noexcept
+	{
+		/* Call entity-specific wakeup logic. */
+		this->onWakeup();
+
+		/* Wakeup all components. */
+		std::lock_guard< std::mutex > lock(m_componentsMutex);
+
+		for ( const auto & component : m_components )
+		{
+			component->onWakeup();
+		}
+	}
+
 	bool
 	AbstractEntity::processLogics (const Scene & scene, size_t engineCycle) noexcept
 	{
@@ -375,7 +438,7 @@ namespace EmEn::Scenes
 
 			while ( componentIt != m_components.end() )
 			{
-				if ( (*componentIt)->shouldBeRemoved() )
+				if ( (*componentIt)->shouldBeRemoved() ) [[unlikely]]
 				{
 					TraceWarning{TracerTag} << "Removing automatically a component from entity '" << this->name() << "' ...";
 

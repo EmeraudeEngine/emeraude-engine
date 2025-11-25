@@ -35,9 +35,10 @@
 
 /* Third party inclusions. */
 #ifdef ASIO_ENABLED
-#define ASIO_STANDALONE 1
-#define ASIO_NO_EXCEPTIONS 1 /* NOTE: When using -fno-exceptions */
-//#define ASIO_NO_TYPEID 1 /* NOTE: When using -fno-rtti */
+/* NOTE: asio_throw_exception.hpp MUST be included before asio.hpp.
+ * It defines ASIO_STANDALONE, ASIO_NO_EXCEPTIONS, and provides
+ * the custom throw_exception() function required when exceptions are disabled. */
+#include "asio_throw_exception.hpp"
 #include "asio.hpp"
 #endif
 

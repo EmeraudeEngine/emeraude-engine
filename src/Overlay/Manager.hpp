@@ -350,17 +350,34 @@ namespace EmEn::Overlay
 			}
 
 			/**
-			 * @brief Updates necessary data in video memory.
-			 * @return bool
+			 * @brief Processes pending surface updates for the current frame.
+			 * @details This method is called every frame from the render loop. It handles:
+			 * - Local surface changes (content updates, manual resize via setSize()/setGeometry())
+			 * - GPU memory uploads for surfaces with outdated content
+			 * @note Only processes VISIBLE screens for performance. Hidden screens are skipped
+			 * and will be processed when they become visible again.
+			 * @note This method is thread-safe and may skip processing if a window resize is in progress.
+			 * @note On failure, the affected screen is automatically disabled (visibility set to false).
 			 */
-			bool updateVideoMemory () noexcept;
+			void processFrameUpdates () noexcept;
 
 			/**
-			 * @brief Updates all overlay screens physical representation with new framebuffer properties.
-			 * @note This is a 'super' Manager::updateVideoMemory() version.
-			 * @return bool
+			 * @brief Handles window resize by updating all overlay resources.
+			 * @details This method is called when the window is resized. It performs:
+			 * - Updates the shared FramebufferProperties with the new window dimensions
+			 * - Recreates the overlay graphics pipeline for the new resolution
+			 * - Forces ALL surfaces (visible or not) to recalculate their pixel dimensions
+			 * - Notifies observers via OverlayResized notification
+			 * @note Unlike processFrameUpdates(), this processes ALL screens regardless of visibility
+			 * to ensure consistency when screens are shown later.
+			 * @note Surfaces are NOT automatically swapped after resize. The back buffer is prepared
+			 * with the new size, but the front buffer continues rendering until the application
+			 * explicitly calls swapFramebuffers(). This allows asynchronous renderers (e.g., CEF)
+			 * to prepare new content at the correct size before swapping.
+			 * @return bool True if resize succeeded, false on critical failure.
 			 */
-			bool updatePhysicalRepresentation () noexcept;
+			[[nodiscard]]
+			bool onWindowResized () noexcept;
 
 			/**
 			 * @brief Gets or creates the descriptor set layout for this surface.

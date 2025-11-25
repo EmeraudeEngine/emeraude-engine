@@ -94,6 +94,34 @@ namespace EmEn::Audio
 				}
 			}
 
+			/**
+			 * @brief Pauses the source using direct OpenAL control.
+			 * @return void
+			 * @version 0.8.35
+			 */
+			void
+			pause () const noexcept
+			{
+				if ( m_source != nullptr )
+				{
+					m_source->pause();
+				}
+			}
+
+			/**
+			 * @brief Resumes the source using direct OpenAL control.
+			 * @return void
+			 * @version 0.8.35
+			 */
+			void
+			resume () const noexcept
+			{
+				if ( m_source != nullptr )
+				{
+					m_source->resume();
+				}
+			}
+
 			/** @copydoc EmEn::Audio::Source::setReferenceDistance() */
 			void
 			setReferenceDistance (float distance) const noexcept

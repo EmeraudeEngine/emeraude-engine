@@ -1,12 +1,12 @@
-# PlatformSpecific System - Development Context
+# PlatformSpecific System
 
 Context spécifique pour le développement du code platform-specific d'Emeraude Engine.
 
-## 🎯 Vue d'ensemble du module
+## Vue d'ensemble du module
 
 Isolation du code spécifique aux systèmes d'exploitation (Windows, Linux, macOS) avec abstractions maximales pour fournir des API uniformes multiplateforme.
 
-## 📋 Règles spécifiques à PlatformSpecific/
+## Règles spécifiques à PlatformSpecific/
 
 ### Philosophie d'isolation STRICTE
 - **Code OS séparé** : Chaque OS dans son espace propre
@@ -72,7 +72,7 @@ CMake sélectionne le bon fichier selon plateforme cible.
 - **Graceful degradation** : Fonctionnalité désactivée plutôt que crash
 - **Documentation** : Indiquer limitations par OS si applicable
 
-## 🛠️ Commandes de développement
+## Commandes de développement
 
 ```bash
 # Tests platform-specific
@@ -80,18 +80,18 @@ ctest -R PlatformSpecific
 ./test --filter="*Platform*"
 ```
 
-## 🔗 Fichiers importants
+## Fichiers importants
 
 - `DialogBox.*` - Abstractions dialog boxes OS
 - `SystemCall.*` - Exécution commandes système
 - `WindowManager.*` - Gestion fenêtre et notifications
 - CMakeLists.txt - Sélection fichiers par plateforme
 
-## ⚡ Patterns de développement
+## Patterns de développement
 
 ### Ajout d'une nouvelle fonctionnalité platform-specific
 
-**1. Définir l'interface abstraite commune**
+**1. Définir l'interface abstraite commune
 ```cpp
 // MyFeature.hpp
 class MyFeature {
@@ -100,9 +100,9 @@ public:
 };
 ```
 
-**2. Implémenter pour chaque OS**
+**2. Implémenter pour chaque OS
 
-**Option A: constexpr if dans .cpp unique**
+**Option A: constexpr if dans .cpp unique
 ```cpp
 // MyFeature.cpp
 bool MyFeature::doSomething(const std::string& param) {
@@ -119,7 +119,7 @@ bool MyFeature::doSomething(const std::string& param) {
 }
 ```
 
-**Option B: Fichiers séparés + CMake**
+**Option B: Fichiers séparés + CMake
 ```cpp
 // MyFeature_Windows.cpp
 bool MyFeature::doSomething(const std::string& param) {
@@ -140,7 +140,7 @@ bool MyFeature::doSomething(const std::string& param) {
 }
 ```
 
-**CMakeLists.txt**
+**CMakeLists.txt
 ```cmake
 if(WIN32)
     set(PLATFORM_SOURCES MyFeature_Windows.cpp)
@@ -181,7 +181,7 @@ bool MyFeature::doSomething(const std::string& param) {
 }
 ```
 
-## 🚨 Points d'attention CRITIQUES
+## Points d'attention CRITIQUES
 
 - **Isolation STRICTE** : Code Windows ne touche JAMAIS Linux/macOS et vice-versa
 - **Pas de #ifdef dans code commun** : Tout le platform-specific DOIT rester dans PlatformSpecific/
@@ -191,7 +191,7 @@ bool MyFeature::doSomething(const std::string& param) {
 - **Warnings explicites** : Si fonctionnalité non supportée, log warning clair
 - **Documentation** : Indiquer limitations par OS dans commentaires
 
-## 📚 Documentation détaillée
+## Documentation détaillée
 
 Systèmes liés:
 → **CMakeLists.txt** - Configuration build multiplateforme

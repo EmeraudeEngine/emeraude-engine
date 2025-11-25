@@ -43,6 +43,7 @@ namespace EmEn::Scenes
 	 */
 	enum class CollisionDetectionModel : uint8_t
 	{
+		//None, // TODO: Make this option valid to disable collision.
 		Point,
 		Sphere,
 		AABB

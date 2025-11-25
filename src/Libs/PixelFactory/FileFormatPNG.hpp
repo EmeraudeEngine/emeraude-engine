@@ -36,6 +36,7 @@
 #include <type_traits>
 #include <array>
 #include <vector>
+#include <string>
 
 /* Third-party inclusions. */
 #include <png.h>
@@ -49,6 +50,16 @@
 
 namespace EmEn::Libs::PixelFactory
 {
+	/**
+	 * @brief Error context for PNG operations, used to replace setjmp/longjmp mechanism.
+	 * @note This struct is passed as user data to libPNG error callbacks.
+	 */
+	struct PNGErrorContext final
+	{
+		bool hasError{false};
+		std::string errorMessage{};
+	};
+
 	/**
 	 * @brief Class for read and write PNG format.
 	 * @tparam pixel_data_t The pixel component type for the pixmap depth precision. Default uint8_t.
@@ -99,25 +110,23 @@ namespace EmEn::Libs::PixelFactory
 					return false;
 				}
 
-				/* create a png read struct. */
-				auto * png = png_create_read_struct(PNG_LIBPNG_VER_STRING, nullptr, nullptr, nullptr);
+				/* Error context for capturing libPNG errors without using setjmp/longjmp. */
+				PNGErrorContext errorContext{};
+
+				/* create a png read struct with custom error handlers. */
+				auto * png = png_create_read_struct(PNG_LIBPNG_VER_STRING, &errorContext, pngErrorCallback, pngWarningCallback);
 
 				if ( png == nullptr )
 				{
 					return false;
 				}
-				
+
 				/* create a png info struct. */
 				auto * pngInfo = png_create_info_struct(png);
 
 				if ( pngInfo == nullptr )
 				{
-					return false;
-				}
-
-				if ( setjmp(png_jmpbuf(png)) )
-				{
-					std::cerr << __PRETTY_FUNCTION__ << ", PNG read failed !" "\n";
+					png_destroy_read_struct(&png, nullptr, nullptr);
 
 					return false;
 				}
@@ -130,6 +139,15 @@ namespace EmEn::Libs::PixelFactory
 
 				/* read png info */
 				png_read_info(png, pngInfo);
+
+				if ( errorContext.hasError )
+				{
+					std::cerr << __PRETTY_FUNCTION__ << ", PNG read failed: " << errorContext.errorMessage << "\n";
+
+					png_destroy_read_struct(&png, &pngInfo, nullptr);
+
+					return false;
+				}
 
 				const auto width = png_get_image_width(png, pngInfo);
 				const auto height = png_get_image_height(png, pngInfo);
@@ -218,6 +236,8 @@ namespace EmEn::Libs::PixelFactory
 					default:
 						std::cerr << __PRETTY_FUNCTION__ << ", unhandled format !" "\n";
 
+						png_destroy_read_struct(&png, &pngInfo, nullptr);
+
 						return false;
 				}
 
@@ -246,12 +266,21 @@ namespace EmEn::Libs::PixelFactory
 				/* read pixel data using row pointers */
 				png_read_image(png, rowPointers.data());
 
+				if ( errorContext.hasError )
+				{
+					std::cerr << __PRETTY_FUNCTION__ << ", PNG read failed: " << errorContext.errorMessage << "\n";
+
+					png_destroy_read_struct(&png, &pngInfo, nullptr);
+
+					return false;
+				}
+
 				/* finish decompression and release memory */
 				png_read_end(png, nullptr);
 
 				png_destroy_read_struct(&png, &pngInfo, nullptr);
 
-				return true;
+				return !errorContext.hasError;
 			}
 
 			/** @copydoc EmEn::Libs::PixelFactory::FileFormatInterface::writeFile() */
@@ -302,7 +331,10 @@ namespace EmEn::Libs::PixelFactory
 					return false;
 				}
 
-				auto * png = png_create_write_struct(PNG_LIBPNG_VER_STRING, nullptr, nullptr, nullptr);
+				/* Error context for capturing libPNG errors without using setjmp/longjmp. */
+				PNGErrorContext errorContext{};
+
+				auto * png = png_create_write_struct(PNG_LIBPNG_VER_STRING, &errorContext, pngErrorCallback, pngWarningCallback);
 
 				if ( png == nullptr )
 				{
@@ -313,14 +345,7 @@ namespace EmEn::Libs::PixelFactory
 
 				if ( pngInfo == nullptr )
 				{
-					return false;
-				}
-
-				if ( setjmp(png_jmpbuf(png)) )
-				{
-					std::cerr << __PRETTY_FUNCTION__ << ", PNG read failed !" "\n";
-
-					png_destroy_write_struct(&png, &pngInfo);
+					png_destroy_write_struct(&png, nullptr);
 
 					return false;
 				}
@@ -354,10 +379,47 @@ namespace EmEn::Libs::PixelFactory
 
 				png_destroy_write_struct(&png, &pngInfo);
 
+				if ( errorContext.hasError )
+				{
+					std::cerr << __PRETTY_FUNCTION__ << ", PNG write failed: " << errorContext.errorMessage << "\n";
+
+					return false;
+				}
+
 				return true;
 			}
 
 		private:
+
+			/**
+			 * @brief Custom error callback for libPNG that sets an error flag instead of using longjmp.
+			 * @param pngPtr The PNG structure pointer (contains error context as user data).
+			 * @param message The error message from libPNG.
+			 */
+			static
+			void
+			pngErrorCallback (png_structp pngPtr, png_const_charp message) noexcept
+			{
+				auto * errorContext = static_cast< PNGErrorContext * >(png_get_error_ptr(pngPtr));
+
+				if ( errorContext != nullptr )
+				{
+					errorContext->hasError = true;
+					errorContext->errorMessage = message;
+				}
+			}
+
+			/**
+			 * @brief Custom warning callback for libPNG.
+			 * @param pngPtr The PNG structure pointer.
+			 * @param message The warning message from libPNG.
+			 */
+			static
+			void
+			pngWarningCallback (png_structp /* pngPtr */, png_const_charp message) noexcept
+			{
+				std::cerr << "PNG warning: " << message << "\n";
+			}
 
 			/**
 			 * @brief Custom function to read with std::fstream with libPNG.

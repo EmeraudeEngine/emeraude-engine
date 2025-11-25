@@ -148,7 +148,7 @@ namespace EmEn::Graphics::Renderable
 	}
 
 	bool
-	TerrainResource::load (Resources::ServiceProvider & serviceProvider) noexcept
+	TerrainResource::load (Resources::AbstractServiceProvider & serviceProvider) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
@@ -171,7 +171,7 @@ namespace EmEn::Graphics::Renderable
 	}
 
 	bool
-	TerrainResource::load (Resources::ServiceProvider & serviceProvider, const std::filesystem::path & filepath) noexcept
+	TerrainResource::load (Resources::AbstractServiceProvider & serviceProvider, const std::filesystem::path & filepath) noexcept
 	{
 		const auto rootCheck = FastJSON::getRootFromFile(filepath);
 
@@ -214,7 +214,7 @@ namespace EmEn::Graphics::Renderable
 	}
 
 	bool
-	TerrainResource::load (Resources::ServiceProvider & serviceProvider, const Json::Value & data) noexcept
+	TerrainResource::load (Resources::AbstractServiceProvider & serviceProvider, const Json::Value & data) noexcept
 	{
 		if ( !this->beginLoading() )
 		{

@@ -1,12 +1,12 @@
-# Core Framework Components - Development Context
+# Core Framework Components
 
 Context spécifique pour les composants de base à la racine de src/ d'Emeraude Engine.
 
-## 🎯 Vue d'ensemble
+## Vue d'ensemble
 
 Composants fondamentaux du framework situés directement dans `src/`. Ces fichiers constituent le cœur du moteur et orchestrent tous les sous-systèmes (Graphics, Audio, Physics, Scenes, etc.).
 
-## 📋 Composants principaux
+## Composants principaux
 
 ### Core - Cœur du framework
 **Fichiers**: `Core.cpp/.hpp` (26KB header, 37KB cpp)
@@ -23,13 +23,38 @@ Composants fondamentaux du framework situés directement dans `src/`. Ces fichie
 
 **Pattern d'utilisation**:
 ```cpp
-class MyApplication : public Core {
-    void onInit() override { /* Initialisation */ }
-    void onLogicUpdate(float deltaTime) override { /* Logique */ }
-    void onRenderUpdate() override { /* Rendu */ }
-    void onShutdown() override { /* Nettoyage */ }
+class MyApplication : public EmEn::Core {
+public:
+    MyApplication(int argc, char** argv) noexcept
+        : Core{argc, argv, "MyApp", {1, 0, 0}, "MyOrg", "example.com"} {}
+
+private:
+    // Required: Setup your scene here
+    bool onCoreStarted() noexcept override { return true; }
+
+    // Required: Update game logic here (runs on logic thread)
+    void onCoreProcessLogics(size_t cycle) noexcept override {}
+
+    // Optional overrides: onBeforeCoreSecondaryServicesInitialization(),
+    // onCorePaused(), onCoreResumed(), onBeforeCoreStop(),
+    // onCoreKeyPress(), onCoreKeyRelease(), onCoreCharacterType(),
+    // onCoreNotification(), onCoreOpenFiles(), onCoreSurfaceRefreshed()
 };
 ```
+
+**Callbacks obligatoires** (pure virtual):
+- `onCoreStarted()` - Initialisation scène, retourne true pour continuer
+- `onCoreProcessLogics(size_t)` - Logique de jeu (thread séparé)
+
+**Callbacks optionnels** (implémentation par défaut):
+- `onBeforeCoreSecondaryServicesInitialization()` - Pré-init (ex: --help)
+- `onCorePaused()` / `onCoreResumed()` - Gestion pause
+- `onBeforeCoreStop()` - Cleanup avant shutdown
+- `onCoreKeyPress()` / `onCoreKeyRelease()` - Input clavier
+- `onCoreCharacterType()` - Saisie texte Unicode
+- `onCoreNotification()` - Pattern Observer
+- `onCoreOpenFiles()` - Drag & drop fichiers
+- `onCoreSurfaceRefreshed()` - Resize fenêtre
 
 ### Tracer - Système de logging
 **Fichiers**: `Tracer.cpp/.hpp` (35KB header, 12KB cpp)
@@ -230,37 +255,39 @@ Arguments > Settings > Valeurs par défaut
 - Nom, version, auteur, copyright
 - Métadonnées applicatives
 
-## 🛠️ Patterns de développement
+## Patterns de développement
 
 ### Création d'une application
 ```cpp
-#include "Core.hpp"
+#include <EmEn/Core.hpp>
 
-class MyGame : public Core {
-    void onInit() override {
-        // Initialiser scènes, resources, etc.
+class MyGame : public EmEn::Core {
+public:
+    MyGame(int argc, char** argv) noexcept
+        : Core{argc, argv, "MyGame", {1, 0, 0}, "MyOrg", "example.com"} {}
+
+private:
+    // Required: Called when engine is fully initialized
+    bool onCoreStarted() noexcept override {
         TRACE_INFO("Game initialized");
+        // Load scenes, resources, etc.
+        return true;  // Return true to start main loop
     }
 
-    void onLogicUpdate(float deltaTime) override {
-        // Logique jeu (thread séparé)
-        updateGameState(deltaTime);
+    // Required: Called every logic frame (separate thread)
+    void onCoreProcessLogics(size_t engineCycle) noexcept override {
+        updateGameState();
     }
 
-    void onRenderUpdate() override {
-        // Rendu (thread séparé)
-        renderScene();
-    }
-
-    void onShutdown() override {
+    // Optional: Cleanup before shutdown
+    void onBeforeCoreStop() noexcept override {
         TRACE_INFO("Game shutdown");
     }
 };
 
-int main(int argc, char* argv[]) {
-    MyGame game;
-    game.run(argc, argv);  // Parse Arguments, init, boucles, shutdown
-    return 0;
+int main(int argc, char** argv) {
+    MyGame game(argc, argv);
+    return game.run() ? EXIT_SUCCESS : EXIT_FAILURE;
 }
 ```
 
@@ -322,7 +349,7 @@ if (arguments.has("custom-flag")) {
 }
 ```
 
-## 🚨 Points d'attention
+## Points d'attention
 
 - **Core est le point central**: Tout passe par Core, ne pas bypasser
 - **Trois threads**: Main, Logic, Render - attention à la thread safety
@@ -335,7 +362,7 @@ if (arguments.has("custom-flag")) {
 - **Window possède Surface**: Ne pas créer de Vulkan Surface manuellement
 - **PlatformManager init GLFW**: Doit être initialisé avant Window
 
-## 🔗 Intégration avec les sous-systèmes
+## Intégration avec les sous-systèmes
 
 ### Core orchestre tout
 ```
@@ -370,21 +397,21 @@ Core
 11. Settings save (auto)
 ```
 
-## 📚 Documentation complémentaire
+## Documentation complémentaire
 
 Sous-systèmes orchestrés par Core:
-→ **@src/Graphics/AGENTS.md** - Système graphique haut niveau
-→ **@src/Vulkan/AGENTS.md** - Backend Vulkan bas niveau
-→ **@src/Physics/AGENTS.md** - Moteur physique Jolt
-→ **@src/Audio/AGENTS.md** - Audio 3D spatial OpenAL
-→ **@src/Scenes/AGENTS.md** - Scene graph hiérarchique
-→ **@src/Resources/AGENTS.md** - Chargement resources fail-safe
-→ **@src/Input/AGENTS.md** - Gestion input GLFW
-→ **@src/Overlay/AGENTS.md** - Interface 2D overlay
+- @src/Graphics/AGENTS.md - Système graphique haut niveau
+- @src/Vulkan/AGENTS.md - Backend Vulkan bas niveau
+- @src/Physics/AGENTS.md - Moteur physique Jolt
+- @src/Audio/AGENTS.md - Audio 3D spatial OpenAL
+- @src/Scenes/AGENTS.md - Scene graph hiérarchique
+- @src/Resources/AGENTS.md - Chargement resources fail-safe
+- @src/Input/AGENTS.md - Gestion input GLFW
+- @src/Overlay/AGENTS.md - Interface 2D overlay
 
 Concepts liés:
-→ **@docs/coordinate-system.md** - Convention Y-down (CRITIQUE)
-→ **@docs/resource-management.md** - Chargement fail-safe
+- @docs/coordinate-system.md - Convention Y-down (CRITIQUE)
+- @docs/resource-management.md - Chargement fail-safe
 
 Platform-specific:
-→ **@src/PlatformSpecific/AGENTS.md** - Code spécialisé par OS
+- @src/PlatformSpecific/AGENTS.md - Code spécialisé par OS

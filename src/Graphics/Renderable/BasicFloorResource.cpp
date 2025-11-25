@@ -77,7 +77,7 @@ namespace EmEn::Graphics::Renderable
 	}
 
 	bool
-	BasicFloorResource::load (Resources::ServiceProvider & serviceProvider) noexcept
+	BasicFloorResource::load (Resources::AbstractServiceProvider & serviceProvider) noexcept
 	{
 		/* 1. Creating a default GridGeometry. */
 		const auto defaultGeometry = std::make_shared< Geometry::VertexGridResource >("DefaultBasicFloorGeometry");
@@ -104,7 +104,7 @@ namespace EmEn::Graphics::Renderable
 	}
 
 	bool
-	BasicFloorResource::load (Resources::ServiceProvider & serviceProvider, const std::filesystem::path & filepath) noexcept
+	BasicFloorResource::load (Resources::AbstractServiceProvider & serviceProvider, const std::filesystem::path & filepath) noexcept
 	{
 		const auto rootCheck = FastJSON::getRootFromFile(filepath);
 
@@ -147,7 +147,7 @@ namespace EmEn::Graphics::Renderable
 	}
 
 	bool
-	BasicFloorResource::load (Resources::ServiceProvider & serviceProvider, const Json::Value & data) noexcept
+	BasicFloorResource::load (Resources::AbstractServiceProvider & serviceProvider, const Json::Value & data) noexcept
 	{
 		/* 1. Creating a geometry. */
 		/* Checks size option. */

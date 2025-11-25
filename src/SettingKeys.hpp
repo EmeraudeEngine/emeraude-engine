@@ -28,57 +28,11 @@
 
 namespace EmEn
 {
-	/* API */
-
-		/* GLFW */
-		constexpr auto GLFWShowInformationKey{"API/GLFW/ShowInformation"}; // Logs
-		constexpr auto DefaultGLFWShowInformation{false};
-		constexpr auto GLFWUsePlatformKey{"API/GLFW/UsePlatform"};
-		constexpr auto DefaultGLFWUsePlatform{"Auto"};
-		constexpr auto GLFWEnableNativeCodeForVkSurfaceKey{"API/GLFW/EnableNativeCodeForVkSurface"};
-		constexpr auto DefaultEnableNativeCodeForVkSurface{false};
-		constexpr auto GLFWWaylandEnableLibDecorKey{"API/GLFW/Wayland/EnableLibDecor"};
-		constexpr auto DefaultGLFWWaylandEnableLibDecor{true};
-		constexpr auto GLFWX11UseXCBInsteadOfXLibKey{"API/GLFW/X11/UseXCBInsteadOfXLib"};
-		constexpr auto DefaultGLFWX11UseXCBInsteadOfXLib{true};
-
-		/* Vulkan */
-		constexpr auto VkShowInformationKey{"API/Vulkan/ShowInformation"}; // Logs
-		constexpr auto DefaultVkShowInformation{false};
-
-			/* Vulkan instance */
-			constexpr auto VkInstanceEnableDebugKey{"API/Vulkan/Instance/EnableDebug"};
-			constexpr auto DefaultVkInstanceEnableDebug{false};
-			constexpr auto VkInstanceRequestedValidationLayersKey{"API/Vulkan/Instance/RequestedValidationLayers"};
-			constexpr auto VkInstanceAvailableValidationLayersKey{"API/Vulkan/Instance/AvailableValidationLayers"};
-			constexpr auto VkInstanceUseDebugMessengerKey{"API/Vulkan/Instance/UseDebugMessenger"};
-			constexpr auto DefaultVkInstanceUseDebugMessenger{true};
-
-			/* Vulkan device */
-			constexpr auto VkDeviceAvailableGPUsKey{"API/Vulkan/Device/AvailableGPUs"};
-			constexpr auto VkDeviceAutoSelectModeKey{"API/Vulkan/Device/AutoSelectMode"};
-			constexpr auto DefaultVkDeviceAutoSelectMode{"Performance"};
-			constexpr auto VkDeviceForceGPUKey{"API/Vulkan/Device/ForceGPU"};
-			constexpr auto VkDeviceUseVMAKey{"API/Vulkan/Device/UseVMA"};
-			constexpr auto DefaultVkDeviceUseVMA{true};
-
-		/* OpenAL */
-		constexpr auto OpenALShowInformationKey{"API/OpenAL/ShowInformation"}; // Logs
-		constexpr auto DefaultOpenALShowInformation{false};
-		constexpr auto OpenALUseEFXExtensionsKey{"API/OpenAL/UseEFXExtensions"};
-		constexpr auto DefaultOpenALUseEFXExtensions{true};
-		constexpr auto OpenALRefreshRateKey{"API/OpenAL/RefreshRate"};
-		constexpr auto DefaultOpenALRefreshRate{46};
-		constexpr auto OpenALSyncStateKey{"API/OpenAL/SyncState"};
-		constexpr auto DefaultOpenALSyncState{0};
-		constexpr auto OpenALMaxMonoSourceCountKey{"API/OpenAL/MaxMonoSourceCount"};
-		constexpr auto DefaultOpenALMaxMonoSourceCount{32};
-		constexpr auto OpenALMaxStereoSourceCountKey{"API/OpenAL/MaxStereoSourceCount"};
-		constexpr auto DefaultOpenALMaxStereoSourceCount{2};
-
 	/* Core */
 	constexpr auto CoreShowInformationKey{"Core/ShowInformation"}; // Logs
 	constexpr auto DefaultCoreShowInformation{false};
+	constexpr auto CoreEnableStatisticsKey{"Core/EnableStatistics"};
+	constexpr auto DefaultCoreEnableStatistics{false};
 	constexpr auto TextEditorKey{"Core/TextEditor"};
 #if IS_LINUX
 	constexpr auto DefaultTextEditor{"gedit"};
@@ -129,6 +83,20 @@ namespace EmEn
 		constexpr auto DefaultAudioMusicVolume{0.5F};
 		constexpr auto AudioMusicChunkSizeKey{"Core/Audio/MusicChunkSize"};
 		constexpr auto DefaultAudioMusicChunkSize{8192};
+		constexpr auto AudioShowInformationKey{"Core/Audio/ShowInformation"}; // Logs
+		constexpr auto DefaultAudioShowInformation{false};
+
+			/* OpenAL */
+			constexpr auto OpenALUseEFXExtensionsKey{"Core/Audio/OpenAL/UseEFXExtensions"};
+			constexpr auto DefaultOpenALUseEFXExtensions{true};
+			constexpr auto OpenALRefreshRateKey{"Core/Audio/OpenAL/RefreshRate"};
+			constexpr auto DefaultOpenALRefreshRate{46};
+			constexpr auto OpenALSyncStateKey{"Core/Audio/OpenAL/SyncState"};
+			constexpr auto DefaultOpenALSyncState{0};
+			constexpr auto OpenALMaxMonoSourceCountKey{"Core/Audio/OpenAL/MaxMonoSourceCount"};
+			constexpr auto DefaultOpenALMaxMonoSourceCount{32};
+			constexpr auto OpenALMaxStereoSourceCountKey{"Core/Audio/OpenAL/MaxStereoSourceCount"};
+			constexpr auto DefaultOpenALMaxStereoSourceCount{2};
 
 			/* Audio recorder */
 			constexpr auto AudioRecorderEnableKey{"Core/Audio/Recorder/Enable"};
@@ -146,31 +114,59 @@ namespace EmEn
 		constexpr auto VideoPreferredMonitorKey{"Core/Video/PreferredMonitor"};
 		constexpr auto DefaultVideoPreferredMonitor{0};
 		constexpr auto VideoEnableVSyncKey{"Core/Video/EnableVSync"};
-		constexpr auto DefaultVideoEnableVSync{false};
+		constexpr auto DefaultVideoEnableVSync{true};
 		constexpr auto VideoEnableDoubleBufferingKey{"Core/Video/EnableDoubleBuffering"}; // Not in use
 		constexpr auto DefaultEnableDoubleBuffering{false};
 		constexpr auto VideoEnableTripleBufferingKey{"Core/Video/EnableTripleBuffering"};
-		constexpr auto DefaultVideoEnableTripleBuffering{false};
+		constexpr auto DefaultVideoEnableTripleBuffering{true};
 		constexpr auto VideoEnableSRGBKey{"Core/Video/EnableSRGB"}; // Not in use
 		constexpr auto DefaultEnableSRGB{false};
+		constexpr auto VideoShowInformationKey{"Core/Video/ShowInformation"}; // Logs
+		constexpr auto DefaultVideoShowInformation{false};
+
+			/* Vulkan instance */
+			constexpr auto VkInstanceEnableDebugKey{"Core/Video/VulkanInstance/EnableDebug"};
+			constexpr auto DefaultVkInstanceEnableDebug{false};
+			constexpr auto VkInstanceRequestedValidationLayersKey{"Core/Video/VulkanInstance/RequestedValidationLayers"};
+			constexpr auto VkInstanceAvailableValidationLayersKey{"Core/Video/VulkanInstance/AvailableValidationLayers"};
+			constexpr auto VkInstanceUseDebugMessengerKey{"Core/Video/VulkanInstance/UseDebugMessenger"};
+			constexpr auto DefaultVkInstanceUseDebugMessenger{true};
+
+			/* Vulkan device */
+			constexpr auto VkDeviceAvailableGPUsKey{"Core/Video/VulkanDevice/AvailableGPUs"};
+			constexpr auto VkDeviceAutoSelectModeKey{"Core/Video/VulkanDevice/AutoSelectMode"};
+			constexpr auto DefaultVkDeviceAutoSelectMode{"Performance"};
+			constexpr auto VkDeviceForceGPUKey{"Core/Video/VulkanDevice/ForceGPU"};
+			constexpr auto VkDeviceUseVMAKey{"Core/Video/VulkanDevice/UseVMA"};
+			constexpr auto DefaultVkDeviceUseVMA{true};
 
 			/* Window */
-			constexpr auto VideoWindowShowInformationKey{"Core/Video/Window/ShowInformation"}; // Logs
-			constexpr auto DefaultVideoWindowShowInformation{false};
-			constexpr auto VideoWindowAlwaysCenterOnStartupKey{"Core/Video/Window/AlwaysCenterOnStartup"};
-			constexpr auto DefaultVideoWindowAlwaysCenterOnStartup{false};
-			constexpr auto VideoWindowFramelessKey{"Core/Video/Window/Frameless"};
-			constexpr auto DefaultVideoWindowFrameless{false};
-			constexpr auto VideoWindowXPositionKey{"Core/Video/Window/XPosition"};
-			constexpr auto DefaultVideoWindowXPosition{64};
-			constexpr auto VideoWindowYPositionKey{"Core/Video/Window/YPosition"};
-			constexpr auto DefaultVideoWindowYPosition{64};
-			constexpr auto VideoWindowWidthKey{"Core/Video/Window/Width"};
-			constexpr auto DefaultVideoWindowWidth{1280U};
-			constexpr auto VideoWindowHeightKey{"Core/Video/Window/Height"};
-			constexpr auto DefaultVideoWindowHeight{720U};
-			constexpr auto VideoWindowGammaKey{"Core/Video/Window/Gamma"};
-			constexpr auto DefaultVideoWindowGamma{1.0F};
+			constexpr auto WindowShowInformationKey{"Core/Video/Window/ShowInformation"}; // Logs
+			constexpr auto DefaultWindowShowInformation{false};
+			constexpr auto WindowAlwaysCenterOnStartupKey{"Core/Video/Window/AlwaysCenterOnStartup"};
+			constexpr auto DefaultWindowAlwaysCenterOnStartup{false};
+			constexpr auto WindowFramelessKey{"Core/Video/Window/Frameless"};
+			constexpr auto DefaultWindowFrameless{false};
+			constexpr auto WindowXPositionKey{"Core/Video/Window/XPosition"};
+			constexpr auto DefaultWindowXPosition{64};
+			constexpr auto WindowYPositionKey{"Core/Video/Window/YPosition"};
+			constexpr auto DefaultWindowYPosition{64};
+			constexpr auto WindowWidthKey{"Core/Video/Window/Width"};
+			constexpr auto DefaultWindowWidth{1280U};
+			constexpr auto WindowHeightKey{"Core/Video/Window/Height"};
+			constexpr auto DefaultWindowHeight{720U};
+			constexpr auto WindowGammaKey{"Core/Video/Window/Gamma"};
+			constexpr auto DefaultWindowGamma{1.0F};
+
+				/* GLFW */
+				constexpr auto GLFWUsePlatformKey{"Core/Video/Window/GLFW/UsePlatform"};
+				constexpr auto DefaultGLFWUsePlatform{"Auto"};
+				constexpr auto GLFWEnableNativeCodeForVkSurfaceKey{"Core/Video/Window/GLFW/EnableNativeCodeForVkSurface"};
+				constexpr auto DefaultEnableNativeCodeForVkSurface{false};
+				constexpr auto GLFWWaylandEnableLibDecorKey{"Core/Video/Window/GLFW/Wayland/EnableLibDecor"};
+				constexpr auto DefaultGLFWWaylandEnableLibDecor{true};
+				constexpr auto GLFWX11UseXCBInsteadOfXLibKey{"Core/Video/Window/GLFW/X11/UseXCBInsteadOfXLib"};
+				constexpr auto DefaultGLFWX11UseXCBInsteadOfXLib{true};
 
 			/* Fullscreen */
 			constexpr auto VideoFullscreenEnabledKey{"Core/Video/Fullscreen/Enabled"};
@@ -185,9 +181,11 @@ namespace EmEn
 			constexpr auto DefaultVideoFullscreenRefreshRate{-1};
 
 			/* Overlay */
-			constexpr auto VideoOverlayForceScaleXKey{"Core/Video/Overlay/ForceScaleX"};
-			constexpr auto VideoOverlayForceScaleYKey{"Core/Video/Overlay/ForceScaleY"};
-			constexpr auto DefaultVideoOverlayForceScale{0};
+			constexpr auto OverlayForceScaleKey{"Core/Video/Overlay/ForceScale"};
+			constexpr auto DefaultOverlayForceScale{false};
+			constexpr auto OverlayScaleXKey{"Core/Video/Overlay/ScaleX"};
+			constexpr auto OverlayScaleYKey{"Core/Video/Overlay/FScaleY"};
+			constexpr auto DefaultOverlayScale{1.0F};
 
 			/* Framebuffer */
 			constexpr auto VideoFramebufferRedBitsKey{"Core/Video/Framebuffer/RedBits"};

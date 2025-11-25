@@ -235,13 +235,13 @@ namespace EmEn::Graphics::Geometry
 			}
 
 			/** @copydoc EmEn::Resources::ResourceTrait::load(Resources::ServiceProvider &) */
-			bool load (Resources::ServiceProvider & serviceProvider) noexcept override;
+			bool load (Resources::AbstractServiceProvider & serviceProvider) noexcept override;
 
 			/** @copydoc EmEn::Resources::ResourceTrait::load(Resources::ServiceProvider &, const std::filesystem::path &) */
-			bool load (Resources::ServiceProvider & serviceProvider, const std::filesystem::path & filepath) noexcept override;
+			bool load (Resources::AbstractServiceProvider & serviceProvider, const std::filesystem::path & filepath) noexcept override;
 
 			/** @copydoc EmEn::Resources::ResourceTrait::load(Resources::Manager &, const Json::Value &) */
-			bool load (Resources::ServiceProvider & serviceProvider, const Json::Value & data) noexcept override;
+			bool load (Resources::AbstractServiceProvider & serviceProvider, const Json::Value & data) noexcept override;
 
 			/** @copydoc EmEn::Resources::ResourceTrait::memoryOccupied() const noexcept */
 			[[nodiscard]]

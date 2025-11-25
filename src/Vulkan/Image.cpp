@@ -159,7 +159,11 @@ namespace EmEn::Vulkan
 			&memoryRequirement
 		);
 
-		m_deviceMemory = std::make_unique< DeviceMemory >(this->device(), memoryRequirement, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+		const auto memoryProperties = m_hostVisible ?
+			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT :
+			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+
+		m_deviceMemory = std::make_unique< DeviceMemory >(this->device(), memoryRequirement, memoryProperties);
 		m_deviceMemory->setIdentifier(ClassId, this->identifier(), "DeviceMemory");
 
 		if ( !m_deviceMemory->createOnHardware() )
@@ -211,7 +215,10 @@ namespace EmEn::Vulkan
 	Image::createWithVMA () noexcept
 	{
 		VmaAllocationCreateInfo allocInfo{};
-		//allocInfo.flags = 0;
+		if ( m_hostVisible )
+		{
+			allocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+		}
 		allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
 		//allocInfo.requiredFlags = 0;
 		//allocInfo.preferredFlags = 0;
@@ -223,7 +230,7 @@ namespace EmEn::Vulkan
 		/* Bind the buffer to the device memory */
 		if ( const auto result = vmaCreateImage(this->device()->memoryAllocatorHandle(), &m_createInfo, &allocInfo, &m_handle, &m_memoryAllocation, nullptr); result != VK_SUCCESS )
 		{
-			TraceError{ClassId} << "Unable to create a buffer with VMA : " << vkResultToCString(result) << " !";
+			TraceError{ClassId} << "Unable to create an image with VMA : " << vkResultToCString(result) << " !";
 
 			return false;
 		}
@@ -365,5 +372,73 @@ namespace EmEn::Vulkan
 		return transferManager.uploadImage(*this, memoryRegion.bytes(), [&memoryRegion] (const Buffer & stagingBuffer) {
 			return stagingBuffer.writeData(memoryRegion);
 		});
+	}
+
+	void *
+	Image::mapMemory () const noexcept
+	{
+		if ( !this->isHostVisible() )
+		{
+			Tracer::error(ClassId, "This image is not host visible! You can't map it.");
+
+			return nullptr;
+		}
+
+		if ( m_memoryAllocation != VK_NULL_HANDLE )
+		{
+			void * pointer = nullptr;
+
+			if ( const auto result = vmaMapMemory(this->device()->memoryAllocatorHandle(), m_memoryAllocation, &pointer); result != VK_SUCCESS )
+			{
+				TraceError{ClassId} << "Unable to map (VMA) the image memory.";
+
+				return nullptr;
+			}
+
+			return pointer;
+		}
+
+		return m_deviceMemory->mapMemory(0, VK_WHOLE_SIZE);
+	}
+
+	void
+	Image::unmapMemory () const noexcept
+	{
+		if ( !this->isHostVisible() )
+		{
+			return;
+		}
+
+		if ( m_memoryAllocation != VK_NULL_HANDLE )
+		{
+			const auto allocator = this->device()->memoryAllocatorHandle();
+
+			vmaFlushAllocation(allocator, m_memoryAllocation, 0, VK_WHOLE_SIZE);
+
+			vmaUnmapMemory(allocator, m_memoryAllocation);
+		}
+		else
+		{
+			m_deviceMemory->unmapMemory();
+		}
+	}
+
+	VkDeviceSize
+	Image::rowPitch () const noexcept
+	{
+		if ( m_createInfo.tiling != VK_IMAGE_TILING_LINEAR )
+		{
+			return 0;
+		}
+
+		VkImageSubresource subresource{};
+		subresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		subresource.mipLevel = 0;
+		subresource.arrayLayer = 0;
+
+		VkSubresourceLayout layout{};
+		vkGetImageSubresourceLayout(this->device()->handle(), m_handle, &subresource, &layout);
+
+		return layout.rowPitch;
 	}
 }

@@ -200,13 +200,13 @@ namespace EmEn::Graphics::Geometry
 	}
 
 	bool
-	VertexGridResource::load (Resources::ServiceProvider & /*serviceProvider*/) noexcept
+	VertexGridResource::load (Resources::AbstractServiceProvider & /*serviceProvider*/) noexcept
 	{
 		return this->load(DefaultSize, DefaultDivision, DefaultUVMultiplier);
 	}
 
 	bool
-	VertexGridResource::load (Resources::ServiceProvider & /*serviceProvider*/, const Json::Value & data) noexcept
+	VertexGridResource::load (Resources::AbstractServiceProvider & /*serviceProvider*/, const Json::Value & data) noexcept
 	{
 		return this->load(
 			FastJSON::getValue< float >(data, JKSize).value_or(DefaultSize),

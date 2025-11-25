@@ -151,11 +151,48 @@ namespace EmEn::Graphics::RenderableInstance
 
 		private:
 
-			/** @copydoc EmEn::Graphics::RenderableInstance::Abstract::pushMatricesForShadowCasting() const noexcept */
-			void pushMatricesForShadowCasting (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::PipelineLayout & pipelineLayout, const Saphir::Program & program, uint32_t readStateIndex, const ViewMatricesInterface & viewMatrices, const Libs::Math::CartesianFrame< float > * worldCoordinates) const noexcept override;
+			/**
+			 * @brief Push constant strategy for Multiple (shadow casting).
+			 *
+			 * @par Matrix Distribution
+			 * | Mode      | Push Constants | VBO Content | UBO Content                   |
+			 * |-----------|----------------|-------------|-------------------------------|
+			 * | Cubemap   | (none)         | M per inst. | VP[6] indexed by gl_ViewIndex |
+			 * | Billboard | V + VP         | pos + scale | -                             |
+			 * | Simple    | VP only        | M per inst. | -                             |
+			 *
+			 * @par Key Difference from Unique
+			 * Multiple stores Model matrices in a VBO (one per instance), so we never
+			 * push M via push constants. For cubemap, this means NO push constants at all.
+			 *
+			 * @par Billboard Mode
+			 * Sprites need both V (for orientation) and VP (for final transform).
+			 * The VBO contains position + scale, not full matrices.
+			 */
+			void pushMatricesForShadowCasting (const RenderPassContext & passCtx, const PushConstantContext & pushCtx, const Libs::Math::CartesianFrame< float > * worldCoordinates) const noexcept override;
 
-			/** @copydoc EmEn::Graphics::RenderableInstance::Abstract::pushMatricesForRendering() const noexcept */
-			void pushMatricesForRendering (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::PipelineLayout & pipelineLayout, const Saphir::Program & program, uint32_t readStateIndex, const ViewMatricesInterface & viewMatrices, const Libs::Math::CartesianFrame< float > * worldCoordinates) const noexcept override;
+			/**
+			 * @brief Push constant strategy for Multiple (scene rendering).
+			 *
+			 * @par Matrix Distribution
+			 * | Mode              | Push Constants | VBO Content | UBO Content                   |
+			 * |-------------------|----------------|-------------|-------------------------------|
+			 * | Cubemap           | (none)         | M per inst. | VP[6] indexed by gl_ViewIndex |
+			 * | Advanced/Billboard| V + VP         | M per inst. | -                             |
+			 * | Simple            | VP only        | M per inst. | -                             |
+			 *
+			 * @par Key Difference from Unique
+			 * Multiple stores Model matrices in a VBO (one per instance), so we never
+			 * push M via push constants. For cubemap, this means NO push constants at all
+			 * - the most efficient path for GPU instancing.
+			 *
+			 * @par Mode Selection
+			 * - **Cubemap**: Zero push constants (M in VBO, VP in UBO)
+			 * - **Advanced**: Lighting needs V for world-space reconstruction
+			 * - **Billboard**: V needed to compute camera-facing orientation
+			 * - **Simple**: Just VP, shader computes final position as VP * M * vertex
+			 */
+			void pushMatricesForRendering (const RenderPassContext & passCtx, const PushConstantContext & pushCtx, const Libs::Math::CartesianFrame< float > * worldCoordinates) const noexcept override;
 
 			/** @copydoc EmEn::Graphics::RenderableInstance::Abstract::instanceCount() */
 			[[nodiscard]]

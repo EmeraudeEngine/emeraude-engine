@@ -44,30 +44,32 @@ namespace EmEn::Overlay
 	using namespace Graphics;
 	using namespace Vulkan;
 
-	bool
-	UIScreen::updateVideoMemory (bool windowResized) noexcept
+	void
+	UIScreen::processSurfaceUpdates (bool forceInvalidate) noexcept
 	{
 		if ( this->empty() )
 		{
-			return true;
+			return;
 		}
-
-		size_t errors = 0;
 
 		for ( const auto & surface : m_surfaces | std::views::values )
 		{
-			if ( windowResized )
+			/* NOTE: When forceInvalidate is true (window resize), all surfaces must
+			 * recalculate their pixel dimensions based on new FramebufferProperties. */
+			if ( forceInvalidate )
 			{
 				surface->invalidate();
 			}
 
-			if ( !surface->updateVideoMemory(m_graphicsRenderer) )
+			if ( !surface->processUpdates(m_graphicsRenderer) )
 			{
-				errors++;
+				TraceError{ClassId} << "The UI screen '" << this->name() << "' physical representation update failed ! Disabling it ...";
+
+				this->setVisibility(false);
+
+				break;
 			}
 		}
-
-		return errors == 0;
 	}
 
 	void

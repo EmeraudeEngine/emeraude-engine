@@ -70,13 +70,13 @@ namespace EmEn
 			return false;
 		}
 
-		m_surface->frontPixmap().fill(Transparent);
+		m_surface->activePixmap().fill(Transparent);
 
 		{
 			//m_font = m_resourceManager.container< Graphics::FontResource >()->getResource("old", false);
 			m_font = m_resourceManager.container< Graphics::FontResource >()->getDefaultResource();
 
-			m_processor.setPixmap(m_surface->frontPixmap());
+			m_processor.setPixmap(m_surface->activePixmap());
 			m_processor.setFont(m_font->font(), 16U);
 			m_processor.setFontColor(White);
 		}
@@ -141,10 +141,27 @@ namespace EmEn
 	void
 	Notifier::renderNotifications () noexcept
 	{
-		/* [VULKAN-CPU-SYNC] Maybe useless */
-		const std::lock_guard< std::mutex > lock{m_surface->frontFramebufferMutex()};
+		/* [VULKAN-CPU-SYNC] Lock the front framebuffer during write operations. */
+		const std::lock_guard< std::mutex > lock{m_surface->activeBufferMutex()};
 
-		if ( m_surface->frontPixmap().fill(m_clearColor) )
+		/* NOTE: Skip rendering if the surface is being resized (pixmap dimensions may be invalid). */
+		if ( !m_surface->isVideoMemorySizeValid() )
+		{
+			return;
+		}
+
+		auto & pixmap = m_surface->activePixmap();
+
+		/* NOTE: Skip rendering if the pixmap has no valid dimensions (during resize transition). */
+		if ( pixmap.width() == 0 || pixmap.height() == 0 )
+		{
+			return;
+		}
+
+		/* NOTE: Update the processor pixmap reference in case of resize. */
+		m_processor.setPixmap(pixmap);
+
+		if ( pixmap.fill(m_clearColor) )
 		{
 			if ( !m_notifications.empty() )
 			{
@@ -169,10 +186,10 @@ namespace EmEn
 	void
 	Notifier::clearDisplay () const noexcept
 	{
-		/* [VULKAN-CPU-SYNC] Maybe useless */
-		const std::lock_guard< std::mutex > lock{m_surface->frontFramebufferMutex()};
+		/* [VULKAN-CPU-SYNC] Lock the front framebuffer during write operations. */
+		const std::lock_guard< std::mutex > lock{m_surface->activeBufferMutex()};
 
-		if ( m_surface->frontPixmap().fill(m_clearColor) )
+		if ( m_surface->activePixmap().fill(m_clearColor) )
 		{
 			m_surface->setVideoMemoryOutdated();
 		}

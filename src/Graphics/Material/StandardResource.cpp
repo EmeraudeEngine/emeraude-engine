@@ -67,7 +67,7 @@ namespace EmEn::Graphics::Material
 	using namespace Vulkan;
 
 	bool
-	StandardResource::load (Resources::ServiceProvider & /*serviceProvider*/) noexcept
+	StandardResource::load (Resources::AbstractServiceProvider & /*serviceProvider*/) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
@@ -82,7 +82,7 @@ namespace EmEn::Graphics::Material
 	}
 
 	bool
-	StandardResource::parseAmbientComponent (const Json::Value & data, Resources::ServiceProvider & serviceProvider) noexcept
+	StandardResource::parseAmbientComponent (const Json::Value & data, Resources::AbstractServiceProvider & serviceProvider) noexcept
 	{
 		FillingType fillingType{};
 
@@ -136,7 +136,7 @@ namespace EmEn::Graphics::Material
 	}
 
 	bool
-	StandardResource::parseDiffuseComponent (const Json::Value & data, Resources::ServiceProvider & serviceProvider) noexcept
+	StandardResource::parseDiffuseComponent (const Json::Value & data, Resources::AbstractServiceProvider & serviceProvider) noexcept
 	{
 		FillingType fillingType{};
 
@@ -188,7 +188,7 @@ namespace EmEn::Graphics::Material
 	}
 
 	bool
-	StandardResource::parseSpecularComponent (const Json::Value & data, Resources::ServiceProvider & serviceProvider) noexcept
+	StandardResource::parseSpecularComponent (const Json::Value & data, Resources::AbstractServiceProvider & serviceProvider) noexcept
 	{
 		FillingType fillingType{};
 
@@ -245,7 +245,7 @@ namespace EmEn::Graphics::Material
 	}
 
 	bool
-	StandardResource::parseOpacityComponent (const Json::Value & data, Resources::ServiceProvider & serviceProvider) noexcept
+	StandardResource::parseOpacityComponent (const Json::Value & data, Resources::AbstractServiceProvider & serviceProvider) noexcept
 	{
 		FillingType fillingType{};
 
@@ -304,7 +304,7 @@ namespace EmEn::Graphics::Material
 	}
 
 	bool
-	StandardResource::parseAutoIlluminationComponent (const Json::Value & data, Resources::ServiceProvider & serviceProvider) noexcept
+	StandardResource::parseAutoIlluminationComponent (const Json::Value & data, Resources::AbstractServiceProvider & serviceProvider) noexcept
 	{
 		FillingType fillingType{};
 
@@ -361,7 +361,7 @@ namespace EmEn::Graphics::Material
 	}
 
 	bool
-	StandardResource::parseNormalComponent (const Json::Value & data, Resources::ServiceProvider & serviceProvider) noexcept
+	StandardResource::parseNormalComponent (const Json::Value & data, Resources::AbstractServiceProvider & serviceProvider) noexcept
 	{
 		FillingType fillingType{};
 
@@ -406,7 +406,7 @@ namespace EmEn::Graphics::Material
 	}
 
 	bool
-	StandardResource::parseReflectionComponent (const Json::Value & data, Resources::ServiceProvider & serviceProvider) noexcept
+	StandardResource::parseReflectionComponent (const Json::Value & data, Resources::AbstractServiceProvider & serviceProvider) noexcept
 	{
 		FillingType fillingType{};
 
@@ -451,7 +451,7 @@ namespace EmEn::Graphics::Material
 	}
 
 	bool
-	StandardResource::load (Resources::ServiceProvider & serviceProvider, const Json::Value & data) noexcept
+	StandardResource::load (Resources::AbstractServiceProvider & serviceProvider, const Json::Value & data) noexcept
 	{
 		if ( !this->beginLoading() )
 		{

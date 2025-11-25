@@ -108,7 +108,7 @@ namespace EmEn::Graphics::Material::Component
 			 * @param fillingType A reference to a texture filling type.
 			 * @param serviceProvider A reference to the resource manager through a service provider.
 			 */
-			Texture (const char * samplerName, std::string variableName, const Json::Value & data, const FillingType & fillingType, Resources::ServiceProvider & serviceProvider) noexcept;
+			Texture (const char * samplerName, std::string variableName, const Json::Value & data, const FillingType & fillingType, Resources::AbstractServiceProvider & serviceProvider) noexcept;
 
 			/** @copydoc EmEn::Graphics::Material::Component::Interface::create() */
 			[[nodiscard]]

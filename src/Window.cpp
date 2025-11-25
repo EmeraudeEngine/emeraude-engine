@@ -43,7 +43,7 @@ namespace EmEn
 	bool
 	Window::onInitialize () noexcept
 	{
-		m_showInformation = m_primaryServices.settings().getOrSetDefault< bool >(VideoWindowShowInformationKey, DefaultVideoWindowShowInformation);
+		m_showInformation = m_primaryServices.settings().getOrSetDefault< bool >(WindowShowInformationKey, DefaultWindowShowInformation);
 		m_windowLess = m_primaryServices.arguments().isSwitchPresent("-W", "--window-less");
 		m_saveWindowPropertiesAtExit = m_primaryServices.settings().getOrSetDefault< bool >(VideoSavePropertiesAtExitKey, DefaultVideoSavePropertiesAtExit);
 
@@ -119,9 +119,9 @@ namespace EmEn
 		}
 		else
 		{
-            const auto windowWidth = m_primaryServices.settings().getOrSetDefault< int32_t >(VideoWindowWidthKey, DefaultVideoWindowWidth);
-            const auto windowHeight = m_primaryServices.settings().getOrSetDefault< int32_t >(VideoWindowHeightKey, DefaultVideoWindowHeight);
-			const auto frameless = m_primaryServices.settings().getOrSetDefault< bool >(VideoWindowFramelessKey, DefaultVideoWindowFrameless);
+            const auto windowWidth = m_primaryServices.settings().getOrSetDefault< int32_t >(WindowWidthKey, DefaultWindowWidth);
+            const auto windowHeight = m_primaryServices.settings().getOrSetDefault< int32_t >(WindowHeightKey, DefaultWindowHeight);
+			const auto frameless = m_primaryServices.settings().getOrSetDefault< bool >(WindowFramelessKey, DefaultWindowFrameless);
 
 			/* GLFW_RESIZABLE specifies whether the windowed mode window
 			 * will be resizable by the user. The window will still be resizable
@@ -214,8 +214,8 @@ namespace EmEn
 				/* NOTE: If the resize fails (invalid size), set back settings to defaults. */
 				if ( !this->resize(windowWidth, windowHeight) )
 				{
-					m_primaryServices.settings().set< int32_t >(VideoWindowWidthKey, DefaultVideoWindowWidth);
-					m_primaryServices.settings().set< int32_t >(VideoWindowHeightKey, DefaultVideoWindowHeight);
+					m_primaryServices.settings().set< int32_t >(WindowWidthKey, DefaultWindowWidth);
+					m_primaryServices.settings().set< int32_t >(WindowHeightKey, DefaultWindowHeight);
 				}
 			}
 			else
@@ -234,10 +234,10 @@ namespace EmEn
 		}
 		else
 		{
-			if ( m_primaryServices.settings().getOrSetDefault< bool >(VideoWindowAlwaysCenterOnStartupKey, DefaultVideoWindowAlwaysCenterOnStartup) )
+			if ( m_primaryServices.settings().getOrSetDefault< bool >(WindowAlwaysCenterOnStartupKey, DefaultWindowAlwaysCenterOnStartup) )
 			{
-				const auto windowWidth = m_primaryServices.settings().getOrSetDefault< uint32_t >(VideoWindowWidthKey, DefaultVideoWindowWidth);
-				const auto windowHeight = m_primaryServices.settings().getOrSetDefault< uint32_t >(VideoWindowHeightKey, DefaultVideoWindowHeight);
+				const auto windowWidth = m_primaryServices.settings().getOrSetDefault< uint32_t >(WindowWidthKey, DefaultWindowWidth);
+				const auto windowHeight = m_primaryServices.settings().getOrSetDefault< uint32_t >(WindowHeightKey, DefaultWindowHeight);
 				const auto centeredPosition = Window::getCenteredPosition({windowWidth, windowHeight}, preferredMonitor);
 
 				if ( m_showInformation )
@@ -249,8 +249,8 @@ namespace EmEn
 			}
 			else
 			{
-				const auto XPosition = m_primaryServices.settings().getOrSetDefault< int32_t >(VideoWindowXPositionKey, DefaultVideoWindowXPosition);
-				const auto YPosition = m_primaryServices.settings().getOrSetDefault< int32_t >(VideoWindowYPositionKey, DefaultVideoWindowYPosition);
+				const auto XPosition = m_primaryServices.settings().getOrSetDefault< int32_t >(WindowXPositionKey, DefaultWindowXPosition);
+				const auto YPosition = m_primaryServices.settings().getOrSetDefault< int32_t >(WindowYPositionKey, DefaultWindowYPosition);
 
 				if ( m_showInformation )
 				{
@@ -260,7 +260,7 @@ namespace EmEn
 				this->setPosition(XPosition, YPosition);
 			}
 
-			const auto gamma = m_primaryServices.settings().getOrSetDefault< float >(VideoWindowGammaKey, DefaultVideoWindowGamma);
+			const auto gamma = m_primaryServices.settings().getOrSetDefault< float >(WindowGammaKey, DefaultWindowGamma);
 
 			this->setGamma(gamma, preferredMonitor);
 		}
@@ -322,17 +322,17 @@ namespace EmEn
 					const auto scaledWidth = static_cast< float >(m_state.framebufferWidth) / m_state.contentXScale;
 					const auto scaledHeight = static_cast< float >(m_state.framebufferHeight) / m_state.contentYScale;
 
-					m_primaryServices.settings().set(VideoWindowWidthKey, static_cast< uint32_t >(scaledWidth));
-					m_primaryServices.settings().set(VideoWindowHeightKey, static_cast< uint32_t >(scaledHeight));
+					m_primaryServices.settings().set(WindowWidthKey, static_cast< uint32_t >(scaledWidth));
+					m_primaryServices.settings().set(WindowHeightKey, static_cast< uint32_t >(scaledHeight));
 				}
 				else
 				{
-					m_primaryServices.settings().set(VideoWindowWidthKey, m_state.framebufferWidth);
-					m_primaryServices.settings().set(VideoWindowHeightKey, m_state.framebufferHeight);
+					m_primaryServices.settings().set(WindowWidthKey, m_state.framebufferWidth);
+					m_primaryServices.settings().set(WindowHeightKey, m_state.framebufferHeight);
 				}
 
-				m_primaryServices.settings().set(VideoWindowXPositionKey, m_state.windowXPosition);
-				m_primaryServices.settings().set(VideoWindowYPositionKey, m_state.windowYPosition);
+				m_primaryServices.settings().set(WindowXPositionKey, m_state.windowXPosition);
+				m_primaryServices.settings().set(WindowYPositionKey, m_state.windowYPosition);
 			}
 		}
 
@@ -357,20 +357,31 @@ namespace EmEn
 	}
 
 	bool
-	Window::resize (int32_t width, int32_t height) const noexcept
+	Window::resize (int32_t width, int32_t height) noexcept
 	{
-		if ( m_windowLess )
-		{
-			Tracer::warning(ClassId, "This is a windowless instance, the resize is disabled!");
-
-			return false;
-		}
-
 		if ( width <= 0 || height <= 0 )
 		{
 			TraceError{ClassId} << width << "x" << height << " is an invalid resolution.";
 
 			return false;
+		}
+
+		if ( m_windowLess )
+		{
+			/* NOTE: Save the state. */
+			m_state.windowWidth = static_cast< uint32_t >(width);
+			m_state.windowHeight = static_cast< uint32_t >(height);
+			m_state.framebufferWidth = static_cast< uint32_t >(width);
+			m_state.framebufferHeight = static_cast< uint32_t >(height);
+			m_framebufferResized = true;
+
+			/* NOTE: This follow the GLFW framework events order. */
+			this->notify(OSNotifiesFramebufferResized);
+			this->notify(OSRequestsToRefreshContent);
+			this->notify(OSNotifiesWindowResized);
+			this->notify(OSNotifiesWindowMovedTo);
+
+			return true;
 		}
 
 		if ( this->isFullscreenMode() )
@@ -385,9 +396,7 @@ namespace EmEn
 
 			auto * monitor = glfwGetWindowMonitor(m_handle.get());
 
-			const auto modes = getMonitorModes(monitor);
-
-			for ( const auto & mode : modes )
+			for ( const auto & mode : Window::getMonitorModes(monitor) )
 			{
 				if ( width == mode.width && height == mode.height )
 				{
@@ -663,8 +672,8 @@ namespace EmEn
 		/* Save the current window size. */
 		{
 			const auto currentSize = this->getFramebufferSize();
-			settings.set<uint32_t>(VideoWindowWidthKey, currentSize[0]);
-			settings.set<uint32_t>(VideoWindowHeightKey, currentSize[1]);
+			settings.set<uint32_t>(WindowWidthKey, currentSize[0]);
+			settings.set<uint32_t>(WindowHeightKey, currentSize[1]);
 		}
 
 		const auto refreshRate = settings.getOrSetDefault< int32_t >(VideoFullscreenRefreshRateKey, DefaultVideoFullscreenRefreshRate);
@@ -716,10 +725,10 @@ namespace EmEn
 
 		/* TODO: Be sure of why const-settings here ! */
 		const auto & settings = m_primaryServices.settings();
-		const auto windowWidth = settings.get< int32_t >(VideoWindowWidthKey, DefaultVideoWindowWidth);
-		const auto windowHeight = settings.get< int32_t >(VideoWindowHeightKey, DefaultVideoWindowHeight);
-		const auto XPosition = settings.get< int32_t >(VideoWindowXPositionKey, DefaultVideoWindowXPosition);
-		const auto YPosition = settings.get< int32_t >(VideoWindowYPositionKey, DefaultVideoWindowYPosition);
+		const auto windowWidth = settings.get< int32_t >(WindowWidthKey, DefaultWindowWidth);
+		const auto windowHeight = settings.get< int32_t >(WindowHeightKey, DefaultWindowHeight);
+		const auto XPosition = settings.get< int32_t >(WindowXPositionKey, DefaultWindowXPosition);
+		const auto YPosition = settings.get< int32_t >(WindowYPositionKey, DefaultWindowYPosition);
 
 		glfwSetWindowMonitor(
 			m_handle.get(),
@@ -789,7 +798,7 @@ namespace EmEn
 		{
 			case GLFW_NOT_INITIALIZED :
 			case GLFW_PLATFORM_ERROR :
-				return {DefaultVideoWindowWidth, DefaultVideoWindowHeight};
+				return {DefaultWindowWidth, DefaultWindowHeight};
 
 			case GLFW_NO_ERROR :
 			default:
@@ -937,7 +946,7 @@ namespace EmEn
 		{
 			case GLFW_NOT_INITIALIZED :
 			case GLFW_PLATFORM_ERROR :
-				return {DefaultVideoWindowWidth, DefaultVideoWindowHeight};
+				return {DefaultWindowWidth, DefaultWindowHeight};
 
 			case GLFW_NO_ERROR :
 			default:
@@ -1180,8 +1189,8 @@ namespace EmEn
 			m_state.windowYPosition = 0;
 
 			/* The window dimension expressed in the OS/desktop screen. */
-			m_state.windowWidth = DefaultVideoWindowWidth;
-			m_state.windowHeight = DefaultVideoWindowHeight;
+			m_state.windowWidth = DefaultWindowWidth;
+			m_state.windowHeight = DefaultWindowHeight;
 
 			/* The window borders sizes (Depend on the OS/desktop). */
 			m_state.borderLeftSize = 0;
@@ -1194,8 +1203,8 @@ namespace EmEn
 			m_state.contentYScale = 1.0F;
 
 			/* The framebuffer of the window expressed in pixels. */
-			m_state.framebufferWidth = DefaultVideoWindowWidth;
-			m_state.framebufferHeight = DefaultVideoWindowHeight;
+			m_state.framebufferWidth = DefaultWindowWidth;
+			m_state.framebufferHeight = DefaultWindowHeight;
 		}
 		else
 		{
@@ -1352,7 +1361,7 @@ namespace EmEn
 	{
 		if constexpr ( WindowEventsDebugEnabled )
 		{
-			TraceDebug{ClassId} << "Framebuffer size changed to " << width << "x" << height << " px." "\n";
+			TraceInfo{ClassId} << "Framebuffer size changed to " << width << "x" << height << " px." "\n";
 		}
 
 		auto * _this = static_cast< Window * >(glfwGetWindowUserPointer(window));
@@ -1365,8 +1374,7 @@ namespace EmEn
 		/* NOTE: Save the state. */
 		_this->m_state.framebufferWidth = static_cast< uint32_t >(width);
 		_this->m_state.framebufferHeight = static_cast< uint32_t >(height);
-
-		TraceInfo{ClassId} << "The framebuffer has been resized to " << width << 'X' << height << " px.";
+		_this->m_framebufferResized = true;
 
 		_this->notify(OSNotifiesFramebufferResized);
 	}
@@ -1376,7 +1384,7 @@ namespace EmEn
 	{
 		if constexpr ( WindowEventsDebugEnabled )
 		{
-			TraceDebug{ClassId} << "Window refresh request." "\n";
+			TraceInfo{ClassId} << "Window refresh request." "\n";
 		}
 
 		auto * _this = static_cast< Window * >(glfwGetWindowUserPointer(window));
@@ -1394,7 +1402,7 @@ namespace EmEn
 	{
 		if constexpr ( WindowEventsDebugEnabled )
 		{
-			TraceDebug{ClassId} << "Window size changed to " << width << "x" << height << " pt." "\n";
+			TraceInfo{ClassId} << "Window size changed to " << width << "x" << height << " pt." "\n";
 		}
 
 		auto * _this = static_cast< Window * >(glfwGetWindowUserPointer(window));
@@ -1425,7 +1433,7 @@ namespace EmEn
 	{
 		if constexpr ( WindowEventsDebugEnabled )
 		{
-			TraceDebug{ClassId} << "Window position changed to X:" << xPosition << ", Y:" << yPosition << "." "\n";
+			TraceInfo{ClassId} << "Window position changed to X:" << xPosition << ", Y:" << yPosition << "." "\n";
 		}
 
 		auto * _this = static_cast< Window * >(glfwGetWindowUserPointer(window));
@@ -1447,13 +1455,13 @@ namespace EmEn
 	{
 		if constexpr ( WindowEventsDebugEnabled )
 		{
-			TraceDebug{ClassId} << "Monitor configuration changed (Monitor " << ( event == GLFW_CONNECTED ? "connected" : "disconnected") << ")." "\n";
+			TraceInfo{ClassId} << "Monitor configuration changed (Monitor " << ( event == GLFW_CONNECTED ? "connected" : "disconnected") << ")." "\n";
 		}
 
 		switch ( event )
 		{
 			case GLFW_CONNECTED :
-				Tracer::info(ClassId, "New monitor add to the configuration !");
+				Tracer::info(ClassId, "New monitor added to the configuration !");
 				break;
 
 			case GLFW_DISCONNECTED :
@@ -1470,7 +1478,7 @@ namespace EmEn
 	{
 		if constexpr ( WindowEventsDebugEnabled )
 		{
-			TraceDebug{ClassId} << "Window close requested." "\n";
+			TraceInfo{ClassId} << "Window close requested." "\n";
 		}
 
 		auto * _this = static_cast< Window * >(glfwGetWindowUserPointer(window));
@@ -1493,7 +1501,7 @@ namespace EmEn
 	{
 		if constexpr ( WindowEventsDebugEnabled )
 		{
-			TraceDebug{ClassId} << "Window is " << ( focused == GLFW_TRUE ? "focused" : "blurred" ) << "." "\n";
+			TraceInfo{ClassId} << "Window is " << ( focused == GLFW_TRUE ? "focused" : "blurred" ) << "." "\n";
 		}
 
 		auto * _this = static_cast< Window * >(glfwGetWindowUserPointer(window));
@@ -1511,7 +1519,7 @@ namespace EmEn
 	{
 		if constexpr ( WindowEventsDebugEnabled )
 		{
-			TraceDebug{ClassId} << "Window is " << ( hidden == GLFW_TRUE ? "hidden" : "visible" ) << "." "\n";
+			TraceInfo{ClassId} << "Window is " << ( hidden == GLFW_TRUE ? "hidden" : "visible" ) << "." "\n";
 		}
 
 		auto * _this = static_cast< Window * >(glfwGetWindowUserPointer(window));
@@ -1529,7 +1537,7 @@ namespace EmEn
 	{
 		if constexpr ( WindowEventsDebugEnabled )
 		{
-			TraceDebug{ClassId} << "Window is " << ( maximized == GLFW_TRUE ? "maximized" : "minimized" ) << "." "\n";
+			TraceInfo{ClassId} << "Window is " << ( maximized == GLFW_TRUE ? "maximized" : "minimized" ) << "." "\n";
 		}
 
 		auto * _this = static_cast< Window * >(glfwGetWindowUserPointer(window));
@@ -1547,7 +1555,7 @@ namespace EmEn
 	{
 		if constexpr ( WindowEventsDebugEnabled )
 		{
-			TraceDebug{ClassId} << "Window scale changed to X:" << xScale << ", Y:" << yScale << "." "\n";
+			TraceInfo{ClassId} << "Window scale changed to X:" << xScale << ", Y:" << yScale << "." "\n";
 		}
 
 		auto * _this = static_cast< Window * >(glfwGetWindowUserPointer(window));

@@ -100,6 +100,12 @@ namespace EmEn::Scenes::Component
 
 		private:
 
+			/** @copydoc EmEn::Scenes::Component::Abstract::onSuspend() */
+			void onSuspend () noexcept override { }
+
+			/** @copydoc EmEn::Scenes::Component::Abstract::onWakeup() */
+			void onWakeup () noexcept override { }
+
 			/** @copydoc EmEn::Scenes::AVConsole::AbstractVirtualDevice::updateDeviceFromCoordinates() noexcept */
 			void updateDeviceFromCoordinates (const Libs::Math::CartesianFrame< float > & worldCoordinates, const Libs::Math::Vector< 3, float > & worldVelocity) noexcept override;
 

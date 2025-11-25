@@ -30,6 +30,7 @@
 #include "Resources/Manager.hpp"
 #include "Vulkan/Image.hpp"
 #include "Vulkan/ImageView.hpp"
+#include "Vulkan/MemoryRegion.hpp"
 #include "Vulkan/Sampler.hpp"
 #include "Graphics/Renderer.hpp"
 
@@ -60,11 +61,108 @@ namespace EmEn::Graphics::TextureResource
 	}
 
 	bool
-	Texture3D::createTexture (Renderer & /*renderer*/) noexcept
+	Texture3D::createTexture (Renderer & renderer) noexcept
 	{
-		Tracer::error(ClassId, "Not yet implemented !");
+		if ( m_localData == nullptr || !m_localData->isValid() )
+		{
+			Tracer::error(ClassId, "No valid local data available !");
 
-		return false;
+			return false;
+		}
+
+		auto & settings = renderer.primaryServices().settings();
+
+		const auto mipLevels = std::min(
+			Image::getMIPLevels(m_localData->width(), m_localData->height()),
+			settings.getOrSetDefault< uint32_t >(GraphicsTextureMipMappingLevelsKey, DefaultGraphicsTextureMipMappingLevels)
+		);
+
+		/* Create a Vulkan image. */
+		m_image = std::make_shared< Vulkan::Image >(
+			renderer.device(),
+			VK_IMAGE_TYPE_3D,
+			Image::getFormat< uint8_t >(m_localData->colorCount()),
+			VkExtent3D{m_localData->width(), m_localData->height(), m_localData->depth()},
+			VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+			0,
+			mipLevels
+		);
+		m_image->setIdentifier(ClassId, this->name(), "Image");
+
+		if ( !m_image->createOnHardware() )
+		{
+			Tracer::error(ClassId, "Unable to create an image !");
+
+			m_image.reset();
+
+			return false;
+		}
+
+		/* Transfer data to the image. */
+		if ( !m_image->writeData(renderer.transferManager(), MemoryRegion{m_localData->data().data(), m_localData->bytes()}) )
+		{
+			Tracer::error(ClassId, "Unable to write data to the image !");
+
+			m_image->destroyFromHardware();
+			m_image.reset();
+
+			return false;
+		}
+
+		/* Create a Vulkan image view. */
+		m_imageView = std::make_shared< ImageView >(
+			m_image,
+			VK_IMAGE_VIEW_TYPE_3D,
+			VkImageSubresourceRange{
+				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+				.baseMipLevel = 0,
+				.levelCount = m_image->createInfo().mipLevels,
+				.baseArrayLayer = 0,
+				.layerCount = m_image->createInfo().arrayLayers
+			}
+		);
+		m_imageView->setIdentifier(ClassId, this->name(), "ImageView");
+
+		if ( !m_imageView->createOnHardware() )
+		{
+			Tracer::error(ClassId, "Unable to create an image view !");
+
+			return false;
+		}
+
+		/* Get a Vulkan sampler. */
+		m_sampler = renderer.getSampler("Texture3D", [] (Settings & settings, VkSamplerCreateInfo & createInfo) {
+			const auto magFilter = settings.getOrSetDefault< std::string >(GraphicsTextureMagFilteringKey, DefaultGraphicsTextureFiltering);
+			const auto minFilter = settings.getOrSetDefault< std::string >(GraphicsTextureMinFilteringKey, DefaultGraphicsTextureFiltering);
+			const auto mipmapMode = settings.getOrSetDefault< std::string >(GraphicsTextureMipFilteringKey, DefaultGraphicsTextureFiltering);
+			const auto mipLevels = settings.getOrSetDefault< float >(GraphicsTextureMipMappingLevelsKey, DefaultGraphicsTextureMipMappingLevels);
+
+			//createInfo.flags = 0;
+			createInfo.magFilter = magFilter == "linear" ? VK_FILTER_LINEAR : VK_FILTER_NEAREST;
+			createInfo.minFilter = minFilter == "linear" ? VK_FILTER_LINEAR : VK_FILTER_NEAREST;
+			createInfo.mipmapMode = mipmapMode == "linear" ? VK_SAMPLER_MIPMAP_MODE_LINEAR : VK_SAMPLER_MIPMAP_MODE_NEAREST;
+			//createInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+			//createInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+			//createInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+			//createInfo.mipLodBias = 0.0F;
+			createInfo.anisotropyEnable = VK_FALSE; /* NOTE: Anisotropy is not typically used for 3D textures. */
+			createInfo.maxAnisotropy = 1.0F;
+			//createInfo.compareEnable = VK_FALSE;
+			//createInfo.compareOp = VK_COMPARE_OP_ALWAYS;
+			//createInfo.minLod = 0.0F;
+			createInfo.maxLod = mipLevels > 0.0F ? mipLevels : VK_LOD_CLAMP_NONE;
+			//createInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+			//createInfo.unnormalizedCoordinates = VK_FALSE;
+		});
+
+		if ( m_sampler == nullptr )
+		{
+			Tracer::error(ClassId, "Unable to get a sampler !");
+
+			return false;
+		}
+
+		return true;
 	}
 
 	bool
@@ -94,59 +192,54 @@ namespace EmEn::Graphics::TextureResource
 	bool
 	Texture3D::isGrayScale () const noexcept
 	{
-		/* FIXME: No local data for now. */
-		return false;
+		if ( !this->isLoaded() )
+		{
+			return false;
+		}
+
+		return m_localData->isGrayScale();
 	}
 
 	PixelFactory::Color< float >
 	Texture3D::averageColor () const noexcept
 	{
-		/* FIXME: No local data for now. */
-		return PixelFactory::Black;
+		if ( !this->isLoaded() )
+		{
+			return PixelFactory::Black;
+		}
+
+		return m_localData->averageColor();
 	}
 
 	bool
-	Texture3D::load (Resources::ServiceProvider & /*serviceProvider*/) noexcept
+	Texture3D::load (Resources::AbstractServiceProvider & serviceProvider) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
 			return false;
 		}
 
-		constexpr size_t size = 32;
+		m_localData = serviceProvider.container< VolumetricImageResource >()->getDefaultResource();
 
-		m_localData.resize(size * size * size * 4);
-
-		for ( uint32_t xIndex = 0; xIndex < size; xIndex++ )
+		if ( !this->addDependency(m_localData) )
 		{
-			for ( uint32_t yIndex = 0; yIndex < size; yIndex++ )
-			{
-				for ( uint32_t zIndex = 0; zIndex < size; zIndex++ )
-				{
-					const auto index = (xIndex * yIndex * size) * zIndex;
-
-					m_localData[index] = xIndex * 8;
-					m_localData[index+1] = yIndex * 8;
-					m_localData[index+2] = zIndex * 8;
-					m_localData[index+3] = 255;
-				}
-			}
+			return this->setLoadSuccess(false);
 		}
 
-		return this->setLoadSuccess(false);
+		return this->setLoadSuccess(true);
 	}
 
 	bool
-	Texture3D::load (Resources::ServiceProvider & serviceProvider, const std::filesystem::path & filepath) noexcept
+	Texture3D::load (Resources::AbstractServiceProvider & serviceProvider, const std::filesystem::path & filepath) noexcept
 	{
-		return this->load(serviceProvider.container< ImageResource >()->getResource(
-			ResourceTrait::getResourceNameFromFilepath(filepath, "Images"),
+		return this->load(serviceProvider.container< VolumetricImageResource >()->getResource(
+			ResourceTrait::getResourceNameFromFilepath(filepath, "VolumetricImages"),
 			true)
 		);
 	}
 
 	bool
-	Texture3D::load (Resources::ServiceProvider & /*serviceProvider*/, const Json::Value & /*data*/) noexcept
+	Texture3D::load (Resources::AbstractServiceProvider & /*serviceProvider*/, const Json::Value & /*data*/) noexcept
 	{
 		/* NOTE: This resource has no local store,
 		 * so this method won't be called from a resource container! */
@@ -156,30 +249,28 @@ namespace EmEn::Graphics::TextureResource
 	}
 
 	bool
-	Texture3D::load (const std::shared_ptr< ImageResource > & imageResource) noexcept
+	Texture3D::load (const std::shared_ptr< VolumetricImageResource > & volumetricImageResource) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
 			return false;
 		}
 
-		if ( imageResource == nullptr )
+		if ( volumetricImageResource == nullptr )
 		{
-			Tracer::error(ClassId, "The image resource is an empty smart pointer !");
+			Tracer::error(ClassId, "The volumetric image resource is an empty smart pointer !");
 
 			return this->setLoadSuccess(false);
 		}
 
-		Tracer::warning(ClassId, "This function is not available yet !");
-
-		/*m_localData = imageResource;
+		m_localData = volumetricImageResource;
 
 		if ( !this->addDependency(m_localData) )
 		{
-			TraceError{ClassId} << "Unable to add the image '" << imageResource->name() << "' as dependency !";
+			TraceError{ClassId} << "Unable to add the volumetric image '" << volumetricImageResource->name() << "' as dependency !";
 
 			return this->setLoadSuccess(false);
-		}*/
+		}
 
 		return this->setLoadSuccess(true);
 	}

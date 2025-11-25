@@ -216,6 +216,16 @@ namespace EmEn::Vulkan
 			}
 
 			/**
+			 * @brief Sets the swap-chain degraded.
+			 * @return void
+			 */
+			void
+			setDegraded () noexcept
+			{
+				m_status = Status::Degraded;
+			}
+
+			/**
 			 * @brief Returns the current status of the swap-chain.
 			 * @return Status
 			 */

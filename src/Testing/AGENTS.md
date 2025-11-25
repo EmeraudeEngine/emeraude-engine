@@ -1,12 +1,12 @@
-# Testing System - Development Context
+# Testing System
 
 Context spécifique pour le développement des tests unitaires d'Emeraude Engine.
 
-## 🎯 Vue d'ensemble du module
+## Vue d'ensemble du module
 
 Tests unitaires du moteur utilisant **Google Test**. Focus actuel sur **Libs** (fondation critique), expansion future vers systèmes haut niveau.
 
-## 📋 Règles spécifiques à Testing/
+## Règles spécifiques à Testing/
 
 ### Framework: Google Test
 - **Google Test (gtest)** : Framework de tests unitaires C++
@@ -89,7 +89,7 @@ TEST(Vector, Normalize) {
 4. **Systèmes haut niveau** : Scenes, Audio, Overlay
 5. **Integration tests** : Tests inter-systèmes
 
-## 🛠️ Commandes de développement
+## Commandes de développement
 
 ```bash
 # Lancer tous les tests
@@ -112,7 +112,7 @@ ctest --output-on-failure
 ./test --gtest_list_tests # Lister tests disponibles
 ```
 
-## 🔗 Fichiers importants
+## Fichiers importants
 
 ### Structure Testing/
 ```
@@ -132,7 +132,7 @@ Testing/
 └── CMakeLists.txt
 ```
 
-## ⚡ Patterns de développement
+## Patterns de développement
 
 ### Créer un nouveau test
 ```cpp
@@ -222,7 +222,7 @@ TEST_F(VectorTest, Add) {
 }
 ```
 
-## 🚨 Points d'attention
+## Points d'attention
 
 - **Libs prioritaire** : Fondation critique, doit être 100% testée
 - **Un test = une fonction** : Clarté et isolation
@@ -233,9 +233,9 @@ TEST_F(VectorTest, Add) {
 - **Pas de randomness** : Tests reproductibles, pas de valeurs aléatoires
 - **CI/CD integration** : Tests lancés automatiquement sur commits
 
-## 📚 Documentation détaillée
+## Documentation détaillée
 
 Systèmes testés:
-→ **@src/Libs/AGENTS.md** - Priorité actuelle des tests
+- @src/Libs/AGENTS.md** - Priorité actuelle des tests
 → **Google Test documentation** - Pour assertions et features avancées
 → **CTest documentation** - Pour intégration CMake

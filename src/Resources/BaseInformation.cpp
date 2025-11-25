@@ -40,7 +40,7 @@ namespace EmEn::Resources
 	bool
 	BaseInformation::parseName (const Json::Value & resourceDefinition) noexcept
 	{
-		if ( !resourceDefinition.isMember(NameKey) )
+		if ( !resourceDefinition.isMember(NameKey) ) [[unlikely]]
 		{
 			TraceError{ClassId} << "Resource base infos doesn't have '" << NameKey << "' key !";
 
@@ -49,7 +49,7 @@ namespace EmEn::Resources
 
 		const auto & resourceName = resourceDefinition[NameKey];
 
-		if ( !resourceName.isString() )
+		if ( !resourceName.isString() ) [[unlikely]]
 		{
 			TraceError{ClassId} << "Key '" << NameKey << "' must be a string !";
 
@@ -75,7 +75,7 @@ namespace EmEn::Resources
 
 		const auto & source = resourceDefinition[SourceKey];
 
-		if ( !source.isString() )
+		if ( !source.isString() ) [[unlikely]]
 		{
 			TraceError{ClassId} << "Key '" << SourceKey << "' must be a string !";
 
@@ -86,7 +86,7 @@ namespace EmEn::Resources
 
 		m_source = to_SourceType(sourceString);
 
-		if ( m_source == SourceType::Undefined )
+		if ( m_source == SourceType::Undefined ) [[unlikely]]
 		{
 			TraceError{ClassId} <<
 				"The value '" << sourceString << "' at '" << SourceKey << "' key is not handled ! "
@@ -101,9 +101,9 @@ namespace EmEn::Resources
 	bool
 	BaseInformation::parseData (const FileSystem & fileSystem, const Json::Value & resourceDefinition) noexcept
 	{
-		if ( !resourceDefinition.isMember(DataKey) )
+		if ( !resourceDefinition.isMember(DataKey) ) [[unlikely]]
 		{
-			TraceError{ClassId} << "Resource base infos doesn't have '" << SourceKey << "' key !";
+			TraceError{ClassId} << "Resource base infos doesn't have '" << DataKey << "' key !";
 
 			return false;
 		}
@@ -112,7 +112,7 @@ namespace EmEn::Resources
 
 		switch ( m_source )
 		{
-			case SourceType::Undefined :
+			case SourceType::Undefined : [[unlikely]]
 				TraceFatal{ClassId} <<
 					"Resource infos '" << SourceKey << "' key is invalid ! "
 					"This should never happen at this point !";
@@ -135,7 +135,7 @@ namespace EmEn::Resources
 
 					const auto filepath = fileSystem.getFilepathFromDataDirectories(DataStores, filename);
 
-					if ( filepath.empty() )
+					if ( filepath.empty() ) [[unlikely]]
 					{
 						TraceError{ClassId} << data << " for '" << DataKey << "' key (" << LocalDataString << ") point to an invalid location.";
 
@@ -144,7 +144,7 @@ namespace EmEn::Resources
 
 					m_data = filepath.string();
 				}
-				else
+				else [[unlikely]]
 				{
 					TraceError{ClassId} << "Key '" << DataKey << "' (" << LocalDataString << ") must be a string !";
 
@@ -161,14 +161,14 @@ namespace EmEn::Resources
 					{
 						m_data = data;
 					}
-					else
+					else [[unlikely]]
 					{
 						TraceError{ClassId} << "'" << url << "' for '" << DataKey << "' key (" << ExternalDataString << ") is an invalid URL.";
 
 						return false;
 					}
 				}
-				else
+				else [[unlikely]]
 				{
 					TraceError{ClassId} << "Key '" << DataKey << "' (" << ExternalDataString << ") must be a string !";
 
@@ -181,7 +181,7 @@ namespace EmEn::Resources
 				{
 					m_data = data;
 				}
-				else
+				else [[unlikely]]
 				{
 					TraceError{ClassId} << "Key '" << DataKey << "' (" << DirectDataString << ") must be a JSON object !";
 

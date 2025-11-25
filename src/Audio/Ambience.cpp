@@ -231,7 +231,7 @@ namespace EmEn::Audio
 	void
 	Ambience::start () noexcept
 	{
-		if ( m_active )
+		if ( m_state != State::Stopped )
 		{
 			return;
 		}
@@ -276,7 +276,7 @@ namespace EmEn::Audio
 			}
 		}
 
-		m_active = true;
+		m_state = State::Playing;
 	}
 
 	bool
@@ -316,20 +316,120 @@ namespace EmEn::Audio
 	void
 	Ambience::stop () noexcept
 	{
-		if ( !m_active )
+		if ( m_state == State::Stopped )
 		{
 			return;
 		}
 
-		m_active = false;
+		m_state = State::Stopped;
 
 		this->releaseSources();
 	}
 
 	void
+	Ambience::pause () noexcept
+	{
+		/* Only pause if currently playing and not suspended. */
+		if ( m_state != State::Playing || m_suspended )
+		{
+			return;
+		}
+
+		m_state = State::Paused;
+
+		/* Pause all sources using direct OpenAL control (sources are kept). */
+		if ( m_loopedSource != nullptr )
+		{
+			m_loopedSource->pause();
+		}
+
+		for ( auto & channel : m_channels )
+		{
+			channel.pause();
+		}
+	}
+
+	void
+	Ambience::resume () noexcept
+	{
+		/* Only resume if previously paused (and not suspended). */
+		if ( m_state != State::Paused || m_suspended )
+		{
+			return;
+		}
+
+		m_state = State::Playing;
+
+		/* Resume all sources using direct OpenAL control. */
+		if ( m_loopedSource != nullptr )
+		{
+			m_loopedSource->resume();
+		}
+
+		for ( auto & channel : m_channels )
+		{
+			channel.resume();
+		}
+	}
+
+	void
+	Ambience::suspend () noexcept
+	{
+		/* Only suspend if active (playing or paused) and not already suspended. */
+		if ( m_state == State::Stopped || m_suspended )
+		{
+			return;
+		}
+
+		m_suspended = true;
+
+		/* Release all sources back to the pool. */
+		this->releaseSources();
+	}
+
+	void
+	Ambience::wakeup () noexcept
+	{
+		/* Only wakeup if previously suspended. */
+		if ( !m_suspended )
+		{
+			return;
+		}
+
+		m_suspended = false;
+
+		/* Reallocate sources from the pool. */
+		if ( !this->allocateSources() )
+		{
+			Tracer::error(ClassId, "Unable to reallocate sources on wakeup !");
+
+			return;
+		}
+
+		/* Restart the loop channel if we have a loop sound. */
+		if ( this->requestLoopChannel() && m_loopSound->isLoaded() )
+		{
+			m_loopedSource->play(m_loopSound, PlayMode::Loop);
+		}
+
+		/* Restart the sound effect channel timers. */
+		for ( auto & channel : m_channels )
+		{
+			channel.setTimeBeforeNextPlay(this->getRandomDelay());
+		}
+
+		/* If we were paused before suspension, pause again. */
+		if ( m_state == State::Paused )
+		{
+			m_state = State::Playing;  /* Temporarily set to Playing to allow pause() to work. */
+			this->pause();
+		}
+	}
+
+	void
 	Ambience::update () noexcept
 	{
-		if ( !m_active )
+		if ( m_state != State::Playing )
 		{
 			return;
 		}
@@ -355,6 +455,8 @@ namespace EmEn::Audio
 	bool
 	Ambience::loadSoundSet (Resources::Manager & resourceManager, const std::filesystem::path & filepath) noexcept
 	{
+		this->reset();
+
 		const auto rootCheck = FastJSON::getRootFromFile(filepath);
 
 		if ( !rootCheck )
@@ -455,6 +557,6 @@ namespace EmEn::Audio
 		m_radius = DefaultRadius;
 		m_minDelay = DefaultMinDelay;
 		m_maxDelay = DefaultMaxDelay;
-		m_active = false;
+		m_state = State::Stopped;
 	}
 }

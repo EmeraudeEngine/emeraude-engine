@@ -201,11 +201,15 @@ namespace EmEn::Overlay
 			}
 
 			/**
-			 * @brief Updates necessary data in video memory.
-			 * @param windowResized Tells the update come from a window resize.
-			 * @return bool
+			 * @brief Processes pending updates for all surfaces in this screen.
+			 * @details This method iterates through all surfaces and processes their pending updates:
+			 * - If forceInvalidate is true (window resize), all surfaces are invalidated first
+			 * - Each surface then recreates it's back buffer if needed and uploads content to GPU
+			 * @param forceInvalidate When true, forces all surfaces to invalidate and recalculate
+			 * their pixel dimensions (used during window resize). When false, only processes
+			 * surfaces that have pending local changes.
 			 */
-			bool updateVideoMemory (bool windowResized) noexcept;
+			void processSurfaceUpdates (bool forceInvalidate) noexcept;
 
 			/**
 			 * @brief Render this screen. The manager does tests for visibility.

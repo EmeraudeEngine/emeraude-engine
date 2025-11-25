@@ -584,14 +584,6 @@ namespace EmEn::Input
 			modifiers |= GLFW_MOD_SUPER;
 		}
 
-		/* DEBUG: Log modifiers */
-		TraceInfo{ClassId} <<
-			"[SCROLL DEBUG] xOffset=" << xOffset <<
-			", yOffset=" << yOffset <<
-			", leftCtrl=" << leftCtrl <<
-			", rightCtrl=" << rightCtrl <<
-			", modifiers=" << modifiers << '\n';
-
 		if ( s_instance->m_moveEventsTracking != nullptr )
 		{
 			/* NOTE: If the move is locked on one listener, checks for listening or relative mode is already done. */
@@ -627,9 +619,9 @@ namespace EmEn::Input
 		std::vector< std::filesystem::path > filePaths;
 		filePaths.reserve(count);
 
-		for ( auto i = 0; i < count; i++ )
+		for ( auto index = 0; index < count; index++ )
 		{
-			const std::filesystem::path filepath{paths[i]};
+			const std::filesystem::path filepath{paths[index]};
 
 			if ( !IO::fileExists(filepath) )
 			{

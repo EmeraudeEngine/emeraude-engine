@@ -54,7 +54,7 @@ namespace EmEn::Vulkan
 	void
 	Instance::readSettings () noexcept
 	{
-		m_showInformation = m_primaryServices.settings().getOrSetDefault< bool >(VkShowInformationKey, DefaultVkShowInformation);
+		m_showInformation = m_primaryServices.settings().getOrSetDefault< bool >(VideoShowInformationKey, DefaultVideoShowInformation);
 
 		m_debugMode =
 			m_primaryServices.arguments().isSwitchPresent("--debug-vulkan") ||
@@ -597,7 +597,7 @@ namespace EmEn::Vulkan
 		const auto runModeString = settings.getOrSetDefault< std::string >(VkDeviceAutoSelectModeKey, DefaultVkDeviceAutoSelectMode);
 		const auto forceGPUName = settings.getOrSetDefault< std::string >(VkDeviceForceGPUKey);
 		const auto useVMA = settings.getOrSetDefault< bool >(VkDeviceUseVMAKey, DefaultVkDeviceUseVMA);
-		const auto showInformation = settings.getOrSetDefault< bool >(VkShowInformationKey, DefaultVkShowInformation);
+		const auto showInformation = settings.getOrSetDefault< bool >(VideoShowInformationKey, DefaultVideoShowInformation);
 
 		/* NOTE: Get a list of available devices. */
 		const auto scoredDevices = this->getScoredGraphicsDevices(window, magic_enum::enum_cast< DeviceRunMode >(runModeString).value());
@@ -701,7 +701,7 @@ namespace EmEn::Vulkan
 		const auto runModeString = settings.getOrSetDefault< std::string >(VkDeviceAutoSelectModeKey, DefaultVkDeviceAutoSelectMode);
 		const auto forceGPUName = settings.getOrSetDefault< std::string >(VkDeviceForceGPUKey);
 		const auto useVMA = settings.getOrSetDefault< bool >(VkDeviceUseVMAKey, DefaultVkDeviceUseVMA);
-		const auto showInformation = settings.getOrSetDefault< bool >(VkShowInformationKey, DefaultVkShowInformation);
+		const auto showInformation = settings.getOrSetDefault< bool >(VideoShowInformationKey, DefaultVideoShowInformation);
 
 		std::vector< const char * > requiredExtensions;
 

@@ -36,8 +36,6 @@ namespace EmEn::Vulkan
 {
 	using namespace Libs;
 
-	size_t ComputePipeline::s_fakeHash = 0;
-
 	bool
 	ComputePipeline::createOnHardware () noexcept
 	{
@@ -55,9 +53,7 @@ namespace EmEn::Vulkan
 			return false;
 		}
 
-		const auto result = vkCreateComputePipelines(this->device()->handle(), VK_NULL_HANDLE, 1, &m_createInfo, nullptr, &m_handle);
-
-		if ( result != VK_SUCCESS )
+		if ( const auto result = vkCreateComputePipelines(this->device()->handle(), VK_NULL_HANDLE, 1, &m_createInfo, nullptr, &m_handle); result != VK_SUCCESS )
 		{
 			TraceError{ClassId} << "Unable to create a compute pipeline : " << vkResultToCString(result) << " !";
 
@@ -92,9 +88,9 @@ namespace EmEn::Vulkan
 	}
 
 	size_t
-	ComputePipeline::getHash () noexcept
+	ComputePipeline::getHash () const noexcept
 	{
-		/* FIXME: Weak and unstable hash method !! */
-		return s_fakeHash++;
+		/* TODO: ... */
+		return 0;
 	}
 }

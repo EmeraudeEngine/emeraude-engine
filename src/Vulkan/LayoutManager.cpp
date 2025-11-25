@@ -26,10 +26,6 @@
 
 #include "LayoutManager.hpp"
 
-/* STL inclusions. */
-#include <exception>
-#include <iostream>
-
 /* Local inclusions. */
 #include "Device.hpp"
 #include "PipelineLayout.hpp"

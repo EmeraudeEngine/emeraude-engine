@@ -241,7 +241,7 @@ namespace EmEn::Graphics
 		/* NOTE: Reserve capacity for cache maps to avoid rehashing during initialization.
 		 * Typical usage patterns: ~30-50 samplers, ~50-100 pipelines/programs. */
 		m_samplers.reserve(50);
-		m_pipelines.reserve(100);
+		m_graphicsPipelines.reserve(100);
 		m_programs.reserve(100);
 
 		/* NOTE: Graphics device selection from the vulkan instance.
@@ -423,6 +423,8 @@ namespace EmEn::Graphics
 	{
 		m_device->waitIdle("Renderer::onTerminate()");
 
+		TraceInfo{ClassId} << m_graphicsPipelinesBuiltCount << " graphics pipelines built during this runtime. " << m_graphicsPipelinesReusedCount << " were re-used.";
+
 		size_t error = 0;
 
 		/* NOTE: Stacked resources on the runtime. */
@@ -434,12 +436,12 @@ namespace EmEn::Graphics
 
 			m_samplers.clear();
 
-			for ( const auto & pipeline: m_pipelines | std::views::values )
+			for ( const auto & pipeline: m_graphicsPipelines | std::views::values )
 			{
 				pipeline->destroyFromHardware();
 			}
 
-			m_pipelines.clear();
+			m_graphicsPipelines.clear();
 		}
 
 		m_descriptorPool.reset();
@@ -550,12 +552,13 @@ namespace EmEn::Graphics
 	bool
 	Renderer::finalizeGraphicsPipeline (const RenderTarget::Abstract & renderTarget, const Program & program, std::shared_ptr< GraphicsPipeline > & graphicsPipeline) noexcept
 	{
-		/* FIXME: This is a fake hash! */
-		const auto hash = GraphicsPipeline::getHash();
+		const auto hash = graphicsPipeline->getHash();
 
-		if ( const auto pipelineIt = m_pipelines.find(hash); pipelineIt != m_pipelines.cend() )
+		if ( const auto pipelineIt = m_graphicsPipelines.find(hash); pipelineIt != m_graphicsPipelines.cend() )
 		{
 			graphicsPipeline = pipelineIt->second;
+
+			m_graphicsPipelinesReusedCount++;
 
 			return true;
 		}
@@ -565,7 +568,9 @@ namespace EmEn::Graphics
 			return false;
 		}
 
-		return m_pipelines.emplace(hash, graphicsPipeline).second;
+		m_graphicsPipelinesBuiltCount++;
+
+		return m_graphicsPipelines.emplace(hash, graphicsPipeline).second;
 	}
 
 	void
@@ -662,9 +667,7 @@ namespace EmEn::Graphics
 			/* 1. If the swap-chain was marked degraded, we rebuild it and skip this frame. */
 			if ( m_swapChain->status() == Status::Degraded )
 			{
-				Tracer::info(ClassId, "The swap-chain is degraded, refreshing it...");
-
-				if ( !this->refreshFramebuffer() )
+				if ( !this->recreateSystem() )
 				{
 					Tracer::fatal(ClassId, "Unable to refresh the swap-chain!");
 
@@ -920,11 +923,18 @@ namespace EmEn::Graphics
 		{
 			switch ( notificationCode )
 			{
+				/* NOTE: These two notifications invalidate the framebuffer content. */
 				case Window::OSNotifiesFramebufferResized :
 				case Window::OSRequestsToRescaleContentBy :
 					if ( m_windowLess )
 					{
 						// TODO: Resize the framebuffer to the right size!
+					}
+					else
+					{
+						Tracer::debug(ClassId, "The GLFW API detected the frambuffer content size or scale has changed! [SWAP-CHAIN-RECREATION-PLANNED]");
+
+						m_swapChain->setDegraded();
 					}
 					break;
 
@@ -972,7 +982,7 @@ namespace EmEn::Graphics
 	}
 
 	bool
-	Renderer::refreshFramebuffer () noexcept
+	Renderer::recreateSystem () noexcept
 	{
 		this->device()->waitIdle("Refreshing the framebuffer.");
 
@@ -988,7 +998,9 @@ namespace EmEn::Graphics
 			return false;
 		}
 
-		m_swapChainRefreshed = true;
+		m_window.resetFramebufferResizeFlag();
+
+		this->notify(WindowContentRefreshed);
 
 		return true;
 	}

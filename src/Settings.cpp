@@ -276,6 +276,11 @@ namespace EmEn
 				return std::any_cast< uint64_t >(item);
 			}
 
+			if ( item.type() == typeid(float) )
+			{
+				return std::any_cast< float >(item);
+			}
+
 			if ( item.type() == typeid(double) )
 			{
 				return std::any_cast< double >(item);

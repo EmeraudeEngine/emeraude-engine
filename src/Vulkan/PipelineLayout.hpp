@@ -213,19 +213,15 @@ namespace EmEn::Vulkan
 			}
 
 			/**
-			 * @brief STL streams printable object.
-			 * @param out A reference to the stream output.
-			 * @param obj A reference to the object to print.
-			 * @return std::ostream &
+			 * @brief Returns the pipeline layout hash.
+			 * @return size_t
 			 */
-			friend std::ostream & operator<< (std::ostream & out, const PipelineLayout & obj);
-
-			/**
-			 * @brief Stringifies the object.
-			 * @param obj A reference to the object to print.
-			 * @return std::string
-			 */
-			friend std::string to_string (const PipelineLayout & obj) noexcept;
+			[[nodiscard]]
+			size_t
+			getHash () const noexcept
+			{
+				return PipelineLayout::computeHash(m_descriptorSetLayouts, m_pushConstantRanges, m_createInfo.flags);
+			}
 
 			/**
 			 * @brief Returns a hash for a pipeline layout according to constructor params.
@@ -235,9 +231,17 @@ namespace EmEn::Vulkan
 			 * @return size_t
 			 */
 			[[nodiscard]]
-			static size_t getHash (const Libs::StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > & descriptorSetLayouts, const Libs::StaticVector< VkPushConstantRange, 4 > & pushConstantRanges, VkPipelineLayoutCreateFlags flags) noexcept;
+			static size_t computeHash (const Libs::StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > & descriptorSetLayouts, const Libs::StaticVector< VkPushConstantRange, 4 > & pushConstantRanges, VkPipelineLayoutCreateFlags flags) noexcept;
 
 		private:
+
+			/**
+			 * @brief STL streams printable object.
+			 * @param out A reference to the stream output.
+			 * @param obj A reference to the object to print.
+			 * @return std::ostream &
+			 */
+			friend std::ostream & operator<< (std::ostream & out, const PipelineLayout & obj);
 
 			VkPipelineLayout m_handle{VK_NULL_HANDLE};
 			VkPipelineLayoutCreateInfo m_createInfo{};
@@ -245,4 +249,11 @@ namespace EmEn::Vulkan
 			Libs::StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > m_descriptorSetLayouts;
 			Libs::StaticVector< VkPushConstantRange, 4 > m_pushConstantRanges;
 	};
+
+	/**
+	 * @brief Stringifies the object.
+	 * @param obj A reference to the object to print.
+	 * @return std::string
+	 */
+	std::string to_string (const PipelineLayout & obj) noexcept;
 }

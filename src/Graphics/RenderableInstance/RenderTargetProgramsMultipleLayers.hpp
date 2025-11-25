@@ -2,9 +2,9 @@
 
 /* STL inclusions. */
 #include <array>
-#include <vector>
 
 /* Local inclusions for inheritances. */
+#include "Libs/StaticVector.hpp"
 #include "RenderTargetProgramsInterface.hpp"
 
 /* Local inclusions for usages. */
@@ -12,9 +12,13 @@
 
 namespace EmEn::Graphics::RenderableInstance
 {
+	/** @brief The number of layer a mesh can register for rendering. */
+	constexpr auto MaxLayerCount{8};
+
 	/**
 	 * @brief This class holds main rendering programs for a renderable instance for a multiple layers mesh.
 	 * @extends EmEn::Graphics::RenderableInstance::RenderTargetProgramsInterface This is a render target program.
+	 * @warning Limited layer count for speed-up by RenderableInstance::MaxLayerCount constant.
 	 */
 	class RenderTargetProgramsMultipleLayers final : public RenderTargetProgramsInterface
 	{
@@ -219,7 +223,7 @@ namespace EmEn::Graphics::RenderableInstance
 				std::shared_ptr< Saphir::Program  > TBNSpaceProgram;
 			};
 
-			std::vector< Layer > m_layers;
+			Libs::StaticVector< Layer, MaxLayerCount > m_layers;
 			bool m_isReadyToRender{false};
 			bool m_isReadyToCastShadows{false};
 	};

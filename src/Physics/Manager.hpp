@@ -27,10 +27,9 @@
 #pragma once
 
 /* STL inclusions. */
-#include <vector>
-#include <map>
-#include <array>
 #include <memory>
+#include <vector>
+#include <unordered_map>
 
 /* Local inclusions for inheritances. */
 #include "ServiceInterface.hpp"
@@ -149,14 +148,6 @@ namespace EmEn::Physics
 			}
 
 			/**
-			 * @brief Returns or creates a graphics pipeline according to requirements.
-			 * @param pipelineLayout A reference to as pipeline layout smart pointer.
-			 * @return std::shared_ptr< Vulkan::ComputePipeline >
-			 */
-			[[nodiscard]]
-			std::shared_ptr< Vulkan::ComputePipeline > getPipeline (const std::shared_ptr< Vulkan::PipelineLayout > & pipelineLayout) noexcept;
-
-			/**
 			 * @brief Returns whether the physics acceleration was enabled at startup.
 			 * @return bool
 			 */
@@ -189,8 +180,8 @@ namespace EmEn::Physics
 			std::shared_ptr< Vulkan::DescriptorPool > m_descriptorPool;
 			std::shared_ptr< Vulkan::CommandPool > m_commandPool;
 			std::vector< std::shared_ptr< Vulkan::CommandBuffer > > m_commandBuffers;
-			std::map< size_t, std::shared_ptr< Vulkan::PipelineLayout > > m_pipelineLayouts;
-			std::map< size_t, std::shared_ptr< Vulkan::ComputePipeline > > m_pipelines;
+			std::unordered_map< size_t, std::shared_ptr< Vulkan::PipelineLayout > > m_pipelineLayouts;
+			std::unordered_map< size_t, std::shared_ptr< Vulkan::ComputePipeline > > m_computePipelines;
 			bool m_accelerationAvailable{false};
 	};
 }

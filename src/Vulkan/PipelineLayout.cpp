@@ -156,7 +156,7 @@ namespace EmEn::Vulkan
 	}
 
 	size_t
-	PipelineLayout::getHash (const StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > & descriptorSetLayouts, const StaticVector< VkPushConstantRange, 4 > & pushConstantRanges, VkPipelineLayoutCreateFlags flags) noexcept
+	PipelineLayout::computeHash (const StaticVector< std::shared_ptr< DescriptorSetLayout >, 4 > & descriptorSetLayouts, const StaticVector< VkPushConstantRange, 4 > & pushConstantRanges, VkPipelineLayoutCreateFlags flags) noexcept
 	{
 		/* FIXME: Weak and unstable hash method !! */
 		size_t hash = 0;

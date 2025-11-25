@@ -37,6 +37,9 @@
 /* Local inclusions for usage. */
 #include "Graphics/Geometry/ResourceGenerator.hpp"
 #include "Graphics/Renderable/SimpleMeshResource.hpp"
+#include "Graphics/Renderable/SpriteResource.hpp"
+#include "Scenes/Component/Camera.hpp"
+#include "Scenes/Component/SphericalPushModifier.hpp"
 #include "Scenes/Scene.hpp"
 
 namespace EmEn::Scenes

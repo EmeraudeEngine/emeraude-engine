@@ -1,222 +1,29 @@
 {
-  "tools": {
-    "permissions": {
-      "Bash": [
-        "git:*",
-        "mkdir:*",
-        "cmake --build *",
-        "ctest*",
-        "clang-format*",
-        "clang-tidy*", 
-        "cppcheck*",
-        "find src/ -name *.cpp",
-        "find src/ -name *.hpp",
-        "grep -r*",
-        "perf record*",
-        "perf report*",
-        "valgrind*",
-        "objdump*",
-        "nm*"
-      ],
-      "Edit": ["**"],
-      "Write": ["**"],
-      "Read": ["**"]
-    }
-  },
-  "agents": {
-    "emeraude-orchestrator": {
-      "description": "Master agent pour délégation intelligente vers spécialistes Emeraude",
-      "contextFiles": [
-        "shared-architecture.md",
-        "shared-conventions.md", 
-        "delegation-map.md"
-      ],
-      "permissions": {
-        "filePatterns": ["**"],
-        "tools": ["*"],
-        "delegation": ["*"]
-      }
-    },
-    "emeraude-code-reviewer": {
-      "description": "Expert review de code avec analyse algorithmique avancée",
-      "contextFiles": [
-        "shared-conventions.md",
-        "code-review-patterns.md"
-      ],
-      "subagents": [
-        "complexity-analyzer",
-        "stl-advisor", 
-        "format-checker",
-        "performance-optimizer"
-      ],
-      "permissions": {
-        "filePatterns": ["src/**", "docs/**", "*.md"],
-        "bash": ["git", "clang-format", "clang-tidy", "cppcheck"],
-        "mcp": ["github", "web-research"]
-      }
-    },
-    "emeraude-debug-assistant": {
-      "description": "Assistant debug avec gdb, valgrind et analyse crashes",
-      "contextFiles": [
-        "shared-conventions.md",
-        "debug-context.md"
-      ],
-      "subagents": [
-        "breakpoint-manager",
-        "memory-analyzer", 
-        "root-cause-analyzer"
-      ],
-      "permissions": {
-        "filePatterns": ["src/**", "build/**", "core*"],
-        "bash": ["gdb", "lldb", "valgrind", "perf", "addr2line", "objdump"],
-        "mcp": ["github"]
-      }
-    },
-    "emeraude-test-orchestrator": {
-      "description": "Orchestration tests avec focus conventions et performance",
-      "contextFiles": [
-        "shared-conventions.md",
-        "test-patterns.md"
-      ],
-      "subagents": [
-        "unit-test-runner",
-        "coverage-analyzer",
-        "integration-validator"
-      ],
-      "permissions": {
-        "filePatterns": ["src/Testing/**", "src/**", "CMakeLists.txt"],
-        "bash": ["ctest", "gcov", "lcov", "cmake", "make", "ninja"],
-        "mcp": ["github"]
-      }
-    }
-  },
-  "hooks": {
-    "pre-commit": {
-      "description": "Validation conventions + format avant commit",
-      "script": ".claude/hooks/pre-commit-validation.sh",
-      "blocking": true,
-      "conditions": {
-        "filePatterns": ["src/**/*.cpp", "src/**/*.hpp"],
-        "skipOnFlag": "--skip-hooks"
-      }
-    },
-    "post-file-change": {
-      "description": "Auto-format code C++ après modifications",
-      "script": ".claude/hooks/auto-format.sh", 
-      "blocking": false,
-      "conditions": {
-        "filePatterns": ["src/**/*.cpp", "src/**/*.hpp"],
-        "excludePatterns": ["*.generated.cpp"]
-      }
-    },
-    "pre-build": {
-      "description": "Validation architecture avant build",
-      "script": ".claude/hooks/architecture-validation.sh",
-      "blocking": true,
-      "conditions": {
-        "filePatterns": ["src/**"],
-        "buildTargets": ["all", "release"]
-      }
-    }
-  },
-  "commands": {
-    "/emeraude-review": {
-      "description": "Review complète de code avec tous subagents",
-      "agent": "emeraude-code-reviewer",
-      "parameters": {
-        "files": "auto-detect",
-        "focus": "comprehensive"
-      }
-    },
-    "/emeraude-debug": {
-      "description": "Session debug assistée avec outils automatiques",
-      "agent": "emeraude-debug-assistant", 
-      "parameters": {
-        "mode": "interactive",
-        "tools": ["gdb", "valgrind", "perf"]
-      }
-    },
-    "/emeraude-test": {
-      "description": "Orchestration tests intelligente",
-      "agent": "emeraude-test-orchestrator",
-      "parameters": {
-        "scope": "affected-by-changes",
-        "coverage": "detailed"
-      }
-    },
-    "/emeraude-conventions": {
-      "description": "Validation pure conventions Emeraude (Y-down, fail-safe, Vulkan)",
-      "agent": "emeraude-orchestrator",
-      "parameters": {
-        "focus": "conventions-only",
-        "critical": "blocking"
-      }
-    },
-    "/emeraude-performance": {
-      "description": "Analyse performance avec profiling automatique",
-      "agent": "emeraude-code-reviewer",
-      "subagent": "performance-optimizer",
-      "parameters": {
-        "profile": true,
-        "hotpaths": true
-      }
-    }
-  },
-  "context": {
-    "autoUpdate": {
-      "enabled": true,
-      "triggers": ["git-commit", "file-change", "build-complete"],
-      "files": [
-        ".claude/context/current-state.md",
-        ".claude/context/recent-changes.md"
-      ]
-    },
-    "emeraudeConventions": {
-      "yDown": {
-        "enabled": true,
-        "severity": "critical",
-        "autoFix": false
-      },
-      "failSafe": {
-        "enabled": true, 
-        "severity": "critical",
-        "autoFix": false
-      },
-      "vulkanAbstraction": {
-        "enabled": true,
-        "severity": "critical", 
-        "autoFix": false
-      }
-    }
-  },
-  "mcp": {
-    "servers": {
-      "github": {
-        "enabled": true,
-        "permissions": ["read", "comment", "status"],
-        "scope": ["EmeraudeEngine/*"]
-      },
-      "web-research": {
-        "enabled": true,
-        "allowedDomains": [
-          "vulkan.org",
-          "github.com",
-          "stackoverflow.com",
-          "cppreference.com"
-        ]
-      }
-    }
-  },
-  "notifications": {
-    "conventionViolations": {
-      "enabled": true,
-      "severity": "critical",
-      "channels": ["console", "file"]
-    },
-    "performanceRegressions": {
-      "enabled": true,
-      "threshold": 5,
-      "channels": ["console"]
-    }
+  "permissions": {
+    "allow": [
+      "Bash(git:*)",
+      "Bash(mkdir:*)",
+      "Bash(cmake:*)",
+      "Bash(ctest:*)",
+      "Bash(clang-format:*)",
+      "Bash(clang-tidy:*)",
+      "Bash(cppcheck:*)",
+      "Bash(grep:*)",
+      "Bash(find:*)",
+      "Bash(perf:*)",
+      "Bash(valgrind:*)",
+      "Bash(objdump:*)",
+      "Bash(nm:*)",
+      "Bash(xargs:*)",
+      "Bash(./Release/EmeraudeUnitTests:*)",
+      "Bash(./Debug/EmeraudeUnitTests:*)",
+      "Bash(wait)",
+      "Bash(tee:*)",
+      "Bash(cat:*)",
+      "Bash(g++:*)",
+      "Read(**)",
+      "Edit(**)",
+      "Write(**)"
+    ]
   }
 }

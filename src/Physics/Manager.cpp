@@ -136,7 +136,7 @@ namespace EmEn::Physics
 	{
 		size_t error = 0;
 
-		m_pipelines.clear();
+		m_computePipelines.clear();
 		m_pipelineLayouts.clear();
 
 		m_descriptorPool.reset();
@@ -179,32 +179,5 @@ namespace EmEn::Physics
 		//m_commandPool->freeCommandBuffers(static_cast< uint32_t >(m_commandBuffers.size()), m_commandBuffers.data());
 
 		m_commandBuffers.clear();
-	}
-
-	std::shared_ptr< ComputePipeline >
-	Manager::getPipeline (const std::shared_ptr< PipelineLayout > & pipelineLayout) noexcept
-	{
-		const auto hash = ComputePipeline::getHash();
-
-		const auto pipelineIt = m_pipelines.find(hash);
-
-		if ( pipelineIt != m_pipelines.cend() )
-		{
-			return pipelineIt->second;
-		}
-
-		auto pipeline = std::make_shared< ComputePipeline >(pipelineLayout);
-		pipeline->setIdentifier(ClassId, "Main", "ComputePipeline");
-
-		if ( !pipeline->createOnHardware() )
-		{
-			Tracer::error(ClassId, "Unable to create the compute pipeline !");
-
-			return {};
-		}
-
-		auto [pair, success] = m_pipelines.emplace(hash, pipeline);
-
-		return pair->second;
 	}
 }

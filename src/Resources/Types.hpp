@@ -24,43 +24,123 @@
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
 
+/**
+ * @file Types.hpp
+ * @brief Core type definitions and enumerations for the Emeraude Engine resource management system.
+ *
+ * This file defines fundamental types, enumerations, and utility functions used throughout
+ * the resource management subsystem. It includes:
+ * - Resource source type identification (local, external, direct data)
+ * - Resource loading status tracking
+ * - Dependency complexity indicators
+ * - String conversion utilities for all enumerations
+ *
+ * All functions in this file are header-only inline implementations for optimal performance.
+ *
+ * @see EmEn::Resources::Manager
+ * @see EmEn::Resources::ResourceTrait
+ * @version 0.8.35
+ */
+
 #pragma once
 
 /* STL inclusions. */
 #include <cstdint>
 #include <string>
+#include <string_view>
 
+/**
+ * @namespace EmEn::Resources
+ * @brief Resource management subsystem for the Emeraude Engine.
+ *
+ * This namespace contains all classes, types, and utilities related to resource
+ * management including loading, caching, dependency resolution, and lifecycle management.
+ *
+ * @version 0.8.35
+ */
 namespace EmEn::Resources
 {
-	/** @brief Name of a default resource. */
+	/**
+	 * @brief Name of a default resource.
+	 *
+	 * This constant is used to identify the default resource instance when no specific
+	 * resource name is provided. Default resources are typically used as fallbacks or
+	 * placeholder values during initialization.
+	 *
+	 * @version 0.8.35
+	 */
 	constexpr auto Default{"Default"};
 
-	/** @brief Name of the data store base directory. */
-	static constexpr auto DataStores{"data-stores"};
+	/**
+	 * @brief Name of the data store base directory.
+	 *
+	 * This constant defines the base directory name where resource data stores are located.
+	 * Data stores organize resources by type and provide hierarchical storage for game assets.
+	 *
+	 * @version 0.8.35
+	 */
+	constexpr auto DataStores{"data-stores"};
 
 	/**
-	 * @brief The resource source type.
+	 * @enum SourceType
+	 * @brief Defines the origin and storage method of resource data.
+	 *
+	 * This enumeration specifies where and how resource data is stored and accessed.
+	 * It is used by the resource management system to determine the appropriate loading
+	 * strategy and data access pattern for each resource.
+	 *
+	 * @see to_cstring(SourceType)
+	 * @see to_string(SourceType)
+	 * @see to_SourceType(std::string_view)
+	 * @version 0.8.35
 	 */
 	enum class SourceType
 	{
-		Undefined,
-		/* Data key will hold the path to a local file. */
-		LocalData,
-		/* Data key will hold the URL to an external file. */
-		ExternalData,
-		/* Data key will hold the JSON definition of the resource. */
-		DirectData
+		Undefined,     ///< Uninitialized or unknown source type. Default state for new resources.
+		LocalData,     ///< Data key holds the path to a local file on the filesystem.
+		ExternalData,  ///< Data key holds the URL to an external file (network resource).
+		DirectData     ///< Data key holds the JSON definition of the resource inline.
 	};
 
-	static constexpr auto UndefinedString{"Undefined"};
-	static constexpr auto LocalDataString{"LocalData"};
-	static constexpr auto ExternalDataString{"ExternalData"};
-	static constexpr auto DirectDataString{"DirectData"};
+	/**
+	 * @brief String representation for SourceType::Undefined.
+	 * @version 0.8.35
+	 */
+	constexpr auto UndefinedString{"Undefined"};
 
 	/**
-	 * @brief Converts a source type enumeration value to the corresponding string.
-	 * @param value The enumeration value.
-	 * @return const char *
+	 * @brief String representation for SourceType::LocalData.
+	 * @version 0.8.35
+	 */
+	constexpr auto LocalDataString{"LocalData"};
+
+	/**
+	 * @brief String representation for SourceType::ExternalData.
+	 * @version 0.8.35
+	 */
+	constexpr auto ExternalDataString{"ExternalData"};
+
+	/**
+	 * @brief String representation for SourceType::DirectData.
+	 * @version 0.8.35
+	 */
+	constexpr auto DirectDataString{"DirectData"};
+
+	/**
+	 * @brief Converts a SourceType enumeration value to its C-string representation.
+	 *
+	 * This function provides a compile-time constant string representation of the
+	 * SourceType enumeration. It is guaranteed not to throw exceptions and always
+	 * returns a valid string pointer.
+	 *
+	 * @param value The SourceType enumeration value to convert.
+	 * @return A pointer to a null-terminated string containing the enumeration name.
+	 *         Returns "Undefined" for any invalid or unrecognized value.
+	 *
+	 * @note This function is noexcept and always returns a valid pointer.
+	 * @see to_string(SourceType)
+	 * @see to_SourceType(std::string_view)
+	 * @version 0.8.35
 	 */
 	[[nodiscard]]
 	inline
@@ -86,9 +166,18 @@ namespace EmEn::Resources
 	}
 
 	/**
-	 * @brief Returns a string version of the enum value.
-	 * @param value The enum value.
-	 * @return std::string
+	 * @brief Converts a SourceType enumeration value to a std::string.
+	 *
+	 * This function creates a std::string object from the SourceType enumeration
+	 * by delegating to to_cstring(). Use this when you need a std::string object
+	 * rather than a C-string pointer.
+	 *
+	 * @param value The SourceType enumeration value to convert.
+	 * @return A std::string containing the enumeration name.
+	 *
+	 * @see to_cstring(SourceType)
+	 * @see to_SourceType(std::string_view)
+	 * @version 0.8.35
 	 */
 	[[nodiscard]]
 	inline
@@ -99,14 +188,27 @@ namespace EmEn::Resources
 	}
 
 	/**
-	 * @brief Converts a string to a source type enumeration value.
-	 * @param value A reference to a string.
-	 * @return ComponentType
+	 * @brief Converts a string to a SourceType enumeration value.
+	 *
+	 * This function parses a string representation and returns the corresponding
+	 * SourceType enumeration value. It performs exact string matching against known
+	 * SourceType names.
+	 *
+	 * @param value A string_view containing the SourceType name to convert.
+	 *              Valid values are: "LocalData", "ExternalData", "DirectData".
+	 * @return The corresponding SourceType enumeration value.
+	 *         Returns SourceType::Undefined if the input string does not match any known value.
+	 *
+	 * @note This function is case-sensitive and requires exact matches.
+	 * @note This function is noexcept and will never throw exceptions.
+	 * @see to_cstring(SourceType)
+	 * @see to_string(SourceType)
+	 * @version 0.8.35
 	 */
 	[[nodiscard]]
 	inline
 	SourceType
-	to_SourceType (const std::string & value) noexcept
+	to_SourceType (std::string_view value) noexcept
 	{
 		if ( value == LocalDataString )
 		{
@@ -126,35 +228,83 @@ namespace EmEn::Resources
 		return SourceType::Undefined;
 	}
 
-	/** @brief This enum defines every stage of resource loading. */
+	/**
+	 * @enum Status
+	 * @brief Defines every stage of the resource loading lifecycle.
+	 *
+	 * This enumeration tracks the current state of a resource through its loading process,
+	 * from initial instantiation through dependency resolution, loading, and final completion
+	 * or failure. The status transitions are generally sequential, moving from Unloaded toward
+	 * either Loaded or Failed states.
+	 *
+	 * The loading pipeline follows this typical flow:
+	 * Unloaded -> Enqueuing/ManualEnqueuing -> Loading -> Loaded/Failed
+	 *
+	 * @note Once a resource reaches the Loading state, no additional dependencies can be added.
+	 * @see to_cstring(Status)
+	 * @see to_string(Status)
+	 * @version 0.8.35
+	 */
 	enum class Status : uint8_t
 	{
-		/* This is the status of a new resource instantiation. */
-		Unloaded = 0,
-		/* Define a resource being attached with dependencies. */
-		Enqueuing = 1,
-		/* Define a resource being manually attached with dependencies. */
-		ManualEnqueuing = 2,
-		/* Define a resource being loaded.
-		 * NOTE: At this stage, this is no more possible to add a new dependency. */
-		Loading = 3,
-		/* Define a resource fully loaded with all dependencies. */
-		Loaded = 4,
-		/* Define a resource impossible to load. */
-		Failed = 5
+		Unloaded = 0,        ///< Initial status of a new resource instantiation. Resource has not been queued for loading.
+		Enqueuing = 1,       ///< Resource is being attached with dependencies automatically by the system.
+		ManualEnqueuing = 2, ///< Resource is being manually attached with dependencies by user code.
+		Loading = 3,         ///< Resource is actively being loaded. No new dependencies can be added at this stage.
+		Loaded = 4,          ///< Resource has been fully loaded along with all its dependencies.
+		Failed = 5           ///< Resource loading has failed and cannot be loaded.
 	};
 
-	static constexpr auto UnloadedString{"Unloaded"};
-	static constexpr auto EnqueuingString{"Enqueuing"};
-	static constexpr auto ManualEnqueuingString{"ManualEnqueuing"};
-	static constexpr auto LoadingString{"Loading"};
-	static constexpr auto LoadedString{"Loaded"};
-	static constexpr auto FailedString{"Failed"};
+	/**
+	 * @brief String representation for Status::Unloaded.
+	 * @version 0.8.35
+	 */
+	constexpr auto UnloadedString{"Unloaded"};
 
 	/**
-	 * @brief Converts a light pass type enumeration value to the corresponding string.
-	 * @param value The enumeration value.
-	 * @return const char *
+	 * @brief String representation for Status::Enqueuing.
+	 * @version 0.8.35
+	 */
+	constexpr auto EnqueuingString{"Enqueuing"};
+
+	/**
+	 * @brief String representation for Status::ManualEnqueuing.
+	 * @version 0.8.35
+	 */
+	constexpr auto ManualEnqueuingString{"ManualEnqueuing"};
+
+	/**
+	 * @brief String representation for Status::Loading.
+	 * @version 0.8.35
+	 */
+	constexpr auto LoadingString{"Loading"};
+
+	/**
+	 * @brief String representation for Status::Loaded.
+	 * @version 0.8.35
+	 */
+	constexpr auto LoadedString{"Loaded"};
+
+	/**
+	 * @brief String representation for Status::Failed.
+	 * @version 0.8.35
+	 */
+	constexpr auto FailedString{"Failed"};
+
+	/**
+	 * @brief Converts a Status enumeration value to its C-string representation.
+	 *
+	 * This function provides a compile-time constant string representation of the
+	 * Status enumeration. It is guaranteed not to throw exceptions and always
+	 * returns a valid string pointer.
+	 *
+	 * @param value The Status enumeration value to convert.
+	 * @return A pointer to a null-terminated string containing the status name.
+	 *         Returns "Unloaded" for any invalid or unrecognized value.
+	 *
+	 * @note This function is noexcept and always returns a valid pointer.
+	 * @see to_string(Status)
+	 * @version 0.8.35
 	 */
 	[[nodiscard]]
 	inline
@@ -182,13 +332,21 @@ namespace EmEn::Resources
 				return FailedString;
 		}
 
-		return nullptr;
+		return UnloadedString;
 	}
 
 	/**
-	 * @brief Returns a string version of the enum value.
-	 * @param value The enum value.
-	 * @return std::string
+	 * @brief Converts a Status enumeration value to a std::string.
+	 *
+	 * This function creates a std::string object from the Status enumeration
+	 * by delegating to to_cstring(). Use this when you need a std::string object
+	 * rather than a C-string pointer.
+	 *
+	 * @param value The Status enumeration value to convert.
+	 * @return A std::string containing the status name.
+	 *
+	 * @see to_cstring(Status)
+	 * @version 0.8.35
 	 */
 	[[nodiscard]]
 	inline
@@ -198,12 +356,112 @@ namespace EmEn::Resources
 		return {to_cstring(value)};
 	}
 
-	/** @brief Describes the depth of dependencies requested for a resource. */
-	enum class DepComplexity: uint8_t
+	/**
+	 * @enum DepComplexity
+	 * @brief Describes the depth and complexity of dependencies for a resource.
+	 *
+	 * This enumeration categorizes resources based on how many dependencies they have
+	 * and how complex their dependency tree is. This information can be used by the
+	 * resource management system to optimize loading strategies and prioritize resources.
+	 *
+	 * The complexity levels provide hints about resource loading time and memory requirements:
+	 * - None: Instant loading, minimal memory
+	 * - One: Quick loading, small memory footprint
+	 * - Few: Moderate loading time, reasonable memory usage
+	 * - Complex: Extended loading time, significant memory requirements
+	 *
+	 * @see to_cstring(DepComplexity)
+	 * @see to_string(DepComplexity)
+	 * @version 0.8.35
+	 */
+	enum class DepComplexity : uint8_t
 	{
-		None = 0,
-		One = 1,
-		Few = 2,
-		Complex = 3
+		None = 0,    ///< No dependencies. Resource is self-contained and can be loaded independently.
+		One = 1,     ///< Single dependency. Resource depends on exactly one other resource.
+		Few = 2,     ///< Few dependencies (2-5 typically). Resource has a small, manageable dependency tree.
+		Complex = 3  ///< Complex dependency tree (6+ typically). Resource has many dependencies or nested dependencies.
 	};
+
+	/**
+	 * @brief String representation for DepComplexity::None.
+	 * @version 0.8.35
+	 */
+	constexpr auto NoneString{"None"};
+
+	/**
+	 * @brief String representation for DepComplexity::One.
+	 * @version 0.8.35
+	 */
+	constexpr auto OneString{"One"};
+
+	/**
+	 * @brief String representation for DepComplexity::Few.
+	 * @version 0.8.35
+	 */
+	constexpr auto FewString{"Few"};
+
+	/**
+	 * @brief String representation for DepComplexity::Complex.
+	 * @version 0.8.35
+	 */
+	constexpr auto ComplexString{"Complex"};
+
+	/**
+	 * @brief Converts a DepComplexity enumeration value to its C-string representation.
+	 *
+	 * This function provides a compile-time constant string representation of the
+	 * DepComplexity enumeration. It is guaranteed not to throw exceptions and always
+	 * returns a valid string pointer.
+	 *
+	 * @param value The DepComplexity enumeration value to convert.
+	 * @return A pointer to a null-terminated string containing the complexity level name.
+	 *         Returns "None" for any invalid or unrecognized value.
+	 *
+	 * @note This function is noexcept and always returns a valid pointer.
+	 * @see to_string(DepComplexity)
+	 * @version 0.8.35
+	 */
+	[[nodiscard]]
+	inline
+	const char *
+	to_cstring (DepComplexity value) noexcept
+	{
+		switch ( value )
+		{
+			case DepComplexity::None :
+				return NoneString;
+
+			case DepComplexity::One :
+				return OneString;
+
+			case DepComplexity::Few :
+				return FewString;
+
+			case DepComplexity::Complex :
+				return ComplexString;
+		}
+
+		return NoneString;
+	}
+
+	/**
+	 * @brief Converts a DepComplexity enumeration value to a std::string.
+	 *
+	 * This function creates a std::string object from the DepComplexity enumeration
+	 * by delegating to to_cstring(). Use this when you need a std::string object
+	 * rather than a C-string pointer.
+	 *
+	 * @param value The DepComplexity enumeration value to convert.
+	 * @return A std::string containing the complexity level name.
+	 *
+	 * @see to_cstring(DepComplexity)
+	 * @version 0.8.35
+	 */
+	[[nodiscard]]
+	inline
+	std::string
+	to_string (DepComplexity value)
+	{
+		return {to_cstring(value)};
+	}
 }

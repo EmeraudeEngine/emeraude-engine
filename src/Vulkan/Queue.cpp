@@ -117,14 +117,14 @@ namespace EmEn::Vulkan
 				return true;
 
 			case VK_SUBOPTIMAL_KHR :
-				Tracer::warning(ClassId, "vkQueuePresentKHR(), the swap-chain is sub-optimal!");
+				Tracer::debug(ClassId, "vkQueuePresentKHR() detected the swap-chain is 'sub-optimal'! [SWAP-CHAIN-RECREATION-PLANNED]");
 
 				swapChainStatus = Status::Degraded;
 
 				return true;
 
 			case VK_ERROR_OUT_OF_DATE_KHR :
-				Tracer::error(ClassId, "vkQueuePresentKHR(), the swap-chain is out of date!");
+				Tracer::debug(ClassId, "vkQueuePresentKHR() detected the swap-chain is 'out of date' by the system! [SWAP-CHAIN-RECREATION-PLANNED]");
 
 				swapChainStatus = Status::Degraded;
 

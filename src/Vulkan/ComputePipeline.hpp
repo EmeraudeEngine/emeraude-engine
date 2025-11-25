@@ -155,12 +155,9 @@ namespace EmEn::Vulkan
 			 * @return size_t
 			 */
 			[[nodiscard]]
-			static size_t getHash () noexcept;
+			size_t getHash () const noexcept;
 
 		private:
-
-			/* FIXME: Remove this !!!! */
-			static size_t s_fakeHash;
 
 			VkPipeline m_handle{VK_NULL_HANDLE};
 			VkComputePipelineCreateInfo m_createInfo{};

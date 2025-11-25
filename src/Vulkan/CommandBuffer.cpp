@@ -31,6 +31,7 @@
 #include <cstdint>
 #include <array>
 #include <memory>
+#include <span>
 #include <vector>
 
 /* Local inclusions. */
@@ -578,7 +579,7 @@ namespace EmEn::Vulkan
 	}
 
 	void
-	CommandBuffer::pipelineBarrier (const std::vector< VkMemoryBarrier > & memoryBarriers, const std::vector< VkBufferMemoryBarrier > & bufferMemoryBarriers, const std::vector< VkImageMemoryBarrier > & imageMemoryBarriers, VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask, VkDependencyFlags dependencyFlags) const noexcept
+	CommandBuffer::pipelineBarrier (std::span< const VkMemoryBarrier > memoryBarriers, std::span< const VkBufferMemoryBarrier > bufferMemoryBarriers, std::span< const VkImageMemoryBarrier > imageMemoryBarriers, VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask, VkDependencyFlags dependencyFlags) const noexcept
 	{
 		if constexpr ( IsDebug )
 		{
@@ -609,7 +610,7 @@ namespace EmEn::Vulkan
 	}
 
 	void
-	CommandBuffer::pipelineBarrier (const std::vector< VkMemoryBarrier > & memoryBarriers, VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask, VkDependencyFlags dependencyFlags) const noexcept
+	CommandBuffer::pipelineBarrier (std::span< const VkMemoryBarrier > memoryBarriers, VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask, VkDependencyFlags dependencyFlags) const noexcept
 	{
 		if constexpr ( IsDebug )
 		{
@@ -640,7 +641,7 @@ namespace EmEn::Vulkan
 	}
 
 	void
-	CommandBuffer::pipelineBarrier (const std::vector< VkBufferMemoryBarrier > & bufferMemoryBarriers, VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask, VkDependencyFlags dependencyFlags) const noexcept
+	CommandBuffer::pipelineBarrier (std::span< const VkBufferMemoryBarrier > bufferMemoryBarriers, VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask, VkDependencyFlags dependencyFlags) const noexcept
 	{
 		if constexpr ( IsDebug )
 		{
@@ -671,7 +672,7 @@ namespace EmEn::Vulkan
 	}
 
 	void
-	CommandBuffer::pipelineBarrier (const std::vector< VkImageMemoryBarrier > & imageMemoryBarriers, VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask, VkDependencyFlags dependencyFlags) const noexcept
+	CommandBuffer::pipelineBarrier (std::span< const VkImageMemoryBarrier > imageMemoryBarriers, VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask, VkDependencyFlags dependencyFlags) const noexcept
 	{
 		if constexpr ( IsDebug )
 		{
@@ -832,7 +833,7 @@ namespace EmEn::Vulkan
 	}
 
 	void
-	CommandBuffer::waitEvents (const std::vector< VkEvent > & events, VkPipelineStageFlags srcFlags, VkPipelineStageFlags dstFlags, const std::vector< VkMemoryBarrier > & memoryBarriers, const std::vector< VkBufferMemoryBarrier > & bufferMemoryBarriers, const std::vector< VkImageMemoryBarrier > & imageMemoryBarriers) const noexcept
+	CommandBuffer::waitEvents (std::span< const VkEvent > events, VkPipelineStageFlags srcFlags, VkPipelineStageFlags dstFlags, std::span< const VkMemoryBarrier > memoryBarriers, std::span< const VkBufferMemoryBarrier > bufferMemoryBarriers, std::span< const VkImageMemoryBarrier > imageMemoryBarriers) const noexcept
 	{
 		if constexpr ( IsDebug )
 		{

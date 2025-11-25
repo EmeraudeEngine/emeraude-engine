@@ -352,6 +352,21 @@ namespace EmEn::Saphir::Generator
 		const auto * renderableInstance = this->getRenderableInstance();
 		const auto * renderable = renderableInstance->renderable();
 
+		/* NOTE: Use dynamic viewport and scissor to avoid pipeline recreation on window resize. */
+		{
+			const StaticVector< VkDynamicState, 16 > dynamicStates{
+				VK_DYNAMIC_STATE_VIEWPORT,
+				VK_DYNAMIC_STATE_SCISSOR
+			};
+
+			if ( !graphicsPipeline.configureDynamicStates(dynamicStates) )
+			{
+				Tracer::error(ClassId, "Unable to configure the graphics pipeline dynamic states !");
+
+				return false;
+			}
+		}
+
 		if ( !graphicsPipeline.configureRasterizationState(m_renderPassType, renderable->layerRasterizationOptions(this->layerIndex())) )
 		{
 			Tracer::error(ClassId, "Unable to configure the graphics pipeline rasterization state !");
@@ -372,7 +387,7 @@ namespace EmEn::Saphir::Generator
 
 			return false;
 		}
-		
+
 		return true;
 	}
 }

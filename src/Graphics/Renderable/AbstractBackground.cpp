@@ -38,7 +38,7 @@ namespace EmEn::Graphics::Renderable
 	using namespace Libs::VertexFactory;
 
 	std::shared_ptr< Geometry::IndexedVertexResource >
-	AbstractBackground::getSkyBoxGeometry (Resources::ServiceProvider & serviceProvider) noexcept
+	AbstractBackground::getSkyBoxGeometry (Resources::AbstractServiceProvider & serviceProvider) noexcept
 	{
 		auto * geometries = serviceProvider.container< Geometry::IndexedVertexResource >();
 
@@ -65,7 +65,7 @@ namespace EmEn::Graphics::Renderable
 	}
 
 	std::shared_ptr< Geometry::IndexedVertexResource >
-	AbstractBackground::getSkyDomeGeometry (Resources::ServiceProvider & serviceProvider) noexcept
+	AbstractBackground::getSkyDomeGeometry (Resources::AbstractServiceProvider & serviceProvider) noexcept
 	{
 		auto * geometries = serviceProvider.container< Geometry::IndexedVertexResource >();
 

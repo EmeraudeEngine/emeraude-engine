@@ -1,18 +1,23 @@
 ---
 Language: Cpp
+Standard: c++20
 BasedOnStyle: LLVM
+
+# Indentation
 AccessModifierOffset: -4
-AlignConsecutiveAssignments: false
-AlignConsecutiveDeclarations: false
-AlignOperands: false
-AlignTrailingComments: false
-AllowShortBlocksOnASingleLine: false
-AllowShortFunctionsOnASingleLine: None
-AllowShortIfStatementsOnASingleLine: false
-AlwaysBreakAfterDefinitionReturnType: true
-AlwaysBreakAfterReturnType: AllDefinitions
-AlwaysBreakTemplateDeclarations: Yes
-BraceWrapping: 
+IndentAccessModifiers: true
+IndentCaseLabels: true
+IndentWidth: 4
+TabWidth: 4
+UseTab: Always
+NamespaceIndentation: All
+
+# Column limit - 0 = pas de reformatage des longues lignes
+ColumnLimit: 0
+
+# Braces (Allman style)
+BreakBeforeBraces: Custom
+BraceWrapping:
   AfterCaseLabel: true
   AfterClass: true
   AfterControlStatement: true
@@ -30,13 +35,63 @@ BraceWrapping:
   SplitEmptyFunction: true
   SplitEmptyRecord: true
   SplitEmptyNamespace: true
-BreakBeforeBraces: Custom
+
+# Line breaks
+AlwaysBreakAfterDefinitionReturnType: true
+AlwaysBreakAfterReturnType: AllDefinitions
+AlwaysBreakTemplateDeclarations: Yes
 BreakBeforeTernaryOperators: false
+
+# Constructor initializers - ":" sur nouvelle ligne, virgule à la fin
+BreakConstructorInitializers: BeforeColon
 BreakConstructorInitializersBeforeComma: false
-ColumnLimit: 120
 ConstructorInitializerAllOnOneLineOrOnePerLine: false
+PackConstructorInitializers: Never
+
+# Short forms
+AllowShortBlocksOnASingleLine: false
+AllowShortFunctionsOnASingleLine: None
+AllowShortIfStatementsOnASingleLine: false
+
+# Alignment
+AlignConsecutiveAssignments: false
+AlignConsecutiveDeclarations: false
+AlignOperands: false
+AlignTrailingComments: false
+
+# Spaces - parenthèses pour control statements SEULEMENT (if, for, while)
+SpacesInParentheses: false
+SpacesInConditionalStatement: true
+SpacesInCStyleCastParentheses: false
+SpacesInAngles: true
+SpaceInEmptyParentheses: false
+
+# Pas d'espace dans les accolades d'initialisation
+Cpp11BracedListStyle: true
+SpaceBeforeCpp11BracedList: false
+
+# Space before parentheses
+SpaceBeforeParens: Custom
+SpaceBeforeParensOptions:
+  AfterControlStatements: true
+  AfterFunctionDeclarationName: true
+  AfterFunctionDefinitionName: true
+  AfterOverloadedOperator: true
+
+# Other spaces
+SpaceAfterTemplateKeyword: false
+
+# Pointer alignment
+PointerAlignment: Middle
+ReferenceAlignment: Middle
+
+# Empty lines
 EmptyLineAfterAccessModifier: Always
-IncludeCategories: 
+MaxEmptyLinesToKeep: 2
+
+# Includes
+SortIncludes: false
+IncludeCategories:
   - Regex: '^<.*'
     Priority: 1
   - Regex: '^".*'
@@ -44,21 +99,10 @@ IncludeCategories:
   - Regex: '.*'
     Priority: 3
 IncludeIsMainRegex: '([-_](test|unittest))?$'
-IndentAccessModifiers: True
-IndentCaseLabels: true
-IndentWidth: 4
+
+# Other
+FixNamespaceComments: false
 InsertNewlineAtEOF: true
 MacroBlockBegin: ''
 MacroBlockEnd: ''
-MaxEmptyLinesToKeep: 2
-NamespaceIndentation: All
-PointerAlignment: Middle
-SpaceAfterTemplateKeyword: false
-SpaceInEmptyParentheses: false
-SpacesInAngles: true
-SpacesInConditionalStatement: true
-SpacesInCStyleCastParentheses: false
-SpacesInParentheses: false
-TabWidth: 4
-UseTab: Always
 ...

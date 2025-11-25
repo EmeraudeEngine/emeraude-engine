@@ -36,7 +36,7 @@ namespace EmEn::Graphics::Renderable
 	using namespace Libs::Math;
 
 	bool
-	DynamicSkyResource::load (Resources::ServiceProvider & /*serviceProvider*/) noexcept
+	DynamicSkyResource::load (Resources::AbstractServiceProvider & /*serviceProvider*/) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
@@ -49,7 +49,7 @@ namespace EmEn::Graphics::Renderable
 	}
 
 	bool
-	DynamicSkyResource::load (Resources::ServiceProvider & /*serviceProvider*/, const Json::Value & /*data*/) noexcept
+	DynamicSkyResource::load (Resources::AbstractServiceProvider & /*serviceProvider*/, const Json::Value & /*data*/) noexcept
 	{
 		if ( !this->beginLoading() )
 		{

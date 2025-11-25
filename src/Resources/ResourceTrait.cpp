@@ -193,6 +193,20 @@ namespace EmEn::Resources
 			return true;
 		}
 
+		/* NOTE: Check for circular dependency.
+		 * We walk up the dependency's parent chain to see if 'this' resource appears.
+		 * If it does, adding this dependency would create a cycle and cause a deadlock. */
+		if ( this->wouldCreateCycle(dependency) ) [[unlikely]]
+		{
+			TraceError{TracerTag} <<
+				"Circular dependency detected ! Adding '" << dependency->name() << "' (" << dependency->classLabel() << ") "
+				"as a dependency of '" << this->name() << "' (" << this->classLabel() << ") would create a cycle !";
+
+			m_status = Status::Failed;
+
+			return false;
+		}
+
 		/* NOTE: Adds the dependency to wait for being loaded ... */
 		m_dependenciesToWaitFor.push_back(dependency);
 
@@ -220,8 +234,12 @@ namespace EmEn::Resources
 				"is loaded from resource '" << this->name() << "' (" << this->classLabel() << ") !";
 		}
 
-		/* NOTE: Removes the loaded resource from dependencies. */
-		std::erase(m_dependenciesToWaitFor, dependency);
+		{
+			const std::lock_guard< std::mutex > lock{m_dependenciesAccess};
+
+			/* NOTE: Removes the loaded resource from dependencies. */
+			std::erase(m_dependenciesToWaitFor, dependency);
+		}
 
 		/* Launch an overall check for dependency loading. */
 		this->checkDependencies();
@@ -230,40 +248,80 @@ namespace EmEn::Resources
 	void
 	ResourceTrait::checkDependencies () noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_dependenciesAccess};
+		/* NOTE: We need to track what actions to take outside the lock to avoid
+		 * calling virtual methods (onDependenciesLoaded) and observer notifications
+		 * while holding the mutex, which could cause deadlocks. */
+		enum class Action { None, CallOnDependenciesLoaded };
+		Action pendingAction = Action::None;
 
-		/* NOTE: First, we check the current resource status. */
-		switch ( m_status )
 		{
-			/* For these statuses, there is no need to check dependencies now. */
-			case Status::Unloaded :
-			case Status::Enqueuing :
-			case Status::ManualEnqueuing :
-				if ( s_verboseEnabled )
-				{
-					TraceInfo{TracerTag} << "The resource '" << this->name() << "' (" << this->classLabel() << ") still enqueuing dependencies !";
-				}
-				break;
+			const std::lock_guard< std::mutex > lock{m_dependenciesAccess};
 
-			/* This is the state where we want to know if dependencies are loaded. */
-			case Status::Loading :
+			/* NOTE: First, we check the current resource status. */
+			switch ( m_status )
 			{
-				/* NOTE: If any of the dependencies are in a loading state. */
-				if ( std::ranges::any_of(m_dependenciesToWaitFor, [] (const auto & dependency) {return !dependency->isLoaded();}) )
-				{
-					return;
-				}
+				/* For these statuses, there is no need to check dependencies now. */
+				case Status::Unloaded :
+				case Status::Enqueuing :
+				case Status::ManualEnqueuing :
+					if ( s_verboseEnabled )
+					{
+						TraceInfo{TracerTag} << "The resource '" << this->name() << "' (" << this->classLabel() << ") still enqueuing dependencies !";
+					}
+					break;
 
-				if ( s_verboseEnabled )
+				/* This is the state where we want to know if dependencies are loaded. */
+				case Status::Loading :
 				{
-					TraceInfo{TracerTag} << "The resource '" << this->name() << "' (" << this->classLabel() << ") has no more dependency to wait for loading !";
-				}
+					/* NOTE: If any of the dependencies are in a loading state. */
+					if ( std::ranges::any_of(m_dependenciesToWaitFor, [] (const auto & dependency) {return !dependency->isLoaded();}) )
+					{
+						return;
+					}
 
-				if ( this->onDependenciesLoaded() )
+					if ( s_verboseEnabled )
+					{
+						TraceInfo{TracerTag} << "The resource '" << this->name() << "' (" << this->classLabel() << ") has no more dependency to wait for loading !";
+					}
+
+					/* NOTE: Mark that we need to call onDependenciesLoaded() outside the lock. */
+					pendingAction = Action::CallOnDependenciesLoaded;
+				}
+					break;
+
+				case Status::Loaded :
+					if ( !m_dependenciesToWaitFor.empty() )
+					{
+						TraceError{TracerTag} << "The resource '" << this->name() << "' (" << this->classLabel() << ") status is loaded, but still have " << m_dependenciesToWaitFor.size() << " dependencies.";
+					}
+
+					/* NOTE: We don't want to check again dependencies. */
+					break;
+
+				case Status::Failed :
+				default:
+					TraceError{TracerTag} <<
+						"The resource '" << this->name() << "' (" << this->classLabel() << ") status is failed ! "
+						"This resource should be removed !";
+					break;
+			}
+		}
+
+		/* NOTE: Execute pending actions outside the lock to prevent deadlocks.
+		 * Virtual method calls and observer notifications happen here. */
+		if ( pendingAction == Action::CallOnDependenciesLoaded )
+		{
+			const bool success = this->onDependenciesLoaded();
+
+			/* NOTE: We need to re-acquire the lock to update status and get parents list. */
+			std::vector< std::shared_ptr< ResourceTrait > > parentsToNotifyCopy;
+
+			{
+				const std::lock_guard< std::mutex > lock{m_dependenciesAccess};
+
+				if ( success )
 				{
 					m_status = Status::Loaded;
-
-					this->notify(LoadFinished, this->name());
 
 					if ( s_verboseEnabled )
 					{
@@ -272,13 +330,8 @@ namespace EmEn::Resources
 
 					if ( !this->isTopResource() )
 					{
-						/* We want to notice parents the resource is loaded. */
-						for ( const auto & parent : m_parentsToNotify )
-						{
-							parent->dependencyLoaded(this->shared_from_this());
-						}
-
-						/* Once notified, we don't need to keep tracks of parents. */
+						/* Copy parents list to notify outside lock. */
+						parentsToNotifyCopy = std::move(m_parentsToNotify);
 						m_parentsToNotify.clear();
 					}
 				}
@@ -286,31 +339,27 @@ namespace EmEn::Resources
 				{
 					m_status = Status::Failed;
 
-					this->notify(LoadFailed, this->name());
-
 					if ( s_verboseEnabled )
 					{
 						TraceError{TracerTag} << "Resource '" << this->name() << "' (" << this->classLabel() << ") failed to load !";
 					}
 				}
 			}
-				break;
 
-			case Status::Loaded :
-				if ( !m_dependenciesToWaitFor.empty() )
+			/* NOTE: Notify observers and parents outside the lock. */
+			if ( success )
+			{
+				this->notify(LoadFinished, this->name());
+
+				for ( const auto & parent : parentsToNotifyCopy )
 				{
-					TraceError{TracerTag} << "The resource '" << this->name() << "' (" << this->classLabel() << ") status is loaded, but still have " << m_dependenciesToWaitFor.size() << " dependencies.";
+					parent->dependencyLoaded(this->shared_from_this());
 				}
-
-				/* NOTE: We don't want to check again dependencies. */
-				break;
-
-			case Status::Failed :
-			default:
-				TraceError{TracerTag} <<
-					"The resource '" << this->name() << "' (" << this->classLabel() << ") status is failed ! "
-					"This resource should be removed !";
-				break;
+			}
+			else
+			{
+				this->notify(LoadFailed, this->name());
+			}
 		}
 	}
 
@@ -384,7 +433,7 @@ namespace EmEn::Resources
 	}
 
 	bool
-	ResourceTrait::load (ServiceProvider & serviceProvider, const std::filesystem::path & filepath) noexcept
+	ResourceTrait::load (AbstractServiceProvider & serviceProvider, const std::filesystem::path & filepath) noexcept
 	{
 		const auto root = FastJSON::getRootFromFile(filepath);
 
@@ -420,5 +469,33 @@ namespace EmEn::Resources
 		{
 			return String::removeFileExtension(filename);
 		}
+	}
+
+	bool
+	ResourceTrait::wouldCreateCycle (const std::shared_ptr< ResourceTrait > & dependency) const noexcept
+	{
+		/* NOTE: Direct self-reference check. */
+		if ( dependency.get() == this )
+		{
+			return true;
+		}
+
+		/* NOTE: Check if 'this' resource appears in the dependency's dependency chain.
+		 * We perform a depth-first search through all dependencies. */
+		for ( const auto & subDependency : dependency->m_dependenciesToWaitFor )
+		{
+			if ( subDependency.get() == this )
+			{
+				return true;
+			}
+
+			/* Recursive check for deeper cycles. */
+			if ( this->wouldCreateCycle(subDependency) )
+			{
+				return true;
+			}
+		}
+
+		return false;
 	}
 }

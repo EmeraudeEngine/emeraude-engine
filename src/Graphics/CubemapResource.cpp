@@ -42,7 +42,7 @@ namespace EmEn::Graphics
 	using namespace Libs::PixelFactory;
 
 	bool
-	CubemapResource::load (Resources::ServiceProvider & /*serviceProvider*/) noexcept
+	CubemapResource::load (Resources::AbstractServiceProvider & /*serviceProvider*/) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
@@ -140,7 +140,7 @@ namespace EmEn::Graphics
 	}
 
 	bool
-	CubemapResource::load (Resources::ServiceProvider & serviceProvider, const std::filesystem::path & filepath) noexcept
+	CubemapResource::load (Resources::AbstractServiceProvider & serviceProvider, const std::filesystem::path & filepath) noexcept
 	{
 		/* Check for a JSON file. */
 		if ( IO::getFileExtension(filepath) == "json" )
@@ -162,7 +162,7 @@ namespace EmEn::Graphics
 	}
 
 	bool
-	CubemapResource::load (Resources::ServiceProvider & serviceProvider, const Json::Value & data) noexcept
+	CubemapResource::load (Resources::AbstractServiceProvider & serviceProvider, const Json::Value & data) noexcept
 	{
 		if ( !this->beginLoading() )
 		{

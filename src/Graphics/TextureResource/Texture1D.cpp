@@ -31,6 +31,7 @@
 #include "Vulkan/Image.hpp"
 #include "Vulkan/ImageView.hpp"
 #include "Vulkan/Sampler.hpp"
+#include "Graphics/Renderer.hpp"
 
 namespace EmEn::Graphics::TextureResource
 {
@@ -59,11 +60,95 @@ namespace EmEn::Graphics::TextureResource
 	}
 
 	bool
-	Texture1D::createTexture (Renderer & /*renderer*/) noexcept
+	Texture1D::createTexture (Renderer & renderer) noexcept
 	{
-		Tracer::error(ClassId, "Not yet implemented !");
+		if ( !this->validateTexture(m_localData->data(), !renderer.vulkanInstance().isStandardTextureCheckEnabled()) )
+		{
+			return false;
+		}
 
-		return false;
+		auto & settings = renderer.primaryServices().settings();
+
+		const auto mipLevels = std::min(
+			Image::getMIPLevels(m_localData->width(), 1),
+			settings.getOrSetDefault< uint32_t >(GraphicsTextureMipMappingLevelsKey, DefaultGraphicsTextureMipMappingLevels)
+		);
+
+		/* Create a Vulkan image. */
+		m_image = std::make_shared< Vulkan::Image >(
+			renderer.device(),
+			VK_IMAGE_TYPE_1D,
+			Image::getFormat< uint8_t >(m_localData->data().colorCount()),
+			VkExtent3D{m_localData->width(), 1U, 1U},
+			VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+			0,
+			mipLevels
+		);
+		m_image->setIdentifier(ClassId, this->name(), "Image");
+
+		if ( !m_image->create(renderer.transferManager(), m_localData) )
+		{
+			Tracer::error(ClassId, "Unable to create an image !");
+
+			m_image.reset();
+
+			return false;
+		}
+
+		/* Create a Vulkan image view. */
+		m_imageView = std::make_shared< ImageView >(
+			m_image,
+			VK_IMAGE_VIEW_TYPE_1D,
+			VkImageSubresourceRange{
+				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+				.baseMipLevel = 0,
+				.levelCount = m_image->createInfo().mipLevels,
+				.baseArrayLayer = 0,
+				.layerCount = m_image->createInfo().arrayLayers
+			}
+		);
+		m_imageView->setIdentifier(ClassId, this->name(), "ImageView");
+
+		if ( !m_imageView->createOnHardware() )
+		{
+			Tracer::error(ClassId, "Unable to create an image view !");
+
+			return false;
+		}
+
+		/* Get a Vulkan sampler. */
+		m_sampler = renderer.getSampler("Texture1D", [] (Settings & settings, VkSamplerCreateInfo & createInfo) {
+			const auto magFilter = settings.getOrSetDefault< std::string >(GraphicsTextureMagFilteringKey, DefaultGraphicsTextureFiltering);
+			const auto minFilter = settings.getOrSetDefault< std::string >(GraphicsTextureMinFilteringKey, DefaultGraphicsTextureFiltering);
+			const auto mipmapMode = settings.getOrSetDefault< std::string >(GraphicsTextureMipFilteringKey, DefaultGraphicsTextureFiltering);
+			const auto mipLevels = settings.getOrSetDefault< float >(GraphicsTextureMipMappingLevelsKey, DefaultGraphicsTextureMipMappingLevels);
+
+			//createInfo.flags = 0;
+			createInfo.magFilter = magFilter == "linear" ? VK_FILTER_LINEAR : VK_FILTER_NEAREST;
+			createInfo.minFilter = minFilter == "linear" ? VK_FILTER_LINEAR : VK_FILTER_NEAREST;
+			createInfo.mipmapMode = mipmapMode == "linear" ? VK_SAMPLER_MIPMAP_MODE_LINEAR : VK_SAMPLER_MIPMAP_MODE_NEAREST;
+			//createInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+			//createInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+			//createInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+			//createInfo.mipLodBias = 0.0F;
+			createInfo.anisotropyEnable = VK_FALSE; /* NOTE: Anisotropy is not supported for 1D textures. */
+			createInfo.maxAnisotropy = 1.0F;
+			//createInfo.compareEnable = VK_FALSE;
+			//createInfo.compareOp = VK_COMPARE_OP_ALWAYS;
+			//createInfo.minLod = 0.0F;
+			createInfo.maxLod = mipLevels > 0.0F ? mipLevels : VK_LOD_CLAMP_NONE;
+			//createInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+			//createInfo.unnormalizedCoordinates = VK_FALSE;
+		});
+
+		if ( m_sampler == nullptr )
+		{
+			Tracer::error(ClassId, "Unable to get a sampler !");
+
+			return false;
+		}
+
+		return true;
 	}
 
 	bool
@@ -93,7 +178,7 @@ namespace EmEn::Graphics::TextureResource
 	bool
 	Texture1D::isGrayScale () const noexcept
 	{
-		if ( m_localData == nullptr )
+		if ( !this->isLoaded() )
 		{
 			return false;
 		}
@@ -104,7 +189,7 @@ namespace EmEn::Graphics::TextureResource
 	PixelFactory::Color< float >
 	Texture1D::averageColor () const noexcept
 	{
-		if ( m_localData == nullptr )
+		if ( !this->isLoaded() )
 		{
 			return PixelFactory::Black;
 		}
@@ -113,7 +198,7 @@ namespace EmEn::Graphics::TextureResource
 	}
 
 	bool
-	Texture1D::load (Resources::ServiceProvider & serviceProvider) noexcept
+	Texture1D::load (Resources::AbstractServiceProvider & serviceProvider) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
@@ -127,11 +212,11 @@ namespace EmEn::Graphics::TextureResource
 			return this->setLoadSuccess(false);
 		}
 
-		return this->setLoadSuccess(false);
+		return this->setLoadSuccess(true);
 	}
 
 	bool
-	Texture1D::load (Resources::ServiceProvider & serviceProvider, const std::filesystem::path & filepath) noexcept
+	Texture1D::load (Resources::AbstractServiceProvider & serviceProvider, const std::filesystem::path & filepath) noexcept
 	{
 		return this->load(serviceProvider.container< ImageResource >()->getResource(
 			ResourceTrait::getResourceNameFromFilepath(filepath, "Images"),
@@ -140,7 +225,7 @@ namespace EmEn::Graphics::TextureResource
 	}
 
 	bool
-	Texture1D::load (Resources::ServiceProvider & /*serviceProvider*/, const Json::Value & /*data*/) noexcept
+	Texture1D::load (Resources::AbstractServiceProvider & /*serviceProvider*/, const Json::Value & /*data*/) noexcept
 	{
 		/* NOTE: This resource has no local store,
 		 * so this method won't be called from a resource container! */

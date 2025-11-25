@@ -36,7 +36,7 @@ namespace EmEn::Graphics::Renderable
 	using namespace Libs::Math;
 
 	bool
-	WaterLevelResource::load (Resources::ServiceProvider & serviceProvider) noexcept
+	WaterLevelResource::load (Resources::AbstractServiceProvider & serviceProvider) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
@@ -66,7 +66,7 @@ namespace EmEn::Graphics::Renderable
 	}
 
 	bool
-	WaterLevelResource::load (Resources::ServiceProvider & /*serviceProvider*/, const Json::Value & /*data*/) noexcept
+	WaterLevelResource::load (Resources::AbstractServiceProvider & /*serviceProvider*/, const Json::Value & /*data*/) noexcept
 	{
 		if ( !this->beginLoading() )
 		{

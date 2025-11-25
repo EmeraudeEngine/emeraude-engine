@@ -35,7 +35,6 @@
 #include <cmath>
 #include <cstring>
 #include <cassert>
-#include <ostream>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -118,7 +117,7 @@ namespace EmEn::Libs::PixelFactory
 					explicit
 					operator Color< color_data_t >() const noexcept
 					{
-						return m_pixmap->template pixel< color_data_t >(m_index);
+						return m_pixmap->pixel< color_data_t >(m_index);
 					}
 
 				private:
@@ -158,7 +157,7 @@ namespace EmEn::Libs::PixelFactory
 					reference
 					operator* () const noexcept
 					{
-						return m_pixmap->template pixel< color_data_t >(m_index);
+						return m_pixmap->pixel< color_data_t >(m_index);
 					}
 
 					ConstPixmapIterator &
@@ -218,7 +217,7 @@ namespace EmEn::Libs::PixelFactory
 					reference
 					operator[] (difference_type n) const
 					{
-						return m_pixmap->template pixel< color_data_t >(m_index + n);
+						return m_pixmap->pixel< color_data_t >(m_index + n);
 					}
 
 					auto
@@ -821,12 +820,12 @@ namespace EmEn::Libs::PixelFactory
 
 					auto begin () const
 					{
-						return m_pixmap->template cbegin< color_data_t >();
+						return m_pixmap->cbegin< color_data_t >();
 					}
 
 					auto end () const
 					{
-						return m_pixmap->template cend< color_data_t >();
+						return m_pixmap->cend< color_data_t >();
 					}
 				};
 
@@ -947,7 +946,7 @@ namespace EmEn::Libs::PixelFactory
 			 */
 			[[nodiscard]]
 			dimension_t
-			x (size_t pixelIndex) const noexcept
+			x (dimension_t pixelIndex) const noexcept
 			{
 				assert(pixelIndex < this->pixelCount());
 
@@ -961,7 +960,7 @@ namespace EmEn::Libs::PixelFactory
 			 */
 			[[nodiscard]]
 			dimension_t
-			y (size_t pixelIndex) const noexcept
+			y (dimension_t pixelIndex) const noexcept
 			{
 				assert(pixelIndex < this->pixelCount());
 
@@ -978,7 +977,7 @@ namespace EmEn::Libs::PixelFactory
 			template< typename output_t = float >
 			[[nodiscard]]
 			output_t
-			u (size_t pixelIndex) const noexcept requires (std::is_floating_point_v< output_t >)
+			u (dimension_t pixelIndex) const noexcept requires (std::is_floating_point_v< output_t >)
 			{
 				return static_cast< output_t >(this->x(pixelIndex)) / static_cast< output_t >(m_width - 1);
 			}
@@ -993,7 +992,7 @@ namespace EmEn::Libs::PixelFactory
 			template< typename output_t = float >
 			[[nodiscard]]
 			float
-			v (size_t pixelIndex) const noexcept requires (std::is_floating_point_v< output_t >)
+			v (dimension_t pixelIndex) const noexcept requires (std::is_floating_point_v< output_t >)
 			{
 				return static_cast< output_t >(this->y(pixelIndex)) / static_cast< output_t >(m_height - 1);
 			}
@@ -1002,10 +1001,10 @@ namespace EmEn::Libs::PixelFactory
 			 * @brief Returns the pixel buffer index by its image coordinates.
 			 * @param coordX The X coordinate of the pixel.
 			 * @param coordY The Y coordinate of the pixel.
-			 * @return size_t
+			 * @return dimension_t
 			 */
 			[[nodiscard]]
-			size_t
+			dimension_t
 			pixelIndex (dimension_t coordX, dimension_t coordY) const noexcept
 			{
 				assert(coordX < m_width && coordY < m_height);
@@ -2714,7 +2713,7 @@ namespace EmEn::Libs::PixelFactory
 					{
 						Algorithms::PerlinNoise< float > generator{randomizer.value(0U, std::numeric_limits< uint32_t >::max())};
 
-						for ( size_t index = 0; index < limit; ++index )
+						for ( dimension_t index = 0; index < limit; ++index )
 						{
 							const auto offset = index * stride;
 
@@ -2729,7 +2728,7 @@ namespace EmEn::Libs::PixelFactory
 						{
 							Algorithms::PerlinNoise< float > generator{randomizer.value(0U, std::numeric_limits< uint32_t >::max())};
 
-							for ( size_t index = 0; index < limit; ++index )
+							for ( dimension_t index = 0; index < limit; ++index )
 							{
 								const auto offset = index * stride;
 								const auto value = generator.generate8bits(this->u(index) * scale, this->v(index) * scale);
@@ -2745,7 +2744,7 @@ namespace EmEn::Libs::PixelFactory
 							Algorithms::PerlinNoise< float > greenGenerator{randomizer.value(0U, std::numeric_limits< uint32_t >::max())};
 							Algorithms::PerlinNoise< float > blueGenerator{randomizer.value(0U, std::numeric_limits< uint32_t >::max())};
 
-							for ( size_t index = 0; index < limit; ++index )
+							for ( dimension_t index = 0; index < limit; ++index )
 							{
 								const auto offset = index * stride;
 								const auto uCoord = this->u(index) * scale;

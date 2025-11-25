@@ -136,7 +136,7 @@ namespace EmEn::Graphics::Geometry
 	}
 
 	bool
-	AdaptiveVertexGridResource::load (Resources::ServiceProvider & /*serviceProvider*/) noexcept
+	AdaptiveVertexGridResource::load (Resources::AbstractServiceProvider & /*serviceProvider*/) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
@@ -149,7 +149,7 @@ namespace EmEn::Graphics::Geometry
 	}
 
 	bool
-	AdaptiveVertexGridResource::load (Resources::ServiceProvider & /*serviceProvider*/, const Json::Value & /*data*/) noexcept
+	AdaptiveVertexGridResource::load (Resources::AbstractServiceProvider & /*serviceProvider*/, const Json::Value & /*data*/) noexcept
 	{
 		if ( !this->beginLoading() )
 		{

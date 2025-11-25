@@ -31,7 +31,7 @@ namespace EmEn::Graphics::Renderable
 	using namespace Libs;
 
 	bool
-	ColorBackgroundResource::load (Resources::ServiceProvider & /*serviceProvider*/) noexcept
+	ColorBackgroundResource::load (Resources::AbstractServiceProvider & /*serviceProvider*/) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
@@ -44,7 +44,7 @@ namespace EmEn::Graphics::Renderable
 	}
 
 	bool
-	ColorBackgroundResource::load (Resources::ServiceProvider & /*serviceProvider*/, const Json::Value & /*data*/) noexcept
+	ColorBackgroundResource::load (Resources::AbstractServiceProvider & /*serviceProvider*/, const Json::Value & /*data*/) noexcept
 	{
 		if ( !this->beginLoading() )
 		{

@@ -26,57 +26,83 @@
 
 #include "CursorAtlas.hpp"
 
+/* STL inclusions. */
+#include <ranges>
+
 /* Local inclusions. */
+#include "Graphics/ImageResource.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn
 {
 	using namespace Libs;
-	
-	void
-	CursorAtlas::setCursor (Window & window, CursorType cursorType) noexcept
-	{
-		auto cursorIt = m_standardCursors.find(cursorType);
 
-		if ( cursorIt == m_standardCursors.end() )
+	namespace
+	{
+		/**
+		 * @brief Converts a CursorType enum to the corresponding GLFW cursor shape constant.
+		 * @param cursorType The cursor type to convert.
+		 * @return The GLFW cursor shape constant.
+		 */
+		[[nodiscard]]
+		constexpr int
+		toGLFWCursorShape (CursorType cursorType) noexcept
 		{
 			switch ( cursorType )
 			{
 				case CursorType::Arrow :
-					cursorIt = m_standardCursors.emplace(cursorType, glfwCreateStandardCursor(GLFW_ARROW_CURSOR)).first;
-					break;
+					return GLFW_ARROW_CURSOR;
 
 				case CursorType::TextInput :
-					cursorIt = m_standardCursors.emplace(cursorType, glfwCreateStandardCursor(GLFW_IBEAM_CURSOR)).first;
-					break;
+					return GLFW_IBEAM_CURSOR;
 
 				case CursorType::Crosshair :
-					cursorIt = m_standardCursors.emplace(cursorType, glfwCreateStandardCursor(GLFW_CROSSHAIR_CURSOR)).first;
-					break;
+					return GLFW_CROSSHAIR_CURSOR;
 
 				case CursorType::Hand :
-					cursorIt = m_standardCursors.emplace(cursorType, glfwCreateStandardCursor(GLFW_HAND_CURSOR)).first;
-					break;
+					return GLFW_HAND_CURSOR;
 
 				case CursorType::HorizontalResize :
-					cursorIt = m_standardCursors.emplace(cursorType, glfwCreateStandardCursor(GLFW_HRESIZE_CURSOR)).first;
-					break;
+					return GLFW_HRESIZE_CURSOR;
 
 				case CursorType::VerticalResize :
-					cursorIt = m_standardCursors.emplace(cursorType, glfwCreateStandardCursor(GLFW_VRESIZE_CURSOR)).first;
-					break;
+					return GLFW_VRESIZE_CURSOR;
 			}
+
+			return GLFW_ARROW_CURSOR;
+		}
+	}
+
+	CursorAtlas::~CursorAtlas () noexcept
+	{
+		this->clear();
+	}
+
+	void
+	CursorAtlas::setCursor (Window & window, CursorType cursorType) noexcept
+	{
+		const auto index = static_cast< size_t >(cursorType);
+
+		if ( index >= StandardCursorCount )
+		{
+			return;
+		}
+
+		if ( m_standardCursors[index] == nullptr )
+		{
+			m_standardCursors[index] = glfwCreateStandardCursor(toGLFWCursorShape(cursorType));
 		}
 
 		if ( !window.isWindowLessMode() )
 		{
-			glfwSetCursor(window.handle(), cursorIt->second);
+			glfwSetCursor(window.handle(), m_standardCursors[index]);
 		}
 	}
 
 	void
-	CursorAtlas::setCursor (Window & window, const std::string & label, const std::array< int, 2 > & size, unsigned char * data, const std::array< int, 2 > & hotSpot) noexcept
+	CursorAtlas::setCursor (Window & window, std::string_view label, const std::array< int, 2 > & size, unsigned char * data, const std::array< int, 2 > & hotSpot) noexcept
 	{
+		/* Heterogeneous lookup: no allocation if cursor already exists. */
 		auto cursorIt = m_customCursors.find(label);
 
 		if ( cursorIt == m_customCursors.end() )
@@ -87,7 +113,8 @@ namespace EmEn
 				.pixels = data
 			};
 
-			cursorIt = m_customCursors.emplace(label, glfwCreateCursor(&cursorImage, hotSpot[0], hotSpot[1])).first;
+			/* Only allocate std::string when inserting a new cursor. */
+			cursorIt = m_customCursors.emplace(std::string{label}, glfwCreateCursor(&cursorImage, hotSpot[0], hotSpot[1])).first;
 		}
 
 		if ( !window.isWindowLessMode() )
@@ -97,7 +124,7 @@ namespace EmEn
 	}
 
 	void
-	CursorAtlas::setCursor (Window & window, const std::string & label, PixelFactory::Pixmap< uint8_t > pixmap, const std::array< int, 2 > & hotSpot) noexcept
+	CursorAtlas::setCursor (Window & window, std::string_view label, PixelFactory::Pixmap< uint8_t > pixmap, const std::array< int, 2 > & hotSpot) noexcept
 	{
 		if ( pixmap.colorCount() != 4 )
 		{
@@ -106,6 +133,7 @@ namespace EmEn
 			return;
 		}
 
+		/* Heterogeneous lookup: no allocation if cursor already exists. */
 		auto cursorIt = m_customCursors.find(label);
 
 		if ( cursorIt == m_customCursors.end() )
@@ -116,13 +144,25 @@ namespace EmEn
 				.pixels = pixmap.pixelPointer(0)
 			};
 
-			cursorIt = m_customCursors.emplace(label, glfwCreateCursor(&cursorImage, hotSpot[0], hotSpot[1])).first;
+			/* Only allocate std::string when inserting a new cursor. */
+			cursorIt = m_customCursors.emplace(std::string{label}, glfwCreateCursor(&cursorImage, hotSpot[0], hotSpot[1])).first;
 		}
 
 		if ( !window.isWindowLessMode() )
 		{
 			glfwSetCursor(window.handle(), cursorIt->second);
 		}
+	}
+
+	void
+	CursorAtlas::setCursor (Window & window, const std::shared_ptr< Graphics::ImageResource > & imageResource, const std::array< int, 2 > & hotSpot) noexcept
+	{
+		if ( !imageResource->isLoaded() )
+		{
+			return;
+		}
+
+		this->setCursor(window, imageResource->name(), imageResource->data(), hotSpot);
 	}
 
 	void
@@ -139,12 +179,14 @@ namespace EmEn
 	void
 	CursorAtlas::clear () noexcept
 	{
-		for ( const auto & cursor : m_standardCursors | std::views::values )
+		for ( auto & cursor : m_standardCursors )
 		{
-			glfwDestroyCursor(cursor);
+			if ( cursor != nullptr )
+			{
+				glfwDestroyCursor(cursor);
+				cursor = nullptr;
+			}
 		}
-
-		m_standardCursors.clear();
 
 		for ( const auto & cursor : m_customCursors | std::views::values )
 		{

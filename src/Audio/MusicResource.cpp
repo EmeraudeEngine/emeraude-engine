@@ -91,7 +91,7 @@ namespace EmEn::Audio
 	}
 
 	bool
-	MusicResource::load (Resources::ServiceProvider & /*serviceProvider*/) noexcept
+	MusicResource::load (Resources::AbstractServiceProvider & /*serviceProvider*/) noexcept
 	{
 		if ( !Manager::isAudioSystemAvailable() )
 		{
@@ -120,7 +120,7 @@ namespace EmEn::Audio
 	}
 
 	bool
-	MusicResource::load (Resources::ServiceProvider & /*serviceProvider*/, const std::filesystem::path & filepath) noexcept
+	MusicResource::load (Resources::AbstractServiceProvider & /*serviceProvider*/, const std::filesystem::path & filepath) noexcept
 	{
 		if ( !Manager::isAudioSystemAvailable() )
 		{
@@ -189,7 +189,7 @@ namespace EmEn::Audio
 	}
 
 	bool
-	MusicResource::load (Resources::ServiceProvider & /*serviceProvider*/, const Json::Value & /*data*/) noexcept
+	MusicResource::load (Resources::AbstractServiceProvider & /*serviceProvider*/, const Json::Value & /*data*/) noexcept
 	{
 		if ( !Manager::isAudioSystemAvailable() )
 		{

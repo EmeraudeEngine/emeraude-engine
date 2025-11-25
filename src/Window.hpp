@@ -126,8 +126,8 @@ namespace EmEn
 				OSNotifiesWindowSizeMaximized,
 				OSNotifiesWindowSizeMinimized,
 				OSNotifiesWindowResized,
-				OSNotifiesFramebufferResized, /* This is the most important notification. */
-				OSRequestsToRescaleContentBy,
+				OSNotifiesFramebufferResized, /* This tells the graphics framebuffer should be resized. */
+				OSRequestsToRescaleContentBy, /* This tells the graphics framebuffer should be resized according to the new scale. */
 				OSRequestsToRefreshContent,
 				OSRequestsToTerminate,
 				/* Enumeration boundary. */
@@ -192,6 +192,27 @@ namespace EmEn
 			isWindowLessMode () const noexcept
 			{
 				return m_windowLess;
+			}
+
+			/**
+			 * @brief Return whether the framebuffer has been resized.
+			 * @return @
+			 */
+			[[nodiscard]]
+			bool
+			isFramebufferResized () const noexcept
+			{
+				return m_framebufferResized;
+			}
+
+			/**
+			 * @brief Tells the framebuffer resize has been taken care of.
+			 * @return void
+			 */
+			void
+			resetFramebufferResizeFlag () noexcept
+			{
+				m_framebufferResized = false;
 			}
 
 			/**
@@ -269,12 +290,13 @@ namespace EmEn
 			void setTitle (const std::string & title) noexcept;
 
 			/**
-			 * @brief Resizes programmatically the window size. This function takes care of the fullscreen/window mode.
+			 * @brief Resizes programmatically the window size.
+			 * @note This function takes care of the fullscreen/window mode.
 			 * @param width The new width.
 			 * @param height The new height.
 			 * @return bool
 			 */
-			bool resize (int32_t width, int32_t height) const noexcept;
+			bool resize (int32_t width, int32_t height) noexcept;
 
 			/**
 			 * @brief Sets the window position on the desktop.
@@ -758,5 +780,6 @@ namespace EmEn
 			bool m_showInformation{false};
 			bool m_windowLess{false};
 			bool m_saveWindowPropertiesAtExit{false};
+			bool m_framebufferResized{false};
 	};
 }

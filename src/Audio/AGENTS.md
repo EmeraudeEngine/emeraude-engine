@@ -1,12 +1,12 @@
-# Audio System - Development Context
+# Audio System
 
 Context spécifique pour le développement du système audio spatial 3D d'Emeraude Engine.
 
-## 🎯 Vue d'ensemble du module
+## Vue d'ensemble du module
 
 Système audio 3D basé sur OpenAL-Soft avec support complet des effets spatiaux, streaming de musique, et intégration transparente avec le scene graph via des components SoundEmitter.
 
-## 📋 Règles spécifiques à Audio/
+## Règles spécifiques à Audio/
 
 ### Convention de coordonnées
 - **Y-DOWN obligatoire** dans l'abstraction Audio
@@ -30,7 +30,7 @@ Système audio 3D basé sur OpenAL-Soft avec support complet des effets spatiaux
 - `MusicResource` : Gestion du chargement des musiques
 - Pattern fail-safe : Ressources audio neutres en cas d'échec
 
-## 🛠️ Commandes de développement
+## Commandes de développement
 
 ```bash
 # Tests audio
@@ -38,7 +38,7 @@ ctest -R Audio
 ./test --filter="*Audio*"
 ```
 
-## 🔗 Fichiers importants
+## Fichiers importants
 
 - `Manager.cpp/.hpp` - Gestionnaire principal (devices, activation, capture)
 - `SoundResource.cpp/.hpp` - Chargement et gestion des sons (mono)
@@ -46,11 +46,13 @@ ctest -R Audio
 - `Source.cpp/.hpp` - Abstraction des sources OpenAL (pool)
 - `Speaker.cpp/.hpp` - Abstraction point d'écoute (non-OpenAL, cohérence API)
 - `TrackMixer.cpp/.hpp` - Jukebox pour gestion de playlists
-- `Ambiencer.cpp/.hpp` - Sons d'ambiance (piste unique + effets aléatoires)
+- `Ambience.cpp/.hpp` - Sons d'ambiance (loop channel + effets aléatoires, State enum)
+- `AmbienceChannel.hpp` - Canal individuel pour effets sonores d'ambiance
+- `AmbienceSound.hpp` - Configuration d'un son d'ambiance
 - `Recorder.cpp/.hpp` - Enregistrement audio depuis microphone
 - `@docs/coordinate-system.md` - Convention Y-down (CRITIQUE)
 
-## ⚡ Patterns de développement
+## Patterns de développement
 
 ### Ajout d'un SoundEmitter à une entité
 1. Créer le component SoundEmitter
@@ -70,12 +72,37 @@ ctest -R Audio
 - Libération automatique en fin de lecture
 - Priorités gérables si pool saturé
 
-### Sons d'ambiance avec Ambiencer
-1. Configurer une piste de fond continue
+### Sons d'ambiance avec Ambience
+1. Configurer une piste de fond continue (loop channel)
 2. Ajouter des effets sonores aléatoires (probabilités, intervalles)
 3. Le système gère automatiquement le mix
 
-## 🚨 Points d'attention
+### Ambience State Management
+L'Ambience utilise un enum `State` pour son état de lecture. Voir `Ambience.hpp:State`
+
+**États de lecture (State enum):**
+- `Stopped` - Non démarré ou arrêté
+- `Playing` - En lecture active
+- `Paused` - En pause gameplay (sources gardées)
+
+**Deux niveaux de contrôle orthogonaux:**
+
+1. **Gameplay level** - `pause()`/`resume()`:
+   - Contrôle OpenAL direct, sources gardées en mémoire
+   - Usage: pause de jeu dans une scène active
+   - Voir `Ambience.cpp:pause()`, `Ambience.cpp:resume()`
+
+2. **Scene Manager level** - `suspend()`/`wakeup()`:
+   - Libère/réacquiert les sources vers le pool
+   - Usage: appelé par `Scene::disable()`/`enable()` lors du changement de scène
+   - Flag `m_suspended` orthogonal à `m_state`
+   - Voir `Ambience.cpp:suspend()`, `Ambience.cpp:wakeup()`
+
+**Comportement:**
+- Si pausé puis suspendu → au wakeup, restauré en état paused
+- `update()` ne traite que l'état `Playing`
+
+## Points d'attention
 
 - **Device detection** : OpenAL-Soft latest peut être capricieux sur laptops
 - **Format sons** : MONO obligatoire pour positionnement 3D spatial

@@ -341,6 +341,30 @@ namespace EmEn::Scenes::Component
 
 		protected:
 
+			/**
+			 * @brief Called when the scene is suspended (disabled).
+			 *
+			 * Components that manage pooled resources (audio sources, etc.)
+			 * should release them here and remember their state for onWakeup().
+			 *
+			 * @note Called by AbstractEntity::suspend().
+			 * @see onWakeup() To restore activity.
+			 * @version 0.8.35
+			 */
+			virtual void onSuspend () noexcept = 0;
+
+			/**
+			 * @brief Called when the scene wakes up (re-enabled).
+			 *
+			 * Components should reacquire pooled resources and restore
+			 * their state from before onSuspend().
+			 *
+			 * @note Called by AbstractEntity::wakeup().
+			 * @see onSuspend() To release resources.
+			 * @version 0.8.35
+			 */
+			virtual void onWakeup () noexcept = 0;
+
 			/* Flag names */
 			static constexpr auto EnablePhysicalProperties{0UL};
 			static constexpr auto UnusedFlag{1UL};
@@ -358,6 +382,9 @@ namespace EmEn::Scenes::Component
 			}
 
 		private:
+
+			/* Allow AbstractEntity to call onSuspend()/onWakeup() on components. */
+			friend class Scenes::AbstractEntity;
 
 			const AbstractEntity & m_parentEntity;
 			Physics::BodyPhysicalProperties m_bodyPhysicalProperties;

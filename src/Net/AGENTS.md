@@ -1,12 +1,12 @@
-# Net System - Development Context
+# Net System
 
 Context spécifique pour le développement du système de téléchargement réseau d'Emeraude Engine.
 
-## 🎯 Vue d'ensemble du module
+## Vue d'ensemble du module
 
 Système de téléchargement de ressources via réseau basé sur ASIO. Intégration transparente avec le système Resources pour chargement d'assets depuis URLs.
 
-## 📋 Règles spécifiques à Net/
+## Règles spécifiques à Net/
 
 ### Objectif principal
 - **Téléchargement de ressources** : Download d'assets/fichiers depuis URLs
@@ -50,7 +50,7 @@ auto texture = resources.container<TextureResource>()->getResource("https://exam
 - **Integration async Resources** : Compatible avec chargement asynchrone Resources
 - **Status tracking** : Resources peut suivre progression via observables
 
-## 🛠️ Commandes de développement
+## Commandes de développement
 
 ```bash
 # Tests net
@@ -58,13 +58,13 @@ ctest -R Net
 ./test --filter="*Net*"
 ```
 
-## 🔗 Fichiers importants
+## Fichiers importants
 
 - `Manager.cpp/.hpp` - Gestionnaire principal, requêtes de téléchargement
 - Cache local (emplacement à documenter)
 - `@docs/resource-management.md` - Integration avec Resources
 
-## ⚡ Patterns de développement
+## Patterns de développement
 
 ### Utilisation via Resources (automatique)
 ```cpp
@@ -106,7 +106,7 @@ netManager.clearCache();
 netManager.forceDownload(url, callback);
 ```
 
-## 🚨 Points d'attention
+## Points d'attention
 
 - **ASIO gère complexité** : Timeouts, retries, erreurs réseau gérés par ASIO
 - **Thread safety** : ASIO gère threading, Net thread-safe par design
@@ -115,9 +115,9 @@ netManager.forceDownload(url, callback);
 - **Fail-safe integration** : Échec download → Resources retourne neutral resource
 - **Pas de multijoueur** : Net est pour assets, pas gameplay networking
 
-## 📚 Documentation détaillée
+## Documentation détaillée
 
 Systèmes liés:
-→ **@docs/resource-management.md** - Integration automatique avec Resources
-→ **@src/Resources/AGENTS.md** - Système de chargement fail-safe
+- @docs/resource-management.md** - Integration automatique avec Resources
+- @src/Resources/AGENTS.md** - Système de chargement fail-safe
 → **ASIO documentation** - Détails sur protocoles et gestion réseau

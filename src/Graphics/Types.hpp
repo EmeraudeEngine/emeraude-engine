@@ -95,8 +95,10 @@ namespace EmEn::Graphics
 		SpotLightPass = 6,
 		SpotLightPassNoShadow = 7,
 		/* Enum value for invalid type. */
-		None = std::numeric_limits< uint8_t >::max()
+		None = 8
 	};
+
+	constexpr auto MaxPassCount = static_cast< size_t >(RenderPassType::None);
 
 	constexpr auto SimplePassString{"SimplePass"};
 	constexpr auto AmbientPassString{"AmbientPass"};

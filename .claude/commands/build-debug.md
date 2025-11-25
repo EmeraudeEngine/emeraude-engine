@@ -1,47 +1,36 @@
 ---
-description: Build Debug configuration (as configured)
+description: Build Debug configuration (incremental)
 ---
 
-Build the project in Debug mode using the existing configuration.
+Build the project in Debug mode.
 
-**Purpose:** Compile the Debug build based on current CMake configuration.
+**Purpose:** Compile and verify code builds successfully.
+
+**Build directory:** `.claude-build-debug`
 
 **Prerequisites:**
-- Configuration must exist (run `/config-debug-library` or `/config-debug-tests` first)
-- Build directory: `.claude-build-debug`
+- Must be configured first with `/config-build-debug`
 
 **Task:**
 
 1. **Verify configuration exists:**
-   - Check if `.claude-build-debug/` exists
-   - If missing, error: "No Debug configuration found. Run /config-debug-library or /config-debug-tests first"
+```bash
+if [ ! -d ".claude-build-debug" ]; then
+    echo "Error: No Debug configuration found. Run /config-build-debug first."
+    exit 1
+fi
+```
 
-2. **Build with appropriate command:**
-   ```bash
-   # All platforms:
-   cmake --build .claude-build-debug --config Debug
-   ```
-
-3. **Report build results:**
-   - Build progress
-   - Compilation warnings/errors
-   - Build time
-   - Number of targets built
-   - Success/failure status
+2. **Build:**
+```bash
+cmake --build .claude-build-debug --config Debug
+```
 
 **Output:**
-- Compiler output
-- Warning summary
-- Build statistics
-- Final status
+- Compilation result (success/errors)
+- Error details if failed
+- Build time
 
-**Error handling:**
-- If configuration missing: Prompt to run config command
-- If build fails: Show detailed error messages
-- If warnings: Summarize warning count and types
+**On error:** Fix the code and run `/build-debug` again.
 
-**Note:** Build speed depends on configuration (library-only is faster than with tests)
-
-**Next steps:**
-- If tests enabled: Run `/run-debug-tests`
-- If library-only: Test manually or integrate in application
+**For tests:** Use the `emeraude-test-orchestrator` agent instead.

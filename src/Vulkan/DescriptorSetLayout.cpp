@@ -130,7 +130,7 @@ namespace EmEn::Vulkan
 	}
 
 	size_t
-	DescriptorSetLayout::getHash (const Libs::StaticVector< VkDescriptorSetLayoutBinding, 16 > & bindings, VkDescriptorSetLayoutCreateFlags flags) noexcept
+	DescriptorSetLayout::computeHash (const Libs::StaticVector< VkDescriptorSetLayoutBinding, 16 > & bindings, VkDescriptorSetLayoutCreateFlags flags) noexcept
 	{
 		/* FIXME: Weak and unstable hash method !! */
 		size_t hashValue = 0;

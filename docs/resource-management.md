@@ -105,12 +105,13 @@ class ResourceTrait : public std::enable_shared_from_this<ResourceTrait>,
                       public NameableTrait, public FlagTrait, public ObservableTrait {
     std::vector<std::shared_ptr<ResourceTrait>> m_parentsToNotify;
     std::vector<std::shared_ptr<ResourceTrait>> m_dependenciesToWaitFor;
-    Status m_status;  // Unloaded, Loading, Loaded, Failed
+    std::atomic<Status> m_status{Status::Unloaded};  // Thread-safe status
+    std::mutex m_dependenciesAccess;  // Protects dependency lists
 
     // Loading lifecycle
-    virtual bool load(ServiceProvider&) = 0;  // Neutral resource (no params)
-    virtual bool load(ServiceProvider&, const std::filesystem::path&) = 0;
-    virtual bool load(ServiceProvider&, const Json::Value&) = 0;
+    virtual bool load(AbstractServiceProvider&) = 0;  // Neutral resource (no params)
+    virtual bool load(AbstractServiceProvider&, const std::filesystem::path&) = 0;
+    virtual bool load(AbstractServiceProvider&, const Json::Value&) = 0;
 
     // Dependency management
     bool addDependency(const std::shared_ptr<ResourceTrait>& dependency);
@@ -120,14 +121,18 @@ class ResourceTrait : public std::enable_shared_from_this<ResourceTrait>,
     bool isLoaded() const;
     bool isLoading() const;
     Status status() const;
+
+    // Circular dependency detection (internal)
+    bool wouldCreateCycle(const std::shared_ptr<ResourceTrait>& dependency) const noexcept;
 };
 ```
 
 **Responsibilities:**
-- **Dependency tracking**: Maintains parent-child relationships
-- **Loading states**: Tracks Unloaded → Loading → Loaded/Failed transitions
-- **Event propagation**: Notifies parents when dependencies complete
+- **Dependency tracking**: Maintains parent-child relationships with circular dependency detection
+- **Loading states**: Tracks Unloaded → Enqueuing → Loading → Loaded/Failed transitions
+- **Event propagation**: Notifies parents when dependencies complete (thread-safe)
 - **Finalization**: Provides hook (`onDependenciesLoaded`) for GPU upload, etc.
+- **Thread safety**: Atomic status + mutex-protected dependency lists
 
 ## The Neutral Resource Pattern (Critical!)
 
@@ -209,36 +214,82 @@ class MeshResource : public ResourceTrait {
 - Never fails to load
 - Immediately usable after creation
 
+### Image and Texture Resource Types
+
+The engine provides specialized image resources for different dimensions:
+
+| Resource Type | Data Storage | Dimensions | Used By |
+|--------------|--------------|------------|---------|
+| `ImageResource` | `Pixmap<uint8_t>` | 2D (width × height) | Texture1D, Texture2D, TextureCubemap |
+| `VolumetricImageResource` | `std::vector<uint8_t>` | 3D (width × height × depth) | Texture3D |
+| `CubemapImageResource` | 6 × `Pixmap<uint8_t>` | 6 faces | TextureCubemap |
+
+**VolumetricImageResource** (`Graphics/VolumetricImageResource.hpp`):
+```cpp
+class VolumetricImageResource : public ResourceTrait {
+    std::vector<uint8_t> m_data;
+    uint32_t m_width{0}, m_height{0}, m_depth{0};
+    uint32_t m_colorCount{4};  // RGBA
+
+    // Neutral resource: 32×32×32 RGB gradient cube
+    bool load(ServiceProvider&) override;
+
+    // File loading: TODO
+    bool load(ServiceProvider&, const std::filesystem::path&) override;
+};
+```
+
+Key methods: `data()`, `width()`, `height()`, `depth()`, `colorCount()`, `bytes()`, `isValid()`, `isGrayScale()`, `averageColor()`
+
 ## Resource Lifecycle and Dependency Chain
 
 ### Complete Resource Lifecycle
 
 ```
 ┌─────────────┐
-│  Unloaded   │  Initial state
+│  Unloaded   │  Initial state (Status::Unloaded)
 └──────┬──────┘
-       │ getResource() or addDependency()
+       │ initializeEnqueuing() called
        ▼
 ┌─────────────┐
-│   Loading   │  load() called, dependencies declared
+│  Enqueuing  │  Dependencies are being declared (Status::Enqueuing)
+│  (or Manual)│  For manual mode: Status::ManualEnqueuing
 └──────┬──────┘
-       │ All sub-resources finish
+       │ setLoadSuccess(true) called
        ▼
 ┌─────────────┐
-│onDependencies│  Finalization hook (GPU upload, etc.)
-│   Loaded()  │
+│   Loading   │  Waiting for dependencies to complete (Status::Loading)
 └──────┬──────┘
-       │ Finalization succeeds
+       │ All dependencies loaded (m_dependenciesToWaitFor empty)
+       ▼
+┌─────────────────┐
+│onDependencies   │  Virtual finalization hook (GPU upload, etc.)
+│   Loaded()      │  Called OUTSIDE mutex to prevent deadlocks
+└──────┬──────────┘
+       │ Returns true
        ▼
 ┌─────────────┐
-│   Loaded    │  Resource ready for use
+│   Loaded    │  Resource ready for use (Status::Loaded)
 └─────────────┘
 
-       OR (if fails)
+       OR (if any step fails)
        ▼
 ┌─────────────┐
-│   Failed    │  Container returns Default instead
+│   Failed    │  Container returns Default instead (Status::Failed)
 └─────────────┘
+```
+
+### Loading Status Enum
+
+```cpp
+enum class Status : uint8_t {
+    Unloaded = 0,        // Initial state
+    Enqueuing = 1,       // Auto mode: dependencies being added
+    ManualEnqueuing = 2, // Manual mode: user controls dependency addition
+    Loading = 3,         // No more deps can be added, waiting for completion
+    Loaded = 4,          // Ready for use
+    Failed = 5           // Load failed, resource unusable
+};
 ```
 
 ### Key Implementation Details
@@ -333,10 +384,72 @@ node->attachMesh(mesh);  // No checks needed!
 
 ### Thread Safety
 
-- All Container methods are protected by `std::mutex m_resourcesAccess`
-- Async loading happens in thread pool, results synchronized via mutex
-- ResourceTrait has `std::mutex m_dependenciesAccess` for dependency list
-- Client code doesn't need to worry about threading
+The resource system is designed for concurrent access from multiple threads:
+
+**Container Level:**
+- All Container methods protected by `std::mutex m_resourcesAccess`
+- Async loading happens in thread pool, synchronized via mutex
+
+**ResourceTrait Level:**
+- `std::atomic<Status> m_status` - Lock-free status queries from any thread
+- `std::mutex m_dependenciesAccess` - Protects parent/dependency lists
+- **Critical Pattern**: Virtual methods (`onDependenciesLoaded()`) and observer notifications are called **outside** the mutex lock to prevent deadlocks
+
+**Two-Phase Pattern in checkDependencies():**
+```cpp
+void ResourceTrait::checkDependencies() noexcept {
+    Action pendingAction = Action::None;
+
+    // Phase 1: Determine action under lock
+    {
+        const std::lock_guard<std::mutex> lock{m_dependenciesAccess};
+        if (allDependenciesLoaded()) {
+            pendingAction = Action::CallOnDependenciesLoaded;
+        }
+    }
+
+    // Phase 2: Execute action OUTSIDE lock (prevents deadlocks)
+    if (pendingAction == Action::CallOnDependenciesLoaded) {
+        const bool success = this->onDependenciesLoaded();  // Virtual call
+        // Re-acquire lock only for status update...
+    }
+}
+```
+
+**Client code doesn't need to worry about threading** - all synchronization is internal.
+
+### Circular Dependency Detection
+
+The system automatically detects and prevents circular dependencies:
+
+```cpp
+bool ResourceTrait::addDependency(const shared_ptr<ResourceTrait>& dependency) noexcept {
+    // ...
+    if (this->wouldCreateCycle(dependency)) [[unlikely]] {
+        TraceError{TracerTag} << "Circular dependency detected!";
+        m_status = Status::Failed;
+        return false;
+    }
+    // ...
+}
+```
+
+**Detection Algorithm (DFS):**
+```cpp
+bool ResourceTrait::wouldCreateCycle(const shared_ptr<ResourceTrait>& dep) const noexcept {
+    // Direct self-reference
+    if (dep.get() == this) return true;
+
+    // Recursive check through dependency's sub-dependencies
+    for (const auto& subDep : dep->m_dependenciesToWaitFor) {
+        if (subDep.get() == this) return true;
+        if (this->wouldCreateCycle(subDep)) return true;  // DFS
+    }
+    return false;
+}
+```
+
+This prevents deadlocks where A waits for B, and B waits for A.
 
 ### Garbage Collection
 
@@ -391,6 +504,9 @@ size_t Manager::unloadUnusedResources() {
 | **Fail-Safe** | Default resources as fallbacks for all failures | Application continues running |
 | **Async by Design** | Immediate return, background loading | No blocking, smooth experience |
 | **Dependency Aware** | Automatic tracking and propagation | Correct load order guaranteed |
+| **Cycle Detection** | Automatic circular dependency detection via DFS | Prevents deadlocks at runtime |
+| **Thread-Safe** | Atomic status + mutex-protected lists | Safe concurrent access |
+| **Deadlock-Free** | Virtual calls outside mutex locks | No lock ordering issues |
 | **Observable** | Event notifications for load state | Engine can react, client doesn't need to |
 | **Cached** | `shared_ptr` in Container for fast reuse | Performance optimization |
 | **Self-Cleaning** | Garbage collection based on `use_count()` | Automatic memory management |
@@ -399,3 +515,145 @@ size_t Manager::unloadUnusedResources() {
 ### Core Philosophy
 
 > "The resource manager's job is to provide a resource, no matter what. The client's job is to use it. That's it."
+
+## File Structure (v0.8.35+)
+
+```
+src/Resources/
+├── Types.hpp              # Enums (SourceType, Status, DepComplexity) + conversion functions
+├── ResourceTrait.hpp      # Base class + AbstractServiceProvider (merged)
+├── ResourceTrait.cpp      # Implementation (dependency management, cycle detection)
+├── Container.hpp          # Template Container<resource_t> (type-specific store)
+├── Manager.hpp            # Central Manager (access to all containers)
+├── Manager.cpp            # Manager implementation
+├── BaseInformation.hpp    # Resource metadata from store index files
+└── BaseInformation.cpp    # Parsing implementation
+```
+
+**Note:** `AbstractServiceProvider` has been merged into `ResourceTrait.hpp` as these classes are tightly coupled. The `requires std::is_base_of_v<ResourceTrait, resource_t>` constraint ensures type safety on container access.
+
+## Future Improvements (Suggestions)
+
+This section documents potential enhancements for future development.
+
+### 1. Optimize Circular Dependency Detection
+
+**Current:** Recursive DFS algorithm is O(n²) worst case for deep dependency graphs.
+
+**Suggestion:** Use visited node marking to avoid re-traversing:
+```cpp
+bool wouldCreateCycle(const shared_ptr<ResourceTrait>& dep,
+                      std::unordered_set<const ResourceTrait*>& visited) const noexcept {
+    if (dep.get() == this) return true;
+    if (visited.contains(dep.get())) return false;  // Already checked
+    visited.insert(dep.get());
+
+    for (const auto& sub : dep->m_dependenciesToWaitFor) {
+        if (this->wouldCreateCycle(sub, visited)) return true;
+    }
+    return false;
+}
+```
+
+**Benefit:** O(n) complexity, significant improvement for complex resource graphs.
+
+### 2. Loading Priority System
+
+**Current:** All resources are treated equally in the loading queue.
+
+**Suggestion:** Add priority levels to control loading order:
+```cpp
+enum class LoadPriority : uint8_t {
+    Critical = 0,   // UI, player model, essential audio
+    High = 1,       // Visible scene elements
+    Normal = 2,     // Standard resources
+    Low = 3,        // Background, preloading
+    Deferred = 4    // Load only when explicitly needed
+};
+
+class ResourceTrait {
+    LoadPriority m_priority{LoadPriority::Normal};
+    // ...
+};
+```
+
+**Benefit:** Faster perceived loading times by prioritizing visible/critical content.
+
+### 3. Progressive/Streaming Loading
+
+**Current:** Resources are either fully loaded or not loaded.
+
+**Suggestion:** Support progressive loading for large resources:
+```cpp
+enum class LoadLevel : uint8_t {
+    Metadata = 0,   // Size, format info only
+    Preview = 1,    // Low-res version (mipmap level 4+)
+    Standard = 2,   // Normal quality
+    Full = 3        // Maximum quality with all mipmaps
+};
+
+class TextureResource : public ResourceTrait {
+    LoadLevel m_currentLevel{LoadLevel::Metadata};
+    bool upgradeToLevel(LoadLevel target);
+    // ...
+};
+```
+
+**Benefit:** Faster initial scene display, smoother streaming for open-world scenarios.
+
+### 4. Enhanced Metrics and Profiling
+
+**Current:** Only `memoryOccupied()` is available.
+
+**Suggestion:** Add comprehensive statistics:
+```cpp
+struct ResourceMetrics {
+    size_t totalResources;
+    size_t loadedResources;
+    size_t failedResources;
+    size_t memoryUsedBytes;
+    size_t cacheHits;
+    size_t cacheMisses;
+    std::chrono::milliseconds totalLoadTime;
+    std::chrono::milliseconds averageLoadTime;
+    std::vector<std::pair<std::string, std::chrono::milliseconds>> slowestResources;
+};
+
+class Manager {
+    ResourceMetrics getMetrics() const;
+    void resetMetrics();
+    // ...
+};
+```
+
+**Benefit:** Better profiling, identification of bottlenecks, optimization guidance.
+
+### 5. Resource Groups / Bundles
+
+**Current:** Resources are loaded individually.
+
+**Suggestion:** Support grouped loading for scene transitions:
+```cpp
+class ResourceBundle {
+    std::string m_name;
+    std::vector<std::string> m_resourceNames;
+    LoadPriority m_priority;
+
+    void preloadAll();
+    void unloadAll();
+    bool isFullyLoaded() const;
+    float loadProgress() const;  // 0.0 to 1.0
+};
+```
+
+**Benefit:** Simplified scene management, better memory control, loading screen progress bars.
+
+### Implementation Priority
+
+| Suggestion | Complexity | Impact | Priority |
+|------------|------------|--------|----------|
+| Optimize cycle detection | Low | Medium | High |
+| Loading priorities | Medium | High | High |
+| Enhanced metrics | Low | Medium | Medium |
+| Resource bundles | Medium | High | Medium |
+| Progressive loading | High | High | Low |

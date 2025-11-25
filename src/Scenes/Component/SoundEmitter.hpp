@@ -266,6 +266,12 @@ namespace EmEn::Scenes::Component
 
 		private:
 
+			/** @copydoc EmEn::Scenes::Component::Abstract::onSuspend() */
+			void onSuspend () noexcept override;
+
+			/** @copydoc EmEn::Scenes::Component::Abstract::onWakeup() */
+			void onWakeup () noexcept override;
+
 			/** @copydoc EmEn::Animations::AnimatableInterface::playAnimation() */
 			bool playAnimation (uint8_t animationID, const Libs::Variant & value, size_t cycle) noexcept override;
 
@@ -302,6 +308,7 @@ namespace EmEn::Scenes::Component
 			static constexpr auto KeepInactiveSourceAlive{UnusedFlag + 0UL};
 			static constexpr auto Loop{UnusedFlag + 1UL};
 			static constexpr auto VelocityDistortionEnabled{UnusedFlag + 2UL};
+			static constexpr auto WasPlayingBeforeSuspend{UnusedFlag + 3UL};
 
 			Audio::SourceRequest m_source;
 			std::shared_ptr< Audio::SoundResource > m_attachedSound;

@@ -178,10 +178,10 @@ namespace EmEn::Graphics::Renderable
 			}
 
 			/** @copydoc EmEn::Resources::ResourceTrait::load(Resources::ServiceProvider &) */
-			bool load (Resources::ServiceProvider & serviceProvider) noexcept override;
+			bool load (Resources::AbstractServiceProvider & serviceProvider) noexcept override;
 
 			/** @copydoc EmEn::Resources::ResourceTrait::load(Resources::Manager &, const Json::Value &) */
-			bool load (Resources::ServiceProvider & serviceProvider, const Json::Value & data) noexcept override;
+			bool load (Resources::AbstractServiceProvider & serviceProvider, const Json::Value & data) noexcept override;
 
 			/** @copydoc EmEn::Resources::ResourceTrait::memoryOccupied() const noexcept */
 			[[nodiscard]]
@@ -200,7 +200,7 @@ namespace EmEn::Graphics::Renderable
 			 * @param rasterizationOptions A reference to rasterization options. Defaults.
 			 * @return bool
 			 */
-			bool load (Resources::ServiceProvider & serviceProvider, const std::shared_ptr< Material::Interface > & material, bool centerAtBottom = false, bool flip = false, const RasterizationOptions & rasterizationOptions = {}) noexcept;
+			bool load (Resources::AbstractServiceProvider & serviceProvider, const std::shared_ptr< Material::Interface > & material, bool centerAtBottom = false, bool flip = false, const RasterizationOptions & rasterizationOptions = {}) noexcept;
 
 			/**
 			 * @brief Sets the site of the sprite.
@@ -276,7 +276,7 @@ namespace EmEn::Graphics::Renderable
 			 * @param flip Flip the UV on X axis.
 			 * @return bool
 			 */
-			bool prepareGeometry (Resources::ServiceProvider & serviceProvider, bool isAnimated, bool centerAtBottom, bool flip) noexcept;
+			bool prepareGeometry (Resources::AbstractServiceProvider & serviceProvider, bool isAnimated, bool centerAtBottom, bool flip) noexcept;
 
 			/**
 			 * @brief Attaches the material resource.

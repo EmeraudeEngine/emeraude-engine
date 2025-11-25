@@ -1,12 +1,12 @@
-# Animations System - Development Context
+# Animations System
 
 Context spécifique pour le développement du système d'animations d'Emeraude Engine.
 
-## 🎯 Vue d'ensemble du module
+## Vue d'ensemble du module
 
 **Statut : EN CHANTIER** - Système d'animations squelettales en cours de développement.
 
-## 📋 Règles spécifiques à Animations/
+## Règles spécifiques à Animations/
 
 ### Périmètre du système
 - **Animations squelettales** : Skinning, déformation de mesh par squelette
@@ -23,7 +23,7 @@ Le système d'animations squelettales est actuellement en développement actif. 
 - Blending d'animations squelettales
 - Interfaces pour animation de valeurs personnalisées
 
-## 🛠️ Commandes de développement
+## Commandes de développement
 
 ```bash
 # Tests animations (quand disponibles)
@@ -31,19 +31,19 @@ ctest -R Animations
 ./test --filter="*Animation*"
 ```
 
-## 🔗 Fichiers importants
+## Fichiers importants
 
 À documenter lors de la stabilisation du système.
 
-## ⚡ Patterns de développement
+## Patterns de développement
 
 À documenter lors de la stabilisation du système.
 
-## 🚨 Points d'attention
+## Points d'attention
 
 - **En développement actif** : Architecture susceptible de changer
 - Consulter les développeurs avant modifications majeures
 
-## 📚 Documentation détaillée
+## Documentation détaillée
 
 Documentation à créer une fois le système stabilisé.

@@ -86,7 +86,7 @@ namespace EmEn::Graphics::Renderable
 	}
 
 	bool
-	MeshResource::load (Resources::ServiceProvider & serviceProvider) noexcept
+	MeshResource::load (Resources::AbstractServiceProvider & serviceProvider) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
@@ -107,7 +107,7 @@ namespace EmEn::Graphics::Renderable
 	}
 
 	std::shared_ptr< Geometry::Interface >
-	MeshResource::parseGeometry (Resources::ServiceProvider & serviceProvider, const Json::Value & data) noexcept
+	MeshResource::parseGeometry (Resources::AbstractServiceProvider & serviceProvider, const Json::Value & data) noexcept
 	{
 		/* Checks size option */
 		if ( data.isMember(BaseSizeKey) )
@@ -155,7 +155,7 @@ namespace EmEn::Graphics::Renderable
 	}
 
 	std::shared_ptr< Material::Interface >
-	MeshResource::parseLayer (Resources::ServiceProvider & serviceProvider, const Json::Value & data) noexcept
+	MeshResource::parseLayer (Resources::AbstractServiceProvider & serviceProvider, const Json::Value & data) noexcept
 	{
 		const auto materialType = FastJSON::getValidatedStringValue(data, MaterialTypeKey, Material::Types).value_or(BasicResource::ClassId);
 		const auto materialResourceName = FastJSON::getValue< std::string >(data, MaterialNameKey);
@@ -219,7 +219,7 @@ namespace EmEn::Graphics::Renderable
 	}
 
 	bool
-	MeshResource::load (Resources::ServiceProvider & serviceProvider, const Json::Value & data) noexcept
+	MeshResource::load (Resources::AbstractServiceProvider & serviceProvider, const Json::Value & data) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
@@ -402,7 +402,7 @@ namespace EmEn::Graphics::Renderable
 	}
 
 	std::shared_ptr< MeshResource >
-	MeshResource::getOrCreate (Resources::ServiceProvider & serviceProvider, const std::shared_ptr< Geometry::Interface > & geometryResource, const std::shared_ptr< Material::Interface > & materialResource, std::string resourceName) noexcept
+	MeshResource::getOrCreate (Resources::AbstractServiceProvider & serviceProvider, const std::shared_ptr< Geometry::Interface > & geometryResource, const std::shared_ptr< Material::Interface > & materialResource, std::string resourceName) noexcept
 	{
 		if ( resourceName.empty() )
 		{
@@ -415,7 +415,7 @@ namespace EmEn::Graphics::Renderable
 	}
 
 	std::shared_ptr< MeshResource >
-	MeshResource::getOrCreate (Resources::ServiceProvider & serviceProvider, const std::shared_ptr< Geometry::Interface > & geometryResource, const std::vector< std::shared_ptr< Material::Interface > > & materialResources, std::string resourceName) noexcept
+	MeshResource::getOrCreate (Resources::AbstractServiceProvider & serviceProvider, const std::shared_ptr< Geometry::Interface > & geometryResource, const std::vector< std::shared_ptr< Material::Interface > > & materialResources, std::string resourceName) noexcept
 	{
 		if ( resourceName.empty() )
 		{

@@ -441,9 +441,9 @@ namespace EmEn::Vulkan
 			 */
 			[[nodiscard]]
 			size_t
-			hash () const noexcept
+			getHash () const noexcept
 			{
-				return DescriptorSetLayout::getHash(m_setLayoutBindings, m_createInfo.flags);
+				return DescriptorSetLayout::computeHash(m_setLayoutBindings, m_createInfo.flags);
 			}
 
 			/**
@@ -451,7 +451,7 @@ namespace EmEn::Vulkan
 			 * @return size_t
 			 */
 			[[nodiscard]]
-			static size_t getHash (const Libs::StaticVector< VkDescriptorSetLayoutBinding, 16 > & bindings, VkDescriptorSetLayoutCreateFlags flags) noexcept;
+			static size_t computeHash (const Libs::StaticVector< VkDescriptorSetLayoutBinding, 16 > & bindings, VkDescriptorSetLayoutCreateFlags flags) noexcept;
 
 		private:
 

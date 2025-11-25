@@ -28,6 +28,7 @@
 
 /* STL inclusions. */
 #include <algorithm>
+#include <functional>
 
 /* Local inclusions. */
 #include "Graphics/VertexBufferFormat.hpp"
@@ -48,7 +49,21 @@ namespace EmEn::Vulkan
 	using namespace Graphics;
 	using namespace Saphir;
 
-	size_t GraphicsPipeline::s_fakeHash{0};
+	namespace
+	{
+		/**
+		 * @brief Combines a hash value with another value using a mixing function.
+		 * @tparam T The type of value to hash.
+		 * @param seed Reference to the current hash value that will be updated.
+		 * @param value The value to combine into the hash.
+		 */
+		template< typename T >
+		void
+		hashCombine (size_t & seed, const T & value) noexcept
+		{
+			seed ^= std::hash< T >{}(value) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+		}
+	}
 
 	bool
 	GraphicsPipeline::configureShaderStages (const StaticVector< std::shared_ptr< ShaderModule >, 5 > & shaderModules) noexcept
@@ -826,7 +841,7 @@ namespace EmEn::Vulkan
 
 		if ( !renderTarget.isReadyForRendering() )
 		{
-			TraceError{ClassId} << "The renderable target '" << renderTarget.id() << "' is not valid !";
+			TraceError{ClassId} << "The renderable target '" << renderTarget.id() << "' is not ready for rendering. Recreation from a resize (" << width << "x" << height << ") cancelled ...";
 
 			return false;
 		}
@@ -855,7 +870,7 @@ namespace EmEn::Vulkan
 
 		if ( !renderTarget.isReadyForRendering() )
 		{
-			TraceError{ClassId} << "The renderable target '" << renderTarget.id() << "' is not valid !";
+			TraceError{ClassId} << "The renderable target '" << renderTarget.id() << "' is not ready for rendering. General recreation cancelled ...";
 
 			return false;
 		}
@@ -927,9 +942,109 @@ namespace EmEn::Vulkan
 	}
 
 	size_t
-	GraphicsPipeline::getHash () noexcept
+	GraphicsPipeline::getHash () const noexcept
 	{
-		/* FIXME: Weak and unstable hash method !! */
-		return s_fakeHash++;
+		size_t hash = 0;
+
+		/* Hash shader stages. */
+		for ( const auto & stage : m_shaderStages )
+		{
+			hashCombine(hash, static_cast< uint32_t >(stage.stage));
+			hashCombine(hash, reinterpret_cast< uintptr_t >(stage.module));
+		}
+
+		/* Hash vertex input state. */
+		if ( m_createInfo.pVertexInputState != nullptr )
+		{
+			hashCombine(hash, m_vertexInputState.vertexBindingDescriptionCount);
+			hashCombine(hash, m_vertexInputState.vertexAttributeDescriptionCount);
+
+			for ( uint32_t index = 0; index < m_vertexInputState.vertexBindingDescriptionCount; ++index )
+			{
+				const auto & binding = m_vertexInputState.pVertexBindingDescriptions[index];
+				hashCombine(hash, binding.binding);
+				hashCombine(hash, binding.stride);
+				hashCombine(hash, static_cast< uint32_t >(binding.inputRate));
+			}
+
+			for ( uint32_t index = 0; index < m_vertexInputState.vertexAttributeDescriptionCount; ++index )
+			{
+				const auto & attribute = m_vertexInputState.pVertexAttributeDescriptions[index];
+				hashCombine(hash, attribute.location);
+				hashCombine(hash, attribute.binding);
+				hashCombine(hash, static_cast< uint32_t >(attribute.format));
+				hashCombine(hash, attribute.offset);
+			}
+		}
+
+		/* Hash input assembly state. */
+		if ( m_createInfo.pInputAssemblyState != nullptr )
+		{
+			hashCombine(hash, static_cast< uint32_t >(m_inputAssemblyState.topology));
+			hashCombine(hash, static_cast< uint32_t >(m_inputAssemblyState.primitiveRestartEnable));
+		}
+
+		/* Hash tessellation state. */
+		if ( m_createInfo.pTessellationState != nullptr )
+		{
+			hashCombine(hash, m_tessellationState.patchControlPoints);
+		}
+
+		/* Hash rasterization state. */
+		if ( m_createInfo.pRasterizationState != nullptr )
+		{
+			hashCombine(hash, static_cast< uint32_t >(m_rasterizationState.depthClampEnable));
+			hashCombine(hash, static_cast< uint32_t >(m_rasterizationState.rasterizerDiscardEnable));
+			hashCombine(hash, static_cast< uint32_t >(m_rasterizationState.polygonMode));
+			hashCombine(hash, static_cast< uint32_t >(m_rasterizationState.cullMode));
+			hashCombine(hash, static_cast< uint32_t >(m_rasterizationState.frontFace));
+			hashCombine(hash, static_cast< uint32_t >(m_rasterizationState.depthBiasEnable));
+		}
+
+		/* Hash multisample state. */
+		if ( m_createInfo.pMultisampleState != nullptr )
+		{
+			hashCombine(hash, static_cast< uint32_t >(m_multisampleState.rasterizationSamples));
+			hashCombine(hash, static_cast< uint32_t >(m_multisampleState.sampleShadingEnable));
+			hashCombine(hash, static_cast< uint32_t >(m_multisampleState.alphaToCoverageEnable));
+			hashCombine(hash, static_cast< uint32_t >(m_multisampleState.alphaToOneEnable));
+		}
+
+		/* Hash depth stencil state. */
+		if ( m_createInfo.pDepthStencilState != nullptr )
+		{
+			hashCombine(hash, static_cast< uint32_t >(m_depthStencilState.depthTestEnable));
+			hashCombine(hash, static_cast< uint32_t >(m_depthStencilState.depthWriteEnable));
+			hashCombine(hash, static_cast< uint32_t >(m_depthStencilState.depthCompareOp));
+			hashCombine(hash, static_cast< uint32_t >(m_depthStencilState.depthBoundsTestEnable));
+			hashCombine(hash, static_cast< uint32_t >(m_depthStencilState.stencilTestEnable));
+		}
+
+		/* Hash color blend state. */
+		if ( m_createInfo.pColorBlendState != nullptr )
+		{
+			hashCombine(hash, static_cast< uint32_t >(m_colorBlendState.logicOpEnable));
+			hashCombine(hash, static_cast< uint32_t >(m_colorBlendState.logicOp));
+
+			for ( const auto & attachment : m_colorBlendAttachments )
+			{
+				hashCombine(hash, static_cast< uint32_t >(attachment.blendEnable));
+				hashCombine(hash, static_cast< uint32_t >(attachment.srcColorBlendFactor));
+				hashCombine(hash, static_cast< uint32_t >(attachment.dstColorBlendFactor));
+				hashCombine(hash, static_cast< uint32_t >(attachment.colorBlendOp));
+				hashCombine(hash, static_cast< uint32_t >(attachment.srcAlphaBlendFactor));
+				hashCombine(hash, static_cast< uint32_t >(attachment.dstAlphaBlendFactor));
+				hashCombine(hash, static_cast< uint32_t >(attachment.alphaBlendOp));
+				hashCombine(hash, static_cast< uint32_t >(attachment.colorWriteMask));
+			}
+		}
+
+		/* Hash dynamic states. */
+		for ( const auto & dynamicState : m_dynamicStates )
+		{
+			hashCombine(hash, static_cast< uint32_t >(dynamicState));
+		}
+
+		return hash;
 	}
 }

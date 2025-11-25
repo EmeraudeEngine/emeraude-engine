@@ -75,7 +75,7 @@ namespace EmEn::Graphics::Geometry
 			options.enableNormalsGeneration();
 		}
 
-		if ( enableTextureCoordinatesGeneration && this->isFlagEnabled(EnablePrimaryTextureCoordinates) || this->isFlagEnabled(EnableSecondaryTextureCoordinates) )
+		if ( enableTextureCoordinatesGeneration && (this->isFlagEnabled(EnablePrimaryTextureCoordinates) || this->isFlagEnabled(EnableSecondaryTextureCoordinates)) )
 		{
 			options.enableTextureCoordinatesGeneration();
 		}

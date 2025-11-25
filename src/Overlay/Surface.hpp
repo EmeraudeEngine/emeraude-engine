@@ -28,6 +28,7 @@
 
 /* STL inclusions. */
 #include <array>
+#include <concepts>
 #include <string>
 
 /* Local inclusions for inheritance. */
@@ -48,8 +49,163 @@ namespace EmEn::Vulkan
 namespace EmEn::Overlay
 {
 	/**
+	 * @brief Defines the transition buffer synchronization status for async content providers.
+	 * @details Used to coordinate resize operations with asynchronous content providers
+	 * like CEF browsers, video decoders, or streaming sources.
+	 */
+	enum class TransitionBufferStatus : uint8_t
+	{
+		/** Transition buffer is ready. Drawing and committing are allowed. */
+		Ready,
+
+		/** Transition buffer is being recreated due to resize. Drawing is not allowed. */
+		Resizing,
+
+		/** Transition buffer has been recreated, waiting for async content.
+		 *  Drawing is allowed, call contentReady() when done. */
+		WaitingForContent
+	};
+
+	/**
+	 * @brief Encapsulates all resources for a single framebuffer.
+	 * @details This structure groups the local pixmap data with its corresponding
+	 * GPU resources (image, image view, descriptor set). Used internally by Surface
+	 * for both single and double buffer modes.
+	 */
+	struct Framebuffer final
+	{
+		/**
+		 * @brief Checks if all GPU resources are valid and created.
+		 * @return bool True if the framebuffer is ready for rendering.
+		 */
+		[[nodiscard]]
+		bool
+		isValid () const noexcept
+		{
+			return image != nullptr && image->isCreated() &&
+				   imageView != nullptr && imageView->isCreated() &&
+				   descriptorSet != nullptr && descriptorSet->isCreated();
+		}
+
+		/**
+		 * @brief Returns the framebuffer width in pixels.
+		 * @return uint32_t The width, or 0 if not initialized.
+		 */
+		[[nodiscard]]
+		uint32_t
+		width () const noexcept
+		{
+			if ( image != nullptr )
+			{
+				return image->createInfo().extent.width;
+			}
+
+			return pixmap.width();
+		}
+
+		/**
+		 * @brief Returns the framebuffer height in pixels.
+		 * @return uint32_t The height, or 0 if not initialized.
+		 */
+		[[nodiscard]]
+		uint32_t
+		height () const noexcept
+		{
+			if ( image != nullptr )
+			{
+				return image->createInfo().extent.height;
+			}
+
+			return pixmap.height();
+		}
+
+		/**
+		 * @brief Checks if the image dimensions match the given size.
+		 * @param targetWidth Target width in pixels.
+		 * @param targetHeight Target height in pixels.
+		 * @return bool True if dimensions match.
+		 */
+		[[nodiscard]]
+		bool
+		matchesSize (uint32_t targetWidth, uint32_t targetHeight) const noexcept
+		{
+			return this->width() == targetWidth && this->height() == targetHeight;
+		}
+
+		/**
+		 * @brief Destroys all GPU resources.
+		 * @return void
+		 */
+		void
+		destroy () noexcept
+		{
+			if ( descriptorSet != nullptr )
+			{
+				descriptorSet->destroy();
+				descriptorSet.reset();
+			}
+
+			if ( imageView != nullptr )
+			{
+				imageView->destroyFromHardware();
+				imageView.reset();
+			}
+
+			if ( image != nullptr )
+			{
+				image->destroyFromHardware();
+				image.reset();
+			}
+		}
+
+		/**
+		 * @brief Writes to the GPU image using memory mapping with RAII safety.
+		 * @details Maps the GPU memory, calls the provided function with the mapped pointer
+		 * and row pitch, then unmaps automatically. Only works when image is host visible.
+		 * @tparam write_func_t Function type accepting (void* mappedPtr, VkDeviceSize rowPitch) and returning bool.
+		 * @param writeFunction The function to call with the mapped memory.
+		 * @return bool True if mapping and write succeeded, false otherwise.
+		 */
+		template< typename write_func_t >
+		requires std::invocable< write_func_t, void *, VkDeviceSize > && std::convertible_to< std::invoke_result_t< write_func_t, void *, VkDeviceSize >, bool >
+		[[nodiscard]]
+		bool
+		writeWithMapping (write_func_t && writeFunction) const noexcept
+		{
+			if ( image == nullptr || !image->isHostVisible() )
+			{
+				return false;
+			}
+
+			void * mappedPtr = image->mapMemory();
+
+			if ( mappedPtr == nullptr )
+			{
+				return false;
+			}
+
+			const auto rowPitch = image->rowPitch();
+
+			const bool result = writeFunction(mappedPtr, rowPitch);
+
+			image->unmapMemory();
+
+			return result;
+		}
+
+		/** @brief Local pixmap data (CPU-side). Only used when memory mapping is disabled. */
+		Libs::PixelFactory::Pixmap< uint8_t > pixmap;
+		/** @brief Vulkan image on GPU. */
+		std::shared_ptr< Vulkan::Image > image;
+		/** @brief Vulkan image view for the image. */
+		std::shared_ptr< Vulkan::ImageView > imageView;
+		/** @brief Descriptor set binding the image for shader access. */
+		std::unique_ptr< Vulkan::DescriptorSet > descriptorSet;
+	};
+
+	/**
 	 * @brief The base class for overlay UIScreen surfaces.
-	 * @exception Libraries::NameableTrait A surface has a name.
+	 * @extends Libs::NameableTrait A surface has a name.
 	 */
 	class Surface : public Libs::NameableTrait
 	{
@@ -109,6 +265,35 @@ namespace EmEn::Overlay
 			~Surface () noexcept override = default;
 
 			/**
+			 * @brief Enables double buffering mode for asynchronous content providers.
+			 * @details When enabled, the surface uses a two-buffer system for smooth resize:
+			 * - activeBuffer: always used for normal read/write operations and GPU rendering
+			 * - transitionBuffer: prepared in background with new dimensions during resize
+			 * - When async content at new size is ready, buffers are swapped
+			 *
+			 * Use this for external renderers like CEF browsers, video decoders, or any
+			 * source that cannot provide content synchronously during resize.
+			 *
+			 * When disabled (default), resize operations block until complete.
+			 *
+			 * @warning Must be called BEFORE createOnHardware() for proper initialization.
+			 */
+			void
+			enableTransitionBuffer () noexcept
+			{
+				m_transitionBufferEnabled = true;
+			}
+
+			/**
+			 * @brief Enable the GPU image to be mappable from the CPU for direct writing
+			 */
+			void
+			enableMapping () noexcept
+			{
+				m_memoryMappingEnabled = true;
+			}
+
+			/**
 			 * @brief Returns the framebuffer properties from the overlay.
 			 * @return const FramebufferProperties &
 			 */
@@ -153,35 +338,37 @@ namespace EmEn::Overlay
 			}
 
 			/**
-			 * @brief Returns the pixmap from the front framebuffer.
-			 * @warning Use the front framebuffer mutex before writing into the pixmap with Surface::frontFramebufferMutex().
+			 * @brief Returns the pixmap from the active buffer.
+			 * @warning Use the active buffer mutex before writing into the pixmap with Surface::activeBufferMutex().
 			 * @return Libs::PixelFactory::Pixmap< uint8_t > &
 			 */
 			[[nodiscard]]
 			Libs::PixelFactory::Pixmap< uint8_t > &
-			frontPixmap () noexcept
+			activePixmap () noexcept
 			{
-				return m_frontLocalData;
+				return m_activeBuffer.pixmap;
 			}
 
 			/**
-			 * @brief Returns the pixmap from the back framebuffer.
+			 * @brief Returns the pixmap from the transition buffer.
+			 * @note Only meaningful when resize transition is enabled. Used during resize
+			 * to prepare content at the new size while the active buffer continues rendering.
 			 * @return Libs::PixelFactory::Pixmap< uint8_t > &
 			 */
 			[[nodiscard]]
 			Libs::PixelFactory::Pixmap< uint8_t > &
-			backPixmap () noexcept
+			transitionPixmap () noexcept
 			{
-				return m_backLocalData;
+				return m_transitionBuffer.pixmap;
 			}
 
 			/**
-			 * @brief Returns the mutex to access the front framebuffer for writing operation.
+			 * @brief Returns the mutex to access the active buffer for writing operation.
 			 * @return std::mutex &
 			 */
 			[[nodiscard]]
 			std::mutex &
-			frontFramebufferMutex () const noexcept
+			activeBufferMutex () const noexcept
 			{
 				return m_framebufferAccess;
 			}
@@ -331,6 +518,65 @@ namespace EmEn::Overlay
 			{
 				m_videoMemoryUpToDate = false;
 			}
+
+			/**
+			 * @brief Returns whether double buffering mode is enabled for async content.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isUsingTransferBuffer () const noexcept
+			{
+				return m_transitionBufferEnabled;
+			}
+
+			/**
+			 * @brief Disables the automatic pixmap copy when creating the transition buffer.
+			 * @details By default, when the transition buffer is created during resize,
+			 * the active buffer content is scaled and copied to the transition buffer.
+			 * This provides a placeholder image while waiting for new content.
+			 * Set this to true if you want the transition buffer to start empty/black.
+			 * @param disabled True to disable the copy, false to enable (default).
+			 */
+			void
+			disablePixmapCopyInTransitionBuffer (bool disabled) noexcept
+			{
+				m_disablePixmapCopyInTransitionBuffer = disabled;
+			}
+
+			/**
+			 * @brief Returns whether pixmap copy to transition buffer is disabled.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isPixmapCopyInTransitionBufferDisabled () const noexcept
+			{
+				return m_disablePixmapCopyInTransitionBuffer;
+			}
+
+			/**
+			 * @brief Returns the current transition buffer status.
+			 * @note Only meaningful when resize transition is enabled.
+			 * @return TransitionBufferStatus
+			 */
+			[[nodiscard]]
+			TransitionBufferStatus
+			transitionBufferStatus () const noexcept
+			{
+				return m_transitionBufferStatus;
+			}
+
+			/**
+			 * @brief Checks if the transition buffer is ready to be committed.
+			 * @details Returns true when the transition buffer has valid GPU resources
+			 * and is not currently being resized. Use this to check if it's safe to
+			 * call commitTransitionBuffer().
+			 * @warning Returns false and logs a warning if transition buffer mode is not enabled.
+			 * @return bool True if the transition buffer is ready for commit.
+			 */
+			[[nodiscard]]
+			bool isTransitionBufferReady () const noexcept;
 
 			/**
 			 * @brief Enables the listening of keyboard events.
@@ -540,15 +786,84 @@ namespace EmEn::Overlay
 			bool isBelowPoint (float positionX, float positionY) const noexcept;
 
 			/**
-			 * @brief Returns the surface descriptor set of the front buffer.
+			 * @brief Returns the surface descriptor set of the active buffer.
 			 * @return const Vulkan::DescriptorSet *
 			 */
 			[[nodiscard]]
 			const Vulkan::DescriptorSet *
 			descriptorSet () const noexcept
 			{
-				return m_frontDescriptorSet.get();
+				return m_activeBuffer.descriptorSet.get();
 			}
+
+			/**
+			 * @return Returns whether the image buffer is mappable.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isMemoryMappingEnabled () const noexcept
+			{
+				return m_memoryMappingEnabled;
+			}
+
+			/**
+			 * @brief Returns a reference to the active framebuffer.
+			 * @return const Framebuffer &
+			 */
+			[[nodiscard]]
+			const Framebuffer &
+			activeBuffer () const noexcept
+			{
+				return m_activeBuffer;
+			}
+
+			/**
+			 * @brief Returns a reference to the transition framebuffer.
+			 * @note Only meaningful when transition buffer mode is enabled.
+			 * @return const Framebuffer &
+			 */
+			[[nodiscard]]
+			const Framebuffer &
+			transitionBuffer () const noexcept
+			{
+				return m_transitionBuffer;
+			}
+
+			/**
+			 * @brief Writes to the active buffer GPU image using memory mapping.
+			 * @details Convenience method that wraps activeBuffer().writeWithMapping().
+			 * Maps the GPU memory, calls the provided function, then unmaps automatically.
+			 * @tparam write_func_t Function type accepting (void* mappedPtr, VkDeviceSize rowPitch) and returning bool.
+			 * @param writeFunction The function to call with the mapped memory.
+			 * @return bool True if mapping and write succeeded, false otherwise.
+			 */
+			template< typename write_func_t >
+			requires std::invocable< write_func_t, void *, VkDeviceSize > && std::convertible_to< std::invoke_result_t< write_func_t, void *, VkDeviceSize >, bool >
+			[[nodiscard]]
+			bool
+			writeActiveBufferWithMapping (write_func_t && writeFunction) const noexcept
+			{
+				return m_activeBuffer.writeWithMapping(std::forward< write_func_t >(writeFunction));
+			}
+
+			/**
+			 * @brief Writes to the transition buffer GPU image using memory mapping.
+			 * @details Convenience method that wraps transitionBuffer().writeWithMapping().
+			 * Maps the GPU memory, calls the provided function, then unmaps automatically.
+			 * @tparam write_func_t Function type accepting (void* mappedPtr, VkDeviceSize rowPitch) and returning bool.
+			 * @param writeFunction The function to call with the mapped memory.
+			 * @return bool True if mapping and write succeeded, false otherwise.
+			 */
+			template< typename write_func_t >
+			requires std::invocable< write_func_t, void *, VkDeviceSize > && std::convertible_to< std::invoke_result_t< write_func_t, void *, VkDeviceSize >, bool >
+			[[nodiscard]]
+			bool
+			writeTransitionBufferWithMapping (write_func_t && writeFunction) const noexcept
+			{
+				return m_transitionBuffer.writeWithMapping(std::forward< write_func_t >(writeFunction));
+			}
+
 			/**
 			 * @brief Creates the surface on the GPU.
 			 * @param renderer A reference to the graphics renderer.
@@ -564,19 +879,31 @@ namespace EmEn::Overlay
 			bool destroyFromHardware () noexcept;
 
 			/**
-			 * @brief Updates the local data changes to the GPU.
-			 * @note Surface::setVideoMemoryOutdated() method must be called first for actually do something here.
+			 * @brief Processes pending updates for this surface.
+			 * @details This method handles two types of updates:
+			 * 1. Size changes: If the surface was invalidated (via invalidate() or window resize),
+			 *    the back buffer is recreated at the new pixel dimensions. The front buffer
+			 *    continues to be used for rendering until swapFramebuffers() is called.
+			 * 2. Content changes: If setVideoMemoryOutdated() was called, the front buffer
+			 *    content is uploaded to GPU memory.
+			 * @note For asynchronous renderers (e.g., CEF), the back buffer preparation and
+			 * front buffer swap are decoupled to allow content to be ready before switching.
 			 * @param renderer A reference to the graphics renderer.
-			 * @return bool
-			 */
-			bool updateVideoMemory (Graphics::Renderer & renderer) noexcept;
-
-			/**
-			 * @brief Swaps the back framebuffer to front framebuffer.
-			 * @return bool
+			 * @return bool True if update succeeded, false on failure.
 			 */
 			[[nodiscard]]
-			bool swapFramebuffers () noexcept;
+			bool processUpdates (Graphics::Renderer & renderer) noexcept;
+
+			/**
+			 * @brief Commits the transition buffer, making it the new active buffer.
+			 * @details After a resize, call this to switch from the old active buffer
+			 * to the transition buffer (which has the new size and content).
+			 * The old active buffer becomes the new transition buffer for the next resize.
+			 * @warning Returns false and logs a warning if transition buffer mode is not enabled.
+			 * @return bool True on success, false if not ready to commit.
+			 */
+			[[nodiscard]]
+			bool commitTransitionBuffer () noexcept;
 
 			/**
 			 * @brief On key press event handler.
@@ -589,8 +916,14 @@ namespace EmEn::Overlay
 			 */
 			virtual
 			bool
-			onKeyPress (int32_t /*key*/, int32_t /*scancode*/, int32_t /*modifiers*/, bool /*repeat*/) noexcept
+			onKeyPress (int32_t key, int32_t scancode, int32_t modifiers, bool repeat) noexcept
 			{
+				/* Unused by default. */
+				static_cast< void >(key);
+				static_cast< void >(scancode);
+				static_cast< void >(modifiers);
+				static_cast< void >(repeat);
+
 				return false;
 			}
 
@@ -604,8 +937,13 @@ namespace EmEn::Overlay
 			 */
 			virtual
 			bool
-			onKeyRelease (int32_t /*key*/, int32_t /*scancode*/, int32_t /*modifiers*/) noexcept
+			onKeyRelease (int32_t key, int32_t scancode, int32_t modifiers) noexcept
 			{
+				/* Unused by default. */
+				static_cast< void >(key);
+				static_cast< void >(scancode);
+				static_cast< void >(modifiers);
+
 				return false;
 			}
 
@@ -617,8 +955,11 @@ namespace EmEn::Overlay
 			 */
 			virtual
 			bool
-			onCharacterType (uint32_t /*unicode*/) noexcept
+			onCharacterType (uint32_t unicode) noexcept
 			{
+				/* Unused by default. */
+				static_cast< void >(unicode);
+
 				return false;
 			}
 
@@ -631,9 +972,11 @@ namespace EmEn::Overlay
 			 */
 			virtual
 			void
-			onPointerEnter (float /*positionX*/, float /*positionY*/) noexcept
+			onPointerEnter (float positionX, float positionY) noexcept
 			{
-
+				/* Unused by default. */
+				static_cast< void >(positionX);
+				static_cast< void >(positionY);
 			}
 
 			/**
@@ -645,9 +988,11 @@ namespace EmEn::Overlay
 			 */
 			virtual
 			void
-			onPointerLeave (float /*positionX*/, float /*positionY*/) noexcept
+			onPointerLeave (float positionX, float positionY) noexcept
 			{
-
+				/* Unused by default. */
+				static_cast< void >(positionX);
+				static_cast< void >(positionY);
 			}
 
 			/**
@@ -659,8 +1004,12 @@ namespace EmEn::Overlay
 			 */
 			virtual
 			bool
-			onPointerMove (float /*positionX*/, float /*positionY*/) noexcept
+			onPointerMove (float positionX, float positionY) noexcept
 			{
+				/* Unused by default. */
+				static_cast< void >(positionX);
+				static_cast< void >(positionY);
+
 				return this->isBlockingEvent();
 			}
 
@@ -675,8 +1024,14 @@ namespace EmEn::Overlay
 			 */
 			virtual
 			bool
-			onButtonPress (float /*positionX*/, float /*positionY*/, int32_t /*buttonNumber*/, int32_t /*modifiers*/) noexcept
+			onButtonPress (float positionX, float positionY, int32_t buttonNumber, int32_t modifiers) noexcept
 			{
+				/* Unused by default. */
+				static_cast< void >(positionX);
+				static_cast< void >(positionY);
+				static_cast< void >(buttonNumber);
+				static_cast< void >(modifiers);
+
 				return this->isBlockingEvent();
 			}
 
@@ -691,8 +1046,14 @@ namespace EmEn::Overlay
 			 */
 			virtual
 			bool
-			onButtonRelease (float /*positionX*/, float /*positionY*/, int /*buttonNumber*/, int /*modifiers*/) noexcept
+			onButtonRelease (float positionX, float positionY, int buttonNumber, int modifiers) noexcept
 			{
+				/* Unused by default. */
+				static_cast< void >(positionX);
+				static_cast< void >(positionY);
+				static_cast< void >(buttonNumber);
+				static_cast< void >(modifiers);
+
 				return this->isBlockingEvent();
 			}
 
@@ -708,8 +1069,15 @@ namespace EmEn::Overlay
 			 */
 			virtual
 			bool
-			onMouseWheel (float /*positionX*/, float /*positionY*/, float /*xOffset*/, float /*yOffset*/, int32_t /*modifiers*/ = 0) noexcept
+			onMouseWheel (float positionX, float positionY, float xOffset, float yOffset, int32_t modifiers = 0) noexcept
 			{
+				/* Unused by default. */
+				static_cast< void >(positionX);
+				static_cast< void >(positionY);
+				static_cast< void >(xOffset);
+				static_cast< void >(yOffset);
+				static_cast< void >(modifiers);
+
 				return this->isBlockingEvent();
 			}
 
@@ -724,33 +1092,18 @@ namespace EmEn::Overlay
 			bool getSampler (Graphics::Renderer & renderer) noexcept;
 
 			/**
-			 * @brief Creates the Vulkan image for the back framebuffer.
-			 * @param renderer A reference to the renderer.
-			 * @return bool
-			 */
-			[[nodiscard]]
-			bool createImage (Graphics::Renderer & renderer) noexcept;
-
-			/**
-			 * @brief Creates the Vulkan image view for the back framebuffer.
-			 * @return bool
-			 */
-			[[nodiscard]]
-			bool createImageView () noexcept;
-
-			/**
-			 * @brief Creates the descriptor set for this surface for the back framebuffer.
+			 * @brief Creates all GPU resources for a framebuffer.
+			 * @details Creates the Vulkan image, image view, and descriptor set for the given
+			 * framebuffer structure. When memory mapping is disabled, the pixmap must be initialized
+			 * before calling this method. When memory mapping is enabled, width and height are used directly.
+			 * @param buffer A reference to the framebuffer to populate.
 			 * @param renderer A reference to the graphics renderer.
-			 * @return bool
+			 * @param width The texture width in pixels.
+			 * @param height The texture height in pixels.
+			 * @return bool True on success, false on failure.
 			 */
 			[[nodiscard]]
-			bool createDescriptorSet (Graphics::Renderer & renderer) noexcept;
-
-			/**
-			 * @brief Clears the back framebuffer.
-			 * @return void
-			 */
-			void clearBackFramebuffer () noexcept;
+			bool createFramebufferResources (Framebuffer & buffer, Graphics::Renderer & renderer, uint32_t width, uint32_t height) const noexcept;
 
 			/**
 			 * @brief Updates the model matrix to place the surface on screen.
@@ -767,14 +1120,37 @@ namespace EmEn::Overlay
 			bool updatePhysicalRepresentation (Graphics::Renderer & renderer) noexcept;
 
 			/**
-			 * @brief Event to override when the surface is ready.
-			 * @return void
+			 * @brief Called when the active buffer is ready for use.
+			 * @details Override this method to be notified when the active buffer has been
+			 * created or recreated. This is called:
+			 * - After initial creation in createOnHardware()
+			 * - After resize in single buffer mode (m_useTransitionBuffer = false)
+			 * @param framebuffer A reference to the active framebuffer.
 			 */
 			virtual
 			void
-			onSurfaceReadyForUsage () noexcept
+			onActiveBufferReady (Framebuffer & framebuffer) noexcept
 			{
-				/* Nothing to do here ... */
+				static_cast< void >(framebuffer);
+			}
+
+			/**
+			 * @brief Called when the transition buffer is ready for content.
+			 * @details Override this method to be notified when the transition buffer
+			 * has been recreated with a new size and is waiting for content.
+			 *
+			 * For async content providers (CEF, video decoder, etc.):
+			 * - Notify your external renderer to produce content at the new size
+			 * - Check isTransitionBufferReady() and call commitTransitionBuffer() when ready
+			 *
+			 * @note canDraw() returns true when this callback is invoked.
+			 * @param framebuffer A reference to the transition framebuffer.
+			 */
+			virtual
+			void
+			onTransitionBufferReady (Framebuffer & framebuffer) noexcept
+			{
+				static_cast< void >(framebuffer);
 			}
 
 			/**
@@ -785,40 +1161,21 @@ namespace EmEn::Overlay
 			 */
 			friend std::ostream & operator<< (std::ostream & out, const Surface & obj);
 
-			/* Flag names */
-			static constexpr auto VideoMemorySizeValid{0UL};
-			static constexpr auto VideoMemoryUpToDate{1UL};
-			static constexpr auto IsVisible{2UL};
-			static constexpr auto IsListeningKeyboard{3UL};
-			static constexpr auto IsListeningPointer{4UL};
-			static constexpr auto LockPointerMoveEvents{5UL};
-			static constexpr auto IsPointerWasOver{6UL};
-			static constexpr auto IsFocused{7UL};
-			static constexpr auto IsOpaque{8UL};
-			static constexpr auto IsAlphaTestEnabled{9UL};
-			static constexpr auto ProcessUnblockedPointerEvents{10UL};
-			static constexpr auto AutoSwapEnabled{11UL};
-			static constexpr auto ReadyToSwap{12UL};
-
 			const FramebufferProperties & m_framebufferProperties;
 			Libs::Math::Space2D::AARectangle< float > m_rectangle{0.0F, 0.0F, 1.0F, 1.0F};
 			Libs::Math::Matrix< 4, float > m_modelMatrix;
-			Libs::PixelFactory::Pixmap< uint8_t > m_frontLocalData;
-			Libs::PixelFactory::Pixmap< uint8_t > m_backLocalData;
+			Framebuffer m_activeBuffer;
+			Framebuffer m_transitionBuffer;
 			std::shared_ptr< Vulkan::Sampler > m_sampler;
-			std::shared_ptr< Vulkan::Image > m_frontImage;
-			std::shared_ptr< Vulkan::ImageView > m_frontImageView;
-			std::unique_ptr< Vulkan::DescriptorSet > m_frontDescriptorSet;
-			std::shared_ptr< Vulkan::Image > m_backImage;
-			std::shared_ptr< Vulkan::ImageView > m_backImageView;
-			std::unique_ptr< Vulkan::DescriptorSet > m_backDescriptorSet;
 			mutable std::mutex m_framebufferAccess;
 			float m_depth{0.0F};
 			float m_alphaThreshold{0.1F};
+			TransitionBufferStatus m_transitionBufferStatus{TransitionBufferStatus::Ready};
 			bool m_videoMemorySizeValid{false};
 			bool m_videoMemoryUpToDate{false};
-			bool m_autoSwapEnabled{false};
-			bool m_readyToSwap{false};
+			bool m_transitionBufferEnabled{false};
+			bool m_disablePixmapCopyInTransitionBuffer{false};
+			bool m_memoryMappingEnabled{false};
 			bool m_isVisible{false};
 			bool m_isListeningKeyboard{false};
 			bool m_isListeningPointer{false};
@@ -828,30 +1185,12 @@ namespace EmEn::Overlay
 			bool m_lockPointerMoveEvents{false};
 			bool m_processUnblockedPointerEvents{false};
 			bool m_isPointerWasOver{false};
-
 	};
-
-	inline
-	std::ostream &
-	operator<< (std::ostream & out, const Surface & obj)
-	{
-		return out << "Surface '" << obj.name() << "' [depth:" << obj.depth() << "] " << obj.geometry() <<
-			"Model matrix : " << obj.modelMatrix();
-	}
 
 	/**
 	 * @brief Stringifies the object.
 	 * @param obj A reference to the object to print.
 	 * @return std::string
 	 */
-	inline
-	std::string
-	to_string (const Surface & obj)
-	{
-		std::stringstream output;
-
-		output << obj;
-
-		return output.str();
-	}
+	std::string to_string (const Surface & obj);
 }

@@ -1,12 +1,12 @@
-# Libs (Libraries) - Development Context
+# Libs (Libraries)
 
 Context spécifique pour le développement des bibliothèques utilitaires d'Emeraude Engine.
 
-## 🎯 Vue d'ensemble du module
+## Vue d'ensemble du module
 
 **Fondation du moteur** - Bibliothèques utilitaires agnostiques fournissant concepts de base, mathématiques, manipulation de données, et intégrations externes. Tout le moteur repose sur Libs pour uniformisation.
 
-## 📋 Règles spécifiques à Libs/
+## Règles spécifiques à Libs/
 
 ### Philosophie: Fondation agnostique CRITIQUE
 - **Fondation du moteur** : Tous les systèmes (Graphics, Physics, Audio, Scenes) utilisent Libs
@@ -59,6 +59,8 @@ Context spécifique pour le développement des bibliothèques utilitaires d'Emer
 - Chargement/sauvegarde formats image
 - Transformations pixel (resize, crop, filters)
 - Génération procédurale images
+- **TextProcessor** : Rendu texte sur Pixmap avec protection bounds
+- **Pixmap** : Container image avec `blendPixel()` (assert) et `blendFreePixel()` (bounds-safe)
 
 **VertexFactory/** - Manipulation géométrie 3D
 - Génération meshes procéduraux
@@ -91,7 +93,7 @@ Context spécifique pour le développement des bibliothèques utilitaires d'Emer
 - **ZIP library** : Archives (IO)
 - Autres selon besoins
 
-## 🛠️ Commandes de développement
+## Commandes de développement
 
 ```bash
 # Tests Libs
@@ -104,7 +106,7 @@ ctest -R Libs
 ./test --filter="*ThreadPool*"
 ```
 
-## 🔗 Fichiers importants
+## Fichiers importants
 
 ### Math (critique)
 - `Vector.hpp` - Vecteurs 2D/3D/4D
@@ -126,7 +128,7 @@ ctest -R Libs
 - `VertexFactory/` - Génération/manipulation géométrie
 - `WaveFactory/` - Manipulation audio
 
-## ⚡ Patterns de développement
+## Patterns de développement
 
 ### Utilisation Math dans tout le moteur
 ```cpp
@@ -194,7 +196,7 @@ class MyUtility {
 #include "Libs/MyUtility.hpp"  // Graphics/Scenes/Physics peuvent inclure Libs
 ```
 
-## 🚨 Points d'attention CRITIQUES
+## Points d'attention CRITIQUES
 
 - **Fondation du moteur** : Tout repose sur Libs, stabilité critique
 - **Zéro dépendance haut niveau** : Libs ne doit JAMAIS inclure Scenes/Physics/Graphics/etc.
@@ -205,11 +207,27 @@ class MyUtility {
 - **Documentation** : Bien documenter, beaucoup de systèmes dépendent de Libs
 - **Tests exhaustifs** : Bug dans Libs affecte tout le moteur
 
-## 📚 Documentation détaillée
+## PixelFactory: Thread Safety et Resize
+
+### TextProcessor et Pixmap pendant resize
+
+Lors du redimensionnement de fenêtre, le Pixmap peut changer de dimensions entre deux frames. Le `TextProcessor` doit être résilient:
+
+**Protection implémentée:**
+1. `TextProcessor::setPixmap()` appelle `updateMetrics()` pour recalculer `maxColumns`/`maxRows`
+2. `blitCharacter()` utilise `blendFreePixel()` (ignore pixels hors bounds) au lieu de `blendPixel()` (assert)
+3. Le Notifier vérifie `pixmap.width() == 0 || pixmap.height() == 0` avant rendu
+
+**Code références:**
+- `PixelFactory/TextProcessor.hpp:setPixmap()` - Appelle `updateMetrics()` après changement de pixmap
+- `PixelFactory/TextProcessor.hpp:blitCharacter()` - Utilise `blendFreePixel()` pour bounds-safety
+- `PixelFactory/Pixmap.hpp:blendPixel()` - Assert sur coordonnées (développement)
+- `PixelFactory/Pixmap.hpp:blendFreePixel()` - Ignore silencieusement hors-bounds (production)
+
+## Documentation détaillée
 
 Libs est référencé par tous les systèmes:
-→ **@src/Math/** - Documentation mathématique détaillée (à créer si besoin)
-→ **@src/Scenes/AGENTS.md** - Utilise CartesianFrame
-→ **@src/Physics/AGENTS.md** - Utilise Vector, Matrix, collision detection
-→ **@src/Graphics/AGENTS.md** - Utilise Math pour transformations
-→ **@src/Audio/AGENTS.md** - Utilise Math pour positionnement 3D
+- @src/Scenes/AGENTS.md** - Utilise CartesianFrame
+- @src/Physics/AGENTS.md** - Utilise Vector, Matrix, collision detection
+- @src/Graphics/AGENTS.md** - Utilise Math pour transformations
+- @src/Audio/AGENTS.md** - Utilise Math pour positionnement 3D

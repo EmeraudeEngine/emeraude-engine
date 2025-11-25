@@ -463,6 +463,12 @@ namespace EmEn::Scenes::Component
 
 		private:
 
+			/** @copydoc EmEn::Scenes::Component::Abstract::onSuspend() */
+			void onSuspend () noexcept override { }
+
+			/** @copydoc EmEn::Scenes::Component::Abstract::onWakeup() */
+			void onWakeup () noexcept override { }
+
 			/** @copydoc EmEn::Scenes::AVConsole::AbstractVirtualDevice::onOutputDeviceConnected() */
 			void onOutputDeviceConnected (EngineContext & engineContext, AbstractVirtualDevice & targetDevice) noexcept final;
 

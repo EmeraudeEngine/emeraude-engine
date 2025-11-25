@@ -57,7 +57,7 @@ namespace EmEn::Saphir
 		{
 			auto & settings = m_primaryServices.settings();
 
-			m_showInformation = settings.getOrSetDefault< bool >(VkShowInformationKey, DefaultVkShowInformation);
+			m_showInformation = settings.getOrSetDefault< bool >(VideoShowInformationKey, DefaultVideoShowInformation);
 			m_showSourceCode = settings.getOrSetDefault< bool >(ShowSourceCodeKey, DefaultShowSourceCode);
 			m_sourceCodeCacheEnabled = settings.getOrSetDefault< bool >(SourceCodeCacheEnabledKey, DefaultSourceCodeCacheEnabled);
 			m_binaryCacheEnabled = settings.getOrSetDefault< bool >(BinaryCacheEnabledKey, DefaultBinaryCacheEnabled);

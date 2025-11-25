@@ -56,7 +56,7 @@ namespace EmEn::Graphics
 	constexpr auto JKImage{"Image"};
 
 	bool
-	MovieResource::load (Resources::ServiceProvider & /*serviceProvider*/) noexcept
+	MovieResource::load (Resources::AbstractServiceProvider & /*serviceProvider*/) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
@@ -97,7 +97,7 @@ namespace EmEn::Graphics
 	}
 
 	bool
-	MovieResource::load (Resources::ServiceProvider & serviceProvider, const std::filesystem::path & filepath) noexcept
+	MovieResource::load (Resources::AbstractServiceProvider & serviceProvider, const std::filesystem::path & filepath) noexcept
 	{
 		/* Check for a JSON file. */
 		if ( IO::getFileExtension(filepath) == "json" )
@@ -117,7 +117,7 @@ namespace EmEn::Graphics
 	}
 
 	bool
-	MovieResource::load (Resources::ServiceProvider & serviceProvider, const Json::Value & data) noexcept
+	MovieResource::load (Resources::AbstractServiceProvider & serviceProvider, const Json::Value & data) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
@@ -186,7 +186,7 @@ namespace EmEn::Graphics
 	}
 
 	bool
-	MovieResource::loadParametric (Resources::ServiceProvider & serviceProvider, const Json::Value & data) noexcept
+	MovieResource::loadParametric (Resources::AbstractServiceProvider & serviceProvider, const Json::Value & data) noexcept
 	{
 		/* Checks the base name of animation files. */
 		const auto basename = FastJSON::getValue< std::string >(data, JKBaseFrameName);
@@ -254,7 +254,7 @@ namespace EmEn::Graphics
 	}
 
 	bool
-	MovieResource::loadManual (Resources::ServiceProvider & serviceProvider, const Json::Value & data) noexcept
+	MovieResource::loadManual (Resources::AbstractServiceProvider & serviceProvider, const Json::Value & data) noexcept
 	{
 		if ( !data.isMember(JKFrames) || !data[JKFrames].isArray() )
 		{

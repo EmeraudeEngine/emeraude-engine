@@ -1,12 +1,12 @@
-# Scene Graph System - Development Context
+# Scene Graph System
 
 Context spécifique pour le développement du système de scene graph hiérarchique d'Emeraude Engine.
 
-## 🎯 Vue d'ensemble du module
+## Vue d'ensemble du module
 
 Système de scene graph basé sur une architecture de composition (Entity-Component) avec deux types d'entités: **Nodes** dynamiques hiérarchiques et **StaticEntities** plates optimisées. Double buffering pour thread-safety entre simulation et rendu.
 
-## 📋 Règles spécifiques à Scenes/
+## Règles spécifiques à Scenes/
 
 ### Philosophie: Composition Over Inheritance
 - **Entités génériques** : Node et StaticEntity sont des conteneurs de position
@@ -45,7 +45,7 @@ Voir @docs/scene-graph-architecture.md pour détails complets.
 - **Frustum culling** : Actif sur parcours de l'arbre
 - Optimisation future : Culling par secteur d'Octree
 
-## 🛠️ Commandes de développement
+## Commandes de développement
 
 ```bash
 # Tests scene graph
@@ -53,7 +53,7 @@ ctest -R Scenes
 ./test --filter="*Scene*"
 ```
 
-## 🔗 Fichiers importants
+## Fichiers importants
 
 - `Manager.cpp/.hpp` - SceneManager, gestion de multiples Scenes + ActiveScene
 - `Scene.cpp/.hpp` - Une scène avec son Root Node, Octrees, observateurs
@@ -62,11 +62,12 @@ ctest -R Scenes
 - `AbstractEntity.cpp/.hpp` - Base commune pour gestion des Components
 - `LocatableInterface.cpp/.hpp` - Interface pour coordonnées/déplacements
 - `ToolKit.cpp/.hpp` - Helpers pour construction d'entités complexes
-- `Component/Abstract.hpp` - Classe de base pour tous les Components
+- `Component/Abstract.hpp` - Classe de base pour tous les Components (pure virtual onSuspend/onWakeup)
+- `Component/SoundEmitter.cpp/.hpp` - Émetteur audio avec gestion suspend/wakeup des sources
 - `@docs/scene-graph-architecture.md` - **Architecture complète et détaillée**
 - `@docs/coordinate-system.md` - Convention Y-down (CRITIQUE)
 
-## ⚡ Patterns de développement
+## Patterns de développement
 
 ### Création d'un objet dynamique (Node)
 ```cpp
@@ -108,12 +109,43 @@ vehicle->applyForce(forwardVector * thrust);
 ```
 
 ### Création d'un nouveau Component
-1. Hériter de `Component` (Abstract.hpp)
+1. Hériter de `Component::Abstract` (Abstract.hpp)
 2. Implémenter `processLogics()` si logique per-frame nécessaire
 3. Implémenter `move()` si réaction au déplacement de l'entité nécessaire
-4. Enregistrer avec Scene si observation automatique nécessaire
+4. Implémenter `onSuspend()`/`onWakeup()` (pure virtual, obligatoire)
+5. Enregistrer avec Scene si observation automatique nécessaire
 
-## 🚨 Points d'attention
+### Système Suspend/Wakeup (Scene Manager Level)
+Quand le Scene Manager change de scène active, les entités et leurs components sont suspendus/réveillés pour libérer les ressources poolées (ex: sources audio OpenAL).
+
+**Architecture (Template Method Pattern):**
+
+1. **AbstractEntity** (`AbstractEntity.hpp/.cpp`):
+   - `suspend()` / `wakeup()` - Méthodes publiques non-virtuelles
+   - Appellent `onSuspend()`/`onWakeup()` de l'entité puis itèrent les components
+   - `onSuspend()`/`onWakeup()` - Hooks protégés virtuels (défaut vide)
+
+2. **Component::Abstract** (`Component/Abstract.hpp`):
+   - `onSuspend()` / `onWakeup()` - Pure virtual protégées (contrat obligatoire)
+   - Appelées par `AbstractEntity` (friend class)
+   - Chaque component doit implémenter (même si vide)
+
+**Flux d'appel:**
+```
+Scene::disable() → entity->suspend() → entity->onSuspend()
+                                     → component->onSuspend() (for each)
+
+Scene::enable()  → entity->wakeup()  → entity->onWakeup()
+                                     → component->onWakeup() (for each)
+```
+
+**Implémentations existantes:**
+- `SoundEmitter`: Libère/réacquiert source audio, mémorise état playing
+- Autres components: Implémentation vide (pas de ressources poolées)
+
+Voir `Scene.cpp:enable()`, `Scene.cpp:disable()`, `AbstractEntity.cpp:suspend()`, `AbstractEntity.cpp:wakeup()`
+
+## Points d'attention
 
 - **Double buffering** : Logic thread écrit activeFrame, Render thread lit renderFrame
 - **Swap atomique** : m_renderFrame = m_activeFrame à la fin de chaque frame logique
@@ -123,8 +155,10 @@ vehicle->applyForce(forwardVector * thrust);
 - **Y-down convention** : CartesianFrame utilise Y-down partout
 - **Pas de cache world** : Recalcul à la demande (optimisation future prévue)
 - **Observateurs** : Registration automatique, ne pas enregistrer manuellement
+- **Suspend/Wakeup** : Tout nouveau Component DOIT implémenter `onSuspend()`/`onWakeup()` (pure virtual)
+- **Friend class** : `AbstractEntity` est friend de `Component::Abstract` pour accéder aux hooks protégés
 
-## 📚 Documentation détaillée
+## Documentation détaillée
 
 Pour l'architecture complète, les diagrammes, et les patterns avancés:
-→ **@docs/scene-graph-architecture.md**
+- @docs/scene-graph-architecture.md

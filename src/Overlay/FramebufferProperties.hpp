@@ -41,7 +41,7 @@ namespace EmEn::Overlay
 	{
 		public:
 
-			/** 
+			/**
 			 * @brief Constructs a default framebuffer properties.
 			 * @warning This will be invalid at this time, be sure to use FramebufferProperties::updateProperties().
 			 */
@@ -56,9 +56,9 @@ namespace EmEn::Overlay
 			 */
 			FramebufferProperties (uint32_t width, uint32_t height, float scaleX = 1.0F, float scaleY = 1.0F) noexcept
 				: m_width{width},
-				m_height{height},
-				m_screenScaleX{scaleX},
-				m_screenScaleY{scaleY}
+				  m_height{height},
+				  m_screenScaleX{scaleX},
+				  m_screenScaleY{scaleY}
 			{
 				this->updateScaledResolution();
 			}
@@ -246,7 +246,8 @@ namespace EmEn::Overlay
 			template< typename integer_t = int32_t >
 			[[nodiscard]]
 			integer_t
-			getRoundedResolutionX () const noexcept requires (std::is_integral_v< integer_t >)
+			getRoundedResolutionX () const noexcept
+				requires(std::is_integral_v< integer_t >)
 			{
 				return static_cast< integer_t >(std::round(m_resolutionX));
 			}
@@ -259,7 +260,8 @@ namespace EmEn::Overlay
 			template< typename integer_t = int32_t >
 			[[nodiscard]]
 			integer_t
-			getRoundedResolutionY () const noexcept requires (std::is_integral_v< integer_t >)
+			getRoundedResolutionY () const noexcept
+				requires(std::is_integral_v< integer_t >)
 			{
 				return static_cast< integer_t >(std::round(m_resolutionY));
 			}
@@ -273,9 +275,10 @@ namespace EmEn::Overlay
 			template< typename integer_t = int32_t >
 			[[nodiscard]]
 			integer_t
-			getRoundedResolutionX (float width) const noexcept requires (std::is_integral_v< integer_t >)
+			getRoundedResolutionX (float width) const noexcept
+				requires(std::is_integral_v< integer_t >)
 			{
-					return static_cast< integer_t >(std::round(m_resolutionX * width));
+				return static_cast< integer_t >(std::round(m_resolutionX * width));
 			}
 
 			/**
@@ -287,9 +290,10 @@ namespace EmEn::Overlay
 			template< typename integer_t = int32_t >
 			[[nodiscard]]
 			integer_t
-			getRoundedResolutionY (float height) const noexcept requires (std::is_integral_v< integer_t >)
+			getRoundedResolutionY (float height) const noexcept
+				requires(std::is_integral_v< integer_t >)
 			{
-					return static_cast< integer_t >(std::round(m_resolutionY * height));
+				return static_cast< integer_t >(std::round(m_resolutionY * height));
 			}
 
 			/**
@@ -350,14 +354,15 @@ namespace EmEn::Overlay
 			float m_resolutionY{0};
 	};
 
-	inline
-	std::ostream &
+	inline std::ostream &
 	operator<< (std::ostream & out, const FramebufferProperties & obj)
 	{
+		// clang-format off
 		return out <<
 			"Framebuffer size : " << obj.width() << "x" << obj.height() << "px" "\n"
 			"Screen scaling (HDPI). X : " << obj.screenScaleX() << ", Y : " << obj.screenScaleY() << "\n"
 			"Resolution : " << obj.resolutionX() << "x" << obj.resolutionY() << "pt" "\n";
+		// clang-format on
 	}
 
 	/**
@@ -365,8 +370,7 @@ namespace EmEn::Overlay
 	 * @param obj A reference to the object to print.
 	 * @return std::string
 	 */
-	inline
-	std::string
+	inline std::string
 	to_string (const FramebufferProperties & obj) noexcept
 	{
 		std::stringstream output;

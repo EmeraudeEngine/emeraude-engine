@@ -71,23 +71,25 @@ namespace EmEn::Libs::Time::Statistics
 				/* Increment executions count. */
 				m_currentExecutionsPerSecond++;
 
-				/* Gets the duration. */
-				auto duration = std::chrono::duration_cast< std::chrono::milliseconds >(clockType::now() - m_startTime).count();
+				/* Gets the current time. */
+				const auto now = clockType::now();
+
+				/* Gets the duration of the execution. */
+				const auto duration = std::chrono::duration_cast< std::chrono::milliseconds >(now - m_startTime).count();
 
 				/* Insert duration for average statistics. */
 				this->insertDuration(duration);
 
-				/* Keep track of time elapsed. */
-				m_delta += duration;
+				/* Checks if a second passed using real elapsed time. */
+				const auto elapsed = std::chrono::duration_cast< std::chrono::milliseconds >(now - m_lastEPSTime).count();
 
-				/* Checks if a second passed. */
-				if ( m_delta >= TimeCorrection )
+				if ( elapsed >= TimeCorrection )
 				{
 					/* Insert EPS for average statistics. */
 					this->insertEPS(m_currentExecutionsPerSecond);
 
 					/* Reset statistics variables. */
-					m_delta -= TimeCorrection;
+					m_lastEPSTime = now;
 					m_currentExecutionsPerSecond = 0;
 				}
 			}
@@ -97,7 +99,7 @@ namespace EmEn::Libs::Time::Statistics
 			static constexpr auto TimeCorrection{1000};
 
 			std::chrono::time_point< clockType > m_startTime{};
-			uint64_t m_delta{0};
+			std::chrono::time_point< clockType > m_lastEPSTime{clockType::now()};
 			uint32_t m_currentExecutionsPerSecond{0};
 	};
 }

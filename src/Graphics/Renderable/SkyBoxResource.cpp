@@ -40,7 +40,7 @@ namespace EmEn::Graphics::Renderable
 	using namespace Graphics::Material;
 
 	bool
-	SkyBoxResource::load (Resources::ServiceProvider & serviceProvider) noexcept
+	SkyBoxResource::load (Resources::AbstractServiceProvider & serviceProvider) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
@@ -70,7 +70,7 @@ namespace EmEn::Graphics::Renderable
 	}
 
 	bool
-	SkyBoxResource::load (Resources::ServiceProvider & serviceProvider, const Json::Value & data) noexcept
+	SkyBoxResource::load (Resources::AbstractServiceProvider & serviceProvider, const Json::Value & data) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
@@ -117,7 +117,7 @@ namespace EmEn::Graphics::Renderable
 	}
 
 	bool
-	SkyBoxResource::load (Resources::ServiceProvider & serviceProvider, const std::shared_ptr< Material::Interface > & material) noexcept
+	SkyBoxResource::load (Resources::AbstractServiceProvider & serviceProvider, const std::shared_ptr< Material::Interface > & material) noexcept
 	{
 		if ( !this->beginLoading() )
 		{

@@ -31,6 +31,7 @@
 #include <cstdint>
 #include <cstddef>
 #include <memory>
+#include <span>
 #include <vector>
 
 /* Local inclusions for inheritances. */
@@ -324,45 +325,45 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Set a pipeline barrier. Full version.
-			 * @param memoryBarriers A reference to a vector of memory barriers.
-			 * @param bufferMemoryBarriers A reference to a vector of buffer memory barriers.
-			 * @param imageMemoryBarriers A reference to a vector of image memory barriers.
+			 * @param memoryBarriers A span of memory barriers.
+			 * @param bufferMemoryBarriers A span of buffer memory barriers.
+			 * @param imageMemoryBarriers A span of image memory barriers.
 			 * @param srcStageMask A bitmask of VkPipelineStageFlagBits specifying the source stages.
 			 * @param dstStageMask A bitmask of VkPipelineStageFlagBits specifying the destination stages.
 			 * @param dependencyFlags
 			 * @return void
 			 */
-			void pipelineBarrier (const std::vector< VkMemoryBarrier > & memoryBarriers, const std::vector< VkBufferMemoryBarrier > & bufferMemoryBarriers, const std::vector< VkImageMemoryBarrier > & imageMemoryBarriers, VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask, VkDependencyFlags dependencyFlags = 0) const noexcept;
+			void pipelineBarrier (std::span< const VkMemoryBarrier > memoryBarriers, std::span< const VkBufferMemoryBarrier > bufferMemoryBarriers, std::span< const VkImageMemoryBarrier > imageMemoryBarriers, VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask, VkDependencyFlags dependencyFlags = 0) const noexcept;
 
 			/**
 			 * @brief Set a pipeline memory barrier.
-			 * @param memoryBarriers A reference to a vector of memory barriers.
+			 * @param memoryBarriers A span of memory barriers.
 			 * @param srcStageMask A bitmask of VkPipelineStageFlagBits specifying the source stages.
 			 * @param dstStageMask A bitmask of VkPipelineStageFlagBits specifying the destination stages.
 			 * @param dependencyFlags
 			 * @return void
 			 */
-			void pipelineBarrier (const std::vector< VkMemoryBarrier > & memoryBarriers, VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask, VkDependencyFlags dependencyFlags = 0) const noexcept;
+			void pipelineBarrier (std::span< const VkMemoryBarrier > memoryBarriers, VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask, VkDependencyFlags dependencyFlags = 0) const noexcept;
 
 			/**
 			 * @brief Set a pipeline buffer memory barrier.
-			 * @param bufferMemoryBarriers A reference to a vector of buffer memory barriers.
+			 * @param bufferMemoryBarriers A span of buffer memory barriers.
 			 * @param srcStageMask A bitmask of VkPipelineStageFlagBits specifying the source stages.
 			 * @param dstStageMask A bitmask of VkPipelineStageFlagBits specifying the destination stages.
 			 * @param dependencyFlags
 			 * @return void
 			 */
-			void pipelineBarrier (const std::vector< VkBufferMemoryBarrier > & bufferMemoryBarriers, VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask, VkDependencyFlags dependencyFlags = 0) const noexcept;
+			void pipelineBarrier (std::span< const VkBufferMemoryBarrier > bufferMemoryBarriers, VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask, VkDependencyFlags dependencyFlags = 0) const noexcept;
 
 			/**
 			 * @brief Set a pipeline image memory barrier.
-			 * @param imageMemoryBarriers A reference to a vector of image memory barriers.
+			 * @param imageMemoryBarriers A span of image memory barriers.
 			 * @param srcStageMask A bitmask of VkPipelineStageFlagBits specifying the source stages.
 			 * @param dstStageMask A bitmask of VkPipelineStageFlagBits specifying the destination stages.
 			 * @param dependencyFlags
 			 * @return void
 			 */
-			void pipelineBarrier (const std::vector< VkImageMemoryBarrier > & imageMemoryBarriers, VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask, VkDependencyFlags dependencyFlags = 0) const noexcept;
+			void pipelineBarrier (std::span< const VkImageMemoryBarrier > imageMemoryBarriers, VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask, VkDependencyFlags dependencyFlags = 0) const noexcept;
 
 			/**
 			 * @brief Set a pipeline memory barrier.
@@ -412,15 +413,15 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Waits for events in command.
-			 * @param events A reference to an event list.
+			 * @param events A span of events.
 			 * @param srcFlags A pipeline source stage flags.
 			 * @param dstFlags A pipeline destination stage flags.
-			 * @param memoryBarriers A reference to a memory barrier list. Default none.
-			 * @param bufferMemoryBarriers A reference to a buffer memory barrier list. Default none.
-			 * @param imageMemoryBarriers A reference to an image memory barrier list. Default none.
+			 * @param memoryBarriers A span of memory barriers. Default empty.
+			 * @param bufferMemoryBarriers A span of buffer memory barriers. Default empty.
+			 * @param imageMemoryBarriers A span of image memory barriers. Default empty.
 			 * @return void
 			 */
-			void waitEvents (const std::vector< VkEvent > & events, VkPipelineStageFlags srcFlags, VkPipelineStageFlags dstFlags, const std::vector< VkMemoryBarrier > & memoryBarriers = {}, const std::vector< VkBufferMemoryBarrier > & bufferMemoryBarriers = {}, const std::vector< VkImageMemoryBarrier > & imageMemoryBarriers = {}) const noexcept;
+			void waitEvents (std::span< const VkEvent > events, VkPipelineStageFlags srcFlags, VkPipelineStageFlags dstFlags, std::span< const VkMemoryBarrier > memoryBarriers = {}, std::span< const VkBufferMemoryBarrier > bufferMemoryBarriers = {}, std::span< const VkImageMemoryBarrier > imageMemoryBarriers = {}) const noexcept;
 
 			/**
 			 * @brief Binds a graphics pipeline.

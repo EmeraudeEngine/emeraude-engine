@@ -206,7 +206,7 @@ namespace EmEn::Graphics::Renderable
 			 * @return shared_ptr< Geometry::IndexedVertexResource >
 			 */
 			[[nodiscard]]
-			static std::shared_ptr< Geometry::IndexedVertexResource > getSkyBoxGeometry (Resources::ServiceProvider & serviceProvider) noexcept;
+			static std::shared_ptr< Geometry::IndexedVertexResource > getSkyBoxGeometry (Resources::AbstractServiceProvider & serviceProvider) noexcept;
 
 			/**
 			 * @brief Creates and/or returns a sky dome (sphere) geometry.
@@ -214,7 +214,7 @@ namespace EmEn::Graphics::Renderable
 			 * @return shared_ptr< Geometry::IndexedVertexResource >
 			 */
 			[[nodiscard]]
-			static std::shared_ptr< Geometry::IndexedVertexResource > getSkyDomeGeometry (Resources::ServiceProvider & serviceProvider) noexcept;
+			static std::shared_ptr< Geometry::IndexedVertexResource > getSkyDomeGeometry (Resources::AbstractServiceProvider & serviceProvider) noexcept;
 
 		protected:
 

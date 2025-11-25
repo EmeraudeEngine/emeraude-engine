@@ -1,12 +1,12 @@
-# Physics System - Development Context
+# Physics System
 
 Context spécifique pour le développement du système physique d'Emeraude Engine.
 
-## 🎯 Vue d'ensemble du module
+## Vue d'ensemble du module
 
 Le système physique d'Emeraude Engine implémente une architecture à 4 types d'entités avec gestion différenciée des collisions pour équilibrer réalisme, performance et design de jeu.
 
-## 📋 Règles spécifiques à Physics/
+## Règles spécifiques à Physics/
 
 ### Convention de coordonnées CRITIQUE
 - **Y-DOWN obligatoire** dans tous les calculs physiques
@@ -23,7 +23,7 @@ Le système physique d'Emeraude Engine implémente une architecture à 4 types d
 ### Ordre d'exécution physique
 1. Intégration des forces → 2. Broad phase → 3. Narrow phase → 4. Résolution inter-entités → 5. Collision sol → 6. Collision limites → 7. Résolution sol
 
-## 🛠️ Commandes de développement
+## Commandes de développement
 
 ```bash
 # Tests spécifiques physique
@@ -31,7 +31,7 @@ ctest -R Physics
 ./test --filter="*Physics*"
 ```
 
-## 🔗 Fichiers importants
+## Fichiers importants
 
 - `Manager.cpp/.hpp` - Gestionnaire principal du système physique
 - `ConstraintSolver.cpp/.hpp` - Résolution des contraintes par impulsions
@@ -40,7 +40,7 @@ ctest -R Physics
 - `@docs/physics-system.md` - Architecture détaillée
 - `@docs/coordinate-system.md` - Convention Y-down (CRITIQUE)
 
-## ⚡ Patterns de développement
+## Patterns de développement
 
 ### Ajout d'un nouveau type de collision
 1. Définir la méthode dans `Collider`
@@ -54,7 +54,7 @@ ctest -R Physics
 3. Respecter la séparation entités/sol
 4. Préserver la séparation boundaries (pas de manifolds)
 
-## 🚨 Points d'attention
+## Points d'attention
 
 - **JAMAIS** de conversion de coordonnées Y
 - Calcul de `penetrationDepth` AVANT hard clipping (sol)
@@ -63,12 +63,12 @@ ctest -R Physics
 - **Integration avec Scenes** : Nodes du scene graph héritent de MovableTrait pour physique
 - **Octree spatial** : Scene possède Octree pour broad-phase physique
 
-## 📚 Documentation détaillée
+## Documentation détaillée
 
 Pour l'architecture complète du système physique:
-→ **@docs/physics-system.md** - Architecture 4-entités détaillée
+- @docs/physics-system.md - Architecture 4-entités détaillée
 
 Systèmes liés:
-→ **@docs/coordinate-system.md** - Convention Y-down (CRITIQUE)
-→ **@src/Scenes/AGENTS.md** - Nodes avec MovableTrait pour physique
-→ **@src/Libs/AGENTS.md** - Math (Vector, Matrix, collision detection)
+- @docs/coordinate-system.md - Convention Y-down (CRITIQUE)
+- @src/Scenes/AGENTS.md - Nodes avec MovableTrait pour physique
+- @src/Libs/AGENTS.md - Math (Vector, Matrix, collision detection)

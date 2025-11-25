@@ -90,9 +90,11 @@ namespace EmEn::Vulkan
 			 * @param arrayLayers The number of array levels. Default 1.
 			 * @param samples The number of samples (multisampling). Default VK_SAMPLE_COUNT_1_BIT.
 			 * @param imageTiling The image tiling (memory layout). Default VK_IMAGE_TILING_OPTIMAL.
+			 * @param hostVisible Whether the image memory should be host visible for direct CPU access. Default false.
 			 */
-			Image (const std::shared_ptr< Device > & device, VkImageType imageType, VkFormat format, const VkExtent3D & extent, VkImageUsageFlags usageFlags, VkImageCreateFlags createFlags = 0, uint32_t mipLevels = 1, uint32_t arrayLayers = 1, VkSampleCountFlagBits samples = VK_SAMPLE_COUNT_1_BIT, VkImageTiling imageTiling = VK_IMAGE_TILING_OPTIMAL) noexcept
-				: AbstractDeviceDependentObject{device}
+			Image (const std::shared_ptr< Device > & device, VkImageType imageType, VkFormat format, const VkExtent3D & extent, VkImageUsageFlags usageFlags, VkImageCreateFlags createFlags = 0, uint32_t mipLevels = 1, uint32_t arrayLayers = 1, VkSampleCountFlagBits samples = VK_SAMPLE_COUNT_1_BIT, VkImageTiling imageTiling = VK_IMAGE_TILING_OPTIMAL, bool hostVisible = false) noexcept
+				: AbstractDeviceDependentObject{device},
+				m_hostVisible{hostVisible}
 			{
 				m_createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
 				m_createInfo.pNext = nullptr;
@@ -407,6 +409,52 @@ namespace EmEn::Vulkan
 			bool writeData (TransferManager & transferManager, const MemoryRegion & memoryRegion) noexcept;
 
 			/**
+			 * @brief Returns whether the image memory is host visible.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isHostVisible () const noexcept
+			{
+				return m_hostVisible;
+			}
+
+			/**
+			 * @brief Maps the image memory to be able to write in it.
+			 * @note Only works if the image was created with hostVisible = true.
+			 * @return void* Pointer to the mapped memory, or nullptr on failure.
+			 */
+			[[nodiscard]]
+			void * mapMemory () const noexcept;
+
+			/**
+			 * @brief Maps the image memory to be able to write in it with a specific type.
+			 * @tparam pointer_t The type of the pointer.
+			 * @return pointer_t* Pointer to the mapped memory, or nullptr on failure.
+			 */
+			template< typename pointer_t >
+			[[nodiscard]]
+			pointer_t *
+			mapMemoryAs () const noexcept
+			{
+				return static_cast< pointer_t * >(this->mapMemory());
+			}
+
+			/**
+			 * @brief Unmaps the image memory.
+			 * @return void
+			 */
+			void unmapMemory () const noexcept;
+
+			/**
+			 * @brief Returns the row pitch (stride) of the image in bytes.
+			 * @note Only valid for LINEAR tiling images. For OPTIMAL tiling, returns 0.
+			 * @return VkDeviceSize The row pitch in bytes, or 0 if not applicable.
+			 */
+			[[nodiscard]]
+			VkDeviceSize rowPitch () const noexcept;
+
+			/**
 			 * @brief Creates an image object from a vulkan handle form the swap chain.
 			 * @param device A reference to a device smart pointer.
 			 * @param handle The handle provided by the swap chain.
@@ -592,5 +640,6 @@ namespace EmEn::Vulkan
 			VmaAllocation m_memoryAllocation{VK_NULL_HANDLE};
 			VkImageLayout m_currentImageLayout{VK_IMAGE_LAYOUT_UNDEFINED};
 			bool m_isSwapChainImage{false};
+			bool m_hostVisible{false};
 	};
 }

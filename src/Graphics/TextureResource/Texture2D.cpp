@@ -199,7 +199,7 @@ namespace EmEn::Graphics::TextureResource
 	}
 
 	bool
-	Texture2D::load (Resources::ServiceProvider & serviceProvider) noexcept
+	Texture2D::load (Resources::AbstractServiceProvider & serviceProvider) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
@@ -217,7 +217,7 @@ namespace EmEn::Graphics::TextureResource
 	}
 
 	bool
-	Texture2D::load (Resources::ServiceProvider & serviceProvider, const std::filesystem::path & filepath) noexcept
+	Texture2D::load (Resources::AbstractServiceProvider & serviceProvider, const std::filesystem::path & filepath) noexcept
 	{
 		return this->load(serviceProvider.container< ImageResource >()->getResource(
 			ResourceTrait::getResourceNameFromFilepath(filepath, "Images"),
@@ -226,7 +226,7 @@ namespace EmEn::Graphics::TextureResource
 	}
 
 	bool
-	Texture2D::load (Resources::ServiceProvider & /*serviceProvider*/, const Json::Value & /*data*/) noexcept
+	Texture2D::load (Resources::AbstractServiceProvider & /*serviceProvider*/, const Json::Value & /*data*/) noexcept
 	{
 		/* NOTE: This resource has no local store,
 		 * so this method won't be called from a resource container! */

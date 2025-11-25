@@ -1,12 +1,12 @@
-# Input System - Development Context
+# Input System
 
 Context spécifique pour le développement du système de gestion des entrées d'Emeraude Engine.
 
-## 🎯 Vue d'ensemble du module
+## Vue d'ensemble du module
 
 Système de gestion des entrées basé sur GLFW, offrant à la fois consultation directe de l'état des périphériques et système d'événements. Supporte clavier, souris, gamepads, joysticks.
 
-## 📋 Règles spécifiques à Input/
+## Règles spécifiques à Input/
 
 ### Architecture double approche
 
@@ -69,7 +69,7 @@ bool leftClick = inputManager.mouse().isButtonPressed(MouseButton::Left);
 - **Application gère** : Mapping "jump" → Space, "fire" → Mouse1, etc.
 - Permet configuration personnalisée par l'utilisateur final
 
-## 🛠️ Commandes de développement
+## Commandes de développement
 
 ```bash
 # Tests input
@@ -77,7 +77,7 @@ ctest -R Input
 ./test --filter="*Input*"
 ```
 
-## 🔗 Fichiers importants
+## Fichiers importants
 
 - `Manager.cpp/.hpp` - Gestionnaire central, dispatch événements, accès Controllers
 - `KeyboardInterface.hpp` - Interface pour événements clavier
@@ -86,7 +86,7 @@ ctest -R Input
 - `MouseController.cpp/.hpp` - Consultation directe état souris
 - Autres interfaces/controllers selon périphériques (Gamepad, Joystick)
 
-## ⚡ Patterns de développement
+## Patterns de développement
 
 ### Utilisation par événements (reactive)
 ```cpp
@@ -189,7 +189,7 @@ inputManager.unregisterMouseListener(&controller);
 // Puis détruire controller
 ```
 
-## 🚨 Points d'attention
+## Points d'attention
 
 - **Désenregistrement** : Désenregistrer les listeners avant destruction
 - **Pas de mapping intégré** : Application responsable du mapping actions
@@ -198,8 +198,8 @@ inputManager.unregisterMouseListener(&controller);
 - **Thread safety** : Événements GLFW viennent du thread principal
 - **OverlayManager prioritaire** : Enregistré automatiquement, peut consommer événements
 
-## 📚 Documentation détaillée
+## Documentation détaillée
 
 Systèmes liés:
-→ **@src/Overlay/AGENTS.md** - Client majeur du système Input
+- @src/Overlay/AGENTS.md** - Client majeur du système Input
 → **GLFW documentation** - Pour détails sur périphériques supportés

@@ -64,7 +64,7 @@ namespace EmEn::Vulkan
 			false
 		},
 		m_renderer{renderer},
-		m_showInformation{settings.getOrSetDefault< bool >(VkShowInformationKey, DefaultVkShowInformation)},
+		m_showInformation{settings.getOrSetDefault< bool >(VideoShowInformationKey, DefaultVideoShowInformation)},
 		m_tripleBufferingEnabled{settings.getOrSetDefault< bool >(VideoEnableTripleBufferingKey, DefaultVideoEnableTripleBuffering)},
 		m_VSyncEnabled{settings.getOrSetDefault< bool >(VideoEnableVSyncKey, DefaultVideoEnableVSync)}
 	{
@@ -951,7 +951,7 @@ namespace EmEn::Vulkan
 				return std::nullopt;
 
 			case VK_SUBOPTIMAL_KHR :
-				Tracer::debug(ClassId, "vkAcquireNextImageKHR(), the swap-chain is degraded!");
+				Tracer::debug(ClassId, "vkAcquireNextImageKHR() detected the swap-chain is 'sub-optimal'! [SWAP-CHAIN-RECREATION-PLANNED]");
 
 				m_status = Status::Degraded;
 
@@ -964,7 +964,7 @@ namespace EmEn::Vulkan
 
 			/* NOTE: These codes below are considered as an error. */
 			case VK_ERROR_OUT_OF_DATE_KHR :
-				TraceError{ClassId} << "The swap-chain is out of date !";
+				Tracer::debug(ClassId, "vkAcquireNextImageKHR() detected the swap-chain is 'out of date'! [SWAP-CHAIN-RECREATION-PLANNED]");
 
 				m_status = Status::Degraded;
 

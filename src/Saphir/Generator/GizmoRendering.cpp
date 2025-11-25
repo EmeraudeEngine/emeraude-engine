@@ -64,8 +64,22 @@ namespace EmEn::Saphir::Generator
 	}
 
 	bool
-	GizmoRendering::onGraphicsPipelineConfiguration (const Program & /*program*/, GraphicsPipeline & /*graphicsPipeline*/) noexcept
+	GizmoRendering::onGraphicsPipelineConfiguration (const Program & /*program*/, GraphicsPipeline & graphicsPipeline) noexcept
 	{
+		/* NOTE: Use dynamic viewport and scissor to avoid pipeline recreation on window resize. */
+		{
+			const StaticVector< VkDynamicState, 16 > dynamicStates{
+				VK_DYNAMIC_STATE_VIEWPORT,
+				VK_DYNAMIC_STATE_SCISSOR
+			};
+
+			if ( !graphicsPipeline.configureDynamicStates(dynamicStates) )
+			{
+				Tracer::error(ClassId, "Unable to configure the graphics pipeline dynamic states !");
+
+				return false;
+			}
+		}
 
 		return true;
 	}

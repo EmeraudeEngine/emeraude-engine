@@ -170,10 +170,10 @@ namespace EmEn::Graphics::Material
 			}
 
 			/** @copydoc EmEn::Resources::ResourceTrait::load(Resources::ServiceProvider &) */
-			bool load (Resources::ServiceProvider & serviceProvider) noexcept override;
+			bool load (Resources::AbstractServiceProvider & serviceProvider) noexcept override;
 
 			/** @copydoc EmEn::Resources::ResourceTrait::load(Resources::Manager &, const Json::Value &) */
-			bool load (Resources::ServiceProvider & serviceProvider, const Json::Value & data) noexcept override;
+			bool load (Resources::AbstractServiceProvider & serviceProvider, const Json::Value & data) noexcept override;
 
 			/** @copydoc EmEn::Resources::ResourceTrait::memoryOccupied() const noexcept */
 			[[nodiscard]]
@@ -487,7 +487,7 @@ namespace EmEn::Graphics::Material
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool parseAmbientComponent (const Json::Value & data, Resources::ServiceProvider & serviceProvider) noexcept;
+			bool parseAmbientComponent (const Json::Value & data, Resources::AbstractServiceProvider & serviceProvider) noexcept;
 
 			/**
 			 * @brief Parses the diffuse component from JSON data.
@@ -496,7 +496,7 @@ namespace EmEn::Graphics::Material
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool parseDiffuseComponent (const Json::Value & data, Resources::ServiceProvider & serviceProvider) noexcept;
+			bool parseDiffuseComponent (const Json::Value & data, Resources::AbstractServiceProvider & serviceProvider) noexcept;
 
 			/**
 			 * @brief Parses the specular component from JSON data.
@@ -505,7 +505,7 @@ namespace EmEn::Graphics::Material
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool parseSpecularComponent (const Json::Value & data, Resources::ServiceProvider & serviceProvider) noexcept;
+			bool parseSpecularComponent (const Json::Value & data, Resources::AbstractServiceProvider & serviceProvider) noexcept;
 
 			/**
 			 * @brief Parses the opacity component from JSON data.
@@ -514,7 +514,7 @@ namespace EmEn::Graphics::Material
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool parseOpacityComponent (const Json::Value & data, Resources::ServiceProvider & serviceProvider) noexcept;
+			bool parseOpacityComponent (const Json::Value & data, Resources::AbstractServiceProvider & serviceProvider) noexcept;
 
 			/**
 			 * @brief Parses the auto-illumination component from JSON data.
@@ -523,7 +523,7 @@ namespace EmEn::Graphics::Material
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool parseAutoIlluminationComponent (const Json::Value & data, Resources::ServiceProvider & serviceProvider) noexcept;
+			bool parseAutoIlluminationComponent (const Json::Value & data, Resources::AbstractServiceProvider & serviceProvider) noexcept;
 
 			/**
 			 * @brief Parses the normal component from JSON data.
@@ -532,7 +532,7 @@ namespace EmEn::Graphics::Material
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool parseNormalComponent (const Json::Value & data, Resources::ServiceProvider & serviceProvider) noexcept;
+			bool parseNormalComponent (const Json::Value & data, Resources::AbstractServiceProvider & serviceProvider) noexcept;
 
 			/**
 			 * @brief Parses the reflection component from JSON data.
@@ -541,7 +541,7 @@ namespace EmEn::Graphics::Material
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool parseReflectionComponent (const Json::Value & data, Resources::ServiceProvider & serviceProvider) noexcept;
+			bool parseReflectionComponent (const Json::Value & data, Resources::AbstractServiceProvider & serviceProvider) noexcept;
 
 			/**
 			 * @brief Updates the UBO with material properties.

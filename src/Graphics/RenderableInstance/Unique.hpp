@@ -88,11 +88,46 @@ namespace EmEn::Graphics::RenderableInstance
 
 		private:
 
-			/** @copydoc EmEn::Graphics::RenderableInstance::Abstract::pushMatricesForShadowCasting() const noexcept */
-			void pushMatricesForShadowCasting (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::PipelineLayout & pipelineLayout, const Saphir::Program & program, uint32_t readStateIndex, const ViewMatricesInterface & viewMatrices, const Libs::Math::CartesianFrame< float > * worldCoordinates) const noexcept override;
+			/**
+			 * @brief Push constant strategy for Unique (shadow casting).
+			 *
+			 * @par Matrix Distribution
+			 * | Mode    | Push Constants | UBO Content                    |
+			 * |---------|----------------|--------------------------------|
+			 * | Cubemap | M only         | VP[6] indexed by gl_ViewIndex  |
+			 * | Classic | MVP combined   | -                              |
+			 *
+			 * @par Rationale
+			 * For cubemap shadow maps, each face needs a different View/Projection matrix.
+			 * These 6 matrices are stored in a UBO and indexed by gl_ViewIndex in the shader.
+			 * We only push the Model matrix via push constants.
+			 *
+			 * For classic 2D shadow maps, we compute and push the combined MVP matrix
+			 * to minimize push constant size.
+			 */
+			void pushMatricesForShadowCasting (const RenderPassContext & passCtx, const PushConstantContext & pushCtx, const Libs::Math::CartesianFrame< float > * worldCoordinates) const noexcept override;
 
-			/** @copydoc EmEn::Graphics::RenderableInstance::Abstract::pushMatricesForRendering() const noexcept */
-			void pushMatricesForRendering (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::PipelineLayout & pipelineLayout, const Saphir::Program & program, uint32_t readStateIndex, const ViewMatricesInterface & viewMatrices, const Libs::Math::CartesianFrame< float > * worldCoordinates) const noexcept override;
+			/**
+			 * @brief Push constant strategy for Unique (scene rendering).
+			 *
+			 * @par Matrix Distribution
+			 * | Mode              | Push Constants | UBO Content                    |
+			 * |-------------------|----------------|--------------------------------|
+			 * | Cubemap           | M only         | VP[6] indexed by gl_ViewIndex  |
+			 * | Advanced/Billboard| V + M          | -                              |
+			 * | Simple            | MVP combined   | -                              |
+			 *
+			 * @par Mode Selection
+			 * - **Cubemap**: Multiview rendering, VP matrices in UBO array
+			 * - **Advanced**: Lighting needs world-space positions, requires separate V and M
+			 * - **Billboard**: Sprites need V matrix to compute camera-facing orientation
+			 * - **Simple**: No lighting, combined MVP minimizes push constant usage
+			 *
+			 * @par MergePushConstants Optimization
+			 * When MergePushConstants is true, V and M are copied to a contiguous buffer
+			 * and pushed in a single vkCmdPushConstants call instead of two separate calls.
+			 */
+			void pushMatricesForRendering (const RenderPassContext & passCtx, const PushConstantContext & pushCtx, const Libs::Math::CartesianFrame< float > * worldCoordinates) const noexcept override;
 
 			/** @copydoc EmEn::Graphics::RenderableInstance::Abstract::instanceCount() */
 			[[nodiscard]]
