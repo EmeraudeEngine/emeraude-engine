@@ -373,7 +373,6 @@ namespace EmEn
 			m_state.windowHeight = static_cast< uint32_t >(height);
 			m_state.framebufferWidth = static_cast< uint32_t >(width);
 			m_state.framebufferHeight = static_cast< uint32_t >(height);
-			m_framebufferResized = true;
 
 			/* NOTE: This follow the GLFW framework events order. */
 			this->notify(OSNotifiesFramebufferResized);
@@ -1176,6 +1175,12 @@ namespace EmEn
 		glfwSetFramebufferSizeCallback(m_handle.get(), framebufferSizeCallback);
 		glfwSetWindowContentScaleCallback(m_handle.get(), windowContentScaleCallback);
 
+#if IS_WINDOWS
+		/* NOTE: On Windows, set up native message handling to detect resize start/end.
+		 * This allows pausing rendering during resize to avoid deadlocks with vkCreateSwapchainKHR(). */
+		this->setupWindowsResizeHandling();
+#endif
+
 		return true;
 	}
 
@@ -1374,7 +1379,6 @@ namespace EmEn
 		/* NOTE: Save the state. */
 		_this->m_state.framebufferWidth = static_cast< uint32_t >(width);
 		_this->m_state.framebufferHeight = static_cast< uint32_t >(height);
-		_this->m_framebufferResized = true;
 
 		_this->notify(OSNotifiesFramebufferResized);
 	}

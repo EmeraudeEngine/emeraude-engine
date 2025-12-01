@@ -54,6 +54,7 @@
 #include "Vulkan/Instance.hpp"
 #include "Vulkan/LayoutManager.hpp"
 #include "Vulkan/TransferManager.hpp"
+#include "Vulkan/SwapChain.hpp"
 #include "Window.hpp"
 
 /* Forward declarations. */
@@ -67,7 +68,6 @@ namespace EmEn
 		class CommandBuffer;
 		class GraphicsPipeline;
 		class Sampler;
-		class SwapChain;
 	}
 
 	namespace Graphics
@@ -778,6 +778,36 @@ namespace EmEn::Graphics
 			[[nodiscard]]
 			std::array< Libs::PixelFactory::Pixmap< uint8_t >, 3 > captureFramebuffer (bool keepAlpha = false, bool withDepthBuffer = false, bool withStencilBuffer = false) noexcept;
 
+			/**
+			 * @brief Sets the swap-chain to status degraded in order to force a refresh.
+			 * @return void
+			 */
+			void
+			setSwapChainDegraded () const noexcept
+			{
+				m_swapChain->setDegraded();
+			}
+
+			/**
+			 * @brief Tells the Core that the swap-chain must be recreated.
+			 * @note This allows the main thread to be in charge of recreating the swap-chain.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isSwapChainDegraded () const noexcept
+			{
+				return m_swapChain->status() == Vulkan::Status::Degraded;
+			}
+
+			/**
+			 * @brief Refresh the graphics renderer framebuffer.
+			 * @note This will be called by the main thread.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool recreateSystem () noexcept;
+
 		private:
 
 			/** @copydoc EmEn::ServiceInterface::onInitialize() */
@@ -788,17 +818,10 @@ namespace EmEn::Graphics
 
 			/** @copydoc EmEn::Libs::ObserverTrait::onNotification() */
 			[[nodiscard]]
-			bool onNotification (const ObservableTrait * observable, int notificationCode, const std::any & data) noexcept override;
+			bool onNotification (const Libs::ObservableTrait * observable, int notificationCode, const std::any & data) noexcept override;
 
 			/** @copydoc EmEn::Console::Controllable::onRegisterToConsole. */
 			void onRegisterToConsole () noexcept override;
-
-			/**
-			 * @brief Refresh the graphics renderer framebuffer.
-			 * @return bool
-			 */
-			[[nodiscard]]
-			bool recreateSystem () noexcept;
 
 			/**
 			 * @brief Initialize all sub services of the renderer.
@@ -865,12 +888,13 @@ namespace EmEn::Graphics
 			Libs::Time::Statistics::RealTime< std::chrono::high_resolution_clock > m_statistics{30};
 			std::array< VkClearValue, 2 > m_clearColors{};
 			uint32_t m_currentFrameIndex{0};
-			const uint64_t m_timeout{std::chrono::duration_cast< std::chrono::nanoseconds >(std::chrono::milliseconds(1000)).count()};
+			const uint64_t m_timeout{std::chrono::duration_cast< std::chrono::nanoseconds >(std::chrono::milliseconds(60'000)).count()};
 			uint32_t m_graphicsPipelinesBuiltCount{0};
 			uint32_t m_graphicsPipelinesReusedCount{0};
 			bool m_debugMode{false};
 			bool m_windowLess{false};
 			bool m_shadowMapsEnabled{true};
 			bool m_renderToTexturesEnabled{true};
+			bool m_swapChainMustBeRecreated{false};
 	};
 }

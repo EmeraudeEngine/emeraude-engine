@@ -376,7 +376,7 @@ namespace EmEn::Input
 
 			/**
 			 * @brief Waits for a system event.
-			 * @param until Sets a duration until the cancellation of the waiting.
+			 * @param until Sets a duration until the cancellation of the waiting in seconds.
 			 * @return void
 			 */
 			void waitSystemEvents (double until = 0.0) const noexcept;

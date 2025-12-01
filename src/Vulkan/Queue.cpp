@@ -106,7 +106,7 @@ namespace EmEn::Vulkan
     }
 
 	bool
-	Queue::present (const VkPresentInfoKHR * presentInfo, Status & swapChainStatus) const noexcept
+	Queue::present (const VkPresentInfoKHR * presentInfo, std::atomic<Status> & swapChainStatus) const noexcept
 	{
 		/* [VULKAN-CPU-SYNC] vkQueuePresentKHR() */
 		const std::lock_guard< Device > lock{*m_device};

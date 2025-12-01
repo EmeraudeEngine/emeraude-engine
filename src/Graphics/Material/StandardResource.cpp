@@ -1082,6 +1082,8 @@ namespace EmEn::Graphics::Material
 
 		if ( this->isComponentPresent(ComponentType::Reflection) )
 		{
+			const auto isCubemap = generator.renderTarget()->isCubemap();
+
 			if ( generator.highQualityReflectionEnabled() )
 			{
 				vertexShader.requestSynthesizeInstruction(ShaderVariable::PositionWorldSpace);
@@ -1110,7 +1112,7 @@ namespace EmEn::Graphics::Material
 
 				vertexShader.declare(Declaration::StageOutput{generator.getNextShaderVariableLocation(), GLSL::FloatVector3, ShaderVariable::ReflectionTextureCoordinates, GLSL::Smooth});
 
-				Code(vertexShader) << ShaderVariable::ReflectionTextureCoordinates << " = reflect(normalize(" << ShaderVariable::PositionWorldSpace << ".xyz - " << ViewUB(UniformBlock::Component::PositionWorldSpace) << ".xyz), " << ShaderVariable::NormalWorldSpace << ");";
+				Code(vertexShader) << ShaderVariable::ReflectionTextureCoordinates << " = reflect(normalize(" << ShaderVariable::PositionWorldSpace << ".xyz - " << ViewUB(UniformBlock::Component::PositionWorldSpace, isCubemap) << ".xyz), " << ShaderVariable::NormalWorldSpace << ");";
 			}
 		}
 

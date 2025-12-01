@@ -279,30 +279,33 @@ namespace EmEn::Graphics
 			friend std::ostream & operator<< (std::ostream & out, const ViewMatrices3DUBO & obj);
 
 			/** @brief Total number of elements in the UBO buffer. */
-			static constexpr auto ViewUBOElementCount = Matrix4Alignment + (5 * VectorAlignment);
+			static constexpr auto ViewUBOElementCount = (6 * Matrix4Alignment) + Matrix4Alignment + (5 * VectorAlignment);
 			/** @brief Total size in bytes of the UBO buffer. */
 			static constexpr auto ViewUBOSize = ViewUBOElementCount * sizeof(float);
 
+			/* @brief Jump offset over the 6 view matrices for the cubemap. */
+			static constexpr auto ViewMatricesJumpOffset{6 + 16UL};
+
 			/** @brief Offset of the projection matrix in the buffer. */
-			static constexpr auto ProjectionMatrixOffset{0UL};
+			static constexpr auto ProjectionMatrixOffset{ViewMatricesJumpOffset + 0UL};
 			/** @brief Offset of the world position in the buffer. */
-			static constexpr auto WorldPositionOffset{16UL};
+			static constexpr auto WorldPositionOffset{ViewMatricesJumpOffset + 16UL};
 			/** @brief Offset of the velocity vector in the buffer. */
-			static constexpr auto VelocityVectorOffset{20UL};
+			static constexpr auto VelocityVectorOffset{ViewMatricesJumpOffset + 20UL};
 			/** @brief Offset of the view properties in the buffer. */
-			static constexpr auto ViewPropertiesOffset{24UL};
+			static constexpr auto ViewPropertiesOffset{ViewMatricesJumpOffset + 24UL};
 			/** @brief Offset of the view width in the buffer. */
-			static constexpr auto ViewWidthOffset{24UL};
+			static constexpr auto ViewWidthOffset{ViewMatricesJumpOffset + 24UL};
 			/** @brief Offset of the view height in the buffer. */
-			static constexpr auto ViewHeightOffset{25UL};
+			static constexpr auto ViewHeightOffset{ViewMatricesJumpOffset + 25UL};
 			/** @brief Offset of the near plane distance in the buffer. */
-			static constexpr auto ViewNearOffset{26UL};
+			static constexpr auto ViewNearOffset{ViewMatricesJumpOffset + 26UL};
 			/** @brief Offset of the far plane distance in the buffer. */
-			static constexpr auto ViewDistanceOffset{27UL};
+			static constexpr auto ViewDistanceOffset{ViewMatricesJumpOffset + 27UL};
 			/** @brief Offset of the ambient light color in the buffer. */
-			static constexpr auto AmbientLightColorOffset{28UL};
+			static constexpr auto AmbientLightColorOffset{ViewMatricesJumpOffset + 28UL};
 			/** @brief Offset of the ambient light intensity in the buffer. */
-			static constexpr auto AmbientLightIntensityOffset{32UL};
+			static constexpr auto AmbientLightIntensityOffset{ViewMatricesJumpOffset + 32UL};
 
 			/** @brief Orientation matrices for the 6 faces of a standard cubemap. */
 			static const std::array< Libs::Math::Matrix< 4, float >, CubemapFaceCount > CubemapOrientation;
@@ -320,6 +323,36 @@ namespace EmEn::Graphics
 				Libs::Math::Vector< 3, float > position;                                  /**< Camera position in world space. */
 				std::array< Frustum, CubemapFaceCount > frustums{};                      /**< Frustums for each cubemap face. */
 				std::array< float, ViewUBOElementCount > bufferData{
+					/* View matrix #1. */
+					1.0F, 0.0F, 0.0F, 0.0F,
+					0.0F, 1.0F, 0.0F, 0.0F,
+					0.0F, 0.0F, 1.0F, 0.0F,
+					0.0F, 0.0F, 0.0F, 1.0F,
+					/* View matrix #2. */
+					1.0F, 0.0F, 0.0F, 0.0F,
+					0.0F, 1.0F, 0.0F, 0.0F,
+					0.0F, 0.0F, 1.0F, 0.0F,
+					0.0F, 0.0F, 0.0F, 1.0F,
+					/* View matrix #3. */
+					1.0F, 0.0F, 0.0F, 0.0F,
+					0.0F, 1.0F, 0.0F, 0.0F,
+					0.0F, 0.0F, 1.0F, 0.0F,
+					0.0F, 0.0F, 0.0F, 1.0F,
+					/* View matrix #4. */
+					1.0F, 0.0F, 0.0F, 0.0F,
+					0.0F, 1.0F, 0.0F, 0.0F,
+					0.0F, 0.0F, 1.0F, 0.0F,
+					0.0F, 0.0F, 0.0F, 1.0F,
+					/* View matrix #5. */
+					1.0F, 0.0F, 0.0F, 0.0F,
+					0.0F, 1.0F, 0.0F, 0.0F,
+					0.0F, 0.0F, 1.0F, 0.0F,
+					0.0F, 0.0F, 0.0F, 1.0F,
+					/* View matrix #6. */
+					1.0F, 0.0F, 0.0F, 0.0F,
+					0.0F, 1.0F, 0.0F, 0.0F,
+					0.0F, 0.0F, 1.0F, 0.0F,
+					0.0F, 0.0F, 0.0F, 1.0F,
 					/* Projection matrix. */
 					1.0F, 0.0F, 0.0F, 0.0F,
 					0.0F, 1.0F, 0.0F, 0.0F,
@@ -345,46 +378,10 @@ namespace EmEn::Graphics
 			mutable std::mutex m_memoryAccess;                                   /**< Mutex for GPU memory access synchronization. */
 	};
 
-	inline
-	std::ostream &
-	operator<< (std::ostream & out, const ViewMatrices3DUBO & obj)
-	{
-		out <<
-			"3D View matrices data : " "\n"
-			"World position " << obj.m_logicState.position << "\n"
-			"Projection " << obj.m_logicState.projection;
-
-		for ( uint32_t viewIndex = 0; viewIndex < CubemapFaceCount; ++viewIndex )
-		{
-			out << "Face #" << viewIndex << "\n"
-				"\t" "View " << obj.m_logicState.views[viewIndex] <<
-				"\t" "Infinity view " << obj.m_logicState.infinityViews[viewIndex] <<
-				"\t" << obj.m_logicState.frustums[viewIndex];
-		}
-
-		out << "Buffer data for GPU : " "\n";
-
-		for ( size_t index = 0; index < obj.m_logicState.bufferData.size(); index += 4 )
-		{
-			out << '[' << obj.m_logicState.bufferData[index+0] << ", " << obj.m_logicState.bufferData[index+1] << ", " << obj.m_logicState.bufferData[index+2] << ", " << obj.m_logicState.bufferData[index+3] << "]" "\n";
-		}
-
-		return out;
-	}
-
 	/**
 	 * @brief Stringifies the object.
 	 * @param obj A reference to the object to print.
 	 * @return std::string
 	 */
-	inline
-	std::string
-	to_string (const ViewMatrices3DUBO & obj) noexcept
-	{
-		std::stringstream output;
-
-		output << obj;
-
-		return output.str();
-	}
+	std::string to_string (const ViewMatrices3DUBO & obj) noexcept;
 }

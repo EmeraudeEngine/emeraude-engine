@@ -701,6 +701,7 @@ namespace EmEn::Saphir
 				constexpr auto Scale{"scale"};
 				/* View specific */
 				constexpr auto ProjectionMatrix{"projectionMatrix"};
+				constexpr auto ViewMatrix{"viewMatrix"};
 				constexpr auto PositionWorldSpace{"positionWorldSpace"};
 				constexpr auto Velocity = "velocity";
 				constexpr auto ViewProperties{"viewProperties"};
@@ -838,35 +839,24 @@ namespace EmEn::Saphir
 	/**
 	 * @brief Returns the full variable name from a view uniform block.
 	 * @param componentName The uniform block component name. See Keys::UniformBlock::Component.
+	 * @param isCubemap Tells if the uniform buffer is structure for a cubemap.
 	 * @return std::string
 	 */
 	[[nodiscard]]
 	inline
 	std::string
-	ViewUB (const char * componentName) noexcept
+	ViewUB (const char * componentName, bool isCubemap) noexcept
 	{
 		std::stringstream output;
 
-		output << Keys::UniformBlock::View << '.' << componentName;
-
-		return output.str();
-	}
-
-	/**
-	 * @brief Returns the full variable name from an indexed view uniform block.
-	 * @note This version use the multiview extension.
-	 * @param memberName The uniform block component name. See Keys::UniformBlock::Component.
-	 * @param componentName The uniform block component name. See Keys::UniformBlock::Component.
-	 * @return std::string
-	 */
-	[[nodiscard]]
-	inline
-	std::string
-	CubeViewUB (const char * memberName, const char * componentName) noexcept
-	{
-		std::stringstream output;
-
-		output << Keys::UniformBlock::View << '.' << memberName << '[' << Keys::GLSL::Vertex::In::ViewIndex << ']' << '.' << componentName;
+		if ( isCubemap )
+		{
+			output << Keys::UniformBlock::View << ".instance[" << Keys::GLSL::Vertex::In::ViewIndex << ']' << '.' << componentName;
+		}
+		else
+		{
+			output << Keys::UniformBlock::View << '.' << componentName;
+		}
 
 		return output.str();
 	}
@@ -876,6 +866,7 @@ namespace EmEn::Saphir
 	 * @param memberName The uniform block component name. See Keys::UniformBlock::Component.
 	 * @param indexVariableName The index in the array.
 	 * @param componentName The uniform block component name. See Keys::UniformBlock::Component.
+	 * @deprecated Use ViewUB("xxx", true) instead. The engine use the multiview extension now.
 	 * @return std::string
 	 */
 	[[nodiscard]]

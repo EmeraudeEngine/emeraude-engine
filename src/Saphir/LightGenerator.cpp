@@ -70,7 +70,7 @@ namespace EmEn::Saphir
 			return m_staticLighting->ambientColorVec4();
 		}
 
-		return ViewUB(UniformBlock::Component::AmbientLightColor);
+		return ViewUB(UniformBlock::Component::AmbientLightColor, false);
 	}
 
 	std::string
@@ -81,7 +81,7 @@ namespace EmEn::Saphir
 			return std::to_string(m_staticLighting->ambientIntensity());
 		}
 
-		return ViewUB(UniformBlock::Component::AmbientLightIntensity);
+		return ViewUB(UniformBlock::Component::AmbientLightIntensity, false);
 	}
 
 	std::string

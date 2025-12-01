@@ -26,13 +26,26 @@
 
 #pragma once
 
-#if __cplusplus >= 202002L /* C++20 feature */
-	#include <source_location>
-	#if !__has_builtin(__builtin_source_location)
+#include "emeraude_config.hpp"
+
+/* TODO: This file is deprecated now. */
+
+#if IS_WINDOWS
+	#if defined(_MSVC_LANG) && _MSVC_LANG >= 202002L
+		#include <source_location>
+	#else
 		#define DECLARE_FAKE_SOURCE_LOCATION
 	#endif
 #else
-	#define DECLARE_FAKE_SOURCE_LOCATION
+	#if __cplusplus >= 202002L /* C++20 feature */
+		#include <source_location>
+
+		#if !__has_builtin(__builtin_source_location)
+			#define DECLARE_FAKE_SOURCE_LOCATION
+		#endif
+	#else
+		#define DECLARE_FAKE_SOURCE_LOCATION
+	#endif
 #endif
 
 #ifdef DECLARE_FAKE_SOURCE_LOCATION

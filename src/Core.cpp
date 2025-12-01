@@ -56,10 +56,10 @@ namespace EmEn
 	using namespace Resources;
 
 	Core::Core (int argc, char * * argv, const char * applicationName, const Version & applicationVersion, const char * applicationOrganization, const char * applicationDomain) noexcept
-		: KeyboardListenerInterface(false, false),
-		Controllable(ClassId),
-		m_identification(applicationName, applicationVersion, applicationOrganization, applicationDomain),
-		m_primaryServices(argc, argv, m_identification)
+		: KeyboardListenerInterface{false, false},
+		Controllable{ClassId},
+		m_identification{applicationName, applicationVersion, applicationOrganization, applicationDomain},
+		m_primaryServices{argc, argv, m_identification}
 	{
 		if ( !this->initializeBaseLevel() )
 		{
@@ -73,10 +73,10 @@ namespace EmEn
 
 #if IS_WINDOWS
 	Core::Core (int argc, wchar_t * * wargv, const char * applicationName, const Version & applicationVersion, const char * applicationOrganization, const char * applicationDomain) noexcept
-		: KeyboardListenerInterface(false, false),
-		Controllable(ClassId),
-		m_identification(applicationName, applicationVersion, applicationOrganization, applicationDomain),
-		m_primaryServices(argc, wargv, m_identification)
+		: KeyboardListenerInterface{false, false},
+		Controllable{ClassId},
+		m_identification{applicationName, applicationVersion, applicationOrganization, applicationDomain},
+		m_primaryServices{argc, wargv, m_identification}
 	{
 		if ( !this->initializeBaseLevel() )
 		{
@@ -163,6 +163,10 @@ namespace EmEn
 
 		while ( m_isRenderingLoopRunning )
 		{
+			/* NOTE: Check the pause flag BEFORE taking the lock.
+			 * This prevents deadlock: the main thread sets m_paused=true, then waits for
+			 * the lock. If we check m_paused first, we release quickly without blocking
+			 * on potentially long Vulkan operations while holding the lock. */
 			if ( m_paused )
 			{
 				/* NOTE: Fake a frame rendering time based on an ideal 30 FPS rendering. */
@@ -208,10 +212,6 @@ namespace EmEn
 	void
 	Core::onWindowChanged () noexcept
 	{
-		/* NOTE: Graphics pipelines no longer need recreation on resize since they use
-		 * dynamic viewport and scissor states. The viewport/scissor are set dynamically
-		 * each frame via vkCmdSetViewport/vkCmdSetScissor in the render commands. */
-
 		if ( !m_overlayManager.onWindowResized() )
 		{
 			Tracer::error(ClassId, "Unable to resize the overlay manager!");
@@ -432,7 +432,7 @@ namespace EmEn
 
 			m_coreHelp.registerShortcut("Quit the application.", KeyEscape, ModKeyShift);
 			m_coreHelp.registerShortcut("Print the active scene content in console.", KeyF1, ModKeyShift);
-			m_coreHelp.registerShortcut("Refreshes scenes (Experimental).", KeyF2, ModKeyShift);
+			m_coreHelp.registerShortcut("Provoke a swap-chain re-creation (Experimental).", KeyF2, ModKeyShift);
 			m_coreHelp.registerShortcut("Test dialog (Experimental).", KeyF3, ModKeyShift);
 			m_coreHelp.registerShortcut("Reset the window size to defaults.", KeyF4, ModKeyShift);
 			m_coreHelp.registerShortcut("Open settings file in text editor.", KeyF5, ModKeyShift);
@@ -985,14 +985,12 @@ namespace EmEn
 							Tracer::info(ClassId, "No active scene !");
 						}
 					}, false);
-
-					m_audioManager.play("switch_on");
 					return true;
 
 				case KeyF2 :
-					m_audioManager.play("switch_on");
+					Tracer::info(ClassId, "Force refresh the rendering system!");
 
-					m_windowChanged = true;
+					m_graphicsRenderer.setSwapChainDegraded();
 
 					return true;
 
@@ -1064,8 +1062,6 @@ namespace EmEn
 				case KeyF9 :
 				{
 					this->notifyUser("Cleaning unused resources ...");
-
-					m_audioManager.play("switch_on");
 
 					const auto count = m_resourceManager.unloadUnusedResources();
 
@@ -1284,14 +1280,11 @@ namespace EmEn
 					break;
 
 				/* NOTE: These two notifications indicate framebuffer size or DPI scale changes.
-				 * The resize flow is handled by the Renderer, which observes the Window directly
-				 * and triggers swap chain recreation. Core receives the result via
-				 * Renderer::WindowContentRefreshed notification, which sets m_windowChanged
-				 * and triggers onWindowChanged() on the main thread.
-				 * Responding here would cause race conditions with the render thread. */
+				 * We don't want to respond here. */
 				case Window::OSNotifiesFramebufferResized :
 				case Window::OSRequestsToRescaleContentBy :
-					Tracer::debug(ClassId, "The GLFW API detected a framebuffer content size or scale changes.");
+					/* NOTE: Commented for excessive logs. */
+					//Tracer::debug(ClassId, "The GLFW API detected a framebuffer content size or scale changes.");
 					break;
 
 				case Window::OSRequestsToTerminate :
@@ -1329,6 +1322,8 @@ namespace EmEn
 			if ( notificationCode == Renderer::WindowContentRefreshed )
 			{
 				m_windowChanged = true;
+
+				return true;
 			}
 
 			TraceDebug{ClassId} << "Receiving an event from '" << Renderer::ClassId << "' (code:" << notificationCode << ") ...";

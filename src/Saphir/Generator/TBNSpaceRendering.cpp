@@ -29,6 +29,7 @@
 /* Local inclusions. */
 #include "Libs/SourceCodeParser.hpp"
 #include "Saphir/Code.hpp"
+#include "Graphics/RenderTarget/Abstract.hpp"
 
 namespace EmEn::Saphir::Generator
 {
@@ -161,6 +162,8 @@ namespace EmEn::Saphir::Generator
 
 		if ( this->isFlagEnabled(IsInstancingEnabled) )
 		{
+			const auto isCubemap = this->renderTarget()->isCubemap();
+
 			/* Declare the view uniform block. */
 			if ( !this->declareViewUniformBlock(*vertexShader) )
 			{
@@ -170,7 +173,7 @@ namespace EmEn::Saphir::Generator
 			vertexShader->declare(Declaration::InputAttribute{VertexAttributeType::ModelMatrixR0});
 			vertexShader->declare(Declaration::StageOutput{this->getNextShaderVariableLocation(), GLSL::Matrix4, ShaderVariable::ModelViewProjectionMatrix, GLSL::Flat});
 
-			Code{*vertexShader, Location::Output} << ShaderVariable::ModelViewProjectionMatrix << " = " << ViewUB(UniformBlock::Component::ViewProjectionMatrix) << " * " << Attribute::ModelMatrix << ';';
+			Code{*vertexShader, Location::Output} << ShaderVariable::ModelViewProjectionMatrix << " = " << ViewUB(UniformBlock::Component::ViewProjectionMatrix, isCubemap) << " * " << Attribute::ModelMatrix << ';';
 		}
 
 		/* Output declarations. */

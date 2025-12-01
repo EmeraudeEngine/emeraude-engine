@@ -39,6 +39,23 @@ namespace EmEn::Vulkan
 {
 	using namespace Libs;
 
+	Surface::~Surface ()
+	{
+		if ( !m_instance.usable() )
+		{
+			return;
+		}
+
+		if ( m_handle != VK_NULL_HANDLE )
+		{
+			vkDestroySurfaceKHR(m_instance.handle(), m_handle, nullptr);
+
+			m_handle = VK_NULL_HANDLE;
+
+			this->setDestroyed();
+		}
+	}
+
 	bool
 	Surface::update (const std::shared_ptr< PhysicalDevice > & physicalDevice) noexcept
 	{

@@ -74,6 +74,25 @@ namespace EmEn
 	}
 
 	void
+	Window::destroySurface () noexcept
+	{
+		if ( m_surface != nullptr )
+		{
+			Tracer::debug(ClassId, "Destroying Vulkan surface...");
+
+			m_surface.reset();
+		}
+	}
+
+	bool
+	Window::recreateSurface (bool useNativeCode) noexcept
+	{
+		this->destroySurface();
+
+		return this->createSurface(useNativeCode);
+	}
+
+	void
 	Window::disableTitleBar () noexcept
 	{
 

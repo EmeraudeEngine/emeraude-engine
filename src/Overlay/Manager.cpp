@@ -772,8 +772,6 @@ namespace EmEn::Overlay
 			screen->render(commandBuffer);
 		}
 #endif
-
-		m_physicalRepresentationUpdateMutex.unlock();
 	}
 
 	bool
@@ -781,27 +779,17 @@ namespace EmEn::Overlay
 	{
 		if ( observable->is(Window::getClassUID()) )
 		{
-			switch ( notificationCode )
+			/* NOTE: On the window creation, we use the initial size to set the overlay phyical size. */
+			if ( notificationCode == Window::Created )
 			{
-				case Window::Created :
-					this->updateFramebufferProperties();
-					break;
+				this->updateFramebufferProperties();
 
-					// FIXME: Check if this is useful.
-				/* NOTE: These two notifications invalidate the framebuffer content. */
-				case Window::OSNotifiesFramebufferResized :
-				case Window::OSRequestsToRescaleContentBy :
-				//	/* NOTE: When the window moves to a monitor with a different DPI,
-				//	 * we need to update framebuffer properties and notify observers. */
-				//	this->updatePhysicalRepresentation();
-					break;
+				return true;
+			}
 
-				default:
-					if constexpr ( ObserverDebugEnabled )
-					{
-						TraceDebug{ClassId} << "Event #" << notificationCode << " from the window ignored.";
-					}
-					break;
+			if constexpr ( ObserverDebugEnabled )
+			{
+				TraceDebug{ClassId} << "Event #" << notificationCode << " from the window ignored.";
 			}
 
 			return true;

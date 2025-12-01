@@ -48,3 +48,4 @@
 - VULKAN: Find a way to order the rendering by pipeline layout to reduce the binding cost per draw. See VK_KHR_dynamic_rendering from Vulkan 1.1 API extension, upgraded in Vulkan 1.2 API and core in Vulkan 1.3 API.
 - VULKAN: Check for the right way to push constant from the right shader declaration to the right stage in vulkan. (GraphicsShaderGenerator.cpp:254)
 - VULKAN: Analyze UBO and instanced VBO usage and make a better and global shared UBO/VBO optimization for short life entity.
+- EXTERNAL_LIBS: Move fastgltf to external libraries projet and make it a binary.

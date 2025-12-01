@@ -77,12 +77,12 @@ namespace EmEn::Graphics
 
 		m_logicState.projection = Matrix< 4, float >::perspectiveProjection(QuartRevolution< float >, 1.0F, m_logicState.bufferData[ViewNearOffset], m_logicState.bufferData[ViewDistanceOffset]);
 
-		TraceDebug{ClassId} <<
+		/*TraceDebug{ClassId} <<
 			"Perspective projection:" "\n"
 			"Size: " << width << " X " << height << "\n"
 			"Distance: " << distance << "\n"
 			"Field of view: " << fov << "\n"
-			"Matrix: " << m_logicState.projection;
+			"Matrix: " << m_logicState.projection;*/
 
 		std::memcpy(&m_logicState.bufferData[ProjectionMatrixOffset], m_logicState.projection.data(), Matrix4Alignment * sizeof(float));
 	}
@@ -108,12 +108,12 @@ namespace EmEn::Graphics
 			m_logicState.bufferData[ViewNearOffset], m_logicState.bufferData[ViewDistanceOffset]
 		);
 
-		TraceDebug{ClassId} <<
+		/*TraceDebug{ClassId} <<
 			"Orthographic projection:" "\n"
 			"Size: " << width << " X " << height << "\n"
 			"Near distance: " << nearDistance << "\n"
 			"Far distance: " << farDistance << "\n"
-			"Matrix: " << m_logicState.projection;
+			"Matrix: " << m_logicState.projection;*/
 
 		std::memcpy(&m_logicState.bufferData[ProjectionMatrixOffset], m_logicState.projection.data(), Matrix4Alignment * sizeof(float));
 	}
@@ -232,5 +232,41 @@ namespace EmEn::Graphics
 		m_uniformBufferObject->unmapMemory(0, VK_WHOLE_SIZE);
 
 		return true;
+	}
+
+	std::ostream &
+	operator<< (std::ostream & out, const ViewMatrices3DUBO & obj)
+	{
+		out <<
+			"3D View matrices data : " "\n"
+			"World position " << obj.m_logicState.position << "\n"
+			"Projection " << obj.m_logicState.projection;
+
+		for ( uint32_t viewIndex = 0; viewIndex < CubemapFaceCount; ++viewIndex )
+		{
+			out << "Face #" << viewIndex << "\n"
+				"\t" "View " << obj.m_logicState.views[viewIndex] <<
+				"\t" "Infinity view " << obj.m_logicState.infinityViews[viewIndex] <<
+				"\t" << obj.m_logicState.frustums[viewIndex];
+		}
+
+		out << "Buffer data for GPU : " "\n";
+
+		for ( size_t index = 0; index < obj.m_logicState.bufferData.size(); index += 4 )
+		{
+			out << '[' << obj.m_logicState.bufferData[index+0] << ", " << obj.m_logicState.bufferData[index+1] << ", " << obj.m_logicState.bufferData[index+2] << ", " << obj.m_logicState.bufferData[index+3] << "]" "\n";
+		}
+
+		return out;
+	}
+
+	std::string
+	to_string (const ViewMatrices3DUBO & obj) noexcept
+	{
+		std::stringstream output;
+
+		output << obj;
+
+		return output.str();
 	}
 }

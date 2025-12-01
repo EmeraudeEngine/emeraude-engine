@@ -362,7 +362,7 @@ namespace EmEn::Saphir
 		else
 		{
 			/* NOTE: For unique sprite (this->isBillBoardingEnabled()), the model matrix is already oriented to the camera. */
-			code << "\t" "const mat4 " << ShaderVariable::ModelViewProjectionMatrix << " = " << ViewUB(Keys::UniformBlock::Component::ProjectionMatrix) << " * " << MatrixPC(PushConstant::Component::ViewMatrix) << " * " << MatrixPC(PushConstant::Component::ModelMatrix) << ";" "\n";
+			code << "\t" "const mat4 " << ShaderVariable::ModelViewProjectionMatrix << " = " << ViewUB(Keys::UniformBlock::Component::ProjectionMatrix, false) << " * " << MatrixPC(PushConstant::Component::ViewMatrix) << " * " << MatrixPC(PushConstant::Component::ModelMatrix) << ";" "\n";
 		}
 
 		m_uniquePreparations.emplace_back(ShaderVariable::ModelViewProjectionMatrix, code.str());

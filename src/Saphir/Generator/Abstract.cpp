@@ -415,16 +415,15 @@ namespace EmEn::Saphir::Generator
 		{
 			Declaration::UniformBlock uniformBlock{setIndex, binding, Declaration::MemoryLayout::Std140, UniformBlock::Type::CubemapView, UniformBlock::View};
 			{
-				/* FIXME: Rework this to split common data between each cubemap faces ! */
 				Declaration::Structure structure{Struct::CubemapFace};
-				structure.addMember(Declaration::VariableType::Matrix4, UniformBlock::Component::ProjectionMatrix);
-				structure.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::PositionWorldSpace);
-				structure.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::Velocity);
-				structure.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::ViewProperties);
-				structure.addMember(Declaration::VariableType::FloatVector4, "_padding");
+				structure.addMember(Declaration::VariableType::Matrix4, UniformBlock::Component::ViewMatrix);
 
 				uniformBlock.addArrayMember(structure, UniformBlock::Component::Instance, 6);
 			}
+			uniformBlock.addMember(Declaration::VariableType::Matrix4, UniformBlock::Component::ProjectionMatrix);
+			uniformBlock.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::PositionWorldSpace);
+			uniformBlock.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::Velocity);
+			uniformBlock.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::ViewProperties);
 			uniformBlock.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::AmbientLightColor);
 			uniformBlock.addMember(Declaration::VariableType::Float, UniformBlock::Component::AmbientLightIntensity);
 

@@ -97,7 +97,7 @@ namespace EmEn::Vulkan
 		m_createInfo.clipped = VK_TRUE;
 		m_createInfo.oldSwapchain = oldSwapChain;
 
-		const auto result = vkCreateSwapchainKHR(this->device()->handle(), &m_createInfo, nullptr, &m_handle);
+		VkResult result = vkCreateSwapchainKHR(this->device()->handle(), &m_createInfo, nullptr, &m_handle);
 
 		/* NOTE: Destroy the previous swap chain if exists. */
 		if ( m_createInfo.oldSwapchain != VK_NULL_HANDLE )
@@ -131,7 +131,7 @@ namespace EmEn::Vulkan
 	bool
 	SwapChain::onCreate (Renderer & renderer) noexcept
 	{
-		const auto & window = renderer.window();
+		auto & window = renderer.window();
 
 		if ( !this->hasDevice() || window.surface() == nullptr )
 		{
@@ -198,7 +198,7 @@ namespace EmEn::Vulkan
 	}
 
 	bool
-	SwapChain::refresh () noexcept
+	SwapChain::recreate () noexcept
 	{
 		/* The old framebuffer must be throw away. */
 		this->resetFramebuffer();
@@ -223,6 +223,65 @@ namespace EmEn::Vulkan
 		}
 
 		/* This will rework the view-related matrices. */
+		this->updateViewProperties();
+
+		m_status = Status::Ready;
+
+		return true;
+	}
+
+	bool
+	SwapChain::fullRecreate (bool useNativeCode) noexcept
+	{
+		/* Destroy the old framebuffer. */
+		this->resetFramebuffer();
+
+		m_status = Status::UnderConstruction;
+
+		/* Destroy the current swap-chain completely. */
+		if ( m_handle != VK_NULL_HANDLE )
+		{
+			vkDestroySwapchainKHR(this->device()->handle(), m_handle, nullptr);
+
+			m_handle = VK_NULL_HANDLE;
+		}
+
+		/* Get the window reference. */
+		auto & window = m_renderer.window();
+
+		/* Destroy and recreate the Vulkan surface using native Win32 API. */
+		if ( !window.recreateSurface(useNativeCode) )
+		{
+			Tracer::error(ClassId, "Unable to recreate the Vulkan surface !");
+
+			return false;
+		}
+
+		/* Update surface capabilities with the new surface. */
+		if ( !window.surface()->update(this->device()) )
+		{
+			Tracer::error(ClassId, "Unable to update the new surface properties !");
+
+			return false;
+		}
+
+		/* Create a brand new swap-chain (no oldSwapchain). */
+		if ( !this->createBaseSwapChain(window, VK_NULL_HANDLE) )
+		{
+			Tracer::error(ClassId, "Unable to create the new swap-chain !");
+
+			return false;
+		}
+
+		/* Rebuild the framebuffer. */
+		if ( !this->createFramebuffer() )
+		{
+			Tracer::error(ClassId, "Unable to complete the framebuffer !");
+
+			return false;
+		}
+
+		/* Update view-related matrices. */
 		this->updateViewProperties();
 
 		m_status = Status::Ready;
@@ -342,11 +401,11 @@ namespace EmEn::Vulkan
 	{
 		const auto framebufferSize = m_renderer.window().getFramebufferSize();
 
-		TraceDebug{ClassId} <<
+		/*TraceDebug{ClassId} <<
 			"Vulkan minimum extent detected : " << capabilities.minImageExtent.width << 'X' << capabilities.minImageExtent.height << "\n"
 			"Vulkan maximum extent detected : " << capabilities.maxImageExtent.width << 'X' << capabilities.maxImageExtent.height << "\n"
 			"Vulkan current extent detected : " << capabilities.currentExtent.width << 'X' << capabilities.currentExtent.height << "\n"
-			"GLFW framebuffer : " << framebufferSize.at(0) << 'X' << framebufferSize.at(1);
+			"GLFW framebuffer : " << framebufferSize.at(0) << 'X' << framebufferSize.at(1);*/
 
 		return {
 			std::clamp(framebufferSize[0], capabilities.minImageExtent.width, capabilities.maxImageExtent.width),

@@ -195,24 +195,16 @@ namespace EmEn
 			}
 
 			/**
-			 * @brief Return whether the framebuffer has been resized.
-			 * @return @
+			 * @brief Returns whether the window is currently being resized by the user.
+			 * @note On Windows, this is true during a drag resize operation (between WM_ENTERSIZEMOVE and WM_EXITSIZEMOVE).
+			 * On other platforms, this always returns false.
+			 * @return bool
 			 */
 			[[nodiscard]]
 			bool
-			isFramebufferResized () const noexcept
+			isUserResizing () const noexcept
 			{
-				return m_framebufferResized;
-			}
-
-			/**
-			 * @brief Tells the framebuffer resize has been taken care of.
-			 * @return void
-			 */
-			void
-			resetFramebufferResizeFlag () noexcept
-			{
-				m_framebufferResized = false;
+				return m_isUserResizing;
 			}
 
 			/**
@@ -564,6 +556,87 @@ namespace EmEn
 			void waitValidWindowSize () const noexcept;
 
 			/**
+			 * @brief Executes a function with all GLFW callbacks temporarily disabled.
+			 * @details This method is useful on Windows where vkCreateSwapchainKHR() can deadlock
+			 * if GLFW callbacks are triggered during swap-chain recreation. The method:
+			 * 1. Saves and disables all GLFW callbacks (window, input, error, monitor, joystick)
+			 * 2. Polls pending system events (pumps the Windows message queue)
+			 * 3. Executes the provided function
+			 * 4. Restores all callbacks to their previous values
+			 * @tparam function_t The callable type.
+			 * @param function The function to execute while callbacks are disabled.
+			 */
+			template< typename function_t >
+			void
+			executeWithoutCallbacks (function_t && function) const noexcept
+			{
+				if ( m_handle == nullptr )
+				{
+					function();
+
+					return;
+				}
+
+				auto * window = m_handle.get();
+
+				/* Save and disable all window callbacks. */
+				const auto prevWindowPos = glfwSetWindowPosCallback(window, nullptr);
+				const auto prevWindowSize = glfwSetWindowSizeCallback(window, nullptr);
+				const auto prevWindowClose = glfwSetWindowCloseCallback(window, nullptr);
+				const auto prevWindowRefresh = glfwSetWindowRefreshCallback(window, nullptr);
+				const auto prevWindowFocus = glfwSetWindowFocusCallback(window, nullptr);
+				const auto prevWindowIconify = glfwSetWindowIconifyCallback(window, nullptr);
+				const auto prevWindowMaximize = glfwSetWindowMaximizeCallback(window, nullptr);
+				const auto prevFramebufferSize = glfwSetFramebufferSizeCallback(window, nullptr);
+				const auto prevWindowContentScale = glfwSetWindowContentScaleCallback(window, nullptr);
+
+				/* Save and disable all input callbacks. */
+				const auto prevKey = glfwSetKeyCallback(window, nullptr);
+				const auto prevChar = glfwSetCharCallback(window, nullptr);
+				const auto prevMouseButton = glfwSetMouseButtonCallback(window, nullptr);
+				const auto prevCursorPos = glfwSetCursorPosCallback(window, nullptr);
+				const auto prevCursorEnter = glfwSetCursorEnterCallback(window, nullptr);
+				const auto prevScroll = glfwSetScrollCallback(window, nullptr);
+				const auto prevDrop = glfwSetDropCallback(window, nullptr);
+
+				/* Save and disable global callbacks. */
+				const auto prevError = glfwSetErrorCallback(nullptr);
+				const auto prevMonitor = glfwSetMonitorCallback(nullptr);
+				const auto prevJoystick = glfwSetJoystickCallback(nullptr);
+
+				/* Pump the message queue without triggering any callbacks. */
+				glfwPollEvents();
+
+				/* Execute the user function. */
+				function();
+
+				/* Restore all window callbacks. */
+				glfwSetWindowPosCallback(window, prevWindowPos);
+				glfwSetWindowSizeCallback(window, prevWindowSize);
+				glfwSetWindowCloseCallback(window, prevWindowClose);
+				glfwSetWindowRefreshCallback(window, prevWindowRefresh);
+				glfwSetWindowFocusCallback(window, prevWindowFocus);
+				glfwSetWindowIconifyCallback(window, prevWindowIconify);
+				glfwSetWindowMaximizeCallback(window, prevWindowMaximize);
+				glfwSetFramebufferSizeCallback(window, prevFramebufferSize);
+				glfwSetWindowContentScaleCallback(window, prevWindowContentScale);
+
+				/* Restore all input callbacks. */
+				glfwSetKeyCallback(window, prevKey);
+				glfwSetCharCallback(window, prevChar);
+				glfwSetMouseButtonCallback(window, prevMouseButton);
+				glfwSetCursorPosCallback(window, prevCursorPos);
+				glfwSetCursorEnterCallback(window, prevCursorEnter);
+				glfwSetScrollCallback(window, prevScroll);
+				glfwSetDropCallback(window, prevDrop);
+
+				/* Restore global callbacks. */
+				glfwSetErrorCallback(prevError);
+				glfwSetMonitorCallback(prevMonitor);
+				glfwSetJoystickCallback(prevJoystick);
+			}
+
+			/**
 			 * @brief Gets the window state into a string.
 			 * @param directData Call glfw lib to get the data instead of printing the last known state.
 			 * @return std::string
@@ -599,6 +672,17 @@ namespace EmEn
 			 */
 			[[nodiscard]]
 			std::array< uint32_t, 2 > getDesktopSize (GLFWmonitor * monitor = nullptr) const noexcept;
+
+			/**
+			 * @brief Recreates the Vulkan surface (destroys then creates).
+			 * @note This is useful on Windows where vkCreateSwapchainKHR can deadlock.
+			 * By destroying the surface completely and recreating it, we avoid the
+			 * problematic swap-chain transition.
+			 * @param useNativeCode Use vulkan native code instead of glfw.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool recreateSurface (bool useNativeCode) noexcept;
 
 		private:
 
@@ -652,6 +736,12 @@ namespace EmEn
 			 */
 			[[nodiscard]]
 			bool createSurface (bool useNativeCode) noexcept;
+
+			/**
+			 * @brief Destroys the current Vulkan surface.
+			 * @return void
+			 */
+			void destroySurface () noexcept;
 
 			/**
 			 * @brief Returns the monitor handles at monitor desired index.
@@ -771,15 +861,36 @@ namespace EmEn
 			[[nodiscard]]
 			std::array< int32_t, 2 > getCenteredPosition (const std::array< uint32_t , 2 > & windowSize, int32_t desiredMonitor = -1) const noexcept;
 
+#if IS_WINDOWS
+			/**
+			 * @brief Sets up the Windows-specific resize handling by subclassing the window.
+			 * @return void
+			 */
+			void setupWindowsResizeHandling () noexcept;
+
+			/**
+			 * @brief Custom Windows procedure to intercept WM_ENTERSIZEMOVE and WM_EXITSIZEMOVE.
+			 * @param hWnd The window handle.
+			 * @param uMsg The message identifier.
+			 * @param wParam Additional message information.
+			 * @param lParam Additional message information.
+			 * @return LRESULT
+			 */
+			static LRESULT CALLBACK windowProc (HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
+#endif
+
 			PrimaryServices & m_primaryServices;
 			const Vulkan::Instance & m_instance;
 			std::string m_title;
 			State m_state{};
 			std::unique_ptr< GLFWwindow, std::function< void (GLFWwindow *) > > m_handle;
 			std::unique_ptr< Vulkan::Surface > m_surface;
+#if IS_WINDOWS
+			WNDPROC m_originalWndProc{nullptr};
+#endif
 			bool m_showInformation{false};
 			bool m_windowLess{false};
 			bool m_saveWindowPropertiesAtExit{false};
-			bool m_framebufferResized{false};
+			bool m_isUserResizing{false};
 	};
 }

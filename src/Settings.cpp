@@ -443,14 +443,14 @@ namespace EmEn
 		if ( storeIt == m_stores.end() )
 		{
 			/* NOTE: The store do not exist. */
-			return false;
+			return true;
 		}
 
 		const auto * array = storeIt->second.getArrayPointer(variableName);
 
 		if ( array == nullptr )
 		{
-			return false;
+			return true;
 		}
 
 		return array->empty();

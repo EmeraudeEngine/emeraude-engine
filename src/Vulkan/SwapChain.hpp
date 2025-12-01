@@ -27,6 +27,7 @@
 #pragma once
 
 /* STL inclusions. */
+#include <atomic>
 #include <cstdint>
 #include <memory>
 #include <vector>
@@ -241,7 +242,18 @@ namespace EmEn::Vulkan
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool refresh () noexcept;
+			bool recreate () noexcept;
+
+			/**
+			 * @brief Fully recreates the swap-chain by destroying and recreating the Vulkan surface.
+			 * @note This is a workaround for Windows where vkCreateSwapchainKHR() can deadlock
+			 * during interactive window resize. By destroying the surface completely, we avoid
+			 * the problematic swap-chain transition on the same surface.
+			 * @param useNativeCode Use the native code to build the surface.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool fullRecreate (bool useNativeCode) noexcept;
 
 			/**
 			 * @brief Acquires the next image index available in the swap-chain.
@@ -434,7 +446,7 @@ namespace EmEn::Vulkan
 			Graphics::Renderer & m_renderer;
 			VkSwapchainKHR m_handle{VK_NULL_HANDLE};
 			VkSwapchainCreateInfoKHR m_createInfo{};
-			Status m_status{Status::Uninitialized};
+			std::atomic<Status> m_status{Status::Uninitialized};
 			uint32_t m_imageCount{0};
 			uint32_t m_acquiredImageIndex{0};
 			Libs::StaticVector< Frame, 5 > m_frames;

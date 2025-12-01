@@ -61,7 +61,11 @@ namespace EmEn
 			createInfo.hwnd = glfwGetWin32Window(m_handle.get());
 			createInfo.hinstance = GetModuleHandle(nullptr);
 
+			std::cout << "[DEBUG-SURFACE-CREATE] 1/2 : before vkCreateWin32SurfaceKHR()" << std::endl;
+
 			result = vkCreateWin32SurfaceKHR(m_instance.handle(), &createInfo, nullptr, &surfaceHandle);
+
+			std::cout << "[DEBUG-SURFACE-CREATE] 2/2 : after vkCreateWin32SurfaceKHR()" << std::endl;
 		}
 		else
 		{
@@ -79,6 +83,27 @@ namespace EmEn
 		m_surface->setIdentifier(ClassId, "OSVideoFramebuffer", "Surface");
 
 		return true;
+	}
+
+	void
+	Window::destroySurface () noexcept
+	{
+		if ( m_surface != nullptr )
+		{
+			Tracer::debug(ClassId, "Destroying Vulkan surface...");
+
+			m_surface.reset();
+		}
+	}
+
+	bool
+	Window::recreateSurface (bool useNativeCode) noexcept
+	{
+		Tracer::debug(ClassId, "Recreating Vulkan surface...");
+
+		this->destroySurface();
+
+		return this->createSurface(useNativeCode);
 	}
 
 	void
@@ -108,6 +133,69 @@ namespace EmEn
 	Window::getWin32Window () const noexcept
 	{
 		return glfwGetWin32Window(m_handle.get());
+	}
+
+	void
+	Window::setupWindowsResizeHandling () noexcept
+	{
+		HWND hwnd = glfwGetWin32Window(m_handle.get());
+
+		if ( hwnd == nullptr )
+		{
+			Tracer::warning(ClassId, "Unable to get Win32 window handle for resize handling setup.");
+			return;
+		}
+
+		/* Store the Window pointer in the HWND user data for retrieval in the WndProc. */
+		SetWindowLongPtr(hwnd, GWLP_USERDATA, reinterpret_cast< LONG_PTR >(this));
+
+		/* Subclass the window to intercept WM_ENTERSIZEMOVE and WM_EXITSIZEMOVE messages. */
+		m_originalWndProc = reinterpret_cast< WNDPROC >(SetWindowLongPtr(hwnd, GWLP_WNDPROC, reinterpret_cast< LONG_PTR >(windowProc)));
+
+		if ( m_originalWndProc == nullptr )
+		{
+			Tracer::warning(ClassId, "Unable to subclass Win32 window for resize handling.");
+		}
+		else
+		{
+			Tracer::info(ClassId, "Windows resize pause handling enabled.");
+		}
+	}
+
+	LRESULT CALLBACK
+	Window::windowProc (HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
+	{
+		auto * window = reinterpret_cast< Window * >(GetWindowLongPtr(hWnd, GWLP_USERDATA));
+
+		if ( window != nullptr )
+		{
+			switch ( uMsg )
+			{
+				case WM_ENTERSIZEMOVE :
+					/* User started dragging/resizing the window - pause rendering. */
+					window->m_isUserResizing = true;
+					break;
+
+				case WM_EXITSIZEMOVE :
+					/* User finished dragging/resizing the window - resume rendering. */
+					window->m_isUserResizing = false;
+
+					/* Notify that the framebuffer needs to be resized now that the user finished resizing. */
+					window->notify(OSNotifiesFramebufferResized);
+					break;
+
+				default :
+					break;
+			}
+		}
+
+		/* Call the original GLFW window procedure. */
+		if ( window != nullptr && window->m_originalWndProc != nullptr )
+		{
+			return CallWindowProc(window->m_originalWndProc, hWnd, uMsg, wParam, lParam);
+		}
+
+		return DefWindowProc(hWnd, uMsg, wParam, lParam);
 	}
 }
 

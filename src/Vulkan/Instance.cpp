@@ -29,6 +29,7 @@
 /* STL inclusions. */
 #include <cstring>
 #include <algorithm>
+#include <ranges>
 #include <utility>
 #include <sstream>
 
@@ -675,6 +676,25 @@ namespace EmEn::Vulkan
 		requirements.featuresVK10().samplerAnisotropy = VK_TRUE;
 		requirements.featuresVK11().multiview = VK_TRUE; // Required for cubemap render-to-texture (Vulkan 1.1+)
 		requirements.featuresVK13().shaderDemoteToHelperInvocation = VK_TRUE;
+
+		/* NOTE: According to Vulkan spec, if a device exposes VK_KHR_portability_subset,
+		 * it MUST be enabled. This is required for MoltenVK on macOS, but some Windows
+		 * drivers or software renderers may also expose it. */
+		if constexpr ( !IsMacOS )
+		{
+			const auto extensions = logicalDevice->physicalDevice()->getExtensions();
+
+			const auto hasPortabilitySubset = std::ranges::any_of(extensions, [] (const VkExtensionProperties & ext) {
+				return std::strcmp(ext.extensionName, "VK_KHR_portability_subset") == 0;
+			});
+
+			if ( hasPortabilitySubset )
+			{
+				m_requiredGraphicsDeviceExtensions.emplace_back("VK_KHR_portability_subset");
+
+				Tracer::info(ClassId, "VK_KHR_portability_subset extension detected and enabled.");
+			}
+		}
 
 		if ( !logicalDevice->create(requirements, m_requiredGraphicsDeviceExtensions, useVMA) )
 		{

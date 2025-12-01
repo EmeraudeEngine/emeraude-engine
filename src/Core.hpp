@@ -122,6 +122,8 @@
 #include <vector>
 #include <string>
 #include <any>
+#include <atomic>
+#include <mutex>
 
 /* Local inclusions for inheritances. */
 #include "Input/KeyboardListenerInterface.hpp"
@@ -1377,16 +1379,16 @@ namespace EmEn
 			std::queue< std::string > m_coreMessages;           ///< Pending messages for display. @todo Display in ImGui.
 
 			/* Control flags. */
-			bool m_isMainLoopRunning{true};          ///< Main loop active flag.
-			bool m_isLogicsLoopRunning{true};        ///< Logic thread active flag.
-			bool m_isRenderingLoopRunning{true};     ///< Render thread active flag.
-			bool m_pausable{false};                  ///< Whether pause is currently allowed.
-			bool m_paused{false};                    ///< Current pause state.
-			bool m_showHelp{false};                  ///< Help display requested via --help.
+			std::atomic< bool > m_isMainLoopRunning{true}; ///< Main loop active flag (atomic for thread-safe access).
+			std::atomic< bool > m_isLogicsLoopRunning{true}; ///< Logic thread active flag (atomic for thread-safe access).
+			std::atomic< bool > m_isRenderingLoopRunning{true}; ///< Render thread active flag (atomic for thread-safe access).
+			std::atomic< bool > m_paused{false}; ///< Current pause state (atomic for thread-safe access).
+			bool m_pausable{false}; ///< Whether pause is currently allowed.
+			bool m_showHelp{false}; ///< Help display requested via --help.
 			bool m_preventDefaultKeyBehaviors{false}; ///< Disable Core's default key handling.
-			bool m_disableNotifier{false};			 ///< Disable Core's notifier.
-			bool m_enableStatistics{false};			 ///< Enable statistics display in the terminal.
-			bool m_windowChanged{false};			 ///< Tells to Core the window has changed.
+			bool m_disableNotifier{false}; ///< Disable Core's notifier.
+			bool m_enableStatistics{false}; ///< Enable statistics display in the terminal.
+			bool m_windowChanged{false};
 
 			/** @} */ // End of Member Variables group
 	};

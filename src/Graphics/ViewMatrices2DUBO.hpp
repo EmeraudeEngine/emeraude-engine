@@ -319,40 +319,10 @@ namespace EmEn::Graphics
 			mutable std::mutex m_GPUBufferAccessLock;                            /**< Mutex for GPU buffer access synchronization. */
 	};
 
-	inline
-	std::ostream &
-	operator<< (std::ostream & out, const ViewMatrices2DUBO & obj)
-	{
-		out <<
-			"2D View matrices data : " "\n"
-			"World position " << obj.m_logicState.position << "\n"
-			"Projection " << obj.m_logicState.projection <<
-			"View " << obj.m_logicState.view <<
-			"Infinity view " << obj.m_logicState.infinityView <<
-			obj.m_logicState.frustum <<
-			"Buffer data for GPU : " "\n";
-
-		for ( size_t index = 0; index < obj.m_logicState.bufferData.size(); index += 4 )
-		{
-			out << '[' << obj.m_logicState.bufferData[index+0] << ", " << obj.m_logicState.bufferData[index+1] << ", " << obj.m_logicState.bufferData[index+2] << ", " << obj.m_logicState.bufferData[index+3] << "]" "\n";
-		}
-
-		return out;
-	}
-
 	/**
 	 * @brief Stringifies the object.
 	 * @param obj A reference to the object to print.
 	 * @return std::string
 	 */
-	inline
-	std::string
-	to_string (const ViewMatrices2DUBO & obj) noexcept
-	{
-		std::stringstream output;
-
-		output << obj;
-
-		return output.str();
-	}
+	std::string to_string (const ViewMatrices2DUBO & obj) noexcept;
 }

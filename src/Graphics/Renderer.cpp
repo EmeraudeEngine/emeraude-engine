@@ -664,8 +664,8 @@ namespace EmEn::Graphics
 		}
 		else
 		{
-			/* 1. If the swap-chain was marked degraded, we rebuild it and skip this frame. */
-			if ( m_swapChain->status() == Status::Degraded )
+			/* 1. If the swap-chain was marked degraded, we discard the next frame until we get back a valid swap-chain. */
+			if ( this->isSwapChainDegraded() )
 			{
 				if ( !this->recreateSystem() )
 				{
@@ -701,8 +701,6 @@ namespace EmEn::Graphics
 
 			if ( !frameIndexOpt )
 			{
-				Tracer::error(ClassId, "Unable to acquire swap-chain image (likely out of date)!");
-
 				return;
 			}
 
@@ -926,14 +924,15 @@ namespace EmEn::Graphics
 				/* NOTE: These two notifications invalidate the framebuffer content. */
 				case Window::OSNotifiesFramebufferResized :
 				case Window::OSRequestsToRescaleContentBy :
+					//TraceDebug{ClassId} << "GLFW tells the window content has changed (size or rescale).";
+
 					if ( m_windowLess )
 					{
-						// TODO: Resize the framebuffer to the right size!
+						// TODO: Resize the windowless framebuffer to the new size!
 					}
 					else
 					{
-						Tracer::debug(ClassId, "The GLFW API detected the frambuffer content size or scale has changed! [SWAP-CHAIN-RECREATION-PLANNED]");
-
+						/* NOTE: We declare the swap-chain degraded. */
 						m_swapChain->setDegraded();
 					}
 					break;
@@ -984,8 +983,10 @@ namespace EmEn::Graphics
 	bool
 	Renderer::recreateSystem () noexcept
 	{
-		this->device()->waitIdle("Refreshing the framebuffer.");
+		/* NOTE: Wait the device to finish all his work before destroying/recreating the swap-chain. */
+		this->device()->waitIdle("Renderer::recreateSystem()");
 
+		/* NOTE: Query the surface properties again. */
 		if ( !m_window.surface()->update(this->device()->physicalDevice()) )
 		{
 			Tracer::error(ClassId, "Unable to update the handle surface from a framebuffer resized!");
@@ -993,12 +994,21 @@ namespace EmEn::Graphics
 			return false;
 		}
 
-		if ( !m_swapChain->refresh() )
+		/* NOTE: Recreate the swap-chain. */
+		/*if constexpr ( IsWindows )
 		{
-			return false;
+			if ( !m_swapChain->fullRecreate(true) )
+			{
+				return false;
+			}
 		}
-
-		m_window.resetFramebufferResizeFlag();
+		else*/
+		{
+			if ( !m_swapChain->recreate() )
+			{
+				return false;
+			}
+		}
 
 		this->notify(WindowContentRefreshed);
 

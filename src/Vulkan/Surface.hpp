@@ -95,22 +95,7 @@ namespace EmEn::Vulkan
 			/**
 			 * @brief Destructs the surface.
 			 */
-			~Surface () override
-			{
-				if ( !m_instance.usable() )
-				{
-					return;
-				}
-
-				if ( m_handle != VK_NULL_HANDLE )
-				{
-					vkDestroySurfaceKHR(m_instance.handle(), m_handle, nullptr);
-
-					m_handle = VK_NULL_HANDLE;
-
-					this->setDestroyed();
-				}
-			}
+			~Surface () override;
 
 			/**
 			 * @brief Updates surface information with a physical device.
