@@ -656,14 +656,17 @@ namespace EmEn
 
 			m_overlayManager.enable(m_inputManager, true);
 
-			/* Initialization of the notifier. */
-			if ( m_notifier.initialize(m_secondaryServicesEnabled) )
+			if ( !m_disableNotifier )
 			{
-				TraceSuccess{ClassId} << m_notifier.name() << " service up !";
-			}
-			else
-			{
-				TraceError{ClassId} << m_notifier.name() << " service failed to execute !";
+				/* Initialization of the notifier. */
+				if ( m_notifier.initialize(m_secondaryServicesEnabled) )
+				{
+					TraceSuccess{ClassId} << m_notifier.name() << " service up !";
+				}
+				else
+				{
+					TraceError{ClassId} << m_notifier.name() << " service failed to execute !";
+				}
 			}
 
 			/* Initialization of the core screen. */

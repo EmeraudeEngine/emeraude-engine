@@ -71,6 +71,7 @@ namespace EmEn
 		}
 
 		m_surface->activePixmap().fill(Transparent);
+		m_surface->setVideoMemoryOutdated();
 
 		{
 			//m_font = m_resourceManager.container< Graphics::FontResource >()->getResource("old", false);
@@ -184,12 +185,12 @@ namespace EmEn
 	}
 
 	void
-	Notifier::clearDisplay () const noexcept
+	Notifier::clearDisplay (const Color< float > & bgColor) const noexcept
 	{
 		/* [VULKAN-CPU-SYNC] Lock the front framebuffer during write operations. */
 		const std::lock_guard< std::mutex > lock{m_surface->activeBufferMutex()};
 
-		if ( m_surface->activePixmap().fill(m_clearColor) )
+		if ( m_surface->activePixmap().fill(bgColor) )
 		{
 			m_surface->setVideoMemoryOutdated();
 		}
@@ -206,7 +207,7 @@ namespace EmEn
 		}
 
 		/* NOTE: Wipe remaining notifications visible on the pixmap. */
-		this->clearDisplay();
+		this->clearDisplay(Transparent);
 	}
 
 	bool

@@ -906,6 +906,16 @@ namespace EmEn
 			}
 
 			/**
+			 * @brief Disables the notifier creation by the Core.
+			 * @version 0.8.35
+			 */
+			void
+			disableNotifier () noexcept
+			{
+				m_disableNotifier = true;
+			}
+
+			/**
 			 * @brief Captures a screenshot and saves it to the user's images folder.
 			 * @details The image is saved in PNG format with a timestamped filename.
 			 * The exact path depends on the operating system.
@@ -1374,6 +1384,7 @@ namespace EmEn
 			bool m_paused{false};                    ///< Current pause state.
 			bool m_showHelp{false};                  ///< Help display requested via --help.
 			bool m_preventDefaultKeyBehaviors{false}; ///< Disable Core's default key handling.
+			bool m_disableNotifier{false};			 ///< Disable Core's notifier.
 			bool m_enableStatistics{false};			 ///< Enable statistics display in the terminal.
 			bool m_windowChanged{false};			 ///< Tells to Core the window has changed.
 

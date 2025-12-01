@@ -162,9 +162,10 @@ namespace EmEn
 
 			/**
 			 * @brief Clears the pixmap.
+			 * @param bgColor A reference to a background color.
 			 * @return void
 			 */
-			void clearDisplay () const noexcept;
+			void clearDisplay (const Libs::PixelFactory::Color< float > & bgColor) const noexcept;
 
 			Resources::Manager & m_resourceManager;
 			Overlay::Manager & m_overlayManager;

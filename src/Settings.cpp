@@ -295,15 +295,18 @@ namespace EmEn
 		};
 
 		const auto getLevel = [] (Json::Value & root, const std::string & key) -> Json::Value & {
+			if ( key.empty() )
+			{
+				return root;
+			}
+
 			Json::Value * current = &root;
 
-			if ( const auto sections = String::explode(key, '/', false); !sections.empty() )
+			for ( const auto & section : String::explode(key, '/', false) )
 			{
-				for ( const auto & section : sections )
-				{
-					current = &(*current)[section];
-				}
+				current = &(*current)[section];
 			}
+
 			return *current;
 		};
 
