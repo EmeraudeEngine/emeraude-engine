@@ -27,6 +27,7 @@
 #include "Instance.hpp"
 
 /* STL inclusions. */
+#include <array>
 #include <cstring>
 #include <algorithm>
 #include <ranges>
@@ -266,7 +267,173 @@ namespace EmEn::Vulkan
 			return std::make_shared< PhysicalDevice >(physicalDevice);
 		});
 
+		/* NOTE: Detect hybrid GPU configuration (Optimus, etc.) */
+		m_hybridConfig = this->detectHybridGPUConfiguration();
+
+		/* NOTE: Read Optimus workaround setting. */
+		m_optimusWorkaroundEnabled = m_primaryServices.settings().getOrSetDefault< bool >(VkDeviceOptimusWorkaroundKey, DefaultVkDeviceOptimusWorkaround);
+
+		/* NOTE: Log GPU configuration if enabled. */
+		this->logGPUConfiguration();
+
 		return !m_physicalDevices.empty();
+	}
+
+	bool
+	Instance::isLikelyMobileGPU (const std::string & gpuName) noexcept
+	{
+		/* Mobile/Laptop GPU naming patterns used by Nvidia:
+		 * - "GeForce RTX 3080 Mobile"
+		 * - "GeForce RTX 4070 Laptop GPU"
+		 * - "Quadro RTX 3000 Max-Q"
+		 * - "GeForce MX450" (MX series are always mobile)
+		 * Desktop GPUs never have these keywords in their names. */
+		static const std::array< std::string, 4 > mobilePatterns = {
+			"Mobile",
+			"Laptop",
+			"Max-Q",
+			" MX"  /* Space prefix to avoid matching other patterns like "RTX" */
+		};
+
+		for ( const auto & pattern : mobilePatterns )
+		{
+			if ( gpuName.find(pattern) != std::string::npos )
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	HybridGPUConfig
+	Instance::detectHybridGPUConfiguration () const noexcept
+	{
+		HybridGPUConfig config{};
+
+		const PhysicalDevice * integratedGPU = nullptr;
+		const PhysicalDevice * nvidiaDiscreteGPU = nullptr;
+
+		for ( const auto & device : m_physicalDevices )
+		{
+			const auto & props = device->propertiesVK10();
+			const auto deviceType = props.deviceType;
+			const auto vendorID = props.vendorID;
+
+			/* Detect iGPU (Intel: 0x8086, AMD: 0x1002) */
+			if ( deviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU )
+			{
+				integratedGPU = device.get();
+				config.integratedGPUName = props.deviceName;
+				config.integratedVendorID = vendorID;
+			}
+
+			/* Detect discrete Nvidia GPU (0x10DE) */
+			if ( deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU && vendorID == VendorID::Nvidia )
+			{
+				nvidiaDiscreteGPU = device.get();
+				config.discreteGPUName = props.deviceName;
+				config.discreteVendorID = vendorID;
+			}
+		}
+
+		/* Optimus detection:
+		 * 1. iGPU must be present
+		 * 2. Nvidia dGPU must be present
+		 * 3. The Nvidia GPU must be a MOBILE variant (Laptop/Mobile/Max-Q/MX series)
+		 *
+		 * This prevents false positives on desktops where the CPU has an iGPU
+		 * (e.g., Intel UHD) but the RTX has its own display outputs. */
+		const bool hasHybridConfig = (integratedGPU != nullptr) && (nvidiaDiscreteGPU != nullptr);
+		const bool isMobileNvidia = !config.discreteGPUName.empty() && Instance::isLikelyMobileGPU(config.discreteGPUName);
+
+		config.isOptimusDetected = hasHybridConfig && isMobileNvidia;
+
+		/* NOTE: Log warning if hybrid config detected but not identified as Optimus.
+		 * This helps users understand why Failsafe isn't triggered. */
+		if ( hasHybridConfig && !isMobileNvidia )
+		{
+			config.isHybridNonOptimus = true;
+		}
+
+		return config;
+	}
+
+	void
+	Instance::logGPUConfiguration () const noexcept
+	{
+		TraceInfo{ClassId} << "========== GPU Configuration ==========";
+		TraceInfo{ClassId} << "Physical devices found: " << m_physicalDevices.size();
+
+		for ( const auto & device : m_physicalDevices )
+		{
+			const auto & props = device->propertiesVK10();
+			std::string typeStr;
+
+			switch ( props.deviceType )
+			{
+				case VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU :
+					typeStr = "iGPU";
+					break;
+
+				case VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU :
+					typeStr = "dGPU";
+					break;
+
+				case VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU :
+					typeStr = "vGPU";
+					break;
+
+				case VK_PHYSICAL_DEVICE_TYPE_CPU :
+					typeStr = "CPU";
+					break;
+
+				default :
+					typeStr = "Other";
+					break;
+			}
+
+			TraceInfo{ClassId} << "  [" << typeStr << "] " << props.deviceName << " (Vendor: " << device->vendorId() << ")";
+		}
+
+		TraceInfo{ClassId} << "---------------------------------------";
+
+		if ( m_hybridConfig.isOptimusDetected )
+		{
+			TraceWarning{ClassId} << "! Nvidia Optimus (LAPTOP) configuration DETECTED";
+			TraceWarning{ClassId} << "  Integrated : " << m_hybridConfig.integratedGPUName;
+			TraceWarning{ClassId} << "  Discrete   : " << m_hybridConfig.discreteGPUName << " (mobile GPU)";
+			TraceWarning{ClassId} << "  Known driver issues may occur with discrete GPU.";
+			TraceWarning{ClassId} << "  Optimus workaround: " << (m_optimusWorkaroundEnabled ? "Enabled" : "Disabled");
+		}
+		else if ( m_hybridConfig.isHybridNonOptimus )
+		{
+			TraceInfo{ClassId} << "Hybrid GPU config: Desktop (non-Optimus)";
+			TraceInfo{ClassId} << "  Integrated : " << m_hybridConfig.integratedGPUName << " (CPU iGPU)";
+			TraceInfo{ClassId} << "  Discrete   : " << m_hybridConfig.discreteGPUName << " (has own display outputs)";
+			TraceInfo{ClassId} << "  No workaround needed - discrete GPU is safe to use.";
+		}
+		else
+		{
+			TraceInfo{ClassId} << "Hybrid GPU config: None detected";
+		}
+
+		TraceInfo{ClassId} << "=======================================";
+	}
+
+	bool
+	Instance::shouldExcludeForFailsafe (const std::shared_ptr< PhysicalDevice > & physicalDevice) const noexcept
+	{
+		/* If no Optimus or workaround disabled, don't exclude anything */
+		if ( !m_hybridConfig.isOptimusDetected || !m_optimusWorkaroundEnabled )
+		{
+			return false;
+		}
+
+		const auto & props = physicalDevice->propertiesVK10();
+
+		/* Exclude only Nvidia discrete GPU on Optimus configuration */
+		return (props.vendorID == VendorID::Nvidia) && (props.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU);
 	}
 
 	void
@@ -546,6 +713,16 @@ namespace EmEn::Vulkan
 				TraceInfo{ClassId} << physicalDevice->getPhysicalDeviceInformation();
 			}
 
+			/* NOTE: Failsafe mode exclusion - skip Nvidia dGPU on Optimus configuration. */
+			if ( runMode == DeviceRunMode::Failsafe && this->shouldExcludeForFailsafe(physicalDevice) )
+			{
+				TraceWarning{ClassId} <<
+					"Failsafe: Excluding '" << physicalDevice->propertiesVK10().deviceName <<
+					"' (Nvidia Optimus configuration detected - known driver issues)";
+
+				continue;
+			}
+
 			if ( window != nullptr && window->usable() )
 			{
 				window->surface()->update(physicalDevice);
@@ -600,20 +777,19 @@ namespace EmEn::Vulkan
 		const auto useVMA = settings.getOrSetDefault< bool >(VkDeviceUseVMAKey, DefaultVkDeviceUseVMA);
 		const auto showInformation = settings.getOrSetDefault< bool >(VideoShowInformationKey, DefaultVideoShowInformation);
 
+		/* NOTE: Save all physical devices to settings (informational, not filtered). */
+		settings.clearArray(VkDeviceAvailableGPUsKey);
+
+		for ( const auto & physicalDevice : m_physicalDevices )
+		{
+			settings.setInArray(VkDeviceAvailableGPUsKey, physicalDevice->deviceName());
+		}
+
 		/* NOTE: Get a list of available devices. */
 		const auto scoredDevices = this->getScoredGraphicsDevices(window, magic_enum::enum_cast< DeviceRunMode >(runModeString).value());
 
 		/* NOTE: Returns the device with the highest score. */
-		if ( !scoredDevices.empty() )
-		{
-			settings.clearArray(VkDeviceAvailableGPUsKey);
-
-			for ( const auto & physicalDevice : scoredDevices | std::views::values )
-			{
-				settings.setInArray(VkDeviceAvailableGPUsKey, physicalDevice->deviceName());
-			}
-		}
-		else
+		if ( scoredDevices.empty() )
 		{
 			Tracer::error(ClassId, "There is no physical device compatible with Vulkan.");
 
@@ -637,14 +813,14 @@ namespace EmEn::Vulkan
 			}
 		}
 
-		/* NOTE: If no GPU was forced or not found, which the best one. */
+		/* NOTE: If no GPU was forced or not found, pick the best one. */
 		if ( selectedPhysicalDevice == nullptr )
 		{
 			selectedPhysicalDevice = scoredDevices.rbegin()->second;
 		}
 
 		/* NOTE: Logical device creation for graphics rendering and presentation. */
-		TraceSuccess{ClassId} << "The graphics capable physical device '" << selectedPhysicalDevice->propertiesVK10().deviceName << "' selected ! ";
+		TraceSuccess{ClassId} << ">>> GPU Selected: " << selectedPhysicalDevice->propertiesVK10().deviceName << " (" << runModeString << " mode)";
 
 		auto logicalDevice = std::make_shared< Device >(*this, selectedPhysicalDevice->propertiesVK10().deviceName, selectedPhysicalDevice, showInformation);
 		logicalDevice->setIdentifier(ClassId, (std::stringstream{} << selectedPhysicalDevice->propertiesVK10().deviceName << "(Graphics)").str(), "Device");
@@ -820,6 +996,9 @@ namespace EmEn::Vulkan
 		switch ( runMode )
 		{
 			case DeviceRunMode::Performance :
+			case DeviceRunMode::Failsafe :
+				/* NOTE: Failsafe uses same scoring as Performance.
+				 * The exclusion of Nvidia dGPU on Optimus is handled separately in getScoredGraphicsDevices. */
 				switch ( deviceProperties.deviceType )
 				{
 					case VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU :
