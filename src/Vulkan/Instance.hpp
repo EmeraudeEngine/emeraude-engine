@@ -347,6 +347,27 @@ namespace EmEn::Vulkan
 			void configureInstanceExtensions () noexcept;
 
 			/**
+			 * @brief Detects hybrid GPU configurations (Nvidia Optimus, etc.).
+			 * @return HybridGPUConfig containing detection results.
+			 */
+			[[nodiscard]]
+			HybridGPUConfig detectHybridGPUConfiguration () const noexcept;
+
+			/**
+			 * @brief Logs the GPU configuration at startup.
+			 * @return void
+			 */
+			void logGPUConfiguration () const noexcept;
+
+			/**
+			 * @brief Checks if a GPU should be excluded in Failsafe mode.
+			 * @param physicalDevice The physical device to check.
+			 * @return True if the device should be excluded.
+			 */
+			[[nodiscard]]
+			bool shouldExcludeForFailsafe (const std::shared_ptr< PhysicalDevice > & physicalDevice) const noexcept;
+
+			/**
 			 * @brief Modulates the device score against a running strategy.
 			 * @param deviceProperties A vulkan struct for the device properties.
 			 * @param runMode The desired running mode.
@@ -423,5 +444,7 @@ namespace EmEn::Vulkan
 			bool m_useDebugMessenger{false};
 			bool m_dynamicStateExtensionEnabled{false};
 			bool m_standardTextureCheckEnabled{false};
+			bool m_optimusWorkaroundEnabled{true};
+			HybridGPUConfig m_hybridConfig{};
 	};
 }

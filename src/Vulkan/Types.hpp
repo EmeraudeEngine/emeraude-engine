@@ -28,6 +28,7 @@
 
 /* STL inclusions. */
 #include <cstdint>
+#include <string>
 
 namespace EmEn::Vulkan
 {
@@ -45,6 +46,40 @@ namespace EmEn::Vulkan
 		DontCare = 0,
 		Performance = 1,
 		PowerSaving = 2,
+		/** @brief Failsafe mode: Performance EXCEPT if Nvidia Optimus detected, then uses iGPU. */
+		Failsafe = 3
+	};
+
+	/** @brief Known GPU vendor IDs for hybrid GPU detection. */
+	namespace VendorID
+	{
+		constexpr uint32_t AMD = 0x1002;
+		constexpr uint32_t Intel = 0x8086;
+		constexpr uint32_t Nvidia = 0x10DE;
+		constexpr uint32_t ARM = 0x13B5;
+		constexpr uint32_t ImgTec = 0x1010;
+		constexpr uint32_t Qualcomm = 0x5143;
+	}
+
+	/**
+	 * @brief Information about detected hybrid GPU configuration.
+	 */
+	struct HybridGPUConfig
+	{
+		/** @brief True if Nvidia Optimus configuration detected (iGPU Intel/AMD + dGPU Nvidia). */
+		bool isOptimusDetected{false};
+
+		/** @brief Name of the integrated GPU. */
+		std::string integratedGPUName{};
+
+		/** @brief Name of the discrete GPU. */
+		std::string discreteGPUName{};
+
+		/** @brief Vendor ID of the integrated GPU. */
+		uint32_t integratedVendorID{0};
+
+		/** @brief Vendor ID of the discrete GPU. */
+		uint32_t discreteVendorID{0};
 	};
 
 	/** @brief This enumeration describes the purpose of a queue from the engine point of view. */
