@@ -142,9 +142,6 @@ namespace EmEn
 			/* Optimus workaround settings */
 			constexpr auto VkDeviceOptimusWorkaroundKey{"Core/Video/VulkanDevice/OptimusWorkaround"};
 			constexpr auto DefaultVkDeviceOptimusWorkaround{true};
-			constexpr auto VkDeviceOptimusDetectedKey{"Core/Video/VulkanDevice/OptimusDetected"};
-			constexpr auto VkDeviceSelectedGPUKey{"Core/Video/VulkanDevice/SelectedGPU"};
-			constexpr auto VkDeviceSelectionReasonKey{"Core/Video/VulkanDevice/SelectionReason"};
 
 			/* Window */
 			constexpr auto WindowShowInformationKey{"Core/Video/Window/ShowInformation"}; // Logs

@@ -726,20 +726,19 @@ namespace EmEn::Vulkan
 		const auto useVMA = settings.getOrSetDefault< bool >(VkDeviceUseVMAKey, DefaultVkDeviceUseVMA);
 		const auto showInformation = settings.getOrSetDefault< bool >(VideoShowInformationKey, DefaultVideoShowInformation);
 
+		/* NOTE: Save all physical devices to settings (informational, not filtered). */
+		settings.clearArray(VkDeviceAvailableGPUsKey);
+
+		for ( const auto & physicalDevice : m_physicalDevices )
+		{
+			settings.setInArray(VkDeviceAvailableGPUsKey, physicalDevice->deviceName());
+		}
+
 		/* NOTE: Get a list of available devices. */
 		const auto scoredDevices = this->getScoredGraphicsDevices(window, magic_enum::enum_cast< DeviceRunMode >(runModeString).value());
 
 		/* NOTE: Returns the device with the highest score. */
-		if ( !scoredDevices.empty() )
-		{
-			settings.clearArray(VkDeviceAvailableGPUsKey);
-
-			for ( const auto & physicalDevice : scoredDevices | std::views::values )
-			{
-				settings.setInArray(VkDeviceAvailableGPUsKey, physicalDevice->deviceName());
-			}
-		}
-		else
+		if ( scoredDevices.empty() )
 		{
 			Tracer::error(ClassId, "There is no physical device compatible with Vulkan.");
 
@@ -747,7 +746,6 @@ namespace EmEn::Vulkan
 		}
 
 		std::shared_ptr< PhysicalDevice > selectedPhysicalDevice;
-		std::string selectionReason;
 
 		if ( !forceGPUName.empty() )
 		{
@@ -758,7 +756,6 @@ namespace EmEn::Vulkan
 				if ( physicalDevice->deviceName() == forceGPUName )
 				{
 					selectedPhysicalDevice = physicalDevice;
-					selectionReason = "Forced by ForceGPU configuration";
 
 					break;
 				}
@@ -769,31 +766,10 @@ namespace EmEn::Vulkan
 		if ( selectedPhysicalDevice == nullptr )
 		{
 			selectedPhysicalDevice = scoredDevices.rbegin()->second;
-
-			const auto runMode = magic_enum::enum_cast< DeviceRunMode >(runModeString).value();
-
-			if ( runMode == DeviceRunMode::Failsafe && m_hybridConfig.isOptimusDetected )
-			{
-				selectionReason = "Failsafe mode - Optimus excluded Nvidia dGPU";
-			}
-			else
-			{
-				selectionReason = "Highest scoring device (" + runModeString + " mode)";
-			}
 		}
-
-		/* NOTE: Write read-only settings for external consumption (e.g., Lychee UI). */
-		settings.set(VkDeviceOptimusDetectedKey, m_hybridConfig.isOptimusDetected);
-		settings.set(VkDeviceSelectedGPUKey, selectedPhysicalDevice->deviceName());
-		settings.set(VkDeviceSelectionReasonKey, selectionReason);
 
 		/* NOTE: Logical device creation for graphics rendering and presentation. */
-		TraceSuccess{ClassId} << ">>> GPU Selected: " << selectedPhysicalDevice->propertiesVK10().deviceName;
-		TraceInfo{ClassId} << "    Reason: " << selectionReason;
-		if ( m_hybridConfig.isOptimusDetected && magic_enum::enum_cast< DeviceRunMode >(runModeString).value() == DeviceRunMode::Failsafe )
-		{
-			TraceInfo{ClassId} << "    Note: Nvidia dGPU excluded (Optimus Failsafe)";
-		}
+		TraceSuccess{ClassId} << ">>> GPU Selected: " << selectedPhysicalDevice->propertiesVK10().deviceName << " (" << runModeString << " mode)";
 
 		auto logicalDevice = std::make_shared< Device >(*this, selectedPhysicalDevice->propertiesVK10().deviceName, selectedPhysicalDevice, showInformation);
 		logicalDevice->setIdentifier(ClassId, (std::stringstream{} << selectedPhysicalDevice->propertiesVK10().deviceName << "(Graphics)").str(), "Device");
