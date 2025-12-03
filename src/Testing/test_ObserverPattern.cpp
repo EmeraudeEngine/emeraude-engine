@@ -50,9 +50,7 @@ class Noise final : public ObservableTrait
 		size_t
 		getClassUID () noexcept
 		{
-			static const size_t classUID = EmEn::Libs::Hash::FNV1a("Noise");
-
-			return classUID;
+			return EmEn::Libs::Hash::FNV1a("Noise");
 		}
 
 		/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
@@ -92,9 +90,7 @@ class DummyClass final : public ObservableTrait
 		size_t
 		getClassUID () noexcept
 		{
-			static const size_t classUID = EmEn::Libs::Hash::FNV1a("DummyClass");
-
-			return classUID;
+			return EmEn::Libs::Hash::FNV1a("DummyClass");
 		}
 
 		/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */

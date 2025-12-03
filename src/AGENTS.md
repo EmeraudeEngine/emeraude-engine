@@ -57,31 +57,37 @@ private:
 - `onCoreSurfaceRefreshed()` - Resize fenêtre
 
 ### Tracer - Système de logging
-**Fichiers**: `Tracer.cpp/.hpp` (35KB header, 12KB cpp)
+**Fichiers**: `Tracer.cpp/.hpp`
 
 **Rôle**: Système de logging runtime pour tracer l'exécution du programme.
+
+**Architecture**:
+- **Tracer** (singleton): Service principal de logging console/fichier. Voir `Tracer.hpp:297-851`
+- **TracerLogger**: Logger asynchrone avec thread dédié pour I/O fichier non-bloquant. Voir `Tracer.hpp:189-295`
+- **TracerEntry**: Entrée de log unique (timestamp, sévérité, tag, message, location, thread). Voir `Tracer.hpp:61-187`
+- **T_TraceHelperBase**: Template CRTP pour les helpers RAII. Voir `Tracer.hpp:857-953`
 
 **Types de messages**:
 - `info` - Informations générales
 - `warning` - Avertissements
 - `error` - Erreurs récupérables
-- `fatal` - Erreurs critiques
+- `fatal` - Erreurs critiques (avec `std::terminate()` optionnel)
 - `success` - Opérations réussies
-- `debug` - Debug (retiré via constexpr en Release)
+- `debug` - Debug (éliminé en Release via classe dummy zero-overhead)
+
+**Classes helper RAII** (utilisent CRTP via `T_TraceHelperBase`):
+- `TraceInfo`, `TraceSuccess`, `TraceWarning`, `TraceError` - Héritent de `T_TraceHelperBase`
+- `TraceFatal` - Classe séparée avec option `terminate`
+- `TraceAPI` - Pour tracer les appels API externes (Vulkan, OpenAL, etc.)
+- `TraceDebug` - Version Release = classe dummy vide (zero-overhead garanti)
 
 **Fonctionnalités**:
-- **Output flexible**: Terminal avec couleurs automatiques + fichiers de log
-- **Métadonnées**: Fichier, ligne, tag, timestamp automatiques
-- **Couleurs**: Coloration automatique selon le type de message
-- **Performance**: Messages debug éliminés à la compilation en Release
+- **Output flexible**: Terminal avec couleurs ANSI + fichiers de log (Text/JSON/HTML)
+- **Métadonnées**: `std::source_location`, thread ID, timestamp automatiques
+- **Thread-safe**: Mutex pour console, queue thread-safe pour fichier
+- **Performance**: TraceDebug Release éliminé à la compilation (zero-cost)
 
-**Usage typique**:
-```cpp
-TRACE_INFO("System initialized");
-TRACE_WARNING("Low memory", "Memory");
-TRACE_ERROR("Failed to load texture", "Graphics");
-TRACE_DEBUG("Variable value: {}", value);  // Retiré en Release
-```
+**Usage**: Voir @AGENTS.md section "Tracer System Usage" pour les conventions complètes.
 
 ### Window - Gestion de fenêtre OS
 **Fichiers**: `Window.cpp/.hpp` + `Window.{linux,mac,windows}.cpp`
@@ -306,20 +312,26 @@ settings.set("audio.master_volume", 0.8f);
 
 ### Utilisation de Tracer
 ```cpp
-// Messages simples
-TRACE_INFO("Loading level");
-TRACE_WARNING("Low FPS detected");
-TRACE_ERROR("Failed to load texture: {}", path);
-TRACE_FATAL("Vulkan device lost");
+// Messages simples (méthodes statiques)
+Tracer::info(ClassId, "Loading level");
+Tracer::warning(ClassId, "Low FPS detected");
+Tracer::error(ClassId, "Failed to load texture");
+Tracer::fatal(ClassId, "Vulkan device lost");
 
-// Avec tags
-TRACE_INFO("Shader compiled", "Graphics");
-TRACE_DEBUG("Position: ({}, {}, {})", x, y, z);  // Retiré en Release
+// Messages formatés (classes RAII)
+TraceInfo{ClassId} << "Loaded " << count << " textures";
+TraceWarning{ClassId} << "FPS dropped to " << fps;
+TraceError{ClassId} << "Failed to load: " << path;
+TraceDebug{ClassId} << "Position: " << x << ", " << y;  // Éliminé en Release
+
+// API trace (pour appels externes)
+TraceAPI{ClassId, "vkCreateDevice"} << "Creating logical device";
 
 // Fichier de log
-tracer.setLogFile("game.log");
-tracer.enableFileLogging(true);
+tracer.enableLogger(filepath);  // Active le logger asynchrone
 ```
+
+**Important**: Voir @AGENTS.md section "Tracer System Usage" pour les règles complètes (braces `{}` obligatoires, choix méthode vs classe, etc.).
 
 ### Utilisation de FileSystem
 ```cpp

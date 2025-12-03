@@ -1024,7 +1024,7 @@ namespace EmEn
 				validSizeFound = true;
 			}
 
-			glfwWaitEvents();
+			std::this_thread::sleep_for(std::chrono::milliseconds(10));
 		}
 	}
 
@@ -1176,9 +1176,8 @@ namespace EmEn
 		glfwSetWindowContentScaleCallback(m_handle.get(), windowContentScaleCallback);
 
 #if IS_WINDOWS
-		/* NOTE: On Windows, set up native message handling to detect resize start/end.
-		 * This allows pausing rendering during resize to avoid deadlocks with vkCreateSwapchainKHR(). */
-		this->setupWindowsResizeHandling();
+		// TODO: Make this feature global on all system an optional. For now disabled.
+		//this->setupWindowsResizeHandling();
 #endif
 
 		return true;

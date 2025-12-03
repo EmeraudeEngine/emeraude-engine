@@ -135,13 +135,12 @@ namespace EmEn
 			/* Vulkan device */
 			constexpr auto VkDeviceAvailableGPUsKey{"Core/Video/VulkanDevice/AvailableGPUs"};
 			constexpr auto VkDeviceAutoSelectModeKey{"Core/Video/VulkanDevice/AutoSelectMode"};
-			constexpr auto DefaultVkDeviceAutoSelectMode{"Failsafe"};
+			constexpr auto DefaultVkDeviceAutoSelectMode{"Performance"}; // "DontCare", "Performance" and "PowerSaving"
+			constexpr auto VkDeviceEnableFailSafeKey{"Core/Video/VulkanDevice/EnableFailSafe"};
+			constexpr auto DefaultEnableFailSafe{true};
 			constexpr auto VkDeviceForceGPUKey{"Core/Video/VulkanDevice/ForceGPU"};
 			constexpr auto VkDeviceUseVMAKey{"Core/Video/VulkanDevice/UseVMA"};
 			constexpr auto DefaultVkDeviceUseVMA{true};
-			/* Optimus workaround settings */
-			constexpr auto VkDeviceOptimusWorkaroundKey{"Core/Video/VulkanDevice/OptimusWorkaround"};
-			constexpr auto DefaultVkDeviceOptimusWorkaround{true};
 
 			/* Window */
 			constexpr auto WindowShowInformationKey{"Core/Video/Window/ShowInformation"}; // Logs

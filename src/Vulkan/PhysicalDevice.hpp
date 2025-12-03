@@ -39,6 +39,7 @@
 /* Local inclusions for usages. */
 #include "Libs/StaticVector.hpp"
 #include "Libs/Version.hpp"
+#include "Types.hpp"
 
 namespace EmEn::Vulkan
 {
@@ -269,37 +270,34 @@ namespace EmEn::Vulkan
 			}
 
 			/**
+			 * @brief Returns the vendor enum.
+			 * @note Shortcut to PhysicalDevice::properties().
+			 * @return Vendor
+			 */
+			[[nodiscard]]
+			Vendor
+			vendor () const noexcept
+			{
+				return toVendor(m_properties.properties.vendorID);
+			}
+
+			/**
 			 * @brief Returns the vendor ID as a string.
 			 * @note Shortcut to PhysicalDevice::properties().
 			 * @return std::string
 			 */
 			[[nodiscard]]
 			std::string
-			vendorId () const noexcept
+			vendorString () const noexcept
 			{
-				switch ( m_properties.properties.vendorID )
+				const auto vendorEnum = this->vendor();
+
+				if ( vendorEnum != Vendor::Unknown )
 				{
-					case 0x1002 :
-						return "AMD (" + std::to_string(m_properties.properties.vendorID) + ")";
-
-					case 0x1010 :
-						return "ImgTec (" + std::to_string(m_properties.properties.vendorID) + ")";
-
-					case 0x10DE :
-						return "Nvidia (" + std::to_string(m_properties.properties.vendorID) + ")";
-
-					case 0x13B5 :
-						return "ARM (" + std::to_string(m_properties.properties.vendorID) + ")";
-
-					case 0x5143 :
-						return "Qualcomm (" + std::to_string(m_properties.properties.vendorID) + ")";
-
-					case 0x8086 :
-						return "Intel (" + std::to_string(m_properties.properties.vendorID) + ")";
-
-					default :
-						return std::to_string(m_properties.properties.vendorID);
+					return std::string{to_cstring(vendorEnum)} + " (" + std::to_string(m_properties.properties.vendorID) + ")";
 				}
+
+				return std::to_string(m_properties.properties.vendorID);
 			}
 
 			/**

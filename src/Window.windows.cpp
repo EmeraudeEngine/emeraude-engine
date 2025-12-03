@@ -61,11 +61,7 @@ namespace EmEn
 			createInfo.hwnd = glfwGetWin32Window(m_handle.get());
 			createInfo.hinstance = GetModuleHandle(nullptr);
 
-			std::cout << "[DEBUG-SURFACE-CREATE] 1/2 : before vkCreateWin32SurfaceKHR()" << std::endl;
-
 			result = vkCreateWin32SurfaceKHR(m_instance.handle(), &createInfo, nullptr, &surfaceHandle);
-
-			std::cout << "[DEBUG-SURFACE-CREATE] 2/2 : after vkCreateWin32SurfaceKHR()" << std::endl;
 		}
 		else
 		{
@@ -143,6 +139,7 @@ namespace EmEn
 		if ( hwnd == nullptr )
 		{
 			Tracer::warning(ClassId, "Unable to get Win32 window handle for resize handling setup.");
+
 			return;
 		}
 

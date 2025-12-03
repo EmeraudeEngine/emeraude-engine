@@ -128,9 +128,10 @@ How these principles apply to Emeraude Engine:
 3. **Code Priorities:** Readability → Maintainability → Scalability → Performance
 4. **C++20 Standard:** All code must adhere to C++20 standard
 5. **Code Formatting:** Use `.clang-format` and `.clang-tidy` configurations
-6. **Documentation:** Doxygen-style comments for all public APIs with `@version` tag (see below)
-7. **Dependencies:** No new third-party libraries without explicit approval
-8. **Licensing:** LGPLv3 compatible code only
+6. **C++ Conventions:** See @docs/cpp-conventions.md for naming, member layout, and coding patterns
+7. **Documentation:** Doxygen-style comments for all public APIs with `@version` tag (see below)
+8. **Dependencies:** No new third-party libraries without explicit approval
+9. **Licensing:** LGPLv3 compatible code only
 
 ### Doxygen @version Convention
 
@@ -157,6 +158,99 @@ This enables:
 - **Resource Safety:** Never return nullptr; always provide valid fallback resources
 - **Memory Management:** Use VMA for GPU memory, RAII for CPU memory
 - **Synchronization:** Careful management of Vulkan fences and semaphores
+
+### Tracer System Usage
+
+The Tracer system provides logging with two distinct APIs. **Choose the appropriate one based on your use case:**
+
+#### 1. Static Methods (Simple Messages)
+Use `Tracer::level(tag, message)` for **simple messages without variables**:
+
+```cpp
+Tracer::info(ClassId, "Initialization complete.");
+Tracer::warning(ClassId, "Feature not supported on this platform.");
+Tracer::error(ClassId, "Failed to load configuration file.");
+Tracer::fatal(ClassId, "Critical system failure.");
+Tracer::debug(ClassId, "Entering function.");  // Only in DEBUG builds
+```
+
+#### 2. Trace Classes (Formatted Messages)
+Use `TraceLevel{tag} << ...` for **messages with variables or formatting**:
+
+```cpp
+TraceInfo{ClassId} << "Found " << count << " devices.";
+TraceWarning{ClassId} << "Texture '" << name << "' not found, using fallback.";
+TraceError{ClassId} << "Vulkan error: " << vkResultToCString(result);
+TraceFatal{ClassId} << "Cannot allocate " << size << " bytes.";
+TraceDebug{ClassId} << "Value: " << value;  // Only in DEBUG builds
+```
+
+#### Critical Rules
+
+1. **Always use braces `{}`** for Trace classes, never parentheses `()`:
+   ```cpp
+   TraceInfo{ClassId} << "Message";   // ✓ CORRECT
+   TraceInfo(ClassId) << "Message";   // ✗ WRONG - compiles but inconsistent
+   ```
+
+2. **Use static methods for literal strings** (no variables):
+   ```cpp
+   Tracer::error(ClassId, "Connection failed.");  // ✓ CORRECT
+   TraceError{ClassId} << "Connection failed.";   // ✗ Unnecessary overhead
+   ```
+
+3. **Use Trace classes when formatting is needed**:
+   ```cpp
+   TraceError{ClassId} << "Error code: " << code;  // ✓ CORRECT
+   Tracer::error(ClassId, "Error code: " + std::to_string(code));  // ✗ Unnecessary string concatenation
+   ```
+
+4. **Each trace must be a coherent, self-contained message**:
+
+   Each call to the Tracer creates an independent log entry with its own metadata (timestamp, thread ID, source location, severity). Therefore, **one trace = one complete piece of information**.
+
+   ```cpp
+   // ✗ WRONG - Multiple traces for one logical message (will have different timestamps, can interleave in multi-thread)
+   TraceInfo{ClassId} << "========== Configuration ==========";
+   TraceInfo{ClassId} << "Device: " << deviceName;
+   TraceInfo{ClassId} << "Vendor: " << vendorName;
+   TraceInfo{ClassId} << "====================================";
+
+   // ✓ CORRECT - One trace per meaningful information
+   TraceInfo{ClassId} << "Device '" << deviceName << "' (Vendor: " << vendorName << ")";
+
+   // ✓ CORRECT - Multi-line content in a single trace (for lists)
+   TraceInfo trace{ClassId};
+   trace << "Available extensions:\n";
+   for (const auto& ext : extensions) {
+       trace << "\t" << ext << "\n";
+   }
+   ```
+
+   **Why this matters:**
+   - Each trace gets a unique timestamp - decorative separators have no meaningful time
+   - In multi-threaded code, other logs can interleave between your "related" traces
+   - Log filtering/searching becomes impossible for split messages
+   - Decorative lines (`===`, `---`) carry no information and pollute logs
+
+#### Available Severity Levels
+| Static Method | Trace Class | Use Case |
+|---------------|-------------|----------|
+| `Tracer::debug()` | `TraceDebug{}` | Development debugging (DEBUG builds only) |
+| `Tracer::info()` | `TraceInfo{}` | General information |
+| `Tracer::success()` | `TraceSuccess{}` | Successful operations |
+| `Tracer::warning()` | `TraceWarning{}` | Non-critical issues |
+| `Tracer::error()` | `TraceError{}` | Recoverable errors |
+| `Tracer::fatal()` | `TraceFatal{}` | Unrecoverable errors |
+| N/A | `TraceAPI{}` | External API calls (Vulkan, OpenAL, etc.) |
+
+#### Implementation Details
+
+The Trace classes use the **CRTP pattern** (`T_TraceHelperBase`) to avoid code duplication while maintaining zero overhead. See `src/Tracer.hpp:857-953` and @docs/cpp-conventions.md for the CRTP pattern documentation.
+
+- `TraceInfo`, `TraceSuccess`, `TraceWarning`, `TraceError` inherit from `T_TraceHelperBase<Derived, Severity>`
+- `TraceFatal` and `TraceAPI` are separate classes (have additional `terminate` parameter)
+- `TraceDebug` in Release builds is a dummy class with empty methods (guaranteed zero-overhead)
 
 ## Essential Commands
 
@@ -353,6 +447,7 @@ private:
 
 For comprehensive information on specific systems, refer to:
 
+- **C++ Conventions:** @docs/cpp-conventions.md (naming, member layout, coding patterns)
 - **Physics System:** @docs/physics-system.md
 - **Resource Management:** @docs/resource-management.md
 - **Coordinate System:** @docs/coordinate-system.md

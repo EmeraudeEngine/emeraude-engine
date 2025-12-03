@@ -434,7 +434,7 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			 * @brief Returns the scene's random number generator.
+			 * @brief Returns the scene's random number generator for floats.
 			 *
 			 * Provides deterministic random values for scene-specific logic.
 			 * Use for procedural generation, particle systems, etc.
@@ -444,9 +444,25 @@ namespace EmEn::Scenes
 			 */
 			[[nodiscard]]
 			Libs::Randomizer< float > &
-			randomizer () noexcept
+			floatRandomizer () noexcept
 			{
-				return m_randomizer;
+				return m_floatRandomizer;
+			}
+
+			/**
+			 * @brief Returns the scene's random number generator for integers.
+			 *
+			 * Provides deterministic random values for scene-specific logic.
+			 * Use for procedural generation, particle systems, etc.
+			 *
+			 * @return Reference to the scene's integer randomizer.
+			 * @version 0.8.35
+			 */
+			[[nodiscard]]
+			Libs::Randomizer< int > &
+			integerRandomizer () noexcept
+			{
+				return m_integerRandomizer;
 			}
 
 			/**
@@ -2159,8 +2175,10 @@ namespace EmEn::Scenes
 			Physics::EnvironmentPhysicalProperties m_environmentPhysicalProperties{Physics::EnvironmentPhysicalProperties::Earth()};
 			/** @brief [PHYSICS-NEW-SYSTEM] Sequential impulse constraint solver. @version 0.8.35 */
 			Physics::ConstraintSolver m_constraintSolver{8, 3};
-			/** @brief Scene-local random number generator. @version 0.8.35 */
-			Libs::Randomizer< float > m_randomizer;
+			/** @brief Scene-local random float generator. @version 0.8.35 */
+			Libs::Randomizer< float > m_floatRandomizer;
+			/** @brief Scene-local random integer generator. @version 0.8.35 */
+			Libs::Randomizer< int > m_integerRandomizer;
 			/** @brief Half-size of cubic scene boundary in meters. @version 0.8.35 */
 			float m_boundary{0};
 			/** @brief Accumulated scene runtime in microseconds. @version 0.8.35 */

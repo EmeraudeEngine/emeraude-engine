@@ -1,7 +1,7 @@
 # Emeraude Engine
 
 ![License](https://img.shields.io/badge/license-LGPLv3-blue.svg)
-![Version](https://img.shields.io/badge/version-0.8.31-green.svg)
+![Version](https://img.shields.io/badge/version-0.8.37b-green.svg)
 ![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-lightgrey.svg)
 
 A modern, cross-platform 3D graphics engine built with **Vulkan API** and **C++20**. Emeraude Engine provides a complete framework for building 3D applications with integrated audio, physics simulation, and advanced rendering capabilities.
@@ -33,8 +33,8 @@ A modern, cross-platform 3D graphics engine built with **Vulkan API** and **C++2
 
 ### Build Tools
 
-- **CMake:** 3.25.1 or higher
-- **Python:** 3.0 or higher (for dependency configuration)
+- **CMake:** 3.25.1+ or higher
+- **Python:** 3.0+ or higher (for dependency configuration)
 - **C++20 Compiler:**
   - **Linux:** GCC 13.3.0+ or GCC 14.2.0+
     - Tested on Debian 13 and Ubuntu 24.04 LTS

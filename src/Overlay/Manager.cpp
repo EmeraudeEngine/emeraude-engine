@@ -634,7 +634,7 @@ namespace EmEn::Overlay
 	}
 
 	void
-	Manager::processFrameUpdates () noexcept
+	Manager::updateVideoMemory () noexcept
 	{
 		/* NOTE: This can collide with the window resize event from Manager::onWindowResized() in another thread. */
 		const std::lock_guard< std::mutex > lock{m_physicalRepresentationUpdateMutex};

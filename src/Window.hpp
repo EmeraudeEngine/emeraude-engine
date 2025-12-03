@@ -162,9 +162,7 @@ namespace EmEn
 			size_t
 			getClassUID () noexcept
 			{
-				static const size_t classUID = EmEn::Libs::Hash::FNV1a(ClassId);
-
-				return classUID;
+				return Libs::Hash::FNV1a(ClassId);
 			}
 
 			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
@@ -198,6 +196,7 @@ namespace EmEn
 			 * @brief Returns whether the window is currently being resized by the user.
 			 * @note On Windows, this is true during a drag resize operation (between WM_ENTERSIZEMOVE and WM_EXITSIZEMOVE).
 			 * On other platforms, this always returns false.
+			 * @todo Generalize this method. For now disabled.
 			 * @return bool
 			 */
 			[[nodiscard]]

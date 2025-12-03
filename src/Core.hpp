@@ -123,7 +123,6 @@
 #include <string>
 #include <any>
 #include <atomic>
-#include <mutex>
 
 /* Local inclusions for inheritances. */
 #include "Input/KeyboardListenerInterface.hpp"
@@ -1354,7 +1353,7 @@ namespace EmEn
 
 			/* Secondary Services - Require graphics context. */
 			PlatformManager m_platformManager{m_primaryServices};                      ///< Platform abstraction layer.
-			Vulkan::Instance m_vulkanInstance{m_identification, m_primaryServices};    ///< Vulkan instance wrapper.
+			Vulkan::Instance m_vulkanInstance{m_identification, m_primaryServices, false};    ///< Vulkan instance wrapper. FIXME: Find a nice way to let user-application sets the boolean
 			Window m_window{m_primaryServices, m_vulkanInstance, m_identification};    ///< Application window.
 			Input::Manager m_inputManager{m_primaryServices, m_window};                ///< Input device management.
 			Graphics::Renderer m_graphicsRenderer{m_primaryServices, m_vulkanInstance, m_window}; ///< Vulkan rendering pipeline.

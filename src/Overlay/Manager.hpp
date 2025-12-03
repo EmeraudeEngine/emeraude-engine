@@ -109,9 +109,7 @@ namespace EmEn::Overlay
 			size_t
 			getClassUID () noexcept
 			{
-				static const size_t classUID = EmEn::Libs::Hash::FNV1a(ClassId);
-
-				return classUID;
+				return Libs::Hash::FNV1a(ClassId);
 			}
 
 			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
@@ -359,7 +357,7 @@ namespace EmEn::Overlay
 			 * @note This method is thread-safe and may skip processing if a window resize is in progress.
 			 * @note On failure, the affected screen is automatically disabled (visibility set to false).
 			 */
-			void processFrameUpdates () noexcept;
+			void updateVideoMemory () noexcept;
 
 			/**
 			 * @brief Handles window resize by updating all overlay resources.

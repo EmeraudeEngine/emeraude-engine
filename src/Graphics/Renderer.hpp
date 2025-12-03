@@ -357,9 +357,7 @@ namespace EmEn::Graphics
 			size_t
 			getClassUID () noexcept
 			{
-				static const size_t classUID = EmEn::Libs::Hash::FNV1a(ClassId);
-
-				return classUID;
+				return Libs::Hash::FNV1a(ClassId);
 			}
 
 			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
@@ -396,72 +394,6 @@ namespace EmEn::Graphics
 			window () noexcept
 			{
 				return m_window;
-			}
-
-			/**
-			 * @brief Returns whether the debug mode is enabled.
-			 * @return bool
-			 */
-			[[nodiscard]]
-			bool
-			isDebugModeEnabled () const noexcept
-			{
-				return m_debugMode;
-			}
-
-			/**
-			 * @brief Controls the state of shadow maps rendering.
-			 * @param state The state.
-			 * @return void
-			 */
-			void
-			enableShadowMaps (bool state) noexcept
-			{
-				m_shadowMapsEnabled = state;
-			}
-
-			/**
-			 * @brief Returns whether the shadow maps rendering is enabled.
-			 * @return bool
-			 */
-			[[nodiscard]]
-			bool
-			isShadowMapsEnabled () const noexcept
-			{
-				return m_shadowMapsEnabled;
-			}
-
-			/**
-			 * @brief Controls the state of rendering to textures.
-			 * @param state The state.
-			 * @return void
-			 */
-			void
-			enableRenderToTextures (bool state) noexcept
-			{
-				m_renderToTexturesEnabled = state;
-			}
-
-			/**
-			 * @brief Returns whether the rendering to textures is enabled.
-			 * @return bool
-			 */
-			[[nodiscard]]
-			bool
-			isRenderToTexturesEnabled () const noexcept
-			{
-				return m_renderToTexturesEnabled;
-			}
-
-			/**
-			 * @brief Toggles offscreen-rendering.
-			 * @return void
-			 */
-			void
-			toggleOffscreenRendering () noexcept
-			{
-				m_renderToTexturesEnabled = !m_renderToTexturesEnabled;
-				m_shadowMapsEnabled = m_renderToTexturesEnabled;
 			}
 
 			/**
@@ -616,6 +548,83 @@ namespace EmEn::Graphics
 			externalInput () const noexcept
 			{
 				return m_externalInput;
+			}
+
+			/**
+			 * @brief Returns whether the graphics renderer is usable.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isUsable () const noexcept
+			{
+				return m_isUsable;
+			}
+
+			/**
+			 * @brief Returns whether the debug mode is enabled.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isDebugModeEnabled () const noexcept
+			{
+				return m_debugMode;
+			}
+
+			/**
+			 * @brief Controls the state of shadow maps rendering.
+			 * @param state The state.
+			 * @return void
+			 */
+			void
+			enableShadowMaps (bool state) noexcept
+			{
+				m_shadowMapsEnabled = state;
+			}
+
+			/**
+			 * @brief Returns whether the shadow maps rendering is enabled.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isShadowMapsEnabled () const noexcept
+			{
+				return m_shadowMapsEnabled;
+			}
+
+			/**
+			 * @brief Controls the state of rendering to textures.
+			 * @param state The state.
+			 * @return void
+			 */
+			void
+			enableRenderToTextures (bool state) noexcept
+			{
+				m_renderToTexturesEnabled = state;
+			}
+
+			/**
+			 * @brief Returns whether the rendering to textures is enabled.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isRenderToTexturesEnabled () const noexcept
+			{
+				return m_renderToTexturesEnabled;
+			}
+
+			/**
+			 * @brief Toggles offscreen-rendering.
+			 * @return void
+			 */
+			void
+			toggleOffscreenRendering () noexcept
+			{
+				m_renderToTexturesEnabled = !m_renderToTexturesEnabled;
+				m_shadowMapsEnabled = m_renderToTexturesEnabled;
 			}
 
 			/**
@@ -800,14 +809,6 @@ namespace EmEn::Graphics
 				return m_swapChain->status() == Vulkan::Status::Degraded;
 			}
 
-			/**
-			 * @brief Refresh the graphics renderer framebuffer.
-			 * @note This will be called by the main thread.
-			 * @return bool
-			 */
-			[[nodiscard]]
-			bool recreateSystem () noexcept;
-
 		private:
 
 			/** @copydoc EmEn::ServiceInterface::onInitialize() */
@@ -867,6 +868,15 @@ namespace EmEn::Graphics
 			 */
 			void destroyRenderingSystem () noexcept;
 
+			/**
+			 * @brief Recreates the base of the rendering system.
+			 * @param withSurface Set this parameter to true to recreate the swap-chain and the surface.
+			 * @param useNativeCode Use the native code to build surface instead the GLFW. Default false.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool recreateRenderingSubSystem (bool withSurface, bool useNativeCode = false) noexcept;
+
 			PrimaryServices & m_primaryServices;
 			Vulkan::Instance & m_vulkanInstance;
 			Window & m_window;
@@ -891,6 +901,7 @@ namespace EmEn::Graphics
 			const uint64_t m_timeout{std::chrono::duration_cast< std::chrono::nanoseconds >(std::chrono::milliseconds(60'000)).count()};
 			uint32_t m_graphicsPipelinesBuiltCount{0};
 			uint32_t m_graphicsPipelinesReusedCount{0};
+			bool m_isUsable{false};
 			bool m_debugMode{false};
 			bool m_windowLess{false};
 			bool m_shadowMapsEnabled{true};

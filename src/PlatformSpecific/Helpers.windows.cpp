@@ -230,9 +230,11 @@ namespace EmEn::PlatformSpecific
 
 		// std::cout, std::clog, std::cerr, std::cin
 		FILE * fDummy = nullptr;
+
 		freopen_s(&fDummy, "CONOUT$", "w", stdout);
 		freopen_s(&fDummy, "CONOUT$", "w", stderr);
 		freopen_s(&fDummy, "CONIN$", "r", stdin);
+
 		std::cout.clear();
 		std::clog.clear();
 		std::cerr.clear();
@@ -240,6 +242,9 @@ namespace EmEn::PlatformSpecific
 
 		auto hOutput = GetStdHandle(STD_OUTPUT_HANDLE);
 		SetConsoleMode(hOutput, ENABLE_PROCESSED_OUTPUT | ENABLE_VIRTUAL_TERMINAL_PROCESSING);
+
+		auto hError = GetStdHandle(STD_ERROR_HANDLE);
+		SetConsoleMode(hError, ENABLE_PROCESSED_OUTPUT | ENABLE_VIRTUAL_TERMINAL_PROCESSING);
 
 		return true;
 	}

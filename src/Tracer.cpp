@@ -51,6 +51,14 @@ namespace EmEn
 {
 	using namespace Libs;
 
+	Tracer &
+	Tracer::getInstance () noexcept
+	{
+		static auto instance = std::make_unique< Tracer >(PrivateToken{});
+
+		return *instance;
+	}
+
 	TracerLogger::TracerLogger (std::filesystem::path filepath, LogFormat logFormat) noexcept
 		: m_filepath{std::move(filepath)},
 		m_logFormat{logFormat}
@@ -82,6 +90,58 @@ namespace EmEn
 		{
 			m_thread.join();
 		}
+	}
+
+	void
+	TracerLogger::push (Severity severity, const char * tag, std::string message, const std::source_location & location) noexcept
+	{
+		{
+			/* NOTE: Lock between the writing logs task in a file and the push/pop method. */
+			const std::lock_guard< std::mutex > lock{m_entriesAccess};
+
+			m_entries.emplace(severity, tag, std::move(message), location, std::this_thread::get_id());
+		}
+
+		/* NOTE: wake up the thread. */
+		m_condition.notify_one();
+	}
+
+	bool
+	TracerLogger::start () noexcept
+	{
+		if ( !m_isUsable || m_isRunning )
+		{
+			if constexpr ( IsDebug )
+			{
+				std::cerr << "TraceLogger::start() : Unable to enable the tracer logger !" "\n";
+			}
+
+			return false;
+		}
+
+		m_isRunning = true;
+
+		m_thread = std::thread{&TracerLogger::task, this};
+
+		return true;
+	}
+
+	void
+	TracerLogger::stop () noexcept
+	{
+		m_isRunning = false;
+
+		m_condition.notify_one();
+	}
+
+	void
+	TracerLogger::clear () noexcept
+	{
+		const std::lock_guard< std::mutex > lock{m_entriesAccess};
+
+		std::queue< TracerEntry > emptyQueue;
+
+		m_entries.swap(emptyQueue);
 	}
 
 	void
@@ -205,6 +265,24 @@ namespace EmEn
 		}
 	}
 
+	Tracer::Tracer (PrivateToken) noexcept
+	{
+		if constexpr ( IsDebug )
+		{
+			std::cout << "Tracer constructed!" << std::endl;
+		}
+	}
+
+	Tracer::~Tracer ()
+	{
+		this->disableLogger();
+
+		if constexpr ( IsDebug )
+		{
+			std::cout << "Tracer instance destroyed!" << std::endl;
+		}
+	}
+
 	void
 	Tracer::earlySetup (const Arguments & arguments, std::string processName, bool childProcess) noexcept
 	{
@@ -280,6 +358,8 @@ namespace EmEn
 				this->enableLogger(logFilepath);
 			}
 		}
+
+		TraceInfo{ClassId} << "The tracer is fully configured for the process '" << m_processName << "'.";
 	}
 
 	std::filesystem::path
@@ -355,14 +435,14 @@ namespace EmEn
 
 		Tracer::colorizeMessage(trace, severity, message);
 
-		if ( this->isSourceLocationEnabled() )
-		{
-			trace << "\n\t" "[" << location.file_name() << ':' << location.line() << ':' << location.column() << " `" << location.function_name() << "`]";
-		}
-
 		if ( this->isThreadInfosEnabled() )
 		{
 			this->injectProcessInfo(trace);
+		}
+
+		if ( this->isSourceLocationEnabled() )
+		{
+			trace << "[" << location.file_name() << ':' << location.line() << ':' << location.column() << " `" << location.function_name() << "`]";
 		}
 
 		const std::lock_guard< std::mutex > lock{m_consoleAccess};
@@ -438,7 +518,7 @@ namespace EmEn
 		const auto tid = -1;
 #endif
 
-		stream << "[PPID:" << m_parentProcessID << "][PID:" << m_processID << "][TID:" << tid << ']';
+		stream << "\n\t" "[PPID:" << m_parentProcessID << "][PID:" << m_processID << "][TID:" << tid << ']';
 	}
 
 	bool
@@ -451,8 +531,40 @@ namespace EmEn
 		}
 
 		/* Checks if a term matches the filter. */
-		return std::ranges::any_of(m_filters, [tag](const auto & filteredTag) {
+		return std::ranges::any_of(m_filters, [tag] (const auto & filteredTag) {
 			return std::strcmp(tag, filteredTag.c_str()) == 0;
 		});
+	}
+
+	void
+	Tracer::colorizeMessage (std::stringstream & stream, Severity severity,  std::string_view message) noexcept
+	{
+		switch ( severity )
+		{
+			case Severity::Debug :
+				stream << " \033[1;36m" << message << "\033[0m ";
+				break;
+
+			case Severity::Success :
+				stream << " \033[1;92m" << message << "\033[0m ";
+				break;
+
+			case Severity::Warning :
+				stream << " \033[1;35m" << message << "\033[0m ";
+				break;
+
+			case Severity::Error :
+				stream << " \033[1;91m" << message << "\033[0m ";
+				break;
+
+			case Severity::Fatal :
+				stream << " \033[1;41m" << message << "\033[0m ";
+				break;
+
+			case Severity::Info :
+			default :
+				stream << ' ' << message << ' ';
+				break;
+		}
 	}
 }
