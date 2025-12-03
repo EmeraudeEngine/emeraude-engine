@@ -27,7 +27,7 @@
 #pragma once
 
 /* Local inclusions for inheritances. */
-#include "Interface.hpp"
+#include "Abstract.hpp"
 
 namespace EmEn::Graphics::Renderable
 {
@@ -35,7 +35,7 @@ namespace EmEn::Graphics::Renderable
 	 * @brief Interface to define a visible sea level in a scene.
 	 * @extends EmEn::Graphics::Renderable::Interface This class is a renderable object in the 3D world.
 	 */
-	class SeaLevelInterface : public Interface
+	class SeaLevelInterface : public Abstract
 	{
 		protected:
 
@@ -46,7 +46,7 @@ namespace EmEn::Graphics::Renderable
 			 */
 			explicit
 			SeaLevelInterface (std::string seaLevelName, uint32_t renderableFlags) noexcept
-				: Interface{std::move(seaLevelName), renderableFlags}
+				: Abstract{std::move(seaLevelName), renderableFlags}
 			{
 
 			}

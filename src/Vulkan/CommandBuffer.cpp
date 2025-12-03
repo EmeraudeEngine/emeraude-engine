@@ -35,7 +35,7 @@
 #include <vector>
 
 /* Local inclusions. */
-#include "Graphics/Geometry/Interface.hpp"
+#include "Graphics/Geometry/Abstract.hpp"
 #include "Sync/Event.hpp"
 #include "Sync/MemoryBarrier.hpp"
 #include "Sync/ImageMemoryBarrier.hpp"

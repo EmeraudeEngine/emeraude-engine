@@ -1,136 +1,184 @@
-# Spécification : Sélection GPU Intelligente avec Détection Optimus
+# Specification: Intelligent GPU Selection with Optimus Detection
 
-**Version:** 1.2
-**Date:** 2025-12-03
-**Auteur:** Claude (assistant) / Sheldon
-**Statut:** Implémenté
+**Version:** 2.0
+**Date:** 2025-12-04
+**Author:** Claude (assistant) / Sheldon
+**Status:** Implemented
 
 ---
 
-## Sommaire
+## Summary
 
-1. [Contexte et Problématique](#1-contexte-et-problématique)
-2. [Solution Implémentée](#2-solution-implémentée)
-3. [Architecture Technique](#3-architecture-technique)
+1. [Context and Problem](#1-context-and-problem)
+2. [Implemented Solution](#2-implemented-solution)
+3. [Technical Architecture](#3-technical-architecture)
 4. [Settings](#4-settings)
-5. [Comportement Runtime](#5-comportement-runtime)
-6. [Références](#6-références)
+5. [Runtime Behavior](#5-runtime-behavior)
+6. [References](#6-references)
 
 ---
 
-## 1. Contexte et Problématique
+## 1. Context and Problem
 
-### 1.1 Bug Identifié
+### 1.1 Identified Bug
 
-Sur les configurations **Nvidia Optimus** (laptop avec iGPU Intel/AMD + dGPU Nvidia mobile), un **deadlock** se produit dans le driver Nvidia lors de la recréation de surface WSI Windows. Le problème survient de manière aléatoire lors du resize de fenêtre ou de la recréation de swapchain.
+On **Nvidia Optimus** configurations (laptop with Intel/AMD iGPU + mobile Nvidia dGPU), a **deadlock** occurs in the Nvidia driver during Windows WSI surface recreation. The problem occurs randomly during window resize or swapchain recreation.
 
-### 1.2 Symptômes
+### 1.2 Symptoms
 
-- Freeze complet de l'application
-- Deadlock dans `win32u.dll` (callstack driver Nvidia)
-- `vkAcquireNextImageKHR` ne retourne jamais
-- Problème **non reproductible** avec l'iGPU seul
+- Complete application freeze
+- Deadlock in `win32u.dll` (Nvidia driver callstack)
+- `vkAcquireNextImageKHR` never returns
+- Problem **not reproducible** with iGPU alone
 
-### 1.3 Cause Racine
+### 1.3 Root Cause
 
-Bug confirmé côté driver Nvidia sur configurations hybrides **laptop** où le dGPU n'a pas de sorties display physiques et passe par l'iGPU. Documenté dans plusieurs projets :
+Bug confirmed on Nvidia driver side for hybrid **laptop** configurations where the dGPU has no physical display outputs and routes through the iGPU. Documented in several projects:
 - [SDL #11820](https://github.com/libsdl-org/SDL/issues/11820)
 - [Dolphin Emulator #13522](https://bugs.dolphin-emu.org/issues/13522)
 - [Gamescope #1091](https://github.com/ValveSoftware/gamescope/issues/1091)
 
-### 1.4 Desktop vs Laptop
+### 1.4 Manifestation Condition
 
-**Important :** Un desktop avec un CPU ayant un iGPU intégré (ex: Intel UHD) + une RTX discrete n'est **PAS** un système Optimus. Sur desktop, la RTX a ses propres sorties display (HDMI, DisplayPort) et ne passe pas par l'iGPU → pas de bug.
+**Important:** The bug only manifests during **swapchain recreation in windowed mode** (resize). In **exclusive fullscreen** mode, the Nvidia dGPU is safe because there is no dynamic surface resize.
 
-### 1.5 Solution
+### 1.5 Desktop vs Laptop
 
-Mode **Failsafe** par défaut qui détecte automatiquement les configurations Optimus **laptop** (GPU mobile) et exclut le dGPU Nvidia problématique.
+A desktop with a CPU having an integrated iGPU (e.g., Intel UHD) + a discrete RTX is **NOT** an Optimus system. On desktop, the RTX has its own display outputs (HDMI, DisplayPort) and does not route through the iGPU - no bug.
+
+### 1.6 Solution
+
+**FailSafe** system independent of selection mode, enabled by default, that automatically detects Optimus **laptop** configurations (mobile GPU) and excludes the problematic Nvidia dGPU **only in windowed mode**.
 
 ---
 
-## 2. Solution Implémentée
+## 2. Implemented Solution
 
-### 2.1 Mode Failsafe
+### 2.1 v2.0 Architecture
 
-Le mode `Failsafe` (défaut) :
-1. Détecte automatiquement les configurations Optimus au démarrage
-2. Se comporte comme **Performance** si pas d'Optimus
-3. **Exclut** le dGPU Nvidia si Optimus détecté → utilise l'iGPU
+The system separates two distinct concerns:
 
-### 2.2 Définition Optimus (v1.2)
+| Concept | Setting | Role |
+|---------|---------|------|
+| **Scoring mode** | `AutoSelectMode` | Determines how to score GPUs (Performance, PowerSaving, DontCare) |
+| **FailSafe protection** | `EnableFailSafe` | Enables/disables safety exclusions (Optimus, etc.) |
 
-Une configuration est considérée **Optimus** si :
-1. Présence d'un `VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU` (Intel ou AMD)
-2. **ET** présence d'un `VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU` avec `vendorID == 0x10DE` (Nvidia)
-3. **ET** le GPU Nvidia est un **modèle mobile/laptop** (détecté par son nom)
+This separation allows FailSafe to be active regardless of the chosen scoring mode.
 
-### 2.3 Détection Mobile GPU
+### 2.2 Selection Modes
 
-La méthode `isLikelyMobileGPU()` vérifie si le nom du GPU contient un indicateur mobile :
+| Mode | Behavior |
+|------|----------|
+| **DontCare** | First available device |
+| **Performance** | Best score (favors dGPU) - **default** |
+| **PowerSaving** | Inverted score (favors iGPU) |
 
-| Pattern | Exemple |
+### 2.3 FailSafe Protection
+
+FailSafe is an **independent protection layer** that applies before scoring:
+
+- **Enabled by default** (`EnableFailSafe = true`)
+- Detects known problematic configurations
+- Excludes affected devices from selection
+
+### 2.4 Optimus Definition
+
+A configuration is considered **Optimus** if:
+1. Presence of a `VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU` (Intel or AMD)
+2. **AND** presence of a `VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU` with `vendorID == 0x10DE` (Nvidia)
+3. **AND** the Nvidia GPU is a **mobile/laptop model** (detected by its name)
+
+### 2.5 Exclusion Condition
+
+The Nvidia dGPU is excluded **if and only if**:
+- `EnableFailSafe = true`
+- Optimus configuration detected
+- **AND** exclusive fullscreen mode **not enabled**
+
+In exclusive fullscreen, the Nvidia dGPU is usable even on Optimus.
+
+### 2.6 Mobile GPU Detection
+
+The `isLikelyMobileGPU()` method checks if the GPU name contains a mobile indicator:
+
+| Pattern | Example |
 |---------|---------|
 | `"Mobile"` | "GeForce RTX 3080 Mobile" |
 | `"Laptop"` | "GeForce RTX 4070 Laptop GPU" |
 | `"Max-Q"` | "Quadro RTX 3000 Max-Q" |
-| `" MX"` | "GeForce MX450" (série MX = toujours mobile) |
+| `" MX"` | "GeForce MX450" (MX series = always mobile) |
 
-Les GPU desktop (ex: "GeForce RTX 4080") n'ont jamais ces mots-clés.
+Desktop GPUs (e.g., "GeForce RTX 4080") never have these keywords.
 
-### 2.4 Flux d'Exécution
+### 2.7 Execution Flow
 
 ```
-preparePhysicalDevices()
-├── Énumère les GPUs via vkEnumeratePhysicalDevices()
-├── detectHybridGPUConfiguration()
-│   ├── Cherche iGPU + dGPU Nvidia
-│   ├── isLikelyMobileGPU(discreteGPUName)
-│   ├── isOptimusDetected = hybrid && mobile
-│   └── isHybridNonOptimus = hybrid && !mobile (desktop)
-├── Lit setting OptimusWorkaround
-└── logGPUConfiguration()
+readSettings()
+├── m_autoSelectMode = Performance | PowerSaving | DontCare
+├── m_enableFailSafe = true (default)
+├── m_fullscreenExclusiveEnabled
+└── m_useVulkanMemoryAllocator
 
-getGraphicsDevice()
-├── Lit AutoSelectMode (défaut: "Failsafe")
-├── Sauvegarde AvailableGPUs (tous les GPUs)
-├── getScoredGraphicsDevices(Failsafe)
-│   └── Si Failsafe + Optimus → shouldExcludeForFailsafe() → skip dGPU Nvidia
-├── Sélectionne le GPU avec le meilleur score
-└── Crée le Device logique
+getScoredGraphicsDevices(window)
+├── detectHybridGPUConfiguration() -> HybridGPUConfig
+├── logGPUConfiguration(hybridConfig)
+├── For each device:
+│   ├── If m_enableFailSafe && shouldExcludeForFailsafe(hybridConfig, device) -> skip
+│   ├── checkDeviceCompatibility() -> base score
+│   └── modulateDeviceScoring() according to m_autoSelectMode
+└── Return map sorted by score
+
+getGraphicsDevice(window)
+├── ForceGPU configured? -> Use that GPU
+└── Otherwise -> Device with best score
 ```
 
 ---
 
-## 3. Architecture Technique
+## 3. Technical Architecture
 
-### 3.1 Fichiers Modifiés
+### 3.1 Modified Files
 
-| Fichier | Modifications |
-|---------|---------------|
-| `src/Vulkan/Types.hpp` | `DeviceRunMode::Failsafe`, `VendorID` namespace, `HybridGPUConfig` struct |
-| `src/Vulkan/Instance.hpp` | Nouvelles méthodes et membres |
-| `src/Vulkan/Instance.cpp` | Implémentation détection et exclusion |
-| `src/SettingKeys.hpp` | Nouvelles clés settings |
+| File | Modifications |
+|------|---------------|
+| `src/Vulkan/Types.hpp` | `DeviceAutoSelectMode` enum, `Vendor` enum, `HybridGPUConfig` struct |
+| `src/Vulkan/Instance.hpp` | Members and methods |
+| `src/Vulkan/Instance.cpp` | Detection and exclusion implementation |
+| `src/SettingKeys.hpp` | Settings keys |
 
-### 3.2 Enum DeviceRunMode
+### 3.2 DeviceAutoSelectMode Enum
 
 ```cpp
-enum class DeviceRunMode : uint8_t
+enum class DeviceAutoSelectMode : uint8_t
 {
-    DontCare = 0,      // Sélection basique
-    Performance = 1,   // Favorise dGPU
-    PowerSaving = 2,   // Favorise iGPU
-    Failsafe = 3       // Performance SAUF si Optimus laptop → iGPU
+    DontCare = 0,      // First available device
+    Performance = 1,   // Favors dGPU (best score) - DEFAULT
+    PowerSaving = 2    // Favors iGPU (inverted score)
 };
 ```
 
-### 3.3 Structure HybridGPUConfig
+### 3.3 Vendor Enum
+
+```cpp
+enum class Vendor : uint32_t
+{
+    Unknown = 0,
+    AMD = 0x1002,
+    ImgTec = 0x1010,
+    Nvidia = 0x10DE,
+    ARM = 0x13B5,
+    Qualcomm = 0x5143,
+    Intel = 0x8086
+};
+```
+
+### 3.4 HybridGPUConfig Structure
 
 ```cpp
 struct HybridGPUConfig
 {
     bool isOptimusDetected{false};      // Laptop: iGPU + mobile Nvidia dGPU
-    bool isHybridNonOptimus{false};     // Desktop: iGPU CPU + discrete RTX (safe)
+    bool isHybridNonOptimus{false};     // Desktop: CPU iGPU + discrete RTX (safe)
     std::string integratedGPUName{};
     std::string discreteGPUName{};
     uint32_t integratedVendorID{0};
@@ -138,42 +186,31 @@ struct HybridGPUConfig
 };
 ```
 
-### 3.4 Vendor IDs
+### 3.5 Key Methods
 
-```cpp
-namespace VendorID
-{
-    constexpr uint32_t AMD = 0x1002;
-    constexpr uint32_t Intel = 0x8086;
-    constexpr uint32_t Nvidia = 0x10DE;
-    constexpr uint32_t ARM = 0x13B5;
-    constexpr uint32_t Qualcomm = 0x5143;
-}
-```
-
-### 3.5 Méthodes Clés
-
-| Méthode | Rôle |
-|---------|------|
-| `isLikelyMobileGPU()` | Détecte si le nom GPU indique un modèle mobile |
-| `detectHybridGPUConfiguration()` | Détecte iGPU + dGPU Nvidia + vérifie si mobile |
-| `shouldExcludeForFailsafe()` | Retourne true si GPU doit être exclu |
-| `logGPUConfiguration()` | Log config GPU au démarrage |
+| Method | Role |
+|--------|------|
+| `readSettings()` | Reads settings at startup |
+| `isLikelyMobileGPU(string)` | Detects if GPU name indicates a mobile model |
+| `detectHybridGPUConfiguration()` | Detects iGPU + Nvidia dGPU + checks if mobile |
+| `shouldExcludeForFailsafe(config, device)` | Returns true if GPU should be excluded |
+| `logGPUConfiguration(config)` | Logs GPU config |
+| `modulateDeviceScoring(props, score)` | Adjusts score according to m_autoSelectMode |
 
 ---
 
 ## 4. Settings
 
-### 4.1 Structure JSON
+### 4.1 JSON Structure
 
 ```json
 {
   "Core": {
     "Video": {
       "VulkanDevice": {
-        "AutoSelectMode": "Failsafe",
+        "AutoSelectMode": "Performance",
+        "EnableFailSafe": true,
         "ForceGPU": "",
-        "OptimusWorkaround": true,
         "UseVMA": true,
         "AvailableGPUs": [
           "AMD Radeon(TM) Graphics",
@@ -185,83 +222,102 @@ namespace VendorID
 }
 ```
 
-### 4.2 Description des Settings
+### 4.2 Settings Description
 
-| Setting | Type | Défaut | Description |
-|---------|------|--------|-------------|
-| `AutoSelectMode` | string | `"Failsafe"` | Mode de sélection : Failsafe, Performance, PowerSaving, DontCare |
-| `ForceGPU` | string | `""` | Forcer un GPU par son nom (override tout) |
-| `OptimusWorkaround` | bool | `true` | Activer l'exclusion du dGPU Nvidia sur Optimus |
-| `UseVMA` | bool | `true` | Utiliser Vulkan Memory Allocator |
-| `AvailableGPUs` | array | (runtime) | Liste de tous les GPUs détectés |
+| Setting | Type | Default | Description |
+|---------|------|---------|-------------|
+| `AutoSelectMode` | string | `"Performance"` | Scoring mode: Performance, PowerSaving, DontCare |
+| `EnableFailSafe` | bool | `true` | Enables safety exclusions (Optimus, etc.) |
+| `ForceGPU` | string | `""` | Force a GPU by name (overrides everything) |
+| `UseVMA` | bool | `true` | Use Vulkan Memory Allocator |
+| `AvailableGPUs` | array | (runtime) | List of all detected GPUs |
 
 ### 4.3 Notes
 
-- `AvailableGPUs` est **recalculé à chaque démarrage** (pas persisté)
-- Tous les GPUs sont listés, même ceux exclus par Failsafe
-- Permet à l'utilisateur de voir les options disponibles pour `ForceGPU`
+- `AvailableGPUs` is **recalculated at each startup** (not persisted)
+- All GPUs are listed, even those excluded by FailSafe
+- Allows user to copy-paste a name for `ForceGPU`
 
 ---
 
-## 5. Comportement Runtime
+## 5. Runtime Behavior
 
-### 5.1 Matrice des Comportements
+### 5.1 Behavior Matrix
 
-| Mode | Config | GPU Mobile | Résultat |
-|------|--------|------------|----------|
-| **Failsafe** | Single GPU | N/A | GPU unique sélectionné |
-| **Failsafe** | Desktop hybrid | Non | dGPU sélectionné (safe) |
-| **Failsafe** | Laptop Optimus | Oui | **iGPU sélectionné** |
-| **Performance** | Any | N/A | dGPU sélectionné |
-| **PowerSaving** | Any | N/A | iGPU sélectionné |
+| AutoSelectMode | EnableFailSafe | Config | Fullscreen | Result |
+|----------------|----------------|--------|------------|--------|
+| Performance | true | Laptop Optimus | No | iGPU selected |
+| Performance | true | Laptop Optimus | Yes | dGPU selected |
+| Performance | true | Desktop hybrid | Any | dGPU selected |
+| Performance | false | Laptop Optimus | Any | dGPU selected (risky!) |
+| PowerSaving | Any | Any | Any | iGPU selected |
+| DontCare | Any | Any | Any | First device |
 
-### 5.2 Logs de Démarrage
+### 5.2 Startup Logs
 
-#### Cas 1: Laptop Optimus (GPU mobile détecté)
-
-```
-[Info]  ========== GPU Configuration ==========
-[Info]  Physical devices found: 2
-[Info]    [iGPU] AMD Radeon(TM) Graphics (Vendor: AMD (4098))
-[Info]    [dGPU] NVIDIA GeForce RTX 3060 Laptop GPU (Vendor: Nvidia (4318))
-[Info]  ---------------------------------------
-[Warn]  ! Nvidia Optimus (LAPTOP) configuration DETECTED
-[Warn]    Integrated : AMD Radeon(TM) Graphics
-[Warn]    Discrete   : NVIDIA GeForce RTX 3060 Laptop GPU (mobile GPU)
-[Warn]    Known driver issues may occur with discrete GPU.
-[Warn]    Optimus workaround: Enabled
-[Info]  =======================================
-[Warn]  Failsafe: Excluding 'NVIDIA GeForce RTX 3060 Laptop GPU'...
-[Success] >>> GPU Selected: AMD Radeon(TM) Graphics (Failsafe mode)
-```
-
-#### Cas 2: Desktop hybrid (GPU desktop - safe)
+#### Case 1: Laptop Optimus in windowed mode (FailSafe active)
 
 ```
-[Info]  ========== GPU Configuration ==========
-[Info]  Physical devices found: 2
-[Info]    [iGPU] Intel(R) UHD Graphics 770 (Vendor: Intel (32902))
-[Info]    [dGPU] NVIDIA GeForce RTX 4080 (Vendor: Nvidia (4318))
-[Info]  ---------------------------------------
-[Info]  Hybrid GPU config: Desktop (non-Optimus)
-[Info]    Integrated : Intel(R) UHD Graphics 770 (CPU iGPU)
-[Info]    Discrete   : NVIDIA GeForce RTX 4080 (has own display outputs)
-[Info]    No workaround needed - discrete GPU is safe to use.
-[Info]  =======================================
-[Success] >>> GPU Selected: NVIDIA GeForce RTX 4080 (Failsafe mode)
+[Info]    Physical device [iGPU] 'AMD Radeon(TM) Graphics' (Vendor: AMD (4098))
+[Info]    Physical device [dGPU] 'NVIDIA GeForce RTX 3060 Laptop GPU' (Vendor: Nvidia (4318))
+[Warning] Nvidia Optimus (LAPTOP) detected: iGPU 'AMD Radeon(TM) Graphics' + dGPU 'NVIDIA GeForce RTX 3060 Laptop GPU' (mobile). Failsafe mode will avoid dGPU in windowed mode.
+[Warning] Failsafe: Excluding 'NVIDIA GeForce RTX 3060 Laptop GPU' (Nvidia Optimus + windowed mode - known driver issues with swap-chain resize)
+[Success] Graphics capable physical device selected: AMD Radeon(TM) Graphics (Performance mode)
 ```
 
-### 5.3 Priorité de Sélection
+#### Case 2: Laptop Optimus in fullscreen (FailSafe active)
 
 ```
-1. ForceGPU configuré → Utiliser ce GPU (override total)
-2. Mode Failsafe + Optimus laptop → Exclure dGPU Nvidia mobile
-3. Scoring selon le mode → Prendre le meilleur score
+[Info]    Physical device [iGPU] 'AMD Radeon(TM) Graphics' (Vendor: AMD (4098))
+[Info]    Physical device [dGPU] 'NVIDIA GeForce RTX 3060 Laptop GPU' (Vendor: Nvidia (4318))
+[Warning] Nvidia Optimus (LAPTOP) detected: iGPU 'AMD Radeon(TM) Graphics' + dGPU 'NVIDIA GeForce RTX 3060 Laptop GPU' (mobile). Failsafe mode will avoid dGPU in windowed mode.
+[Success] Graphics capable physical device selected: NVIDIA GeForce RTX 3060 Laptop GPU (Performance mode)
+```
+
+#### Case 3: Desktop hybrid (FailSafe active)
+
+```
+[Info]    Physical device [iGPU] 'Intel(R) UHD Graphics 770' (Vendor: Intel (32902))
+[Info]    Physical device [dGPU] 'NVIDIA GeForce RTX 3070 Ti' (Vendor: Nvidia (4318))
+[Info]    Hybrid GPU (Desktop, non-Optimus): iGPU 'Intel(R) UHD Graphics 770' + dGPU 'NVIDIA GeForce RTX 3070 Ti'. All modes safe.
+[Success] Graphics capable physical device selected: NVIDIA GeForce RTX 3070 Ti (Performance mode)
+```
+
+#### Case 4: Forced GPU
+
+```
+[Debug]   Trying to force the physical device (Graphics) named 'Intel(R) UHD Graphics 770' ...
+[Success] Graphics capable physical device selected: Intel(R) UHD Graphics 770 (FORCED)
+```
+
+### 5.3 Selection Priority
+
+```
+1. ForceGPU configured -> Use that GPU (total override)
+2. EnableFailSafe + exclusion condition -> Exclude the device
+3. Scoring according to AutoSelectMode -> Take the best score
+```
+
+### 5.4 Extensibility
+
+The `shouldExcludeForFailsafe()` method is designed to accommodate other exclusion cases:
+
+```cpp
+bool Instance::shouldExcludeForFailsafe(const HybridGPUConfig& config,
+                                         const std::shared_ptr<PhysicalDevice>& device) const noexcept
+{
+    // Case 1: Nvidia Optimus in windowed mode
+    if (!m_fullscreenExclusiveEnabled && config.isOptimusDetected) { ... }
+
+    // NOTE: Other exclusion cases will follow...
+
+    return false;
+}
 ```
 
 ---
 
-## 6. Références
+## 6. References
 
 ### 6.1 Bug Reports
 

@@ -230,6 +230,36 @@ namespace EmEn::PlatformSpecific
 
 		// std::cout, std::clog, std::cerr, std::cin
 		FILE * fDummy = nullptr;
+
+		freopen_s(&fDummy, "CONOUT$", "w", stdout);
+		freopen_s(&fDummy, "CONOUT$", "w", stderr);
+		freopen_s(&fDummy, "CONIN$", "r", stdin);
+
+		std::cout.clear();
+		std::clog.clear();
+		std::cerr.clear();
+		std::cin.clear();
+
+		auto hOutput = GetStdHandle(STD_OUTPUT_HANDLE);
+		SetConsoleMode(hOutput, ENABLE_PROCESSED_OUTPUT | ENABLE_VIRTUAL_TERMINAL_PROCESSING);
+
+		auto hError = GetStdHandle(STD_ERROR_HANDLE);
+		SetConsoleMode(hError, ENABLE_PROCESSED_OUTPUT | ENABLE_VIRTUAL_TERMINAL_PROCESSING);
+
+		return true;
+	}
+
+	bool
+	attachToParentConsole ()
+	{
+		/* Try to attach to parent process console (e.g., Visual Studio terminal). */
+		if ( !AttachConsole(ATTACH_PARENT_PROCESS) )
+		{
+			return false;
+		}
+
+		/* Redirect std streams to the attached console. */
+		FILE * fDummy = nullptr;
 		freopen_s(&fDummy, "CONOUT$", "w", stdout);
 		freopen_s(&fDummy, "CONOUT$", "w", stderr);
 		freopen_s(&fDummy, "CONIN$", "r", stdin);

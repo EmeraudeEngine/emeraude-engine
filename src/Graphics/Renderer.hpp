@@ -357,9 +357,7 @@ namespace EmEn::Graphics
 			size_t
 			getClassUID () noexcept
 			{
-				static const size_t classUID = EmEn::Libs::Hash::FNV1a(ClassId);
-
-				return classUID;
+				return Libs::Hash::FNV1a(ClassId);
 			}
 
 			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
@@ -396,72 +394,6 @@ namespace EmEn::Graphics
 			window () noexcept
 			{
 				return m_window;
-			}
-
-			/**
-			 * @brief Returns whether the debug mode is enabled.
-			 * @return bool
-			 */
-			[[nodiscard]]
-			bool
-			isDebugModeEnabled () const noexcept
-			{
-				return m_debugMode;
-			}
-
-			/**
-			 * @brief Controls the state of shadow maps rendering.
-			 * @param state The state.
-			 * @return void
-			 */
-			void
-			enableShadowMaps (bool state) noexcept
-			{
-				m_shadowMapsEnabled = state;
-			}
-
-			/**
-			 * @brief Returns whether the shadow maps rendering is enabled.
-			 * @return bool
-			 */
-			[[nodiscard]]
-			bool
-			isShadowMapsEnabled () const noexcept
-			{
-				return m_shadowMapsEnabled;
-			}
-
-			/**
-			 * @brief Controls the state of rendering to textures.
-			 * @param state The state.
-			 * @return void
-			 */
-			void
-			enableRenderToTextures (bool state) noexcept
-			{
-				m_renderToTexturesEnabled = state;
-			}
-
-			/**
-			 * @brief Returns whether the rendering to textures is enabled.
-			 * @return bool
-			 */
-			[[nodiscard]]
-			bool
-			isRenderToTexturesEnabled () const noexcept
-			{
-				return m_renderToTexturesEnabled;
-			}
-
-			/**
-			 * @brief Toggles offscreen-rendering.
-			 * @return void
-			 */
-			void
-			toggleOffscreenRendering () noexcept
-			{
-				m_renderToTexturesEnabled = !m_renderToTexturesEnabled;
-				m_shadowMapsEnabled = m_renderToTexturesEnabled;
 			}
 
 			/**
@@ -619,6 +551,83 @@ namespace EmEn::Graphics
 			}
 
 			/**
+			 * @brief Returns whether the graphics renderer is usable.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isUsable () const noexcept
+			{
+				return m_isUsable;
+			}
+
+			/**
+			 * @brief Returns whether the debug mode is enabled.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isDebugModeEnabled () const noexcept
+			{
+				return m_debugMode;
+			}
+
+			/**
+			 * @brief Controls the state of shadow maps rendering.
+			 * @param state The state.
+			 * @return void
+			 */
+			void
+			enableShadowMaps (bool state) noexcept
+			{
+				m_shadowMapsEnabled = state;
+			}
+
+			/**
+			 * @brief Returns whether the shadow maps rendering is enabled.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isShadowMapsEnabled () const noexcept
+			{
+				return m_shadowMapsEnabled;
+			}
+
+			/**
+			 * @brief Controls the state of rendering to textures.
+			 * @param state The state.
+			 * @return void
+			 */
+			void
+			enableRenderToTextures (bool state) noexcept
+			{
+				m_renderToTexturesEnabled = state;
+			}
+
+			/**
+			 * @brief Returns whether the rendering to textures is enabled.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isRenderToTexturesEnabled () const noexcept
+			{
+				return m_renderToTexturesEnabled;
+			}
+
+			/**
+			 * @brief Toggles offscreen-rendering.
+			 * @return void
+			 */
+			void
+			toggleOffscreenRendering () noexcept
+			{
+				m_renderToTexturesEnabled = !m_renderToTexturesEnabled;
+				m_shadowMapsEnabled = m_renderToTexturesEnabled;
+			}
+
+			/**
 			 * @brief Sets the clear value for the color buffer for the next rendering.
 			 * @param red A scalar value.
 			 * @param green A scalar value.
@@ -752,6 +761,34 @@ namespace EmEn::Graphics
 			bool finalizeGraphicsPipeline (const RenderTarget::Abstract & renderTarget, const Saphir::Program & program, std::shared_ptr< Vulkan::GraphicsPipeline > & graphicsPipeline) noexcept;
 
 			/**
+			 * @brief Finds a cached shader program by its unique key.
+			 * @note This allows early lookup before shader generation to avoid redundant work.
+			 * @param programKey The unique key identifying the program configuration.
+			 * @return std::shared_ptr< Saphir::Program > The cached program or nullptr if not found.
+			 */
+			[[nodiscard]]
+			std::shared_ptr< Saphir::Program > findCachedProgram (size_t programKey) const noexcept;
+
+			/**
+			 * @brief Caches a shader program for future reuse.
+			 * @param programKey The unique key identifying the program configuration.
+			 * @param program The program to cache.
+			 * @return bool True if the program was successfully cached.
+			 */
+			bool cacheProgram (size_t programKey, const std::shared_ptr< Saphir::Program > & program) noexcept;
+
+			/**
+			 * @brief Notifies that a cached program was reused.
+			 * @note This increments the reuse counter for statistics.
+			 * @return void
+			 */
+			void
+			notifyProgramReused () noexcept
+			{
+				m_programReusedCount++;
+			}
+
+			/**
 			 * @brief Returns or creates a sampler.
 			 * @param identifier A string.
 			 * @param setupCreateInfo A function to configure the creation info structure.
@@ -800,13 +837,33 @@ namespace EmEn::Graphics
 				return m_swapChain->status() == Vulkan::Status::Degraded;
 			}
 
-			/**
-			 * @brief Refresh the graphics renderer framebuffer.
-			 * @note This will be called by the main thread.
-			 * @return bool
-			 */
 			[[nodiscard]]
-			bool recreateSystem () noexcept;
+			uint32_t
+			pipelineBuiltCount () const noexcept
+			{
+				return m_pipelineBuiltCount;
+			}
+
+			[[nodiscard]]
+			uint32_t
+			pipelineReusedCount () const noexcept
+			{
+				return m_pipelineReusedCount;
+			}
+
+			[[nodiscard]]
+			uint32_t
+			programBuiltCount () const noexcept
+			{
+				return m_programBuiltCount;
+			}
+
+			[[nodiscard]]
+			uint32_t
+			programsReusedCount () const noexcept
+			{
+				return m_programReusedCount;
+			}
 
 		private:
 
@@ -867,6 +924,15 @@ namespace EmEn::Graphics
 			 */
 			void destroyRenderingSystem () noexcept;
 
+			/**
+			 * @brief Recreates the base of the rendering system.
+			 * @param withSurface Set this parameter to true to recreate the swap-chain and the surface.
+			 * @param useNativeCode Use the native code to build surface instead the GLFW. Default false.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool recreateRenderingSubSystem (bool withSurface, bool useNativeCode = false) noexcept;
+
 			PrimaryServices & m_primaryServices;
 			Vulkan::Instance & m_vulkanInstance;
 			Window & m_window;
@@ -889,8 +955,11 @@ namespace EmEn::Graphics
 			std::array< VkClearValue, 2 > m_clearColors{};
 			uint32_t m_currentFrameIndex{0};
 			const uint64_t m_timeout{std::chrono::duration_cast< std::chrono::nanoseconds >(std::chrono::milliseconds(60'000)).count()};
-			uint32_t m_graphicsPipelinesBuiltCount{0};
-			uint32_t m_graphicsPipelinesReusedCount{0};
+			uint32_t m_pipelineBuiltCount{0};
+			uint32_t m_pipelineReusedCount{0};
+			uint32_t m_programBuiltCount{0};
+			uint32_t m_programReusedCount{0};
+			bool m_isUsable{false};
 			bool m_debugMode{false};
 			bool m_windowLess{false};
 			bool m_shadowMapsEnabled{true};

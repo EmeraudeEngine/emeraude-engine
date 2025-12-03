@@ -1,102 +1,102 @@
 # Tool (Utilities)
 
-Context spécifique pour le développement des outils utilitaires d'Emeraude Engine.
+Context for developing Emeraude Engine utility tools.
 
-## Vue d'ensemble du module
+## Module Overview
 
-**Statut : PEU UTILISÉ** - Utilitaires annexes utilisant la logique du moteur pour tâches spécifiques, lancés via arguments ligne de commande. Concept présent mais pas activement utilisé.
+**Status: RARELY USED** - Auxiliary utilities using engine logic for specific tasks, launched via command line arguments. Concept present but not actively used.
 
-## Règles spécifiques à Tool/
+## Tool-Specific Rules
 
-### Concept: Utilitaires annexes
-- **Pas l'application principale** : Outils pour tâches spécifiques, pas pour lancer le jeu/app
-- **Utilise logique moteur** : Réutilise systèmes du moteur (Geometry, Vulkan, etc.)
-- **Runtime via CLI** : Lancés par arguments en ligne de commande
+### Concept: Auxiliary Utilities
+- **Not the main application**: Tools for specific tasks, not for launching game/app
+- **Uses engine logic**: Reuses engine systems (Geometry, Vulkan, etc.)
+- **Runtime via CLI**: Launched by command line arguments
 
-### Outils disponibles (exemples)
+### Available Tools (examples)
 
-**GeometryDataPrinter** :
-- Affiche structure data d'une géométrie en format texte
-- Inspection/debug de fichiers géométrie
+**GeometryDataPrinter**:
+- Displays geometry data structure in text format
+- Inspection/debug of geometry files
 
-**VulkanCapabilities** :
-- Affiche capacités Vulkan du système
-- Info GPU, extensions supportées, limites
+**VulkanCapabilities**:
+- Displays system Vulkan capabilities
+- GPU info, supported extensions, limits
 
-### Invocation (syntaxe approximative)
+### Invocation (approximate syntax)
 ```bash
-# Exemple conceptuel (syntaxe exacte à définir)
+# Conceptual example (exact syntax to be defined)
 ./Emeraude --tool geometry-printer file.obj
 ./Emeraude --tool vulkan-capabilities
 ```
 
 ### Architecture
-- Outils enregistrés avec nom unique
-- Dispatch selon argument `--tool`
-- Accès aux systèmes moteur (Resources, Graphics, etc.)
+- Tools registered with unique name
+- Dispatch based on `--tool` argument
+- Access to engine systems (Resources, Graphics, etc.)
 
-## Commandes de développement
+## Development Commands
 
 ```bash
-# Lister outils disponibles (si implémenté)
+# List available tools (if implemented)
 ./Emeraude --list-tools
 
-# Lancer un outil
+# Launch a tool
 ./Emeraude --tool <tool-name> [args...]
 ```
 
-## Fichiers importants
+## Important Files
 
-- GeometryDataPrinter - Inspection géométries
-- VulkanCapabilities - Info capacités GPU
-- À documenter lors de l'activation du système
+- GeometryDataPrinter - Geometry inspection
+- VulkanCapabilities - GPU capabilities info
+- To be documented upon system activation
 
-## Patterns de développement
+## Development Patterns
 
-### Ajout d'un nouvel outil (concept)
+### Adding a New Tool (concept)
 ```cpp
-// Créer classe outil
+// Create tool class
 class MyTool {
 public:
     static int run(const std::vector<std::string>& args) {
-        // Utiliser systèmes moteur
+        // Use engine systems
         auto geometry = loadGeometry(args[0]);
         processGeometry(geometry);
         return 0;  // Success
     }
 };
 
-// Enregistrer
+// Register
 ToolRegistry::register("my-tool", &MyTool::run);
 ```
 
-### Utilisation depuis main()
+### Usage from main()
 ```cpp
 int main(int argc, char* argv[]) {
-    // Détecter mode outil
+    // Detect tool mode
     if (hasArg("--tool")) {
         std::string toolName = getArg("--tool");
         return ToolRegistry::run(toolName, remainingArgs);
     }
 
-    // Sinon lancer application normale
+    // Otherwise launch normal application
     return runApplication();
 }
 ```
 
-## Points d'attention
+## Critical Points
 
-- **Peu utilisé actuellement** : Concept présent mais pas activement développé
-- **Syntaxe à définir** : Interface CLI exacte à standardiser
-- **Accès systèmes moteur** : Outils peuvent utiliser Resources, Graphics, etc.
-- **Pas pour production** : Outils de développement/debug uniquement
-- **Exit propre** : Retourner code exit approprié (0 = succès)
+- **Rarely used currently**: Concept present but not actively developed
+- **Syntax to define**: Exact CLI interface to be standardized
+- **Engine system access**: Tools can use Resources, Graphics, etc.
+- **Not for production**: Development/debug tools only
+- **Clean exit**: Return appropriate exit code (0 = success)
 
-## Documentation détaillée
+## Detailed Documentation
 
-À créer si le système Tool devient activement utilisé.
+To be created if Tool system becomes actively used.
 
-Systèmes utilisables par Tools:
-- @src/Libs/AGENTS.md** - Bibliothèques fondamentales
-- @src/Graphics/AGENTS.md** - Pour outils graphiques
-- @src/Resources/AGENTS.md** - Chargement de resources
+Systems usable by Tools:
+- @src/Libs/AGENTS.md - Foundational libraries
+- @src/Graphics/AGENTS.md - For graphics tools
+- @src/Resources/AGENTS.md - Resource loading

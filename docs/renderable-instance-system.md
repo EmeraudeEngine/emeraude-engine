@@ -7,7 +7,7 @@ This document provides detailed architecture for the RenderableInstance system, 
 - **RenderableInstance**: An instance of a Renderable ready to be drawn, with its own transformation and rendering parameters.
 - **Unique**: A RenderableInstance for classic rendering (one object, push constants for matrices).
 - **Multiple**: A RenderableInstance for GPU instancing (N objects, VBO for matrices).
-- **RenderTargetPrograms**: Collection of shader programs associated with a RenderableInstance for a specific RenderTarget.
+- **ProgramCacheKey**: Key structure identifying a shader program configuration (program type, render pass, layer, flags).
 - **RenderPassType**: Type of rendering pass (ambient, directional light, point light, etc.).
 - **Layer**: A sub-geometry + material combination within a single Renderable (for multi-material meshes).
 
@@ -48,13 +48,10 @@ Each RenderableInstance has flags that control its rendering behavior:
 | `EnableLighting` | Generates lighting code in shaders |
 | `EnableShadows` | Generates code for casting/receiving shadows |
 | `UseInfinityView` | Ignores translation (for skybox) |
-| `FacingCamera` | Billboard - always faces the camera (sprites) |
 | `DisableDepthTest` | Does not read the depth buffer |
 | `DisableDepthWrite` | Does not write to the depth buffer |
 | `DisableStencilTest` | Does not read the stencil buffer |
 | `DisableStencilWrite` | Does not write to the stencil buffer |
-| `EnableInstancing` | Uses VBO for matrices (GPU instancing) |
-| `EnableSkeletalAnimation` | Skeletal animation via UBO *(Work In Progress)* |
 | `ApplyTransformationMatrix` | Applies an additional transformation *(Unique only, push constants)* |
 | `DisableLightDistanceCheck` | Ignores distance for lighting calculation |
 | `DisplayTBNSpaceEnabled` | Debug: displays tangent space vectors |
@@ -80,26 +77,39 @@ Renderable "character":
 // All layers are rendered as part of the same RenderableInstance
 ```
 
-## Programs per RenderTarget
+## Program Caching Architecture
 
-Each RenderableInstance maintains a set of shader programs **per RenderTarget**:
+Shader programs are cached at the **Renderable** level, not per-instance. This enables efficient sharing across all instances of the same Renderable:
 
 ```
-RenderableInstance
-    └── m_renderTargetPrograms: Map<RenderTarget → RenderTargetPrograms>
+Renderable::Abstract
+    └── m_programCache: Map<RenderTarget → Map<ProgramCacheKey → Program>>
 ```
 
-This allows the same object to be rendered in multiple targets (main view, shadow map, security camera) with appropriate programs.
+This allows the same object to be rendered in multiple targets (main view, shadow map, security camera) with appropriate programs, while ensuring instances sharing the same Renderable also share cached programs.
 
-### RenderTargetPrograms Structure
+### ProgramCacheKey Structure
 
-- Up to 8 rendering programs (one per `RenderPassType`)
-- 1 shadow casting program
-- 1 TBN Space program (debug)
+The cache key uniquely identifies a shader program configuration:
 
-Two implementations exist depending on the number of layers:
-- `RenderTargetProgramsSingleLayer`: 1 layer (optimized)
-- `RenderTargetProgramsMultipleLayers`: N layers
+```cpp
+struct ProgramCacheKey {
+    ProgramType programType;      // Rendering, ShadowCasting, TBNSpace
+    RenderPassType renderPassType; // Ambient, directional, point, spot...
+    uint32_t layerIndex;          // Material layer index
+    bool isInstancing;            // Unique (false) vs Multiple (true)
+    bool isLightingEnabled;       // Lighting code enabled
+    bool isDepthTestDisabled;     // Depth test disabled flag
+    bool isDepthWriteDisabled;    // Depth write disabled flag
+};
+```
+
+### Why Cache at Renderable Level?
+
+- **Memory efficiency**: Instances sharing a Renderable share programs
+- **Lightweight instances**: RenderableInstance has no dynamic allocations
+- **Thread-safe**: Cache protected by mutex for concurrent access
+- **Automatic sharing**: No manual program management needed
 
 ## RenderPass Types
 
@@ -135,15 +145,19 @@ The **Scene** orchestrates program generation based on configuration:
 ```
 1. getReadyForShadowCasting(renderTarget, renderer)
    └── For each layer:
-       └── Generator::ShadowCasting → Shadow program
+       └── Build ProgramCacheKey
+       └── Check Renderable cache → if miss: Generator::ShadowCasting → cache result
 
 2. getReadyForRender(scene, renderTarget, renderPassTypes, renderer)
    └── For each requested RenderPassType:
        └── For each layer:
-           └── Generator::SceneRendering → Render program
+           └── Build ProgramCacheKey
+           └── Check Renderable cache → if miss: Generator::SceneRendering → cache result
 ```
 
 **Dynamic generation**: If a new light appears in the scene, missing programs are generated on the fly. The Scene examines what's active (shadows, light types, render target types) and completes rendering possibilities both upfront and as needed.
+
+**Cache hierarchy**: Programs are first looked up in the Renderable's cache. On miss, they're generated via Saphir and cached for future use by any instance of the same Renderable.
 
 ## Render Context System
 
@@ -190,15 +204,16 @@ struct PushConstantContext final
 render(readStateIndex, renderTarget, lightEmitter, renderPassType,
        layerIndex, worldCoordinates, commandBuffer)
 {
-    1. Retrieve program for (renderPassType, layerIndex)
-    2. Bind graphics pipeline
-    3. Bind instance VBO/matrices
-    4. Build RenderPassContext and PushConstantContext
-    5. Push matrices via pushMatricesForRendering(passContext, pushContext, worldCoordinates)
-    6. Bind View UBO (descriptor set 0)
-    7. Bind Light UBO if present (descriptor set 1)
-    8. Bind Material descriptors (descriptor set 1 or 2)
-    9. commandBuffer.draw(geometry, layerIndex/frameIndex, instanceCount)
+    1. Build ProgramCacheKey for (renderPassType, layerIndex, instance flags)
+    2. Query program from Renderable cache
+    3. Bind graphics pipeline
+    4. Bind instance VBO/matrices
+    5. Build RenderPassContext and PushConstantContext
+    6. Push matrices via pushMatricesForRendering(passContext, pushContext, worldCoordinates)
+    7. Bind View UBO (descriptor set 0)
+    8. Bind Light UBO if present (descriptor set 1)
+    9. Bind Material descriptors (descriptor set 1 or 2)
+    10. commandBuffer.draw(geometry, layerIndex/frameIndex, instanceCount)
 }
 ```
 
@@ -207,14 +222,15 @@ render(readStateIndex, renderTarget, lightEmitter, renderPassType,
 ```cpp
 castShadows(readStateIndex, renderTarget, layerIndex, worldCoordinates, commandBuffer)
 {
-    1. Retrieve shadow casting program for layerIndex
-    2. Bind graphics pipeline
-    3. Set dynamic viewport
-    4. Bind View UBO (if instancing enabled)
-    5. Bind instance model layer
-    6. Build RenderPassContext and PushConstantContext
-    7. Push matrices via pushMatricesForShadowCasting(passContext, pushContext, worldCoordinates)
-    8. commandBuffer.draw(geometry, layerIndex, instanceCount)
+    1. Build ProgramCacheKey for (ShadowCasting, layerIndex, instance flags)
+    2. Query program from Renderable cache
+    3. Bind graphics pipeline
+    4. Set dynamic viewport
+    5. Bind View UBO (if instancing enabled)
+    6. Bind instance model layer
+    7. Build RenderPassContext and PushConstantContext
+    8. Push matrices via pushMatricesForShadowCasting(passContext, pushContext, worldCoordinates)
+    9. commandBuffer.draw(geometry, layerIndex, instanceCount)
 }
 ```
 
@@ -407,12 +423,6 @@ The RenderableInstance system supports cubemap multiview rendering through the `
 
 **Next step**: Adapt Saphir shader generators to produce shaders using `gl_ViewIndex` for cubemap VP matrix access.
 
-## Work In Progress
-
-### Skeletal Animation
-
-The flag `EnableSkeletalAnimation` exists in preparation for skeletal animation support. This will integrate with the RenderableInstance system, using a UBO to pass bone matrices to shaders.
-
 ## Performance Optimizations
 
 ### Zero Heap Allocation in Hot Paths
@@ -485,7 +495,8 @@ This avoids repeated conditional checks during high-frequency draw calls.
 |-----------|-------------|---------|
 | **Separation of concerns** | Scene components vs Graphics technique | Clean architecture |
 | **Forward multi-pass** | One pass per light source | Simple, efficient shaders |
-| **Dynamic program generation** | Programs generated on demand | Only what's needed |
+| **Renderable-level caching** | Programs cached on Renderable, not Instance | Memory efficiency, shared programs |
+| **Lightweight instances** | RenderableInstance has no dynamic allocations | Fast instantiation, low memory |
 | **Flag-based configuration** | Behavior controlled via flags | Flexible, explicit |
 | **Zero heap allocation** | StaticVector + std::span in hot paths | No allocator overhead |
 | **Context-based rendering** | POD structures for render context | Cubemap support, clean interface |
@@ -494,4 +505,4 @@ This avoids repeated conditional checks during high-frequency draw calls.
 
 ### Core Philosophy
 
-> "Provide the right rendering technique for each use case: classic rendering for unique objects, GPU instancing for duplicates, with dynamic shader program generation based on actual scene requirements."
+> "Provide the right rendering technique for each use case: classic rendering for unique objects, GPU instancing for duplicates, with dynamic shader program generation based on actual scene requirements. Programs are cached at the Renderable level to maximize sharing across instances."

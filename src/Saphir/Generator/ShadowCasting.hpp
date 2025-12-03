@@ -54,16 +54,20 @@ namespace EmEn::Saphir::Generator
 			ShadowCasting (const std::shared_ptr< const Graphics::RenderTarget::Abstract > & renderTarget, const std::shared_ptr< const Graphics::RenderableInstance::Abstract > & renderableInstance, uint32_t layerIndex) noexcept
 				: Abstract{ClassId, renderTarget, renderableInstance, layerIndex}
 			{
-				if ( renderableInstance->instancingEnabled() )
+				if ( renderableInstance->useModelVertexBufferObject() )
 				{
 					this->enableFlag(IsInstancingEnabled);
 				}
 
-				if ( renderableInstance->isFacingCamera() )
+				if ( renderableInstance->renderable()->isSprite() )
 				{
 					this->enableFlag(IsRenderableFacingCamera);
 				}
 			}
+
+			/** @copydoc EmEn::Saphir::Generator::Abstract::computeProgramCacheKey() */
+			[[nodiscard]]
+			size_t computeProgramCacheKey () const noexcept override;
 
 		private:
 

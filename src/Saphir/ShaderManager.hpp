@@ -121,9 +121,7 @@ namespace EmEn::Saphir
 			size_t
 			getClassUID () noexcept
 			{
-				static const size_t classUID = EmEn::Libs::Hash::FNV1a(ClassId);
-
-				return classUID;
+				return Libs::Hash::FNV1a(ClassId);
 			}
 
 			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
@@ -189,24 +187,6 @@ namespace EmEn::Saphir
 
 			/** @copydoc EmEn::ServiceInterface::onTerminate() */
 			bool onTerminate () noexcept override;
-
-			/**
-			 * @brief Returns the shader identification.
-			 * @param shaderType The shader type.
-			 * @param shaderName A reference to a string.
-			 * @return std::string
-			 */
-			[[nodiscard]]
-			static
-			std::string
-			getShaderIdentificationString (ShaderType shaderType, const std::string & shaderName) noexcept
-			{
-				std::stringstream output;
-				output << to_string(shaderType);
-				output << shaderName;
-
-				return output.str();
-			}
 
 			/**
 			 * @brief Compiles a shader from a saphir generated source code.

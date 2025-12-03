@@ -35,7 +35,7 @@
 
 /* Local inclusions for usages. */
 #include "Libs/Math/CartesianFrame.hpp"
-#include "Graphics/Renderable/Interface.hpp"
+#include "Graphics/Renderable/Abstract.hpp"
 
 namespace EmEn::Graphics::RenderableInstance
 {
@@ -56,7 +56,7 @@ namespace EmEn::Graphics::RenderableInstance
 			 * @param flagBits The multiple renderable instance level flags. Default 0.
 			 */
 			explicit
-			Unique (const std::shared_ptr< Renderable::Interface > & renderable, uint32_t flagBits = 0) noexcept
+			Unique (const std::shared_ptr< Renderable::Abstract > & renderable, uint32_t flagBits = 0) noexcept
 				: Abstract{renderable, flagBits}
 			{
 

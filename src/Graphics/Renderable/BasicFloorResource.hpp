@@ -89,9 +89,7 @@ namespace EmEn::Graphics::Renderable
 			size_t
 			getClassUID () noexcept
 			{
-				static const size_t classUID = EmEn::Libs::Hash::FNV1a(ClassId);
-
-				return classUID;
+				return Libs::Hash::FNV1a(ClassId);
 			}
 
 			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
@@ -239,6 +237,7 @@ namespace EmEn::Graphics::Renderable
 			/**
 			 * @brief Loads a basic floor by using parameters to generate the ground with diamond square and a material to paint it.
 			 * @param size The size of the whole size of one dimension of the grid. I.e., If the size is 1024, the grid will be from +512 to -512.
+			 * @param shiftHeight Apply a shift on each final height.
 			 * @param division How many cells in one dimension.
 			 * @param factor Set diamond square factor parameter.
 			 * @param roughness Set the diamond square roughness parameter. A value from 0.0 to 1.0
@@ -247,11 +246,12 @@ namespace EmEn::Graphics::Renderable
 			 * @param UVMultiplier Texture coordinates multiplier.
 			 * @return bool
 			 */
-			bool loadDiamondSquare (float size, uint32_t division, float factor, float roughness, int32_t seed, const std::shared_ptr< Material::Interface > & materialResource, float UVMultiplier = 1.0F) noexcept;
+			bool loadDiamondSquare (float size, float shiftHeight, uint32_t division, float factor, float roughness, int32_t seed, const std::shared_ptr< Material::Interface > & materialResource, float UVMultiplier = 1.0F) noexcept;
 
 			/**
 			 * @brief Loads a basic floor by using parameters to generate the ground with diamond square and a material to paint it.
 			 * @param size The size of the whole size of one dimension of the grid. I.e., If the size is 1024, the grid will be from +512 to -512.
+			 * @param shiftHeight Apply a shift on each final height.
 			 * @param division How many cells in one dimension.
 			 * @param noiseSize Set the perlin noise size parameter.
 			 * @param noiseFactor Set perlin noise factor parameter.
@@ -259,7 +259,7 @@ namespace EmEn::Graphics::Renderable
 			 * @param UVMultiplier Texture coordinates multiplier.
 			 * @return bool
 			 */
-			bool loadPerlinNoise (float size, uint32_t division, float noiseSize, float noiseFactor, const std::shared_ptr< Material::Interface > & materialResource, float UVMultiplier = 1.0F) noexcept;
+			bool loadPerlinNoise (float size, float shiftHeight, uint32_t division, float noiseSize, float noiseFactor, const std::shared_ptr< Material::Interface > & materialResource, float UVMultiplier = 1.0F) noexcept;
 
 			/**
 			 * @brief Loads a basic floor by using parameters to generate the ground with a displacement map and a material to paint it.

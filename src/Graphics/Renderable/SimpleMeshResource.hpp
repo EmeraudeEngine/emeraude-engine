@@ -30,7 +30,7 @@
 #include <memory>
 
 /* Local inclusions for inheritances. */
-#include "Interface.hpp"
+#include "Abstract.hpp"
 
 /* Local inclusions for usages. */
 #include "Resources/Container.hpp"
@@ -41,7 +41,7 @@ namespace EmEn::Graphics::Renderable
 	 * @brief Simple mesh renderable with only one layer.
 	 * @extends EmEn::Graphics::Renderable::Interface
 	 */
-	class SimpleMeshResource final : public Interface
+	class SimpleMeshResource final : public Abstract
 	{
 		friend class Resources::Container< SimpleMeshResource >;
 
@@ -62,7 +62,7 @@ namespace EmEn::Graphics::Renderable
 			 */
 			explicit
 			SimpleMeshResource (std::string name, uint32_t renderableFlags = 0) noexcept
-				: Interface{std::move(name), renderableFlags}
+				: Abstract{std::move(name), renderableFlags}
 			{
 
 			}
@@ -75,9 +75,7 @@ namespace EmEn::Graphics::Renderable
 			size_t
 			getClassUID () noexcept
 			{
-				static const size_t classUID = EmEn::Libs::Hash::FNV1a(ClassId);
-
-				return classUID;
+				return Libs::Hash::FNV1a(ClassId);
 			}
 
 			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */

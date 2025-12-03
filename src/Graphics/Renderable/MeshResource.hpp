@@ -31,7 +31,7 @@
 #include <memory>
 
 /* Local inclusions for inheritances. */
-#include "Interface.hpp"
+#include "Abstract.hpp"
 
 /* Local inclusions for usages. */
 #include "Resources/Container.hpp"
@@ -111,7 +111,7 @@ namespace EmEn::Graphics::Renderable
 	 * @brief This class provides a high-level object to describe a physical object in the 3D world.
 	 * @extends EmEn::Graphics::Renderable::Interface Adds the ability to be rendered in the 3D world.
 	 */
-	class MeshResource final : public Interface
+	class MeshResource final : public Abstract
 	{
 		friend class Resources::Container< MeshResource >;
 
@@ -132,7 +132,7 @@ namespace EmEn::Graphics::Renderable
 			 */
 			explicit
 			MeshResource (std::string name, uint32_t renderableFlags = 0) noexcept
-				: Interface{std::move(name), renderableFlags}
+				: Abstract{std::move(name), renderableFlags}
 			{
 
 			}
@@ -145,9 +145,7 @@ namespace EmEn::Graphics::Renderable
 			size_t
 			getClassUID () noexcept
 			{
-				static const size_t classUID = EmEn::Libs::Hash::FNV1a(ClassId);
-
-				return classUID;
+				return Libs::Hash::FNV1a(ClassId);
 			}
 
 			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */

@@ -1,136 +1,136 @@
 # Scene Graph System
 
-Context spécifique pour le développement du système de scene graph hiérarchique d'Emeraude Engine.
+Context for developing the Emeraude Engine hierarchical scene graph system.
 
-## Vue d'ensemble du module
+## Module Overview
 
-Système de scene graph basé sur une architecture de composition (Entity-Component) avec deux types d'entités: **Nodes** dynamiques hiérarchiques et **StaticEntities** plates optimisées. Double buffering pour thread-safety entre simulation et rendu.
+Scene graph system based on composition architecture (Entity-Component) with two entity types: hierarchical dynamic **Nodes** and optimized flat **StaticEntities**. Double buffering for thread-safety between simulation and rendering.
 
-## Règles spécifiques à Scenes/
+## Scenes-Specific Rules
 
-### Philosophie: Composition Over Inheritance
-- **Entités génériques** : Node et StaticEntity sont des conteneurs de position
-- **Components donnent le sens** : Visual, Light, Camera, SoundEmitter, etc.
-- **JAMAIS de sous-classes** : Utiliser composition de Components au lieu de Player extends Node
-- **Flexibilité maximale** : Ajouter/retirer comportements dynamiquement
+### Philosophy: Composition Over Inheritance
+- **Generic entities**: Node and StaticEntity are position containers
+- **Components give meaning**: Visual, Light, Camera, SoundEmitter, etc.
+- **NEVER subclass**: Use Component composition instead of Player extends Node
+- **Maximum flexibility**: Add/remove behaviors dynamically
 
-### Architecture: Deux types d'entités
+### Architecture: Two Entity Types
 
-**Node (Dynamique)** : Arbre hiérarchique avec physique, transformations relatives au parent
-**StaticEntity (Statique)** : Flat map optimisée, pas de physique, transformations absolues
+**Node (Dynamic)**: Hierarchical tree with physics, parent-relative transforms
+**StaticEntity (Static)**: Optimized flat map, no physics, absolute transforms
 
-Voir @docs/scene-graph-architecture.md pour détails complets.
+See @docs/scene-graph-architecture.md for complete details.
 
-### Convention de coordonnées
-- **Y-DOWN obligatoire** dans CartesianFrame
-- Transformations locales pour Nodes (relatives au parent)
-- World space recalculé à la demande (pas de cache actuellement)
+### Coordinate Convention
+- **Y-DOWN mandatory** in CartesianFrame
+- Local transforms for Nodes (parent-relative)
+- World space recalculated on demand (no cache currently)
 
-### Components disponibles
-**Rendu:** Visual, MultipleVisuals
-**Lumières:** DirectionalLight, PointLight, SpotLight
+### Available Components
+**Rendering:** Visual, MultipleVisuals
+**Lights:** DirectionalLight, PointLight, SpotLight
 **Audio:** SoundEmitter, Microphone
 **Physics:** DirectionalPushModifier, SphericalPushModifier, Weight
-**Utilitaires:** Camera, ParticlesEmitter
+**Utilities:** Camera, ParticlesEmitter
 
-### Système d'observateurs
-- **Registration automatique** : Scene observe ajout de Components
-- Visual → enregistrement au rendu
-- Camera/Microphone → enregistrement à AVConsole
-- Lights → enregistrement à LightSet
-- **JAMAIS de registration manuelle**
+### Observer System
+- **Automatic registration**: Scene observes Component additions
+- Visual → rendering registration
+- Camera/Microphone → AVConsole registration
+- Lights → LightSet registration
+- **NEVER manual registration**
 
-### Optimisation spatiale
-- **Octrees par Scene** : Un pour physique, un pour rendu
-- **Frustum culling** : Actif sur parcours de l'arbre
-- Optimisation future : Culling par secteur d'Octree
+### Spatial Optimization
+- **Octrees per Scene**: One for physics, one for rendering
+- **Frustum culling**: Active during tree traversal
+- Future optimization: Culling by Octree sector
 
-## Commandes de développement
+## Development Commands
 
 ```bash
-# Tests scene graph
+# Scene graph tests
 ctest -R Scenes
 ./test --filter="*Scene*"
 ```
 
-## Fichiers importants
+## Important Files
 
-- `Manager.cpp/.hpp` - SceneManager, gestion de multiples Scenes + ActiveScene
-- `Scene.cpp/.hpp` - Une scène avec son Root Node, Octrees, observateurs
-- `Node.cpp/.hpp` - Entité dynamique hiérarchique (arbre)
-- `StaticEntity.cpp/.hpp` - Entité statique optimisée (flat map)
-- `AbstractEntity.cpp/.hpp` - Base commune pour gestion des Components
-- `LocatableInterface.cpp/.hpp` - Interface pour coordonnées/déplacements
-- `ToolKit.cpp/.hpp` - Helpers pour construction d'entités complexes
-- `Component/Abstract.hpp` - Classe de base pour tous les Components (pure virtual onSuspend/onWakeup)
-- `Component/SoundEmitter.cpp/.hpp` - Émetteur audio avec gestion suspend/wakeup des sources
-- `@docs/scene-graph-architecture.md` - **Architecture complète et détaillée**
-- `@docs/coordinate-system.md` - Convention Y-down (CRITIQUE)
+- `Manager.cpp/.hpp` - SceneManager, multiple Scenes management + ActiveScene
+- `Scene.cpp/.hpp` - A scene with its Root Node, Octrees, observers
+- `Node.cpp/.hpp` - Hierarchical dynamic entity (tree)
+- `StaticEntity.cpp/.hpp` - Optimized static entity (flat map)
+- `AbstractEntity.cpp/.hpp` - Common base for Component management
+- `LocatableInterface.cpp/.hpp` - Interface for coordinates/movement
+- `ToolKit.cpp/.hpp` - Helpers for complex entity construction
+- `Component/Abstract.hpp` - Base class for all Components (pure virtual onSuspend/onWakeup)
+- `Component/SoundEmitter.cpp/.hpp` - Audio emitter with suspend/wakeup source management
+- `@docs/scene-graph-architecture.md` - **Complete detailed architecture**
+- `@docs/coordinate-system.md` - Y-down convention (CRITICAL)
 
-## Patterns de développement
+## Development Patterns
 
-### Création d'un objet dynamique (Node)
+### Creating a Dynamic Object (Node)
 ```cpp
-// Créer comme enfant d'un Node existant
+// Create as child of existing Node
 auto player = scene->root()->createChild("player", initialPos);
 
-// Ajouter des Components
+// Add Components
 player->newVisual(meshResource, castShadows, receiveShadows, "body");
 player->newCamera(90.0f, 16.0f/9.0f, 0.1f, 1000.0f, "player_cam");
 
-// Configurer physique
+// Configure physics
 player->bodyPhysicalProperties().setMass(80.0f);
 player->enableSphereCollision(true);
 ```
 
-### Création d'une géométrie statique (StaticEntity)
+### Creating Static Geometry (StaticEntity)
 ```cpp
-// Créer via Scene
+// Create via Scene
 auto building = scene->createStaticEntity("building_01");
 building->setPosition(worldPos);
 
-// Ajouter Visual et Light
+// Add Visual and Light
 building->newVisual(buildingMesh, true, true, "main");
 building->newPointLight(Color::Warm, 100.0f, 20.0f, "lamp");
 ```
 
-### Hiérarchie (véhicule avec roues)
+### Hierarchy (vehicle with wheels)
 ```cpp
-// Véhicule parent
+// Parent vehicle
 auto vehicle = scene->root()->createChild("vehicle", vehiclePos);
 vehicle->newVisual(carBodyMesh, true, true, "body");
 
-// Roues enfants (suivent automatiquement le parent)
+// Child wheels (automatically follow parent)
 auto wheelFL = vehicle->createChild("wheel_FL", localPos_FL);
 wheelFL->newVisual(wheelMesh, true, true, "wheel");
 
-// Bouger le véhicule → roues suivent automatiquement
+// Move vehicle → wheels automatically follow
 vehicle->applyForce(forwardVector * thrust);
 ```
 
-### Création d'un nouveau Component
-1. Hériter de `Component::Abstract` (Abstract.hpp)
-2. Implémenter `processLogics()` si logique per-frame nécessaire
-3. Implémenter `move()` si réaction au déplacement de l'entité nécessaire
-4. Implémenter `onSuspend()`/`onWakeup()` (pure virtual, obligatoire)
-5. Enregistrer avec Scene si observation automatique nécessaire
+### Creating a New Component
+1. Inherit from `Component::Abstract` (Abstract.hpp)
+2. Implement `processLogics()` if per-frame logic needed
+3. Implement `move()` if reaction to entity movement needed
+4. Implement `onSuspend()`/`onWakeup()` (pure virtual, mandatory)
+5. Register with Scene if automatic observation needed
 
-### Système Suspend/Wakeup (Scene Manager Level)
-Quand le Scene Manager change de scène active, les entités et leurs components sont suspendus/réveillés pour libérer les ressources poolées (ex: sources audio OpenAL).
+### Suspend/Wakeup System (Scene Manager Level)
+When Scene Manager changes active scene, entities and their components are suspended/woken up to release pooled resources (e.g., OpenAL audio sources).
 
 **Architecture (Template Method Pattern):**
 
 1. **AbstractEntity** (`AbstractEntity.hpp/.cpp`):
-   - `suspend()` / `wakeup()` - Méthodes publiques non-virtuelles
-   - Appellent `onSuspend()`/`onWakeup()` de l'entité puis itèrent les components
-   - `onSuspend()`/`onWakeup()` - Hooks protégés virtuels (défaut vide)
+   - `suspend()` / `wakeup()` - Public non-virtual methods
+   - Call entity's `onSuspend()`/`onWakeup()` then iterate components
+   - `onSuspend()`/`onWakeup()` - Protected virtual hooks (default empty)
 
 2. **Component::Abstract** (`Component/Abstract.hpp`):
-   - `onSuspend()` / `onWakeup()` - Pure virtual protégées (contrat obligatoire)
-   - Appelées par `AbstractEntity` (friend class)
-   - Chaque component doit implémenter (même si vide)
+   - `onSuspend()` / `onWakeup()` - Pure virtual protected (mandatory contract)
+   - Called by `AbstractEntity` (friend class)
+   - Each component must implement (even if empty)
 
-**Flux d'appel:**
+**Call flow:**
 ```
 Scene::disable() → entity->suspend() → entity->onSuspend()
                                      → component->onSuspend() (for each)
@@ -139,26 +139,26 @@ Scene::enable()  → entity->wakeup()  → entity->onWakeup()
                                      → component->onWakeup() (for each)
 ```
 
-**Implémentations existantes:**
-- `SoundEmitter`: Libère/réacquiert source audio, mémorise état playing
-- Autres components: Implémentation vide (pas de ressources poolées)
+**Existing implementations:**
+- `SoundEmitter`: Releases/reacquires audio source, remembers playing state
+- Other components: Empty implementation (no pooled resources)
 
-Voir `Scene.cpp:enable()`, `Scene.cpp:disable()`, `AbstractEntity.cpp:suspend()`, `AbstractEntity.cpp:wakeup()`
+See `Scene.cpp:enable()`, `Scene.cpp:disable()`, `AbstractEntity.cpp:suspend()`, `AbstractEntity.cpp:wakeup()`
 
-## Points d'attention
+## Critical Points
 
-- **Double buffering** : Logic thread écrit activeFrame, Render thread lit renderFrame
-- **Swap atomique** : m_renderFrame = m_activeFrame à la fin de chaque frame logique
-- **Smart pointers** : shared_ptr et weak_ptr pour gestion automatique de la hiérarchie
-- **Manager et Scene** : Gèrent construction/destruction fail-safe (en développement)
-- **Root Node** : Immutable, ne peut ni bouger ni recevoir de Components
-- **Y-down convention** : CartesianFrame utilise Y-down partout
-- **Pas de cache world** : Recalcul à la demande (optimisation future prévue)
-- **Observateurs** : Registration automatique, ne pas enregistrer manuellement
-- **Suspend/Wakeup** : Tout nouveau Component DOIT implémenter `onSuspend()`/`onWakeup()` (pure virtual)
-- **Friend class** : `AbstractEntity` est friend de `Component::Abstract` pour accéder aux hooks protégés
+- **Double buffering**: Logic thread writes activeFrame, Render thread reads renderFrame
+- **Atomic swap**: m_renderFrame = m_activeFrame at end of each logic frame
+- **Smart pointers**: shared_ptr and weak_ptr for automatic hierarchy management
+- **Manager and Scene**: Handle fail-safe construction/destruction (in development)
+- **Root Node**: Immutable, cannot move nor receive Components
+- **Y-down convention**: CartesianFrame uses Y-down everywhere
+- **No world cache**: On-demand recalculation (future optimization planned)
+- **Observers**: Automatic registration, do not register manually
+- **Suspend/Wakeup**: Every new Component MUST implement `onSuspend()`/`onWakeup()` (pure virtual)
+- **Friend class**: `AbstractEntity` is friend of `Component::Abstract` to access protected hooks
 
-## Documentation détaillée
+## Detailed Documentation
 
-Pour l'architecture complète, les diagrammes, et les patterns avancés:
+For complete architecture, diagrams, and advanced patterns:
 - @docs/scene-graph-architecture.md

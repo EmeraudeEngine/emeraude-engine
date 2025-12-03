@@ -27,6 +27,9 @@
 #include "ShaderManager.hpp"
 
 /* STL inclusions. */
+#include "Libs/TokenFormatter.hpp"
+
+
 #include <string>
 #include <algorithm>
 
@@ -321,14 +324,6 @@ namespace EmEn::Saphir
 				"Generate it first.";
 
 			return {};
-		}
-
-		if ( this->showSourceCode() )
-		{
-			TraceInfo{ClassId} << "\n"
-				"****** START OF LOADED GLSL SHADER CODE ******" "\n" <<
-				SourceCodeParser::parse(shader.sourceCode()) <<
-				"******  END OF LOADED GLSL SHADER CODE  ******" "\n";
 		}
 
 		const auto shaderHash = shader.hash();
@@ -669,7 +664,14 @@ namespace EmEn::Saphir
 			return false;
 		}
 
-		const std::string shaderIdentifier = ShaderManager::getShaderIdentificationString(type, shaderName);
+		std::string shaderIdentifier;
+
+		{
+			std::stringstream identifier;
+			identifier << TokenFormatter::toUpperSpaced(to_cstring(type)) << " (" << shaderName << ")";
+
+			shaderIdentifier = identifier.str();
+		}
 
 		/* NOTE: Convert shader shaderType to GLSLang shaderType. */
 		const auto shaderType = ShaderManager::GLSLangShaderType(type);
@@ -708,10 +710,12 @@ namespace EmEn::Saphir
 
 		if ( this->showSourceCode() )
 		{
-			TraceInfo{ClassId} << "\n"
-				"****** START OF PRE-PROCESSED GLSL SHADER CODE " << shaderIdentifier << " ******" "\n" <<
-				SourceCodeParser::parse(preprocessedSource) <<
-				"****** END OF PRE-PROCESSED GLSL SHADER CODE " << shaderIdentifier << " ******" "\n";
+			/* NOTE: Show the pre-processed version of the source code by GLSlang.
+			 * This can be helpful when trying to understand a shader compilation error. */
+			TraceDebug{ClassId} << "\n"
+				"/****** START OF PRE-PROCESSED GLSL " << shaderIdentifier << " CODE ******/" "\n" <<
+				SourceCodeParser::parse(preprocessedSource, 0, true) <<
+				"/****** END OF PRE-PROCESSED GLSL " << shaderIdentifier << " CODE ******/" "\n";
 		}
 
 		/* NOTE: Parse the final source code. */
@@ -754,9 +758,7 @@ namespace EmEn::Saphir
 
 		GlslangToSpv(*program.getIntermediate(shaderType), binaryCode, &logger, &spvOptions);
 
-		const auto messages = logger.getAllMessages();
-
-		if ( !messages.empty() )
+		if ( const auto messages = logger.getAllMessages(); !messages.empty() )
 		{
 			TraceInfo{ClassId} << "GLSL to SPIR-V messages : " << messages;
 		}
@@ -769,7 +771,7 @@ namespace EmEn::Saphir
 	void
 	ShaderManager::printCompilationErrors (const std::string & shaderIdentifier, const std::string & sourceCode, const char * log) noexcept
 	{
-		SourceCodeParser parser{sourceCode};
+		SourceCodeParser parser{sourceCode, 5, false};
 
 		for ( const auto & error : String::explode(log, '\n') )
 		{
@@ -780,20 +782,20 @@ namespace EmEn::Saphir
 				const auto line = std::stoi(chunks[2]);
 				const auto column = std::stoi(chunks[1]);
 
-				parser.notice(line, column, error);
+				parser.annotate(line, column, error);
 			}
 			else
 			{
-				parser.notice(error);
+				parser.annotate(error);
 			}
 		}
 
 		const std::string annotatedSourceCode = parser.getParsedSourceCode();
 
 		TraceError{ClassId} << "\n"
-			"****** START OF ERRONEOUS GLSL SHADER CODE " << shaderIdentifier << " ******" "\n" <<
+			"/****** START OF ERRONEOUS GLSL " << shaderIdentifier << " CODE ******/" "\n" <<
 			annotatedSourceCode <<
-			"****** END OF ERRONEOUS GLSL SHADER CODE " << shaderIdentifier << " ******" "\n";
+			"/****** END OF ERRONEOUS GLSL " << shaderIdentifier << " CODE ******/" "\n";
 
 		this->notify(ShaderCompilationFailed, std::pair< std::string, std::string >(shaderIdentifier, annotatedSourceCode));
 	}

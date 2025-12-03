@@ -62,7 +62,7 @@ namespace EmEn::Scenes::Component
 		return m_parentEntity.parentScene().engineContext();
 	}
 
-	const Renderable::Interface *
+	const Renderable::Abstract *
 	Abstract::getRenderable () const noexcept
 	{
 		const auto renderableInstance = this->getRenderableInstance();

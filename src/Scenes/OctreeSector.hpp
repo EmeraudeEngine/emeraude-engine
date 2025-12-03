@@ -50,11 +50,86 @@
 namespace EmEn::Scenes
 {
 	/**
-	 * @brief The octree sector class.
-	 * @tparam element_t The type of the inserted element, it must inherit from EmEn::Scenes::LocatableInterface.
-	 * @tparam enable_volume Enable the use of the element volume instead of their position. This implies multiple insertions at the same depth level.
-	 * @extends std::enable_shared_from_this A sector must be able to give his own smart pointer.
-	 * @extends EmEn::Libs::Math::Space3D::AACuboid A sector is a cube in the 3D space and thus provides intersection detection with primitives.
+	 * @class OctreeSector
+	 * @brief Template class for hierarchical octree spatial partitioning.
+	 *
+	 * This class implements a dynamic octree spatial partitioning structure used for both
+	 * rendering (frustum culling) and physics (collision broad-phase detection). The octree
+	 * subdivides 3D space into eight child sectors recursively, storing elements at all levels
+	 * they intersect for efficient spatial queries.
+	 *
+	 * The template supports two modes via the enable_volume parameter:
+	 * - Point-based (enable_volume=false): Elements inserted based on their position point only.
+	 *   Used for rendering octrees where each element occupies a single leaf sector.
+	 * - Volume-based (enable_volume=true): Elements inserted based on their bounding volume
+	 *   (AABB or Sphere). Used for physics octrees where elements can span multiple sectors.
+	 *
+	 * Key features:
+	 * - Zero-overhead callbacks: Template methods (forTouchedSector, forSurroundingSectors)
+	 *   accept callable types directly, avoiding std::function allocation overhead.
+	 * - Direct slot calculation: computeSlotForPosition() enables O(1) octree traversal
+	 *   by computing the child sector index from position via bit manipulation.
+	 * - Combined operations: updateOrInsert() performs contains + update/insert in a single
+	 *   traversal, eliminating redundant lookups.
+	 * - Dynamic expansion: Sectors automatically subdivide when element count exceeds
+	 *   maxElementPerSector threshold.
+	 * - Optional auto-collapse: Empty leaf sectors can be automatically removed when enabled.
+	 *
+	 * @tparam element_t The type of elements stored in the octree. Must inherit from both
+	 *                   EmEn::Scenes::LocatableInterface (provides position/volume) and
+	 *                   EmEn::Libs::NameableTrait (provides name for debugging).
+	 * @tparam enable_volume When true, uses element's bounding volume (AABB/Sphere) for
+	 *                       insertion, allowing elements to span multiple sectors (physics mode).
+	 *                       When false, uses only the element's position point (rendering mode).
+	 *
+	 * @note DESIGN CONSIDERATION - Storage Strategy (All-Levels vs Leaf-Only):
+	 *       Current implementation stores elements at ALL levels they touch (root to leaves).
+	 *       Alternative: Store elements only in leaf sectors.
+	 *
+	 *       Current (All-Levels) - CPU optimized:
+	 *       + Fast early-exit: m_elements.empty() skips empty branches without traversal
+	 *       + Local decisions: isStillLeaf() decides expand/collapse without checking children
+	 *       + O(1) contains() at any level
+	 *       - Higher memory: elements duplicated in parent sectors (shared_ptr overhead only)
+	 *
+	 *       Alternative (Leaf-Only) - Memory optimized:
+	 *       + Lower memory footprint
+	 *       + Simpler erase() logic
+	 *       - Must traverse to leaves to check emptiness
+	 *       - Breaks current expand/collapse logic based on m_elements.size()
+	 *       - No early-exit optimization
+	 *
+	 *       Assessment: Current all-levels strategy prioritizes CPU performance over memory.
+	 *       The memory overhead is acceptable (shared_ptr = pointer + refcount, not entity copy).
+	 *       A compile-time template parameter could be added to switch strategies if needed.
+	 *
+	 * @note OPTIMIZATION CONSIDERATION - Cached Sector Reference in Entity:
+	 *       Potential optimization: store a pointer to the last known sector in the entity itself.
+	 *       This would allow fast-path updates when an entity hasn't moved out of its sector.
+	 *
+	 *       For enable_volume=false (rendering octree, point-based):
+	 *       + Entity is in exactly ONE leaf sector at a time
+	 *       + Could store OctreeSector* in entity, check if still inside before full traversal
+	 *       + Already partially implemented: update() uses getDeepestSubSector() for this
+	 *
+	 *       For enable_volume=true (physics octree, volume-based):
+	 *       - Entity can span MULTIPLE sectors simultaneously (AABB/Sphere overlaps)
+	 *       - Cannot store single sector reference
+	 *       - Would need std::vector or bitset of touched sectors
+	 *       - Complexity may outweigh benefits
+	 *
+	 *       Implementation approaches:
+	 *       1. Add void* m_cachedSector to LocatableInterface (simple, not type-safe)
+	 *       2. Add std::unordered_map<element_t*, OctreeSector*> cache at root level
+	 *       3. Template specialization for enable_volume=false only
+	 *
+	 *       Assessment: Deferred. Current update() already has fast-path for point-based case.
+	 *       Volume-based case complexity makes this optimization questionable for physics octree.
+	 *
+	 * @see EmEn::Scenes::LocatableInterface
+	 * @see EmEn::Libs::NameableTrait
+	 * @see EmEn::Libs::Math::Space3D::AACuboid
+	 * @version 0.8.38
 	 */
 	template< typename element_t, bool enable_volume >
 	requires (std::is_base_of_v< Libs::NameableTrait, element_t >, std::is_base_of_v< LocatableInterface, element_t >)
@@ -62,43 +137,82 @@ namespace EmEn::Scenes
 	{
 		public:
 
-			/** @brief Class identifier. */
+			/** @brief Class identifier for tracing and debugging. */
 			static constexpr auto ClassId{"OctreeSector"};
 
+			/** @brief Number of child sectors in an octree node (always 8). */
 			static constexpr auto SectorDivision{8UL};
+
+			/** @brief Default maximum number of elements per sector before subdivision. */
 			static constexpr auto DefaultSectorElementLimit{8UL};
 
+			/** @brief Slot index for subsector with positive X, positive Y, positive Z (slot 0). */
 			static constexpr auto XPositiveYPositiveZPositive{0UL};
+
+			/** @brief Slot index for subsector with positive X, positive Y, negative Z (slot 1). */
 			static constexpr auto XPositiveYPositiveZNegative{1UL};
+
+			/** @brief Slot index for subsector with positive X, negative Y, positive Z (slot 2). */
 			static constexpr auto XPositiveYNegativeZPositive{2UL};
+
+			/** @brief Slot index for subsector with positive X, negative Y, negative Z (slot 3). */
 			static constexpr auto XPositiveYNegativeZNegative{3UL};
+
+			/** @brief Slot index for subsector with negative X, positive Y, positive Z (slot 4). */
 			static constexpr auto XNegativeYPositiveZPositive{4UL};
+
+			/** @brief Slot index for subsector with negative X, positive Y, negative Z (slot 5). */
 			static constexpr auto XNegativeYPositiveZNegative{5UL};
+
+			/** @brief Slot index for subsector with negative X, negative Y, positive Z (slot 6). */
 			static constexpr auto XNegativeYNegativeZPositive{6UL};
+
+			/** @brief Slot index for subsector with negative X, negative Y, negative Z (slot 7). */
 			static constexpr auto XNegativeYNegativeZNegative{7UL};
 
 			/**
 			 * @brief Constructs a root octree sector.
-			 * @note The root sector is a leaf when empty.
-			 * @param maximum The highest limit of the root sector.
-			 * @param minimum The lowest limit of the root sector.
-			 * @param maxElementPerSector The threshold number of elements to trigger a new sector subdivision. Default 8.
-			 * @param enableAutoCollapse Enable a leaf sector to be automatically removed if empty. Default false.
+			 *
+			 * Creates the top-level sector of the octree hierarchy. The root sector is initially
+			 * a leaf (no subdivisions) and will automatically expand when the element count
+			 * exceeds maxElementPerSector.
+			 *
+			 * @param maximum The maximum corner (highest X, Y, Z coordinates) of the root sector bounds.
+			 * @param minimum The minimum corner (lowest X, Y, Z coordinates) of the root sector bounds.
+			 * @param maxElementPerSector The threshold number of elements that triggers automatic
+			 *                            subdivision. Must be at least DefaultSectorElementLimit (8).
+			 *                            Values below this minimum are clamped upward. Default is 8.
+			 * @param enableAutoCollapse When true, empty leaf sectors are automatically removed during
+			 *                           erase operations to reduce memory usage. When false, sectors
+			 *                           remain allocated once created. Default is false.
+			 *
+			 * @note The root sector initially has no parent (isRoot() returns true).
+			 * @note Auto-collapse is incompatible with reserve() - pre-allocated sectors would be
+			 *       immediately removed if they're empty.
 			 */
 			OctreeSector (const Libs::Math::Vector< 3, float > & maximum, const Libs::Math::Vector< 3, float > & minimum, size_t maxElementPerSector = DefaultSectorElementLimit, bool enableAutoCollapse = false) noexcept
 				: AACuboid{maximum, minimum},
 				m_maxElementPerSector{std::max< size_t >(DefaultSectorElementLimit, maxElementPerSector)},
 				m_autoCollapseEnabled{enableAutoCollapse}
 			{
-				
+
 			}
 
 			/**
 			 * @brief Constructs a child octree sector.
-			 * @param maximum The highest limit of the child sector.
-			 * @param minimum The lowest limit of the child sector.
-			 * @param parentSector A reference to the parent sector smart pointer.
-			 * @param slot The slot where the subsector is built.
+			 *
+			 * Creates a subsector within a parent sector during subdivision. Child sectors inherit
+			 * their parent's maxElementPerSector and autoCollapseEnabled settings.
+			 *
+			 * @param maximum The maximum corner (highest X, Y, Z coordinates) of the child sector bounds.
+			 * @param minimum The minimum corner (lowest X, Y, Z coordinates) of the child sector bounds.
+			 * @param parentSector Shared pointer to the parent sector that owns this child.
+			 *                     Used to traverse up the hierarchy and inherit configuration.
+			 * @param slot The slot index (0-7) indicating this child's position within the parent's
+			 *             eight-way subdivision. See XPositiveYPositiveZPositive and related constants.
+			 *
+			 * @note This constructor is typically called internally by expand().
+			 * @see expand()
 			 */
 			OctreeSector (const Libs::Math::Vector< 3, float > & maximum, const Libs::Math::Vector< 3, float > & minimum, const std::shared_ptr< OctreeSector > & parentSector, size_t slot) noexcept
 				: AACuboid{maximum, minimum},
@@ -111,39 +225,53 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			 * @brief Copy constructor.
-			 * @param copy A reference to the copied instance.
+			 * @brief Deleted copy constructor.
+			 *
+			 * OctreeSector cannot be copied as it maintains hierarchical parent-child relationships
+			 * via shared_ptr and weak_ptr that cannot be safely duplicated.
 			 */
 			OctreeSector (const OctreeSector & copy) noexcept = delete;
 
 			/**
-			 * @brief Move constructor.
-			 * @param copy A reference to the copied instance.
+			 * @brief Deleted move constructor.
+			 *
+			 * OctreeSector cannot be moved as it maintains hierarchical parent-child relationships
+			 * via shared_ptr and weak_ptr that would be invalidated by moving.
 			 */
 			OctreeSector (OctreeSector && copy) noexcept = delete;
 
 			/**
-			 * @brief Copy assignment.
-			 * @param copy A reference to the copied instance.
-			 * @return OctreeSector &
+			 * @brief Deleted copy assignment operator.
+			 *
+			 * OctreeSector cannot be copy-assigned due to its complex hierarchical structure and
+			 * shared ownership semantics.
 			 */
 			OctreeSector & operator= (const OctreeSector & copy) noexcept = delete;
 
 			/**
-			 * @brief Move assignment.
-			 * @param copy A reference to the copied instance.
-			 * @return OctreeSector &
+			 * @brief Deleted move assignment operator.
+			 *
+			 * OctreeSector cannot be move-assigned due to its complex hierarchical structure and
+			 * shared ownership semantics.
 			 */
 			OctreeSector & operator= (OctreeSector && copy) noexcept = delete;
 
 			/**
 			 * @brief Destructs the octree sector.
+			 *
+			 * Automatically cleans up child sectors and releases all stored elements.
+			 * If this sector has children, they will be recursively destroyed.
 			 */
 			~OctreeSector () = default;
 
 			/**
-			 * @brief Returns true if the sector is the top of the tree.
-			 * @return bool
+			 * @brief Checks whether this sector is the root of the octree.
+			 *
+			 * The root sector has no parent and represents the entire spatial volume.
+			 *
+			 * @return True if this is the root sector (no parent), false if it's a child sector.
+			 *
+			 * @note Root sectors have m_slot set to std::numeric_limits<size_t>::max().
 			 */
 			[[nodiscard]]
 			bool
@@ -153,8 +281,14 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			 * @brief Returns whether the sector is an endpoint in the tree.
-			 * @return bool
+			 * @brief Checks whether this sector is a leaf node (has no children).
+			 *
+			 * Leaf sectors are the endpoints of the octree hierarchy and directly contain
+			 * elements without further subdivision.
+			 *
+			 * @return True if this sector has no child sectors, false if it has been subdivided.
+			 *
+			 * @see isExpanded()
 			 */
 			[[nodiscard]]
 			bool
@@ -164,8 +298,14 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			 * @brief Returns whether the sector has subsectors.
-			 * @return bool
+			 * @brief Checks whether this sector has been subdivided into child sectors.
+			 *
+			 * Expanded sectors have eight child sectors and were subdivided due to exceeding
+			 * the maxElementPerSector threshold.
+			 *
+			 * @return True if this sector has child sectors, false if it's still a leaf.
+			 *
+			 * @see isLeaf()
 			 */
 			[[nodiscard]]
 			bool
@@ -175,10 +315,19 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			 * @brief Returns whether this sector has no element registered in it.
-			 * @warning This method does not indicate whether there are no more subsectors below.
-			 * But it is guaranteed that there can only be empty subsectors underneath.
-			 * @return bool
+			 * @brief Checks whether this sector contains no elements.
+			 *
+			 * An empty sector has no elements registered at this level. Due to the all-levels
+			 * storage strategy, if a sector is empty, all its descendants are guaranteed to be
+			 * empty as well (enabling fast early-exit in traversal algorithms).
+			 *
+			 * @return True if no elements are stored in this sector, false otherwise.
+			 *
+			 * @warning This only checks the local element set, not whether child sectors exist.
+			 *          Use isLeaf() to check for the absence of child sectors.
+			 *
+			 * @note This is used for optimization - empty() allows forTouchedSector() and other
+			 *       traversal methods to skip entire branches without recursing into children.
 			 */
 			[[nodiscard]]
 			bool
@@ -188,9 +337,21 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			 * @brief Returns the slot of a subsector.
-			 * @warning It this sector is root, the value will be the max for a size_t.
-			 * @return size_t
+			 * @brief Returns this sector's slot index within its parent.
+			 *
+			 * The slot index (0-7) indicates which of the eight child positions this sector
+			 * occupies within its parent's subdivision. Slot indices follow the bit pattern:
+			 * bit 2 (value 4) = X axis, bit 1 (value 2) = Y axis, bit 0 (value 1) = Z axis,
+			 * where 0 = positive direction, 1 = negative direction.
+			 *
+			 * @return The slot index (0-7) for child sectors, or std::numeric_limits<size_t>::max()
+			 *         for the root sector.
+			 *
+			 * @warning Check isRoot() before using this value. Root sectors return the maximum
+			 *          size_t value, which is not a valid slot index.
+			 *
+			 * @see XPositiveYPositiveZPositive and related slot constants
+			 * @see computeSlotForPosition()
 			 */
 			[[nodiscard]]
 			size_t
@@ -200,8 +361,15 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			 * @brief Returns the number of elements hold in an octree before expanding.
-			 * @return size_t
+			 * @brief Returns the element count threshold that triggers sector subdivision.
+			 *
+			 * When a leaf sector's element count exceeds this threshold, the sector automatically
+			 * subdivides into eight child sectors.
+			 *
+			 * @return The maximum number of elements allowed in a sector before expansion.
+			 *
+			 * @note This value is set during construction and inherited by all child sectors.
+			 * @note The minimum value is DefaultSectorElementLimit (8).
 			 */
 			[[nodiscard]]
 			size_t
@@ -211,8 +379,17 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			 * @brief Returns whether the automatic empty leaf sector removal is enabled.
-			 * @return bool
+			 * @brief Checks whether automatic empty sector removal is enabled.
+			 *
+			 * When enabled, empty leaf sectors are automatically collapsed (removed) during
+			 * erase operations to reduce memory usage. When disabled, sectors remain allocated
+			 * once created.
+			 *
+			 * @return True if auto-collapse is enabled, false otherwise.
+			 *
+			 * @note Auto-collapse is incompatible with reserve() - pre-allocated empty sectors
+			 *       would be immediately removed.
+			 * @note This setting is inherited from the root sector by all child sectors.
 			 */
 			[[nodiscard]]
 			bool
@@ -222,9 +399,15 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			 * @brief Returns the sector distance from the root sector.
-			 * @note If the sector is root, the method will return 0.
-			 * @return size_t
+			 * @brief Calculates the distance (level) of this sector from the root.
+			 *
+			 * The distance represents how many levels down this sector is in the octree hierarchy.
+			 * This is useful for debugging and understanding the octree structure.
+			 *
+			 * @return The number of levels from the root to this sector. Returns 0 for the root
+			 *         sector, 1 for direct children of root, 2 for grandchildren, etc.
+			 *
+			 * @note This method traverses up the parent chain, so it has O(depth) complexity.
 			 */
 			[[nodiscard]]
 			size_t
@@ -250,9 +433,17 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			 * @brief Returns the depth below this one.
-			 * @note From the root sector, this method will give the depth of the whole octree.
-			 * @return size_t
+			 * @brief Calculates the maximum depth of the subtree below this sector.
+			 *
+			 * The depth represents the longest path from this sector to any leaf sector below it.
+			 * When called on the root sector, this returns the total depth of the entire octree.
+			 *
+			 * @return The maximum number of levels below this sector. Returns 0 for leaf sectors,
+			 *         1 if only direct children exist, etc.
+			 *
+			 * @note This method recursively traverses all child sectors, so it has O(n) complexity
+			 *       where n is the number of sectors in the subtree.
+			 * @note When called on root, this gives the maximum subdivision depth of the octree.
 			 */
 			[[nodiscard]]
 			size_t
@@ -279,8 +470,17 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			 * @brief Returns the sectors count below this one (included).
-			 * @return size_t
+			 * @brief Counts the total number of sectors in this subtree.
+			 *
+			 * Recursively counts this sector plus all its descendant sectors. Useful for
+			 * analyzing memory usage and octree structure.
+			 *
+			 * @return The total number of sectors including this one and all descendants.
+			 *         Returns 1 for leaf sectors (just themselves).
+			 *
+			 * @note This method recursively traverses all child sectors, so it has O(n) complexity
+			 *       where n is the number of sectors in the subtree.
+			 * @note When called on root, this gives the total sector count for the entire octree.
 			 */
 			[[nodiscard]]
 			size_t
@@ -300,9 +500,20 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			 * @brief Returns the parent sector.
-			 * @warning This can be nullptr. Check if the sector is the root one before.
-			 * @return std::weak_ptr< OctreeSector >
+			 * @brief Returns a weak pointer to the parent sector.
+			 *
+			 * The parent sector is the sector one level up in the octree hierarchy that
+			 * contains this sector as one of its eight children.
+			 *
+			 * @return A weak_ptr to the parent sector. The weak_ptr will be expired (invalid)
+			 *         if this is the root sector.
+			 *
+			 * @warning Always check isRoot() before using the returned weak_ptr, or check if
+			 *          the weak_ptr is expired before locking it.
+			 *
+			 * @note A weak_ptr is used to avoid circular references between parent and child sectors.
+			 *
+			 * @see isRoot()
 			 */
 			[[nodiscard]]
 			std::weak_ptr< OctreeSector >
@@ -312,9 +523,20 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			 * @brief Returns the parent sector.
-			 * @warning This can be nullptr. Check if the sector is the root one before.
-			 * @return std::weak_ptr< const OctreeSector >
+			 * @brief Returns a weak pointer to the parent sector (const version).
+			 *
+			 * The parent sector is the sector one level up in the octree hierarchy that
+			 * contains this sector as one of its eight children.
+			 *
+			 * @return A weak_ptr to the const parent sector. The weak_ptr will be expired (invalid)
+			 *         if this is the root sector.
+			 *
+			 * @warning Always check isRoot() before using the returned weak_ptr, or check if
+			 *          the weak_ptr is expired before locking it.
+			 *
+			 * @note A weak_ptr is used to avoid circular references between parent and child sectors.
+			 *
+			 * @see isRoot()
 			 */
 			[[nodiscard]]
 			std::weak_ptr< const OctreeSector >
@@ -324,8 +546,15 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			 * @brief Returns the root sector.
-			 * @return std::shared_ptr< OctreeSector >.
+			 * @brief Traverses up the hierarchy to find and return the root sector.
+			 *
+			 * Walks up the parent chain until reaching the root sector (the sector with no parent).
+			 * Useful for accessing octree-wide configuration or performing operations from the root.
+			 *
+			 * @return A shared_ptr to the root sector of this octree.
+			 *
+			 * @note If called on the root sector itself, returns this sector.
+			 * @note This method has O(depth) complexity as it traverses the parent chain.
 			 */
 			[[nodiscard]]
 			std::shared_ptr< OctreeSector >
@@ -342,8 +571,15 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			 * @brief Returns the root sector.
-			 * @return std::shared_ptr< const OctreeSector >.
+			 * @brief Traverses up the hierarchy to find and return the root sector (const version).
+			 *
+			 * Walks up the parent chain until reaching the root sector (the sector with no parent).
+			 * Useful for accessing octree-wide configuration or performing operations from the root.
+			 *
+			 * @return A shared_ptr to the const root sector of this octree.
+			 *
+			 * @note If called on the root sector itself, returns this sector.
+			 * @note This method has O(depth) complexity as it traverses the parent chain.
 			 */
 			[[nodiscard]]
 			std::shared_ptr< const OctreeSector >
@@ -360,9 +596,20 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			 * @brief Returns the subsector list.
-			 * @warning This can be a list of empty sector. Check if the sector is leaf before.
-			 * @return std::array< std::shared_ptr< OctreeSector >, 8 > &
+			 * @brief Returns the array of eight child sectors.
+			 *
+			 * Provides direct access to the subsector array for manual traversal. Each element
+			 * in the array corresponds to one of the eight octants defined by the slot constants.
+			 *
+			 * @return Reference to the array of eight child sector pointers.
+			 *
+			 * @warning The array may contain null pointers if this sector is a leaf (not expanded).
+			 *          Always check isExpanded() before accessing child sectors.
+			 * @warning Do not modify the array contents directly unless you understand the octree
+			 *          invariants. Use insert(), erase(), expand(), and collapse() instead.
+			 *
+			 * @see isExpanded()
+			 * @see isLeaf()
 			 */
 			[[nodiscard]]
 			std::array< std::shared_ptr< OctreeSector >, SectorDivision > &
@@ -372,9 +619,19 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			 * @brief Returns the subsector list.
-			 * @warning This can be a list of empty sector. Check if the sector is leaf before.
-			 * @return const std::array< std::shared_ptr< OctreeSector >, 8 > &
+			 * @brief Returns the array of eight child sectors (const version).
+			 *
+			 * Provides direct read-only access to the subsector array for manual traversal.
+			 * Each element in the array corresponds to one of the eight octants defined by
+			 * the slot constants.
+			 *
+			 * @return Const reference to the array of eight child sector pointers.
+			 *
+			 * @warning The array may contain null pointers if this sector is a leaf (not expanded).
+			 *          Always check isExpanded() before accessing child sectors.
+			 *
+			 * @see isExpanded()
+			 * @see isLeaf()
 			 */
 			[[nodiscard]]
 			const std::array< std::shared_ptr< OctreeSector >, SectorDivision > &
@@ -384,10 +641,23 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			 * @brief Reserves subsectors by specifying the desired depth.
-			 * @note This won't have any effect with automatic collapse enabled.
-			 * @param depth
-			 * @return void
+			 * @brief Pre-allocates octree sectors to a specified depth.
+			 *
+			 * Recursively subdivides this sector and all descendants to create a fixed-depth
+			 * octree structure. This is useful for avoiding dynamic allocations during runtime
+			 * when the spatial extent is known in advance.
+			 *
+			 * @param depth The number of levels to pre-allocate. 0 means no allocation,
+			 *              1 means allocate immediate children, 2 means children and grandchildren, etc.
+			 *
+			 * @note This method has no effect if auto-collapse is enabled, as empty pre-allocated
+			 *       sectors would be immediately removed. A warning is logged if attempted.
+			 * @note Pre-allocation is useful for performance-critical scenarios where allocation
+			 *       overhead must be avoided during gameplay.
+			 *
+			 * @warning Incompatible with autoCollapseEnabled. Check autoCollapseEnabled() before calling.
+			 *
+			 * @see autoCollapseEnabled()
 			 */
 			void
 			reserve (size_t depth) noexcept
@@ -414,9 +684,19 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			 * @brief Returns whether the entity is present in the sector.
-			 * @param element A reference to an element smart pointer.
-			 * @return bool
+			 * @brief Checks whether an element is present in this sector.
+			 *
+			 * Tests if the element is registered in this specific sector's element set.
+			 * Due to the all-levels storage strategy, an element present in a child sector
+			 * will also be present in all its parent sectors.
+			 *
+			 * @param element Shared pointer to the element to search for.
+			 *
+			 * @return True if the element is in this sector's element set, false otherwise.
+			 *
+			 * @note This is an O(1) operation using unordered_set lookup.
+			 * @note This only checks the local sector, not descendants. To check if an element
+			 *       is anywhere in the octree, call contains() on the root sector.
 			 */
 			[[nodiscard]]
 			bool
@@ -426,10 +706,22 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			 * @brief Returns whether a primitive is colling with the octree sector.
-			 * @tparam primitive_t The type of primitive.
-			 * @param primitive A reference to a primitive.
-			 * @return bool
+			 * @brief Tests collision between this sector and a geometric primitive.
+			 *
+			 * Determines whether the given primitive (point, sphere, AABB, frustum, etc.)
+			 * intersects with this sector's bounding volume. This is the fundamental spatial
+			 * query used by insert, update, and traversal methods.
+			 *
+			 * @tparam primitive_t The type of primitive to test (automatically deduced).
+			 *                     Supported types: Vector<3,float> (point), Sphere, AACuboid, Frustum.
+			 * @param primitive The primitive to test for collision.
+			 *
+			 * @return True if the primitive intersects this sector's bounds, false otherwise.
+			 *
+			 * @note This method delegates to the collision detection functions in
+			 *       EmEn::Libs::Math::Space3D::isColliding().
+			 *
+			 * @see EmEn::Libs::Math::Space3D::isColliding()
 			 */
 			template< typename primitive_t >
 			[[nodiscard]]
@@ -440,10 +732,30 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			 * @brief Adds an element to the tree at the level of this sector and below.
-			 * @note This is the main function determining the collision primitive to use.
-			 * @param element A reference to an element smart pointer.
-			 * @return bool
+			 * @brief Inserts an element into the octree at this sector level and all descendant sectors it touches.
+			 *
+			 * This is the primary insertion method that dispatches to the appropriate collision primitive
+			 * based on the template parameter enable_volume:
+			 * - When enable_volume=false (rendering octree): Uses only the element's position point.
+			 * - When enable_volume=true (physics octree): Uses the element's bounding volume (Sphere or AABB)
+			 *   as determined by element->collisionDetectionModel().
+			 *
+			 * The element is inserted at this level if it collides with this sector, then recursively
+			 * inserted into all child sectors it touches (all-levels storage strategy).
+			 *
+			 * @param element Shared pointer to the element to insert. Must provide position and
+			 *                (if enable_volume=true) collision detection model and bounding volume.
+			 *
+			 * @return True if the element was successfully inserted (collides with this sector),
+			 *         false if the element is outside this sector's bounds or already present.
+			 *
+			 * @note Automatically triggers subdivision if element count exceeds maxElementPerSector.
+			 * @note For volume-based insertion, elements can span multiple sectors simultaneously.
+			 * @note Duplicate insertions of the same element are ignored (idempotent operation).
+			 *
+			 * @see insertWithPrimitive()
+			 * @see update()
+			 * @see updateOrInsert()
 			 */
 			bool
 			insert (const std::shared_ptr< element_t > & element) noexcept
@@ -472,10 +784,81 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			 * @brief Checks whether an element still in this sector and below.
-			 * @note This is the main function determining the collision primitive to use.
-			 * @param element A reference to an element smart pointer.
-			 * @return bool
+			 * @brief Optimized combined operation: updates element position if present, otherwise inserts it.
+			 *
+			 * This is a performance optimization that combines the functionality of contains() +
+			 * update() or insert() into a single operation, avoiding redundant octree traversal.
+			 * Use this when you're unsure whether an element is already in the octree.
+			 *
+			 * Algorithm:
+			 * 1. Fast-path check: If element is in root's element set, call update()
+			 * 2. Otherwise: Call insert() to add it to the octree
+			 *
+			 * @param element Shared pointer to the element to update or insert.
+			 *
+			 * @return True if the element is now present in the octree, false if the operation failed
+			 *         (e.g., element is outside the octree bounds).
+			 *
+			 * @pre This method must be called on the root sector only. Debug builds will assert this.
+			 *
+			 * @note This is more efficient than calling contains() + update()/insert() separately.
+			 * @note Typical usage: Call this every frame for moving elements where you're unsure
+			 *       if they've been added yet.
+			 *
+			 * @see insert()
+			 * @see update()
+			 */
+			bool
+			updateOrInsert (const std::shared_ptr< element_t > & element) noexcept
+			{
+				if constexpr ( IsDebug )
+				{
+					if ( !this->isRoot() )
+					{
+						TraceError{ClassId} << "You can't call updateOrInsert() on a subsector !";
+
+						return false;
+					}
+				}
+
+				/* Fast path: element already present, just update it. */
+				if ( m_elements.contains(element) )
+				{
+					return this->update(element);
+				}
+
+				/* Element not present, insert it. */
+				return this->insert(element);
+			}
+
+			/**
+			 * @brief Updates an element's position within the octree after it has moved.
+			 *
+			 * This method re-evaluates the element's position/volume and adjusts its placement
+			 * in the octree hierarchy. If the element has moved into different sectors, it will
+			 * be removed from old sectors and added to new ones.
+			 *
+			 * Algorithm behavior differs by template mode:
+			 * - enable_volume=false (rendering): Fast-path optimization checks if element is still
+			 *   in its last known leaf sector before full traversal.
+			 * - enable_volume=true (physics): Full re-evaluation since elements can span multiple sectors.
+			 *
+			 * @param element Shared pointer to the element to update. Must already be in the octree.
+			 *
+			 * @return True if the element is still within the octree bounds, false if it moved
+			 *         completely outside the root sector (element will be removed).
+			 *
+			 * @pre This method must be called on the root sector only. Debug builds will assert this.
+			 * @pre The element must already be present in the octree (use insert() for new elements).
+			 *
+			 * @note If the root sector is not expanded (still a leaf), this is a no-op that returns true.
+			 * @note For point-based octrees, includes fast-path: checks last leaf sector first.
+			 *
+			 * @todo Verify the specific fast-path check for point-based mode (enable_volume=false).
+			 *
+			 * @see insert()
+			 * @see updateOrInsert()
+			 * @see erase()
 			 */
 			bool
 			update (const std::shared_ptr< element_t > & element) noexcept
@@ -531,9 +914,27 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			 * @brief Removes an element from the tree this level and below.
-			 * @param element A reference to an element smart pointer.
-			 * @return bool
+			 * @brief Removes an element from the octree at this level and all descendant sectors.
+			 *
+			 * Recursively removes the element from this sector and all child sectors. Due to the
+			 * all-levels storage strategy, the element must be removed from every sector it was
+			 * inserted into.
+			 *
+			 * If auto-collapse is enabled, this operation may trigger sector collapse if removing
+			 * the element reduces the sector's element count below the collapse threshold.
+			 *
+			 * @param element Shared pointer to the element to remove.
+			 *
+			 * @return True if the element was found and removed, false if it wasn't present in
+			 *         this sector.
+			 *
+			 * @note When called on root, logs a warning if the element isn't in the octree.
+			 * @note This method automatically triggers collapse if autoCollapseEnabled and element
+			 *       count drops below maxElementPerSector / 2.
+			 * @note Safe to call even if element is not present (idempotent operation).
+			 *
+			 * @see insert()
+			 * @see autoCollapseEnabled()
 			 */
 			bool
 			erase (const std::shared_ptr< element_t > & element) noexcept
@@ -565,8 +966,17 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			 * @brief Returns the number of elements present in this sector.
-			 * @return size_t
+			 * @brief Returns the number of elements stored in this sector.
+			 *
+			 * Counts only elements at this specific sector level, not including descendants.
+			 * Due to the all-levels storage strategy, elements present in child sectors are
+			 * also counted in their parent sectors.
+			 *
+			 * @return The number of elements in this sector's element set.
+			 *
+			 * @note This is an O(1) operation.
+			 * @note To count total unique elements in the entire octree, call this on leaf
+			 *       sectors only and aggregate the results.
 			 */
 			[[nodiscard]]
 			size_t
@@ -576,8 +986,17 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			 * @brief Returns the element list of the sector.
-			 * @return const std::unordered_set< std::shared_ptr< element_t > > &
+			 * @brief Returns read-only access to the element set for this sector.
+			 *
+			 * Provides direct access to the unordered_set containing all elements registered
+			 * at this sector level. Useful for iteration and queries.
+			 *
+			 * @return Const reference to the unordered_set of element shared pointers.
+			 *
+			 * @note Elements in this set are also present in all child sectors they intersect.
+			 * @note Do not modify the returned set. Use insert() and erase() to modify octree contents.
+			 *
+			 * @see elementCount()
 			 */
 			[[nodiscard]]
 			const std::unordered_set< std::shared_ptr< element_t > > &
@@ -587,9 +1006,21 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			 * @brief Tries to find the first named element in the octree.
-			 * @param name A reference to a string
-			 * @return std::shared_ptr< element_t >
+			 * @brief Searches for the first element with a specific name in this sector.
+			 *
+			 * Performs a linear search through this sector's element set to find an element
+			 * matching the given name. Only searches the local sector, not descendants.
+			 *
+			 * @param name The name to search for (compared via element->name()).
+			 *
+			 * @return Shared pointer to the first matching element, or nullptr if no element
+			 *         with that name exists in this sector.
+			 *
+			 * @note This searches only the current sector. To search the entire octree, call
+			 *       this on the root sector (which contains all elements due to all-levels storage).
+			 * @note Has O(n) complexity where n is the number of elements in this sector.
+			 * @note If multiple elements share the same name, only the first one found is returned
+			 *       (iteration order is unspecified due to unordered_set).
 			 */
 			[[nodiscard]]
 			std::shared_ptr< element_t >
@@ -607,9 +1038,81 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			 * @brief Returns a list of surrounding leaf sectors (Moore neighborhood, 26 sectors).
-			 * @param includeThisSector Include the current sector in the list.
-			 * @return std::vector< std::shared_ptr< const OctreeSector > >
+			 * @brief Executes a callback function on surrounding leaf sectors (Moore neighborhood).
+			 *
+			 * Invokes the provided callable on up to 26 neighboring leaf sectors surrounding this
+			 * sector, plus optionally this sector itself. The Moore neighborhood includes all
+			 * sectors that share a face, edge, or corner with this sector.
+			 *
+			 * This is a zero-overhead callback mechanism - the function parameter is a template
+			 * type that avoids std::function allocation overhead. Perfect for hot-path collision
+			 * detection and spatial queries.
+			 *
+			 * @tparam function_t The callable type (lambda, function pointer, functor). Automatically
+			 *                    deduced. Must be invocable with signature: void(const OctreeSector&).
+			 * @param includeThisSector If true, the callback is first invoked on this sector before
+			 *                          checking neighbors.
+			 * @param function The callable to execute on each neighbor. Receives a const reference
+			 *                 to each neighboring sector.
+			 *
+			 * @note Neighbors that don't exist (outside octree bounds) or aren't subdivided to the
+			 *       same level are automatically skipped.
+			 * @note This is useful for broad-phase collision detection: find elements in neighboring
+			 *       sectors that might collide with elements in this sector.
+			 * @note Prefer this over getSurroundingSectors() to avoid vector allocation.
+			 *
+			 * @see getSurroundingSectors()
+			 * @see getNeighbor()
+			 */
+			template< typename function_t >
+			void
+			forSurroundingSectors (bool includeThisSector, function_t && function) const noexcept
+			{
+				if ( includeThisSector )
+				{
+					function(*this);
+				}
+
+				/* Iterate through the 26 directions of the Moore neighborhood. */
+				for ( int x = -1; x <= 1; ++x )
+				{
+					for ( int y = -1; y <= 1; ++y )
+					{
+						for ( int z = -1; z <= 1; ++z )
+						{
+							/* Skip the center (0, 0, 0), which is the current sector itself. */
+							if ( x == 0 && y == 0 && z == 0 )
+							{
+								continue;
+							}
+
+							if ( const auto neighbor = this->getNeighbor(x, y, z) )
+							{
+								function(*neighbor);
+							}
+						}
+					}
+				}
+			}
+
+			/**
+			 * @brief Returns a vector of surrounding leaf sectors (Moore neighborhood).
+			 *
+			 * Collects up to 26 neighboring leaf sectors surrounding this sector, plus optionally
+			 * this sector itself, and returns them in a vector. The Moore neighborhood includes
+			 * all sectors that share a face, edge, or corner with this sector.
+			 *
+			 * @param includeThisSector If true, this sector is included as the first element of
+			 *                          the returned vector.
+			 *
+			 * @return Vector of shared pointers to neighboring const sectors. May contain fewer
+			 *         than 26 neighbors if some don't exist or aren't subdivided to the same level.
+			 *
+			 * @deprecated Prefer forSurroundingSectors() to avoid vector allocation overhead.
+			 *             This method allocates a vector on each call, while forSurroundingSectors()
+			 *             uses zero-overhead callbacks.
+			 *
+			 * @see forSurroundingSectors()
 			 */
 			[[nodiscard]]
 			std::vector< std::shared_ptr< const OctreeSector > >
@@ -649,15 +1152,34 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			 * @brief Executes a function on every subsector inside the area.
-			 * @tparam primitive_t The type of primitive for collision detection.
-			 * @param primitive A reference to the primitive.
-			 * @param function A reference to lambda.
-			 * @return void
+			 * @brief Executes a callback function on every leaf sector that intersects a primitive.
+			 *
+			 * Recursively traverses the octree and invokes the callback only on leaf sectors that
+			 * collide with the provided geometric primitive (frustum, sphere, AABB, etc.). This is
+			 * the primary spatial query method for frustum culling, range queries, and collision detection.
+			 *
+			 * The traversal is optimized via early-exit: if a sector is empty (m_elements.empty()),
+			 * the entire subtree is skipped without recursion, thanks to the all-levels storage strategy.
+			 *
+			 * @tparam primitive_t The primitive type for collision testing (automatically deduced).
+			 *                     Supported: Vector<3,float> (point), Sphere, AACuboid, Frustum.
+			 * @tparam function_t The callable type (automatically deduced). Must be invocable with
+			 *                    signature: void(const OctreeSector&).
+			 * @param primitive The geometric primitive to test for collision. Only sectors intersecting
+			 *                  this primitive will have the callback invoked.
+			 * @param function The callable to execute on each leaf sector that intersects the primitive.
+			 *
+			 * @note Zero-overhead callbacks: template type avoids std::function allocation.
+			 * @note Fast early-exit: empty sectors are skipped without descending to children.
+			 * @note Only leaf sectors invoke the callback - intermediate nodes are just traversed.
+			 * @note Common usage: Frustum culling for rendering, range queries for AI, broad-phase collision.
+			 *
+			 * @see forLeafSectors()
+			 * @see isCollidingWith()
 			 */
-			template< typename primitive_t >
+			template< typename primitive_t, typename function_t >
 			void
-			forTouchedSector (const primitive_t & primitive, const std::function< void (const OctreeSector &) > & function) const noexcept
+			forTouchedSector (const primitive_t & primitive, function_t && function) const noexcept
 			{
 				/* NOTE: Sector empty or out of bound. */
 				if ( m_elements.empty() || !this->isCollidingWith(primitive) )
@@ -681,10 +1203,75 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			 * @brief Returns a pointer to a subsector when an element appears.
-			 * @note This assumes the element is part of this sector.
-			 * @param element A reference to an element smart pointer.
-			 * @return const OctreeSector *
+			 * @brief Executes a callback function on every non-empty leaf sector in the subtree.
+			 *
+			 * Recursively traverses the octree rooted at this sector and invokes the callback on
+			 * all leaf sectors that contain at least one element. Empty sectors and their entire
+			 * subtrees are skipped via early-exit optimization.
+			 *
+			 * @tparam function_t The callable type (automatically deduced). Must be invocable with
+			 *                    signature: void(const OctreeSector&).
+			 * @param function The callable to execute on each non-empty leaf sector.
+			 *
+			 * @note Zero-overhead callbacks: template type avoids std::function allocation.
+			 * @note Fast early-exit: empty sectors are skipped without descending to children.
+			 * @note Only leaf sectors invoke the callback - intermediate nodes are just traversed.
+			 * @note Common usage: Iterate over all elements in the octree, broad-phase collision
+			 *       detection (check all pairs within each leaf), serialization.
+			 *
+			 * @see forTouchedSector()
+			 */
+			template< typename function_t >
+			void
+			forLeafSectors (function_t && function) const noexcept
+			{
+				/* NOTE: Sector empty, skip entirely. */
+				if ( m_elements.empty() )
+				{
+					return;
+				}
+
+				/* NOTE: This is a leaf sector, execute the function here. */
+				if ( this->isLeaf() )
+				{
+					function(*this);
+
+					return;
+				}
+
+				/* NOTE: Go deeper in the tree. */
+				for ( const auto & subSector : m_subSectors )
+				{
+					subSector->forLeafSectors(function);
+				}
+			}
+
+			/**
+			 * @brief Finds the deepest (smallest) leaf sector containing an element.
+			 *
+			 * Recursively traverses the octree downward to find the most specific (deepest) leaf
+			 * sector that contains the given element. This is useful for localized spatial queries
+			 * and update operations.
+			 *
+			 * Algorithm: For point-based octrees (enable_volume=false), the element exists in exactly
+			 * one leaf sector. For volume-based octrees (enable_volume=true), this returns the first
+			 * matching leaf found (elements may span multiple sectors).
+			 *
+			 * @param element Shared pointer to the element to locate.
+			 *
+			 * @return Raw pointer to the deepest leaf sector containing the element. Returns this
+			 *         sector itself if it's a leaf. Never returns nullptr if the element is present.
+			 *
+			 * @pre The element must be present in this sector (call contains() first or ensure
+			 *      this is called from the root sector).
+			 *
+			 * @note For point-based octrees, this provides the exact leaf sector for fast updates.
+			 * @note Has O(depth) complexity as it traverses down the hierarchy.
+			 * @note Linear search through 8 child sectors at each level. For position-only queries,
+			 *       prefer getDeepestSubSectorForPosition() which uses O(1) slot calculation.
+			 *
+			 * @see getDeepestSubSectorForPosition()
+			 * @see contains()
 			 */
 			[[nodiscard]]
 			const OctreeSector *
@@ -711,11 +1298,69 @@ namespace EmEn::Scenes
 				return deepestSubSector;
 			}
 
+			/**
+			 * @brief Finds the deepest leaf sector containing a position via direct slot calculation.
+			 *
+			 * Recursively traverses the octree downward using O(1) slot calculation at each level
+			 * to find the leaf sector containing the given position. This is significantly faster
+			 * than getDeepestSubSector() as it avoids linear search through child sectors.
+			 *
+			 * The slot index is computed directly from the position relative to each sector's center
+			 * using bit manipulation, enabling immediate selection of the correct child sector.
+			 *
+			 * @param position The 3D position to locate within the octree.
+			 *
+			 * @return Raw pointer to the deepest leaf sector containing the position. Returns this
+			 *         sector itself if it's a leaf. Never returns nullptr if position is within bounds.
+			 *
+			 * @note This is the fastest way to locate a leaf sector for a position (O(depth) with
+			 *       O(1) per level, no search overhead).
+			 * @note Used internally by update() for fast-path optimization in point-based octrees.
+			 * @note Assumes position is within this sector's bounds (no bounds checking performed).
+			 *
+			 * @see getDeepestSubSector()
+			 * @see computeSlotForPosition()
+			 */
+			[[nodiscard]]
+			const OctreeSector *
+			getDeepestSubSectorForPosition (const Libs::Math::Vector< 3, float > & position) const noexcept
+			{
+				/* NOTE: If there is no subsector below this one. */
+				if ( !m_isExpanded )
+				{
+					return this;
+				}
+
+				/* Calculate the slot directly from position relative to sector center. */
+				const auto center = this->center();
+				const size_t slot = computeSlotForPosition(position, center);
+
+				return m_subSectors[slot]->getDeepestSubSectorForPosition(position);
+			}
+
 		private:
 
 			/**
-			 * @brief Checks the sector content to expand or collapse it and returns if the sector is a leaf or not.
-			 * @return bool
+			 * @brief Evaluates sector state and triggers expansion or collapse as needed.
+			 *
+			 * This method is called after element insertion or removal to determine whether
+			 * the sector should be subdivided (expand) or merged (collapse) based on element count.
+			 * It enforces the octree's adaptive subdivision strategy.
+			 *
+			 * Expansion trigger: If this is a leaf with more than maxElementPerSector elements,
+			 * the sector is subdivided into 8 child sectors.
+			 *
+			 * Collapse trigger (if autoCollapseEnabled): If this is expanded but has fewer than
+			 * maxElementPerSector / 2 elements, child sectors are merged back into this sector.
+			 *
+			 * @return True if the sector is still (or has become) a leaf, false if it's expanded.
+			 *
+			 * @note This method modifies the sector's structure (may create or destroy child sectors).
+			 * @note Called internally by insert() and erase() operations.
+			 *
+			 * @see expand()
+			 * @see collapse()
+			 * @see autoCollapseEnabled()
 			 */
 			[[nodiscard]]
 			bool
@@ -744,11 +1389,32 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			 * @brief Adds an element to the tree at the level of this sector and below.
-			 * @tparam primitive_t The type of primitive for collision detection.
-			 * @param element A reference to the element smart pointer.
-			 * @param primitive A reference to the primitive.
-			 * @return bool
+			 * @brief Internal insertion implementation using a specific collision primitive.
+			 *
+			 * This is the core insertion algorithm that recursively inserts an element into
+			 * this sector and all descendant sectors it collides with. It handles collision
+			 * detection, duplicate checking, and automatic subdivision.
+			 *
+			 * Algorithm:
+			 * 1. Test if primitive collides with this sector's bounds
+			 * 2. If yes, add element to this sector's element set (ignoring duplicates)
+			 * 3. Check if sector should expand due to element count exceeding threshold
+			 * 4. If expanded, recursively insert into all 8 child sectors
+			 *
+			 * @tparam primitive_t The primitive type for collision testing (automatically deduced).
+			 *                     Supported: Vector<3,float> (point), Sphere, AACuboid.
+			 * @param element Shared pointer to the element to insert.
+			 * @param primitive The collision primitive representing the element's spatial extent.
+			 *
+			 * @return True if insertion succeeded (element collides with this sector), false if
+			 *         element is outside bounds or already present.
+			 *
+			 * @note This is called by the public insert() method after determining the appropriate
+			 *       primitive based on the element's collision detection model.
+			 * @note Duplicate insertions are silently ignored (unordered_set::emplace returns false).
+			 *
+			 * @see insert()
+			 * @see isStillLeaf()
 			 */
 			template< typename primitive_t >
 			bool
@@ -776,11 +1442,33 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			 * @brief Checks whether an element still in this sector and below.
-			 * @tparam primitive_t The type of primitive for collision detection.
-			 * @param element A reference to the element smart pointer.
-			 * @param primitive A reference to the primitive.
-			 * @return bool
+			 * @brief Internal update implementation that validates and adjusts element placement.
+			 *
+			 * This method recursively checks whether an element's primitive still intersects
+			 * the correct sectors after a position/volume change. It removes the element from
+			 * sectors it no longer touches and adds it to new sectors it now intersects.
+			 *
+			 * Algorithm at each sector:
+			 * 1. Test if primitive still collides with this sector
+			 * 2. If no collision and not root: remove element from this sector and descendants
+			 * 3. If collision but element missing: insert element (moved into this branch)
+			 * 4. If collision and element present: recursively check all child sectors
+			 *
+			 * @tparam primitive_t The primitive type for collision testing (automatically deduced).
+			 *                     Supported: Vector<3,float> (point), Sphere, AACuboid.
+			 * @param element Shared pointer to the element to update.
+			 * @param primitive The collision primitive representing the element's current spatial extent.
+			 *
+			 * @return True if the element still intersects the octree (remains in the root sector),
+			 *         false if it moved completely outside the root bounds.
+			 *
+			 * @note This is called by the public update() method after determining the appropriate
+			 *       primitive based on the element's collision detection model.
+			 * @note The root sector never removes the element, allowing it to be re-inserted if
+			 *       it moves back into bounds.
+			 *
+			 * @see update()
+			 * @see insertWithPrimitive()
 			 */
 			template< typename primitive_t >
 			bool
@@ -817,8 +1505,30 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			 * @brief Expands this sector to eight new ones.
-			 * @return void.
+			 * @brief Subdivides this sector into eight child sectors.
+			 *
+			 * Creates 8 child sectors by splitting this sector's volume along each axis at its center point.
+			 * Each child sector has half the width/height/depth of the parent. All elements currently in
+			 * this sector are redistributed to the appropriate child sectors based on their spatial extent.
+			 *
+			 * The eight child sectors are arranged according to the octant constants (slot indices 0-7).
+			 * This method allocates 8 std::make_shared<OctreeSector> and redistributes all elements
+			 * via recursive insert() calls.
+			 *
+			 * @note OPTIMIZATION CONSIDERATION: This method performs 8 std::make_shared allocations.
+			 *       Potential improvements:
+			 *       - Pool allocator: Pre-allocate sector blocks to reduce allocation overhead.
+			 *       - std::unique_ptr: Lower overhead but breaks enable_shared_from_this and weak_ptr for parent.
+			 *       Current assessment: Expansion is infrequent (only when exceeding m_maxElementPerSector),
+			 *       so the optimization gain would be marginal compared to the implementation complexity.
+			 *
+			 * @note Element redistribution: All elements in this sector are re-inserted into child sectors.
+			 *       Elements may be inserted into multiple child sectors if their volume spans boundaries.
+			 *
+			 * @note Called automatically by isStillLeaf() when element count exceeds maxElementPerSector.
+			 *
+			 * @see collapse()
+			 * @see isStillLeaf()
 			 */
 			void
 			expand () noexcept
@@ -903,8 +1613,22 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			 * @brief Merges the sectors underlying this one.
-			 * @return void
+			 * @brief Merges child sectors back into this sector (removes subdivision).
+			 *
+			 * Destroys all 8 child sectors by resetting their shared pointers, deallocating them
+			 * and transitioning this sector back to a leaf state. All elements remain in this
+			 * sector's element set (they were already present due to all-levels storage).
+			 *
+			 * This operation is triggered automatically when auto-collapse is enabled and the
+			 * element count drops below maxElementPerSector / 2.
+			 *
+			 * @note Elements are not removed or re-inserted - they remain in this sector's set.
+			 * @note Child sectors are deallocated, freeing memory.
+			 * @note Only called when autoCollapseEnabled is true.
+			 *
+			 * @see expand()
+			 * @see isStillLeaf()
+			 * @see autoCollapseEnabled()
 			 */
 			void
 			collapse () noexcept
@@ -915,6 +1639,61 @@ namespace EmEn::Scenes
 				}
 
 				m_isExpanded = false;
+			}
+
+			/**
+			 * @brief Computes the octree slot index for a position using bit manipulation.
+			 *
+			 * Determines which of the 8 child sectors (octants) a position falls into by comparing
+			 * the position to the center point along each axis. The result is a 3-bit index where
+			 * each bit corresponds to an axis:
+			 * - Bit 2 (value 4): X axis - set if position.x < center.x (negative X half)
+			 * - Bit 1 (value 2): Y axis - set if position.y < center.y (negative Y half)
+			 * - Bit 0 (value 1): Z axis - set if position.z < center.z (negative Z half)
+			 *
+			 * Examples:
+			 * - (+X, +Y, +Z): slot 0 (binary 000) = XPositiveYPositiveZPositive
+			 * - (+X, +Y, -Z): slot 1 (binary 001) = XPositiveYPositiveZNegative
+			 * - (-X, -Y, -Z): slot 7 (binary 111) = XNegativeYNegativeZNegative
+			 *
+			 * @param position The 3D position to locate within the octree.
+			 * @param center The center point of the sector for comparison.
+			 *
+			 * @return The slot index (0-7) indicating which octant contains the position.
+			 *
+			 * @note This is a static method and can be called without a sector instance.
+			 * @note O(1) operation using only 3 comparisons and bit operations.
+			 * @note Used by getDeepestSubSectorForPosition() for fast octree traversal.
+			 *
+			 * @see getDeepestSubSectorForPosition()
+			 */
+			[[nodiscard]]
+			static size_t
+			computeSlotForPosition (const Libs::Math::Vector< 3, float > & position, const Libs::Math::Vector< 3, float > & center) noexcept
+			{
+				using namespace Libs::Math;
+
+				size_t slot = 0;
+
+				/* X-axis: bit 2 (value 4). Negative X sets the bit. */
+				if ( position[X] < center[X] )
+				{
+					slot |= 4;
+				}
+
+				/* Y-axis: bit 1 (value 2). Negative Y sets the bit. */
+				if ( position[Y] < center[Y] )
+				{
+					slot |= 2;
+				}
+
+				/* Z-axis: bit 0 (value 1). Negative Z sets the bit. */
+				if ( position[Z] < center[Z] )
+				{
+					slot |= 1;
+				}
+
+				return slot;
 			}
 
 			/**
@@ -1002,12 +1781,21 @@ namespace EmEn::Scenes
 
 				return parentNeighbor->subSectors()[descendantSlot];
 			}
+
 			/* Flag names. */
 			static constexpr auto IsExpanded{0UL};
 			static constexpr auto AutoCollapseEnabled{1UL};
 
 			std::weak_ptr< OctreeSector > m_parentSector;
 			std::array< std::shared_ptr< OctreeSector >, SectorDivision > m_subSectors;
+			/**
+			 * @brief Set of elements in this sector.
+			 * @note OPTIMIZATION CONSIDERATION: Using std::shared_ptr adds atomic refcount overhead on insert/erase.
+			 *       Alternative: std::unordered_set<element_t*> with external lifetime management.
+			 *       Risk: If an entity is destroyed without being removed from the octree, it causes undefined behavior.
+			 *       Current assessment: The shared_ptr provides safety as the Scene manages entity lifetime.
+			 *       The refcount overhead is acceptable given the protection it provides against dangling pointers.
+			 */
 			std::unordered_set< std::shared_ptr< element_t > > m_elements;
 			size_t m_slot{std::numeric_limits< size_t >::max()};
 			size_t m_maxElementPerSector;

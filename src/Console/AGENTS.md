@@ -1,47 +1,47 @@
 # Console System
 
-Context spécifique pour le développement du système de console de commandes d'Emeraude Engine.
+Context for developing the Emeraude Engine command console system.
 
-## Vue d'ensemble du module
+## Module Overview
 
-**Statut : EN DÉVELOPPEMENT (non pressant)** - Système de terminal/console pour piloter le moteur via commandes textuelles.
+**Status: IN DEVELOPMENT (low priority)** - Terminal/console system for controlling the engine via text commands.
 
-## Règles spécifiques à Console/
+## Console-Specific Rules
 
-### Objectif
-- **Terminal de commandes** : Interface textuelle pour contrôler le moteur
-- **Parsing d'entrées** : Analyse de commandes saisies par l'utilisateur
-- **Interface Controllable** : Système d'objets contrôlables par commandes
+### Objective
+- **Command terminal**: Text interface to control the engine
+- **Input parsing**: Analysis of user-entered commands
+- **Controllable interface**: System of controllable objects via commands
 
-### Architecture prévue
-- Console pour saisie et affichage
-- Parser pour interpréter commandes
-- Interface Controllable pour objets pilotables
-- Système de commandes extensible
+### Planned Architecture
+- Console for input and display
+- Parser to interpret commands
+- Controllable interface for controllable objects
+- Extensible command system
 
-## Commandes de développement
+## Development Commands
 
 ```bash
-# Tests console (quand disponibles)
+# Console tests (when available)
 ctest -R Console
 ./test --filter="*Console*"
 ```
 
-## Fichiers importants
+## Important Files
 
-- `Controllable.hpp` - Interface pour objets contrôlables par console
-- À documenter lors de la stabilisation du système
+- `Controllable.hpp` - Interface for console-controllable objects
+- To be documented upon system stabilization
 
-## Patterns de développement
+## Development Patterns
 
-À documenter lors de la stabilisation du système.
+To be documented upon system stabilization.
 
-## Points d'attention
+## Critical Points
 
-- **En développement** : Architecture susceptible de changer
-- **Non pressant** : Priorité faible actuellement
-- **Ne pas confondre** : Aucun lien avec AVConsole (Audio Video Console)
+- **In development**: Architecture subject to change
+- **Low priority**: Currently low priority
+- **Do not confuse**: No relation to AVConsole (Audio Video Console)
 
-## Documentation détaillée
+## Detailed Documentation
 
-Documentation à créer une fois le système stabilisé.
+Documentation to be created once the system is stabilized.

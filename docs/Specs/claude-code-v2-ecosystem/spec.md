@@ -1,84 +1,84 @@
-# Spécification : Écosystème Claude Code v2.0 pour Emeraude Engine
+# Specification: Claude Code v2.0 Ecosystem for Emeraude Engine
 
-## 🎯 Vue d'ensemble
+## Overview
 
-Implémentation d'un écosystème Claude Code v2.0 complet avec orchestration Master-Subagents spécialisés pour Emeraude Engine, incluant agents experts, commands orchestrés, hooks d'automation et validation continue des conventions critiques.
+Implementation of a complete Claude Code v2.0 ecosystem with Master-Subagent orchestration specialized for Emeraude Engine, including expert agents, orchestrated commands, automation hooks, and continuous validation of critical conventions.
 
-## 📋 Objectifs
+## Objectives
 
-### Objectif Principal
-Créer un système d'agents spécialisés qui automatise et améliore significativement le workflow de développement Emeraude Engine avec :
-- Review de code intelligent avec analyse algorithmique
-- Debugging assisté avec breakpoints automatiques  
-- Testing orchestré avec validation conventions
-- Automation complète via hooks
+### Primary Objective
+Create a specialized agent system that automates and significantly improves the Emeraude Engine development workflow with:
+- Intelligent code review with algorithmic analysis
+- Assisted debugging with automatic breakpoints
+- Orchestrated testing with convention validation
+- Complete automation via hooks
 
-### Objectifs Secondaires
-- Réduire temps review PR de 80%
-- Éliminer violations conventions critiques (Y-down, fail-safe, Vulkan)
-- Accélérer debugging avec analyse guidée
-- Améliorer couverture tests de 65% → 90%+
+### Secondary Objectives
+- Reduce PR review time by 80%
+- Eliminate critical convention violations (Y-down, fail-safe, Vulkan)
+- Accelerate debugging with guided analysis
+- Improve test coverage from 65% to 90%+
 
-## 🏗️ Architecture Technique
+## Technical Architecture
 
 ### Master-Subagents Hierarchy
 ```
-📱 Emeraude Orchestrator (Master Agent)
-├── 🔍 Code Review Agent
-│   ├── 📊 Complexity Analyzer Subagent  
-│   ├── 📚 STL Advisor Subagent
-│   ├── 🎨 Format Checker Subagent
-│   └── ⚡ Performance Optimizer Subagent
-├── 🐛 Debug Assistant Agent
-│   ├── 🔴 Breakpoint Manager Subagent
-│   ├── 📈 Memory Analyzer Subagent
-│   └── 🕵️ Root Cause Analyzer Subagent
-├── 🧪 Test Orchestrator Agent
-│   ├── 🏃 Unit Test Runner Subagent
-│   ├── 📐 Coverage Analyzer Subagent
-│   └── ⚖️ Integration Validator Subagent
-└── 🏗️ Build & CI Agent
-    ├── 🔨 CMake Specialist Subagent
-    └── 📦 Dependency Checker Subagent
+Emeraude Orchestrator (Master Agent)
+├── Code Review Agent
+│   ├── Complexity Analyzer Subagent
+│   ├── STL Advisor Subagent
+│   ├── Format Checker Subagent
+│   └── Performance Optimizer Subagent
+├── Debug Assistant Agent
+│   ├── Breakpoint Manager Subagent
+│   ├── Memory Analyzer Subagent
+│   └── Root Cause Analyzer Subagent
+├── Test Orchestrator Agent
+│   ├── Unit Test Runner Subagent
+│   ├── Coverage Analyzer Subagent
+│   └── Integration Validator Subagent
+└── Build & CI Agent
+    ├── CMake Specialist Subagent
+    └── Dependency Checker Subagent
 ```
 
-### Agents Principaux
+### Main Agents
 
 #### 1. Emeraude Orchestrator (Master)
-- **Rôle** : Orchestrateur principal avec vision globale
-- **Responsabilités** :
-  - Analyse et routage intelligent des tâches
-  - Délégation aux spécialistes appropriés  
-  - Coordination et intégration des résultats
-  - Validation conformité architecture Emeraude
+- **Role**: Main orchestrator with global vision
+- **Responsibilities**:
+  - Intelligent task analysis and routing
+  - Delegation to appropriate specialists
+  - Result coordination and integration
+  - Emeraude architecture compliance validation
 
 #### 2. Code Review Agent
-- **Rôle** : Expert review de code avec analyse approfondie
-- **Responsabilités** :
-  - Analyse complexité algorithmique (Big O)
-  - Suggestions optimisation STL C++20
-  - Validation conventions Emeraude (Y-down, fail-safe, Vulkan)
-  - Détection hotspots performance
+- **Role**: Code review expert with deep analysis
+- **Responsibilities**:
+  - Algorithmic complexity analysis (Big O)
+  - C++20 STL optimization suggestions
+  - Emeraude convention validation (Y-down, fail-safe, Vulkan)
+  - Performance hotspot detection
 
-#### 3. Debug Assistant Agent  
-- **Rôle** : Expert debugging avec automation intelligente
-- **Responsabilités** :
-  - Configuration automatique breakpoints selon contexte
-  - Analyse mémoire (VMA, Valgrind, leaks)
-  - Root cause analysis avec patterns Emeraude
-  - Génération scripts GDB optimisés
+#### 3. Debug Assistant Agent
+- **Role**: Debugging expert with intelligent automation
+- **Responsibilities**:
+  - Automatic breakpoint configuration based on context
+  - Memory analysis (VMA, Valgrind, leaks)
+  - Root cause analysis with Emeraude patterns
+  - Optimized GDB script generation
 
 #### 4. Test Orchestrator Agent
-- **Rôle** : Orchestrateur tests avec validation conventions
-- **Responsabilités** :
-  - Sélection intelligente tests (basé sur fichiers modifiés)
-  - Validation automatique conventions critiques
-  - Coverage analysis chemins critiques
-  - Détection régressions performance
+- **Role**: Test orchestrator with convention validation
+- **Responsibilities**:
+  - Intelligent test selection (based on modified files)
+  - Automatic critical convention validation
+  - Critical path coverage analysis
+  - Performance regression detection
 
-### Configuration Système
+### System Configuration
 
-#### Permissions Granulaires
+#### Granular Permissions
 ```json
 {
   "permissions": {
@@ -119,172 +119,172 @@ Créer un système d'agents spécialisés qui automatise et améliore significat
 }
 ```
 
-## ⚡ Commands & Hooks
+## Commands & Hooks
 
-### Commands Orchestrés
+### Orchestrated Commands
 
 #### `/emeraude-full-review [options]`
-Review complète orchestrée avec tous agents
-- Analyse technique approfondie
-- Validation conventions Emeraude
-- Tests automatiques 
-- Suggestions optimisation
+Complete orchestrated review with all agents
+- Deep technical analysis
+- Emeraude convention validation
+- Automatic tests
+- Optimization suggestions
 
 #### `/emeraude-smart-debug [description]`
-Debugging intelligent avec breakpoints automatiques
-- Configuration GDB spécialisée selon subsystem
-- Analyse mémoire automatique
-- Root cause analysis guidée
+Intelligent debugging with automatic breakpoints
+- Specialized GDB configuration by subsystem
+- Automatic memory analysis
+- Guided root cause analysis
 
 #### `/emeraude-performance-audit [target]`
-Audit performance complet
-- Profiling automatique (perf, callgrind)
-- Analyse hotspots par subsystem
-- Suggestions optimisation algorithmiques
+Complete performance audit
+- Automatic profiling (perf, callgrind)
+- Hotspot analysis by subsystem
+- Algorithmic optimization suggestions
 
-### Hooks d'Automation
+### Automation Hooks
 
 #### Pre-commit Hook
-- Validation Y-down coordinate system
-- Vérification abstraction Vulkan
-- Check fail-safe resource patterns
+- Y-down coordinate system validation
+- Vulkan abstraction verification
+- Fail-safe resource pattern check
 - Auto-formatting clang-format
 
-#### Post-merge Hook  
-- Tests intégration complets
-- Vérification dépendances
+#### Post-merge Hook
+- Complete integration tests
+- Dependency verification
 - Performance regression check
 
 #### Auto-review Hook (PR)
-- Review automatique PR
-- Posting résultats comme commentaires
-- Integration avec GitHub Actions
+- Automatic PR review
+- Results posted as comments
+- GitHub Actions integration
 
-## 📊 Validations Spécifiques Emeraude
+## Emeraude-Specific Validations
 
-### Conventions Critiques
+### Critical Conventions
 1. **Y-down Coordinate System**
-   - Détection `-9.81` (doit être `+9.81`)
-   - Scan `flip Y` / `invert Y` dans commentaires
-   - Validation physics calculations
+   - Detect `-9.81` (should be `+9.81`)
+   - Scan `flip Y` / `invert Y` in comments
+   - Physics calculation validation
 
 2. **Fail-safe Resource Management**
-   - Vérification retours `nullptr` (interdits)
-   - Validation neutral resources existence
+   - Verify `nullptr` returns (forbidden)
+   - Validate neutral resources existence
    - Check dependency chain integrity
 
 3. **Vulkan Abstraction**
-   - Détection appels `vk*` directs hors `Vulkan/`
-   - Validation usage abstractions Graphics
+   - Detect direct `vk*` calls outside `Vulkan/`
+   - Validate Graphics abstraction usage
    - Check proper VMA usage
 
 4. **Memory Management**
    - RAII patterns validation
    - VMA allocation tracking
-   - Leak detection spécialisée
+   - Specialized leak detection
 
-## 🎯 Métriques de Succès
+## Success Metrics
 
-### Quantitatives
-- **Temps review PR** : 4h → 30min (-87%)
-- **Bugs production** : 5/release → 1/release (-80%)
-- **Temps debugging** : 8h → 2h (-75%)
-- **Coverage tests** : 65% → 90%+ (+38%)
-- **Violations conventions** : 30% → 2% (-93%)
+### Quantitative
+- **PR review time**: 4h to 30min (-87%)
+- **Production bugs**: 5/release to 1/release (-80%)
+- **Debugging time**: 8h to 2h (-75%)
+- **Test coverage**: 65% to 90%+ (+38%)
+- **Convention violations**: 30% to 2% (-93%)
 
-### Qualitatives  
-- Détection automatique 90% des issues before human review
-- Zero violations Y-down/fail-safe en production
-- Onboarding nouveaux développeurs accéléré
-- Knowledge preservation via agents experts
+### Qualitative
+- Automatic detection of 90% of issues before human review
+- Zero Y-down/fail-safe violations in production
+- Accelerated new developer onboarding
+- Knowledge preservation via expert agents
 
-## 🔧 Technologies & Outils
+## Technologies & Tools
 
 ### Core Technologies
-- **Claude Code v2.0** : Master-subagent orchestration
-- **MCP Protocol** : Integration outils externes
-- **GitHub Actions** : CI/CD automation
-- **GDB/LLDB** : Debugging automatisé
+- **Claude Code v2.0**: Master-subagent orchestration
+- **MCP Protocol**: External tool integration
+- **GitHub Actions**: CI/CD automation
+- **GDB/LLDB**: Automated debugging
 
 ### Development Tools
-- **clang-format/tidy** : Code formatting/analysis
-- **Valgrind** : Memory analysis
-- **perf/callgrind** : Performance profiling
-- **gcov/lcov** : Coverage analysis
+- **clang-format/tidy**: Code formatting/analysis
+- **Valgrind**: Memory analysis
+- **perf/callgrind**: Performance profiling
+- **gcov/lcov**: Coverage analysis
 
 ### Emeraude-Specific Tools
-- **CMake** : Build system integration
-- **CTest** : Test framework
-- **Vulkan Validation Layers** : Graphics debugging
-- **VMA** : Memory allocation tracking
+- **CMake**: Build system integration
+- **CTest**: Test framework
+- **Vulkan Validation Layers**: Graphics debugging
+- **VMA**: Memory allocation tracking
 
-## 🚀 Plan de Déploiement
+## Deployment Plan
 
-### Phase 1 : Core Agents (Semaine 1)
+### Phase 1: Core Agents (Week 1)
 - Emeraude Orchestrator
 - Code Review Agent + Complexity Analyzer
 - Basic permissions & hooks
 
-### Phase 2 : Specialized Agents (Semaine 2)  
+### Phase 2: Specialized Agents (Week 2)
 - Debug Assistant + Breakpoint Manager
 - Test Orchestrator + Smart Filtering
 - Memory & Coverage Analyzers
 
-### Phase 3 : Advanced Automation (Semaine 3)
-- Commands orchestrés complets
+### Phase 3: Advanced Automation (Week 3)
+- Complete orchestrated commands
 - GitHub Actions integration
 - Performance audit automation
 
-### Phase 4 : Refinement (Semaine 4)
-- Fine-tuning délégation patterns
-- Optimization context sharing
+### Phase 4: Refinement (Week 4)
+- Delegation pattern fine-tuning
+- Context sharing optimization
 - Documentation & training
 
-## 📚 Documentation & Formation
+## Documentation & Training
 
-### Documentation Technique
-- Architecture agents détaillée
-- Guide configuration permissions
-- Patterns délégation best practices
-- Troubleshooting common issues
+### Technical Documentation
+- Detailed agent architecture
+- Permission configuration guide
+- Delegation best practices patterns
+- Common issues troubleshooting
 
-### Formation Équipe
-- Workshop Claude Code v2.0 concepts
-- Hands-on training agents usage
+### Team Training
+- Claude Code v2.0 concepts workshop
+- Hands-on agent usage training
 - Convention validation workflows
-- Debugging assisted techniques
+- Assisted debugging techniques
 
-## ⚠️ Risques & Mitigations
+## Risks & Mitigations
 
-### Risques Identifiés
-1. **Complexité configuration** : Nombreux agents à configurer
-2. **Performance impact** : Context size + processing overhead  
-3. **Learning curve** : Équipe adaptation nouveaux workflows
-4. **False positives** : Validation trop stricte conventions
+### Identified Risks
+1. **Configuration complexity**: Many agents to configure
+2. **Performance impact**: Context size + processing overhead
+3. **Learning curve**: Team adaptation to new workflows
+4. **False positives**: Too strict convention validation
 
-### Stratégies Mitigation
-1. **Configuration progressive** : Implémentation phase par phase
-2. **Context optimization** : Isolation stricte + size limits
-3. **Training intensif** : Workshops + documentation complète
-4. **Tuning iteratif** : Ajustement seuils validation
+### Mitigation Strategies
+1. **Progressive configuration**: Phase by phase implementation
+2. **Context optimization**: Strict isolation + size limits
+3. **Intensive training**: Workshops + complete documentation
+4. **Iterative tuning**: Validation threshold adjustment
 
-## 📋 Critères d'Acceptation
+## Acceptance Criteria
 
-### Fonctionnels
-- [ ] Agents principaux opérationnels avec délégation
-- [ ] Commands orchestrés fonctionnels
-- [ ] Hooks automation configurés et testés
-- [ ] Validation conventions 100% automatisée
+### Functional
+- [ ] Main agents operational with delegation
+- [ ] Orchestrated commands functional
+- [ ] Automation hooks configured and tested
+- [ ] 100% automated convention validation
 
-### Performance  
-- [ ] Context size optimisé (<150k tokens)
-- [ ] Temps response agents <30s
-- [ ] Overhead hooks <5% temps dev
+### Performance
+- [ ] Optimized context size (<150k tokens)
+- [ ] Agent response time <30s
+- [ ] Hook overhead <5% dev time
 
-### Qualité
-- [ ] Documentation complète agents + workflows
-- [ ] Tests automatisés configuration
-- [ ] Monitoring métriques succès
-- [ ] Formation équipe completée
+### Quality
+- [ ] Complete agent + workflow documentation
+- [ ] Automated configuration tests
+- [ ] Success metrics monitoring
+- [ ] Team training completed
 
-Cette spécification servira de référence pour l'implémentation complète de l'écosystème Claude Code v2.0 pour Emeraude Engine.
+This specification serves as reference for the complete implementation of the Claude Code v2.0 ecosystem for Emeraude Engine.

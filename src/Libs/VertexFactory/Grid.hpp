@@ -31,12 +31,11 @@
 
 /* STL inclusions. */
 #include <cstdint>
-#include <vector>
-#include <string>
 #include <iostream>
 #include <sstream>
-#include <functional>
+#include <string>
 #include <type_traits>
+#include <vector>
 
 /* Local inclusions. */
 #include "Libs/Algorithms/DiamondSquare.hpp"
@@ -52,9 +51,37 @@
 namespace EmEn::Libs::VertexFactory
 {
 	/**
-	 * @brief The grid geometry class.
-	 * @tparam vertex_data_t The precision type of vertex data. Default float.
-	 * @tparam index_data_t The precision type of index data. Default uint32_t.
+	 * @class Grid
+	 * @brief Template class for generating 2D grid geometry with height displacement.
+	 *
+	 * Grid provides a flexible system for creating heightmap-based terrain and ground surfaces.
+	 * It generates a square grid of points with configurable dimensions and supports various
+	 * height displacement techniques including pixmap-based displacement mapping, procedural
+	 * noise generation (Perlin and Diamond-Square algorithms), and direct height manipulation.
+	 *
+	 * The grid is always square (same number of divisions on both axes) and centered at the origin.
+	 * It uses a **Right-Handed Y-DOWN** coordinate system where Y represents height/elevation.
+	 *
+	 * Key features:
+	 * - Configurable grid size and subdivision count
+	 * - Multiple displacement mapping modes (Replace, Add, Subtract, Multiply, Divide)
+	 * - Procedural noise generation (Perlin, Diamond-Square)
+	 * - Height scaling and shifting operations
+	 * - Automatic bounding box and bounding sphere computation
+	 * - Position, normal, tangent, and texture coordinate generation
+	 * - Vertex color sampling from pixmaps
+	 * - Template-based for flexible precision control
+	 *
+	 * @tparam vertex_data_t Floating-point type for vertex data and geometric calculations (default: float).
+	 * @tparam index_data_t Unsigned integer type for indexing grid points and quads (default: uint32_t).
+	 *
+	 * @note The grid is always square in XZ plane with Y as the height dimension.
+	 * @note All methods assume the grid is initialized via initializeData() before use.
+	 * @note Recent optimizations include template-based transformations and cached neighbor positions.
+	 *
+	 * @see GridQuad
+	 * @see PointTransformationMode
+	 * @version 0.8.38
 	 */
 	template< typename vertex_data_t = float, typename index_data_t = uint32_t >
 	requires (std::is_floating_point_v< vertex_data_t > && std::is_unsigned_v< index_data_t > )
@@ -63,17 +90,40 @@ namespace EmEn::Libs::VertexFactory
 		public:
 
 			/**
-			 * @brief Constructs a default grid.
+			 * @brief Constructs a default empty grid.
+			 *
+			 * Creates an uninitialized grid with zero dimensions. You must call initializeData()
+			 * before using the grid.
+			 *
+			 * @see initializeData()
 			 */
 			Grid () noexcept = default;
 
 			/**
-			 * @brief Reserves data for a new grid.
-			 * @note All parameters are for one dimension, because a Grid is always a square.
-			 * @param size The size of the grid or a cell grid depending on the third parameter.
-			 * @param division The number of cells per dimension (square).
-			 * @param isSizeForCell Tells if the size parameter is the size of a cell or the whole grid.
-			 * @return bool
+			 * @brief Initializes the grid with specified size and subdivision count.
+			 *
+			 * Allocates memory for grid points and calculates grid dimensions. This method must
+			 * be called before any other grid operations. The grid is always square (same number
+			 * of divisions on both X and Z axes) and centered at the origin.
+			 *
+			 * All heights are initialized to zero, creating a flat plane. Use displacement methods
+			 * to add terrain features.
+			 *
+			 * @param size The total size of the grid or the size of a single cell, depending on isSizeForCell parameter.
+			 * @param division The number of quad cells along one dimension. Total quads = division × division.
+			 * @param isSizeForCell If true, size represents a single cell dimension; if false (default), size is the total grid dimension.
+			 *
+			 * @return True if initialization succeeded, false if parameters are invalid (division is zero or size is negative).
+			 *
+			 * @pre division must be at least 1
+			 * @pre size must be positive
+			 * @post Grid is cleared before initialization
+			 * @post Bounding box is initialized for a flat grid at Y=0
+			 * @post Point count = (division + 1)²
+			 * @post All point heights are initialized to zero
+			 *
+			 * @note The actual number of vertices is (division + 1)² because a grid with N cells needs N+1 points per dimension.
+			 * @note In Debug builds, memory allocation size is printed to console when EMERAUDE_DEBUG_VERTEX_FACTORY is enabled.
 			 */
 			bool
 			initializeData (vertex_data_t size, index_data_t division, bool isSizeForCell = false) noexcept
@@ -129,11 +179,26 @@ namespace EmEn::Libs::VertexFactory
 			}
 
 			/**
-			 * @brief Applies a pixmap as a height map to the geometry.
-			 * @param map A reference to a pixmap.
-			 * @param factor The factor of displacement.
-			 * @param mode The mode for moving vertices high. Default Replace.
-			 * @return void
+			 * @brief Applies pixmap-based displacement mapping to modify grid heights.
+			 *
+			 * Samples a pixmap using UV coordinates and uses its grayscale values to displace
+			 * grid point heights. The pixmap is sampled using cosine interpolation for smooth results.
+			 * This is commonly used to apply heightmaps from image files to terrain geometry.
+			 *
+			 * @param map Reference to a valid pixmap containing height data. Grayscale values are used for displacement.
+			 * @param factor Multiplier applied to sampled grayscale values (range 0-255) to determine displacement magnitude.
+			 * @param mode Transformation mode controlling how new heights combine with existing values (default: Replace).
+			 *
+			 * @pre map must be valid (map.isValid() returns true)
+			 * @post Grid heights are modified according to the specified mode
+			 * @post Bounding box is NOT automatically updated; use height transformation methods if needed
+			 *
+			 * @note Uses cosine interpolation for smooth sampling across the pixmap
+			 * @note UV coordinates are computed automatically from grid indices
+			 *
+			 * @see PointTransformationMode
+			 * @see applyPerlinNoise()
+			 * @see applyDiamondSquare()
 			 */
 			void
 			applyDisplacementMapping (const PixelFactory::Pixmap< uint8_t > & map, vertex_data_t factor, PointTransformationMode mode = PointTransformationMode::Replace) noexcept
@@ -145,128 +210,69 @@ namespace EmEn::Libs::VertexFactory
 					return;
 				}
 
-				switch ( mode )
-				{
-					case PointTransformationMode::Replace :
-						this->applyTransformation([this, &map, factor] (index_data_t indexOnX, index_data_t indexOnY, vertex_data_t coordU, vertex_data_t coordV) {
-							m_pointHeights[this->index(indexOnX, indexOnY)] = map.cosineSample(coordU, coordV).gray() * factor;
-
-							return true;
-						});
-						break;
-
-					case PointTransformationMode::Add :
-						this->applyTransformation([this, &map, factor] (index_data_t indexOnX, index_data_t indexOnY, vertex_data_t coordU, vertex_data_t coordV) {
-							m_pointHeights[this->index(indexOnX, indexOnY)] += map.cosineSample(coordU, coordV).gray() * factor;
-
-							return true;
-						});
-						break;
-
-					case PointTransformationMode::Subtract :
-						this->applyTransformation([this, &map, factor] (index_data_t indexOnX, index_data_t indexOnY, vertex_data_t coordU, vertex_data_t coordV) {
-							m_pointHeights[this->index(indexOnX, indexOnY)] -= map.cosineSample(coordU, coordV).gray() * factor;
-
-							return true;
-						});
-						break;
-
-					case PointTransformationMode::Multiply :
-						this->applyTransformation([this, &map, factor] (index_data_t indexOnX, index_data_t indexOnY, vertex_data_t coordU, vertex_data_t coordV) {
-							m_pointHeights[this->index(indexOnX, indexOnY)] *= map.cosineSample(coordU, coordV).gray() * factor;
-
-							return true;
-						});
-						break;
-
-					case PointTransformationMode::Divide :
-						this->applyTransformation([this, &map, factor] (index_data_t indexOnX, index_data_t indexOnY, vertex_data_t coordU, vertex_data_t coordV) {
-							m_pointHeights[this->index(indexOnX, indexOnY)] /= map.cosineSample(coordU, coordV).gray() * factor;
-
-							return true;
-						});
-						break;
-				}
+				this->applyTransformationWithUV([this, &map, factor, mode] (index_data_t indexOnX, index_data_t indexOnY, vertex_data_t coordU, vertex_data_t coordV) {
+					const auto newValue = static_cast< vertex_data_t >(map.cosineSample(coordU, coordV).gray()) * factor;
+					applyMode(m_pointHeights[this->index(indexOnX, indexOnY)], newValue, mode);
+				});
 			}
 
 			/**
-			 * @brief Applies the perlin noise algorithm on the grid.
-			 * @param size The size of the perlin algorithm.
-			 * @param factor The factor of displacement.
-			 * @param mode The mode for moving vertices high. Default Replace.
-			 * @return void
+			 * @brief Applies procedural Perlin noise to generate organic terrain features.
+			 *
+			 * Generates height displacement using Perlin noise algorithm, which produces smooth,
+			 * natural-looking terrain with organic features. Higher size values create larger-scale
+			 * terrain features, while smaller values produce more detailed, fine-grained noise.
+			 *
+			 * @param size Frequency/scale of the Perlin noise pattern. Larger values create more frequent, detailed features.
+			 * @param factor Multiplier for noise output values, controlling displacement magnitude.
+			 * @param mode Transformation mode controlling how noise values combine with existing heights (default: Replace).
+			 *
+			 * @post Grid heights are modified with Perlin noise according to the specified mode
+			 * @post Bounding box is automatically updated to encompass new height values
+			 *
+			 * @note Perlin noise produces values in range [-1, 1], scaled by the factor parameter
+			 * @note This method automatically updates the bounding box, unlike applyDisplacementMapping()
+			 *
+			 * @see PointTransformationMode
+			 * @see applyDiamondSquare()
+			 * @see applyDisplacementMapping()
 			 */
 			void
 			applyPerlinNoise (vertex_data_t size, vertex_data_t factor, PointTransformationMode mode = PointTransformationMode::Replace) noexcept
 			{
 				Algorithms::PerlinNoise< vertex_data_t > generator{};
 
-				switch ( mode )
-				{
-					case PointTransformationMode::Replace :
-						this->applyTransformation([this, size, factor, &generator] (index_data_t indexOnX, index_data_t indexOnY, vertex_data_t coordU, vertex_data_t coordV) {
-							const auto index = this->index(indexOnX, indexOnY);
+				this->applyTransformationWithUV([this, size, factor, mode, &generator] (index_data_t indexOnX, index_data_t indexOnY, vertex_data_t coordU, vertex_data_t coordV) {
+					const auto idx = this->index(indexOnX, indexOnY);
+					const auto newValue = generator.generate(coordU * size, coordV * size, 0) * factor;
 
-							m_pointHeights[index] = generator.generate(coordU * size, coordV * size, 0) * factor;
-							m_boundingBox.mergeY(m_pointHeights[index]);
-
-							return true;
-						});
-						break;
-
-					case PointTransformationMode::Add :
-						this->applyTransformation([this, size, factor, &generator] (index_data_t indexOnX, index_data_t indexOnY, vertex_data_t coordU, vertex_data_t coordV) {
-							const auto index = this->index(indexOnX, indexOnY);
-
-							m_pointHeights[index] += generator.generate(coordU * size, coordV * size, 0) * factor;
-							m_boundingBox.mergeY(m_pointHeights[index]);
-
-							return true;
-						});
-						break;
-
-					case PointTransformationMode::Subtract :
-						this->applyTransformation([this, size, factor, &generator] (index_data_t indexOnX, index_data_t indexOnY, vertex_data_t coordU, vertex_data_t coordV) {
-							const auto index = this->index(indexOnX, indexOnY);
-
-							m_pointHeights[index] -= generator.generate(coordU * size, coordV * size, 0) * factor;
-							m_boundingBox.mergeY(m_pointHeights[index]);
-
-							return true;
-						});
-						break;
-
-					case PointTransformationMode::Multiply :
-						this->applyTransformation([this, size, factor, &generator] (index_data_t indexOnX, index_data_t indexOnY, vertex_data_t coordU, vertex_data_t coordV) {
-							const auto index = this->index(indexOnX, indexOnY);
-
-							m_pointHeights[index] *= generator.generate(coordU * size, coordV * size, 0) * factor;
-							m_boundingBox.mergeY(m_pointHeights[index]);
-
-							return true;
-						});
-						break;
-
-					case PointTransformationMode::Divide :
-						this->applyTransformation([this, size, factor, &generator] (index_data_t indexOnX, index_data_t indexOnY, vertex_data_t coordU, vertex_data_t coordV) {
-							const auto index = this->index(indexOnX, indexOnY);
-
-							m_pointHeights[index] /= generator.generate(coordU * size, coordV * size, 0) * factor;
-							m_boundingBox.mergeY(m_pointHeights[index]);
-
-							return true;
-						});
-						break;
-				}
+					applyMode(m_pointHeights[idx], newValue, mode);
+					m_boundingBox.mergeY(m_pointHeights[idx]);
+				});
 			}
 
 			/**
-			 * @brief Applies the diamond square algorithm on the grid.
-			 * @param factor Noise strength.
-			 * @param roughness Noise roughness.
-			 * @param seed Randomize the generation. Default 1.
-			 * @param mode The mode for moving vertices high. Default Replace.
-			 * @return void
+			 * @brief Applies procedural Diamond-Square algorithm for fractal terrain generation.
+			 *
+			 * Generates height displacement using the Diamond-Square algorithm, a fractal subdivision
+			 * technique that produces realistic terrain with controllable roughness. This method is
+			 * particularly effective for creating mountainous or hilly landscapes with natural variation.
+			 *
+			 * @param factor Multiplier for algorithm output values, controlling overall displacement magnitude.
+			 * @param roughness Controls terrain roughness/smoothness. Higher values create more jagged, rough terrain; lower values produce smoother landscapes.
+			 * @param seed Random seed for reproducible generation (default: 1). Different seeds produce different terrain patterns.
+			 * @param mode Transformation mode controlling how generated heights combine with existing values (default: Replace).
+			 *
+			 * @post Grid heights are modified with Diamond-Square values according to the specified mode
+			 * @post Bounding box is automatically updated to encompass new height values
+			 *
+			 * @note The algorithm requires grid dimensions to be suitable for fractal subdivision
+			 * @note This method automatically updates the bounding box
+			 * @note Diamond-Square typically produces more angular features than Perlin noise
+			 *
+			 * @see PointTransformationMode
+			 * @see applyPerlinNoise()
+			 * @see applyDisplacementMapping()
 			 */
 			void
 			applyDiamondSquare (vertex_data_t factor, vertex_data_t roughness, int32_t seed = 1, PointTransformationMode mode = PointTransformationMode::Replace) noexcept
@@ -275,93 +281,95 @@ namespace EmEn::Libs::VertexFactory
 
 				if ( map.generate(m_squaredPointCount, roughness) )
 				{
-					switch ( mode )
-					{
-						case PointTransformationMode::Replace :
-							this->applyTransformation([this, factor, &map] (index_data_t indexOnX, index_data_t indexOnY) {
-								const auto index = this->index(indexOnX, indexOnY);
+					this->applyTransformation([this, factor, mode, &map] (index_data_t indexOnX, index_data_t indexOnY) {
+						const auto idx = this->index(indexOnX, indexOnY);
+						const auto newValue = map.value(indexOnX, indexOnY) * factor;
 
-								m_pointHeights[index] = map.value(indexOnX, indexOnY) * factor;
-								m_boundingBox.mergeY(m_pointHeights[index]);
-
-								return true;
-							});
-							break;
-
-						case PointTransformationMode::Add :
-							this->applyTransformation([this, factor, &map] (index_data_t indexOnX, index_data_t indexOnY) {
-								const auto index = this->index(indexOnX, indexOnY);
-
-								m_pointHeights[index] += map.value(indexOnX, indexOnY) * factor;
-								m_boundingBox.mergeY(m_pointHeights[index]);
-
-								return true;
-							});
-							break;
-
-						case PointTransformationMode::Subtract :
-							this->applyTransformation([this, factor, &map] (index_data_t indexOnX, index_data_t indexOnY) {
-								const auto index = this->index(indexOnX, indexOnY);
-
-								m_pointHeights[index] -= map.value(indexOnX, indexOnY) * factor;
-								m_boundingBox.mergeY(m_pointHeights[index]);
-
-								return true;
-							});
-							break;
-
-						case PointTransformationMode::Multiply :
-							this->applyTransformation([this, factor, &map] (index_data_t indexOnX, index_data_t indexOnY) {
-								const auto index = this->index(indexOnX, indexOnY);
-
-								m_pointHeights[index] *= map.value(indexOnX, indexOnY) * factor;
-								m_boundingBox.mergeY(m_pointHeights[index]);
-
-								return true;
-							});
-							break;
-
-						case PointTransformationMode::Divide :
-							this->applyTransformation([this, factor, &map] (index_data_t indexOnX, index_data_t indexOnY) {
-								const auto index = this->index(indexOnX, indexOnY);
-
-								m_pointHeights[index] /= map.value(indexOnX, indexOnY) * factor;
-								m_boundingBox.mergeY(m_pointHeights[index]);
-
-								return true;
-							});
-							break;
-					}
+						applyMode(m_pointHeights[idx], newValue, mode);
+						m_boundingBox.mergeY(m_pointHeights[idx]);
+					});
 				}
 			}
 
 			/**
-			 * @brief Multiplies uniformly the heights of the grid.
-			 * @param value The scale value.
-			 * @return void
+			 * @brief Multiplies all grid heights by a uniform scale factor.
+			 *
+			 * Applies uniform scaling to all height values in the grid. This is useful for
+			 * adjusting the overall vertical scale of terrain after generation or to match
+			 * a specific height range requirement.
+			 *
+			 * @param multiplier Scale factor applied to all heights. Values < 1 compress, values > 1 stretch.
+			 *
+			 * @post All height values are multiplied by the multiplier
+			 * @post Bounding box is updated to reflect new height range
+			 * @post Bounding sphere radius is recalculated
+			 *
+			 * @note Negative multipliers will flip terrain upside-down but are valid
+			 *
+			 * @see shiftHeight()
 			 */
 			void
-			scale (vertex_data_t value) noexcept
+			scaleHeight (vertex_data_t multiplier) noexcept
 			{
-				constexpr auto Half = static_cast< vertex_data_t >(0.5);
-
-				std::transform(m_pointHeights.begin(), m_pointHeights.end(), m_pointHeights.begin(), [value] (auto height) -> vertex_data_t {
-					return height * value;
+				std::transform(m_pointHeights.begin(), m_pointHeights.end(), m_pointHeights.begin(), [multiplier] (auto height) -> vertex_data_t {
+					return height * multiplier;
 				});
 
 				auto maximum = m_boundingBox.maximum();
 				auto minimum = m_boundingBox.minimum();
 
-				maximum[Math::Y] *= value;
-				minimum[Math::Y] *= value;
+				maximum[Math::Y] *= multiplier;
+				minimum[Math::Y] *= multiplier;
 
 				m_boundingBox.set(maximum, minimum);
-				m_boundingSphere.setRadius(m_boundingBox.highestLength() * Half);
+				m_boundingSphere.setRadius(m_boundingBox.highestLength() * static_cast< vertex_data_t >(0.5));
 			}
 
 			/**
-			 * @brief Clears the grid data.
-			 * @return void
+			 * @brief Adds a uniform offset to all grid heights.
+			 *
+			 * Applies a constant vertical translation to all height values. This is useful for
+			 * raising or lowering the entire terrain to a specific elevation, such as placing
+			 * terrain above sea level or adjusting baseline elevation.
+			 *
+			 * @param shift Offset value added to all heights. Positive values raise the terrain, negative values lower it.
+			 *
+			 * @post All height values are increased by the shift amount
+			 * @post Bounding box is translated vertically to reflect new height range
+			 * @post Bounding sphere radius is recalculated
+			 *
+			 * @see scaleHeight()
+			 */
+			void
+			shiftHeight (vertex_data_t shift) noexcept
+			{
+				std::transform(m_pointHeights.begin(), m_pointHeights.end(), m_pointHeights.begin(), [shift] (auto height) -> vertex_data_t {
+					return height + shift;
+				});
+
+				auto maximum = m_boundingBox.maximum();
+				auto minimum = m_boundingBox.minimum();
+
+				maximum[Math::Y] += shift;
+				minimum[Math::Y] += shift;
+
+				m_boundingBox.set(maximum, minimum);
+				m_boundingSphere.setRadius(m_boundingBox.highestLength() * static_cast< vertex_data_t >(0.5));
+			}
+
+			/**
+			 * @brief Clears all grid data and resets to uninitialized state.
+			 *
+			 * Deallocates all memory and resets grid to an empty state equivalent to
+			 * a newly constructed Grid. After calling clear(), you must call initializeData()
+			 * before using the grid again.
+			 *
+			 * @post All height data is deallocated
+			 * @post Quad and point counts are reset to zero
+			 * @post Bounding box and bounding sphere are reset
+			 * @post isValid() returns false
+			 *
+			 * @see initializeData()
 			 */
 			void
 			clear () noexcept
@@ -376,9 +384,21 @@ namespace EmEn::Libs::VertexFactory
 			}
 
 			/**
-			 * @brief Sets a multiplier to texture coordinates.
-			 * @param UVMultiplier The multiplier in both direction for the texture coordinates.
-			 * @return void
+			 * @brief Sets uniform texture coordinate multiplier for both U and V directions.
+			 *
+			 * Controls texture tiling across the grid by scaling UV coordinates. Higher values
+			 * cause textures to repeat more frequently; lower values stretch textures across
+			 * more grid area. Both U and V receive the same multiplier.
+			 *
+			 * @param UVMultiplier Multiplier applied to both U and V texture coordinates. Must be positive.
+			 *
+			 * @pre UVMultiplier must be greater than zero
+			 * @post If valid, both m_UMultiplier and m_VMultiplier are set to UVMultiplier
+			 * @post If invalid (≤ 0), multipliers remain unchanged
+			 *
+			 * @see setUVMultiplier(vertex_data_t, vertex_data_t)
+			 * @see textureCoordinates2D()
+			 * @see textureCoordinates3D()
 			 */
 			void
 			setUVMultiplier (vertex_data_t UVMultiplier) noexcept
@@ -391,10 +411,24 @@ namespace EmEn::Libs::VertexFactory
 			}
 
 			/**
-			 * @brief Sets a multiplier to texture coordinates.
-			 * @param UMultiplier The multiplier in X direction for the texture coordinates.
-			 * @param VMultiplier The multiplier in Y direction for the texture coordinates.
-			 * @return void
+			 * @brief Sets independent texture coordinate multipliers for U and V directions.
+			 *
+			 * Controls texture tiling with different rates for horizontal (U) and vertical (V)
+			 * directions. This allows non-uniform texture scaling, useful for anisotropic texturing
+			 * or matching textures to non-square aspect ratios.
+			 *
+			 * @param UMultiplier Multiplier for U (horizontal) texture coordinates. Must be positive.
+			 * @param VMultiplier Multiplier for V (vertical) texture coordinates. Must be positive.
+			 *
+			 * @pre UMultiplier must be greater than zero
+			 * @pre VMultiplier must be greater than zero
+			 * @post If valid, m_UMultiplier is set to UMultiplier
+			 * @post If valid, m_VMultiplier is set to VMultiplier
+			 * @post Invalid values (≤ 0) are silently ignored, leaving corresponding multiplier unchanged
+			 *
+			 * @see setUVMultiplier(vertex_data_t)
+			 * @see textureCoordinates2D()
+			 * @see textureCoordinates3D()
 			 */
 			void
 			setUVMultiplier (vertex_data_t UMultiplier, vertex_data_t VMultiplier) noexcept
@@ -411,8 +445,12 @@ namespace EmEn::Libs::VertexFactory
 			}
 
 			/**
-			 * @brief Returns the multiplier to the U component of texture coordinates.
-			 * @return vertex_data_t
+			 * @brief Returns the current U (horizontal) texture coordinate multiplier.
+			 *
+			 * @return Current U multiplier value.
+			 *
+			 * @see setUVMultiplier()
+			 * @see VMultiplier()
 			 */
 			[[nodiscard]]
 			vertex_data_t
@@ -422,8 +460,12 @@ namespace EmEn::Libs::VertexFactory
 			}
 
 			/**
-			 * @brief Returns the multiplier to the V component of texture coordinates.
-			 * @return vertex_data_t
+			 * @brief Returns the current V (vertical) texture coordinate multiplier.
+			 *
+			 * @return Current V multiplier value.
+			 *
+			 * @see setUVMultiplier()
+			 * @see UMultiplier()
 			 */
 			[[nodiscard]]
 			vertex_data_t
@@ -433,8 +475,13 @@ namespace EmEn::Libs::VertexFactory
 			}
 
 			/**
-			 * @brief Checks the validity of the data.
-			 * @return bool
+			 * @brief Checks if the grid has been initialized and contains valid data.
+			 *
+			 * @return True if grid is initialized with data, false if uninitialized or cleared.
+			 *
+			 * @see empty()
+			 * @see initializeData()
+			 * @see clear()
 			 */
 			[[nodiscard]]
 			bool
@@ -444,9 +491,13 @@ namespace EmEn::Libs::VertexFactory
 			}
 
 			/**
-			 * @brief Checks if the grid data is empty.
-			 * @note Inverse of Grid::isValid(). Provided to satisfy C++ conventions.
-			 * @return bool
+			 * @brief Checks if the grid is empty (uninitialized).
+			 *
+			 * Inverse of isValid(). Provided for consistency with STL container conventions.
+			 *
+			 * @return True if grid is empty/uninitialized, false if initialized with data.
+			 *
+			 * @see isValid()
 			 */
 			[[nodiscard]]
 			bool
@@ -456,8 +507,16 @@ namespace EmEn::Libs::VertexFactory
 			}
 
 			/**
-			 * @brief Returns a bounding box enclosing the whole grid.
-			 * @return const Math::Space3D::AACuboid< vertex_data_t > &
+			 * @brief Returns the axis-aligned bounding box enclosing the entire grid geometry.
+			 *
+			 * The bounding box is automatically updated by displacement methods like applyPerlinNoise()
+			 * and height manipulation methods like scaleHeight() and shiftHeight().
+			 *
+			 * @return Const reference to the grid's bounding box.
+			 *
+			 * @note Updated automatically by most height modification methods
+			 *
+			 * @see boundingSphere()
 			 */
 			[[nodiscard]]
 			const Math::Space3D::AACuboid< vertex_data_t > &
@@ -467,8 +526,15 @@ namespace EmEn::Libs::VertexFactory
 			}
 
 			/**
-			 * @brief Returns the bounding radius.
-			 * @return const Math::Space3D::Sphere< vertex_data_t > &
+			 * @brief Returns the bounding sphere enclosing the entire grid geometry.
+			 *
+			 * The bounding sphere is centered at the origin and has a radius sufficient to
+			 * enclose the entire grid including height displacement. Automatically updated
+			 * alongside the bounding box.
+			 *
+			 * @return Const reference to the grid's bounding sphere.
+			 *
+			 * @see boundingBox()
 			 */
 			[[nodiscard]]
 			const Math::Space3D::Sphere< vertex_data_t > &
@@ -478,8 +544,14 @@ namespace EmEn::Libs::VertexFactory
 			}
 
 			/**
-			 * @brief Returns the squared dimension of the grid.
-			 * @return vertex_data_t
+			 * @brief Returns the total size of the grid in world units.
+			 *
+			 * Since the grid is square, this represents both X and Z dimensions.
+			 *
+			 * @return Full grid size (edge length in world units).
+			 *
+			 * @see halfSquaredSize()
+			 * @see quadSize()
 			 */
 			[[nodiscard]]
 			vertex_data_t
@@ -489,9 +561,16 @@ namespace EmEn::Libs::VertexFactory
 			}
 
 			/**
-			 * @brief Returns the half squared dimension of the grid.
-			 * @note Useful when using coordinates thinking the origin of the grid is at his center.
-			 * @return vertex_data_t
+			 * @brief Returns half the total grid size in world units.
+			 *
+			 * Useful for coordinate calculations since the grid is centered at origin.
+			 * Grid extends from -halfSquaredSize to +halfSquaredSize on both X and Z axes.
+			 *
+			 * @return Half of the full grid size.
+			 *
+			 * @note Grid coordinates range from [-halfSquaredSize, +halfSquaredSize]
+			 *
+			 * @see squaredSize()
 			 */
 			[[nodiscard]]
 			vertex_data_t
@@ -501,8 +580,13 @@ namespace EmEn::Libs::VertexFactory
 			}
 
 			/**
-			 * @brief Returns the size of a grid cell.
-			 * @return vertex_data_t
+			 * @brief Returns the size of a single grid quad (cell) in world units.
+			 *
+			 * Since the grid is square, this represents the quad size on both X and Z axes.
+			 *
+			 * @return Size of one grid cell edge in world units.
+			 *
+			 * @see squaredSize()
 			 */
 			[[nodiscard]]
 			vertex_data_t
@@ -512,10 +596,19 @@ namespace EmEn::Libs::VertexFactory
 			}
 
 			/**
-			 * @brief Returns the height at cell coordinates.
-			 * @param indexOnX The grid quad index on X axis.
-			 * @param indexOnY The grid quad index on Y axis.
-			 * @return vertex_data_t
+			 * @brief Returns the height value at specified grid point indices.
+			 *
+			 * Retrieves the exact height stored at a grid vertex identified by its X/Z indices.
+			 * No interpolation is performed.
+			 *
+			 * @param indexOnX Grid point index along X axis (0 to squaredPointCount-1).
+			 * @param indexOnY Grid point index along Z axis (0 to squaredPointCount-1).
+			 *
+			 * @return Height value at the specified grid point.
+			 *
+			 * @note No bounds checking is performed; invalid indices cause undefined behavior
+			 *
+			 * @see getHeightAt(vertex_data_t, vertex_data_t)
 			 */
 			[[nodiscard]]
 			vertex_data_t
@@ -525,10 +618,22 @@ namespace EmEn::Libs::VertexFactory
 			}
 
 			/**
-			 * @brief Returns the height at an arbitrary X/Y coordinates.
-			 * @param positionX The coordinate on X axis.
-			 * @param positionY The coordinate on Y axis.
-			 * @return vertex_data_t
+			 * @brief Returns the interpolated height at arbitrary world coordinates.
+			 *
+			 * Performs bilinear interpolation of height values from the four surrounding grid
+			 * points. This provides smooth height queries at any position on the grid, not just
+			 * at vertex locations.
+			 *
+			 * @param positionX World coordinate on X axis.
+			 * @param positionY World coordinate on Z axis.
+			 *
+			 * @return Interpolated height value, or 0 if coordinates are outside grid bounds.
+			 *
+			 * @note Coordinates outside range [-halfSquaredSize, +halfSquaredSize] return 0
+			 * @note Uses bilinear interpolation for smooth results
+			 *
+			 * @see getHeightAt(index_data_t, index_data_t)
+			 * @see getNormalAt()
 			 */
 			[[nodiscard]]
 			vertex_data_t
@@ -557,10 +662,22 @@ namespace EmEn::Libs::VertexFactory
 			}
 
 			/**
-			 * @brief Returns the normal vector at an arbitrary X/Y coordinates.
-			 * @param positionX The coordinate on X axis.
-			 * @param positionY The coordinate on Y axis.
-			 * @return Math::Vector< 3, vertex_data_t >
+			 * @brief Returns the interpolated surface normal at arbitrary world coordinates.
+			 *
+			 * Performs bilinear interpolation of normal vectors from the four surrounding grid
+			 * points. Useful for smooth lighting and physics interactions at any position on
+			 * the terrain surface.
+			 *
+			 * @param positionX World coordinate on X axis.
+			 * @param positionY World coordinate on Z axis.
+			 *
+			 * @return Interpolated normalized surface normal vector, or positive Y if outside bounds.
+			 *
+			 * @note Coordinates outside range [-halfSquaredSize, +halfSquaredSize] return (0, 1, 0)
+			 * @note Uses bilinear interpolation for smooth normal transitions
+			 *
+			 * @see getHeightAt(vertex_data_t, vertex_data_t)
+			 * @see normal()
 			 */
 			[[nodiscard]]
 			Math::Vector< 3, vertex_data_t >
@@ -589,8 +706,14 @@ namespace EmEn::Libs::VertexFactory
 			}
 
 			/**
-			 * @brief Returns the point count.
-			 * @return index_data_t
+			 * @brief Returns the total number of grid vertices (points).
+			 *
+			 * For a grid with N divisions per dimension, the point count is (N+1)².
+			 *
+			 * @return Total number of vertices in the grid.
+			 *
+			 * @see squaredPointCount()
+			 * @see quadCount()
 			 */
 			[[nodiscard]]
 			index_data_t
@@ -600,8 +723,13 @@ namespace EmEn::Libs::VertexFactory
 			}
 
 			/**
-			 * @brief Returns the point count in one dimension.
-			 * @return index_data_t
+			 * @brief Returns the number of grid vertices along one dimension.
+			 *
+			 * This is the number of divisions plus one (N+1).
+			 *
+			 * @return Number of points along X or Z axis.
+			 *
+			 * @see pointCount()
 			 */
 			[[nodiscard]]
 			index_data_t
@@ -611,8 +739,14 @@ namespace EmEn::Libs::VertexFactory
 			}
 
 			/**
-			 * @brief Returns the number of grid cell.
-			 * @return index_data_t
+			 * @brief Returns the total number of grid quads (cells).
+			 *
+			 * For a grid with N divisions per dimension, the quad count is N².
+			 *
+			 * @return Total number of quads in the grid.
+			 *
+			 * @see squaredQuadCount()
+			 * @see pointCount()
 			 */
 			[[nodiscard]]
 			index_data_t
@@ -622,8 +756,13 @@ namespace EmEn::Libs::VertexFactory
 			}
 
 			/**
-			 * @brief Returns the number of grid cell in one dimension.
-			 * @return index_data_t
+			 * @brief Returns the number of grid quads along one dimension.
+			 *
+			 * This is the number of divisions specified in initializeData().
+			 *
+			 * @return Number of quads along X or Z axis.
+			 *
+			 * @see quadCount()
 			 */
 			[[nodiscard]]
 			index_data_t
@@ -633,10 +772,20 @@ namespace EmEn::Libs::VertexFactory
 			}
 
 			/**
-			 * @brief Convert XY indexes to buffer index.
-			 * @param indexOnX The grid quad index on X axis.
-			 * @param indexOnY The grid quad index on Y axis.
-			 * @return index_data_t
+			 * @brief Converts 2D grid coordinates to linear buffer index.
+			 *
+			 * Maps (X, Z) grid coordinates to a linear index for accessing the height buffer.
+			 * Uses row-major ordering.
+			 *
+			 * @param indexOnX Grid point index along X axis.
+			 * @param indexOnY Grid point index along Z axis.
+			 *
+			 * @return Linear index into the height buffer.
+			 *
+			 * @note Row-major formula: index = x + (z * width)
+			 *
+			 * @see indexOnX()
+			 * @see indexOnY()
 			 */
 			[[nodiscard]]
 			index_data_t
@@ -646,9 +795,17 @@ namespace EmEn::Libs::VertexFactory
 			}
 
 			/**
-			 * @brief Returns the X grid coordinates from grid index.
-			 * @param index The grid index.
-			 * @return index_data_t
+			 * @brief Extracts X grid coordinate from linear buffer index.
+			 *
+			 * Inverse operation of index(). Converts a linear buffer index back to its
+			 * X grid coordinate.
+			 *
+			 * @param index Linear buffer index.
+			 *
+			 * @return Grid point index along X axis.
+			 *
+			 * @see index()
+			 * @see indexOnY()
 			 */
 			[[nodiscard]]
 			index_data_t
@@ -656,23 +813,42 @@ namespace EmEn::Libs::VertexFactory
 			{
 				return index % m_squaredPointCount;
 			}
+
 			/**
-			 * @brief Returns the Y grid coordinates from grid index.
-			 * @param index The grid index.
-			 * @return index_data_t
+			 * @brief Extracts Z grid coordinate from linear buffer index.
+			 *
+			 * Inverse operation of index(). Converts a linear buffer index back to its
+			 * Z grid coordinate.
+			 *
+			 * @param index Linear buffer index.
+			 *
+			 * @return Grid point index along Z axis.
+			 *
+			 * @see index()
+			 * @see indexOnX()
 			 */
 			[[nodiscard]]
 			index_data_t
 			indexOnY (index_data_t index) const noexcept
 			{
-				return static_cast< index_data_t >(std::floor(index / m_squaredPointCount));
+				return index / m_squaredPointCount;
 			}
 
 			/**
-			 * @brief Returns the quad at grid coordinates.
-			 * @param indexOnX The grid quad index on X axis.
-			 * @param indexOnY The grid quad index on Y axis.
-			 * @return GridQuad
+			 * @brief Returns a GridQuad structure for the quad at specified grid coordinates.
+			 *
+			 * A GridQuad contains the four vertex indices (top-left, top-right, bottom-left,
+			 * bottom-right) that form a quad cell in the grid.
+			 *
+			 * @param indexOnX Quad index along X axis (0 to squaredQuadCount-1).
+			 * @param indexOnY Quad index along Z axis (0 to squaredQuadCount-1).
+			 *
+			 * @return GridQuad containing the four corner vertex indices, or empty GridQuad if indices overflow.
+			 *
+			 * @note Prints error to stderr if indices are out of bounds
+			 *
+			 * @see GridQuad
+			 * @see nearestQuad()
 			 */
 			[[nodiscard]]
 			GridQuad< index_data_t >
@@ -699,10 +875,17 @@ namespace EmEn::Libs::VertexFactory
 			}
 
 			/**
-			 * @brief Returns the nearest quad at coordinates.
-			 * @param coordX
-			 * @param coordY
-			 * @return GridQuad< index_data_t >
+			 * @brief Finds the nearest quad at arbitrary world coordinates.
+			 *
+			 * Converts world coordinates to grid indices and returns the quad containing
+			 * or nearest to those coordinates. Useful for spatial queries and collision detection.
+			 *
+			 * @param coordX World coordinate on X axis.
+			 * @param coordY World coordinate on Z axis.
+			 *
+			 * @return GridQuad containing the quad at or nearest to the specified coordinates.
+			 *
+			 * @see quad()
 			 */
 			[[nodiscard]]
 			GridQuad< index_data_t >
@@ -715,22 +898,37 @@ namespace EmEn::Libs::VertexFactory
 			}
 
 			/**
-			 * @brief Builds position vectors.
-			 * @return std::vector< vertex_data_t >
+			 * @brief Builds a flat vector containing all vertex positions in XYZ format.
+			 *
+			 * Generates a contiguous array of position data suitable for GPU upload or further
+			 * processing. Each vertex contributes 3 values (X, Y, Z) in sequence.
+			 *
+			 * @return Vector containing interleaved position data: [x0, y0, z0, x1, y1, z1, ...].
+			 *         Size is pointCount() × 3.
+			 *
+			 * @note Data layout is optimized for GPU vertex buffer creation
+			 * @note Y coordinate contains the height value at each point
+			 *
+			 * @see position()
 			 */
+			[[nodiscard]]
 			std::vector< vertex_data_t >
 			buildPositionVector () const noexcept
 			{
-				std::vector< vertex_data_t > vector{m_squaredPointCount * m_squaredPointCount * 3};
+				const auto totalPoints = static_cast< size_t >(m_squaredPointCount) * m_squaredPointCount;
+				std::vector< vertex_data_t > vector(totalPoints * 3);
 
-				#pragma omp simd
-				for ( index_data_t xIndex = 0; xIndex < m_squaredPointCount; ++xIndex )
+				size_t writeIndex = 0;
+
+				for ( index_data_t yIndex = 0; yIndex < m_squaredPointCount; ++yIndex )
 				{
-					for ( index_data_t yIndex = 0; yIndex < m_squaredPointCount; ++yIndex )
+					const auto zCoord = (yIndex * m_quadSquaredSize) - m_halfSquaredSize;
+
+					for ( index_data_t xIndex = 0; xIndex < m_squaredPointCount; ++xIndex )
 					{
-						vector.push_back((xIndex * m_quadSquaredSize) - m_halfSquaredSize);
-						vector.push_back(m_pointHeights[this->index(xIndex, yIndex)]);
-						vector.push_back((yIndex * m_quadSquaredSize) - m_halfSquaredSize);
+						vector[writeIndex++] = (xIndex * m_quadSquaredSize) - m_halfSquaredSize;
+						vector[writeIndex++] = m_pointHeights[this->index(xIndex, yIndex)];
+						vector[writeIndex++] = zCoord;
 					}
 				}
 
@@ -738,10 +936,17 @@ namespace EmEn::Libs::VertexFactory
 			}
 
 			/**
-			 * @brief Returns the position vector at grid coordinates.
-			 * @param positionX The grid quad index on X axis.
-			 * @param positionY The grid quad index on Y axis.
-			 * @return Math::Vector< 3, vertex_data_t >
+			 * @brief Returns the 3D position vector at specified grid point indices.
+			 *
+			 * Computes world-space position (X, Y, Z) for a grid vertex. The position includes
+			 * the stored height value as the Y component.
+			 *
+			 * @param positionX Grid point index along X axis.
+			 * @param positionY Grid point index along Z axis.
+			 *
+			 * @return 3D position vector in world coordinates.
+			 *
+			 * @see position(index_data_t)
 			 */
 			[[nodiscard]]
 			Math::Vector< 3, vertex_data_t >
@@ -755,9 +960,15 @@ namespace EmEn::Libs::VertexFactory
 			}
 
 			/**
-			 * @brief Returns the position vector at grid cell index.
-			 * @param index The grid cell index.
-			 * @return Math::Vector< 3, vertex_data_t >
+			 * @brief Returns the 3D position vector at specified linear index.
+			 *
+			 * Convenience overload that converts linear index to 2D coordinates and computes position.
+			 *
+			 * @param index Linear buffer index.
+			 *
+			 * @return 3D position vector in world coordinates.
+			 *
+			 * @see position(index_data_t, index_data_t)
 			 */
 			[[nodiscard]]
 			Math::Vector< 3, vertex_data_t >
@@ -767,12 +978,25 @@ namespace EmEn::Libs::VertexFactory
 			}
 
 			/**
-			 * @brief Returns the normal vector at grid coordinates.
-			 * @note Will return negative Y vector by default.
-			 * @param indexOnX The grid quad index on X axis.
-			 * @param indexOnY The grid quad index on Y axis.
-			 * @param thisPosition The reference to the position at this same spot.
-			 * @return Math::Vector< 3, vertex_data_t >
+			 * @brief Computes the surface normal at specified grid point with pre-computed position.
+			 *
+			 * Calculates the normal vector by averaging normals from all adjacent quads (up to 4).
+			 * This method uses a provided position vector to avoid recomputation, improving performance
+			 * when position is already known. Recent optimization caches neighbor positions to reduce
+			 * redundant calculations.
+			 *
+			 * @param indexOnX Grid point index along X axis.
+			 * @param indexOnY Grid point index along Z axis.
+			 * @param thisPosition Pre-computed 3D position at this grid point.
+			 *
+			 * @return Normalized surface normal vector, or negative Y (0, -1, 0) if on a flat region or edge.
+			 *
+			 * @note Averages normals from surrounding quads for smooth results
+			 * @note Edge and corner vertices have fewer adjacent quads to consider
+			 * @note Recently optimized with cached neighbor positions
+			 *
+			 * @see normal(index_data_t, index_data_t)
+			 * @see normal(index_data_t)
 			 */
 			[[nodiscard]]
 			Math::Vector< 3, vertex_data_t >
@@ -780,56 +1004,59 @@ namespace EmEn::Libs::VertexFactory
 			{
 				Math::Vector< 3, vertex_data_t > normal{};
 
+				const bool hasTop = indexOnY > 0;
+				const bool hasBottom = indexOnY < (m_squaredPointCount - 1);
+				const bool hasLeft = indexOnX > 0;
+				const bool hasRight = indexOnX < (m_squaredPointCount - 1);
+
+				/* Cache neighbor positions that may be used multiple times. */
+				Math::Vector< 3, vertex_data_t > left{};
+				Math::Vector< 3, vertex_data_t > right{};
+
+				if ( hasLeft && (hasTop || hasBottom) )
+				{
+					left = this->position(indexOnX - 1, indexOnY);
+				}
+
+				if ( hasRight && (hasTop || hasBottom) )
+				{
+					right = this->position(indexOnX + 1, indexOnY);
+				}
+
 				/* Checks the two quads top to this position.
 				 * NOTE: indexOnY:0 = top. */
-				if ( indexOnY > 0 )
+				if ( hasTop )
 				{
 					const auto top = this->position(indexOnX, indexOnY - 1);
 
 					/* Top-Left quad. */
-					if ( indexOnX > 0 )
+					if ( hasLeft )
 					{
-						normal += Math::Vector< 3, vertex_data_t >::normal(
-							top,
-							thisPosition,
-							this->position(indexOnX - 1, indexOnY)
-						);
+						normal += Math::Vector< 3, vertex_data_t >::normal(top, thisPosition, left);
 					}
 
 					/* Top-Right quad. */
-					if ( indexOnX < (m_squaredPointCount - 1) )
+					if ( hasRight )
 					{
-						normal += Math::Vector< 3, vertex_data_t >::normal(
-							this->position(indexOnX + 1, indexOnY),
-							thisPosition,
-							top
-						);
+						normal += Math::Vector< 3, vertex_data_t >::normal(right, thisPosition, top);
 					}
 				}
 
 				/* Checks the two quads bottom to this position. */
-				if ( indexOnY < (m_squaredPointCount - 1) )
+				if ( hasBottom )
 				{
 					const auto bottom = this->position(indexOnX, indexOnY + 1);
 
 					/* Bottom-Left quad. */
-					if ( indexOnX > 0 )
+					if ( hasLeft )
 					{
-						normal += Math::Vector< 3, vertex_data_t >::normal(
-							this->position(indexOnX - 1, indexOnY),
-							thisPosition,
-							bottom
-						);
+						normal += Math::Vector< 3, vertex_data_t >::normal(left, thisPosition, bottom);
 					}
 
 					/* Bottom-Right quad. */
-					if ( indexOnX < (m_squaredPointCount - 1) )
+					if ( hasRight )
 					{
-						normal += Math::Vector< 3, vertex_data_t >::normal(
-							bottom,
-							thisPosition,
-							this->position(indexOnX + 1, indexOnY)
-						);
+						normal += Math::Vector< 3, vertex_data_t >::normal(bottom, thisPosition, right);
 					}
 				}
 
@@ -842,10 +1069,16 @@ namespace EmEn::Libs::VertexFactory
 			}
 
 			/**
-			 * @brief Returns the normal vector at grid coordinates.
-			 * @param positionX The grid quad index on X axis.
-			 * @param positionY The grid quad index on Y axis.
-			 * @return Math::Vector< 3, vertex_data_t >
+			 * @brief Computes the surface normal at specified grid point indices.
+			 *
+			 * Convenience overload that computes position automatically.
+			 *
+			 * @param positionX Grid point index along X axis.
+			 * @param positionY Grid point index along Z axis.
+			 *
+			 * @return Normalized surface normal vector.
+			 *
+			 * @see normal(index_data_t, index_data_t, const Math::Vector&)
 			 */
 			[[nodiscard]]
 			Math::Vector< 3, vertex_data_t >
@@ -855,10 +1088,14 @@ namespace EmEn::Libs::VertexFactory
 			}
 
 			/**
-			 * @brief Returns the normal vector at grid index.
-			 * @param index The grid quad index.
-			 * @param thisPosition The reference to the position at this same spot.
-			 * @return Math::Vector< 3, vertex_data_t >
+			 * @brief Computes the surface normal at specified linear index with pre-computed position.
+			 *
+			 * @param index Linear buffer index.
+			 * @param thisPosition Pre-computed 3D position at this grid point.
+			 *
+			 * @return Normalized surface normal vector.
+			 *
+			 * @see normal(index_data_t, index_data_t, const Math::Vector&)
 			 */
 			[[nodiscard]]
 			Math::Vector< 3, vertex_data_t >
@@ -868,9 +1105,15 @@ namespace EmEn::Libs::VertexFactory
 			}
 
 			/**
-			 * @brief Returns the normal vector at grid index.
-			 * @param index The grid quad index.
-			 * @return Math::Vector< 3, vertex_data_t >
+			 * @brief Computes the surface normal at specified linear index.
+			 *
+			 * Convenience overload that computes position automatically.
+			 *
+			 * @param index Linear buffer index.
+			 *
+			 * @return Normalized surface normal vector.
+			 *
+			 * @see normal(index_data_t, index_data_t)
 			 */
 			[[nodiscard]]
 			Math::Vector< 3, vertex_data_t >
@@ -883,13 +1126,28 @@ namespace EmEn::Libs::VertexFactory
 			}
 
 			/**
-			 * @brief Returns the tangent vector at grid coordinates.
-			 * @note Will return positive X vector by default.
-			 * @param indexOnX The grid quad index on X axis.
-			 * @param indexOnY The grid quad index on Y axis.
-			 * @param thisPosition The reference to the position at this same spot.
-			 * @param thisUV The reference to the texture coordinates at this same spot.
-			 * @return Math::Vector< 3, vertex_data_t >
+			 * @brief Computes the surface tangent vector at specified grid point with pre-computed data.
+			 *
+			 * Calculates the tangent vector by averaging tangents from all adjacent quads (up to 4).
+			 * Tangent vectors are essential for normal mapping and anisotropic shading. This method
+			 * uses provided position and UV data to avoid recomputation. Recent optimization caches
+			 * neighbor positions and UVs to reduce redundant calculations.
+			 *
+			 * @param indexOnX Grid point index along X axis.
+			 * @param indexOnY Grid point index along Z axis.
+			 * @param thisPosition Pre-computed 3D position at this grid point.
+			 * @param thisUV Pre-computed 3D texture coordinates at this grid point.
+			 *
+			 * @return Normalized tangent vector, or positive X (1, 0, 0) if on a flat region or edge.
+			 *
+			 * @note Averages tangents from surrounding quads for smooth results
+			 * @note Edge and corner vertices have fewer adjacent quads to consider
+			 * @note Recently optimized with cached neighbor positions and UVs
+			 * @note Requires 3D texture coordinates (U, V, height-based W)
+			 *
+			 * @see tangent(index_data_t, index_data_t)
+			 * @see tangent(index_data_t)
+			 * @see textureCoordinates3D()
 			 */
 			[[nodiscard]]
 			Math::Vector< 3, vertex_data_t >
@@ -897,69 +1155,80 @@ namespace EmEn::Libs::VertexFactory
 			{
 				Math::Vector< 3, vertex_data_t > tangent{};
 
+				const bool hasTop = indexOnY > 0;
+				const bool hasBottom = indexOnY < (m_squaredPointCount - 1);
+				const bool hasLeft = indexOnX > 0;
+				const bool hasRight = indexOnX < (m_squaredPointCount - 1);
+
+				/* Cache neighbor positions and UVs that may be used multiple times. */
+				Math::Vector< 3, vertex_data_t > leftPosition{};
+				Math::Vector< 3, vertex_data_t > leftUV{};
+				Math::Vector< 3, vertex_data_t > rightPosition{};
+				Math::Vector< 3, vertex_data_t > rightUV{};
+
+				if ( hasLeft && (hasTop || hasBottom) )
+				{
+					leftPosition = this->position(indexOnX - 1, indexOnY);
+					leftUV = this->textureCoordinates3D(indexOnX - 1, indexOnY);
+				}
+
+				if ( hasRight && (hasTop || hasBottom) )
+				{
+					rightPosition = this->position(indexOnX + 1, indexOnY);
+					rightUV = this->textureCoordinates3D(indexOnX + 1, indexOnY);
+				}
+
 				/* Checks the two quads top to this position.
 				 * NOTE: indexOnY:0 = top. */
-				if ( indexOnY > 0 )
+				if ( hasTop )
 				{
 					const auto topPosition = this->position(indexOnX, indexOnY - 1);
 					const auto topUV = this->textureCoordinates3D(indexOnX, indexOnY - 1);
 
 					/* Top-Left quad. */
-					if ( indexOnX > 0 )
+					if ( hasLeft )
 					{
 						tangent += Math::Vector< 3, vertex_data_t >::tangent(
-							this->position(indexOnX - 1, indexOnY),
-							this->textureCoordinates3D(indexOnX - 1, indexOnY),
-							thisPosition,
-							thisUV,
-							topPosition,
-							topUV
+							leftPosition, leftUV,
+							thisPosition, thisUV,
+							topPosition, topUV
 						);
 					}
 
 					/* Top-Right quad. */
-					if ( indexOnX < (m_squaredPointCount - 1) )
+					if ( hasRight )
 					{
 						tangent += Math::Vector< 3, vertex_data_t >::tangent(
-							topPosition,
-							topUV,
-							thisPosition,
-							thisUV,
-							this->position(indexOnX + 1, indexOnY),
-							this->textureCoordinates3D(indexOnX + 1, indexOnY)
+							topPosition, topUV,
+							thisPosition, thisUV,
+							rightPosition, rightUV
 						);
 					}
 				}
 
 				/* Checks the two quads bottom to this position. */
-				if ( indexOnY < (m_squaredPointCount - 1) )
+				if ( hasBottom )
 				{
 					const auto bottomPosition = this->position(indexOnX, indexOnY + 1);
 					const auto bottomUV = this->textureCoordinates3D(indexOnX, indexOnY + 1);
 
 					/* Bottom-Left quad. */
-					if ( indexOnX > 0 )
+					if ( hasLeft )
 					{
 						tangent += Math::Vector< 3, vertex_data_t >::tangent(
-							bottomPosition,
-							bottomUV,
-							thisPosition,
-							thisUV,
-							this->position(indexOnX - 1, indexOnY),
-							this->textureCoordinates3D(indexOnX - 1, indexOnY)
+							bottomPosition, bottomUV,
+							thisPosition, thisUV,
+							leftPosition, leftUV
 						);
 					}
 
 					/* Bottom-Right quad. */
-					if ( indexOnX < (m_squaredPointCount - 1) )
+					if ( hasRight )
 					{
 						tangent += Math::Vector< 3, vertex_data_t >::tangent(
-							this->position(indexOnX + 1, indexOnY),
-							this->textureCoordinates3D(indexOnX + 1, indexOnY),
-							thisPosition,
-							thisUV,
-							bottomPosition,
-							bottomUV
+							rightPosition, rightUV,
+							thisPosition, thisUV,
+							bottomPosition, bottomUV
 						);
 					}
 				}
@@ -973,10 +1242,16 @@ namespace EmEn::Libs::VertexFactory
 			}
 
 			/**
-			 * @brief Returns the tangent vector at grid coordinates.
-			 * @param positionX The grid quad index on X axis.
-			 * @param positionY The grid quad index on Y axis.
-			 * @return Math::Vector< 3, vertex_data_t >
+			 * @brief Computes the surface tangent at specified grid point indices.
+			 *
+			 * Convenience overload that computes position and texture coordinates automatically.
+			 *
+			 * @param positionX Grid point index along X axis.
+			 * @param positionY Grid point index along Z axis.
+			 *
+			 * @return Normalized tangent vector.
+			 *
+			 * @see tangent(index_data_t, index_data_t, const Math::Vector&, const Math::Vector&)
 			 */
 			[[nodiscard]]
 			Math::Vector< 3, vertex_data_t >
@@ -986,9 +1261,15 @@ namespace EmEn::Libs::VertexFactory
 			}
 
 			/**
-			 * @brief Returns the tangent vector at grid index.
-			 * @param index The grid quad index.
-			 * @return Math::Vector< 3, vertex_data_t >
+			 * @brief Computes the surface tangent at specified linear index.
+			 *
+			 * Convenience overload that computes position and texture coordinates automatically.
+			 *
+			 * @param index Linear buffer index.
+			 *
+			 * @return Normalized tangent vector.
+			 *
+			 * @see tangent(index_data_t, index_data_t)
 			 */
 			[[nodiscard]]
 			Math::Vector< 3, vertex_data_t >
@@ -1001,11 +1282,15 @@ namespace EmEn::Libs::VertexFactory
 			}
 
 			/**
-			 * @brief Returns the tangent vector at grid index.
-			 * @param index The grid quad index.
-			 * @param thisPosition The reference to the position at this same spot.
-			 * @param thisUV The reference to the texture coordinates at this same spot.
-			 * @return Math::Vector< 3, vertex_data_t >
+			 * @brief Computes the surface tangent at specified linear index with pre-computed data.
+			 *
+			 * @param index Linear buffer index.
+			 * @param thisPosition Pre-computed 3D position at this grid point.
+			 * @param thisUV Pre-computed 3D texture coordinates at this grid point.
+			 *
+			 * @return Normalized tangent vector.
+			 *
+			 * @see tangent(index_data_t, index_data_t, const Math::Vector&, const Math::Vector&)
 			 */
 			[[nodiscard]]
 			Math::Vector< 3, vertex_data_t >
@@ -1015,10 +1300,21 @@ namespace EmEn::Libs::VertexFactory
 			}
 
 			/**
-			 * @brief Returns a 2D texture coordinates at grid coordinates.
-			 * @param indexOnX The grid quad index on X axis.
-			 * @param indexOnY The grid quad index on Y axis.
-			 * @return Math::Vector< 2, vertex_data_t >
+			 * @brief Computes 2D texture coordinates (UV) at specified grid point indices.
+			 *
+			 * Generates normalized texture coordinates in range [0, 1] scaled by the UV multipliers.
+			 * The coordinates are based on grid position, not height.
+			 *
+			 * @param indexOnX Grid point index along X axis.
+			 * @param indexOnY Grid point index along Z axis.
+			 *
+			 * @return 2D texture coordinate vector (U, V).
+			 *
+			 * @note UV values are scaled by m_UMultiplier and m_VMultiplier
+			 *
+			 * @see textureCoordinates2D(index_data_t)
+			 * @see textureCoordinates3D()
+			 * @see setUVMultiplier()
 			 */
 			[[nodiscard]]
 			Math::Vector< 2, vertex_data_t >
@@ -1033,9 +1329,15 @@ namespace EmEn::Libs::VertexFactory
 			}
 
 			/**
-			 * @brief Returns a 2D texture coordinates at grid index.
-			 * @param index The grid quad index.
-			 * @return Math::Vector< 2, vertex_data_t >
+			 * @brief Computes 2D texture coordinates at specified linear index.
+			 *
+			 * Convenience overload that converts linear index to 2D coordinates.
+			 *
+			 * @param index Linear buffer index.
+			 *
+			 * @return 2D texture coordinate vector (U, V).
+			 *
+			 * @see textureCoordinates2D(index_data_t, index_data_t)
 			 */
 			[[nodiscard]]
 			Math::Vector< 2, vertex_data_t >
@@ -1045,10 +1347,21 @@ namespace EmEn::Libs::VertexFactory
 			}
 
 			/**
-			 * @brief Returns a 3D texture coordinates at grid coordinates.
-			 * @param indexOnX The grid quad index on X axis.
-			 * @param indexOnY The grid quad index on Y axis.
-			 * @return Math::Vector< 2, vertex_data_t >
+			 * @brief Computes 3D texture coordinates (UVW) at specified grid point indices.
+			 *
+			 * Generates texture coordinates with a third component (W) based on normalized height.
+			 * The W component represents the point's height relative to the bounding box, useful
+			 * for height-based texture blending or effects.
+			 *
+			 * @param indexOnX Grid point index along X axis.
+			 * @param indexOnY Grid point index along Z axis.
+			 *
+			 * @return 3D texture coordinate vector (U, V, W) where W is normalized height.
+			 *
+			 * @note UV values are scaled by multipliers; W is in range [0, 1] based on bounding box
+			 *
+			 * @see textureCoordinates3D(index_data_t)
+			 * @see textureCoordinates2D()
 			 */
 			[[nodiscard]]
 			Math::Vector< 3, vertex_data_t >
@@ -1064,9 +1377,15 @@ namespace EmEn::Libs::VertexFactory
 			}
 
 			/**
-			 * @brief Returns a 3D texture coordinates at grid index.
-			 * @param index The grid quad index.
-			 * @return Math::Vector< 3, vertex_data_t >
+			 * @brief Computes 3D texture coordinates at specified linear index.
+			 *
+			 * Convenience overload that converts linear index to 2D coordinates.
+			 *
+			 * @param index Linear buffer index.
+			 *
+			 * @return 3D texture coordinate vector (U, V, W).
+			 *
+			 * @see textureCoordinates3D(index_data_t, index_data_t)
 			 */
 			[[nodiscard]]
 			Math::Vector< 3, vertex_data_t >
@@ -1076,10 +1395,19 @@ namespace EmEn::Libs::VertexFactory
 			}
 
 			/**
-			 * @brief Returns a vertex color at grid index.
-			 * @param index The grid quad index.
-			 * @param pixmap A reference to a pixmap.
-			 * @return PixelFactory::Color< float >
+			 * @brief Samples a vertex color from a pixmap at specified grid point.
+			 *
+			 * Uses the grid point's UV coordinates to sample a color from the provided pixmap.
+			 * This is useful for applying color maps or terrain splat maps to grid geometry.
+			 *
+			 * @param index Linear buffer index.
+			 * @param pixmap Reference to pixmap containing color data.
+			 *
+			 * @return Sampled color value using linear interpolation.
+			 *
+			 * @note Uses linear sampling for smooth color transitions
+			 *
+			 * @see textureCoordinates2D()
 			 */
 			[[nodiscard]]
 			PixelFactory::Color< float >
@@ -1092,8 +1420,16 @@ namespace EmEn::Libs::VertexFactory
 			}
 
 			/**
-			 * @brief Returns the list of heights;
-			 * @return const std::vector< vertex_data_t > &
+			 * @brief Returns direct read-only access to the internal height buffer.
+			 *
+			 * Provides const reference to the underlying height storage for efficient access
+			 * or bulk processing. Heights are stored in row-major order.
+			 *
+			 * @return Const reference to the height data vector.
+			 *
+			 * @note Heights are stored in row-major order: index = x + (z * squaredPointCount)
+			 *
+			 * @see getHeightAt()
 			 */
 			const std::vector< vertex_data_t > &
 			heights () const noexcept
@@ -1102,10 +1438,17 @@ namespace EmEn::Libs::VertexFactory
 			}
 
 			/**
-			 * @brief STL streams printable object.
-			 * @param out A reference to the stream output.
-			 * @param obj A reference to the object to print.
-			 * @return std::ostream &
+			 * @brief Outputs grid information to an output stream.
+			 *
+			 * Provides formatted debug output showing grid dimensions, counts, sizes,
+			 * and bounding volumes. Useful for debugging and logging.
+			 *
+			 * @param out Output stream to write to.
+			 * @param obj Grid instance to output.
+			 *
+			 * @return Reference to the output stream for chaining.
+			 *
+			 * @see to_string()
 			 */
 			friend
 			std::ostream &
@@ -1123,9 +1466,16 @@ namespace EmEn::Libs::VertexFactory
 			}
 
 			/**
-			 * @brief Stringifies the object.
-			 * @param obj A reference to the object to print.
-			 * @return std::string
+			 * @brief Converts grid information to a string representation.
+			 *
+			 * Creates a formatted string containing grid dimensions, counts, sizes,
+			 * and bounding volumes. Identical output to operator<<.
+			 *
+			 * @param obj Grid instance to stringify.
+			 *
+			 * @return String containing formatted grid information.
+			 *
+			 * @see operator<<()
 			 */
 			friend
 			std::string
@@ -1141,12 +1491,72 @@ namespace EmEn::Libs::VertexFactory
 		private:
 
 			/**
-			 * @brief Applies a transformation on grid data.
-			 * @param transform A reference to a lambda.
-			 * @return void
+			 * @brief Applies a transformation mode to update a value.
+			 *
+			 * Helper function that performs the arithmetic operation specified by the
+			 * PointTransformationMode enum. This is used internally by displacement methods
+			 * to combine new height values with existing ones.
+			 *
+			 * @tparam value_t Type of value to operate on (typically vertex_data_t).
+			 *
+			 * @param current Reference to the current value to modify.
+			 * @param newValue The new value to apply.
+			 * @param mode Transformation mode specifying the operation (Replace, Add, Subtract, Multiply, Divide).
+			 *
+			 * @note Recent optimization: converted from std::function to template for better performance
+			 *
+			 * @see PointTransformationMode
+			 * @see applyDisplacementMapping()
+			 * @see applyPerlinNoise()
+			 * @see applyDiamondSquare()
 			 */
+			template< typename value_t >
+			static void
+			applyMode (value_t & current, value_t newValue, PointTransformationMode mode) noexcept
+			{
+				switch ( mode )
+				{
+					case PointTransformationMode::Replace:
+						current = newValue;
+						break;
+
+					case PointTransformationMode::Add:
+						current += newValue;
+						break;
+
+					case PointTransformationMode::Subtract:
+						current -= newValue;
+						break;
+
+					case PointTransformationMode::Multiply:
+						current *= newValue;
+						break;
+
+					case PointTransformationMode::Divide:
+						current /= newValue;
+						break;
+				}
+			}
+
+			/**
+			 * @brief Applies a callable transformation to all grid points with UV coordinates.
+			 *
+			 * Iterates over all grid points and invokes the provided callable with grid indices
+			 * and pre-computed UV coordinates. This template-based approach provides efficient
+			 * iteration for displacement mapping operations.
+			 *
+			 * @tparam Func Callable type with signature (index_data_t, index_data_t, vertex_data_t, vertex_data_t).
+			 *
+			 * @param transform Callable invoked for each grid point with (indexOnX, indexOnY, coordU, coordV).
+			 *
+			 * @note Recent optimization: template-based instead of std::function for better performance
+			 *
+			 * @see applyTransformation()
+			 * @see applyDisplacementMapping()
+			 */
+			template< typename Func >
 			void
-			applyTransformation (const std::function< bool (index_data_t, index_data_t, vertex_data_t, vertex_data_t) > & transform) noexcept
+			applyTransformationWithUV (Func && transform) noexcept
 			{
 				const auto square = static_cast< vertex_data_t >(m_squaredQuadCount);
 
@@ -1161,44 +1571,51 @@ namespace EmEn::Libs::VertexFactory
 						const auto coordU = static_cast< vertex_data_t >(xIndex) / square;
 
 						/* Send data to transformation function. */
-						if ( !transform(xIndex, yIndex, coordU, coordV) )
-						{
-							std::cerr << __PRETTY_FUNCTION__ << ", transform method failed !" "\n";
-
-							return;
-						}
+						transform(xIndex, yIndex, coordU, coordV);
 					}
 				}
 			}
 
 			/**
-			 * @brief Applies a transformation on grid data.
-			 * @param transform A reference to a lambda.
-			 * @return void
+			 * @brief Applies a callable transformation to all grid points.
+			 *
+			 * Iterates over all grid points and invokes the provided callable with grid indices.
+			 * This template-based approach provides efficient iteration for procedural generation
+			 * and height manipulation operations.
+			 *
+			 * @tparam Func Callable type with signature (index_data_t, index_data_t).
+			 *
+			 * @param transform Callable invoked for each grid point with (indexOnX, indexOnY).
+			 *
+			 * @note Recent optimization: template-based instead of std::function for better performance
+			 *
+			 * @see applyTransformationWithUV()
+			 * @see applyDiamondSquare()
 			 */
+			template< typename Func >
 			void
-			applyTransformation (const std::function< bool (index_data_t, index_data_t) > & transform) const noexcept
+			applyTransformation (Func && transform) noexcept
 			{
-				/* Loop over Y axis and get the V coordinates. */
+				/* Loop over Y axis. */
 				for ( index_data_t yIndex = 0; yIndex < m_squaredPointCount; ++yIndex )
 				{
-					/* Loop over X axis and get the U coordinates. */
+					/* Loop over X axis. */
 					for ( index_data_t xIndex = 0; xIndex < m_squaredPointCount; ++xIndex )
 					{
 						/* Send data to transformation function. */
-						if ( !transform(xIndex, yIndex) )
-						{
-							std::cerr << __PRETTY_FUNCTION__ << ", transform method failed !" "\n";
-
-							return;
-						}
+						transform(xIndex, yIndex);
 					}
 				}
 			}
 
 			/**
-			 * @brief Updates the bounding box with new data.
-			 * @return void
+			 * @brief Recalculates the bounding box from current height data.
+			 *
+			 * Iterates through all height values to determine the minimum and maximum Y extents,
+			 * then updates the bounding box accordingly. This is used when heights are modified
+			 * in ways that don't automatically update the bounding box.
+			 *
+			 * @note Currently unused in the public API; height modification methods handle bounding box updates directly
 			 */
 			void
 			updateBoundingBox () noexcept
@@ -1211,15 +1628,14 @@ namespace EmEn::Libs::VertexFactory
 				}
 			}
 
-			index_data_t m_squaredQuadCount{0};
-			/* NOTE: m_squareQuads + 1 */
-			index_data_t m_squaredPointCount{0};
-			std::vector< vertex_data_t > m_pointHeights{};
-			vertex_data_t m_quadSquaredSize{2};
-			vertex_data_t m_halfSquaredSize{1};
-			vertex_data_t m_UMultiplier{1};
-			vertex_data_t m_VMultiplier{1};
-			Math::Space3D::AACuboid< vertex_data_t > m_boundingBox;
-			Math::Space3D::Sphere< vertex_data_t > m_boundingSphere;
+			index_data_t m_squaredQuadCount{0}; ///< Number of quad cells per dimension (N divisions).
+			index_data_t m_squaredPointCount{0}; ///< Number of vertices per dimension (N+1 points for N quads).
+			std::vector< vertex_data_t > m_pointHeights{}; ///< Height values for all grid points, stored in row-major order.
+			vertex_data_t m_quadSquaredSize{2}; ///< World-space size of a single quad cell edge.
+			vertex_data_t m_halfSquaredSize{1}; ///< Half of the total grid size; grid ranges from -half to +half.
+			vertex_data_t m_UMultiplier{1}; ///< Texture coordinate multiplier for U (horizontal) direction.
+			vertex_data_t m_VMultiplier{1}; ///< Texture coordinate multiplier for V (vertical) direction.
+			Math::Space3D::AACuboid< vertex_data_t > m_boundingBox; ///< Axis-aligned bounding box encompassing all grid geometry.
+			Math::Space3D::Sphere< vertex_data_t > m_boundingSphere; ///< Bounding sphere encompassing all grid geometry.
 	};
 }

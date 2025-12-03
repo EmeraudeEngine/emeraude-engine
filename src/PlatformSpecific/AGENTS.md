@@ -1,97 +1,97 @@
 # PlatformSpecific System
 
-Context spécifique pour le développement du code platform-specific d'Emeraude Engine.
+Context for developing Emeraude Engine platform-specific code.
 
-## Vue d'ensemble du module
+## Module Overview
 
-Isolation du code spécifique aux systèmes d'exploitation (Windows, Linux, macOS) avec abstractions maximales pour fournir des API uniformes multiplateforme.
+Isolation of OS-specific code (Windows, Linux, macOS) with maximum abstractions to provide uniform cross-platform APIs.
 
-## Règles spécifiques à PlatformSpecific/
+## PlatformSpecific-Specific Rules
 
-### Philosophie d'isolation STRICTE
-- **Code OS séparé** : Chaque OS dans son espace propre
-- **JAMAIS de contamination** : Code Windows ne doit JAMAIS toucher Linux/macOS et vice-versa
-- **Abstraction maximale** : Interface commune, implémentations OS-specific
-- **Isolation stricte** : Code spécifique à un OS ne se retrouve PAS dans espace commun
+### STRICT Isolation Philosophy
+- **Separate OS code**: Each OS in its own space
+- **NEVER contaminate**: Windows code must NEVER touch Linux/macOS and vice-versa
+- **Maximum abstraction**: Common interface, OS-specific implementations
+- **Strict isolation**: OS-specific code is NOT found in common space
 
-### Fonctionnalités abstraites
+### Abstracted Features
 
-**Appels système** :
-- Exécution de commandes système spécifiques OS
-- Gestion des processus et environnement
+**System calls**:
+- Execution of OS-specific system commands
+- Process and environment management
 
-**Dialog boxes** :
-- Boîtes de dialogue messages (info, warning, error)
-- File open dialog (sélection fichier à ouvrir)
-- File save dialog (sélection emplacement sauvegarde)
+**Dialog boxes**:
+- Message dialog boxes (info, warning, error)
+- File open dialog (file selection to open)
+- File save dialog (save location selection)
 
-**Application système** :
-- Taskbar notifications (clignoter taskbar)
-- Window focus et attention
-- Autres interactions spécifiques fenêtre/application
+**System application**:
+- Taskbar notifications (flash taskbar)
+- Window focus and attention
+- Other window/application specific interactions
 
-### Organisation du code
+### Code Organization
 
-**Approche mixte (par ordre de préférence)** :
+**Mixed approach (in preference order)**:
 
-1. **constexpr if (C++17+)** - Préféré quand possible
+1. **constexpr if (C++17+)** - Preferred when possible
 ```cpp
 if constexpr (std::is_same_v<Platform, Windows>) {
-    // Code Windows
+    // Windows code
 } else if constexpr (std::is_same_v<Platform, Linux>) {
-    // Code Linux
+    // Linux code
 } else if constexpr (std::is_same_v<Platform, macOS>) {
-    // Code macOS
+    // macOS code
 }
 ```
 
-2. **#ifdef** - Si constexpr non applicable
+2. **#ifdef** - If constexpr not applicable
 ```cpp
 #ifdef _WIN32
-    // Code Windows
+    // Windows code
 #elif __linux__
-    // Code Linux
+    // Linux code
 #elif __APPLE__
-    // Code macOS
+    // macOS code
 #endif
 ```
 
-3. **Fichiers .cpp séparés** - Pour code volumineux
+3. **Separate .cpp files** - For large code
 ```
 PlatformSpecific/
-├── DialogBox.hpp          // Interface commune
-├── DialogBox_Windows.cpp  // Implémentation Windows
-├── DialogBox_Linux.cpp    // Implémentation Linux
-└── DialogBox_macOS.cpp    // Implémentation macOS
+├── DialogBox.hpp          // Common interface
+├── DialogBox_Windows.cpp  // Windows implementation
+├── DialogBox_Linux.cpp    // Linux implementation
+└── DialogBox_macOS.cpp    // macOS implementation
 ```
-CMake sélectionne le bon fichier selon plateforme cible.
+CMake selects the right file based on target platform.
 
-### Gestion des fallbacks
-- **Pas de règle fixe** : Décision au cas par cas
-- **Warning général** : Si aucune implémentation possible → warning console
-- **Graceful degradation** : Fonctionnalité désactivée plutôt que crash
-- **Documentation** : Indiquer limitations par OS si applicable
+### Fallback Management
+- **No fixed rule**: Decision case by case
+- **General warning**: If no implementation possible → console warning
+- **Graceful degradation**: Feature disabled rather than crash
+- **Documentation**: Indicate OS limitations if applicable
 
-## Commandes de développement
+## Development Commands
 
 ```bash
-# Tests platform-specific
+# Platform-specific tests
 ctest -R PlatformSpecific
 ./test --filter="*Platform*"
 ```
 
-## Fichiers importants
+## Important Files
 
-- `DialogBox.*` - Abstractions dialog boxes OS
-- `SystemCall.*` - Exécution commandes système
-- `WindowManager.*` - Gestion fenêtre et notifications
-- CMakeLists.txt - Sélection fichiers par plateforme
+- `DialogBox.*` - OS dialog box abstractions
+- `SystemCall.*` - System command execution
+- `WindowManager.*` - Window and notification management
+- CMakeLists.txt - Platform file selection
 
-## Patterns de développement
+## Development Patterns
 
-### Ajout d'une nouvelle fonctionnalité platform-specific
+### Adding a New Platform-Specific Feature
 
-**1. Définir l'interface abstraite commune
+**1. Define the common abstract interface**
 ```cpp
 // MyFeature.hpp
 class MyFeature {
@@ -100,9 +100,9 @@ public:
 };
 ```
 
-**2. Implémenter pour chaque OS
+**2. Implement for each OS**
 
-**Option A: constexpr if dans .cpp unique
+**Option A: constexpr if in single .cpp**
 ```cpp
 // MyFeature.cpp
 bool MyFeature::doSomething(const std::string& param) {
@@ -119,7 +119,7 @@ bool MyFeature::doSomething(const std::string& param) {
 }
 ```
 
-**Option B: Fichiers séparés + CMake
+**Option B: Separate files + CMake**
 ```cpp
 // MyFeature_Windows.cpp
 bool MyFeature::doSomething(const std::string& param) {
@@ -140,7 +140,7 @@ bool MyFeature::doSomething(const std::string& param) {
 }
 ```
 
-**CMakeLists.txt
+**CMakeLists.txt**
 ```cmake
 if(WIN32)
     set(PLATFORM_SOURCES MyFeature_Windows.cpp)
@@ -153,46 +153,46 @@ endif()
 add_library(PlatformSpecific ${PLATFORM_SOURCES} ...)
 ```
 
-### Utilisation depuis code commun
+### Usage from Common Code
 ```cpp
-// Dans code moteur (commun)
+// In engine code (common)
 #include "PlatformSpecific/DialogBox.hpp"
 
 void showError(const std::string& message) {
-    // API abstraite, implémentation OS-specific transparente
+    // Abstract API, transparent OS-specific implementation
     DialogBox::showError("Error", message);
 }
 ```
 
-### Gestion des fonctionnalités non supportées
+### Handling Unsupported Features
 ```cpp
 bool MyFeature::doSomething(const std::string& param) {
     if constexpr (Platform::isWindows()) {
-        // Implémentation Windows
+        // Windows implementation
         return true;
     } else if constexpr (Platform::isLinux()) {
-        // Implémentation Linux
+        // Linux implementation
         return true;
     } else {
-        // macOS: pas encore implémenté
+        // macOS: not yet implemented
         Log::warning("MyFeature::doSomething not implemented on macOS");
-        return false;  // Échec gracieux
+        return false;  // Graceful failure
     }
 }
 ```
 
-## Points d'attention CRITIQUES
+## CRITICAL Attention Points
 
-- **Isolation STRICTE** : Code Windows ne touche JAMAIS Linux/macOS et vice-versa
-- **Pas de #ifdef dans code commun** : Tout le platform-specific DOIT rester dans PlatformSpecific/
-- **Test cross-platform** : Tester sur les 3 OS avant commit
-- **API abstraite** : Interface .hpp commune, implémentations séparées
-- **CMake correctement configuré** : Vérifier sélection fichiers par OS
-- **Warnings explicites** : Si fonctionnalité non supportée, log warning clair
-- **Documentation** : Indiquer limitations par OS dans commentaires
+- **STRICT isolation**: Windows code NEVER touches Linux/macOS and vice-versa
+- **No #ifdef in common code**: All platform-specific MUST stay in PlatformSpecific/
+- **Cross-platform testing**: Test on all 3 OS before commit
+- **Abstract API**: Common .hpp interface, separate implementations
+- **CMake correctly configured**: Verify file selection per OS
+- **Explicit warnings**: If feature unsupported, log clear warning
+- **Documentation**: Indicate OS limitations in comments
 
-## Documentation détaillée
+## Detailed Documentation
 
-Systèmes liés:
-→ **CMakeLists.txt** - Configuration build multiplateforme
-→ **README.md** - Plateformes supportées et requirements
+Related systems:
+- CMakeLists.txt - Cross-platform build configuration
+- README.md - Supported platforms and requirements

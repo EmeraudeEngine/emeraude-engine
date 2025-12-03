@@ -56,23 +56,35 @@ namespace EmEn::Vulkan
 	void
 	Instance::readSettings () noexcept
 	{
-		m_showInformation = m_primaryServices.settings().getOrSetDefault< bool >(VideoShowInformationKey, DefaultVideoShowInformation);
+		const auto & arguments = m_primaryServices.arguments();
+		auto & settings = m_primaryServices.settings();
+
+		m_showInformation = settings.getOrSetDefault< bool >(VideoShowInformationKey, DefaultVideoShowInformation);
 
 		m_debugMode =
-			m_primaryServices.arguments().isSwitchPresent("--debug-vulkan") ||
-			m_primaryServices.settings().getOrSetDefault< bool >(VkInstanceEnableDebugKey, DefaultVkInstanceEnableDebug);
+			arguments.isSwitchPresent("--debug-vulkan") ||
+			settings.getOrSetDefault< bool >(VkInstanceEnableDebugKey, DefaultVkInstanceEnableDebug);
 
 		/* NOTE: Only if the validation layer is enabled. */
 		if ( this->isDebugModeEnabled() )
 		{
 			/* Enable the vulkan debug messenger. */
-			m_useDebugMessenger = m_primaryServices.settings().getOrSetDefault< bool >(VkInstanceUseDebugMessengerKey, DefaultVkInstanceUseDebugMessenger);
+			m_useDebugMessenger = settings.getOrSetDefault< bool >(VkInstanceUseDebugMessengerKey, DefaultVkInstanceUseDebugMessenger);
 
 			if ( this->isUsingDebugMessenger() )
 			{
 				m_debugCreateInfo = DebugMessenger::getCreateInfo();
 			}
 		}
+
+		/* NOTE: Check the automatic device selection mode. */
+		const auto autoSelectModeString = settings.getOrSetDefault< std::string >(VkDeviceAutoSelectModeKey, DefaultVkDeviceAutoSelectMode);
+
+		m_autoSelectMode = magic_enum::enum_cast< DeviceAutoSelectMode >(autoSelectModeString).value_or(DeviceAutoSelectMode::Performance);
+		m_enableFailSafe = settings.getOrSetDefault< bool >(VkDeviceEnableFailSafeKey, DefaultEnableFailSafe);
+
+		/* NOTE: Usage of Vulkan Memory Allocator from AMD instead of manual memory management. */
+		m_useVulkanMemoryAllocator = settings.getOrSetDefault< bool >(VkDeviceUseVMAKey, DefaultVkDeviceUseVMA);
 	}
 
 	bool
@@ -267,15 +279,6 @@ namespace EmEn::Vulkan
 			return std::make_shared< PhysicalDevice >(physicalDevice);
 		});
 
-		/* NOTE: Detect hybrid GPU configuration (Optimus, etc.) */
-		m_hybridConfig = this->detectHybridGPUConfiguration();
-
-		/* NOTE: Read Optimus workaround setting. */
-		m_optimusWorkaroundEnabled = m_primaryServices.settings().getOrSetDefault< bool >(VkDeviceOptimusWorkaroundKey, DefaultVkDeviceOptimusWorkaround);
-
-		/* NOTE: Log GPU configuration if enabled. */
-		this->logGPUConfiguration();
-
 		return !m_physicalDevices.empty();
 	}
 
@@ -312,7 +315,7 @@ namespace EmEn::Vulkan
 		HybridGPUConfig config{};
 
 		const PhysicalDevice * integratedGPU = nullptr;
-		const PhysicalDevice * nvidiaDiscreteGPU = nullptr;
+		const PhysicalDevice * discreteGPU = nullptr;
 
 		for ( const auto & device : m_physicalDevices )
 		{
@@ -329,9 +332,9 @@ namespace EmEn::Vulkan
 			}
 
 			/* Detect discrete Nvidia GPU (0x10DE) */
-			if ( deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU && vendorID == VendorID::Nvidia )
+			if ( deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU && toVendor(vendorID) == Vendor::Nvidia )
 			{
-				nvidiaDiscreteGPU = device.get();
+				discreteGPU = device.get();
 				config.discreteGPUName = props.deviceName;
 				config.discreteVendorID = vendorID;
 			}
@@ -344,7 +347,7 @@ namespace EmEn::Vulkan
 		 *
 		 * This prevents false positives on desktops where the CPU has an iGPU
 		 * (e.g., Intel UHD) but the RTX has its own display outputs. */
-		const bool hasHybridConfig = (integratedGPU != nullptr) && (nvidiaDiscreteGPU != nullptr);
+		const bool hasHybridConfig = (integratedGPU != nullptr) && (discreteGPU != nullptr);
 		const bool isMobileNvidia = !config.discreteGPUName.empty() && Instance::isLikelyMobileGPU(config.discreteGPUName);
 
 		config.isOptimusDetected = hasHybridConfig && isMobileNvidia;
@@ -358,82 +361,30 @@ namespace EmEn::Vulkan
 
 		return config;
 	}
-
-	void
-	Instance::logGPUConfiguration () const noexcept
-	{
-		TraceInfo{ClassId} << "========== GPU Configuration ==========";
-		TraceInfo{ClassId} << "Physical devices found: " << m_physicalDevices.size();
-
-		for ( const auto & device : m_physicalDevices )
-		{
-			const auto & props = device->propertiesVK10();
-			std::string typeStr;
-
-			switch ( props.deviceType )
-			{
-				case VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU :
-					typeStr = "iGPU";
-					break;
-
-				case VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU :
-					typeStr = "dGPU";
-					break;
-
-				case VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU :
-					typeStr = "vGPU";
-					break;
-
-				case VK_PHYSICAL_DEVICE_TYPE_CPU :
-					typeStr = "CPU";
-					break;
-
-				default :
-					typeStr = "Other";
-					break;
-			}
-
-			TraceInfo{ClassId} << "  [" << typeStr << "] " << props.deviceName << " (Vendor: " << device->vendorId() << ")";
-		}
-
-		TraceInfo{ClassId} << "---------------------------------------";
-
-		if ( m_hybridConfig.isOptimusDetected )
-		{
-			TraceWarning{ClassId} << "! Nvidia Optimus (LAPTOP) configuration DETECTED";
-			TraceWarning{ClassId} << "  Integrated : " << m_hybridConfig.integratedGPUName;
-			TraceWarning{ClassId} << "  Discrete   : " << m_hybridConfig.discreteGPUName << " (mobile GPU)";
-			TraceWarning{ClassId} << "  Known driver issues may occur with discrete GPU.";
-			TraceWarning{ClassId} << "  Optimus workaround: " << (m_optimusWorkaroundEnabled ? "Enabled" : "Disabled");
-		}
-		else if ( m_hybridConfig.isHybridNonOptimus )
-		{
-			TraceInfo{ClassId} << "Hybrid GPU config: Desktop (non-Optimus)";
-			TraceInfo{ClassId} << "  Integrated : " << m_hybridConfig.integratedGPUName << " (CPU iGPU)";
-			TraceInfo{ClassId} << "  Discrete   : " << m_hybridConfig.discreteGPUName << " (has own display outputs)";
-			TraceInfo{ClassId} << "  No workaround needed - discrete GPU is safe to use.";
-		}
-		else
-		{
-			TraceInfo{ClassId} << "Hybrid GPU config: None detected";
-		}
-
-		TraceInfo{ClassId} << "=======================================";
-	}
-
+	
 	bool
-	Instance::shouldExcludeForFailsafe (const std::shared_ptr< PhysicalDevice > & physicalDevice) const noexcept
+	Instance::shouldExcludeForFailsafe (const HybridGPUConfig & hybridConfig, const std::shared_ptr< PhysicalDevice > & physicalDevice) const noexcept
 	{
-		/* If no Optimus or workaround disabled, don't exclude anything */
-		if ( !m_hybridConfig.isOptimusDetected || !m_optimusWorkaroundEnabled )
+		/* NOTE: Optimus bug only manifests in windowed mode during swap-chain recreation (resize).
+		 * In fullscreen exclusive mode, the dGPU is safe to use.
+		 * skip Nvidia dGPU on Optimus configuration in windowed mode.
+		 * The Optimus bug only manifests during swap-chain recreation (window resize).*/
+		if ( !m_fullscreenExclusiveEnabled && hybridConfig.isOptimusDetected )
 		{
-			return false;
+			const auto & props = physicalDevice->propertiesVK10();
+
+			/* Exclude only Nvidia discrete GPU on Optimus configuration in windowed mode */
+			if ( toVendor(props.vendorID) == Vendor::Nvidia && props.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU )
+			{
+				TraceWarning{ClassId} << "Failsafe: Excluding '" << physicalDevice->propertiesVK10().deviceName << "' (Nvidia Optimus + windowed mode - known driver issues with swap-chain resize)";
+
+				return true;
+			}
 		}
 
-		const auto & props = physicalDevice->propertiesVK10();
+		/* NOTE: Other exclusion case will follow... */
 
-		/* Exclude only Nvidia discrete GPU on Optimus configuration */
-		return (props.vendorID == VendorID::Nvidia) && (props.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU);
+		return false;
 	}
 
 	void
@@ -700,41 +651,43 @@ namespace EmEn::Vulkan
 	}
 
 	std::map< size_t, std::shared_ptr< PhysicalDevice > >
-	Instance::getScoredGraphicsDevices (Window * window, DeviceRunMode runMode) const noexcept
+	Instance::getScoredGraphicsDevices (Window * window) const noexcept
 	{
+		const auto hybridConfig = this->detectHybridGPUConfiguration();
+
 		std::map< size_t, std::shared_ptr< PhysicalDevice > > graphicsDevices{};
 
 		for ( const auto & physicalDevice : m_physicalDevices )
 		{
-			size_t score = 0;
+			size_t score = 1;
 
 			if ( m_showInformation )
 			{
 				TraceInfo{ClassId} << physicalDevice->getPhysicalDeviceInformation();
 			}
 
-			/* NOTE: Failsafe mode exclusion - skip Nvidia dGPU on Optimus configuration. */
-			if ( runMode == DeviceRunMode::Failsafe && this->shouldExcludeForFailsafe(physicalDevice) )
+			/* NOTE: Failsafe mode exclusion. */
+			if ( m_enableFailSafe && this->shouldExcludeForFailsafe(hybridConfig, physicalDevice) )
 			{
-				TraceWarning{ClassId} <<
-					"Failsafe: Excluding '" << physicalDevice->propertiesVK10().deviceName <<
-					"' (Nvidia Optimus configuration detected - known driver issues)";
-
 				continue;
 			}
 
 			if ( window != nullptr && window->usable() )
 			{
+				TraceDebug{ClassId} << "Check for graphics presentation capabilities.";
+
 				window->surface()->update(physicalDevice);
 
-				if ( !Instance::checkDeviceCompatibility(physicalDevice, runMode, window, score) )
+				if ( !this->checkDeviceCompatibility(physicalDevice, window, score) )
 				{
 					continue;
 				}
 			}
 			else
 			{
-				if ( !Instance::checkDeviceCompatibility(physicalDevice, runMode, VK_QUEUE_GRAPHICS_BIT, score) )
+				TraceDebug{ClassId} << "Skip th check for graphics presentation capabilities due to unavailable window.";
+
+				if ( !this->checkDeviceCompatibility(physicalDevice, VK_QUEUE_GRAPHICS_BIT, score) )
 				{
 					continue;
 				}
@@ -750,14 +703,46 @@ namespace EmEn::Vulkan
 				continue;
 			}
 
-			score += physicalDevice->getTotalQueueCount() * 100;
+			if ( m_autoSelectMode == DeviceAutoSelectMode::Performance )
+			{
+				/* NOTE: More queues = higher score for performance. */
+				score += physicalDevice->getTotalQueueCount() * 10;
+			}
+			else if ( m_autoSelectMode == DeviceAutoSelectMode::PowerSaving )
+			{
+				/* NOTE: Fewer queues = higher score for power saving (inverse relationship). */
+				score += 100 / std::max(physicalDevice->getTotalQueueCount(), static_cast< size_t >(1));
+			}
+
+			this->modulateDeviceScoring(physicalDevice->propertiesVK10(), score);
 
 			if ( m_showInformation )
 			{
-				TraceInfo(ClassId) << "Physical device '" << physicalDevice->propertiesVK10().deviceName << "' reached a score of " << score << " !";
+				TraceInfo{ClassId} << "Physical device '" << physicalDevice->propertiesVK10().deviceName << "' reached a score of " << score << " !";
 			}
 
 			graphicsDevices.emplace(score, physicalDevice);
+		}
+
+		if ( m_showInformation )
+		{
+			/* NOTE: Log hybrid GPU configuration diagnostic as a single coherent trace. */
+			if ( hybridConfig.isOptimusDetected )
+			{
+				TraceWarning{ClassId} <<
+					"Nvidia Optimus (LAPTOP) detected: "
+					"iGPU '" << hybridConfig.integratedGPUName << "' + "
+					"dGPU '" << hybridConfig.discreteGPUName << "' (mobile). "
+					"Failsafe mode will avoid dGPU in windowed mode.";
+			}
+			else if ( hybridConfig.isHybridNonOptimus )
+			{
+				TraceInfo{ClassId} <<
+					"Hybrid GPU (Desktop, non-Optimus): "
+					"iGPU '" << hybridConfig.integratedGPUName << "' + "
+					"dGPU '" << hybridConfig.discreteGPUName << "'. "
+					"All modes safe.";
+			}
 		}
 
 		return graphicsDevices;
@@ -772,9 +757,7 @@ namespace EmEn::Vulkan
 		}
 
 		auto & settings = m_primaryServices.settings();
-		const auto runModeString = settings.getOrSetDefault< std::string >(VkDeviceAutoSelectModeKey, DefaultVkDeviceAutoSelectMode);
 		const auto forceGPUName = settings.getOrSetDefault< std::string >(VkDeviceForceGPUKey);
-		const auto useVMA = settings.getOrSetDefault< bool >(VkDeviceUseVMAKey, DefaultVkDeviceUseVMA);
 		const auto showInformation = settings.getOrSetDefault< bool >(VideoShowInformationKey, DefaultVideoShowInformation);
 
 		/* NOTE: Save all physical devices to settings (informational, not filtered). */
@@ -786,12 +769,12 @@ namespace EmEn::Vulkan
 		}
 
 		/* NOTE: Get a list of available devices. */
-		const auto scoredDevices = this->getScoredGraphicsDevices(window, magic_enum::enum_cast< DeviceRunMode >(runModeString).value());
+		const auto scoredDevices = this->getScoredGraphicsDevices(window);
 
 		/* NOTE: Returns the device with the highest score. */
 		if ( scoredDevices.empty() )
 		{
-			Tracer::error(ClassId, "There is no physical device compatible with Vulkan.");
+			Tracer::error(ClassId, "There is no physical device (Graphics) compatible with Vulkan.");
 
 			return {};
 		}
@@ -800,7 +783,7 @@ namespace EmEn::Vulkan
 
 		if ( !forceGPUName.empty() )
 		{
-			TraceInfo{ClassId} << "Trying to force the GPU named '" << forceGPUName << "' ...";
+			TraceDebug{ClassId} << "Trying to force the physical device (Graphics) named '" << forceGPUName << "' ...";
 
 			for ( const auto & physicalDevice: scoredDevices | std::views::values )
 			{
@@ -814,13 +797,16 @@ namespace EmEn::Vulkan
 		}
 
 		/* NOTE: If no GPU was forced or not found, pick the best one. */
-		if ( selectedPhysicalDevice == nullptr )
+		if ( selectedPhysicalDevice != nullptr )
+		{
+			TraceSuccess{ClassId} << "Graphics capable physical device selected: " << selectedPhysicalDevice->propertiesVK10().deviceName << " (FORCED)";
+		}
+		else
 		{
 			selectedPhysicalDevice = scoredDevices.rbegin()->second;
-		}
 
-		/* NOTE: Logical device creation for graphics rendering and presentation. */
-		TraceSuccess{ClassId} << ">>> GPU Selected: " << selectedPhysicalDevice->propertiesVK10().deviceName << " (" << runModeString << " mode)";
+			TraceSuccess{ClassId} << "Graphics capable physical device selected: " << selectedPhysicalDevice->propertiesVK10().deviceName << " (" << magic_enum::enum_name(m_autoSelectMode) << " mode)";
+		}
 
 		auto logicalDevice = std::make_shared< Device >(*this, selectedPhysicalDevice->propertiesVK10().deviceName, selectedPhysicalDevice, showInformation);
 		logicalDevice->setIdentifier(ClassId, (std::stringstream{} << selectedPhysicalDevice->propertiesVK10().deviceName << "(Graphics)").str(), "Device");
@@ -872,7 +858,7 @@ namespace EmEn::Vulkan
 			}
 		}
 
-		if ( !logicalDevice->create(requirements, m_requiredGraphicsDeviceExtensions, useVMA) )
+		if ( !logicalDevice->create(requirements, m_requiredGraphicsDeviceExtensions, m_useVulkanMemoryAllocator) )
 		{
 			return {};
 		}
@@ -894,7 +880,7 @@ namespace EmEn::Vulkan
 		}
 
 		auto & settings = m_primaryServices.settings();
-		const auto runModeString = settings.getOrSetDefault< std::string >(VkDeviceAutoSelectModeKey, DefaultVkDeviceAutoSelectMode);
+		const auto autoSelectModeString = settings.getOrSetDefault< std::string >(VkDeviceAutoSelectModeKey, DefaultVkDeviceAutoSelectMode);
 		const auto forceGPUName = settings.getOrSetDefault< std::string >(VkDeviceForceGPUKey);
 		const auto useVMA = settings.getOrSetDefault< bool >(VkDeviceUseVMAKey, DefaultVkDeviceUseVMA);
 		const auto showInformation = settings.getOrSetDefault< bool >(VideoShowInformationKey, DefaultVideoShowInformation);
@@ -905,27 +891,37 @@ namespace EmEn::Vulkan
 
 		for ( const auto & physicalDevice : m_physicalDevices )
 		{
-			size_t score = 0;
+			size_t score = 1;
 
-			if ( !Instance::checkDeviceCompatibility(physicalDevice, DeviceRunMode::Performance, VK_QUEUE_COMPUTE_BIT, score) )
+			if ( !this->checkDeviceCompatibility(physicalDevice, VK_QUEUE_COMPUTE_BIT, score) )
 			{
 				continue;
 			}
 
-			if ( !Instance::checkDevicesFeaturesForCompute(physicalDevice, score) )
+			if ( !this->checkDevicesFeaturesForCompute(physicalDevice, score) )
 			{
 				continue;
 			}
 
-			if ( !Instance::checkDeviceForRequiredExtensions(physicalDevice, requiredExtensions, score) )
+			if ( !this->checkDeviceForRequiredExtensions(physicalDevice, requiredExtensions, score) )
 			{
 				continue;
 			}
 
-			if ( m_showInformation )
+			if ( m_autoSelectMode == DeviceAutoSelectMode::Performance )
 			{
-				TraceInfo{ClassId} << "Physical device '" << physicalDevice->propertiesVK10().deviceName << "' reached score of " << score;
+				/* NOTE: More queues = higher score for performance. */
+				score += physicalDevice->getTotalQueueCount() * 10;
 			}
+			else if ( m_autoSelectMode == DeviceAutoSelectMode::PowerSaving )
+			{
+				/* NOTE: Fewer queues = higher score for power saving (inverse relationship). */
+				score += 100 / std::max(physicalDevice->getTotalQueueCount(), static_cast< size_t >(1));
+			}
+
+			this->modulateDeviceScoring(physicalDevice->propertiesVK10(), score);
+
+			TraceInfo{ClassId} << "Physical device '" << physicalDevice->propertiesVK10().deviceName << "' reached score of " << score;
 
 			scoredDevices.emplace(score, physicalDevice);
 		}
@@ -933,16 +929,14 @@ namespace EmEn::Vulkan
 		/* NOTE: Returns the device with the highest score. */
 		if ( scoredDevices.empty() )
 		{
-			Tracer::fatal(ClassId, "There is no physical device compatible with Vulkan.");
+			Tracer::fatal(ClassId, "There is no physical device (Compute) compatible with Vulkan.");
 
 			return {};
 		}
 
 		const auto & selectedPhysicalDevice = scoredDevices.rbegin()->second;
 
-		TraceSuccess{ClassId} <<
-			"Compute capable physical device '" << selectedPhysicalDevice->propertiesVK10().deviceName << "' selected ! "
-			"Creating the logical compute device ...";
+		TraceSuccess{ClassId} << "Compute capable physical device '" << selectedPhysicalDevice->propertiesVK10().deviceName << "' selected (" << autoSelectModeString << " mode)";
 
 		/* NOTE: Logical device creation for computing. */
 		auto logicalDevice = std::make_shared< Device >(*this, selectedPhysicalDevice->propertiesVK10().deviceName, selectedPhysicalDevice, showInformation);
@@ -991,14 +985,11 @@ namespace EmEn::Vulkan
 	}
 
 	void
-	Instance::modulateDeviceScoring (const VkPhysicalDeviceProperties & deviceProperties, DeviceRunMode runMode, size_t & score) noexcept
+	Instance::modulateDeviceScoring (const VkPhysicalDeviceProperties & deviceProperties, size_t & score) const noexcept
 	{
-		switch ( runMode )
+		switch ( m_autoSelectMode )
 		{
-			case DeviceRunMode::Performance :
-			case DeviceRunMode::Failsafe :
-				/* NOTE: Failsafe uses same scoring as Performance.
-				 * The exclusion of Nvidia dGPU on Optimus is handled separately in getScoredGraphicsDevices. */
+			case DeviceAutoSelectMode::Performance :
 				switch ( deviceProperties.deviceType )
 				{
 					case VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU :
@@ -1018,7 +1009,7 @@ namespace EmEn::Vulkan
 				}
 				break;
 
-			case DeviceRunMode::PowerSaving :
+			case DeviceAutoSelectMode::PowerSaving :
 				switch ( deviceProperties.deviceType )
 				{
 					case VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU :
@@ -1042,26 +1033,13 @@ namespace EmEn::Vulkan
 				}
 				break;
 
-			case DeviceRunMode::DontCare :
-				switch ( deviceProperties.deviceType )
-				{
-					case VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU :
-						score *= 3;
-						break;
-
-					case VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU :
-						score *= 2;
-						break;
-
-					default :
-						break;
-				}
+			default :
 				break;
 		}
 	}
 
 	bool
-	Instance::checkDeviceCompatibility (const std::shared_ptr< PhysicalDevice > & physicalDevice, DeviceRunMode runMode, VkQueueFlagBits type, size_t & score) noexcept
+	Instance::checkDeviceCompatibility (const std::shared_ptr< PhysicalDevice > & physicalDevice, VkQueueFlagBits type, size_t & score) const noexcept
 	{
 		for ( const auto & queueFamilyProperty : physicalDevice->queueFamilyPropertiesVK11() )
 		{
@@ -1070,8 +1048,6 @@ namespace EmEn::Vulkan
 				continue;
 			}
 
-			Instance::modulateDeviceScoring(physicalDevice->propertiesVK10(), runMode, score);
-
 			return true;
 		}
 
@@ -1079,7 +1055,7 @@ namespace EmEn::Vulkan
 	}
 
 	bool
-	Instance::checkDeviceCompatibility (const std::shared_ptr< PhysicalDevice > & physicalDevice, DeviceRunMode runMode, const Window * window, size_t & score) noexcept
+	Instance::checkDeviceCompatibility (const std::shared_ptr< PhysicalDevice > & physicalDevice, const Window * window, size_t & score) const noexcept
 	{
 		for ( const auto & queueFamilyProperty : physicalDevice->queueFamilyPropertiesVK11() )
 		{
@@ -1095,13 +1071,15 @@ namespace EmEn::Vulkan
 				continue;
 			}
 
+			TraceSuccess{ClassId} << "'" << physicalDevice->deviceName() << "' support presentation!";
+
 			score += window->surface()->formats().size();
 			score += window->surface()->presentModes().size();
 
-			Instance::modulateDeviceScoring(physicalDevice->propertiesVK10(), runMode, score);
-
 			return true;
 		}
+
+		TraceWarning{ClassId} << "'" << physicalDevice->deviceName() << "' no not support presentation!";
 
 		return false;
 	}

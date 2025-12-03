@@ -1,112 +1,112 @@
 # Audio System
 
-Context spécifique pour le développement du système audio spatial 3D d'Emeraude Engine.
+Context for developing the Emeraude Engine 3D spatial audio system.
 
-## Vue d'ensemble du module
+## Module Overview
 
-Système audio 3D basé sur OpenAL-Soft avec support complet des effets spatiaux, streaming de musique, et intégration transparente avec le scene graph via des components SoundEmitter.
+3D audio system based on OpenAL-Soft with full support for spatial effects, music streaming, and seamless integration with the scene graph via SoundEmitter components.
 
-## Règles spécifiques à Audio/
+## Audio-Specific Rules
 
-### Convention de coordonnées
-- **Y-DOWN obligatoire** dans l'abstraction Audio
-- Conversions internes vers OpenAL si nécessaire
-- Cohérence totale avec le reste du moteur (Physics, Graphics, Scenes)
+### Coordinate Convention
+- **Y-DOWN mandatory** in Audio abstraction
+- Internal conversions to OpenAL if necessary
+- Total consistency with the rest of the engine (Physics, Graphics, Scenes)
 
-### Philosophie Sons vs Musiques
-- **Sons** : Chargés entièrement en RAM, format MONO, pour effets sonores courts
-- **Musiques** : Streaming depuis RAM vers OpenAL, format STÉRÉO supporté, pour pistes longues
-- Formats supportés : Délégués à `libsndfile` (WAV, OGG, FLAC, etc.)
+### Sounds vs Music Philosophy
+- **Sounds**: Fully loaded in RAM, MONO format, for short sound effects
+- **Music**: Streaming from RAM to OpenAL, STEREO format supported, for long tracks
+- Supported formats: Delegated to `libsndfile` (WAV, OGG, FLAC, etc.)
 
-### Architecture Component
-- **SoundEmitter** : Component attachable aux Entity/Nodes du scene graph
-- Nombre d'émetteurs : Illimité au niveau scene graph
-- **Pooling** : Les émetteurs requièrent des sources OpenAL depuis un pool lors de la lecture
-- Positionnement 3D automatique via le scene graph
+### Component Architecture
+- **SoundEmitter**: Component attachable to Entity/Nodes in the scene graph
+- Emitter count: Unlimited at scene graph level
+- **Pooling**: Emitters require OpenAL sources from a pool during playback
+- Automatic 3D positioning via scene graph
 
-### Integration Resources
-- **OBLIGATOIRE** : Utilisation du système Resources pour chargement
-- `SoundResource` : Gestion du chargement des sons
-- `MusicResource` : Gestion du chargement des musiques
-- Pattern fail-safe : Ressources audio neutres en cas d'échec
+### Resources Integration
+- **MANDATORY**: Use Resources system for loading
+- `SoundResource`: Sound loading management
+- `MusicResource`: Music loading management
+- Fail-safe pattern: Neutral audio resources on failure
 
-## Commandes de développement
+## Development Commands
 
 ```bash
-# Tests audio
+# Audio tests
 ctest -R Audio
 ./test --filter="*Audio*"
 ```
 
-## Fichiers importants
+## Important Files
 
-- `Manager.cpp/.hpp` - Gestionnaire principal (devices, activation, capture)
-- `SoundResource.cpp/.hpp` - Chargement et gestion des sons (mono)
-- `MusicResource.cpp/.hpp` - Chargement et gestion des musiques (stéréo + streaming)
-- `Source.cpp/.hpp` - Abstraction des sources OpenAL (pool)
-- `Speaker.cpp/.hpp` - Abstraction point d'écoute (non-OpenAL, cohérence API)
-- `TrackMixer.cpp/.hpp` - Jukebox pour gestion de playlists
-- `Ambience.cpp/.hpp` - Sons d'ambiance (loop channel + effets aléatoires, State enum)
-- `AmbienceChannel.hpp` - Canal individuel pour effets sonores d'ambiance
-- `AmbienceSound.hpp` - Configuration d'un son d'ambiance
-- `Recorder.cpp/.hpp` - Enregistrement audio depuis microphone
-- `@docs/coordinate-system.md` - Convention Y-down (CRITIQUE)
+- `Manager.cpp/.hpp` - Main manager (devices, activation, capture)
+- `SoundResource.cpp/.hpp` - Sound loading and management (mono)
+- `MusicResource.cpp/.hpp` - Music loading and management (stereo + streaming)
+- `Source.cpp/.hpp` - OpenAL source abstraction (pool)
+- `Speaker.cpp/.hpp` - Listen point abstraction (non-OpenAL, API consistency)
+- `TrackMixer.cpp/.hpp` - Jukebox for playlist management
+- `Ambience.cpp/.hpp` - Ambient sounds (loop channel + random effects, State enum)
+- `AmbienceChannel.hpp` - Individual channel for ambient sound effects
+- `AmbienceSound.hpp` - Ambient sound configuration
+- `Recorder.cpp/.hpp` - Audio recording from microphone
+- `@docs/coordinate-system.md` - Y-down convention (CRITICAL)
 
-## Patterns de développement
+## Development Patterns
 
-### Ajout d'un SoundEmitter à une entité
-1. Créer le component SoundEmitter
-2. L'attacher au Node du scene graph
-3. Charger la SoundResource via le système Resources
-4. Le positionnement 3D suit automatiquement le Node
+### Adding a SoundEmitter to an Entity
+1. Create the SoundEmitter component
+2. Attach it to the scene graph Node
+3. Load the SoundResource via the Resources system
+4. 3D positioning automatically follows the Node
 
-### Configuration des effets audio
-- Tous les effets OpenAL-Soft disponibles via système de filtres
-- Effets 3D : Atténuation distance, Doppler, directivité
-- Effets d'environnement : Réverbération, occlusion, etc.
-- Application par filtres configurables
+### Audio Effects Configuration
+- All OpenAL-Soft effects available via filter system
+- 3D effects: Distance attenuation, Doppler, directivity
+- Environment effects: Reverb, occlusion, etc.
+- Applied via configurable filters
 
-### Gestion du pooling de sources
-- Pool de sources OpenAL géré par le Manager
-- Requête automatique lors du `play()` d'un émetteur
-- Libération automatique en fin de lecture
-- Priorités gérables si pool saturé
+### Source Pooling Management
+- OpenAL source pool managed by Manager
+- Automatic request on emitter `play()`
+- Automatic release at playback end
+- Priorities manageable if pool saturated
 
-### Sons d'ambiance avec Ambience
-1. Configurer une piste de fond continue (loop channel)
-2. Ajouter des effets sonores aléatoires (probabilités, intervalles)
-3. Le système gère automatiquement le mix
+### Ambient Sounds with Ambience
+1. Configure a continuous background track (loop channel)
+2. Add random sound effects (probabilities, intervals)
+3. System automatically manages the mix
 
 ### Ambience State Management
-L'Ambience utilise un enum `State` pour son état de lecture. Voir `Ambience.hpp:State`
+Ambience uses a `State` enum for playback state. See `Ambience.hpp:State`
 
-**États de lecture (State enum):**
-- `Stopped` - Non démarré ou arrêté
-- `Playing` - En lecture active
-- `Paused` - En pause gameplay (sources gardées)
+**Playback states (State enum):**
+- `Stopped` - Not started or stopped
+- `Playing` - Active playback
+- `Paused` - Gameplay paused (sources kept)
 
-**Deux niveaux de contrôle orthogonaux:**
+**Two orthogonal control levels:**
 
 1. **Gameplay level** - `pause()`/`resume()`:
-   - Contrôle OpenAL direct, sources gardées en mémoire
-   - Usage: pause de jeu dans une scène active
-   - Voir `Ambience.cpp:pause()`, `Ambience.cpp:resume()`
+   - Direct OpenAL control, sources kept in memory
+   - Usage: game pause in an active scene
+   - See `Ambience.cpp:pause()`, `Ambience.cpp:resume()`
 
 2. **Scene Manager level** - `suspend()`/`wakeup()`:
-   - Libère/réacquiert les sources vers le pool
-   - Usage: appelé par `Scene::disable()`/`enable()` lors du changement de scène
-   - Flag `m_suspended` orthogonal à `m_state`
-   - Voir `Ambience.cpp:suspend()`, `Ambience.cpp:wakeup()`
+   - Releases/reacquires sources to/from pool
+   - Usage: called by `Scene::disable()`/`enable()` on scene change
+   - `m_suspended` flag orthogonal to `m_state`
+   - See `Ambience.cpp:suspend()`, `Ambience.cpp:wakeup()`
 
-**Comportement:**
-- Si pausé puis suspendu → au wakeup, restauré en état paused
-- `update()` ne traite que l'état `Playing`
+**Behavior:**
+- If paused then suspended → on wakeup, restored to paused state
+- `update()` only processes `Playing` state
 
-## Points d'attention
+## Critical Points
 
-- **Device detection** : OpenAL-Soft latest peut être capricieux sur laptops
-- **Format sons** : MONO obligatoire pour positionnement 3D spatial
-- **Format musiques** : STÉRÉO supporté (pas de spatialisation)
-- **Thread safety** : OpenAL gère le threading en interne
-- **Coordinate system** : Toujours Y-down dans l'API Audio
-- **Resource integration** : Jamais de chargement direct, passer par Resources
+- **Device detection**: OpenAL-Soft latest can be finicky on laptops
+- **Sound format**: MONO mandatory for 3D spatial positioning
+- **Music format**: STEREO supported (no spatialization)
+- **Thread safety**: OpenAL handles threading internally
+- **Coordinate system**: Always Y-down in Audio API
+- **Resource integration**: Never load directly, go through Resources

@@ -1,123 +1,123 @@
 # Net System
 
-Context spécifique pour le développement du système de téléchargement réseau d'Emeraude Engine.
+Context for developing the Emeraude Engine network download system.
 
-## Vue d'ensemble du module
+## Module Overview
 
-Système de téléchargement de ressources via réseau basé sur ASIO. Intégration transparente avec le système Resources pour chargement d'assets depuis URLs.
+Network resource download system based on ASIO. Seamless integration with the Resources system for loading assets from URLs.
 
-## Règles spécifiques à Net/
+## Net-Specific Rules
 
-### Objectif principal
-- **Téléchargement de ressources** : Download d'assets/fichiers depuis URLs
-- **PAS de multijoueur** : Net n'est pas pour networking gameplay
-- **Integration Resources** : Workflow transparent avec système de chargement
+### Main Objective
+- **Resource download**: Download assets/files from URLs
+- **NOT multiplayer**: Net is not for gameplay networking
+- **Resources integration**: Seamless workflow with loading system
 
-### Architecture ASIO
-- **Basé sur ASIO** : Boost.Asio ou standalone pour gestion réseau
-- **Protocoles supportés** : HTTP/HTTPS et autres protocoles ASIO
-- **Asynchrone** : Téléchargements non-bloquants
-- **Gestion interne** : ASIO gère timeouts, retries, erreurs réseau
+### ASIO Architecture
+- **ASIO-based**: Boost.Asio or standalone for network management
+- **Supported protocols**: HTTP/HTTPS and other ASIO protocols
+- **Asynchronous**: Non-blocking downloads
+- **Internal management**: ASIO handles timeouts, retries, network errors
 
-### Integration avec Resources
+### Resources Integration
 
-**Workflow automatique** :
+**Automatic workflow**:
 ```
-1. Resource load() détecte une URL au lieu d'un chemin fichier
-2. Resources délègue à Net pour téléchargement
-3. Net télécharge de façon asynchrone
-4. Net retourne le fichier téléchargé à Resources
-5. Resources finalise le chargement normalement
+1. Resource load() detects a URL instead of a file path
+2. Resources delegates to Net for download
+3. Net downloads asynchronously
+4. Net returns downloaded file to Resources
+5. Resources finalizes loading normally
 ```
 
-**Transparent pour le client** :
+**Transparent for client**:
 ```cpp
-// Client code identique, que ce soit fichier local ou URL
+// Client code identical, whether local file or URL
 auto texture = resources.container<TextureResource>()->getResource("logo.png");
-// ou
+// or
 auto texture = resources.container<TextureResource>()->getResource("https://example.com/logo.png");
 
-// Net gère automatiquement le download si URL détectée
+// Net automatically handles download if URL detected
 ```
 
-### Système de cache local
-- **Cache automatique** : Ressources téléchargées sauvegardées localement
-- **Évite re-téléchargements** : Vérification cache avant download
-- **Gestion transparente** : Cache géré automatiquement par Net
+### Local Cache System
+- **Automatic cache**: Downloaded resources saved locally
+- **Avoids re-downloads**: Cache check before download
+- **Transparent management**: Cache automatically managed by Net
 
-### Téléchargements asynchrones
-- **Non-bloquant** : Pas de freeze pendant downloads
-- **Integration async Resources** : Compatible avec chargement asynchrone Resources
-- **Status tracking** : Resources peut suivre progression via observables
+### Asynchronous Downloads
+- **Non-blocking**: No freeze during downloads
+- **Async Resources integration**: Compatible with Resources async loading
+- **Status tracking**: Resources can track progress via observables
 
-## Commandes de développement
+## Development Commands
 
 ```bash
-# Tests net
+# Net tests
 ctest -R Net
 ./test --filter="*Net*"
 ```
 
-## Fichiers importants
+## Important Files
 
-- `Manager.cpp/.hpp` - Gestionnaire principal, requêtes de téléchargement
-- Cache local (emplacement à documenter)
-- `@docs/resource-management.md` - Integration avec Resources
+- `Manager.cpp/.hpp` - Main manager, download requests
+- Local cache (location to be documented)
+- `@docs/resource-management.md` - Resources integration
 
-## Patterns de développement
+## Development Patterns
 
-### Utilisation via Resources (automatique)
+### Usage via Resources (automatic)
 ```cpp
-// Resources détecte URL et utilise Net automatiquement
+// Resources detects URL and uses Net automatically
 auto mesh = resources.container<MeshResource>()->getResource(
     "https://cdn.example.com/assets/character.obj"
 );
 
-// Mesh commence Loading (téléchargement en cours)
-// Quand download terminé → parsing → Loaded
-// Si échec download → Default mesh (fail-safe)
+// Mesh starts Loading (download in progress)
+// When download complete → parsing → Loaded
+// If download fails → Default mesh (fail-safe)
 ```
 
-### Requête explicite (rare, usage avancé)
+### Explicit Request (rare, advanced usage)
 ```cpp
-// Si besoin de contrôle direct sur téléchargement
+// If direct download control needed
 netManager.requestDownload(
     "https://example.com/file.dat",
     "/local/cache/path",
     [](bool success, const std::string& localPath) {
         if (success) {
-            // Fichier disponible à localPath
+            // File available at localPath
         } else {
-            // Échec téléchargement
+            // Download failed
         }
     }
 );
 ```
 
-### Gestion du cache
+### Cache Management
 ```cpp
-// Vérifier si ressource en cache
+// Check if resource is cached
 bool cached = netManager.isCached("https://example.com/texture.png");
 
-// Vider cache (maintenance)
+// Clear cache (maintenance)
 netManager.clearCache();
 
-// Forcer re-téléchargement (ignore cache)
+// Force re-download (ignore cache)
 netManager.forceDownload(url, callback);
 ```
 
-## Points d'attention
+## Critical Points
 
-- **ASIO gère complexité** : Timeouts, retries, erreurs réseau gérés par ASIO
-- **Thread safety** : ASIO gère threading, Net thread-safe par design
-- **Cache local** : Vérifier espace disque disponible pour cache
-- **URLs dans stores** : Resources stores peuvent contenir URLs au lieu de chemins
-- **Fail-safe integration** : Échec download → Resources retourne neutral resource
-- **Pas de multijoueur** : Net est pour assets, pas gameplay networking
+- **ASIO handles complexity**: Timeouts, retries, network errors handled by ASIO
+- **Thread safety**: ASIO handles threading, Net thread-safe by design
+- **Local cache**: Check available disk space for cache
+- **URLs in stores**: Resources stores can contain URLs instead of paths
+- **Fail-safe integration**: Download failure → Resources returns neutral resource
+- **No multiplayer**: Net is for assets, not gameplay networking
 
-## Documentation détaillée
+## Detailed Documentation
 
-Systèmes liés:
-- @docs/resource-management.md** - Integration automatique avec Resources
-- @src/Resources/AGENTS.md** - Système de chargement fail-safe
-→ **ASIO documentation** - Détails sur protocoles et gestion réseau
+Related systems:
+- @docs/resource-management.md - Automatic integration with Resources
+- @src/Resources/AGENTS.md - Fail-safe loading system
+- ASIO documentation - Protocol details and network management

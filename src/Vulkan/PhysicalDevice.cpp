@@ -564,7 +564,7 @@ namespace EmEn::Vulkan
 			this->deviceType() << " '" << this->deviceName() << "' : \n"
 			" - API driver : " << this->APIDriverString() << "\n"
 			" - Driver version : " << this->DriverVersionString() << "\n"
-			" - Vendor ID : " << this->vendorId() << "\n"
+			" - Vendor ID : " << this->vendorString() << "\n"
 			" - Device ID : " << this->deviceId() << "\n"
 			" - Pipeline cache UUID : " << this->pipelineCacheUUID() << "\n";
 

@@ -812,14 +812,7 @@ namespace EmEn::Scenes
 		{
 			const std::lock_guard< std::mutex > lockGuard{m_renderingOctreeAccess};
 
-			if ( m_renderingOctree->contains(entity) )
-			{
-				m_renderingOctree->update(entity);
-			}
-			else
-			{
-				m_renderingOctree->insert(entity);
-			}
+			m_renderingOctree->updateOrInsert(entity);
 		}
 
 		/* Check the entity in the physics octree. */
@@ -827,14 +820,7 @@ namespace EmEn::Scenes
 		{
 			const std::lock_guard< std::mutex > lock{m_physicsOctreeAccess};
 
-			if ( m_physicsOctree->contains(entity) )
-			{
-				m_physicsOctree->update(entity);
-			}
-			else
-			{
-				m_physicsOctree->insert(entity);
-			}
+			m_physicsOctree->updateOrInsert(entity);
 		}
 	}
 
@@ -1163,25 +1149,25 @@ namespace EmEn::Scenes
 	void
 	Scene::sectorCollisionTest (const OctreeSector< AbstractEntity, true > & sector, std::vector< ContactManifold > & manifolds) noexcept
 	{
-		/* No element present. */
-		if ( sector.empty() )
-		{
-			return;
-		}
+		/* Global set of tested pairs for this frame.
+		 * Uses a combined 64-bit key from two 32-bit pointer hashes to identify unique pairs.
+		 * This replaces per-entity hasCollisionWith() linear searches with O(1) hash lookup.
+		 * NOTE: Static to preserve allocated capacity across frames, avoiding repeated allocations. */
+		static std::unordered_set< uint64_t > testedPairs;
+		testedPairs.clear();
 
-		/* If the sector is not a leaf, we test subsectors. */
-		if ( !sector.isLeaf() )
-		{
-			//#pragma omp parallel for
-			for ( const auto & subSector : sector.subSectors() )
-			{
-				this->sectorCollisionTest(*subSector, manifolds);
-			}
+		/* Use optimized forLeafSectors() to traverse directly to leaves.
+		 * NOTE: Capture pointer to static variable since lambdas cannot capture static storage directly. */
+		auto * testedPairsPtr = &testedPairs;
 
-			return;
-		}
+		sector.forLeafSectors([this, &manifolds, testedPairsPtr] (const OctreeSector< AbstractEntity, true > & leafSector) {
+			this->leafSectorCollisionTest(leafSector, manifolds, *testedPairsPtr);
+		});
+	}
 
-		/* We are in a leaf, we check scene nodes present here. */
+	void
+	Scene::leafSectorCollisionTest (const OctreeSector< AbstractEntity, true > & sector, std::vector< ContactManifold > & manifolds, std::unordered_set< uint64_t > & testedPairs) noexcept
+	{
 		const auto & elements = sector.elements();
 
 		for ( auto elementIt = elements.begin(); elementIt != elements.end(); ++elementIt )
@@ -1205,15 +1191,25 @@ namespace EmEn::Scenes
 					continue;
 				}
 
+				/* Create a unique pair key using ordered pointers.
+				 * Order pointers to ensure (A,B) and (B,A) produce the same key. */
+				const auto ptrA = reinterpret_cast< uintptr_t >(entityA.get());
+				const auto ptrB = reinterpret_cast< uintptr_t >(entityB.get());
+				const uint64_t pairKey = (ptrA < ptrB)
+					? (static_cast< uint64_t >(ptrA) << 32) | static_cast< uint64_t >(ptrB & 0xFFFFFFFF)
+					: (static_cast< uint64_t >(ptrB) << 32) | static_cast< uint64_t >(ptrA & 0xFFFFFFFF);
+
+				/* Check for cross-sector collision duplicates using global set.
+				 * O(1) lookup instead of O(n) linear search in hasCollisionWith(). */
+				if ( !testedPairs.insert(pairKey).second )
+				{
+					/* Pair already tested in another sector, skip. */
+					continue;
+				}
+
 				if ( entityAHasMovableAbility )
 				{
 					auto & colliderA = entityA->getMovableTrait()->collider();
-
-					/* Check for cross-sector collisions duplicates. */
-					if ( colliderA.hasCollisionWith(*entityB) )
-					{
-						continue;
-					}
 
 					/* NOTE: Here the entity A is movable.
 					 * We will check the collision from entity A. */
@@ -1245,12 +1241,6 @@ namespace EmEn::Scenes
 					}
 
 					auto & colliderB = entityB->getMovableTrait()->collider();
-
-					/* Check for cross-sector collisions duplicates. */
-					if ( colliderB.hasCollisionWith(*entityA) )
-					{
-						continue;
-					}
 
 					/* NOTE: Here the entity A is static, and B cannot be static.
 					 * We will check the collision from entity B. */
@@ -1986,7 +1976,12 @@ namespace EmEn::Scenes
 		}
 
 		/* If the object cannot be loaded, mark it as broken! */
-		renderableInstance->setBroken("Unable to get ready for rendering !");
+		{
+			std::stringstream ss;
+			ss << "Unable to get ready the renderable instance (Renderable:" << renderableInstance->renderable()->name() << "') for rendering with render-target '" << renderTarget->id() << "'";
+
+			renderableInstance->setBroken(ss.str());
+		}
 
 		return true; // Continue
 	}

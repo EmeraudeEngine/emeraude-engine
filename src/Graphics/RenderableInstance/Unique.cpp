@@ -34,6 +34,7 @@
 /* Local inclusions. */
 #include "Graphics/ViewMatricesInterface.hpp"
 #include "Vulkan/CommandBuffer.hpp"
+#include "Vulkan/PipelineLayout.hpp"
 
 namespace EmEn::Graphics::RenderableInstance
 {
@@ -50,7 +51,7 @@ namespace EmEn::Graphics::RenderableInstance
 		/* NOTE: If world coordinates are a nullptr, we assume to render the object at the origin. */
 		if ( worldCoordinates != nullptr )
 		{
-			modelMatrix = this->isFacingCamera() ?
+			modelMatrix = this->renderable()->isSprite() ?
 				worldCoordinates->getSpriteModelMatrix(passContext.viewMatrices->position(passContext.readStateIndex)) :
 				worldCoordinates->getModelMatrix();
 		}
@@ -100,7 +101,7 @@ namespace EmEn::Graphics::RenderableInstance
 		/* NOTE: If world coordinates are a nullptr, we assume to render the object at the origin. */
 		if ( worldCoordinates != nullptr )
 		{
-			modelMatrix = this->isFacingCamera() ?
+			modelMatrix = this->renderable()->isSprite() ?
 				worldCoordinates->getSpriteModelMatrix(passContext.viewMatrices->position(passContext.readStateIndex)) :
 				worldCoordinates->getModelMatrix();
 		}

@@ -1,155 +1,161 @@
 # Libs (Libraries)
 
-Context spécifique pour le développement des bibliothèques utilitaires d'Emeraude Engine.
+Context for developing Emeraude Engine utility libraries.
 
-## Vue d'ensemble du module
+## Module Overview
 
-**Fondation du moteur** - Bibliothèques utilitaires agnostiques fournissant concepts de base, mathématiques, manipulation de données, et intégrations externes. Tout le moteur repose sur Libs pour uniformisation.
+**Engine foundation** - Platform-agnostic utility libraries providing base concepts, mathematics, data manipulation, and external integrations. All engine systems depend on Libs for uniformity.
 
-## Règles spécifiques à Libs/
+## Libs-Specific Rules
 
-### Philosophie: Fondation agnostique CRITIQUE
-- **Fondation du moteur** : Tous les systèmes (Graphics, Physics, Audio, Scenes) utilisent Libs
-- **Agnostique** : AUCUNE dépendance vers systèmes haut niveau (Scenes, Physics, Graphics, etc.)
-- **Uniformisation** : Fournir types et concepts communs à tout le moteur
-- **Réutilisable** : Code générique, pas spécifique à un cas d'usage
+### Philosophy: Critical Agnostic Foundation
+- **Engine foundation**: All systems (Graphics, Physics, Audio, Scenes) use Libs
+- **Agnostic**: NO dependencies on high-level systems (Scenes, Physics, Graphics, etc.)
+- **Uniformity**: Provide common types and concepts for the entire engine
+- **Reusable**: Generic code, not specific to any use case
 
-### Architecture par domaine
+### Architecture by Domain
 
-**Algorithms/** - Algorithmes utiles multimédia
-- Implémentations simples d'algos classiques
-- Optimisés pour usage temps réel
+**Algorithms/** - Useful multimedia algorithms
+- Simple implementations of classic algorithms
+- Optimized for real-time usage
 
-**Compression/** - Abstraction compression/décompression
-- Standardisation logique compression de données
+**Compression/** - Compression/decompression abstraction
+- Standardized data compression logic
 - Wrappers: zlib, lzma
-- Interface commune pour tous algorithmes
+- Common interface for all algorithms
 
-**Debug/** - Outils stats et développement
-- Profiling, timings, statistiques
-- Helpers de débogage
+**Debug/** - Stats and development tools
+- Profiling, timings, statistics
+- Debug helpers
 
-**GamesTools/** - Classes utilitaires jeux vidéo
-- Helpers spécifiques gameplay et jeux
-- Concepts génériques jeux
+**GamesTools/** - Game utility classes
+- Gameplay-specific helpers
+- Generic game concepts
 
-**Hash/** - Algorithmes de hashage
-- MD5, SHA, et autres algorithmes classiques
-- Pour checksums, identifiants, caching
+**Hash/** - Hashing algorithms
+- MD5, SHA, and other classic algorithms
+- For checksums, identifiers, caching
 
-**IO/** - Lecture/écriture fichiers génériques
-- Abstractions I/O cross-platform
-- Support archives (ZIP via lib externe)
-- Manipulation fichiers/dossiers
+**IO/** - Generic file read/write
+- Cross-platform I/O abstractions
+- Archive support (ZIP via external lib)
+- File/folder manipulation
 
-**Math/** - Bibliothèque mathématique 2D/3D complète
-- **Vector** : Vecteurs 2D/3D/4D
-- **Matrix** : Matrices transformations
-- **Quaternion** : Rotations 3D
-- **CartesianFrame** : Système coordonnées (position + base orthonormale)
-- **Collision/Intersection** : Détection géométrique
-- **Courbes de Bézier** : Interpolation smooth
-- Toute logique mathématique 2D/3D présente et future
+**Math/** - Complete 2D/3D math library
+- **Vector**: 2D/3D/4D vectors
+- **Matrix**: Transformation matrices
+- **Quaternion**: 3D rotations
+- **CartesianFrame**: Coordinate system (position + orthonormal basis)
+- **Collision/Intersection**: Geometric detection
+- **Bezier curves**: Smooth interpolation
+- All current and future 2D/3D math logic
 
-**Network/** - Généralisation logiques web
-- Helpers protocoles réseau
-- Abstractions communication
+**Network/** - Web logic generalization
+- Network protocol helpers
+- Communication abstractions
 
-**PixelFactory/** - Manipulation d'images
-- Chargement/sauvegarde formats image
-- Transformations pixel (resize, crop, filters)
-- Génération procédurale images
-- **TextProcessor** : Rendu texte sur Pixmap avec protection bounds
-- **Pixmap** : Container image avec `blendPixel()` (assert) et `blendFreePixel()` (bounds-safe)
+**PixelFactory/** - Image manipulation
+- Load/save image formats
+- Pixel transformations (resize, crop, filters)
+- Procedural image generation
+- **TextProcessor**: Text rendering on Pixmap with bounds protection
+- **Pixmap**: Image container with `blendPixel()` (assert) and `blendFreePixel()` (bounds-safe)
 
-**VertexFactory/** - Manipulation géométrie 3D
-- Génération meshes procéduraux
-- Transformations géométriques
-- Calculs normales, tangentes, UVs
+**VertexFactory/** - 3D geometry manipulation
+- Procedural mesh generation
+- Geometric transformations
+- Normal, tangent, UV calculations
 
-**WaveFactory/** - Manipulation audio
-- Chargement formats audio (via libsndfile)
-- Transformations samples audio
-- Génération procédurale sons
+**WaveFactory/** - Audio manipulation
+- Audio format loading (via libsndfile)
+- Audio sample transformations
+- Procedural sound generation
 
-**Time/** - Gestion temporelle
-- Chronomètres (chronos)
+**Time/** - Temporal management
+- Chronometers
 - Timers
-- Helpers timing via objets et interfaces
+- Timing helpers via objects and interfaces
 
-**Concepts généraux (racine Libs/)** :
-- **Observer/Observable** : Pattern événementiel
-- **Versioning** : Gestion versions
-- **JSON** : Parsing/écriture JSON rapide
-- **Flags** : Gestion drapeaux binaires
-- **Traits** : Helpers (NamingTrait, etc.)
-- **Strings** : Manipulation chaînes caractères
-- **ThreadPool** : Pool de threads performant (classe excellente)
+**General concepts (Libs/ root)**:
+- **Observer/Observable**: Event pattern
+- **Versioning**: Version management
+- **JSON**: Fast JSON parsing/writing
+- **Flags**: Binary flag management
+- **Traits**: Helpers (NamingTrait, etc.)
+- **Strings**: String manipulation
+- **TokenFormatter**: Case style detection and conversion (camelCase, snake_case, PascalCase, etc.)
+- **ThreadPool**: High-performance thread pool
+- **KVParser**: INI-style file parsing (sections, key-values)
+- **SourceCodeParser**: Source code parsing with annotations and formatting
 
-### Dépendances externes intégrées
-- **libsndfile** : Chargement formats audio (WaveFactory)
-- **zlib** : Compression (Compression)
-- **lzma** : Compression (Compression)
-- **ZIP library** : Archives (IO)
-- Autres selon besoins
+### Integrated External Dependencies
+- **libsndfile**: Audio format loading (WaveFactory)
+- **zlib**: Compression (Compression)
+- **lzma**: Compression (Compression)
+- **ZIP library**: Archives (IO)
 
-## Commandes de développement
+## Development Commands
 
 ```bash
-# Tests Libs
+# Libs tests
 ctest -R Libs
 ./test --filter="*Libs*"
 
-# Tests par catégorie
+# Tests by category
 ./test --filter="*Math*"
 ./test --filter="*IO*"
 ./test --filter="*ThreadPool*"
+./Release/EmeraudeUnitTests --gtest_filter="TokenFormatter*"
 ```
 
-## Fichiers importants
+## Important Files
 
-### Math (critique)
-- `Vector.hpp` - Vecteurs 2D/3D/4D
-- `Matrix.hpp` - Matrices transformations
-- `Quaternion.hpp` - Rotations 3D
-- `CartesianFrame.hpp` - Système coordonnées avec base orthonormale
-- `Collision.hpp` - Détection collisions
-- `Bezier.hpp` - Courbes de Bézier
+### Math (critical)
+- `Vector.hpp` - 2D/3D/4D vectors
+- `Matrix.hpp` - Transformation matrices
+- `Quaternion.hpp` - 3D rotations
+- `CartesianFrame.hpp` - Coordinate system with orthonormal basis
+- `Collision.hpp` - Collision detection
+- `Bezier.hpp` - Bezier curves
 
-### Concepts généraux
-- `Observer.hpp` / `Observable.hpp` - Pattern événementiel
-- `ThreadPool.hpp` - Pool threads performant
-- `JSON.hpp` - Manipulation JSON
-- `FlagTrait.hpp` - Gestion flags
-- `NamableTrait.hpp` - Trait pour noms
+### General Concepts
+- `Observer.hpp` / `Observable.hpp` - Event pattern
+- `ThreadPool.hpp` - High-performance thread pool
+- `JSON.hpp` - JSON manipulation
+- `FlagTrait.hpp` - Flag management
+- `NamableTrait.hpp` - Naming trait
+- `TokenFormatter.hpp` - Case detection/conversion (zero-allocation design)
+- `KVParser.hpp` - INI-style parser (KVVariable, KVSection, KVParser)
+- `SourceCodeParser.hpp` - Source code parser with annotations
 
 ### Factories
-- `PixelFactory/` - Manipulation images
-- `VertexFactory/` - Génération/manipulation géométrie
-- `WaveFactory/` - Manipulation audio
+- `PixelFactory/` - Image manipulation
+- `VertexFactory/` - Geometry generation/manipulation
+- `WaveFactory/` - Audio manipulation
 
-## Patterns de développement
+## Development Patterns
 
-### Utilisation Math dans tout le moteur
+### Math Usage Throughout Engine
 ```cpp
-// Graphics utilise Math
+// Graphics uses Math
 Matrix4 projectionMatrix = Math::perspective(fov, aspect, near, far);
 Vector3 cameraPos = camera.cartesianFrame().position();
 
-// Physics utilise Math
+// Physics uses Math
 Vector3 force = mass * acceleration;
 Quaternion rotation = Quaternion::fromEuler(pitch, yaw, roll);
 
-// Audio utilise Math
+// Audio uses Math
 Vector3 soundPos = emitter.cartesianFrame().position();
 float distance = (listenerPos - soundPos).length();
 
-// Tout le moteur uniformisé via Libs/Math
+// Entire engine unified via Libs/Math
 ```
 
-### Pattern Observer/Observable
+### Observer/Observable Pattern
 ```cpp
-// Observable dans Resources
+// Observable in Resources
 class TextureResource : public ResourceTrait, public Observable {
     void finishLoading() {
         // ...
@@ -157,77 +163,150 @@ class TextureResource : public ResourceTrait, public Observable {
     }
 };
 
-// Observer dans Scene
+// Observer in Scene
 class Scene : public Observer {
     void onNotify(Observable* source, Event event) override {
         if (event == Event::Loaded) {
-            // Réagir au chargement
+            // React to loading
         }
     }
 };
 ```
 
-### ThreadPool pour tâches async
+### ThreadPool for Async Tasks
 ```cpp
-// Pool global ou local
+// Global or local pool
 ThreadPool pool(std::thread::hardware_concurrency());
 
-// Soumettre tâches
+// Submit tasks
 auto future1 = pool.enqueue([](int x) { return x * 2; }, 42);
 auto future2 = pool.enqueue([](){ loadHeavyResource(); });
 
-// Attendre résultats
+// Wait for results
 int result = future1.get();  // 84
-future2.wait();  // Attendre fin chargement
+future2.wait();  // Wait for loading completion
 ```
 
-### Ajout d'une nouvelle lib (règles)
+### TokenFormatter for Case Conversion
 ```cpp
-// ❌ INTERDIT: Dépendre de systèmes haut niveau
-#include "Scenes/Node.hpp"  // NON! Libs ne dépend pas de Scenes
+// Static methods for direct conversion
+std::string snaked = TokenFormatter::toSnakeCase("myVariableName");  // "my_variable_name"
+std::string pascal = TokenFormatter::toPascalCase("my_variable_name");  // "MyVariableName"
 
-// ✅ CORRECT: Agnostique et générique
+// Instance for multiple conversions (parses once, converts many times)
+TokenFormatter formatter("XMLParser");
+formatter.toSnakeCase();       // "xml_parser"
+formatter.toCamelCase();       // "xmlParser"
+formatter.toKebabCase();       // "xml-parser"
+formatter.toTitleCase();       // "Xml Parser"
+formatter.toScreamingSnake();  // "XML_PARSER"
+
+// Style detection
+CaseStyle style = TokenFormatter::detect("myVar");  // CaseStyle::CamelCase
+std::string_view name = TokenFormatter::styleName(style);  // "camelCase"
+
+// Supported styles: CamelCase, PascalCase, SnakeCase, ScreamingSnake,
+// KebabCase, TrainCase, FlatCase, UpperFlatCase, LowerSpaced, UpperSpaced, TitleCase
+```
+
+**Zero-allocation design:**
+- Internal buffer (128 chars max) stores token copy
+- Words stored as `std::string_view` into buffer (max 8 words)
+- Only output methods allocate (with `reserve()`)
+- See: `TokenFormatter.hpp:MaxWords`, `TokenFormatter.hpp:MaxTokenLength`
+
+### KVParser for INI Files
+```cpp
+// Read configuration file
+KVParser parser;
+if (parser.read("config.ini")) {
+    // Access section (creates if not exists)
+    auto& graphics = parser.section("Graphics");
+
+    // Read variables with type conversion
+    int width = graphics.variable("width").asInteger();
+    bool fullscreen = graphics.variable("fullscreen").asBoolean();
+    float gamma = graphics.variable("gamma").asFloat();
+    const std::string& path = graphics.variable("path").asString();
+
+    // Check if variable exists
+    if (graphics.variable("vsync").isUndefined()) {
+        // Variable not found
+    }
+}
+
+// Write configuration
+KVParser config;
+config.section("main").addVariable("version", KVVariable{"1.0"});
+config.section("Graphics").addVariable("width", KVVariable{1920});
+config.section("Graphics").addVariable("fullscreen", KVVariable{true});
+config.write("output.ini");
+```
+
+**INI file format:**
+```ini
+[SectionName]
+key = value
+another_key = 123
+
+# Comment lines (ignored)
+@ Header lines (ignored)
+```
+
+**Code references:**
+- `KVParser.hpp:KVVariable` - Variable with type conversions (bool, int, float, double, string)
+- `KVParser.hpp:KVSection` - Named variable collection
+- `KVParser.hpp:KVParser` - Main parser with sections
+- Uses `std::filesystem::path` for file operations (C++17+)
+- Uses `std::string_view` for read-only parameters
+
+### Adding a New Lib (Rules)
+```cpp
+// FORBIDDEN: Depending on high-level systems
+#include "Scenes/Node.hpp"  // NO! Libs does not depend on Scenes
+
+// CORRECT: Agnostic and generic
 class MyUtility {
-    // Fonctionne sans connaître Scenes/Physics/Graphics
+    // Works without knowing Scenes/Physics/Graphics
     static Vector3 interpolate(const Vector3& a, const Vector3& b, float t);
 };
 
-// ✅ Les systèmes haut niveau utilisent Libs
-#include "Libs/MyUtility.hpp"  // Graphics/Scenes/Physics peuvent inclure Libs
+// High-level systems use Libs
+#include "Libs/MyUtility.hpp"  // Graphics/Scenes/Physics can include Libs
 ```
 
-## Points d'attention CRITIQUES
+## Critical Attention Points
 
-- **Fondation du moteur** : Tout repose sur Libs, stabilité critique
-- **Zéro dépendance haut niveau** : Libs ne doit JAMAIS inclure Scenes/Physics/Graphics/etc.
-- **Agnostique** : Code générique, pas spécifique à un cas d'usage
-- **Uniformisation** : Types Math utilisés PARTOUT (Vector, Matrix, CartesianFrame)
-- **Thread-safe** : Considérer thread-safety pour utilitaires partagés
-- **Performance** : Code critique (utilisé partout), optimiser si nécessaire
-- **Documentation** : Bien documenter, beaucoup de systèmes dépendent de Libs
-- **Tests exhaustifs** : Bug dans Libs affecte tout le moteur
+- **Engine foundation**: Everything depends on Libs, critical stability
+- **Zero high-level dependencies**: Libs must NEVER include Scenes/Physics/Graphics/etc.
+- **Agnostic**: Generic code, not specific to any use case
+- **Uniformity**: Math types used EVERYWHERE (Vector, Matrix, CartesianFrame)
+- **Thread-safe**: Consider thread-safety for shared utilities
+- **Performance**: Critical code (used everywhere), optimize if necessary
+- **Documentation**: Document well, many systems depend on Libs
+- **Exhaustive tests**: Bug in Libs affects entire engine
 
-## PixelFactory: Thread Safety et Resize
+## PixelFactory: Thread Safety and Resize
 
-### TextProcessor et Pixmap pendant resize
+### TextProcessor and Pixmap During Resize
 
-Lors du redimensionnement de fenêtre, le Pixmap peut changer de dimensions entre deux frames. Le `TextProcessor` doit être résilient:
+During window resize, Pixmap dimensions can change between frames. `TextProcessor` must be resilient:
 
-**Protection implémentée:**
-1. `TextProcessor::setPixmap()` appelle `updateMetrics()` pour recalculer `maxColumns`/`maxRows`
-2. `blitCharacter()` utilise `blendFreePixel()` (ignore pixels hors bounds) au lieu de `blendPixel()` (assert)
-3. Le Notifier vérifie `pixmap.width() == 0 || pixmap.height() == 0` avant rendu
+**Implemented protection:**
+1. `TextProcessor::setPixmap()` calls `updateMetrics()` to recalculate `maxColumns`/`maxRows`
+2. `blitCharacter()` uses `blendFreePixel()` (ignores out-of-bounds pixels) instead of `blendPixel()` (assert)
+3. Notifier checks `pixmap.width() == 0 || pixmap.height() == 0` before rendering
 
-**Code références:**
-- `PixelFactory/TextProcessor.hpp:setPixmap()` - Appelle `updateMetrics()` après changement de pixmap
-- `PixelFactory/TextProcessor.hpp:blitCharacter()` - Utilise `blendFreePixel()` pour bounds-safety
-- `PixelFactory/Pixmap.hpp:blendPixel()` - Assert sur coordonnées (développement)
-- `PixelFactory/Pixmap.hpp:blendFreePixel()` - Ignore silencieusement hors-bounds (production)
+**Code references:**
+- `PixelFactory/TextProcessor.hpp:setPixmap()` - Calls `updateMetrics()` after pixmap change
+- `PixelFactory/TextProcessor.hpp:blitCharacter()` - Uses `blendFreePixel()` for bounds-safety
+- `PixelFactory/Pixmap.hpp:blendPixel()` - Assert on coordinates (development)
+- `PixelFactory/Pixmap.hpp:blendFreePixel()` - Silently ignores out-of-bounds (production)
 
-## Documentation détaillée
+## Detailed Documentation
 
-Libs est référencé par tous les systèmes:
-- @src/Scenes/AGENTS.md** - Utilise CartesianFrame
-- @src/Physics/AGENTS.md** - Utilise Vector, Matrix, collision detection
-- @src/Graphics/AGENTS.md** - Utilise Math pour transformations
-- @src/Audio/AGENTS.md** - Utilise Math pour positionnement 3D
+Libs is referenced by all systems:
+- @src/Scenes/AGENTS.md - Uses CartesianFrame
+- @src/Physics/AGENTS.md - Uses Vector, Matrix, collision detection
+- @src/Graphics/AGENTS.md - Uses Math for transformations
+- @src/Audio/AGENTS.md - Uses Math for 3D positioning

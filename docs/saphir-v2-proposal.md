@@ -1,23 +1,23 @@
-# Saphir 2.0 - Proposition d'Architecture Réflexive
+# Saphir 2.0 - Reflective Architecture Proposal
 
-**Statut:** Proposition
+**Status:** Proposal
 **Date:** 2025-11-26
-**Auteur:** LondNoir + Claude
+**Author:** LondNoir + Claude
 
-## Objectifs
+## Objectives
 
-1. Rendre Saphir plus **réflexif** — capable d'interroger les Materials et Geometries plutôt que de recevoir du code généré
-2. Permettre l'injection de **shaders custom** analysables
-3. Simplifier la création de nouveaux types de Materials
-4. Améliorer la validation et le debugging
+1. Make Saphir more **reflective** - able to query Materials and Geometries rather than receiving generated code
+2. Allow injection of **custom shaders** that can be analyzed
+3. Simplify creation of new Material types
+4. Improve validation and debugging
 
 ---
 
-## Problèmes de l'Architecture Actuelle
+## Problems with Current Architecture
 
-### 1. Material comme générateur de code
+### 1. Material as Code Generator
 
-Actuellement, chaque Material implémente directement la génération:
+Currently, each Material directly implements generation:
 
 ```cpp
 class Interface {
@@ -27,13 +27,13 @@ class Interface {
 };
 ```
 
-**Problèmes:**
-- Saphir ne peut pas "voir" ce que fait un Material
-- Duplication de logique entre BasicResource et StandardResource
-- Difficile d'optimiser ou valider le code généré
-- Impossible d'injecter du GLSL custom
+**Problems:**
+- Saphir cannot "see" what a Material does
+- Logic duplication between BasicResource and StandardResource
+- Difficult to optimize or validate generated code
+- Impossible to inject custom GLSL
 
-### 2. Flux actuel
+### 2. Current Flow
 
 ```
 Material::Interface ──────────────┐
@@ -50,28 +50,28 @@ LightGenerator ───────────────────┘
   • generate*ShaderCode()
 ```
 
-Le Material est une **boîte noire** qui produit du code. Saphir assemble mais ne comprend pas.
+Material is a **black box** that produces code. Saphir assembles but does not understand.
 
 ---
 
-## Proposition: Architecture Réflexive
+## Proposal: Reflective Architecture
 
-### Concept Central: MaterialDescriptor
+### Central Concept: MaterialDescriptor
 
-Un Material ne génère plus de code — il **déclare** ses propriétés via un descripteur sémantique:
+A Material no longer generates code - it **declares** its properties via a semantic descriptor:
 
 ```cpp
 struct TextureSlot
 {
-    std::string samplerName;           // Nom GLSL du sampler
-    uint32_t uvChannel = 0;            // Canal UV (0 = primaire, 1 = secondaire)
-    bool uses3DCoordinates = false;    // Cubemap ou 3D texture
-    std::optional<std::string> scale;  // Variable de scale optionnelle
+    std::string samplerName;           // GLSL sampler name
+    uint32_t uvChannel = 0;            // UV channel (0 = primary, 1 = secondary)
+    bool uses3DCoordinates = false;    // Cubemap or 3D texture
+    std::optional<std::string> scale;  // Optional scale variable
 };
 
 struct MaterialDescriptor
 {
-    // === Propriétés de surface (textures optionnelles) ===
+    // === Surface properties (optional textures) ===
     std::optional<TextureSlot> albedo;          // diffuse/base color
     std::optional<TextureSlot> normal;          // normal map
     std::optional<TextureSlot> roughness;       // roughness (PBR)
@@ -81,7 +81,7 @@ struct MaterialDescriptor
     std::optional<TextureSlot> opacity;         // alpha/transparency
     std::optional<TextureSlot> displacement;    // height/displacement map
 
-    // === Couleurs/valeurs constantes (si pas de texture) ===
+    // === Constant colors/values (if no texture) ===
     std::optional<Color> albedoColor;
     std::optional<Color> emissiveColor;
     float roughnessValue = 0.5f;
@@ -89,7 +89,7 @@ struct MaterialDescriptor
     float opacityValue = 1.0f;
     float normalScale = 1.0f;
 
-    // === Comportement ===
+    // === Behavior ===
     ShadingModel shadingModel = ShadingModel::PBR;  // PBR, Phong, Gouraud, Unlit
     BlendingMode blending = BlendingMode::None;
     bool doubleSided = false;
@@ -97,12 +97,12 @@ struct MaterialDescriptor
     float alphaCutoff = 0.5f;
     bool receivesShadows = true;
 
-    // === Requirements inférés automatiquement ===
+    // === Requirements inferred automatically ===
     [[nodiscard]] GeometryRequirements inferRequirements() const noexcept;
 };
 ```
 
-### Nouveau Flux de Génération
+### New Generation Flow
 
 ```
 Material ──► MaterialDescriptor ──┐
@@ -110,24 +110,24 @@ Material ──► MaterialDescriptor ──┐
 Geometry ──► GeometryCapabilities ├──► Saphir::Analyzer ──► GLSL
                                   │         │
 CustomShader ──► ShaderFragment ──┘         ├── Infer geometry requirements
-                   (nouveau)                ├── Validate compatibility
+                   (new)                    ├── Validate compatibility
                                             ├── Select shading model
                                             └── Generate optimal code
 ```
 
-**Saphir devient intelligent:**
-- Il **lit** le MaterialDescriptor
-- Il **infère** les requirements (normals, tangents, UVs...)
-- Il **valide** contre GeometryCapabilities
-- Il **génère** le code optimal
+**Saphir becomes intelligent:**
+- It **reads** the MaterialDescriptor
+- It **infers** requirements (normals, tangents, UVs...)
+- It **validates** against GeometryCapabilities
+- It **generates** optimal code
 
 ---
 
-## Support des Custom Shaders
+## Custom Shader Support
 
 ### Concept: ShaderFragment
 
-Un morceau de GLSL analysable avec métadonnées:
+An analyzable GLSL fragment with metadata:
 
 ```cpp
 class ShaderFragment
@@ -142,16 +142,16 @@ public:
 
     // === Introspection ===
 
-    // Ce que le fragment REQUIERT (inputs)
+    // What the fragment REQUIRES (inputs)
     [[nodiscard]] const std::vector<ShaderInput>& inputs() const noexcept;
 
-    // Ce que le fragment PRODUIT (outputs)
+    // What the fragment PRODUCES (outputs)
     [[nodiscard]] const std::vector<ShaderOutput>& outputs() const noexcept;
 
-    // Uniforms/samplers utilisés
+    // Uniforms/samplers used
     [[nodiscard]] const std::vector<UniformRequirement>& uniforms() const noexcept;
 
-    // Fonctions définies
+    // Functions defined
     [[nodiscard]] const std::vector<FunctionSignature>& functions() const noexcept;
 
     // === Code ===
@@ -163,22 +163,22 @@ public:
 };
 ```
 
-### Syntaxe GLSL avec Pragmas Saphir
+### GLSL Syntax with Saphir Pragmas
 
 ```glsl
 // water_surface.glsl
 #pragma saphir version 1
 #pragma saphir type fragment
 
-// Déclaration des inputs requis
+// Required inputs declaration
 #pragma saphir input vec3 worldPosition
 #pragma saphir input vec3 worldNormal
 #pragma saphir input vec2 texCoord0
 
-// Déclaration des outputs produits
+// Produced outputs declaration
 #pragma saphir output vec4 finalColor
 
-// Déclaration des uniforms custom
+// Custom uniforms declaration
 #pragma saphir uniform sampler2D waterNormalMap
 #pragma saphir uniform sampler2D foamTexture
 #pragma saphir uniform float time
@@ -187,14 +187,14 @@ public:
 #pragma saphir uniform vec3 waterColor
 #pragma saphir uniform float opacity
 
-// Point d'entrée du fragment custom
+// Custom fragment entry point
 void saphir_fragment()
 {
-    // Animation des UVs
+    // UV animation
     vec2 animatedUV = texCoord0 + vec2(time * waveSpeed);
     vec2 distortedUV = animatedUV + sin(worldPosition.xz * waveScale) * 0.02;
 
-    // Normal mapping avec deux couches
+    // Normal mapping with two layers
     vec3 normal1 = texture(waterNormalMap, distortedUV).xyz * 2.0 - 1.0;
     vec3 normal2 = texture(waterNormalMap, distortedUV * 0.5 + 0.3).xyz * 2.0 - 1.0;
     vec3 combinedNormal = normalize(normal1 + normal2);
@@ -203,10 +203,10 @@ void saphir_fragment()
     vec3 viewDir = normalize(cameraPosition - worldPosition);
     float fresnel = pow(1.0 - max(dot(viewDir, worldNormal), 0.0), 3.0);
 
-    // Foam at edges (exemple)
+    // Foam at edges (example)
     float foam = texture(foamTexture, texCoord0 * 4.0).r;
 
-    // Couleur finale
+    // Final color
     vec3 color = mix(waterColor, vec3(1.0), foam * 0.3);
     color = mix(color, vec3(0.8, 0.9, 1.0), fresnel * 0.5);
 
@@ -214,57 +214,57 @@ void saphir_fragment()
 }
 ```
 
-### Analyse par Saphir
+### Saphir Analysis
 
-Quand Saphir parse ce fichier:
+When Saphir parses this file:
 
-1. **Extraction des métadonnées:**
-   - Inputs requis: `worldPosition`, `worldNormal`, `texCoord0`
-   - Outputs produits: `finalColor`
-   - Uniforms: 7 déclarés
+1. **Metadata extraction:**
+   - Required inputs: `worldPosition`, `worldNormal`, `texCoord0`
+   - Produced outputs: `finalColor`
+   - Uniforms: 7 declared
 
-2. **Validation contre Geometry:**
+2. **Validation against Geometry:**
    ```
    Geometry provides: [position, normal, uv0, tangent]
    Fragment requires: [worldPosition, worldNormal, texCoord0]
-   ✓ Compatible
+   OK Compatible
    ```
 
-3. **Intégration dans le pipeline:**
-   - Génère le vertex shader standard (transformations)
-   - Injecte les uniforms dans le descriptor set
-   - Assemble `saphir_fragment()` dans `main()`
+3. **Pipeline integration:**
+   - Generates standard vertex shader (transformations)
+   - Injects uniforms into descriptor set
+   - Assembles `saphir_fragment()` into `main()`
 
 ---
 
-## Interface Material Révisée
+## Revised Material Interface
 
 ```cpp
 class Interface : public Resources::ResourceTrait
 {
 public:
-    // === NOUVEAU: API Réflexive ===
+    // === NEW: Reflective API ===
 
     /**
-     * @brief Retourne le descripteur sémantique du material.
-     * @note Saphir utilisera ce descripteur pour générer le code.
+     * @brief Returns the semantic descriptor of the material.
+     * @note Saphir will use this descriptor to generate code.
      */
     [[nodiscard]]
     virtual MaterialDescriptor descriptor() const noexcept = 0;
 
     /**
-     * @brief Retourne un fragment shader custom optionnel.
-     * @note Si présent, Saphir l'intègre au lieu de générer.
+     * @brief Returns an optional custom fragment shader.
+     * @note If present, Saphir integrates it instead of generating.
      */
     [[nodiscard]]
     virtual std::optional<ShaderFragment> customFragment() const noexcept
     {
-        return std::nullopt;  // Par défaut, Saphir génère tout
+        return std::nullopt;  // By default, Saphir generates everything
     }
 
     /**
-     * @brief Retourne un vertex shader custom optionnel.
-     * @note Rare, mais utile pour effets spéciaux (vertex displacement).
+     * @brief Returns an optional custom vertex shader.
+     * @note Rare, but useful for special effects (vertex displacement).
      */
     [[nodiscard]]
     virtual std::optional<ShaderFragment> customVertex() const noexcept
@@ -272,7 +272,7 @@ public:
         return std::nullopt;
     }
 
-    // === DEPRECATED: Ancienne API (rétro-compatibilité) ===
+    // === DEPRECATED: Old API (backward compatibility) ===
 
     [[deprecated("Use descriptor() instead")]]
     [[nodiscard]]
@@ -297,7 +297,7 @@ public:
 
 ---
 
-## Saphir::Analyzer - Le Nouveau Coeur
+## Saphir::Analyzer - The New Core
 
 ```cpp
 namespace Saphir
@@ -306,7 +306,7 @@ namespace Saphir
     {
     public:
         /**
-         * @brief Analyse un MaterialDescriptor et génère le code shader.
+         * @brief Analyzes a MaterialDescriptor and generates shader code.
          */
         [[nodiscard]]
         GenerationResult analyze(
@@ -316,7 +316,7 @@ namespace Saphir
         ) noexcept;
 
         /**
-         * @brief Analyse un ShaderFragment custom.
+         * @brief Analyzes a custom ShaderFragment.
          */
         [[nodiscard]]
         ValidationResult validate(
@@ -325,7 +325,7 @@ namespace Saphir
         ) noexcept;
 
         /**
-         * @brief Génère le code final en combinant descriptor + fragment custom.
+         * @brief Generates final code by combining descriptor + custom fragment.
          */
         [[nodiscard]]
         GenerationResult generate(
@@ -344,7 +344,7 @@ namespace Saphir
         std::vector<std::string> warnings;
         std::vector<std::string> errors;
 
-        // Statistiques pour debugging
+        // Statistics for debugging
         struct Stats {
             uint32_t textureCount;
             uint32_t uniformCount;
@@ -366,81 +366,81 @@ namespace Saphir
 
 ---
 
-## Comparaison Avant/Après
+## Before/After Comparison
 
 | Aspect | Saphir 1.x | Saphir 2.0 |
 |--------|------------|------------|
-| **Réflexion** | Material = boîte noire | Descripteur introspectable |
-| **Custom shaders** | Impossible | Fragments GLSL injectables |
-| **Validation** | Runtime (crash potentiel) | Compile-time + logs clairs |
-| **Nouveau Material** | Implémenter 4 méthodes | Remplir un descripteur |
-| **Debugging** | Difficile | Descripteur lisible + stats |
-| **Optimisation** | Manuelle | Dead code elimination auto |
-| **Courbe d'apprentissage** | Comprendre toute l'archi | Remplir une struct |
+| **Reflection** | Material = black box | Introspectable descriptor |
+| **Custom shaders** | Impossible | Injectable GLSL fragments |
+| **Validation** | Runtime (potential crash) | Compile-time + clear logs |
+| **New Material** | Implement 4 methods | Fill a descriptor |
+| **Debugging** | Difficult | Readable descriptor + stats |
+| **Optimization** | Manual | Auto dead code elimination |
+| **Learning curve** | Understand entire architecture | Fill a struct |
 
 ---
 
-## Plan d'Implémentation
+## Implementation Plan
 
 ### Phase 1: MaterialDescriptor (Foundation)
 
-- [ ] Créer `Saphir/MaterialDescriptor.hpp`
-- [ ] Définir les structures `TextureSlot`, `ShadingModel`, etc.
-- [ ] Implémenter `inferRequirements()`
-- [ ] Tests unitaires
+- [ ] Create `Saphir/MaterialDescriptor.hpp`
+- [ ] Define `TextureSlot`, `ShadingModel`, etc. structures
+- [ ] Implement `inferRequirements()`
+- [ ] Unit tests
 
 ### Phase 2: Saphir::Analyzer (Core)
 
-- [ ] Créer `Saphir/Analyzer.hpp/.cpp`
-- [ ] Implémenter génération depuis MaterialDescriptor
-- [ ] Supporter les modèles: Unlit, Phong, PBR
-- [ ] Intégrer avec LightGenerator existant
-- [ ] Tests avec Materials simples
+- [ ] Create `Saphir/Analyzer.hpp/.cpp`
+- [ ] Implement generation from MaterialDescriptor
+- [ ] Support models: Unlit, Phong, PBR
+- [ ] Integrate with existing LightGenerator
+- [ ] Tests with simple Materials
 
 ### Phase 3: ShaderFragment (Custom Shaders)
 
-- [ ] Définir syntaxe des pragmas `#pragma saphir`
-- [ ] Implémenter parser GLSL léger
-- [ ] Créer `Saphir/ShaderFragment.hpp/.cpp`
-- [ ] Validation des inputs/outputs
-- [ ] Injection dans le pipeline
-- [ ] Tests avec shaders custom
+- [ ] Define `#pragma saphir` pragma syntax
+- [ ] Implement lightweight GLSL parser
+- [ ] Create `Saphir/ShaderFragment.hpp/.cpp`
+- [ ] Input/output validation
+- [ ] Pipeline injection
+- [ ] Tests with custom shaders
 
-### Phase 4: Migration BasicResource/StandardResource
+### Phase 4: BasicResource/StandardResource Migration
 
-- [ ] Ajouter `descriptor()` à BasicResource
-- [ ] Ajouter `descriptor()` à StandardResource
-- [ ] Router SceneRendering vers Analyzer si `descriptor()` disponible
-- [ ] Maintenir rétro-compatibilité avec anciennes méthodes
-- [ ] Tests de non-régression
+- [ ] Add `descriptor()` to BasicResource
+- [ ] Add `descriptor()` to StandardResource
+- [ ] Route SceneRendering to Analyzer if `descriptor()` available
+- [ ] Maintain backward compatibility with old methods
+- [ ] Non-regression tests
 
-### Phase 5: Deprecation et Cleanup
+### Phase 5: Deprecation and Cleanup
 
-- [ ] Marquer anciennes méthodes `[[deprecated]]`
-- [ ] Migrer tout le code interne vers descripteurs
-- [ ] Documenter la nouvelle API
-- [ ] Mettre à jour `docs/saphir-shader-system.md`
-- [ ] Supprimer code legacy (version future)
-
----
-
-## Questions Ouvertes
-
-1. **Syntaxe des pragmas** — `#pragma saphir` ou format différent (JSON header, attributs GLSL)?
-
-2. **Niveau de custom** — Autoriser vertex custom ou seulement fragment?
-
-3. **Hot-reload** — Recharger les ShaderFragments à chaud pendant le développement?
-
-4. **Héritage de Materials** — Un Material peut-il hériter d'un autre descripteur?
-
-5. **Compute shaders** — Intégrer dans le même système ou séparé?
+- [ ] Mark old methods `[[deprecated]]`
+- [ ] Migrate all internal code to descriptors
+- [ ] Document new API
+- [ ] Update `docs/saphir-shader-system.md`
+- [ ] Remove legacy code (future version)
 
 ---
 
-## Références
+## Open Questions
 
-- Architecture actuelle: `docs/saphir-shader-system.md`
+1. **Pragma syntax** - `#pragma saphir` or different format (JSON header, GLSL attributes)?
+
+2. **Custom level** - Allow custom vertex or only fragment?
+
+3. **Hot-reload** - Reload ShaderFragments on the fly during development?
+
+4. **Material inheritance** - Can a Material inherit from another descriptor?
+
+5. **Compute shaders** - Integrate in same system or separate?
+
+---
+
+## References
+
+- Current architecture: `docs/saphir-shader-system.md`
 - Material interface: `src/Graphics/Material/Interface.hpp`
 - Generators: `src/Saphir/Generator/`
 - LightGenerator: `src/Saphir/LightGenerator.hpp`

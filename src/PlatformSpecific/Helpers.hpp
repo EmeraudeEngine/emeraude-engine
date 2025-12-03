@@ -98,6 +98,13 @@ namespace EmEn::PlatformSpecific
 	bool createConsole (const std::string & title);
 
 	/**
+	* @brief Attaches to the parent process console.
+	* @warning Used only for Windows OS. Fails if the parent has no console.
+	* @return bool
+	*/
+	bool attachToParentConsole ();
+
+	/**
 	 * @brief Returns the parent process ID on Windows.
 	 * @return int
 	 */

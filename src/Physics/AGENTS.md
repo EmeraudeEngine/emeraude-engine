@@ -1,74 +1,74 @@
 # Physics System
 
-Context spécifique pour le développement du système physique d'Emeraude Engine.
+Context for developing the Emeraude Engine physics system.
 
-## Vue d'ensemble du module
+## Module Overview
 
-Le système physique d'Emeraude Engine implémente une architecture à 4 types d'entités avec gestion différenciée des collisions pour équilibrer réalisme, performance et design de jeu.
+The Emeraude Engine physics system implements a 4-entity type architecture with differentiated collision handling to balance realism, performance, and game design.
 
-## Règles spécifiques à Physics/
+## Physics-Specific Rules
 
-### Convention de coordonnées CRITIQUE
-- **Y-DOWN obligatoire** dans tous les calculs physiques
-- Gravité : `+9.81` sur l'axe Y (tire vers le bas)
-- Impulsion de saut : valeur Y négative (pousse vers le haut)
-- Poussée vers l'avant : valeur Z négative
+### CRITICAL Coordinate Convention
+- **Y-DOWN mandatory** in all physics calculations
+- Gravity: `+9.81` on Y axis (pulls downward)
+- Jump impulse: negative Y value (pushes upward)
+- Forward thrust: negative Z value
 
-### Types d'entités (4 types distincts)
-1. **Boundaries** : Contraintes de jeu (murs invisibles)
-2. **Ground** : Surfaces physiques hybrides (stabilité + réalisme)  
-3. **StaticEntity** : Objets statiques avec masse définie
-4. **Nodes** : Entités dynamiques complètes
+### Entity Types (4 distinct types)
+1. **Boundaries**: Game constraints (invisible walls)
+2. **Ground**: Hybrid physical surfaces (stability + realism)
+3. **StaticEntity**: Static objects with defined mass
+4. **Nodes**: Full dynamic entities
 
-### Ordre d'exécution physique
-1. Intégration des forces → 2. Broad phase → 3. Narrow phase → 4. Résolution inter-entités → 5. Collision sol → 6. Collision limites → 7. Résolution sol
+### Physics Execution Order
+1. Force integration → 2. Broad phase → 3. Narrow phase → 4. Inter-entity resolution → 5. Ground collision → 6. Boundary collision → 7. Ground resolution
 
-## Commandes de développement
+## Development Commands
 
 ```bash
-# Tests spécifiques physique
+# Physics-specific tests
 ctest -R Physics
 ./test --filter="*Physics*"
 ```
 
-## Fichiers importants
+## Important Files
 
-- `Manager.cpp/.hpp` - Gestionnaire principal du système physique
-- `ConstraintSolver.cpp/.hpp` - Résolution des contraintes par impulsions
-- `ContactManifold.cpp/.hpp` - Structure de données de collision
-- `Collider.cpp/.hpp` - Détection de collision
-- `@docs/physics-system.md` - Architecture détaillée
-- `@docs/coordinate-system.md` - Convention Y-down (CRITIQUE)
+- `Manager.cpp/.hpp` - Main physics system manager
+- `ConstraintSolver.cpp/.hpp` - Impulse-based constraint resolution
+- `ContactManifold.cpp/.hpp` - Collision data structure
+- `Collider.cpp/.hpp` - Collision detection
+- `@docs/physics-system.md` - Detailed architecture
+- `@docs/coordinate-system.md` - Y-down convention (CRITICAL)
 
-## Patterns de développement
+## Development Patterns
 
-### Ajout d'un nouveau type de collision
-1. Définir la méthode dans `Collider`
-2. Créer les manifolds appropriés
-3. Tester avec les 4 types d'entités
-4. Vérifier la cohérence des coordonnées Y-down
+### Adding a New Collision Type
+1. Define the method in `Collider`
+2. Create appropriate manifolds
+3. Test with all 4 entity types
+4. Verify Y-down coordinate consistency
 
-### Modification du solveur
-1. Maintenir les 8 itérations de vélocité, 3 de position
-2. Appliquer les impulsions selon le type d'entité
-3. Respecter la séparation entités/sol
-4. Préserver la séparation boundaries (pas de manifolds)
+### Modifying the Solver
+1. Maintain 8 velocity iterations, 3 position iterations
+2. Apply impulses according to entity type
+3. Respect entity/ground separation
+4. Preserve boundary separation (no manifolds)
 
-## Points d'attention
+## Critical Points
 
-- **JAMAIS** de conversion de coordonnées Y
-- Calcul de `penetrationDepth` AVANT hard clipping (sol)
-- Mass matters pour StaticEntity (pas de masse infinie)
-- Deux appels séparés au solveur (entités puis sol)
-- **Integration avec Scenes** : Nodes du scene graph héritent de MovableTrait pour physique
-- **Octree spatial** : Scene possède Octree pour broad-phase physique
+- **NEVER** convert Y coordinates
+- Calculate `penetrationDepth` BEFORE hard clipping (ground)
+- Mass matters for StaticEntity (no infinite mass)
+- Two separate solver calls (entities then ground)
+- **Scenes integration**: Scene graph Nodes inherit MovableTrait for physics
+- **Spatial octree**: Scene owns Octree for physics broad-phase
 
-## Documentation détaillée
+## Detailed Documentation
 
-Pour l'architecture complète du système physique:
-- @docs/physics-system.md - Architecture 4-entités détaillée
+For complete physics system architecture:
+- @docs/physics-system.md - Detailed 4-entity architecture
 
-Systèmes liés:
-- @docs/coordinate-system.md - Convention Y-down (CRITIQUE)
-- @src/Scenes/AGENTS.md - Nodes avec MovableTrait pour physique
+Related systems:
+- @docs/coordinate-system.md - Y-down convention (CRITICAL)
+- @src/Scenes/AGENTS.md - Nodes with MovableTrait for physics
 - @src/Libs/AGENTS.md - Math (Vector, Matrix, collision detection)

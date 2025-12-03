@@ -53,7 +53,7 @@ namespace EmEn
 	{
 		namespace Renderable
 		{
-			class Interface;
+			class Abstract;
 		}
 
 		namespace RenderableInstance
@@ -132,9 +132,7 @@ namespace EmEn::Scenes::Component
 			size_t
 			getClassUID () noexcept
 			{
-				static const size_t classUID = EmEn::Libs::Hash::FNV1a("Component");
-
-				return classUID;
+				return Libs::Hash::FNV1a("Component");
 			}
 
 			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
@@ -218,7 +216,7 @@ namespace EmEn::Scenes::Component
 			 * @return const Graphics::Renderable::Interface *
 			 */
 			[[nodiscard]]
-			const Graphics::Renderable::Interface * getRenderable () const noexcept;
+			const Graphics::Renderable::Abstract * getRenderable () const noexcept;
 
 			/**
 			 * @brief Returns physical properties of the component.

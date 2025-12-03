@@ -31,7 +31,7 @@
 #include <mutex>
 
 /* Local inclusions for inheritances. */
-#include "Interface.hpp"
+#include "Abstract.hpp"
 
 /* Local inclusions for usages. */
 #include "Resources/Container.hpp"
@@ -43,7 +43,7 @@ namespace EmEn::Graphics::Renderable
 	 * @note The animation is limited to 120 frames.
 	 * @extends EmEn::Graphics::Renderable::Interface Adds the ability to be rendered in the 3D world.
 	 */
-	class SpriteResource final : public Interface
+	class SpriteResource final : public Abstract
 	{
 		friend class Resources::Container< SpriteResource >;
 
@@ -64,7 +64,7 @@ namespace EmEn::Graphics::Renderable
 			 */
 			explicit
 			SpriteResource (std::string name, uint32_t renderableFlags = 0) noexcept
-				: Interface{std::move(name), IsSprite | renderableFlags}
+				: Abstract{std::move(name), IsSprite | renderableFlags}
 			{
 
 			}
@@ -77,9 +77,7 @@ namespace EmEn::Graphics::Renderable
 			size_t
 			getClassUID () noexcept
 			{
-				static const size_t classUID = EmEn::Libs::Hash::FNV1a(ClassId);
-
-				return classUID;
+				return Libs::Hash::FNV1a(ClassId);
 			}
 
 			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */

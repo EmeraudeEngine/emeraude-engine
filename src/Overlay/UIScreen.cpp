@@ -34,7 +34,6 @@
 #include "Libs/NameableTrait.hpp"
 #include "Vulkan/CommandBuffer.hpp"
 #include "Graphics/Geometry/IndexedVertexResource.hpp"
-#include "FramebufferProperties.hpp"
 #include "Surface.hpp"
 #include "Tracer.hpp"
 

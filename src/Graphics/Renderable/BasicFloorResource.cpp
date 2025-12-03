@@ -316,7 +316,7 @@ namespace EmEn::Graphics::Renderable
 	}
 
 	bool
-	BasicFloorResource::loadDiamondSquare (float size, uint32_t division, float factor, float roughness, int32_t seed, const std::shared_ptr< Material::Interface > & materialResource, float UVMultiplier) noexcept
+	BasicFloorResource::loadDiamondSquare (float size, float shiftHeight, uint32_t division, float factor, float roughness, int32_t seed, const std::shared_ptr< Material::Interface > & materialResource, float UVMultiplier) noexcept
 	{
 		Grid< float > grid{};
 
@@ -324,6 +324,11 @@ namespace EmEn::Graphics::Renderable
 		{
 			grid.setUVMultiplier(UVMultiplier);
 			grid.applyDiamondSquare(factor, roughness, seed);
+
+			if ( !Utility::isZero(shiftHeight) )
+			{
+				grid.shiftHeight(shiftHeight);
+			}
 		}
 		else
 		{
@@ -346,7 +351,7 @@ namespace EmEn::Graphics::Renderable
 	}
 
 	bool
-	BasicFloorResource::loadPerlinNoise (float size, uint32_t division, float noiseSize, float noiseFactor, const std::shared_ptr< Material::Interface > & materialResource, float UVMultiplier) noexcept
+	BasicFloorResource::loadPerlinNoise (float size, float shiftHeight, uint32_t division, float noiseSize, float noiseFactor, const std::shared_ptr< Material::Interface > & materialResource, float UVMultiplier) noexcept
 	{
 		Grid< float > grid{};
 
@@ -354,6 +359,11 @@ namespace EmEn::Graphics::Renderable
 		{
 			grid.setUVMultiplier(UVMultiplier);
 			grid.applyPerlinNoise(noiseSize, noiseFactor);
+
+			if ( !Utility::isZero(shiftHeight) )
+			{
+				grid.shiftHeight(shiftHeight);
+			}
 		}
 		else
 		{

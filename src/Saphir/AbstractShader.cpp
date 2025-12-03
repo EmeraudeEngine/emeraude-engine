@@ -31,10 +31,12 @@
 #include <functional>
 
 /* Local inclusions. */
+#include "Libs/SourceCodeParser.hpp"
 #include "Libs/IO/IO.hpp"
 #include "Generator/Abstract.hpp"
 #include "Keys.hpp"
 #include "Tracer.hpp"
+#include "Libs/TokenFormatter.hpp"
 
 namespace EmEn::Saphir
 {
@@ -285,6 +287,22 @@ namespace EmEn::Saphir
 		this->onGetDeclarationStats(output);
 
 		return output.str();
+	}
+
+	void
+	AbstractShader::traceSuccessfulGeneration () const noexcept
+	{
+		const TokenFormatter tokenFormatter{to_cstring(this->type())};
+		const auto tracerTag = tokenFormatter.toCamelCase();
+		const auto typeTitle = tokenFormatter.toUpperSpaced();
+
+		TraceSuccess{tracerTag.c_str()} << "Source code (" << this->sourceCode().size() << " bytes) for " << tokenFormatter.toLowerSpaced() << " '" << this->name() << "' successfully generated.";
+
+		TraceInfo{tracerTag.c_str()} << "\n"
+			"/****** START OF GENERATED GLSL " << typeTitle << " (" << this->name() << ") CODE ******/" "\n" <<
+			SourceCodeParser::parse(this->sourceCode(), 0, false) <<
+			"/****** END OF GENERATED GLSL " << typeTitle << " (" << this->name() << ") CODE ******/" "\n" <<
+			this->getDeclarationStats() << "\n";
 	}
 
 	void

@@ -323,6 +323,12 @@ namespace EmEn::Saphir
 			std::string getDeclarationStats () const noexcept;
 
 			/**
+			 * @brief Display with the tracer a successful shader generation.
+			 * @return void
+			 */
+			void traceSuccessfulGeneration () const noexcept;
+
+			/**
 			 * @brief Returns the shader type.
 			 * @return ShaderType
 			 */

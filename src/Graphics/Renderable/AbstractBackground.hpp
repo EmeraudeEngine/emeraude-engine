@@ -27,7 +27,7 @@
 #pragma once
 
 /* Local inclusions for inheritances. */
-#include "Interface.hpp"
+#include "Abstract.hpp"
 
 /* Local inclusions for usages. */
 #include "Libs/PixelFactory/Color.hpp"
@@ -39,7 +39,7 @@ namespace EmEn::Graphics::Renderable
 	 * @brief An abstract class to define the far background of a scene.
 	 * @extends EmEn::Graphics::Renderable::Interface This class is a renderable object in the 3D world.
 	 */
-	class AbstractBackground : public Interface
+	class AbstractBackground : public Abstract
 	{
 		public:
 
@@ -225,7 +225,7 @@ namespace EmEn::Graphics::Renderable
 			 */
 			explicit
 			AbstractBackground (std::string name, uint32_t renderableFlags) noexcept
-				: Interface{std::move(name), renderableFlags}
+				: Abstract{std::move(name), renderableFlags}
 			{
 
 			}

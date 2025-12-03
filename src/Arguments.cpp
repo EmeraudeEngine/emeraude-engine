@@ -57,7 +57,7 @@ namespace EmEn
 
 			if ( !value.starts_with('-') )
 			{
-				TraceError{ClassId} << "Invalid argument : " << value;
+				TraceWarning{ClassId} << "Invalid argument '" << value << "', skipping ...";
 
 				continue;
 			}

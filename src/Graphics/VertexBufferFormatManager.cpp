@@ -30,7 +30,7 @@
 #include <sstream>
 
 /* Local inclusions. */
-#include "Graphics/Geometry/Interface.hpp"
+#include "Graphics/Geometry/Abstract.hpp"
 #include "Saphir/VertexShader.hpp"
 #include "Vulkan/VertexBufferObject.hpp"
 #include "Tracer.hpp"

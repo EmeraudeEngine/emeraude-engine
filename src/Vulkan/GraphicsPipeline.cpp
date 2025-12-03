@@ -35,7 +35,7 @@
 #include "Graphics/RasterizationOptions.hpp"
 #include "Graphics/RenderTarget/Abstract.hpp"
 #include "Graphics/RenderableInstance/Abstract.hpp"
-#include "Graphics/Material/Interface.hpp"
+#include "Graphics/Material/Abstract.hpp"
 #include "Device.hpp"
 #include "PipelineLayout.hpp"
 #include "ShaderModule.hpp"
@@ -86,7 +86,7 @@ namespace EmEn::Vulkan
 		const auto & bindings = vertexBufferFormat.bindings();
 		const auto & attributes = vertexBufferFormat.attributes();
 
-		if ( bindings.empty() || attributes.empty())
+		if ( bindings.empty() || attributes.empty() )
 		{
 			Tracer::error(ClassId, "There is no binding or vertex attribute !");
 
@@ -125,52 +125,52 @@ namespace EmEn::Vulkan
 
 		switch ( binding->topology() )
 		{
-			case Topology::PointList :
+			case Topology::PointList:
 				m_inputAssemblyState.topology = VK_PRIMITIVE_TOPOLOGY_POINT_LIST;
 				break;
 
-			case Topology::LineLine :
+			case Topology::LineLine:
 				m_inputAssemblyState.topology = VK_PRIMITIVE_TOPOLOGY_LINE_LIST;
 				break;
 
-			case Topology::LineStrip :
+			case Topology::LineStrip:
 				m_inputAssemblyState.topology = VK_PRIMITIVE_TOPOLOGY_LINE_STRIP;
 				break;
 
-			case Topology::TriangleList :
+			case Topology::TriangleList:
 				m_inputAssemblyState.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
 				break;
 
-			case Topology::TriangleStrip :
+			case Topology::TriangleStrip:
 				m_inputAssemblyState.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
 				break;
 
-			case Topology::TriangleFan :
+			case Topology::TriangleFan:
 				m_inputAssemblyState.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN;
 				break;
 
-			case Topology::LineListWithAdjacency :
+			case Topology::LineListWithAdjacency:
 				m_inputAssemblyState.topology = VK_PRIMITIVE_TOPOLOGY_LINE_LIST_WITH_ADJACENCY;
 				break;
 
-			case Topology::LineStripWithAdjacency :
+			case Topology::LineStripWithAdjacency:
 				m_inputAssemblyState.topology = VK_PRIMITIVE_TOPOLOGY_LINE_STRIP_WITH_ADJACENCY;
 				break;
 
-			case Topology::TriangleListWithAdjacency :
+			case Topology::TriangleListWithAdjacency:
 				m_inputAssemblyState.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST_WITH_ADJACENCY;
 				break;
 
-			case Topology::TriangleStripWithAdjacency :
+			case Topology::TriangleStripWithAdjacency:
 				m_inputAssemblyState.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP_WITH_ADJACENCY;
 				break;
 
-			case Topology::PatchList :
+			case Topology::PatchList:
 				m_inputAssemblyState.topology = VK_PRIMITIVE_TOPOLOGY_PATCH_LIST;
 				break;
 
-			case Topology::CustomData :
-			case Topology::Invalid :
+			case Topology::CustomData:
+			case Topology::Invalid:
 				return false;
 		}
 
@@ -257,44 +257,45 @@ namespace EmEn::Vulkan
 		m_rasterizationState.flags = flags;
 		m_rasterizationState.depthClampEnable = VK_FALSE;
 		m_rasterizationState.rasterizerDiscardEnable = VK_FALSE;
+
 		if ( options != nullptr )
 		{
 			switch ( options->polygonMode() )
 			{
-				case PolygonMode::Fill :
-				case PolygonMode::Invalid :
+				case PolygonMode::Fill:
+				case PolygonMode::Invalid:
 					m_rasterizationState.polygonMode = VK_POLYGON_MODE_FILL;
 					break;
 
-				case PolygonMode::Line :
+				case PolygonMode::Line:
 					m_rasterizationState.polygonMode = VK_POLYGON_MODE_LINE;
 					break;
 
-				case PolygonMode::Point :
+				case PolygonMode::Point:
 					m_rasterizationState.polygonMode = VK_POLYGON_MODE_POINT;
 					break;
 
-				case PolygonMode::FillRectangle :
+				case PolygonMode::FillRectangle:
 					m_rasterizationState.polygonMode = VK_POLYGON_MODE_FILL_RECTANGLE_NV;
 					break;
 			}
 
 			switch ( options->cullingMode() )
 			{
-				case CullingMode::None :
+				case CullingMode::None:
 					m_rasterizationState.cullMode = VK_CULL_MODE_NONE;
 					break;
 
-				case CullingMode::Front :
+				case CullingMode::Front:
 					m_rasterizationState.cullMode = VK_CULL_MODE_FRONT_BIT;
 					break;
 
-				case CullingMode::Back :
-				case CullingMode::Invalid :
+				case CullingMode::Back:
+				case CullingMode::Invalid:
 					m_rasterizationState.cullMode = VK_CULL_MODE_BACK_BIT;
 					break;
 
-				case CullingMode::Both :
+				case CullingMode::Both:
 					m_rasterizationState.cullMode = VK_CULL_MODE_FRONT_AND_BACK;
 					break;
 			}
@@ -310,23 +311,46 @@ namespace EmEn::Vulkan
 
 		switch ( renderPassType )
 		{
-			case RenderPassType::DirectionalLightPass :
-			case RenderPassType::DirectionalLightPassNoShadow :
-			case RenderPassType::PointLightPass :
-			case RenderPassType::PointLightPassNoShadow :
-			case RenderPassType::SpotLightPass :
-			case RenderPassType::SpotLightPassNoShadow :
-				m_rasterizationState.depthBiasEnable = VK_TRUE;
-				m_rasterizationState.depthBiasConstantFactor = -4.0F;
-				m_rasterizationState.depthBiasClamp = 0.0F;
-				m_rasterizationState.depthBiasSlopeFactor = 0.0F;
+			case RenderPassType::DirectionalLightPass:
+			case RenderPassType::DirectionalLightPassNoShadow:
+			case RenderPassType::PointLightPass:
+			case RenderPassType::PointLightPassNoShadow:
+			case RenderPassType::SpotLightPass:
+			case RenderPassType::SpotLightPassNoShadow:
+				if ( options != nullptr && options->isDepthBiasEnabled() )
+				{
+					m_rasterizationState.depthBiasEnable = VK_TRUE;
+					m_rasterizationState.depthBiasConstantFactor = options->depthBiasConstantFactor();
+					m_rasterizationState.depthBiasClamp = options->depthBiasClamp();
+					m_rasterizationState.depthBiasSlopeFactor = options->depthBiasSlopeFactor();
+				}
+				else
+				{
+					/* NOTE: Default behavior to remove artefact when adding light over the ambient pass. */
+					m_rasterizationState.depthBiasEnable = VK_TRUE;
+					m_rasterizationState.depthBiasConstantFactor = 0.0F;
+					m_rasterizationState.depthBiasClamp = 0.0F;
+					m_rasterizationState.depthBiasSlopeFactor = -1.0F;
+				}
 				break;
 
-			default :
-				m_rasterizationState.depthBiasEnable = VK_FALSE;
-				m_rasterizationState.depthBiasConstantFactor = 0.0F;
-				m_rasterizationState.depthBiasClamp = 0.0F;
-				m_rasterizationState.depthBiasSlopeFactor = 0.0F;
+			case RenderPassType::SimplePass :
+			case RenderPassType::AmbientPass :
+			default:
+				if ( options != nullptr && options->isDepthBiasEnabled() )
+				{
+					m_rasterizationState.depthBiasEnable = VK_TRUE;
+					m_rasterizationState.depthBiasConstantFactor = options->depthBiasConstantFactor();
+					m_rasterizationState.depthBiasClamp = options->depthBiasClamp();
+					m_rasterizationState.depthBiasSlopeFactor = options->depthBiasSlopeFactor();
+				}
+				else
+				{
+					m_rasterizationState.depthBiasEnable = VK_FALSE;
+					m_rasterizationState.depthBiasConstantFactor = 0.0F;
+					m_rasterizationState.depthBiasClamp = 0.0F;
+					m_rasterizationState.depthBiasSlopeFactor = 0.0F;
+				}
 				break;
 		}
 
@@ -389,12 +413,12 @@ namespace EmEn::Vulkan
 
 		switch ( renderPassType )
 		{
-			case RenderPassType::DirectionalLightPass :
-			case RenderPassType::DirectionalLightPassNoShadow :
-			case RenderPassType::PointLightPass :
-			case RenderPassType::PointLightPassNoShadow :
-			case RenderPassType::SpotLightPass :
-			case RenderPassType::SpotLightPassNoShadow :
+			case RenderPassType::DirectionalLightPass:
+			case RenderPassType::DirectionalLightPassNoShadow:
+			case RenderPassType::PointLightPass:
+			case RenderPassType::PointLightPassNoShadow:
+			case RenderPassType::SpotLightPass:
+			case RenderPassType::SpotLightPassNoShadow:
 				m_depthStencilState.depthTestEnable = VK_TRUE;
 				m_depthStencilState.depthWriteEnable = VK_FALSE;
 				m_depthStencilState.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
@@ -531,12 +555,12 @@ namespace EmEn::Vulkan
 			switch ( renderPassType )
 			{
 				/* NOTE: This will perform a light color addition over the ambient pass. */
-				case RenderPassType::DirectionalLightPass :
-				case RenderPassType::DirectionalLightPassNoShadow :
-				case RenderPassType::PointLightPass :
-				case RenderPassType::PointLightPassNoShadow :
-				case RenderPassType::SpotLightPass :
-				case RenderPassType::SpotLightPassNoShadow :
+				case RenderPassType::DirectionalLightPass:
+				case RenderPassType::DirectionalLightPassNoShadow:
+				case RenderPassType::PointLightPass:
+				case RenderPassType::PointLightPassNoShadow:
+				case RenderPassType::SpotLightPass:
+				case RenderPassType::SpotLightPassNoShadow:
 					m_colorBlendAttachments[0].blendEnable = VK_TRUE;
 
 					m_colorBlendAttachments[0].srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
@@ -563,7 +587,7 @@ namespace EmEn::Vulkan
 
 						switch ( material.blendingMode() )
 						{
-							case BlendingMode::Add :
+							case BlendingMode::Add:
 								m_colorBlendAttachments[0].srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
 								m_colorBlendAttachments[0].dstColorBlendFactor = VK_BLEND_FACTOR_ONE;
 								m_colorBlendAttachments[0].colorBlendOp = VK_BLEND_OP_ADD;
@@ -573,7 +597,7 @@ namespace EmEn::Vulkan
 								m_colorBlendAttachments[0].alphaBlendOp = VK_BLEND_OP_ADD;
 								break;
 
-							case BlendingMode::Multiply :
+							case BlendingMode::Multiply:
 								m_colorBlendAttachments[0].srcColorBlendFactor = VK_BLEND_FACTOR_ZERO;
 								m_colorBlendAttachments[0].dstColorBlendFactor = VK_BLEND_FACTOR_SRC_COLOR;
 								m_colorBlendAttachments[0].colorBlendOp = VK_BLEND_OP_ADD;
@@ -583,7 +607,7 @@ namespace EmEn::Vulkan
 								m_colorBlendAttachments[0].alphaBlendOp = VK_BLEND_OP_ADD;
 								break;
 
-							case BlendingMode::Screen :
+							case BlendingMode::Screen:
 								m_colorBlendAttachments[0].srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
 								m_colorBlendAttachments[0].dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_COLOR;
 								m_colorBlendAttachments[0].colorBlendOp = VK_BLEND_OP_ADD;
@@ -594,7 +618,7 @@ namespace EmEn::Vulkan
 								break;
 
 							/* Simple alpha blending. */
-							case BlendingMode::Normal :
+							case BlendingMode::Normal:
 							default:
 								m_colorBlendAttachments[0].srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
 								m_colorBlendAttachments[0].dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
@@ -605,8 +629,6 @@ namespace EmEn::Vulkan
 								m_colorBlendAttachments[0].alphaBlendOp = VK_BLEND_OP_ADD;
 								break;
 						}
-
-
 					}
 					break;
 			}
@@ -743,16 +765,7 @@ namespace EmEn::Vulkan
 		 * and VK_DYNAMIC_STATE_LINE_WIDTH dynamic states set. */
 		if ( m_createInfo.pRasterizationState == nullptr )
 		{
-			if ( !isDynamicStateEnabled || (
-				!this->hasDynamicState(VK_DYNAMIC_STATE_DEPTH_CLAMP_ENABLE_EXT) &&
-				!this->hasDynamicState(VK_DYNAMIC_STATE_RASTERIZER_DISCARD_ENABLE) &&
-				!this->hasDynamicState(VK_DYNAMIC_STATE_POLYGON_MODE_EXT) &&
-				!this->hasDynamicState(VK_DYNAMIC_STATE_CULL_MODE) &&
-				!this->hasDynamicState(VK_DYNAMIC_STATE_FRONT_FACE) &&
-				!this->hasDynamicState(VK_DYNAMIC_STATE_DEPTH_BIAS_ENABLE) &&
-				!this->hasDynamicState(VK_DYNAMIC_STATE_DEPTH_BIAS) &&
-				!this->hasDynamicState(VK_DYNAMIC_STATE_LINE_WIDTH)
-			))
+			if ( !isDynamicStateEnabled || (!this->hasDynamicState(VK_DYNAMIC_STATE_DEPTH_CLAMP_ENABLE_EXT) && !this->hasDynamicState(VK_DYNAMIC_STATE_RASTERIZER_DISCARD_ENABLE) && !this->hasDynamicState(VK_DYNAMIC_STATE_POLYGON_MODE_EXT) && !this->hasDynamicState(VK_DYNAMIC_STATE_CULL_MODE) && !this->hasDynamicState(VK_DYNAMIC_STATE_FRONT_FACE) && !this->hasDynamicState(VK_DYNAMIC_STATE_DEPTH_BIAS_ENABLE) && !this->hasDynamicState(VK_DYNAMIC_STATE_DEPTH_BIAS) && !this->hasDynamicState(VK_DYNAMIC_STATE_LINE_WIDTH)) )
 			{
 				Tracer::error(ClassId, "There is no rasterization state to build the graphics pipeline properly !");
 
@@ -766,12 +779,7 @@ namespace EmEn::Vulkan
 		 * in which case VkPipelineMultisampleStateCreateInfo::sampleShadingEnable is assumed to be VK_FALSE. */
 		if ( m_createInfo.pMultisampleState == nullptr )
 		{
-			if ( !isDynamicStateEnabled || (
-				!this->hasDynamicState(VK_DYNAMIC_STATE_RASTERIZATION_SAMPLES_EXT) &&
-				!this->hasDynamicState(VK_DYNAMIC_STATE_SAMPLE_MASK_EXT) &&
-				!this->hasDynamicState(VK_DYNAMIC_STATE_ALPHA_TO_COVERAGE_ENABLE_EXT) &&
-				!this->hasDynamicState(VK_DYNAMIC_STATE_ALPHA_TO_ONE_ENABLE_EXT)
-			))
+			if ( !isDynamicStateEnabled || (!this->hasDynamicState(VK_DYNAMIC_STATE_RASTERIZATION_SAMPLES_EXT) && !this->hasDynamicState(VK_DYNAMIC_STATE_SAMPLE_MASK_EXT) && !this->hasDynamicState(VK_DYNAMIC_STATE_ALPHA_TO_COVERAGE_ENABLE_EXT) && !this->hasDynamicState(VK_DYNAMIC_STATE_ALPHA_TO_ONE_ENABLE_EXT)) )
 			{
 				Tracer::error(ClassId, "There is no multisample state to build the graphics pipeline properly !");
 
@@ -785,15 +793,7 @@ namespace EmEn::Vulkan
 		 * and VK_DYNAMIC_STATE_DEPTH_BOUNDS dynamic states set. */
 		if ( m_createInfo.pDepthStencilState == nullptr )
 		{
-			if ( !isDynamicStateEnabled || (
-				!this->hasDynamicState(VK_DYNAMIC_STATE_DEPTH_TEST_ENABLE) &&
-				!this->hasDynamicState(VK_DYNAMIC_STATE_DEPTH_WRITE_ENABLE) &&
-				!this->hasDynamicState(VK_DYNAMIC_STATE_DEPTH_COMPARE_OP) &&
-				!this->hasDynamicState(VK_DYNAMIC_STATE_DEPTH_BOUNDS_TEST_ENABLE) &&
-				!this->hasDynamicState(VK_DYNAMIC_STATE_STENCIL_TEST_ENABLE) &&
-				!this->hasDynamicState(VK_DYNAMIC_STATE_STENCIL_OP) &&
-				!this->hasDynamicState(VK_DYNAMIC_STATE_DEPTH_BOUNDS)
-			))
+			if ( !isDynamicStateEnabled || (!this->hasDynamicState(VK_DYNAMIC_STATE_DEPTH_TEST_ENABLE) && !this->hasDynamicState(VK_DYNAMIC_STATE_DEPTH_WRITE_ENABLE) && !this->hasDynamicState(VK_DYNAMIC_STATE_DEPTH_COMPARE_OP) && !this->hasDynamicState(VK_DYNAMIC_STATE_DEPTH_BOUNDS_TEST_ENABLE) && !this->hasDynamicState(VK_DYNAMIC_STATE_STENCIL_TEST_ENABLE) && !this->hasDynamicState(VK_DYNAMIC_STATE_STENCIL_OP) && !this->hasDynamicState(VK_DYNAMIC_STATE_DEPTH_BOUNDS)) )
 			{
 				Tracer::error(ClassId, "There is no depth/stencil state to build the graphics pipeline properly !");
 
@@ -807,21 +807,14 @@ namespace EmEn::Vulkan
 		 * dynamic states set. */
 		if ( m_createInfo.pColorBlendState == nullptr )
 		{
-			if ( !isDynamicStateEnabled || (
-				!this->hasDynamicState(VK_DYNAMIC_STATE_LOGIC_OP_ENABLE_EXT) &&
-				!this->hasDynamicState(VK_DYNAMIC_STATE_LOGIC_OP_EXT) &&
-				!this->hasDynamicState(VK_DYNAMIC_STATE_COLOR_BLEND_ENABLE_EXT) &&
-				!this->hasDynamicState(VK_DYNAMIC_STATE_COLOR_BLEND_EQUATION_EXT) &&
-				!this->hasDynamicState(VK_DYNAMIC_STATE_COLOR_WRITE_MASK_EXT) &&
-				!this->hasDynamicState(VK_DYNAMIC_STATE_BLEND_CONSTANTS)
-			))
+			if ( !isDynamicStateEnabled || (!this->hasDynamicState(VK_DYNAMIC_STATE_LOGIC_OP_ENABLE_EXT) && !this->hasDynamicState(VK_DYNAMIC_STATE_LOGIC_OP_EXT) && !this->hasDynamicState(VK_DYNAMIC_STATE_COLOR_BLEND_ENABLE_EXT) && !this->hasDynamicState(VK_DYNAMIC_STATE_COLOR_BLEND_EQUATION_EXT) && !this->hasDynamicState(VK_DYNAMIC_STATE_COLOR_WRITE_MASK_EXT) && !this->hasDynamicState(VK_DYNAMIC_STATE_BLEND_CONSTANTS)) )
 			{
 				this->defaultColorBlendState();
 			}
 		}
 
 		/* NOTE: This can be NULL, which means no state in the pipeline is considered dynamic. */
-		//m_createInfo.pDynamicState = nullptr;
+		// m_createInfo.pDynamicState = nullptr;
 
 		m_createInfo.layout = pipelineLayout->handle();
 		m_createInfo.renderPass = renderPass->handle();
@@ -875,9 +868,7 @@ namespace EmEn::Vulkan
 			return false;
 		}
 
-		const auto & extent = renderTarget.extent();
-
-		if ( !this->configureViewportState(extent.width, extent.height) )
+		if ( const auto & extent = renderTarget.extent(); !this->configureViewportState(extent.width, extent.height) )
 		{
 			Tracer::error(ClassId, "Unable to configure viewport state !");
 
@@ -899,15 +890,7 @@ namespace EmEn::Vulkan
 	bool
 	GraphicsPipeline::createOnHardware () noexcept
 	{
-		const auto result = vkCreateGraphicsPipelines(
-			this->device()->handle(),
-			VK_NULL_HANDLE,
-			1, &m_createInfo,
-			nullptr,
-			&m_handle
-		);
-
-		if ( result != VK_SUCCESS )
+		if ( const auto result = vkCreateGraphicsPipelines(this->device()->handle(), VK_NULL_HANDLE, 1, &m_createInfo, nullptr, &m_handle); result != VK_SUCCESS )
 		{
 			TraceError{ClassId} << "Unable to create a graphics pipeline : " << vkResultToCString(result) << " !";
 

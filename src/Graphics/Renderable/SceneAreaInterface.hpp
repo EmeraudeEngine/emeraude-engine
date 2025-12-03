@@ -27,7 +27,7 @@
 #pragma once
 
 /* Local inclusions for inheritances. */
-#include "Interface.hpp"
+#include "Abstract.hpp"
 
 namespace EmEn::Graphics::Renderable
 {
@@ -35,7 +35,7 @@ namespace EmEn::Graphics::Renderable
 	 * @brief Interface to define a physical and visible floor in a scene.
 	 * @extends EmEn::Graphics::Renderable::Interface This class is a renderable object in the 3D world.
 	 */
-	class SceneAreaInterface : public Interface
+	class SceneAreaInterface : public Abstract
 	{
 		public:
 
@@ -74,7 +74,7 @@ namespace EmEn::Graphics::Renderable
 			 */
 			explicit
 			SceneAreaInterface (std::string sceneAreaName, uint32_t renderableFlags) noexcept
-				: Interface{std::move(sceneAreaName), renderableFlags}
+				: Abstract{std::move(sceneAreaName), renderableFlags}
 			{
 
 			}

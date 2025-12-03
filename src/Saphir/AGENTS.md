@@ -1,84 +1,110 @@
 # Saphir Shader System
 
-Context spécifique pour le développement du système de génération automatique de shaders d'Emeraude Engine.
+Context for developing the Emeraude Engine automatic shader generation system.
 
-## Vue d'ensemble du module
+## Module Overview
 
-Saphir génère automatiquement du code GLSL à partir des propriétés de matériaux, des attributs géométriques et du contexte de scène. Il élimine le besoin de centaines de variantes de shaders écrites manuellement.
+Saphir automatically generates GLSL code from material properties, geometry attributes, and scene context. It eliminates the need for hundreds of manually written shader variants.
 
-## Règles spécifiques à Saphir/
+## Saphir-Specific Rules
 
-### Philosophie de génération
-- **Génération paramétrique** : Shaders créés à partir d'inconnues (material + geometry + scene)
-- **Vérification de compatibilité STRICTE** : Material requirements DOIT matcher geometry attributes
-- **Échec gracieux** : Si incompatible → resource loading fails → application continue
-- **Cache agressif** : Évite génération et compilation redondantes
+### Generation Philosophy
+- **Parametric generation**: Shaders created from unknowns (material + geometry + scene)
+- **STRICT compatibility checking**: Material requirements MUST match geometry attributes
+- **Graceful failure**: If incompatible → resource loading fails → application continues
+- **Aggressive caching**: 3-level cache avoids redundant generation and compilation
 
-### Types de générateurs
-1. **SceneGenerator** : Objets 3D avec éclairage complet, matériaux, effets
-2. **OverlayGenerator** : Éléments 2D (UI, HUD, texte, sprites)
-3. **ShadowManager** : Shaders minimaux pour génération shadow maps
+### 3-Level Cache System
 
-### Vérification de compatibilité
-```cpp
-Material requirements: [Normals, TangentSpace, TextureCoordinates2D]
-Geometry attributes:   [positions, normals, uvs]  // PAS de tangents!
-→ ÉCHEC avec log détaillé
+| Level | Object | Location | Cache Key | Benefit |
+|-------|--------|----------|-----------|---------|
+| 1 | `ShaderModule` | `ShaderManager` | Source code hash | Reuse compiled SPIR-V between programs |
+| 2 | `Program` | `Renderer::m_programs` | `computeProgramCacheKey()` | Skip entire shader generation |
+| 3 | `GraphicsPipeline` | `Renderer::m_graphicsPipelines` | `getHash()` | Reuse Vulkan pipeline objects |
+
+**Program cache** (Level 2) provides the biggest gain - it short-circuits before any shader code generation when an identical configuration exists. See: `Generator::Abstract::generateShaderProgram()`
+
+```
+RenderableInstance created
+    │
+    ▼
+computeProgramCacheKey() ──► Cache hit? ──► Return cached Program (skip all generation)
+    │                              │
+    │ miss                         │ hit (1482 reuses typical)
+    ▼                              │
+Generate GLSL code                 │
+Compile ShaderModules              │
+Create Program                     │
+Cache Program ◄────────────────────┘
 ```
 
-## Commandes de développement
+### Generator Types
+1. **SceneGenerator**: 3D objects with full lighting, materials, effects
+2. **OverlayGenerator**: 2D elements (UI, HUD, text, sprites)
+3. **ShadowManager**: Minimal shaders for shadow map generation
+
+### Compatibility Checking
+```cpp
+Material requirements: [Normals, TangentSpace, TextureCoordinates2D]
+Geometry attributes:   [positions, normals, uvs]  // NO tangents!
+→ FAILURE with detailed log
+```
+
+## Development Commands
 
 ```bash
-# Tests spécifiques
+# Specific tests
 ctest -R Saphir
 ./test --filter="*Shader*"
 ```
 
-## Fichiers importants
+## Important Files
 
-- `CodeGeneratorInterface.cpp/.hpp` - Interface base pour tous les générateurs
-- `LightGenerator.cpp/.hpp` - Génération éclairage (PerFragment, PerVertex)
-- `Program.cpp/.hpp` - Gestion programmes Vulkan et cache SPIR-V
-- `ShaderManager.cpp/.hpp` - Coordinateur principal système Saphir
-- `@docs/saphir-shader-system.md` - Architecture complète du système
+- `Generator/Abstract.cpp/.hpp` - Base class for all generators, implements cache lookup
+- `Generator/SceneRendering.cpp/.hpp` - 3D scene rendering generator
+- `Generator/ShadowCasting.cpp/.hpp` - Shadow map generator
+- `Generator/OverlayRendering.cpp/.hpp` - 2D overlay generator
+- `LightGenerator.cpp/.hpp` - Lighting generation (PerFragment, PerVertex)
+- `Program.cpp/.hpp` - Shader program (shaders + pipeline layout)
+- `ShaderManager.cpp/.hpp` - ShaderModule cache and compilation
 
-## Patterns de développement
+## Development Patterns
 
-### Ajout d'un nouveau générateur
-1. Hériter de `CodeGeneratorInterface`
-2. Implémenter `check(material, geometry)` pour compatibilité
-3. Implémenter `generate()` pour production GLSL
-4. Enregistrer avec le ShaderManager
+### Adding a New Generator
+1. Inherit from `Generator::Abstract`
+2. Implement `computeProgramCacheKey()` - **REQUIRED** for cache system
+3. Implement `prepareUniformSets()`, `onGenerateShadersCode()`, `onCreateDataLayouts()`, `onGraphicsPipelineConfiguration()`
+4. Cache key must include all parameters that affect shader output
 
-### Extension d'un générateur existant
-1. Identifier le type de generator (Scene/Overlay/Shadow)
-2. Ajouter conditions dans les méthodes generate
-3. Tester toutes les combinaisons material/geometry
-4. Vérifier performance cache (hash des inputs)
+### Extending an Existing Generator
+1. Identify generator type (Scene/Overlay/Shadow)
+2. Add conditions in generate methods
+3. Test all material/geometry combinations
+4. Verify cache performance (input hash)
 
-### Debug échecs de génération
-1. Examiner logs détaillés (matériel vs géométrie)
-2. Vérifier export des tangents (Blender/Maya)
-3. Simplifier matériel OU enrichir géométrie
-4. Tester avec matériel par défaut d'abord
+### Debugging Generation Failures
+1. Examine detailed logs (material vs geometry)
+2. Verify tangent export (Blender/Maya)
+3. Simplify material OR enrich geometry
+4. Test with default material first
 
-## Points d'attention
+## Critical Points
 
-- **Strict checking** : Material requirements DOIT être satisfait par geometry
-- **Cache par hash** : Inputs identiques → même shader (performance)
-- **Fail-safe integration** : Échecs logés mais app continue (pas de crash)
-- **Y-down convention** : Matrices projection configurées pour Vulkan
-- **Thread safety** : Cache protégé, génération peut être parallèle
-- **Utilisé par Graphics et Overlay** : Graphics (3D), Overlay (2D) utilisent Saphir
-- **Génération runtime** : Shaders générés à la demande pendant chargement resources
+- **Strict checking**: Material requirements MUST be satisfied by geometry
+- **Hash-based cache**: Identical inputs → same shader (performance)
+- **Fail-safe integration**: Failures logged but app continues (no crash)
+- **Y-down convention**: Projection matrices configured for Vulkan
+- **Thread safety**: Cache protected, generation can be parallel
+- **Used by Graphics and Overlay**: Graphics (3D), Overlay (2D) use Saphir
+- **Runtime generation**: Shaders generated on demand during resource loading
 
-## Documentation détaillée
+## Detailed Documentation
 
-Pour l'architecture complète du système Saphir:
-- @docs/saphir-shader-system.md** - Génération paramétrique, compatibilité, cache
+For complete Saphir system architecture:
+- @docs/saphir-shader-system.md - Parametric generation, compatibility, cache
 
-Systèmes liés:
-- @src/Graphics/AGENTS.md** - Material et Geometry pour génération 3D
-- @src/Overlay/AGENTS.md** - Pipeline 2D via OverlayGenerator
-- @src/Resources/AGENTS.md** - Génération pendant onDependenciesLoaded()
-- @src/Vulkan/AGENTS.md** - Compilation SPIR-V et pipelines
+Related systems:
+- @src/Graphics/AGENTS.md - Material and Geometry for 3D generation
+- @src/Overlay/AGENTS.md - 2D pipeline via OverlayGenerator
+- @src/Resources/AGENTS.md - Generation during onDependenciesLoaded()
+- @src/Vulkan/AGENTS.md - SPIR-V compilation and pipelines

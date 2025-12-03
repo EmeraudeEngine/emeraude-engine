@@ -39,6 +39,12 @@ namespace EmEn::Libs
 {
 	ThreadPool::ThreadPool (size_t threadCount)
 	{
+		/* Ensure at least one worker. */
+		if ( threadCount == 0 )
+		{
+			threadCount = 1;
+		}
+
 		m_workers.reserve(threadCount);
 
 		for ( size_t index = 0; index < threadCount; ++index )
@@ -48,7 +54,7 @@ namespace EmEn::Libs
 
 		if constexpr ( ThreadPoolDebugEnabled )
 		{
-			std::cout << "[ThreadPool-debug] " << threadCount << " thread spawned in the pool !" "\n";
+			std::cout << "[ThreadPool-debug] " << threadCount << " threads spawned in the pool." "\n";
 		}
 	}
 
@@ -56,31 +62,29 @@ namespace EmEn::Libs
 	{
 		if constexpr ( ThreadPoolDebugEnabled )
 		{
-			std::cout << "[ThreadPool-debug] Cleaning the thread pool ..." "\n";
+			std::cout << "[ThreadPool-debug] Cleaning the thread pool..." "\n";
 		}
 
+		/* Signal all workers to stop. */
 		{
-			std::unique_lock< std::mutex > scopeLock{m_threadAccess};
-
-			m_stop = true;
+			std::lock_guard< std::mutex > lock{m_mutex};
+			m_stop.store(true, std::memory_order_release);
 		}
 
-		/* NOTE: Wake every body to make them stop. */
+		/* Wake all workers so they can see the stop flag. */
 		m_condition.notify_all();
 
 		if constexpr ( ThreadPoolDebugEnabled )
 		{
-			std::cout << "[ThreadPool-debug] Stopped and wait for all threads to quit ..." "\n";
+			std::cout << "[ThreadPool-debug] Stopped and waiting for all threads to quit..." "\n";
 		}
 
 		for ( auto & worker : m_workers )
 		{
-			if ( !worker.joinable() )
+			if ( worker.joinable() )
 			{
-				continue;
+				worker.join();
 			}
-
-			worker.join();
 		}
 
 		if constexpr ( ThreadPoolDebugEnabled )
@@ -90,24 +94,28 @@ namespace EmEn::Libs
 	}
 
 	bool
-	ThreadPool::enqueue (std::function< void () > task)
+	ThreadPool::enqueueTask (Task && task)
 	{
 		{
-			std::unique_lock< std::mutex > scopeLock{m_threadAccess};
+			std::lock_guard< std::mutex > lock{m_mutex};
 
-			if ( m_stop )
+			if ( m_stop.load(std::memory_order_acquire) )
 			{
-				std::cerr << "[ThreadPool-debug] Enqueue on a stopped thread pool !" "\n";
+				if constexpr ( ThreadPoolDebugEnabled )
+				{
+					std::cerr << "[ThreadPool-debug] Enqueue on a stopped thread pool!" "\n";
+				}
 
 				return false;
 			}
 
-			m_tasks.emplace(std::move(task));
+			m_tasks.emplace_back(std::move(task));
+			m_pendingTasks.fetch_add(1, std::memory_order_release);
 		}
 
 		if constexpr ( ThreadPoolDebugEnabled )
 		{
-			std::cout << "[ThreadPool-debug] New task added." "\n";
+			std::cout << "[ThreadPool-debug] New task added to queue." "\n";
 		}
 
 		m_condition.notify_one();
@@ -118,18 +126,23 @@ namespace EmEn::Libs
 	void
 	ThreadPool::wait ()
 	{
-		std::unique_lock< std::mutex > lock{m_threadAccess};
+		if constexpr ( ThreadPoolDebugEnabled )
+		{
+			std::cout <<
+				"[ThreadPool-debug] Waiting for " << m_busyWorkers.load(std::memory_order_relaxed) << " workers to finish "
+				"(" << m_pendingTasks.load(std::memory_order_relaxed) << " tasks left)..." "\n";
+		}
+
+		std::unique_lock< std::mutex > lock{m_mutex};
+
+		m_completionCondition.wait(lock, [this] {
+			return m_pendingTasks.load(std::memory_order_acquire) == 0 && m_busyWorkers.load(std::memory_order_acquire) == 0;
+		});
 
 		if constexpr ( ThreadPoolDebugEnabled )
 		{
-			std::cout << "[ThreadPool-debug] Waiting for " << m_busyWorkers << " to finish (" << m_tasks.size() << " tasks left) ..." "\n";
+			std::cout << "[ThreadPool-debug] All tasks completed." "\n";
 		}
-
-		/* NOTE: The wait condition is that the task file is empty
-		 * and no worker is currently executing a task. */
-		m_completion_condition.wait(lock, [this] {
-			return m_tasks.empty() && m_busyWorkers == 0;
-		});
 	}
 
 	void
@@ -137,33 +150,43 @@ namespace EmEn::Libs
 	{
 		while ( true )
 		{
-			std::function< void () > task;
+			Task task;
 
 			{
-				std::unique_lock< std::mutex > lock{m_threadAccess};
+				std::unique_lock< std::mutex > lock{m_mutex};
 
+				/* Wait until there's work or stop signal. */
 				m_condition.wait(lock, [this] {
-					return m_stop || !m_tasks.empty();
+					return m_stop.load(std::memory_order_acquire) || !m_tasks.empty();
 				});
 
-				/* NOTE: If the pool is stopped and there are no more tasks, the worker may stop. */
-				if ( m_stop && m_tasks.empty() )
+				/* Check stop condition - but finish remaining tasks first. */
+				if ( m_stop.load(std::memory_order_acquire) && m_tasks.empty() )
 				{
 					return;
 				}
 
-				task = std::move(m_tasks.front());
-
-				m_tasks.pop();
-
-				++m_busyWorkers;
+				/* Get a task from the queue. */
+				if ( !m_tasks.empty() )
+				{
+					task = std::move(m_tasks.front());
+					m_tasks.pop_front();
+					m_pendingTasks.fetch_sub(1, std::memory_order_release);
+					m_busyWorkers.fetch_add(1, std::memory_order_release);
+				}
+				else
+				{
+					/* Spurious wakeup or stop without tasks. */
+					continue;
+				}
 			}
 
+			/* Execute task outside any locks. */
 			if constexpr ( ThreadPoolDebugEnabled )
 			{
-				std::this_thread::sleep_for(std::chrono::milliseconds(500));
-
-				std::cout << "[ThreadPool-debug] Thread #" << std::this_thread::get_id() << " running ... (" << m_busyWorkers << " busy workers, " << m_tasks.size() << " tasks left)" "\n";
+				std::cout <<
+					"[ThreadPool-debug] Worker running task... "
+					"(" << m_busyWorkers.load(std::memory_order_relaxed) << " busy, " << m_pendingTasks.load(std::memory_order_relaxed) << " pending)" "\n";
 
 				{
 					Time::Elapsed::PrintScopeRealTime stat{"[ThreadPool-debug] Task finished"};
@@ -171,26 +194,20 @@ namespace EmEn::Libs
 					task();
 				}
 
-				std::cout << "[ThreadPool-debug] Thread #" << std::this_thread::get_id() << " finished. (" << m_busyWorkers << " busy workers, " << m_tasks.size() << " tasks left)" "\n";
-
-				std::this_thread::sleep_for(std::chrono::milliseconds(500));
+				std::cout << "[ThreadPool-debug] Worker finished task." "\n";
 			}
 			else
 			{
 				task();
 			}
 
+			/* Decrement busy count and signal completion. */
 			{
-				std::unique_lock< std::mutex > lock{m_threadAccess};
+				std::lock_guard< std::mutex > lock{m_mutex};
 
-				--m_busyWorkers;
+				m_busyWorkers.fetch_sub(1, std::memory_order_release);
 
-				/* NOTE: If it was the last task in progress AND the queue is empty,
-				 * we notify those who are waiting. */
-				if ( m_busyWorkers == 0 && m_tasks.empty() )
-				{
-					m_completion_condition.notify_all();
-				}
+				m_completionCondition.notify_all();
 			}
 		}
 	}

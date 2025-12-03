@@ -38,8 +38,6 @@
 #include <sstream>
 #include <string>
 #include <vector>
-#include <array>
-#include <functional>
 #include <limits>
 #include <type_traits>
 #include <iostream>

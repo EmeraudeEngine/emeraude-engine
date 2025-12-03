@@ -73,11 +73,13 @@ namespace EmEn::Vulkan
 			 * @brief Constructs a Vulkan instance.
 			 * @param identification A reference to the application identification.
 			 * @param primaryServices A reference to primary services.
+			 * @param fullscreenExclusiveEnabled Declares the application will run only in fullscreen.
 			 */
-			Instance (const Identification & identification, PrimaryServices & primaryServices) noexcept
+			Instance (const Identification & identification, PrimaryServices & primaryServices, bool fullscreenExclusiveEnabled) noexcept
 				: ServiceInterface{ClassId},
 				m_identification{identification},
-				m_primaryServices{primaryServices}
+				m_primaryServices{primaryServices},
+				m_fullscreenExclusiveEnabled{fullscreenExclusiveEnabled}
 			{
 				/* [VULKAN-API-SETUP] Graphics device extensions selection. */
 
@@ -327,11 +329,10 @@ namespace EmEn::Vulkan
 			/**
 			 * @brief Returns a list of a scored graphics-capable device.
 			 * @param window A pointer to the current Window. This can be nullptr.
-			 * @param runMode The running mode desired for sorting devices.
 			 * @return std::map< size_t, std::shared_ptr< PhysicalDevice > >
 			 */
 			[[nodiscard]]
-			std::map< size_t, std::shared_ptr< PhysicalDevice > > getScoredGraphicsDevices (Window * window, DeviceRunMode runMode) const noexcept;
+			std::map< size_t, std::shared_ptr< PhysicalDevice > > getScoredGraphicsDevices (Window * window) const noexcept;
 
 			/**
 			 * @brief Configures the list of required validation layers.
@@ -362,49 +363,41 @@ namespace EmEn::Vulkan
 			static bool isLikelyMobileGPU (const std::string & gpuName) noexcept;
 
 			/**
-			 * @brief Logs the GPU configuration at startup.
-			 * @return void
-			 */
-			void logGPUConfiguration () const noexcept;
-
-			/**
 			 * @brief Checks if a GPU should be excluded in Failsafe mode.
+			 * @param hybridConfig A reference to a struct.
 			 * @param physicalDevice The physical device to check.
 			 * @return True if the device should be excluded.
 			 */
 			[[nodiscard]]
-			bool shouldExcludeForFailsafe (const std::shared_ptr< PhysicalDevice > & physicalDevice) const noexcept;
+			bool shouldExcludeForFailsafe (const HybridGPUConfig & hybridConfig, const std::shared_ptr< PhysicalDevice > & physicalDevice) const noexcept;
 
 			/**
 			 * @brief Modulates the device score against a running strategy.
 			 * @param deviceProperties A vulkan struct for the device properties.
-			 * @param runMode The desired running mode.
 			 * @param score A reference to the score.
 			 * @return void
 			 */
-			static void modulateDeviceScoring (const VkPhysicalDeviceProperties & deviceProperties, DeviceRunMode runMode, size_t & score) noexcept;
+			void modulateDeviceScoring (const VkPhysicalDeviceProperties & deviceProperties, size_t & score) const noexcept;
 
 			/**
 			 * @brief Checks the physical device type for use as a specific purpose
 			 * @param physicalDevice A reference to the physical device smart pointer.
-			 * @param runMode The desired running mode.
 			 * @param type The desired queue type.
 			 * @param score A reference to a score to sort the preferred device.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			static bool checkDeviceCompatibility (const std::shared_ptr< PhysicalDevice > & physicalDevice, DeviceRunMode runMode, VkQueueFlagBits type, size_t & score) noexcept;
+			bool checkDeviceCompatibility (const std::shared_ptr< PhysicalDevice > & physicalDevice, VkQueueFlagBits type, size_t & score) const noexcept;
 
 			/**
 			 * @brief Checks the physical device type for use as a graphics device with presentation supported.
 			 * @param physicalDevice A reference to the physical device smart pointer.
-			 * @param runMode The desired running mode.
 			 * @param window A pointer to the window where rendering will be displayed.
 			 * @param score A reference to a score to sort the preferred device.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			static bool checkDeviceCompatibility (const std::shared_ptr< PhysicalDevice > & physicalDevice, DeviceRunMode runMode, const Window * window, size_t & score) noexcept;
+			bool checkDeviceCompatibility (const std::shared_ptr< PhysicalDevice > & physicalDevice, const Window * window, size_t & score) const noexcept;
 
 			/**
 			 * @brief Checks the device features presence for a specialized device selector.
@@ -447,12 +440,14 @@ namespace EmEn::Vulkan
 			std::vector< const char * > m_requiredValidationLayers;
 			std::vector< const char * > m_requiredInstanceExtensions;
 			std::vector< const char * > m_requiredGraphicsDeviceExtensions;
+			DeviceAutoSelectMode m_autoSelectMode{DeviceAutoSelectMode::Performance};
 			bool m_showInformation{false};
 			bool m_debugMode{false};
 			bool m_useDebugMessenger{false};
 			bool m_dynamicStateExtensionEnabled{false};
 			bool m_standardTextureCheckEnabled{false};
-			bool m_optimusWorkaroundEnabled{true};
-			HybridGPUConfig m_hybridConfig{};
+			bool m_enableFailSafe{false};
+			bool m_fullscreenExclusiveEnabled{false};
+			bool m_useVulkanMemoryAllocator{false};
 	};
 }

@@ -30,19 +30,18 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <mutex>
 #include <string>
-#include <unordered_map>
 #include "Libs/std_source_location.hpp"
 
 /* Local inclusions for inheritances. */
 #include "Libs/FlagTrait.hpp"
 
 /* Local inclusions for usages. */
-#include "Graphics/Renderable/Interface.hpp"
+#include "Graphics/Renderable/Abstract.hpp"
 #include "Graphics/Types.hpp"
 #include "Libs/Math/CartesianFrame.hpp"
 #include "RenderContext.hpp"
-#include "RenderTargetProgramsInterface.hpp"
 
 /* Forward declarations. */
 namespace EmEn
@@ -97,38 +96,45 @@ namespace EmEn::Graphics::RenderableInstance
 		IsReadyToRender = 1U << 0,
 		/**
 		 * @brief This flag is set when all positions (GPU instancing) are up to date.
-		 * @deprecated This flag is legacy and currently unused. Previously controlled video memory buffer update
-		 * frequency.
+		 * @note Used by Multiple to avoid redundant VBO uploads when local data hasn't changed.
 		 */
 		ArePositionsSynchronized = 1U << 1,
 		/** @brief This flag is set when the renderable instance can't be loaded in the rendering system and must be removed. */
 		BrokenState = 1U << 2,
-		/** @brief This flag is set when the renderable instance uses a VBO to send locations (GPU instancing). */
-		EnableInstancing = 1U << 3,
-		/** @brief This flag is set when the renderable instance uses skeletal animation with an UBO. */
-		EnableSkeletalAnimation = 1U << 4,
 		/** @brief This flag is set when the renderable instance needs to generate a shader with lighting code. */
-		EnableLighting = 1U << 5,
+		EnableLighting = 1U << 3,
 		/** @brief This flag is set when the renderable instance needs to generate a shader to cast/receive shadows. */
-		EnableShadows = 1U << 6,
+		EnableShadows = 1U << 4,
 		/** @brief This flag is set to update the renderable instance model matrix with rotations only. Useful for sky rendering. */
-		UseInfinityView = 1U << 7,
-		/** @brief This flag is set to update the renderable instance model matrix to always face the camera. Useful for sprite rendering. */
-		FacingCamera = 1U << 8,
-		/** @brief This flag tells the renderer to not read the depth buffer when drawing this renderable instance. */
-		DisableDepthTest = 1U << 9,
-		/** @brief This flag tells the renderer to not write in the depth buffer when drawing this renderable instance. */
-		DisableDepthWrite = 1U << 10,
-		/** @brief This flag tells the renderer to not read the stencil buffer when drawing this renderable instance. */
-		DisableStencilTest = 1U << 11,
-		/** @brief This flag tells the renderer to not write in the stencil buffer when drawing this renderable instance. */
-		DisableStencilWrite = 1U << 12,
+		UseInfinityView = 1U << 5,
+		/**
+		 * @brief This flag tells the renderer to not read the depth buffer when drawing this renderable instance.
+		 * @todo Convert to Vulkan 1.3 dynamic state (VK_DYNAMIC_STATE_DEPTH_TEST_ENABLE) to avoid pipeline duplication.
+		 */
+		DisableDepthTest = 1U << 6,
+		/**
+		 * @brief This flag tells the renderer to not write in the depth buffer when drawing this renderable instance.
+		 * @todo Convert to Vulkan 1.3 dynamic state (VK_DYNAMIC_STATE_DEPTH_WRITE_ENABLE) to avoid pipeline duplication.
+		 */
+		DisableDepthWrite = 1U << 7,
+		/**
+		 * @brief This flag tells the renderer to not read the stencil buffer when drawing this renderable instance.
+		 * @todo Convert to Vulkan 1.3 dynamic state (VK_DYNAMIC_STATE_STENCIL_TEST_ENABLE) to avoid pipeline duplication.
+		 * @note Currently unused.
+		 */
+		DisableStencilTest = 1U << 8,
+		/**
+		 * @brief This flag tells the renderer to not write in the stencil buffer when drawing this renderable instance.
+		 * @todo Convert to Vulkan 1.3 dynamic state (VK_DYNAMIC_STATE_STENCIL_OP) to avoid pipeline duplication.
+		 * @note Currently unused.
+		 */
+		DisableStencilWrite = 1U << 9,
 		/** @brief [DEBUG] This flag tells the renderer to display tangent space vectors on the render instance. */
-		DisplayTBNSpaceEnabled = 1U << 13,
+		DisplayTBNSpaceEnabled = 1U << 10,
 		/** @brief This flag tells the renderable instance to need an extra transformation matrix to be applied. */
-		ApplyTransformationMatrix = 1U << 14,
+		ApplyTransformationMatrix = 1U << 11,
 		/** @brief This flag tells disabling the light distance check. */
-		DisableLightDistanceCheck = 1U << 15
+		DisableLightDistanceCheck = 1U << 12
 	};
 
 	/**
@@ -222,28 +228,6 @@ namespace EmEn::Graphics::RenderableInstance
 			}
 
 			/**
-			 * @brief Returns whether the renderable instance instancing is enabled.
-			 * @return bool
-			 */
-			[[nodiscard]]
-			bool
-			instancingEnabled () const noexcept
-			{
-				return this->isFlagEnabled(EnableInstancing);
-			}
-
-			/**
-			 * @brief Returns whether the renderable instance is using a skeletal animation uniform buffer.
-			 * @return bool
-			 */
-			[[nodiscard]]
-			bool
-			skeletalAnimationEnabled () const noexcept
-			{
-				return this->isFlagEnabled(EnableSkeletalAnimation);
-			}
-
-			/**
 			 * @brief Enables the lighting code generation in shaders.
 			 * @return Abstract *
 			 */
@@ -318,17 +302,6 @@ namespace EmEn::Graphics::RenderableInstance
 			isUsingInfinityView () const noexcept
 			{
 				return this->isFlagEnabled(UseInfinityView);
-			}
-
-			/**
-			 * @brief Returns whether the instance should be rendered facing the camera.
-			 * @return bool
-			 */
-			[[nodiscard]]
-			bool
-			isFacingCamera () const noexcept
-			{
-				return this->isFlagEnabled(FacingCamera);
 			}
 
 			/**
@@ -463,7 +436,7 @@ namespace EmEn::Graphics::RenderableInstance
 			 * @return const Renderable::Interface *
 			 */
 			[[nodiscard]]
-			const Renderable::Interface *
+			const Renderable::Abstract *
 			renderable () const noexcept
 			{
 				return m_renderable.get();
@@ -669,6 +642,20 @@ namespace EmEn::Graphics::RenderableInstance
 				m_frameIndex = this->renderable()->material(0)->frameIndexAt(sceneTimeMS);
 			}
 
+			/**
+			 * @brief Returns whether the instance uses a uniform buffer object for the model matrices.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			virtual bool useModelUniformBufferObject () const noexcept = 0;
+
+			/**
+			 * @brief Returns whether the instance uses a vertex buffer object for the model matrices.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			virtual bool useModelVertexBufferObject () const noexcept = 0;
+
 		protected:
 
 			/**
@@ -676,7 +663,7 @@ namespace EmEn::Graphics::RenderableInstance
 			 * @param renderable A reference to a renderable interface smart pointer.
 			 * @param flagBits The renderable instance level flags.
 			 */
-			Abstract (const std::shared_ptr< Renderable::Interface > & renderable, uint32_t flagBits) noexcept
+			Abstract (const std::shared_ptr< Renderable::Abstract > & renderable, uint32_t flagBits) noexcept
 				: FlagTrait{flagBits},
 				m_renderable{renderable}
 			{
@@ -730,20 +717,6 @@ namespace EmEn::Graphics::RenderableInstance
 			virtual bool isModelMatricesCreated () const noexcept = 0;
 
 			/**
-			 * @brief Returns whether the instance uses a uniform buffer object for the model matrices.
-			 * @return bool
-			 */
-			[[nodiscard]]
-			virtual bool useModelUniformBufferObject () const noexcept = 0;
-
-			/**
-			 * @brief Returns whether the instance uses a vertex buffer object for the model matrices.
-			 * @return bool
-			 */
-			[[nodiscard]]
-			virtual bool useModelVertexBufferObject () const noexcept = 0;
-
-			/**
 			 * @brief Binds the renderable instance resources to a command buffer.
 			 * @param commandBuffer A reference to a command buffer.
 			 * @param layerIndex The current layer to bind.
@@ -759,23 +732,20 @@ namespace EmEn::Graphics::RenderableInstance
 			 */
 			mutable std::mutex m_localDataAccess;
 
-			/**
-			 * @brief Mutex protecting pipeline and render target program access.
-			 *
-			 * @note Used to synchronize access to m_renderTargetPrograms between Logic thread (refresh/destroy) and
-			 * Render thread (use).
-			 */
-			mutable std::mutex m_pipelineAccess;
-
 		private:
 
+			/**
+			 * @brief Builds a program cache key for this instance's current configuration.
+			 * @param programType The type of program.
+			 * @param renderPassType The render pass type.
+			 * @param layerIndex The material layer index.
+			 * @return Renderable::ProgramCacheKey
+			 */
 			[[nodiscard]]
-			RenderTargetProgramsInterface *
-			getOrCreateRenderTargetProgramInterface (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, uint32_t layerCount);
+			Renderable::ProgramCacheKey buildProgramCacheKey (Renderable::ProgramType programType, RenderPassType renderPassType, uint32_t layerIndex) const noexcept;
 
-			const std::shared_ptr< Renderable::Interface > m_renderable;
+			const std::shared_ptr< Renderable::Abstract > m_renderable;
 			Libs::Math::Matrix< 4, float > m_transformationMatrix;
-			std::unordered_map< std::shared_ptr< const RenderTarget::Abstract >, std::unique_ptr< RenderTargetProgramsInterface > > m_renderTargetPrograms;
 			uint32_t m_frameIndex{0};
 	};
 }

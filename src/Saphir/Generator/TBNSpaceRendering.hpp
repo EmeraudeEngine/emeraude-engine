@@ -54,6 +54,10 @@ namespace EmEn::Saphir::Generator
 
 			}
 
+			/** @copydoc EmEn::Saphir::Generator::Abstract::computeProgramCacheKey() */
+			[[nodiscard]]
+			size_t computeProgramCacheKey () const noexcept override;
+
 		private:
 
 			/** @copydoc EmEn::Saphir::Generator::Abstract::prepareUniformSets() */

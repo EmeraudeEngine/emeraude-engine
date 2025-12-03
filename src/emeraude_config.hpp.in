@@ -117,6 +117,7 @@
 #endif
 
 #cmakedefine EMERAUDE_DEBUG_THREAD_POOL
+#cmakedefine EMERAUDE_DISABLE_PARALLEL_COLLISION
 
 /* Third-party libraries enabled at compile-time. */
 #cmakedefine EMERAUDE_USE_SYSTEM_LIBS
@@ -188,6 +189,7 @@ namespace EmEn
 
 	constexpr bool ThreadPoolDebugEnabled{@EMERAUDE_DEBUG_THREAD_POOL@};
 	constexpr unsigned int ThreadPoolDebugEnabledNumThreads{@EMERAUDE_DEBUG_THREAD_POOL_N@};
+	constexpr bool ParallelCollisionDisabled{@EMERAUDE_DISABLE_PARALLEL_COLLISION@};
 }
 
 #undef ON

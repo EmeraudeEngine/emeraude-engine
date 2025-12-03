@@ -26,17 +26,11 @@
 
 #include "Abstract.hpp"
 
-/* STL inclusions. */
-#include <mutex>
-#include <ranges>
-
 /* Local inclusions. */
 #include "Graphics/RenderTarget/Abstract.hpp"
 #include "Graphics/Renderer.hpp"
 #include "Graphics/ViewMatricesInterface.hpp"
 #include "PrimaryServices.hpp"
-#include "RenderTargetProgramsMultipleLayers.hpp"
-#include "RenderTargetProgramsSingleLayer.hpp"
 #include "Saphir/Generator/SceneRendering.hpp"
 #include "Saphir/Generator/ShadowCasting.hpp"
 #include "Saphir/Generator/TBNSpaceRendering.hpp"
@@ -55,63 +49,59 @@ namespace EmEn::Graphics::RenderableInstance
 
 	constexpr auto TracerTag{"RenderableInstance"};
 
+	Renderable::ProgramCacheKey
+	Abstract::buildProgramCacheKey (Renderable::ProgramType programType, RenderPassType renderPassType, uint32_t layerIndex) const noexcept
+	{
+		return Renderable::ProgramCacheKey{
+			.programType = programType,
+			.renderPassType = renderPassType,
+			.layerIndex = layerIndex,
+			.isInstancing = this->useModelVertexBufferObject(),
+			.isLightingEnabled = this->isLightingEnabled(),
+			.isDepthTestDisabled = this->isDepthTestDisabled(),
+			.isDepthWriteDisabled = this->isDepthWriteDisabled()
+		};
+	}
+
 	bool
 	Abstract::isReadyToCastShadows (const std::shared_ptr< RenderTarget::Abstract > & renderTarget) const noexcept
 	{
-		/* [VULKAN-CPU-SYNC] Protects pipeline map */
-		const std::lock_guard< std::mutex > lock{m_pipelineAccess};
-
-		const auto renderTargetIt = m_renderTargetPrograms.find(renderTarget);
-
-		if ( renderTargetIt == m_renderTargetPrograms.cend() )
+		if ( m_renderable == nullptr || !m_renderable->isReadyForInstantiation() )
 		{
 			return false;
 		}
 
-		return renderTargetIt->second->isReadyForShadowCasting();
+		/* Check if all shadow casting programs exist for all layers. */
+		const auto layerCount = m_renderable->layerCount();
+
+		for ( uint32_t layerIndex = 0; layerIndex < layerCount; ++layerIndex )
+		{
+			const auto cacheKey = this->buildProgramCacheKey(Renderable::ProgramType::ShadowCasting, RenderPassType::SimplePass, layerIndex);
+
+			if ( m_renderable->findCachedProgram(renderTarget, cacheKey) == nullptr )
+			{
+				return false;
+			}
+		}
+
+		return true;
 	}
 
 	bool
 	Abstract::isReadyToRender (const std::shared_ptr< RenderTarget::Abstract > & renderTarget) const noexcept
 	{
-		/* [VULKAN-CPU-SYNC] Protects pipeline map */
-		const std::lock_guard< std::mutex > lock{m_pipelineAccess};
-
-		const auto renderTargetIt = m_renderTargetPrograms.find(renderTarget);
-
-		if ( renderTargetIt == m_renderTargetPrograms.cend() )
+		if ( m_renderable == nullptr || !m_renderable->isReadyForInstantiation() )
 		{
 			return false;
 		}
 
-		return renderTargetIt->second->isReadyToRender();
-	}
-
-	RenderTargetProgramsInterface *
-	Abstract::getOrCreateRenderTargetProgramInterface (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, uint32_t layerCount)
-	{
-		/* [VULKAN-CPU-SYNC] Protects pipeline map */
-		const std::lock_guard< std::mutex > lock{m_pipelineAccess};
-
-		if ( layerCount > 1 )
-		{
-			const auto renderTargetIt = m_renderTargetPrograms.try_emplace(renderTarget, std::make_unique< RenderTargetProgramsMultipleLayers >(layerCount)).first;
-
-			return renderTargetIt->second.get();
-		}
-
-		const auto renderTargetIt = m_renderTargetPrograms.try_emplace(renderTarget, std::make_unique< RenderTargetProgramsSingleLayer >()).first;
-
-		return renderTargetIt->second.get();
+		/* Check if at least one rendering program exists (we can't know all pass types here). */
+		return m_renderable->hasAnyCachedPrograms(renderTarget);
 	}
 
 	bool
 	Abstract::getReadyForShadowCasting (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, Renderer & renderer) noexcept
 	{
-		/* NOTE: Checking the renderable interface.
-		 * This is the shared part between all renderable instances. */
-		/* TODO: Check for renderable interface already in video memory to reduce renderable instance preparation time.
-		 */
 		if ( m_renderable == nullptr )
 		{
 			return false;
@@ -126,17 +116,8 @@ namespace EmEn::Graphics::RenderableInstance
 
 		const auto layerCount = m_renderable->layerCount();
 
-		auto * renderTargetProgram = this->getOrCreateRenderTargetProgramInterface(renderTarget, layerCount);
-
-		if ( renderTargetProgram == nullptr )
-		{
-			return false;
-		}
-
 		if constexpr ( IsDebug )
 		{
-			/* NOTE: This test only exists in debug mode because it is already performed beyond
-			 * isReadyForInstantiation(). */
 			if ( layerCount == 0 )
 			{
 				std::stringstream errorMessage;
@@ -150,6 +131,15 @@ namespace EmEn::Graphics::RenderableInstance
 
 		for ( uint32_t layerIndex = 0; layerIndex < layerCount; ++layerIndex )
 		{
+			const auto cacheKey = this->buildProgramCacheKey(Renderable::ProgramType::ShadowCasting, RenderPassType::SimplePass, layerIndex);
+
+			/* Try to find a cached program from the Renderable. */
+			if ( m_renderable->findCachedProgram(renderTarget, cacheKey) != nullptr )
+			{
+				continue;
+			}
+
+			/* Generate a new program. */
 			Generator::ShadowCasting generator{renderTarget, this->shared_from_this(), layerIndex};
 
 			if ( !generator.generateShaderProgram(renderer) )
@@ -157,10 +147,9 @@ namespace EmEn::Graphics::RenderableInstance
 				return false;
 			}
 
-			renderTargetProgram->setShadowCastingProgram(layerIndex, generator.shaderProgram());
+			/* Cache the program on the Renderable for future instances. */
+			m_renderable->cacheProgram(renderTarget, cacheKey, generator.shaderProgram());
 		}
-
-		renderTargetProgram->setReadyForShadowCasting();
 
 		return true;
 	}
@@ -168,10 +157,6 @@ namespace EmEn::Graphics::RenderableInstance
 	bool
 	Abstract::getReadyForRender (const Scenes::Scene & scene, const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const StaticVector< RenderPassType, MaxPassCount > & renderPassTypes, Renderer & renderer) noexcept
 	{
-		/* NOTE: Checking the renderable interface.
-		 * This is the shared part between all renderable instances. */
-		/* TODO: Check for renderable interface already in video memory to reduce renderable instance preparation time.
-		 */
 		if ( m_renderable == nullptr )
 		{
 			this->setBroken("The renderable instance has no renderable associated !");
@@ -187,13 +172,6 @@ namespace EmEn::Graphics::RenderableInstance
 		}
 
 		const auto layerCount = m_renderable->layerCount();
-
-		auto * renderTargetProgram = this->getOrCreateRenderTargetProgramInterface(renderTarget, layerCount);
-
-		if ( renderTargetProgram == nullptr )
-		{
-			return false;
-		}
 
 		/* NOTE: These tests only exist in debug mode because they are already performed beyond
 		 * isReadyForInstantiation(). */
@@ -231,10 +209,18 @@ namespace EmEn::Graphics::RenderableInstance
 		{
 			for ( uint32_t layerIndex = 0; layerIndex < layerCount; layerIndex++ )
 			{
+				const auto cacheKey = this->buildProgramCacheKey(Renderable::ProgramType::Rendering, renderPassType, layerIndex);
+
+				/* Try to find a cached program from the Renderable. */
+				if ( m_renderable->findCachedProgram(renderTarget, cacheKey) != nullptr )
+				{
+					continue;
+				}
+
+				/* Generate a new program. */
 				std::stringstream shaderProgramName;
 				shaderProgramName << "RenderableInstance" << to_string(renderPassType);
 
-				/* The first step is to generate the shader source code from every resource involved. */
 				Generator::SceneRendering generator{shaderProgramName.str(), renderTarget, this->shared_from_this(), layerIndex, scene, renderPassType, renderer.primaryServices().settings()};
 
 				if ( !generator.generateShaderProgram(renderer) )
@@ -249,16 +235,24 @@ namespace EmEn::Graphics::RenderableInstance
 					return false;
 				}
 
-				renderTargetProgram->setRenderProgram(renderPassType, layerIndex, generator.shaderProgram());
+				/* Cache the program on the Renderable for future instances. */
+				m_renderable->cacheProgram(renderTarget, cacheKey, generator.shaderProgram());
 			}
 		}
-
-		renderTargetProgram->setReadyToRender();
 
 		if ( this->isDisplayTBNSpaceEnabled() )
 		{
 			for ( uint32_t layerIndex = 0; layerIndex < layerCount; layerIndex++ )
 			{
+				const auto cacheKey = this->buildProgramCacheKey(Renderable::ProgramType::TBNSpace, RenderPassType::SimplePass, layerIndex);
+
+				/* Try to find a cached program from the Renderable. */
+				if ( m_renderable->findCachedProgram(renderTarget, cacheKey) != nullptr )
+				{
+					continue;
+				}
+
+				/* Generate a new program. */
 				Generator::TBNSpaceRendering generator{renderTarget, this->shared_from_this(), layerIndex};
 
 				if ( !generator.generateShaderProgram(renderer) )
@@ -268,7 +262,8 @@ namespace EmEn::Graphics::RenderableInstance
 					continue;
 				}
 
-				renderTargetProgram->setTBNSpaceProgram(layerIndex, generator.shaderProgram());
+				/* Cache the program on the Renderable for future instances. */
+				m_renderable->cacheProgram(renderTarget, cacheKey, generator.shaderProgram());
 			}
 		}
 
@@ -284,46 +279,29 @@ namespace EmEn::Graphics::RenderableInstance
 	}
 
 	bool
-	Abstract::refreshGraphicsPipelines (const std::shared_ptr< RenderTarget::Abstract > & renderTarget) noexcept
+	Abstract::refreshGraphicsPipelines (const std::shared_ptr< RenderTarget::Abstract > & /*renderTarget*/) noexcept
 	{
-		/* [VULKAN-CPU-SYNC] Protects pipeline map */
-		const std::lock_guard< std::mutex > lock{m_pipelineAccess};
-
-		const auto renderTargetIt = m_renderTargetPrograms.find(renderTarget);
-
-		if ( renderTargetIt == m_renderTargetPrograms.end() )
-		{
-			return false;
-		}
-
-		return renderTargetIt->second->refreshGraphicsPipelines(renderTarget);
+		/* NOTE: Graphics pipelines are now managed by Renderable's cache.
+		 * This method is kept for API compatibility but does nothing.
+		 * The Renderer's pipeline cache handles recreation automatically. */
+		return true;
 	}
 
 	void
 	Abstract::destroyGraphicsPipelines (const std::shared_ptr< RenderTarget::Abstract > & renderTarget) noexcept
 	{
-		/* [VULKAN-CPU-SYNC] Protects pipeline map */
-		const std::lock_guard< std::mutex > lock{m_pipelineAccess};
-
-		m_renderTargetPrograms.erase(renderTarget);
+		/* Forward to Renderable's cache. */
+		if ( m_renderable != nullptr )
+		{
+			m_renderable->clearProgramCache(renderTarget);
+		}
 	}
 
 	void
 	Abstract::castShadows (uint32_t readStateIndex, const std::shared_ptr< RenderTarget::Abstract > & renderTarget, uint32_t layerIndex, const CartesianFrame< float > * worldCoordinates, const CommandBuffer & commandBuffer) const noexcept
 	{
-		/* [VULKAN-CPU-SYNC] Protects pipeline map */
-		const std::lock_guard< std::mutex > lock{m_pipelineAccess};
-
-		const auto renderTargetProgramsIt = m_renderTargetPrograms.find(renderTarget);
-
-		if ( renderTargetProgramsIt == m_renderTargetPrograms.end() )
-		{
-			TraceError{TracerTag} << "There is no render target programs named '" << renderTarget->id() << "' in the renderable instance (Renderable:" << m_renderable->name() << ") !";
-
-			return;
-		}
-
-		const auto program = renderTargetProgramsIt->second->shadowCastingProgram(layerIndex);
+		const auto cacheKey = this->buildProgramCacheKey(Renderable::ProgramType::ShadowCasting, RenderPassType::SimplePass, layerIndex);
+		const auto program = m_renderable->findCachedProgram(renderTarget, cacheKey);
 
 		if ( program == nullptr )
 		{
@@ -336,11 +314,11 @@ namespace EmEn::Graphics::RenderableInstance
 
 		commandBuffer.bind(*program->graphicsPipeline());
 
-		/* NOTE: Set the dynamic viewport. */
+		/* NOTE: Set the dynamic viewport and scissor. */
 		renderTarget->setViewport(commandBuffer);
 
-		/* Bind view UBO. */
-		if ( this->isFlagEnabled(EnableInstancing) )
+		/* NOTE: Bind the view UBO if renderable instance uses GPU instancing. */
+		if ( this->useModelVertexBufferObject() )
 		{
 			commandBuffer.bind(*renderTarget->viewMatrices().descriptorSet(), *pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, 0);
 		}
@@ -371,19 +349,8 @@ namespace EmEn::Graphics::RenderableInstance
 	void
 	Abstract::render (uint32_t readStateIndex, const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const Scenes::Component::AbstractLightEmitter * lightEmitter, RenderPassType renderPassType, uint32_t layerIndex, const CartesianFrame< float > * worldCoordinates, const CommandBuffer & commandBuffer) const noexcept
 	{
-		/* [VULKAN-CPU-SYNC] Protects pipeline map */
-		const std::lock_guard< std::mutex > lock{m_pipelineAccess};
-
-		const auto renderTargetProgramsIt = m_renderTargetPrograms.find(renderTarget);
-
-		if ( renderTargetProgramsIt == m_renderTargetPrograms.end() )
-		{
-			TraceError{TracerTag} << "There is no render target programs named '" << renderTarget->id() << "' in the renderable instance (Renderable:" << m_renderable->name() << ") !";
-
-			return;
-		}
-
-		const auto program = renderTargetProgramsIt->second->renderProgram(renderPassType, layerIndex);
+		const auto cacheKey = this->buildProgramCacheKey(Renderable::ProgramType::Rendering, renderPassType, layerIndex);
+		const auto program = m_renderable->findCachedProgram(renderTarget, cacheKey);
 
 		if ( program == nullptr )
 		{
@@ -452,19 +419,8 @@ namespace EmEn::Graphics::RenderableInstance
 	void
 	Abstract::renderTBNSpace (uint32_t readStateIndex, const std::shared_ptr< RenderTarget::Abstract > & renderTarget, uint32_t layerIndex, const CartesianFrame< float > * worldCoordinates, const CommandBuffer & commandBuffer) const noexcept
 	{
-		/* [VULKAN-CPU-SYNC] Protects pipeline map */
-		const std::lock_guard< std::mutex > lock{m_pipelineAccess};
-
-		const auto renderTargetProgramsIt = m_renderTargetPrograms.find(renderTarget);
-
-		if ( renderTargetProgramsIt == m_renderTargetPrograms.end() )
-		{
-			TraceError{TracerTag} << "There is no render target programs named '" << renderTarget->id() << "' in the renderable instance (Renderable:" << m_renderable->name() << ") !";
-
-			return;
-		}
-
-		const auto program = renderTargetProgramsIt->second->TBNSpaceProgram(layerIndex);
+		const auto cacheKey = this->buildProgramCacheKey(Renderable::ProgramType::TBNSpace, RenderPassType::SimplePass, layerIndex);
+		const auto program = m_renderable->findCachedProgram(renderTarget, cacheKey);
 
 		if ( program == nullptr )
 		{
@@ -480,8 +436,8 @@ namespace EmEn::Graphics::RenderableInstance
 		/* NOTE: Set the dynamic viewport and scissor. */
 		renderTarget->setViewport(commandBuffer);
 
-		/* Bind view UBO. */
-		if ( this->isFlagEnabled(EnableInstancing) )
+		/* NOTE: Bind the view UBO if renderable instance uses GPU instancing. */
+		if ( this->useModelVertexBufferObject() )
 		{
 			commandBuffer.bind(*renderTarget->viewMatrices().descriptorSet(), *pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, 0);
 		}

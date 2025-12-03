@@ -129,48 +129,110 @@ namespace EmEn::Graphics
 			}
 
 			/**
-			 * @brief
-			 * @param factor
-			 * @param units
+			 * @brief Sets the depth bias (polygon offset) parameters.
+			 * @note Automatically enables depth bias when called.
+			 * @param factor The slope factor (depthBiasSlopeFactor).
+			 * @param units The constant factor (depthBiasConstantFactor).
+			 * @param clamp The maximum depth bias (depthBiasClamp). Default 0.0f.
 			 * @return void
 			 */
 			void
-			setPolygonOffsetParameters (float factor, float units) noexcept
+			setDepthBias (float factor, float units, float clamp = 0.0F) noexcept
 			{
-				m_polygonOffsetFactor = factor;
-				m_polygonOffsetUnits = units;
+				m_depthBiasEnabled = true;
+				m_depthBiasSlopeFactor = factor;
+				m_depthBiasConstantFactor = units;
+				m_depthBiasClamp = clamp;
 			}
 
 			/**
-			 * @brief
-			 * @note The initial option is '0.0F'.
+			 * @brief Manually enable or disable depth bias.
+			 * @param state The state.
+			 */
+			void
+			enableDepthBias (bool state) noexcept
+			{
+				m_depthBiasEnabled = state;
+			}
+
+			/**
+			 * @brief Returns whether depth bias is enabled.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isDepthBiasEnabled () const noexcept
+			{
+				return m_depthBiasEnabled;
+			}
+
+			/**
+			 * @brief Returns the depth bias slope factor.
 			 * @return float
 			 */
+			[[nodiscard]]
+			float
+			depthBiasSlopeFactor () const noexcept
+			{
+				return m_depthBiasSlopeFactor;
+			}
+
+			/**
+			 * @brief Returns the depth bias constant factor.
+			 * @return float
+			 */
+			[[nodiscard]]
+			float
+			depthBiasConstantFactor () const noexcept
+			{
+				return m_depthBiasConstantFactor;
+			}
+
+			/**
+			 * @brief Returns the depth bias clamp.
+			 * @return float
+			 */
+			[[nodiscard]]
+			float
+			depthBiasClamp () const noexcept
+			{
+				return m_depthBiasClamp;
+			}
+
+			// Deprecated / Alias for backwards compatibility if needed, but updated to use new members
+			[[deprecated("Use setDepthBias(slope, constant) instead")]]
+			void
+			setPolygonOffsetParameters (float factor, float units) noexcept
+			{
+				setDepthBias(factor, units, 0.0F);
+			}
+
+			[[deprecated("Use depthBiasSlopeFactor() instead")]]
 			[[nodiscard]]
 			float
 			polygonOffsetFactor () const noexcept
 			{
-				return m_polygonOffsetFactor;
+				return m_depthBiasSlopeFactor;
 			}
 
-			/**
-			 * @brief
-			 * @note The initial option is '0.0F'.
-			 * @return float
-			 */
+			[[deprecated("Use depthBiasConstantFactor() instead")]]
 			[[nodiscard]]
 			float
 			polygonOffsetUnits () const noexcept
 			{
-				return m_polygonOffsetUnits;
+				return m_depthBiasConstantFactor;
 			}
 
 		private:
 
 			PolygonMode m_polygonMode{PolygonMode::Fill};
 			CullingMode m_cullingMode{CullingMode::Back};
-			float m_polygonOffsetFactor{0.0F};
-			float m_polygonOffsetUnits{0.0F};
+			
+			bool m_depthBiasEnabled{false};
+			float m_depthBiasSlopeFactor{0.0F};    // Was factor
+			float m_depthBiasConstantFactor{0.0F}; // Was units
+			float m_depthBiasClamp{0.0F};
+
 			bool m_triangleClockwise{false};
 	};
 }

@@ -33,16 +33,30 @@ endif ()
 
 project(
 	${BINARY_NAME}
-	VERSION 0.8.36
+	VERSION 0.8.38
 	DESCRIPTION "Emeraude Engine is an open-source (LGPLv3) 3D Graphics engine using Vulkan and written in C++20."
 	HOMEPAGE_URL "https://github.com/EmeraudeEngine/emeraude-engine"
 	LANGUAGES C CXX
 )
 
+
 set_property(GLOBAL PROPERTY USE_FOLDERS On)
 
 set(CMAKE_VERBOSE_MAKEFILE On)
 set(CMAKE_EXPORT_COMPILE_COMMANDS On)
+
+# Project build types configuration.
+set(CMAKE_CONFIGURATION_TYPES Debug Release)
+
+if ( NOT CMAKE_BUILD_TYPE )
+	if ( "${MSVC_BUILD_TYPE}" STREQUAL "Debug" OR "${MSVC_BUILD_TYPE}" STREQUAL "debug" )
+		set(CMAKE_BUILD_TYPE Debug)
+	elseif ( "${MSVC_BUILD_TYPE}" STREQUAL "Release" OR "${MSVC_BUILD_TYPE}" STREQUAL "release" )
+		set(CMAKE_BUILD_TYPE Release)
+	else ()
+		message(FATAL_ERROR "[EmeraudeEngine] Please specify the build type for Windows with -DMSVC_BUILD_TYPE:STRING=Debug or -DMSVC_BUILD_TYPE:STRING=Release !")
+	endif ()
+endif ()
 
 message("[EmeraudeEngine] Build type : ${CMAKE_BUILD_TYPE}")
 
@@ -78,6 +92,7 @@ option(EMERAUDE_DEBUG_WINDOW_EVENTS "Enable printing of events to the console fr
 option(EMERAUDE_DEBUG_VULKAN_TRACKING "Enable printing of Vulkan objects lifespan (Default Off)." Off)
 option(EMERAUDE_DEBUG_THREAD_POOL "Enable printing of ThreadPool (Default Off)." Off)
 set(EMERAUDE_DEBUG_THREAD_POOL_N "1" CACHE STRING "When debugging ThreadPool, force the number of threads (Default 1).")
+option(EMERAUDE_DISABLE_PARALLEL_COLLISION "Disable parallel collision detection for performance comparison (Default Off)." Off)
 
 
 # Force the compilation directory for testing (Only if empty)

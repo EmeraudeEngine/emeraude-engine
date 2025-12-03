@@ -111,6 +111,6 @@ namespace EmEn::Input
 		}
 #endif
 
-		/* NOTE: glfwGetCursorPos() was removed from because of high CPU usage. */
+		/* NOTE: glfwGetCursorPos() was removed from here, because of high CPU usage. */
 	}
 }

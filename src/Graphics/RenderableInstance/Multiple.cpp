@@ -35,6 +35,7 @@
 #include "Graphics/Renderer.hpp"
 #include "Graphics/ViewMatricesInterface.hpp"
 #include "Vulkan/CommandBuffer.hpp"
+#include "Vulkan/PipelineLayout.hpp"
 #include "Vulkan/TransferManager.hpp"
 
 namespace EmEn::Graphics::RenderableInstance
@@ -43,8 +44,8 @@ namespace EmEn::Graphics::RenderableInstance
 	using namespace Libs::Math;
 	using namespace Vulkan;
 
-	Multiple::Multiple (const std::shared_ptr< Device > & device, const std::shared_ptr< Renderable::Interface > & renderable, const std::vector< CartesianFrame< float > > & instanceLocations, uint32_t flagBits) noexcept
-		: Abstract{renderable, EnableInstancing | flagBits},
+	Multiple::Multiple (const std::shared_ptr< Device > & device, const std::shared_ptr< Renderable::Abstract > & renderable, const std::vector< CartesianFrame< float > > & instanceLocations, uint32_t flagBits) noexcept
+		: Abstract{renderable, flagBits},
 		m_instanceCount{static_cast< uint32_t >(instanceLocations.size())},
 		m_activeInstanceCount{m_instanceCount}
 	{
@@ -56,7 +57,7 @@ namespace EmEn::Graphics::RenderableInstance
 		}
 
 		/* NOTE: Reserve the actual data place to speed up the local storage. */
-		if ( this->isFacingCamera() )
+		if ( this->renderable()->isSprite() )
 		{
 			m_localData.resize(m_instanceCount * SpriteVBOElementCount);
 		}
@@ -80,8 +81,8 @@ namespace EmEn::Graphics::RenderableInstance
 		}
 	}
 
-	Multiple::Multiple (const std::shared_ptr< Device > & device, const std::shared_ptr< Renderable::Interface > & renderable, uint32_t instanceCount, uint32_t flagBits) noexcept
-		: Abstract{renderable, EnableInstancing | flagBits},
+	Multiple::Multiple (const std::shared_ptr< Device > & device, const std::shared_ptr< Renderable::Abstract > & renderable, uint32_t instanceCount, uint32_t flagBits) noexcept
+		: Abstract{renderable, flagBits},
 		m_instanceCount{instanceCount}
 	{
 		if ( m_instanceCount == 0 )
@@ -92,7 +93,7 @@ namespace EmEn::Graphics::RenderableInstance
 		}
 
 		/* NOTE: Reserve the actual data place to speed up the local storage. */
-		if ( this->isFacingCamera() )
+		if ( this->renderable()->isSprite() )
 		{
 			m_localData.resize(m_instanceCount * SpriteVBOElementCount);
 		}
@@ -125,7 +126,7 @@ namespace EmEn::Graphics::RenderableInstance
 			return false;
 		}
 
-		if ( this->isFacingCamera() )
+		if ( this->renderable()->isSprite() )
 		{
 			/* Starting offset to write vectors */
 			size_t elementOffset = instanceIndex * SpriteVBOElementCount;
@@ -157,7 +158,7 @@ namespace EmEn::Graphics::RenderableInstance
 			const auto modelMatrix = instanceLocation.getModelMatrix();
 			modelMatrix.copy(m_localData.data() + elementOffset);
 
-			if ( !this->isFacingCamera() )
+			if ( !this->renderable()->isSprite() )
 			{
 				/* Advance offset for the normal matrix (16 floats). */
 				elementOffset += 4UL * getAttributeSize(VertexAttributeType::ModelMatrixR0);
@@ -188,7 +189,7 @@ namespace EmEn::Graphics::RenderableInstance
 			return false;
 		}
 
-		if ( this->isFacingCamera() )
+		if ( this->renderable()->isSprite() )
 		{
 			/* Starting offset to write vectors */
 			auto elementOffset = instanceOffset * SpriteVBOElementCount;
@@ -248,7 +249,7 @@ namespace EmEn::Graphics::RenderableInstance
 	{
 		const auto limit = m_instanceCount;
 
-		if ( this->isFacingCamera() )
+		if ( this->renderable()->isSprite() )
 		{
 			for ( size_t instanceIndex = 0; instanceIndex < limit; instanceIndex++ )
 			{
@@ -301,7 +302,7 @@ namespace EmEn::Graphics::RenderableInstance
 			return true;
 		}
 
-		const auto vertexElementCount = this->isFacingCamera() ? SpriteVBOElementCount : MeshVBOElementCount;
+		const auto vertexElementCount = this->renderable()->isSprite() ? SpriteVBOElementCount : MeshVBOElementCount;
 		const auto vertexCount = static_cast< uint32_t >(m_localData.size() / vertexElementCount);
 
 		m_vertexBufferObject = std::make_unique< VertexBufferObject >(device, vertexCount, vertexElementCount, true);

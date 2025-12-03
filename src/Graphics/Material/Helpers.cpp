@@ -32,9 +32,9 @@
 #include <array>
 
 /* Local inclusions. */
-#include "Graphics/Geometry/Interface.hpp"
+#include "Graphics/Geometry/Abstract.hpp"
 #include "Graphics/Types.hpp"
-#include "Interface.hpp"
+#include "Abstract.hpp"
 #include "Libs/PixelFactory/Color.hpp"
 #include "Saphir/Generator/Abstract.hpp"
 #include "Saphir/Code.hpp"

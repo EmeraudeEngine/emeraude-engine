@@ -62,10 +62,10 @@ namespace EmEn::Scenes::Component
 			 * @param renderable A reference to a renderable smart pointer.
 			 * @param coordinates A list of sub-coordinates [std::move].
 			 */
-			MultipleVisuals (const std::string & componentName, const AbstractEntity & parentEntity, const std::shared_ptr< Graphics::Renderable::Interface > & renderable, std::vector< Libs::Math::CartesianFrame< float > > coordinates) noexcept
+			MultipleVisuals (const std::string & componentName, const AbstractEntity & parentEntity, const std::shared_ptr< Graphics::Renderable::Abstract > & renderable, std::vector< Libs::Math::CartesianFrame< float > > coordinates) noexcept
 				: Abstract{componentName, parentEntity},
 				m_renderableInterface{renderable},
-				m_renderableInstance{std::make_shared< Graphics::RenderableInstance::Multiple >(this->engineContext().graphicsRenderer.device(), renderable, coordinates, renderable->isSprite() ? Graphics::RenderableInstance::FacingCamera : Graphics::RenderableInstance::None)},
+				m_renderableInstance{std::make_shared< Graphics::RenderableInstance::Multiple >(this->engineContext().graphicsRenderer.device(), renderable, coordinates, Graphics::RenderableInstance::None)},
 				m_coordinates{std::move(coordinates)}
 			{
 				this->observe(renderable.get());
@@ -140,7 +140,7 @@ namespace EmEn::Scenes::Component
 			[[nodiscard]]
 			bool onNotification (const ObservableTrait * observable, int notificationCode, const std::any & data) noexcept override;
 
-			std::weak_ptr< Graphics::Renderable::Interface > m_renderableInterface;
+			std::weak_ptr< Graphics::Renderable::Abstract > m_renderableInterface;
 			std::shared_ptr< Graphics::RenderableInstance::Multiple > m_renderableInstance;
 			std::vector< Libs::Math::CartesianFrame< float > > m_coordinates;
 	};

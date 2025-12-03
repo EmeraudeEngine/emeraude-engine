@@ -240,7 +240,7 @@ namespace EmEn::Saphir::Generator
 			 * @return const Graphics::Renderable::Interface *
 			 */
 			[[nodiscard]]
-			const Graphics::Renderable::Interface *
+			const Graphics::Renderable::Abstract *
 			getRenderable () const noexcept
 			{
 				if ( !this->isRenderableInstanceAvailable() )
@@ -368,7 +368,13 @@ namespace EmEn::Saphir::Generator
 			[[nodiscard]]
 			bool generateShaderProgram (Graphics::Renderer & renderer, const std::string & GLSLVersion = DefaultGLSLVersion, const std::string & GLSLProfile = DefaultGLSLProfile) noexcept;
 
-
+			/**
+			 * @brief Computes a unique cache key for the shader program configuration.
+			 * @note This allows early lookup before shader generation to avoid redundant work.
+			 * @return size_t The unique hash identifying this program configuration.
+			 */
+			[[nodiscard]]
+			virtual size_t computeProgramCacheKey () const noexcept = 0;
 
 		protected:
 
@@ -397,12 +403,12 @@ namespace EmEn::Saphir::Generator
 				m_renderableInstance{renderableInstance},
 				m_layerIndex{layerIndex}
 			{
-				if ( renderableInstance->instancingEnabled() )
+				if ( renderableInstance->useModelVertexBufferObject() )
 				{
 					this->enableFlag(IsInstancingEnabled);
 				}
 
-				if ( renderableInstance->isFacingCamera() )
+				if ( renderableInstance->renderable()->isSprite() )
 				{
 					this->enableFlag(IsRenderableFacingCamera);
 				}

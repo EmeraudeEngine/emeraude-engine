@@ -1,5 +1,5 @@
 /*
- * src/Graphics/Renderable/Interface.hpp
+ * src/Graphics/Renderable/Abstract.hpp
  * This file is part of Emeraude-Engine
  *
  * Copyright (C) 2010-2025 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
@@ -26,15 +26,45 @@
 
 #pragma once
 
+/* STL inclusions. */
+#include <memory>
+#include <mutex>
+#include <unordered_map>
+
 /* Local inclusions for inheritances. */
 #include "Resources/ResourceTrait.hpp"
 
 /* Local inclusions for usages. */
 #include "Libs/Math/Space3D/AACuboid.hpp"
 #include "Libs/Math/Space3D/Sphere.hpp"
-#include "Graphics/Geometry/Interface.hpp"
-#include "Graphics/Material/Interface.hpp"
+#include "Graphics/Geometry/Abstract.hpp"
+#include "Graphics/Material/Abstract.hpp"
 #include "Graphics/RasterizationOptions.hpp"
+#include "ProgramCacheKey.hpp"
+
+/* Forward declarations. */
+namespace EmEn
+{
+	namespace Graphics
+	{
+		class Renderer;
+
+		namespace RenderTarget
+		{
+			class Abstract;
+		}
+	}
+
+	namespace Saphir
+	{
+		class Program;
+	}
+
+	namespace Scenes
+	{
+		class Scene;
+	}
+}
 
 namespace EmEn::Graphics::Renderable
 {
@@ -56,7 +86,7 @@ namespace EmEn::Graphics::Renderable
 	 * @note This holds only what to draw.
 	 * @extends EmEn::Resources::ResourceTrait Every renderable is a resource.
 	 */
-	class Interface : public Resources::ResourceTrait
+	class Abstract : public Resources::ResourceTrait
 	{
 		public:
 
@@ -67,32 +97,32 @@ namespace EmEn::Graphics::Renderable
 			 * @brief Copy constructor.
 			 * @param copy A reference to the copied instance.
 			 */
-			Interface (const Interface & copy) noexcept = delete;
+			Abstract (const Abstract & copy) noexcept = delete;
 
 			/**
 			 * @brief Move constructor.
 			 * @param copy A reference to the copied instance.
 			 */
-			Interface (Interface && copy) noexcept = delete;
+			Abstract (Abstract && copy) noexcept = delete;
 
 			/**
 			 * @brief Copy assignment.
 			 * @param copy A reference to the copied instance.
 			 * @return Interface &
 			 */
-			Interface & operator= (const Interface & copy) noexcept = delete;
+			Abstract & operator= (const Abstract & copy) noexcept = delete;
 
 			/**
 			 * @brief Move assignment.
 			 * @param copy A reference to the copied instance.
 			 * @return Interface &
 			 */
-			Interface & operator= (Interface && copy) noexcept = delete;
+			Abstract & operator= (Abstract && copy) noexcept = delete;
 
 			/**
 			 * @brief Destructs the renderable object.
 			 */
-			~Interface () override = default;
+			~Abstract () override = default;
 
 			/**
 			 * @brief Returns whether the renderable is ready to prepare an instance on GPU for rendering.
@@ -127,6 +157,53 @@ namespace EmEn::Graphics::Renderable
 			{
 				return this->isFlagEnabled(IsSprite);
 			}
+
+			/**
+			 * @brief Finds a cached program for the given render target and configuration.
+			 * @param renderTarget A reference to the render target.
+			 * @param key The program cache key.
+			 * @return std::shared_ptr< Saphir::Program > The cached program, or nullptr if not found.
+			 */
+			[[nodiscard]]
+			std::shared_ptr< Saphir::Program > findCachedProgram (const std::shared_ptr< const RenderTarget::Abstract > & renderTarget, const ProgramCacheKey & key) const noexcept;
+
+			/**
+			 * @brief Caches a program for the given render target and configuration.
+			 * @param renderTarget A reference to the render target.
+			 * @param key The program cache key.
+			 * @param program The program to cache.
+			 * @return void
+			 */
+			void cacheProgram (const std::shared_ptr< const RenderTarget::Abstract > & renderTarget, const ProgramCacheKey & key, const std::shared_ptr< Saphir::Program > & program) const noexcept;
+
+			/**
+			 * @brief Clears all cached programs for a specific render target.
+			 * @param renderTarget A reference to the render target.
+			 * @return void
+			 */
+			void clearProgramCache (const std::shared_ptr< const RenderTarget::Abstract > & renderTarget) const noexcept;
+
+			/**
+			 * @brief Clears all cached programs for all render targets.
+			 * @return void
+			 */
+			void clearAllProgramCaches () const noexcept;
+
+			/**
+			 * @brief Checks if a render target has any cached programs.
+			 * @param renderTarget A reference to the render target.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool hasAnyCachedPrograms (const std::shared_ptr< const RenderTarget::Abstract > & renderTarget) const noexcept;
+
+			/**
+			 * @brief Returns the number of cached programs for a render target.
+			 * @param renderTarget A reference to the render target.
+			 * @return size_t
+			 */
+			[[nodiscard]]
+			size_t cachedProgramCount (const std::shared_ptr< const RenderTarget::Abstract > & renderTarget) const noexcept;
 
 			/**
 			 * @brief Returns the number of layouts to render the whole object.
@@ -190,7 +267,7 @@ namespace EmEn::Graphics::Renderable
 			 * @param resourceFlags The resource flag bits.
 			 */
 			explicit
-			Interface (std::string resourceName, uint32_t resourceFlags) noexcept
+			Abstract (std::string resourceName, uint32_t resourceFlags) noexcept
 				: ResourceTrait{std::move(resourceName), resourceFlags}
 			{
 
@@ -219,5 +296,17 @@ namespace EmEn::Graphics::Renderable
 			/** @copydoc EmEn::Resources::ResourceTrait::onDependenciesLoaded() */
 			[[nodiscard]]
 			bool onDependenciesLoaded () noexcept override;
+
+			/** @brief Type alias for the inner program cache (config key → program). */
+			using ProgramCache = std::unordered_map< ProgramCacheKey, std::shared_ptr< Saphir::Program > >;
+
+			/** @brief Type alias for the outer cache (render target → program cache). */
+			using RenderTargetProgramCache = std::unordered_map< std::shared_ptr< const RenderTarget::Abstract >, ProgramCache >;
+
+			/** @brief Cache of shader programs per render target and configuration. */
+			mutable RenderTargetProgramCache m_programCache;
+
+			/** @brief Mutex protecting the program cache. */
+			mutable std::mutex m_programCacheMutex;
 	};
 }

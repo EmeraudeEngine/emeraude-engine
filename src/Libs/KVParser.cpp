@@ -26,24 +26,36 @@
 
 #include "KVParser.hpp"
 
+/* STL inclusions. */
+#include <fstream>
+
 namespace EmEn::Libs
 {
+	void
+	KVSection::write (std::ofstream & file) const noexcept
+	{
+		for ( const auto & [name, variable] : m_variables )
+		{
+			file << name << " = " << variable.asString() << "\n";
+		}
+	}
+
 	std::string
-	KVParser::parseSectionTitle (const std::string & line) noexcept
+	KVParser::parseSectionTitle (std::string_view line) noexcept
 	{
 		const auto start = line.find_first_of('[');
-		const auto length = line.find_last_of(']');
+		const auto end = line.find_last_of(']');
 
-		if ( start != std::string::npos && length != std::string::npos )
+		if ( start != std::string_view::npos && end != std::string_view::npos && end > start )
 		{
-			return {line, start + 1, length - 1};
+			return std::string{line.substr(start + 1, end - start - 1)};
 		}
 
 		return {};
 	}
 
 	KVParser::LineType
-	KVParser::getLineType (const std::string & line) noexcept
+	KVParser::getLineType (std::string_view line) noexcept
 	{
 		for ( const auto character : line )
 		{
@@ -62,7 +74,6 @@ namespace EmEn::Libs
 					return LineType::Definition;
 
 				default :
-					/* We don't care about this char ... */
 					break;
 			}
 		}
@@ -71,86 +82,80 @@ namespace EmEn::Libs
 	}
 
 	KVSection &
-	KVParser::section (const std::string & label) noexcept
+	KVParser::section (std::string_view label) noexcept
 	{
-		if ( const auto sectionIt = m_sections.find(label); sectionIt != m_sections.cend() )
-		{
-			return sectionIt->second;
-		}
-
-		return m_sections[label];
+		return m_sections.try_emplace(std::string{label}).first->second;
 	}
 
 	bool
-	KVParser::read (const std::string & filepath) noexcept
+	KVParser::read (const std::filesystem::path & filepath) noexcept
 	{
-		if ( std::ifstream file{filepath}; file.is_open() )
+		std::ifstream file{filepath};
+
+		if ( !file.is_open() )
 		{
-			std::string line;
-
-			/* This is the default section. */
-			auto * currentSection = &this->section("main");
-
-			/* Count the sections. */
-			while ( std::getline(file, line) )
-			{
-				switch ( KVParser::getLineType(line) )
-				{
-					case LineType::SectionTitle :
-						if ( auto sectionName = KVParser::parseSectionTitle(line); !sectionName.empty() )
-						{
-							currentSection = &this->section(sectionName);
-						}
-						break;
-
-					case LineType::Definition :
-						if ( auto equalSignPosition = line.find_first_of('='); equalSignPosition != std::string::npos )
-						{
-							auto key = String::trim(line.substr(0, equalSignPosition));
-							auto value = String::trim(line.substr(equalSignPosition + 1));
-
-							currentSection->addVariable(key, KVVariable{value});
-						}
-						break;
-
-					case LineType::None :
-					case LineType::Headers :
-					case LineType::Comment :
-						break;
-				}
-			}
-
-			file.close();
-
-			/* Indicates the parser state. */
-			return true;
+			return false;
 		}
 
-		return false;
+		std::string line;
+
+		/* This is the default section. */
+		auto * currentSection = &this->section("main");
+
+		/* Parse all lines. */
+		while ( std::getline(file, line) )
+		{
+			switch ( KVParser::getLineType(line) )
+			{
+				case LineType::SectionTitle :
+					if ( auto sectionName = KVParser::parseSectionTitle(line); !sectionName.empty() )
+					{
+						currentSection = &this->section(sectionName);
+					}
+					break;
+
+				case LineType::Definition :
+					if ( auto equalSignPosition = line.find_first_of('='); equalSignPosition != std::string::npos )
+					{
+						auto key = String::trim(line.substr(0, equalSignPosition));
+						auto value = String::trim(line.substr(equalSignPosition + 1));
+
+						currentSection->addVariable(key, KVVariable{value});
+					}
+					break;
+
+				case LineType::None :
+				case LineType::Headers :
+				case LineType::Comment :
+					break;
+			}
+		}
+
+		return true;
 	}
 
 	bool
-	KVParser::write (const std::string & filepath) const noexcept
+	KVParser::write (const std::filesystem::path & filepath) const noexcept
 	{
-		if ( std::ofstream file{filepath, std::ios::out | std::ios::trunc}; file.is_open() )
+		std::ofstream file{filepath, std::ios::out | std::ios::trunc};
+
+		if ( !file.is_open() )
 		{
-			for ( const auto & [sectionName, section] : m_sections )
-			{
-				file << "[" << sectionName << "]" "\n";
-
-				for ( const auto & [variableName, variable] : section.variables() )
-				{
-					file << variableName << " = " << variable.asString() << "\n";
-				}
-
-				file << "\n";
-			}
-
-			file.close();
-
-			return true;
+			return false;
 		}
 
-		return false;
+		for ( const auto & [sectionName, section] : m_sections )
+		{
+			file << "[" << sectionName << "]" "\n";
+
+			for ( const auto & [variableName, variable] : section.variables() )
+			{
+				file << variableName << " = " << variable.asString() << "\n";
+			}
+
+			file << "\n";
+		}
+
+		return true;
 	}
 }

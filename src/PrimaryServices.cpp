@@ -49,7 +49,7 @@ namespace EmEn
 		/* NOTE: This must be done immediately! */
 		if ( !m_arguments.initialize(m_servicesEnabled) )
 		{
-			std::cerr << ClassId << ", " << m_arguments.name() << " service failed to execute !";
+			std::cerr << ClassId << ", " << m_arguments.name() << " service failed to execute!";
 		}
 
 		Tracer::getInstance().earlySetup(m_arguments, m_processName, false);
@@ -90,7 +90,7 @@ namespace EmEn
 		}
 		else
 		{
-			std::cerr << ClassId << ", " << m_arguments.name() << " service failed to execute !";
+			std::cerr << ClassId << ", " << m_arguments.name() << " service failed to execute!";
 		}
 	}
 
@@ -105,7 +105,7 @@ namespace EmEn
 		/* NOTE: This must be done immediately! */
 		if ( !m_arguments.initialize(m_servicesEnabled) )
 		{
-			std::cerr << ClassId << ", " << m_arguments.name() << " service failed to execute !";
+			std::cerr << ClassId << ", " << m_arguments.name() << " service failed to execute!";
 		}
 
 		Tracer::getInstance().earlySetup(m_arguments, m_processName, false);
@@ -146,7 +146,7 @@ namespace EmEn
 		}
 		else
 		{
-			std::cerr << ClassId << ", " << m_arguments.name() << " service failed to execute !";
+			std::cerr << ClassId << ", " << m_arguments.name() << " service failed to execute!";
 		}
 	}
 #endif
@@ -166,7 +166,7 @@ namespace EmEn
 		/* Initialize the file system to reach every useful directory. */
 		if ( m_fileSystem.initialize(m_servicesEnabled) )
 		{
-			TraceSuccess{ClassId} << m_fileSystem.name() << " primary service up [" << m_processName << "] !";
+			TraceSuccess{ClassId} << m_fileSystem.name() << " primary service up! [" << m_processName << "]";
 
 			/* Creating some basic paths. */
 			const auto directory = m_fileSystem.userDataDirectory("captures");
@@ -179,13 +179,13 @@ namespace EmEn
 				}
 				else
 				{
-					TraceWarning{ClassId} << "Unable to create captures directory " << directory << " !";
+					TraceWarning{ClassId} << "Unable to create captures directory " << directory << "!";
 				}
 			}
 		}
 		else
 		{
-			TraceFatal{ClassId} << m_fileSystem.name() << " primary service failed to execute [" << m_processName << "] !";
+			TraceFatal{ClassId} << m_fileSystem.name() << " primary service failed to execute! [" << m_processName << "!";
 
 			return false;
 		}
@@ -194,15 +194,15 @@ namespace EmEn
 		 * NOTE: Settings class manages to write a default file. */
 		if ( m_settings.initialize(m_servicesEnabled) )
 		{
-			TraceSuccess{ClassId} << m_settings.name() << " primary service up [" << m_processName << "] !";
-
 			/* NOTE: Now the core settings are initialized, we can update the tracer service configuration. */
 			Tracer::getInstance().lateSetup(m_arguments, m_fileSystem, m_settings);
+
+			TraceSuccess{ClassId} << m_settings.name() << " primary service up! [" << m_processName << "]";
 		}
 		else
 		{
 			TraceError{ClassId} <<
-				m_fileSystem.name() << " primary service failed to execute [" << m_processName << "] !" "\n"
+				m_fileSystem.name() << " primary service failed to execute! [" << m_processName << "]" "\n"
 				"There is a problem to read or write the core settings file." "\n"
 				"The engine will use the default configuration.";
 		}
@@ -223,11 +223,11 @@ namespace EmEn
 		{
 			if ( service->terminate() )
 			{
-				TraceSuccess{ClassId} << service->name() << " primary service terminated gracefully [" << m_processName << "] !";
+				TraceSuccess{ClassId} << service->name() << " primary service terminated gracefully! [" << m_processName << "]";
 			}
 			else
 			{
-				TraceError{ClassId} << service->name() << " primary service failed to terminate properly [" << m_processName << "] !";
+				TraceError{ClassId} << service->name() << " primary service failed to terminate properly! [" << m_processName << "]";
 			}
 		}
 	}

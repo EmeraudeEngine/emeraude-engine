@@ -415,6 +415,8 @@ namespace EmEn::Graphics
 			}
 		}
 
+		m_isUsable = true;
+
 		return true;
 	}
 
@@ -422,8 +424,6 @@ namespace EmEn::Graphics
 	Renderer::onTerminate () noexcept
 	{
 		m_device->waitIdle("Renderer::onTerminate()");
-
-		TraceInfo{ClassId} << m_graphicsPipelinesBuiltCount << " graphics pipelines built during this runtime. " << m_graphicsPipelinesReusedCount << " were re-used.";
 
 		size_t error = 0;
 
@@ -442,6 +442,9 @@ namespace EmEn::Graphics
 			}
 
 			m_graphicsPipelines.clear();
+
+			/* NOTE: Clear the program cache to release shared pointers before Vulkan resources are destroyed. */
+			m_programs.clear();
 		}
 
 		m_descriptorPool.reset();
@@ -558,7 +561,7 @@ namespace EmEn::Graphics
 		{
 			graphicsPipeline = pipelineIt->second;
 
-			m_graphicsPipelinesReusedCount++;
+			m_pipelineReusedCount++;
 
 			return true;
 		}
@@ -568,9 +571,38 @@ namespace EmEn::Graphics
 			return false;
 		}
 
-		m_graphicsPipelinesBuiltCount++;
+		m_pipelineBuiltCount++;
 
 		return m_graphicsPipelines.emplace(hash, graphicsPipeline).second;
+	}
+
+	std::shared_ptr< Saphir::Program >
+	Renderer::findCachedProgram (size_t programKey) const noexcept
+	{
+		if ( const auto programIt = m_programs.find(programKey); programIt != m_programs.cend() )
+		{
+			return programIt->second;
+		}
+
+		return nullptr;
+	}
+
+	bool
+	Renderer::cacheProgram (size_t programKey, const std::shared_ptr< Program > & program) noexcept
+	{
+		if ( program == nullptr )
+		{
+			return false;
+		}
+
+		const auto [it, inserted] = m_programs.emplace(programKey, program);
+
+		if ( inserted )
+		{
+			m_programBuiltCount++;
+		}
+
+		return inserted;
 	}
 
 	void
@@ -667,11 +699,12 @@ namespace EmEn::Graphics
 			/* 1. If the swap-chain was marked degraded, we discard the next frame until we get back a valid swap-chain. */
 			if ( this->isSwapChainDegraded() )
 			{
-				if ( !this->recreateSystem() )
+				/* NOTE: Let's try to recreate every new frame and Core decide what to do with the renderer. */
+				if ( !this->recreateRenderingSubSystem(false, false) )
 				{
 					Tracer::fatal(ClassId, "Unable to refresh the swap-chain!");
 
-					std::abort();
+					m_isUsable = false;
 				}
 
 				/* Let this image drop. */
@@ -924,8 +957,6 @@ namespace EmEn::Graphics
 				/* NOTE: These two notifications invalidate the framebuffer content. */
 				case Window::OSNotifiesFramebufferResized :
 				case Window::OSRequestsToRescaleContentBy :
-					//TraceDebug{ClassId} << "GLFW tells the window content has changed (size or rescale).";
-
 					if ( m_windowLess )
 					{
 						// TODO: Resize the windowless framebuffer to the new size!
@@ -933,7 +964,10 @@ namespace EmEn::Graphics
 					else
 					{
 						/* NOTE: We declare the swap-chain degraded. */
-						m_swapChain->setDegraded();
+						if ( m_swapChain != nullptr )
+						{
+							m_swapChain->setDegraded();
+						}
 					}
 					break;
 
@@ -981,10 +1015,13 @@ namespace EmEn::Graphics
 	}
 
 	bool
-	Renderer::recreateSystem () noexcept
+	Renderer::recreateRenderingSubSystem (bool withSurface, bool useNativeCode) noexcept
 	{
 		/* NOTE: Wait the device to finish all his work before destroying/recreating the swap-chain. */
 		this->device()->waitIdle("Renderer::recreateSystem()");
+
+		/* NOTE: Lock operation to wait a valid size from the OS. */
+		m_window.waitValidWindowSize();
 
 		/* NOTE: Query the surface properties again. */
 		if ( !m_window.surface()->update(this->device()->physicalDevice()) )
@@ -995,20 +1032,22 @@ namespace EmEn::Graphics
 		}
 
 		/* NOTE: Recreate the swap-chain. */
-		/*if constexpr ( IsWindows )
+		if ( withSurface )
 		{
-			if ( !m_swapChain->fullRecreate(true) )
+			if ( !m_swapChain->fullRecreate(useNativeCode) )
 			{
 				return false;
 			}
 		}
-		else*/
+		else
 		{
 			if ( !m_swapChain->recreate() )
 			{
 				return false;
 			}
 		}
+
+		m_isUsable = true;
 
 		this->notify(WindowContentRefreshed);
 

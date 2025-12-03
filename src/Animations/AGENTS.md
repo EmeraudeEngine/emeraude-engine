@@ -1,49 +1,49 @@
 # Animations System
 
-Context spécifique pour le développement du système d'animations d'Emeraude Engine.
+Context for developing the Emeraude Engine animations system.
 
-## Vue d'ensemble du module
+## Module Overview
 
-**Statut : EN CHANTIER** - Système d'animations squelettales en cours de développement.
+**Status: UNDER CONSTRUCTION** - Skeletal animation system currently in development.
 
-## Règles spécifiques à Animations/
+## Animations-Specific Rules
 
-### Périmètre du système
-- **Animations squelettales** : Skinning, déformation de mesh par squelette
-- **Interfaces d'animation** : Possibilité d'animer des valeurs via interfaces
-- **PAS d'animations de transform** : Utiliser scene graph pour animer position/rotation/scale
+### System Scope
+- **Skeletal animations**: Skinning, mesh deformation via skeleton
+- **Animation interfaces**: Possibility to animate values via interfaces
+- **NOT transform animations**: Use scene graph for position/rotation/scale animation
 
-### Architecture (à définir)
-Le système d'animations squelettales est actuellement en développement actif. L'architecture et les fonctionnalités seront documentées une fois stabilisées.
+### Architecture (to be defined)
+The skeletal animation system is currently under active development. Architecture and features will be documented once stabilized.
 
-### Fonctionnalités prévues
-- Squelettes et bones
-- Skinning (déformation vertices par bones)
-- Timeline et keyframes
-- Blending d'animations squelettales
-- Interfaces pour animation de valeurs personnalisées
+### Planned Features
+- Skeletons and bones
+- Skinning (vertex deformation by bones)
+- Timeline and keyframes
+- Skeletal animation blending
+- Interfaces for custom value animation
 
-## Commandes de développement
+## Development Commands
 
 ```bash
-# Tests animations (quand disponibles)
+# Animation tests (when available)
 ctest -R Animations
 ./test --filter="*Animation*"
 ```
 
-## Fichiers importants
+## Important Files
 
-À documenter lors de la stabilisation du système.
+To be documented upon system stabilization.
 
-## Patterns de développement
+## Development Patterns
 
-À documenter lors de la stabilisation du système.
+To be documented upon system stabilization.
 
-## Points d'attention
+## Critical Points
 
-- **En développement actif** : Architecture susceptible de changer
-- Consulter les développeurs avant modifications majeures
+- **Under active development**: Architecture subject to change
+- Consult developers before major modifications
 
-## Documentation détaillée
+## Detailed Documentation
 
-Documentation à créer une fois le système stabilisé.
+Documentation to be created once the system is stabilized.

@@ -160,6 +160,7 @@ set(EMERAUDE_HEADER_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/std_source_location.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/String.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/ThreadPool.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/TokenFormatter.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/Utility.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/Variant.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/Version.hpp
@@ -223,6 +224,7 @@ set(EMERAUDE_SOURCE_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/SourceCodeParser.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/String.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/ThreadPool.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/TokenFormatter.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/Variant.cpp
     # Net
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Net/Manager.cpp

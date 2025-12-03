@@ -1,32 +1,32 @@
 # Testing System
 
-Context spécifique pour le développement des tests unitaires d'Emeraude Engine.
+Context for developing Emeraude Engine unit tests.
 
-## Vue d'ensemble du module
+## Module Overview
 
-Tests unitaires du moteur utilisant **Google Test**. Focus actuel sur **Libs** (fondation critique), expansion future vers systèmes haut niveau.
+Engine unit tests using **Google Test**. Current focus on **Libs** (critical foundation), future expansion to high-level systems.
 
-## Règles spécifiques à Testing/
+## Testing-Specific Rules
 
 ### Framework: Google Test
-- **Google Test (gtest)** : Framework de tests unitaires C++
-- **CTest integration** : Lancé via `ctest` pour CI/CD
-- **Assertions standard** : EXPECT_*, ASSERT_*, etc.
+- **Google Test (gtest)**: C++ unit testing framework
+- **CTest integration**: Launched via `ctest` for CI/CD
+- **Standard assertions**: EXPECT_*, ASSERT_*, etc.
 
-### Conventions de test OBLIGATOIRES
+### MANDATORY Test Conventions
 
-**Organisation fichiers** :
-- **Un fichier par classe/concept** : Un test file par unité testée
-- Nommage : `ClassNameTest.cpp` ou `ConceptTest.cpp`
+**File organization**:
+- **One file per class/concept**: One test file per tested unit
+- Naming: `ClassNameTest.cpp` or `ConceptTest.cpp`
 
-**Organisation tests** :
-- **Un test par fonction** : Chaque fonction a son propre TEST()
-- **Variantes dans le même test** : Appels alternatifs/edge cases regroupés
-- Nommage test : `TEST(ClassName, FunctionName)` ou `TEST(ClassName, FunctionName_EdgeCase)`
+**Test organization**:
+- **One test per function**: Each function has its own TEST()
+- **Variants in same test**: Alternative calls/edge cases grouped
+- Test naming: `TEST(ClassName, FunctionName)` or `TEST(ClassName, FunctionName_EdgeCase)`
 
-**Exemple** :
+**Example**:
 ```cpp
-// VectorTest.cpp - teste Libs/Math/Vector
+// VectorTest.cpp - tests Libs/Math/Vector
 
 TEST(Vector, Constructor) {
     Vector3 v1(1.0f, 2.0f, 3.0f);
@@ -34,7 +34,7 @@ TEST(Vector, Constructor) {
     EXPECT_EQ(v1.y, 2.0f);
     EXPECT_EQ(v1.z, 3.0f);
 
-    // Variante: constructeur par défaut
+    // Variant: default constructor
     Vector3 v2;
     EXPECT_EQ(v2.x, 0.0f);
     EXPECT_EQ(v2.y, 0.0f);
@@ -45,7 +45,7 @@ TEST(Vector, Length) {
     Vector3 v(3.0f, 4.0f, 0.0f);
     EXPECT_FLOAT_EQ(v.length(), 5.0f);
 
-    // Edge case: vecteur zéro
+    // Edge case: zero vector
     Vector3 zero(0.0f, 0.0f, 0.0f);
     EXPECT_FLOAT_EQ(zero.length(), 0.0f);
 }
@@ -57,17 +57,17 @@ TEST(Vector, Normalize) {
     EXPECT_FLOAT_EQ(v.x, 0.6f);
     EXPECT_FLOAT_EQ(v.y, 0.8f);
 
-    // Edge case: normaliser vecteur zéro
+    // Edge case: normalize zero vector
     Vector3 zero(0.0f, 0.0f, 0.0f);
-    zero.normalize();  // Ne doit pas crash
+    zero.normalize();  // Must not crash
     EXPECT_TRUE(std::isnan(zero.x) || zero.x == 0.0f);
 }
 ```
 
-### Priorité des tests
+### Test Priority
 
-**Actuellement testé** :
-- **Libs** : Priorité absolue (fondation du moteur)
+**Currently tested**:
+- **Libs**: Absolute priority (engine foundation)
   - Math (Vector, Matrix, Quaternion, CartesianFrame)
   - Algorithms
   - IO
@@ -75,49 +75,49 @@ TEST(Vector, Normalize) {
   - Observer/Observable
   - Etc.
 
-**Future expansion** :
-- Resources (chargement, fail-safe, dépendances)
-- Physics (collisions, contraintes, intégration)
-- Graphics (géométrie, matériaux, renderables)
+**Future expansion**:
+- Resources (loading, fail-safe, dependencies)
+- Physics (collisions, constraints, integration)
+- Graphics (geometry, materials, renderables)
 - Scenes (nodes, components, transformations)
-- Saphir (génération shaders, compatibilité)
+- Saphir (shader generation, compatibility)
 
-### Stratégie de montée en pile
-1. **Libs 100% testé** : Base solide garantie
-2. **Systèmes fondamentaux** : Resources, Physics
-3. **Systèmes graphiques** : Graphics, Saphir
-4. **Systèmes haut niveau** : Scenes, Audio, Overlay
-5. **Integration tests** : Tests inter-systèmes
+### Stack-Up Strategy
+1. **Libs 100% tested**: Solid foundation guaranteed
+2. **Foundational systems**: Resources, Physics
+3. **Graphics systems**: Graphics, Saphir
+4. **High-level systems**: Scenes, Audio, Overlay
+5. **Integration tests**: Inter-system tests
 
-## Commandes de développement
+## Development Commands
 
 ```bash
-# Lancer tous les tests
+# Run all tests
 ctest
 
-# Lancer tests en parallèle
+# Run tests in parallel
 ctest --parallel $(nproc)
 
-# Lancer tests spécifiques
-ctest -R Vector           # Tests contenant "Vector"
-ctest -R Libs             # Tous tests Libs
+# Run specific tests
+ctest -R Vector           # Tests containing "Vector"
+ctest -R Libs             # All Libs tests
 ./test --gtest_filter="Vector.*"  # Google Test filter
 
-# Mode verbose
+# Verbose mode
 ctest --verbose
 ctest --output-on-failure
 
-# Lancer l'exécutable de test directement
-./test                    # Tous les tests
-./test --gtest_list_tests # Lister tests disponibles
+# Run test executable directly
+./test                    # All tests
+./test --gtest_list_tests # List available tests
 ```
 
-## Fichiers importants
+## Important Files
 
-### Structure Testing/
+### Testing/ Structure
 ```
 Testing/
-├── Libs/                  # Tests Libs (priorité actuelle)
+├── Libs/                  # Libs tests (current priority)
 │   ├── Math/
 │   │   ├── VectorTest.cpp
 │   │   ├── MatrixTest.cpp
@@ -132,15 +132,15 @@ Testing/
 └── CMakeLists.txt
 ```
 
-## Patterns de développement
+## Development Patterns
 
-### Créer un nouveau test
+### Creating a New Test
 ```cpp
-// 1. Créer fichier Testing/Category/ClassTest.cpp
+// 1. Create file Testing/Category/ClassTest.cpp
 #include <gtest/gtest.h>
 #include "Libs/Math/Vector.hpp"
 
-// 2. Un test par fonction
+// 2. One test per function
 TEST(Vector, Add) {
     Vector3 a(1, 2, 3);
     Vector3 b(4, 5, 6);
@@ -151,7 +151,7 @@ TEST(Vector, Add) {
     EXPECT_EQ(result.z, 9);
 }
 
-// 3. Tester edge cases
+// 3. Test edge cases
 TEST(Vector, Add_WithZero) {
     Vector3 a(1, 2, 3);
     Vector3 zero(0, 0, 0);
@@ -160,82 +160,82 @@ TEST(Vector, Add_WithZero) {
     EXPECT_EQ(result, a);
 }
 
-// 4. Tester cas limites
+// 4. Test boundary cases
 TEST(Vector, Add_Overflow) {
     Vector3 a(FLT_MAX, 0, 0);
     Vector3 b(1, 0, 0);
     Vector3 result = a + b;
-    // Vérifier comportement overflow
+    // Verify overflow behavior
 }
 ```
 
-### Types d'assertions Google Test
+### Google Test Assertion Types
 ```cpp
-// Égalité
+// Equality
 EXPECT_EQ(a, b);      // a == b
 EXPECT_NE(a, b);      // a != b
 
-// Comparaison
+// Comparison
 EXPECT_LT(a, b);      // a < b
 EXPECT_LE(a, b);      // a <= b
 EXPECT_GT(a, b);      // a > b
 EXPECT_GE(a, b);      // a >= b
 
-// Flottants (avec epsilon)
-EXPECT_FLOAT_EQ(a, b);   // ~equal pour float
-EXPECT_DOUBLE_EQ(a, b);  // ~equal pour double
+// Floats (with epsilon)
+EXPECT_FLOAT_EQ(a, b);   // ~equal for float
+EXPECT_DOUBLE_EQ(a, b);  // ~equal for double
 EXPECT_NEAR(a, b, eps);  // |a - b| <= eps
 
-// Booléens
+// Booleans
 EXPECT_TRUE(condition);
 EXPECT_FALSE(condition);
 
-// Pointeurs
+// Pointers
 EXPECT_EQ(ptr, nullptr);
 EXPECT_NE(ptr, nullptr);
 
 // ASSERT_* variants: stop test on failure
-ASSERT_EQ(a, b);  // Si échec, arrête le test
+ASSERT_EQ(a, b);  // If fails, stops the test
 ```
 
-### Tests avec fixtures (setup/teardown)
+### Tests with Fixtures (setup/teardown)
 ```cpp
 class VectorTest : public ::testing::Test {
 protected:
     void SetUp() override {
-        // Setup avant chaque test
+        // Setup before each test
         v1 = Vector3(1, 2, 3);
         v2 = Vector3(4, 5, 6);
     }
 
     void TearDown() override {
-        // Cleanup après chaque test
+        // Cleanup after each test
     }
 
     Vector3 v1, v2;
 };
 
 TEST_F(VectorTest, Add) {
-    // Utilise v1 et v2 du fixture
+    // Uses v1 and v2 from fixture
     Vector3 result = v1 + v2;
     EXPECT_EQ(result.x, 5);
 }
 ```
 
-## Points d'attention
+## Critical Points
 
-- **Libs prioritaire** : Fondation critique, doit être 100% testée
-- **Un test = une fonction** : Clarté et isolation
-- **Edge cases obligatoires** : Tester valeurs limites, zéro, négatif, overflow
-- **EXPECT vs ASSERT** : EXPECT continue après échec, ASSERT arrête
-- **Float comparison** : Utiliser EXPECT_FLOAT_EQ, pas EXPECT_EQ
-- **Tests rapides** : Éviter tests longs (< 1 seconde idéalement)
-- **Pas de randomness** : Tests reproductibles, pas de valeurs aléatoires
-- **CI/CD integration** : Tests lancés automatiquement sur commits
+- **Libs priority**: Critical foundation, must be 100% tested
+- **One test = one function**: Clarity and isolation
+- **Edge cases mandatory**: Test boundary values, zero, negative, overflow
+- **EXPECT vs ASSERT**: EXPECT continues after failure, ASSERT stops
+- **Float comparison**: Use EXPECT_FLOAT_EQ, not EXPECT_EQ
+- **Fast tests**: Avoid long tests (< 1 second ideally)
+- **No randomness**: Reproducible tests, no random values
+- **CI/CD integration**: Tests run automatically on commits
 
-## Documentation détaillée
+## Detailed Documentation
 
-Systèmes testés:
-- @src/Libs/AGENTS.md** - Priorité actuelle des tests
-→ **Google Test documentation** - Pour assertions et features avancées
-→ **CTest documentation** - Pour intégration CMake
+Tested systems:
+- @src/Libs/AGENTS.md - Current test priority
+- Google Test documentation - For assertions and advanced features
+- CTest documentation - For CMake integration

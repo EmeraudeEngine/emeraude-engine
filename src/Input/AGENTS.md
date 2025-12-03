@@ -1,99 +1,99 @@
 # Input System
 
-Context spécifique pour le développement du système de gestion des entrées d'Emeraude Engine.
+Context for developing the Emeraude Engine input management system.
 
-## Vue d'ensemble du module
+## Module Overview
 
-Système de gestion des entrées basé sur GLFW, offrant à la fois consultation directe de l'état des périphériques et système d'événements. Supporte clavier, souris, gamepads, joysticks.
+GLFW-based input management system offering both direct device state querying and an event system. Supports keyboard, mouse, gamepads, joysticks.
 
-## Règles spécifiques à Input/
+## Input-Specific Rules
 
-### Architecture double approche
+### Dual Approach Architecture
 
-**État direct (Polling)** : Consultation de l'état actuel via Controllers
-- Clavier : Touches pressées/relâchées
-- Souris : Position, boutons, scroll
-- Gamepads/Joysticks : Axes, boutons
+**Direct State (Polling)**: Query current state via Controllers
+- Keyboard: Keys pressed/released
+- Mouse: Position, buttons, scroll
+- Gamepads/Joysticks: Axes, buttons
 
-**Système d'événements** : Callbacks pour réactions temps réel
-- Tous les événements GLFW implémentés
-- Dispatch via interfaces à hériter
-- Enregistrement dans InputManager
+**Event System**: Callbacks for real-time reactions
+- All GLFW events implemented
+- Dispatch via interfaces to inherit
+- Registration in InputManager
 
-### Intégration GLFW
-- **Support natif** : Tout ce que GLFW supporte est disponible
-- **Événements complets** : Key press/release, mouse move/click, gamepad, etc.
-- **Cross-platform** : Gestion automatique des différences OS via GLFW
+### GLFW Integration
+- **Native support**: Everything GLFW supports is available
+- **Complete events**: Key press/release, mouse move/click, gamepad, etc.
+- **Cross-platform**: Automatic OS difference handling via GLFW
 
-### Système d'enregistrement
+### Registration System
 
-**Interfaces à hériter** :
-- Interface clavier (key events)
-- Interface souris (mouse events)
-- Autres interfaces selon périphériques
+**Interfaces to inherit**:
+- Keyboard interface (key events)
+- Mouse interface (mouse events)
+- Other interfaces per device
 
-**Enregistrement dans Manager** :
+**Registration in Manager**:
 ```cpp
-// Objet hérite de KeyboardInterface
+// Object inherits from KeyboardInterface
 class MyController : public KeyboardInterface {
     void onKeyPress(Key key) override { ... }
     void onKeyRelease(Key key) override { ... }
 };
 
-// Enregistrement
+// Registration
 MyController controller;
 inputManager.registerKeyboardListener(&controller);
 ```
 
-**Exemple d'usage** :
-- OverlayManager hérite des interfaces clavier/souris
-- Enregistré automatiquement au démarrage du moteur
-- Reçoit les événements et les dispatch aux Screen/Surface
+**Usage example**:
+- OverlayManager inherits keyboard/mouse interfaces
+- Automatically registered at engine startup
+- Receives events and dispatches them to Screen/Surface
 
-### Consultation directe (Controllers)
+### Direct Query (Controllers)
 
-Alternative au système d'événements pour polling d'état :
+Alternative to event system for state polling:
 ```cpp
-// Consulter état clavier
+// Query keyboard state
 if (inputManager.keyboard().isKeyPressed(Key::W)) {
     moveForward();
 }
 
-// Consulter état souris
+// Query mouse state
 auto mousePos = inputManager.mouse().position();
 bool leftClick = inputManager.mouse().isButtonPressed(MouseButton::Left);
 ```
 
-### Mapping d'actions (responsabilité application)
-- **Input fournit** : Inputs bruts GLFW
-- **Application gère** : Mapping "jump" → Space, "fire" → Mouse1, etc.
-- Permet configuration personnalisée par l'utilisateur final
+### Action Mapping (application responsibility)
+- **Input provides**: Raw GLFW inputs
+- **Application handles**: Mapping "jump" → Space, "fire" → Mouse1, etc.
+- Allows user-customizable configuration
 
-## Commandes de développement
+## Development Commands
 
 ```bash
-# Tests input
+# Input tests
 ctest -R Input
 ./test --filter="*Input*"
 ```
 
-## Fichiers importants
+## Important Files
 
-- `Manager.cpp/.hpp` - Gestionnaire central, dispatch événements, accès Controllers
-- `KeyboardInterface.hpp` - Interface pour événements clavier
-- `MouseInterface.hpp` - Interface pour événements souris
-- `KeyboardController.cpp/.hpp` - Consultation directe état clavier
-- `MouseController.cpp/.hpp` - Consultation directe état souris
-- Autres interfaces/controllers selon périphériques (Gamepad, Joystick)
+- `Manager.cpp/.hpp` - Central manager, event dispatch, Controller access
+- `KeyboardInterface.hpp` - Interface for keyboard events
+- `MouseInterface.hpp` - Interface for mouse events
+- `KeyboardController.cpp/.hpp` - Direct keyboard state query
+- `MouseController.cpp/.hpp` - Direct mouse state query
+- Other interfaces/controllers per device (Gamepad, Joystick)
 
-## Patterns de développement
+## Development Patterns
 
-### Utilisation par événements (reactive)
+### Event-based Usage (reactive)
 ```cpp
-// 1. Hériter de l'interface appropriée
+// 1. Inherit from appropriate interface
 class PlayerController : public KeyboardInterface, public MouseInterface {
 public:
-    // Événements clavier
+    // Keyboard events
     void onKeyPress(Key key) override {
         if (key == Key::Space) {
             player->jump();
@@ -106,7 +106,7 @@ public:
         }
     }
 
-    // Événements souris
+    // Mouse events
     void onMouseMove(double x, double y) override {
         camera->rotate(x, y);
     }
@@ -118,21 +118,21 @@ public:
     }
 };
 
-// 2. Enregistrer dans InputManager
+// 2. Register with InputManager
 PlayerController controller;
 inputManager.registerKeyboardListener(&controller);
 inputManager.registerMouseListener(&controller);
 ```
 
-### Utilisation par polling (direct)
+### Polling-based Usage (direct)
 ```cpp
-// Dans la boucle de jeu (logique frame)
+// In game loop (frame logic)
 void updatePlayer(float dt) {
-    // Consultation directe de l'état
+    // Direct state query
     auto& keyboard = inputManager.keyboard();
     auto& mouse = inputManager.mouse();
 
-    // Déplacement continu
+    // Continuous movement
     if (keyboard.isKeyPressed(Key::W)) {
         player->moveForward(dt);
     }
@@ -146,15 +146,15 @@ void updatePlayer(float dt) {
         player->moveRight(dt);
     }
 
-    // Rotation caméra
+    // Camera rotation
     auto mousePos = mouse.position();
     camera->lookAt(mousePos.x, mousePos.y);
 }
 ```
 
-### Mapping d'actions (dans application)
+### Action Mapping (in application)
 ```cpp
-// Application définit son propre système de mapping
+// Application defines its own mapping system
 class ActionMapper {
     std::map<std::string, Key> keyBindings;
 
@@ -181,25 +181,25 @@ if (mapper.isActionActive("jump")) {
 }
 ```
 
-### Désenregistrement
+### Unregistration
 ```cpp
-// Important : désenregistrer avant destruction
+// Important: unregister before destruction
 inputManager.unregisterKeyboardListener(&controller);
 inputManager.unregisterMouseListener(&controller);
-// Puis détruire controller
+// Then destroy controller
 ```
 
-## Points d'attention
+## Critical Points
 
-- **Désenregistrement** : Désenregistrer les listeners avant destruction
-- **Pas de mapping intégré** : Application responsable du mapping actions
-- **Double approche** : Choisir événements (reactive) ou polling (direct) selon besoin
-- **GLFW dépendance** : Input wraps GLFW, suit ses limitations/capabilities
-- **Thread safety** : Événements GLFW viennent du thread principal
-- **OverlayManager prioritaire** : Enregistré automatiquement, peut consommer événements
+- **Unregistration**: Unregister listeners before destruction
+- **No built-in mapping**: Application responsible for action mapping
+- **Dual approach**: Choose events (reactive) or polling (direct) based on need
+- **GLFW dependency**: Input wraps GLFW, follows its limitations/capabilities
+- **Thread safety**: GLFW events come from main thread
+- **OverlayManager priority**: Automatically registered, may consume events
 
-## Documentation détaillée
+## Detailed Documentation
 
-Systèmes liés:
-- @src/Overlay/AGENTS.md** - Client majeur du système Input
-→ **GLFW documentation** - Pour détails sur périphériques supportés
+Related systems:
+- @src/Overlay/AGENTS.md - Major Input system client
+- GLFW documentation - For supported device details

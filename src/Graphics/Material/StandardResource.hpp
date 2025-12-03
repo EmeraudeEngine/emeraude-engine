@@ -31,7 +31,7 @@
 #include <unordered_map>
 
 /* Local inclusions for inheritances. */
-#include "Interface.hpp"
+#include "Abstract.hpp"
 
 /* Local inclusions for usages. */
 #include "Resources/Container.hpp"
@@ -140,9 +140,7 @@ namespace EmEn::Graphics::Material
 			size_t
 			getClassUID () noexcept
 			{
-				static const size_t classUID = EmEn::Libs::Hash::FNV1a(ClassId);
-
-				return classUID;
+				return Libs::Hash::FNV1a(ClassId);
 			}
 
 			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */

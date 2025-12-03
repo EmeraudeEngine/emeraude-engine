@@ -38,7 +38,7 @@
 /* Local inclusions for usages. */
 #include "Libs/Math/CartesianFrame.hpp"
 #include "Libs/Math/Matrix.hpp"
-#include "Graphics/Renderable/Interface.hpp"
+#include "Graphics/Renderable/Abstract.hpp"
 #include "Vulkan/VertexBufferObject.hpp"
 
 namespace EmEn::Graphics::RenderableInstance
@@ -62,7 +62,7 @@ namespace EmEn::Graphics::RenderableInstance
 			 * @param instanceLocations A reference to a vector of coordinates. The max location count will be extracted from size().
 			 * @param flagBits The multiple renderable instance level flags. Default 0.
 			 */
-			Multiple (const std::shared_ptr< Vulkan::Device > & device, const std::shared_ptr< Renderable::Interface > & renderable, const std::vector< Libs::Math::CartesianFrame< float > > & instanceLocations, uint32_t flagBits = 0) noexcept;
+			Multiple (const std::shared_ptr< Vulkan::Device > & device, const std::shared_ptr< Renderable::Abstract > & renderable, const std::vector< Libs::Math::CartesianFrame< float > > & instanceLocations, uint32_t flagBits = 0) noexcept;
 
 			/**
 			 * @brief Constructs a renderable instance.
@@ -71,7 +71,7 @@ namespace EmEn::Graphics::RenderableInstance
 			 * @param instanceCount The maximum of number of locations holds by this instance.
 			 * @param flagBits The multiple renderable instance level flags. Default 0.
 			 */
-			Multiple (const std::shared_ptr< Vulkan::Device > & device, const std::shared_ptr< Renderable::Interface > & renderable, uint32_t instanceCount, uint32_t flagBits = 0) noexcept;
+			Multiple (const std::shared_ptr< Vulkan::Device > & device, const std::shared_ptr< Renderable::Abstract > & renderable, uint32_t instanceCount, uint32_t flagBits = 0) noexcept;
 
 			/** @copydoc EmEn::Graphics::RenderableInstance::Abstract::isModelMatricesCreated() const */
 			[[nodiscard]]

@@ -1,141 +1,141 @@
 # AVConsole (Audio Video Console)
 
-Context spécifique pour le développement du système AVConsole d'Emeraude Engine.
+Context for developing the Emeraude Engine AVConsole system.
 
-## Vue d'ensemble du module
+## Module Overview
 
-Console de mixage audio-vidéo pour gérer les connexions entre caméras, microphones, écouteurs (speakers) et render-targets. Chaque Scene possède son propre AVConsole.
+Audio-video mixing console for managing connections between cameras, microphones, speakers, and render-targets. Each Scene has its own AVConsole.
 
-## Règles spécifiques à AVConsole/
+## AVConsole-Specific Rules
 
-### Concept: Console de mixage
-- **Audio Video Console** : Abstraction d'une console de mixage AV
-- **Par Scene** : Chaque Scene a son AVConsole dédié
-- **Gestion connexions** : Lie cameras, micros, speakers entre eux et aux outputs
+### Concept: Mixing Console
+- **Audio Video Console**: AV mixing console abstraction
+- **Per Scene**: Each Scene has its dedicated AVConsole
+- **Connection management**: Links cameras, mics, speakers together and to outputs
 
-### Fonctionnalités principales
+### Main Features
 
-**Gestion des caméras** :
-- Enregistrement automatique des Camera components
-- Liaison camera → render-target
-- Switch entre caméras multiples
-- Définition de la caméra active pour affichage utilisateur
+**Camera management**:
+- Automatic registration of Camera components
+- Camera → render-target binding
+- Switch between multiple cameras
+- Active camera definition for user display
 
-**Gestion audio** :
-- Enregistrement automatique des Microphone components
-- Liaison micro → sortie audio
-- Configuration des listeners (points d'écoute)
-- Mix audio de la scène
+**Audio management**:
+- Automatic registration of Microphone components
+- Mic → audio output binding
+- Listener (listen point) configuration
+- Scene audio mix
 
-**Render-to-texture** :
-- Camera → render-target custom (pas juste écran principal)
-- Multiples cameras pour multiples render-targets simultanés
-- Utilisation: mirrors, security cameras, portals, mini-maps, etc.
+**Render-to-texture**:
+- Camera → custom render-target (not just main screen)
+- Multiple cameras for multiple simultaneous render-targets
+- Usage: mirrors, security cameras, portals, mini-maps, etc.
 
-### Integration avec Scene
-- **Observateurs** : AVConsole observe ajout de Camera/Microphone components
-- **Registration automatique** : Components s'enregistrent automatiquement
-- **Lifecycle** : AVConsole suit le lifecycle de la Scene
+### Scene Integration
+- **Observers**: AVConsole observes Camera/Microphone component additions
+- **Automatic registration**: Components register automatically
+- **Lifecycle**: AVConsole follows Scene lifecycle
 
-### Switch de caméra
+### Camera Switch
 ```cpp
-// Scene avec plusieurs caméras
+// Scene with multiple cameras
 auto cam1 = node1->newCamera(..., "main_camera");
 auto cam2 = node2->newCamera(..., "security_camera");
 
-// AVConsole détecte automatiquement les deux
+// AVConsole automatically detects both
 
-// Switch caméra active
-scene->avConsole().setActiveCamera("main_camera");  // Vue joueur
-// ou
-scene->avConsole().setActiveCamera("security_camera");  // Vue sécurité
+// Switch active camera
+scene->avConsole().setActiveCamera("main_camera");  // Player view
+// or
+scene->avConsole().setActiveCamera("security_camera");  // Security view
 ```
 
 ### Render-to-texture
 ```cpp
-// Créer render-target custom
+// Create custom render-target
 auto renderTarget = graphics.createRenderTarget("mirror_view", 512, 512);
 
-// Lier caméra au render-target
+// Bind camera to render-target
 auto mirrorCam = mirrorNode->newCamera(..., "mirror_camera");
 scene->avConsole().bindCameraToTarget("mirror_camera", renderTarget);
 
-// mirrorCam rend dans renderTarget au lieu de l'écran principal
-// renderTarget peut être utilisé comme texture sur un mesh (miroir)
+// mirrorCam renders to renderTarget instead of main screen
+// renderTarget can be used as texture on a mesh (mirror)
 ```
 
-## Commandes de développement
+## Development Commands
 
 ```bash
-# Tests AVConsole
+# AVConsole tests
 ctest -R AVConsole
 ./test --filter="*AVConsole*"
 ```
 
-## Fichiers importants
+## Important Files
 
-- `Manager.cpp/.hpp` - Gestionnaire AVConsole (un par Scene)
-- Intégré dans Scene lifecycle
-- `@src/Scenes/AGENTS.md` - Context général du scene graph
+- `Manager.cpp/.hpp` - AVConsole manager (one per Scene)
+- Integrated in Scene lifecycle
+- `@src/Scenes/AGENTS.md` - General scene graph context
 - `@src/Scenes/Component/Camera.hpp` - Camera component
 - `@src/Scenes/Component/Microphone.hpp` - Microphone component
 
-## Patterns de développement
+## Development Patterns
 
-### Multi-caméras avec switch
+### Multi-camera with Switch
 ```cpp
-// Setup plusieurs caméras dans la scène
+// Setup multiple cameras in scene
 auto playerNode = scene->root()->createChild("player", playerPos);
 auto playerCam = playerNode->newCamera(90.0f, 16.0f/9.0f, 0.1f, 1000.0f, "player_view");
 
 auto droneNode = scene->root()->createChild("drone", dronePos);
 auto droneCam = droneNode->newCamera(120.0f, 16.0f/9.0f, 0.1f, 5000.0f, "drone_view");
 
-// Switch dynamique
+// Dynamic switch
 if (userPressedKey(Key::V)) {
-    scene->avConsole().setActiveCamera("drone_view");  // Vue drone
+    scene->avConsole().setActiveCamera("drone_view");  // Drone view
 } else {
-    scene->avConsole().setActiveCamera("player_view");  // Vue joueur
+    scene->avConsole().setActiveCamera("player_view");  // Player view
 }
 ```
 
-### Mini-map avec render-to-texture
+### Mini-map with Render-to-texture
 ```cpp
-// Caméra top-down pour mini-map
+// Top-down camera for mini-map
 auto minimapNode = scene->root()->createChild("minimap_cam", Vec3(0, -100, 0));
-minimapNode->lookDown();  // Vue du dessus
+minimapNode->lookDown();  // Top view
 auto minimapCam = minimapNode->newCamera(60.0f, 1.0f, 0.1f, 200.0f, "minimap");
 
-// Render-target pour mini-map
+// Render-target for mini-map
 auto minimapTarget = graphics.createRenderTarget("minimap_rt", 256, 256);
 scene->avConsole().bindCameraToTarget("minimap", minimapTarget);
 
-// Utiliser minimapTarget comme texture dans l'overlay
+// Use minimapTarget as texture in overlay
 overlayManager.displayTexture(minimapTarget, screenWidth - 266, 10, 256, 256);
 ```
 
-### Configuration audio 3D
+### 3D Audio Configuration
 ```cpp
-// Microphone attaché à la caméra active (listener suit caméra)
+// Microphone attached to active camera (listener follows camera)
 auto listener = playerNode->newMicrophone("player_ears");
 
-// AVConsole configure automatiquement OpenAL listener
-// Position et orientation du listener suivent le Node
+// AVConsole automatically configures OpenAL listener
+// Listener position and orientation follow the Node
 ```
 
-## Points d'attention
+## Critical Points
 
-- **Un AVConsole par Scene** : Pas global, lié à la Scene
-- **Registration automatique** : Ne pas enregistrer manuellement Camera/Microphone
-- **Active camera required** : Au moins une caméra doit être active pour rendu
-- **Render-target lifetime** : Gérer durée de vie des render-targets custom
-- **Performance** : Multiples render-targets = multiples render passes (coût GPU)
-- **Audio listener unique** : Un seul listener actif (lié à caméra active généralement)
+- **One AVConsole per Scene**: Not global, tied to Scene
+- **Automatic registration**: Do not manually register Camera/Microphone
+- **Active camera required**: At least one camera must be active for rendering
+- **Render-target lifetime**: Manage custom render-target lifetimes
+- **Performance**: Multiple render-targets = multiple render passes (GPU cost)
+- **Unique audio listener**: Only one active listener (generally tied to active camera)
 
-## Documentation détaillée
+## Detailed Documentation
 
-Systèmes liés:
-- @src/Scenes/AGENTS.md** - Scene graph et components
-- @src/Audio/AGENTS.md** - Système audio 3D
-- @src/Graphics/AGENTS.md** - Render-targets et rendering
-- @docs/scene-graph-architecture.md** - Architecture complète Scenes
+Related systems:
+- @src/Scenes/AGENTS.md - Scene graph and components
+- @src/Audio/AGENTS.md - 3D audio system
+- @src/Graphics/AGENTS.md - Render-targets and rendering
+- @docs/scene-graph-architecture.md - Complete Scenes architecture

@@ -1,20 +1,20 @@
-# Spécification : Commandes Build Multi-Plateforme (macOS + Linux)
+# Specification: Cross-Platform Build Commands (macOS + Linux)
 
 **Date**: 2025-11-22
-**Objectif**: Garantir la compatibilité des commandes slash de build entre macOS et Linux
-**Statut**: En développement
+**Objective**: Ensure slash command build compatibility between macOS and Linux
+**Status**: In development
 
-## 🎯 Contexte
+## Context
 
-Les commandes slash actuelles dans `.claude/commands/` doivent fonctionner de manière transparente sur :
-- **macOS** (Darwin, Apple Silicon ARM64 et Intel x86_64)
-- **Linux** (Debian 13, Ubuntu 24.04, x86_64 et ARM64)
+Current slash commands in `.claude/commands/` must work seamlessly on:
+- **macOS** (Darwin, Apple Silicon ARM64 and Intel x86_64)
+- **Linux** (Debian 13, Ubuntu 24.04, x86_64 and ARM64)
 
-Actuellement, les commandes ont été développées et testées principalement sur Linux. Cette spec documente les adaptations nécessaires pour macOS tout en préservant la compatibilité Linux.
+Currently, commands have been developed and tested primarily on Linux. This spec documents necessary adaptations for macOS while preserving Linux compatibility.
 
-## 📋 Différences Plateforme
+## Platform Differences
 
-### 1. Nombre de Processeurs
+### 1. Processor Count
 
 **Linux**:
 ```bash
@@ -26,9 +26,9 @@ nproc
 sysctl -n hw.ncpu
 ```
 
-**Solution Multi-Plateforme**:
+**Cross-Platform Solution**:
 ```bash
-# Détection automatique du nombre de CPU
+# Automatic CPU count detection
 if [[ "$OSTYPE" == "darwin"* ]]; then
     NCPU=$(sysctl -n hw.ncpu)
 else
@@ -36,70 +36,70 @@ else
 fi
 ```
 
-### 2. Générateur CMake
+### 2. CMake Generator
 
-**Linux (par défaut)**:
+**Linux (default)**:
 - Unix Makefiles (make)
-- Ou Ninja si installé
+- Or Ninja if installed
 
-**macOS (recommandé)**:
-- Unix Makefiles (make) - Compatible partout
-- Xcode - Pour développement IDE
-- Ninja - Pour builds optimisés
+**macOS (recommended)**:
+- Unix Makefiles (make) - Compatible everywhere
+- Xcode - For IDE development
+- Ninja - For optimized builds
 
-**Solution Actuelle**:
-Ne pas spécifier de générateur → CMake choisit automatiquement le meilleur disponible.
+**Current Solution**:
+Don't specify a generator - CMake automatically chooses the best available.
 
 ```bash
-# Laisse CMake décider (recommandé)
+# Let CMake decide (recommended)
 cmake ..
 
-# OU spécifier explicitement si besoin
+# OR specify explicitly if needed
 cmake -G "Unix Makefiles" ..
-cmake -G "Ninja" ..           # Si Ninja installé
-cmake -G "Xcode" ..           # macOS uniquement
+cmake -G "Ninja" ..           # If Ninja installed
+cmake -G "Xcode" ..           # macOS only
 ```
 
-### 3. Chemins et Dépendances
+### 3. Paths and Dependencies
 
-**Différences potentielles** :
-- Emplacement de Vulkan SDK
-- Librairies système (OpenAL, etc.)
-- Compilateurs (GCC vs Clang)
+**Potential differences**:
+- Vulkan SDK location
+- System libraries (OpenAL, etc.)
+- Compilers (GCC vs Clang)
 
-**Gestion** :
-CMake gère automatiquement via `find_package()` et variables d'environnement.
+**Handling**:
+CMake handles automatically via `find_package()` and environment variables.
 
-### 4. Variables d'Environnement Build
+### 4. Build Environment Variables
 
-**macOS spécifiques** :
+**macOS specific**:
 ```bash
-# Vulkan SDK (si installé via LunarG)
+# Vulkan SDK (if installed via LunarG)
 export VULKAN_SDK="/Users/$USER/VulkanSDK/[version]/macOS"
 
 # Architectures (Apple Silicon)
-export CMAKE_OSX_ARCHITECTURES="arm64"  # Ou "x86_64" pour Intel
+export CMAKE_OSX_ARCHITECTURES="arm64"  # Or "x86_64" for Intel
 ```
 
-**Linux spécifiques** :
+**Linux specific**:
 ```bash
-# Généralement pas besoin de variables spéciales
+# Generally no special variables needed
 # Vulkan via package manager
 ```
 
-## 🔧 Modifications des Commandes
+## Command Modifications
 
-### Commandes à Adapter
+### Commands to Adapt
 
 #### 1. `/build-test`
-**Fichier**: `.claude/commands/build-test.md`
+**File**: `.claude/commands/build-test.md`
 
-**Changements** :
+**Changes**:
 ```bash
-# AVANT (Linux-only)
+# BEFORE (Linux-only)
 cmake --build . --parallel $(nproc)
 
-# APRÈS (Multi-plateforme)
+# AFTER (Cross-platform)
 if [[ "$OSTYPE" == "darwin"* ]]; then
     cmake --build . --parallel $(sysctl -n hw.ncpu)
 else
@@ -107,9 +107,9 @@ else
 fi
 ```
 
-**OU utiliser fonction helper** :
+**OR use helper function**:
 ```bash
-# Fonction à ajouter en début de commande
+# Function to add at command start
 get_ncpu() {
     if [[ "$OSTYPE" == "darwin"* ]]; then
         sysctl -n hw.ncpu
@@ -118,56 +118,56 @@ get_ncpu() {
     fi
 }
 
-# Utilisation
+# Usage
 cmake --build . --parallel $(get_ncpu)
 ```
 
 #### 2. `/quick-test`
-**Fichier**: `.claude/commands/quick-test.md`
+**File**: `.claude/commands/quick-test.md`
 
-**Changements** : Identiques à `/build-test`
+**Changes**: Same as `/build-test`
 
 #### 3. `/full-test`
-**Fichier**: `.claude/commands/full-test.md`
+**File**: `.claude/commands/full-test.md`
 
-**Changements** : Identiques à `/build-test`
+**Changes**: Same as `/build-test`
 
 #### 4. `/build-only`
-**Fichier**: `.claude/commands/build-only.md`
+**File**: `.claude/commands/build-only.md`
 
-**Changements** : Identiques à `/build-test`
+**Changes**: Same as `/build-test`
 
 #### 5. `/clean-rebuild`
-**Fichier**: `.claude/commands/clean-rebuild.md`
+**File**: `.claude/commands/clean-rebuild.md`
 
-**Changements** : Identiques à `/build-test`
+**Changes**: Same as `/build-test`
 
 #### 6. `/build-release`
-**Fichier**: `.claude/commands/build-release.md`
+**File**: `.claude/commands/build-release.md`
 
-**Changements** : Identiques à `/build-test`
+**Changes**: Same as `/build-test`
 
-### Commandes Sans Modification Nécessaire
+### Commands Without Modification Needed
 
-- `/check-conventions` - Scripts Python/Grep (portable)
-- `/verify-y-down` - Scripts Python/Grep (portable)
-- `/show-architecture` - Lecture fichiers (portable)
-- `/doc-system` - Lecture fichiers (portable)
+- `/check-conventions` - Python/Grep scripts (portable)
+- `/verify-y-down` - Python/Grep scripts (portable)
+- `/show-architecture` - File reading (portable)
+- `/doc-system` - File reading (portable)
 - `/find-usage` - Grep (portable)
-- `/check-references` - Scripts Python (portable)
-- `/add-resource-type` - Génération fichiers (portable)
+- `/check-references` - Python scripts (portable)
+- `/add-resource-type` - File generation (portable)
 
-## 🛠️ Implémentation Recommandée
+## Recommended Implementation
 
-### Option 1: Fonction Helper Globale (RECOMMANDÉ)
+### Option 1: Global Helper Function (RECOMMENDED)
 
-Créer un fichier de fonctions communes :
+Create a common functions file:
 
-**`.claude/commands/common.sh`** :
+**`.claude/commands/common.sh`**:
 ```bash
 #!/bin/bash
 
-# Retourne le nombre de CPU de manière portable
+# Returns CPU count in a portable way
 get_ncpu() {
     if [[ "$OSTYPE" == "darwin"* ]]; then
         sysctl -n hw.ncpu
@@ -176,7 +176,7 @@ get_ncpu() {
     fi
 }
 
-# Détecte la plateforme
+# Detects the platform
 get_platform() {
     if [[ "$OSTYPE" == "darwin"* ]]; then
         echo "macos"
@@ -187,26 +187,26 @@ get_platform() {
     fi
 }
 
-# Export pour utilisation dans les commandes
+# Export for use in commands
 export -f get_ncpu
 export -f get_platform
 ```
 
-**Utilisation dans les commandes** :
+**Usage in commands**:
 ```bash
-# En début de chaque commande .md
+# At start of each command .md
 source "$(dirname "$0")/common.sh"
 
-# Puis
+# Then
 cmake --build . --parallel $(get_ncpu)
 ```
 
-### Option 2: Inline dans Chaque Commande
+### Option 2: Inline in Each Command
 
-Inclure directement la détection dans chaque commande :
+Include detection directly in each command:
 
 ```bash
-# Détection plateforme
+# Platform detection
 if [[ "$OSTYPE" == "darwin"* ]]; then
     NCPU=$(sysctl -n hw.ncpu)
 else
@@ -217,144 +217,144 @@ fi
 cmake --build . --parallel $NCPU
 ```
 
-**Avantages** : Pas de dépendance externe
-**Inconvénients** : Code dupliqué
+**Advantages**: No external dependency
+**Disadvantages**: Duplicated code
 
-### Option 3: Variable CMAKE (PROPRE)
+### Option 3: CMAKE Variable (CLEANEST)
 
-Utiliser CMake pour gérer le parallélisme :
+Use CMake to handle parallelism:
 
 ```bash
-# CMake 3.12+ supporte --parallel sans argument
-# Il détecte automatiquement le nombre de CPU
+# CMake 3.12+ supports --parallel without argument
+# It automatically detects CPU count
 cmake --build . --parallel
 
-# Fonctionne sur macOS ET Linux !
+# Works on macOS AND Linux!
 ```
 
-**RECOMMANDATION FINALE** : Utiliser **Option 3** (la plus simple et portable)
+**FINAL RECOMMENDATION**: Use **Option 3** (simplest and most portable)
 
-## 📝 Plan de Mise en Œuvre
+## Implementation Plan
 
-### Phase 1: Tests sur macOS
-- [x] Tester build-test sur macOS ✅ (fonctionnel avec .claude-build-debug/)
-- [ ] Tester full-test sur macOS
-- [ ] Tester quick-test sur macOS
-- [ ] Tester build-release sur macOS
-- [ ] Tester clean-rebuild sur macOS
+### Phase 1: macOS Testing
+- [x] Test build-test on macOS (functional with .claude-build-debug/)
+- [ ] Test full-test on macOS
+- [ ] Test quick-test on macOS
+- [ ] Test build-release on macOS
+- [ ] Test clean-rebuild on macOS
 
-### Phase 2: Modification des Commandes
-- [ ] Modifier `/build-test` avec Option 3
-- [ ] Modifier `/quick-test` avec Option 3
-- [ ] Modifier `/full-test` avec Option 3
-- [ ] Modifier `/build-only` avec Option 3
-- [ ] Modifier `/clean-rebuild` avec Option 3
-- [ ] Modifier `/build-release` avec Option 3
+### Phase 2: Command Modifications
+- [ ] Modify `/build-test` with Option 3
+- [ ] Modify `/quick-test` with Option 3
+- [ ] Modify `/full-test` with Option 3
+- [ ] Modify `/build-only` with Option 3
+- [ ] Modify `/clean-rebuild` with Option 3
+- [ ] Modify `/build-release` with Option 3
 
-### Phase 3: Validation Cross-Platform
-- [ ] Tester toutes les commandes sur macOS ARM64 (Apple Silicon)
-- [ ] Tester toutes les commandes sur macOS x86_64 (Intel)
-- [ ] Tester toutes les commandes sur Linux x86_64 (Debian/Ubuntu)
-- [ ] Documenter les résultats
+### Phase 3: Cross-Platform Validation
+- [ ] Test all commands on macOS ARM64 (Apple Silicon)
+- [ ] Test all commands on macOS x86_64 (Intel)
+- [ ] Test all commands on Linux x86_64 (Debian/Ubuntu)
+- [ ] Document results
 
 ### Phase 4: Documentation
-- [ ] Mettre à jour `.claude/commands/README.md`
-- [ ] Ajouter notes de compatibilité dans chaque commande
-- [ ] Créer section "Multi-Platform Support" dans CLAUDE.md
+- [ ] Update `.claude/commands/README.md`
+- [ ] Add compatibility notes to each command
+- [ ] Create "Multi-Platform Support" section in CLAUDE.md
 
-## ⚠️ Points d'Attention
+## Notes
 
-### macOS Spécifique
+### macOS Specific
 
 1. **Apple Silicon (ARM64)**
-   - Rosetta 2 peut être nécessaire pour certaines dépendances x86_64
-   - Vérifier que toutes les dépendances ont des binaries ARM64 natifs
-   - Variable CMake : `CMAKE_OSX_ARCHITECTURES=arm64`
+   - Rosetta 2 may be needed for some x86_64 dependencies
+   - Verify all dependencies have native ARM64 binaries
+   - CMake variable: `CMAKE_OSX_ARCHITECTURES=arm64`
 
 2. **Vulkan SDK**
-   - Installation manuelle requise (LunarG)
-   - Vérifier que `VULKAN_SDK` est défini : `echo $VULKAN_SDK`
-   - Si vide, exporter : `export VULKAN_SDK="/Users/$USER/VulkanSDK/1.x.xxx.x/macOS"`
+   - Manual installation required (LunarG)
+   - Verify `VULKAN_SDK` is defined: `echo $VULKAN_SDK`
+   - If empty, export: `export VULKAN_SDK="/Users/$USER/VulkanSDK/1.x.xxx.x/macOS"`
 
 3. **OpenAL**
-   - Fourni par le système (AudioToolbox framework)
-   - Pas besoin d'installation externe normalement
+   - Provided by system (AudioToolbox framework)
+   - No external installation normally needed
 
 4. **Clang vs GCC**
-   - macOS utilise Apple Clang par défaut
-   - Compatibilité C++20 : Clang 17.0+ requis (vérifié : OK)
+   - macOS uses Apple Clang by default
+   - C++20 compatibility: Clang 17.0+ required (verified: OK)
 
-### Linux Spécifique
+### Linux Specific
 
-1. **nproc disponible**
-   - Fait partie de GNU coreutils (toujours installé)
-   - Pas de fallback nécessaire
+1. **nproc available**
+   - Part of GNU coreutils (always installed)
+   - No fallback needed
 
 2. **Vulkan SDK**
-   - Via package manager : `vulkan-sdk`, `libvulkan-dev`
-   - Pas de variable d'environnement nécessaire
+   - Via package manager: `vulkan-sdk`, `libvulkan-dev`
+   - No environment variable needed
 
-3. **Dépendances**
-   - Toutes via apt/yum/pacman
-   - Liste dans README.md
+3. **Dependencies**
+   - All via apt/yum/pacman
+   - List in README.md
 
-## 🧪 Tests de Validation
+## Validation Tests
 
-### Test 1: Build Basique
+### Test 1: Basic Build
 ```bash
-# Sur macOS ET Linux
+# On macOS AND Linux
 cd .claude-build-debug
 cmake ..
 cmake --build . --parallel
 ```
 
-**Résultat attendu** : Build réussit sans spécifier le nombre de CPU
+**Expected result**: Build succeeds without specifying CPU count
 
-### Test 2: Build avec Tests
+### Test 2: Build with Tests
 ```bash
-# Sur macOS ET Linux
+# On macOS AND Linux
 /build-test
 ```
 
-**Résultat attendu** : Build + tests passent sur les deux plateformes
+**Expected result**: Build + tests pass on both platforms
 
 ### Test 3: Clean Rebuild
 ```bash
-# Sur macOS ET Linux
+# On macOS AND Linux
 /clean-rebuild
 ```
 
-**Résultat attendu** : Rebuild complet réussit
+**Expected result**: Complete rebuild succeeds
 
-## 📊 Matrice de Compatibilité
+## Compatibility Matrix
 
-| Commande | Linux x86_64 | macOS ARM64 | macOS x86_64 | Statut |
-|----------|--------------|-------------|--------------|--------|
-| `/build-test` | ✅ | ✅ | ? | OK |
-| `/quick-test` | ✅ | ? | ? | À tester |
-| `/full-test` | ✅ | ? | ? | À tester |
-| `/build-only` | ✅ | ? | ? | À tester |
-| `/build-release` | ✅ | ? | ? | À tester |
-| `/clean-rebuild` | ✅ | ? | ? | À tester |
+| Command | Linux x86_64 | macOS ARM64 | macOS x86_64 | Status |
+|---------|--------------|-------------|--------------|--------|
+| `/build-test` | OK | OK | ? | OK |
+| `/quick-test` | OK | ? | ? | To test |
+| `/full-test` | OK | ? | ? | To test |
+| `/build-only` | OK | ? | ? | To test |
+| `/build-release` | OK | ? | ? | To test |
+| `/clean-rebuild` | OK | ? | ? | To test |
 
-✅ = Testé et fonctionnel
-? = Pas encore testé
-❌ = Problème détecté
+OK = Tested and functional
+? = Not yet tested
+X = Problem detected
 
-## 🔄 Changelog
+## Changelog
 
 ### 2025-11-22
-- Création initiale de la spec
-- Identification des différences plateforme
-- Recommandation : `cmake --build . --parallel` (sans argument)
-- Build test réussi sur macOS ARM64 avec `.claude-build-debug/`
+- Initial spec creation
+- Platform differences identification
+- Recommendation: `cmake --build . --parallel` (without argument)
+- Build test successful on macOS ARM64 with `.claude-build-debug/`
 
-## 📚 Références
+## References
 
 - CMake documentation: https://cmake.org/cmake/help/latest/manual/cmake.1.html#build-tool-mode
-- Emeraude Engine AGENTS.md: Build instructions multi-plateforme
-- Emeraude Engine README.md: Dépendances par plateforme
+- Emeraude Engine AGENTS.md: Cross-platform build instructions
+- Emeraude Engine README.md: Dependencies per platform
 
 ---
 
-**Prochaine étape** : Implémenter Option 3 dans toutes les commandes de build et tester sur macOS ARM64 + Linux.
+**Next step**: Implement Option 3 in all build commands and test on macOS ARM64 + Linux.

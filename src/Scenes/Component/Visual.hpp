@@ -59,10 +59,10 @@ namespace EmEn::Scenes::Component
 			 * @param parentEntity A reference to the parent entity.
 			 * @param renderable A reference to a renderable smart pointer.
 			 */
-			Visual (const std::string & componentName, const AbstractEntity & parentEntity, const std::shared_ptr< Graphics::Renderable::Interface > & renderable) noexcept
+			Visual (const std::string & componentName, const AbstractEntity & parentEntity, const std::shared_ptr< Graphics::Renderable::Abstract > & renderable) noexcept
 				: Abstract{componentName, parentEntity},
 				m_renderableInterface{renderable},
-				m_renderableInstance{std::make_shared< Graphics::RenderableInstance::Unique >(renderable, renderable->isSprite() ? Graphics::RenderableInstance::FacingCamera : Graphics::RenderableInstance::None)}
+				m_renderableInstance{std::make_shared< Graphics::RenderableInstance::Unique >(renderable, Graphics::RenderableInstance::None)}
 			{
 				this->observe(renderable.get());
 			}
@@ -140,7 +140,7 @@ namespace EmEn::Scenes::Component
 			[[nodiscard]]
 			bool onNotification (const ObservableTrait * observable, int notificationCode, const std::any & data) noexcept override;
 
-			std::weak_ptr< Graphics::Renderable::Interface > m_renderableInterface;
+			std::weak_ptr< Graphics::Renderable::Abstract > m_renderableInterface;
 			std::shared_ptr< Graphics::RenderableInstance::Unique > m_renderableInstance;
 	};
 }

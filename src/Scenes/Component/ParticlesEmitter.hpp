@@ -77,10 +77,10 @@ namespace EmEn::Scenes::Component
 			 * @param renderable The rendered object by this particle emitter.
 			 * @param instanceCount A fixed instance count.
 			 */
-			ParticlesEmitter (const std::string & componentName, const AbstractEntity & parentEntity, const std::shared_ptr< Graphics::Renderable::Interface > & renderable, uint32_t instanceCount) noexcept
+			ParticlesEmitter (const std::string & componentName, const AbstractEntity & parentEntity, const std::shared_ptr< Graphics::Renderable::Abstract > & renderable, uint32_t instanceCount) noexcept
 				: Abstract{componentName, parentEntity},
 				m_renderableInterface{renderable},
-				m_renderableInstance{std::make_shared< Graphics::RenderableInstance::Multiple >(this->engineContext().graphicsRenderer.device(), renderable, instanceCount, renderable->isSprite() ? Graphics::RenderableInstance::FacingCamera : Graphics::RenderableInstance::None)},
+				m_renderableInstance{std::make_shared< Graphics::RenderableInstance::Multiple >(this->engineContext().graphicsRenderer.device(), renderable, instanceCount, Graphics::RenderableInstance::None)},
 				m_particleLimit{instanceCount}
 			{
 				/* NOTE: Prepare local data at the fixed size. */
@@ -492,7 +492,7 @@ namespace EmEn::Scenes::Component
 				Full
 			};
 
-			std::weak_ptr< Graphics::Renderable::Interface > m_renderableInterface;
+			std::weak_ptr< Graphics::Renderable::Abstract > m_renderableInterface;
 			std::shared_ptr< Graphics::RenderableInstance::Multiple > m_renderableInstance;
 			Physics::BodyPhysicalProperties m_particlePhysicalProperties;
 			std::vector< Physics::Particle > m_particles;

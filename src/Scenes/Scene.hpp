@@ -33,6 +33,7 @@
 #include <map>
 #include <vector>
 #include <set>
+#include <unordered_set>
 #include <string>
 #include <any>
 #include <memory>
@@ -434,7 +435,7 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			 * @brief Returns the scene's random number generator.
+			 * @brief Returns the scene's random number generator for floats.
 			 *
 			 * Provides deterministic random values for scene-specific logic.
 			 * Use for procedural generation, particle systems, etc.
@@ -444,9 +445,25 @@ namespace EmEn::Scenes
 			 */
 			[[nodiscard]]
 			Libs::Randomizer< float > &
-			randomizer () noexcept
+			floatRandomizer () noexcept
 			{
-				return m_randomizer;
+				return m_floatRandomizer;
+			}
+
+			/**
+			 * @brief Returns the scene's random number generator for integers.
+			 *
+			 * Provides deterministic random values for scene-specific logic.
+			 * Use for procedural generation, particle systems, etc.
+			 *
+			 * @return Reference to the scene's integer randomizer.
+			 * @version 0.8.35
+			 */
+			[[nodiscard]]
+			Libs::Randomizer< int > &
+			integerRandomizer () noexcept
+			{
+				return m_integerRandomizer;
 			}
 
 			/**
@@ -2000,6 +2017,14 @@ namespace EmEn::Scenes
 			void sectorCollisionTest (const OctreeSector< AbstractEntity, true > & sector, std::vector< Physics::ContactManifold > & manifolds) noexcept;
 
 			/**
+			 * @brief Performs collision tests within a single leaf sector.
+			 * @param sector A reference to a leaf sector.
+			 * @param manifolds A reference to a vector of contact manifolds.
+			 * @param testedPairs A reference to a set of already tested entity pairs (avoids cross-sector duplicates).
+			 */
+			void leafSectorCollisionTest (const OctreeSector< AbstractEntity, true > & sector, std::vector< Physics::ContactManifold > & manifolds, std::unordered_set< uint64_t > & testedPairs) noexcept;
+
+			/**
 			 * @brief [PHYSICS-NEW-SYSTEM] Clips entity against scene boundaries using sphere collision.
 			 *
 			 * Uses the entity's bounding sphere to test against the cubic scene
@@ -2159,8 +2184,10 @@ namespace EmEn::Scenes
 			Physics::EnvironmentPhysicalProperties m_environmentPhysicalProperties{Physics::EnvironmentPhysicalProperties::Earth()};
 			/** @brief [PHYSICS-NEW-SYSTEM] Sequential impulse constraint solver. @version 0.8.35 */
 			Physics::ConstraintSolver m_constraintSolver{8, 3};
-			/** @brief Scene-local random number generator. @version 0.8.35 */
-			Libs::Randomizer< float > m_randomizer;
+			/** @brief Scene-local random float generator. @version 0.8.35 */
+			Libs::Randomizer< float > m_floatRandomizer;
+			/** @brief Scene-local random integer generator. @version 0.8.35 */
+			Libs::Randomizer< int > m_integerRandomizer;
 			/** @brief Half-size of cubic scene boundary in meters. @version 0.8.35 */
 			float m_boundary{0};
 			/** @brief Accumulated scene runtime in microseconds. @version 0.8.35 */

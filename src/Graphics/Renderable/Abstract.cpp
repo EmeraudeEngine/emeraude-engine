@@ -1,5 +1,5 @@
 /*
- * src/Graphics/Renderable/Interface.cpp
+ * src/Graphics/Renderable/Abstract.cpp
  * This file is part of Emeraude-Engine
  *
  * Copyright (C) 2010-2025 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
@@ -24,7 +24,7 @@
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
 
-#include "Interface.hpp"
+#include "Abstract.hpp"
 
 /* Local inclusions. */
 #include "Tracer.hpp"
@@ -38,7 +38,7 @@ namespace EmEn::Graphics::Renderable
 	constexpr auto TracerTag{"RenderableInterface"};
 
 	bool
-	Interface::onDependenciesLoaded () noexcept
+	Abstract::onDependenciesLoaded () noexcept
 	{
 		/* NOTE: Check for sub-geometries and layer count coherence. */
 		if ( this->geometry()->subGeometryCount() != this->layerCount() )
@@ -82,5 +82,81 @@ namespace EmEn::Graphics::Renderable
 		this->setReadyForInstantiation(true);
 
 		return true;
+	}
+
+	std::shared_ptr< Saphir::Program >
+	Abstract::findCachedProgram (const std::shared_ptr< const RenderTarget::Abstract > & renderTarget, const ProgramCacheKey & key) const noexcept
+	{
+		const std::lock_guard< std::mutex > lock{m_programCacheMutex};
+
+		const auto renderTargetIt = m_programCache.find(renderTarget);
+
+		if ( renderTargetIt == m_programCache.cend() )
+		{
+			return nullptr;
+		}
+
+		const auto programIt = renderTargetIt->second.find(key);
+
+		if ( programIt == renderTargetIt->second.cend() )
+		{
+			return nullptr;
+		}
+
+		return programIt->second;
+	}
+
+	void
+	Abstract::cacheProgram (const std::shared_ptr< const RenderTarget::Abstract > & renderTarget, const ProgramCacheKey & key, const std::shared_ptr< Saphir::Program > & program) const noexcept
+	{
+		const std::lock_guard< std::mutex > lock{m_programCacheMutex};
+
+		m_programCache[renderTarget][key] = program;
+	}
+
+	void
+	Abstract::clearProgramCache (const std::shared_ptr< const RenderTarget::Abstract > & renderTarget) const noexcept
+	{
+		const std::lock_guard< std::mutex > lock{m_programCacheMutex};
+
+		m_programCache.erase(renderTarget);
+	}
+
+	void
+	Abstract::clearAllProgramCaches () const noexcept
+	{
+		const std::lock_guard< std::mutex > lock{m_programCacheMutex};
+
+		m_programCache.clear();
+	}
+
+	bool
+	Abstract::hasAnyCachedPrograms (const std::shared_ptr< const RenderTarget::Abstract > & renderTarget) const noexcept
+	{
+		const std::lock_guard< std::mutex > lock{m_programCacheMutex};
+
+		const auto renderTargetIt = m_programCache.find(renderTarget);
+
+		if ( renderTargetIt == m_programCache.cend() )
+		{
+			return false;
+		}
+
+		return !renderTargetIt->second.empty();
+	}
+
+	size_t
+	Abstract::cachedProgramCount (const std::shared_ptr< const RenderTarget::Abstract > & renderTarget) const noexcept
+	{
+		const std::lock_guard< std::mutex > lock{m_programCacheMutex};
+
+		const auto renderTargetIt = m_programCache.find(renderTarget);
+
+		if ( renderTargetIt == m_programCache.cend() )
+		{
+			return 0;
+		}
+
+		return renderTargetIt->second.size();
 	}
 }

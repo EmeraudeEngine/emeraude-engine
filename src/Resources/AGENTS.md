@@ -1,83 +1,83 @@
 # Resource Management
 
-Context spécifique pour le développement du système de gestion des ressources d'Emeraude Engine.
+Context for developing the Emeraude Engine resource management system.
 
-## Vue d'ensemble du module
+## Module Overview
 
-Système de ressources fail-safe qui garantit de JAMAIS retourner nullptr et de toujours fournir une ressource valide, même en cas d'échec de chargement.
+Fail-safe resource system that guarantees NEVER returning nullptr and always providing a valid resource, even on loading failure.
 
 ## Architecture (v0.8.35+)
 
-### Classes principales
+### Main Classes
 
-| Fichier | Classe | Rôle |
-|---------|--------|------|
-| `Types.hpp` | Enums + fonctions | `SourceType`, `Status`, `DepComplexity` + conversions string |
-| `ResourceTrait.hpp` | `ResourceTrait` | Interface de base pour toutes les ressources |
-| `ResourceTrait.hpp` | `AbstractServiceProvider` | Interface d'accès aux containers (fusionnée) |
-| `Container.hpp` | `Container<resource_t>` | Store template par type de ressource |
-| `Manager.hpp` | `Manager` | Coordinateur central, accès à tous les containers |
-| `BaseInformation.hpp` | `BaseInformation` | Métadonnées de ressource (store index) |
+| File | Class | Role |
+|------|-------|------|
+| `Types.hpp` | Enums + functions | `SourceType`, `Status`, `DepComplexity` + string conversions |
+| `ResourceTrait.hpp` | `ResourceTrait` | Base interface for all resources |
+| `ResourceTrait.hpp` | `AbstractServiceProvider` | Container access interface (merged) |
+| `Container.hpp` | `Container<resource_t>` | Template store per resource type |
+| `Manager.hpp` | `Manager` | Central coordinator, access to all containers |
+| `BaseInformation.hpp` | `BaseInformation` | Resource metadata (store index) |
 
-### Cycle de vie des ressources
+### Resource Lifecycle
 
 ```
 Unloaded → Enqueuing/ManualEnqueuing → Loading → Loaded/Failed
 ```
 
 **Status enum:**
-- `Unloaded` (0) : État initial
-- `Enqueuing` (1) : Mode auto, dépendances en cours d'ajout
-- `ManualEnqueuing` (2) : Mode manuel, utilisateur contrôle les dépendances
-- `Loading` (3) : Plus de dépendances autorisées, attente de complétion
-- `Loaded` (4) : Prêt à l'utilisation
-- `Failed` (5) : Échec de chargement
+- `Unloaded` (0): Initial state
+- `Enqueuing` (1): Auto mode, dependencies being added
+- `ManualEnqueuing` (2): Manual mode, user controls dependencies
+- `Loading` (3): No more dependencies allowed, waiting for completion
+- `Loaded` (4): Ready for use
+- `Failed` (5): Loading failed
 
-## Règles spécifiques à Resources/
+## Resources-Specific Rules
 
-### Philosophie Fail-Safe OBLIGATOIRE
-- **JAMAIS** de retour nullptr depuis les Containers
-- **TOUJOURS** fournir une ressource valide (vraie ou neutral)
-- **JAMAIS** de vérification d'erreur côté client
-- Les erreurs sont loggées mais ne cassent jamais l'application
+### MANDATORY Fail-Safe Philosophy
+- **NEVER** return nullptr from Containers
+- **ALWAYS** provide a valid resource (real or neutral)
+- **NEVER** require error checking on client side
+- Errors are logged but never break the application
 
-### Pattern Neutral Resource
-- **OBLIGATOIRE** : Implémenter `load(AbstractServiceProvider&)` sans paramètres
-- La ressource neutral doit TOUJOURS réussir (pas d'I/O)
-- Être immédiatement utilisable et visuellement identifiable
-- Aucune dépendance externe
+### Neutral Resource Pattern
+- **MANDATORY**: Implement `load(AbstractServiceProvider&)` without parameters
+- Neutral resource must ALWAYS succeed (no I/O)
+- Be immediately usable and visually identifiable
+- No external dependencies
 
-### Thread Safety (CRITIQUE)
+### Thread Safety (CRITICAL)
 
 **Atomic status:**
 ```cpp
 std::atomic<Status> m_status{Status::Unloaded};  // Lock-free queries
 ```
 
-**Mutex pour listes:**
+**Mutex for lists:**
 ```cpp
-std::mutex m_dependenciesAccess;  // Protège m_parentsToNotify et m_dependenciesToWaitFor
+std::mutex m_dependenciesAccess;  // Protects m_parentsToNotify and m_dependenciesToWaitFor
 ```
 
-**Pattern deux phases (évite deadlocks):**
+**Two-phase pattern (avoids deadlocks):**
 ```cpp
 void checkDependencies() noexcept {
     Action action = Action::None;
     {
         std::lock_guard lock{m_dependenciesAccess};
-        // Phase 1: Déterminer l'action sous verrou
+        // Phase 1: Determine action under lock
         if (allDependenciesLoaded()) action = Action::CallOnDependenciesLoaded;
     }
-    // Phase 2: Exécuter HORS verrou (appels virtuels + notifications)
+    // Phase 2: Execute OUTSIDE lock (virtual calls + notifications)
     if (action == Action::CallOnDependenciesLoaded) {
         this->onDependenciesLoaded();  // Virtual call OUTSIDE lock!
     }
 }
 ```
 
-### Détection de cycles (NOUVEAU v0.8.35)
+### Cycle Detection (NEW v0.8.35)
 
-**Automatique dans addDependency():**
+**Automatic in addDependency():**
 ```cpp
 if (this->wouldCreateCycle(dependency)) [[unlikely]] {
     m_status = Status::Failed;
@@ -85,10 +85,10 @@ if (this->wouldCreateCycle(dependency)) [[unlikely]] {
 }
 ```
 
-**Algorithme DFS récursif:**
+**Recursive DFS algorithm:**
 ```cpp
 bool wouldCreateCycle(const shared_ptr<ResourceTrait>& dep) const noexcept {
-    if (dep.get() == this) return true;  // Auto-référence
+    if (dep.get() == this) return true;  // Self-reference
     for (const auto& sub : dep->m_dependenciesToWaitFor) {
         if (sub.get() == this || this->wouldCreateCycle(sub)) return true;
     }
@@ -96,100 +96,100 @@ bool wouldCreateCycle(const shared_ptr<ResourceTrait>& dep) const noexcept {
 }
 ```
 
-### Gestion des dépendances
-- Utiliser `addDependency()` pour déclarer les dépendances
-- `onDependenciesLoaded()` pour la finalisation (upload GPU, etc.)
-- Propagation automatique des événements parent-enfant
-- Reference counting avec `std::shared_ptr`
+### Dependency Management
+- Use `addDependency()` to declare dependencies
+- `onDependenciesLoaded()` for finalization (GPU upload, etc.)
+- Automatic parent-child event propagation
+- Reference counting with `std::shared_ptr`
 
-## Patterns de développement
+## Development Patterns
 
-### Création d'un nouveau type de ressource
-1. Hériter de `ResourceTrait`
-2. **OBLIGATOIRE** : Implémenter la neutral resource `load(AbstractServiceProvider&)`
-3. Implémenter le chargement fichier/données avec possibilité d'échec
-4. `onDependenciesLoaded()` pour finalisation
-5. Enregistrer dans `Manager`
+### Creating a New Resource Type
+1. Inherit from `ResourceTrait`
+2. **MANDATORY**: Implement neutral resource `load(AbstractServiceProvider&)`
+3. Implement file/data loading with failure possibility
+4. `onDependenciesLoaded()` for finalization
+5. Register in `Manager`
 
-### Chargement avec dépendances
+### Loading with Dependencies
 ```cpp
 bool load(AbstractServiceProvider& provider, const Json::Value& data) override {
-    // 1. Initialiser l'enqueuing
+    // 1. Initialize enqueuing
     if (!this->initializeEnqueuing(false)) return false;
 
-    // 2. Charger données immédiates
+    // 2. Load immediate data
     loadImmediateData(data);
 
-    // 3. Déclarer dépendances (détection de cycle automatique)
+    // 3. Declare dependencies (automatic cycle detection)
     auto dep = provider.container<OtherResource>()->getResource(data["dep"]);
-    if (!addDependency(dep)) return false;  // Cycle détecté = échec
+    if (!addDependency(dep)) return false;  // Cycle detected = failure
 
-    // 4. Finaliser l'enqueuing
-    return this->setLoadSuccess(true); // Resource passe à Loading
+    // 4. Finalize enqueuing
+    return this->setLoadSuccess(true); // Resource transitions to Loading
 }
 
 bool onDependenciesLoaded() override {
-    // 5. Finalisation quand TOUTES les dépendances sont prêtes
-    // NOTE: Appelé HORS mutex pour éviter deadlocks
+    // 5. Finalization when ALL dependencies are ready
+    // NOTE: Called OUTSIDE mutex to avoid deadlocks
     uploadToGPU();
-    return true; // Resource passe à Loaded
+    return true; // Resource transitions to Loaded
 }
 ```
 
 ### Garbage Collection
-- `use_count() == 1` → seul le Container détient la ressource
-- `unloadUnusedResources()` pour libérer mémoire
-- Garder les Default resources en cache permanent
+- `use_count() == 1` → only Container holds the resource
+- `unloadUnusedResources()` to free memory
+- Keep Default resources in permanent cache
 
-## Commandes de développement
+## Development Commands
 
 ```bash
-# Tests resources
+# Resources tests
 ctest -R Resources
 ./test --filter="*Resource*"
 ```
 
-## Points d'attention CRITIQUES
+## CRITICAL Attention Points
 
 | Point | Importance | Description |
 |-------|------------|-------------|
-| **Thread safety** | CRITIQUE | Status atomique + mutex sur listes |
-| **Deadlock prevention** | CRITIQUE | Appels virtuels HORS verrou |
-| **Cycle detection** | HAUTE | DFS automatique dans addDependency() |
-| **Memory management** | HAUTE | `shared_ptr` pour reference counting |
-| **Status tracking** | MOYENNE | Machine à états : Unloaded → Loading → Loaded/Failed |
-| **Cache efficiency** | MOYENNE | Clé par nom de ressource pour réutilisation |
+| **Thread safety** | CRITICAL | Atomic status + mutex on lists |
+| **Deadlock prevention** | CRITICAL | Virtual calls OUTSIDE lock |
+| **Cycle detection** | HIGH | Automatic DFS in addDependency() |
+| **Memory management** | HIGH | `shared_ptr` for reference counting |
+| **Status tracking** | MEDIUM | State machine: Unloaded → Loading → Loaded/Failed |
+| **Cache efficiency** | MEDIUM | Key by resource name for reuse |
 
-## Fichiers supprimés (v0.8.35)
+## Removed Files (v0.8.35)
 
-- `AbstractServiceProvider.hpp` → Fusionné dans `ResourceTrait.hpp`
-- `LoadingRequest.hpp` → Supprimé (fonctionnalité intégrée ailleurs)
-- `Randomizer.hpp` → Supprimé
+- `AbstractServiceProvider.hpp` → Merged into `ResourceTrait.hpp`
+- `LoadingRequest.hpp` → Removed (functionality integrated elsewhere)
+- `Randomizer.hpp` → Removed
 
-## Améliorations futures (suggestions)
+## Future Improvements (suggestions)
 
-| Suggestion | Complexité | Impact | Priorité |
+| Suggestion | Complexity | Impact | Priority |
 |------------|------------|--------|----------|
-| **Optimiser détection cycles** | Basse | Moyen | Haute |
-| Algorithme DFS avec `visited set` → O(n) au lieu de O(n²) | | | |
-| **Système de priorités** | Moyenne | Haut | Haute |
+| **Optimize cycle detection** | Low | Medium | High |
+| DFS algorithm with `visited set` → O(n) instead of O(n²) | | | |
+| **Priority system** | Medium | High | High |
 | `LoadPriority::Critical/High/Normal/Low/Deferred` | | | |
-| **Métriques avancées** | Basse | Moyen | Moyenne |
-| Cache hits/misses, temps de chargement, ressources lentes | | | |
-| **Resource bundles** | Moyenne | Haut | Moyenne |
-| Groupes de ressources pour transitions de scènes | | | |
-| **Chargement progressif** | Haute | Haut | Basse |
-| LOD pour textures, streaming pour open-world | | | |
+| **Advanced metrics** | Low | Medium | Medium |
+| Cache hits/misses, load times, slow resources | | | |
+| **Resource bundles** | Medium | High | Medium |
+| Resource groups for scene transitions | | | |
+| **Progressive loading** | High | High | Low |
+| LOD for textures, streaming for open-world | | | |
 
-Voir @docs/resource-management.md section "Future Improvements" pour les détails d'implémentation.
+See @docs/resource-management.md section "Future Improvements" for implementation details.
 
-## Documentation détaillée
+## Detailed Documentation
 
-Pour l'architecture complète du système de resources:
-- @docs/resource-management.md - Fail-safe, dépendances, lifecycle détaillé, thread safety, suggestions futures
+For complete resources system architecture:
+- @docs/resource-management.md - Fail-safe, dependencies, detailed lifecycle, thread safety, future suggestions
 
-Systèmes liés:
-- @src/Net/AGENTS.md - Téléchargement resources depuis URLs
-- @src/Graphics/AGENTS.md - Geometry, Material, Texture comme resources
+Related systems:
+- @src/Net/AGENTS.md - Resource download from URLs
+- @src/Graphics/AGENTS.md - Geometry, Material, Texture as resources
 - @src/Audio/AGENTS.md - SoundResource, MusicResource
 - @src/Libs/AGENTS.md - Observer/Observable pattern

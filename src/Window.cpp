@@ -722,12 +722,12 @@ namespace EmEn
 			return;
 		}
 
-		/* TODO: Be sure of why const-settings here ! */
-		const auto & settings = m_primaryServices.settings();
-		const auto windowWidth = settings.get< int32_t >(WindowWidthKey, DefaultWindowWidth);
-		const auto windowHeight = settings.get< int32_t >(WindowHeightKey, DefaultWindowHeight);
-		const auto XPosition = settings.get< int32_t >(WindowXPositionKey, DefaultWindowXPosition);
-		const auto YPosition = settings.get< int32_t >(WindowYPositionKey, DefaultWindowYPosition);
+		auto & settings = m_primaryServices.settings();
+
+		const auto windowWidth = settings.getOrSetDefault< int32_t >(WindowWidthKey, DefaultWindowWidth);
+		const auto windowHeight = settings.getOrSetDefault< int32_t >(WindowHeightKey, DefaultWindowHeight);
+		const auto XPosition = settings.getOrSetDefault< int32_t >(WindowXPositionKey, DefaultWindowXPosition);
+		const auto YPosition = settings.getOrSetDefault< int32_t >(WindowYPositionKey, DefaultWindowYPosition);
 
 		glfwSetWindowMonitor(
 			m_handle.get(),
@@ -1024,7 +1024,7 @@ namespace EmEn
 				validSizeFound = true;
 			}
 
-			glfwWaitEvents();
+			std::this_thread::sleep_for(std::chrono::milliseconds(10));
 		}
 	}
 
@@ -1176,9 +1176,8 @@ namespace EmEn
 		glfwSetWindowContentScaleCallback(m_handle.get(), windowContentScaleCallback);
 
 #if IS_WINDOWS
-		/* NOTE: On Windows, set up native message handling to detect resize start/end.
-		 * This allows pausing rendering during resize to avoid deadlocks with vkCreateSwapchainKHR(). */
-		this->setupWindowsResizeHandling();
+		// TODO: Make this feature global on all system an optional. For now disabled.
+		//this->setupWindowsResizeHandling();
 #endif
 
 		return true;

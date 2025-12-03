@@ -26,6 +26,10 @@
 
 #include "GizmoRendering.hpp"
 
+/* Local inclusions. */
+#include "Graphics/RenderTarget/Abstract.hpp"
+#include "Libs/Hash/FNV1a.hpp"
+
 namespace EmEn::Saphir::Generator
 {
 	using namespace Libs;
@@ -82,5 +86,21 @@ namespace EmEn::Saphir::Generator
 		}
 
 		return true;
+	}
+
+	size_t
+	GizmoRendering::computeProgramCacheKey () const noexcept
+	{
+		/* NOTE: Helper function to combine hash values (boost::hash_combine style). */
+		const auto hashCombine = [] (size_t & seed, size_t value) noexcept {
+			seed ^= value + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+		};
+
+		size_t hash = Hash::FNV1a(ClassId);
+
+		/* 1. Render target type (cubemap vs single layer). */
+		hashCombine(hash, static_cast< size_t >(this->renderTarget()->isCubemap()));
+
+		return hash;
 	}
 }

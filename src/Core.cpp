@@ -110,7 +110,7 @@ namespace EmEn
 	void
 	Core::logicsTask () noexcept
 	{
-		const std::chrono::duration< uint64_t, std::micro > logicsUpdateFrequency{EngineUpdateCycleDurationUS< uint64_t >};
+		constexpr std::chrono::duration< uint64_t, std::micro > logicsUpdateFrequency{EngineUpdateCycleDurationUS< uint64_t >};
 
 		while ( m_isLogicsLoopRunning )
 		{
@@ -183,15 +183,15 @@ namespace EmEn
 				m_sceneManager.withSharedActiveScene([&] (const auto & activeScene) {
 					if ( activeScene != nullptr )
 					{
-						/* This should only sync UBO for the scene. */
+						/* This should only synchronize UBOs for the scene. */
 						activeScene->updateVideoMemory(
 							m_graphicsRenderer.isShadowMapsEnabled(),
 							m_graphicsRenderer.isRenderToTexturesEnabled()
 						);
 					}
 
-					/* This should only sync UBO for the overlay. */
-					m_overlayManager.processFrameUpdates();
+					/* This should only synchronize UBOs for the overlay. */
+					m_overlayManager.updateVideoMemory();
 
 					/* Render the scene (optional) and the overlay on top. */
 					m_graphicsRenderer.renderFrame(activeScene, m_overlayManager);
@@ -206,7 +206,10 @@ namespace EmEn
 
 		Tracer::success(ClassId, "[THREAD] Rendering process terminated successfully !");
 
-		TraceInfo{ClassId} << "The rendering produced " << frames << " frames.";
+		TraceInfo{ClassId} <<
+			"The rendering produced " << frames << " frames." "\n"
+			"Pipelines statistics : " << m_graphicsRenderer.pipelineBuiltCount() << " built during, " << m_graphicsRenderer.pipelineReusedCount() << " were re-used." "\n"
+			"Programs statistics : " << m_graphicsRenderer.programBuiltCount() << " built during, " << m_graphicsRenderer.programsReusedCount() << " were re-used.";
 	}
 
 	void
@@ -295,10 +298,19 @@ namespace EmEn
 			 * DirectInput: Copy the state of every input device to use it in the engine cycle. */
 			m_inputManager.waitSystemEvents(0.010);
 
-			/* NOTE: Must be done on the main thread. */
-			if ( m_windowChanged )
+			/* NOTE: Check if the graphics render do not have a problem. */
+			if ( m_graphicsRenderer.isUsable() )
 			{
-				this->onWindowChanged();
+				/* NOTE: Must be done on the main thread. */
+				if ( m_windowChanged )
+				{
+					this->onWindowChanged();
+				}
+			}
+			else
+			{
+				/* ... If so, we stop nicely here, letting the chance to the user application to save data. */
+				this->stop();
 			}
 
 			/* Let the child class get the call event from the main loop. */
