@@ -722,12 +722,12 @@ namespace EmEn
 			return;
 		}
 
-		/* TODO: Be sure of why const-settings here ! */
-		const auto & settings = m_primaryServices.settings();
-		const auto windowWidth = settings.get< int32_t >(WindowWidthKey, DefaultWindowWidth);
-		const auto windowHeight = settings.get< int32_t >(WindowHeightKey, DefaultWindowHeight);
-		const auto XPosition = settings.get< int32_t >(WindowXPositionKey, DefaultWindowXPosition);
-		const auto YPosition = settings.get< int32_t >(WindowYPositionKey, DefaultWindowYPosition);
+		auto & settings = m_primaryServices.settings();
+
+		const auto windowWidth = settings.getOrSetDefault< int32_t >(WindowWidthKey, DefaultWindowWidth);
+		const auto windowHeight = settings.getOrSetDefault< int32_t >(WindowHeightKey, DefaultWindowHeight);
+		const auto XPosition = settings.getOrSetDefault< int32_t >(WindowXPositionKey, DefaultWindowXPosition);
+		const auto YPosition = settings.getOrSetDefault< int32_t >(WindowYPositionKey, DefaultWindowYPosition);
 
 		glfwSetWindowMonitor(
 			m_handle.get(),
