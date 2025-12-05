@@ -39,10 +39,24 @@ project(
 	LANGUAGES C CXX
 )
 
+
 set_property(GLOBAL PROPERTY USE_FOLDERS On)
 
 set(CMAKE_VERBOSE_MAKEFILE On)
 set(CMAKE_EXPORT_COMPILE_COMMANDS On)
+
+# Project build types configuration.
+set(CMAKE_CONFIGURATION_TYPES Debug Release)
+
+if ( NOT CMAKE_BUILD_TYPE )
+	if ( "${MSVC_BUILD_TYPE}" STREQUAL "Debug" OR "${MSVC_BUILD_TYPE}" STREQUAL "debug" )
+		set(CMAKE_BUILD_TYPE Debug)
+	elseif ( "${MSVC_BUILD_TYPE}" STREQUAL "Release" OR "${MSVC_BUILD_TYPE}" STREQUAL "release" )
+		set(CMAKE_BUILD_TYPE Release)
+	else ()
+		message(FATAL_ERROR "[EmeraudeEngine] Please specify the build type for Windows with -DMSVC_BUILD_TYPE:STRING=Debug or -DMSVC_BUILD_TYPE:STRING=Release !")
+	endif ()
+endif ()
 
 message("[EmeraudeEngine] Build type : ${CMAKE_BUILD_TYPE}")
 
