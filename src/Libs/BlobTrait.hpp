@@ -47,29 +47,6 @@ namespace EmEn::Libs
 			 */
 			BlobTrait () = default;
 
-#if IS_MACOS
-			/**
-			 * @brief Constructs a blob with an initial string.
-			 * @param initialString A pointer to a C-string.
-			 */
-			explicit
-			BlobTrait (const char * initialString)
-				: m_stream{initialString}
-			{
-
-			}
-
-			/**
-			 * @brief Constructs a blob with an initial string.
-			 * @param initialString A reference to a string.
-			 */
-			explicit
-			BlobTrait (const std::string & initialString)
-				: m_stream{initialString}
-			{
-
-			}
-#else
 			/**
 			 * @brief Constructs a blob with an initial string view.
 			 * @param initialString A string view.
@@ -80,7 +57,7 @@ namespace EmEn::Libs
 			{
 
 			}
-#endif
+
 			/**
 			 * @brief Deleted copy constructor.
 			 * @param other A reference to a blob.
