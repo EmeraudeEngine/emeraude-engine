@@ -26,29 +26,25 @@
 
 #pragma once
 
-/* Local inclusions for inheritances. */
-#include "Abstract.hpp"
-
-namespace EmEn::Graphics::Renderable
+namespace EmEn::Scenes
 {
 	/**
 	 * @brief Interface to define a visible sea level in a scene.
-	 * @extends EmEn::Graphics::Renderable::Interface This class is a renderable object in the 3D world.
 	 */
-	class SeaLevelInterface : public Abstract
+	class SeaLevelInterface
 	{
+		public:
+
+			/**
+			 * @brief Destructs the sea level interface.
+			 */
+			virtual ~SeaLevelInterface () = default;
+
 		protected:
 
 			/**
 			 * @brief Constructs a renderable sea level interface.
-			 * @param seaLevelName A string for the sea level resource name [std::move].
-			 * @param renderableFlags The resource flag bits.
 			 */
-			explicit
-			SeaLevelInterface (std::string seaLevelName, uint32_t renderableFlags) noexcept
-				: Abstract{std::move(seaLevelName), renderableFlags}
-			{
-
-			}
+			SeaLevelInterface () noexcept = default;
 	};
 }

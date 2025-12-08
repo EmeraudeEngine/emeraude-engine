@@ -98,8 +98,8 @@ namespace EmEn::Scenes
 		/* Checks for the background. */
 		this->readBackground(scene);
 
-		/* Checks for the scene area. */
-		this->readSceneArea(scene);
+		/* Checks for the ground. */
+		this->readGround(scene);
 
 		return true;
 	}
@@ -144,7 +144,7 @@ namespace EmEn::Scenes
 	}
 
 	bool
-	DefinitionResource::readSceneArea (Scene & /*scene*/) noexcept
+	DefinitionResource::readGround (Scene & /*scene*/) noexcept
 	{
 		return true;
 	}

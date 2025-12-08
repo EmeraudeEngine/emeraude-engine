@@ -33,6 +33,7 @@
 /* Local inclusions. */
 #include "Libs/WaveFactory/Wave.hpp"
 #include "Manager.hpp"
+#include "Libs/WaveFactory/FileIO.hpp"
 
 namespace EmEn::Audio
 {
@@ -85,16 +86,16 @@ namespace EmEn::Audio
 			return false;
 		}
 
-		WaveFactory::Wave< int16_t > file;
+		WaveFactory::Wave< int16_t > wave;
 
-		if ( !file.initialize(m_samples, WaveFactory::Channels::Mono, m_frequency) )
+		if ( !wave.initialize(m_samples, WaveFactory::Channels::Mono, m_frequency) )
 		{
 			Tracer::error(ClassId, "Unable to initialize wave data !");
 
 			return false;
 		}
 
-		if ( !file.writeFile(filepath) )
+		if ( !WaveFactory::FileIO::write(wave, filepath) )
 		{
 			Tracer::error(ClassId, "Unable to save the record to a file !");
 

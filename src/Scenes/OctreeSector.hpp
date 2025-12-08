@@ -1338,6 +1338,148 @@ namespace EmEn::Scenes
 				return m_subSectors[slot]->getDeepestSubSectorForPosition(position);
 			}
 
+			/**
+			 * @brief Checks whether this sector touches any face of the root octree boundary.
+			 *
+			 * Determines if this sector is located at the outer edge of the entire octree structure
+			 * by analyzing the slot path from this sector up to the root. A sector touches the root
+			 * boundary on a given axis if all slots in the parent chain have consistent values for
+			 * that axis (all positive or all negative direction).
+			 *
+			 * Algorithm: For each axis (X, Y, Z), we check if all bits in the slot path are
+			 * consistently 0 (positive side) or consistently 1 (negative side). If so, this sector
+			 * touches the root boundary on that axis's corresponding face.
+			 *
+			 * Performance: O(depth) where depth is the distance from this sector to the root.
+			 * Uses only integer bit operations (no floating-point comparisons).
+			 *
+			 * @return True if this sector touches any face of the root octree boundary, false if
+			 *         it is entirely internal (surrounded by other sectors on all sides).
+			 *
+			 * @note The root sector itself always returns true (it IS the boundary).
+			 * @note This is useful for spatial queries that need to handle edge cases differently,
+			 *       such as neighbor finding or boundary condition handling.
+			 *
+			 * @see isTouchingRootBorderOnAxis()
+			 * @see getNeighbor()
+			 * @version 0.8.38
+			 */
+			[[nodiscard]]
+			bool
+			isTouchingRootBorder () const noexcept
+			{
+				/* The root sector is the boundary itself. */
+				if ( this->isRoot() )
+				{
+					return true;
+				}
+
+				/* Track which faces we might be touching.
+				 * For each axis: bit 0 = might touch positive face, bit 1 = might touch negative face.
+				 * Initialize to 0b11 (might touch both) for each axis. */
+				unsigned int possibleX = 0b11;
+				unsigned int possibleY = 0b11;
+				unsigned int possibleZ = 0b11;
+
+				auto currentSector = this;
+
+				while ( !currentSector->isRoot() )
+				{
+					const size_t slot = currentSector->m_slot;
+
+					/* X-axis: bit 2 (value 4). If set = negative X, if clear = positive X.
+					 * If we see a positive X slot, we can't be at negative X boundary (clear bit 1).
+					 * If we see a negative X slot, we can't be at positive X boundary (clear bit 0). */
+					if ( slot & 4 )
+					{
+						possibleX &= 0b10; /* Clear positive possibility. */
+					}
+					else
+					{
+						possibleX &= 0b01; /* Clear negative possibility. */
+					}
+
+					/* Y-axis: bit 1 (value 2). */
+					if ( slot & 2 )
+					{
+						possibleY &= 0b10;
+					}
+					else
+					{
+						possibleY &= 0b01;
+					}
+
+					/* Z-axis: bit 0 (value 1). */
+					if ( slot & 1 )
+					{
+						possibleZ &= 0b10;
+					}
+					else
+					{
+						possibleZ &= 0b01;
+					}
+
+					/* Early exit: if no face is possible anymore, we're internal. */
+					if ( possibleX == 0 && possibleY == 0 && possibleZ == 0 )
+					{
+						return false;
+					}
+
+					currentSector = currentSector->m_parentSector.lock().get();
+				}
+
+				/* If any axis still has a possible face, we're touching the boundary. */
+				return (possibleX != 0) || (possibleY != 0) || (possibleZ != 0);
+			}
+
+			/**
+			 * @brief Checks whether this sector touches a specific face of the root octree boundary.
+			 *
+			 * Determines if this sector is located at the outer edge of the entire octree structure
+			 * on a specific axis and direction. This is more specific than isTouchingRootBorder()
+			 * and allows querying individual faces.
+			 *
+			 * @param axis The axis to check (0 = X, 1 = Y, 2 = Z).
+			 * @param negative If true, check the negative face (min); if false, check the positive face (max).
+			 *
+			 * @return True if this sector touches the specified face of the root boundary.
+			 *
+			 * @note The root sector always returns true for any face.
+			 *
+			 * @see isTouchingRootBorder()
+			 * @version 0.8.38
+			 */
+			[[nodiscard]]
+			bool
+			isTouchingRootBorderOnAxis (size_t axis, bool negative) const noexcept
+			{
+				if ( this->isRoot() )
+				{
+					return true;
+				}
+
+				/* Bit position for this axis in the slot (X=2, Y=1, Z=0). */
+				const size_t bitMask = 4 >> axis;
+
+				auto currentSector = this;
+
+				while ( !currentSector->isRoot() )
+				{
+					const size_t slot = currentSector->m_slot;
+					const bool slotIsNegative = (slot & bitMask) != 0;
+
+					/* If the slot direction doesn't match what we're looking for, we're not at that boundary. */
+					if ( slotIsNegative != negative )
+					{
+						return false;
+					}
+
+					currentSector = currentSector->m_parentSector.lock().get();
+				}
+
+				return true;
+			}
+
 		private:
 
 			/**

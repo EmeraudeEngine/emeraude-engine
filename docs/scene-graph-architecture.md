@@ -19,6 +19,28 @@ This document provides detailed architecture for the Scene Graph system, the org
 
 The `Scene` class (`src/Scenes/Scene.hpp`) is the main container that manages all aspects of a 3D environment. It orchestrates entities, rendering, physics, and audio-visual connections.
 
+### Source File Organization
+
+Due to its size (~2260 lines in the header), the Scene class implementation is split across multiple files organized by concept:
+
+| File | Purpose | Size |
+|------|---------|------|
+| `Scene.hpp` | Complete class declaration, organized by concept sections | ~2260 lines |
+| `Scene.cpp` | Core lifecycle, audio management, octree building | ~750 lines |
+| `Scene.entities.cpp` | Node tree, static entities, modifiers, observer notifications | ~480 lines |
+| `Scene.physics.cpp` | Collision detection, boundary clipping | ~300 lines |
+| `Scene.rendering.cpp` | Render targets, shadow casting, rendering pipeline | ~1300 lines |
+
+Each file uses section markers for navigation:
+```cpp
+/* ============================================================
+ * [CONCEPT: NAME]
+ * Description.
+ * ============================================================ */
+```
+
+Use search for `[CONCEPT: RENDERING]`, `[CONCEPT: PHYSICS]`, etc. to navigate quickly.
+
 ### Scene Responsibilities
 
 ```
@@ -50,7 +72,7 @@ The `Scene` class (`src/Scenes/Scene.hpp`) is the main container that manages al
 │   • Collision detection via octree broad-phase                      │
 │   • Legacy position-correction OR impulse-based solver              │
 │   • Scene boundary clipping (world cube limits)                     │
-│   • SceneArea ground collision                                      │
+│   • Ground ground collision                                      │
 │   • ConstraintSolver for rigid body physics                         │
 ├─────────────────────────────────────────────────────────────────────┤
 │ Audio-Visual Management:                                            │
@@ -60,7 +82,7 @@ The `Scene` class (`src/Scenes/Scene.hpp`) is the main container that manages al
 ├─────────────────────────────────────────────────────────────────────┤
 │ Scene Resources:                                                    │
 │   • Background (skybox, procedural sky)                            │
-│   • SceneArea (ground/terrain with collision)                       │
+│   • Ground (ground/terrain with collision)                       │
 │   • SeaLevel (water plane with buoyancy)                           │
 │   • Environment effects (Saphir post-processing)                    │
 └─────────────────────────────────────────────────────────────────────┘
@@ -75,7 +97,7 @@ Scene scene(
     "MyScene",                  // Unique scene name
     1000.0f,                    // Boundary (half-size of world cube)
     backgroundResource,         // Optional skybox (nullptr for none)
-    sceneAreaResource,          // Optional terrain (nullptr for none)
+    groundResource,          // Optional terrain (nullptr for none)
     seaLevelResource,           // Optional water (nullptr for none)
     SceneOctreeOptions{         // Optional octree configuration
         .renderingOctreeAutoExpandAt = 256,
@@ -599,7 +621,7 @@ Both systems handle scene boundary clipping:
 ```cpp
 // clipWithBoundingSphere() / clipWithBoundingBox()
 - Hard clipping: Prevents entities from leaving world cube
-- Ground collision: Integration with SceneArea terrain
+- Ground collision: Integration with Ground terrain
 - New system: Generates manifolds for boundary bounces
 - Old system: Direct position correction + collision record
 ```

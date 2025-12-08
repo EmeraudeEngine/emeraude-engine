@@ -141,7 +141,14 @@ set(EMERAUDE_HEADER_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/VertexFactory/TreeGenerator.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/VertexFactory/TriangleGenerator.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/VertexFactory/Types.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/WaveFactory/FileFormatInterface.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/WaveFactory/FileFormatJSON.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/WaveFactory/FileFormatMIDI.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/WaveFactory/FileFormatSNDFile.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/WaveFactory/FileIO.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/WaveFactory/Processor.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/WaveFactory/Synthesizer.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/WaveFactory/SFXScript.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/WaveFactory/Types.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/WaveFactory/Wave.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/BlobTrait.hpp
@@ -215,7 +222,6 @@ set(EMERAUDE_SOURCE_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/Time/Statistics/CPUTime.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/VertexFactory/TreeGenerator.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/WaveFactory/Processor.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/WaveFactory/Wave.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/FastJSON.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/FileTimestamps.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/KVParser.cpp

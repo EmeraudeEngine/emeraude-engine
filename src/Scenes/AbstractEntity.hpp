@@ -425,6 +425,7 @@ namespace EmEn::Scenes
 			hasComponent () const noexcept
 			{
 				std::lock_guard< std::mutex > lock(m_componentsMutex);
+
 				return !m_components.empty();
 			}
 
@@ -760,22 +761,22 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			 * @brief Returns whether the entity is collidable (has bounding shapes).
+			 * @brief Returns whether the entity participates in collision detection.
 			 *
-			 * An entity is a deflector if it has valid bounding primitives and collision
-			 * is not disabled. Deflectors participate in collision detection.
+			 * An entity is collidable by default. Collidable entities participate in
+			 * physics collision detection.
 			 *
-			 * @return bool True if entity has bounding shapes and collision enabled, false otherwise.
+			 * @return bool True if collision is enabled, false if disabled.
 			 *
-			 * @note Automatically set based on bounding box validity (updateEntityProperties()).
-			 * @see disableCollision(), isCollisionDisabled()
-			 * @version 0.8.35
+			 * @note Entities are collidable by default. Use setCollidable(false) to disable.
+			 * @see setCollidable()
+			 * @version 0.8.39
 			 */
 			[[nodiscard]]
 			bool
-			isDeflector () const noexcept
+			isCollidable () const noexcept
 			{
-				return this->isFlagEnabled(IsDeflector);
+				return !this->isFlagEnabled(IsCollisionDisabled);
 			}
 
 			/**
@@ -850,34 +851,20 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			 * @brief Disables collision tests for this entity.
+			 * @brief Sets whether this entity participates in collision detection.
 			 *
 			 * When disabled, the entity will not participate in collision detection even
 			 * if it has valid bounding primitives. Use for non-solid visuals, triggers, etc.
 			 *
-			 * @note This also disables the IsDeflector flag.
-			 * @see isCollisionDisabled()
-			 * @version 0.8.35
+			 * @param state True to enable collision detection, false to disable.
+			 *
+			 * @see isCollidable()
+			 * @version 0.8.39
 			 */
 			void
-			disableCollision () noexcept
+			setCollidable (bool state) noexcept
 			{
-				this->enableFlag(IsCollisionDisabled);
-			}
-
-			/**
-			 * @brief Returns whether collision tests are disabled for this entity.
-			 *
-			 * @return bool True if collision is disabled, false if collision is enabled.
-			 *
-			 * @see disableCollision()
-			 * @version 0.8.35
-			 */
-			[[nodiscard]]
-			bool
-			isCollisionDisabled () const noexcept
-			{
-				return this->isFlagEnabled(IsCollisionDisabled);
+				this->setFlag(IsCollisionDisabled, !state);
 			}
 
 			/**
@@ -981,12 +968,11 @@ namespace EmEn::Scenes
 			 * @version 0.8.35
 			 */
 			static constexpr auto BoundingPrimitivesOverridden{0UL}; ///< Bounding shapes manually overridden (don't auto-update).
-			static constexpr auto IsDeflector{1UL};                  ///< Entity has valid bounding shapes and collision enabled.
+			static constexpr auto IsCollisionDisabled{1UL};          ///< Collision detection disabled (default: false = collidable).
 			static constexpr auto IsRenderable{2UL};                 ///< Entity has at least one renderable component.
 			static constexpr auto HasBodyPhysicalProperties{3UL};    ///< Entity has aggregated physical properties (mass > 0).
 			static constexpr auto IsSimulationPaused{4UL};           ///< Physics simulation paused (no gravity/drag).
-			static constexpr auto IsCollisionDisabled{5UL};          ///< Collision detection disabled for this entity.
-			static constexpr auto NextFlag{6UL};                     ///< First available flag for derived classes (Node, StaticEntity).
+			static constexpr auto NextFlag{5UL};                     ///< First available flag for derived classes (Node, StaticEntity).
 
 			/**
 			 * @brief Constructs an abstract entity.
@@ -1136,7 +1122,7 @@ namespace EmEn::Scenes
 			 * @brief Recalculates entity properties when components change.
 			 *
 			 * Aggregates physical properties (mass, drag, bounciness) from all components,
-			 * merges bounding primitives, updates flags (IsRenderable, IsDeflector,
+			 * merges bounding primitives, updates flags (IsRenderable, IsCollidable,
 			 * HasBodyPhysicalProperties), and triggers onContentModified() hook.
 			 *
 			 * Called automatically when:
@@ -1146,7 +1132,7 @@ namespace EmEn::Scenes
 			 *
 			 * @note If BoundingPrimitivesOverridden flag is set, bounding shapes are NOT updated.
 			 * @note This is the central orchestrator for entity state consistency.
-			 * @version 0.8.35
+			 * @version 0.8.39
 			 */
 			void updateEntityProperties () noexcept;
 
@@ -1276,21 +1262,6 @@ namespace EmEn::Scenes
 			[[nodiscard]]
 			static std::shared_ptr< Graphics::Renderable::MeshResource > getCameraVisualDebug (Resources::Manager & resources) noexcept;
 
-			/**
-			 * @brief Sets the deflector state flag (internal).
-			 *
-			 * Called by updateEntityProperties() when bounding box validity changes.
-			 *
-			 * @param state True if entity has valid bounding shapes, false otherwise.
-			 *
-			 * @note Prefer updateEntityProperties() over manual flag manipulation.
-			 * @version 0.8.35
-			 */
-			void
-			setDeflectorState (bool state) noexcept
-			{
-				this->setFlag(IsDeflector, state);
-			}
 
 			/**
 			 * @brief Derived class notification fallback hook.

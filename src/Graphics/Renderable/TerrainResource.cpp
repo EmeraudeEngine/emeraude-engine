@@ -187,30 +187,30 @@ namespace EmEn::Graphics::Renderable
 		/* Checks if additional stores before loading (optional) */
 		serviceProvider.update(root);
 
-		if ( !root.isMember(DefinitionResource::SceneAreaKey) )
+		if ( !root.isMember(DefinitionResource::GroundKey) )
 		{
-			TraceError{ClassId} << "The key '" << DefinitionResource::SceneAreaKey << "' is not present !";
+			TraceError{ClassId} << "The key '" << DefinitionResource::GroundKey << "' is not present !";
 
 			return this->setLoadSuccess(false);
 		}
 
-		const auto & sceneAreaObject = root[DefinitionResource::SceneAreaKey];
+		const auto & groundObject = root[DefinitionResource::GroundKey];
 
-		if ( !sceneAreaObject.isMember(FastJSON::TypeKey) && !sceneAreaObject[FastJSON::TypeKey].isString() )
+		if ( !groundObject.isMember(FastJSON::TypeKey) && !groundObject[FastJSON::TypeKey].isString() )
 		{
 			TraceError{ClassId} << "The key '" << FastJSON::TypeKey << "' is not present or not a string !";
 
 			return this->setLoadSuccess(false);
 		}
 
-		if ( sceneAreaObject[FastJSON::TypeKey].asString() != ClassId || !sceneAreaObject.isMember(FastJSON::DataKey) )
+		if ( groundObject[FastJSON::TypeKey].asString() != ClassId || !groundObject.isMember(FastJSON::DataKey) )
 		{
 			Tracer::error(ClassId, "This file doesn't contains a Terrain definition !");
 
 			return this->setLoadSuccess(false);
 		}
 
-		return this->load(serviceProvider, sceneAreaObject[FastJSON::DataKey]);
+		return this->load(serviceProvider, groundObject[FastJSON::DataKey]);
 	}
 
 	bool

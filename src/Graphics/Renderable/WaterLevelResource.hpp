@@ -30,7 +30,8 @@
 #include <memory>
 
 /* Local inclusions for inheritances. */
-#include "SeaLevelInterface.hpp"
+#include "Abstract.hpp"
+#include "Scenes/SeaLevelInterface.hpp"
 
 /* Local inclusions for usages. */
 #include "Resources/Container.hpp"
@@ -40,9 +41,10 @@ namespace EmEn::Graphics::Renderable
 {
 	/**
 	 * @brief The water level resource class.
-	 * @extends EmEn::Graphics::Renderable::SeaLevelInterface This is a sea level.
+	 * @extends EmEn::Graphics::Renderable::Abstract This class is a renderable object in the 3D world.
+	 * @extends EmEn::Scenes::SeaLevelInterface This is a sea level.
 	 */
-	class WaterLevelResource : public SeaLevelInterface
+	class WaterLevelResource : public Abstract, public Scenes::SeaLevelInterface
 	{
 		friend class Resources::Container< WaterLevelResource >;
 
@@ -67,7 +69,7 @@ namespace EmEn::Graphics::Renderable
 			 */
 			explicit
 			WaterLevelResource (std::string name, uint32_t renderableFlags = 0) noexcept
-				: SeaLevelInterface{std::move(name), renderableFlags}
+				: Abstract{std::move(name), renderableFlags}
 			{
 
 			}
@@ -99,7 +101,7 @@ namespace EmEn::Graphics::Renderable
 				return classUID == getClassUID();
 			}
 
-			/** @copydoc EmEn::Graphics::Renderable::Interface::layerCount() const */
+			/** @copydoc EmEn::Graphics::Renderable::Abstract::layerCount() const */
 			[[nodiscard]]
 			uint32_t
 			layerCount () const noexcept override
@@ -107,7 +109,7 @@ namespace EmEn::Graphics::Renderable
 				return 1;
 			}
 
-			/** @copydoc EmEn::Graphics::Renderable::Interface::isOpaque() const */
+			/** @copydoc EmEn::Graphics::Renderable::Abstract::isOpaque() const */
 			[[nodiscard]]
 			bool
 			isOpaque (uint32_t /*layerIndex*/) const noexcept override
@@ -120,7 +122,7 @@ namespace EmEn::Graphics::Renderable
 				return m_material->isOpaque();
 			}
 
-			/** @copydoc EmEn::Graphics::Renderable::Interface::geometry() const */
+			/** @copydoc EmEn::Graphics::Renderable::Abstract::geometry() const */
 			[[nodiscard]]
 			const Geometry::Interface *
 			geometry () const noexcept override
@@ -128,7 +130,7 @@ namespace EmEn::Graphics::Renderable
 				return m_geometry.get();
 			}
 
-			/** @copydoc EmEn::Graphics::Renderable::Interface::material() const */
+			/** @copydoc EmEn::Graphics::Renderable::Abstract::material() const */
 			[[nodiscard]]
 			const Material::Interface *
 			material (uint32_t /*layerIndex*/) const noexcept override
@@ -136,7 +138,7 @@ namespace EmEn::Graphics::Renderable
 				return m_material.get();
 			}
 
-			/** @copydoc EmEn::Graphics::Renderable::Interface::layerRasterizationOptions() const */
+			/** @copydoc EmEn::Graphics::Renderable::Abstract::layerRasterizationOptions() const */
 			[[nodiscard]]
 			const RasterizationOptions *
 			layerRasterizationOptions (uint32_t /*layerIndex*/) const noexcept override
@@ -144,7 +146,7 @@ namespace EmEn::Graphics::Renderable
 				return nullptr;
 			}
 
-			/** @copydoc EmEn::Graphics::Renderable::Interface::boundingBox() const */
+			/** @copydoc EmEn::Graphics::Renderable::Abstract::boundingBox() const */
 			[[nodiscard]]
 			const Libs::Math::Space3D::AACuboid< float > &
 			boundingBox () const noexcept override
@@ -157,7 +159,7 @@ namespace EmEn::Graphics::Renderable
 				return m_geometry->boundingBox();
 			}
 
-			/** @copydoc EmEn::Graphics::Renderable::Interface::boundingSphere() const */
+			/** @copydoc EmEn::Graphics::Renderable::Abstract::boundingSphere() const */
 			[[nodiscard]]
 			const Libs::Math::Space3D::Sphere< float > &
 			boundingSphere () const noexcept override

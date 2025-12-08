@@ -440,6 +440,7 @@ namespace EmEn
 			m_coreHelp.registerArgument("Disable audio layer.", "disable-audio");
 			m_coreHelp.registerArgument("Display only logs which tags appears. TAG is a list of words separated by comma.", "filter-tag", 't', {"TAG"});
 			m_coreHelp.registerArgument("Set a custom core settings file. FILE_PATH is where to get the settings file and should be writable.", "settings-filepath", 0, {"FILE_PATH"});
+			m_coreHelp.registerArgument("Set a custom core settings filename. FILE_NAME is an alternate name of the 'settings.json' file.", "settings-filepath", 0, {"FILE_NAME"});
 			m_coreHelp.registerArgument("Disable the generation or the saving of settings files.", "disable-settings-autosave");
 			m_coreHelp.registerArgument("Enable log writing.", "enable-log", 'l', {"FILE_PATH"});
 			m_coreHelp.registerArgument("Add a custom data directory.", "add-data-directory", 0, {"DIRECTORY_PATH"});

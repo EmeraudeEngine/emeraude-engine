@@ -86,14 +86,22 @@ namespace EmEn::Scenes
 				break;
 
 			case TransformSpace::World :
-				if ( m_parent.lock()->isRoot() )
+			{
+				const auto parentNode = m_parent.lock();
+
+				if ( parentNode->isRoot() )
 				{
 					m_logicStateCoordinates.setPosition(position);
 				}
 				else
 				{
-					/* TODO: Pay attention to the node level. */
+					/* Convert world position to local position using inverse of parent's world matrix. */
+					const auto parentWorldMatrix = parentNode->getWorldCoordinates().getModelMatrix();
+					const auto invParentMatrix = parentWorldMatrix.inverse();
+					const auto localPos = invParentMatrix * Vector< 4, float >{position, 1.0F};
+					m_logicStateCoordinates.setPosition(Vector< 3, float >{localPos[X], localPos[Y], localPos[Z]});
 				}
+			}
 				break;
 		}
 
@@ -130,14 +138,24 @@ namespace EmEn::Scenes
 				break;
 
 			case TransformSpace::World :
-				if ( m_parent.lock()->isRoot() )
+			{
+				const auto parentNode = m_parent.lock();
+
+				if ( parentNode->isRoot() )
 				{
 					m_logicStateCoordinates.setXPosition(position);
 				}
 				else
 				{
-					/* TODO: Pay attention to the node level. */
+					/* Get current world position, modify X, convert back to local. */
+					auto worldPos = this->getWorldCoordinates().position();
+					worldPos[X] = position;
+					const auto parentWorldMatrix = parentNode->getWorldCoordinates().getModelMatrix();
+					const auto invParentMatrix = parentWorldMatrix.inverse();
+					const auto localPos = invParentMatrix * Vector< 4, float >{worldPos, 1.0F};
+					m_logicStateCoordinates.setPosition(Vector< 3, float >{localPos[X], localPos[Y], localPos[Z]});
 				}
+			}
 				break;
 		}
 
@@ -174,14 +192,24 @@ namespace EmEn::Scenes
 				break;
 
 			case TransformSpace::World :
-				if ( m_parent.lock()->isRoot() )
+			{
+				const auto parentNode = m_parent.lock();
+
+				if ( parentNode->isRoot() )
 				{
 					m_logicStateCoordinates.setYPosition(position);
 				}
 				else
 				{
-					/* TODO: Pay attention to the node level. */
+					/* Get current world position, modify Y, convert back to local. */
+					auto worldPos = this->getWorldCoordinates().position();
+					worldPos[Y] = position;
+					const auto parentWorldMatrix = parentNode->getWorldCoordinates().getModelMatrix();
+					const auto invParentMatrix = parentWorldMatrix.inverse();
+					const auto localPos = invParentMatrix * Vector< 4, float >{worldPos, 1.0F};
+					m_logicStateCoordinates.setPosition(Vector< 3, float >{localPos[X], localPos[Y], localPos[Z]});
 				}
+			}
 				break;
 		}
 
@@ -218,14 +246,24 @@ namespace EmEn::Scenes
 				break;
 
 			case TransformSpace::World :
-				if ( m_parent.lock()->isRoot() )
+			{
+				const auto parentNode = m_parent.lock();
+
+				if ( parentNode->isRoot() )
 				{
 					m_logicStateCoordinates.setZPosition(position);
 				}
 				else
 				{
-					/* TODO: Pay attention to the node level. */
+					/* Get current world position, modify Z, convert back to local. */
+					auto worldPos = this->getWorldCoordinates().position();
+					worldPos[Z] = position;
+					const auto parentWorldMatrix = parentNode->getWorldCoordinates().getModelMatrix();
+					const auto invParentMatrix = parentWorldMatrix.inverse();
+					const auto localPos = invParentMatrix * Vector< 4, float >{worldPos, 1.0F};
+					m_logicStateCoordinates.setPosition(Vector< 3, float >{localPos[X], localPos[Y], localPos[Z]});
 				}
+			}
 				break;
 		}
 
@@ -262,14 +300,23 @@ namespace EmEn::Scenes
 				break;
 
 			case TransformSpace::World :
-				if ( m_parent.lock()->isRoot() )
+			{
+				const auto parentNode = m_parent.lock();
+
+				if ( parentNode->isRoot() )
 				{
 					m_logicStateCoordinates.translate(distance, false);
 				}
 				else
 				{
-					/* TODO: Pay attention to the node level. */
+					/* Calculate new world position and convert to local. */
+					const auto newWorldPos = this->getWorldCoordinates().position() + distance;
+					const auto parentWorldMatrix = parentNode->getWorldCoordinates().getModelMatrix();
+					const auto invParentMatrix = parentWorldMatrix.inverse();
+					const auto localPos = invParentMatrix * Vector< 4, float >{newWorldPos, 1.0F};
+					m_logicStateCoordinates.setPosition(Vector< 3, float >{localPos[X], localPos[Y], localPos[Z]});
 				}
+			}
 				break;
 		}
 
@@ -306,14 +353,24 @@ namespace EmEn::Scenes
 				break;
 
 			case TransformSpace::World :
-				if ( m_parent.lock()->isRoot() )
+			{
+				const auto parentNode = m_parent.lock();
+
+				if ( parentNode->isRoot() )
 				{
 					m_logicStateCoordinates.translateX(distance, false);
 				}
 				else
 				{
-					/* TODO: Pay attention to the node level. */
+					/* Move along world X axis, convert result to local. */
+					auto newWorldPos = this->getWorldCoordinates().position();
+					newWorldPos[X] += distance;
+					const auto parentWorldMatrix = parentNode->getWorldCoordinates().getModelMatrix();
+					const auto invParentMatrix = parentWorldMatrix.inverse();
+					const auto localPos = invParentMatrix * Vector< 4, float >{newWorldPos, 1.0F};
+					m_logicStateCoordinates.setPosition(Vector< 3, float >{localPos[X], localPos[Y], localPos[Z]});
 				}
+			}
 				break;
 		}
 
@@ -350,14 +407,24 @@ namespace EmEn::Scenes
 				break;
 
 			case TransformSpace::World :
-				if ( m_parent.lock()->isRoot() )
+			{
+				const auto parentNode = m_parent.lock();
+
+				if ( parentNode->isRoot() )
 				{
 					m_logicStateCoordinates.translateY(distance, false);
 				}
 				else
 				{
-					/* TODO: Pay attention to the node level. */
+					/* Move along world Y axis, convert result to local. */
+					auto newWorldPos = this->getWorldCoordinates().position();
+					newWorldPos[Y] += distance;
+					const auto parentWorldMatrix = parentNode->getWorldCoordinates().getModelMatrix();
+					const auto invParentMatrix = parentWorldMatrix.inverse();
+					const auto localPos = invParentMatrix * Vector< 4, float >{newWorldPos, 1.0F};
+					m_logicStateCoordinates.setPosition(Vector< 3, float >{localPos[X], localPos[Y], localPos[Z]});
 				}
+			}
 				break;
 		}
 
@@ -394,14 +461,24 @@ namespace EmEn::Scenes
 				break;
 
 			case TransformSpace::World :
-				if ( m_parent.lock()->isRoot() )
+			{
+				const auto parentNode = m_parent.lock();
+
+				if ( parentNode->isRoot() )
 				{
 					m_logicStateCoordinates.translateZ(distance, false);
 				}
 				else
 				{
-					/* TODO: Pay attention to the node level. */
+					/* Move along world Z axis, convert result to local. */
+					auto newWorldPos = this->getWorldCoordinates().position();
+					newWorldPos[Z] += distance;
+					const auto parentWorldMatrix = parentNode->getWorldCoordinates().getModelMatrix();
+					const auto invParentMatrix = parentWorldMatrix.inverse();
+					const auto localPos = invParentMatrix * Vector< 4, float >{newWorldPos, 1.0F};
+					m_logicStateCoordinates.setPosition(Vector< 3, float >{localPos[X], localPos[Y], localPos[Z]});
 				}
+			}
 				break;
 		}
 
@@ -793,6 +870,13 @@ namespace EmEn::Scenes
 		else
 		{
 			this->onContainerMove(this->getWorldCoordinates());
+		}
+
+		/* Update the inverse world inertia tensor when rotation changes.
+		 * This is needed for correct angular physics response. */
+		if ( this->isMovable() && this->isRotationPhysicsEnabled() )
+		{
+			this->updateInverseWorldInertia(m_logicStateCoordinates.getRotationMatrix3());
 		}
 
 		/* Dispatch the movement to every sub node. */

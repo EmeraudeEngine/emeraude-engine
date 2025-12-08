@@ -933,10 +933,7 @@ namespace EmEn::Scenes
 					entity.entity()->setCollisionDetectionModel(CollisionDetectionModel::Sphere);
 
 					/* FIXME: The bounding sphere is incorrectly computed from the geometry! */
-					entity.entity()->overrideBoundingPrimitives(
-						Space3D::AACuboid{radius},
-						Space3D::Sphere{radius}
-					);
+					entity.entity()->overrideBoundingPrimitives(Space3D::AACuboid{radius}, Space3D::Sphere{radius});
 
 					const auto density = materialResource == nullptr ? 1.0F : materialResource->surfacePhysicalProperties().density();
 

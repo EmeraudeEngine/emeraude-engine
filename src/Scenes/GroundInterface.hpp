@@ -1,5 +1,5 @@
 /*
- * src/Graphics/Renderable/SceneAreaInterface.hpp
+ * src/Graphics/Renderable/GroundInterface.hpp
  * This file is part of Emeraude-Engine
  *
  * Copyright (C) 2010-2025 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
@@ -26,18 +26,19 @@
 
 #pragma once
 
-/* Local inclusions for inheritances. */
-#include "Abstract.hpp"
-
-namespace EmEn::Graphics::Renderable
+namespace EmEn::Scenes
 {
 	/**
 	 * @brief Interface to define a physical and visible floor in a scene.
-	 * @extends EmEn::Graphics::Renderable::Interface This class is a renderable object in the 3D world.
 	 */
-	class SceneAreaInterface : public Abstract
+	class GroundInterface
 	{
 		public:
+
+			/**
+			 * @brief Destructs the ground interface.
+			 */
+			virtual ~GroundInterface () = default;
 
 			/**
 			 * @brief Returns the ground level under the given position.
@@ -68,15 +69,8 @@ namespace EmEn::Graphics::Renderable
 		protected:
 
 			/**
-			 * @brief Constructs a renderable scene area interface.
-			 * @param sceneAreaName A string for the scene area resource name [std::move].
-			 * @param renderableFlags The resource flag bits.
+			 * @brief Constructs a ground interface.
 			 */
-			explicit
-			SceneAreaInterface (std::string sceneAreaName, uint32_t renderableFlags) noexcept
-				: Abstract{std::move(sceneAreaName), renderableFlags}
-			{
-
-			}
+			GroundInterface () noexcept = default;
 	};
 }

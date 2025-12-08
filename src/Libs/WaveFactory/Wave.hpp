@@ -32,21 +32,25 @@
 /* STL inclusions. */
 #include <cstddef>
 #include <cstdint>
+#include <cmath>
+#include <filesystem>
 #include <iostream>
 #include <limits>
 #include <sstream>
 #include <string>
 #include <type_traits>
 #include <vector>
-#include <filesystem>
 
 /* Local inclusions. */
 #include "Libs/Utility.hpp"
-#include "Libs/Randomizer.hpp"
 #include "Types.hpp"
 
 namespace EmEn::Libs::WaveFactory
 {
+	/* Forward declarations. */
+	template< typename precision_t > requires (std::is_arithmetic_v< precision_t >) class Synthesizer;
+	class Processor;
+
 	/**
 	 * @brief The Wave class.
 	 * @tparam precision_t The type of number for wave precision. Default int16_t.
@@ -55,12 +59,13 @@ namespace EmEn::Libs::WaveFactory
 	requires (std::is_arithmetic_v< precision_t >)
 	class Wave final
 	{
-		/* NOTE: Let's be friend with the wave processor. */
+		/* NOTE: Let's be friend with the Synthesizer and Processor classes. */
+		friend class Synthesizer< precision_t >;
 		friend class Processor;
 
-		/* NOTE: The conversion function is a way easier if we let it be a friend too. */
-		template< typename typeA_t, typename typeB_t >
-		friend size_t convertWaveFormat (const Wave< typeA_t > & source, Wave< typeB_t > & destination) noexcept;
+		/* NOTE: The conversion function is way easier if we let it be a friend too. */
+		template< typename input_data_t, typename output_data_t >
+		friend Wave< output_data_t > dataConversion (const Wave< input_data_t > & input) noexcept;
 
 		public:
 
@@ -76,7 +81,7 @@ namespace EmEn::Libs::WaveFactory
 			 * @param frequency The frequency of the sound (samples per seconds).
 			 */
 			Wave (size_t samplesCount, Channels channels, Frequency frequency) noexcept
-				: Wave()
+				: Wave{}
 			{
 				this->initialize(samplesCount, channels, frequency);
 			}
@@ -153,33 +158,7 @@ namespace EmEn::Libs::WaveFactory
 				m_data.clear();
 			}
 
-			/**
-			 * @brief Reads a sound file using LibSNDFile.
-			 * @param filepath A reference to a file path.
-			 * @return bool
-			 */
-			bool
-			readFile (const std::filesystem::path & filepath) noexcept
-			{
-				std::cerr << __PRETTY_FUNCTION__ << ", this precision format is not handled to write '" << filepath << "' !" "\n";
-
-				return false;
-			}
-
-			/**
-			 * @brief Writes a sound file using LibSNDFile.
-			 * @param filepath A reference to a file path.
-			 * @return bool
-			 */
-			bool
-			writeFile (const std::filesystem::path & filepath) noexcept
-			{
-				std::cerr << __PRETTY_FUNCTION__ << ", this precision format is not handled to write '" << filepath << "' !" "\n";
-
-				return false;
-			}
-
-			/**
+		/**
 			 * @brief Returns whether there is data loaded.
 			 * @return bool
 			 */
@@ -250,13 +229,35 @@ namespace EmEn::Libs::WaveFactory
 			}
 
 			/**
+			 * @brief Returns read-only access to raw data of the wave.
+			 * @return const std::vector< precision_t > &
+			 */
+			[[nodiscard]]
+			const std::vector< precision_t > &
+			data () const noexcept
+			{
+				return m_data;
+			}
+
+			/**
+			 * @brief Returns a write access to raw data of the wave.
+			 * @return std::vector< precision_t > &
+			 */
+			[[nodiscard]]
+			std::vector< precision_t > &
+			data () noexcept
+			{
+				return m_data;
+			}
+
+			/**
 			 * @brief Returns a raw pointer to the data at specified offset.
 			 * @param offset The offset in the buffer. Default 0.
 			 * @return type_t *
 			 */
 			[[nodiscard]]
 			precision_t *
-			data (size_t offset = 0) noexcept
+			samplePointer (size_t offset = 0UL) noexcept
 			{
 				if ( offset > 0UL )
 				{
@@ -280,7 +281,7 @@ namespace EmEn::Libs::WaveFactory
 			 */
 			[[nodiscard]]
 			const precision_t *
-			data (size_t offset = 0) const noexcept
+			samplePointer (size_t offset) const noexcept
 			{
 				if ( offset > 0UL )
 				{
@@ -370,27 +371,6 @@ namespace EmEn::Libs::WaveFactory
 			}
 
 			/**
-			 * @brief Generates a noise sound using the wave properties.
-			 * @return bool
-			 */
-			bool
-			generateNoise () noexcept
-			{
-				if ( m_data.empty() )
-				{
-					std::cerr << __PRETTY_FUNCTION__ << ", unable to generate noise in an empty buffer !" "\n";
-
-					return false;
-				}
-
-				Randomizer< precision_t > randomizer;
-
-				std::fill(m_data.begin(), m_data.end(), randomizer.value(std::numeric_limits< precision_t >::lowest(), std::numeric_limits< precision_t >::max()));
-
-				return true;
-			}
-
-			/**
 			 * @brief STL streams printable object.
 			 * @param out A reference to the stream output.
 			 * @param obj A reference to the object to print.
@@ -433,41 +413,56 @@ namespace EmEn::Libs::WaveFactory
 			Frequency m_frequency = Frequency::Invalid;
 	};
 
-	template<>
-	bool Wave< int16_t >::readFile (const std::filesystem::path & filepath) noexcept;
-
-	template<>
-	bool Wave< int16_t >::writeFile (const std::filesystem::path & filepath) noexcept;
-
 	/**
-	 * @brief Converts a wave format to another one.
-	 * @tparam src_data_t The type of the source wave.
-	 * @tparam dst_data_t The type of the destination wave.
-	 * @param source A reference to the source wave.
-	 * @param destination A reference to the destination wave.
-	 * @return size_t
+	 * @brief Converts a wave from one data type to another.
+	 * @tparam input_data_t The data type of the source wave.
+	 * @tparam output_data_t The data type of the target wave.
+	 * @param input A reference to input wave.
+	 * @return Wave< output_data_t >
 	 */
-	template< typename src_data_t, typename dst_data_t >
-	size_t
-	convertWaveFormat (const Wave< src_data_t > & source, Wave< dst_data_t > & destination) noexcept
+	template< typename input_data_t, typename output_data_t >
+	[[nodiscard]]
+	Wave< output_data_t >
+	dataConversion (const Wave< input_data_t > & input) noexcept
+	requires (std::is_arithmetic_v< input_data_t >, std::is_arithmetic_v< output_data_t >)
 	{
-		destination.clear();
+		Wave< output_data_t > output{input.sampleCount(), input.channels(), input.frequency()};
 
-		const auto sampleCount = source.elementCount();
+		const auto & inputData = input.data();
+		auto & outputData = output.data();
 
-		if ( sampleCount > 0 )
+		for ( size_t index = 0; index < inputData.size(); index++ )
 		{
-			destination.m_data.resize(sampleCount);
-
-			for ( size_t sampleIndex = 0; sampleIndex < sampleCount; ++sampleIndex )
+			if constexpr ( std::is_floating_point_v< input_data_t > )
 			{
-				destination.m_data[sampleIndex] = static_cast< dst_data_t >(source.m_data[sampleIndex]);
+				/* float -> float */
+				if constexpr ( std::is_floating_point_v< output_data_t > )
+				{
+					outputData[index] = static_cast< output_data_t >(inputData[index]);
+				}
+				/* float -> integer */
+				else
+				{
+					outputData[index] = static_cast< output_data_t >(std::round(inputData[index] * std::numeric_limits< output_data_t >::max()));
+				}
+			}
+			else
+			{
+				/* integer -> float */
+				if constexpr ( std::is_floating_point_v< output_data_t > )
+				{
+					outputData[index] = static_cast< output_data_t >(inputData[index]) / static_cast< output_data_t >(std::numeric_limits< input_data_t >::max());
+				}
+				/* integer -> integer */
+				else
+				{
+					const auto ratio = static_cast< float >(std::numeric_limits< output_data_t >::max()) / static_cast< float >(std::numeric_limits< input_data_t >::max());
+
+					outputData[index] = static_cast< output_data_t >(std::round(ratio * inputData[index]));
+				}
 			}
 		}
 
-		destination.m_channels = source.m_channels;
-		destination.m_frequency = source.m_frequency;
-
-		return sampleCount;
+		return output;
 	}
 }

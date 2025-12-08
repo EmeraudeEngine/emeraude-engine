@@ -26,6 +26,9 @@
 
 #include "ContactPoint.hpp"
 
+/* STL inclusions. */
+#include <cmath>
+
 namespace EmEn::Physics
 {
 	void
@@ -41,6 +44,24 @@ namespace EmEn::Physics
 		{
 			m_rB = m_positionWorld - m_bodyB->getWorldCenterOfMass();
 		}
+
+		/* Compute tangent basis using Gram-Schmidt orthonormalization.
+		 * We need two vectors perpendicular to the normal for friction. */
+		if ( std::abs(m_normal[Libs::Math::X]) < 0.9F )
+		{
+			/* Normal is not aligned with X axis, use X as reference. */
+			m_tangent1 = Libs::Math::Vector< 3, float >::crossProduct(m_normal, {1.0F, 0.0F, 0.0F});
+		}
+		else
+		{
+			/* Normal is mostly aligned with X axis, use Y as reference. */
+			m_tangent1 = Libs::Math::Vector< 3, float >::crossProduct(m_normal, {0.0F, 1.0F, 0.0F});
+		}
+
+		m_tangent1.normalize();
+
+		/* Second tangent is perpendicular to both normal and first tangent. */
+		m_tangent2 = Libs::Math::Vector< 3, float >::crossProduct(m_normal, m_tangent1);
 	}
 
 	void
@@ -62,5 +83,38 @@ namespace EmEn::Physics
 		m_accumulatedNormalImpulse = std::max(0.0F, oldImpulse + lambda);
 
 		lambda = m_accumulatedNormalImpulse - oldImpulse;
+	}
+
+	void
+	ContactPoint::updateAccumulatedTangentImpulse (float & lambda, size_t tangentIndex, float maxFriction) noexcept
+	{
+		const float oldImpulse = m_accumulatedTangentImpulse[tangentIndex];
+		const float newImpulse = std::clamp(oldImpulse + lambda, -maxFriction, maxFriction);
+
+		m_accumulatedTangentImpulse[tangentIndex] = newImpulse;
+
+		lambda = newImpulse - oldImpulse;
+	}
+
+	void
+	ContactPoint::setEffectiveMassTangent1 (float mass) noexcept
+	{
+		m_effectiveMassTangent1 = mass;
+
+		if ( m_effectiveMassTangent1 > 0.0F )
+		{
+			m_effectiveMassTangent1 = 1.0F / m_effectiveMassTangent1;
+		}
+	}
+
+	void
+	ContactPoint::setEffectiveMassTangent2 (float mass) noexcept
+	{
+		m_effectiveMassTangent2 = mass;
+
+		if ( m_effectiveMassTangent2 > 0.0F )
+		{
+			m_effectiveMassTangent2 = 1.0F / m_effectiveMassTangent2;
+		}
 	}
 }

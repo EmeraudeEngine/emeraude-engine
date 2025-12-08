@@ -38,9 +38,6 @@
 
 /* Local inclusions. */
 #include "DefinitionResource.hpp"
-#include "Graphics/Renderable/AbstractBackground.hpp"
-#include "Graphics/Renderable/SceneAreaInterface.hpp"
-#include "Graphics/Renderable/SeaLevelInterface.hpp"
 #include "Resources/Manager.hpp"
 #include "PrimaryServices.hpp"
 
@@ -310,7 +307,7 @@ namespace EmEn::Scenes
 	}
 
 	std::shared_ptr< Scene >
-	Manager::newScene (const std::string & sceneName, float boundary, const std::shared_ptr< Renderable::AbstractBackground > & background, const std::shared_ptr< Renderable::SceneAreaInterface > & sceneArea, const std::shared_ptr< Renderable::SeaLevelInterface > & seaLevel) noexcept
+	Manager::newScene (const std::string & sceneName, float boundary, const std::shared_ptr< Renderable::AbstractBackground > & background, const std::shared_ptr< GroundInterface > & groundPhysics, const std::shared_ptr< SeaLevelInterface > & seaLevel) noexcept
 	{
 		const std::lock_guard< std::mutex > lock{m_sceneListAccess};
 
@@ -321,7 +318,7 @@ namespace EmEn::Scenes
 			return nullptr;
 		}
 
-		auto newScene = std::make_shared< Scene >(m_graphicsRenderer, m_audioManager, sceneName, boundary, background, sceneArea, seaLevel);
+		auto newScene = std::make_shared< Scene >(m_graphicsRenderer, m_audioManager, sceneName, boundary, background, groundPhysics, seaLevel);
 
 		this->notify(SceneCreated, newScene);
 

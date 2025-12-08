@@ -948,12 +948,21 @@ namespace EmEn::Scenes
 			/**
 			 * @copydoc EmEn::Physics::MovableTrait::moveFromPhysics()
 			 * @note Called by physics engine to update node position based on simulation.
+			 * @note If simulation was paused and movement is below threshold, stays paused.
 			 * @version 0.8.35
 			 */
 			void
-			moveFromPhysics (const Libs::Math::Vector< 3, float > & worldPosition) noexcept override
+			moveFromPhysics (const Libs::Math::Vector< 3, float > & positionDelta) noexcept override
 			{
-				this->move(worldPosition, Libs::Math::TransformSpace::World);
+				const bool wasSimulationPaused = this->isSimulationPaused();
+
+				this->move(positionDelta, Libs::Math::TransformSpace::World);
+
+				/* If simulation was paused and movement is not significant, stay paused. */
+				if ( wasSimulationPaused && positionDelta.length() < Physics::SI::centimeters(5.0F) )
+				{
+					this->pauseSimulation(true);
+				}
 			}
 
 			/**

@@ -31,9 +31,9 @@
 #include <algorithm>
 
 /* Local inclusions. */
+#include "Libs/Math/Vector.hpp"
 #include "ContactManifold.hpp"
 #include "MovableTrait.hpp"
-#include "Libs/Math/Vector.hpp"
 
 namespace EmEn::Physics
 {
@@ -112,6 +112,35 @@ namespace EmEn::Physics
 
 			contact.setEffectiveMass(massInvA + massInvB + angularContribution);
 
+			/* Compute effective mass for tangent directions (friction). */
+			float angularContributionT1 = 0.0F;
+			float angularContributionT2 = 0.0F;
+
+			if ( bodyA && bodyA->isMovable() && bodyA->isRotationPhysicsEnabled() )
+			{
+				auto rA_cross_t1 = Libs::Math::Vector< 3, float >::crossProduct(contact.rA(), contact.tangent1());
+				auto tempT1 = bodyA->inverseWorldInertia() * rA_cross_t1;
+				angularContributionT1 += Libs::Math::Vector< 3, float >::dotProduct(rA_cross_t1, tempT1);
+
+				auto rA_cross_t2 = Libs::Math::Vector< 3, float >::crossProduct(contact.rA(), contact.tangent2());
+				auto tempT2 = bodyA->inverseWorldInertia() * rA_cross_t2;
+				angularContributionT2 += Libs::Math::Vector< 3, float >::dotProduct(rA_cross_t2, tempT2);
+			}
+
+			if ( bodyB && bodyB->isMovable() && bodyB->isRotationPhysicsEnabled() )
+			{
+				auto rB_cross_t1 = Libs::Math::Vector< 3, float >::crossProduct(contact.rB(), contact.tangent1());
+				auto tempT1 = bodyB->inverseWorldInertia() * rB_cross_t1;
+				angularContributionT1 += Libs::Math::Vector< 3, float >::dotProduct(rB_cross_t1, tempT1);
+
+				auto rB_cross_t2 = Libs::Math::Vector< 3, float >::crossProduct(contact.rB(), contact.tangent2());
+				auto tempT2 = bodyB->inverseWorldInertia() * rB_cross_t2;
+				angularContributionT2 += Libs::Math::Vector< 3, float >::dotProduct(rB_cross_t2, tempT2);
+			}
+
+			contact.setEffectiveMassTangent1(massInvA + massInvB + angularContributionT1);
+			contact.setEffectiveMassTangent2(massInvA + massInvB + angularContributionT2);
+
 			/* Compute velocity bias for position correction (Baumgarte stabilization). */
 			const float penetrationError = std::max(contact.penetrationDepth() - BaumgarteSlop, 0.0F);
 
@@ -176,8 +205,13 @@ namespace EmEn::Physics
 				restitution = bodyB->getBodyPhysicalProperties().bounciness();
 			}
 
-			/* Compute impulse magnitude. */
-			const float targetVelocity = -normalVelocity - restitution * std::max(0.0F, -normalVelocity) + contact.velocityBias();
+			/* Compute impulse magnitude using standard impulse formula:
+			 * j = -(1 + e) * Vn / effective_mass
+			 * where Vn is the relative velocity along the normal.
+			 *
+			 * When objects are approaching (Vn < 0), we need to apply a separating impulse.
+			 * The restitution coefficient determines how much the objects "bounce back". */
+			const float targetVelocity = -(1.0F + restitution) * normalVelocity + contact.velocityBias();
 			float lambda = targetVelocity * contact.effectiveMass();
 
 			/* Accumulate and clamp impulse (non-penetration constraint: impulse >= 0). */
@@ -185,10 +219,25 @@ namespace EmEn::Physics
 
 			/* Apply impulses. */
 			const auto linearImpulse = contact.normal() * lambda;
+			const auto & normal = contact.normal();
+
+			/* Check if this is a ground collision for each body.
+			 * In Y-down system, normal points from bodyA to bodyB.
+			 * - If normal.Y > 0.7 (pointing down), bodyA is above and grounded.
+			 * - If normal.Y < -0.7 (pointing up), bodyB is above and grounded.
+			 * Threshold of 0.7 allows surfaces up to ~45 degrees to count as ground. */
+			constexpr auto GroundNormalThreshold{0.7F};
 
 			if ( bodyA && bodyA->isMovable() )
 			{
 				bodyA->applyLinearImpulse(-linearImpulse);
+				bodyA->setHadCollision();
+
+				/* Body A is grounded if normal points downward (A is on top). */
+				if ( normal[Libs::Math::Y] > GroundNormalThreshold )
+				{
+					bodyA->setGrounded();
+				}
 
 				if ( bodyA->isRotationPhysicsEnabled() )
 				{
@@ -201,12 +250,134 @@ namespace EmEn::Physics
 			if ( bodyB && bodyB->isMovable() )
 			{
 				bodyB->applyLinearImpulse(linearImpulse);
+				bodyB->setHadCollision();
+
+				/* Body B is grounded if normal points upward (B is on top). */
+				if ( normal[Libs::Math::Y] < -GroundNormalThreshold )
+				{
+					bodyB->setGrounded();
+				}
 
 				if ( bodyB->isRotationPhysicsEnabled() )
 				{
 					const auto angularImpulse = Libs::Math::Vector< 3, float >::crossProduct(contact.rB(), linearImpulse);
 
 					bodyB->applyAngularImpulse(angularImpulse);
+				}
+			}
+
+			/* ============================================================
+			 * FRICTION IMPULSES (Coulomb friction model)
+			 * ============================================================ */
+
+			/* Compute friction coefficient (average stickiness of both bodies). */
+			float friction = 0.0F;
+
+			if ( bodyA && bodyB )
+			{
+				friction = (bodyA->getBodyPhysicalProperties().stickiness() + bodyB->getBodyPhysicalProperties().stickiness()) * 0.5F;
+			}
+			else if ( bodyA )
+			{
+				friction = bodyA->getBodyPhysicalProperties().stickiness();
+			}
+			else if ( bodyB )
+			{
+				friction = bodyB->getBodyPhysicalProperties().stickiness();
+			}
+
+			/* Maximum friction impulse is proportional to normal force (Coulomb's law). */
+			const float maxFriction = friction * contact.accumulatedNormalImpulse();
+
+			/* Skip friction if no normal force or no friction coefficient. */
+			if ( maxFriction <= 0.0F )
+			{
+				continue;
+			}
+
+			/* Recompute relative velocity after normal impulse was applied. */
+			velocityA.reset();
+			velocityB.reset();
+
+			if ( bodyA && bodyA->isMovable() )
+			{
+				velocityA = bodyA->linearVelocity();
+
+				if ( bodyA->isRotationPhysicsEnabled() )
+				{
+					velocityA += Libs::Math::Vector< 3, float >::crossProduct(bodyA->angularVelocity(), contact.rA());
+				}
+			}
+
+			if ( bodyB && bodyB->isMovable() )
+			{
+				velocityB = bodyB->linearVelocity();
+
+				if ( bodyB->isRotationPhysicsEnabled() )
+				{
+					velocityB += Libs::Math::Vector< 3, float >::crossProduct(bodyB->angularVelocity(), contact.rB());
+				}
+			}
+
+			relativeVelocity = velocityB - velocityA;
+
+			/* Tangent 1 friction. */
+			{
+				const float tangentVelocity1 = Libs::Math::Vector< 3, float >::dotProduct(relativeVelocity, contact.tangent1());
+				float lambdaT1 = -tangentVelocity1 * contact.effectiveMassTangent1();
+
+				contact.updateAccumulatedTangentImpulse(lambdaT1, 0, maxFriction);
+
+				const auto frictionImpulse1 = contact.tangent1() * lambdaT1;
+
+				if ( bodyA && bodyA->isMovable() )
+				{
+					bodyA->applyLinearImpulse(-frictionImpulse1);
+
+					if ( bodyA->isRotationPhysicsEnabled() )
+					{
+						bodyA->applyAngularImpulse(Libs::Math::Vector< 3, float >::crossProduct(contact.rA(), -frictionImpulse1));
+					}
+				}
+
+				if ( bodyB && bodyB->isMovable() )
+				{
+					bodyB->applyLinearImpulse(frictionImpulse1);
+
+					if ( bodyB->isRotationPhysicsEnabled() )
+					{
+						bodyB->applyAngularImpulse(Libs::Math::Vector< 3, float >::crossProduct(contact.rB(), frictionImpulse1));
+					}
+				}
+			}
+
+			/* Tangent 2 friction. */
+			{
+				const float tangentVelocity2 = Libs::Math::Vector< 3, float >::dotProduct(relativeVelocity, contact.tangent2());
+				float lambdaT2 = -tangentVelocity2 * contact.effectiveMassTangent2();
+
+				contact.updateAccumulatedTangentImpulse(lambdaT2, 1, maxFriction);
+
+				const auto frictionImpulse2 = contact.tangent2() * lambdaT2;
+
+				if ( bodyA && bodyA->isMovable() )
+				{
+					bodyA->applyLinearImpulse(-frictionImpulse2);
+
+					if ( bodyA->isRotationPhysicsEnabled() )
+					{
+						bodyA->applyAngularImpulse(Libs::Math::Vector< 3, float >::crossProduct(contact.rA(), -frictionImpulse2));
+					}
+				}
+
+				if ( bodyB && bodyB->isMovable() )
+				{
+					bodyB->applyLinearImpulse(frictionImpulse2);
+
+					if ( bodyB->isRotationPhysicsEnabled() )
+					{
+						bodyB->applyAngularImpulse(Libs::Math::Vector< 3, float >::crossProduct(contact.rB(), frictionImpulse2));
+					}
 				}
 			}
 		}

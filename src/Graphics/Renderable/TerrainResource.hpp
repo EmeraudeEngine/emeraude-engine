@@ -30,7 +30,8 @@
 #include <memory>
 
 /* Local inclusions for inheritances. */
-#include "SceneAreaInterface.hpp"
+#include "Abstract.hpp"
+#include "Scenes/GroundInterface.hpp"
 
 /* Local inclusions for usages. */
 #include "Resources/Container.hpp"
@@ -40,10 +41,11 @@
 namespace EmEn::Graphics::Renderable
 {
 	/**
-	* @brief The terrain resource class.
-	 * @extends EmEn::Graphics::Renderable::SceneAreaInterface The is a scene area.
+	 * @brief The terrain resource class.
+	 * @extends EmEn::Graphics::Renderable::Abstract This class is a renderable object in the 3D world.
+	 * @extends EmEn::Scenes::GroundInterface This is the scene ground.
 	 */
-	class TerrainResource final : public SceneAreaInterface
+	class TerrainResource final : public Abstract, public Scenes::GroundInterface
 	{
 		friend class Resources::Container< TerrainResource >;
 
@@ -74,7 +76,7 @@ namespace EmEn::Graphics::Renderable
 			 */
 			explicit
 			TerrainResource (std::string name, uint32_t renderableFlags = 0) noexcept
-				: SceneAreaInterface{std::move(name), renderableFlags},
+				: Abstract{std::move(name), renderableFlags},
 				  m_geometry{std::make_unique< Geometry::AdaptiveVertexGridResource >(this->name() + "AdaptiveGrid")}
 			{
 
@@ -107,7 +109,7 @@ namespace EmEn::Graphics::Renderable
 				return classUID == getClassUID();
 			}
 
-			/** @copydoc EmEn::Graphics::Renderable::Interface::layerCount() const */
+			/** @copydoc EmEn::Graphics::Renderable::Abstract::layerCount() const */
 			[[nodiscard]]
 			uint32_t
 			layerCount () const noexcept override
@@ -115,7 +117,7 @@ namespace EmEn::Graphics::Renderable
 				return 1;
 			}
 
-			/** @copydoc EmEn::Graphics::Renderable::Interface::isOpaque() const */
+			/** @copydoc EmEn::Graphics::Renderable::Abstract::isOpaque() const */
 			[[nodiscard]]
 			bool
 			isOpaque (uint32_t /*layerIndex*/) const noexcept override
@@ -128,7 +130,7 @@ namespace EmEn::Graphics::Renderable
 				return true;
 			}
 
-			/** @copydoc EmEn::Graphics::Renderable::Interface::geometry() const */
+			/** @copydoc EmEn::Graphics::Renderable::Abstract::geometry() const */
 			[[nodiscard]]
 			const Geometry::Interface *
 			geometry () const noexcept override
@@ -136,7 +138,7 @@ namespace EmEn::Graphics::Renderable
 				return m_geometry.get();
 			}
 
-			/** @copydoc EmEn::Graphics::Renderable::Interface::material() const */
+			/** @copydoc EmEn::Graphics::Renderable::Abstract::material() const */
 			[[nodiscard]]
 			const Material::Interface *
 			material (uint32_t /*layerIndex*/) const noexcept override
@@ -144,7 +146,7 @@ namespace EmEn::Graphics::Renderable
 				return m_material.get();
 			}
 
-			/** @copydoc EmEn::Graphics::Renderable::Interface::layerRasterizationOptions() const */
+			/** @copydoc EmEn::Graphics::Renderable::Abstract::layerRasterizationOptions() const */
 			[[nodiscard]]
 			const RasterizationOptions *
 			layerRasterizationOptions (uint32_t /*layerIndex*/) const noexcept override
@@ -152,7 +154,7 @@ namespace EmEn::Graphics::Renderable
 				return nullptr;
 			}
 
-			/** @copydoc EmEn::Graphics::Renderable::Interface::boundingBox() const */
+			/** @copydoc EmEn::Graphics::Renderable::Abstract::boundingBox() const */
 			[[nodiscard]]
 			const Libs::Math::Space3D::AACuboid< float > &
 			boundingBox () const noexcept override
@@ -160,7 +162,7 @@ namespace EmEn::Graphics::Renderable
 				return m_localData.boundingBox();
 			}
 
-			/** @copydoc EmEn::Graphics::Renderable::Interface::boundingSphere() const */
+			/** @copydoc EmEn::Graphics::Renderable::Abstract::boundingSphere() const */
 			[[nodiscard]]
 			const Libs::Math::Space3D::Sphere< float > &
 			boundingSphere () const noexcept override
@@ -194,7 +196,7 @@ namespace EmEn::Graphics::Renderable
 				return 0;
 			}
 
-			/** @copydoc EmEn::Graphics::Renderable::SceneAreaInterface::getLevelAt(const Libs::Math::Vector< 3, float > &) const */
+			/** @copydoc EmEn::Scenes::GroundInterface::getLevelAt(const Libs::Math::Vector< 3, float > &) const */
 			[[nodiscard]]
 			float
 			getLevelAt (const Libs::Math::Vector< 3, float > & worldPosition) const noexcept override
@@ -202,15 +204,15 @@ namespace EmEn::Graphics::Renderable
 				return m_localData.getHeightAt(worldPosition[Libs::Math::X], worldPosition[Libs::Math::Z]);
 			}
 
-			/** @copydoc EmEn::Graphics::Renderable::SceneAreaInterface::getLevelAt(float, float, float) const */
+			/** @copydoc EmEn::Scenes::GroundInterface::getLevelAt(float, float, float) const */
 			[[nodiscard]]
 			Libs::Math::Vector< 3, float >
-			getLevelAt (float positionX, float positionZ, float deltaY = 0.0F) const noexcept override
+			getLevelAt (float positionX, float positionZ, float deltaY) const noexcept override
 			{
 				return {positionX, m_localData.getHeightAt(positionX, positionZ) + deltaY, positionZ};
 			}
 
-			/** @copydoc EmEn::Graphics::Renderable::SceneAreaInterface::getNormalAt() const */
+			/** @copydoc EmEn::Scenes::GroundInterface::getNormalAt() const */
 			[[nodiscard]]
 			Libs::Math::Vector< 3, float >
 			getNormalAt (const Libs::Math::Vector< 3, float > & worldPosition) const noexcept override

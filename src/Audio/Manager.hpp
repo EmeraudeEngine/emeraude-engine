@@ -47,6 +47,7 @@
 #include "Audio/TrackMixer.hpp"
 #include "Audio/AudioRecorder.hpp"
 #include "SettingKeys.hpp"
+#include "SoundResource.hpp"
 #include "Source.hpp"
 #include "Types.hpp"
 
@@ -63,6 +64,11 @@ namespace EmEn
 
 namespace EmEn::Audio
 {
+	constexpr auto InfoSound{"builtin.info"};
+	constexpr auto ErrorSound{"builtin.error"};
+	constexpr auto WarningSound{"builtin.warning"};
+	constexpr auto SuccessSound{"builtin.success"};
+
 	/**
 	 * @brief The audio manager service class.
 	 * @note [OBS][STATIC-OBSERVABLE]
@@ -215,11 +221,17 @@ namespace EmEn::Audio
 
 			/**
 			 * @brief Plays a sound on the default source.
-			 * @param resourceName A reference to a string for a resource.
+			 * @param resourceName A reference to a string for a resource. TODO: Should be a string_view.
 			 * @param mode The play mode. Default Once.
 			 * @param gain The gain of the channel to play the sound.
 			 */
 			void play (const std::string & resourceName, PlayMode mode = PlayMode::Once, float gain = 1.0F) const noexcept;
+
+			/**
+			 * @brief Generates procedural sounds for basic events.
+			 * @return void
+			 */
+			void generateBuiltinSounds () noexcept;
 
 			/**
 			 * @brief Returns the API (OpenAL) information.
@@ -492,5 +504,6 @@ namespace EmEn::Audio
 			mutable std::mutex m_sourcePoolMutex;
 			bool m_showInformation{false};
 			bool m_usingAdvancedEnumeration{false};
+			bool m_prebuiltSoundsGenerated{false};
 	};
 }

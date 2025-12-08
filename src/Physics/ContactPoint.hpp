@@ -141,6 +141,81 @@ namespace EmEn::Physics
 			void updateAccumulatedNormalImpulse (float & lambda) noexcept;
 
 			/**
+			 * @brief Updates accumulated tangent impulse with friction clamping.
+			 * @param lambda The impulse delta (modified to actual applied impulse).
+			 * @param tangentIndex The tangent direction index (0 or 1).
+			 * @param maxFriction The maximum friction impulse magnitude.
+			 */
+			void updateAccumulatedTangentImpulse (float & lambda, size_t tangentIndex, float maxFriction) noexcept;
+
+			/**
+			 * @brief Returns the first tangent vector.
+			 * @return const Libs::Math::Vector< 3, float > &
+			 */
+			[[nodiscard]]
+			const Libs::Math::Vector< 3, float > &
+			tangent1 () const noexcept
+			{
+				return m_tangent1;
+			}
+
+			/**
+			 * @brief Returns the second tangent vector.
+			 * @return const Libs::Math::Vector< 3, float > &
+			 */
+			[[nodiscard]]
+			const Libs::Math::Vector< 3, float > &
+			tangent2 () const noexcept
+			{
+				return m_tangent2;
+			}
+
+			/**
+			 * @brief Sets the effective mass for tangent direction 1.
+			 * @param mass The effective mass.
+			 */
+			void setEffectiveMassTangent1 (float mass) noexcept;
+
+			/**
+			 * @brief Sets the effective mass for tangent direction 2.
+			 * @param mass The effective mass.
+			 */
+			void setEffectiveMassTangent2 (float mass) noexcept;
+
+			/**
+			 * @brief Returns the effective mass for tangent direction 1.
+			 * @return float
+			 */
+			[[nodiscard]]
+			float
+			effectiveMassTangent1 () const noexcept
+			{
+				return m_effectiveMassTangent1;
+			}
+
+			/**
+			 * @brief Returns the effective mass for tangent direction 2.
+			 * @return float
+			 */
+			[[nodiscard]]
+			float
+			effectiveMassTangent2 () const noexcept
+			{
+				return m_effectiveMassTangent2;
+			}
+
+			/**
+			 * @brief Returns the accumulated normal impulse.
+			 * @return float
+			 */
+			[[nodiscard]]
+			float
+			accumulatedNormalImpulse () const noexcept
+			{
+				return m_accumulatedNormalImpulse;
+			}
+
+			/**
 			 * @brief Resets accumulated impulses (for new frame).
 			 */
 			void
@@ -170,6 +245,10 @@ namespace EmEn::Physics
 			Libs::Math::Vector< 3, float > m_rA;              ///< Vector from body A center of mass to contact
 			Libs::Math::Vector< 3, float > m_rB;              ///< Vector from body B center of mass to contact
 
+			/* Friction tangent basis (computed once per manifold) */
+			Libs::Math::Vector< 3, float > m_tangent1;        ///< First tangent vector (perpendicular to normal)
+			Libs::Math::Vector< 3, float > m_tangent2;        ///< Second tangent vector (perpendicular to normal and tangent1)
+
 			/* Bodies involved */
 			MovableTrait * m_bodyA{nullptr};                  ///< First body (can be nullptr for static)
 			MovableTrait * m_bodyB{nullptr};                  ///< Second body (can be nullptr for static)
@@ -180,6 +259,8 @@ namespace EmEn::Physics
 
 			/* Solver cache (computed per iteration) */
 			float m_effectiveMass{0.0F};                      ///< Cached 1/(K_normal) for this contact
+			float m_effectiveMassTangent1{0.0F};              ///< Cached 1/(K_tangent1) for friction
+			float m_effectiveMassTangent2{0.0F};              ///< Cached 1/(K_tangent2) for friction
 			float m_velocityBias{0.0F};                       ///< Baumgarte stabilization bias
 	};
 

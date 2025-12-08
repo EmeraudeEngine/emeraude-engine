@@ -51,13 +51,17 @@ namespace EmEn
 			m_showInformation = m_arguments.isSwitchPresent("--verbose");
 		}
 
-		if ( const auto argument = m_arguments.get("--settings-filepath") )
+		if ( const auto filepath = m_arguments.get("--settings-filepath") )
 		{
-			m_filepath = argument.value();
+			m_filepath = filepath.value();
+		}
+		else if ( const auto filename = m_arguments.get("--settings-filename") )
+		{
+			m_filepath = m_fileSystem.configDirectory(filename.value());
 		}
 		else
 		{
-			m_filepath = m_fileSystem.configDirectory(Settings::Filename);
+			m_filepath = m_fileSystem.configDirectory(Filename);
 		}
 
 		if ( m_filepath.empty() )
