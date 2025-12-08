@@ -1,5 +1,5 @@
 /*
- * src/Graphics/Renderable/SeaLevelInterface.hpp
+ * src/Graphics/Renderer.console.cpp
  * This file is part of Emeraude-Engine
  *
  * Copyright (C) 2010-2025 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
@@ -24,31 +24,13 @@
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
 
-#pragma once
+#include "Renderer.hpp"
 
-/* Local inclusions for inheritances. */
-#include "Abstract.hpp"
-
-namespace EmEn::Graphics::Renderable
+namespace EmEn::Graphics
 {
-	/**
-	 * @brief Interface to define a visible sea level in a scene.
-	 * @extends EmEn::Graphics::Renderable::Interface This class is a renderable object in the 3D world.
-	 */
-	class SeaLevelInterface : public Abstract
+	void
+	Renderer::onRegisterToConsole () noexcept
 	{
-		protected:
 
-			/**
-			 * @brief Constructs a renderable sea level interface.
-			 * @param seaLevelName A string for the sea level resource name [std::move].
-			 * @param renderableFlags The resource flag bits.
-			 */
-			explicit
-			SeaLevelInterface (std::string seaLevelName, uint32_t renderableFlags) noexcept
-				: Abstract{std::move(seaLevelName), renderableFlags}
-			{
-
-			}
-	};
+	}
 }

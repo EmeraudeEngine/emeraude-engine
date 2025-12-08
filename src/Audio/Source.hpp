@@ -513,6 +513,39 @@ namespace EmEn::Audio
 			}
 
 			/**
+			 * @brief Sets the loop mode.
+			 * @param state True to enable looping, false to disable.
+			 * @return void
+			 */
+			void
+			setLooping (bool state) noexcept
+			{
+				alSourcei(this->identifier(), AL_LOOPING, state ? AL_TRUE : AL_FALSE);
+			}
+
+			/**
+			 * @brief Returns the current playback position in seconds.
+			 * @return float
+			 */
+			[[nodiscard]]
+			float
+			playbackPosition () const noexcept
+			{
+				return this->getFloatValue(AL_SEC_OFFSET, 0.0F);
+			}
+
+			/**
+			 * @brief Sets the playback position in seconds.
+			 * @param position The position in seconds.
+			 * @return void
+			 */
+			void
+			setPlaybackPosition (float position) noexcept
+			{
+				alSourcef(this->identifier(), AL_SEC_OFFSET, position);
+			}
+
+			/**
 			 * @brief isRelative
 			 * @return
 			 */

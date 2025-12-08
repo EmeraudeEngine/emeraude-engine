@@ -67,7 +67,7 @@
  *
  * protected:
  *     // Required: Setup your scene here
- *     bool onCoreStarted() noexcept override { return true; }
+ *     bool onCoreStarted(const EmEn::Arguments &, EmEn::Settings &) noexcept override { return true; }
  *
  *     // Required: Update game logic here (runs on logic thread)
  *     void onCoreProcessLogics(size_t cycle) noexcept override {}
@@ -126,7 +126,7 @@
 
 /* Local inclusions for inheritances. */
 #include "Input/KeyboardListenerInterface.hpp"
-#include "Console/Controllable.hpp"
+#include "Console/ControllableTrait.hpp"
 #include "Libs/ObserverTrait.hpp"
 #include "Libs/ObservableTrait.hpp"
 
@@ -155,11 +155,11 @@ namespace EmEn
 	 * @brief Core object of Emeraude-Engine. One of his main roles is to hold all services.
 	 * @note [OBS][STATIC-OBSERVER][STATIC-OBSERVABLE]
 	 * @extends EmEn::Input::KeyboardListenerInterface The core needs to get events from the keyboard for low-level interaction.
-	 * @extends EmEn::Console::Controllable The core can be controlled by the console.
+	 * @extends EmEn::Console::ControllableTrait The core can be controlled by the console.
 	 * @extends EmEn::Libs::ObserverTrait The core is an observer.
 	 * @extends EmEn::Libs::ObservableTrait The core is observable.
 	 */
-	class Core : private Input::KeyboardListenerInterface, private Console::Controllable, public Libs::ObserverTrait, public Libs::ObservableTrait
+	class Core : private Input::KeyboardListenerInterface, private Console::ControllableTrait, public Libs::ObserverTrait, public Libs::ObservableTrait
 	{
 		public:
 
@@ -458,7 +458,7 @@ namespace EmEn
 			 * custom commands and variables accessible from the in-game console.
 			 * @return Reference to Console::Controller.
 			 * @see Console::Controller
-			 * @see Console::Controllable
+			 * @see Console::ControllableTrait
 			 * @version 0.8.35
 			 */
 			[[nodiscard]]
@@ -1041,7 +1041,7 @@ namespace EmEn
 			[[nodiscard]]
 			bool onNotification (const ObservableTrait * observable, int notificationCode, const std::any & data) noexcept final;
 
-			/** @copydoc EmEn::Console::Controllable::onRegisterToConsole. */
+			/** @copydoc EmEn::Console::ControllableTrait::onRegisterToConsole. */
 			void onRegisterToConsole () noexcept override;
 
 			/** @} */ // End of Interface Implementations group
@@ -1170,10 +1170,12 @@ namespace EmEn
 			 * @brief Called after all services are initialized, before the main loop.
 			 * @details This is the primary initialization hook for applications.
 			 * Load scenes, create entities, and set up game state here.
+			 * @param arguments A reference to the arguments for a quick-access.
+			 * @param settings A writable reference to the settigns for a quick-access.
 			 * @return true to enter main loop, false to abort with error.
 			 * @version 0.8.35
 			 */
-			virtual bool onCoreStarted () noexcept = 0;
+			virtual bool onCoreStarted (const Arguments & arguments, Settings & settings) noexcept = 0;
 
 			/**
 			 * @brief Hook called every main loop iteration.

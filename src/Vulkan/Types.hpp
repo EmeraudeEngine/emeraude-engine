@@ -103,7 +103,8 @@ namespace EmEn::Vulkan
 	 * @return const char * The vendor name.
 	 */
 	[[nodiscard]]
-	constexpr const char *
+	constexpr
+	const char *
 	to_cstring (Vendor vendor) noexcept
 	{
 		switch ( vendor )

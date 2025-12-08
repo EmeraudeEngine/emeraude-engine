@@ -274,6 +274,31 @@ namespace EmEn::PlatformSpecific
 		return true;
 	}
 
+	void
+	waitBeforeConsoleClose ()
+	{
+		std::cout << "\nPress any key to close this window..." << std::flush;
+
+		HANDLE hInput = GetStdHandle(STD_INPUT_HANDLE);
+
+		/* Clear any pending input. */
+		FlushConsoleInputBuffer(hInput);
+
+		/* Wait for a key press using Windows API. */
+		INPUT_RECORD inputRecord{};
+		DWORD eventsRead = 0;
+
+		while ( true )
+		{
+			ReadConsoleInput(hInput, &inputRecord, 1, &eventsRead);
+
+			if ( inputRecord.EventType == KEY_EVENT && inputRecord.Event.KeyEvent.bKeyDown )
+			{
+				break;
+			}
+		}
+	}
+
 	int
 	getParentProcessId (DWORD pid) noexcept
 	{

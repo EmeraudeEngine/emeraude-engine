@@ -10,7 +10,7 @@ This document provides detailed architecture for the physics system, including e
 - **Velocity Inversion**: Manual velocity reversal applied for game design purposes (e.g., bouncing off invisible boundaries).
 - **Impulse**: Instantaneous change in momentum applied to an entity (force × time), used to resolve collisions realistically.
 - **Restitution (Bounciness)**: Material property coefficient [0.0-1.0] that determines energy preservation in collisions (0 = no bounce, 1 = perfect bounce).
-- **SceneAreaResource**: Interface that provides ground height queries at any 2D coordinate: `(X, Z) → Y height`.
+- **GroundResource**: Interface that provides ground height queries at any 2D coordinate: `(X, Z) → Y height`.
 
 ## Design Philosophy: Why 4 Entity Types?
 
@@ -47,7 +47,7 @@ This separation allows each type to have **clear, non-overlapping collision sema
 
 **Category:** Physical Surface (Hybrid Approach)
 
-**Purpose:** Defines the terrain/floor height at any 2D coordinate `(X, Z)`. The `SceneAreaResource` interface provides height queries: `getHeightAt(x, z) → y`.
+**Purpose:** Defines the terrain/floor height at any 2D coordinate `(X, Z)`. The `GroundResource` interface provides height queries: `getHeightAt(x, z) → y`.
 
 **Why It Exists:** Ground is a physical surface that should behave realistically (bounce, friction), but we add hard clipping for guaranteed stability (prevents tunneling through terrain).
 
@@ -65,7 +65,7 @@ This separation allows each type to have **clear, non-overlapping collision sema
 
 **Example:**
 ```cpp
-float groundY = sceneArea->getHeightAt(entity.x, entity.z);
+float groundY = ground->getHeightAt(entity.x, entity.z);
 float penetrationDepth = entity.y - groundY;  // Calculate BEFORE clip
 if (penetrationDepth > 0.0F) {
     // 1. Hard clip for stability
@@ -145,7 +145,7 @@ The physics system executes in this precise order each fixed timestep:
    → Iterative solving (8 velocity iterations, 3 position iterations)
 
 5. Ground collision check
-   → Query SceneAreaResource for ground height
+   → Query GroundResource for ground height
    → Calculate penetration depth BEFORE clipping
    → Apply hard clip: entity.y = groundY (stability guarantee)
    → Create ground manifolds (preserve penetration depth)

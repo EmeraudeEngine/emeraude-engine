@@ -814,6 +814,42 @@ namespace EmEn::Resources
 			}
 
 			/**
+			 * @brief Returns resource names from the store that start with a given prefix.
+			 *
+			 * Filters all resource names from the metadata store, returning only those that
+			 * begin with the specified prefix string. Useful for retrieving categorized resources
+			 * (e.g., "UI/", "Sound/Music/", "Texture/Terrain/").
+			 *
+			 * @param prefix The prefix string to filter by (e.g., "UI/" or "Enemy_").
+			 * @return Vector of resource names that start with the given prefix.
+			 * @note Returns empty vector if store is null or no matches found.
+			 * @note The comparison is case-sensitive.
+			 * @see getResourceNames() To get all resource names without filtering
+			 * @version 0.8.40
+			 */
+			[[nodiscard]]
+			std::vector< std::string >
+			getResourceNames (const std::string & prefix) const noexcept
+			{
+				if ( m_localStore == nullptr || prefix.empty() )
+				{
+					return {};
+				}
+
+				std::vector< std::string > names;
+
+				for ( const auto & key : *m_localStore | std::views::keys )
+				{
+					if ( key.starts_with(prefix) )
+					{
+						names.push_back(key);
+					}
+				}
+
+				return names;
+			}
+
+			/**
 			 * @brief Creates a new empty resource for manual population.
 			 *
 			 * Allocates a new resource object in the Unloaded state. The caller is responsible
@@ -1112,11 +1148,8 @@ namespace EmEn::Resources
 				/* Creates a new resource. */
 				const auto newResource = this->createResourceUnlocked(resourceName, resourceFlags);
 
-				/* Already defines that the resource is in manual loading mode. */
-				if ( !newResource->enableManualLoading() )
+				if ( newResource == nullptr )
 				{
-					TraceError{resource_t::ClassId} << "The manual loading for resource '" << resourceName << "' has been already set !";
-
 					return this->getDefaultResourceUnlocked();
 				}
 
@@ -1185,10 +1218,9 @@ namespace EmEn::Resources
 				/* Creates a new resource. */
 				const auto newResource = this->createResourceUnlocked(resourceName, resourceFlags);
 
-				/* Already defines that the resource is in manual loading mode. */
-				if ( !newResource->enableManualLoading() )
+				if ( newResource == nullptr )
 				{
-					return nullptr;
+					return this->getDefaultResourceUnlocked();
 				}
 
 				m_primaryServices.threadPool()->enqueue([createFunction, newResource] {
@@ -1412,6 +1444,11 @@ namespace EmEn::Resources
 						"Unable to get " << resource_t::ClassId << " resource named '" << resourceName << "' into the map. "
 						"This should never happens !";
 
+					return nullptr;
+				}
+
+				if ( !result.first->second->enableManualLoading() )
+				{
 					return nullptr;
 				}
 

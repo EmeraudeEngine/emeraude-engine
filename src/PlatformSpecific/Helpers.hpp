@@ -105,6 +105,13 @@ namespace EmEn::PlatformSpecific
 	bool attachToParentConsole ();
 
 	/**
+	 * @brief Waits for a key press before closing the console.
+	 * @note Displays "Press any key to close this window..." and waits.
+	 * @return void
+	 */
+	void waitBeforeConsoleClose ();
+
+	/**
 	 * @brief Returns the parent process ID on Windows.
 	 * @return int
 	 */

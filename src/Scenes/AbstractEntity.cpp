@@ -156,9 +156,25 @@ namespace EmEn::Scenes
 			}
 		}
 
-		if ( !this->isCollisionDisabled() )
+		switch ( m_collisionDetectionModel )
 		{
-			this->setDeflectorState(m_boundingBox.isValid());
+			case CollisionDetectionModel::Point :
+				// Nothing to do ...
+				break;
+
+			case CollisionDetectionModel::Sphere :
+				if ( !m_boundingSphere.isValid() )
+				{
+					m_collisionDetectionModel = CollisionDetectionModel::Point;
+				}
+				break;
+
+			case CollisionDetectionModel::AABB :
+				if ( !m_boundingBox.isValid() )
+				{
+					m_collisionDetectionModel = CollisionDetectionModel::Point;
+				}
+				break;
 		}
 
 		if ( physicalEntityCount > 0 )
@@ -208,6 +224,7 @@ namespace EmEn::Scenes
 	{
 		/* NOTE: Dispatch the move to every component. */
 		std::lock_guard< std::mutex > lock(m_componentsMutex);
+
 		for ( const auto & component : m_components )
 		{
 			component->move(worldCoordinates);
@@ -219,6 +236,7 @@ namespace EmEn::Scenes
 	{
 		{
 			std::lock_guard< std::mutex > lock(m_componentsMutex);
+
 			if ( m_components.full() ) [[unlikely]]
 			{
 				TraceError{TracerTag} << "Unable to add a new component !";

@@ -479,12 +479,6 @@ namespace EmEn::Graphics
 		return error == 0;
 	}
 
-	void
-	Renderer::onRegisterToConsole () noexcept
-	{
-
-	}
-
 	std::shared_ptr< RenderTarget::Abstract >
 	Renderer::mainRenderTarget () const noexcept
 	{

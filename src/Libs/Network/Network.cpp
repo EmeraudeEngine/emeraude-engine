@@ -207,7 +207,7 @@ namespace EmEn::Libs::Network
 				std::cout << readBytes << " total bytes (" << readBytes / 1024 << " Kib) read." "\n";
 			}
 
-			if ( !IO::filePutContents(filepath, {asio::buffers_begin(buffer.data()), asio::buffers_end(buffer.data())}) )
+			if ( !IO::filePutContents(filepath, std::string{asio::buffers_begin(buffer.data()), asio::buffers_end(buffer.data())}) )
 			{
 				std::cerr << "Unable to write data in file '" << filepath << "' !" "\n";
 

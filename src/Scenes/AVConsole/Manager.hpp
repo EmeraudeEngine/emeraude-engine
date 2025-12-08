@@ -38,7 +38,7 @@
 
 /* Local inclusions for inheritances. */
 #include "Libs/NameableTrait.hpp"
-#include "Console/Controllable.hpp"
+#include "Console/ControllableTrait.hpp"
 #include "Libs/ObserverTrait.hpp"
 #include "Libs/ObservableTrait.hpp"
 
@@ -57,11 +57,11 @@ namespace EmEn::Scenes::AVConsole
 	 * @brief The audio/video manager links every virtual audio/video input/output from a scene.
 	 * @note [OBS][STATIC-OBSERVER][STATIC-OBSERVABLE]
 	 * @extends EmEn::Libs::NameableTrait The audio/video manager can have a name according to a scene.
-	 * @extends EmEn::Console::Controllable The audio/video manager is usable from the console.
+	 * @extends EmEn::Console::ControllableTrait The audio/video manager is usable from the console.
 	 * @extends EmEn::Libs::ObserverTrait The audio/video manager wants to get notifications from devices.
 	 * @extends EmEn::Libs::ObserverTrait The audio/video manager dispatches device configuration changes.
 	 */
-	class Manager final : public Libs::NameableTrait, public Console::Controllable, public Libs::ObserverTrait, public Libs::ObservableTrait
+	class Manager final : public Libs::NameableTrait, public Console::ControllableTrait, public Libs::ObserverTrait, public Libs::ObservableTrait
 	{
 		public:
 
@@ -407,7 +407,7 @@ namespace EmEn::Scenes::AVConsole
 			[[nodiscard]]
 			bool onNotification (const ObservableTrait * observable, int notificationCode, const std::any & data) noexcept override;
 
-			/** @copydoc EmEn::Console::Controllable::onRegisterToConsole. */
+			/** @copydoc EmEn::Console::ControllableTrait::onRegisterToConsole. */
 			void onRegisterToConsole () noexcept override;
 
 			/**

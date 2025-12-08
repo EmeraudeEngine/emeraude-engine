@@ -43,75 +43,10 @@ namespace EmEn::Scenes::AVConsole
 
 	Manager::Manager (const std::string & name, Renderer & graphicsRenderer, Audio::Manager & audioManager) noexcept
 		: NameableTrait{name + ClassId},
-		Controllable{ClassId},
+		ControllableTrait{ClassId},
 		m_engineContext{graphicsRenderer, audioManager}
 	{
-		/* Console commands bindings. */
-		this->bindCommand("listDevices", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
-			auto deviceType{DeviceType::Both};
 
-			if ( !arguments.empty() )
-			{
-				const auto argument = arguments[0].asString();
-
-				if ( argument == "video" )
-				{
-					deviceType = DeviceType::Video;
-				}
-				else if ( argument == "audio" )
-				{
-					deviceType = DeviceType::Audio;
-				}
-				else if ( argument == "both" )
-				{
-					deviceType = DeviceType::Both;
-				}
-			}
-
-			outputs.emplace_back(Severity::Info, this->getDeviceList(deviceType));
-
-			return 0;
-		}, "Get a list of input/output audio/video devices.");
-
-		this->bindCommand("registerRoute", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
-			if ( arguments.size() != 3 )
-			{
-				outputs.emplace_back(Severity::Error, "This method need 3 parameters.");
-
-				return 1;
-			}
-
-			const auto type = arguments[0].asString();
-			const auto source = arguments[1].asString();
-			const auto target = arguments[2].asString();
-
-			if ( type == "video" )
-			{
-				if ( !this->connectVideoDevices(source, target) )
-				{
-					outputs.emplace_back(Severity::Error, "Unable to connect the video device.");
-
-					return 3;
-				}
-			}
-			else if ( type == "audio" )
-			{
-				if ( !this->connectAudioDevices(source, target) )
-				{
-					outputs.emplace_back(Severity::Error, "Unable to connect the audio device.");
-
-					return 3;
-				}
-			}
-			else
-			{
-				outputs.emplace_back(Severity::Error, "First parameter must be 'video' or 'audio'.");
-
-				return 2;
-			}
-
-			return 0;
-		}, "Register a route from input device to output device.");
 	}
 
 	bool
@@ -644,12 +579,6 @@ namespace EmEn::Scenes::AVConsole
 			"Forgetting it ...";
 
 		return false;
-	}
-
-	void
-	Manager::onRegisterToConsole () noexcept
-	{
-
 	}
 
 	bool

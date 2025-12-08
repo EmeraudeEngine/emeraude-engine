@@ -35,7 +35,7 @@
 
 /* Local inclusions for inheritances. */
 #include "ServiceInterface.hpp"
-#include "Console/Controllable.hpp"
+#include "Console/ControllableTrait.hpp"
 #include "Libs/ObserverTrait.hpp"
 
 /* Local inclusions for usages. */
@@ -65,11 +65,11 @@ namespace EmEn::Audio
 	 * @brief The track mixer service class.
 	 * @note [OBS][STATIC-OBSERVER][STATIC-OBSERVABLE]
 	 * @extends EmEn::ServiceInterface This is a service.
-	 * @extends EmEn::Console::Controllable The console can control the track mixer.
+	 * @extends EmEn::Console::ControllableTrait The console can control the track mixer.
 	 * @extends EmEn::Libs::ObservableTrait This service is observable.
 	 * @extends EmEn::Libs::ObserverTrait This service can observe resource loading.
 	 */
-	class TrackMixer final : public ServiceInterface, public Console::Controllable, public Libs::ObservableTrait, public Libs::ObserverTrait
+	class TrackMixer final : public ServiceInterface, public Console::ControllableTrait, public Libs::ObservableTrait, public Libs::ObserverTrait
 	{
 		public:
 
@@ -95,6 +95,7 @@ namespace EmEn::Audio
 				MusicPaused,
 				MusicResumed,
 				MusicStopped,
+				TrackChanged, /**< @brief Notifies that the current track index has changed (without playback). */
 				/* Enumeration boundary. */
 				MaxEnum
 			};
@@ -107,7 +108,7 @@ namespace EmEn::Audio
 			 */
 			TrackMixer (PrimaryServices & primaryServices, Resources::Manager & resourceManager, Manager & audioManager) noexcept
 				: ServiceInterface{ClassId},
-				Controllable{ClassId},
+				ControllableTrait{ClassId},
 				m_primaryServices{primaryServices},
 				m_resourceManager{resourceManager},
 				m_audioManager{audioManager}
@@ -160,15 +161,12 @@ namespace EmEn::Audio
 			}
 
 			/**
-			 * @brief Enables the cross-fader
+			 * @brief Enables the cross-fader.
+			 * @note When disabling, stops any ongoing fade and ensures only the current track plays.
 			 * @param state The state.
 			 * @return void
 			 */
-			void
-			enableCrossFader (bool state) noexcept
-			{
-				m_crossFaderEnabled = state;
-			}
+			void enableCrossFader (bool state) noexcept;
 
 			/**
 			 * @brief Returns whether the cross-fader is enabled.
@@ -179,6 +177,25 @@ namespace EmEn::Audio
 			isCrossFaderEnabled () const noexcept
 			{
 				return m_crossFaderEnabled;
+			}
+
+			/**
+			 * @brief Sets the play mode (Once or Loop).
+			 * @note Also updates the currently playing source if any.
+			 * @param mode The play mode.
+			 * @return void
+			 */
+			void setPlayMode (PlayMode mode) noexcept;
+
+			/**
+			 * @brief Returns the current play mode.
+			 * @return PlayMode
+			 */
+			[[nodiscard]]
+			PlayMode
+			playMode () const noexcept
+			{
+				return m_playMode;
 			}
 
 			/**
@@ -203,6 +220,50 @@ namespace EmEn::Audio
 			}
 
 			/**
+			 * @brief Returns a const reference to the playlist.
+			 * @return const std::vector< std::shared_ptr< MusicResource > > &
+			 */
+			[[nodiscard]]
+			const std::vector< std::shared_ptr< MusicResource > > &
+			playlist () const noexcept
+			{
+				return m_playlist;
+			}
+
+			/**
+			 * @brief Returns the playlist size.
+			 * @return size_t
+			 */
+			[[nodiscard]]
+			size_t
+			playlistSize () const noexcept
+			{
+				return m_playlist.size();
+			}
+
+			/**
+			 * @brief Returns the current track index in the playlist.
+			 * @return size_t
+			 */
+			[[nodiscard]]
+			size_t
+			currentTrackIndex () const noexcept
+			{
+				return m_musicIndex;
+			}
+
+			/**
+			 * @brief Returns the user state.
+			 * @return UserState
+			 */
+			[[nodiscard]]
+			UserState
+			userState () const noexcept
+			{
+				return m_userState;
+			}
+
+			/**
 			 * @brief Plays the playlist.
 			 * @return bool
 			 */
@@ -216,6 +277,13 @@ namespace EmEn::Audio
 			bool play (const std::shared_ptr< MusicResource > & track) noexcept;
 
 			/**
+			 * @brief Plays a track at the specified index in the playlist.
+			 * @param index The index of the track in the playlist.
+			 * @return bool
+			 */
+			bool playIndex (size_t index) noexcept;
+
+			/**
 			 * @brief Returns whether the soundtrack is playing.
 			 * @return bool
 			 */
@@ -227,6 +295,51 @@ namespace EmEn::Audio
 			 * @return bool
 			 */
 			bool next () noexcept;
+
+			/**
+			 * @brief Starts the previous music in the playlist.
+			 * @return bool
+			 */
+			bool previous () noexcept;
+
+			/**
+			 * @brief Returns the current playback position in seconds.
+			 * @return float
+			 */
+			[[nodiscard]]
+			float currentPosition () const noexcept;
+
+			/**
+			 * @brief Returns the duration of the current track in seconds.
+			 * @return float
+			 */
+			[[nodiscard]]
+			float currentDuration () const noexcept;
+
+			/**
+			 * @brief Seeks to a position in the current track.
+			 * @param position The position in seconds.
+			 * @return void
+			 */
+			void seek (float position) noexcept;
+
+			/**
+			 * @brief Enables or disables shuffle mode.
+			 * @param state True to enable shuffle, false to disable.
+			 * @return void
+			 */
+			void enableShuffle (bool state) noexcept;
+
+			/**
+			 * @brief Returns whether shuffle mode is enabled.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isShuffleEnabled () const noexcept
+			{
+				return m_shuffleEnabled;
+			}
 
 			/**
 			 * @brief Pauses the music.
@@ -266,7 +379,7 @@ namespace EmEn::Audio
 			[[nodiscard]]
 			bool onNotification (const ObservableTrait * observable, int notificationCode, const std::any & data) noexcept override;
 
-			/** @copydoc EmEn::Console::Controllable::onRegisterToConsole. */
+			/** @copydoc EmEn::Console::ControllableTrait::onRegisterToConsole. */
 			void onRegisterToConsole () noexcept override;
 
 			/**
@@ -317,6 +430,12 @@ namespace EmEn::Audio
 			 */
 			static void eventCallback (ALenum eventType, ALuint object, ALuint param, ALsizei length, const ALchar * message, void * userParam) noexcept;
 
+			/**
+			 * @brief Generates a shuffled order for the playlist.
+			 * @return void
+			 */
+			void generateShuffleOrder () noexcept;
+
 			PrimaryServices & m_primaryServices;
 			Resources::Manager & m_resourceManager;
 			Manager & m_audioManager;
@@ -336,5 +455,8 @@ namespace EmEn::Audio
 			bool m_crossFaderEnabled{false};
 			bool m_isFading{false};
 			std::atomic_bool m_requestNextTrack{false};
+			bool m_shuffleEnabled{false};
+			std::vector< size_t > m_shuffleOrder;
+			size_t m_shuffleIndex{0};
 	};
 }

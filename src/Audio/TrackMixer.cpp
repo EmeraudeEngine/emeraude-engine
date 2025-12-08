@@ -26,6 +26,11 @@
 
 #include "TrackMixer.hpp"
 
+/* STL inclusions. */
+#include <algorithm>
+#include <random>
+#include <numeric>
+
 /* Emeraude-Engine configuration. */
 #include "emeraude_config.hpp"
 
@@ -172,6 +177,78 @@ namespace EmEn::Audio
 		}
 	}
 
+	void
+	TrackMixer::enableCrossFader (bool state) noexcept
+	{
+		m_crossFaderEnabled = state;
+
+		/* NOTE: If disabling cross-fader while fading or with two tracks playing,
+		 * stop the non-current track and set the current one to full volume. */
+		if ( !state && this->usable() )
+		{
+			const std::lock_guard< std::mutex > lock{m_stateAccess};
+
+			/* Stop any ongoing fade. */
+			m_isFading = false;
+
+			switch ( m_playingTrack )
+			{
+				case PlayingTrack::TrackA :
+					/* Stop track B if it's playing. */
+					if ( !m_trackB->isMuted() )
+					{
+						m_trackB->stop();
+						m_trackB->removeSound();
+					}
+					/* Ensure track A is at full volume. */
+					m_trackA->setGain(m_gain);
+					break;
+
+				case PlayingTrack::TrackB :
+					/* Stop track A if it's playing. */
+					if ( !m_trackA->isMuted() )
+					{
+						m_trackA->stop();
+						m_trackA->removeSound();
+					}
+					/* Ensure track B is at full volume. */
+					m_trackB->setGain(m_gain);
+					break;
+
+				case PlayingTrack::None:
+					break;
+			}
+		}
+	}
+
+	void
+	TrackMixer::setPlayMode (PlayMode mode) noexcept
+	{
+		m_playMode = mode;
+
+		/* NOTE: Also update the currently playing source if any. */
+		if ( this->usable() )
+		{
+			const std::lock_guard< std::mutex > lock{m_stateAccess};
+
+			const bool looping = (mode == PlayMode::Loop);
+
+			switch ( m_playingTrack )
+			{
+				case PlayingTrack::TrackA :
+					m_trackA->setLooping(looping);
+					break;
+
+				case PlayingTrack::TrackB :
+					m_trackB->setLooping(looping);
+					break;
+
+				case PlayingTrack::None:
+					break;
+			}
+		}
+	}
+
 	bool
 	TrackMixer::checkTrackLoading (const std::shared_ptr< MusicResource > & track) noexcept
 	{
@@ -275,6 +352,12 @@ namespace EmEn::Audio
 					{
 						m_isFading = true;
 					}
+					else
+					{
+						/* NOTE: Stop the old track immediately when cross-fader is disabled. */
+						m_trackA->stop();
+						m_trackA->removeSound();
+					}
 					break;
 
 				case PlayingTrack::TrackB:
@@ -283,6 +366,12 @@ namespace EmEn::Audio
 					if ( m_crossFaderEnabled )
 					{
 						m_isFading = true;
+					}
+					else
+					{
+						/* NOTE: Stop the old track immediately when cross-fader is disabled. */
+						m_trackB->stop();
+						m_trackB->removeSound();
 					}
 					break;
 			}
@@ -315,6 +404,28 @@ namespace EmEn::Audio
 	}
 
 	bool
+	TrackMixer::playIndex (size_t index) noexcept
+	{
+		if ( m_playlist.empty() )
+		{
+			Tracer::warning(ClassId, "The playlist is empty !");
+
+			return false;
+		}
+
+		if ( index >= m_playlist.size() )
+		{
+			Tracer::warning(ClassId, "Invalid playlist index !");
+
+			return false;
+		}
+
+		m_musicIndex = index;
+
+		return this->play(m_playlist[m_musicIndex]);
+	}
+
+	bool
 	TrackMixer::next () noexcept
 	{
 		/* NOTE: If the player is paused, we don't change anything. */
@@ -330,20 +441,200 @@ namespace EmEn::Audio
 			return false;
 		}
 
-		m_musicIndex++;
-
-		if ( m_musicIndex >= m_playlist.size() )
+		/* NOTE: Handle shuffle mode. */
+		if ( m_shuffleEnabled && !m_shuffleOrder.empty() )
 		{
-			m_musicIndex = 0;
+			m_shuffleIndex++;
+
+			if ( m_shuffleIndex >= m_shuffleOrder.size() )
+			{
+				m_shuffleIndex = 0;
+			}
+
+			m_musicIndex = m_shuffleOrder[m_shuffleIndex];
+		}
+		else
+		{
+			m_musicIndex++;
+
+			if ( m_musicIndex >= m_playlist.size() )
+			{
+				m_musicIndex = 0;
+			}
 		}
 
-		/* NOTE: If the player is stopped, we just change the track. */
+		/* NOTE: If the player is stopped, we just change the track index and notify. */
 		if ( m_userState == UserState::Stopped )
 		{
+			this->notify(TrackChanged, m_musicIndex);
+
 			return true;
 		}
 
-		return this->play(m_playlist[m_musicIndex]);
+		const bool success = this->play(m_playlist[m_musicIndex]);
+
+		/* NOTE: Notify that the track index has changed (for UI update). */
+		if ( success )
+		{
+			this->notify(TrackChanged, m_musicIndex);
+		}
+
+		return success;
+	}
+
+	bool
+	TrackMixer::previous () noexcept
+	{
+		/* NOTE: If the player is paused, we don't change anything. */
+		if ( m_userState == UserState::Paused )
+		{
+			return false;
+		}
+
+		if ( m_playlist.empty() )
+		{
+			Tracer::warning(ClassId, "The playlist is empty !");
+
+			return false;
+		}
+
+		/* NOTE: Handle shuffle mode. */
+		if ( m_shuffleEnabled && !m_shuffleOrder.empty() )
+		{
+			if ( m_shuffleIndex == 0 )
+			{
+				m_shuffleIndex = m_shuffleOrder.size() - 1;
+			}
+			else
+			{
+				m_shuffleIndex--;
+			}
+
+			m_musicIndex = m_shuffleOrder[m_shuffleIndex];
+		}
+		else
+		{
+			if ( m_musicIndex == 0 )
+			{
+				m_musicIndex = m_playlist.size() - 1;
+			}
+			else
+			{
+				m_musicIndex--;
+			}
+		}
+
+		/* NOTE: If the player is stopped, we just change the track index and notify. */
+		if ( m_userState == UserState::Stopped )
+		{
+			this->notify(TrackChanged, m_musicIndex);
+
+			return true;
+		}
+
+		const bool success = this->play(m_playlist[m_musicIndex]);
+
+		/* NOTE: Notify that the track index has changed (for UI update). */
+		if ( success )
+		{
+			this->notify(TrackChanged, m_musicIndex);
+		}
+
+		return success;
+	}
+
+	float
+	TrackMixer::currentPosition () const noexcept
+	{
+		if ( !this->usable() )
+		{
+			return 0.0F;
+		}
+
+		const std::lock_guard< std::mutex > lock{m_stateAccess};
+
+		switch ( m_playingTrack )
+		{
+			case PlayingTrack::TrackA :
+				return m_trackA->playbackPosition();
+
+			case PlayingTrack::TrackB :
+				return m_trackB->playbackPosition();
+
+			case PlayingTrack::None :
+			default :
+				return 0.0F;
+		}
+	}
+
+	float
+	TrackMixer::currentDuration () const noexcept
+	{
+		if ( m_playlist.empty() || m_musicIndex >= m_playlist.size() )
+		{
+			return 0.0F;
+		}
+
+		return m_playlist[m_musicIndex]->duration();
+	}
+
+	void
+	TrackMixer::seek (float position) noexcept
+	{
+		if ( !this->usable() )
+		{
+			return;
+		}
+
+		const std::lock_guard< std::mutex > lock{m_stateAccess};
+
+		switch ( m_playingTrack )
+		{
+			case PlayingTrack::TrackA :
+				m_trackA->setPlaybackPosition(position);
+				break;
+
+			case PlayingTrack::TrackB :
+				m_trackB->setPlaybackPosition(position);
+				break;
+
+			case PlayingTrack::None :
+				break;
+		}
+	}
+
+	void
+	TrackMixer::enableShuffle (bool state) noexcept
+	{
+		m_shuffleEnabled = state;
+
+		if ( state && !m_playlist.empty() )
+		{
+			this->generateShuffleOrder();
+
+			/* Find current track in shuffle order to continue from there. */
+			for ( size_t i = 0; i < m_shuffleOrder.size(); i++ )
+			{
+				if ( m_shuffleOrder[i] == m_musicIndex )
+				{
+					m_shuffleIndex = i;
+					break;
+				}
+			}
+		}
+	}
+
+	void
+	TrackMixer::generateShuffleOrder () noexcept
+	{
+		m_shuffleOrder.resize(m_playlist.size());
+		std::iota(m_shuffleOrder.begin(), m_shuffleOrder.end(), 0);
+
+		std::random_device rd;
+		std::mt19937 gen{rd()};
+		std::shuffle(m_shuffleOrder.begin(), m_shuffleOrder.end(), gen);
+
+		m_shuffleIndex = 0;
 	}
 
 	bool
@@ -517,133 +808,6 @@ namespace EmEn::Audio
 			"Forgetting it ...";
 
 		return false;
-	}
-
-	void
-	TrackMixer::onRegisterToConsole () noexcept
-	{
-		this->bindCommand("play", [this] (const Console::Arguments & arguments, Console::Outputs & outputs) {
-			if ( !this->usable() )
-			{
-				outputs.emplace_back(Severity::Warning, "The track mixer is unavailable !");
-
-				return 0;
-			}
-
-			/* Checks if we need to resume. */
-			if ( arguments.empty() )
-			{
-				switch ( m_playingTrack )
-				{
-					case PlayingTrack::None :
-						outputs.emplace_back(Severity::Warning, "There is no soundtrack !");
-						break;
-
-					case PlayingTrack::TrackA :
-						if ( m_trackA->isPaused() )
-						{
-							m_trackA->resume();
-
-							outputs.emplace_back(Severity::Info, "Resuming track A.");
-
-							return 0;
-						}
-						break;
-
-					case PlayingTrack::TrackB :
-						if ( m_trackB->isPaused() )
-						{
-							m_trackB->resume();
-
-							outputs.emplace_back(Severity::Info, "Resuming track B.");;
-
-							return 0;
-						}
-						break;
-				}
-
-				return 1;
-			}
-
-			/* Search the song. */
-			const auto soundTrackName = arguments[0].asString();
-			const auto soundtrack = m_resourceManager.container< MusicResource >()->getResource(soundTrackName);
-
-			if ( soundtrack == nullptr )
-			{
-				outputs.emplace_back(Severity::Error, std::stringstream{} << "Soundtrack '" << soundTrackName << "' doesn't exist !");
-
-				return 2;
-			}
-
-			this->play(soundtrack);
-
-			outputs.emplace_back(Severity::Success, std::stringstream{} << "Playing '" << soundTrackName << "' ...");
-
-			return 0;
-		}, "Play or resume a music. There is no need of parameter to resume.");
-
-		this->bindCommand("pause", [this] (const Console::Arguments & /*arguments*/, Console::Outputs & outputs) {
-			if ( !this->usable() )
-			{
-				outputs.emplace_back(Severity::Warning, "The track mixer is unavailable !");
-
-				return 1;
-			}
-
-			switch ( m_playingTrack )
-			{
-				case PlayingTrack::None :
-					outputs.emplace_back(Severity::Warning, "There is no track playing !");
-					break;
-
-				case PlayingTrack::TrackA :
-					m_trackA->pause();
-
-					outputs.emplace_back(Severity::Info, "Track A paused.");
-					break;
-
-				case PlayingTrack::TrackB :
-					m_trackB->pause();
-
-					outputs.emplace_back(Severity::Info, "Track B paused.");
-					break;
-			}
-
-			return 0;
-		}, "Pause music playback.");
-
-		this->bindCommand("stop", [this] (const Console::Arguments & /*arguments*/, Console::Outputs & outputs) {
-			if ( !this->usable() )
-			{
-				outputs.emplace_back(Severity::Warning, "The track mixer is unavailable !");
-
-				return 1;
-			}
-
-			switch ( m_playingTrack )
-			{
-				case PlayingTrack::None:
-					outputs.emplace_back(Severity::Warning, "There is no track playing !");
-					break;
-
-				case PlayingTrack::TrackA :
-					m_trackA->stop();
-					m_playingTrack = PlayingTrack::None;
-
-					outputs.emplace_back(Severity::Info, "Track A stopped.");
-					break;
-
-				case PlayingTrack::TrackB :
-					m_trackB->stop();
-					m_playingTrack = PlayingTrack::None;
-
-					outputs.emplace_back(Severity::Info, "Track B stopped.");
-					break;
-			}
-
-			return 0;
-		}, "Stop music.");
 	}
 
 	bool

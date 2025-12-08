@@ -573,6 +573,13 @@ namespace EmEn
 			[[nodiscard]]
 			bool save () const noexcept;
 
+			/**
+			 * @brief Returns all settings as a JSON string.
+			 * @return std::string
+			 */
+			[[nodiscard]]
+			std::string toJsonString () const noexcept;
+
 		private:
 
 			/** @copydoc EmEn::ServiceInterface::onInitialize() */

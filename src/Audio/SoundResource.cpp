@@ -27,7 +27,10 @@
 #include "SoundResource.hpp"
 
 /* Local inclusions. */
+#include "Libs/WaveFactory/FileIO.hpp"
 #include "Libs/WaveFactory/Processor.hpp"
+#include "Libs/WaveFactory/Synthesizer.hpp"
+#include "Libs/WaveFactory/SFXScript.hpp"
 #include "Resources/Manager.hpp"
 #include "Manager.hpp"
 #include "Tracer.hpp"
@@ -50,14 +53,58 @@ namespace EmEn::Audio
 		}
 
 		const auto frequencyPlayback = Manager::frequencyPlayback();
-		const auto oneSecond = 1U * static_cast< size_t >(frequencyPlayback);
+		const auto sampleRate = static_cast< size_t >(frequencyPlayback);
 
-		if ( !m_localData.initialize(oneSecond, WaveFactory::Channels::Mono, frequencyPlayback) )
+		/* Default/fallback sound: A retro "alert" double-beep.
+		 * Two short beeps with a pitch sweep, easily recognizable as a placeholder. */
+		const auto beepDuration = sampleRate / 10;  /* 100ms per beep */
+		const auto silenceDuration = sampleRate / 20;  /* 50ms silence between beeps */
+		const auto totalDuration = beepDuration * 2 + silenceDuration;
+
+		WaveFactory::Synthesizer synth{m_localData, totalDuration, frequencyPlayback};
+
+		/* First beep: descending pitch sweep (880Hz -> 440Hz). */
+		synth.setRegion(0, beepDuration);
+
+		if ( !synth.pitchSweep(880.0F, 440.0F, 0.6F) )
 		{
 			return this->setLoadSuccess(false);
 		}
 
-		if ( !m_localData.generateNoise() )
+		/* Apply a punchy envelope. */
+		if ( !synth.applyADSR(0.01F, 0.02F, 0.7F, 0.05F) )
+		{
+			return this->setLoadSuccess(false);
+		}
+
+		/* Add a bit of bit-crush for that retro feel. */
+		if ( !synth.applyBitCrush(12) )
+		{
+			return this->setLoadSuccess(false);
+		}
+
+		/* Second beep: ascending pitch sweep (440Hz -> 660Hz). */
+		synth.setRegion(beepDuration + silenceDuration, beepDuration);
+
+		if ( !synth.pitchSweep(440.0F, 660.0F, 0.6F) )
+		{
+			return this->setLoadSuccess(false);
+		}
+
+		if ( !synth.applyADSR(0.01F, 0.02F, 0.7F, 0.05F) )
+		{
+			return this->setLoadSuccess(false);
+		}
+
+		if ( !synth.applyBitCrush(12) )
+		{
+			return this->setLoadSuccess(false);
+		}
+
+		/* Final normalization to ensure good volume. */
+		synth.resetRegion();
+
+		if ( !synth.normalize() )
 		{
 			return this->setLoadSuccess(false);
 		}
@@ -78,7 +125,7 @@ namespace EmEn::Audio
 			return false;
 		}
 
-		if ( !m_localData.readFile(filepath) )
+		if ( !WaveFactory::FileIO::read(filepath, m_localData) )
 		{
 			TraceError{ClassId} << "Unable to load the sound file '" << filepath << "' !";
 
@@ -141,7 +188,7 @@ namespace EmEn::Audio
 	}
 
 	bool
-	SoundResource::load (Resources::AbstractServiceProvider & /*serviceProvider*/, const Json::Value & /*data*/) noexcept
+	SoundResource::load (Resources::AbstractServiceProvider & /*serviceProvider*/, const Json::Value & data) noexcept
 	{
 		if ( !Manager::isAudioSystemAvailable() )
 		{
@@ -153,9 +200,19 @@ namespace EmEn::Audio
 			return false;
 		}
 
-		/* TODO: Empty function. */
+		const auto frequencyPlayback = Manager::frequencyPlayback();
 
-		return this->setLoadSuccess(false);
+		/* Use SFXScript to generate audio from JSON data. */
+		WaveFactory::SFXScript script{m_localData, frequencyPlayback};
+
+		if ( !script.generateFromData(data) )
+		{
+			TraceError{ClassId} << "Failed to generate sound '" << this->name() << "' from JSON data !";
+
+			return this->setLoadSuccess(false);
+		}
+
+		return this->setLoadSuccess(true);
 	}
 
 	bool

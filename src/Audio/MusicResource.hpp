@@ -32,6 +32,7 @@
 
 /* Local inclusions. */
 #include "Resources/Container.hpp"
+#include "Libs/WaveFactory/Wave.hpp"
 
 namespace EmEn::Audio
 {
@@ -173,6 +174,17 @@ namespace EmEn::Audio
 			artist () const noexcept
 			{
 				return m_artist;
+			}
+
+			/**
+			 * @brief Returns the duration of the music in seconds.
+			 * @return float
+			 */
+			[[nodiscard]]
+			float
+			duration () const noexcept
+			{
+				return m_localData.seconds();
 			}
 
 		private:

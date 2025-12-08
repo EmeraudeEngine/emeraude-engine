@@ -51,13 +51,17 @@ namespace EmEn
 			m_showInformation = m_arguments.isSwitchPresent("--verbose");
 		}
 
-		if ( const auto argument = m_arguments.get("--settings-filepath") )
+		if ( const auto filepath = m_arguments.get("--settings-filepath") )
 		{
-			m_filepath = argument.value();
+			m_filepath = filepath.value();
+		}
+		else if ( const auto filename = m_arguments.get("--settings-filename") )
+		{
+			m_filepath = m_fileSystem.configDirectory(filename.value());
 		}
 		else
 		{
-			m_filepath = m_fileSystem.configDirectory(Settings::Filename);
+			m_filepath = m_fileSystem.configDirectory(Filename);
 		}
 
 		if ( m_filepath.empty() )
@@ -69,7 +73,7 @@ namespace EmEn
 
 		if ( m_showInformation )
 		{
-			TraceInfo{ClassId} << "Loading settings from file '" << m_filepath.string() << "' ...";
+			TraceInfo{ClassId} << "Loading settings from file " << m_filepath << " ...";
 		}
 
 		/* Checks the file presence, if not, it will be created and uses the default engine values. */
@@ -93,7 +97,7 @@ namespace EmEn
 
 			if ( !this->readFile(m_filepath) )
 			{
-				TraceError{ClassId} << "Unable to read settings file from '" << m_filepath.string() << "' path !";
+				TraceError{ClassId} << "Unable to read settings file from " << m_filepath << "'path !";
 
 				this->saveAtExit(false);
 
@@ -130,12 +134,12 @@ namespace EmEn
 
 			if ( !this->writeFile(m_filepath) )
 			{
-				TraceError{ClassId} << "Unable to write settings file to '" << m_filepath << "' !";
+				TraceError{ClassId} << "Unable to write settings file to " << m_filepath << " !";
 
 				return false;
 			}
 
-			TraceSuccess{ClassId} << "Settings file saved to '" << m_filepath << "' !";
+			TraceSuccess{ClassId} << "Settings file saved to " << m_filepath << " !";
 		}
 
 		return true;
@@ -469,6 +473,106 @@ namespace EmEn
 		}
 
 		return this->writeFile(m_filepath);
+	}
+
+	std::string
+	Settings::toJsonString () const noexcept
+	{
+		const std::shared_lock< std::shared_mutex > lock{m_storeAccess};
+
+		const auto toJson = [] (const std::any & item) -> Json::Value {
+			if ( item.type() == typeid(bool) )
+			{
+				return std::any_cast< bool >(item);
+			}
+
+			if ( item.type() == typeid(int32_t) )
+			{
+				return std::any_cast< int32_t >(item);
+			}
+
+			if ( item.type() == typeid(uint32_t) )
+			{
+				return std::any_cast< uint32_t >(item);
+			}
+
+			if ( item.type() == typeid(int64_t) )
+			{
+				return std::any_cast< int64_t >(item);
+			}
+
+			if ( item.type() == typeid(uint64_t) )
+			{
+				return std::any_cast< uint64_t >(item);
+			}
+
+			if ( item.type() == typeid(float) )
+			{
+				return std::any_cast< float >(item);
+			}
+
+			if ( item.type() == typeid(double) )
+			{
+				return std::any_cast< double >(item);
+			}
+
+			if ( item.type() == typeid(std::string) )
+			{
+				return std::any_cast< std::string >(item);
+			}
+
+			return Json::stringValue;
+		};
+
+		const auto getLevel = [] (Json::Value & root, const std::string & key) -> Json::Value & {
+			if ( key.empty() )
+			{
+				return root;
+			}
+
+			Json::Value * current = &root;
+
+			for ( const auto & section : String::explode(key, '/', false) )
+			{
+				current = &(*current)[section];
+			}
+
+			return *current;
+		};
+
+		Json::Value root;
+
+		for ( const auto & [key, store] : m_stores )
+		{
+			auto & data = getLevel(root, std::string{key});
+
+			for ( const auto & [name, value] : store.variables() )
+			{
+				data[name] = toJson(value);
+			}
+
+			for ( const auto & [name, values] : store.arrays() )
+			{
+				data[name] = Json::arrayValue;
+
+				for ( const auto & value : values )
+				{
+					data[name].append(toJson(value));
+				}
+			}
+		}
+
+		Json::StreamWriterBuilder builder{};
+		builder["commentStyle"] = "None";
+		builder["indentation"] = "";
+		builder["enableYAMLCompatibility"] = false;
+		builder["dropNullPlaceholders"] = true;
+		builder["useSpecialFloats"] = true;
+		builder["precision"] = 8;
+		builder["precisionType"] = "significant";
+		builder["emitUTF8"] = true;
+
+		return Json::writeString(builder, root);
 	}
 
 	std::ostream &

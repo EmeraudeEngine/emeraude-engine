@@ -117,11 +117,11 @@ namespace EmEn::Audio
 		{
 			const auto chunk = wave.chunk(chunkIndex, length);
 
-			alBufferData(this->identifier(), format, wave.data(chunk.offset), static_cast< ALsizei >(chunk.bytes), static_cast< ALsizei >(wave.frequency()));
+			alBufferData(this->identifier(), format, wave.samplePointer(chunk.offset), static_cast< ALsizei >(chunk.bytes), static_cast< ALsizei >(wave.frequency()));
 		}
 		else
 		{
-			alBufferData(this->identifier(), format, wave.data(), wave.bytes< ALsizei >(), static_cast< ALsizei >(wave.frequency()));
+			alBufferData(this->identifier(), format, wave.samplePointer(0), wave.bytes< ALsizei >(), static_cast< ALsizei >(wave.frequency()));
 		}
 
 		if ( alGetErrors("alBufferData()", __FILE__, __LINE__) )

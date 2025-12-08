@@ -32,7 +32,6 @@
 /* Local inclusions for usages. */
 #include "EnvironmentPhysicalProperties.hpp"
 #include "BodyPhysicalProperties.hpp"
-#include "Collider.hpp"
 
 namespace EmEn::Physics
 {
@@ -219,6 +218,8 @@ namespace EmEn::Physics
 
 				m_linearVelocity += impulse * this->getBodyPhysicalProperties().inverseMass();
 				m_linearSpeed = m_linearVelocity.length();
+
+				this->onImpulse();
 			}
 
 			/**
@@ -237,6 +238,8 @@ namespace EmEn::Physics
 
 				m_angularVelocity += m_inverseWorldInertia * angularImpulse;
 				m_angularSpeed = m_angularVelocity.length();
+
+				this->onImpulse();
 			}
 
 			/**
@@ -294,49 +297,12 @@ namespace EmEn::Physics
 			}
 
 			/**
-			 * @brief Returns the read-only collider.
-			 * @return const Collider &
-			 */
-			[[nodiscard]]
-			const Collider &
-			collider () const noexcept
-			{
-				return m_collider;
-			}
-
-			/**
-			 * @brief Returns the collider.
-			 * @return Collider &
-			 */
-			[[nodiscard]]
-			Collider &
-			collider () noexcept
-			{
-				return m_collider;
-			}
-
-			/**
 			 * @brief Adds a physical force to the object acceleration.
 			 * @note Using this formula: F = m * a
 			 * @param force A reference to a vector representing the force. The magnitude (length) will represent the acceleration in m/s².
 			 * @return void
 			 */
 			void addForce (const Libs::Math::Vector< 3, float > & force) noexcept;
-
-			/**
-			 * @brief Adds a torque to the object angular acceleration.
-			 * @param torque A reference to a vector representing the torque.
-			 * @return void
-			 */
-			void addTorque (const Libs::Math::Vector< 3, float > & torque) noexcept;
-
-			/**
-			 * @brief Deviates the velocity direction from a normal vector when the object hit something static.
-			 * @param surfaceNormal A vector representing the hit surface normal.
-			 * @param surfaceBounciness A scalar to reduce the velocity after deviating the movement. 1.0F = no velocity loss from the surface. Default 0.75.
-			 * @return float
-			 */
-			float deflect (const Libs::Math::Vector< 3, float > & surfaceNormal, float surfaceBounciness = 0.75F) noexcept;
 
 			/**
 			 * @brief Sets the object into inertia.
@@ -412,29 +378,6 @@ namespace EmEn::Physics
 			isRotationPhysicsEnabled () const noexcept
 			{
 				return m_rotationEnabled;
-			}
-
-			/**
-			 * @brief Sets whether this movable trait always computes physics.
-			 * @note This means the simulation will never pause on this entity.
-			 * @param state The state.
-			 * @return void
-			 */
-			void
-			setAlwaysComputePhysicsState (bool state) noexcept
-			{
-				m_alwaysComputePhysics = state;
-			}
-
-			/**
-			 * @brief Returns whether this movable trait always computes physics.
-			 * @return bool
-			 */
-			[[nodiscard]]
-			bool
-			alwaysComputePhysics () const noexcept
-			{
-				return m_alwaysComputePhysics;
 			}
 
 			/**
@@ -530,6 +473,38 @@ namespace EmEn::Physics
 			 */
 			virtual void rotateFromPhysics (float radianAngle, const Libs::Math::Vector< 3, float > & worldDirection) noexcept = 0;
 
+			/**
+			 * @brief Marks that this entity had a collision this frame.
+			 * @note Called by the constraint solver when resolving collisions.
+			 * @return void
+			 */
+			void
+			setHadCollision () noexcept
+			{
+				m_hadCollision = true;
+			}
+
+			/**
+			 * @brief Marks that this entity is grounded (standing on a surface).
+			 * @note Called by the constraint solver when collision normal points upward.
+			 * @return void
+			 */
+			void setGrounded () noexcept;
+
+			/**
+			 * @brief Decrements the grounded grace period.
+			 * @note Called each frame. Grounded state persists for a few frames after losing contact.
+			 * @return void
+			 */
+			void updateGroundedState () noexcept;
+
+			/**
+			 * @brief Returns whether this entity is grounded.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool isGrounded () const noexcept;
+
 		protected:
 
 			/**
@@ -546,18 +521,16 @@ namespace EmEn::Physics
 
 		private:
 
-			Libs::Math::Vector< 3, float > m_lastWorldPosition;
 			Libs::Math::Vector< 3, float > m_linearVelocity;
 			Libs::Math::Vector< 3, float > m_angularVelocity; // Omega
 			Libs::Math::Vector< 3, float > m_centerOfMass;
 			Libs::Math::Matrix< 3, float > m_inverseWorldInertia; // Cached I^-1 in world space
 			float m_linearSpeed{0.0F};
 			float m_angularSpeed{0.0F};
-			Collider m_collider;
-			uint32_t m_inertCheckCount{0};
+			uint8_t m_groundedFrames{0};
 			bool m_isMovable{true};
 			bool m_rotationEnabled{false};
-			bool m_alwaysComputePhysics{false};
 			bool m_freeFlyModeEnabled{false};
+			bool m_hadCollision{false};
 	};
 }

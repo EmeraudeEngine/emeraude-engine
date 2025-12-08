@@ -79,10 +79,7 @@ namespace EmEn::Scenes
 	{
 		public:
 
-			/**
-			 * @brief Class identifier string for debugging and type identification.
-			 * @version 0.8.35
-			 */
+			/** @brief Class identifier string for debugging and type identification. */
 			static constexpr auto ClassId{"StaticEntity"};
 
 			/**
@@ -93,7 +90,6 @@ namespace EmEn::Scenes
 			 * Supports both local and world space transformations for position, translation, and rotation.
 			 *
 			 * @see EmEn::Animations::AnimatableInterface
-			 * @version 0.8.35
 			 */
 			enum AnimationID : uint8_t
 			{
@@ -136,8 +132,6 @@ namespace EmEn::Scenes
 			 * @param name A reference to a string to name the entity in the scene.
 			 * @param sceneTimeMS The scene current time in milliseconds.
 			 * @param coordinates The initial local coordinate frame of the static entity. Defaults to origin.
-			 *
-			 * @version 0.8.35
 			 */
 			StaticEntity (const Scene & scene, const std::string & name, uint32_t sceneTimeMS, const Libs::Math::CartesianFrame< float > & coordinates = {}) noexcept
 				: AbstractEntity{scene, name, sceneTimeMS},
@@ -153,7 +147,6 @@ namespace EmEn::Scenes
 			 * and prevent issues with scene graph integrity.
 			 *
 			 * @param copy A reference to the copied instance.
-			 * @version 0.8.35
 			 */
 			StaticEntity (const StaticEntity & copy) noexcept = delete;
 
@@ -164,7 +157,6 @@ namespace EmEn::Scenes
 			 * and prevent issues with scene graph integrity.
 			 *
 			 * @param copy A reference to the copied instance.
-			 * @version 0.8.35
 			 */
 			StaticEntity (StaticEntity && copy) noexcept = delete;
 
@@ -176,7 +168,6 @@ namespace EmEn::Scenes
 			 *
 			 * @param copy A reference to the copied instance.
 			 * @return StaticEntity &
-			 * @version 0.8.35
 			 */
 			StaticEntity & operator= (const StaticEntity & copy) noexcept = delete;
 
@@ -188,7 +179,6 @@ namespace EmEn::Scenes
 			 *
 			 * @param copy A reference to the copied instance.
 			 * @return StaticEntity &
-			 * @version 0.8.35
 			 */
 			StaticEntity & operator= (StaticEntity && copy) noexcept = delete;
 
@@ -196,15 +186,10 @@ namespace EmEn::Scenes
 			 * @brief Destructs the static entity.
 			 *
 			 * Cleans up all resources associated with this static entity.
-			 *
-			 * @version 0.8.35
 			 */
 			~StaticEntity () override = default;
 
-			/**
-			 * @copydoc EmEn::Scenes::LocatableInterface::setPosition(const Libs::Math::Vector< 3, float > &, Libs::Math::TransformSpace)
-			 * @version 0.8.35
-			 */
+			/** @copydoc EmEn::Scenes::LocatableInterface::setPosition(const Libs::Math::Vector< 3, float > &, Libs::Math::TransformSpace) */
 			void
 			setPosition (const Libs::Math::Vector< 3, float > & position, Libs::Math::TransformSpace transformSpace) noexcept override
 			{
@@ -220,10 +205,7 @@ namespace EmEn::Scenes
 				this->onLocationDataUpdate();
 			}
 
-			/**
-			 * @copydoc EmEn::Scenes::LocatableInterface::setXPosition(float, Libs::Math::TransformSpace)
-			 * @version 0.8.35
-			 */
+			/** @copydoc EmEn::Scenes::LocatableInterface::setXPosition(float, Libs::Math::TransformSpace) */
 			void
 			setXPosition (float position, Libs::Math::TransformSpace transformSpace) noexcept override
 			{
@@ -239,10 +221,7 @@ namespace EmEn::Scenes
 				this->onLocationDataUpdate();
 			}
 
-			/**
-			 * @copydoc EmEn::Scenes::LocatableInterface::setYPosition(float, Libs::Math::TransformSpace)
-			 * @version 0.8.35
-			 */
+			/** @copydoc EmEn::Scenes::LocatableInterface::setYPosition(float, Libs::Math::TransformSpace) */
 			void
 			setYPosition (float position, Libs::Math::TransformSpace transformSpace) noexcept override
 			{
@@ -258,10 +237,7 @@ namespace EmEn::Scenes
 				this->onLocationDataUpdate();
 			}
 
-			/**
-			 * @copydoc EmEn::Scenes::LocatableInterface::setZPosition(float, Libs::Math::TransformSpace)
-			 * @version 0.8.35
-			 */
+			/** @copydoc EmEn::Scenes::LocatableInterface::setZPosition(float, Libs::Math::TransformSpace) */
 			void
 			setZPosition (float position, Libs::Math::TransformSpace transformSpace) noexcept override
 			{
@@ -277,10 +253,7 @@ namespace EmEn::Scenes
 				this->onLocationDataUpdate();
 			}
 
-			/**
-			 * @copydoc EmEn::Scenes::LocatableInterface::move(const Libs::Math::Vector< 3, float > &, Libs::Math::TransformSpace)
-			 * @version 0.8.35
-			 */
+			/** @copydoc EmEn::Scenes::LocatableInterface::move(const Libs::Math::Vector< 3, float > &, Libs::Math::TransformSpace) */
 			void
 			move (const Libs::Math::Vector< 3, float > & distance, Libs::Math::TransformSpace transformSpace) noexcept override
 			{
@@ -289,10 +262,7 @@ namespace EmEn::Scenes
 				this->onLocationDataUpdate();
 			}
 
-			/**
-			 * @copydoc EmEn::Scenes::LocatableInterface::moveX(float, Libs::Math::TransformSpace)
-			 * @version 0.8.35
-			 */
+			/** @copydoc EmEn::Scenes::LocatableInterface::moveX(float, Libs::Math::TransformSpace) */
 			void
 			moveX (float distance, Libs::Math::TransformSpace transformSpace) noexcept override
 			{
@@ -301,10 +271,7 @@ namespace EmEn::Scenes
 				this->onLocationDataUpdate();
 			}
 
-			/**
-			 * @copydoc EmEn::Scenes::LocatableInterface::moveY(float, Libs::Math::TransformSpace)
-			 * @version 0.8.35
-			 */
+			/** @copydoc EmEn::Scenes::LocatableInterface::moveY(float, Libs::Math::TransformSpace) */
 			void
 			moveY (float distance, Libs::Math::TransformSpace transformSpace) noexcept override
 			{
@@ -313,10 +280,7 @@ namespace EmEn::Scenes
 				this->onLocationDataUpdate();
 			}
 
-			/**
-			 * @copydoc EmEn::Scenes::LocatableInterface::moveZ(float, Libs::Math::TransformSpace)
-			 * @version 0.8.35
-			 */
+			/** @copydoc EmEn::Scenes::LocatableInterface::moveZ(float, Libs::Math::TransformSpace) */
 			void
 			moveZ (float distance, Libs::Math::TransformSpace transformSpace) noexcept override
 			{
@@ -325,10 +289,7 @@ namespace EmEn::Scenes
 				this->onLocationDataUpdate();
 			}
 
-			/**
-			 * @copydoc EmEn::Scenes::LocatableInterface::rotate(float, const Libs::Math::Vector< 3, float > &, Libs::Math::TransformSpace)
-			 * @version 0.8.35
-			 */
+			/** @copydoc EmEn::Scenes::LocatableInterface::rotate(float, const Libs::Math::Vector< 3, float > &, Libs::Math::TransformSpace) */
 			void
 			rotate (float radian, const Libs::Math::Vector< 3, float > & axis, Libs::Math::TransformSpace transformSpace) noexcept override
 			{
@@ -337,10 +298,7 @@ namespace EmEn::Scenes
 				this->onLocationDataUpdate();
 			}
 
-			/**
-			 * @copydoc EmEn::Scenes::LocatableInterface::pitch(float, Libs::Math::TransformSpace)
-			 * @version 0.8.35
-			 */
+			/** @copydoc EmEn::Scenes::LocatableInterface::pitch(float, Libs::Math::TransformSpace) */
 			void
 			pitch (float radian, Libs::Math::TransformSpace transformSpace) noexcept override
 			{
@@ -349,10 +307,7 @@ namespace EmEn::Scenes
 				this->onLocationDataUpdate();
 			}
 
-			/**
-			 * @copydoc EmEn::Scenes::LocatableInterface::yaw(float, Libs::Math::TransformSpace)
-			 * @version 0.8.35
-			 */
+			/** @copydoc EmEn::Scenes::LocatableInterface::yaw(float, Libs::Math::TransformSpace) */
 			void
 			yaw (float radian, Libs::Math::TransformSpace transformSpace) noexcept override
 			{
@@ -361,10 +316,7 @@ namespace EmEn::Scenes
 				this->onLocationDataUpdate();
 			}
 
-			/**
-			 * @copydoc EmEn::Scenes::LocatableInterface::roll(float, Libs::Math::TransformSpace)
-			 * @version 0.8.35
-			 */
+			/** @copydoc EmEn::Scenes::LocatableInterface::roll(float, Libs::Math::TransformSpace) */
 			void
 			roll (float radian, Libs::Math::TransformSpace transformSpace) noexcept override
 			{
@@ -379,7 +331,6 @@ namespace EmEn::Scenes
 			 *          Only TransformSpace::Local is currently supported. Using other transform spaces will
 			 *          have no effect on the entity.
 			 * @todo Reorient the scale vector to world coordinates for Parent and World transform spaces.
-			 * @version 0.8.35
 			 */
 			void scale (const Libs::Math::Vector< 3, float > & factor, Libs::Math::TransformSpace transformSpace) noexcept override;
 
@@ -389,7 +340,6 @@ namespace EmEn::Scenes
 			 *          Only TransformSpace::Local is currently supported. Using other transform spaces will
 			 *          have no effect on the entity.
 			 * @todo Reorient the scale vector to world coordinates for Parent and World transform spaces.
-			 * @version 0.8.35
 			 */
 			void scale (float factor, Libs::Math::TransformSpace transformSpace) noexcept override;
 
@@ -399,7 +349,6 @@ namespace EmEn::Scenes
 			 *          Only TransformSpace::Local is currently supported. Using other transform spaces will
 			 *          have no effect on the entity.
 			 * @todo Reorient the scale vector to world coordinates for Parent and World transform spaces.
-			 * @version 0.8.35
 			 */
 			void scaleX (float factor, Libs::Math::TransformSpace transformSpace) noexcept override;
 
@@ -409,7 +358,6 @@ namespace EmEn::Scenes
 			 *          Only TransformSpace::Local is currently supported. Using other transform spaces will
 			 *          have no effect on the entity.
 			 * @todo Reorient the scale vector to world coordinates for Parent and World transform spaces.
-			 * @version 0.8.35
 			 */
 			void scaleY (float factor, Libs::Math::TransformSpace transformSpace) noexcept override;
 
@@ -419,14 +367,10 @@ namespace EmEn::Scenes
 			 *          Only TransformSpace::Local is currently supported. Using other transform spaces will
 			 *          have no effect on the entity.
 			 * @todo Reorient the scale vector to world coordinates for Parent and World transform spaces.
-			 * @version 0.8.35
 			 */
 			void scaleZ (float factor, Libs::Math::TransformSpace transformSpace) noexcept override;
 
-			/**
-			 * @copydoc EmEn::Scenes::LocatableInterface::lookAt(const Libs::Math::Vector< 3, float > &, bool)
-			 * @version 0.8.35
-			 */
+			/** @copydoc EmEn::Scenes::LocatableInterface::lookAt(const Libs::Math::Vector< 3, float > &, bool) */
 			void
 			lookAt (const Libs::Math::Vector< 3, float > & target, bool flipZAxis) noexcept override
 			{
@@ -435,20 +379,14 @@ namespace EmEn::Scenes
 				this->onLocationDataUpdate();
 			}
 
-			/**
-			 * @copydoc EmEn::Scenes::LocatableInterface::setLocalCoordinates(const Libs::Math::CartesianFrame< float > &)
-			 * @version 0.8.35
-			 */
+			/** @copydoc EmEn::Scenes::LocatableInterface::setLocalCoordinates(const Libs::Math::CartesianFrame< float > &) */
 			void
 			setLocalCoordinates (const Libs::Math::CartesianFrame< float > & coordinates) noexcept override
 			{
 				m_logicStateCoordinates = coordinates;
 			}
 
-			/**
-			 * @copydoc EmEn::Scenes::LocatableInterface::localCoordinates() const
-			 * @version 0.8.35
-			 */
+			/** @copydoc EmEn::Scenes::LocatableInterface::localCoordinates() const */
 			[[nodiscard]]
 			const Libs::Math::CartesianFrame< float > &
 			localCoordinates () const noexcept override
@@ -456,10 +394,7 @@ namespace EmEn::Scenes
 				return m_logicStateCoordinates;
 			}
 
-			/**
-			 * @copydoc EmEn::Scenes::LocatableInterface::localCoordinates()
-			 * @version 0.8.35
-			 */
+			/** @copydoc EmEn::Scenes::LocatableInterface::localCoordinates() */
 			[[nodiscard]]
 			Libs::Math::CartesianFrame< float > &
 			localCoordinates () noexcept override
@@ -469,9 +404,7 @@ namespace EmEn::Scenes
 
 			/**
 			 * @copydoc EmEn::Scenes::LocatableInterface::getWorldCoordinates() const
-			 * @note For StaticEntity, world coordinates are the same as local coordinates since
-			 *       static entities have no parent hierarchy.
-			 * @version 0.8.35
+			 * @note For StaticEntity, world coordinates are the same as local coordinates since static entities have no parent hierarchy.
 			 */
 			[[nodiscard]]
 			Libs::Math::CartesianFrame< float >
@@ -480,10 +413,7 @@ namespace EmEn::Scenes
 				return m_logicStateCoordinates;
 			}
 
-			/**
-			 * @copydoc EmEn::Scenes::LocatableInterface::getWorldBoundingBox() const
-			 * @version 0.8.35
-			 */
+			/** @copydoc EmEn::Scenes::LocatableInterface::getWorldBoundingBox() const */
 			[[nodiscard]]
 			Libs::Math::Space3D::AACuboid< float >
 			getWorldBoundingBox () const noexcept override
@@ -491,10 +421,7 @@ namespace EmEn::Scenes
 				return Libs::Math::OrientedCuboid< float >{this->localBoundingBox(), m_logicStateCoordinates}.getAxisAlignedBox();
 			}
 
-			/**
-			 * @copydoc EmEn::Scenes::LocatableInterface::getWorldBoundingSphere() const
-			 * @version 0.8.35
-			 */
+			/** @copydoc EmEn::Scenes::LocatableInterface::getWorldBoundingSphere() const */
 			[[nodiscard]]
 			Libs::Math::Space3D::Sphere< float >
 			getWorldBoundingSphere () const noexcept override
@@ -505,10 +432,7 @@ namespace EmEn::Scenes
 				};
 			}
 
-			/**
-			 * @copydoc EmEn::Scenes::LocatableInterface::isVisibleTo(const Graphics::Frustum &) const
-			 * @version 0.8.35
-			 */
+			/** @copydoc EmEn::Scenes::LocatableInterface::isVisibleTo(const Graphics::Frustum &) const */
 			[[nodiscard]]
 			bool
 			isVisibleTo (const Graphics::Frustum & frustum) const noexcept override
@@ -538,8 +462,6 @@ namespace EmEn::Scenes
 			 * @return size_t The unique class identifier hash.
 			 *
 			 * @note Thread-safe due to static local variable initialization guarantees in C++11 and later.
-			 *
-			 * @version 0.8.35
 			 */
 			static
 			size_t
@@ -548,10 +470,7 @@ namespace EmEn::Scenes
 				return Libs::Hash::FNV1a(ClassId);
 			}
 
-			/**
-			 * @copydoc EmEn::Libs::ObservableTrait::classUID() const
-			 * @version 0.8.35
-			 */
+			/** @copydoc EmEn::Libs::ObservableTrait::classUID() const */
 			[[nodiscard]]
 			size_t
 			classUID () const noexcept override
@@ -559,10 +478,7 @@ namespace EmEn::Scenes
 				return getClassUID();
 			}
 
-			/**
-			 * @copydoc EmEn::Libs::ObservableTrait::is() const
-			 * @version 0.8.35
-			 */
+			/** @copydoc EmEn::Libs::ObservableTrait::is() const */
 			[[nodiscard]]
 			bool
 			is (size_t classUID) const noexcept override
@@ -573,7 +489,6 @@ namespace EmEn::Scenes
 			/**
 			 * @copydoc EmEn::Scenes::AbstractEntity::hasMovableAbility() const
 			 * @return Always returns false for StaticEntity as it has no physics simulation.
-			 * @version 0.8.35
 			 */
 			[[nodiscard]]
 			bool
@@ -585,7 +500,6 @@ namespace EmEn::Scenes
 			/**
 			 * @copydoc EmEn::Scenes::AbstractEntity::isMoving() const
 			 * @return Always returns false for StaticEntity as it has no physics simulation.
-			 * @version 0.8.35
 			 */
 			[[nodiscard]]
 			bool
@@ -596,9 +510,7 @@ namespace EmEn::Scenes
 
 			/**
 			 * @copydoc EmEn::Scenes::AbstractEntity::publishStateForRendering(uint32_t)
-			 * @note Publishes the current logic state coordinates to the specified render state buffer
-			 *       for thread-safe access by the rendering system.
-			 * @version 0.8.35
+			 * @note Publishes the current logic state coordinates to the specified render state buffer for thread-safe access by the rendering system.
 			 */
 			void
 			publishStateForRendering (uint32_t writeStateIndex) noexcept override
@@ -619,7 +531,6 @@ namespace EmEn::Scenes
 			/**
 			 * @copydoc EmEn::Scenes::AbstractEntity::getWorldCoordinatesStateForRendering(uint32_t) const
 			 * @note Retrieves the coordinates from the specified render state buffer for rendering.
-			 * @version 0.8.35
 			 */
 			[[nodiscard]]
 			const Libs::Math::CartesianFrame< float > &
@@ -631,7 +542,6 @@ namespace EmEn::Scenes
 			/**
 			 * @copydoc EmEn::Scenes::AbstractEntity::getMovableTrait()
 			 * @return Always returns nullptr for StaticEntity as it has no physics trait.
-			 * @version 0.8.35
 			 */
 			[[nodiscard]]
 			Physics::MovableTrait *
@@ -643,7 +553,6 @@ namespace EmEn::Scenes
 			/**
 			 * @copydoc EmEn::Scenes::AbstractEntity::getMovableTrait() const
 			 * @return Always returns nullptr for StaticEntity as it has no physics trait.
-			 * @version 0.8.35
 			 */
 			[[nodiscard]]
 			const Physics::MovableTrait *
@@ -661,8 +570,6 @@ namespace EmEn::Scenes
 			 * @return Libs::Math::Matrix< 4, float > The 4x4 model transformation matrix.
 			 *
 			 * @see Libs::Math::CartesianFrame::getModelMatrix()
-			 *
-			 * @version 0.8.35
 			 */
 			[[nodiscard]]
 			Libs::Math::Matrix< 4, float >
@@ -681,8 +588,6 @@ namespace EmEn::Scenes
 			 * @return Libs::Math::Matrix< 4, float > The 4x4 view transformation matrix.
 			 *
 			 * @see Libs::Math::CartesianFrame::getViewMatrix()
-			 *
-			 * @version 0.8.35
 			 */
 			[[nodiscard]]
 			Libs::Math::Matrix< 4, float >
@@ -701,8 +606,6 @@ namespace EmEn::Scenes
 			 * @return Libs::Math::Matrix< 4, float > The 4x4 infinity view transformation matrix.
 			 *
 			 * @see Libs::Math::CartesianFrame::getInfinityViewMatrix()
-			 *
-			 * @version 0.8.35
 			 */
 			[[nodiscard]]
 			Libs::Math::Matrix< 4, float >
@@ -713,16 +616,12 @@ namespace EmEn::Scenes
 
 		private:
 
-			/**
-			 * @copydoc EmEn::Scenes::AbstractEntity::onUnhandledNotification()
-			 * @version 0.8.35
-			 */
+			/** @copydoc EmEn::Scenes::AbstractEntity::onUnhandledNotification() */
 			bool onUnhandledNotification (const ObservableTrait * observable, int notificationCode, const std::any & data) noexcept override;
 
 			/**
 			 * @copydoc EmEn::Scenes::AbstractEntity::onLocationDataUpdate()
 			 * @note Dispatches location changes to all attached components.
-			 * @version 0.8.35
 			 */
 			void
 			onLocationDataUpdate () noexcept override
@@ -731,22 +630,13 @@ namespace EmEn::Scenes
 				this->onContainerMove(m_logicStateCoordinates);
 			}
 
-			/**
-			 * @copydoc EmEn::Animations::AnimatableInterface::playAnimation()
-			 * @version 0.8.35
-			 */
+			/** @copydoc EmEn::Animations::AnimatableInterface::playAnimation() */
 			bool playAnimation (uint8_t animationID, const Libs::Variant & value, size_t cycle) noexcept override;
 
-			/**
-			 * @copydoc EmEn::Scenes::AbstractEntity::onProcessLogics()
-			 * @version 0.8.35
-			 */
+			/** @copydoc EmEn::Scenes::AbstractEntity::onProcessLogics() */
 			bool onProcessLogics (const Scene & scene) noexcept override;
 
-			/**
-			 * @copydoc EmEn::Scenes::AbstractEntity::onContentModified()
-			 * @version 0.8.35
-			 */
+			/** @copydoc EmEn::Scenes::AbstractEntity::onContentModified() */
 			void onContentModified () noexcept override;
 
 			/**
@@ -755,8 +645,6 @@ namespace EmEn::Scenes
 			 * Stores the position, rotation, and scale of the static entity in the scene.
 			 * This is the authoritative state modified by transformation methods and used
 			 * during logic updates.
-			 *
-			 * @version 0.8.35
 			 */
 			Libs::Math::CartesianFrame< float > m_logicStateCoordinates;
 
@@ -766,8 +654,6 @@ namespace EmEn::Scenes
 			 * Maintains two copies of the coordinate frame to allow the logic system and
 			 * rendering system to operate independently without locking. The logic system
 			 * publishes its state to one buffer while the renderer reads from the other.
-			 *
-			 * @version 0.8.35
 			 */
 			std::array< Libs::Math::CartesianFrame< float >, 2 > m_renderStateCoordinates{};
 	};

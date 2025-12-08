@@ -54,7 +54,7 @@ namespace EmEn::Scenes
 
 			/* JSON key. */
 			static constexpr auto BackgroundKey{"Background"};
-			static constexpr auto SceneAreaKey{"SceneArea"};
+			static constexpr auto GroundKey{"Ground"};
 			static constexpr auto ExtraDataKey{"ExtraData"};
 			static constexpr auto SurfaceGravityKey{"SurfaceGravity"};
 			static constexpr auto AtmosphericDensityKey{"AtmosphericDensity"};
@@ -149,18 +149,18 @@ namespace EmEn::Scenes
 			bool readProperties (Scene & scene) noexcept;
 
 			/**
-			 * @brief readBackground
+			 * @brief Reads the background description.
 			 * @param scene A reference to the scene.
 			 * @return bool
 			 */
 			bool readBackground (Scene & scene) noexcept;
 
 			/**
-			 * @brief readSceneArea
+			 * @brief Reads the ground description.
 			 * @param scene A reference to the scene.
 			 * @return bool
 			 */
-			bool readSceneArea (Scene & scene) noexcept;
+			bool readGround (Scene & scene) noexcept;
 
 			Json::Value m_root;
 	};

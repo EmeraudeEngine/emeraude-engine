@@ -29,7 +29,7 @@ ctest -R Console
 
 ## Important Files
 
-- `Controllable.hpp` - Interface for console-controllable objects
+- `ControllableTrait.hpp` - Interface for console-controllable objects
 - To be documented upon system stabilization
 
 ## Development Patterns

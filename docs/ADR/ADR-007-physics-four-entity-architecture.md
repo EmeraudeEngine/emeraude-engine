@@ -120,7 +120,7 @@ building.setMass(50000.0f);  // 50 tons
    → 8 velocity iterations, 3 position iterations
 
 5. Ground collision check
-   → Query SceneAreaResource for height
+   → Query GroundResource for height
    → Calculate penetration BEFORE clipping (critical!)
    → Apply hard clip, create ground manifolds
 

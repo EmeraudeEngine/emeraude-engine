@@ -67,10 +67,11 @@ Context for developing Emeraude Engine utility libraries.
 - Geometric transformations
 - Normal, tangent, UV calculations
 
-**WaveFactory/** - Audio manipulation
-- Audio format loading (via libsndfile)
+**WaveFactory/** - Audio manipulation - See [`@WaveFactory/AGENTS.md`](WaveFactory/AGENTS.md)
+- Audio format loading (WAV, FLAC, OGG via libsndfile)
+- Procedural audio from JSON definitions (mono Synthesizer, multi-track via SFXScript)
+- MIDI to synthesized audio conversion
 - Audio sample transformations
-- Procedural sound generation
 
 **Time/** - Temporal management
 - Chronometers
@@ -309,4 +310,4 @@ Libs is referenced by all systems:
 - @src/Scenes/AGENTS.md - Uses CartesianFrame
 - @src/Physics/AGENTS.md - Uses Vector, Matrix, collision detection
 - @src/Graphics/AGENTS.md - Uses Math for transformations
-- @src/Audio/AGENTS.md - Uses Math for 3D positioning
+- @src/Audio/AGENTS.md - Uses Math for 3D positioning, WaveFactory for sound processing

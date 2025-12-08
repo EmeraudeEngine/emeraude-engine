@@ -30,7 +30,7 @@ public:
 
 private:
     // Required: Setup your scene here
-    bool onCoreStarted() noexcept override { return true; }
+    bool onCoreStarted(const EmEn::Arguments & arguments, EmEn::Settings & settings) noexcept override { return true; }
 
     // Required: Update game logic here (runs on logic thread)
     void onCoreProcessLogics(size_t cycle) noexcept override {}
@@ -43,7 +43,7 @@ private:
 ```
 
 **Mandatory callbacks** (pure virtual):
-- `onCoreStarted()` - Scene initialization, return true to continue
+- `onCoreStarted(const EmEn::Arguments & arguments, EmEn::Settings & settings)` - Scene initialization, return true to continue
 - `onCoreProcessLogics(size_t)` - Game logic (separate thread)
 
 **Optional callbacks** (default implementation):
@@ -274,7 +274,7 @@ public:
 
 private:
     // Required: Called when engine is fully initialized
-    bool onCoreStarted() noexcept override {
+    bool onCoreStarted(const EmEn::Arguments & arguments, EmEn::Settings & settings) noexcept override {
         TRACE_INFO("Game initialized");
         // Load scenes, resources, etc.
         return true;  // Return true to start main loop

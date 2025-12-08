@@ -37,7 +37,7 @@
 #include <string>
 
 /* Local inclusions for inheritances. */
-#include "Console/Controllable.hpp"
+#include "Console/ControllableTrait.hpp"
 #include "Libs/ObserverTrait.hpp"
 #include "Libs/ObservableTrait.hpp"
 #include "ServiceInterface.hpp"
@@ -279,7 +279,7 @@ namespace EmEn::Graphics
 	 * @extends EmEn::ServiceInterface The renderer is a service.
 	 * @extends EmEn::Libs::ObserverTrait The renderer needs to observe handle changes, for instance.
 	 * @extends EmEn::Libs::ObservableTrait The renderer can notify surface changes.
-	 * @extends EmEn::Console::Controllable The console can control the renderer.
+	 * @extends EmEn::Console::ControllableTrait The console can control the renderer.
 	 * 
 	 * # Performance Optimizations (Cache Lookups)
 	 *
@@ -304,7 +304,7 @@ namespace EmEn::Graphics
 	 * **Future consideration:** If dynamic pipeline creation is needed during runtime,
 	 * protect cache modifications with std::shared_mutex (read-write lock).
 	 */
-	class Renderer final : public ServiceInterface, public Libs::ObserverTrait, public Libs::ObservableTrait, public Console::Controllable
+	class Renderer final : public ServiceInterface, public Libs::ObserverTrait, public Libs::ObservableTrait, public Console::ControllableTrait
 	{
 		public:
 
@@ -327,7 +327,7 @@ namespace EmEn::Graphics
 			 */
 			Renderer (PrimaryServices & primaryServices, Vulkan::Instance & instance, Window & window) noexcept
 				: ServiceInterface{ClassId},
-				Controllable{ClassId},
+				ControllableTrait{ClassId},
 				m_primaryServices{primaryServices},
 				m_vulkanInstance{instance},
 				m_window{window},
@@ -877,7 +877,7 @@ namespace EmEn::Graphics
 			[[nodiscard]]
 			bool onNotification (const Libs::ObservableTrait * observable, int notificationCode, const std::any & data) noexcept override;
 
-			/** @copydoc EmEn::Console::Controllable::onRegisterToConsole. */
+			/** @copydoc EmEn::Console::ControllableTrait::onRegisterToConsole. */
 			void onRegisterToConsole () noexcept override;
 
 			/**

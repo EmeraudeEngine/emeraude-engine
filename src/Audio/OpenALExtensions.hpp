@@ -36,6 +36,20 @@
 /* Local inclusions. */
 #include "Tracer.hpp"
 
+/* NOTE: These types may not be defined in older OpenAL-Soft versions (< 1.24).
+ * Define them manually for compatibility with OpenAL-Soft 1.23.x and earlier. */
+#ifndef ALC_SOFT_system_events
+#define ALC_SOFT_system_events 1
+#define ALC_EVENT_SUPPORTED_SOFT 0x19A5
+#define ALC_EVENT_NOT_SUPPORTED_SOFT 0x0000
+#define ALC_EVENT_TYPE_DEFAULT_DEVICE_CHANGED_SOFT 0x19A6
+#define ALC_EVENT_TYPE_DEVICE_ADDED_SOFT 0x19A7
+#define ALC_EVENT_TYPE_DEVICE_REMOVED_SOFT 0x19A8
+typedef ALCboolean (ALC_APIENTRY *LPALCEVENTISSUPPORTEDSOFT)(ALCenum eventType);
+typedef ALCboolean (ALC_APIENTRY *LPALCEVENTCONTROLSOFT)(ALCsizei count, const ALCenum *types, ALCboolean enable);
+typedef void (ALC_APIENTRY *LPALCEVENTCALLBACKSOFT)(void (ALC_APIENTRY *callback)(ALCenum eventType, ALCenum deviceType, ALCdevice *device, ALCsizei length, const ALCchar *message, void *userParam), void *userParam);
+#endif
+
 namespace EmEn::Audio::OpenAL
 {
 	constexpr auto TracerTag{"OpenAL.Extension"};

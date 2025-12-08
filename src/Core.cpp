@@ -57,7 +57,7 @@ namespace EmEn
 
 	Core::Core (int argc, char * * argv, const char * applicationName, const Version & applicationVersion, const char * applicationOrganization, const char * applicationDomain) noexcept
 		: KeyboardListenerInterface{false, false},
-		Controllable{ClassId},
+		ControllableTrait{ClassId},
 		m_identification{applicationName, applicationVersion, applicationOrganization, applicationDomain},
 		m_primaryServices{argc, argv, m_identification}
 	{
@@ -74,7 +74,7 @@ namespace EmEn
 #if IS_WINDOWS
 	Core::Core (int argc, wchar_t * * wargv, const char * applicationName, const Version & applicationVersion, const char * applicationOrganization, const char * applicationDomain) noexcept
 		: KeyboardListenerInterface{false, false},
-		Controllable{ClassId},
+		ControllableTrait{ClassId},
 		m_identification{applicationName, applicationVersion, applicationOrganization, applicationDomain},
 		m_primaryServices{argc, wargv, m_identification}
 	{
@@ -175,30 +175,25 @@ namespace EmEn
 				continue;
 			}
 
-			{
-				/* NOTE: Print a warning if this loop takes more than 33.33 ms, which means we are below 30 FPS. */
-				const Time::Elapsed::PrintScopeRealTimeThreshold stat{"renderingTask", 1000.0 / 30.0};
+			/* NOTE: Ask for a shared-access to the scene content preventing to lock the "logic thread" and draw the scene. */
+			m_sceneManager.withSharedActiveScene([&] (const auto & activeScene) {
+				if ( activeScene != nullptr )
+				{
+					/* This should only synchronize UBOs for the scene. */
+					activeScene->updateVideoMemory(
+						m_graphicsRenderer.isShadowMapsEnabled(),
+						m_graphicsRenderer.isRenderToTexturesEnabled()
+					);
+				}
 
-				/* NOTE: Ask for a shared-access to the scene content prevening to lock the "logic thread" and draw the scene. */
-				m_sceneManager.withSharedActiveScene([&] (const auto & activeScene) {
-					if ( activeScene != nullptr )
-					{
-						/* This should only synchronize UBOs for the scene. */
-						activeScene->updateVideoMemory(
-							m_graphicsRenderer.isShadowMapsEnabled(),
-							m_graphicsRenderer.isRenderToTexturesEnabled()
-						);
-					}
+				/* This should only synchronize UBOs for the overlay. */
+				m_overlayManager.updateVideoMemory();
 
-					/* This should only synchronize UBOs for the overlay. */
-					m_overlayManager.updateVideoMemory();
+				/* Render the scene (optional) and the overlay on top. */
+				m_graphicsRenderer.renderFrame(activeScene, m_overlayManager);
+			}, false);
 
-					/* Render the scene (optional) and the overlay on top. */
-					m_graphicsRenderer.renderFrame(activeScene, m_overlayManager);
-				}, false);
-
-				frames++;
-			}
+			frames++;
 		}
 
 		/* NOTE: Wait until the device has finished all his pending work. */
@@ -273,7 +268,7 @@ namespace EmEn
 		Tracer::success(ClassId, "Core level execution started !");
 
 		/* Launch the application level. */
-		if ( this->onCoreStarted() )
+		if ( this->onCoreStarted(m_primaryServices.arguments(), m_primaryServices.settings()) )
 		{
 			Tracer::success(ClassId, "The application successfully started.");
 
@@ -440,6 +435,7 @@ namespace EmEn
 			m_coreHelp.registerArgument("Disable audio layer.", "disable-audio");
 			m_coreHelp.registerArgument("Display only logs which tags appears. TAG is a list of words separated by comma.", "filter-tag", 't', {"TAG"});
 			m_coreHelp.registerArgument("Set a custom core settings file. FILE_PATH is where to get the settings file and should be writable.", "settings-filepath", 0, {"FILE_PATH"});
+			m_coreHelp.registerArgument("Set a custom core settings filename. FILE_NAME is an alternate name of the 'settings.json' file.", "settings-filepath", 0, {"FILE_NAME"});
 			m_coreHelp.registerArgument("Disable the generation or the saving of settings files.", "disable-settings-autosave");
 			m_coreHelp.registerArgument("Enable log writing.", "enable-log", 'l', {"FILE_PATH"});
 			m_coreHelp.registerArgument("Add a custom data directory.", "add-data-directory", 0, {"DIRECTORY_PATH"});
@@ -739,18 +735,6 @@ namespace EmEn
 		TraceSuccess{ClassId} << userService->name() << " user service up !";
 
 		return true;
-	}
-
-	void
-	Core::onRegisterToConsole () noexcept
-	{
-		this->bindCommand("exit,quit,shutdown", [this] (const Console::Arguments & /*arguments*/, Console::Outputs & outputs) {
-			outputs.emplace_back(Severity::Info, "Shutdown procedure called from console ...");
-
-			this->stop();
-
-			return 0;
-		}, "Quit the application.");
 	}
 
 	bool
@@ -1406,7 +1390,8 @@ namespace EmEn
 					break;
 			}
 
-			return true;
+			/* NOTE: Also forward to derived class for additional handling (e.g., UI updates). */
+			return this->onCoreNotification(observable, notificationCode, data);
 		}
 
 		if ( observable == &m_sceneManager )

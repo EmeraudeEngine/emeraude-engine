@@ -51,7 +51,7 @@ namespace EmEn::Console
 	}
 
 	bool
-	Controller::add (Controllable & controllable) noexcept
+	Controller::add (ControllableTrait & controllable) noexcept
 	{
 		if ( m_consoleObjects.contains(controllable.identifier()) )
 		{
@@ -80,7 +80,7 @@ namespace EmEn::Console
 
 
 	bool
-	Controller::remove (const Controllable & pointer) noexcept
+	Controller::remove (const ControllableTrait & pointer) noexcept
 	{
 		for ( auto it = m_consoleObjects.begin(); it != m_consoleObjects.end(); ++it )
 		{
@@ -186,7 +186,7 @@ namespace EmEn::Console
 	}
 
 	bool
-	Controller::loopOverObjectsName (const std::map< std::string, Controllable * > & objects, Expression & expression, std::string & identifier, std::vector< std::string > & suggestions) noexcept
+	Controller::loopOverObjectsName (const std::map< std::string, ControllableTrait * > & objects, Expression & expression, std::string & identifier, std::vector< std::string > & suggestions) noexcept
 	{
 		for ( const auto & [name, controllable] : objects )
 		{

@@ -532,8 +532,8 @@ namespace EmEn::Resources
 			m_containers.emplace(typeid(Graphics::Renderable::SpriteResource), std::make_unique< Sprites >("Sprite manager", m_primaryServices, *this, this->getLocalStore("Sprites")));
 			m_containers.emplace(typeid(Graphics::Renderable::SkyBoxResource), std::make_unique< SkyBoxes >("Skybox manager", m_primaryServices, *this, this->getLocalStore("Backgrounds")));
 			m_containers.emplace(typeid(Graphics::Renderable::DynamicSkyResource), std::make_unique< DynamicSkies >("Dynamic sky manager", m_primaryServices, *this, this->getLocalStore("Backgrounds")));
-			m_containers.emplace(typeid(Graphics::Renderable::BasicFloorResource), std::make_unique< BasicFloors >("BasicFloor manager", m_primaryServices, *this, this->getLocalStore("SceneAreas")));
-			m_containers.emplace(typeid(Graphics::Renderable::TerrainResource), std::make_unique< Terrains >("Terrain manager", m_primaryServices, *this, this->getLocalStore("SceneAreas")));
+			m_containers.emplace(typeid(Graphics::Renderable::BasicFloorResource), std::make_unique< BasicFloors >("BasicFloor manager", m_primaryServices, *this, this->getLocalStore("Grounds")));
+			m_containers.emplace(typeid(Graphics::Renderable::TerrainResource), std::make_unique< Terrains >("Terrain manager", m_primaryServices, *this, this->getLocalStore("Grounds")));
 			m_containers.emplace(typeid(Graphics::Renderable::WaterLevelResource), std::make_unique< WaterLevels >("Water level manager", m_primaryServices, *this, this->getLocalStore("SeaLevels")));
 			m_containers.emplace(typeid(Scenes::DefinitionResource), std::make_unique< SceneDefinitions >("Scene definition manager", m_primaryServices, *this, this->getLocalStore("Scenes")));
 		}

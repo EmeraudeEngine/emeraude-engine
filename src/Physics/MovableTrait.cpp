@@ -27,6 +27,7 @@
 #include "MovableTrait.hpp"
 
 /* Local inclusions. */
+#include "Tracer.hpp"
 #include "Libs/Math/Base.hpp"
 
 namespace EmEn::Physics
@@ -74,55 +75,6 @@ namespace EmEn::Physics
 	}
 
 	void
-	MovableTrait::addTorque (const Vector< 3, float > & torque) noexcept
-	{
-		const auto & objectProperties = this->getBodyPhysicalProperties();
-
-		/* NOTE: If the object mass is null, we discard the torque. */
-		if ( objectProperties.isMassNull() )
-		{
-			return;
-		}
-
-		/* NOTE: (Vector)Torque = (Matrix)Inertia * (Vector)Angular Acceleration (T = I * α)
-		 * => "α = I⁻¹ * T"
-		 *
-		 * The inertia tensor is stored in PhysicalObjectProperties.
-		 * For a solid cuboid, it should be set as:
-		 * Ixx = (m * (h² + d²)) / 12
-		 * Iyy = (m * (w² + d²)) / 12
-		 * Izz = (m * (w² + h²)) / 12
-		 */
-		const auto & inertia = objectProperties.inertiaTensor();
-
-		/* Calculate angular acceleration from torque: α = I⁻¹ * T */
-		const auto angularAcceleration = inertia.inverse() * torque;
-
-		/* Apply angular acceleration (scaled by timestep). */
-		m_angularVelocity += angularAcceleration * EngineUpdateCycleDurationS< float >;
-		m_angularSpeed = m_angularVelocity.length();
-
-		this->onImpulse();
-	}
-
-	float
-	MovableTrait::deflect (const Vector< 3, float > & surfaceNormal, float surfaceBounciness) noexcept
-	{
-		const auto & objectProperties = this->getBodyPhysicalProperties();
-
-		const auto currentSpeed = m_linearSpeed;
-		const auto incidentVector = m_linearVelocity.normalized();
-		const auto dotProduct = Vector< 3, float >::dotProduct(incidentVector, surfaceNormal); // 1.0 or -1.0 = parallel (full hit). 0.0 = perpendicular (no hit).
-		const auto totalBounciness = objectProperties.bounciness() * clampToUnit(surfaceBounciness);
-		const auto modulatedBounciness = modulateNormalizedValue(totalBounciness, 1.0F - std::abs(dotProduct));
-
-		m_linearSpeed = currentSpeed * modulatedBounciness;
-		m_linearVelocity = (incidentVector - (surfaceNormal * (dotProduct * 2.0F))).scale(m_linearSpeed);
-
-		return currentSpeed;
-	}
-
-	void
 	MovableTrait::stopMovement () noexcept
 	{
 		m_linearVelocity.reset();
@@ -130,8 +82,6 @@ namespace EmEn::Physics
 
 		m_linearSpeed = 0.0F;
 		m_angularSpeed = 0.0F;
-
-		m_inertCheckCount = 0;
 	}
 
 	bool
@@ -139,8 +89,8 @@ namespace EmEn::Physics
 	{
 		const auto & objectProperties = this->getBodyPhysicalProperties();
 
-		/* Apply the gravity. */
-		if ( !this->isFreeFlyModeEnabled() && !objectProperties.isMassNull() )
+		/* Apply the gravity only if not grounded. */
+		if ( !this->isGrounded() && !this->isFreeFlyModeEnabled() && !objectProperties.isMassNull() )
 		{
 			m_linearVelocity[Y] += envProperties.steppedSurfaceGravity();
 			m_linearSpeed = m_linearVelocity.length();
@@ -207,46 +157,72 @@ namespace EmEn::Physics
 		return isMoveOccurs;
 	}
 
+	void
+	MovableTrait::setGrounded () noexcept
+	{
+		m_groundedFrames = 15;
+	}
+
+	void
+	MovableTrait::updateGroundedState () noexcept
+	{
+		if ( std::abs(m_linearVelocity[Y]) < 0.001F )
+		{
+			return;
+		}
+
+		if ( m_groundedFrames > 0 )
+		{
+			m_groundedFrames--;
+		}
+	}
+
+	bool
+	MovableTrait::isGrounded () const noexcept
+	{
+		return m_groundedFrames > 0;
+	}
+
 	bool
 	MovableTrait::checkSimulationInertia () noexcept
 	{
-		/* FIXME: Remove this ! */
-		if ( m_angularSpeed > 0.0F )
+		TraceInfo{"PHYSICS"} <<
+			"Is movable : " << this->isMovable() << "\n"
+			"Is grounded : " << this->isGrounded() << "\n"
+			"Velocity : " << this->linearVelocity() << "\n";
+
+		/* No collision this frame, entity might be in free fall - don't pause. */
+		if ( !m_hadCollision )
 		{
 			return false;
 		}
 
-		/* FIXME: Should be a general settings to tweak physics engine. */
-		constexpr auto MinimalDistance{0.01F};
-		constexpr auto TotalInertiaCheckCount{15};
+		constexpr auto VelocityClampThreshold{0.05F}; /* 1 cm/s */
 
-		/* Compute the last distance made by the entity. */
-		const auto worldPosition = this->getWorldPosition();
-		const auto distance = std::abs((worldPosition - m_lastWorldPosition).length());
-
-		/* Save the "new" last position. */
-		m_lastWorldPosition = worldPosition;
-
-		/* Check if the distance is bigger than the threshold. */
-		if ( distance > MinimalDistance )
+		/* Clamp micro-velocities to zero to eliminate solver oscillations. */
+		if ( m_linearSpeed > 0.0F && m_linearSpeed < VelocityClampThreshold )
 		{
-			m_inertCheckCount = 0;
-
-			return false;
+			m_linearVelocity.reset();
+			m_linearSpeed = 0.0F;
 		}
 
-		/* Check if the test reach the total of tests required
-		 * to declare the entity into inertia state. */
-		m_inertCheckCount++;
-
-		if ( m_inertCheckCount < TotalInertiaCheckCount )
+		if ( m_angularSpeed > 0.0F && m_angularSpeed < VelocityClampThreshold )
 		{
-			return false;
+			m_angularVelocity.reset();
+			m_angularSpeed = 0.0F;
 		}
 
-		/* Completely stops the motion. */
-		this->stopMovement();
+		/* If no velocity, entity is at rest. */
+		if ( m_linearSpeed == 0.0F && m_angularSpeed == 0.0F )
+		{
+			/* Reset collision flag when pausing. */
+			m_hadCollision = false;
 
-		return true;
+			this->setGrounded();
+
+			return true;
+		}
+
+		return false;
 	}
 }

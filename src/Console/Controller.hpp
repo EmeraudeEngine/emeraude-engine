@@ -36,7 +36,7 @@
 
 /* Local usages */
 #include "Output.hpp"
-#include "Controllable.hpp"
+#include "ControllableTrait.hpp"
 
 /* Forward declarations */
 namespace EmEn
@@ -128,7 +128,7 @@ namespace EmEn::Console
 			 * @param controllable A reference to the controllable object to add.
 			 * @return bool
 			 */
-			bool add (Controllable & controllable) noexcept;
+			bool add (ControllableTrait & controllable) noexcept;
 
 			/**
 			 * @brief Removes a controllable object from the console using the identifier.
@@ -142,7 +142,7 @@ namespace EmEn::Console
 			 * @param pointer A reference to the controllable object to remove.
 			 * @return bool
 			 */
-			bool remove (const Controllable & pointer) noexcept;
+			bool remove (const ControllableTrait & pointer) noexcept;
 
 			/**
 			 * @brief Tries to guess the next term in the console input.
@@ -182,7 +182,7 @@ namespace EmEn::Console
 			 * @param suggestions A writable reference to a string list to set found suggestions.
 			 * @return bool
 			 */
-			static bool loopOverObjectsName (const std::map< std::string, Controllable * > & objects, Expression & expression, std::string & identifier, std::vector< std::string > & suggestions) noexcept;
+			static bool loopOverObjectsName (const std::map< std::string, ControllableTrait * > & objects, Expression & expression, std::string & identifier, std::vector< std::string > & suggestions) noexcept;
 
 		private:
 
@@ -207,7 +207,7 @@ namespace EmEn::Console
 			static Controller * s_instance;
 
 			PrimaryServices & m_primaryServices;
-			std::map< std::string, Controllable * > m_consoleObjects;
+			std::map< std::string, ControllableTrait * > m_consoleObjects;
 			std::vector< std::string > m_history;
 			bool m_directInputWasEnabled{false};
 			bool m_pointerWasLocked{false};

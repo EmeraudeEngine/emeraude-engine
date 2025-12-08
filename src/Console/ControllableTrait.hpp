@@ -1,5 +1,5 @@
 /*
- * src/Console/Controllable.hpp
+ * src/Console/ControllableTrait.hpp
  * This file is part of Emeraude-Engine
  *
  * Copyright (C) 2010-2025 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
@@ -39,7 +39,7 @@ namespace EmEn::Console
 	/**
 	 * @brief Interface to register an object controllable with the console.
 	 */
-	class Controllable
+	class ControllableTrait
 	{
 		public:
 
@@ -47,32 +47,32 @@ namespace EmEn::Console
 			 * @brief Copy constructor.
 			 * @param copy A reference to the copied instance.
 			 */
-			Controllable (const Controllable & copy) noexcept = default;
+			ControllableTrait (const ControllableTrait & copy) noexcept = default;
 
 			/**
 			 * @brief Move constructor.
 			 * @param copy A reference to the copied instance.
 			 */
-			Controllable (Controllable && copy) noexcept = default;
+			ControllableTrait (ControllableTrait && copy) noexcept = default;
 
 			/**
 			 * @brief Copy assignment.
 			 * @param copy A reference to the copied instance.
-			 * @return Controllable &
+			 * @return ControllableTrait &
 			 */
-			Controllable & operator= (const Controllable & copy) noexcept = default;
+			ControllableTrait & operator= (const ControllableTrait & copy) noexcept = default;
 
 			/**
 			 * @brief Move assignment.
 			 * @param copy A reference to the copied instance.
-			 * @return Controllable &
+			 * @return ControllableTrait &
 			 */
-			Controllable & operator= (Controllable && copy) noexcept = default;
+			ControllableTrait & operator= (ControllableTrait && copy) noexcept = default;
 
 			/**
 			 * @brief The destructor auto removes this object from the console.
 			 */
-			virtual ~Controllable ();
+			virtual ~ControllableTrait ();
 
 			/**
 			 * @brief Returns the identifier of this object in the console.
@@ -90,7 +90,7 @@ namespace EmEn::Console
 			 * @param object A reference to the parent object.
 			 * @return bool
 			 */
-			bool registerToObject (Controllable & object) noexcept;
+			bool registerToObject (ControllableTrait & object) noexcept;
 
 			/**
 			 * @brief Executes an expression from the console.
@@ -117,7 +117,7 @@ namespace EmEn::Console
 			 * @param consoleIdentifier A string to for the name of the object [std::move].
 			 */
 			explicit
-			Controllable (std::string consoleIdentifier) noexcept
+			ControllableTrait (std::string consoleIdentifier) noexcept
 				: m_identifier{std::move(consoleIdentifier)}
 			{
 
@@ -162,6 +162,6 @@ namespace EmEn::Console
 
 			std::string m_identifier;
 			std::map< std::string, Command > m_commands;
-			std::map< std::string, Controllable * > m_consoleObjects;
+			std::map< std::string, ControllableTrait * > m_consoleObjects;
 	};
 }

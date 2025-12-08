@@ -56,7 +56,11 @@ ctest -R Scenes
 ## Important Files
 
 - `Manager.cpp/.hpp` - SceneManager, multiple Scenes management + ActiveScene
-- `Scene.cpp/.hpp` - A scene with its Root Node, Octrees, observers
+- `Scene.hpp` - Scene class declaration (~2260 lines), organized by concept
+- `Scene.cpp` - Core lifecycle, audio, octree management
+- `Scene.entities.cpp` - Node tree, static entities, modifiers
+- `Scene.physics.cpp` - Collision detection, boundary clipping
+- `Scene.rendering.cpp` - Render targets, shadow casting, rendering pipeline
 - `Node.cpp/.hpp` - Hierarchical dynamic entity (tree)
 - `StaticEntity.cpp/.hpp` - Optimized static entity (flat map)
 - `AbstractEntity.cpp/.hpp` - Common base for Component management
@@ -66,6 +70,54 @@ ctest -R Scenes
 - `Component/SoundEmitter.cpp/.hpp` - Audio emitter with suspend/wakeup source management
 - `@docs/scene-graph-architecture.md` - **Complete detailed architecture**
 - `@docs/coordinate-system.md` - Y-down convention (CRITICAL)
+
+## Scene Class Organization
+
+The Scene class is split into multiple implementation files by concept for easier navigation.
+
+### Scene.hpp Structure (Declaration Order)
+
+**Public Section:**
+| Concept | Description |
+|---------|-------------|
+| Core/Lifecycle | Constructor, destructor, enable/disable, processLogics |
+| Managers/Accessors | Accessors for managers (video, audio, physics, resources) |
+| Entities | Node tree, static entities, modifiers |
+| Rendering | Render targets (shadow maps, textures, views), rendering pipeline |
+| Physics | Octree management, collision detection |
+| Audio | Ambience management |
+| Effects | Visual effects (fog, depth of field) |
+| Debug Display | Statistics and debug visualization |
+
+**Private Section:**
+| Concept | Description |
+|---------|-------------|
+| Observer | onNotification, checkRootNodeNotification, checkEntityNotification |
+| Core/Lifecycle | initializeBaseComponents, suspendAllEntities, wakeupAllEntities |
+| Entities | checkEntityLocationInOctrees |
+| Rendering | Render list population, shadow casting, visual component iteration |
+| Physics | sectorCollisionTest, leafSectorCollisionTest, boundary clipping |
+
+### Implementation Files
+
+| File | Concepts | Lines |
+|------|----------|-------|
+| `Scene.cpp` | Core/Lifecycle, Audio, Octree management | ~750 |
+| `Scene.entities.cpp` | Entities (Node/StaticEntity), Observer notifications | ~480 |
+| `Scene.physics.cpp` | Modifiers, Collision detection, Boundary clipping | ~300 |
+| `Scene.rendering.cpp` | Render targets, Shadow casting, Rendering pipeline | ~1300 |
+
+### Section Comments Format
+
+Each concept section is marked with:
+```cpp
+/* ============================================================
+ * [CONCEPT: NAME]
+ * Description.
+ * ============================================================ */
+```
+
+This allows quick navigation using search (e.g., `[CONCEPT: RENDERING]`).
 
 ## Development Patterns
 

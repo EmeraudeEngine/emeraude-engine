@@ -245,7 +245,7 @@ public:
 
 private:
     // Required: Called when engine is fully initialized - setup your scene here
-    bool onCoreStarted() noexcept override {
+    bool onCoreStarted(const EmEn::Arguments & arguments, EmEn::Settings & settings) noexcept override {
         return true;  // Return true to run the application
     }
 

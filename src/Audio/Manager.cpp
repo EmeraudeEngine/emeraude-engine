@@ -37,6 +37,7 @@
 #include "SoundResource.hpp"
 #include "Source.hpp"
 #include "Utility.hpp"
+#include "Libs/WaveFactory/Synthesizer.hpp"
 
 namespace EmEn::Audio
 {
@@ -424,6 +425,11 @@ namespace EmEn::Audio
 			TraceWarning{ClassId} << m_trackMixer.name() << " service failed to execute !";
 		}
 
+		if ( settings.getOrSetDefault< bool >(AudioEnablePrebuiltSoundsKey, DefaultAudioEnablePrebuiltSounds) )
+		{
+			this->generateBuiltinSounds();
+		}
+
 		if ( m_showInformation )
 		{
 			Tracer::info(ClassId, this->getAPIInformation());
@@ -526,12 +532,6 @@ namespace EmEn::Audio
 	}
 
 	void
-	Manager::onRegisterToConsole () noexcept
-	{
-
-	}
-
-	void
 	Manager::enableAudio (bool state) noexcept
 	{
 		if ( !s_audioSystemAvailable )
@@ -573,6 +573,165 @@ namespace EmEn::Audio
 			m_defaultSource->setGain(gain);
 			m_defaultSource->play(soundResource, mode);
 		}
+	}
+
+	void
+	Manager::generateBuiltinSounds () noexcept
+	{
+		if ( m_prebuiltSoundsGenerated )
+		{
+			return;
+		}
+
+		auto * soundResources = m_resourceManager.container< SoundResource >();
+
+		const auto frequencyPlayback = Manager::frequencyPlayback();
+		const auto sampleRate = static_cast< size_t >(frequencyPlayback);
+
+		/* INFO sound: A gentle, pleasant two-tone chime (ascending).
+		 * Musical interval: Perfect fifth (C5 -> G5). */
+		{
+			auto infoSound = soundResources->createResource(InfoSound);
+
+			if ( infoSound != nullptr )
+			{
+				const auto noteDuration = sampleRate / 5;  /* 200ms per note */
+				const auto totalDuration = noteDuration * 2;
+
+				auto & localData = infoSound->localData();
+
+				WaveFactory::Synthesizer synth{localData, totalDuration, frequencyPlayback};
+
+				/* First note: C5 (523.25 Hz) */
+				synth.setRegion(0, noteDuration);
+				synth.sineWave(523.25F, 0.6F);
+				synth.applyADSR(0.01F, 0.05F, 0.6F, 0.1F);
+
+				/* Second note: G5 (783.99 Hz) */
+				synth.setRegion(noteDuration, noteDuration);
+				synth.sineWave(783.99F, 0.6F);
+				synth.applyADSR(0.01F, 0.05F, 0.6F, 0.1F);
+
+				synth.resetRegion();
+				synth.normalize();
+
+				infoSound->setManualLoadSuccess(true);
+			}
+		}
+
+		/* ERROR sound: An alarming descending tritone (the "devil's interval").
+		 * Creates tension and urgency. */
+		{
+			auto errorSound = soundResources->createResource(ErrorSound);
+
+			if ( errorSound != nullptr )
+			{
+				const auto totalDuration = sampleRate / 4;  /* 250ms */
+
+				auto & localData = errorSound->localData();
+
+				WaveFactory::Synthesizer synth{localData, totalDuration, frequencyPlayback};
+
+				/* Descending pitch sweep with square wave for harsh sound. */
+				synth.pitchSweep(880.0F, 220.0F, 0.7F);
+
+				/* Add some grit with bit crushing. */
+				synth.applyBitCrush(10);
+
+				/* Sharp attack, quick decay. */
+				synth.applyADSR(0.005F, 0.1F, 0.4F, 0.1F);
+
+				/* Mix with a lower rumble for weight. */
+				WaveFactory::Wave< int16_t > rumble;
+				WaveFactory::Synthesizer synthRumble{rumble, totalDuration, frequencyPlayback};
+				synthRumble.pitchSweep(150.0F, 80.0F, 0.5F);
+				synthRumble.applyADSR(0.01F, 0.1F, 0.3F, 0.1F);
+
+				synth.mix(rumble, 0.6F);
+				synth.normalize();
+
+				errorSound->setManualLoadSuccess(true);
+			}
+		}
+
+		/* WARNING sound: A pulsing alert tone, like a gentle alarm.
+		 * Two quick beeps at the same pitch. */
+		{
+			auto warningSound = soundResources->createResource(WarningSound);
+
+			if ( warningSound != nullptr )
+			{
+				const auto beepDuration = sampleRate / 12;  /* ~83ms per beep */
+				const auto gapDuration = sampleRate / 20;   /* 50ms gap */
+				const auto totalDuration = beepDuration * 2 + gapDuration;
+
+				auto & localData = warningSound->localData();
+
+				WaveFactory::Synthesizer synth{localData, totalDuration, frequencyPlayback};
+
+				/* First beep: A4 (440 Hz) with triangle wave for softer tone. */
+				synth.setRegion(0, beepDuration);
+				synth.triangleWave(440.0F, 0.7F);
+				synth.applyADSR(0.005F, 0.02F, 0.8F, 0.02F);
+
+				/* Second beep after the gap. */
+				synth.setRegion(beepDuration + gapDuration, beepDuration);
+				synth.triangleWave(440.0F, 0.7F);
+				synth.applyADSR(0.005F, 0.02F, 0.8F, 0.02F);
+
+				synth.resetRegion();
+				synth.normalize();
+
+				warningSound->setManualLoadSuccess(true);
+			}
+		}
+
+		/* SUCCESS sound: A triumphant ascending arpeggio (major chord).
+		 * C5 -> E5 -> G5 (C major triad). */
+		{
+			auto successSound = soundResources->createResource(SuccessSound);
+
+			if ( successSound != nullptr )
+			{
+				const auto noteDuration = sampleRate / 8;   /* 125ms per note */
+				const auto totalDuration = noteDuration * 3;
+
+				auto & localData = successSound->localData();
+
+				WaveFactory::Synthesizer synth{localData, totalDuration, frequencyPlayback};
+
+				/* First note: C5 (523.25 Hz). */
+				synth.setRegion(0, noteDuration);
+				synth.sineWave(523.25F, 0.5F);
+				synth.applyADSR(0.01F, 0.03F, 0.7F, 0.05F);
+
+				/* Second note: E5 (659.25 Hz). */
+				synth.setRegion(noteDuration, noteDuration);
+				synth.sineWave(659.25F, 0.5F);
+				synth.applyADSR(0.01F, 0.03F, 0.7F, 0.05F);
+
+				/* Third note: G5 (783.99 Hz). */
+				synth.setRegion(noteDuration * 2, noteDuration);
+				synth.sineWave(783.99F, 0.5F);
+				synth.applyADSR(0.01F, 0.03F, 0.7F, 0.05F);
+
+				/* Add a subtle shimmer with high frequency over all. */
+				WaveFactory::Wave< int16_t > shimmer;
+				WaveFactory::Synthesizer synthShimmer{shimmer, totalDuration, frequencyPlayback};
+				synthShimmer.sineWave(1046.5F, 0.2F);  /* C6 - octave above. */
+				synthShimmer.applyADSR(0.05F, 0.1F, 0.3F, 0.2F);
+
+				synth.resetRegion();
+				synth.mix(shimmer, 0.3F);
+				synth.normalize();
+
+				successSound->setManualLoadSuccess(true);
+			}
+		}
+
+		m_prebuiltSoundsGenerated = true;
+
+		TraceSuccess{ClassId} << "Builtin sounds generated: " << InfoSound << ", " << ErrorSound << ", " << WarningSound << ", " << SuccessSound;
 	}
 
 	void

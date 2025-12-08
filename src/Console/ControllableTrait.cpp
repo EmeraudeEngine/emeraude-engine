@@ -1,5 +1,5 @@
 /*
- * src/Console/Controllable.cpp
+ * src/Console/ControllableTrait.cpp
  * This file is part of Emeraude-Engine
  *
  * Copyright (C) 2010-2025 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
@@ -24,7 +24,7 @@
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
 
-#include "Controllable.hpp"
+#include "ControllableTrait.hpp"
 
 /* STL inclusions. */
 #include <iostream>
@@ -39,9 +39,9 @@ namespace EmEn::Console
 {
 	using namespace Libs;
 
-	constexpr auto TracerTag{"Controllable"};
+	constexpr auto TracerTag{"ControllableTrait"};
 
-	Controllable::~Controllable ()
+	ControllableTrait::~ControllableTrait ()
 	{
 		auto * console = Controller::instance();
 
@@ -53,7 +53,7 @@ namespace EmEn::Console
 	}
 
 	bool
-	Controllable::execute (Expression & expression, Outputs & outputs) noexcept
+	ControllableTrait::execute (Expression & expression, Outputs & outputs) noexcept
 	{
 		/* Checks for the next identifier. */
 		auto identifier = expression.nextIdentifier();
@@ -103,7 +103,7 @@ namespace EmEn::Console
 	}
 
 	void
-	Controllable::complete (Expression & expression, std::string & identifier, std::vector< std::string > & suggestions) const noexcept
+	ControllableTrait::complete (Expression & expression, std::string & identifier, std::vector< std::string > & suggestions) const noexcept
 	{
 		identifier = expression.nextIdentifier();
 
@@ -156,7 +156,7 @@ namespace EmEn::Console
 	}
 
 	void
-	Controllable::bindCommand (const std::string & commandNames, const Binding & binding, const std::string & help) noexcept
+	ControllableTrait::bindCommand (const std::string & commandNames, const Binding & binding, const std::string & help) noexcept
 	{
 		const auto commandNamesList = String::explode(commandNames, ',', false);
 
@@ -176,7 +176,7 @@ namespace EmEn::Console
 	}
 
 	void
-	Controllable::unbindCommand (const std::string & commandNames) noexcept
+	ControllableTrait::unbindCommand (const std::string & commandNames) noexcept
 	{
 		const auto commandNameList = String::explode(commandNames, ',', false);
 
@@ -192,7 +192,7 @@ namespace EmEn::Console
 	}
 
 	bool
-	Controllable::registerToConsole () noexcept
+	ControllableTrait::registerToConsole () noexcept
 	{
 		if ( !Controller::instance()->add(*this) )
 		{
@@ -207,7 +207,7 @@ namespace EmEn::Console
 	}
 
 	bool
-	Controllable::registerToObject (Controllable & object) noexcept
+	ControllableTrait::registerToObject (ControllableTrait & object) noexcept
 	{
 		if ( object.m_consoleObjects.contains(m_identifier) )
 		{
@@ -224,7 +224,7 @@ namespace EmEn::Console
 	}
 
 	bool
-	Controllable::checkBuiltInCommands (const Expression & expression, Outputs & outputs) const noexcept
+	ControllableTrait::checkBuiltInCommands (const Expression & expression, Outputs & outputs) const noexcept
 	{
 		if ( expression.commandName() == "lsfunc" )
 		{

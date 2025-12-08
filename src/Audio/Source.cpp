@@ -646,7 +646,10 @@ namespace EmEn::Audio
 			case AL_PLAYING :
 			case AL_PAUSED :
 				this->stop();
+				[[fallthrough]];
 
+			case AL_STOPPED :
+				/* NOTE: Clear any previously queued buffers before playing a new track. */
 				if ( this->getSourceType() == SourceType::Streaming )
 				{
 					this->clearStream();
@@ -815,7 +818,7 @@ namespace EmEn::Audio
 
 		alSourceUnqueueBuffers(this->identifier(), bufferCount, removedIdentifiers.data());
 
-		if ( !alGetErrors(__PRETTY_FUNCTION__, __FILE__, __LINE__) )
+		if ( alGetErrors(__PRETTY_FUNCTION__, __FILE__, __LINE__) )
 		{
 			Tracer::warning(ClassId, "Something goes wrong with OpenAL when clearing streams !");
 		}
