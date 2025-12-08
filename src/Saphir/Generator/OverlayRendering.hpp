@@ -42,22 +42,15 @@ namespace EmEn::Saphir::Generator
 			/** @brief Class identifier. */
 			static constexpr auto ClassId{"OverlayRendering"};
 
-			enum class ColorConversion: uint8_t
-			{
-				None,
-				ToSRGB,
-				ToLinear
-			};
-
 			/**
 			 * @brief Constructs a graphics shader generator for a geometry.
 			 * @param renderTarget A reference to a render target.
 			 * @param geometry A reference to the geometry interface smart pointer.
-			 * @param conversion A color conversion to display the overlay. Default none.
+			 * @param colorSpaceConversion A color space conversion to display the overlay. Default none.
 			 */
-			OverlayRendering (const std::shared_ptr< const Graphics::RenderTarget::Abstract > & renderTarget, const std::shared_ptr< const Graphics::Geometry::Interface > & geometry, ColorConversion conversion = ColorConversion::None) noexcept
+			OverlayRendering (const std::shared_ptr< const Graphics::RenderTarget::Abstract > & renderTarget, const std::shared_ptr< const Graphics::Geometry::Interface > & geometry, ColorSpaceConversion colorSpaceConversion = ColorSpaceConversion::None) noexcept
 				: Abstract{ClassId, renderTarget, geometry->topology(), geometry->flags()},
-				m_colorConversion{conversion}
+				m_colorSpaceConversion{colorSpaceConversion}
 			{
 
 			}
@@ -103,6 +96,6 @@ namespace EmEn::Saphir::Generator
 			[[nodiscard]]
 			bool generateFragmentShader (Program & program) noexcept;
 
-			ColorConversion m_colorConversion{ColorConversion::None};
+			ColorSpaceConversion m_colorSpaceConversion{ColorSpaceConversion::None};
 	};
 }

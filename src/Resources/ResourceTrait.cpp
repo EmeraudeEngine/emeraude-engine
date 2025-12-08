@@ -48,7 +48,7 @@ namespace EmEn::Resources
 		switch ( m_status )
 		{
 			case Status::Unloaded :
-				if ( s_verboseEnabled )
+				if ( s_showInformation )
 				{
 					TraceInfo{TracerTag} << "The resource '" << this->name() << "' (" << this << ") is destroyed with status 'Unloaded' !";
 				}
@@ -89,7 +89,7 @@ namespace EmEn::Resources
 	bool
 	ResourceTrait::initializeEnqueuing (bool manual) noexcept
 	{
-		if ( s_verboseEnabled )
+		if ( s_showInformation )
 		{
 			TraceInfo{TracerTag} << "Beginning the creation of resource '" << this->name() << "' (" << this->classLabel() << ") ...";
 		}
@@ -174,7 +174,7 @@ namespace EmEn::Resources
 		/* NOTE: If the dependency is already loaded, we skip it... */
 		if ( dependency->isLoaded() )
 		{
-			if ( s_verboseEnabled )
+			if ( s_showInformation )
 			{
 				TraceInfo{TracerTag} << "Resource dependency '" << dependency->name() << "' (" << dependency->classLabel() << ") is already loaded.";
 			}
@@ -185,7 +185,7 @@ namespace EmEn::Resources
 		/* NOTE: If the dependency is already present, we also skip it... */
 		if ( std::ranges::find(std::as_const(m_dependenciesToWaitFor), dependency) != m_dependenciesToWaitFor.cend() )
 		{
-			if ( s_verboseEnabled )
+			if ( s_showInformation )
 			{
 				TraceInfo{TracerTag} << "Resource dependency '" << dependency->name() << "' (" << dependency->classLabel() << ") is already in the queue.";
 			}
@@ -213,7 +213,7 @@ namespace EmEn::Resources
 		/* ... then set this resource as the parent of the dependency (double-link). */
 		dependency->m_parentsToNotify.push_back(this->shared_from_this());
 
-		if ( s_verboseEnabled )
+		if ( s_showInformation )
 		{
 			TraceInfo{TracerTag} <<
 				"Resource dependency '" << dependency->name() << "' (" << dependency->classLabel() << ") "
@@ -227,7 +227,7 @@ namespace EmEn::Resources
 	void
 	ResourceTrait::dependencyLoaded (const std::shared_ptr< ResourceTrait > & dependency) noexcept
 	{
-		if ( s_verboseEnabled )
+		if ( s_showInformation )
 		{
 			TraceInfo{TracerTag} <<
 				"The dependency '" << dependency->name() << "' (" << dependency->classLabel() << ") "
@@ -264,7 +264,7 @@ namespace EmEn::Resources
 				case Status::Unloaded :
 				case Status::Enqueuing :
 				case Status::ManualEnqueuing :
-					if ( s_verboseEnabled )
+					if ( s_showInformation )
 					{
 						TraceInfo{TracerTag} << "The resource '" << this->name() << "' (" << this->classLabel() << ") still enqueuing dependencies !";
 					}
@@ -279,7 +279,7 @@ namespace EmEn::Resources
 						return;
 					}
 
-					if ( s_verboseEnabled )
+					if ( s_showInformation )
 					{
 						TraceInfo{TracerTag} << "The resource '" << this->name() << "' (" << this->classLabel() << ") has no more dependency to wait for loading !";
 					}
@@ -323,7 +323,7 @@ namespace EmEn::Resources
 				{
 					m_status = Status::Loaded;
 
-					if ( s_verboseEnabled )
+					if ( s_showInformation )
 					{
 						TraceSuccess{TracerTag} << "Resource '" << this->name() << "' (" << this->classLabel() << ") is successfully loaded !";
 					}
@@ -339,7 +339,7 @@ namespace EmEn::Resources
 				{
 					m_status = Status::Failed;
 
-					if ( s_verboseEnabled )
+					if ( s_showInformation )
 					{
 						TraceError{TracerTag} << "Resource '" << this->name() << "' (" << this->classLabel() << ") failed to load !";
 					}
@@ -366,7 +366,7 @@ namespace EmEn::Resources
 	bool
 	ResourceTrait::setLoadSuccess (bool status) noexcept
 	{
-		if ( s_verboseEnabled )
+		if ( s_showInformation )
 		{
 			TraceInfo{TracerTag} << "Ending the creation of resource '" << this->name() << "' (" << this->classLabel() << ") ...";
 		}

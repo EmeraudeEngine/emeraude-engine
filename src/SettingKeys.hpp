@@ -29,7 +29,7 @@
 namespace EmEn
 {
 	/* Core */
-	constexpr auto CoreShowInformationKey{"Core/ShowInformation"}; // Logs
+	constexpr auto CoreShowInformationKey{"Core/ShowInformation"}; // Logs (and with argument switch "--show-core-infos")
 	constexpr auto DefaultCoreShowInformation{false};
 	constexpr auto CoreEnableStatisticsKey{"Core/EnableStatistics"};
 	constexpr auto DefaultCoreEnableStatistics{false};
@@ -55,11 +55,11 @@ namespace EmEn
 		constexpr auto DefaultTracerLogFormat{"Text"};
 
 		/* Input manager */
-		constexpr auto InputShowInformationKey{"Core/Input/ShowInformation"}; // Logs
+		constexpr auto InputShowInformationKey{"Core/Input/ShowInformation"}; // Logs (and with argument switch "--show-input-infos")
 		constexpr auto DefaultInputShowInformation{false};
 
 		/* Resource manager */
-		constexpr auto ResourcesShowInformationKey{"Core/Resources/ShowInformation"}; // Logs
+		constexpr auto ResourcesShowInformationKey{"Core/Resources/ShowInformation"}; // Logs (and with argument switch "--show-resources-infos")
 		constexpr auto DefaultResourcesShowInformation{false};
 		constexpr auto ResourcesDownloadEnabledKey{"Core/Resources/DownloadEnabled"};
 		constexpr auto DefaultResourcesDownloadEnabled{true};
@@ -83,7 +83,7 @@ namespace EmEn
 		constexpr auto DefaultAudioMusicVolume{0.5F};
 		constexpr auto AudioMusicChunkSizeKey{"Core/Audio/MusicChunkSize"};
 		constexpr auto DefaultAudioMusicChunkSize{8192};
-		constexpr auto AudioShowInformationKey{"Core/Audio/ShowInformation"}; // Logs
+		constexpr auto AudioShowInformationKey{"Core/Audio/ShowInformation"}; // Logs (and with argument switch "--show-audio-infos")
 		constexpr auto DefaultAudioShowInformation{false};
 
 			/* OpenAL */
@@ -121,7 +121,7 @@ namespace EmEn
 		constexpr auto DefaultVideoEnableTripleBuffering{true};
 		constexpr auto VideoEnableSRGBKey{"Core/Video/EnableSRGB"}; // Not in use
 		constexpr auto DefaultEnableSRGB{false};
-		constexpr auto VideoShowInformationKey{"Core/Video/ShowInformation"}; // Logs
+		constexpr auto VideoShowInformationKey{"Core/Video/ShowInformation"}; // Logs (and with argument switch "--show-video-infos")
 		constexpr auto DefaultVideoShowInformation{false};
 
 			/* Vulkan instance */
@@ -143,8 +143,6 @@ namespace EmEn
 			constexpr auto DefaultVkDeviceUseVMA{true};
 
 			/* Window */
-			constexpr auto WindowShowInformationKey{"Core/Video/Window/ShowInformation"}; // Logs
-			constexpr auto DefaultWindowShowInformation{false};
 			constexpr auto WindowAlwaysCenterOnStartupKey{"Core/Video/Window/AlwaysCenterOnStartup"};
 			constexpr auto DefaultWindowAlwaysCenterOnStartup{false};
 			constexpr auto WindowFramelessKey{"Core/Video/Window/Frameless"};

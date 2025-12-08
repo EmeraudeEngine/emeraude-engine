@@ -45,9 +45,13 @@ namespace EmEn
 	bool
 	PlatformManager::onInitialize () noexcept
 	{
+		const auto & arguments = m_primaryServices.arguments();
 		auto & settings = m_primaryServices.settings();
 		
-		m_showInformation = settings.getOrSetDefault< bool >(VideoShowInformationKey, DefaultVideoShowInformation);
+		m_showInformation =
+			settings.getOrSetDefault< bool >(VideoShowInformationKey, DefaultVideoShowInformation) ||
+			arguments.isSwitchPresent("--show-all-infos") ||
+			arguments.isSwitchPresent("--show-video-infos");
 
 		glfwSetErrorCallback(Tracer::traceGLFW);
 

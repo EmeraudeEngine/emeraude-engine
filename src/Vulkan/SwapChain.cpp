@@ -51,7 +51,7 @@ namespace EmEn::Vulkan
 	using namespace Libs::PixelFactory;
 	using namespace Graphics;
 
-	SwapChain::SwapChain (Renderer & renderer, Settings & settings) noexcept
+	SwapChain::SwapChain (Renderer & renderer, Settings & settings, bool showInformation) noexcept
 		: AbstractDeviceDependentObject{renderer.device()},
 		Abstract{
 			ClassId,
@@ -64,7 +64,7 @@ namespace EmEn::Vulkan
 			false
 		},
 		m_renderer{renderer},
-		m_showInformation{settings.getOrSetDefault< bool >(VideoShowInformationKey, DefaultVideoShowInformation)},
+		m_showInformation{showInformation},
 		m_tripleBufferingEnabled{settings.getOrSetDefault< bool >(VideoEnableTripleBufferingKey, DefaultVideoEnableTripleBuffering)},
 		m_VSyncEnabled{settings.getOrSetDefault< bool >(VideoEnableVSyncKey, DefaultVideoEnableVSync)}
 	{

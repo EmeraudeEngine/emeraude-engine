@@ -407,10 +407,11 @@ namespace EmEn::Overlay
 
 			/**
 			 * @brief Generates the overlay shader program.
-			 * @return bool
+			 * @param colorSpaceConversion What type of color-space conversion to do.
+			 * @return std::shared_ptr< Saphir::Program >
 			 */
 			[[nodiscard]]
-			bool generateShaderProgram () noexcept;
+			std::shared_ptr< Saphir::Program > generateShaderProgram (Saphir::ColorSpaceConversion colorSpaceConversion) const noexcept;
 
 #ifdef IMGUI_ENABLED
 
@@ -434,7 +435,7 @@ namespace EmEn::Overlay
 			Graphics::Renderer & m_graphicsRenderer;
 			FramebufferProperties m_framebufferProperties;
 			std::shared_ptr< Graphics::Geometry::IndexedVertexResource > m_surfaceGeometry;
-			std::shared_ptr< Saphir::Program > m_program;
+			std::array< std::shared_ptr< Saphir::Program >, 3 > m_programs;
 			std::unordered_map< std::string, std::shared_ptr< UIScreen > > m_screens;
 			std::shared_ptr< UIScreen > m_inputExclusiveScreen;
 #ifdef IMGUI_ENABLED

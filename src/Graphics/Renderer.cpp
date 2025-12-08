@@ -320,7 +320,7 @@ namespace EmEn::Graphics
 		}
 		else
 		{
-			m_swapChain = std::make_shared< SwapChain >(*this, m_primaryServices.settings());
+			m_swapChain = std::make_shared< SwapChain >(*this, m_primaryServices.settings(), m_vulkanInstance.showInformation());
 			m_swapChain->setIdentifier(ClassId, "Main", "SwapChain");
 
 			if ( !m_swapChain->createOnHardware() )

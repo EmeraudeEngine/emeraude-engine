@@ -430,6 +430,12 @@ namespace EmEn
 		/* Registering core help. */
 		{
 			m_coreHelp.registerArgument("Show this help.", "help", 'h');
+			m_coreHelp.registerArgument("Show information about the Core system in terminal.", "show-core-infos");
+			m_coreHelp.registerArgument("Show information about the input system in terminal.", "show-input-infos");
+			m_coreHelp.registerArgument("Show information about the resource system in terminal.", "show-resources-infos");
+			m_coreHelp.registerArgument("Show information about the audio system in terminal.", "show-audio-infos");
+			m_coreHelp.registerArgument("Show information about the video system in terminal.", "show-video-infos");
+			m_coreHelp.registerArgument("Show information about all systems in terminal.", "show-all-infos");
 			m_coreHelp.registerArgument("Disable the window for server version.", "window-less", 'W');
 			m_coreHelp.registerArgument("Disable audio layer.", "disable-audio");
 			m_coreHelp.registerArgument("Display only logs which tags appears. TAG is a list of words separated by comma.", "filter-tag", 't', {"TAG"});
@@ -519,14 +525,21 @@ namespace EmEn
 		}
 
 		/* Print startup general information. */
-		if ( m_primaryServices.settings().getOrSetDefault< bool >(CoreShowInformationKey, DefaultCoreShowInformation) )
+		if (
+			m_primaryServices.settings().getOrSetDefault< bool >(CoreShowInformationKey, DefaultCoreShowInformation) ||
+			m_primaryServices.arguments().isSwitchPresent("--show-all-infos") ||
+			m_primaryServices.arguments().isSwitchPresent("--show-core-infos")
+		)
 		{
 			Tracer::info(ClassId, m_primaryServices.information());
 		}
 
-		if ( m_primaryServices.settings().get< bool >(CoreEnableStatisticsKey, DefaultCoreEnableStatistics) )
+		if (
+			m_primaryServices.settings().getOrSetDefault< bool >(CoreEnableStatisticsKey, DefaultCoreEnableStatistics) ||
+			m_primaryServices.arguments().isSwitchPresent("--show-rendering-stats")
+		)
 		{
-			Tracer::info(ClassId, "Statistics enabled.");
+			Tracer::info(ClassId, "Graphics rendering statistics enabled.");
 
 			m_enableStatistics = true;
 		}

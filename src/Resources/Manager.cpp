@@ -111,9 +111,9 @@ namespace EmEn::Resources
 	void
 	Manager::setVerbosity (bool state) noexcept
 	{
-		m_verbosityEnabled = state;
+		m_showInformation = state;
 
-		ResourceTrait::s_verboseEnabled = state;
+		ResourceTrait::s_showInformation = state;
 
 		for ( const auto & resourceContainer : m_containers | std::views::values )
 		{
@@ -207,7 +207,7 @@ namespace EmEn::Resources
 
 		const std::lock_guard< std::mutex > lock{m_localStoresAccess};
 
-		return this->parseStores(m_primaryServices.fileSystem(), stores, m_verbosityEnabled);
+		return this->parseStores(m_primaryServices.fileSystem(), stores, m_showInformation);
 	}
 
 	bool
@@ -267,7 +267,7 @@ namespace EmEn::Resources
 				continue;
 			}
 
-			if ( this->parseStores(fileSystem, storesObject, m_verbosityEnabled) )
+			if ( this->parseStores(fileSystem, storesObject, m_showInformation) )
 			{
 				TraceSuccess{ClassId} << "Resource index '" << filepath << "' loaded !";
 			}
@@ -358,7 +358,7 @@ namespace EmEn::Resources
 				continue;
 			}
 
-			if ( m_verbosityEnabled )
+			if ( m_showInformation )
 			{
 				TraceInfo{ClassId} << "Scanning directory: " << dataStoreDirectory;
 			}
@@ -380,7 +380,7 @@ namespace EmEn::Resources
 					continue;
 				}
 
-				if ( m_verbosityEnabled )
+				if ( m_showInformation )
 				{
 					TraceInfo{ClassId} << "Scanning store directory: " << storeName;
 				}
@@ -390,7 +390,7 @@ namespace EmEn::Resources
 				{
 					m_localStores[storeName] = std::make_shared< std::unordered_map< std::string, BaseInformation > >();
 
-					if ( m_verbosityEnabled )
+					if ( m_showInformation )
 					{
 						TraceInfo{ClassId} << "Creating store '" << storeName << "' from dynamic scan";
 					}
@@ -451,7 +451,7 @@ namespace EmEn::Resources
 						store->emplace(resourceNameStr, baseInformation);
 						resourcesFound++;
 
-						if ( m_verbosityEnabled )
+						if ( m_showInformation )
 						{
 							TraceInfo{ClassId} << "Registered '" << resourceNameStr << "' in '" << storeName << "' store";
 						}
@@ -464,7 +464,7 @@ namespace EmEn::Resources
 			}
 		}
 
-		if ( m_verbosityEnabled || resourcesFound > 0 )
+		if ( m_showInformation || resourcesFound > 0 )
 		{
 			TraceSuccess{ClassId} << "Dynamic scan found " << resourcesFound << " resources across all stores";
 		}
@@ -475,10 +475,15 @@ namespace EmEn::Resources
 	bool
 	Manager::onInitialize () noexcept
 	{
-		m_verbosityEnabled = m_primaryServices.settings().getOrSetDefault< bool >(ResourcesShowInformationKey, DefaultResourcesShowInformation);
-		m_downloadingAllowed = m_primaryServices.settings().getOrSetDefault< bool >(ResourcesDownloadEnabledKey, DefaultResourcesDownloadEnabled);
-		m_quietConversion = m_primaryServices.settings().getOrSetDefault< bool >(ResourcesQuietConversionKey, DefaultResourcesQuietConversion);
-		m_useDynamicScan = m_primaryServices.settings().getOrSetDefault< bool >(ResourcesUseDynamicScanKey, DefaultResourcesUseDynamicScan);
+		const auto & arguments = m_primaryServices.arguments();
+		auto & settings = m_primaryServices.settings();
+
+		m_showInformation = settings.getOrSetDefault< bool >(ResourcesShowInformationKey, DefaultResourcesShowInformation) ||
+			arguments.isSwitchPresent("--show-all-infos") ||
+			arguments.isSwitchPresent("--show-resources-infos");
+		m_downloadingAllowed = settings.getOrSetDefault< bool >(ResourcesDownloadEnabledKey, DefaultResourcesDownloadEnabled);
+		m_quietConversion = settings.getOrSetDefault< bool >(ResourcesQuietConversionKey, DefaultResourcesQuietConversion);
+		m_useDynamicScan = settings.getOrSetDefault< bool >(ResourcesUseDynamicScanKey, DefaultResourcesUseDynamicScan);
 
 		/* NOTE: Initialize the store service. */
 		{
@@ -534,13 +539,13 @@ namespace EmEn::Resources
 		}
 
 		/* NOTE: Transfers flags. */
-		ResourceTrait::s_verboseEnabled = m_verbosityEnabled;
+		ResourceTrait::s_showInformation = m_showInformation;
 		ResourceTrait::s_quietConversion = m_quietConversion;
 
 		/* NOTE: Initialize every resource manager. */
 		for ( const auto & resourceContainer : m_containers | std::views::values )
 		{
-			resourceContainer->setVerbosity(m_verbosityEnabled);
+			resourceContainer->setVerbosity(m_showInformation);
 
 			if ( resourceContainer->initialize() )
 			{

@@ -279,21 +279,19 @@ namespace EmEn::Overlay
 		});
 	}
 
-	bool
-	Manager::generateShaderProgram () noexcept
+	std::shared_ptr< Program >
+	Manager::generateShaderProgram (ColorSpaceConversion colorSpaceConversion) const noexcept
 	{
-		Generator::OverlayRendering generator{m_graphicsRenderer.mainRenderTarget(), m_surfaceGeometry, Generator::OverlayRendering::ColorConversion::ToLinear};
+		Generator::OverlayRendering generator{m_graphicsRenderer.mainRenderTarget(), m_surfaceGeometry, colorSpaceConversion};
 
 		if ( !generator.generateShaderProgram(m_graphicsRenderer) )
 		{
 			Tracer::error(ClassId, "Unable to generate the overlay manager shader program !");
 
-			return false;
+			return nullptr;
 		}
 
-		m_program = generator.shaderProgram();
-
-		return true;
+		return generator.shaderProgram();
 	}
 
 	void
@@ -334,11 +332,22 @@ namespace EmEn::Overlay
 			return false;
 		}
 
-		if ( !this->generateShaderProgram() )
-		{
-			Tracer::error(ClassId, "Unable to generate the overlay manager shader program !");
+		std::array< std::pair< size_t, ColorSpaceConversion >, 3 > types{{
+			{static_cast< size_t >(ColorSpaceConversion::None), ColorSpaceConversion::None}, // 0
+			{static_cast< size_t >(ColorSpaceConversion::ToSRGB), ColorSpaceConversion::ToSRGB}, // 1
+			{static_cast< size_t >(ColorSpaceConversion::ToLinear), ColorSpaceConversion::ToLinear} // 2
+		}};
 
-			return false;
+		for ( const auto & [index, colorSpaceConversion] : types )
+		{
+			m_programs[index] = this->generateShaderProgram(colorSpaceConversion);
+
+			if ( m_programs[index] == nullptr )
+			{
+				Tracer::error(ClassId, "Unable to generate an overlay manager shader program !");
+
+				return false;
+			}
 		}
 
 #ifdef IMGUI_ENABLED
@@ -370,7 +379,11 @@ namespace EmEn::Overlay
 
 		m_screens.clear();
 
-		m_program.reset();
+		for ( auto & program : m_programs )
+		{
+			program.reset();
+		}
+
 		m_surfaceGeometry.reset();
 
 		return true;
@@ -665,16 +678,6 @@ namespace EmEn::Overlay
 		/* Step 1: Update shared framebuffer properties with new window dimensions. */
 		this->updateFramebufferProperties();
 
-		if ( m_program == nullptr )
-		{
-			TraceError{ClassId} << "The program wasn't generated !";
-
-			return false;
-		}
-
-		/* NOTE: Pipeline recreation is no longer needed because viewport and scissor are now dynamic states.
-		 * The viewport/scissor are set dynamically in render() using the current render target extent. */
-
 		/* Step 2: Force ALL screens (visible or not) to recalculate their pixel dimensions.
 		 * The 'true' parameter triggers invalidate() on all surfaces, causing them to
 		 * recreate their transition buffers at the new size.
@@ -721,41 +724,44 @@ namespace EmEn::Overlay
 		/* Lock for overlay resizing ! */
 		const std::lock_guard< std::mutex > overlayLock{m_physicalRepresentationUpdateMutex};
 
-		/* Bind the graphics pipeline. */
-		commandBuffer.bind(*m_program->graphicsPipeline());
-
-		/* NOTE: Set dynamic viewport and scissor based on current render target extent. */
-		{
-			const auto & extent3D = renderTarget->extent();
-
-			const VkViewport viewport{
-				.x = 0.0F,
-				.y = 0.0F,
-				.width = static_cast< float >(extent3D.width),
-				.height = static_cast< float >(extent3D.height),
-				.minDepth = 0.0F,
-				.maxDepth = 1.0F
-			};
-			vkCmdSetViewport(commandBuffer.handle(), 0, 1, &viewport);
-
-			const VkRect2D scissor{
-				.offset = {0, 0},
-				.extent = {extent3D.width, extent3D.height}
-			};
-			vkCmdSetScissor(commandBuffer.handle(), 0, 1, &scissor);
-		}
-
-		/* Bind the geometry VBO and the optional IBO. */
-		commandBuffer.bind(*m_surfaceGeometry, 0);
-
-		const auto pipelineLayout = m_program->pipelineLayout();
-
 		for ( const auto & screen : m_screens | std::views::values )
 		{
 			if ( screen->empty() || !screen->isVisible() )
 			{
 				continue;
 			}
+
+			/* NOTE: Select the right color-space conversion program. */
+			const auto & program = m_programs[static_cast< size_t >(screen->colorSpaceConversion())];
+
+			/* Bind the graphics pipeline. */
+			commandBuffer.bind(*program->graphicsPipeline());
+
+			/* NOTE: Set dynamic viewport and scissor based on current render target extent. */
+			{
+				const auto & extent3D = renderTarget->extent();
+
+				const VkViewport viewport{
+					.x = 0.0F,
+					.y = 0.0F,
+					.width = static_cast< float >(extent3D.width),
+					.height = static_cast< float >(extent3D.height),
+					.minDepth = 0.0F,
+					.maxDepth = 1.0F
+				};
+				vkCmdSetViewport(commandBuffer.handle(), 0, 1, &viewport);
+
+				const VkRect2D scissor{
+					.offset = {0, 0},
+					.extent = {extent3D.width, extent3D.height}
+				};
+				vkCmdSetScissor(commandBuffer.handle(), 0, 1, &scissor);
+			}
+
+			/* Bind the geometry VBO and the optional IBO. */
+			commandBuffer.bind(*m_surfaceGeometry, 0);
+
+			const auto pipelineLayout = program->pipelineLayout();
 
 			screen->render(renderTarget, commandBuffer, *pipelineLayout, *m_surfaceGeometry);
 		}

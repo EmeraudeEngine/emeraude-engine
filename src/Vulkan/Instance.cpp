@@ -59,7 +59,10 @@ namespace EmEn::Vulkan
 		const auto & arguments = m_primaryServices.arguments();
 		auto & settings = m_primaryServices.settings();
 
-		m_showInformation = settings.getOrSetDefault< bool >(VideoShowInformationKey, DefaultVideoShowInformation);
+		m_showInformation =
+			settings.getOrSetDefault< bool >(VideoShowInformationKey, DefaultVideoShowInformation) ||
+			arguments.isSwitchPresent("--show-all-infos") ||
+			arguments.isSwitchPresent("--show-video-infos");
 
 		m_debugMode =
 			arguments.isSwitchPresent("--debug-vulkan") ||
@@ -758,7 +761,6 @@ namespace EmEn::Vulkan
 
 		auto & settings = m_primaryServices.settings();
 		const auto forceGPUName = settings.getOrSetDefault< std::string >(VkDeviceForceGPUKey);
-		const auto showInformation = settings.getOrSetDefault< bool >(VideoShowInformationKey, DefaultVideoShowInformation);
 
 		/* NOTE: Save all physical devices to settings (informational, not filtered). */
 		settings.clearArray(VkDeviceAvailableGPUsKey);
@@ -808,7 +810,7 @@ namespace EmEn::Vulkan
 			TraceSuccess{ClassId} << "Graphics capable physical device selected: " << selectedPhysicalDevice->propertiesVK10().deviceName << " (" << magic_enum::enum_name(m_autoSelectMode) << " mode)";
 		}
 
-		auto logicalDevice = std::make_shared< Device >(*this, selectedPhysicalDevice->propertiesVK10().deviceName, selectedPhysicalDevice, showInformation);
+		auto logicalDevice = std::make_shared< Device >(*this, selectedPhysicalDevice->propertiesVK10().deviceName, selectedPhysicalDevice, m_showInformation);
 		logicalDevice->setIdentifier(ClassId, (std::stringstream{} << selectedPhysicalDevice->propertiesVK10().deviceName << "(Graphics)").str(), "Device");
 
 		/* Check window */
@@ -883,7 +885,6 @@ namespace EmEn::Vulkan
 		const auto autoSelectModeString = settings.getOrSetDefault< std::string >(VkDeviceAutoSelectModeKey, DefaultVkDeviceAutoSelectMode);
 		const auto forceGPUName = settings.getOrSetDefault< std::string >(VkDeviceForceGPUKey);
 		const auto useVMA = settings.getOrSetDefault< bool >(VkDeviceUseVMAKey, DefaultVkDeviceUseVMA);
-		const auto showInformation = settings.getOrSetDefault< bool >(VideoShowInformationKey, DefaultVideoShowInformation);
 
 		std::vector< const char * > requiredExtensions;
 
@@ -939,7 +940,7 @@ namespace EmEn::Vulkan
 		TraceSuccess{ClassId} << "Compute capable physical device '" << selectedPhysicalDevice->propertiesVK10().deviceName << "' selected (" << autoSelectModeString << " mode)";
 
 		/* NOTE: Logical device creation for computing. */
-		auto logicalDevice = std::make_shared< Device >(*this, selectedPhysicalDevice->propertiesVK10().deviceName, selectedPhysicalDevice, showInformation);
+		auto logicalDevice = std::make_shared< Device >(*this, selectedPhysicalDevice->propertiesVK10().deviceName, selectedPhysicalDevice, m_showInformation);
 		logicalDevice->setIdentifier(ClassId, (std::stringstream{} << selectedPhysicalDevice->propertiesVK10().deviceName << "(Physics)").str(), "Device");
 
 		DeviceRequirements requirements{false, nullptr, true};

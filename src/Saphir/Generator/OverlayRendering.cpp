@@ -153,9 +153,9 @@ namespace EmEn::Saphir::Generator
 			return false;
 		}
 
-		switch ( m_colorConversion )
+		switch ( m_colorSpaceConversion )
 		{
-			case ColorConversion::ToSRGB :
+			case ColorSpaceConversion::ToSRGB :
 				if ( !fragmentShader->declare(FragmentShader::generateToSRGBColorFunction()) )
 				{
 					return false;
@@ -166,7 +166,7 @@ namespace EmEn::Saphir::Generator
 					ShaderVariable::OutputFragment << " = toSRGBColor(color);";
 				break;
 
-			case ColorConversion::ToLinear :
+			case ColorSpaceConversion::ToLinear :
 				if ( !fragmentShader->declare(FragmentShader::generateToLinearColorFunction()) )
 				{
 					return false;
@@ -177,7 +177,7 @@ namespace EmEn::Saphir::Generator
 					ShaderVariable::OutputFragment << " = toLinearColor(color);";
 				break;
 
-			case ColorConversion::None :
+			case ColorSpaceConversion::None :
 			default:
 				Code{*fragmentShader, Location::Output} <<
 					ShaderVariable::OutputFragment << " = texture(" << Uniform::PrimarySampler << ", " << ShaderVariable::Primary2DTextureCoordinates << ").bgra;";
@@ -274,7 +274,7 @@ namespace EmEn::Saphir::Generator
 		hashCombine(hash, static_cast< size_t >(this->renderTarget()->isCubemap()));
 
 		/* 2. Color conversion mode. */
-		hashCombine(hash, static_cast< size_t >(m_colorConversion));
+		hashCombine(hash, static_cast< size_t >(m_colorSpaceConversion));
 
 		return hash;
 	}

@@ -89,6 +89,27 @@ namespace EmEn::Overlay
 			}
 
 			/**
+			 * @brief Sets the color-space conversion requested for this screen.
+			 * @return void
+			 */
+			void
+			setColorSpaceConversion (Saphir::ColorSpaceConversion colorSpaceConversion) noexcept
+			{
+				m_colorSpaceConversion = colorSpaceConversion;
+			}
+
+			/**
+			 * @brief Returns color-space conversion requested for this screen.
+			 * @return Saphir::ColorSpaceConversion
+			 */
+			[[nodiscard]]
+			Saphir::ColorSpaceConversion
+			colorSpaceConversion () const noexcept
+			{
+				return m_colorSpaceConversion;
+			}
+
+			/**
 			 * @brief Sets the UI screen visibility.
 			 * @param state The state
 			 * @return void
@@ -399,6 +420,7 @@ namespace EmEn::Overlay
 			std::map< std::string, std::shared_ptr< Surface > > m_surfaces;
 			std::vector< std::shared_ptr< Surface > > m_sortedSurfaces;
 			std::shared_ptr< Surface > m_inputExclusiveSurface;
+			Saphir::ColorSpaceConversion m_colorSpaceConversion{Saphir::ColorSpaceConversion::None};
 			mutable std::mutex m_surfacesMutex;
 			bool m_isVisible{false};
 			bool m_isListeningKeyboard{false};

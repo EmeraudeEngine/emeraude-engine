@@ -324,11 +324,15 @@ namespace EmEn::Audio
 	bool
 	Manager::onInitialize () noexcept
 	{
+		const auto & arguments = m_primaryServices.arguments();
 		auto & settings = m_primaryServices.settings();
 
-		m_showInformation = settings.getOrSetDefault< bool >(AudioShowInformationKey, DefaultAudioShowInformation);
+		m_showInformation =
+			settings.getOrSetDefault< bool >(AudioShowInformationKey, DefaultAudioShowInformation) ||
+			arguments.isSwitchPresent("--show-all-infos") ||
+			arguments.isSwitchPresent("--show-audio-infos");
 
-		if ( m_primaryServices.arguments().isSwitchPresent("--disable-audio") || !settings.getOrSetDefault< bool >(AudioEnableKey, DefaultAudioEnable) )
+		if ( arguments.isSwitchPresent("--disable-audio") || !settings.getOrSetDefault< bool >(AudioEnableKey, DefaultAudioEnable) )
 		{
 			Tracer::warning(ClassId, "Audio manager disabled at startup.");
 

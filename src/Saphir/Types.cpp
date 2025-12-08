@@ -26,6 +26,9 @@
 
 #include "Types.hpp"
 
+/* STL inclusions. */
+#include <iostream>
+
 namespace EmEn::Saphir
 {
 	const char *
@@ -82,5 +85,47 @@ namespace EmEn::Saphir
 			default:
 				return nullptr;
 		}
+	}
+
+	const char *
+	to_cstring (ColorSpaceConversion type) noexcept
+	{
+		switch ( type )
+		{
+			case ColorSpaceConversion::None :
+				return NoneString;
+
+			case ColorSpaceConversion::ToLinear :
+				return ToLinearString;
+
+			case ColorSpaceConversion::ToSRGB :
+				return ToSRGBString;
+
+			default:
+				return nullptr;
+		}
+	}
+
+	ColorSpaceConversion
+	to_ColorSpaceConversion (const std::string & value) noexcept
+	{
+		if ( value == NoneString )
+		{
+			return ColorSpaceConversion::None;
+		}
+
+		if ( value == ToLinearString )
+		{
+			return ColorSpaceConversion::ToLinear;
+		}
+
+		if ( value == ToSRGBString )
+		{
+			return ColorSpaceConversion::ToSRGB;
+		}
+
+		std::cerr << "to_ColorSpaceConversion() : Unknown '" << value << "' type ! Returning 'None' by default." << "\n";
+
+		return ColorSpaceConversion::None;
 	}
 }

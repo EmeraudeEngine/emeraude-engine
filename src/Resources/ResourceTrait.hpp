@@ -424,7 +424,7 @@ namespace EmEn::Resources
 			 * @warning Enabling this can significantly increase console output volume
 			 * @version 0.8.35
 			 */
-			inline static bool s_verboseEnabled{false};
+			inline static bool s_showInformation{false};
 
 			/**
 			 * @brief Global flag to suppress resource conversion warning messages.

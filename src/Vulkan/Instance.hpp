@@ -172,6 +172,17 @@ namespace EmEn::Vulkan
 			}
 
 			/**
+			 * @brief Returns whether the instance show information state is on.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			showInformation () const noexcept
+			{
+				return m_showInformation;
+			}
+
+			/**
 			 * @brief Returns the Vulkan validation layer state.
 			 * @return bool
 			 */

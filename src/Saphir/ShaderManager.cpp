@@ -58,9 +58,12 @@ namespace EmEn::Saphir
 	{
 		/* Read core settings. */
 		{
+			const auto & arguments = m_primaryServices.arguments();
 			auto & settings = m_primaryServices.settings();
 
-			m_showInformation = settings.getOrSetDefault< bool >(VideoShowInformationKey, DefaultVideoShowInformation);
+			m_showInformation = settings.getOrSetDefault< bool >(VideoShowInformationKey, DefaultVideoShowInformation) ||
+				arguments.isSwitchPresent("--show-all-infos") ||
+				arguments.isSwitchPresent("--show-video-infos");
 			m_showSourceCode = settings.getOrSetDefault< bool >(ShowSourceCodeKey, DefaultShowSourceCode);
 			m_sourceCodeCacheEnabled = settings.getOrSetDefault< bool >(SourceCodeCacheEnabledKey, DefaultSourceCodeCacheEnabled);
 			m_binaryCacheEnabled = settings.getOrSetDefault< bool >(BinaryCacheEnabledKey, DefaultBinaryCacheEnabled);

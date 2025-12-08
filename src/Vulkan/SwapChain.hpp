@@ -65,8 +65,9 @@ namespace EmEn::Vulkan
 			 * @brief Constructs a swap-chain.
 			 * @param renderer A reference to the graphics renderer.
 			 * @param settings A reference to the settings.
+			 * @param showInformation Enable log output.
 			 */
-			SwapChain (Graphics::Renderer & renderer, Settings & settings) noexcept;
+			SwapChain (Graphics::Renderer & renderer, Settings & settings, bool showInformation) noexcept;
 
 			/**
 			 * @brief Destructs the swap-chain.

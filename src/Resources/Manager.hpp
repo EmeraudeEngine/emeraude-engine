@@ -173,7 +173,7 @@ namespace EmEn::Resources
 			bool
 			verbosityEnabled () const noexcept
 			{
-				return m_verbosityEnabled;
+				return m_showInformation;
 			}
 
 			/**
@@ -507,7 +507,7 @@ namespace EmEn::Resources
 			mutable std::mutex m_localStoresAccess;
 
 			/** @brief Flag indicating whether verbose logging is enabled for resource operations. */
-			bool m_verbosityEnabled{false};
+			bool m_showInformation{false};
 
 			/** @brief Flag indicating whether downloading resources from remote sources is allowed. */
 			bool m_downloadingAllowed{false};

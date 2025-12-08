@@ -688,9 +688,15 @@ namespace EmEn::Input
 	bool
 	Manager::onInitialize () noexcept
 	{
-		m_showInformation = m_primaryServices.settings().getOrSetDefault< bool >(InputShowInformationKey, DefaultInputShowInformation);
+		const auto & arguments = m_primaryServices.arguments();
+		auto & settings = m_primaryServices.settings();
 
-		if ( m_primaryServices.arguments().isSwitchPresent("-W", "--window-less") )
+		m_showInformation =
+			settings.getOrSetDefault< bool >(InputShowInformationKey, DefaultInputShowInformation) ||
+			arguments.isSwitchPresent("--show-all-infos") ||
+			arguments.isSwitchPresent("--show-input-infos");
+
+		if ( arguments.isSwitchPresent("-W", "--window-less") )
 		{
 			m_windowLess = true;
 
