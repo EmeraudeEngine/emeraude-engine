@@ -175,30 +175,25 @@ namespace EmEn
 				continue;
 			}
 
-			{
-				/* NOTE: Print a warning if this loop takes more than 33.33 ms, which means we are below 30 FPS. */
-				const Time::Elapsed::PrintScopeRealTimeThreshold stat{"renderingTask", 1000.0 / 30.0};
+			/* NOTE: Ask for a shared-access to the scene content preventing to lock the "logic thread" and draw the scene. */
+			m_sceneManager.withSharedActiveScene([&] (const auto & activeScene) {
+				if ( activeScene != nullptr )
+				{
+					/* This should only synchronize UBOs for the scene. */
+					activeScene->updateVideoMemory(
+						m_graphicsRenderer.isShadowMapsEnabled(),
+						m_graphicsRenderer.isRenderToTexturesEnabled()
+					);
+				}
 
-				/* NOTE: Ask for a shared-access to the scene content prevening to lock the "logic thread" and draw the scene. */
-				m_sceneManager.withSharedActiveScene([&] (const auto & activeScene) {
-					if ( activeScene != nullptr )
-					{
-						/* This should only synchronize UBOs for the scene. */
-						activeScene->updateVideoMemory(
-							m_graphicsRenderer.isShadowMapsEnabled(),
-							m_graphicsRenderer.isRenderToTexturesEnabled()
-						);
-					}
+				/* This should only synchronize UBOs for the overlay. */
+				m_overlayManager.updateVideoMemory();
 
-					/* This should only synchronize UBOs for the overlay. */
-					m_overlayManager.updateVideoMemory();
+				/* Render the scene (optional) and the overlay on top. */
+				m_graphicsRenderer.renderFrame(activeScene, m_overlayManager);
+			}, false);
 
-					/* Render the scene (optional) and the overlay on top. */
-					m_graphicsRenderer.renderFrame(activeScene, m_overlayManager);
-				}, false);
-
-				frames++;
-			}
+			frames++;
 		}
 
 		/* NOTE: Wait until the device has finished all his pending work. */
