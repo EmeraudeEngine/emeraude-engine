@@ -170,9 +170,17 @@ The `Synthesizer` class works exclusively with mono audio:
 - Format 0 and 1 (single/multi-track)
 - Note On/Off events with velocity
 - Tempo changes (meta event 0x51)
+- End of Track (meta event 0x2F) - proper parsing termination
 - Variable-length delta times
 - Running status compression
+- **Pitch Bend (0xE0)**: Real-time pitch modification per channel
+- **CC#1 (Modulation)**: Vibrato effect
+- **CC#7 (Volume)**: Channel volume control
 - **CC#10 (Pan)**: Stereo positioning per MIDI channel (0=left, 64=center, 127=right)
+- **CC#11 (Expression)**: Dynamic volume control
+- **CC#64 (Sustain)**: Sustain pedal
+- **CC#74 (Filter Cutoff)**: Brightness control
+- **CC#92 (Tremolo)**: Amplitude modulation
 - **Program Change**: Instrument selection per channel (General MIDI mapping)
 
 **Output:**
@@ -190,9 +198,9 @@ The `Synthesizer` class works exclusively with mono audio:
 | **Channel 10** | Any | Noise burst | Percussion |
 
 **Limitations:**
-- No pitch bend or modulation
 - No SMPTE time division
 - Basic waveforms (no wavetable/sampling)
+- No SoundFont (SF2) support yet (architecture is ready for future integration)
 
 **Note rendering:**
 - Waveform selected by instrument family
@@ -229,3 +237,13 @@ The `Synthesizer` class works exclusively with mono audio:
 - **Region system**: Use `setRegion()`/`resetRegion()` for sub-buffer operations
 - **Type conversion**: Use `dataConversion<>()` for int16_t <-> float conversion
 - **Performance**: Synthesizer methods are optimized for single-channel processing
+- **MIDI End of Track**: Always handle meta event 0x2F to properly terminate parsing. See: `FileFormatMIDI.hpp:parseTrack()`
+
+## Future Extensibility
+
+**SoundFont (SF2) Integration:**
+The MIDI rendering architecture is modular and ready for SF2 sample-based playback:
+- Parsing and rendering are separated (`parseTrack()` → `renderToWave()`)
+- Sample generation is isolated in `Synthesizer::generateWaveformSample()`
+- To add SF2: replace waveform generation with sample lookup from SoundFont bank
+- Recommended library: TinySoundFont (header-only, MIT license)
