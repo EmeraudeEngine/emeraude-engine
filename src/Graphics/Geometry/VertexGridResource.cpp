@@ -366,7 +366,7 @@ namespace EmEn::Graphics::Geometry
 					buffer.emplace_back(m_globalVertexColor.red());
 					buffer.emplace_back(m_globalVertexColor.green());
 					buffer.emplace_back(m_globalVertexColor.blue());
-					buffer.emplace_back(1.0);
+					buffer.emplace_back(1.0F);
 					break;
 
 				case VertexColorGenMode::UseRandom :
@@ -376,7 +376,7 @@ namespace EmEn::Graphics::Geometry
 					buffer.emplace_back(randomColor.red());
 					buffer.emplace_back(randomColor.green());
 					buffer.emplace_back(randomColor.blue());
-					buffer.emplace_back(1.0);
+					buffer.emplace_back(1.0F);
 				}
 					break;
 
@@ -396,10 +396,10 @@ namespace EmEn::Graphics::Geometry
 		/* Vertex weight. */
 		if ( this->isFlagEnabled(EnableWeight) )
 		{
-			buffer.emplace_back(1.0);
-			buffer.emplace_back(1.0);
-			buffer.emplace_back(1.0);
-			buffer.emplace_back(1.0);
+			buffer.emplace_back(1.0F);
+			buffer.emplace_back(1.0F);
+			buffer.emplace_back(1.0F);
+			buffer.emplace_back(1.0F);
 		}
 
 		return static_cast< uint32_t >(buffer.size() / vertexElementCount) - 1;

@@ -29,6 +29,7 @@
 /* STL inclusions. */
 #include <cstdint>
 #include <string>
+#include <string_view>
 #include <memory>
 
 /* Local inclusions for usages. */
@@ -263,7 +264,7 @@ namespace EmEn::Graphics::Geometry
 			std::shared_ptr< IndexedVertexResource > torus (float majorRadius, float minorRadius, uint32_t slices = 8, uint32_t stacks = 8, std::string resourceName = {}) const noexcept;
 
 			/**
-			 * @brief Generates a octahedron geometry.
+			 * @brief Generates an octahedron geometry.
 			 * @param radius The radius.
 			 * @param resourceName A string. Default auto generated name.
 			 * @return std::shared_ptr< IndexedVertexResource >
@@ -299,7 +300,7 @@ namespace EmEn::Graphics::Geometry
 			std::shared_ptr< IndexedVertexResource > dodecahedron (float radius, std::string resourceName = {}) const noexcept;
 
 			/**
-			 * @brief Generates a icosahedron geometry.
+			 * @brief Generates an icosahedron geometry.
 			 * @param radius The radius.
 			 * @param resourceName A string. Default auto generated name.
 			 * @return std::shared_ptr< IndexedVertexResource >
@@ -346,7 +347,7 @@ namespace EmEn::Graphics::Geometry
 			 * @return std::string
 			 */
 			[[nodiscard]]
-			std::string generateResourceName (const char * type, const std::string & values) const noexcept;
+			std::string generateResourceName (std::string_view type, std::string_view values) const noexcept;
 
 			Resources::Manager & m_resources;
 			GenerationParameters m_generationParameters;

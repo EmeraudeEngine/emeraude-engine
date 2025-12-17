@@ -420,7 +420,7 @@ namespace EmEn::Libs::VertexFactory
 				const auto skinWidth = static_cast< vertex_data_t >(m_header.skinwidth);
 				const auto skinHeight = static_cast< vertex_data_t >(m_header.skinheight);
 
-				geometry.reserveData(triangleCount * 3, triangleCount * 3, 0U, triangleCount);
+				geometry.reserveData(static_cast< uint32_t >(triangleCount) * 3, static_cast< uint32_t >(triangleCount) * 3, 0U, static_cast< uint32_t >(triangleCount));
 
 				ShapeBuilderOptions< vertex_data_t > options{};
 				options.enableGlobalVertexColor(PixelFactory::White);

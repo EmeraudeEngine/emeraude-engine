@@ -51,7 +51,7 @@ namespace EmEn::Overlay
 			return;
 		}
 
-		for ( const auto & surface : m_surfaces | std::views::values )
+		for ( const auto & surface : m_surfaces )
 		{
 			/* NOTE: When forceInvalidate is true (window resize), all surfaces must
 			 * recalculate their pixel dimensions based on new FramebufferProperties. */
@@ -76,7 +76,7 @@ namespace EmEn::Overlay
 	{
 		const std::lock_guard< std::mutex > lock{m_surfacesMutex};
 
-		for ( const auto & surface : m_sortedSurfaces )
+		for ( const auto & surface : m_surfaces )
 		{
 			if ( !surface->isVisible() )
 			{
@@ -117,9 +117,11 @@ namespace EmEn::Overlay
 	{
 		const std::lock_guard< std::mutex > lock{m_surfacesMutex};
 
-		const auto surfaceIt = m_surfaces.find(name);
+		const auto surfaceIt = std::ranges::find_if(m_surfaces, [&name] (const auto & s) {
+			return s->name() == name;
+		});
 
-		if ( surfaceIt == m_surfaces.cend() )
+		if ( surfaceIt == m_surfaces.end() )
 		{
 			TraceWarning{ClassId} << "There is no surface named '" << name << "' in the screen to erase !";
 
@@ -127,11 +129,9 @@ namespace EmEn::Overlay
 		}
 
 		// TODO: Check why we can't explicitly kill the surface here.
-		//surfaceIt->second->destroyFromHardware();
+		//(*surfaceIt)->destroyFromHardware();
 
 		m_surfaces.erase(surfaceIt);
-
-		this->sortSurfacesByDepth();
 
 		return true;
 	}
@@ -142,37 +142,40 @@ namespace EmEn::Overlay
 		const std::lock_guard< std::mutex > lock{m_surfacesMutex};
 
 		m_surfaces.clear();
-		m_sortedSurfaces.clear();
 	}
 
 	std::shared_ptr< const Surface >
 	UIScreen::getSurface (const std::string & name) const noexcept
 	{
-		const auto surfaceIt = m_surfaces.find(name);
+		const auto surfaceIt = std::ranges::find_if(m_surfaces, [&name] (const auto & s) {
+			return s->name() == name;
+		});
 
-		if ( surfaceIt == m_surfaces.cend() )
+		if ( surfaceIt == m_surfaces.end() )
 		{
-			TraceWarning{ClassId} << "There is no surface named " << name << "' in the screen !";
+			TraceWarning{ClassId} << "There is no surface named '" << name << "' in the screen !";
 
 			return nullptr;
 		}
 
-		return surfaceIt->second;
+		return *surfaceIt;
 	}
 
 	std::shared_ptr< Surface >
 	UIScreen::getSurface (const std::string & name) noexcept
 	{
-		const auto surfaceIt = m_surfaces.find(name);
+		const auto surfaceIt = std::ranges::find_if(m_surfaces, [&name] (const auto & s) {
+			return s->name() == name;
+		});
 
-		if ( surfaceIt == m_surfaces.cend() )
+		if ( surfaceIt == m_surfaces.end() )
 		{
-			TraceWarning{ClassId} << "There is no surface named " << name << "' in the screen !";
+			TraceWarning{ClassId} << "There is no surface named '" << name << "' in the screen !";
 
 			return nullptr;
 		}
 
-		return surfaceIt->second;
+		return *surfaceIt;
 	}
 
 	bool
@@ -202,12 +205,12 @@ namespace EmEn::Overlay
 			return surface->onKeyPress(key, scancode, modifiers, repeat);
 		};
 
-		if ( m_inputExclusiveSurface != nullptr )
+		if ( const auto exclusiveSurface = m_inputExclusiveSurface.lock() )
 		{
-			return dispatchEvent(m_inputExclusiveSurface);
+			return dispatchEvent(exclusiveSurface);
 		}
 
-		return std::ranges::any_of(std::views::reverse(m_sortedSurfaces), [dispatchEvent] (const auto & surface) -> bool {
+		return std::ranges::any_of(std::views::reverse(m_surfaces), [dispatchEvent] (const auto & surface) -> bool {
 			return dispatchEvent(surface);
 		});
 	}
@@ -224,12 +227,12 @@ namespace EmEn::Overlay
 			return surface->onKeyRelease(key, scancode, modifiers);
 		};
 
-		if ( m_inputExclusiveSurface != nullptr )
+		if ( const auto exclusiveSurface = m_inputExclusiveSurface.lock() )
 		{
-			return dispatchEvent(m_inputExclusiveSurface);
+			return dispatchEvent(exclusiveSurface);
 		}
 
-		return std::ranges::any_of(std::views::reverse(m_sortedSurfaces), [dispatchEvent] (const auto & surface) -> bool {
+		return std::ranges::any_of(std::views::reverse(m_surfaces), [dispatchEvent] (const auto & surface) -> bool {
 			return dispatchEvent(surface);
 		});
 	}
@@ -246,12 +249,12 @@ namespace EmEn::Overlay
 			return surface->onCharacterType(unicode);
 		};
 
-		if ( m_inputExclusiveSurface != nullptr )
+		if ( const auto exclusiveSurface = m_inputExclusiveSurface.lock() )
 		{
-			return dispatchEvent(m_inputExclusiveSurface);
+			return dispatchEvent(exclusiveSurface);
 		}
 
-		return std::ranges::any_of(std::views::reverse(m_sortedSurfaces), [dispatchEvent] (const auto & surface) -> bool {
+		return std::ranges::any_of(std::views::reverse(m_surfaces), [dispatchEvent] (const auto & surface) -> bool {
 			return dispatchEvent(surface);
 		});
 	}
@@ -294,12 +297,12 @@ namespace EmEn::Overlay
 			return false;
 		};
 
-		if ( m_inputExclusiveSurface != nullptr )
+		if ( const auto exclusiveSurface = m_inputExclusiveSurface.lock() )
 		{
-			return dispatchEvent(m_inputExclusiveSurface);
+			return dispatchEvent(exclusiveSurface);
 		}
 
-		return std::ranges::any_of(std::views::reverse(m_sortedSurfaces), [dispatchEvent] (const auto & surface) -> bool {
+		return std::ranges::any_of(std::views::reverse(m_surfaces), [dispatchEvent] (const auto & surface) -> bool {
 			return dispatchEvent(surface);
 		});
 	}
@@ -320,12 +323,12 @@ namespace EmEn::Overlay
 			return false;
 		};
 
-		if ( m_inputExclusiveSurface != nullptr )
+		if ( const auto exclusiveSurface = m_inputExclusiveSurface.lock() )
 		{
-			return dispatchEvent(m_inputExclusiveSurface);
+			return dispatchEvent(exclusiveSurface);
 		}
 
-		return std::ranges::any_of(std::views::reverse(m_sortedSurfaces), [dispatchEvent] (const auto & surface) -> bool {
+		return std::ranges::any_of(std::views::reverse(m_surfaces), [dispatchEvent] (const auto & surface) -> bool {
 			return dispatchEvent(surface);
 		});
 	}
@@ -342,12 +345,12 @@ namespace EmEn::Overlay
 			return false;
 		};
 
-		if ( m_inputExclusiveSurface != nullptr )
+		if ( const auto exclusiveSurface = m_inputExclusiveSurface.lock() )
 		{
-			return dispatchEvent(m_inputExclusiveSurface);
+			return dispatchEvent(exclusiveSurface);
 		}
 
-		return std::ranges::any_of(std::views::reverse(m_sortedSurfaces), [dispatchEvent] (const auto & surface) -> bool {
+		return std::ranges::any_of(std::views::reverse(m_surfaces), [dispatchEvent] (const auto & surface) -> bool {
 			return dispatchEvent(surface);
 		});
 	}
@@ -364,48 +367,35 @@ namespace EmEn::Overlay
 			return false;
 		};
 
-		if ( m_inputExclusiveSurface != nullptr )
+		if ( const auto exclusiveSurface = m_inputExclusiveSurface.lock() )
 		{
-			return dispatchEvent(m_inputExclusiveSurface);
+			return dispatchEvent(exclusiveSurface);
 		}
 
-		return std::ranges::any_of(std::views::reverse(m_sortedSurfaces), [dispatchEvent] (const auto & surface) -> bool {
+		return std::ranges::any_of(std::views::reverse(m_surfaces), [dispatchEvent] (const auto & surface) -> bool {
 			return dispatchEvent(surface);
 		});
 	}
 
 	void
-	UIScreen::sortSurfacesByDepth ()
+	UIScreen::sortSurfacesByDepth () noexcept
 	{
-		std::vector< std::pair< float, std::shared_ptr< Surface > > > tmpSurfaces;
-		tmpSurfaces.reserve(m_surfaces.size());
-
-		for ( auto & surface : m_surfaces | std::views::values )
-		{
-			tmpSurfaces.emplace_back(surface->depth(), surface);
-		}
-
-		std::ranges::sort(tmpSurfaces, [] (const auto & x, const auto & y) {
-			return x.first < y.first;
+		std::ranges::sort(m_surfaces, [] (const auto & a, const auto & b) {
+			return a->depth() < b->depth();
 		});
-
-		m_sortedSurfaces.clear();
-
-		for ( auto & surface: tmpSurfaces | std::views::values )
-		{
-			m_sortedSurfaces.emplace_back(surface);
-		}
 	}
 
 	std::ostream &
 	operator<< (std::ostream & out, const UIScreen & obj)
 	{
+		const auto exclusiveSurface = obj.m_inputExclusiveSurface.lock();
+
 		out <<
 			"UI screen '" << obj.name() << "' data :" "\n"
 			"Is visible : " << ( obj.isVisible() ? "YES" : "NO" ) << "\n" <<
 			"Is listening to the keyboard : " << ( obj.isListeningKeyboard() ? "YES" : "NO" ) << "\n" <<
 			"Is listening to the mouse/pointer : " << ( obj.isListeningPointer() ? "YES" : "NO" ) << "\n" <<
-			"Has input exclusive surface : " << ( obj.m_inputExclusiveSurface == nullptr ? "[No]" : obj.m_inputExclusiveSurface->name() ) << '\n';
+			"Has input exclusive surface : " << ( exclusiveSurface == nullptr ? "[No]" : exclusiveSurface->name() ) << '\n';
 
 		if ( obj.m_surfaces.empty() )
 		{
@@ -417,7 +407,7 @@ namespace EmEn::Overlay
 				"Surfaces : " "\n"
 				"==============================================================================" "\n";
 
-			for ( const auto & surface : obj.m_sortedSurfaces )
+			for ( const auto & surface : obj.m_surfaces )
 			{
 				out <<
 					*surface <<

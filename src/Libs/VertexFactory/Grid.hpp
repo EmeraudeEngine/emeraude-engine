@@ -639,19 +639,23 @@ namespace EmEn::Libs::VertexFactory
 			vertex_data_t
 			getHeightAt (vertex_data_t positionX, vertex_data_t positionY) const noexcept
 			{
-				/* If coordinates are outside the grid, we return zero. */
-				if ( positionX <= -m_halfSquaredSize || positionX >= m_halfSquaredSize || positionY <= -m_halfSquaredSize || positionY >= m_halfSquaredSize )
-				{
-					return 0;
-				}
+				/* Clamp coordinates to valid range. This ensures smooth behavior at terrain edges
+				 * by using edge heights for out-of-bounds positions. */
+				constexpr auto epsilon = static_cast< vertex_data_t >(0.0001);
+				const auto clampedX = std::clamp(positionX, -m_halfSquaredSize + epsilon, m_halfSquaredSize - epsilon);
+				const auto clampedY = std::clamp(positionY, -m_halfSquaredSize + epsilon, m_halfSquaredSize - epsilon);
 
-				const auto realX = (positionX + m_halfSquaredSize) / m_quadSquaredSize;
+				const auto realX = (clampedX + m_halfSquaredSize) / m_quadSquaredSize;
 				const auto factorX = realX - std::floor(realX);
 
-				const auto realY = (positionY + m_halfSquaredSize) / m_quadSquaredSize;
+				const auto realY = (clampedY + m_halfSquaredSize) / m_quadSquaredSize;
 				const auto factorY = realY - std::floor(realY);
 
-				const auto currentQuad = this->quad(static_cast< index_data_t >(std::floor(realX)), static_cast< index_data_t >(std::floor(realY)));
+				/* Clamp indices to valid range to handle floating-point edge cases. */
+				const auto indexX = std::min(static_cast< index_data_t >(std::floor(realX)), m_squaredQuadCount - 1);
+				const auto indexY = std::min(static_cast< index_data_t >(std::floor(realY)), m_squaredQuadCount - 1);
+
+				const auto currentQuad = this->quad(indexX, indexY);
 
 				/* Interpolate height from each corner of the quad. First X axis... */
 				const auto top = Math::linearInterpolation(m_pointHeights[currentQuad.topLeftIndex()], m_pointHeights[currentQuad.topRightIndex()], factorX);
@@ -683,19 +687,23 @@ namespace EmEn::Libs::VertexFactory
 			Math::Vector< 3, vertex_data_t >
 			getNormalAt (vertex_data_t positionX, vertex_data_t positionY) const noexcept
 			{
-				/* If coordinates are outside the grid, we return zero. */
-				if ( positionX <= -m_halfSquaredSize || positionX >= m_halfSquaredSize || positionY <= -m_halfSquaredSize || positionY >= m_halfSquaredSize )
-				{
-					return Math::Vector< 3, vertex_data_t>::positiveY();
-				}
+				/* Clamp coordinates to valid range. This ensures smooth behavior at terrain edges
+				 * by using edge normals for out-of-bounds positions. */
+				constexpr auto epsilon = static_cast< vertex_data_t >(0.0001);
+				const auto clampedX = std::clamp(positionX, -m_halfSquaredSize + epsilon, m_halfSquaredSize - epsilon);
+				const auto clampedY = std::clamp(positionY, -m_halfSquaredSize + epsilon, m_halfSquaredSize - epsilon);
 
-				const auto realX = (positionX + m_halfSquaredSize) / m_quadSquaredSize;
+				const auto realX = (clampedX + m_halfSquaredSize) / m_quadSquaredSize;
 				const auto factorX = realX - std::floor(realX);
 
-				const auto realY = (positionY + m_halfSquaredSize) / m_quadSquaredSize;
+				const auto realY = (clampedY + m_halfSquaredSize) / m_quadSquaredSize;
 				const auto factorY = realY - std::floor(realY);
 
-				const auto coordQuad = this->quad(static_cast< index_data_t >(std::floor(realX)), static_cast< index_data_t >(std::floor(realY)));
+				/* Clamp indices to valid range to handle floating-point edge cases. */
+				const auto indexX = std::min(static_cast< index_data_t >(std::floor(realX)), m_squaredQuadCount - 1);
+				const auto indexY = std::min(static_cast< index_data_t >(std::floor(realY)), m_squaredQuadCount - 1);
+
+				const auto coordQuad = this->quad(indexX, indexY);
 
 				/* Interpolate height from each corner of the quad. First X axis... */
 				const auto top = Math::linearInterpolation(this->normal(coordQuad.topLeftIndex()), this->normal(coordQuad.topRightIndex()), factorX);

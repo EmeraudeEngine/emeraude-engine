@@ -146,6 +146,9 @@ namespace EmEn::Scenes
 			/** @brief Default maximum number of elements per sector before subdivision. */
 			static constexpr auto DefaultSectorElementLimit{8UL};
 
+			/** @brief Default maximum depth of octree subdivision to prevent infinite recursion. */
+			static constexpr auto DefaultMaxDepth{16UL};
+
 			/** @brief Slot index for subsector with positive X, positive Y, positive Z (slot 0). */
 			static constexpr auto XPositiveYPositiveZPositive{0UL};
 
@@ -1508,12 +1511,18 @@ namespace EmEn::Scenes
 			bool
 			isStillLeaf () noexcept
 			{
-				/* If the number of elements exceeds the sector limit, we split down the sector. */
+				/* If the number of elements exceeds the sector limit, we split down the sector.
+				 * But only if we haven't reached the maximum depth to prevent infinite recursion
+				 * when all elements are at the same position. */
 				if ( !m_isExpanded && m_elements.size() > m_maxElementPerSector )
 				{
-					this->expand();
+					if ( this->getDistance() < DefaultMaxDepth )
+					{
+						this->expand();
 
-					return false;
+						return false;
+					}
+					/* else: We've hit max depth, stay as a leaf with many elements. */
 				}
 
 				if ( m_autoCollapseEnabled )

@@ -122,7 +122,7 @@ namespace EmEn::Vulkan
 			VkDescriptorBufferInfo
 			getDescriptorInfo () const noexcept
 			{
-				return this->getDescriptorInfo(0, this->bytes());
+				return this->getDescriptorInfo(0, static_cast< uint32_t >(this->bytes()));
 			}
 
 			/**

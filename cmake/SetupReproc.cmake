@@ -18,10 +18,8 @@ set(REPROC_OBJECT_LIBRARIES ON)
 
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/dependencies/reproc EXCLUDE_FROM_ALL)
 
-if ( UNIX )
-	target_compile_options(reproc PRIVATE -fPIC)
-	target_compile_options(reproc++ PRIVATE -fPIC)
-endif ()
+# Enable Position Independent Code for shared library compatibility
+set_target_properties(reproc reproc++ PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 target_include_directories(${TARGET_BINARY_FOR_SETUP} PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/reproc/reproc/include

@@ -56,7 +56,12 @@ message("Configuring Vulkan Memory Allocator library as sub-project ...")
 
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/dependencies/VulkanMemoryAllocator EXCLUDE_FROM_ALL)
 
-target_include_directories(${TARGET_BINARY_FOR_SETUP} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/VulkanMemoryAllocator/include)
+if ( EMERAUDE_DISABLE_PARANOID_COMPILATION )
+	target_include_directories(${TARGET_BINARY_FOR_SETUP} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/VulkanMemoryAllocator/include)
+else ()
+	# Mark VMA include directory as SYSTEM to suppress warnings from header-only library
+	target_include_directories(${TARGET_BINARY_FOR_SETUP} SYSTEM PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/VulkanMemoryAllocator/include)
+endif ()
 
 target_link_libraries(${TARGET_BINARY_FOR_SETUP} PRIVATE VulkanMemoryAllocator)
 
@@ -85,6 +90,19 @@ set(ENABLE_RTTI Off CACHE BOOL "" FORCE)
 set(ENABLE_EXCEPTIONS Off CACHE BOOL "" FORCE)
 
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/dependencies/glslang EXCLUDE_FROM_ALL)
+
+# Disable strict warnings for third-party glslang library (GCC 14 false positives)
+if ( UNIX AND NOT APPLE )
+	foreach(_glslang_target IN ITEMS glslang SPIRV glslang-default-resource-limits)
+		if ( TARGET ${_glslang_target} )
+			target_compile_options(${_glslang_target} PRIVATE
+				-Wno-error=array-bounds
+				-Wno-error=stringop-overflow
+				-Wno-error=maybe-uninitialized
+			)
+		endif ()
+	endforeach()
+endif ()
 
 target_include_directories(${TARGET_BINARY_FOR_SETUP} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/glslang)
 

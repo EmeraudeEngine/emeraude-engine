@@ -51,13 +51,11 @@ namespace EmEn::Graphics::Geometry
 	ResourceGenerator::triangle (float size, std::string resourceName) const noexcept
 	{
 		if ( resourceName.empty() )
-		{ 
-			resourceName = this->generateResourceName("ShapeTriangle", (std::stringstream{} << size).str()); 
+		{
+			resourceName = this->generateResourceName("ShapeTriangle", std::to_string(size));
 		}
 
-		const auto & parameters = m_generationParameters;
-
-		return m_resources.container< VertexResource >()->getOrCreateResourceAsync(resourceName, [size, parameters] (VertexResource & newGeometry) {
+		return m_resources.container< VertexResource >()->getOrCreateResourceAsync(std::move(resourceName), [size, parameters = m_generationParameters] (VertexResource & newGeometry) {
 			auto shape = ShapeGenerator::generateTriangle< float, uint32_t >(size, parameters.getShapeBuilderOptions(false, false, false));
 
 			if ( !parameters.transformMatrix().isIdentity() )
@@ -65,7 +63,7 @@ namespace EmEn::Graphics::Geometry
 				shape.transform(parameters.transformMatrix());
 			}
 
-			return newGeometry.load(shape);
+			return newGeometry.load(std::move(shape));
 		}, m_generationParameters.geometryFlags());
 	}
 
@@ -73,13 +71,11 @@ namespace EmEn::Graphics::Geometry
 	ResourceGenerator::quad (float width, float height, std::string resourceName) const noexcept
 	{
 		if ( resourceName.empty() )
-		{ 
-			resourceName = this->generateResourceName("Quad", (std::stringstream{} << width << ',' << height).str()); 
+		{
+			resourceName = this->generateResourceName("Quad", std::to_string(width) + ',' + std::to_string(height));
 		}
 
-		const auto & parameters = m_generationParameters;
-
-		return m_resources.container< IndexedVertexResource >()->getOrCreateResourceAsync(resourceName, [width, height, parameters] (IndexedVertexResource & newGeometry) {
+		return m_resources.container< IndexedVertexResource >()->getOrCreateResourceAsync(std::move(resourceName), [width, height, parameters = m_generationParameters] (IndexedVertexResource & newGeometry) {
 			auto shape = ShapeGenerator::generateQuad< float, uint32_t >(width, height, parameters.getShapeBuilderOptions(false, false, false));
 
 			if ( !parameters.transformMatrix().isIdentity() )
@@ -87,7 +83,7 @@ namespace EmEn::Graphics::Geometry
 				shape.transform(parameters.transformMatrix());
 			}
 
-			return newGeometry.load(shape);
+			return newGeometry.load(std::move(shape));
 		}, m_generationParameters.geometryFlags());
 	}
 
@@ -96,12 +92,10 @@ namespace EmEn::Graphics::Geometry
 	{
 		if ( resourceName.empty() )
 		{
-			resourceName = this->generateResourceName("Cuboid", (std::stringstream{} << width << ',' << height << ',' << depth).str()); 
+			resourceName = this->generateResourceName("Cuboid", std::to_string(width) + ',' + std::to_string(height) + ',' + std::to_string(depth));
 		}
 
-		const auto & parameters = m_generationParameters;
-
-		return m_resources.container< IndexedVertexResource >()->getOrCreateResourceAsync(resourceName, [width, height, depth, parameters] (IndexedVertexResource & newGeometry) {
+		return m_resources.container< IndexedVertexResource >()->getOrCreateResourceAsync(std::move(resourceName), [width, height, depth, parameters = m_generationParameters] (IndexedVertexResource & newGeometry) {
 			auto shape = ShapeGenerator::generateCuboid< float, uint32_t >(width, height, depth, parameters.getShapeBuilderOptions(false, false, false));
 
 			if ( !parameters.transformMatrix().isIdentity() )
@@ -109,7 +103,7 @@ namespace EmEn::Graphics::Geometry
 				shape.transform(parameters.transformMatrix());
 			}
 
-			return newGeometry.load(shape);
+			return newGeometry.load(std::move(shape));
 		}, m_generationParameters.geometryFlags());
 	}
 
@@ -117,13 +111,13 @@ namespace EmEn::Graphics::Geometry
 	ResourceGenerator::cuboid (const Vector< 3, float > & max, const Vector< 3, float > & min, std::string resourceName) const noexcept
 	{
 		if ( resourceName.empty() )
-		{ 
-			resourceName = this->generateResourceName("Cuboid", (std::stringstream{} << max << ',' << min).str()); 
+		{
+			std::stringstream ss;
+			ss << max << ',' << min;
+			resourceName = this->generateResourceName("Cuboid", ss.str());
 		}
 
-		const auto & parameters = m_generationParameters;
-
-		return m_resources.container< IndexedVertexResource >()->getOrCreateResourceAsync(resourceName, [max, min, parameters] (IndexedVertexResource & newGeometry) {
+		return m_resources.container< IndexedVertexResource >()->getOrCreateResourceAsync(std::move(resourceName), [max, min, parameters = m_generationParameters] (IndexedVertexResource & newGeometry) {
 			auto shape = ShapeGenerator::generateCuboid< float, uint32_t >(max, min, parameters.getShapeBuilderOptions(false, false, false));
 
 			if ( !parameters.transformMatrix().isIdentity() )
@@ -131,7 +125,7 @@ namespace EmEn::Graphics::Geometry
 				shape.transform(parameters.transformMatrix());
 			}
 
-			return newGeometry.load(shape);
+			return newGeometry.load(std::move(shape));
 		}, m_generationParameters.geometryFlags());
 	}
 
@@ -140,12 +134,10 @@ namespace EmEn::Graphics::Geometry
 	{
 		if ( resourceName.empty() )
 		{
-			resourceName = this->generateResourceName("HollowedCube", (std::stringstream{} << size << ',' << borderSize).str());
+			resourceName = this->generateResourceName("HollowedCube", std::to_string(size) + ',' + std::to_string(borderSize));
 		}
 
-		const auto & parameters = m_generationParameters;
-
-		return m_resources.container< IndexedVertexResource >()->getOrCreateResourceAsync(resourceName, [size, borderSize, parameters] (IndexedVertexResource & newGeometry) {
+		return m_resources.container< IndexedVertexResource >()->getOrCreateResourceAsync(std::move(resourceName), [size, borderSize, parameters = m_generationParameters] (IndexedVertexResource & newGeometry) {
 			auto shape = ShapeGenerator::generateHollowedCube< float, uint32_t >(size, borderSize, parameters.getShapeBuilderOptions(false, false, false));
 
 			if ( !parameters.transformMatrix().isIdentity() )
@@ -153,7 +145,7 @@ namespace EmEn::Graphics::Geometry
 				shape.transform(parameters.transformMatrix());
 			}
 
-			return newGeometry.load(shape);
+			return newGeometry.load(std::move(shape));
 		}, m_generationParameters.geometryFlags());
 	}
 
@@ -161,13 +153,11 @@ namespace EmEn::Graphics::Geometry
 	ResourceGenerator::sphere (float radius, uint32_t slices, uint32_t stacks, std::string resourceName) const noexcept
 	{
 		if ( resourceName.empty() )
-		{ 
-			resourceName = this->generateResourceName("Sphere", (std::stringstream{} << radius << ',' << slices << ',' << stacks).str()); 
+		{
+			resourceName = this->generateResourceName("Sphere", std::to_string(radius) + ',' + std::to_string(slices) + ',' + std::to_string(stacks));
 		}
 
-		const auto & parameters = m_generationParameters;
-
-		return m_resources.container< IndexedVertexResource >()->getOrCreateResourceAsync(resourceName, [radius, slices, stacks, parameters] (IndexedVertexResource & newGeometry) {
+		return m_resources.container< IndexedVertexResource >()->getOrCreateResourceAsync(std::move(resourceName), [radius, slices, stacks, parameters = m_generationParameters] (IndexedVertexResource & newGeometry) {
 			auto shape = ShapeGenerator::generateSphere< float, uint32_t >(radius, slices, stacks, parameters.getShapeBuilderOptions(false, false, true));
 
 			if ( !parameters.transformMatrix().isIdentity() )
@@ -175,7 +165,7 @@ namespace EmEn::Graphics::Geometry
 				shape.transform(parameters.transformMatrix());
 			}
 
-			return newGeometry.load(shape);
+			return newGeometry.load(std::move(shape));
 		}, m_generationParameters.geometryFlags());
 	}
 
@@ -183,13 +173,11 @@ namespace EmEn::Graphics::Geometry
 	ResourceGenerator::geodesicSphere (float radius, uint32_t depth, std::string resourceName) const noexcept
 	{
 		if ( resourceName.empty() )
-		{ 
-			resourceName = this->generateResourceName("GeodesicSphere", (std::stringstream{} << radius << ',' << depth).str()); 
+		{
+			resourceName = this->generateResourceName("GeodesicSphere", std::to_string(radius) + ',' + std::to_string(depth));
 		}
 
-		const auto & parameters = m_generationParameters;
-
-		return m_resources.container< IndexedVertexResource >()->getOrCreateResourceAsync(resourceName, [radius, depth, parameters] (IndexedVertexResource & newGeometry) {
+		return m_resources.container< IndexedVertexResource >()->getOrCreateResourceAsync(std::move(resourceName), [radius, depth, parameters = m_generationParameters] (IndexedVertexResource & newGeometry) {
 			auto shape = ShapeGenerator::generateGeodesicSphere< float, uint32_t >(radius, depth, parameters.getShapeBuilderOptions(true, true, true));
 
 			if ( !parameters.transformMatrix().isIdentity() )
@@ -197,7 +185,7 @@ namespace EmEn::Graphics::Geometry
 				shape.transform(parameters.transformMatrix());
 			}
 
-			return newGeometry.load(shape);
+			return newGeometry.load(std::move(shape));
 		}, m_generationParameters.geometryFlags());
 	}
 
@@ -205,13 +193,11 @@ namespace EmEn::Graphics::Geometry
 	ResourceGenerator::cylinder (float baseRadius, float topRadius, float length, uint32_t slices, uint32_t stacks, std::string resourceName) const noexcept
 	{
 		if ( resourceName.empty() )
-		{ 
-			resourceName = this->generateResourceName("Cylinder", (std::stringstream{} << baseRadius << ',' << topRadius << ',' << length << ',' << slices << ',' << stacks).str()); 
+		{
+			resourceName = this->generateResourceName("Cylinder", std::to_string(baseRadius) + ',' + std::to_string(topRadius) + ',' + std::to_string(length) + ',' + std::to_string(slices) + ',' + std::to_string(stacks));
 		}
 
-		const auto & parameters = m_generationParameters;
-
-		return m_resources.container< IndexedVertexResource >()->getOrCreateResourceAsync(resourceName, [baseRadius, topRadius, length, slices, stacks, parameters] (IndexedVertexResource & newGeometry) {
+		return m_resources.container< IndexedVertexResource >()->getOrCreateResourceAsync(std::move(resourceName), [baseRadius, topRadius, length, slices, stacks, parameters = m_generationParameters] (IndexedVertexResource & newGeometry) {
 			auto shape = ShapeGenerator::generateCylinder< float, uint32_t >(baseRadius, topRadius, length, slices, stacks, parameters.getShapeBuilderOptions(false, false, false));
 
 			if ( !parameters.transformMatrix().isIdentity() )
@@ -219,7 +205,7 @@ namespace EmEn::Graphics::Geometry
 				shape.transform(parameters.transformMatrix());
 			}
 
-			return newGeometry.load(shape);
+			return newGeometry.load(std::move(shape));
 		}, m_generationParameters.geometryFlags());
 	}
 
@@ -228,12 +214,10 @@ namespace EmEn::Graphics::Geometry
 	{
 		if ( resourceName.empty() )
 		{
-			resourceName = this->generateResourceName("Disk", (std::stringstream{} << outerRadius << ',' << innerRadius << ',' << slices << ',' << stacks).str()); 
+			resourceName = this->generateResourceName("Disk", std::to_string(outerRadius) + ',' + std::to_string(innerRadius) + ',' + std::to_string(slices) + ',' + std::to_string(stacks));
 		}
 
-		const auto & parameters = m_generationParameters;
-
-		return m_resources.container< IndexedVertexResource >()->getOrCreateResourceAsync(resourceName, [outerRadius, innerRadius, slices, stacks, parameters] (IndexedVertexResource & newGeometry) {
+		return m_resources.container< IndexedVertexResource >()->getOrCreateResourceAsync(std::move(resourceName), [outerRadius, innerRadius, slices, stacks, parameters = m_generationParameters] (IndexedVertexResource & newGeometry) {
 			auto shape = ShapeGenerator::generateDisk< float, uint32_t >(outerRadius, innerRadius, slices, stacks, parameters.getShapeBuilderOptions(false, false, false));
 
 			if ( !parameters.transformMatrix().isIdentity() )
@@ -241,7 +225,7 @@ namespace EmEn::Graphics::Geometry
 				shape.transform(parameters.transformMatrix());
 			}
 
-			return newGeometry.load(shape);
+			return newGeometry.load(std::move(shape));
 		}, m_generationParameters.geometryFlags());
 	}
 
@@ -249,13 +233,11 @@ namespace EmEn::Graphics::Geometry
 	ResourceGenerator::torus (float majorRadius, float minorRadius, uint32_t slices, uint32_t stacks, std::string resourceName) const noexcept
 	{
 		if ( resourceName.empty() )
-		{ 
-			resourceName = this->generateResourceName("Torus", (std::stringstream{} << majorRadius << ',' << minorRadius << ',' << slices << ',' << stacks).str()); 
+		{
+			resourceName = this->generateResourceName("Torus", std::to_string(majorRadius) + ',' + std::to_string(minorRadius) + ',' + std::to_string(slices) + ',' + std::to_string(stacks));
 		}
 
-		const auto & parameters = m_generationParameters;
-
-		return m_resources.container< IndexedVertexResource >()->getOrCreateResourceAsync(resourceName, [majorRadius, minorRadius, slices, stacks, parameters] (IndexedVertexResource & newGeometry) {
+		return m_resources.container< IndexedVertexResource >()->getOrCreateResourceAsync(std::move(resourceName), [majorRadius, minorRadius, slices, stacks, parameters = m_generationParameters] (IndexedVertexResource & newGeometry) {
 			auto shape = ShapeGenerator::generateTorus< float, uint32_t >(majorRadius, minorRadius, slices, stacks, parameters.getShapeBuilderOptions(false, false, false));
 
 			if ( !parameters.transformMatrix().isIdentity() )
@@ -263,7 +245,7 @@ namespace EmEn::Graphics::Geometry
 				shape.transform(parameters.transformMatrix());
 			}
 
-			return newGeometry.load(shape);
+			return newGeometry.load(std::move(shape));
 		}, m_generationParameters.geometryFlags());
 	}
 
@@ -271,13 +253,11 @@ namespace EmEn::Graphics::Geometry
 	ResourceGenerator::tetrahedron (float radius, std::string resourceName) const noexcept
 	{
 		if ( resourceName.empty() )
-		{ 
-			resourceName = this->generateResourceName("Tetrahedron", (std::stringstream{} << radius).str()); 
+		{
+			resourceName = this->generateResourceName("Tetrahedron", std::to_string(radius));
 		}
 
-		const auto & parameters = m_generationParameters;
-
-		return m_resources.container< IndexedVertexResource >()->getOrCreateResourceAsync(resourceName, [radius, parameters] (IndexedVertexResource & newGeometry) {
+		return m_resources.container< IndexedVertexResource >()->getOrCreateResourceAsync(std::move(resourceName), [radius, parameters = m_generationParameters] (IndexedVertexResource & newGeometry) {
 			auto shape = ShapeGenerator::generateTetrahedron< float, uint32_t >(radius, parameters.getShapeBuilderOptions(false, false, false));
 
 			if ( !parameters.transformMatrix().isIdentity() )
@@ -285,7 +265,7 @@ namespace EmEn::Graphics::Geometry
 				shape.transform(parameters.transformMatrix());
 			}
 
-			return newGeometry.load(shape);
+			return newGeometry.load(std::move(shape));
 		}, m_generationParameters.geometryFlags());
 	}
 
@@ -293,13 +273,11 @@ namespace EmEn::Graphics::Geometry
 	ResourceGenerator::hexahedron (float radius, std::string resourceName) const noexcept
 	{
 		if ( resourceName.empty() )
-		{ 
-			resourceName = this->generateResourceName("Hexahedron", (std::stringstream{} << radius).str()); 
+		{
+			resourceName = this->generateResourceName("Hexahedron", std::to_string(radius));
 		}
 
-		const auto & parameters = m_generationParameters;
-
-		return m_resources.container< IndexedVertexResource >()->getOrCreateResourceAsync(resourceName, [radius, parameters] (IndexedVertexResource & newGeometry) {
+		return m_resources.container< IndexedVertexResource >()->getOrCreateResourceAsync(std::move(resourceName), [radius, parameters = m_generationParameters] (IndexedVertexResource & newGeometry) {
 			auto shape = ShapeGenerator::generateHexahedron< float, uint32_t >(radius, parameters.getShapeBuilderOptions(false, false, false));
 
 			if ( !parameters.transformMatrix().isIdentity() )
@@ -307,7 +285,7 @@ namespace EmEn::Graphics::Geometry
 				shape.transform(parameters.transformMatrix());
 			}
 
-			return newGeometry.load(shape);
+			return newGeometry.load(std::move(shape));
 		}, m_generationParameters.geometryFlags());
 	}
 
@@ -315,13 +293,11 @@ namespace EmEn::Graphics::Geometry
 	ResourceGenerator::octahedron (float radius, std::string resourceName) const noexcept
 	{
 		if ( resourceName.empty() )
-		{ 
-			resourceName = this->generateResourceName("Octahedron", (std::stringstream{} << radius).str()); 
+		{
+			resourceName = this->generateResourceName("Octahedron", std::to_string(radius));
 		}
 
-		const auto & parameters = m_generationParameters;
-
-		return m_resources.container< IndexedVertexResource >()->getOrCreateResourceAsync(resourceName, [radius, parameters] (IndexedVertexResource & newGeometry) {
+		return m_resources.container< IndexedVertexResource >()->getOrCreateResourceAsync(std::move(resourceName), [radius, parameters = m_generationParameters] (IndexedVertexResource & newGeometry) {
 			auto shape = ShapeGenerator::generateOctahedron< float, uint32_t >(radius, parameters.getShapeBuilderOptions(false, false, false));
 
 			if ( !parameters.transformMatrix().isIdentity() )
@@ -329,7 +305,7 @@ namespace EmEn::Graphics::Geometry
 				shape.transform(parameters.transformMatrix());
 			}
 
-			return newGeometry.load(shape);
+			return newGeometry.load(std::move(shape));
 		}, m_generationParameters.geometryFlags());
 	}
 
@@ -338,12 +314,10 @@ namespace EmEn::Graphics::Geometry
 	{
 		if ( resourceName.empty() )
 		{
-			resourceName = this->generateResourceName("Dodecahedron", (std::stringstream{} << radius).str()); 
+			resourceName = this->generateResourceName("Dodecahedron", std::to_string(radius));
 		}
 
-		const auto & parameters = m_generationParameters;
-
-		return m_resources.container< IndexedVertexResource >()->getOrCreateResourceAsync(resourceName, [radius, parameters] (IndexedVertexResource & newGeometry) {
+		return m_resources.container< IndexedVertexResource >()->getOrCreateResourceAsync(std::move(resourceName), [radius, parameters = m_generationParameters] (IndexedVertexResource & newGeometry) {
 			auto shape = ShapeGenerator::generateDodecahedron< float, uint32_t >(radius, parameters.getShapeBuilderOptions(false, false, false));
 
 			if ( !parameters.transformMatrix().isIdentity() )
@@ -351,7 +325,7 @@ namespace EmEn::Graphics::Geometry
 				shape.transform(parameters.transformMatrix());
 			}
 
-			return newGeometry.load(shape);
+			return newGeometry.load(std::move(shape));
 		}, m_generationParameters.geometryFlags());
 	}
 
@@ -359,13 +333,11 @@ namespace EmEn::Graphics::Geometry
 	ResourceGenerator::icosahedron (float radius, std::string resourceName) const noexcept
 	{
 		if ( resourceName.empty() )
-		{ 
-			resourceName = this->generateResourceName("Icosahedron", (std::stringstream{} << radius).str()); 
+		{
+			resourceName = this->generateResourceName("Icosahedron", std::to_string(radius));
 		}
 
-		const auto & parameters = m_generationParameters;
-
-		return m_resources.container< IndexedVertexResource >()->getOrCreateResourceAsync(resourceName, [radius, parameters] (IndexedVertexResource & newGeometry) {
+		return m_resources.container< IndexedVertexResource >()->getOrCreateResourceAsync(std::move(resourceName), [radius, parameters = m_generationParameters] (IndexedVertexResource & newGeometry) {
 			auto shape = ShapeGenerator::generateIcosahedron< float, uint32_t >(radius, parameters.getShapeBuilderOptions(false, false, false));
 
 			if ( !parameters.transformMatrix().isIdentity() )
@@ -373,7 +345,7 @@ namespace EmEn::Graphics::Geometry
 				shape.transform(parameters.transformMatrix());
 			}
 
-			return newGeometry.load(shape);
+			return newGeometry.load(std::move(shape));
 		}, m_generationParameters.geometryFlags());
 	}
 
@@ -381,19 +353,23 @@ namespace EmEn::Graphics::Geometry
 	ResourceGenerator::arrow (float size, PointTo pointTo, std::string resourceName) const noexcept
 	{
 		if ( resourceName.empty() )
-		{ 
-			resourceName = this->generateResourceName("Arrow", (std::stringstream{} << size << ',' << static_cast< int >(pointTo)).str()); 
+		{
+			resourceName = this->generateResourceName("Arrow", std::to_string(size) + ',' + std::to_string(static_cast< int >(pointTo)));
 		}
 
-		const auto & parameters = m_generationParameters;
-
-		return m_resources.container< IndexedVertexResource >()->getOrCreateResourceAsync(resourceName, [size, pointTo, parameters] (IndexedVertexResource & newGeometry) {
-			const auto arrowLength = 1.0F * size;
-			const auto arrowThickness = 0.015F * size;
-			const auto arrowCapLength = arrowLength * 0.2F;
-			const auto arrowCapThickness = 0.06F * size;
+		return m_resources.container< IndexedVertexResource >()->getOrCreateResourceAsync(std::move(resourceName), [size, pointTo, parameters = m_generationParameters] (IndexedVertexResource & newGeometry) {
+			constexpr auto arrowLengthFactor = 1.0F;
+			constexpr auto arrowThicknessFactor = 0.015F;
+			constexpr auto arrowCapLengthFactor = 0.2F;
+			constexpr auto arrowCapThicknessFactor = 0.06F;
 			constexpr auto quality = 8U;
-			const auto gape = arrowCapThickness * 0.5F;
+			constexpr auto gapeFactor = 0.5F;
+
+			const auto arrowLength = arrowLengthFactor * size;
+			const auto arrowThickness = arrowThicknessFactor * size;
+			const auto arrowCapLength = arrowLength * arrowCapLengthFactor;
+			const auto arrowCapThickness = arrowCapThicknessFactor * size;
+			const auto gape = arrowCapThickness * gapeFactor;
 
 			Shape< float, uint32_t > shape;
 
@@ -440,7 +416,7 @@ namespace EmEn::Graphics::Geometry
 				assembler.merge(chunk);
 			}
 
-			switch ( pointTo )
+			switch (pointTo)
 			{
 				case PointTo::PositiveX :
 					shape.transform(Matrix< 4, float >::rotation(Radian(QuartRevolution< float >), 0.0F, 0.0, 1.0F));
@@ -472,7 +448,7 @@ namespace EmEn::Graphics::Geometry
 				shape.transform(parameters.transformMatrix());
 			}
 
-			return newGeometry.load(shape);
+			return newGeometry.load(std::move(shape));
 		}, m_generationParameters.geometryFlags());
 	}
 
@@ -480,19 +456,23 @@ namespace EmEn::Graphics::Geometry
 	ResourceGenerator::axis (float size, std::string resourceName) const noexcept
 	{
 		if ( resourceName.empty() )
-		{ 
-			resourceName = this->generateResourceName("Axis", (std::stringstream{} << size).str()); 
+		{
+			resourceName = this->generateResourceName("Axis", std::to_string(size));
 		}
 
-		const auto & parameters = m_generationParameters;
+		return m_resources.container< IndexedVertexResource >()->getOrCreateResourceAsync(std::move(resourceName), [size, parameters = m_generationParameters] (IndexedVertexResource & newGeometry) {
+			constexpr auto arrowLengthFactor = 1.0F;
+			constexpr auto arrowThicknessFactor = 0.015F;
+			constexpr auto arrowCapLengthFactor = 0.2F;
+			constexpr auto arrowCapThicknessFactor = 0.06F;
+			constexpr auto quality = 8U;
+			constexpr auto gapeFactor = 0.5F;
 
-		return m_resources.container< IndexedVertexResource >()->getOrCreateResourceAsync(resourceName, [size, parameters] (IndexedVertexResource & newGeometry) {
-			const auto arrowLength = 1.0F * size;
-			const auto arrowThickness = 0.015F * size;
-			const auto arrowCapLength = arrowLength * 0.2F;
-			const auto arrowCapThickness = 0.06F * size;
-			const auto quality = 8U;
-			const auto gape = arrowCapThickness * 0.5F;
+			const auto arrowLength = arrowLengthFactor * size;
+			const auto arrowThickness = arrowThicknessFactor * size;
+			const auto arrowCapLength = arrowLength * arrowCapLengthFactor;
+			const auto arrowCapThickness = arrowCapThicknessFactor * size;
+			const auto gape = arrowCapThickness * gapeFactor;
 
 			Shape< float > shape{};
 
@@ -566,7 +546,7 @@ namespace EmEn::Graphics::Geometry
 				shape.transform(parameters.transformMatrix());
 			}
 
-			return newGeometry.load(shape);
+			return newGeometry.load(std::move(shape));
 		}, m_generationParameters.geometryFlags());
 	}
 
@@ -574,23 +554,21 @@ namespace EmEn::Graphics::Geometry
 	ResourceGenerator::surface (float size, uint32_t division, std::string resourceName) const noexcept
 	{
 		if ( resourceName.empty() )
-		{ 
-			resourceName = this->generateResourceName("Surface", (std::stringstream{} << size << ',' << division).str()); 
+		{
+			resourceName = this->generateResourceName("Surface", std::to_string(size) + ',' + std::to_string(division));
 		}
 
-		const auto & parameters = m_generationParameters;
-
-		return m_resources.container< VertexGridResource >()->getOrCreateResourceAsync(resourceName, [size, division, parameters] (VertexGridResource & newGeometry) {
+		return m_resources.container< VertexGridResource >()->getOrCreateResourceAsync(std::move(resourceName), [size, division, parameters = m_generationParameters] (VertexGridResource & newGeometry) {
 			return newGeometry.load(size, division, parameters.textureCoordinatesMultiplier()[X], parameters.vertexColorGenMode(), parameters.globalVertexColor());
 		}, m_generationParameters.geometryFlags());
 	}
 
 	std::string
-	ResourceGenerator::generateResourceName (const char * type, const std::string & values) const noexcept
+	ResourceGenerator::generateResourceName (std::string_view type, std::string_view values) const noexcept
 	{
 		std::stringstream output;
 
-		output << '+' << type << '(' << Hash::md5(m_generationParameters.uniqueIdentifier() + '-' + values) << ')';
+		output << '+' << type << '(' << Hash::md5(m_generationParameters.uniqueIdentifier() + '-' + std::string(values)) << ')';
 
 		return output.str();
 	}

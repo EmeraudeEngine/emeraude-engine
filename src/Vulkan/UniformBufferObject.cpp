@@ -53,7 +53,7 @@ namespace EmEn::Vulkan
 		{
 			TraceWarning{ClassId} << "The uniform buffer object '" << this->identifier() << "' has been built with no block size !";
 
-			return this->getDescriptorInfo(0, this->bytes());
+			return this->getDescriptorInfo(0, static_cast< uint32_t >(this->bytes()));
 		}
 
 		return this->getDescriptorInfo(elementOffset, m_blockAlignedSize);

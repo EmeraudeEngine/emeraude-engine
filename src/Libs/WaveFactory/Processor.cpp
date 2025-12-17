@@ -328,7 +328,19 @@ namespace EmEn::Libs::WaveFactory
 		}
 
 		/* Append the other wave's data. */
+		m_wave.m_data.reserve(m_wave.m_data.size() + other.m_data.size());
+
+		/* NOTE: GCC 14 generates a false positive -Wstringop-overflow warning here.
+		 * The code is correct: isValid() checks guarantee non-null data, and reserve()
+		 * ensures sufficient capacity. This is a known GCC analyzer limitation. */
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wstringop-overflow"
+#endif
 		m_wave.m_data.insert(m_wave.m_data.end(), other.m_data.begin(), other.m_data.end());
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic pop
+#endif
 
 		return true;
 	}
@@ -473,7 +485,7 @@ namespace EmEn::Libs::WaveFactory
 	{
 		if ( !m_wave.isValid() )
 		{
-			return -std::numeric_limits< float >::infinity();
+			return SilenceDB;
 		}
 
 		float peakValue = 0.0F;
@@ -485,7 +497,7 @@ namespace EmEn::Libs::WaveFactory
 
 		if ( peakValue < 1e-10F )
 		{
-			return -std::numeric_limits< float >::infinity();
+			return SilenceDB;
 		}
 
 		return 20.0F * std::log10(peakValue);
@@ -496,7 +508,7 @@ namespace EmEn::Libs::WaveFactory
 	{
 		if ( !m_wave.isValid() || m_wave.m_data.empty() )
 		{
-			return -std::numeric_limits< float >::infinity();
+			return SilenceDB;
 		}
 
 		float sumSquares = 0.0F;
@@ -510,7 +522,7 @@ namespace EmEn::Libs::WaveFactory
 
 		if ( rms < 1e-10F )
 		{
-			return -std::numeric_limits< float >::infinity();
+			return SilenceDB;
 		}
 
 		return 20.0F * std::log10(rms);

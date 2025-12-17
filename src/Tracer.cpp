@@ -359,7 +359,7 @@ namespace EmEn
 			}
 		}
 
-		TraceInfo{ClassId} << "The tracer is fully configured for the process '" << m_processName << "'.";
+		TraceDebug{ClassId} << "The tracer is fully configured for the process '" << m_processName << "'.";
 	}
 
 	std::filesystem::path

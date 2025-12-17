@@ -262,7 +262,7 @@ namespace EmEn::Vulkan
 
 		for ( auto it = m_queueFamilyProperties.cbegin(); it != m_queueFamilyProperties.cend(); ++it )
 		{
-			auto index = std::distance(m_queueFamilyProperties.cbegin(), it);
+			const auto index = static_cast< uint32_t >(std::distance(m_queueFamilyProperties.cbegin(), it));
 
 			if ( (m_queueFamilyProperties[index].queueFamilyProperties.queueFlags & type) != 0 )
 			{

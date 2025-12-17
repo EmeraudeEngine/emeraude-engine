@@ -35,7 +35,7 @@ target_sources(${PROJECT_NAME} PUBLIC FILE_SET HEADERS BASE_DIRS ${CMAKE_CURRENT
 set_target_properties(${PROJECT_NAME} PROPERTIES
 	CXX_STANDARD 20
 	CXX_STANDARD_REQUIRED On
-	CXX_EXTENSIONS On
+	CXX_EXTENSIONS Off
 )
 
 if ( MSVC )
@@ -62,7 +62,7 @@ if ( MSVC )
 			#/WX           # Treat warnings as errors
 			/Zi
 		>
-		$<$<CONFIG:Relase>:
+		$<$<CONFIG:Release>:
 			-DNDEBUG
 			/O2           # Optimize for maximum speed
 			/Ob2          # Inline any suitable function
@@ -83,7 +83,7 @@ else ( UNIX )
 			-Wpedantic
 			-Werror
 		>
-		$<$<CONFIG:Relase>:
+		$<$<CONFIG:Release>:
 			-O2
 			-ffast-math
 			-fdata-sections

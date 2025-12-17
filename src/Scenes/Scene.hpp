@@ -2140,6 +2140,51 @@ namespace EmEn::Scenes
 			 */
 			void clipAboveGround (const std::shared_ptr< AbstractEntity > & entity) const noexcept;
 
+			/**
+			 * @brief Accumulates position correction from boundary collisions.
+			 *
+			 * Detects boundary collisions and accumulates the correction vector.
+			 * Also tracks the dominant collision (deepest penetration) for velocity bounce.
+			 *
+			 * @param entity The entity to test.
+			 * @param positionCorrection [out] Accumulated position correction vector.
+			 * @param dominantNormal [out] Normal of the deepest penetration collision.
+			 * @param maxPenetration [out] Deepest penetration depth found.
+			 * @version 0.8.39
+			 */
+			void accumulateBoundaryCorrection (const std::shared_ptr< AbstractEntity > & entity, Libs::Math::Vector< 3, float > & positionCorrection, Libs::Math::Vector< 3, float > & dominantNormal, float & maxPenetration) const noexcept;
+
+			/**
+			 * @brief Accumulates position correction from ground collision.
+			 *
+			 * Detects ground collision and accumulates the correction vector.
+			 * Also tracks the dominant collision (deepest penetration) for velocity bounce.
+			 *
+			 * @param entity The entity to test.
+			 * @param positionCorrection [out] Accumulated position correction vector.
+			 * @param dominantNormal [out] Normal of the deepest penetration collision.
+			 * @param maxPenetration [out] Deepest penetration depth found.
+			 * @param groundNormal [out] Normal of the ground collision (for grounded state).
+			 * @param groundPenetration [out] Penetration depth of ground collision.
+			 * @version 0.8.41
+			 */
+			void accumulateGroundCorrection (const std::shared_ptr< AbstractEntity > & entity, Libs::Math::Vector< 3, float > & positionCorrection, Libs::Math::Vector< 3, float > & dominantNormal, float & maxPenetration, Libs::Math::Vector< 3, float > & groundNormal, float & groundPenetration) const noexcept;
+
+			/**
+			 * @brief Accumulates position corrections from static entity collisions.
+			 *
+			 * Detects collisions with static entities in the sector and accumulates corrections.
+			 * Also tracks the dominant collision (deepest penetration) for velocity bounce.
+			 *
+			 * @param entity The movable entity to test.
+			 * @param sector The octree sector containing potential collision targets.
+			 * @param positionCorrection [out] Accumulated position correction vector.
+			 * @param dominantNormal [out] Normal of the deepest penetration collision.
+			 * @param maxPenetration [out] Deepest penetration depth found.
+			 * @version 0.8.39
+			 */
+			void accumulateStaticEntityCorrections (const std::shared_ptr< AbstractEntity > & entity, const OctreeSector< AbstractEntity, true > & sector, Libs::Math::Vector< 3, float > & positionCorrection, Libs::Math::Vector< 3, float > & dominantNormal, float & maxPenetration) const noexcept;
+
 			/* ============================================================
 			 * [PRIVATE: CONSTANTS]
 			 * ============================================================ */

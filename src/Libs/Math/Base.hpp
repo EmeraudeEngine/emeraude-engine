@@ -674,7 +674,7 @@ namespace EmEn::Libs::Math
 	integral_t
 	alignCount (integral_t value, integral_t alignment) requires (std::is_integral_v< integral_t >)
 	{
-		return std::ceil(static_cast< float >(value) / static_cast< float >(alignment));
+		return static_cast< integral_t >(std::ceil(static_cast< float >(value) / static_cast< float >(alignment)));
 	}
 
 	/**

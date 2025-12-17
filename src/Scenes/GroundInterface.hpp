@@ -52,7 +52,7 @@ namespace EmEn::Scenes
 			 * @brief Returns a position where Y is completed by the level at X,Z position.
 			 * @param positionX The X coordinates.
 			 * @param positionZ The Z coordinates.
-			 * @param deltaY A difference value to add to the height.
+			 * @param deltaY A difference value to add to the Y component. Default 0.0F.
 			 * @return Vector< 3, float >
 			 */
 			[[nodiscard]]

@@ -56,11 +56,6 @@ namespace EmEn::Input
 				 * Magnification is typically in range [-1, 1], multiply to get reasonable scroll values. */
 				const auto yOffset = magnification * 50.0;  /* Scale factor to match scroll sensitivity. */
 
-				/* Get cursor position */
-				NSWindow * nsWindow = glfwGetCocoaWindow(window);
-				NSPoint mouseLocation = [nsWindow mouseLocationOutsideOfEventStream];
-				NSRect contentRect = [[nsWindow contentView] frame];
-
 				/* Convert to GLFW coordinates (origin at top-left) */
 				const auto position = getPointerLocation(window);
 

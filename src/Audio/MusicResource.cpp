@@ -130,7 +130,7 @@ namespace EmEn::Audio
 		constexpr float E2 = 82.41F;
 		constexpr float G2 = 98.00F;
 		constexpr float A2 = 110.00F;
-		constexpr float B2 = 123.47F;
+		//constexpr float B2 = 123.47F;
 		constexpr float C3 = 130.81F;
 		constexpr float D3 = 146.83F;
 		constexpr float E3 = 164.81F;

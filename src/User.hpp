@@ -27,11 +27,11 @@
 #pragma once
 
 /* STL inclusions. */
-#include <array>
 #include <string>
 
 /* Local inclusion for inheritances */
 #include "ServiceInterface.hpp"
+#include "SettingKeys.hpp"
 
 /* Forward declarations. */
 namespace EmEn
@@ -117,7 +117,7 @@ namespace EmEn
 			bool onTerminate () noexcept override;
 
 			PrimaryServices & m_primaryServices;
-			uint64_t m_userID{0};
-			std::string m_username{"John.Doe"};
+			uint64_t m_userID{DefaultUserAccountID};
+			std::string m_username{DefaultUserAccountName};
 	};
 }

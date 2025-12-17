@@ -1445,7 +1445,7 @@ namespace EmEn::Libs::VertexFactory
 					}
 				}
 
-				centroid /= m_vertices.size();
+				centroid /= static_cast< vertex_data_t >(m_vertices.size());
 
 				vertex_data_t centroidDistance = 0;
 

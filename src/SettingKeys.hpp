@@ -254,4 +254,10 @@ namespace EmEn
 		/* Physics */
 		constexpr auto EnablePhysicsAccelerationKey{"Core/Physics/EnableAcceleration"};
 		constexpr auto DefaultEnablePhysicsAcceleration{false};
+
+		/* User */
+		constexpr auto UserAccountIDKey{"Core/User/ID"};
+		constexpr auto DefaultUserAccountID{0};
+		constexpr auto UserAccountNameKey{"Core/User/AccountName"};
+		constexpr auto DefaultUserAccountName{"John.Doe"};
 }

@@ -51,6 +51,9 @@ namespace EmEn::Libs::WaveFactory
 	{
 		public:
 
+			/** @brief Silence level in db. */
+			static constexpr float SilenceDB{-200.0F};
+
 			/**
 			 * @brief Constructs a default wave processor.
 			 */

@@ -26,11 +26,16 @@
 
 #include "User.hpp"
 
+#include "PrimaryServices.hpp"
+
 namespace EmEn
 {
 	bool
 	User::onInitialize () noexcept
 	{
+		m_userID = m_primaryServices.settings().getOrSetDefault< uint64_t >(UserAccountIDKey, DefaultUserAccountID);
+		m_username = m_primaryServices.settings().getOrSetDefault< std::string >(UserAccountNameKey, DefaultUserAccountName);
+
 		return true;
 	}
 

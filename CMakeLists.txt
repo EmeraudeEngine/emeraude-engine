@@ -33,7 +33,7 @@ endif ()
 
 project(
 	${BINARY_NAME}
-	VERSION 0.8.40
+	VERSION 0.8.41
 	DESCRIPTION "Emeraude Engine is an open-source (LGPLv3) 3D Graphics engine using Vulkan and written in C++20."
 	HOMEPAGE_URL "https://github.com/EmeraudeEngine/emeraude-engine"
 	LANGUAGES C CXX
@@ -70,6 +70,9 @@ set(EMERAUDE_INTERNET_CHECK_DOMAIN "google.com" CACHE STRING "Web domain to chec
 set(EMERAUDE_COMPILATION_DIR "" CACHE STRING "Declare where the project is compiled. For macOS this should point the 'package.app' in the compilation folder.")
 option(EMERAUDE_ENABLE_TESTS "Enable the Emeraude-Engine testing suite (Default Off)." Off)
 option(EMERAUDE_ENABLE_PCH "Enable 'PreCompiled Headers' feature to speed up the compilation (Default Off)." Off)
+option(EMERAUDE_DISABLE_PARANOID_COMPILATION "Disable warnings as errors for compilation (Default Off)." Off)
+option(EMERAUDE_DISABLE_EXCEPTIONS "Disable 'c++ exceptions' feature (Default On)." On)
+option(EMERAUDE_DISABLE_RTTI "Disable 'Run-Time Type Information' feature (Broken feature, Default Off)." Off) # TODO: Make changes for std::any usage.
 option(EMERAUDE_USE_STATIC_RUNTIME "Build Emeraude-Engine with the static MSVC runtime (Windows only, Default Off)." Off)
 option(EMERAUDE_USE_SYSTEM_LIBS "Use the system for common libraries instead of the embedded ones (Deprecated, Default Off)." Off)
 option(EMERAUDE_USE_SYSTEM_OPENAL "Use the system OpenAL-Soft library (Default Off)." Off)
@@ -173,6 +176,10 @@ elseif ( MSVC )
 
 		set(LOCAL_LIB_DIR "${CMAKE_CURRENT_SOURCE_DIR}/dependencies/windows.${APP_ARCH}-${CMAKE_BUILD_TYPE}-MD" CACHE STRING "Final directory for local libraries for Windows.")
 	endif ()
+
+	# Remove default MSVC flags added by CMake to avoid D9025 warnings
+	string(REPLACE "/EHsc" "" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
+	string(REPLACE "/Ob2" "" CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE}")
 endif ()
 
 # Download the binary precompiled package for the current configuration.
@@ -182,6 +189,108 @@ endif ()
 message("[EmeraudeEngine] Project directory: ${CMAKE_SOURCE_DIR}, current : ${CMAKE_CURRENT_SOURCE_DIR}")
 message("[EmeraudeEngine] Binary directory: ${CMAKE_BINARY_DIR}, current : ${CMAKE_CURRENT_BINARY_DIR}")
 message("[EmeraudeEngine] Local external dependencies: ${LOCAL_LIB_DIR}")
+
+
+
+#######################################################################
+# Reusable compile definitions and options for projects using the engine.
+# These variables are exported for use in dependent projects.
+
+if ( MSVC )
+	set(EMERAUDE_COMPILE_DEFINITIONS
+		$<$<CONFIG:Debug>:DEBUG>					# Declares DEBUG macro
+		$<$<CONFIG:Release>:NDEBUG>					# Declares NDEBUG macro
+		_WIN32_WINNT=0x0A00							# Target Windows 10/11 (0x0601=Win7, 0x0602=Win8, 0x0603=Win8.1)
+		CACHE STRING "Emeraude-Engine compile definitions for Windows."
+	)
+
+	set(EMERAUDE_COMPILE_OPTIONS
+		$<IF:$<BOOL:${EMERAUDE_DISABLE_RTTI}>,/GR-,/GR>				# Run-time type information (conditional)
+		$<$<BOOL:${EMERAUDE_DISABLE_EXCEPTIONS}>:/EHs->				# Disable sync exceptions (conditional)
+		$<$<BOOL:${EMERAUDE_DISABLE_EXCEPTIONS}>:/EHc->				# Disable extern C nothrow (conditional)
+		$<$<NOT:$<BOOL:${EMERAUDE_DISABLE_EXCEPTIONS}>>:/EHsc>		# Enable C++ exceptions (conditional)
+		$<$<CONFIG:Debug>:/RTC1>					# Enable basic run-time checks
+		$<$<CONFIG:Debug>:/Od>						# Disable optimizations
+		$<$<CONFIG:Debug>:/Zi>						# Generate debug information (PDB)
+		$<$<CONFIG:Release>:/O2>					# Optimize for maximum speed
+		$<$<CONFIG:Release>:/Ob3>					# Inline any suitable function
+		$<$<CONFIG:Release>:/GF>					# Enable string pooling
+		/MP${CMAKE_BUILD_PARALLEL_LEVEL}			# Multi-processor compilation
+		/Gy											# Enable function-level linking
+		/W4											# Warning level 4 (high)
+		$<$<NOT:$<BOOL:${EMERAUDE_DISABLE_PARANOID_COMPILATION}>>:/WX>	# Treat warnings as errors (conditional)
+		/wd4100										# Ignore "unreferenced formal parameter"
+		/wd4127										# Ignore "conditional expression is constant"
+		/wd4324										# Ignore "structure was padded due to alignment specifier"
+		/wd4481										# Ignore "nonstandard extension used: override"
+		/wd4512										# Ignore "assignment operator could not be generated"
+		$<$<BOOL:${EMERAUDE_DISABLE_EXCEPTIONS}>:/wd4530>	# Ignore "C++ exception handler used, but unwind semantics are not enabled" when exceptions are disabled
+		/wd4702										# Ignore "unreachable code"
+		/wd4996										# Ignore "function or variable may be unsafe"
+		CACHE STRING "Emeraude-Engine compile options for Windows."
+	)
+elseif ( APPLE )
+	set(EMERAUDE_COMPILE_DEFINITIONS
+		$<$<CONFIG:Debug>:DEBUG>					# Declares DEBUG macro
+		$<$<CONFIG:Release>:NDEBUG>					# Declares NDEBUG macro
+		CACHE STRING "Emeraude-Engine compile definitions for macOS."
+	)
+
+	set(EMERAUDE_COMPILE_OPTIONS
+		$<IF:$<BOOL:${EMERAUDE_DISABLE_RTTI}>,-fno-rtti,-frtti>					# Run-time type information (conditional)
+		$<IF:$<BOOL:${EMERAUDE_DISABLE_EXCEPTIONS}>,-fno-exceptions,-fexceptions>	# C++ exception handling (conditional)
+		$<$<CONFIG:Debug>:-O0>						# No optimization
+		$<$<CONFIG:Debug>:-g>						# Generate debug information
+		$<$<CONFIG:Debug>:-Wall>					# Enable all common warnings
+		$<$<CONFIG:Debug>:-Wextra>					# Enable extra warnings
+		$<$<CONFIG:Debug>:-Wpedantic>				# Enforce strict ISO C++ compliance
+		$<$<CONFIG:Debug>:-fno-omit-frame-pointer>	# Keep frame pointer for better stack traces
+		$<$<CONFIG:Release>:-O2>					# Optimize for speed
+		$<$<CONFIG:Release>:-ffast-math>			# Enable fast floating-point optimizations
+		$<$<CONFIG:Release>:-fdata-sections>		# Place each data item in its own section
+		$<$<CONFIG:Release>:-ffunction-sections>	# Place each function in its own section
+		$<$<CONFIG:Release>:-fstack-protector-strong>	# Stack buffer overflow protection
+		$<$<NOT:$<BOOL:${EMERAUDE_DISABLE_PARANOID_COMPILATION}>>:-Werror>	# Treat warnings as errors (conditional)
+		-Wformat									# Check format string arguments
+		-Wformat-security							# Warn about format string vulnerabilities
+		-Wno-unknown-pragmas						# Ignore unknown pragma directives
+		-Wno-unused-parameter						# Ignore unused function parameters
+		-Wno-unused-private-field					# Ignore unused private fields
+		-Wno-nullability-extension					# Ignore nullability extension warnings
+		-Wno-nullability-completeness				# Ignore incomplete nullability annotations
+		-Wno-gnu-zero-variadic-macro-arguments		# Ignore GNU variadic macro extension
+		CACHE STRING "Emeraude-Engine compile options for macOS."
+	)
+elseif ( UNIX )
+	set(EMERAUDE_COMPILE_DEFINITIONS
+		$<$<CONFIG:Debug>:DEBUG>					# Declares DEBUG macro
+		$<$<CONFIG:Release>:NDEBUG>					# Declares NDEBUG macro
+		$<$<CONFIG:Release>:_FORTIFY_SOURCE=2>		# Runtime buffer overflow detection
+		CACHE STRING "Emeraude-Engine compile definitions for Linux."
+	)
+
+	set(EMERAUDE_COMPILE_OPTIONS
+		$<IF:$<BOOL:${EMERAUDE_DISABLE_RTTI}>,-fno-rtti,-frtti>					# Run-time type information (conditional)
+		$<IF:$<BOOL:${EMERAUDE_DISABLE_EXCEPTIONS}>,-fno-exceptions,-fexceptions>	# C++ exception handling (conditional)
+		$<$<CONFIG:Debug>:-O0>						# No optimization
+		$<$<CONFIG:Debug>:-g>						# Generate debug information
+		$<$<CONFIG:Debug>:-Wall>					# Enable all common warnings
+		$<$<CONFIG:Debug>:-Wextra>					# Enable extra warnings
+		$<$<CONFIG:Debug>:-Wpedantic>				# Enforce strict ISO C++ compliance
+		$<$<CONFIG:Debug>:-fno-omit-frame-pointer>	# Keep frame pointer for better stack traces
+		$<$<CONFIG:Release>:-O2>					# Optimize for speed
+		$<$<CONFIG:Release>:-ffast-math>			# Enable fast floating-point optimizations
+		$<$<CONFIG:Release>:-fdata-sections>		# Place each data item in its own section
+		$<$<CONFIG:Release>:-ffunction-sections>	# Place each function in its own section
+		$<$<CONFIG:Release>:-fstack-protector-strong>	# Stack buffer overflow protection
+		$<$<NOT:$<BOOL:${EMERAUDE_DISABLE_PARANOID_COMPILATION}>>:-Werror>	# Treat warnings as errors (conditional)
+		-Wformat									# Check format string arguments
+		-Wformat-security							# Warn about format string vulnerabilities
+		-Wno-unknown-pragmas						# Ignore unknown pragma directives
+		-Wno-unused-parameter						# Ignore unused function parameters
+		CACHE STRING "Emeraude-Engine compile options for Linux."
+	)
+endif ()
 
 
 
@@ -226,12 +335,11 @@ endif ()
 
 target_link_directories(${PROJECT_NAME} PUBLIC ${LOCAL_LIB_DIR}/lib)
 
-# Set DEBUG or NDEBUG macro
-target_compile_definitions(${PROJECT_NAME} PRIVATE
-	$<$<CONFIG:Debug>:DEBUG>
-	$<$<CONFIG:Release>:NDEBUG>
-)
+target_compile_definitions(${PROJECT_NAME} PUBLIC ${EMERAUDE_COMPILE_DEFINITIONS})
 
+target_compile_options(${PROJECT_NAME} PUBLIC ${EMERAUDE_COMPILE_OPTIONS})
+
+# Platform-specific target properties.
 if ( MSVC )
 	message("[EmeraudeEngine] Configuring C++ compiler (>= MSVC 2022) for Windows ...")
 
@@ -245,156 +353,75 @@ if ( MSVC )
 		VERSION ${PROJECT_VERSION}
 		WINDOWS_EXPORT_ALL_SYMBOLS ON # TODO: Change this by creating a real API with "emeraude_export.hpp"
 	)
+elseif ( APPLE )
+	message("[EmeraudeEngine] Configuring C++ compiler (>= AppleClang 17.0) for macOS ...")
 
-	# Windows 7	0x0601
-	# Windows 8	0x0602
-	# Windows 8.1 0x0603
-	# Windows 10/11 0x0A00
-	target_compile_definitions(${PROJECT_NAME} PRIVATE _WIN32_WINNT=0x0A00)
-
-	target_compile_options(${PROJECT_NAME} PRIVATE
-		/wd4100       # Ignore "unreferenced formal parameter" warning
-		/wd4127       # Ignore "conditional expression is constant" warning
-		/wd4244       # Ignore "conversion possible loss of data" warning
-		/wd4324       # Ignore "structure was padded due to alignment specifier" warning
-		/wd4481       # Ignore "nonstandard extension used: override" warning
-		/wd4512       # Ignore "assignment operator could not be generated" warning
-		/wd4701       # Ignore "potentially uninitialized local variable" warning
-		/wd4702       # Ignore "unreachable code" warning
-		/wd4996       # Ignore "function or variable may be unsafe" warning
-		/MP${CMAKE_BUILD_PARALLEL_LEVEL} # Multiprocess compilation
-		/Gy           # Enable function-level linking
-		#/GR-          # Disable run-time type information
-		/EHsc		  # Enable exceptions
-		/W4           # Warning level 4
-		$<$<CONFIG:Debug>:
-			/RTC1         # Disable optimizations
-			/Od           # Enable basic run-time checks
-			#/WX           # Treat warnings as errors
-			/Zi
-		>
-		$<$<CONFIG:Relase>:
-			/O2           # Optimize for maximum speed
-			/Ob2          # Inline any suitable function
-			/GF           # Enable string pooling
-		>
+	set_target_properties(${PROJECT_NAME} PROPERTIES
+		C_STANDARD 17 # Next standard will be C23
+		C_STANDARD_REQUIRED On
+		C_EXTENSIONS Off
+		CXX_STANDARD 20 # Next standard will be C++23, then C++26.
+		CXX_STANDARD_REQUIRED On
+		CXX_EXTENSIONS Off
+		VERSION ${PROJECT_VERSION}
+		SOVERSION ${PROJECT_VERSION_MAJOR}
+		FRAMEWORK TRUE
+		FRAMEWORK_VERSION ${PROJECT_VERSION}
+		MACOSX_FRAMEWORK_IDENTIFIER org.ln-isle.emeraude
+		INSTALL_NAME_DIR "@rpath"
+		MACOSX_RPATH TRUE
 	)
+
+	# Link UniformTypeIdentifiers framework for UTType (macOS 11.0+)
+	target_link_libraries(${PROJECT_NAME} PRIVATE "-framework UniformTypeIdentifiers")
 elseif ( UNIX )
-	if ( APPLE )
-		message("[EmeraudeEngine] Configuring C++ compiler (>= AppleClang 17.0) for macOS ...")
+	message("[EmeraudeEngine] Configuring C++ compiler (>= G++13.3) for Linux ...")
 
-		set_target_properties(${PROJECT_NAME} PROPERTIES
-			C_STANDARD 17 # Next standard will be C23
-			C_STANDARD_REQUIRED On
-			C_EXTENSIONS Off
-			CXX_STANDARD 20 # Next standard will be C++23, then C++26.
-			CXX_STANDARD_REQUIRED On
-			CXX_EXTENSIONS Off
-			VERSION ${PROJECT_VERSION}
-			SOVERSION ${PROJECT_VERSION_MAJOR}
-			FRAMEWORK TRUE
-			FRAMEWORK_VERSION ${PROJECT_VERSION}
-			MACOSX_FRAMEWORK_IDENTIFIER org.ln-isle.emeraude
-			INSTALL_NAME_DIR "@rpath"
-			MACOSX_RPATH TRUE
-		)
+	set_target_properties(${PROJECT_NAME} PROPERTIES
+		C_STANDARD 17 # Next standard will be C23
+		C_STANDARD_REQUIRED On
+		C_EXTENSIONS Off
+		CXX_STANDARD 20 # Next standard will be C++23, then C++26.
+		CXX_STANDARD_REQUIRED On
+		CXX_EXTENSIONS Off
+		VERSION ${PROJECT_VERSION}
+		SOVERSION ${PROJECT_VERSION_MAJOR}
+	)
 
-		# Debug include path
-		#target_compile_options(${PROJECT_NAME} PRIVATE -v)
+	# Linux-only sanitizer options.
+	if ( EMERAUDE_ENABLE_ASAN )
+		message("[EmeraudeEngine] Enabling AddressSanitizer tools ...")
 
-		target_compile_options(${PROJECT_NAME} PRIVATE
-			#-fno-rtti                  # Disable run-time type information
-			-fno-exceptions             # Disable C++ exception layer
-			#-fexperimental-library     # Enables std::jthread from STL. Creates bugs!
-			$<$<CONFIG:Debug>:
-				-O0
-				-g
-				-Wall
-				-Wextra
-				-Wpedantic
-				#-Werror
-			>
-			$<$<CONFIG:Relase>:
-				-O2
-				-ffast-math
-				-fdata-sections
-				-ffunction-sections
-			>
-			-Wno-unknown-pragmas
-			-Wno-unused
-			-Wno-nullability-extension
-			-Wno-nullability-completeness
-			-Wno-gnu-zero-variadic-macro-arguments
-		)
-	else ()
-		message("[EmeraudeEngine] Configuring C++ compiler (>= G++13.3) for Linux ...")
+		target_compile_options(${PROJECT_NAME} PUBLIC -fsanitize=address)
+		target_link_options(${PROJECT_NAME} PUBLIC -fsanitize=address)
+	endif ()
 
-		set_target_properties(${PROJECT_NAME} PROPERTIES
-			C_STANDARD 17 # Next standard will be C23
-			C_STANDARD_REQUIRED On
-			C_EXTENSIONS On
-			CXX_STANDARD 20 # Next standard will be C++23, then C++26.
-			CXX_STANDARD_REQUIRED On
-			CXX_EXTENSIONS On
-			VERSION ${PROJECT_VERSION}
-			SOVERSION ${PROJECT_VERSION_MAJOR}
-		)
+	if ( EMERAUDE_ENABLE_MSAN )
+		message("[EmeraudeEngine] Enabling MemorySanitizer tools ...")
 
-		target_compile_options(${PROJECT_NAME} PRIVATE
-			#-fno-rtti                  # Disable run-time type information
-			-fno-exceptions             # Disable C++ exception layer
-			$<$<CONFIG:Debug>:
-				-O0
-				-g
-				-Wall
-				-Wextra
-				-Wpedantic
-				#-Werror
-			>
-			$<$<CONFIG:Relase>:
-				-O2
-				-ffast-math
-				-fdata-sections
-				-ffunction-sections
-			>
-			-Wno-unknown-pragmas
-			-Wno-unused
-		)
+		target_compile_options(${PROJECT_NAME} PUBLIC -fsanitize=memory)
+		target_link_options(${PROJECT_NAME} PUBLIC -fsanitize=memory)
+	endif ()
 
-		if ( EMERAUDE_ENABLE_ASAN )
-			message("[EmeraudeEngine] Enabling AddressSanitizer tools ...")
+	if ( EMERAUDE_ENABLE_LSAN )
+		message("[EmeraudeEngine] Enabling LeakSanitizer tools ...")
 
-			target_compile_options(${PROJECT_NAME} PUBLIC -fsanitize=address)
-			target_link_options(${PROJECT_NAME} PUBLIC -fsanitize=address)
-		endif ()
+		target_compile_options(${PROJECT_NAME} PUBLIC -fsanitize=leak)
+		target_link_options(${PROJECT_NAME} PUBLIC -fsanitize=leak)
+	endif ()
 
-		if ( EMERAUDE_ENABLE_MSAN )
-			message("[EmeraudeEngine] Enabling MemorySanitizer tools ...")
+	if ( EMERAUDE_ENABLE_TSAN )
+		message("[EmeraudeEngine] Enabling ThreadSanitizer tools ...")
 
-			target_compile_options(${PROJECT_NAME} PUBLIC -fsanitize=memory)
-			target_link_options(${PROJECT_NAME} PUBLIC -fsanitize=memory)
-		endif ()
+		target_compile_options(${PROJECT_NAME} PUBLIC -fsanitize=thread)
+		target_link_options(${PROJECT_NAME} PUBLIC -fsanitize=thread)
+	endif ()
 
-		if ( EMERAUDE_ENABLE_LSAN )
-			message("[EmeraudeEngine] Enabling LeakSanitizer tools ...")
+	if ( EMERAUDE_ENABLE_UBSAN )
+		message("[EmeraudeEngine] Enabling UndefinedBehaviorSanitizer tools ...")
 
-			target_compile_options(${PROJECT_NAME} PUBLIC -fsanitize=leak)
-			target_link_options(${PROJECT_NAME} PUBLIC -fsanitize=leak)
-		endif ()
-
-		if ( EMERAUDE_ENABLE_TSAN )
-			message("[EmeraudeEngine] Enabling ThreadSanitizer tools ...")
-
-			target_compile_options(${PROJECT_NAME} PUBLIC -fsanitize=thread)
-			target_link_options(${PROJECT_NAME} PUBLIC -fsanitize=thread)
-		endif ()
-
-		if ( EMERAUDE_ENABLE_UBSAN )
-			message("[EmeraudeEngine] Enabling UndefinedBehaviorSanitizer tools ...")
-
-			target_compile_options(${PROJECT_NAME} PUBLIC -fsanitize=undefined -fsanitize=integer -fsanitize=nullability)
-			target_link_options(${PROJECT_NAME} PUBLIC -fsanitize=undefined -fsanitize=integer -fsanitize=nullability)
-		endif ()
+		target_compile_options(${PROJECT_NAME} PUBLIC -fsanitize=undefined -fsanitize=integer -fsanitize=nullability)
+		target_link_options(${PROJECT_NAME} PUBLIC -fsanitize=undefined -fsanitize=integer -fsanitize=nullability)
 	endif ()
 else ()
 	message(FATAL_ERROR "[EmeraudeEngine] Unsupported platform/compiler! NOTE: If you are on Windows be sure to use 'Visual Studio 2022' (>=).")
@@ -532,9 +559,7 @@ if ( EMERAUDE_ENABLE_TESTS )
 	# Enable the testing
 	enable_testing()
 
-	gtest_discover_tests(EmeraudeUnitTests
-		WORKING_DIRECTORY ${EMERAUDE_COMPILATION_DIR}
-	)
+	gtest_discover_tests(EmeraudeUnitTests WORKING_DIRECTORY ${EMERAUDE_COMPILATION_DIR})
 endif ()
 
 

@@ -4,6 +4,7 @@
 
 /* Third-party inclusions. */
 #import <AppKit/AppKit.h>
+#import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 
 /* Local inclusions. */
 #include "Window.hpp"
@@ -50,24 +51,33 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
             }
             [file_types_list addObject:[file_type_set array]];
 
-            // Passing an empty array to setAllowedFileTypes will cause exception.
-            NSArray * file_types = nil;
+            // Convert extensions to UTTypes for allowedContentTypes (macOS 12.0+)
+            NSMutableArray<UTType *> * contentTypes = [NSMutableArray array];
             NSUInteger count = [file_types_list count];
 
             if ( count > 0 )
             {
-                file_types = [[file_types_list objectAtIndex:0] allObjects];
+                NSArray * extensions = [[file_types_list objectAtIndex:0] allObjects];
 
-                // If we meet a '*' file extension, we allow all the file types and no
-                // need to set the specified file types.
-                if ( [file_types count] == 0 || [file_types containsObject:@"*"] )
+                // If we meet a '*' file extension, we allow all the file types
+                if ( [extensions count] > 0 && ![extensions containsObject:@"*"] )
                 {
-                    file_types = nil;
+                    for ( NSString * ext in extensions )
+                    {
+                        UTType * type = [UTType typeWithFilenameExtension:ext];
+
+                        if ( type != nil )
+                        {
+                            [contentTypes addObject:type];
+                        }
+                    }
                 }
             }
 
-			[panel setAllowedFileTypes:file_types];
-			//panel.allowedContentTypes = file_types; // Recommanded new way
+            if ( [contentTypes count] > 0 )
+            {
+                panel.allowedContentTypes = contentTypes;
+            }
 
             // TODO: Format picker not yet implemented, macOS doesnt support it natively.
             // To create it like electron see : https://github.com/electron/electron/blob/main/shell/browser/ui/file_dialog_mac.mm#L133

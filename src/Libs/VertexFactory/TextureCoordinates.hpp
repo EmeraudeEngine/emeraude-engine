@@ -59,20 +59,20 @@ namespace EmEn::Libs::VertexFactory::TextureCoordinates
 		/* From ZY Plane */
 		if ( absNX > absNZ && absNX > absNY )
 		{
-			texCoordU = normal[Math::X] > 0 ? ( position[Math::Z] > 0 ? 0 : 1 ) : ( position[Math::Z] > 0 ? 1 : 0 );
-			texCoordV = position[Math::Y] > 0 ? 1 : 0;
+			texCoordU = normal[Math::X] > 0 ? ( position[Math::Z] > 0 ? static_cast< number_t >(0) : static_cast< number_t >(1) ) : ( position[Math::Z] > 0 ? static_cast< number_t >(1) : static_cast< number_t >(0) );
+			texCoordV = position[Math::Y] > 0 ? static_cast< number_t >(1) : static_cast< number_t >(0);
 		}
 		/* From XZ Plane */
 		else if ( absNY > absNX && absNY > absNZ )
 		{
-			texCoordU = position[Math::X] > 0 ? 1 : 0;
-			texCoordV = normal[Math::Y] > 0 ? ( position[Math::Z] > 0 ? 0 : 1 ) : ( position[Math::Z] > 0 ? 1 : 0 );
+			texCoordU = position[Math::X] > 0 ? static_cast< number_t >(1) : static_cast< number_t >(0);
+			texCoordV = normal[Math::Y] > 0 ? ( position[Math::Z] > 0 ? static_cast< number_t >(0) : static_cast< number_t >(1) ) : ( position[Math::Z] > 0 ? static_cast< number_t >(1) : static_cast< number_t >(0) );
 		}
 		/* From XY Plane */
 		else if ( absNZ > absNX && absNZ > absNY )
 		{
-			texCoordU = normal[Math::Z] > 0 ? ( position[Math::X] > 0 ? 1 : 0 ) : ( position[Math::X] > 0 ? 0 : 1 );
-			texCoordV = position[Math::Y] > 0 ? 1 : 0;
+			texCoordU = normal[Math::Z] > 0 ? ( position[Math::X] > 0 ? static_cast< number_t >(1) : static_cast< number_t >(0) ) : ( position[Math::X] > 0 ? static_cast< number_t >(0) : static_cast< number_t >(1) );
+			texCoordV = position[Math::Y] > 0 ? static_cast< number_t >(1) : static_cast< number_t >(0);
 		}
 
 		return {texCoordU, texCoordV, texCoordW};

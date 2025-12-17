@@ -36,8 +36,6 @@ namespace EmEn::Vulkan
 {
 	using namespace Libs;
 
-	constexpr auto TracerTag{"VulkanUtility"};
-
 	const char *
 	vkResultToCString (VkResult code) noexcept
 	{

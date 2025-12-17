@@ -375,16 +375,16 @@ namespace EmEn::Graphics::Geometry
 			m_localData.emplace_back(color.red());
 			m_localData.emplace_back(color.green());
 			m_localData.emplace_back(color.blue());
-			m_localData.emplace_back(1.0);
+			m_localData.emplace_back(1.0F);
 		}
 
 		/* Vertex weight. */
 		if ( this->isFlagEnabled(EnableWeight) )
 		{
-			m_localData.emplace_back(1.0);
-			m_localData.emplace_back(1.0);
-			m_localData.emplace_back(1.0);
-			m_localData.emplace_back(1.0);
+			m_localData.emplace_back(1.0F);
+			m_localData.emplace_back(1.0F);
+			m_localData.emplace_back(1.0F);
+			m_localData.emplace_back(1.0F);
 		}
 	}
 

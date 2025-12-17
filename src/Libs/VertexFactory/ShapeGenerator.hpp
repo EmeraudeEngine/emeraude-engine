@@ -1432,7 +1432,7 @@ namespace EmEn::Libs::VertexFactory::ShapeGenerator
 	{
 		/* NOTE: c = √(2) * r */
 		const vertex_data_t edgeSize = std::sqrt(static_cast< vertex_data_t >(2)) * radius;
-		const vertex_data_t delta = std::sqrt(static_cast< vertex_data_t >(3)) * edgeSize * 0.5;
+		const vertex_data_t delta = std::sqrt(static_cast< vertex_data_t >(3)) * edgeSize * static_cast< vertex_data_t >(0.5);
 
 		return generateCuboid(delta, delta, delta, options);
 	}

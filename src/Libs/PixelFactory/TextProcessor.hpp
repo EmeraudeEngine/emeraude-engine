@@ -337,8 +337,8 @@ namespace EmEn::Libs::PixelFactory
 				}
 
 				m_textMetrics.lineHeight = m_selectedFont->height() + m_textMetrics.lineSpace;
-				m_textMetrics.maxColumns = std::floor(m_rectangle.width() / m_selectedFont->widestChar());
-				m_textMetrics.maxRows = std::floor(m_rectangle.height() / m_textMetrics.lineHeight);
+				m_textMetrics.maxColumns = static_cast< dimension_t >(std::floor(m_rectangle.width() / m_selectedFont->widestChar()));
+				m_textMetrics.maxRows = static_cast< dimension_t >(std::floor(m_rectangle.height() / m_textMetrics.lineHeight));
 			}
 
 			Pixmap< pixel_data_t > * m_pixmap{nullptr};

@@ -135,6 +135,17 @@ namespace EmEn
 			void terminate () noexcept;
 
 			/**
+			 * @brief Returns whether the process is a child.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isChildProcess () const noexcept
+			{
+				return m_childProcess;
+			}
+
+			/**
 			 * @brief Returns the reference to the primary service thread pool.
 			 * @return std::shared_ptr< Libs::ThreadPool >
 			 */

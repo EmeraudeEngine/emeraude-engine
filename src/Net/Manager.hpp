@@ -175,7 +175,7 @@ namespace EmEn::Net
 			uint64_t
 			totalBytesTotal () const noexcept
 			{
-				return std::accumulate(m_downloadItems.cbegin(), m_downloadItems.cend(), 0UL, [] (uint64_t sum, const auto & item) {
+				return std::accumulate(m_downloadItems.cbegin(), m_downloadItems.cend(), static_cast< uint64_t >(0), [] (uint64_t sum, const auto & item) {
 					return sum + item.bytesTotal();
 				});
 			}
@@ -188,7 +188,7 @@ namespace EmEn::Net
 			uint64_t
 			totalBytesReceived () const noexcept
 			{
-				return std::accumulate(m_downloadItems.cbegin(), m_downloadItems.cend(), 0UL, [] (uint64_t sum, const auto & item) {
+				return std::accumulate(m_downloadItems.cbegin(), m_downloadItems.cend(), static_cast< uint64_t >(0), [] (uint64_t sum, const auto & item) {
 					return sum + item.bytesReceived();
 				});
 			}

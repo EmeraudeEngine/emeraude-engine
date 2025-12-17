@@ -36,8 +36,6 @@ namespace EmEn::Scenes
 	using namespace Libs::Math;
 	using namespace Physics;
 
-	constexpr auto TracerTag{"Scene/Physics"};
-
 	void
 	Scene::simulatePhysics () noexcept
 	{
@@ -47,88 +45,88 @@ namespace EmEn::Scenes
 		}
 
 		/* ============================================================
-		 * PHASE 0: UPDATE GROUNDED STATE (Grace Period Decay)
+		 * PHASE 1: STATIC COLLISIONS (Boundaries, Ground, StaticEntity)
+		 * - Accumulate position corrections from ALL static collisions
+		 * - Use dominant collision (deepest penetration) for velocity bounce
 		 * ============================================================ */
 
-		/*for ( const auto & entity : m_physicsOctree->elements() )
-		{
-			if ( entity->isSimulationPaused() )
-			{
-				continue;
-			}
-
-			if ( auto * movableEntity = entity->getMovableTrait(); movableEntity != nullptr )
-			{
-				movableEntity->updateGroundedState();
-			}
-		}*/
-
-		/* ============================================================
-		 * PHASE 1: COLLISION DETECTION (Generate Manifolds)
-		 * ============================================================ */
-
-		/* FIXME: Poor memory management ! */
-		std::vector< ContactManifold > manifolds;
-		std::unordered_set< uint64_t > testedEntityPairs;
-
-		/* 1.1 - Detect collisions: Boundaries, Ground, and Entity-Entity. */
-		m_physicsOctree->forLeafSectors([this, &manifolds, &testedEntityPairs] (const OctreeSector< AbstractEntity, true > & sector) {
-			this->detectCollisionCollisionInSector(sector, manifolds, testedEntityPairs);
-		});
-
-		/* ============================================================
-		 * PHASE 2: COLLISION RESOLUTION (Impulse Solver)
-		 * ============================================================ */
-
-		if ( !manifolds.empty() )
-		{
-			m_constraintSolver.solve(manifolds, EngineUpdateCycleDurationS< float >);
-		}
-
-		/* ============================================================
-		 * PHASE 3: SAFETY CLIPPING (Prevent Escapes)
-		 * ============================================================ */
-
-		/*m_physicsOctree->forLeafSectors([this] (const OctreeSector< AbstractEntity, true > & leafSector) {
+		m_physicsOctree->forLeafSectors([this] (const OctreeSector< AbstractEntity, true > & leafSector) {
 			const bool sectorAtBorder = leafSector.isTouchingRootBorder();
 
 			for ( const auto & entity : leafSector.elements() )
 			{
-				// Skip non-movable entities.
-				if ( !entity->hasMovableAbility() )
+				/* Skip non-movable or paused entities. */
+				if ( !entity->hasMovableAbility() || entity->isSimulationPaused() )
 				{
 					continue;
 				}
 
-				// 3.1 - Clip inside boundaries (only for sectors at the world border).
-				if ( sectorAtBorder )
+				auto * movable = entity->getMovableTrait();
+
+				if ( movable == nullptr )
 				{
-					this->clipInsideBoundaries(entity);
+					continue;
 				}
 
-				// 3.2 - Clip above ground.
-				this->clipAboveGround(entity);
+				/* Accumulation variables. */
+				Vector< 3, float > positionCorrection{0.0F, 0.0F, 0.0F};
+				Vector< 3, float > dominantNormal{0.0F, 0.0F, 0.0F};
+				float maxPenetration = 0.0F;
+
+				/* 1.1 - Boundary collisions (only for sectors at world border). */
+				if ( sectorAtBorder )
+				{
+					this->accumulateBoundaryCorrection(entity, positionCorrection, dominantNormal, maxPenetration);
+				}
+
+				/* 1.2 - Ground collisions (track separately for grounded state). */
+				Vector< 3, float > groundNormal{0.0F, 0.0F, 0.0F};
+				float groundPenetration = 0.0F;
+				this->accumulateGroundCorrection(entity, positionCorrection, dominantNormal, maxPenetration, groundNormal, groundPenetration);
+
+				/* 1.3 - StaticEntity collisions. */
+				this->accumulateStaticEntityCorrections(entity, leafSector, positionCorrection, dominantNormal, maxPenetration);
+
+				/* Apply corrections if any collision occurred. */
+				if ( maxPenetration > 0.0F )
+				{
+					/* Apply position correction (move out of collision). */
+					movable->moveFromPhysics(positionCorrection);
+
+					/* Apply velocity correction (bounce on dominant normal).
+					 * NOTE: Normal points TOWARDS surface (down for ground, Y+).
+					 * vn > 0 means velocity is going INTO the surface (same direction as normal). */
+					auto velocity = movable->linearVelocity();
+					const float vn = Vector< 3, float >::dotProduct(velocity, dominantNormal);
+
+					if ( vn > 0.0F )
+					{
+						const float bounciness = movable->getBodyPhysicalProperties().bounciness();
+						/* Reflect velocity: remove component going into surface, add bounce. */
+						velocity -= dominantNormal * vn * (1.0F + bounciness);
+						movable->setLinearVelocity(velocity);
+					}
+
+					/* Mark as grounded if there's a ground collision (regardless of dominant)
+					 * AND the entity is not bouncing away (velocity Y should be near zero or positive). */
+					/* NOTE: Temporarily disabled for physics testing.
+					if ( groundPenetration > 0.0F && velocity[Y] >= -0.1F )
+					{
+						movable->setGrounded();
+					}
+					*/
+				}
 			}
-		});*/
+		});
 
 		/* ============================================================
-		 * PHASE 4: SLEEP CHECK (Pause Idle Entities)
+		 * PHASE 2: DYNAMIC COLLISIONS (Node vs Node)
+		 * - Detection + Impulse solver (no direct position correction)
+		 * - TODO: Implement after static collisions are validated
 		 * ============================================================ */
 
-		/*for ( const auto & entity : m_physicsOctree->elements() )
-		{
-			auto * movableEntity = entity->getMovableTrait();
-
-			if ( movableEntity == nullptr )
-			{
-				continue;
-			}
-
-			if ( !entity->isSimulationPaused() && (!movableEntity->isMovable() || movableEntity->checkSimulationInertia()) )
-			{
-				entity->pauseSimulation(true);
-			}
-		}*/
+		/* NOTE: Node vs Node collisions are temporarily disabled.
+		 * The impulse-based solver will handle these once static collisions are stable. */
 	}
 
 	uint64_t
@@ -424,7 +422,6 @@ namespace EmEn::Scenes
 			return;
 		}
 
-		const auto initialManifoldCount = manifolds.size();
 		const auto position = entity->getWorldCoordinates().position();
 
 		switch ( entity->collisionDetectionModel() )
@@ -597,7 +594,7 @@ namespace EmEn::Scenes
 
 		if ( newCollisions > 0 )
 		{
-			TraceInfo{TracerTag} <<
+			TraceInfo{ClassId} <<
 				"Boundary collision detected: entity='" << entity->name() << "' "
 				"pos=(" << position[X] << ", " << position[Y] << ", " << position[Z] << ") "
 				"contacts=" << newCollisions;
@@ -619,7 +616,6 @@ namespace EmEn::Scenes
 			return;
 		}
 
-		const auto initialManifoldCount = manifolds.size();
 		const auto position = entity->getWorldCoordinates().position();
 
 		switch ( entity->collisionDetectionModel() )
@@ -700,7 +696,7 @@ namespace EmEn::Scenes
 
 		if ( newCollisions > 0 )
 		{
-			TraceInfo{TracerTag} <<
+			TraceInfo{ClassId} <<
 				"Ground collision detected: entity='" << entity->name() << "' "
 				"pos=(" << position[X] << ", " << position[Y] << ", " << position[Z] << ") "
 				"contacts=" << newCollisions;
@@ -722,5 +718,273 @@ namespace EmEn::Scenes
 
 			node.addForce(modifierForce);
 		});
+	}
+
+	void
+	Scene::accumulateBoundaryCorrection (const std::shared_ptr< AbstractEntity > & entity, Vector< 3, float > & positionCorrection, Vector< 3, float > & dominantNormal, float & maxPenetration) const noexcept
+	{
+		const auto position = entity->getWorldCoordinates().position();
+
+		/* Helper lambda to accumulate a single boundary collision. */
+		auto accumulateCollision = [&positionCorrection, &dominantNormal, &maxPenetration] (const Vector< 3, float > & normal, float penetration) {
+			/* Accumulate position correction (move opposite to normal). */
+			positionCorrection -= normal * penetration;
+
+			/* Track dominant collision for velocity bounce. */
+			if ( penetration > maxPenetration )
+			{
+				maxPenetration = penetration;
+				dominantNormal = normal;
+			}
+		};
+
+		switch ( entity->collisionDetectionModel() )
+		{
+			case CollisionDetectionModel::Point :
+			{
+				if ( position[X] > m_boundary )
+				{
+					accumulateCollision({1.0F, 0.0F, 0.0F}, position[X] - m_boundary);
+				}
+				else if ( position[X] < -m_boundary )
+				{
+					accumulateCollision({-1.0F, 0.0F, 0.0F}, -m_boundary - position[X]);
+				}
+
+				if ( position[Y] > m_boundary )
+				{
+					accumulateCollision({0.0F, 1.0F, 0.0F}, position[Y] - m_boundary);
+				}
+				else if ( position[Y] < -m_boundary )
+				{
+					accumulateCollision({0.0F, -1.0F, 0.0F}, -m_boundary - position[Y]);
+				}
+
+				if ( position[Z] > m_boundary )
+				{
+					accumulateCollision({0.0F, 0.0F, 1.0F}, position[Z] - m_boundary);
+				}
+				else if ( position[Z] < -m_boundary )
+				{
+					accumulateCollision({0.0F, 0.0F, -1.0F}, -m_boundary - position[Z]);
+				}
+			}
+				break;
+
+			case CollisionDetectionModel::Sphere :
+			{
+				const auto radius = entity->getWorldBoundingSphere().radius();
+
+				if ( position[X] + radius > m_boundary )
+				{
+					accumulateCollision({1.0F, 0.0F, 0.0F}, (position[X] + radius) - m_boundary);
+				}
+				else if ( position[X] - radius < -m_boundary )
+				{
+					accumulateCollision({-1.0F, 0.0F, 0.0F}, -m_boundary - (position[X] - radius));
+				}
+
+				if ( position[Y] + radius > m_boundary )
+				{
+					accumulateCollision({0.0F, 1.0F, 0.0F}, (position[Y] + radius) - m_boundary);
+				}
+				else if ( position[Y] - radius < -m_boundary )
+				{
+					accumulateCollision({0.0F, -1.0F, 0.0F}, -m_boundary - (position[Y] - radius));
+				}
+
+				if ( position[Z] + radius > m_boundary )
+				{
+					accumulateCollision({0.0F, 0.0F, 1.0F}, (position[Z] + radius) - m_boundary);
+				}
+				else if ( position[Z] - radius < -m_boundary )
+				{
+					accumulateCollision({0.0F, 0.0F, -1.0F}, -m_boundary - (position[Z] - radius));
+				}
+			}
+				break;
+
+			case CollisionDetectionModel::AABB :
+			{
+				const auto AABB = entity->getWorldBoundingBox();
+
+				if ( AABB.maximum(X) > m_boundary )
+				{
+					accumulateCollision({1.0F, 0.0F, 0.0F}, AABB.maximum(X) - m_boundary);
+				}
+				else if ( AABB.minimum(X) < -m_boundary )
+				{
+					accumulateCollision({-1.0F, 0.0F, 0.0F}, -m_boundary - AABB.minimum(X));
+				}
+
+				if ( AABB.maximum(Y) > m_boundary )
+				{
+					accumulateCollision({0.0F, 1.0F, 0.0F}, AABB.maximum(Y) - m_boundary);
+				}
+				else if ( AABB.minimum(Y) < -m_boundary )
+				{
+					accumulateCollision({0.0F, -1.0F, 0.0F}, -m_boundary - AABB.minimum(Y));
+				}
+
+				if ( AABB.maximum(Z) > m_boundary )
+				{
+					accumulateCollision({0.0F, 0.0F, 1.0F}, AABB.maximum(Z) - m_boundary);
+				}
+				else if ( AABB.minimum(Z) < -m_boundary )
+				{
+					accumulateCollision({0.0F, 0.0F, -1.0F}, -m_boundary - AABB.minimum(Z));
+				}
+			}
+				break;
+		}
+	}
+
+	void
+	Scene::accumulateGroundCorrection (const std::shared_ptr< AbstractEntity > & entity, Vector< 3, float > & positionCorrection, Vector< 3, float > & dominantNormal, float & maxPenetration, Vector< 3, float > & groundNormal, float & groundPenetration) const noexcept
+	{
+		if ( m_groundPhysics == nullptr )
+		{
+			return;
+		}
+
+		const auto position = entity->getWorldCoordinates().position();
+
+		/* Helper lambda to accumulate ground collision.
+		 * Gets the actual terrain normal at the contact position. */
+		auto accumulateCollision = [this, &positionCorrection, &dominantNormal, &maxPenetration, &groundNormal, &groundPenetration] (const Vector< 3, float > & contactPosition, float penetration) {
+			/* Get actual terrain normal at this position.
+			 * getNormalAt() returns normal pointing UP (away from ground, Y-).
+			 * We negate it to get normal pointing INTO ground (Y+) for consistent bounce math. */
+			const auto normal = -m_groundPhysics->getNormalAt(contactPosition);
+
+			/* Accumulate position correction (move opposite to normal = up). */
+			positionCorrection -= normal * penetration;
+
+			/* Track ground-specific collision for grounded state. */
+			groundNormal = normal;
+			groundPenetration = penetration;
+
+			/* Track dominant collision for velocity bounce. */
+			if ( penetration > maxPenetration )
+			{
+				maxPenetration = penetration;
+				dominantNormal = normal;
+			}
+		};
+
+		switch ( entity->collisionDetectionModel() )
+		{
+			case CollisionDetectionModel::Point :
+			{
+				const auto groundLevel = m_groundPhysics->getLevelAt(position);
+
+				/* NOTE: Y- is up, so position[Y] > groundLevel means below ground. */
+				if ( position[Y] > groundLevel )
+				{
+					accumulateCollision(position, position[Y] - groundLevel);
+				}
+			}
+				break;
+
+			case CollisionDetectionModel::Sphere :
+			{
+				const auto radius = entity->getWorldBoundingSphere().radius();
+				const auto groundLevel = m_groundPhysics->getLevelAt(position);
+				/* NOTE: Y- is up, so the lowest point of the sphere is position[Y] + radius. */
+				const auto lowestPoint = position[Y] + radius;
+
+				if ( lowestPoint > groundLevel )
+				{
+					accumulateCollision(position, lowestPoint - groundLevel);
+				}
+			}
+				break;
+
+			case CollisionDetectionModel::AABB :
+			{
+				const auto AABB = entity->getWorldBoundingBox();
+
+				/* NOTE: Y- is up, so "bottom" of the box has maximum Y values.
+				 * Check all four bottom corners and use the deepest penetration. */
+				const std::array< Vector< 3, float >, 4 > bottomCorners{
+					AABB.bottomSouthEast(),
+					AABB.bottomSouthWest(),
+					AABB.bottomNorthWest(),
+					AABB.bottomNorthEast()
+				};
+
+				auto deepestPenetration = 0.0F;
+
+				for ( const auto & corner : bottomCorners )
+				{
+					const auto groundLevel = m_groundPhysics->getLevelAt(corner);
+					const auto penetration = corner[Y] - groundLevel;
+
+					if ( penetration > deepestPenetration )
+					{
+						deepestPenetration = penetration;
+					}
+				}
+
+				if ( deepestPenetration > 0.0F )
+				{
+					accumulateCollision(position, deepestPenetration);
+				}
+			}
+				break;
+		}
+	}
+
+	void
+	Scene::accumulateStaticEntityCorrections (const std::shared_ptr< AbstractEntity > & entity, const OctreeSector< AbstractEntity, true > & sector, Vector< 3, float > & positionCorrection, Vector< 3, float > & dominantNormal, float & maxPenetration) const noexcept
+	{
+		/* Iterate through all entities in this sector looking for static entities. */
+		for ( const auto & otherEntity : sector.elements() )
+		{
+			/* Skip self. */
+			if ( entity.get() == otherEntity.get() )
+			{
+				continue;
+			}
+
+			/* Skip if the other entity is movable (we only want static entities here). */
+			if ( otherEntity->hasMovableAbility() )
+			{
+				continue;
+			}
+
+			/* Perform collision detection between the movable entity and the static entity. */
+			const auto entitySphere = entity->getWorldBoundingSphere();
+			const auto otherSphere = otherEntity->getWorldBoundingSphere();
+
+			/* Simple sphere-sphere collision for now. */
+			const auto delta = entitySphere.position() - otherSphere.position();
+			const auto distanceSquared = delta.lengthSquared();
+			const auto combinedRadius = entitySphere.radius() + otherSphere.radius();
+
+			if ( distanceSquared < combinedRadius * combinedRadius )
+			{
+				const auto distance = std::sqrt(distanceSquared);
+				const auto penetration = combinedRadius - distance;
+
+				if ( penetration > 0.0F && distance > 0.0001F )
+				{
+					/* Normal points from static entity to movable entity. */
+					const auto normal = delta / distance;
+
+					/* Accumulate position correction (move in direction of normal). */
+					positionCorrection += normal * penetration;
+
+					/* Track dominant collision for velocity bounce.
+					 * For static entities, we use the normal pointing INTO the static entity
+					 * (opposite direction) for consistent bounce behavior. */
+					if ( penetration > maxPenetration )
+					{
+						maxPenetration = penetration;
+						dominantNormal = -normal;
+					}
+				}
+			}
+		}
 	}
 }

@@ -836,7 +836,7 @@ namespace EmEn::Libs::Math
 				{
 					for ( size_t rowIndex = 0; rowIndex < dim_t; rowIndex++ )
 					{
-						m_data[(columnIndex * dim_t) + rowIndex] = columnIndex == rowIndex ? 1 : 0;
+						m_data[(columnIndex * dim_t) + rowIndex] = columnIndex == rowIndex ? static_cast< precision_t >(1) : static_cast< precision_t >(0);
 					}
 				}
 			}
@@ -853,7 +853,7 @@ namespace EmEn::Libs::Math
 				{
 					for ( size_t row = 0; row < dim_t; ++row )
 					{
-						const precision_t expected = row == col ? 1 : 0;
+						const precision_t expected = row == col ? static_cast< precision_t >(1) : static_cast< precision_t >(0);
 
 						if constexpr ( std::is_floating_point_v< precision_t > )
 						{

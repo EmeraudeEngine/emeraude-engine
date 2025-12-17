@@ -110,7 +110,7 @@ namespace EmEn::Physics
 		     movableEntityB.collisionDetectionModel() == CollisionDetectionModel::Sphere )
 		{
 			/* Contact point is on surface of sphere A, in direction of B. */
-			const auto & posA = movableEntityA.getWorldCoordinates().position();
+			const auto posA = movableEntityA.getWorldCoordinates().position();
 			const auto radiusA = movableEntityA.getWorldBoundingSphere().radius();
 
 			collisionPosition = posA + contactNormal * radiusA;

@@ -102,15 +102,15 @@ namespace EmEn::Animations
 
 			case Variant::Type::Integer64 :
 				return Variant{static_cast< int64_t >(linearInterpolation< long double >(
-					itStart->second.value().asInteger64(),
-					itEnd->second.value().asInteger64(),
+					static_cast< long double >(itStart->second.value().asInteger64()),
+					static_cast< long double >(itEnd->second.value().asInteger64()),
 					factor
 				))};
 
 			case Variant::Type::UnsignedInteger64 :
 				return Variant{static_cast< uint64_t >(linearInterpolation< long double >(
-					itStart->second.value().asUnsignedInteger64(),
-					itEnd->second.value().asUnsignedInteger64(),
+					static_cast< long double >(itStart->second.value().asUnsignedInteger64()),
+					static_cast< long double >(itEnd->second.value().asUnsignedInteger64()),
 					factor
 				))};
 
@@ -269,15 +269,15 @@ namespace EmEn::Animations
 
 			case Variant::Type::Integer64 :
 				return Variant{static_cast< int64_t >(cosineInterpolation< long double >(
-					itStart->second.value().asInteger64(),
-					itEnd->second.value().asInteger64(),
+					static_cast< long double >(itStart->second.value().asInteger64()),
+					static_cast< long double >(itEnd->second.value().asInteger64()),
 					factor
 				))};
 
 			case Variant::Type::UnsignedInteger64 :
 				return Variant{static_cast< uint64_t >(cosineInterpolation< long double >(
-					itStart->second.value().asUnsignedInteger64(),
-					itEnd->second.value().asUnsignedInteger64(),
+					static_cast< long double >(itStart->second.value().asUnsignedInteger64()),
+					static_cast< long double >(itEnd->second.value().asUnsignedInteger64()),
 					factor
 				))};
 

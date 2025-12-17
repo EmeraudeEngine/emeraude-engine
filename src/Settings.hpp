@@ -654,7 +654,7 @@ namespace EmEn
 
 					if ( value.type() == typeid(bool) )
 					{
-						return std::any_cast< bool >(value) ? 1 : 0;
+						return std::any_cast< bool >(value) ? static_cast< variable_t >(1) : static_cast< variable_t >(0);
 					}
 
 					if ( value.type() == typeid(uint32_t) )
@@ -685,7 +685,7 @@ namespace EmEn
 
 					if ( value.type() == typeid(bool) )
 					{
-						return std::any_cast< bool >(value) ? 1 : 0;
+						return std::any_cast< bool >(value) ? static_cast< variable_t >(1) : static_cast< variable_t >(0);
 					}
 
 					if ( value.type() == typeid(int32_t) )
@@ -719,7 +719,7 @@ namespace EmEn
 
 					if ( value.type() == typeid(bool) )
 					{
-						return std::any_cast< bool >(value) ? 1 : 0;
+						return std::any_cast< bool >(value) ? static_cast< variable_t >(1) : static_cast< variable_t >(0);
 					}
 
 					if ( value.type() == typeid(int32_t) )
@@ -748,7 +748,7 @@ namespace EmEn
 
 					if ( value.type() == typeid(bool) )
 					{
-						return std::any_cast< bool >(value) ? 1 : 0;
+						return std::any_cast< bool >(value) ? static_cast< variable_t >(1) : static_cast< variable_t >(0);
 					}
 
 					if ( value.type() == typeid(int32_t) )
@@ -786,7 +786,7 @@ namespace EmEn
 
 					if ( value.type() == typeid(bool) )
 					{
-						return std::any_cast< bool >(value) ? 1 : 0;
+						return std::any_cast< bool >(value) ? static_cast< variable_t >(1) : static_cast< variable_t >(0);
 					}
 
 					if ( value.type() == typeid(int32_t) )
@@ -826,7 +826,7 @@ namespace EmEn
 
 					if ( value.type() == typeid(bool) )
 					{
-						return std::any_cast< bool >(value) ? 1 : 0;
+						return std::any_cast< bool >(value) ? static_cast< variable_t >(1) : static_cast< variable_t >(0);
 					}
 
 					if ( value.type() == typeid(int32_t) )

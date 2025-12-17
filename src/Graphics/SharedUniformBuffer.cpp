@@ -80,7 +80,7 @@ namespace EmEn::Graphics
 		const auto maxUBOSize = 65536U;//limits.maxUniformBufferRange;
 		const auto minUBOAlignment = limits.minUniformBufferOffsetAlignment;
 
-		m_blockAlignedSize = minUBOAlignment * Math::alignCount(m_uniformBlockSize, static_cast< uint32_t >(minUBOAlignment));
+		m_blockAlignedSize = static_cast< uint32_t >(minUBOAlignment) * Math::alignCount(m_uniformBlockSize, static_cast< uint32_t >(minUBOAlignment));
 		m_maxElementCountPerUBO = maxUBOSize / m_blockAlignedSize;
 
 		/*TraceInfo{ClassId} <<
@@ -219,7 +219,7 @@ namespace EmEn::Graphics
 	SharedUniformBuffer::addBuffer () noexcept
 	{
 		/* TODO: Check this code (this doesn't work with desktop AMD graphics card) */
-		const auto & limits = m_device->physicalDevice()->propertiesVK10().limits;
+		//const auto & limits = m_device->physicalDevice()->propertiesVK10().limits;
 		const auto chunkId = (std::stringstream{} << "Chunk#" << m_uniformBufferObjects.size()).str();
 
 		constexpr auto UBOMaxSize = 65536;//limits.maxUniformBufferRange;
@@ -242,7 +242,8 @@ namespace EmEn::Graphics
 	bool
 	SharedUniformBuffer::addBuffer (Renderer & renderer, const descriptor_set_creator_t & descriptorSetCreator) noexcept
 	{
-		const auto & limits = m_device->physicalDevice()->propertiesVK10().limits;
+		/* TODO: Check this code (this doesn't work with desktop AMD graphics card) */
+		//const auto & limits = m_device->physicalDevice()->propertiesVK10().limits;
 		const auto chunkId = (std::stringstream{} << "DynamicChunk#" << m_uniformBufferObjects.size()).str();
 
 		constexpr auto UBOMaxSize = 65536;//limits.maxUniformBufferRange;

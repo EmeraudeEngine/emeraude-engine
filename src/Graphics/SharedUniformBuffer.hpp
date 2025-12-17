@@ -204,7 +204,7 @@ namespace EmEn::Graphics
 			uint32_t
 			bufferIndex (uint32_t index) const noexcept
 			{
-				return std::floor(index / m_maxElementCountPerUBO);
+				return static_cast< uint32_t >(std::floor(static_cast< double >(index) / static_cast< double >(m_maxElementCountPerUBO)));
 			}
 
 			std::shared_ptr< Vulkan::Device > m_device;

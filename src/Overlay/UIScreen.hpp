@@ -27,10 +27,10 @@
 #pragma once
 
 /* STL inclusions. */
-#include <array>
-#include <map>
+#include <algorithm>
 #include <memory>
 #include <string>
+#include <vector>
 
 /* Local inclusions for inheritances. */
 #include "Libs/NameableTrait.hpp"
@@ -196,14 +196,18 @@ namespace EmEn::Overlay
 					return nullptr;
 				}
 
-				if ( m_surfaces.contains(name) )
+					const auto existingIt = std::ranges::find_if(m_surfaces, [&name] (const auto & s) {
+					return s->name() == name;
+				});
+
+				if ( existingIt != m_surfaces.end() )
 				{
 					TraceError{ClassId} << "The UI screen '" << this->name() << "' contains already a surface named '" << name << "' !";
 
 					return nullptr;
 				}
 
-				const auto surface = std::make_shared< surface_t >(m_framebufferProperties, name, std::forward< ctor_args >(args)...);
+				auto surface = std::make_shared< surface_t >(m_framebufferProperties, name, std::forward< ctor_args >(args)...);
 
 				if ( !surface->createOnHardware(m_graphicsRenderer) )
 				{
@@ -214,7 +218,7 @@ namespace EmEn::Overlay
 					return nullptr;
 				}
 
-				m_surfaces[name] = surface;
+				m_surfaces.emplace_back(surface);
 
 				this->sortSurfacesByDepth();
 
@@ -256,25 +260,14 @@ namespace EmEn::Overlay
 			void clearSurfaces () noexcept;
 
 			/**
-			 * @brief Returns the screen name surfaces list.
-			 * @return const std::map< std::string, std::shared_ptr< Surface > > &
-			 */
-			[[nodiscard]]
-			const std::map< std::string, std::shared_ptr< Surface > > &
-			namedSurfaces () const noexcept
-			{
-				return m_surfaces;
-			}
-
-			/**
 			 * @brief Returns the screen surfaces list sorted by depth.
 			 * @return const std::vector< std::shared_ptr< Surface > > &
 			 */
 			[[nodiscard]]
 			const std::vector< std::shared_ptr< Surface > > &
-			sortedSurfaces () const noexcept
+			surfaces () const noexcept
 			{
-				return m_sortedSurfaces;
+				return m_surfaces;
 			}
 
 			/**
@@ -312,26 +305,26 @@ namespace EmEn::Overlay
 			}
 
 			/**
-			 * @bries Returns whether an input exclusive surface has been set.
+			 * @brief Returns whether an input exclusive surface has been set.
 			 * @return bool
 			 */
 			[[nodiscard]]
 			bool
 			isInputExclusiveSurfaceEnabled () const noexcept
 			{
-				return m_inputExclusiveSurface != nullptr;
+				return !m_inputExclusiveSurface.expired();
 			}
 
 			/**
 			 * @brief Returns the surface set as input exclusive.
-			 * @warning This can be nullptr.
+			 * @warning This can be nullptr if the surface was destroyed or never set.
 			 * @return std::shared_ptr< Surface >
 			 */
 			[[nodiscard]]
 			std::shared_ptr< Surface >
 			inputExclusiveSurface () const noexcept
 			{
-				return m_inputExclusiveSurface;
+				return m_inputExclusiveSurface.lock();
 			}
 
 			/**
@@ -405,7 +398,7 @@ namespace EmEn::Overlay
 			 * @brief Sort surfaces by depth when adding or removing surface from the screen.
 			 * @return void
 			 */
-			void sortSurfacesByDepth ();
+			void sortSurfacesByDepth () noexcept;
 
 			/**
 			 * @brief STL streams printable object.
@@ -417,9 +410,8 @@ namespace EmEn::Overlay
 			
 			Graphics::Renderer & m_graphicsRenderer;
 			const FramebufferProperties & m_framebufferProperties;
-			std::map< std::string, std::shared_ptr< Surface > > m_surfaces;
-			std::vector< std::shared_ptr< Surface > > m_sortedSurfaces;
-			std::shared_ptr< Surface > m_inputExclusiveSurface;
+			std::vector< std::shared_ptr< Surface > > m_surfaces;
+			std::weak_ptr< Surface > m_inputExclusiveSurface;
 			Saphir::ColorSpaceConversion m_colorSpaceConversion{Saphir::ColorSpaceConversion::None};
 			mutable std::mutex m_surfacesMutex;
 			bool m_isVisible{false};

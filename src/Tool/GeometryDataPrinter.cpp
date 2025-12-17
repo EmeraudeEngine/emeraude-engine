@@ -70,7 +70,7 @@ namespace EmEn::Tool
 
 		if ( const auto arg = arguments.get("--quality") )
 		{
-			m_quality = String::toNumber< uint64_t >(arg.value());
+			m_quality = String::toNumber< uint32_t >(arg.value());
 		}
 		
 		m_enableNormals = arguments.isSwitchPresent("--enable-normals");
