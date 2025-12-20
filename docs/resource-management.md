@@ -82,6 +82,7 @@ class Container : public ContainerInterface, public ObserverTrait {
     // Core API
     std::shared_ptr<resource_t> getResource(const std::string& name, bool asyncLoad = true);
     std::shared_ptr<resource_t> getOrCreateResource(const std::string& name, ...);
+    std::shared_ptr<resource_t> getOrCreateUnloadedResource(const std::string& name, ...);
     std::shared_ptr<resource_t> getDefaultResource();
 
     // Management

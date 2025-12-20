@@ -1,5 +1,5 @@
 /*
- * src/Graphics/Renderable/GroundInterface.hpp
+ * src/Graphics/Renderable/GroundLevelInterface.hpp
  * This file is part of Emeraude-Engine
  *
  * Copyright (C) 2010-2025 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
@@ -26,19 +26,22 @@
 
 #pragma once
 
+/* Local inclusions. */
+#include "Libs/Math/Vector.hpp"
+
 namespace EmEn::Scenes
 {
 	/**
 	 * @brief Interface to define a physical and visible floor in a scene.
 	 */
-	class GroundInterface
+	class GroundLevelInterface
 	{
 		public:
 
 			/**
 			 * @brief Destructs the ground interface.
 			 */
-			virtual ~GroundInterface () = default;
+			virtual ~GroundLevelInterface () = default;
 
 			/**
 			 * @brief Returns the ground level under the given position.
@@ -66,11 +69,17 @@ namespace EmEn::Scenes
 			[[nodiscard]]
 			virtual Libs::Math::Vector< 3, float > getNormalAt (const Libs::Math::Vector< 3, float > & worldPosition) const noexcept = 0;
 
+			/**
+			 * @brief Updates the ground visibility from the camera position.
+			 * @note This is not frustum-culling, but help the ground to know where the point of view is located.
+			 */
+			virtual void updateVisibility (const Libs::Math::Vector< 3, float > & worldPosition) noexcept = 0;
+
 		protected:
 
 			/**
 			 * @brief Constructs a ground interface.
 			 */
-			GroundInterface () noexcept = default;
+			GroundLevelInterface () noexcept = default;
 	};
 }

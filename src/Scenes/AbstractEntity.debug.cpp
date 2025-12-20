@@ -29,6 +29,10 @@
 /* Local inclusions. */
 #include "Graphics/Geometry/ResourceGenerator.hpp"
 #include "Graphics/RenderableInstance/Abstract.hpp"
+#include "Physics/CollisionModelInterface.hpp"
+#include "Physics/SphereCollisionModel.hpp"
+#include "Physics/AABBCollisionModel.hpp"
+#include "Physics/CapsuleCollisionModel.hpp"
 #include "Component/Visual.hpp"
 #include "Tracer.hpp"
 
@@ -41,13 +45,13 @@ namespace EmEn::Scenes
 	using namespace Libs;
 	using namespace Libs::Math;
 	using namespace Graphics;
+	using namespace Physics;
 
 	constexpr auto TracerTag{"AbstractEntity.debug"};
 
 	constexpr auto AxisDebugName{"+EntityAxis"};
 	constexpr auto VelocityDebugName{"+EntityVelocity"};
-	constexpr auto BoundingBoxDebugName{"+EntityBoundingBox"};
-	constexpr auto BoundingSphereDebugName{"+EntityBoundingSphere"};
+	constexpr auto BoundingShapeDebugName{"+EntityBoundingShape"};
 	constexpr auto CameraDebugName{"+EntityCamera"};
 
 	void
@@ -57,7 +61,7 @@ namespace EmEn::Scenes
 		{
 			return;
 		}
-		
+
 		const char * label = nullptr;
 		std::shared_ptr< Renderable::MeshResource > meshResource;
 
@@ -73,14 +77,27 @@ namespace EmEn::Scenes
 				meshResource = AbstractEntity::getVelocityVisualDebug(resourceManager);
 				break;
 
-			case VisualDebugType::BoundingBox :
-				label = BoundingBoxDebugName;
-				meshResource = AbstractEntity::getBoundingBoxVisualDebug(resourceManager);
-				break;
+			case VisualDebugType::BoundingShape :
+				label = BoundingShapeDebugName;
+				if ( m_collisionModel != nullptr )
+				{
+					switch ( m_collisionModel->modelType() )
+					{
+						case CollisionModelType::Point :
+							/* Point has no visual representation, use axis instead. */
+							meshResource = AbstractEntity::getAxisVisualDebug(resourceManager);
+							break;
 
-			case VisualDebugType::BoundingSphere :
-				label = BoundingSphereDebugName;
-				meshResource = AbstractEntity::getBoundingSphereVisualDebug(resourceManager);
+						case CollisionModelType::Sphere :
+							meshResource = AbstractEntity::getBoundingSphereVisualDebug(resourceManager);
+							break;
+
+						case CollisionModelType::AABB :
+						case CollisionModelType::Capsule : /* TODO: Implement capsule visual debug mesh. */
+							meshResource = AbstractEntity::getBoundingBoxVisualDebug(resourceManager);
+							break;
+					}
+				}
 				break;
 
 			case VisualDebugType::Camera :
@@ -99,7 +116,6 @@ namespace EmEn::Scenes
 		/* NOTE: Create an instance of this visual debug mesh. */
 		const auto meshInstance = this->componentBuilder< Component::Visual >(label)
 			 .setup([] (auto & component) {
-				 component.enablePhysicalProperties(false);
 				 component.getRenderableInstance()->enableLighting();
 			 }).build(meshResource);
 
@@ -116,24 +132,65 @@ namespace EmEn::Scenes
 		switch ( type )
 		{
 			case VisualDebugType::Axis :
-				renderableInstance->setTransformationMatrix(Matrix< 4, float >::scaling(m_boundingSphere.radius()));
+				if ( m_collisionModel != nullptr )
+				{
+					renderableInstance->setTransformationMatrix(Matrix< 4, float >::scaling(m_collisionModel->getRadius()));
+				}
+				else
+				{
+					renderableInstance->setTransformationMatrix(Matrix< 4, float >::identity());
+				}
 				break;
 
 			case VisualDebugType::Velocity :
 				break;
 
-			case VisualDebugType::BoundingBox :
-				renderableInstance->setTransformationMatrix(
-					Matrix< 4, float >::translation(m_boundingBox.centroid()) *
-					Matrix< 4, float >::scaling(m_boundingBox.width(), m_boundingBox.height(), m_boundingBox.depth())
-				);
-				break;
+			case VisualDebugType::BoundingShape :
+				if ( m_collisionModel != nullptr )
+				{
+					switch ( m_collisionModel->modelType() )
+					{
+						case CollisionModelType::Point :
+							/* Point has no shape, use identity. */
+							renderableInstance->setTransformationMatrix(Matrix< 4, float >::identity());
+							break;
 
-			case VisualDebugType::BoundingSphere :
-				renderableInstance->setTransformationMatrix(
-					Matrix< 4, float >::translation(m_boundingSphere.position()) *
-					Matrix< 4, float >::scaling(m_boundingSphere.radius())
-				);
+						case CollisionModelType::Sphere :
+							/* Sphere is centered at local origin. */
+							renderableInstance->setTransformationMatrix(Matrix< 4, float >::scaling(m_collisionModel->getRadius()));
+							break;
+
+						case CollisionModelType::AABB :
+						{
+							const auto * aabbModel = static_cast< const AABBCollisionModel * >(m_collisionModel.get());
+							const auto & aabb = aabbModel->localAABB();
+
+							if ( aabb.isValid() )
+							{
+								renderableInstance->setTransformationMatrix(
+									Matrix< 4, float >::translation(aabb.centroid()) *
+									Matrix< 4, float >::scaling(aabb.width(), aabb.height(), aabb.depth())
+								);
+							}
+						}
+							break;
+
+						case CollisionModelType::Capsule :
+						{
+							const auto * capsuleModel = static_cast< const CapsuleCollisionModel * >(m_collisionModel.get());
+							const auto & capsule = capsuleModel->localCapsule();
+							const auto center = (capsule.startPoint() + capsule.endPoint()) * 0.5F;
+							const auto height = (capsule.endPoint() - capsule.startPoint()).length() + capsule.radius() * 2.0F;
+							const auto diameter = capsule.radius() * 2.0F;
+
+							renderableInstance->setTransformationMatrix(
+								Matrix< 4, float >::translation(center) *
+								Matrix< 4, float >::scaling(diameter, height, diameter)
+							);
+						}
+							break;
+					}
+				}
 				break;
 
 			case VisualDebugType::Camera :
@@ -156,12 +213,8 @@ namespace EmEn::Scenes
 				this->removeComponent(VelocityDebugName);
 				break;
 
-			case VisualDebugType::BoundingBox :
-				this->removeComponent(BoundingBoxDebugName);
-				break;
-
-			case VisualDebugType::BoundingSphere :
-				this->removeComponent(BoundingSphereDebugName);
+			case VisualDebugType::BoundingShape :
+				this->removeComponent(BoundingShapeDebugName);
 				break;
 
 			case VisualDebugType::Camera :
@@ -196,11 +249,8 @@ namespace EmEn::Scenes
 			case VisualDebugType::Velocity :
 				return this->containsComponent(VelocityDebugName);
 
-			case VisualDebugType::BoundingBox :
-				return this->containsComponent(BoundingBoxDebugName);
-
-			case VisualDebugType::BoundingSphere :
-				return this->containsComponent(BoundingSphereDebugName);
+			case VisualDebugType::BoundingShape :
+				return this->containsComponent(BoundingShapeDebugName);
 
 			case VisualDebugType::Camera :
 				return this->containsComponent(CameraDebugName);
@@ -213,51 +263,71 @@ namespace EmEn::Scenes
 	AbstractEntity::updateVisualDebug () noexcept
 	{
 		/* Update axis. */
+		if ( const auto component = this->getComponent(AxisDebugName); component != nullptr )
 		{
-			const auto component = this->getComponent(AxisDebugName);
+			const auto renderableInstance = component->getRenderableInstance();
 
-			if ( component != nullptr )
+			if ( m_collisionModel != nullptr )
 			{
-				const auto renderableInstance = component->getRenderableInstance();
-
-				if ( m_boundingSphere.isValid() )
-				{
-					renderableInstance->setTransformationMatrix(Matrix< 4, float >::scaling(m_boundingSphere.radius()));
-				}
-				else
-				{
-					renderableInstance->setTransformationMatrix(Matrix< 4, float >::scaling(1.0F));
-				}
+				renderableInstance->setTransformationMatrix(Matrix< 4, float >::scaling(m_collisionModel->getRadius()));
+			}
+			else
+			{
+				renderableInstance->setTransformationMatrix(Matrix< 4, float >::identity());
 			}
 		}
 
-		/* Update bounding box. */
+		/* Update bounding shape. */
+		if ( m_collisionModel == nullptr  )
 		{
-			const auto component = this->getComponent(BoundingBoxDebugName);
-
-			if ( component != nullptr )
-			{
-				const auto renderableInstance = component->getRenderableInstance();
-
-				renderableInstance->setTransformationMatrix(
-					Matrix< 4, float >::translation(m_boundingBox.centroid()) *
-					Matrix< 4, float >::scaling(m_boundingBox.width(), m_boundingBox.height(), m_boundingBox.depth())
-				);
-			}
+			return;
 		}
 
-		/* Update bounding sphere. */
+		if ( const auto component = this->getComponent(BoundingShapeDebugName); component != nullptr )
 		{
-			const auto component = this->getComponent(BoundingSphereDebugName);
+			const auto renderableInstance = component->getRenderableInstance();
 
-			if ( component != nullptr )
+			switch ( m_collisionModel->modelType() )
 			{
-				const auto renderableInstance = component->getRenderableInstance();
+				case CollisionModelType::Point :
+					/* Point has no shape, use identity. */
+					renderableInstance->setTransformationMatrix(Matrix< 4, float >::identity());
+					break;
 
-				renderableInstance->setTransformationMatrix(
-					Matrix< 4, float >::translation(m_boundingSphere.position()) *
-					Matrix< 4, float >::scaling(m_boundingSphere.radius())
-				);
+				case CollisionModelType::Sphere :
+					/* Sphere is centered at local origin. */
+					renderableInstance->setTransformationMatrix(Matrix< 4, float >::scaling(m_collisionModel->getRadius()));
+					break;
+
+				case CollisionModelType::AABB :
+				{
+					const auto * aabbModel = static_cast< const AABBCollisionModel * >(m_collisionModel.get());
+					const auto & aabb = aabbModel->localAABB();
+
+					if ( aabb.isValid() )
+					{
+						renderableInstance->setTransformationMatrix(
+							Matrix< 4, float >::translation(aabb.centroid()) *
+							Matrix< 4, float >::scaling(aabb.width(), aabb.height(), aabb.depth())
+						);
+					}
+				}
+					break;
+
+				case CollisionModelType::Capsule :
+				{
+					const auto * capsuleModel = static_cast< const CapsuleCollisionModel * >(m_collisionModel.get());
+					const auto & capsule = capsuleModel->localCapsule();
+					const auto center = (capsule.startPoint() + capsule.endPoint()) * 0.5F;
+					const auto height = (capsule.endPoint() - capsule.startPoint()).length() + capsule.radius() * 2.0F;
+					const auto diameter = capsule.radius() * 2.0F;
+
+					renderableInstance->setTransformationMatrix(
+						Matrix< 4, float >::translation(center) *
+						Matrix< 4, float >::scaling(diameter, height, diameter)
+					);
+				}
+					break;
 			}
 		}
 	}
@@ -308,7 +378,7 @@ namespace EmEn::Scenes
 	std::shared_ptr< Renderable::MeshResource >
 	AbstractEntity::getVelocityVisualDebug (Resources::Manager & resources) noexcept
 	{
-		return resources.container< Renderable::MeshResource >()->getOrCreateResourceAsync(AxisDebugName, [&resources] (Renderable::MeshResource & newMesh) {
+		return resources.container< Renderable::MeshResource >()->getOrCreateResourceAsync(VelocityDebugName, [&resources] (Renderable::MeshResource & newMesh) {
 			/* NOTE: Get the geometry. */
 			const Geometry::ResourceGenerator generator{resources, Geometry::EnableNormal | Geometry::EnableVertexColor};
 
@@ -328,33 +398,9 @@ namespace EmEn::Scenes
 	}
 
 	std::shared_ptr< Renderable::MeshResource >
-	AbstractEntity::getBoundingBoxVisualDebug (Resources::Manager & resources) noexcept
-	{
-		return resources.container< Renderable::MeshResource >()->getOrCreateResourceAsync(BoundingBoxDebugName, [&resources] (Renderable::MeshResource & newMesh) {
-			/* NOTE: Get the geometry. */
-			const Geometry::ResourceGenerator generator{resources, Geometry::EnableNormal | Geometry::EnableVertexColor};
-
-			const auto geometryResource = generator.cube(1.0F);
-
-			if ( geometryResource == nullptr )
-			{
-				return false;
-			}
-
-			/* NOTE: Get a translucent material. */
-			const auto materialResource = AbstractEntity::getTranslucentVisualDebugMaterial(resources);
-
-			/* NOTE: Assemble the mesh. */
-			// TODO: Remove hard-coded wireframe !
-			return newMesh.load(geometryResource, materialResource, {PolygonMode::Line, CullingMode::None});
-		});
-	}
-
-	std::shared_ptr< Renderable::MeshResource >
 	AbstractEntity::getBoundingSphereVisualDebug (Resources::Manager & resources) noexcept
 	{
-		return resources.container< Renderable::MeshResource >()->getOrCreateResourceAsync(BoundingSphereDebugName, [&resources] (Renderable::MeshResource & newMesh) {
-			/* NOTE: Get the geometry. */
+		return resources.container< Renderable::MeshResource >()->getOrCreateResourceAsync("+BoundingSphere", [&resources] (Renderable::MeshResource & newMesh) {
 			const Geometry::ResourceGenerator generator{resources, Geometry::EnableNormal | Geometry::EnableVertexColor};
 
 			const auto geometryResource = generator.geodesicSphere(1.0F);
@@ -364,11 +410,27 @@ namespace EmEn::Scenes
 				return false;
 			}
 
-			/* NOTE: Get a basic material. */
 			const auto materialResource = AbstractEntity::getTranslucentVisualDebugMaterial(resources);
 
-			/* NOTE: Assemble the mesh. */
-			// TODO: Remove hard-coded wireframe !
+			return newMesh.load(geometryResource, materialResource, {PolygonMode::Line, CullingMode::None});
+		});
+	}
+
+	std::shared_ptr< Renderable::MeshResource >
+	AbstractEntity::getBoundingBoxVisualDebug (Resources::Manager & resources) noexcept
+	{
+		return resources.container< Renderable::MeshResource >()->getOrCreateResourceAsync("+BoundingBox", [&resources] (Renderable::MeshResource & newMesh) {
+			const Geometry::ResourceGenerator generator{resources, Geometry::EnableNormal | Geometry::EnableVertexColor};
+
+			const auto geometryResource = generator.cube(1.0F);
+
+			if ( geometryResource == nullptr )
+			{
+				return false;
+			}
+
+			const auto materialResource = AbstractEntity::getTranslucentVisualDebugMaterial(resources);
+
 			return newMesh.load(geometryResource, materialResource, {PolygonMode::Line, CullingMode::None});
 		});
 	}

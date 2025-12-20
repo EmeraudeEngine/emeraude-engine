@@ -170,14 +170,7 @@ namespace EmEn::Scenes::Component
 			 * @param loop The loop play mode state. Default false.
 			 * @return void
 			 */
-			void
-			attachSound (const std::shared_ptr< Audio::SoundResource > & sound, float gain = 1.0F, bool loop = false) noexcept
-			{
-				this->setFlag(Loop, loop);
-
-				m_attachedSound = sound;
-				m_gain = gain;
-			}
+			void attachSound (const std::shared_ptr< Audio::SoundResource > & sound, float gain = 1.0F, bool loop = false) noexcept;
 
 			/**
 			 * @brief Sends a sound to play to the underlying source.
@@ -312,6 +305,6 @@ namespace EmEn::Scenes::Component
 
 			Audio::SourceRequest m_source;
 			std::shared_ptr< Audio::SoundResource > m_attachedSound;
-			float m_gain{8.0F};
+			float m_gain{1.0F};
 	};
 }

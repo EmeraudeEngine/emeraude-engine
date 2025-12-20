@@ -28,13 +28,31 @@
 
 /* STL inclusions. */
 #include <cstdint>
+#include <memory>
 
 /* Local inclusions for usages. */
 #include "EnvironmentPhysicalProperties.hpp"
 #include "BodyPhysicalProperties.hpp"
 
+/* Forward declarations. */
+namespace EmEn::Scenes
+{
+	class AbstractEntity;
+}
+
+
 namespace EmEn::Physics
 {
+	/**
+	 * @brief Identifies the type of surface an entity is grounded on.
+	 */
+	enum class GroundedSource : uint8_t
+	{
+		None,      ///< Not grounded.
+		Ground,    ///< Grounded on terrain/ground.
+		Boundary,  ///< Grounded on world boundary.
+		Entity     ///< Grounded on a StaticEntity or Node.
+	};
 	/**
 	 * @brief Gives the ability to move something in the 3D world with physical properties.
 	 */
@@ -445,10 +463,16 @@ namespace EmEn::Physics
 
 			/**
 			 * @brief Events when this movable has hit something.
-			 * @param impactForce The force of impact.
+			 * @note The impact force is expressed in Newtons (N), representing the instantaneous collision force.
+			 *       Computed as F = (m × Δv) / Δt where Δt is the physics timestep.
+			 *       Example values at 60 FPS (Δt ≈ 0.0167s):
+			 *       - Light tap: ~100 N
+			 *       - Moderate impact: ~1000 N
+			 *       - Heavy collision: ~10000 N
+			 * @param impactForce The collision force in Newtons (N).
 			 * @return void
 			 */
-			virtual void onHit (float impactForce) noexcept = 0;
+			virtual void onCollision (float impactForce) noexcept = 0;
 
 			/**
 			 * @brief Events when this movable got a new impulse or a force.
@@ -474,22 +498,18 @@ namespace EmEn::Physics
 			virtual void rotateFromPhysics (float radianAngle, const Libs::Math::Vector< 3, float > & worldDirection) noexcept = 0;
 
 			/**
-			 * @brief Marks that this entity had a collision this frame.
-			 * @note Called by the constraint solver when resolving collisions.
+			 * @brief Marks that this entity is grounded on a specific source.
+			 * @param source The type of surface (Ground, Boundary, or Entity).
+			 * @param groundedOn Pointer to the entity we're grounded on (only for Entity source).
 			 * @return void
 			 */
-			void
-			setHadCollision () noexcept
-			{
-				m_hadCollision = true;
-			}
+			void setGrounded (GroundedSource source, const MovableTrait * groundedOn = nullptr) noexcept;
 
 			/**
-			 * @brief Marks that this entity is grounded (standing on a surface).
-			 * @note Called by the constraint solver when collision normal points upward.
+			 * @brief Clears the grounded state immediately.
 			 * @return void
 			 */
-			void setGrounded () noexcept;
+			void clearGrounded () noexcept;
 
 			/**
 			 * @brief Decrements the grounded grace period.
@@ -499,11 +519,47 @@ namespace EmEn::Physics
 			void updateGroundedState () noexcept;
 
 			/**
-			 * @brief Returns whether this entity is grounded.
+			 * @brief Returns whether this entity is grounded on anything.
 			 * @return bool
 			 */
 			[[nodiscard]]
 			bool isGrounded () const noexcept;
+
+			/**
+			 * @brief Returns whether this entity is grounded on terrain.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool isGroundedOnTerrain () const noexcept;
+
+			/**
+			 * @brief Returns whether this entity is grounded on a boundary.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool isGroundedOnBoundary () const noexcept;
+
+			/**
+			 * @brief Returns whether this entity is grounded on another entity.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool isGroundedOnEntity () const noexcept;
+
+			/**
+			 * @brief Returns whether this entity is grounded on a specific entity.
+			 * @param entity The entity to check against.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool isGroundedOn (const MovableTrait * entity) const noexcept;
+
+			/**
+			 * @brief Returns the current grounded source.
+			 * @return GroundedSource
+			 */
+			[[nodiscard]]
+			GroundedSource groundedSource () const noexcept;
 
 		protected:
 
@@ -521,16 +577,23 @@ namespace EmEn::Physics
 
 		private:
 
+			/** @brief Threshold for considering entity stable (in frames). ~500ms at 60 FPS. */
+			static constexpr uint8_t StableFramesThreshold{30};
+			/** @brief Grace period before losing grounded state (in frames). ~250ms at 60 FPS. */
+			static constexpr uint8_t GroundedGracePeriod{15};
+
 			Libs::Math::Vector< 3, float > m_linearVelocity;
 			Libs::Math::Vector< 3, float > m_angularVelocity; // Omega
 			Libs::Math::Vector< 3, float > m_centerOfMass;
 			Libs::Math::Matrix< 3, float > m_inverseWorldInertia; // Cached I^-1 in world space
+			const MovableTrait * m_groundedOn{nullptr}; ///< Entity we're grounded on (if source is Entity).
 			float m_linearSpeed{0.0F};
 			float m_angularSpeed{0.0F};
-			uint8_t m_groundedFrames{0};
+			GroundedSource m_groundedSource{GroundedSource::None}; ///< Type of surface we're grounded on.
+			uint8_t m_groundedFrames{0}; ///< Grace period countdown.
+			uint8_t m_stableFrames{0}; ///< Consecutive frames with negligible velocity.
 			bool m_isMovable{true};
 			bool m_rotationEnabled{false};
 			bool m_freeFlyModeEnabled{false};
-			bool m_hadCollision{false};
 	};
 }

@@ -89,30 +89,21 @@ namespace EmEn::Libs::Utility
 	}
 
 	/**
-	 * @brief Returns the number between boundaries or on extreme number.
+	 * @brief Checks if a number is within the specified boundaries (inclusive).
 	 * @tparam number_t The type of the number. Default float.
 	 * @param value The number to be tested.
-	 * @param lowest The lowest number allowed.
-	 * @param highest The highest number allowed.
-	 * @return number_t
+	 * @param lowest The lowest boundary.
+	 * @param highest The highest boundary.
+	 * @return bool
 	 */
 	template< typename number_t = float >
-	[[deprecated("Use STL from C++17 : std::clamp(value, lowest, highest)")]]
 	[[nodiscard]]
-	number_t
-	between (number_t value, number_t lowest, number_t highest) noexcept requires (std::is_arithmetic_v< number_t >)
+	constexpr
+	bool
+	isBetween (number_t value, number_t lowest, number_t highest) noexcept
+		requires (std::is_arithmetic_v< number_t >)
 	{
-		if ( value < lowest )
-		{
-			return lowest;
-		}
-
-		if ( value > highest )
-		{
-			return highest;
-		}
-
-		return value;
+		return value >= lowest && value <= highest;
 	}
 
 	/**
@@ -127,7 +118,8 @@ namespace EmEn::Libs::Utility
 	[[nodiscard]]
 	constexpr
 	number_t
-	ceilDivision (number_t dividend, number_t divisor) noexcept requires (std::is_integral_v< number_t >)
+	ceilDivision (number_t dividend, number_t divisor) noexcept
+		requires (std::is_integral_v< number_t >)
 	{
 		if ( divisor == 0 )
 		{
@@ -149,7 +141,8 @@ namespace EmEn::Libs::Utility
 	[[nodiscard]]
 	constexpr
 	number_t
-	ratio (number_t total, number_t part, number_t scale) noexcept requires (std::is_floating_point_v< number_t >)
+	ratio (number_t total, number_t part, number_t scale) noexcept
+		requires (std::is_floating_point_v< number_t >)
 	{
 		if ( total == 0 )
 		{
@@ -171,7 +164,8 @@ namespace EmEn::Libs::Utility
 	[[nodiscard]]
 	constexpr
 	number_t
-	ratio (number_t total, number_t part, float scale = 1.0F) noexcept requires (std::is_integral_v< number_t >)
+	ratio (number_t total, number_t part, float scale = 1.0F) noexcept
+		requires (std::is_integral_v< number_t >)
 	{
 		if ( total == 0 )
 		{
@@ -209,7 +203,8 @@ namespace EmEn::Libs::Utility
 	template< typename number_t = int32_t >
 	[[nodiscard]]
 	number_t
-	quickRandom (number_t min, number_t max) requires (std::is_integral_v< number_t >)
+	quickRandom (number_t min, number_t max)
+		requires (std::is_integral_v< number_t >)
 	{
 		if ( min > max )
 		{
@@ -237,7 +232,8 @@ namespace EmEn::Libs::Utility
 	template< typename number_t = float >
 	[[nodiscard]]
 	number_t
-	quickRandom (number_t min, number_t max) requires (std::is_floating_point_v< number_t >)
+	quickRandom (number_t min, number_t max)
+		requires (std::is_floating_point_v< number_t >)
 	{
 		if ( max < min )
 		{
@@ -261,7 +257,8 @@ namespace EmEn::Libs::Utility
 	template< typename number_t = float >
 	[[nodiscard]]
 	bool
-	equal (number_t operandA, number_t operandB, number_t epsilon = std::numeric_limits< number_t >::epsilon()) noexcept requires (std::is_floating_point_v< number_t >)
+	equal (number_t operandA, number_t operandB, number_t epsilon = std::numeric_limits< number_t >::epsilon()) noexcept
+		requires (std::is_floating_point_v< number_t >)
 	{
 		return std::abs(operandA - operandB) <= epsilon;
 	}
@@ -277,7 +274,8 @@ namespace EmEn::Libs::Utility
 	template< typename number_t = float >
 	[[nodiscard]]
 	bool
-	different (number_t operandA, number_t operandB, number_t epsilon = std::numeric_limits< number_t >::epsilon()) noexcept requires (std::is_floating_point_v< number_t >)
+	different (number_t operandA, number_t operandB, number_t epsilon = std::numeric_limits< number_t >::epsilon()) noexcept
+		requires (std::is_floating_point_v< number_t >)
 	{
 		return std::abs(operandA - operandB) > epsilon;
 	}
@@ -292,7 +290,8 @@ namespace EmEn::Libs::Utility
 	template< typename number_t = float >
 	[[nodiscard]]
 	bool
-	isZero (number_t value, number_t epsilon = std::numeric_limits< number_t >::epsilon()) noexcept requires (std::is_arithmetic_v< number_t >)
+	isZero (number_t value, number_t epsilon = std::numeric_limits< number_t >::epsilon()) noexcept
+		requires (std::is_arithmetic_v< number_t >)
 	{
 		if constexpr ( std::is_integral_v< number_t > )
 		{
@@ -313,7 +312,8 @@ namespace EmEn::Libs::Utility
 	template< typename number_t = float >
 	[[nodiscard]]
 	number_t
-	ifZero (number_t value, number_t replacement, number_t epsilon = std::numeric_limits< number_t >::epsilon()) noexcept requires (std::is_floating_point_v< number_t >)
+	ifZero (number_t value, number_t replacement, number_t epsilon = std::numeric_limits< number_t >::epsilon()) noexcept
+		requires (std::is_floating_point_v< number_t >)
 	{
 		return std::abs(value) <= epsilon ? replacement : value;
 	}
@@ -328,7 +328,8 @@ namespace EmEn::Libs::Utility
 	template< typename number_t = float >
 	[[nodiscard]]
 	bool
-	isOne (number_t value, number_t epsilon = std::numeric_limits< number_t >::epsilon()) noexcept requires (std::is_floating_point_v< number_t >)
+	isOne (number_t value, number_t epsilon = std::numeric_limits< number_t >::epsilon()) noexcept
+		requires (std::is_floating_point_v< number_t >)
 	{
 		return equal(value, static_cast< number_t >(1), epsilon);
 	}

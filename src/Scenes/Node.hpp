@@ -415,22 +415,8 @@ namespace EmEn::Scenes
 			Libs::Math::CartesianFrame< float > getWorldCoordinates () const noexcept override;
 
 			/**
-			 * @copydoc EmEn::Scenes::LocatableInterface::getWorldBoundingBox() const
-			 * @return Null box if called on root node.
-			 */
-			[[nodiscard]]
-			Libs::Math::Space3D::AACuboid< float > getWorldBoundingBox () const noexcept override;
-
-			/**
-			 * @copydoc EmEn::Scenes::LocatableInterface::getWorldBoundingSphere() const
-			 * @return Null sphere if called on root node.
-			 */
-			[[nodiscard]]
-			Libs::Math::Space3D::Sphere< float > getWorldBoundingSphere () const noexcept override;
-
-			/**
 			 * @copydoc EmEn::Scenes::LocatableInterface::isVisibleTo(const Graphics::Frustum &) const
-			 * @note Uses the collision detection model to determine visibility (Point, Sphere, or AABB).
+			 * @note Uses the collision model AABB to determine visibility.
 			 */
 			[[nodiscard]]
 			bool isVisibleTo (const Graphics::Frustum & frustum) const noexcept override;
@@ -552,11 +538,11 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			 * @copydoc EmEn::Physics::MovableTrait::onHit() noexcept
+			 * @copydoc EmEn::Physics::MovableTrait::onCollision() noexcept
 			 * @post Emits NodeCollision notification with impact force as data.
 			 */
 			void
-			onHit (float impactForce) noexcept override
+			onCollision (float impactForce) noexcept override
 			{
 				this->notify(NodeCollision, impactForce);
 			}
@@ -871,7 +857,7 @@ namespace EmEn::Scenes
 				this->move(positionDelta, Libs::Math::TransformSpace::World);
 
 				/* If simulation was paused and movement is not significant, stay paused. */
-				if ( wasSimulationPaused && positionDelta.length() < Physics::SI::centimeters(5.0F) )
+				if ( wasSimulationPaused && positionDelta.length() < Physics::SI::centimeters(2.0F) )
 				{
 					this->pauseSimulation(true);
 				}

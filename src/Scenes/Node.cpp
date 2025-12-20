@@ -34,6 +34,7 @@
 
 /* Local inclusions. */
 #include "Libs/Math/OrientedCuboid.hpp"
+#include "Scenes/Component/AbstractModifier.hpp"
 #include "Scenes/Scene.hpp"
 #include "Tracer.hpp"
 
@@ -750,62 +751,20 @@ namespace EmEn::Scenes
 		return CartesianFrame< float >{matrix, scalingVector};
 	}
 
-	Space3D::AACuboid< float >
-	Node::getWorldBoundingBox () const noexcept
-	{
-		if ( this->isRoot() )
-		{
-			/* NOTE: Returns a null box! */
-			return {};
-		}
-
-		if ( this->parent()->isRoot() )
-		{
-			return OrientedCuboid< float >{this->localBoundingBox(), m_logicStateCoordinates}.getAxisAlignedBox();
-		}
-
-		return OrientedCuboid< float >{this->localBoundingBox(), this->getWorldCoordinates()}.getAxisAlignedBox();
-	}
-
-	Space3D::Sphere< float >
-	Node::getWorldBoundingSphere () const noexcept
-	{
-		if ( this->isRoot() )
-		{
-			/* NOTE: Returns a null sphere! */
-			return {};
-		}
-
-		if ( this->parent()->isRoot() )
-		{
-			return {
-				this->localBoundingSphere().radius(),
-				m_logicStateCoordinates.position() + this->localBoundingSphere().position()
-			};
-		}
-
-		return {
-			this->localBoundingSphere().radius(),
-			this->getWorldCoordinates().position() + this->localBoundingSphere().position()
-		};
-	}
-
 	bool
 	Node::isVisibleTo (const Frustum & frustum) const noexcept
 	{
-		switch ( this->collisionDetectionModel() )
+		if ( !this->hasCollisionModel() )
 		{
-			case CollisionDetectionModel::Point :
-				return frustum.isSeeing(this->getWorldPosition());
-
-			case CollisionDetectionModel::Sphere :
-				return frustum.isSeeing(this->getWorldBoundingSphere());
-
-			case CollisionDetectionModel::AABB :
-				return frustum.isSeeing(this->getWorldBoundingBox());
+			/* No collision model: use point visibility (position only). */
+			return frustum.isSeeing(this->getWorldPosition());
 		}
 
-		return true;
+		/* Use AABB from collision model for frustum culling. */
+		const auto worldCoords = this->getWorldCoordinates();
+		const auto worldAABB = this->collisionModel()->getAABB(worldCoords);
+
+		return frustum.isSeeing(worldAABB);
 	}
 
 	void
@@ -897,14 +856,24 @@ namespace EmEn::Scenes
 		m_lifetime += EngineUpdateCycleDurationUS< uint64_t >;
 
 		/* NOTE: Check if the node has disabled its ability to move. */
-		if ( !this->isMovable() )
+		if ( !this->isMovable() || !this->isCollidable() )
 		{
 			return false;
 		}
 
 		/* NOTE: Apply scene modifiers to modify acceleration vectors.
 		 * This can resume the physics simulation. */
-		scene.applyModifiers(*this);
+		scene.forEachModifiers([this] (const auto & modifier) {
+			/* NOTE: Avoid working on the same Node. */
+			if ( this == &modifier.parentEntity() )
+			{
+				return;
+			}
+
+			const auto modifierForce = modifier.getForceAppliedTo(*this);
+
+			this->addForce(modifierForce);
+		});
 
 		/* NOTE: If the physics engine has determined that the entity
 		 * does not need physics calculation, we stop here. */
@@ -913,7 +882,17 @@ namespace EmEn::Scenes
 			return false;
 		}
 
-		return this->updateSimulation(scene.physicalEnvironmentProperties());
+		const auto result = this->updateSimulation(scene.physicalEnvironmentProperties());
+
+		/* Sleep/Wake: check if entity has been stable long enough to pause simulation. */
+		if ( this->checkSimulationInertia() )
+		{
+			Tracer::debug(ClassId, "Physics simulation paused (entity at rest).");
+
+			this->pauseSimulation(true);
+		}
+
+		return result;
 	}
 
 	void

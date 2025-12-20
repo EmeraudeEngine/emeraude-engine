@@ -30,9 +30,10 @@
 #include <memory>
 
 /* Local inclusions for inheritances. */
-#include "Abstract.hpp"
+#include "Interface.hpp"
 
 /* Local inclusions for usages. */
+#include "Graphics/ImageResource.hpp"
 #include "Resources/Container.hpp"
 
 namespace EmEn::Graphics::Geometry
@@ -54,6 +55,10 @@ namespace EmEn::Graphics::Geometry
 
 			/** @brief Defines the resource dependency complexity. */
 			static constexpr auto Complexity{Resources::DepComplexity::One};
+
+			static constexpr auto DefaultGridSize{1000.0F}; /* NOTE: 1 kilometer. */
+			static constexpr auto DefaultGridDivision{500U}; /* NOTE: Cell wil be 2 meters. */
+			static constexpr auto DefaultUVMultiplier{500.0F};
 
 			/**
 			 * @brief Construct a vertex grid geometry resource.
@@ -160,12 +165,12 @@ namespace EmEn::Graphics::Geometry
 				return 1;
 			}
 
-			/** @copydoc EmEn::Graphics::Geometry::Interface::subGeometryRange() */
+			/** @copydoc EmEn::Graphics::Geometry::Interface::subGeometryRange(uint32_t) const */
 			[[nodiscard]]
 			std::array< uint32_t, 2 >
-			subGeometryRange (uint32_t /*subGeometryIndex*/ = 0) const noexcept override
+			subGeometryRange (uint32_t /*subGeometryIndex*/) const noexcept override
 			{
-				return {0, static_cast< uint32_t >(m_indexBufferObject->indexCount())};
+				return {0, m_indexBufferObject->indexCount()};
 			}
 
 			/** @copydoc EmEn::Graphics::Geometry::Interface::boundingBox() */
@@ -246,25 +251,53 @@ namespace EmEn::Graphics::Geometry
 			}
 
 			/**
+			 * @brief Enables vertex color from a global color.
+			 * @note Should be called before the load() function.
+			 * @param color A reference to a color.
+			 * @return void.
+			 */
+			void enableVertexColor (const Libs::PixelFactory::Color< float > & color) noexcept;
+
+			/**
+			 * @brief Enables vertex color from a color map.
+			 * @note Should be called before the load() function.
+			 * @param colorMap A reference to an image resource.
+			 * @return void.
+			 */
+			void enableVertexColor (const std::shared_ptr< ImageResource > & colorMap) noexcept;
+
+			/**
+			 * @brief Enables vertex color using randomization.
+			 * @note Should be called before the load() function.
+			 * @todo Set parameters to clamp color.
+			 * @return void.
+			 */
+			void enableVertexColorRandom () noexcept;
+
+			/**
+			 * @brief Enables vertex color using coordinates.
+			 * @note Should be called before the load() function.
+			 * @todo Set parameters for color generation.
+			 * @return void.
+			 */
+			void enableVertexColorFromCoords () noexcept;
+
+			/**
 			 * @brief Loads a flat squared grid.
-			 * @param size The size of the whole size of one dimension of the grid. I.e. If the size is 1024, the grid will be from +512 to -512.
-			 * @param division How many cells in one dimension.
-			 * @param UVMultiplier Texture coordinates multiplier. Default, 1.0.
-			 * @param vertexColorGenMode Set the vertex color generation mode. Default random.
-			 * @param globalVertexColor A reference to a color. Default black.
+			 * @param gridSize The size of the whole size of one dimension of the grid. I.e. If the size is 1024, the grid will be from +512 to -512.
+			 * @param gridDivision How many cells in one dimension.
+			 * @param UVMultiplier Texture coordinates multiplier. Default 1.
 			 * @return bool
 			 */
-			bool load (float size, uint32_t division, float UVMultiplier = 1.0F, const VertexColorGenMode & vertexColorGenMode = VertexColorGenMode::UseRandom, const Libs::PixelFactory::Color< float > & globalVertexColor = Libs::PixelFactory::Black) noexcept;
+			bool load (float gridSize, uint32_t gridDivision, float UVMultiplier = 1.0F) noexcept;
 
 			/**
 			 * @brief This loads a geometry from a parametric object.
 			 * @note This only local data and not pushing it to the video RAM.
 			 * @param grid A reference to a geometry from vertex factory library.
-			 * @param vertexColorGenMode Set the vertex color generation mode. Default random.
-			 * @param globalVertexColor A reference to a color. Default black.
 			 * @return bool
 			 */
-			bool load (const Libs::VertexFactory::Grid< float > & grid, const VertexColorGenMode & vertexColorGenMode = VertexColorGenMode::UseRandom, const Libs::PixelFactory::Color< float > & globalVertexColor = Libs::PixelFactory::Black) noexcept;
+			bool load (const Libs::VertexFactory::Grid< float > & grid) noexcept;
 
 			/**
 			 * @brief Gives access to the local geometry data.
@@ -290,41 +323,39 @@ namespace EmEn::Graphics::Geometry
 		private:
 
 			/**
-			 * @brief Creates a hardware buffer on the device.
-			 * @param transferManager A reference to the transfer manager.
-			 * @param vertexAttributes A reference to a vertex attribute vector.
-			 * @param vertexCount The number of vertices.
-			 * @param vertexElementCount The number of elements composing a vertex.
-			 * @param indices A reference to an index vector.
-			 * @return bool
+			 * @brief Prepares data vector to go on GPU.
+			 * @param vertexAttributes A writable reference to a vector of vertex attributes.
+			 * @param vertexElementCount The number of elements which compose one vertex.
+			 * @param indices A writable reference to a vector of indices.
+			 * @return void
 			 */
 			[[nodiscard]]
-			bool createVideoMemoryBuffers (Vulkan::TransferManager & transferManager, const std::vector< float > & vertexAttributes, uint32_t vertexCount, uint32_t vertexElementCount, const std::vector< uint32_t > & indices) noexcept;
+			bool generateGPUBuffers (std::vector< float > & vertexAttributes, uint32_t vertexElementCount, std::vector< uint32_t > & indices) const noexcept;
 
 			/**
 			 * @brief Adds a vertex to the local buffer.
-			 * @param index The point index in the local grid.
-			 * @param buffer A reference to the vertex attribute buffer.
-			 * @param vertexElementCount The number of elements for a vertex count.
+			 * @param pointIndex The point index in the local grid.
+			 * @param vertexAttributes A writable reference to a vector of vertex attributes.
+			 * @param vertexElementCount The number of elements which compose one vertex.
 			 * @return uint32_t
 			 */
 			[[nodiscard]]
-			uint32_t addVertexToBuffer (uint32_t index, std::vector< float > & buffer, uint32_t vertexElementCount) const noexcept;
+			uint32_t addVertexToBuffer (uint32_t pointIndex, std::vector< float > & vertexAttributes, uint32_t vertexElementCount) const noexcept;
 
 			/* JSON key. */
 			static constexpr auto JKSize{"Size"};
 			static constexpr auto JKDivision{"Division"};
 			static constexpr auto JKUVMultiplier{"UVMultiplier"};
 
-			static constexpr auto DefaultSize{1024.0F};
-			static constexpr auto DefaultDivision{32UL};
-			static constexpr auto DefaultUVMultiplier{32.0F};
-
+			/* Vulkan buffers. */
 			std::unique_ptr< Vulkan::VertexBufferObject > m_vertexBufferObject;
 			std::unique_ptr< Vulkan::IndexBufferObject > m_indexBufferObject;
+			/* Local data. */
 			Libs::VertexFactory::Grid< float > m_localData;
+			/* VBO generation options. */
 			VertexColorGenMode m_vertexColorGenMode{VertexColorGenMode::UseRandom};
 			Libs::PixelFactory::Color< float > m_globalVertexColor;
+			std::shared_ptr< ImageResource > m_vertexColorMap{};
 	};
 }
 

@@ -38,8 +38,8 @@ namespace EmEn::Audio
 	}
 
 	void
-	Speaker::updateDeviceFromCoordinates (const CartesianFrame< float > & /*worldCoordinates*/, const Vector< 3, float > & /*worldVelocity*/) noexcept
+	Speaker::updateDeviceFromCoordinates (const CartesianFrame< float > & worldCoordinates, const Vector< 3, float > & /*worldVelocity*/) noexcept
 	{
-		// Nothing to do for now ...
+		m_worldCoordinates = worldCoordinates;
 	}
 }

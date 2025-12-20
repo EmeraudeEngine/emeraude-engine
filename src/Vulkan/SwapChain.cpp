@@ -66,7 +66,8 @@ namespace EmEn::Vulkan
 		m_renderer{renderer},
 		m_showInformation{showInformation},
 		m_tripleBufferingEnabled{settings.getOrSetDefault< bool >(VideoEnableTripleBufferingKey, DefaultVideoEnableTripleBuffering)},
-		m_VSyncEnabled{settings.getOrSetDefault< bool >(VideoEnableVSyncKey, DefaultVideoEnableVSync)}
+		m_VSyncEnabled{settings.getOrSetDefault< bool >(VideoEnableVSyncKey, DefaultVideoEnableVSync)},
+		m_sRGBEnabled{settings.getOrSetDefault< bool >(VideoEnableSRGBKey, DefaultEnableSRGB)}
 	{
 		m_renderer.window().surface()->update(renderer.device());
 	}
@@ -418,15 +419,31 @@ namespace EmEn::Vulkan
 	{
 		const auto & formats = m_renderer.window().surface()->formats();
 
-		/* NOTE: Check for 24 bits sRGB. */
-		const auto formatIt = std::ranges::find_if(formats, [] (auto item) {
-			return item.format == VK_FORMAT_B8G8R8A8_SRGB && item.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
+		/* NOTE: Two modes are available:
+		 * - SRGB (m_sRGBEnabled = true): For native 3D rendering with linear lighting.
+		 *   The GPU automatically converts linear→sRGB on write.
+		 * - UNORM (m_sRGBEnabled = false): For pre-gamma-corrected content (like CEF overlays).
+		 *   Values are stored as-is without automatic conversion. */
+		const VkFormat targetFormat = m_sRGBEnabled ? VK_FORMAT_B8G8R8A8_SRGB : VK_FORMAT_B8G8R8A8_UNORM;
+		const char * formatName = m_sRGBEnabled ? "SRGB" : "UNORM";
+
+		const auto formatIt = std::ranges::find_if(formats, [targetFormat] (auto item) {
+			return item.format == targetFormat && item.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
 		});
 
 		if ( formatIt == formats.cend() )
 		{
-			return formats.at(0);
+			const auto & fallback = formats.at(0);
+
+			TraceWarning{ClassId} <<
+				"The " << formatName << " surface format (VK_FORMAT_B8G8R8A8_" << formatName << ") is not available! "
+				"Falling back to format " << fallback.format << " with color space " << fallback.colorSpace << ". "
+				"This may cause incorrect color rendering.";
+
+			return fallback;
 		}
+
+		TraceInfo{ClassId} << "The swap-chain will use " << formatName << " surface format (VK_FORMAT_B8G8R8A8_" << formatName << ").";
 
 		return *formatIt;
 	}
@@ -1197,6 +1214,7 @@ namespace EmEn::Vulkan
 	void
 	SwapChain::updateDeviceFromCoordinates (const CartesianFrame< float > & worldCoordinates, const Vector< 3, float > & worldVelocity) noexcept
 	{
+		m_worldCoordinates = worldCoordinates;
 		m_viewMatrices.updateViewCoordinates(worldCoordinates, worldVelocity);
 	}
 

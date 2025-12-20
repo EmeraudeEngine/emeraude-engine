@@ -209,19 +209,21 @@ namespace EmEn::Libs::Math::Space3D
 			return false;
 		}
 
-		/* NOTE: Collision confirmed, MTV calculated. */
+		/* NOTE: Collision confirmed, MTV calculated.
+		 * Convention: MTV pushes the first argument (triangle) out of the second (sphere).
+		 * So we negate delta to point from sphere center towards triangle. */
 		const auto distance = std::sqrt(distanceSq);
 		const auto overlap = sphere.radius() - distance;
 
 		if ( distance > std::numeric_limits< precision_t >::epsilon() )
 		{
-			/* NOTE: The direction of the MTV is that of the delta vector (from the nearest point to the center of the sphere). */
-			minimumTranslationVector = (delta / distance) * overlap;
+			/* NOTE: Negate delta so MTV pushes triangle away from sphere center. */
+			minimumTranslationVector = (-delta / distance) * overlap;
 		}
 		else
 		{
-			/* NOTE: The center of the sphere is on the triangle. We push along the normal of the triangle. */
-			minimumTranslationVector = normal * sphere.radius();
+			/* NOTE: The center of the sphere is on the triangle. Push triangle along its normal (away from sphere). */
+			minimumTranslationVector = -normal * sphere.radius();
 		}
 
 		return true;
@@ -236,12 +238,29 @@ namespace EmEn::Libs::Math::Space3D
 		return isColliding(triangle, sphere);
 	}
 
-	/** @copydoc EmEn::Libs::Math::Space3D::isColliding(const Triangle< precision_t > &, const Sphere< precision_t > &, Vector< 3, precision_t > &) noexcept */
+	/**
+	 * @brief Checks if a sphere is colliding with a triangle and gives the minimum translation vector (MTV).
+	 * @note The MTV pushes the sphere out of the triangle (consistent with convention: MTV pushes first arg out of second).
+	 * @tparam precision_t The data precision. Default float.
+	 * @param sphere A reference to a sphere.
+	 * @param triangle A reference to a triangle.
+	 * @param minimumTranslationVector A writable reference to a vector.
+	 * @return bool
+	 */
 	template< typename precision_t = float >
 	[[nodiscard]]
 	bool
 	isColliding (const Sphere< precision_t > & sphere, const Triangle< precision_t > & triangle, Vector< 3, precision_t > & minimumTranslationVector) noexcept requires (std::is_floating_point_v< precision_t >)
 	{
-		return isColliding(triangle, sphere, minimumTranslationVector);
+		/* NOTE: isColliding(triangle, sphere, mtv) computes MTV to push triangle out of sphere.
+		 * We need the opposite: push sphere out of triangle, so we negate the MTV. */
+		if ( isColliding(triangle, sphere, minimumTranslationVector) )
+		{
+			minimumTranslationVector = -minimumTranslationVector;
+
+			return true;
+		}
+
+		return false;
 	}
 }

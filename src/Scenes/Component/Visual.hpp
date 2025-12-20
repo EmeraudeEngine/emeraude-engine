@@ -91,7 +91,7 @@ namespace EmEn::Scenes::Component
 				return strcmp(ClassId, classID) == 0;
 			}
 
-			/** @copydoc EmEn::Scenes::Component::Abstract::boundingBox() const */
+			/** @copydoc EmEn::Scenes::Component::Abstract::localBoundingBox() const */
 			[[nodiscard]]
 			const Libs::Math::Space3D::AACuboid< float > &
 			localBoundingBox () const noexcept override
@@ -99,7 +99,7 @@ namespace EmEn::Scenes::Component
 				return m_renderableInstance->renderable()->boundingBox();
 			}
 
-			/** @copydoc EmEn::Scenes::Component::Abstract::boundingSphere() const */
+			/** @copydoc EmEn::Scenes::Component::Abstract::localBoundingSphere() const */
 			[[nodiscard]]
 			const Libs::Math::Space3D::Sphere< float > &
 			localBoundingSphere () const noexcept override

@@ -46,11 +46,13 @@ namespace EmEn::Saphir::Generator
 			 * @brief Constructs a graphics shader generator for a geometry.
 			 * @param renderTarget A reference to a render target.
 			 * @param geometry A reference to the geometry interface smart pointer.
-			 * @param colorSpaceConversion A color space conversion to display the overlay. Default none.
+			 * @param premultipliedAlpha Enable pre-multiplied alpha. Default false.
+			 * @param isBGRASurface True if source pixels are in BGRA format (CEF), false for RGBA. Default false.
 			 */
-			OverlayRendering (const std::shared_ptr< const Graphics::RenderTarget::Abstract > & renderTarget, const std::shared_ptr< const Graphics::Geometry::Interface > & geometry, ColorSpaceConversion colorSpaceConversion = ColorSpaceConversion::None) noexcept
+			OverlayRendering (const std::shared_ptr< const Graphics::RenderTarget::Abstract > & renderTarget, const std::shared_ptr< const Graphics::Geometry::Interface > & geometry, bool premultipliedAlpha = false, bool isBGRASurface = false) noexcept
 				: Abstract{ClassId, renderTarget, geometry->topology(), geometry->flags()},
-				m_colorSpaceConversion{colorSpaceConversion}
+				m_premultipliedAlpha{premultipliedAlpha},
+				m_isBGRASurface{isBGRASurface}
 			{
 
 			}
@@ -96,6 +98,7 @@ namespace EmEn::Saphir::Generator
 			[[nodiscard]]
 			bool generateFragmentShader (Program & program) noexcept;
 
-			ColorSpaceConversion m_colorSpaceConversion{ColorSpaceConversion::None};
+			bool m_premultipliedAlpha{false};
+			bool m_isBGRASurface{false};
 	};
 }

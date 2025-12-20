@@ -152,6 +152,15 @@ namespace EmEn::Scenes::Component
 	}
 
 	void
+	SoundEmitter::attachSound (const std::shared_ptr< SoundResource > & sound, float gain, bool loop) noexcept
+	{
+		this->setFlag(Loop, loop);
+
+		m_attachedSound = sound;
+		m_gain = gain;
+	}
+
+	void
 	SoundEmitter::play (const std::shared_ptr< SoundResource > & sound, float gain, bool loop, bool replaceSound) noexcept
 	{
 		if ( !replaceSound && m_source != nullptr && m_source->isPlaying() )

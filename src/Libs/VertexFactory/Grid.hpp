@@ -30,8 +30,10 @@
 #include "emeraude_config.hpp"
 
 /* STL inclusions. */
+#include <algorithm>
 #include <cstdint>
 #include <iostream>
+#include <limits>
 #include <sstream>
 #include <string>
 #include <type_traits>
@@ -50,6 +52,23 @@
 
 namespace EmEn::Libs::VertexFactory
 {
+	template< typename vertex_data_t = float >
+	requires (std::is_floating_point_v< vertex_data_t > )
+	struct PerlinNoiseParams
+	{
+		vertex_data_t size{1};
+		vertex_data_t factor{0.5};
+	};
+
+	template< typename vertex_data_t = float >
+	requires (std::is_floating_point_v< vertex_data_t > )
+	struct DiamondSquareParams
+	{
+		vertex_data_t factor{1};
+		vertex_data_t roughness{0.5};
+		int32_t seed{0};
+	};
+
 	/**
 	 * @class Grid
 	 * @brief Template class for generating 2D grid geometry with height displacement.
@@ -91,53 +110,71 @@ namespace EmEn::Libs::VertexFactory
 
 			/**
 			 * @brief Constructs a default empty grid.
-			 *
-			 * Creates an uninitialized grid with zero dimensions. You must call initializeData()
-			 * before using the grid.
-			 *
+			 * @note Creates an uninitialized grid with zero dimensions. You must call initializeData() before using the grid.
 			 * @see initializeData()
 			 */
 			Grid () noexcept = default;
 
 			/**
-			 * @brief Initializes the grid with specified size and subdivision count.
+			 * @brief Constructs a grid.
+			 * @param cellCount The number of quad cells along one dimension. Total quads = division × division.
+			 * @param cellSize The dimension of one cell. Default 1.
+			 * @see initializeData()
+			 */
+			explicit
+			Grid (index_data_t cellCount, vertex_data_t cellSize = 1) noexcept
+			{
+				this->initializeByCellSize(cellCount, cellSize);
+			}
+
+			/**
+			 * @brief Constructs a grid.
+			 * @param gridSize The total size of the grid.
+			 * @param gridDivision The number of quad cells along one dimension. Total quads = division × division.
+			 * @see initializeData()
+			 */
+			Grid (vertex_data_t gridSize, index_data_t gridDivision) noexcept
+			{
+				this->initializeByGridSize(gridSize, gridDivision);
+			}
+
+			/**
+			 * @brief Initializes the grid by specifying cell count and cell size.
 			 *
-			 * Allocates memory for grid points and calculates grid dimensions. This method must
-			 * be called before any other grid operations. The grid is always square (same number
-			 * of divisions on both X and Z axes) and centered at the origin.
+			 * Creates a grid where you define how many cells you want and how large each cell should be.
+			 * The total grid size is computed as cellCount × cellSize. This approach is useful when
+			 * you need precise control over individual cell dimensions, such as for tile-based systems.
 			 *
-			 * All heights are initialized to zero, creating a flat plane. Use displacement methods
-			 * to add terrain features.
+			 * @param cellCount The number of quad cells along one dimension. Total quads = cellCount × cellCount.
+			 * @param cellSize The size of a single cell edge in world units. Default is 1.
 			 *
-			 * @param size The total size of the grid or the size of a single cell, depending on isSizeForCell parameter.
-			 * @param division The number of quad cells along one dimension. Total quads = division × division.
-			 * @param isSizeForCell If true, size represents a single cell dimension; if false (default), size is the total grid dimension.
+			 * @return True if initialization succeeded, false if parameters are invalid.
 			 *
-			 * @return True if initialization succeeded, false if parameters are invalid (division is zero or size is negative).
-			 *
-			 * @pre division must be at least 1
-			 * @pre size must be positive
+			 * @pre cellCount must be at least 1
+			 * @pre cellSize must be positive
 			 * @post Grid is cleared before initialization
 			 * @post Bounding box is initialized for a flat grid at Y=0
-			 * @post Point count = (division + 1)²
-			 * @post All point heights are initialized to zero
+			 * @post Point count = (cellCount + 1)²
+			 * @post Total grid size = cellCount × cellSize
 			 *
-			 * @note The actual number of vertices is (division + 1)² because a grid with N cells needs N+1 points per dimension.
-			 * @note In Debug builds, memory allocation size is printed to console when EMERAUDE_DEBUG_VERTEX_FACTORY is enabled.
+			 * @note The actual number of vertices is (cellCount + 1)² because a grid with N cells needs N+1 points per dimension.
+			 *
+			 * @see initializeByGridSize()
+			 * @see clear()
 			 */
 			bool
-			initializeData (vertex_data_t size, index_data_t division, bool isSizeForCell = false) noexcept
+			initializeByCellSize (index_data_t cellCount, vertex_data_t cellSize = 1) noexcept
 			{
-				if ( division == 0 )
+				if ( cellCount == 0 )
 				{
-					std::cerr << __PRETTY_FUNCTION__ << ", division parameter must be at least 1 !" "\n";
+					std::cerr << __PRETTY_FUNCTION__ << ", the cell count parameter must be at least 1 !" "\n";
 
 					return false;
 				}
 
-				if ( size < 0 )
+				if ( cellSize < 0 )
 				{
-					std::cerr << __PRETTY_FUNCTION__ << ", size parameter must be positive !" "\n";
+					std::cerr << __PRETTY_FUNCTION__ << ", the cell size parameter must be positive !" "\n";
 
 					return false;
 				}
@@ -145,8 +182,9 @@ namespace EmEn::Libs::VertexFactory
 				/* To be sure. */
 				this->clear();
 
-				m_squaredQuadCount = division;
-				m_squaredPointCount = division + 1;
+				/* NOTE: Declare the total number of points to create the grid. */
+				m_squaredQuadCount = cellCount;
+				m_squaredPointCount = cellCount + 1;
 				m_pointHeights.resize(this->pointCount(), 0);
 
 				if constexpr ( VertexFactoryDebugEnabled )
@@ -160,16 +198,78 @@ namespace EmEn::Libs::VertexFactory
 				constexpr auto Half = static_cast< vertex_data_t >(0.5);
 
 				/* If we specify the size about the division. */
-				if ( isSizeForCell )
+				m_quadSquaredSize = cellSize;
+				m_halfSquaredSize = (m_quadSquaredSize * m_squaredQuadCount) * Half;
+
+				/* Initialize the bounding box for a flat ground. */
+				m_boundingBox.set({m_halfSquaredSize, 0, m_halfSquaredSize}, {-m_halfSquaredSize, 0, -m_halfSquaredSize});
+				m_boundingSphere.setRadius(m_boundingBox.highestLength() * Half);
+
+				return true;
+			}
+
+			/**
+			 * @brief Initializes the grid by specifying total grid size and subdivision count.
+			 *
+			 * Creates a grid where you define the total size and how many cells to subdivide it into.
+			 * The cell size is computed as gridSize / gridDivision. This approach is useful when
+			 * you need a specific overall terrain size regardless of cell granularity.
+			 *
+			 * @param gridSize The total size of the grid in world units. The grid extends from -gridSize/2 to +gridSize/2.
+			 * @param gridDivision The number of quad cells along one dimension. Total quads = gridDivision × gridDivision.
+			 *
+			 * @return True if initialization succeeded, false if parameters are invalid.
+			 *
+			 * @pre gridSize must be positive
+			 * @pre gridDivision must be at least 1
+			 * @post Grid is cleared before initialization
+			 * @post Bounding box is initialized for a flat grid at Y=0
+			 * @post Point count = (gridDivision + 1)²
+			 * @post Cell size = gridSize / gridDivision
+			 *
+			 * @note The actual number of vertices is (gridDivision + 1)² because a grid with N cells needs N+1 points per dimension.
+			 *
+			 * @see initializeByCellSize()
+			 * @see clear()
+			 */
+			bool
+			initializeByGridSize (vertex_data_t gridSize, index_data_t gridDivision) noexcept
+			{
+				if ( gridSize < 0 )
 				{
-					m_quadSquaredSize = size;
-					m_halfSquaredSize = (m_quadSquaredSize * m_squaredQuadCount) * Half;
+					std::cerr << __PRETTY_FUNCTION__ << ", the grid size parameter must be positive !" "\n";
+
+					return false;
 				}
-				else
+
+				if ( gridDivision == 0 )
 				{
-					m_quadSquaredSize = size / m_squaredQuadCount;
-					m_halfSquaredSize = size * Half;
+					std::cerr << __PRETTY_FUNCTION__ << ", the grid division parameter must be at least 1 !" "\n";
+
+					return false;
 				}
+
+				/* To be sure. */
+				this->clear();
+
+				/* NOTE: Declare the total number of points to create the grid. */
+				m_squaredQuadCount = gridDivision;
+				m_squaredPointCount = gridDivision + 1;
+				m_pointHeights.resize(this->pointCount(), 0);
+
+				if constexpr ( VertexFactoryDebugEnabled )
+				{
+					/* Shows memory usage */
+					const auto memoryAllocated = m_pointHeights.size() * sizeof(vertex_data_t);
+
+					std::cout << "[DEBUG:VERTEX_FACTORY] " << ( static_cast< vertex_data_t >(memoryAllocated) / 1048576 ) << " Mib allocated." "\n";
+				}
+
+				constexpr auto Half = static_cast< vertex_data_t >(0.5);
+
+				/* If we specify the size about the division. */
+				m_quadSquaredSize = gridSize / m_squaredQuadCount;
+				m_halfSquaredSize = gridSize * Half;
 
 				/* Initialize the bounding box for a flat ground. */
 				m_boundingBox.set({m_halfSquaredSize, 0, m_halfSquaredSize}, {-m_halfSquaredSize, 0, -m_halfSquaredSize});
@@ -277,13 +377,13 @@ namespace EmEn::Libs::VertexFactory
 			void
 			applyDiamondSquare (vertex_data_t factor, vertex_data_t roughness, int32_t seed = 1, PointTransformationMode mode = PointTransformationMode::Replace) noexcept
 			{
-				Algorithms::DiamondSquare< vertex_data_t > map{seed, false};
+				Algorithms::DiamondSquare< vertex_data_t > generator{seed, false};
 
-				if ( map.generate(m_squaredPointCount, roughness) )
+				if ( generator.generate(m_squaredPointCount, roughness) )
 				{
-					this->applyTransformation([this, factor, mode, &map] (index_data_t indexOnX, index_data_t indexOnY) {
+					this->applyTransformation([this, factor, mode, &generator] (index_data_t indexOnX, index_data_t indexOnY) {
 						const auto idx = this->index(indexOnX, indexOnY);
-						const auto newValue = map.value(indexOnX, indexOnY) * factor;
+						const auto newValue = generator.value(indexOnX, indexOnY) * factor;
 
 						applyMode(m_pointHeights[idx], newValue, mode);
 						m_boundingBox.mergeY(m_pointHeights[idx]);
@@ -961,9 +1061,9 @@ namespace EmEn::Libs::VertexFactory
 			position (index_data_t positionX, index_data_t positionY) const noexcept
 			{
 				return {
-					(positionX * m_quadSquaredSize) - m_halfSquaredSize,
+					(positionX * m_quadSquaredSize) - m_halfSquaredSize + m_worldOffset[0],
 					m_pointHeights[this->index(positionX, positionY)],
-					(positionY * m_quadSquaredSize) - m_halfSquaredSize
+					(positionY * m_quadSquaredSize) - m_halfSquaredSize + m_worldOffset[1]
 				};
 			}
 
@@ -1446,6 +1546,95 @@ namespace EmEn::Libs::VertexFactory
 			}
 
 			/**
+			 * @brief Extracts a sub-grid from this grid at a specified center position.
+			 *
+			 * Creates a new grid by extracting a square region of cellCount × cellCount cells
+			 * centered around the given position. The center position is automatically clamped
+			 * to ensure the extracted region stays within the parent grid bounds.
+			 *
+			 * This means positions near edges or corners will produce the same sub-grid,
+			 * as the center is adjusted to keep the extraction region valid.
+			 *
+			 * @param centerPosition The desired center point in world coordinates (X, Z).
+			 * @param cellCount The number of cells per dimension for the sub-grid. Result has cellCount × cellCount cells.
+			 *
+			 * @return A new Grid containing the extracted region with copied height data.
+			 *
+			 * @pre cellCount must be less than or equal to squaredQuadCount()
+			 * @post The returned grid has the same cell size as the parent
+			 * @post The returned grid's heights are copied from the parent
+			 *
+			 * @note Useful for LOD systems, local collision detection, or terrain streaming.
+			 *
+			 * @see initializeByCellSize()
+			 */
+			[[nodiscard]]
+			Grid
+			subGrid (const Math::Vector< 2, vertex_data_t > & centerPosition, index_data_t cellCount) const noexcept
+			{
+				/* Ensure cellCount doesn't exceed the parent grid. */
+				const auto clampedCellCount = std::min(cellCount, m_squaredQuadCount);
+				const auto halfCellCount = clampedCellCount / 2;
+
+				/* Convert world position to grid indices. */
+				auto centerIndexX = static_cast< index_data_t >(std::floor((centerPosition[0] + m_halfSquaredSize) / m_quadSquaredSize));
+				auto centerIndexY = static_cast< index_data_t >(std::floor((centerPosition[1] + m_halfSquaredSize) / m_quadSquaredSize));
+
+				/* Clamp center so the sub-grid stays within bounds.
+				 * The center must be at least halfCellCount from edges. */
+				const auto minCenter = halfCellCount;
+				const auto maxCenter = m_squaredQuadCount - (clampedCellCount - halfCellCount);
+
+				centerIndexX = std::clamp(centerIndexX, minCenter, maxCenter);
+				centerIndexY = std::clamp(centerIndexY, minCenter, maxCenter);
+
+				/* Calculate starting indices. */
+				const auto startX = centerIndexX - halfCellCount;
+				const auto startY = centerIndexY - halfCellCount;
+
+				/* Create the sub-grid with the same cell size. */
+				Grid result;
+				result.initializeByCellSize(clampedCellCount, m_quadSquaredSize);
+
+				{
+					const auto UVRatio = static_cast< float >(cellCount) / static_cast< float >(this->squaredQuadCount());
+
+					result.setUVMultiplier(m_UMultiplier * UVRatio, m_VMultiplier * UVRatio);
+				}
+
+				/* Calculate world offset for the sub-grid center. */
+				result.m_worldOffset[0] = (static_cast< vertex_data_t >(centerIndexX) * m_quadSquaredSize) - m_halfSquaredSize;
+				result.m_worldOffset[1] = (static_cast< vertex_data_t >(centerIndexY) * m_quadSquaredSize) - m_halfSquaredSize;
+
+				const auto pointCount = clampedCellCount + 1;
+				auto minHeight = std::numeric_limits< vertex_data_t >::max();
+				auto maxHeight = std::numeric_limits< vertex_data_t >::lowest();
+
+				/* Copy row by row (contiguous in memory due to row-major layout). */
+				for ( index_data_t y = 0; y < pointCount; ++y )
+				{
+					const auto * srcRow = &m_pointHeights[this->index(startX, startY + y)];
+					auto * dstRow = &result.m_pointHeights[y * pointCount];
+
+					std::copy_n(srcRow, pointCount, dstRow);
+
+					/* Find min/max for this row. */
+					const auto [rowMin, rowMax] = std::minmax_element(dstRow, dstRow + pointCount);
+					minHeight = std::min(minHeight, *rowMin);
+					maxHeight = std::max(maxHeight, *rowMax);
+				}
+
+				/* Single bounding box update. */
+				result.m_boundingBox.set(
+					{result.m_halfSquaredSize, maxHeight, result.m_halfSquaredSize},
+					{-result.m_halfSquaredSize, minHeight, -result.m_halfSquaredSize}
+				);
+				result.m_boundingSphere.setRadius(result.m_boundingBox.highestLength() * static_cast< vertex_data_t >(0.5));
+
+				return result;
+			}
+
+			/**
 			 * @brief Outputs grid information to an output stream.
 			 *
 			 * Provides formatted debug output showing grid dimensions, counts, sizes,
@@ -1643,6 +1832,7 @@ namespace EmEn::Libs::VertexFactory
 			vertex_data_t m_halfSquaredSize{1}; ///< Half of the total grid size; grid ranges from -half to +half.
 			vertex_data_t m_UMultiplier{1}; ///< Texture coordinate multiplier for U (horizontal) direction.
 			vertex_data_t m_VMultiplier{1}; ///< Texture coordinate multiplier for V (vertical) direction.
+			Math::Vector< 2, vertex_data_t > m_worldOffset{}; ///< World-space offset applied to positions (X, Z).
 			Math::Space3D::AACuboid< vertex_data_t > m_boundingBox; ///< Axis-aligned bounding box encompassing all grid geometry.
 			Math::Space3D::Sphere< vertex_data_t > m_boundingSphere; ///< Bounding sphere encompassing all grid geometry.
 	};

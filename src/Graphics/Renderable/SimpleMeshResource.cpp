@@ -71,7 +71,7 @@ namespace EmEn::Graphics::Renderable
 	}
 
 	bool
-	SimpleMeshResource::load (const std::shared_ptr< Geometry::Interface > & geometry, const std::shared_ptr< Material::Interface > & material) noexcept
+	SimpleMeshResource::load (const std::shared_ptr< Geometry::Interface > & geometry, const std::shared_ptr< Material::Interface > & material, const RasterizationOptions & rasterizationOptions) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
@@ -90,6 +90,8 @@ namespace EmEn::Graphics::Renderable
 				return this->setLoadSuccess(false);
 			}
 		}
+
+		m_rasterizationOptions = rasterizationOptions;
 
 		return this->setLoadSuccess(true);
 	}

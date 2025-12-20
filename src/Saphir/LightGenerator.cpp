@@ -600,16 +600,16 @@ namespace EmEn::Saphir
 
 		if ( m_useReflection )
 		{
-			Code{fragmentShader} << m_fragmentColor << " += mix(" << surfaceColor << ", " << m_surfaceReflectionColor << ", " << m_surfaceReflectionAmount << ") * (" << this->ambientLightColor() << " * " << intensity << ");";
+			Code{fragmentShader} << m_fragmentColor << ".rgb += mix(" << surfaceColor << ", " << m_surfaceReflectionColor << ", " << m_surfaceReflectionAmount << ").rgb * (" << this->ambientLightColor() << ".rgb * " << intensity << ");";
 		}
 		else
 		{
-			Code{fragmentShader} << m_fragmentColor << " += " << surfaceColor << " * (" << this->ambientLightColor() << " * " << intensity << ");";
+			Code{fragmentShader} << m_fragmentColor << ".rgb += " << surfaceColor << ".rgb * (" << this->ambientLightColor() << ".rgb * " << intensity << ");";
 		}
 
 		if ( !m_surfaceAutoIlluminationAmount.empty() )
 		{
-			Code{fragmentShader} << m_fragmentColor << " += " << m_surfaceDiffuseColor << " * " << m_surfaceAutoIlluminationAmount << ";";
+			Code{fragmentShader} << m_fragmentColor << ".rgb += " << m_surfaceDiffuseColor << ".rgb * " << m_surfaceAutoIlluminationAmount << ";";
 		}
 	}
 
@@ -641,11 +641,11 @@ namespace EmEn::Saphir
 
 		if ( m_useReflection )
 		{
-			Code{fragmentShader} << m_fragmentColor << " += mix(" << m_surfaceDiffuseColor << ", " << m_surfaceReflectionColor << ", " << m_surfaceReflectionAmount << ") * (" << this->lightColor() << " * " << this->lightIntensity() << " * " << finaleDiffuseFactor << ");";
+			Code{fragmentShader} << m_fragmentColor << ".rgb += mix(" << m_surfaceDiffuseColor << ", " << m_surfaceReflectionColor << ", " << m_surfaceReflectionAmount << ").rgb * (" << this->lightColor() << ".rgb * " << this->lightIntensity() << " * " << finaleDiffuseFactor << ");";
 		}
 		else
 		{
-			Code{fragmentShader} << m_fragmentColor << " += " << m_surfaceDiffuseColor << " * (" << this->lightColor() << " * " << this->lightIntensity() << " * " << finaleDiffuseFactor << ");";
+			Code{fragmentShader} << m_fragmentColor << ".rgb += " << m_surfaceDiffuseColor << ".rgb * (" << this->lightColor() << ".rgb * " << this->lightIntensity() << " * " << finaleDiffuseFactor << ");";
 		}
 
 		if ( !m_surfaceSpecularColor.empty() )
@@ -654,11 +654,11 @@ namespace EmEn::Saphir
 
 			if ( m_useReflection )
 			{
-				Code{fragmentShader} << m_fragmentColor << " += mix(" << m_surfaceSpecularColor << ", " << m_surfaceReflectionColor << ", " << m_surfaceReflectionAmount << ") * (" << this->lightIntensity() << " * " << finaleSpecularFactor << ");";
+				Code{fragmentShader} << m_fragmentColor << ".rgb += mix(" << m_surfaceSpecularColor << ", " << m_surfaceReflectionColor << ", " << m_surfaceReflectionAmount << ").rgb * (" << this->lightIntensity() << " * " << finaleSpecularFactor << ");";
 			}
 			else
 			{
-				Code{fragmentShader} << m_fragmentColor << " += " << m_surfaceSpecularColor << " * (" << this->lightIntensity() << " * " << finaleSpecularFactor << ");";
+				Code{fragmentShader} << m_fragmentColor << ".rgb += " << m_surfaceSpecularColor << ".rgb * (" << this->lightIntensity() << " * " << finaleSpecularFactor << ");";
 			}
 		}
 

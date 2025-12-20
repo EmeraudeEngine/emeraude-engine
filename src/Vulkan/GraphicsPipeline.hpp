@@ -251,10 +251,13 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Generates color blend state into the graphics pipeline createInfo for simple alpha blending.
+			 * @param premultipliedAlpha Set to true if the source uses premultiplied alpha (RGB already multiplied by A).
+			 * When true, uses the formula: Cout = Csrc + Cdst × (1 - Asrc).
+			 * When false (default), uses standard formula: Cout = Csrc × Asrc + Cdst × (1 - Asrc).
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool configureColorBlendStateForAlphaBlending () noexcept;
+			bool configureColorBlendStateForAlphaBlending (bool premultipliedAlpha = false) noexcept;
 
 			/**
 			 * @brief Generates color blend state into the graphics pipeline createInfo.

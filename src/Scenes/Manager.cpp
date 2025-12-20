@@ -83,7 +83,7 @@ namespace EmEn::Scenes
 	}
 
 	std::shared_ptr< Scene >
-	Manager::newScene (const std::string & sceneName, float boundary, const std::shared_ptr< Renderable::AbstractBackground > & background, const std::shared_ptr< GroundInterface > & groundPhysics, const std::shared_ptr< SeaLevelInterface > & seaLevel) noexcept
+	Manager::newScene (const std::string & sceneName, float boundary, const std::shared_ptr< Renderable::AbstractBackground > & background, const std::shared_ptr< GroundLevelInterface > & groundLevel, const std::shared_ptr< SeaLevelInterface > & seaLevel) noexcept
 	{
 		const std::lock_guard< std::mutex > lock{m_sceneListAccess};
 
@@ -94,7 +94,7 @@ namespace EmEn::Scenes
 			return nullptr;
 		}
 
-		auto newScene = std::make_shared< Scene >(m_graphicsRenderer, m_audioManager, sceneName, boundary, background, groundPhysics, seaLevel);
+		auto newScene = std::make_shared< Scene >(m_graphicsRenderer, m_audioManager, sceneName, boundary, background, groundLevel, seaLevel);
 
 		this->notify(SceneCreated, newScene);
 
@@ -169,21 +169,6 @@ namespace EmEn::Scenes
 		this->notify(SceneLoaded, scene);
 
 		return {scene, sceneDefinition};
-	}
-
-	bool
-	Manager::refreshActiveScene () const noexcept
-	{
-		const std::unique_lock lock{m_activeSceneSharedAccess};
-
-		if ( m_activeScene == nullptr )
-		{
-			return true;
-		}
-
-		TraceDebug{ClassId} << "Refreshing the active scene '" << m_activeScene->name() << "' ...";
-
-		return m_activeScene->refreshRenderableInstances();
 	}
 
 	bool

@@ -102,6 +102,40 @@ requires std::invocable<write_func_t, void*, VkDeviceSize> &&
 - **No lighting**: Pure 2D screen-space rendering
 - **Alpha blending**: Transparency and multi-layer support
 
+### UIScreen Rendering Options
+
+UIScreen supports two rendering options that affect shader program selection:
+
+**Premultiplied Alpha** (`setPremultipliedAlpha(bool)` / `premultipliedAlpha()`):
+- When true: Uses premultiplied alpha blending formula
+- Required for CEF/Chromium which provides premultiplied BGRA pixels
+- Default: false (standard alpha blending)
+
+**BGRA Source Format** (`useBGRAFormat(bool)` / `isUsingBGRAFormat()`):
+- When true: Shader applies `.bgra` swizzle to convert BGRA → RGBA
+- Required for CEF which provides BGRA pixel order
+- When false: No swizzle, assumes RGBA source
+- Default: false (RGBA)
+
+**Shader Program Variants:**
+Manager maintains 4 shader programs for all combinations:
+```
+Index | Alpha Mode      | Pixel Format | Use Case
+------+-----------------+--------------+------------------
+  0   | Standard        | RGBA         | Default sources
+  1   | Premultiplied   | RGBA         | Premul RGBA sources
+  2   | Standard        | BGRA         | Raw BGRA sources
+  3   | Premultiplied   | BGRA         | CEF (typical)
+```
+
+Program selection uses bitwise index: `(premultipliedAlpha ? 1 : 0) | (isUsingBGRAFormat ? 2 : 0)`
+
+**Code references:**
+- `UIScreen.hpp:setPremultipliedAlpha()`, `useBGRAFormat()` - Screen options
+- `Manager.hpp:ProgramCount` - 4 program variants
+- `Manager.cpp:739` - Program selection logic
+- `OverlayRendering.cpp:159-168` - Conditional BGRA swizzle in fragment shader
+
 ### Input Integration
 - **OverlayManager is InputManager client**: Receives mouse/keyboard events
 - **Hierarchical dispatch**: Manager → Screen → Surface
@@ -113,6 +147,13 @@ requires std::invocable<write_func_t, void*, VkDeviceSize> &&
 - Applications can use CEF in offscreen mode
 - CEF rendering → generic Surface Pixmap
 - OverlayManager displays Surface normally
+
+**CEF Screen Configuration:**
+```cpp
+// UIScreen for CEF content requires both options:
+screen->setPremultipliedAlpha(true);  // CEF uses premultiplied alpha
+screen->useBGRAFormat(true);          // CEF provides BGRA pixels
+```
 
 **Two rendering paths for CEF OnPaint():**
 
@@ -137,8 +178,8 @@ ctest -R Overlay
 
 ## Important Files
 
-- `Manager.cpp/.hpp` - Main manager, Screen coordination, InputManager client
-- `Screen.cpp/.hpp` - Logical Surface group
+- `Manager.cpp/.hpp` - Main manager, Screen coordination, InputManager client, 4 shader programs
+- `UIScreen.cpp/.hpp` - Logical Surface group with rendering options (premultiplied alpha, BGRA format)
 - `Surface.cpp/.hpp` - Graphical element with Framebuffer, position, Z-order, transition buffer system
 - `Surface.hpp:Framebuffer` - Struct with image, imageView, sampler, pixmap, descriptorSet, width()/height()
 - `Surface.hpp:writeWithMapping()` - C++20 template with requires constraint for type-safe GPU writes

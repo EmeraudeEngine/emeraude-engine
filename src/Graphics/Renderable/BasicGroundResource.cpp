@@ -1,5 +1,5 @@
 /*
- * src/Graphics/Renderable/BasicFloorResource.cpp
+ * src/Graphics/Renderable/BasicGroundResource.cpp
  * This file is part of Emeraude-Engine
  *
  * Copyright (C) 2010-2025 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
@@ -24,7 +24,7 @@
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
 
-#include "BasicFloorResource.hpp"
+#include "BasicGroundResource.hpp"
 
 /* Local inclusions. */
 #include "Libs/FastJSON.hpp"
@@ -42,7 +42,7 @@ namespace EmEn::Graphics::Renderable
 	using namespace Scenes;
 
 	float
-	BasicFloorResource::getLevelAt (const Vector< 3, float > & worldPosition) const noexcept
+	BasicGroundResource::getLevelAt (const Vector< 3, float > & worldPosition) const noexcept
 	{
 		/* NOTE: If no geometry available,
 		 * we send the -Y boundary limit. */
@@ -55,7 +55,7 @@ namespace EmEn::Graphics::Renderable
 	}
 
 	Vector< 3, float >
-	BasicFloorResource::getLevelAt (float positionX, float positionZ, float deltaY) const noexcept
+	BasicGroundResource::getLevelAt (float positionX, float positionZ, float deltaY) const noexcept
 	{
 		if ( m_geometry == nullptr )
 		{
@@ -66,7 +66,7 @@ namespace EmEn::Graphics::Renderable
 	}
 
 	Vector< 3, float >
-	BasicFloorResource::getNormalAt (const Vector< 3, float > & worldPosition) const noexcept
+	BasicGroundResource::getNormalAt (const Vector< 3, float > & worldPosition) const noexcept
 	{
 		if ( m_geometry == nullptr )
 		{
@@ -77,14 +77,14 @@ namespace EmEn::Graphics::Renderable
 	}
 
 	bool
-	BasicFloorResource::load (Resources::AbstractServiceProvider & serviceProvider) noexcept
+	BasicGroundResource::load (Resources::AbstractServiceProvider & serviceProvider) noexcept
 	{
 		/* 1. Creating a default GridGeometry. */
-		const auto defaultGeometry = std::make_shared< Geometry::VertexGridResource >("DefaultBasicFloorGeometry");
+		const auto defaultGeometry = std::make_shared< Geometry::VertexGridResource >("DefaultBasicGroundGeometry");
 
 		if ( !defaultGeometry->load(DefaultSize, DefaultDivision) )
 		{
-			TraceError{ClassId} << "Unable to create default GridGeometry to generate the default BasicFloor !";
+			TraceError{ClassId} << "Unable to create default grid geometry to generate the default basic ground !";
 
 			return this->setLoadSuccess(false);
 		}
@@ -94,7 +94,7 @@ namespace EmEn::Graphics::Renderable
 
 		if ( defaultMaterial == nullptr )
 		{
-			TraceError{ClassId} << "Unable to get default Material to generate the default BasicFloor !";
+			TraceError{ClassId} << "Unable to get default material to generate the default basic ground !";
 
 			return this->setLoadSuccess(false);
 		}
@@ -104,7 +104,7 @@ namespace EmEn::Graphics::Renderable
 	}
 
 	bool
-	BasicFloorResource::load (Resources::AbstractServiceProvider & serviceProvider, const std::filesystem::path & filepath) noexcept
+	BasicGroundResource::load (Resources::AbstractServiceProvider & serviceProvider, const std::filesystem::path & filepath) noexcept
 	{
 		const auto rootCheck = FastJSON::getRootFromFile(filepath);
 
@@ -138,7 +138,7 @@ namespace EmEn::Graphics::Renderable
 
 		if ( groundObject[FastJSON::TypeKey].asString() != ClassId || !groundObject.isMember(FastJSON::DataKey) )
 		{
-			TraceError{ClassId} << "This file doesn't contains a BasicFloor definition !";
+			TraceError{ClassId} << "This file doesn't contains a basic ground definition !";
 
 			return this->setLoadSuccess(false);
 		}
@@ -147,7 +147,7 @@ namespace EmEn::Graphics::Renderable
 	}
 
 	bool
-	BasicFloorResource::load (Resources::AbstractServiceProvider & serviceProvider, const Json::Value & data) noexcept
+	BasicGroundResource::load (Resources::AbstractServiceProvider & serviceProvider, const Json::Value & data) noexcept
 	{
 		/* 1. Creating a geometry. */
 		/* Checks size option. */
@@ -170,7 +170,7 @@ namespace EmEn::Graphics::Renderable
 
 		if ( !geometryResource->load(data[SizeKey].asFloat(), data[DivisionKey].asUInt(), DefaultGeometryFlags) )
 		{
-			TraceError{ClassId} << "Unable to create GridGeometry to generate the BasicFloor !";
+			TraceError{ClassId} << "Unable to create grid geometry to generate the basic ground !";
 
 			return this->setLoadSuccess(false);
 		}
@@ -266,7 +266,7 @@ namespace EmEn::Graphics::Renderable
 		}
 		else
 		{
-			TraceWarning{ClassId} << "Material resource type '" << materialType << "' for basic floor '" << this->name() << "' is not handled !";
+			TraceWarning{ClassId} << "Material resource type '" << materialType << "' for basic ground '" << this->name() << "' is not handled !";
 		}
 
 		/* 3. Use the common func. */
@@ -274,7 +274,7 @@ namespace EmEn::Graphics::Renderable
 	}
 
 	bool
-	BasicFloorResource::load (const std::shared_ptr< Geometry::VertexGridResource > & geometry, const std::shared_ptr< Material::Interface > & material) noexcept
+	BasicGroundResource::load (const std::shared_ptr< Geometry::VertexGridResource > & vertexGridResource, const std::shared_ptr< Material::Interface > & materialResource, const RasterizationOptions & rasterizationOptions) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
@@ -282,48 +282,58 @@ namespace EmEn::Graphics::Renderable
 		}
 
 		/* 1. Check the grid geometry. */
-		if ( !this->setGeometry(geometry) )
+		if ( !this->setGeometry(vertexGridResource) )
 		{
-			TraceError{ClassId} << "Unable to set grid geometry for basic floor '" << this->name() << "' !";
+			TraceError{ClassId} << "Unable to set grid geometry for basic ground '" << this->name() << "' !";
 
 			return this->setLoadSuccess(false);
 		}
 
 		/* 2. Check the material. */
-		if ( !this->setMaterial(material) )
+		if ( !this->setMaterial(materialResource) )
 		{
-			TraceError{ClassId} << "Unable to set material for basic floor '" << this->name() << "' !";
+			TraceError{ClassId} << "Unable to set material for basic ground '" << this->name() << "' !";
 
 			return this->setLoadSuccess(false);
 		}
+
+		/* 3. Set rasterization options. */
+		m_rasterizationOptions = rasterizationOptions;
 
 		return this->setLoadSuccess(true);
 	}
 
 	bool
-	BasicFloorResource::load (float size, uint32_t division, const std::shared_ptr< Material::Interface > & materialResource, float UVMultiplier) noexcept
+	BasicGroundResource::load (float gridSize, uint32_t gridDivision, const std::shared_ptr< Material::Interface > & materialResource, const RasterizationOptions & rasterizationOptions, float UVMultiplier) noexcept
 	{
 		const auto geometryResource = std::make_shared< Geometry::VertexGridResource >(this->name() + "GridGeometry", DefaultGeometryFlags);
 
-		if ( !geometryResource->load(size, division, UVMultiplier) )
+		if ( !geometryResource->load(gridSize, gridDivision, UVMultiplier) )
 		{
-			Tracer::error(ClassId, "Unable to generate a basic floor geometry !");
+			Tracer::error(ClassId, "Unable to generate a basic ground geometry !");
 
 			return false;
 		}
 
-		return this->load(geometryResource, materialResource);
+		return this->load(geometryResource, materialResource, rasterizationOptions);
 	}
 
 	bool
-	BasicFloorResource::loadDiamondSquare (float size, float shiftHeight, uint32_t division, float factor, float roughness, int32_t seed, const std::shared_ptr< Material::Interface > & materialResource, float UVMultiplier) noexcept
+	BasicGroundResource::loadDiamondSquare (float gridSize, uint32_t gridDivision, const std::shared_ptr< Material::Interface > & materialResource, const DiamondSquareParams< float > & noise, const RasterizationOptions & rasterizationOptions, float UVMultiplier, float shiftHeight) noexcept
 	{
+		if ( !isPowerOfTwo(gridDivision) )
+		{
+			TraceError{ClassId} << "The grid division (" << gridDivision << ") must be a power of two to use diamond square !";
+
+			return false;
+		}
+
 		Grid< float > grid{};
 
-		if ( grid.initializeData(size, division) )
+		if ( grid.initializeByGridSize(gridSize, gridDivision) )
 		{
 			grid.setUVMultiplier(UVMultiplier);
-			grid.applyDiamondSquare(factor, roughness, seed);
+			grid.applyDiamondSquare(noise.factor, noise.roughness, noise.seed);
 
 			if ( !Utility::isZero(shiftHeight) )
 			{
@@ -342,23 +352,23 @@ namespace EmEn::Graphics::Renderable
 
 		if ( !geometryResource->load(grid) )
 		{
-			Tracer::error(ClassId, "Unable to generate a basic floor geometry !");
+			Tracer::error(ClassId, "Unable to generate a basic ground geometry !");
 
 			return false;
 		}
 
-		return this->load(geometryResource, materialResource);
+		return this->load(geometryResource, materialResource, rasterizationOptions);
 	}
 
 	bool
-	BasicFloorResource::loadPerlinNoise (float size, float shiftHeight, uint32_t division, float noiseSize, float noiseFactor, const std::shared_ptr< Material::Interface > & materialResource, float UVMultiplier) noexcept
+	BasicGroundResource::loadPerlinNoise (float gridSize, uint32_t gridDivision, const std::shared_ptr< Material::Interface > & materialResource, const PerlinNoiseParams< float > & noise, const RasterizationOptions & rasterizationOptions, float UVMultiplier, float shiftHeight) noexcept
 	{
 		Grid< float > grid{};
 
-		if ( grid.initializeData(size, division) )
+		if ( grid.initializeByGridSize(gridSize, gridDivision) )
 		{
 			grid.setUVMultiplier(UVMultiplier);
-			grid.applyPerlinNoise(noiseSize, noiseFactor);
+			grid.applyPerlinNoise(noise.size, noise.factor);
 
 			if ( !Utility::isZero(shiftHeight) )
 			{
@@ -377,16 +387,16 @@ namespace EmEn::Graphics::Renderable
 
 		if ( !geometryResource->load(grid) )
 		{
-			Tracer::error(ClassId, "Unable to generate a basic floor geometry !");
+			Tracer::error(ClassId, "Unable to generate a basic ground geometry !");
 
 			return false;
 		}
 
-		return this->load(geometryResource, materialResource);
+		return this->load(geometryResource, materialResource, rasterizationOptions);
 	}
 
 	bool
-	BasicFloorResource::setGeometry (const std::shared_ptr< Geometry::VertexGridResource > & geometryResource) noexcept
+	BasicGroundResource::setGeometry (const std::shared_ptr< Geometry::VertexGridResource > & geometryResource) noexcept
 	{
 		if ( geometryResource == nullptr )
 		{
@@ -403,7 +413,7 @@ namespace EmEn::Graphics::Renderable
 	}
 
 	bool
-	BasicFloorResource::setMaterial (const std::shared_ptr< Material::Interface > & materialResource) noexcept
+	BasicGroundResource::setMaterial (const std::shared_ptr< Material::Interface > & materialResource) noexcept
 	{
 		if ( materialResource == nullptr )
 		{

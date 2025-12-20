@@ -30,7 +30,7 @@
 #include <array>
 
 /* Local inclusions for inheritances. */
-#include "Abstract.hpp"
+#include "Interface.hpp"
 
 /* Local inclusions for usages. */
 #include "Resources/Container.hpp"
@@ -148,6 +148,17 @@ namespace EmEn::Graphics::Material
 			/** @copydoc EmEn::Resources::ResourceTrait::load(Resources::Manager &, const Json::Value &) */
 			bool load (Resources::AbstractServiceProvider & serviceProvider, const Json::Value & data) noexcept override;
 
+			/**
+			 * @brief Loads a basic material with specific color properties.
+			 * @param color The diffuse color.
+			 * @param specularColor The specular color.
+			 * @param shininess The shininess value. Default 32.0.
+			 * @param opacity The opacity value (0.0 = transparent, 1.0 = opaque). Default 1.0.
+			 * @param blendingMode The blending mode. Default None.
+			 * @return bool
+			 */
+			bool load (const Libs::PixelFactory::Color< float > & color, const Libs::PixelFactory::Color< float > & specularColor, float shininess = 32.0F, float opacity = 1.0F, BlendingMode blendingMode = BlendingMode::None) noexcept;
+
 			/** @copydoc EmEn::Resources::ResourceTrait::memoryOccupied() const noexcept */
 			[[nodiscard]]
 			size_t
@@ -176,7 +187,7 @@ namespace EmEn::Graphics::Material
 			[[nodiscard]]
 			bool generateFragmentShaderCode (Saphir::Generator::Abstract & generator, Saphir::LightGenerator & lightGenerator, Saphir::FragmentShader & fragmentShader) const noexcept override;
 
-			/** @copydoc EmEn::Graphics::Material::Interface::physicalSurfaceProperties() const */
+			/** @copydoc EmEn::Graphics::Material::Interface::surfacePhysicalProperties() const */
 			[[nodiscard]]
 			const Physics::SurfacePhysicalProperties &
 			surfacePhysicalProperties () const noexcept override
@@ -184,7 +195,7 @@ namespace EmEn::Graphics::Material
 				return m_physicalSurfaceProperties;
 			}
 
-			/** @copydoc EmEn::Graphics::Material::Interface::physicalSurfaceProperties() */
+			/** @copydoc EmEn::Graphics::Material::Interface::surfacePhysicalProperties() */
 			[[nodiscard]]
 			Physics::SurfacePhysicalProperties &
 			surfacePhysicalProperties () noexcept override

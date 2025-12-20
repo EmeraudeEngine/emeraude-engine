@@ -864,7 +864,7 @@ namespace EmEn::Resources
 			 * @return Shared pointer to the newly created resource, or nullptr on failure.
 			 * @warning Returns nullptr if a resource with this name already exists.
 			 * @see addResource() To add an already-constructed resource
-			 * @see getOrNewResource() To get existing or create new
+			 * @see getOrCreateUnloadedResource() To get existing or create new unloaded
 			 * @note Thread-safe: locks m_resourcesAccess internally.
 			 * @version 0.8.35
 			 */
@@ -1080,7 +1080,7 @@ namespace EmEn::Resources
 			}
 
 			/**
-			 * @brief Returns an existing resource or creates a new empty one.
+			 * @brief Returns an existing resource or creates a new unloaded one.
 			 *
 			 * Combines get and create operations: tries to load from store first, creates new if not found.
 			 * Useful when you want a resource whether it exists or not.
@@ -1088,15 +1088,16 @@ namespace EmEn::Resources
 			 * @param resourceName Name of the resource.
 			 * @param resourceFlags Construction flags if creating new resource (default: 0).
 			 * @param asyncLoad True for async loading if resource is in store (default: true).
-			 * @return Shared pointer to existing or newly created resource.
+			 * @return Shared pointer to existing or newly created unloaded resource.
 			 * @see getResource() To only retrieve existing resources
 			 * @see createResource() To only create new resources
+			 * @see getOrCreateResource() To get existing or create AND initialize via custom function
 			 * @note Thread-safe: locks m_resourcesAccess internally.
 			 * @version 0.8.35
 			 */
 			[[nodiscard]]
 			std::shared_ptr< resource_t >
-			getOrNewResource (const std::string & resourceName, uint32_t resourceFlags = 0, bool asyncLoad = true) noexcept
+			getOrCreateUnloadedResource (const std::string & resourceName, uint32_t resourceFlags = 0, bool asyncLoad = true) noexcept
 			{
 				const std::lock_guard< std::mutex > scopeLock{m_resourcesAccess};
 
@@ -1510,7 +1511,7 @@ namespace EmEn::Resources
 			 * @brief Internal: Checks for existing resource or queues it for loading.
 			 *
 			 * Helper method that checks loaded resources first, then queries the store and
-			 * initiates loading if found. Used by methods like getOrNewResource() that need
+			 * initiates loading if found. Used by methods like getOrCreateUnloadedResource() that need
 			 * to check existence before creating.
 			 *
 			 * @param resourceName Name of the resource to check/load.

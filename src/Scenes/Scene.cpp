@@ -106,9 +106,9 @@ namespace EmEn::Scenes
 		{
 			/* NOTE: Release shared_ptr */
 			m_seaLevelRenderable.reset();
-			m_seaLevelPhysics.reset();
-			m_groundRenderable.reset();
-			m_groundPhysics.reset();
+			m_seaLevel.reset();
+			m_groundLevelRenderable.reset();
+			m_groundLevel.reset();
 			m_backgroundResource.reset();
 
 			/* NOTE: Release all shared_ptr */
@@ -220,6 +220,13 @@ namespace EmEn::Scenes
 		m_lifetimeUS += EngineUpdateCycleDurationUS< uint64_t >;
 		m_lifetimeMS += EngineUpdateCycleDurationMS< uint32_t >;
 
+		if ( m_groundLevel != nullptr )
+		{
+			const auto worldCoordinates = m_AVConsoleManager.getPrimaryVideoDevice()->getWorldCoordinates();
+
+			m_groundLevel->updateVisibility(worldCoordinates.position());
+		}
+
 		this->simulatePhysics();
 
 		m_nodeController.update();
@@ -315,7 +322,10 @@ namespace EmEn::Scenes
 		{
 			for ( const auto & element : m_renderingOctree->elements() )
 			{
-				newOctree->insert(element);
+				if ( element->isRenderable() )
+				{
+					newOctree->insert(element);
+				}
 			}
 		}
 
@@ -350,7 +360,10 @@ namespace EmEn::Scenes
 		{
 			for ( const auto & element : m_physicsOctree->elements() )
 			{
-				newOctree->insert(element);
+				if ( element->isCollidable() )
+				{
+					newOctree->insert(element);
+				}
 			}
 		}
 

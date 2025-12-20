@@ -695,4 +695,19 @@ namespace EmEn::Libs::Math
 
 		return numbers.empty() ? 0 : std::accumulate(numbers.cbegin(), numbers.cend(), 0) / numbers.size();
 	}
+
+	/**
+	 * @brief Checks if a number is a power of two.
+	 * @param value The value to check.
+	 * @return True if value is a power of two, false otherwise.
+	 */
+	template< typename integral_t = uint32_t >
+	[[nodiscard]]
+	static
+	constexpr
+	bool
+	isPowerOfTwo (integral_t value) noexcept requires (std::is_arithmetic_v< integral_t >)
+	{
+		return value > 0 && (value & (value - 1)) == 0;
+	}
 }

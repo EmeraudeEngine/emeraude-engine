@@ -278,25 +278,6 @@ namespace EmEn::Graphics::RenderableInstance
 		Tracer::error(TracerTag, errorMessage, location);
 	}
 
-	bool
-	Abstract::refreshGraphicsPipelines (const std::shared_ptr< RenderTarget::Abstract > & /*renderTarget*/) noexcept
-	{
-		/* NOTE: Graphics pipelines are now managed by Renderable's cache.
-		 * This method is kept for API compatibility but does nothing.
-		 * The Renderer's pipeline cache handles recreation automatically. */
-		return true;
-	}
-
-	void
-	Abstract::destroyGraphicsPipelines (const std::shared_ptr< RenderTarget::Abstract > & renderTarget) noexcept
-	{
-		/* Forward to Renderable's cache. */
-		if ( m_renderable != nullptr )
-		{
-			m_renderable->clearProgramCache(renderTarget);
-		}
-	}
-
 	void
 	Abstract::castShadows (uint32_t readStateIndex, const std::shared_ptr< RenderTarget::Abstract > & renderTarget, uint32_t layerIndex, const CartesianFrame< float > * worldCoordinates, const CommandBuffer & commandBuffer) const noexcept
 	{
@@ -406,7 +387,35 @@ namespace EmEn::Graphics::RenderableInstance
 
 		commandBuffer.bind(*material->descriptorSet(), *pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, setOffset/*++*/);
 
-		if ( material->isAnimated() )
+		/* Check for adaptive LOD rendering. */
+		if ( geometry->isAdaptiveLOD() )
+		{
+			const auto & viewPosition = renderTarget->viewMatrices().position();
+
+			/* Prepare LODs and stitching for this frame. */
+			geometry->prepareAdaptiveRendering(viewPosition);
+
+			/* Draw all sectors at their computed LOD level. */
+			const auto drawCallCount = geometry->getAdaptiveDrawCallCount(viewPosition);
+
+			for ( uint32_t drawCallIndex = 0; drawCallIndex < drawCallCount; ++drawCallIndex )
+			{
+				const auto range = geometry->getAdaptiveDrawCallRange(drawCallIndex, viewPosition);
+
+				commandBuffer.drawIndexed(range[0], range[1], this->instanceCount());
+			}
+
+			/* Draw stitching geometry between LOD zones. */
+			const auto stitchingCount = geometry->getStitchingDrawCallCount();
+
+			for ( uint32_t stitchIndex = 0; stitchIndex < stitchingCount; ++stitchIndex )
+			{
+				const auto range = geometry->getStitchingDrawCallRange(stitchIndex);
+
+				commandBuffer.drawIndexed(range[0], range[1], this->instanceCount());
+			}
+		}
+		else if ( material->isAnimated() )
 		{
 			commandBuffer.draw(*geometry, m_frameIndex, this->instanceCount());
 		}

@@ -89,24 +89,48 @@ namespace EmEn::Overlay
 			}
 
 			/**
-			 * @brief Sets the color-space conversion requested for this screen.
+			 * @brief Sets the alpha is premultiplied for this screen.
+			 * @param state The state.
 			 * @return void
 			 */
 			void
-			setColorSpaceConversion (Saphir::ColorSpaceConversion colorSpaceConversion) noexcept
+			setPremultipliedAlpha (bool state) noexcept
 			{
-				m_colorSpaceConversion = colorSpaceConversion;
+				m_premultipliedAlpha = state;
 			}
 
 			/**
-			 * @brief Returns color-space conversion requested for this screen.
-			 * @return Saphir::ColorSpaceConversion
+			 * @brief Returns whether the alpha is premultiplied for this screen.
+			 * @return bool
 			 */
 			[[nodiscard]]
-			Saphir::ColorSpaceConversion
-			colorSpaceConversion () const noexcept
+			bool
+			premultipliedAlpha () const noexcept
 			{
-				return m_colorSpaceConversion;
+				return m_premultipliedAlpha;
+			}
+
+			/**
+			 * @brief Sets the source format to BGRA for this screen.
+			 * @note By default, the source format is RGBA. CEF provides BGRA pixels.
+			 * @param state The state. True for BGRA, false for RGBA.
+			 * @return void
+			 */
+			void
+			useBGRAFormat (bool state) noexcept
+			{
+				m_useBGRAFormat = state;
+			}
+
+			/**
+			 * @brief Returns whether the source format is BGRA for this screen.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isUsingBGRAFormat () const noexcept
+			{
+				return m_useBGRAFormat;
 			}
 
 			/**
@@ -412,11 +436,12 @@ namespace EmEn::Overlay
 			const FramebufferProperties & m_framebufferProperties;
 			std::vector< std::shared_ptr< Surface > > m_surfaces;
 			std::weak_ptr< Surface > m_inputExclusiveSurface;
-			Saphir::ColorSpaceConversion m_colorSpaceConversion{Saphir::ColorSpaceConversion::None};
 			mutable std::mutex m_surfacesMutex;
 			bool m_isVisible{false};
 			bool m_isListeningKeyboard{false};
 			bool m_isListeningPointer{false};
+			bool m_premultipliedAlpha{false};
+			bool m_useBGRAFormat{false};
 	};
 
 	/**

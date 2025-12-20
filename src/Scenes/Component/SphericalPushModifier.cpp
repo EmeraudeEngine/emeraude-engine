@@ -27,6 +27,7 @@
 #include "SphericalPushModifier.hpp"
 
 /* Local inclusions. */
+#include "Physics/CollisionModelInterface.hpp"
 #include "Scenes/AbstractEntity.hpp"
 #include "Scenes/Scene.hpp"
 
@@ -68,18 +69,51 @@ namespace EmEn::Scenes::Component
 	}
 
 	Vector< 3, float >
-	SphericalPushModifier::getForceAppliedToEntity (const CartesianFrame< float > & worldCoordinates, const Space3D::Sphere< float > & worldBoundingSphere) const noexcept
+	SphericalPushModifier::getForceAppliedTo (const LocatableInterface & entity) const noexcept
 	{
 		if ( !this->isEnabled() )
 		{
 			return {};
 		}
 
+		const auto worldCoordinates = entity.getWorldCoordinates();
 		auto magnitude = m_magnitude;
 
 		if ( this->hasInfluenceArea() )
 		{
-			const auto influence = this->influenceArea()->influenceStrength(worldCoordinates, worldBoundingSphere);
+			float influence = 0.0F;
+
+			if ( const auto * model = entity.collisionModel(); model != nullptr )
+			{
+				switch ( model->modelType() )
+				{
+					case CollisionModelType::Point :
+						influence = this->influenceArea()->influenceStrength(worldCoordinates.position());
+						break;
+
+					case CollisionModelType::Sphere :
+					{
+						const Space3D::Sphere< float > boundingSphere{model->getRadius(), worldCoordinates.position()};
+
+						influence = this->influenceArea()->influenceStrength(worldCoordinates, boundingSphere);
+						break;
+					}
+
+					case CollisionModelType::AABB :
+					case CollisionModelType::Capsule :
+					{
+						const auto worldAABB = model->getAABB(worldCoordinates);
+
+						influence = this->influenceArea()->influenceStrength(worldCoordinates, worldAABB);
+						break;
+					}
+				}
+			}
+			else
+			{
+				/* Fallback: point-based influence. */
+				influence = this->influenceArea()->influenceStrength(worldCoordinates.position());
+			}
 
 			if ( influence <= 0.0F )
 			{
@@ -93,7 +127,7 @@ namespace EmEn::Scenes::Component
 	}
 
 	Vector< 3, float >
-	SphericalPushModifier::getForceAppliedToEntity (const CartesianFrame< float > & worldCoordinates, const Space3D::AACuboid< float > & worldBoundingBox) const noexcept
+	SphericalPushModifier::getForceAppliedTo (const CartesianFrame< float > & worldPosition, float radius) const noexcept
 	{
 		if ( !this->isEnabled() )
 		{
@@ -104,7 +138,19 @@ namespace EmEn::Scenes::Component
 
 		if ( this->hasInfluenceArea() )
 		{
-			const auto influence = this->influenceArea()->influenceStrength(worldCoordinates, worldBoundingBox);
+			float influence = 0.0F;
+
+			if ( radius > 0.0F )
+			{
+				/* Object with bounding radius: create a sphere on the fly. */
+				const Space3D::Sphere< float > boundingSphere{radius, worldPosition.position()};
+				influence = this->influenceArea()->influenceStrength(worldPosition, boundingSphere);
+			}
+			else
+			{
+				/* Point: use point-based influence. */
+				influence = this->influenceArea()->influenceStrength(worldPosition.position());
+			}
 
 			if ( influence <= 0.0F )
 			{
@@ -114,6 +160,6 @@ namespace EmEn::Scenes::Component
 			magnitude *= influence;
 		}
 
-		return (worldCoordinates.position() - this->parentEntity().getWorldCoordinates().position()).normalize().scale(magnitude);
+		return (worldPosition.position() - this->parentEntity().getWorldCoordinates().position()).normalize().scale(magnitude);
 	}
 }

@@ -63,7 +63,17 @@ namespace EmEn::Audio
 
 		private:
 
+			/** @copydoc EmEn::Scenes::AVConsole::AbstractVirtualDevice::getWorldCoordinates() */
+			[[nodiscard]]
+			Libs::Math::CartesianFrame< float >
+			getWorldCoordinates () const noexcept override
+			{
+				return m_worldCoordinates;
+			}
+
 			/** @copydoc EmEn::Scenes::AVConsole::AbstractVirtualDevice::updateDeviceFromCoordinates() */
 			void updateDeviceFromCoordinates (const Libs::Math::CartesianFrame< float > & worldCoordinates, const Libs::Math::Vector< 3, float > & worldVelocity) noexcept override;
+
+			Libs::Math::CartesianFrame< float > m_worldCoordinates{};
 	};
 }

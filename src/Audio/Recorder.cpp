@@ -32,8 +32,8 @@ namespace EmEn::Audio
 	using namespace Libs::Math;
 
 	void
-	Recorder::updateDeviceFromCoordinates (const CartesianFrame< float > & /*worldCoordinates*/, const Vector< 3, float > & /*worldVelocity*/) noexcept
+	Recorder::updateDeviceFromCoordinates (const CartesianFrame< float > & worldCoordinates, const Vector< 3, float > & /*worldVelocity*/) noexcept
 	{
-		// Nothing to do for now ...
+		m_worldCoordinates = worldCoordinates;
 	}
 }

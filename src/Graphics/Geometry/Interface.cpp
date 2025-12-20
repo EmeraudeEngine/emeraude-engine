@@ -24,7 +24,7 @@
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
 
-#include "Abstract.hpp"
+#include "Interface.hpp"
 
 /* STL inclusions. */
 #include <algorithm>

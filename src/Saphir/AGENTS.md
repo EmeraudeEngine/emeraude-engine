@@ -40,8 +40,17 @@ Cache Program ◄────────────────────┘
 
 ### Generator Types
 1. **SceneGenerator**: 3D objects with full lighting, materials, effects
-2. **OverlayGenerator**: 2D elements (UI, HUD, text, sprites)
+2. **OverlayRendering**: 2D elements (UI, HUD, text, sprites) - generates 4 program variants
 3. **ShadowManager**: Minimal shaders for shadow map generation
+
+### OverlayRendering Generator
+
+Generates 4 shader program variants based on:
+- **Premultiplied alpha**: Affects blend state configuration
+- **BGRA source**: Affects fragment shader (`.bgra` swizzle or not)
+
+Cache key includes: render target type + premultiplied alpha + BGRA source format.
+See: `OverlayRendering.cpp:computeProgramCacheKey()`
 
 ### Compatibility Checking
 ```cpp
@@ -97,6 +106,8 @@ ctest -R Saphir
 - **Thread safety**: Cache protected, generation can be parallel
 - **Used by Graphics and Overlay**: Graphics (3D), Overlay (2D) use Saphir
 - **Runtime generation**: Shaders generated on demand during resource loading
+- **Alpha preservation**: Lighting calculations use `.rgb` only, never modify alpha channel. See: `LightGenerator.cpp:603-661`
+- **Color space conversion** (3D only): sRGB↔Linear functions apply gamma only to RGB, alpha passes through unchanged. See: `FragmentShader.cpp:generateToSRGBColorFunction()`, `generateToLinearColorFunction()`. Note: Overlay system does NOT use color space conversion - swap-chain format (UNORM vs SRGB) determines final handling.
 
 ## Detailed Documentation
 

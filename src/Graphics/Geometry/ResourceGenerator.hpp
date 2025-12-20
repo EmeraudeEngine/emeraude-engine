@@ -330,13 +330,13 @@ namespace EmEn::Graphics::Geometry
 
 			/**
 			 * @brief Generates a grid geometry.
-			 * @param size The size of the whole size of one dimension of the grid. i.e. If the size is 1024, the grid will be from +512 to -512.
-			 * @param division How many cell in one dimension.
+			 * @param gridSize The size of the whole size of one dimension of the grid. i.e. If the size is 1024, the grid will be from +512 to -512.
+			 * @param gridDivision How many cell in one dimension.
 			 * @param resourceName A string. Default auto generated name.
 			 * @return shared_ptr< VertexGridResource >
 			 */
 			[[nodiscard]]
-			std::shared_ptr< VertexGridResource > surface (float size, uint32_t division, std::string resourceName = {}) const noexcept;
+			std::shared_ptr< VertexGridResource > surface (float gridSize, uint32_t gridDivision, std::string resourceName = {}) const noexcept;
 
 		private:
 

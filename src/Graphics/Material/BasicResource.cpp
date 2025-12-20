@@ -42,6 +42,7 @@ namespace EmEn::Graphics::Material
 {
 	using namespace Libs;
 	using namespace Libs::Math;
+	using namespace Libs::PixelFactory;
 	using namespace Saphir;
 	using namespace Saphir::Keys;
 	using namespace Vulkan;
@@ -54,9 +55,40 @@ namespace EmEn::Graphics::Material
 			return false;
 		}
 
-		if ( !this->setColor(PixelFactory::Grey) )
+		if ( !this->setColor(Grey) )
 		{
 			return false;
+		}
+
+		return this->setLoadSuccess(true);
+	}
+
+	bool
+	BasicResource::load (const Color< float > & color, const Color< float > & specularColor, float shininess, float opacity, BlendingMode blendingMode) noexcept
+	{
+		if ( !this->beginLoading() )
+		{
+			return false;
+		}
+
+		if ( !this->setColor(color) )
+		{
+			return false;
+		}
+
+		if ( !this->setSpecularComponent(specularColor, shininess) )
+		{
+			return false;
+		}
+
+		if ( !this->setOpacity(opacity) )
+		{
+			return false;
+		}
+
+		if ( blendingMode != BlendingMode::None )
+		{
+			this->enableBlending(blendingMode);
 		}
 
 		return this->setLoadSuccess(true);
@@ -138,7 +170,7 @@ namespace EmEn::Graphics::Material
 			const auto & specularData = data[SpecularString];
 
 			this->setSpecularComponent(
-				FastJSON::getValue< PixelFactory::Color< float > >(specularData, JKColor).value_or(DefaultSpecularColor),
+				FastJSON::getValue< Color< float > >(specularData, JKColor).value_or(DefaultSpecularColor),
 				FastJSON::getValue< float >(specularData, JKShininess).value_or(DefaultShininess)
 			);
 		}
@@ -656,7 +688,7 @@ namespace EmEn::Graphics::Material
 	}
 
 	bool
-	BasicResource::setColor (const PixelFactory::Color< float > & color) noexcept
+	BasicResource::setColor (const Color< float > & color) noexcept
 	{
 		if ( this->isCreated() && !this->isFlagEnabled(DynamicColorEnabled) )
 		{
@@ -737,7 +769,7 @@ namespace EmEn::Graphics::Material
 	}
 
 	bool
-	BasicResource::setSpecularComponent (const PixelFactory::Color< float > & color) noexcept
+	BasicResource::setSpecularComponent (const Color< float > & color) noexcept
 	{
 		m_materialProperties[SpecularColorOffset] = color.red();
 		m_materialProperties[SpecularColorOffset+1] = color.green();
@@ -748,7 +780,7 @@ namespace EmEn::Graphics::Material
 	}
 
 	bool
-	BasicResource::setSpecularComponent (const PixelFactory::Color< float > & color, float shininess) noexcept
+	BasicResource::setSpecularComponent (const Color< float > & color, float shininess) noexcept
 	{
 		m_materialProperties[SpecularColorOffset] = color.red();
 		m_materialProperties[SpecularColorOffset+1] = color.green();

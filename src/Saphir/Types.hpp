@@ -87,46 +87,4 @@ namespace EmEn::Saphir
 	const char * getShaderFileExtension (ShaderType type) noexcept;
 
 	using ShaderBinary = std::vector< uint32_t >;
-
-	/**
-	 * @brief Color space conversion enumeration.
-	 */
-	enum class ColorSpaceConversion : uint8_t
-	{
-		None = 0,
-		ToSRGB = 1,
-		ToLinear = 2
-	};
-
-	static constexpr auto NoneString{"None"};
-	static constexpr auto ToSRGBString{"ToSRGB"};
-	static constexpr auto ToLinearString{"ToLinear"};
-
-	/**
-	 * @brief Returns a C-String version of the enum value.
-	 * @param type The enum value.
-	 * @return const char *
-	 */
-	[[nodiscard]]
-	const char * to_cstring (ColorSpaceConversion type) noexcept;
-
-	/**
-	 * @brief Returns a string version of the enum value.
-	 * @param type The enum value.
-	 * @return std::string
-	 */
-	[[nodiscard]]
-	inline
-	std::string
-	to_string (ColorSpaceConversion type) noexcept
-	{
-		return {to_cstring(type)};
-	}
-
-	/**
-	 * @brief Returns the enum value from a string version.
-	 * @param value A reference to a string.
-	 * @return ColorSpaceConversion
-	 */
-	ColorSpaceConversion to_ColorSpaceConversion (const std::string & value) noexcept;
 }

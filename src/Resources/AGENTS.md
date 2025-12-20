@@ -136,6 +136,19 @@ bool onDependenciesLoaded() override {
 }
 ```
 
+### Container API Methods (v0.8+)
+
+| Method | Purpose |
+|--------|---------|
+| `getResource(name)` | Get existing or load from store |
+| `getDefaultResource()` | Get neutral/fallback resource |
+| `getOrCreateResource(name, fn)` | Get existing or create+initialize via function |
+| `getOrCreateUnloadedResource(name)` | Get existing or create empty shell (unloaded state) |
+| `getRandomResource()` | Get random loaded resource |
+| `preloadResource(name)` | Trigger async preload |
+
+**Note:** `getOrCreateUnloadedResource()` creates a resource in unloaded state, useful when you need to manually load the resource later via custom initialization.
+
 ### Garbage Collection
 - `use_count() == 1` → only Container holds the resource
 - `unloadUnusedResources()` to free memory

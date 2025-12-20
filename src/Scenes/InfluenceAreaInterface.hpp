@@ -108,12 +108,27 @@ namespace EmEn::Scenes
 			[[nodiscard]]
 			virtual float influenceStrength (const Libs::Math::CartesianFrame< float > & worldCoordinates, const Libs::Math::Space3D::AACuboid< float > & worldBoundingBox) const noexcept = 0;
 
+			/**
+			 * @brief Returns whether a point is under the influence of this area.
+			 * @param worldPosition The world position to test.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			virtual bool isUnderInfluence (const Libs::Math::Vector< 3, float > & worldPosition) const noexcept = 0;
+
+			/**
+			 * @brief Returns the strength of influence at a point.
+			 * @param worldPosition The world position to test.
+			 * @return float
+			 */
+			[[nodiscard]]
+			virtual float influenceStrength (const Libs::Math::Vector< 3, float > & worldPosition) const noexcept = 0;
+
 		protected:
 
 			/**
 			 * @brief Constructs an influence area.
 			 */
 			InfluenceAreaInterface () noexcept = default;
-
 	};
 }

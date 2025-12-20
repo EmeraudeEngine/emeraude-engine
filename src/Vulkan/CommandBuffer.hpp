@@ -502,6 +502,15 @@ namespace EmEn::Vulkan
 			 */
 			void draw (const Graphics::Geometry::Interface & geometry, uint32_t subGeometryIndex = 0, uint32_t instanceCount = 1) const noexcept;
 
+			/**
+			 * @brief Registers an indexed draw command with explicit range.
+			 * @param indexOffset The starting index in the index buffer.
+			 * @param indexCount The number of indices to draw.
+			 * @param instanceCount The number of instances. Default 1.
+			 * @return void
+			 */
+			void drawIndexed (uint32_t indexOffset, uint32_t indexCount, uint32_t instanceCount = 1) const noexcept;
+
 		private:
 
 			VkCommandBuffer m_handle{VK_NULL_HANDLE};

@@ -27,10 +27,12 @@
 #include "ConstraintSolver.hpp"
 
 /* STL inclusions. */
+#include <cmath>
 #include <vector>
 #include <algorithm>
 
 /* Local inclusions. */
+#include "Constants.hpp"
 #include "Libs/Math/Vector.hpp"
 #include "ContactManifold.hpp"
 #include "MovableTrait.hpp"
@@ -231,12 +233,13 @@ namespace EmEn::Physics
 			if ( bodyA && bodyA->isMovable() )
 			{
 				bodyA->applyLinearImpulse(-linearImpulse);
-				bodyA->setHadCollision();
 
-				/* Body A is grounded if normal points downward (A is on top). */
-				if ( normal[Libs::Math::Y] > GroundNormalThreshold )
+				/* Body A is grounded if normal points downward (A is on top).
+				 * Only ground against static surfaces, not other dynamic bodies. */
+				if ( normal[Libs::Math::Y] > GroundNormalThreshold && (!bodyB || !bodyB->isMovable()) )
 				{
-					bodyA->setGrounded();
+					/* Ground on Entity since this is Node-to-Node collision resolution. */
+					bodyA->setGrounded(GroundedSource::Entity, bodyB);
 				}
 
 				if ( bodyA->isRotationPhysicsEnabled() )
@@ -250,12 +253,13 @@ namespace EmEn::Physics
 			if ( bodyB && bodyB->isMovable() )
 			{
 				bodyB->applyLinearImpulse(linearImpulse);
-				bodyB->setHadCollision();
 
-				/* Body B is grounded if normal points upward (B is on top). */
-				if ( normal[Libs::Math::Y] < -GroundNormalThreshold )
+				/* Body B is grounded if normal points upward (B is on top).
+				 * Only ground against static surfaces, not other dynamic bodies. */
+				if ( normal[Libs::Math::Y] < -GroundNormalThreshold && (!bodyA || !bodyA->isMovable()) )
 				{
-					bodyB->setGrounded();
+					/* Ground on Entity since this is Node-to-Node collision resolution. */
+					bodyB->setGrounded(GroundedSource::Entity, bodyA);
 				}
 
 				if ( bodyB->isRotationPhysicsEnabled() )
@@ -263,6 +267,24 @@ namespace EmEn::Physics
 					const auto angularImpulse = Libs::Math::Vector< 3, float >::crossProduct(contact.rB(), linearImpulse);
 
 					bodyB->applyAngularImpulse(angularImpulse);
+				}
+			}
+
+			/* Notify bodies of collision event.
+			 * Convert impulse (N·s) to force (N) by dividing by delta time.
+			 * F = J / Δt where J is the impulse magnitude. */
+			const float impactForce = std::abs(lambda) / EngineUpdateCycleDurationS< float >;
+
+			if ( impactForce > 0.0F )
+			{
+				if ( bodyA && bodyA->isMovable() )
+				{
+					bodyA->onCollision(impactForce);
+				}
+
+				if ( bodyB && bodyB->isMovable() )
+				{
+					bodyB->onCollision(impactForce);
 				}
 			}
 

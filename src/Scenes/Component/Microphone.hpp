@@ -106,6 +106,14 @@ namespace EmEn::Scenes::Component
 			/** @copydoc EmEn::Scenes::Component::Abstract::onWakeup() */
 			void onWakeup () noexcept override { }
 
+			/** @copydoc EmEn::Scenes::AVConsole::AbstractVirtualDevice::getWorldCoordinates() */
+			[[nodiscard]]
+			Libs::Math::CartesianFrame< float >
+			getWorldCoordinates () const noexcept override
+			{
+				return Abstract::getWorldCoordinates();
+			}
+
 			/** @copydoc EmEn::Scenes::AVConsole::AbstractVirtualDevice::updateDeviceFromCoordinates() noexcept */
 			void updateDeviceFromCoordinates (const Libs::Math::CartesianFrame< float > & worldCoordinates, const Libs::Math::Vector< 3, float > & worldVelocity) noexcept override;
 

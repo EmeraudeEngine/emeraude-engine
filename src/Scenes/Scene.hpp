@@ -59,7 +59,7 @@
 #include "Saphir/EffectInterface.hpp"
 #include "Scenes/AVConsole/Manager.hpp"
 #include "Component/Visual.hpp"
-#include "GroundInterface.hpp"
+#include "GroundLevelInterface.hpp"
 #include "SeaLevelInterface.hpp"
 #include "LightSet.hpp"
 #include "OctreeSector.hpp"
@@ -260,14 +260,14 @@ namespace EmEn::Scenes
 			 * @see enable() To activate the scene for rendering.
 			 * @see SceneOctreeOptions For octree configuration.
 			 */
-			Scene (Graphics::Renderer & graphicsRenderer, Audio::Manager & audioManager, const std::string & name, float boundary, const std::shared_ptr< Graphics::Renderable::AbstractBackground > & background = nullptr, const std::shared_ptr< GroundInterface > & ground = nullptr, const std::shared_ptr< SeaLevelInterface > & seaLevel = nullptr, const SceneOctreeOptions & octreeOptions = {}) noexcept
+			Scene (Graphics::Renderer & graphicsRenderer, Audio::Manager & audioManager, const std::string & name, float boundary, const std::shared_ptr< Graphics::Renderable::AbstractBackground > & background = nullptr, const std::shared_ptr< GroundLevelInterface > & ground = nullptr, const std::shared_ptr< SeaLevelInterface > & seaLevel = nullptr, const SceneOctreeOptions & octreeOptions = {}) noexcept
 				: NameableTrait{name},
 				m_rootNode{std::make_shared< Node >(*this)},
 				m_backgroundResource{background},
-				m_groundRenderable{std::dynamic_pointer_cast< Graphics::Renderable::Abstract >(ground)},
-				m_groundPhysics{ground},
+				m_groundLevelRenderable{std::dynamic_pointer_cast< Graphics::Renderable::Abstract >(ground)},
+				m_groundLevel{ground},
 				m_seaLevelRenderable{std::dynamic_pointer_cast< Graphics::Renderable::Abstract >(seaLevel)},
-				m_seaLevelPhysics{seaLevel},
+				m_seaLevel{seaLevel},
 				m_AVConsoleManager{name, graphicsRenderer, audioManager},
 				m_boundary{boundary}
 			{
@@ -989,18 +989,6 @@ namespace EmEn::Scenes
 				}
 			}
 
-			/**
-			 * @brief Applies all scene modifiers to a node.
-			 *
-			 * Iterates through m_modifiers and applies each valid modifier's
-			 * effect to the given node (gravity, wind, etc.).
-			 *
-			 * @param node Node to apply modifiers to.
-			 *
-			 * @see forEachModifiers() For modifier iteration.
-			 */
-			void applyModifiers (Node & node) const noexcept;
-
 			/* ============================================================
 			 * [CONCEPT: RENDERING]
 			 * Render targets, scene visuals, rendering pipeline.
@@ -1052,13 +1040,13 @@ namespace EmEn::Scenes
 			 * @param ground Shared pointer to the terrain, or nullptr to clear.
 			 *
 			 * @see ground() To query current terrain.
-			 * @see GroundInterface For terrain interface.
+			 * @see GroundLevelInterface For terrain interface.
 			 */
 			void
-			setGround (const std::shared_ptr< GroundInterface > & ground) noexcept
+			setGroundLevel (const std::shared_ptr< GroundLevelInterface > & ground) noexcept
 			{
-				m_groundPhysics = ground;
-				m_groundRenderable = std::dynamic_pointer_cast< Graphics::Renderable::Abstract >(ground);
+				m_groundLevel = ground;
+				m_groundLevelRenderable = std::dynamic_pointer_cast< Graphics::Renderable::Abstract >(ground);
 
 				this->registerSceneVisualComponents();
 			}
@@ -1071,10 +1059,10 @@ namespace EmEn::Scenes
 			 * @see setGround() To modify.
 			 */
 			[[nodiscard]]
-			std::shared_ptr< GroundInterface >
-			groundPhysics () const noexcept
+			std::shared_ptr< GroundLevelInterface >
+			groundLevel () const noexcept
 			{
-				return m_groundPhysics;
+				return m_groundLevel;
 			}
 
 			/**
@@ -1086,9 +1074,9 @@ namespace EmEn::Scenes
 			 */
 			[[nodiscard]]
 			std::shared_ptr< Graphics::Renderable::Abstract >
-			groundRenderable () const noexcept
+			groundLevelRenderable () const noexcept
 			{
-				return m_groundRenderable;
+				return m_groundLevelRenderable;
 			}
 
 			/**
@@ -1107,7 +1095,7 @@ namespace EmEn::Scenes
 			void
 			setSeaLevel (const std::shared_ptr< SeaLevelInterface > & seaLevel) noexcept
 			{
-				m_seaLevelPhysics = seaLevel;
+				m_seaLevel = seaLevel;
 				m_seaLevelRenderable = std::dynamic_pointer_cast< Graphics::Renderable::Abstract >(seaLevel);
 
 				this->registerSceneVisualComponents();
@@ -1122,9 +1110,9 @@ namespace EmEn::Scenes
 			 */
 			[[nodiscard]]
 			std::shared_ptr< SeaLevelInterface >
-			seaLevelPhysics () const noexcept
+			seaLevel () const noexcept
 			{
-				return m_seaLevelPhysics;
+				return m_seaLevel;
 			}
 
 			/**
@@ -1463,16 +1451,6 @@ namespace EmEn::Scenes
 			 * @param commandBuffer The Vulkan command buffer for recording draw calls.
 			 */
 			void render (const std::shared_ptr< Graphics::RenderTarget::Abstract > & renderTarget, const Vulkan::CommandBuffer & commandBuffer) noexcept;
-
-			/**
-			 * @brief Rebuilds GPU resources for all renderable instances.
-			 *
-			 * Forces re-preparation of all instances for their render targets.
-			 * Useful after GPU resource invalidation.
-			 *
-			 * @return True if all instances refreshed successfully.
-			 */
-			bool refreshRenderableInstances () const noexcept;
 
 			/* ============================================================
 			 * [CONCEPT: PHYSICS]
@@ -2069,7 +2047,7 @@ namespace EmEn::Scenes
 			 *
 			 * @note This is a recursive method that descends into subsectors.
 			 */
-			void simulatePhysics () noexcept;
+			void simulatePhysics () const noexcept;
 
 			/**
 			 * @brief Performs collision tests within a single sector.
@@ -2077,7 +2055,7 @@ namespace EmEn::Scenes
 			 * @param manifolds A reference to a vector of contact manifolds.
 			 * @param testedEntityPairs A reference to a set of already tested entity pairs (avoids cross-sector duplicates).
 			 */
-			void detectCollisionCollisionInSector (const OctreeSector< AbstractEntity, true > & sector, std::vector< Physics::ContactManifold > & manifolds, std::unordered_set< uint64_t > & testedEntityPairs) const noexcept;
+			void detectCollisionInSector (const OctreeSector< AbstractEntity, true > & sector, std::vector< Physics::ContactManifold > & manifolds, std::unordered_set< uint64_t > & testedEntityPairs) const noexcept;
 
 			/**
 			 * @brief Detects collision between an entity and the world boundaries.
@@ -2104,7 +2082,7 @@ namespace EmEn::Scenes
 			 * @param entity The entity to test.
 			 * @param manifolds Vector to append contact manifolds to.
 			 *
-			 * @note Only called if m_groundPhysics is valid.
+			 * @note Only called if m_groundLevel is valid.
 			 * @see clipAboveGround() for hard clipping (safety).
 			 * @version 0.8.39
 			 */
@@ -2134,7 +2112,7 @@ namespace EmEn::Scenes
 			 *
 			 * @param entity The entity to clip.
 			 *
-			 * @note Only called if m_groundPhysics is valid.
+			 * @note Only called if m_groundLevel is valid.
 			 * @see detectGroundCollision() for physics response.
 			 * @version 0.8.39
 			 */
@@ -2181,9 +2159,10 @@ namespace EmEn::Scenes
 			 * @param positionCorrection [out] Accumulated position correction vector.
 			 * @param dominantNormal [out] Normal of the deepest penetration collision.
 			 * @param maxPenetration [out] Deepest penetration depth found.
-			 * @version 0.8.39
+			 * @param collidedEntity [out] Pointer to the static entity with deepest penetration.
+			 * @version 0.8.40
 			 */
-			void accumulateStaticEntityCorrections (const std::shared_ptr< AbstractEntity > & entity, const OctreeSector< AbstractEntity, true > & sector, Libs::Math::Vector< 3, float > & positionCorrection, Libs::Math::Vector< 3, float > & dominantNormal, float & maxPenetration) const noexcept;
+			void accumulateStaticEntityCorrections (const std::shared_ptr< AbstractEntity > & entity, const OctreeSector< AbstractEntity, true > & sector, Libs::Math::Vector< 3, float > & positionCorrection, Libs::Math::Vector< 3, float > & dominantNormal, float & maxPenetration, const Physics::MovableTrait *& collidedEntity) const noexcept;
 
 			/* ============================================================
 			 * [PRIVATE: CONSTANTS]
@@ -2219,13 +2198,13 @@ namespace EmEn::Scenes
 			/** @brief Scene background (skybox, procedural sky). May be null. */
 			std::shared_ptr< Graphics::Renderable::AbstractBackground > m_backgroundResource;
 			/** @brief Scene terrain/ground renderable for visual representation. May be null. */
-			std::shared_ptr< Graphics::Renderable::Abstract > m_groundRenderable;
+			std::shared_ptr< Graphics::Renderable::Abstract > m_groundLevelRenderable;
 			/** @brief Scene terrain/ground physics interface for collision. May be null. */
-			std::shared_ptr< GroundInterface > m_groundPhysics;
+			std::shared_ptr< GroundLevelInterface > m_groundLevel;
 			/** @brief Scene water surface renderable for visual representation. May be null. */
 			std::shared_ptr< Graphics::Renderable::Abstract > m_seaLevelRenderable;
 			/** @brief Scene water surface physics interface. May be null. */
-			std::shared_ptr< SeaLevelInterface > m_seaLevelPhysics;
+			std::shared_ptr< SeaLevelInterface > m_seaLevel;
 
 			/* ============================================================
 			 * [PRIVATE: MANAGERS]
@@ -2273,7 +2252,7 @@ namespace EmEn::Scenes
 			/** @brief Physical environment (gravity, air density). Default: Earth. */
 			Physics::EnvironmentPhysicalProperties m_environmentPhysicalProperties{Physics::EnvironmentPhysicalProperties::Earth()};
 			/** @brief [PHYSICS-NEW-SYSTEM] Sequential impulse constraint solver. */
-			Physics::ConstraintSolver m_constraintSolver{8, 3};
+			mutable Physics::ConstraintSolver m_constraintSolver{8, 3};
 			/** @brief Scene-local random float generator. */
 			Libs::Randomizer< float > m_floatRandomizer;
 			/** @brief Scene-local random integer generator. */

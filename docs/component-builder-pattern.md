@@ -59,7 +59,6 @@ auto light = entity->componentBuilder< Component::PointLight >("MainLight")
 // Visual component with mesh resource
 auto visual = entity->componentBuilder< Component::Visual >("MeshVisual")
     .setup([] (auto & component) {
-        vis.enablePhysicalProperties(true);
         vis.getRenderableInstance()->enableLighting();
     })
     .build(meshResource);
@@ -278,7 +277,6 @@ auto mesh = entity->componentBuilder< Component::Visual >("Mesh")
 // Mesh with physics and lighting
 auto physicsMesh = entity->componentBuilder< Component::Visual >("PhysicsMesh")
     .setup([] (auto & component) {
-        component.enablePhysicalProperties(true);
         component.getRenderableInstance()->enableLighting();
     })
     .build(meshResource);
@@ -286,18 +284,13 @@ auto physicsMesh = entity->componentBuilder< Component::Visual >("PhysicsMesh")
 // Mesh without physics
 auto staticMesh = entity->componentBuilder< Component::Visual >("StaticMesh")
     .setup([] (auto & component) {
-        component.enablePhysicalProperties(false);
         component.getRenderableInstance()->enableLighting();
     })
     .build(meshResource);
 
 // Multiple visual instances
 std::vector< CartesianFrame< float > > positions = {...};
-auto multiVisual = entity->componentBuilder< Component::MultipleVisuals >("Trees")
-    .setup([] (auto & component) {
-        component.enablePhysicalProperties(false);
-    })
-    .build(meshResource, positions);
+auto multiVisual = entity->componentBuilder< Component::MultipleVisuals >("Trees").build(meshResource, positions);
 ```
 
 ### Other Components
@@ -328,11 +321,7 @@ auto modifier = entity->componentBuilder< Component::SphericalPushModifier >("Pu
 Physics::BodyPhysicalProperties props;
 props.setMass(10.0f);
 
-auto weight = entity->componentBuilder< Component::Weight >("Weight")
-    .setup([] (auto & component) {
-        component.enablePhysicalProperties(true);
-    })
-    .build(props);
+auto weight = entity->componentBuilder< Component::Weight >("Weight").build(props);
 ```
 
 ### Conditional Configuration
@@ -378,18 +367,6 @@ auto light = entity->componentBuilder< Component::PointLight >("Light")
         component.setColor(color);  // Captured by reference
     })
     .build(2048);
-
-// Capture multiple variables
-auto visual = entity->componentBuilder< Component::Visual >("Visual")
-    .setup([&resource, enablePhysics, enableLight] (auto & component) {
-        component.enablePhysicalProperties(enablePhysics);
-        
-        if ( enableLight ) 
-        {
-            component.getRenderableInstance()->enableLighting();
-        }
-    })
-    .build(resource);
 ```
 
 ---
@@ -419,7 +396,6 @@ auto visual = entity->newVisual(meshResource, true, true, "Visual");
 // NEW
 auto visual = entity->componentBuilder< Component::Visual >("Visual")
     .setup([] (auto & component) {
-        component.enablePhysicalProperties(true);
         component.getRenderableInstance()->enableLighting();
     })
     .build(meshResource);
@@ -463,11 +439,7 @@ auto sound = entity->componentBuilder< Component::SoundEmitter >("Sound")
 auto weight = entity->newWeight(physicalProps, "Weight");
 
 // NEW
-auto weight = entity->componentBuilder<Component::Weight>("Weight")
-    .setup([](Component::Weight& w) {
-        w.enablePhysicalProperties(true);
-    })
-    .build(physicalProps);
+auto weight = entity->componentBuilder<Component::Weight>("Weight").build(physicalProps);
 ```
 
 ### Migration Checklist
@@ -648,9 +620,6 @@ if (!component) {
     TraceError{"MyClass"} << "Failed to create component!";
     return;
 }
-
-// Use component safely
-component->enablePhysicalProperties(true);
 ```
 
 ### 7. Use in Templates

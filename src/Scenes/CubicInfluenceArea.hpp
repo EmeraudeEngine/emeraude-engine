@@ -95,6 +95,14 @@ namespace EmEn::Scenes
 			[[nodiscard]]
 			float influenceStrength (const Libs::Math::CartesianFrame< float > & worldCoordinates, const Libs::Math::Space3D::AACuboid< float > & worldBoundingBox) const noexcept override;
 
+			/** @copydoc EmEn::Scenes::InfluenceAreaInterface::isUnderInfluence(const Libs::Math::Vector< 3, float > &) */
+			[[nodiscard]]
+			bool isUnderInfluence (const Libs::Math::Vector< 3, float > & worldPosition) const noexcept override;
+
+			/** @copydoc EmEn::Scenes::InfluenceAreaInterface::influenceStrength(const Libs::Math::Vector< 3, float > &) */
+			[[nodiscard]]
+			float influenceStrength (const Libs::Math::Vector< 3, float > & worldPosition) const noexcept override;
+
 			/**
 			 * @brief Sets the size of the area.
 			 * @param size Unidirectional size of the area.

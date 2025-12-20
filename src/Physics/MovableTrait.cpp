@@ -89,8 +89,39 @@ namespace EmEn::Physics
 	{
 		const auto & objectProperties = this->getBodyPhysicalProperties();
 
-		/* Apply the gravity only if not grounded. */
-		if ( !this->isGrounded() && !this->isFreeFlyModeEnabled() && !objectProperties.isMassNull() )
+		/* Decay grounded state each frame. */
+		this->updateGroundedState();
+
+		/* Apply ground friction and gravity based on grounded source.
+		 * Ground/Boundary: stable surfaces - full friction, no gravity
+		 * Entity: dynamic surfaces - friction but gravity still applies (can fall off) */
+		const bool isOnStableSurface = this->isGroundedOnTerrain() || this->isGroundedOnBoundary();
+
+		if ( this->isGrounded() )
+		{
+			const auto frictionFactor = 1.0F - objectProperties.stickiness();
+
+			m_linearVelocity[X] *= frictionFactor;
+			m_linearVelocity[Z] *= frictionFactor;
+
+			/* Clamp downward velocity to prevent micro-bounces.
+			 * Only for stable surfaces (Ground/Boundary).
+			 * Y-down: positive Y = moving down. */
+			if ( isOnStableSurface && m_linearVelocity[Y] > 0.0F )
+			{
+				m_linearVelocity[Y] = 0.0F;
+			}
+
+			m_linearSpeed = m_linearVelocity.length();
+		}
+
+		/* Apply gravity if:
+		 * - Not grounded at all, OR
+		 * - Grounded on Entity (can fall off dynamic surfaces)
+		 * Exception: free fly mode or massless objects. */
+		const bool shouldApplyGravity = !isOnStableSurface && !this->isFreeFlyModeEnabled() && !objectProperties.isMassNull();
+
+		if ( shouldApplyGravity )
 		{
 			m_linearVelocity[Y] += envProperties.steppedSurfaceGravity();
 			m_linearSpeed = m_linearVelocity.length();
@@ -158,14 +189,25 @@ namespace EmEn::Physics
 	}
 
 	void
-	MovableTrait::setGrounded () noexcept
+	MovableTrait::setGrounded (GroundedSource source, const MovableTrait * groundedOn) noexcept
 	{
-		m_groundedFrames = 15;
+		m_groundedSource = source;
+		m_groundedOn = groundedOn;
+		m_groundedFrames = GroundedGracePeriod;
+	}
+
+	void
+	MovableTrait::clearGrounded () noexcept
+	{
+		m_groundedSource = GroundedSource::None;
+		m_groundedOn = nullptr;
+		m_groundedFrames = 0;
 	}
 
 	void
 	MovableTrait::updateGroundedState () noexcept
 	{
+		/* Don't decay grounded state if Y velocity is negligible. */
 		if ( std::abs(m_linearVelocity[Y]) < 0.001F )
 		{
 			return;
@@ -174,6 +216,13 @@ namespace EmEn::Physics
 		if ( m_groundedFrames > 0 )
 		{
 			m_groundedFrames--;
+
+			/* Clear the grounded source when grace period expires. */
+			if ( m_groundedFrames == 0 )
+			{
+				m_groundedSource = GroundedSource::None;
+				m_groundedOn = nullptr;
+			}
 		}
 	}
 
@@ -184,43 +233,74 @@ namespace EmEn::Physics
 	}
 
 	bool
+	MovableTrait::isGroundedOnTerrain () const noexcept
+	{
+		return m_groundedFrames > 0 && m_groundedSource == GroundedSource::Ground;
+	}
+
+	bool
+	MovableTrait::isGroundedOnBoundary () const noexcept
+	{
+		return m_groundedFrames > 0 && m_groundedSource == GroundedSource::Boundary;
+	}
+
+	bool
+	MovableTrait::isGroundedOnEntity () const noexcept
+	{
+		return m_groundedFrames > 0 && m_groundedSource == GroundedSource::Entity;
+	}
+
+	bool
+	MovableTrait::isGroundedOn (const MovableTrait * entity) const noexcept
+	{
+		return m_groundedFrames > 0 && m_groundedSource == GroundedSource::Entity && m_groundedOn == entity;
+	}
+
+	GroundedSource
+	MovableTrait::groundedSource () const noexcept
+	{
+		return m_groundedFrames > 0 ? m_groundedSource : GroundedSource::None;
+	}
+
+	bool
 	MovableTrait::checkSimulationInertia () noexcept
 	{
-		TraceInfo{"PHYSICS"} <<
-			"Is movable : " << this->isMovable() << "\n"
-			"Is grounded : " << this->isGrounded() << "\n"
-			"Velocity : " << this->linearVelocity() << "\n";
+		constexpr auto VelocityThreshold{0.05F}; /* 5 cm/s */
 
-		/* No collision this frame, entity might be in free fall - don't pause. */
-		if ( !m_hadCollision )
+		/* Check if velocity is negligible. */
+		const bool isStable = (m_linearSpeed < VelocityThreshold) && (m_angularSpeed < VelocityThreshold);
+
+		/* Sleep only allowed when ACTIVELY touching a stable surface this frame.
+		 * m_groundedFrames == GroundedGracePeriod means we just touched the surface.
+		 * Grace period alone (bouncing but not touching) must not allow sleep. */
+		const bool isActivelyOnStableSurface =
+			(m_groundedFrames == GroundedGracePeriod) &&
+			(m_groundedSource == GroundedSource::Ground || m_groundedSource == GroundedSource::Boundary);
+
+		if ( isStable && isActivelyOnStableSurface )
 		{
-			return false;
+			/* Increment stable frames counter. */
+			if ( m_stableFrames < StableFramesThreshold )
+			{
+				m_stableFrames++;
+			}
+
+			/* After enough stable frames, entity can sleep. */
+			if ( m_stableFrames >= StableFramesThreshold )
+			{
+				/* Clamp micro-velocities to zero. */
+				m_linearVelocity.reset();
+				m_angularVelocity.reset();
+				m_linearSpeed = 0.0F;
+				m_angularSpeed = 0.0F;
+
+				return true;
+			}
 		}
-
-		constexpr auto VelocityClampThreshold{0.05F}; /* 1 cm/s */
-
-		/* Clamp micro-velocities to zero to eliminate solver oscillations. */
-		if ( m_linearSpeed > 0.0F && m_linearSpeed < VelocityClampThreshold )
+		else
 		{
-			m_linearVelocity.reset();
-			m_linearSpeed = 0.0F;
-		}
-
-		if ( m_angularSpeed > 0.0F && m_angularSpeed < VelocityClampThreshold )
-		{
-			m_angularVelocity.reset();
-			m_angularSpeed = 0.0F;
-		}
-
-		/* If no velocity, entity is at rest. */
-		if ( m_linearSpeed == 0.0F && m_angularSpeed == 0.0F )
-		{
-			/* Reset collision flag when pausing. */
-			m_hadCollision = false;
-
-			this->setGrounded();
-
-			return true;
+			/* Reset stable frames counter on any significant movement. */
+			m_stableFrames = 0;
 		}
 
 		return false;

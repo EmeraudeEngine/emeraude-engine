@@ -35,7 +35,7 @@
 #include "Graphics/RasterizationOptions.hpp"
 #include "Graphics/RenderTarget/Abstract.hpp"
 #include "Graphics/RenderableInstance/Abstract.hpp"
-#include "Graphics/Material/Abstract.hpp"
+#include "Graphics/Material/Interface.hpp"
 #include "Device.hpp"
 #include "PipelineLayout.hpp"
 #include "ShaderModule.hpp"
@@ -509,14 +509,25 @@ namespace EmEn::Vulkan
 	}
 
 	bool
-	GraphicsPipeline::configureColorBlendStateForAlphaBlending () noexcept
+	GraphicsPipeline::configureColorBlendStateForAlphaBlending (bool premultipliedAlpha) noexcept
 	{
 		m_colorBlendAttachments.clear();
 
+		/* Porter-Duff "over" compositing (Photoshop/GIMP "Normal" blending):
+		 *
+		 * For premultiplied alpha:
+		 *   Cout = Csrc + Cdst × (1 - Asrc)
+		 *
+		 * For standard (non-premultiplied) alpha:
+		 *   Cout = Csrc × Asrc + Cdst × (1 - Asrc)
+		 *
+		 * Alpha (both modes):
+		 *   Aout = Asrc + Adst × (1 - Asrc)
+		 */
 		m_colorBlendAttachments.emplace_back(VkPipelineColorBlendAttachmentState{
 			.blendEnable = VK_TRUE,
 
-			.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,
+			.srcColorBlendFactor = premultipliedAlpha ? VK_BLEND_FACTOR_ONE : VK_BLEND_FACTOR_SRC_ALPHA,
 			.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
 			.colorBlendOp = VK_BLEND_OP_ADD,
 

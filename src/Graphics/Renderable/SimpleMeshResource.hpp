@@ -39,7 +39,7 @@ namespace EmEn::Graphics::Renderable
 {
 	/**
 	 * @brief Simple mesh renderable with only one layer.
-	 * @extends EmEn::Graphics::Renderable::Interface
+	 * @extends EmEn::Graphics::Renderable::Abstract
 	 */
 	class SimpleMeshResource final : public Abstract
 	{
@@ -116,7 +116,7 @@ namespace EmEn::Graphics::Renderable
 				return sizeof(*this);
 			}
 
-			/** @copydoc EmEn::Graphics::Renderable::Interface::layerCount() const */
+			/** @copydoc EmEn::Graphics::Renderable::Abstract::layerCount() const */
 			[[nodiscard]]
 			uint32_t
 			layerCount () const noexcept override
@@ -124,7 +124,7 @@ namespace EmEn::Graphics::Renderable
 				return 1;
 			}
 
-			/** @copydoc EmEn::Graphics::Renderable::Interface::isOpaque() const */
+			/** @copydoc EmEn::Graphics::Renderable::Abstract::isOpaque() const */
 			[[nodiscard]]
 			bool
 			isOpaque (uint32_t /*layerIndex*/) const noexcept override
@@ -137,7 +137,7 @@ namespace EmEn::Graphics::Renderable
 				return true;
 			}
 
-			/** @copydoc EmEn::Graphics::Renderable::Interface::geometry() const */
+			/** @copydoc EmEn::Graphics::Renderable::Abstract::geometry() const */
 			[[nodiscard]]
 			const Geometry::Interface *
 			geometry () const noexcept override
@@ -145,7 +145,7 @@ namespace EmEn::Graphics::Renderable
 				return m_geometry.get();
 			}
 
-			/** @copydoc EmEn::Graphics::Renderable::Interface::material() const */
+			/** @copydoc EmEn::Graphics::Renderable::Abstract::material() const */
 			[[nodiscard]]
 			const Material::Interface *
 			material (uint32_t /*layerIndex*/) const noexcept override
@@ -153,15 +153,15 @@ namespace EmEn::Graphics::Renderable
 				return m_material.get();
 			}
 
-			/** @copydoc EmEn::Graphics::Renderable::Interface::layerRasterizationOptions() const */
+			/** @copydoc EmEn::Graphics::Renderable::Abstract::layerRasterizationOptions() const */
 			[[nodiscard]]
 			const RasterizationOptions *
 			layerRasterizationOptions (uint32_t /*layerIndex*/) const noexcept override
 			{
-				return nullptr;
+				return &m_rasterizationOptions;
 			}
 
-			/** @copydoc EmEn::Graphics::Renderable::Interface::boundingBox() const */
+			/** @copydoc EmEn::Graphics::Renderable::Abstract::boundingBox() const */
 			[[nodiscard]]
 			const Libs::Math::Space3D::AACuboid< float > &
 			boundingBox () const noexcept override
@@ -174,7 +174,7 @@ namespace EmEn::Graphics::Renderable
 				return m_geometry->boundingBox();
 			}
 
-			/** @copydoc EmEn::Graphics::Renderable::Interface::boundingSphere() const */
+			/** @copydoc EmEn::Graphics::Renderable::Abstract::boundingSphere() const */
 			[[nodiscard]]
 			const Libs::Math::Space3D::Sphere< float > &
 			boundingSphere () const noexcept override
@@ -191,9 +191,10 @@ namespace EmEn::Graphics::Renderable
 			 * @brief Loads a simple mesh.
 			 * @param geometry A reference to a geometry smart pointer.
 			 * @param material A reference to a material smart pointer.
+			 * @param rasterizationOptions Rasterization options. Default none.
 			 * @return bool
 			 */
-			bool load (const std::shared_ptr< Geometry::Interface > & geometry, const std::shared_ptr< Material::Interface > & material = nullptr) noexcept;
+			bool load (const std::shared_ptr< Geometry::Interface > & geometry, const std::shared_ptr< Material::Interface > & material = nullptr, const RasterizationOptions & rasterizationOptions = {}) noexcept;
 
 			/**
 			 * @brief Creates a unique simple mesh or returns the existing one with the same parameters.
@@ -225,6 +226,7 @@ namespace EmEn::Graphics::Renderable
 
 			std::shared_ptr< Geometry::Interface > m_geometry;
 			std::shared_ptr< Material::Interface > m_material;
+			RasterizationOptions m_rasterizationOptions{};
 	};
 }
 

@@ -31,7 +31,7 @@
 
 /* Local inclusions for inheritances. */
 #include "Abstract.hpp"
-#include "Scenes/GroundInterface.hpp"
+#include "Scenes/GroundLevelInterface.hpp"
 
 /* Local inclusions for usages. */
 #include "Resources/Container.hpp"
@@ -43,9 +43,9 @@ namespace EmEn::Graphics::Renderable
 	/**
 	 * @brief The terrain resource class.
 	 * @extends EmEn::Graphics::Renderable::Abstract This class is a renderable object in the 3D world.
-	 * @extends EmEn::Scenes::GroundInterface This is the scene ground.
+	 * @extends EmEn::Scenes::GroundLevelInterface This is the scene ground.
 	 */
-	class TerrainResource final : public Abstract, public Scenes::GroundInterface
+	class TerrainResource final : public Abstract, public Scenes::GroundLevelInterface
 	{
 		friend class Resources::Container< TerrainResource >;
 
@@ -57,17 +57,10 @@ namespace EmEn::Graphics::Renderable
 			/** @brief Defines the resource dependency complexity. */
 			static constexpr auto Complexity{Resources::DepComplexity::Complex};
 
-			/* JSON key. */
-			static constexpr auto HeightMapKey{"HeightMap"};
-				static constexpr auto ImageNameKey{"ImageName"};
-				static constexpr auto InverseKey{"Inverse"};
-			static constexpr auto MaterialTypeKey{"MaterialType"};
-			static constexpr auto MaterialNameKey{"MaterialName"};
-			static constexpr auto PerlinNoiseKey{"PerlinNoise"};
-			static constexpr auto VertexColorKey{"VertexColor"};
-
-			static constexpr auto DefaultSize{4096.0F};
-			static constexpr auto DefaultDivision{4096};
+			static constexpr auto DefaultGridSize{5000.0F}; /* NOTE: 5 kilometer. */
+			static constexpr auto DefaultVisibleSize{4096.0F}; /* NOTE: 4 kilometer. */
+			static constexpr auto DefaultGridDivision{5000U}; /* NOTE: Cell wil be 1 meter. */
+			static constexpr auto DefaultUVMultiplier{5000.0F};
 
 			/**
 			 * @brief Constructs a terrain resource.
@@ -77,7 +70,7 @@ namespace EmEn::Graphics::Renderable
 			explicit
 			TerrainResource (std::string name, uint32_t renderableFlags = 0) noexcept
 				: Abstract{std::move(name), renderableFlags},
-				  m_geometry{std::make_unique< Geometry::AdaptiveVertexGridResource >(this->name() + "AdaptiveGrid")}
+				  m_geometry{std::make_unique< Geometry::AdaptiveVertexGridResource >(this->name() + "AdaptiveGrid", Geometry::EnableTangentSpace | Geometry::EnablePrimaryTextureCoordinates | Geometry::EnablePrimitiveRestart)}
 			{
 
 			}
@@ -151,7 +144,7 @@ namespace EmEn::Graphics::Renderable
 			const RasterizationOptions *
 			layerRasterizationOptions (uint32_t /*layerIndex*/) const noexcept override
 			{
-				return nullptr;
+				return &m_rasterizationOptions;
 			}
 
 			/** @copydoc EmEn::Graphics::Renderable::Abstract::boundingBox() const */
@@ -196,7 +189,7 @@ namespace EmEn::Graphics::Renderable
 				return 0;
 			}
 
-			/** @copydoc EmEn::Scenes::GroundInterface::getLevelAt(const Libs::Math::Vector< 3, float > &) const */
+			/** @copydoc EmEn::Scenes::GroundLevelInterface::getLevelAt(const Libs::Math::Vector< 3, float > &) const */
 			[[nodiscard]]
 			float
 			getLevelAt (const Libs::Math::Vector< 3, float > & worldPosition) const noexcept override
@@ -204,7 +197,7 @@ namespace EmEn::Graphics::Renderable
 				return m_localData.getHeightAt(worldPosition[Libs::Math::X], worldPosition[Libs::Math::Z]);
 			}
 
-			/** @copydoc EmEn::Scenes::GroundInterface::getLevelAt(float, float, float) const */
+			/** @copydoc EmEn::Scenes::GroundLevelInterface::getLevelAt(float, float, float) const */
 			[[nodiscard]]
 			Libs::Math::Vector< 3, float >
 			getLevelAt (float positionX, float positionZ, float deltaY) const noexcept override
@@ -212,7 +205,7 @@ namespace EmEn::Graphics::Renderable
 				return {positionX, m_localData.getHeightAt(positionX, positionZ) + deltaY, positionZ};
 			}
 
-			/** @copydoc EmEn::Scenes::GroundInterface::getNormalAt() const */
+			/** @copydoc EmEn::Scenes::GroundLevelInterface::getNormalAt() const */
 			[[nodiscard]]
 			Libs::Math::Vector< 3, float >
 			getNormalAt (const Libs::Math::Vector< 3, float > & worldPosition) const noexcept override
@@ -220,31 +213,107 @@ namespace EmEn::Graphics::Renderable
 				return m_localData.getNormalAt(worldPosition[Libs::Math::X], worldPosition[Libs::Math::Z]);
 			}
 
+			/** @copydoc EmEn::Scenes::GroundLevelInterface::updateVisibility() */
+			void updateVisibility (const Libs::Math::Vector< 3, float > & worldPosition) noexcept override;
+
 			/**
 			 * @brief Loads a parametric terrain with a material.
-			 * @param size
-			 * @param division
-			 * @param material A pointer to a material resource.
+			 * @param gridSize The size of the whole size of one dimension of the grid. I.e., If the size is 1024, the grid will be from +512 to -512.
+			 * @param gridDivision How many cells in one dimension.
+			 * @param materialResource A reference to a material resource smart-pointer.
+			 * @param rasterizationOptions Rasterization options. Default none.
+			 * @param UVMultiplier Texture coordinates multiplier. Default 1.
 			 * @return bool
 			 */
-			bool load (float size, uint32_t division, const std::shared_ptr< Material::Interface > & material) noexcept;
+			bool load (float gridSize, uint32_t gridDivision, const std::shared_ptr< Material::Interface > & materialResource, const RasterizationOptions & rasterizationOptions = {}, float UVMultiplier = 1.0F) noexcept;
+
+			/**
+			 * @brief Loads a terrain by using parameters to generate the ground with a displacement map and a material to paint it.
+			 * @tparam pixmapData_t The type used within the pixmap.
+			 * @param gridSize The size of the whole size of one dimension of the grid. I.e., If the size is 1024, the grid will be from +512 to -512.
+			 * @param gridDivision How many cells in one dimension.
+			 * @param displacementMap A pixmap to use as a displacement map.
+			 * @param displacementFactor Factor of displacement.
+			 * @param materialResource A reference to a material smart pointer.
+			 * @param rasterizationOptions Rasterization options. Default none.
+			 * @param UVMultiplier Texture coordinates multiplier. Default 1.
+			 * @return bool
+			 */
+			template< typename pixmapData_t >
+			bool
+			load (float gridSize, uint32_t gridDivision, const Libs::PixelFactory::Pixmap< pixmapData_t > & displacementMap, float displacementFactor, const std::shared_ptr< Material::Interface > & materialResource, const RasterizationOptions & rasterizationOptions = {}, float UVMultiplier = 1.0F) noexcept requires (std::is_arithmetic_v< pixmapData_t >)
+			{
+				if ( !this->beginLoading() )
+				{
+					return false;
+				}
+
+				/* 1. Initialize local data. */
+				if ( !m_localData.initializeByGridSize(gridSize, gridDivision) )
+				{
+					Tracer::error(ClassId, "Unable to initialize local data !");
+
+					return this->setLoadSuccess(false);
+				}
+
+				/* 2. Apply displacement mapping. */
+				m_localData.setUVMultiplier(UVMultiplier);
+				m_localData.applyDisplacementMapping(displacementMap, displacementFactor);
+
+				/* 3. Create adaptive geometry from local data. */
+				const auto subGrid = m_localData.subGrid({0.0F, 0.0F}, static_cast< uint32_t >(m_visibleSize));
+
+				if ( !m_geometry->load(subGrid) )
+				{
+					Tracer::error(ClassId, "Unable to create adaptive grid from local data !");
+
+					m_localData.clear();
+
+					return this->setLoadSuccess(false);
+				}
+
+				/* 4. Set material and rasterization options. */
+				m_rasterizationOptions = rasterizationOptions;
+
+				if ( !this->setMaterial(materialResource) )
+				{
+					TraceError{ClassId} << "Unable to use material for Terrain '" << this->name() << "' !";
+
+					m_localData.clear();
+
+					return this->setLoadSuccess(false);
+				}
+
+				return this->setLoadSuccess(true);
+			}
+
+			/**
+			 * @brief Loads a terrain by using parameters to generate the ground with diamond square and a material to paint it.
+			 * @param gridSize The size of the whole size of one dimension of the grid. I.e., If the size is 1024, the grid will be from +512 to -512.
+			 * @param gridDivision How many cells in one dimension.
+			 * @param materialResource A reference to a material smart pointer.
+			 * @param noise A reference to a struct.
+			 * @param rasterizationOptions Rasterization options. Default none.
+			 * @param UVMultiplier Texture coordinates multiplier. Default 1.
+			 * @param shiftHeight Apply a shift on each final height. Default none.
+			 * @return bool
+			 */
+			bool loadDiamondSquare (float gridSize, uint32_t gridDivision, const std::shared_ptr< Material::Interface > & materialResource, const Libs::VertexFactory::DiamondSquareParams< float > & noise, const RasterizationOptions & rasterizationOptions = {}, float UVMultiplier = 1.0F, float shiftHeight = 0.0F) noexcept;
+
+			/**
+			 * @brief Loads a terrain by using parameters to generate the ground with perlin noise and a material to paint it.
+			 * @param gridSize The size of the whole size of one dimension of the grid. I.e., If the size is 1024, the grid will be from +512 to -512.
+			 * @param gridDivision How many cells in one dimension.
+			 * @param materialResource A reference to a material smart pointer.
+			 * @param noise A reference to a struct.
+			 * @param rasterizationOptions Rasterization options. Default none.
+			 * @param UVMultiplier Texture coordinates multiplier. Default 1.
+			 * @param shiftHeight Apply a shift on each final height. Default none.
+			 * @return bool
+			 */
+			bool loadPerlinNoise (float gridSize, uint32_t gridDivision, const std::shared_ptr< Material::Interface > & materialResource, const Libs::VertexFactory::PerlinNoiseParams< float > & noise, const RasterizationOptions & rasterizationOptions = {}, float UVMultiplier = 1.0F, float shiftHeight = 0.0F) noexcept;
 
 		private:
-
-			/**
-			 * @brief Prepares all about geometry of the terrain.
-			 * @param size The size of the terrain.
-			 * @param division The number of division.
-			 * @return bool
-			 */
-			bool prepareGeometry (float size, uint32_t division) noexcept;
-
-			/**
-			 * @brief Sets a grid geometry.
-			 * @param geometryResource A reference to a material smart pointer.
-			 * @return bool
-			 */
-			bool setGeometry (const std::shared_ptr< Geometry::AdaptiveVertexGridResource > & geometryResource) noexcept;
 
 			/**
 			 * @brief Sets a material.
@@ -253,19 +322,24 @@ namespace EmEn::Graphics::Renderable
 			 */
 			bool setMaterial (const std::shared_ptr< Material::Interface > & materialResource) noexcept;
 
-			/**
-			 * @brief updateActiveGeometryProcess
-			 */
-			void updateActiveGeometryProcess () noexcept;
+			/* JSON key. */
+			static constexpr auto GridSizeKey{"GridSize"};
+			static constexpr auto GridDivisionKey{"GridDivision"};
+			static constexpr auto GridVisibleSizeKey{"GridVisibleSize"};
+			static constexpr auto HeightMapKey{"HeightMap"};
+			static constexpr auto ImageNameKey{"ImageName"};
+			static constexpr auto InverseKey{"Inverse"};
+			static constexpr auto MaterialTypeKey{"MaterialType"};
+			static constexpr auto MaterialNameKey{"MaterialName"};
+			static constexpr auto PerlinNoiseKey{"PerlinNoise"};
+			static constexpr auto VertexColorKey{"VertexColor"};
 
-			/* Contains the graphical sub-data. */
 			std::shared_ptr< Geometry::AdaptiveVertexGridResource > m_geometry;
-			std::shared_ptr< Geometry::VertexGridResource > m_farGeometry;
 			std::shared_ptr< Material::Interface > m_material;
-			/* Contains the whole data. */
 			Libs::VertexFactory::Grid< float > m_localData{};
-			Libs::Math::Vector< 3, float > m_lastUpdatePosition{};
-			bool m_updatingActiveGeometryProcess = false;
+			Libs::Math::Vector< 2, float > m_lastAdaptiveGridPositionUpdated{};
+			RasterizationOptions m_rasterizationOptions{};
+			float m_visibleSize{DefaultVisibleSize};
 	};
 }
 

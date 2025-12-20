@@ -27,7 +27,7 @@
 #include "Program.hpp"
 
 /* Local inclusions. */
-#include "Graphics/Geometry/Abstract.hpp"
+#include "Graphics/Geometry/Interface.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::Saphir

@@ -1,5 +1,5 @@
 /*
- * src/Graphics/Renderable/WaterLevelResource.cpp
+ * src/Graphics/Renderable/BasicSeaResource.cpp
  * This file is part of Emeraude-Engine
  *
  * Copyright (C) 2010-2025 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
@@ -24,7 +24,7 @@
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
 
-#include "WaterLevelResource.hpp"
+#include "BasicSeaResource.hpp"
 
 /* Local inclusions. */
 #include "Resources/Manager.hpp"
@@ -36,18 +36,18 @@ namespace EmEn::Graphics::Renderable
 	using namespace Libs::Math;
 
 	bool
-	WaterLevelResource::load (Resources::AbstractServiceProvider & serviceProvider) noexcept
+	BasicSeaResource::load (Resources::AbstractServiceProvider & serviceProvider) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
 			return false;
 		}
 
-		const auto geometryResource = std::make_shared< Geometry::VertexGridResource >("DefaultWaterLevelGeometry");
+		const auto geometryResource = std::make_shared< Geometry::VertexGridResource >("DefaultBasicSeaGeometry");
 
 		if ( !geometryResource->load(DefaultSize, DefaultDivision) )
 		{
-			TraceError{ClassId} << "Unable to create default GridGeometry to generate the default WaterLevel !";
+			TraceError{ClassId} << "Unable to create default grid geometry to generate the default basic sea !";
 
 			return this->setLoadSuccess(false);
 		}
@@ -66,7 +66,7 @@ namespace EmEn::Graphics::Renderable
 	}
 
 	bool
-	WaterLevelResource::load (Resources::AbstractServiceProvider & /*serviceProvider*/, const Json::Value & /*data*/) noexcept
+	BasicSeaResource::load (Resources::AbstractServiceProvider & /*serviceProvider*/, const Json::Value & /*data*/) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
@@ -79,7 +79,7 @@ namespace EmEn::Graphics::Renderable
 	}
 
 	bool
-	WaterLevelResource::load (const std::shared_ptr< Geometry::VertexGridResource > & geometryResource, const std::shared_ptr< Material::Interface > & materialResource) noexcept
+	BasicSeaResource::load (const std::shared_ptr< Geometry::VertexGridResource > & geometryResource, const std::shared_ptr< Material::Interface > & materialResource, float waterLevel) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
@@ -89,7 +89,7 @@ namespace EmEn::Graphics::Renderable
 		/* 1. Check the grid geometry. */
 		if ( !this->setGeometry(geometryResource) )
 		{
-			TraceError{ClassId} << "Unable to use grid geometry for WaterLevel '" << this->name() << "' !";
+			TraceError{ClassId} << "Unable to use grid geometry for basic sea '" << this->name() << "' !";
 
 			return this->setLoadSuccess(false);
 		}
@@ -97,16 +97,58 @@ namespace EmEn::Graphics::Renderable
 		/* 2. Check the material. */
 		if ( !this->setMaterial(materialResource) )
 		{
-			TraceError{ClassId} << "Unable to use material for WaterLevel '" << this->name() << "' !";
+			TraceError{ClassId} << "Unable to use material for basic sea '" << this->name() << "' !";
 
 			return this->setLoadSuccess(false);
 		}
+
+		/* 3. Set the water level height. */
+		m_waterLevel = waterLevel;
 
 		return this->setLoadSuccess(true);
 	}
 
 	bool
-	WaterLevelResource::setGeometry (const std::shared_ptr< Geometry::VertexGridResource > & geometryResource) noexcept
+	BasicSeaResource::load (float gridSize, uint32_t gridDivision, const std::shared_ptr< Material::Interface > & materialResource, float waterLevel, float UVMultiplier) noexcept
+	{
+		if ( !this->beginLoading() )
+		{
+			return false;
+		}
+
+		/* 1. Generate the grid geometry. */
+		const auto geometryResource = std::make_shared< Geometry::VertexGridResource >(this->name() + "GridGeometry");
+
+		if ( !geometryResource->load(gridSize, gridDivision, UVMultiplier) )
+		{
+			TraceError{ClassId} << "Unable to generate a basic sea geometry !";
+
+			return this->setLoadSuccess(false);
+		}
+
+		if ( !this->setGeometry(geometryResource) )
+		{
+			TraceError{ClassId} << "Unable to use grid geometry for basic sea '" << this->name() << "' !";
+
+			return this->setLoadSuccess(false);
+		}
+
+		/* 2. Check the material. */
+		if ( !this->setMaterial(materialResource) )
+		{
+			TraceError{ClassId} << "Unable to use material for basic sea '" << this->name() << "' !";
+
+			return this->setLoadSuccess(false);
+		}
+
+		/* 3. Set the water level height. */
+		m_waterLevel = waterLevel;
+
+		return this->setLoadSuccess(true);
+	}
+
+	bool
+	BasicSeaResource::setGeometry (const std::shared_ptr< Geometry::VertexGridResource > & geometryResource) noexcept
 	{
 		if ( geometryResource == nullptr )
 		{
@@ -127,7 +169,7 @@ namespace EmEn::Graphics::Renderable
 	}
 
 	bool
-	WaterLevelResource::setMaterial (const std::shared_ptr< Material::Interface > & materialResource) noexcept
+	BasicSeaResource::setMaterial (const std::shared_ptr< Material::Interface > & materialResource) noexcept
 	{
 		if ( materialResource == nullptr )
 		{

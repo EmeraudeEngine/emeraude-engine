@@ -110,12 +110,29 @@ namespace EmEn::Libs::Math::Space3D
 		return isColliding(point, sphere);
 	}
 
-	/** @copydoc EmEn::Libs::Math::Space3D::isColliding(const Point< precision_t > &, const Sphere< precision_t > &, Vector< 3, precision_t >) noexcept */
+	/**
+	 * @brief Checks if a sphere is colliding with a point and gives the minimum translation vector (MTV).
+	 * @note The MTV pushes the sphere out of the point (consistent with convention: MTV pushes first arg out of second).
+	 * @tparam precision_t The data precision. Default float.
+	 * @param sphere A reference to a sphere.
+	 * @param point A reference to a point.
+	 * @param minimumTranslationVector A writable reference to a vector.
+	 * @return bool
+	 */
 	template< typename precision_t = float >
 	[[nodiscard]]
 	bool
 	isColliding (const Sphere< precision_t > & sphere, const Point< precision_t > & point, Vector< 3, precision_t > & minimumTranslationVector) noexcept requires (std::is_floating_point_v< precision_t >)
 	{
-		return isColliding(point, sphere, minimumTranslationVector);
+		/* NOTE: isColliding(point, sphere, mtv) computes MTV to push point out of sphere.
+		 * We need the opposite: push sphere out of point, so we negate the MTV. */
+		if ( isColliding(point, sphere, minimumTranslationVector) )
+		{
+			minimumTranslationVector = -minimumTranslationVector;
+
+			return true;
+		}
+
+		return false;
 	}
 }

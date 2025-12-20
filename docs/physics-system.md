@@ -123,48 +123,58 @@ if (penetrationDepth > 0.0F) {
 
 ## Physics Execution Order
 
-The physics system executes in this precise order each fixed timestep:
+The physics system executes in two phases per fixed timestep. See `Scene.physics.cpp:simulatePhysics()`.
+
+### Phase 1: Static Collisions (Per-Entity Accumulation)
+
+For each movable entity in the physics octree:
 
 ```
-1. Integrate forces
-   → Update velocities and positions for all Nodes
-   → Apply gravity, drag, user forces
-   → Forward integrate: position += velocity * dt
+1. Accumulate corrections from all static sources:
+   a. Boundary corrections (if sector touches world border)
+   b. Ground corrections (track separately for grounded state)
+   c. StaticEntity corrections (track dominant collision entity)
 
-2. Broad phase collision detection
-   → Octree spatial queries to find potentially colliding pairs
-   → Cull pairs that are too far apart
+2. Track dominant collision source:
+   → Which source had deepest penetration?
+   → Store GroundedSource + entity pointer for grounded state
 
-3. Narrow phase collision detection
-   → Precise collision detection (sphere-sphere, AABB-AABB, etc.)
-   → Generate contact manifolds for all colliding pairs
+3. Apply combined position correction:
+   → Single moveFromPhysics() call with total correction
 
-4. Solve inter-entity collisions (FIRST solver call)
-   → Process manifolds: Node↔Node, Node↔StaticEntity
-   → Apply velocity and position corrections via impulses
-   → Iterative solving (8 velocity iterations, 3 position iterations)
-
-5. Ground collision check
-   → Query GroundResource for ground height
-   → Calculate penetration depth BEFORE clipping
-   → Apply hard clip: entity.y = groundY (stability guarantee)
-   → Create ground manifolds (preserve penetration depth)
-
-6. Boundary collision check
-   → Check if entity exceeds scene cube boundaries
-   → Apply hard clip: clamp position to boundary
-   → Manually invert/dampen velocity (NO manifolds)
-
-7. Solve ground collisions (SECOND solver call)
-   → Process ground manifolds from step 5
-   → Apply velocity corrections for realistic bounce/friction
-   → Iterative solving (same iteration counts)
+4. Apply collision response:
+   → Velocity bounce based on dominant normal
+   → Set grounded state with appropriate source
+   → Priority: Ground > Boundary > Entity
 ```
 
-**Key Points:**
-- Two separate solver calls: inter-entity collisions first, then ground collisions.
-- Ground penetration depth calculated BEFORE hard clipping (critical for solver).
-- Boundaries use manual velocity handling (no solver involvement).
+### Phase 2: Dynamic Collisions (Node ↔ Node)
+
+```
+1. Iterate octree leaf sectors
+   → For each movable pair in same sector
+
+2. Detect collisions:
+   → detectCollisionMovableToMovable() creates ContactManifolds
+   → Track involved entities for boundary re-clipping
+
+3. Resolve via Sequential Impulse Solver:
+   → ConstraintSolver::solve(manifolds, dt)
+   → 8 velocity iterations, 3 position iterations
+   → Impulses applied to both bodies (mass-proportional)
+   → Grounded state set with GroundedSource::Entity
+
+4. Re-clip involved entities:
+   → Impulse resolution may push entities outside boundaries
+   → clipInsideBoundaries() for all involved entities
+```
+
+### Key Implementation Details
+
+- **Pair deduplication:** `createEntityPairKey()` prevents testing same pair twice across sectors
+- **Grounded marking:** Only mark grounded if collision normal is ~vertical (Y > 0.7 threshold)
+- **Static-only grounding:** ConstraintSolver only grounds against non-movable bodies
+- **Boundary re-clip:** Critical to prevent impulse resolution pushing entities out of world
 
 ## Design Principles Summary
 
@@ -180,3 +190,142 @@ The physics system executes in this precise order each fixed timestep:
 - **Consistency:** Within each type, behavior is uniform and predictable.
 - **No leakage:** Implementation details of one type don't affect others.
 - **Explicit tradeoffs:** Each type represents an explicit design decision (realism vs performance vs game feel).
+
+## GroundedSource System
+
+The physics system tracks not just WHETHER an entity is grounded, but WHAT TYPE of surface it's grounded on. This enables differentiated behavior for gravity and friction.
+
+### GroundedSource Enum
+
+```cpp
+enum class GroundedSource : uint8_t {
+    None,      // Not grounded
+    Ground,    // On terrain (GroundResource)
+    Boundary,  // On world boundary
+    Entity     // On StaticEntity or Node
+};
+```
+
+### Differentiated Gravity Behavior
+
+| Grounded On | Gravity Applied? | Rationale |
+|-------------|------------------|-----------|
+| Ground | No | Terrain is stable, infinite mass |
+| Boundary | No | World limits are absolute constraints |
+| Entity | **Yes** | Can walk off platforms, entities can move |
+| None | Yes | Freefall |
+
+**Key Design Decision:** When grounded on an Entity (StaticEntity or Node), gravity continues to apply. This prevents the "floating platform" bug where entities would remain suspended in air after walking off a platform edge due to the grounded grace period.
+
+### Implementation
+
+```cpp
+// MovableTrait.cpp:updateSimulation()
+const bool isOnStableSurface = this->isGroundedOnTerrain() || this->isGroundedOnBoundary();
+
+// Gravity only blocked for stable surfaces
+const bool shouldApplyGravity = !isOnStableSurface && !this->isFreeFlyModeEnabled() && !objectProperties.isMassNull();
+```
+
+### Grace Period
+
+Grounded state persists for 15 frames (`GroundedGracePeriod`) after losing contact to prevent jitter. The grace period only decrements when Y velocity is significant (> 0.001 m/s).
+
+See: `MovableTrait.hpp`, `MovableTrait.cpp:updateGroundedState()`
+
+## Physics Modifiers (Force Zones)
+
+Modifiers are components that apply forces to entities within a defined influence area. Unlike collisions, modifiers don't prevent movement but push/pull entities.
+
+### Available Modifiers
+
+| Modifier | Effect | Use Cases |
+|----------|--------|-----------|
+| `SphericalPushModifier` | Radial force outward from center | Explosions, repulsors |
+| `DirectionalPushModifier` | Constant force in one direction | Wind, conveyor belts |
+
+### Influence Area System
+
+Modifiers use an influence area to define their zone of effect and force falloff:
+
+**SphericalInfluenceArea** (`SphericalInfluenceArea.cpp/.hpp`):
+- Defines sphere with inner and outer radius
+- Inside inner radius: full influence (1.0)
+- Between inner and outer: linear falloff
+- Outside outer radius: no influence (0.0)
+- Supports both Sphere and AABB collision models
+
+**CubicInfluenceArea** (`CubicInfluenceArea.cpp/.hpp`):
+- Defines oriented box in modifier's local space
+- Uses parent entity's world matrix for transformation
+- Returns full influence (1.0) for entities inside, 0.0 outside
+- Supports both Sphere and AABB collision models
+
+### Modifier Execution Flow
+
+```
+Scene::applyModifiers() [Scene.physics.cpp]
+├── For each Node with physics:
+│   ├── Get entity's AABB in world coordinates
+│   ├── For each modifier in m_modifiers:
+│   │   ├── Call modifier->getForceAppliedToEntity(worldCoords, aabb)
+│   │   │   ├── Check influenceArea()->influenceStrength()
+│   │   │   └── Return force vector scaled by influence
+│   │   └── Accumulate force
+│   └── Apply total force to entity
+```
+
+### CRITICAL: World Coordinates Convention
+
+**The `worldBoundingBox` parameter passed to influence area methods is ALREADY in world coordinates.**
+
+When `CollisionModel::getAABB(worldFrame)` is called, it returns an AABB with min/max positions that are absolute world positions, NOT relative offsets.
+
+**Correct usage:**
+```cpp
+// worldBoundingBox.minimum() and maximum() are WORLD positions
+const auto & boxMin = worldBoundingBox.minimum();
+const auto & boxMax = worldBoundingBox.maximum();
+// Use directly for intersection tests
+```
+
+**WRONG (historical bug):**
+```cpp
+// DO NOT add entity position - it's already included!
+const auto worldMin = targetPosition + worldBoundingBox.minimum(); // WRONG!
+```
+
+### Sphere-AABB Intersection (SphericalInfluenceArea)
+
+Algorithm: Find closest point on AABB to sphere center, check distance.
+
+```cpp
+// Find closest point on box to sphere center
+Vector<3> closestPoint(
+    std::clamp(sphereCenter[X], boxMin[X], boxMax[X]),
+    std::clamp(sphereCenter[Y], boxMin[Y], boxMax[Y]),
+    std::clamp(sphereCenter[Z], boxMin[Z], boxMax[Z])
+);
+float distance = (closestPoint - sphereCenter).length();
+bool intersects = distance <= sphereRadius;
+```
+
+### AABB-vs-Oriented-Box Intersection (CubicInfluenceArea)
+
+Algorithm: Transform AABB center to modifier local space, expand bounds by half-extents.
+
+```cpp
+// Transform world AABB center to modifier's local space
+const auto center = (boxMin + boxMax) * 0.5F;
+const auto localPos = getPositionInModifierSpace(center); // Uses inverted model matrix
+
+// Test with expanded bounds (accounting for AABB size)
+bool intersectsX = localPos[X] + halfExtentX >= -m_xSize && localPos[X] - halfExtentX <= m_xSize;
+// ... similar for Y, Z
+```
+
+### Performance Note
+
+Currently, modifiers are stored in a flat set (`m_modifiers`) and iterated for every entity each frame. This is O(entities × modifiers).
+
+**Future optimization:** Integrate modifiers into the physics octree for O(log n) spatial queries, similar to entity collision detection.

@@ -279,6 +279,14 @@ namespace EmEn::Vulkan
 			/** @copydoc EmEn::Scenes::AVConsole::AbstractVirtualDevice::updateVideoDeviceProperties() */
 			void updateVideoDeviceProperties (float fovOrNear, float distanceOrFar, bool isOrthographicProjection) noexcept override;
 
+			/** @copydoc EmEn::Scenes::AVConsole::AbstractVirtualDevice::getWorldCoordinates() */
+			[[nodiscard]]
+			Libs::Math::CartesianFrame< float >
+			getWorldCoordinates () const noexcept override
+			{
+				return m_worldCoordinates;
+			}
+
 			/** @copydoc EmEn::Scenes::AVConsole::AbstractVirtualDevice::updateDeviceFromCoordinates() */
 			void updateDeviceFromCoordinates (const Libs::Math::CartesianFrame< float > & worldCoordinates, const Libs::Math::Vector< 3, float > & worldVelocity) noexcept override;
 
@@ -452,11 +460,13 @@ namespace EmEn::Vulkan
 			uint32_t m_acquiredImageIndex{0};
 			Libs::StaticVector< Frame, 5 > m_frames;
 			Graphics::ViewMatrices2DUBO m_viewMatrices;
+			Libs::Math::CartesianFrame< float > m_worldCoordinates{};
 			float m_fovOrNear{0.0F};
 			float m_distanceOrFar{0.0F};
 			bool m_showInformation{false};
 			bool m_isPerspectiveProjection{false};
 			bool m_tripleBufferingEnabled{false};
 			bool m_VSyncEnabled{false};
+			bool m_sRGBEnabled{false};
 	};
 }

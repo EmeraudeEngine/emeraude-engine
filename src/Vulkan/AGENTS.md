@@ -28,6 +28,26 @@ Vulkan abstraction layer that hides API complexity while providing precise contr
 - Vulkan Y-inverted viewport handled automatically
 - No conversion in shaders
 
+### Swap-Chain Format Configuration
+
+The swap-chain surface format can be configured via settings:
+
+**Settings keys:** `Video/EnableSRGB` (default: false)
+
+| Format | Key Value | Use Case |
+|--------|-----------|----------|
+| `VK_FORMAT_B8G8R8A8_UNORM` | false | sRGB content (CEF, web), no automatic conversion |
+| `VK_FORMAT_B8G8R8A8_SRGB` | true | Linear content, automatic linear→sRGB conversion |
+
+**Why UNORM for CEF:**
+- CEF provides sRGB pixels already
+- SRGB format applies gamma correction, causing double correction (washed-out colors)
+- UNORM passes pixels through unchanged
+
+**Code references:**
+- `SwapChain.cpp:chooseSurfaceFormat()` - Format selection logic
+- `SwapChain.hpp:m_sRGBEnabled` - Configuration member
+
 ### Performance: std::span for Barrier APIs
 
 `CommandBuffer` uses `std::span` for synchronization methods:

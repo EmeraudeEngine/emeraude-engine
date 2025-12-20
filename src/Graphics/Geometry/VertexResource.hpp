@@ -30,7 +30,7 @@
 #include <memory>
 
 /* Local inclusions for inheritances. */
-#include "Abstract.hpp"
+#include "Interface.hpp"
 
 /* Local inclusions for usages. */
 #include "Resources/Container.hpp"
@@ -156,7 +156,7 @@ namespace EmEn::Graphics::Geometry
 				return static_cast< uint32_t >(m_subGeometries.size());
 			}
 
-			/** @copydoc EmEn::Graphics::Geometry::Interface::subGeometryRange() */
+			/** @copydoc EmEn::Graphics::Geometry::Interface::subGeometryRange(uint32_t) const */
 			[[nodiscard]]
 			std::array< uint32_t, 2 >
 			subGeometryRange (uint32_t subGeometryIndex) const noexcept override

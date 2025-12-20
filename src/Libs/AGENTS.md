@@ -19,6 +19,7 @@ Context for developing Emeraude Engine utility libraries.
 **Algorithms/** - Useful multimedia algorithms
 - Simple implementations of classic algorithms
 - Optimized for real-time usage
+- **DiamondSquare**: Procedural terrain heightmap generation (see below)
 
 **Compression/** - Compression/decompression abstraction
 - Standardized data compression logic
@@ -47,7 +48,8 @@ Context for developing Emeraude Engine utility libraries.
 - **Matrix**: Transformation matrices
 - **Quaternion**: 3D rotations
 - **CartesianFrame**: Coordinate system (position + orthonormal basis)
-- **Collision/Intersection**: Geometric detection
+- **Primitives**: Point, Line, Segment, Sphere, Capsule, Triangle, AACuboid
+- **Collision/Intersection**: Geometric detection between primitives
 - **Bezier curves**: Smooth interpolation
 - All current and future 2D/3D math logic
 
@@ -118,8 +120,27 @@ ctest -R Libs
 - `Matrix.hpp` - Transformation matrices
 - `Quaternion.hpp` - 3D rotations
 - `CartesianFrame.hpp` - Coordinate system with orthonormal basis
-- `Collision.hpp` - Collision detection
 - `Bezier.hpp` - Bezier curves
+
+### Math/Space3D Primitives
+- `Point.hpp` - 3D point
+- `Line.hpp` - Infinite line (origin + direction)
+- `Segment.hpp` - Finite line segment (start + end)
+- `Sphere.hpp` - Sphere (center + radius)
+- `Capsule.hpp` - Capsule/Stadium solid (axis segment + radius)
+- `Triangle.hpp` - Triangle (3 vertices)
+- `AACuboid.hpp` - Axis-aligned bounding box
+
+### Math/Space3D Collisions
+- `Collisions/SamePrimitive.hpp` - Same-type collisions (Sphere-Sphere, Capsule-Capsule, etc.)
+- `Collisions/CapsulePoint.hpp` - Capsule vs Point
+- `Collisions/CapsuleSphere.hpp` - Capsule vs Sphere
+- `Collisions/CapsuleCuboid.hpp` - Capsule vs AABB
+- `Collisions/CapsuleTriangle.hpp` - Capsule vs Triangle (terrain mesh)
+
+### Math/Space3D Intersections
+- `Intersections/LineCapsule.hpp` - Line-Capsule raycasting
+- `Intersections/SegmentCapsule.hpp` - Segment-Capsule intersection
 
 ### General Concepts
 - `Observer.hpp` / `Observable.hpp` - Event pattern
@@ -288,6 +309,85 @@ class MyUtility {
 - **Documentation**: Document well, many systems depend on Libs
 - **Exhaustive tests**: Bug in Libs affects entire engine
 
+## Math/Space3D: Capsule Primitive
+
+### Definition
+A **Capsule** (also called Stadium solid) is a swept sphere: a line segment with a radius. It consists of a cylindrical body capped by two hemispheres.
+
+```
+    ___
+   /   \      ← hemisphere (radius r)
+  |     |
+  |     |     ← cylinder (height h, radius r)
+  |     |
+   \___/      ← hemisphere (radius r)
+```
+
+### Internal Representation
+- `Segment<precision_t> m_axis` - Central axis (start and end points)
+- `precision_t m_radius` - Radius of the capsule
+
+### Key Design Decisions
+
+**Degenerate capsules (zero-length axis) are VALID:**
+- A capsule with `startPoint == endPoint` behaves as a sphere
+- `isValid()` only checks `radius > 0`
+- Use `isDegenerate()` to detect zero-length axis
+
+**Code references:**
+- `Math/Space3D/Capsule.hpp:isValid()` - Returns true if radius > 0
+- `Math/Space3D/Capsule.hpp:isDegenerate()` - Returns true if axis length ≈ 0
+- `Math/Space3D/Capsule.hpp:closestPointOnAxis()` - Critical for collision detection
+
+### Collision Convention (MTV)
+**MTV (Minimum Translation Vector) pushes the FIRST argument out of the SECOND.**
+
+```cpp
+// 4 overloads per collision pair:
+isColliding(Capsule, X)           // without MTV
+isColliding(Capsule, X, mtv)      // MTV pushes Capsule out of X
+isColliding(X, Capsule)           // without MTV
+isColliding(X, Capsule, mtv)      // MTV pushes X out of Capsule
+```
+
+### Usage Example
+```cpp
+// Create a capsule (vertical, height 10, radius 2)
+Capsule<float> capsule{{0, 0, 0}, {0, 10, 0}, 2.0f};
+
+// Check collision with sphere
+Sphere<float> sphere{1.5f, {3, 5, 0}};
+Vector<3, float> mtv;
+if (isColliding(capsule, sphere, mtv)) {
+    // mtv contains vector to push capsule out of sphere
+}
+
+// Raycast against capsule
+Line<float> ray{{-10, 5, 0}, {1, 0, 0}};
+Point<float> hit;
+if (isIntersecting(ray, capsule, hit)) {
+    // hit contains first intersection point
+}
+```
+
+### Available Collision Tests
+| Pair | File | Notes |
+|------|------|-------|
+| Capsule-Capsule | `SamePrimitive.hpp` | Segment-segment distance |
+| Capsule-Point | `CapsulePoint.hpp` | Point-to-axis distance |
+| Capsule-Sphere | `CapsuleSphere.hpp` | Closest point on axis |
+| Capsule-Cuboid | `CapsuleCuboid.hpp` | Iterative refinement |
+| Capsule-Triangle | `CapsuleTriangle.hpp` | Terrain mesh collision |
+| Line-Capsule | `LineCapsule.hpp` | Raycasting |
+| Segment-Capsule | `SegmentCapsule.hpp` | Finite ray intersection |
+
+### Unit Tests
+All capsule functionality is tested in `Testing/test_MathSpace3D.cpp`:
+- Primitive tests (constructor, isValid, isDegenerate, centroid, volume)
+- Collision tests (all pairs, with/without MTV)
+- Intersection tests (Line, Segment)
+- Edge cases (degenerate capsules, touching/not touching)
+
 ## PixelFactory: Thread Safety and Resize
 
 ### TextProcessor and Pixmap During Resize
@@ -326,6 +426,70 @@ constexpr auto epsilon = static_cast<vertex_data_t>(0.0001);
 const auto clampedX = std::clamp(positionX, -m_halfSquaredSize + epsilon, m_halfSquaredSize - epsilon);
 const auto clampedY = std::clamp(positionY, -m_halfSquaredSize + epsilon, m_halfSquaredSize - epsilon);
 ```
+
+## Algorithms: DiamondSquare
+
+### Overview
+
+The `DiamondSquare` algorithm generates fractal terrain heightmaps. It produces natural-looking landscapes with controllable roughness.
+
+### Key Design: Normalized Output
+
+**Output values are normalized to [-1, 1] range.** This means the `factor` parameter when applying to a Grid represents the actual maximum height displacement in world units (meters).
+
+```cpp
+// DiamondSquare generates values in [-1, 1]
+// When applied with factor=100, terrain heights will be ±100 meters
+grid.applyDiamondSquare({100.0F, 0.5F, 0});  // factor=100m, roughness=0.5
+```
+
+### Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `size` | `size_t` | Grid dimension (must be 2^n + 1, e.g., 3, 5, 9, 17, 33...) |
+| `roughness` | `float` | 0.0-1.0, controls terrain detail (higher = more jagged) |
+| `normalize` | `bool` | Default `true`. Set to `false` for raw algorithm output |
+| `useSameValueForCorner` | `bool` | If `true`, all four corners start with same random value (tileable edges) |
+| `seed` | `int32_t` | Optional random seed for reproducible results |
+
+### Usage Example
+
+```cpp
+#include "Libs/Algorithms/DiamondSquare.hpp"
+
+// Direct usage
+Algorithms::DiamondSquare<float> ds(42, true);  // seed=42, same corners
+if (ds.generate(129, 0.5F)) {  // 129x129 grid, 0.5 roughness
+    float height = ds.value(64, 64);  // Query center point
+    // height is in [-1, 1] range
+}
+
+// Via VertexFactory Grid (typical usage)
+Grid grid(8192.0F, 256);  // 8km terrain, 256 subdivisions
+grid.applyDiamondSquare({
+    100.0F,  // factor: heights will be ±100 meters
+    0.5F,    // roughness: 0.5 (moderate detail)
+    7        // seed: reproducible terrain
+});
+```
+
+### Why Normalization Matters
+
+Without normalization, the algorithm produces values proportional to grid size:
+- 33×33 grid → values roughly ±32
+- 16385×16385 grid → values roughly ±16384
+
+This made the `factor` parameter confusing (factor=1.0 on a 16k grid gave ±16km heights!).
+
+**With normalization (default):**
+- All grid sizes → values in [-1, 1]
+- `factor` directly represents maximum height in world units
+- `factor=100` means ±100 meters regardless of grid resolution
+
+**Code reference:**
+- `Algorithms/DiamondSquare.hpp:normalizeData()` - Min/max normalization to [-1, 1]
+- `Algorithms/DiamondSquare.hpp:generate()` - `normalize` parameter (default `true`)
 
 ## Detailed Documentation
 

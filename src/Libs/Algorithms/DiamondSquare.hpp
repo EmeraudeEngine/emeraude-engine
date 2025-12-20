@@ -27,6 +27,7 @@
 #pragma once
 
 /* STL inclusions. */
+#include <algorithm>
 #include <cstdint>
 #include <cstddef>
 #include <type_traits>
@@ -96,23 +97,38 @@ namespace EmEn::Libs::Algorithms
 
 			/**
 			 * @brief Generates the noise data.
-			 * @param size The size of pattern.
+			 * @param size The size of pattern which must be 2^1 + 1.
 			 * @param roughness A value from 0 to 1 to controls the roughness.
+			 * @param normalize If true, normalizes output values to [-1, 1] range. Default true.
 			 * @return bool
 			 */
 			bool
-			generate (size_t size, number_t roughness) noexcept
+			generate (size_t size, number_t roughness, bool normalize = true) noexcept
 			{
-				if ( !this->initializeData(size) )
+				/* Size must be at least 3. */
+				if ( size < 3 )
 				{
+					std::cerr << "The size must be at least 3! (size:" << size << ", roughness:" << roughness << ")" "\n";
+
+					return false;
+				}
+
+				/* Size must be of the form 2^n + 1, meaning (size - 1) must be a power of two. */
+				if ( !Math::isPowerOfTwo(size - 1) )
+				{
+					std::cerr << "The size minus one must be a power of two! (size:" << size << ", roughness:" << roughness << ")" "\n";
+
 					return false;
 				}
 
 				roughness = Math::clampToUnit(roughness);
 
+				m_size = size;
+				m_data.resize(m_size * m_size);
+
 				this->cornerStep();
 
-				auto currentSize = m_size - 1;
+				auto currentSize = m_size;
 
 				while ( currentSize > 1 )
 				{
@@ -125,6 +141,12 @@ namespace EmEn::Libs::Algorithms
 					this->squareStep(currentSize, halfSize, roughness);
 
 					currentSize = halfSize;
+				}
+
+				/* Normalize values to [-1, 1] range if requested. */
+				if ( normalize )
+				{
+					this->normalizeData();
 				}
 
 				return true;
@@ -143,30 +165,6 @@ namespace EmEn::Libs::Algorithms
 			index (size_t coordX, size_t coordY) const noexcept
 			{
 				return (coordY * m_size) + coordX;
-			}
-
-			/**
-			 * @brief Initializes the data before noise generation.
-			 * @param size The size of pattern.
-			 * @return bool
-			 */
-			bool
-			initializeData (size_t size) noexcept
-			{
-				if ( size < 3 )
-				{
-					return false;
-				}
-
-				if ( size % 2 == 0 )
-				{
-					size++;
-				}
-
-				m_size = size;
-				m_data.resize(m_size * m_size);
-
-				return true;
 			}
 
 			/**
@@ -286,6 +284,59 @@ namespace EmEn::Libs::Algorithms
 							roughness * halfSize
 						);
 					}
+				}
+			}
+
+			/**
+			 * @brief Normalizes all data values to the [-1, 1] range.
+			 *
+			 * This ensures the factor parameter in applyDiamondSquare represents
+			 * the actual maximum height displacement in world units.
+			 *
+			 * @return void
+			 */
+			void
+			normalizeData () noexcept
+			{
+				if ( m_data.empty() )
+				{
+					return;
+				}
+
+				/* Find min and max values. */
+				auto minVal = m_data[0];
+				auto maxVal = m_data[0];
+
+				for ( const auto & value : m_data )
+				{
+					if ( value < minVal )
+					{
+						minVal = value;
+					}
+
+					if ( value > maxVal )
+					{
+						maxVal = value;
+					}
+				}
+
+				/* Avoid division by zero if all values are the same. */
+				const auto range = maxVal - minVal;
+
+				if ( range < static_cast< number_t >(0.0001) )
+				{
+					/* All values are essentially the same, set them to 0. */
+					std::fill(m_data.begin(), m_data.end(), static_cast< number_t >(0));
+
+					return;
+				}
+
+				/* Normalize to [-1, 1] range. */
+				const auto scale = static_cast< number_t >(2) / range;
+
+				for ( auto & value : m_data )
+				{
+					value = ((value - minVal) * scale) - static_cast< number_t >(1);
 				}
 			}
 

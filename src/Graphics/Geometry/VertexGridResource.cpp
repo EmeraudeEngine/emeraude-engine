@@ -38,17 +38,10 @@ namespace EmEn::Graphics::Geometry
 	using namespace Libs::PixelFactory;
 	using namespace Vulkan;
 
+	[[nodiscard]]
 	bool
-	VertexGridResource::createOnHardware (TransferManager & transferManager) noexcept
+	VertexGridResource::generateGPUBuffers (std::vector< float > & vertexAttributes, uint32_t vertexElementCount, std::vector< uint32_t > & indices) const noexcept
 	{
-		if ( this->isCreated() )
-		{
-			Tracer::warning(ClassId, "The buffers are already in video memory ! Use processLogics() instead.");
-
-			return true;
-		}
-
-		/* Checking local data ... */
 		if ( !m_localData.isValid() )
 		{
 			TraceError{ClassId} <<
@@ -58,20 +51,17 @@ namespace EmEn::Graphics::Geometry
 			return false;
 		}
 
-		/* NOTE: Example for a 4 divisions square. */
-
 		/* Create the vertex and the index buffers local data. */
-		const auto vertexElementCount = getElementCountFromFlags(this->flags());
 		const auto rowCount = m_localData.squaredQuadCount(); /* 4 */
+
+		/* 25 * element count per vertex */
+		vertexAttributes.reserve(m_localData.pointCount() * vertexElementCount);
+
 		/* This holds the number of indices requested to draw a
 		 * full row of quads, including the primitive restart. */
 		const auto indexPerRowCount = (m_localData.squaredPointCount() * 2) + 1; /* 11 */
 		const auto indexCount = indexPerRowCount * rowCount; /* 44 */
 
-		std::vector< float > vertexAttributes;
-		vertexAttributes.reserve(m_localData.pointCount() * vertexElementCount); /* 25 * element count per vertex */
-
-		std::vector< uint32_t > indices;
 		indices.reserve(indexCount);
 
 		for ( auto quadYIndex = 0U; quadYIndex < rowCount; quadYIndex++ )
@@ -128,35 +118,58 @@ namespace EmEn::Graphics::Geometry
 			return false;
 		}
 
-		/* Create hardware buffers from local data. */
-		return this->createVideoMemoryBuffers(transferManager, vertexAttributes, m_localData.pointCount(), vertexElementCount, indices);
+		return true;
 	}
 
 	bool
-	VertexGridResource::createVideoMemoryBuffers (TransferManager & transferManager, const std::vector< float > & vertexAttributes, uint32_t vertexCount, uint32_t vertexElementCount, const std::vector< uint32_t > & indices) noexcept
+	VertexGridResource::createOnHardware (TransferManager & transferManager) noexcept
 	{
-		m_vertexBufferObject = std::make_unique< VertexBufferObject >(transferManager.device(), vertexCount, vertexElementCount, false);
-		m_vertexBufferObject->setIdentifier(ClassId, this->name(), "VertexBufferObject");
-
-		if ( !m_vertexBufferObject->createOnHardware() || !m_vertexBufferObject->transferData(transferManager, vertexAttributes) )
+		if ( this->isCreated() )
 		{
-			Tracer::error(ClassId, "Unable to create the vertex buffer object (VBO) !");
+			Tracer::warning(ClassId, "The buffers are already in video memory ! Use processLogics() instead.");
 
-			m_vertexBufferObject.reset();
+			return true;
+		}
 
+		/* NOTE: Prepare vectors in the desired format for the GPU. */
+		const auto vertexElementCount = getElementCountFromFlags(this->flags());
+
+		std::vector< float > vertexAttributes;
+		std::vector< uint32_t > indices;
+
+		if ( !this->generateGPUBuffers(vertexAttributes, vertexElementCount, indices) )
+		{
 			return false;
 		}
 
-		m_indexBufferObject = std::make_unique< IndexBufferObject >(transferManager.device(), static_cast< uint32_t >(indices.size()));
-		m_indexBufferObject->setIdentifier(ClassId, this->name(), "IndexBufferObject");
-
-		if ( !m_indexBufferObject->createOnHardware() || !m_indexBufferObject->transferData(transferManager, indices) )
+		/* Create the VBO. */
 		{
-			Tracer::error(ClassId, "Unable to get an index buffer object (IBO) !");
+			m_vertexBufferObject = std::make_unique< VertexBufferObject >(transferManager.device(), m_localData.pointCount(), vertexElementCount, false);
+			m_vertexBufferObject->setIdentifier(ClassId, this->name(), "VertexBufferObject");
 
-			m_indexBufferObject.reset();
+			if ( !m_vertexBufferObject->createOnHardware() || !m_vertexBufferObject->transferData(transferManager, vertexAttributes) )
+			{
+				Tracer::error(ClassId, "Unable to create the vertex buffer object (VBO) !");
 
-			return false;
+				m_vertexBufferObject.reset();
+
+				return false;
+			}
+		}
+
+		/* Create the IBO. */
+		{
+			m_indexBufferObject = std::make_unique< IndexBufferObject >(transferManager.device(), static_cast< uint32_t >(indices.size()));
+			m_indexBufferObject->setIdentifier(ClassId, this->name(), "IndexBufferObject");
+
+			if ( !m_indexBufferObject->createOnHardware() || !m_indexBufferObject->transferData(transferManager, indices) )
+			{
+				Tracer::error(ClassId, "Unable to get an index buffer object (IBO) !");
+
+				m_indexBufferObject.reset();
+
+				return false;
+			}
 		}
 
 		return true;
@@ -199,45 +212,88 @@ namespace EmEn::Graphics::Geometry
 		}
 	}
 
+	void
+	VertexGridResource::enableVertexColor (const Color< float > & color) noexcept
+	{
+		if ( this->isCreated() )
+		{
+			Tracer::error(ClassId, "Vertex color must be enabled before loading the data !");
+
+			return;
+		}
+
+		m_vertexColorGenMode = VertexColorGenMode::UseGlobalColor;
+		m_globalVertexColor = color;
+		m_vertexColorMap.reset();
+	}
+
+	void
+	VertexGridResource::enableVertexColor (const std::shared_ptr< ImageResource > & colorMap) noexcept
+	{
+		if ( this->isCreated() )
+		{
+			Tracer::error(ClassId, "Vertex color must be enabled before loading the data !");
+
+			return;
+		}
+
+		m_vertexColorGenMode = VertexColorGenMode::UseColorMap;
+		m_vertexColorMap = colorMap;
+	}
+
+	void
+	VertexGridResource::enableVertexColorRandom () noexcept
+	{
+		if ( this->isCreated() )
+		{
+			Tracer::error(ClassId, "Vertex color must be enabled before loading the data !");
+
+			return;
+		}
+
+		m_vertexColorGenMode = VertexColorGenMode::UseRandom;
+		m_vertexColorMap.reset();
+	}
+
+	void
+	VertexGridResource::enableVertexColorFromCoords () noexcept
+	{
+		if ( this->isCreated() )
+		{
+			Tracer::error(ClassId, "Vertex color must be enabled before loading the data !");
+
+			return;
+		}
+
+		m_vertexColorGenMode = VertexColorGenMode::GenerateFromCoords;
+		m_vertexColorMap.reset();
+	}
+
 	bool
 	VertexGridResource::load (Resources::AbstractServiceProvider & /*serviceProvider*/) noexcept
 	{
-		return this->load(DefaultSize, DefaultDivision, DefaultUVMultiplier);
+		return this->load(DefaultGridSize, DefaultGridDivision, DefaultUVMultiplier);
 	}
 
 	bool
 	VertexGridResource::load (Resources::AbstractServiceProvider & /*serviceProvider*/, const Json::Value & data) noexcept
 	{
 		return this->load(
-			FastJSON::getValue< float >(data, JKSize).value_or(DefaultSize),
-			FastJSON::getValue< uint32_t >(data, JKDivision).value_or(DefaultDivision),
+			FastJSON::getValue< float >(data, JKSize).value_or(DefaultGridSize),
+			FastJSON::getValue< uint32_t >(data, JKDivision).value_or(DefaultGridDivision),
 			FastJSON::getValue< float >(data, JKUVMultiplier).value_or(DefaultUVMultiplier)
 		);
 	}
 
 	bool
-	VertexGridResource::load (float size, uint32_t division, float UVMultiplier, const VertexColorGenMode & vertexColorGenMode, const Color< float > & globalVertexColor) noexcept
+	VertexGridResource::load (float gridSize, uint32_t gridDivision, float UVMultiplier) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
 			return false;
 		}
 
-		if ( size < 0.0F )
-		{
-			Tracer::error(ClassId, "Size parameter must be positive !");
-
-			return this->setLoadSuccess(false);
-		}
-
-		if ( division < 1 )
-		{
-			Tracer::error(ClassId, "Division parameter must be a least 1 !");
-
-			return this->setLoadSuccess(false);
-		}
-
-		if ( !m_localData.initializeData(size, division) )
+		if ( !m_localData.initializeByGridSize(gridSize, gridDivision) )
 		{
 			Tracer::error(ClassId, "Unable to initialize local data !");
 
@@ -245,14 +301,12 @@ namespace EmEn::Graphics::Geometry
 		}
 
 		m_localData.setUVMultiplier(UVMultiplier);
-		m_vertexColorGenMode = vertexColorGenMode;
-		m_globalVertexColor = globalVertexColor;
 
 		return this->setLoadSuccess(true);
 	}
 
 	bool
-	VertexGridResource::load (const Grid< float > & grid, const VertexColorGenMode & vertexColorGenMode, const Color< float > & globalVertexColor) noexcept
+	VertexGridResource::load (const Grid< float > & grid) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
@@ -261,77 +315,75 @@ namespace EmEn::Graphics::Geometry
 
 		if ( !grid.isValid() )
 		{
-			Tracer::error(ClassId, "The base geometry is not usable !");
+			Tracer::error(ClassId, "The grid geometry is invalid!");
 
 			return this->setLoadSuccess(false);
 		}
 
 		m_localData = grid;
-		m_vertexColorGenMode = vertexColorGenMode;
-		m_globalVertexColor = globalVertexColor;
 
 		return this->setLoadSuccess(true);
 	}
 
 	uint32_t
-	VertexGridResource::addVertexToBuffer (uint32_t index, std::vector< float > & buffer, uint32_t vertexElementCount) const noexcept
+	VertexGridResource::addVertexToBuffer (uint32_t pointIndex, std::vector< float > & vertexAttributes, uint32_t vertexElementCount) const noexcept
 	{
-		const auto position = m_localData.position(index);
+		const auto position = m_localData.position(pointIndex);
 
 		/* Vertex position */
-		buffer.emplace_back(position[X]);
-		buffer.emplace_back(position[Y]);
-		buffer.emplace_back(position[Z]);
+		vertexAttributes.emplace_back(position[X]);
+		vertexAttributes.emplace_back(position[Y]);
+		vertexAttributes.emplace_back(position[Z]);
 
 		if ( this->isFlagEnabled(EnableTangentSpace) )
 		{
-			const auto normal = m_localData.normal(index, position);
-			const auto tangent = m_localData.tangent(index, position, m_localData.textureCoordinates3D(index));
+			const auto normal = m_localData.normal(pointIndex, position);
+			const auto tangent = m_localData.tangent(pointIndex, position, m_localData.textureCoordinates3D(pointIndex));
 			const auto binormal = Vector< 3, float >::crossProduct(normal, tangent);
 
 			/* Tangent */
-			buffer.emplace_back(tangent[X]);
-			buffer.emplace_back(tangent[Y]);
-			buffer.emplace_back(tangent[Z]);
+			vertexAttributes.emplace_back(tangent[X]);
+			vertexAttributes.emplace_back(tangent[Y]);
+			vertexAttributes.emplace_back(tangent[Z]);
 
 			/* Binormal */
-			buffer.emplace_back(binormal[X]);
-			buffer.emplace_back(binormal[Y]);
-			buffer.emplace_back(binormal[Z]);
+			vertexAttributes.emplace_back(binormal[X]);
+			vertexAttributes.emplace_back(binormal[Y]);
+			vertexAttributes.emplace_back(binormal[Z]);
 
 			/* Normal */
-			buffer.emplace_back(normal[X]);
-			buffer.emplace_back(normal[Y]);
-			buffer.emplace_back(normal[Z]);
+			vertexAttributes.emplace_back(normal[X]);
+			vertexAttributes.emplace_back(normal[Y]);
+			vertexAttributes.emplace_back(normal[Z]);
 		}
 		else if ( this->isFlagEnabled(EnableNormal) )
 		{
-			const auto normal = m_localData.normal(index, position);
+			const auto normal = m_localData.normal(pointIndex, position);
 
 			/* Normal */
-			buffer.emplace_back(normal[X]);
-			buffer.emplace_back(normal[Y]);
-			buffer.emplace_back(normal[Z]);
+			vertexAttributes.emplace_back(normal[X]);
+			vertexAttributes.emplace_back(normal[Y]);
+			vertexAttributes.emplace_back(normal[Z]);
 		}
 
 		if ( this->isFlagEnabled(EnablePrimaryTextureCoordinates) )
 		{
 			if ( this->isFlagEnabled(Enable3DPrimaryTextureCoordinates) )
 			{
-				const auto UVWCoords = m_localData.textureCoordinates3D(index);
+				const auto UVWCoords = m_localData.textureCoordinates3D(pointIndex);
 
 				/* 3D texture coordinates */
-				buffer.emplace_back(UVWCoords[X]);
-				buffer.emplace_back(UVWCoords[Y]);
-				buffer.emplace_back(UVWCoords[Z]);
+				vertexAttributes.emplace_back(UVWCoords[X]);
+				vertexAttributes.emplace_back(UVWCoords[Y]);
+				vertexAttributes.emplace_back(UVWCoords[Z]);
 			}
 			else
 			{
-				const auto UVCoords = m_localData.textureCoordinates2D(index);
+				const auto UVCoords = m_localData.textureCoordinates2D(pointIndex);
 
 				/* 2D texture coordinates */
-				buffer.emplace_back(UVCoords[X]);
-				buffer.emplace_back(UVCoords[Y]);
+				vertexAttributes.emplace_back(UVCoords[X]);
+				vertexAttributes.emplace_back(UVCoords[Y]);
 			}
 		}
 
@@ -340,20 +392,20 @@ namespace EmEn::Graphics::Geometry
 		{
 			if ( this->isFlagEnabled(Enable3DSecondaryTextureCoordinates) )
 			{
-				const auto UVWCoords = m_localData.textureCoordinates3D(index);
+				const auto UVWCoords = m_localData.textureCoordinates3D(pointIndex);
 
 				/* 3D texture coordinates */
-				buffer.emplace_back(UVWCoords[X]);
-				buffer.emplace_back(UVWCoords[Y]);
-				buffer.emplace_back(UVWCoords[Z]);
+				vertexAttributes.emplace_back(UVWCoords[X]);
+				vertexAttributes.emplace_back(UVWCoords[Y]);
+				vertexAttributes.emplace_back(UVWCoords[Z]);
 			}
 			else
 			{
-				const auto UVCoords = m_localData.textureCoordinates2D(index);
+				const auto UVCoords = m_localData.textureCoordinates2D(pointIndex);
 
 				/* 2D texture coordinates */
-				buffer.emplace_back(UVCoords[X]);
-				buffer.emplace_back(UVCoords[Y]);
+				vertexAttributes.emplace_back(UVCoords[X]);
+				vertexAttributes.emplace_back(UVCoords[Y]);
 			}
 		}
 
@@ -362,32 +414,36 @@ namespace EmEn::Graphics::Geometry
 		{
 			switch ( m_vertexColorGenMode )
 			{
-				case VertexColorGenMode::UseGlobal :
-					buffer.emplace_back(m_globalVertexColor.red());
-					buffer.emplace_back(m_globalVertexColor.green());
-					buffer.emplace_back(m_globalVertexColor.blue());
-					buffer.emplace_back(1.0F);
+				case VertexColorGenMode::UseGlobalColor :
+					vertexAttributes.emplace_back(m_globalVertexColor.red());
+					vertexAttributes.emplace_back(m_globalVertexColor.green());
+					vertexAttributes.emplace_back(m_globalVertexColor.blue());
+					vertexAttributes.emplace_back(1.0F);
+					break;
+
+				case VertexColorGenMode::UseColorMap:
+					// TODO
 					break;
 
 				case VertexColorGenMode::UseRandom :
 				{
 					const auto randomColor = Color< float >::quickRandom();
 
-					buffer.emplace_back(randomColor.red());
-					buffer.emplace_back(randomColor.green());
-					buffer.emplace_back(randomColor.blue());
-					buffer.emplace_back(1.0F);
+					vertexAttributes.emplace_back(randomColor.red());
+					vertexAttributes.emplace_back(randomColor.green());
+					vertexAttributes.emplace_back(randomColor.blue());
+					vertexAttributes.emplace_back(1.0F);
 				}
 					break;
 
 				case VertexColorGenMode::GenerateFromCoords :
 				{
-					const auto UVCoords = m_localData.textureCoordinates2D(index);
+					const auto UVCoords = m_localData.textureCoordinates2D(pointIndex);
 					const auto level = 1.0F - ((position[Y] - m_localData.boundingBox().minimum(Y)) / m_localData.boundingBox().height());
 
-					buffer.emplace_back(UVCoords[X] / m_localData.UMultiplier());
-					buffer.emplace_back(UVCoords[Y] / m_localData.VMultiplier());
-					buffer.emplace_back(level);
+					vertexAttributes.emplace_back(UVCoords[X] / m_localData.UMultiplier());
+					vertexAttributes.emplace_back(UVCoords[Y] / m_localData.VMultiplier());
+					vertexAttributes.emplace_back(level);
 				}
 					break;
 			}
@@ -396,12 +452,12 @@ namespace EmEn::Graphics::Geometry
 		/* Vertex weight. */
 		if ( this->isFlagEnabled(EnableWeight) )
 		{
-			buffer.emplace_back(1.0F);
-			buffer.emplace_back(1.0F);
-			buffer.emplace_back(1.0F);
-			buffer.emplace_back(1.0F);
+			vertexAttributes.emplace_back(1.0F);
+			vertexAttributes.emplace_back(1.0F);
+			vertexAttributes.emplace_back(1.0F);
+			vertexAttributes.emplace_back(1.0F);
 		}
 
-		return static_cast< uint32_t >(buffer.size() / vertexElementCount) - 1;
+		return static_cast< uint32_t >(vertexAttributes.size() / vertexElementCount) - 1;
 	}
-	}
+}

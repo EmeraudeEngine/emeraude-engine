@@ -153,35 +153,18 @@ namespace EmEn::Saphir::Generator
 			return false;
 		}
 
-		switch ( m_colorSpaceConversion )
+		/* NOTE: Output the texture directly without color space conversion.
+		 * The swap-chain format (UNORM vs SRGB) determines the final color handling.
+		 * BGRA sources (like CEF) need the .bgra swizzle to convert to RGBA. */
+		if ( m_isBGRASurface )
 		{
-			case ColorSpaceConversion::ToSRGB :
-				if ( !fragmentShader->declare(FragmentShader::generateToSRGBColorFunction()) )
-				{
-					return false;
-				}
-
-				Code{*fragmentShader, Location::Output} <<
-					"const vec4 color = texture(" << Uniform::PrimarySampler << ", " << ShaderVariable::Primary2DTextureCoordinates << ").bgra;" "\n" <<
-					ShaderVariable::OutputFragment << " = toSRGBColor(color);";
-				break;
-
-			case ColorSpaceConversion::ToLinear :
-				if ( !fragmentShader->declare(FragmentShader::generateToLinearColorFunction()) )
-				{
-					return false;
-				}
-
-				Code{*fragmentShader, Location::Output} <<
-					"const vec4 color = texture(" << Uniform::PrimarySampler << ", " << ShaderVariable::Primary2DTextureCoordinates << ").bgra;" "\n" <<
-					ShaderVariable::OutputFragment << " = toLinearColor(color);";
-				break;
-
-			case ColorSpaceConversion::None :
-			default:
-				Code{*fragmentShader, Location::Output} <<
-					ShaderVariable::OutputFragment << " = texture(" << Uniform::PrimarySampler << ", " << ShaderVariable::Primary2DTextureCoordinates << ").bgra;";
-				break;
+			Code{*fragmentShader, Location::Output} <<
+				ShaderVariable::OutputFragment << " = texture(" << Uniform::PrimarySampler << ", " << ShaderVariable::Primary2DTextureCoordinates << ").bgra;";
+		}
+		else
+		{
+			Code{*fragmentShader, Location::Output} <<
+				ShaderVariable::OutputFragment << " = texture(" << Uniform::PrimarySampler << ", " << ShaderVariable::Primary2DTextureCoordinates << ");";
 		}
 
 		return fragmentShader->generateSourceCode(*this);
@@ -250,7 +233,9 @@ namespace EmEn::Saphir::Generator
 			}
 		}
 
-		if ( !graphicsPipeline.configureColorBlendStateForAlphaBlending() )
+		/* NOTE: CEF/Chromium provides BGRA pixels with premultiplied alpha,
+		 * so we need to use the premultiplied alpha blending formula. */
+		if ( !graphicsPipeline.configureColorBlendStateForAlphaBlending(m_premultipliedAlpha) )
 		{
 			Tracer::error(ClassId, "Unable to configure the graphics pipeline color blend state !");
 
@@ -273,8 +258,11 @@ namespace EmEn::Saphir::Generator
 		/* 1. Render target type (cubemap vs single layer). */
 		hashCombine(hash, static_cast< size_t >(this->renderTarget()->isCubemap()));
 
-		/* 2. Color conversion mode. */
-		hashCombine(hash, static_cast< size_t >(m_colorSpaceConversion));
+		/* 2. Premultiplied alpha mode. */
+		hashCombine(hash, static_cast< size_t >(m_premultipliedAlpha));
+
+		/* 3. BGRA source format. */
+		hashCombine(hash, static_cast< size_t >(m_isBGRASurface));
 
 		return hash;
 	}

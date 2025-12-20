@@ -117,7 +117,7 @@ namespace EmEn::Graphics::Renderable
 	}
 
 	bool
-	SkyBoxResource::load (Resources::AbstractServiceProvider & serviceProvider, const std::shared_ptr< Material::Interface > & material) noexcept
+	SkyBoxResource::load (Resources::AbstractServiceProvider & serviceProvider, const std::shared_ptr< Interface > & material) noexcept
 	{
 		if ( !this->beginLoading() )
 		{

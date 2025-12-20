@@ -314,6 +314,13 @@ namespace EmEn::Scenes::AVConsole
 			}
 
 			/**
+			 * @brief Returns the world coordinates of this device.
+			 * @return Libs::Math::CartesianFrame< float >
+			 */
+			[[nodiscard]]
+			virtual Libs::Math::CartesianFrame< float > getWorldCoordinates () const noexcept = 0;
+
+			/**
 			 * @brief Updates the device from object coordinates in world space holding it.
 			 * @param worldCoordinates A reference to the coordinates of the device.
 			 * @param worldVelocity A reference to the velocity vector of the device.

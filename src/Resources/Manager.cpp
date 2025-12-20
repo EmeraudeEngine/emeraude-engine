@@ -44,14 +44,14 @@
 #include "Graphics/Material/BasicResource.hpp"
 #include "Graphics/Material/StandardResource.hpp"
 #include "Graphics/MovieResource.hpp"
-#include "Graphics/Renderable/BasicFloorResource.hpp"
+#include "Graphics/Renderable/BasicGroundResource.hpp"
 #include "Graphics/Renderable/DynamicSkyResource.hpp"
 #include "Graphics/Renderable/MeshResource.hpp"
 #include "Graphics/Renderable/SimpleMeshResource.hpp"
 #include "Graphics/Renderable/SkyBoxResource.hpp"
 #include "Graphics/Renderable/SpriteResource.hpp"
 #include "Graphics/Renderable/TerrainResource.hpp"
-#include "Graphics/Renderable/WaterLevelResource.hpp"
+#include "Graphics/Renderable/BasicSeaResource.hpp"
 #include "Graphics/TextureResource/AnimatedTexture2D.hpp"
 #include "Graphics/TextureResource/Texture1D.hpp"
 #include "Graphics/TextureResource/Texture2D.hpp"
@@ -532,9 +532,9 @@ namespace EmEn::Resources
 			m_containers.emplace(typeid(Graphics::Renderable::SpriteResource), std::make_unique< Sprites >("Sprite manager", m_primaryServices, *this, this->getLocalStore("Sprites")));
 			m_containers.emplace(typeid(Graphics::Renderable::SkyBoxResource), std::make_unique< SkyBoxes >("Skybox manager", m_primaryServices, *this, this->getLocalStore("Backgrounds")));
 			m_containers.emplace(typeid(Graphics::Renderable::DynamicSkyResource), std::make_unique< DynamicSkies >("Dynamic sky manager", m_primaryServices, *this, this->getLocalStore("Backgrounds")));
-			m_containers.emplace(typeid(Graphics::Renderable::BasicFloorResource), std::make_unique< BasicFloors >("BasicFloor manager", m_primaryServices, *this, this->getLocalStore("Grounds")));
+			m_containers.emplace(typeid(Graphics::Renderable::BasicGroundResource), std::make_unique< BasicGrounds >("Basic ground manager", m_primaryServices, *this, this->getLocalStore("Grounds")));
 			m_containers.emplace(typeid(Graphics::Renderable::TerrainResource), std::make_unique< Terrains >("Terrain manager", m_primaryServices, *this, this->getLocalStore("Grounds")));
-			m_containers.emplace(typeid(Graphics::Renderable::WaterLevelResource), std::make_unique< WaterLevels >("Water level manager", m_primaryServices, *this, this->getLocalStore("SeaLevels")));
+			m_containers.emplace(typeid(Graphics::Renderable::BasicSeaResource), std::make_unique< BasicSeas >("Basic sea manager", m_primaryServices, *this, this->getLocalStore("Seas")));
 			m_containers.emplace(typeid(Scenes::DefinitionResource), std::make_unique< SceneDefinitions >("Scene definition manager", m_primaryServices, *this, this->getLocalStore("Scenes")));
 		}
 

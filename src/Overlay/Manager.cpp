@@ -280,9 +280,9 @@ namespace EmEn::Overlay
 	}
 
 	std::shared_ptr< Program >
-	Manager::generateShaderProgram (ColorSpaceConversion colorSpaceConversion) const noexcept
+	Manager::generateShaderProgram (bool premultipliedAlpha, bool isBGRASurface) const noexcept
 	{
-		Generator::OverlayRendering generator{m_graphicsRenderer.mainRenderTarget(), m_surfaceGeometry, colorSpaceConversion};
+		Generator::OverlayRendering generator{m_graphicsRenderer.mainRenderTarget(), m_surfaceGeometry, premultipliedAlpha, isBGRASurface};
 
 		if ( !generator.generateShaderProgram(m_graphicsRenderer) )
 		{
@@ -332,15 +332,18 @@ namespace EmEn::Overlay
 			return false;
 		}
 
-		std::array< std::pair< size_t, ColorSpaceConversion >, 3 > types{{
-			{static_cast< size_t >(ColorSpaceConversion::None), ColorSpaceConversion::None}, // 0
-			{static_cast< size_t >(ColorSpaceConversion::ToSRGB), ColorSpaceConversion::ToSRGB}, // 1
-			{static_cast< size_t >(ColorSpaceConversion::ToLinear), ColorSpaceConversion::ToLinear} // 2
-		}};
-
-		for ( const auto & [index, colorSpaceConversion] : types )
+		/* Generate program variants for all combinations of alpha modes and pixel formats.
+		 * Index layout:
+		 *   0 = RGBA + standard alpha
+		 *   1 = RGBA + premultiplied alpha
+		 *   2 = BGRA + standard alpha
+		 *   3 = BGRA + premultiplied alpha */
+		for ( size_t index = 0; index < ProgramCount; ++index )
 		{
-			m_programs[index] = this->generateShaderProgram(colorSpaceConversion);
+			const bool premultipliedAlpha = (index & 0x1) != 0;
+			const bool isBGRASurface = (index & 0x2) != 0;
+
+			m_programs[index] = this->generateShaderProgram(premultipliedAlpha, isBGRASurface);
 
 			if ( m_programs[index] == nullptr )
 			{
@@ -731,8 +734,10 @@ namespace EmEn::Overlay
 				continue;
 			}
 
-			/* NOTE: Select the right color-space conversion program. */
-			const auto & program = m_programs[static_cast< size_t >(screen->colorSpaceConversion())];
+			/* NOTE: Select the right program based on alpha blending mode and pixel format.
+			 * Index layout: bit 0 = premultiplied alpha, bit 1 = BGRA source. */
+			const size_t programIndex = (screen->premultipliedAlpha() ? 1 : 0) | (screen->isUsingBGRAFormat() ? 2 : 0);
+			const auto & program = m_programs[programIndex];
 
 			/* Bind the graphics pipeline. */
 			commandBuffer.bind(*program->graphicsPipeline());

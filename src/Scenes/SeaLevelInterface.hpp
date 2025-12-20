@@ -1,5 +1,5 @@
 /*
- * src/Graphics/Renderable/SeaLevelInterface.hpp
+ * src/Scenes/SeaLevelInterface.hpp
  * This file is part of Emeraude-Engine
  *
  * Copyright (C) 2010-2025 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
@@ -26,10 +26,13 @@
 
 #pragma once
 
+/* Local inclusions. */
+#include "Libs/Math/Vector.hpp"
+
 namespace EmEn::Scenes
 {
 	/**
-	 * @brief Interface to define a visible sea level in a scene.
+	 * @brief Interface to define a visible and physical sea level in a scene.
 	 */
 	class SeaLevelInterface
 	{
@@ -39,6 +42,62 @@ namespace EmEn::Scenes
 			 * @brief Destructs the sea level interface.
 			 */
 			virtual ~SeaLevelInterface () = default;
+
+			/**
+			 * @brief Returns the constant water level height.
+			 * @return float
+			 */
+			[[nodiscard]]
+			virtual float getLevel () const noexcept = 0;
+
+			/**
+			 * @brief Returns the water level at the given position.
+			 * @param worldPosition An absolute position.
+			 * @return float
+			 */
+			[[nodiscard]]
+			virtual float getLevelAt (const Libs::Math::Vector< 3, float > & worldPosition) const noexcept = 0;
+
+			/**
+			 * @brief Returns a position where Y is completed by the water level at X,Z position.
+			 * @param positionX The X coordinates.
+			 * @param positionZ The Z coordinates.
+			 * @param deltaY A difference value to add to the Y component. Default 0.0F.
+			 * @return Vector< 3, float >
+			 */
+			[[nodiscard]]
+			virtual Libs::Math::Vector< 3, float > getLevelAt (float positionX, float positionZ, float deltaY = 0.0F) const noexcept = 0;
+
+			/**
+			 * @brief Returns the normal vector at the given position.
+			 * @param worldPosition An absolute position.
+			 * @return Vector< 3, float >
+			 */
+			[[nodiscard]]
+			virtual Libs::Math::Vector< 3, float > getNormalAt (const Libs::Math::Vector< 3, float > & worldPosition) const noexcept = 0;
+
+			/**
+			 * @brief Checks if a world position is submerged (below water level).
+			 * @param worldPosition An absolute position.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			virtual bool isSubmerged (const Libs::Math::Vector< 3, float > & worldPosition) const noexcept = 0;
+
+			/**
+			 * @brief Returns the depth at a given position (positive if submerged, negative if above).
+			 * @param worldPosition An absolute position.
+			 * @return float
+			 */
+			[[nodiscard]]
+			virtual float getDepthAt (const Libs::Math::Vector< 3, float > & worldPosition) const noexcept = 0;
+
+			/**
+			 * @brief Updates the water surface visibility from the camera position.
+			 * @note This is not frustum-culling, but helps the water to know where the point of view is located.
+			 * @param worldPosition The camera world position.
+			 */
+			virtual void updateVisibility (const Libs::Math::Vector< 3, float > & worldPosition) noexcept = 0;
 
 		protected:
 

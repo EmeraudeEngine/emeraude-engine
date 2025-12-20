@@ -229,12 +229,13 @@ namespace EmEn::Saphir
 	{
 		std::stringstream functionCode;
 
+		/* NOTE: Only convert RGB components, alpha channel is always linear. */
 		functionCode <<
-			"\t" "bvec4 cutoff = lessThan(linearRGB, vec4(0.0031308));" "\n"
-			"\t" "vec4 higher = vec4(1.055) * pow(linearRGB, vec4(1.0 / 2.4)) - vec4(0.055);" "\n"
-			"\t" "vec4 lower = linearRGB * vec4(12.92);" "\n\n"
+			"\t" "bvec3 cutoff = lessThan(linearRGB.rgb, vec3(0.0031308));" "\n"
+			"\t" "vec3 higher = vec3(1.055) * pow(linearRGB.rgb, vec3(1.0 / 2.4)) - vec3(0.055);" "\n"
+			"\t" "vec3 lower = linearRGB.rgb * vec3(12.92);" "\n\n"
 
-			"\t" "return mix(higher, lower, cutoff);" "\n";
+			"\t" "return vec4(mix(higher, lower, cutoff), linearRGB.a);" "\n";
 
 		Function function{"toSRGBColor", GLSL::FloatVector4};
 		function.addInParameter(GLSL::FloatVector4, "linearRGB", true);
@@ -248,12 +249,13 @@ namespace EmEn::Saphir
 	{
 		std::stringstream functionCode;
 
+		/* NOTE: Only convert RGB components, alpha channel is always linear. */
 		functionCode <<
-			"\t" "bvec4 cutoff = lessThan(sRGB, vec4(0.04045));" "\n"
-			"\t" "vec4 higher = pow((sRGB + vec4(0.055)) / vec4(1.055), vec4(2.4));" "\n"
-			"\t" "vec4 lower = sRGB / vec4(12.92);" "\n\n"
+			"\t" "bvec3 cutoff = lessThan(sRGB.rgb, vec3(0.04045));" "\n"
+			"\t" "vec3 higher = pow((sRGB.rgb + vec3(0.055)) / vec3(1.055), vec3(2.4));" "\n"
+			"\t" "vec3 lower = sRGB.rgb / vec3(12.92);" "\n\n"
 
-			"\t" "return mix(higher, lower, cutoff);" "\n";
+			"\t" "return vec4(mix(higher, lower, cutoff), sRGB.a);" "\n";
 
 		Function function{"toLinearColor", GLSL::FloatVector4};
 		function.addInParameter(GLSL::FloatVector4, "sRGB", true);

@@ -532,20 +532,6 @@ namespace EmEn::Graphics::RenderableInstance
 			}
 
 			/**
-			 * @brief Refresh graphics pipelines for a specific render target.
-			 * @param renderTarget A reference to the render target smart pointer.
-			 * @return bool
-			 */
-			bool refreshGraphicsPipelines (const std::shared_ptr< RenderTarget::Abstract > & renderTarget) noexcept;
-
-			/**
-			 * @brief Destroys graphics pipelines from the renderable instance for a specific render target.
-			 * @param renderTarget A reference to the render target smart pointer.
-			 * @return void
-			 */
-			void destroyGraphicsPipelines (const std::shared_ptr< RenderTarget::Abstract > & renderTarget) noexcept;
-
-			/**
 			 * @brief Draws the instance into a shadow map.
 			 *
 			 * Renders the instance for shadow casting using a simplified pipeline:

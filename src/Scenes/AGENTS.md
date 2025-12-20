@@ -33,6 +33,104 @@ See @docs/scene-graph-architecture.md for complete details.
 **Physics:** DirectionalPushModifier, SphericalPushModifier, Weight
 **Utilities:** Camera, ParticlesEmitter
 
+### Level Interfaces (Ground & Sea)
+
+Two interfaces define scene-wide physical levels for gameplay queries:
+
+| Interface | Purpose | Implementations |
+|-----------|---------|-----------------|
+| `GroundLevelInterface` | Ground/terrain queries | `BasicGroundResource`, `TerrainResource` |
+| `SeaLevelInterface` | Water surface queries | `BasicSeaResource` |
+
+**GroundLevelInterface** (`Scenes/GroundLevelInterface.hpp`):
+- `getLevelAt(worldPosition)` - Ground height at position
+- `getLevelAt(x, z, deltaY)` - Returns position with Y = ground level + delta
+- `getNormalAt(worldPosition)` - Surface normal at position
+- `updateVisibility(cameraPosition)` - LOD/visibility hint
+
+**SeaLevelInterface** (`Scenes/SeaLevelInterface.hpp`):
+- `getLevel()` - Constant water height
+- `getLevelAt(worldPosition)` - Water height at position (flat = constant)
+- `getLevelAt(x, z, deltaY)` - Returns position with Y = water level + delta
+- `getNormalAt(worldPosition)` - Water surface normal (flat = {0,1,0})
+- `isSubmerged(worldPosition)` - True if position.Y < water level
+- `getDepthAt(worldPosition)` - Depth below water (positive = submerged)
+- `updateVisibility(cameraPosition)` - Visibility hint
+
+**Scene accessors:**
+```cpp
+scene->groundPhysics()     // Returns GroundLevelInterface*
+scene->seaLevelPhysics()   // Returns SeaLevelInterface*
+```
+
+**Code references:**
+- `Scenes/GroundLevelInterface.hpp` - Ground interface definition
+- `Scenes/SeaLevelInterface.hpp` - Sea level interface definition
+- `Graphics/Renderable/BasicGroundResource.hpp` - Flat ground implementation
+- `Graphics/Renderable/BasicSeaResource.hpp` - Flat water implementation
+- `Graphics/Renderable/TerrainResource.hpp` - Heightmap terrain implementation
+
+### Modifier System & Influence Areas
+
+Modifiers (DirectionalPushModifier, SphericalPushModifier) apply forces to entities within their influence area.
+
+**Influence Area Types:**
+- `SphericalInfluenceArea`: Sphere with inner/outer radius for falloff. See `SphericalInfluenceArea.cpp`
+- `CubicInfluenceArea`: Oriented box with local space transformation. See `CubicInfluenceArea.cpp`
+
+**Modifier API (Semantic Dispatch):**
+
+Two overloads with clear semantic separation:
+
+```cpp
+// For entities (Node, StaticEntity) - encapsulates collision model lookup
+Vector<3,float> getForceAppliedTo(const LocatableInterface& entity) const noexcept;
+
+// For particles/points - direct position with optional bounding radius
+Vector<3,float> getForceAppliedTo(const CartesianFrame<float>& worldPosition, float radius = 0.0F) const noexcept;
+```
+
+**Entity overload internals** - Dispatches based on `CollisionModelType`:
+- `Point` → uses `influenceStrength(position)` (point-based)
+- `Sphere` → creates Sphere from `getRadius()`, uses Sphere overload
+- `AABB/Capsule` → uses `getAABB(worldCoordinates)`, uses AACuboid overload
+- No collision model → fallback to point-based
+
+**Particle/Point overload**:
+- `radius > 0.0F` → creates Sphere on the fly
+- `radius == 0.0F` (default) → uses point-based influence
+
+**Influence Area Interface:**
+
+Three overload families for different use cases:
+```cpp
+// Bounding volume tests (entities with collision models)
+float influenceStrength(const CartesianFrame<float>&, const Sphere<float>&);
+float influenceStrength(const CartesianFrame<float>&, const AACuboid<float>&);
+
+// Point test (particles, fallback for entities without collision)
+float influenceStrength(const Vector<3,float>& worldPosition);
+```
+
+**How modifiers work:**
+1. `Scene::forEachModifiers()` iterates all modifiers
+2. For entities: calls `modifier->getForceAppliedTo(*this)` - entity passed directly
+3. For particles: calls `modifier->getForceAppliedTo(worldCoordinates, m_size * 0.5F)` - radius passed
+4. Modifier internally dispatches to correct `influenceStrength()` overload
+5. Returns force vector applied to entity's physics
+
+**Code references:**
+- `InfluenceAreaInterface.hpp` - Pure virtual interface (Sphere, AABB, Point overloads)
+- `SphericalInfluenceArea.cpp:influenceStrength()` - Distance-based falloff (inner/outer radius)
+- `CubicInfluenceArea.cpp:influenceStrength()` - Local space box containment test
+- `AbstractModifier.hpp:getForceAppliedTo()` - Virtual interface (entity vs particle)
+- `SphericalPushModifier.cpp:getForceAppliedTo()` - Radial force with type dispatch
+- `DirectionalPushModifier.cpp:getForceAppliedTo()` - Directional force with type dispatch
+- `Node.cpp:879` - Entity call site (passes `*this`)
+- `Particle.cpp:404` - Particle call site (passes `worldCoordinates, m_size * 0.5F`)
+
+**Future improvement:** Modifiers should be integrated into physics octree for O(log n) lookups instead of O(n) iteration.
+
 ### Observer System
 - **Automatic registration**: Scene observes Component additions
 - Visual → rendering registration
@@ -69,6 +167,11 @@ ctest -R Scenes
 - `ToolKit.cpp/.hpp` - Helpers for complex entity construction
 - `Component/Abstract.hpp` - Base class for all Components (pure virtual onSuspend/onWakeup)
 - `Component/SoundEmitter.cpp/.hpp` - Audio emitter with suspend/wakeup source management
+- `InfluenceAreaInterface.hpp` - Pure virtual interface for modifier influence zones
+- `SphericalInfluenceArea.cpp/.hpp` - Spherical influence with inner/outer radius falloff
+- `CubicInfluenceArea.cpp/.hpp` - Oriented box influence with local space transform
+- `Component/SphericalPushModifier.cpp/.hpp` - Radial push force modifier
+- `Component/DirectionalPushModifier.cpp/.hpp` - Directional push force modifier
 - `@docs/scene-graph-architecture.md` - **Complete detailed architecture**
 - `@docs/coordinate-system.md` - Y-down convention (CRITICAL)
 
@@ -217,6 +320,47 @@ When entities cluster at the same point (e.g., physics simulation causing all ba
 **Performance note:**
 At depth 16 with a 200-unit root sector, minimum sector size ≈ 0.003 units. This is smaller than any realistic entity radius, so the depth limit rarely triggers in normal gameplay.
 
+## Visual Debug System
+
+Entities support visual debugging through `enableVisualDebug()` with different visualization types.
+
+### Debug Types
+
+| Type | Purpose | Mesh Used |
+|------|---------|-----------|
+| `Axis` | Show entity orientation | RGB axis lines |
+| `Velocity` | Show movement direction | Arrow |
+| `BoundingShape` | Show collision model | Shape-specific mesh |
+| `Camera` | Show camera frustum | Camera model |
+
+### BoundingShape Visualization
+
+The debug system visualizes all collision model types with appropriate transformations:
+
+- **Point**: Identity transform (axis gizmo used)
+- **Sphere**: Uniform scaling by diameter
+- **AABB**: Translation to centroid + scaling by dimensions
+- **Capsule**: Translation to center + scaling (diameter, height, diameter)
+
+See: `AbstractEntity.debug.cpp:enableVisualDebug()`, `AbstractEntity.debug.cpp:updateVisualDebug()`
+
+### Collision Model Auto-Creation
+
+**CRITICAL BUG PATTERN**: Visual components with meshes trigger automatic collision model creation.
+
+When creating debug/gizmo entities (e.g., sun position markers):
+1. `generateSphereInstance()` creates a visual mesh
+2. `updateEntityProperties()` auto-generates AABB from mesh bounds
+3. This collision model interferes with physics!
+
+**Solution**: Disable physics on gizmo entities:
+```cpp
+// Option 2: Set null collision model after creation
+entity->setCollisionModel(nullptr);
+```
+
+See: `AbstractEntity.cpp:updateEntityProperties()` for auto-AABB creation logic.
+
 ## Critical Points
 
 - **Double buffering**: Logic thread writes activeFrame, Render thread reads renderFrame
@@ -229,6 +373,7 @@ At depth 16 with a 200-unit root sector, minimum sector size ≈ 0.003 units. Th
 - **Observers**: Automatic registration, do not register manually
 - **Suspend/Wakeup**: Every new Component MUST implement `onSuspend()`/`onWakeup()` (pure virtual)
 - **Friend class**: `AbstractEntity` is friend of `Component::Abstract` to access protected hooks
+- **Auto collision models**: Visual components auto-generate collision models - disable for gizmos!
 
 ## Detailed Documentation
 
