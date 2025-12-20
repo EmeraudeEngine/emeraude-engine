@@ -218,11 +218,15 @@ namespace EmEn::Libs::Math::Space3D
 			}
 		}
 
-		/* NOTE: Collision confirmed, we build the MTV. Make sure the axle is pointing in the right direction for thrust. */
+		/* NOTE: Collision confirmed, we build the MTV.
+		 * Convention: MTV pushes the first argument (triangle) out of the second (cuboid).
+		 * So the MTV should point from cuboid center towards triangle center. */
 		const auto centerA = (p0 + p1 + p2) / static_cast<precision_t>(3);
 		const auto centerB = cuboid.centroid();
 
-		if ( Vector< 3, precision_t >::dotProduct(centerB - centerA, smallestAxis) < 0 )
+		/* NOTE: We want MTV to point from B (cuboid) towards A (triangle).
+		 * If centerA - centerB and smallestAxis have opposite signs, flip the axis. */
+		if ( Vector< 3, precision_t >::dotProduct(centerA - centerB, smallestAxis) < 0 )
 		{
 			smallestAxis = -smallestAxis;
 		}
@@ -241,12 +245,29 @@ namespace EmEn::Libs::Math::Space3D
 		return isColliding(triangle, cuboid);
 	}
 
-	/** @copydoc EmEn::Libs::Math::Space3D::isColliding(const Triangle< precision_t > &, const AACuboid< precision_t > &, Vector< 3, precision_t > &) noexcept */
+	/**
+	 * @brief Checks if a cuboid is colliding with a triangle and gives the minimum translation vector (MTV).
+	 * @note The MTV pushes the cuboid out of the triangle (consistent with convention: MTV pushes first arg out of second).
+	 * @tparam precision_t The data precision. Default float.
+	 * @param cuboid A reference to a cuboid.
+	 * @param triangle A reference to a triangle.
+	 * @param minimumTranslationVector A writable reference to a vector.
+	 * @return bool
+	 */
 	template< typename precision_t = float >
 	[[nodiscard]]
 	bool
 	isColliding (const AACuboid< precision_t > & cuboid, const Triangle< precision_t > & triangle, Vector< 3, precision_t > & minimumTranslationVector) noexcept requires (std::is_floating_point_v< precision_t >)
 	{
-		return isColliding(triangle, cuboid, minimumTranslationVector);
+		/* NOTE: isColliding(triangle, cuboid, mtv) computes MTV to push triangle out of cuboid.
+		 * We need the opposite: push cuboid out of triangle, so we negate the MTV. */
+		if ( isColliding(triangle, cuboid, minimumTranslationVector) )
+		{
+			minimumTranslationVector = -minimumTranslationVector;
+
+			return true;
+		}
+
+		return false;
 	}
 }

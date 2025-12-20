@@ -16,9 +16,6 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 	{
         @autoreleasepool
         {
-            [NSApplication sharedApplication]; // FIXME: Check the usefulness of this line !
-            [NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];
-
             NSString * title = [NSString stringWithCString:this->title().c_str()
             encoding:[NSString defaultCStringEncoding]];
 

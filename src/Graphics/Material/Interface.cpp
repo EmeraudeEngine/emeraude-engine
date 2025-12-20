@@ -24,7 +24,7 @@
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
 
-#include "Abstract.hpp"
+#include "Interface.hpp"
 
 /* Local inclusions. */
 #include "Libs/FastJSON.hpp"

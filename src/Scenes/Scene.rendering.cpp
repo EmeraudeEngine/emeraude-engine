@@ -413,46 +413,7 @@ namespace EmEn::Scenes
 			}
 		}*/
 	}
-
-	bool
-	Scene::refreshRenderableInstances () const noexcept
-	{
-		uint32_t errorCount = 0;
-
-		this->forEachRenderableInstance([&] (const auto & renderableInstance) {
-			this->forEachRenderToShadowMap([&errorCount, &renderableInstance] (const auto & renderTarget) {
-				if ( !renderableInstance->refreshGraphicsPipelines(renderTarget) )
-				{
-					TraceDebug{ClassId} << "Unable to refresh the renderable '" << renderableInstance->renderable()->name() << "' for shadow map '" << renderTarget->id() << "' !";
-
-					errorCount++;
-				}
-			});
-
-			this->forEachRenderToTexture([&errorCount, &renderableInstance] (const auto & renderTarget) {
-				if ( !renderableInstance->refreshGraphicsPipelines(renderTarget) )
-				{
-					TraceDebug{ClassId} << "Unable to refresh the renderable '" << renderableInstance->renderable()->name() << "' for texture '" << renderTarget->id() << "' !";
-
-					errorCount++;
-				}
-			});
-
-			this->forEachRenderToView([&errorCount, &renderableInstance] (const auto & renderTarget) {
-				if ( !renderableInstance->refreshGraphicsPipelines(renderTarget) )
-				{
-					TraceDebug{ClassId} << "Unable to refresh the renderable '" << renderableInstance->renderable()->name() << "' for view '" << renderTarget->id() << "' !";
-
-					errorCount++;
-				}
-			});
-
-			return true;
-		});
-
-		return errorCount == 0;
-	}
-
+	
 	void
 	Scene::publishStateForRendering () noexcept
 	{

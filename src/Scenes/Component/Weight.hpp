@@ -68,7 +68,7 @@ namespace EmEn::Scenes::Component
 			Weight (const std::string & componentName, const AbstractEntity & parentEntity) noexcept
 				: Abstract{componentName, parentEntity}
 			{
-				this->enablePhysicalProperties(true);
+
 			}
 
 			/**
@@ -80,7 +80,6 @@ namespace EmEn::Scenes::Component
 			Weight (const std::string & componentName, const AbstractEntity & parentEntity, const Physics::BodyPhysicalProperties & initialProperties) noexcept
 				: Abstract{componentName, parentEntity}
 			{
-				this->enablePhysicalProperties(true);
 				this->bodyPhysicalProperties().setProperties(initialProperties);
 			}
 

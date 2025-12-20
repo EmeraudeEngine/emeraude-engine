@@ -1197,6 +1197,7 @@ namespace EmEn::Vulkan
 	void
 	SwapChain::updateDeviceFromCoordinates (const CartesianFrame< float > & worldCoordinates, const Vector< 3, float > & worldVelocity) noexcept
 	{
+		m_worldCoordinates = worldCoordinates;
 		m_viewMatrices.updateViewCoordinates(worldCoordinates, worldVelocity);
 	}
 

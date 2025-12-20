@@ -30,7 +30,7 @@
 #include <array>
 
 /* Local inclusions for inheritances. */
-#include "Abstract.hpp"
+#include "Interface.hpp"
 
 /* Local inclusions for usages. */
 #include "Resources/Container.hpp"

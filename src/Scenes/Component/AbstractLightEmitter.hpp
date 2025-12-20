@@ -429,6 +429,14 @@ namespace EmEn::Scenes::Component
 				this->enableFlag(Enabled);
 			}
 
+			/** @copydoc EmEn::Scenes::AVConsole::AbstractVirtualDevice::getWorldCoordinates() */
+			[[nodiscard]]
+			Libs::Math::CartesianFrame< float >
+			getWorldCoordinates () const noexcept override
+			{
+				return Abstract::getWorldCoordinates();
+			}
+
 			/** @copydoc EmEn::Scenes::AVConsole::AbstractVirtualDevice::updateDeviceFromCoordinates() */
 			void updateDeviceFromCoordinates (const Libs::Math::CartesianFrame< float > & worldCoordinates, const Libs::Math::Vector< 3, float > & worldVelocity) noexcept final;
 

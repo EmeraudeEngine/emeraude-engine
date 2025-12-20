@@ -284,6 +284,84 @@ namespace EmEn::Graphics::Geometry
 			 */
 			virtual void destroyFromHardware (bool clearLocalData) noexcept = 0;
 
+			/**
+			 * @brief Returns whether this geometry uses adaptive LOD rendering.
+			 * @note When true, the renderer should use getAdaptiveDrawCallCount() and getAdaptiveDrawCallRange().
+			 * @return bool
+			 */
+			[[nodiscard]]
+			virtual
+			bool
+			isAdaptiveLOD () const noexcept
+			{
+				return false;
+			}
+
+			/**
+			 * @brief Returns the number of draw calls needed for adaptive LOD rendering.
+			 * @param viewPosition The current view/camera position in world space.
+			 * @return uint32_t The number of draw calls to issue.
+			 */
+			[[nodiscard]]
+			virtual
+			uint32_t
+			getAdaptiveDrawCallCount ([[maybe_unused]] const Libs::Math::Vector< 3, float > & viewPosition) const noexcept
+			{
+				return 1;
+			}
+
+			/**
+			 * @brief Returns the index range for a specific adaptive draw call.
+			 * @param drawCallIndex The draw call index (0 to getAdaptiveDrawCallCount()-1).
+			 * @param viewPosition The current view/camera position in world space.
+			 * @return std::array< uint32_t, 2 > The [indexOffset, indexCount] for this draw call.
+			 */
+			[[nodiscard]]
+			virtual
+			std::array< uint32_t, 2 >
+			getAdaptiveDrawCallRange ([[maybe_unused]] uint32_t drawCallIndex, [[maybe_unused]] const Libs::Math::Vector< 3, float > & viewPosition) const noexcept
+			{
+				return this->subGeometryRange(0);
+			}
+
+			/**
+			 * @brief Prepares adaptive LOD stitching for the current view position.
+			 * @note Call this once per frame before rendering to pre-compute LODs and stitching.
+			 * @param viewPosition The current view/camera position in world space.
+			 * @return void
+			 */
+			virtual
+			void
+			prepareAdaptiveRendering ([[maybe_unused]] const Libs::Math::Vector< 3, float > & viewPosition) const noexcept
+			{
+
+			}
+
+			/**
+			 * @brief Returns the number of stitching draw calls after prepareAdaptiveRendering().
+			 * @return uint32_t The number of stitching draw calls.
+			 */
+			[[nodiscard]]
+			virtual
+			uint32_t
+			getStitchingDrawCallCount () const noexcept
+			{
+				return 0;
+			}
+
+			/**
+			 * @brief Returns the index range for a specific stitching draw call.
+			 * @param drawCallIndex The stitching draw call index.
+			 * @return std::array< uint32_t, 2 > The [indexOffset, indexCount] for this draw call.
+			 */
+			[[nodiscard]]
+			virtual
+			std::array< uint32_t, 2 >
+			getStitchingDrawCallRange ([[maybe_unused]] uint32_t drawCallIndex) const noexcept
+			{
+				return {0, 0};
+			}
+
 		protected:
 
 			/**

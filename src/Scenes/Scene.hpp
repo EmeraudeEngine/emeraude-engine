@@ -989,18 +989,6 @@ namespace EmEn::Scenes
 				}
 			}
 
-			/**
-			 * @brief Applies all scene modifiers to a node.
-			 *
-			 * Iterates through m_modifiers and applies each valid modifier's
-			 * effect to the given node (gravity, wind, etc.).
-			 *
-			 * @param node Node to apply modifiers to.
-			 *
-			 * @see forEachModifiers() For modifier iteration.
-			 */
-			void applyModifiers (Node & node) const noexcept;
-
 			/* ============================================================
 			 * [CONCEPT: RENDERING]
 			 * Render targets, scene visuals, rendering pipeline.
@@ -1463,16 +1451,6 @@ namespace EmEn::Scenes
 			 * @param commandBuffer The Vulkan command buffer for recording draw calls.
 			 */
 			void render (const std::shared_ptr< Graphics::RenderTarget::Abstract > & renderTarget, const Vulkan::CommandBuffer & commandBuffer) noexcept;
-
-			/**
-			 * @brief Rebuilds GPU resources for all renderable instances.
-			 *
-			 * Forces re-preparation of all instances for their render targets.
-			 * Useful after GPU resource invalidation.
-			 *
-			 * @return True if all instances refreshed successfully.
-			 */
-			bool refreshRenderableInstances () const noexcept;
 
 			/* ============================================================
 			 * [CONCEPT: PHYSICS]
@@ -2069,7 +2047,7 @@ namespace EmEn::Scenes
 			 *
 			 * @note This is a recursive method that descends into subsectors.
 			 */
-			void simulatePhysics () noexcept;
+			void simulatePhysics () const noexcept;
 
 			/**
 			 * @brief Performs collision tests within a single sector.
@@ -2077,7 +2055,7 @@ namespace EmEn::Scenes
 			 * @param manifolds A reference to a vector of contact manifolds.
 			 * @param testedEntityPairs A reference to a set of already tested entity pairs (avoids cross-sector duplicates).
 			 */
-			void detectCollisionCollisionInSector (const OctreeSector< AbstractEntity, true > & sector, std::vector< Physics::ContactManifold > & manifolds, std::unordered_set< uint64_t > & testedEntityPairs) const noexcept;
+			void detectCollisionInSector (const OctreeSector< AbstractEntity, true > & sector, std::vector< Physics::ContactManifold > & manifolds, std::unordered_set< uint64_t > & testedEntityPairs) const noexcept;
 
 			/**
 			 * @brief Detects collision between an entity and the world boundaries.
@@ -2181,9 +2159,10 @@ namespace EmEn::Scenes
 			 * @param positionCorrection [out] Accumulated position correction vector.
 			 * @param dominantNormal [out] Normal of the deepest penetration collision.
 			 * @param maxPenetration [out] Deepest penetration depth found.
-			 * @version 0.8.39
+			 * @param collidedEntity [out] Pointer to the static entity with deepest penetration.
+			 * @version 0.8.40
 			 */
-			void accumulateStaticEntityCorrections (const std::shared_ptr< AbstractEntity > & entity, const OctreeSector< AbstractEntity, true > & sector, Libs::Math::Vector< 3, float > & positionCorrection, Libs::Math::Vector< 3, float > & dominantNormal, float & maxPenetration) const noexcept;
+			void accumulateStaticEntityCorrections (const std::shared_ptr< AbstractEntity > & entity, const OctreeSector< AbstractEntity, true > & sector, Libs::Math::Vector< 3, float > & positionCorrection, Libs::Math::Vector< 3, float > & dominantNormal, float & maxPenetration, const Physics::MovableTrait *& collidedEntity) const noexcept;
 
 			/* ============================================================
 			 * [PRIVATE: CONSTANTS]
@@ -2273,7 +2252,7 @@ namespace EmEn::Scenes
 			/** @brief Physical environment (gravity, air density). Default: Earth. */
 			Physics::EnvironmentPhysicalProperties m_environmentPhysicalProperties{Physics::EnvironmentPhysicalProperties::Earth()};
 			/** @brief [PHYSICS-NEW-SYSTEM] Sequential impulse constraint solver. */
-			Physics::ConstraintSolver m_constraintSolver{8, 3};
+			mutable Physics::ConstraintSolver m_constraintSolver{8, 3};
 			/** @brief Scene-local random float generator. */
 			Libs::Randomizer< float > m_floatRandomizer;
 			/** @brief Scene-local random integer generator. */

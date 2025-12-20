@@ -377,7 +377,7 @@ namespace EmEn::Graphics::Renderable
 	}
 
 	bool
-	MeshResource::addMaterial (const std::shared_ptr< Material::Interface > & material, const RasterizationOptions & options, int flags) noexcept
+	MeshResource::addMaterial (const std::shared_ptr< Material::Interface > & material, const RasterizationOptions & options, uint32_t flags) noexcept
 	{
 		if ( material == nullptr )
 		{

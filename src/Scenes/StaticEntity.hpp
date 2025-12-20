@@ -413,44 +413,21 @@ namespace EmEn::Scenes
 				return m_logicStateCoordinates;
 			}
 
-			/** @copydoc EmEn::Scenes::LocatableInterface::getWorldBoundingBox() const */
-			[[nodiscard]]
-			Libs::Math::Space3D::AACuboid< float >
-			getWorldBoundingBox () const noexcept override
-			{
-				return Libs::Math::OrientedCuboid< float >{this->localBoundingBox(), m_logicStateCoordinates}.getAxisAlignedBox();
-			}
-
-			/** @copydoc EmEn::Scenes::LocatableInterface::getWorldBoundingSphere() const */
-			[[nodiscard]]
-			Libs::Math::Space3D::Sphere< float >
-			getWorldBoundingSphere () const noexcept override
-			{
-				return {
-					this->localBoundingSphere().radius(),
-					m_logicStateCoordinates.position() + this->localBoundingSphere().position()
-				};
-			}
-
 			/** @copydoc EmEn::Scenes::LocatableInterface::isVisibleTo(const Graphics::Frustum &) const */
 			[[nodiscard]]
 			bool
 			isVisibleTo (const Graphics::Frustum & frustum) const noexcept override
 			{
-				switch ( this->collisionDetectionModel() )
+				if ( !this->hasCollisionModel() )
 				{
-					case CollisionDetectionModel::Point :
-						return frustum.isSeeing(m_logicStateCoordinates.position());
-
-					case CollisionDetectionModel::Sphere :
-						return frustum.isSeeing(this->getWorldBoundingSphere());
-
-					case CollisionDetectionModel::AABB :
-						return frustum.isSeeing(this->getWorldBoundingBox());
-
-					default :
-						return true;
+					/* No collision model: use point visibility (position only). */
+					return frustum.isSeeing(m_logicStateCoordinates.position());
 				}
+
+				/* Use AABB from collision model for frustum culling. */
+				const auto worldAABB = this->collisionModel()->getAABB(m_logicStateCoordinates);
+
+				return frustum.isSeeing(worldAABB);
 			}
 
 			/**

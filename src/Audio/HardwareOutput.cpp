@@ -41,6 +41,8 @@ namespace EmEn::Audio
 	void
 	HardwareOutput::updateDeviceFromCoordinates (const CartesianFrame< float > & worldCoordinates, const Vector< 3, float > & worldVelocity) noexcept
 	{
+		m_worldCoordinates = worldCoordinates;
+
 		const auto & position = worldCoordinates.position();
 		const auto & atVector = worldCoordinates.forwardVector();
 		/* NOTE: This is not a bug, OpenAL was designed to work with OpenGL.

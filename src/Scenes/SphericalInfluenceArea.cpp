@@ -85,17 +85,92 @@ namespace EmEn::Scenes
 	}
 
 	bool
-	SphericalInfluenceArea::isUnderInfluence (const CartesianFrame< float > & /*worldCoordinates*/, const Space3D::AACuboid< float > & /*worldBoundingBox*/) const noexcept
+	SphericalInfluenceArea::isUnderInfluence (const CartesianFrame< float > & /*worldCoordinates*/, const Space3D::AACuboid< float > & worldBoundingBox) const noexcept
 	{
-		/* FIXME: TODO ! */
-		return false;
+		const auto modifierPosition = m_parentEntity->getWorldCoordinates().position();
+
+		/* NOTE: worldBoundingBox is already in world coordinates (from CollisionModel::getAABB(worldFrame)). */
+		const auto & boxMin = worldBoundingBox.minimum();
+		const auto & boxMax = worldBoundingBox.maximum();
+
+		/* Find the closest point on the AABB to the sphere center. */
+		const Vector< 3, float > closestPoint(
+			std::clamp(modifierPosition[X], boxMin[X], boxMax[X]),
+			std::clamp(modifierPosition[Y], boxMin[Y], boxMax[Y]),
+			std::clamp(modifierPosition[Z], boxMin[Z], boxMax[Z])
+		);
+
+		/* Check if that point is within the outer radius. */
+		const auto distance = (closestPoint - modifierPosition).length();
+
+		return distance <= m_outerRadius;
 	}
 
 	float
-	SphericalInfluenceArea::influenceStrength (const CartesianFrame< float > & /*worldCoordinates*/, const Space3D::AACuboid< float > & /*worldBoundingBox*/) const noexcept
+	SphericalInfluenceArea::influenceStrength (const CartesianFrame< float > & /*worldCoordinates*/, const Space3D::AACuboid< float > & worldBoundingBox) const noexcept
 	{
-		/* FIXME: TODO ! */
-		return 0.0F;
+		const auto modifierPosition = m_parentEntity->getWorldCoordinates().position();
+
+		/* NOTE: worldBoundingBox is already in world coordinates (from CollisionModel::getAABB(worldFrame)). */
+		const auto & boxMin = worldBoundingBox.minimum();
+		const auto & boxMax = worldBoundingBox.maximum();
+
+		/* Find the closest point on the AABB to the sphere center. */
+		const Vector< 3, float > closestPoint(
+			std::clamp(modifierPosition[X], boxMin[X], boxMax[X]),
+			std::clamp(modifierPosition[Y], boxMin[Y], boxMax[Y]),
+			std::clamp(modifierPosition[Z], boxMin[Z], boxMax[Z])
+		);
+
+		const auto distance = (closestPoint - modifierPosition).length();
+
+		/* Outside the outer radius, no influence. */
+		if ( distance > m_outerRadius )
+		{
+			return 0.0F;
+		}
+
+		/* Inside the inner radius, full influence. */
+		if ( distance < m_innerRadius )
+		{
+			return 1.0F;
+		}
+
+		/* Compute falloff between inner and outer radius. */
+		const auto falloutDistance = m_outerRadius - m_innerRadius;
+
+		return 1.0F - ((distance - m_innerRadius) / falloutDistance);
+	}
+
+	bool
+	SphericalInfluenceArea::isUnderInfluence (const Vector< 3, float > & worldPosition) const noexcept
+	{
+		const auto distance = (worldPosition - m_parentEntity->getWorldCoordinates().position()).length();
+
+		return distance <= m_outerRadius;
+	}
+
+	float
+	SphericalInfluenceArea::influenceStrength (const Vector< 3, float > & worldPosition) const noexcept
+	{
+		const auto distance = (worldPosition - m_parentEntity->getWorldCoordinates().position()).length();
+
+		/* Outside the outer radius, no influence. */
+		if ( distance > m_outerRadius )
+		{
+			return 0.0F;
+		}
+
+		/* Inside the inner radius, full influence. */
+		if ( distance < m_innerRadius )
+		{
+			return 1.0F;
+		}
+
+		/* Compute falloff between inner and outer radius. */
+		const auto falloutDistance = m_outerRadius - m_innerRadius;
+
+		return 1.0F - ((distance - m_innerRadius) / falloutDistance);
 	}
 
 	void

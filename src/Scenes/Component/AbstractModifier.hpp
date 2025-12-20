@@ -35,6 +35,7 @@
 
 /* Local inclusions for usages. */
 #include "Scenes/CubicInfluenceArea.hpp"
+#include "Scenes/LocatableInterface.hpp"
 #include "Scenes/SphericalInfluenceArea.hpp"
 
 namespace EmEn::Scenes::Component
@@ -198,20 +199,21 @@ namespace EmEn::Scenes::Component
 			}
 
 			/**
-			 * @brief Returns the force applied to an entity.
-			 * @param worldCoordinates A reference to a cartesian frame.
-			 * @param worldBoundingSphere A reference to a sphere.
-			 * @return Libs::Math::Vector< 3, float >
+			 * @brief Returns the force applied to a locatable entity (Node, StaticEntity).
+			 * @param entity A reference to a locatable entity.
+			 * @return Libs::Math::Vector< 3, float > The force to apply.
 			 */
-			virtual Libs::Math::Vector< 3, float > getForceAppliedToEntity (const Libs::Math::CartesianFrame< float > & worldCoordinates, const Libs::Math::Space3D::Sphere< float > & worldBoundingSphere) const noexcept = 0;
+			[[nodiscard]]
+			virtual Libs::Math::Vector< 3, float > getForceAppliedTo (const LocatableInterface & entity) const noexcept = 0;
 
 			/**
-			 * @brief Returns the force applied to an entity.
-			 * @param worldCoordinates A reference to a cartesian frame.
-			 * @param worldBoundingBox A reference to a sphere.
-			 * @return Libs::Math::Vector< 3, float >
+			 * @brief Returns the force applied to a point or small object.
+			 * @param worldPosition A reference to a cartesian frame.
+			 * @param radius The bounding radius (0 for point-based calculation).
+			 * @return Libs::Math::Vector< 3, float > The force to apply.
 			 */
-			virtual Libs::Math::Vector< 3, float > getForceAppliedToEntity (const Libs::Math::CartesianFrame< float > & worldCoordinates, const Libs::Math::Space3D::AACuboid< float > & worldBoundingBox) const noexcept = 0;
+			[[nodiscard]]
+			virtual Libs::Math::Vector< 3, float > getForceAppliedTo (const Libs::Math::CartesianFrame< float > & worldPosition, float radius = 0.0F) const noexcept = 0;
 
 		protected:
 

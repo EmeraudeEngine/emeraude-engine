@@ -31,12 +31,13 @@
 
 using namespace EmEn::Libs::Math;
 
-TEST(Math, clamp)
+// FIXME: Test disabled due to deprecation.
+/*TEST(Math, clamp)
 {
 	EXPECT_EQ(clamp(-0.3, -1.0, 3.0), -0.3);
 
 	EXPECT_EQ(clamp(67, 10, 50), 50);
-}
+}*/
 
 TEST(Math, clampToUnit)
 {

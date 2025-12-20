@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* Local inclusions. */
+#include "Libs/Math/Vector.hpp"
+
 namespace EmEn::Scenes
 {
 	/**
@@ -65,6 +68,12 @@ namespace EmEn::Scenes
 			 */
 			[[nodiscard]]
 			virtual Libs::Math::Vector< 3, float > getNormalAt (const Libs::Math::Vector< 3, float > & worldPosition) const noexcept = 0;
+
+			/**
+			 * @brief Updates the ground visibility from the camera position.
+			 * @note This is not frustum-culling, but help the ground to know where the point of view is located.
+			 */
+			virtual void updateVisibility (const Libs::Math::Vector< 3, float > & worldPosition) noexcept = 0;
 
 		protected:
 

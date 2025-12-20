@@ -26,6 +26,9 @@
 
 #include "TerrainResource.hpp"
 
+/* STL inclusions. */
+#include <thread>
+
 /* 3rd inclusions. */
 #include "magic_enum/magic_enum.hpp"
 
@@ -41,52 +44,6 @@ namespace EmEn::Graphics::Renderable
 	using namespace Libs::Math;
 	using namespace Libs::VertexFactory;
 	using namespace Scenes;
-
-	/*void
-	Terrain::updateVisibility (const CartesianFrame< float > & coordinates) noexcept
-	{
-		/ * Checks if the current position still close to the center of sub-data. * /
-		const auto position = coordinates.position();
-
-		/ * Creates a new visible grid if position overlap the limit of the existing one. * /
-		if ( Vector< 3, float >::distance(m_lastUpdatePosition, position) > m_geometry->getMinimalUpdateDistance() )
-		{
-			if ( !m_updatingActiveGeometryProcess )
-			{
-				m_lastUpdatePosition = position;
-
-				std::thread process(&Terrain::updateActiveGeometryProcess, this);
-
-				process.detach();
-			}
-			else
-			{
-				Tracer::warning(ClassId, "A new grid is already currently loading. Maybe the dimension of the active grid is too small !");
-			}
-		}
-
-		/ * Updates the visibility of the active subgrid. * /
-		m_geometry->updateVisibility(coordinates);
-	}*/
-
-	bool
-	TerrainResource::setGeometry (const std::shared_ptr< Geometry::AdaptiveVertexGridResource > & geometryResource) noexcept
-	{
-		if ( geometryResource == nullptr )
-		{
-			TraceError{ClassId} << "Geometry smart pointer attached to Renderable '" << this->name() << "' " << this << " is null !";
-
-			return false;
-		}
-
-		this->setReadyForInstantiation(false);
-
-		/* Change the material. */
-		m_geometry = geometryResource;
-
-		/* Checks if all is loaded */
-		return this->addDependency(m_geometry);
-	}
 
 	bool
 	TerrainResource::setMaterial (const std::shared_ptr< Material::Interface > & materialResource) noexcept
@@ -108,43 +65,31 @@ namespace EmEn::Graphics::Renderable
 	}
 
 	void
-	TerrainResource::updateActiveGeometryProcess () noexcept
+	TerrainResource::updateVisibility (const Vector< 3, float > & worldPosition) noexcept
 	{
-		m_updatingActiveGeometryProcess = true;
-
-		Tracer::info(ClassId, "Update process started...");
-
-		/* This will processLogics local data from AdaptiveGridGeometry. */
-		if ( m_geometry->updateLocalData(m_localData, m_lastUpdatePosition) )
+		/* Skip if geometry is already updating. */
+		if ( m_geometry->isUpdating() )
 		{
-			//this->setRequestingVideoMemoryUpdate();
+			return;
 		}
 
-		m_updatingActiveGeometryProcess = false;
-	}
+		const auto visibilityThreshold = m_visibleSize / 3.0F;
+		const float distance = Vector< 2, float >::distance(m_lastAdaptiveGridPositionUpdated, {worldPosition[X], worldPosition[Z]});
 
-	bool
-	TerrainResource::prepareGeometry (float size, uint32_t division) noexcept
-	{
-		/* 1. Create the local data. */
-		if ( !m_localData.initializeData(size, division) )
+		if ( distance > visibilityThreshold )
 		{
-			Tracer::error(ClassId, "Unable to initialize local data !");
+			TraceInfo{ClassId} << "Threshold reached at " << worldPosition << "!";
 
-			return false;
+			m_lastAdaptiveGridPositionUpdated = {worldPosition[X], worldPosition[Z]};
+
+			/* Prepare the sub-grid data. */
+			const auto subGrid = m_localData.subGrid(m_lastAdaptiveGridPositionUpdated, static_cast< uint32_t >(m_visibleSize));
+
+			/* Launch update in a detached thread. */
+			std::thread([geometry = m_geometry, subGrid = std::move(subGrid)]() {
+				geometry->updateData(subGrid);
+			}).detach();
 		}
-
-		/* 2. Create the adaptive geometry (visible part). */
-		if ( !m_geometry->load(m_localData, division / 4, {0.0F, 0.0F, 0.0F}) )
-		{
-			Tracer::error(ClassId, "Unable to create adaptive grid from local data !");
-
-			m_localData.clear();
-
-			return false;
-		}
-
-		return true;
 	}
 
 	bool
@@ -155,8 +100,23 @@ namespace EmEn::Graphics::Renderable
 			return false;
 		}
 
-		if ( !this->prepareGeometry(DefaultSize, DefaultDivision) )
+		/* Create the local data. */
+		if ( !m_localData.initializeByGridSize(DefaultGridSize, DefaultGridDivision) )
 		{
+			Tracer::error(ClassId, "Unable to initialize local data !");
+
+			return this->setLoadSuccess(false);
+		}
+
+		/* Create the initial adaptive geometry (visible part). */
+		const auto subGrid = m_localData.subGrid({0.0F, 0.0F}, static_cast< uint32_t >(m_visibleSize));
+
+		if ( !m_geometry->load(subGrid) )
+		{
+			Tracer::error(ClassId, "Unable to create adaptive grid from local data !");
+
+			m_localData.clear();
+
 			return this->setLoadSuccess(false);
 		}
 
@@ -224,8 +184,9 @@ namespace EmEn::Graphics::Renderable
 		/* First, we check every key from JSON data. */
 
 		/* Checks size and division options... */
-		const auto size = FastJSON::getValue< float >(data, FastJSON::SizeKey).value_or(DefaultSize);
-		const auto division = FastJSON::getValue< uint32_t >(data, FastJSON::DivisionKey).value_or(DefaultDivision);
+		const auto gridSize = FastJSON::getValue< float >(data, GridSizeKey).value_or(DefaultGridSize);
+		const auto gridDivision = FastJSON::getValue< uint32_t >(data, GridDivisionKey).value_or(DefaultGridDivision);
+		m_visibleSize = FastJSON::getValue< float >(data, GridVisibleSizeKey).value_or(DefaultVisibleSize);
 
 		/* Checks material type. */
 		const auto materialType = FastJSON::getValue< std::string >(data, MaterialTypeKey);
@@ -239,51 +200,10 @@ namespace EmEn::Graphics::Renderable
 
 		/* Then, we actually load the data. */
 
-		/* The geometry. */
-		if ( !m_localData.initializeData(size, division) )
+		/* Create the local data. */
+		if ( !m_localData.initializeByGridSize(gridSize, gridDivision) )
 		{
 			Tracer::error(ClassId, "Unable to initialize local data !");
-
-			return false;
-		}
-
-		/* Checks for vertex color. */
-		/*std::shared_ptr< Image > vertexColorMap;
-
-		if ( data.isMember(VertexColorKey) )
-		{
-			auto vertexColorData = data[VertexColorKey];
-
-			if ( vertexColorData.isObject() )
-			{
-				auto imageName = FastJSON::getString(vertexColorData, ImageNameKey);
-
-				if ( !imageName.empty() )
-				{
-					vertexColorMap = resources.images().get(imageName, true);
-
-					if ( vertexColorMap == nullptr )
-						Tracer::warning(ClassId, Blob() << "Image '" << imageName << "' is not available in data stores !");
-				}
-				else
-				{
-					Tracer::warning(ClassId, Blob() << "The key '" << ImageNameKey << "' is not present or not a string !");
-				}
-			}
-			else
-			{
-				Tracer::warning(ClassId, Blob() << "The key '" << VertexColorKey << "' must be an object !");
-			}
-		}
-
-		m_farGeometry = std::make_shared< VertexGridResource >(this->name() + "FarGeometry");
-
-		if ( vertexColorMap != nullptr )
-			m_farGeometry->enableVertexColor(vertexColorMap);*/
-
-		if ( !m_farGeometry->load(size, division / 64U) )
-		{
-			Tracer::error(ClassId, "Unable to create the far geometry !");
 
 			return this->setLoadSuccess(false);
 		}
@@ -361,8 +281,6 @@ namespace EmEn::Graphics::Renderable
 
 					/* Applies the height map on the geometry. */
 					m_localData.applyDisplacementMapping(imageResource->data(), inverse ? -scale : scale, mode);
-
-					m_farGeometry->localData().applyDisplacementMapping(imageResource->data(), inverse ? -scale : scale, mode);
 				}
 			}
 			else
@@ -374,9 +292,7 @@ namespace EmEn::Graphics::Renderable
 		/* Perlin noise filtering application. */
 		if ( data.isMember(PerlinNoiseKey) )
 		{
-			auto noiseFiltering = data[PerlinNoiseKey];
-
-			if ( noiseFiltering.isArray() )
+			if ( auto noiseFiltering = data[PerlinNoiseKey]; noiseFiltering.isArray() )
 			{
 				for ( const auto & iteration : noiseFiltering )
 				{
@@ -391,8 +307,6 @@ namespace EmEn::Graphics::Renderable
 					const auto perlinMode = magic_enum::enum_cast< EmEn::Libs::VertexFactory::PointTransformationMode >(modeString).value();
 
 					m_localData.applyPerlinNoise(perlinSize, perlinScale, perlinMode);
-
-					m_farGeometry->localData().applyPerlinNoise(perlinSize, perlinScale, perlinMode);
 				}
 			}
 			else
@@ -406,19 +320,14 @@ namespace EmEn::Graphics::Renderable
 
 		m_localData.setUVMultiplier(value);
 
-		m_farGeometry->localData().setUVMultiplier(value);
-
-		/* Checks if all is loaded */
-		if ( !this->addDependency(m_farGeometry) )
-		{
-			return this->setLoadSuccess(false);
-		}
-
+		// TODO: Check to enable vertex color from JSON.
 		//if ( vertexColorMap != nullptr )
 		//	m_geometry->enableVertexColor(vertexColorMap);
 
-		/* Creates the adaptive geometry (visible part). */
-		if ( !m_geometry->load(m_localData, division / 16U, {0.0F, 0.0F, 0.0F}) )
+		/* Create the initial adaptive geometry (visible part). */
+		const auto subGrid = m_localData.subGrid({0.0F, 0.0F}, static_cast< uint32_t >(m_visibleSize));
+
+		if ( !m_geometry->load(subGrid) )
 		{
 			Tracer::error(ClassId, "Unable to create adaptive grid from local data !");
 
@@ -431,23 +340,156 @@ namespace EmEn::Graphics::Renderable
 	}
 
 	bool
-	TerrainResource::load (float size, uint32_t division, const std::shared_ptr< Material::Interface > & material) noexcept
+	TerrainResource::load (float gridSize, uint32_t gridDivision, const std::shared_ptr< Material::Interface > & materialResource, const RasterizationOptions & rasterizationOptions, float UVMultiplier) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
 			return false;
 		}
 
-		if ( !this->prepareGeometry(size, division) )
+		/* Create the local data. */
+		m_localData.setUVMultiplier(UVMultiplier);
+
+		if ( !m_localData.initializeByGridSize(gridSize, gridDivision) )
 		{
-			Tracer::error(ClassId, "Unable to prepare the geometry to generate the Terrain !");
+			Tracer::error(ClassId, "Unable to initialize local data !");
 
 			return this->setLoadSuccess(false);
 		}
 
-		if ( !this->setMaterial(material) )
+		/* Create the initial adaptive geometry (visible part). */
+		const auto subGrid = m_localData.subGrid({0.0F, 0.0F}, static_cast< uint32_t >(m_visibleSize));
+
+		if ( !m_geometry->load(subGrid) )
+		{
+			Tracer::error(ClassId, "Unable to create adaptive grid from local data !");
+
+			m_localData.clear();
+
+			return this->setLoadSuccess(false);
+		}
+
+		/* Set rasterization options. */
+		m_rasterizationOptions = rasterizationOptions;
+
+		if ( !this->setMaterial(materialResource) )
 		{
 			TraceError{ClassId} << "Unable to use material for Terrain '" << this->name() << "' !";
+
+			return this->setLoadSuccess(false);
+		}
+
+		return this->setLoadSuccess(true);
+	}
+
+	bool
+	TerrainResource::loadDiamondSquare (float gridSize, uint32_t gridDivision, const std::shared_ptr< Material::Interface > & materialResource, const DiamondSquareParams< float > & noise, const RasterizationOptions & rasterizationOptions, float UVMultiplier, float shiftHeight) noexcept
+	{
+		if ( !this->beginLoading() )
+		{
+			return false;
+		}
+
+		if ( !isPowerOfTwo(gridDivision) )
+		{
+			TraceError{ClassId} << "The grid division (" << gridDivision << ") must be a power of two to use diamond square !";
+
+			return this->setLoadSuccess(false);
+		}
+
+		/* Initialize local data. */
+		if ( !m_localData.initializeByGridSize(gridSize, gridDivision) )
+		{
+			Tracer::error(ClassId, "Unable to initialize local data !");
+
+			return this->setLoadSuccess(false);
+		}
+
+		/* Apply diamond square algorithm. */
+		m_localData.setUVMultiplier(UVMultiplier);
+		m_localData.applyDiamondSquare(noise.factor, noise.roughness, noise.seed);
+
+		if ( !Utility::isZero(shiftHeight) )
+		{
+			m_localData.shiftHeight(shiftHeight);
+		}
+
+		/* Create the initial adaptive geometry (visible part). */
+		const auto subGrid = m_localData.subGrid({0.0F, 0.0F}, static_cast< uint32_t >(m_visibleSize));
+
+		if ( !m_geometry->load(subGrid) )
+		{
+			Tracer::error(ClassId, "Unable to create adaptive grid from local data !");
+
+			m_localData.clear();
+
+			return this->setLoadSuccess(false);
+		}
+
+		/* Set rasterization options. */
+		m_rasterizationOptions = rasterizationOptions;
+
+		/* Set material. */
+		if ( !this->setMaterial(materialResource) )
+		{
+			TraceError{ClassId} << "Unable to use material for Terrain '" << this->name() << "' !";
+
+			m_localData.clear();
+
+			return this->setLoadSuccess(false);
+		}
+
+		TraceSuccess{ClassId} << "Terrain '" << this->name() << "' loaded!";
+
+		return this->setLoadSuccess(true);
+	}
+
+	bool
+	TerrainResource::loadPerlinNoise (float gridSize, uint32_t gridDivision, const std::shared_ptr< Material::Interface > & materialResource, const PerlinNoiseParams< float > & noise, const RasterizationOptions & rasterizationOptions, float UVMultiplier, float shiftHeight) noexcept
+	{
+		if ( !this->beginLoading() )
+		{
+			return false;
+		}
+
+		/* Initialize local data. */
+		if ( !m_localData.initializeByGridSize(gridSize, gridDivision) )
+		{
+			Tracer::error(ClassId, "Unable to initialize local data !");
+
+			return this->setLoadSuccess(false);
+		}
+
+		/* Apply perlin noise. */
+		m_localData.setUVMultiplier(UVMultiplier);
+		m_localData.applyPerlinNoise(noise.size, noise.factor);
+
+		if ( !Utility::isZero(shiftHeight) )
+		{
+			m_localData.shiftHeight(shiftHeight);
+		}
+
+		/* Create the initial adaptive geometry (visible part). */
+		const auto subGrid = m_localData.subGrid({0.0F, 0.0F}, static_cast< uint32_t >(m_visibleSize));
+
+		if ( !m_geometry->load(subGrid) )
+		{
+			Tracer::error(ClassId, "Unable to create adaptive grid from local data !");
+
+			m_localData.clear();
+
+			return this->setLoadSuccess(false);
+		}
+
+		/* Set rasterization options. */
+		m_rasterizationOptions = rasterizationOptions;
+
+		/* Set material. */
+		if ( !this->setMaterial(materialResource) )
+		{
+			TraceError{ClassId} << "Unable to use material for Terrain '" << this->name() << "' !";
+
+			m_localData.clear();
 
 			return this->setLoadSuccess(false);
 		}

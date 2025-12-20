@@ -274,7 +274,7 @@ namespace EmEn::Graphics::Renderable
 	}
 
 	bool
-	BasicFloorResource::load (const std::shared_ptr< Geometry::VertexGridResource > & geometry, const std::shared_ptr< Material::Interface > & material) noexcept
+	BasicFloorResource::load (const std::shared_ptr< Geometry::VertexGridResource > & vertexGridResource, const std::shared_ptr< Material::Interface > & materialResource, const RasterizationOptions & rasterizationOptions) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
@@ -282,7 +282,7 @@ namespace EmEn::Graphics::Renderable
 		}
 
 		/* 1. Check the grid geometry. */
-		if ( !this->setGeometry(geometry) )
+		if ( !this->setGeometry(vertexGridResource) )
 		{
 			TraceError{ClassId} << "Unable to set grid geometry for basic floor '" << this->name() << "' !";
 
@@ -290,40 +290,50 @@ namespace EmEn::Graphics::Renderable
 		}
 
 		/* 2. Check the material. */
-		if ( !this->setMaterial(material) )
+		if ( !this->setMaterial(materialResource) )
 		{
 			TraceError{ClassId} << "Unable to set material for basic floor '" << this->name() << "' !";
 
 			return this->setLoadSuccess(false);
 		}
 
+		/* 3. Set rasterization options. */
+		m_rasterizationOptions = rasterizationOptions;
+
 		return this->setLoadSuccess(true);
 	}
 
 	bool
-	BasicFloorResource::load (float size, uint32_t division, const std::shared_ptr< Material::Interface > & materialResource, float UVMultiplier) noexcept
+	BasicFloorResource::load (float gridSize, uint32_t gridDivision, const std::shared_ptr< Material::Interface > & materialResource, const RasterizationOptions & rasterizationOptions, float UVMultiplier) noexcept
 	{
 		const auto geometryResource = std::make_shared< Geometry::VertexGridResource >(this->name() + "GridGeometry", DefaultGeometryFlags);
 
-		if ( !geometryResource->load(size, division, UVMultiplier) )
+		if ( !geometryResource->load(gridSize, gridDivision, UVMultiplier) )
 		{
 			Tracer::error(ClassId, "Unable to generate a basic floor geometry !");
 
 			return false;
 		}
 
-		return this->load(geometryResource, materialResource);
+		return this->load(geometryResource, materialResource, rasterizationOptions);
 	}
 
 	bool
-	BasicFloorResource::loadDiamondSquare (float size, float shiftHeight, uint32_t division, float factor, float roughness, int32_t seed, const std::shared_ptr< Material::Interface > & materialResource, float UVMultiplier) noexcept
+	BasicFloorResource::loadDiamondSquare (float gridSize, uint32_t gridDivision, const std::shared_ptr< Material::Interface > & materialResource, const DiamondSquareParams< float > & noise, const RasterizationOptions & rasterizationOptions, float UVMultiplier, float shiftHeight) noexcept
 	{
+		if ( !isPowerOfTwo(gridDivision) )
+		{
+			TraceError{ClassId} << "The grid division (" << gridDivision << ") must be a power of two to use diamond square !";
+
+			return false;
+		}
+
 		Grid< float > grid{};
 
-		if ( grid.initializeData(size, division) )
+		if ( grid.initializeByGridSize(gridSize, gridDivision) )
 		{
 			grid.setUVMultiplier(UVMultiplier);
-			grid.applyDiamondSquare(factor, roughness, seed);
+			grid.applyDiamondSquare(noise.factor, noise.roughness, noise.seed);
 
 			if ( !Utility::isZero(shiftHeight) )
 			{
@@ -347,18 +357,18 @@ namespace EmEn::Graphics::Renderable
 			return false;
 		}
 
-		return this->load(geometryResource, materialResource);
+		return this->load(geometryResource, materialResource, rasterizationOptions);
 	}
 
 	bool
-	BasicFloorResource::loadPerlinNoise (float size, float shiftHeight, uint32_t division, float noiseSize, float noiseFactor, const std::shared_ptr< Material::Interface > & materialResource, float UVMultiplier) noexcept
+	BasicFloorResource::loadPerlinNoise (float gridSize, uint32_t gridDivision, const std::shared_ptr< Material::Interface > & materialResource, const PerlinNoiseParams< float > & noise, const RasterizationOptions & rasterizationOptions, float UVMultiplier, float shiftHeight) noexcept
 	{
 		Grid< float > grid{};
 
-		if ( grid.initializeData(size, division) )
+		if ( grid.initializeByGridSize(gridSize, gridDivision) )
 		{
 			grid.setUVMultiplier(UVMultiplier);
-			grid.applyPerlinNoise(noiseSize, noiseFactor);
+			grid.applyPerlinNoise(noise.size, noise.factor);
 
 			if ( !Utility::isZero(shiftHeight) )
 			{
@@ -382,7 +392,7 @@ namespace EmEn::Graphics::Renderable
 			return false;
 		}
 
-		return this->load(geometryResource, materialResource);
+		return this->load(geometryResource, materialResource, rasterizationOptions);
 	}
 
 	bool

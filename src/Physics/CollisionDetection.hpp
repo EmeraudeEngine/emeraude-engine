@@ -29,21 +29,28 @@
 /* STL inclusions. */
 #include <vector>
 
-/* Local inclusions for usages. */
-#include "Libs/Math/Vector.hpp"
-
 /* Forward declarations. */
-namespace EmEn::Scenes
+namespace EmEn
 {
-	class AbstractEntity;
+	namespace Physics
+	{
+		class ContactManifold;
+	}
+
+	namespace Scenes
+	{
+		class AbstractEntity;
+	}
 }
 
 namespace EmEn::Physics
 {
-	class ContactManifold;
-
 	/**
 	 * @brief Detects collision between two movable entities and creates a contact manifold.
+	 *
+	 * Uses the entities' CollisionModelInterface for unified collision detection.
+	 * Both entities must have collision models set via setCollisionModel().
+	 *
 	 * @param movableEntityA Reference to first movable entity.
 	 * @param movableEntityB Reference to second movable entity.
 	 * @param outManifolds Vector to store generated manifolds.
@@ -53,44 +60,14 @@ namespace EmEn::Physics
 
 	/**
 	 * @brief Detects collision between a movable entity and a static entity, and creates a contact manifold.
+	 *
+	 * Uses the entities' CollisionModelInterface for unified collision detection.
+	 * Both entities must have collision models set via setCollisionModel().
+	 *
 	 * @param movableEntity Reference to a movable entity.
 	 * @param staticEntity Reference to a static entity.
 	 * @param outManifolds Vector to store generated manifolds.
 	 * @return bool True if collision detected.
 	 */
 	bool detectCollisionMovableToStatic (Scenes::AbstractEntity & movableEntity, const Scenes::AbstractEntity & staticEntity, std::vector< ContactManifold > & outManifolds) noexcept;
-
-	/**
-	 * @brief Detects sphere-to-sphere collision.
-	 * @param sphereEntityA A reference to the first entity using sphere collision.
-	 * @param sphereEntityB A reference to the second entity using sphere collision.
-	 * @param outPenetration Output: penetration depth.
-	 * @param outNormal Output: collision normal (from A to B).
-	 * @return bool True if collision detected.
-	 */
-	[[nodiscard]]
-	bool detectSphereToSphereCollision (const Scenes::AbstractEntity & sphereEntityA, const Scenes::AbstractEntity & sphereEntityB, float & outPenetration, Libs::Math::Vector< 3, float > & outNormal) noexcept;
-
-	/**
-	 * @brief Detects box-to-box collision (AABB then OBB).
-	 * @param boxEntityA A reference to the first entity using box collision.
-	 * @param boxEntityB A reference to the second entity using box collision.
-	 * @param outPenetration Output: penetration depth.
-	 * @param outNormal Output: collision normal.
-	 * @return bool True if collision detected.
-	 */
-	[[nodiscard]]
-	bool detectBoxToBoxCollision (const Scenes::AbstractEntity & boxEntityA, const Scenes::AbstractEntity & boxEntityB, float & outPenetration, Libs::Math::Vector< 3, float > & outNormal) noexcept;
-
-	/**
-	 * @brief Detects sphere-to-box collision.
-	 * @param sphereEntity A reference to the entity using sphere collision.
-	 * @param boxEntity A reference to the entity using box collision.
-	 * @param outPenetration Output: penetration depth.
-	 * @param outNormal Output: collision normal.
-	 * @return bool True if collision detected.
-	 * @todo Not yet implemented.
-	 */
-	[[nodiscard]]
-	bool detectSphereToBoxCollision (const Scenes::AbstractEntity & sphereEntity, const Scenes::AbstractEntity & boxEntity, float & outPenetration, Libs::Math::Vector< 3, float > & outNormal) noexcept;
 }

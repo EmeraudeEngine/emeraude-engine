@@ -27,6 +27,10 @@
 #include <gtest/gtest.h>
 
 /* Local inclusions. */
+#include "Libs/Math/Space3D/Collisions/CapsuleCuboid.hpp"
+#include "Libs/Math/Space3D/Collisions/CapsulePoint.hpp"
+#include "Libs/Math/Space3D/Collisions/CapsuleSphere.hpp"
+#include "Libs/Math/Space3D/Collisions/CapsuleTriangle.hpp"
 #include "Libs/Math/Space3D/Collisions/PointCuboid.hpp"
 #include "Libs/Math/Space3D/Collisions/PointSphere.hpp"
 #include "Libs/Math/Space3D/Collisions/PointTriangle.hpp"
@@ -34,15 +38,18 @@
 #include "Libs/Math/Space3D/Collisions/SphereCuboid.hpp"
 #include "Libs/Math/Space3D/Collisions/TriangleCuboid.hpp"
 #include "Libs/Math/Space3D/Collisions/TriangleSphere.hpp"
+#include "Libs/Math/Space3D/Intersections/LineCapsule.hpp"
 #include "Libs/Math/Space3D/Intersections/LineCuboid.hpp"
 #include "Libs/Math/Space3D/Intersections/LineLine.hpp"
 #include "Libs/Math/Space3D/Intersections/LineSphere.hpp"
 #include "Libs/Math/Space3D/Intersections/LineTriangle.hpp"
+#include "Libs/Math/Space3D/Intersections/SegmentCapsule.hpp"
 #include "Libs/Math/Space3D/Intersections/SegmentCuboid.hpp"
 #include "Libs/Math/Space3D/Intersections/SegmentSegment.hpp"
 #include "Libs/Math/Space3D/Intersections/SegmentSphere.hpp"
 #include "Libs/Math/Space3D/Intersections/SegmentTriangle.hpp"
 #include "Libs/Math/Space3D/AACuboid.hpp"
+#include "Libs/Math/Space3D/Capsule.hpp"
 #include "Libs/Math/Space3D/Line.hpp"
 #include "Libs/Math/Space3D/Point.hpp"
 #include "Libs/Math/Space3D/Segment.hpp"
@@ -1838,4 +1845,508 @@ TYPED_TEST(MathSpace3D, CollisionTetrahedronMTVSymmetry)
 		const TypeParam dotProduct = Vector< 3, TypeParam >::dotProduct(mtv1, mtv2);
 		ASSERT_LT(dotProduct, TypeParam{0});
 	}
+}
+
+// ============================================================================
+// CAPSULE TESTS
+// ============================================================================
+
+TYPED_TEST(MathSpace3D, CapsuleDefaultConstructor)
+{
+	const Capsule< TypeParam > capsule;
+
+	ASSERT_EQ(capsule.radius(), TypeParam{0});
+	ASSERT_FALSE(capsule.isValid());
+}
+
+TYPED_TEST(MathSpace3D, CapsuleConstructorWithPoints)
+{
+	const Point< TypeParam > start{0, 0, 0};
+	const Point< TypeParam > end{0, 5, 0};
+	const Capsule< TypeParam > capsule{start, end, TypeParam{1.0}};
+
+	ASSERT_EQ(capsule.axis().startPoint(), start);
+	ASSERT_EQ(capsule.axis().endPoint(), end);
+	ASSERT_NEAR(capsule.radius(), TypeParam{1.0}, TypeParam{1e-5});
+	ASSERT_TRUE(capsule.isValid());
+}
+
+TYPED_TEST(MathSpace3D, CapsuleConstructorWithSegment)
+{
+	const Segment< TypeParam > axis{{0, 0, 0}, {0, 10, 0}};
+	const Capsule< TypeParam > capsule{axis, TypeParam{2.0}};
+
+	ASSERT_EQ(capsule.axis().startPoint(), axis.startPoint());
+	ASSERT_EQ(capsule.axis().endPoint(), axis.endPoint());
+	ASSERT_NEAR(capsule.radius(), TypeParam{2.0}, TypeParam{1e-5});
+}
+
+TYPED_TEST(MathSpace3D, CapsuleIsValid)
+{
+	const Capsule< TypeParam > validCapsule{{0, 0, 0}, {0, 5, 0}, TypeParam{1.0}};
+	ASSERT_TRUE(validCapsule.isValid());
+
+	const Capsule< TypeParam > invalidRadiusCapsule{{0, 0, 0}, {0, 5, 0}, TypeParam{0.0}};
+	ASSERT_FALSE(invalidRadiusCapsule.isValid());
+
+	/* NOTE: A degenerate capsule (zero-length axis) is still valid - it behaves as a sphere. */
+	const Capsule< TypeParam > degenerateAxisCapsule{{0, 0, 0}, {0, 0, 0}, TypeParam{1.0}};
+	ASSERT_TRUE(degenerateAxisCapsule.isValid());
+	ASSERT_TRUE(degenerateAxisCapsule.isDegenerate());
+}
+
+TYPED_TEST(MathSpace3D, CapsuleSetAxis)
+{
+	Capsule< TypeParam > capsule{{0, 0, 0}, {0, 5, 0}, TypeParam{1.0}};
+
+	capsule.setAxis({{1, 2, 3}, {4, 5, 6}});
+
+	ASSERT_EQ(capsule.axis().startPoint(), Point< TypeParam >(1, 2, 3));
+	ASSERT_EQ(capsule.axis().endPoint(), Point< TypeParam >(4, 5, 6));
+}
+
+TYPED_TEST(MathSpace3D, CapsuleSetRadius)
+{
+	Capsule< TypeParam > capsule{{0, 0, 0}, {0, 5, 0}, TypeParam{1.0}};
+
+	capsule.setRadius(TypeParam{3.0});
+
+	ASSERT_NEAR(capsule.radius(), TypeParam{3.0}, TypeParam{1e-5});
+}
+
+TYPED_TEST(MathSpace3D, CapsuleSetRadiusNegative)
+{
+	Capsule< TypeParam > capsule{{0, 0, 0}, {0, 5, 0}, TypeParam{1.0}};
+
+	capsule.setRadius(TypeParam{-3.0});
+
+	// Should take absolute value
+	ASSERT_NEAR(capsule.radius(), TypeParam{3.0}, TypeParam{1e-5});
+}
+
+TYPED_TEST(MathSpace3D, CapsuleSquaredRadius)
+{
+	const Capsule< TypeParam > capsule{{0, 0, 0}, {0, 5, 0}, TypeParam{4.0}};
+
+	ASSERT_NEAR(capsule.squaredRadius(), TypeParam{16.0}, TypeParam{1e-5});
+}
+
+TYPED_TEST(MathSpace3D, CapsuleCentroid)
+{
+	const Capsule< TypeParam > capsule{{0, 0, 0}, {0, 10, 0}, TypeParam{2.0}};
+
+	ASSERT_EQ(capsule.centroid(), Point< TypeParam >(0, 5, 0));
+}
+
+TYPED_TEST(MathSpace3D, CapsuleClosestPointOnAxisMiddle)
+{
+	const Capsule< TypeParam > capsule{{0, 0, 0}, {0, 10, 0}, TypeParam{1.0}};
+
+	// Point next to the middle of the axis
+	const Point< TypeParam > point{5, 5, 0};
+	const auto closest = capsule.closestPointOnAxis(point);
+
+	ASSERT_NEAR(closest[X], TypeParam{0}, TypeParam{1e-5});
+	ASSERT_NEAR(closest[Y], TypeParam{5}, TypeParam{1e-5});
+	ASSERT_NEAR(closest[Z], TypeParam{0}, TypeParam{1e-5});
+}
+
+TYPED_TEST(MathSpace3D, CapsuleClosestPointOnAxisStart)
+{
+	const Capsule< TypeParam > capsule{{0, 0, 0}, {0, 10, 0}, TypeParam{1.0}};
+
+	// Point below the start of the axis
+	const Point< TypeParam > point{5, -5, 0};
+	const auto closest = capsule.closestPointOnAxis(point);
+
+	// Should clamp to start point
+	ASSERT_EQ(closest, Point< TypeParam >(0, 0, 0));
+}
+
+TYPED_TEST(MathSpace3D, CapsuleClosestPointOnAxisEnd)
+{
+	const Capsule< TypeParam > capsule{{0, 0, 0}, {0, 10, 0}, TypeParam{1.0}};
+
+	// Point above the end of the axis
+	const Point< TypeParam > point{5, 15, 0};
+	const auto closest = capsule.closestPointOnAxis(point);
+
+	// Should clamp to end point
+	ASSERT_EQ(closest, Point< TypeParam >(0, 10, 0));
+}
+
+TYPED_TEST(MathSpace3D, CapsuleGetVolume)
+{
+	// Capsule with axis length 4 and radius 1
+	// Volume = cylinder (π*r²*h) + sphere (4/3*π*r³)
+	// Volume = π*1*4 + 4/3*π*1 = 4π + 4π/3 = 16π/3
+	const Capsule< TypeParam > capsule{{0, 0, 0}, {0, 4, 0}, TypeParam{1.0}};
+	const TypeParam expectedVolume = TypeParam{16.0 / 3.0} * std::numbers::pi_v< TypeParam >;
+
+	ASSERT_NEAR(capsule.getVolume(), expectedVolume, TypeParam{1e-3});
+}
+
+TYPED_TEST(MathSpace3D, CapsuleReset)
+{
+	Capsule< TypeParam > capsule{{1, 2, 3}, {4, 5, 6}, TypeParam{2.0}};
+
+	capsule.reset();
+
+	ASSERT_EQ(capsule.radius(), TypeParam{0});
+	ASSERT_FALSE(capsule.isValid());
+}
+
+TYPED_TEST(MathSpace3D, CapsuleContainsPointInside)
+{
+	const Capsule< TypeParam > capsule{{0, 0, 0}, {0, 10, 0}, TypeParam{2.0}};
+	const Point< TypeParam > point{1, 5, 0};
+
+	ASSERT_TRUE(capsule.contains(point));
+}
+
+TYPED_TEST(MathSpace3D, CapsuleContainsPointOutside)
+{
+	const Capsule< TypeParam > capsule{{0, 0, 0}, {0, 10, 0}, TypeParam{2.0}};
+	const Point< TypeParam > point{5, 5, 0};
+
+	ASSERT_FALSE(capsule.contains(point));
+}
+
+TYPED_TEST(MathSpace3D, CapsuleContainsPointInHemisphere)
+{
+	const Capsule< TypeParam > capsule{{0, 0, 0}, {0, 10, 0}, TypeParam{2.0}};
+	const Point< TypeParam > point{0, -1, 0};
+
+	ASSERT_TRUE(capsule.contains(point));
+}
+
+// ============================================================================
+// COLLISION TESTS - CAPSULE COLLISIONS
+// ============================================================================
+
+TYPED_TEST(MathSpace3D, CollisionCapsulePointInside)
+{
+	const Capsule< TypeParam > capsule{{0, 0, 0}, {0, 10, 0}, TypeParam{2.0}};
+	const Point< TypeParam > point{1, 5, 0};
+
+	ASSERT_TRUE(isColliding(capsule, point));
+	ASSERT_TRUE(isColliding(point, capsule));
+}
+
+TYPED_TEST(MathSpace3D, CollisionCapsulePointOutside)
+{
+	const Capsule< TypeParam > capsule{{0, 0, 0}, {0, 10, 0}, TypeParam{2.0}};
+	const Point< TypeParam > point{5, 5, 0};
+
+	ASSERT_FALSE(isColliding(capsule, point));
+}
+
+TYPED_TEST(MathSpace3D, CollisionCapsulePointWithMTV)
+{
+	const Capsule< TypeParam > capsule{{0, 0, 0}, {0, 10, 0}, TypeParam{2.0}};
+	const Point< TypeParam > point{1, 5, 0};
+	Vector< 3, TypeParam > mtv;
+
+	ASSERT_TRUE(isColliding(capsule, point, mtv));
+	ASSERT_NE(mtv.length(), TypeParam{0});
+}
+
+TYPED_TEST(MathSpace3D, CollisionCapsuleSphereIntersecting)
+{
+	const Capsule< TypeParam > capsule{{0, 0, 0}, {0, 10, 0}, TypeParam{2.0}};
+	const Sphere< TypeParam > sphere{1.5, {2, 5, 0}};
+
+	ASSERT_TRUE(isColliding(capsule, sphere));
+	ASSERT_TRUE(isColliding(sphere, capsule));
+}
+
+TYPED_TEST(MathSpace3D, CollisionCapsuleSphereNotIntersecting)
+{
+	const Capsule< TypeParam > capsule{{0, 0, 0}, {0, 10, 0}, TypeParam{2.0}};
+	const Sphere< TypeParam > sphere{1.0, {5, 5, 0}};
+
+	ASSERT_FALSE(isColliding(capsule, sphere));
+}
+
+TYPED_TEST(MathSpace3D, CollisionCapsuleSphereWithMTV)
+{
+	const Capsule< TypeParam > capsule{{0, 0, 0}, {0, 10, 0}, TypeParam{2.0}};
+	const Sphere< TypeParam > sphere{1.5, {2, 5, 0}};
+	Vector< 3, TypeParam > mtv;
+
+	ASSERT_TRUE(isColliding(capsule, sphere, mtv));
+	ASSERT_NE(mtv.length(), TypeParam{0});
+}
+
+TYPED_TEST(MathSpace3D, CollisionCapsuleSphereAtHemisphere)
+{
+	// Sphere touching the top hemisphere
+	const Capsule< TypeParam > capsule{{0, 0, 0}, {0, 10, 0}, TypeParam{2.0}};
+	const Sphere< TypeParam > sphere{1.0, {0, 12, 0}};
+
+	ASSERT_TRUE(isColliding(capsule, sphere));
+}
+
+TYPED_TEST(MathSpace3D, CollisionCapsuleCapsuleIntersecting)
+{
+	const Capsule< TypeParam > capsule1{{0, 0, 0}, {0, 10, 0}, TypeParam{2.0}};
+	const Capsule< TypeParam > capsule2{{3, 0, 0}, {3, 10, 0}, TypeParam{2.0}};
+
+	ASSERT_TRUE(isColliding(capsule1, capsule2));
+}
+
+TYPED_TEST(MathSpace3D, CollisionCapsuleCapsuleNotIntersecting)
+{
+	const Capsule< TypeParam > capsule1{{0, 0, 0}, {0, 10, 0}, TypeParam{2.0}};
+	const Capsule< TypeParam > capsule2{{10, 0, 0}, {10, 10, 0}, TypeParam{2.0}};
+
+	ASSERT_FALSE(isColliding(capsule1, capsule2));
+}
+
+TYPED_TEST(MathSpace3D, CollisionCapsuleCapsuleWithMTV)
+{
+	const Capsule< TypeParam > capsule1{{0, 0, 0}, {0, 10, 0}, TypeParam{2.0}};
+	const Capsule< TypeParam > capsule2{{3, 0, 0}, {3, 10, 0}, TypeParam{2.0}};
+	Vector< 3, TypeParam > mtv;
+
+	ASSERT_TRUE(isColliding(capsule1, capsule2, mtv));
+	// MTV should point in X direction to separate capsules
+	ASSERT_GT(std::abs(mtv[X]), TypeParam{0});
+}
+
+TYPED_TEST(MathSpace3D, CollisionCapsuleCapsuleCrossing)
+{
+	// Two capsules crossing in an X pattern
+	const Capsule< TypeParam > capsule1{{-5, 0, 0}, {5, 0, 0}, TypeParam{1.0}};
+	const Capsule< TypeParam > capsule2{{0, -5, 0}, {0, 5, 0}, TypeParam{1.0}};
+
+	ASSERT_TRUE(isColliding(capsule1, capsule2));
+}
+
+TYPED_TEST(MathSpace3D, CollisionCapsuleCuboidIntersecting)
+{
+	const Capsule< TypeParam > capsule{{5, 0, 5}, {5, 10, 5}, TypeParam{2.0}};
+	const AACuboid< TypeParam > cuboid{{10, 10, 10}, {0, 0, 0}};
+
+	ASSERT_TRUE(isColliding(capsule, cuboid));
+	ASSERT_TRUE(isColliding(cuboid, capsule));
+}
+
+TYPED_TEST(MathSpace3D, CollisionCapsuleCuboidNotIntersecting)
+{
+	const Capsule< TypeParam > capsule{{20, 0, 20}, {20, 10, 20}, TypeParam{2.0}};
+	const AACuboid< TypeParam > cuboid{{10, 10, 10}, {0, 0, 0}};
+
+	ASSERT_FALSE(isColliding(capsule, cuboid));
+}
+
+TYPED_TEST(MathSpace3D, CollisionCapsuleCuboidWithMTV)
+{
+	const Capsule< TypeParam > capsule{{8, 0, 5}, {8, 10, 5}, TypeParam{2.0}};
+	const AACuboid< TypeParam > cuboid{{10, 10, 10}, {0, 0, 0}};
+	Vector< 3, TypeParam > mtv;
+
+	ASSERT_TRUE(isColliding(capsule, cuboid, mtv));
+	ASSERT_NE(mtv.length(), TypeParam{0});
+}
+
+TYPED_TEST(MathSpace3D, CollisionCapsuleCuboidAxisInsideCuboid)
+{
+	// Capsule axis passes through cuboid
+	const Capsule< TypeParam > capsule{{5, -5, 5}, {5, 15, 5}, TypeParam{1.0}};
+	const AACuboid< TypeParam > cuboid{{10, 10, 10}, {0, 0, 0}};
+
+	ASSERT_TRUE(isColliding(capsule, cuboid));
+}
+
+TYPED_TEST(MathSpace3D, CollisionCapsuleTriangleIntersecting)
+{
+	const Capsule< TypeParam > capsule{{5, 1, 5}, {5, 5, 5}, TypeParam{2.0}};
+	const Triangle< TypeParam > triangle{{0, 0, 0}, {10, 0, 0}, {5, 0, 10}};
+
+	ASSERT_TRUE(isColliding(capsule, triangle));
+	ASSERT_TRUE(isColliding(triangle, capsule));
+}
+
+TYPED_TEST(MathSpace3D, CollisionCapsuleTriangleNotIntersecting)
+{
+	const Capsule< TypeParam > capsule{{5, 10, 5}, {5, 15, 5}, TypeParam{2.0}};
+	const Triangle< TypeParam > triangle{{0, 0, 0}, {10, 0, 0}, {5, 0, 10}};
+
+	ASSERT_FALSE(isColliding(capsule, triangle));
+}
+
+TYPED_TEST(MathSpace3D, CollisionCapsuleTriangleWithMTV)
+{
+	const Capsule< TypeParam > capsule{{5, 1, 5}, {5, 5, 5}, TypeParam{2.0}};
+	const Triangle< TypeParam > triangle{{0, 0, 0}, {10, 0, 0}, {5, 0, 10}};
+	Vector< 3, TypeParam > mtv;
+
+	ASSERT_TRUE(isColliding(capsule, triangle, mtv));
+	ASSERT_NE(mtv.length(), TypeParam{0});
+}
+
+TYPED_TEST(MathSpace3D, CollisionCapsuleTriangleTouchingEdge)
+{
+	// Capsule touching triangle edge
+	const Capsule< TypeParam > capsule{{5, 2, 0}, {5, 5, 0}, TypeParam{2.0}};
+	const Triangle< TypeParam > triangle{{0, 0, 0}, {10, 0, 0}, {5, 0, 10}};
+
+	ASSERT_TRUE(isColliding(capsule, triangle));
+}
+
+// ============================================================================
+// INTERSECTION TESTS - CAPSULE INTERSECTIONS
+// ============================================================================
+
+TYPED_TEST(MathSpace3D, IntersectionLineCapsuleIntersecting)
+{
+	const Line< TypeParam > line{{-5, 5, 0}, {1, 0, 0}};
+	const Capsule< TypeParam > capsule{{0, 0, 0}, {0, 10, 0}, TypeParam{2.0}};
+
+	ASSERT_TRUE(isIntersecting(line, capsule));
+	ASSERT_TRUE(isIntersecting(capsule, line));
+}
+
+TYPED_TEST(MathSpace3D, IntersectionLineCapsuleNotIntersecting)
+{
+	const Line< TypeParam > line{{10, 5, 0}, {0, 0, 1}};
+	const Capsule< TypeParam > capsule{{0, 0, 0}, {0, 10, 0}, TypeParam{2.0}};
+
+	ASSERT_FALSE(isIntersecting(line, capsule));
+}
+
+TYPED_TEST(MathSpace3D, IntersectionLineCapsuleWithIntersectionPoint)
+{
+	const Line< TypeParam > line{{-10, 5, 0}, {1, 0, 0}};
+	const Capsule< TypeParam > capsule{{0, 0, 0}, {0, 10, 0}, TypeParam{2.0}};
+	Point< TypeParam > intersection;
+
+	ASSERT_TRUE(isIntersecting(line, capsule, intersection));
+	// Intersection should be on the capsule surface
+	const auto closestOnAxis = capsule.closestPointOnAxis(intersection);
+	const auto distance = Point< TypeParam >::distance(intersection, closestOnAxis);
+	ASSERT_NEAR(distance, capsule.radius(), TypeParam{1e-3});
+}
+
+TYPED_TEST(MathSpace3D, IntersectionLineCapsuleAtHemisphere)
+{
+	// Line passing through top hemisphere
+	const Line< TypeParam > line{{-5, 12, 0}, {1, 0, 0}};
+	const Capsule< TypeParam > capsule{{0, 0, 0}, {0, 10, 0}, TypeParam{2.0}};
+	Point< TypeParam > intersection;
+
+	// Should hit the top hemisphere (sphere at {0, 10, 0} with radius 2)
+	ASSERT_TRUE(isIntersecting(line, capsule, intersection));
+}
+
+TYPED_TEST(MathSpace3D, IntersectionSegmentCapsuleIntersecting)
+{
+	const Segment< TypeParam > segment{{-5, 5, 0}, {5, 5, 0}};
+	const Capsule< TypeParam > capsule{{0, 0, 0}, {0, 10, 0}, TypeParam{2.0}};
+
+	ASSERT_TRUE(isIntersecting(segment, capsule));
+	ASSERT_TRUE(isIntersecting(capsule, segment));
+}
+
+TYPED_TEST(MathSpace3D, IntersectionSegmentCapsuleNotIntersecting)
+{
+	const Segment< TypeParam > segment{{5, 5, 0}, {10, 5, 0}};
+	const Capsule< TypeParam > capsule{{0, 0, 0}, {0, 10, 0}, TypeParam{2.0}};
+
+	ASSERT_FALSE(isIntersecting(segment, capsule));
+}
+
+TYPED_TEST(MathSpace3D, IntersectionSegmentCapsuleTooShort)
+{
+	// Segment doesn't reach the capsule
+	const Segment< TypeParam > segment{{-10, 5, 0}, {-5, 5, 0}};
+	const Capsule< TypeParam > capsule{{0, 0, 0}, {0, 10, 0}, TypeParam{2.0}};
+
+	ASSERT_FALSE(isIntersecting(segment, capsule));
+}
+
+TYPED_TEST(MathSpace3D, IntersectionSegmentCapsuleWithIntersectionPoint)
+{
+	const Segment< TypeParam > segment{{-5, 5, 0}, {5, 5, 0}};
+	const Capsule< TypeParam > capsule{{0, 0, 0}, {0, 10, 0}, TypeParam{2.0}};
+	Point< TypeParam > intersection;
+
+	ASSERT_TRUE(isIntersecting(segment, capsule, intersection));
+	// Intersection should be on segment
+	ASSERT_GE(intersection[X], TypeParam{-5});
+	ASSERT_LE(intersection[X], TypeParam{5});
+}
+
+TYPED_TEST(MathSpace3D, IntersectionSegmentCapsuleAtHemisphere)
+{
+	// Segment passing through bottom hemisphere
+	const Segment< TypeParam > segment{{-5, -1, 0}, {5, -1, 0}};
+	const Capsule< TypeParam > capsule{{0, 0, 0}, {0, 10, 0}, TypeParam{2.0}};
+
+	ASSERT_TRUE(isIntersecting(segment, capsule));
+}
+
+// ============================================================================
+// INDUSTRIAL QUALITY TESTS - CAPSULE EDGE CASES
+// ============================================================================
+
+TYPED_TEST(MathSpace3D, CollisionDegenerateCapsuleZeroRadius)
+{
+	const Capsule< TypeParam > degenerate{{0, 0, 0}, {0, 10, 0}, TypeParam{0.0}};
+
+	ASSERT_FALSE(degenerate.isValid());
+}
+
+TYPED_TEST(MathSpace3D, CollisionDegenerateCapsuleZeroLength)
+{
+	/* NOTE: A zero-length axis capsule is still valid - it behaves as a sphere. */
+	const Capsule< TypeParam > degenerate{{5, 5, 5}, {5, 5, 5}, TypeParam{2.0}};
+
+	ASSERT_TRUE(degenerate.isValid());
+	ASSERT_TRUE(degenerate.isDegenerate());
+}
+
+TYPED_TEST(MathSpace3D, CollisionCapsuleCapsuleMTVMagnitude)
+{
+	// Two capsules with known overlap
+	const Capsule< TypeParam > capsule1{{0, 0, 0}, {0, 10, 0}, TypeParam{2.0}};
+	const Capsule< TypeParam > capsule2{{3, 0, 0}, {3, 10, 0}, TypeParam{2.0}};
+	Vector< 3, TypeParam > mtv;
+
+	ASSERT_TRUE(isColliding(capsule1, capsule2, mtv));
+
+	// Distance between axes is 3, sum of radii is 4, so overlap is 1
+	ASSERT_NEAR(mtv.length(), TypeParam{1}, TypeParam{1e-3});
+}
+
+TYPED_TEST(MathSpace3D, CollisionCapsuleSphereMTVMagnitude)
+{
+	const Capsule< TypeParam > capsule{{0, 0, 0}, {0, 10, 0}, TypeParam{2.0}};
+	const Sphere< TypeParam > sphere{TypeParam{2.0}, {3, 5, 0}};
+	Vector< 3, TypeParam > mtv;
+
+	ASSERT_TRUE(isColliding(capsule, sphere, mtv));
+
+	// Distance from axis to sphere center is 3, sum of radii is 4, so overlap is 1
+	ASSERT_NEAR(mtv.length(), TypeParam{1}, TypeParam{1e-3});
+}
+
+TYPED_TEST(MathSpace3D, CollisionCapsuleCapsuleExactlyTouching)
+{
+	// Two capsules touching at exactly one point
+	const Capsule< TypeParam > capsule1{{0, 0, 0}, {0, 10, 0}, TypeParam{2.0}};
+	const Capsule< TypeParam > capsule2{{4, 0, 0}, {4, 10, 0}, TypeParam{2.0}};
+
+	// Distance between axes = 4, sum of radii = 4, so exactly touching
+	ASSERT_TRUE(isColliding(capsule1, capsule2));
+}
+
+TYPED_TEST(MathSpace3D, CollisionCapsuleCapsuleVeryCloseButNotTouching)
+{
+	const Capsule< TypeParam > capsule1{{0, 0, 0}, {0, 10, 0}, TypeParam{2.0}};
+	const Capsule< TypeParam > capsule2{{TypeParam{4.001}, 0, 0}, {TypeParam{4.001}, 10, 0}, TypeParam{2.0}};
+
+	// Distance > sum of radii
+	ASSERT_FALSE(isColliding(capsule1, capsule2));
 }

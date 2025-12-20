@@ -154,14 +154,29 @@ namespace EmEn::Libs::Math::Space3D
 		return isColliding(point, cuboid);
 	}
 
-	/** @copydoc EmEn::Libs::Math::Space3D::isColliding(const Point< precision_t > &, const AACuboid< precision_t > &, Vector< 3, precision_t >) noexcept */
+	/**
+	 * @brief Checks if a cuboid is colliding with a point and gives the minimum translation vector (MTV).
+	 * @note The MTV pushes the cuboid out of the point (consistent with convention: MTV pushes first arg out of second).
+	 * @tparam precision_t The data precision. Default float.
+	 * @param cuboid A reference to a cuboid.
+	 * @param point A reference to a point.
+	 * @param minimumTranslationVector A writable reference to a vector.
+	 * @return bool
+	 */
 	template< typename precision_t = float >
 	[[nodiscard]]
 	bool
-	isColliding (const AACuboid< precision_t > & cuboid, const Point< precision_t > & point, Vector< 3, precision_t > & /*minimumTranslationVector*/) noexcept requires (std::is_floating_point_v< precision_t >)
+	isColliding (const AACuboid< precision_t > & cuboid, const Point< precision_t > & point, Vector< 3, precision_t > & minimumTranslationVector) noexcept requires (std::is_floating_point_v< precision_t >)
 	{
-		// FIXME : The MTV is not set in this version !
+		/* NOTE: isColliding(point, cuboid, mtv) computes MTV to push point out of cuboid.
+		 * We need the opposite: push cuboid out of point, so we negate the MTV. */
+		if ( isColliding(point, cuboid, minimumTranslationVector) )
+		{
+			minimumTranslationVector = -minimumTranslationVector;
 
-		return isColliding(point, cuboid);
+			return true;
+		}
+
+		return false;
 	}
 }

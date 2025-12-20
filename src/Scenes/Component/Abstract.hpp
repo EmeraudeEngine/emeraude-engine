@@ -152,29 +152,6 @@ namespace EmEn::Scenes::Component
 			}
 
 			/**
-			 * @brief Sets the physical properties application state.
-			 * @note This affects the bounding primitives.
-			 * @param state The state.
-			 * @return void
-			 */
-			void
-			enablePhysicalProperties (bool state) noexcept
-			{
-				this->setFlag(EnablePhysicalProperties, state);
-			}
-
-			/**
-			 * @brief Returns whether the physical properties are disabled.
-			 * @return bool
-			 */
-			[[nodiscard]]
-			bool
-			isPhysicalPropertiesEnabled () const noexcept
-			{
-				return this->isFlagEnabled(EnablePhysicalProperties);
-			}
-
-			/**
 			 * @brief Returns the entity where this entity is attached.
 			 * @return const AbstractEntity &
 			 */
@@ -364,8 +341,7 @@ namespace EmEn::Scenes::Component
 			virtual void onWakeup () noexcept = 0;
 
 			/* Flag names */
-			static constexpr auto EnablePhysicalProperties{0UL};
-			static constexpr auto UnusedFlag{1UL};
+			static constexpr auto UnusedFlag{0UL};
 
 			/**
 			 * @brief Constructs an abstract entity component.

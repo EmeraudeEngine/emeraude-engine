@@ -52,9 +52,11 @@ TEST(PixelFactoryColor, ColorFromInteger)
 	ASSERT_EQ(ColorFromInteger< uint32_t >(0, 4294967295, 0, 4294967295), Green);
 	ASSERT_EQ(ColorFromInteger< uint32_t >(0, 0, 4294967295, 4294967295), Blue);
 
-	ASSERT_EQ(ColorFromInteger< uint64_t >(0, 0, 0, 18446744073709551615), Black);
-	ASSERT_EQ(ColorFromInteger< uint64_t >(18446744073709551615, 18446744073709551615, 18446744073709551615, 18446744073709551615), White);
-	ASSERT_EQ(ColorFromInteger< uint64_t >(18446744073709551615, 0, 0, 18446744073709551615), Red);
-	ASSERT_EQ(ColorFromInteger< uint64_t >(0, 18446744073709551615, 0, 18446744073709551615), Green);
-	ASSERT_EQ(ColorFromInteger< uint64_t >(0, 0, 18446744073709551615, 18446744073709551615), Blue);
+	constexpr auto max_uint64_t{std::numeric_limits< uint64_t >::max()};
+
+	ASSERT_EQ(ColorFromInteger< uint64_t >(0, 0, 0, max_uint64_t), Black);
+	ASSERT_EQ(ColorFromInteger< uint64_t >(max_uint64_t, max_uint64_t, max_uint64_t, max_uint64_t), White);
+	ASSERT_EQ(ColorFromInteger< uint64_t >(max_uint64_t, 0, 0, max_uint64_t), Red);
+	ASSERT_EQ(ColorFromInteger< uint64_t >(0, max_uint64_t, 0, max_uint64_t), Green);
+	ASSERT_EQ(ColorFromInteger< uint64_t >(0, 0, max_uint64_t, max_uint64_t), Blue);
 }

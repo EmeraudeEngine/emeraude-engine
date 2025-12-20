@@ -172,21 +172,6 @@ namespace EmEn::Scenes
 	}
 
 	bool
-	Manager::refreshActiveScene () const noexcept
-	{
-		const std::unique_lock lock{m_activeSceneSharedAccess};
-
-		if ( m_activeScene == nullptr )
-		{
-			return true;
-		}
-
-		TraceDebug{ClassId} << "Refreshing the active scene '" << m_activeScene->name() << "' ...";
-
-		return m_activeScene->refreshRenderableInstances();
-	}
-
-	bool
 	Manager::deleteScene (const std::string & sceneName) noexcept
 	{
 		const std::lock_guard< std::mutex > lock{m_sceneListAccess};

@@ -37,8 +37,8 @@
 /* Local inclusions for usages. */
 #include "Libs/Math/Space3D/AACuboid.hpp"
 #include "Libs/Math/Space3D/Sphere.hpp"
-#include "Graphics/Geometry/Abstract.hpp"
-#include "Graphics/Material/Abstract.hpp"
+#include "Graphics/Geometry/Interface.hpp"
+#include "Graphics/Material/Interface.hpp"
 #include "Graphics/RasterizationOptions.hpp"
 #include "ProgramCacheKey.hpp"
 

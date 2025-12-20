@@ -231,12 +231,13 @@ namespace EmEn::Physics
 			if ( bodyA && bodyA->isMovable() )
 			{
 				bodyA->applyLinearImpulse(-linearImpulse);
-				bodyA->setHadCollision();
 
-				/* Body A is grounded if normal points downward (A is on top). */
-				if ( normal[Libs::Math::Y] > GroundNormalThreshold )
+				/* Body A is grounded if normal points downward (A is on top).
+				 * Only ground against static surfaces, not other dynamic bodies. */
+				if ( normal[Libs::Math::Y] > GroundNormalThreshold && (!bodyB || !bodyB->isMovable()) )
 				{
-					bodyA->setGrounded();
+					/* Ground on Entity since this is Node-to-Node collision resolution. */
+					bodyA->setGrounded(GroundedSource::Entity, bodyB);
 				}
 
 				if ( bodyA->isRotationPhysicsEnabled() )
@@ -250,12 +251,13 @@ namespace EmEn::Physics
 			if ( bodyB && bodyB->isMovable() )
 			{
 				bodyB->applyLinearImpulse(linearImpulse);
-				bodyB->setHadCollision();
 
-				/* Body B is grounded if normal points upward (B is on top). */
-				if ( normal[Libs::Math::Y] < -GroundNormalThreshold )
+				/* Body B is grounded if normal points upward (B is on top).
+				 * Only ground against static surfaces, not other dynamic bodies. */
+				if ( normal[Libs::Math::Y] < -GroundNormalThreshold && (!bodyA || !bodyA->isMovable()) )
 				{
-					bodyB->setGrounded();
+					/* Ground on Entity since this is Node-to-Node collision resolution. */
+					bodyB->setGrounded(GroundedSource::Entity, bodyA);
 				}
 
 				if ( bodyB->isRotationPhysicsEnabled() )

@@ -270,12 +270,6 @@ namespace EmEn::Scenes
 			SceneLoading loadScene (const std::shared_ptr< DefinitionResource > & sceneDefinition) noexcept;
 
 			/**
-			 * @brief Refreshes the active scene.
-			 * @return bool
-			 */
-			bool refreshActiveScene () const noexcept;
-
-			/**
 			 * @brief Disables and delete a scene.
 			 * @param sceneName The scene name.
 			 * @return bool

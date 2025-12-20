@@ -35,7 +35,7 @@
 #include "Graphics/RasterizationOptions.hpp"
 #include "Graphics/RenderTarget/Abstract.hpp"
 #include "Graphics/RenderableInstance/Abstract.hpp"
-#include "Graphics/Material/Abstract.hpp"
+#include "Graphics/Material/Interface.hpp"
 #include "Device.hpp"
 #include "PipelineLayout.hpp"
 #include "ShaderModule.hpp"

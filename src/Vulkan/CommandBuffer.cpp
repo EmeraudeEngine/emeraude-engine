@@ -32,10 +32,9 @@
 #include <array>
 #include <memory>
 #include <span>
-#include <vector>
 
 /* Local inclusions. */
-#include "Graphics/Geometry/Abstract.hpp"
+#include "Graphics/Geometry/Interface.hpp"
 #include "Sync/Event.hpp"
 #include "Sync/MemoryBarrier.hpp"
 #include "Sync/ImageMemoryBarrier.hpp"
@@ -1227,5 +1226,45 @@ namespace EmEn::Vulkan
 				firstInstance
 			);
 		}
+	}
+
+	void
+	CommandBuffer::drawIndexed (uint32_t indexOffset, uint32_t indexCount, uint32_t instanceCount) const noexcept
+	{
+		if constexpr ( IsDebug )
+		{
+			if ( !this->isCreated() )
+			{
+				Tracer::error(ClassId, "The command buffer is not created for drawIndexed() !");
+
+				return;
+			}
+
+			if ( instanceCount == 0 )
+			{
+				Tracer::error(ClassId, "No instance count for drawIndexed() !");
+
+				return;
+			}
+
+			if ( indexCount == 0 )
+			{
+				Tracer::error(ClassId, "No index count for drawIndexed() !");
+
+				return;
+			}
+		}
+
+		constexpr int32_t vertexOffset{0};
+		constexpr uint32_t firstInstance{0};
+
+		vkCmdDrawIndexed(
+			m_handle,
+			indexCount,
+			instanceCount,
+			indexOffset,
+			vertexOffset,
+			firstInstance
+		);
 	}
 }

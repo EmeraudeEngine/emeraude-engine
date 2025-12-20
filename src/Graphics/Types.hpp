@@ -927,9 +927,10 @@ namespace EmEn::Graphics
 	 */
 	enum class VertexColorGenMode : uint8_t
 	{
-		UseGlobal = 0,
-		UseRandom = 1,
-		GenerateFromCoords = 2
+		UseGlobalColor = 0,
+		UseColorMap = 1,
+		UseRandom = 2,
+		GenerateFromCoords = 3
 	};
 
 	/**

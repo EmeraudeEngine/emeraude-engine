@@ -183,12 +183,29 @@ namespace EmEn::Libs::Math::Space3D
 		return isColliding(sphere, cuboid);
 	}
 
-	/** @copydoc EmEn::Libs::Math::Space3D::isColliding(const Sphere< precision_t > &, const AACuboid< precision_t > &, Vector< 3, precision_t > &) noexcept */
+	/**
+	 * @brief Checks if a cuboid is colliding with a sphere and gives the minimum translation vector (MTV).
+	 * @note The MTV pushes the cuboid out of the sphere (consistent with convention: MTV pushes first arg out of second).
+	 * @tparam precision_t The data precision. Default float.
+	 * @param cuboid A reference to a cuboid.
+	 * @param sphere A reference to a sphere.
+	 * @param minimumTranslationVector A writable reference to a vector.
+	 * @return bool
+	 */
 	template< typename precision_t = float >
 	[[nodiscard]]
 	bool
 	isColliding (const AACuboid< precision_t > & cuboid, const Sphere< precision_t > & sphere, Vector< 3, precision_t > & minimumTranslationVector) noexcept requires (std::is_floating_point_v< precision_t >)
 	{
-		return isColliding(sphere, cuboid, minimumTranslationVector);
+		/* NOTE: isColliding(sphere, cuboid, mtv) computes MTV to push sphere out of cuboid.
+		 * We need the opposite: push cuboid out of sphere, so we negate the MTV. */
+		if ( isColliding(sphere, cuboid, minimumTranslationVector) )
+		{
+			minimumTranslationVector = -minimumTranslationVector;
+
+			return true;
+		}
+
+		return false;
 	}
 }

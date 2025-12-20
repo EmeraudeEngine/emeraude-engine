@@ -38,6 +38,7 @@
 #include "Graphics/Geometry/ResourceGenerator.hpp"
 #include "Graphics/Renderable/SimpleMeshResource.hpp"
 #include "Graphics/Renderable/SpriteResource.hpp"
+#include "Physics/SphereCollisionModel.hpp"
 #include "Scenes/Component/Camera.hpp"
 #include "Scenes/Component/SphericalPushModifier.hpp"
 #include "Scenes/Scene.hpp"
@@ -676,7 +677,19 @@ namespace EmEn::Scenes
 
 				auto component = entity->template componentBuilder< Component::Visual >(entityName)
 					.setup([enablePhysicalProperties, enableLighting] (auto & visual) {
-						visual.enablePhysicalProperties(enablePhysicalProperties);
+						/* FIXME: Dummy variables ... */
+						if ( enablePhysicalProperties )
+						{
+							visual.bodyPhysicalProperties().setProperties(
+							   1.0F,
+							   0.5F,
+							   Physics::DragCoefficient::Sphere< float >,
+							   0.5F,
+							   0.5F,
+							   0.5F,
+							   {}
+						   );
+						}
 
 						if ( enableLighting )
 						{
@@ -714,7 +727,19 @@ namespace EmEn::Scenes
 
 				auto component = entity->template componentBuilder< Component::Visual >(entityName)
 					.setup([enablePhysicalProperties, enableLighting] (auto & visual) {
-						visual.enablePhysicalProperties(enablePhysicalProperties);
+						/* FIXME: Dummy variables ... */
+						if ( enablePhysicalProperties )
+						{
+							visual.bodyPhysicalProperties().setProperties(
+							   1.0F,
+							   0.5F,
+							   Physics::DragCoefficient::Sphere< float >,
+							   0.5F,
+							   0.5F,
+							   0.5F,
+							   {}
+						   );
+						}
 
 						if ( enableLighting )
 						{
@@ -817,7 +842,19 @@ namespace EmEn::Scenes
 
 				auto component = entity->template componentBuilder< Component::Visual >(entityName)
 					.setup([enablePhysicalProperties, enableLighting] (auto & visual) {
-						visual.enablePhysicalProperties(enablePhysicalProperties);
+						/* FIXME: Dummy variables ... */
+						if ( enablePhysicalProperties )
+						{
+							visual.bodyPhysicalProperties().setProperties(
+							   1.0F,
+							   0.5F,
+							   Physics::DragCoefficient::Sphere< float >,
+							   0.5F,
+							   0.5F,
+							   0.5F,
+							   {}
+						   );
+						}
 
 						if ( enableLighting )
 						{
@@ -930,10 +967,7 @@ namespace EmEn::Scenes
 
 				if ( entity.isValid() && enablePhysicalProperties )
 				{
-					entity.entity()->setCollisionDetectionModel(CollisionDetectionModel::Sphere);
-
-					/* FIXME: The bounding sphere is incorrectly computed from the geometry! */
-					entity.entity()->overrideBoundingPrimitives(Space3D::AACuboid{radius}, Space3D::Sphere{radius});
+					entity.entity()->setCollisionModel(std::make_unique< Physics::SphereCollisionModel >(radius));
 
 					const auto density = materialResource == nullptr ? 1.0F : materialResource->surfacePhysicalProperties().density();
 
@@ -993,6 +1027,14 @@ namespace EmEn::Scenes
 			 */
 			[[nodiscard]]
 			std::vector< Libs::Math::CartesianFrame< float > > generateRandomCoordinates (size_t count, float min, float max) noexcept;
+
+			/**
+			 * @brief Returns a simple colored basic material.
+			 * @param color A reference to a color.
+			 * @return std::shared_ptr< Graphics::Material::Interface >
+			 */
+			[[nodiscard]]
+			std::shared_ptr< Graphics::Material::Interface > getColoredMaterialResource (const Libs::PixelFactory::Color< float > & color) const noexcept;
 
 		private:
 

@@ -109,7 +109,7 @@ namespace EmEn::Graphics::Renderable
 
 	/**
 	 * @brief This class provides a high-level object to describe a physical object in the 3D world.
-	 * @extends EmEn::Graphics::Renderable::Interface Adds the ability to be rendered in the 3D world.
+	 * @extends EmEn::Graphics::Renderable::Abstract Adds the ability to be rendered in the 3D world.
 	 */
 	class MeshResource final : public Abstract
 	{
@@ -164,7 +164,7 @@ namespace EmEn::Graphics::Renderable
 				return classUID == getClassUID();
 			}
 
-			/** @copydoc EmEn::Graphics::Renderable::Interface::layerCount() const */
+			/** @copydoc EmEn::Graphics::Renderable::Abstract::layerCount() const */
 			[[nodiscard]]
 			uint32_t
 			layerCount () const noexcept override
@@ -172,11 +172,11 @@ namespace EmEn::Graphics::Renderable
 				return static_cast< uint32_t >(m_layers.size());
 			}
 
-			/** @copydoc EmEn::Graphics::Renderable::Interface::isOpaque() const */
+			/** @copydoc EmEn::Graphics::Renderable::Abstract::isOpaque() const */
 			[[nodiscard]]
 			bool isOpaque (uint32_t layerIndex) const noexcept override;
 
-			/** @copydoc EmEn::Graphics::Renderable::Interface::geometry() const */
+			/** @copydoc EmEn::Graphics::Renderable::Abstract::geometry() const */
 			[[nodiscard]]
 			const Geometry::Interface *
 			geometry () const noexcept override
@@ -184,15 +184,15 @@ namespace EmEn::Graphics::Renderable
 				return m_geometry.get();
 			}
 
-			/** @copydoc EmEn::Graphics::Renderable::Interface::material() const */
+			/** @copydoc EmEn::Graphics::Renderable::Abstract::material() const */
 			[[nodiscard]]
 			const Material::Interface * material (uint32_t layerIndex) const noexcept override;
 
-			/** @copydoc EmEn::Graphics::Renderable::Interface::layerRasterizationOptions() const */
+			/** @copydoc EmEn::Graphics::Renderable::Abstract::layerRasterizationOptions() const */
 			[[nodiscard]]
 			const RasterizationOptions * layerRasterizationOptions (uint32_t layerIndex) const noexcept override;
 
-			/** @copydoc EmEn::Graphics::Renderable::Interface::boundingBox() const */
+			/** @copydoc EmEn::Graphics::Renderable::Abstract::boundingBox() const */
 			[[nodiscard]]
 			const Libs::Math::Space3D::AACuboid< float > &
 			boundingBox () const noexcept override
@@ -205,7 +205,7 @@ namespace EmEn::Graphics::Renderable
 				return m_geometry->boundingBox();
 			}
 
-			/** @copydoc EmEn::Graphics::Renderable::Interface::boundingSphere() const */
+			/** @copydoc EmEn::Graphics::Renderable::Abstract::boundingSphere() const */
 			[[nodiscard]]
 			const Libs::Math::Space3D::Sphere< float > &
 			boundingSphere () const noexcept override
@@ -306,7 +306,7 @@ namespace EmEn::Graphics::Renderable
 			 * @return bool
 			 */
 			bool
-			setMaterial (const std::shared_ptr< Material::Interface > & material, const RasterizationOptions & options, int flags) noexcept
+			setMaterial (const std::shared_ptr< Material::Interface > & material, const RasterizationOptions & options, uint32_t flags) noexcept
 			{
 				m_layers.clear();
 
@@ -320,7 +320,7 @@ namespace EmEn::Graphics::Renderable
 			 * @param flags The renderable level flags.
 			 * @return bool
 			 */
-			bool addMaterial (const std::shared_ptr< Material::Interface > & material, const RasterizationOptions & options, int flags) noexcept;
+			bool addMaterial (const std::shared_ptr< Material::Interface > & material, const RasterizationOptions & options, uint32_t flags) noexcept;
 
 			/**
 			 * @brief Parses a JSON stream to get the geometry information.

@@ -17,7 +17,7 @@
 | **Graphics** | **Graphics Layer** | [`src/Graphics/AGENTS.md`](src/Graphics/AGENTS.md) | **Start Here**. High-level. |
 | | Vulkan Layer | [`src/Vulkan/AGENTS.md`](src/Vulkan/AGENTS.md) | Low-level abstraction. |
 | | Saphir (Shader) | [`src/Saphir/AGENTS.md`](src/Saphir/AGENTS.md) | Shader generation. |
-| **Sim** | **Physics** | [`src/Physics/AGENTS.md`](src/Physics/AGENTS.md) | Jolt integration. |
+| **Sim** | **Physics** | [`src/Physics/AGENTS.md`](src/Physics/AGENTS.md) | Physics system. |
 | | Audio | [`src/Audio/AGENTS.md`](src/Audio/AGENTS.md) | OpenAL spatial audio. |
 | | Input | [`src/Input/AGENTS.md`](src/Input/AGENTS.md) | Keyboard/Mouse/Pad. |
 | **Data** | Resources | [`src/Resources/AGENTS.md`](src/Resources/AGENTS.md) | Async loading. |

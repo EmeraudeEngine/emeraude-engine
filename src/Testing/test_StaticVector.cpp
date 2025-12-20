@@ -197,7 +197,7 @@ namespace EmEn::Libs
 #if defined(__cpp_exceptions)
 	    ASSERT_THROW(s.at(1), std::out_of_range);
 #else
-	    ASSERT_DEATH(s.at(1), "");
+	    ASSERT_DEATH((void) s.at(1), "");
 #endif
 	}
 

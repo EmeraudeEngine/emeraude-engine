@@ -80,25 +80,25 @@ namespace EmEn::Libs::Math::Space3D
 			}
 
 			/**
-			 * @brief Checks if the box volume consistency.
-			 * @return bool
+			 * @brief Checks if the box volume is consistent and finite.
+			 * @return bool True if max > min on all axes and dimensions are finite (not NaN/Inf).
 			 */
 			[[nodiscard]]
-			constexpr
 			bool
 			isValid () const noexcept
 			{
-				if ( m_maximum[X] <= m_minimum[X] )
+				/* Check volume consistency (max must be > min on all axes). */
+				if ( m_maximum[X] <= m_minimum[X] ||
+					 m_maximum[Y] <= m_minimum[Y] ||
+					 m_maximum[Z] <= m_minimum[Z] )
 				{
 					return false;
 				}
 
-				if ( m_maximum[Y] <= m_minimum[Y] )
-				{
-					return false;
-				}
-
-				if ( m_maximum[Z] <= m_minimum[Z] )
+				/* Check that dimensions are finite (catches overflow from default-constructed AABB). */
+				if ( !std::isfinite(m_maximum[X] - m_minimum[X]) ||
+					 !std::isfinite(m_maximum[Y] - m_minimum[Y]) ||
+					 !std::isfinite(m_maximum[Z] - m_minimum[Z]) )
 				{
 					return false;
 				}

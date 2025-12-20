@@ -40,6 +40,8 @@
 
 namespace EmEn::Physics
 {
+	/* Forward declarations. */
+	class CollisionModelInterface;
 	/**
 	 * @brief The particle class.
 	 * @extends EmEn::Scenes::LocatableInterface A particle is locatable in the scene.
@@ -153,51 +155,35 @@ namespace EmEn::Physics
 				return m_cartesianFrame;
 			}
 
-			/** @copydoc EmEn::Scenes::LocatableInterface::localBoundingBox() const */
-			[[nodiscard]]
-			const Libs::Math::Space3D::AACuboid< float > &
-			localBoundingBox () const noexcept override
-			{
-				return Scenes::Component::Abstract::NullBoundingBox;
-			}
-
-			/** @copydoc EmEn::Scenes::LocatableInterface::getWorldBoundingBox() const */
-			[[nodiscard]]
-			Libs::Math::Space3D::AACuboid< float >
-			getWorldBoundingBox () const noexcept override
-			{
-				return Scenes::Component::Abstract::NullBoundingBox;
-			}
-
-			/** @copydoc EmEn::Scenes::LocatableInterface::localBoundingSphere() const */
-			[[nodiscard]]
-			const Libs::Math::Space3D::Sphere< float > &
-			localBoundingSphere () const noexcept override
-			{
-				return Scenes::Component::Abstract::NullBoundingSphere;
-			}
-
-			/** @copydoc EmEn::Scenes::LocatableInterface::getWorldBoundingSphere() const */
-			[[nodiscard]]
-			Libs::Math::Space3D::Sphere< float >
-			getWorldBoundingSphere () const noexcept override
-			{
-				return Scenes::Component::Abstract::NullBoundingSphere;
-			}
-
-			/** @copydoc EmEn::Scenes::LocatableInterface::setCollisionDetectionModel(Scenes::CollisionDetectionModel) */
+			/** @copydoc EmEn::Scenes::LocatableInterface::setCollisionModel(std::unique_ptr< CollisionModelInterface >) */
 			void
-			setCollisionDetectionModel (Scenes::CollisionDetectionModel /*model*/) noexcept override
+			setCollisionModel (std::unique_ptr< CollisionModelInterface > /*model*/) noexcept override
 			{
-
+				/* Particles are points without collision model. */
 			}
 
-			/** @copydoc EmEn::Scenes::LocatableInterface::collisionDetectionModel() const */
+			/** @copydoc EmEn::Scenes::LocatableInterface::hasCollisionModel() const */
 			[[nodiscard]]
-			Scenes::CollisionDetectionModel
-			collisionDetectionModel () const noexcept override
+			bool
+			hasCollisionModel () const noexcept override
 			{
-				return Scenes::CollisionDetectionModel::Point;
+				return false;
+			}
+
+			/** @copydoc EmEn::Scenes::LocatableInterface::collisionModel() const */
+			[[nodiscard]]
+			const CollisionModelInterface *
+			collisionModel () const noexcept override
+			{
+				return nullptr;
+			}
+
+			/** @copydoc EmEn::Scenes::LocatableInterface::collisionModel() */
+			[[nodiscard]]
+			CollisionModelInterface *
+			collisionModel () noexcept override
+			{
+				return nullptr;
 			}
 
 			/** @copydoc EmEn::Scenes::LocatableInterface::isVisibleTo(const Graphics::Frustum &) const */

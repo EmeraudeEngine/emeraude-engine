@@ -293,10 +293,19 @@ namespace EmEn::Graphics::RenderTarget
 				this->updateViewRangesProperties(fovOrNear, distanceOrFar);
 			}
 
+			/** @copydoc EmEn::Scenes::AVConsole::AbstractVirtualDevice::getWorldCoordinates() */
+			[[nodiscard]]
+			Libs::Math::CartesianFrame< float >
+			getWorldCoordinates () const noexcept override
+			{
+				return m_worldCoordinates;
+			}
+
 			/** @copydoc EmEn::Scenes::AVConsole::AbstractVirtualDevice::updateDeviceFromCoordinates() */
 			void
 			updateDeviceFromCoordinates (const Libs::Math::CartesianFrame< float > & worldCoordinates, const Libs::Math::Vector< 3, float > & worldVelocity) noexcept override
 			{
+				m_worldCoordinates = worldCoordinates;
 				m_viewMatrices.updateViewCoordinates(worldCoordinates, worldVelocity);
 			}
 
@@ -605,6 +614,7 @@ namespace EmEn::Graphics::RenderTarget
 			std::shared_ptr< Vulkan::ImageView > m_stencilImageView;
 			std::shared_ptr< Vulkan::Framebuffer > m_framebuffer;
 			view_matrices_t m_viewMatrices;
+			Libs::Math::CartesianFrame< float > m_worldCoordinates{};
 			bool m_isReadyForRendering{false};
 	};
 }
