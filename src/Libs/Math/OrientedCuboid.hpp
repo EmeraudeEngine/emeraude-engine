@@ -149,78 +149,118 @@ namespace EmEn::Libs::Math
 			/**
 			 * @brief Minimum Translation Vector (MTV): direction.scale(return).
 			 * @note http://www.dyn4j.org/2010/01/sat/
+			 * @note Convention: MTV pushes cuboidA out of cuboidB.
 			 * @param cuboidA A reference to an orientedCuboid.
 			 * @param cuboidB A reference to another orientedCuboid.
-			 * @param direction A reference to a direction vector. This will output the direction of the collision.
-			 * @return data_t
+			 * @param direction A reference to a direction vector. This will output the MTV direction.
+			 * @return data_t The penetration depth (0 if no collision).
 			 */
 			static
 			data_t
 			isIntersecting (const OrientedCuboid< data_t > & cuboidA, const OrientedCuboid< data_t > & cuboidB, Vector< 3, data_t > & direction) noexcept
 			{
-				/* NOTE: The number of axes to test can be reduced by not testing parallel axes.
-				 * This is why a rectangle only has two axes to test.
-				 * Some shapes like a rectangle can perform faster if it has its
-				 * own projection and getAxes code since a rectangle does not need to test 4 axes but really just 2.
-				 * The last separation axis could be used to prime the next iteration of SAT
-				 * so that the algorithm could be O(1) in non-intersection cases.
-				 * SAT in 3D can end up testing LOTS of axes. */
+				/* NOTE: Full SAT for 3D OBB vs OBB requires testing 15 axes:
+				 * - 3 face normals from box A
+				 * - 3 face normals from box B
+				 * - 9 cross products of edges (3 edges A × 3 edges B)
+				 * Missing the edge cross products can cause false positives. */
 
-				auto distance = std::numeric_limits< data_t >::max();
+				auto minOverlap = std::numeric_limits< data_t >::max();
+				Vector< 3, data_t > minAxis;
 
-				/* Loop over the axes from box A. */
-				for ( const auto & axis : cuboidA.m_normals )
+				/* Helper lambda to test a single axis. Returns false if separation found. */
+				auto testAxis = [&cuboidA, &cuboidB, &minOverlap, &minAxis] (const Vector< 3, data_t > & axis) -> bool
 				{
-					/* Projects both shapes onto the axis. */
-					const auto projectionA = cuboidA.project(axis);
-					const auto projectionB = cuboidB.project(axis);
+					/* Skip degenerate axes (from parallel edges). */
+					const auto lengthSq = axis.lengthSquared();
 
-					/* Gets the possible overlap. */
+					if ( lengthSq < std::numeric_limits< data_t >::epsilon() )
+					{
+						return true;
+					}
+
+					/* Normalize the axis. */
+					const auto normalizedAxis = axis / std::sqrt(lengthSq);
+
+					/* Project both shapes onto the axis. */
+					const auto projectionA = cuboidA.project(normalizedAxis);
+					const auto projectionB = cuboidB.project(normalizedAxis);
+
+					/* Get the overlap. */
 					const auto overlap = projectionA.getOverlap(projectionB);
 
-					/* Do the projections overlap?
-					 * If not, then we can guarantee that the shapes do not overlap. */
+					/* If no overlap, we found a separating axis. */
 					if ( overlap <= 0 )
 					{
-						return 0;
+						return false;
 					}
 
-					/* Checks for minimum overlapping. If minimum, we set this one as the smallest. */
-					if ( overlap < distance )
+					/* Track minimum overlap for MTV. */
+					if ( overlap < minOverlap )
 					{
-						distance = overlap;
-						direction = axis;
+						minOverlap = overlap;
+						minAxis = normalizedAxis;
 					}
-				}
 
-				/* Loop over the axes from box B. */
-				for ( const auto & axis : cuboidB.m_normals )
+					return true;
+				};
+
+				/* Test the 3 face normals from box A (only need positive directions). */
+				if ( !testAxis(cuboidA.m_normals[PositiveX]) ) { return 0; }
+				if ( !testAxis(cuboidA.m_normals[PositiveY]) ) { return 0; }
+				if ( !testAxis(cuboidA.m_normals[PositiveZ]) ) { return 0; }
+
+				/* Test the 3 face normals from box B. */
+				if ( !testAxis(cuboidB.m_normals[PositiveX]) ) { return 0; }
+				if ( !testAxis(cuboidB.m_normals[PositiveY]) ) { return 0; }
+				if ( !testAxis(cuboidB.m_normals[PositiveZ]) ) { return 0; }
+
+				/* Test the 9 edge cross products.
+				 * Edges of each box are aligned with their face normals. */
+				const auto & axesA = cuboidA.m_normals;
+				const auto & axesB = cuboidB.m_normals;
+
+				/* A.X × B.X, A.X × B.Y, A.X × B.Z */
+				if ( !testAxis(Vector< 3, data_t >::crossProduct(axesA[PositiveX], axesB[PositiveX])) ) { return 0; }
+				if ( !testAxis(Vector< 3, data_t >::crossProduct(axesA[PositiveX], axesB[PositiveY])) ) { return 0; }
+				if ( !testAxis(Vector< 3, data_t >::crossProduct(axesA[PositiveX], axesB[PositiveZ])) ) { return 0; }
+
+				/* A.Y × B.X, A.Y × B.Y, A.Y × B.Z */
+				if ( !testAxis(Vector< 3, data_t >::crossProduct(axesA[PositiveY], axesB[PositiveX])) ) { return 0; }
+				if ( !testAxis(Vector< 3, data_t >::crossProduct(axesA[PositiveY], axesB[PositiveY])) ) { return 0; }
+				if ( !testAxis(Vector< 3, data_t >::crossProduct(axesA[PositiveY], axesB[PositiveZ])) ) { return 0; }
+
+				/* A.Z × B.X, A.Z × B.Y, A.Z × B.Z */
+				if ( !testAxis(Vector< 3, data_t >::crossProduct(axesA[PositiveZ], axesB[PositiveX])) ) { return 0; }
+				if ( !testAxis(Vector< 3, data_t >::crossProduct(axesA[PositiveZ], axesB[PositiveY])) ) { return 0; }
+				if ( !testAxis(Vector< 3, data_t >::crossProduct(axesA[PositiveZ], axesB[PositiveZ])) ) { return 0; }
+
+				/* Collision confirmed. Ensure MTV direction pushes A out of B.
+				 * Calculate centers and check if minAxis points from B to A. */
+				Vector< 3, data_t > centerA, centerB;
+
+				for ( const auto & vertex : cuboidA.m_vertices )
 				{
-					/* Projects both shapes onto the axis. */
-					const auto projectionA = cuboidA.project(axis);
-					const auto projectionB = cuboidB.project(axis);
-
-					/* Gets the possible overlap. */
-					const auto overlap = projectionA.getOverlap(projectionB);
-
-					/* Do the projections overlap?
-					 * If not, then we can guarantee that the shapes do not overlap. */
-					if ( overlap <= 0 )
-					{
-						return 0;
-					}
-
-					/* Checks for minimum overlapping. If minimum, we set this one as the smallest. */
-					if ( overlap < distance )
-					{
-						distance = overlap;
-						direction = axis;
-					}
+					centerA += vertex;
 				}
 
-				/* If we get here, then we know that every axis had overlap on it,
-				 * so we can guarantee an intersection. */
-				return distance;
+				for ( const auto & vertex : cuboidB.m_vertices )
+				{
+					centerB += vertex;
+				}
+
+				centerA /= static_cast< data_t >(8);
+				centerB /= static_cast< data_t >(8);
+
+				/* If the axis points from A to B, flip it so MTV pushes A out of B. */
+				if ( Vector< 3, data_t >::dotProduct(centerA - centerB, minAxis) < 0 )
+				{
+					minAxis = -minAxis;
+				}
+
+				direction = minAxis;
+
+				return minOverlap;
 			}
 
 			/**

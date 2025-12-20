@@ -28,6 +28,7 @@
 
 /* Local inclusions. */
 #include "Component/AbstractModifier.hpp"
+#include "Libs/Math/OrientedCuboid.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::Scenes
@@ -101,9 +102,8 @@ namespace EmEn::Scenes
 
 					if ( vn > 0.0F )
 					{
-						const float bounciness = movable->getBodyPhysicalProperties().bounciness();
 						/* Reflect velocity: remove component going into surface, add bounce. */
-						velocity -= dominantNormal * vn * (1.0F + bounciness);
+						velocity -= dominantNormal * vn * (1.0F + movable->getBodyPhysicalProperties().bounciness());
 						movable->setLinearVelocity(velocity);
 					}
 
@@ -141,7 +141,7 @@ namespace EmEn::Scenes
 	}
 
 	void
-	Scene::detectCollisionCollisionInSector (const OctreeSector< AbstractEntity, true > & sector, std::vector< ContactManifold > & manifolds, std::unordered_set< uint64_t > & testedEntityPairs) const noexcept
+	Scene::detectCollisionInSector (const OctreeSector< AbstractEntity, true > & sector, std::vector< ContactManifold > & manifolds, std::unordered_set< uint64_t > & testedEntityPairs) const noexcept
 	{
 		const bool sectorAtBorder = sector.isTouchingRootBorder();
 
@@ -953,35 +953,115 @@ namespace EmEn::Scenes
 				continue;
 			}
 
-			/* Perform collision detection between the movable entity and the static entity. */
-			const auto entitySphere = entity->getWorldBoundingSphere();
-			const auto otherSphere = otherEntity->getWorldBoundingSphere();
+			/* Collision detection based on both entities' collision models.
+			 * Static entities with Point model are ignored (no volume). */
+			Vector< 3, float > mtv{0.0F, 0.0F, 0.0F};
+			bool collisionDetected = false;
 
-			/* Simple sphere-sphere collision for now. */
-			const auto delta = entitySphere.position() - otherSphere.position();
-			const auto distanceSquared = delta.lengthSquared();
-			const auto combinedRadius = entitySphere.radius() + otherSphere.radius();
-
-			if ( distanceSquared < combinedRadius * combinedRadius )
+			switch ( otherEntity->collisionDetectionModel() )
 			{
-				const auto distance = std::sqrt(distanceSquared);
-				const auto penetration = combinedRadius - distance;
+				case CollisionDetectionModel::Point :
+					/* Static entities with no volume are skipped. */
+					continue;
 
-				if ( penetration > 0.0F && distance > 0.0001F )
+				case CollisionDetectionModel::Sphere :
 				{
-					/* Normal points from static entity to movable entity. */
-					const auto normal = delta / distance;
+					const auto staticSphere = otherEntity->getWorldBoundingSphere();
 
-					/* Accumulate position correction (move in direction of normal). */
-					positionCorrection += normal * penetration;
+					switch ( entity->collisionDetectionModel() )
+					{
+						case CollisionDetectionModel::Point :
+						{
+							const auto position = entity->getWorldCoordinates().position();
 
-					/* Track dominant collision for velocity bounce.
-					 * For static entities, we use the normal pointing INTO the static entity
-					 * (opposite direction) for consistent bounce behavior. */
+							collisionDetected = Space3D::isColliding(position, staticSphere, mtv);
+						}
+							break;
+
+						case CollisionDetectionModel::Sphere :
+						{
+							const auto entitySphere = entity->getWorldBoundingSphere();
+
+							collisionDetected = Space3D::isColliding(entitySphere, staticSphere, mtv);
+						}
+							break;
+
+						case CollisionDetectionModel::AABB :
+						{
+							const auto entityAABB = entity->getWorldBoundingBox();
+
+							collisionDetected = Space3D::isColliding(entityAABB, staticSphere, mtv);
+						}
+							break;
+					}
+				}
+					break;
+
+				case CollisionDetectionModel::AABB :
+				{
+					const auto staticAABB = otherEntity->getWorldBoundingBox();
+
+					switch ( entity->collisionDetectionModel() )
+					{
+						case CollisionDetectionModel::Point :
+						{
+							const auto position = entity->getWorldCoordinates().position();
+
+							collisionDetected = Space3D::isColliding(position, staticAABB, mtv);
+						}
+							break;
+
+						case CollisionDetectionModel::Sphere :
+						{
+							const auto entitySphere = entity->getWorldBoundingSphere();
+
+							collisionDetected = Space3D::isColliding(entitySphere, staticAABB, mtv);
+						}
+							break;
+
+						case CollisionDetectionModel::AABB :
+						{
+							const auto entityAABB = entity->getWorldBoundingBox();
+
+							/* NOTE: Broad phase: Quick AABB overlap test. */
+							if ( Space3D::isColliding(entityAABB, staticAABB) )
+							{
+								/* NOTE: Narrow phase: Precise OBB collision using SAT algorithm.
+								 * This handles rotated objects correctly by testing all 15 separating axes. */
+								const auto entityOBB = OrientedCuboid< float >{entity->localBoundingBox(), entity->getWorldCoordinates()};
+								const auto staticOBB = OrientedCuboid< float >{otherEntity->localBoundingBox(), otherEntity->getWorldCoordinates()};
+
+								Vector< 3, float > direction;
+								const auto penetration = OrientedCuboid< float >::isIntersecting(entityOBB, staticOBB, direction);
+
+								if ( penetration > 0.0F )
+								{
+									collisionDetected = true;
+									mtv = direction * penetration;
+								}
+							}
+						}
+							break;
+					}
+				}
+					break;
+			}
+
+			if ( collisionDetected )
+			{
+				const auto penetration = mtv.length();
+
+				if ( penetration > 0.0F )
+				{
+					/* MTV points in the direction to move the entity OUT of collision. */
+					positionCorrection += mtv;
+
+					/* Track dominant collision for velocity bounce. */
 					if ( penetration > maxPenetration )
 					{
 						maxPenetration = penetration;
-						dominantNormal = -normal;
+						/* Normal points INTO the static entity (for bounce calculation). */
+						dominantNormal = -mtv.normalize();
 					}
 				}
 			}

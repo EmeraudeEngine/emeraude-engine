@@ -108,6 +108,7 @@ namespace EmEn::Scenes
 
 		this->setRenderingAbilityState(false);
 
+		/* NOTE: If bounding primitives are overridden, we don't recompute them. */
 		if ( !this->isFlagEnabled(BoundingPrimitivesOverridden) )
 		{
 			/* Reset the bounding box to make a valid
@@ -117,7 +118,8 @@ namespace EmEn::Scenes
 		}
 
 		{
-			std::lock_guard< std::mutex > lock(m_componentsMutex);
+			const std::lock_guard< std::mutex > lock{m_componentsMutex};
+
 			for ( const auto & component : m_components )
 			{
 				/* Checks render ability. */
@@ -146,35 +148,54 @@ namespace EmEn::Scenes
 						physicalEntityCount++;
 					}
 
+					/* NOTE: If bounding primitives are overridden, we don't recompute them. */
 					if ( !this->isFlagEnabled(BoundingPrimitivesOverridden) )
 					{
 						/* Merge the component local bounding shapes to the scene node local bounding shapes. */
-						m_boundingBox.merge(component->localBoundingBox());
-						m_boundingSphere.merge(component->localBoundingSphere());
+						if ( const auto & componentBoundingBox = component->localBoundingBox(); componentBoundingBox.isValid() )
+						{
+							m_boundingBox.merge(componentBoundingBox);
+						}
+						else
+						{
+							TraceDebug{TracerTag} << "[ENTITY-PROPERTIES] The component of entity " << this->name() << "' has an invalid bounding box! ";
+						}
+
+						if ( const auto & componentBoundingSphere = component->localBoundingSphere(); componentBoundingSphere.isValid() )
+						{
+							m_boundingSphere.merge(componentBoundingSphere);
+						}
+						else
+						{
+							TraceDebug{TracerTag} << "[ENTITY-PROPERTIES] The component of entity " << this->name() << "' has an invalid bounding sphere! ";
+						}
 					}
 				}
 			}
 		}
 
-		switch ( m_collisionDetectionModel )
+		if constexpr ( IsDebug )
 		{
-			case CollisionDetectionModel::Point :
-				// Nothing to do ...
-				break;
+			switch ( m_collisionDetectionModel )
+			{
+				case CollisionDetectionModel::Point :
+					// Nothing special ...
+					break;
 
-			case CollisionDetectionModel::Sphere :
-				if ( !m_boundingSphere.isValid() )
-				{
-					m_collisionDetectionModel = CollisionDetectionModel::Point;
-				}
-				break;
+				case CollisionDetectionModel::Sphere :
+					if ( !m_boundingSphere.isValid() )
+					{
+						TraceDebug{TracerTag} << "[ENTITY-PROPERTIES][WARNING] The entity '" << this->name() << "' collision model is Sphere. But the primitive is invalid!";
+					}
+					break;
 
-			case CollisionDetectionModel::AABB :
-				if ( !m_boundingBox.isValid() )
-				{
-					m_collisionDetectionModel = CollisionDetectionModel::Point;
-				}
-				break;
+				case CollisionDetectionModel::AABB :
+					if ( !m_boundingBox.isValid() )
+					{
+						TraceDebug{TracerTag} << "[ENTITY-PROPERTIES][WARNING] The entity '" << this->name() << "' collision model is AABB. But the primitive is invalid!";
+					}
+					break;
+			}
 		}
 
 		if ( physicalEntityCount > 0 )

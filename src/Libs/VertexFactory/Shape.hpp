@@ -1426,15 +1426,10 @@ namespace EmEn::Libs::VertexFactory
 				m_boundingSphere.reset();
 				m_farthestDistance = 0;
 
-				/* NOTE: This will hold up the center of every vertex. */
-				Math::Vector< 3, vertex_data_t > centroid;
-
 				for ( const auto & vertexRef : m_vertices )
 				{
 					/* Update the bounding box. */
 					m_boundingBox.merge(vertexRef.position());
-
-					centroid += vertexRef.position();
 
 					/* Update the farthest point from the origin. */
 					const auto distance = vertexRef.position().length();
@@ -1445,13 +1440,16 @@ namespace EmEn::Libs::VertexFactory
 					}
 				}
 
-				centroid /= static_cast< vertex_data_t >(m_vertices.size());
+				/* NOTE: Use the bounding box center instead of the average of vertices.
+				 * The average of vertices can be off-center for non-uniformly sampled geometry
+				 * (e.g., spheres with more vertices at poles), causing an inflated bounding sphere. */
+				const auto centroid = m_boundingBox.centroid();
 
 				vertex_data_t centroidDistance = 0;
 
 				for ( const auto & vertexRef : m_vertices )
 				{
-					/* Update the farthest point from the origin. */
+					/* Update the farthest point from the bounding box center. */
 					const auto distance = (vertexRef.position() - centroid).length();
 
 					if ( distance > centroidDistance )

@@ -45,6 +45,10 @@ set(EMERAUDE_HEADER_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/Math/Space2D/SAT.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/Math/Space2D/Segment.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/Math/Space2D/Triangle.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/Math/Space3D/Collisions/CapsuleCuboid.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/Math/Space3D/Collisions/CapsulePoint.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/Math/Space3D/Collisions/CapsuleSphere.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/Math/Space3D/Collisions/CapsuleTriangle.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/Math/Space3D/Collisions/PointCuboid.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/Math/Space3D/Collisions/PointSphere.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/Math/Space3D/Collisions/PointTriangle.hpp
@@ -61,6 +65,7 @@ set(EMERAUDE_HEADER_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/Math/Space3D/Intersections/SegmentSphere.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/Math/Space3D/Intersections/SegmentTriangle.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/Math/Space3D/AACuboid.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/Math/Space3D/Capsule.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/Math/Space3D/Line.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/Math/Space3D/Point.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/Math/Space3D/Segment.hpp

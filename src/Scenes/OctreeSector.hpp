@@ -43,6 +43,7 @@
 /* Local inclusions for usages. */
 #include "Libs/Math/Space3D/Collisions/SamePrimitive.hpp"
 #include "Libs/Math/Space3D/Collisions/PointCuboid.hpp"
+#include "Libs/Math/Space3D/Collisions/PointSphere.hpp"
 #include "Libs/Math/Space3D/Collisions/SphereCuboid.hpp"
 #include "LocatableInterface.hpp"
 #include "Tracer.hpp"

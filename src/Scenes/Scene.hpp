@@ -2077,7 +2077,7 @@ namespace EmEn::Scenes
 			 * @param manifolds A reference to a vector of contact manifolds.
 			 * @param testedEntityPairs A reference to a set of already tested entity pairs (avoids cross-sector duplicates).
 			 */
-			void detectCollisionCollisionInSector (const OctreeSector< AbstractEntity, true > & sector, std::vector< Physics::ContactManifold > & manifolds, std::unordered_set< uint64_t > & testedEntityPairs) const noexcept;
+			void detectCollisionInSector (const OctreeSector< AbstractEntity, true > & sector, std::vector< Physics::ContactManifold > & manifolds, std::unordered_set< uint64_t > & testedEntityPairs) const noexcept;
 
 			/**
 			 * @brief Detects collision between an entity and the world boundaries.

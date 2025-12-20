@@ -58,7 +58,7 @@ namespace EmEn::Libs::Math::Space3D
 			explicit
 			constexpr
 			Sphere (precision_t radius) noexcept
-				: m_radius(radius)
+				: m_radius{radius}
 			{
 
 			}
@@ -70,7 +70,8 @@ namespace EmEn::Libs::Math::Space3D
 			 */
 			constexpr
 			Sphere (precision_t radius, const Vector< 3, precision_t > & position) noexcept
-				: m_position(position), m_radius(radius)
+				: m_position{position},
+				m_radius{radius}
 			{
 
 			}

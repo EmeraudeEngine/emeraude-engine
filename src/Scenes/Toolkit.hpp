@@ -932,9 +932,6 @@ namespace EmEn::Scenes
 				{
 					entity.entity()->setCollisionDetectionModel(CollisionDetectionModel::Sphere);
 
-					/* FIXME: The bounding sphere is incorrectly computed from the geometry! */
-					entity.entity()->overrideBoundingPrimitives(Space3D::AACuboid{radius}, Space3D::Sphere{radius});
-
 					const auto density = materialResource == nullptr ? 1.0F : materialResource->surfacePhysicalProperties().density();
 
 					entity.component()
@@ -993,6 +990,14 @@ namespace EmEn::Scenes
 			 */
 			[[nodiscard]]
 			std::vector< Libs::Math::CartesianFrame< float > > generateRandomCoordinates (size_t count, float min, float max) noexcept;
+
+			/**
+			 * @brief Returns a simple colored basic material.
+			 * @param color A reference to a color.
+			 * @return std::shared_ptr< Graphics::Material::Interface >
+			 */
+			[[nodiscard]]
+			std::shared_ptr< Graphics::Material::Interface > getColoredMaterialResource (const Libs::PixelFactory::Color< float > & color) const noexcept;
 
 		private:
 

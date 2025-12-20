@@ -103,6 +103,22 @@ ctest -R Physics
 - **Scenes integration**: Scene graph Nodes inherit MovableTrait for physics
 - **Spatial octree**: Scene owns Octree for physics broad-phase
 
+## Available Collision Primitives
+
+The physics system uses collision primitives from `Libs/Math/Space3D`:
+
+| Primitive | Description | Use Case |
+|-----------|-------------|----------|
+| `Sphere` | Center + radius | Simple entities, particles |
+| `Capsule` | Axis segment + radius | Characters, elongated objects |
+| `AACuboid` | Axis-aligned box | Static objects, triggers |
+| `Triangle` | 3 vertices | Terrain mesh collision |
+
+**Capsule** is ideal for character collision:
+- Better fit for humanoid shapes than spheres
+- Handles slopes and stairs naturally
+- See: `@src/Libs/AGENTS.md` → "Math/Space3D: Capsule Primitive"
+
 ## Detailed Documentation
 
 For complete physics system architecture:
@@ -111,4 +127,4 @@ For complete physics system architecture:
 Related systems:
 - @docs/coordinate-system.md - Y-down convention (CRITICAL)
 - @src/Scenes/AGENTS.md - Nodes with MovableTrait for physics
-- @src/Libs/AGENTS.md - Math (Vector, Matrix, collision detection)
+- @src/Libs/AGENTS.md - Math (Vector, Matrix, collision primitives including Capsule)
