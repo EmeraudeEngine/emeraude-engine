@@ -45,6 +45,7 @@
 #include "Libs/Math/Space3D/Collisions/PointCuboid.hpp"
 #include "Libs/Math/Space3D/Collisions/PointSphere.hpp"
 #include "Libs/Math/Space3D/Collisions/SphereCuboid.hpp"
+#include "Physics/CollisionModelInterface.hpp"
 #include "LocatableInterface.hpp"
 #include "Tracer.hpp"
 
@@ -741,8 +742,8 @@ namespace EmEn::Scenes
 			 * This is the primary insertion method that dispatches to the appropriate collision primitive
 			 * based on the template parameter enable_volume:
 			 * - When enable_volume=false (rendering octree): Uses only the element's position point.
-			 * - When enable_volume=true (physics octree): Uses the element's bounding volume (Sphere or AABB)
-			 *   as determined by element->collisionDetectionModel().
+			 * - When enable_volume=true (physics octree): Uses the element's collision model AABB
+			 *   or position for Point types (as determined by element->collisionModel()).
 			 *
 			 * The element is inserted at this level if it collides with this sector, then recursively
 			 * inserted into all child sectors it touches (all-levels storage strategy).
@@ -766,20 +767,22 @@ namespace EmEn::Scenes
 			{
 				if constexpr ( enable_volume )
 				{
-					switch ( element->collisionDetectionModel() )
+					/* If no collision model, use position as a point. */
+					if ( !element->hasCollisionModel() )
 					{
-						case CollisionDetectionModel::Point :
-							return this->insertWithPrimitive(element, element->getWorldCoordinates().position());
-
-						case CollisionDetectionModel::Sphere :
-							return this->insertWithPrimitive(element, element->getWorldBoundingSphere());
-
-						case CollisionDetectionModel::AABB :
-							return this->insertWithPrimitive(element, element->getWorldBoundingBox());
-
-						default:
-							return false;
+						return this->insertWithPrimitive(element, element->getWorldCoordinates().position());
 					}
+
+					const auto * model = element->collisionModel();
+
+					/* Point models use position directly. */
+					if ( model->modelType() == Physics::CollisionModelType::Point )
+					{
+						return this->insertWithPrimitive(element, element->getWorldCoordinates().position());
+					}
+
+					/* All other models (Sphere, AABB, Capsule) use their world AABB. */
+					return this->insertWithPrimitive(element, model->getAABB(element->getWorldCoordinates()));
 				}
 				else
 				{
@@ -886,20 +889,22 @@ namespace EmEn::Scenes
 				/* TODO: Verify the specific check when not using volume. */
 				if constexpr ( enable_volume )
 				{
-					switch ( element->collisionDetectionModel() )
+					/* If no collision model, use position as a point. */
+					if ( !element->hasCollisionModel() )
 					{
-						case CollisionDetectionModel::Point :
-							return this->checkElementOverlapWithPrimitive(element, element->getWorldCoordinates().position());
-
-						case CollisionDetectionModel::Sphere :
-							return this->checkElementOverlapWithPrimitive(element, element->getWorldBoundingSphere());
-
-						case CollisionDetectionModel::AABB :
-							return this->checkElementOverlapWithPrimitive(element, element->getWorldBoundingBox());
-
-						default:
-							return false;
+						return this->checkElementOverlapWithPrimitive(element, element->getWorldCoordinates().position());
 					}
+
+					const auto * model = element->collisionModel();
+
+					/* Point models use position directly. */
+					if ( model->modelType() == Physics::CollisionModelType::Point )
+					{
+						return this->checkElementOverlapWithPrimitive(element, element->getWorldCoordinates().position());
+					}
+
+					/* All other models (Sphere, AABB, Capsule) use their world AABB. */
+					return this->checkElementOverlapWithPrimitive(element, model->getAABB(element->getWorldCoordinates()));
 				}
 				else
 				{

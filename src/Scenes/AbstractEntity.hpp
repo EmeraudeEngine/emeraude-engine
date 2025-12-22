@@ -45,12 +45,11 @@
 /* Local inclusions for usages. */
 #include "Libs/StaticVector.hpp"
 #include "Libs/Math/CartesianFrame.hpp"
-#include "Libs/Math/Space3D/AACuboid.hpp"
-#include "Libs/Math/Space3D/Sphere.hpp"
 #include "Component/Abstract.hpp"
 #include "Resources/Manager.hpp"
 #include "Graphics/Renderable/MeshResource.hpp"
 #include "Graphics/Material/BasicResource.hpp"
+#include "Physics/CollisionModelInterface.hpp"
 
 /* Forward declarations. */
 namespace EmEn::Physics
@@ -65,8 +64,7 @@ namespace EmEn::Scenes
 	{
 		Axis,            ///< Local coordinate system axes (RGB = XYZ).
 		Velocity,        ///< Velocity vector visualization for moving entities.
-		BoundingBox,     ///< Axis-aligned bounding box (AABB) wireframe.
-		BoundingSphere,  ///< Bounding sphere wireframe.
+		BoundingShape,   ///< Collision model shape wireframe (adapts to model type).
 		Camera,          ///< Camera frustum visualization.
 	};
 
@@ -307,35 +305,31 @@ namespace EmEn::Scenes
 			 */
 			~AbstractEntity () override = default;
 
-			/** @copydoc EmEn::Scenes::LocatableInterface::localBoundingBox() const */
+			/** @copydoc EmEn::Scenes::LocatableInterface::setCollisionModel(std::unique_ptr< Physics::CollisionModelInterface >) */
+			void setCollisionModel (std::unique_ptr< Physics::CollisionModelInterface > model) noexcept override;
+
+			/** @copydoc EmEn::Scenes::LocatableInterface::hasCollisionModel() const */
 			[[nodiscard]]
-			const Libs::Math::Space3D::AACuboid< float > &
-			localBoundingBox () const noexcept final
+			bool
+			hasCollisionModel () const noexcept override
 			{
-				return m_boundingBox;
+				return m_collisionModel != nullptr;
 			}
 
-			/** @copydoc EmEn::Scenes::LocatableInterface::localBoundingSphere() const */
+			/** @copydoc EmEn::Scenes::LocatableInterface::collisionModel() const */
 			[[nodiscard]]
-			const Libs::Math::Space3D::Sphere< float > &
-			localBoundingSphere () const noexcept final
+			const Physics::CollisionModelInterface *
+			collisionModel () const noexcept override
 			{
-				return m_boundingSphere;
+				return m_collisionModel.get();
 			}
 
-			/** @copydoc EmEn::Scenes::LocatableInterface::setCollisionDetectionModel(Scenes::CollisionDetectionModel) */
-			void
-			setCollisionDetectionModel (CollisionDetectionModel model) noexcept override
-			{
-				m_collisionDetectionModel = model;
-			}
-
-			/** @copydoc EmEn::Scenes::LocatableInterface::collisionDetectionModel() const */
+			/** @copydoc EmEn::Scenes::LocatableInterface::collisionModel() */
 			[[nodiscard]]
-			CollisionDetectionModel
-			collisionDetectionModel () const noexcept override
+			Physics::CollisionModelInterface *
+			collisionModel () noexcept override
 			{
-				return m_collisionDetectionModel;
+				return m_collisionModel.get();
 			}
 
 			/**
@@ -354,7 +348,7 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			 * @brief Returns the physical properties (read-only).
+			 * @brief Returns the physical properties (read-only) [PHYSICS].
 			 *
 			 * Physical properties are aggregated from all components with physical
 			 * properties enabled (mass, drag, bounciness, etc.). Properties are
@@ -372,7 +366,7 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			 * @brief Returns the physical properties (writable).
+			 * @brief Returns the physical properties (writable) [PHYSICS].
 			 *
 			 * Allows direct modification of aggregated physical properties. Note that
 			 * properties are recalculated when components change, so manual modifications
@@ -603,23 +597,6 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			 * @brief Overrides automatic bounding primitive computation.
-			 *
-			 * By default, bounding primitives are automatically computed by merging all
-			 * component bounding shapes. This method allows manual override for custom
-			 * collision shapes or performance optimization.
-			 *
-			 * @param box The custom axis-aligned bounding box (AABB).
-			 * @param sphere The custom bounding sphere.
-			 *
-			 * @note Once overridden, bounding primitives will NOT update when components change.
-			 *       Call this again with new values if needed.
-			 * @note Sets the BoundingPrimitivesOverridden flag.
-			 * @see localBoundingBox(), localBoundingSphere()
-			 */
-			void overrideBoundingPrimitives (const Libs::Math::Space3D::AACuboid< float > & box, const Libs::Math::Space3D::Sphere< float > & sphere) noexcept;
-
-			/**
 			 * @brief Enables a visual debug overlay for this entity.
 			 *
 			 * Creates visual components to display debug information (axes, velocity, bounding
@@ -686,7 +663,7 @@ namespace EmEn::Scenes
 			bool processLogics (const Scene & scene, size_t engineCycle) noexcept;
 
 			/**
-			 * @brief Returns whether the entity has moved since the last cycle.
+			 * @brief Returns whether the entity has moved since the last cycle [PHYSICS].
 			 *
 			 * Used by Scene to determine if entity needs spatial partitioning (octree) updates.
 			 *
@@ -718,24 +695,6 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			 * @brief Returns whether the entity participates in collision detection.
-			 *
-			 * An entity is collidable by default. Collidable entities participate in
-			 * physics collision detection.
-			 *
-			 * @return bool True if collision is enabled, false if disabled.
-			 *
-			 * @note Entities are collidable by default. Use setCollidable(false) to disable.
-			 * @see setCollidable()
-			 */
-			[[nodiscard]]
-			bool
-			isCollidable () const noexcept
-			{
-				return !this->isFlagEnabled(IsCollisionDisabled);
-			}
-
-			/**
 			 * @brief Returns whether the entity is renderable.
 			 *
 			 * An entity is renderable if it has at least one component with rendering capability
@@ -753,26 +712,41 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			 * @brief Returns whether the entity has valid physical properties.
+			 * @brief Sets whether this entity participates in collision detection [PHYSICS].
 			 *
-			 * Physical properties are aggregated from components with non-null mass.
-			 * If true, bodyPhysicalProperties() contains valid aggregated values.
+			 * When disabled, the entity will not participate in collision detection even
+			 * if it has valid bounding primitives. Use for non-solid visuals, triggers, etc.
 			 *
-			 * @return bool True if entity has at least one component with physical properties, false otherwise.
+			 * @param state True to enable collision detection, false to disable.
 			 *
-			 * @note Automatically set based on component properties (updateEntityProperties()).
-			 * @todo [PHYSICS] Should query m_bodyPhysicalProperties directly instead of using flag.
-			 * @see bodyPhysicalProperties()
+			 * @see isCollidable()
 			 */
-			[[nodiscard]]
-			bool
-			hasBodyPhysicalProperties () const noexcept
+			void
+			setCollidable (bool state) noexcept
 			{
-				return this->isFlagEnabled(HasBodyPhysicalProperties);
+				this->setFlag(IsCollisionDisabled, !state);
 			}
 
 			/**
-			 * @brief Pauses physics simulation on this entity.
+			 * @brief Returns whether the entity participates in collision detection [PHYSICS].
+			 *
+			 * An entity is collidable by default. Collidable entities participate in
+			 * physics collision detection.
+			 *
+			 * @return bool True if collision is enabled, false if disabled.
+			 *
+			 * @note Entities are collidable by default. Use setCollidable(false) to disable.
+			 * @see setCollidable()
+			 */
+			[[nodiscard]]
+			bool
+			isCollidable () const noexcept
+			{
+				return !this->isFlagEnabled(IsCollisionDisabled);
+			}
+
+			/**
+			 * @brief Pauses physics simulation on this entity [PHYSICS].
 			 *
 			 * When paused, the entity will not receive automatic forces (gravity, drag).
 			 * The simulation automatically resumes when custom forces are applied.
@@ -789,7 +763,7 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			 * @brief Returns whether physics simulation is paused on this entity.
+			 * @brief Returns whether physics simulation is paused on this entity [PHYSICS].
 			 *
 			 * @return bool True if simulation is paused (no gravity/drag), false if active.
 			 *
@@ -803,23 +777,7 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			 * @brief Sets whether this entity participates in collision detection.
-			 *
-			 * When disabled, the entity will not participate in collision detection even
-			 * if it has valid bounding primitives. Use for non-solid visuals, triggers, etc.
-			 *
-			 * @param state True to enable collision detection, false to disable.
-			 *
-			 * @see isCollidable()
-			 */
-			void
-			setCollidable (bool state) noexcept
-			{
-				this->setFlag(IsCollisionDisabled, !state);
-			}
-
-			/**
-			 * @brief Returns whether the entity has movement capability.
+			 * @brief Returns whether the entity has movement capability [PHYSICS].
 			 *
 			 * Indicates if this entity type supports physics movement (velocity, forces, etc.).
 			 * Node returns true, StaticEntity returns false.
@@ -833,7 +791,7 @@ namespace EmEn::Scenes
 			virtual bool hasMovableAbility () const noexcept = 0;
 
 			/**
-			 * @brief Returns the movable trait for physics movement (non-const version).
+			 * @brief Returns the movable trait for physics movement (non-const version) [PHYSICS].
 			 *
 			 * Provides access to velocity, forces, and other movement properties. Only valid
 			 * if hasMovableAbility() returns true.
@@ -847,7 +805,7 @@ namespace EmEn::Scenes
 			virtual Physics::MovableTrait * getMovableTrait () noexcept = 0;
 
 			/**
-			 * @brief Returns the movable trait for physics movement (const version).
+			 * @brief Returns the movable trait for physics movement (const version) [PHYSICS].
 			 *
 			 * @return const Physics::MovableTrait * Pointer to movable trait (entity-owned), or nullptr if static.
 			 *
@@ -858,7 +816,7 @@ namespace EmEn::Scenes
 			virtual const Physics::MovableTrait * getMovableTrait () const noexcept = 0;
 
 			/**
-			 * @brief Returns whether the entity is currently moving (has non-zero velocity).
+			 * @brief Returns whether the entity is currently moving (has non-zero velocity) [PHYSICS].
 			 *
 			 * Static entities always return false. Nodes with zero velocity return false.
 			 *
@@ -907,15 +865,13 @@ namespace EmEn::Scenes
 			/**
 			 * @brief Flag indices for FlagArrayTrait< 8 >.
 			 *
-			 * AbstractEntity uses 6 of the 8 available flags. Derived classes can use flags
-			 * starting from NextFlag (currently 6).
+			 * AbstractEntity uses 5 of the 8 available flags. Derived classes can use flags
+			 * starting from NextFlag (currently 4).
 			 */
-			static constexpr auto BoundingPrimitivesOverridden{0UL}; ///< Bounding shapes manually overridden (don't auto-update).
+			static constexpr auto IsRenderable{0UL};                 ///< Entity has at least one renderable component.
 			static constexpr auto IsCollisionDisabled{1UL};          ///< Collision detection disabled (default: false = collidable).
-			static constexpr auto IsRenderable{2UL};                 ///< Entity has at least one renderable component.
-			static constexpr auto HasBodyPhysicalProperties{3UL};    ///< Entity has aggregated physical properties (mass > 0).
-			static constexpr auto IsSimulationPaused{4UL};           ///< Physics simulation paused (no gravity/drag).
-			static constexpr auto NextFlag{5UL};                     ///< First available flag for derived classes (Node, StaticEntity).
+			static constexpr auto IsSimulationPaused{2UL};           ///< Physics simulation paused (no gravity/drag).
+			static constexpr auto NextFlag{3UL};                     ///< First available flag for derived classes (Node, StaticEntity).
 
 			/**
 			 * @brief Constructs an abstract entity.
@@ -934,6 +890,22 @@ namespace EmEn::Scenes
 				m_birthTime{sceneTimepointMS}
 			{
 
+			}
+
+			/**
+			 * @brief Sets the renderable state flag.
+			 *
+			 * Called by updateEntityProperties() when components with rendering capability
+			 * are detected.
+			 *
+			 * @param state True if entity has renderable components, false otherwise.
+			 *
+			 * @note Prefer updateEntityProperties() over manual flag manipulation.
+			 */
+			void
+			setRenderingAbilityState (bool state) noexcept
+			{
+				this->setFlag(IsRenderable, state);
 			}
 
 			/**
@@ -980,38 +952,6 @@ namespace EmEn::Scenes
 			void onContainerMove (const Libs::Math::CartesianFrame< float > & worldCoordinates) noexcept;
 
 			/**
-			 * @brief Sets the renderable state flag.
-			 *
-			 * Called by updateEntityProperties() when components with rendering capability
-			 * are detected.
-			 *
-			 * @param state True if entity has renderable components, false otherwise.
-			 *
-			 * @note Prefer updateEntityProperties() over manual flag manipulation.
-			 */
-			void
-			setRenderingAbilityState (bool state) noexcept
-			{
-				this->setFlag(IsRenderable, state);
-			}
-
-			/**
-			 * @brief Sets the physical properties state flag.
-			 *
-			 * Called by updateEntityProperties() when components with physical properties
-			 * (non-null mass) are detected.
-			 *
-			 * @param state True if entity has physical components, false otherwise.
-			 *
-			 * @note Prefer updateEntityProperties() over manual flag manipulation.
-			 */
-			void
-			setBodyPhysicalPropertiesState (bool state) noexcept
-			{
-				this->setFlag(HasBodyPhysicalProperties, state);
-			}
-
-			/**
 			 * @brief Derived class logic update hook.
 			 *
 			 * Called by processLogics() after component updates. Derived classes implement
@@ -1055,15 +995,14 @@ namespace EmEn::Scenes
 			 * @brief Recalculates entity properties when components change.
 			 *
 			 * Aggregates physical properties (mass, drag, bounciness) from all components,
-			 * merges bounding primitives, updates flags (IsRenderable, IsCollidable,
-			 * HasBodyPhysicalProperties), and triggers onContentModified() hook.
+			 * updates flags (IsRenderable, IsCollidable, HasBodyPhysicalProperties),
+			 * and triggers onContentModified() hook.
 			 *
 			 * Called automatically when:
 			 * - Components are added/removed
 			 * - Component properties change (ComponentContentModified notification)
 			 * - Physical properties change (PropertiesChanged notification)
 			 *
-			 * @note If BoundingPrimitivesOverridden flag is set, bounding shapes are NOT updated.
 			 * @note This is the central orchestrator for entity state consistency.
 			 */
 			void updateEntityProperties () noexcept;
@@ -1152,18 +1091,7 @@ namespace EmEn::Scenes
 			static std::shared_ptr< Graphics::Renderable::MeshResource > getVelocityVisualDebug (Resources::Manager & resources) noexcept;
 
 			/**
-			 * @brief Returns or creates the bounding box debug mesh (wireframe AABB).
-			 *
-			 * @param resources Reference to resource manager (used for mesh creation).
-			 * @return std::shared_ptr< Graphics::Renderable::MeshResource > Shared pointer to bounding box debug mesh.
-			 *
-			 * @note Cached after first creation - subsequent calls return same mesh.
-			 */
-			[[nodiscard]]
-			static std::shared_ptr< Graphics::Renderable::MeshResource > getBoundingBoxVisualDebug (Resources::Manager & resources) noexcept;
-
-			/**
-			 * @brief Returns or creates the bounding sphere debug mesh (wireframe sphere).
+			 * @brief Returns or creates the bounding sphere debug mesh (geodesic sphere wireframe).
 			 *
 			 * @param resources Reference to resource manager (used for mesh creation).
 			 * @return std::shared_ptr< Graphics::Renderable::MeshResource > Shared pointer to bounding sphere debug mesh.
@@ -1172,6 +1100,17 @@ namespace EmEn::Scenes
 			 */
 			[[nodiscard]]
 			static std::shared_ptr< Graphics::Renderable::MeshResource > getBoundingSphereVisualDebug (Resources::Manager & resources) noexcept;
+
+			/**
+			 * @brief Returns or creates the bounding box debug mesh (cube wireframe).
+			 *
+			 * @param resources Reference to resource manager (used for mesh creation).
+			 * @return std::shared_ptr< Graphics::Renderable::MeshResource > Shared pointer to bounding box debug mesh.
+			 *
+			 * @note Cached after first creation - subsequent calls return same mesh.
+			 */
+			[[nodiscard]]
+			static std::shared_ptr< Graphics::Renderable::MeshResource > getBoundingBoxVisualDebug (Resources::Manager & resources) noexcept;
 
 			/**
 			 * @brief Returns or creates the camera debug mesh (frustum wireframe).
@@ -1214,12 +1153,10 @@ namespace EmEn::Scenes
 			const Scene & m_scene;                          ///< Reference to parent scene (immutable, valid for lifetime).
 			Libs::StaticVector< std::shared_ptr< Component::Abstract >, MaxComponentCount > m_components; ///< Fixed-size component storage.
 			mutable std::mutex m_componentsMutex;           ///< Protects m_components for thread-safe access.
-			Libs::Math::Space3D::AACuboid< float > m_boundingBox;      ///< Aggregated axis-aligned bounding box (local space).
-			Libs::Math::Space3D::Sphere< float > m_boundingSphere;     ///< Aggregated bounding sphere (local space).
 			Physics::BodyPhysicalProperties m_bodyPhysicalProperties;  ///< Aggregated physical properties (mass, drag, etc.).
+			std::unique_ptr< Physics::CollisionModelInterface > m_collisionModel; ///< Collision model for narrow-phase detection.
 			const uint32_t m_birthTime{0};                  ///< Scene timestamp at creation (milliseconds).
 			size_t m_lastUpdatedMoveCycle{0};               ///< Last engine cycle when entity moved (for hasMoved()).
-			CollisionDetectionModel m_collisionDetectionModel{CollisionDetectionModel::Sphere}; ///< Collision detection algorithm preference.
 	};
 
 	template< typename component_t >

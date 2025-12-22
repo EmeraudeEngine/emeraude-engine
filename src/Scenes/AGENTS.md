@@ -217,6 +217,47 @@ When entities cluster at the same point (e.g., physics simulation causing all ba
 **Performance note:**
 At depth 16 with a 200-unit root sector, minimum sector size ≈ 0.003 units. This is smaller than any realistic entity radius, so the depth limit rarely triggers in normal gameplay.
 
+## Visual Debug System
+
+Entities support visual debugging through `enableVisualDebug()` with different visualization types.
+
+### Debug Types
+
+| Type | Purpose | Mesh Used |
+|------|---------|-----------|
+| `Axis` | Show entity orientation | RGB axis lines |
+| `Velocity` | Show movement direction | Arrow |
+| `BoundingShape` | Show collision model | Shape-specific mesh |
+| `Camera` | Show camera frustum | Camera model |
+
+### BoundingShape Visualization
+
+The debug system visualizes all collision model types with appropriate transformations:
+
+- **Point**: Identity transform (axis gizmo used)
+- **Sphere**: Uniform scaling by diameter
+- **AABB**: Translation to centroid + scaling by dimensions
+- **Capsule**: Translation to center + scaling (diameter, height, diameter)
+
+See: `AbstractEntity.debug.cpp:enableVisualDebug()`, `AbstractEntity.debug.cpp:updateVisualDebug()`
+
+### Collision Model Auto-Creation
+
+**CRITICAL BUG PATTERN**: Visual components with meshes trigger automatic collision model creation.
+
+When creating debug/gizmo entities (e.g., sun position markers):
+1. `generateSphereInstance()` creates a visual mesh
+2. `updateEntityProperties()` auto-generates AABB from mesh bounds
+3. This collision model interferes with physics!
+
+**Solution**: Disable physics on gizmo entities:
+```cpp
+// Option 2: Set null collision model after creation
+entity->setCollisionModel(nullptr);
+```
+
+See: `AbstractEntity.cpp:updateEntityProperties()` for auto-AABB creation logic.
+
 ## Critical Points
 
 - **Double buffering**: Logic thread writes activeFrame, Render thread reads renderFrame
@@ -229,6 +270,7 @@ At depth 16 with a 200-unit root sector, minimum sector size ≈ 0.003 units. Th
 - **Observers**: Automatic registration, do not register manually
 - **Suspend/Wakeup**: Every new Component MUST implement `onSuspend()`/`onWakeup()` (pure virtual)
 - **Friend class**: `AbstractEntity` is friend of `Component::Abstract` to access protected hooks
+- **Auto collision models**: Visual components auto-generate collision models - disable for gizmos!
 
 ## Detailed Documentation
 

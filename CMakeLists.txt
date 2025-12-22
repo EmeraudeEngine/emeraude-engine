@@ -193,108 +193,6 @@ message("[EmeraudeEngine] Local external dependencies: ${LOCAL_LIB_DIR}")
 
 
 #######################################################################
-# Reusable compile definitions and options for projects using the engine.
-# These variables are exported for use in dependent projects.
-
-if ( MSVC )
-	set(EMERAUDE_COMPILE_DEFINITIONS
-		$<$<CONFIG:Debug>:DEBUG>					# Declares DEBUG macro
-		$<$<CONFIG:Release>:NDEBUG>					# Declares NDEBUG macro
-		_WIN32_WINNT=0x0A00							# Target Windows 10/11 (0x0601=Win7, 0x0602=Win8, 0x0603=Win8.1)
-		CACHE STRING "Emeraude-Engine compile definitions for Windows."
-	)
-
-	set(EMERAUDE_COMPILE_OPTIONS
-		$<IF:$<BOOL:${EMERAUDE_DISABLE_RTTI}>,/GR-,/GR>				# Run-time type information (conditional)
-		$<$<BOOL:${EMERAUDE_DISABLE_EXCEPTIONS}>:/EHs->				# Disable sync exceptions (conditional)
-		$<$<BOOL:${EMERAUDE_DISABLE_EXCEPTIONS}>:/EHc->				# Disable extern C nothrow (conditional)
-		$<$<NOT:$<BOOL:${EMERAUDE_DISABLE_EXCEPTIONS}>>:/EHsc>		# Enable C++ exceptions (conditional)
-		$<$<CONFIG:Debug>:/RTC1>					# Enable basic run-time checks
-		$<$<CONFIG:Debug>:/Od>						# Disable optimizations
-		$<$<CONFIG:Debug>:/Zi>						# Generate debug information (PDB)
-		$<$<CONFIG:Release>:/O2>					# Optimize for maximum speed
-		$<$<CONFIG:Release>:/Ob3>					# Inline any suitable function
-		$<$<CONFIG:Release>:/GF>					# Enable string pooling
-		/MP${CMAKE_BUILD_PARALLEL_LEVEL}			# Multi-processor compilation
-		/Gy											# Enable function-level linking
-		/W4											# Warning level 4 (high)
-		$<$<NOT:$<BOOL:${EMERAUDE_DISABLE_PARANOID_COMPILATION}>>:/WX>	# Treat warnings as errors (conditional)
-		/wd4100										# Ignore "unreferenced formal parameter"
-		/wd4127										# Ignore "conditional expression is constant"
-		/wd4324										# Ignore "structure was padded due to alignment specifier"
-		/wd4481										# Ignore "nonstandard extension used: override"
-		/wd4512										# Ignore "assignment operator could not be generated"
-		$<$<BOOL:${EMERAUDE_DISABLE_EXCEPTIONS}>:/wd4530>	# Ignore "C++ exception handler used, but unwind semantics are not enabled" when exceptions are disabled
-		/wd4702										# Ignore "unreachable code"
-		/wd4996										# Ignore "function or variable may be unsafe"
-		CACHE STRING "Emeraude-Engine compile options for Windows."
-	)
-elseif ( APPLE )
-	set(EMERAUDE_COMPILE_DEFINITIONS
-		$<$<CONFIG:Debug>:DEBUG>					# Declares DEBUG macro
-		$<$<CONFIG:Release>:NDEBUG>					# Declares NDEBUG macro
-		CACHE STRING "Emeraude-Engine compile definitions for macOS."
-	)
-
-	set(EMERAUDE_COMPILE_OPTIONS
-		$<IF:$<BOOL:${EMERAUDE_DISABLE_RTTI}>,-fno-rtti,-frtti>					# Run-time type information (conditional)
-		$<IF:$<BOOL:${EMERAUDE_DISABLE_EXCEPTIONS}>,-fno-exceptions,-fexceptions>	# C++ exception handling (conditional)
-		$<$<CONFIG:Debug>:-O0>						# No optimization
-		$<$<CONFIG:Debug>:-g>						# Generate debug information
-		$<$<CONFIG:Debug>:-Wall>					# Enable all common warnings
-		$<$<CONFIG:Debug>:-Wextra>					# Enable extra warnings
-		$<$<CONFIG:Debug>:-Wpedantic>				# Enforce strict ISO C++ compliance
-		$<$<CONFIG:Debug>:-fno-omit-frame-pointer>	# Keep frame pointer for better stack traces
-		$<$<CONFIG:Release>:-O2>					# Optimize for speed
-		$<$<CONFIG:Release>:-ffast-math>			# Enable fast floating-point optimizations
-		$<$<CONFIG:Release>:-fdata-sections>		# Place each data item in its own section
-		$<$<CONFIG:Release>:-ffunction-sections>	# Place each function in its own section
-		$<$<CONFIG:Release>:-fstack-protector-strong>	# Stack buffer overflow protection
-		$<$<NOT:$<BOOL:${EMERAUDE_DISABLE_PARANOID_COMPILATION}>>:-Werror>	# Treat warnings as errors (conditional)
-		-Wformat									# Check format string arguments
-		-Wformat-security							# Warn about format string vulnerabilities
-		-Wno-unknown-pragmas						# Ignore unknown pragma directives
-		-Wno-unused-parameter						# Ignore unused function parameters
-		-Wno-unused-private-field					# Ignore unused private fields
-		-Wno-nullability-extension					# Ignore nullability extension warnings
-		-Wno-nullability-completeness				# Ignore incomplete nullability annotations
-		-Wno-gnu-zero-variadic-macro-arguments		# Ignore GNU variadic macro extension
-		CACHE STRING "Emeraude-Engine compile options for macOS."
-	)
-elseif ( UNIX )
-	set(EMERAUDE_COMPILE_DEFINITIONS
-		$<$<CONFIG:Debug>:DEBUG>					# Declares DEBUG macro
-		$<$<CONFIG:Release>:NDEBUG>					# Declares NDEBUG macro
-		$<$<CONFIG:Release>:_FORTIFY_SOURCE=2>		# Runtime buffer overflow detection
-		CACHE STRING "Emeraude-Engine compile definitions for Linux."
-	)
-
-	set(EMERAUDE_COMPILE_OPTIONS
-		$<IF:$<BOOL:${EMERAUDE_DISABLE_RTTI}>,-fno-rtti,-frtti>					# Run-time type information (conditional)
-		$<IF:$<BOOL:${EMERAUDE_DISABLE_EXCEPTIONS}>,-fno-exceptions,-fexceptions>	# C++ exception handling (conditional)
-		$<$<CONFIG:Debug>:-O0>						# No optimization
-		$<$<CONFIG:Debug>:-g>						# Generate debug information
-		$<$<CONFIG:Debug>:-Wall>					# Enable all common warnings
-		$<$<CONFIG:Debug>:-Wextra>					# Enable extra warnings
-		$<$<CONFIG:Debug>:-Wpedantic>				# Enforce strict ISO C++ compliance
-		$<$<CONFIG:Debug>:-fno-omit-frame-pointer>	# Keep frame pointer for better stack traces
-		$<$<CONFIG:Release>:-O2>					# Optimize for speed
-		$<$<CONFIG:Release>:-ffast-math>			# Enable fast floating-point optimizations
-		$<$<CONFIG:Release>:-fdata-sections>		# Place each data item in its own section
-		$<$<CONFIG:Release>:-ffunction-sections>	# Place each function in its own section
-		$<$<CONFIG:Release>:-fstack-protector-strong>	# Stack buffer overflow protection
-		$<$<NOT:$<BOOL:${EMERAUDE_DISABLE_PARANOID_COMPILATION}>>:-Werror>	# Treat warnings as errors (conditional)
-		-Wformat									# Check format string arguments
-		-Wformat-security							# Warn about format string vulnerabilities
-		-Wno-unknown-pragmas						# Ignore unknown pragma directives
-		-Wno-unused-parameter						# Ignore unused function parameters
-		CACHE STRING "Emeraude-Engine compile options for Linux."
-	)
-endif ()
-
-
-
-#######################################################################
 # Pre sources assembly operations.
 if ( EMERAUDE_ENABLE_IMGUI )
 	include(SetupPreSourcesImGui)
@@ -343,6 +241,39 @@ target_compile_options(${PROJECT_NAME} PUBLIC ${EMERAUDE_COMPILE_OPTIONS})
 if ( MSVC )
 	message("[EmeraudeEngine] Configuring C++ compiler (>= MSVC 2022) for Windows ...")
 
+	set(EMERAUDE_COMPILE_DEFINITIONS
+		$<$<CONFIG:Debug>:DEBUG>					# Declares DEBUG macro
+		$<$<CONFIG:Release>:NDEBUG>					# Declares NDEBUG macro
+		_WIN32_WINNT=0x0A00							# Target Windows 10/11 (0x0601=Win7, 0x0602=Win8, 0x0603=Win8.1)
+		CACHE STRING "Emeraude-Engine compile definitions for Windows."
+	)
+
+	set(EMERAUDE_COMPILE_OPTIONS
+		$<IF:$<BOOL:${EMERAUDE_DISABLE_RTTI}>,/GR-,/GR>				# Run-time type information (conditional)
+		$<$<BOOL:${EMERAUDE_DISABLE_EXCEPTIONS}>:/EHs->				# Disable sync exceptions (conditional)
+		$<$<BOOL:${EMERAUDE_DISABLE_EXCEPTIONS}>:/EHc->				# Disable extern C nothrow (conditional)
+		$<$<NOT:$<BOOL:${EMERAUDE_DISABLE_EXCEPTIONS}>>:/EHsc>		# Enable C++ exceptions (conditional)
+		$<$<CONFIG:Debug>:/RTC1>					# Enable basic run-time checks
+		$<$<CONFIG:Debug>:/Od>						# Disable optimizations
+		$<$<CONFIG:Debug>:/Zi>						# Generate debug information (PDB)
+		$<$<CONFIG:Release>:/O2>					# Optimize for maximum speed
+		$<$<CONFIG:Release>:/Ob3>					# Inline any suitable function
+		$<$<CONFIG:Release>:/GF>					# Enable string pooling
+		/MP${CMAKE_BUILD_PARALLEL_LEVEL}			# Multi-processor compilation
+		/Gy											# Enable function-level linking
+		/W4											# Warning level 4 (high)
+		$<$<NOT:$<BOOL:${EMERAUDE_DISABLE_PARANOID_COMPILATION}>>:/WX>	# Treat warnings as errors (conditional)
+		/wd4100										# Ignore "unreferenced formal parameter"
+		/wd4127										# Ignore "conditional expression is constant"
+		/wd4324										# Ignore "structure was padded due to alignment specifier"
+		/wd4481										# Ignore "nonstandard extension used: override"
+		/wd4512										# Ignore "assignment operator could not be generated"
+		$<$<BOOL:${EMERAUDE_DISABLE_EXCEPTIONS}>:/wd4530>	# Ignore "C++ exception handler used, but unwind semantics are not enabled" when exceptions are disabled
+		/wd4702										# Ignore "unreachable code"
+		/wd4996										# Ignore "function or variable may be unsafe"
+		CACHE STRING "Emeraude-Engine compile options for Windows."
+	)
+
 	set_target_properties(${PROJECT_NAME} PROPERTIES
 		C_STANDARD 17 # Next standard will be C23
 		C_STANDARD_REQUIRED On
@@ -355,6 +286,38 @@ if ( MSVC )
 	)
 elseif ( APPLE )
 	message("[EmeraudeEngine] Configuring C++ compiler (>= AppleClang 17.0) for macOS ...")
+
+	set(EMERAUDE_COMPILE_DEFINITIONS
+		$<$<CONFIG:Debug>:DEBUG>					# Declares DEBUG macro
+		$<$<CONFIG:Release>:NDEBUG>					# Declares NDEBUG macro
+		CACHE STRING "Emeraude-Engine compile definitions for macOS."
+	)
+
+	set(EMERAUDE_COMPILE_OPTIONS
+		$<IF:$<BOOL:${EMERAUDE_DISABLE_RTTI}>,-fno-rtti,-frtti>					# Run-time type information (conditional)
+		$<IF:$<BOOL:${EMERAUDE_DISABLE_EXCEPTIONS}>,-fno-exceptions,-fexceptions>	# C++ exception handling (conditional)
+		$<$<CONFIG:Debug>:-O0>						# No optimization
+		$<$<CONFIG:Debug>:-g>						# Generate debug information
+		$<$<CONFIG:Debug>:-Wall>					# Enable all common warnings
+		$<$<CONFIG:Debug>:-Wextra>					# Enable extra warnings
+		$<$<CONFIG:Debug>:-Wpedantic>				# Enforce strict ISO C++ compliance
+		$<$<CONFIG:Debug>:-fno-omit-frame-pointer>	# Keep frame pointer for better stack traces
+		$<$<CONFIG:Release>:-O2>					# Optimize for speed
+		$<$<CONFIG:Release>:-ffast-math>			# Enable fast floating-point optimizations
+		$<$<CONFIG:Release>:-fdata-sections>		# Place each data item in its own section
+		$<$<CONFIG:Release>:-ffunction-sections>	# Place each function in its own section
+		$<$<CONFIG:Release>:-fstack-protector-strong>	# Stack buffer overflow protection
+		$<$<NOT:$<BOOL:${EMERAUDE_DISABLE_PARANOID_COMPILATION}>>:-Werror>	# Treat warnings as errors (conditional)
+		-Wformat									# Check format string arguments
+		-Wformat-security							# Warn about format string vulnerabilities
+		-Wno-unknown-pragmas						# Ignore unknown pragma directives
+		-Wno-unused-parameter						# Ignore unused function parameters
+		-Wno-unused-private-field					# Ignore unused private fields
+		-Wno-nullability-extension					# Ignore nullability extension warnings
+		-Wno-nullability-completeness				# Ignore incomplete nullability annotations
+		-Wno-gnu-zero-variadic-macro-arguments		# Ignore GNU variadic macro extension
+		CACHE STRING "Emeraude-Engine compile options for macOS."
+	)
 
 	set_target_properties(${PROJECT_NAME} PROPERTIES
 		C_STANDARD 17 # Next standard will be C23
@@ -376,6 +339,35 @@ elseif ( APPLE )
 	target_link_libraries(${PROJECT_NAME} PRIVATE "-framework UniformTypeIdentifiers")
 elseif ( UNIX )
 	message("[EmeraudeEngine] Configuring C++ compiler (>= G++13.3) for Linux ...")
+
+	set(EMERAUDE_COMPILE_DEFINITIONS
+		$<$<CONFIG:Debug>:DEBUG>					# Declares DEBUG macro
+		$<$<CONFIG:Release>:NDEBUG>					# Declares NDEBUG macro
+		$<$<CONFIG:Release>:_FORTIFY_SOURCE=2>		# Runtime buffer overflow detection
+		CACHE STRING "Emeraude-Engine compile definitions for Linux."
+	)
+
+	set(EMERAUDE_COMPILE_OPTIONS
+		$<IF:$<BOOL:${EMERAUDE_DISABLE_RTTI}>,-fno-rtti,-frtti>					# Run-time type information (conditional)
+		$<IF:$<BOOL:${EMERAUDE_DISABLE_EXCEPTIONS}>,-fno-exceptions,-fexceptions>	# C++ exception handling (conditional)
+		$<$<CONFIG:Debug>:-O0>						# No optimization
+		$<$<CONFIG:Debug>:-g>						# Generate debug information
+		$<$<CONFIG:Debug>:-Wall>					# Enable all common warnings
+		$<$<CONFIG:Debug>:-Wextra>					# Enable extra warnings
+		$<$<CONFIG:Debug>:-Wpedantic>				# Enforce strict ISO C++ compliance
+		$<$<CONFIG:Debug>:-fno-omit-frame-pointer>	# Keep frame pointer for better stack traces
+		$<$<CONFIG:Release>:-O2>					# Optimize for speed
+		$<$<CONFIG:Release>:-ffast-math>			# Enable fast floating-point optimizations
+		$<$<CONFIG:Release>:-fdata-sections>		# Place each data item in its own section
+		$<$<CONFIG:Release>:-ffunction-sections>	# Place each function in its own section
+		$<$<CONFIG:Release>:-fstack-protector-strong>	# Stack buffer overflow protection
+		$<$<NOT:$<BOOL:${EMERAUDE_DISABLE_PARANOID_COMPILATION}>>:-Werror>	# Treat warnings as errors (conditional)
+		-Wformat									# Check format string arguments
+		-Wformat-security							# Warn about format string vulnerabilities
+		-Wno-unknown-pragmas						# Ignore unknown pragma directives
+		-Wno-unused-parameter						# Ignore unused function parameters
+		CACHE STRING "Emeraude-Engine compile options for Linux."
+	)
 
 	set_target_properties(${PROJECT_NAME} PROPERTIES
 		C_STANDARD 17 # Next standard will be C23

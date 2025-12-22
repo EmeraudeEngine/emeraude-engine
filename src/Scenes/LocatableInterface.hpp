@@ -26,29 +26,24 @@
 
 #pragma once
 
+/* STL inclusions. */
+#include <memory>
+
 /* Local inclusions for usages. */
 #include "Libs/Math/CartesianFrame.hpp"
-#include "Libs/Math/Space3D/AACuboid.hpp"
-#include "Libs/Math/Space3D/Sphere.hpp"
 
 namespace EmEn::Graphics
 {
 	class Frustum;
 }
 
+namespace EmEn::Physics
+{
+	class CollisionModelInterface;
+}
+
 namespace EmEn::Scenes
 {
-	/**
-	 * @brief Type of collision detection.
-	 */
-	enum class CollisionDetectionModel : uint8_t
-	{
-		//None, // TODO: Make this option valid to disable collision.
-		Point,
-		Sphere,
-		AABB
-	};
-
 	/**
 	 * @brief The LocatableInterface class is used to locate something in the 3D world and set its coordinates.
 	 */
@@ -260,45 +255,31 @@ namespace EmEn::Scenes
 			virtual Libs::Math::CartesianFrame< float > getWorldCoordinates () const noexcept = 0;
 
 			/**
-			 * @brief Returns the world bounding box of a 3D world entity.
-			 * @return const Libs::Math::Space3D::AACuboid< float > &
+			 * @brief Sets the collision model for narrow-phase collision detection [PHYSICS].
+			 * @param model A unique pointer to the collision model.
 			 */
-			[[nodiscard]]
-			virtual const Libs::Math::Space3D::AACuboid< float > & localBoundingBox () const noexcept = 0;
+			virtual void setCollisionModel (std::unique_ptr< Physics::CollisionModelInterface > model) noexcept = 0;
 
 			/**
-			 * @brief Returns the world bounding box of a 3D world entity.
-			 * @return Libs::Math::Space3D::AACuboid< float >
+			 * @brief Returns whether this locatable has a collision model [PHYSICS].
+			 * @return bool
 			 */
 			[[nodiscard]]
-			virtual Libs::Math::Space3D::AACuboid< float > getWorldBoundingBox () const noexcept = 0;
+			virtual bool hasCollisionModel () const noexcept = 0;
 
 			/**
-			 * @brief Returns the world bounding sphere of a 3D world entity.
-			 * @return const Libs::Math::Space3D::Sphere< float > &
+			 * @brief Returns the collision model for narrow-phase collision detection [PHYSICS].
+			 * @return const Physics::CollisionModelInterface *
 			 */
 			[[nodiscard]]
-			virtual const Libs::Math::Space3D::Sphere< float > & localBoundingSphere () const noexcept = 0;
+			virtual const Physics::CollisionModelInterface * collisionModel () const noexcept = 0;
 
 			/**
-			 * @brief Returns the world bounding sphere of a 3D world entity.
-			 * @return Libs::Math::Space3D::Sphere< float >
+			 * @brief Returns the collision model for narrow-phase collision detection (mutable) [PHYSICS].
+			 * @return Physics::CollisionModelInterface *
 			 */
 			[[nodiscard]]
-			virtual Libs::Math::Space3D::Sphere< float > getWorldBoundingSphere () const noexcept = 0;
-
-			/**
-			 * @brief Sets how to detect collisions with this location.
-			 * @return state The state.
-			 */
-			virtual void setCollisionDetectionModel (CollisionDetectionModel model) noexcept = 0;
-
-			/**
-			 * @brief Returns how collisions are detected by this location.
-			 * @return CollisionDetectionModel
-			 */
-			[[nodiscard]]
-			virtual CollisionDetectionModel collisionDetectionModel () const noexcept = 0;
+			virtual Physics::CollisionModelInterface * collisionModel () noexcept = 0;
 
 			/**
 			 * @brief Returns whether this metaobject is inside the frustum.

@@ -93,17 +93,69 @@ namespace EmEn::Scenes
 	}
 
 	bool
-	CubicInfluenceArea::isUnderInfluence (const CartesianFrame< float > & /*worldCoordinates*/, const Space3D::AACuboid< float > & /*worldBoundingBox*/) const noexcept
+	CubicInfluenceArea::isUnderInfluence (const CartesianFrame< float > & /*worldCoordinates*/, const Space3D::AACuboid< float > & worldBoundingBox) const noexcept
 	{
-		/* FIXME: TODO ! */
-		return false;
+		/* NOTE: worldBoundingBox is already in world coordinates (from CollisionModel::getAABB(worldFrame)). */
+		/* Transform the AABB center into modifier local space. */
+		const auto center = (worldBoundingBox.minimum() + worldBoundingBox.maximum()) * 0.5F;
+		const auto position = this->getPositionInModifierSpace(center);
+
+		/* Get the half-extents of the target AABB. */
+		const auto halfExtentX = worldBoundingBox.width() * 0.5F;
+		const auto halfExtentY = worldBoundingBox.height() * 0.5F;
+		const auto halfExtentZ = worldBoundingBox.depth() * 0.5F;
+
+		/* Test AABB vs AABB in modifier space (expanded bounds). */
+		if ( position[X] + halfExtentX < -m_xSize || position[X] - halfExtentX > m_xSize )
+		{
+			return false;
+		}
+
+		if ( position[Y] + halfExtentY < -m_ySize || position[Y] - halfExtentY > m_ySize )
+		{
+			return false;
+		}
+
+		if ( position[Z] + halfExtentZ < -m_zSize || position[Z] - halfExtentZ > m_zSize )
+		{
+			return false;
+		}
+
+		return true;
 	}
 
 	float
-	CubicInfluenceArea::influenceStrength (const CartesianFrame< float > & /*worldCoordinates*/, const Space3D::AACuboid< float > & /*worldBoundingBox*/) const noexcept
+	CubicInfluenceArea::influenceStrength (const CartesianFrame< float > & /*worldCoordinates*/, const Space3D::AACuboid< float > & worldBoundingBox) const noexcept
 	{
-		/* FIXME: TODO ! */
-		return 0.0F;
+		/* NOTE: worldBoundingBox is already in world coordinates (from CollisionModel::getAABB(worldFrame)). */
+		/* Transform the AABB center into modifier local space. */
+		const auto center = (worldBoundingBox.minimum() + worldBoundingBox.maximum()) * 0.5F;
+		const auto position = this->getPositionInModifierSpace(center);
+
+		/* Get the half-extents of the target AABB. */
+		const auto halfExtentX = worldBoundingBox.width() * 0.5F;
+		const auto halfExtentY = worldBoundingBox.height() * 0.5F;
+		const auto halfExtentZ = worldBoundingBox.depth() * 0.5F;
+
+		/* Test AABB vs AABB in modifier space. */
+		if ( position[X] + halfExtentX < -m_xSize || position[X] - halfExtentX > m_xSize )
+		{
+			return 0.0F;
+		}
+
+		if ( position[Y] + halfExtentY < -m_ySize || position[Y] - halfExtentY > m_ySize )
+		{
+			return 0.0F;
+		}
+
+		if ( position[Z] + halfExtentZ < -m_zSize || position[Z] - halfExtentZ > m_zSize )
+		{
+			return 0.0F;
+		}
+
+		/* Inside the cubic area, return full influence. */
+		/* NOTE: Could implement distance-based falloff from edges if needed. */
+		return 1.0F;
 	}
 
 	void

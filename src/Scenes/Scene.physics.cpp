@@ -26,11 +26,6 @@
 
 #include "Scene.hpp"
 
-/* Local inclusions. */
-#include "Component/AbstractModifier.hpp"
-#include "Libs/Math/OrientedCuboid.hpp"
-#include "Tracer.hpp"
-
 namespace EmEn::Scenes
 {
 	using namespace Libs;
@@ -38,12 +33,16 @@ namespace EmEn::Scenes
 	using namespace Physics;
 
 	void
-	Scene::simulatePhysics () noexcept
+	Scene::simulatePhysics () const noexcept
 	{
 		if ( m_physicsOctree == nullptr )
 		{
 			return;
 		}
+
+		/* Lock the physics octree for the duration of the simulation to prevent
+		 * concurrent modifications from other threads (e.g., checkEntityLocationInOctrees). */
+		const std::lock_guard< std::mutex > lock{m_physicsOctreeAccess};
 
 		/* ============================================================
 		 * PHASE 1: STATIC COLLISIONS (Boundaries, Ground, StaticEntity)
@@ -64,7 +63,7 @@ namespace EmEn::Scenes
 
 				auto * movable = entity->getMovableTrait();
 
-				if ( movable == nullptr )
+				if ( movable == nullptr || !movable->isMovable() )
 				{
 					continue;
 				}
@@ -232,12 +231,48 @@ namespace EmEn::Scenes
 	void
 	Scene::clipInsideBoundaries (const std::shared_ptr< AbstractEntity > & entity) const noexcept
 	{
-		switch ( entity->collisionDetectionModel() )
-		{
-			case CollisionDetectionModel::Point :
-			{
-				const auto position = entity->getWorldCoordinates().position();
+		const auto position = entity->getWorldCoordinates().position();
 
+		/* No collision model means Point behavior. */
+		if ( !entity->hasCollisionModel() )
+		{
+			if ( position[X] > m_boundary )
+			{
+				entity->setXPosition(m_boundary, TransformSpace::World);
+			}
+			else if ( position[X] < -m_boundary )
+			{
+				entity->setXPosition(-m_boundary, TransformSpace::World);
+			}
+
+			if ( position[Y] > m_boundary )
+			{
+				entity->setYPosition(m_boundary, TransformSpace::World);
+			}
+			else if ( position[Y] < -m_boundary )
+			{
+				entity->setYPosition(-m_boundary, TransformSpace::World);
+			}
+
+			if ( position[Z] > m_boundary )
+			{
+				entity->setZPosition(m_boundary, TransformSpace::World);
+			}
+			else if ( position[Z] < -m_boundary )
+			{
+				entity->setZPosition(-m_boundary, TransformSpace::World);
+			}
+
+			return;
+		}
+
+		const auto * model = entity->collisionModel();
+		const auto worldCoords = entity->getWorldCoordinates();
+
+		switch ( model->modelType() )
+		{
+			case CollisionModelType::Point :
+			{
 				if ( position[X] > m_boundary )
 				{
 					entity->setXPosition(m_boundary, TransformSpace::World);
@@ -267,10 +302,10 @@ namespace EmEn::Scenes
 			}
 				break;
 
-			case CollisionDetectionModel::Sphere :
+			case CollisionModelType::Sphere :
 			{
-				const auto position = entity->getWorldCoordinates().position();
-				const auto radius = entity->getWorldBoundingSphere().radius();
+				const auto aabb = model->getAABB(worldCoords);
+				const auto radius = aabb.width() * 0.5F;
 				const auto limit = m_boundary - radius;
 
 				if ( position[X] > limit )
@@ -302,37 +337,41 @@ namespace EmEn::Scenes
 			}
 				break;
 
-			case CollisionDetectionModel::AABB :
+			case CollisionModelType::AABB :
 			{
-				const auto AABB = entity->getWorldBoundingBox();
+				const auto aabb = model->getAABB(worldCoords);
 
-				if ( AABB.maximum(X) > m_boundary )
+				if ( aabb.maximum(X) > m_boundary )
 				{
-					entity->moveX(m_boundary - AABB.maximum(X), TransformSpace::World);
+					entity->moveX(m_boundary - aabb.maximum(X), TransformSpace::World);
 				}
-				else if ( AABB.minimum(X) < -m_boundary )
+				else if ( aabb.minimum(X) < -m_boundary )
 				{
-					entity->moveX(-m_boundary - AABB.minimum(X), TransformSpace::World);
-				}
-
-				if ( AABB.maximum(Y) > m_boundary )
-				{
-					entity->moveY(m_boundary - AABB.maximum(Y), TransformSpace::World);
-				}
-				else if ( AABB.minimum(Y) < -m_boundary )
-				{
-					entity->moveY(-m_boundary - AABB.minimum(Y), TransformSpace::World);
+					entity->moveX(-m_boundary - aabb.minimum(X), TransformSpace::World);
 				}
 
-				if ( AABB.maximum(Z) > m_boundary )
+				if ( aabb.maximum(Y) > m_boundary )
 				{
-					entity->moveZ(m_boundary - AABB.maximum(Z), TransformSpace::World);
+					entity->moveY(m_boundary - aabb.maximum(Y), TransformSpace::World);
 				}
-				else if ( AABB.minimum(Z) < -m_boundary )
+				else if ( aabb.minimum(Y) < -m_boundary )
 				{
-					entity->moveZ(-m_boundary - AABB.minimum(Z), TransformSpace::World);
+					entity->moveY(-m_boundary - aabb.minimum(Y), TransformSpace::World);
+				}
+
+				if ( aabb.maximum(Z) > m_boundary )
+				{
+					entity->moveZ(m_boundary - aabb.maximum(Z), TransformSpace::World);
+				}
+				else if ( aabb.minimum(Z) < -m_boundary )
+				{
+					entity->moveZ(-m_boundary - aabb.minimum(Z), TransformSpace::World);
 				}
 			}
+				break;
+
+			case CollisionModelType::Capsule :
+				/* TODO: Implement Capsule boundary clipping. */
 				break;
 		}
 	}
@@ -346,14 +385,31 @@ namespace EmEn::Scenes
 			return;
 		}
 
-		switch ( entity->collisionDetectionModel() )
+		const auto position = entity->getWorldCoordinates().position();
+
+		/* No collision model means Point behavior. */
+		if ( !entity->hasCollisionModel() )
 		{
-			case CollisionDetectionModel::Point :
+			const auto groundLevel = m_groundPhysics->getLevelAt(position);
+
+			/* NOTE: Y- is up, so position[Y] must be <= groundLevel to be above ground. */
+			if ( position[Y] > groundLevel )
 			{
-				const auto position = entity->getWorldCoordinates().position();
+				entity->setYPosition(groundLevel, TransformSpace::World);
+			}
+
+			return;
+		}
+
+		const auto * model = entity->collisionModel();
+		const auto worldCoords = entity->getWorldCoordinates();
+
+		switch ( model->modelType() )
+		{
+			case CollisionModelType::Point :
+			{
 				const auto groundLevel = m_groundPhysics->getLevelAt(position);
 
-				/* NOTE: Y- is up, so position[Y] must be <= groundLevel to be above ground. */
 				if ( position[Y] > groundLevel )
 				{
 					entity->setYPosition(groundLevel, TransformSpace::World);
@@ -361,10 +417,10 @@ namespace EmEn::Scenes
 			}
 				break;
 
-			case CollisionDetectionModel::Sphere :
+			case CollisionModelType::Sphere :
 			{
-				const auto position = entity->getWorldCoordinates().position();
-				const auto radius = entity->getWorldBoundingSphere().radius();
+				const auto aabb = model->getAABB(worldCoords);
+				const auto radius = aabb.width() * 0.5F;
 				const auto groundLevel = m_groundPhysics->getLevelAt(position);
 				/* NOTE: Y- is up, so the lowest point of the sphere is position[Y] + radius. */
 				const auto lowestPoint = position[Y] + radius;
@@ -376,17 +432,17 @@ namespace EmEn::Scenes
 			}
 				break;
 
-			case CollisionDetectionModel::AABB :
+			case CollisionModelType::AABB :
 			{
-				const auto AABB = entity->getWorldBoundingBox();
+				const auto aabb = model->getAABB(worldCoords);
 
 				/* NOTE: Y- is up, so "bottom" of the box has maximum Y values.
 				 * Check all four bottom corners and use the deepest penetration. */
 				const std::array< Vector< 3, float >, 4 > bottomCorners{
-					AABB.bottomSouthEast(),
-					AABB.bottomSouthWest(),
-					AABB.bottomNorthWest(),
-					AABB.bottomNorthEast()
+					aabb.bottomSouthEast(),
+					aabb.bottomSouthWest(),
+					aabb.bottomNorthWest(),
+					aabb.bottomNorthEast()
 				};
 
 				auto deepestPenetration = 0.0F;
@@ -409,6 +465,10 @@ namespace EmEn::Scenes
 				}
 			}
 				break;
+
+			case CollisionModelType::Capsule :
+				/* TODO: Implement Capsule ground clipping. */
+				break;
 		}
 	}
 
@@ -422,11 +482,19 @@ namespace EmEn::Scenes
 			return;
 		}
 
-		const auto position = entity->getWorldCoordinates().position();
-
-		switch ( entity->collisionDetectionModel() )
+		/* No collision model means no collision simulation. */
+		if ( !entity->hasCollisionModel() )
 		{
-			case CollisionDetectionModel::Point :
+			return;
+		}
+
+		const auto * model = entity->collisionModel();
+		const auto worldCoords = entity->getWorldCoordinates();
+		const auto position = worldCoords.position();
+
+		switch ( model->modelType() )
+		{
+			case CollisionModelType::Point :
 			{
 				/* X+ boundary: entity beyond +X wall, normal points from entity towards wall (X+). */
 				if ( position[X] > m_boundary )
@@ -475,9 +543,10 @@ namespace EmEn::Scenes
 			}
 				break;
 
-			case CollisionDetectionModel::Sphere :
+			case CollisionModelType::Sphere :
 			{
-				const auto radius = entity->getWorldBoundingSphere().radius();
+				const auto aabb = model->getAABB(worldCoords);
+				const auto radius = aabb.width() * 0.5F;
 
 				/* X+ boundary: normal points from entity towards wall (X+). */
 				if ( position[X] + radius > m_boundary )
@@ -532,73 +601,67 @@ namespace EmEn::Scenes
 			}
 				break;
 
-			case CollisionDetectionModel::AABB :
+			case CollisionModelType::AABB :
 			{
-				const auto AABB = entity->getWorldBoundingBox();
+				const auto aabb = model->getAABB(worldCoords);
 
 				/* X+ boundary: normal points from entity towards wall (X+). */
-				if ( AABB.maximum(X) > m_boundary )
+				if ( aabb.maximum(X) > m_boundary )
 				{
-					const auto penetration = AABB.maximum(X) - m_boundary;
+					const auto penetration = aabb.maximum(X) - m_boundary;
 					ContactManifold manifold(movable);
 					manifold.addContact({m_boundary, position[Y], position[Z]}, {1.0F, 0.0F, 0.0F}, penetration);
 					manifolds.push_back(manifold);
 				}
 				/* X- boundary: normal points from entity towards wall (X-). */
-				else if ( AABB.minimum(X) < -m_boundary )
+				else if ( aabb.minimum(X) < -m_boundary )
 				{
-					const auto penetration = -m_boundary - AABB.minimum(X);
+					const auto penetration = -m_boundary - aabb.minimum(X);
 					ContactManifold manifold(movable);
 					manifold.addContact({-m_boundary, position[Y], position[Z]}, {-1.0F, 0.0F, 0.0F}, penetration);
 					manifolds.push_back(manifold);
 				}
 
 				/* Y+ boundary: normal points from entity towards wall (Y+). */
-				if ( AABB.maximum(Y) > m_boundary )
+				if ( aabb.maximum(Y) > m_boundary )
 				{
-					const auto penetration = AABB.maximum(Y) - m_boundary;
+					const auto penetration = aabb.maximum(Y) - m_boundary;
 					ContactManifold manifold(movable);
 					manifold.addContact({position[X], m_boundary, position[Z]}, {0.0F, 1.0F, 0.0F}, penetration);
 					manifolds.push_back(manifold);
 				}
 				/* Y- boundary: normal points from entity towards wall (Y-). */
-				else if ( AABB.minimum(Y) < -m_boundary )
+				else if ( aabb.minimum(Y) < -m_boundary )
 				{
-					const auto penetration = -m_boundary - AABB.minimum(Y);
+					const auto penetration = -m_boundary - aabb.minimum(Y);
 					ContactManifold manifold(movable);
 					manifold.addContact({position[X], -m_boundary, position[Z]}, {0.0F, -1.0F, 0.0F}, penetration);
 					manifolds.push_back(manifold);
 				}
 
 				/* Z+ boundary: normal points from entity towards wall (Z+). */
-				if ( AABB.maximum(Z) > m_boundary )
+				if ( aabb.maximum(Z) > m_boundary )
 				{
-					const auto penetration = AABB.maximum(Z) - m_boundary;
+					const auto penetration = aabb.maximum(Z) - m_boundary;
 					ContactManifold manifold(movable);
 					manifold.addContact({position[X], position[Y], m_boundary}, {0.0F, 0.0F, 1.0F}, penetration);
 					manifolds.push_back(manifold);
 				}
 				/* Z- boundary: normal points from entity towards wall (Z-). */
-				else if ( AABB.minimum(Z) < -m_boundary )
+				else if ( aabb.minimum(Z) < -m_boundary )
 				{
-					const auto penetration = -m_boundary - AABB.minimum(Z);
+					const auto penetration = -m_boundary - aabb.minimum(Z);
 					ContactManifold manifold(movable);
 					manifold.addContact({position[X], position[Y], -m_boundary}, {0.0F, 0.0F, -1.0F}, penetration);
 					manifolds.push_back(manifold);
 				}
 			}
 				break;
+
+			case CollisionModelType::Capsule :
+				/* TODO: Implement Capsule boundary collision. */
+				break;
 		}
-
-		/*const auto newCollisions = manifolds.size() - initialManifoldCount;
-
-		if ( newCollisions > 0 )
-		{
-			TraceInfo{ClassId} <<
-				"Boundary collision detected: entity='" << entity->name() << "' "
-				"pos=(" << position[X] << ", " << position[Y] << ", " << position[Z] << ") "
-				"contacts=" << newCollisions;
-		}*/
 	}
 
 	void
@@ -616,11 +679,19 @@ namespace EmEn::Scenes
 			return;
 		}
 
-		const auto position = entity->getWorldCoordinates().position();
-
-		switch ( entity->collisionDetectionModel() )
+		/* No collision model means no collision simulation. */
+		if ( !entity->hasCollisionModel() )
 		{
-			case CollisionDetectionModel::Point :
+			return;
+		}
+
+		const auto * model = entity->collisionModel();
+		const auto worldCoords = entity->getWorldCoordinates();
+		const auto position = worldCoords.position();
+
+		switch ( model->modelType() )
+		{
+			case CollisionModelType::Point :
 			{
 				const auto groundLevel = m_groundPhysics->getLevelAt(position);
 
@@ -636,9 +707,10 @@ namespace EmEn::Scenes
 			}
 				break;
 
-			case CollisionDetectionModel::Sphere :
+			case CollisionModelType::Sphere :
 			{
-				const auto radius = entity->getWorldBoundingSphere().radius();
+				const auto aabb = model->getAABB(worldCoords);
+				const auto radius = aabb.width() * 0.5F;
 				const auto groundLevel = m_groundPhysics->getLevelAt(position);
 				/* NOTE: Y- is up, so the lowest point of the sphere is position[Y] + radius. */
 				const auto lowestPoint = position[Y] + radius;
@@ -654,17 +726,17 @@ namespace EmEn::Scenes
 			}
 				break;
 
-			case CollisionDetectionModel::AABB :
+			case CollisionModelType::AABB :
 			{
-				const auto AABB = entity->getWorldBoundingBox();
+				const auto aabb = model->getAABB(worldCoords);
 
 				/* NOTE: Y- is up, so "bottom" of the box has maximum Y values.
 				 * Check all four bottom corners and use the deepest penetration. */
 				const std::array< Vector< 3, float >, 4 > bottomCorners{
-					AABB.bottomSouthEast(),
-					AABB.bottomSouthWest(),
-					AABB.bottomNorthWest(),
-					AABB.bottomNorthEast()
+					aabb.bottomSouthEast(),
+					aabb.bottomSouthWest(),
+					aabb.bottomNorthWest(),
+					aabb.bottomNorthEast()
 				};
 
 				auto deepestPenetration = 0.0F;
@@ -690,40 +762,25 @@ namespace EmEn::Scenes
 				}
 			}
 				break;
+
+			case CollisionModelType::Capsule :
+				/* TODO: Implement Capsule ground collision. */
+				break;
 		}
-
-		/*const auto newCollisions = manifolds.size() - initialManifoldCount;
-
-		if ( newCollisions > 0 )
-		{
-			TraceInfo{ClassId} <<
-				"Ground collision detected: entity='" << entity->name() << "' "
-				"pos=(" << position[X] << ", " << position[Y] << ", " << position[Z] << ") "
-				"contacts=" << newCollisions;
-		}*/
-	}
-
-	void
-	Scene::applyModifiers (Node & node) const noexcept
-	{
-		this->forEachModifiers([&node] (const auto & modifier) {
-			/* NOTE: Avoid working on the same Node. */
-			if ( &node == &modifier.parentEntity() )
-			{
-				return;
-			}
-
-			/* FIXME: Use AABB when usable */
-			const auto modifierForce = modifier.getForceAppliedToEntity(node.getWorldCoordinates(), node.getWorldBoundingSphere());
-
-			node.addForce(modifierForce);
-		});
 	}
 
 	void
 	Scene::accumulateBoundaryCorrection (const std::shared_ptr< AbstractEntity > & entity, Vector< 3, float > & positionCorrection, Vector< 3, float > & dominantNormal, float & maxPenetration) const noexcept
 	{
-		const auto position = entity->getWorldCoordinates().position();
+		/* No collision model means no boundary correction. */
+		if ( !entity->hasCollisionModel() )
+		{
+			return;
+		}
+
+		const auto * model = entity->collisionModel();
+		const auto worldCoords = entity->getWorldCoordinates();
+		const auto position = worldCoords.position();
 
 		/* Helper lambda to accumulate a single boundary collision. */
 		auto accumulateCollision = [&positionCorrection, &dominantNormal, &maxPenetration] (const Vector< 3, float > & normal, float penetration) {
@@ -738,9 +795,9 @@ namespace EmEn::Scenes
 			}
 		};
 
-		switch ( entity->collisionDetectionModel() )
+		switch ( model->modelType() )
 		{
-			case CollisionDetectionModel::Point :
+			case CollisionModelType::Point :
 			{
 				if ( position[X] > m_boundary )
 				{
@@ -771,9 +828,10 @@ namespace EmEn::Scenes
 			}
 				break;
 
-			case CollisionDetectionModel::Sphere :
+			case CollisionModelType::Sphere :
 			{
-				const auto radius = entity->getWorldBoundingSphere().radius();
+				const auto aabb = model->getAABB(worldCoords);
+				const auto radius = aabb.width() * 0.5F;
 
 				if ( position[X] + radius > m_boundary )
 				{
@@ -804,37 +862,41 @@ namespace EmEn::Scenes
 			}
 				break;
 
-			case CollisionDetectionModel::AABB :
+			case CollisionModelType::AABB :
 			{
-				const auto AABB = entity->getWorldBoundingBox();
+				const auto aabb = model->getAABB(worldCoords);
 
-				if ( AABB.maximum(X) > m_boundary )
+				if ( aabb.maximum(X) > m_boundary )
 				{
-					accumulateCollision({1.0F, 0.0F, 0.0F}, AABB.maximum(X) - m_boundary);
+					accumulateCollision({1.0F, 0.0F, 0.0F}, aabb.maximum(X) - m_boundary);
 				}
-				else if ( AABB.minimum(X) < -m_boundary )
+				else if ( aabb.minimum(X) < -m_boundary )
 				{
-					accumulateCollision({-1.0F, 0.0F, 0.0F}, -m_boundary - AABB.minimum(X));
-				}
-
-				if ( AABB.maximum(Y) > m_boundary )
-				{
-					accumulateCollision({0.0F, 1.0F, 0.0F}, AABB.maximum(Y) - m_boundary);
-				}
-				else if ( AABB.minimum(Y) < -m_boundary )
-				{
-					accumulateCollision({0.0F, -1.0F, 0.0F}, -m_boundary - AABB.minimum(Y));
+					accumulateCollision({-1.0F, 0.0F, 0.0F}, -m_boundary - aabb.minimum(X));
 				}
 
-				if ( AABB.maximum(Z) > m_boundary )
+				if ( aabb.maximum(Y) > m_boundary )
 				{
-					accumulateCollision({0.0F, 0.0F, 1.0F}, AABB.maximum(Z) - m_boundary);
+					accumulateCollision({0.0F, 1.0F, 0.0F}, aabb.maximum(Y) - m_boundary);
 				}
-				else if ( AABB.minimum(Z) < -m_boundary )
+				else if ( aabb.minimum(Y) < -m_boundary )
 				{
-					accumulateCollision({0.0F, 0.0F, -1.0F}, -m_boundary - AABB.minimum(Z));
+					accumulateCollision({0.0F, -1.0F, 0.0F}, -m_boundary - aabb.minimum(Y));
+				}
+
+				if ( aabb.maximum(Z) > m_boundary )
+				{
+					accumulateCollision({0.0F, 0.0F, 1.0F}, aabb.maximum(Z) - m_boundary);
+				}
+				else if ( aabb.minimum(Z) < -m_boundary )
+				{
+					accumulateCollision({0.0F, 0.0F, -1.0F}, -m_boundary - aabb.minimum(Z));
 				}
 			}
+				break;
+
+			case CollisionModelType::Capsule :
+				/* TODO: Implement Capsule boundary correction. */
 				break;
 		}
 	}
@@ -847,7 +909,15 @@ namespace EmEn::Scenes
 			return;
 		}
 
-		const auto position = entity->getWorldCoordinates().position();
+		/* No collision model means no ground correction. */
+		if ( !entity->hasCollisionModel() )
+		{
+			return;
+		}
+
+		const auto * model = entity->collisionModel();
+		const auto worldCoords = entity->getWorldCoordinates();
+		const auto position = worldCoords.position();
 
 		/* Helper lambda to accumulate ground collision.
 		 * Gets the actual terrain normal at the contact position. */
@@ -872,9 +942,9 @@ namespace EmEn::Scenes
 			}
 		};
 
-		switch ( entity->collisionDetectionModel() )
+		switch ( model->modelType() )
 		{
-			case CollisionDetectionModel::Point :
+			case CollisionModelType::Point :
 			{
 				const auto groundLevel = m_groundPhysics->getLevelAt(position);
 
@@ -886,9 +956,10 @@ namespace EmEn::Scenes
 			}
 				break;
 
-			case CollisionDetectionModel::Sphere :
+			case CollisionModelType::Sphere :
 			{
-				const auto radius = entity->getWorldBoundingSphere().radius();
+				const auto aabb = model->getAABB(worldCoords);
+				const auto radius = aabb.width() * 0.5F;
 				const auto groundLevel = m_groundPhysics->getLevelAt(position);
 				/* NOTE: Y- is up, so the lowest point of the sphere is position[Y] + radius. */
 				const auto lowestPoint = position[Y] + radius;
@@ -900,17 +971,17 @@ namespace EmEn::Scenes
 			}
 				break;
 
-			case CollisionDetectionModel::AABB :
+			case CollisionModelType::AABB :
 			{
-				const auto AABB = entity->getWorldBoundingBox();
+				const auto aabb = model->getAABB(worldCoords);
 
 				/* NOTE: Y- is up, so "bottom" of the box has maximum Y values.
 				 * Check all four bottom corners and use the deepest penetration. */
 				const std::array< Vector< 3, float >, 4 > bottomCorners{
-					AABB.bottomSouthEast(),
-					AABB.bottomSouthWest(),
-					AABB.bottomNorthWest(),
-					AABB.bottomNorthEast()
+					aabb.bottomSouthEast(),
+					aabb.bottomSouthWest(),
+					aabb.bottomNorthWest(),
+					aabb.bottomNorthEast()
 				};
 
 				auto deepestPenetration = 0.0F;
@@ -932,12 +1003,25 @@ namespace EmEn::Scenes
 				}
 			}
 				break;
+
+			case CollisionModelType::Capsule :
+				/* TODO: Implement Capsule ground correction. */
+				break;
 		}
 	}
 
 	void
 	Scene::accumulateStaticEntityCorrections (const std::shared_ptr< AbstractEntity > & entity, const OctreeSector< AbstractEntity, true > & sector, Vector< 3, float > & positionCorrection, Vector< 3, float > & dominantNormal, float & maxPenetration) const noexcept
 	{
+		/* No collision model means no collision simulation. */
+		if ( !entity->hasCollisionModel() )
+		{
+			return;
+		}
+
+		const auto * entityModel = entity->collisionModel();
+		const auto entityWorldCoords = entity->getWorldCoordinates();
+
 		/* Iterate through all entities in this sector looking for static entities. */
 		for ( const auto & otherEntity : sector.elements() )
 		{
@@ -953,116 +1037,37 @@ namespace EmEn::Scenes
 				continue;
 			}
 
-			/* Collision detection based on both entities' collision models.
-			 * Static entities with Point model are ignored (no volume). */
-			Vector< 3, float > mtv{0.0F, 0.0F, 0.0F};
-			bool collisionDetected = false;
-
-			switch ( otherEntity->collisionDetectionModel() )
+			/* Skip if the other entity has no collision model. */
+			if ( !otherEntity->hasCollisionModel() )
 			{
-				case CollisionDetectionModel::Point :
-					/* Static entities with no volume are skipped. */
-					continue;
-
-				case CollisionDetectionModel::Sphere :
-				{
-					const auto staticSphere = otherEntity->getWorldBoundingSphere();
-
-					switch ( entity->collisionDetectionModel() )
-					{
-						case CollisionDetectionModel::Point :
-						{
-							const auto position = entity->getWorldCoordinates().position();
-
-							collisionDetected = Space3D::isColliding(position, staticSphere, mtv);
-						}
-							break;
-
-						case CollisionDetectionModel::Sphere :
-						{
-							const auto entitySphere = entity->getWorldBoundingSphere();
-
-							collisionDetected = Space3D::isColliding(entitySphere, staticSphere, mtv);
-						}
-							break;
-
-						case CollisionDetectionModel::AABB :
-						{
-							const auto entityAABB = entity->getWorldBoundingBox();
-
-							collisionDetected = Space3D::isColliding(entityAABB, staticSphere, mtv);
-						}
-							break;
-					}
-				}
-					break;
-
-				case CollisionDetectionModel::AABB :
-				{
-					const auto staticAABB = otherEntity->getWorldBoundingBox();
-
-					switch ( entity->collisionDetectionModel() )
-					{
-						case CollisionDetectionModel::Point :
-						{
-							const auto position = entity->getWorldCoordinates().position();
-
-							collisionDetected = Space3D::isColliding(position, staticAABB, mtv);
-						}
-							break;
-
-						case CollisionDetectionModel::Sphere :
-						{
-							const auto entitySphere = entity->getWorldBoundingSphere();
-
-							collisionDetected = Space3D::isColliding(entitySphere, staticAABB, mtv);
-						}
-							break;
-
-						case CollisionDetectionModel::AABB :
-						{
-							const auto entityAABB = entity->getWorldBoundingBox();
-
-							/* NOTE: Broad phase: Quick AABB overlap test. */
-							if ( Space3D::isColliding(entityAABB, staticAABB) )
-							{
-								/* NOTE: Narrow phase: Precise OBB collision using SAT algorithm.
-								 * This handles rotated objects correctly by testing all 15 separating axes. */
-								const auto entityOBB = OrientedCuboid< float >{entity->localBoundingBox(), entity->getWorldCoordinates()};
-								const auto staticOBB = OrientedCuboid< float >{otherEntity->localBoundingBox(), otherEntity->getWorldCoordinates()};
-
-								Vector< 3, float > direction;
-								const auto penetration = OrientedCuboid< float >::isIntersecting(entityOBB, staticOBB, direction);
-
-								if ( penetration > 0.0F )
-								{
-									collisionDetected = true;
-									mtv = direction * penetration;
-								}
-							}
-						}
-							break;
-					}
-				}
-					break;
+				continue;
 			}
 
-			if ( collisionDetected )
+			const auto * otherModel = otherEntity->collisionModel();
+
+			/* Static entities with Point model are ignored (no volume). */
+			if ( otherModel->modelType() == CollisionModelType::Point )
 			{
-				const auto penetration = mtv.length();
+				continue;
+			}
 
-				if ( penetration > 0.0F )
+			const auto otherWorldCoords = otherEntity->getWorldCoordinates();
+
+			/* Use the collision model interface for collision detection.
+			 * This handles all combinations through double dispatch. */
+			const auto results = entityModel->isCollidingWith(entityWorldCoords, *otherModel, otherWorldCoords);
+
+			if ( results.m_collisionDetected && results.m_depth > 0.0F )
+			{
+				/* MTV points in the direction to move the entity OUT of collision. */
+				positionCorrection += results.m_MTV;
+
+				/* Track dominant collision for velocity bounce. */
+				if ( results.m_depth > maxPenetration )
 				{
-					/* MTV points in the direction to move the entity OUT of collision. */
-					positionCorrection += mtv;
-
-					/* Track dominant collision for velocity bounce. */
-					if ( penetration > maxPenetration )
-					{
-						maxPenetration = penetration;
-						/* Normal points INTO the static entity (for bounce calculation). */
-						dominantNormal = -mtv.normalize();
-					}
+					maxPenetration = results.m_depth;
+					/* Normal points INTO the static entity (for bounce calculation). */
+					dominantNormal = -results.m_impactNormal;
 				}
 			}
 		}

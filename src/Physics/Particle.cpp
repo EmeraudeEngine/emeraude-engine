@@ -26,6 +26,8 @@
 
 #include "Particle.hpp"
 
+/* Local inclusions. */
+#include "Libs/Math/Space3D/Sphere.hpp"
 #include "Scenes/Scene.hpp"
 
 namespace EmEn::Physics
@@ -399,7 +401,9 @@ namespace EmEn::Physics
 
 		/* Apply scene modifiers. */
 		scene.forEachModifiers([this, &worldCoordinates, &particleProperties] (const auto & modifier) {
-			const auto force = modifier.getForceAppliedToEntity(worldCoordinates, this->localBoundingSphere());
+			/* Create a tiny sphere for the particle using its size as diameter. */
+			const auto particleSphere = Space3D::Sphere< float >{m_size * 0.5F, worldCoordinates.position()};
+			const auto force = modifier.getForceAppliedToEntity(worldCoordinates, particleSphere);
 
 			m_linearVelocity += force * particleProperties.inverseMass() * EngineUpdateCycleDurationS< float >;
 		});

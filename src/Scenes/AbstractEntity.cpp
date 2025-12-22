@@ -30,6 +30,8 @@
 #include <algorithm>
 
 /* Local inclusions. */
+#include "Physics/CollisionModelInterface.hpp"
+#include "Physics/AABBCollisionModel.hpp"
 #include "Component/Camera.hpp"
 #include "Component/DirectionalLight.hpp"
 #include "Component/DirectionalPushModifier.hpp"
@@ -109,13 +111,14 @@ namespace EmEn::Scenes
 		this->setRenderingAbilityState(false);
 
 		/* NOTE: If bounding primitives are overridden, we don't recompute them. */
-		if ( !this->isFlagEnabled(BoundingPrimitivesOverridden) )
+		if ( m_collisionModel != nullptr && !m_collisionModel->areShapeParametersOverridden() )
 		{
-			/* Reset the bounding box to make a valid
-			 * bounding box merging from entities. */
-			m_boundingBox.reset();
-			m_boundingSphere.reset();
+			m_collisionModel->resetShapeParameters();
 		}
+
+		/* NOTE: Reset flags. */
+		this->setRenderingAbilityState(false);
+		this->setCollidable(false);
 
 		{
 			const std::lock_guard< std::mutex > lock{m_componentsMutex};
@@ -128,73 +131,45 @@ namespace EmEn::Scenes
 					this->setRenderingAbilityState(true);
 				}
 
-				if ( component->isPhysicalPropertiesEnabled() )
+				/* Gets physical properties of a component. */
+				if ( const auto & physicalProperties = component->bodyPhysicalProperties(); !physicalProperties.isMassNull() )
 				{
-					const auto & bodyPhysicalProperties = component->bodyPhysicalProperties();
+					surface += physicalProperties.surface();
+					mass += physicalProperties.mass();
 
-					/* Gets physical properties of a component only if it's a physical object. */
-					if ( !bodyPhysicalProperties.isMassNull() )
+					dragCoefficient += physicalProperties.dragCoefficient();
+					angularDragCoefficient += physicalProperties.angularDragCoefficient();
+					bounciness += physicalProperties.bounciness();
+					stickiness += physicalProperties.stickiness();
+					/* FIXME: How to combine this ! */
+					inertiaTensor = physicalProperties.inertiaTensor();
+
+					physicalEntityCount++;
+				}
+
+				/* NOTE: If no collision model we create a default AABB. */
+				if ( m_collisionModel == nullptr )
+				{
+					m_collisionModel = std::make_unique< AABBCollisionModel >(component->localBoundingBox());
+				}
+				else if ( !m_collisionModel->areShapeParametersOverridden() )
+				{
+					switch ( m_collisionModel->modelType() )
 					{
-						surface += bodyPhysicalProperties.surface();
-						mass += bodyPhysicalProperties.mass();
+						case CollisionModelType::Point :
+							/* Nothing to do ... */
+							break;
 
-						dragCoefficient += bodyPhysicalProperties.dragCoefficient();
-						angularDragCoefficient += bodyPhysicalProperties.angularDragCoefficient();
-						bounciness += bodyPhysicalProperties.bounciness();
-						stickiness += bodyPhysicalProperties.stickiness();
-						/* FIXME: How to combine this ! */
-						inertiaTensor = bodyPhysicalProperties.inertiaTensor();
+						case CollisionModelType::Sphere :
+							m_collisionModel->mergeShapeParameters(component->localBoundingSphere());
+							break;
 
-						physicalEntityCount++;
-					}
-
-					/* NOTE: If bounding primitives are overridden, we don't recompute them. */
-					if ( !this->isFlagEnabled(BoundingPrimitivesOverridden) )
-					{
-						/* Merge the component local bounding shapes to the scene node local bounding shapes. */
-						if ( const auto & componentBoundingBox = component->localBoundingBox(); componentBoundingBox.isValid() )
-						{
-							m_boundingBox.merge(componentBoundingBox);
-						}
-						else
-						{
-							TraceDebug{TracerTag} << "[ENTITY-PROPERTIES] The component of entity " << this->name() << "' has an invalid bounding box! ";
-						}
-
-						if ( const auto & componentBoundingSphere = component->localBoundingSphere(); componentBoundingSphere.isValid() )
-						{
-							m_boundingSphere.merge(componentBoundingSphere);
-						}
-						else
-						{
-							TraceDebug{TracerTag} << "[ENTITY-PROPERTIES] The component of entity " << this->name() << "' has an invalid bounding sphere! ";
-						}
+						case CollisionModelType::AABB :
+						case CollisionModelType::Capsule :
+							m_collisionModel->mergeShapeParameters(component->localBoundingBox());
+							break;
 					}
 				}
-			}
-		}
-
-		if constexpr ( IsDebug )
-		{
-			switch ( m_collisionDetectionModel )
-			{
-				case CollisionDetectionModel::Point :
-					// Nothing special ...
-					break;
-
-				case CollisionDetectionModel::Sphere :
-					if ( !m_boundingSphere.isValid() )
-					{
-						TraceDebug{TracerTag} << "[ENTITY-PROPERTIES][WARNING] The entity '" << this->name() << "' collision model is Sphere. But the primitive is invalid!";
-					}
-					break;
-
-				case CollisionDetectionModel::AABB :
-					if ( !m_boundingBox.isValid() )
-					{
-						TraceDebug{TracerTag} << "[ENTITY-PROPERTIES][WARNING] The entity '" << this->name() << "' collision model is AABB. But the primitive is invalid!";
-					}
-					break;
 			}
 		}
 
@@ -209,17 +184,14 @@ namespace EmEn::Scenes
 				angularDragCoefficient / div,
 				clampToUnit(bounciness / div),
 				clampToUnit(stickiness / div),
-				/* FIXME: Incorrect ! */
-				inertiaTensor
+				inertiaTensor // FIXME: Incorrect !
 			);
 
-			this->setBodyPhysicalPropertiesState(true);
+			this->setCollidable(true);
 		}
 		else
 		{
 			m_bodyPhysicalProperties.reset();
-
-			this->setBodyPhysicalPropertiesState(false);
 		}
 
 		/* NOTE: Update bounding primitive visual representations. */
@@ -229,15 +201,9 @@ namespace EmEn::Scenes
 	}
 
 	void
-	AbstractEntity::overrideBoundingPrimitives (const Space3D::AACuboid< float > & box, const Space3D::Sphere< float > & sphere) noexcept
+	AbstractEntity::setCollisionModel (std::unique_ptr< CollisionModelInterface > model) noexcept
 	{
-		m_boundingBox = box;
-		m_boundingSphere = sphere;
-
-		this->enableFlag(BoundingPrimitivesOverridden);
-
-		/* NOTE: Update bounding primitives visual representation. */
-		this->updateVisualDebug();
+		m_collisionModel = std::move(model);
 	}
 
 	void

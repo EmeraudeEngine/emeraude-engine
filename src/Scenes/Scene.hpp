@@ -989,18 +989,6 @@ namespace EmEn::Scenes
 				}
 			}
 
-			/**
-			 * @brief Applies all scene modifiers to a node.
-			 *
-			 * Iterates through m_modifiers and applies each valid modifier's
-			 * effect to the given node (gravity, wind, etc.).
-			 *
-			 * @param node Node to apply modifiers to.
-			 *
-			 * @see forEachModifiers() For modifier iteration.
-			 */
-			void applyModifiers (Node & node) const noexcept;
-
 			/* ============================================================
 			 * [CONCEPT: RENDERING]
 			 * Render targets, scene visuals, rendering pipeline.
@@ -2069,7 +2057,7 @@ namespace EmEn::Scenes
 			 *
 			 * @note This is a recursive method that descends into subsectors.
 			 */
-			void simulatePhysics () noexcept;
+			void simulatePhysics () const noexcept;
 
 			/**
 			 * @brief Performs collision tests within a single sector.

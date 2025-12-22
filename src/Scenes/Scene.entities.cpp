@@ -291,7 +291,7 @@ namespace EmEn::Scenes
 
 			while ( crawler.hasNextNode() )
 			{
-				if ( auto node = crawler.nextNode() )
+				if ( const auto node = crawler.nextNode() )
 				{
 					node->wakeup();
 				}
@@ -313,6 +313,21 @@ namespace EmEn::Scenes
 		/* Check the entity in the physics octree. */
 		if ( m_physicsOctree != nullptr && entity->isCollidable() )
 		{
+			/* NOTE: If there is no collision model, no physics simulation is possible. */
+			const auto * collisionModel = entity->collisionModel();
+
+			if ( collisionModel == nullptr )
+			{
+				return;
+			}
+
+			/* NOTE: Skip entities with uninitialized collision models (invalid AABBs).
+			 * They will be added later when their collision geometry is loaded. */
+			if ( !collisionModel->getAABB(entity->getWorldCoordinates()).isValid() )
+			{
+				return;
+			}
+
 			const std::lock_guard< std::mutex > lock{m_physicsOctreeAccess};
 
 			m_physicsOctree->updateOrInsert(entity);

@@ -94,11 +94,7 @@ namespace EmEn::Scenes
 				return false;
 			}
 
-			const auto meshInstance = this->createStaticEntity(label, position)
-				->componentBuilder< Component::Visual >(label)
-				.setup([] (auto & component) {
-					component.enablePhysicalProperties(false);
-				}).build(meshResource);
+			const auto meshInstance = this->createStaticEntity(label, position)->componentBuilder< Component::Visual >(label).build(meshResource);
 
 			if ( meshInstance == nullptr )
 			{
@@ -181,11 +177,7 @@ namespace EmEn::Scenes
 			return false;
 		}
 
-		const auto meshInstance = this->createStaticEntity(GroundZeroPlaneDisplay)
-			->componentBuilder< Component::Visual >(GroundZeroPlaneDisplay)
-			.setup([] (auto & component) {
-				component.enablePhysicalProperties(false);
-			}).build(meshResource);
+		const auto meshInstance = this->createStaticEntity(GroundZeroPlaneDisplay)->componentBuilder< Component::Visual >(GroundZeroPlaneDisplay).build(meshResource);
 
 		if ( meshInstance == nullptr )
 		{
@@ -293,10 +285,7 @@ namespace EmEn::Scenes
 				entity->pitch(Radian(QuartRevolution< float >), TransformSpace::Local);
 			}
 
-			const auto meshInstance = entity->componentBuilder< Component::Visual >(label)
-				.setup([] (auto & component) {
-					component.enablePhysicalProperties(false);
-				}).build(meshResource);
+			const auto meshInstance = entity->componentBuilder< Component::Visual >(label).build(meshResource);
 
 			if ( meshInstance == nullptr )
 			{

@@ -315,7 +315,10 @@ namespace EmEn::Scenes
 		{
 			for ( const auto & element : m_renderingOctree->elements() )
 			{
-				newOctree->insert(element);
+				if ( element->isRenderable() )
+				{
+					newOctree->insert(element);
+				}
 			}
 		}
 
@@ -350,7 +353,10 @@ namespace EmEn::Scenes
 		{
 			for ( const auto & element : m_physicsOctree->elements() )
 			{
-				newOctree->insert(element);
+				if ( element->isCollidable() )
+				{
+					newOctree->insert(element);
+				}
 			}
 		}
 

@@ -38,6 +38,7 @@
 #include "Graphics/Geometry/ResourceGenerator.hpp"
 #include "Graphics/Renderable/SimpleMeshResource.hpp"
 #include "Graphics/Renderable/SpriteResource.hpp"
+#include "Physics/SphereCollisionModel.hpp"
 #include "Scenes/Component/Camera.hpp"
 #include "Scenes/Component/SphericalPushModifier.hpp"
 #include "Scenes/Scene.hpp"
@@ -676,7 +677,19 @@ namespace EmEn::Scenes
 
 				auto component = entity->template componentBuilder< Component::Visual >(entityName)
 					.setup([enablePhysicalProperties, enableLighting] (auto & visual) {
-						visual.enablePhysicalProperties(enablePhysicalProperties);
+						/* FIXME: Dummy variables ... */
+						if ( enablePhysicalProperties )
+						{
+							visual.bodyPhysicalProperties().setProperties(
+							   1.0F,
+							   0.5F,
+							   Physics::DragCoefficient::Sphere< float >,
+							   0.5F,
+							   0.5F,
+							   0.5F,
+							   {}
+						   );
+						}
 
 						if ( enableLighting )
 						{
@@ -714,7 +727,19 @@ namespace EmEn::Scenes
 
 				auto component = entity->template componentBuilder< Component::Visual >(entityName)
 					.setup([enablePhysicalProperties, enableLighting] (auto & visual) {
-						visual.enablePhysicalProperties(enablePhysicalProperties);
+						/* FIXME: Dummy variables ... */
+						if ( enablePhysicalProperties )
+						{
+							visual.bodyPhysicalProperties().setProperties(
+							   1.0F,
+							   0.5F,
+							   Physics::DragCoefficient::Sphere< float >,
+							   0.5F,
+							   0.5F,
+							   0.5F,
+							   {}
+						   );
+						}
 
 						if ( enableLighting )
 						{
@@ -817,7 +842,19 @@ namespace EmEn::Scenes
 
 				auto component = entity->template componentBuilder< Component::Visual >(entityName)
 					.setup([enablePhysicalProperties, enableLighting] (auto & visual) {
-						visual.enablePhysicalProperties(enablePhysicalProperties);
+						/* FIXME: Dummy variables ... */
+						if ( enablePhysicalProperties )
+						{
+							visual.bodyPhysicalProperties().setProperties(
+							   1.0F,
+							   0.5F,
+							   Physics::DragCoefficient::Sphere< float >,
+							   0.5F,
+							   0.5F,
+							   0.5F,
+							   {}
+						   );
+						}
 
 						if ( enableLighting )
 						{
@@ -930,7 +967,7 @@ namespace EmEn::Scenes
 
 				if ( entity.isValid() && enablePhysicalProperties )
 				{
-					entity.entity()->setCollisionDetectionModel(CollisionDetectionModel::Sphere);
+					entity.entity()->setCollisionModel(std::make_unique< Physics::SphereCollisionModel >(radius));
 
 					const auto density = materialResource == nullptr ? 1.0F : materialResource->surfacePhysicalProperties().density();
 
