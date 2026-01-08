@@ -31,6 +31,7 @@
 
 /* STL inclusions. */
 #include <ranges>
+#include <thread>
 
 /* Local inclusions. */
 #include "Libs/Time/Elapsed/PrintScopeRealTime.hpp"
@@ -243,6 +244,17 @@ namespace EmEn::Graphics
 		m_samplers.reserve(50);
 		m_graphicsPipelines.reserve(100);
 		m_programs.reserve(100);
+
+		/* NOTE: Initialize the optional frame rate limiter.
+		 * 0 = disabled, otherwise the target FPS (e.g., 60, 120, 144). */
+		m_frameRateLimit = m_primaryServices.settings().getOrSetDefault< uint32_t >(VideoFrameRateLimitKey, DefaultVideoFrameRateLimit);
+
+		if ( m_frameRateLimit > 0 )
+		{
+			m_frameDuration = std::chrono::nanoseconds(1'000'000'000 / m_frameRateLimit);
+
+			TraceInfo{ClassId} << "Frame rate limiter enabled: " << m_frameRateLimit << " FPS (frame duration: " << m_frameDuration.count() / 1'000'000.0 << " ms)";
+		}
 
 		/* NOTE: Graphics device selection from the vulkan instance.
 		 * The Vulkan instance doesn't directly create a device on its initialization. */
@@ -602,6 +614,12 @@ namespace EmEn::Graphics
 	void
 	Renderer::renderFrame (const std::shared_ptr< Scenes::Scene > & scene, const Overlay::Manager & overlayManager) noexcept
 	{
+		/* NOTE: Record frame start time for the optional frame limiter. */
+		if ( m_frameDuration.count() > 0 )
+		{
+			m_frameStartTime = std::chrono::high_resolution_clock::now();
+		}
+
 		if ( m_windowLess )
 		{
 			auto & currentFrameScope = m_rendererFrameScope[0];
@@ -819,6 +837,32 @@ namespace EmEn::Graphics
 			}
 
 			m_currentFrameIndex = (m_currentFrameIndex + 1) % m_rendererFrameScope.size();
+		}
+
+		/* NOTE: Apply frame rate limiting if enabled.
+		 * This uses a busy-wait for the final microseconds to achieve accurate timing,
+		 * as std::this_thread::sleep_for() has limited precision on most platforms. */
+		if ( m_frameDuration.count() > 0 )
+		{
+			const auto frameEndTime = std::chrono::high_resolution_clock::now();
+			const auto elapsed = frameEndTime - m_frameStartTime;
+
+			if ( elapsed < m_frameDuration )
+			{
+				const auto remainingTime = m_frameDuration - elapsed;
+
+				/* Sleep for most of the remaining time (leave 1ms for busy-wait precision). */
+				if ( remainingTime > std::chrono::milliseconds(1) )
+				{
+					std::this_thread::sleep_for(remainingTime - std::chrono::milliseconds(1));
+				}
+
+				/* Busy-wait for the final portion to achieve precise timing. */
+				while ( std::chrono::high_resolution_clock::now() - m_frameStartTime < m_frameDuration )
+				{
+					/* Spin-wait for precise frame timing. */
+				}
+			}
 		}
 	}
 

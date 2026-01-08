@@ -33,7 +33,7 @@ endif ()
 
 project(
 	${BINARY_NAME}
-	VERSION 0.8.43
+	VERSION 0.8.44
 	DESCRIPTION "Emeraude Engine is an open-source (LGPLv3) 3D Graphics engine using Vulkan and written in C++20."
 	HOMEPAGE_URL "https://github.com/EmeraudeEngine/emeraude-engine"
 	LANGUAGES C CXX
@@ -230,10 +230,6 @@ endif ()
 
 target_link_directories(${PROJECT_NAME} PUBLIC ${LOCAL_LIB_DIR}/lib)
 
-target_compile_definitions(${PROJECT_NAME} PUBLIC ${EMERAUDE_COMPILE_DEFINITIONS})
-
-target_compile_options(${PROJECT_NAME} PUBLIC ${EMERAUDE_COMPILE_OPTIONS})
-
 # Platform-specific target properties.
 if ( MSVC )
 	message("[EmeraudeEngine] Configuring C++ compiler (>= MSVC 2022) for Windows ...")
@@ -416,6 +412,14 @@ elseif ( UNIX )
 else ()
 	message(FATAL_ERROR "[EmeraudeEngine] Unsupported platform/compiler! NOTE: If you are on Windows be sure to use 'Visual Studio 2022' (>=).")
 endif ()
+
+target_compile_definitions(${PROJECT_NAME} PUBLIC ${EMERAUDE_COMPILE_DEFINITIONS})
+
+message("[EmeraudeEngine] '${PROJECT_NAME}' will be compiled with definitions: ${EMERAUDE_COMPILE_DEFINITIONS}")
+
+target_compile_options(${PROJECT_NAME} PUBLIC ${EMERAUDE_COMPILE_OPTIONS})
+
+message("[EmeraudeEngine] '${PROJECT_NAME}' will be compiled with flags: ${EMERAUDE_COMPILE_OPTIONS}")
 
 target_include_directories(${PROJECT_NAME} PUBLIC
     ${CMAKE_BINARY_DIR}/include

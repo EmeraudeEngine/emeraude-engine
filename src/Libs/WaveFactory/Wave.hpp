@@ -188,6 +188,11 @@ namespace EmEn::Libs::WaveFactory
 			size_t
 			sampleCount () const noexcept
 			{
+				if ( m_data.empty() )
+				{
+					return 0;
+				}
+
 				return m_data.size() / static_cast< size_t >(m_channels);
 			}
 

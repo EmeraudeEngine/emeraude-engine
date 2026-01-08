@@ -41,7 +41,24 @@
 2.  **Vulkan:** NEVER call Vulkan directly. Use `Graphics/` abstractions.
 3.  **Memory:** Use **VMA** for GPU. Use **RAII** for CPU. No raw pointers.
 
-## 4. Documentation Index
+## 4. Platform-Specific Recommendations
+
+### Linux/NVIDIA/X11 (GNOME, KDE)
+
+**Issue:** VSync causes micro-stuttering due to double synchronization (driver + compositor).
+
+**Solution:**
+```
+Core/Video/EnableVSync = false
+Core/Video/EnableTripleBuffering = true (optional)
+Core/Video/FrameRateLimit = 60  (or monitor refresh rate)
+```
+
+The compositor handles display sync; the app limits its frame rate to avoid wasting resources.
+
+**Details:** See [`src/Vulkan/AGENTS.md`](src/Vulkan/AGENTS.md) (Present Mode Selection) and [`src/Graphics/AGENTS.md`](src/Graphics/AGENTS.md) (Frame Rate Limiter).
+
+## 5. Documentation Index
 
 -   **Philosophy:** [`docs/architecture-philosophy.md`](docs/architecture-philosophy.md) (Deep dive).
 -   **Tracer:** [`docs/tracer-system.md`](docs/tracer-system.md) (Logging rules).

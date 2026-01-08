@@ -121,6 +121,8 @@ namespace EmEn
 		constexpr auto DefaultEnableDoubleBuffering{false};
 		constexpr auto VideoEnableTripleBufferingKey{"Core/Video/EnableTripleBuffering"};
 		constexpr auto DefaultVideoEnableTripleBuffering{true};
+		constexpr auto VideoFrameRateLimitKey{"Core/Video/FrameRateLimit"};
+		constexpr auto DefaultVideoFrameRateLimit{0U}; // 0 = disabled, otherwise FPS target
 		constexpr auto VideoEnableSRGBKey{"Core/Video/EnableSRGB"};
 		constexpr auto DefaultEnableSRGB{false};
 		constexpr auto VideoShowInformationKey{"Core/Video/ShowInformation"}; // Logs (and with argument switch "--show-video-infos")
