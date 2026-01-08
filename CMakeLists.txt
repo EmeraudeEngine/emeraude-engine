@@ -33,7 +33,7 @@ endif ()
 
 project(
 	${BINARY_NAME}
-	VERSION 0.8.42
+	VERSION 0.8.43
 	DESCRIPTION "Emeraude Engine is an open-source (LGPLv3) 3D Graphics engine using Vulkan and written in C++20."
 	HOMEPAGE_URL "https://github.com/EmeraudeEngine/emeraude-engine"
 	LANGUAGES C CXX
@@ -199,7 +199,6 @@ if ( EMERAUDE_ENABLE_IMGUI )
 	include(SetupPreSourcesImGui)
 endif ()
 
-include(SetupPreSourcesJsonCpp)
 
 
 #######################################################################
@@ -210,9 +209,6 @@ include(PrepareEngineSourceFiles)
 if ( EMERAUDE_ENABLE_IMGUI )
 	list(APPEND EMERAUDE_SOURCE_FILES ${IMGUI_SOURCE_FILES})
 endif ()
-
-# JsonCpp library source files
-list(APPEND EMERAUDE_SOURCE_FILES ${JSONCPP_SOURCE_FILES})
 
 
 
@@ -442,7 +438,7 @@ set(BUILD_SHARED_LIBS Off CACHE BOOL "" FORCE)
 set(TARGET_BINARY_FOR_SETUP ${PROJECT_NAME})
 
 # Base dependencies
-include(SetupPostSourcesJsonCpp)
+include(SetupJsonCpp)
 
 # Magic Enum
 target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/magic_enum/include)
@@ -502,7 +498,7 @@ if ( NOT EMERAUDE_BUILD_SERVICES_ONLY )
 
 	include(SetupReproc) # Using add_subdirectory()
 
-	include(SetupFastGLTF) # Using add_subdirectory()
+	include(SetupFastGLTF)
 
 	if ( EMERAUDE_ENABLE_OPENMP AND NOT APPLE )
 		include(SetupOpenMP)
