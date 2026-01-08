@@ -144,10 +144,10 @@ namespace EmEn::Libs::Math::Space2D::SAT
 			centerB += v;
 		}
 
-		centerA /= verticesA.size();
-		centerB /= verticesB.size();
+		centerA /= static_cast< precision_t >(verticesA.size());
+		centerB /= static_cast< precision_t >(verticesB.size());
 
-		Vector< 2, precision_t > direction = centerB - centerA;
+		const auto direction = centerB - centerA;
 
 		if ( Vector< 2, precision_t >::dotProduct(direction, MTV) < 0 )
 		{

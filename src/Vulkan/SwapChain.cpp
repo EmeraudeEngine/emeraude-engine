@@ -443,7 +443,10 @@ namespace EmEn::Vulkan
 			return fallback;
 		}
 
-		TraceInfo{ClassId} << "The swap-chain will use " << formatName << " surface format (VK_FORMAT_B8G8R8A8_" << formatName << ").";
+		if ( m_showInformation )
+		{
+			TraceInfo{ClassId} << "The swap-chain will use " << formatName << " surface format (VK_FORMAT_B8G8R8A8_" << formatName << ").";
+		}
 
 		return *formatIt;
 	}
@@ -1081,98 +1084,178 @@ namespace EmEn::Vulkan
 	VkPresentModeKHR
 	SwapChain::choosePresentMode () const noexcept
 	{
+		/*
+		 * Present Mode Selection Strategy (Windows, Linux, macOS)
+		 *
+		 * Available modes and their characteristics:
+		 * ┌─────────────────────┬─────────┬──────────┬─────────┬──────────────────────────────────┐
+		 * │ Mode                │ VSync   │ Blocking │ Tearing │ Notes                            │
+		 * ├─────────────────────┼─────────┼──────────┼─────────┼──────────────────────────────────┤
+		 * │ IMMEDIATE           │ No      │ No       │ Yes     │ Lowest latency, may tear         │
+		 * │ MAILBOX             │ Yes     │ No       │ No      │ Triple-buffer, best for games    │
+		 * │ FIFO                │ Yes     │ Yes      │ No      │ Always available, classic vsync  │
+		 * │ FIFO_RELAXED        │ Partial │ Partial  │ If late │ Vsync but allows late present    │
+		 * └─────────────────────┴─────────┴──────────┴─────────┴──────────────────────────────────┘
+		 *
+		 * Selection matrix based on user preferences:
+		 * ┌───────────┬────────────────┬────────────────────────────────────────────────────────┐
+		 * │ VSync     │ Triple-Buffer  │ Priority order                                         │
+		 * ├───────────┼────────────────┼────────────────────────────────────────────────────────┤
+		 * │ ON        │ ON             │ MAILBOX > FIFO_RELAXED > FIFO                          │
+		 * │ ON        │ OFF            │ FIFO (standard double-buffered vsync)                  │
+		 * │ OFF       │ ON             │ IMMEDIATE > MAILBOX > FIFO_RELAXED > FIFO              │
+		 * │ OFF       │ OFF            │ IMMEDIATE > FIFO_RELAXED > FIFO                        │
+		 * └───────────┴────────────────┴────────────────────────────────────────────────────────┘
+		 *
+		 * Platform notes:
+		 * - Windows:  MAILBOX widely supported on modern GPUs.
+		 * - Linux:    MAILBOX often unavailable (Mesa drivers). FIFO_RELAXED is a good fallback.
+		 * - macOS:    Limited mode support through MoltenVK, FIFO typically used.
+		 */
+
 		const auto & presentModes = m_renderer.window().surface()->presentModes();
 
+		/* Helper lambda to check mode availability. */
+		auto isAvailable = [&presentModes](VkPresentModeKHR mode) -> bool {
+			return std::ranges::find(presentModes, mode) != presentModes.cend();
+		};
+
+		/* Helper lambda to get mode name for logging. */
+		auto getModeName = [](VkPresentModeKHR mode) -> const char * {
+			switch ( mode )
+			{
+				case VK_PRESENT_MODE_IMMEDIATE_KHR :
+					return "IMMEDIATE";
+
+				case VK_PRESENT_MODE_MAILBOX_KHR :
+					return "MAILBOX";
+
+				case VK_PRESENT_MODE_FIFO_KHR :
+					return "FIFO";
+
+				case VK_PRESENT_MODE_FIFO_RELAXED_KHR :
+					return "FIFO_RELAXED";
+
+				case VK_PRESENT_MODE_SHARED_DEMAND_REFRESH_KHR :
+					return "SHARED_DEMAND_REFRESH";
+
+				case VK_PRESENT_MODE_SHARED_CONTINUOUS_REFRESH_KHR :
+					return "SHARED_CONTINUOUS_REFRESH";
+
+				default :
+					return "UNKNOWN";
+			}
+		};
+
+		/* Log available modes. */
 		if ( m_showInformation )
 		{
 			std::stringstream info;
-			info << "Present modes available :" "\n";
+			info << "Present modes available:" "\n";
 
 			for ( const auto presentMode : presentModes )
 			{
-				switch ( presentMode )
-				{
-					// NOTE: Tearing.
-					case VK_PRESENT_MODE_IMMEDIATE_KHR :
-						info << " - VK_PRESENT_MODE_IMMEDIATE_KHR" "\n";
-						break;
-
-					// NOTE: No tearing.
-					case VK_PRESENT_MODE_MAILBOX_KHR :
-						info << " - VK_PRESENT_MODE_MAILBOX_KHR" "\n";
-						break;
-
-					// NOTE: Always available, no tearing.
-					case VK_PRESENT_MODE_FIFO_KHR :
-						info << " - VK_PRESENT_MODE_FIFO_KHR" "\n";
-						break;
-
-					// NOTE: Tearing on timeout.
-					case VK_PRESENT_MODE_FIFO_RELAXED_KHR :
-						info << " - VK_PRESENT_MODE_FIFO_RELAXED_KHR" "\n";
-						break;
-
-					case VK_PRESENT_MODE_SHARED_DEMAND_REFRESH_KHR :
-						info << " - VK_PRESENT_MODE_SHARED_DEMAND_REFRESH_KHR" "\n";
-						break;
-
-					case VK_PRESENT_MODE_SHARED_CONTINUOUS_REFRESH_KHR :
-						info << " - VK_PRESENT_MODE_SHARED_CONTINUOUS_REFRESH_KHR" "\n";
-						break;
-
-					default:
-						info << " - UNKNOWN MODE !" "\n";
-						break;
-				}
+				info << " - VK_PRESENT_MODE_" << getModeName(presentMode) << "_KHR" "\n";
 			}
 
 			TraceInfo{ClassId} << info.str();
 		}
 
+		/* Select optimal present mode based on user preferences. */
+		VkPresentModeKHR selectedMode = VK_PRESENT_MODE_FIFO_KHR;
+		auto selectionReason = "default fallback (always available)";
+
 		if ( m_VSyncEnabled )
 		{
-			if ( std::ranges::find(presentModes, VK_PRESENT_MODE_MAILBOX_KHR) != presentModes.cend() )
+			if ( m_tripleBufferingEnabled )
 			{
-				if ( m_showInformation )
+				/* VSync ON + Triple-buffer ON:
+				 * User wants smooth vsync without input lag.
+				 * MAILBOX is ideal: presents at vsync but doesn't block if ahead.
+				 * FIFO_RELAXED is acceptable: allows tearing only if late, avoiding latency buildup. */
+				if ( isAvailable(VK_PRESENT_MODE_MAILBOX_KHR) )
 				{
-					TraceInfo{ClassId} << "The swap-chain will use MAILBOX as presentation mode.";
+					selectedMode = VK_PRESENT_MODE_MAILBOX_KHR;
+					selectionReason = "vsync + triple-buffer (optimal)";
 				}
-
-				return VK_PRESENT_MODE_MAILBOX_KHR;
+				else if ( isAvailable(VK_PRESENT_MODE_FIFO_RELAXED_KHR) )
+				{
+					selectedMode = VK_PRESENT_MODE_FIFO_RELAXED_KHR;
+					selectionReason = "vsync + triple-buffer (MAILBOX unavailable)";
+				}
+				else
+				{
+					selectionReason = "vsync + triple-buffer (only FIFO available)";
+				}
 			}
-		}
-		else if ( m_tripleBufferingEnabled )
-		{
-			if ( std::ranges::find(presentModes, VK_PRESENT_MODE_FIFO_RELAXED_KHR) != presentModes.cend() )
+			else
 			{
-				if ( m_showInformation )
-				{
-					TraceInfo{ClassId} << "The swap-chain will use FIFO_RELAXED as presentation mode.";
-				}
-
-				return VK_PRESENT_MODE_FIFO_RELAXED_KHR;
+				/* VSync ON + Triple-buffer OFF:
+				 * User wants classic double-buffered vsync.
+				 * FIFO is the standard choice. */
+				selectionReason = "vsync without triple-buffer (classic double-buffered)";
 			}
 		}
 		else
 		{
-			if ( std::ranges::find(presentModes, VK_PRESENT_MODE_IMMEDIATE_KHR) != presentModes.cend() )
+			if ( m_tripleBufferingEnabled )
 			{
-				if ( m_showInformation )
+				/* VSync OFF + Triple-buffer ON:
+				 * User wants lowest latency but with triple-buffer to smooth frame times.
+				 * IMMEDIATE is best for latency.
+				 * MAILBOX provides smooth frame pacing with vsync (acceptable compromise).
+				 * FIFO_RELAXED allows uncapped presentation when ahead. */
+				if ( isAvailable(VK_PRESENT_MODE_IMMEDIATE_KHR) )
 				{
-					TraceInfo{ClassId} << "The swap-chain will use IMMEDIATE as presentation mode.";
+					selectedMode = VK_PRESENT_MODE_IMMEDIATE_KHR;
+					selectionReason = "no vsync + triple-buffer (lowest latency)";
 				}
-
-				return VK_PRESENT_MODE_IMMEDIATE_KHR;
+				else if ( isAvailable(VK_PRESENT_MODE_MAILBOX_KHR) )
+				{
+					selectedMode = VK_PRESENT_MODE_MAILBOX_KHR;
+					selectionReason = "no vsync + triple-buffer (IMMEDIATE unavailable)";
+				}
+				else if ( isAvailable(VK_PRESENT_MODE_FIFO_RELAXED_KHR) )
+				{
+					selectedMode = VK_PRESENT_MODE_FIFO_RELAXED_KHR;
+					selectionReason = "no vsync + triple-buffer (IMMEDIATE/MAILBOX unavailable)";
+				}
+				else
+				{
+					selectionReason = "no vsync + triple-buffer (only FIFO available, forced vsync)";
+				}
+			}
+			else
+			{
+				/* VSync OFF + Triple-buffer OFF:
+				 * User wants absolute minimum latency, accepts tearing.
+				 * IMMEDIATE is the only true "no vsync" mode.
+				 * FIFO_RELAXED is acceptable as it allows late presentation. */
+				if ( isAvailable(VK_PRESENT_MODE_IMMEDIATE_KHR) )
+				{
+					selectedMode = VK_PRESENT_MODE_IMMEDIATE_KHR;
+					selectionReason = "no vsync, no triple-buffer (lowest latency)";
+				}
+				else if ( isAvailable(VK_PRESENT_MODE_FIFO_RELAXED_KHR) )
+				{
+					selectedMode = VK_PRESENT_MODE_FIFO_RELAXED_KHR;
+					selectionReason = "no vsync, no triple-buffer (IMMEDIATE unavailable)";
+				}
+				else
+				{
+					selectionReason = "no vsync, no triple-buffer (only FIFO available, forced vsync)";
+				}
 			}
 		}
 
 		if ( m_showInformation )
 		{
-			TraceInfo{ClassId} << "The swap-chain will use FIFO as presentation mode.";
+			TraceInfo{ClassId} <<
+				"Present mode selected: VK_PRESENT_MODE_" << getModeName(selectedMode) << "_KHR "
+				"[" << selectionReason << "]";
 		}
 
-		/* Default presentation mode (Always available). */
-		return VK_PRESENT_MODE_FIFO_KHR;
+		return selectedMode;
 	}
 
 	void

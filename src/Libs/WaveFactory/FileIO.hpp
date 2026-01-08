@@ -53,7 +53,7 @@ namespace EmEn::Libs::WaveFactory::FileIO
 	[[nodiscard]]
 	bool
 	read (const std::filesystem::path & filepath, Wave< precision_t > & wave, Frequency frequency = Frequency::PCM48000Hz) noexcept
-	requires (std::is_arithmetic_v< precision_t >)
+		requires (std::is_arithmetic_v< precision_t >)
 	{
 		if ( !IO::fileExists(filepath) )
 		{
@@ -74,6 +74,53 @@ namespace EmEn::Libs::WaveFactory::FileIO
 		if ( extension == "mid" || extension == "midi" )
 		{
 			FileFormatMIDI< precision_t > fileFormat{frequency};
+
+			return fileFormat.readFile(filepath, wave);
+		}
+
+		/* All other audio formats are handled by libsndfile. */
+		FileFormatSNDFile< precision_t > fileFormat;
+
+		return fileFormat.readFile(filepath, wave);
+	}
+
+	/**
+	 * @brief Reads a MIDI file into a wave structure using a SoundFont for rendering.
+	 * @tparam precision_t The sample precision type. Default int16_t.
+	 * @param filepath A reference to a filesystem path.
+	 * @param wave A reference to the destination wave.
+	 * @param frequency The sample rate for audio generation.
+	 * @param soundfont Pointer to a TinySoundFont handle for sample-based rendering.
+	 * @return bool
+	 * @note If soundfont is nullptr, falls back to additive synthesis.
+	 * @note For non-MIDI files, the soundfont parameter is ignored.
+	 */
+	template< typename precision_t = int16_t >
+	[[nodiscard]]
+	bool
+	read (const std::filesystem::path & filepath, Wave< precision_t > & wave, Frequency frequency, tsf * soundfont) noexcept
+		requires (std::is_arithmetic_v< precision_t >)
+	{
+		if ( !IO::fileExists(filepath) )
+		{
+			std::cerr << "[WaveFactory::FileIO] read(), the file '" << filepath << "' doesn't exist !\n";
+
+			return false;
+		}
+
+		const auto extension = IO::getFileExtension(filepath, true);
+
+		if ( extension == "json" )
+		{
+			FileFormatJSON< precision_t > fileFormat{frequency};
+
+			return fileFormat.readFile(filepath, wave);
+		}
+
+		if ( extension == "mid" || extension == "midi" )
+		{
+			FileFormatMIDI< precision_t > fileFormat{frequency};
+			fileFormat.setSoundfont(soundfont);
 
 			return fileFormat.readFile(filepath, wave);
 		}

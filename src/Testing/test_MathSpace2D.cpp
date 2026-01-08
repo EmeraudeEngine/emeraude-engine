@@ -59,7 +59,6 @@ template< typename >
 struct MathSpace2D
 	: testing::Test
 {
-
 };
 
 TYPED_TEST_SUITE(MathSpace2D, MathTypeList);
@@ -84,8 +83,8 @@ TYPED_TEST(MathSpace2D, LineConstructorWithDirection)
 	const Line< TypeParam > line{dir};
 
 	ASSERT_EQ(line.origin(), Point< TypeParam >(0, 0));
-	ASSERT_NEAR(line.direction().length(), TypeParam{1.0}, TypeParam{1e-5});
-	ASSERT_NEAR(line.direction()[Y], TypeParam{1.0}, TypeParam{1e-5});
+	ASSERT_NEAR(line.direction().length(), static_cast< TypeParam >(1.0), static_cast< TypeParam >(1e-5));
+	ASSERT_NEAR(line.direction()[Y], static_cast< TypeParam >(1.0), static_cast< TypeParam >(1e-5));
 }
 
 TYPED_TEST(MathSpace2D, LineConstructorWithOriginAndDirection)
@@ -95,8 +94,8 @@ TYPED_TEST(MathSpace2D, LineConstructorWithOriginAndDirection)
 	const Line< TypeParam > line{origin, dir};
 
 	ASSERT_EQ(line.origin(), origin);
-	ASSERT_NEAR(line.direction().length(), TypeParam{1.0}, TypeParam{1e-5});
-	ASSERT_NEAR(line.direction()[Y], TypeParam{1.0}, TypeParam{1e-5});
+	ASSERT_NEAR(line.direction().length(), static_cast< TypeParam >(1.0), static_cast< TypeParam >(1e-5));
+	ASSERT_NEAR(line.direction()[Y], static_cast< TypeParam >(1.0), static_cast< TypeParam >(1e-5));
 }
 
 TYPED_TEST(MathSpace2D, LineSetOrigin)
@@ -117,7 +116,7 @@ TYPED_TEST(MathSpace2D, LineSetDirection)
 	line.setDirection(newDir);
 
 	// Direction should be normalized
-	ASSERT_NEAR(line.direction().length(), TypeParam{1.0}, TypeParam{1e-5});
+	ASSERT_NEAR(line.direction().length(), static_cast< TypeParam >(1.0), static_cast< TypeParam >(1e-5));
 }
 
 TYPED_TEST(MathSpace2D, LineReset)
@@ -187,23 +186,23 @@ TYPED_TEST(MathSpace2D, SegmentGetStartXY)
 {
 	const Segment< TypeParam > segment{{1, 2}, {4, 5}};
 
-	ASSERT_NEAR(segment.startX(), TypeParam{1.0}, TypeParam{1e-5});
-	ASSERT_NEAR(segment.startY(), TypeParam{2.0}, TypeParam{1e-5});
+	ASSERT_NEAR(segment.startX(), static_cast< TypeParam >(1.0), static_cast< TypeParam >(1e-5));
+	ASSERT_NEAR(segment.startY(), static_cast< TypeParam >(2.0), static_cast< TypeParam >(1e-5));
 }
 
 TYPED_TEST(MathSpace2D, SegmentGetEndXY)
 {
 	const Segment< TypeParam > segment{{1, 2}, {4, 5}};
 
-	ASSERT_NEAR(segment.endX(), TypeParam{4.0}, TypeParam{1e-5});
-	ASSERT_NEAR(segment.endY(), TypeParam{5.0}, TypeParam{1e-5});
+	ASSERT_NEAR(segment.endX(), static_cast< TypeParam >(4.0), static_cast< TypeParam >(1e-5));
+	ASSERT_NEAR(segment.endY(), static_cast< TypeParam >(5.0), static_cast< TypeParam >(1e-5));
 }
 
 TYPED_TEST(MathSpace2D, SegmentGetLength)
 {
 	const Segment< TypeParam > segment{{0, 0}, {3, 4}};
 
-	ASSERT_NEAR(segment.getLength(), TypeParam{5.0}, TypeParam{1e-5});
+	ASSERT_NEAR(segment.getLength(), static_cast< TypeParam >(5.0), static_cast< TypeParam >(1e-5));
 }
 
 TYPED_TEST(MathSpace2D, SegmentReset)
@@ -222,7 +221,7 @@ TYPED_TEST(MathSpace2D, SegmentReset)
 
 TYPED_TEST(MathSpace2D, CircleDefaultConstructor)
 {
-	const Circle< TypeParam > circle{0.0};
+	const Circle< TypeParam > circle{static_cast< TypeParam >(0.0)};
 
 	ASSERT_EQ(circle.position(), Point< TypeParam >(0, 0));
 	ASSERT_EQ(circle.radius(), TypeParam{0});
@@ -230,19 +229,19 @@ TYPED_TEST(MathSpace2D, CircleDefaultConstructor)
 
 TYPED_TEST(MathSpace2D, CircleConstructorWithRadius)
 {
-	const Circle< TypeParam > circle{5.0};
+	const Circle< TypeParam > circle{static_cast< TypeParam >(5.0)};
 
 	ASSERT_EQ(circle.position(), Point< TypeParam >(0, 0));
-	ASSERT_NEAR(circle.radius(), TypeParam{5.0}, TypeParam{1e-5});
+	ASSERT_NEAR(circle.radius(), static_cast< TypeParam >(5.0), static_cast< TypeParam >(1e-5));
 }
 
 TYPED_TEST(MathSpace2D, CircleConstructorWithRadiusAndPosition)
 {
 	const Point< TypeParam > pos{10, 20};
-	const Circle< TypeParam > circle{5.0, pos};
+	const Circle< TypeParam > circle{static_cast< TypeParam >(5.0), pos};
 
 	ASSERT_EQ(circle.position(), pos);
-	ASSERT_NEAR(circle.radius(), TypeParam{5.0}, TypeParam{1e-5});
+	ASSERT_NEAR(circle.radius(), static_cast< TypeParam >(5.0), static_cast< TypeParam >(1e-5));
 }
 
 TYPED_TEST(MathSpace2D, CircleIsValid)
@@ -250,13 +249,13 @@ TYPED_TEST(MathSpace2D, CircleIsValid)
 	const Circle< TypeParam > validCircle{5.0};
 	ASSERT_TRUE(validCircle.isValid());
 
-	const Circle< TypeParam > invalidCircle{0.0};
+	const Circle< TypeParam > invalidCircle{static_cast< TypeParam >(0.0)};
 	ASSERT_FALSE(invalidCircle.isValid());
 }
 
 TYPED_TEST(MathSpace2D, CircleSetPosition)
 {
-	Circle< TypeParam > circle{5.0};
+	Circle< TypeParam > circle{static_cast< TypeParam >(5.0)};
 	const Point< TypeParam > newPos{1, 2};
 
 	circle.setPosition(newPos);
@@ -266,49 +265,49 @@ TYPED_TEST(MathSpace2D, CircleSetPosition)
 
 TYPED_TEST(MathSpace2D, CircleSetRadius)
 {
-	Circle< TypeParam > circle{5.0};
+	Circle< TypeParam > circle{static_cast< TypeParam >(5.0)};
 
-	circle.setRadius(10.0);
+	circle.setRadius(static_cast< TypeParam >(10.0));
 
-	ASSERT_NEAR(circle.radius(), TypeParam{10.0}, TypeParam{1e-5});
+	ASSERT_NEAR(circle.radius(), static_cast< TypeParam >(10.0), static_cast< TypeParam >(1e-5));
 }
 
 TYPED_TEST(MathSpace2D, CircleSetRadiusNegative)
 {
-	Circle< TypeParam > circle{5.0};
+	Circle< TypeParam > circle{static_cast< TypeParam >(5.0)};
 
-	circle.setRadius(-10.0);
+	circle.setRadius(static_cast< TypeParam >(-10.0));
 
 	// Should take absolute value
-	ASSERT_NEAR(circle.radius(), TypeParam{10.0}, TypeParam{1e-5});
+	ASSERT_NEAR(circle.radius(), static_cast< TypeParam >(10.0), static_cast< TypeParam >(1e-5));
 }
 
 TYPED_TEST(MathSpace2D, CircleSquaredRadius)
 {
-	const Circle< TypeParam > circle{5.0};
+	const Circle< TypeParam > circle{static_cast< TypeParam >(5.0)};
 
-	ASSERT_NEAR(circle.squaredRadius(), TypeParam{25.0}, TypeParam{1e-5});
+	ASSERT_NEAR(circle.squaredRadius(), static_cast< TypeParam >(25.0), static_cast< TypeParam >(1e-5));
 }
 
 TYPED_TEST(MathSpace2D, CircleGetPerimeter)
 {
-	const Circle< TypeParam > circle{1.0};
+	const Circle< TypeParam > circle{static_cast< TypeParam >(1.0)};
 
 	// C = 2πr
-	ASSERT_NEAR(circle.getPerimeter(), TypeParam{2.0} * std::numbers::pi_v< TypeParam >, TypeParam{1e-4});
+	ASSERT_NEAR(circle.getPerimeter(), static_cast< TypeParam >(2.0) * std::numbers::pi_v< TypeParam >, static_cast< TypeParam >(1e-4));
 }
 
 TYPED_TEST(MathSpace2D, CircleGetArea)
 {
-	const Circle< TypeParam > circle{1.0};
+	const Circle< TypeParam > circle{static_cast< TypeParam >(1.0)};
 
 	// A = πr²
-	ASSERT_NEAR(circle.getArea(), std::numbers::pi_v< TypeParam >, TypeParam{1e-4});
+	ASSERT_NEAR(circle.getArea(), std::numbers::pi_v< TypeParam >, static_cast< TypeParam >(1e-4));
 }
 
 TYPED_TEST(MathSpace2D, CircleReset)
 {
-	Circle< TypeParam > circle{10.0, {1, 2}};
+	Circle< TypeParam > circle{static_cast< TypeParam >(10.0), {1, 2}};
 
 	circle.reset();
 
@@ -387,7 +386,7 @@ TYPED_TEST(MathSpace2D, TriangleGetPerimeter)
 	// Right triangle with sides 3, 4, 5
 	const Triangle< TypeParam > triangle{{0, 0}, {3, 0}, {0, 4}};
 
-	ASSERT_NEAR(triangle.getPerimeter(), TypeParam{12.0}, TypeParam{1e-4});
+	ASSERT_NEAR(triangle.getPerimeter(), static_cast< TypeParam >(12.0), static_cast< TypeParam >(1e-4));
 }
 
 TYPED_TEST(MathSpace2D, TriangleGetArea)
@@ -395,7 +394,7 @@ TYPED_TEST(MathSpace2D, TriangleGetArea)
 	// Triangle with base 4 and height 3
 	const Triangle< TypeParam > triangle{{0, 0}, {4, 0}, {0, 3}};
 
-	ASSERT_NEAR(triangle.getArea(), TypeParam{6.0}, TypeParam{1e-4});
+	ASSERT_NEAR(triangle.getArea(), static_cast< TypeParam >(6.0), static_cast< TypeParam >(1e-4));
 }
 
 TYPED_TEST(MathSpace2D, TriangleReset)
@@ -417,59 +416,59 @@ TYPED_TEST(MathSpace2D, AARectangleDefaultConstructor)
 {
 	const AARectangle< TypeParam > rect;
 
-	ASSERT_NEAR(rect.width(), TypeParam{0}, TypeParam{1e-5});
-	ASSERT_NEAR(rect.height(), TypeParam{0}, TypeParam{1e-5});
+	ASSERT_NEAR(rect.width(), TypeParam{0}, static_cast< TypeParam >(1e-5));
+	ASSERT_NEAR(rect.height(), TypeParam{0}, static_cast< TypeParam >(1e-5));
 }
 
 TYPED_TEST(MathSpace2D, AARectangleConstructorWithDimensions)
 {
-	const AARectangle< TypeParam > rect{10.0, 20.0};
+	const AARectangle< TypeParam > rect{static_cast< TypeParam >(10.0), static_cast< TypeParam >(20.0)};
 
 	ASSERT_TRUE(rect.isValid());
-	ASSERT_NEAR(rect.width(), TypeParam{10.0}, TypeParam{1e-5});
-	ASSERT_NEAR(rect.height(), TypeParam{20.0}, TypeParam{1e-5});
+	ASSERT_NEAR(rect.width(), static_cast< TypeParam >(10.0), static_cast< TypeParam >(1e-5));
+	ASSERT_NEAR(rect.height(), static_cast< TypeParam >(20.0), static_cast< TypeParam >(1e-5));
 }
 
 TYPED_TEST(MathSpace2D, AARectangleConstructorWithPositionAndDimensions)
 {
-	const AARectangle< TypeParam > rect{5.0, 10.0, 20.0, 30.0};
+	const AARectangle< TypeParam > rect{static_cast< TypeParam >(5.0), static_cast< TypeParam >(10.0), static_cast< TypeParam >(20.0), static_cast< TypeParam >(30.0)};
 
 	ASSERT_TRUE(rect.isValid());
-	ASSERT_NEAR(rect.left(), TypeParam{5.0}, TypeParam{1e-5});
-	ASSERT_NEAR(rect.top(), TypeParam{10.0}, TypeParam{1e-5});
-	ASSERT_NEAR(rect.width(), TypeParam{20.0}, TypeParam{1e-5});
-	ASSERT_NEAR(rect.height(), TypeParam{30.0}, TypeParam{1e-5});
+	ASSERT_NEAR(rect.left(), static_cast< TypeParam >(5.0), static_cast< TypeParam >(1e-5));
+	ASSERT_NEAR(rect.top(), static_cast< TypeParam >(10.0), static_cast< TypeParam >(1e-5));
+	ASSERT_NEAR(rect.width(), static_cast< TypeParam >(20.0), static_cast< TypeParam >(1e-5));
+	ASSERT_NEAR(rect.height(), static_cast< TypeParam >(30.0), static_cast< TypeParam >(1e-5));
 }
 
 TYPED_TEST(MathSpace2D, AARectangleIsValid)
 {
-	const AARectangle< TypeParam > validRect{10.0, 20.0};
+	const AARectangle< TypeParam > validRect{static_cast< TypeParam >(10.0), static_cast< TypeParam >(20.0)};
 	ASSERT_TRUE(validRect.isValid());
 
-	const AARectangle< TypeParam > invalidRect{0.0, 0.0};
+	const AARectangle< TypeParam > invalidRect{static_cast< TypeParam >(0.0), static_cast< TypeParam >(0.0)};
 	ASSERT_FALSE(invalidRect.isValid());
 }
 
 TYPED_TEST(MathSpace2D, AARectangleGetArea)
 {
-	const AARectangle< TypeParam > rect{10.0, 20.0};
+	const AARectangle< TypeParam > rect{static_cast< TypeParam >(10.0), static_cast< TypeParam >(20.0)};
 
-	ASSERT_NEAR(rect.getArea(), TypeParam{200.0}, TypeParam{1e-5});
+	ASSERT_NEAR(rect.getArea(), static_cast< TypeParam >(200.0), static_cast< TypeParam >(1e-5));
 }
 
 TYPED_TEST(MathSpace2D, AARectangleConstructorSwapsMaxMin)
 {
 	// Constructor should handle inverted coordinates
-	const AARectangle< TypeParam > rect{10.0, 10.0, -5.0, -5.0};
+	const AARectangle< TypeParam > rect{static_cast< TypeParam >(10.0), static_cast< TypeParam >(10.0), static_cast< TypeParam >(-5.0), static_cast< TypeParam >(-5.0)};
 
 	// Negative dimensions should result in 0
-	ASSERT_NEAR(rect.width(), TypeParam{0.0}, TypeParam{1e-5});
-	ASSERT_NEAR(rect.height(), TypeParam{0.0}, TypeParam{1e-5});
+	ASSERT_NEAR(rect.width(), static_cast< TypeParam >(0.0), static_cast< TypeParam >(1e-5));
+	ASSERT_NEAR(rect.height(), static_cast< TypeParam >(0.0), static_cast< TypeParam >(1e-5));
 }
 
 TYPED_TEST(MathSpace2D, AARectangleCornerPoints)
 {
-	const AARectangle< TypeParam > rect{10.0, 20.0, 30.0, 40.0};
+	const AARectangle< TypeParam > rect{static_cast< TypeParam >(10.0), static_cast< TypeParam >(20.0), static_cast< TypeParam >(30.0), static_cast< TypeParam >(40.0)};
 
 	const auto corners = rect.points();
 
@@ -477,50 +476,50 @@ TYPED_TEST(MathSpace2D, AARectangleCornerPoints)
 
 	// Order: topLeft, bottomLeft, topRight, bottomRight
 	// Top-left
-	ASSERT_NEAR(corners[0].x(), TypeParam{10.0}, TypeParam{1e-5});
-	ASSERT_NEAR(corners[0].y(), TypeParam{20.0}, TypeParam{1e-5});
+	ASSERT_NEAR(corners[0].x(), static_cast< TypeParam >(10.0), static_cast< TypeParam >(1e-5));
+	ASSERT_NEAR(corners[0].y(), static_cast< TypeParam >(20.0), static_cast< TypeParam >(1e-5));
 
 	// Bottom-left
-	ASSERT_NEAR(corners[1].x(), TypeParam{10.0}, TypeParam{1e-5});
-	ASSERT_NEAR(corners[1].y(), TypeParam{60.0}, TypeParam{1e-5});
+	ASSERT_NEAR(corners[1].x(), static_cast< TypeParam >(10.0), static_cast< TypeParam >(1e-5));
+	ASSERT_NEAR(corners[1].y(), static_cast< TypeParam >(60.0), static_cast< TypeParam >(1e-5));
 
 	// Top-right
-	ASSERT_NEAR(corners[2].x(), TypeParam{40.0}, TypeParam{1e-5});
-	ASSERT_NEAR(corners[2].y(), TypeParam{20.0}, TypeParam{1e-5});
+	ASSERT_NEAR(corners[2].x(), static_cast< TypeParam >(40.0), static_cast< TypeParam >(1e-5));
+	ASSERT_NEAR(corners[2].y(), static_cast< TypeParam >(20.0), static_cast< TypeParam >(1e-5));
 
 	// Bottom-right
-	ASSERT_NEAR(corners[3].x(), TypeParam{40.0}, TypeParam{1e-5});
-	ASSERT_NEAR(corners[3].y(), TypeParam{60.0}, TypeParam{1e-5});
+	ASSERT_NEAR(corners[3].x(), static_cast< TypeParam >(40.0), static_cast< TypeParam >(1e-5));
+	ASSERT_NEAR(corners[3].y(), static_cast< TypeParam >(60.0), static_cast< TypeParam >(1e-5));
 }
 
 // NOTE: AARectangle doesn't have centroid() or merge(Point) in 2D
 
 TYPED_TEST(MathSpace2D, AARectangleMergeWithRectangle)
 {
-	AARectangle< TypeParam > rect1{0.0, 0.0, 10.0, 10.0};
-	const AARectangle< TypeParam > rect2{5.0, 5.0, 15.0, 15.0};
+	AARectangle< TypeParam > rect1{static_cast< TypeParam >(0.0), static_cast< TypeParam >(0.0), static_cast< TypeParam >(10.0), static_cast< TypeParam >(10.0)};
+	const AARectangle< TypeParam > rect2{static_cast< TypeParam >(5.0), static_cast< TypeParam >(5.0), static_cast< TypeParam >(15.0), static_cast< TypeParam >(15.0)};
 
 	rect1.merge(rect2);
 
-	ASSERT_NEAR(rect1.left(), TypeParam{0.0}, TypeParam{1e-5});
-	ASSERT_NEAR(rect1.top(), TypeParam{0.0}, TypeParam{1e-5});
-	ASSERT_NEAR(rect1.width(), TypeParam{20.0}, TypeParam{1e-5});
-	ASSERT_NEAR(rect1.height(), TypeParam{20.0}, TypeParam{1e-5});
+	ASSERT_NEAR(rect1.left(), static_cast< TypeParam >(0.0), static_cast< TypeParam >(1e-5));
+	ASSERT_NEAR(rect1.top(), static_cast< TypeParam >(0.0), static_cast< TypeParam >(1e-5));
+	ASSERT_NEAR(rect1.width(), static_cast< TypeParam >(20.0), static_cast< TypeParam >(1e-5));
+	ASSERT_NEAR(rect1.height(), static_cast< TypeParam >(20.0), static_cast< TypeParam >(1e-5));
 }
 
 // NOTE: AARectangle doesn't have setMaxMin() in 2D
 
 TYPED_TEST(MathSpace2D, AARectangleReset)
 {
-	AARectangle< TypeParam > rect{10.0, 20.0, 30.0, 40.0};
+	AARectangle< TypeParam > rect{static_cast< TypeParam >(10.0), static_cast< TypeParam >(20.0), static_cast< TypeParam >(30.0), static_cast< TypeParam >(40.0)};
 
 	rect.reset();
 
 	// Reset creates a 1x1 rectangle at origin
-	ASSERT_NEAR(rect.left(), TypeParam{0.0}, TypeParam{1e-5});
-	ASSERT_NEAR(rect.top(), TypeParam{0.0}, TypeParam{1e-5});
-	ASSERT_NEAR(rect.width(), TypeParam{1.0}, TypeParam{1e-5});
-	ASSERT_NEAR(rect.height(), TypeParam{1.0}, TypeParam{1e-5});
+	ASSERT_NEAR(rect.left(), static_cast< TypeParam >(0.0), static_cast< TypeParam >(1e-5));
+	ASSERT_NEAR(rect.top(), static_cast< TypeParam >(0.0), static_cast< TypeParam >(1e-5));
+	ASSERT_NEAR(rect.width(), static_cast< TypeParam >(1.0), static_cast< TypeParam >(1e-5));
+	ASSERT_NEAR(rect.height(), static_cast< TypeParam >(1.0), static_cast< TypeParam >(1e-5));
 }
 
 // NOTE: AARectangle doesn't have highestLength() or farthestPoint() in 2D
@@ -896,8 +895,8 @@ TYPED_TEST(MathSpace2D, IntersectionLineLineWithIntersectionPoint)
 	Point< TypeParam > intersection;
 
 	ASSERT_TRUE(isIntersecting(line1, line2, intersection));
-	ASSERT_NEAR(intersection[X], TypeParam{2.0}, TypeParam{1e-4});
-	ASSERT_NEAR(intersection[Y], TypeParam{2.0}, TypeParam{1e-4});
+	ASSERT_NEAR(intersection[X], static_cast< TypeParam >(2.0), static_cast< TypeParam >(1e-4));
+	ASSERT_NEAR(intersection[Y], static_cast< TypeParam >(2.0), static_cast< TypeParam >(1e-4));
 }
 
 TYPED_TEST(MathSpace2D, IntersectionLineLinePerpendicular)
@@ -1023,8 +1022,8 @@ TYPED_TEST(MathSpace2D, IntersectionSegmentSegmentWithIntersectionPoint)
 	Point< TypeParam > intersection;
 
 	ASSERT_TRUE(isIntersecting(seg1, seg2, intersection));
-	ASSERT_NEAR(intersection[X], TypeParam{2.0}, TypeParam{1e-4});
-	ASSERT_NEAR(intersection[Y], TypeParam{2.0}, TypeParam{1e-4});
+	ASSERT_NEAR(intersection[X], static_cast< TypeParam >(2.0), static_cast< TypeParam >(1e-4));
+	ASSERT_NEAR(intersection[Y], static_cast< TypeParam >(2.0), static_cast< TypeParam >(1e-4));
 }
 
 TYPED_TEST(MathSpace2D, IntersectionSegmentSegmentParallel)
@@ -1174,16 +1173,15 @@ TYPED_TEST(MathSpace2D, SATProjectTriangleOnAxis)
 	std::vector< Vector< 2, TypeParam > > vertices = {
 		Vector< 2, TypeParam >{0, 0},
 		Vector< 2, TypeParam >{10, 0},
-		Vector< 2, TypeParam >{0, 10}
-	};
+		Vector< 2, TypeParam >{0, 10}};
 
 	const Vector< 2, TypeParam > axis{1, 0}; // X-axis
 
 	TypeParam min, max;
 	SAT::project(vertices, axis, min, max);
 
-	ASSERT_NEAR(min, TypeParam{0.0}, TypeParam{1e-5});
-	ASSERT_NEAR(max, TypeParam{10.0}, TypeParam{1e-5});
+	ASSERT_NEAR(min, static_cast< TypeParam >(0.0), static_cast< TypeParam >(1e-5));
+	ASSERT_NEAR(max, static_cast< TypeParam >(10.0), static_cast< TypeParam >(1e-5));
 }
 
 TYPED_TEST(MathSpace2D, SATCheckCollisionSimpleTriangles)
@@ -1192,14 +1190,12 @@ TYPED_TEST(MathSpace2D, SATCheckCollisionSimpleTriangles)
 	std::vector< Vector< 2, TypeParam > > tri1 = {
 		Vector< 2, TypeParam >{0, 0},
 		Vector< 2, TypeParam >{3, 0},
-		Vector< 2, TypeParam >{0, 3}
-	};
+		Vector< 2, TypeParam >{0, 3}};
 
 	std::vector< Vector< 2, TypeParam > > tri2 = {
 		Vector< 2, TypeParam >{1, 1},
 		Vector< 2, TypeParam >{4, 1},
-		Vector< 2, TypeParam >{1, 4}
-	};
+		Vector< 2, TypeParam >{1, 4}};
 
 	Vector< 2, TypeParam > mtv;
 
@@ -1212,14 +1208,12 @@ TYPED_TEST(MathSpace2D, SATCheckCollisionNoCollision)
 	std::vector< Vector< 2, TypeParam > > tri1 = {
 		Vector< 2, TypeParam >{0, 0},
 		Vector< 2, TypeParam >{2, 0},
-		Vector< 2, TypeParam >{0, 2}
-	};
+		Vector< 2, TypeParam >{0, 2}};
 
 	std::vector< Vector< 2, TypeParam > > tri2 = {
 		Vector< 2, TypeParam >{10, 10},
 		Vector< 2, TypeParam >{12, 10},
-		Vector< 2, TypeParam >{10, 12}
-	};
+		Vector< 2, TypeParam >{10, 12}};
 
 	Vector< 2, TypeParam > mtv;
 
@@ -1232,14 +1226,12 @@ TYPED_TEST(MathSpace2D, SATCheckCollisionDegenerateTriangle)
 	std::vector< Vector< 2, TypeParam > > tri1 = {
 		Vector< 2, TypeParam >{0, 0},
 		Vector< 2, TypeParam >{1, 0},
-		Vector< 2, TypeParam >{2, 0}
-	};
+		Vector< 2, TypeParam >{2, 0}};
 
 	std::vector< Vector< 2, TypeParam > > tri2 = {
 		Vector< 2, TypeParam >{0, 0},
 		Vector< 2, TypeParam >{3, 0},
-		Vector< 2, TypeParam >{0, 3}
-	};
+		Vector< 2, TypeParam >{0, 3}};
 
 	Vector< 2, TypeParam > mtv;
 
@@ -1258,7 +1250,7 @@ TYPED_TEST(MathSpace2D, DistancePointToLine)
 
 	const auto dist = point.distanceToLine(line.origin(), line.direction());
 
-	ASSERT_NEAR(dist, TypeParam{5.0}, TypeParam{1e-5});
+	ASSERT_NEAR(dist, static_cast< TypeParam >(5.0), static_cast< TypeParam >(1e-5));
 }
 
 // NOTE: Point doesn't have distanceToSegment() method
@@ -1270,7 +1262,7 @@ TYPED_TEST(MathSpace2D, DistancePointToCircleEdge)
 
 	const auto dist = Vector< 2, TypeParam >::distance(point, circle.position()) - circle.radius();
 
-	ASSERT_NEAR(dist, TypeParam{7.0}, TypeParam{1e-5});
+	ASSERT_NEAR(dist, static_cast< TypeParam >(7.0), static_cast< TypeParam >(1e-5));
 }
 
 TYPED_TEST(MathSpace2D, DistanceBetweenPoints)
@@ -1280,7 +1272,7 @@ TYPED_TEST(MathSpace2D, DistanceBetweenPoints)
 
 	const auto dist = Vector< 2, TypeParam >::distance(p1, p2);
 
-	ASSERT_NEAR(dist, TypeParam{5.0}, TypeParam{1e-5});
+	ASSERT_NEAR(dist, static_cast< TypeParam >(5.0), static_cast< TypeParam >(1e-5));
 }
 
 TYPED_TEST(MathSpace2D, DistanceSquaredBetweenPoints)
@@ -1290,7 +1282,7 @@ TYPED_TEST(MathSpace2D, DistanceSquaredBetweenPoints)
 
 	const auto distSq = Vector< 2, TypeParam >::distanceSquared(p1, p2);
 
-	ASSERT_NEAR(distSq, TypeParam{25.0}, TypeParam{1e-5});
+	ASSERT_NEAR(distSq, static_cast< TypeParam >(25.0), static_cast< TypeParam >(1e-5));
 }
 
 // ============================================================================
@@ -1310,8 +1302,8 @@ TYPED_TEST(MathSpace2D, ClosestPointOnTriangle)
 	const auto closest = details::closestPointOnTriangle(point, triangle);
 
 	// Point is inside triangle, so closest point is the point itself
-	ASSERT_NEAR(closest.x(), TypeParam{5.0}, TypeParam{1e-4});
-	ASSERT_NEAR(closest.y(), TypeParam{5.0}, TypeParam{1e-4});
+	ASSERT_NEAR(closest.x(), static_cast< TypeParam >(5.0), static_cast< TypeParam >(1e-4));
+	ASSERT_NEAR(closest.y(), static_cast< TypeParam >(5.0), static_cast< TypeParam >(1e-4));
 }
 
 // ============================================================================
@@ -1366,7 +1358,7 @@ TYPED_TEST(MathSpace2D, IntersectionLineRectangleMaximumPoints)
 
 	ASSERT_GE(count, 2);
 	ASSERT_LE(count, 4); // May detect up to 4 points at corners due to numerical precision
-	ASSERT_EQ(static_cast<size_t>(count), intersections.size());
+	ASSERT_EQ(static_cast< size_t >(count), intersections.size());
 	// Note: Boundary validation removed due to numerical precision issues at corners
 }
 
@@ -1444,7 +1436,7 @@ TYPED_TEST(MathSpace2D, CollisionDegenerateTriangleZeroArea)
 	const Triangle< TypeParam > degenerate{{0, 0}, {1, 0}, {2, 0}};
 
 	ASSERT_FALSE(degenerate.isValid());
-	ASSERT_NEAR(degenerate.getArea(), TypeParam{0}, TypeParam{1e-5});
+	ASSERT_NEAR(degenerate.getArea(), TypeParam{0}, static_cast< TypeParam >(1e-5));
 }
 
 TYPED_TEST(MathSpace2D, CollisionValidTriangleWithDegenerateTriangle)
@@ -1607,8 +1599,8 @@ TYPED_TEST(MathSpace2D, IntersectionSegmentSegmentTShapeNumericalPrecision)
 	const bool result = isIntersecting(horizontal, vertical, intersection);
 
 	ASSERT_TRUE(result);
-	ASSERT_NEAR(intersection.x(), TypeParam{5.0}, TypeParam{1e-4});
-	ASSERT_NEAR(intersection.y(), TypeParam{5.0}, TypeParam{1e-4});
+	ASSERT_NEAR(intersection.x(), static_cast< TypeParam >(5.0), static_cast< TypeParam >(1e-4));
+	ASSERT_NEAR(intersection.y(), static_cast< TypeParam >(5.0), static_cast< TypeParam >(1e-4));
 }
 
 // ============================================================================
@@ -1709,7 +1701,7 @@ TYPED_TEST(MathSpace2D, CollisionRectangleVeryLargeAspectRatio)
 	 * @test Tests collision with extreme aspect ratio rectangles.
 	 * REQUIREMENT: Must handle extreme aspect ratios correctly.
 	 */
-	const AARectangle< TypeParam > thin{0, 0, TypeParam{1000}, TypeParam{0.1}};
+	const AARectangle< TypeParam > thin{0, 0, TypeParam{1000}, static_cast< TypeParam >(0.1)};
 	const AARectangle< TypeParam > square{10, -1, 10, 10};
 
 	ASSERT_TRUE(thin.isValid());
@@ -1736,7 +1728,7 @@ TYPED_TEST(MathSpace2D, IntersectionLineAtRectangleBoundaryNumerical)
 	// Verify intersection points are on vertical line at x=5
 	for ( const auto & point : intersections )
 	{
-		ASSERT_NEAR(point.x(), TypeParam{5.0}, TypeParam{1e-4});
+		ASSERT_NEAR(point.x(), static_cast< TypeParam >(5.0), static_cast< TypeParam >(1e-4));
 	}
 }
 
@@ -1796,7 +1788,6 @@ TYPED_TEST(MathSpace2D, CollisionTriangleRectangleMTVSymmetry)
 	ASSERT_TRUE(isColliding(rect, triangle, mtv_ba));
 
 	// MTV(A, B) should be opposite of MTV(B, A)
-	ASSERT_NEAR(mtv_ab.x(), -mtv_ba.x(), TypeParam{1e-4});
-	ASSERT_NEAR(mtv_ab.y(), -mtv_ba.y(), TypeParam{1e-4});
+	ASSERT_NEAR(mtv_ab.x(), -mtv_ba.x(), static_cast< TypeParam >(1e-4));
+	ASSERT_NEAR(mtv_ab.y(), -mtv_ba.y(), static_cast< TypeParam >(1e-4));
 }
-

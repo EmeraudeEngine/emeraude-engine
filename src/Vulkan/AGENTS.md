@@ -48,6 +48,44 @@ The swap-chain surface format can be configured via settings:
 - `SwapChain.cpp:chooseSurfaceFormat()` - Format selection logic
 - `SwapChain.hpp:m_sRGBEnabled` - Configuration member
 
+### Present Mode Selection
+
+The swap-chain present mode is selected based on `VSync` and `Triple-Buffering` settings.
+
+**Settings keys:**
+- `Core/Video/EnableVSync` (default: true)
+- `Core/Video/EnableTripleBuffering` (default: true)
+
+**Available modes and characteristics:**
+
+| Mode | VSync | Blocking | Tearing | Notes |
+|------|-------|----------|---------|-------|
+| `IMMEDIATE` | No | No | Yes | Lowest latency, may tear |
+| `MAILBOX` | Yes | No | No | Triple-buffer, best for games |
+| `FIFO` | Yes | Yes | No | Always available, classic vsync |
+| `FIFO_RELAXED` | Partial | Partial | If late | Vsync but allows late present |
+
+**Selection matrix:**
+
+| VSync | Triple-Buffer | Priority order |
+|-------|---------------|----------------|
+| ON | ON | MAILBOX > FIFO_RELAXED > FIFO |
+| ON | OFF | FIFO (standard double-buffered vsync) |
+| OFF | ON | IMMEDIATE > MAILBOX > FIFO_RELAXED > FIFO |
+| OFF | OFF | IMMEDIATE > FIFO_RELAXED > FIFO |
+
+**Platform notes:**
+- **Windows**: MAILBOX widely supported on modern GPUs.
+- **Linux**: MAILBOX often unavailable (Mesa/NVIDIA). FIFO_RELAXED is a good fallback.
+- **macOS**: Limited mode support through MoltenVK, FIFO typically used.
+
+**Linux/NVIDIA/X11 known issue:**
+With compositor-based desktops (GNOME, KDE), enabling VSync can cause micro-stuttering due to double sync (driver + compositor). **Recommended solution**: Disable VSync, use Frame Rate Limiter instead, let compositor handle sync.
+
+**Code references:**
+- `SwapChain.cpp:choosePresentMode()` - Mode selection logic with full documentation
+- `SettingKeys.hpp:VideoEnableVSyncKey`, `VideoEnableTripleBufferingKey`
+
 ### Performance: std::span for Barrier APIs
 
 `CommandBuffer` uses `std::span` for synchronization methods:

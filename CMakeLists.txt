@@ -33,7 +33,7 @@ endif ()
 
 project(
 	${BINARY_NAME}
-	VERSION 0.8.43
+	VERSION 0.8.44
 	DESCRIPTION "Emeraude Engine is an open-source (LGPLv3) 3D Graphics engine using Vulkan and written in C++20."
 	HOMEPAGE_URL "https://github.com/EmeraudeEngine/emeraude-engine"
 	LANGUAGES C CXX
@@ -72,8 +72,8 @@ option(EMERAUDE_ENABLE_TESTS "Enable the Emeraude-Engine testing suite (Default 
 option(EMERAUDE_ENABLE_PCH "Enable 'PreCompiled Headers' feature to speed up the compilation (Default Off)." Off)
 option(EMERAUDE_DISABLE_PARANOID_COMPILATION "Disable warnings as errors for compilation (Default Off)." Off)
 option(EMERAUDE_DISABLE_EXCEPTIONS "Disable 'c++ exceptions' feature (Default On)." On)
-option(EMERAUDE_DISABLE_RTTI "Disable 'Run-Time Type Information' feature (Broken feature, Default Off)." Off) # TODO: Make changes for std::any usage.
-option(EMERAUDE_ENABLE_FP_OPTIMIZATION "Enable floating-point optimization (Default On)." On)
+option(EMERAUDE_DISABLE_RTTI "Disable 'Run-Time Type Information' feature (Broken feature, Default Off)." Off) # TODO: Make changes for std::any usage (Should be ON by default).
+option(EMERAUDE_ENABLE_FP_OPTIMIZATION "Enable floating-point optimization (Broken feature, Default Off)." Off) # TODO: fastgltf fails to compile (Should be ON by default).
 option(EMERAUDE_USE_STATIC_RUNTIME "Build Emeraude-Engine with the static MSVC runtime (Windows only, Default Off)." Off)
 option(EMERAUDE_USE_SYSTEM_LIBS "Use the system for common libraries instead of the embedded ones (Deprecated, Default Off)." Off)
 option(EMERAUDE_USE_SYSTEM_OPENAL "Use the system OpenAL-Soft library (Default Off)." Off)
@@ -83,7 +83,7 @@ option(EMERAUDE_ENABLE_LSAN "Enable 'LeakSanitizer' library. Adds a dev tool to 
 option(EMERAUDE_ENABLE_TSAN "Enable 'ThreadSanitizer' library. Adds a dev tool to detects data race [SYSTEM] (Linux only, Default Off)." Off)
 option(EMERAUDE_ENABLE_UBSAN "Enable 'UndefinedBehaviorSanitizer' library. Adds a dev tool to detects undefined behavior [SYSTEM] (Linux only, Default Off)." Off)
 option(EMERAUDE_ENABLE_OPENMP "Enable 'libomp' library [SYSTEM] (Default On)." On)
-option(EMERAUDE_ENABLE_ASIO "Enable 'libasio' library. Adds the networking ability [SYSTEM|LOCAL] (Default On)." On)
+option(EMERAUDE_ENABLE_ASIO "Enable 'libasio' library. Adds the networking ability [LOCAL] (Default On)." On)
 option(EMERAUDE_ENABLE_IMGUI "Enable 'libimgui' library. Adds a GUI to the engine [LOCAL] (Default Off)." Off)
 # Debug preprocessor macros control (Ignored in Release).
 option(EMERAUDE_DEBUG_OBSERVER_PATTERN "Enable the debug output of observer pattern (Default Off)." Off)
@@ -229,10 +229,6 @@ if ( EMERAUDE_ENABLE_PCH )
 endif ()
 
 target_link_directories(${PROJECT_NAME} PUBLIC ${LOCAL_LIB_DIR}/lib)
-
-target_compile_definitions(${PROJECT_NAME} PUBLIC ${EMERAUDE_COMPILE_DEFINITIONS})
-
-target_compile_options(${PROJECT_NAME} PUBLIC ${EMERAUDE_COMPILE_OPTIONS})
 
 # Platform-specific target properties.
 if ( MSVC )
@@ -417,6 +413,14 @@ else ()
 	message(FATAL_ERROR "[EmeraudeEngine] Unsupported platform/compiler! NOTE: If you are on Windows be sure to use 'Visual Studio 2022' (>=).")
 endif ()
 
+target_compile_definitions(${PROJECT_NAME} PUBLIC ${EMERAUDE_COMPILE_DEFINITIONS})
+
+message("[EmeraudeEngine] '${PROJECT_NAME}' will be compiled with definitions: ${EMERAUDE_COMPILE_DEFINITIONS}")
+
+target_compile_options(${PROJECT_NAME} PUBLIC ${EMERAUDE_COMPILE_OPTIONS})
+
+message("[EmeraudeEngine] '${PROJECT_NAME}' will be compiled with flags: ${EMERAUDE_COMPILE_OPTIONS}")
+
 target_include_directories(${PROJECT_NAME} PUBLIC
     ${CMAKE_BINARY_DIR}/include
     ${LOCAL_LIB_DIR}/include
@@ -442,6 +446,9 @@ include(SetupJsonCpp)
 
 # Magic Enum
 target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/magic_enum/include)
+
+# TinySoundFont (SF2 SoundFont support for MIDI rendering)
+target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/tinysoundfont)
 
 # Request : brotli, bzip2, harbuzz, png, zlib
 include(SetupFreetype)
@@ -524,6 +531,8 @@ unset(TARGET_BINARY_FOR_SETUP)
 if ( EMERAUDE_ENABLE_TESTS )
 	message("[EmeraudeEngine] Enabling GoogleTest")
 
+	set(GTEST_EXECUTABLE_NAME EmeraudeUnitTests)
+
 	# Fetch GoogleTest
 	include(FetchContent)
 	include(GoogleTest)
@@ -539,17 +548,34 @@ if ( EMERAUDE_ENABLE_TESTS )
 	# Create the executable
 	file(GLOB_RECURSE TEST_SOURCE_FILES ${CMAKE_CURRENT_SOURCE_DIR}/src/Testing/*.cpp)
 
-	add_executable(EmeraudeUnitTests ${TEST_SOURCE_FILES})
+	add_executable(${GTEST_EXECUTABLE_NAME} ${TEST_SOURCE_FILES})
 
 	# Configure the compilation
-	set_target_properties(EmeraudeUnitTests PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED On)
-	target_include_directories(EmeraudeUnitTests PRIVATE ${EMERAUDE_SOURCE_DIR})
-	target_link_libraries(EmeraudeUnitTests PRIVATE ${PROJECT_NAME} gtest_main)
+	set_target_properties(${GTEST_EXECUTABLE_NAME} PROPERTIES
+		C_STANDARD 17 # Next standard will be C23
+		C_STANDARD_REQUIRED On
+		C_EXTENSIONS Off
+		CXX_STANDARD 20 # Next standard will be C++23, then C++26.
+		CXX_STANDARD_REQUIRED On
+		CXX_EXTENSIONS Off
+	)
+
+	target_compile_definitions(${GTEST_EXECUTABLE_NAME} PRIVATE ${EMERAUDE_COMPILE_DEFINITIONS})
+	target_compile_options(${GTEST_EXECUTABLE_NAME} PRIVATE ${EMERAUDE_COMPILE_OPTIONS})
+	target_include_directories(${GTEST_EXECUTABLE_NAME} PRIVATE ${EMERAUDE_SOURCE_DIR})
+	target_link_libraries(${GTEST_EXECUTABLE_NAME} PRIVATE ${PROJECT_NAME} gtest_main)
+
+	# Link the dependencies used inside the unit testing executable.
+	set(TARGET_BINARY_FOR_SETUP ${GTEST_EXECUTABLE_NAME})
+
+	include(SetupJPEG)
+	include(SetupPNG)
+	include(SetupZLIB)
 
 	# Enable the testing
 	enable_testing()
 
-	gtest_discover_tests(EmeraudeUnitTests WORKING_DIRECTORY ${EMERAUDE_COMPILATION_DIR})
+	gtest_discover_tests(${GTEST_EXECUTABLE_NAME} WORKING_DIRECTORY ${EMERAUDE_COMPILATION_DIR})
 endif ()
 
 
@@ -569,12 +595,14 @@ endif ()
 
 if ( NOT "${EMERAUDE_COMPILATION_DIR}" STREQUAL "" )
 	# Copy debug file
-	add_custom_target(copy_debug_files ALL
-		COMMAND $<$<CONFIG:Debug>:${CMAKE_COMMAND}> -E copy_if_different
-		"${CMAKE_CURRENT_SOURCE_DIR}/resources/vk_layer_settings.txt"
-		"${EMERAUDE_COMPILATION_DIR}/vk_layer_settings.txt"
-		VERBATIM
-	)
+	if ( CMAKE_BUILD_TYPE STREQUAL "Debug" )
+		add_custom_target(copy_debug_files ALL
+			COMMAND ${CMAKE_COMMAND} -E copy_if_different
+			"${CMAKE_CURRENT_SOURCE_DIR}/resources/vk_layer_settings.txt"
+			"${EMERAUDE_COMPILATION_DIR}/vk_layer_settings.txt"
+			VERBATIM
+		)
+	endif ()
 
 	# Copy 'gamecontrollerdb.txt' in the compilation directory.
 	if ( APPLE )

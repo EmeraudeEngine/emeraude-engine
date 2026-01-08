@@ -44,7 +44,8 @@ namespace EmEn::Libs::Math::Space2D
 	template< typename precision_t = float >
 	[[nodiscard]]
 	bool
-	isIntersecting (const Segment< precision_t > & segment, const Circle< precision_t > & circle, Point< precision_t > & intersection) noexcept requires (std::is_floating_point_v< precision_t >)
+	isIntersecting (const Segment< precision_t > & segment, const Circle< precision_t > & circle, Point< precision_t > & intersection) noexcept
+		requires (std::is_floating_point_v< precision_t >)
 	{
 		const auto d = segment.endPoint() - segment.startPoint();
 		const auto f = segment.startPoint() - circle.position();
@@ -115,7 +116,8 @@ namespace EmEn::Libs::Math::Space2D
 	template< typename precision_t = float >
 	[[nodiscard]]
 	bool
-	isIntersecting (const Segment< precision_t > & segment, const Circle< precision_t > & circle) noexcept requires (std::is_floating_point_v< precision_t >)
+	isIntersecting (const Segment< precision_t > & segment, const Circle< precision_t > & circle) noexcept
+		requires (std::is_floating_point_v< precision_t >)
 	{
 		Point< precision_t > dummy;
 
@@ -126,7 +128,8 @@ namespace EmEn::Libs::Math::Space2D
 	template< typename precision_t = float >
 	[[nodiscard]]
 	bool
-	isIntersecting (const Circle< precision_t > & circle, const Segment< precision_t > & segment) noexcept requires (std::is_floating_point_v< precision_t >)
+	isIntersecting (const Circle< precision_t > & circle, const Segment< precision_t > & segment) noexcept
+		requires (std::is_floating_point_v< precision_t >)
 	{
 		return isIntersecting(segment, circle);
 	}
@@ -135,7 +138,8 @@ namespace EmEn::Libs::Math::Space2D
 	template< typename precision_t = float >
 	[[nodiscard]]
 	bool
-	isIntersecting (const Circle< precision_t > & circle, const Segment< precision_t > & segment, Point< precision_t > & intersection) noexcept requires (std::is_floating_point_v< precision_t >)
+	isIntersecting (const Circle< precision_t > & circle, const Segment< precision_t > & segment, Point< precision_t > & intersection) noexcept
+		requires (std::is_floating_point_v< precision_t >)
 	{
 		return isIntersecting(segment, circle, intersection);
 	}

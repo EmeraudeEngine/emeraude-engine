@@ -41,12 +41,13 @@ namespace EmEn::Libs::Math::Space2D
 	 * @param line A reference to a line.
 	 * @param rectangle A reference to a rectangle.
 	 * @param intersections A writable container of intersection points.
-	 * @return int The number of intersection points.
+	 * @return uint32_t The number of intersection points.
 	 */
 	template< typename precision_t = float >
 	[[nodiscard]]
-	int
-	isIntersecting (const Line< precision_t > & line, const AARectangle< precision_t > & rectangle, StaticVector< Point< precision_t >, 4 > & intersections) noexcept requires (std::is_floating_point_v< precision_t >)
+	uint32_t
+	isIntersecting (const Line< precision_t > & line, const AARectangle< precision_t > & rectangle, StaticVector< Point< precision_t >, 4 > & intersections) noexcept
+		requires (std::is_floating_point_v< precision_t >)
 	{
 		intersections.clear();
 
@@ -58,20 +59,20 @@ namespace EmEn::Libs::Math::Space2D
 			Segment< precision_t > edge(vertices[index], vertices[(index + 1) % 4]);
 			Point< precision_t > intersection;
 
-			// Convert segment to line for intersection test
+			/* Convert segment to line for intersection test. */
 			Line< precision_t > edgeLine(edge.startPoint(), (edge.endPoint() - edge.startPoint()).normalized());
 
 			if ( isIntersecting(line, edgeLine, intersection) )
 			{
-				// Check if intersection point is actually on the segment
-				const auto t = Vector< 2, precision_t >::dotProduct(intersection - edge.startPoint(), edge.endPoint() - edge.startPoint()) /
-				               (edge.endPoint() - edge.startPoint()).lengthSquared();
+				/* Check if intersection point is actually on the segment. */
+				const auto t = Vector< 2, precision_t >::dotProduct(intersection - edge.startPoint(), edge.endPoint() - edge.startPoint()) / (edge.endPoint() - edge.startPoint()).lengthSquared();
 
 				if ( t >= 0 && t <= 1 )
 				{
-					// Check for duplicate points (avoid adding same corner twice)
+					/* Check for duplicate points (avoid adding same corner twice). */
 					bool isDuplicate = false;
 					const precision_t epsilonSq = epsilon * epsilon;
+
 					for ( const auto & existing : intersections )
 					{
 						if ( (intersection - existing).lengthSquared() < epsilonSq )
@@ -89,7 +90,7 @@ namespace EmEn::Libs::Math::Space2D
 			}
 		}
 
-		return intersections.size();
+		return static_cast< uint32_t >(intersections.size());
 	}
 
 	/**
@@ -102,7 +103,8 @@ namespace EmEn::Libs::Math::Space2D
 	template< typename precision_t = float >
 	[[nodiscard]]
 	bool
-	isIntersecting (const Line< precision_t > & line, const AARectangle< precision_t > & rectangle) noexcept requires (std::is_floating_point_v< precision_t >)
+	isIntersecting (const Line< precision_t > & line, const AARectangle< precision_t > & rectangle) noexcept
+		requires (std::is_floating_point_v< precision_t >)
 	{
 		StaticVector< Point< precision_t >, 4 > intersections;
 
@@ -113,7 +115,8 @@ namespace EmEn::Libs::Math::Space2D
 	template< typename precision_t = float >
 	[[nodiscard]]
 	bool
-	isIntersecting (const AARectangle< precision_t > & rectangle, const Line< precision_t > & line) noexcept requires (std::is_floating_point_v< precision_t >)
+	isIntersecting (const AARectangle< precision_t > & rectangle, const Line< precision_t > & line) noexcept
+		requires (std::is_floating_point_v< precision_t >)
 	{
 		return isIntersecting(line, rectangle);
 	}
@@ -121,8 +124,9 @@ namespace EmEn::Libs::Math::Space2D
 	/** @copydoc EmEn::Libs::Math::Space2D::isIntersecting(const Line< precision_t > &, const AARectangle< precision_t > &, StaticVector< Point< precision_t >, 4 > &) noexcept */
 	template< typename precision_t = float >
 	[[nodiscard]]
-	int
-	isIntersecting (const AARectangle< precision_t > & rectangle, const Line< precision_t > & line, StaticVector< Point< precision_t >, 4 > & intersections) noexcept requires (std::is_floating_point_v< precision_t >)
+	uint32_t
+	isIntersecting (const AARectangle< precision_t > & rectangle, const Line< precision_t > & line, StaticVector< Point< precision_t >, 4 > & intersections) noexcept
+		requires (std::is_floating_point_v< precision_t >)
 	{
 		return isIntersecting(line, rectangle, intersections);
 	}

@@ -410,8 +410,8 @@ TYPED_TEST(MathVector, NormalizeVector)
 		ASSERT_TRUE(nearEqual(len, TypeParam{1}));
 
 		/* Direction should be preserved */
-		ASSERT_TRUE(nearEqual(vec[X], TypeParam{0.6}));  // 3/5
-		ASSERT_TRUE(nearEqual(vec[Y], TypeParam{0.8}));  // 4/5
+		ASSERT_TRUE(nearEqual(vec[X], static_cast< TypeParam >(0.6)));  // 3/5
+		ASSERT_TRUE(nearEqual(vec[Y], static_cast< TypeParam >(0.8)));  // 4/5
 		ASSERT_TRUE(nearEqual(vec[Z], TypeParam{0}));
 	}
 }
@@ -734,7 +734,7 @@ TYPED_TEST(MathVector, LinearInterpolation)
 		const auto end = Vector< 3, TypeParam >{TypeParam{10}, TypeParam{10}, TypeParam{10}};
 
 		/* At t=0.5, should be halfway */
-		const auto mid = start + (end - start) * TypeParam{0.5};
+		const auto mid = start + (end - start) * static_cast< TypeParam >(0.5);
 
 		ASSERT_TRUE(nearEqual(mid[X], TypeParam{5}));
 		ASSERT_TRUE(nearEqual(mid[Y], TypeParam{5}));

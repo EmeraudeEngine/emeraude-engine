@@ -25,3 +25,6 @@
 [submodule "dependencies/VulkanMemoryAllocator"]
 	path = dependencies/VulkanMemoryAllocator
 	url = https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator.git
+[submodule "dependencies/tinysoundfont"]
+	path = dependencies/tinysoundfont
+	url = https://github.com/schellingb/TinySoundFont.git

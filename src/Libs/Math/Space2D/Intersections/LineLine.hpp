@@ -49,7 +49,8 @@ namespace EmEn::Libs::Math::Space2D
 	template< typename precision_t = float >
 	[[nodiscard]]
 	bool
-	isIntersecting (precision_t ax, precision_t ay, precision_t bx, precision_t by, precision_t cx, precision_t cy, precision_t dx, precision_t dy, Point< precision_t > & intersection) noexcept requires (std::is_arithmetic_v< precision_t >)
+	isIntersecting (precision_t ax, precision_t ay, precision_t bx, precision_t by, precision_t cx, precision_t cy, precision_t dx, precision_t dy, Point< precision_t > & intersection) noexcept
+		requires (std::is_arithmetic_v< precision_t >)
 	{
 		/* NOTE: Direction vectors of the lines */
 		const precision_t dir_ab_x = ax - bx;
@@ -88,7 +89,8 @@ namespace EmEn::Libs::Math::Space2D
 	template< typename precision_t = float >
 	[[nodiscard]]
 	bool
-	isIntersecting (const Line< precision_t > & lineA, const Line< precision_t > & lineB, Point< precision_t > & intersection) noexcept requires (std::is_floating_point_v< precision_t >)
+	isIntersecting (const Line< precision_t > & lineA, const Line< precision_t > & lineB, Point< precision_t > & intersection) noexcept
+		requires (std::is_floating_point_v< precision_t >)
 	{
 		const auto p1 = lineA.origin();
 		const auto p2 = lineA.origin() + lineA.direction();
@@ -108,7 +110,8 @@ namespace EmEn::Libs::Math::Space2D
 	template< typename precision_t = float >
 	[[nodiscard]]
 	bool
-	isIntersecting (const Line< precision_t > & lineA, const Line< precision_t > & lineB) noexcept requires (std::is_floating_point_v< precision_t >)
+	isIntersecting (const Line< precision_t > & lineA, const Line< precision_t > & lineB) noexcept
+		requires (std::is_floating_point_v< precision_t >)
 	{
 		Point< precision_t > dummy;
 

@@ -40,12 +40,13 @@ namespace EmEn::Libs::Math::Space2D
 	 * @param circle A reference to a circle.
 	 * @param intersection1 A writable reference for the first intersection point.
 	 * @param intersection2 A writable reference for the second intersection point.
-	 * @return int The number of intersection points (0, 1, or 2).
+	 * @return uint32_t The number of intersection points (0, 1, or 2).
 	 */
 	template< typename precision_t = float >
 	[[nodiscard]]
-	int
-	isIntersecting (const Line< precision_t > & line, const Circle< precision_t > & circle, Point< precision_t > & intersection1, Point< precision_t > & intersection2) noexcept requires (std::is_floating_point_v< precision_t >)
+	uint32_t
+	isIntersecting (const Line< precision_t > & line, const Circle< precision_t > & circle, Point< precision_t > & intersection1, Point< precision_t > & intersection2) noexcept
+		requires (std::is_floating_point_v< precision_t >)
 	{
 		const auto d = line.direction();
 		const auto f = line.origin() - circle.position();
@@ -90,7 +91,8 @@ namespace EmEn::Libs::Math::Space2D
 	template< typename precision_t = float >
 	[[nodiscard]]
 	bool
-	isIntersecting (const Line< precision_t > & line, const Circle< precision_t > & circle) noexcept requires (std::is_floating_point_v< precision_t >)
+	isIntersecting (const Line< precision_t > & line, const Circle< precision_t > & circle) noexcept
+		requires (std::is_floating_point_v< precision_t >)
 	{
 		Point< precision_t > dummy1, dummy2;
 
@@ -101,7 +103,8 @@ namespace EmEn::Libs::Math::Space2D
 	template< typename precision_t = float >
 	[[nodiscard]]
 	bool
-	isIntersecting (const Circle< precision_t > & circle, const Line< precision_t > & line) noexcept requires (std::is_floating_point_v< precision_t >)
+	isIntersecting (const Circle< precision_t > & circle, const Line< precision_t > & line) noexcept
+		requires (std::is_floating_point_v< precision_t >)
 	{
 		return isIntersecting(line, circle);
 	}
@@ -109,7 +112,7 @@ namespace EmEn::Libs::Math::Space2D
 	/** @copydoc EmEn::Libs::Math::Space2D::isIntersecting(const Line< precision_t > &, Circle< precision_t > &, Point< precision_t > &, Point< precision_t > &) noexcept */
 	template< typename precision_t = float >
 	[[nodiscard]]
-	int
+	uint32_t
 	isIntersecting (const Circle< precision_t > & circle, const Line< precision_t > & line, Point< precision_t > & intersection1, Point< precision_t > & intersection2) noexcept requires (std::is_floating_point_v< precision_t >)
 	{
 		return isIntersecting(line, circle, intersection1, intersection2);

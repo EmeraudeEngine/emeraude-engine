@@ -28,6 +28,7 @@
 
 /* STL inclusions. */
 #include <array>
+#include <mutex>
 
 /* Third-party inclusions. */
 #include "taglib/tag.h"
@@ -46,6 +47,25 @@
 namespace EmEn::Audio
 {
 	using namespace Libs;
+
+	/* NOTE: TSF (TinySoundFont) is not thread-safe for concurrent rendering operations.
+	 * This mutex protects SF2-based MIDI loading when multiple MusicResources load in parallel. */
+	static std::mutex s_tsfMutex;
+
+	/* Global SoundFont handle used as fallback when no per-instance SF2 is configured. */
+	static tsf * s_globalSoundfont{nullptr};
+
+	void
+	MusicResource::setGlobalSoundfont (tsf * soundfont) noexcept
+	{
+		s_globalSoundfont = soundfont;
+	}
+
+	tsf *
+	MusicResource::globalSoundfont () noexcept
+	{
+		return s_globalSoundfont;
+	}
 
 	bool
 	MusicResource::onDependenciesLoaded () noexcept
@@ -298,11 +318,7 @@ namespace EmEn::Audio
 
 		/* Lambda to generate a measure with rhythm and texture variations.
 		 * Left channel: Bass + Chords, Right channel: Melody + Counter-melody */
-		auto generateMeasure = [&](size_t & sample, const Chord & chord,
-		                           const std::array< float, 4 > & melodyLine,
-		                           const std::array< float, 4 > & bassLine,
-		                           float intensity, RhythmStyle rhythm, TextureStyle texture,
-		                           size_t measureInSection, bool addCounterMelody)
+		auto generateMeasure = [&] (size_t & sample, const Chord & chord, const std::array< float, 4 > & melodyLine, const std::array< float, 4 > & bassLine, float intensity, RhythmStyle rhythm, TextureStyle texture, size_t measureInSection, bool addCounterMelody)
 		{
 			/* Vary intensity slightly within measure for more life. */
 			const std::array< float, 4 > beatAccents = {{1.0F, 0.7F, 0.85F, 0.75F}};
@@ -467,17 +483,14 @@ namespace EmEn::Audio
 		};
 
 		/* Lambda to generate a full section with style parameters. */
-		auto generateSection = [&](size_t & sample,
-		                           const std::array< Chord, 4 > & chords,
-		                           const std::array< std::array< float, 4 >, 4 > & melody,
-		                           float intensity, RhythmStyle rhythm, TextureStyle texture,
-		                           bool counterMelody, bool varySecondPass)
+		auto generateSection = [&] (size_t & sample, const std::array< Chord, 4 > & chords, const std::array< std::array< float, 4 >, 4 > & melody, float intensity, RhythmStyle rhythm, TextureStyle texture, bool counterMelody, bool varySecondPass)
 		{
 			/* Play the chord progression twice per section. */
 			for ( size_t rep = 0; rep < 2 && sample < totalSamples; ++rep )
 			{
 				/* Vary rhythm on second pass if requested. */
 				RhythmStyle currentRhythm = rhythm;
+
 				if ( varySecondPass && rep == 1 )
 				{
 					/* Switch to a complementary rhythm. */
@@ -501,8 +514,7 @@ namespace EmEn::Audio
 					const auto & bassLine = bassPatternA[chordIdx];
 					const auto measureNum = rep * 4 + chordIdx;
 
-					generateMeasure(sample, chord, melodyLine, bassLine, passIntensity,
-					                currentRhythm, texture, measureNum, counterMelody);
+					generateMeasure(sample, chord, melodyLine, bassLine, passIntensity, currentRhythm, texture, measureNum, counterMelody);
 				}
 			}
 		};
@@ -556,10 +568,10 @@ namespace EmEn::Audio
 		const auto & leftData = leftWave.data();
 		const auto & rightData = rightWave.data();
 
-		for ( size_t i = 0; i < totalSamples; ++i )
+		for ( size_t sampleIndex = 0; sampleIndex < totalSamples; ++sampleIndex )
 		{
-			stereoData[i * 2] = leftData[i];
-			stereoData[i * 2 + 1] = rightData[i];
+			stereoData[sampleIndex * 2] = leftData[sampleIndex];
+			stereoData[sampleIndex * 2 + 1] = rightData[sampleIndex];
 		}
 
 		return this->setLoadSuccess(true);
@@ -578,7 +590,34 @@ namespace EmEn::Audio
 			return false;
 		}
 
-		if ( !WaveFactory::FileIO::read(filepath, m_localData) )
+		/* Use SF2-based rendering for MIDI files if a soundfont is configured. */
+		const auto extension = filepath.extension().string();
+		const bool isMidi = (extension == ".mid" || extension == ".midi");
+
+		/* Use per-instance soundfont if set, otherwise fall back to global. */
+		tsf * effectiveSoundfont = m_soundfont != nullptr ? m_soundfont : s_globalSoundfont;
+
+		bool loadSuccess = false;
+
+		if ( isMidi && effectiveSoundfont != nullptr )
+		{
+			/* Lock the mutex to ensure thread-safe access to the shared TSF handle.
+			 * TSF maintains internal state that cannot be safely accessed concurrently. */
+			const std::lock_guard< std::mutex > tsfLock{s_tsfMutex};
+
+			loadSuccess = WaveFactory::FileIO::read(filepath, m_localData, Manager::frequencyPlayback(), effectiveSoundfont);
+
+			/*if ( loadSuccess && WaveFactory::FileIO::write(m_localData, "/home/londnoir/" + this->name() + ".mp3") )
+			{
+				std::cout << "saved" "\n";
+			}*/
+		}
+		else
+		{
+			loadSuccess = WaveFactory::FileIO::read(filepath, m_localData);
+		}
+
+		if ( !loadSuccess )
 		{
 			TraceError{ClassId} << "Unable to load the music file '" << filepath << "' !";
 

@@ -37,27 +37,29 @@ template< typename >
 struct MathQuaternion
 	: testing::Test
 {
-
 };
 
 TYPED_TEST_SUITE(MathQuaternion, MathTypeList);
 
 /* Helper function for floating-point comparison */
 template< typename T >
-constexpr T epsilon()
+constexpr T
+epsilon ()
 {
 	return static_cast< T >(1e-5);
 }
 
 template< typename T >
-bool nearEqual(T a, T b, T eps = epsilon< T >())
+bool
+nearEqual (T a, T b, T eps = epsilon< T >())
 {
 	return std::abs(a - b) < eps;
 }
 
 /* Helper to compare quaternions element-wise */
 template< typename T >
-void assertQuaternionNear(const Quaternion< T > & a, const Quaternion< T > & b, T eps = epsilon< T >())
+void
+assertQuaternionNear (const Quaternion< T > & a, const Quaternion< T > & b, T eps = epsilon< T >())
 {
 	ASSERT_NEAR(a[X], b[X], eps) << "Mismatch at X";
 	ASSERT_NEAR(a[Y], b[Y], eps) << "Mismatch at Y";
@@ -398,7 +400,7 @@ TYPED_TEST(MathQuaternion, DoubleInverse)
 	const auto inversed = original.inversed();
 	const auto doubleInversed = inversed.inversed();
 
-	assertQuaternionNear(doubleInversed, original, TypeParam{0.01});
+	assertQuaternionNear(doubleInversed, original, static_cast< TypeParam >(0.01));
 }
 
 TYPED_TEST(MathQuaternion, DotProduct)
@@ -446,17 +448,17 @@ TYPED_TEST(MathQuaternion, FromAngleAxis90Degrees)
 	quat.fromAngleAxis(Angle, axis);
 
 	// For 90° rotation: sin(45°) ≈ 0.707, cos(45°) ≈ 0.707
-	ASSERT_NEAR(quat[X], TypeParam{0}, TypeParam{0.01});
-	ASSERT_NEAR(quat[Y], TypeParam{0.707}, TypeParam{0.01});
-	ASSERT_NEAR(quat[Z], TypeParam{0}, TypeParam{0.01});
-	ASSERT_NEAR(quat[W], TypeParam{0.707}, TypeParam{0.01});
+	ASSERT_NEAR(quat[X], TypeParam{0}, static_cast< TypeParam >(0.01));
+	ASSERT_NEAR(quat[Y], static_cast< TypeParam >(0.707), static_cast< TypeParam >(0.01));
+	ASSERT_NEAR(quat[Z], TypeParam{0}, static_cast< TypeParam >(0.01));
+	ASSERT_NEAR(quat[W], static_cast< TypeParam >(0.707), static_cast< TypeParam >(0.01));
 }
 
 TYPED_TEST(MathQuaternion, ToAngleAxis)
 {
 	// Create quaternion from known angle-axis
-	constexpr auto Angle = std::numbers::pi_v< TypeParam > / 2;  // 90°
-	const Vector< 3, TypeParam > inputAxis{0, 1, 0};  // Y-axis
+	constexpr auto Angle = std::numbers::pi_v< TypeParam > / 2; // 90°
+	const Vector< 3, TypeParam > inputAxis{0, 1, 0}; // Y-axis
 
 	Quaternion< TypeParam > quat;
 	quat.fromAngleAxis(Angle, inputAxis);
@@ -467,12 +469,12 @@ TYPED_TEST(MathQuaternion, ToAngleAxis)
 	quat.toAngleAxis(outputAngle, outputAxis);
 
 	// Verify angle
-	ASSERT_NEAR(outputAngle, Angle, TypeParam{0.01});
+	ASSERT_NEAR(outputAngle, Angle, static_cast< TypeParam >(0.01));
 
 	// Verify axis (should be unit vector along Y)
-	ASSERT_NEAR(outputAxis[X], TypeParam{0}, TypeParam{0.01});
-	ASSERT_NEAR(outputAxis[Y], TypeParam{1}, TypeParam{0.01});
-	ASSERT_NEAR(outputAxis[Z], TypeParam{0}, TypeParam{0.01});
+	ASSERT_NEAR(outputAxis[X], TypeParam{0}, static_cast< TypeParam >(0.01));
+	ASSERT_NEAR(outputAxis[Y], TypeParam{1}, static_cast< TypeParam >(0.01));
+	ASSERT_NEAR(outputAxis[Z], TypeParam{0}, static_cast< TypeParam >(0.01));
 }
 
 TYPED_TEST(MathQuaternion, EulerAnglesZero)
@@ -480,18 +482,18 @@ TYPED_TEST(MathQuaternion, EulerAnglesZero)
 	const Quaternion< TypeParam > quat{TypeParam{0}, TypeParam{0}, TypeParam{0}};
 
 	// Zero rotation should give identity quaternion
-	ASSERT_NEAR(quat[X], TypeParam{0}, TypeParam{0.01});
-	ASSERT_NEAR(quat[Y], TypeParam{0}, TypeParam{0.01});
-	ASSERT_NEAR(quat[Z], TypeParam{0}, TypeParam{0.01});
-	ASSERT_NEAR(quat[W], TypeParam{1}, TypeParam{0.01});
+	ASSERT_NEAR(quat[X], TypeParam{0}, static_cast< TypeParam >(0.01));
+	ASSERT_NEAR(quat[Y], TypeParam{0}, static_cast< TypeParam >(0.01));
+	ASSERT_NEAR(quat[Z], TypeParam{0}, static_cast< TypeParam >(0.01));
+	ASSERT_NEAR(quat[W], TypeParam{1}, static_cast< TypeParam >(0.01));
 }
 
 TYPED_TEST(MathQuaternion, EulerAnglesRoundTrip)
 {
 	const Vector< 3, TypeParam > inputAngles{
-		std::numbers::pi_v< TypeParam > / 6,  // 30°
-		std::numbers::pi_v< TypeParam > / 4,  // 45°
-		std::numbers::pi_v< TypeParam > / 3   // 60°
+		std::numbers::pi_v< TypeParam > / 6, // 30°
+		std::numbers::pi_v< TypeParam > / 4, // 45°
+		std::numbers::pi_v< TypeParam > / 3 // 60°
 	};
 
 	Quaternion< TypeParam > quat{inputAngles};
@@ -502,7 +504,7 @@ TYPED_TEST(MathQuaternion, EulerAnglesRoundTrip)
 	Quaternion< TypeParam > quat2{outputAngles};
 
 	// Compare quaternions with tolerance for double conversion
-	assertQuaternionNear(quat, quat2, TypeParam{0.01});
+	assertQuaternionNear(quat, quat2, static_cast< TypeParam >(0.01));
 }
 
 // ============================================================================
@@ -533,9 +535,9 @@ TYPED_TEST(MathQuaternion, RotateVector90DegreesY)
 	const auto result = quat * vec;
 
 	// (1,0,0) rotated 90° around Y should be (0,0,-1)
-	ASSERT_NEAR(result[X], TypeParam{0}, TypeParam{0.01});
-	ASSERT_NEAR(result[Y], TypeParam{0}, TypeParam{0.01});
-	ASSERT_NEAR(result[Z], TypeParam{-1}, TypeParam{0.01});
+	ASSERT_NEAR(result[X], TypeParam{0}, static_cast< TypeParam >(0.01));
+	ASSERT_NEAR(result[Y], TypeParam{0}, static_cast< TypeParam >(0.01));
+	ASSERT_NEAR(result[Z], TypeParam{-1}, static_cast< TypeParam >(0.01));
 }
 
 TYPED_TEST(MathQuaternion, RotatedVector)
@@ -550,9 +552,9 @@ TYPED_TEST(MathQuaternion, RotatedVector)
 	const auto result = quat * vec;
 
 	// (1,0,0) rotated 90° around Z should be (0,1,0)
-	ASSERT_NEAR(result[X], TypeParam{0}, TypeParam{0.01});
-	ASSERT_NEAR(result[Y], TypeParam{1}, TypeParam{0.01});
-	ASSERT_NEAR(result[Z], TypeParam{0}, TypeParam{0.01});
+	ASSERT_NEAR(result[X], TypeParam{0}, static_cast< TypeParam >(0.01));
+	ASSERT_NEAR(result[Y], TypeParam{1}, static_cast< TypeParam >(0.01));
+	ASSERT_NEAR(result[Z], TypeParam{0}, static_cast< TypeParam >(0.01));
 }
 
 TYPED_TEST(MathQuaternion, RotationPreservesLength)
@@ -568,7 +570,7 @@ TYPED_TEST(MathQuaternion, RotationPreservesLength)
 	const auto result = quat * vec;
 	const auto resultLength = result.length();
 
-	ASSERT_NEAR(originalLength, resultLength, TypeParam{0.01});
+	ASSERT_NEAR(originalLength, resultLength, static_cast< TypeParam >(0.01));
 }
 
 TYPED_TEST(MathQuaternion, RotationFromToSameVector)
@@ -578,10 +580,10 @@ TYPED_TEST(MathQuaternion, RotationFromToSameVector)
 	quat.rotationFromTo(vec, vec);
 
 	// Same vector should give identity quaternion
-	ASSERT_NEAR(quat[X], TypeParam{0}, TypeParam{0.01});
-	ASSERT_NEAR(quat[Y], TypeParam{0}, TypeParam{0.01});
-	ASSERT_NEAR(quat[Z], TypeParam{0}, TypeParam{0.01});
-	ASSERT_NEAR(quat[W], TypeParam{1}, TypeParam{0.01});
+	ASSERT_NEAR(quat[X], TypeParam{0}, static_cast< TypeParam >(0.01));
+	ASSERT_NEAR(quat[Y], TypeParam{0}, static_cast< TypeParam >(0.01));
+	ASSERT_NEAR(quat[Z], TypeParam{0}, static_cast< TypeParam >(0.01));
+	ASSERT_NEAR(quat[W], TypeParam{1}, static_cast< TypeParam >(0.01));
 }
 
 TYPED_TEST(MathQuaternion, RotationFromTo90Degrees)
@@ -595,9 +597,9 @@ TYPED_TEST(MathQuaternion, RotationFromTo90Degrees)
 	const auto result = quat * from;
 
 	// Result should be close to 'to' vector
-	ASSERT_NEAR(result[X], to[X], TypeParam{0.01});
-	ASSERT_NEAR(result[Y], to[Y], TypeParam{0.01});
-	ASSERT_NEAR(result[Z], to[Z], TypeParam{0.01});
+	ASSERT_NEAR(result[X], to[X], static_cast< TypeParam >(0.01));
+	ASSERT_NEAR(result[Y], to[Y], static_cast< TypeParam >(0.01));
+	ASSERT_NEAR(result[Z], to[Z], static_cast< TypeParam >(0.01));
 }
 
 TYPED_TEST(MathQuaternion, RotationFromToOpposite)
@@ -611,9 +613,9 @@ TYPED_TEST(MathQuaternion, RotationFromToOpposite)
 	const auto result = quat * from;
 
 	// Result should be close to 'to' vector
-	ASSERT_NEAR(result[X], to[X], TypeParam{0.01});
-	ASSERT_NEAR(result[Y], to[Y], TypeParam{0.01});
-	ASSERT_NEAR(result[Z], to[Z], TypeParam{0.01});
+	ASSERT_NEAR(result[X], to[X], static_cast< TypeParam >(0.01));
+	ASSERT_NEAR(result[Y], to[Y], static_cast< TypeParam >(0.01));
+	ASSERT_NEAR(result[Z], to[Z], static_cast< TypeParam >(0.01));
 }
 
 // ============================================================================
@@ -645,13 +647,13 @@ TYPED_TEST(MathQuaternion, LerpMidpoint)
 	const Quaternion< TypeParam > q1{0, 0, 0, 1};
 	const Quaternion< TypeParam > q2{1, 0, 0, 1};
 
-	const auto result = Quaternion< TypeParam >::lerp(q1, q2, TypeParam{0.5});
+	const auto result = Quaternion< TypeParam >::lerp(q1, q2, static_cast< TypeParam >(0.5));
 
 	// Midpoint should be average
-	ASSERT_NEAR(result[X], TypeParam{0.5}, TypeParam{0.01});
-	ASSERT_NEAR(result[Y], TypeParam{0}, TypeParam{0.01});
-	ASSERT_NEAR(result[Z], TypeParam{0}, TypeParam{0.01});
-	ASSERT_NEAR(result[W], TypeParam{1}, TypeParam{0.01});
+	ASSERT_NEAR(result[X], static_cast< TypeParam >(0.5), static_cast< TypeParam >(0.01));
+	ASSERT_NEAR(result[Y], TypeParam{0}, static_cast< TypeParam >(0.01));
+	ASSERT_NEAR(result[Z], TypeParam{0}, static_cast< TypeParam >(0.01));
+	ASSERT_NEAR(result[W], TypeParam{1}, static_cast< TypeParam >(0.01));
 }
 
 TYPED_TEST(MathQuaternion, SlerpStartPoint)
@@ -660,9 +662,9 @@ TYPED_TEST(MathQuaternion, SlerpStartPoint)
 	const Quaternion< TypeParam > q2{1, 0, 0, 0};
 
 	// Use 4-parameter version to avoid ambiguity
-	const auto result = Quaternion< TypeParam >::slerp(q1, q2, TypeParam{0}, TypeParam{0.05});
+	const auto result = Quaternion< TypeParam >::slerp(q1, q2, TypeParam{0}, static_cast< TypeParam >(0.05));
 
-	assertQuaternionNear(result, q1, TypeParam{0.01});
+	assertQuaternionNear(result, q1, static_cast< TypeParam >(0.01));
 }
 
 TYPED_TEST(MathQuaternion, SlerpEndPoint)
@@ -671,9 +673,9 @@ TYPED_TEST(MathQuaternion, SlerpEndPoint)
 	const Quaternion< TypeParam > q2{1, 0, 0, 0};
 
 	// Use 4-parameter version to avoid ambiguity
-	const auto result = Quaternion< TypeParam >::slerp(q1, q2, TypeParam{1}, TypeParam{0.05});
+	const auto result = Quaternion< TypeParam >::slerp(q1, q2, TypeParam{1}, static_cast< TypeParam >(0.05));
 
-	assertQuaternionNear(result, q2, TypeParam{0.01});
+	assertQuaternionNear(result, q2, static_cast< TypeParam >(0.01));
 }
 
 // ============================================================================
@@ -682,26 +684,26 @@ TYPED_TEST(MathQuaternion, SlerpEndPoint)
 
 TYPED_TEST(MathQuaternion, RotationMatrixIdentity)
 {
-	const Quaternion< TypeParam > quat{0, 0, 0, 1};  // Identity quaternion
+	const Quaternion< TypeParam > quat{0, 0, 0, 1}; // Identity quaternion
 	const auto matrix = quat.rotationMatrix();
 
 	// Identity quaternion should produce identity matrix
-	ASSERT_NEAR(matrix[0], TypeParam{1}, TypeParam{0.01});  // m00
-	ASSERT_NEAR(matrix[1], TypeParam{0}, TypeParam{0.01});  // m01
-	ASSERT_NEAR(matrix[2], TypeParam{0}, TypeParam{0.01});  // m02
-	ASSERT_NEAR(matrix[3], TypeParam{0}, TypeParam{0.01});  // m10
-	ASSERT_NEAR(matrix[4], TypeParam{1}, TypeParam{0.01});  // m11
-	ASSERT_NEAR(matrix[5], TypeParam{0}, TypeParam{0.01});  // m12
-	ASSERT_NEAR(matrix[6], TypeParam{0}, TypeParam{0.01});  // m20
-	ASSERT_NEAR(matrix[7], TypeParam{0}, TypeParam{0.01});  // m21
-	ASSERT_NEAR(matrix[8], TypeParam{1}, TypeParam{0.01});  // m22
+	ASSERT_NEAR(matrix[0], TypeParam{1}, static_cast< TypeParam >(0.01)); // m00
+	ASSERT_NEAR(matrix[1], TypeParam{0}, static_cast< TypeParam >(0.01)); // m01
+	ASSERT_NEAR(matrix[2], TypeParam{0}, static_cast< TypeParam >(0.01)); // m02
+	ASSERT_NEAR(matrix[3], TypeParam{0}, static_cast< TypeParam >(0.01)); // m10
+	ASSERT_NEAR(matrix[4], TypeParam{1}, static_cast< TypeParam >(0.01)); // m11
+	ASSERT_NEAR(matrix[5], TypeParam{0}, static_cast< TypeParam >(0.01)); // m12
+	ASSERT_NEAR(matrix[6], TypeParam{0}, static_cast< TypeParam >(0.01)); // m20
+	ASSERT_NEAR(matrix[7], TypeParam{0}, static_cast< TypeParam >(0.01)); // m21
+	ASSERT_NEAR(matrix[8], TypeParam{1}, static_cast< TypeParam >(0.01)); // m22
 }
 
 TYPED_TEST(MathQuaternion, RotationMatrix90DegreesZ)
 {
 	// Create quaternion for 90° rotation around Z axis
-	constexpr auto Angle = std::numbers::pi_v< TypeParam > / 2;  // 90°
-	const Vector< 3, TypeParam > axis{0, 0, 1};  // Z-axis
+	constexpr auto Angle = std::numbers::pi_v< TypeParam > / 2; // 90°
+	const Vector< 3, TypeParam > axis{0, 0, 1}; // Z-axis
 
 	Quaternion< TypeParam > quat;
 	quat.fromAngleAxis(Angle, axis);
@@ -709,15 +711,15 @@ TYPED_TEST(MathQuaternion, RotationMatrix90DegreesZ)
 	const auto matrix = quat.rotationMatrix();
 
 	// 90° Z rotation should give: [0 -1 0; 1 0 0; 0 0 1]
-	ASSERT_NEAR(matrix[0], TypeParam{0}, TypeParam{0.01});   // m00
-	ASSERT_NEAR(matrix[1], TypeParam{-1}, TypeParam{0.01});  // m01
-	ASSERT_NEAR(matrix[2], TypeParam{0}, TypeParam{0.01});   // m02
-	ASSERT_NEAR(matrix[3], TypeParam{1}, TypeParam{0.01});   // m10
-	ASSERT_NEAR(matrix[4], TypeParam{0}, TypeParam{0.01});   // m11
-	ASSERT_NEAR(matrix[5], TypeParam{0}, TypeParam{0.01});   // m12
-	ASSERT_NEAR(matrix[6], TypeParam{0}, TypeParam{0.01});   // m20
-	ASSERT_NEAR(matrix[7], TypeParam{0}, TypeParam{0.01});   // m21
-	ASSERT_NEAR(matrix[8], TypeParam{1}, TypeParam{0.01});   // m22
+	ASSERT_NEAR(matrix[0], TypeParam{0}, static_cast< TypeParam >(0.01)); // m00
+	ASSERT_NEAR(matrix[1], TypeParam{-1}, static_cast< TypeParam >(0.01)); // m01
+	ASSERT_NEAR(matrix[2], TypeParam{0}, static_cast< TypeParam >(0.01)); // m02
+	ASSERT_NEAR(matrix[3], TypeParam{1}, static_cast< TypeParam >(0.01)); // m10
+	ASSERT_NEAR(matrix[4], TypeParam{0}, static_cast< TypeParam >(0.01)); // m11
+	ASSERT_NEAR(matrix[5], TypeParam{0}, static_cast< TypeParam >(0.01)); // m12
+	ASSERT_NEAR(matrix[6], TypeParam{0}, static_cast< TypeParam >(0.01)); // m20
+	ASSERT_NEAR(matrix[7], TypeParam{0}, static_cast< TypeParam >(0.01)); // m21
+	ASSERT_NEAR(matrix[8], TypeParam{1}, static_cast< TypeParam >(0.01)); // m22
 }
 
 TYPED_TEST(MathQuaternion, FromMatrix)
@@ -725,19 +727,18 @@ TYPED_TEST(MathQuaternion, FromMatrix)
 	// Create a known rotation matrix (90° around Z)
 	Matrix< 4, TypeParam > matrix{
 		0, -1, 0, 0,
-		1,  0, 0, 0,
-		0,  0, 1, 0,
-		0,  0, 0, 1
-	};
+		1, 0, 0, 0,
+		0, 0, 1, 0,
+		0, 0, 0, 1};
 
 	const Quaternion< TypeParam > quat{matrix};
 
 	// Verify the quaternion represents a 90° Z rotation
 	// For 90° Z rotation: q = [0, 0, sin(45°), cos(45°)] = [0, 0, 0.707, 0.707]
-	ASSERT_NEAR(quat[X], TypeParam{0}, TypeParam{0.01});
-	ASSERT_NEAR(quat[Y], TypeParam{0}, TypeParam{0.01});
-	ASSERT_NEAR(quat[Z], TypeParam{0.707}, TypeParam{0.01});
-	ASSERT_NEAR(quat[W], TypeParam{0.707}, TypeParam{0.01});
+	ASSERT_NEAR(quat[X], TypeParam{0}, static_cast< TypeParam >(0.01));
+	ASSERT_NEAR(quat[Y], TypeParam{0}, static_cast< TypeParam >(0.01));
+	ASSERT_NEAR(quat[Z], static_cast< TypeParam >(0.707), static_cast< TypeParam >(0.01));
+	ASSERT_NEAR(quat[W], static_cast< TypeParam >(0.707), static_cast< TypeParam >(0.01));
 }
 
 // ============================================================================
@@ -912,7 +913,7 @@ TYPED_TEST(MathQuaternion, ConjugateInverseUnitQuaternion)
 	const auto conjugated = quat.conjugated();
 	const auto inversed = quat.inversed();
 
-	assertQuaternionNear(conjugated, inversed, TypeParam{0.01});
+	assertQuaternionNear(conjugated, inversed, static_cast< TypeParam >(0.01));
 }
 
 // ============================================================================
@@ -937,9 +938,9 @@ TYPED_TEST(MathQuaternion, CompositeRotations)
 	const auto result = combined * vec;
 
 	// After Y rotation: (0,0,-1), after Z rotation: (0,0,-1) stays same
-	ASSERT_NEAR(result[X], TypeParam{0}, TypeParam{0.01});
-	ASSERT_NEAR(result[Y], TypeParam{0}, TypeParam{0.01});
-	ASSERT_NEAR(result[Z], TypeParam{-1}, TypeParam{0.01});
+	ASSERT_NEAR(result[X], TypeParam{0}, static_cast< TypeParam >(0.01));
+	ASSERT_NEAR(result[Y], TypeParam{0}, static_cast< TypeParam >(0.01));
+	ASSERT_NEAR(result[Z], TypeParam{-1}, static_cast< TypeParam >(0.01));
 }
 
 TYPED_TEST(MathQuaternion, UnitQuaternionProperty)
@@ -950,7 +951,7 @@ TYPED_TEST(MathQuaternion, UnitQuaternionProperty)
 	Quaternion< TypeParam > quat;
 	quat.fromAngleAxis(Angle, Vector< 3, TypeParam >{0, 1, 0});
 
-	ASSERT_NEAR(quat.length(), TypeParam{1}, TypeParam{0.01});
+	ASSERT_NEAR(quat.length(), TypeParam{1}, static_cast< TypeParam >(0.01));
 }
 
 TYPED_TEST(MathQuaternion, DoubleRotation180)
@@ -967,7 +968,7 @@ TYPED_TEST(MathQuaternion, DoubleRotation180)
 	const Vector< 3, TypeParam > vec{1, 0, 0};
 	const auto result = combined * vec;
 
-	ASSERT_NEAR(result[X], vec[X], TypeParam{0.01});
-	ASSERT_NEAR(result[Y], vec[Y], TypeParam{0.01});
-	ASSERT_NEAR(result[Z], vec[Z], TypeParam{0.01});
+	ASSERT_NEAR(result[X], vec[X], static_cast< TypeParam >(0.01));
+	ASSERT_NEAR(result[Y], vec[Y], static_cast< TypeParam >(0.01));
+	ASSERT_NEAR(result[Z], vec[Z], static_cast< TypeParam >(0.01));
 }

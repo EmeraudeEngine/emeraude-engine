@@ -188,6 +188,11 @@ namespace EmEn::Libs::WaveFactory
 			size_t
 			sampleCount () const noexcept
 			{
+				if ( m_data.empty() )
+				{
+					return 0;
+				}
+
 				return m_data.size() / static_cast< size_t >(m_channels);
 			}
 
@@ -350,24 +355,28 @@ namespace EmEn::Libs::WaveFactory
 
 			/**
 			 * @brief Returns the duration in seconds.
-			 * @return float
+			 * @return float Returns 0.0 if frequency is invalid.
 			 */
 			[[nodiscard]]
 			float
 			seconds () const noexcept
 			{
-				return static_cast< float >(this->sampleCount()) / static_cast< float >(m_frequency);
+				const auto freq = static_cast< float >(m_frequency);
+
+				return (freq > 0.0F) ? (static_cast< float >(this->sampleCount()) / freq) : 0.0F;
 			}
 
 			/**
 			 * @brief Returns the duration in milliseconds.
-			 * @return float
+			 * @return float Returns 0.0 if frequency is invalid.
 			 */
 			[[nodiscard]]
 			float
 			milliseconds () const noexcept
 			{
-				return (static_cast< float >(this->sampleCount()) * 1000.0F) / static_cast< float >(m_frequency);
+				const auto freq = static_cast< float >(m_frequency);
+
+				return (freq > 0.0F) ? ((static_cast< float >(this->sampleCount()) * 1000.0F) / freq) : 0.0F;
 			}
 
 			/**

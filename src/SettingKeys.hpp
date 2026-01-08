@@ -83,6 +83,8 @@ namespace EmEn
 		constexpr auto DefaultAudioMusicVolume{0.5F};
 		constexpr auto AudioMusicChunkSizeKey{"Core/Audio/MusicChunkSize"};
 		constexpr auto DefaultAudioMusicChunkSize{8192};
+		constexpr auto AudioMusicSoundfontKey{"Core/Audio/MusicSoundfont"};
+		constexpr auto DefaultAudioMusicSoundfont{""};
 		constexpr auto AudioEnablePrebuiltSoundsKey{"Core/Audio/EnablePrebuiltSounds"};
 		constexpr auto DefaultAudioEnablePrebuiltSounds{false};
 		constexpr auto AudioShowInformationKey{"Core/Audio/ShowInformation"}; // Logs (and with argument switch "--show-audio-infos")
@@ -121,6 +123,8 @@ namespace EmEn
 		constexpr auto DefaultEnableDoubleBuffering{false};
 		constexpr auto VideoEnableTripleBufferingKey{"Core/Video/EnableTripleBuffering"};
 		constexpr auto DefaultVideoEnableTripleBuffering{true};
+		constexpr auto VideoFrameRateLimitKey{"Core/Video/FrameRateLimit"};
+		constexpr auto DefaultVideoFrameRateLimit{0U}; // 0 = disabled, otherwise FPS target
 		constexpr auto VideoEnableSRGBKey{"Core/Video/EnableSRGB"};
 		constexpr auto DefaultEnableSRGB{false};
 		constexpr auto VideoShowInformationKey{"Core/Video/ShowInformation"}; // Logs (and with argument switch "--show-video-infos")

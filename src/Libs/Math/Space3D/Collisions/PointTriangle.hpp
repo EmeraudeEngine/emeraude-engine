@@ -76,12 +76,12 @@ namespace EmEn::Libs::Math::Space3D
 		}
 
 		const auto & trianglePoints = triangle.points();
-		const auto & A = trianglePoints[0];
-		const auto & B = trianglePoints[1];
-		const auto & C = trianglePoints[2];
+		const auto & pointA = trianglePoints[0];
+		const auto & pointB = trianglePoints[1];
+		const auto & pointC = trianglePoints[2];
 
 		/* NOTE: Use the SAT helper function for 3D point-in-triangle test with MTV. */
-		return SAT::pointInTriangleWithMTV(point, A, B, C, minimumTranslationVector);
+		return SAT::pointInTriangleWithMTV(point, pointA, pointB, pointC, minimumTranslationVector);
 	}
 
 	/** @copydoc EmEn::Libs::Math::Space3D::isColliding(const Point< precision_t > &, const Triangle< precision_t > &) noexcept */

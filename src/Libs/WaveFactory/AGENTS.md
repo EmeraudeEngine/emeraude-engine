@@ -131,13 +131,28 @@ processor.toWave(loaded); // Write back
 ### Load MIDI File
 
 ```cpp
-// Via FileIO (automatic dispatch)
+// Via FileIO (automatic dispatch) - additive synthesis
 Wave<int16_t> wave;
 WaveFactory::FileIO::read("music.mid", wave, Frequency::PCM48000Hz);
 
-// Direct usage
+// Direct usage - additive synthesis
 FileFormatMIDI<int16_t> midiFormat{Frequency::PCM48000Hz};
 midiFormat.readFile("music.mid", wave);
+```
+
+### Load MIDI with SoundFont (SF2)
+
+```cpp
+// High-quality rendering with SF2 sample bank
+// Note: tsf* handle typically comes from Audio::SoundfontResource
+
+Wave<int16_t> wave;
+FileFormatMIDI<int16_t> midiFormat{Frequency::PCM48000Hz};
+midiFormat.setSoundfont(tsfHandle);  // tsf* from SoundfontResource::handle()
+midiFormat.readFile("music.mid", wave);
+
+// Via FileIO with SF2
+WaveFactory::FileIO::read("music.mid", wave, Frequency::PCM48000Hz, tsfHandle);
 ```
 
 ## Technical Details
@@ -174,14 +189,26 @@ The `Synthesizer` class works exclusively with mono audio:
 - Variable-length delta times
 - Running status compression
 - **Pitch Bend (0xE0)**: Real-time pitch modification per channel
-- **CC#1 (Modulation)**: Vibrato effect
+- **CC#1 (Modulation)**: Vibrato effect (LFO-based in TSF mode)
 - **CC#7 (Volume)**: Channel volume control
 - **CC#10 (Pan)**: Stereo positioning per MIDI channel (0=left, 64=center, 127=right)
 - **CC#11 (Expression)**: Dynamic volume control
 - **CC#64 (Sustain)**: Sustain pedal
 - **CC#74 (Filter Cutoff)**: Brightness control
 - **CC#92 (Tremolo)**: Amplitude modulation
-- **Program Change**: Instrument selection per channel (General MIDI mapping)
+- **Program Change (0xC0)**: Dynamic instrument selection per channel
+- **Channel Pressure (0xD0)**: Aftertouch affecting whole channel
+- **Polyphonic Key Pressure (0xA0)**: Per-note aftertouch (captured, limited TSF support)
+
+**Advanced controllers (SF2 mode):**
+- **CC#0, CC#32**: Bank Select MSB/LSB
+- **CC#6, CC#38**: Data Entry MSB/LSB (for RPN)
+- **CC#39, CC#42, CC#43**: Fine LSB controllers (Volume, Pan, Expression)
+- **CC#98, CC#99**: NRPN LSB/MSB
+- **CC#100, CC#101**: RPN LSB/MSB (Pitch Bend Range)
+- **CC#120**: All Sound Off
+- **CC#121**: Reset All Controllers
+- **CC#123**: All Notes Off
 
 **Output:**
 - **Stereo output** with per-channel pan positioning
@@ -197,10 +224,48 @@ The `Synthesizer` class works exclusively with mono audio:
 | Percussive, SFX | 112-127 | Noise burst | Short |
 | **Channel 10** | Any | Noise burst | Percussion |
 
+**SoundFont (SF2) Support:**
+- Optional SF2 sample-based rendering via TinySoundFont
+- `setSoundfont(tsf*)` to enable high-quality rendering
+- Falls back to additive synthesis if no SF2 provided
+- See: `Audio/SoundfontResource` for SF2 loading
+
+**Dynamic Control Events (TSF mode):**
+- Pitch Bend, Volume, Expression, Sustain, Pan update in real-time during playback
+- Events processed via unified timeline (`TimelineEvent` struct)
+- **Modulation/Vibrato**: LFO at 5.5Hz, ±50 cents max depth, scaled by CC#1 value
+- **Adaptive chunked rendering**: 4096-sample chunks normally, 64-sample when vibrato active
+- **Program Change**: Dynamic instrument switching during playback
+- **Bank Select + RPN**: Full MIDI bank/preset selection support
+- Pre-allocated 256 TSF voices for complex MIDI files
+- See: `FileFormatMIDI.hpp:renderWithSoundfont()`
+
+**Tempo Map:**
+- Multiple tempo changes during playback properly handled
+- Tempo events (`TempoEvent`) stored and sorted by tick
+- Time-to-sample conversion via `ticksToSamplesWithTempoMap()`
+- See: `FileFormatMIDI.hpp:TempoEvent`, `FileFormatMIDI.hpp:ticksToSamplesWithTempoMap()`
+
+**Rendering Pipeline (SF2 mode):**
+- Float accumulator buffer for lossless rendering before normalization
+- Post-rendering normalization with 5% headroom (target peak = 0.95)
+- Adaptive chunk sizes: 4096 samples normally, 64 samples when vibrato active
+- Direct rendering into accumulator (no intermediate buffer allocation)
+- Maximum duration limit: 30 minutes to prevent memory exhaustion
+- See: `FileFormatMIDI.hpp:renderWithSoundfont()`
+
+**Robustness:**
+- **EOF protection**: `readVariableLength()` guards against truncated files to prevent infinite loops
+- **NaN guards**: All output samples checked with `std::isfinite()` before writing
+- **Invalid frequency handling**: `Wave::seconds()`/`milliseconds()` return 0.0F when frequency is Invalid
+- See: `FileFormatMIDI.hpp:readVariableLength()`, `Wave.hpp:seconds()`
+
 **Limitations:**
 - No SMPTE time division
-- Basic waveforms (no wavetable/sampling)
-- No SoundFont (SF2) support yet (architecture is ready for future integration)
+- No Reverb/Chorus effects (CC#91/93 - TSF limitation)
+- Polyphonic Key Pressure captured but not applied (TSF limitation)
+- No streaming mode (full pre-rendering to buffer)
+- Truncated MIDI files may produce incomplete audio (graceful degradation)
 
 **Note rendering:**
 - Waveform selected by instrument family
@@ -223,12 +288,7 @@ The `Synthesizer` class works exclusively with mono audio:
 | `FileFormatInterface.hpp` | Abstract base class |
 | `FileFormatSNDFile.hpp` | libsndfile wrapper |
 | `FileFormatJSON.hpp` | JSON procedural audio |
-| `FileFormatMIDI.hpp` | MIDI file parser |
-
-## External Dependencies
-
-- **libsndfile**: Audio format loading (WAV, FLAC, OGG, etc.)
-- **libsamplerate**: High-quality resampling (SRC_SINC_BEST_QUALITY)
+| `FileFormatMIDI.hpp` | MIDI file parser with SF2 support |
 
 ## Critical Attention Points
 
@@ -238,12 +298,12 @@ The `Synthesizer` class works exclusively with mono audio:
 - **Type conversion**: Use `dataConversion<>()` for int16_t <-> float conversion
 - **Performance**: Synthesizer methods are optimized for single-channel processing
 - **MIDI End of Track**: Always handle meta event 0x2F to properly terminate parsing. See: `FileFormatMIDI.hpp:parseTrack()`
+- **MIDI Tempo Map**: Use `ticksToSamplesWithTempoMap()` for accurate timing with tempo changes. See: `FileFormatMIDI.hpp:ticksToSamplesWithTempoMap()`
+- **MIDI EOF Safety**: `readVariableLength()` must check for EOF to prevent infinite loops on truncated files. See: `FileFormatMIDI.hpp:readVariableLength()`
+- **Wave Invalid Frequency**: Always check frequency validity before computing durations. `seconds()`/`milliseconds()` return 0.0F for invalid frequency.
 
-## Future Extensibility
+## External Dependencies
 
-**SoundFont (SF2) Integration:**
-The MIDI rendering architecture is modular and ready for SF2 sample-based playback:
-- Parsing and rendering are separated (`parseTrack()` → `renderToWave()`)
-- Sample generation is isolated in `Synthesizer::generateWaveformSample()`
-- To add SF2: replace waveform generation with sample lookup from SoundFont bank
-- Recommended library: TinySoundFont (header-only, MIT license)
+- **libsndfile**: Audio format loading (WAV, FLAC, OGG, etc.)
+- **libsamplerate**: High-quality resampling (SRC_SINC_BEST_QUALITY)
+- **TinySoundFont**: SoundFont 2 (SF2) sample-based MIDI rendering (header-only, MIT license)

@@ -420,7 +420,7 @@ namespace EmEn::Libs::PixelFactory
 				this->prepareSwapBuffer();
 
 				/* NOTE: The shift is completely moving the pixmap outside the canvas in X-Axis or Y-axis. */
-				if ( std::abs(xDirection) < m_target.width() && std::abs(yDirection) < m_target.height() )
+				if ( static_cast< dimension_t >(std::abs(xDirection)) < m_target.width() && static_cast< dimension_t >(std::abs(yDirection)) < m_target.height() )
 				{
 					const auto rowSize = m_target.pitch();
 					const auto xShift = xDirection * static_cast< int32_t >(m_target.colorCount());
@@ -494,15 +494,12 @@ namespace EmEn::Libs::PixelFactory
 					return true;
 				}
 
+				const auto widthS = static_cast< int32_t >(m_target.width());
+				const auto heightS = static_cast< int32_t >(m_target.height());
+
 				/* NOTE: Remove the shifting round trip. */
-				xDirection =
-					xDirection < 0 ?
-					xDirection % -m_target.width() :
-					xDirection % m_target.width();
-				yDirection =
-					yDirection < 0 ?
-					yDirection % -m_target.height() :
-					yDirection % m_target.height();
+				xDirection = xDirection < 0 ? xDirection % -widthS : xDirection % widthS;
+				yDirection = yDirection < 0 ? yDirection % -heightS : yDirection % heightS;
 
 				/* NOTE: Complete shift in both directions. */
 				if ( xDirection == 0 && yDirection == 0 )
@@ -747,12 +744,12 @@ namespace EmEn::Libs::PixelFactory
 					return false;
 				}
 
-				for ( size_t y = 0; y < destinationClip.height(); y++ )
+				for ( dimension_t y = 0; y < destinationClip.height(); ++y )
 				{
 					const auto sourceY = sourceClip.top() + y;
 					const auto destinationY = destinationClip.top() + y;
 
-					for ( size_t x = 0; x < destinationClip.width(); x++ )
+					for ( dimension_t x = 0; x < destinationClip.width(); ++x )
 					{
 						const auto sourceX = sourceClip.left() + x;
 						const auto destinationX = destinationClip.left() + x;
@@ -815,7 +812,7 @@ namespace EmEn::Libs::PixelFactory
 
 				if ( xPosition < 0 )
 				{
-					const auto shiftSize = static_cast< size_t >(std::abs(xPosition));
+					const auto shiftSize = static_cast< dimension_t >(std::abs(xPosition));
 
 					if ( shiftSize >= source.width() )
 					{
@@ -838,13 +835,13 @@ namespace EmEn::Libs::PixelFactory
 				{
 					sourceClip.setWidth(source.width());
 
-					destinationClip.setLeft(static_cast< size_t >(xPosition));
+					destinationClip.setLeft(static_cast< dimension_t >(xPosition));
 					destinationClip.setWidth(source.width());
 				}
 
 				if ( yPosition < 0 )
 				{
-					const auto shiftSize = static_cast< size_t >(std::abs(yPosition));
+					const auto shiftSize = static_cast< dimension_t >(std::abs(yPosition));
 
 					if ( shiftSize >= source.height() )
 					{
@@ -867,7 +864,7 @@ namespace EmEn::Libs::PixelFactory
 				{
 					sourceClip.setHeight(source.height());
 
-					destinationClip.setTop(static_cast< size_t >(yPosition));
+					destinationClip.setTop(static_cast< dimension_t >(yPosition));
 					destinationClip.setHeight(source.height());
 				}
 

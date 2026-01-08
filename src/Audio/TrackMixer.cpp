@@ -37,8 +37,10 @@
 /* Local inclusions. */
 #include "OpenALExtensions.hpp"
 #include "Resources/Manager.hpp"
+#include "SoundfontResource.hpp"
 #include "Manager.hpp"
 #include "Settings.hpp"
+#include "SettingKeys.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::Audio
@@ -108,6 +110,32 @@ namespace EmEn::Audio
 
 		/* Sets master volume. */
 		this->setVolume(m_primaryServices.settings().getOrSetDefault< float >(AudioMusicVolumeKey, DefaultAudioMusicVolume));
+
+		/* Load the configured SoundFont for MIDI rendering (if any). */
+		const auto soundfontName = m_primaryServices.settings().getOrSetDefault< std::string >(AudioMusicSoundfontKey, DefaultAudioMusicSoundfont);
+
+		if ( !soundfontName.empty() )
+		{
+			auto * soundfontContainer = m_resourceManager.container< SoundfontResource >();
+
+			if ( soundfontContainer != nullptr )
+			{
+				m_soundfont = soundfontContainer->getResource(soundfontName, false);
+
+				if ( m_soundfont != nullptr && m_soundfont->isValid() )
+				{
+					TraceSuccess{ClassId} << "Loaded SoundFont '" << soundfontName << "' for MIDI rendering.";
+
+					MusicResource::setGlobalSoundfont(m_soundfont->handle());
+				}
+				else
+				{
+					TraceWarning{ClassId} << "Failed to load SoundFont '" << soundfontName << "' ! Using additive synthesis.";
+
+					m_soundfont.reset();
+				}
+			}
+		}
 
 		/* NOTE: Allocating track sources (to volume 0) */
 		m_trackA = std::make_unique< Source >();
@@ -635,6 +663,17 @@ namespace EmEn::Audio
 		std::shuffle(m_shuffleOrder.begin(), m_shuffleOrder.end(), gen);
 
 		m_shuffleIndex = 0;
+	}
+
+	void
+	TrackMixer::addToPlaylist (const std::shared_ptr< MusicResource > & track, const std::shared_ptr< SoundfontResource > & soundfont) noexcept
+	{
+		if ( track != nullptr && soundfont != nullptr && soundfont->isValid() )
+		{
+			track->setSoundfont(soundfont->handle());
+		}
+
+		m_playlist.push_back(track);
 	}
 
 	bool

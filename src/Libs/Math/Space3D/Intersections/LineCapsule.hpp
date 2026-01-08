@@ -107,8 +107,8 @@ namespace EmEn::Libs::Math::Space3D
 			return distSq <= radiusSq;
 		}
 
-		/* NOTE: Find closest points between infinite line and capsule axis segment.
-		 * This is a simplified line-segment closest point computation. */
+		/* NOTE: Find the closest points between infinite line and capsule axis segment.
+		 * This is a simplified line-segment to the closest point computation. */
 		const auto w0 = lineOrigin - capsuleStart;
 
 		const auto a = Vector< 3, precision_t >::dotProduct(capsuleAxis, capsuleAxis);
@@ -134,21 +134,21 @@ namespace EmEn::Libs::Math::Space3D
 		}
 
 		/* NOTE: Clamp tc to [0, 1] to stay on the capsule axis segment.
-		 * After clamping, recompute sc for the closest point on line. */
+		 * After clamping, recompute sc for the closest point on the line. */
 		if ( tc < 0 )
 		{
 			tc = 0;
-			/* NOTE: Find closest point on line to capsuleStart. */
+			/* NOTE: Find the closest point on the line to capsuleStart. */
 			sc = -Vector< 3, precision_t >::dotProduct(lineOrigin - capsuleStart, lineDir);
 		}
 		else if ( tc > 1 )
 		{
 			tc = 1;
-			/* NOTE: Find closest point on line to capsuleEnd. */
+			/* NOTE: Find the closest point on the line to capsuleEnd. */
 			sc = -Vector< 3, precision_t >::dotProduct(lineOrigin - capsuleEnd, lineDir);
 		}
 
-		/* NOTE: Closest point on line and on capsule axis. */
+		/* NOTE: Closest point on the line and on capsule axis. */
 		const auto closestOnLine = lineOrigin + lineDir * sc;
 		const auto closestOnAxis = capsuleStart + capsuleAxis * tc;
 
@@ -182,7 +182,7 @@ namespace EmEn::Libs::Math::Space3D
 		const auto & lineDir = line.direction();
 		const auto & capsuleStart = capsule.axis().startPoint();
 		const auto & capsuleEnd = capsule.axis().endPoint();
-		const auto radius = capsule.radius();
+		//const auto radius = capsule.radius();
 		const auto radiusSq = capsule.squaredRadius();
 
 		const auto capsuleAxis = capsuleEnd - capsuleStart;

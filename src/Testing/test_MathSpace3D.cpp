@@ -66,7 +66,6 @@ template< typename >
 struct MathSpace3D
 	: testing::Test
 {
-
 };
 
 TYPED_TEST_SUITE(MathSpace3D, MathTypeList);
@@ -91,8 +90,8 @@ TYPED_TEST(MathSpace3D, LineConstructorWithDirection)
 	const Line< TypeParam > line{dir};
 
 	ASSERT_EQ(line.origin(), Point< TypeParam >(0, 0, 0));
-	ASSERT_NEAR(line.direction().length(), TypeParam{1.0}, TypeParam{1e-5});
-	ASSERT_NEAR(line.direction()[Y], TypeParam{1.0}, TypeParam{1e-5});
+	ASSERT_NEAR(line.direction().length(), static_cast< TypeParam >(1.0), static_cast< TypeParam >(1e-5));
+	ASSERT_NEAR(line.direction()[Y], static_cast< TypeParam >(1.0), static_cast< TypeParam >(1e-5));
 }
 
 TYPED_TEST(MathSpace3D, LineConstructorWithOriginAndDirection)
@@ -102,8 +101,8 @@ TYPED_TEST(MathSpace3D, LineConstructorWithOriginAndDirection)
 	const Line< TypeParam > line{origin, dir};
 
 	ASSERT_EQ(line.origin(), origin);
-	ASSERT_NEAR(line.direction().length(), TypeParam{1.0}, TypeParam{1e-5});
-	ASSERT_NEAR(line.direction()[Z], TypeParam{1.0}, TypeParam{1e-5});
+	ASSERT_NEAR(line.direction().length(), static_cast< TypeParam >(1.0), static_cast< TypeParam >(1e-5));
+	ASSERT_NEAR(line.direction()[Z], static_cast< TypeParam >(1.0), static_cast< TypeParam >(1e-5));
 }
 
 TYPED_TEST(MathSpace3D, LineSetOrigin)
@@ -124,7 +123,7 @@ TYPED_TEST(MathSpace3D, LineSetDirection)
 	line.setDirection(newDir);
 
 	// Direction should be normalized
-	ASSERT_NEAR(line.direction().length(), TypeParam{1.0}, TypeParam{1e-5});
+	ASSERT_NEAR(line.direction().length(), static_cast< TypeParam >(1.0), static_cast< TypeParam >(1e-5));
 }
 
 TYPED_TEST(MathSpace3D, LineReset)
@@ -194,25 +193,25 @@ TYPED_TEST(MathSpace3D, SegmentGetStartXYZ)
 {
 	const Segment< TypeParam > segment{{1, 2, 3}, {4, 5, 6}};
 
-	ASSERT_NEAR(segment.startX(), TypeParam{1.0}, TypeParam{1e-5});
-	ASSERT_NEAR(segment.startY(), TypeParam{2.0}, TypeParam{1e-5});
-	ASSERT_NEAR(segment.startZ(), TypeParam{3.0}, TypeParam{1e-5});
+	ASSERT_NEAR(segment.startX(), static_cast< TypeParam >(1.0), static_cast< TypeParam >(1e-5));
+	ASSERT_NEAR(segment.startY(), static_cast< TypeParam >(2.0), static_cast< TypeParam >(1e-5));
+	ASSERT_NEAR(segment.startZ(), static_cast< TypeParam >(3.0), static_cast< TypeParam >(1e-5));
 }
 
 TYPED_TEST(MathSpace3D, SegmentGetEndXYZ)
 {
 	const Segment< TypeParam > segment{{1, 2, 3}, {4, 5, 6}};
 
-	ASSERT_NEAR(segment.endX(), TypeParam{4.0}, TypeParam{1e-5});
-	ASSERT_NEAR(segment.endY(), TypeParam{5.0}, TypeParam{1e-5});
-	ASSERT_NEAR(segment.endZ(), TypeParam{6.0}, TypeParam{1e-5});
+	ASSERT_NEAR(segment.endX(), static_cast< TypeParam >(4.0), static_cast< TypeParam >(1e-5));
+	ASSERT_NEAR(segment.endY(), static_cast< TypeParam >(5.0), static_cast< TypeParam >(1e-5));
+	ASSERT_NEAR(segment.endZ(), static_cast< TypeParam >(6.0), static_cast< TypeParam >(1e-5));
 }
 
 TYPED_TEST(MathSpace3D, SegmentGetLength)
 {
 	const Segment< TypeParam > segment{{0, 0, 0}, {3, 4, 0}};
 
-	ASSERT_NEAR(segment.getLength(), TypeParam{5.0}, TypeParam{1e-5});
+	ASSERT_NEAR(segment.getLength(), static_cast< TypeParam >(5.0), static_cast< TypeParam >(1e-5));
 }
 
 TYPED_TEST(MathSpace3D, SegmentReset)
@@ -239,19 +238,19 @@ TYPED_TEST(MathSpace3D, SphereDefaultConstructor)
 
 TYPED_TEST(MathSpace3D, SphereConstructorWithRadius)
 {
-	const Sphere< TypeParam > sphere{5.0};
+	const Sphere< TypeParam > sphere{static_cast< TypeParam >(5.0)};
 
 	ASSERT_EQ(sphere.position(), Point< TypeParam >(0, 0, 0));
-	ASSERT_NEAR(sphere.radius(), TypeParam{5.0}, TypeParam{1e-5});
+	ASSERT_NEAR(sphere.radius(), static_cast< TypeParam >(5.0), static_cast< TypeParam >(1e-5));
 }
 
 TYPED_TEST(MathSpace3D, SphereConstructorWithRadiusAndPosition)
 {
 	const Point< TypeParam > pos{10, 20, 30};
-	const Sphere< TypeParam > sphere{5.0, pos};
+	const Sphere< TypeParam > sphere{static_cast< TypeParam >(5.0), pos};
 
 	ASSERT_EQ(sphere.position(), pos);
-	ASSERT_NEAR(sphere.radius(), TypeParam{5.0}, TypeParam{1e-5});
+	ASSERT_NEAR(sphere.radius(), static_cast< TypeParam >(5.0), static_cast< TypeParam >(1e-5));
 }
 
 TYPED_TEST(MathSpace3D, SphereIsValid)
@@ -259,13 +258,13 @@ TYPED_TEST(MathSpace3D, SphereIsValid)
 	const Sphere< TypeParam > validSphere{5.0};
 	ASSERT_TRUE(validSphere.isValid());
 
-	const Sphere< TypeParam > invalidSphere{0.0};
+	const Sphere< TypeParam > invalidSphere{static_cast< TypeParam >(0.0)};
 	ASSERT_FALSE(invalidSphere.isValid());
 }
 
 TYPED_TEST(MathSpace3D, SphereSetPosition)
 {
-	Sphere< TypeParam > sphere{5.0};
+	Sphere< TypeParam > sphere{static_cast< TypeParam >(5.0)};
 	const Point< TypeParam > newPos{1, 2, 3};
 
 	sphere.setPosition(newPos);
@@ -275,57 +274,57 @@ TYPED_TEST(MathSpace3D, SphereSetPosition)
 
 TYPED_TEST(MathSpace3D, SphereSetRadius)
 {
-	Sphere< TypeParam > sphere{5.0};
+	Sphere< TypeParam > sphere{static_cast< TypeParam >(5.0)};
 
-	sphere.setRadius(10.0);
+	sphere.setRadius(static_cast< TypeParam >(10.0));
 
-	ASSERT_NEAR(sphere.radius(), TypeParam{10.0}, TypeParam{1e-5});
+	ASSERT_NEAR(sphere.radius(), static_cast< TypeParam >(10.0), static_cast< TypeParam >(1e-5));
 }
 
 TYPED_TEST(MathSpace3D, SphereSetRadiusNegative)
 {
-	Sphere< TypeParam > sphere{5.0};
+	Sphere< TypeParam > sphere{static_cast< TypeParam >(5.0)};
 
-	sphere.setRadius(-10.0);
+	sphere.setRadius(static_cast< TypeParam >(-10.0));
 
 	// Should take absolute value
-	ASSERT_NEAR(sphere.radius(), TypeParam{10.0}, TypeParam{1e-5});
+	ASSERT_NEAR(sphere.radius(), static_cast< TypeParam >(10.0), static_cast< TypeParam >(1e-5));
 }
 
 TYPED_TEST(MathSpace3D, SphereSquaredRadius)
 {
-	const Sphere< TypeParam > sphere{5.0};
+	const Sphere< TypeParam > sphere{static_cast< TypeParam >(5.0)};
 
-	ASSERT_NEAR(sphere.squaredRadius(), TypeParam{25.0}, TypeParam{1e-5});
+	ASSERT_NEAR(sphere.squaredRadius(), static_cast< TypeParam >(25.0), static_cast< TypeParam >(1e-5));
 }
 
 TYPED_TEST(MathSpace3D, SphereGetPerimeter)
 {
-	const Sphere< TypeParam > sphere{1.0};
+	const Sphere< TypeParam > sphere{static_cast< TypeParam >(1.0)};
 
 	// C = 2πr
-	ASSERT_NEAR(sphere.getPerimeter(), TypeParam{2.0} * std::numbers::pi_v< TypeParam >, TypeParam{1e-4});
+	ASSERT_NEAR(sphere.getPerimeter(), static_cast< TypeParam >(2.0) * std::numbers::pi_v< TypeParam >, static_cast< TypeParam >(1e-4));
 }
 
 TYPED_TEST(MathSpace3D, SphereGetArea)
 {
-	const Sphere< TypeParam > sphere{1.0};
+	const Sphere< TypeParam > sphere{static_cast< TypeParam >(1.0)};
 
 	// A = πr²
-	ASSERT_NEAR(sphere.getArea(), std::numbers::pi_v< TypeParam >, TypeParam{1e-4});
+	ASSERT_NEAR(sphere.getArea(), std::numbers::pi_v< TypeParam >, static_cast< TypeParam >(1e-4));
 }
 
 TYPED_TEST(MathSpace3D, SphereGetVolume)
 {
-	const Sphere< TypeParam > sphere{1.0};
+	const Sphere< TypeParam > sphere{static_cast< TypeParam >(1.0)};
 
 	// V = 4/3 πr³
-	ASSERT_NEAR(sphere.getVolume(), TypeParam{4.0 / 3.0} * std::numbers::pi_v< TypeParam >, TypeParam{1e-4});
+	ASSERT_NEAR(sphere.getVolume(), static_cast< TypeParam >(4.0 / 3.0) * std::numbers::pi_v< TypeParam >, static_cast< TypeParam >(1e-4));
 }
 
 TYPED_TEST(MathSpace3D, SphereReset)
 {
-	Sphere< TypeParam > sphere{10.0, {1, 2, 3}};
+	Sphere< TypeParam > sphere{static_cast< TypeParam >(10.0), {1, 2, 3}};
 
 	sphere.reset();
 
@@ -335,24 +334,24 @@ TYPED_TEST(MathSpace3D, SphereReset)
 
 TYPED_TEST(MathSpace3D, SphereMergeContained)
 {
-	Sphere< TypeParam > sphere1{10.0, {0, 0, 0}};
-	const Sphere< TypeParam > sphere2{2.0, {1, 1, 1}};
+	Sphere< TypeParam > sphere1{static_cast< TypeParam >(10.0), {0, 0, 0}};
+	const Sphere< TypeParam > sphere2{static_cast< TypeParam >(2.0), {1, 1, 1}};
 
 	sphere1.merge(sphere2);
 
 	// sphere2 is entirely contained in sphere1, so sphere1 should remain unchanged
-	ASSERT_NEAR(sphere1.radius(), TypeParam{10.0}, TypeParam{1e-5});
+	ASSERT_NEAR(sphere1.radius(), static_cast< TypeParam >(10.0), static_cast< TypeParam >(1e-5));
 }
 
 TYPED_TEST(MathSpace3D, SphereMergeDisjoint)
 {
-	Sphere< TypeParam > sphere1{1.0, {0, 0, 0}};
-	const Sphere< TypeParam > sphere2{1.0, {10, 0, 0}};
+	Sphere< TypeParam > sphere1{static_cast< TypeParam >(1.0), {0, 0, 0}};
+	const Sphere< TypeParam > sphere2{static_cast< TypeParam >(1.0), {10, 0, 0}};
 
 	sphere1.merge(sphere2);
 
 	// Merged sphere should contain both
-	ASSERT_GT(sphere1.radius(), TypeParam{5.0});
+	ASSERT_GT(sphere1.radius(), static_cast< TypeParam >(5.0));
 }
 
 // ============================================================================
@@ -435,7 +434,7 @@ TYPED_TEST(MathSpace3D, TriangleGetPerimeter)
 	// Right triangle with sides 3, 4, 5
 	const Triangle< TypeParam > triangle{{0, 0, 0}, {3, 0, 0}, {0, 4, 0}};
 
-	ASSERT_NEAR(triangle.getPerimeter(), TypeParam{12.0}, TypeParam{1e-4});
+	ASSERT_NEAR(triangle.getPerimeter(), static_cast< TypeParam >(12.0), static_cast< TypeParam >(1e-4));
 }
 
 TYPED_TEST(MathSpace3D, TriangleGetArea)
@@ -443,7 +442,7 @@ TYPED_TEST(MathSpace3D, TriangleGetArea)
 	// Triangle with base 4 and height 3
 	const Triangle< TypeParam > triangle{{0, 0, 0}, {4, 0, 0}, {0, 3, 0}};
 
-	ASSERT_NEAR(triangle.getArea(), TypeParam{6.0}, TypeParam{1e-4});
+	ASSERT_NEAR(triangle.getArea(), static_cast< TypeParam >(6.0), static_cast< TypeParam >(1e-4));
 }
 
 TYPED_TEST(MathSpace3D, TriangleReset)
@@ -471,7 +470,7 @@ TYPED_TEST(MathSpace3D, AACuboidDefaultConstructor)
 
 TYPED_TEST(MathSpace3D, AACuboidConstructorWithValue)
 {
-	const AACuboid< TypeParam > cuboid{5.0};
+	const AACuboid< TypeParam > cuboid{static_cast< TypeParam >(5.0)};
 
 	ASSERT_TRUE(cuboid.isValid());
 	ASSERT_EQ(cuboid.maximum(), Point< TypeParam >(5, 5, 5));
@@ -501,7 +500,7 @@ TYPED_TEST(MathSpace3D, AACuboidConstructorSwapsMaxMin)
 
 TYPED_TEST(MathSpace3D, AACuboidIsValid)
 {
-	const AACuboid< TypeParam > validCuboid{5.0};
+	const AACuboid< TypeParam > validCuboid{static_cast< TypeParam >(5.0)};
 	ASSERT_TRUE(validCuboid.isValid());
 
 	AACuboid< TypeParam > invalidCuboid;
@@ -512,7 +511,7 @@ TYPED_TEST(MathSpace3D, AACuboidSetValue)
 {
 	AACuboid< TypeParam > cuboid;
 
-	cuboid.set(10.0);
+	cuboid.set(static_cast< TypeParam >(10.0));
 
 	ASSERT_TRUE(cuboid.isValid());
 	ASSERT_EQ(cuboid.maximum(), Point< TypeParam >(10, 10, 10));
@@ -534,9 +533,9 @@ TYPED_TEST(MathSpace3D, AACuboidWidthHeightDepth)
 {
 	const AACuboid< TypeParam > cuboid{{10, 20, 30}, {-5, -10, -15}};
 
-	ASSERT_NEAR(cuboid.width(), TypeParam{15.0}, TypeParam{1e-5});
-	ASSERT_NEAR(cuboid.height(), TypeParam{30.0}, TypeParam{1e-5});
-	ASSERT_NEAR(cuboid.depth(), TypeParam{45.0}, TypeParam{1e-5});
+	ASSERT_NEAR(cuboid.width(), static_cast< TypeParam >(15.0), static_cast< TypeParam >(1e-5));
+	ASSERT_NEAR(cuboid.height(), static_cast< TypeParam >(30.0), static_cast< TypeParam >(1e-5));
+	ASSERT_NEAR(cuboid.depth(), static_cast< TypeParam >(45.0), static_cast< TypeParam >(1e-5));
 }
 
 TYPED_TEST(MathSpace3D, AACuboidFarthestPoint)
@@ -544,7 +543,7 @@ TYPED_TEST(MathSpace3D, AACuboidFarthestPoint)
 	const AACuboid< TypeParam > cuboid{{10, 5, 3}, {-2, -20, -1}};
 
 	// Farthest point from center should be max of abs values
-	ASSERT_NEAR(cuboid.farthestPoint(), TypeParam{20.0}, TypeParam{1e-5});
+	ASSERT_NEAR(cuboid.farthestPoint(), static_cast< TypeParam >(20.0), static_cast< TypeParam >(1e-5));
 }
 
 TYPED_TEST(MathSpace3D, AACuboidHighestLength)
@@ -552,7 +551,7 @@ TYPED_TEST(MathSpace3D, AACuboidHighestLength)
 	const AACuboid< TypeParam > cuboid{{10, 20, 30}, {5, 10, 15}};
 
 	// Highest of width=5, height=10, depth=15
-	ASSERT_NEAR(cuboid.highestLength(), TypeParam{15.0}, TypeParam{1e-5});
+	ASSERT_NEAR(cuboid.highestLength(), static_cast< TypeParam >(15.0), static_cast< TypeParam >(1e-5));
 }
 
 TYPED_TEST(MathSpace3D, AACuboidCornerPoints)
@@ -580,7 +579,7 @@ TYPED_TEST(MathSpace3D, AACuboidGetVolume)
 {
 	const AACuboid< TypeParam > cuboid{{5, 5, 5}, {0, 0, 0}};
 
-	ASSERT_NEAR(cuboid.getVolume(), TypeParam{125.0}, TypeParam{1e-5});
+	ASSERT_NEAR(cuboid.getVolume(), static_cast< TypeParam >(125.0), static_cast< TypeParam >(1e-5));
 }
 
 TYPED_TEST(MathSpace3D, AACuboidReset)
@@ -618,9 +617,9 @@ TYPED_TEST(MathSpace3D, AACuboidMergeXYZ)
 {
 	AACuboid< TypeParam > cuboid{{5, 5, 5}, {0, 0, 0}};
 
-	cuboid.mergeX(10.0);
-	cuboid.mergeY(-3.0);
-	cuboid.mergeZ(7.0);
+	cuboid.mergeX(static_cast< TypeParam >(10.0));
+	cuboid.mergeY(static_cast< TypeParam >(-3.0));
+	cuboid.mergeZ(static_cast< TypeParam >(7.0));
 
 	ASSERT_EQ(cuboid.maximum(), Point< TypeParam >(10, 5, 7));
 	ASSERT_EQ(cuboid.minimum(), Point< TypeParam >(0, -3, 0));
@@ -1017,8 +1016,8 @@ TYPED_TEST(MathSpace3D, IntersectionLineLineIntersecting)
 	Point< TypeParam > intersection;
 
 	ASSERT_TRUE(isIntersecting(line1, line2, intersection));
-	ASSERT_NEAR(intersection[X], TypeParam{5}, TypeParam{1e-4});
-	ASSERT_NEAR(intersection[Y], TypeParam{0}, TypeParam{1e-4});
+	ASSERT_NEAR(intersection[X], TypeParam{5}, static_cast< TypeParam >(1e-4));
+	ASSERT_NEAR(intersection[Y], TypeParam{0}, static_cast< TypeParam >(1e-4));
 }
 
 TYPED_TEST(MathSpace3D, IntersectionLineLineParallel)
@@ -1048,7 +1047,7 @@ TYPED_TEST(MathSpace3D, IntersectionLineSphereIntersecting)
 	ASSERT_TRUE(isIntersecting(sphere, line, intersection));
 	// Intersection should be on sphere surface
 	const Point< TypeParam > center{0, 0, 0};
-	ASSERT_NEAR(Point< TypeParam >::distance(intersection, center), TypeParam{5.0}, TypeParam{1e-4});
+	ASSERT_NEAR(Point< TypeParam >::distance(intersection, center), static_cast< TypeParam >(5.0), static_cast< TypeParam >(1e-4));
 }
 
 TYPED_TEST(MathSpace3D, IntersectionLineSphereNotIntersecting)
@@ -1067,7 +1066,7 @@ TYPED_TEST(MathSpace3D, IntersectionLineTriangleIntersecting)
 
 	ASSERT_TRUE(isIntersecting(line, triangle, intersection));
 	ASSERT_TRUE(isIntersecting(triangle, line, intersection));
-	ASSERT_NEAR(intersection[Z], TypeParam{0}, TypeParam{1e-4});
+	ASSERT_NEAR(intersection[Z], TypeParam{0}, static_cast< TypeParam >(1e-4));
 }
 
 TYPED_TEST(MathSpace3D, IntersectionLineTriangleNotIntersecting)
@@ -1087,7 +1086,7 @@ TYPED_TEST(MathSpace3D, IntersectionLineCuboidIntersecting)
 	ASSERT_TRUE(isIntersecting(line, cuboid, intersection));
 	ASSERT_TRUE(isIntersecting(cuboid, line, intersection));
 	// Intersection should be at bottom of cuboid
-	ASSERT_NEAR(intersection[Z], TypeParam{0}, TypeParam{1e-4});
+	ASSERT_NEAR(intersection[Z], TypeParam{0}, static_cast< TypeParam >(1e-4));
 }
 
 TYPED_TEST(MathSpace3D, IntersectionLineCuboidNotIntersecting)
@@ -1106,8 +1105,8 @@ TYPED_TEST(MathSpace3D, IntersectionLineSphereTangent)
 	Point< TypeParam > intersection;
 
 	ASSERT_TRUE(isIntersecting(line, sphere, intersection));
-	ASSERT_NEAR(intersection[X], TypeParam{5}, TypeParam{1e-4});
-	ASSERT_NEAR(intersection[Y], TypeParam{0}, TypeParam{1e-4});
+	ASSERT_NEAR(intersection[X], TypeParam{5}, static_cast< TypeParam >(1e-4));
+	ASSERT_NEAR(intersection[Y], TypeParam{0}, static_cast< TypeParam >(1e-4));
 }
 
 TYPED_TEST(MathSpace3D, IntersectionLineThroughSphereCenter)
@@ -1131,8 +1130,8 @@ TYPED_TEST(MathSpace3D, IntersectionSegmentSegmentIntersecting)
 	Point< TypeParam > intersection;
 
 	ASSERT_TRUE(isIntersecting(seg1, seg2, intersection));
-	ASSERT_NEAR(intersection[X], TypeParam{5}, TypeParam{1e-4});
-	ASSERT_NEAR(intersection[Y], TypeParam{0}, TypeParam{1e-4});
+	ASSERT_NEAR(intersection[X], TypeParam{5}, static_cast< TypeParam >(1e-4));
+	ASSERT_NEAR(intersection[Y], TypeParam{0}, static_cast< TypeParam >(1e-4));
 }
 
 TYPED_TEST(MathSpace3D, IntersectionSegmentSegmentNotIntersecting)
@@ -1188,7 +1187,7 @@ TYPED_TEST(MathSpace3D, IntersectionSegmentSphereIntersecting)
 	ASSERT_TRUE(isIntersecting(sphere, segment, intersection));
 	// Intersection should be on sphere surface
 	const Point< TypeParam > center{0, 0, 0};
-	ASSERT_NEAR(Point< TypeParam >::distance(intersection, center), TypeParam{5.0}, TypeParam{1e-4});
+	ASSERT_NEAR(Point< TypeParam >::distance(intersection, center), static_cast< TypeParam >(5.0), static_cast< TypeParam >(1e-4));
 }
 
 TYPED_TEST(MathSpace3D, IntersectionSegmentSphereNotIntersecting)
@@ -1215,7 +1214,7 @@ TYPED_TEST(MathSpace3D, IntersectionSegmentTriangleIntersecting)
 
 	ASSERT_TRUE(isIntersecting(segment, triangle, intersection));
 	ASSERT_TRUE(isIntersecting(triangle, segment, intersection));
-	ASSERT_NEAR(intersection[Z], TypeParam{0}, TypeParam{1e-4});
+	ASSERT_NEAR(intersection[Z], TypeParam{0}, static_cast< TypeParam >(1e-4));
 }
 
 TYPED_TEST(MathSpace3D, IntersectionSegmentTriangleNotIntersecting)
@@ -1243,7 +1242,7 @@ TYPED_TEST(MathSpace3D, IntersectionSegmentCuboidIntersecting)
 	ASSERT_TRUE(isIntersecting(segment, cuboid, intersection));
 	ASSERT_TRUE(isIntersecting(cuboid, segment, intersection));
 	// Intersection should be at bottom of cuboid
-	ASSERT_NEAR(intersection[Z], TypeParam{0}, TypeParam{1e-4});
+	ASSERT_NEAR(intersection[Z], TypeParam{0}, static_cast< TypeParam >(1e-4));
 }
 
 TYPED_TEST(MathSpace3D, IntersectionSegmentCuboidNotIntersecting)
@@ -1272,7 +1271,7 @@ TYPED_TEST(MathSpace3D, IntersectionSegmentSphereTangent)
 	Point< TypeParam > intersection;
 
 	ASSERT_TRUE(isIntersecting(segment, sphere, intersection));
-	ASSERT_NEAR(intersection[X], TypeParam{5}, TypeParam{1e-4});
+	ASSERT_NEAR(intersection[X], TypeParam{5}, static_cast< TypeParam >(1e-4));
 }
 
 TYPED_TEST(MathSpace3D, IntersectionSegmentTriangleAtVertex)
@@ -1283,9 +1282,9 @@ TYPED_TEST(MathSpace3D, IntersectionSegmentTriangleAtVertex)
 	Point< TypeParam > intersection;
 
 	ASSERT_TRUE(isIntersecting(segment, triangle, intersection));
-	ASSERT_NEAR(intersection[X], TypeParam{0}, TypeParam{1e-4});
-	ASSERT_NEAR(intersection[Y], TypeParam{0}, TypeParam{1e-4});
-	ASSERT_NEAR(intersection[Z], TypeParam{0}, TypeParam{1e-4});
+	ASSERT_NEAR(intersection[X], TypeParam{0}, static_cast< TypeParam >(1e-4));
+	ASSERT_NEAR(intersection[Y], TypeParam{0}, static_cast< TypeParam >(1e-4));
+	ASSERT_NEAR(intersection[Z], TypeParam{0}, static_cast< TypeParam >(1e-4));
 }
 
 TYPED_TEST(MathSpace3D, IntersectionSegmentTriangleAtEdge)
@@ -1296,7 +1295,7 @@ TYPED_TEST(MathSpace3D, IntersectionSegmentTriangleAtEdge)
 	Point< TypeParam > intersection;
 
 	ASSERT_TRUE(isIntersecting(segment, triangle, intersection));
-	ASSERT_NEAR(intersection[Z], TypeParam{0}, TypeParam{1e-4});
+	ASSERT_NEAR(intersection[Z], TypeParam{0}, static_cast< TypeParam >(1e-4));
 }
 
 // ============================================================================
@@ -1319,15 +1318,13 @@ TYPED_TEST(MathSpace3D, SATAxesCapacityTetrahedronTetrahedron)
 		Vector< 3, TypeParam >{0, 0, 0},
 		Vector< 3, TypeParam >{4, 0, 0},
 		Vector< 3, TypeParam >{2, 4, 0},
-		Vector< 3, TypeParam >{2, 2, 4}
-	};
+		Vector< 3, TypeParam >{2, 2, 4}};
 
 	std::array< Vector< 3, TypeParam >, 4 > tetra2 = {
 		Vector< 3, TypeParam >{3, 2, 2},
 		Vector< 3, TypeParam >{7, 2, 2},
 		Vector< 3, TypeParam >{5, 6, 2},
-		Vector< 3, TypeParam >{5, 4, 6}
-	};
+		Vector< 3, TypeParam >{5, 4, 6}};
 
 	Vector< 3, TypeParam > mtv;
 
@@ -1344,20 +1341,19 @@ TYPED_TEST(MathSpace3D, SATAxesCapacityOctahedron)
 	 * SAT optimization reduces this, but capacity must be sufficient.
 	 */
 	std::array< Vector< 3, TypeParam >, 6 > octahedron = {
-		Vector< 3, TypeParam >{0, 5, 0},   // top
-		Vector< 3, TypeParam >{5, 0, 0},   // +X
-		Vector< 3, TypeParam >{0, 0, 5},   // +Z
-		Vector< 3, TypeParam >{-5, 0, 0},  // -X
-		Vector< 3, TypeParam >{0, 0, -5},  // -Z
-		Vector< 3, TypeParam >{0, -5, 0}   // bottom
+		Vector< 3, TypeParam >{0, 5, 0}, // top
+		Vector< 3, TypeParam >{5, 0, 0}, // +X
+		Vector< 3, TypeParam >{0, 0, 5}, // +Z
+		Vector< 3, TypeParam >{-5, 0, 0}, // -X
+		Vector< 3, TypeParam >{0, 0, -5}, // -Z
+		Vector< 3, TypeParam >{0, -5, 0} // bottom
 	};
 
 	std::array< Vector< 3, TypeParam >, 4 > tetra = {
 		Vector< 3, TypeParam >{1, 1, 1},
 		Vector< 3, TypeParam >{3, 1, 1},
 		Vector< 3, TypeParam >{2, 3, 1},
-		Vector< 3, TypeParam >{2, 2, 3}
-	};
+		Vector< 3, TypeParam >{2, 2, 3}};
 
 	Vector< 3, TypeParam > mtv;
 	[[maybe_unused]] const bool result = SAT::checkCollision(octahedron, tetra, mtv);
@@ -1540,7 +1536,7 @@ TYPED_TEST(MathSpace3D, CollisionTriangleVeryCloseButNotTouching)
 	 * @test Tests numerical precision when triangles are very close but not touching.
 	 */
 	const Triangle< TypeParam > tri1{{0, 0, 0}, {5, 0, 0}, {2.5, 5, 0}};
-	const Triangle< TypeParam > tri2{{0, 0, 0.001}, {5, 0, 0.001}, {2.5, 5, 0.001}};
+	const Triangle< TypeParam > tri2{{0, 0, static_cast< TypeParam >(0.001F)}, {5, 0, static_cast< TypeParam >(0.001F)}, {2.5, 5, static_cast< TypeParam >(0.001F)}};
 
 	// Triangles are 0.001 units apart - should not be colliding
 	[[maybe_unused]] const bool result = isColliding(tri1, tri2);
@@ -1565,7 +1561,7 @@ TYPED_TEST(MathSpace3D, CollisionSphereVeryCloseButNotTouching)
 	 * @test Tests numerical stability with nearly touching spheres.
 	 */
 	const Sphere< TypeParam > sphere1{5.0, {0, 0, 0}};
-	const Sphere< TypeParam > sphere2{5.0, {10.001, 0, 0}};
+	const Sphere< TypeParam > sphere2{static_cast< TypeParam >(5.0), {static_cast< TypeParam >(10.001F), 0, 0}};
 
 	// Spheres are 0.001 units apart
 	const bool result = isColliding(sphere1, sphere2);
@@ -1587,8 +1583,8 @@ TYPED_TEST(MathSpace3D, IntersectionSegmentTriangleNumericalPrecision)
 
 	if ( result )
 	{
-		ASSERT_NEAR(intersection[X], TypeParam{5}, TypeParam{1e-4});
-		ASSERT_NEAR(intersection[Z], TypeParam{0}, TypeParam{1e-4});
+		ASSERT_NEAR(intersection[X], TypeParam{5}, static_cast< TypeParam >(1e-4));
+		ASSERT_NEAR(intersection[Z], TypeParam{0}, static_cast< TypeParam >(1e-4));
 	}
 }
 
@@ -1606,15 +1602,13 @@ TYPED_TEST(MathSpace3D, SATCollisionWithStdArrayTetrahedrons)
 		Vector< 3, TypeParam >{0, 0, 0},
 		Vector< 3, TypeParam >{8, 0, 0},
 		Vector< 3, TypeParam >{4, 8, 0},
-		Vector< 3, TypeParam >{4, 4, 8}
-	};
+		Vector< 3, TypeParam >{4, 4, 8}};
 
 	std::array< Vector< 3, TypeParam >, 4 > tetra2 = {
 		Vector< 3, TypeParam >{2, 2, 1},
 		Vector< 3, TypeParam >{10, 2, 1},
 		Vector< 3, TypeParam >{6, 10, 1},
-		Vector< 3, TypeParam >{6, 6, 9}
-	};
+		Vector< 3, TypeParam >{6, 6, 9}};
 
 	Vector< 3, TypeParam > mtv;
 
@@ -1638,8 +1632,7 @@ TYPED_TEST(MathSpace3D, SATCollisionWithMixedSizeArrays3D)
 		Vector< 3, TypeParam >{2, 2, 2},
 		Vector< 3, TypeParam >{10, 2, 2},
 		Vector< 3, TypeParam >{6, 10, 2},
-		Vector< 3, TypeParam >{6, 6, 10}
-	};
+		Vector< 3, TypeParam >{6, 6, 10}};
 
 	std::array< Vector< 3, TypeParam >, 6 > octa = {
 		Vector< 3, TypeParam >{6, 12, 6},
@@ -1647,8 +1640,7 @@ TYPED_TEST(MathSpace3D, SATCollisionWithMixedSizeArrays3D)
 		Vector< 3, TypeParam >{6, 7, 11},
 		Vector< 3, TypeParam >{1, 7, 6},
 		Vector< 3, TypeParam >{6, 7, 1},
-		Vector< 3, TypeParam >{6, 2, 6}
-	};
+		Vector< 3, TypeParam >{6, 2, 6}};
 
 	Vector< 3, TypeParam > mtv;
 
@@ -1674,8 +1666,8 @@ TYPED_TEST(MathSpace3D, IntersectionWithStaticVectorCompatibility)
 
 	ASSERT_TRUE(result);
 	// Verify intersection point is on segment
-	ASSERT_NEAR(intersection[X], TypeParam{0}, TypeParam{1e-4});
-	ASSERT_NEAR(intersection[Y], TypeParam{0}, TypeParam{1e-4});
+	ASSERT_NEAR(intersection[X], TypeParam{0}, static_cast< TypeParam >(1e-4));
+	ASSERT_NEAR(intersection[Y], TypeParam{0}, static_cast< TypeParam >(1e-4));
 }
 
 // ============================================================================
@@ -1691,14 +1683,12 @@ TYPED_TEST(MathSpace3D, CollisionTriangleVeryLargeCoordinates)
 	const Triangle< TypeParam > tri1{
 		{TypeParam{1e6}, TypeParam{1e6}, TypeParam{1e6}},
 		{TypeParam{1e6} + TypeParam{10}, TypeParam{1e6}, TypeParam{1e6}},
-		{TypeParam{1e6} + TypeParam{5}, TypeParam{1e6} + TypeParam{10}, TypeParam{1e6}}
-	};
+		{TypeParam{1e6} + TypeParam{5}, TypeParam{1e6} + TypeParam{10}, TypeParam{1e6}}};
 
 	const Triangle< TypeParam > tri2{
 		{TypeParam{1e6} + TypeParam{2}, TypeParam{1e6} + TypeParam{2}, TypeParam{1e6} + TypeParam{2}},
 		{TypeParam{1e6} + TypeParam{12}, TypeParam{1e6} + TypeParam{2}, TypeParam{1e6} + TypeParam{2}},
-		{TypeParam{1e6} + TypeParam{7}, TypeParam{1e6} + TypeParam{12}, TypeParam{1e6} + TypeParam{2}}
-	};
+		{TypeParam{1e6} + TypeParam{7}, TypeParam{1e6} + TypeParam{12}, TypeParam{1e6} + TypeParam{2}}};
 
 	ASSERT_TRUE(tri1.isValid());
 	ASSERT_TRUE(tri2.isValid());
@@ -1718,14 +1708,12 @@ TYPED_TEST(MathSpace3D, CollisionTriangleVerySmallDimensions)
 	const Triangle< TypeParam > tiny{
 		{0, 0, 0},
 		{epsilon, 0, 0},
-		{epsilon / TypeParam{2}, epsilon, 0}
-	};
+		{epsilon / TypeParam{2}, epsilon, 0}};
 
 	const Triangle< TypeParam > overlapping{
 		{0, 0, 0},
 		{epsilon * TypeParam{2}, 0, 0},
-		{epsilon, epsilon * TypeParam{2}, 0}
-	};
+		{epsilon, epsilon * TypeParam{2}, 0}};
 
 	if ( tiny.isValid() && overlapping.isValid() )
 	{
@@ -1777,14 +1765,12 @@ TYPED_TEST(MathSpace3D, CollisionTriangleMTVCalculation)
 	std::array< Vector< 3, TypeParam >, 3 > tri1 = {
 		Vector< 3, TypeParam >{0, 0, 0},
 		Vector< 3, TypeParam >{8, 0, 0},
-		Vector< 3, TypeParam >{4, 8, 0}
-	};
+		Vector< 3, TypeParam >{4, 8, 0}};
 
 	std::array< Vector< 3, TypeParam >, 3 > tri2 = {
 		Vector< 3, TypeParam >{2, 2, 0},
 		Vector< 3, TypeParam >{10, 2, 0},
-		Vector< 3, TypeParam >{6, 10, 0}
-	};
+		Vector< 3, TypeParam >{6, 10, 0}};
 
 	Vector< 3, TypeParam > mtv;
 
@@ -1822,15 +1808,13 @@ TYPED_TEST(MathSpace3D, CollisionTetrahedronMTVSymmetry)
 		Vector< 3, TypeParam >{0, 0, 0},
 		Vector< 3, TypeParam >{6, 0, 0},
 		Vector< 3, TypeParam >{3, 6, 0},
-		Vector< 3, TypeParam >{3, 3, 6}
-	};
+		Vector< 3, TypeParam >{3, 3, 6}};
 
 	std::array< Vector< 3, TypeParam >, 4 > tetra2 = {
 		Vector< 3, TypeParam >{2, 2, 2},
 		Vector< 3, TypeParam >{8, 2, 2},
 		Vector< 3, TypeParam >{5, 8, 2},
-		Vector< 3, TypeParam >{5, 5, 8}
-	};
+		Vector< 3, TypeParam >{5, 5, 8}};
 
 	Vector< 3, TypeParam > mtv1, mtv2;
 
@@ -1863,41 +1847,41 @@ TYPED_TEST(MathSpace3D, CapsuleConstructorWithPoints)
 {
 	const Point< TypeParam > start{0, 0, 0};
 	const Point< TypeParam > end{0, 5, 0};
-	const Capsule< TypeParam > capsule{start, end, TypeParam{1.0}};
+	const Capsule< TypeParam > capsule{start, end, static_cast< TypeParam >(1.0)};
 
 	ASSERT_EQ(capsule.axis().startPoint(), start);
 	ASSERT_EQ(capsule.axis().endPoint(), end);
-	ASSERT_NEAR(capsule.radius(), TypeParam{1.0}, TypeParam{1e-5});
+	ASSERT_NEAR(capsule.radius(), static_cast< TypeParam >(1.0), static_cast< TypeParam >(1e-5));
 	ASSERT_TRUE(capsule.isValid());
 }
 
 TYPED_TEST(MathSpace3D, CapsuleConstructorWithSegment)
 {
 	const Segment< TypeParam > axis{{0, 0, 0}, {0, 10, 0}};
-	const Capsule< TypeParam > capsule{axis, TypeParam{2.0}};
+	const Capsule< TypeParam > capsule{axis, static_cast< TypeParam >(2.0)};
 
 	ASSERT_EQ(capsule.axis().startPoint(), axis.startPoint());
 	ASSERT_EQ(capsule.axis().endPoint(), axis.endPoint());
-	ASSERT_NEAR(capsule.radius(), TypeParam{2.0}, TypeParam{1e-5});
+	ASSERT_NEAR(capsule.radius(), static_cast< TypeParam >(2.0), static_cast< TypeParam >(1e-5));
 }
 
 TYPED_TEST(MathSpace3D, CapsuleIsValid)
 {
-	const Capsule< TypeParam > validCapsule{{0, 0, 0}, {0, 5, 0}, TypeParam{1.0}};
+	const Capsule< TypeParam > validCapsule{{0, 0, 0}, {0, 5, 0}, static_cast< TypeParam >(1.0)};
 	ASSERT_TRUE(validCapsule.isValid());
 
-	const Capsule< TypeParam > invalidRadiusCapsule{{0, 0, 0}, {0, 5, 0}, TypeParam{0.0}};
+	const Capsule< TypeParam > invalidRadiusCapsule{{0, 0, 0}, {0, 5, 0}, static_cast< TypeParam >(0.0)};
 	ASSERT_FALSE(invalidRadiusCapsule.isValid());
 
 	/* NOTE: A degenerate capsule (zero-length axis) is still valid - it behaves as a sphere. */
-	const Capsule< TypeParam > degenerateAxisCapsule{{0, 0, 0}, {0, 0, 0}, TypeParam{1.0}};
+	const Capsule< TypeParam > degenerateAxisCapsule{{0, 0, 0}, {0, 0, 0}, static_cast< TypeParam >(1.0)};
 	ASSERT_TRUE(degenerateAxisCapsule.isValid());
 	ASSERT_TRUE(degenerateAxisCapsule.isDegenerate());
 }
 
 TYPED_TEST(MathSpace3D, CapsuleSetAxis)
 {
-	Capsule< TypeParam > capsule{{0, 0, 0}, {0, 5, 0}, TypeParam{1.0}};
+	Capsule< TypeParam > capsule{{0, 0, 0}, {0, 5, 0}, static_cast< TypeParam >(1.0)};
 
 	capsule.setAxis({{1, 2, 3}, {4, 5, 6}});
 
@@ -1907,53 +1891,53 @@ TYPED_TEST(MathSpace3D, CapsuleSetAxis)
 
 TYPED_TEST(MathSpace3D, CapsuleSetRadius)
 {
-	Capsule< TypeParam > capsule{{0, 0, 0}, {0, 5, 0}, TypeParam{1.0}};
+	Capsule< TypeParam > capsule{{0, 0, 0}, {0, 5, 0}, static_cast< TypeParam >(1.0)};
 
-	capsule.setRadius(TypeParam{3.0});
+	capsule.setRadius(static_cast< TypeParam >(3.0));
 
-	ASSERT_NEAR(capsule.radius(), TypeParam{3.0}, TypeParam{1e-5});
+	ASSERT_NEAR(capsule.radius(), static_cast< TypeParam >(3.0), static_cast< TypeParam >(1e-5));
 }
 
 TYPED_TEST(MathSpace3D, CapsuleSetRadiusNegative)
 {
-	Capsule< TypeParam > capsule{{0, 0, 0}, {0, 5, 0}, TypeParam{1.0}};
+	Capsule< TypeParam > capsule{{0, 0, 0}, {0, 5, 0}, static_cast< TypeParam >(1.0)};
 
 	capsule.setRadius(TypeParam{-3.0});
 
 	// Should take absolute value
-	ASSERT_NEAR(capsule.radius(), TypeParam{3.0}, TypeParam{1e-5});
+	ASSERT_NEAR(capsule.radius(), static_cast< TypeParam >(3.0), static_cast< TypeParam >(1e-5));
 }
 
 TYPED_TEST(MathSpace3D, CapsuleSquaredRadius)
 {
-	const Capsule< TypeParam > capsule{{0, 0, 0}, {0, 5, 0}, TypeParam{4.0}};
+	const Capsule< TypeParam > capsule{{0, 0, 0}, {0, 5, 0}, static_cast< TypeParam >(4.0)};
 
-	ASSERT_NEAR(capsule.squaredRadius(), TypeParam{16.0}, TypeParam{1e-5});
+	ASSERT_NEAR(capsule.squaredRadius(), static_cast< TypeParam >(16.0), static_cast< TypeParam >(1e-5));
 }
 
 TYPED_TEST(MathSpace3D, CapsuleCentroid)
 {
-	const Capsule< TypeParam > capsule{{0, 0, 0}, {0, 10, 0}, TypeParam{2.0}};
+	const Capsule< TypeParam > capsule{{0, 0, 0}, {0, 10, 0}, static_cast< TypeParam >(2.0)};
 
 	ASSERT_EQ(capsule.centroid(), Point< TypeParam >(0, 5, 0));
 }
 
 TYPED_TEST(MathSpace3D, CapsuleClosestPointOnAxisMiddle)
 {
-	const Capsule< TypeParam > capsule{{0, 0, 0}, {0, 10, 0}, TypeParam{1.0}};
+	const Capsule< TypeParam > capsule{{0, 0, 0}, {0, 10, 0}, static_cast< TypeParam >(1.0)};
 
 	// Point next to the middle of the axis
 	const Point< TypeParam > point{5, 5, 0};
 	const auto closest = capsule.closestPointOnAxis(point);
 
-	ASSERT_NEAR(closest[X], TypeParam{0}, TypeParam{1e-5});
-	ASSERT_NEAR(closest[Y], TypeParam{5}, TypeParam{1e-5});
-	ASSERT_NEAR(closest[Z], TypeParam{0}, TypeParam{1e-5});
+	ASSERT_NEAR(closest[X], TypeParam{0}, static_cast< TypeParam >(1e-5));
+	ASSERT_NEAR(closest[Y], TypeParam{5}, static_cast< TypeParam >(1e-5));
+	ASSERT_NEAR(closest[Z], TypeParam{0}, static_cast< TypeParam >(1e-5));
 }
 
 TYPED_TEST(MathSpace3D, CapsuleClosestPointOnAxisStart)
 {
-	const Capsule< TypeParam > capsule{{0, 0, 0}, {0, 10, 0}, TypeParam{1.0}};
+	const Capsule< TypeParam > capsule{{0, 0, 0}, {0, 10, 0}, static_cast< TypeParam >(1.0)};
 
 	// Point below the start of the axis
 	const Point< TypeParam > point{5, -5, 0};
@@ -1965,7 +1949,7 @@ TYPED_TEST(MathSpace3D, CapsuleClosestPointOnAxisStart)
 
 TYPED_TEST(MathSpace3D, CapsuleClosestPointOnAxisEnd)
 {
-	const Capsule< TypeParam > capsule{{0, 0, 0}, {0, 10, 0}, TypeParam{1.0}};
+	const Capsule< TypeParam > capsule{{0, 0, 0}, {0, 10, 0}, static_cast< TypeParam >(1.0)};
 
 	// Point above the end of the axis
 	const Point< TypeParam > point{5, 15, 0};
@@ -1980,15 +1964,15 @@ TYPED_TEST(MathSpace3D, CapsuleGetVolume)
 	// Capsule with axis length 4 and radius 1
 	// Volume = cylinder (π*r²*h) + sphere (4/3*π*r³)
 	// Volume = π*1*4 + 4/3*π*1 = 4π + 4π/3 = 16π/3
-	const Capsule< TypeParam > capsule{{0, 0, 0}, {0, 4, 0}, TypeParam{1.0}};
-	const TypeParam expectedVolume = TypeParam{16.0 / 3.0} * std::numbers::pi_v< TypeParam >;
+	const Capsule< TypeParam > capsule{{0, 0, 0}, {0, 4, 0}, static_cast< TypeParam >(1.0)};
+	const TypeParam expectedVolume = static_cast< TypeParam >(16.0 / 3.0) * std::numbers::pi_v< TypeParam >;
 
 	ASSERT_NEAR(capsule.getVolume(), expectedVolume, TypeParam{1e-3});
 }
 
 TYPED_TEST(MathSpace3D, CapsuleReset)
 {
-	Capsule< TypeParam > capsule{{1, 2, 3}, {4, 5, 6}, TypeParam{2.0}};
+	Capsule< TypeParam > capsule{{1, 2, 3}, {4, 5, 6}, static_cast< TypeParam >(2.0)};
 
 	capsule.reset();
 
@@ -1998,7 +1982,7 @@ TYPED_TEST(MathSpace3D, CapsuleReset)
 
 TYPED_TEST(MathSpace3D, CapsuleContainsPointInside)
 {
-	const Capsule< TypeParam > capsule{{0, 0, 0}, {0, 10, 0}, TypeParam{2.0}};
+	const Capsule< TypeParam > capsule{{0, 0, 0}, {0, 10, 0}, static_cast< TypeParam >(2.0)};
 	const Point< TypeParam > point{1, 5, 0};
 
 	ASSERT_TRUE(capsule.contains(point));
@@ -2006,7 +1990,7 @@ TYPED_TEST(MathSpace3D, CapsuleContainsPointInside)
 
 TYPED_TEST(MathSpace3D, CapsuleContainsPointOutside)
 {
-	const Capsule< TypeParam > capsule{{0, 0, 0}, {0, 10, 0}, TypeParam{2.0}};
+	const Capsule< TypeParam > capsule{{0, 0, 0}, {0, 10, 0}, static_cast< TypeParam >(2.0)};
 	const Point< TypeParam > point{5, 5, 0};
 
 	ASSERT_FALSE(capsule.contains(point));
@@ -2014,7 +1998,7 @@ TYPED_TEST(MathSpace3D, CapsuleContainsPointOutside)
 
 TYPED_TEST(MathSpace3D, CapsuleContainsPointInHemisphere)
 {
-	const Capsule< TypeParam > capsule{{0, 0, 0}, {0, 10, 0}, TypeParam{2.0}};
+	const Capsule< TypeParam > capsule{{0, 0, 0}, {0, 10, 0}, static_cast< TypeParam >(2.0)};
 	const Point< TypeParam > point{0, -1, 0};
 
 	ASSERT_TRUE(capsule.contains(point));
@@ -2026,7 +2010,7 @@ TYPED_TEST(MathSpace3D, CapsuleContainsPointInHemisphere)
 
 TYPED_TEST(MathSpace3D, CollisionCapsulePointInside)
 {
-	const Capsule< TypeParam > capsule{{0, 0, 0}, {0, 10, 0}, TypeParam{2.0}};
+	const Capsule< TypeParam > capsule{{0, 0, 0}, {0, 10, 0}, static_cast< TypeParam >(2.0)};
 	const Point< TypeParam > point{1, 5, 0};
 
 	ASSERT_TRUE(isColliding(capsule, point));
@@ -2035,7 +2019,7 @@ TYPED_TEST(MathSpace3D, CollisionCapsulePointInside)
 
 TYPED_TEST(MathSpace3D, CollisionCapsulePointOutside)
 {
-	const Capsule< TypeParam > capsule{{0, 0, 0}, {0, 10, 0}, TypeParam{2.0}};
+	const Capsule< TypeParam > capsule{{0, 0, 0}, {0, 10, 0}, static_cast< TypeParam >(2.0)};
 	const Point< TypeParam > point{5, 5, 0};
 
 	ASSERT_FALSE(isColliding(capsule, point));
@@ -2043,7 +2027,7 @@ TYPED_TEST(MathSpace3D, CollisionCapsulePointOutside)
 
 TYPED_TEST(MathSpace3D, CollisionCapsulePointWithMTV)
 {
-	const Capsule< TypeParam > capsule{{0, 0, 0}, {0, 10, 0}, TypeParam{2.0}};
+	const Capsule< TypeParam > capsule{{0, 0, 0}, {0, 10, 0}, static_cast< TypeParam >(2.0)};
 	const Point< TypeParam > point{1, 5, 0};
 	Vector< 3, TypeParam > mtv;
 
@@ -2053,7 +2037,7 @@ TYPED_TEST(MathSpace3D, CollisionCapsulePointWithMTV)
 
 TYPED_TEST(MathSpace3D, CollisionCapsuleSphereIntersecting)
 {
-	const Capsule< TypeParam > capsule{{0, 0, 0}, {0, 10, 0}, TypeParam{2.0}};
+	const Capsule< TypeParam > capsule{{0, 0, 0}, {0, 10, 0}, static_cast< TypeParam >(2.0)};
 	const Sphere< TypeParam > sphere{1.5, {2, 5, 0}};
 
 	ASSERT_TRUE(isColliding(capsule, sphere));
@@ -2062,7 +2046,7 @@ TYPED_TEST(MathSpace3D, CollisionCapsuleSphereIntersecting)
 
 TYPED_TEST(MathSpace3D, CollisionCapsuleSphereNotIntersecting)
 {
-	const Capsule< TypeParam > capsule{{0, 0, 0}, {0, 10, 0}, TypeParam{2.0}};
+	const Capsule< TypeParam > capsule{{0, 0, 0}, {0, 10, 0}, static_cast< TypeParam >(2.0)};
 	const Sphere< TypeParam > sphere{1.0, {5, 5, 0}};
 
 	ASSERT_FALSE(isColliding(capsule, sphere));
@@ -2070,7 +2054,7 @@ TYPED_TEST(MathSpace3D, CollisionCapsuleSphereNotIntersecting)
 
 TYPED_TEST(MathSpace3D, CollisionCapsuleSphereWithMTV)
 {
-	const Capsule< TypeParam > capsule{{0, 0, 0}, {0, 10, 0}, TypeParam{2.0}};
+	const Capsule< TypeParam > capsule{{0, 0, 0}, {0, 10, 0}, static_cast< TypeParam >(2.0)};
 	const Sphere< TypeParam > sphere{1.5, {2, 5, 0}};
 	Vector< 3, TypeParam > mtv;
 
@@ -2081,7 +2065,7 @@ TYPED_TEST(MathSpace3D, CollisionCapsuleSphereWithMTV)
 TYPED_TEST(MathSpace3D, CollisionCapsuleSphereAtHemisphere)
 {
 	// Sphere touching the top hemisphere
-	const Capsule< TypeParam > capsule{{0, 0, 0}, {0, 10, 0}, TypeParam{2.0}};
+	const Capsule< TypeParam > capsule{{0, 0, 0}, {0, 10, 0}, static_cast< TypeParam >(2.0)};
 	const Sphere< TypeParam > sphere{1.0, {0, 12, 0}};
 
 	ASSERT_TRUE(isColliding(capsule, sphere));
@@ -2089,24 +2073,24 @@ TYPED_TEST(MathSpace3D, CollisionCapsuleSphereAtHemisphere)
 
 TYPED_TEST(MathSpace3D, CollisionCapsuleCapsuleIntersecting)
 {
-	const Capsule< TypeParam > capsule1{{0, 0, 0}, {0, 10, 0}, TypeParam{2.0}};
-	const Capsule< TypeParam > capsule2{{3, 0, 0}, {3, 10, 0}, TypeParam{2.0}};
+	const Capsule< TypeParam > capsule1{{0, 0, 0}, {0, 10, 0}, static_cast< TypeParam >(2.0)};
+	const Capsule< TypeParam > capsule2{{3, 0, 0}, {3, 10, 0}, static_cast< TypeParam >(2.0)};
 
 	ASSERT_TRUE(isColliding(capsule1, capsule2));
 }
 
 TYPED_TEST(MathSpace3D, CollisionCapsuleCapsuleNotIntersecting)
 {
-	const Capsule< TypeParam > capsule1{{0, 0, 0}, {0, 10, 0}, TypeParam{2.0}};
-	const Capsule< TypeParam > capsule2{{10, 0, 0}, {10, 10, 0}, TypeParam{2.0}};
+	const Capsule< TypeParam > capsule1{{0, 0, 0}, {0, 10, 0}, static_cast< TypeParam >(2.0)};
+	const Capsule< TypeParam > capsule2{{10, 0, 0}, {10, 10, 0}, static_cast< TypeParam >(2.0)};
 
 	ASSERT_FALSE(isColliding(capsule1, capsule2));
 }
 
 TYPED_TEST(MathSpace3D, CollisionCapsuleCapsuleWithMTV)
 {
-	const Capsule< TypeParam > capsule1{{0, 0, 0}, {0, 10, 0}, TypeParam{2.0}};
-	const Capsule< TypeParam > capsule2{{3, 0, 0}, {3, 10, 0}, TypeParam{2.0}};
+	const Capsule< TypeParam > capsule1{{0, 0, 0}, {0, 10, 0}, static_cast< TypeParam >(2.0)};
+	const Capsule< TypeParam > capsule2{{3, 0, 0}, {3, 10, 0}, static_cast< TypeParam >(2.0)};
 	Vector< 3, TypeParam > mtv;
 
 	ASSERT_TRUE(isColliding(capsule1, capsule2, mtv));
@@ -2117,15 +2101,15 @@ TYPED_TEST(MathSpace3D, CollisionCapsuleCapsuleWithMTV)
 TYPED_TEST(MathSpace3D, CollisionCapsuleCapsuleCrossing)
 {
 	// Two capsules crossing in an X pattern
-	const Capsule< TypeParam > capsule1{{-5, 0, 0}, {5, 0, 0}, TypeParam{1.0}};
-	const Capsule< TypeParam > capsule2{{0, -5, 0}, {0, 5, 0}, TypeParam{1.0}};
+	const Capsule< TypeParam > capsule1{{-5, 0, 0}, {5, 0, 0}, static_cast< TypeParam >(1.0)};
+	const Capsule< TypeParam > capsule2{{0, -5, 0}, {0, 5, 0}, static_cast< TypeParam >(1.0)};
 
 	ASSERT_TRUE(isColliding(capsule1, capsule2));
 }
 
 TYPED_TEST(MathSpace3D, CollisionCapsuleCuboidIntersecting)
 {
-	const Capsule< TypeParam > capsule{{5, 0, 5}, {5, 10, 5}, TypeParam{2.0}};
+	const Capsule< TypeParam > capsule{{5, 0, 5}, {5, 10, 5}, static_cast< TypeParam >(2.0)};
 	const AACuboid< TypeParam > cuboid{{10, 10, 10}, {0, 0, 0}};
 
 	ASSERT_TRUE(isColliding(capsule, cuboid));
@@ -2134,7 +2118,7 @@ TYPED_TEST(MathSpace3D, CollisionCapsuleCuboidIntersecting)
 
 TYPED_TEST(MathSpace3D, CollisionCapsuleCuboidNotIntersecting)
 {
-	const Capsule< TypeParam > capsule{{20, 0, 20}, {20, 10, 20}, TypeParam{2.0}};
+	const Capsule< TypeParam > capsule{{20, 0, 20}, {20, 10, 20}, static_cast< TypeParam >(2.0)};
 	const AACuboid< TypeParam > cuboid{{10, 10, 10}, {0, 0, 0}};
 
 	ASSERT_FALSE(isColliding(capsule, cuboid));
@@ -2142,7 +2126,7 @@ TYPED_TEST(MathSpace3D, CollisionCapsuleCuboidNotIntersecting)
 
 TYPED_TEST(MathSpace3D, CollisionCapsuleCuboidWithMTV)
 {
-	const Capsule< TypeParam > capsule{{8, 0, 5}, {8, 10, 5}, TypeParam{2.0}};
+	const Capsule< TypeParam > capsule{{8, 0, 5}, {8, 10, 5}, static_cast< TypeParam >(2.0)};
 	const AACuboid< TypeParam > cuboid{{10, 10, 10}, {0, 0, 0}};
 	Vector< 3, TypeParam > mtv;
 
@@ -2153,7 +2137,7 @@ TYPED_TEST(MathSpace3D, CollisionCapsuleCuboidWithMTV)
 TYPED_TEST(MathSpace3D, CollisionCapsuleCuboidAxisInsideCuboid)
 {
 	// Capsule axis passes through cuboid
-	const Capsule< TypeParam > capsule{{5, -5, 5}, {5, 15, 5}, TypeParam{1.0}};
+	const Capsule< TypeParam > capsule{{5, -5, 5}, {5, 15, 5}, static_cast< TypeParam >(1.0)};
 	const AACuboid< TypeParam > cuboid{{10, 10, 10}, {0, 0, 0}};
 
 	ASSERT_TRUE(isColliding(capsule, cuboid));
@@ -2161,7 +2145,7 @@ TYPED_TEST(MathSpace3D, CollisionCapsuleCuboidAxisInsideCuboid)
 
 TYPED_TEST(MathSpace3D, CollisionCapsuleTriangleIntersecting)
 {
-	const Capsule< TypeParam > capsule{{5, 1, 5}, {5, 5, 5}, TypeParam{2.0}};
+	const Capsule< TypeParam > capsule{{5, 1, 5}, {5, 5, 5}, static_cast< TypeParam >(2.0)};
 	const Triangle< TypeParam > triangle{{0, 0, 0}, {10, 0, 0}, {5, 0, 10}};
 
 	ASSERT_TRUE(isColliding(capsule, triangle));
@@ -2170,7 +2154,7 @@ TYPED_TEST(MathSpace3D, CollisionCapsuleTriangleIntersecting)
 
 TYPED_TEST(MathSpace3D, CollisionCapsuleTriangleNotIntersecting)
 {
-	const Capsule< TypeParam > capsule{{5, 10, 5}, {5, 15, 5}, TypeParam{2.0}};
+	const Capsule< TypeParam > capsule{{5, 10, 5}, {5, 15, 5}, static_cast< TypeParam >(2.0)};
 	const Triangle< TypeParam > triangle{{0, 0, 0}, {10, 0, 0}, {5, 0, 10}};
 
 	ASSERT_FALSE(isColliding(capsule, triangle));
@@ -2178,7 +2162,7 @@ TYPED_TEST(MathSpace3D, CollisionCapsuleTriangleNotIntersecting)
 
 TYPED_TEST(MathSpace3D, CollisionCapsuleTriangleWithMTV)
 {
-	const Capsule< TypeParam > capsule{{5, 1, 5}, {5, 5, 5}, TypeParam{2.0}};
+	const Capsule< TypeParam > capsule{{5, 1, 5}, {5, 5, 5}, static_cast< TypeParam >(2.0)};
 	const Triangle< TypeParam > triangle{{0, 0, 0}, {10, 0, 0}, {5, 0, 10}};
 	Vector< 3, TypeParam > mtv;
 
@@ -2189,7 +2173,7 @@ TYPED_TEST(MathSpace3D, CollisionCapsuleTriangleWithMTV)
 TYPED_TEST(MathSpace3D, CollisionCapsuleTriangleTouchingEdge)
 {
 	// Capsule touching triangle edge
-	const Capsule< TypeParam > capsule{{5, 2, 0}, {5, 5, 0}, TypeParam{2.0}};
+	const Capsule< TypeParam > capsule{{5, 2, 0}, {5, 5, 0}, static_cast< TypeParam >(2.0)};
 	const Triangle< TypeParam > triangle{{0, 0, 0}, {10, 0, 0}, {5, 0, 10}};
 
 	ASSERT_TRUE(isColliding(capsule, triangle));
@@ -2202,7 +2186,7 @@ TYPED_TEST(MathSpace3D, CollisionCapsuleTriangleTouchingEdge)
 TYPED_TEST(MathSpace3D, IntersectionLineCapsuleIntersecting)
 {
 	const Line< TypeParam > line{{-5, 5, 0}, {1, 0, 0}};
-	const Capsule< TypeParam > capsule{{0, 0, 0}, {0, 10, 0}, TypeParam{2.0}};
+	const Capsule< TypeParam > capsule{{0, 0, 0}, {0, 10, 0}, static_cast< TypeParam >(2.0)};
 
 	ASSERT_TRUE(isIntersecting(line, capsule));
 	ASSERT_TRUE(isIntersecting(capsule, line));
@@ -2211,7 +2195,7 @@ TYPED_TEST(MathSpace3D, IntersectionLineCapsuleIntersecting)
 TYPED_TEST(MathSpace3D, IntersectionLineCapsuleNotIntersecting)
 {
 	const Line< TypeParam > line{{10, 5, 0}, {0, 0, 1}};
-	const Capsule< TypeParam > capsule{{0, 0, 0}, {0, 10, 0}, TypeParam{2.0}};
+	const Capsule< TypeParam > capsule{{0, 0, 0}, {0, 10, 0}, static_cast< TypeParam >(2.0)};
 
 	ASSERT_FALSE(isIntersecting(line, capsule));
 }
@@ -2219,7 +2203,7 @@ TYPED_TEST(MathSpace3D, IntersectionLineCapsuleNotIntersecting)
 TYPED_TEST(MathSpace3D, IntersectionLineCapsuleWithIntersectionPoint)
 {
 	const Line< TypeParam > line{{-10, 5, 0}, {1, 0, 0}};
-	const Capsule< TypeParam > capsule{{0, 0, 0}, {0, 10, 0}, TypeParam{2.0}};
+	const Capsule< TypeParam > capsule{{0, 0, 0}, {0, 10, 0}, static_cast< TypeParam >(2.0)};
 	Point< TypeParam > intersection;
 
 	ASSERT_TRUE(isIntersecting(line, capsule, intersection));
@@ -2233,7 +2217,7 @@ TYPED_TEST(MathSpace3D, IntersectionLineCapsuleAtHemisphere)
 {
 	// Line passing through top hemisphere
 	const Line< TypeParam > line{{-5, 12, 0}, {1, 0, 0}};
-	const Capsule< TypeParam > capsule{{0, 0, 0}, {0, 10, 0}, TypeParam{2.0}};
+	const Capsule< TypeParam > capsule{{0, 0, 0}, {0, 10, 0}, static_cast< TypeParam >(2.0)};
 	Point< TypeParam > intersection;
 
 	// Should hit the top hemisphere (sphere at {0, 10, 0} with radius 2)
@@ -2243,7 +2227,7 @@ TYPED_TEST(MathSpace3D, IntersectionLineCapsuleAtHemisphere)
 TYPED_TEST(MathSpace3D, IntersectionSegmentCapsuleIntersecting)
 {
 	const Segment< TypeParam > segment{{-5, 5, 0}, {5, 5, 0}};
-	const Capsule< TypeParam > capsule{{0, 0, 0}, {0, 10, 0}, TypeParam{2.0}};
+	const Capsule< TypeParam > capsule{{0, 0, 0}, {0, 10, 0}, static_cast< TypeParam >(2.0)};
 
 	ASSERT_TRUE(isIntersecting(segment, capsule));
 	ASSERT_TRUE(isIntersecting(capsule, segment));
@@ -2252,7 +2236,7 @@ TYPED_TEST(MathSpace3D, IntersectionSegmentCapsuleIntersecting)
 TYPED_TEST(MathSpace3D, IntersectionSegmentCapsuleNotIntersecting)
 {
 	const Segment< TypeParam > segment{{5, 5, 0}, {10, 5, 0}};
-	const Capsule< TypeParam > capsule{{0, 0, 0}, {0, 10, 0}, TypeParam{2.0}};
+	const Capsule< TypeParam > capsule{{0, 0, 0}, {0, 10, 0}, static_cast< TypeParam >(2.0)};
 
 	ASSERT_FALSE(isIntersecting(segment, capsule));
 }
@@ -2261,7 +2245,7 @@ TYPED_TEST(MathSpace3D, IntersectionSegmentCapsuleTooShort)
 {
 	// Segment doesn't reach the capsule
 	const Segment< TypeParam > segment{{-10, 5, 0}, {-5, 5, 0}};
-	const Capsule< TypeParam > capsule{{0, 0, 0}, {0, 10, 0}, TypeParam{2.0}};
+	const Capsule< TypeParam > capsule{{0, 0, 0}, {0, 10, 0}, static_cast< TypeParam >(2.0)};
 
 	ASSERT_FALSE(isIntersecting(segment, capsule));
 }
@@ -2269,7 +2253,7 @@ TYPED_TEST(MathSpace3D, IntersectionSegmentCapsuleTooShort)
 TYPED_TEST(MathSpace3D, IntersectionSegmentCapsuleWithIntersectionPoint)
 {
 	const Segment< TypeParam > segment{{-5, 5, 0}, {5, 5, 0}};
-	const Capsule< TypeParam > capsule{{0, 0, 0}, {0, 10, 0}, TypeParam{2.0}};
+	const Capsule< TypeParam > capsule{{0, 0, 0}, {0, 10, 0}, static_cast< TypeParam >(2.0)};
 	Point< TypeParam > intersection;
 
 	ASSERT_TRUE(isIntersecting(segment, capsule, intersection));
@@ -2282,7 +2266,7 @@ TYPED_TEST(MathSpace3D, IntersectionSegmentCapsuleAtHemisphere)
 {
 	// Segment passing through bottom hemisphere
 	const Segment< TypeParam > segment{{-5, -1, 0}, {5, -1, 0}};
-	const Capsule< TypeParam > capsule{{0, 0, 0}, {0, 10, 0}, TypeParam{2.0}};
+	const Capsule< TypeParam > capsule{{0, 0, 0}, {0, 10, 0}, static_cast< TypeParam >(2.0)};
 
 	ASSERT_TRUE(isIntersecting(segment, capsule));
 }
@@ -2293,7 +2277,7 @@ TYPED_TEST(MathSpace3D, IntersectionSegmentCapsuleAtHemisphere)
 
 TYPED_TEST(MathSpace3D, CollisionDegenerateCapsuleZeroRadius)
 {
-	const Capsule< TypeParam > degenerate{{0, 0, 0}, {0, 10, 0}, TypeParam{0.0}};
+	const Capsule< TypeParam > degenerate{{0, 0, 0}, {0, 10, 0}, static_cast< TypeParam >(0.0)};
 
 	ASSERT_FALSE(degenerate.isValid());
 }
@@ -2301,7 +2285,7 @@ TYPED_TEST(MathSpace3D, CollisionDegenerateCapsuleZeroRadius)
 TYPED_TEST(MathSpace3D, CollisionDegenerateCapsuleZeroLength)
 {
 	/* NOTE: A zero-length axis capsule is still valid - it behaves as a sphere. */
-	const Capsule< TypeParam > degenerate{{5, 5, 5}, {5, 5, 5}, TypeParam{2.0}};
+	const Capsule< TypeParam > degenerate{{5, 5, 5}, {5, 5, 5}, static_cast< TypeParam >(2.0)};
 
 	ASSERT_TRUE(degenerate.isValid());
 	ASSERT_TRUE(degenerate.isDegenerate());
@@ -2310,8 +2294,8 @@ TYPED_TEST(MathSpace3D, CollisionDegenerateCapsuleZeroLength)
 TYPED_TEST(MathSpace3D, CollisionCapsuleCapsuleMTVMagnitude)
 {
 	// Two capsules with known overlap
-	const Capsule< TypeParam > capsule1{{0, 0, 0}, {0, 10, 0}, TypeParam{2.0}};
-	const Capsule< TypeParam > capsule2{{3, 0, 0}, {3, 10, 0}, TypeParam{2.0}};
+	const Capsule< TypeParam > capsule1{{0, 0, 0}, {0, 10, 0}, static_cast< TypeParam >(2.0)};
+	const Capsule< TypeParam > capsule2{{3, 0, 0}, {3, 10, 0}, static_cast< TypeParam >(2.0)};
 	Vector< 3, TypeParam > mtv;
 
 	ASSERT_TRUE(isColliding(capsule1, capsule2, mtv));
@@ -2322,8 +2306,8 @@ TYPED_TEST(MathSpace3D, CollisionCapsuleCapsuleMTVMagnitude)
 
 TYPED_TEST(MathSpace3D, CollisionCapsuleSphereMTVMagnitude)
 {
-	const Capsule< TypeParam > capsule{{0, 0, 0}, {0, 10, 0}, TypeParam{2.0}};
-	const Sphere< TypeParam > sphere{TypeParam{2.0}, {3, 5, 0}};
+	const Capsule< TypeParam > capsule{{0, 0, 0}, {0, 10, 0}, static_cast< TypeParam >(2.0)};
+	const Sphere< TypeParam > sphere{static_cast< TypeParam >(2.0), {3, 5, 0}};
 	Vector< 3, TypeParam > mtv;
 
 	ASSERT_TRUE(isColliding(capsule, sphere, mtv));
@@ -2335,8 +2319,8 @@ TYPED_TEST(MathSpace3D, CollisionCapsuleSphereMTVMagnitude)
 TYPED_TEST(MathSpace3D, CollisionCapsuleCapsuleExactlyTouching)
 {
 	// Two capsules touching at exactly one point
-	const Capsule< TypeParam > capsule1{{0, 0, 0}, {0, 10, 0}, TypeParam{2.0}};
-	const Capsule< TypeParam > capsule2{{4, 0, 0}, {4, 10, 0}, TypeParam{2.0}};
+	const Capsule< TypeParam > capsule1{{0, 0, 0}, {0, 10, 0}, static_cast< TypeParam >(2.0)};
+	const Capsule< TypeParam > capsule2{{4, 0, 0}, {4, 10, 0}, static_cast< TypeParam >(2.0)};
 
 	// Distance between axes = 4, sum of radii = 4, so exactly touching
 	ASSERT_TRUE(isColliding(capsule1, capsule2));
@@ -2344,8 +2328,8 @@ TYPED_TEST(MathSpace3D, CollisionCapsuleCapsuleExactlyTouching)
 
 TYPED_TEST(MathSpace3D, CollisionCapsuleCapsuleVeryCloseButNotTouching)
 {
-	const Capsule< TypeParam > capsule1{{0, 0, 0}, {0, 10, 0}, TypeParam{2.0}};
-	const Capsule< TypeParam > capsule2{{TypeParam{4.001}, 0, 0}, {TypeParam{4.001}, 10, 0}, TypeParam{2.0}};
+	const Capsule< TypeParam > capsule1{{0, 0, 0}, {0, 10, 0}, static_cast< TypeParam >(2.0)};
+	const Capsule< TypeParam > capsule2{{static_cast< TypeParam >(4.001), 0, 0}, {static_cast< TypeParam >(4.001), 10, 0}, static_cast< TypeParam >(2.0)};
 
 	// Distance > sum of radii
 	ASSERT_FALSE(isColliding(capsule1, capsule2));

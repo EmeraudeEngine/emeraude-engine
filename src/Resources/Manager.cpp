@@ -34,6 +34,7 @@
 #include "Libs/FastJSON.hpp"
 #include "Audio/MusicResource.hpp"
 #include "Audio/SoundResource.hpp"
+#include "Audio/SoundfontResource.hpp"
 #include "Graphics/CubemapResource.hpp"
 #include "Graphics/FontResource.hpp"
 #include "Graphics/Geometry/AdaptiveVertexGridResource.hpp"
@@ -310,6 +311,9 @@ namespace EmEn::Resources
 			{".wav", "Sounds"}, {".ogg", "Sounds"}, {".mp3", "Sounds"},
 			{".flac", "Musics"}, {".opus", "Musics"}, {".aiff", "Musics"},
 
+			/* SoundFont formats → SoundBanks store */
+			{".sf2", "SoundBanks"},
+
 			/* 3D Model formats → Meshes store */
 			{".gltf", "Meshes"}, {".glb", "Meshes"}, {".obj", "Meshes"},
 			{".fbx", "Meshes"}, {".dae", "Meshes"},
@@ -512,6 +516,7 @@ namespace EmEn::Resources
 
 			m_containers.emplace(typeid(Audio::SoundResource), std::make_unique< Sounds >("Sound manager", m_primaryServices, *this, this->getLocalStore("Sounds")));
 			m_containers.emplace(typeid(Audio::MusicResource), std::make_unique< Musics >("Music manager", m_primaryServices, *this, this->getLocalStore("Musics")));
+			m_containers.emplace(typeid(Audio::SoundfontResource), std::make_unique< Soundfonts >("Soundfont manager", m_primaryServices, *this, this->getLocalStore("SoundBanks")));
 			m_containers.emplace(typeid(Graphics::FontResource), std::make_unique< Fonts >("Font manager", m_primaryServices, *this, this->getLocalStore("Fonts")));
 			m_containers.emplace(typeid(Graphics::ImageResource), std::make_unique< Images >("Image manager", m_primaryServices, *this, this->getLocalStore("Images")));
 			m_containers.emplace(typeid(Graphics::CubemapResource), std::make_unique< Cubemaps >("Cubemap manager", m_primaryServices, *this, this->getLocalStore("Cubemaps")));
