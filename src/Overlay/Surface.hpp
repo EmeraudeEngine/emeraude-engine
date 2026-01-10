@@ -67,6 +67,23 @@ namespace EmEn::Overlay
 	};
 
 	/**
+	 * @brief Identifies which buffer should receive incoming frame data.
+	 * @details Used by async content providers to determine where to write
+	 * frame data based on the frame dimensions and current buffer states.
+	 */
+	enum class TargetBuffer : uint8_t
+	{
+		/** Frame dimensions don't match any buffer - skip the frame. */
+		None,
+
+		/** Frame matches active buffer dimensions - normal operation. */
+		Active,
+
+		/** Frame matches transition buffer dimensions - completing a resize. */
+		Transition
+	};
+
+	/**
 	 * @brief Encapsulates all resources for a single framebuffer.
 	 * @details This structure groups the local pixmap data with its corresponding
 	 * GPU resources (image, image view, descriptor set). Used internally by Surface
@@ -577,6 +594,32 @@ namespace EmEn::Overlay
 			 */
 			[[nodiscard]]
 			bool isTransitionBufferReady () const noexcept;
+
+			/**
+			 * @brief Determines which buffer should receive frame data based on dimensions.
+			 * @details Used by async content providers to route incoming frames to the
+			 * appropriate buffer. During resize transitions, frames may arrive at either
+			 * the old size (for active buffer) or new size (for transition buffer).
+			 * @param frameWidth The width of the incoming frame in pixels.
+			 * @param frameHeight The height of the incoming frame in pixels.
+			 * @return TargetBuffer The buffer that matches the frame dimensions, or None if no match.
+			 */
+			[[nodiscard]]
+			TargetBuffer
+			determineTargetBuffer (uint32_t frameWidth, uint32_t frameHeight) const noexcept
+			{
+				if ( this->isTransitionBufferReady() && m_transitionBuffer.matchesSize(frameWidth, frameHeight) )
+				{
+					return TargetBuffer::Transition;
+				}
+
+				if ( m_activeBuffer.matchesSize(frameWidth, frameHeight) )
+				{
+					return TargetBuffer::Active;
+				}
+
+				return TargetBuffer::None;
+			}
 
 			/**
 			 * @brief Enables the listening of keyboard events.
