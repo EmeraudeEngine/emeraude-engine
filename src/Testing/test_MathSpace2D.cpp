@@ -462,8 +462,8 @@ TYPED_TEST(MathSpace2D, AARectangleConstructorSwapsMaxMin)
 	const AARectangle< TypeParam > rect{10.0, 10.0, -5.0, -5.0};
 
 	// Negative dimensions should result in 0
-	ASSERT_NEAR(rect.width(), TypeParam{0.0}, static_cast< TypeParam >(1e-5));
-	ASSERT_NEAR(rect.height(), TypeParam{0.0}, static_cast< TypeParam >(1e-5));
+	ASSERT_NEAR(rect.width(), static_cast< TypeParam >(0.0), static_cast< TypeParam >(1e-5));
+	ASSERT_NEAR(rect.height(), static_cast< TypeParam >(0.0), static_cast< TypeParam >(1e-5));
 }
 
 TYPED_TEST(MathSpace2D, AARectangleCornerPoints)
@@ -501,8 +501,8 @@ TYPED_TEST(MathSpace2D, AARectangleMergeWithRectangle)
 
 	rect1.merge(rect2);
 
-	ASSERT_NEAR(rect1.left(), TypeParam{0.0}, static_cast< TypeParam >(1e-5));
-	ASSERT_NEAR(rect1.top(), TypeParam{0.0}, static_cast< TypeParam >(1e-5));
+	ASSERT_NEAR(rect1.left(), static_cast< TypeParam >(0.0), static_cast< TypeParam >(1e-5));
+	ASSERT_NEAR(rect1.top(), static_cast< TypeParam >(0.0), static_cast< TypeParam >(1e-5));
 	ASSERT_NEAR(rect1.width(), static_cast< TypeParam >(20.0), static_cast< TypeParam >(1e-5));
 	ASSERT_NEAR(rect1.height(), static_cast< TypeParam >(20.0), static_cast< TypeParam >(1e-5));
 }
@@ -516,8 +516,8 @@ TYPED_TEST(MathSpace2D, AARectangleReset)
 	rect.reset();
 
 	// Reset creates a 1x1 rectangle at origin
-	ASSERT_NEAR(rect.left(), TypeParam{0.0}, static_cast< TypeParam >(1e-5));
-	ASSERT_NEAR(rect.top(), TypeParam{0.0}, static_cast< TypeParam >(1e-5));
+	ASSERT_NEAR(rect.left(), static_cast< TypeParam >(0.0), static_cast< TypeParam >(1e-5));
+	ASSERT_NEAR(rect.top(), static_cast< TypeParam >(0.0), static_cast< TypeParam >(1e-5));
 	ASSERT_NEAR(rect.width(), static_cast< TypeParam >(1.0), static_cast< TypeParam >(1e-5));
 	ASSERT_NEAR(rect.height(), static_cast< TypeParam >(1.0), static_cast< TypeParam >(1e-5));
 }
@@ -1180,7 +1180,7 @@ TYPED_TEST(MathSpace2D, SATProjectTriangleOnAxis)
 	TypeParam min, max;
 	SAT::project(vertices, axis, min, max);
 
-	ASSERT_NEAR(min, TypeParam{0.0}, static_cast< TypeParam >(1e-5));
+	ASSERT_NEAR(min, static_cast< TypeParam >(0.0), static_cast< TypeParam >(1e-5));
 	ASSERT_NEAR(max, static_cast< TypeParam >(10.0), static_cast< TypeParam >(1e-5));
 }
 
@@ -1262,7 +1262,7 @@ TYPED_TEST(MathSpace2D, DistancePointToCircleEdge)
 
 	const auto dist = Vector< 2, TypeParam >::distance(point, circle.position()) - circle.radius();
 
-	ASSERT_NEAR(dist, TypeParam{7.0}, static_cast< TypeParam >(1e-5));
+	ASSERT_NEAR(dist, static_cast< TypeParam >(7.0), static_cast< TypeParam >(1e-5));
 }
 
 TYPED_TEST(MathSpace2D, DistanceBetweenPoints)
@@ -1701,7 +1701,7 @@ TYPED_TEST(MathSpace2D, CollisionRectangleVeryLargeAspectRatio)
 	 * @test Tests collision with extreme aspect ratio rectangles.
 	 * REQUIREMENT: Must handle extreme aspect ratios correctly.
 	 */
-	const AARectangle< TypeParam > thin{0, 0, TypeParam{1000}, TypeParam{0.1}};
+	const AARectangle< TypeParam > thin{0, 0, TypeParam{1000}, static_cast< TypeParam >(0.1)};
 	const AARectangle< TypeParam > square{10, -1, 10, 10};
 
 	ASSERT_TRUE(thin.isValid());

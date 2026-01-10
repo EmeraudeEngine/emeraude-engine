@@ -37,26 +37,23 @@ template< typename >
 struct Math
 	: testing::Test
 {
-
 };
 TYPED_TEST_SUITE(Math, MathTypeList);
 
 TYPED_TEST(Math, LineFormula)
 {
-	LineFormula< TypeParam > algorithm{{
-		{0.25, 0.33},
-		{0.69, 0.95},
-		{1.324, 1.964},
-		{1.99, 2.01},
-		{3.2, 3.151},
-		{3.95, 3.9555},
-		{4.225, 4.1015}
-	}};
+	LineFormula< TypeParam > algorithm{{{static_cast< TypeParam >(0.25), static_cast< TypeParam >(0.33)},
+										{static_cast< TypeParam >(0.69), static_cast< TypeParam >(0.95)},
+										{static_cast< TypeParam >(1.324), static_cast< TypeParam >(1.964)},
+										{static_cast< TypeParam >(1.99), static_cast< TypeParam >(2.01)},
+										{static_cast< TypeParam >(3.2), static_cast< TypeParam >(3.151)},
+										{static_cast< TypeParam >(3.95), static_cast< TypeParam >(3.9555)},
+										{static_cast< TypeParam >(4.225), static_cast< TypeParam >(4.1015)}}};
 
 	ASSERT_TRUE(algorithm.compute());
 
-	ASSERT_NEAR(algorithm.getSlope(), 0.904971, 0.001);
-	ASSERT_NEAR(algorithm.getYIntersect(), 0.331172, 0.001);
-	ASSERT_NEAR(algorithm.getCoefficientDetermination(), 0.978823, 0.001);
-	ASSERT_NEAR(algorithm.getRobustness(), 2.7326, 0.01);
+	ASSERT_NEAR(algorithm.getSlope(), static_cast< TypeParam >(0.904971), static_cast< TypeParam >(0.001));
+	ASSERT_NEAR(algorithm.getYIntersect(), static_cast< TypeParam >(0.331172), static_cast< TypeParam >(0.001));
+	ASSERT_NEAR(algorithm.getCoefficientDetermination(), static_cast< TypeParam >(0.978823), static_cast< TypeParam >(0.001));
+	ASSERT_NEAR(algorithm.getRobustness(), static_cast< TypeParam >(2.7326), static_cast< TypeParam >(0.01));
 }

@@ -496,7 +496,7 @@ TYPED_TEST(MathCartesianFrame, TranslateLocal)
 		frame.yaw(Radian< TypeParam >(90), true); // Rotate 90 degrees around Y
 
 		// Translate 1 unit in local Z (which should be world X after rotation)
-		frame.translate(TypeParam{0.0}, TypeParam{0.0}, static_cast< TypeParam >(1.0), true);
+		frame.translate(static_cast< TypeParam >(0.0), static_cast< TypeParam >(0.0), static_cast< TypeParam >(1.0), true);
 
 		// Position should have changed based on local axes
 		ASSERT_GT(std::abs(frame.position()[X]), static_cast< TypeParam >(0.5));
@@ -796,9 +796,9 @@ TYPED_TEST(MathCartesianFrame, GetInfinityViewMatrix)
 		const auto infinityViewMatrix = frame.getInfinityViewMatrix();
 
 		// Infinity view matrix should have no translation
-		ASSERT_NEAR(infinityViewMatrix[M4x4Col3Row0], TypeParam{0.0}, static_cast< TypeParam >(1e-5));
-		ASSERT_NEAR(infinityViewMatrix[M4x4Col3Row1], TypeParam{0.0}, static_cast< TypeParam >(1e-5));
-		ASSERT_NEAR(infinityViewMatrix[M4x4Col3Row2], TypeParam{0.0}, static_cast< TypeParam >(1e-5));
+		ASSERT_NEAR(infinityViewMatrix[M4x4Col3Row0], static_cast< TypeParam >(0.0), static_cast< TypeParam >(1e-5));
+		ASSERT_NEAR(infinityViewMatrix[M4x4Col3Row1], static_cast< TypeParam >(0.0), static_cast< TypeParam >(1e-5));
+		ASSERT_NEAR(infinityViewMatrix[M4x4Col3Row2], static_cast< TypeParam >(0.0), static_cast< TypeParam >(1e-5));
 	}
 }
 
@@ -866,9 +866,9 @@ TYPED_TEST(MathCartesianFrame, GetRotationMatrix4)
 		const auto rotMatrix = frame.getRotationMatrix4();
 
 		// Translation should be zero
-		ASSERT_NEAR(rotMatrix[M4x4Col3Row0], TypeParam{0.0}, static_cast< TypeParam >(1e-5));
-		ASSERT_NEAR(rotMatrix[M4x4Col3Row1], TypeParam{0.0}, static_cast< TypeParam >(1e-5));
-		ASSERT_NEAR(rotMatrix[M4x4Col3Row2], TypeParam{0.0}, static_cast< TypeParam >(1e-5));
+		ASSERT_NEAR(rotMatrix[M4x4Col3Row0], static_cast< TypeParam >(0.0), static_cast< TypeParam >(1e-5));
+		ASSERT_NEAR(rotMatrix[M4x4Col3Row1], static_cast< TypeParam >(0.0), static_cast< TypeParam >(1e-5));
+		ASSERT_NEAR(rotMatrix[M4x4Col3Row2], static_cast< TypeParam >(0.0), static_cast< TypeParam >(1e-5));
 	}
 }
 
@@ -915,7 +915,7 @@ TYPED_TEST(MathCartesianFrame, ResetRotation)
 		frame.resetRotation();
 
 		// Position should remain unchanged
-		ASSERT_NEAR(frame.position()[X], TypeParam{10.0}, static_cast< TypeParam >(1e-5));
+		ASSERT_NEAR(frame.position()[X], static_cast< TypeParam >(10.0), static_cast< TypeParam >(1e-5));
 
 		// Rotation should be reset
 		const auto expectedY = Vector< 3, TypeParam >::positiveY();
@@ -991,7 +991,7 @@ TYPED_TEST(MathCartesianFrame, LinearInterpolationEndpoints)
 		const auto frameB = CartesianFrame< TypeParam >{Vector< 3, TypeParam >{10.0, 10.0, 10.0}};
 
 		// At t=0, should equal frameA
-		const auto interpolatedA = CartesianFrame< TypeParam >::linearInterpolation(frameA, frameB, TypeParam{0.0});
+		const auto interpolatedA = CartesianFrame< TypeParam >::linearInterpolation(frameA, frameB, static_cast< TypeParam >(0.0));
 		ASSERT_EQ(interpolatedA.position(), frameA.position());
 
 		// At t=1, should equal frameB
@@ -1017,9 +1017,9 @@ TYPED_TEST(MathCartesianFrame, CosineInterpolation)
 		const auto interpolated = CartesianFrame< TypeParam >::cosineInterpolation(frameA, frameB, static_cast< TypeParam >(0.5));
 
 		// At t=0.5, should be near midpoint with cosine interpolation
-		ASSERT_NEAR(interpolated.position()[X], static_cast< TypeParam >(5.0), TypeParam{0.1});
-		ASSERT_NEAR(interpolated.position()[Y], static_cast< TypeParam >(5.0), TypeParam{0.1});
-		ASSERT_NEAR(interpolated.position()[Z], static_cast< TypeParam >(5.0), TypeParam{0.1});
+		ASSERT_NEAR(interpolated.position()[X], static_cast< TypeParam >(5.0), static_cast< TypeParam >(0.1));
+		ASSERT_NEAR(interpolated.position()[Y], static_cast< TypeParam >(5.0), static_cast< TypeParam >(0.1));
+		ASSERT_NEAR(interpolated.position()[Z], static_cast< TypeParam >(5.0), static_cast< TypeParam >(0.1));
 	}
 }
 
@@ -1038,7 +1038,7 @@ TYPED_TEST(MathCartesianFrame, CosineInterpolationEndpoints)
 		const auto frameB = CartesianFrame< TypeParam >{Vector< 3, TypeParam >{10.0, 10.0, 10.0}};
 
 		// At t=0, should equal frameA
-		const auto interpolatedA = CartesianFrame< TypeParam >::cosineInterpolation(frameA, frameB, TypeParam{0.0});
+		const auto interpolatedA = CartesianFrame< TypeParam >::cosineInterpolation(frameA, frameB, static_cast< TypeParam >(0.0));
 		ASSERT_NEAR(interpolatedA.position()[X], frameA.position()[X], static_cast< TypeParam >(1e-5));
 
 		// At t=1, should equal frameB
