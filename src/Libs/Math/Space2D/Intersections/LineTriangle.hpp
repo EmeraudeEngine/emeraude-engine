@@ -41,12 +41,13 @@ namespace EmEn::Libs::Math::Space2D
 	 * @param line A reference to a line.
 	 * @param triangle A reference to a triangle.
 	 * @param intersections A writable container of intersection points.
-	 * @return int The number of intersection points.
+	 * @return uint32_t The number of intersection points.
 	 */
 	template< typename precision_t = float >
 	[[nodiscard]]
-	int
-	isIntersecting (const Line< precision_t > & line, const Triangle< precision_t > & triangle, StaticVector< Point< precision_t >, 4 > & intersections) noexcept requires (std::is_floating_point_v< precision_t >)
+	uint32_t
+	isIntersecting (const Line< precision_t > & line, const Triangle< precision_t > & triangle, StaticVector< Point< precision_t >, 4 > & intersections) noexcept
+		requires (std::is_floating_point_v< precision_t >)
 	{
 		intersections.clear();
 
@@ -89,7 +90,7 @@ namespace EmEn::Libs::Math::Space2D
 			}
 		}
 
-		return intersections.size();
+		return static_cast< uint32_t >(intersections.size());
 	}
 
 	/**
@@ -102,7 +103,8 @@ namespace EmEn::Libs::Math::Space2D
 	template< typename precision_t = float >
 	[[nodiscard]]
 	bool
-	isIntersecting (const Line< precision_t > & line, const Triangle< precision_t > & triangle) noexcept requires (std::is_floating_point_v< precision_t >)
+	isIntersecting (const Line< precision_t > & line, const Triangle< precision_t > & triangle) noexcept
+		requires (std::is_floating_point_v< precision_t >)
 	{
 		StaticVector< Point< precision_t >, 4 > intersections;
 
@@ -113,7 +115,8 @@ namespace EmEn::Libs::Math::Space2D
 	template< typename precision_t = float >
 	[[nodiscard]]
 	bool
-	isIntersecting (const Triangle< precision_t > & triangle, const Line< precision_t > & line) noexcept requires (std::is_floating_point_v< precision_t >)
+	isIntersecting (const Triangle< precision_t > & triangle, const Line< precision_t > & line) noexcept
+		requires (std::is_floating_point_v< precision_t >)
 	{
 		return isIntersecting(line, triangle);
 	}
@@ -121,8 +124,9 @@ namespace EmEn::Libs::Math::Space2D
 	/** @copydoc EmEn::Libs::Math::Space2D::isIntersecting(const Line< precision_t > &, const Triangle< precision_t > &, StaticVector< Point< precision_t >, 4 > &) noexcept */
 	template< typename precision_t = float >
 	[[nodiscard]]
-	int
-	isIntersecting (const Triangle< precision_t > & triangle, const Line< precision_t > & line, StaticVector< Point< precision_t >, 4 > & intersections) noexcept requires (std::is_floating_point_v< precision_t >)
+	uint32_t
+	isIntersecting (const Triangle< precision_t > & triangle, const Line< precision_t > & line, StaticVector< Point< precision_t >, 4 > & intersections) noexcept
+		requires (std::is_floating_point_v< precision_t >)
 	{
 		return isIntersecting(line, triangle, intersections);
 	}

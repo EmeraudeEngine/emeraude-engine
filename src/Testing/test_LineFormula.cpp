@@ -31,7 +31,7 @@
 
 using namespace EmEn::Libs::Math;
 
-using MathTypeList = testing::Types< int, float, double >;
+using MathTypeList = testing::Types< float, double >;
 
 template< typename >
 struct Math
@@ -43,26 +43,20 @@ TYPED_TEST_SUITE(Math, MathTypeList);
 
 TYPED_TEST(Math, LineFormula)
 {
-	if constexpr ( !std::is_integral_v< TypeParam > )
-	{
-		LineFormula< TypeParam > algorithm{{
-			{0.25, 0.33},
-			{0.69, 0.95},
-			{1.324, 1.964},
-			{1.99, 2.01},
-			{3.2, 3.151},
-			{3.95, 3.9555},
-			{4.225, 4.1015}
-		}};
+	LineFormula< TypeParam > algorithm{{
+		{0.25, 0.33},
+		{0.69, 0.95},
+		{1.324, 1.964},
+		{1.99, 2.01},
+		{3.2, 3.151},
+		{3.95, 3.9555},
+		{4.225, 4.1015}
+	}};
 
-		ASSERT_EQ(algorithm.compute(), true);
+	ASSERT_TRUE(algorithm.compute());
 
-		ASSERT_NEAR(algorithm.getSlope(), 0.984299, 0.001);
-
-		ASSERT_NEAR(algorithm.getCoefficientDetermination(), 0.980484, 0.001);
-
-		ASSERT_NEAR(algorithm.getYIntersect(), 0.0157008, 0.001);
-
-		ASSERT_NEAR(algorithm.getRobustness(), 62.6912, 0.001);
-	}
+	ASSERT_NEAR(algorithm.getSlope(), 0.904971, 0.001);
+	ASSERT_NEAR(algorithm.getYIntersect(), 0.331172, 0.001);
+	ASSERT_NEAR(algorithm.getCoefficientDetermination(), 0.978823, 0.001);
+	ASSERT_NEAR(algorithm.getRobustness(), 2.7326, 0.01);
 }

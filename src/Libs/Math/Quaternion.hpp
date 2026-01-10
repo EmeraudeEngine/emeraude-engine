@@ -406,8 +406,8 @@ namespace EmEn::Libs::Math
 				auto uv = Vector< 3, precision_t >::crossProduct(qVector, operand);
 				auto uuv = Vector< 3, precision_t >::crossProduct(qVector, uv);
 
-				uv *= 2.0 * m_data[W];
-				uuv *= 2.0;
+				uv *= static_cast< precision_t >(2) * m_data[W];
+				uuv *= static_cast< precision_t >(2);
 
 				return operand + uv + uuv;
 			}
@@ -426,8 +426,8 @@ namespace EmEn::Libs::Math
 				auto uv = Vector< 4, precision_t >::crossProduct(qVector, operand);
 				auto uuv = Vector< 4, precision_t >::crossProduct(qVector, uv);
 
-				uv *= 2.0 * m_data[W];
-				uuv *= 2.0;
+				uv *= static_cast< precision_t >(2) * m_data[W];
+				uuv *= static_cast< precision_t >(2);
 
 				return operand + uv + uuv;
 			}
@@ -675,18 +675,18 @@ namespace EmEn::Libs::Math
 				auto sqy = m_data[1] * m_data[1];
 				auto sqz = m_data[2] * m_data[2];
 
-				vector[Y] = std::asin(2.0 * (m_data[3] * m_data[1] - m_data[0] * m_data[2]));
+				vector[Y] = static_cast< precision_t >(std::asin(static_cast< precision_t >(2) * (m_data[3] * m_data[1] - m_data[0] * m_data[2])));
 
 				if ( PiOver2 - std::abs(vector[Y]) > std::numeric_limits< precision_t >::epsilon() )
 				{
-					vector[Z] = std::atan2(2.0 * (m_data[0] * m_data[1] + m_data[3] * m_data[2]), sqx - sqy - sqz + sqw);
-					vector[X] = std::atan2(2.0 * (m_data[3] * m_data[0] + m_data[1] * m_data[2]), sqw - sqx - sqy + sqz);
+					vector[Z] = static_cast< precision_t >(std::atan2(static_cast< precision_t >(2) * (m_data[0] * m_data[1] + m_data[3] * m_data[2]), sqx - sqy - sqz + sqw));
+					vector[X] = static_cast< precision_t >(std::atan2(static_cast< precision_t >(2) * (m_data[3] * m_data[0] + m_data[1] * m_data[2]), sqw - sqx - sqy + sqz));
 				}
 				else
 				{
 					// Compute heading from local 'down' vector.
-					vector[Z] = std::atan2(2 * m_data[1] * m_data[2] - 2 * m_data[0] * m_data[3], 2 * m_data[0] * m_data[2] + 2 * m_data[1] * m_data[3]);
-					vector[X] = 0.0;
+					vector[Z] = static_cast< precision_t >(std::atan2(2 * m_data[1] * m_data[2] - 2 * m_data[0] * m_data[3], 2 * m_data[0] * m_data[2] + 2 * m_data[1] * m_data[3]));
+					vector[X] = static_cast< precision_t >(0);
 
 					// NOTE: Original code had a check `if (vector[X] < 0)` here, which was unreachable
 					// because vector[X] is set to 0.0 above. It has been removed.
@@ -909,7 +909,7 @@ namespace EmEn::Libs::Math
 			Quaternion
 			lerp (const Quaternion & qA, const Quaternion & qB, precision_t time) noexcept
 			{
-				return (qA * (1.0 - time)) + (qB * time);
+				return (qA * (static_cast< precision_t >(1) - time)) + (qB * time);
 			}
 
 			/**
@@ -1001,10 +1001,10 @@ namespace EmEn::Libs::Math
 			Quaternion &
 			fromAngleAxis (precision_t angle, const Vector< 3, precision_t > & axis)
 			{
-				const auto halfAngle = 0.5 * angle;
-				const auto sin = std::sin(halfAngle);
+				const auto halfAngle = static_cast< precision_t >(0.5) * angle;
+				const auto sin = static_cast< precision_t >(std::sin(halfAngle));
 
-				m_data[W] = std::cos(halfAngle);
+				m_data[W] = static_cast< precision_t >(std::cos(halfAngle));
 				m_data[X] = sin * axis[X];
 				m_data[Y] = sin * axis[Y];
 				m_data[Z] = sin * axis[Z];
@@ -1025,10 +1025,10 @@ namespace EmEn::Libs::Math
 
 				if ( Utility::isZero(sqLen) )
 				{
-					angle = 0.0;
-					axis[X] = 0.0;
-					axis[Y] = 1.0;
-					axis[Z] = 0.0;
+					angle = static_cast< precision_t >(0);
+					axis[X] = static_cast< precision_t >(0);
+					axis[Y] = static_cast< precision_t >(1);
+					axis[Z] = static_cast< precision_t >(0);
 
 					return;
 				}
@@ -1036,17 +1036,17 @@ namespace EmEn::Libs::Math
 				/* Clamp w to [-1, 1] to avoid numerical errors with acos */
 				const auto w_clamped = std::clamp(m_data[W], static_cast<precision_t>(-1.0), static_cast<precision_t>(1.0));
 
-				angle = 2.0 * std::acos(w_clamped);
+				angle = static_cast< precision_t >(2) * static_cast< precision_t >(std::acos(w_clamped));
 
 				/* sin(angle/2) = sqrt(x² + y² + z²) for unit quaternion */
-				const auto sinHalfAngle = std::sqrt(m_data[X] * m_data[X] + m_data[Y] * m_data[Y] + m_data[Z] * m_data[Z]);
+				const auto sinHalfAngle = static_cast< precision_t >(std::sqrt(m_data[X] * m_data[X] + m_data[Y] * m_data[Y] + m_data[Z] * m_data[Z]));
 
 				if ( Utility::isZero(sinHalfAngle) )
 				{
 					/* Angle is 0 or 2π, axis is arbitrary */
-					axis[X] = 0.0;
-					axis[Y] = 1.0;
-					axis[Z] = 0.0;
+					axis[X] = static_cast< precision_t >(0);
+					axis[Y] = static_cast< precision_t >(1);
+					axis[Z] = static_cast< precision_t >(0);
 				}
 				else
 				{
@@ -1071,35 +1071,38 @@ namespace EmEn::Libs::Math
 
 				const auto d = Vector< 3, precision_t >::dotProduct(v0, v1);
 
-				/* If dot == 1, vectors are the same */
-				if ( d >= 1.0 )
+				/* Tolerance for floating-point comparisons. */
+				constexpr auto tolerance = std::numeric_limits< precision_t >::epsilon() * precision_t{100};
+
+				/* If dot ≈ 1, vectors are the same */
+				if ( d >= precision_t{1} - tolerance )
 				{
 					this->reset();
 
 					return;
 				}
 
-				/* exactly opposite */
-				if ( d <= -1.0 )
+				/* Nearly opposite vectors (dot ≈ -1) */
+				if ( d <= precision_t{-1} + tolerance )
 				{
-					auto axis = Vector< 3, precision_t >::crossProduct({1.0, 0.0, 0.0}, v0);
+					auto axis = Vector< 3, precision_t >::crossProduct({1, 0, 0}, v0);
 
-					if ( axis.length() == 0.0 )
+					if ( axis.lengthSquared() < tolerance )
 					{
-						axis = Vector< 3, precision_t >::crossProduct({0.0, 1.0, 0.0}, v0);
+						axis = Vector< 3, precision_t >::crossProduct({0, 1, 0}, v0);
 					}
 
 					/* same as fromAngleAxis(core::PI, axis).normalize(); */
-					this->set(axis[X], axis[Y], axis[Z], 0.0).normalize();
+					this->set(axis[X], axis[Y], axis[Z], 0).normalize();
 
 					return;
 				}
 
-				const auto s = std::sqrt((1.0 + d) * 2.0); // optimize inv_sqrt
-				const auto invS = 1.0 / s;
+				const auto s = std::sqrt((precision_t{1} + d) * precision_t{2});
+				const auto invS = precision_t{1} / s;
 				const auto c = Vector< 3, precision_t >::crossProduct(v0, v1) * invS;
 
-				this->set(c[X], c[Y], c[Z], s * 0.5F).normalize();
+				this->set(c[X], c[Y], c[Z], s * precision_t{0.5}).normalize();
 			}
 
 			/**

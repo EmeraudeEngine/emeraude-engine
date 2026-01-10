@@ -217,7 +217,7 @@ namespace EmEn::Libs::Math::Space3D
 		const auto & segEnd = segment.endPoint();
 		const auto & capsuleStart = capsule.axis().startPoint();
 		const auto & capsuleEnd = capsule.axis().endPoint();
-		const auto radius = capsule.radius();
+		//const auto radius = capsule.radius();
 		const auto radiusSq = capsule.squaredRadius();
 
 		const auto segDir = segEnd - segStart;

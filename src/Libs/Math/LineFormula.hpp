@@ -115,8 +115,8 @@ namespace EmEn::Libs::Math
 					const auto y = m_yValues[index] - yAverage;
 
 					sumProdAverageDeviation += x * y;
-					sumXAverageDeviationSquared += std::pow(x, 2);
-					sumYAverageDeviationSquared += std::pow(y, 2);
+					sumXAverageDeviationSquared += x * x;
+					sumYAverageDeviationSquared += y * y;
 				}
 
 				m_slope = sumProdAverageDeviation / sumXAverageDeviationSquared;

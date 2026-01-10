@@ -915,7 +915,7 @@ namespace EmEn::Libs::Math
 			precision_t
 			length () const noexcept
 			{
-				return std::sqrt(this->lengthSquared());
+				return static_cast< precision_t >(std::sqrt(this->lengthSquared()));
 			}
 
 			/**

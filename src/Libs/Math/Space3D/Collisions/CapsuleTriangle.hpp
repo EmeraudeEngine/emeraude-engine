@@ -63,26 +63,26 @@ namespace EmEn::Libs::Math::Space3D
 		};
 
 		const auto & triPoints = triangle.points();
-		const auto & A = triPoints[0];
-		const auto & B = triPoints[1];
-		const auto & C = triPoints[2];
+		const auto & pointA = triPoints[0];
+		const auto & pointB = triPoints[1];
+		const auto & pointC = triPoints[2];
 
 		/* NOTE: Find the closest point on the plane of the triangle. */
-		const auto normal = Vector< 3, precision_t >::normal(A, B, C);
+		const auto normal = Vector< 3, precision_t >::normal(pointA, pointB, pointC);
 
 		if ( normal.isZero() )
 		{
 			/* NOTE: Degenerate triangle. Return the first vertex. */
-			return A;
+			return pointA;
 		}
 
-		const auto distanceToPlane = Vector< 3, precision_t >::dotProduct(point - A, normal);
+		const auto distanceToPlane = Vector< 3, precision_t >::dotProduct(point - pointA, normal);
 		const auto pointOnPlane = point - (normal * distanceToPlane);
 
 		/* NOTE: Check if this point is inside the triangle (using the "same side" technique). */
-		const auto c1 = Vector< 3, precision_t >::dotProduct(Vector< 3, precision_t >::crossProduct(B - A, pointOnPlane - A), normal);
-		const auto c2 = Vector< 3, precision_t >::dotProduct(Vector< 3, precision_t >::crossProduct(C - B, pointOnPlane - B), normal);
-		const auto c3 = Vector< 3, precision_t >::dotProduct(Vector< 3, precision_t >::crossProduct(A - C, pointOnPlane - C), normal);
+		const auto c1 = Vector< 3, precision_t >::dotProduct(Vector< 3, precision_t >::crossProduct(pointB - pointA, pointOnPlane - pointA), normal);
+		const auto c2 = Vector< 3, precision_t >::dotProduct(Vector< 3, precision_t >::crossProduct(pointC - pointB, pointOnPlane - pointB), normal);
+		const auto c3 = Vector< 3, precision_t >::dotProduct(Vector< 3, precision_t >::crossProduct(pointA - pointC, pointOnPlane - pointC), normal);
 
 		if ( c1 >= 0 && c2 >= 0 && c3 >= 0 )
 		{
@@ -91,9 +91,9 @@ namespace EmEn::Libs::Math::Space3D
 		}
 
 		/* NOTE: The projection is outside. Find the closest point on the edges. */
-		const auto pAB = closestPointOnSegment(point, A, B);
-		const auto pBC = closestPointOnSegment(point, B, C);
-		const auto pCA = closestPointOnSegment(point, C, A);
+		const auto pAB = closestPointOnSegment(point, pointA, pointB);
+		const auto pBC = closestPointOnSegment(point, pointB, pointC);
+		const auto pCA = closestPointOnSegment(point, pointC, pointA);
 
 		const auto dAB = Vector< 3, precision_t >::distanceSquared(point, pAB);
 		const auto dBC = Vector< 3, precision_t >::distanceSquared(point, pBC);

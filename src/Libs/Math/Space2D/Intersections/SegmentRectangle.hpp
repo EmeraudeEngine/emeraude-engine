@@ -47,7 +47,8 @@ namespace EmEn::Libs::Math::Space2D
 	template< typename precision_t = float >
 	[[nodiscard]]
 	bool
-	isIntersecting (const Segment< precision_t > & segment, const AARectangle< precision_t > & rectangle, Point< precision_t > & intersection) noexcept requires (std::is_floating_point_v< precision_t >)
+	isIntersecting (const Segment< precision_t > & segment, const AARectangle< precision_t > & rectangle, Point< precision_t > & intersection) noexcept
+		requires (std::is_floating_point_v< precision_t >)
 	{
 		if ( isColliding(Point< precision_t >{segment.startPoint()}, rectangle) )
 		{
@@ -102,7 +103,8 @@ namespace EmEn::Libs::Math::Space2D
 	template< typename precision_t = float >
 	[[nodiscard]]
 	bool
-	isIntersecting (const Segment< precision_t > & segment, const AARectangle< precision_t > & rectangle) noexcept requires (std::is_floating_point_v< precision_t >)
+	isIntersecting (const Segment< precision_t > & segment, const AARectangle< precision_t > & rectangle) noexcept
+		requires (std::is_floating_point_v< precision_t >)
 	{
 		Point< precision_t > dummy;
 		
@@ -113,7 +115,8 @@ namespace EmEn::Libs::Math::Space2D
 	template< typename precision_t = float >
 	[[nodiscard]]
 	bool
-	isIntersecting (const AARectangle< precision_t > & rectangle, const Segment< precision_t > & segment) noexcept requires (std::is_floating_point_v< precision_t >)
+	isIntersecting (const AARectangle< precision_t > & rectangle, const Segment< precision_t > & segment) noexcept
+		requires (std::is_floating_point_v< precision_t >)
 	{
 		return isIntersecting(segment, rectangle);
 	}
@@ -122,7 +125,8 @@ namespace EmEn::Libs::Math::Space2D
 	template< typename precision_t = float >
 	[[nodiscard]]
 	bool
-	isIntersecting (const AARectangle< precision_t > & rectangle, const Segment< precision_t > & segment, Point< precision_t > & intersection) noexcept requires (std::is_floating_point_v< precision_t >)
+	isIntersecting (const AARectangle< precision_t > & rectangle, const Segment< precision_t > & segment, Point< precision_t > & intersection) noexcept
+		requires (std::is_floating_point_v< precision_t >)
 	{
 		return isIntersecting(segment, rectangle, intersection);
 	}

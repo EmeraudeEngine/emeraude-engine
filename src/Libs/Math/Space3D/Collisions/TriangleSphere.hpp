@@ -42,7 +42,8 @@ namespace EmEn::Libs::Math::Space3D
 	template< typename precision_t = float >
 	[[nodiscard]]
 	bool
-	isColliding (const Triangle< precision_t > & triangle, const Sphere< precision_t > & sphere) noexcept requires (std::is_floating_point_v< precision_t >)
+	isColliding (const Triangle< precision_t > & triangle, const Sphere< precision_t > & sphere) noexcept
+		requires (std::is_floating_point_v< precision_t >)
 	{
 		if ( !triangle.isValid() || !sphere.isValid() )
 		{
@@ -61,20 +62,20 @@ namespace EmEn::Libs::Math::Space3D
 		};
 
 		const auto & triPoints = triangle.points();
-		const auto & A = triPoints[0];
-		const auto & B = triPoints[1];
-		const auto & C = triPoints[2];
-		const auto & S = sphere.position();
+		const auto & pointA = triPoints[0];
+		const auto & pointB = triPoints[1];
+		const auto & pointC = triPoints[2];
+		const auto & position = sphere.position();
 
 		/* NOTE: Find the closest point on the plane of the triangle. */
-		const auto normal = Vector< 3, precision_t >::normal(A, B, C);
-		const auto distanceToPlane = Vector< 3, precision_t >::dotProduct(S - A, normal);
-		const auto pointOnPlane = S - (normal * distanceToPlane);
+		const auto normal = Vector< 3, precision_t >::normal(pointA, pointB, pointC);
+		const auto distanceToPlane = Vector< 3, precision_t >::dotProduct(position - pointA, normal);
+		const auto pointOnPlane = position - (normal * distanceToPlane);
 
 		/* NOTE: Check if this point is inside the triangle (using the "same side" technique with the vector product). */
-		const auto c1 = Vector< 3, precision_t >::dotProduct(Vector< 3, precision_t >::crossProduct(B - A, pointOnPlane - A), normal);
-		const auto c2 = Vector< 3, precision_t >::dotProduct(Vector< 3, precision_t >::crossProduct(C - B, pointOnPlane - B), normal);
-		const auto c3 = Vector< 3, precision_t >::dotProduct(Vector< 3, precision_t >::crossProduct(A - C, pointOnPlane - C), normal);
+		const auto c1 = Vector< 3, precision_t >::dotProduct(Vector< 3, precision_t >::crossProduct(pointB - pointA, pointOnPlane - pointA), normal);
+		const auto c2 = Vector< 3, precision_t >::dotProduct(Vector< 3, precision_t >::crossProduct(pointC - pointB, pointOnPlane - pointB), normal);
+		const auto c3 = Vector< 3, precision_t >::dotProduct(Vector< 3, precision_t >::crossProduct(pointA - pointC, pointOnPlane - pointC), normal);
 
 		Point< precision_t > closestPoint;
 
@@ -86,13 +87,13 @@ namespace EmEn::Libs::Math::Space3D
 		else
 		{
 			/* NOTE: The projection is outward. The closest point is on one of the edges. */
-			const auto pAB = closestPointOnSegment(S, A, B);
-			const auto pBC = closestPointOnSegment(S, B, C);
-			const auto pCA = closestPointOnSegment(S, C, A);
+			const auto pAB = closestPointOnSegment(position, pointA, pointB);
+			const auto pBC = closestPointOnSegment(position, pointB, pointC);
+			const auto pCA = closestPointOnSegment(position, pointC, pointA);
 
-			const auto dAB = Vector< 3, precision_t >::distanceSquared(S, pAB);
-			const auto dBC = Vector< 3, precision_t >::distanceSquared(S, pBC);
-			const auto dCA = Vector< 3, precision_t >::distanceSquared(S, pCA);
+			const auto dAB = Vector< 3, precision_t >::distanceSquared(position, pAB);
+			const auto dBC = Vector< 3, precision_t >::distanceSquared(position, pBC);
+			const auto dCA = Vector< 3, precision_t >::distanceSquared(position, pCA);
 
 			if ( dAB < dBC && dAB < dCA )
 			{
@@ -109,7 +110,7 @@ namespace EmEn::Libs::Math::Space3D
 		}
 
 		/* NOTE: Compare the final distance to the radius of the sphere. */
-		return Vector< 3, precision_t >::distanceSquared(S, closestPoint) <= sphere.squaredRadius();
+		return Vector< 3, precision_t >::distanceSquared(position, closestPoint) <= sphere.squaredRadius();
 	}
 
 	/**
@@ -123,7 +124,8 @@ namespace EmEn::Libs::Math::Space3D
 	template< typename precision_t = float >
 	[[nodiscard]]
 	bool
-	isColliding (const Triangle< precision_t > & triangle, const Sphere< precision_t > & sphere, Vector< 3, precision_t > & minimumTranslationVector) noexcept requires (std::is_floating_point_v< precision_t >)
+	isColliding (const Triangle< precision_t > & triangle, const Sphere< precision_t > & sphere, Vector< 3, precision_t > & minimumTranslationVector) noexcept
+		requires (std::is_floating_point_v< precision_t >)
 	{
 		if ( !triangle.isValid() || !sphere.isValid() )
 		{
@@ -153,18 +155,18 @@ namespace EmEn::Libs::Math::Space3D
 		};
 
 		const auto & triPoints = triangle.points();
-		const auto & A = triPoints[0];
-		const auto & B = triPoints[1];
-		const auto & C = triPoints[2];
-		const auto & S = sphere.position();
+		const auto & pointA = triPoints[0];
+		const auto & pointB = triPoints[1];
+		const auto & pointC = triPoints[2];
+		const auto & position = sphere.position();
 
-		const auto normal = Vector< 3, precision_t >::normal(A, B, C);
-		const auto distanceToPlane = Vector< 3, precision_t >::dotProduct(S - A, normal);
-		const auto pointOnPlane = S - (normal * distanceToPlane);
+		const auto normal = Vector< 3, precision_t >::normal(pointA, pointB, pointC);
+		const auto distanceToPlane = Vector< 3, precision_t >::dotProduct(position - pointA, normal);
+		const auto pointOnPlane = position - (normal * distanceToPlane);
 
-		const auto c1 = Vector< 3, precision_t >::dotProduct(Vector< 3, precision_t >::crossProduct(B - A, pointOnPlane - A), normal);
-		const auto c2 = Vector< 3, precision_t >::dotProduct(Vector< 3, precision_t >::crossProduct(C - B, pointOnPlane - B), normal);
-		const auto c3 = Vector< 3, precision_t >::dotProduct(Vector< 3, precision_t >::crossProduct(A - C, pointOnPlane - C), normal);
+		const auto c1 = Vector< 3, precision_t >::dotProduct(Vector< 3, precision_t >::crossProduct(pointB - pointA, pointOnPlane - pointA), normal);
+		const auto c2 = Vector< 3, precision_t >::dotProduct(Vector< 3, precision_t >::crossProduct(pointC - pointB, pointOnPlane - pointB), normal);
+		const auto c3 = Vector< 3, precision_t >::dotProduct(Vector< 3, precision_t >::crossProduct(pointA - pointC, pointOnPlane - pointC), normal);
 
 		Point< precision_t > closestPoint;
 
@@ -174,13 +176,13 @@ namespace EmEn::Libs::Math::Space3D
 		}
 		else
 		{
-			const auto pAB = closestPointOnSegment(S, A, B);
-			const auto pBC = closestPointOnSegment(S, B, C);
-			const auto pCA = closestPointOnSegment(S, C, A);
+			const auto pAB = closestPointOnSegment(position, pointA, pointB);
+			const auto pBC = closestPointOnSegment(position, pointB, pointC);
+			const auto pCA = closestPointOnSegment(position, pointC, pointA);
 
-			const auto dAB = Vector< 3, precision_t >::distanceSquared(S, pAB);
-			const auto dBC = Vector< 3, precision_t >::distanceSquared(S, pBC);
-			const auto dCA = Vector< 3, precision_t >::distanceSquared(S, pCA);
+			const auto dAB = Vector< 3, precision_t >::distanceSquared(position, pAB);
+			const auto dBC = Vector< 3, precision_t >::distanceSquared(position, pBC);
+			const auto dCA = Vector< 3, precision_t >::distanceSquared(position, pCA);
 
 			if ( dAB < dBC && dAB < dCA )
 			{
@@ -198,7 +200,7 @@ namespace EmEn::Libs::Math::Space3D
 
 		/* NOTE: End of search for the nearest point.
 		 * Calculate distance and check collision */
-		const auto delta = S - closestPoint;
+		const auto delta = position - closestPoint;
 		const auto distanceSq = delta.lengthSquared();
 
 		if ( distanceSq > sphere.squaredRadius() )
@@ -233,7 +235,8 @@ namespace EmEn::Libs::Math::Space3D
 	template< typename precision_t = float >
 	[[nodiscard]]
 	bool
-	isColliding (const Sphere< precision_t > & sphere, const Triangle< precision_t > & triangle) noexcept requires (std::is_floating_point_v< precision_t >)
+	isColliding (const Sphere< precision_t > & sphere, const Triangle< precision_t > & triangle) noexcept
+		requires (std::is_floating_point_v< precision_t >)
 	{
 		return isColliding(triangle, sphere);
 	}
@@ -250,7 +253,8 @@ namespace EmEn::Libs::Math::Space3D
 	template< typename precision_t = float >
 	[[nodiscard]]
 	bool
-	isColliding (const Sphere< precision_t > & sphere, const Triangle< precision_t > & triangle, Vector< 3, precision_t > & minimumTranslationVector) noexcept requires (std::is_floating_point_v< precision_t >)
+	isColliding (const Sphere< precision_t > & sphere, const Triangle< precision_t > & triangle, Vector< 3, precision_t > & minimumTranslationVector) noexcept
+		requires (std::is_floating_point_v< precision_t >)
 	{
 		/* NOTE: isColliding(triangle, sphere, mtv) computes MTV to push triangle out of sphere.
 		 * We need the opposite: push sphere out of triangle, so we negate the MTV. */

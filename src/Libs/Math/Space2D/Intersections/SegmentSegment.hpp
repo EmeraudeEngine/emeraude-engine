@@ -43,7 +43,8 @@ namespace EmEn::Libs::Math::Space2D
 	template< typename precision_t = float >
 	[[nodiscard]]
 	bool
-	isIntersecting (const Segment< precision_t > & segmentA, const Segment< precision_t > & segmentB, Point< precision_t > & intersection) noexcept requires (std::is_floating_point_v< precision_t >)
+	isIntersecting (const Segment< precision_t > & segmentA, const Segment< precision_t > & segmentB, Point< precision_t > & intersection) noexcept
+		requires (std::is_floating_point_v< precision_t >)
 	{
 		/* NOTE: Direction vectors for each segment. */
 		const auto directionA = segmentA.endPoint() - segmentA.startPoint();
@@ -125,7 +126,8 @@ namespace EmEn::Libs::Math::Space2D
 	template< typename precision_t = float >
 	[[nodiscard]]
 	bool
-	isIntersecting (const Segment< precision_t > & segmentA, const Segment< precision_t > & segmentB) noexcept requires (std::is_floating_point_v< precision_t >)
+	isIntersecting (const Segment< precision_t > & segmentA, const Segment< precision_t > & segmentB) noexcept
+		requires (std::is_floating_point_v< precision_t >)
 	{
 		Point< precision_t > dummy;
 
