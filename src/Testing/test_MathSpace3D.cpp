@@ -238,7 +238,7 @@ TYPED_TEST(MathSpace3D, SphereDefaultConstructor)
 
 TYPED_TEST(MathSpace3D, SphereConstructorWithRadius)
 {
-	const Sphere< TypeParam > sphere{5.0};
+	const Sphere< TypeParam > sphere{static_cast< TypeParam >(5.0)};
 
 	ASSERT_EQ(sphere.position(), Point< TypeParam >(0, 0, 0));
 	ASSERT_NEAR(sphere.radius(), static_cast< TypeParam >(5.0), static_cast< TypeParam >(1e-5));
@@ -247,7 +247,7 @@ TYPED_TEST(MathSpace3D, SphereConstructorWithRadius)
 TYPED_TEST(MathSpace3D, SphereConstructorWithRadiusAndPosition)
 {
 	const Point< TypeParam > pos{10, 20, 30};
-	const Sphere< TypeParam > sphere{5.0, pos};
+	const Sphere< TypeParam > sphere{static_cast< TypeParam >(5.0), pos};
 
 	ASSERT_EQ(sphere.position(), pos);
 	ASSERT_NEAR(sphere.radius(), static_cast< TypeParam >(5.0), static_cast< TypeParam >(1e-5));
@@ -258,13 +258,13 @@ TYPED_TEST(MathSpace3D, SphereIsValid)
 	const Sphere< TypeParam > validSphere{5.0};
 	ASSERT_TRUE(validSphere.isValid());
 
-	const Sphere< TypeParam > invalidSphere{0.0};
+	const Sphere< TypeParam > invalidSphere{static_cast< TypeParam >(0.0)};
 	ASSERT_FALSE(invalidSphere.isValid());
 }
 
 TYPED_TEST(MathSpace3D, SphereSetPosition)
 {
-	Sphere< TypeParam > sphere{5.0};
+	Sphere< TypeParam > sphere{static_cast< TypeParam >(5.0)};
 	const Point< TypeParam > newPos{1, 2, 3};
 
 	sphere.setPosition(newPos);
@@ -274,18 +274,18 @@ TYPED_TEST(MathSpace3D, SphereSetPosition)
 
 TYPED_TEST(MathSpace3D, SphereSetRadius)
 {
-	Sphere< TypeParam > sphere{5.0};
+	Sphere< TypeParam > sphere{static_cast< TypeParam >(5.0)};
 
-	sphere.setRadius(10.0);
+	sphere.setRadius(static_cast< TypeParam >(10.0));
 
 	ASSERT_NEAR(sphere.radius(), static_cast< TypeParam >(10.0), static_cast< TypeParam >(1e-5));
 }
 
 TYPED_TEST(MathSpace3D, SphereSetRadiusNegative)
 {
-	Sphere< TypeParam > sphere{5.0};
+	Sphere< TypeParam > sphere{static_cast< TypeParam >(5.0)};
 
-	sphere.setRadius(-10.0);
+	sphere.setRadius(static_cast< TypeParam >(-10.0));
 
 	// Should take absolute value
 	ASSERT_NEAR(sphere.radius(), static_cast< TypeParam >(10.0), static_cast< TypeParam >(1e-5));
@@ -293,14 +293,14 @@ TYPED_TEST(MathSpace3D, SphereSetRadiusNegative)
 
 TYPED_TEST(MathSpace3D, SphereSquaredRadius)
 {
-	const Sphere< TypeParam > sphere{5.0};
+	const Sphere< TypeParam > sphere{static_cast< TypeParam >(5.0)};
 
 	ASSERT_NEAR(sphere.squaredRadius(), static_cast< TypeParam >(25.0), static_cast< TypeParam >(1e-5));
 }
 
 TYPED_TEST(MathSpace3D, SphereGetPerimeter)
 {
-	const Sphere< TypeParam > sphere{1.0};
+	const Sphere< TypeParam > sphere{static_cast< TypeParam >(1.0)};
 
 	// C = 2πr
 	ASSERT_NEAR(sphere.getPerimeter(), static_cast< TypeParam >(2.0) * std::numbers::pi_v< TypeParam >, static_cast< TypeParam >(1e-4));
@@ -308,7 +308,7 @@ TYPED_TEST(MathSpace3D, SphereGetPerimeter)
 
 TYPED_TEST(MathSpace3D, SphereGetArea)
 {
-	const Sphere< TypeParam > sphere{1.0};
+	const Sphere< TypeParam > sphere{static_cast< TypeParam >(1.0)};
 
 	// A = πr²
 	ASSERT_NEAR(sphere.getArea(), std::numbers::pi_v< TypeParam >, static_cast< TypeParam >(1e-4));
@@ -316,7 +316,7 @@ TYPED_TEST(MathSpace3D, SphereGetArea)
 
 TYPED_TEST(MathSpace3D, SphereGetVolume)
 {
-	const Sphere< TypeParam > sphere{1.0};
+	const Sphere< TypeParam > sphere{static_cast< TypeParam >(1.0)};
 
 	// V = 4/3 πr³
 	ASSERT_NEAR(sphere.getVolume(), static_cast< TypeParam >(4.0 / 3.0) * std::numbers::pi_v< TypeParam >, static_cast< TypeParam >(1e-4));
@@ -324,7 +324,7 @@ TYPED_TEST(MathSpace3D, SphereGetVolume)
 
 TYPED_TEST(MathSpace3D, SphereReset)
 {
-	Sphere< TypeParam > sphere{10.0, {1, 2, 3}};
+	Sphere< TypeParam > sphere{static_cast< TypeParam >(10.0), {1, 2, 3}};
 
 	sphere.reset();
 
@@ -334,8 +334,8 @@ TYPED_TEST(MathSpace3D, SphereReset)
 
 TYPED_TEST(MathSpace3D, SphereMergeContained)
 {
-	Sphere< TypeParam > sphere1{10.0, {0, 0, 0}};
-	const Sphere< TypeParam > sphere2{2.0, {1, 1, 1}};
+	Sphere< TypeParam > sphere1{static_cast< TypeParam >(10.0), {0, 0, 0}};
+	const Sphere< TypeParam > sphere2{static_cast< TypeParam >(2.0), {1, 1, 1}};
 
 	sphere1.merge(sphere2);
 
@@ -345,8 +345,8 @@ TYPED_TEST(MathSpace3D, SphereMergeContained)
 
 TYPED_TEST(MathSpace3D, SphereMergeDisjoint)
 {
-	Sphere< TypeParam > sphere1{1.0, {0, 0, 0}};
-	const Sphere< TypeParam > sphere2{1.0, {10, 0, 0}};
+	Sphere< TypeParam > sphere1{static_cast< TypeParam >(1.0), {0, 0, 0}};
+	const Sphere< TypeParam > sphere2{static_cast< TypeParam >(1.0), {10, 0, 0}};
 
 	sphere1.merge(sphere2);
 
@@ -470,7 +470,7 @@ TYPED_TEST(MathSpace3D, AACuboidDefaultConstructor)
 
 TYPED_TEST(MathSpace3D, AACuboidConstructorWithValue)
 {
-	const AACuboid< TypeParam > cuboid{5.0};
+	const AACuboid< TypeParam > cuboid{static_cast< TypeParam >(5.0)};
 
 	ASSERT_TRUE(cuboid.isValid());
 	ASSERT_EQ(cuboid.maximum(), Point< TypeParam >(5, 5, 5));
@@ -500,7 +500,7 @@ TYPED_TEST(MathSpace3D, AACuboidConstructorSwapsMaxMin)
 
 TYPED_TEST(MathSpace3D, AACuboidIsValid)
 {
-	const AACuboid< TypeParam > validCuboid{5.0};
+	const AACuboid< TypeParam > validCuboid{static_cast< TypeParam >(5.0)};
 	ASSERT_TRUE(validCuboid.isValid());
 
 	AACuboid< TypeParam > invalidCuboid;
@@ -511,7 +511,7 @@ TYPED_TEST(MathSpace3D, AACuboidSetValue)
 {
 	AACuboid< TypeParam > cuboid;
 
-	cuboid.set(10.0);
+	cuboid.set(static_cast< TypeParam >(10.0));
 
 	ASSERT_TRUE(cuboid.isValid());
 	ASSERT_EQ(cuboid.maximum(), Point< TypeParam >(10, 10, 10));
@@ -617,9 +617,9 @@ TYPED_TEST(MathSpace3D, AACuboidMergeXYZ)
 {
 	AACuboid< TypeParam > cuboid{{5, 5, 5}, {0, 0, 0}};
 
-	cuboid.mergeX(10.0);
-	cuboid.mergeY(-3.0);
-	cuboid.mergeZ(7.0);
+	cuboid.mergeX(static_cast< TypeParam >(10.0));
+	cuboid.mergeY(static_cast< TypeParam >(-3.0));
+	cuboid.mergeZ(static_cast< TypeParam >(7.0));
 
 	ASSERT_EQ(cuboid.maximum(), Point< TypeParam >(10, 5, 7));
 	ASSERT_EQ(cuboid.minimum(), Point< TypeParam >(0, -3, 0));

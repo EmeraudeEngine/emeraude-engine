@@ -221,7 +221,7 @@ TYPED_TEST(MathSpace2D, SegmentReset)
 
 TYPED_TEST(MathSpace2D, CircleDefaultConstructor)
 {
-	const Circle< TypeParam > circle{0.0};
+	const Circle< TypeParam > circle{static_cast< TypeParam >(0.0)};
 
 	ASSERT_EQ(circle.position(), Point< TypeParam >(0, 0));
 	ASSERT_EQ(circle.radius(), TypeParam{0});
@@ -229,7 +229,7 @@ TYPED_TEST(MathSpace2D, CircleDefaultConstructor)
 
 TYPED_TEST(MathSpace2D, CircleConstructorWithRadius)
 {
-	const Circle< TypeParam > circle{5.0};
+	const Circle< TypeParam > circle{static_cast< TypeParam >(5.0)};
 
 	ASSERT_EQ(circle.position(), Point< TypeParam >(0, 0));
 	ASSERT_NEAR(circle.radius(), static_cast< TypeParam >(5.0), static_cast< TypeParam >(1e-5));
@@ -238,7 +238,7 @@ TYPED_TEST(MathSpace2D, CircleConstructorWithRadius)
 TYPED_TEST(MathSpace2D, CircleConstructorWithRadiusAndPosition)
 {
 	const Point< TypeParam > pos{10, 20};
-	const Circle< TypeParam > circle{5.0, pos};
+	const Circle< TypeParam > circle{static_cast< TypeParam >(5.0), pos};
 
 	ASSERT_EQ(circle.position(), pos);
 	ASSERT_NEAR(circle.radius(), static_cast< TypeParam >(5.0), static_cast< TypeParam >(1e-5));
@@ -249,13 +249,13 @@ TYPED_TEST(MathSpace2D, CircleIsValid)
 	const Circle< TypeParam > validCircle{5.0};
 	ASSERT_TRUE(validCircle.isValid());
 
-	const Circle< TypeParam > invalidCircle{0.0};
+	const Circle< TypeParam > invalidCircle{static_cast< TypeParam >(0.0)};
 	ASSERT_FALSE(invalidCircle.isValid());
 }
 
 TYPED_TEST(MathSpace2D, CircleSetPosition)
 {
-	Circle< TypeParam > circle{5.0};
+	Circle< TypeParam > circle{static_cast< TypeParam >(5.0)};
 	const Point< TypeParam > newPos{1, 2};
 
 	circle.setPosition(newPos);
@@ -265,18 +265,18 @@ TYPED_TEST(MathSpace2D, CircleSetPosition)
 
 TYPED_TEST(MathSpace2D, CircleSetRadius)
 {
-	Circle< TypeParam > circle{5.0};
+	Circle< TypeParam > circle{static_cast< TypeParam >(5.0)};
 
-	circle.setRadius(10.0);
+	circle.setRadius(static_cast< TypeParam >(10.0));
 
 	ASSERT_NEAR(circle.radius(), static_cast< TypeParam >(10.0), static_cast< TypeParam >(1e-5));
 }
 
 TYPED_TEST(MathSpace2D, CircleSetRadiusNegative)
 {
-	Circle< TypeParam > circle{5.0};
+	Circle< TypeParam > circle{static_cast< TypeParam >(5.0)};
 
-	circle.setRadius(-10.0);
+	circle.setRadius(static_cast< TypeParam >(-10.0));
 
 	// Should take absolute value
 	ASSERT_NEAR(circle.radius(), static_cast< TypeParam >(10.0), static_cast< TypeParam >(1e-5));
@@ -284,14 +284,14 @@ TYPED_TEST(MathSpace2D, CircleSetRadiusNegative)
 
 TYPED_TEST(MathSpace2D, CircleSquaredRadius)
 {
-	const Circle< TypeParam > circle{5.0};
+	const Circle< TypeParam > circle{static_cast< TypeParam >(5.0)};
 
 	ASSERT_NEAR(circle.squaredRadius(), static_cast< TypeParam >(25.0), static_cast< TypeParam >(1e-5));
 }
 
 TYPED_TEST(MathSpace2D, CircleGetPerimeter)
 {
-	const Circle< TypeParam > circle{1.0};
+	const Circle< TypeParam > circle{static_cast< TypeParam >(1.0)};
 
 	// C = 2πr
 	ASSERT_NEAR(circle.getPerimeter(), static_cast< TypeParam >(2.0) * std::numbers::pi_v< TypeParam >, static_cast< TypeParam >(1e-4));
@@ -299,7 +299,7 @@ TYPED_TEST(MathSpace2D, CircleGetPerimeter)
 
 TYPED_TEST(MathSpace2D, CircleGetArea)
 {
-	const Circle< TypeParam > circle{1.0};
+	const Circle< TypeParam > circle{static_cast< TypeParam >(1.0)};
 
 	// A = πr²
 	ASSERT_NEAR(circle.getArea(), std::numbers::pi_v< TypeParam >, static_cast< TypeParam >(1e-4));
@@ -307,7 +307,7 @@ TYPED_TEST(MathSpace2D, CircleGetArea)
 
 TYPED_TEST(MathSpace2D, CircleReset)
 {
-	Circle< TypeParam > circle{10.0, {1, 2}};
+	Circle< TypeParam > circle{static_cast< TypeParam >(10.0), {1, 2}};
 
 	circle.reset();
 
@@ -422,7 +422,7 @@ TYPED_TEST(MathSpace2D, AARectangleDefaultConstructor)
 
 TYPED_TEST(MathSpace2D, AARectangleConstructorWithDimensions)
 {
-	const AARectangle< TypeParam > rect{10.0, 20.0};
+	const AARectangle< TypeParam > rect{static_cast< TypeParam >(10.0), static_cast< TypeParam >(20.0)};
 
 	ASSERT_TRUE(rect.isValid());
 	ASSERT_NEAR(rect.width(), static_cast< TypeParam >(10.0), static_cast< TypeParam >(1e-5));
@@ -431,7 +431,7 @@ TYPED_TEST(MathSpace2D, AARectangleConstructorWithDimensions)
 
 TYPED_TEST(MathSpace2D, AARectangleConstructorWithPositionAndDimensions)
 {
-	const AARectangle< TypeParam > rect{5.0, 10.0, 20.0, 30.0};
+	const AARectangle< TypeParam > rect{static_cast< TypeParam >(5.0), static_cast< TypeParam >(10.0), static_cast< TypeParam >(20.0), static_cast< TypeParam >(30.0)};
 
 	ASSERT_TRUE(rect.isValid());
 	ASSERT_NEAR(rect.left(), static_cast< TypeParam >(5.0), static_cast< TypeParam >(1e-5));
@@ -442,16 +442,16 @@ TYPED_TEST(MathSpace2D, AARectangleConstructorWithPositionAndDimensions)
 
 TYPED_TEST(MathSpace2D, AARectangleIsValid)
 {
-	const AARectangle< TypeParam > validRect{10.0, 20.0};
+	const AARectangle< TypeParam > validRect{static_cast< TypeParam >(10.0), static_cast< TypeParam >(20.0)};
 	ASSERT_TRUE(validRect.isValid());
 
-	const AARectangle< TypeParam > invalidRect{0.0, 0.0};
+	const AARectangle< TypeParam > invalidRect{static_cast< TypeParam >(0.0), static_cast< TypeParam >(0.0)};
 	ASSERT_FALSE(invalidRect.isValid());
 }
 
 TYPED_TEST(MathSpace2D, AARectangleGetArea)
 {
-	const AARectangle< TypeParam > rect{10.0, 20.0};
+	const AARectangle< TypeParam > rect{static_cast< TypeParam >(10.0), static_cast< TypeParam >(20.0)};
 
 	ASSERT_NEAR(rect.getArea(), static_cast< TypeParam >(200.0), static_cast< TypeParam >(1e-5));
 }
@@ -459,7 +459,7 @@ TYPED_TEST(MathSpace2D, AARectangleGetArea)
 TYPED_TEST(MathSpace2D, AARectangleConstructorSwapsMaxMin)
 {
 	// Constructor should handle inverted coordinates
-	const AARectangle< TypeParam > rect{10.0, 10.0, -5.0, -5.0};
+	const AARectangle< TypeParam > rect{static_cast< TypeParam >(10.0), static_cast< TypeParam >(10.0), static_cast< TypeParam >(-5.0), static_cast< TypeParam >(-5.0)};
 
 	// Negative dimensions should result in 0
 	ASSERT_NEAR(rect.width(), static_cast< TypeParam >(0.0), static_cast< TypeParam >(1e-5));
@@ -468,7 +468,7 @@ TYPED_TEST(MathSpace2D, AARectangleConstructorSwapsMaxMin)
 
 TYPED_TEST(MathSpace2D, AARectangleCornerPoints)
 {
-	const AARectangle< TypeParam > rect{10.0, 20.0, 30.0, 40.0};
+	const AARectangle< TypeParam > rect{static_cast< TypeParam >(10.0), static_cast< TypeParam >(20.0), static_cast< TypeParam >(30.0), static_cast< TypeParam >(40.0)};
 
 	const auto corners = rect.points();
 
@@ -496,8 +496,8 @@ TYPED_TEST(MathSpace2D, AARectangleCornerPoints)
 
 TYPED_TEST(MathSpace2D, AARectangleMergeWithRectangle)
 {
-	AARectangle< TypeParam > rect1{0.0, 0.0, 10.0, 10.0};
-	const AARectangle< TypeParam > rect2{5.0, 5.0, 15.0, 15.0};
+	AARectangle< TypeParam > rect1{static_cast< TypeParam >(0.0), static_cast< TypeParam >(0.0), static_cast< TypeParam >(10.0), static_cast< TypeParam >(10.0)};
+	const AARectangle< TypeParam > rect2{static_cast< TypeParam >(5.0), static_cast< TypeParam >(5.0), static_cast< TypeParam >(15.0), static_cast< TypeParam >(15.0)};
 
 	rect1.merge(rect2);
 
@@ -511,7 +511,7 @@ TYPED_TEST(MathSpace2D, AARectangleMergeWithRectangle)
 
 TYPED_TEST(MathSpace2D, AARectangleReset)
 {
-	AARectangle< TypeParam > rect{10.0, 20.0, 30.0, 40.0};
+	AARectangle< TypeParam > rect{static_cast< TypeParam >(10.0), static_cast< TypeParam >(20.0), static_cast< TypeParam >(30.0), static_cast< TypeParam >(40.0)};
 
 	rect.reset();
 

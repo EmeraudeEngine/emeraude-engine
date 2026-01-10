@@ -1163,7 +1163,7 @@ TYPED_TEST(MathMatrix, OrthographicProjection)
 {
 	if constexpr ( !std::is_integral_v< TypeParam > )
 	{
-		const auto projection = Matrix< 4, TypeParam >::orthographicProjection(-10, 10, -10, 10, 0.1, 100);
+		const auto projection = Matrix< 4, TypeParam >::orthographicProjection(-10, 10, -10, 10, static_cast< TypeParam >(0.1), static_cast< TypeParam >(100));
 
 		// Test point in the middle of the frustum
 		const Vector< 4, TypeParam > point{0, 0, -50, 1};
@@ -1187,7 +1187,7 @@ TYPED_TEST(MathMatrix, PerspectiveProjection)
 	{
 		const auto fov = std::numbers::pi_v< TypeParam > / 2; // 90° FOV
 		const auto aspectRatio = static_cast< TypeParam >(16.0 / 9.0);
-		const auto projection = Matrix< 4, TypeParam >::perspectiveProjection(fov, aspectRatio, 0.1, 100);
+		const auto projection = Matrix< 4, TypeParam >::perspectiveProjection(fov, aspectRatio, static_cast< TypeParam >(0.1), static_cast< TypeParam >(100));
 
 		// Test that the projection matrix exists and is not degenerate
 		const auto det = projection.determinant();

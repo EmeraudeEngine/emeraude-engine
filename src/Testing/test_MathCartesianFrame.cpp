@@ -190,14 +190,14 @@ TYPED_TEST(MathCartesianFrame, CartesianFrameTransformation)
 	{
 		/* Check scaling. */
 		{
-			constexpr auto Reference = Matrix< 4, TypeParam >{{2.0, 0.0, 0.0, 0.0,
-															   0.0, 2.0, 0.0, 0.0,
-															   0.0, 0.0, 2.0, 0.0,
-															   1.2, -1.3, 3.2, 1.0}};
+			constexpr auto Reference = Matrix< 4, TypeParam >{{static_cast< TypeParam >(2.0), static_cast< TypeParam >(0.0), static_cast< TypeParam >(0.0), static_cast< TypeParam >(0.0),
+															   static_cast< TypeParam >(0.0), static_cast< TypeParam >(2.0), static_cast< TypeParam >(0.0), static_cast< TypeParam >(0.0),
+															   static_cast< TypeParam >(0.0), static_cast< TypeParam >(0.0), static_cast< TypeParam >(2.0), static_cast< TypeParam >(0.0),
+															   static_cast< TypeParam >(1.2), static_cast< TypeParam >(-1.3), static_cast< TypeParam >(3.2), static_cast< TypeParam >(1.0)}};
 
 			auto cartesianFrame = CartesianFrame< TypeParam >{};
-			cartesianFrame.setPosition(1.2, -1.3, 3.2);
-			cartesianFrame.setScalingFactor(2.0);
+			cartesianFrame.setPosition(static_cast< TypeParam >(1.2), static_cast< TypeParam >(-1.3), static_cast< TypeParam >(3.2));
+			cartesianFrame.setScalingFactor(static_cast< TypeParam >(2.0));
 
 			const auto modelMatrixA = cartesianFrame.getModelMatrix();
 
@@ -209,13 +209,13 @@ TYPED_TEST(MathCartesianFrame, CartesianFrameTransformation)
 		}
 
 		{
-			constexpr auto Reference = Matrix< 4, TypeParam >{{2.0, 0.0, 0.0, 0.0,
-															   0.0, 2.0, 0.0, 0.0,
-															   0.0, 0.0, 2.0, 0.0,
-															   0.0, -2.6, 0.0, 1.0}};
+			constexpr auto Reference = Matrix< 4, TypeParam >{{static_cast< TypeParam >(2.0), static_cast< TypeParam >(0.0), static_cast< TypeParam >(0.0), static_cast< TypeParam >(0.0),
+															   static_cast< TypeParam >(0.0), static_cast< TypeParam >(2.0), static_cast< TypeParam >(0.0), static_cast< TypeParam >(0.0),
+															   static_cast< TypeParam >(0.0), static_cast< TypeParam >(0.0), static_cast< TypeParam >(2.0), static_cast< TypeParam >(0.0),
+															   static_cast< TypeParam >(0.0), static_cast< TypeParam >(-2.6), static_cast< TypeParam >(0.0), static_cast< TypeParam >(1.0)}};
 
-			const auto frameA = CartesianFrame< TypeParam >{Vector< 3, TypeParam >{0.0, -1.5, 0.0}, 2.0};
-			const auto frameB = CartesianFrame< TypeParam >{0.0, -0.55, 0.0};
+			const auto frameA = CartesianFrame< TypeParam >{Vector< 3, TypeParam >{static_cast< TypeParam >(0.0), static_cast< TypeParam >(-1.5), static_cast< TypeParam >(0.0)}, static_cast< TypeParam >(2.0)};
+			const auto frameB = CartesianFrame< TypeParam >{static_cast< TypeParam >(0.0), static_cast< TypeParam >(-0.55), static_cast< TypeParam >(0.0)};
 			const auto modelMatrix = frameA.getModelMatrix() * frameB.getModelMatrix();
 			const auto scaling = frameA.scalingFactor() * frameB.scalingFactor();
 
@@ -236,7 +236,7 @@ TYPED_TEST(MathCartesianFrame, CartesianFrameTransformation)
 
 TYPED_TEST(MathCartesianFrame, ConstructorWithPosition)
 {
-	const Vector< 3, TypeParam > pos{1.5, 2.5, 3.5};
+	const Vector< 3, TypeParam > pos{static_cast< TypeParam >(1.5), static_cast< TypeParam >(2.5), static_cast< TypeParam >(3.5)};
 	const auto frame = CartesianFrame< TypeParam >{pos};
 
 	ASSERT_EQ(frame.position(), pos);
@@ -247,8 +247,8 @@ TYPED_TEST(MathCartesianFrame, ConstructorWithPosition)
 
 TYPED_TEST(MathCartesianFrame, ConstructorWithPositionAndScaling)
 {
-	const Vector< 3, TypeParam > pos{1.0, 2.0, 3.0};
-	const TypeParam scale = 2.5;
+	const Vector< 3, TypeParam > pos{static_cast< TypeParam >(1.0), static_cast< TypeParam >(2.0), static_cast< TypeParam >(3.0)};
+	const TypeParam scale = static_cast< TypeParam >(2.5);
 	const auto frame = CartesianFrame< TypeParam >{pos, scale};
 
 	ASSERT_EQ(frame.position(), pos);
@@ -279,11 +279,11 @@ TYPED_TEST(MathCartesianFrame, ConstructorFromMatrix)
 	{
 		// Create a known model matrix (translation + rotation)
 		auto originalFrame = CartesianFrame< TypeParam >{};
-		originalFrame.setPosition(1.0, 2.0, 3.0);
+		originalFrame.setPosition(static_cast< TypeParam >(1.0), static_cast< TypeParam >(2.0), static_cast< TypeParam >(3.0));
 		originalFrame.yaw(Radian< TypeParam >(45), true);
 
 		const auto modelMatrix = originalFrame.getModelMatrix();
-		const auto scale = Vector< 3, TypeParam >{2.0, 2.0, 2.0};
+		const auto scale = Vector< 3, TypeParam >{static_cast< TypeParam >(2.0), static_cast< TypeParam >(2.0), static_cast< TypeParam >(2.0)};
 
 		// Reconstruct frame from matrix
 		const auto rebuiltFrame = CartesianFrame< TypeParam >{modelMatrix, scale};
@@ -297,10 +297,10 @@ TYPED_TEST(MathCartesianFrame, ConstructorFromMatrix)
 
 TYPED_TEST(MathCartesianFrame, ConstructorWithVectors)
 {
-	const Vector< 3, TypeParam > pos{1.0, 2.0, 3.0};
-	const Vector< 3, TypeParam > down{0.0, 1.0, 0.0};
-	const Vector< 3, TypeParam > back{0.0, 0.0, 1.0};
-	const Vector< 3, TypeParam > scale{2.0, 3.0, 4.0};
+	const Vector< 3, TypeParam > pos{static_cast< TypeParam >(1.0), static_cast< TypeParam >(2.0), static_cast< TypeParam >(3.0)};
+	const Vector< 3, TypeParam > down{static_cast< TypeParam >(0.0), static_cast< TypeParam >(1.0), static_cast< TypeParam >(0.0)};
+	const Vector< 3, TypeParam > back{static_cast< TypeParam >(0.0), static_cast< TypeParam >(0.0), static_cast< TypeParam >(1.0)};
+	const Vector< 3, TypeParam > scale{static_cast< TypeParam >(2.0), static_cast< TypeParam >(3.0), static_cast< TypeParam >(4.0)};
 
 	const auto frame = CartesianFrame< TypeParam >{pos, down, back, scale};
 
@@ -317,7 +317,7 @@ TYPED_TEST(MathCartesianFrame, ConstructorWithVectors)
 TYPED_TEST(MathCartesianFrame, SetPosition)
 {
 	auto frame = CartesianFrame< TypeParam >{};
-	const Vector< 3, TypeParam > newPos{10.0, 20.0, 30.0};
+	const Vector< 3, TypeParam > newPos{static_cast< TypeParam >(10.0), static_cast< TypeParam >(20.0), static_cast< TypeParam >(30.0)};
 
 	frame.setPosition(newPos);
 
@@ -358,14 +358,14 @@ TYPED_TEST(MathCartesianFrame, SetUniformScaling)
 
 	frame.setScalingFactor(static_cast< TypeParam >(3.0));
 
-	const Vector< 3, TypeParam > expectedScale{3.0, 3.0, 3.0};
+	const Vector< 3, TypeParam > expectedScale{static_cast< TypeParam >(3.0), static_cast< TypeParam >(3.0), static_cast< TypeParam >(3.0)};
 	ASSERT_EQ(frame.scalingFactor(), expectedScale);
 }
 
 TYPED_TEST(MathCartesianFrame, SetScalingVector)
 {
 	auto frame = CartesianFrame< TypeParam >{};
-	const Vector< 3, TypeParam > scale{2.0, 3.0, 4.0};
+	const Vector< 3, TypeParam > scale{static_cast< TypeParam >(2.0), static_cast< TypeParam >(3.0), static_cast< TypeParam >(4.0)};
 
 	frame.setScalingFactor(scale);
 
