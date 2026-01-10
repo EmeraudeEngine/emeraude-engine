@@ -260,10 +260,10 @@ TEST(String, toNumber)
 	ASSERT_EQ(String::toNumber< uint32_t >("4294967295"), std::numeric_limits< uint32_t >::max());
 
 	/* Check 64-bit integers. */
-	ASSERT_EQ(String::toNumber< long int >("-9223372036854775808"), std::numeric_limits< long int >::lowest());
-	ASSERT_EQ(String::toNumber< long int >("9223372036854775807"), std::numeric_limits< long int >::max());
-	ASSERT_EQ(String::toNumber< unsigned long int >("0"), std::numeric_limits< unsigned long int >::lowest());
-	ASSERT_EQ(String::toNumber< unsigned long int >("18446744073709551615"), std::numeric_limits< unsigned long int >::max());
+	ASSERT_EQ(String::toNumber< long long >("-9223372036854775808"), std::numeric_limits< long long >::lowest());
+	ASSERT_EQ(String::toNumber< long long >("9223372036854775807"), std::numeric_limits< long long >::max());
+	ASSERT_EQ(String::toNumber< unsigned long long >("0"), std::numeric_limits< unsigned long long >::lowest());
+	ASSERT_EQ(String::toNumber< unsigned long long >("18446744073709551615"), std::numeric_limits< unsigned long long >::max());
 	ASSERT_EQ(String::toNumber< int64_t >("-9223372036854775808"), std::numeric_limits< int64_t >::lowest());
 	ASSERT_EQ(String::toNumber< int64_t >("9223372036854775807"), std::numeric_limits< int64_t >::max());
 	ASSERT_EQ(String::toNumber< uint64_t >("0"), std::numeric_limits< uint64_t >::lowest());
