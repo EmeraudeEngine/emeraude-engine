@@ -1536,7 +1536,7 @@ TYPED_TEST(MathSpace3D, CollisionTriangleVeryCloseButNotTouching)
 	 * @test Tests numerical precision when triangles are very close but not touching.
 	 */
 	const Triangle< TypeParam > tri1{{0, 0, 0}, {5, 0, 0}, {2.5, 5, 0}};
-	const Triangle< TypeParam > tri2{{0, 0, 0.001}, {5, 0, 0.001}, {2.5, 5, 0.001}};
+	const Triangle< TypeParam > tri2{{0, 0, static_cast< TypeParam >(0.001F)}, {5, 0, static_cast< TypeParam >(0.001F)}, {2.5, 5, static_cast< TypeParam >(0.001F)}};
 
 	// Triangles are 0.001 units apart - should not be colliding
 	[[maybe_unused]] const bool result = isColliding(tri1, tri2);
@@ -1561,7 +1561,7 @@ TYPED_TEST(MathSpace3D, CollisionSphereVeryCloseButNotTouching)
 	 * @test Tests numerical stability with nearly touching spheres.
 	 */
 	const Sphere< TypeParam > sphere1{5.0, {0, 0, 0}};
-	const Sphere< TypeParam > sphere2{5.0, {10.001, 0, 0}};
+	const Sphere< TypeParam > sphere2{static_cast< TypeParam >(5.0), {static_cast< TypeParam >(10.001F), 0, 0}};
 
 	// Spheres are 0.001 units apart
 	const bool result = isColliding(sphere1, sphere2);

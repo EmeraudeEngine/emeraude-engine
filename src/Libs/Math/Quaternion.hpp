@@ -43,7 +43,7 @@ namespace EmEn::Libs::Math
 	 * @brief Class defining a Quaternion.
 	 */
 	template< typename precision_t = float >
-	requires (std::is_floating_point_v< precision_t >)
+		requires(std::is_floating_point_v< precision_t >)
 	class Quaternion final
 	{
 		public:
@@ -58,19 +58,15 @@ namespace EmEn::Libs::Math
 			/**
 			 * @brief Constructs a default quaternion.
 			 */
-			constexpr
-			Quaternion () noexcept = default;
+			constexpr Quaternion () noexcept = default;
 
 			/**
 			 * @brief Constructs a quaternion from an STL array.
 			 * @param data A reference to an array.
 			 */
-			explicit
-			constexpr
-			Quaternion (const std::array< precision_t, 4 > & data) noexcept
+			explicit constexpr Quaternion (const std::array< precision_t, 4 > & data) noexcept
 				: m_data(data)
 			{
-
 			}
 
 			/**
@@ -80,11 +76,9 @@ namespace EmEn::Libs::Math
 			 * @param z
 			 * @param w
 			 */
-			constexpr
-			Quaternion (precision_t x, precision_t y, precision_t z, precision_t w) noexcept
+			constexpr Quaternion (precision_t x, precision_t y, precision_t z, precision_t w) noexcept
 				: m_data{x, y, z, w}
 			{
-
 			}
 
 			/**
@@ -102,8 +96,7 @@ namespace EmEn::Libs::Math
 			 * @brief Constructs a quaternion from euler's angle.
 			 * @param vector A reference to a vector of angles X/Y/Z expressed in radians.
 			 */
-			explicit
-			Quaternion (const Vector< 3, precision_t > & vector)
+			explicit Quaternion (const Vector< 3, precision_t > & vector)
 			{
 				this->setFromEulerAngles(vector);
 			}
@@ -113,32 +106,25 @@ namespace EmEn::Libs::Math
 			 * @param vector A reference to a vector.
 			 * @param real
 			 */
-			explicit
-			constexpr
-			Quaternion (const Vector< 3, precision_t > & vector, precision_t real) noexcept
+			explicit constexpr Quaternion (const Vector< 3, precision_t > & vector, precision_t real) noexcept
 				: m_data{vector[X], vector[Y], vector[Z], real}
 			{
-
 			}
 
 			/**
 			 * @brief Constructs a quaternion from vector 4.
 			 * @param vector A reference to a vector.
 			 */
-			explicit
-			constexpr
-			Quaternion (const Vector< 4, precision_t > & vector) noexcept
+			explicit constexpr Quaternion (const Vector< 4, precision_t > & vector) noexcept
 				: m_data{vector[X], vector[Y], vector[Z], vector[W]}
 			{
-
 			}
 
 			/**
 			 * @brief Constructs a quaternion from matrix.
 			 * @param matrix A reference to a matrix.
 			 */
-			explicit
-			Quaternion (const Matrix< 4, precision_t > & matrix)
+			explicit Quaternion (const Matrix< 4, precision_t > & matrix)
 			{
 				*this = matrix;
 			}
@@ -162,8 +148,7 @@ namespace EmEn::Libs::Math
 						(matrix[6] - matrix[9]) / scale,
 						(matrix[8] - matrix[2]) / scale,
 						(matrix[1] - matrix[4]) / scale,
-						static_cast< precision_t >(0.25) * scale
-					};
+						static_cast< precision_t >(0.25) * scale};
 				}
 				else
 				{
@@ -176,8 +161,7 @@ namespace EmEn::Libs::Math
 							static_cast< precision_t >(0.25) * scale,
 							(matrix[4] + matrix[1]) / scale,
 							(matrix[2] + matrix[8]) / scale,
-							(matrix[6] - matrix[9]) / scale
-						};
+							(matrix[6] - matrix[9]) / scale};
 					}
 					else if ( matrix[5] > matrix[10] )
 					{
@@ -188,8 +172,7 @@ namespace EmEn::Libs::Math
 							(matrix[4] + matrix[1]) / scale,
 							static_cast< precision_t >(0.25) * scale,
 							(matrix[9] + matrix[6]) / scale,
-							(matrix[8] - matrix[2]) / scale
-						};
+							(matrix[8] - matrix[2]) / scale};
 					}
 					else
 					{
@@ -200,8 +183,7 @@ namespace EmEn::Libs::Math
 							(matrix[8] + matrix[2]) / scale,
 							(matrix[9] + matrix[6]) / scale,
 							static_cast< precision_t >(0.25) * scale,
-							(matrix[1] - matrix[4]) / scale
-						};
+							(matrix[1] - matrix[4]) / scale};
 					}
 				}
 
@@ -215,8 +197,7 @@ namespace EmEn::Libs::Math
 			 * @return Quaternion
 			 */
 			[[nodiscard]]
-			constexpr
-			Quaternion
+			constexpr Quaternion
 			operator+ () const noexcept
 			{
 				return *this;
@@ -227,8 +208,7 @@ namespace EmEn::Libs::Math
 			 * @return Quaternion
 			 */
 			[[nodiscard]]
-			constexpr
-			Quaternion
+			constexpr Quaternion
 			operator- () const
 			{
 				return {-m_data[X], -m_data[Y], -m_data[Z], -m_data[W]};
@@ -267,9 +247,9 @@ namespace EmEn::Libs::Math
 			operator== (const Quaternion & operand) const noexcept
 			{
 				return Utility::equal(m_data[X], operand.m_data[X]) &&
-					   Utility::equal(m_data[Y], operand.m_data[Y]) &&
-					   Utility::equal(m_data[Z], operand.m_data[Z]) &&
-					   Utility::equal(m_data[W], operand.m_data[W]);
+					Utility::equal(m_data[Y], operand.m_data[Y]) &&
+					Utility::equal(m_data[Z], operand.m_data[Z]) &&
+					Utility::equal(m_data[W], operand.m_data[W]);
 			}
 
 			/**
@@ -281,7 +261,7 @@ namespace EmEn::Libs::Math
 			bool
 			operator!= (const Quaternion & operand) const noexcept
 			{
-				return !this->operator==(operand);
+				return !this->operator== (operand);
 			}
 
 			/**
@@ -290,16 +270,14 @@ namespace EmEn::Libs::Math
 			 * @return Quaternion
 			 */
 			[[nodiscard]]
-			constexpr
-			Quaternion
+			constexpr Quaternion
 			operator+ (const Quaternion & operand) const noexcept
 			{
 				return {
 					m_data[X] + operand.m_data[X],
 					m_data[Y] + operand.m_data[Y],
 					m_data[Z] + operand.m_data[Z],
-					m_data[W] + operand.m_data[W]
-				};
+					m_data[W] + operand.m_data[W]};
 			}
 
 			/**
@@ -307,8 +285,7 @@ namespace EmEn::Libs::Math
 			 * @param operand A reference to another quaternion.
 			 * @return Quaternion &
 			 */
-			constexpr
-			Quaternion &
+			constexpr Quaternion &
 			operator+= (const Quaternion & operand) noexcept
 			{
 				if ( this != &operand )
@@ -328,16 +305,14 @@ namespace EmEn::Libs::Math
 			 * @return Quaternion
 			 */
 			[[nodiscard]]
-			constexpr
-			Quaternion
+			constexpr Quaternion
 			operator- (const Quaternion & operand) const noexcept
 			{
 				return {
 					m_data[X] - operand.m_data[X],
 					m_data[Y] - operand.m_data[Y],
 					m_data[Z] - operand.m_data[Z],
-					m_data[W] - operand.m_data[W]
-				};
+					m_data[W] - operand.m_data[W]};
 			}
 
 			/**
@@ -345,8 +320,7 @@ namespace EmEn::Libs::Math
 			 * @param operand A reference to another quaternion.
 			 * @return Quaternion &
 			 */
-			constexpr
-			Quaternion &
+			constexpr Quaternion &
 			operator-= (const Quaternion & operand) noexcept
 			{
 				if ( this != &operand )
@@ -366,8 +340,7 @@ namespace EmEn::Libs::Math
 			 * @return Quaternion
 			 */
 			[[nodiscard]]
-			constexpr
-			Quaternion
+			constexpr Quaternion
 			operator* (const Quaternion & operand) const noexcept
 			{
 				return Quaternion::product(*this, operand);
@@ -379,16 +352,14 @@ namespace EmEn::Libs::Math
 			 * @return Quaternion
 			 */
 			[[nodiscard]]
-			constexpr
-			Quaternion
+			constexpr Quaternion
 			operator* (precision_t operand) const noexcept
 			{
 				return {
 					m_data[X] * operand,
 					m_data[Y] * operand,
 					m_data[Z] * operand,
-					m_data[W] * operand
-				};
+					m_data[W] * operand};
 			}
 
 			/**
@@ -397,8 +368,7 @@ namespace EmEn::Libs::Math
 			 * @return Vector< 3, precision_t >
 			 */
 			[[nodiscard]]
-			constexpr
-			Vector< 3, precision_t >
+			constexpr Vector< 3, precision_t >
 			operator* (const Vector< 3, precision_t > & operand) const noexcept
 			{
 				const Vector< 3, precision_t > qVector{m_data[X], m_data[Y], m_data[Z]};
@@ -417,8 +387,7 @@ namespace EmEn::Libs::Math
 			 * @param operand A reference to a vector.
 			 * @return Vector< 4, precision_t >
 			 */
-			constexpr
-			Vector< 4, precision_t >
+			constexpr Vector< 4, precision_t >
 			operator* (const Vector< 4, precision_t > & operand) const noexcept
 			{
 				Vector< 4, precision_t > qVector{m_data[X], m_data[Y], m_data[Z]};
@@ -437,8 +406,7 @@ namespace EmEn::Libs::Math
 			 * @param operand A reference to another quaternion.
 			 * @return Quaternion &
 			 */
-			constexpr
-			Quaternion &
+			constexpr Quaternion &
 			operator*= (const Quaternion & operand) noexcept
 			{
 				*this = Quaternion::product(*this, operand);
@@ -451,8 +419,7 @@ namespace EmEn::Libs::Math
 			 * @param operand A scalar.
 			 * @return Quaternion &
 			 */
-			constexpr
-			Quaternion &
+			constexpr Quaternion &
 			operator*= (precision_t operand) noexcept
 			{
 				m_data[X] *= operand;
@@ -469,9 +436,12 @@ namespace EmEn::Libs::Math
 			 * @param operand A scalar.
 			 * @return Quaternion
 			 */
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable : 4723)
+#endif
 			[[nodiscard]]
-			constexpr
-			Quaternion
+			constexpr Quaternion
 			operator/ (precision_t operand) const noexcept
 			{
 				if ( Utility::isZero(operand) )
@@ -483,9 +453,11 @@ namespace EmEn::Libs::Math
 					m_data[X] / operand,
 					m_data[Y] / operand,
 					m_data[Z] / operand,
-					m_data[W] / operand
-				};
+					m_data[W] / operand};
 			}
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
 
 			/**
 			 * @brief Quaternion scalar division operator.
@@ -493,8 +465,11 @@ namespace EmEn::Libs::Math
 			 * @param operand A scalar.
 			 * @return Quaternion
 			 */
-			constexpr
-			Quaternion &
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable : 4723)
+#endif
+			constexpr Quaternion &
 			operator/= (precision_t operand) noexcept
 			{
 				if ( !Utility::isZero(operand) )
@@ -507,6 +482,9 @@ namespace EmEn::Libs::Math
 
 				return *this;
 			}
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
 
 			/**
 			 * @brief Sets the complex part of the quaternion.
@@ -700,8 +678,7 @@ namespace EmEn::Libs::Math
 			 * @return Vector< 4, precision_t >
 			 */
 			[[nodiscard]]
-			constexpr
-			Vector< 4, precision_t >
+			constexpr Vector< 4, precision_t >
 			getAsVector4 () const noexcept
 			{
 				return {m_data[X], m_data[Y], m_data[Z], m_data[W]};
@@ -711,8 +688,7 @@ namespace EmEn::Libs::Math
 			 * @brief Conjugates the quaternion.
 			 * @return Quaternion &
 			 */
-			constexpr
-			Quaternion &
+			constexpr Quaternion &
 			conjugate () noexcept
 			{
 				m_data[X] = -m_data[X];
@@ -727,8 +703,7 @@ namespace EmEn::Libs::Math
 			 * @return Quaternion
 			 */
 			[[nodiscard]]
-			constexpr
-			Quaternion
+			constexpr Quaternion
 			conjugated () const noexcept
 			{
 				return {-m_data[X], -m_data[Y], -m_data[Z], m_data[W]};
@@ -739,12 +714,10 @@ namespace EmEn::Libs::Math
 			 * @return precision_t
 			 */
 			[[nodiscard]]
-			constexpr
-			precision_t
+			constexpr precision_t
 			squaredLength () const noexcept
 			{
-				return
-					(m_data[X] * m_data[X]) +
+				return (m_data[X] * m_data[X]) +
 					(m_data[Y] * m_data[Y]) +
 					(m_data[Z] * m_data[Z]) +
 					(m_data[W] * m_data[W]);
@@ -766,6 +739,10 @@ namespace EmEn::Libs::Math
 			 * @brief The quaternion will remain unchanged on division by zero.
 			 * @return Quaternion &
 			 */
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable : 4723)
+#endif
 			Quaternion &
 			inverse ()
 			{
@@ -781,12 +758,19 @@ namespace EmEn::Libs::Math
 
 				return *this;
 			}
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
 
 			/**
 			 * @brief Computes the inverse of this quaternion.
 			 * @brief The returned quaternion will be identity on division by zero.
 			 * @return Quaternion
 			 */
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable : 4723)
+#endif
 			[[nodiscard]]
 			Quaternion
 			inversed () const
@@ -802,9 +786,11 @@ namespace EmEn::Libs::Math
 					-m_data[X] / normal,
 					-m_data[Y] / normal,
 					-m_data[Z] / normal,
-					 m_data[W] / normal
-				};
+					m_data[W] / normal};
 			}
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
 
 			/**
 			 * @brief Normalizes the quaternion.
@@ -856,8 +842,7 @@ namespace EmEn::Libs::Math
 					m_data[X] * r,
 					m_data[Y] * r,
 					m_data[Z] * r,
-					m_data[W] * r
-				};
+					m_data[W] * r};
 			}
 
 			/**
@@ -866,13 +851,10 @@ namespace EmEn::Libs::Math
 			 * @param qB A reference to a quaternion.
 			 * @return precision_t
 			 */
-			static
-			constexpr
-			precision_t
+			static constexpr precision_t
 			dotProduct (const Quaternion & qA, const Quaternion & qB) noexcept
 			{
-				return
-					(qA.m_data[0] * qB.m_data[0]) +
+				return (qA.m_data[0] * qB.m_data[0]) +
 					(qA.m_data[1] * qB.m_data[1]) +
 					(qA.m_data[2] * qB.m_data[2]) +
 					(qA.m_data[3] * qB.m_data[3]);
@@ -883,17 +865,14 @@ namespace EmEn::Libs::Math
 			 * @return Quaternion
 			 */
 			[[nodiscard]]
-			static
-			constexpr
-			Quaternion
+			static constexpr Quaternion
 			product (const Quaternion & qA, const Quaternion & qB) noexcept
 			{
 				return {
 					qA.m_data[Y] * qB.m_data[Z] - qA.m_data[Z] * qB.m_data[Y] + qA.m_data[X] * qB.m_data[W] + qA.m_data[W] * qB.m_data[X],
 					qA.m_data[Z] * qB.m_data[X] - qA.m_data[X] * qB.m_data[Z] + qA.m_data[Y] * qB.m_data[W] + qA.m_data[W] * qB.m_data[Y],
 					qA.m_data[X] * qB.m_data[Y] - qA.m_data[Y] * qB.m_data[X] + qA.m_data[Z] * qB.m_data[W] + qA.m_data[W] * qB.m_data[Z],
-					qA.m_data[W] * qB.m_data[W] - qA.m_data[X] * qB.m_data[X] - qA.m_data[Y] * qB.m_data[Y] - qA.m_data[Z] * qB.m_data[Z]
-				};
+					qA.m_data[W] * qB.m_data[W] - qA.m_data[X] * qB.m_data[X] - qA.m_data[Y] * qB.m_data[Y] - qA.m_data[Z] * qB.m_data[Z]};
 			}
 
 			/**
@@ -904,9 +883,7 @@ namespace EmEn::Libs::Math
 			 * @return Quaternion
 			 */
 			[[nodiscard]]
-			static
-			constexpr
-			Quaternion
+			static constexpr Quaternion
 			lerp (const Quaternion & qA, const Quaternion & qB, precision_t time) noexcept
 			{
 				return (qA * (static_cast< precision_t >(1) - time)) + (qB * time);
@@ -920,8 +897,7 @@ namespace EmEn::Libs::Math
 			 * @return Quaternion
 			 */
 			[[nodiscard]]
-			static
-			Quaternion
+			static Quaternion
 			slerp (const Quaternion & qA, const Quaternion & qB, precision_t time)
 			{
 				precision_t cosOmega = Quaternion::dotProduct(qA, qB);
@@ -929,14 +905,14 @@ namespace EmEn::Libs::Math
 				auto qBCopy = qB;
 
 				// Use the short path
-				if (cosOmega < 0.0)
+				if ( cosOmega < 0.0 )
 				{
 					cosOmega = -cosOmega;
 					qBCopy = -qB;
 				}
 
 				// If angle is small, use linear interpolation
-				if (cosOmega > static_cast<precision_t>(1.0) - std::numeric_limits<precision_t>::epsilon())
+				if ( cosOmega > static_cast< precision_t >(1.0) - std::numeric_limits< precision_t >::epsilon() )
 				{
 					return Quaternion::lerp(qA, qBCopy, time).normalized();
 				}
@@ -944,7 +920,7 @@ namespace EmEn::Libs::Math
 				const auto omega = std::acos(cosOmega);
 				const auto sinOmega = std::sin(omega);
 
-				const auto scaleA = std::sin((static_cast<precision_t>(1.0) - time) * omega) / sinOmega;
+				const auto scaleA = std::sin((static_cast< precision_t >(1.0) - time) * omega) / sinOmega;
 				const auto scaleB = std::sin(time * omega) / sinOmega;
 
 				return (qA * scaleA) + (qBCopy * scaleB);
@@ -961,8 +937,7 @@ namespace EmEn::Libs::Math
 			 * @return Quaternion
 			 */
 			[[nodiscard]]
-			static
-			Quaternion
+			static Quaternion
 			slerp (const Quaternion & qA, const Quaternion & qB, precision_t time, precision_t threshold = 0.05)
 			{
 				auto angle = Quaternion::dotProduct(qA, qB);
@@ -1034,7 +1009,7 @@ namespace EmEn::Libs::Math
 				}
 
 				/* Clamp w to [-1, 1] to avoid numerical errors with acos */
-				const auto w_clamped = std::clamp(m_data[W], static_cast<precision_t>(-1.0), static_cast<precision_t>(1.0));
+				const auto w_clamped = std::clamp(m_data[W], static_cast< precision_t >(-1.0), static_cast< precision_t >(1.0));
 
 				angle = static_cast< precision_t >(2) * static_cast< precision_t >(std::acos(w_clamped));
 
@@ -1111,23 +1086,21 @@ namespace EmEn::Libs::Math
 			 * It returns the matrix, which will not be a rotation if the quaternion is non-unit.
 			 * @return Matrix< 3, precision_t >
 			 */
-			constexpr
-			Matrix< 3, precision_t >
+			constexpr Matrix< 3, precision_t >
 			rotationMatrix () const noexcept
 			{
-				std::array< precision_t, 9 > m {
+				std::array< precision_t, 9 > m{
 					static_cast< precision_t >(1.0) - static_cast< precision_t >(2.0) * m_data[Y] * m_data[Y] - static_cast< precision_t >(2.0) * m_data[Z] * m_data[Z],
-						  static_cast< precision_t >(2.0) * m_data[X] * m_data[Y] - static_cast< precision_t >(2.0) * m_data[Z] * m_data[W],
-						  static_cast< precision_t >(2.0) * m_data[X] * m_data[Z] + static_cast< precision_t >(2.0) * m_data[Y] * m_data[W],
+					static_cast< precision_t >(2.0) * m_data[X] * m_data[Y] - static_cast< precision_t >(2.0) * m_data[Z] * m_data[W],
+					static_cast< precision_t >(2.0) * m_data[X] * m_data[Z] + static_cast< precision_t >(2.0) * m_data[Y] * m_data[W],
 
-						  static_cast< precision_t >(2.0) * m_data[X] * m_data[Y] + static_cast< precision_t >(2.0) * m_data[Z] * m_data[W],
+					static_cast< precision_t >(2.0) * m_data[X] * m_data[Y] + static_cast< precision_t >(2.0) * m_data[Z] * m_data[W],
 					static_cast< precision_t >(1.0) - static_cast< precision_t >(2.0) * m_data[X] * m_data[X] - static_cast< precision_t >(2.0) * m_data[Z] * m_data[Z],
-						  static_cast< precision_t >(2.0) * m_data[Y] * m_data[Z] - static_cast< precision_t >(2.0) * m_data[X] * m_data[W],
+					static_cast< precision_t >(2.0) * m_data[Y] * m_data[Z] - static_cast< precision_t >(2.0) * m_data[X] * m_data[W],
 
-						  static_cast< precision_t >(2.0) * m_data[X] * m_data[Z] - static_cast< precision_t >(2.0) * m_data[Y] * m_data[W],
-						  static_cast< precision_t >(2.0) * m_data[Y] * m_data[Z] + static_cast< precision_t >(2.0) * m_data[X] * m_data[W],
-					static_cast< precision_t >(1.0) - static_cast< precision_t >(2.0) * m_data[X] * m_data[X] - static_cast< precision_t >(2.0) * m_data[Y] * m_data[Y]
-				};
+					static_cast< precision_t >(2.0) * m_data[X] * m_data[Z] - static_cast< precision_t >(2.0) * m_data[Y] * m_data[W],
+					static_cast< precision_t >(2.0) * m_data[Y] * m_data[Z] + static_cast< precision_t >(2.0) * m_data[X] * m_data[W],
+					static_cast< precision_t >(1.0) - static_cast< precision_t >(2.0) * m_data[X] * m_data[X] - static_cast< precision_t >(2.0) * m_data[Y] * m_data[Y]};
 
 				return Matrix< 3, precision_t >{m};
 			}
@@ -1186,8 +1159,7 @@ namespace EmEn::Libs::Math
 			 * @param vector A reference to a vector.
 			 * @return Vector< 3, precision_t >
 			 */
-			constexpr
-			Vector< 3, precision_t >
+			constexpr Vector< 3, precision_t >
 			rotatedVector (const Vector< 3, precision_t > & vector) const noexcept
 			{
 				return (*this * Quaternion(vector, 0) * this->conjugate()).complex();
@@ -1198,16 +1170,14 @@ namespace EmEn::Libs::Math
 			 * @return Matrix< 4, precision_t >
 			 */
 			[[nodiscard]]
-			constexpr
-			Matrix< 4, precision_t >
+			constexpr Matrix< 4, precision_t >
 			getMatrix () const noexcept
 			{
 				std::array< precision_t, 16 > matrixData{
-					 m_data[W], -m_data[Z],  m_data[Y],  m_data[X],
-					 m_data[Z],  m_data[W], -m_data[X],  m_data[Y],
-					-m_data[Y],  m_data[X],  m_data[W],  m_data[Z],
-					-m_data[X], -m_data[Y], -m_data[Z],  m_data[W]
-				};
+					m_data[W], -m_data[Z], m_data[Y], m_data[X],
+					m_data[Z], m_data[W], -m_data[X], m_data[Y],
+					-m_data[Y], m_data[X], m_data[W], m_data[Z],
+					-m_data[X], -m_data[Y], -m_data[Z], m_data[W]};
 
 				return Matrix< 4, precision_t >{matrixData};
 			}
@@ -1217,16 +1187,14 @@ namespace EmEn::Libs::Math
 			 * @return Matrix< 4, precision_t >
 			 */
 			[[nodiscard]]
-			constexpr
-			Matrix< 4, precision_t >
+			constexpr Matrix< 4, precision_t >
 			getRightMatrix () const noexcept
 			{
 				std::array< precision_t, 16 > matrixData{
-					 m_data[W], -m_data[Z],  m_data[Y], -m_data[X],
-					 m_data[Z],  m_data[W], -m_data[X], -m_data[Y],
-					-m_data[Y],  m_data[X],  m_data[W], -m_data[Z],
-					 m_data[X],  m_data[Y],  m_data[Z],  m_data[W]
-				};
+					m_data[W], -m_data[Z], m_data[Y], -m_data[X],
+					m_data[Z], m_data[W], -m_data[X], -m_data[Y],
+					-m_data[Y], m_data[X], m_data[W], -m_data[Z],
+					m_data[X], m_data[Y], m_data[Z], m_data[W]};
 
 				return Matrix< 4, precision_t >{matrixData};
 			}
@@ -1244,7 +1212,7 @@ namespace EmEn::Libs::Math
 
 				if ( sqLen < std::numeric_limits< precision_t >::epsilon() * std::numeric_limits< precision_t >::epsilon() )
 				{
-					//throw std::invalid_argument("twistAxis must be non-zero for swing-twist decomposition.");
+					// throw std::invalid_argument("twistAxis must be non-zero for swing-twist decomposition.");
 					return {};
 				}
 
@@ -1259,7 +1227,7 @@ namespace EmEn::Libs::Math
 				const auto projectedTwistVector = Vector< 3, precision_t >::dotProduct(twistVectorPart, twistAxis) * twistAxis;
 
 				twist.set(projectedTwistVector, twist.real());
-				twist.normalize(); 
+				twist.normalize();
 
 				return {swing, twist};
 			}
@@ -1279,8 +1247,7 @@ namespace EmEn::Libs::Math
 			 * @brief Resets the quaternion to identity.
 			 * @return Quaternion &
 			 */
-			constexpr
-			Quaternion &
+			constexpr Quaternion &
 			reset () noexcept
 			{
 				m_data[X] = 0;
@@ -1311,8 +1278,7 @@ namespace EmEn::Libs::Math
 			 * @param obj A reference to the object to print.
 			 * @return std::ostream &
 			 */
-			friend
-			std::ostream &
+			friend std::ostream &
 			operator<< (std::ostream & out, const Quaternion & obj)
 			{
 				using namespace std;
@@ -1325,8 +1291,7 @@ namespace EmEn::Libs::Math
 			 * @param obj A reference to the object to print.
 			 * @return std::string
 			 */
-			friend
-			std::string
+			friend std::string
 			to_string (const Quaternion & obj)
 			{
 				std::stringstream output;

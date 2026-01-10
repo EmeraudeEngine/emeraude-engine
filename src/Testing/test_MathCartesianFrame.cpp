@@ -215,7 +215,7 @@ TYPED_TEST(MathCartesianFrame, CartesianFrameTransformation)
 															   static_cast< TypeParam >(0.0), static_cast< TypeParam >(-2.6), static_cast< TypeParam >(0.0), static_cast< TypeParam >(1.0)}};
 
 			const auto frameA = CartesianFrame< TypeParam >{Vector< 3, TypeParam >{static_cast< TypeParam >(0.0), static_cast< TypeParam >(-1.5), static_cast< TypeParam >(0.0)}, static_cast< TypeParam >(2.0)};
-			const auto frameB = CartesianFrame< TypeParam >{static_cast< TypeParam >(0.0), static_cast< TypeParam >(-0.55), static_cast< TypeParam >(0.0)};
+			const auto frameB = CartesianFrame< TypeParam >{static_cast< TypeParam >(0.0F), static_cast< TypeParam >(-0.55F), static_cast< TypeParam >(0.0F)};
 			const auto modelMatrix = frameA.getModelMatrix() * frameB.getModelMatrix();
 			const auto scaling = frameA.scalingFactor() * frameB.scalingFactor();
 
