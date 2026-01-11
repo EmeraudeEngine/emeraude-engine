@@ -447,6 +447,9 @@ include(SetupJsonCpp)
 # Magic Enum
 target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/magic_enum/include)
 
+# TinySoundFont (SF2 SoundFont support for MIDI rendering)
+target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/tinysoundfont)
+
 # Request : brotli, bzip2, harbuzz, png, zlib
 include(SetupFreetype)
 

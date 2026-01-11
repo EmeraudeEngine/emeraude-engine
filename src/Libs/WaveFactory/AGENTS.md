@@ -131,13 +131,28 @@ processor.toWave(loaded); // Write back
 ### Load MIDI File
 
 ```cpp
-// Via FileIO (automatic dispatch)
+// Via FileIO (automatic dispatch) - additive synthesis
 Wave<int16_t> wave;
 WaveFactory::FileIO::read("music.mid", wave, Frequency::PCM48000Hz);
 
-// Direct usage
+// Direct usage - additive synthesis
 FileFormatMIDI<int16_t> midiFormat{Frequency::PCM48000Hz};
 midiFormat.readFile("music.mid", wave);
+```
+
+### Load MIDI with SoundFont (SF2)
+
+```cpp
+// High-quality rendering with SF2 sample bank
+// Note: tsf* handle typically comes from Audio::SoundfontResource
+
+Wave<int16_t> wave;
+FileFormatMIDI<int16_t> midiFormat{Frequency::PCM48000Hz};
+midiFormat.setSoundfont(tsfHandle);  // tsf* from SoundfontResource::handle()
+midiFormat.readFile("music.mid", wave);
+
+// Via FileIO with SF2
+WaveFactory::FileIO::read("music.mid", wave, Frequency::PCM48000Hz, tsfHandle);
 ```
 
 ## Technical Details
@@ -197,10 +212,14 @@ The `Synthesizer` class works exclusively with mono audio:
 | Percussive, SFX | 112-127 | Noise burst | Short |
 | **Channel 10** | Any | Noise burst | Percussion |
 
+**SoundFont (SF2) Support:**
+- Optional SF2 sample-based rendering via TinySoundFont
+- `setSoundfont(tsf*)` to enable high-quality rendering
+- Falls back to additive synthesis if no SF2 provided
+- See: `Audio/SoundfontResource` for SF2 loading
+
 **Limitations:**
 - No SMPTE time division
-- Basic waveforms (no wavetable/sampling)
-- No SoundFont (SF2) support yet (architecture is ready for future integration)
 
 **Note rendering:**
 - Waveform selected by instrument family
@@ -223,12 +242,7 @@ The `Synthesizer` class works exclusively with mono audio:
 | `FileFormatInterface.hpp` | Abstract base class |
 | `FileFormatSNDFile.hpp` | libsndfile wrapper |
 | `FileFormatJSON.hpp` | JSON procedural audio |
-| `FileFormatMIDI.hpp` | MIDI file parser |
-
-## External Dependencies
-
-- **libsndfile**: Audio format loading (WAV, FLAC, OGG, etc.)
-- **libsamplerate**: High-quality resampling (SRC_SINC_BEST_QUALITY)
+| `FileFormatMIDI.hpp` | MIDI file parser with SF2 support |
 
 ## Critical Attention Points
 
@@ -239,11 +253,8 @@ The `Synthesizer` class works exclusively with mono audio:
 - **Performance**: Synthesizer methods are optimized for single-channel processing
 - **MIDI End of Track**: Always handle meta event 0x2F to properly terminate parsing. See: `FileFormatMIDI.hpp:parseTrack()`
 
-## Future Extensibility
+## External Dependencies
 
-**SoundFont (SF2) Integration:**
-The MIDI rendering architecture is modular and ready for SF2 sample-based playback:
-- Parsing and rendering are separated (`parseTrack()` → `renderToWave()`)
-- Sample generation is isolated in `Synthesizer::generateWaveformSample()`
-- To add SF2: replace waveform generation with sample lookup from SoundFont bank
-- Recommended library: TinySoundFont (header-only, MIT license)
+- **libsndfile**: Audio format loading (WAV, FLAC, OGG, etc.)
+- **libsamplerate**: High-quality resampling (SRC_SINC_BEST_QUALITY)
+- **TinySoundFont**: SoundFont 2 (SF2) sample-based MIDI rendering (header-only, MIT license)

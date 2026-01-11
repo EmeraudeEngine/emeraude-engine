@@ -34,6 +34,9 @@
 #include "Resources/Container.hpp"
 #include "Libs/WaveFactory/Wave.hpp"
 
+/* Forward declaration for TinySoundFont. */
+struct tsf;
+
 namespace EmEn::Audio
 {
 	/**
@@ -187,6 +190,44 @@ namespace EmEn::Audio
 				return m_localData.seconds();
 			}
 
+			/**
+			 * @brief Sets a SoundFont handle for MIDI rendering (per-instance).
+			 * @param soundfont Pointer to a TinySoundFont handle, or nullptr to use additive synthesis.
+			 * @note Must be called before load() for the setting to take effect.
+			 * @note The caller is responsible for ensuring the soundfont remains valid during loading.
+			 */
+			void
+			setSoundfont (tsf * soundfont) noexcept
+			{
+				m_soundfont = soundfont;
+			}
+
+			/**
+			 * @brief Returns the currently set SoundFont handle (per-instance).
+			 * @return tsf* Pointer to the soundfont, or nullptr if none set.
+			 */
+			[[nodiscard]]
+			tsf *
+			soundfont () const noexcept
+			{
+				return m_soundfont;
+			}
+
+			/**
+			 * @brief Sets a global SoundFont handle used by all MusicResources for MIDI rendering.
+			 * @param soundfont Pointer to a TinySoundFont handle, or nullptr to disable.
+			 * @note This is used as a fallback when no per-instance soundfont is set.
+			 * @note The caller must ensure the soundfont remains valid while resources are loading.
+			 */
+			static void setGlobalSoundfont (tsf * soundfont) noexcept;
+
+			/**
+			 * @brief Returns the global SoundFont handle.
+			 * @return tsf* Pointer to the global soundfont, or nullptr if none set.
+			 */
+			[[nodiscard]]
+			static tsf * globalSoundfont () noexcept;
+
 		private:
 
 			/** @copydoc EmEn::Resources::ResourceTrait::onDependenciesLoaded() */
@@ -205,6 +246,7 @@ namespace EmEn::Audio
 			Libs::WaveFactory::Wave< int16_t > m_localData;
 			std::string m_title{DefaultInfo};
 			std::string m_artist{DefaultInfo};
+			tsf * m_soundfont{nullptr};
 	};
 }
 

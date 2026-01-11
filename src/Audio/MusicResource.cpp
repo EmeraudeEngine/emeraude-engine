@@ -28,6 +28,7 @@
 
 /* STL inclusions. */
 #include <array>
+#include <mutex>
 
 /* Third-party inclusions. */
 #include "taglib/tag.h"
@@ -46,6 +47,25 @@
 namespace EmEn::Audio
 {
 	using namespace Libs;
+
+	/* NOTE: TSF (TinySoundFont) is not thread-safe for concurrent rendering operations.
+	 * This mutex protects SF2-based MIDI loading when multiple MusicResources load in parallel. */
+	static std::mutex s_tsfMutex;
+
+	/* Global SoundFont handle used as fallback when no per-instance SF2 is configured. */
+	static tsf * s_globalSoundfont{nullptr};
+
+	void
+	MusicResource::setGlobalSoundfont (tsf * soundfont) noexcept
+	{
+		s_globalSoundfont = soundfont;
+	}
+
+	tsf *
+	MusicResource::globalSoundfont () noexcept
+	{
+		return s_globalSoundfont;
+	}
 
 	bool
 	MusicResource::onDependenciesLoaded () noexcept
@@ -578,7 +598,29 @@ namespace EmEn::Audio
 			return false;
 		}
 
-		if ( !WaveFactory::FileIO::read(filepath, m_localData) )
+		/* Use SF2-based rendering for MIDI files if a soundfont is configured. */
+		const auto extension = filepath.extension().string();
+		const bool isMidi = (extension == ".mid" || extension == ".midi");
+
+		/* Use per-instance soundfont if set, otherwise fall back to global. */
+		tsf * effectiveSoundfont = (m_soundfont != nullptr) ? m_soundfont : s_globalSoundfont;
+
+		bool loadSuccess = false;
+
+		if ( isMidi && effectiveSoundfont != nullptr )
+		{
+			/* Lock the mutex to ensure thread-safe access to the shared TSF handle.
+			 * TSF maintains internal state that cannot be safely accessed concurrently. */
+			const std::lock_guard< std::mutex > tsfLock{s_tsfMutex};
+
+			loadSuccess = WaveFactory::FileIO::read(filepath, m_localData, Manager::frequencyPlayback(), effectiveSoundfont);
+		}
+		else
+		{
+			loadSuccess = WaveFactory::FileIO::read(filepath, m_localData);
+		}
+
+		if ( !loadSuccess )
 		{
 			TraceError{ClassId} << "Unable to load the music file '" << filepath << "' !";
 

@@ -45,6 +45,9 @@
 #include "Synthesizer.hpp"
 #include "Wave.hpp"
 
+/* TinySoundFont inclusion for SoundFont rendering. */
+#include "tsf.h"
+
 namespace EmEn::Libs::WaveFactory
 {
 	/**
@@ -92,6 +95,28 @@ namespace EmEn::Libs::WaveFactory
 				return m_frequency;
 			}
 
+			/**
+			 * @brief Sets a SoundFont for high-quality sample-based rendering.
+			 * @param soundfont Pointer to a TinySoundFont handle, or nullptr for additive synthesis.
+			 * @note The caller retains ownership of the tsf handle.
+			 */
+			void
+			setSoundfont (tsf * soundfont) noexcept
+			{
+				m_soundfont = soundfont;
+			}
+
+			/**
+			 * @brief Returns the current SoundFont handle.
+			 * @return tsf* Pointer to the SoundFont, or nullptr if none set.
+			 */
+			[[nodiscard]]
+			tsf *
+			soundfont () const noexcept
+			{
+				return m_soundfont;
+			}
+
 			/** @copydoc EmEn::Libs::WaveFactory::FileFormatInterface::readFile() */
 			[[nodiscard]]
 			bool
@@ -116,19 +141,32 @@ namespace EmEn::Libs::WaveFactory
 					return false;
 				}
 
-				/* Parse all tracks and collect notes and control events. */
+				/* Parse all tracks and collect notes, control events, tempo events, and raw MIDI CC. */
 				std::vector< MIDINote > notes;
 				std::vector< ControlEvent > controlEvents;
+				std::vector< TempoEvent > tempoEvents;
+				std::vector< MidiCCEvent > midiCCEvents;
 				std::array< ChannelState, 16 > channelStates{};
 
 				for ( uint16_t trackIndex = 0; trackIndex < header.trackCount; ++trackIndex )
 				{
-					if ( !this->parseTrack(file, header, notes, controlEvents, channelStates, trackIndex) )
+					if ( !this->parseTrack(file, notes, controlEvents, tempoEvents, midiCCEvents, channelStates, trackIndex) )
 					{
 						std::cerr << "[WaveFactory::FileFormatMIDI] readFile(), failed to parse track " << trackIndex << " in '" << filepath << "' !\n";
 
 						return false;
 					}
+				}
+
+				/* Sort tempo events by tick for correct tempo mapping. */
+				std::sort(tempoEvents.begin(), tempoEvents.end(), [] (const TempoEvent & a, const TempoEvent & b) {
+					return a.tick < b.tick;
+				});
+
+				/* Ensure we have at least a default tempo if the file doesn't specify one. */
+				if ( tempoEvents.empty() || tempoEvents[0].tick > 0 )
+				{
+					tempoEvents.insert(tempoEvents.begin(), {0, 500000});
 				}
 
 				if ( notes.empty() )
@@ -144,7 +182,7 @@ namespace EmEn::Libs::WaveFactory
 				});
 
 				/* Render notes to wave. */
-				if ( !this->renderToWave(wave, notes, controlEvents, header, channelStates) )
+				if ( !this->renderToWave(wave, notes, controlEvents, tempoEvents, header, channelStates) )
 				{
 					std::cerr << "[WaveFactory::FileFormatMIDI] readFile(), failed to render audio from '" << filepath << "' !\n";
 
@@ -176,7 +214,15 @@ namespace EmEn::Libs::WaveFactory
 				uint16_t format{0};
 				uint16_t trackCount{0};
 				uint16_t division{480};        /* Ticks per quarter note. */
-				uint32_t tempo{500000};        /* Microseconds per quarter note (default 120 BPM). */
+			};
+
+			/**
+			 * @brief Represents a tempo change event in the MIDI file.
+			 */
+			struct TempoEvent
+			{
+				uint32_t tick{0};              /* Tick position of the tempo change. */
+				uint32_t tempo{500000};        /* Microseconds per quarter note. */
 			};
 
 			/**
@@ -208,10 +254,23 @@ namespace EmEn::Libs::WaveFactory
 				uint8_t filterCutoff{127}; /* Filter cutoff (CC#74), default fully open. */
 				uint8_t filterResonance{0}; /* Filter resonance (CC#71), default no resonance. */
 				uint8_t tremoloDepth{0};   /* Tremolo depth (CC#92), default off. */
+				uint8_t reverb{40};        /* Reverb send level (CC#91), default 40. */
+				uint8_t chorus{0};         /* Chorus send level (CC#93), default 0. */
 				bool sustainPedal{false};  /* Sustain pedal state (CC#64). */
 				bool portamentoOn{false};  /* Portamento on/off (CC#65). */
 				int16_t pitchBend{0};      /* Pitch bend value (-8192 to +8191). */
 				float pitchBendRange{2.0F}; /* Pitch bend range in semitones (default ±2). */
+			};
+
+			/**
+			 * @brief Represents a raw MIDI Control Change event for TSF passthrough.
+			 */
+			struct MidiCCEvent
+			{
+				uint32_t tick{0};          /* Event time in ticks. */
+				uint8_t channel{0};        /* MIDI channel (0-15). */
+				uint8_t controller{0};     /* Controller number (0-127). */
+				uint8_t value{0};          /* Controller value (0-127). */
 			};
 
 			/**
@@ -365,16 +424,17 @@ namespace EmEn::Libs::WaveFactory
 			/**
 			 * @brief Parses a single MIDI track.
 			 * @param stream The input stream.
-			 * @param header The MIDI header for timing info.
 			 * @param notes The vector to append parsed notes to.
 			 * @param controlEvents The vector to append control events to.
+			 * @param tempoEvents The vector to append tempo events to.
+			 * @param midiCCEvents The vector to append raw MIDI CC events to.
 			 * @param channelStates The channel state array to update (pan, etc.).
 			 * @param trackIndex The index of this track.
 			 * @return bool
 			 */
 			[[nodiscard]]
 			bool
-			parseTrack (std::istream & stream, MIDIHeader & header, std::vector< MIDINote > & notes, std::vector< ControlEvent > & controlEvents, std::array< ChannelState, 16 > & channelStates, uint16_t trackIndex) noexcept
+			parseTrack (std::istream & stream, std::vector< MIDINote > & notes, std::vector< ControlEvent > & controlEvents, std::vector< TempoEvent > & tempoEvents, std::vector< MidiCCEvent > & midiCCEvents, std::array< ChannelState, 16 > & channelStates, uint16_t trackIndex) noexcept
 			{
 				/* Read chunk type (should be "MTrk"). */
 				char magic[4];
@@ -684,12 +744,13 @@ namespace EmEn::Libs::WaveFactory
 								}
 								else if ( metaType == 0x51 && metaLength == 3 )
 								{
-									/* Tempo change. */
+									/* Tempo change - store as event for accurate timing. */
 									uint8_t tempoBytes[3];
 									stream.read(reinterpret_cast< char * >(tempoBytes), 3);
-									header.tempo = (static_cast< uint32_t >(tempoBytes[0]) << 16) |
-												   (static_cast< uint32_t >(tempoBytes[1]) << 8) |
-												   static_cast< uint32_t >(tempoBytes[2]);
+									const uint32_t tempo = (static_cast< uint32_t >(tempoBytes[0]) << 16) |
+														   (static_cast< uint32_t >(tempoBytes[1]) << 8) |
+														   static_cast< uint32_t >(tempoBytes[2]);
+									tempoEvents.push_back({currentTick, tempo});
 								}
 								else
 								{
@@ -901,18 +962,314 @@ namespace EmEn::Libs::WaveFactory
 			}
 
 			/**
-			 * @brief Renders parsed MIDI notes to a stereo Wave with full MIDI controller support.
+			 * @brief Renders parsed MIDI notes using TinySoundFont for high-quality sample-based output.
 			 * @param wave The destination wave (will be stereo).
 			 * @param notes The parsed notes.
 			 * @param controlEvents The control change events (pitch bend, modulation, etc.).
+			 * @param tempoEvents The tempo change events (sorted by tick).
 			 * @param header The MIDI header for timing info.
 			 * @param channelStates The channel states containing pan and program values.
 			 * @return bool
 			 */
 			[[nodiscard]]
 			bool
-			renderToWave (Wave< precision_t > & wave, const std::vector< MIDINote > & notes, const std::vector< ControlEvent > & controlEvents, const MIDIHeader & header, const std::array< ChannelState, 16 > & channelStates) noexcept
+			renderWithSoundfont (Wave< precision_t > & wave, const std::vector< MIDINote > & notes, const std::vector< ControlEvent > & controlEvents, const std::vector< TempoEvent > & tempoEvents, const MIDIHeader & header, const std::array< ChannelState, 16 > & channelStates) noexcept
 			{
+				const auto sampleRate = static_cast< uint32_t >(m_frequency);
+
+				/* Configure TSF for stereo interleaved output. */
+				tsf_set_output(m_soundfont, TSF_STEREO_INTERLEAVED, static_cast< int >(sampleRate), 0.0F);
+				tsf_reset(m_soundfont);
+
+				/* Set initial channel states (program, pan, volume). */
+				for ( uint8_t channel = 0; channel < 16; ++channel )
+				{
+					const auto & state = channelStates[channel];
+
+					/* Set instrument program (bank 128 for channel 9 = drums). */
+					if ( channel == 9 )
+					{
+						tsf_channel_set_bank_preset(m_soundfont, channel, 128, state.program);
+					}
+					else
+					{
+						tsf_channel_set_bank_preset(m_soundfont, channel, 0, state.program);
+					}
+
+					/* Set pan (TSF uses 0.0 = left, 0.5 = center, 1.0 = right). */
+					tsf_channel_set_pan(m_soundfont, channel, static_cast< float >(state.pan) / 127.0F);
+
+					/* Set volume. */
+					tsf_channel_set_volume(m_soundfont, channel, static_cast< float >(state.volume) / 127.0F);
+				}
+
+				/* Find the last note end to determine total duration. */
+				uint32_t maxEndTick = 0;
+
+				for ( const auto & note : notes )
+				{
+					maxEndTick = std::max(maxEndTick, note.endTick);
+				}
+
+				/* Add a small tail for release. */
+				const uint32_t tailTicks = header.division;
+				const uint32_t totalSamples = ticksToSamplesWithTempoMap(maxEndTick + tailTicks, tempoEvents, header.division, sampleRate);
+
+				/* Initialize the wave as stereo. */
+				if ( !wave.initialize(totalSamples, Channels::Stereo, m_frequency) )
+				{
+					std::cerr << "[WaveFactory::FileFormatMIDI] renderWithSoundfont(), failed to initialize wave !\n";
+
+					return false;
+				}
+
+				/* Build a unified timeline of all events (notes, controls, and tempo changes). */
+				struct TimelineEvent
+				{
+					uint32_t tick;
+					enum class Type : uint8_t { NoteOn, NoteOff, Control, TempoChange } type;
+					uint8_t channel;
+					uint8_t data1;  /* Note number or control type. */
+					uint8_t data2;  /* Velocity or control value. */
+					int32_t data3;  /* Extended data (pitch bend or tempo). */
+				};
+
+				std::vector< TimelineEvent > timeline;
+				timeline.reserve(notes.size() * 2 + controlEvents.size() + tempoEvents.size());
+
+				/* Add note events. */
+				for ( const auto & note : notes )
+				{
+					timeline.push_back({note.startTick, TimelineEvent::Type::NoteOn, note.channel, note.noteNumber, note.velocity, 0});
+					timeline.push_back({note.endTick, TimelineEvent::Type::NoteOff, note.channel, note.noteNumber, 0, 0});
+				}
+
+				/* Add control events. */
+				for ( const auto & ctrl : controlEvents )
+				{
+					timeline.push_back({ctrl.tick, TimelineEvent::Type::Control, ctrl.channel, static_cast< uint8_t >(ctrl.type), 0, ctrl.value});
+				}
+
+				/* Add tempo events. */
+				for ( const auto & tempo : tempoEvents )
+				{
+					timeline.push_back({tempo.tick, TimelineEvent::Type::TempoChange, 0, 0, 0, static_cast< int32_t >(tempo.tempo)});
+				}
+
+				/* Sort by tick. */
+				std::sort(timeline.begin(), timeline.end(), [](const TimelineEvent & a, const TimelineEvent & b) {
+					return a.tick < b.tick;
+				});
+
+				/* Simple sequential rendering: process events in order, render samples between them. */
+				auto & waveData = wave.data();
+				uint32_t currentSample = 0;
+				uint32_t lastEventTick = 0;
+				uint32_t currentTempo = tempoEvents.empty() ? 500000 : tempoEvents[0].tempo;
+
+				/* Process each event in the timeline. */
+				for ( size_t eventIndex = 0; eventIndex < timeline.size(); ++eventIndex )
+				{
+					const auto & event = timeline[eventIndex];
+
+					/* Render samples from last event to this event. */
+					if ( event.tick > lastEventTick )
+					{
+						const uint32_t deltaTicks = event.tick - lastEventTick;
+						const double deltaSeconds = (static_cast< double >(deltaTicks) * static_cast< double >(currentTempo)) / (static_cast< double >(header.division) * 1000000.0);
+						const auto samplesToRender = static_cast< uint32_t >(deltaSeconds * static_cast< double >(sampleRate));
+
+						if ( samplesToRender > 0 && currentSample < totalSamples )
+						{
+							const uint32_t actualSamples = std::min(samplesToRender, totalSamples - currentSample);
+							std::vector< float > floatBuffer(actualSamples * 2);
+							tsf_render_float(m_soundfont, floatBuffer.data(), static_cast< int >(actualSamples), 0);
+
+							for ( uint32_t i = 0; i < actualSamples * 2; ++i )
+							{
+								const size_t outputIndex = static_cast< size_t >(currentSample) * 2 + i;
+
+								if ( outputIndex < waveData.size() )
+								{
+									if constexpr ( std::is_floating_point_v< precision_t > )
+									{
+										waveData[outputIndex] = static_cast< precision_t >(floatBuffer[i]);
+									}
+									else
+									{
+										const float sample = std::clamp(floatBuffer[i], -1.0F, 1.0F);
+										const auto maxVal = static_cast< float >(std::numeric_limits< precision_t >::max());
+										waveData[outputIndex] = static_cast< precision_t >(sample * maxVal);
+									}
+								}
+							}
+
+							currentSample += actualSamples;
+						}
+
+						lastEventTick = event.tick;
+					}
+
+					/* Process the event. */
+					switch ( event.type )
+					{
+						case TimelineEvent::Type::NoteOn:
+							tsf_channel_note_on(m_soundfont, event.channel, event.data1, static_cast< float >(event.data2) / 127.0F);
+							break;
+
+						case TimelineEvent::Type::NoteOff:
+							tsf_channel_note_off(m_soundfont, event.channel, event.data1);
+							break;
+
+						case TimelineEvent::Type::TempoChange:
+							currentTempo = static_cast< uint32_t >(event.data3);
+							break;
+
+						case TimelineEvent::Type::Control:
+						{
+							const auto ctrlType = static_cast< ControlEvent::Type >(event.data1);
+
+							switch ( ctrlType )
+							{
+								case ControlEvent::Type::PitchBend:
+									tsf_channel_set_pitchwheel(m_soundfont, event.channel, static_cast< int >(event.data3) + 8192);
+									break;
+
+								case ControlEvent::Type::Volume:
+									tsf_channel_set_volume(m_soundfont, event.channel, static_cast< float >(event.data3) / 127.0F);
+									break;
+
+								case ControlEvent::Type::Expression:
+									tsf_channel_midi_control(m_soundfont, event.channel, 11, static_cast< int >(event.data3));
+									break;
+
+								case ControlEvent::Type::Sustain:
+									tsf_channel_midi_control(m_soundfont, event.channel, 64, event.data3 != 0 ? 127 : 0);
+									break;
+
+								default:
+									break;
+							}
+
+							break;
+						}
+					}
+				}
+
+				/* Render any remaining samples after all events. */
+				if ( currentSample < totalSamples )
+				{
+					const uint32_t remainingSamples = totalSamples - currentSample;
+					std::vector< float > floatBuffer(remainingSamples * 2);
+					tsf_render_float(m_soundfont, floatBuffer.data(), static_cast< int >(remainingSamples), 0);
+
+					for ( uint32_t i = 0; i < remainingSamples * 2; ++i )
+					{
+						const size_t outputIndex = static_cast< size_t >(currentSample) * 2 + i;
+
+						if ( outputIndex < waveData.size() )
+						{
+							if constexpr ( std::is_floating_point_v< precision_t > )
+							{
+								waveData[outputIndex] = static_cast< precision_t >(floatBuffer[i]);
+							}
+							else
+							{
+								const float sample = std::clamp(floatBuffer[i], -1.0F, 1.0F);
+								const auto maxVal = static_cast< float >(std::numeric_limits< precision_t >::max());
+								waveData[outputIndex] = static_cast< precision_t >(sample * maxVal);
+							}
+						}
+					}
+				}
+
+				return true;
+			}
+
+			/**
+			 * @brief Converts MIDI ticks to sample position using tempo map.
+			 * @param tick The tick position to convert.
+			 * @param tempoEvents The sorted tempo events.
+			 * @param division Ticks per quarter note.
+			 * @param sampleRate The sample rate in Hz.
+			 * @return uint32_t The sample position.
+			 */
+			[[nodiscard]]
+			static uint32_t
+			ticksToSamplesWithTempoMap (uint32_t tick, const std::vector< TempoEvent > & tempoEvents, uint16_t division, uint32_t sampleRate) noexcept
+			{
+				double totalSeconds = 0.0;
+				uint32_t lastTick = 0;
+				uint32_t currentTempo = 500000; /* Default 120 BPM. */
+
+				for ( const auto & event : tempoEvents )
+				{
+					if ( event.tick >= tick )
+					{
+						break;
+					}
+
+					/* Add time from lastTick to this tempo event. */
+					const uint32_t deltaTicks = event.tick - lastTick;
+					totalSeconds += (static_cast< double >(deltaTicks) * static_cast< double >(currentTempo)) / (static_cast< double >(division) * 1000000.0);
+
+					lastTick = event.tick;
+					currentTempo = event.tempo;
+				}
+
+				/* Add remaining time from last tempo event to target tick. */
+				const uint32_t remainingTicks = tick - lastTick;
+				totalSeconds += (static_cast< double >(remainingTicks) * static_cast< double >(currentTempo)) / (static_cast< double >(division) * 1000000.0);
+
+				return static_cast< uint32_t >(totalSeconds * static_cast< double >(sampleRate));
+			}
+
+			/**
+			 * @brief Gets the tempo at a specific tick position.
+			 * @param tick The tick position.
+			 * @param tempoEvents The sorted tempo events.
+			 * @return uint32_t The tempo in microseconds per quarter note.
+			 */
+			[[nodiscard]]
+			static uint32_t
+			getTempoAtTick (uint32_t tick, const std::vector< TempoEvent > & tempoEvents) noexcept
+			{
+				uint32_t tempo = 500000; /* Default 120 BPM. */
+
+				for ( const auto & event : tempoEvents )
+				{
+					if ( event.tick > tick )
+					{
+						break;
+					}
+
+					tempo = event.tempo;
+				}
+
+				return tempo;
+			}
+
+			/**
+			 * @brief Renders parsed MIDI notes to a stereo Wave with full MIDI controller support.
+			 * @param wave The destination wave (will be stereo).
+			 * @param notes The parsed notes.
+			 * @param controlEvents The control change events (pitch bend, modulation, etc.).
+			 * @param tempoEvents The tempo change events (sorted by tick).
+			 * @param header The MIDI header for timing info.
+			 * @param channelStates The channel states containing pan and program values.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			renderToWave (Wave< precision_t > & wave, const std::vector< MIDINote > & notes, const std::vector< ControlEvent > & controlEvents, const std::vector< TempoEvent > & tempoEvents, const MIDIHeader & header, const std::array< ChannelState, 16 > & channelStates) noexcept
+			{
+				/* If a SoundFont is available, use sample-based rendering. */
+				if ( m_soundfont != nullptr )
+				{
+					return this->renderWithSoundfont(wave, notes, controlEvents, tempoEvents, header, channelStates);
+				}
+
+				/* Otherwise, fall back to additive synthesis. */
 				const auto sampleRate = static_cast< uint32_t >(m_frequency);
 				const auto sampleRateF = static_cast< float >(sampleRate);
 
@@ -926,7 +1283,7 @@ namespace EmEn::Libs::WaveFactory
 
 				/* Add a small tail for release. */
 				const uint32_t tailTicks = header.division / 2;
-				const uint32_t totalSamples = ticksToSamples(maxEndTick + tailTicks, header.tempo, header.division, sampleRate);
+				const uint32_t totalSamples = ticksToSamplesWithTempoMap(maxEndTick + tailTicks, tempoEvents, header.division, sampleRate);
 
 				/* Initialize the wave as stereo. */
 				if ( !wave.initialize(totalSamples, Channels::Stereo, m_frequency) )
@@ -942,8 +1299,9 @@ namespace EmEn::Libs::WaveFactory
 				/* Build channel event index for fast lookup. */
 				const auto channelEventIndex = buildChannelEventIndex(controlEvents);
 
-				/* Precompute tick-to-sample conversion factor. */
-				const float tickToSampleFactor = static_cast< float >(header.tempo) / (static_cast< float >(header.division) * 1000000.0F) * sampleRateF;
+				/* Get initial tempo for tick-to-sample conversion factor. */
+				const uint32_t initialTempo = getTempoAtTick(0, tempoEvents);
+				const float tickToSampleFactor = static_cast< float >(initialTempo) / (static_cast< float >(header.division) * 1000000.0F) * sampleRateF;
 
 				/* Random generator for noise. */
 				std::random_device randomDevice;
@@ -971,8 +1329,8 @@ namespace EmEn::Libs::WaveFactory
 				/* Render each note with pitch bend, modulation, expression, volume, and portamento. */
 				for ( const auto & note : sortedNotes )
 				{
-					const uint32_t startSample = ticksToSamples(note.startTick, header.tempo, header.division, sampleRate);
-					const uint32_t endSample = ticksToSamples(note.endTick, header.tempo, header.division, sampleRate);
+					const uint32_t startSample = ticksToSamplesWithTempoMap(note.startTick, tempoEvents, header.division, sampleRate);
+					const uint32_t endSample = ticksToSamplesWithTempoMap(note.endTick, tempoEvents, header.division, sampleRate);
 
 					if ( endSample <= startSample || startSample >= totalSamples )
 					{
@@ -1178,5 +1536,6 @@ namespace EmEn::Libs::WaveFactory
 			}
 
 			Frequency m_frequency{Frequency::PCM48000Hz};
+			tsf * m_soundfont{nullptr};
 	};
 }

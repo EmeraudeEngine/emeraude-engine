@@ -40,6 +40,7 @@
 
 /* Local inclusions for usages. */
 #include "MusicResource.hpp"
+#include "SoundfontResource.hpp"
 #include "Source.hpp"
 #include "Types.hpp"
 
@@ -208,6 +209,17 @@ namespace EmEn::Audio
 			{
 				m_playlist.push_back(track);
 			}
+
+			/**
+			 * @brief Adds a soundtrack to the playlist with a SoundFont for MIDI rendering.
+			 * @param track A reference to a music resource.
+			 * @param soundfont A reference to a soundfont resource for high-quality MIDI synthesis.
+			 * @note The soundfont is configured on the track before adding to playlist.
+			 * @note If the track is already loaded, the soundfont setting has no effect.
+			 * @return void
+			 */
+			void
+			addToPlaylist (const std::shared_ptr< MusicResource > & track, const std::shared_ptr< SoundfontResource > & soundfont) noexcept;
 
 			/**
 			 * @brief Removes all soundtracks from the playlist.
@@ -458,5 +470,6 @@ namespace EmEn::Audio
 			bool m_shuffleEnabled{false};
 			std::vector< size_t > m_shuffleOrder;
 			size_t m_shuffleIndex{0};
+			std::shared_ptr< SoundfontResource > m_soundfont;
 	};
 }
