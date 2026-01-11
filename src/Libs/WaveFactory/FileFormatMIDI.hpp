@@ -1081,6 +1081,9 @@ namespace EmEn::Libs::WaveFactory
 					return false;
 				}
 
+				/* Use a float accumulator buffer for rendering to preserve peaks before normalization. */
+				std::vector< float > floatAccumulator(totalSamples * 2, 0.0F);
+
 				/* Build a unified timeline of all events (notes, controls, and tempo changes). */
 				struct TimelineEvent
 				{
@@ -1120,7 +1123,6 @@ namespace EmEn::Libs::WaveFactory
 				});
 
 				/* Simple sequential rendering: process events in order, render samples between them. */
-				auto & waveData = wave.data();
 				uint32_t currentSample = 0;
 				uint32_t lastEventTick = 0;
 				uint32_t currentTempo = tempoEvents.empty() ? 500000 : tempoEvents[0].tempo;
@@ -1186,22 +1188,14 @@ namespace EmEn::Libs::WaveFactory
 							std::vector< float > floatBuffer(actualSamples * 2);
 							tsf_render_float(m_soundfont, floatBuffer.data(), static_cast< int >(actualSamples), 0);
 
+							/* Accumulate to float buffer (no clamping to preserve peaks). */
 							for ( uint32_t i = 0; i < actualSamples * 2; ++i )
 							{
 								const size_t outputIndex = static_cast< size_t >(currentSample) * 2 + i;
 
-								if ( outputIndex < waveData.size() )
+								if ( outputIndex < floatAccumulator.size() )
 								{
-									if constexpr ( std::is_floating_point_v< precision_t > )
-									{
-										waveData[outputIndex] = static_cast< precision_t >(floatBuffer[i]);
-									}
-									else
-									{
-										const float sample = std::clamp(floatBuffer[i], -1.0F, 1.0F);
-										const auto maxVal = static_cast< float >(std::numeric_limits< precision_t >::max());
-										waveData[outputIndex] = static_cast< precision_t >(sample * maxVal);
-									}
+									floatAccumulator[outputIndex] = floatBuffer[i];
 								}
 							}
 
@@ -1306,19 +1300,40 @@ namespace EmEn::Libs::WaveFactory
 					{
 						const size_t outputIndex = static_cast< size_t >(currentSample) * 2 + i;
 
-						if ( outputIndex < waveData.size() )
+						if ( outputIndex < floatAccumulator.size() )
 						{
-							if constexpr ( std::is_floating_point_v< precision_t > )
-							{
-								waveData[outputIndex] = static_cast< precision_t >(floatBuffer[i]);
-							}
-							else
-							{
-								const float sample = std::clamp(floatBuffer[i], -1.0F, 1.0F);
-								const auto maxVal = static_cast< float >(std::numeric_limits< precision_t >::max());
-								waveData[outputIndex] = static_cast< precision_t >(sample * maxVal);
-							}
+							floatAccumulator[outputIndex] = floatBuffer[i];
 						}
+					}
+				}
+
+				/* Find peak amplitude for normalization. */
+				float peakAmplitude = 0.0F;
+
+				for ( const float sample : floatAccumulator )
+				{
+					peakAmplitude = std::max(peakAmplitude, std::abs(sample));
+				}
+
+				/* Calculate normalization factor (with headroom to avoid clipping). */
+				constexpr float TargetPeak = 0.95F;  /* Leave 5% headroom. */
+				const float normalizationFactor = (peakAmplitude > 0.0F) ? (TargetPeak / peakAmplitude) : 1.0F;
+
+				/* Convert to output format with normalization. */
+				auto & waveData = wave.data();
+
+				for ( size_t i = 0; i < floatAccumulator.size() && i < waveData.size(); ++i )
+				{
+					const float normalizedSample = floatAccumulator[i] * normalizationFactor;
+
+					if constexpr ( std::is_floating_point_v< precision_t > )
+					{
+						waveData[i] = static_cast< precision_t >(normalizedSample);
+					}
+					else
+					{
+						const auto maxVal = static_cast< float >(std::numeric_limits< precision_t >::max());
+						waveData[i] = static_cast< precision_t >(std::clamp(normalizedSample, -1.0F, 1.0F) * maxVal);
 					}
 				}
 
