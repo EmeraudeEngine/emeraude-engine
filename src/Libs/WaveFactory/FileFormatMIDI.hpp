@@ -285,6 +285,7 @@ namespace EmEn::Libs::WaveFactory
 					Tremolo,
 					ChannelPressure,   /* Aftertouch affecting whole channel. */
 					PolyKeyPressure,   /* Aftertouch affecting specific note. */
+					ProgramChange,     /* Instrument change during playback. */
 					RawMidiCC          /* Pass-through for CC handled natively by TSF. */
 				};
 
@@ -708,6 +709,13 @@ namespace EmEn::Libs::WaveFactory
 							const auto program = static_cast< uint8_t >(stream.get());
 							channelStates[channel].program = program;
 
+							ControlEvent event;
+							event.tick = currentTick;
+							event.channel = channel;
+							event.type = ControlEvent::Type::ProgramChange;
+							event.value = static_cast< int16_t >(program);
+							controlEvents.push_back(event);
+
 							break;
 						}
 
@@ -926,6 +934,10 @@ namespace EmEn::Libs::WaveFactory
 						case ControlEvent::Type::PolyKeyPressure:
 							/* Per-note aftertouch - harder to apply in this context, skip for now. */
 							break;
+
+						case ControlEvent::Type::ProgramChange:
+							/* Program change only affects SF2 rendering, not additive synthesis. */
+							break;
 					}
 
 					++searchIndex;
@@ -1113,6 +1125,13 @@ namespace EmEn::Libs::WaveFactory
 				uint32_t lastEventTick = 0;
 				uint32_t currentTempo = tempoEvents.empty() ? 500000 : tempoEvents[0].tempo;
 
+				/* Vibrato state per channel. */
+				std::array< uint8_t, 16 > channelModulation{};  /* CC#1 values. */
+				std::array< int16_t, 16 > channelBasePitchBend{};  /* Original pitch bend before vibrato. */
+				double vibratoPhase = 0.0;  /* Global vibrato LFO phase. */
+				constexpr double VibratoRate = 5.5;  /* Hz - typical vibrato speed. */
+				constexpr int VibratoDepthMax = 50;  /* Max pitch bend deviation (~50 cents). */
+
 				/* Process each event in the timeline. */
 				for ( size_t eventIndex = 0; eventIndex < timeline.size(); ++eventIndex )
 				{
@@ -1123,11 +1142,47 @@ namespace EmEn::Libs::WaveFactory
 					{
 						const uint32_t deltaTicks = event.tick - lastEventTick;
 						const double deltaSeconds = (static_cast< double >(deltaTicks) * static_cast< double >(currentTempo)) / (static_cast< double >(header.division) * 1000000.0);
-						const auto samplesToRender = static_cast< uint32_t >(deltaSeconds * static_cast< double >(sampleRate));
+						auto samplesToRender = static_cast< uint32_t >(deltaSeconds * static_cast< double >(sampleRate));
 
-						if ( samplesToRender > 0 && currentSample < totalSamples )
+						/* Check if any channel has vibrato active. */
+						bool hasVibrato = false;
+						for ( uint8_t ch = 0; ch < 16; ++ch )
 						{
-							const uint32_t actualSamples = std::min(samplesToRender, totalSamples - currentSample);
+							if ( channelModulation[ch] > 0 )
+							{
+								hasVibrato = true;
+								break;
+							}
+						}
+
+						/* Render in chunks for vibrato, or all at once otherwise. */
+						constexpr uint32_t VibratoChunkSize = 64;
+
+						while ( samplesToRender > 0 && currentSample < totalSamples )
+						{
+							const uint32_t chunkSize = hasVibrato ? std::min(samplesToRender, VibratoChunkSize) : samplesToRender;
+							const uint32_t actualSamples = std::min(chunkSize, totalSamples - currentSample);
+
+							/* Apply vibrato LFO to pitch wheel for channels with modulation. */
+							if ( hasVibrato )
+							{
+								const double vibratoValue = std::sin(vibratoPhase * 2.0 * 3.14159265358979323846);
+
+								for ( uint8_t ch = 0; ch < 16; ++ch )
+								{
+									if ( channelModulation[ch] > 0 )
+									{
+										/* Scale vibrato depth by modulation amount. */
+										const int vibratoOffset = static_cast< int >(vibratoValue * VibratoDepthMax * channelModulation[ch] / 127);
+										const int newPitchBend = 8192 + channelBasePitchBend[ch] + vibratoOffset;
+										tsf_channel_set_pitchwheel(m_soundfont, ch, std::clamp(newPitchBend, 0, 16383));
+									}
+								}
+
+								/* Advance vibrato phase. */
+								vibratoPhase += VibratoRate * static_cast< double >(actualSamples) / static_cast< double >(sampleRate);
+							}
+
 							std::vector< float > floatBuffer(actualSamples * 2);
 							tsf_render_float(m_soundfont, floatBuffer.data(), static_cast< int >(actualSamples), 0);
 
@@ -1151,6 +1206,7 @@ namespace EmEn::Libs::WaveFactory
 							}
 
 							currentSample += actualSamples;
+							samplesToRender -= actualSamples;
 						}
 
 						lastEventTick = event.tick;
@@ -1178,7 +1234,12 @@ namespace EmEn::Libs::WaveFactory
 							switch ( ctrlType )
 							{
 								case ControlEvent::Type::PitchBend:
+									channelBasePitchBend[event.channel] = static_cast< int16_t >(event.data3);
 									tsf_channel_set_pitchwheel(m_soundfont, event.channel, static_cast< int >(event.data3) + 8192);
+									break;
+
+								case ControlEvent::Type::Modulation:
+									channelModulation[event.channel] = static_cast< uint8_t >(event.data3);
 									break;
 
 								case ControlEvent::Type::Volume:
@@ -1211,6 +1272,18 @@ namespace EmEn::Libs::WaveFactory
 								case ControlEvent::Type::PolyKeyPressure:
 									/* Per-note aftertouch - TSF doesn't support modifying active voice velocity.
 									 * Could be implemented with custom voice tracking, but skipped for now. */
+									break;
+
+								case ControlEvent::Type::ProgramChange:
+									/* Dynamic instrument change - use bank 128 for drums (channel 9). */
+									if ( event.channel == 9 )
+									{
+										tsf_channel_set_bank_preset(m_soundfont, event.channel, 128, static_cast< int >(event.data3));
+									}
+									else
+									{
+										tsf_channel_set_bank_preset(m_soundfont, event.channel, 0, static_cast< int >(event.data3));
+									}
 									break;
 
 								default:

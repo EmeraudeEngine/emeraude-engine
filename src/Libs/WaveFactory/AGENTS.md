@@ -189,14 +189,26 @@ The `Synthesizer` class works exclusively with mono audio:
 - Variable-length delta times
 - Running status compression
 - **Pitch Bend (0xE0)**: Real-time pitch modification per channel
-- **CC#1 (Modulation)**: Vibrato effect
+- **CC#1 (Modulation)**: Vibrato effect (LFO-based in TSF mode)
 - **CC#7 (Volume)**: Channel volume control
 - **CC#10 (Pan)**: Stereo positioning per MIDI channel (0=left, 64=center, 127=right)
 - **CC#11 (Expression)**: Dynamic volume control
 - **CC#64 (Sustain)**: Sustain pedal
 - **CC#74 (Filter Cutoff)**: Brightness control
 - **CC#92 (Tremolo)**: Amplitude modulation
-- **Program Change**: Instrument selection per channel (General MIDI mapping)
+- **Program Change (0xC0)**: Dynamic instrument selection per channel
+- **Channel Pressure (0xD0)**: Aftertouch affecting whole channel
+- **Polyphonic Key Pressure (0xA0)**: Per-note aftertouch (captured, limited TSF support)
+
+**Advanced controllers (SF2 mode):**
+- **CC#0, CC#32**: Bank Select MSB/LSB
+- **CC#6, CC#38**: Data Entry MSB/LSB (for RPN)
+- **CC#39, CC#42, CC#43**: Fine LSB controllers (Volume, Pan, Expression)
+- **CC#98, CC#99**: NRPN LSB/MSB
+- **CC#100, CC#101**: RPN LSB/MSB (Pitch Bend Range)
+- **CC#120**: All Sound Off
+- **CC#121**: Reset All Controllers
+- **CC#123**: All Notes Off
 
 **Output:**
 - **Stereo output** with per-channel pan positioning
@@ -221,6 +233,11 @@ The `Synthesizer` class works exclusively with mono audio:
 **Dynamic Control Events (TSF mode):**
 - Pitch Bend, Volume, Expression, Sustain, Pan update in real-time during playback
 - Events processed via unified timeline (`TimelineEvent` struct)
+- **Modulation/Vibrato**: LFO at 5.5Hz, ±50 cents max depth, scaled by CC#1 value
+- **Chunked rendering**: 64-sample chunks when vibrato active for smooth pitch modulation
+- **Program Change**: Dynamic instrument switching during playback
+- **Bank Select + RPN**: Full MIDI bank/preset selection support
+- Pre-allocated 256 TSF voices for complex MIDI files
 - See: `FileFormatMIDI.hpp:renderWithSoundfont()`
 
 **Tempo Map:**
@@ -231,7 +248,9 @@ The `Synthesizer` class works exclusively with mono audio:
 
 **Limitations:**
 - No SMPTE time division
-- No Reverb/Chorus effects (TSF limitation)
+- No Reverb/Chorus effects (CC#91/93 - TSF limitation)
+- Polyphonic Key Pressure captured but not applied (TSF limitation)
+- No streaming mode (full pre-rendering to buffer)
 
 **Note rendering:**
 - Waveform selected by instrument family

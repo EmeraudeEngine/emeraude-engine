@@ -284,6 +284,11 @@ std::string name = sf2->presetName(0);
 
 ### SF2 Rendering Features
 - **Dynamic control events**: Pan (CC#10), Expression (CC#11), Sustain (CC#64), Volume (CC#7), Pitch Bend update in real-time
+- **Modulation/Vibrato (CC#1)**: LFO at 5.5Hz, ±50 cents max depth, rendered in 64-sample chunks
 - **Tempo map support**: Multiple tempo changes during playback handled correctly
-- **Program changes**: Bank selection (0 for melodic, 128 for drums on channel 10)
+- **Program changes**: Dynamic instrument switching during playback
+- **Bank selection**: CC#0/CC#32 for Bank Select, 0 for melodic, 128 for drums (channel 10)
+- **RPN support**: Pitch Bend Range (CC#100/101 + CC#6/38)
+- **Aftertouch**: Channel Pressure (0xD0) simulated via expression
+- **Voice allocation**: Pre-allocated 256 TSF voices for complex MIDI files
 - See: `Libs/WaveFactory/AGENTS.md` for full MIDI feature list
