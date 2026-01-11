@@ -282,12 +282,16 @@ namespace EmEn::Libs::WaveFactory
 					PortamentoSwitch,
 					FilterCutoff,
 					FilterResonance,
-					Tremolo
+					Tremolo,
+					ChannelPressure,   /* Aftertouch affecting whole channel. */
+					PolyKeyPressure,   /* Aftertouch affecting specific note. */
+					RawMidiCC          /* Pass-through for CC handled natively by TSF. */
 				};
 
 				uint32_t tick{0};      /* Event time in ticks. */
 				uint8_t channel{0};    /* MIDI channel (0-15). */
 				Type type{Type::PitchBend};
+				uint8_t controller{0}; /* Raw CC number (for RawMidiCC type). */
 				int16_t value{0};      /* Event value. */
 			};
 
@@ -502,10 +506,18 @@ namespace EmEn::Libs::WaveFactory
 							break;
 						}
 
-						case 0xA0: /* Polyphonic Key Pressure */
+						case 0xA0: /* Polyphonic Key Pressure (Aftertouch per note) */
 						{
-							stream.get();
-							stream.get();
+							const auto noteNumber = static_cast< uint8_t >(stream.get());
+							const auto pressure = static_cast< uint8_t >(stream.get());
+
+							ControlEvent event;
+							event.tick = currentTick;
+							event.channel = channel;
+							event.type = ControlEvent::Type::PolyKeyPressure;
+							event.controller = noteNumber;  /* Store note number in controller field. */
+							event.value = static_cast< int16_t >(pressure);
+							controlEvents.push_back(event);
 
 							break;
 						}
@@ -657,6 +669,33 @@ namespace EmEn::Libs::WaveFactory
 									break;
 								}
 
+								/* TSF-native controllers: Bank Select, RPN, Data Entry, LSB controllers, All Notes Off. */
+								case 0:   /* CC#0: Bank Select MSB. */
+								case 6:   /* CC#6: Data Entry MSB (for RPN). */
+								case 32:  /* CC#32: Bank Select LSB. */
+								case 38:  /* CC#38: Data Entry LSB (for RPN). */
+								case 39:  /* CC#39: Volume LSB. */
+								case 42:  /* CC#42: Pan LSB. */
+								case 43:  /* CC#43: Expression LSB. */
+								case 98:  /* CC#98: NRPN LSB. */
+								case 99:  /* CC#99: NRPN MSB. */
+								case 100: /* CC#100: RPN LSB. */
+								case 101: /* CC#101: RPN MSB. */
+								case 120: /* CC#120: All Sound Off. */
+								case 121: /* CC#121: Reset All Controllers. */
+								case 123: /* CC#123: All Notes Off. */
+								{
+									ControlEvent event;
+									event.tick = currentTick;
+									event.channel = channel;
+									event.type = ControlEvent::Type::RawMidiCC;
+									event.controller = controller;
+									event.value = static_cast< int16_t >(value);
+									controlEvents.push_back(event);
+
+									break;
+								}
+
 								default:
 									break;
 							}
@@ -672,9 +711,16 @@ namespace EmEn::Libs::WaveFactory
 							break;
 						}
 
-						case 0xD0: /* Channel Pressure */
+						case 0xD0: /* Channel Pressure (Aftertouch for whole channel) */
 						{
-							stream.get();
+							const auto pressure = static_cast< uint8_t >(stream.get());
+
+							ControlEvent event;
+							event.tick = currentTick;
+							event.channel = channel;
+							event.type = ControlEvent::Type::ChannelPressure;
+							event.value = static_cast< int16_t >(pressure);
+							controlEvents.push_back(event);
 
 							break;
 						}
@@ -867,6 +913,19 @@ namespace EmEn::Libs::WaveFactory
 						case ControlEvent::Type::Tremolo:
 							cache.tremoloDepth = event.value;
 							break;
+
+						case ControlEvent::Type::RawMidiCC:
+							/* Ignored in additive synthesis - only meaningful for SF2 rendering. */
+							break;
+
+						case ControlEvent::Type::ChannelPressure:
+							/* Channel aftertouch can modulate expression for added dynamics. */
+							cache.expression = std::max(cache.expression, event.value);
+							break;
+
+						case ControlEvent::Type::PolyKeyPressure:
+							/* Per-note aftertouch - harder to apply in this context, skip for now. */
+							break;
 					}
 
 					++searchIndex;
@@ -964,6 +1023,10 @@ namespace EmEn::Libs::WaveFactory
 				tsf_set_output(m_soundfont, TSF_STEREO_INTERLEAVED, static_cast< int >(sampleRate), 0.0F);
 				tsf_reset(m_soundfont);
 
+				/* Pre-allocate voices for thread safety and performance.
+				 * 256 voices should be enough for most complex MIDI files. */
+				tsf_set_max_voices(m_soundfont, 256);
+
 				/* Set initial channel states (program, pan, volume). */
 				for ( uint8_t channel = 0; channel < 16; ++channel )
 				{
@@ -1030,7 +1093,7 @@ namespace EmEn::Libs::WaveFactory
 				/* Add control events. */
 				for ( const auto & ctrl : controlEvents )
 				{
-					timeline.push_back({ctrl.tick, TimelineEvent::Type::Control, ctrl.channel, static_cast< uint8_t >(ctrl.type), 0, ctrl.value});
+					timeline.push_back({ctrl.tick, TimelineEvent::Type::Control, ctrl.channel, static_cast< uint8_t >(ctrl.type), ctrl.controller, ctrl.value});
 				}
 
 				/* Add tempo events. */
@@ -1132,6 +1195,22 @@ namespace EmEn::Libs::WaveFactory
 
 								case ControlEvent::Type::Pan:
 									tsf_channel_set_pan(m_soundfont, event.channel, static_cast< float >(event.data3) / 127.0F);
+									break;
+
+								case ControlEvent::Type::RawMidiCC:
+									/* Pass directly to TSF for native handling (Bank Select, RPN, LSB, etc.). */
+									tsf_channel_midi_control(m_soundfont, event.channel, event.data2, static_cast< int >(event.data3));
+									break;
+
+								case ControlEvent::Type::ChannelPressure:
+									/* Channel aftertouch - simulate via expression modulation.
+									 * Scale pressure to add expressiveness without overwhelming the base expression. */
+									tsf_channel_midi_control(m_soundfont, event.channel, 11, 64 + static_cast< int >(event.data3) / 2);
+									break;
+
+								case ControlEvent::Type::PolyKeyPressure:
+									/* Per-note aftertouch - TSF doesn't support modifying active voice velocity.
+									 * Could be implemented with custom voice tracking, but skipped for now. */
 									break;
 
 								default:
