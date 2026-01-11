@@ -249,7 +249,7 @@ Resource class for loading SoundFont 2 (SF2) files used for high-quality MIDI re
 
 ```cpp
 // Load a SoundFont via Resources system
-auto soundfonts = resources->container<SoundfontResource>();
+auto soundfonts = resources->container<S<oundfontResource>();
 auto sf2 = soundfonts->getResource("8realgs20");
 
 // Check if valid
@@ -281,3 +281,9 @@ std::string name = sf2->presetName(0);
 - `SoundfontResource.cpp` - Implementation with TSF_IMPLEMENTATION
 - `FileFormatMIDI.hpp:setSoundfont()` - Pass SF2 handle for rendering
 - `FileFormatMIDI.hpp:renderWithSoundfont()` - SF2-based MIDI rendering
+
+### SF2 Rendering Features
+- **Dynamic control events**: Pan (CC#10), Expression (CC#11), Sustain (CC#64), Volume (CC#7), Pitch Bend update in real-time
+- **Tempo map support**: Multiple tempo changes during playback handled correctly
+- **Program changes**: Bank selection (0 for melodic, 128 for drums on channel 10)
+- See: `Libs/WaveFactory/AGENTS.md` for full MIDI feature list

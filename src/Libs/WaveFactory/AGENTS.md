@@ -218,8 +218,20 @@ The `Synthesizer` class works exclusively with mono audio:
 - Falls back to additive synthesis if no SF2 provided
 - See: `Audio/SoundfontResource` for SF2 loading
 
+**Dynamic Control Events (TSF mode):**
+- Pitch Bend, Volume, Expression, Sustain, Pan update in real-time during playback
+- Events processed via unified timeline (`TimelineEvent` struct)
+- See: `FileFormatMIDI.hpp:renderWithSoundfont()`
+
+**Tempo Map:**
+- Multiple tempo changes during playback properly handled
+- Tempo events (`TempoEvent`) stored and sorted by tick
+- Time-to-sample conversion via `ticksToSamplesWithTempoMap()`
+- See: `FileFormatMIDI.hpp:TempoEvent`, `FileFormatMIDI.hpp:ticksToSamplesWithTempoMap()`
+
 **Limitations:**
 - No SMPTE time division
+- No Reverb/Chorus effects (TSF limitation)
 
 **Note rendering:**
 - Waveform selected by instrument family
@@ -252,6 +264,7 @@ The `Synthesizer` class works exclusively with mono audio:
 - **Type conversion**: Use `dataConversion<>()` for int16_t <-> float conversion
 - **Performance**: Synthesizer methods are optimized for single-channel processing
 - **MIDI End of Track**: Always handle meta event 0x2F to properly terminate parsing. See: `FileFormatMIDI.hpp:parseTrack()`
+- **MIDI Tempo Map**: Use `ticksToSamplesWithTempoMap()` for accurate timing with tempo changes. See: `FileFormatMIDI.hpp:ticksToSamplesWithTempoMap()`
 
 ## External Dependencies
 
