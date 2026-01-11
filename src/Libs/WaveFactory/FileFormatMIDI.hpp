@@ -31,9 +31,11 @@
 #include <array>
 #include <cmath>
 #include <cstdint>
+#include <cstring>
 #include <fstream>
 #include <iostream>
 #include <map>
+#include <random>
 #include <type_traits>
 #include <vector>
 
@@ -141,16 +143,15 @@ namespace EmEn::Libs::WaveFactory
 					return false;
 				}
 
-				/* Parse all tracks and collect notes, control events, tempo events, and raw MIDI CC. */
+				/* Parse all tracks and collect notes, control events, and tempo events. */
 				std::vector< MIDINote > notes;
 				std::vector< ControlEvent > controlEvents;
 				std::vector< TempoEvent > tempoEvents;
-				std::vector< MidiCCEvent > midiCCEvents;
 				std::array< ChannelState, 16 > channelStates{};
 
 				for ( uint16_t trackIndex = 0; trackIndex < header.trackCount; ++trackIndex )
 				{
-					if ( !this->parseTrack(file, notes, controlEvents, tempoEvents, midiCCEvents, channelStates, trackIndex) )
+					if ( !this->parseTrack(file, notes, controlEvents, tempoEvents, channelStates, trackIndex) )
 					{
 						std::cerr << "[WaveFactory::FileFormatMIDI] readFile(), failed to parse track " << trackIndex << " in '" << filepath << "' !\n";
 
@@ -254,23 +255,10 @@ namespace EmEn::Libs::WaveFactory
 				uint8_t filterCutoff{127}; /* Filter cutoff (CC#74), default fully open. */
 				uint8_t filterResonance{0}; /* Filter resonance (CC#71), default no resonance. */
 				uint8_t tremoloDepth{0};   /* Tremolo depth (CC#92), default off. */
-				uint8_t reverb{40};        /* Reverb send level (CC#91), default 40. */
-				uint8_t chorus{0};         /* Chorus send level (CC#93), default 0. */
 				bool sustainPedal{false};  /* Sustain pedal state (CC#64). */
 				bool portamentoOn{false};  /* Portamento on/off (CC#65). */
 				int16_t pitchBend{0};      /* Pitch bend value (-8192 to +8191). */
 				float pitchBendRange{2.0F}; /* Pitch bend range in semitones (default ±2). */
-			};
-
-			/**
-			 * @brief Represents a raw MIDI Control Change event for TSF passthrough.
-			 */
-			struct MidiCCEvent
-			{
-				uint32_t tick{0};          /* Event time in ticks. */
-				uint8_t channel{0};        /* MIDI channel (0-15). */
-				uint8_t controller{0};     /* Controller number (0-127). */
-				uint8_t value{0};          /* Controller value (0-127). */
 			};
 
 			/**
@@ -285,6 +273,7 @@ namespace EmEn::Libs::WaveFactory
 				enum class Type : uint8_t
 				{
 					PitchBend,
+					Pan,
 					Modulation,
 					Expression,
 					Volume,
@@ -360,23 +349,6 @@ namespace EmEn::Libs::WaveFactory
 			}
 
 			/**
-			 * @brief Converts MIDI ticks to sample position.
-			 * @param ticks The tick count.
-			 * @param tempo Microseconds per quarter note.
-			 * @param division Ticks per quarter note.
-			 * @param sampleRate The sample rate in Hz.
-			 * @return uint32_t The sample position.
-			 */
-			[[nodiscard]]
-			static uint32_t
-			ticksToSamples (uint32_t ticks, uint32_t tempo, uint16_t division, uint32_t sampleRate) noexcept
-			{
-				const double seconds = (static_cast< double >(ticks) * static_cast< double >(tempo)) / (static_cast< double >(division) * 1000000.0);
-
-				return static_cast< uint32_t >(seconds * static_cast< double >(sampleRate));
-			}
-
-			/**
 			 * @brief Parses the MIDI file header.
 			 * @param stream The input stream.
 			 * @param header The header structure to fill.
@@ -427,14 +399,13 @@ namespace EmEn::Libs::WaveFactory
 			 * @param notes The vector to append parsed notes to.
 			 * @param controlEvents The vector to append control events to.
 			 * @param tempoEvents The vector to append tempo events to.
-			 * @param midiCCEvents The vector to append raw MIDI CC events to.
 			 * @param channelStates The channel state array to update (pan, etc.).
 			 * @param trackIndex The index of this track.
 			 * @return bool
 			 */
 			[[nodiscard]]
 			bool
-			parseTrack (std::istream & stream, std::vector< MIDINote > & notes, std::vector< ControlEvent > & controlEvents, std::vector< TempoEvent > & tempoEvents, std::vector< MidiCCEvent > & midiCCEvents, std::array< ChannelState, 16 > & channelStates, uint16_t trackIndex) noexcept
+			parseTrack (std::istream & stream, std::vector< MIDINote > & notes, std::vector< ControlEvent > & controlEvents, std::vector< TempoEvent > & tempoEvents, std::array< ChannelState, 16 > & channelStates, uint16_t trackIndex) noexcept
 			{
 				/* Read chunk type (should be "MTrk"). */
 				char magic[4];
@@ -591,6 +562,13 @@ namespace EmEn::Libs::WaveFactory
 								case 10: /* CC#10: Pan (0=left, 64=center, 127=right). */
 								{
 									channelStates[channel].pan = value;
+
+									ControlEvent event;
+									event.tick = currentTick;
+									event.channel = channel;
+									event.type = ControlEvent::Type::Pan;
+									event.value = static_cast< int16_t >(value);
+									controlEvents.push_back(event);
 
 									break;
 								}
@@ -791,6 +769,7 @@ namespace EmEn::Libs::WaveFactory
 			struct ChannelControlCache
 			{
 				int16_t pitchBend{0};
+				int16_t pan{64};
 				int16_t modulation{0};
 				int16_t expression{127};
 				int16_t volume{100};
@@ -847,6 +826,10 @@ namespace EmEn::Libs::WaveFactory
 					{
 						case ControlEvent::Type::PitchBend:
 							cache.pitchBend = event.value;
+							break;
+
+						case ControlEvent::Type::Pan:
+							cache.pan = event.value;
 							break;
 
 						case ControlEvent::Type::Modulation:
@@ -1145,6 +1128,10 @@ namespace EmEn::Libs::WaveFactory
 
 								case ControlEvent::Type::Sustain:
 									tsf_channel_midi_control(m_soundfont, event.channel, 64, event.data3 != 0 ? 127 : 0);
+									break;
+
+								case ControlEvent::Type::Pan:
+									tsf_channel_set_pan(m_soundfont, event.channel, static_cast< float >(event.data3) / 127.0F);
 									break;
 
 								default:
