@@ -2,7 +2,7 @@
  * src/Testing/test_ThreadPool.cpp
  * This file is part of Emeraude-Engine
  *
- * Copyright (C) 2010-2025 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
+ * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
  *
  * Emeraude-Engine is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -1020,9 +1020,9 @@ TEST(ThreadPool, ParallelPixmapDrawing)
 	const auto speedup = sequentialMs / parallelMs;
 	const auto timeGainPercent = ((sequentialMs - parallelMs) / sequentialMs) * 100.0;
 
-	std::cout << "[          ] Sequential: " << sequentialMs << " ms\n";
-	std::cout << "[          ] Parallel:   " << parallelMs << " ms (" << pool.threadCount() << " threads)\n";
-	std::cout << "[          ] Speedup:    " << speedup << "x | Time saved: " << timeGainPercent << "%\n";
+	std::cout << "[		  ] Sequential: " << sequentialMs << " ms\n";
+	std::cout << "[		  ] Parallel:   " << parallelMs << " ms (" << pool.threadCount() << " threads)\n";
+	std::cout << "[		  ] Speedup:	" << speedup << "x | Time saved: " << timeGainPercent << "%\n";
 
 	/* The parallel version should be faster than sequential. */
 	EXPECT_LT(parallelDuration.count(), sequentialDuration.count());

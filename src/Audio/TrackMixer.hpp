@@ -2,7 +2,7 @@
  * src/Audio/TrackMixer.hpp
  * This file is part of Emeraude-Engine
  *
- * Copyright (C) 2010-2025 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
+ * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
  *
  * Emeraude-Engine is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -40,7 +40,6 @@
 
 /* Local inclusions for usages. */
 #include "MusicResource.hpp"
-#include "SoundfontResource.hpp"
 #include "Source.hpp"
 #include "Types.hpp"
 
@@ -211,17 +210,6 @@ namespace EmEn::Audio
 			}
 
 			/**
-			 * @brief Adds a soundtrack to the playlist with a SoundFont for MIDI rendering.
-			 * @param track A reference to a music resource.
-			 * @param soundfont A reference to a soundfont resource for high-quality MIDI synthesis.
-			 * @note The soundfont is configured on the track before adding to playlist.
-			 * @note If the track is already loaded, the soundfont setting has no effect.
-			 * @return void
-			 */
-			void
-			addToPlaylist (const std::shared_ptr< MusicResource > & track, const std::shared_ptr< SoundfontResource > & soundfont) noexcept;
-
-			/**
 			 * @brief Removes all soundtracks from the playlist.
 			 * @return void
 			 */
@@ -333,7 +321,7 @@ namespace EmEn::Audio
 			 * @param position The position in seconds.
 			 * @return void
 			 */
-			void seek (float position) noexcept;
+			void seek (float position) const noexcept;
 
 			/**
 			 * @brief Enables or disables shuffle mode.
@@ -470,6 +458,5 @@ namespace EmEn::Audio
 			bool m_shuffleEnabled{false};
 			std::vector< size_t > m_shuffleOrder;
 			size_t m_shuffleIndex{0};
-			std::shared_ptr< SoundfontResource > m_soundfont;
 	};
 }

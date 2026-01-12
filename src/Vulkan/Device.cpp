@@ -2,7 +2,7 @@
  * src/Vulkan/Device.cpp
  * This file is part of Emeraude-Engine
  *
- * Copyright (C) 2010-2025 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
+ * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
  *
  * Emeraude-Engine is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -393,55 +393,55 @@ namespace EmEn::Vulkan
 		 * Priority 2: A queue that supports the task (e.g., graphics + compute). */
 		for ( uint32_t index = 0; index < queueFamilyProperties.size(); ++index )
 		{
-		    const auto & properties = queueFamilyProperties[index].queueFamilyProperties;
-		    const bool hasGraphics = (properties.queueFlags & VK_QUEUE_GRAPHICS_BIT) != 0;
-		    const bool hasCompute = (properties.queueFlags & VK_QUEUE_COMPUTE_BIT) != 0;
+			const auto & properties = queueFamilyProperties[index].queueFamilyProperties;
+			const bool hasGraphics = (properties.queueFlags & VK_QUEUE_GRAPHICS_BIT) != 0;
+			const bool hasCompute = (properties.queueFlags & VK_QUEUE_COMPUTE_BIT) != 0;
 
-		    /* NOTE: Check presentation support if necessary for graphics files. */
-		    bool presentationSupport = true;
+			/* NOTE: Check presentation support if necessary for graphics files. */
+			bool presentationSupport = true;
 
-		    if ( requirements.needsPresentation() )
-		    {
-		        presentationSupport = m_physicalDevice->getSurfaceSupport(requirements.surface(), index);
-		    }
+			if ( requirements.needsPresentation() )
+			{
+				presentationSupport = m_physicalDevice->getSurfaceSupport(requirements.surface(), index);
+			}
 
-		    if ( hasGraphics && presentationSupport )
-		    {
-		        if ( !bestGraphicsIndex.has_value() )
-		        {
-		        	/* NOTE: If we don't have a candidate yet, we'll take this one. */
-		            bestGraphicsIndex = index;
-		        }
-		        else if ( !hasCompute )
-		        {
-		        	TraceDebug{ClassId} << "The device has a graphics dedicated queue family at index #" << index;
+			if ( hasGraphics && presentationSupport )
+			{
+				if ( !bestGraphicsIndex.has_value() )
+				{
+					/* NOTE: If we don't have a candidate yet, we'll take this one. */
+					bestGraphicsIndex = index;
+				}
+				else if ( !hasCompute )
+				{
+					TraceDebug{ClassId} << "The device has a graphics dedicated queue family at index #" << index;
 
-		        	/* NOTE: If we find a DEDICATED graphics queue (without computing), it's even better! */
-		            bestGraphicsIndex = index;
-		        }
-		    }
+					/* NOTE: If we find a DEDICATED graphics queue (without computing), it's even better! */
+					bestGraphicsIndex = index;
+				}
+			}
 
-		    if ( hasCompute )
-		    {
-		    	/* NOTE: Same idea but for compute here. */
-		        if ( !bestComputeIndex.has_value() )
-		        {
-		            bestComputeIndex = index;
-		        }
-		        else if ( !hasGraphics )
-		        {
-		        	TraceDebug{ClassId} << "The device has a compute dedicated queue family at index #" << index;
+			if ( hasCompute )
+			{
+				/* NOTE: Same idea but for compute here. */
+				if ( !bestComputeIndex.has_value() )
+				{
+					bestComputeIndex = index;
+				}
+				else if ( !hasGraphics )
+				{
+					TraceDebug{ClassId} << "The device has a compute dedicated queue family at index #" << index;
 
-		            bestComputeIndex = index;
-		        }
-		    }
+					bestComputeIndex = index;
+				}
+			}
 		}
 
 		if ( !bestGraphicsIndex.has_value() )
 		{
 			Tracer::debug(ClassId, "The device lacks a graphics queue family!");
 
-		    return false;
+			return false;
 		}
 
 		if ( !bestComputeIndex.has_value() )

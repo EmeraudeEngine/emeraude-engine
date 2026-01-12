@@ -1,8 +1,8 @@
 /*
- * src/Libs/Statistics.hpp
+ * src/Libs/Debug/Statistics.hpp
  * This file is part of Emeraude-Engine
  *
- * Copyright (C) 2010-2025 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
+ * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
  *
  * Emeraude-Engine is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public

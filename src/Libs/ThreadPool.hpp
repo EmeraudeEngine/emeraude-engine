@@ -2,7 +2,7 @@
  * src/Libs/ThreadPool.hpp
  * This file is part of Emeraude-Engine
  *
- * Copyright (C) 2010-2025 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
+ * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
  *
  * Emeraude-Engine is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -91,19 +91,19 @@ namespace EmEn::Libs
 	 *
 	 * // Fire-and-forget task submission
 	 * pool.enqueue([] {
-	 *     std::cout << "Hello from worker thread\n";
+	 *	 std::cout << "Hello from worker thread\n";
 	 * });
 	 *
 	 * // Task with result
 	 * auto future = pool.enqueueWithResult([] {
-	 *     return 42;
+	 *	 return 42;
 	 * });
 	 * int result = future.get(); // Blocks until task completes
 	 *
 	 * // Data-parallel loop
 	 * std::vector<int> data(10000);
 	 * pool.parallelFor(size_t{0}, data.size(), [&](size_t i) {
-	 *     data[i] = compute(i);
+	 *	 data[i] = compute(i);
 	 * });
 	 * // parallelFor blocks until all iterations complete
 	 *
@@ -461,7 +461,7 @@ namespace EmEn::Libs
 			 * until the pool is destroyed. If threadCount is 0, defaults to at least 1 worker.
 			 *
 			 * @param threadCount Number of worker threads to create. Defaults to the number
-			 *                    of hardware threads available (std::thread::hardware_concurrency()).
+			 *					of hardware threads available (std::thread::hardware_concurrency()).
 			 * @post threadCount() returns the actual number of workers created.
 			 * @note If threadCount is 0, it is automatically adjusted to 1.
 			 * @note Worker threads are launched immediately and wait for tasks.
@@ -542,7 +542,7 @@ namespace EmEn::Libs
 			 * @return The approximate number of queued tasks waiting to be executed.
 			 * @note Thread-safe: Uses atomic load with relaxed ordering.
 			 * @note Due to concurrent operations, the value is approximate
-			 *       and may be stale by the time it is used.
+			 *	   and may be stale by the time it is used.
 			 */
 			[[nodiscard]]
 			size_t
@@ -586,7 +586,7 @@ namespace EmEn::Libs
 			 * @code
 			 * ThreadPool pool;
 			 * bool success = pool.enqueue([] {
-			 *     std::cout << "Task executed\n";
+			 *	 std::cout << "Task executed\n";
 			 * });
 			 * @endcode
 			 */
@@ -688,7 +688,7 @@ namespace EmEn::Libs
 			 * @return std::future<ReturnType> where ReturnType is the callable's return type.
 			 * @note Thread-safe: Can be called concurrently from multiple threads.
 			 * @note The task is wrapped in exception-safe handling: exceptions are captured
-			 *       and rethrown when future.get() is called.
+			 *	   and rethrown when future.get() is called.
 			 * @note Slightly more overhead than enqueue() due to std::promise/std::future.
 			 * @note This method is only available when C++ exceptions are enabled.
 			 *
@@ -697,25 +697,25 @@ namespace EmEn::Libs
 			 *
 			 * // Task returning a value
 			 * auto future = pool.enqueueWithResult([] {
-			 *     return 42;
+			 *	 return 42;
 			 * });
 			 * int result = future.get(); // Blocks until task completes, returns 42
 			 *
 			 * // Task returning void
 			 * auto voidFuture = pool.enqueueWithResult([] {
-			 *     std::cout << "Task completed\n";
+			 *	 std::cout << "Task completed\n";
 			 * });
 			 * voidFuture.get(); // Blocks until task completes
 			 *
 			 * // Exception handling
 			 * auto exFuture = pool.enqueueWithResult([] {
-			 *     throw std::runtime_error("Error");
-			 *     return 0;
+			 *	 throw std::runtime_error("Error");
+			 *	 return 0;
 			 * });
 			 * try {
-			 *     exFuture.get(); // Rethrows the exception
+			 *	 exFuture.get(); // Rethrows the exception
 			 * } catch (const std::runtime_error& e) {
-			 *     std::cerr << e.what() << "\n";
+			 *	 std::cerr << e.what() << "\n";
 			 * }
 			 * @endcode
 			 */
@@ -773,19 +773,19 @@ namespace EmEn::Libs
 			 * @param start First index to process (inclusive).
 			 * @param end Last index (exclusive), following
 			 * @param body Callable invoked for each index: body(index). Must be thread-safe
-			 *             if it accesses shared data.
+			 *			 if it accesses shared data.
 			 * @param grainSize Minimum number of iterations per task chunk (default 1).
-			 *                  Higher values reduce task creation overhead but may cause
-			 *                  load imbalance. Automatically increased for very small workloads.
+			 *				  Higher values reduce task creation overhead but may cause
+			 *				  load imbalance. Automatically increased for very small workloads.
 			 *
 			 * @pre start < end (if start >= end, returns immediately without executing body).
 			 * @post All iterations in [start, end) have been executed exactly once.
 			 * @note Blocks until all iterations complete (synchronous operation with implicit wait).
 			 * @note Thread-safe: body must be thread-safe for concurrent execution.
 			 * @note Exceptions: If body throws, the exception propagates from parallelFor.
-			 *       Other iterations may continue executing concurrently.
+			 *	   Other iterations may continue executing concurrently.
 			 * @note Sequential fallback: If end-start <= grainSize or threadCount() <= 1,
-			 *       executes sequentially to avoid parallelization overhead.
+			 *	   executes sequentially to avoid parallelization overhead.
 			 *
 			 * @code
 			 * ThreadPool pool;
@@ -793,22 +793,22 @@ namespace EmEn::Libs
 			 * // Process array elements
 			 * std::vector<int> data(10000);
 			 * pool.parallelFor(size_t{0}, data.size(), [&data](size_t i) {
-			 *     data[i] = compute(i);
+			 *	 data[i] = compute(i);
 			 * });
 			 * // All elements processed when parallelFor returns
 			 *
 			 * // With custom grain size for better performance
 			 * pool.parallelFor(size_t{0}, data.size(), [&data](size_t i) {
-			 *     data[i] = expensiveCompute(i);
+			 *	 data[i] = expensiveCompute(i);
 			 * }, 100); // Process at least 100 elements per task
 			 *
 			 * // 2D loop example
 			 * const size_t width = 1920, height = 1080;
 			 * std::vector<Pixel> image(width * height);
 			 * pool.parallelFor(size_t{0}, height, [&](size_t y) {
-			 *     for (size_t x = 0; x < width; ++x) {
-			 *         image[y * width + x] = renderPixel(x, y);
-			 *     }
+			 *	 for (size_t x = 0; x < width; ++x) {
+			 *		 image[y * width + x] = renderPixel(x, y);
+			 *	 }
 			 * });
 			 * @endcode
 			 */
@@ -901,19 +901,19 @@ namespace EmEn::Libs
 			 * @post isIdle() returns true when wait() returns.
 			 * @note Thread-safe: Can be called concurrently from multiple threads.
 			 * @note Does not prevent new tasks from being enqueued concurrently.
-			 *       If other threads continue enqueuing, wait() may return while
-			 *       new tasks are being added.
+			 *	   If other threads continue enqueuing, wait() may return while
+			 *	   new tasks are being added.
 			 * @note Calling wait() from a task executed by the pool will deadlock
-			 *       if the pool is saturated (all workers busy). Avoid this pattern.
+			 *	   if the pool is saturated (all workers busy). Avoid this pattern.
 			 *
 			 * @code
 			 * ThreadPool pool;
 			 *
 			 * // Enqueue some tasks
 			 * for (int i = 0; i < 100; ++i) {
-			 *     pool.enqueue([i] {
-			 *         std::cout << "Task " << i << "\n";
-			 *     });
+			 *	 pool.enqueue([i] {
+			 *		 std::cout << "Task " << i << "\n";
+			 *	 });
 			 * }
 			 *
 			 * // Wait for all tasks to complete

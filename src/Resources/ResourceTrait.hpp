@@ -2,7 +2,7 @@
  * src/Resources/ResourceTrait.hpp
  * This file is part of Emeraude-Engine
  *
- * Copyright (C) 2010-2025 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
+ * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
  *
  * Emeraude-Engine is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -27,9 +27,9 @@
 #pragma once
 
 /* STL inclusions. */
-#include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <atomic>
 #include <string>
 #include <vector>
 #include <memory>
@@ -69,6 +69,7 @@ namespace EmEn
 	}
 
 	class FileSystem;
+	class Settings;
 }
 
 namespace EmEn::Resources
@@ -89,7 +90,7 @@ namespace EmEn::Resources
 	 * stable throughout the lifetime of the service provider.
 	 *
 	 * @note This is an abstract base class. Concrete implementations must provide the
-	 *       getContainerInternal() and update() methods.
+	 *	   getContainerInternal() and update() methods.
 	 *
 	 * @see Manager
 	 * @see Container
@@ -97,17 +98,34 @@ namespace EmEn::Resources
 	 * @see FileSystem
 	 * @see Graphics::Renderer
 	 *
-	 * @since 0.8.0
-	 * @version 0.8.35
+	 * @version 0.8.45
 	 */
 	class AbstractServiceProvider
 	{
 		public:
 
 			/**
+			 * @brief Deleted copy constructor (reference members).
+			 */
+			AbstractServiceProvider (const AbstractServiceProvider &) = delete;
+
+			/**
+			 * @brief Deleted copy assignment operator (reference members).
+			 */
+			AbstractServiceProvider & operator= (const AbstractServiceProvider &) = delete;
+
+			/**
+			 * @brief Deleted move constructor (reference members).
+			 */
+			AbstractServiceProvider (AbstractServiceProvider &&) = delete;
+
+			/**
+			 * @brief Deleted move assignment operator (reference members).
+			 */
+			AbstractServiceProvider & operator= (AbstractServiceProvider &&) = delete;
+
+			/**
 			 * @brief Destructs the service provider.
-			 *
-			 * @version 0.8.35
 			 */
 			virtual ~AbstractServiceProvider() = default;
 
@@ -120,14 +138,29 @@ namespace EmEn::Resources
 			 * @return Const reference to the FileSystem instance.
 			 *
 			 * @see FileSystem
-			 *
-			 * @version 0.8.35
 			 */
 			[[nodiscard]]
 			const FileSystem &
 			fileSystem () const noexcept
 			{
 				return m_fileSystem;
+			}
+
+			/**
+			 * @brief Returns access to the settings service for configuration retrieval.
+			 *
+			 * Provides access to the Settings service used to retrieve and modify
+			 * engine configuration values during resource loading.
+			 *
+			 * @return Non-const reference to the Settings instance.
+			 *
+			 * @see Settings
+			 */
+			[[nodiscard]]
+			Settings &
+			settings () const noexcept
+			{
+				return m_settings;
 			}
 
 			/**
@@ -141,11 +174,9 @@ namespace EmEn::Resources
 			 * @return Non-const reference to the Graphics::Renderer instance.
 			 *
 			 * @note The non-const reference allows GPU resource creation even from const
-			 *       methods of derived classes.
+			 *	   methods of derived classes.
 			 *
 			 * @see Graphics::Renderer
-			 *
-			 * @version 0.8.35
 			 */
 			[[nodiscard]]
 			Graphics::Renderer &
@@ -162,18 +193,16 @@ namespace EmEn::Resources
 			 * container and performs a static cast to the typed container interface.
 			 *
 			 * @tparam resource_t The resource type to retrieve the container for. Must derive
-			 *                    from ResourceTrait (e.g., SoundResource, ImageResource, MeshResource).
+			 *					from ResourceTrait (e.g., SoundResource, ImageResource, MeshResource).
 			 *
 			 * @return Pointer to the typed Container<resource_t>, or nullptr if the
-			 *         container for this type is not registered.
+			 *		 container for this type is not registered.
 			 *
 			 * @note The returned pointer may be nullptr if the resource type is not
-			 *       registered with the service provider.
+			 *	   registered with the service provider.
 			 *
 			 * @see Container
 			 * @see getContainerInternal()
-			 *
-			 * @version 0.8.35
 			 */
 			template< typename resource_t >
 				requires std::is_base_of_v< ResourceTrait, resource_t >
@@ -196,18 +225,16 @@ namespace EmEn::Resources
 			 * the container and its resources.
 			 *
 			 * @tparam resource_t The resource type to retrieve the container for. Must derive
-			 *                    from ResourceTrait (e.g., SoundResource, ImageResource, MeshResource).
+			 *					from ResourceTrait (e.g., SoundResource, ImageResource, MeshResource).
 			 *
 			 * @return Const pointer to the typed Container<resource_t>, or nullptr if the
-			 *         container for this type is not registered.
+			 *		 container for this type is not registered.
 			 *
 			 * @note The returned pointer may be nullptr if the resource type is not
-			 *       registered with the service provider.
+			 *	   registered with the service provider.
 			 *
 			 * @see Container
 			 * @see getContainerInternal()
-			 *
-			 * @version 0.8.35
 			 */
 			template< typename resource_t >
 				requires std::is_base_of_v< ResourceTrait, resource_t >
@@ -234,9 +261,7 @@ namespace EmEn::Resources
 			 * @return true if the update was successful, false otherwise.
 			 *
 			 * @note This is a pure virtual method that must be implemented by concrete
-			 *       service provider classes.
-			 *
-			 * @version 0.8.35
+			 *	   service provider classes.
 			 */
 			virtual bool update (const Json::Value & root) noexcept = 0;
 
@@ -246,53 +271,26 @@ namespace EmEn::Resources
 			 * @brief Constructs a service provider with required service references.
 			 *
 			 * Protected constructor ensures this class can only be instantiated through
-			 * derived classes. The constructor binds references to the FileSystem and
-			 * Graphics::Renderer services that will be used throughout the lifetime of
+			 * derived classes. The constructor binds references to the FileSystem, Settings,
+			 * and Graphics::Renderer services that will be used throughout the lifetime of
 			 * the service provider.
 			 *
 			 * @param fileSystem Const reference to the FileSystem service for loading
-			 *                   resource data from storage.
+			 *				   resource data from storage.
+			 * @param settings Non-const reference to the Settings service for configuration
+			 *				 retrieval and modification.
 			 * @param graphicsRenderer Non-const reference to the Graphics::Renderer
-			 *                         service for creating GPU resources.
+			 *						 service for creating GPU resources.
 			 *
 			 * @note The reference members make this class non-copyable and non-movable.
-			 *
-			 * @version 0.8.35
 			 */
-			AbstractServiceProvider (const FileSystem & fileSystem, Graphics::Renderer & graphicsRenderer) noexcept
+			AbstractServiceProvider (const FileSystem & fileSystem, Settings & settings, Graphics::Renderer & graphicsRenderer) noexcept
 				: m_fileSystem{fileSystem},
+				m_settings{settings},
 				m_graphicsRenderer{graphicsRenderer}
 			{
 
 			}
-
-			/**
-			 * @brief Deleted copy constructor (reference members).
-			 *
-			 * @version 0.8.35
-			 */
-			AbstractServiceProvider (const AbstractServiceProvider &) = delete;
-
-			/**
-			 * @brief Deleted copy assignment operator (reference members).
-			 *
-			 * @version 0.8.35
-			 */
-			AbstractServiceProvider & operator= (const AbstractServiceProvider &) = delete;
-
-			/**
-			 * @brief Deleted move constructor (reference members).
-			 *
-			 * @version 0.8.35
-			 */
-			AbstractServiceProvider (AbstractServiceProvider &&) = delete;
-
-			/**
-			 * @brief Deleted move assignment operator (reference members).
-			 *
-			 * @version 0.8.35
-			 */
-			AbstractServiceProvider & operator= (AbstractServiceProvider &&) = delete;
 
 			/**
 			 * @brief Returns the container for a specific resource type (internal implementation).
@@ -304,15 +302,13 @@ namespace EmEn::Resources
 			 * @param typeIndex The std::type_index identifying the resource type.
 			 *
 			 * @return Pointer to the ContainerInterface for the specified type, or nullptr
-			 *         if no container is registered for this type.
+			 *		 if no container is registered for this type.
 			 *
 			 * @note This is a pure virtual method that must be implemented by concrete
-			 *       service provider classes.
+			 *	   service provider classes.
 			 *
 			 * @see container()
 			 * @see ContainerInterface
-			 *
-			 * @version 0.8.35
 			 */
 			[[nodiscard]]
 			virtual ContainerInterface * getContainerInternal (const std::type_index & typeIndex) noexcept = 0;
@@ -327,24 +323,24 @@ namespace EmEn::Resources
 			 * @param typeIndex The std::type_index identifying the resource type.
 			 *
 			 * @return Const pointer to the ContainerInterface for the specified type, or nullptr
-			 *         if no container is registered for this type.
+			 *		 if no container is registered for this type.
 			 *
 			 * @note This is a pure virtual method that must be implemented by concrete
-			 *       service provider classes.
+			 *	   service provider classes.
 			 *
 			 * @see container()
 			 * @see ContainerInterface
-			 *
-			 * @version 0.8.35
 			 */
 			[[nodiscard]]
 			virtual const ContainerInterface * getContainerInternal (const std::type_index & typeIndex) const noexcept = 0;
 
 		private:
 
-			const FileSystem & m_fileSystem;              ///< Reference to the FileSystem service for loading resource data.
-			Graphics::Renderer & m_graphicsRenderer;      ///< Reference to the Graphics::Renderer service for GPU resource creation.
+			const FileSystem & m_fileSystem;			  ///< Reference to the FileSystem service for loading resource data.
+			Settings & m_settings;						///< Reference to the Settings service for configuration retrieval.
+			Graphics::Renderer & m_graphicsRenderer;	  ///< Reference to the Graphics::Renderer service for GPU resource creation.
 	};
+
 	/**
 	 * @class ResourceTrait
 	 * @brief Base trait for all loadable resources in the Emeraude Engine with dependency management.
@@ -384,13 +380,13 @@ namespace EmEn::Resources
 	 * - `LoadFinished` - Resource and all dependencies successfully loaded
 	 * - `LoadFailed` - Loading failed (check logs for details)
 	 *
-	 * @note [OBS][SHARED-OBSERVABLE] - This class uses the observer pattern and requires shared_ptr
-	 * @extends std::enable_shared_from_this A resource must be managed by shared_ptr for dependency tracking
-	 * @extends EmEn::Libs::NameableTrait A resource is always named for identification and logging
-	 * @extends EmEn::Libs::FlagTrait<uint32_t> Construction flags control loading behavior
-	 * @extends EmEn::Libs::ObservableTrait Observable pattern for loading state tracking
-	 * @see AbstractServiceProvider, Container, Manager
-	 * @version 0.8.35
+	 * @note [OBS][SHARED-OBSERVABLE] - This class uses the observer pattern and requires shared_ptr.
+	 * @extends std::enable_shared_from_this A resource must be managed by shared_ptr for dependency tracking.
+	 * @extends EmEn::Libs::NameableTrait A resource is always named for identification and logging.
+	 * @extends EmEn::Libs::FlagTrait<uint32_t> Construction flags control loading behavior.
+	 * @extends EmEn::Libs::ObservableTrait Observable pattern for loading state tracking.
+	 * @see AbstractServiceProvider, Container, Manager.
+	 * @version 0.8.45
 	 */
 	class ResourceTrait : public std::enable_shared_from_this< ResourceTrait >, public Libs::NameableTrait, public Libs::FlagTrait< uint32_t >, public Libs::ObservableTrait
 	{
@@ -404,14 +400,13 @@ namespace EmEn::Resources
 			 * that have subscribed to this resource's loading events.
 			 *
 			 * @see ObservableTrait::notify(), ObservableTrait::subscribe()
-			 * @version 0.8.35
 			 */
 			enum NotificationCode
 			{
 				LoadFinished, ///< Resource and all dependencies successfully loaded and ready for use
 				LoadFailed,   ///< Loading failed at any stage (check logs for detailed error messages)
 				/* Enumeration boundary. */
-				MaxEnum       ///< Internal boundary marker, not a valid notification code
+				MaxEnum	   ///< Internal boundary marker, not a valid notification code
 			};
 
 			/**
@@ -422,7 +417,6 @@ namespace EmEn::Resources
 			 *
 			 * @note This affects all ResourceTrait instances globally
 			 * @warning Enabling this can significantly increase console output volume
-			 * @version 0.8.35
 			 */
 			inline static bool s_showInformation{false};
 
@@ -430,10 +424,9 @@ namespace EmEn::Resources
 			 * @brief Global flag to suppress resource conversion warning messages.
 			 *
 			 * When true (default), conversion warnings (e.g., format conversions, data loss warnings)
-			 * are suppressed. Set to false to see all conversion-related warnings.
+			 * are suppressed. Set to "false" to see all conversion-related warnings.
 			 *
 			 * @note This affects all ResourceTrait instances globally
-			 * @version 0.8.35
 			 */
 			inline static bool s_quietConversion{true};
 
@@ -443,7 +436,6 @@ namespace EmEn::Resources
 			 * Resources cannot be copied due to complex dependency relationships and shared_ptr requirements.
 			 *
 			 * @param copy A reference to the copied instance
-			 * @version 0.8.35
 			 */
 			ResourceTrait (const ResourceTrait & copy) noexcept = delete;
 
@@ -453,7 +445,6 @@ namespace EmEn::Resources
 			 * Resources cannot be moved due to complex dependency relationships and shared_ptr requirements.
 			 *
 			 * @param copy A reference to the moved instance
-			 * @version 0.8.35
 			 */
 			ResourceTrait (ResourceTrait && copy) noexcept = delete;
 
@@ -464,7 +455,6 @@ namespace EmEn::Resources
 			 *
 			 * @param copy A reference to the copied instance
 			 * @return ResourceTrait& (never returns, deleted)
-			 * @version 0.8.35
 			 */
 			ResourceTrait & operator= (const ResourceTrait & copy) noexcept = delete;
 
@@ -475,7 +465,6 @@ namespace EmEn::Resources
 			 *
 			 * @param copy A reference to the moved instance
 			 * @return ResourceTrait& (never returns, deleted)
-			 * @version 0.8.35
 			 */
 			ResourceTrait & operator= (ResourceTrait && copy) noexcept = delete;
 
@@ -489,7 +478,6 @@ namespace EmEn::Resources
 			 *
 			 * @post Parent and dependency lists should be empty for properly loaded resources
 			 * @see isLoaded(), status()
-			 * @version 0.8.35
 			 */
 			~ResourceTrait () override;
 
@@ -502,7 +490,6 @@ namespace EmEn::Resources
 			 * @return true if this resource has no parents waiting for its loading, false otherwise
 			 * @note Thread-safe to call at any time
 			 * @see m_parentsToNotify
-			 * @version 0.8.35
 			 */
 			[[nodiscard]]
 			bool
@@ -520,7 +507,6 @@ namespace EmEn::Resources
 			 * @return The number of unloaded dependencies this resource is waiting for
 			 * @note Thread-safe to call at any time
 			 * @see m_dependenciesToWaitFor, addDependency()
-			 * @version 0.8.35
 			 */
 			[[nodiscard]]
 			size_t
@@ -539,7 +525,6 @@ namespace EmEn::Resources
 			 * @note Useful when using Container::getOrCreate() to detect newly created resources
 			 * @warning To check if resource is not ready, use !isLoaded() instead
 			 * @see isLoaded(), isLoading(), status()
-			 * @version 0.8.35
 			 */
 			[[nodiscard]]
 			bool
@@ -557,7 +542,6 @@ namespace EmEn::Resources
 			 * @return true if status is Status::Loading, false otherwise
 			 * @note Thread-safe to call at any time
 			 * @see isLoaded(), isUnloaded(), status()
-			 * @version 0.8.35
 			 */
 			[[nodiscard]]
 			bool
@@ -575,7 +559,6 @@ namespace EmEn::Resources
 			 * @return true if status is Status::Loaded, false otherwise
 			 * @note Thread-safe to call at any time
 			 * @see isLoading(), isUnloaded(), status(), onDependenciesLoaded()
-			 * @version 0.8.35
 			 */
 			[[nodiscard]]
 			bool
@@ -596,7 +579,6 @@ namespace EmEn::Resources
 			 * @post Resource status becomes ManualEnqueuing if successful
 			 * @note Fails if resource is already in Loading, Loaded, or Failed state
 			 * @see setManualLoadSuccess(), beginLoading(), Status
-			 * @version 0.8.35
 			 */
 			[[nodiscard]]
 			bool
@@ -617,7 +599,6 @@ namespace EmEn::Resources
 			 * @post Resource transitions to Loading, then eventually Loaded or Failed
 			 * @note Only works in manual loading mode; fails in automatic loading mode
 			 * @see enableManualLoading(), setLoadSuccess()
-			 * @version 0.8.35
 			 */
 			bool setManualLoadSuccess (bool status) noexcept;
 
@@ -627,7 +608,6 @@ namespace EmEn::Resources
 			 * @return The current Status enum value (Unloaded, Enqueuing, ManualEnqueuing, Loading, Loaded, or Failed)
 			 * @note Thread-safe to call at any time
 			 * @see Status, isLoaded(), isLoading(), isUnloaded()
-			 * @version 0.8.35
 			 */
 			[[nodiscard]]
 			Status
@@ -644,7 +624,6 @@ namespace EmEn::Resources
 			 *
 			 * @note This sets the DirectLoading flag in FlagTrait
 			 * @see isDirectLoading()
-			 * @version 0.8.35
 			 */
 			void
 			setDirectLoadingHint () noexcept
@@ -661,7 +640,6 @@ namespace EmEn::Resources
 			 *
 			 * @return A C-string constant identifying the resource class type
 			 * @note Must be implemented by all concrete resource classes
-			 * @version 0.8.35
 			 */
 			[[nodiscard]]
 			virtual const char * classLabel () const noexcept = 0;
@@ -678,7 +656,6 @@ namespace EmEn::Resources
 			 * @post Resource will be in Loaded or Failed state
 			 * @note Pure virtual - must be implemented by derived classes
 			 * @see load(AbstractServiceProvider&, const std::filesystem::path&)
-			 * @version 0.8.35
 			 */
 			virtual bool load (AbstractServiceProvider & serviceProvider) noexcept = 0;
 
@@ -697,7 +674,6 @@ namespace EmEn::Resources
 			 * @post Resource will be in Loaded or Failed state
 			 * @note Default implementation parses JSON; override for binary formats
 			 * @see load(AbstractServiceProvider&, const Json::Value&)
-			 * @version 0.8.35
 			 */
 			virtual bool load (AbstractServiceProvider & serviceProvider, const std::filesystem::path & filepath) noexcept;
 
@@ -715,7 +691,6 @@ namespace EmEn::Resources
 			 * @post Resource will be in Loaded or Failed state
 			 * @note Pure virtual - must be implemented by derived classes
 			 * @see load(AbstractServiceProvider&, const std::filesystem::path&)
-			 * @version 0.8.35
 			 */
 			virtual bool load (AbstractServiceProvider & serviceProvider, const Json::Value & data) noexcept = 0;
 
@@ -729,7 +704,6 @@ namespace EmEn::Resources
 			 * @return The total memory footprint in bytes
 			 * @note Override in derived classes to account for dynamically allocated data
 			 * @note Default implementation only returns the size of the resource object itself
-			 * @version 0.8.35
 			 */
 			[[nodiscard]]
 			virtual
@@ -752,7 +726,6 @@ namespace EmEn::Resources
 			 * @post Resource is in Unloaded state with empty dependency lists
 			 * @note Resource names should be unique within their container
 			 * @see NameableTrait, FlagTrait
-			 * @version 0.8.35
 			 */
 			ResourceTrait (std::string resourceName, uint32_t initialResourceFlags) noexcept
 				: NameableTrait{std::move(resourceName)},
@@ -770,7 +743,6 @@ namespace EmEn::Resources
 			 * @return true if DirectLoading flag is enabled, false otherwise
 			 * @note This is a hint flag and doesn't directly affect ResourceTrait behavior
 			 * @see setDirectLoadingHint()
-			 * @version 0.8.35
 			 */
 			[[nodiscard]]
 			bool
@@ -792,7 +764,6 @@ namespace EmEn::Resources
 			 * @warning If this returns false, abort the loading process immediately
 			 * @note For manual loading, use enableManualLoading() instead
 			 * @see setLoadSuccess(), addDependency(), enableManualLoading()
-			 * @version 0.8.35
 			 */
 			[[nodiscard]]
 			bool
@@ -820,7 +791,6 @@ namespace EmEn::Resources
 			 * @note Thread-safe: uses m_dependenciesAccess mutex
 			 * @warning Circular dependencies are not detected and will cause deadlock
 			 * @see beginLoading(), setLoadSuccess(), m_dependenciesToWaitFor
-			 * @version 0.8.35
 			 */
 			[[nodiscard]]
 			bool addDependency (const std::shared_ptr< ResourceTrait > & dependency) noexcept;
@@ -839,7 +809,6 @@ namespace EmEn::Resources
 			 * @post On failure: Resource transitions to Failed and emits LoadFailed notification
 			 * @note Thread-safe: uses m_dependenciesAccess mutex
 			 * @see beginLoading(), addDependency(), checkDependencies(), onDependenciesLoaded()
-			 * @version 0.8.35
 			 */
 			[[nodiscard]]
 			bool setLoadSuccess (bool status) noexcept;
@@ -858,7 +827,6 @@ namespace EmEn::Resources
 			 * @note This is called from within a mutex-protected section
 			 * @note All dependencies are guaranteed to be in Loaded state when this is called
 			 * @see checkDependencies(), setLoadSuccess()
-			 * @version 0.8.35
 			 */
 			[[nodiscard]]
 			virtual
@@ -882,7 +850,6 @@ namespace EmEn::Resources
 			 * @return Relative resource name with extension removed and UNIX-style separators
 			 * @note On Windows, path separators are converted to forward slashes
 			 * @see NameableTrait
-			 * @version 0.8.35
 			 */
 			[[nodiscard]]
 			static std::string getResourceNameFromFilepath (const std::filesystem::path & filepath, const std::string & storeName) noexcept;
@@ -901,7 +868,6 @@ namespace EmEn::Resources
 			 * @post checkDependencies() is called to evaluate overall loading status
 			 * @note Thread-safe: uses m_dependenciesAccess mutex
 			 * @see addDependency(), checkDependencies(), m_dependenciesToWaitFor
-			 * @version 0.8.35
 			 */
 			void dependencyLoaded (const std::shared_ptr< ResourceTrait > & dependency) noexcept;
 
@@ -919,7 +885,6 @@ namespace EmEn::Resources
 			 * @note Thread-safe: uses m_dependenciesAccess mutex
 			 * @note Only acts when status is Loading; ignores calls in other states
 			 * @see dependencyLoaded(), onDependenciesLoaded(), setLoadSuccess()
-			 * @version 0.8.35
 			 */
 			void checkDependencies () noexcept;
 
@@ -934,7 +899,6 @@ namespace EmEn::Resources
 			 * @pre Resource must be in Unloaded state
 			 * @post Resource transitions to Enqueuing or ManualEnqueuing state if successful
 			 * @see beginLoading(), enableManualLoading()
-			 * @version 0.8.35
 			 */
 			[[nodiscard]]
 			bool initializeEnqueuing (bool manual) noexcept;
@@ -952,68 +916,15 @@ namespace EmEn::Resources
 			 * @note This method must be called while holding m_dependenciesAccess mutex.
 			 * @note The check is recursive and may be expensive for deep dependency trees.
 			 * @see addDependency()
-			 * @version 0.8.35
 			 */
 			[[nodiscard]]
 			bool wouldCreateCycle (const std::shared_ptr< ResourceTrait > & dependency) const noexcept;
 
-			/**
-			 * @brief Flag bit indicating the resource should use direct (synchronous) loading.
-			 *
-			 * This flag is set via setDirectLoadingHint() and checked via isDirectLoading().
-			 * It serves as a hint to the resource manager about loading strategy.
-			 *
-			 * @see setDirectLoadingHint(), isDirectLoading()
-			 * @version 0.8.35
-			 */
 			static constexpr uint32_t DirectLoading = 1U << 31;
 
-			/**
-			 * @brief List of parent resources waiting for this resource to complete loading.
-			 *
-			 * When this resource loads, it notifies all parents via dependencyLoaded().
-			 * Parents add themselves to this list when calling addDependency().
-			 * Cleared after notification to prevent memory leaks.
-			 *
-			 * @note Protected by m_dependenciesAccess mutex
-			 * @see m_dependenciesToWaitFor, dependencyLoaded(), addDependency()
-			 * @version 0.8.35
-			 */
 			std::vector< std::shared_ptr< ResourceTrait > > m_parentsToNotify;
-
-			/**
-			 * @brief List of child resources that must load before this resource can complete.
-			 *
-			 * Populated by addDependency() during the Enqueuing/ManualEnqueuing phase.
-			 * Dependencies are removed as they complete via dependencyLoaded().
-			 * When this list becomes empty and status is Loading, the resource can finalize.
-			 *
-			 * @note Protected by m_dependenciesAccess mutex
-			 * @see m_parentsToNotify, addDependency(), checkDependencies()
-			 * @version 0.8.35
-			 */
 			std::vector< std::shared_ptr< ResourceTrait > > m_dependenciesToWaitFor;
-
-			/**
-			 * @brief Current loading status of the resource.
-			 *
-			 * Transitions through the state machine: Unloaded → Enqueuing/ManualEnqueuing → Loading → Loaded/Failed
-			 *
-			 * @note Atomic to ensure thread-safe reads and writes without requiring mutex locks.
-			 * @see Status, status(), isLoaded(), isLoading(), isUnloaded()
-			 * @version 0.8.35
-			 */
 			std::atomic< Status > m_status{Status::Unloaded};
-
-			/**
-			 * @brief Mutex protecting dependency vectors and status transitions.
-			 *
-			 * This mutex ensures thread-safe access to m_parentsToNotify and m_dependenciesToWaitFor.
-			 * Locked during addDependency(), dependencyLoaded(), checkDependencies(), and setLoadSuccess().
-			 *
-			 * @note Mutable to allow locking in const methods
-			 * @version 0.8.35
-			 */
 			mutable std::mutex m_dependenciesAccess;
 	};
 }

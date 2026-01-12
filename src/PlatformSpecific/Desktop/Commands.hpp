@@ -2,7 +2,7 @@
  * src/PlatformSpecific/Desktop/Commands.hpp
  * This file is part of Emeraude-Engine
  *
- * Copyright (C) 2010-2025 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
+ * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
  *
  * Emeraude-Engine is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -124,9 +124,10 @@ namespace EmEn::PlatformSpecific::Desktop
 
 	/**
 	 * @brief Sets a progression inside the taskbar icon of the application.
+	 * @param window A reference to the window.
 	 * @param progress The progression value. Negative number disables the progression.
 	 * @param mode The progression mode. Only for Windows.
 	 * @return void
 	 */
-	void setTaskbarIconProgression (float progress, ProgressMode mode) noexcept;
+	void setTaskbarIconProgression (const Window & window, float progress, ProgressMode mode) noexcept;
 }

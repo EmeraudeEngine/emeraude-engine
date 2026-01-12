@@ -2,7 +2,7 @@
  * src/Libs/VertexFactory/Grid.hpp
  * This file is part of Emeraude-Engine
  *
- * Copyright (C) 2010-2025 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
+ * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
  *
  * Emeraude-Engine is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -1012,7 +1012,7 @@ namespace EmEn::Libs::VertexFactory
 			 * processing. Each vertex contributes 3 values (X, Y, Z) in sequence.
 			 *
 			 * @return Vector containing interleaved position data: [x0, y0, z0, x1, y1, z1, ...].
-			 *         Size is pointCount() × 3.
+			 *		 Size is pointCount() × 3.
 			 *
 			 * @note Data layout is optimized for GPU vertex buffer creation
 			 * @note Y coordinate contains the height value at each point

@@ -2,7 +2,7 @@
  * src/Window.cpp
  * This file is part of Emeraude-Engine
  *
- * Copyright (C) 2010-2025 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
+ * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
  *
  * Emeraude-Engine is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -124,8 +124,8 @@ namespace EmEn
 		}
 		else
 		{
-            const auto windowWidth = settings.getOrSetDefault< int32_t >(WindowWidthKey, DefaultWindowWidth);
-            const auto windowHeight = settings.getOrSetDefault< int32_t >(WindowHeightKey, DefaultWindowHeight);
+			const auto windowWidth = settings.getOrSetDefault< int32_t >(WindowWidthKey, DefaultWindowWidth);
+			const auto windowHeight = settings.getOrSetDefault< int32_t >(WindowHeightKey, DefaultWindowHeight);
 			const auto frameless = settings.getOrSetDefault< bool >(WindowFramelessKey, DefaultWindowFrameless);
 
 			/* GLFW_RESIZABLE specifies whether the windowed mode window

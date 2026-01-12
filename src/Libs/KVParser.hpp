@@ -2,7 +2,7 @@
  * src/Libs/KVParser.hpp
  * This file is part of Emeraude-Engine
  *
- * Copyright (C) 2010-2025 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
+ * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
  *
  * Emeraude-Engine is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -139,7 +139,7 @@ namespace EmEn::Libs
 			 * @brief Checks if the variable is in an undefined state.
 			 *
 			 * @return true if the variable was default-constructed and never assigned a value,
-			 *         false otherwise.
+			 *		 false otherwise.
 			 */
 			[[nodiscard]]
 			bool
@@ -339,9 +339,9 @@ namespace EmEn::Libs
 	 * @code
 	 * KVParser parser;
 	 * if (parser.read("config.ini")) {
-	 *     auto& section = parser.section("Graphics");
-	 *     int width = section.variable("width").asInteger();
-	 *     bool fullscreen = section.variable("fullscreen").asBoolean();
+	 *	 auto& section = parser.section("Graphics");
+	 *	 int width = section.variable("width").asInteger();
+	 *	 bool fullscreen = section.variable("fullscreen").asBoolean();
 	 * }
 	 * @endcode
 	 *
@@ -418,10 +418,10 @@ namespace EmEn::Libs
 			 *
 			 * @param filepath Path to the configuration file to read.
 			 * @return true if the file was successfully opened and parsed, false if the file
-			 *         could not be opened.
+			 *		 could not be opened.
 			 *
 			 * @note Parsing errors in individual lines are silently ignored; only file I/O
-			 *       errors cause this method to return false.
+			 *	   errors cause this method to return false.
 			 */
 			[[nodiscard]]
 			bool read (const std::filesystem::path & filepath) noexcept;
@@ -445,7 +445,7 @@ namespace EmEn::Libs
 			 *
 			 * @param filepath Path to the configuration file to write.
 			 * @return true if the file was successfully opened and written, false if the file
-			 *         could not be created or opened for writing.
+			 *		 could not be created or opened for writing.
 			 */
 			[[nodiscard]]
 			bool write (const std::filesystem::path & filepath) const noexcept;
@@ -459,11 +459,11 @@ namespace EmEn::Libs
 			 */
 			enum class LineType
 			{
-				None = 0,         ///< Empty or unrecognized line
-				Headers = 1,      ///< Header line starting with '@'
-				Comment = 2,      ///< Comment line starting with '#'
+				None = 0,		 ///< Empty or unrecognized line
+				Headers = 1,	  ///< Header line starting with '@'
+				Comment = 2,	  ///< Comment line starting with '#'
 				SectionTitle = 3, ///< Section header line containing '['
-				Definition = 4    ///< Variable definition line containing '='
+				Definition = 4	///< Variable definition line containing '='
 			};
 
 			/**

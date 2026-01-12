@@ -2,7 +2,7 @@
  * src/Scenes/AbstractEntity.hpp
  * This file is part of Emeraude-Engine
  *
- * Copyright (C) 2010-2025 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
+ * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
  *
  * Emeraude-Engine is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -62,10 +62,10 @@ namespace EmEn::Scenes
 	/** @brief Types of visual debug overlays that can be enabled on entities. */
 	enum class VisualDebugType
 	{
-		Axis,            ///< Local coordinate system axes (RGB = XYZ).
-		Velocity,        ///< Velocity vector visualization for moving entities.
+		Axis,			///< Local coordinate system axes (RGB = XYZ).
+		Velocity,		///< Velocity vector visualization for moving entities.
 		BoundingShape,   ///< Collision model shape wireframe (adapts to model type).
-		Camera,          ///< Camera frustum visualization.
+		Camera,		  ///< Camera frustum visualization.
 	};
 
 	/* Forward declaration for ComponentBuilder. */
@@ -174,18 +174,18 @@ namespace EmEn::Scenes
 	 * (Visual, Camera, Light, SoundEmitter, etc.) rather than subclassing.
 	 *
 	 * @note [THREAD-SAFETY] Component access (m_components) is thread-safe (protected by m_componentsMutex).
-	 *       Other members are read-safe, write-unsafe: multiple threads can safely read simultaneously,
-	 *       but writes must be externally synchronized. The caller is responsible for ensuring thread-safety
-	 *       if entities are modified concurrently.
+	 *	   Other members are read-safe, write-unsafe: multiple threads can safely read simultaneously,
+	 *	   but writes must be externally synchronized. The caller is responsible for ensuring thread-safety
+	 *	   if entities are modified concurrently.
 	 *
 	 * @note [DOUBLE-BUFFERING] publishStateForRendering() and getWorldCoordinatesStateForRendering()
-	 *       provide thread-safe separation between logic thread (writes) and render thread (reads).
-	 *       Logic thread updates entity state, then publishes to render buffer. Render thread reads
-	 *       from stable buffer without blocking logic thread.
+	 *	   provide thread-safe separation between logic thread (writes) and render thread (reads).
+	 *	   Logic thread updates entity state, then publishes to render buffer. Render thread reads
+	 *	   from stable buffer without blocking logic thread.
 	 *
 	 * @note [OBSERVER PATTERN] Entities observe their components (ObserverTrait) and notify observers
-	 *       of content changes (ObservableTrait). This enables automatic registration with Scene subsystems
-	 *       (Graphics, Audio, Physics) when components are added/removed.
+	 *	   of content changes (ObservableTrait). This enables automatic registration with Scene subsystems
+	 *	   (Graphics, Audio, Physics) when components are added/removed.
 	 *
 	 * @extends EmEn::Libs::FlagArrayTrait< 8 > Provides 8 boolean flags, with 6 used by this base class.
 	 * @extends EmEn::Libs::NameableTrait An entity has a unique name for identification and debugging.
@@ -209,47 +209,47 @@ namespace EmEn::Scenes
 			 * components with appropriate subsystems (Graphics, Audio, Physics).
 			 *
 			 * @note Component-specific codes (CameraCreated, VisualCreated, etc.) carry
-			 *       std::shared_ptr< component_t > in the notification data (std::any).
+			 *	   std::shared_ptr< component_t > in the notification data (std::any).
 			 * @note Generic codes (ComponentCreated, ComponentDestroyed) carry
-			 *       std::shared_ptr< Component::Abstract >.
+			 *	   std::shared_ptr< Component::Abstract >.
 			 */
 			enum NotificationCode
 			{
 				/* Main notifications */
-				EntityContentModified,        ///< Entity's content has changed (bounding primitives, properties).
-				ComponentCreated,             ///< Generic: any component added (carries std::shared_ptr< Component::Abstract >).
-				ComponentDestroyed,           ///< Generic: any component removed.
-				ModifierCreated,              ///< Generic: any AbstractModifier added.
-				ModifierDestroyed,            ///< Generic: any AbstractModifier removed.
+				EntityContentModified,		///< Entity's content has changed (bounding primitives, properties).
+				ComponentCreated,			 ///< Generic: any component added (carries std::shared_ptr< Component::Abstract >).
+				ComponentDestroyed,		   ///< Generic: any component removed.
+				ModifierCreated,			  ///< Generic: any AbstractModifier added.
+				ModifierDestroyed,			///< Generic: any AbstractModifier removed.
 				/* Specific component notifications */
-				CameraCreated,                ///< Component::Camera added (non-primary).
-				PrimaryCameraCreated,         ///< Component::Camera added (marked as primary via asPrimary()).
-				CameraDestroyed,              ///< Component::Camera removed.
-				MicrophoneCreated,            ///< Component::Microphone added (non-primary).
-				PrimaryMicrophoneCreated,     ///< Component::Microphone added (marked as primary via asPrimary()).
-				MicrophoneDestroyed,          ///< Component::Microphone removed.
-				DirectionalLightCreated,      ///< Component::DirectionalLight added.
-				DirectionalLightDestroyed,    ///< Component::DirectionalLight removed.
-				PointLightCreated,            ///< Component::PointLight added.
-				PointLightDestroyed,          ///< Component::PointLight removed.
-				SpotLightCreated,             ///< Component::SpotLight added.
-				SpotLightDestroyed,           ///< Component::SpotLight removed.
-				SoundEmitterCreated,          ///< Component::SoundEmitter added.
-				SoundEmitterDestroyed,        ///< Component::SoundEmitter removed.
-				VisualCreated,                ///< Component::Visual added.
-				VisualComponentDestroyed,     ///< Component::Visual removed.
-				MultipleVisualsCreated,       ///< Component::MultipleVisuals added.
+				CameraCreated,				///< Component::Camera added (non-primary).
+				PrimaryCameraCreated,		 ///< Component::Camera added (marked as primary via asPrimary()).
+				CameraDestroyed,			  ///< Component::Camera removed.
+				MicrophoneCreated,			///< Component::Microphone added (non-primary).
+				PrimaryMicrophoneCreated,	 ///< Component::Microphone added (marked as primary via asPrimary()).
+				MicrophoneDestroyed,		  ///< Component::Microphone removed.
+				DirectionalLightCreated,	  ///< Component::DirectionalLight added.
+				DirectionalLightDestroyed,	///< Component::DirectionalLight removed.
+				PointLightCreated,			///< Component::PointLight added.
+				PointLightDestroyed,		  ///< Component::PointLight removed.
+				SpotLightCreated,			 ///< Component::SpotLight added.
+				SpotLightDestroyed,		   ///< Component::SpotLight removed.
+				SoundEmitterCreated,		  ///< Component::SoundEmitter added.
+				SoundEmitterDestroyed,		///< Component::SoundEmitter removed.
+				VisualCreated,				///< Component::Visual added.
+				VisualComponentDestroyed,	 ///< Component::Visual removed.
+				MultipleVisualsCreated,	   ///< Component::MultipleVisuals added.
 				MultipleVisualsComponentDestroyed, ///< Component::MultipleVisuals removed.
-				ParticlesEmitterCreated,      ///< Component::ParticlesEmitter added.
-				ParticlesEmitterDestroyed,    ///< Component::ParticlesEmitter removed.
+				ParticlesEmitterCreated,	  ///< Component::ParticlesEmitter added.
+				ParticlesEmitterDestroyed,	///< Component::ParticlesEmitter removed.
 				DirectionalPushModifierCreated,   ///< Component::DirectionalPushModifier added.
 				DirectionalPushModifierDestroyed, ///< Component::DirectionalPushModifier removed.
-				SphericalPushModifierCreated,     ///< Component::SphericalPushModifier added.
+				SphericalPushModifierCreated,	 ///< Component::SphericalPushModifier added.
 				SphericalPushModifierDestroyed,   ///< Component::SphericalPushModifier removed.
-				WeightCreated,                ///< Component::Weight added.
-				WeightDestroyed,              ///< Component::Weight removed.
+				WeightCreated,				///< Component::Weight added.
+				WeightDestroyed,			  ///< Component::Weight removed.
 				/* Enumeration boundary. */
-				MaxEnum                       ///< Total count of notification codes.
+				MaxEnum					   ///< Total count of notification codes.
 			};
 
 			/**
@@ -338,7 +338,7 @@ namespace EmEn::Scenes
 			 * @return const Scene & Reference to the scene that owns this entity.
 			 *
 			 * @note The scene reference is immutable and valid for the entity's lifetime.
-			 *       Entity is destroyed when scene is destroyed.
+			 *	   Entity is destroyed when scene is destroyed.
 			 */
 			[[nodiscard]]
 			const Scene &
@@ -375,7 +375,7 @@ namespace EmEn::Scenes
 			 * @return Physics::BodyPhysicalProperties & Writable reference to aggregated properties.
 			 *
 			 * @warning Manual changes to properties are overwritten when components are added/removed.
-			 *          Prefer modifying individual component properties instead.
+			 *		  Prefer modifying individual component properties instead.
 			 */
 			Physics::BodyPhysicalProperties &
 			bodyPhysicalProperties () noexcept
@@ -868,10 +868,10 @@ namespace EmEn::Scenes
 			 * AbstractEntity uses 5 of the 8 available flags. Derived classes can use flags
 			 * starting from NextFlag (currently 4).
 			 */
-			static constexpr auto IsRenderable{0UL};                 ///< Entity has at least one renderable component.
-			static constexpr auto IsCollisionDisabled{1UL};          ///< Collision detection disabled (default: false = collidable).
-			static constexpr auto IsSimulationPaused{2UL};           ///< Physics simulation paused (no gravity/drag).
-			static constexpr auto NextFlag{3UL};                     ///< First available flag for derived classes (Node, StaticEntity).
+			static constexpr auto IsRenderable{0UL};				 ///< Entity has at least one renderable component.
+			static constexpr auto IsCollisionDisabled{1UL};		  ///< Collision detection disabled (default: false = collidable).
+			static constexpr auto IsSimulationPaused{2UL};		   ///< Physics simulation paused (no gravity/drag).
+			static constexpr auto NextFlag{3UL};					 ///< First available flag for derived classes (Node, StaticEntity).
 
 			/**
 			 * @brief Constructs an abstract entity.
@@ -973,7 +973,7 @@ namespace EmEn::Scenes
 			 * (e.g., octree re-insertion).
 			 *
 			 * @note This is NOT called for every component change, only when properties
-			 *       (bounding shapes, mass, etc.) are recalculated.
+			 *	   (bounding shapes, mass, etc.) are recalculated.
 			 */
 			virtual void onContentModified () noexcept = 0;
 
@@ -1150,13 +1150,13 @@ namespace EmEn::Scenes
 			 */
 			virtual void onLocationDataUpdate () noexcept = 0;
 
-			const Scene & m_scene;                          ///< Reference to parent scene (immutable, valid for lifetime).
+			const Scene & m_scene;						  ///< Reference to parent scene (immutable, valid for lifetime).
 			Libs::StaticVector< std::shared_ptr< Component::Abstract >, MaxComponentCount > m_components; ///< Fixed-size component storage.
-			mutable std::mutex m_componentsMutex;           ///< Protects m_components for thread-safe access.
+			mutable std::mutex m_componentsMutex;		   ///< Protects m_components for thread-safe access.
 			Physics::BodyPhysicalProperties m_bodyPhysicalProperties;  ///< Aggregated physical properties (mass, drag, etc.).
 			std::unique_ptr< Physics::CollisionModelInterface > m_collisionModel; ///< Collision model for narrow-phase detection.
-			const uint32_t m_birthTime{0};                  ///< Scene timestamp at creation (milliseconds).
-			size_t m_lastUpdatedMoveCycle{0};               ///< Last engine cycle when entity moved (for hasMoved()).
+			const uint32_t m_birthTime{0};				  ///< Scene timestamp at creation (milliseconds).
+			size_t m_lastUpdatedMoveCycle{0};			   ///< Last engine cycle when entity moved (for hasMoved()).
 	};
 
 	template< typename component_t >

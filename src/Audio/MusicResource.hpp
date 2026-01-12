@@ -2,7 +2,7 @@
  * src/Audio/MusicResource.hpp
  * This file is part of Emeraude-Engine
  *
- * Copyright (C) 2010-2025 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
+ * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
  *
  * Emeraude-Engine is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -34,11 +34,13 @@
 #include "Resources/Container.hpp"
 #include "Libs/WaveFactory/Wave.hpp"
 
-/* Forward declaration for TinySoundFont. */
+/* Forward declarations. */
 struct tsf;
 
 namespace EmEn::Audio
 {
+	class SoundfontResource;
+
 	/**
 	 * @brief The music resource class.
 	 * @extends EmEn::Audio::PlayableInterface
@@ -54,7 +56,7 @@ namespace EmEn::Audio
 			static constexpr auto ClassId{"MusicResource"};
 
 			/** @brief Defines the resource dependency complexity. */
-			static constexpr auto Complexity{Resources::DepComplexity::None};
+			static constexpr auto Complexity{Resources::DepComplexity::One};
 
 			/**
 			 * @brief Constructs a music resource.
@@ -190,44 +192,6 @@ namespace EmEn::Audio
 				return m_localData.seconds();
 			}
 
-			/**
-			 * @brief Sets a SoundFont handle for MIDI rendering (per-instance).
-			 * @param soundfont Pointer to a TinySoundFont handle, or nullptr to use additive synthesis.
-			 * @note Must be called before load() for the setting to take effect.
-			 * @note The caller is responsible for ensuring the soundfont remains valid during loading.
-			 */
-			void
-			setSoundfont (tsf * soundfont) noexcept
-			{
-				m_soundfont = soundfont;
-			}
-
-			/**
-			 * @brief Returns the currently set SoundFont handle (per-instance).
-			 * @return tsf* Pointer to the soundfont, or nullptr if none set.
-			 */
-			[[nodiscard]]
-			tsf *
-			soundfont () const noexcept
-			{
-				return m_soundfont;
-			}
-
-			/**
-			 * @brief Sets a global SoundFont handle used by all MusicResources for MIDI rendering.
-			 * @param soundfont Pointer to a TinySoundFont handle, or nullptr to disable.
-			 * @note This is used as a fallback when no per-instance soundfont is set.
-			 * @note The caller must ensure the soundfont remains valid while resources are loading.
-			 */
-			static void setGlobalSoundfont (tsf * soundfont) noexcept;
-
-			/**
-			 * @brief Returns the global SoundFont handle.
-			 * @return tsf* Pointer to the global soundfont, or nullptr if none set.
-			 */
-			[[nodiscard]]
-			static tsf * globalSoundfont () noexcept;
-
 		private:
 
 			/** @copydoc EmEn::Resources::ResourceTrait::onDependenciesLoaded() */
@@ -240,13 +204,21 @@ namespace EmEn::Audio
 			 */
 			void readMetaData (const std::filesystem::path & filepath) noexcept;
 
+			/**
+			 * @brief Renders the pending MIDI file using the loaded soundfont.
+			 * @return true on success, false on failure.
+			 */
+			[[nodiscard]]
+			bool renderPendingMidi () noexcept;
+
 			static constexpr auto DefaultInfo{"Unknown"};
 
 			std::vector< std::shared_ptr< Buffer > > m_buffers;
 			Libs::WaveFactory::Wave< int16_t > m_localData;
 			std::string m_title{DefaultInfo};
 			std::string m_artist{DefaultInfo};
-			tsf * m_soundfont{nullptr};
+			std::filesystem::path m_pendingMidiPath;					  ///< Path to MIDI file awaiting soundfont dependency.
+			std::shared_ptr< SoundfontResource > m_soundfontDependency;   ///< Reference to the soundfont dependency.
 	};
 }
 

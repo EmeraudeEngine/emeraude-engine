@@ -2,7 +2,7 @@
  * src/Libs/SourceCodeParser.hpp
  * This file is part of Emeraude-Engine
  *
- * Copyright (C) 2010-2025 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
+ * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
  *
  * Emeraude-Engine is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -55,14 +55,14 @@ namespace EmEn::Libs
 	 *
 	 * Usage example:
 	 * @code
-	 * std::string code = "int main() {\n    return 0;\n}\n";
+	 * std::string code = "int main() {\n	return 0;\n}\n";
 	 * SourceCodeParser parser(code, 5, false);
 	 * parser.annotate(2, 11, "Missing semicolon");
 	 * std::string annotated = parser.getParsedSourceCode();
 	 * @endcode
 	 *
 	 * @note This class is designed for read-only analysis and formatting. It does not modify
-	 *       the original source code content.
+	 *	   the original source code content.
 	 * @see String::explode()
 	 * @since 0.8.38
 	 * @version 0.8.38
@@ -78,13 +78,13 @@ namespace EmEn::Libs
 			 * line number display and comment removal options.
 			 *
 			 * @param sourceCode The source code to parse as a string reference. The content is
-			 *                   split into individual lines for processing.
+			 *				   split into individual lines for processing.
 			 * @param showLineNumbers Controls line number display: 0 disables line numbers,
-			 *                        any value > 0 enables them with the specified width (minimum 5).
-			 *                        Values between 1-4 are automatically adjusted to 5.
+			 *						any value > 0 enables them with the specified width (minimum 5).
+			 *						Values between 1-4 are automatically adjusted to 5.
 			 * @param removeComments When true, removes all C/C++ style comments.
-			 *                       from the source code while preserving line mapping for annotations.
-			 *                       Empty lines resulting from comment removal are also removed.
+			 *					   from the source code while preserving line mapping for annotations.
+			 *					   Empty lines resulting from comment removal are also removed.
 			 *
 			 * @note Line numbers are right-aligned with the specified width, followed by "| ".
 			 * @note Comment removal maintains accurate line/column mapping for annotations.
@@ -108,14 +108,14 @@ namespace EmEn::Libs
 			 * as a footer annotation instead.
 			 *
 			 * @param line The line number (1-based) where the annotation should appear.
-			 *             If 0 or less, the annotation is treated as a footer annotation.
+			 *			 If 0 or less, the annotation is treated as a footer annotation.
 			 * @param column The column position (0-based) where the annotation marker should point.
 			 * @param notice The annotation text to display.
 			 *
 			 * @note Annotations appear below their corresponding line with tilde characters (~)
-			 *       leading to a caret (^) pointing at the column position.
+			 *	   leading to a caret (^) pointing at the column position.
 			 * @note When line numbers are enabled, the annotation indentation accounts for the
-			 *       line number display width.
+			 *	   line number display width.
 			 * @see annotate(std::string_view)
 			 * @version 0.8.38
 			 */
@@ -154,9 +154,9 @@ namespace EmEn::Libs
 			 * @return A formatted string containing the annotated source code.
 			 *
 			 * @note When comments are removed, line mapping is preserved so annotations
-			 *       still point to the correct positions.
+			 *	   still point to the correct positions.
 			 * @note Annotations use tilde characters (~) followed by a caret (^) to point
-			 *       at specific columns.
+			 *	   at specific columns.
 			 * @note Multiple annotations on the same line are displayed in column order.
 			 * @version 0.8.38
 			 */
@@ -172,14 +172,14 @@ namespace EmEn::Libs
 			 *
 			 * @param sourceCode The source code to parse and format.
 			 * @param showLineNumbers Controls line number display: 0 disables line numbers,
-			 *                        any value > 0 enables them with the specified width (minimum 5).
-			 *                        Default is 5.
+			 *						any value > 0 enables them with the specified width (minimum 5).
+			 *						Default is 5.
 			 * @param removeComments When true, removes all C/C++ style comments from the source code.
-			 *                       Default is false.
+			 *					   Default is false.
 			 * @return A formatted string with line numbers (if enabled) and processed content.
 			 *
 			 * @note This method cannot add annotations. Use the constructor and instance methods
-			 *       if you need to annotate the source code.
+			 *	   if you need to annotate the source code.
 			 * @version 0.8.38
 			 */
 			[[nodiscard]]

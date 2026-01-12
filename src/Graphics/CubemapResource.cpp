@@ -2,7 +2,7 @@
  * src/Graphics/CubemapResource.cpp
  * This file is part of Emeraude-Engine
  *
- * Copyright (C) 2010-2025 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
+ * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
  *
  * Emeraude-Engine is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -83,10 +83,10 @@ namespace EmEn::Graphics
 			/* Create a retro sunset gradient (orange -> pink -> purple -> dark blue). */
 			Gradient< float, float > sunsetGradient;
 			sunsetGradient.addColorAt(0.0F, Color< float >{0.05F, 0.05F, 0.15F, 1.0F});  /* Top: Dark blue */
-			sunsetGradient.addColorAt(0.3F, Color< float >{0.3F, 0.1F, 0.4F, 1.0F});     /* Purple */
-			sunsetGradient.addColorAt(0.5F, Color< float >{0.9F, 0.3F, 0.4F, 1.0F});     /* Pink/Rose */
-			sunsetGradient.addColorAt(0.7F, Color< float >{1.0F, 0.5F, 0.2F, 1.0F});     /* Orange */
-			sunsetGradient.addColorAt(1.0F, Color< float >{0.95F, 0.8F, 0.6F, 1.0F});    /* Bottom: Light orange/yellow */
+			sunsetGradient.addColorAt(0.3F, Color< float >{0.3F, 0.1F, 0.4F, 1.0F});	 /* Purple */
+			sunsetGradient.addColorAt(0.5F, Color< float >{0.9F, 0.3F, 0.4F, 1.0F});	 /* Pink/Rose */
+			sunsetGradient.addColorAt(0.7F, Color< float >{1.0F, 0.5F, 0.2F, 1.0F});	 /* Orange */
+			sunsetGradient.addColorAt(1.0F, Color< float >{0.95F, 0.8F, 0.6F, 1.0F});	/* Bottom: Light orange/yellow */
 
 			for ( size_t faceIndex = 0; faceIndex < CubemapFaceCount; faceIndex++ )
 			{

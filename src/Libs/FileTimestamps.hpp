@@ -2,7 +2,7 @@
  * src/Libs/FileTimestamps.hpp
  * This file is part of Emeraude-Engine
  *
- * Copyright (C) 2010-2025 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
+ * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
  *
  * Emeraude-Engine is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -51,7 +51,7 @@ namespace EmEn::Libs
 	 * If a timestamp is unavailable on the current platform, it will be set to 0.
 	 *
 	 * @note The class performs lazy fetching: timestamps are retrieved only when
-	 *       one of the accessor methods is called for the first time.
+	 *	   one of the accessor methods is called for the first time.
 	 */
 	class FileTimestamps final
 	{
@@ -166,9 +166,9 @@ namespace EmEn::Libs
 			 *
 			 * @note This triggers lazy fetching if not already done.
 			 * @note The meaning of ctime is platform-dependent. Use birthTimeNS() for
-			 *       true creation time when available.
+			 *	   true creation time when available.
 			 * @return On Linux/macOS: last status change time. On Windows: creation time.
-			 *       Returns 0 if unavailable.
+			 *	   Returns 0 if unavailable.
 			 */
 			[[nodiscard]]
 			uint64_t
@@ -186,9 +186,9 @@ namespace EmEn::Libs
 			 * @brief Returns the ctime in milliseconds since Unix epoch.
 			 * @note This triggers lazy fetching if not already done.
 			 * @note The meaning of ctime is platform-dependent. Use birthTimeMS() for
-			 *       true creation time when available.
+			 *	   true creation time when available.
 			 * @return On Linux/macOS: last status change time. On Windows: creation time.
-			 *       Returns 0.0 if unavailable.
+			 *	   Returns 0.0 if unavailable.
 			 */
 			[[nodiscard]]
 			double
@@ -201,9 +201,9 @@ namespace EmEn::Libs
 			 * @brief Returns the ctime in seconds since Unix epoch.
 			 * @note This triggers lazy fetching if not already done.
 			 * @note The meaning of ctime is platform-dependent. Use birthTimeS() for
-			 *       true creation time when available.
+			 *	   true creation time when available.
 			 * @return On Linux/macOS: last status change time. On Windows: creation time.
-			 *       Returns 0.0 if unavailable.
+			 *	   Returns 0.0 if unavailable.
 			 */
 			[[nodiscard]]
 			double
@@ -216,9 +216,9 @@ namespace EmEn::Libs
 			 * @brief Returns the file creation time (birth time) in nanoseconds since Unix epoch.
 			 * @note This triggers lazy fetching if not already done.
 			 * @note Availability:
-			 *       - Linux: Requires kernel 4.11+ and modern filesystem (ext4, btrfs, etc.)
-			 *       - macOS: Always available
-			 *       - Windows: Always available (same as ctime)
+			 *	   - Linux: Requires kernel 4.11+ and modern filesystem (ext4, btrfs, etc.)
+			 *	   - macOS: Always available
+			 *	   - Windows: Always available (same as ctime)
 			 * @return Creation time in nanoseconds, or 0 if unavailable on this platform.
 			 */
 			[[nodiscard]]
@@ -237,9 +237,9 @@ namespace EmEn::Libs
 			 * @brief Returns the file creation time (birth time) in milliseconds since Unix epoch.
 			 * @note This triggers lazy fetching if not already done.
 			 * @note Availability:
-			 *       - Linux: Requires kernel 4.11+ and modern filesystem (ext4, btrfs, etc.)
-			 *       - macOS: Always available
-			 *       - Windows: Always available (same as ctime)
+			 *	   - Linux: Requires kernel 4.11+ and modern filesystem (ext4, btrfs, etc.)
+			 *	   - macOS: Always available
+			 *	   - Windows: Always available (same as ctime)
 			 * @return Creation time in milliseconds (with sub-millisecond precision), or 0.0 if unavailable on this platform.
 			 */
 			[[nodiscard]]
@@ -253,9 +253,9 @@ namespace EmEn::Libs
 			 * @brief Returns the file creation time (birth time) in seconds since Unix epoch.
 			 * @note This triggers lazy fetching if not already done.
 			 * @note Availability:
-			 *       - Linux: Requires kernel 4.11+ and modern filesystem (ext4, btrfs, etc.)
-			 *       - macOS: Always available
-			 *       - Windows: Always available (same as ctime)
+			 *	   - Linux: Requires kernel 4.11+ and modern filesystem (ext4, btrfs, etc.)
+			 *	   - macOS: Always available
+			 *	   - Windows: Always available (same as ctime)
 			 * @return Creation time in seconds (with sub-second precision), or 0.0 if unavailable on this platform.
 			 */
 			[[nodiscard]]

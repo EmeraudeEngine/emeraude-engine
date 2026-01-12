@@ -2,7 +2,7 @@
  * src/Scenes/Scene.hpp
  * This file is part of Emeraude-Engine
  *
- * Copyright (C) 2010-2025 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
+ * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
  *
  * Emeraude-Engine is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -248,8 +248,8 @@ namespace EmEn::Scenes
 			 * @param audioManager Reference to the audio manager for spatial audio.
 			 * @param name Unique scene name (used for AVConsole identification).
 			 * @param boundary Half-size of the cubic scene volume in meters.
-			 *                 Scene spans from (-boundary, -boundary, -boundary) to
-			 *                 (+boundary, +boundary, +boundary).
+			 *				 Scene spans from (-boundary, -boundary, -boundary) to
+			 *				 (+boundary, +boundary, +boundary).
 			 * @param background Optional skybox or procedural background. Default: nullptr.
 			 * @param ground Optional terrain/ground for ground collision. Default: nullptr.
 			 * @param seaLevel Optional water surface. Default: nullptr.

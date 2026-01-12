@@ -2,7 +2,7 @@
  * src/Libs/Math/CartesianFrame.hpp
  * This file is part of Emeraude-Engine
  *
- * Copyright (C) 2010-2025 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
+ * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
  *
  * Emeraude-Engine is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -1088,52 +1088,52 @@ namespace EmEn::Libs::Math
 			Matrix< 4, precision_t >
 			getInvertedModelMatrix () const noexcept
 			{
-			    // Optimization: If scaling is identity (1, 1, 1), the inverse model matrix is simply the view matrix.
-			    if ( m_scaling.isAllComponentOne() )
-			    {
-			        return this->getViewMatrix();
-			    }
+				// Optimization: If scaling is identity (1, 1, 1), the inverse model matrix is simply the view matrix.
+				if ( m_scaling.isAllComponentOne() )
+				{
+					return this->getViewMatrix();
+				}
 
 				assert(!Utility::isZero(m_scaling[X]) && "X scaling factor cannot be zero for inversion.");
 				assert(!Utility::isZero(m_scaling[Y]) && "Y scaling factor cannot be zero for inversion.");
 				assert(!Utility::isZero(m_scaling[Z]) && "Z scaling factor cannot be zero for inversion.");
 
-			    // Scaling is not identity, calculate the full inverse InvS * InvR * InvT
-		        // 1. Calculate inverse scaling factors
-		        //    We assume scale factors are non-zero. Division by zero is undefined behavior.
-		        //    Consider adding assertions or checks if a zero scale is possible but invalid.
-		        const precision_t invScaleX = static_cast<precision_t>(1) / m_scaling[X];
-		        const precision_t invScaleY = static_cast<precision_t>(1) / m_scaling[Y];
-		        const precision_t invScaleZ = static_cast<precision_t>(1) / m_scaling[Z];
+				// Scaling is not identity, calculate the full inverse InvS * InvR * InvT
+				// 1. Calculate inverse scaling factors
+				//	We assume scale factors are non-zero. Division by zero is undefined behavior.
+				//	Consider adding assertions or checks if a zero scale is possible but invalid.
+				const precision_t invScaleX = static_cast<precision_t>(1) / m_scaling[X];
+				const precision_t invScaleY = static_cast<precision_t>(1) / m_scaling[Y];
+				const precision_t invScaleZ = static_cast<precision_t>(1) / m_scaling[Z];
 
-		        // 2. Get the current world-space axes of the frame
-		        const auto right = this->rightVector(); // X+ axis
-		        // m_downward (Y+) and m_backward (Z+) are already members
+				// 2. Get the current world-space axes of the frame
+				const auto right = this->rightVector(); // X+ axis
+				// m_downward (Y+) and m_backward (Z+) are already members
 
-		        // 3. Calculate translation part of the inverse matrix: T' = - (InvS * InvR * position)
-		        //    InvR * position = [dot(right, pos), dot(down, pos), dot(back, pos)]
-		        //    -InvS * (InvR * pos) = [-dot(r, p)*invSx, -dot(d, p)*invSy, -dot(b, p)*invSz]
-		        const auto positionX = -Vector< 3, precision_t >::dotProduct(right, m_position) * invScaleX;
-		        const auto positionY = -Vector< 3, precision_t >::dotProduct(m_downward, m_position) * invScaleY;
-		        const auto positionZ = -Vector< 3, precision_t >::dotProduct(m_backward, m_position) * invScaleZ;
+				// 3. Calculate translation part of the inverse matrix: T' = - (InvS * InvR * position)
+				//	InvR * position = [dot(right, pos), dot(down, pos), dot(back, pos)]
+				//	-InvS * (InvR * pos) = [-dot(r, p)*invSx, -dot(d, p)*invSy, -dot(b, p)*invSz]
+				const auto positionX = -Vector< 3, precision_t >::dotProduct(right, m_position) * invScaleX;
+				const auto positionY = -Vector< 3, precision_t >::dotProduct(m_downward, m_position) * invScaleY;
+				const auto positionZ = -Vector< 3, precision_t >::dotProduct(m_backward, m_position) * invScaleZ;
 
-		        // 4. Calculate rotation part of the inverse matrix: R' = InvS * InvR .
-		        //    InvR (transpose of R) has columns: right, downward, backward.
-		        //    InvS applies 1/scale to each component of these column vectors.
-		        //    The resulting matrix (InvS * InvR) will have columns:
-		        //    Col0 = [right.x*invSx, right.y*invSy, right.z*invSz]
-		        //    Col1 = [downward.x*invSx, downward.y*invSy, downward.z*invSz]
-		        //    Col2 = [backward.x*invSx, backward.y*invSy, backward.z*invSz]
+				// 4. Calculate rotation part of the inverse matrix: R' = InvS * InvR .
+				//	InvR (transpose of R) has columns: right, downward, backward.
+				//	InvS applies 1/scale to each component of these column vectors.
+				//	The resulting matrix (InvS * InvR) will have columns:
+				//	Col0 = [right.x*invSx, right.y*invSy, right.z*invSz]
+				//	Col1 = [downward.x*invSx, downward.y*invSy, downward.z*invSz]
+				//	Col2 = [backward.x*invSx, backward.y*invSy, backward.z*invSz]
 
-		        // 5. Construct the final inverse matrix (InvS * InvR * InvT) in column-major order
-		        std::array< precision_t, 16 > rawData{
-		            right[X] * invScaleX, right[Y] * invScaleY, right[Z] * invScaleZ, 0, // Column 0 (InvS * right_axis_of_InvR)
-		            m_downward[X] * invScaleX, m_downward[Y] * invScaleY, m_downward[Z] * invScaleZ, 0, // Column 1 (InvS * downward_axis_of_InvR)
-		            m_backward[X] * invScaleX, m_backward[Y] * invScaleY, m_backward[Z] * invScaleZ, 0, // Column 2 (InvS * backward_axis_of_InvR)
-		            positionX, positionY, positionZ, 1 // Column 3 (Translation part T')
-		        };
+				// 5. Construct the final inverse matrix (InvS * InvR * InvT) in column-major order
+				std::array< precision_t, 16 > rawData{
+					right[X] * invScaleX, right[Y] * invScaleY, right[Z] * invScaleZ, 0, // Column 0 (InvS * right_axis_of_InvR)
+					m_downward[X] * invScaleX, m_downward[Y] * invScaleY, m_downward[Z] * invScaleZ, 0, // Column 1 (InvS * downward_axis_of_InvR)
+					m_backward[X] * invScaleX, m_backward[Y] * invScaleY, m_backward[Z] * invScaleZ, 0, // Column 2 (InvS * backward_axis_of_InvR)
+					positionX, positionY, positionZ, 1 // Column 3 (Translation part T')
+				};
 
-		        return Matrix< 4, precision_t >{rawData};
+				return Matrix< 4, precision_t >{rawData};
 			}
 
 			/**

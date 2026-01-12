@@ -2,7 +2,7 @@
  * src/Audio/MusicResource.cpp
  * This file is part of Emeraude-Engine
  *
- * Copyright (C) 2010-2025 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
+ * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
  *
  * Emeraude-Engine is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -42,6 +42,9 @@
 #include "Resources/Manager.hpp"
 #include "Buffer.hpp"
 #include "Manager.hpp"
+#include "SoundfontResource.hpp"
+#include "Settings.hpp"
+#include "SettingKeys.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::Audio
@@ -52,24 +55,19 @@ namespace EmEn::Audio
 	 * This mutex protects SF2-based MIDI loading when multiple MusicResources load in parallel. */
 	static std::mutex s_tsfMutex;
 
-	/* Global SoundFont handle used as fallback when no per-instance SF2 is configured. */
-	static tsf * s_globalSoundfont{nullptr};
-
-	void
-	MusicResource::setGlobalSoundfont (tsf * soundfont) noexcept
-	{
-		s_globalSoundfont = soundfont;
-	}
-
-	tsf *
-	MusicResource::globalSoundfont () noexcept
-	{
-		return s_globalSoundfont;
-	}
-
 	bool
 	MusicResource::onDependenciesLoaded () noexcept
 	{
+		/* If we have a pending MIDI file, render it now that the soundfont is loaded. */
+		if ( !m_pendingMidiPath.empty() )
+		{
+			if ( !this->renderPendingMidi() )
+			{
+				return false;
+			}
+		}
+
+		/* Create audio buffers from the loaded wave data. */
 		const auto chunkSize = Manager::musicChunkSize();
 		const auto chunkCount = m_localData.chunkCount(chunkSize);
 
@@ -85,6 +83,34 @@ namespace EmEn::Audio
 
 				return false;
 			}
+		}
+
+		/* Clear temporary references now that loading is complete. */
+		m_pendingMidiPath.clear();
+		m_soundfontDependency.reset();
+
+		return true;
+	}
+
+	bool
+	MusicResource::renderPendingMidi () noexcept
+	{
+		if ( m_soundfontDependency == nullptr || !m_soundfontDependency->isValid() )
+		{
+			TraceError{ClassId} << "Soundfont dependency is not valid for MIDI rendering of '" << this->name() << "' !";
+
+			return false;
+		}
+
+		/* Lock the mutex to ensure thread-safe access to the TSF handle.
+		 * TSF maintains internal state that cannot be safely accessed concurrently. */
+		const std::lock_guard< std::mutex > tsfLock{s_tsfMutex};
+
+		if ( !WaveFactory::FileIO::read(m_pendingMidiPath, m_localData, Manager::frequencyPlayback(), m_soundfontDependency->handle()) )
+		{
+			TraceError{ClassId} << "Unable to render MIDI file '" << m_pendingMidiPath << "' !";
+
+			return false;
 		}
 
 		return true;
@@ -183,83 +209,83 @@ namespace EmEn::Audio
 
 		/* Section A chords: Am - F - C - G (classic pop progression in Am). */
 		constexpr std::array< Chord, 4 > chordsA = {{
-			{A2, A3, C4, E4},      /* Am */
-			{F3, F3, A3, C4},      /* F */
-			{C3, C4, E4, G4},      /* C */
-			{G2, G3, B3, D4}       /* G */
+			{A2, A3, C4, E4},	  /* Am */
+			{F3, F3, A3, C4},	  /* F */
+			{C3, C4, E4, G4},	  /* C */
+			{G2, G3, B3, D4}	   /* G */
 		}};
 
 		/* Section A' chords: Am - F - C - E (variation with E for tension). */
 		constexpr std::array< Chord, 4 > chordsAv = {{
-			{A2, A3, C4, E4},           /* Am */
-			{F3, F3, A3, C4},           /* F */
-			{C3, C4, E4, G4},           /* C */
+			{A2, A3, C4, E4},		   /* Am */
+			{F3, F3, A3, C4},		   /* F */
+			{C3, C4, E4, G4},		   /* C */
 			{E2, E3, GSharp4 / 2.0F, B3} /* E (dominant) */
 		}};
 
 		/* Section B chords: Dm - G - C - Am (ii-V-I-vi). */
 		constexpr std::array< Chord, 4 > chordsB = {{
-			{D3, D4, F4, A4},      /* Dm */
-			{G2, G3, B3, D4},      /* G */
-			{C3, C4, E4, G4},      /* C */
-			{A2, A3, C4, E4}       /* Am */
+			{D3, D4, F4, A4},	  /* Dm */
+			{G2, G3, B3, D4},	  /* G */
+			{C3, C4, E4, G4},	  /* C */
+			{A2, A3, C4, E4}	   /* Am */
 		}};
 
 		/* Section B' chords: Dm - E - Am - Am (turnaround). */
 		constexpr std::array< Chord, 4 > chordsBv = {{
-			{D3, D4, F4, A4},           /* Dm */
+			{D3, D4, F4, A4},		   /* Dm */
 			{E2, E3, GSharp4 / 2.0F, B3}, /* E */
-			{A2, A3, C4, E4},           /* Am */
-			{A2, A3, C4, E4}            /* Am (sustain for loop) */
+			{A2, A3, C4, E4},		   /* Am */
+			{A2, A3, C4, E4}			/* Am (sustain for loop) */
 		}};
 
 		/* Section C chords: F - G - Am - Em (bridge, new color). */
 		constexpr std::array< Chord, 4 > chordsC = {{
-			{F3, F3, A3, C4},      /* F */
-			{G2, G3, B3, D4},      /* G */
-			{A2, A3, C4, E4},      /* Am */
-			{E2, E3, G3, B3}       /* Em */
+			{F3, F3, A3, C4},	  /* F */
+			{G2, G3, B3, D4},	  /* G */
+			{A2, A3, C4, E4},	  /* Am */
+			{E2, E3, G3, B3}	   /* Em */
 		}};
 
 		/* Melody patterns - varied for each section. */
 		constexpr std::array< std::array< float, 4 >, 4 > melodyA = {{
-			{A4, C5, E5, C5},      /* Ascending arpeggio */
-			{F4, A4, C5, A4},      /* F arpeggio */
-			{G4, C5, E5, G5},      /* C with reach to G5 */
-			{G4, B4, D5, B4}       /* G arpeggio */
+			{A4, C5, E5, C5},	  /* Ascending arpeggio */
+			{F4, A4, C5, A4},	  /* F arpeggio */
+			{G4, C5, E5, G5},	  /* C with reach to G5 */
+			{G4, B4, D5, B4}	   /* G arpeggio */
 		}};
 
 		constexpr std::array< std::array< float, 4 >, 4 > melodyAv = {{
-			{E5, C5, A4, C5},      /* Descending start */
-			{C5, A4, F4, A4},      /* Answer phrase */
-			{E5, G5, E5, C5},      /* High point */
+			{E5, C5, A4, C5},	  /* Descending start */
+			{C5, A4, F4, A4},	  /* Answer phrase */
+			{E5, G5, E5, C5},	  /* High point */
 			{B4, GSharp4, E4, GSharp4}  /* Tension on E chord */
 		}};
 
 		constexpr std::array< std::array< float, 4 >, 4 > melodyB = {{
-			{D5, F5, A4, F5},      /* Dm - higher energy */
-			{D5, B4, G4, B4},      /* G - descending */
-			{C5, E5, G5, E5},      /* C - bright */
-			{A4, C5, E5, A4}       /* Am - resolution */
+			{D5, F5, A4, F5},	  /* Dm - higher energy */
+			{D5, B4, G4, B4},	  /* G - descending */
+			{C5, E5, G5, E5},	  /* C - bright */
+			{A4, C5, E5, A4}	   /* Am - resolution */
 		}};
 
 		constexpr std::array< std::array< float, 4 >, 4 > melodyBv = {{
-			{F5, D5, A4, D5},      /* Dm - variation */
+			{F5, D5, A4, D5},	  /* Dm - variation */
 			{E5, GSharp4, B4, E5}, /* E - tension */
-			{A4, C5, E5, C5},      /* Am - soft landing */
-			{A4, E4, A4, E4}       /* Am - simple for loop point */
+			{A4, C5, E5, C5},	  /* Am - soft landing */
+			{A4, E4, A4, E4}	   /* Am - simple for loop point */
 		}};
 
 		constexpr std::array< std::array< float, 4 >, 4 > melodyC = {{
-			{A4, C5, F5, C5},      /* F - lyrical */
-			{B4, D5, G5, D5},      /* G - ascending */
-			{C5, E5, A4, E5},      /* Am - floating */
-			{B4, E5, G4, E5}       /* Em - ethereal */
+			{A4, C5, F5, C5},	  /* F - lyrical */
+			{B4, D5, G5, D5},	  /* G - ascending */
+			{C5, E5, A4, E5},	  /* Am - floating */
+			{B4, E5, G4, E5}	   /* Em - ethereal */
 		}};
 
 		/* Bass patterns for more movement. */
 		constexpr std::array< std::array< float, 4 >, 4 > bassPatternA = {{
-			{A2, A2, E3, A2},      /* Root-root-fifth-root */
+			{A2, A2, E3, A2},	  /* Root-root-fifth-root */
 			{F3, F3, C3, F3},
 			{C3, C3, G3, C3},
 			{G2, G2, D3, G2}
@@ -276,19 +302,19 @@ namespace EmEn::Audio
 		/* Rhythm pattern types for variation. */
 		enum class RhythmStyle
 		{
-			Straight,       /* Quarter notes */
-			Syncopated,     /* Off-beat accents */
-			Arpeggiated,    /* Broken chord */
-			Sparse          /* Fewer notes, more space */
+			Straight,	   /* Quarter notes */
+			Syncopated,	 /* Off-beat accents */
+			Arpeggiated,	/* Broken chord */
+			Sparse		  /* Fewer notes, more space */
 		};
 
 		/* Texture types. */
 		enum class TextureStyle
 		{
-			Pad,            /* Sustained chords */
-			Plucked,        /* Short attacks */
-			Layered,        /* Rich harmonics */
-			Minimal         /* Simple, clean */
+			Pad,			/* Sustained chords */
+			Plucked,		/* Short attacks */
+			Layered,		/* Rich harmonics */
+			Minimal		 /* Simple, clean */
 		};
 
 		/* Half-beat duration for eighth notes. */
@@ -296,9 +322,9 @@ namespace EmEn::Audio
 
 		/* Lambda to add a note to a specific channel. */
 		auto addNoteToChannel = [&frequencyPlayback](WaveFactory::Synthesizer< int16_t > & synth,
-		                                              size_t sample, size_t length, float freq, float amp,
-		                                              float attack, float decay, float sustain, float release,
-		                                              bool useTriangle = false)
+													  size_t sample, size_t length, float freq, float amp,
+													  float attack, float decay, float sustain, float release,
+													  bool useTriangle = false)
 		{
 			WaveFactory::Wave< int16_t > tempWave;
 			WaveFactory::Synthesizer tempSynth{tempWave, length, frequencyPlayback};
@@ -578,7 +604,7 @@ namespace EmEn::Audio
 	}
 
 	bool
-	MusicResource::load (Resources::AbstractServiceProvider & /*serviceProvider*/, const std::filesystem::path & filepath) noexcept
+	MusicResource::load (Resources::AbstractServiceProvider & serviceProvider, const std::filesystem::path & filepath) noexcept
 	{
 		if ( !Manager::isAudioSystemAvailable() )
 		{
@@ -590,41 +616,77 @@ namespace EmEn::Audio
 			return false;
 		}
 
-		/* Use SF2-based rendering for MIDI files if a soundfont is configured. */
+		/* Check if this is a MIDI file that might need a soundfont. */
 		const auto extension = filepath.extension().string();
 		const bool isMidi = (extension == ".mid" || extension == ".midi");
 
-		/* Use per-instance soundfont if set, otherwise fall back to global. */
-		tsf * effectiveSoundfont = m_soundfont != nullptr ? m_soundfont : s_globalSoundfont;
-
-		bool loadSuccess = false;
-
-		if ( isMidi && effectiveSoundfont != nullptr )
+		if ( isMidi )
 		{
-			/* Lock the mutex to ensure thread-safe access to the shared TSF handle.
-			 * TSF maintains internal state that cannot be safely accessed concurrently. */
-			const std::lock_guard< std::mutex > tsfLock{s_tsfMutex};
+			/* Query the soundfont name from settings. */
+			const auto soundfontName = serviceProvider.settings().getOrSetDefault< std::string >(AudioMusicSoundfontKey, DefaultAudioMusicSoundfont);
 
-			loadSuccess = WaveFactory::FileIO::read(filepath, m_localData, Manager::frequencyPlayback(), effectiveSoundfont);
-
-			/*if ( loadSuccess && WaveFactory::FileIO::write(m_localData, "/home/londnoir/" + this->name() + ".mp3") )
+			if ( !soundfontName.empty() )
 			{
-				std::cout << "saved" "\n";
-			}*/
+				/* Load the soundfont as a dependency. */
+				auto * soundfontContainer = serviceProvider.container< SoundfontResource >();
+
+				if ( soundfontContainer != nullptr )
+				{
+					m_soundfontDependency = soundfontContainer->getResource(soundfontName, true);
+
+					if ( m_soundfontDependency != nullptr )
+					{
+						/* Store the MIDI path for later rendering in onDependenciesLoaded(). */
+						m_pendingMidiPath = filepath;
+
+						/* Add the soundfont as a dependency - rendering will happen once it's loaded. */
+						if ( !this->addDependency(m_soundfontDependency) )
+						{
+							TraceWarning{ClassId} <<
+								"Failed to add soundfont '" << soundfontName << "' as dependency for music '" << this->name() << "'. "
+								"Falling back to additive synthesis.";
+
+							m_soundfontDependency.reset();
+							m_pendingMidiPath.clear();
+						}
+						else
+						{
+							/* Dependency added successfully. Loading will complete in onDependenciesLoaded(). */
+							return this->setLoadSuccess(true);
+						}
+					}
+					else
+					{
+						TraceWarning{ClassId} <<
+							"Soundfont '" << soundfontName << "' not found for music '" << this->name() << "'. "
+							"Using additive synthesis fallback.";
+					}
+				}
+			}
+
+			/* No soundfont configured or available - use additive synthesis. */
+			if ( !WaveFactory::FileIO::read(filepath, m_localData) )
+			{
+				TraceError{ClassId} << "Unable to load the MIDI file '" << filepath << "' with additive synthesis !";
+
+				return this->setLoadSuccess(false);
+			}
 		}
 		else
 		{
-			loadSuccess = WaveFactory::FileIO::read(filepath, m_localData);
+			/* Standard audio file loading (WAV, MP3, OGG, etc.). */
+			if ( !WaveFactory::FileIO::read(filepath, m_localData) )
+			{
+				TraceError{ClassId} << "Unable to load the music file '" << filepath << "' !";
+
+				return this->setLoadSuccess(false);
+			}
+
+			/* Read optional metadata from the soundtrack. */
+			this->readMetaData(filepath);
 		}
 
-		if ( !loadSuccess )
-		{
-			TraceError{ClassId} << "Unable to load the music file '" << filepath << "' !";
-
-			return this->setLoadSuccess(false);
-		}
-
-		/* Checks frequency for playback within the audio engine. */
+		/* Check frequency for playback within the audio engine. */
 		if ( m_localData.frequency() != Manager::frequencyPlayback() )
 		{
 			TraceWarning{ClassId} <<
@@ -633,20 +695,6 @@ namespace EmEn::Audio
 
 			/* Copy the buffer in float (single precision) format. */
 			WaveFactory::Processor processor{m_localData};
-
-			/* Launch a mix-down process ... */
-			/* FIXME: If music is not stereo, so mono or 5.1 for instance set it to a stereo wave format. */
-			/*if ( m_localData.channels() != WaveFactory::Channels::Stereo )
-			{
-				Tracer::info(ClassId, Blob() << "The sound '" << this->name() << "' is multichannel ! Performing a mix down ...");
-
-				if ( !processor.mixDown() )
-				{
-					Tracer::error(ClassId, "Mix down failed !");
-
-					return this->setLoadSuccess(false);
-				}
-			}*/
 
 			/* Launch a resampling process ... */
 			if ( !processor.resample(Manager::frequencyPlayback()) )
@@ -663,12 +711,6 @@ namespace EmEn::Audio
 
 				return this->setLoadSuccess(false);
 			}
-		}
-
-		/* Read optional metadata from the soundtrack if available. */
-		if ( filepath.extension() != ".mid" && filepath.extension() != ".midi" )
-		{
-			this->readMetaData(filepath);
 		}
 
 		return this->setLoadSuccess(true);

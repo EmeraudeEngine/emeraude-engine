@@ -2,7 +2,7 @@
  * src/Scenes/StaticEntity.hpp
  * This file is part of Emeraude-Engine
  *
- * Copyright (C) 2010-2025 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
+ * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
  *
  * Emeraude-Engine is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -93,32 +93,32 @@ namespace EmEn::Scenes
 			 */
 			enum AnimationID : uint8_t
 			{
-				LocalCoordinates,     ///< Full local coordinate frame
-				LocalPosition,        ///< Local space position (3D vector)
-				LocalXPosition,       ///< Local space X-axis position
-				LocalYPosition,       ///< Local space Y-axis position
-				LocalZPosition,       ///< Local space Z-axis position
-				LocalTranslation,     ///< Local space translation offset (3D vector)
-				LocalXTranslation,    ///< Local space X-axis translation
-				LocalYTranslation,    ///< Local space Y-axis translation
-				LocalZTranslation,    ///< Local space Z-axis translation
-				LocalRotation,        ///< Local space rotation (quaternion or euler)
-				LocalXRotation,       ///< Local space X-axis rotation (pitch)
-				LocalYRotation,       ///< Local space Y-axis rotation (yaw)
-				LocalZRotation,       ///< Local space Z-axis rotation (roll)
+				LocalCoordinates,	 ///< Full local coordinate frame
+				LocalPosition,		///< Local space position (3D vector)
+				LocalXPosition,	   ///< Local space X-axis position
+				LocalYPosition,	   ///< Local space Y-axis position
+				LocalZPosition,	   ///< Local space Z-axis position
+				LocalTranslation,	 ///< Local space translation offset (3D vector)
+				LocalXTranslation,	///< Local space X-axis translation
+				LocalYTranslation,	///< Local space Y-axis translation
+				LocalZTranslation,	///< Local space Z-axis translation
+				LocalRotation,		///< Local space rotation (quaternion or euler)
+				LocalXRotation,	   ///< Local space X-axis rotation (pitch)
+				LocalYRotation,	   ///< Local space Y-axis rotation (yaw)
+				LocalZRotation,	   ///< Local space Z-axis rotation (roll)
 
-				WorldPosition,        ///< World space position (3D vector)
-				WorldXPosition,       ///< World space X-axis position
-				WorldYPosition,       ///< World space Y-axis position
-				WorldZPosition,       ///< World space Z-axis position
-				WorldTranslation,     ///< World space translation offset (3D vector)
-				WorldXTranslation,    ///< World space X-axis translation
-				WorldYTranslation,    ///< World space Y-axis translation
-				WorldZTranslation,    ///< World space Z-axis translation
-				WorldRotation,        ///< World space rotation (quaternion or euler)
-				WorldXRotation,       ///< World space X-axis rotation (pitch)
-				WorldYRotation,       ///< World space Y-axis rotation (yaw)
-				WorldZRotation        ///< World space Z-axis rotation (roll)
+				WorldPosition,		///< World space position (3D vector)
+				WorldXPosition,	   ///< World space X-axis position
+				WorldYPosition,	   ///< World space Y-axis position
+				WorldZPosition,	   ///< World space Z-axis position
+				WorldTranslation,	 ///< World space translation offset (3D vector)
+				WorldXTranslation,	///< World space X-axis translation
+				WorldYTranslation,	///< World space Y-axis translation
+				WorldZTranslation,	///< World space Z-axis translation
+				WorldRotation,		///< World space rotation (quaternion or euler)
+				WorldXRotation,	   ///< World space X-axis rotation (pitch)
+				WorldYRotation,	   ///< World space Y-axis rotation (yaw)
+				WorldZRotation		///< World space Z-axis rotation (roll)
 			};
 
 			/**
@@ -328,8 +328,8 @@ namespace EmEn::Scenes
 			/**
 			 * @copydoc EmEn::Scenes::LocatableInterface::scale(const Libs::Math::Vector< 3, float > &, Libs::Math::TransformSpace)
 			 * @warning TransformSpace::Parent and TransformSpace::World are not yet implemented for scaling.
-			 *          Only TransformSpace::Local is currently supported. Using other transform spaces will
-			 *          have no effect on the entity.
+			 *		  Only TransformSpace::Local is currently supported. Using other transform spaces will
+			 *		  have no effect on the entity.
 			 * @todo Reorient the scale vector to world coordinates for Parent and World transform spaces.
 			 */
 			void scale (const Libs::Math::Vector< 3, float > & factor, Libs::Math::TransformSpace transformSpace) noexcept override;
@@ -337,8 +337,8 @@ namespace EmEn::Scenes
 			/**
 			 * @copydoc EmEn::Scenes::LocatableInterface::scale(float, Libs::Math::TransformSpace)
 			 * @warning TransformSpace::Parent and TransformSpace::World are not yet implemented for scaling.
-			 *          Only TransformSpace::Local is currently supported. Using other transform spaces will
-			 *          have no effect on the entity.
+			 *		  Only TransformSpace::Local is currently supported. Using other transform spaces will
+			 *		  have no effect on the entity.
 			 * @todo Reorient the scale vector to world coordinates for Parent and World transform spaces.
 			 */
 			void scale (float factor, Libs::Math::TransformSpace transformSpace) noexcept override;
@@ -346,8 +346,8 @@ namespace EmEn::Scenes
 			/**
 			 * @copydoc EmEn::Scenes::LocatableInterface::scaleX(float, Libs::Math::TransformSpace)
 			 * @warning TransformSpace::Parent and TransformSpace::World are not yet implemented for scaling.
-			 *          Only TransformSpace::Local is currently supported. Using other transform spaces will
-			 *          have no effect on the entity.
+			 *		  Only TransformSpace::Local is currently supported. Using other transform spaces will
+			 *		  have no effect on the entity.
 			 * @todo Reorient the scale vector to world coordinates for Parent and World transform spaces.
 			 */
 			void scaleX (float factor, Libs::Math::TransformSpace transformSpace) noexcept override;
@@ -355,8 +355,8 @@ namespace EmEn::Scenes
 			/**
 			 * @copydoc EmEn::Scenes::LocatableInterface::scaleY(float, Libs::Math::TransformSpace)
 			 * @warning TransformSpace::Parent and TransformSpace::World are not yet implemented for scaling.
-			 *          Only TransformSpace::Local is currently supported. Using other transform spaces will
-			 *          have no effect on the entity.
+			 *		  Only TransformSpace::Local is currently supported. Using other transform spaces will
+			 *		  have no effect on the entity.
 			 * @todo Reorient the scale vector to world coordinates for Parent and World transform spaces.
 			 */
 			void scaleY (float factor, Libs::Math::TransformSpace transformSpace) noexcept override;
@@ -364,8 +364,8 @@ namespace EmEn::Scenes
 			/**
 			 * @copydoc EmEn::Scenes::LocatableInterface::scaleZ(float, Libs::Math::TransformSpace)
 			 * @warning TransformSpace::Parent and TransformSpace::World are not yet implemented for scaling.
-			 *          Only TransformSpace::Local is currently supported. Using other transform spaces will
-			 *          have no effect on the entity.
+			 *		  Only TransformSpace::Local is currently supported. Using other transform spaces will
+			 *		  have no effect on the entity.
 			 * @todo Reorient the scale vector to world coordinates for Parent and World transform spaces.
 			 */
 			void scaleZ (float factor, Libs::Math::TransformSpace transformSpace) noexcept override;

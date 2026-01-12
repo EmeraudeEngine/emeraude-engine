@@ -2,7 +2,7 @@
  * src/Libs/WaveFactory/SFXScript.hpp
  * This file is part of Emeraude-Engine
  *
- * Copyright (C) 2010-2025 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
+ * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
  *
  * Emeraude-Engine is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -47,20 +47,20 @@ namespace EmEn::Libs::WaveFactory
 	 *   "duration": 5000,
 	 *   "channels": 2,
 	 *   "tracks": [
-	 *     {
-	 *       "preInstructions": [...],
-	 *       "regions": [
-	 *         { "offset": 0, "length": 2000, "instructions": [...] }
-	 *       ],
-	 *       "instructions": [...]
-	 *     },
-	 *     {
-	 *       "preInstructions": [...],
-	 *       "regions": [
-	 *         { "offset": 0, "length": 2000, "instructions": [...] }
-	 *       ],
-	 *       "instructions": [...]
-	 *     }
+	 *	 {
+	 *	   "preInstructions": [...],
+	 *	   "regions": [
+	 *		 { "offset": 0, "length": 2000, "instructions": [...] }
+	 *	   ],
+	 *	   "instructions": [...]
+	 *	 },
+	 *	 {
+	 *	   "preInstructions": [...],
+	 *	   "regions": [
+	 *		 { "offset": 0, "length": 2000, "instructions": [...] }
+	 *	   ],
+	 *	   "instructions": [...]
+	 *	 }
 	 *   ],
 	 *   "finalInstructions": [...]
 	 * }

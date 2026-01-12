@@ -2,7 +2,7 @@
  * src/Libs/Algorithms/PerlinNoise.hpp
  * This file is part of Emeraude-Engine
  *
- * Copyright (C) 2010-2025 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
+ * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
  *
  * Emeraude-Engine is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -228,11 +228,11 @@ namespace EmEn::Libs::Algorithms
 			};
 
 			static constexpr std::array< GradientVector, 16 > GradientTable {{
-	            {1, 1, 0}, {-1, 1, 0}, {1, -1, 0}, {-1, -1, 0}, // Indices 0-3   (Gradients XY)
+				{1, 1, 0}, {-1, 1, 0}, {1, -1, 0}, {-1, -1, 0}, // Indices 0-3   (Gradients XY)
 				{1, 0, 1}, {-1, 0, 1}, {1, 0, -1}, {-1, 0, -1}, // Indices 4-7   (Gradients XZ)
 				{0, 1, 1}, {0, -1, 1}, {0, 1, -1}, {0, -1, -1}, // Indices 8-11  (Gradients YZ)
 				{1, 1, 0}, {-1, 1, 0}, {1, -1, 0}, {-1, -1, 0}  // Indices 12-15 (Répétition first 4)
-            }};
+			}};
 
 			std::vector< uint32_t > m_permutations{};
 	};

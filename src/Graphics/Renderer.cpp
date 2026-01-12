@@ -2,7 +2,7 @@
  * src/Graphics/Renderer.cpp
  * This file is part of Emeraude-Engine
  *
- * Copyright (C) 2010-2025 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
+ * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
  *
  * Emeraude-Engine is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -255,6 +255,8 @@ namespace EmEn::Graphics
 
 			TraceInfo{ClassId} << "Frame rate limiter enabled: " << m_frameRateLimit << " FPS (frame duration: " << m_frameDuration.count() / 1'000'000.0 << " ms)";
 		}
+
+		m_shadowMapsEnabled = m_primaryServices.settings().getOrSetDefault< bool >(GraphicsShadowMappingEnabledKey, DefaultGraphicsShadowMappingEnabled);
 
 		/* NOTE: Graphics device selection from the vulkan instance.
 		 * The Vulkan instance doesn't directly create a device on its initialization. */

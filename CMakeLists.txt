@@ -33,7 +33,7 @@ endif ()
 
 project(
 	${BINARY_NAME}
-	VERSION 0.8.44
+	VERSION 0.8.45
 	DESCRIPTION "Emeraude Engine is an open-source (LGPLv3) 3D Graphics engine using Vulkan and written in C++20."
 	HOMEPAGE_URL "https://github.com/EmeraudeEngine/emeraude-engine"
 	LANGUAGES C CXX
@@ -426,10 +426,8 @@ target_include_directories(${PROJECT_NAME} PUBLIC
     ${LOCAL_LIB_DIR}/include
 )
 
-# "portable-file-dialogs" library for LINUX
-if ( UNIX AND NOT APPLE )
-	target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/portable-file-dialogs)
-endif ()
+# NOTE: portable-file-dialogs dependency has been removed.
+# All dialog implementations now use native platform APIs directly.
 
 
 

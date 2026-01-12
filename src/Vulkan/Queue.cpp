@@ -2,7 +2,7 @@
  * src/Vulkan/Queue.cpp
  * This file is part of Emeraude-Engine
  *
- * Copyright (C) 2010-2025 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
+ * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
  *
  * Emeraude-Engine is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -67,43 +67,43 @@ namespace EmEn::Vulkan
 		return true;
 	}
 
-    bool
+	bool
 	Queue::submit (const CommandBuffer & commandBuffer, const SynchInfo & synchInfo) const noexcept
-    {
-        if ( synchInfo.waitSemaphores.size() != synchInfo.waitStages.size() )
-        {
-        	Tracer::error(ClassId, "Wait semaphore count must equal wait stage count!");
-
-            return false;
-        }
-
-        VkCommandBuffer commandBufferHandle = commandBuffer.handle();
-
-        const VkSubmitInfo submitInfo
+	{
+		if ( synchInfo.waitSemaphores.size() != synchInfo.waitStages.size() )
 		{
-            .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-            .pNext = nullptr,
-            .waitSemaphoreCount = static_cast< uint32_t >(synchInfo.waitSemaphores.size()),
-            .pWaitSemaphores = synchInfo.waitSemaphores.data(),
-            .pWaitDstStageMask = synchInfo.waitStages.data(),
-            .commandBufferCount = 1,
-            .pCommandBuffers = &commandBufferHandle,
-            .signalSemaphoreCount = static_cast< uint32_t >(synchInfo.signalSemaphores.size()),
-            .pSignalSemaphores = synchInfo.signalSemaphores.data(),
-        };
+			Tracer::error(ClassId, "Wait semaphore count must equal wait stage count!");
+
+			return false;
+		}
+
+		VkCommandBuffer commandBufferHandle = commandBuffer.handle();
+
+		const VkSubmitInfo submitInfo
+		{
+			.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+			.pNext = nullptr,
+			.waitSemaphoreCount = static_cast< uint32_t >(synchInfo.waitSemaphores.size()),
+			.pWaitSemaphores = synchInfo.waitSemaphores.data(),
+			.pWaitDstStageMask = synchInfo.waitStages.data(),
+			.commandBufferCount = 1,
+			.pCommandBuffers = &commandBufferHandle,
+			.signalSemaphoreCount = static_cast< uint32_t >(synchInfo.signalSemaphores.size()),
+			.pSignalSemaphores = synchInfo.signalSemaphores.data(),
+		};
 
 		/* [VULKAN-CPU-SYNC] vkQueueSubmit() */
 		const std::lock_guard< Device > lock{*m_device};
 
 		if ( const auto result = vkQueueSubmit(m_handle, 1, &submitInfo, synchInfo.fence); result != VK_SUCCESS )
-        {
-        	TraceError{ClassId} << "Unable to submit work into the queue : " << vkResultToCString(result) << " !";
+		{
+			TraceError{ClassId} << "Unable to submit work into the queue : " << vkResultToCString(result) << " !";
 
-            return false;
-        }
+			return false;
+		}
 
-        return true;
-    }
+		return true;
+	}
 
 	bool
 	Queue::present (const VkPresentInfoKHR * presentInfo, std::atomic<Status> & swapChainStatus) const noexcept

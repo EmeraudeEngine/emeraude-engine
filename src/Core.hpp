@@ -2,7 +2,7 @@
  * src/Core.hpp
  * This file is part of Emeraude-Engine
  *
- * Copyright (C) 2010-2025 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
+ * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
  *
  * Emeraude-Engine is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -61,32 +61,32 @@
  * class MyApplication : public EmEn::Core
  * {
  * public:
- *     MyApplication(int argc, char** argv)
- *         : Core(argc, argv, "MyApp", {1, 0, 0}, "MyOrg", "myorg.com")
- *     {}
+ *	 MyApplication(int argc, char** argv)
+ *		 : Core(argc, argv, "MyApp", {1, 0, 0}, "MyOrg", "myorg.com")
+ *	 {}
  *
  * protected:
- *     // Required: Setup your scene here
- *     bool onCoreStarted(const EmEn::Arguments &, EmEn::Settings &) noexcept override { return true; }
+ *	 // Required: Setup your scene here
+ *	 bool onCoreStarted(const EmEn::Arguments &, EmEn::Settings &) noexcept override { return true; }
  *
- *     // Required: Update game logic here (runs on logic thread)
- *     void onCoreProcessLogics(size_t cycle) noexcept override {}
+ *	 // Required: Update game logic here (runs on logic thread)
+ *	 void onCoreProcessLogics(size_t cycle) noexcept override {}
  *
- *     // Optional overrides available:
- *     // - onBeforeCoreSecondaryServicesInitialization() : Pre-init checks
- *     // - onCorePaused() / onCoreResumed() : Pause handling
- *     // - onBeforeCoreStop() : Cleanup before shutdown
- *     // - onCoreKeyPress() / onCoreKeyRelease() : Keyboard input
- *     // - onCoreCharacterType() : Text input
- *     // - onCoreNotification() : Observer pattern events
- *     // - onCoreOpenFiles() : Drag & drop files
- *     // - onCoreSurfaceRefreshed() : Window resize handling
+ *	 // Optional overrides available:
+ *	 // - onBeforeCoreSecondaryServicesInitialization() : Pre-init checks
+ *	 // - onCorePaused() / onCoreResumed() : Pause handling
+ *	 // - onBeforeCoreStop() : Cleanup before shutdown
+ *	 // - onCoreKeyPress() / onCoreKeyRelease() : Keyboard input
+ *	 // - onCoreCharacterType() : Text input
+ *	 // - onCoreNotification() : Observer pattern events
+ *	 // - onCoreOpenFiles() : Drag & drop files
+ *	 // - onCoreSurfaceRefreshed() : Window resize handling
  * };
  *
  * int main(int argc, char** argv)
  * {
- *     MyApplication app(argc, argv);
- *     return app.run() ? EXIT_SUCCESS : EXIT_FAILURE;
+ *	 MyApplication app(argc, argv);
+ *	 return app.run() ? EXIT_SUCCESS : EXIT_FAILURE;
  * }
  * @endcode
  *
@@ -139,6 +139,7 @@
 #include "Identification.hpp"
 #include "Input/Manager.hpp"
 #include "Notifier.hpp"
+#include "SystemNotification.hpp"
 #include "Overlay/Manager.hpp"
 #include "Physics/Manager.hpp"
 #include "PlatformManager.hpp"
@@ -158,6 +159,7 @@ namespace EmEn
 	 * @extends EmEn::Console::ControllableTrait The core can be controlled by the console.
 	 * @extends EmEn::Libs::ObserverTrait The core is an observer.
 	 * @extends EmEn::Libs::ObservableTrait The core is observable.
+	 * @version 0.8.35
 	 */
 	class Core : private Input::KeyboardListenerInterface, private Console::ControllableTrait, public Libs::ObserverTrait, public Libs::ObservableTrait
 	{
@@ -170,7 +172,7 @@ namespace EmEn
 			 * @brief Constants for parsing command-line arguments.
 			 * @{
 			 */
-			static constexpr auto ToolsArg{"-t"};               ///< Short argument for tools mode.
+			static constexpr auto ToolsArg{"-t"};			   ///< Short argument for tools mode.
 			static constexpr auto ToolsLongArg{"--tools-mode"}; ///< Long argument for tools mode.
 			/** @} */
 
@@ -180,7 +182,7 @@ namespace EmEn
 			 * @{
 			 */
 			static constexpr auto VulkanInformationToolName{"vulkanInfo"};   ///< Displays Vulkan instance/device info.
-			static constexpr auto PrintGeometryToolName{"printGeometry"};    ///< Prints geometry file contents.
+			static constexpr auto PrintGeometryToolName{"printGeometry"};	///< Prints geometry file contents.
 			static constexpr auto ConvertGeometryToolName{"convertGeometry"};///< Converts between geometry formats.
 			/** @} */
 
@@ -193,24 +195,23 @@ namespace EmEn
 			 * @code
 			 * void MyObserver::onNotification(const ObservableTrait* obs, int code, const std::any& data)
 			 * {
-			 *     if (code == Core::ExecutionPaused) {
-			 *         // Pause audio, physics, etc.
-			 *     }
+			 *	 if (code == Core::ExecutionPaused) {
+			 *		 // Pause audio, physics, etc.
+			 *	 }
 			 * }
 			 * @endcode
-			 * @version 0.8.35
 			 */
 			enum NotificationCode
 			{
-				EnteringMainLoop,             ///< Engine main loop has started.
-				ExitingMainLoop,              ///< Engine main loop is stopped.
-				ExecutionPaused,              ///< Engine execution is paused (game pause).
-				ExecutionResumed,             ///< Engine execution has resumed after pause.
-				ExecutionStopping,            ///< Engine is shutting down.
-				ExecutionStopped,             ///< Engine is stopped.
+				EnteringMainLoop,			 ///< Engine main loop has started.
+				ExitingMainLoop,			  ///< Engine main loop is stopped.
+				ExecutionPaused,			  ///< Engine execution is paused (game pause).
+				ExecutionResumed,			 ///< Engine execution has resumed after pause.
+				ExecutionStopping,			///< Engine is shutting down.
+				ExecutionStopped,			 ///< Engine is stopped.
 				SurfaceRefreshed,			  ///< Render surface was recreated (resize, etc.).
 				/* Enumeration boundary. */
-				MaxEnum                       ///< Sentinel value for iteration.
+				MaxEnum					   ///< Sentinel value for iteration.
 			};
 
 			/**
@@ -218,11 +219,10 @@ namespace EmEn
 			 * @details Determines how the engine should behave after argument parsing
 			 * and initial setup. This allows running auxiliary tools without full
 			 * engine initialization.
-			 * @version 0.8.35
 			 */
 			enum class StartupMode : uint8_t
 			{
-				Error,     ///< An error occurred during initialization; engine cannot start.
+				Error,	 ///< An error occurred during initialization; engine cannot start.
 				ToolsMode, ///< Engine runs in tools mode (vulkanInfo, geometry tools, etc.).
 				Continue   ///< Normal startup; proceed with full engine initialization.
 			};
@@ -272,7 +272,6 @@ namespace EmEn
 			 * @return true if the engine executed and shut down successfully, false on error.
 			 * @see stop()
 			 * @see onCoreStarted()
-			 * @version 0.8.35
 			 */
 			[[nodiscard]]
 			bool run () noexcept;
@@ -285,7 +284,6 @@ namespace EmEn
 			 * @note The engine must be pausable (controlled by internal state).
 			 * @see resume()
 			 * @see NotificationCode::ExecutionPaused
-			 * @version 0.8.35
 			 */
 			void pause () noexcept;
 
@@ -295,7 +293,6 @@ namespace EmEn
 			 * notification to all observers.
 			 * @see pause()
 			 * @see NotificationCode::ExecutionResumed
-			 * @version 0.8.35
 			 */
 			void resume () noexcept;
 
@@ -310,7 +307,6 @@ namespace EmEn
 			 * @see run()
 			 * @see onBeforeCoreStop()
 			 * @see NotificationCode::ExecutionStopped
-			 * @version 0.8.35
 			 */
 			void stop () noexcept;
 
@@ -322,7 +318,6 @@ namespace EmEn
 			 * handling.
 			 * @param filepaths A reference to a vector of filesystem paths representing the dropped files.
 			 * @see onCoreOpenFiles()
-			 * @version 0.8.35
 			 */
 			void openFiles (const std::vector< std::filesystem::path > & filepaths) noexcept;
 
@@ -333,7 +328,6 @@ namespace EmEn
 			 * editors, file managers, or other tools.
 			 * @warning This blocks the entire engine. Use sparingly and only for user-initiated actions.
 			 * @param command The shell command to execute.
-			 * @version 0.8.35
 			 */
 			void hangExecution (const std::string & command) noexcept;
 
@@ -344,7 +338,6 @@ namespace EmEn
 			 * @param message The message text to display.
 			 * @param duration Display duration in milliseconds. Default is Notifier::DefaultDuration (3000ms).
 			 * @see Notifier
-			 * @version 0.8.35
 			 */
 			void
 			notifyUser (const std::string & message, uint32_t duration = Notifier::DefaultDuration) noexcept
@@ -363,7 +356,6 @@ namespace EmEn
 			 * @param duration Display duration in milliseconds. Default is Notifier::DefaultDuration (3000ms).
 			 * @see Notifier
 			 * @see Libs::BlobTrait
-			 * @version 0.8.35
 			 */
 			void
 			notifyUser (const Libs::BlobTrait & message, uint32_t duration = Notifier::DefaultDuration) noexcept
@@ -377,7 +369,6 @@ namespace EmEn
 			 * @details When true, the application should display help text and exit
 			 * without initializing the graphics subsystem.
 			 * @return true if help was requested, false otherwise.
-			 * @version 0.8.35
 			 */
 			[[nodiscard]]
 			bool
@@ -392,7 +383,6 @@ namespace EmEn
 			 * as specified in the constructor.
 			 * @return Const reference to the Identification structure.
 			 * @see Identification
-			 * @version 0.8.35
 			 */
 			[[nodiscard]]
 			const Identification &
@@ -406,7 +396,6 @@ namespace EmEn
 			 * @details Provides access to command-line help text and argument documentation.
 			 * @return Const reference to the Help service.
 			 * @see Help
-			 * @version 0.8.35
 			 */
 			[[nodiscard]]
 			const Help &
@@ -430,7 +419,6 @@ namespace EmEn
 			 * tracer, filesystem, settings, and network manager.
 			 * @return Const reference to PrimaryServices.
 			 * @see PrimaryServices
-			 * @version 0.8.35
 			 */
 			[[nodiscard]]
 			const PrimaryServices &
@@ -440,10 +428,9 @@ namespace EmEn
 			}
 
 			/**
-			 * @brief Returns the primary services container.
+			 * @brief Returns the primary service container.
 			 * @return Reference to PrimaryServices.
 			 * @see PrimaryServices
-			 * @version 0.8.35
 			 */
 			[[nodiscard]]
 			PrimaryServices &
@@ -459,7 +446,6 @@ namespace EmEn
 			 * @return Reference to Console::Controller.
 			 * @see Console::Controller
 			 * @see Console::ControllableTrait
-			 * @version 0.8.35
 			 */
 			[[nodiscard]]
 			Console::Controller &
@@ -472,7 +458,6 @@ namespace EmEn
 			 * @brief Returns the console controller service (const).
 			 * @return Const reference to Console::Controller.
 			 * @see Console::Controller
-			 * @version 0.8.35
 			 */
 			[[nodiscard]]
 			const Console::Controller &
@@ -487,7 +472,6 @@ namespace EmEn
 			 * (textures, meshes, sounds, etc.). Implements fail-safe resource loading.
 			 * @return Reference to Resources::Manager.
 			 * @see Resources::Manager
-			 * @version 0.8.35
 			 */
 			[[nodiscard]]
 			Resources::Manager &
@@ -500,7 +484,6 @@ namespace EmEn
 			 * @brief Returns the resource manager service (const).
 			 * @return Const reference to Resources::Manager.
 			 * @see Resources::Manager
-			 * @version 0.8.35
 			 */
 			[[nodiscard]]
 			const Resources::Manager &
@@ -515,7 +498,6 @@ namespace EmEn
 			 * user-specific configuration.
 			 * @return Reference to User.
 			 * @see User
-			 * @version 0.8.35
 			 */
 			[[nodiscard]]
 			User &
@@ -528,7 +510,6 @@ namespace EmEn
 			 * @brief Returns the user service (const).
 			 * @return Const reference to User.
 			 * @see User
-			 * @version 0.8.35
 			 */
 			[[nodiscard]]
 			const User &
@@ -543,7 +524,6 @@ namespace EmEn
 			 * for OS-level functionality.
 			 * @return Reference to PlatformManager.
 			 * @see PlatformManager
-			 * @version 0.8.35
 			 */
 			[[nodiscard]]
 			PlatformManager &
@@ -556,7 +536,6 @@ namespace EmEn
 			 * @brief Returns the platform manager service (const).
 			 * @return Const reference to PlatformManager.
 			 * @see PlatformManager
-			 * @version 0.8.35
 			 */
 			[[nodiscard]]
 			const PlatformManager &
@@ -571,7 +550,6 @@ namespace EmEn
 			 * including physical device selection and instance management.
 			 * @return Reference to Vulkan::Instance.
 			 * @see Vulkan::Instance
-			 * @version 0.8.35
 			 */
 			[[nodiscard]]
 			Vulkan::Instance &
@@ -584,7 +562,6 @@ namespace EmEn
 			 * @brief Returns the Vulkan instance service (const).
 			 * @return Const reference to Vulkan::Instance.
 			 * @see Vulkan::Instance
-			 * @version 0.8.35
 			 */
 			[[nodiscard]]
 			const Vulkan::Instance &
@@ -599,7 +576,6 @@ namespace EmEn
 			 * resizing, fullscreen toggle, and input event routing.
 			 * @return Reference to Window.
 			 * @see Window
-			 * @version 0.8.35
 			 */
 			[[nodiscard]]
 			Window &
@@ -612,7 +588,6 @@ namespace EmEn
 			 * @brief Returns the window service (const).
 			 * @return Const reference to Window.
 			 * @see Window
-			 * @version 0.8.35
 			 */
 			[[nodiscard]]
 			const Window &
@@ -627,7 +602,6 @@ namespace EmEn
 			 * input state queries and event listener registration.
 			 * @return Reference to Input::Manager.
 			 * @see Input::Manager
-			 * @version 0.8.35
 			 */
 			[[nodiscard]]
 			Input::Manager &
@@ -640,7 +614,6 @@ namespace EmEn
 			 * @brief Returns the input manager service (const).
 			 * @return Const reference to Input::Manager.
 			 * @see Input::Manager
-			 * @version 0.8.35
 			 */
 			[[nodiscard]]
 			const Input::Manager &
@@ -655,7 +628,6 @@ namespace EmEn
 			 * submission, render passes, and GPU resource management.
 			 * @return Reference to Graphics::Renderer.
 			 * @see Graphics::Renderer
-			 * @version 0.8.35
 			 */
 			[[nodiscard]]
 			Graphics::Renderer &
@@ -668,7 +640,6 @@ namespace EmEn
 			 * @brief Returns the graphics renderer service (const).
 			 * @return Const reference to Graphics::Renderer.
 			 * @see Graphics::Renderer
-			 * @version 0.8.35
 			 */
 			[[nodiscard]]
 			const Graphics::Renderer &
@@ -683,7 +654,6 @@ namespace EmEn
 			 * dynamics. Uses a 4-entity type system (Boundaries, Ground, StaticEntity, Nodes).
 			 * @return Reference to Physics::Manager.
 			 * @see Physics::Manager
-			 * @version 0.8.35
 			 */
 			[[nodiscard]]
 			Physics::Manager &
@@ -696,7 +666,6 @@ namespace EmEn
 			 * @brief Returns the physics manager service (const).
 			 * @return Const reference to Physics::Manager.
 			 * @see Physics::Manager
-			 * @version 0.8.35
 			 */
 			[[nodiscard]]
 			const Physics::Manager &
@@ -711,7 +680,6 @@ namespace EmEn
 			 * listeners, and audio resource playback.
 			 * @return Reference to Audio::Manager.
 			 * @see Audio::Manager
-			 * @version 0.8.35
 			 */
 			[[nodiscard]]
 			Audio::Manager &
@@ -724,7 +692,6 @@ namespace EmEn
 			 * @brief Returns the audio manager service (const).
 			 * @return Const reference to Audio::Manager.
 			 * @see Audio::Manager
-			 * @version 0.8.35
 			 */
 			[[nodiscard]]
 			const Audio::Manager &
@@ -739,7 +706,6 @@ namespace EmEn
 			 * and heads-up display elements.
 			 * @return Reference to Overlay::Manager.
 			 * @see Overlay::Manager
-			 * @version 0.8.35
 			 */
 			[[nodiscard]]
 			Overlay::Manager &
@@ -752,7 +718,6 @@ namespace EmEn
 			 * @brief Returns the overlay manager service (const).
 			 * @return Const reference to Overlay::Manager.
 			 * @see Overlay::Manager
-			 * @version 0.8.35
 			 */
 			[[nodiscard]]
 			const Overlay::Manager &
@@ -767,7 +732,6 @@ namespace EmEn
 			 * @return Reference to Notifier.
 			 * @see Notifier
 			 * @see notifyUser()
-			 * @version 0.8.35
 			 */
 			[[nodiscard]]
 			Notifier &
@@ -780,7 +744,6 @@ namespace EmEn
 			 * @brief Returns the notifier service (const).
 			 * @return Const reference to Notifier.
 			 * @see Notifier
-			 * @version 0.8.35
 			 */
 			[[nodiscard]]
 			const Notifier &
@@ -790,12 +753,36 @@ namespace EmEn
 			}
 
 			/**
+			 * @brief Returns the system notification service.
+			 * @details Provides cross-platform OS-level notifications (system tray notifications).
+			 * @return Reference to SystemNotification.
+			 * @see SystemNotification
+			 */
+			[[nodiscard]]
+			SystemNotification &
+			systemNotification () noexcept
+			{
+				return m_systemNotification;
+			}
+
+			/**
+			 * @brief Returns the system notification service (const).
+			 * @return Const reference to SystemNotification.
+			 * @see SystemNotification
+			 */
+			[[nodiscard]]
+			const SystemNotification &
+			systemNotification () const noexcept
+			{
+				return m_systemNotification;
+			}
+
+			/**
 			 * @brief Returns the scene manager service.
 			 * @details Manages the hierarchical scene graph, entity creation,
 			 * and scene lifecycle (loading, activation, transitions).
 			 * @return Reference to Scenes::Manager.
 			 * @see Scenes::Manager
-			 * @version 0.8.35
 			 */
 			[[nodiscard]]
 			Scenes::Manager &
@@ -808,7 +795,6 @@ namespace EmEn
 			 * @brief Returns the scene manager service (const).
 			 * @return Const reference to Scenes::Manager.
 			 * @see Scenes::Manager
-			 * @version 0.8.35
 			 */
 			[[nodiscard]]
 			const Scenes::Manager &
@@ -822,7 +808,6 @@ namespace EmEn
 			 * @details Accumulated time since run() was called. Useful for timing,
 			 * animations, and performance monitoring.
 			 * @return Engine lifetime in microseconds.
-			 * @version 0.8.35
 			 */
 			[[nodiscard]]
 			uint64_t
@@ -836,7 +821,6 @@ namespace EmEn
 			 * @details Incremented each frame. Useful for frame-based timing
 			 * and periodic operations.
 			 * @return Number of completed engine cycles.
-			 * @version 0.8.35
 			 */
 			[[nodiscard]]
 			size_t
@@ -859,9 +843,9 @@ namespace EmEn
 			 * class MyGame : public EmEn::Core
 			 * {
 			 * public:
-			 *     MyGame(int argc, char** argv)
-			 *         : Core(argc, argv, "MyGame", {1, 0, 0}, "MyCompany", "mycompany.com")
-			 *     {}
+			 *	 MyGame(int argc, char** argv)
+			 *		 : Core(argc, argv, "MyGame", {1, 0, 0}, "MyCompany", "mycompany.com")
+			 *	 {}
 			 * };
 			 * @endcode
 			 *
@@ -872,7 +856,6 @@ namespace EmEn
 			 * @param applicationOrganization Organization name for settings paths. Default "UnknownOrganization".
 			 * @param applicationDomain Domain for network identification. Default "localhost".
 			 * @see Identification
-			 * @version 0.8.35
 			 */
 			Core (int argc, char * * argv, const char * applicationName = "UnknownApplication", const Libs::Version & applicationVersion = {0, 0, 0}, const char * applicationOrganization = "UnknownOrganization", const char * applicationDomain = "localhost") noexcept;
 
@@ -887,7 +870,6 @@ namespace EmEn
 			 * @param applicationVersion Semantic version for the application. Default 0.0.0.
 			 * @param applicationOrganization Organization name for settings paths. Default "UnknownOrganization".
 			 * @param applicationDomain Domain for network identification. Default "unknown.org".
-			 * @version 0.8.35
 			 */
 			Core (int argc, wchar_t * * wargv, const char * applicationName = "UnknownApplication", const Libs::Version & applicationVersion = {0, 0, 0}, const char * applicationOrganization = "UnknownOrganization", const char * applicationDomain = "unknown.org") noexcept;
 #endif
@@ -898,7 +880,6 @@ namespace EmEn
 			 * (like F11 for fullscreen). Use this when your application handles all
 			 * keyboard input directly.
 			 * @warning Only enable this if your application provides complete keyboard handling.
-			 * @version 0.8.35
 			 */
 			void
 			preventDefaultKeyBehaviors () noexcept
@@ -908,7 +889,6 @@ namespace EmEn
 
 			/**
 			 * @brief Disables the notifier creation by the Core.
-			 * @version 0.8.35
 			 */
 			void
 			disableNotifier () noexcept
@@ -921,7 +901,6 @@ namespace EmEn
 			 * @details The image is saved in PNG format with a timestamped filename.
 			 * The exact path depends on the operating system.
 			 * @return true if the screenshot was saved successfully, false otherwise.
-			 * @version 0.8.35
 			 */
 			bool screenshot () noexcept;
 
@@ -930,7 +909,6 @@ namespace EmEn
 			 * @details Saves each render target's content to separate image files.
 			 * Useful for debugging rendering pipeline issues.
 			 * @return true if all framebuffers were dumped successfully.
-			 * @version 0.8.35
 			 */
 			[[nodiscard]]
 			bool dumpFramebuffer () const noexcept;
@@ -944,7 +922,6 @@ namespace EmEn
 			 * @brief Sets the cursor to a standard system cursor type.
 			 * @param cursorType The standard cursor type (arrow, hand, resize, etc.).
 			 * @see CursorType
-			 * @version 0.8.35
 			 */
 			void
 			setCursor (CursorType cursorType) noexcept
@@ -958,7 +935,6 @@ namespace EmEn
 			 * @param pixmap The cursor image data.
 			 * @param hotSpot Click point offset from top-left corner. Default {0, 0}.
 			 * @see Libs::PixelFactory::Pixmap
-			 * @version 0.8.35
 			 */
 			void
 			setCursor (const std::string & label, const Libs::PixelFactory::Pixmap< uint8_t > & pixmap, const std::array< int, 2 > & hotSpot = {0, 0}) noexcept
@@ -973,7 +949,6 @@ namespace EmEn
 			 * @param size Cursor dimensions as {width, height}.
 			 * @param data Raw RGBA pixel data (width * height * 4 bytes).
 			 * @param hotSpot Click point offset from top-left corner. Default {0, 0}.
-			 * @version 0.8.35
 			 */
 			void
 			setCursor (const std::string & label, const std::array< int, 2 > & size, unsigned char * data, const std::array< int, 2 > & hotSpot = {0, 0}) noexcept
@@ -988,7 +963,6 @@ namespace EmEn
 			 * @param imageResource The image resource to use as cursor.
 			 * @param hotSpot Click point offset from top-left corner. Default {0, 0}.
 			 * @see Graphics::ImageResource
-			 * @version 0.8.35
 			 */
 			void
 			setCursor (const std::shared_ptr< Graphics::ImageResource > & imageResource, const std::array< int, 2 > & hotSpot = {0, 0}) noexcept
@@ -998,7 +972,6 @@ namespace EmEn
 
 			/**
 			 * @brief Resets the cursor to the default arrow.
-			 * @version 0.8.35
 			 */
 			void
 			resetCursor () noexcept
@@ -1016,7 +989,6 @@ namespace EmEn
 			 * @param userService Pointer to a service implementing ServiceInterface.
 			 * @return true if the service was registered successfully.
 			 * @see ServiceInterface
-			 * @version 0.8.35
 			 */
 			[[nodiscard]]
 			bool enableUserService (ServiceInterface * userService) noexcept;
@@ -1056,7 +1028,6 @@ namespace EmEn
 			 * @details Sets up primary services, parses arguments, and prepares
 			 * for either tools mode or full engine initialization.
 			 * @return true if initialization succeeded.
-			 * @version 0.8.35
 			 */
 			[[nodiscard]]
 			bool initializeBaseLevel () noexcept;
@@ -1066,14 +1037,12 @@ namespace EmEn
 			 * @details After this method, Graphics::Renderer, Audio::Manager,
 			 * Input::Manager, and all other secondary services are available.
 			 * @return true if initialization succeeded; false aborts engine startup.
-			 * @version 0.8.35
 			 */
 			bool initializeCoreLevel () noexcept;
 
 			/**
 			 * @brief Initializes the rendering surface and swap-chain.
 			 * @return true if screen initialization succeeded.
-			 * @version 0.8.35
 			 */
 			bool initializeCoreScreen () noexcept;
 
@@ -1081,7 +1050,6 @@ namespace EmEn
 			 * @brief Logic thread entry point.
 			 * @details Runs physics simulation, scene updates, and calls onCoreProcessLogics().
 			 * Executes on a dedicated thread separate from rendering.
-			 * @version 0.8.35
 			 */
 			void logicsTask () noexcept;
 
@@ -1089,7 +1057,6 @@ namespace EmEn
 			 * @brief Rendering thread entry point.
 			 * @details Handles frame preparation, command buffer recording,
 			 * and GPU submission. Executes on a dedicated thread.
-			 * @version 0.8.35
 			 */
 			void renderingTask () noexcept;
 
@@ -1097,7 +1064,6 @@ namespace EmEn
 			 * @brief Recreates the render surface after resize or mode change.
 			 * @details Handles swap-chain recreation and notifies observers via
 			 * ApplicationSurfaceRefreshed notification.
-			 * @version 0.8.35
 			 */
 			void onWindowChanged () noexcept;
 
@@ -1105,7 +1071,6 @@ namespace EmEn
 			 * @brief Performs engine shutdown sequence.
 			 * @details Terminates all services in reverse initialization order.
 			 * @return Exit code (0 for success).
-			 * @version 0.8.35
 			 */
 			unsigned int terminate () noexcept;
 
@@ -1114,14 +1079,12 @@ namespace EmEn
 			 * @details Handles tools like vulkanInfo and geometry conversion.
 			 * @return true if tools mode executed successfully.
 			 * @see StartupMode::ToolsMode
-			 * @version 0.8.35
 			 */
 			bool executeToolsMode () noexcept;
 
 			/**
 			 * @brief Processes and displays queued core messages.
 			 * @details Shows error dialogs and shader compilation failures.
-			 * @version 0.8.35
 			 */
 			void displayCoreMessages () noexcept;
 
@@ -1140,7 +1103,6 @@ namespace EmEn
 			 * code for display. Override to customize error handling.
 			 * @param shaderIdentifier Name/path of the failed shader.
 			 * @param sourceCode The shader source that failed to compile.
-			 * @version 0.8.35
 			 */
 			virtual
 			void
@@ -1156,7 +1118,6 @@ namespace EmEn
 			 * @details Use this hook to display help, validate configuration,
 			 * or perform early checks that don't require graphics.
 			 * @return true to abort startup (e.g., after showing help), false to continue.
-			 * @version 0.8.35
 			 */
 			[[nodiscard]]
 			virtual
@@ -1171,9 +1132,8 @@ namespace EmEn
 			 * @details This is the primary initialization hook for applications.
 			 * Load scenes, create entities, and set up game state here.
 			 * @param arguments A reference to the arguments for a quick-access.
-			 * @param settings A writable reference to the settigns for a quick-access.
+			 * @param settings A writable reference to the settings for a quick-access.
 			 * @return true to enter main loop, false to abort with error.
-			 * @version 0.8.35
 			 */
 			virtual bool onCoreStarted (const Arguments & arguments, Settings & settings) noexcept = 0;
 
@@ -1181,7 +1141,6 @@ namespace EmEn
 			 * @brief Hook called every main loop iteration.
 			 * @details Override in derived classes for per-frame custom processing.
 			 * Called after input processing and before rendering.
-			 * @version 0.8.35
 			 */
 			virtual
 			void
@@ -1196,7 +1155,6 @@ namespace EmEn
 			 * Update game state, AI, and non-physics logic here.
 			 * @warning Thread safety: Do not access rendering resources directly.
 			 * @param engineCycle The current frame number since engine start.
-			 * @version 0.8.35
 			 */
 			virtual void onCoreProcessLogics (size_t engineCycle) noexcept = 0;
 
@@ -1205,7 +1163,6 @@ namespace EmEn
 			 * @details Pause game-specific systems (timers, AI, etc.) here.
 			 * Physics and audio are paused automatically by the engine.
 			 * @see pause()
-			 * @version 0.8.35
 			 */
 			virtual
 			void
@@ -1218,7 +1175,6 @@ namespace EmEn
 			 * @brief Called when the engine resumes from pause.
 			 * @details Resume game-specific systems paused in onCorePaused().
 			 * @see resume()
-			 * @version 0.8.35
 			 */
 			virtual
 			void
@@ -1232,7 +1188,6 @@ namespace EmEn
 			 * @details Clean up game state, save progress, and release
 			 * application-specific resources here. Services are still available.
 			 * @see stop()
-			 * @version 0.8.35
 			 */
 			virtual
 			void
@@ -1250,7 +1205,6 @@ namespace EmEn
 			 * @param modifiers Modifier key bitmask (Shift, Ctrl, Alt, Super).
 			 * @param repeat true if this is a key repeat event.
 			 * @return true if the event was handled, false to pass to next listener.
-			 * @version 0.8.35
 			 */
 			virtual
 			bool
@@ -1266,7 +1220,6 @@ namespace EmEn
 			 * @param scancode Platform-specific scancode.
 			 * @param modifiers Modifier key bitmask (Shift, Ctrl, Alt, Super).
 			 * @return true if the event was handled, false to pass to next listener.
-			 * @version 0.8.35
 			 */
 			virtual
 			bool
@@ -1281,7 +1234,6 @@ namespace EmEn
 			 * and Unicode character input rather than key press events.
 			 * @param unicode The Unicode code point of the typed character.
 			 * @return true if the event was handled, false to pass to next listener.
-			 * @version 0.8.35
 			 */
 			virtual
 			bool
@@ -1298,7 +1250,6 @@ namespace EmEn
 			 * @param notificationCode Notification type identifier.
 			 * @param data Optional notification payload.
 			 * @return true to remain attached as observer, false to detach.
-			 * @version 0.8.35
 			 */
 			virtual
 			bool
@@ -1312,7 +1263,6 @@ namespace EmEn
 			 * @details Implement to handle drag-and-drop file loading.
 			 * @param filepaths Paths to the dropped files.
 			 * @see openFiles()
-			 * @version 0.8.35
 			 */
 			virtual
 			void
@@ -1326,7 +1276,6 @@ namespace EmEn
 			 * @note The overlay manager and the scene manager is already refreshed at this point.
 			 * @details Implement to handle a resize into the user-application.
 			 * @see refreshSurface()
-			 * @version 0.8.35
 			 */
 			virtual
 			void
@@ -1344,40 +1293,41 @@ namespace EmEn
 			 * @{
 			 */
 
-			Identification m_identification;                                           ///< Application identity (name, version, org).
-			Help m_coreHelp{"Core engine"};                                            ///< Command-line help system.
+			Identification m_identification;										   ///< Application identity (name, version, org).
+			Help m_coreHelp{"Core engine"};											///< Command-line help system.
 
 			/* Primary Services - Available immediately after construction. */
-			PrimaryServices m_primaryServices;                                         ///< Bundled primary service container.
-			Console::Controller m_consoleController{m_primaryServices};                ///< Console command processor.
+			PrimaryServices m_primaryServices;										 ///< Bundled primary service container.
+			Console::Controller m_consoleController{m_primaryServices};				///< Console command processor.
 			Resources::Manager m_resourceManager{m_primaryServices, m_graphicsRenderer}; ///< Resource loading and caching.
-			User m_user{m_primaryServices};                                            ///< User preferences and settings.
+			User m_user{m_primaryServices};											///< User preferences and settings.
 
 			/* Secondary Services - Require graphics context. */
-			PlatformManager m_platformManager{m_primaryServices};                      ///< Platform abstraction layer.
-			Vulkan::Instance m_vulkanInstance{m_identification, m_primaryServices, false};    ///< Vulkan instance wrapper. FIXME: Find a nice way to let user-application sets the boolean
-			Window m_window{m_primaryServices, m_vulkanInstance, m_identification};    ///< Application window.
-			Input::Manager m_inputManager{m_primaryServices, m_window};                ///< Input device management.
+			PlatformManager m_platformManager{m_primaryServices};					  ///< Platform abstraction layer.
+			Vulkan::Instance m_vulkanInstance{m_identification, m_primaryServices, false};	///< Vulkan instance wrapper. FIXME: Find a nice way to let user-application sets the boolean
+			Window m_window{m_primaryServices, m_vulkanInstance, m_identification};	///< Application window.
+			Input::Manager m_inputManager{m_primaryServices, m_window};				///< Input device management.
 			Graphics::Renderer m_graphicsRenderer{m_primaryServices, m_vulkanInstance, m_window}; ///< Vulkan rendering pipeline.
-			Physics::Manager m_physicsManager{m_primaryServices, m_vulkanInstance};    ///< Physics simulation.
-			Audio::Manager m_audioManager{m_primaryServices, m_resourceManager};       ///< OpenAL audio system.
+			Physics::Manager m_physicsManager{m_primaryServices, m_vulkanInstance};	///< Physics simulation.
+			Audio::Manager m_audioManager{m_primaryServices, m_resourceManager};	   ///< OpenAL audio system.
 			Overlay::Manager m_overlayManager{m_primaryServices, m_window, m_graphicsRenderer}; ///< ImGui overlay system.
-			Notifier m_notifier{m_resourceManager, m_overlayManager};                  ///< On-screen notifications.
+			Notifier m_notifier{m_resourceManager, m_overlayManager};				  ///< On-screen notifications.
+			SystemNotification m_systemNotification{m_primaryServices.settings(), m_window};	  ///< OS-level system notifications.
 			Scenes::Manager m_sceneManager{m_primaryServices, m_resourceManager, m_inputManager, m_graphicsRenderer, m_audioManager}; ///< Scene graph management.
 
 			/* Service tracking. */
 			std::vector< ServiceInterface * > m_primaryServicesEnabled;   ///< Enabled primary service pointers.
 			std::vector< ServiceInterface * > m_secondaryServicesEnabled; ///< Enabled secondary service pointers.
-			std::vector< ServiceInterface * > m_userServiceEnabled;       ///< User-registered service pointers.
+			std::vector< ServiceInterface * > m_userServiceEnabled;	   ///< User-registered service pointers.
 
 			/* Runtime state. */
-			CursorAtlas m_cursorAtlas;                          ///< Custom cursor cache.
-			std::thread m_logicsThread;                         ///< Logic processing thread.
-			std::thread m_renderingThread;                      ///< Rendering thread.
-			uint64_t m_lifetime{0};                             ///< Total runtime in microseconds.
-			size_t m_cycle{0};                                  ///< Main loop iteration count.
+			CursorAtlas m_cursorAtlas;						  ///< Custom cursor cache.
+			std::thread m_logicsThread;						 ///< Logic processing thread.
+			std::thread m_renderingThread;					  ///< Rendering thread.
+			uint64_t m_lifetime{0};							 ///< Total runtime in microseconds.
+			size_t m_cycle{0};								  ///< Main loop iteration count.
 			StartupMode m_startupMode{StartupMode::Continue};   ///< Startup behavior mode.
-			std::queue< std::string > m_coreMessages;           ///< Pending messages for display. @todo Display in ImGui.
+			std::queue< std::string > m_coreMessages;		   ///< Pending messages for display. @todo Display in ImGui.
 
 			/* Control flags. */
 			std::atomic< bool > m_isMainLoopRunning{true}; ///< Main loop active flag (atomic for thread-safe access).

@@ -2,7 +2,7 @@
  * src/Overlay/Surface.hpp
  * This file is part of Emeraude-Engine
  *
- * Copyright (C) 2010-2025 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
+ * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
  *
  * Emeraude-Engine is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -925,10 +925,10 @@ namespace EmEn::Overlay
 			 * @brief Processes pending updates for this surface.
 			 * @details This method handles two types of updates:
 			 * 1. Size changes: If the surface was invalidated (via invalidate() or window resize),
-			 *    the back buffer is recreated at the new pixel dimensions. The front buffer
-			 *    continues to be used for rendering until swapFramebuffers() is called.
+			 *	the back buffer is recreated at the new pixel dimensions. The front buffer
+			 *	continues to be used for rendering until swapFramebuffers() is called.
 			 * 2. Content changes: If setVideoMemoryOutdated() was called, the front buffer
-			 *    content is uploaded to GPU memory.
+			 *	content is uploaded to GPU memory.
 			 * @note For asynchronous renderers (e.g., CEF), the back buffer preparation and
 			 * front buffer swap are decoupled to allow content to be ready before switching.
 			 * @param renderer A reference to the graphics renderer.

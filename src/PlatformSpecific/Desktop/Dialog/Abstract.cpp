@@ -2,7 +2,7 @@
  * src/PlatformSpecific/Desktop/Dialog/Abstract.cpp
  * This file is part of Emeraude-Engine
  *
- * Copyright (C) 2010-2025 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
+ * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
  *
  * Emeraude-Engine is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -26,38 +26,7 @@
 
 #include "Abstract.hpp"
 
-/* STL inclusions. */
-#include <sstream>
-
 namespace EmEn::PlatformSpecific::Desktop::Dialog
 {
-#ifdef IS_LINUX
-	std::vector< std::string >
-	Abstract::convertFilterStructureForPFD (const std::vector< std::pair< std::string, std::vector< std::string > > > & extensionFilters) noexcept
-	{
-		std::vector< std::string > pfdFilterStructure;
-		pfdFilterStructure.reserve(extensionFilters.size() * 2);
-
-		for ( const auto & [filterName, extensions] : extensionFilters )
-		{
-			pfdFilterStructure.emplace_back(filterName);
-
-			std::stringstream extensionString;
-
-			for ( auto it = extensions.cbegin(); it != extensions.cend(); ++it )
-			{
-				extensionString << "*." << *it;
-
-				if ( std::next(it) != extensions.cend() )
-				{
-					extensionString << ' ';
-				}
-			}
-
-			pfdFilterStructure.emplace_back(extensionString.str());
-		}
-
-		return pfdFilterStructure;
-	}
-#endif
+	/* NOTE: All dialog implementations are now platform-specific and do not require shared code. */
 }

@@ -2,7 +2,7 @@
  * src/Graphics/TextureResource/Texture1D.hpp
  * This file is part of Emeraude-Engine
  *
- * Copyright (C) 2010-2025 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
+ * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
  *
  * Emeraude-Engine is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -352,10 +352,10 @@ namespace EmEn::Graphics::TextureResource
 
 		private:
 
-			std::shared_ptr< ImageResource > m_localData;     ///< Dependent ImageResource providing pixel data.
-			std::shared_ptr< Vulkan::Image > m_image;         ///< Vulkan Image object (VK_IMAGE_TYPE_1D) on GPU.
+			std::shared_ptr< ImageResource > m_localData;	 ///< Dependent ImageResource providing pixel data.
+			std::shared_ptr< Vulkan::Image > m_image;		 ///< Vulkan Image object (VK_IMAGE_TYPE_1D) on GPU.
 			std::shared_ptr< Vulkan::ImageView > m_imageView; ///< Vulkan ImageView (VK_IMAGE_VIEW_TYPE_1D) for shader access.
-			std::shared_ptr< Vulkan::Sampler > m_sampler;     ///< Vulkan Sampler with filtering settings (no anisotropy).
+			std::shared_ptr< Vulkan::Sampler > m_sampler;	 ///< Vulkan Sampler with filtering settings (no anisotropy).
 	};
 }
 

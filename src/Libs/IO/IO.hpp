@@ -2,7 +2,7 @@
  * src/Libs/IO/IO.hpp
  * This file is part of Emeraude-Engine
  *
- * Copyright (C) 2010-2025 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
+ * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
  *
  * Emeraude-Engine is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -105,7 +105,7 @@ namespace EmEn::Libs::IO
 	 * @param path Path to the directory to check.
 	 * @return True if the path exists and is a directory, false otherwise.
 	 * @note Returns false if the path is empty or points to a non-directory.
-	 *       Error messages are suppressed for non-existent directories (error code 2).
+	 *	   Error messages are suppressed for non-existent directories (error code 2).
 	 */
 	[[nodiscard]]
 	bool directoryExists (const std::filesystem::path & path) noexcept;
@@ -118,7 +118,7 @@ namespace EmEn::Libs::IO
 	 * @param path Path to the directory to check.
 	 * @return True if the directory is empty, false otherwise.
 	 * @note Returns false if the path is empty or an error occurs.
-	 *       The directory must exist for this function to work correctly.
+	 *	   The directory must exist for this function to work correctly.
 	 */
 	[[nodiscard]]
 	bool isDirectoryContentEmpty (const std::filesystem::path & path) noexcept;
@@ -144,7 +144,7 @@ namespace EmEn::Libs::IO
 	 *
 	 * @param path Path to the directory to create.
 	 * @param removeFileSection If true, treats the last component as a filename and creates
-	 *        only the parent directory path. Useful when path includes a filename. Default false.
+	 *		only the parent directory path. Useful when path includes a filename. Default false.
 	 * @return True if the directory was created or already exists, false on error.
 	 * @note Returns false if the path is empty or directory creation fails.
 	 */
@@ -158,7 +158,7 @@ namespace EmEn::Libs::IO
 	 *
 	 * @param path Path to the directory to delete.
 	 * @param recursive If true, deletes the directory and all its contents recursively.
-	 *        If false, only deletes empty directories. Default false.
+	 *		If false, only deletes empty directories. Default false.
 	 * @return True if the directory was successfully deleted, false otherwise.
 	 * @warning This is a destructive operation that cannot be undone. Use recursive mode with caution.
 	 * @note Returns false if the path is empty, not a directory, or deletion fails.
@@ -258,10 +258,10 @@ namespace EmEn::Libs::IO
 	 *
 	 * @param filepath Path to the file to read.
 	 * @param[out] content String that will be filled with the file contents.
-	 *        The string is resized to match the file size.
+	 *		The string is resized to match the file size.
 	 * @return True if the file was successfully read, false otherwise.
 	 * @note Returns false if the path is empty, file cannot be opened, or read fails.
-	 *       Errors are logged to stderr.
+	 *	   Errors are logged to stderr.
 	 * @see fileGetContents(const std::filesystem::path&, std::vector<data_t>&)
 	 */
 	bool fileGetContents (const std::filesystem::path & filepath, std::string & content) noexcept;
@@ -278,7 +278,7 @@ namespace EmEn::Libs::IO
 	 * @param createDirectories If true, creates parent directories if they don't exist. Default false.
 	 * @return True if the content was successfully written, false otherwise.
 	 * @note Returns false if the path is empty, directory creation fails (when requested),
-	 *       file cannot be opened, or write fails. Errors are logged to stderr.
+	 *	   file cannot be opened, or write fails. Errors are logged to stderr.
 	 * @see filePutContents(const std::filesystem::path&, const container_t&, bool, bool)
 	 */
 	bool filePutContents (const std::filesystem::path & filepath, std::string_view content, bool append = false, bool createDirectories = false) noexcept;
@@ -293,11 +293,11 @@ namespace EmEn::Libs::IO
 	 * @tparam data_t The type of data elements to store (e.g., uint32_t, char, std::byte).
 	 * @param filepath Path to the file to read.
 	 * @param[out] content Vector that will be filled with the file contents.
-	 *        The vector is resized to fit the file data, accounting for element size.
+	 *		The vector is resized to fit the file data, accounting for element size.
 	 * @return True if the file was successfully read, false otherwise.
 	 * @note Returns false if the path is empty, file cannot be opened, or read fails.
-	 *       If file size is not evenly divisible by sizeof(data_t), the vector is
-	 *       sized up to accommodate partial elements. Errors are logged to stderr.
+	 *	   If file size is not evenly divisible by sizeof(data_t), the vector is
+	 *	   sized up to accommodate partial elements. Errors are logged to stderr.
 	 * @see fileGetContents(const std::filesystem::path&, std::string&)
 	 */
 	template< typename data_t >
@@ -358,8 +358,8 @@ namespace EmEn::Libs::IO
 	 * @param createDirectories If true, creates parent directories if they don't exist. Default false.
 	 * @return True if the data was successfully written, false otherwise.
 	 * @note Returns false if the path is empty, directory creation fails (when requested),
-	 *       file cannot be opened, or write fails. Errors are logged to stderr.
-	 *       The total bytes written equals container size multiplied by element size.
+	 *	   file cannot be opened, or write fails. Errors are logged to stderr.
+	 *	   The total bytes written equals container size multiplied by element size.
 	 * @see filePutContents(const std::filesystem::path&, std::string_view, bool, bool)
 	 */
 	template< std::ranges::contiguous_range container_t >
@@ -406,9 +406,9 @@ namespace EmEn::Libs::IO
 	 *
 	 * @param path Path to the directory to check or create.
 	 * @return True if the directory exists and is writable, or was successfully created.
-	 *         False if creation fails or the directory is not writable.
+	 *		 False if creation fails or the directory is not writable.
 	 * @note This function combines directoryExists(), writable(), and createDirectory().
-	 *       Particularly useful for cache directories and temporary storage locations.
+	 *	   Particularly useful for cache directories and temporary storage locations.
 	 * @see directoryExists, writable, createDirectory
 	 */
 	[[nodiscard]]

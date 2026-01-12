@@ -5,16 +5,6 @@ set -e
 echo "Installing build dependencies ..."
 
 sudo apt update
-sudo apt install g++ cmake ninja-build nasm python3 \
-  libvulkan-dev vulkan-tools vulkan-validationlayers vulkan-validationlayers-dev \
-  libopenal-dev \
-  libsndfile1-dev \
-  libsamplerate0-dev \
-  libtag1-dev \
-  libimgui-dev \
-  xorg-dev \
-  libxkbcommon-dev \
-  libgtk-3-dev \
-  libhwloc-dev
+sudo apt install g++ cmake ninja-build nasm python3 libvulkan-dev vulkan-tools vulkan-validationlayers vulkan-validationlayers-dev xorg-dev libxkbcommon-dev
 
 echo "Done !"

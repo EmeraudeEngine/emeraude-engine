@@ -1,8 +1,8 @@
 /*
-* src/Libs/Math/Space2D/Intersections.hpp
+ * src/Libs/Math/Space2D/Intersections/LineTriangle.hpp
  * This file is part of Emeraude-Engine
  *
- * Copyright (C) 2010-2025 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
+ * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
  *
  * Emeraude-Engine is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -66,7 +66,7 @@ namespace EmEn::Libs::Math::Space2D
 			{
 				// Check if intersection point is actually on the segment
 				const auto t = Vector< 2, precision_t >::dotProduct(intersection - edge.startPoint(), edge.endPoint() - edge.startPoint()) /
-				               (edge.endPoint() - edge.startPoint()).lengthSquared();
+							   (edge.endPoint() - edge.startPoint()).lengthSquared();
 
 				if ( t >= 0 && t <= 1 )
 				{

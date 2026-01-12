@@ -2,7 +2,7 @@
  * src/Libs/PixelFactory/Font.hpp
  * This file is part of Emeraude-Engine
  *
- * Copyright (C) 2010-2025 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
+ * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
  *
  * Emeraude-Engine is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -494,32 +494,32 @@ namespace EmEn::Libs::PixelFactory
 			uint32_t
 			findClosestSize (uint32_t targetSize) const noexcept
 			{
-			    if ( m_fonts.empty() )
-			    {
-			    	return 0;
-			    }
+				if ( m_fonts.empty() )
+				{
+					return 0;
+				}
 
-			    const auto upper = m_fonts.lower_bound(targetSize);
+				const auto upper = m_fonts.lower_bound(targetSize);
 
-			    if ( upper == m_fonts.cbegin() )
-			    {
-			        return upper->first;
-			    }
+				if ( upper == m_fonts.cbegin() )
+				{
+					return upper->first;
+				}
 
-			    if ( upper == m_fonts.cend() )
-			    {
-			        return std::prev(upper)->first;
-			    }
+				if ( upper == m_fonts.cend() )
+				{
+					return std::prev(upper)->first;
+				}
 
-			    const auto lower = std::prev(upper);
+				const auto lower = std::prev(upper);
 
 				const uint32_t diffUpper = upper->first - targetSize;
-			    const uint32_t diffLower = targetSize - lower->first;
+				const uint32_t diffLower = targetSize - lower->first;
 
-			    if ( diffLower <= diffUpper )
-			    {
-			        return lower->first;
-			    }
+				if ( diffLower <= diffUpper )
+				{
+					return lower->first;
+				}
 
 				return upper->first;
 			}

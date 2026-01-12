@@ -2,7 +2,7 @@
  * src/Audio/TrackMixer.cpp
  * This file is part of Emeraude-Engine
  *
- * Copyright (C) 2010-2025 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
+ * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
  *
  * Emeraude-Engine is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -37,7 +37,6 @@
 /* Local inclusions. */
 #include "OpenALExtensions.hpp"
 #include "Resources/Manager.hpp"
-#include "SoundfontResource.hpp"
 #include "Manager.hpp"
 #include "Settings.hpp"
 #include "SettingKeys.hpp"
@@ -111,31 +110,8 @@ namespace EmEn::Audio
 		/* Sets master volume. */
 		this->setVolume(m_primaryServices.settings().getOrSetDefault< float >(AudioMusicVolumeKey, DefaultAudioMusicVolume));
 
-		/* Load the configured SoundFont for MIDI rendering (if any). */
-		const auto soundfontName = m_primaryServices.settings().getOrSetDefault< std::string >(AudioMusicSoundfontKey, DefaultAudioMusicSoundfont);
-
-		if ( !soundfontName.empty() )
-		{
-			auto * soundfontContainer = m_resourceManager.container< SoundfontResource >();
-
-			if ( soundfontContainer != nullptr )
-			{
-				m_soundfont = soundfontContainer->getResource(soundfontName, false);
-
-				if ( m_soundfont != nullptr && m_soundfont->isValid() )
-				{
-					TraceSuccess{ClassId} << "Loaded SoundFont '" << soundfontName << "' for MIDI rendering.";
-
-					MusicResource::setGlobalSoundfont(m_soundfont->handle());
-				}
-				else
-				{
-					TraceWarning{ClassId} << "Failed to load SoundFont '" << soundfontName << "' ! Using additive synthesis.";
-
-					m_soundfont.reset();
-				}
-			}
-		}
+		/* NOTE: SoundFont for MIDI rendering is now managed per-resource via the dependency system.
+		 * Each MusicResource queries settings and loads the soundfont as a dependency when needed. */
 
 		/* NOTE: Allocating track sources (to volume 0) */
 		m_trackA = std::make_unique< Source >();
@@ -406,7 +382,7 @@ namespace EmEn::Audio
 
 			trackToPlayNow = m_playingTrack;
 		}
-    
+	
 		bool success = false;
 		const float initialGain = m_crossFaderEnabled && wasPlaying ? 0.0F : m_gain;
 
@@ -607,7 +583,7 @@ namespace EmEn::Audio
 	}
 
 	void
-	TrackMixer::seek (float position) noexcept
+	TrackMixer::seek (float position) const noexcept
 	{
 		if ( !this->usable() )
 		{
@@ -660,20 +636,9 @@ namespace EmEn::Audio
 
 		std::random_device rd;
 		std::mt19937 gen{rd()};
-		std::shuffle(m_shuffleOrder.begin(), m_shuffleOrder.end(), gen);
+		std::ranges::shuffle(m_shuffleOrder, gen);
 
 		m_shuffleIndex = 0;
-	}
-
-	void
-	TrackMixer::addToPlaylist (const std::shared_ptr< MusicResource > & track, const std::shared_ptr< SoundfontResource > & soundfont) noexcept
-	{
-		if ( track != nullptr && soundfont != nullptr && soundfont->isValid() )
-		{
-			track->setSoundfont(soundfont->handle());
-		}
-
-		m_playlist.push_back(track);
 	}
 
 	bool

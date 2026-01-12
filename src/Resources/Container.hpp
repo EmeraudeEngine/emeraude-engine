@@ -2,7 +2,7 @@
  * src/Resources/Container.hpp
  * This file is part of Emeraude-Engine
  *
- * Copyright (C) 2010-2025 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
+ * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
  *
  * Emeraude-Engine is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -577,13 +577,13 @@ namespace EmEn::Resources
 			 */
 			enum NotificationCode
 			{
-				Unknown,                   ///< Unknown or unspecified notification.
-				LoadingProcessStarted,     ///< Emitted when a resource begins loading.
-				ResourceLoaded,            ///< Emitted when a resource successfully loads (data: resource_t*).
-				LoadingProcessFinished,    ///< Emitted when loading completes (success or failure).
-				Progress,                  ///< Emitted for loading progress updates (if supported).
+				Unknown,				   ///< Unknown or unspecified notification.
+				LoadingProcessStarted,	 ///< Emitted when a resource begins loading.
+				ResourceLoaded,			///< Emitted when a resource successfully loads (data: resource_t*).
+				LoadingProcessFinished,	///< Emitted when loading completes (success or failure).
+				Progress,				  ///< Emitted for loading progress updates (if supported).
 				/* Enumeration boundary. */
-				MaxEnum                    ///< Enumeration boundary marker.
+				MaxEnum					///< Enumeration boundary marker.
 			};
 
 			/**
@@ -597,7 +597,7 @@ namespace EmEn::Resources
 			 * @param primaryServices Reference to core engine services (threading, networking, filesystem).
 			 * @param serviceProvider Reference to the resource service provider for loading operations.
 			 * @param store Shared pointer to the resource metadata store (name -> BaseInformation map).
-			 *              Can be nullptr for containers that don't use a predefined store.
+			 *			  Can be nullptr for containers that don't use a predefined store.
 			 * @note [OBS] Container becomes observable and can emit NotificationCode events.
 			 * @note [OBSERVER] Container observes the network manager for download completion.
 			 * @version 0.8.35
@@ -1729,12 +1729,12 @@ namespace EmEn::Resources
 				this->notify(LoadingProcessFinished);
 			}
 
-			PrimaryServices & m_primaryServices;                                                     ///< Core engine services (threading, networking, filesystem).
-			AbstractServiceProvider & m_serviceProvider;                                          ///< Service provider for resource loading operations.
+			PrimaryServices & m_primaryServices;													 ///< Core engine services (threading, networking, filesystem).
+			AbstractServiceProvider & m_serviceProvider;										  ///< Service provider for resource loading operations.
 			std::shared_ptr< std::unordered_map< std::string, BaseInformation > > m_localStore;  ///< Shared store of available resource metadata (name -> BaseInformation).
-			std::unordered_map< std::string, std::shared_ptr< resource_t > > m_resources;        ///< Map of loaded resources (name -> resource).
-			std::unordered_map< int, LoadingRequest< resource_t > > m_externalResources;         ///< Active download requests (ticket -> request).
-			mutable std::mutex m_resourcesAccess;                                                 ///< Mutex protecting m_resources and m_externalResources.
-			bool m_verboseEnabled{false};                                                         ///< Verbose logging flag for detailed trace output.
+			std::unordered_map< std::string, std::shared_ptr< resource_t > > m_resources;		///< Map of loaded resources (name -> resource).
+			std::unordered_map< int, LoadingRequest< resource_t > > m_externalResources;		 ///< Active download requests (ticket -> request).
+			mutable std::mutex m_resourcesAccess;												 ///< Mutex protecting m_resources and m_externalResources.
+			bool m_verboseEnabled{false};														 ///< Verbose logging flag for detailed trace output.
 	};
 }

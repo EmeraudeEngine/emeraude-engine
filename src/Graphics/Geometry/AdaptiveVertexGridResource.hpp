@@ -2,7 +2,7 @@
  * src/Graphics/Geometry/AdaptiveVertexGridResource.hpp
  * This file is part of Emeraude-Engine
  *
- * Copyright (C) 2010-2025 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
+ * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
  *
  * Emeraude-Engine is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -401,9 +401,9 @@ namespace EmEn::Graphics::Geometry
 			/**
 			 * @brief Sets the LOD distance parameters.
 			 * @param baseMultiplier The base distance threshold as a fraction of sector size (default 0.125).
-			 *        Higher values extend the high-detail zone.
+			 *		Higher values extend the high-detail zone.
 			 * @param thresholdGrowth The multiplier applied to threshold between LOD levels (default 2.0).
-			 *        Higher values make LOD transitions more gradual.
+			 *		Higher values make LOD transitions more gradual.
 			 * @return void
 			 */
 			void

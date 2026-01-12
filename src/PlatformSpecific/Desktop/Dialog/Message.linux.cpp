@@ -2,7 +2,7 @@
  * src/PlatformSpecific/Desktop/Dialog/Message.linux.cpp
  * This file is part of Emeraude-Engine
  *
- * Copyright (C) 2010-2025 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
+ * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
  *
  * Emeraude-Engine is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -28,85 +28,326 @@
 
 #if IS_LINUX
 
-/* Third-party inclusions. */
-#include "portable-file-dialogs.h"
+/* STL inclusions. */
+#include <array>
+#include <cstdlib>
+#include <cstdio>
 
 /* Local inclusions. */
 #include "Window.hpp"
 
 namespace EmEn::PlatformSpecific::Desktop::Dialog
 {
-	pfd::icon
-	getMessageType (MessageType messageType) noexcept
+	namespace
 	{
-		switch ( messageType )
+		bool
+		checkProgram (const std::string & program) noexcept
 		{
-			case MessageType::Info:
-				return pfd::icon::info;
+			const std::string command = "which " + program + " > /dev/null 2>&1";
 
-			case MessageType::Warning:
-				return pfd::icon::warning;
-
-			case MessageType::Error:
-				return pfd::icon::error;
-
-			case MessageType::Question:
-				return pfd::icon::question;
-
-			default:
-				return pfd::icon::info;
+			return system(command.c_str()) == 0;
 		}
-	}
 
-	pfd::choice
-	getButtonLayout (ButtonLayout buttonLayout) noexcept
-	{
-		switch ( buttonLayout )
+		bool
+		hasZenity () noexcept
 		{
-			case ButtonLayout::OKCancel :
-				return pfd::choice::ok_cancel;
+			static const bool result = checkProgram("zenity");
 
-			case ButtonLayout::YesNo :
-				return pfd::choice::yes_no;
+			return result;
+		}
 
-			case ButtonLayout::OK :
-			case ButtonLayout::Quit :
-			case ButtonLayout::NoButton :
-			default:
-				return pfd::choice::ok;
+		bool
+		hasKdialog () noexcept
+		{
+			static const bool result = checkProgram("kdialog");
+
+			return result;
+		}
+
+		bool
+		isKdeDesktop () noexcept
+		{
+			const char * desktop = std::getenv("XDG_CURRENT_DESKTOP");
+
+			if ( desktop != nullptr )
+			{
+				std::string desktopStr{desktop};
+
+				return desktopStr.find("KDE") != std::string::npos;
+			}
+
+			return false;
+		}
+
+		std::string
+		escapeShellArg (const std::string & arg) noexcept
+		{
+			std::string escaped;
+			escaped.reserve(arg.size() + 2);
+			escaped += '\'';
+
+			for ( const char c : arg )
+			{
+				if ( c == '\'' )
+				{
+					/* End quote, add escaped quote, restart quote. */
+					escaped += "'\\''";
+				}
+				else
+				{
+					escaped += c;
+				}
+			}
+
+			escaped += '\'';
+
+			return escaped;
+		}
+
+		const char *
+		getZenityIconName (MessageType messageType) noexcept
+		{
+			switch ( messageType )
+			{
+				case MessageType::Warning:
+					return "dialog-warning";
+
+				case MessageType::Error:
+					return "dialog-error";
+
+				case MessageType::Question:
+					return "dialog-question";
+
+				case MessageType::Info:
+				default:
+					return "dialog-information";
+			}
+		}
+
+		const char *
+		getKdialogIconName (MessageType messageType) noexcept
+		{
+			switch ( messageType )
+			{
+				case MessageType::Warning:
+					return "warning";
+
+				case MessageType::Error:
+					return "error";
+
+				case MessageType::Question:
+					return "question";
+
+				case MessageType::Info:
+				default:
+					return "information";
+			}
+		}
+
+		std::string
+		executeCommand (const std::string & command, int & exitCode) noexcept
+		{
+			std::string output;
+			std::array< char, 256 > buffer{};
+
+			FILE * pipe = popen(command.c_str(), "r");
+
+			if ( pipe == nullptr )
+			{
+				exitCode = -1;
+
+				return output;
+			}
+
+			while ( fgets(buffer.data(), static_cast< int >(buffer.size()), pipe) != nullptr )
+			{
+				output += buffer.data();
+			}
+
+			const int status = pclose(pipe);
+			exitCode = WEXITSTATUS(status);
+
+			/* Remove trailing newline if any. */
+			while ( !output.empty() && output.back() == '\n' )
+			{
+				output.pop_back();
+			}
+
+			return output;
 		}
 	}
 
 	bool
 	Message::execute (Window * /*window*/) noexcept
 	{
-		auto output = pfd::message{
-			this->title(),
-			m_message,
-			getButtonLayout(m_buttonLayout),
-			getMessageType(m_messageType)
-		};
+		std::string command;
 
-		switch ( output.result() )
+		/* Prefer kdialog on KDE, zenity otherwise. */
+		const bool useKdialog = hasKdialog() && (!hasZenity() || isKdeDesktop());
+
+		if ( useKdialog )
 		{
-			case pfd::button::cancel :
-			case pfd::button::abort :
-			case pfd::button::ignore :
-			case pfd::button::retry :
-				m_userAnswer = Answer::Cancel;
-				break;
+			command = "kdialog";
 
-			case pfd::button::ok :
+			/* KDialog dialog type and button handling. */
+			switch ( m_buttonLayout )
+			{
+				case ButtonLayout::OK:
+				case ButtonLayout::Quit:
+				case ButtonLayout::NoButton:
+					switch ( m_messageType )
+					{
+						case MessageType::Error:
+							command += " --error";
+							break;
+
+						case MessageType::Warning:
+							command += " --sorry";
+							break;
+
+						case MessageType::Question:
+						case MessageType::Info:
+						default:
+							command += " --msgbox";
+							break;
+					}
+					break;
+
+				case ButtonLayout::OKCancel:
+					if ( m_messageType == MessageType::Warning || m_messageType == MessageType::Error )
+					{
+						command += " --warningyesno";
+					}
+					else
+					{
+						command += " --yesno";
+					}
+					break;
+
+				case ButtonLayout::YesNo:
+					if ( m_messageType == MessageType::Warning || m_messageType == MessageType::Error )
+					{
+						command += " --warningyesno";
+					}
+					else
+					{
+						command += " --yesno";
+					}
+					break;
+			}
+
+			command += " ";
+			command += escapeShellArg(m_message);
+			command += " --title ";
+			command += escapeShellArg(this->title());
+
+			/* OKCancel uses Yes/No labels in kdialog. */
+			if ( m_buttonLayout == ButtonLayout::OKCancel )
+			{
+				command += " --yes-label OK --no-label Cancel";
+			}
+		}
+		else if ( hasZenity() )
+		{
+			command = "zenity";
+
+			/* Zenity dialog type. */
+			switch ( m_buttonLayout )
+			{
+				case ButtonLayout::OK:
+				case ButtonLayout::Quit:
+				case ButtonLayout::NoButton:
+					switch ( m_messageType )
+					{
+						case MessageType::Error:
+							command += " --error";
+							break;
+
+						case MessageType::Warning:
+							command += " --warning";
+							break;
+
+						case MessageType::Question:
+						case MessageType::Info:
+						default:
+							command += " --info";
+							break;
+					}
+					break;
+
+				case ButtonLayout::OKCancel:
+					command += " --question --cancel-label=Cancel --ok-label=OK";
+					break;
+
+				case ButtonLayout::YesNo:
+					command += " --question --switch --extra-button=No --extra-button=Yes";
+					break;
+			}
+
+			command += " --title ";
+			command += escapeShellArg(this->title());
+			command += " --width=300 --height=0 --no-markup";
+			command += " --text ";
+			command += escapeShellArg(m_message);
+			command += " --icon=";
+			command += getZenityIconName(m_messageType);
+		}
+		else
+		{
+			/* No dialog tool available. */
+			m_userAnswer = Answer::DialogFailure;
+
+			return false;
+		}
+
+		/* Execute the command and get the result. */
+		int exitCode = 0;
+		const std::string output = executeCommand(command, exitCode);
+
+		/* Parse the result based on the tool and button layout. */
+		if ( useKdialog )
+		{
+			/* KDialog: exit code 0 = Yes/OK, non-zero = No/Cancel. */
+			switch ( m_buttonLayout )
+			{
+				case ButtonLayout::OK:
+				case ButtonLayout::Quit:
+				case ButtonLayout::NoButton:
+					m_userAnswer = Answer::OK;
+					break;
+
+				case ButtonLayout::OKCancel:
+					m_userAnswer = (exitCode == 0) ? Answer::OK : Answer::Cancel;
+					break;
+
+				case ButtonLayout::YesNo:
+					m_userAnswer = (exitCode == 0) ? Answer::Yes : Answer::No;
+					break;
+			}
+		}
+		else
+		{
+			/* Zenity: parse output for switch mode, exit code otherwise. */
+			if ( m_buttonLayout == ButtonLayout::YesNo )
+			{
+				/* Switch mode: output contains the button text. */
+				if ( output == "Yes" )
+				{
+					m_userAnswer = Answer::Yes;
+				}
+				else
+				{
+					m_userAnswer = Answer::No;
+				}
+			}
+			else if ( m_buttonLayout == ButtonLayout::OKCancel )
+			{
+				m_userAnswer = (exitCode == 0) ? Answer::OK : Answer::Cancel;
+			}
+			else
+			{
 				m_userAnswer = Answer::OK;
-				break;
-
-			case pfd::button::yes :
-				m_userAnswer = Answer::Yes;
-				break;
-
-			case pfd::button::no :
-				m_userAnswer = Answer::No;
-				break;
+			}
 		}
 
 		return true;

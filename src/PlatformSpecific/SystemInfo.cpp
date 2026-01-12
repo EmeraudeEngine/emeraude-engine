@@ -2,7 +2,7 @@
  * src/PlatformSpecific/SystemInfo.cpp
  * This file is part of Emeraude-Engine
  *
- * Copyright (C) 2010-2025 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
+ * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
  *
  * Emeraude-Engine is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -50,13 +50,13 @@ namespace EmEn::PlatformSpecific
 #if IS_ARM_ARCH
 		const auto cpuInfo = cpu_features::GetAarch64Info();
 
-        m_CPUInformation.vendorName = "Apple";
-        m_CPUInformation.vendorID = cpuInfo.implementer;
-        m_CPUInformation.deviceName = "Apple M?";
-        m_CPUInformation.deviceID = cpuInfo.variant;
-        m_CPUInformation.family = -1;
-        m_CPUInformation.model = cpuInfo.part;
-        m_CPUInformation.stepping = cpuInfo.revision;
+		m_CPUInformation.vendorName = "Apple";
+		m_CPUInformation.vendorID = cpuInfo.implementer;
+		m_CPUInformation.deviceName = "Apple M?";
+		m_CPUInformation.deviceID = cpuInfo.variant;
+		m_CPUInformation.family = -1;
+		m_CPUInformation.model = cpuInfo.part;
+		m_CPUInformation.stepping = cpuInfo.revision;
 #else
 		const auto cpuInfo = cpu_features::GetX86Info();
 

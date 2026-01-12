@@ -2,7 +2,7 @@
  * src/Scenes/Node.hpp
  * This file is part of Emeraude-Engine
  *
- * Copyright (C) 2010-2025 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
+ * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
  *
  * Emeraude-Engine is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -102,12 +102,12 @@ namespace EmEn::Scenes
 			enum NotificationCode
 			{
 				SubNodeCreating = AbstractEntity::MaxEnum, ///< Emitted before a child node is created. Data: parent shared_ptr.
-				SubNodeCreated,                             ///< Emitted after a child node is created. Data: child shared_ptr.
-				SubNodeDeleting,                            ///< Emitted before a child node is destroyed. Data: child shared_ptr.
-				SubNodeDeleted,                             ///< Emitted after a child node is destroyed. Data: parent shared_ptr.
-				NodeCollision,                              ///< Emitted when physics detects a collision. Data: impact force (float).
+				SubNodeCreated,							 ///< Emitted after a child node is created. Data: child shared_ptr.
+				SubNodeDeleting,							///< Emitted before a child node is destroyed. Data: child shared_ptr.
+				SubNodeDeleted,							 ///< Emitted after a child node is destroyed. Data: parent shared_ptr.
+				NodeCollision,							  ///< Emitted when physics detects a collision. Data: impact force (float).
 				/* Enumeration boundary. */
-				MaxEnum                                     ///< Marks the end of the enumeration range.
+				MaxEnum									 ///< Marks the end of the enumeration range.
 			};
 
 			/**
@@ -120,45 +120,45 @@ namespace EmEn::Scenes
 			 */
 			enum AnimationID : uint8_t
 			{
-				LocalCoordinates,    ///< Animates the entire local coordinate frame.
-				LocalPosition,       ///< Animates position in local space (absolute).
-				LocalXPosition,      ///< Animates X position in local space.
-				LocalYPosition,      ///< Animates Y position in local space.
-				LocalZPosition,      ///< Animates Z position in local space.
-				LocalTranslation,    ///< Animates translation in local space (relative).
+				LocalCoordinates,	///< Animates the entire local coordinate frame.
+				LocalPosition,	   ///< Animates position in local space (absolute).
+				LocalXPosition,	  ///< Animates X position in local space.
+				LocalYPosition,	  ///< Animates Y position in local space.
+				LocalZPosition,	  ///< Animates Z position in local space.
+				LocalTranslation,	///< Animates translation in local space (relative).
 				LocalXTranslation,   ///< Animates X translation in local space.
 				LocalYTranslation,   ///< Animates Y translation in local space.
 				LocalZTranslation,   ///< Animates Z translation in local space.
-				LocalRotation,       ///< Animates rotation in local space (full rotation).
-				LocalXRotation,      ///< Animates pitch in local space (rotation around X axis).
-				LocalYRotation,      ///< Animates yaw in local space (rotation around Y axis).
-				LocalZRotation,      ///< Animates roll in local space (rotation around Z axis).
+				LocalRotation,	   ///< Animates rotation in local space (full rotation).
+				LocalXRotation,	  ///< Animates pitch in local space (rotation around X axis).
+				LocalYRotation,	  ///< Animates yaw in local space (rotation around Y axis).
+				LocalZRotation,	  ///< Animates roll in local space (rotation around Z axis).
 
-				ParentPosition,      ///< Animates position in parent space (absolute).
-				ParentXPosition,     ///< Animates X position in parent space.
-				ParentYPosition,     ///< Animates Y position in parent space.
-				ParentZPosition,     ///< Animates Z position in parent space.
+				ParentPosition,	  ///< Animates position in parent space (absolute).
+				ParentXPosition,	 ///< Animates X position in parent space.
+				ParentYPosition,	 ///< Animates Y position in parent space.
+				ParentZPosition,	 ///< Animates Z position in parent space.
 				ParentTranslation,   ///< Animates translation in parent space (relative).
 				ParentXTranslation,  ///< Animates X translation in parent space.
 				ParentYTranslation,  ///< Animates Y translation in parent space.
 				ParentZTranslation,  ///< Animates Z translation in parent space.
-				ParentRotation,      ///< Animates rotation in parent space (full rotation).
-				ParentXRotation,     ///< Animates pitch in parent space.
-				ParentYRotation,     ///< Animates yaw in parent space.
-				ParentZRotation,     ///< Animates roll in parent space.
+				ParentRotation,	  ///< Animates rotation in parent space (full rotation).
+				ParentXRotation,	 ///< Animates pitch in parent space.
+				ParentYRotation,	 ///< Animates yaw in parent space.
+				ParentZRotation,	 ///< Animates roll in parent space.
 
-				WorldPosition,       ///< Animates position in world space (absolute).
-				WorldXPosition,      ///< Animates X position in world space.
-				WorldYPosition,      ///< Animates Y position in world space.
-				WorldZPosition,      ///< Animates Z position in world space.
-				WorldTranslation,    ///< Animates translation in world space (relative).
+				WorldPosition,	   ///< Animates position in world space (absolute).
+				WorldXPosition,	  ///< Animates X position in world space.
+				WorldYPosition,	  ///< Animates Y position in world space.
+				WorldZPosition,	  ///< Animates Z position in world space.
+				WorldTranslation,	///< Animates translation in world space (relative).
 				WorldXTranslation,   ///< Animates X translation in world space.
 				WorldYTranslation,   ///< Animates Y translation in world space.
 				WorldZTranslation,   ///< Animates Z translation in world space.
-				WorldRotation,       ///< Animates rotation in world space (full rotation).
-				WorldXRotation,      ///< Animates pitch in world space.
-				WorldYRotation,      ///< Animates yaw in world space.
-				WorldZRotation       ///< Animates roll in world space.
+				WorldRotation,	   ///< Animates rotation in world space (full rotation).
+				WorldXRotation,	  ///< Animates pitch in world space.
+				WorldYRotation,	  ///< Animates yaw in world space.
+				WorldZRotation	   ///< Animates roll in world space.
 			};
 
 			/**

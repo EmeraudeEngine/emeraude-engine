@@ -2,7 +2,7 @@
  * src/Physics/Physics.hpp
  * This file is part of Emeraude-Engine
  *
- * Copyright (C) 2010-2025 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
+ * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
  *
  * Emeraude-Engine is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -2048,7 +2048,7 @@ namespace EmEn::Physics
 
 			Libs::Math::Matrix< 3, precision_t > inertia{};
 			inertia[Libs::Math::M3x3Col0Row0] = (mass * (static_cast< precision_t >(3) * sqRadius + sqHeight)) / static_cast< precision_t >(12);  // Ixx
-			inertia[Libs::Math::M3x3Col1Row1] = (mass * sqRadius) / static_cast< precision_t >(2);                                                 // Iyy
+			inertia[Libs::Math::M3x3Col1Row1] = (mass * sqRadius) / static_cast< precision_t >(2);												 // Iyy
 			inertia[Libs::Math::M3x3Col2Row2] = (mass * (static_cast< precision_t >(3) * sqRadius + sqHeight)) / static_cast< precision_t >(12);  // Izz
 
 			return inertia;

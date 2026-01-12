@@ -2,7 +2,7 @@
  * src/Graphics/RenderableInstance/Abstract.hpp
  * This file is part of Emeraude-Engine
  *
- * Copyright (C) 2010-2025 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
+ * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
  *
  * Emeraude-Engine is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -155,7 +155,7 @@ namespace EmEn::Graphics::RenderableInstance
 	 *
 	 * @note Thread safety: This class uses internal mutex locking for GPU memory access.
 	 * @note Clarification needed: The necessity of mutex locks (m_GPUMemoryAccess) is unclear
-	 *       and marked with [VULKAN-CPU-SYNC] in the implementation.
+	 *	   and marked with [VULKAN-CPU-SYNC] in the implementation.
 	 *
 	 * @todo Check for renderable interface already in video memory to reduce preparation time.
 	 *
@@ -454,7 +454,7 @@ namespace EmEn::Graphics::RenderableInstance
 			 * @return false if an error occurred (instance marked as broken).
 			 *
 			 * @note Returns true immediately if renderable is not ready for instantiation.
-			 *       A loading event will trigger another call when ready.
+			 *	   A loading event will trigger another call when ready.
 			 *
 			 * @see castShadows() To render after preparation.
 			 * @version 0.8.35
@@ -476,7 +476,7 @@ namespace EmEn::Graphics::RenderableInstance
 			 * @return false if an error occurred (instance marked as broken).
 			 *
 			 * @note Returns true immediately if renderable is not ready for instantiation.
-			 *       A loading event will trigger another call when ready.
+			 *	   A loading event will trigger another call when ready.
 			 * @note Also generates TBN space visualization program if DisplayTBNSpaceEnabled flag is set.
 			 *
 			 * @see render() To render after preparation.

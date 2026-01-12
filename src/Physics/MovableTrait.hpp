@@ -2,7 +2,7 @@
  * src/Physics/MovableTrait.hpp
  * This file is part of Emeraude-Engine
  *
- * Copyright (C) 2010-2025 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
+ * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
  *
  * Emeraude-Engine is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -48,10 +48,10 @@ namespace EmEn::Physics
 	 */
 	enum class GroundedSource : uint8_t
 	{
-		None,      ///< Not grounded.
-		Ground,    ///< Grounded on terrain/ground.
+		None,	  ///< Not grounded.
+		Ground,	///< Grounded on terrain/ground.
 		Boundary,  ///< Grounded on world boundary.
-		Entity     ///< Grounded on a StaticEntity or Node.
+		Entity	 ///< Grounded on a StaticEntity or Node.
 	};
 	/**
 	 * @brief Gives the ability to move something in the 3D world with physical properties.
@@ -371,7 +371,7 @@ namespace EmEn::Physics
 			/**
 			 * @brief Enables or disables rotation physics for this entity.
 			 * @note When disabled, torque will not be applied and collisions won't induce rotation.
-			 *       Disabling rotation will also reset angular velocity to zero.
+			 *	   Disabling rotation will also reset angular velocity to zero.
 			 * @param state True to enable rotation, false to disable.
 			 * @return void
 			 */
@@ -464,11 +464,11 @@ namespace EmEn::Physics
 			/**
 			 * @brief Events when this movable has hit something.
 			 * @note The impact force is expressed in Newtons (N), representing the instantaneous collision force.
-			 *       Computed as F = (m × Δv) / Δt where Δt is the physics timestep.
-			 *       Example values at 60 FPS (Δt ≈ 0.0167s):
-			 *       - Light tap: ~100 N
-			 *       - Moderate impact: ~1000 N
-			 *       - Heavy collision: ~10000 N
+			 *	   Computed as F = (m × Δv) / Δt where Δt is the physics timestep.
+			 *	   Example values at 60 FPS (Δt ≈ 0.0167s):
+			 *	   - Light tap: ~100 N
+			 *	   - Moderate impact: ~1000 N
+			 *	   - Heavy collision: ~10000 N
 			 * @param impactForce The collision force in Newtons (N).
 			 * @return void
 			 */

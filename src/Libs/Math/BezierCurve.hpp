@@ -2,7 +2,7 @@
  * src/Libs/Math/BezierCurve.hpp
  * This file is part of Emeraude-Engine
  *
- * Copyright (C) 2010-2025 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
+ * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
  *
  * Emeraude-Engine is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -132,21 +132,21 @@ namespace EmEn::Libs::Math
 				/* Case where the curve has only one quadratic segment. */
 				if ( m_points.size() == 3 && !m_closed )
 				{
-				    return Vector< dim_t, number_t >::quadraticBezierInterpolation(m_points[0], m_points[1], m_points[2], globalTimePoint);
+					return Vector< dim_t, number_t >::quadraticBezierInterpolation(m_points[0], m_points[1], m_points[2], globalTimePoint);
 				}
 
 				/* Managing extreme cases for open curves. */
 				if ( !m_closed )
 				{
-				    if ( globalTimePoint <= 0.0F )
-				    {
-					    return m_points.front();
-				    }
+					if ( globalTimePoint <= 0.0F )
+					{
+						return m_points.front();
+					}
 
-				    if ( globalTimePoint >= 1.0F )
-				    {
-					    return m_points.back();
-				    }
+					if ( globalTimePoint >= 1.0F )
+					{
+						return m_points.back();
+					}
 				}
 
 				const size_t pointCount = m_points.size();
@@ -167,7 +167,7 @@ namespace EmEn::Libs::Math
 				/* Ensure the index does not overflow due to inaccuracies on globalTimePoint = 1.0 */
 				if ( segmentIndex >= numSegments )
 				{
-				    segmentIndex = numSegments - 1;
+					segmentIndex = numSegments - 1;
 				}
 
 				const float localTimePoint = scaledTime - static_cast< float >(segmentIndex);
@@ -176,19 +176,19 @@ namespace EmEn::Libs::Math
 
 				if ( m_closed )
 				{
-				    /* For a closed curve, we loop over the points using the modulo.
-				     * The segment 'i' is formed by (midpoint(Pi, Pi+1), Pi+1, midpoint(Pi+1, Pi+2))
-				     * For simplicity, we can consider the segment i as (Pi, Pi+1, Pi+2) */
-				    pointA = m_points[segmentIndex % pointCount];
-				    pointB = m_points[(segmentIndex + 1) % pointCount];
-				    pointC = m_points[(segmentIndex + 2) % pointCount];
+					/* For a closed curve, we loop over the points using the modulo.
+					 * The segment 'i' is formed by (midpoint(Pi, Pi+1), Pi+1, midpoint(Pi+1, Pi+2))
+					 * For simplicity, we can consider the segment i as (Pi, Pi+1, Pi+2) */
+					pointA = m_points[segmentIndex % pointCount];
+					pointB = m_points[(segmentIndex + 1) % pointCount];
+					pointC = m_points[(segmentIndex + 2) % pointCount];
 				}
 				else
 				{
-				    /* For an open curve, the segment 'i' is (Pi, Pi+1, Pi+2) */
-				    pointA = m_points[segmentIndex];
-				    pointB = m_points[segmentIndex + 1];
-				    pointC = m_points[segmentIndex + 2];
+					/* For an open curve, the segment 'i' is (Pi, Pi+1, Pi+2) */
+					pointA = m_points[segmentIndex];
+					pointB = m_points[segmentIndex + 1];
+					pointC = m_points[segmentIndex + 2];
 				}
 
 				/* NOTE: This logic assumes a chain of quadratic Bézier curves where P_i, P_i+1, P_i+2 form a curve.

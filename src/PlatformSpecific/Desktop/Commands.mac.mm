@@ -116,9 +116,68 @@ namespace EmEn::PlatformSpecific::Desktop
 	}
 
 	void
-	setTaskbarIconProgression (float /*progress*/, ProgressMode /*mode*/) noexcept
+	setTaskbarIconProgression (const Window & /*window*/, float progress, ProgressMode /*mode*/) noexcept
 	{
+		@autoreleasepool
+		{
+			NSDockTile * dockTile = [NSApp dockTile];
 
+			/* Handle progress disable (negative value). */
+			if ( progress < 0.0F )
+			{
+				/* Remove the progress indicator. */
+				[dockTile setContentView:nil];
+				[dockTile display];
+
+				return;
+			}
+
+			/* Get or create the content view. */
+			NSView * contentView = [dockTile contentView];
+			NSProgressIndicator * progressIndicator = nil;
+
+			if ( contentView == nil )
+			{
+				/* Create a new image view with the app icon as background. */
+				NSImageView * imageView = [[NSImageView alloc] init];
+				[imageView setImage:[NSApp applicationIconImage]];
+
+				/* Create a progress indicator. */
+				progressIndicator = [[NSProgressIndicator alloc] initWithFrame:NSMakeRect(0, 0, dockTile.size.width, 15)];
+				[progressIndicator setStyle:NSProgressIndicatorStyleBar];
+				[progressIndicator setIndeterminate:NO];
+				[progressIndicator setMinValue:0.0];
+				[progressIndicator setMaxValue:1.0];
+
+				/* Add the progress indicator to the image view. */
+				[imageView addSubview:progressIndicator];
+
+				/* Set the content view. */
+				[dockTile setContentView:imageView];
+			}
+			else
+			{
+				/* Find the existing progress indicator. */
+				for ( NSView * subview in [contentView subviews] )
+				{
+					if ( [subview isKindOfClass:[NSProgressIndicator class]] )
+					{
+						progressIndicator = (NSProgressIndicator *)subview;
+
+						break;
+					}
+				}
+			}
+
+			/* Update the progress value. */
+			if ( progressIndicator != nil )
+			{
+				[progressIndicator setDoubleValue:static_cast< double >(progress)];
+			}
+
+			/* Refresh the dock tile. */
+			[dockTile display];
+		}
 	}
 }
 

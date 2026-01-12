@@ -2,7 +2,7 @@
  * src/Resources/Manager.hpp
  * This file is part of Emeraude-Engine
  *
- * Copyright (C) 2010-2025 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
+ * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
  *
  * Emeraude-Engine is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -95,7 +95,7 @@ namespace EmEn::Resources
 			 * @param graphicsRenderer Reference to the graphics rendering subsystem.
 			 *
 			 * @note The constructor does not initialize resource containers. Call initialize()
-			 *       after construction to set up resource management.
+			 *	   after construction to set up resource management.
 			 * @note This class follows the service initialization pattern defined by ServiceInterface.
 			 *
 			 * @since 0.8.35
@@ -103,7 +103,7 @@ namespace EmEn::Resources
 			explicit
 			Manager (PrimaryServices & primaryServices, Graphics::Renderer & graphicsRenderer) noexcept
 				: ServiceInterface{ClassId},
-				AbstractServiceProvider{primaryServices.fileSystem(), graphicsRenderer},
+				AbstractServiceProvider{primaryServices.fileSystem(), primaryServices.settings(), graphicsRenderer},
 				m_primaryServices{primaryServices}
 			{
 

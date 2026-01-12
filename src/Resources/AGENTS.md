@@ -14,10 +14,23 @@ Fail-safe resource system that guarantees NEVER returning nullptr and always pro
 |------|-------|------|
 | `Types.hpp` | Enums + functions | `SourceType`, `Status`, `DepComplexity` + string conversions |
 | `ResourceTrait.hpp` | `ResourceTrait` | Base interface for all resources |
-| `ResourceTrait.hpp` | `AbstractServiceProvider` | Container access interface (merged) |
+| `ResourceTrait.hpp` | `AbstractServiceProvider` | Service access interface (merged) |
 | `Container.hpp` | `Container<resource_t>` | Template store per resource type |
 | `Manager.hpp` | `Manager` | Central coordinator, access to all containers |
 | `BaseInformation.hpp` | `BaseInformation` | Resource metadata (store index) |
+
+### AbstractServiceProvider Interface
+
+Services available to resources during loading via `load(AbstractServiceProvider&)`:
+
+| Method | Returns | Purpose |
+|--------|---------|---------|
+| `fileSystem()` | `const FileSystem&` | File path resolution |
+| `settings()` | `Settings&` | Configuration retrieval and modification |
+| `graphicsRenderer()` | `Graphics::Renderer&` | GPU resource creation |
+| `container<T>()` | `Container<T>*` | Access to other resource containers |
+
+**Code reference:** `ResourceTrait.hpp:AbstractServiceProvider`
 
 ### Resource Lifecycle
 

@@ -2,7 +2,7 @@
  * src/Graphics/RenderableInstance/Multiple.hpp
  * This file is part of Emeraude-Engine
  *
- * Copyright (C) 2010-2025 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
+ * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
  *
  * Emeraude-Engine is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -155,11 +155,11 @@ namespace EmEn::Graphics::RenderableInstance
 			 * @brief Push constant strategy for Multiple (shadow casting).
 			 *
 			 * @par Matrix Distribution
-			 * | Mode      | Push Constants | VBO Content | UBO Content                   |
+			 * | Mode	  | Push Constants | VBO Content | UBO Content				   |
 			 * |-----------|----------------|-------------|-------------------------------|
-			 * | Cubemap   | (none)         | M per inst. | VP[6] indexed by gl_ViewIndex |
-			 * | Billboard | V + VP         | pos + scale | -                             |
-			 * | Simple    | VP only        | M per inst. | -                             |
+			 * | Cubemap   | (none)		 | M per inst. | VP[6] indexed by gl_ViewIndex |
+			 * | Billboard | V + VP		 | pos + scale | -							 |
+			 * | Simple	| VP only		| M per inst. | -							 |
 			 *
 			 * @par Key Difference from Unique
 			 * Multiple stores Model matrices in a VBO (one per instance), so we never
@@ -175,11 +175,11 @@ namespace EmEn::Graphics::RenderableInstance
 			 * @brief Push constant strategy for Multiple (scene rendering).
 			 *
 			 * @par Matrix Distribution
-			 * | Mode              | Push Constants | VBO Content | UBO Content                   |
+			 * | Mode			  | Push Constants | VBO Content | UBO Content				   |
 			 * |-------------------|----------------|-------------|-------------------------------|
-			 * | Cubemap           | (none)         | M per inst. | VP[6] indexed by gl_ViewIndex |
-			 * | Advanced/Billboard| V + VP         | M per inst. | -                             |
-			 * | Simple            | VP only        | M per inst. | -                             |
+			 * | Cubemap		   | (none)		 | M per inst. | VP[6] indexed by gl_ViewIndex |
+			 * | Advanced/Billboard| V + VP		 | M per inst. | -							 |
+			 * | Simple			| VP only		| M per inst. | -							 |
 			 *
 			 * @par Key Difference from Unique
 			 * Multiple stores Model matrices in a VBO (one per instance), so we never

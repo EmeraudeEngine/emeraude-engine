@@ -2,7 +2,7 @@
  * src/Graphics/Geometry/AdaptiveVertexGridResource.cpp
  * This file is part of Emeraude-Engine
  *
- * Copyright (C) 2010-2025 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
+ * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
  *
  * Emeraude-Engine is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -149,7 +149,7 @@ namespace EmEn::Graphics::Geometry
 				/* === Generate edge stitching for LOD transitions === */
 				for ( uint32_t lodLevel = startLOD; lodLevel < endLOD && lodLevel < m_lodLevelCount - 1; ++lodLevel )
 				{
-					const auto stepHigh = 1U << lodLevel;       /* Higher detail (more vertices) */
+					const auto stepHigh = 1U << lodLevel;	   /* Higher detail (more vertices) */
 					const auto stepLow = 1U << (lodLevel + 1);  /* Lower detail (fewer vertices) */
 
 					/* North edge (Z-): connects points at sectorQuadStartY */

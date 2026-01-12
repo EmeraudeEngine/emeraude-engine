@@ -2,7 +2,7 @@
  * src/Core.cpp
  * This file is part of Emeraude-Engine
  *
- * Copyright (C) 2010-2025 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
+ * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
  *
  * Emeraude-Engine is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -418,7 +418,7 @@ namespace EmEn
 	Core::initializeBaseLevel () noexcept
 	{
 		std::cout << "\n"
-			"Engine      : " << m_identification.engineId() << "\n"
+			"Engine	  : " << m_identification.engineId() << "\n"
 			"Application : " << m_identification.applicationId() << "\n"
 			"Reverse ID  : " << m_identification.applicationReverseId() << "\n\n";
 
@@ -668,6 +668,16 @@ namespace EmEn
 		else
 		{
 			TraceWarning{ClassId} << m_audioManager.name() << " service failed to execute, no audio available !";
+		}
+
+		/* Initialize system notification service (OS-level notifications). */
+		if ( m_systemNotification.initialize(m_secondaryServicesEnabled) )
+		{
+			TraceSuccess{ClassId} << m_systemNotification.name() << " service up !";
+		}
+		else
+		{
+			TraceWarning{ClassId} << m_systemNotification.name() << " service failed to execute, no system notifications available !";
 		}
 
 		/* Initialization of the overlay manager. */

@@ -2,7 +2,7 @@
  * src/Resources/Types.hpp
  * This file is part of Emeraude-Engine
  *
- * Copyright (C) 2010-2025 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
+ * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
  *
  * Emeraude-Engine is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -96,10 +96,10 @@ namespace EmEn::Resources
 	 */
 	enum class SourceType
 	{
-		Undefined,     ///< Uninitialized or unknown source type. Default state for new resources.
-		LocalData,     ///< Data key holds the path to a local file on the filesystem.
+		Undefined,	 ///< Uninitialized or unknown source type. Default state for new resources.
+		LocalData,	 ///< Data key holds the path to a local file on the filesystem.
 		ExternalData,  ///< Data key holds the URL to an external file (network resource).
-		DirectData     ///< Data key holds the JSON definition of the resource inline.
+		DirectData	 ///< Data key holds the JSON definition of the resource inline.
 	};
 
 	/**
@@ -135,7 +135,7 @@ namespace EmEn::Resources
 	 *
 	 * @param value The SourceType enumeration value to convert.
 	 * @return A pointer to a null-terminated string containing the enumeration name.
-	 *         Returns "Undefined" for any invalid or unrecognized value.
+	 *		 Returns "Undefined" for any invalid or unrecognized value.
 	 *
 	 * @note This function is noexcept and always returns a valid pointer.
 	 * @see to_string(SourceType)
@@ -195,9 +195,9 @@ namespace EmEn::Resources
 	 * SourceType names.
 	 *
 	 * @param value A string_view containing the SourceType name to convert.
-	 *              Valid values are: "LocalData", "ExternalData", "DirectData".
+	 *			  Valid values are: "LocalData", "ExternalData", "DirectData".
 	 * @return The corresponding SourceType enumeration value.
-	 *         Returns SourceType::Undefined if the input string does not match any known value.
+	 *		 Returns SourceType::Undefined if the input string does not match any known value.
 	 *
 	 * @note This function is case-sensitive and requires exact matches.
 	 * @note This function is noexcept and will never throw exceptions.
@@ -247,12 +247,12 @@ namespace EmEn::Resources
 	 */
 	enum class Status : uint8_t
 	{
-		Unloaded = 0,        ///< Initial status of a new resource instantiation. Resource has not been queued for loading.
-		Enqueuing = 1,       ///< Resource is being attached with dependencies automatically by the system.
+		Unloaded = 0,		///< Initial status of a new resource instantiation. Resource has not been queued for loading.
+		Enqueuing = 1,	   ///< Resource is being attached with dependencies automatically by the system.
 		ManualEnqueuing = 2, ///< Resource is being manually attached with dependencies by user code.
-		Loading = 3,         ///< Resource is actively being loaded. No new dependencies can be added at this stage.
-		Loaded = 4,          ///< Resource has been fully loaded along with all its dependencies.
-		Failed = 5           ///< Resource loading has failed and cannot be loaded.
+		Loading = 3,		 ///< Resource is actively being loaded. No new dependencies can be added at this stage.
+		Loaded = 4,		  ///< Resource has been fully loaded along with all its dependencies.
+		Failed = 5		   ///< Resource loading has failed and cannot be loaded.
 	};
 
 	/**
@@ -300,7 +300,7 @@ namespace EmEn::Resources
 	 *
 	 * @param value The Status enumeration value to convert.
 	 * @return A pointer to a null-terminated string containing the status name.
-	 *         Returns "Unloaded" for any invalid or unrecognized value.
+	 *		 Returns "Unloaded" for any invalid or unrecognized value.
 	 *
 	 * @note This function is noexcept and always returns a valid pointer.
 	 * @see to_string(Status)
@@ -376,9 +376,9 @@ namespace EmEn::Resources
 	 */
 	enum class DepComplexity : uint8_t
 	{
-		None = 0,    ///< No dependencies. Resource is self-contained and can be loaded independently.
-		One = 1,     ///< Single dependency. Resource depends on exactly one other resource.
-		Few = 2,     ///< Few dependencies (2-5 typically). Resource has a small, manageable dependency tree.
+		None = 0,	///< No dependencies. Resource is self-contained and can be loaded independently.
+		One = 1,	 ///< Single dependency. Resource depends on exactly one other resource.
+		Few = 2,	 ///< Few dependencies (2-5 typically). Resource has a small, manageable dependency tree.
 		Complex = 3  ///< Complex dependency tree (6+ typically). Resource has many dependencies or nested dependencies.
 	};
 
@@ -415,7 +415,7 @@ namespace EmEn::Resources
 	 *
 	 * @param value The DepComplexity enumeration value to convert.
 	 * @return A pointer to a null-terminated string containing the complexity level name.
-	 *         Returns "None" for any invalid or unrecognized value.
+	 *		 Returns "None" for any invalid or unrecognized value.
 	 *
 	 * @note This function is noexcept and always returns a valid pointer.
 	 * @see to_string(DepComplexity)

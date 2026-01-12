@@ -2,7 +2,7 @@
  * src/Libs/WaveFactory/Synthesizer.hpp
  * This file is part of Emeraude-Engine
  *
- * Copyright (C) 2010-2025 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
+ * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
  *
  * Emeraude-Engine is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -63,22 +63,22 @@ namespace EmEn::Libs::WaveFactory
 			 */
 			enum class InstrumentFamily : uint8_t
 			{
-				Piano,       /* 0-7: Soft sine-like tones. */
+				Piano,	   /* 0-7: Soft sine-like tones. */
 				Chromatic,   /* 8-15: Mallet percussion. */
-				Organ,       /* 16-23: Rich harmonics. */
-				Guitar,      /* 24-31: Bright plucked strings. */
-				Bass,        /* 32-39: Low-end. */
-				Strings,     /* 40-47: Bowed strings. */
-				Ensemble,    /* 48-55: String/choir ensembles. */
-				Brass,       /* 56-63: Bright, punchy. */
-				Reed,        /* 64-71: Woodwinds. */
-				Pipe,        /* 72-79: Flutes, whistles. */
+				Organ,	   /* 16-23: Rich harmonics. */
+				Guitar,	  /* 24-31: Bright plucked strings. */
+				Bass,		/* 32-39: Low-end. */
+				Strings,	 /* 40-47: Bowed strings. */
+				Ensemble,	/* 48-55: String/choir ensembles. */
+				Brass,	   /* 56-63: Bright, punchy. */
+				Reed,		/* 64-71: Woodwinds. */
+				Pipe,		/* 72-79: Flutes, whistles. */
 				SynthLead,   /* 80-87: Electronic leads. */
-				SynthPad,    /* 88-95: Pads, atmospheres. */
-				SynthFX,     /* 96-103: Effects. */
-				Ethnic,      /* 104-111: World instruments. */
+				SynthPad,	/* 88-95: Pads, atmospheres. */
+				SynthFX,	 /* 96-103: Effects. */
+				Ethnic,	  /* 104-111: World instruments. */
 				Percussive,  /* 112-119: Melodic percussion. */
-				SoundFX      /* 120-127: Sound effects. */
+				SoundFX	  /* 120-127: Sound effects. */
 			};
 
 			/**
@@ -107,12 +107,12 @@ namespace EmEn::Libs::WaveFactory
 			 */
 			struct NormalizedHarmonic
 			{
-				float multiplier{1.0F};          /* Frequency multiplier. */
+				float multiplier{1.0F};		  /* Frequency multiplier. */
 				float normalizedAmplitude{1.0F}; /* Pre-normalized amplitude. */
 			};
 
 			/* ======================================================================================== */
-			/*                              SINE LOOKUP TABLE (LUT)                                      */
+			/*							  SINE LOOKUP TABLE (LUT)									  */
 			/* ======================================================================================== */
 
 			/** @brief Size of sine lookup table (4096 = ~0.09° resolution, good quality). */
@@ -201,7 +201,7 @@ namespace EmEn::Libs::WaveFactory
 			}
 
 			/* ======================================================================================== */
-			/*                              STATIC PER-SAMPLE FUNCTIONS                                 */
+			/*							  STATIC PER-SAMPLE FUNCTIONS								 */
 			/* ======================================================================================== */
 
 			/**
@@ -572,7 +572,7 @@ namespace EmEn::Libs::WaveFactory
 			}
 
 			/* ======================================================================================== */
-			/*                              INSTANCE METHODS (WAVE OPERATIONS)                          */
+			/*							  INSTANCE METHODS (WAVE OPERATIONS)						  */
 			/* ======================================================================================== */
 
 			/**
@@ -1122,7 +1122,7 @@ namespace EmEn::Libs::WaveFactory
 
 				/* Create a copy of original data for the region. */
 				std::vector< precision_t > originalData(data.begin() + static_cast< ptrdiff_t >(startSample),
-				                                        data.begin() + static_cast< ptrdiff_t >(endSample));
+														data.begin() + static_cast< ptrdiff_t >(endSample));
 
 				for ( size_t sampleIndex = startSample; sampleIndex < endSample; ++sampleIndex )
 				{
@@ -1640,7 +1640,7 @@ namespace EmEn::Libs::WaveFactory
 
 				/* Create a copy of original data for reading. */
 				std::vector< precision_t > originalData(data.begin() + static_cast< ptrdiff_t >(startSample),
-				                                        data.begin() + static_cast< ptrdiff_t >(endSample));
+														data.begin() + static_cast< ptrdiff_t >(endSample));
 
 				for ( size_t sampleIndex = startSample; sampleIndex < endSample; ++sampleIndex )
 				{
@@ -1735,7 +1735,7 @@ namespace EmEn::Libs::WaveFactory
 					size_t readIdx2 = (readIdx1 + maxDelaySamples - 1) % maxDelaySamples;
 
 					const auto delayedSample = delayBuffer[readIdx1] * (1.0F - readOffsetFrac) +
-					                           delayBuffer[readIdx2] * readOffsetFrac;
+											   delayBuffer[readIdx2] * readOffsetFrac;
 
 					/* Write to delay buffer with feedback. */
 					delayBuffer[writeIndex] = inputSample + delayedSample * feedback;
@@ -2317,7 +2317,7 @@ namespace EmEn::Libs::WaveFactory
 
 				/* Create a copy of original data. */
 				std::vector< precision_t > originalData(data.begin() + static_cast< ptrdiff_t >(startSample),
-				                                        data.begin() + static_cast< ptrdiff_t >(endSample));
+														data.begin() + static_cast< ptrdiff_t >(endSample));
 
 				for ( size_t sampleIndex = startSample; sampleIndex < endSample; ++sampleIndex )
 				{

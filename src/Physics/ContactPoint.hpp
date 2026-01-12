@@ -2,7 +2,7 @@
  * src/Physics/ContactPoint.hpp
  * This file is part of Emeraude-Engine
  *
- * Copyright (C) 2010-2025 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
+ * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
  *
  * Emeraude-Engine is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -238,30 +238,30 @@ namespace EmEn::Physics
 
 			/* Contact geometry */
 			Libs::Math::Vector< 3, float > m_positionWorld;   ///< Contact point in world space
-			Libs::Math::Vector< 3, float > m_normal;          ///< Contact normal (from A to B)
-			float m_penetrationDepth{0.0F};                   ///< Penetration depth (positive = penetrating)
+			Libs::Math::Vector< 3, float > m_normal;		  ///< Contact normal (from A to B)
+			float m_penetrationDepth{0.0F};				   ///< Penetration depth (positive = penetrating)
 
 			/* Contact relative positions (computed once per manifold) */
-			Libs::Math::Vector< 3, float > m_rA;              ///< Vector from body A center of mass to contact
-			Libs::Math::Vector< 3, float > m_rB;              ///< Vector from body B center of mass to contact
+			Libs::Math::Vector< 3, float > m_rA;			  ///< Vector from body A center of mass to contact
+			Libs::Math::Vector< 3, float > m_rB;			  ///< Vector from body B center of mass to contact
 
 			/* Friction tangent basis (computed once per manifold) */
-			Libs::Math::Vector< 3, float > m_tangent1;        ///< First tangent vector (perpendicular to normal)
-			Libs::Math::Vector< 3, float > m_tangent2;        ///< Second tangent vector (perpendicular to normal and tangent1)
+			Libs::Math::Vector< 3, float > m_tangent1;		///< First tangent vector (perpendicular to normal)
+			Libs::Math::Vector< 3, float > m_tangent2;		///< Second tangent vector (perpendicular to normal and tangent1)
 
 			/* Bodies involved */
-			MovableTrait * m_bodyA{nullptr};                  ///< First body (can be nullptr for static)
-			MovableTrait * m_bodyB{nullptr};                  ///< Second body (can be nullptr for static)
+			MovableTrait * m_bodyA{nullptr};				  ///< First body (can be nullptr for static)
+			MovableTrait * m_bodyB{nullptr};				  ///< Second body (can be nullptr for static)
 
 			/* Accumulated impulses (for warm starting and clamping) */
-			float m_accumulatedNormalImpulse{0.0F};           ///< Accumulated impulse along normal
+			float m_accumulatedNormalImpulse{0.0F};		   ///< Accumulated impulse along normal
 			std::array< float, 2 > m_accumulatedTangentImpulse{0.0F, 0.0F}; ///< Accumulated friction impulses (2D tangent space)
 
 			/* Solver cache (computed per iteration) */
-			float m_effectiveMass{0.0F};                      ///< Cached 1/(K_normal) for this contact
-			float m_effectiveMassTangent1{0.0F};              ///< Cached 1/(K_tangent1) for friction
-			float m_effectiveMassTangent2{0.0F};              ///< Cached 1/(K_tangent2) for friction
-			float m_velocityBias{0.0F};                       ///< Baumgarte stabilization bias
+			float m_effectiveMass{0.0F};					  ///< Cached 1/(K_normal) for this contact
+			float m_effectiveMassTangent1{0.0F};			  ///< Cached 1/(K_tangent1) for friction
+			float m_effectiveMassTangent2{0.0F};			  ///< Cached 1/(K_tangent2) for friction
+			float m_velocityBias{0.0F};					   ///< Baumgarte stabilization bias
 	};
 
 	inline

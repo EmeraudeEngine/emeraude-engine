@@ -2,7 +2,7 @@
  * src/Resources/ResourceTrait.cpp
  * This file is part of Emeraude-Engine
  *
- * Copyright (C) 2010-2025 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
+ * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
  *
  * Emeraude-Engine is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -124,7 +124,22 @@ namespace EmEn::Resources
 	bool
 	ResourceTrait::addDependency (const std::shared_ptr< ResourceTrait > & dependency) noexcept
 	{
-		const std::lock_guard< std::mutex > lock{m_dependenciesAccess};
+		/* NOTE: Check null pointer before acquiring any locks. */
+		if ( dependency == nullptr )
+		{
+			Tracer::error(TracerTag, "The dependency pointer is null !");
+
+			const std::lock_guard< std::mutex > lock{m_dependenciesAccess};
+
+			m_status = Status::Failed;
+
+			return false;
+		}
+
+		/* NOTE: Lock both this resource's and the dependency's mutex to safely modify
+		 * both dependency lists. std::scoped_lock handles deadlock avoidance by
+		 * acquiring locks in a consistent order. */
+		std::scoped_lock lock{m_dependenciesAccess, dependency->m_dependenciesAccess};
 
 		/* First, we check the current resource status. */
 		switch ( m_status )
@@ -160,15 +175,6 @@ namespace EmEn::Resources
 					"This resource should be removed.";
 
 				return false;
-		}
-
-		if ( dependency == nullptr )
-		{
-			Tracer::error(TracerTag, "The dependency pointer is null !");
-
-			m_status = Status::Failed;
-
-			return false;
 		}
 
 		/* NOTE: If the dependency is already loaded, we skip it... */

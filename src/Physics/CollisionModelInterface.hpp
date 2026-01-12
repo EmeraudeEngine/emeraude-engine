@@ -2,7 +2,7 @@
  * src/Physics/CollisionModelInterface.hpp
  * This file is part of Emeraude-Engine
  *
- * Copyright (C) 2010-2025 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
+ * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
  *
  * Emeraude-Engine is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -51,11 +51,11 @@ namespace EmEn::Physics
 	 */
 	struct CollisionDetectionResults
 	{
-		Libs::Math::Vector< 3, float > m_MTV{};          /**< Minimum Translation Vector to separate shapes. */
-		Libs::Math::Vector< 3, float > m_contact{};      /**< Absolute contact point in world space. */
+		Libs::Math::Vector< 3, float > m_MTV{};		  /**< Minimum Translation Vector to separate shapes. */
+		Libs::Math::Vector< 3, float > m_contact{};	  /**< Absolute contact point in world space. */
 		Libs::Math::Vector< 3, float > m_impactNormal{}; /**< Normal of the impact surface. */
-		float m_depth{0.0F};                             /**< Penetration depth. */
-		bool m_collisionDetected{false};                 /**< Whether a collision was detected. */
+		float m_depth{0.0F};							 /**< Penetration depth. */
+		bool m_collisionDetected{false};				 /**< Whether a collision was detected. */
 	};
 
 	/**
@@ -113,10 +113,10 @@ namespace EmEn::Physics
 			/**
 			 * @brief Returns the maximum bounding radius of the collision shape.
 			 * @note This is the radius of the smallest sphere that can contain the shape.
-			 *       - Point: 0
-			 *       - Sphere: radius
-			 *       - AABB: max(halfWidth, halfHeight, halfDepth)
-			 *       - Capsule: half-height + radius
+			 *	   - Point: 0
+			 *	   - Sphere: radius
+			 *	   - AABB: max(halfWidth, halfHeight, halfDepth)
+			 *	   - Capsule: half-height + radius
 			 * @return float The maximum bounding radius.
 			 */
 			[[nodiscard]]
@@ -125,10 +125,10 @@ namespace EmEn::Physics
 			/**
 			 * @brief Sets the bounding shape parameters.
 			 * @note The interpretation of dimensions depends on the collision model type:
-			 *       - Point: dimensions ignored
-			 *       - Sphere: radius = max(dimensions) * 0.5
-			 *       - AABB: halfExtents = dimensions * 0.5
-			 *       - Capsule: radius = max(width, depth) * 0.5, height = dimensions.y
+			 *	   - Point: dimensions ignored
+			 *	   - Sphere: radius = max(dimensions) * 0.5
+			 *	   - AABB: halfExtents = dimensions * 0.5
+			 *	   - Capsule: radius = max(width, depth) * 0.5, height = dimensions.y
 			 * @param dimensions The dimensions (width, height, depth) of the bounding shape.
 			 * @param centerOffset The offset of the shape center from the entity's origin.
 			 */
@@ -144,12 +144,12 @@ namespace EmEn::Physics
 			/**
 			 * @brief Merges/expands the bounding shape to encompass the given dimensions.
 			 * @note Unlike overrideShapeParameters(), this does NOT set the override flag.
-			 *       Used for automatic shape computation from component geometries.
+			 *	   Used for automatic shape computation from component geometries.
 			 * @note The interpretation of dimensions depends on the collision model type:
-			 *       - Point: dimensions ignored
-			 *       - Sphere: radius = max(current radius, max(dimensions) * 0.5)
-			 *       - AABB: merge with the given dimensions/offset
-			 *       - Capsule: expand radius and height if necessary
+			 *	   - Point: dimensions ignored
+			 *	   - Sphere: radius = max(current radius, max(dimensions) * 0.5)
+			 *	   - AABB: merge with the given dimensions/offset
+			 *	   - Capsule: expand radius and height if necessary
 			 * @param dimensions The dimensions (width, height, depth) to merge.
 			 * @param centerOffset The offset of the shape center from the entity's origin.
 			 */
@@ -172,7 +172,7 @@ namespace EmEn::Physics
 			/**
 			 * @brief Resets the shape parameters to their initial empty state.
 			 * @note This is used before merging component bounding boxes to recalculate from scratch.
-			 *       Does NOT affect the override flag.
+			 *	   Does NOT affect the override flag.
 			 */
 			virtual void resetShapeParameters () noexcept = 0;
 

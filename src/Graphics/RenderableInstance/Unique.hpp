@@ -2,7 +2,7 @@
  * src/Graphics/RenderableInstance/Unique.hpp
  * This file is part of Emeraude-Engine
  *
- * Copyright (C) 2010-2025 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
+ * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
  *
  * Emeraude-Engine is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -92,10 +92,10 @@ namespace EmEn::Graphics::RenderableInstance
 			 * @brief Push constant strategy for Unique (shadow casting).
 			 *
 			 * @par Matrix Distribution
-			 * | Mode    | Push Constants | UBO Content                    |
+			 * | Mode	| Push Constants | UBO Content					|
 			 * |---------|----------------|--------------------------------|
-			 * | Cubemap | M only         | VP[6] indexed by gl_ViewIndex  |
-			 * | Classic | MVP combined   | -                              |
+			 * | Cubemap | M only		 | VP[6] indexed by gl_ViewIndex  |
+			 * | Classic | MVP combined   | -							  |
 			 *
 			 * @par Rationale
 			 * For cubemap shadow maps, each face needs a different View/Projection matrix.
@@ -111,11 +111,11 @@ namespace EmEn::Graphics::RenderableInstance
 			 * @brief Push constant strategy for Unique (scene rendering).
 			 *
 			 * @par Matrix Distribution
-			 * | Mode              | Push Constants | UBO Content                    |
+			 * | Mode			  | Push Constants | UBO Content					|
 			 * |-------------------|----------------|--------------------------------|
-			 * | Cubemap           | M only         | VP[6] indexed by gl_ViewIndex  |
-			 * | Advanced/Billboard| V + M          | -                              |
-			 * | Simple            | MVP combined   | -                              |
+			 * | Cubemap		   | M only		 | VP[6] indexed by gl_ViewIndex  |
+			 * | Advanced/Billboard| V + M		  | -							  |
+			 * | Simple			| MVP combined   | -							  |
 			 *
 			 * @par Mode Selection
 			 * - **Cubemap**: Multiview rendering, VP matrices in UBO array

@@ -2,7 +2,7 @@
  * src/PlatformSpecific/Desktop/Commands.linux.cpp
  * This file is part of Emeraude-Engine
  *
- * Copyright (C) 2010-2025 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
+ * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
  *
  * Emeraude-Engine is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -97,9 +97,10 @@ namespace EmEn::PlatformSpecific::Desktop
 	}
 
 	void
-	setTaskbarIconProgression (float progress, ProgressMode /*mode*/) noexcept
+	setTaskbarIconProgression (const Window & /*window*/, float /*progress*/, ProgressMode /*mode*/) noexcept
 	{
-		/* NOTE: This OS method is only available with Unity desktop from Ubuntu. */
+		/* NOTE: This OS method is only available with Unity desktop from Ubuntu (via libunity).
+		 * Standard Linux desktop environments (GNOME, KDE, etc.) do not support taskbar progress. */
 	}
 }
 

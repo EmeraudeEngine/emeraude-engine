@@ -2,7 +2,7 @@
  * src/Libs/PixelFactory/Pixmap.hpp
  * This file is part of Emeraude-Engine
  *
- * Copyright (C) 2010-2025 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
+ * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
  *
  * Emeraude-Engine is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -135,10 +135,10 @@ namespace EmEn::Libs::PixelFactory
 				public:
 
 					 using iterator_category = std::random_access_iterator_tag;
-					 using value_type        = Color< color_data_t >;
+					 using value_type		= Color< color_data_t >;
 					 using difference_type   = std::ptrdiff_t;
-					 using pointer           = void;
-					 using reference         = value_type;
+					 using pointer		   = void;
+					 using reference		 = value_type;
 
 					/**
 					 * @brief Constructs an iterator.
@@ -238,10 +238,10 @@ namespace EmEn::Libs::PixelFactory
 				public:
 
 					 using iterator_category = std::random_access_iterator_tag;
-					 using value_type        = Color< color_data_t >;
+					 using value_type		= Color< color_data_t >;
 					 using difference_type   = std::ptrdiff_t;
-					 using pointer           = void;
-					 using reference         = PixelProxy< color_data_t >;
+					 using pointer		   = void;
+					 using reference		 = PixelProxy< color_data_t >;
 
 					/**
 					 * @brief Constructs an iterator.
@@ -1186,9 +1186,9 @@ namespace EmEn::Libs::PixelFactory
 					coordY >= 0 && coordY < static_cast< int32_t >(this->height())
 				)
 				{
-                    const auto pixelIndex = this->pixelIndex(static_cast< dimension_t >(coordX), static_cast< dimension_t >(coordY));
+					const auto pixelIndex = this->pixelIndex(static_cast< dimension_t >(coordX), static_cast< dimension_t >(coordY));
 
-                    const auto previousColor = this->pixel(pixelIndex);
+					const auto previousColor = this->pixel(pixelIndex);
 
 					this->setPixel(pixelIndex, Color< color_data_t >::mix(previousColor, color, mix));
 				}

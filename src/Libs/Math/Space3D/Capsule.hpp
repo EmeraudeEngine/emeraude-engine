@@ -2,7 +2,7 @@
  * src/Libs/Math/Space3D/Capsule.hpp
  * This file is part of Emeraude-Engine
  *
- * Copyright (C) 2010-2025 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
+ * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
  *
  * Emeraude-Engine is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -40,7 +40,7 @@ namespace EmEn::Libs::Math::Space3D
 	/**
 	 * @brief Class for a capsule (swept sphere / stadium solid) in 3D space.
 	 * @note A capsule is defined by a line segment (axis) and a radius,
-	 *       forming a cylinder with hemispherical caps at each end.
+	 *	   forming a cylinder with hemispherical caps at each end.
 	 * @tparam precision_t The precision type. Default float.
 	 */
 	template< typename precision_t = float >
@@ -96,7 +96,7 @@ namespace EmEn::Libs::Math::Space3D
 			/**
 			 * @brief Checks if the capsule is valid.
 			 * @note A capsule is valid if it has a positive radius.
-			 *       A degenerate capsule (zero-length axis) is still valid and behaves as a sphere.
+			 *	   A degenerate capsule (zero-length axis) is still valid and behaves as a sphere.
 			 * @return bool
 			 */
 			[[nodiscard]]
@@ -264,7 +264,7 @@ namespace EmEn::Libs::Math::Space3D
 			/**
 			 * @brief Returns the capsule volume.
 			 * @note V = pi * r^2 * (4/3 * r + h) where h is axis length.
-			 *       This is the volume of a cylinder + sphere.
+			 *	   This is the volume of a cylinder + sphere.
 			 * @return precision_t
 			 */
 			[[nodiscard]]

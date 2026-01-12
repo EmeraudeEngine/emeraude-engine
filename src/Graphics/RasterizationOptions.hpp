@@ -2,7 +2,7 @@
  * src/Graphics/RasterizationOptions.hpp
  * This file is part of Emeraude-Engine
  *
- * Copyright (C) 2010-2025 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
+ * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
  *
  * Emeraude-Engine is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -229,7 +229,7 @@ namespace EmEn::Graphics
 			CullingMode m_cullingMode{CullingMode::Back};
 			
 			bool m_depthBiasEnabled{false};
-			float m_depthBiasSlopeFactor{0.0F};    // Was factor
+			float m_depthBiasSlopeFactor{0.0F};	// Was factor
 			float m_depthBiasConstantFactor{0.0F}; // Was units
 			float m_depthBiasClamp{0.0F};
 

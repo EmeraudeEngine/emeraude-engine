@@ -196,6 +196,7 @@ set(EMERAUDE_HEADER_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/ServiceInterface.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/SettingKeys.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Settings.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/SystemNotification.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Tracer.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/User.hpp
 )
@@ -247,6 +248,7 @@ set(EMERAUDE_SOURCE_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/FileSystem.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/PrimaryServices.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Settings.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/SystemNotification.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Tracer.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/User.cpp
 )
@@ -323,6 +325,7 @@ else ()
         ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/Desktop/Dialog/SaveFile.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/Desktop/Dialog/Types.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/Desktop/Commands.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/Desktop/Notification.hpp
         # ROOT
         ${CMAKE_CURRENT_SOURCE_DIR}/src/Core.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/CursorAtlas.hpp
@@ -357,6 +360,7 @@ else ()
             ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/Desktop/Dialog/OpenFile.linux.cpp
             ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/Desktop/Dialog/SaveFile.linux.cpp
             ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/Desktop/Commands.linux.cpp
+            ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/Desktop/Notification.linux.cpp
             # ROOT
             ${CMAKE_CURRENT_SOURCE_DIR}/src/Window.linux.cpp
         )
@@ -371,6 +375,7 @@ else ()
             ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/Desktop/Dialog/OpenFile.mac.mm
             ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/Desktop/Dialog/SaveFile.mac.mm
             ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/Desktop/Commands.mac.mm
+            ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/Desktop/Notification.mac.mm
             ${CMAKE_CURRENT_SOURCE_DIR}/src/Input/Manager.mac.mm
             # ROOT
             ${CMAKE_CURRENT_SOURCE_DIR}/src/Window.mac.mm
@@ -386,6 +391,7 @@ else ()
             ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/Desktop/Dialog/OpenFile.windows.cpp
             ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/Desktop/Dialog/SaveFile.windows.cpp
             ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/Desktop/Commands.windows.cpp
+            ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/Desktop/Notification.windows.cpp
             # ROOT
             ${CMAKE_CURRENT_SOURCE_DIR}/src/Window.windows.cpp
         )

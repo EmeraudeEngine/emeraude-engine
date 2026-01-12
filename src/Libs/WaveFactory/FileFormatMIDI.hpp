@@ -2,7 +2,7 @@
  * src/Libs/WaveFactory/FileFormatMIDI.hpp
  * This file is part of Emeraude-Engine
  *
- * Copyright (C) 2010-2025 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
+ * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
  *
  * Emeraude-Engine is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -150,9 +150,9 @@ namespace EmEn::Libs::WaveFactory
 				std::array< ChannelState, 16 > channelStates{};
 
 				/* Pre-allocate vectors to avoid reallocations during parsing. */
-				notes.reserve(header.trackCount * 100);        /* Typical: ~100 notes per track. */
+				notes.reserve(header.trackCount * 100);		/* Typical: ~100 notes per track. */
 				controlEvents.reserve(header.trackCount * 50); /* Fewer control events. */
-				tempoEvents.reserve(16);                       /* Rarely more than a few tempo changes. */
+				tempoEvents.reserve(16);					   /* Rarely more than a few tempo changes. */
 
 				for ( uint16_t trackIndex = 0; trackIndex < header.trackCount; ++trackIndex )
 				{
@@ -219,7 +219,7 @@ namespace EmEn::Libs::WaveFactory
 			{
 				uint16_t format{0};
 				uint16_t trackCount{0};
-				uint16_t division{480};        /* Ticks per quarter note. */
+				uint16_t division{480};		/* Ticks per quarter note. */
 			};
 
 			/**
@@ -227,8 +227,8 @@ namespace EmEn::Libs::WaveFactory
 			 */
 			struct TempoEvent
 			{
-				uint32_t tick{0};              /* Tick position of the tempo change. */
-				uint32_t tempo{500000};        /* Microseconds per quarter note. */
+				uint32_t tick{0};			  /* Tick position of the tempo change. */
+				uint32_t tempo{500000};		/* Microseconds per quarter note. */
 			};
 
 			/**
@@ -253,16 +253,16 @@ namespace EmEn::Libs::WaveFactory
 			{
 				/* Ordered by size (largest first) to minimize padding. */
 				float pitchBendRange{2.0F}; /* Pitch bend range in semitones (default ±2). */
-				int16_t pitchBend{0};       /* Pitch bend value (-8192 to +8191). */
-				uint8_t pan{64};            /* Default center (CC#10). */
-				uint8_t program{0};         /* Default piano (Acoustic Grand). */
-				uint8_t modulation{0};      /* Modulation wheel (CC#1). */
-				uint8_t expression{127};    /* Expression controller (CC#11), default max. */
-				uint8_t volume{100};        /* Channel volume (CC#7). */
+				int16_t pitchBend{0};	   /* Pitch bend value (-8192 to +8191). */
+				uint8_t pan{64};			/* Default center (CC#10). */
+				uint8_t program{0};		 /* Default piano (Acoustic Grand). */
+				uint8_t modulation{0};	  /* Modulation wheel (CC#1). */
+				uint8_t expression{127};	/* Expression controller (CC#11), default max. */
+				uint8_t volume{100};		/* Channel volume (CC#7). */
 				uint8_t portamentoTime{0};  /* Portamento time (CC#5), 0-127. */
 				uint8_t filterCutoff{127};  /* Filter cutoff (CC#74), default fully open. */
 				uint8_t filterResonance{0}; /* Filter resonance (CC#71), default no resonance. */
-				uint8_t tremoloDepth{0};    /* Tremolo depth (CC#92), default off. */
+				uint8_t tremoloDepth{0};	/* Tremolo depth (CC#92), default off. */
 				bool sustainPedal{false};   /* Sustain pedal state (CC#64). */
 				bool portamentoOn{false};   /* Portamento on/off (CC#65). */
 			};
@@ -291,15 +291,15 @@ namespace EmEn::Libs::WaveFactory
 					Tremolo,
 					ChannelPressure,   /* Aftertouch affecting whole channel. */
 					PolyKeyPressure,   /* Aftertouch affecting specific note. */
-					ProgramChange,     /* Instrument change during playback. */
-					RawMidiCC          /* Pass-through for CC handled natively by TSF. */
+					ProgramChange,	 /* Instrument change during playback. */
+					RawMidiCC		  /* Pass-through for CC handled natively by TSF. */
 				};
 
-				uint32_t tick{0};      /* Event time in ticks. */
-				uint8_t channel{0};    /* MIDI channel (0-15). */
+				uint32_t tick{0};	  /* Event time in ticks. */
+				uint8_t channel{0};	/* MIDI channel (0-15). */
 				Type type{Type::PitchBend};
 				uint8_t controller{0}; /* Raw CC number (for RawMidiCC type). */
-				int16_t value{0};      /* Event value. */
+				int16_t value{0};	  /* Event value. */
 			};
 
 			/** @brief Alias to Synthesizer types for convenience. */
@@ -1087,9 +1087,6 @@ namespace EmEn::Libs::WaveFactory
 				/* Add a small tail for release. */
 				const uint32_t tailTicks = header.division;
 				uint32_t totalSamples = ticksToSamplesWithTempoMap(maxEndTick + tailTicks, tempoEvents, header.division, sampleRate);
-
-				/* Debug: show duration info. */
-				const float durationSeconds = static_cast< float >(totalSamples) / static_cast< float >(sampleRate);
 
 				/* Limit maximum duration to 30 minutes to prevent memory issues. */
 				constexpr uint32_t MaxDurationSeconds = 30 * 60;

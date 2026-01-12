@@ -2,7 +2,7 @@
  * src/Libs/Math/Space3D/Intersections/SegmentCapsule.hpp
  * This file is part of Emeraude-Engine
  *
- * Copyright (C) 2010-2025 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
+ * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
  *
  * Emeraude-Engine is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -58,7 +58,7 @@ namespace EmEn::Libs::Math::Space3D
 		const auto & capsuleStart = capsule.axis().startPoint();
 		const auto & capsuleEnd = capsule.axis().endPoint();
 
-		const auto d1 = segEnd - segStart;       /* Segment direction */
+		const auto d1 = segEnd - segStart;	   /* Segment direction */
 		const auto d2 = capsuleEnd - capsuleStart; /* Capsule axis direction */
 		const auto r = segStart - capsuleStart;
 

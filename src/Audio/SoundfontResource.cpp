@@ -2,7 +2,7 @@
  * src/Audio/SoundfontResource.cpp
  * This file is part of Emeraude-Engine
  *
- * Copyright (C) 2010-2025 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
+ * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
  *
  * Emeraude-Engine is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -24,14 +24,15 @@
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
 
-/* TinySoundFont implementation (must be defined in exactly one .cpp file). */
-#define TSF_IMPLEMENTATION
-#include "tsf.h"
-
 #include "SoundfontResource.hpp"
 
 /* STL inclusions. */
 #include <fstream>
+
+/* Third-party inclusions. */
+/* TinySoundFont implementation (must be defined in exactly one .cpp file). */
+#define TSF_IMPLEMENTATION
+#include "tsf.h"
 
 /* Local inclusions. */
 #include "Resources/Manager.hpp"

@@ -2,7 +2,7 @@
  * src/PlatformSpecific/Desktop/Dialog/Abstract.hpp
  * This file is part of Emeraude-Engine
  *
- * Copyright (C) 2010-2025 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
+ * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
  *
  * Emeraude-Engine is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -110,16 +110,6 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 			{
 
 			}
-
-#ifdef IS_LINUX
-			/**
-			 * @brief Helpers for "portable-file-dialogs" and generate filter structure.
-			 * @param extensionFilters A reference to vector.
-			 * @return std::vector< std::string >
-			 */
-			[[nodiscard]]
-			static std::vector< std::string > convertFilterStructureForPFD (const std::vector< std::pair< std::string, std::vector< std::string > > > & extensionFilters) noexcept;
-#endif
 
 		private:
 

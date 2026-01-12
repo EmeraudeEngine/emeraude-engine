@@ -2,7 +2,7 @@
  * src/Physics/AABBCollisionModel.hpp
  * This file is part of Emeraude-Engine
  *
- * Copyright (C) 2010-2025 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
+ * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
  *
  * Emeraude-Engine is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -46,7 +46,7 @@ namespace EmEn::Physics
 	 * World position is injected at collision test time via CartesianFrame.
 	 *
 	 * @note Rotation is NOT supported for AABB. The world frame's orientation
-	 *       is ignored - only the position is used for translation.
+	 *	   is ignored - only the position is used for translation.
 	 *
 	 * @since 0.8.43
 	 */

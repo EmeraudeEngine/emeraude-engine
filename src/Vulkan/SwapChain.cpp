@@ -2,7 +2,7 @@
  * src/Vulkan/SwapChain.cpp
  * This file is part of Emeraude-Engine
  *
- * Copyright (C) 2010-2025 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
+ * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
  *
  * Emeraude-Engine is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -1089,28 +1089,28 @@ namespace EmEn::Vulkan
 		 *
 		 * Available modes and their characteristics:
 		 * ┌─────────────────────┬─────────┬──────────┬─────────┬──────────────────────────────────┐
-		 * │ Mode                │ VSync   │ Blocking │ Tearing │ Notes                            │
+		 * │ Mode				│ VSync   │ Blocking │ Tearing │ Notes							│
 		 * ├─────────────────────┼─────────┼──────────┼─────────┼──────────────────────────────────┤
-		 * │ IMMEDIATE           │ No      │ No       │ Yes     │ Lowest latency, may tear         │
-		 * │ MAILBOX             │ Yes     │ No       │ No      │ Triple-buffer, best for games    │
-		 * │ FIFO                │ Yes     │ Yes      │ No      │ Always available, classic vsync  │
-		 * │ FIFO_RELAXED        │ Partial │ Partial  │ If late │ Vsync but allows late present    │
+		 * │ IMMEDIATE		   │ No	  │ No	   │ Yes	 │ Lowest latency, may tear		 │
+		 * │ MAILBOX			 │ Yes	 │ No	   │ No	  │ Triple-buffer, best for games	│
+		 * │ FIFO				│ Yes	 │ Yes	  │ No	  │ Always available, classic vsync  │
+		 * │ FIFO_RELAXED		│ Partial │ Partial  │ If late │ Vsync but allows late present	│
 		 * └─────────────────────┴─────────┴──────────┴─────────┴──────────────────────────────────┘
 		 *
 		 * Selection matrix based on user preferences:
 		 * ┌───────────┬────────────────┬────────────────────────────────────────────────────────┐
-		 * │ VSync     │ Triple-Buffer  │ Priority order                                         │
+		 * │ VSync	 │ Triple-Buffer  │ Priority order										 │
 		 * ├───────────┼────────────────┼────────────────────────────────────────────────────────┤
-		 * │ ON        │ ON             │ MAILBOX > FIFO_RELAXED > FIFO                          │
-		 * │ ON        │ OFF            │ FIFO (standard double-buffered vsync)                  │
-		 * │ OFF       │ ON             │ IMMEDIATE > MAILBOX > FIFO_RELAXED > FIFO              │
-		 * │ OFF       │ OFF            │ IMMEDIATE > FIFO_RELAXED > FIFO                        │
+		 * │ ON		│ ON			 │ MAILBOX > FIFO_RELAXED > FIFO						  │
+		 * │ ON		│ OFF			│ FIFO (standard double-buffered vsync)				  │
+		 * │ OFF	   │ ON			 │ IMMEDIATE > MAILBOX > FIFO_RELAXED > FIFO			  │
+		 * │ OFF	   │ OFF			│ IMMEDIATE > FIFO_RELAXED > FIFO						│
 		 * └───────────┴────────────────┴────────────────────────────────────────────────────────┘
 		 *
 		 * Platform notes:
 		 * - Windows:  MAILBOX widely supported on modern GPUs.
-		 * - Linux:    MAILBOX often unavailable (Mesa drivers). FIFO_RELAXED is a good fallback.
-		 * - macOS:    Limited mode support through MoltenVK, FIFO typically used.
+		 * - Linux:	MAILBOX often unavailable (Mesa drivers). FIFO_RELAXED is a good fallback.
+		 * - macOS:	Limited mode support through MoltenVK, FIFO typically used.
 		 */
 
 		const auto & presentModes = m_renderer.window().surface()->presentModes();

@@ -2,7 +2,7 @@
  * src/Graphics/ViewMatrices3DUBO.hpp
  * This file is part of Emeraude-Engine
  *
- * Copyright (C) 2010-2025 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
+ * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
  *
  * Emeraude-Engine is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -317,11 +317,11 @@ namespace EmEn::Graphics
 			 */
 			struct DataState
 			{
-				Libs::Math::Matrix< 4, float > projection;                               /**< Projection matrix for 3D cubemap. */
+				Libs::Math::Matrix< 4, float > projection;							   /**< Projection matrix for 3D cubemap. */
 				std::array< Libs::Math::Matrix< 4, float >, CubemapFaceCount > views{}; /**< View matrices for each cubemap face. */
 				std::array< Libs::Math::Matrix< 4, float >, CubemapFaceCount > infinityViews{}; /**< View matrices for infinite distance (skybox). */
-				Libs::Math::Vector< 3, float > position;                                  /**< Camera position in world space. */
-				std::array< Frustum, CubemapFaceCount > frustums{};                      /**< Frustums for each cubemap face. */
+				Libs::Math::Vector< 3, float > position;								  /**< Camera position in world space. */
+				std::array< Frustum, CubemapFaceCount > frustums{};					  /**< Frustums for each cubemap face. */
 				std::array< float, ViewUBOElementCount > bufferData{
 					/* View matrix #1. */
 					1.0F, 0.0F, 0.0F, 0.0F,
@@ -371,11 +371,11 @@ namespace EmEn::Graphics
 				};
 			};
 
-			DataState m_logicState;                                              /**< Current logic state (write). */
-			std::array< DataState, 2 > m_renderState;                           /**< Double-buffered render states (read). */
+			DataState m_logicState;											  /**< Current logic state (write). */
+			std::array< DataState, 2 > m_renderState;						   /**< Double-buffered render states (read). */
 			std::unique_ptr< Vulkan::UniformBufferObject > m_uniformBufferObject; /**< Vulkan UBO for GPU memory. */
-			std::unique_ptr< Vulkan::DescriptorSet > m_descriptorSet;           /**< Vulkan descriptor set. */
-			mutable std::mutex m_memoryAccess;                                   /**< Mutex for GPU memory access synchronization. */
+			std::unique_ptr< Vulkan::DescriptorSet > m_descriptorSet;		   /**< Vulkan descriptor set. */
+			mutable std::mutex m_memoryAccess;								   /**< Mutex for GPU memory access synchronization. */
 	};
 
 	/**
