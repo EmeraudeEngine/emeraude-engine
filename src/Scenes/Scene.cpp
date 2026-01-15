@@ -41,6 +41,48 @@ namespace EmEn::Scenes
 	using namespace Libs;
 	using namespace Libs::Math;
 	using namespace Physics;
+	using namespace Graphics;
+
+	Scene::Scene (Resources::Manager & resourceManager, Renderer & graphicsRenderer, Audio::Manager & audioManager, const std::string & name, float boundary, const std::shared_ptr< Renderable::AbstractBackground > & background, const std::shared_ptr< GroundLevelInterface > & ground, const std::shared_ptr< SeaLevelInterface > & seaLevel, const SceneOctreeOptions & octreeOptions) noexcept
+		: NameableTrait{name},
+		m_rootNode{std::make_shared< Node >(*this)},
+		m_backgroundResource{background},
+		m_groundLevelRenderable{std::dynamic_pointer_cast< Renderable::Abstract >(ground)},
+		m_groundLevel{ground},
+		m_seaLevelRenderable{std::dynamic_pointer_cast< Renderable::Abstract >(seaLevel)},
+		m_seaLevel{seaLevel},
+		m_AVConsoleManager{name, graphicsRenderer, audioManager},
+		m_boundary{boundary}
+	{
+		this->observe(&m_AVConsoleManager);
+		this->observe(m_rootNode.get());
+
+		this->buildOctrees(octreeOptions);
+
+		/* Create or retrieve the default black environment cubemap for IBL fallback.
+		 * This ensures materials with automatic reflection always have a valid cubemap. */
+		m_environmentCubemap = resourceManager.container< TextureResource::TextureCubemap >()
+			->getOrCreateResource("DefaultBlackEnvMap", [&resourceManager, &graphicsRenderer] (TextureResource::TextureCubemap & texture) {
+				/* Create a small 1x1 black cubemap. */
+				const auto blackCubemap = resourceManager.container< CubemapResource >()
+					->getOrCreateResource("DefaultBlackEnvMap", [] (CubemapResource & cubemap) {
+						return cubemap.loadSolidColor(PixelFactory::Black, 16);
+					});
+
+				if ( !texture.load(blackCubemap) )
+				{
+					return false;
+				}
+
+				/* Create the texture on GPU immediately (synchronous). */
+				if ( !texture.createTexture(graphicsRenderer) )
+				{
+					return false;
+				}
+
+				return true;
+			});
+	}
 
 	Scene::~Scene ()
 	{

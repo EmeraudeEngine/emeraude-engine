@@ -563,7 +563,8 @@ namespace EmEn::Graphics
 	bool
 	Renderer::finalizeGraphicsPipeline (const RenderTarget::Abstract & renderTarget, const Program & program, std::shared_ptr< GraphicsPipeline > & graphicsPipeline) noexcept
 	{
-		const auto hash = graphicsPipeline->getHash();
+		const auto & renderPass = renderTarget.framebuffer()->renderPass();
+		const auto hash = graphicsPipeline->getHash(*renderPass);
 
 		if ( const auto pipelineIt = m_graphicsPipelines.find(hash); pipelineIt != m_graphicsPipelines.cend() )
 		{
@@ -574,7 +575,7 @@ namespace EmEn::Graphics
 			return true;
 		}
 
-		if ( !graphicsPipeline->finalize(renderTarget.framebuffer()->renderPass(), program.pipelineLayout(), program.useTesselation(), m_vulkanInstance.isDynamicStateExtensionEnabled()) )
+		if ( !graphicsPipeline->finalize(renderPass, program.pipelineLayout(), program.useTesselation(), m_vulkanInstance.isDynamicStateExtensionEnabled()) )
 		{
 			return false;
 		}

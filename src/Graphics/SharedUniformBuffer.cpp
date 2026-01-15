@@ -212,7 +212,33 @@ namespace EmEn::Graphics
 			return false;
 		}
 
-		return m_uniformBufferObjects.at(bufferIndex)->writeData({data, m_uniformBlockSize, m_blockAlignedSize * index});
+		/* NOTE: Use LOCAL offset within the specific UBO, not global offset.
+		 * Example: Element 300 with maxElementCountPerUBO=256 is at local index 44 in UBO #1.
+		 * The byte offset is 44 * blockAlignedSize, not 300 * blockAlignedSize! */
+		const auto byteOffset = static_cast< uint32_t >(this->getByteOffsetForElement(index));
+
+		return m_uniformBufferObjects.at(bufferIndex)->writeData({data, m_uniformBlockSize, byteOffset});
+	}
+
+	VkDescriptorBufferInfo
+	SharedUniformBuffer::getDescriptorInfoForElement (uint32_t elementIndex) const noexcept
+	{
+		VkDescriptorBufferInfo descriptorInfo{};
+
+		const auto * ubo = this->uniformBufferObject(elementIndex);
+
+		if ( ubo == nullptr )
+		{
+			TraceError{ClassId} << "Cannot get descriptor info for element #" << elementIndex << " - no UBO found!";
+
+			return descriptorInfo;
+		}
+
+		descriptorInfo.buffer = ubo->handle();
+		descriptorInfo.offset = this->getByteOffsetForElement(elementIndex);
+		descriptorInfo.range = m_blockAlignedSize;
+
+		return descriptorInfo;
 	}
 
 	bool

@@ -22,58 +22,73 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
             NSOpenPanel * panel = [NSOpenPanel openPanel];
 
             [panel setTitle:title];
-            [panel setCanChooseFiles:YES];
-            [panel setCanChooseDirectories:NO];
-            [panel setAllowsMultipleSelection:YES];
 
-            NSMutableArray * file_types_list = [NSMutableArray array];
-            NSMutableArray * filter_names = [NSMutableArray array];
-            NSMutableOrderedSet * file_type_set = [NSMutableOrderedSet orderedSetWithCapacity:m_extensionFilters.size()];
-
-            for ( auto & filter : m_extensionFilters )
+            /* Configure file/folder selection mode. */
+            if ( m_selectFolder )
             {
-                [filter_names addObject:@(filter.first.c_str())];
-
-                for ( std::string & ext : filter.second )
-                {
-                    auto pos = ext.rfind('.');
-
-                    if ( pos != std::string::npos )
-                    {
-                        ext.erase(0, pos + 1);
-                    }
-
-                    [file_type_set addObject:@(ext.c_str())];
-                }
+                [panel setCanChooseFiles:NO];
+                [panel setCanChooseDirectories:YES];
             }
-            [file_types_list addObject:[file_type_set array]];
-
-            // Convert extensions to UTTypes for allowedContentTypes (macOS 12.0+)
-            NSMutableArray<UTType *> * contentTypes = [NSMutableArray array];
-            NSUInteger count = [file_types_list count];
-
-            if ( count > 0 )
+            else
             {
-                NSArray * extensions = [[file_types_list objectAtIndex:0] allObjects];
+                [panel setCanChooseFiles:YES];
+                [panel setCanChooseDirectories:NO];
+            }
 
-                // If we meet a '*' file extension, we allow all the file types
-                if ( [extensions count] > 0 && ![extensions containsObject:@"*"] )
+            [panel setAllowsMultipleSelection:m_multiSelect ? YES : NO];
+
+            /* Apply file extension filters only when selecting files, not folders. */
+            if ( !m_selectFolder && !m_extensionFilters.empty() )
+            {
+                NSMutableArray * file_types_list = [NSMutableArray array];
+                NSMutableArray * filter_names = [NSMutableArray array];
+                NSMutableOrderedSet * file_type_set = [NSMutableOrderedSet orderedSetWithCapacity:m_extensionFilters.size()];
+
+                for ( auto & filter : m_extensionFilters )
                 {
-                    for ( NSString * ext in extensions )
-                    {
-                        UTType * type = [UTType typeWithFilenameExtension:ext];
+                    [filter_names addObject:@(filter.first.c_str())];
 
-                        if ( type != nil )
+                    for ( std::string & ext : filter.second )
+                    {
+                        auto pos = ext.rfind('.');
+
+                        if ( pos != std::string::npos )
                         {
-                            [contentTypes addObject:type];
+                            ext.erase(0, pos + 1);
+                        }
+
+                        [file_type_set addObject:@(ext.c_str())];
+                    }
+                }
+                [file_types_list addObject:[file_type_set array]];
+
+                // Convert extensions to UTTypes for allowedContentTypes (macOS 12.0+)
+                NSMutableArray<UTType *> * contentTypes = [NSMutableArray array];
+                NSUInteger count = [file_types_list count];
+
+                if ( count > 0 )
+                {
+                    NSArray * extensions = [[file_types_list objectAtIndex:0] allObjects];
+
+                    // If we meet a '*' file extension, we allow all the file types
+                    if ( [extensions count] > 0 && ![extensions containsObject:@"*"] )
+                    {
+                        for ( NSString * ext in extensions )
+                        {
+                            UTType * type = [UTType typeWithFilenameExtension:ext];
+
+                            if ( type != nil )
+                            {
+                                [contentTypes addObject:type];
+                            }
                         }
                     }
                 }
-            }
 
-            if ( [contentTypes count] > 0 )
-            {
-                panel.allowedContentTypes = contentTypes;
+                if ( [contentTypes count] > 0 )
+                {
+                    panel.allowedContentTypes = contentTypes;
+                }
             }
 
             // TODO: Format picker not yet implemented, macOS doesnt support it natively.

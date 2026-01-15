@@ -29,6 +29,8 @@
 /* Local inclusions. */
 #include "Graphics/RenderTarget/Abstract.hpp"
 #include "Libs/Hash/FNV1a.hpp"
+#include "Vulkan/Framebuffer.hpp"
+#include "Vulkan/RenderPass.hpp"
 #include "Libs/SourceCodeParser.hpp"
 #include "Overlay/Manager.hpp"
 #include "Saphir/Code.hpp"
@@ -255,13 +257,19 @@ namespace EmEn::Saphir::Generator
 
 		size_t hash = Hash::FNV1a(ClassId);
 
-		/* 1. Render target type (cubemap vs single layer). */
+		/* 1. Render pass handle (critical for pipeline compatibility). */
+		if ( const auto * framebuffer = this->renderTarget()->framebuffer(); framebuffer != nullptr )
+		{
+			hashCombine(hash, reinterpret_cast< size_t >(framebuffer->renderPass()->handle()));
+		}
+
+		/* 2. Render target type (cubemap vs single layer). */
 		hashCombine(hash, static_cast< size_t >(this->renderTarget()->isCubemap()));
 
-		/* 2. Premultiplied alpha mode. */
+		/* 3. Premultiplied alpha mode. */
 		hashCombine(hash, static_cast< size_t >(m_premultipliedAlpha));
 
-		/* 3. BGRA source format. */
+		/* 4. BGRA source format. */
 		hashCombine(hash, static_cast< size_t >(m_isBGRASurface));
 
 		return hash;

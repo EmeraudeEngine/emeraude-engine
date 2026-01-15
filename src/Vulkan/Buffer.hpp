@@ -329,13 +329,11 @@ namespace EmEn::Vulkan
 			 */
 			[[nodiscard]]
 			VkDescriptorBufferInfo
-			getDescriptorInfo (uint32_t /*offset*/, uint32_t range) const noexcept
+			getDescriptorInfo (uint32_t offset, uint32_t range) const noexcept
 			{
-				/* FIXME: Setting the offset breaks some scenes! */
-
 				VkDescriptorBufferInfo descriptorInfo{};
 				descriptorInfo.buffer = m_handle;
-				descriptorInfo.offset = 0;
+				descriptorInfo.offset = static_cast< VkDeviceSize >(offset);
 				descriptorInfo.range = range;
 
 				return descriptorInfo;

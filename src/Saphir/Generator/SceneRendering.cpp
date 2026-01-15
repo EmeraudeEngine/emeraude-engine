@@ -29,6 +29,8 @@
 /* Local inclusions. */
 #include "Graphics/RenderTarget/Abstract.hpp"
 #include "Libs/Hash/FNV1a.hpp"
+#include "Vulkan/Framebuffer.hpp"
+#include "Vulkan/RenderPass.hpp"
 #include "Libs/SourceCodeParser.hpp"
 #include "Scenes/Scene.hpp"
 #include "Saphir/Code.hpp"
@@ -203,13 +205,22 @@ namespace EmEn::Saphir::Generator
 	SceneRendering::generateVertexShader (Program & program) noexcept
 	{
 		/* Create the vertex shader. */
+		const bool isCubemapTarget = this->renderTarget()->isCubemap();
+
 		auto * vertexShader = program.initVertexShader(
 			this->name( ) + "VertexShader",
 			this->isFlagEnabled(IsInstancingEnabled),
 			this->isAdvancedRendering(),
-			this->isFlagEnabled(IsRenderableFacingCamera)
+			this->isFlagEnabled(IsRenderableFacingCamera),
+			isCubemapTarget
 		);
 		vertexShader->setExtensionBehavior("GL_ARB_separate_shader_objects", "enable");
+
+		/* NOTE: Cubemap rendering requires multiview extension for gl_ViewIndex. */
+		if ( isCubemapTarget )
+		{
+			vertexShader->setExtensionBehavior("GL_EXT_multiview", "enable");
+		}
 
 		if ( !this->declareMatrixPushConstantBlock(*vertexShader) )
 		{
@@ -369,10 +380,16 @@ namespace EmEn::Saphir::Generator
 
 		size_t hash = 0;
 
-		/* 1. Render target type (cubemap vs single layer). */
+		/* 1. Render pass handle (critical for pipeline compatibility). */
+		if ( const auto * framebuffer = this->renderTarget()->framebuffer(); framebuffer != nullptr )
+		{
+			hashCombine(hash, reinterpret_cast< size_t >(framebuffer->renderPass()->handle()));
+		}
+
+		/* 2. Render target type (cubemap vs single layer). */
 		hashCombine(hash, static_cast< size_t >(this->renderTarget()->isCubemap()));
 
-		/* 2. Renderable identity (geometry + material combination via resource name). */
+		/* 3. Renderable identity (geometry + material combination via resource name). */
 		if ( this->isRenderableInstanceAvailable() )
 		{
 			const auto * renderable = this->getRenderable();
@@ -383,16 +400,16 @@ namespace EmEn::Saphir::Generator
 			}
 		}
 
-		/* 3. Layer index. */
+		/* 4. Layer index. */
 		hashCombine(hash, static_cast< size_t >(this->layerIndex()));
 
-		/* 4. Render pass type. */
+		/* 5. Render pass type. */
 		hashCombine(hash, static_cast< size_t >(m_renderPassType));
 
-		/* 5. Generator flags (instancing, lighting, facing camera, etc.). */
+		/* 6. Generator flags (instancing, lighting, facing camera, etc.). */
 		hashCombine(hash, static_cast< size_t >(this->flags()));
 
-		/* 6. Scene static lighting state (affects shader generation). */
+		/* 7. Scene static lighting state (affects shader generation). */
 		if ( m_scene != nullptr && m_scene->lightSet().isUsingStaticLighting() )
 		{
 			hashCombine(hash, 1ULL);

@@ -82,10 +82,22 @@ ctest -R PlatformSpecific
 
 ## Important Files
 
-- `DialogBox.*` - OS dialog box abstractions
-- `SystemCall.*` - System command execution
-- `WindowManager.*` - Window and notification management
+### Desktop Directory (`Desktop/`)
+- `Commands.*` - System commands (taskbar flash, progress, run applications)
+- `Dialog/Abstract.*` - Base class for all dialogs
+- `Dialog/Types.hpp` - Dialog types and aliases (`MessageType`, `ButtonLayout`, `ButtonLabels`)
+- `Dialog/Message.*` - Message dialogs (info, warning, error, question) with preset `ButtonLayout`
+- `Dialog/CustomMessage.*` - Custom button dialogs (1-6 buttons with custom labels)
+- `Dialog/OpenFile.*` - File/folder open dialogs
+- `Dialog/SaveFile.*` - File save dialogs
+- `Notification.*` - System notifications (toast/banner)
 - CMakeLists.txt - Platform file selection
+
+### File Naming Convention
+Platform-specific implementations use suffixes:
+- `.linux.cpp` - Linux implementation
+- `.mac.mm` - macOS implementation (Objective-C++)
+- `.windows.cpp` - Windows implementation
 
 ## Development Patterns
 
@@ -190,6 +202,90 @@ bool MyFeature::doSomething(const std::string& param) {
 - **CMake correctly configured**: Verify file selection per OS
 - **Explicit warnings**: If feature unsupported, log clear warning
 - **Documentation**: Indicate OS limitations in comments
+
+## Platform-Specific Implementation Details
+
+### Linux Dialog Implementation (zenity/kdialog)
+Linux dialogs use native desktop tools via shell commands. See: `Desktop/Dialog/*.linux.cpp`
+
+**Tool Selection Logic**:
+```cpp
+// Prefer kdialog on KDE, zenity otherwise
+const bool useKdialog = hasKdialog() && (!hasZenity() || isKdeDesktop());
+```
+
+**Key Functions** (in anonymous namespace):
+- `checkProgram()` - Checks tool availability via `which`
+- `hasZenity()` / `hasKdialog()` - Cached tool detection
+- `isKdeDesktop()` - Checks `XDG_CURRENT_DESKTOP` for "KDE"
+- `escapeShellArg()` - Shell argument escaping with single quotes
+- `executeCommand()` - Runs command via `popen`/`pclose`
+
+**Zenity Quirks** (as of 2024+):
+- Use `--icon=` not `--icon-name=` (deprecated)
+- `--confirm-overwrite` is deprecated (now default behavior)
+- Multi-select separator: use `--separator=$'\\n'` (bash syntax for real newline)
+
+### Windows Taskbar Progress
+Uses COM `ITaskbarList3` interface. See: `Desktop/Commands.windows.cpp:setTaskbarIconProgression()`
+
+**Progress Modes** (`ProgressMode` enum):
+| Mode | Windows Flag | Visual |
+|------|--------------|--------|
+| `None` | `TBPF_NOPROGRESS` | Hidden |
+| `Normal` | `TBPF_NORMAL` | Green bar |
+| `Indeterminate` | `TBPF_INDETERMINATE` | Marquee animation |
+| `Error` | `TBPF_ERROR` | Red bar |
+| `Paused` | `TBPF_PAUSED` | Yellow bar |
+
+### macOS Dock Progress
+Uses `NSDockTile` with `NSProgressIndicator`. See: `Desktop/Commands.mac.mm:setTaskbarIconProgression()`
+
+- Progress bar overlays the dock icon
+- Pass negative value to remove the progress indicator
+- Mode parameter is ignored (macOS only supports normal progress)
+
+### Linux Taskbar Progress
+**Not supported** on standard Linux desktops (GNOME, KDE, etc.).
+Would require `libunity` for Ubuntu Unity desktop only.
+See: `Desktop/Commands.linux.cpp:setTaskbarIconProgression()` (stub)
+
+### CustomMessage Dialog (Custom Buttons)
+
+Dialogs with 1-6 custom button labels. See: `Desktop/Dialog/CustomMessage.*`
+
+**Type**: `ButtonLabels` (`Libs::StaticVector<std::string, 6>`)
+
+**Usage**:
+```cpp
+Dialog::CustomMessage dialog{"Title", "Message", {"Save", "Don't Save", "Cancel"}, MessageType::Warning};
+dialog.execute(&window);
+int clickedIndex = dialog.getClickedButtonIndex();  // 0-based, -1 if dismissed
+```
+
+**Platform Implementations**:
+| Platform | API | Button Index Mapping |
+|----------|-----|---------------------|
+| macOS | `NSAlert` with `addButtonWithTitle:` | `NSAlertFirstButtonReturn (1000)` → 0 |
+| Linux | `zenity --question --switch --extra-button=...` | Parses button text from stdout |
+| Windows | `TaskDialogIndirect` with `TASKDIALOG_BUTTON[]` | Button IDs 100+ → 0-based |
+
+**Critical**: First button in array is the default/primary button on all platforms.
+
+### OpenFile Dialog Constraints
+
+**CRITICAL**: File filters must NOT be applied when selecting folders (`m_selectFolder = true`).
+
+See: `Desktop/Dialog/OpenFile.windows.cpp`, `Desktop/Dialog/OpenFile.mac.mm`
+
+```cpp
+// Correct pattern - skip filters for folder selection
+if (!m_selectFolder && !m_extensionFilters.empty()) {
+    // Apply filters only for file selection
+}
+```
+
+This constraint was discovered as a bug fix - applying filters to folder selection breaks the dialog on Windows and macOS.
 
 ## Detailed Documentation
 

@@ -73,7 +73,8 @@ namespace EmEn::Saphir
 				: m_renderPassType{renderPassType},
 				m_PCFSample{settings.getOrSetDefault< uint32_t >(GraphicsShadowMappingPCFSampleKey, DefaultGraphicsShadowMappingPCFSample)},
 				m_PCFRadius{settings.getOrSetDefault< float >(GraphicsShadowMappingPCFRadiusKey, DefaultGraphicsShadowMappingPCFRadius)},
-				m_fragmentColor{fragmentColor}
+				m_fragmentColor{fragmentColor},
+				m_highQualityReflectionEnabled{settings.getOrSetDefault< bool >(HighQualityReflectionEnabledKey, DefaultHighQualityReflectionEnabled)}
 			{
 				if ( m_renderPassType == Graphics::RenderPassType::SimplePass )
 				{
@@ -161,14 +162,42 @@ namespace EmEn::Saphir
 			}
 
 			/**
-			 * @brief Declares the variable used by the fragment shader to get the surface auto-illumination.
-			 * @param amountVariableName A reference to a string for GLSL variable holding the surface auto-illumination.
+			 * @brief Declares the variable used by the fragment shader to get the surface auto-illumination (Phong mode).
+			 * @param amountVariableName A reference to a string for GLSL variable holding the surface auto-illumination amount.
 			 * @return void
 			 */
 			void
 			declareSurfaceAutoIllumination (const std::string & amountVariableName) noexcept
 			{
 				m_surfaceAutoIlluminationAmount = amountVariableName;
+			}
+
+			/**
+			 * @brief Declares the variable used by the fragment shader to get the surface auto-illumination (PBR mode).
+			 * @param colorVariableName A reference to a string for GLSL variable holding the surface auto-illumination color.
+			 * @param amountVariableName A reference to a string for GLSL variable holding the surface auto-illumination amount.
+			 * @return void
+			 */
+			void
+			declareSurfaceAutoIllumination (const std::string & colorVariableName, const std::string & amountVariableName) noexcept
+			{
+				m_surfaceAutoIlluminationColor = colorVariableName;
+				m_surfaceAutoIlluminationAmount = amountVariableName;
+				m_useAutoIllumination = true;
+			}
+
+			/**
+			 * @brief Declares the variable used by the fragment shader to get the baked ambient occlusion.
+			 * @param valueVariableName A reference to a string for GLSL variable holding the AO value (0.0-1.0).
+			 * @param intensityVariableName A reference to a string for GLSL variable holding the AO intensity multiplier.
+			 * @return void
+			 */
+			void
+			declareSurfaceAmbientOcclusion (const std::string & valueVariableName, const std::string & intensityVariableName) noexcept
+			{
+				m_surfaceAmbientOcclusion = valueVariableName;
+				m_surfaceAOIntensity = intensityVariableName;
+				m_useAmbientOcclusion = true;
 			}
 
 			/**
@@ -230,6 +259,121 @@ namespace EmEn::Saphir
 				}
 
 				m_useReflection = true;
+			}
+
+			/**
+			 * @brief Declares the variable used by the fragment shader to get the surface refraction map sampler and amount.
+			 * @param colorVariableName A reference to string for the GLSL variable holding the surface refraction sample.
+			 * @param amountVariableName A reference to string for the GLSL variable holding the refraction amount. Default 0.5.
+			 * @param iorVariableName A reference to string for the GLSL variable holding the refraction IOR. Default 1.0.
+			 * @return void
+			 */
+			void
+			declareSurfaceRefraction (const std::string & colorVariableName, const std::string & amountVariableName = {}, const std::string & iorVariableName = {}) noexcept
+			{
+				m_surfaceRefractionColor = colorVariableName;
+
+				if ( amountVariableName.empty() )
+				{
+					m_surfaceRefractionAmount = "(0.0)";
+				}
+				else
+				{
+					m_surfaceRefractionAmount = amountVariableName;
+				}
+
+				if ( iorVariableName.empty() )
+				{
+					m_surfaceRefractionIOR = "(1.0)";
+				}
+				else
+				{
+					m_surfaceRefractionIOR = iorVariableName;
+				}
+
+				m_useRefraction = true;
+			}
+
+			/* ==================== PBR Mode ==================== */
+
+			/**
+			 * @brief Enables PBR (Physically Based Rendering) mode.
+			 * @note When PBR mode is enabled, the light generator uses Cook-Torrance BRDF
+			 *       instead of Phong-Blinn shading.
+			 * @return void
+			 */
+			void
+			enablePBRMode () noexcept
+			{
+				m_usePBRMode = true;
+			}
+
+			/**
+			 * @brief Returns whether PBR mode is enabled.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isPBRMode () const noexcept
+			{
+				return m_usePBRMode;
+			}
+
+			/**
+			 * @brief Returns whether high-quality reflection is enabled.
+			 * @note When enabled, reflectionNormal and reflectionI are computed per-fragment.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			highQualityReflectionEnabled () const noexcept
+			{
+				return m_highQualityReflectionEnabled;
+			}
+
+			/**
+			 * @brief Declares the variable used by the fragment shader to get the surface albedo (base color).
+			 * @param colorVariableName A reference to a string for GLSL variable holding the surface albedo.
+			 * @return void
+			 */
+			void
+			declareSurfaceAlbedo (const std::string & colorVariableName) noexcept
+			{
+				m_surfaceAlbedo = colorVariableName;
+			}
+
+			/**
+			 * @brief Declares the variable used by the fragment shader to get the surface roughness.
+			 * @param valueVariableName A reference to a string for GLSL variable holding the surface roughness (0.0 = mirror, 1.0 = diffuse).
+			 * @return void
+			 */
+			void
+			declareSurfaceRoughness (const std::string & valueVariableName) noexcept
+			{
+				m_surfaceRoughness = valueVariableName;
+			}
+
+			/**
+			 * @brief Declares the variable used by the fragment shader to get the surface metalness.
+			 * @param valueVariableName A reference to a string for GLSL variable holding the surface metalness (0.0 = dielectric, 1.0 = metal).
+			 * @return void
+			 */
+			void
+			declareSurfaceMetalness (const std::string & valueVariableName) noexcept
+			{
+				m_surfaceMetalness = valueVariableName;
+			}
+
+			/**
+			 * @brief Declares the variable used by the fragment shader to get the IBL (Image-Based Lighting) intensity.
+			 * @note This controls the contribution of environment cubemaps (reflection/refraction) in PBR mode.
+			 * @param valueVariableName A reference to a string for GLSL variable holding the IBL intensity (0.0 = none, 1.0 = full).
+			 * @return void
+			 */
+			void
+			declareSurfaceIBLIntensity (const std::string & valueVariableName) noexcept
+			{
+				m_surfaceIBLIntensity = valueVariableName;
 			}
 
 			/**
@@ -382,6 +526,35 @@ namespace EmEn::Saphir
 			bool generatePhongBlinnWithNormalMapFragmentShader (Generator::Abstract & generator, FragmentShader & fragmentShader, Graphics::LightType lightType, bool enableShadowMap) const noexcept;
 
 			/**
+			 * @brief Generates the vertex shader for a light using PBR Cook-Torrance BRDF.
+			 * @param generator A reference to the shader generator.
+			 * @param vertexShader A reference to the vertex shader.
+			 * @param lightType The light type.
+			 * @param enableShadowMap Enables the shadow mapping code generation.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool generatePBRVertexShader (Generator::Abstract & generator, VertexShader & vertexShader, Graphics::LightType lightType, bool enableShadowMap) const noexcept;
+
+			/**
+			 * @brief Generates the fragment shader for a light using PBR Cook-Torrance BRDF.
+			 * @param generator A reference to the shader generator.
+			 * @param fragmentShader A reference to the fragment shader.
+			 * @param lightType The light type.
+			 * @param enableShadowMap Enables the shadow mapping code generation.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool generatePBRFragmentShader (Generator::Abstract & generator, FragmentShader & fragmentShader, Graphics::LightType lightType, bool enableShadowMap) const noexcept;
+
+			/**
+			 * @brief Generates the PBR BRDF helper functions (Fresnel, NDF, Geometry).
+			 * @param fragmentShader A reference to the fragment shader.
+			 * @return void
+			 */
+			void generatePBRBRDFFunctions (FragmentShader & fragmentShader) const noexcept;
+
+			/**
 			 * @brief generate2DShadowMapCode
 			 * @param shadowMap
 			 * @param fragmentPosition
@@ -504,12 +677,28 @@ namespace EmEn::Saphir
 			std::string m_surfaceNormalVector;
 			std::string m_surfaceReflectionColor;
 			std::string m_surfaceReflectionAmount;
+			std::string m_surfaceRefractionColor;
+			std::string m_surfaceRefractionAmount;
+			std::string m_surfaceRefractionIOR;
+			/* PBR-specific variables. */
+			std::string m_surfaceAlbedo;
+			std::string m_surfaceRoughness;
+			std::string m_surfaceMetalness;
+			std::string m_surfaceIBLIntensity;
+			std::string m_surfaceAutoIlluminationColor;
+			std::string m_surfaceAmbientOcclusion;
+			std::string m_surfaceAOIntensity;
 			const StaticLighting * m_staticLighting{nullptr};
 			bool m_discardUnlitFragment{true};
 			bool m_useStaticLighting{false};
 			bool m_useNormalMapping{false};
 			bool m_useOpacity{false};
 			bool m_useReflection{false};
+			bool m_useRefraction{false};
 			bool m_enableAmbientNoise{false};
+			bool m_usePBRMode{false};
+			bool m_useAutoIllumination{false};
+			bool m_useAmbientOcclusion{false};
+			bool m_highQualityReflectionEnabled{false};
 	};
 }

@@ -94,7 +94,7 @@ namespace EmEn::Scenes
 			return nullptr;
 		}
 
-		auto newScene = std::make_shared< Scene >(m_graphicsRenderer, m_audioManager, sceneName, boundary, background, groundLevel, seaLevel);
+		auto newScene = std::make_shared< Scene >(m_resourceManager, m_graphicsRenderer, m_audioManager, sceneName, boundary, background, groundLevel, seaLevel);
 
 		this->notify(SceneCreated, newScene);
 

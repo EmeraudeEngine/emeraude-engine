@@ -56,6 +56,7 @@ namespace EmEn::Vulkan
 			return this->getDescriptorInfo(0, static_cast< uint32_t >(this->bytes()));
 		}
 
-		return this->getDescriptorInfo(elementOffset, m_blockAlignedSize);
+		/* NOTE: Convert element index to byte offset. */
+		return this->getDescriptorInfo(elementOffset * m_blockAlignedSize, m_blockAlignedSize);
 	}
 }

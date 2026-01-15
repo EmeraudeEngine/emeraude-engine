@@ -167,11 +167,6 @@ For each file, analyze:
 
 ### Step 3: Check Formatting
 
-Run formatting check (if clang-format available):
-```bash
-clang-format --dry-run --Werror [file]
-```
-
 Check for:
 - Consistent indentation (tabs)
 - Brace style (Allman or K&R - check project standard)

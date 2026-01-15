@@ -38,6 +38,8 @@
 #include "Scenes/Component/AbstractLightEmitter.hpp"
 #include "Tracer.hpp"
 #include "Vulkan/CommandBuffer.hpp"
+#include "Vulkan/Framebuffer.hpp"
+#include "Vulkan/RenderPass.hpp"
 
 namespace EmEn::Graphics::RenderableInstance
 {
@@ -50,11 +52,12 @@ namespace EmEn::Graphics::RenderableInstance
 	constexpr auto TracerTag{"RenderableInstance"};
 
 	Renderable::ProgramCacheKey
-	Abstract::buildProgramCacheKey (Renderable::ProgramType programType, RenderPassType renderPassType, uint32_t layerIndex) const noexcept
+	Abstract::buildProgramCacheKey (Renderable::ProgramType programType, RenderPassType renderPassType, uint64_t renderPassHandle, uint32_t layerIndex) const noexcept
 	{
 		return Renderable::ProgramCacheKey{
 			.programType = programType,
 			.renderPassType = renderPassType,
+			.renderPassHandle = renderPassHandle,
 			.layerIndex = layerIndex,
 			.isInstancing = this->useModelVertexBufferObject(),
 			.isLightingEnabled = this->isLightingEnabled(),
@@ -76,7 +79,8 @@ namespace EmEn::Graphics::RenderableInstance
 
 		for ( uint32_t layerIndex = 0; layerIndex < layerCount; ++layerIndex )
 		{
-			const auto cacheKey = this->buildProgramCacheKey(Renderable::ProgramType::ShadowCasting, RenderPassType::SimplePass, layerIndex);
+			const auto renderPassHandle = reinterpret_cast< uint64_t >(renderTarget->framebuffer()->renderPass()->handle());
+			const auto cacheKey = this->buildProgramCacheKey(Renderable::ProgramType::ShadowCasting, RenderPassType::SimplePass, renderPassHandle, layerIndex);
 
 			if ( m_renderable->findCachedProgram(renderTarget, cacheKey) == nullptr )
 			{
@@ -129,9 +133,11 @@ namespace EmEn::Graphics::RenderableInstance
 			}
 		}
 
+		const auto renderPassHandle = reinterpret_cast< uint64_t >(renderTarget->framebuffer()->renderPass()->handle());
+
 		for ( uint32_t layerIndex = 0; layerIndex < layerCount; ++layerIndex )
 		{
-			const auto cacheKey = this->buildProgramCacheKey(Renderable::ProgramType::ShadowCasting, RenderPassType::SimplePass, layerIndex);
+			const auto cacheKey = this->buildProgramCacheKey(Renderable::ProgramType::ShadowCasting, RenderPassType::SimplePass, renderPassHandle, layerIndex);
 
 			/* Try to find a cached program from the Renderable. */
 			if ( m_renderable->findCachedProgram(renderTarget, cacheKey) != nullptr )
@@ -205,11 +211,13 @@ namespace EmEn::Graphics::RenderableInstance
 			}
 		}
 
+		const auto renderPassHandle = reinterpret_cast< uint64_t >(renderTarget->framebuffer()->renderPass()->handle());
+
 		for ( const auto renderPassType : renderPassTypes )
 		{
 			for ( uint32_t layerIndex = 0; layerIndex < layerCount; layerIndex++ )
 			{
-				const auto cacheKey = this->buildProgramCacheKey(Renderable::ProgramType::Rendering, renderPassType, layerIndex);
+				const auto cacheKey = this->buildProgramCacheKey(Renderable::ProgramType::Rendering, renderPassType, renderPassHandle, layerIndex);
 
 				/* Try to find a cached program from the Renderable. */
 				if ( m_renderable->findCachedProgram(renderTarget, cacheKey) != nullptr )
@@ -244,7 +252,7 @@ namespace EmEn::Graphics::RenderableInstance
 		{
 			for ( uint32_t layerIndex = 0; layerIndex < layerCount; layerIndex++ )
 			{
-				const auto cacheKey = this->buildProgramCacheKey(Renderable::ProgramType::TBNSpace, RenderPassType::SimplePass, layerIndex);
+				const auto cacheKey = this->buildProgramCacheKey(Renderable::ProgramType::TBNSpace, RenderPassType::SimplePass, renderPassHandle, layerIndex);
 
 				/* Try to find a cached program from the Renderable. */
 				if ( m_renderable->findCachedProgram(renderTarget, cacheKey) != nullptr )
@@ -281,7 +289,8 @@ namespace EmEn::Graphics::RenderableInstance
 	void
 	Abstract::castShadows (uint32_t readStateIndex, const std::shared_ptr< RenderTarget::Abstract > & renderTarget, uint32_t layerIndex, const CartesianFrame< float > * worldCoordinates, const CommandBuffer & commandBuffer) const noexcept
 	{
-		const auto cacheKey = this->buildProgramCacheKey(Renderable::ProgramType::ShadowCasting, RenderPassType::SimplePass, layerIndex);
+		const auto renderPassHandle = reinterpret_cast< uint64_t >(renderTarget->framebuffer()->renderPass()->handle());
+		const auto cacheKey = this->buildProgramCacheKey(Renderable::ProgramType::ShadowCasting, RenderPassType::SimplePass, renderPassHandle, layerIndex);
 		const auto program = m_renderable->findCachedProgram(renderTarget, cacheKey);
 
 		if ( program == nullptr )
@@ -330,7 +339,8 @@ namespace EmEn::Graphics::RenderableInstance
 	void
 	Abstract::render (uint32_t readStateIndex, const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const Scenes::Component::AbstractLightEmitter * lightEmitter, RenderPassType renderPassType, uint32_t layerIndex, const CartesianFrame< float > * worldCoordinates, const CommandBuffer & commandBuffer) const noexcept
 	{
-		const auto cacheKey = this->buildProgramCacheKey(Renderable::ProgramType::Rendering, renderPassType, layerIndex);
+		const auto renderPassHandle = reinterpret_cast< uint64_t >(renderTarget->framebuffer()->renderPass()->handle());
+		const auto cacheKey = this->buildProgramCacheKey(Renderable::ProgramType::Rendering, renderPassType, renderPassHandle, layerIndex);
 		const auto program = m_renderable->findCachedProgram(renderTarget, cacheKey);
 
 		if ( program == nullptr )
@@ -428,7 +438,8 @@ namespace EmEn::Graphics::RenderableInstance
 	void
 	Abstract::renderTBNSpace (uint32_t readStateIndex, const std::shared_ptr< RenderTarget::Abstract > & renderTarget, uint32_t layerIndex, const CartesianFrame< float > * worldCoordinates, const CommandBuffer & commandBuffer) const noexcept
 	{
-		const auto cacheKey = this->buildProgramCacheKey(Renderable::ProgramType::TBNSpace, RenderPassType::SimplePass, layerIndex);
+		const auto renderPassHandle = reinterpret_cast< uint64_t >(renderTarget->framebuffer()->renderPass()->handle());
+		const auto cacheKey = this->buildProgramCacheKey(Renderable::ProgramType::TBNSpace, RenderPassType::SimplePass, renderPassHandle, layerIndex);
 		const auto program = m_renderable->findCachedProgram(renderTarget, cacheKey);
 
 		if ( program == nullptr )

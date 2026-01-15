@@ -132,7 +132,7 @@ namespace EmEn::Saphir
 	}
 
 	VertexShader *
-	Program::initVertexShader (const std::string & name, bool enableInstancing, bool enableAdvancedMatrices, bool enableBillBoarding) noexcept
+	Program::initVertexShader (const std::string & name, bool enableInstancing, bool enableAdvancedMatrices, bool enableBillBoarding, bool enableCubemapMode) noexcept
 	{
 		if ( m_vertexShader != nullptr )
 		{
@@ -156,6 +156,11 @@ namespace EmEn::Saphir
 		if ( enableBillBoarding )
 		{
 			m_vertexShader->enableBillBoarding();
+		}
+
+		if ( enableCubemapMode )
+		{
+			m_vertexShader->enableCubemapMode();
 		}
 
 		return m_vertexShader.get();

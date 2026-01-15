@@ -169,6 +169,33 @@ namespace EmEn::Graphics
 				return m_blockAlignedSize;
 			}
 
+			/**
+			 * @brief Returns the byte offset for an element within its UBO.
+			 * @note This is the LOCAL offset within the specific UBO that holds the element.
+			 *       Use this for descriptor set binding or direct buffer access.
+			 * @param elementIndex The global element index.
+			 * @return VkDeviceSize The byte offset within the UBO.
+			 */
+			[[nodiscard]]
+			VkDeviceSize
+			getByteOffsetForElement (uint32_t elementIndex) const noexcept
+			{
+				/* NOTE: When multiple UBOs exist, convert global index to local index within that UBO.
+				 * Example: With maxElementCountPerUBO=256, element 300 is at local index 44 in UBO #1. */
+				const auto localIndex = elementIndex % m_maxElementCountPerUBO;
+				return static_cast< VkDeviceSize >(localIndex) * m_blockAlignedSize;
+			}
+
+			/**
+			 * @brief Returns a fully configured VkDescriptorBufferInfo for an element.
+			 * @note This is the preferred method for getting descriptor info as it ensures
+			 *       the correct byte offset calculation is always used.
+			 * @param elementIndex The global element index.
+			 * @return VkDescriptorBufferInfo Ready to use in vkUpdateDescriptorSets.
+			 */
+			[[nodiscard]]
+			VkDescriptorBufferInfo getDescriptorInfoForElement (uint32_t elementIndex) const noexcept;
+
 		private:
 
 			/**

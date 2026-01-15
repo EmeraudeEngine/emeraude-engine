@@ -308,6 +308,34 @@ namespace EmEn::Graphics
 		return this->setLoadSuccess(true);
 	}
 
+	bool
+	CubemapResource::loadSolidColor (const Color< float > & color, uint32_t size) noexcept
+	{
+		if ( !this->beginLoading() )
+		{
+			return false;
+		}
+
+		for ( size_t faceIndex = 0; faceIndex < CubemapFaceCount; faceIndex++ )
+		{
+			if ( !m_faces.at(faceIndex).initialize(size, size, ChannelMode::RGBA) )
+			{
+				TraceError{ClassId} << "Unable to initialize the pixmap for face #" << faceIndex << " !";
+
+				return this->setLoadSuccess(false);
+			}
+
+			if ( !m_faces.at(faceIndex).fill(color) )
+			{
+				TraceError{ClassId} << "Unable to fill the pixmap for face #" << faceIndex << " !";
+
+				return this->setLoadSuccess(false);
+			}
+		}
+
+		return this->setLoadSuccess(true);
+	}
+
 	const Pixmap< uint8_t > &
 	CubemapResource::data (size_t faceIndex) const noexcept
 	{

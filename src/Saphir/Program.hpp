@@ -126,10 +126,11 @@ namespace EmEn::Saphir
 			 * @param enableInstancing Enable instancing for the vertex shader.
 			 * @param enableAdvancedMatrices Enable the advanced matrices for the vertex shader.
 			 * @param enableBillBoarding Enable the render of bill boards instead of classic geometry.
+			 * @param enableCubemapMode Enable cubemap multiview rendering mode.
 			 * @return VertexShader *
 			 */
 			[[nodiscard]]
-			VertexShader * initVertexShader (const std::string & name, bool enableInstancing, bool enableAdvancedMatrices, bool enableBillBoarding) noexcept;
+			VertexShader * initVertexShader (const std::string & name, bool enableInstancing, bool enableAdvancedMatrices, bool enableBillBoarding, bool enableCubemapMode = false) noexcept;
 
 			/**
 			 * @brief Initializes the tesselation control shader and returns it.

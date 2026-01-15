@@ -338,7 +338,47 @@ namespace EmEn::Saphir
 
 		std::stringstream code;
 
-		if ( this->isInstancingEnabled() )
+		/* NOTE: Cubemap mode uses multiview rendering with gl_ViewIndex to select the correct view matrix from UBO.
+		 * The projection matrix is shared (not per-face), so we use ViewUB(..., false) for projection
+		 * but ViewUB(..., true) for the view matrix to get instance[gl_ViewIndex].viewMatrix. */
+		if ( this->isCubemapModeEnabled() )
+		{
+			if ( this->isInstancingEnabled() )
+			{
+				if ( this->isBillBoardingEnabled() )
+				{
+					if ( !this->prepareSpriteModelMatrix() )
+					{
+						return false;
+					}
+
+					code << "\t" "const mat4 " << ShaderVariable::ModelViewProjectionMatrix << " = "
+						<< ViewUB(Keys::UniformBlock::Component::ProjectionMatrix, false) << " * "
+						<< ViewUB(Keys::UniformBlock::Component::ViewMatrix, true) << " * "
+						<< ShaderVariable::SpriteModelMatrix << ";" "\n";
+				}
+				else
+				{
+					if ( !this->declare(InputAttribute{VertexAttributeType::ModelMatrixR0}) )
+					{
+						return false;
+					}
+
+					code << "\t" "const mat4 " << ShaderVariable::ModelViewProjectionMatrix << " = "
+						<< ViewUB(Keys::UniformBlock::Component::ProjectionMatrix, false) << " * "
+						<< ViewUB(Keys::UniformBlock::Component::ViewMatrix, true) << " * "
+						<< Attribute::ModelMatrix << ";" "\n";
+				}
+			}
+			else
+			{
+				code << "\t" "const mat4 " << ShaderVariable::ModelViewProjectionMatrix << " = "
+					<< ViewUB(Keys::UniformBlock::Component::ProjectionMatrix, false) << " * "
+					<< ViewUB(Keys::UniformBlock::Component::ViewMatrix, true) << " * "
+					<< MatrixPC(PushConstant::Component::ModelMatrix) << ";" "\n";
+			}
+		}
+		else if ( this->isInstancingEnabled() )
 		{
 			if ( this->isBillBoardingEnabled() )
 			{
@@ -692,8 +732,9 @@ namespace EmEn::Saphir
 			modelMatrix = MatrixPC(PushConstant::Component::ModelMatrix);
 		}
 
-		/* TODO: Check why the last component should be 0.0 ? */
-		code << vectorName << " = (" << modelMatrix << " * vec4(" << attributeName << ", 1.0)).xyz;" "\n";
+		/* NOTE: w=0.0 because normals are direction vectors, not points.
+		 * Using w=1.0 would incorrectly apply the model matrix translation to the normal. */
+		code << vectorName << " = (" << modelMatrix << " * vec4(" << attributeName << ", 0.0)).xyz;" "\n";
 
 		if ( scope != VariableScope::ToNextStage )
 		{
@@ -884,7 +925,7 @@ namespace EmEn::Saphir
 	}
 
 	bool
-	VertexShader::synthesizeWorldToTangentMatrix (Generator::Abstract & generator, std::string & topInstructions, std::string & outputInstructions, VariableScope scope) noexcept
+	VertexShader::synthesizeTangentToWorldMatrix (Generator::Abstract & generator, std::string & topInstructions, std::string & outputInstructions, VariableScope scope) noexcept
 	{
 		if ( !this->declare(InputAttribute{VertexAttributeType::Tangent}) )
 		{
@@ -901,7 +942,7 @@ namespace EmEn::Saphir
 			return false;
 		}
 
-		if ( !this->declare(StageOutput{generator.getNextShaderVariableLocation(3), GLSL::Matrix3, ShaderVariable::WorldToTangentMatrix, GLSL::Smooth}) )
+		if ( !this->declare(StageOutput{generator.getNextShaderVariableLocation(3), GLSL::Matrix3, ShaderVariable::TangentToWorldMatrix, GLSL::Smooth}) )
 		{
 			return false;
 		}
@@ -912,7 +953,7 @@ namespace EmEn::Saphir
 		}
 
 		const auto matrixCode = (std::stringstream{} <<
-			'\t' << ShaderVariable::WorldToTangentMatrix << " = " << ShaderVariable::NormalMatrix << " * mat3(" << Attribute::Tangent << ", " << Attribute::Binormal << ", " << Attribute::Normal << ");" "\n"
+			'\t' << ShaderVariable::TangentToWorldMatrix << " = " << ShaderVariable::NormalMatrix << " * mat3(" << Attribute::Tangent << ", " << Attribute::Binormal << ", " << Attribute::Normal << ");" "\n"
 		).str();
 
 		if ( scope != VariableScope::ToNextStage )
@@ -1105,9 +1146,9 @@ namespace EmEn::Saphir
 			}
 
 
-			if ( std::strcmp(variableType, ShaderVariable::WorldToTangentMatrix) == 0 )
+			if ( std::strcmp(variableType, ShaderVariable::TangentToWorldMatrix) == 0 )
 			{
-				if ( !this->synthesizeWorldToTangentMatrix(generator, topInstructions, outputInstructions, variableScope) )
+				if ( !this->synthesizeTangentToWorldMatrix(generator, topInstructions, outputInstructions, variableScope) )
 				{
 					return false;
 				}
@@ -1166,7 +1207,7 @@ namespace EmEn::Saphir
 			ShaderVariable::NormalViewSpace,
 			ShaderVariable::WorldTBNMatrix,
 			ShaderVariable::ViewTBNMatrix,
-			ShaderVariable::WorldToTangentMatrix
+			ShaderVariable::TangentToWorldMatrix
 		};
 
 		return std::ranges::any_of(variables, [variableName] (const auto & name) {

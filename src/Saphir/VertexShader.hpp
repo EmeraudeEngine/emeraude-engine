@@ -228,6 +228,27 @@ namespace EmEn::Saphir
 				return m_billBoardingEnabled;
 			}
 
+			/**
+			 * @brief Enables cubemap rendering mode (multiview with gl_ViewIndex).
+			 * @return void
+			 */
+			void
+			enableCubemapMode () noexcept
+			{
+				m_cubemapModeEnabled = true;
+			}
+
+			/**
+			 * @brief Returns whether the vertex shader is in cubemap rendering mode.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isCubemapModeEnabled () const noexcept
+			{
+				return m_cubemapModeEnabled;
+			}
+
 		private:
 
 			/** @copydoc EmEn::Saphir::AbstractShader::onSourceCodeGeneration() */
@@ -377,14 +398,14 @@ namespace EmEn::Saphir
 			bool synthesizeViewTBNMatrix (Generator::Abstract & generator, std::string & topInstructions, std::string & outputInstructions, VariableScope scope) noexcept;
 
 			/**
-			 * @brief Synthesizes the matrix to get the vertex normal in world space from a normal map.
+			 * @brief Synthesizes the matrix to transform tangent-space normals to world space.
 			 * @param generator A reference to the shader generator.
 			 * @param topInstructions Every instruction that should be on the top of the main() function.
 			 * @param outputInstructions Every instruction that should be at the end of the main() function.
 			 * @param scope Set the variable scope in the vertex shader.
 			 * @return bool
 			 */
-			bool synthesizeWorldToTangentMatrix (Generator::Abstract & generator, std::string & topInstructions, std::string & outputInstructions, VariableScope scope) noexcept;
+			bool synthesizeTangentToWorldMatrix (Generator::Abstract & generator, std::string & topInstructions, std::string & outputInstructions, VariableScope scope) noexcept;
 
 			/**
 			 * @brief Synthesizes instructions before generating the final source code.
@@ -428,5 +449,6 @@ namespace EmEn::Saphir
 			bool m_instancingEnabled{false};
 			bool m_advancedMatricesEnabled{false};
 			bool m_billBoardingEnabled{false};
+			bool m_cubemapModeEnabled{false};
 	};
 }

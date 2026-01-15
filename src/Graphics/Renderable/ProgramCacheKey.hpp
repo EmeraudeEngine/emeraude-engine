@@ -54,6 +54,7 @@ namespace EmEn::Graphics::Renderable
 	 * This key uniquely identifies a shader program configuration based on:
 	 * - The type of program (rendering, shadow casting, TBN debug)
 	 * - The render pass type (ambient, directional light, etc.)
+	 * - The render pass handle (for Vulkan render pass compatibility)
 	 * - The material layer index
 	 * - Instance-specific flags that affect shader generation
 	 *
@@ -66,6 +67,8 @@ namespace EmEn::Graphics::Renderable
 		ProgramType programType{ProgramType::Rendering};
 		/** @brief The render pass type for rendering programs. */
 		RenderPassType renderPassType{RenderPassType::SimplePass};
+		/** @brief The Vulkan render pass handle for pipeline compatibility. */
+		uint64_t renderPassHandle{0};
 		/** @brief The material layer index. */
 		uint32_t layerIndex{0};
 		/** @brief Whether the instance uses GPU instancing (Multiple vs Unique). */
@@ -94,6 +97,7 @@ namespace EmEn::Graphics::Renderable
 
 			hashCombine(static_cast< size_t >(programType));
 			hashCombine(static_cast< size_t >(renderPassType));
+			hashCombine(static_cast< size_t >(renderPassHandle));
 			hashCombine(static_cast< size_t >(layerIndex));
 			hashCombine(static_cast< size_t >(isInstancing));
 			hashCombine(static_cast< size_t >(isLightingEnabled));
@@ -114,6 +118,7 @@ namespace EmEn::Graphics::Renderable
 		{
 			return programType == other.programType &&
 				renderPassType == other.renderPassType &&
+				renderPassHandle == other.renderPassHandle &&
 				layerIndex == other.layerIndex &&
 				isInstancing == other.isInstancing &&
 				isLightingEnabled == other.isLightingEnabled &&

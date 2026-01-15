@@ -887,8 +887,6 @@ namespace EmEn::Scenes
 		/* Sleep/Wake: check if entity has been stable long enough to pause simulation. */
 		if ( this->checkSimulationInertia() )
 		{
-			Tracer::debug(ClassId, "Physics simulation paused (entity at rest).");
-
 			this->pauseSimulation(true);
 		}
 

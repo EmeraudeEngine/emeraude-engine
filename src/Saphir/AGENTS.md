@@ -1,5 +1,11 @@
 # Saphir Shader System
 
+> [!CRITICAL]
+> **Before modifying ANY generator or cache code, READ [`docs/pipeline-caching-system.md`](../../docs/pipeline-caching-system.md) FIRST!**
+>
+> Key rule: `computeProgramCacheKey()` MUST include `renderPassHandle` as its first hash component.
+> Forgetting this causes Vulkan validation errors: "sample count mismatch", "format mismatch".
+
 Context for developing the Emeraude Engine automatic shader generation system.
 
 ## Module Overview
@@ -20,7 +26,7 @@ Saphir automatically generates GLSL code from material properties, geometry attr
 |-------|--------|----------|-----------|---------|
 | 1 | `ShaderModule` | `ShaderManager` | Source code hash | Reuse compiled SPIR-V between programs |
 | 2 | `Program` | `Renderer::m_programs` | `computeProgramCacheKey()` | Skip entire shader generation |
-| 3 | `GraphicsPipeline` | `Renderer::m_graphicsPipelines` | `getHash()` | Reuse Vulkan pipeline objects |
+| 3 | `GraphicsPipeline` | `Renderer::m_graphicsPipelines` | `getHash(renderPass)` | Reuse Vulkan pipeline objects |
 
 **Program cache** (Level 2) provides the biggest gain - it short-circuits before any shader code generation when an identical configuration exists. See: `Generator::Abstract::generateShaderProgram()`
 
@@ -36,6 +42,46 @@ Generate GLSL code                 │
 Compile ShaderModules              │
 Create Program                     │
 Cache Program ◄────────────────────┘
+```
+
+> [!CRITICAL]
+> **computeProgramCacheKey() MUST include renderPassHandle!**
+>
+> Each generator's `computeProgramCacheKey()` MUST include the render pass handle as the FIRST
+> hash component. This is required because Vulkan pipelines are tied to specific render passes.
+>
+> Without renderPassHandle, pipelines created for offscreen rendering (1 sample) would be
+> incorrectly reused for main view rendering (4 samples), causing validation errors.
+
+### computeProgramCacheKey() Requirements
+
+Every generator must implement `computeProgramCacheKey()` with these MANDATORY components:
+
+```cpp
+size_t MyGenerator::computeProgramCacheKey () const noexcept
+{
+    size_t hash = Hash::FNV1a(ClassId);  // Generator type identifier
+
+    // 1. MANDATORY: Render pass handle (pipeline compatibility)
+    if ( const auto * framebuffer = this->renderTarget()->framebuffer(); framebuffer != nullptr )
+    {
+        hashCombine(hash, reinterpret_cast< size_t >(framebuffer->renderPass()->handle()));
+    }
+
+    // 2. MANDATORY: Render target type (cubemap vs single layer)
+    hashCombine(hash, static_cast< size_t >(this->renderTarget()->isCubemap()));
+
+    // 3. Generator-specific parameters...
+    // (renderable name, layer index, flags, etc.)
+
+    return hash;
+}
+```
+
+**Required includes** for accessing render pass handle:
+```cpp
+#include "Vulkan/Framebuffer.hpp"
+#include "Vulkan/RenderPass.hpp"
 ```
 
 ### Generator Types
@@ -96,6 +142,40 @@ ctest -R Saphir
 2. Verify tangent export (Blender/Maya)
 3. Simplify material OR enrich geometry
 4. Test with default material first
+
+## Fresnel Effect Generation (Reflection + Refraction)
+
+When a material has BOTH reflection AND refraction components, Saphir generates Fresnel blending code.
+
+### Generation Flow
+
+1. **`StandardResource::generateFragmentShaderCode()`** detects both components present
+2. Generates `fresnelFactor` variable using Schlick approximation:
+   ```glsl
+   const float F0 = pow((1.0 - ubMaterial.refractionIOR) / (1.0 + ubMaterial.refractionIOR), 2.0);
+   const float cosTheta = max(dot(-refractionI, refractionNormal), 0.0);
+   const float fresnelFactor = F0 + (1.0 - F0) * pow(1.0 - cosTheta, 5.0);
+   ```
+3. **`LightGenerator::generateAmbientFragmentShader()`** uses fresnelFactor for ambient pass
+4. **`LightGenerator::generateFinalFragmentOutput()`** uses fresnelFactor for light passes
+
+### Lighting Code Pattern
+
+```cpp
+// In LightGenerator.cpp - when m_useReflection && m_useRefraction
+const auto code = (std::stringstream{} <<
+    "const vec3 reflected = mix(" << m_surfaceDiffuseColor << ", " << m_surfaceReflectionColor << ", " << m_surfaceReflectionAmount << ").rgb;" "\n"
+    "const vec3 refracted = mix(" << m_surfaceDiffuseColor << ", " << m_surfaceRefractionColor << ", " << m_surfaceRefractionAmount << ").rgb;" "\n\n" <<
+    m_fragmentColor << ".rgb += mix(refracted, reflected, fresnelFactor) * lighting;").str();
+```
+
+### Important Notes
+
+- `fresnelFactor` is **only generated when BOTH** reflection AND refraction are present
+- Using `fresnelFactor` without both components causes "undefined variable" shader error
+- The `amount` parameters control the blend between base color and cubemap sample
+- Fresnel determines the blend between reflected and refracted result
+- Files: `StandardResource.cpp:1449-1472`, `LightGenerator.cpp:601-672`
 
 ## Critical Points
 

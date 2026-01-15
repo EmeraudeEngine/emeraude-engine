@@ -283,6 +283,12 @@ namespace EmEn::Saphir
 
 		if ( generator.highQualityLightEnabled() )
 		{
+			/* PBR mode uses Cook-Torrance BRDF. */
+			if ( m_usePBRMode )
+			{
+				return this->generatePBRVertexShader(generator, vertexShader, lightType, enableShadowMap);
+			}
+
 			if ( generator.normalMappingEnabled() && m_useNormalMapping )
 			{
 				return this->generatePhongBlinnWithNormalMapVertexShader(generator, vertexShader, lightType, enableShadowMap);
@@ -362,6 +368,12 @@ namespace EmEn::Saphir
 
 		if ( generator.highQualityLightEnabled() )
 		{
+			/* PBR mode uses Cook-Torrance BRDF. */
+			if ( m_usePBRMode )
+			{
+				return this->generatePBRFragmentShader(generator, fragmentShader, lightType, enableShadowMap);
+			}
+
 			if ( generator.normalMappingEnabled() && m_useNormalMapping )
 			{
 				return this->generatePhongBlinnWithNormalMapFragmentShader(generator, fragmentShader, lightType, enableShadowMap);
@@ -572,8 +584,10 @@ namespace EmEn::Saphir
 
 		if ( m_surfaceAmbientColor.empty() )
 		{
-			/* NOTE: Get 5% of the surface diffuse color to create the surface ambient color. */
-			surfaceColor = (std::stringstream{} << "(" << m_surfaceDiffuseColor << " * 0.05)").str();
+			/* NOTE: Get 5% of the surface diffuse/albedo color to create the surface ambient color.
+			 * In PBR mode, use albedo instead of diffuse. */
+			const auto & baseColor = m_usePBRMode && !m_surfaceAlbedo.empty() ? m_surfaceAlbedo : m_surfaceDiffuseColor;
+			surfaceColor = (std::stringstream{} << "(" << baseColor << " * 0.05)").str();
 		}
 		else
 		{
@@ -598,18 +612,119 @@ namespace EmEn::Saphir
 			intensity = this->ambientLightIntensity();
 		}
 
-		if ( m_useReflection )
+		if ( m_usePBRMode && m_useReflection && m_useRefraction && this->highQualityReflectionEnabled() )
+		{
+			/* NOTE: PBR Glass/transparent materials with both reflection and refraction.
+			 * The Fresnel effect determines the blend between reflection and refraction.
+			 * IBL is the main contribution for glass - it shows the environment, not ambient light.
+			 * IBLIntensity allows dynamic control over the cubemap contribution.
+			 * Requires high-quality mode for reflectionNormal and reflectionI variables. */
+			const auto iblIntensity = m_surfaceIBLIntensity.empty() ? "1.0" : m_surfaceIBLIntensity;
+			const auto code = (std::stringstream{} <<
+				"/* PBR Glass IBL - Fresnel-Schlick approximation. */" "\n"
+				"const float NdotV = max(dot(reflectionNormal, -reflectionI), 0.0);" "\n"
+				"const float fresnelFactor = 0.04 + (1.0 - 0.04) * pow(1.0 - NdotV, 5.0);" "\n"
+				"const vec3 reflectedColor = " << m_surfaceReflectionColor << ".rgb * " << m_surfaceReflectionAmount << ";" "\n"
+				"const vec3 refractedColor = " << m_surfaceRefractionColor << ".rgb * " << m_surfaceRefractionAmount << ";" "\n"
+				"/* Blend reflection and refraction based on Fresnel, modulated by IBL intensity. */" "\n" <<
+				m_fragmentColor << ".rgb += mix(refractedColor, reflectedColor, fresnelFactor) * " << iblIntensity << ";").str();
+
+			Code{fragmentShader, Location::Output} << code;
+		}
+		else if ( m_usePBRMode && m_useReflection && this->highQualityReflectionEnabled() )
+		{
+			/* NOTE: PBR Metal/reflective materials.
+			 * IBL is modulated by Fresnel (with proper F0 based on metalness) and IBLIntensity.
+			 * For metals (metalness=1), F0 = albedo color, giving strong colored reflections.
+			 * For dielectrics (metalness=0), F0 = 0.04, giving weak white reflections.
+			 * Requires high-quality mode for reflectionNormal and reflectionI variables. */
+			const auto iblIntensity = m_surfaceIBLIntensity.empty() ? "1.0" : m_surfaceIBLIntensity;
+			const auto albedo = m_surfaceAlbedo.empty() ? "vec3(1.0)" : m_surfaceAlbedo + ".rgb";
+			const auto metalness = m_surfaceMetalness.empty() ? "0.0" : m_surfaceMetalness;
+			const auto code = (std::stringstream{} <<
+				"/* PBR IBL - Fresnel-Schlick with proper F0 for metals. */" "\n"
+				"const vec3 iblF0 = mix(vec3(0.04), " << albedo << ", " << metalness << ");" "\n"
+				"const float NdotV = max(dot(reflectionNormal, -reflectionI), 0.0);" "\n"
+				"const vec3 fresnelIBL = iblF0 + (1.0 - iblF0) * pow(1.0 - NdotV, 5.0);" "\n"
+				"const vec3 reflectedColor = " << m_surfaceReflectionColor << ".rgb * " << m_surfaceReflectionAmount << ";" "\n"
+				"/* IBL contribution modulated by Fresnel and IBL intensity. */" "\n" <<
+				m_fragmentColor << ".rgb += reflectedColor * fresnelIBL * " << iblIntensity << ";").str();
+
+			Code{fragmentShader, Location::Output} << code;
+		}
+		else if ( m_usePBRMode && m_useReflection )
+		{
+			/* NOTE: PBR low-quality fallback - simplified IBL without per-fragment Fresnel.
+			 * When high-quality reflection is disabled, reflectionNormal and reflectionI
+			 * are not available. We approximate F0 using metalness:
+			 * - Dielectrics (metalness=0): F0 ≈ 0.04 (only 4% reflection)
+			 * - Metals (metalness=1): F0 = albedo (colored reflections)
+			 * This prevents the overly bright "flashy" look. */
+			const auto iblIntensity = m_surfaceIBLIntensity.empty() ? "1.0" : m_surfaceIBLIntensity;
+			const auto albedo = m_surfaceAlbedo.empty() ? "vec3(1.0)" : m_surfaceAlbedo + ".rgb";
+			const auto metalness = m_surfaceMetalness.empty() ? "0.0" : m_surfaceMetalness;
+			const auto code = (std::stringstream{} <<
+				"/* Low-quality PBR IBL - F0 approximation without Fresnel. */" "\n"
+				"const vec3 lqF0 = mix(vec3(0.04), " << albedo << ", " << metalness << ");" "\n" <<
+				m_fragmentColor << ".rgb += " << m_surfaceReflectionColor << ".rgb * lqF0 * " << m_surfaceReflectionAmount << " * " << iblIntensity << ";").str();
+			Code{fragmentShader, Location::Output} << code;
+		}
+		else if ( m_usePBRMode && m_useRefraction )
+		{
+			/* NOTE: PBR low-quality fallback for refraction-only materials.
+			 * Refraction is less affected by F0 - use a subtle blend. */
+			const auto iblIntensity = m_surfaceIBLIntensity.empty() ? "1.0" : m_surfaceIBLIntensity;
+			Code{fragmentShader} << m_fragmentColor << ".rgb += " << m_surfaceRefractionColor << ".rgb * " << m_surfaceRefractionAmount << " * 0.96 * " << iblIntensity << ";";
+		}
+		else if ( m_useReflection && m_useRefraction )
+		{
+			/* NOTE: Non-PBR Glass - legacy behavior.
+			 * The fresnelFactor variable is already declared by the material (StandardResource).
+			 * We just use it here to blend reflection and refraction in the ambient pass. */
+			const auto code = (std::stringstream{} <<
+				"/* Glass ambient pass - uses fresnelFactor from material. */" "\n"
+				"const vec3 ambientReflectedColor = " << m_surfaceReflectionColor << ".rgb * " << m_surfaceReflectionAmount << ";" "\n"
+				"const vec3 ambientRefractedColor = " << m_surfaceRefractionColor << ".rgb * " << m_surfaceRefractionAmount << ";" "\n"
+				"/* Blend reflection and refraction based on Fresnel, with subtle tint from albedo. */" "\n" <<
+				m_fragmentColor << ".rgb += mix(ambientRefractedColor, ambientReflectedColor, fresnelFactor) * " << surfaceColor << ".rgb;").str();
+
+			Code{fragmentShader, Location::Output} << code;
+		}
+		else if ( m_useReflection )
 		{
 			Code{fragmentShader} << m_fragmentColor << ".rgb += mix(" << surfaceColor << ", " << m_surfaceReflectionColor << ", " << m_surfaceReflectionAmount << ").rgb * (" << this->ambientLightColor() << ".rgb * " << intensity << ");";
+		}
+		else if ( m_useRefraction )
+		{
+			Code{fragmentShader} << m_fragmentColor << ".rgb += mix(" << surfaceColor << ", " << m_surfaceRefractionColor << ", " << m_surfaceRefractionAmount << ").rgb * (" << this->ambientLightColor() << ".rgb * " << intensity << ");";
 		}
 		else
 		{
 			Code{fragmentShader} << m_fragmentColor << ".rgb += " << surfaceColor << ".rgb * (" << this->ambientLightColor() << ".rgb * " << intensity << ");";
 		}
 
+		/* Auto-Illumination (emissive) support. */
 		if ( !m_surfaceAutoIlluminationAmount.empty() )
 		{
-			Code{fragmentShader} << m_fragmentColor << ".rgb += " << m_surfaceDiffuseColor << ".rgb * " << m_surfaceAutoIlluminationAmount << ";";
+			if ( m_useAutoIllumination && !m_surfaceAutoIlluminationColor.empty() )
+			{
+				/* PBR mode: use explicit emissive color. */
+				Code{fragmentShader} << m_fragmentColor << ".rgb += " << m_surfaceAutoIlluminationColor << ".rgb * " << m_surfaceAutoIlluminationAmount << ";";
+			}
+			else
+			{
+				/* Legacy/Phong mode: use diffuse color as emissive base. */
+				Code{fragmentShader} << m_fragmentColor << ".rgb += " << m_surfaceDiffuseColor << ".rgb * " << m_surfaceAutoIlluminationAmount << ";";
+			}
+		}
+
+		/* Ambient Occlusion (baked texture) support - modulates the ambient contribution. */
+		if ( m_useAmbientOcclusion && !m_surfaceAmbientOcclusion.empty() )
+		{
+			const auto aoIntensity = m_surfaceAOIntensity.empty() ? "1.0" : m_surfaceAOIntensity;
+			/* NOTE: AO darkens ambient lighting. mix(1.0, ao, intensity) allows intensity control.
+			 * When intensity = 0, no AO effect. When intensity = 1, full AO effect. */
+			Code{fragmentShader} << m_fragmentColor << ".rgb *= mix(1.0, " << m_surfaceAmbientOcclusion << ", " << aoIntensity << ");";
 		}
 	}
 
@@ -637,29 +752,91 @@ namespace EmEn::Saphir
 			this->generateAmbientFragmentShader(fragmentShader);
 		}
 
+		/* NOTE: In PBR mode, use albedo instead of diffuse color. */
+		const auto & surfaceColor = m_usePBRMode && !m_surfaceAlbedo.empty() ? m_surfaceAlbedo : m_surfaceDiffuseColor;
+
 		const auto finaleDiffuseFactor = m_useOpacity ? diffuseFactor + " * " + m_surfaceOpacityAmount : diffuseFactor;
 
-		if ( m_useReflection )
+		Code{fragmentShader} << m_fragmentColor << ".rgb += " << surfaceColor << ".rgb * (" << this->lightColor() << ".rgb * " << this->lightIntensity() << " * " << finaleDiffuseFactor << ");";
+
+		/* NOTE: In PBR mode, reflection/refraction (IBL) is handled ONLY in the ambient pass
+		 * via generateAmbientFragmentShader(). We skip per-light reflection mixing here.
+		 * In legacy (Phong) mode, reflection is mixed per-light for compatibility. */
+		if ( !m_usePBRMode )
 		{
-			Code{fragmentShader} << m_fragmentColor << ".rgb += mix(" << m_surfaceDiffuseColor << ", " << m_surfaceReflectionColor << ", " << m_surfaceReflectionAmount << ").rgb * (" << this->lightColor() << ".rgb * " << this->lightIntensity() << " * " << finaleDiffuseFactor << ");";
-		}
-		else
-		{
-			Code{fragmentShader} << m_fragmentColor << ".rgb += " << m_surfaceDiffuseColor << ".rgb * (" << this->lightColor() << ".rgb * " << this->lightIntensity() << " * " << finaleDiffuseFactor << ");";
+			if ( m_useReflection && m_useRefraction )
+			{
+				/* NOTE: Fresnel effect for blending reflection and refraction.
+				 * Schlick approximation: F = F0 + (1 - F0) * pow(1 - cosTheta, 5)
+				 * F0 for glass is approximately 0.04, for water ~0.02, for diamond ~0.17.
+				 * We compute F0 from IOR: F0 = ((n1-n2)/(n1+n2))^2 where n1=1 (air). */
+				const auto code = (std::stringstream{} <<
+					"const vec3 reflected = mix(" << surfaceColor << ", " << m_surfaceReflectionColor << ", " << m_surfaceReflectionAmount << ").rgb;" "\n"
+					"const vec3 refracted = mix(" << surfaceColor << ", " << m_surfaceRefractionColor << ", " << m_surfaceRefractionAmount << ").rgb;" "\n\n" <<
+
+					m_fragmentColor << ".rgb += mix(refracted, reflected, fresnelFactor) * (" << this->lightColor() << ".rgb * " << this->lightIntensity() << " * " << finaleDiffuseFactor << ");").str();
+
+				Code{fragmentShader, Location::Output} << code;
+			}
+			else if ( m_useReflection )
+			{
+				Code{fragmentShader} << m_fragmentColor << ".rgb += mix(" << surfaceColor << ", " << m_surfaceReflectionColor << ", " << m_surfaceReflectionAmount << ").rgb * (" << this->lightColor() << ".rgb * " << this->lightIntensity() << " * " << finaleDiffuseFactor << ");";
+			}
+			else if ( m_useRefraction )
+			{
+				Code{fragmentShader} << m_fragmentColor << ".rgb += mix(" << surfaceColor << ", " << m_surfaceRefractionColor << ", " << m_surfaceRefractionAmount << ").rgb * (" << this->lightColor() << ".rgb * " << this->lightIntensity() << " * " << finaleDiffuseFactor << ");";
+			}
 		}
 
-		if ( !m_surfaceSpecularColor.empty() )
+		/* NOTE: Specular reflection mixing is for legacy (Phong) materials only.
+		 * PBR materials don't set m_surfaceSpecularColor - they use Cook-Torrance BRDF. */
+		if ( !m_surfaceSpecularColor.empty() && !m_usePBRMode )
 		{
 			const auto finaleSpecularFactor = m_useOpacity ? specularFactor + " * " + m_surfaceOpacityAmount : specularFactor;
 
-			if ( m_useReflection )
+			if ( m_useReflection && m_useRefraction )
+			{
+				/* NOTE: Fresnel effect for blending reflection and refraction.
+				 * Schlick approximation: F = F0 + (1 - F0) * pow(1 - cosTheta, 5)
+				 * F0 for glass is approximately 0.04, for water ~0.02, for diamond ~0.17.
+				 * We compute F0 from IOR: F0 = ((n1-n2)/(n1+n2))^2 where n1=1 (air). */
+				const auto code = (std::stringstream{} <<
+					"const vec3 reflectedSpecular = mix(" << m_surfaceSpecularColor << ", " << m_surfaceReflectionColor << ", " << m_surfaceReflectionAmount << ").rgb;" "\n"
+					"const vec3 refractedSpecular = mix(" << m_surfaceSpecularColor << ", " << m_surfaceRefractionColor << ", " << m_surfaceRefractionAmount << ").rgb;" "\n\n" <<
+
+					m_fragmentColor << ".rgb += mix(refractedSpecular, reflectedSpecular, fresnelFactor) * (" << this->lightIntensity() << " * " << finaleSpecularFactor << ");").str();
+
+				Code{fragmentShader, Location::Output} << code;
+			}
+			else if ( m_useReflection )
 			{
 				Code{fragmentShader} << m_fragmentColor << ".rgb += mix(" << m_surfaceSpecularColor << ", " << m_surfaceReflectionColor << ", " << m_surfaceReflectionAmount << ").rgb * (" << this->lightIntensity() << " * " << finaleSpecularFactor << ");";
+			}
+			else if ( m_useRefraction )
+			{
+				Code{fragmentShader} << m_fragmentColor << ".rgb += mix(" << m_surfaceSpecularColor << ", " << m_surfaceRefractionColor << ", " << m_surfaceRefractionAmount << ").rgb * (" << this->lightIntensity() << " * " << finaleSpecularFactor << ");";
 			}
 			else
 			{
 				Code{fragmentShader} << m_fragmentColor << ".rgb += " << m_surfaceSpecularColor << ".rgb * (" << this->lightIntensity() << " * " << finaleSpecularFactor << ");";
 			}
+		}
+		/* NOTE: PBR low-quality specular approximation using diffuseFactor.
+		 * Since specularFactor isn't available in Gouraud mode for PBR, we approximate
+		 * using diffuseFactor (N·L) instead of the proper (N·H) or (R·V).
+		 * F0 with albedo/metalness for colored metal highlights. */
+		else if ( m_usePBRMode && !m_surfaceRoughness.empty() )
+		{
+			const auto albedo = m_surfaceAlbedo.empty() ? "vec3(1.0)" : m_surfaceAlbedo + ".rgb";
+			const auto metalness = m_surfaceMetalness.empty() ? "0.0" : m_surfaceMetalness;
+			const auto code = (std::stringstream{} <<
+				"/* PBR low-quality specular - F0 approximation. */" "\n"
+				"const float lqShininess = pow(1.0 - " << m_surfaceRoughness << ", 2.0) * 64.0 + 1.0;" "\n"
+				"const vec3 lqSpecF0 = mix(vec3(1.00), " << albedo << ", " << metalness << ");" "\n"
+				"const float lqSpecPower = pow(max(" << finaleDiffuseFactor << ", 0.0), lqShininess);" "\n" <<
+				m_fragmentColor << ".rgb += lqSpecF0 * " << this->lightColor() << ".rgb * " << this->lightIntensity() << " * lqSpecPower;").str();
+
+			Code{fragmentShader, Location::Output} << code;
 		}
 
 		return true;

@@ -164,6 +164,14 @@ namespace EmEn::Graphics::Renderable
 			 */
 			bool load (Resources::AbstractServiceProvider & serviceProvider, const std::shared_ptr< Material::Interface > & material) noexcept;
 
+			/** @copydoc EmEn::Graphics::Renderable::AbstractBackground::environmentCubemap() */
+			[[nodiscard]]
+			std::shared_ptr< TextureResource::TextureCubemap >
+			environmentCubemap () const noexcept override
+			{
+				return m_cubemap;
+			}
+
 		private:
 
 			/* JSON key. */
@@ -189,6 +197,7 @@ namespace EmEn::Graphics::Renderable
 
 			std::shared_ptr< Geometry::Interface > m_geometry;
 			std::shared_ptr< Material::Interface > m_material;
+			std::shared_ptr< TextureResource::TextureCubemap > m_cubemap;
 	};
 }
 

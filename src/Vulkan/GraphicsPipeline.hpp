@@ -344,10 +344,11 @@ namespace EmEn::Vulkan
 			/**
 			 * @brief Returns a hash for this graphics pipeline according to configured states.
 			 * @note This should be called after all configure*() methods but before finalize().
+			 * @param renderPass The render pass that will be used with this pipeline.
 			 * @return size_t
 			 */
 			[[nodiscard]]
-			size_t getHash () const noexcept;
+			size_t getHash (const RenderPass & renderPass) const noexcept;
 
 		private:
 

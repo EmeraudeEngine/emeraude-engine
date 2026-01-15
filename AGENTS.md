@@ -58,12 +58,21 @@ The compositor handles display sync; the app limits its frame rate to avoid wast
 
 **Details:** See [`src/Vulkan/AGENTS.md`](src/Vulkan/AGENTS.md) (Present Mode Selection) and [`src/Graphics/AGENTS.md`](src/Graphics/AGENTS.md) (Frame Rate Limiter).
 
-## 5. Documentation Index
+## 5. AI-Friendly Codebase
+
+This engine is designed to be **AI-friendly** to maximize collaboration with AI assistants.
+
+**Core principle:** When an AI identifies an unclear concept or confusing interface, it should **STRONGLY SUGGEST refactoring it**. An unclear interface that causes bugs once will cause bugs again.
+
+See [`docs/cpp-conventions.md#ai-friendly-code-guidelines`](docs/cpp-conventions.md#ai-friendly-code-guidelines) for detailed guidelines.
+
+## 6. Documentation Index
 
 -   **Philosophy:** [`docs/architecture-philosophy.md`](docs/architecture-philosophy.md) (Deep dive).
 -   **Tracer:** [`docs/tracer-system.md`](docs/tracer-system.md) (Logging rules).
--   **Conventions:** [`docs/cpp-conventions.md`](docs/cpp-conventions.md).
+-   **Conventions:** [`docs/cpp-conventions.md`](docs/cpp-conventions.md) (Includes AI-friendly guidelines).
 -   **Physics:** [`docs/physics-system.md`](docs/physics-system.md).
 -   **Resources:** [`docs/resource-management.md`](docs/resource-management.md).
+-   **Pipeline Caching:** [`docs/pipeline-caching-system.md`](docs/pipeline-caching-system.md) (Critical for render pass compatibility).
 
 > **Maintenance:** If you implement significant changes, ask to update docs or run `/update-docs`.

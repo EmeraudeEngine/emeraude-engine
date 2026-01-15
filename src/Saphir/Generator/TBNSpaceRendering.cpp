@@ -29,6 +29,8 @@
 /* Local inclusions. */
 #include "Graphics/RenderTarget/Abstract.hpp"
 #include "Libs/Hash/FNV1a.hpp"
+#include "Vulkan/Framebuffer.hpp"
+#include "Vulkan/RenderPass.hpp"
 #include "Libs/SourceCodeParser.hpp"
 #include "Saphir/Code.hpp"
 
@@ -309,10 +311,16 @@ namespace EmEn::Saphir::Generator
 
 		size_t hash = Hash::FNV1a(ClassId);
 
-		/* 1. Render target type (cubemap vs single layer). */
+		/* 1. Render pass handle (critical for pipeline compatibility). */
+		if ( const auto * framebuffer = this->renderTarget()->framebuffer(); framebuffer != nullptr )
+		{
+			hashCombine(hash, reinterpret_cast< size_t >(framebuffer->renderPass()->handle()));
+		}
+
+		/* 2. Render target type (cubemap vs single layer). */
 		hashCombine(hash, static_cast< size_t >(this->renderTarget()->isCubemap()));
 
-		/* 2. Renderable identity (geometry combination via resource name). */
+		/* 3. Renderable identity (geometry combination via resource name). */
 		if ( this->isRenderableInstanceAvailable() )
 		{
 			const auto * renderable = this->getRenderable();
@@ -323,10 +331,10 @@ namespace EmEn::Saphir::Generator
 			}
 		}
 
-		/* 3. Layer index. */
+		/* 4. Layer index. */
 		hashCombine(hash, static_cast< size_t >(this->layerIndex()));
 
-		/* 4. Generator flags (instancing, facing camera). */
+		/* 5. Generator flags (instancing, facing camera). */
 		hashCombine(hash, static_cast< size_t >(this->flags()));
 
 		return hash;

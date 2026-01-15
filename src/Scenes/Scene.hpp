@@ -51,6 +51,7 @@
 #include "Audio/Ambience.hpp"
 #include "Libs/Randomizer.hpp"
 #include "Graphics/Renderable/AbstractBackground.hpp"
+#include "Graphics/TextureResource/TextureCubemap.hpp"
 #include "Graphics/RenderTarget/ShadowMap.hpp"
 #include "Graphics/RenderTarget/Texture.hpp"
 #include "Graphics/RenderTarget/View.hpp"
@@ -244,6 +245,7 @@ namespace EmEn::Scenes
 			 * via enable() before use. This allows deferred setup of cameras,
 			 * microphones, and render targets.
 			 *
+			 * @param resourceManager A reference to the resource manager.
 			 * @param graphicsRenderer Reference to the graphics renderer for GPU resources.
 			 * @param audioManager Reference to the audio manager for spatial audio.
 			 * @param name Unique scene name (used for AVConsole identification).
@@ -260,22 +262,7 @@ namespace EmEn::Scenes
 			 * @see enable() To activate the scene for rendering.
 			 * @see SceneOctreeOptions For octree configuration.
 			 */
-			Scene (Graphics::Renderer & graphicsRenderer, Audio::Manager & audioManager, const std::string & name, float boundary, const std::shared_ptr< Graphics::Renderable::AbstractBackground > & background = nullptr, const std::shared_ptr< GroundLevelInterface > & ground = nullptr, const std::shared_ptr< SeaLevelInterface > & seaLevel = nullptr, const SceneOctreeOptions & octreeOptions = {}) noexcept
-				: NameableTrait{name},
-				m_rootNode{std::make_shared< Node >(*this)},
-				m_backgroundResource{background},
-				m_groundLevelRenderable{std::dynamic_pointer_cast< Graphics::Renderable::Abstract >(ground)},
-				m_groundLevel{ground},
-				m_seaLevelRenderable{std::dynamic_pointer_cast< Graphics::Renderable::Abstract >(seaLevel)},
-				m_seaLevel{seaLevel},
-				m_AVConsoleManager{name, graphicsRenderer, audioManager},
-				m_boundary{boundary}
-			{
-				this->observe(&m_AVConsoleManager);
-				this->observe(m_rootNode.get());
-
-				this->buildOctrees(octreeOptions);
-			}
+			Scene (Resources::Manager & resourceManager, Graphics::Renderer & graphicsRenderer, Audio::Manager & audioManager, const std::string & name, float boundary, const std::shared_ptr< Graphics::Renderable::AbstractBackground > & background = nullptr, const std::shared_ptr< GroundLevelInterface > & ground = nullptr, const std::shared_ptr< SeaLevelInterface > & seaLevel = nullptr, const SceneOctreeOptions & octreeOptions = {}) noexcept;
 
 			/**
 			 * @brief Copy constructor (deleted).
@@ -1012,6 +999,17 @@ namespace EmEn::Scenes
 			{
 				m_backgroundResource = background;
 
+				/* Extract environment cubemap from background if available. */
+				if ( background != nullptr )
+				{
+					const auto cubemap = background->environmentCubemap();
+
+					if ( cubemap != nullptr )
+					{
+						m_environmentCubemap = cubemap;
+					}
+				}
+
 				this->registerSceneVisualComponents();
 			}
 
@@ -1027,6 +1025,29 @@ namespace EmEn::Scenes
 			background () const noexcept
 			{
 				return m_backgroundResource;
+			}
+
+			/**
+			 * @brief Sets the current environment cubemap for IBL.
+			 * @note This replaces any cubemap previously set by setDefaultEnvironmentCubemap or by a background.
+			 * @param cubemap Shared pointer to the environment cubemap. Ignored if nullptr.
+			 */
+			void
+			setEnvironmentCubemap (const std::shared_ptr< Graphics::TextureResource::TextureCubemap > & cubemap) noexcept
+			{
+				m_environmentCubemap = cubemap;
+			}
+
+			/**
+			 * @brief Returns the current environment cubemap for IBL.
+			 * @note Always returns a valid cubemap (never nullptr) if default was properly set.
+			 * @return Shared pointer to the environment cubemap.
+			 */
+			[[nodiscard]]
+			std::shared_ptr< Graphics::TextureResource::TextureCubemap >
+			environmentCubemap () const noexcept
+			{
+				return m_environmentCubemap;
 			}
 
 			/**
@@ -2197,6 +2218,8 @@ namespace EmEn::Scenes
 			std::map< std::string , std::shared_ptr< StaticEntity > > m_staticEntities;
 			/** @brief Scene background (skybox, procedural sky). May be null. */
 			std::shared_ptr< Graphics::Renderable::AbstractBackground > m_backgroundResource;
+			/** @brief Current environment cubemap for IBL. Should never be null after initialization. */
+			std::shared_ptr< Graphics::TextureResource::TextureCubemap > m_environmentCubemap;
 			/** @brief Scene terrain/ground renderable for visual representation. May be null. */
 			std::shared_ptr< Graphics::Renderable::Abstract > m_groundLevelRenderable;
 			/** @brief Scene terrain/ground physics interface for collision. May be null. */

@@ -33,6 +33,12 @@
 #include "Libs/PixelFactory/Color.hpp"
 #include "Graphics/Geometry/IndexedVertexResource.hpp"
 
+/* Forward declarations. */
+namespace EmEn::Graphics::TextureResource
+{
+	class TextureCubemap;
+}
+
 namespace EmEn::Graphics::Renderable
 {
 	/**
@@ -198,6 +204,18 @@ namespace EmEn::Graphics::Renderable
 			lightSpecularColor () const noexcept
 			{
 				return m_lightSpecularColor;
+			}
+
+			/**
+			 * @brief Returns the environment cubemap texture for IBL (Image-Based Lighting).
+			 * @note Override in derived classes that provide a cubemap (e.g., SkyBoxResource).
+			 * @return Shared pointer to the cubemap texture, or nullptr if not available.
+			 */
+			[[nodiscard]]
+			virtual std::shared_ptr< TextureResource::TextureCubemap >
+			environmentCubemap () const noexcept
+			{
+				return nullptr;
 			}
 
 			/**

@@ -5,7 +5,6 @@ This document describes the C++ coding conventions used in Emeraude Engine.
 ## General Rules
 
 - **Standard:** C++20
-- **Formatting:** Use `.clang-format` and `.clang-tidy` configurations
 - **Language:** All code, comments, and documentation in English
 
 ---
@@ -323,6 +322,66 @@ Vendor vendor() const noexcept;
 /* NOTE: Detect hybrid GPU configuration (Optimus, etc.) */
 m_hybridConfig = this->detectHybridGPUConfiguration();
 ```
+
+---
+
+## AI-Friendly Code Guidelines
+
+This codebase aims to be **AI-friendly** to maximize collaboration with AI assistants.
+
+### Clarity Over Cleverness
+
+1. **Clear naming over ambiguous parameters**: If a function takes a parameter that could be interpreted multiple ways, rename it or split into explicit methods.
+
+   ```cpp
+   // AMBIGUOUS - is offset an element index or byte offset?
+   getDescriptorInfo(uint32_t offset, uint32_t range);
+
+   // CLEAR - explicit naming removes ambiguity
+   getDescriptorInfoForElement(uint32_t elementIndex);
+   getDescriptorInfoAtByteOffset(VkDeviceSize byteOffset);
+   ```
+
+2. **Single responsibility for conversions**: When a value needs conversion (e.g., element index → byte offset), do it in ONE place, not scattered across multiple files.
+
+   ```cpp
+   // GOOD - conversion happens in the class that understands the concept
+   VkDeviceSize SharedUniformBuffer::getByteOffsetForElement(uint32_t elementIndex) const
+   {
+       return static_cast<VkDeviceSize>(elementIndex % m_maxElementCountPerUBO) * m_blockAlignedSize;
+   }
+   ```
+
+### Proactive Refactoring Rule
+
+> **When an AI identifies an unclear concept or confusing interface, it should STRONGLY SUGGEST refactoring it.**
+>
+> An unclear interface that causes bugs once will cause bugs again. The fix should address the root cause (confusing API design), not just the symptom (wrong value passed).
+
+**Signs of an unclear interface:**
+- Parameter named `offset` but receives an index
+- Caller needs to know implementation details to use correctly
+- FIXME/TODO comments about "breaks some scenes"
+- Same conversion logic duplicated in multiple places
+
+**Refactoring checklist:**
+1. Rename parameters to match their actual meaning
+2. Add explicit helper methods with clear names
+3. Document the contract with `@note` or `/* NOTE: */`
+4. Add assertions or validation when possible
+
+### Documentation for Future AI
+
+When fixing bugs or adding features, document the **why** not just the **what**:
+
+```cpp
+/* NOTE: Use LOCAL offset within the specific UBO, not global offset.
+ * Example: Element 300 with maxElementCountPerUBO=256 is at local index 44 in UBO #1.
+ * The byte offset is 44 * blockAlignedSize, not 300 * blockAlignedSize! */
+const auto byteOffset = this->getByteOffsetForElement(index);
+```
+
+This helps future AI sessions understand the reasoning behind the code.
 
 ---
 

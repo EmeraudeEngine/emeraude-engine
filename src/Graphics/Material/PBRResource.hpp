@@ -1,5 +1,5 @@
 /*
- * src/Graphics/Material/StandardResource.hpp
+ * src/Graphics/Material/PBRResource.hpp
  * This file is part of Emeraude-Engine
  *
  * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
@@ -65,40 +65,47 @@ namespace EmEn
 namespace EmEn::Graphics::Material
 {
 	/**
-	 * @brief The standard material resource of the engine.
+	 * @brief PBR (Physically Based Rendering) material resource using the Metallic-Roughness workflow.
 	 * @extends EmEn::Graphics::Material::Interface This is a material.
+	 *
+	 * This material implements the standard PBR metallic-roughness workflow with:
+	 * - Albedo (base color)
+	 * - Roughness (0.0 = mirror, 1.0 = diffuse)
+	 * - Metalness (0.0 = dielectric, 1.0 = metal)
+	 * - Normal mapping (optional)
+	 * - Reflection/IBL via cubemap (optional)
 	 */
-	class StandardResource final : public Interface
+	class PBRResource final : public Interface
 	{
-		friend class Resources::Container< StandardResource >;
+		friend class Resources::Container< PBRResource >;
 
 		using ResourceTrait::load;
 
 		public:
 
 			/** @brief Class identifier. */
-			static constexpr auto ClassId{"MaterialStandardResource"};
+			static constexpr auto ClassId{"MaterialPBRResource"};
 
 			/* Shader-specific keys. */
-			static constexpr auto SurfaceAmbientColor{"SurfaceAmbientColor"};
-			static constexpr auto SurfaceDiffuseColor{"SurfaceDiffuseColor"};
-			static constexpr auto SurfaceSpecularColor{"SurfaceSpecularColor"};
-			static constexpr auto SurfaceAutoIlluminationColor{"SurfaceAutoIlluminationColor"};
-			static constexpr auto SurfaceOpacityAmount{"SurfaceOpacityAmount"};
+			static constexpr auto SurfaceAlbedoColor{"SurfaceAlbedoColor"};
+			static constexpr auto SurfaceRoughness{"SurfaceRoughness"};
+			static constexpr auto SurfaceMetalness{"SurfaceMetalness"};
 			static constexpr auto SurfaceNormalVector{"SurfaceNormalVector"};
 			static constexpr auto SurfaceReflectionColor{"SurfaceReflectionColor"};
 			static constexpr auto SurfaceRefractionColor{"SurfaceRefractionColor"};
+			static constexpr auto SurfaceAutoIlluminationColor{"SurfaceAutoIlluminationColor"};
+			static constexpr auto SurfaceAmbientOcclusion{"SurfaceAmbientOcclusion"};
 
 			/** @brief Defines the resource dependency complexity. */
 			static constexpr auto Complexity{Resources::DepComplexity::Few};
 
 			/**
-			 * @brief Constructs a material.
+			 * @brief Constructs a PBR material.
 			 * @param name A reference to a string for the resource name.
 			 * @param materialFlags The resource flag bits. Default none.
 			 */
 			explicit
-			StandardResource (const std::string & name, uint32_t materialFlags = 0) noexcept
+			PBRResource (const std::string & name, uint32_t materialFlags = 0) noexcept
 				: Interface{name, materialFlags}
 			{
 
@@ -108,32 +115,32 @@ namespace EmEn::Graphics::Material
 			 * @brief Copy constructor.
 			 * @param copy A reference to the copied instance.
 			 */
-			StandardResource (const StandardResource & copy) noexcept = delete;
+			PBRResource (const PBRResource & copy) noexcept = delete;
 
 			/**
 			 * @brief Move constructor.
 			 * @param copy A reference to the copied instance.
 			 */
-			StandardResource (StandardResource && copy) noexcept = delete;
+			PBRResource (PBRResource && copy) noexcept = delete;
 
 			/**
 			 * @brief Copy assignment.
 			 * @param copy A reference to the copied instance.
-			 * @return StandardResource &
+			 * @return PBRResource &
 			 */
-			StandardResource & operator= (const StandardResource & copy) noexcept = delete;
+			PBRResource & operator= (const PBRResource & copy) noexcept = delete;
 
 			/**
 			 * @brief Move assignment.
 			 * @param copy A reference to the copied instance.
-			 * @return StandardResource &
+			 * @return PBRResource &
 			 */
-			StandardResource & operator= (StandardResource && copy) noexcept = delete;
-			
+			PBRResource & operator= (PBRResource && copy) noexcept = delete;
+
 			/**
 			 * @brief Destructs the material.
 			 */
-			~StandardResource () override
+			~PBRResource () override
 			{
 				this->destroy();
 			}
@@ -187,7 +194,7 @@ namespace EmEn::Graphics::Material
 				return sizeof(*this);
 			}
 
-			/** @copydoc EmEn::Graphics::Material::Interface::isCreated() */
+			/** @copydoc EmEn::Graphics::Material::Interface::isComplex() */
 			[[nodiscard]]
 			bool isComplex () const noexcept override;
 
@@ -258,101 +265,58 @@ namespace EmEn::Graphics::Material
 			[[nodiscard]]
 			Saphir::Declaration::UniformBlock getUniformBlock (uint32_t set, uint32_t binding) const noexcept override;
 
+			/* ==================== Component Setters (Pre-creation) ==================== */
+
 			/**
-			 * @brief Sets the ambient component as a color.
+			 * @brief Sets the albedo (base color) component as a color.
 			 * @warning This function is available before creation time.
 			 * @param color A reference to a color.
 			 * @return bool
 			 */
-			bool setAmbientComponent (const Libs::PixelFactory::Color< float > & color) noexcept;
+			bool setAlbedoComponent (const Libs::PixelFactory::Color< float > & color) noexcept;
 
 			/**
-			 * @brief Sets the ambient component as a texture.
+			 * @brief Sets the albedo (base color) component as a texture.
 			 * @warning This function is available before creation time.
 			 * @param texture A reference to a texture smart pointer.
 			 * @return bool
 			 */
-			bool setAmbientComponent (const std::shared_ptr< TextureResource::Abstract > & texture) noexcept;
+			bool setAlbedoComponent (const std::shared_ptr< TextureResource::Abstract > & texture) noexcept;
 
 			/**
-			 * @brief Sets the diffuse component as a color.
+			 * @brief Sets the roughness component as a value (0.0 = mirror, 1.0 = fully rough).
 			 * @warning This function is available before creation time.
-			 * @param color A reference to a color.
+			 * @param value The roughness value between 0.0 and 1.0. Default 0.5.
 			 * @return bool
 			 */
-			bool setDiffuseComponent (const Libs::PixelFactory::Color< float > & color) noexcept;
+			bool setRoughnessComponent (float value = DefaultRoughness) noexcept;
 
 			/**
-			 * @brief Sets the diffuse component as a texture.
-			 * @warning This function is available before creation time.
-			 * @param texture A reference to a texture smart pointer.
-			 * @return bool
-			 */
-			bool setDiffuseComponent (const std::shared_ptr< TextureResource::Abstract > & texture) noexcept;
-
-			/**
-			 * @brief Sets the specular component as a color.
-			 * @warning This function is available before creation time.
-			 * @param color A reference to a color.
-			 * @param shininess A positive value.
-			 * @return bool
-			 */
-			bool setSpecularComponent (const Libs::PixelFactory::Color< float > & color, float shininess = DefaultShininess) noexcept;
-
-			/**
-			 * @brief Sets the specular component as a texture.
+			 * @brief Sets the roughness component as a texture.
 			 * @warning This function is available before creation time.
 			 * @param texture A reference to a texture smart pointer.
-			 * @param shininess A positive value. Default 32.0.
+			 * @param value The default roughness value. Default 0.5.
+			 * @param invert If true, the texture is treated as a smoothness/gloss map and inverted (1.0 - value). Default false.
 			 * @return bool
 			 */
-			bool setSpecularComponent (const std::shared_ptr< TextureResource::Abstract > & texture, float shininess = DefaultShininess) noexcept;
+			bool setRoughnessComponent (const std::shared_ptr< TextureResource::Abstract > & texture, float value = DefaultRoughness, bool invert = false) noexcept;
 
 			/**
-			 * @brief Sets the opacity component as a value.
+			 * @brief Sets the metalness component as a value (0.0 = dielectric, 1.0 = metal).
 			 * @warning This function is available before creation time.
-			 * @param amount The control amount. Default 100%.
+			 * @param value The metalness value between 0.0 and 1.0. Default 0.0.
 			 * @return bool
 			 */
-			bool setOpacityComponent (float amount = DefaultOpacity) noexcept;
+			bool setMetalnessComponent (float value = DefaultMetalness) noexcept;
 
 			/**
-			 * @brief Sets the opacity component as a texture.
+			 * @brief Sets the metalness component as a texture.
 			 * @warning This function is available before creation time.
 			 * @param texture A reference to a texture smart pointer.
-			 * @param amount The control amount. Default 100%.
+			 * @param value The default metalness value. Default 0.0.
 			 * @return bool
 			 */
-			bool setOpacityComponent (const std::shared_ptr< TextureResource::Abstract > & texture, float amount = DefaultOpacity) noexcept;
-
-			/**
-			 * @brief Sets the auto-illumination component as a value.
-			 * @warning This function is available before creation time.
-			 * @note The auto-illumination will light globally up the diffuse color.
-			 * @param amount The control amount. Default 100%.
-			 * @return bool
-			 */
-			bool setAutoIlluminationComponent (float amount = DefaultAutoIlluminationAmount) noexcept;
-
-			/**
-			 * @brief Sets the auto-illumination component as a color.
-			 * @warning This function is available before creation time.
-			 * @note The auto-illumination will light globally up a custom color over the final result.
-			 * @param color A reference to a color.
-			 * @param amount The control amount. Default 100%.
-			 * @return bool
-			 */
-			bool setAutoIlluminationComponent (const Libs::PixelFactory::Color< float > & color, float amount = DefaultAutoIlluminationAmount) noexcept;
-
-			/**
-			 * @brief Sets the auto-illumination component as a texture.
-			 * @warning This function is available before creation time.
-			 * @note The auto-illumination will light up the final result using a texture.
-			 * @param texture A reference to a texture smart pointer.
-			 * @param amount The control amount. Default 100%.
-			 * @return bool
-			 */
-			bool setAutoIlluminationComponent (const std::shared_ptr< TextureResource::Abstract > & texture, float amount = DefaultAutoIlluminationAmount) noexcept;
+			bool setMetalnessComponent (const std::shared_ptr< TextureResource::Abstract > & texture, float value = DefaultMetalness) noexcept;
 
 			/**
 			 * @brief Sets the normal component as a texture.
@@ -364,52 +328,48 @@ namespace EmEn::Graphics::Material
 			bool setNormalComponent (const std::shared_ptr< TextureResource::Abstract > & texture, float scale = DefaultNormalScale) noexcept;
 
 			/**
-			 * @brief Sets the reflection component as a texture.
-			 * @warning This function is available before creation time.
-			 * @param texture A reference to a texture smart pointer.
-			 * @param amount The control amount. Default 50%.
-			 * @return bool
-			 */
-			bool setReflectionComponent (const std::shared_ptr< TextureResource::Abstract > & texture, float amount = DefaultReflectionAmount) noexcept;
-
-			/**
-			 * @brief Sets the reflection component using a render target (for dynamic cubemap reflections).
-			 * @warning This function is available before creation time.
-			 * @note Useful for dynamic reflections using RenderTarget::Texture cubemaps.
-			 * @param renderTarget A reference to a texture interface smart pointer (e.g., RenderTarget::Texture).
-			 * @param amount The control amount. Default 50%.
-			 * @return bool
-			 */
-			bool setReflectionComponentFromRenderTarget (const std::shared_ptr< Vulkan::TextureInterface > & renderTarget, float amount = DefaultReflectionAmount) noexcept;
-
-			/**
-			 * @brief Sets the refraction component as a texture (for glass/water effects).
+			 * @brief Sets the reflection/IBL component as a cubemap texture.
 			 * @warning This function is available before creation time.
 			 * @param texture A reference to a cubemap texture smart pointer.
-			 * @param ior The index of refraction. Default 1.5 (glass).
-			 * @param amount The control amount. Default 95%.
 			 * @return bool
 			 */
-			bool setRefractionComponent (const std::shared_ptr< TextureResource::Abstract > & texture, float ior = DefaultRefractionIOR, float amount = DefaultRefractionAmount) noexcept;
+			bool setReflectionComponent (const std::shared_ptr< TextureResource::Abstract > & texture) noexcept;
 
 			/**
-			 * @brief Sets the refraction component using a render target (for dynamic cubemap refractions).
+			 * @brief Sets the reflection/IBL component using a render target (for dynamic cubemap).
 			 * @warning This function is available before creation time.
-			 * @note Useful for dynamic refractions using RenderTarget::Texture cubemaps.
-			 * @param renderTarget A reference to a texture interface smart pointer (e.g., RenderTarget::Texture).
-			 * @param ior The index of refraction. Default 1.5 (glass).
-			 * @param amount The control amount. Default 95%.
+			 * @param renderTarget A reference to a texture interface smart pointer.
 			 * @return bool
 			 */
-			bool setRefractionComponentFromRenderTarget (const std::shared_ptr< Vulkan::TextureInterface > & renderTarget, float ior = DefaultRefractionIOR, float amount = DefaultRefractionAmount) noexcept;
+			bool setReflectionComponentFromRenderTarget (const std::shared_ptr< Vulkan::TextureInterface > & renderTarget) noexcept;
+
+			/**
+			 * @brief Sets the refraction component as a cubemap texture for glass-like materials.
+			 * @warning This function is available before creation time.
+			 * @note Fresnel will automatically blend between reflection and refraction.
+			 * @param texture A reference to a cubemap texture smart pointer.
+			 * @param ior The index of refraction (1.0 = air, 1.33 = water, 1.5 = glass, 2.4 = diamond). Default glass.
+			 * @return bool
+			 */
+			bool setRefractionComponent (const std::shared_ptr< TextureResource::Abstract > & texture, float ior = DefaultIOR) noexcept;
+
+			/**
+			 * @brief Sets the refraction component using a render target (for dynamic cubemap).
+			 * @warning This function is available before creation time.
+			 * @note Fresnel will automatically blend between reflection and refraction.
+			 * @param renderTarget A reference to a texture interface smart pointer.
+			 * @param ior The index of refraction. Default glass.
+			 * @return bool
+			 */
+			bool setRefractionComponentFromRenderTarget (const std::shared_ptr< Vulkan::TextureInterface > & renderTarget, float ior = DefaultIOR) noexcept;
 
 			/**
 			 * @brief Enables automatic reflection from scene environment cubemap.
 			 * @note When enabled, the material will use the scene's environment cubemap for reflection
 			 * instead of a material-specific texture. This is resolved at render time.
-			 * @param amount The reflection amount. Default 50%.
+			 * @param iblIntensity The IBL intensity. Default 1.0.
 			 */
-			void enableAutomaticReflection (float amount = DefaultReflectionAmount) noexcept;
+			void enableAutomaticReflection (float iblIntensity = DefaultIBLIntensity) noexcept;
 
 			/** @copydoc EmEn::Graphics::Material::Interface::useAutomaticReflection() const noexcept */
 			[[nodiscard]]
@@ -424,6 +384,33 @@ namespace EmEn::Graphics::Material
 			bool updateAutomaticReflectionCubemap (const Vulkan::TextureInterface & cubemap) noexcept override;
 
 			/**
+			 * @brief Sets the auto-illumination (emissive) component as a color.
+			 * @warning This function is available before creation time.
+			 * @param color A reference to the emissive color.
+			 * @param amount The intensity multiplier. Default 1.0.
+			 * @return bool
+			 */
+			bool setAutoIlluminationComponent (const Libs::PixelFactory::Color< float > & color, float amount = DefaultAutoIlluminationAmount) noexcept;
+
+			/**
+			 * @brief Sets the auto-illumination (emissive) component as a texture.
+			 * @warning This function is available before creation time.
+			 * @param texture A reference to a texture smart pointer.
+			 * @param amount The intensity multiplier. Default 1.0.
+			 * @return bool
+			 */
+			bool setAutoIlluminationComponent (const std::shared_ptr< TextureResource::Abstract > & texture, float amount = DefaultAutoIlluminationAmount) noexcept;
+
+			/**
+			 * @brief Sets the ambient occlusion component as a baked texture.
+			 * @warning This function is available before creation time.
+			 * @param texture A reference to a texture smart pointer (grayscale AO map).
+			 * @param intensity The AO intensity (0.0 = no AO, 1.0 = full AO). Default 1.0.
+			 * @return bool
+			 */
+			bool setAmbientOcclusionComponent (const std::shared_ptr< TextureResource::Abstract > & texture, float intensity = DefaultAOIntensity) noexcept;
+
+			/**
 			 * @brief Returns whether a material component is present.
 			 * @param componentType The type of component.
 			 * @return bool
@@ -431,100 +418,79 @@ namespace EmEn::Graphics::Material
 			[[nodiscard]]
 			bool isComponentPresent (ComponentType componentType) const noexcept;
 
+			/* ==================== Dynamic Property Setters (Post-creation) ==================== */
+
 			/**
-			 * @brief Changes the ambient color.
+			 * @brief Changes the albedo color.
 			 * @note This is a dynamic property.
 			 * @param color A reference to a color.
 			 * @return void
 			 */
-			void setAmbientColor (const Libs::PixelFactory::Color< float > & color) noexcept;
+			void setAlbedoColor (const Libs::PixelFactory::Color< float > & color) noexcept;
 
 			/**
-			 * @brief Changes the diffuse color.
+			 * @brief Changes the roughness value.
 			 * @note This is a dynamic property.
-			 * @param color A reference to a color.
+			 * @param value A value between 0.0 and 1.0.
 			 * @return void
 			 */
-			void setDiffuseColor (const Libs::PixelFactory::Color< float > & color) noexcept;
+			void setRoughness (float value) noexcept;
 
 			/**
-			 * @brief Changes the specular color.
+			 * @brief Changes the metalness value.
 			 * @note This is a dynamic property.
-			 * @param color A reference to a color.
+			 * @param value A value between 0.0 and 1.0.
 			 * @return void
 			 */
-			void setSpecularColor (const Libs::PixelFactory::Color< float > & color) noexcept;
-
-			/**
-			 * @brief Changes the auto-illumination color.
-			 * @note This is a dynamic property.
-			 * @param color A reference to a color.
-			 * @return void
-			 */
-			void setAutoIlluminationColor (const Libs::PixelFactory::Color< float > & color) noexcept;
-
-			/**
-			 * @brief Changes the specular shininess amount.
-			 * @note This is a dynamic property.
-			 * @param value A positive value.
-			 * @return void
-			 */
-			void setShininess (float value) noexcept;
-
-			/**
-			 * @brief Changes the opacity.
-			 * @note This is a dynamic property.
-			 * @param value A value between 0.0 and 1.0
-			 * @return void
-			 */
-			void setOpacity (float value) noexcept;
-
-			/**
-			 * @brief Sets an alpha value below the pixel will be discarded.
-			 * @param value A value between 0.0 and 1.0
-			 * @return void
-			 */
-			void setAlphaThresholdToDiscard (float value) noexcept;
-
-			/**
-			 * @brief Changes the auto-illumination amount of light.
-			 * @note This is a dynamic property.
-			 * @param value A positive value.
-			 * @return void
-			 */
-			void setAutoIlluminationAmount (float value) noexcept;
+			void setMetalness (float value) noexcept;
 
 			/**
 			 * @brief Changes the normal mapping scale factor.
 			 * @note This is a dynamic property.
-			 * @param value A value.
+			 * @param value A scale value.
 			 * @return void
 			 */
 			void setNormalScale (float value) noexcept;
 
 			/**
-			 * @brief Changes the reflection amount.
-			 * @note This is a dynamic property.
-			 * @param value A value between 0.0 and 1.0
+			 * @brief Changes the index of refraction.
+			 * @note This is a dynamic property. Only effective if refraction component is present.
+			 * @param value The IOR value (1.0 to 3.0).
 			 * @return void
 			 */
-			void setReflectionAmount (float value) noexcept;
+			void setIOR (float value) noexcept;
 
 			/**
-			 * @brief Changes the refraction amount.
-			 * @note This is a dynamic property.
-			 * @param value A value between 0.0 and 1.0
+			 * @brief Changes the IBL (Image-Based Lighting) intensity.
+			 * @note This is a dynamic property. Controls the contribution of environment cubemaps.
+			 * @param value The IBL intensity (0.0 = none, 1.0 = full). Default 1.0.
 			 * @return void
 			 */
-			void setRefractionAmount (float value) noexcept;
+			void setIBLIntensity (float value) noexcept;
 
 			/**
-			 * @brief Changes the refraction index of refraction.
+			 * @brief Changes the auto-illumination color.
 			 * @note This is a dynamic property.
-			 * @param value The IOR value (typically 1.0-2.5, glass=1.5, water=1.33, diamond=2.42)
+			 * @param color A reference to the emissive color.
 			 * @return void
 			 */
-			void setRefractionIOR (float value) noexcept;
+			void setAutoIlluminationColor (const Libs::PixelFactory::Color< float > & color) noexcept;
+
+			/**
+			 * @brief Changes the auto-illumination intensity multiplier.
+			 * @note This is a dynamic property.
+			 * @param value The intensity multiplier.
+			 * @return void
+			 */
+			void setAutoIlluminationAmount (float value) noexcept;
+
+			/**
+			 * @brief Changes the ambient occlusion intensity.
+			 * @note This is a dynamic property.
+			 * @param value The AO intensity (0.0 = no AO, 1.0 = full AO).
+			 * @return void
+			 */
+			void setAOIntensity (float value) noexcept;
 
 		private:
 
@@ -552,49 +518,31 @@ namespace EmEn::Graphics::Material
 			bool createDescriptorSet (Renderer & renderer, const Vulkan::UniformBufferObject & uniformBufferObject) noexcept override;
 
 			/**
-			 * @brief Parses the ambient component from JSON data.
+			 * @brief Parses the albedo component from JSON data.
 			 * @param data A reference to the JSON data.
 			 * @param serviceProvider A reference to the resource manager through a service provider.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool parseAmbientComponent (const Json::Value & data, Resources::AbstractServiceProvider & serviceProvider) noexcept;
+			bool parseAlbedoComponent (const Json::Value & data, Resources::AbstractServiceProvider & serviceProvider) noexcept;
 
 			/**
-			 * @brief Parses the diffuse component from JSON data.
+			 * @brief Parses the roughness component from JSON data.
 			 * @param data A reference to the JSON data.
 			 * @param serviceProvider A reference to the resource manager through a service provider.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool parseDiffuseComponent (const Json::Value & data, Resources::AbstractServiceProvider & serviceProvider) noexcept;
+			bool parseRoughnessComponent (const Json::Value & data, Resources::AbstractServiceProvider & serviceProvider) noexcept;
 
 			/**
-			 * @brief Parses the specular component from JSON data.
+			 * @brief Parses the metalness component from JSON data.
 			 * @param data A reference to the JSON data.
 			 * @param serviceProvider A reference to the resource manager through a service provider.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool parseSpecularComponent (const Json::Value & data, Resources::AbstractServiceProvider & serviceProvider) noexcept;
-
-			/**
-			 * @brief Parses the opacity component from JSON data.
-			 * @param data A reference to the JSON data.
-			 * @param serviceProvider A reference to the resource manager through a service provider.
-			 * @return bool
-			 */
-			[[nodiscard]]
-			bool parseOpacityComponent (const Json::Value & data, Resources::AbstractServiceProvider & serviceProvider) noexcept;
-
-			/**
-			 * @brief Parses the auto-illumination component from JSON data.
-			 * @param data A reference to the JSON data.
-			 * @param serviceProvider A reference to the resource manager through a service provider.
-			 * @return bool
-			 */
-			[[nodiscard]]
-			bool parseAutoIlluminationComponent (const Json::Value & data, Resources::AbstractServiceProvider & serviceProvider) noexcept;
+			bool parseMetalnessComponent (const Json::Value & data, Resources::AbstractServiceProvider & serviceProvider) noexcept;
 
 			/**
 			 * @brief Parses the normal component from JSON data.
@@ -624,13 +572,31 @@ namespace EmEn::Graphics::Material
 			bool parseRefractionComponent (const Json::Value & data, Resources::AbstractServiceProvider & serviceProvider) noexcept;
 
 			/**
+			 * @brief Parses the auto-illumination component from JSON data.
+			 * @param data A reference to the JSON data.
+			 * @param serviceProvider A reference to the resource manager through a service provider.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool parseAutoIlluminationComponent (const Json::Value & data, Resources::AbstractServiceProvider & serviceProvider) noexcept;
+
+			/**
+			 * @brief Parses the ambient occlusion component from JSON data.
+			 * @param data A reference to the JSON data.
+			 * @param serviceProvider A reference to the resource manager through a service provider.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool parseAmbientOcclusionComponent (const Json::Value & data, Resources::AbstractServiceProvider & serviceProvider) noexcept;
+
+			/**
 			 * @brief Updates the UBO with material properties.
-			 * @return void
+			 * @return bool
 			 */
 			bool updateVideoMemory () noexcept;
 
 			/**
-			 * @brief Generates the fragment shader code for a specific component.
+			 * @brief Generates the fragment shader code for a specific texture component.
 			 * @param componentType The component type to find in the material.
 			 * @param codeGenerator A reference to a function to generate the actual code.
 			 * @param fragmentShader A reference to the fragment shader being generated.
@@ -648,56 +614,60 @@ namespace EmEn::Graphics::Material
 			[[nodiscard]]
 			static const char * textCoords (const Component::Texture * component) noexcept;
 
-			/* Uniform buffer object offset to write data. */
-			static constexpr auto AmbientColorOffset{0UL};
-			static constexpr auto DiffuseColorOffset{4UL};
-			static constexpr auto SpecularColorOffset{8UL};
+			/* Uniform buffer object layout (STD140 aligned, 16 floats = 64 bytes):
+			 * vec4 albedoColor              (offset 0-3)
+			 * float roughness               (offset 4)
+			 * float metalness               (offset 5)
+			 * float normalScale             (offset 6)
+			 * float f0                      (offset 7)  - Base reflectivity for dielectrics
+			 * float ior                     (offset 8)  - Index of refraction for glass/transparent
+			 * float iblIntensity            (offset 9)  - IBL contribution intensity (0.0-1.0)
+			 * float autoIlluminationAmount  (offset 10) - Emissive intensity multiplier
+			 * float aoIntensity             (offset 11) - Ambient occlusion intensity
+			 * vec4 autoIlluminationColor    (offset 12-15) - Emissive color
+			 */
+			static constexpr auto AlbedoColorOffset{0UL};
+			static constexpr auto RoughnessOffset{4UL};
+			static constexpr auto MetalnessOffset{5UL};
+			static constexpr auto NormalScaleOffset{6UL};
+			static constexpr auto F0Offset{7UL};
+			static constexpr auto IOROffset{8UL};
+			static constexpr auto IBLIntensityOffset{9UL};
+			static constexpr auto AutoIlluminationAmountOffset{10UL};
+			static constexpr auto AOIntensityOffset{11UL};
 			static constexpr auto AutoIlluminationColorOffset{12UL};
-			static constexpr auto ShininessOffset{16UL};
-			static constexpr auto OpacityOffset{17UL};
-			static constexpr auto AutoIlluminationAmountOffset{18UL};
-			static constexpr auto NormalScaleOffset{19UL};
-			static constexpr auto ReflectionAmountOffset{20UL};
-			static constexpr auto RefractionAmountOffset{21UL};
-			static constexpr auto RefractionIOROffset{22UL};
 
 			/* Default values. */
-			static constexpr auto DefaultAmbientColor{Libs::PixelFactory::DarkGrey};
-			static constexpr auto DefaultDiffuseColor{Libs::PixelFactory::Grey};
-			static constexpr auto DefaultSpecularColor{Libs::PixelFactory::White};
-			static constexpr auto DefaultAutoIlluminationColor{Libs::PixelFactory::White};
-			static constexpr auto DefaultShininess{32.0F};
-			static constexpr auto DefaultOpacity{1.0F};
-			static constexpr auto DefaultAutoIlluminationAmount{1.0F};
+			static constexpr auto DefaultAlbedoColor{Libs::PixelFactory::Grey};
+			static constexpr auto DefaultRoughness{0.5F};
+			static constexpr auto DefaultMetalness{0.0F};
 			static constexpr auto DefaultNormalScale{1.0F};
-			static constexpr auto DefaultReflectionAmount{0.5F};
-			static constexpr auto DefaultRefractionAmount{0.95F};
-			static constexpr auto DefaultRefractionIOR{1.5F}; /* Glass */
+			static constexpr auto DefaultF0{0.04F}; /* Standard F0 for dielectrics. */
+			static constexpr auto DefaultIOR{1.5F}; /* Standard IOR for glass. */
+			static constexpr auto DefaultIBLIntensity{1.0F}; /* Full IBL contribution by default. */
+			static constexpr auto DefaultAutoIlluminationColor{Libs::PixelFactory::Black};
+			static constexpr auto DefaultAutoIlluminationAmount{0.0F}; /* Disabled by default. */
+			static constexpr auto DefaultAOIntensity{1.0F}; /* Full AO contribution by default. */
 
 			Physics::SurfacePhysicalProperties m_physicalSurfaceProperties{};
 			std::unordered_map< ComponentType, std::unique_ptr< Component::Interface > > m_components{};
 			BlendingMode m_blendingMode{BlendingMode::None};
-			std::array< float, 24 > m_materialProperties{
-				/* Ambient color (4), */
-				DefaultAmbientColor.red(), DefaultAmbientColor.green(), DefaultAmbientColor.blue(), DefaultDiffuseColor.alpha(),
-				/* Diffuse color (4), */
-				DefaultDiffuseColor.red(), DefaultDiffuseColor.green(), DefaultDiffuseColor.blue(), DefaultDiffuseColor.alpha(),
-				/* Specular color (4), */
-				DefaultSpecularColor.red(), DefaultSpecularColor.green(), DefaultSpecularColor.blue(), DefaultSpecularColor.alpha(),
-				/* Auto-illumination color (4), */
-				DefaultAutoIlluminationColor.red(), DefaultAutoIlluminationColor.green(), DefaultAutoIlluminationColor.blue(), DefaultAutoIlluminationColor.alpha(),
-				/* Shininess (1), Opacity (1), AutoIlluminationColor (1), NormalScale (1). */
-				DefaultShininess, DefaultOpacity, DefaultAutoIlluminationAmount, DefaultNormalScale,
-				/* ReflectionAmount (1), RefractionAmount (1), RefractionIOR (1), Unused (1). */
-				DefaultReflectionAmount, DefaultRefractionAmount, DefaultRefractionIOR, 0.0F
+			std::array< float, 16 > m_materialProperties{
+				/* Albedo color (4) */
+				DefaultAlbedoColor.red(), DefaultAlbedoColor.green(), DefaultAlbedoColor.blue(), DefaultAlbedoColor.alpha(),
+				/* Roughness (1), Metalness (1), NormalScale (1), F0 (1) */
+				DefaultRoughness, DefaultMetalness, DefaultNormalScale, DefaultF0,
+				/* IOR (1), IBLIntensity (1), AutoIlluminationAmount (1), AOIntensity (1) */
+				DefaultIOR, DefaultIBLIntensity, DefaultAutoIlluminationAmount, DefaultAOIntensity,
+				/* AutoIlluminationColor (4) */
+				DefaultAutoIlluminationColor.red(), DefaultAutoIlluminationColor.green(), DefaultAutoIlluminationColor.blue(), DefaultAutoIlluminationColor.alpha()
 			};
 			std::shared_ptr< Vulkan::DescriptorSetLayout > m_descriptorSetLayout;
 			std::unique_ptr< Vulkan::DescriptorSet > m_descriptorSet;
 			std::shared_ptr< SharedUniformBuffer > m_sharedUniformBuffer;
-			float m_alphaThresholdToDiscard{0.1F};
 			uint32_t m_sharedUBOIndex{0};
-			/* TODO: Unify video memory update mechanism between all materials. */
 			bool m_videoMemoryUpdated{false};
+			bool m_invertRoughness{false};
 			bool m_useAutomaticReflection{false};
 			/** @brief Binding point for automatic reflection cubemap (only valid when m_useAutomaticReflection is true). */
 			uint32_t m_automaticReflectionBindingPoint{0};
@@ -707,5 +677,5 @@ namespace EmEn::Graphics::Material
 /* Expose the resource manager as a convenient type. */
 namespace EmEn::Resources
 {
-	using StandardMaterials = Container< Graphics::Material::StandardResource >;
+	using PBRMaterials = Container< Graphics::Material::PBRResource >;
 }

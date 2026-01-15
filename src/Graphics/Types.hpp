@@ -286,8 +286,10 @@ namespace EmEn::Graphics
 		Normal = 6,
 		Displacement = 7,
 		Reflection = 8,
-		Roughness = 9,
-		Metalness = 10,
+		Refraction = 9,
+		Roughness = 10,
+		Metalness = 11,
+		AmbientOcclusion = 12,
 		Invalid = std::numeric_limits< uint32_t >::max()
 	};
 
@@ -300,8 +302,11 @@ namespace EmEn::Graphics
 	constexpr auto NormalString{"Normal"};
 	constexpr auto DisplacementString{"Displacement"};
 	constexpr auto ReflectionString{"Reflection"};
+	constexpr auto RefractionString{"Refraction"};
 	constexpr auto RoughnessString{"Roughness"};
 	constexpr auto MetalnessString{"Metalness"};
+	constexpr auto AmbientOcclusionString{"AmbientOcclusion"};
+	constexpr auto AutomaticString{"Automatic"};
 
 	/**
 	 * @brief Converts a component type enumeration value to the corresponding string.

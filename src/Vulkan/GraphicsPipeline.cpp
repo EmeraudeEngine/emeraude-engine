@@ -936,9 +936,12 @@ namespace EmEn::Vulkan
 	}
 
 	size_t
-	GraphicsPipeline::getHash () const noexcept
+	GraphicsPipeline::getHash (const RenderPass & renderPass) const noexcept
 	{
 		size_t hash = 0;
+
+		/* Hash the render pass handle to ensure pipelines are not shared across incompatible render passes. */
+		hashCombine(hash, reinterpret_cast< uintptr_t >(renderPass.handle()));
 
 		/* Hash shader stages. */
 		for ( const auto & stage : m_shaderStages )

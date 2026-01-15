@@ -73,6 +73,9 @@ namespace EmEn::Graphics::Material
 	static constexpr auto JKAutoIllumination{"AutoIllumination"};
 	static constexpr auto JKOpacity{"Opacity"};
 	static constexpr auto JKAlphaThreshold{"AlphaThreshold"};
+	static constexpr auto JKIOR{"IOR"};
+	static constexpr auto JKCubemap{"Cubemap"};
+	static constexpr auto JKIBLIntensity{"IBLIntensity"};
 
 	/**
 	 * @brief Returns the filling type token from a JSON value.

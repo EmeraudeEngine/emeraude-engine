@@ -52,8 +52,11 @@ namespace EmEn::Graphics::Renderable
 			return this->setLoadSuccess(false);
 		}
 
-		const auto materialResource = serviceProvider.container< BasicResource >()->getOrCreateResource("DefaultSkyboxMaterial", [&serviceProvider] (BasicResource & newMaterial) {
-			if ( !newMaterial.setTextureResource(serviceProvider.container< TextureResource::TextureCubemap >()->getDefaultResource()) )
+		/* Store the cubemap for environment IBL access. */
+		m_cubemap = serviceProvider.container< TextureResource::TextureCubemap >()->getDefaultResource();
+
+		const auto materialResource = serviceProvider.container< BasicResource >()->getOrCreateResource("DefaultSkyboxMaterial", [this] (BasicResource & newMaterial) {
+			if ( !newMaterial.setTextureResource(m_cubemap) )
 			{
 				return false;
 			}
@@ -91,8 +94,11 @@ namespace EmEn::Graphics::Renderable
 
 		const auto textureName = data[TextureKey].asString();
 
-		const auto materialResource = serviceProvider.container< BasicResource >()->getOrCreateResource(textureName + "SkyboxMaterial", [&] (BasicResource & newMaterial) {
-			if ( !newMaterial.setTextureResource(serviceProvider.container< TextureResource::TextureCubemap >()->getResource(textureName, this->isDirectLoading())) )
+		/* Store the cubemap for environment IBL access. */
+		m_cubemap = serviceProvider.container< TextureResource::TextureCubemap >()->getResource(textureName, this->isDirectLoading());
+
+		const auto materialResource = serviceProvider.container< BasicResource >()->getOrCreateResource(textureName + "SkyboxMaterial", [this] (BasicResource & newMaterial) {
+			if ( !newMaterial.setTextureResource(m_cubemap) )
 			{
 				return false;
 			}

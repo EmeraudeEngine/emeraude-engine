@@ -32,8 +32,17 @@
 #include <string_view>
 #include <array>
 
+/* Local inclusions. */
+#include "Libs/StaticVector.hpp"
+
 namespace EmEn::PlatformSpecific::Desktop::Dialog
 {
+	/** @brief Maximum number of custom buttons in a dialog. */
+	static constexpr size_t MaxCustomButtons{6};
+
+	/** @brief Container for custom button labels. */
+	using ButtonLabels = Libs::StaticVector< std::string, MaxCustomButtons >;
+
 	/**
 	 * @brief The button layout enumeration.
 	 */

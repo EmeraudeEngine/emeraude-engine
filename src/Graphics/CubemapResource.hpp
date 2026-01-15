@@ -138,6 +138,14 @@ namespace EmEn::Graphics
 			bool load (const CubemapPixmaps & pixmaps) noexcept;
 
 			/**
+			 * @brief Loads a cubemap filled with a solid color.
+			 * @param color The color to fill all faces with.
+			 * @param size The size of each face (width and height in pixels).
+			 * @return bool
+			 */
+			bool loadSolidColor (const Libs::PixelFactory::Color< float > & color, uint32_t size) noexcept;
+
+			/**
 			 * @brief Returns the pixmap.
 			 * @param faceIndex The face number.
 			 * @return const Libraries::PixelFactory::Pixmap< uint8_t > &

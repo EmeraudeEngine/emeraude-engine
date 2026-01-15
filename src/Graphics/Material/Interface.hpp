@@ -40,6 +40,7 @@ namespace EmEn
 	namespace Vulkan
 	{
 		class LayoutManager;
+		class TextureInterface;
 	}
 
 	namespace Physics
@@ -330,6 +331,32 @@ namespace EmEn::Graphics::Material
 			 */
 			[[nodiscard]]
 			virtual bool isComplex () const noexcept = 0;
+
+			/**
+			 * @brief Returns whether the material uses automatic scene reflection.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			virtual
+			bool
+			useAutomaticReflection () const noexcept
+			{
+				return false;
+			}
+
+			/**
+			 * @brief Updates the automatic reflection cubemap binding with the scene's environment cubemap.
+			 * @note This must be called before rendering when useAutomaticReflection() is true.
+			 * @param cubemap A reference to the environment cubemap to bind.
+			 * @return bool True if successful.
+			 */
+			[[nodiscard]]
+			virtual
+			bool
+			updateAutomaticReflectionCubemap (const Vulkan::TextureInterface & /*cubemap*/) noexcept
+			{
+				return true;
+			}
 
 			/**
 			 * @brief Configures the light generator with this material.

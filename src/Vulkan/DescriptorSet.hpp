@@ -155,7 +155,20 @@ namespace EmEn::Vulkan
 			}
 
 			/**
+			 * @brief Writes a uniform buffer to the descriptor set using pre-computed descriptor info.
+			 * @note This is the PREFERRED method when using SharedUniformBuffer, as the offset
+			 *       calculation is already done correctly by SharedUniformBuffer::getDescriptorInfoForElement().
+			 * @param bindingIndex The binding index inside the descriptor set layout.
+			 * @param descriptorInfo The pre-configured VkDescriptorBufferInfo with buffer, offset, and range.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool writeUniformBuffer (uint32_t bindingIndex, const VkDescriptorBufferInfo & descriptorInfo) const noexcept;
+
+			/**
 			 * @brief Writes a uniform buffer object to the descriptor set.
+			 * @warning When using SharedUniformBuffer, prefer writeUniformBuffer() with getDescriptorInfoForElement()
+			 *          to ensure correct byte offset calculation.
 			 * @param bindingIndex The binding index of the texture inside the descriptor set layout.
 			 * @param uniformBufferObject A reference to the uniform buffer object smart pointer.
 			 * @param elementOffset The element offset inside the uniform buffer object. Default 0.

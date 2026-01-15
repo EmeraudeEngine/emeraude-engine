@@ -104,49 +104,53 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 			}
 		}
 
-		/* NOTE: Set the dialog file extension filter. */
+		/* NOTE: Set the dialog file extension filter.
+		 * Filters are only applicable when selecting files, not folders. */
 		std::map< std::wstring, std::wstring > dataHolder;
 
-		if ( m_extensionFilters.empty() )
+		if ( !m_selectFolder )
 		{
-			COMDLG_FILTERSPEC save_filter[1];
-			save_filter[0].pszName = L"All files";
-			save_filter[0].pszSpec = L"*.*";
-
-			hr = dialogHandle->SetFileTypes(1, save_filter);
-			if ( FAILED(hr) )
+			if ( m_extensionFilters.empty() )
 			{
-				Tracer::error(ClassId, "Unable to set file types to the dialog instance !");
+				COMDLG_FILTERSPEC save_filter[1];
+				save_filter[0].pszName = L"All files";
+				save_filter[0].pszSpec = L"*.*";
 
-				return false;
+				hr = dialogHandle->SetFileTypes(1, save_filter);
+				if ( FAILED(hr) )
+				{
+					Tracer::error(ClassId, "Unable to set file types to the dialog instance !");
+
+					return false;
+				}
+
+				hr = dialogHandle->SetFileTypeIndex(1);
+				if ( FAILED(hr) )
+				{
+					Tracer::error(ClassId, "Unable to set file type index to the dialog instance !");
+
+					return false;
+				}
 			}
-
-			hr = dialogHandle->SetFileTypeIndex(1);
-			if ( FAILED(hr) )
+			else
 			{
-				Tracer::error(ClassId, "Unable to set file type index to the dialog instance !");
+				const auto fileTypes = createExtensionFilter(m_extensionFilters, dataHolder);
 
-				return false;
-			}
-		}
-		else
-		{
-			const auto fileTypes = createExtensionFilter(m_extensionFilters, dataHolder);
+				hr = dialogHandle->SetFileTypes(static_cast< uint32_t >(fileTypes.size()), fileTypes.data());
+				if ( FAILED(hr) )
+				{
+					Tracer::error(ClassId, "Unable to set file types to the dialog instance !");
 
-			hr = dialogHandle->SetFileTypes(static_cast< uint32_t >(fileTypes.size()), fileTypes.data());
-			if ( FAILED(hr) )
-			{
-				Tracer::error(ClassId, "Unable to set file types to the dialog instance !");
+					return false;
+				}
 
-				return false;
-			}
+				hr = dialogHandle->SetFileTypeIndex(1);
+				if ( FAILED(hr) )
+				{
+					Tracer::error(ClassId, "Unable to set file type index to the dialog instance !");
 
-			hr = dialogHandle->SetFileTypeIndex(1);
-			if ( FAILED(hr) )
-			{
-				Tracer::error(ClassId, "Unable to set file type index to the dialog instance !");
-
-				return false;
+					return false;
+				}
 			}
 		}
 

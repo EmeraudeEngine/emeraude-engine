@@ -124,6 +124,7 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 			}
 		}
 
+		[[maybe_unused]]
 		const char *
 		getKdialogIconName (MessageType messageType) noexcept
 		{

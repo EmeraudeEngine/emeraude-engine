@@ -5,7 +5,6 @@
       "Bash(mkdir:*)",
       "Bash(cmake:*)",
       "Bash(ctest:*)",
-      "Bash(clang-format:*)",
       "Bash(clang-tidy:*)",
       "Bash(cppcheck:*)",
       "Bash(grep:*)",

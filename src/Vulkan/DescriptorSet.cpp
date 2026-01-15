@@ -87,6 +87,44 @@ namespace EmEn::Vulkan
 	}
 
 	bool
+	DescriptorSet::writeUniformBuffer (uint32_t bindingIndex, const VkDescriptorBufferInfo & descriptorInfo) const noexcept
+	{
+		if ( !this->isCreated() )
+		{
+			Tracer::error(ClassId, "The descriptor set is not yet created ! Unable to write into it.");
+
+			return false;
+		}
+
+		if ( descriptorInfo.buffer == VK_NULL_HANDLE )
+		{
+			Tracer::error(ClassId, "The descriptor buffer info has a null buffer handle !");
+
+			return false;
+		}
+
+		VkWriteDescriptorSet writeDescriptorSet{};
+		writeDescriptorSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		writeDescriptorSet.pNext = nullptr;
+		writeDescriptorSet.dstSet = m_handle;
+		writeDescriptorSet.dstBinding = bindingIndex;
+		writeDescriptorSet.dstArrayElement = 0;
+		writeDescriptorSet.descriptorCount = 1;
+		writeDescriptorSet.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+		writeDescriptorSet.pImageInfo = nullptr;
+		writeDescriptorSet.pBufferInfo = &descriptorInfo;
+		writeDescriptorSet.pTexelBufferView = nullptr;
+
+		vkUpdateDescriptorSets(
+			m_descriptorPool->device()->handle(),
+			1, &writeDescriptorSet,
+			0, VK_NULL_HANDLE
+		);
+
+		return true;
+	}
+
+	bool
 	DescriptorSet::writeUniformBufferObject (uint32_t bindingIndex, const UniformBufferObject & uniformBufferObject, uint32_t elementOffset) const noexcept
 	{
 		if ( !this->isCreated() )

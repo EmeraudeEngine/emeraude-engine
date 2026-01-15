@@ -366,11 +366,17 @@ namespace EmEn::Graphics
 			case ComponentType::Reflection :
 				return ReflectionString;
 
+			case ComponentType::Refraction :
+				return RefractionString;
+
 			case ComponentType::Roughness :
 				return RoughnessString;
 
 			case ComponentType::Metalness :
 				return MetalnessString;
+
+			case ComponentType::AmbientOcclusion :
+				return AmbientOcclusionString;
 
 			case ComponentType::Invalid :
 				return InvalidString;
@@ -420,6 +426,31 @@ namespace EmEn::Graphics
 		if ( value == ReflectionString )
 		{
 			return ComponentType::Reflection;
+		}
+
+		if ( value == RefractionString )
+		{
+			return ComponentType::Refraction;
+		}
+
+		if ( value == AlbedoString )
+		{
+			return ComponentType::Albedo;
+		}
+
+		if ( value == RoughnessString )
+		{
+			return ComponentType::Roughness;
+		}
+
+		if ( value == MetalnessString )
+		{
+			return ComponentType::Metalness;
+		}
+
+		if ( value == AmbientOcclusionString )
+		{
+			return ComponentType::AmbientOcclusion;
 		}
 
 		if ( value == InvalidString )

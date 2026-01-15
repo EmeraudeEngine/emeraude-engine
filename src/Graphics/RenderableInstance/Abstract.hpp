@@ -724,11 +724,12 @@ namespace EmEn::Graphics::RenderableInstance
 			 * @brief Builds a program cache key for this instance's current configuration.
 			 * @param programType The type of program.
 			 * @param renderPassType The render pass type.
+			 * @param renderPassHandle The Vulkan render pass handle for pipeline compatibility.
 			 * @param layerIndex The material layer index.
 			 * @return Renderable::ProgramCacheKey
 			 */
 			[[nodiscard]]
-			Renderable::ProgramCacheKey buildProgramCacheKey (Renderable::ProgramType programType, RenderPassType renderPassType, uint32_t layerIndex) const noexcept;
+			Renderable::ProgramCacheKey buildProgramCacheKey (Renderable::ProgramType programType, RenderPassType renderPassType, uint64_t renderPassHandle, uint32_t layerIndex) const noexcept;
 
 			const std::shared_ptr< Renderable::Abstract > m_renderable;
 			Libs::Math::Matrix< 4, float > m_transformationMatrix;

@@ -664,14 +664,21 @@ namespace EmEn::Saphir
 			/* Generic */
 			constexpr auto PrimarySampler{"uPrimarySampler"};
 			constexpr auto SecondarySampler{"uSecondarySampler"};
-			/* Material specific */
+			/* Material specific (Phong) */
 			constexpr auto AmbientSampler{"uAmbientSampler"};
 			constexpr auto DiffuseSampler{"uDiffuseSampler"};
 			constexpr auto SpecularSampler{"uSpecularSampler"};
 			constexpr auto AutoIlluminationSampler{"uAutoIlluminationSampler"};
 			constexpr auto NormalSampler{"uNormalSampler"};
 			constexpr auto ReflectionSampler{"uReflectionSampler"};
+			constexpr auto RefractionSampler{"uRefractionSampler"};
 			constexpr auto OpacitySampler{"uOpacitySampler"};
+			/* Material specific (PBR) */
+			constexpr auto AlbedoSampler{"uAlbedoSampler"};
+			constexpr auto RoughnessSampler{"uRoughnessSampler"};
+			constexpr auto MetalnessSampler{"uMetalnessSampler"};
+			constexpr auto AmbientOcclusionSampler{"uAmbientOcclusionSampler"};
+			/* Lighting specific */
 			constexpr auto ShadowMapSampler{"uShadowMapSampler"};
 		}
 
@@ -688,6 +695,7 @@ namespace EmEn::Saphir
 				constexpr auto CubemapView{"CubemapView"};
 				constexpr auto BasicMaterial{"BasicMaterial"};
 				constexpr auto StandardMaterial{"StandardMaterial"};
+				constexpr auto PBRMaterial{"PBRMaterial"};
 				constexpr auto DirectionalLight{"DirectionalLight"};
 				constexpr auto PointLight{"PointLight"};
 				constexpr auto SpotLight{"SpotLight"};
@@ -707,7 +715,7 @@ namespace EmEn::Saphir
 				constexpr auto ViewProperties{"viewProperties"};
 				constexpr auto AmbientLightColor{"ambientLightColor"};
 				constexpr auto AmbientLightIntensity{"ambientLightIntensity"};
-				/* Material specific */
+				/* Material specific (Phong) */
 				constexpr auto AmbientColor{"ambientColor"};
 				constexpr auto DiffuseColor{"diffuseColor"};
 				constexpr auto SpecularColor{"specularColor"};
@@ -717,6 +725,15 @@ namespace EmEn::Saphir
 				constexpr auto Opacity{"opacity"};
 				constexpr auto NormalScale{"normalScale"};
 				constexpr auto ReflectionAmount{"reflectionAmount"};
+				constexpr auto RefractionAmount{"refractionAmount"};
+				constexpr auto RefractionIOR{"refractionIOR"};
+				/* Material specific (PBR) */
+				constexpr auto AlbedoColor{"albedoColor"};
+				constexpr auto Roughness{"roughness"};
+				constexpr auto Metalness{"metalness"};
+				constexpr auto F0{"f0"};
+				constexpr auto IBLIntensity{"iblIntensity"};
+				constexpr auto AOIntensity{"aoIntensity"};
 				/* Light specific */
 				constexpr auto Color{"color"};
 				//constexpr auto PositionWorldSpace{"positionWorldSpace"}; // Shared with View
@@ -768,6 +785,7 @@ namespace EmEn::Saphir
 			constexpr auto Secondary2DTextureCoordinates{"sv2DTexCoord1"};
 			constexpr auto Secondary3DTextureCoordinates{"sv3DTexCoord1"};
 			constexpr auto ReflectionTextureCoordinates{"svReflectionTexCoord"};
+			constexpr auto RefractionTextureCoordinates{"svRefractionTexCoord"};
 			constexpr auto TangentWorldSpace{"svTangentWorldSpace"};
 			constexpr auto TangentViewSpace{"svTangentViewSpace"};
 			constexpr auto BinormalWorldSpace{"svBinormalWorldSpace"};
@@ -780,7 +798,7 @@ namespace EmEn::Saphir
 			constexpr auto ModelViewProjectionMatrix{"svModelViewProjectionMatrix"};
 			constexpr auto WorldTBNMatrix{"svWorldTBNMatrix"};
 			constexpr auto ViewTBNMatrix{"svViewTBNMatrix"};
-			constexpr auto WorldToTangentMatrix{"svWorldToTangent"};
+			constexpr auto TangentToWorldMatrix{"svTangentToWorld"};
 			constexpr auto OutputFragment{"svOutputFragment"};
 			constexpr auto FragCoord{"svFragCoord"};
 			constexpr auto Light{"svLight"};

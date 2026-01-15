@@ -320,6 +320,7 @@ else ()
     list(APPEND EMERAUDE_HEADER_FILES
         # PlatformSpecific
         ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/Desktop/Dialog/Abstract.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/Desktop/Dialog/CustomMessage.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/Desktop/Dialog/Message.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/Desktop/Dialog/OpenFile.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/Desktop/Dialog/SaveFile.hpp
@@ -356,6 +357,7 @@ else ()
 
         list(APPEND EMERAUDE_SOURCE_FILES
             # PlatformSpecific
+            ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/Desktop/Dialog/CustomMessage.linux.cpp
             ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/Desktop/Dialog/Message.linux.cpp
             ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/Desktop/Dialog/OpenFile.linux.cpp
             ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/Desktop/Dialog/SaveFile.linux.cpp
@@ -371,6 +373,7 @@ else ()
 
         list(APPEND EMERAUDE_SOURCE_FILES
             # PlatformSpecific
+            ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/Desktop/Dialog/CustomMessage.mac.mm
             ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/Desktop/Dialog/Message.mac.mm
             ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/Desktop/Dialog/OpenFile.mac.mm
             ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/Desktop/Dialog/SaveFile.mac.mm
@@ -387,6 +390,7 @@ else ()
 
         list(APPEND EMERAUDE_SOURCE_FILES
             # PlatformSpecific
+            ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/Desktop/Dialog/CustomMessage.windows.cpp
             ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/Desktop/Dialog/Message.windows.cpp
             ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/Desktop/Dialog/OpenFile.windows.cpp
             ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/Desktop/Dialog/SaveFile.windows.cpp

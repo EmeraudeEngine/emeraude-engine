@@ -44,6 +44,7 @@
 #include "Graphics/ImageResource.hpp"
 #include "Graphics/Material/BasicResource.hpp"
 #include "Graphics/Material/StandardResource.hpp"
+#include "Graphics/Material/PBRResource.hpp"
 #include "Graphics/MovieResource.hpp"
 #include "Graphics/Renderable/BasicGroundResource.hpp"
 #include "Graphics/Renderable/DynamicSkyResource.hpp"
@@ -532,6 +533,7 @@ namespace EmEn::Resources
 			m_containers.emplace(typeid(Graphics::Geometry::AdaptiveVertexGridResource), std::make_unique< AdaptiveVertexGridGeometries >("Adaptive grid geometry manager", m_primaryServices, *this, this->getLocalStore("Geometries")));
 			m_containers.emplace(typeid(Graphics::Material::BasicResource), std::make_unique< BasicMaterials >("Basic material manager", m_primaryServices, *this, this->getLocalStore("Materials")));
 			m_containers.emplace(typeid(Graphics::Material::StandardResource), std::make_unique< StandardMaterials >("Standard material manager", m_primaryServices, *this, this->getLocalStore("Materials")));
+			m_containers.emplace(typeid(Graphics::Material::PBRResource), std::make_unique< PBRMaterials >("PBR material manager", m_primaryServices, *this, this->getLocalStore("Materials")));
 			m_containers.emplace(typeid(Graphics::Renderable::SimpleMeshResource), std::make_unique< SimpleMeshes >("Simple mesh manager", m_primaryServices, *this, this->getLocalStore("Meshes")));
 			m_containers.emplace(typeid(Graphics::Renderable::MeshResource), std::make_unique< Meshes >("Mesh manager", m_primaryServices, *this, this->getLocalStore("Meshes")));
 			m_containers.emplace(typeid(Graphics::Renderable::SpriteResource), std::make_unique< Sprites >("Sprite manager", m_primaryServices, *this, this->getLocalStore("Sprites")));

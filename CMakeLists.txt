@@ -33,7 +33,7 @@ endif ()
 
 project(
 	${BINARY_NAME}
-	VERSION 0.8.45
+	VERSION 0.8.46
 	DESCRIPTION "Emeraude Engine is an open-source (LGPLv3) 3D Graphics engine using Vulkan and written in C++20."
 	HOMEPAGE_URL "https://github.com/EmeraudeEngine/emeraude-engine"
 	LANGUAGES C CXX
@@ -443,10 +443,10 @@ set(TARGET_BINARY_FOR_SETUP ${PROJECT_NAME})
 include(SetupJsonCpp)
 
 # Magic Enum
-target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/magic_enum/include)
+target_include_directories(${PROJECT_NAME} SYSTEM PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/magic_enum/include)
 
 # TinySoundFont (SF2 SoundFont support for MIDI rendering)
-target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/tinysoundfont)
+target_include_directories(${PROJECT_NAME} SYSTEM PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/dependencies/tinysoundfont)
 
 # Request : brotli, bzip2, harbuzz, png, zlib
 include(SetupFreetype)
