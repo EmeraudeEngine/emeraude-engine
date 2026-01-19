@@ -338,7 +338,6 @@ else ()
 
     list(APPEND EMERAUDE_SOURCE_FILES
         # PlatformSpecific
-        ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/Desktop/Dialog/Abstract.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/Desktop/Dialog/Types.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/Desktop/Commands.cpp
         # ROOT

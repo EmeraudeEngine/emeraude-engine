@@ -26,84 +26,14 @@
 
 #include "Message.hpp"
 
-#if IS_LINUX
-
-/* STL inclusions. */
-#include <array>
-#include <cstdlib>
-#include <cstdio>
-
 /* Local inclusions. */
+#include "PlatformSpecific/Helpers.hpp"
 #include "Window.hpp"
 
 namespace EmEn::PlatformSpecific::Desktop::Dialog
 {
 	namespace
 	{
-		bool
-		checkProgram (const std::string & program) noexcept
-		{
-			const std::string command = "which " + program + " > /dev/null 2>&1";
-
-			return system(command.c_str()) == 0;
-		}
-
-		bool
-		hasZenity () noexcept
-		{
-			static const bool result = checkProgram("zenity");
-
-			return result;
-		}
-
-		bool
-		hasKdialog () noexcept
-		{
-			static const bool result = checkProgram("kdialog");
-
-			return result;
-		}
-
-		bool
-		isKdeDesktop () noexcept
-		{
-			const char * desktop = std::getenv("XDG_CURRENT_DESKTOP");
-
-			if ( desktop != nullptr )
-			{
-				std::string desktopStr{desktop};
-
-				return desktopStr.find("KDE") != std::string::npos;
-			}
-
-			return false;
-		}
-
-		std::string
-		escapeShellArg (const std::string & arg) noexcept
-		{
-			std::string escaped;
-			escaped.reserve(arg.size() + 2);
-			escaped += '\'';
-
-			for ( const char c : arg )
-			{
-				if ( c == '\'' )
-				{
-					/* End quote, add escaped quote, restart quote. */
-					escaped += "'\\''";
-				}
-				else
-				{
-					escaped += c;
-				}
-			}
-
-			escaped += '\'';
-
-			return escaped;
-		}
-
 		const char *
 		getZenityIconName (MessageType messageType) noexcept
 		{
@@ -122,59 +52,6 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 				default:
 					return "dialog-information";
 			}
-		}
-
-		[[maybe_unused]]
-		const char *
-		getKdialogIconName (MessageType messageType) noexcept
-		{
-			switch ( messageType )
-			{
-				case MessageType::Warning:
-					return "warning";
-
-				case MessageType::Error:
-					return "error";
-
-				case MessageType::Question:
-					return "question";
-
-				case MessageType::Info:
-				default:
-					return "information";
-			}
-		}
-
-		std::string
-		executeCommand (const std::string & command, int & exitCode) noexcept
-		{
-			std::string output;
-			std::array< char, 256 > buffer{};
-
-			FILE * pipe = popen(command.c_str(), "r");
-
-			if ( pipe == nullptr )
-			{
-				exitCode = -1;
-
-				return output;
-			}
-
-			while ( fgets(buffer.data(), static_cast< int >(buffer.size()), pipe) != nullptr )
-			{
-				output += buffer.data();
-			}
-
-			const int status = pclose(pipe);
-			exitCode = WEXITSTATUS(status);
-
-			/* Remove trailing newline if any. */
-			while ( !output.empty() && output.back() == '\n' )
-			{
-				output.pop_back();
-			}
-
-			return output;
 		}
 	}
 
@@ -354,5 +231,3 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 		return true;
 	}
 }
-
-#endif

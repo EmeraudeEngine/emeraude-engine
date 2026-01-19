@@ -26,11 +26,7 @@
 
 #pragma once
 
-/* Engine configuration file. */
-#include "emeraude_config.hpp"
-
 /* STL inclusions. */
-#include <vector>
 #include <string>
 
 /* Forward declarations. */

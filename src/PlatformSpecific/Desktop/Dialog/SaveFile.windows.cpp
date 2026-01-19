@@ -26,11 +26,10 @@
 
 #include "SaveFile.hpp"
 
-#if IS_WINDOWS
-
 /* STL inclusions. */
-#include <vector>
+#include <filesystem>
 #include <map>
+#include <vector>
 
 /* Third-party inclusions. */
 #include <shobjidl.h>
@@ -168,9 +167,7 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 					return false;
 				}
 
-				const std::wstring filepathW{filepath};
-
-				m_filepath = convertWideToUTF8(filepathW);
+				m_filepath = filepath;
 
 				CoTaskMemFree(filepath);
 			}
@@ -181,5 +178,3 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 		return true;
 	}
 }
-
-#endif

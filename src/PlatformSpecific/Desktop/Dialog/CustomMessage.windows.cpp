@@ -26,12 +26,11 @@
 
 #include "CustomMessage.hpp"
 
-#if IS_WINDOWS
-
 /* STL inclusions. */
 #include <vector>
 
 /* Local inclusions. */
+#include "PlatformSpecific/Helpers.hpp"
 #include "Window.hpp"
 
 /* Windows inclusions. */
@@ -65,27 +64,6 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 					return nullptr;
 			}
 		}
-
-		std::wstring
-		toWideString (const std::string & str) noexcept
-		{
-			if ( str.empty() )
-			{
-				return {};
-			}
-
-			const int sizeNeeded = MultiByteToWideChar(CP_UTF8, 0, str.data(), static_cast< int >(str.size()), nullptr, 0);
-
-			if ( sizeNeeded <= 0 )
-			{
-				return {};
-			}
-
-			std::wstring result(static_cast< size_t >(sizeNeeded), 0);
-			MultiByteToWideChar(CP_UTF8, 0, str.data(), static_cast< int >(str.size()), result.data(), sizeNeeded);
-
-			return result;
-		}
 	}
 
 	bool
@@ -99,8 +77,8 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 		}
 
 		/* Convert strings to wide strings. */
-		const std::wstring wideTitle = toWideString(this->title());
-		const std::wstring wideMessage = toWideString(m_message);
+		const std::wstring wideTitle = convertUTF8ToWide(this->title());
+		const std::wstring wideMessage = convertUTF8ToWide(m_message);
 
 		/* Convert button labels to wide strings and create TASKDIALOG_BUTTON array.
 		 * We store wide strings separately to keep them alive during the dialog. */
@@ -109,7 +87,7 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 
 		for ( const auto & label : m_buttons )
 		{
-			wideLabels.push_back(toWideString(label));
+			wideLabels.push_back(convertUTF8ToWide(label));
 		}
 
 		/* Create button array for TaskDialogIndirect.
@@ -163,5 +141,3 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 		return true;
 	}
 }
-
-#endif

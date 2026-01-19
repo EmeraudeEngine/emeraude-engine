@@ -26,8 +26,6 @@
 
 #include "CustomMessage.hpp"
 
-#if IS_MACOS
-
 /* Third-party inclusions. */
 #import <AppKit/AppKit.h>
 
@@ -120,5 +118,3 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 		return true;
 	}
 }
-
-#endif

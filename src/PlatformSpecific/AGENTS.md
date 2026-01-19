@@ -6,104 +6,273 @@ Context for developing Emeraude Engine platform-specific code.
 
 Isolation of OS-specific code (Windows, Linux, macOS) with maximum abstractions to provide uniform cross-platform APIs.
 
-## PlatformSpecific-Specific Rules
+---
+
+## Critical Rules
 
 ### STRICT Isolation Philosophy
-- **Separate OS code**: Each OS in its own space
+- **Separate OS code**: Each OS in its own implementation file
 - **NEVER contaminate**: Windows code must NEVER touch Linux/macOS and vice-versa
-- **Maximum abstraction**: Common interface, OS-specific implementations
-- **Strict isolation**: OS-specific code is NOT found in common space
+- **Maximum abstraction**: Common interface in `.hpp`, OS-specific implementations in separate files
+- **Strict isolation**: OS-specific code is NOT found in common headers (except `#if` for includes/types)
 
-### Abstracted Features
+### NO Platform Macros in Implementation Files
 
-**System calls**:
-- Execution of OS-specific system commands
-- Process and environment management
+**CRITICAL**: Platform-specific `.cpp` and `.mm` files must **NOT** contain `#if IS_LINUX`, `#if IS_WINDOWS`, or `#if IS_MACOS` guards around their entire content.
 
-**Dialog boxes**:
-- Message dialog boxes (info, warning, error)
-- File open dialog (file selection to open)
-- File save dialog (save location selection)
+**Why**: CMake conditionally includes files based on the target platform. Wrapping code in platform macros is redundant and masks errors - if a file accidentally ends up in the wrong build, it should fail to compile immediately rather than being silently ignored.
 
-**System application**:
-- Taskbar notifications (flash taskbar)
-- Window focus and attention
-- Other window/application specific interactions
-
-### Code Organization
-
-**Mixed approach (in preference order)**:
-
-1. **constexpr if (C++17+)** - Preferred when possible
+**Correct Pattern**:
 ```cpp
-if constexpr (std::is_same_v<Platform, Windows>) {
-    // Windows code
-} else if constexpr (std::is_same_v<Platform, Linux>) {
-    // Linux code
-} else if constexpr (std::is_same_v<Platform, macOS>) {
-    // macOS code
+// OpenFile.linux.cpp
+#include "OpenFile.hpp"
+
+/* STL inclusions. */
+#include <filesystem>
+
+/* Local inclusions. */
+#include "PlatformSpecific/Helpers.hpp"
+
+namespace EmEn::PlatformSpecific::Desktop::Dialog
+{
+    bool OpenFile::execute(Window* window) noexcept
+    {
+        // Linux implementation directly - NO #if IS_LINUX wrapper
+    }
 }
 ```
 
-2. **#ifdef** - If constexpr not applicable
+**Exception**: Platform macros ARE allowed in **header files** for conditional includes and type definitions:
 ```cpp
-#ifdef _WIN32
-    // Windows code
-#elif __linux__
-    // Linux code
-#elif __APPLE__
-    // macOS code
+// Helpers.hpp - OK to use macros for conditional includes
+#if IS_WINDOWS
+    #include <Windows.h>
+#endif
+
+#if IS_LINUX
+    using ExtensionFilters = std::vector<std::pair<std::string, std::vector<std::string>>>;
 #endif
 ```
 
-3. **Separate .cpp files** - For large code
+---
+
+## Directory Structure
+
 ```
 PlatformSpecific/
-├── DialogBox.hpp          // Common interface
-├── DialogBox_Windows.cpp  // Windows implementation
-├── DialogBox_Linux.cpp    // Linux implementation
-└── DialogBox_macOS.cpp    // macOS implementation
+├── AGENTS.md                    # This file
+├── Helpers.hpp                  # Cross-platform helper declarations
+├── Helpers.linux.cpp            # Linux helper implementations
+├── Helpers.mac.cpp              # macOS helper implementations
+├── Helpers.windows.cpp          # Windows helper implementations
+├── SystemInfo.hpp/.cpp          # System information (+ platform files)
+├── UserInfo.hpp/.cpp            # User information (+ platform files)
+├── Types.hpp                    # Common type definitions
+└── Desktop/
+    ├── Commands.*               # System commands (taskbar, etc.)
+    ├── Notification.*           # System notifications
+    └── Dialog/
+        ├── Abstract.hpp         # Base class for all dialogs
+        ├── Types.hpp/.cpp       # Dialog types and aliases
+        ├── Message.*            # Message dialogs (preset buttons)
+        ├── CustomMessage.*      # Custom button dialogs
+        ├── OpenFile.*           # File/folder open dialogs
+        └── SaveFile.*           # File save dialogs
 ```
-CMake selects the right file based on target platform.
-
-### Fallback Management
-- **No fixed rule**: Decision case by case
-- **General warning**: If no implementation possible → console warning
-- **Graceful degradation**: Feature disabled rather than crash
-- **Documentation**: Indicate OS limitations if applicable
-
-## Development Commands
-
-```bash
-# Platform-specific tests
-ctest -R PlatformSpecific
-./test --filter="*Platform*"
-```
-
-## Important Files
-
-### Desktop Directory (`Desktop/`)
-- `Commands.*` - System commands (taskbar flash, progress, run applications)
-- `Dialog/Abstract.*` - Base class for all dialogs
-- `Dialog/Types.hpp` - Dialog types and aliases (`MessageType`, `ButtonLayout`, `ButtonLabels`)
-- `Dialog/Message.*` - Message dialogs (info, warning, error, question) with preset `ButtonLayout`
-- `Dialog/CustomMessage.*` - Custom button dialogs (1-6 buttons with custom labels)
-- `Dialog/OpenFile.*` - File/folder open dialogs
-- `Dialog/SaveFile.*` - File save dialogs
-- `Notification.*` - System notifications (toast/banner)
-- CMakeLists.txt - Platform file selection
 
 ### File Naming Convention
+
 Platform-specific implementations use suffixes:
-- `.linux.cpp` - Linux implementation
-- `.mac.mm` - macOS implementation (Objective-C++)
-- `.windows.cpp` - Windows implementation
+| Suffix | Platform | Language |
+|--------|----------|----------|
+| `.linux.cpp` | Linux | C++ |
+| `.mac.mm` | macOS | Objective-C++ |
+| `.windows.cpp` | Windows | C++ |
+
+CMake selects the appropriate file based on target platform.
+
+---
+
+## Helpers System
+
+Platform-specific utility functions are centralized in `Helpers.hpp` with separate implementations per OS.
+
+### Linux Helpers (`Helpers.linux.cpp`)
+
+| Function | Purpose |
+|----------|---------|
+| `checkProgram(name)` | Checks if program exists via `which` |
+| `hasZenity()` | Cached check for zenity availability |
+| `hasKdialog()` | Cached check for kdialog availability |
+| `isKdeDesktop()` | Checks `XDG_CURRENT_DESKTOP` for "KDE" |
+| `escapeShellArg(arg)` | Escapes string for shell (single quotes) |
+| `executeCommand(cmd, exitCode)` | Runs command via `popen`, returns stdout |
+| `buildZenityFilters(filters)` | Builds `--file-filter=` arguments |
+| `buildKdialogFilters(filters)` | Builds kdialog filter string |
+
+**Tool Selection Logic** (used in all Linux dialogs):
+```cpp
+// Prefer kdialog on KDE, zenity otherwise
+const bool useKdialog = hasKdialog() && (!hasZenity() || isKdeDesktop());
+```
+
+### Windows Helpers (`Helpers.windows.cpp`)
+
+| Function | Purpose |
+|----------|---------|
+| `convertUTF8ToWide(str)` | UTF-8 `std::string` → `std::wstring` |
+| `convertWideToUTF8(wstr)` | `std::wstring` → UTF-8 `std::string` |
+| `convertANSIToWide(str)` | ANSI `std::string` → `std::wstring` |
+| `convertWideToANSI(wstr)` | `std::wstring` → ANSI `std::string` |
+| `createExtensionFilter(...)` | Builds `COMDLG_FILTERSPEC` array |
+| `getStringValueFromHKLM(...)` | Reads Windows registry |
+| `createConsole(title)` | Creates debug console window |
+| `attachToParentConsole()` | Attaches to parent console |
+
+### macOS Helpers (`Helpers.mac.cpp`)
+
+macOS helpers are minimal - Objective-C provides native string handling. NSString conversion is done inline using `stringWithUTF8String:`.
+
+---
+
+## UTF-8 Encoding Practices
+
+All internal strings use **UTF-8 encoding**. Platform-specific conversions are required at boundaries.
+
+### Windows
+Always use `convertUTF8ToWide()` before passing strings to Windows APIs:
+```cpp
+const std::wstring wsTitle = convertUTF8ToWide(this->title());
+const std::wstring wsMessage = convertUTF8ToWide(m_message);
+MessageBoxW(parentWindow, wsMessage.data(), wsTitle.data(), flags);
+```
+
+### macOS
+Use `stringWithUTF8String:` for NSString conversion:
+```cpp
+NSString* title = [NSString stringWithUTF8String:this->title().c_str()];
+NSString* message = [NSString stringWithUTF8String:m_message.c_str()];
+```
+
+**IMPORTANT**: Do NOT use `stringWithCString:encoding:defaultCStringEncoding` - it may not handle UTF-8 correctly.
+
+### Linux
+Shell commands receive UTF-8 directly (modern Linux systems are UTF-8 native). Use `escapeShellArg()` to safely quote arguments.
+
+---
+
+## Dialog System
+
+### Dialog Classes
+
+| Class | Purpose | Buttons |
+|-------|---------|---------|
+| `Message` | Standard message dialogs | Preset layouts (`OK`, `OKCancel`, `YesNo`, `Quit`) |
+| `CustomMessage` | Custom button dialogs | 1-6 custom labels |
+| `OpenFile` | File/folder selection | N/A (system buttons) |
+| `SaveFile` | Save location selection | N/A (system buttons) |
+
+### File Path Handling
+
+Dialogs use `std::filesystem::path` for file paths:
+```cpp
+// OpenFile returns vector of paths
+std::vector<std::filesystem::path> m_filepaths;
+
+// SaveFile returns single path
+std::filesystem::path m_filepath;
+```
+
+### Linux Dialog Implementation (zenity/kdialog)
+
+Linux dialogs use native desktop tools via shell commands.
+
+**Zenity Quirks** (as of 2025+):
+| Issue | Solution |
+|-------|----------|
+| Icon parameter | Use `--icon=` not `--icon-name=` (deprecated) |
+| Confirm overwrite | `--confirm-overwrite` deprecated (now default) |
+| Multi-select separator | Use `--separator='\n'` for newline separation |
+| Custom buttons | Use `--question --switch --extra-button=Label` |
+
+**kdialog Limitations**:
+- Maximum 3 buttons for question dialogs (`--yesnocancel`)
+- For 4+ buttons, fall back to zenity even on KDE
+
+**Button Index Mapping**:
+| Tool | Method | Index Extraction |
+|------|--------|------------------|
+| zenity (switch mode) | Outputs clicked button text | Match against button labels |
+| kdialog | Exit codes: 0=Yes, 1=No, 2=Cancel | Direct mapping |
+
+### Windows Dialog Implementation
+
+| Dialog | API |
+|--------|-----|
+| `Message` | `MessageBoxW()` |
+| `CustomMessage` | `TaskDialogIndirect()` with `TASKDIALOG_BUTTON[]` |
+| `OpenFile` | `IFileOpenDialog` (COM) |
+| `SaveFile` | `IFileSaveDialog` (COM) |
+
+**CustomMessage Button IDs**: Start at 100 to avoid conflicts with common button IDs.
+
+**Required for TaskDialog**: Common Controls v6 manifest dependency (automatically injected via `#pragma comment`).
+
+### macOS Dialog Implementation
+
+| Dialog | API |
+|--------|-----|
+| `Message` / `CustomMessage` | `NSAlert` with `addButtonWithTitle:` |
+| `OpenFile` | `NSOpenPanel` |
+| `SaveFile` | `NSSavePanel` |
+
+**NSAlert Button Mapping**: Returns 1000, 1001, 1002... for buttons in order added. Convert to 0-based: `index = button - 1000`.
+
+**File Type Filtering**: Use `UTType` with `allowedContentTypes` (macOS 12.0+).
+
+### OpenFile Constraints
+
+**CRITICAL**: File filters must NOT be applied when selecting folders (`m_selectFolder = true`):
+```cpp
+// Correct pattern
+if (!m_selectFolder && !m_extensionFilters.empty()) {
+    // Apply filters only for file selection
+}
+```
+
+Applying filters to folder selection breaks the dialog on Windows and macOS.
+
+---
+
+## Taskbar Progress
+
+### Windows (`ITaskbarList3`)
+
+| `ProgressMode` | Windows Flag | Visual |
+|----------------|--------------|--------|
+| `None` | `TBPF_NOPROGRESS` | Hidden |
+| `Normal` | `TBPF_NORMAL` | Green bar |
+| `Indeterminate` | `TBPF_INDETERMINATE` | Marquee animation |
+| `Error` | `TBPF_ERROR` | Red bar |
+| `Paused` | `TBPF_PAUSED` | Yellow bar |
+
+### macOS (`NSDockTile`)
+
+- Uses `NSProgressIndicator` overlay on dock icon
+- Pass negative value to remove progress indicator
+- Mode parameter is ignored (only normal progress supported)
+
+### Linux
+
+**Not supported** on standard Linux desktops. Would require `libunity` for Ubuntu Unity only.
+
+---
 
 ## Development Patterns
 
 ### Adding a New Platform-Specific Feature
 
-**1. Define the common abstract interface**
+**1. Define the common interface** (`.hpp`):
 ```cpp
 // MyFeature.hpp
 class MyFeature {
@@ -112,183 +281,63 @@ public:
 };
 ```
 
-**2. Implement for each OS**
-
-**Option A: constexpr if in single .cpp**
-```cpp
-// MyFeature.cpp
-bool MyFeature::doSomething(const std::string& param) {
-    if constexpr (Platform::isWindows()) {
-        // Windows implementation
-        return windowsDoSomething(param);
-    } else if constexpr (Platform::isLinux()) {
-        // Linux implementation
-        return linuxDoSomething(param);
-    } else if constexpr (Platform::isMacOS()) {
-        // macOS implementation
-        return macosDoSomething(param);
-    }
-}
+**2. Create platform implementations**:
+```
+MyFeature.linux.cpp
+MyFeature.mac.mm
+MyFeature.windows.cpp
 ```
 
-**Option B: Separate files + CMake**
-```cpp
-// MyFeature_Windows.cpp
-bool MyFeature::doSomething(const std::string& param) {
-    // Windows only
-    return /* ... */;
-}
-
-// MyFeature_Linux.cpp
-bool MyFeature::doSomething(const std::string& param) {
-    // Linux only
-    return /* ... */;
-}
-
-// MyFeature_macOS.cpp
-bool MyFeature::doSomething(const std::string& param) {
-    // macOS only
-    return /* ... */;
-}
-```
-
-**CMakeLists.txt**
+**3. Update CMakeLists.txt**:
 ```cmake
 if(WIN32)
-    set(PLATFORM_SOURCES MyFeature_Windows.cpp)
+    list(APPEND PLATFORM_SOURCES MyFeature.windows.cpp)
 elseif(UNIX AND NOT APPLE)
-    set(PLATFORM_SOURCES MyFeature_Linux.cpp)
+    list(APPEND PLATFORM_SOURCES MyFeature.linux.cpp)
 elseif(APPLE)
-    set(PLATFORM_SOURCES MyFeature_macOS.cpp)
+    list(APPEND PLATFORM_SOURCES MyFeature.mac.mm)
 endif()
-
-add_library(PlatformSpecific ${PLATFORM_SOURCES} ...)
-```
-
-### Usage from Common Code
-```cpp
-// In engine code (common)
-#include "PlatformSpecific/DialogBox.hpp"
-
-void showError(const std::string& message) {
-    // Abstract API, transparent OS-specific implementation
-    DialogBox::showError("Error", message);
-}
 ```
 
 ### Handling Unsupported Features
+
 ```cpp
 bool MyFeature::doSomething(const std::string& param) {
-    if constexpr (Platform::isWindows()) {
-        // Windows implementation
-        return true;
-    } else if constexpr (Platform::isLinux()) {
-        // Linux implementation
-        return true;
-    } else {
-        // macOS: not yet implemented
-        Log::warning("MyFeature::doSomething not implemented on macOS");
-        return false;  // Graceful failure
-    }
+    // Implementation not available on this platform
+    Tracer::warning(ClassId, "MyFeature::doSomething not implemented on this platform");
+    return false;  // Graceful failure
 }
 ```
 
-## CRITICAL Attention Points
+---
+
+## Common Pitfalls
+
+| Pitfall | Solution |
+|---------|----------|
+| Platform macros in implementation files | Remove them - CMake handles file selection |
+| Wrong UTF-8 conversion on Windows | Always use `convertUTF8ToWide()` |
+| `defaultCStringEncoding` on macOS | Use `stringWithUTF8String:` instead |
+| File filters with folder selection | Skip filters when `m_selectFolder = true` |
+| More than 3 buttons with kdialog | Fall back to zenity |
+| Blocking shell commands on Linux | Use `executeCommand()` which handles `popen`/`pclose` |
+
+---
+
+## Attention Points
 
 - **STRICT isolation**: Windows code NEVER touches Linux/macOS and vice-versa
-- **No #ifdef in common code**: All platform-specific MUST stay in PlatformSpecific/
+- **No platform macros in .cpp/.mm files**: CMake selects files per OS
 - **Cross-platform testing**: Test on all 3 OS before commit
-- **Abstract API**: Common .hpp interface, separate implementations
+- **Abstract API**: Common `.hpp` interface, separate implementations
 - **CMake correctly configured**: Verify file selection per OS
 - **Explicit warnings**: If feature unsupported, log clear warning
-- **Documentation**: Indicate OS limitations in comments
+- **UTF-8 everywhere**: Convert at platform boundaries only
 
-## Platform-Specific Implementation Details
+---
 
-### Linux Dialog Implementation (zenity/kdialog)
-Linux dialogs use native desktop tools via shell commands. See: `Desktop/Dialog/*.linux.cpp`
+## Related Documentation
 
-**Tool Selection Logic**:
-```cpp
-// Prefer kdialog on KDE, zenity otherwise
-const bool useKdialog = hasKdialog() && (!hasZenity() || isKdeDesktop());
-```
-
-**Key Functions** (in anonymous namespace):
-- `checkProgram()` - Checks tool availability via `which`
-- `hasZenity()` / `hasKdialog()` - Cached tool detection
-- `isKdeDesktop()` - Checks `XDG_CURRENT_DESKTOP` for "KDE"
-- `escapeShellArg()` - Shell argument escaping with single quotes
-- `executeCommand()` - Runs command via `popen`/`pclose`
-
-**Zenity Quirks** (as of 2024+):
-- Use `--icon=` not `--icon-name=` (deprecated)
-- `--confirm-overwrite` is deprecated (now default behavior)
-- Multi-select separator: use `--separator=$'\\n'` (bash syntax for real newline)
-
-### Windows Taskbar Progress
-Uses COM `ITaskbarList3` interface. See: `Desktop/Commands.windows.cpp:setTaskbarIconProgression()`
-
-**Progress Modes** (`ProgressMode` enum):
-| Mode | Windows Flag | Visual |
-|------|--------------|--------|
-| `None` | `TBPF_NOPROGRESS` | Hidden |
-| `Normal` | `TBPF_NORMAL` | Green bar |
-| `Indeterminate` | `TBPF_INDETERMINATE` | Marquee animation |
-| `Error` | `TBPF_ERROR` | Red bar |
-| `Paused` | `TBPF_PAUSED` | Yellow bar |
-
-### macOS Dock Progress
-Uses `NSDockTile` with `NSProgressIndicator`. See: `Desktop/Commands.mac.mm:setTaskbarIconProgression()`
-
-- Progress bar overlays the dock icon
-- Pass negative value to remove the progress indicator
-- Mode parameter is ignored (macOS only supports normal progress)
-
-### Linux Taskbar Progress
-**Not supported** on standard Linux desktops (GNOME, KDE, etc.).
-Would require `libunity` for Ubuntu Unity desktop only.
-See: `Desktop/Commands.linux.cpp:setTaskbarIconProgression()` (stub)
-
-### CustomMessage Dialog (Custom Buttons)
-
-Dialogs with 1-6 custom button labels. See: `Desktop/Dialog/CustomMessage.*`
-
-**Type**: `ButtonLabels` (`Libs::StaticVector<std::string, 6>`)
-
-**Usage**:
-```cpp
-Dialog::CustomMessage dialog{"Title", "Message", {"Save", "Don't Save", "Cancel"}, MessageType::Warning};
-dialog.execute(&window);
-int clickedIndex = dialog.getClickedButtonIndex();  // 0-based, -1 if dismissed
-```
-
-**Platform Implementations**:
-| Platform | API | Button Index Mapping |
-|----------|-----|---------------------|
-| macOS | `NSAlert` with `addButtonWithTitle:` | `NSAlertFirstButtonReturn (1000)` → 0 |
-| Linux | `zenity --question --switch --extra-button=...` | Parses button text from stdout |
-| Windows | `TaskDialogIndirect` with `TASKDIALOG_BUTTON[]` | Button IDs 100+ → 0-based |
-
-**Critical**: First button in array is the default/primary button on all platforms.
-
-### OpenFile Dialog Constraints
-
-**CRITICAL**: File filters must NOT be applied when selecting folders (`m_selectFolder = true`).
-
-See: `Desktop/Dialog/OpenFile.windows.cpp`, `Desktop/Dialog/OpenFile.mac.mm`
-
-```cpp
-// Correct pattern - skip filters for folder selection
-if (!m_selectFolder && !m_extensionFilters.empty()) {
-    // Apply filters only for file selection
-}
-```
-
-This constraint was discovered as a bug fix - applying filters to folder selection breaks the dialog on Windows and macOS.
-
-## Detailed Documentation
-
-Related systems:
+- `Desktop/Dialog/Types.hpp` - `MessageType`, `ButtonLayout`, `ButtonLabels` definitions
+- `Libs/StaticVector.hpp` - Fixed-capacity vector used for `ButtonLabels`
 - CMakeLists.txt - Cross-platform build configuration
-- README.md - Supported platforms and requirements

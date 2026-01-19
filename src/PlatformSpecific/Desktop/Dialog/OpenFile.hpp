@@ -27,7 +27,9 @@
 #pragma once
 
 /* STL inclusions. */
+#include <filesystem>
 #include <utility>
+#include <vector>
 
 /* Local inclusions for inheritances. */
 #include "Abstract.hpp"
@@ -109,10 +111,10 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 
 			/**
 			 * @brief Returns the selected files.
-			 * @return const std::vector< std::string > &
+			 * @return const std::vector< std::filesystem::path > &
 			 */
 			[[nodiscard]]
-			const std::vector< std::string > &
+			const std::vector< std::filesystem::path > &
 			filepaths () const
 			{
 				return m_filepaths;
@@ -121,7 +123,7 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 		private:
 
 			std::vector< std::pair< std::string, std::vector< std::string > > > m_extensionFilters;
-			std::vector< std::string > m_filepaths;
+			std::vector< std::filesystem::path > m_filepaths;
 			bool m_canceled{false};
 			bool m_selectFolder{false};
 			bool m_multiSelect{false};

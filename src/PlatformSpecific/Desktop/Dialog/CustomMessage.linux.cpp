@@ -26,85 +26,14 @@
 
 #include "CustomMessage.hpp"
 
-#if IS_LINUX
-
-/* STL inclusions. */
-#include <array>
-#include <cstdlib>
-#include <cstdio>
-#include <algorithm>
-
 /* Local inclusions. */
+#include "PlatformSpecific/Helpers.hpp"
 #include "Window.hpp"
 
 namespace EmEn::PlatformSpecific::Desktop::Dialog
 {
 	namespace
 	{
-		bool
-		checkProgram (const std::string & program) noexcept
-		{
-			const std::string command = "which " + program + " > /dev/null 2>&1";
-
-			return system(command.c_str()) == 0;
-		}
-
-		bool
-		hasZenity () noexcept
-		{
-			static const bool result = checkProgram("zenity");
-
-			return result;
-		}
-
-		bool
-		hasKdialog () noexcept
-		{
-			static const bool result = checkProgram("kdialog");
-
-			return result;
-		}
-
-		bool
-		isKdeDesktop () noexcept
-		{
-			const char * desktop = std::getenv("XDG_CURRENT_DESKTOP");
-
-			if ( desktop != nullptr )
-			{
-				std::string desktopStr{desktop};
-
-				return desktopStr.find("KDE") != std::string::npos;
-			}
-
-			return false;
-		}
-
-		std::string
-		escapeShellArg (const std::string & arg) noexcept
-		{
-			std::string escaped;
-			escaped.reserve(arg.size() + 2);
-			escaped += '\'';
-
-			for ( const char c : arg )
-			{
-				if ( c == '\'' )
-				{
-					/* End quote, add escaped quote, restart quote. */
-					escaped += "'\\''";
-				}
-				else
-				{
-					escaped += c;
-				}
-			}
-
-			escaped += '\'';
-
-			return escaped;
-		}
-
 		const char *
 		getZenityIconName (MessageType messageType) noexcept
 		{
@@ -124,38 +53,6 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 					return "dialog-information";
 			}
 		}
-
-		std::string
-		executeCommand (const std::string & command, int & exitCode) noexcept
-		{
-			std::string output;
-			std::array< char, 256 > buffer{};
-
-			FILE * pipe = popen(command.c_str(), "r");
-
-			if ( pipe == nullptr )
-			{
-				exitCode = -1;
-
-				return output;
-			}
-
-			while ( fgets(buffer.data(), static_cast< int >(buffer.size()), pipe) != nullptr )
-			{
-				output += buffer.data();
-			}
-
-			const int status = pclose(pipe);
-			exitCode = WEXITSTATUS(status);
-
-			/* Remove trailing newline if any. */
-			while ( !output.empty() && output.back() == '\n' )
-			{
-				output.pop_back();
-			}
-
-			return output;
-		}
 	}
 
 	bool
@@ -172,9 +69,7 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 
 		/* Prefer kdialog on KDE for up to 3 buttons, zenity otherwise.
 		 * Note: kdialog only supports up to 3 buttons (yesnocancel), so we use zenity for more. */
-		const bool useKdialog = hasKdialog() && (!hasZenity() || isKdeDesktop()) && m_buttons.size() <= 3;
-
-		if ( useKdialog )
+		if ( hasKdialog() && (!hasZenity() || isKdeDesktop()) && m_buttons.size() <= 3 )
 		{
 			command = "kdialog";
 
@@ -251,7 +146,7 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 
 			/* Execute and parse kdialog result. */
 			int exitCode = 0;
-			executeCommand(command, exitCode);
+			(void)executeCommand(command, exitCode);
 
 			if ( m_buttons.size() == 1 )
 			{
@@ -284,7 +179,8 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 
 			return true;
 		}
-		else if ( hasZenity() )
+
+		if ( hasZenity() )
 		{
 			/* Zenity with --question --switch and --extra-button for custom buttons.
 			 * The output contains the button text that was clicked. */
@@ -323,14 +219,10 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 			/* If no match found and dialog was closed, keep -1. */
 			return true;
 		}
-		else
-		{
-			/* No dialog tool available. */
-			m_clickedIndex = -1;
 
-			return false;
-		}
+		/* No dialog tool available. */
+		m_clickedIndex = -1;
+
+		return false;
 	}
 }
-
-#endif

@@ -26,9 +26,8 @@
 
 #include "Message.hpp"
 
-#if IS_WINDOWS
-
 /* Local inclusions. */
+#include "PlatformSpecific/Helpers.hpp"
 #include "Window.hpp"
 
 namespace EmEn::PlatformSpecific::Desktop::Dialog
@@ -80,10 +79,9 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 		UINT messageType = getMessageType(m_messageType);
 		UINT layout = getButtonLayout(m_buttonLayout);
 
-		/* NOTE: Convert strings from 8bit char to wide char. */
-		const auto & title = this->title();
-		const std::wstring wsTitle(title.cbegin(), title.cend());
-		const std::wstring wsMessage(m_message.cbegin(), m_message.cend());
+		/* NOTE: Convert strings from UTF-8 to wide char. */
+		const std::wstring wsTitle = convertUTF8ToWide(this->title());
+		const std::wstring wsMessage = convertUTF8ToWide(m_message);
 
 		HWND parentWindow = window != nullptr ? window->getWin32Window() : nullptr;
 
@@ -112,5 +110,3 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 		return true;
 	}
 }
-
-#endif

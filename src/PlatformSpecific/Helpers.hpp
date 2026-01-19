@@ -31,9 +31,9 @@
 
 /* STL inclusions. */
 #include <string>
+#include <vector>
 #if IS_WINDOWS
 	#include <map>
-	#include <vector>
 #endif
 
 /* Third-party inclusions. */
@@ -126,5 +126,74 @@ namespace EmEn::PlatformSpecific
 	 */
 	[[nodiscard]]
 	std::vector< COMDLG_FILTERSPEC > createExtensionFilter (const std::vector< std::pair< std::string, std::vector< std::string > > > & filters, std::map< std::wstring, std::wstring > & dataHolder);
+#endif
+
+#if IS_LINUX
+	/** @brief Extension filter type for file dialogs. */
+	using ExtensionFilters = std::vector< std::pair< std::string, std::vector< std::string > > >;
+
+	/**
+	 * @brief Checks if a program is available in the system PATH.
+	 * @param program The program name to check.
+	 * @return bool True if the program exists.
+	 */
+	[[nodiscard]]
+	bool checkProgram (const std::string & program) noexcept;
+
+	/**
+	 * @brief Checks if zenity is available on the system.
+	 * @note Result is cached after first call.
+	 * @return bool
+	 */
+	[[nodiscard]]
+	bool hasZenity () noexcept;
+
+	/**
+	 * @brief Checks if kdialog is available on the system.
+	 * @note Result is cached after first call.
+	 * @return bool
+	 */
+	[[nodiscard]]
+	bool hasKdialog () noexcept;
+
+	/**
+	 * @brief Checks if the current desktop environment is KDE.
+	 * @return bool
+	 */
+	[[nodiscard]]
+	bool isKdeDesktop () noexcept;
+
+	/**
+	 * @brief Escapes a string for safe use as a shell argument.
+	 * @param arg The argument to escape.
+	 * @return std::string The escaped argument wrapped in single quotes.
+	 */
+	[[nodiscard]]
+	std::string escapeShellArg (const std::string & arg) noexcept;
+
+	/**
+	 * @brief Executes a shell command and captures its output.
+	 * @param command The command to execute.
+	 * @param exitCode Output parameter for the command's exit code.
+	 * @return std::string The command's stdout output with trailing newlines removed.
+	 */
+	[[nodiscard]]
+	std::string executeCommand (const std::string & command, int & exitCode) noexcept;
+
+	/**
+	 * @brief Builds zenity file filter arguments from extension filters.
+	 * @param filters The extension filters.
+	 * @return std::string The zenity --file-filter arguments.
+	 */
+	[[nodiscard]]
+	std::string buildZenityFilters (const ExtensionFilters & filters) noexcept;
+
+	/**
+	 * @brief Builds kdialog file filter arguments from extension filters.
+	 * @param filters The extension filters.
+	 * @return std::string The kdialog filter string.
+	 */
+	[[nodiscard]]
+	std::string buildKdialogFilters (const ExtensionFilters & filters) noexcept;
 #endif
 }

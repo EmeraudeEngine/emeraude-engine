@@ -26,11 +26,10 @@
 
 #include "OpenFile.hpp"
 
-#if IS_WINDOWS
-
 /* STL inclusions. */
-#include <vector>
+#include <filesystem>
 #include <map>
+#include <vector>
 
 /* Third-party inclusions. */
 #include <shobjidl.h>
@@ -201,9 +200,7 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 					hr = item->GetDisplayName(SIGDN_FILESYSPATH, &path);
 					if ( SUCCEEDED(hr) )
 					{
-						const std::wstring filepathW{path};
-
-						m_filepaths.emplace_back(convertWideToUTF8(filepathW));
+						m_filepaths.emplace_back(path);
 
 						CoTaskMemFree(path);
 					}
@@ -218,5 +215,3 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 		return true;
 	}
 }
-
-#endif
