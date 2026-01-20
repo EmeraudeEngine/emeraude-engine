@@ -41,12 +41,12 @@ namespace EmEn::Graphics
 	using namespace Vulkan;
 
 	const std::array< Matrix< 4, float >, CubemapFaceIndexes.size() > ViewMatrices3DUBO::CubemapOrientation{
-		Matrix< 4, float >::lookAt(Vector< 3, float >{0.0F, 0.0F, 0.0F}, Vector< 3, float >{ 1.0F,  0.0F,  0.0F}, Vector< 3, float >{ 0.0F, -1.0F,  0.0F}), // X+
-		Matrix< 4, float >::lookAt(Vector< 3, float >{0.0F, 0.0F, 0.0F}, Vector< 3, float >{-1.0F,  0.0F,  0.0F}, Vector< 3, float >{ 0.0F, -1.0F,  0.0F}), // X-
+		Matrix< 4, float >::lookAt(Vector< 3, float >{0.0F, 0.0F, 0.0F}, Vector< 3, float >{ 1.0F,  0.0F,  0.0F}, Vector< 3, float >{ 0.0F,  1.0F,  0.0F}), // X+
+		Matrix< 4, float >::lookAt(Vector< 3, float >{0.0F, 0.0F, 0.0F}, Vector< 3, float >{-1.0F,  0.0F,  0.0F}, Vector< 3, float >{ 0.0F,  1.0F,  0.0F}), // X-
 		Matrix< 4, float >::lookAt(Vector< 3, float >{0.0F, 0.0F, 0.0F}, Vector< 3, float >{ 0.0F, -1.0F,  0.0F}, Vector< 3, float >{ 0.0F,  0.0F, -1.0F}), // Y+
 		Matrix< 4, float >::lookAt(Vector< 3, float >{0.0F, 0.0F, 0.0F}, Vector< 3, float >{ 0.0F,  1.0F,  0.0F}, Vector< 3, float >{ 0.0F,  0.0F,  1.0F}), // Y-
-		Matrix< 4, float >::lookAt(Vector< 3, float >{0.0F, 0.0F, 0.0F}, Vector< 3, float >{ 0.0F,  0.0F,  1.0F}, Vector< 3, float >{ 0.0F, -1.0F,  0.0F}), // Z+
-		Matrix< 4, float >::lookAt(Vector< 3, float >{0.0F, 0.0F, 0.0F}, Vector< 3, float >{ 0.0F,  0.0F, -1.0F}, Vector< 3, float >{ 0.0F, -1.0F,  0.0F}) // Z-
+		Matrix< 4, float >::lookAt(Vector< 3, float >{0.0F, 0.0F, 0.0F}, Vector< 3, float >{ 0.0F,  0.0F, -1.0F}, Vector< 3, float >{ 0.0F,  1.0F,  0.0F}), // Z+ (direction swapped)
+		Matrix< 4, float >::lookAt(Vector< 3, float >{0.0F, 0.0F, 0.0F}, Vector< 3, float >{ 0.0F,  0.0F,  1.0F}, Vector< 3, float >{ 0.0F,  1.0F,  0.0F}) // Z- (direction swapped)
 	};
 
 	const std::array< Matrix< 4, float >, CubemapFaceIndexes.size() > ViewMatrices3DUBO::ShadowCubemapOrientation{
@@ -57,6 +57,120 @@ namespace EmEn::Graphics
 		Matrix< 4, float >::lookAt(Vector< 3, float >{0.0F, 0.0F, 0.0F}, Vector< 3, float >{ 0.0F,  0.0F, -1.0F}, Vector< 3, float >{ 0.0F,  1.0F,  0.0F}), // Z+
 		Matrix< 4, float >::lookAt(Vector< 3, float >{0.0F, 0.0F, 0.0F}, Vector< 3, float >{ 0.0F,  0.0F,  1.0F}, Vector< 3, float >{ 0.0F,  1.0F,  0.0F}) // Z-
 	};
+
+	const Matrix< 4, float > &
+	ViewMatrices3DUBO::projectionMatrix (uint32_t readStateIndex) const noexcept
+	{
+		if constexpr ( IsDebug )
+		{
+			if ( readStateIndex >= m_renderState.size() )
+			{
+				Tracer::error(ClassId, "Index overflow !");
+
+				return m_logicState.projection;
+			}
+		}
+
+		return m_renderState[readStateIndex].projection;
+	}
+
+	const Matrix< 4, float > &
+	ViewMatrices3DUBO::viewMatrix (bool infinity, size_t index) const noexcept
+	{
+		if ( index >= CubemapFaceCount )
+		{
+			Tracer::error(ClassId, "Index overflow !");
+
+			index = 0;
+		}
+
+		return infinity ? m_logicState.infinityViews[index] : m_logicState.views[index];
+	}
+
+	const Matrix< 4, float > &
+	ViewMatrices3DUBO::viewMatrix (uint32_t readStateIndex, bool infinity, size_t index) const noexcept
+	{
+		if constexpr ( IsDebug )
+		{
+			if ( index >= CubemapFaceCount )
+			{
+				Tracer::error(ClassId, "Index overflow !");
+
+				index = 0;
+			}
+
+			if ( readStateIndex >= m_renderState.size() )
+			{
+				Tracer::error(ClassId, "Index overflow !");
+
+				return infinity ? m_logicState.infinityViews[index] : m_logicState.views[index];
+			}
+		}
+
+		return infinity ? m_renderState[readStateIndex].infinityViews[index] : m_renderState[readStateIndex].views[index];
+	}
+
+	const Vector< 3, float > &
+	ViewMatrices3DUBO::position (uint32_t readStateIndex) const noexcept
+	{
+		if constexpr ( IsDebug )
+		{
+			if ( readStateIndex >= m_renderState.size() )
+			{
+				Tracer::error(ClassId, "Index overflow !");
+
+				return m_logicState.position;
+			}
+		}
+
+		return m_renderState[readStateIndex].position;
+	}
+
+	const Frustum &
+	ViewMatrices3DUBO::frustum (size_t index) const noexcept
+	{
+		if ( index >= CubemapFaceCount )
+		{
+			Tracer::error(ClassId, "Index overflow !");
+
+			index = 0;
+		}
+
+		return m_logicState.frustums[index];
+	}
+
+	const Frustum &
+	ViewMatrices3DUBO::frustum (uint32_t readStateIndex, size_t index) const noexcept
+	{
+		if constexpr ( IsDebug )
+		{
+			if ( index >= CubemapFaceCount )
+			{
+				Tracer::error(ClassId, "Index overflow !");
+
+				index = 0;
+			}
+
+			if ( readStateIndex >= m_renderState.size() )
+			{
+				Tracer::error(ClassId, "Index overflow !");
+
+				return m_logicState.frustums[index];
+			}
+		}
+
+		return m_renderState[readStateIndex].frustums[index];
+	}
+
+	float
+	ViewMatrices3DUBO::fieldOfView () const noexcept
+	{
+		using namespace Libs::Math;
+
+		constexpr auto Rad2Deg = HalfRevolution< float > / std::numbers::pi_v< float >;
+
+		return std::atan(1.0F / m_logicState.projection[M4x4Col1Row1]) * 2.0F * Rad2Deg;
+	}
 
 	void
 	ViewMatrices3DUBO::updatePerspectiveViewProperties (float width, float height, float fov, float distance) noexcept
@@ -72,10 +186,10 @@ namespace EmEn::Graphics
 
 		m_logicState.bufferData[ViewWidthOffset] = width;
 		m_logicState.bufferData[ViewHeightOffset] = height;
-		m_logicState.bufferData[ViewDistanceOffset] = distance;
-		m_logicState.bufferData[ViewNearOffset] = 0.1F / std::sqrt(1.0F + powA * 2.0F);
+		m_logicState.bufferData[FarPlaneOffset] = distance;
+		m_logicState.bufferData[NearPlaneOffset] = 0.1F / std::sqrt(1.0F + powA * 2.0F);
 
-		m_logicState.projection = Matrix< 4, float >::perspectiveProjection(QuartRevolution< float >, 1.0F, m_logicState.bufferData[ViewNearOffset], m_logicState.bufferData[ViewDistanceOffset]);
+		m_logicState.projection = Matrix< 4, float >::perspectiveProjection(QuartRevolution< float >, 1.0F, m_logicState.bufferData[NearPlaneOffset], m_logicState.bufferData[FarPlaneOffset]);
 
 		/*TraceDebug{ClassId} <<
 			"Perspective projection:" "\n"
@@ -99,13 +213,13 @@ namespace EmEn::Graphics
 
 		m_logicState.bufferData[ViewWidthOffset] = width;
 		m_logicState.bufferData[ViewHeightOffset] = height;
-		m_logicState.bufferData[ViewNearOffset] = nearDistance;
-		m_logicState.bufferData[ViewDistanceOffset] = farDistance;
+		m_logicState.bufferData[NearPlaneOffset] = nearDistance;
+		m_logicState.bufferData[FarPlaneOffset] = farDistance;
 
 		m_logicState.projection = Matrix< 4, float >::orthographicProjection(
-			-m_logicState.bufferData[ViewDistanceOffset], m_logicState.bufferData[ViewDistanceOffset],
-			-m_logicState.bufferData[ViewDistanceOffset], m_logicState.bufferData[ViewDistanceOffset],
-			m_logicState.bufferData[ViewNearOffset], m_logicState.bufferData[ViewDistanceOffset]
+			-m_logicState.bufferData[FarPlaneOffset], m_logicState.bufferData[FarPlaneOffset],
+			-m_logicState.bufferData[FarPlaneOffset], m_logicState.bufferData[FarPlaneOffset],
+			m_logicState.bufferData[NearPlaneOffset], m_logicState.bufferData[FarPlaneOffset]
 		);
 
 		/*TraceDebug{ClassId} <<
@@ -130,9 +244,11 @@ namespace EmEn::Graphics
 			m_logicState.views.at(faceIndex) = CubemapOrientation.at(faceIndex) * Matrix< 4, float >::translation(-m_logicState.position);
 			m_logicState.infinityViews.at(faceIndex) = CubemapOrientation.at(faceIndex) * Matrix< 4, float >::translation(-m_logicState.position);
 			m_logicState.frustums.at(faceIndex).update(m_logicState.projection * m_logicState.views.at(faceIndex));
+
+			/* Copy view matrix to buffer data for GPU upload. */
+			std::memcpy(&m_logicState.bufferData[faceIndex * Matrix4Alignment], m_logicState.views.at(faceIndex).data(), Matrix4Alignment * sizeof(float));
 		}
 
-		/* FIXME: These data are not constantly updated on GPU. */
 		m_logicState.bufferData[WorldPositionOffset + 0] = m_logicState.position.x();
 		m_logicState.bufferData[WorldPositionOffset + 1] = m_logicState.position.y();
 		m_logicState.bufferData[WorldPositionOffset + 2] = m_logicState.position.z();
@@ -196,6 +312,22 @@ namespace EmEn::Graphics
 		return true;
 	}
 
+	void
+	ViewMatrices3DUBO::publishStateForRendering (uint32_t writeStateIndex) noexcept
+	{
+		if constexpr ( IsDebug )
+		{
+			if ( writeStateIndex >= m_renderState.size() )
+			{
+				Tracer::error(ClassId, "Index overflow !");
+
+				return;
+			}
+		}
+
+		m_renderState[writeStateIndex] = m_logicState;
+	}
+
 	bool
 	ViewMatrices3DUBO::updateVideoMemory (uint32_t readStateIndex) const noexcept
 	{
@@ -232,6 +364,17 @@ namespace EmEn::Graphics
 		m_uniformBufferObject->unmapMemory(0, VK_WHOLE_SIZE);
 
 		return true;
+	}
+
+	void
+	ViewMatrices3DUBO::destroy () noexcept
+	{
+		/* [VULKAN-CPU-SYNC] Maybe useless */
+		/* NOTE: Lock between updateVideoMemory() and destroy(). */
+		const std::lock_guard< std::mutex > lock{m_memoryAccess};
+
+		m_descriptorSet.reset();
+		m_uniformBufferObject.reset();
 	}
 
 	std::ostream &

@@ -159,6 +159,27 @@ namespace EmEn::Graphics
 			virtual float fieldOfView () const noexcept = 0;
 
 			/**
+			 * @brief Returns the near clipping plane distance.
+			 * @return float
+			 */
+			[[nodiscard]]
+			virtual float nearPlane () const noexcept = 0;
+
+			/**
+			 * @brief Returns the far clipping plane distance.
+			 * @return float
+			 */
+			[[nodiscard]]
+			virtual float farPlane () const noexcept = 0;
+
+			/**
+			 * @brief Returns the view descriptor set.
+			 * @return const Vulkan::DescriptorSet *
+			 */
+			[[nodiscard]]
+			virtual const Vulkan::DescriptorSet * descriptorSet () const noexcept = 0;
+
+			/**
 			 * @brief Updates view properties with a perspective projection.
 			 * @note This should be called when the viewport changes.
 			 * @param width The width of the viewport.
@@ -228,11 +249,27 @@ namespace EmEn::Graphics
 			virtual void destroy () noexcept = 0;
 
 			/**
-			 * @brief Returns the view descriptor set.
-			 * @return const Vulkan::DescriptorSet *
+			 * @brief Computes the 8 corners of a frustum in world space.
+			 * @note The corners are computed by transforming NDC cube corners through the inverse view-projection matrix.
+			 * @param inverseViewProjection The inverse of the view-projection matrix.
+			 * @return std::array< Libs::Math::Vector< 3, float >, 8 > The frustum corners in world space.
 			 */
 			[[nodiscard]]
-			virtual const Vulkan::DescriptorSet * descriptorSet () const noexcept = 0;
+			static std::array< Libs::Math::Vector< 3, float >, 8 > computeFrustumCornersWorld (const Libs::Math::Matrix< 4, float > & inverseViewProjection) noexcept;
+
+			/**
+			 * @brief Computes the 8 corners of this view's frustum in world space.
+			 * @note Uses the current projection and view matrices to compute frustum corners.
+			 * @return std::array< Libs::Math::Vector< 3, float >, 8 > The frustum corners in world space.
+			 */
+			[[nodiscard]]
+			std::array< Libs::Math::Vector< 3, float >, 8 >
+			getFrustumCornersWorld () const noexcept
+			{
+				const auto viewProjection = this->projectionMatrix() * this->viewMatrix(false, 0);
+
+				return ViewMatricesInterface::computeFrustumCornersWorld(viewProjection.inverse());
+			}
 
 		protected:
 

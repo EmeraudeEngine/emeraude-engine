@@ -1290,8 +1290,6 @@ namespace EmEn::Vulkan
 		{
 			m_viewMatrices.updateOrthographicViewProperties(width, height, m_fovOrNear, m_distanceOrFar);
 		}
-
-		this->setViewDistance(m_distanceOrFar);
 	}
 
 	void

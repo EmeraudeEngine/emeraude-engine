@@ -291,6 +291,14 @@ namespace EmEn::Vulkan
 			void enableMultiview () noexcept;
 
 			/**
+			 * @brief Enables multiview rendering with a custom number of views.
+			 * @note This requires Vulkan 1.1+ and multiview feature enabled.
+			 * @param viewCount The number of views (1-32, limited by implementation).
+			 * @return void
+			 */
+			void enableMultiview (uint32_t viewCount) noexcept;
+
+			/**
 			 * @brief Returns whether multiview is enabled.
 			 * @return bool
 			 */

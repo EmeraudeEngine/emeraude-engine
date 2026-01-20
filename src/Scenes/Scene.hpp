@@ -55,7 +55,6 @@
 #include "Graphics/RenderTarget/ShadowMap.hpp"
 #include "Graphics/RenderTarget/Texture.hpp"
 #include "Graphics/RenderTarget/View.hpp"
-#include "Physics/CollisionDetection.hpp"
 #include "Physics/ConstraintSolver.hpp"
 #include "Saphir/EffectInterface.hpp"
 #include "Scenes/AVConsole/Manager.hpp"
@@ -79,6 +78,7 @@ namespace EmEn
 
 	namespace Graphics
 	{
+		class BindlessTextureManager;
 		class Renderer;
 	}
 
@@ -245,7 +245,6 @@ namespace EmEn::Scenes
 			 * via enable() before use. This allows deferred setup of cameras,
 			 * microphones, and render targets.
 			 *
-			 * @param resourceManager A reference to the resource manager.
 			 * @param graphicsRenderer Reference to the graphics renderer for GPU resources.
 			 * @param audioManager Reference to the audio manager for spatial audio.
 			 * @param name Unique scene name (used for AVConsole identification).
@@ -262,7 +261,7 @@ namespace EmEn::Scenes
 			 * @see enable() To activate the scene for rendering.
 			 * @see SceneOctreeOptions For octree configuration.
 			 */
-			Scene (Resources::Manager & resourceManager, Graphics::Renderer & graphicsRenderer, Audio::Manager & audioManager, const std::string & name, float boundary, const std::shared_ptr< Graphics::Renderable::AbstractBackground > & background = nullptr, const std::shared_ptr< GroundLevelInterface > & ground = nullptr, const std::shared_ptr< SeaLevelInterface > & seaLevel = nullptr, const SceneOctreeOptions & octreeOptions = {}) noexcept;
+			Scene (Graphics::Renderer & graphicsRenderer, Audio::Manager & audioManager, const std::string & name, float boundary, const std::shared_ptr< Graphics::Renderable::AbstractBackground > & background = nullptr, const std::shared_ptr< GroundLevelInterface > & ground = nullptr, const std::shared_ptr< SeaLevelInterface > & seaLevel = nullptr, const SceneOctreeOptions & octreeOptions = {}) noexcept;
 
 			/**
 			 * @brief Copy constructor (deleted).
@@ -994,24 +993,7 @@ namespace EmEn::Scenes
 			 * @see background() To query current background.
 			 * @see Graphics::Renderable::AbstractBackground For background interface.
 			 */
-			void
-			setBackground (const std::shared_ptr< Graphics::Renderable::AbstractBackground > & background) noexcept
-			{
-				m_backgroundResource = background;
-
-				/* Extract environment cubemap from background if available. */
-				if ( background != nullptr )
-				{
-					const auto cubemap = background->environmentCubemap();
-
-					if ( cubemap != nullptr )
-					{
-						m_environmentCubemap = cubemap;
-					}
-				}
-
-				this->registerSceneVisualComponents();
-			}
+			void setBackground (const std::shared_ptr< Graphics::Renderable::AbstractBackground > & background) noexcept;
 
 			/**
 			 * @brief Returns the current scene background.
@@ -1179,7 +1161,6 @@ namespace EmEn::Scenes
 			 * @param name Unique name for the virtual video device (must not exist).
 			 * @param resolution Cubemap face size in pixels.
 			 * @param viewDistance Maximum shadow casting distance in meters.
-			 * @param isOrthographicProjection Usually false for point lights.
 			 * @return Shared pointer to the cubic shadow map, or nullptr on failure.
 			 *
 			 * @todo Get the view distance value from settings.
@@ -1187,7 +1168,27 @@ namespace EmEn::Scenes
 			 * @see createRenderToShadowMap() For directional/spotlights.
 			 */
 			[[nodiscard]]
-			std::shared_ptr< Graphics::RenderTarget::ShadowMap< Graphics::ViewMatrices3DUBO > > createRenderToCubicShadowMap (const std::string & name, uint32_t resolution, float viewDistance, bool isOrthographicProjection) noexcept;
+			std::shared_ptr< Graphics::RenderTarget::ShadowMap< Graphics::ViewMatrices3DUBO > > createRenderToCubicShadowMap (const std::string & name, uint32_t resolution, float viewDistance) noexcept;
+
+			/**
+			 * @brief Creates a cascaded shadow map render target for directional lights.
+			 *
+			 * Cascaded Shadow Maps (CSM) divide the view frustum into multiple cascades,
+			 * each with its own shadow map. This provides high-quality shadows near the
+			 * camera while covering large distances with lower resolution in the distance.
+			 *
+			 * @param name Unique name for the virtual video device (must not exist).
+			 * @param resolution Shadow map resolution (same for all cascades).
+			 * @param viewDistance Maximum shadow casting distance in meters.
+			 * @param cascadeCount Number of cascades (1-4). Default is 4.
+			 * @param lambda Split factor (0 = linear, 1 = logarithmic, 0.5 = balanced). Default is 0.5.
+			 * @return Shared pointer to the cascaded shadow map, or nullptr on failure.
+			 *
+			 * @see createRenderToShadowMap() For classic single shadow map.
+			 * @see Graphics::ViewMatricesCascadedUBO For cascade matrix management.
+			 */
+			[[nodiscard]]
+			std::shared_ptr< Graphics::RenderTarget::ShadowMap< Graphics::ViewMatricesCascadedUBO > > createRenderToCascadedShadowMap (const std::string & name, uint32_t resolution, float viewDistance, uint32_t cascadeCount = Graphics::MaxCascadeCount, float lambda = Graphics::DefaultCascadeLambda) noexcept;
 
 			/**
 			 * @brief Creates a 2D render-to-texture target for off-screen rendering.
@@ -1869,6 +1870,14 @@ namespace EmEn::Scenes
 			bool initializeBaseComponents () const noexcept;
 
 			/**
+			 * @brief Updates Cascaded Shadow Map (CSM) matrices for all directional lights.
+			 * @note Called each frame from processLogics() to update cascade projections based on current camera frustum.
+			 * @param mainRenderTarget A reference to the main render target smart-pointer.
+			 * @return void
+			 */
+			void updateCSMCascades (const std::shared_ptr< Graphics::RenderTarget::Abstract > & mainRenderTarget) const noexcept;
+
+			/**
 			 * @brief Builds the scene octrees.
 			 * @param octreeOptions A reference to an octree options struct.
 			 * @return bool
@@ -1957,7 +1966,7 @@ namespace EmEn::Scenes
 			 * @return bool. True to ignore this renderable instance.
 			 */
 			[[nodiscard]]
-			bool checkRenderableInstanceForRendering (const std::shared_ptr< Graphics::RenderTarget::Abstract > & renderTarget, const std::shared_ptr< Graphics::RenderableInstance::Abstract > & renderableInstance) const noexcept;
+			bool checkRenderableInstanceForRendering (const std::shared_ptr< Graphics::RenderTarget::Abstract > & renderTarget, const std::shared_ptr< Graphics::RenderableInstance::Abstract > & renderableInstance) noexcept;
 
 			/**
 			 * @brief Updates the render lists from a point of view of a camera to prepare only the useful data to make a render with it.
@@ -1982,9 +1991,10 @@ namespace EmEn::Scenes
 			 * @param readStateIndex The render state valid index to read data.
 			 * @param commandBuffer A reference to the command buffer.
 			 * @param renderBatches A reference to a render batch.
+			 * @param bindlessTexturesManager A pointer to the bindless textures manager. Can be nullptr.
 			 * @return void
 			 */
-			void renderLightedSelection (const std::shared_ptr< Graphics::RenderTarget::Abstract > & renderTarget, uint32_t readStateIndex, const Vulkan::CommandBuffer & commandBuffer, const RenderBatch::List & renderBatches) const noexcept;
+			void renderLightedSelection (const std::shared_ptr< Graphics::RenderTarget::Abstract > & renderTarget, uint32_t readStateIndex, const Vulkan::CommandBuffer & commandBuffer, const RenderBatch::List & renderBatches, const Graphics::BindlessTextureManager * bindlessTexturesManager) const noexcept;
 
 			/**
 			 * @brief Loops over each renderable instance of the scene
@@ -2001,7 +2011,7 @@ namespace EmEn::Scenes
 			 *
 			 * @param renderTarget Target to initialize instances for.
 			 */
-			void initializeRenderTarget (const std::shared_ptr< Graphics::RenderTarget::Abstract > & renderTarget) const noexcept;
+			void initializeRenderTarget (const std::shared_ptr< Graphics::RenderTarget::Abstract > & renderTarget) noexcept;
 
 			/**
 			 * @brief Determines which render passes apply to a renderable instance.
@@ -2042,7 +2052,7 @@ namespace EmEn::Scenes
 			 * @note Returns true even if preparation is deferred.
 			 */
 			[[nodiscard]]
-			bool getRenderableInstanceReadyForRendering (const std::shared_ptr< Graphics::RenderableInstance::Abstract > & renderableInstance, const std::shared_ptr< Graphics::RenderTarget::Abstract > & renderTarget) const noexcept;
+			bool getRenderableInstanceReadyForRendering (const std::shared_ptr< Graphics::RenderableInstance::Abstract > & renderableInstance, const std::shared_ptr< Graphics::RenderTarget::Abstract > & renderTarget) noexcept;
 
 			/* ============================================================
 			 * [PRIVATE: PHYSICS]

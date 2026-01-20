@@ -1171,6 +1171,114 @@ namespace EmEn::Vulkan
 	}
 
 	void
+	CommandBuffer::draw (const Graphics::Geometry::Interface & geometry) const noexcept
+	{
+		if constexpr ( IsDebug )
+		{
+			if ( !this->isCreated() )
+			{
+				TraceError{ClassId} << "The command buffer is not created for the geometry '" << geometry.name() << "' !";
+
+				return;
+			}
+
+			if ( !geometry.isCreated() )
+			{
+				TraceError{ClassId} << "The geometry '" << geometry.name() << "' is not created !";
+
+				return;
+			}
+		}
+
+		constexpr uint32_t instanceCount{1};
+		constexpr uint32_t firstInstance{0};
+
+		if ( geometry.useIndexBuffer() )
+		{
+			constexpr uint32_t firstIndex{0};
+			constexpr int32_t vertexOffset{0};
+
+			vkCmdDrawIndexed(
+				m_handle,
+				geometry.indexBufferObject()->indexCount(),
+				instanceCount,
+				firstIndex,
+				vertexOffset,
+				firstInstance
+			);
+		}
+		else
+		{
+			constexpr uint32_t firstVertex{0};
+
+			vkCmdDraw(
+				m_handle,
+				geometry.vertexBufferObject()->vertexCount(),
+				instanceCount,
+				firstVertex,
+				firstInstance
+			);
+		}
+	}
+
+	void
+	CommandBuffer::draw (const Graphics::Geometry::Interface & geometry, uint32_t instanceCount) const noexcept
+	{
+		if constexpr ( IsDebug )
+		{
+			if ( !this->isCreated() )
+			{
+				TraceError{ClassId} << "The command buffer is not created for the geometry '" << geometry.name() << "' !";
+
+				return;
+			}
+
+			if ( instanceCount == 0 )
+			{
+				TraceError{ClassId} << "No instance count for the geometry '" << geometry.name() << "' !";
+
+				return;
+			}
+
+			if ( !geometry.isCreated() )
+			{
+				TraceError{ClassId} << "The geometry '" << geometry.name() << "' is not created !";
+
+				return;
+			}
+		}
+
+		constexpr uint32_t firstInstance{0};
+
+		if ( geometry.useIndexBuffer() )
+		{
+			constexpr uint32_t firstIndex{0};
+			constexpr int32_t vertexOffset{0};
+
+			vkCmdDrawIndexed(
+				m_handle,
+				geometry.indexBufferObject()->indexCount(),
+				instanceCount,
+				firstIndex,
+				vertexOffset,
+				firstInstance
+			);
+		}
+		else
+		{
+			constexpr uint32_t firstVertex{0};
+
+			vkCmdDraw(
+				m_handle,
+				geometry.vertexBufferObject()->vertexCount(),
+				instanceCount,
+				firstVertex,
+				firstInstance
+			);
+		}
+	}
+
+	void
 	CommandBuffer::draw (const Graphics::Geometry::Interface & geometry, uint32_t subGeometryIndex, uint32_t instanceCount) const noexcept
 	{
 		if constexpr ( IsDebug )

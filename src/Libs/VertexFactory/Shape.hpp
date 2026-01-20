@@ -195,6 +195,7 @@ namespace EmEn::Libs::VertexFactory
 				m_boundingSphere.reset();
 				m_farthestDistance = 0;
 				m_textureCoordinatesDeclared = false;
+				m_normalsDeclared = false;
 				m_computeEdges = false;
 			}
 
@@ -221,6 +222,17 @@ namespace EmEn::Libs::VertexFactory
 			}
 
 			/**
+			 * @brief Gives mutable access to the vertices list.
+			 * @return std::vector< ShapeVertex< vertex_data_t > > &
+			 */
+			[[nodiscard]]
+			std::vector< ShapeVertex< vertex_data_t > > &
+			vertices () noexcept
+			{
+				return m_vertices;
+			}
+
+			/**
 			 * @brief Gives access to the vertex colors list.
 			 * @return const std::vector< Math::Vector< 4, vertex_data_t > > &
 			 */
@@ -232,12 +244,34 @@ namespace EmEn::Libs::VertexFactory
 			}
 
 			/**
+			 * @brief Gives mutable access to the vertex colors list.
+			 * @return std::vector< Math::Vector< 4, vertex_data_t > > &
+			 */
+			[[nodiscard]]
+			std::vector< Math::Vector< 4, vertex_data_t > > &
+			vertexColors () noexcept
+			{
+				return m_vertexColors;
+			}
+
+			/**
 			 * @brief Gives access to the triangle list.
 			 * @return const std::vector< ShapeTriangle< vertex_data_t > > &
 			 */
 			[[nodiscard]]
 			const std::vector< ShapeTriangle< vertex_data_t > > &
 			triangles () const noexcept
+			{
+				return m_triangles;
+			}
+
+			/**
+			 * @brief Gives mutable access to the triangle list.
+			 * @return std::vector< ShapeTriangle< vertex_data_t > > &
+			 */
+			[[nodiscard]]
+			std::vector< ShapeTriangle< vertex_data_t > > &
+			triangles () noexcept
 			{
 				return m_triangles;
 			}
@@ -400,6 +434,28 @@ namespace EmEn::Libs::VertexFactory
 			isTextureCoordinatesAvailable () const noexcept
 			{
 				return m_textureCoordinatesDeclared;
+			}
+
+			/**
+			 * @brief Returns whether normals are available.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isNormalsAvailable () const noexcept
+			{
+				return m_normalsDeclared;
+			}
+
+			/**
+			 * @brief Declares that normals are available.
+			 * @note Use this after loading geometry with pre-existing normals.
+			 * @return void
+			 */
+			void
+			declareNormalsAvailable () noexcept
+			{
+				m_normalsDeclared = true;
 			}
 
 			/**
@@ -652,6 +708,8 @@ namespace EmEn::Libs::VertexFactory
 
 					verticesRef[globalVertexIndex].setNormal(normal.normalize());
 				}
+
+				m_normalsDeclared = true;
 
 				return true;
 			}
@@ -1884,6 +1942,7 @@ namespace EmEn::Libs::VertexFactory
 			 * This is different from the fourth component of the centroid (m_boundingSphere). */
 			vertex_data_t m_farthestDistance{0};
 			bool m_textureCoordinatesDeclared{false};
+			bool m_normalsDeclared{false};
 			bool m_computeEdges{false};
 	};
 }

@@ -34,8 +34,10 @@
 #include <iostream>
 #include <type_traits>
 
+#ifdef LIBSNDFILE_ENABLED
 /* Third-party inclusions. */
 #include "sndfile.h"
+#endif
 
 /* Local inclusions for inheritances. */
 #include "FileFormatInterface.hpp"
@@ -85,6 +87,7 @@ namespace EmEn::Libs::WaveFactory
 			}
 	};
 
+#ifdef LIBSNDFILE_ENABLED
 	/**
 	 * @brief Specialization for int16_t (16-bit PCM audio).
 	 */
@@ -219,4 +222,5 @@ namespace EmEn::Libs::WaveFactory
 				return true;
 			}
 	};
+#endif
 }

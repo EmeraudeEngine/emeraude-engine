@@ -48,6 +48,7 @@
 #include "Libs/Time/Statistics/RealTime.hpp"
 #include "RenderTarget/Abstract.hpp"
 #include "Saphir/ShaderManager.hpp"
+#include "BindlessTextureManager.hpp"
 #include "SharedUBOManager.hpp"
 #include "VertexBufferFormatManager.hpp"
 #include "Vulkan/Sync/Fence.hpp"
@@ -56,6 +57,8 @@
 #include "Vulkan/TransferManager.hpp"
 #include "Vulkan/SwapChain.hpp"
 #include "Window.hpp"
+#include "Resources/Manager.hpp"
+#include "TextureResource/TextureCubemap.hpp"
 
 /* Forward declarations. */
 namespace EmEn
@@ -72,6 +75,8 @@ namespace EmEn
 
 	namespace Graphics
 	{
+		class DummyShadowTexture;
+
 		namespace Material
 		{
 			class Interface;
@@ -333,6 +338,7 @@ namespace EmEn::Graphics
 				m_window{window},
 				m_shaderManager{primaryServices},
 				m_sharedUBOManager{*this},
+				m_bindlessTextureManager{*this},
 				m_debugMode{m_vulkanInstance.isDebugModeEnabled()}
 			{
 				/* Framebuffer clear color value. */
@@ -504,6 +510,28 @@ namespace EmEn::Graphics
 			sharedUBOManager () const noexcept
 			{
 				return m_sharedUBOManager;
+			}
+
+			/**
+			 * @brief Returns the reference to the bindless texture manager.
+			 * @return BindlessTextureManager &
+			 */
+			[[nodiscard]]
+			BindlessTextureManager &
+			bindlessTextureManager () noexcept
+			{
+				return m_bindlessTextureManager;
+			}
+
+			/**
+			 * @brief Returns the reference to the bindless texture manager.
+			 * @return const BindlessTextureManager &
+			 */
+			[[nodiscard]]
+			const BindlessTextureManager &
+			bindlessTextureManager () const noexcept
+			{
+				return m_bindlessTextureManager;
 			}
 
 			/**
@@ -751,6 +779,56 @@ namespace EmEn::Graphics
 			}
 
 			/**
+			 * @brief Creates graphics resources for default or fall-back behavior.
+			 * @param resources A reference to the resource manager.
+			 * @return void
+			 */
+			void createDefaultResources (Resources::Manager & resources) noexcept;
+
+			/**
+			 * @brief Clears default graphics resources before shutdown.
+			 * @note This must be called before Vulkan resources are destroyed
+			 * because these textures have VMA allocations.
+			 * @return void
+			 */
+			void clearDefaultResources () noexcept;
+
+			/**
+			 * @brief Returns the default texture cubemap.
+			 * @return std::shared_ptr< TextureResource::TextureCubemap >
+			 */
+			[[nodiscard]]
+			std::shared_ptr< TextureResource::TextureCubemap >
+			getDefaultTextureCubemap () const noexcept
+			{
+				return m_defaultTextureCubemap;
+			}
+
+			/**
+			 * @brief Returns the dummy 2D shadow texture.
+			 * @note This texture is used for lights without shadow mapping to maintain unified descriptor set layouts.
+			 * @return std::shared_ptr< DummyShadowTexture >
+			 */
+			[[nodiscard]]
+			std::shared_ptr< DummyShadowTexture >
+			getDummyShadowTexture2D () const noexcept
+			{
+				return m_dummyShadowTexture2D;
+			}
+
+			/**
+			 * @brief Returns the dummy cubemap shadow texture.
+			 * @note This texture is used for point lights without shadow mapping to maintain unified descriptor set layouts.
+			 * @return std::shared_ptr< DummyShadowTexture >
+			 */
+			[[nodiscard]]
+			std::shared_ptr< DummyShadowTexture >
+			getDummyShadowTextureCube () const noexcept
+			{
+				return m_dummyShadowTextureCube;
+			}
+
+			/**
 			 * @brief Finalizes the graphics pipeline creation by replacing it with a similar or create and cache this new one.
 			 * @param renderTarget A reference to a render target.
 			 * @param program A reference to the program.
@@ -835,6 +913,25 @@ namespace EmEn::Graphics
 			isSwapChainDegraded () const noexcept
 			{
 				return m_swapChain->status() == Vulkan::Status::Degraded;
+			}
+
+			/**
+			 * @brief Requests a graceful shutdown of the renderer.
+			 * @note This will signal the renderer to stop producing new frames
+			 * and allow any frames in-flight to complete before destruction.
+			 * @return void
+			 */
+			void requestShutdown () noexcept;
+
+			/**
+			 * @brief Returns whether a shutdown has been requested.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isShutdownRequested () const noexcept
+			{
+				return m_shutdownRequested;
 			}
 
 			[[nodiscard]]
@@ -941,6 +1038,7 @@ namespace EmEn::Graphics
 			Vulkan::LayoutManager m_layoutManager;
 			Saphir::ShaderManager m_shaderManager;
 			SharedUBOManager m_sharedUBOManager;
+			BindlessTextureManager m_bindlessTextureManager;
 			VertexBufferFormatManager m_vertexBufferFormatManager;
 			ExternalInput m_externalInput;
 			std::vector< ServiceInterface * > m_subServicesEnabled;
@@ -953,6 +1051,9 @@ namespace EmEn::Graphics
 			std::unordered_map< std::string, std::shared_ptr< Vulkan::Sampler > > m_samplers;
 			Libs::Time::Statistics::RealTime< std::chrono::high_resolution_clock > m_statistics{30};
 			std::array< VkClearValue, 2 > m_clearColors{};
+			/* NOTE: Shadow maps only have a depth attachment at index 0, so they need
+			 * separate clear values with depth=1.0 at index 0 (not index 1 like main render). */
+			std::array< VkClearValue, 1 > m_shadowMapClearValues{VkClearValue{.depthStencil = {1.0F, 0}}};
 			uint32_t m_currentFrameIndex{0};
 			const uint64_t m_timeout{std::chrono::duration_cast< std::chrono::nanoseconds >(std::chrono::milliseconds(60'000)).count()};
 			std::chrono::high_resolution_clock::time_point m_frameStartTime{};
@@ -962,11 +1063,15 @@ namespace EmEn::Graphics
 			uint32_t m_pipelineReusedCount{0};
 			uint32_t m_programBuiltCount{0};
 			uint32_t m_programReusedCount{0};
+			std::shared_ptr< TextureResource::TextureCubemap > m_defaultTextureCubemap;
+			std::shared_ptr< DummyShadowTexture > m_dummyShadowTexture2D;
+			std::shared_ptr< DummyShadowTexture > m_dummyShadowTextureCube;
 			bool m_isUsable{false};
 			bool m_debugMode{false};
 			bool m_windowLess{false};
 			bool m_shadowMapsEnabled{true};
 			bool m_renderToTexturesEnabled{true};
 			bool m_swapChainMustBeRecreated{false};
+			bool m_shutdownRequested{false};
 	};
 }

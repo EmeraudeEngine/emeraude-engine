@@ -91,6 +91,7 @@ namespace EmEn::Graphics::Material::Component
 			case FillingType::Color :
 			case FillingType::None :
 			case FillingType::AlphaChannelAsValue :
+			case FillingType::Automatic :
 				Tracer::error(ClassId, "Invalid texture type !");
 
 				return;

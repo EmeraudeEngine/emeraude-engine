@@ -113,6 +113,22 @@ namespace EmEn::Vulkan
 				return Scenes::AVConsole::VideoType::View;
 			}
 
+			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::setViewDistance() */
+			void
+			setViewDistance (float meters) noexcept override
+			{
+				m_distanceOrFar = meters;
+				this->updateViewProperties();
+			}
+
+			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::viewDistance() */
+			[[nodiscard]]
+			float
+			viewDistance () const noexcept override
+			{
+				return m_viewMatrices.farPlane();
+			}
+
 			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::updateViewRangesProperties() noexcept */
 			void updateViewRangesProperties (float fovOrNear, float distanceOrFar) noexcept override;
 
@@ -302,6 +318,17 @@ namespace EmEn::Vulkan
 
 			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::onDestroy() */
 			void onDestroy () noexcept override;
+
+			/**
+			 * @copydoc EmEn::Graphics::RenderTarget::Abstract::writeCombinedImageSampler(const Vulkan::DescriptorSet &, uint32_t) const
+			 * @note Intentionally left in private methods because this is not a texture.
+			 */
+			[[nodiscard]]
+			bool
+			writeCombinedImageSampler (const Vulkan::DescriptorSet & /*descriptorSet*/, uint32_t /*bindingIndex*/) const noexcept override
+			{
+				return false;
+			}
 
 			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::createRenderPass() */
 			[[nodiscard]]

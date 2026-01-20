@@ -42,6 +42,7 @@
 #include "Graphics/Types.hpp"
 #include "Libs/Math/CartesianFrame.hpp"
 #include "RenderContext.hpp"
+#include "Graphics/BindlessTextureManager.hpp"
 
 /* Forward declarations. */
 namespace EmEn
@@ -103,8 +104,10 @@ namespace EmEn::Graphics::RenderableInstance
 		BrokenState = 1U << 2,
 		/** @brief This flag is set when the renderable instance needs to generate a shader with lighting code. */
 		EnableLighting = 1U << 3,
-		/** @brief This flag is set when the renderable instance needs to generate a shader to cast/receive shadows. */
-		EnableShadows = 1U << 4,
+		/** @brief This flag disables shadow casting (the instance won't be rendered in shadow maps). */
+		DisableShadowCasting = 1U << 4,
+		/** @brief This flag disables shadow receiving (the instance won't sample shadow maps during rendering). */
+		DisableShadowReceiving = 1U << 13,
 		/** @brief This flag is set to update the renderable instance model matrix with rotations only. Useful for sky rendering. */
 		UseInfinityView = 1U << 5,
 		/**
@@ -251,26 +254,71 @@ namespace EmEn::Graphics::RenderableInstance
 			}
 
 			/**
-			 * @brief Enables the shadowing code generation in shaders.
+			 * @brief Disables shadow casting for this instance (won't be rendered in shadow maps).
 			 * @return Abstract *
 			 */
 			Abstract *
-			enableShadows () noexcept
+			disableShadowCasting () noexcept
 			{
-				this->enableFlag(EnableShadows);
+				this->enableFlag(DisableShadowCasting);
 
 				return this;
 			}
 
 			/**
-			 * @brief Returns whether the shadowing code generation is enabled in shaders.
+			 * @brief Returns whether shadow casting is disabled for this instance.
 			 * @return bool
 			 */
 			[[nodiscard]]
 			bool
-			isShadowsEnabled () const noexcept
+			isShadowCastingDisabled () const noexcept
 			{
-				return this->isFlagEnabled(EnableShadows);
+				return this->isFlagEnabled(DisableShadowCasting);
+			}
+
+			/**
+			 * @brief Returns whether shadow casting is enabled for this instance.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isShadowCastingEnabled () const noexcept
+			{
+				return this->isFlagDisabled(DisableShadowCasting);
+			}
+
+			/**
+			 * @brief Disables shadow receiving for this instance (won't sample shadow maps during rendering).
+			 * @return Abstract *
+			 */
+			Abstract *
+			disableShadowReceiving () noexcept
+			{
+				this->enableFlag(DisableShadowReceiving);
+
+				return this;
+			}
+
+			/**
+			 * @brief Returns whether shadow receiving is disabled for this instance.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isShadowReceivingDisabled () const noexcept
+			{
+				return this->isFlagEnabled(DisableShadowReceiving);
+			}
+
+			/**
+			 * @brief Returns whether shadow receiving is enabled for this instance.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isShadowReceivingEnabled () const noexcept
+			{
+				return this->isFlagDisabled(DisableShadowReceiving);
 			}
 
 			/**
@@ -570,6 +618,7 @@ namespace EmEn::Graphics::RenderableInstance
 			 * @param layerIndex The renderable layer index (for multi-layer materials).
 			 * @param worldCoordinates A pointer to the world coordinates of the instance. nullptr means origin.
 			 * @param commandBuffer A reference to the command buffer recording draw commands.
+		 * @param bindlessTexturesManager A pointer to the bindless textures manager for materials using automatic reflection. Can be nullptr.
 			 *
 			 * @todo The lightEmitter parameter should be refactored to use a smart pointer for safety.
 			 *
@@ -577,7 +626,7 @@ namespace EmEn::Graphics::RenderableInstance
 			 * @see renderTBNSpace() For debug visualization.
 			 * @version 0.8.35
 			 */
-			void render (uint32_t readStateIndex, const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const Scenes::Component::AbstractLightEmitter * lightEmitter, RenderPassType renderPassType, uint32_t layerIndex, const Libs::Math::CartesianFrame< float > * worldCoordinates, const Vulkan::CommandBuffer & commandBuffer) const noexcept;
+			void render (uint32_t readStateIndex, const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const Scenes::Component::AbstractLightEmitter * lightEmitter, RenderPassType renderPassType, uint32_t layerIndex, const Libs::Math::CartesianFrame< float > * worldCoordinates, const Vulkan::CommandBuffer & commandBuffer, const BindlessTextureManager * bindlessTexturesManager = nullptr) const noexcept;
 
 			/**
 			 * @brief Renders the Tangent-Bitangent-Normal space vectors for debugging.

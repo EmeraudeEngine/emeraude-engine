@@ -62,6 +62,7 @@ namespace EmEn
 		class CommandBuffer;
 		class TransferManager;
 		class LayoutManager;
+		class DescriptorSet;
 		class DescriptorSetLayout;
 	}
 }
@@ -258,24 +259,17 @@ namespace EmEn::Graphics::RenderTarget
 
 			/**
 			 * @brief Sets the render target maximum viewable distance in meters.
+			 * @param meters The distance in meters.
 			 * @return void
 			 */
-			void
-			setViewDistance (float meters) noexcept
-			{
-				m_viewDistance = meters;
-			}
+			virtual void setViewDistance (float meters) noexcept = 0;
 
 			/**
 			 * @brief Returns the render target maximum viewable distance in meters.
 			 * @return float
 			 */
 			[[nodiscard]]
-			float
-			viewDistance () const noexcept
-			{
-				return m_viewDistance;
-			}
+			virtual float viewDistance () const noexcept = 0;
 
 			/**
 			 * @brief Changes the projection type.
@@ -331,6 +325,17 @@ namespace EmEn::Graphics::RenderTarget
 			virtual bool isCubemap () const noexcept = 0;
 
 			/**
+			 * @brief Returns whether the render target is a cascaded shadow map.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			virtual bool
+			isCascadedShadowMap () const noexcept
+			{
+				return false;
+			}
+
+			/**
 			 * @brief Gives access to the framebuffer for the rendering process.
 			 * @return const Vulkan::Framebuffer *
 			 */
@@ -353,10 +358,20 @@ namespace EmEn::Graphics::RenderTarget
 
 			/**
 			 * @brief Returns whether the render target is ready to render into.
+			 * @todo This should be split into isReadyForRendering() and isReadyForSampling().
 			 * @return bool
 			 */
 			[[nodiscard]]
 			virtual bool isReadyForRendering () const noexcept = 0;
+
+			/**
+			 * @brief Writes a sampled texture to the descriptor set.
+			 * @param descriptorSet A reference to the descriptor set.
+			 * @param bindingIndex The binding index of the first texture inside the descriptor set layout.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			virtual bool writeCombinedImageSampler (const Vulkan::DescriptorSet & descriptorSet, uint32_t bindingIndex) const noexcept = 0;
 
 			/**
 			 * @brief Captures the GPU buffer to save into a pixmap.
@@ -401,7 +416,6 @@ namespace EmEn::Graphics::RenderTarget
 					.offset = {.x = 0, .y = 0},
 					.extent = {.width = extent.width, .height = extent.height}
 				},
-				m_viewDistance{viewDistance},
 				m_renderType{renderType},
 				m_isOrthographicProjection{isOrthographicProjection},
 				m_enableSyncPrimitive{enableSyncPrimitives}
@@ -512,7 +526,6 @@ namespace EmEn::Graphics::RenderTarget
 			FramebufferPrecisions m_precisions;
 			VkExtent3D m_extent{};
 			VkRect2D m_renderArea{};
-			float m_viewDistance{DefaultGraphicsViewDistance};
 			RenderTargetType m_renderType;
 			std::shared_ptr< Vulkan::Sync::Semaphore > m_semaphore;
 			bool m_isOrthographicProjection{false};

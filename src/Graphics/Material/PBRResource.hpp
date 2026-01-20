@@ -37,6 +37,7 @@
 #include "Resources/Container.hpp"
 #include "Physics/SurfacePhysicalProperties.hpp"
 #include "Component/Interface.hpp"
+#include "Graphics/TextureResource/TextureCubemap.hpp"
 
 /* Forward declarations. */
 namespace EmEn
@@ -344,6 +345,24 @@ namespace EmEn::Graphics::Material
 			bool setReflectionComponentFromRenderTarget (const std::shared_ptr< Vulkan::TextureInterface > & renderTarget) noexcept;
 
 			/**
+			 * @brief Sets the reflection/IBL component using scene environment cubemap.
+			 * @note When enabled, the material will use the scene's environment cubemap for reflection
+			 * instead of a material-specific texture. This is resolved at render time.
+			 * @param IBLIntensity The IBL intensity. Default 1.0.
+			 * @return bool
+			 */
+			bool setReflectionComponentFromEnvironmentCubemap (float IBLIntensity = DefaultIBLIntensity) noexcept;
+
+			/**
+			 * @brief Sets the refraction component using the scene's environment cubemap.
+			 * @note When enabled, the material will use the scene's environment cubemap for refraction
+			 * instead of a material-specific texture. This is resolved at render time.
+			 * @param ior The index of refraction (1.0 = air, 1.33 = water, 1.5 = glass, 2.4 = diamond). Default glass.
+			 * @return bool
+			 */
+			bool setRefractionComponentFromEnvironmentCubemap (float ior = DefaultIOR) noexcept;
+
+			/**
 			 * @brief Sets the refraction component as a cubemap texture for glass-like materials.
 			 * @warning This function is available before creation time.
 			 * @note Fresnel will automatically blend between reflection and refraction.
@@ -363,25 +382,13 @@ namespace EmEn::Graphics::Material
 			 */
 			bool setRefractionComponentFromRenderTarget (const std::shared_ptr< Vulkan::TextureInterface > & renderTarget, float ior = DefaultIOR) noexcept;
 
-			/**
-			 * @brief Enables automatic reflection from scene environment cubemap.
-			 * @note When enabled, the material will use the scene's environment cubemap for reflection
-			 * instead of a material-specific texture. This is resolved at render time.
-			 * @param iblIntensity The IBL intensity. Default 1.0.
-			 */
-			void enableAutomaticReflection (float iblIntensity = DefaultIBLIntensity) noexcept;
-
-			/** @copydoc EmEn::Graphics::Material::Interface::useAutomaticReflection() const noexcept */
+			/** @copydoc EmEn::Graphics::Material::Interface::useEnvironmentCubemap() const noexcept */
 			[[nodiscard]]
 			bool
-			useAutomaticReflection () const noexcept override
+			useEnvironmentCubemap () const noexcept override
 			{
-				return m_useAutomaticReflection;
+				return m_isUsingEnvironmentCubemap || m_isUsingEnvironmentCubemapForRefraction;
 			}
-
-			/** @copydoc EmEn::Graphics::Material::Interface::updateAutomaticReflectionCubemap() noexcept */
-			[[nodiscard]]
-			bool updateAutomaticReflectionCubemap (const Vulkan::TextureInterface & cubemap) noexcept override;
 
 			/**
 			 * @brief Sets the auto-illumination (emissive) component as a color.
@@ -614,6 +621,26 @@ namespace EmEn::Graphics::Material
 			[[nodiscard]]
 			static const char * textCoords (const Component::Texture * component) noexcept;
 
+			/**
+			 * @brief Generates fragment shader code for bindless reflection using the scene's environment cubemap.
+			 * @note Used when automatic reflection is enabled AND bindless textures are supported.
+			 * @param generator A reference to the shader generator.
+			 * @param fragmentShader A reference to the fragment shader being generated.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool generateBindlessReflectionFragmentShader (const Saphir::Generator::Abstract & generator, Saphir::FragmentShader & fragmentShader) const noexcept;
+
+			/**
+			 * @brief Generates fragment shader code for bindless refraction using the scene's environment cubemap.
+			 * @note Used when automatic refraction is enabled AND bindless textures are supported.
+			 * @param generator A reference to the shader generator.
+			 * @param fragmentShader A reference to the fragment shader being generated.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool generateBindlessRefractionFragmentShader (const Saphir::Generator::Abstract & generator, Saphir::FragmentShader & fragmentShader) const noexcept;
+
 			/* Uniform buffer object layout (STD140 aligned, 16 floats = 64 bytes):
 			 * vec4 albedoColor              (offset 0-3)
 			 * float roughness               (offset 4)
@@ -668,9 +695,8 @@ namespace EmEn::Graphics::Material
 			uint32_t m_sharedUBOIndex{0};
 			bool m_videoMemoryUpdated{false};
 			bool m_invertRoughness{false};
-			bool m_useAutomaticReflection{false};
-			/** @brief Binding point for automatic reflection cubemap (only valid when m_useAutomaticReflection is true). */
-			uint32_t m_automaticReflectionBindingPoint{0};
+			bool m_isUsingEnvironmentCubemap{false};
+			bool m_isUsingEnvironmentCubemapForRefraction{false};
 	};
 }
 

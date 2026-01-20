@@ -45,11 +45,11 @@
 /* Local inclusions for usages. */
 #include "Libs/StaticVector.hpp"
 #include "Libs/Math/CartesianFrame.hpp"
-#include "Component/Abstract.hpp"
-#include "Resources/Manager.hpp"
+#include "Physics/CollisionModelInterface.hpp"
+#include "Graphics/Renderable/SimpleMeshResource.hpp"
 #include "Graphics/Renderable/MeshResource.hpp"
 #include "Graphics/Material/BasicResource.hpp"
-#include "Physics/CollisionModelInterface.hpp"
+#include "Component/Abstract.hpp"
 
 /* Forward declarations. */
 namespace EmEn::Physics
@@ -1072,56 +1072,56 @@ namespace EmEn::Scenes
 			 * @brief Returns or creates the axis debug mesh (RGB arrows for XYZ).
 			 *
 			 * @param resources Reference to resource manager (used for mesh creation).
-			 * @return std::shared_ptr< Graphics::Renderable::MeshResource > Shared pointer to axis debug mesh.
+			 * @return std::shared_ptr< Graphics::Renderable::SimpleMeshResource > Shared pointer to axis debug mesh.
 			 *
 			 * @note Cached after first creation - subsequent calls return same mesh.
 			 */
 			[[nodiscard]]
-			static std::shared_ptr< Graphics::Renderable::MeshResource > getAxisVisualDebug (Resources::Manager & resources) noexcept;
+			static std::shared_ptr< Graphics::Renderable::SimpleMeshResource > getAxisVisualDebug (Resources::Manager & resources) noexcept;
 
 			/**
 			 * @brief Returns or creates the velocity debug mesh (directional arrow).
 			 *
 			 * @param resources Reference to resource manager (used for mesh creation).
-			 * @return std::shared_ptr< Graphics::Renderable::MeshResource > Shared pointer to velocity debug mesh.
+			 * @return std::shared_ptr< Graphics::Renderable::SimpleMeshResource > Shared pointer to velocity debug mesh.
 			 *
 			 * @note Cached after first creation - subsequent calls return same mesh.
 			 */
 			[[nodiscard]]
-			static std::shared_ptr< Graphics::Renderable::MeshResource > getVelocityVisualDebug (Resources::Manager & resources) noexcept;
+			static std::shared_ptr< Graphics::Renderable::SimpleMeshResource > getVelocityVisualDebug (Resources::Manager & resources) noexcept;
 
 			/**
 			 * @brief Returns or creates the bounding sphere debug mesh (geodesic sphere wireframe).
 			 *
 			 * @param resources Reference to resource manager (used for mesh creation).
-			 * @return std::shared_ptr< Graphics::Renderable::MeshResource > Shared pointer to bounding sphere debug mesh.
+			 * @return std::shared_ptr< Graphics::Renderable::SimpleMeshResource > Shared pointer to bounding sphere debug mesh.
 			 *
 			 * @note Cached after first creation - subsequent calls return same mesh.
 			 */
 			[[nodiscard]]
-			static std::shared_ptr< Graphics::Renderable::MeshResource > getBoundingSphereVisualDebug (Resources::Manager & resources) noexcept;
+			static std::shared_ptr< Graphics::Renderable::SimpleMeshResource > getBoundingSphereVisualDebug (Resources::Manager & resources) noexcept;
 
 			/**
 			 * @brief Returns or creates the bounding box debug mesh (cube wireframe).
 			 *
 			 * @param resources Reference to resource manager (used for mesh creation).
-			 * @return std::shared_ptr< Graphics::Renderable::MeshResource > Shared pointer to bounding box debug mesh.
+			 * @return std::shared_ptr< Graphics::Renderable::SimpleMeshResource > Shared pointer to bounding box debug mesh.
 			 *
 			 * @note Cached after first creation - subsequent calls return same mesh.
 			 */
 			[[nodiscard]]
-			static std::shared_ptr< Graphics::Renderable::MeshResource > getBoundingBoxVisualDebug (Resources::Manager & resources) noexcept;
+			static std::shared_ptr< Graphics::Renderable::SimpleMeshResource > getBoundingBoxVisualDebug (Resources::Manager & resources) noexcept;
 
 			/**
 			 * @brief Returns or creates the camera debug mesh (frustum wireframe).
 			 *
 			 * @param resources Reference to resource manager (used for mesh creation).
-			 * @return std::shared_ptr< Graphics::Renderable::MeshResource > Shared pointer to camera debug mesh.
+			 * @return std::shared_ptr< Graphics::Renderable::SimpleMeshResource > Shared pointer to camera debug mesh.
 			 *
 			 * @note Cached after first creation - subsequent calls return same mesh.
 			 */
 			[[nodiscard]]
-			static std::shared_ptr< Graphics::Renderable::MeshResource > getCameraVisualDebug (Resources::Manager & resources) noexcept;
+			static std::shared_ptr< Graphics::Renderable::SimpleMeshResource > getCameraVisualDebug (Resources::Manager & resources) noexcept;
 
 			/**
 			 * @brief Derived class notification fallback hook.

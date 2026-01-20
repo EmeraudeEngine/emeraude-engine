@@ -27,9 +27,9 @@
 #pragma once
 
 /* Local inclusions for usages. */
-#include "Graphics/Types.hpp"
 #include "Libs/FastJSON.hpp"
 #include "Libs/PixelFactory/Color.hpp"
+#include "Graphics/Types.hpp"
 
 /* Forward declarations. */
 namespace EmEn
@@ -83,37 +83,7 @@ namespace EmEn::Graphics::Material
 	 * @return std::optional< FillingType >
 	 */
 	[[nodiscard]]
-	inline
-	std::optional< FillingType >
-	getFillingTypeFromJSON (const Json::Value & data) noexcept
-	{
-		if ( data.isMember(JKType) && data[JKType].isString() )
-		{
-			constexpr std::array< const char *, 9 > fillingTypes{
-				ValueString,
-				ColorString,
-				GradientString,
-				TextureString,
-				VolumeTextureString,
-				CubemapString,
-				AnimatedTextureString,
-				AlphaChannelAsValueString,
-				NoneString
-			};
-
-			const auto foundValue = data[JKType].asString();
-
-			for ( const auto & value : fillingTypes )
-			{
-				if ( foundValue == value )
-				{
-					return to_FillingType(foundValue);
-				}
-			}
-		}
-
-		return std::nullopt;
-	}
+	std::optional< FillingType > getFillingTypeFromJSON (const Json::Value & data) noexcept;
 
 	/**
 	 * @brief Returns the blending mode token from a JSON value.
@@ -121,33 +91,7 @@ namespace EmEn::Graphics::Material
 	 * @return std::optional< BlendingMode >
 	 */
 	[[nodiscard]]
-	inline
-	std::optional< BlendingMode >
-	getBlendingModeFromJSON (const Json::Value & data) noexcept
-	{
-		if ( data.isMember(JKBlendingMode) && data[JKBlendingMode].isString() )
-		{
-			constexpr std::array< const char *, 5 > fillingTypes{
-				NormalBlendingString,
-				AddBlendingString,
-				MultiplyBlendingString,
-				ScreenBlendingString,
-				NoneString
-			};
-
-			const auto foundValue = data[JKBlendingMode].asString();
-
-			for ( const auto & value : fillingTypes )
-			{
-				if ( foundValue == value )
-				{
-					return to_BlendingMode(foundValue);
-				}
-			}
-		}
-
-		return std::nullopt;
-	}
+	std::optional< BlendingMode > getBlendingModeFromJSON (const Json::Value & data) noexcept;
 
 	/**
 	 * @brief Checks primary texture coordinates linkage between the material and the geometry.

@@ -119,9 +119,69 @@ ctest -R Saphir
 - `Generator/SceneRendering.cpp/.hpp` - 3D scene rendering generator
 - `Generator/ShadowCasting.cpp/.hpp` - Shadow map generator
 - `Generator/OverlayRendering.cpp/.hpp` - 2D overlay generator
-- `LightGenerator.cpp/.hpp` - Lighting generation (PerFragment, PerVertex)
+- `LightGenerator.cpp/.hpp` - Lighting code generation (PerFragment, PerVertex)
 - `Program.cpp/.hpp` - Shader program (shaders + pipeline layout)
 - `ShaderManager.cpp/.hpp` - ShaderModule cache and compilation
+
+## Quality Setting Architecture
+
+The `EnableHighQualityKey` setting controls shader quality (per-fragment vs per-vertex lighting, normal mapping, etc.).
+
+### Single Read Pattern
+The setting is read **once** in `SceneRendering` constructor and passed to `LightGenerator`:
+
+```cpp
+// SceneRendering.hpp:68 - Single read point
+m_lightGenerator{settings, renderPassType, settings.getOrSetDefault<bool>(EnableHighQualityKey, DefaultEnableHighQuality)}
+
+// SceneRendering.hpp:71 - Reuses value from LightGenerator
+if ( m_lightGenerator.highQualityEnabled() ) {
+    this->enableFlag(HighQualityEnabled);
+}
+```
+
+**Why this pattern:**
+- Avoids double reading of the same setting
+- `LightGenerator` stores the value for use in `generateAmbientFragmentShader()` (which doesn't have access to the generator)
+- `Generator::Abstract::highQualityEnabled()` is used elsewhere in shader generation code
+
+### High Quality Effects
+When enabled (`EnableHighQualityKey = true`):
+- Per-fragment lighting (Phong-Blinn or PBR Cook-Torrance)
+- Normal mapping support (if geometry provides tangent space)
+- Per-fragment reflection/refraction with Fresnel
+
+When disabled:
+- Per-vertex lighting (Gouraud shading)
+- No normal mapping
+- Simplified reflection/refraction
+
+### Per-Vertex Lighting Shader Input Constraint
+
+> [!CRITICAL]
+> **GLSL shader inputs are READ-ONLY in fragment shaders!**
+>
+> In per-vertex (Gouraud) lighting, `diffuseFactor` and `specularFactor` are computed in the vertex shader and passed to the fragment shader via an interface block (`LightBlock`). These are shader inputs and CANNOT be modified.
+
+**Problem scenario (caused shader compilation error):**
+```glsl
+// WRONG - trying to modify shader input
+svLight.diffuseFactor *= shadowFactor;  // ERROR: l-value required
+```
+
+**Solution:**
+Create local copies of the shader inputs before modification:
+```glsl
+// CORRECT - create local copies
+float diffuseFactor = svLight.diffuseFactor;
+float specularFactor = svLight.specularFactor;
+
+// Now safe to modify
+diffuseFactor *= shadowFactor;
+specularFactor *= shadowFactor;
+```
+
+**Code reference:** `LightGenerator.PerVertex.cpp:generateGouraudFragmentShader()` - Local copies created before shadow factor multiplication
 
 ## Development Patterns
 
@@ -189,10 +249,132 @@ const auto code = (std::stringstream{} <<
 - **Alpha preservation**: Lighting calculations use `.rgb` only, never modify alpha channel. See: `LightGenerator.cpp:603-661`
 - **Color space conversion** (3D only): sRGB↔Linear functions apply gamma only to RGB, alpha passes through unchanged. See: `FragmentShader.cpp:generateToSRGBColorFunction()`, `generateToLinearColorFunction()`. Note: Overlay system does NOT use color space conversion - swap-chain format (UNORM vs SRGB) determines final handling.
 
+## Cubemap Rendering Mode (Multiview)
+
+When rendering to a cubemap (e.g., environment probes, reflection captures), the shader system operates differently:
+
+### Matrix Sources by Render Mode
+
+| Matrix | Standard Mode | Cubemap Mode |
+|--------|---------------|--------------|
+| Projection | Push constant (MVP) or UBO | UBO (shared for all faces) |
+| View | Push constant (MVP) or UBO | UBO indexed by `gl_ViewIndex` |
+| Model | Push constant (MVP) | Push constant (Model only) |
+
+### Push Constant Declaration
+
+The push constant structure changes based on render target type. See: `Generator/Abstract.cpp:declareMatrixPushConstantBlock()`
+
+```cpp
+// Standard mode (non-cubemap, non-instanced, no advanced matrices)
+layout(push_constant) uniform Matrices {
+    mat4 modelViewProjectionMatrix;  // Pre-combined MVP
+} pcMatrices;
+
+// Cubemap mode (non-instanced)
+layout(push_constant) uniform Matrices {
+    mat4 modelMatrix;  // Model only - View/Projection from UBO
+} pcMatrices;
+```
+
+### View Matrix Access Pattern
+
+Code that needs the view matrix must check the render mode:
+
+```cpp
+// In generator code
+const auto viewMatrixSource = vertexShader.isCubemapModeEnabled() ?
+    ViewUB(UniformBlock::Component::ViewMatrix, true) :    // UBO: ubView.instance[gl_ViewIndex].viewMatrix
+    MatrixPC(PushConstant::Component::ViewMatrix);         // Push constant: pcMatrices.viewMatrix
+```
+
+### Files Implementing Cubemap Support
+
+- `Generator/Abstract.cpp:declareMatrixPushConstantBlock()` - Push constant declaration
+- `VertexShader.cpp:prepareModelViewMatrix()` - ModelView matrix computation
+- `VertexShader.cpp:prepareModelViewProjectionMatrix()` - MVP computation
+- `VertexShader.cpp:prepareSpriteModelMatrix()` - Billboard sprite support
+- `LightGenerator.PerFragment.cpp` - Light direction/position in view space
+- `LightGenerator.PerFragment.NormalMap.cpp` - Normal mapping light calculations
+- `LightGenerator.PerVertex.cpp` - Per-vertex (Gouraud) lighting
+- `LightGenerator.PBR.cpp` - PBR lighting calculations
+
+### CPU-Side Matrix Push (Graphics Layer)
+
+The CPU code must match the shader expectations. See: `Graphics/RenderableInstance/Unique.cpp:pushMatricesForRendering()`
+
+```cpp
+if ( passContext.isCubemap ) {
+    // Push only model matrix (View/Projection in UBO)
+    vkCmdPushConstants(..., MatrixBytes, modelMatrix.data());
+} else if ( pushContext.useAdvancedMatrices ) {
+    // Push View + Model separately
+    vkCmdPushConstants(..., MatrixBytes * 2, buffer.data());
+} else {
+    // Push combined MVP
+    vkCmdPushConstants(..., MatrixBytes, modelViewProjectionMatrix.data());
+}
+```
+
+### Common Pitfall
+
+> [!WARNING]
+> When adding code that uses `MatrixPC(ViewMatrix)`, always check if cubemap mode requires using `ViewUB(ViewMatrix, true)` instead. Failure to do so causes shader compilation errors: `'viewMatrix' : no such field in structure 'pcMatrices'`
+
+## Shadow Map Code Generation
+
+Shadow map sampling code is generated in `LightGenerator.ShadowMap.cpp`. The code is separated by light type and PCF mode.
+
+### Generation Functions
+
+| Function | Purpose |
+|----------|---------|
+| `generate2DShadowMapCode()` | Non-PCF 2D shadow (directional, spot) |
+| `generate2DShadowMapPCFCode()` | PCF-enabled 2D shadows |
+| `generate3DShadowMapCode()` | Non-PCF cubemap shadow (point light) |
+| `generate3DShadowMapPCFCode()` | PCF-enabled cubemap shadows |
+| `generateCSMShadowMapCode()` | Cascaded Shadow Maps |
+
+### PCF Methods
+
+The `PCFMethod` enum controls soft shadow sampling:
+
+| Method | Description |
+|--------|-------------|
+| `Grid` | Regular grid pattern, (2n+1)² samples |
+| `VogelDisk` | Vogel spiral disk, even distribution |
+| `PoissonDisk` | Pre-computed Poisson disk |
+| `OptimizedGather` | 4-tap `textureGather` optimization |
+
+**Code references:**
+- `LightGenerator.ShadowMap.cpp` - All shadow map code generation
+- `LightGenerator.hpp:PCFMethod` - PCF method enum
+- `LightGenerator.hpp:m_PCFMethod` - Active PCF method
+
+### Vertex Shader Shadow Output
+
+`generateVertexShaderShadowMapCode()` outputs position data for fragment shadow sampling:
+
+- **2D shadows (directional/spot):** `PositionLightSpace` (vec4) - fragment position in light clip space
+- **Cubemap shadows (point):** `DirectionWorldSpace` (vec4) - direction from light to fragment
+
+### Settings Integration
+
+Shadow mapping settings are read during generator construction:
+
+| Setting | Member | Effect |
+|---------|--------|--------|
+| `GraphicsShadowMappingPCFEnabledKey` | `m_usePCF` | Enable/disable PCF |
+| `GraphicsShadowMappingPCFMethodKey` | `m_PCFMethod` | PCF sampling method |
+| `GraphicsShadowMappingPCFSampleKey` | `m_PCFSample` | Grid sample count |
+
+See [`docs/shadow-mapping.md`](../../docs/shadow-mapping.md) for complete shadow mapping architecture.
+
 ## Detailed Documentation
 
 For complete Saphir system architecture:
 - @docs/saphir-shader-system.md - Parametric generation, compatibility, cache
+- @docs/shadow-mapping.md - Shadow mapping, PCF methods, global controls
 
 Related systems:
 - @src/Graphics/AGENTS.md - Material and Geometry for 3D generation

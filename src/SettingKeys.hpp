@@ -234,12 +234,20 @@ namespace EmEn
 			/* Shadow Mapping */
 			constexpr auto GraphicsShadowMappingEnabledKey{"Core/Graphics/ShadowMapping/Enabled"};
 			constexpr auto DefaultGraphicsShadowMappingEnabled{true};
-			constexpr auto GraphicsShadowMappingBaseResolutionKey{"Core/Graphics/ShadowMapping/BaseResolution"};
-			constexpr auto DefaultGraphicsShadowMappingBaseResolution{512U};
-			constexpr auto GraphicsShadowMappingPCFSampleKey{"Core/Graphics/ShadowMapping/PCFSample"};
-			constexpr auto DefaultGraphicsShadowMappingPCFSample{0U};
-			constexpr auto GraphicsShadowMappingPCFRadiusKey{"Core/Graphics/ShadowMapping/PCFRadius"};
-			constexpr auto DefaultGraphicsShadowMappingPCFRadius{1.0F};
+			constexpr auto GraphicsShadowMappingEnablePCFKey{"Core/Graphics/ShadowMapping/EnablePCF"};
+			constexpr auto DefaultGraphicsShadowMappingEnablePCF{false};
+			constexpr auto GraphicsShadowMappingPCFSamplesKey{"Core/Graphics/ShadowMapping/PCFSamples"};
+			constexpr auto DefaultGraphicsShadowMappingPCFSamples{2U};
+			/**
+			 * @brief PCF filtering method for shadow mapping.
+			 * @note Available methods:
+			 * - "Performance": Grid (max FPS, basic quality)
+			 * - "Balanced": VogelDisk (recommended sweet spot)
+			 * - "Quality": PoissonDisk (better visuals)
+			 * - "Ultra": OptimizedGather (best quality, optimized sampling)
+			 */
+			constexpr auto GraphicsShadowMappingPCFMethodKey{"Core/Graphics/ShadowMapping/PCFMethod"};
+			constexpr auto DefaultGraphicsShadowMappingPCFMethod{"Balanced"};
 			constexpr auto GraphicsShadowMappingViewDistanceKey{"Core/Graphics/ShadowMapping/ViewDistance"};
 			constexpr auto DefaultGraphicsShadowMappingViewDistance{5000.0F}; /* NOTE: 5km */
 
@@ -250,12 +258,8 @@ namespace EmEn
 			constexpr auto DefaultSourceCodeCacheEnabled{false};
 			constexpr auto BinaryCacheEnabledKey{"Core/Graphics/Shader/EnableBinaryCache"};
 			constexpr auto DefaultBinaryCacheEnabled{false};
-			constexpr auto NormalMappingEnabledKey{"Core/Graphics/Shader/EnableNormalMapping"};
-			constexpr auto DefaultNormalMappingEnabled{true};
-			constexpr auto HighQualityLightEnabledKey{"Core/Graphics/Shader/EnabledHighQualityLight"};
-			constexpr auto DefaultHighQualityLightEnabled{false};
-			constexpr auto HighQualityReflectionEnabledKey{"Core/Graphics/Shader/EnableHighQualityReflection"};
-			constexpr auto DefaultHighQualityReflectionEnabled{false};
+			constexpr auto EnableHighQualityKey{"Core/Graphics/Shader/EnableHighQuality"};
+			constexpr auto DefaultEnableHighQuality{false};
 
 		/* Physics */
 		constexpr auto EnablePhysicsAccelerationKey{"Core/Physics/EnableAcceleration"};

@@ -164,6 +164,19 @@ namespace EmEn::Graphics::Renderable
 				return classUID == getClassUID();
 			}
 
+			/** @copydoc EmEn::Graphics::Renderable::Abstract::subGeometryCount() const */
+			[[nodiscard]]
+			uint32_t
+			subGeometryCount () const noexcept override
+			{
+				if ( m_geometry == nullptr )
+				{
+					return 0;
+				}
+
+				return m_geometry->subGeometryCount();
+			}
+
 			/** @copydoc EmEn::Graphics::Renderable::Abstract::layerCount() const */
 			[[nodiscard]]
 			uint32_t
@@ -289,6 +302,33 @@ namespace EmEn::Graphics::Renderable
 			[[nodiscard]]
 			static std::shared_ptr< MeshResource > getOrCreate (Resources::AbstractServiceProvider & serviceProvider, const std::shared_ptr< Geometry::Interface > & geometryResource, const std::vector< std::shared_ptr< Material::Interface > > & materialResources, std::string resourceName = {}) noexcept;
 
+			/**
+			 * @brief Parses a JSON stream to get the material information.
+			 * @note This method is public to allow SimpleMeshResource to reuse it.
+			 * @param serviceProvider A reference to the resource manager through a service provider.
+			 * @param data A reference to a JSON node.
+			 * @return std::shared_ptr< Material::Interface >
+			 */
+			static std::shared_ptr< Material::Interface > parseLayer (Resources::AbstractServiceProvider & serviceProvider, const Json::Value & data) noexcept;
+
+			/**
+			 * @brief Parses a JSON stream to get the mesh options.
+			 * @note This method is public to allow SimpleMeshResource to reuse it.
+			 * @param data A reference to a JSON node.
+			 * @return RasterizationOptions
+			 */
+			static RasterizationOptions parseLayerOptions (const Json::Value & data) noexcept;
+
+			/* JSON keys (public for shared use with SimpleMeshResource). */
+			static constexpr auto LayersKey{"Layers"};
+			static constexpr auto GeometryTypeKey{"GeometryType"};
+			static constexpr auto GeometryNameKey{"GeometryName"};
+			static constexpr auto MaterialTypeKey{"MaterialType"};
+			static constexpr auto MaterialNameKey{"MaterialName"};
+			static constexpr auto BaseSizeKey{"BaseSize"};
+			static constexpr auto EnableDoubleSidedFaceKey{"EnableDoubleSidedFace"};
+			static constexpr auto DrawingModeKey{"DrawingMode"};
+
 		private:
 
 			/**
@@ -330,34 +370,9 @@ namespace EmEn::Graphics::Renderable
 			 */
 			std::shared_ptr< Geometry::Interface > parseGeometry (Resources::AbstractServiceProvider & serviceProvider, const Json::Value & data) noexcept;
 
-			/**
-			 * @brief Parses a JSON stream to get the material information.
-			 * @param serviceProvider A reference to the resource manager through a service provider.
-			 * @param data A reference to a JSON node.
-			 * @return std::shared_ptr< Material::Interface >
-			 */
-			static std::shared_ptr< Material::Interface > parseLayer (Resources::AbstractServiceProvider & serviceProvider, const Json::Value & data) noexcept;
-
-			/**
-			 * @brief Parses a JSON stream to get the mesh options.
-			 * @param data A reference to a JSON node.
-			 * @return RasterizationOptions
-			 */
-			static RasterizationOptions parseLayerOptions (const Json::Value & data) noexcept;
-
 			/* Flag names. */
 			static constexpr auto IsReadyToSetupGPU{0UL};
 			static constexpr auto IsBroken{1UL};
-
-			/* JSON key. */
-			static constexpr auto LayersKey{"Layers"};
-			static constexpr auto GeometryTypeKey{"GeometryType"};
-			static constexpr auto GeometryNameKey{"GeometryName"};
-			static constexpr auto MaterialTypeKey{"MaterialType"};
-			static constexpr auto MaterialNameKey{"MaterialName"};
-			static constexpr auto BaseSizeKey{"BaseSize"};
-			static constexpr auto EnableDoubleSidedFaceKey{"EnableDoubleSidedFace"};
-			static constexpr auto DrawingModeKey{"DrawingMode"};
 
 			std::shared_ptr< Geometry::Interface > m_geometry;
 			std::vector< MeshLayer > m_layers;

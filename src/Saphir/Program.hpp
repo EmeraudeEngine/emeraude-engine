@@ -28,6 +28,7 @@
 
 /* STL inclusions. */
 #include <cstdint>
+#include <map>
 #include <memory>
 #include <string>
 #include <vector>
@@ -413,6 +414,41 @@ namespace EmEn::Saphir
 				return m_graphicsPipeline;
 			}
 
+			/**
+			 * @brief Sets a boolean specialization constant for the fragment shader.
+			 * @note Must be called before shader compilation (createGraphicsPipeline).
+			 * @param constantId The constant ID as declared in the shader (layout(constant_id = X)).
+			 * @param value The boolean value for the constant.
+			 * @return void
+			 */
+			void
+			setFragmentSpecializationConstant (uint32_t constantId, bool value) noexcept
+			{
+				m_fragmentSpecConstantsBool.emplace(constantId, value);
+			}
+
+			/**
+			 * @brief Returns the fragment shader boolean specialization constants.
+			 * @return const std::map< uint32_t, bool > &
+			 */
+			[[nodiscard]]
+			const std::map< uint32_t, bool > &
+			fragmentSpecializationConstantsBool () const noexcept
+			{
+				return m_fragmentSpecConstantsBool;
+			}
+
+			/**
+			 * @brief Returns whether the program has specialization constants defined.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			hasSpecializationConstants () const noexcept
+			{
+				return !m_fragmentSpecConstantsBool.empty();
+			}
+
 		private:
 
 			std::string m_GLSLVersion;
@@ -426,5 +462,6 @@ namespace EmEn::Saphir
 			std::shared_ptr< Graphics::VertexBufferFormat > m_vertexBufferFormat;
 			std::shared_ptr< Vulkan::PipelineLayout > m_pipelineLayout;
 			std::shared_ptr< Vulkan::GraphicsPipeline > m_graphicsPipeline;
+			std::map< uint32_t, bool > m_fragmentSpecConstantsBool; // FIXME: Use a cheaper structure here.
 	};
 }

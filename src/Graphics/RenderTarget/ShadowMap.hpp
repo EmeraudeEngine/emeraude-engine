@@ -37,21 +37,39 @@
 #include "Graphics/Renderer.hpp"
 #include "Graphics/ViewMatrices2DUBO.hpp"
 #include "Graphics/ViewMatrices3DUBO.hpp"
+#include "Graphics/ViewMatricesCascadedUBO.hpp"
 
 namespace EmEn::Graphics::RenderTarget
 {
 	constexpr auto Bias{0.5F};
 
+	/* NOTE: This matrix transforms from clip space to texture coordinates.
+	 * For x and y: [-1, 1] → [0, 1] using scale 0.5 and bias 0.5.
+	 * For z: identity since Vulkan projection already outputs [0, 1].
+	 *
+	 * Column-major storage (OpenGL/Vulkan convention):
+	 * The matrix performs: x' = 0.5*x + 0.5, y' = 0.5*y + 0.5, z' = z, w' = w
+	 * Translation (0.5, 0.5, 0) goes in column 3. */
 	constexpr Libs::Math::Matrix< 4, float > ScaleBiasMatrix{{
-		Bias, 0.0F, 0.0F, 0.0F,
-		0.0F, Bias, 0.0F, 0.0F,
-		0.0F, 0.0F, Bias, 0.0F,
-		Bias, Bias, Bias, 1.0F
+		Bias, 0.0F, 0.0F, 0.0F,  /* Column 0: scale X */
+		0.0F, Bias, 0.0F, 0.0F,  /* Column 1: scale Y */
+		0.0F, 0.0F, 1.0F, 0.0F,  /* Column 2: Z passthrough */
+		Bias, Bias, 0.0F, 1.0F   /* Column 3: translation + w=1 */
 	}};
 
+	/* Type trait helpers for view matrix type detection. */
+	template< typename T >
+	static constexpr bool Is2DViewMatrix = std::is_same_v< T, ViewMatrices2DUBO >;
+
+	template< typename T >
+	static constexpr bool IsCubemapViewMatrix = std::is_same_v< T, ViewMatrices3DUBO >;
+
+	template< typename T >
+	static constexpr bool IsCascadedViewMatrix = std::is_same_v< T, ViewMatricesCascadedUBO >;
+
 	/**
-	 * @brief The shadow map template to handle 2D and cubemap render target.
-	 * @tparam view_matrices_t The type of matrix interface.
+	 * @brief The shadow map template to handle 2D, cubemap and cascaded render targets.
+	 * @tparam view_matrices_t The type of matrix interface (ViewMatrices2DUBO, ViewMatrices3DUBO, or ViewMatricesCascadedUBO).
 	 * @extends EmEn::Vulkan::TextureInterface This is a texture.
 	 * @extends EmEn::Graphics::RenderTarget::Abstract This is a render target.
 	 */
@@ -65,13 +83,14 @@ namespace EmEn::Graphics::RenderTarget
 			static constexpr auto ClassId{"ShadowMap"};
 
 			/**
-			 * @brief Constructs a shadow map.
+			 * @brief Constructs a 2D shadow map.
 			 * @param deviceName A reference to a string.
 			 * @param resolution The shadow map resolution.
 			 * @param viewDistance The max viewable distance in meters.
 			 * @param isOrthographicProjection Set orthographic projection instead of perspective.
 			 */
-			ShadowMap (const std::string & deviceName, uint32_t resolution, float viewDistance, bool isOrthographicProjection) noexcept requires (std::is_same_v< view_matrices_t, ViewMatrices2DUBO >)
+			ShadowMap (const std::string & deviceName, uint32_t resolution, float viewDistance, bool isOrthographicProjection) noexcept
+				requires (Is2DViewMatrix< view_matrices_t >)
 				: Abstract {
 					deviceName,
 					{0U, 0U, 0U, 0U, 32U, 0U, 1U},
@@ -91,9 +110,9 @@ namespace EmEn::Graphics::RenderTarget
 			 * @param deviceName A reference to a string.
 			 * @param resolution The shadow map resolution.
 			 * @param viewDistance The max viewable distance in meters.
-			 * @param isOrthographicProjection Set orthographic projection instead of perspective.
 			 */
-			ShadowMap (const std::string & deviceName, uint32_t resolution, float viewDistance, bool isOrthographicProjection) noexcept requires (std::is_same_v< view_matrices_t, ViewMatrices3DUBO >)
+			ShadowMap (const std::string & deviceName, uint32_t resolution, float viewDistance) noexcept
+				requires (IsCubemapViewMatrix< view_matrices_t >)
 				: Abstract{
 					deviceName,
 					{0U, 0U, 0U, 0U, 32U, 0U, 1U},
@@ -101,9 +120,35 @@ namespace EmEn::Graphics::RenderTarget
 					viewDistance,
 					RenderTargetType::ShadowCubemap,
 					Scenes::AVConsole::ConnexionType::Input,
-					isOrthographicProjection,
+					false,
 					true
 				}
+			{
+
+			}
+
+			/**
+			 * @brief Constructs a cascaded shadow map.
+			 * @param deviceName A reference to a string.
+			 * @param resolution The shadow map resolution (same for all cascades).
+			 * @param viewDistance The max viewable distance in meters.
+			 * @param cascadeCount The number of cascades (1-4).
+			 * @param lambda The split factor (0 = linear, 1 = logarithmic, 0.5 = balanced).
+			 */
+			ShadowMap (const std::string & deviceName, uint32_t resolution, float viewDistance, uint32_t cascadeCount = MaxCascadeCount, float lambda = DefaultCascadeLambda) noexcept
+				requires (IsCascadedViewMatrix< view_matrices_t >)
+				: Abstract{
+					deviceName,
+					{0U, 0U, 0U, 0U, 32U, 0U, 1U},
+					{resolution, resolution, 1},
+					viewDistance,
+					RenderTargetType::ShadowMap,
+					Scenes::AVConsole::ConnexionType::Input,
+					true, /* Orthographic projection for directional lights. */
+					true
+				},
+				m_viewMatrices{cascadeCount, lambda},
+				m_cascadeCount{std::clamp(cascadeCount, 1U, MaxCascadeCount)}
 			{
 
 			}
@@ -126,7 +171,7 @@ namespace EmEn::Graphics::RenderTarget
 						return false;
 					}
 
-					if ( this->isCubemap() )
+					if constexpr ( IsCubemapViewMatrix< view_matrices_t > )
 					{
 						if ( m_depthCubeImageView == nullptr || !m_depthCubeImageView->isCreated() )
 						{
@@ -145,7 +190,7 @@ namespace EmEn::Graphics::RenderTarget
 					return false;
 				}
 
-				return true;
+				return m_isReadyForRendering;
 			}
 
 			/** @copydoc EmEn::Vulkan::TextureInterface::type() const noexcept */
@@ -153,9 +198,13 @@ namespace EmEn::Graphics::RenderTarget
 			Vulkan::TextureType
 			type () const noexcept override
 			{
-				if constexpr ( std::is_same_v< view_matrices_t, ViewMatrices3DUBO > )
+				if constexpr ( IsCubemapViewMatrix< view_matrices_t > )
 				{
 					return Vulkan::TextureType::TextureCube;
+				}
+				else if constexpr ( IsCascadedViewMatrix< view_matrices_t > )
+				{
+					return Vulkan::TextureType::Texture2DArray;
 				}
 				else
 				{
@@ -168,13 +217,13 @@ namespace EmEn::Graphics::RenderTarget
 			uint32_t
 			dimensions () const noexcept override
 			{
-				if constexpr ( std::is_same_v< view_matrices_t, ViewMatrices3DUBO > )
+				if constexpr ( IsCubemapViewMatrix< view_matrices_t > )
 				{
 					return 3;
 				}
 				else
 				{
-					return 2;
+					return 2; /* 2D and 2D array are still 2D sampling. */
 				}
 			}
 
@@ -183,14 +232,7 @@ namespace EmEn::Graphics::RenderTarget
 			bool
 			isCubemapTexture () const noexcept override
 			{
-				if constexpr ( std::is_same_v< view_matrices_t, ViewMatrices3DUBO > )
-				{
-					return true;
-				}
-				else
-				{
-					return false;
-				}
+				return IsCubemapViewMatrix< view_matrices_t >;
 			}
 
 			/** @copydoc EmEn::Vulkan::TextureInterface::image() const noexcept */
@@ -206,13 +248,18 @@ namespace EmEn::Graphics::RenderTarget
 			std::shared_ptr< Vulkan::ImageView >
 			imageView () const noexcept override
 			{
-				/* NOTE: As a texture request, we give the right image view with cubemap. */
-				if ( this->isCubemap() && m_depthCubeImageView != nullptr )
+				/* NOTE: As a texture request, we give the right image view for sampling.
+				 * - 2D: Use m_depthImageView (VK_IMAGE_VIEW_TYPE_2D)
+				 * - Cubemap: Use m_depthCubeImageView (VK_IMAGE_VIEW_TYPE_CUBE)
+				 * - Cascade: Use m_depthImageView (VK_IMAGE_VIEW_TYPE_2D_ARRAY) */
+				if constexpr ( IsCubemapViewMatrix< view_matrices_t > )
 				{
 					return m_depthCubeImageView;
 				}
-
-				return m_depthImageView;
+				else
+				{
+					return m_depthImageView;
+				}
 			}
 
 			/** @copydoc EmEn::Vulkan::TextureInterface::sampler() const noexcept */
@@ -228,14 +275,33 @@ namespace EmEn::Graphics::RenderTarget
 			bool
 			request3DTextureCoordinates () const noexcept override
 			{
-				if constexpr ( std::is_same_v< view_matrices_t, ViewMatrices3DUBO >  )
+				return IsCubemapViewMatrix< view_matrices_t >;
+			}
+
+			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::setViewDistance() */
+			void
+			setViewDistance (float meters) noexcept override
+			{
+				const auto & extent = this->extent();
+				const auto width = static_cast< float >(extent.width);
+				const auto height = static_cast< float >(extent.height);
+
+				if ( this->isOrthographicProjection() )
 				{
-					return true;
+					m_viewMatrices.updateOrthographicViewProperties(width, height, m_viewMatrices.nearPlane(), meters);
 				}
 				else
 				{
-					return false;
+					m_viewMatrices.updatePerspectiveViewProperties(width, height, m_viewMatrices.fieldOfView(), meters);
 				}
+			}
+
+			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::viewDistance() */
+			[[nodiscard]]
+			float
+			viewDistance () const noexcept override
+			{
+				return m_viewMatrices.farPlane();
 			}
 
 			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::updateViewRangesProperties() */
@@ -244,7 +310,7 @@ namespace EmEn::Graphics::RenderTarget
 			{
 				const auto & extent = this->extent();
 				const auto width = static_cast< float >(extent.width);
-				const auto height = static_cast< float >(extent.width);
+				const auto height = static_cast< float >(extent.height);
 
 				if ( this->isOrthographicProjection() )
 				{
@@ -254,8 +320,6 @@ namespace EmEn::Graphics::RenderTarget
 				{
 					m_viewMatrices.updatePerspectiveViewProperties(width, height, fovOrNear, distanceOrFar);
 				}
-
-				this->setViewDistance(distanceOrFar);
 			}
 
 			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::aspectRatio() */
@@ -263,7 +327,7 @@ namespace EmEn::Graphics::RenderTarget
 			float
 			aspectRatio () const noexcept override
 			{
-				if constexpr ( std::is_same_v< view_matrices_t, ViewMatrices3DUBO >  )
+				if constexpr ( IsCubemapViewMatrix< view_matrices_t > )
 				{
 					return 1.0F;
 				}
@@ -283,14 +347,15 @@ namespace EmEn::Graphics::RenderTarget
 			bool
 			isCubemap () const noexcept override
 			{
-				if constexpr ( std::is_same_v< view_matrices_t, ViewMatrices3DUBO >  )
-				{
-					return true;
-				}
-				else
-				{
-					return false;
-				}
+				return IsCubemapViewMatrix< view_matrices_t >;
+			}
+
+			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::isCascadedShadowMap() */
+			[[nodiscard]]
+			bool
+			isCascadedShadowMap () const noexcept override
+			{
+				return IsCascadedViewMatrix< view_matrices_t >;
 			}
 
 			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::viewMatrices() const */
@@ -333,6 +398,21 @@ namespace EmEn::Graphics::RenderTarget
 				return m_isReadyForRendering;
 			}
 
+			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::writeCombinedImageSampler(const Vulkan::DescriptorSet &, uint32_t) const */
+			[[nodiscard]]
+			bool
+			writeCombinedImageSampler (const Vulkan::DescriptorSet & descriptorSet, uint32_t bindingIndex) const noexcept override
+			{
+				if ( !this->isReadyForRendering() )
+				{
+					TraceError{ClassId} << "The shadow map is not ready for rendering!";
+
+					return false;
+				}
+
+				return descriptorSet.writeCombinedImageSampler(bindingIndex, *this->image(), *this->imageView(), *this->sampler());
+			}
+
 			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::capture() */
 			[[nodiscard]]
 			std::array< Libs::PixelFactory::Pixmap< uint8_t >, 3 >
@@ -340,8 +420,17 @@ namespace EmEn::Graphics::RenderTarget
 			{
 				std::array< Libs::PixelFactory::Pixmap< uint8_t >, 3 > result{};
 
-				/* Validate layer index for cubemaps and single-layer shadow maps. */
-				const uint32_t maxLayers = this->isCubemap() ? 6 : 1;
+				/* Validate layer index. */
+				uint32_t maxLayers = 1;
+
+				if constexpr ( IsCubemapViewMatrix< view_matrices_t > )
+				{
+					maxLayers = 6;
+				}
+				else if constexpr ( IsCascadedViewMatrix< view_matrices_t > )
+				{
+					maxLayers = m_cascadeCount;
+				}
 
 				if ( layerIndex >= maxLayers )
 				{
@@ -376,17 +465,87 @@ namespace EmEn::Graphics::RenderTarget
 				return result;
 			}
 
+			/* Cascade-specific methods (only available for cascaded shadow maps). */
+
+			/**
+			 * @brief Returns the number of cascades.
+			 * @return uint32_t
+			 */
+			[[nodiscard]]
+			uint32_t
+			cascadeCount () const noexcept
+				requires (IsCascadedViewMatrix< view_matrices_t >)
+			{
+				return m_cascadeCount;
+			}
+
+			/**
+			 * @brief Returns the image view for a specific cascade layer.
+			 * @param cascadeIndex The cascade index (0 to cascadeCount-1).
+			 * @return std::shared_ptr< Vulkan::ImageView >
+			 */
+			[[nodiscard]]
+			std::shared_ptr< Vulkan::ImageView >
+			cascadeImageView (size_t cascadeIndex) const noexcept
+				requires (IsCascadedViewMatrix< view_matrices_t >)
+			{
+				if ( cascadeIndex >= m_cascadeCount )
+				{
+					Tracer::error(ClassId, "Cascade index overflow !");
+
+					cascadeIndex = 0;
+				}
+
+				return m_perCascadeImageViews[cascadeIndex];
+			}
+
+			/**
+			 * @brief Returns the cascaded view matrices.
+			 * @return ViewMatricesCascadedUBO &
+			 */
+			[[nodiscard]]
+			ViewMatricesCascadedUBO &
+			cascadedViewMatrices () noexcept
+				requires (IsCascadedViewMatrix< view_matrices_t >)
+			{
+				return m_viewMatrices;
+			}
+
+			/**
+			 * @brief Returns the cascaded view matrices (const).
+			 * @return const ViewMatricesCascadedUBO &
+			 */
+			[[nodiscard]]
+			const ViewMatricesCascadedUBO &
+			cascadedViewMatrices () const noexcept
+				requires (IsCascadedViewMatrix< view_matrices_t >)
+			{
+				return m_viewMatrices;
+			}
+
 		private:
 
 			/** @copydoc EmEn::Scenes::AVConsole::AbstractVirtualDevice::updateVideoDeviceProperties() */
 			void
 			updateVideoDeviceProperties (float fovOrNear, float distanceOrFar, bool isOrthographicProjection) noexcept override
 			{
-				if ( this->isOrthographicProjection() != isOrthographicProjection )
+				if constexpr ( IsCascadedViewMatrix< view_matrices_t > )
 				{
-					TraceWarning{ClassId} << "The shadow map '" << this->id() << "' don't use the correct projection type !";
+					if ( !isOrthographicProjection )
+					{
+						TraceWarning{ClassId} << "CSM '" << this->id() << "' requires orthographic projection !";
 
-					return;
+						return;
+					}
+				}
+				else
+				{
+					if ( this->isOrthographicProjection() != isOrthographicProjection )
+					{
+						TraceWarning{ClassId} << "The shadow map '" << this->id() << "' don't use the correct projection type !";
+
+						return;
+					}
 				}
 
 				this->updateViewRangesProperties(fovOrNear, distanceOrFar);
@@ -433,19 +592,31 @@ namespace EmEn::Graphics::RenderTarget
 				}
 
 				/* Create a sampler for the texture. */
-				m_sampler = renderer.getSampler("ShadowMap", [] (Settings &, VkSamplerCreateInfo & createInfo) {
+				m_sampler = renderer.getSampler("ShadowMap", [this] (Settings &, VkSamplerCreateInfo & createInfo) {
 					//createInfo.flags = 0;
 					createInfo.magFilter = VK_FILTER_LINEAR;
 					createInfo.minFilter = VK_FILTER_LINEAR;
 					createInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-					createInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-					createInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-					createInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+					/* NOTE: Use CLAMP_TO_BORDER so that sampling outside the shadow map
+					 * returns borderColor (white = no shadow) instead of edge pixels. */
+					createInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+					createInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+					createInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
 					//createInfo.mipLodBias = 0.0F;
 					//createInfo.anisotropyEnable = VK_FALSE;
 					//createInfo.maxAnisotropy = 1.0F;
-					createInfo.compareEnable = VK_TRUE;
-					createInfo.compareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
+					//createInfo.maxAnisotropy = 1.0F;
+					/* NOTE: Cubemap doesn't use compare (manual sampling). */
+					if constexpr ( IsCubemapViewMatrix< view_matrices_t > )
+					{
+						createInfo.compareEnable = VK_FALSE;
+						createInfo.compareOp = VK_COMPARE_OP_ALWAYS;
+					}
+					else
+					{
+						createInfo.compareEnable = VK_TRUE;
+						createInfo.compareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
+					}
 					createInfo.minLod = 0.0F;
 					createInfo.maxLod = 1.0F;
 					createInfo.borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
@@ -488,6 +659,15 @@ namespace EmEn::Graphics::RenderTarget
 				/* The texture sampler. */
 				m_sampler.reset();
 
+				/* Per-cascade image views (cascade only). */
+				if constexpr ( IsCascadedViewMatrix< view_matrices_t > )
+				{
+					for ( auto & view : m_perCascadeImageViews )
+					{
+						view.reset();
+					}
+				}
+
 				/* The depth/stencil buffers. */
 				m_depthCubeImageView.reset();
 				m_depthImageView.reset();
@@ -515,15 +695,29 @@ namespace EmEn::Graphics::RenderTarget
 				 * NOTE: Stencil buffer is useless here! */
 				if ( this->precisions().depthBits() > 0 )
 				{
+					/* Calculate layer count based on shadow map type. */
+					uint32_t layerCount = 1;
+					VkImageCreateFlags flags = 0;
+
+					if constexpr ( IsCubemapViewMatrix< view_matrices_t > )
+					{
+						layerCount = 6;
+						flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
+					}
+					else if constexpr ( IsCascadedViewMatrix< view_matrices_t > )
+					{
+						layerCount = m_cascadeCount;
+					}
+
 					m_depthImage = std::make_shared< Vulkan::Image >(
 						device,
 						VK_IMAGE_TYPE_2D,
 						Vulkan::Instance::findDepthStencilFormat(device, this->precisions()), /* Should be VK_FORMAT_D32_SFLOAT or VK_FORMAT_D16_UNORM */
 						this->extent(),
 						VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-						this->isCubemap() ? VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT : 0,
+						flags,
 						1,
-						this->isCubemap() ? 6 : 1
+						layerCount
 					);
 					m_depthImage->setIdentifier(ClassId, this->id(), "Image");
 
@@ -534,17 +728,30 @@ namespace EmEn::Graphics::RenderTarget
 						return false;
 					}
 
+					/* NOTE: Set the expected final image layout for being usable as a texture sampler.
+					 * This must match the render pass finalLayout (VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL). */
+					m_depthImage->setCurrentImageLayout(VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL);
+
+					/* Create the main image view for rendering.
+					 * - 2D: VK_IMAGE_VIEW_TYPE_2D
+					 * - Cubemap: VK_IMAGE_VIEW_TYPE_2D_ARRAY (for multiview rendering)
+					 * - Cascade: VK_IMAGE_VIEW_TYPE_2D_ARRAY (for multiview rendering and sampling) */
+					VkImageViewType viewType = VK_IMAGE_VIEW_TYPE_2D;
+
+					if constexpr ( IsCubemapViewMatrix< view_matrices_t > || IsCascadedViewMatrix< view_matrices_t > )
+					{
+						viewType = VK_IMAGE_VIEW_TYPE_2D_ARRAY;
+					}
+
 					m_depthImageView = std::make_shared< Vulkan::ImageView >(
 						m_depthImage,
-						/* NOTE: Here we use VK_IMAGE_VIEW_TYPE_2D_ARRAY instead
-						 * of VK_IMAGE_VIEW_TYPE_CUBE when rendering to a cubemap for the multiview feature. */
-						this->isCubemap() ? VK_IMAGE_VIEW_TYPE_2D_ARRAY : VK_IMAGE_VIEW_TYPE_2D,
+						viewType,
 						VkImageSubresourceRange{
 							.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
 							.baseMipLevel = 0,
 							.levelCount = m_depthImage->createInfo().mipLevels, /* Must be 1 */
 							.baseArrayLayer = 0,
-							.layerCount = m_depthImage->createInfo().arrayLayers /* Must be 1 or 6 (cubemap) */
+							.layerCount = layerCount
 						}
 					);
 					m_depthImageView->setIdentifier(ClassId, this->id(), "ImageView");
@@ -556,9 +763,8 @@ namespace EmEn::Graphics::RenderTarget
 						return false;
 					}
 
-					/* NOTE: Create a specific view for reading
-					 * the cubemap in shaders according to the multiview feature. */
-					if ( this->isCubemap() )
+					/* NOTE: Create a specific view for reading the cubemap in shaders (cubemap only). */
+					if constexpr ( IsCubemapViewMatrix< view_matrices_t > )
 					{
 						m_depthCubeImageView = std::make_shared< Vulkan::ImageView >(
 							m_depthImage,
@@ -578,6 +784,33 @@ namespace EmEn::Graphics::RenderTarget
 							TraceError{ClassId} << "Unable to create a cube image view (Depth buffer) for shadow map '" << this->id() << "' !";
 
 							return false;
+						}
+					}
+
+					/* Create per-cascade image views for rendering to individual layers (cascade only). */
+					if constexpr ( IsCascadedViewMatrix< view_matrices_t > )
+					{
+						for ( uint32_t i = 0; i < m_cascadeCount; ++i )
+						{
+							m_perCascadeImageViews[i] = std::make_shared< Vulkan::ImageView >(
+								m_depthImage,
+								VK_IMAGE_VIEW_TYPE_2D,
+								VkImageSubresourceRange{
+									.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
+									.baseMipLevel = 0,
+									.levelCount = 1,
+									.baseArrayLayer = i,
+									.layerCount = 1
+								}
+							);
+							m_perCascadeImageViews[i]->setIdentifier(ClassId, this->id(), ("CascadeImageView" + std::to_string(i)).c_str());
+
+							if ( !m_perCascadeImageViews[i]->createOnHardware() )
+							{
+								TraceError{ClassId} << "Unable to create the image view for cascade " << i << " of shadow map '" << this->id() << "' !";
+
+								return false;
+							}
 						}
 					}
 				}
@@ -654,10 +887,14 @@ namespace EmEn::Graphics::RenderTarget
 					.dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT
 				});
 
-				/* Enable multiview for cubemap rendering (Vulkan 1.1+) */
-				if ( this->isCubemap() )
+				/* Enable multiview for cubemap and cascade rendering (Vulkan 1.1+). */
+				if constexpr ( IsCubemapViewMatrix< view_matrices_t > )
 				{
 					renderPass->enableMultiview();
+				}
+				else if constexpr ( IsCascadedViewMatrix< view_matrices_t > )
+				{
+					renderPass->enableMultiview(m_cascadeCount);
 				}
 
 				if ( !renderPass->createOnHardware() )
@@ -679,8 +916,18 @@ namespace EmEn::Graphics::RenderTarget
 			bool
 			createFramebuffer (const std::shared_ptr< Vulkan::RenderPass > & renderPass) noexcept
 			{
-				/* Prepare the framebuffer. */
-				m_framebuffer = std::make_shared< Vulkan::Framebuffer >(renderPass, this->extent());
+				/* Prepare the framebuffer.
+				 * NOTE: When using multiview, framebuffer layers = 1.
+				 * The render pass multiview extension handles rendering to multiple array layers. */
+				if constexpr ( IsCubemapViewMatrix< view_matrices_t > || IsCascadedViewMatrix< view_matrices_t > )
+				{
+					const VkExtent2D extent2D{this->extent().width, this->extent().height};
+					m_framebuffer = std::make_shared< Vulkan::Framebuffer >(renderPass, extent2D, 1);
+				}
+				else
+				{
+					m_framebuffer = std::make_shared< Vulkan::Framebuffer >(renderPass, this->extent());
+				}
 				m_framebuffer->setIdentifier(ClassId, this->id(), "Framebuffer");
 
 				/* Attach the depth buffer. */
@@ -706,12 +953,14 @@ namespace EmEn::Graphics::RenderTarget
 			}
 
 			std::shared_ptr< Vulkan::Image > m_depthImage;
-			std::shared_ptr< Vulkan::ImageView > m_depthImageView;
-			std::shared_ptr< Vulkan::ImageView > m_depthCubeImageView;
+			std::shared_ptr< Vulkan::ImageView > m_depthImageView; /* NOTE: In 2D mode, this is used for rendering AND sampling. In cubemap/cascade mode, this is used for rendering. */
+			std::shared_ptr< Vulkan::ImageView > m_depthCubeImageView; /* NOTE: In cubemap mode, this is used for sampling. */
+			std::array< std::shared_ptr< Vulkan::ImageView >, MaxCascadeCount > m_perCascadeImageViews{}; /* NOTE: In cascade mode, used for per-cascade rendering. */
 			std::shared_ptr< Vulkan::Sampler > m_sampler;
 			std::shared_ptr< Vulkan::Framebuffer > m_framebuffer;
 			view_matrices_t m_viewMatrices;
 			Libs::Math::CartesianFrame< float > m_worldCoordinates{};
+			uint32_t m_cascadeCount{MaxCascadeCount};
 			bool m_isReadyForRendering{false};
 	};
 }

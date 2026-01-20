@@ -40,6 +40,97 @@ namespace EmEn::Graphics
 	using namespace Libs::Math;
 	using namespace Vulkan;
 
+	const Matrix< 4, float > &
+	ViewMatrices2DUBO::projectionMatrix (uint32_t readStateIndex) const noexcept
+	{
+		if constexpr ( IsDebug )
+		{
+			if ( readStateIndex >= m_renderState.size() )
+			{
+				Tracer::error(ClassId, "Index overflow !");
+
+				return m_logicState.projection;
+			}
+		}
+
+		return m_renderState[readStateIndex].projection;
+	}
+
+	const Matrix< 4, float > &
+	ViewMatrices2DUBO::viewMatrix (bool infinity, size_t /*index*/) const noexcept
+	{
+		return infinity ? m_logicState.infinityView : m_logicState.view;
+	}
+
+	const Matrix< 4, float > &
+	ViewMatrices2DUBO::viewMatrix (uint32_t readStateIndex, bool infinity, size_t /*index*/) const noexcept
+	{
+		if constexpr ( IsDebug )
+		{
+			if ( readStateIndex >= m_renderState.size() )
+			{
+				Tracer::error(ClassId, "Index overflow !");
+
+				return infinity ? m_logicState.infinityView : m_logicState.view;
+			}
+		}
+
+		return infinity ? m_renderState[readStateIndex].infinityView : m_renderState[readStateIndex].view;
+	}
+
+	const Vector< 3, float > &
+	ViewMatrices2DUBO::position (uint32_t readStateIndex) const noexcept
+	{
+		if constexpr ( IsDebug )
+		{
+			if ( readStateIndex >= m_renderState.size() )
+			{
+				Tracer::error(ClassId, "Index overflow !");
+
+				return m_logicState.position;
+			}
+		}
+
+		return m_renderState[readStateIndex].position;
+	}
+
+	const Frustum &
+	ViewMatrices2DUBO::frustum (uint32_t readStateIndex, size_t /*index*/) const noexcept
+	{
+		if constexpr ( IsDebug )
+		{
+			if ( readStateIndex >= m_renderState.size() )
+			{
+				Tracer::error(ClassId, "Index overflow !");
+
+				return m_logicState.frustum;
+			}
+		}
+
+		return m_renderState[readStateIndex].frustum;
+	}
+
+	float
+	ViewMatrices2DUBO::getAspectRatio () const noexcept
+	{
+		if ( m_logicState.bufferData[ViewWidthOffset] * m_logicState.bufferData[ViewHeightOffset] <= 0.0F )
+		{
+			Tracer::error(ClassId, "View properties for width and height are invalid ! Unable to compute the aspect ratio.");
+
+			return 1.0F;
+		}
+
+		return m_logicState.bufferData[ViewWidthOffset] / m_logicState.bufferData[ViewHeightOffset];
+	}
+
+	float
+	ViewMatrices2DUBO::fieldOfView () const noexcept
+	{
+		constexpr auto Rad2Deg = HalfRevolution< float > / std::numbers::pi_v< float >;
+
+		return std::atan(1.0F / m_logicState.projection[M4x4Col1Row1]) * 2.0F * Rad2Deg;
+	}
+
 	void
 	ViewMatrices2DUBO::updatePerspectiveViewProperties (float width, float height, float fov, float distance) noexcept
 	{
@@ -54,17 +145,17 @@ namespace EmEn::Graphics
 
 		m_logicState.bufferData[ViewWidthOffset] = width;
 		m_logicState.bufferData[ViewHeightOffset] = height;
-		m_logicState.bufferData[ViewDistanceOffset] = distance;
+		m_logicState.bufferData[FarPlaneOffset] = distance;
 
 		/* Formula : nearPlane = nearestObject / sqrt(1 + tan(fov/2)² · (aspectRatio² + 1)) */
 		{
 			const auto powA = std::pow(std::tan(Radian(fov) * 0.5F), 2.0F);
 			const auto powB = std::pow(aspectRatio, 2.0F) + 1.0F;
 
-			m_logicState.bufferData[ViewNearOffset] = 0.1F / std::sqrt(1.0F + powA * powB);
+			m_logicState.bufferData[NearPlaneOffset] = 0.1F / std::sqrt(1.0F + powA * powB);
 		}
 
-		m_logicState.projection = Matrix< 4, float >::perspectiveProjection(fov, aspectRatio, m_logicState.bufferData[ViewNearOffset], m_logicState.bufferData[ViewDistanceOffset]);
+		m_logicState.projection = Matrix< 4, float >::perspectiveProjection(fov, aspectRatio, m_logicState.bufferData[NearPlaneOffset], m_logicState.bufferData[FarPlaneOffset]);
 
 		/*TraceDebug{ClassId} <<
 			"Perspective projection:" "\n"
@@ -86,17 +177,20 @@ namespace EmEn::Graphics
 			return;
 		}
 
-		const auto side = m_logicState.bufferData[ViewDistanceOffset] * this->getAspectRatio();
-
 		m_logicState.bufferData[ViewWidthOffset] = width;
 		m_logicState.bufferData[ViewHeightOffset] = height;
-		m_logicState.bufferData[ViewNearOffset] = nearDistance;
-		m_logicState.bufferData[ViewDistanceOffset] = farDistance;
+		m_logicState.bufferData[NearPlaneOffset] = nearDistance;
+		m_logicState.bufferData[FarPlaneOffset] = farDistance;
+
+		/* NOTE: The farDistance parameter represents the TOTAL coverage size.
+		 * We divide by 2 to get the half-size for the orthographic projection bounds.
+		 * This makes coverageSize intuitive: coverageSize=100 means a 100x100 unit area. */
+		const auto halfSide = (m_logicState.bufferData[FarPlaneOffset] * 0.5F) * this->getAspectRatio();
 
 		m_logicState.projection = Matrix< 4, float >::orthographicProjection(
-			-side, side,
-			-m_logicState.bufferData[ViewDistanceOffset], m_logicState.bufferData[ViewDistanceOffset],
-			m_logicState.bufferData[ViewNearOffset], m_logicState.bufferData[ViewDistanceOffset]
+			-halfSide, halfSide,
+			-halfSide, halfSide,
+			m_logicState.bufferData[NearPlaneOffset], m_logicState.bufferData[FarPlaneOffset]
 		);
 
 		/*TraceDebug{ClassId} <<
@@ -181,6 +275,22 @@ namespace EmEn::Graphics
 		return true;
 	}
 
+	void
+	ViewMatrices2DUBO::publishStateForRendering (uint32_t writeStateIndex) noexcept
+	{
+		if constexpr ( IsDebug )
+		{
+			if ( writeStateIndex >= m_renderState.size() )
+			{
+				Tracer::error(ClassId, "Index overflow !");
+
+				return;
+			}
+		}
+
+		m_renderState[writeStateIndex] = m_logicState;
+	}
+
 	bool
 	ViewMatrices2DUBO::updateVideoMemory (uint32_t readStateIndex) const noexcept
 	{
@@ -217,6 +327,17 @@ namespace EmEn::Graphics
 		m_uniformBufferObject->unmapMemory(0, VK_WHOLE_SIZE);
 
 		return true;
+	}
+
+	void
+	ViewMatrices2DUBO::destroy () noexcept
+	{
+		/* [VULKAN-CPU-SYNC] Maybe useless */
+		/* NOTE: Lock between updateVideoMemory() and destroy(). */
+		const std::lock_guard< std::mutex > lock{m_GPUBufferAccessLock};
+
+		m_descriptorSet.reset();
+		m_uniformBufferObject.reset();
 	}
 
 	std::ostream &

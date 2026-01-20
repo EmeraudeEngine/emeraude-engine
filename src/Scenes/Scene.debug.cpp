@@ -29,7 +29,7 @@
 /* Local inclusions. */
 #include "Libs/PixelFactory/Color.hpp"
 #include "Graphics/Geometry/ResourceGenerator.hpp"
-#include "Graphics/Renderable/MeshResource.hpp"
+#include "Graphics/Renderable/SimpleMeshResource.hpp"
 #include "Graphics/Material/BasicResource.hpp"
 #include "Resources/Manager.hpp"
 
@@ -85,9 +85,10 @@ namespace EmEn::Scenes
 				return false;
 			}
 
-			const auto meshResource = resourceManager.container< Renderable::MeshResource >()->getOrCreateResource(label, [&geometryResource, &materialResource] (Renderable::MeshResource & newMesh) {
-				return newMesh.load(geometryResource, materialResource);
-			});
+			const auto meshResource = resourceManager.container< Renderable::SimpleMeshResource >()
+				->getOrCreateResource(label, [&geometryResource, &materialResource] (auto & newMesh) {
+					return newMesh.load(geometryResource, materialResource);
+				});
 
 			if ( meshResource == nullptr )
 			{
@@ -168,9 +169,10 @@ namespace EmEn::Scenes
 			return false;
 		}
 
-		const auto meshResource = resourceManager.container< Renderable::MeshResource >()->getOrCreateResource(GroundZeroPlaneDisplay, [&geometryResource, &materialResource] (Renderable::MeshResource & newMesh) {
-			return newMesh.load(geometryResource, materialResource, {PolygonMode::Line, CullingMode::None});
-		});
+		const auto meshResource = resourceManager.container< Renderable::SimpleMeshResource >()
+			->getOrCreateResource(GroundZeroPlaneDisplay, [&geometryResource, &materialResource] (auto & newMesh) {
+				return newMesh.load(geometryResource, materialResource, {PolygonMode::Line, CullingMode::None});
+			});
 
 		if ( meshResource == nullptr )
 		{
@@ -264,9 +266,10 @@ namespace EmEn::Scenes
 				return false;
 			}
 
-			const auto meshResource = resourceManager.container< Renderable::MeshResource >()->getOrCreateResource(label, [&geometryResource, &materialResource] (Renderable::MeshResource & newMesh) {
-				return newMesh.load(geometryResource, materialResource, {PolygonMode::Line, CullingMode::None});
-			});
+			const auto meshResource = resourceManager.container< Renderable::SimpleMeshResource >()
+				->getOrCreateResource(label, [&geometryResource, &materialResource] (auto & newMesh) {
+					return newMesh.load(geometryResource, materialResource, {PolygonMode::Line, CullingMode::None});
+				});
 
 			if ( meshResource == nullptr )
 			{

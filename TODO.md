@@ -4,10 +4,7 @@
 - GENERAL: Improve functions args to use "std::move" when useful.
 - GENERAL: Rewrite libs Observer/Observable pattern with the idea of static and shared objects.
 - GENERAL: Replace all "std::stringstream" by "std::format" (C++20) for simple keys, names or identifiers creation. WARNING: This doesn't work under macOS for targeting older SDKs.
-- GENERAL: Check for light coherence, create a built-in scene with a fixed directional light and multiple materials.
 - GENERAL: Issue on Linux with X11, multi-monitors and NVIDIA proprietary driver. More info: https://forums.developer.nvidia.com/t/external-monitor-freezes-when-using-dedicated-gpu/265406
-- RENDERING SYSTEM: Enable additional render targets next to the main one to create shadow maps, 2D textures and reflections. (WIP)
-- RENDERING SYSTEM: Study and create the cubemap rendering (single-pass) to be able to produce reflections and shadow cubemap.
 - RENDERING SYSTEM: Improve the rendering branches to reduce cost.
 - RENDERING SYSTEM: Check sprite blending.
 - RENDERING SYSTEM: Check sprite texture clamping to edges.
@@ -38,7 +35,6 @@
 - GEOMETRY: Finish 3D formats loading/reading.
 - GEOMETRY: Check geometry primitive generation with all basic attributes.
 - VULKAN: Find a better way to detect the UBO max capacity. For now the limit is hard-coded to 65,536 bytes.
-- VULKAN: Implement descriptorIndexing from Vulkan 1.2 API.
 - VULKAN: Implement VK_KHR_synchronization2 and VK_KHR_dynamic_rendering from Vulkan 1.3 API.
 - VULKAN: Check validation layers and debug messenger relationship. (According to khronos, this is valid to create the debug messenger without validation layers)
 - VULKAN: Fix texture loading. (UINT → UNORM) Convert data before? or not?
@@ -48,4 +44,3 @@
 - VULKAN: Find a way to order the rendering by pipeline layout to reduce the binding cost per draw. See VK_KHR_dynamic_rendering from Vulkan 1.1 API extension, upgraded in Vulkan 1.2 API and core in Vulkan 1.3 API.
 - VULKAN: Check for the right way to push constant from the right shader declaration to the right stage in vulkan. (GraphicsShaderGenerator.cpp:254)
 - VULKAN: Analyze UBO and instanced VBO usage and make a better and global shared UBO/VBO optimization for short life entity.
-- EXTERNAL_LIBS: Move fastgltf to external libraries projet and make it a binary.

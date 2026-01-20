@@ -71,47 +71,15 @@ namespace EmEn::Graphics
 
 			/** @copydoc EmEn::Graphics::ViewMatricesInterface::projectionMatrix(uint32_t) const */
 			[[nodiscard]]
-			const Libs::Math::Matrix< 4, float > &
-			projectionMatrix (uint32_t readStateIndex) const noexcept override
-			{
-				if constexpr ( IsDebug )
-				{
-					if ( readStateIndex >= m_renderState.size() )
-					{
-						Tracer::error(ClassId, "Index overflow !");
-
-						return m_logicState.projection;
-					}
-				}
-
-				return m_renderState[readStateIndex].projection;
-			}
+			const Libs::Math::Matrix< 4, float > & projectionMatrix (uint32_t readStateIndex) const noexcept override;
 
 			/** @copydoc EmEn::Graphics::ViewMatricesInterface::viewMatrix(bool, size_t) const */
 			[[nodiscard]]
-			const Libs::Math::Matrix< 4, float > &
-			viewMatrix (bool infinity, size_t /*index*/) const noexcept override
-			{
-				return infinity ? m_logicState.infinityView : m_logicState.view;
-			}
+			const Libs::Math::Matrix< 4, float > & viewMatrix (bool infinity, size_t index) const noexcept override;
 
 			/** @copydoc EmEn::Graphics::ViewMatricesInterface::viewMatrix(uint32_t, bool, size_t) const */
 			[[nodiscard]]
-			const Libs::Math::Matrix< 4, float > &
-			viewMatrix (uint32_t readStateIndex, bool infinity, size_t /*index*/) const noexcept override
-			{
-				if constexpr ( IsDebug )
-				{
-					if ( readStateIndex >= m_renderState.size() )
-					{
-						Tracer::error(ClassId, "Index overflow !");
-
-						return infinity ? m_logicState.infinityView : m_logicState.view;
-					}
-				}
-
-				return infinity ? m_renderState[readStateIndex].infinityView : m_renderState[readStateIndex].view;
-			}
+			const Libs::Math::Matrix< 4, float > & viewMatrix (uint32_t readStateIndex, bool infinity, size_t index) const noexcept override;
 
 			/** @copydoc EmEn::Graphics::ViewMatricesInterface::position() const */
 			[[nodiscard]]
@@ -123,21 +91,7 @@ namespace EmEn::Graphics
 
 			/** @copydoc EmEn::Graphics::ViewMatricesInterface::position(uint32_t) const */
 			[[nodiscard]]
-			const Libs::Math::Vector< 3, float > &
-			position (uint32_t readStateIndex) const noexcept override
-			{
-				if constexpr ( IsDebug )
-				{
-					if ( readStateIndex >= m_renderState.size() )
-					{
-						Tracer::error(ClassId, "Index overflow !");
-
-						return m_logicState.position;
-					}
-				}
-
-				return m_renderState[readStateIndex].position;
-			}
+			const Libs::Math::Vector< 3, float > & position (uint32_t readStateIndex) const noexcept override;
 
 			/** @copydoc EmEn::Graphics::ViewMatricesInterface::frustum(size_t) const */
 			[[nodiscard]]
@@ -149,47 +103,38 @@ namespace EmEn::Graphics
 
 			/** @copydoc EmEn::Graphics::ViewMatricesInterface::frustum(uint32_t, size_t) const */
 			[[nodiscard]]
-			const Frustum &
-			frustum (uint32_t readStateIndex, size_t /*index*/) const noexcept override
-			{
-				if constexpr ( IsDebug )
-				{
-					if ( readStateIndex >= m_renderState.size() )
-					{
-						Tracer::error(ClassId, "Index overflow !");
-
-						return m_logicState.frustum;
-					}
-				}
-
-				return m_renderState[readStateIndex].frustum;
-			}
+			const Frustum & frustum (uint32_t readStateIndex, size_t index) const noexcept override;
 
 			/** @copydoc EmEn::Graphics::ViewMatricesInterface::getAspectRatio() */
 			[[nodiscard]]
-			float
-			getAspectRatio () const noexcept override
-			{
-				if ( m_logicState.bufferData[ViewWidthOffset] * m_logicState.bufferData[ViewHeightOffset] <= 0.0F )
-				{
-					Tracer::error(ClassId, "View properties for width and height are invalid ! Unable to compute the aspect ratio.");
-
-					return 1.0F;
-				}
-
-				return m_logicState.bufferData[ViewWidthOffset] / m_logicState.bufferData[ViewHeightOffset];
-			}
+			float getAspectRatio () const noexcept override;
 
 			/** @copydoc EmEn::Graphics::ViewMatricesInterface::fieldOfView() */
 			[[nodiscard]]
+			float fieldOfView () const noexcept override;
+
+			/** @copydoc EmEn::Graphics::ViewMatricesInterface::nearPlane() */
+			[[nodiscard]]
 			float
-			fieldOfView () const noexcept override
+			nearPlane () const noexcept override
 			{
-				using namespace Libs::Math;
+				return m_logicState.bufferData[NearPlaneOffset];
+			}
 
-				constexpr auto Rad2Deg = HalfRevolution< float > / std::numbers::pi_v< float >;
+			/** @copydoc EmEn::Graphics::ViewMatricesInterface::farPlane() */
+			[[nodiscard]]
+			float
+			farPlane () const noexcept override
+			{
+				return m_logicState.bufferData[FarPlaneOffset];
+			}
 
-				return std::atan(1.0F / m_logicState.projection[M4x4Col1Row1]) * 2.0F * Rad2Deg;
+			/** @copydoc EmEn::Graphics::ViewMatricesInterface::descriptorSet() */
+			[[nodiscard]]
+			const Vulkan::DescriptorSet *
+			descriptorSet () const noexcept override
+			{
+				return m_descriptorSet.get();
 			}
 
 			/** @copydoc EmEn::Graphics::ViewMatricesInterface::updatePerspectiveViewProperties() */
@@ -208,44 +153,13 @@ namespace EmEn::Graphics
 			bool create (Renderer & renderer, const std::string & instanceID) noexcept override;
 
 			/** @copydoc EmEn::Graphics::ViewMatricesInterface::publishStateForRendering(uint32_t) */
-			void
-			publishStateForRendering (uint32_t writeStateIndex) noexcept override
-			{
-				if constexpr ( IsDebug )
-				{
-					if ( writeStateIndex >= m_renderState.size() )
-					{
-						Tracer::error(ClassId, "Index overflow !");
-
-						return;
-					}
-				}
-
-				m_renderState[writeStateIndex] = m_logicState;
-			}
+			void publishStateForRendering (uint32_t writeStateIndex) noexcept override;
 
 			/** @copydoc EmEn::Graphics::ViewMatricesInterface::updateVideoMemory(uint32_t) const */
 			bool updateVideoMemory (uint32_t readStateIndex) const noexcept override;
 
 			/** @copydoc EmEn::Graphics::ViewMatricesInterface::destroy() */
-			void
-			destroy () noexcept override
-			{
-				/* [VULKAN-CPU-SYNC] Maybe useless */
-				/* NOTE: Lock between updateVideoMemory() and destroy(). */
-				const std::lock_guard< std::mutex > lock{m_GPUBufferAccessLock};
-
-				m_descriptorSet.reset();
-				m_uniformBufferObject.reset();
-			}
-
-			/** @copydoc EmEn::Graphics::ViewMatricesInterface::descriptorSet() */
-			[[nodiscard]]
-			const Vulkan::DescriptorSet *
-			descriptorSet () const noexcept override
-			{
-				return m_descriptorSet.get();
-			}
+			void destroy () noexcept override;
 
 		private:
 
@@ -275,9 +189,9 @@ namespace EmEn::Graphics
 			/** @brief Offset of the view height in the buffer. */
 			static constexpr auto ViewHeightOffset{25UL};
 			/** @brief Offset of the near plane distance in the buffer. */
-			static constexpr auto ViewNearOffset{26UL};
+			static constexpr auto NearPlaneOffset{26UL};
 			/** @brief Offset of the far plane distance in the buffer. */
-			static constexpr auto ViewDistanceOffset{27UL};
+			static constexpr auto FarPlaneOffset{27UL};
 			/** @brief Offset of the ambient light color in the buffer. */
 			static constexpr auto AmbientLightColorOffset{28UL};
 			/** @brief Offset of the ambient light intensity in the buffer. */
@@ -288,11 +202,11 @@ namespace EmEn::Graphics
 			 */
 			struct DataState
 			{
-				Libs::Math::Matrix< 4, float > projection;	  /**< Projection matrix for 2D view. */
-				Libs::Math::Matrix< 4, float > view;			/**< View matrix. */
-				Libs::Math::Matrix< 4, float > infinityView;	/**< View matrix for infinite distance (skybox). */
-				Libs::Math::Vector< 3, float > position;		/**< Camera position in world space. */
-				Frustum frustum;								 /**< Frustum for culling. */
+				Libs::Math::Matrix< 4, float > projection; /**< Projection matrix for 2D view. */
+				Libs::Math::Matrix< 4, float > view; /**< View matrix. */
+				Libs::Math::Matrix< 4, float > infinityView; /**< View matrix for infinite distance (skybox). */
+				Libs::Math::Vector< 3, float > position; /**< Camera position in world space. */
+				Frustum frustum; /**< Frustum for culling. */
 				std::array< float, ViewUBOElementCount > bufferData{
 					/* Projection matrix. */
 					1.0F, 0.0F, 0.0F, 0.0F,
@@ -312,11 +226,11 @@ namespace EmEn::Graphics
 				};
 			};
 
-			DataState m_logicState;											  /**< Current logic state (write). */
-			std::array< DataState, 2 > m_renderState;						   /**< Double-buffered render states (read). */
+			DataState m_logicState; /**< Current logic state (write). */
+			std::array< DataState, 2 > m_renderState; /**< Double-buffered render states (read). */
 			std::unique_ptr< Vulkan::UniformBufferObject > m_uniformBufferObject; /**< Vulkan UBO for GPU memory. */
-			std::unique_ptr< Vulkan::DescriptorSet > m_descriptorSet;		   /**< Vulkan descriptor set. */
-			mutable std::mutex m_GPUBufferAccessLock;							/**< Mutex for GPU buffer access synchronization. */
+			std::unique_ptr< Vulkan::DescriptorSet > m_descriptorSet; /**< Vulkan descriptor set. */
+			mutable std::mutex m_GPUBufferAccessLock; /**< Mutex for GPU buffer access synchronization. */
 	};
 
 	/**

@@ -121,14 +121,11 @@ set(EMERAUDE_HEADER_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/Time/Time.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/Time/TimedEvent.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/Time/Types.hpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/VertexFactory/FileFormatFBX.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/VertexFactory/FileFormatInterface.hpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/VertexFactory/FileFormatMD2.hpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/VertexFactory/FileFormatMD3.hpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/VertexFactory/FileFormatMD5.hpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/VertexFactory/FileFormatMDL.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/VertexFactory/FileFormatMDx.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/VertexFactory/FileFormatNative.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/VertexFactory/FileFormatOBJ.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/VertexFactory/FileFormatSTL.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/VertexFactory/FileIO.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/VertexFactory/Grid.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/VertexFactory/GridQuad.hpp

@@ -623,4 +623,85 @@ namespace EmEn::Saphir::Declaration
 				return 0;
 		}
 	}
+
+	uint32_t
+	base_alignment_std140 (VariableType type) noexcept
+	{
+		switch ( type )
+		{
+			/* Scalars: base alignment = 4 bytes. */
+			case VariableType::Float :
+			case VariableType::UnsignedInteger :
+			case VariableType::AtomicUnsignedInteger :
+			case VariableType::Integer :
+			case VariableType::Boolean :
+				return 4;
+
+			/* Double scalars: base alignment = 8 bytes. */
+			case VariableType::Double :
+				return 8;
+
+			/* vec2: base alignment = 8 bytes (2 * 4). */
+			case VariableType::FloatVector2 :
+			case VariableType::UIntVector2 :
+			case VariableType::SIntVector2 :
+			case VariableType::BooleanVector2 :
+				return 8;
+
+			/* dvec2: base alignment = 16 bytes (2 * 8). */
+			case VariableType::DoubleVector2 :
+				return 16;
+
+			/* vec3, vec4: base alignment = 16 bytes (rounded up to vec4). */
+			case VariableType::FloatVector3 :
+			case VariableType::FloatVector4 :
+			case VariableType::UIntVector3 :
+			case VariableType::UIntVector4 :
+			case VariableType::SIntVector3 :
+			case VariableType::SIntVector4 :
+			case VariableType::BooleanVector3 :
+			case VariableType::BooleanVector4 :
+				return 16;
+
+			/* dvec3, dvec4: base alignment = 32 bytes (rounded up to dvec4). */
+			case VariableType::DoubleVector3 :
+			case VariableType::DoubleVector4 :
+				return 32;
+
+			/* Matrices: treated as arrays of column vectors.
+			 * Column vectors use vec4 alignment (16 bytes) in std140. */
+			case VariableType::Matrix2 :
+			case VariableType::Matrix2x2 :
+			case VariableType::Matrix2x3 :
+			case VariableType::Matrix2x4 :
+			case VariableType::Matrix3 :
+			case VariableType::Matrix3x2 :
+			case VariableType::Matrix3x3 :
+			case VariableType::Matrix3x4 :
+			case VariableType::Matrix4 :
+			case VariableType::Matrix4x2 :
+			case VariableType::Matrix4x3 :
+			case VariableType::Matrix4x4 :
+				return 16;
+
+			/* Double matrices: column vectors use dvec4 alignment (32 bytes). */
+			case VariableType::DoubleMatrix2 :
+			case VariableType::DoubleMatrix2x2 :
+			case VariableType::DoubleMatrix2x3 :
+			case VariableType::DoubleMatrix2x4 :
+			case VariableType::DoubleMatrix3 :
+			case VariableType::DoubleMatrix3x2 :
+			case VariableType::DoubleMatrix3x3 :
+			case VariableType::DoubleMatrix3x4 :
+			case VariableType::DoubleMatrix4 :
+			case VariableType::DoubleMatrix4x2 :
+			case VariableType::DoubleMatrix4x3 :
+			case VariableType::DoubleMatrix4x4 :
+				return 32;
+
+			/* Opaque types (samplers, images, textures) don't have alignment in UBOs. */
+			default:
+				return 0;
+		}
+	}
 }

@@ -26,11 +26,15 @@
 
 #include "DirectionalLight.hpp"
 
+/* STL inclusions. */
+#include <cstring>
+
 /* Local inclusions. */
 #include "Saphir/LightGenerator.hpp"
 #include "Scenes/AVConsole/Manager.hpp"
 #include "Scenes/Scene.hpp"
 #include "Tracer.hpp"
+#include "Vulkan/DescriptorSet.hpp"
 
 namespace EmEn::Scenes::Component
 {
@@ -97,9 +101,43 @@ namespace EmEn::Scenes::Component
 			return;
 		}
 
-		if ( this->isShadowCastingEnabled() )
+		/* NOTE: For CSM, the shadow map coordinates and matrices are computed in updateCascades()
+		 * based on the camera frustum. The classic shadow map logic below doesn't apply. */
+		if ( this->isShadowCastingEnabled() && !m_usesCSM )
 		{
-			this->updateDeviceFromCoordinates(worldCoordinates, this->getWorldVelocity());
+			/* NOTE: For directional lights (classic shadow map mode), the shadow map should be
+			 * centered at the scene origin, not at the light position. The light is conceptually
+			 * at infinity, so only the direction matters.
+			 *
+			 * The camera is positioned on the light side of origin, far enough back that
+			 * the frustum covers the entire coverage area symmetrically around origin.
+			 * With near=0 and far=coverage, placing camera at coverage/2 from origin
+			 * means the far plane is only coverage/2 past origin. Instead, we use the
+			 * full coverage as camera offset so that origin is at depth coverage/2.
+			 */
+
+			/* Compute the light direction (same logic as setDirection()).
+			 * This is the direction light rays travel (from light toward scene). */
+			const auto lightDirection = m_useDirectionVector ?
+				worldCoordinates.forwardVector() :
+				-worldCoordinates.position().normalized();
+
+			CartesianFrame< float > shadowMapFrame;
+
+			/* Position camera on the light side of origin at full coverage distance.
+			 * This places origin at depth = coverage (middle when far = coverage * 2).
+			 * Camera position = -lightDirection * coverage (opposite to ray direction). */
+			shadowMapFrame.setPosition(-lightDirection * m_coverageSize);
+
+			/* Set the shadow map frame to look in the light direction.
+			 * CartesianFrame convention: camera looks in Z- (forward), Z+ is backward.
+			 * So backward = -lightDirection to make the camera look in lightDirection. */
+			shadowMapFrame.setBackwardVector(-lightDirection);
+
+			this->updateDeviceFromCoordinates(shadowMapFrame, Vector< 3, float >::origin());
+
+			/* Update the light space matrix in the buffer after changing shadow map coordinates. */
+			this->updateLightSpaceMatrix();
 		}
 
 		this->setDirection(worldCoordinates);
@@ -119,6 +157,26 @@ namespace EmEn::Scenes::Component
 	DirectionalLight::onIntensityChange (float intensity) noexcept
 	{
 		m_buffer[IntensityOffset] = intensity;
+	}
+
+	void
+	DirectionalLight::setPCFRadius (float radius) noexcept
+	{
+		m_PCFRadius = std::abs(radius);
+
+		m_buffer[PCFRadiusOffset] = m_PCFRadius;
+
+		this->requestVideoMemoryUpdate();
+	}
+
+	void
+	DirectionalLight::setShadowBias (float bias) noexcept
+	{
+		m_shadowBias = bias;
+
+		m_buffer[ShadowBiasOffset] = m_shadowBias;
+
+		this->requestVideoMemoryUpdate();
 	}
 
 	bool
@@ -142,29 +200,68 @@ namespace EmEn::Scenes::Component
 		/* Initialize the data buffer. */
 		this->setDirection(this->getWorldCoordinates());
 
+		/* [VULKAN-SHADOW] Create shadow map if resolution is specified. */
 		if ( const auto resolution = this->shadowMapResolution(); resolution > 0 )
 		{
-			/* [VULKAN-SHADOW] TODO: Reuse shadow maps + remove it from console on failure */
-			m_shadowMap = scene.createRenderToShadowMap(this->name() + ShadowMapName, resolution, this->getDistanceOrFar(), this->isOrthographicProjection());
-
-			if ( m_shadowMap != nullptr )
+			if ( m_usesCSM )
 			{
-				if ( this->connect(scene.AVConsoleManager().engineContext(), m_shadowMap, true) == AVConsole::ConnexionResult::Success )
-				{
-					TraceSuccess{ClassId} << "2D shadow map (" << resolution << "px²) successfully created for directional light '" << this->name() << "'.";
+				TraceDebug{ClassId} << "Creating CSM (" << m_cascadeCount << " cascades, lambda=" << m_lambda << ") for directional light '" << this->name() << "'...";
 
-					this->enableShadowCasting(true);
-				}
-				else
-				{
-					TraceError{ClassId} << "Unable to connect the 2D shadow map (" << resolution << "px²) to directional light '" << this->name() << "' !";
-
-					m_shadowMap.reset();
-				}
+				m_shadowMap = scene.createRenderToCascadedShadowMap(this->name() + ShadowMapName, resolution, this->getDistanceOrFar(), m_cascadeCount, m_lambda);
 			}
 			else
 			{
-				TraceError{ClassId} << "Unable to create a 2D shadow map (" << resolution << "px²) for directional light '" << this->name() << "' !";
+				TraceDebug{ClassId} << "Creating classic shadow map (coverage=" << m_coverageSize << "m) for directional light '" << this->name() << "'...";
+
+				m_shadowMap = scene.createRenderToShadowMap(this->name() + ShadowMapName, resolution, m_coverageSize, this->isOrthographicProjection());
+			}
+
+			if ( m_shadowMap == nullptr )
+			{
+				TraceError{ClassId} << "Unable to create shadow map for directional light '" << this->name() << "' !";
+
+				return false;
+			}
+
+			if ( this->connect(scene.AVConsoleManager().engineContext(), m_shadowMap, true) != AVConsole::ConnexionResult::Success )
+			{
+				TraceError{ClassId} << "Unable to connect the shadow map to directional light '" << this->name() << "' !";
+
+				m_shadowMap.reset();
+
+				return false;
+			}
+
+			if ( !this->createShadowDescriptorSet(scene) )
+			{
+				TraceError{ClassId} << "Unable to create shadow descriptor set for directional light '" << this->name() << "' !";
+
+				this->disconnect(scene.AVConsoleManager().engineContext(), m_shadowMap, true);
+
+				m_shadowMap.reset();
+
+				return false;
+			}
+
+			this->enableShadowCasting(true);
+
+			TraceSuccess{ClassId} << "Shadow map (" << resolution << "px²) successfully created for directional light '" << this->name() << "'.";
+
+			/* NOTE: For classic shadow maps, override the coordinates.
+			 * The base class onOutputDeviceConnected() initialized it with the light's
+			 * actual position, which is wrong for directional lights. */
+			if ( !m_usesCSM )
+			{
+				const auto worldCoordinates = this->getWorldCoordinates();
+				const auto lightDirection = m_useDirectionVector ? worldCoordinates.forwardVector() : -worldCoordinates.position().normalized();
+
+				CartesianFrame< float > shadowMapFrame;
+				const auto coverage = m_coverageSize > 0.0F ? m_coverageSize : this->getDistanceOrFar() * 0.5F;
+				shadowMapFrame.setPosition(-lightDirection * coverage);
+				shadowMapFrame.setBackwardVector(-lightDirection);
+
+				this->updateDeviceFromCoordinates(shadowMapFrame, Vector< 3, float >::origin());
+				this->updateLightSpaceMatrix();
 			}
 		}
 
@@ -174,6 +271,10 @@ namespace EmEn::Scenes::Component
 	void
 	DirectionalLight::destroyFromHardware (Scene & scene) noexcept
 	{
+		/* Clean up shadow descriptor sets. */
+		m_shadowDescriptorSet.reset();
+
+		/* Clean up classic shadow map. */
 		if ( m_shadowMap != nullptr )
 		{
 			this->disconnect(scene.AVConsoleManager().engineContext(), m_shadowMap, true);
@@ -184,9 +285,184 @@ namespace EmEn::Scenes::Component
 		this->removeFromSharedUniformBuffer();
 	}
 
+	const Vulkan::DescriptorSet *
+	DirectionalLight::descriptorSet (bool useShadowMap) const noexcept
+	{
+		/* If shadow map is requested, check for CSM first, then classic shadow map. */
+		if ( useShadowMap )
+		{
+			if ( m_shadowDescriptorSet != nullptr )
+			{
+				return m_shadowDescriptorSet.get();
+			}
+		}
+
+		/* Otherwise, fall back to the base implementation (shared UBO descriptor set). */
+		return AbstractLightEmitter::descriptorSet(useShadowMap);
+	}
+
 	Declaration::UniformBlock
 	DirectionalLight::getUniformBlock (uint32_t set, uint32_t binding, bool useShadow) const noexcept
 	{
 		return LightGenerator::getUniformBlock(set, binding, LightType::Directional, useShadow);
+	}
+
+	bool
+	DirectionalLight::createShadowDescriptorSet (Scene & scene) noexcept
+	{
+		auto & renderer = scene.AVConsoleManager().graphicsRenderer();
+
+		/* Get the unified descriptor set layout (same for shadow and non-shadow). */
+		const auto descriptorSetLayout = LightSet::getDescriptorSetLayout(renderer.layoutManager());
+
+		if ( descriptorSetLayout == nullptr )
+		{
+			TraceError{ClassId} << "Unable to get the shadow descriptor set layout !";
+
+			return false;
+		}
+
+		/* Create the descriptor set. */
+		m_shadowDescriptorSet = std::make_unique< Vulkan::DescriptorSet >(renderer.descriptorPool(), descriptorSetLayout);
+
+		if ( !m_shadowDescriptorSet->create() )
+		{
+			TraceError{ClassId} << "Unable to create the shadow descriptor set !";
+
+			m_shadowDescriptorSet.reset();
+
+			return false;
+		}
+
+		/* Get the UBO from the shared buffer. */
+		const auto sharedUBO = scene.lightSet().directionalLightBuffer();
+
+		if ( !sharedUBO )
+		{
+			TraceError{ClassId} << "Unable to get the shared uniform buffer !";
+
+			m_shadowDescriptorSet.reset();
+
+			return false;
+		}
+
+		/* Write binding 0: Light UBO (dynamic offset). */
+		if ( !m_shadowDescriptorSet->writeUniformBufferObjectDynamic(0, *sharedUBO->uniformBufferObject(this->UBOIndex())) )
+		{
+			TraceError{ClassId} << "Unable to write UBO to shadow descriptor set !";
+
+			m_shadowDescriptorSet.reset();
+
+			return false;
+		}
+
+		/* Write binding 1: Shadow map sampler. */
+		if ( m_shadowMap == nullptr || !m_shadowMap->writeCombinedImageSampler(*m_shadowDescriptorSet, 1) )
+		{
+			TraceError{ClassId} << "Shadow map is null, cannot bind to descriptor set !";
+
+			m_shadowDescriptorSet.reset();
+
+			return false;
+		}
+
+		TraceSuccess{ClassId} << "Shadow descriptor set created successfully for directional light '" << this->name() << "'.";
+
+		return true;
+	}
+
+	void
+	DirectionalLight::updateCascades (const std::array< Vector< 3, float >, 8 > & cameraFrustumCorners, float nearPlane, float farPlane) noexcept
+	{
+		if ( !m_usesCSM || m_shadowMap == nullptr )
+		{
+			return;
+		}
+
+		/* Get the light direction. */
+		const auto worldCoordinates = this->getWorldCoordinates();
+		const auto lightDirection = m_useDirectionVector ? worldCoordinates.forwardVector() : -worldCoordinates.position().normalized();
+
+		/* Scale CSM coverage based on m_csmScale.
+		 * csmScale 1.0 = full frustum, 2.0 = zoom x2, 4.0 = zoom x4, etc.
+		 * We must scale both the far corners AND the farPlane value. */
+		const float CSMCoverageRatio = 1.0F / m_CSMScale;
+
+		/* Scale far corners (indices 4-7) to match reduced coverage.
+		 * New far corner = near corner + (far corner - near corner) * ratio */
+		auto scaledCorners = cameraFrustumCorners;
+
+		for ( size_t corner = 0; corner < 4; ++corner )
+		{
+			scaledCorners[corner + 4] = scaledCorners[corner] + (cameraFrustumCorners[corner + 4] - cameraFrustumCorners[corner]) * CSMCoverageRatio;
+		}
+
+		const float CSMFarPlane = nearPlane + (farPlane - nearPlane) * CSMCoverageRatio;
+
+		/* Update the cascade matrices in the cascaded view matrices UBO. */
+		auto & viewMatrices = static_cast< ViewMatricesCascadedUBO & >(m_shadowMap->viewMatrices());
+
+		viewMatrices.updateFromMainCameraFrustum(lightDirection, scaledCorners, nearPlane, CSMFarPlane);
+
+		/* Copy cascade data to the Light UBO buffer for shader access during scene rendering. */
+		for ( uint32_t cascadeIndex = 0; cascadeIndex < m_cascadeCount; ++cascadeIndex )
+		{
+			const auto & matrix = viewMatrices.cascadeViewProjectionMatrix(cascadeIndex);
+
+			std::memcpy(&m_CSMBuffer[CSM_CascadeMatricesOffset + cascadeIndex * 16], matrix.data(), 16 * sizeof(float));
+		}
+
+		/* Copy split distances. */
+		for ( uint32_t cascadeIndex = 0; cascadeIndex < m_cascadeCount; ++cascadeIndex )
+		{
+			m_CSMBuffer[CSM_SplitDistancesOffset + cascadeIndex] = viewMatrices.splitDistance(cascadeIndex);
+		}
+
+		/* Set cascade count and shadow bias. */
+		m_CSMBuffer[CSM_CascadeCountOffset] = static_cast< float >(m_cascadeCount);
+		m_CSMBuffer[CSM_ShadowBiasOffset] = m_shadowBias;
+
+		/* Copy light properties. */
+		m_CSMBuffer[CSM_ColorOffset + 0] = this->color().red();
+		m_CSMBuffer[CSM_ColorOffset + 1] = this->color().green();
+		m_CSMBuffer[CSM_ColorOffset + 2] = this->color().blue();
+		m_CSMBuffer[CSM_ColorOffset + 3] = 1.0F;
+
+		m_CSMBuffer[CSM_DirectionOffset + 0] = lightDirection.x();
+		m_CSMBuffer[CSM_DirectionOffset + 1] = lightDirection.y();
+		m_CSMBuffer[CSM_DirectionOffset + 2] = lightDirection.z();
+		m_CSMBuffer[CSM_DirectionOffset + 3] = 0.0F;
+
+		m_CSMBuffer[CSM_IntensityOffset] = this->intensity();
+	}
+
+	void
+	DirectionalLight::updateLightSpaceMatrix () noexcept
+	{
+		this->writeLightSpaceMatrix(m_buffer.data() + LightMatrixOffset);
+	}
+
+	bool
+	DirectionalLight::onVideoMemoryUpdate (SharedUniformBuffer & UBO, uint32_t index) noexcept
+	{
+		if ( m_usesCSM )
+		{
+			return UBO.writeElementData(index, m_CSMBuffer.data());
+		}
+
+		return UBO.writeElementData(index, m_buffer.data());
+	}
+
+	std::ostream &
+	operator<< (std::ostream & out, const DirectionalLight & obj)
+	{
+		const auto worldCoordinates = obj.getWorldCoordinates();
+
+		return out << "Directional light data ;\n"
+			"Direction (World Space) : " << worldCoordinates.forwardVector() << "\n"
+			"Color : " << obj.color() << "\n"
+			"Intensity : " << obj.intensity() << "\n"
+			"Activity : " << ( obj.isEnabled() ? "true" : "false" ) << "\n"
+			"Shadow caster : " << ( obj.isShadowCastingEnabled() ? "true" : "false" ) << '\n';
 	}
 }

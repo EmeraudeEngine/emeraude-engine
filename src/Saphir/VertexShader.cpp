@@ -254,9 +254,15 @@ namespace EmEn::Saphir
 		this->declare(VertexShader::generateComputeUpwardVectorFunction());
 		this->declare(VertexShader::generateGetBillBoardModelMatrixFunction());
 
+		/* NOTE: In cubemap mode, the view matrix comes from the UBO indexed by gl_ViewIndex,
+		 * not from the push constant. */
+		const auto viewMatrixSource = this->isCubemapModeEnabled() ?
+			ViewUB(Keys::UniformBlock::Component::ViewMatrix, true) :
+			MatrixPC(PushConstant::Component::ViewMatrix);
+
 		/* TODO: Find a way to get the camera world position directly (View UBO is not constantly updated for now) */
 		code <<
-			"\t" "const mat4 InvView = inverse(" << MatrixPC(PushConstant::Component::ViewMatrix) << ");" "\n"
+			"\t" "const mat4 InvView = inverse(" << viewMatrixSource << ");" "\n"
 			"\t" "const mat4 " << ShaderVariable::SpriteModelMatrix << " = getBillBoardModelMatrix(InvView[3].xyz, " << Attribute::ModelPosition << ", " << Attribute::ModelScaling << ");" "\n\n";
 
 		m_uniquePreparations.emplace_back(ShaderVariable::SpriteModelMatrix, code.str());
@@ -274,7 +280,43 @@ namespace EmEn::Saphir
 
 		std::stringstream code;
 
-		if ( this->isInstancingEnabled() )
+		/* NOTE: In cubemap mode, the view matrix comes from the UBO indexed by gl_ViewIndex,
+		 * not from the push constant. */
+		if ( this->isCubemapModeEnabled() )
+		{
+			if ( this->isInstancingEnabled() )
+			{
+				if ( this->isBillBoardingEnabled() )
+				{
+					if ( !this->prepareSpriteModelMatrix() )
+					{
+						return false;
+					}
+
+					code << "\t" "const mat4 " << ShaderVariable::ModelViewMatrix << " = "
+						<< ViewUB(Keys::UniformBlock::Component::ViewMatrix, true) << " * "
+						<< ShaderVariable::SpriteModelMatrix << ";" "\n";
+				}
+				else
+				{
+					if ( !this->declare(InputAttribute{VertexAttributeType::ModelMatrixR0}) )
+					{
+						return false;
+					}
+
+					code << "\t" "const mat4 " << ShaderVariable::ModelViewMatrix << " = "
+						<< ViewUB(Keys::UniformBlock::Component::ViewMatrix, true) << " * "
+						<< Attribute::ModelMatrix << ";" "\n";
+				}
+			}
+			else
+			{
+				code << "\t" "const mat4 " << ShaderVariable::ModelViewMatrix << " = "
+					<< ViewUB(Keys::UniformBlock::Component::ViewMatrix, true) << " * "
+					<< MatrixPC(PushConstant::Component::ModelMatrix) << ";" "\n";
+			}
+		}
+		else if ( this->isInstancingEnabled() )
 		{
 			if ( this->isBillBoardingEnabled() )
 			{
@@ -338,10 +380,47 @@ namespace EmEn::Saphir
 
 		std::stringstream code;
 
+		/* NOTE: CSM (Cascaded Shadow Map) mode uses multiview rendering with gl_ViewIndex
+		 * to select the correct cascade view-projection matrix from the UBO.
+		 * The CSM UBO has mat4[4] cascadeViewProjectionMatrices at offset 0. */
+		if ( this->isCSMModeEnabled() )
+		{
+			if ( this->isInstancingEnabled() )
+			{
+				if ( this->isBillBoardingEnabled() )
+				{
+					if ( !this->prepareSpriteModelMatrix() )
+					{
+						return false;
+					}
+
+					code << "\t" "const mat4 " << ShaderVariable::ModelViewProjectionMatrix << " = "
+						<< Keys::UniformBlock::View << "." << Keys::UniformBlock::Component::CascadeViewProjectionMatrices << "[gl_ViewIndex] * "
+						<< ShaderVariable::SpriteModelMatrix << ";" "\n";
+				}
+				else
+				{
+					if ( !this->declare(InputAttribute{VertexAttributeType::ModelMatrixR0}) )
+					{
+						return false;
+					}
+
+					code << "\t" "const mat4 " << ShaderVariable::ModelViewProjectionMatrix << " = "
+						<< Keys::UniformBlock::View << "." << Keys::UniformBlock::Component::CascadeViewProjectionMatrices << "[gl_ViewIndex] * "
+						<< Attribute::ModelMatrix << ";" "\n";
+				}
+			}
+			else
+			{
+				code << "\t" "const mat4 " << ShaderVariable::ModelViewProjectionMatrix << " = "
+					<< Keys::UniformBlock::View << "." << Keys::UniformBlock::Component::CascadeViewProjectionMatrices << "[gl_ViewIndex] * "
+					<< MatrixPC(PushConstant::Component::ModelMatrix) << ";" "\n";
+			}
+		}
 		/* NOTE: Cubemap mode uses multiview rendering with gl_ViewIndex to select the correct view matrix from UBO.
 		 * The projection matrix is shared (not per-face), so we use ViewUB(..., false) for projection
 		 * but ViewUB(..., true) for the view matrix to get instance[gl_ViewIndex].viewMatrix. */
-		if ( this->isCubemapModeEnabled() )
+		else if ( this->isCubemapModeEnabled() )
 		{
 			if ( this->isInstancingEnabled() )
 			{
@@ -516,7 +595,10 @@ namespace EmEn::Saphir
 
 		std::string MVPMatrix;
 
-		if ( this->isInstancingEnabled() || this->isAdvancedMatricesEnabled() )
+		/* NOTE: When rendering to a cubemap or CSM, we MUST always prepare the ModelViewProjectionMatrix
+		 * because the push constant contains only the Model matrix, and Projection/View come from the UBO
+		 * indexed by gl_ViewIndex. Without this, the shader would try to read a non-existent MVP from push constants. */
+		if ( this->isInstancingEnabled() || this->isAdvancedMatricesEnabled() || this->isCubemapModeEnabled() || this->isCSMModeEnabled() )
 		{
 			if ( !this->prepareModelViewProjectionMatrix() )
 			{

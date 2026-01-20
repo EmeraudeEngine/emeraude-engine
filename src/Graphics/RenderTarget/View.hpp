@@ -104,24 +104,48 @@ namespace EmEn::Graphics::RenderTarget
 
 			}
 
+			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::setViewDistance() */
+			void
+			setViewDistance (float meters) noexcept override
+			{
+				const auto & extent = this->extent();
+				const auto width = static_cast< float >(extent.width);
+				const auto height = static_cast< float >(extent.height);
+
+				if ( this->isOrthographicProjection() )
+				{
+					m_viewMatrices.updateOrthographicViewProperties(width, height, m_viewMatrices.nearPlane(), meters);
+				}
+				else
+				{
+					m_viewMatrices.updatePerspectiveViewProperties(width, height, m_viewMatrices.fieldOfView(), meters);
+				}
+			}
+
+			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::viewDistance() */
+			[[nodiscard]]
+			float
+			viewDistance () const noexcept override
+			{
+				return m_viewMatrices.farPlane();
+			}
+
 			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::updateViewRangesProperties() */
 			void
 			updateViewRangesProperties (float fovOrNear, float distanceOrFar) noexcept override
 			{
 				const auto & extent = this->extent();
 				const auto width = static_cast< float >(extent.width);
-				const auto height = static_cast< float >(extent.width);
+				const auto height = static_cast< float >(extent.height);
 
 				if ( this->isOrthographicProjection() )
 				{
-					m_viewMatrices.updatePerspectiveViewProperties(width, height, fovOrNear, distanceOrFar);
+					m_viewMatrices.updateOrthographicViewProperties(width, height, fovOrNear, distanceOrFar);
 				}
 				else
 				{
-					m_viewMatrices.updateOrthographicViewProperties(width, height, fovOrNear, distanceOrFar);
+					m_viewMatrices.updatePerspectiveViewProperties(width, height, fovOrNear, distanceOrFar);
 				}
-
-				this->setViewDistance(distanceOrFar);
 			}
 
 			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::aspectRatio() */
@@ -364,6 +388,17 @@ namespace EmEn::Graphics::RenderTarget
 
 				m_colorImageView.reset();
 				m_colorImage.reset();
+			}
+
+			/**
+			 * @copydoc EmEn::Graphics::RenderTarget::Abstract::writeCombinedImageSampler(const Vulkan::DescriptorSet &, uint32_t) const
+			 * @note Intentionally left in private methods because this is not a texture.
+			 */
+			[[nodiscard]]
+			bool
+			writeCombinedImageSampler (const Vulkan::DescriptorSet & /*descriptorSet*/, uint32_t /*bindingIndex*/) const noexcept override
+			{
+				return false;
 			}
 
 			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::createRenderPass() */

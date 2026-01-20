@@ -216,6 +216,17 @@ namespace EmEn::Vulkan
 			[[nodiscard]]
 			bool downloadImage (const Image & sourceImage, VkImageLayout currentLayout, VkImageAspectFlags aspectMask, Libs::PixelFactory::Pixmap< uint8_t > & pixmap) noexcept;
 
+			/**
+			 * @brief Clears a depth image to a specific depth value.
+			 * @note The image must be in VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL layout.
+			 * @param image A reference to the depth image to clear.
+			 * @param depthValue The depth value to clear to (0.0 to 1.0).
+			 * @param stencilValue The stencil value to clear to. Default 0.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool clearDepthImage (Image & image, float depthValue, uint32_t stencilValue = 0) const noexcept;
+
 		private:
 
 			/** @copydoc EmEn::ServiceInterface::onInitialize() */

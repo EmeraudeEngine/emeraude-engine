@@ -166,7 +166,11 @@ namespace EmEn::Graphics::Geometry
 			return false;
 		}
 
-		ShapeBuilderOptions< float > options{};
+		this->enableFlag(EnableTangentSpace);
+		this->enableFlag(EnablePrimaryTextureCoordinates);
+		this->enableFlag(EnableVertexColor);
+
+		ShapeBuilderOptions< float > options{true, true, true, false, false};
 		options.enableGlobalVertexColor(Red);
 
 		m_localData = ShapeGenerator::generateCuboid(1.0F, 1.0F, 1.0F, options);

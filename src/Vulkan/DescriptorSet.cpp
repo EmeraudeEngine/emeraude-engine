@@ -37,6 +37,7 @@
 #include "Sampler.hpp"
 #include "UniformBufferObject.hpp"
 #include "Tracer.hpp"
+#include "Graphics/RenderTarget/Abstract.hpp"
 
 namespace EmEn::Vulkan
 {

@@ -46,13 +46,49 @@ namespace EmEn::Scenes::Component
 			static constexpr auto ClassId{"DirectionalLight"};
 
 			/**
-			 * @brief Constructs a directional light.
+			 * @brief Constructs a directional light without shadow mapping.
 			 * @param componentName A reference to a string.
 			 * @param parentEntity A reference to the parent entity.
-			 * @param shadowMapResolution Enable the shadow map by specifying the resolution. Default, no shadow map.
 			 */
-			DirectionalLight (const std::string & componentName, const AbstractEntity & parentEntity, uint32_t shadowMapResolution = 0) noexcept
-				: AbstractLightEmitter{componentName, parentEntity, shadowMapResolution}
+			DirectionalLight (const std::string & componentName, const AbstractEntity & parentEntity) noexcept
+				: AbstractLightEmitter{componentName, parentEntity, 0}
+			{
+
+			}
+
+			/**
+			 * @brief Constructs a directional light with classic shadow mapping.
+			 * @note Uses a fixed orthographic projection covering a square area centered on the light.
+			 * @param componentName A reference to a string.
+			 * @param parentEntity A reference to the parent entity.
+			 * @param shadowMapResolution The shadow map resolution in pixels.
+			 * @param coverageSize The coverage size in world units (width/height of the shadow area).
+			 */
+			DirectionalLight (const std::string & componentName, const AbstractEntity & parentEntity, uint32_t shadowMapResolution, float coverageSize) noexcept
+				: AbstractLightEmitter{componentName, parentEntity, shadowMapResolution},
+				m_coverageSize{coverageSize}
+			{
+
+			}
+
+			/**
+			 * @brief Constructs a directional light with Cascaded Shadow Mapping (CSM).
+			 * @note CSM automatically derives coverage from the main camera frustum.
+			 *       Each cascade covers a portion of the view frustum, providing higher
+			 *       shadow resolution near the camera and lower resolution far away.
+			 * @param componentName A reference to a string.
+			 * @param parentEntity A reference to the parent entity.
+			 * @param shadowMapResolution The shadow map resolution in pixels (per cascade).
+			 * @param cascadeCount The number of cascades (1-4).
+			 * @param lambda The split factor (0 = linear, 1 = logarithmic, 0.5 = balanced). Default is 0.5.
+			 * @param csmScale The zoom scale for CSM coverage (1.0 = full frustum, 2.0 = zoom x2, 4.0 = zoom x4). Default is 1.0.
+			 */
+			DirectionalLight (const std::string & componentName, const AbstractEntity & parentEntity, uint32_t shadowMapResolution, uint32_t cascadeCount, float lambda, float csmScale = 1.0F) noexcept
+				: AbstractLightEmitter{componentName, parentEntity, shadowMapResolution},
+				m_lambda{std::clamp(lambda, 0.0F, 1.0F)},
+				m_cascadeCount{std::clamp(cascadeCount, 1U, Graphics::MaxCascadeCount)},
+				m_CSMScale{std::max(csmScale, 0.01F)},
+				m_usesCSM{true}
 			{
 
 			}
@@ -138,12 +174,47 @@ namespace EmEn::Scenes::Component
 			std::shared_ptr< Graphics::RenderTarget::Abstract >
 			shadowMap () const noexcept override
 			{
-				return std::static_pointer_cast< Graphics::RenderTarget::Abstract >(m_shadowMap);
+				return m_shadowMap;
+			}
+
+			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::descriptorSet() */
+			[[nodiscard]]
+			const Vulkan::DescriptorSet *
+			descriptorSet (bool useShadowMap) const noexcept override;
+
+			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::hasShadowDescriptorSet() */
+			[[nodiscard]]
+			bool
+			hasShadowDescriptorSet () const noexcept override
+			{
+				return m_shadowDescriptorSet != nullptr;
 			}
 
 			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::getUniformBlock() */
 			[[nodiscard]]
 			Saphir::Declaration::UniformBlock getUniformBlock (uint32_t set, uint32_t binding, bool useShadow) const noexcept override;
+
+			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::setPCFRadius(float) */
+			void setPCFRadius (float radius) noexcept override;
+
+			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::PCFRadius() */
+			[[nodiscard]]
+			float
+			PCFRadius () const noexcept override
+			{
+				return m_PCFRadius;
+			}
+
+			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::setShadowBias(float) */
+			void setShadowBias (float bias) noexcept override;
+
+			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::shadowBias() */
+			[[nodiscard]]
+			float
+			shadowBias () const noexcept override
+			{
+				return m_shadowBias;
+			}
 
 			/**
 			 * @brief Sets the light direction from the coordinate direction instead of the position to origin.
@@ -167,17 +238,104 @@ namespace EmEn::Scenes::Component
 				return m_useDirectionVector;
 			}
 
+			/**
+			 * @brief Returns whether this light uses Cascaded Shadow Maps.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			usesCSM () const noexcept
+			{
+				return m_usesCSM;
+			}
+
+			/**
+			 * @brief Returns the number of cascades.
+			 * @return uint32_t
+			 */
+			[[nodiscard]]
+			uint32_t
+			cascadeCount () const noexcept
+			{
+				return m_cascadeCount;
+			}
+
+			/**
+			 * @brief Returns the lambda value for cascade split calculation.
+			 * @return float
+			 */
+			[[nodiscard]]
+			float
+			cascadeLambda () const noexcept
+			{
+				return m_lambda;
+			}
+
+			/**
+			 * @brief Returns the coverage size for classic shadow mapping.
+			 * @return float The coverage size in world units (0 = CSM mode).
+			 */
+			[[nodiscard]]
+			float
+			coverageSize () const noexcept
+			{
+				return m_coverageSize;
+			}
+
+			/**
+			 * @brief Sets the coverage size for classic shadow mapping.
+			 * @note This has no effect when using CSM (coverage is derived from camera frustum).
+			 * @param size The coverage size in world units.
+			 * @return void
+			 */
+			void
+			setCoverageSize (float size) noexcept
+			{
+				m_coverageSize = std::max(0.0F, size);
+			}
+
+			/**
+			 * @brief Sets the cascade count (only effective when using CSM).
+			 * @param count The number of cascades (1-4).
+			 * @return void
+			 */
+			void
+			setCascadeCount (uint32_t count) noexcept
+			{
+				m_cascadeCount = std::clamp(count, 1U, Graphics::MaxCascadeCount);
+			}
+
+			/**
+			 * @brief Sets the cascade lambda value (only effective when using CSM).
+			 * @param lambda The lambda value (0 = linear, 1 = logarithmic).
+			 * @return void
+			 */
+			void
+			setCascadeLambda (float lambda) noexcept
+			{
+				m_lambda = std::clamp(lambda, 0.0F, 1.0F);
+			}
+
+			/**
+			 * @brief Updates the cascade matrices based on the camera frustum.
+			 * @note This should be called every frame when CSM is enabled.
+			 * @param cameraFrustumCorners Array of 8 corners of the camera frustum in world space.
+			 * @param nearPlane The camera near plane distance.
+			 * @param farPlane The camera far plane distance.
+			 * @return void
+			 */
+			void updateCascades (const std::array< Libs::Math::Vector< 3, float >, 8 > & cameraFrustumCorners, float nearPlane, float farPlane) noexcept;
+
 		private:
 
 			/** @copydoc EmEn::Animations::AnimatableInterface::playAnimation() */
 			bool playAnimation (uint8_t animationID, const Libs::Variant & value, size_t cycle) noexcept override;
 
-			/**
-			 * @brief Sets the light direction into the buffer.
-			 * @brief A reference to a cartesian frame for the light location.
-			 * @return void
-			 */
-			void setDirection (const Libs::Math::CartesianFrame< float > & worldCoordinates) noexcept;
+			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::createShadowDescriptorSet() */
+			bool createShadowDescriptorSet (Scene & scene) noexcept override;
+
+			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::updateLightSpaceMatrix() */
+			void updateLightSpaceMatrix () noexcept override;
 
 			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::getFovOrNear() */
 			[[nodiscard]]
@@ -193,8 +351,14 @@ namespace EmEn::Scenes::Component
 			float
 			getDistanceOrFar () const noexcept override
 			{
-				/* NOTE: A directional light returns the far value. */
-				return DefaultGraphicsShadowMappingViewDistance;
+				/* NOTE: For classic shadow map, we need the far plane at coverage * 2.
+				 * The camera is positioned at coverage distance from origin, so
+				 * far = coverage * 2 means the frustum extends coverage units past origin,
+				 * creating a symmetric depth range around the scene center.
+				 *
+				 * For CSM, this value is not used since matrices are computed in updateCascades()
+				 * from the camera frustum. Return 1.0 as a dummy value. */
+				return m_usesCSM ? 1.0F : m_coverageSize * 2.0F;
 			}
 
 			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::isOrthographicProjection() */
@@ -207,17 +371,20 @@ namespace EmEn::Scenes::Component
 
 			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::onVideoMemoryUpdate() */
 			[[nodiscard]]
-			bool
-			onVideoMemoryUpdate (Graphics::SharedUniformBuffer & UBO, uint32_t index) noexcept override
-			{
-				return UBO.writeElementData(index, m_buffer.data());
-			}
+			bool onVideoMemoryUpdate (Graphics::SharedUniformBuffer & UBO, uint32_t index) noexcept override;
 
 			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::onColorChange() */
 			void onColorChange (const Libs::PixelFactory::Color< float > & color) noexcept override;
 
 			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::onIntensityChange() */
 			void onIntensityChange (float intensity) noexcept override;
+
+			/**
+			 * @brief Sets the light direction into the buffer.
+			 * @brief A reference to a cartesian frame for the light location.
+			 * @return void
+			 */
+			void setDirection (const Libs::Math::CartesianFrame< float > & worldCoordinates) noexcept;
 
 			/**
 			 * @brief STL streams printable object.
@@ -227,42 +394,67 @@ namespace EmEn::Scenes::Component
 			 */
 			friend std::ostream & operator<< (std::ostream & out, const DirectionalLight & obj);
 
-			/* Uniform buffer object offset to write data. */
+			/* Uniform buffer object offset to write data (std140 layout).
+			 * vec4 Color: floats 0-3
+			 * vec4 Direction: floats 4-7
+			 * float Intensity: float 8
+			 * float PCFRadius: float 9
+			 * float ShadowBias: float 10
+			 * float padding: float 11
+			 * mat4 ViewProjectionMatrix: floats 12-27
+			 */
+			/* Classic buffer layout offsets. */
 			static constexpr auto ColorOffset{0UL};
 			static constexpr auto DirectionOffset{4UL};
 			static constexpr auto IntensityOffset{8UL};
-			static constexpr auto LightMatrixOffset{16UL};
+			static constexpr auto PCFRadiusOffset{9UL};
+			static constexpr auto ShadowBiasOffset{10UL};
+			static constexpr auto LightMatrixOffset{12UL};
 
-			std::shared_ptr< Graphics::RenderTarget::ShadowMap< Graphics::ViewMatrices2DUBO > > m_shadowMap;
+			/* CSM buffer layout offsets (matches shader UBO):
+			 * mat4[4] cascadeViewProjectionMatrices: floats 0-63
+			 * vec4 cascadeSplitDistances: floats 64-67
+			 * float cascadeCount: float 68
+			 * float shadowBias: float 69
+			 * vec4 padding: floats 70-71
+			 * vec4 color: floats 72-75
+			 * vec4 direction: floats 76-79
+			 * float intensity: float 80
+			 * vec3 padding: floats 81-83 */
+			static constexpr auto CSM_CascadeMatricesOffset{0UL};
+			static constexpr auto CSM_SplitDistancesOffset{64UL};
+			static constexpr auto CSM_CascadeCountOffset{68UL};
+			static constexpr auto CSM_ShadowBiasOffset{69UL};
+			static constexpr auto CSM_ColorOffset{72UL};
+			static constexpr auto CSM_DirectionOffset{76UL};
+			static constexpr auto CSM_IntensityOffset{80UL};
+			static constexpr auto CSM_BufferSize{84UL};
+
+			std::shared_ptr< Graphics::RenderTarget::Abstract > m_shadowMap; /* NOTE: std::shared_ptr< Graphics::RenderTarget::ShadowMap< Graphics::ViewMatrices2DUBO > > */
+			std::unique_ptr< Vulkan::DescriptorSet > m_shadowDescriptorSet;
+			float m_coverageSize{0.0F}; /**< Coverage size in world units for classic shadow map. Unused in CSM mode. */
+			float m_PCFRadius{1.0F}; /**< PCF filter radius in normalized texture coordinates. */
+			float m_shadowBias{0.0F}; /**< Shadow bias to prevent shadow acne. */
+			float m_lambda{Graphics::DefaultCascadeLambda};
+			uint32_t m_cascadeCount{Graphics::MaxCascadeCount};
+			float m_CSMScale{1.0F};
 			std::array< float, 4 + 4 + 4 + 16 > m_buffer{
 				/* Light color. */
 				this->color().red(), this->color().green(), this->color().blue(), 1.0F,
 				/* Light direction (Directional). */
 				0.0F, 1.0F, 0.0F, 0.0F,
 				/* Light properties. */
-				this->intensity(), 0.0F, 0.0F, 0.0F,
+				this->intensity(), m_PCFRadius, m_shadowBias, 0.0F,
 				/* Light matrix. */
 				1.0F, 0.0F, 0.0F, 0.0F,
 				0.0F, 1.0F, 0.0F, 0.0F,
 				0.0F, 0.0F, 1.0F, 0.0F,
 				0.0F, 0.0F, 0.0F, 1.0F
 			};
+			std::array< float, CSM_BufferSize > m_CSMBuffer{}; /**< CSM-specific buffer for cascade data. */
 			bool m_useDirectionVector{false};
+			bool m_usesCSM{false};
 	};
-
-	inline
-	std::ostream &
-	operator<< (std::ostream & out, const DirectionalLight & obj)
-	{
-		const auto worldCoordinates = obj.getWorldCoordinates();
-
-		return out << "Directional light data ;\n"
-			"Direction (World Space) : " << worldCoordinates.forwardVector() << "\n"
-			"Color : " << obj.color() << "\n"
-			"Intensity : " << obj.intensity() << "\n"
-			"Activity : " << ( obj.isEnabled() ? "true" : "false" ) << "\n"
-			"Shadow caster : " << ( obj.isShadowCastingEnabled() ? "true" : "false" ) << '\n';
-	}
 
 	/**
 	 * @brief Stringifies the object.

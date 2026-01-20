@@ -106,8 +106,17 @@ namespace EmEn::Vulkan
 	RenderPass::enableMultiview () noexcept
 	{
 		/* Configure for 6 views (cubemap faces) */
-		m_viewMask = 0b00111111; /* 6 bits for 6 faces */
-		m_correlationMask = 0b00111111;
+		this->enableMultiview(6);
+	}
+
+	void
+	RenderPass::enableMultiview (uint32_t viewCount) noexcept
+	{
+		/* Create a bitmask for the specified number of views.
+		 * For viewCount=4: mask = 0b00001111 (4 bits set)
+		 * For viewCount=6: mask = 0b00111111 (6 bits set) */
+		m_viewMask = (1U << viewCount) - 1;
+		m_correlationMask = m_viewMask;
 
 		m_multiviewCreateInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_MULTIVIEW_CREATE_INFO;
 		m_multiviewCreateInfo.pNext = nullptr;

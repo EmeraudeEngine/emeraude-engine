@@ -33,23 +33,15 @@
 /* Local inclusions for inheritances. */
 #include "AbstractObject.hpp"
 
-namespace EmEn
+namespace EmEn::Vulkan
 {
-	namespace Vulkan
-	{
-		class DescriptorPool;
-		class DescriptorSetLayout;
-		class Image;
-		class ImageView;
-		class Sampler;
-		class UniformBufferObject;
-		class TextureInterface;
-	}
-
-	namespace Graphics::TextureResource
-	{
-		class Abstract;
-	}
+	class DescriptorPool;
+	class DescriptorSetLayout;
+	class Image;
+	class ImageView;
+	class Sampler;
+	class UniformBufferObject;
+	class TextureInterface;
 }
 
 namespace EmEn::Vulkan

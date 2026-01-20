@@ -94,6 +94,14 @@ namespace EmEn::Graphics::Renderable
 				return classUID == getClassUID();
 			}
 
+			/** @copydoc EmEn::Graphics::Renderable::Abstract::subGeometryCount() const */
+			[[nodiscard]]
+			uint32_t
+			subGeometryCount () const noexcept override
+			{
+				return 1;
+			}
+
 			/** @copydoc EmEn::Graphics::Renderable::Abstract::layerCount() const */
 			[[nodiscard]]
 			uint32_t
@@ -169,7 +177,7 @@ namespace EmEn::Graphics::Renderable
 			std::shared_ptr< TextureResource::TextureCubemap >
 			environmentCubemap () const noexcept override
 			{
-				return m_cubemap;
+				return m_environmentCubemap;
 			}
 
 		private:
@@ -197,7 +205,7 @@ namespace EmEn::Graphics::Renderable
 
 			std::shared_ptr< Geometry::Interface > m_geometry;
 			std::shared_ptr< Material::Interface > m_material;
-			std::shared_ptr< TextureResource::TextureCubemap > m_cubemap;
+			std::shared_ptr< TextureResource::TextureCubemap > m_environmentCubemap;
 	};
 }
 

@@ -102,6 +102,14 @@ namespace EmEn::Graphics::Renderable
 				return classUID == getClassUID();
 			}
 
+			/** @copydoc EmEn::Graphics::Renderable::Abstract::subGeometryCount() const */
+			[[nodiscard]]
+			uint32_t
+			subGeometryCount () const noexcept override
+			{
+				return 1;
+			}
+
 			/** @copydoc EmEn::Graphics::Renderable::Abstract::layerCount() const */
 			[[nodiscard]]
 			uint32_t

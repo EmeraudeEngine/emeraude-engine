@@ -41,6 +41,7 @@
 #include "Libs/PixelFactory/Color.hpp"
 #include "CommandPool.hpp"
 #include "Device.hpp"
+#include "Framebuffer.hpp"
 
 /* Forward declarations. */
 namespace EmEn
@@ -230,6 +231,32 @@ namespace EmEn::Vulkan
 			 * @return void
 			 */
 			void beginRenderPass (const Framebuffer & framebuffer, const VkRect2D & renderArea, const std::array< VkClearValue, 2 > & clearValues, VkSubpassContents subpassContents) const noexcept;
+
+			/**
+			 * @brief Registers a render pass begin with variable clear value count.
+			 * @tparam array_size_t The number of clear values (must be > 0 and != 2 to avoid ambiguity).
+			 * @param framebuffer A reference to a framebuffer.
+			 * @param renderArea The render area.
+			 * @param clearValues The framebuffer clear values.
+			 * @param subpassContents
+			 * @return void
+			 */
+			template< size_t array_size_t >
+			void
+			beginRenderPass (const Framebuffer & framebuffer, const VkRect2D & renderArea, const std::array< VkClearValue, array_size_t > & clearValues, VkSubpassContents subpassContents) const noexcept
+				requires (array_size_t > 0 && array_size_t != 2)
+			{
+				VkRenderPassBeginInfo renderPassBeginInfo{};
+				renderPassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+				renderPassBeginInfo.pNext = nullptr;
+				renderPassBeginInfo.renderPass = framebuffer.renderPass()->handle();
+				renderPassBeginInfo.framebuffer = framebuffer.handle();
+				renderPassBeginInfo.renderArea = renderArea;
+				renderPassBeginInfo.clearValueCount = static_cast< uint32_t >(array_size_t);
+				renderPassBeginInfo.pClearValues = clearValues.data();
+
+				vkCmdBeginRenderPass(m_handle, &renderPassBeginInfo, subpassContents);
+			}
 
 			/**
 			 * @brief Registers a render pass end.
@@ -469,7 +496,7 @@ namespace EmEn::Vulkan
 			 * @param descriptorSet A reference to a descriptor set.
 			 * @param pipelineLayout A reference to a pipeline layout.
 			 * @param bindPoint The target binding point in the pipeline.
-			 * @param firstSet The first set. Default 0.
+			 * @param firstSet The first set.
 			 * @param dynamicOffset ??? TODO: Define it
 			 * @return void
 			 */
@@ -478,38 +505,53 @@ namespace EmEn::Vulkan
 			/**
 			 * @brief Binds a single geometry.
 			 * @param geometry A reference to the geometry.
-			 * @param subGeometryIndex A sub geometry layer index being drawn. Default 0.
+			 * @param subGeometryIndex A sub geometry layer index being drawn.
 			 * @return void
 			 */
-			void bind (const Graphics::Geometry::Interface & geometry, uint32_t subGeometryIndex = 0) const noexcept;
+			void bind (const Graphics::Geometry::Interface & geometry, uint32_t subGeometryIndex) const noexcept;
 
 			/**
 			 * @brief Binds a single geometry using a model vertex buffer object for location.
 			 * @param geometry A reference to the geometry.
 			 * @param modelVBO A reference to a vertex buffer object.
-			 * @param subGeometryIndex A sub geometry layer index being drawn. Default 0.
-			 * @param modelVBOOffset The offset in the model vertex buffer object. Default 0.
+			 * @param subGeometryIndex A sub geometry layer index being drawn.
+			 * @param modelVBOOffset The offset in the model vertex buffer object.
 			 * @return void
 			 */
-			void bind (const Graphics::Geometry::Interface & geometry, const VertexBufferObject & modelVBO, uint32_t subGeometryIndex = 0, VkDeviceSize modelVBOOffset = 0) const noexcept;
+			void bind (const Graphics::Geometry::Interface & geometry, const VertexBufferObject & modelVBO, uint32_t subGeometryIndex, VkDeviceSize modelVBOOffset) const noexcept;
 
 			/**
 			 * @brief Registers a draw command.
 			 * @param geometry A reference to the geometry.
-			 * @param subGeometryIndex A sub geometry layer index being drawn. Default 0.
-			 * @param instanceCount The number of instances. Default 1.
 			 * @return void
 			 */
-			void draw (const Graphics::Geometry::Interface & geometry, uint32_t subGeometryIndex = 0, uint32_t instanceCount = 1) const noexcept;
+			void draw (const Graphics::Geometry::Interface & geometry) const noexcept;
+
+			/**
+			 * @brief Registers a draw command.
+			 * @param geometry A reference to the geometry.
+			 * @param instanceCount The number of instances.
+			 * @return void
+			 */
+			void draw (const Graphics::Geometry::Interface & geometry, uint32_t instanceCount) const noexcept;
+
+			/**
+			 * @brief Registers a draw command.
+			 * @param geometry A reference to the geometry.
+			 * @param subGeometryIndex A sub geometry layer index being drawn.
+			 * @param instanceCount The number of instances.
+			 * @return void
+			 */
+			void draw (const Graphics::Geometry::Interface & geometry, uint32_t subGeometryIndex, uint32_t instanceCount) const noexcept;
 
 			/**
 			 * @brief Registers an indexed draw command with explicit range.
 			 * @param indexOffset The starting index in the index buffer.
 			 * @param indexCount The number of indices to draw.
-			 * @param instanceCount The number of instances. Default 1.
+			 * @param instanceCount The number of instances.
 			 * @return void
 			 */
-			void drawIndexed (uint32_t indexOffset, uint32_t indexCount, uint32_t instanceCount = 1) const noexcept;
+			void drawIndexed (uint32_t indexOffset, uint32_t indexCount, uint32_t instanceCount) const noexcept;
 
 		private:
 

@@ -164,7 +164,7 @@ namespace EmEn::Graphics::RenderTarget
 					return false;
 				}
 
-				return true;
+				return m_isReadyForRendering;
 			}
 
 			/** @copydoc EmEn::Vulkan::TextureInterface::type() const noexcept */
@@ -257,13 +257,39 @@ namespace EmEn::Graphics::RenderTarget
 				}
 			}
 
+			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::setViewDistance() */
+			void
+			setViewDistance (float meters) noexcept override
+			{
+				const auto & extent = this->extent();
+				const auto width = static_cast< float >(extent.width);
+				const auto height = static_cast< float >(extent.height);
+
+				if ( this->isOrthographicProjection() )
+				{
+					m_viewMatrices.updateOrthographicViewProperties(width, height, m_viewMatrices.nearPlane(), meters);
+				}
+				else
+				{
+					m_viewMatrices.updatePerspectiveViewProperties(width, height, m_viewMatrices.fieldOfView(), meters);
+				}
+			}
+
+			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::viewDistance() */
+			[[nodiscard]]
+			float
+			viewDistance () const noexcept override
+			{
+				return m_viewMatrices.farPlane();
+			}
+
 			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::updateViewRangesProperties() */
 			void
 			updateViewRangesProperties (float fovOrNear, float distanceOrFar) noexcept override
 			{
 				const auto & extent = this->extent();
 				const auto width = static_cast< float >(extent.width);
-				const auto height = static_cast< float >(extent.width);
+				const auto height = static_cast< float >(extent.height);
 
 				if ( this->isOrthographicProjection() )
 				{
@@ -273,8 +299,6 @@ namespace EmEn::Graphics::RenderTarget
 				{
 					m_viewMatrices.updatePerspectiveViewProperties(width, height, fovOrNear, distanceOrFar);
 				}
-
-				this->setViewDistance(distanceOrFar);
 			}
 
 			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::aspectRatio() */
@@ -350,6 +374,21 @@ namespace EmEn::Graphics::RenderTarget
 			isReadyForRendering () const noexcept override
 			{
 				return m_isReadyForRendering;
+			}
+
+			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::writeCombinedImageSampler(const Vulkan::DescriptorSet &, uint32_t) const */
+			[[nodiscard]]
+			bool
+			writeCombinedImageSampler (const Vulkan::DescriptorSet & descriptorSet, uint32_t bindingIndex) const noexcept override
+			{
+				if ( !this->isReadyForRendering() )
+				{
+					TraceError{ClassId} << "The shadow map is not ready for rendering!";
+
+					return false;
+				}
+
+				return descriptorSet.writeCombinedImageSampler(bindingIndex, *this->image(), *this->imageView(), *this->sampler());
 			}
 
 			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::capture() */
@@ -888,8 +927,8 @@ namespace EmEn::Graphics::RenderTarget
 			}
 
 			std::shared_ptr< Vulkan::Image > m_colorImage;
-			std::shared_ptr< Vulkan::ImageView > m_colorImageView;
-			std::shared_ptr< Vulkan::ImageView > m_colorCubeImageView;
+			std::shared_ptr< Vulkan::ImageView > m_colorImageView; /* NOTE: In 2D mode, this is used for rendering AND sampling. In cubemap mode, this is used only for rendering. */
+			std::shared_ptr< Vulkan::ImageView > m_colorCubeImageView; /* NOTE: In cubemap mode, this is used for sampling. */
 			std::shared_ptr< Vulkan::Image > m_depthStencilImage;
 			std::shared_ptr< Vulkan::ImageView > m_depthImageView;
 			std::shared_ptr< Vulkan::ImageView > m_stencilImageView;
