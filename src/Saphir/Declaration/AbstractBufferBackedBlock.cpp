@@ -67,25 +67,54 @@ namespace EmEn::Saphir::Declaration
 	uint32_t
 	AbstractBufferBackedBlock::bytes () const noexcept
 	{
-		uint32_t size = 0;
+		uint32_t currentOffset = 0;
 
+		/* NOTE: Structure declarations are embedded types, not direct members.
+		 * They contribute to size only when referenced by a member. */
 		for ( const auto & structure: this->structureDeclaration() | std::views::values )
 		{
-			size += structure.bytes();
+			currentOffset += structure.bytes();
 		}
 
-		for ( const auto & bufferBackedBlock: this->members() | std::views::values )
+		/* Calculate size with proper std140 alignment. */
+		for ( const auto & member: this->members() | std::views::values )
 		{
-			size +=  bufferBackedBlock.bytes();
+			const auto memberType = member.type();
+			const auto memberSize = member.bytes();
+
+			/* Apply alignment only for std140 layout. */
+			if ( m_memoryLayout == MemoryLayout::Std140 )
+			{
+				uint32_t alignment = base_alignment_std140(memberType);
+
+				/* For arrays in std140, each element is rounded up to vec4 alignment (16 bytes). */
+				if ( member.arraySize() > 0 && alignment < 16 )
+				{
+					alignment = 16;
+				}
+
+				/* Align current offset to the member's base alignment. */
+				if ( alignment > 0 )
+				{
+					const uint32_t remainder = currentOffset % alignment;
+
+					if ( remainder != 0 )
+					{
+						currentOffset += alignment - remainder;
+					}
+				}
+			}
+
+			currentOffset += memberSize;
 		}
 
-		/* FIXME: Check alignment. */
+		/* For block arrays, multiply by array size. */
 		if ( this->arraySize() > 1U )
 		{
-			size *= this->arraySize();
+			currentOffset *= this->arraySize();
 		}
 
-		return size;
+		return currentOffset;
 	}
 
 	bool

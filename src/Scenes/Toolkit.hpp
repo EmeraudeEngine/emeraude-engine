@@ -379,7 +379,8 @@ namespace EmEn::Scenes
 			template< typename entity_t = StaticEntity >
 			[[nodiscard]]
 			std::shared_ptr< entity_t >
-			generateEntity (const std::string & entityName = {}, GenPolicy genPolicy = GenPolicy::Simple) noexcept requires (std::is_base_of_v< AbstractEntity, entity_t >)
+			generateEntity (const std::string & entityName = {}, GenPolicy genPolicy = GenPolicy::Simple) noexcept
+				requires (std::is_base_of_v< AbstractEntity, entity_t >)
 			{
 				if constexpr ( std::is_same_v< entity_t, Node > )
 				{
@@ -406,7 +407,8 @@ namespace EmEn::Scenes
 			template< typename entity_t = StaticEntity >
 			[[nodiscard]]
 			std::shared_ptr< entity_t >
-			generateEntity (const Libs::Math::Vector< 3, float > & lookAt, const std::string & entityName = {}, GenPolicy genPolicy = GenPolicy::Simple) noexcept requires (std::is_base_of_v< AbstractEntity, entity_t >)
+			generateEntity (const Libs::Math::Vector< 3, float > & lookAt, const std::string & entityName = {}, GenPolicy genPolicy = GenPolicy::Simple) noexcept
+				requires (std::is_base_of_v< AbstractEntity, entity_t >)
 			{
 				if constexpr ( std::is_same_v< entity_t, Node > )
 				{
@@ -433,7 +435,8 @@ namespace EmEn::Scenes
 			 */
 			template< typename entity_t = StaticEntity >
 			BuiltEntity< entity_t, Component::Camera >
-			generatePerspectiveCamera (const std::string & entityName, float fov = DefaultGraphicsFieldOfView, const Libs::Math::Vector< 3, float > & lookAt = {}, bool primaryDevice = false, bool showModel = false) noexcept requires (std::is_base_of_v< AbstractEntity, entity_t >)
+			generatePerspectiveCamera (const std::string & entityName, float fov = DefaultGraphicsFieldOfView, const Libs::Math::Vector< 3, float > & lookAt = {}, bool primaryDevice = false, bool showModel = false) noexcept
+				requires (std::is_base_of_v< AbstractEntity, entity_t >)
 			{
 				/* Create the entity. */
 				auto entity = this->generateEntity< entity_t >(lookAt, entityName);
@@ -477,7 +480,8 @@ namespace EmEn::Scenes
 			 */
 			template< typename entity_t = StaticEntity >
 			BuiltEntity< entity_t, Component::Camera >
-			generateOrthographicCamera (const std::string & entityName, float size = 1.0F, const Libs::Math::Vector< 3, float > & lookAt = {}, bool primaryDevice = false, bool showModel = false) noexcept requires (std::is_base_of_v< AbstractEntity, entity_t >)
+			generateOrthographicCamera (const std::string & entityName, float size = 1.0F, const Libs::Math::Vector< 3, float > & lookAt = {}, bool primaryDevice = false, bool showModel = false) noexcept
+				requires (std::is_base_of_v< AbstractEntity, entity_t >)
 			{
 				/* Create the entity. */
 				auto entity = this->generateEntity< entity_t >(lookAt, entityName);
@@ -517,7 +521,8 @@ namespace EmEn::Scenes
 			 */
 			template< typename entity_t = StaticEntity >
 			BuiltEntity< entity_t, Component::Camera >
-			generateCubemapCamera (const std::string & entityName, bool primaryDevice = false, bool showModel = false) noexcept requires (std::is_base_of_v< AbstractEntity, entity_t >)
+			generateCubemapCamera (const std::string & entityName, bool primaryDevice = false, bool showModel = false) noexcept
+				requires (std::is_base_of_v< AbstractEntity, entity_t >)
 			{
 				/* Create the entity. */
 				auto entity = this->generateEntity< entity_t >(entityName);
@@ -556,11 +561,14 @@ namespace EmEn::Scenes
 			 * @param color The color of the light. Default, white.
 			 * @param intensity The light intensity. Default 1.
 			 * @param shadowMapResolution The shadow map resolution. Default disabled.
+			 * @param coverageSize The coverage size in world units. If 0 (default), uses Cascaded Shadow Maps (CSM).
+			 *                     If > 0, uses a classic shadow map with this coverage dimension.
 			 * @return BuiltEntity< entity_t, Component::DirectionalLight >
 			 */
 			template< typename entity_t = StaticEntity >
 			BuiltEntity< entity_t, Component::DirectionalLight >
-			generateDirectionalLight (const std::string & entityName, const Libs::PixelFactory::Color< float > & color = Libs::PixelFactory::White, float intensity = Component::AbstractLightEmitter::DefaultIntensity, uint32_t shadowMapResolution = 0) noexcept requires (std::is_base_of_v< AbstractEntity, entity_t >)
+			generateDirectionalLight (const std::string & entityName, const Libs::PixelFactory::Color< float > & color = Libs::PixelFactory::White, float intensity = Component::AbstractLightEmitter::DefaultIntensity, uint32_t shadowMapResolution = 0, float coverageSize = 0.0F) noexcept
+				requires (std::is_base_of_v< AbstractEntity, entity_t >)
 			{
 				/* Create the entity. */
 				auto entity = this->generateEntity< entity_t >(entityName);
@@ -575,7 +583,7 @@ namespace EmEn::Scenes
 					.setup([color, intensity] (auto & light) {
 						light.setColor(color);
 						light.setIntensity(intensity);
-					}).build(shadowMapResolution);
+					}).build(shadowMapResolution, coverageSize);
 
 				return {entity, component};
 			}
@@ -592,7 +600,8 @@ namespace EmEn::Scenes
 			 */
 			template< typename entity_t = StaticEntity >
 			BuiltEntity< entity_t, Component::PointLight >
-			generatePointLight (const std::string & entityName, const Libs::PixelFactory::Color< float > & color = Libs::PixelFactory::White, float radius = Component::AbstractLightEmitter::DefaultRadius, float intensity = Component::AbstractLightEmitter::DefaultIntensity, uint32_t shadowMapResolution = 0) noexcept requires (std::is_base_of_v< AbstractEntity, entity_t >)
+			generatePointLight (const std::string & entityName, const Libs::PixelFactory::Color< float > & color = Libs::PixelFactory::White, float radius = Component::AbstractLightEmitter::DefaultRadius, float intensity = Component::AbstractLightEmitter::DefaultIntensity, uint32_t shadowMapResolution = 0) noexcept
+				requires (std::is_base_of_v< AbstractEntity, entity_t >)
 			{
 				/* Create the entity. */
 				auto entity = this->generateEntity< entity_t >(entityName);
@@ -628,7 +637,8 @@ namespace EmEn::Scenes
 			 */
 			template< typename entity_t = StaticEntity >
 			BuiltEntity< entity_t, Component::SpotLight >
-			generateSpotLight (const std::string & entityName, const Libs::Math::Vector< 3, float > & lookAt = {}, float innerAngle = Component::AbstractLightEmitter::DefaultInnerAngle, float outerAngle = Component::AbstractLightEmitter::DefaultOuterAngle, const Libs::PixelFactory::Color< float > & color = Libs::PixelFactory::White, float radius = Component::AbstractLightEmitter::DefaultRadius, float intensity = Component::AbstractLightEmitter::DefaultIntensity, uint32_t shadowMapResolution = 0) noexcept requires (std::is_base_of_v< AbstractEntity, entity_t >)
+			generateSpotLight (const std::string & entityName, const Libs::Math::Vector< 3, float > & lookAt = {}, float innerAngle = Component::AbstractLightEmitter::DefaultInnerAngle, float outerAngle = Component::AbstractLightEmitter::DefaultOuterAngle, const Libs::PixelFactory::Color< float > & color = Libs::PixelFactory::White, float radius = Component::AbstractLightEmitter::DefaultRadius, float intensity = Component::AbstractLightEmitter::DefaultIntensity, uint32_t shadowMapResolution = 0) noexcept
+				requires (std::is_base_of_v< AbstractEntity, entity_t >)
 			{
 				/* Create the entity. */
 				auto entity = this->generateEntity< entity_t >(lookAt, entityName);
@@ -651,17 +661,19 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			 * @brief Generates a mesh instance in the scene from a mesh resource.
+			 * @brief Generates a renderable instance in the scene from a mesh resource.
+			 * @tparam renderable_t The type of renderable.
 			 * @tparam entity_t The type of entity, a scene node or a static entity. Default, 'StaticEntity'.
 			 * @param entityName A reference to a string.
-			 * @param meshResource A mesh resource smart pointer. Default mesh resource.
-			 * @param enablePhysicalProperties Enable physical properties on the new component. Default true.
+			 * @param renderable A reference to a renderable smart-pointer. Default resource.
+			 * @param physicalProperties A reference to a body physical properties. Default properties.
 			 * @param enableLighting Enable the lighting. Default true.
 			 * @return BuiltEntity< entity_t, Component::Visual >
 			 */
-			template< typename entity_t = StaticEntity >
+			template< typename renderable_t, typename entity_t = StaticEntity >
 			BuiltEntity< entity_t, Component::Visual >
-			generateMeshInstance (const std::string & entityName, std::shared_ptr< Graphics::Renderable::MeshResource > meshResource = nullptr, bool enablePhysicalProperties = true, bool enableLighting = true) noexcept requires (std::is_base_of_v< AbstractEntity, entity_t >)
+			generateRenderableInstance (const std::string & entityName, std::shared_ptr< renderable_t > renderable = nullptr, const Physics::BodyPhysicalProperties & physicalProperties = {}, bool enableLighting = true) noexcept
+				requires (std::is_base_of_v< Graphics::Renderable::Abstract, renderable_t > && std::is_base_of_v< AbstractEntity, entity_t >)
 			{
 				auto entity = this->generateEntity< entity_t >(entityName);
 
@@ -670,82 +682,20 @@ namespace EmEn::Scenes
 					return {};
 				}
 
-				if ( meshResource == nullptr )
+				if ( renderable == nullptr )
 				{
-					meshResource = m_resourceManager.container< Graphics::Renderable::MeshResource >()->getDefaultResource();
+					renderable = m_resourceManager.container< renderable_t >()->getDefaultResource();
 				}
 
 				auto component = entity->template componentBuilder< Component::Visual >(entityName)
-					.setup([enablePhysicalProperties, enableLighting] (auto & visual) {
-						/* FIXME: Dummy variables ... */
-						if ( enablePhysicalProperties )
-						{
-							visual.bodyPhysicalProperties().setProperties(
-							   1.0F,
-							   0.5F,
-							   Physics::DragCoefficient::Sphere< float >,
-							   0.5F,
-							   0.5F,
-							   0.5F,
-							   {}
-						   );
-						}
+					.setup([&physicalProperties, enableLighting] (auto & visual) {
+						visual.bodyPhysicalProperties().setProperties(physicalProperties);
 
 						if ( enableLighting )
 						{
 							visual.getRenderableInstance()->enableLighting();
 						}
-					}).build(meshResource);
-
-				return {entity, component};
-			}
-
-			/**
-			 * @brief Generates a mesh instance in the scene from a simple mesh resource.
-			 * @tparam entity_t The type of entity, a scene node or a static entity. Default, 'StaticEntity'.
-			 * @param entityName A reference to a string.
-			 * @param simpleMeshResource A simple mesh resource smart pointer. Default simple mesh resource.
-			 * @param enablePhysicalProperties Enable physical properties on the new component. Default true.
-			 * @param enableLighting Enable the lighting. Default true.
-			 * @return BuiltEntity< entity_t, Component::Visual >
-			 */
-			template< typename entity_t = StaticEntity >
-			BuiltEntity< entity_t, Component::Visual >
-			generateMeshInstance (const std::string & entityName, std::shared_ptr< Graphics::Renderable::SimpleMeshResource > simpleMeshResource = nullptr, bool enablePhysicalProperties = true, bool enableLighting = true) noexcept requires (std::is_base_of_v< AbstractEntity, entity_t >)
-			{
-				auto entity = this->generateEntity< entity_t >(entityName);
-
-				if ( entity == nullptr )
-				{
-					return {};
-				}
-
-				if ( simpleMeshResource == nullptr )
-				{
-					simpleMeshResource = m_resourceManager.container< Graphics::Renderable::SimpleMeshResource >()->getDefaultResource();
-				}
-
-				auto component = entity->template componentBuilder< Component::Visual >(entityName)
-					.setup([enablePhysicalProperties, enableLighting] (auto & visual) {
-						/* FIXME: Dummy variables ... */
-						if ( enablePhysicalProperties )
-						{
-							visual.bodyPhysicalProperties().setProperties(
-							   1.0F,
-							   0.5F,
-							   Physics::DragCoefficient::Sphere< float >,
-							   0.5F,
-							   0.5F,
-							   0.5F,
-							   {}
-						   );
-						}
-
-						if ( enableLighting )
-						{
-							visual.getRenderableInstance()->enableLighting();
-						}
-					}).build(simpleMeshResource);
+					}).build(renderable);
 
 				return {entity, component};
 			}
@@ -756,52 +706,59 @@ namespace EmEn::Scenes
 			 * @param entityName A reference to a string.
 			 * @param geometryResource A geometry smart pointer. Default geometry resource.
 			 * @param materialResource A material smart pointer. Default material resource.
-			 * @param enablePhysicalProperties Enable physical properties on the new component. Default true.
+			 * @param physicalProperties A reference to a body physical properties. Default properties.
 			 * @param enableLighting Enable the lighting. Default true.
 			 * @return BuiltEntity< entity_t, Component::Visual >
 			 */
 			template< typename entity_t = StaticEntity >
 			BuiltEntity< entity_t, Component::Visual >
-			generateMeshInstance (const std::string & entityName, std::shared_ptr< Graphics::Geometry::Interface > geometryResource = nullptr, std::shared_ptr< Graphics::Material::Interface > materialResource = nullptr, bool enablePhysicalProperties = true, bool enableLighting = true) noexcept requires (std::is_base_of_v< AbstractEntity, entity_t >)
+			generateRenderableInstance (const std::string & entityName, std::shared_ptr< Graphics::Geometry::Interface > geometryResource = nullptr, std::shared_ptr< Graphics::Material::Interface > materialResource = nullptr, const Physics::BodyPhysicalProperties & physicalProperties = {}, bool enableLighting = true) noexcept
+				requires (std::is_base_of_v< AbstractEntity, entity_t >)
 			{
+				using namespace Graphics;
+				using namespace Graphics::Renderable;
+
 				if ( geometryResource == nullptr )
 				{
-					geometryResource = m_resourceManager.container< Graphics::Geometry::IndexedVertexResource >()->getDefaultResource();
+					geometryResource = m_resourceManager.container< Geometry::IndexedVertexResource >()->getDefaultResource();
 				}
 
 				if ( materialResource == nullptr )
 				{
-					materialResource = m_resourceManager.container< Graphics::Material::BasicResource >()->getDefaultResource();
+					materialResource = m_resourceManager.container< Material::BasicResource >()->getDefaultResource();
 				}
 
+				/* NOTE: Check for sub-geometry count to check to from Mesh to SimpleMesh resource. */
 				if ( geometryResource->subGeometryCount() > 1 )
 				{
-					const auto meshResource = Graphics::Renderable::MeshResource::getOrCreate(m_resourceManager, geometryResource, materialResource);
+					const auto meshResource = MeshResource::getOrCreate(m_resourceManager, geometryResource, materialResource);
 
-					return generateMeshInstance< entity_t >(entityName, meshResource, enablePhysicalProperties, enableLighting);
+					return generateRenderableInstance< MeshResource, entity_t >(entityName, meshResource, physicalProperties, enableLighting);
 				}
 
-				const auto simpleMeshResource = Graphics::Renderable::SimpleMeshResource::getOrCreate(m_resourceManager, geometryResource, materialResource);
+				const auto simpleMeshResource = SimpleMeshResource::getOrCreate(m_resourceManager, geometryResource, materialResource);
 
-				return generateMeshInstance< entity_t >(entityName, simpleMeshResource, enablePhysicalProperties, enableLighting);
+				return generateRenderableInstance< SimpleMeshResource, entity_t >(entityName, simpleMeshResource, physicalProperties, enableLighting);
 			}
 
 			/**
 			 * @brief Generates a mesh instance in the scene from a shape and a material resource.
-			 * @note Shortcut to Toolkit::generateMeshInstance().
+			 * @note Shortcut to Toolkit::generateRenderableInstance().
 			 * @tparam entity_t The type of entity, a scene node or a static entity. Default, 'StaticEntity'.
 			 * @param entityName A reference to a string.
 			 * @param shape A reference to a vertex factory shape.
 			 * @param materialResource A reference to a material smart pointer. Default material resource.
-			 * @param enablePhysicalProperties Enable physical properties on the new component. Default true.
+			 * @param physicalProperties A reference to a body physical properties. Default properties.
 			 * @param enableLighting Enable the lighting. Default true.
 			 * @return BuiltEntity< entity_t, Component::Visual >
 			 */
 			template< typename entity_t = StaticEntity >
 			BuiltEntity< entity_t, Component::Visual >
-			generateMeshInstance (const std::string & entityName, const Libs::VertexFactory::Shape< float > & shape, const std::shared_ptr< Graphics::Material::Interface > & materialResource = nullptr, bool enablePhysicalProperties = true, bool enableLighting = true) noexcept requires (std::is_base_of_v< AbstractEntity, entity_t >)
+			generateRenderableInstance (const std::string & entityName, const Libs::VertexFactory::Shape< float > & shape, const std::shared_ptr< Graphics::Material::Interface > & materialResource = nullptr, const Physics::BodyPhysicalProperties & physicalProperties = {}, bool enableLighting = true) noexcept
+				requires (std::is_base_of_v< AbstractEntity, entity_t >)
 			{
 				using namespace Graphics;
+				using namespace Graphics::Renderable;
 
 				const Geometry::ResourceGenerator generator{m_resourceManager, Geometry::EnableTangentSpace | Geometry::EnablePrimaryTextureCoordinates};
 
@@ -812,75 +769,24 @@ namespace EmEn::Scenes
 					return {};
 				}
 
-				return this->generateMeshInstance< entity_t >(entityName, geometryResource, materialResource, enablePhysicalProperties, enableLighting);
-			}
-
-			/**
-			 * @brief Generates a sprite instance in the scene.
-			 * @tparam entity_t The type of entity, a scene node or a static entity. Default, 'StaticEntity'.
-			 * @param entityName A reference to a string.
-			 * @param spriteResource A sprite resource smart pointer. Default sprite resource.
-			 * @param enablePhysicalProperties Enable physical properties on the new component. Default true.
-			 * @param enableLighting Enable the lighting. Default true.
-			 * @return BuiltEntity< entity_t, Component::Visual >
-			 */
-			template< typename entity_t = StaticEntity >
-			BuiltEntity< entity_t, Component::Visual >
-			generateSpriteInstance (const std::string & entityName, std::shared_ptr< Graphics::Renderable::SpriteResource > spriteResource = nullptr, bool enablePhysicalProperties = true, bool enableLighting = true) noexcept requires (std::is_base_of_v< AbstractEntity, entity_t >)
-			{
-				auto entity = this->generateEntity< entity_t >(entityName);
-
-				if ( entity == nullptr )
-				{
-					return {};
-				}
-
-				if ( spriteResource == nullptr )
-				{
-					spriteResource = m_resourceManager.container< Graphics::Renderable::SpriteResource >()->getDefaultResource();
-				}
-
-				auto component = entity->template componentBuilder< Component::Visual >(entityName)
-					.setup([enablePhysicalProperties, enableLighting] (auto & visual) {
-						/* FIXME: Dummy variables ... */
-						if ( enablePhysicalProperties )
-						{
-							visual.bodyPhysicalProperties().setProperties(
-							   1.0F,
-							   0.5F,
-							   Physics::DragCoefficient::Sphere< float >,
-							   0.5F,
-							   0.5F,
-							   0.5F,
-							   {}
-						   );
-						}
-
-						if ( enableLighting )
-						{
-							visual.getRenderableInstance()->enableLighting();
-						}
-					}).build(spriteResource);
-
-				return {entity, component};
+				return this->generateRenderableInstance< entity_t >(entityName, geometryResource, materialResource, physicalProperties, enableLighting);
 			}
 
 			/**
 			 * @brief Generates a cuboid mesh instance with computed physics properties.
-			 * @note Shortcut to Toolkit::generateMeshInstance(). The TBN space and one texture coordinates will be enabled.
+			 * @note Shortcut to Toolkit::generateRenderableInstance(). The TBN space and one texture coordinates will be enabled.
 			 * @tparam entity_t The type of entity, a scene node or a static entity. Default, 'StaticEntity'.
 			 * @param entityName A reference to a string.
 			 * @param size The dimension of the cuboid.
 			 * @param materialResource A material resource. Default random.
-			 * @param enablePhysicalProperties Enable physical properties on the new component. Default true.
 			 * @param enableLighting Enable the lighting. Default true.
 			 * @return BuiltEntity< entity_t, Component::Visual >
 			 */
 			template< typename entity_t = StaticEntity >
 			BuiltEntity< entity_t, Component::Visual >
-			generateCuboidInstance (const std::string & entityName, const Libs::Math::Vector< 3, float > & size, const std::shared_ptr< Graphics::Material::Interface > & materialResource = nullptr, bool enablePhysicalProperties = true, bool enableLighting = true) noexcept requires (std::is_base_of_v< AbstractEntity, entity_t >)
+			generateCuboidInstance (const std::string & entityName, const Libs::Math::Vector< 3, float > & size, const std::shared_ptr< Graphics::Material::Interface > & materialResource = nullptr, bool enableLighting = true) noexcept
+				requires (std::is_base_of_v< AbstractEntity, entity_t >)
 			{
-				using namespace Libs;
 				using namespace Libs::Math;
 				using namespace Graphics;
 				using namespace Physics;
@@ -894,58 +800,54 @@ namespace EmEn::Scenes
 					return {};
 				}
 
-				const auto entity = this->generateMeshInstance< entity_t >(entityName, geometryResource, materialResource, enablePhysicalProperties, enableLighting);
+				const auto density = materialResource == nullptr ? 1.0F : materialResource->surfacePhysicalProperties().density();
 
-				if ( entity.isValid() && enablePhysicalProperties )
-				{
-					entity.component()
-						->bodyPhysicalProperties().setProperties(
-							size[X] * size[Y] * size[Z] * materialResource->surfacePhysicalProperties().density() * SI::Kilogram< float >,
-							size[X] * size[Y],
-							DragCoefficient::Cube< float >,
-							Half< float >,
-							Half< float >,
-							Half< float >,
-							{}
-						);
-				}
+				const BodyPhysicalProperties bodyPhysicalProperties{
+					size[X] * size[Y] * size[Z] * density * SI::Kilogram< float >,
+					size[X] * size[Y],
+					DragCoefficient::Cube< float >,
+					Half< float >,
+					Half< float >,
+					Half< float >,
+					{}
+				};
 
-				return entity;
+				return this->generateRenderableInstance< entity_t >(entityName, geometryResource, materialResource, bodyPhysicalProperties, enableLighting);
 			}
 
 			/**
 			 * @brief Generates a cube mesh instance with computed physics properties.
-			 * @note Shortcut to Toolkit::generateMeshInstance(). The TBN space and one texture coordinates will be enabled.
+			 * @note Shortcut to Toolkit::generateRenderableInstance(). The TBN space and one texture coordinates will be enabled.
 			 * @tparam entity_t The type of entity, a scene node or a static entity. Default, 'StaticEntity'.
 			 * @param entityName A reference to a string.
 			 * @param size The uniform size of the cube.
 			 * @param materialResource A material resource. Default random.
-			 * @param enablePhysicalProperties Enable physical properties on the new component. Default true.
 			 * @param enableLighting Enable the lighting. Default true.
 			 * @return BuiltEntity< entity_t, Component::Visual >
 			 */
 			template< typename entity_t = StaticEntity >
 			BuiltEntity< entity_t, Component::Visual >
-			generateCuboidInstance (const std::string & entityName, float size, const std::shared_ptr< Graphics::Material::Interface > & materialResource = nullptr, bool enablePhysicalProperties = true, bool enableLighting = true) noexcept requires (std::is_base_of_v< AbstractEntity, entity_t >)
+			generateCuboidInstance (const std::string & entityName, float size, const std::shared_ptr< Graphics::Material::Interface > & materialResource = nullptr, bool enableLighting = true) noexcept
+				requires (std::is_base_of_v< AbstractEntity, entity_t >)
 			{
-				return generateCuboidInstance< entity_t >(entityName, {size, size, size}, materialResource, enablePhysicalProperties, enableLighting);
+				return generateCuboidInstance< entity_t >(entityName, {size, size, size}, materialResource, enableLighting);
 			}
 
 			/**
 			 * @brief Generates a sphere mesh instance with computed physics properties.
-			 * @note Shortcut to Toolkit::generateMeshInstance(). The TBN space and one texture coordinates will be enabled.
+			 * @note Shortcut to Toolkit::generateRenderableInstance(). The TBN space and one texture coordinates will be enabled.
 			 * @tparam entity_t The type of entity, a scene node or a static entity. Default, 'StaticEntity'.
 			 * @param entityName A reference to a string.
 			 * @param radius The radius of the sphere.
 			 * @param materialResource A reference to a material smart pointer. Default nullptr.
 			 * @param useGeodesic Use a geodesic sphere instead of a classic one. Default, 'false'.
-			 * @param enablePhysicalProperties Enable physical properties on the new component. Default true.
 			 * @param enableLighting Enable the lighting. Default true.
 			 * @return BuiltEntity< entity_t, Component::Visual >
 			 */
 			template< typename entity_t = StaticEntity >
 			BuiltEntity< entity_t, Component::Visual >
-			generateSphereInstance (const std::string & entityName, float radius, const std::shared_ptr< Graphics::Material::Interface > & materialResource = nullptr, bool useGeodesic = false, bool enablePhysicalProperties = true, bool enableLighting = true) noexcept requires (std::is_base_of_v< AbstractEntity, entity_t >)
+			generateSphereInstance (const std::string & entityName, float radius, const std::shared_ptr< Graphics::Material::Interface > & materialResource = nullptr, bool useGeodesic = false, bool enableLighting = true) noexcept
+				requires (std::is_base_of_v< AbstractEntity, entity_t >)
 			{
 				using namespace Libs;
 				using namespace Libs::Math;
@@ -963,24 +865,23 @@ namespace EmEn::Scenes
 					return {};
 				}
 
-				auto entity = this->generateMeshInstance< entity_t >(entityName, geometryResource, materialResource, enablePhysicalProperties, enableLighting);
+				const auto density = materialResource == nullptr ? 1.0F : materialResource->surfacePhysicalProperties().density();
 
-				if ( entity.isValid() && enablePhysicalProperties )
+				const BodyPhysicalProperties bodyPhysicalProperties{
+					sphereVolume(radius) * density * SI::Kilogram< float >,
+					circleArea(radius) * SI::Meter< float >,
+					DragCoefficient::Sphere< float >,
+					Half< float >,
+					Half< float >,
+					Half< float >,
+					{}
+				};
+
+				auto entity = this->generateRenderableInstance< entity_t >(entityName, geometryResource, materialResource, bodyPhysicalProperties, enableLighting);
+
+				if ( entity.isValid() )
 				{
-					entity.entity()->setCollisionModel(std::make_unique< Physics::SphereCollisionModel >(radius));
-
-					const auto density = materialResource == nullptr ? 1.0F : materialResource->surfacePhysicalProperties().density();
-
-					entity.component()
-						->bodyPhysicalProperties().setProperties(
-							sphereVolume(radius) * density * SI::Kilogram< float >,
-							circleArea(radius) * SI::Meter< float >,
-							DragCoefficient::Sphere< float >,
-							Half< float >,
-							Half< float >,
-							Half< float >,
-							{}
-						);
+					entity.entity()->setCollisionModel(std::make_unique< SphereCollisionModel >(radius));
 				}
 
 				return entity;
@@ -996,7 +897,8 @@ namespace EmEn::Scenes
 			 */
 			template< typename entity_t = StaticEntity >
 			BuiltEntity< entity_t, Component::SphericalPushModifier >
-			generateSphericalPushModifier (const std::string & entityName, float magnitude) noexcept requires (std::is_base_of_v< AbstractEntity, entity_t >)
+			generateSphericalPushModifier (const std::string & entityName, float magnitude) noexcept
+				requires (std::is_base_of_v< AbstractEntity, entity_t >)
 			{
 				using namespace Libs;
 				using namespace Libs::Math;
@@ -1016,6 +918,94 @@ namespace EmEn::Scenes
 					}).build();
 
 				return {entity, component};
+			}
+
+			/**
+			 * @brief Generates a camera and a 2D texture offscreen-rendering connected to it.
+			 * @tparam entity_t The type of entity, a scene node or a static entity. Default, 'StaticEntity'.
+			 * @param name A reference to a string.
+			 * @param fov The camera field of view expressed in degrees. Default 85.0.
+			 * @param lookAt A position where the camera should initially look at. Default, [0,0,0].
+			 * @param precision
+			 * @param distance
+			 * @param showModel
+			 * @return std::pair< BuiltEntity< entity_t, Component::Camera >, std::shared_ptr< Graphics::RenderTarget::Texture< Graphics::ViewMatrices3DUBO > > >
+			 */
+			template< typename entity_t = StaticEntity >
+			[[nodiscard]]
+			std::pair< BuiltEntity< entity_t, Component::Camera >, std::shared_ptr< Graphics::RenderTarget::Texture< Graphics::ViewMatrices2DUBO > > >
+			generateTexture2DRenderer (const std::string & name, float fov, const Libs::Math::Vector< 3, float > & lookAt, uint32_t precision = 512, float distance = 5000.0F, bool showModel = false) noexcept
+				requires(std::is_base_of_v< AbstractEntity, entity_t >)
+			{
+				const auto builtEntity = this->generatePerspectiveCamera< entity_t >(name + "Camera", fov, lookAt, false, showModel);
+
+				if ( !builtEntity.isValid() )
+				{
+					Tracer::error(ClassId, "Unable to create a perspective camera entity !");
+
+					return {};
+				}
+
+				const auto texture = m_scene->createRenderToTexture2D(name + "Cubemap", precision, precision, 4, distance, false);
+
+				if ( texture == nullptr || !texture->isCreated() )
+				{
+					Tracer::error(ClassId, "Unable to create a 2D texture render target !");
+
+					return {builtEntity, nullptr};
+				}
+
+				if ( !m_scene->AVConsoleManager().connectVideoDevices(builtEntity.component()->id(), texture->id()) )
+				{
+					Tracer::error(ClassId, "Unable to connect the camera to the 2D texture render target!");
+
+					return {builtEntity, nullptr};
+				}
+
+				return {builtEntity, texture};
+			}
+
+			/**
+			 * @brief Generates a camera and a cubemap offscreen-rendering connected to it.
+			 * @tparam entity_t The type of entity, a scene node or a static entity. Default, 'StaticEntity'.
+			 * @param name A reference to a string.
+			 * @param precision
+			 * @param distance
+			 * @param showModel
+			 * @return std::pair< BuiltEntity< entity_t, Component::Camera >, std::shared_ptr< Graphics::RenderTarget::Texture< Graphics::ViewMatrices3DUBO > > >
+			 */
+			template< typename entity_t = StaticEntity >
+			[[nodiscard]]
+			std::pair< BuiltEntity< entity_t, Component::Camera >, std::shared_ptr< Graphics::RenderTarget::Texture< Graphics::ViewMatrices3DUBO > > >
+			generateEnvironmentCubemapRenderer (const std::string & name, uint32_t precision = 512, float distance = 5000.0F, bool showModel = false) noexcept
+				requires (std::is_base_of_v< AbstractEntity, entity_t >)
+			{
+				const auto builtEntity = this->generateCubemapCamera< entity_t >(name + "Camera", false, showModel);
+
+				if ( !builtEntity.isValid() )
+				{
+					Tracer::error(ClassId, "Unable to create a perspective camera entity !");
+
+					return {};
+				}
+
+				const auto environmentCubemap = m_scene->createRenderToCubemap(name + "Cubemap", precision, 4, distance, false);
+
+				if ( environmentCubemap == nullptr || !environmentCubemap->isCreated() )
+				{
+					Tracer::error(ClassId, "Unable to create a cubemap render target !");
+
+					return {builtEntity, nullptr};
+				}
+
+				if ( !m_scene->AVConsoleManager().connectVideoDevices(builtEntity.component()->id(), environmentCubemap->id()) )
+				{
+					Tracer::error(ClassId, "Unable to connect the camera to the cubemap render target!");
+
+					return {builtEntity, nullptr};
+				}
+
+				return {builtEntity, environmentCubemap};
 			}
 
 			/**

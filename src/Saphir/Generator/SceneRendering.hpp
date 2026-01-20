@@ -63,24 +63,19 @@ namespace EmEn::Saphir::Generator
 			 * @param settings A reference to the core settings.
 			 */
 			SceneRendering (const std::string & shaderProgramName, const std::shared_ptr< const Graphics::RenderTarget::Abstract > & renderTarget, const std::shared_ptr< const Graphics::RenderableInstance::Abstract > & renderableInstance, uint32_t layerIndex, const Scenes::Scene & scene, Graphics::RenderPassType renderPassType, Settings & settings) noexcept
-				: Abstract(shaderProgramName, renderTarget, renderableInstance, layerIndex),
-				m_renderPassType(renderPassType),
-				m_lightGenerator(settings, renderPassType),
-				m_scene(&scene)
+				: Abstract{shaderProgramName, renderTarget, renderableInstance, layerIndex},
+				m_renderPassType{renderPassType},
+				m_lightGenerator{settings, renderPassType, settings.getOrSetDefault< bool >(EnableHighQualityKey, DefaultEnableHighQuality)},
+				m_scene{&scene}
 			{
-				if ( settings.getOrSetDefault< bool >(NormalMappingEnabledKey, DefaultNormalMappingEnabled) )
+				if ( m_lightGenerator.highQualityEnabled() )
 				{
-					this->enableFlag(NormalMappingEnabled);
+					this->enableFlag(HighQualityEnabled);
 				}
 
-				if ( settings.getOrSetDefault< bool >(HighQualityLightEnabledKey, DefaultHighQualityLightEnabled) )
+				if ( this->materialEnabled() && this->getMaterialInterface()->useEnvironmentCubemap() )
 				{
-					this->enableFlag(HighQualityLightEnabled);
-				}
-
-				if ( settings.getOrSetDefault< bool >(HighQualityReflectionEnabledKey, DefaultHighQualityReflectionEnabled) )
-				{
-					this->enableFlag(HighQualityReflectionEnabled);
+					this->enableBindlessTextures(true);
 				}
 			}
 

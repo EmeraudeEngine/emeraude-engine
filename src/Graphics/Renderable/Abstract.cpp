@@ -41,11 +41,11 @@ namespace EmEn::Graphics::Renderable
 	Abstract::onDependenciesLoaded () noexcept
 	{
 		/* NOTE: Check for sub-geometries and layer count coherence. */
-		if ( this->geometry()->subGeometryCount() != this->layerCount() )
+		if ( this->subGeometryCount() != this->layerCount() )
 		{
 			TraceError{TracerTag} <<
-				"Resource '" << this->name() << "' (" << this->classLabel() << ") structure ill-formed ! "
-				"There is " << this->geometry()->subGeometryCount() << " sub-geometries and " <<  this->layerCount() << " rendering layers !";
+				"Resource '" << this->name() << "' (" << this->classLabel() << ") structure ill-formed! "
+				"There is " << this->subGeometryCount() << " sub-geometries and " <<  this->layerCount() << " rendering layers!";
 
 			return false;
 		}
@@ -57,8 +57,8 @@ namespace EmEn::Graphics::Renderable
 			{
 
 				TraceError{TracerTag} <<
-					"Resource '" << this->name() << "' (" << this->classLabel() << ") structure ill-formed ! "
-					"The geometry is not created !";
+					"Resource '" << this->name() << "' (" << this->classLabel() << ") structure ill-formed! "
+					"The geometry is not created!";
 
 				return false;
 			}
@@ -71,8 +71,8 @@ namespace EmEn::Graphics::Renderable
 				if ( !this->material(layerIndex)->isCreated() )
 				{
 					TraceError{TracerTag} <<
-						"Resource '" << this->name() << "' (" << this->classLabel() << ") structure ill-formed ! "
-						"The material #" << layerIndex << " is not created !";
+						"Resource '" << this->name() << "' (" << this->classLabel() << ") structure ill-formed! "
+						"The material #" << layerIndex << " is not created!";
 
 					return false;
 				}
@@ -143,6 +143,32 @@ namespace EmEn::Graphics::Renderable
 		}
 
 		return !renderTargetIt->second.empty();
+	}
+
+	bool
+	Abstract::hasAnyCachedProgramsForRenderPass (const std::shared_ptr< const RenderTarget::Abstract > & renderTarget, uint64_t renderPassHandle) const noexcept
+	{
+		const std::lock_guard< std::mutex > lock{m_programCacheMutex};
+
+		const auto renderTargetIt = m_programCache.find(renderTarget);
+
+		if ( renderTargetIt == m_programCache.cend() )
+		{
+			return false;
+		}
+
+		/* NOTE: Check if any cached program has a matching render pass handle.
+		 * This is necessary because after a window resize, the render pass is recreated
+		 * with a new handle, making previously cached programs invalid. */
+		for ( const auto & [key, program] : renderTargetIt->second )
+		{
+			if ( key.renderPassHandle == renderPassHandle )
+			{
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	size_t

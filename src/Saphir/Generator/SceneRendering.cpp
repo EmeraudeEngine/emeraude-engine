@@ -27,7 +27,10 @@
 #include "SceneRendering.hpp"
 
 /* Local inclusions. */
+#include "Graphics/BindlessTextureManager.hpp"
+#include "Graphics/Renderer.hpp"
 #include "Graphics/RenderTarget/Abstract.hpp"
+#include "Graphics/Material/Interface.hpp"
 #include "Libs/Hash/FNV1a.hpp"
 #include "Vulkan/Framebuffer.hpp"
 #include "Vulkan/RenderPass.hpp"
@@ -68,6 +71,12 @@ namespace EmEn::Saphir::Generator
 		if ( this->materialEnabled() )
 		{
 			setIndexes.enableSet(SetType::PerModelLayer);
+		}
+
+		/* Enable the bindless texture set when bindless textures are in use. */
+		if ( this->bindlessTexturesEnabled() )
+		{
+			setIndexes.enableSet(SetType::PerBindless);
 		}
 	}
 
@@ -169,6 +178,9 @@ namespace EmEn::Saphir::Generator
 	{
 		if ( m_scene != nullptr && setIndexes.isSetEnabled(SetType::PerLight) )
 		{
+			/* NOTE: Use the unified layout (2 bindings: UBO + shadow sampler).
+			 * Shadow behavior is controlled by the scUseShadow specialization constant.
+			 * The Vulkan driver eliminates dead code when scUseShadow is false. */
 			auto descriptorSetLayout = Scenes::LightSet::getDescriptorSetLayout(renderer.layoutManager());
 
 			if ( descriptorSetLayout == nullptr )
@@ -189,6 +201,21 @@ namespace EmEn::Saphir::Generator
 			if ( descriptorSetLayout == nullptr )
 			{
 				Tracer::error(ClassId, "Unable to get the material descriptor set layout !");
+
+				return false;
+			}
+
+			descriptorSetLayouts.emplace_back(descriptorSetLayout);
+		}
+
+		/* Prepare the descriptor set layout for bindless textures. */
+		if ( setIndexes.isSetEnabled(SetType::PerBindless) )
+		{
+			auto descriptorSetLayout = renderer.bindlessTextureManager().descriptorSetLayout();
+
+			if ( descriptorSetLayout == nullptr )
+			{
+				Tracer::error(ClassId, "Unable to get the bindless textures descriptor set layout !");
 
 				return false;
 			}
@@ -413,6 +440,15 @@ namespace EmEn::Saphir::Generator
 		if ( m_scene != nullptr && m_scene->lightSet().isUsingStaticLighting() )
 		{
 			hashCombine(hash, 1ULL);
+		}
+
+		/* 8. Material layout signature to separate incompatible pipelines (e.g. Standard Refl/Refract). */
+		if ( this->materialEnabled() )
+		{
+			if ( const auto & layout = this->getMaterialInterface()->descriptorSetLayout(); layout != nullptr )
+			{
+				hashCombine(hash, layout->getHash());
+			}
 		}
 
 		return hash;

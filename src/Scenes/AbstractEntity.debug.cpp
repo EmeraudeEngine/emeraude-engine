@@ -63,7 +63,7 @@ namespace EmEn::Scenes
 		}
 
 		const char * label = nullptr;
-		std::shared_ptr< Renderable::MeshResource > meshResource;
+		std::shared_ptr< Renderable::SimpleMeshResource > meshResource;
 
 		switch ( type )
 		{
@@ -353,10 +353,10 @@ namespace EmEn::Scenes
 		});
 	}
 
-	std::shared_ptr< Renderable::MeshResource >
+	std::shared_ptr< Renderable::SimpleMeshResource >
 	AbstractEntity::getAxisVisualDebug (Resources::Manager & resources) noexcept
 	{
-		return resources.container< Renderable::MeshResource >()->getOrCreateResourceAsync(AxisDebugName, [&resources] (Renderable::MeshResource & newMesh) {
+		return resources.container< Renderable::SimpleMeshResource >()->getOrCreateResourceAsync(AxisDebugName, [&resources] (auto & newMesh) {
 			/* NOTE: Get the geometry. */
 			const Geometry::ResourceGenerator generator{resources, Geometry::EnableNormal | Geometry::EnableVertexColor};
 
@@ -375,10 +375,10 @@ namespace EmEn::Scenes
 		});
 	}
 
-	std::shared_ptr< Renderable::MeshResource >
+	std::shared_ptr< Renderable::SimpleMeshResource >
 	AbstractEntity::getVelocityVisualDebug (Resources::Manager & resources) noexcept
 	{
-		return resources.container< Renderable::MeshResource >()->getOrCreateResourceAsync(VelocityDebugName, [&resources] (Renderable::MeshResource & newMesh) {
+		return resources.container< Renderable::SimpleMeshResource >()->getOrCreateResourceAsync(VelocityDebugName, [&resources] (auto & newMesh) {
 			/* NOTE: Get the geometry. */
 			const Geometry::ResourceGenerator generator{resources, Geometry::EnableNormal | Geometry::EnableVertexColor};
 
@@ -397,10 +397,10 @@ namespace EmEn::Scenes
 		});
 	}
 
-	std::shared_ptr< Renderable::MeshResource >
+	std::shared_ptr< Renderable::SimpleMeshResource >
 	AbstractEntity::getBoundingSphereVisualDebug (Resources::Manager & resources) noexcept
 	{
-		return resources.container< Renderable::MeshResource >()->getOrCreateResourceAsync("+BoundingSphere", [&resources] (Renderable::MeshResource & newMesh) {
+		return resources.container< Renderable::SimpleMeshResource >()->getOrCreateResourceAsync("+BoundingSphere", [&resources] (auto & newMesh) {
 			const Geometry::ResourceGenerator generator{resources, Geometry::EnableNormal | Geometry::EnableVertexColor};
 
 			const auto geometryResource = generator.geodesicSphere(1.0F);
@@ -416,10 +416,10 @@ namespace EmEn::Scenes
 		});
 	}
 
-	std::shared_ptr< Renderable::MeshResource >
+	std::shared_ptr< Renderable::SimpleMeshResource >
 	AbstractEntity::getBoundingBoxVisualDebug (Resources::Manager & resources) noexcept
 	{
-		return resources.container< Renderable::MeshResource >()->getOrCreateResourceAsync("+BoundingBox", [&resources] (Renderable::MeshResource & newMesh) {
+		return resources.container< Renderable::SimpleMeshResource >()->getOrCreateResourceAsync("+BoundingBox", [&resources] (auto & newMesh) {
 			const Geometry::ResourceGenerator generator{resources, Geometry::EnableNormal | Geometry::EnableVertexColor};
 
 			const auto geometryResource = generator.cube(1.0F);
@@ -435,10 +435,10 @@ namespace EmEn::Scenes
 		});
 	}
 
-	std::shared_ptr< Renderable::MeshResource >
+	std::shared_ptr< Renderable::SimpleMeshResource >
 	AbstractEntity::getCameraVisualDebug (Resources::Manager & resources) noexcept
 	{
-		return resources.container< Renderable::MeshResource >()->getOrCreateResourceAsync(CameraDebugName, [&resources] (Renderable::MeshResource & newMesh) {
+		return resources.container< Renderable::SimpleMeshResource >()->getOrCreateResourceAsync(CameraDebugName, [&resources] (auto & newMesh) {
 			/* NOTE: Get the geometry. */
 			const auto geometryResource = resources.container< Geometry::IndexedVertexResource >()->getResource("Items/Camera", false);
 

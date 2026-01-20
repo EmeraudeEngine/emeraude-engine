@@ -58,7 +58,37 @@ namespace EmEn::Vulkan
 		m_createInfo.bindingCount = static_cast< uint32_t >(m_setLayoutBindings.size());
 		m_createInfo.pBindings = m_setLayoutBindings.data();
 
+		/* Check if we have any non-zero binding flags to use the extension. */
+		VkDescriptorSetLayoutBindingFlagsCreateInfo bindingFlagsCreateInfo{};
+		bool hasBindingFlags = false;
+
+		for ( const auto flag : m_bindingFlags )
+		{
+			if ( flag != 0 )
+			{
+				hasBindingFlags = true;
+
+				break;
+			}
+		}
+
+		if ( hasBindingFlags )
+		{
+			bindingFlagsCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO;
+			bindingFlagsCreateInfo.pNext = m_createInfo.pNext;
+			bindingFlagsCreateInfo.bindingCount = static_cast< uint32_t >(m_bindingFlags.size());
+			bindingFlagsCreateInfo.pBindingFlags = m_bindingFlags.data();
+
+			m_createInfo.pNext = &bindingFlagsCreateInfo;
+		}
+
 		const auto result = vkCreateDescriptorSetLayout(this->device()->handle(), &m_createInfo, nullptr, &m_handle);
+
+		/* Reset pNext to avoid dangling pointer after this function returns. */
+		if ( hasBindingFlags )
+		{
+			m_createInfo.pNext = bindingFlagsCreateInfo.pNext;
+		}
 
 		if ( result != VK_SUCCESS )
 		{
@@ -97,7 +127,7 @@ namespace EmEn::Vulkan
 	}
 
 	bool
-	DescriptorSetLayout::declare (VkDescriptorSetLayoutBinding setLayoutBinding) noexcept
+	DescriptorSetLayout::declare (VkDescriptorSetLayoutBinding setLayoutBinding, VkDescriptorBindingFlags bindingFlags) noexcept
 	{
 		if ( this->isCreated() )
 		{
@@ -125,6 +155,7 @@ namespace EmEn::Vulkan
 		}
 
 		m_setLayoutBindings.emplace_back(setLayoutBinding);
+		m_bindingFlags.emplace_back(bindingFlags);
 
 		return true;
 	}

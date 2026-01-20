@@ -27,6 +27,7 @@
 #include "AbstractLightEmitter.hpp"
 
 /* Local inclusions. */
+#include "Graphics/SharedUniformBuffer.hpp"
 #include "Scenes/AVConsole/Manager.hpp"
 
 namespace EmEn::Scenes::Component
@@ -47,6 +48,8 @@ namespace EmEn::Scenes::Component
 		this->forEachOutputs([&worldCoordinates, &worldVelocity] (const auto & output) {
 			output->updateDeviceFromCoordinates(worldCoordinates, worldVelocity);
 		});
+
+		this->updateLightSpaceMatrix();
 	}
 
 	void
@@ -118,5 +121,110 @@ namespace EmEn::Scenes::Component
 		}
 
 		return true;
+	}
+
+	void
+	AbstractLightEmitter::enable (bool state) noexcept
+	{
+		this->setFlag(Enabled, state);
+
+		if ( state )
+		{
+			this->enableFlag(VideoMemoryUpdateRequested);
+		}
+	}
+
+	bool
+	AbstractLightEmitter::toggle () noexcept
+	{
+		if ( this->isFlagEnabled(Enabled) )
+		{
+			this->disableFlag(Enabled);
+
+			return false;
+		}
+
+		this->enableFlag(Enabled);
+		this->enableFlag(VideoMemoryUpdateRequested);
+
+		return true;
+	}
+
+	void
+	AbstractLightEmitter::setColor (const Libs::PixelFactory::Color< float > & color) noexcept
+	{
+		m_color = color;
+
+		this->onColorChange(m_color);
+
+		this->requestVideoMemoryUpdate();
+	}
+
+	void
+	AbstractLightEmitter::setIntensity (float intensity) noexcept
+	{
+		m_intensity = intensity;
+
+		this->onIntensityChange(m_intensity);
+
+		this->requestVideoMemoryUpdate();
+	}
+
+	uint32_t
+	AbstractLightEmitter::UBOAlignment () const noexcept
+	{
+		if ( m_sharedUniformBuffer == nullptr )
+		{
+			return 0;
+		}
+
+		return m_sharedUniformBuffer->blockAlignedSize();
+	}
+
+	uint32_t
+	AbstractLightEmitter::UBOOffset () const noexcept
+	{
+		if ( m_sharedUniformBuffer == nullptr )
+		{
+			return 0;
+		}
+
+		return m_sharedUBOIndex * m_sharedUniformBuffer->blockAlignedSize();
+	}
+
+	const Vulkan::DescriptorSet *
+	AbstractLightEmitter::descriptorSet ([[maybe_unused]] bool useShadowMap) const noexcept
+	{
+		if ( m_sharedUniformBuffer == nullptr )
+		{
+			return nullptr;
+		}
+
+		return m_sharedUniformBuffer->descriptorSet(m_sharedUBOIndex);
+	}
+
+	void
+	AbstractLightEmitter::requestVideoMemoryUpdate () noexcept
+	{
+		if ( this->isEnabled() )
+		{
+			this->enableFlag(VideoMemoryUpdateRequested);
+		}
+	}
+
+	void
+	AbstractLightEmitter::writeLightSpaceMatrix (float * bufferDestination) const noexcept
+	{
+		if ( bufferDestination == nullptr )
+		{
+			return;
+		}
+
+		const auto matrix = this->getLightSpaceMatrix();
+
+		/* NOTE: Update the light space matrix.
+		 * Use data() to get pointer to underlying array. Using &matrix[0] would be UB
+		 * because the const operator[] returns by value (a temporary). */
+		std::copy_n(matrix.data(), 16, bufferDestination);
 	}
 }

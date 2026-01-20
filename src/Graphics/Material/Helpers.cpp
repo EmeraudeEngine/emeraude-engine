@@ -27,27 +27,84 @@
 #include "Helpers.hpp"
 
 /* STL inclusions. */
-#include <algorithm>
 #include <cstdint>
+#include <algorithm>
 #include <array>
 
 /* Local inclusions. */
 #include "Graphics/Geometry/Interface.hpp"
-#include "Graphics/Types.hpp"
-#include "Interface.hpp"
-#include "Libs/PixelFactory/Color.hpp"
 #include "Saphir/Generator/Abstract.hpp"
 #include "Saphir/Code.hpp"
 #include "Saphir/Keys.hpp"
+#include "Interface.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::Graphics::Material
 {
 	using namespace Libs;
+	using namespace Libs::PixelFactory;
 	using namespace Saphir;
 	using namespace Saphir::Keys;
 
 	constexpr auto TracerTag{"MaterialHelpers"};
+
+	std::optional< FillingType >
+	getFillingTypeFromJSON (const Json::Value & data) noexcept
+	{
+		if ( data.isMember(JKType) && data[JKType].isString() )
+		{
+			constexpr std::array< const char *, 9 > fillingTypes{
+				ValueString,
+				ColorString,
+				GradientString,
+				TextureString,
+				VolumeTextureString,
+				CubemapString,
+				AnimatedTextureString,
+				AlphaChannelAsValueString,
+				NoneString
+			};
+
+			const auto foundValue = data[JKType].asString();
+
+			for ( const auto & value : fillingTypes )
+			{
+				if ( foundValue == value )
+				{
+					return to_FillingType(foundValue);
+				}
+			}
+		}
+
+		return std::nullopt;
+	}
+
+	std::optional< BlendingMode >
+	getBlendingModeFromJSON (const Json::Value & data) noexcept
+	{
+		if ( data.isMember(JKBlendingMode) && data[JKBlendingMode].isString() )
+		{
+			constexpr std::array< const char *, 5 > fillingTypes{
+				NormalBlendingString,
+				AddBlendingString,
+				MultiplyBlendingString,
+				ScreenBlendingString,
+				NoneString
+			};
+
+			const auto foundValue = data[JKBlendingMode].asString();
+
+			for ( const auto & value : fillingTypes )
+			{
+				if ( foundValue == value )
+				{
+					return to_BlendingMode(foundValue);
+				}
+			}
+		}
+
+		return std::nullopt;
+	}
 
 	bool
 	checkPrimaryTextureCoordinates (Generator::Abstract & generator, VertexShader & vertexShader, const Interface & material, const Geometry::Interface & geometry) noexcept
@@ -222,6 +279,14 @@ namespace EmEn::Graphics::Material
 			return optional;
 		}
 
+		/* Automatic type doesn't require Data - parameters are read directly from the component. */
+		if ( fillingType == FillingType::Automatic )
+		{
+			componentData = component;
+
+			return true;
+		}
+
 		if ( !component.isMember(JKData) )
 		{
 			TraceError{TracerTag} << "The key '" << JKData << "' from component '" << componentName << "' JSON structure is not present !";
@@ -229,11 +294,36 @@ namespace EmEn::Graphics::Material
 			return false;
 		}
 
-		if ( !component[JKData].isObject() && !component[JKData].isArray() )
+		/* Validate Data format based on Type:
+		 * - Value: numeric
+		 * - Color: array [r, g, b] or [r, g, b, a]
+		 * - Texture/Cubemap/etc.: object with Name key */
+		if ( fillingType == FillingType::Value )
 		{
-			TraceError{TracerTag} << "The key '" << JKData << "' from component '" << componentName << "' must be an object or an array !";
+			if ( !component[JKData].isNumeric() )
+			{
+				TraceError{TracerTag} << "The key '" << JKData << "' from component '" << componentName << "' with Type 'Value' must be numeric !";
 
-			return false;
+				return false;
+			}
+		}
+		else if ( fillingType == FillingType::Color )
+		{
+			if ( !component[JKData].isArray() )
+			{
+				TraceError{TracerTag} << "The key '" << JKData << "' from component '" << componentName << "' with Type 'Color' must be an array !";
+
+				return false;
+			}
+		}
+		else
+		{
+			if ( !component[JKData].isObject() )
+			{
+				TraceError{TracerTag} << "The key '" << JKData << "' from component '" << componentName << "' must be an object !";
+
+				return false;
+			}
 		}
 
 		componentData = component[JKData];

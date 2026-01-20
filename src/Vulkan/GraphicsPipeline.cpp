@@ -948,6 +948,34 @@ namespace EmEn::Vulkan
 		{
 			hashCombine(hash, static_cast< uint32_t >(stage.stage));
 			hashCombine(hash, reinterpret_cast< uintptr_t >(stage.module));
+
+			/* Hash specialization constants to distinguish pipelines with different spec constant values. */
+			if ( stage.pSpecializationInfo != nullptr )
+			{
+				const auto * specInfo = stage.pSpecializationInfo;
+				hashCombine(hash, specInfo->mapEntryCount);
+				hashCombine(hash, specInfo->dataSize);
+
+				/* Hash each map entry. */
+				for ( uint32_t index = 0; index < specInfo->mapEntryCount; ++index )
+				{
+					const auto & entry = specInfo->pMapEntries[index];
+					hashCombine(hash, entry.constantID);
+					hashCombine(hash, entry.offset);
+					hashCombine(hash, entry.size);
+				}
+
+				/* Hash the actual specialization data bytes. */
+				if ( specInfo->pData != nullptr && specInfo->dataSize > 0 )
+				{
+					const auto * dataBytes = static_cast< const uint8_t * >(specInfo->pData);
+
+					for ( size_t index = 0; index < specInfo->dataSize; ++index )
+					{
+						hashCombine(hash, dataBytes[index]);
+					}
+				}
+			}
 		}
 
 		/* Hash vertex input state. */

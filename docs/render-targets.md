@@ -42,25 +42,79 @@ Main scene rendering must wait for off-screen rendering to complete.
 
 **Implementation:**
 - **Layered Framebuffer**: 6 layers (+X, -X, +Y, -Y, +Z, -Z).
-- **Shader Access**: `gl_ViewIndex` identifies the face.
-- **Uniform Blocks**: Array of 6 view matrices.
+- **Shader Access**: `gl_ViewIndex` (0-5) identifies the face.
+- **Vulkan Extension**: `VK_KHR_multiview` + `GL_EXT_multiview` GLSL extension.
 
+**UBO Layout:**
 ```glsl
-// Uniform block layout
+struct CubemapFace {
+    mat4 viewMatrix;              // Per-face view matrix
+};
+
 layout(std140, set = 0, binding = 0) uniform CubemapView {
-    CubemapFace faces[6];         // Projection/View per face
-    vec4 ambientLightColor;       // Shared data
+    CubemapFace instance[6];      // Per-face data (indexed by gl_ViewIndex)
+    mat4 projectionMatrix;        // Shared: 90° FOV, 1:1 aspect
+    vec4 positionWorldSpace;      // Shared: camera position
+    vec4 ambientLightColor;       // Shared: lighting
+    float ambientLightIntensity;
 } ubView;
 
-// Access
-mat4 projection = ubView.faces[gl_ViewIndex].projectionMatrix;
+// Shader access pattern
+mat4 view = ubView.instance[gl_ViewIndex].viewMatrix;  // Per-face
+mat4 proj = ubView.projectionMatrix;                    // Shared
 ```
 
-**Variable Synthesis:**
-- `RenderPassContext` flags `isCubemap`.
-- If `isCubemap`: Push constants disabled (matrices are in UBO array).
-- Saphir generators adapted to use `gl_ViewIndex`.
+**Matrix Sources in Cubemap Mode:**
 
-### 4. Recursive Rendering
+| Matrix | Source | Reason |
+|--------|--------|--------|
+| Projection | UBO (shared) | Same 90° FOV for all faces |
+| View | UBO (indexed) | Different orientation per face |
+| Model | Push Constant | Per-object transform |
+
+**Push Constant in Cubemap Mode:**
+```glsl
+// Cubemap mode: ONLY model matrix
+layout(push_constant) uniform Matrices {
+    mat4 modelMatrix;  // NOT modelViewProjectionMatrix!
+} pcMatrices;
+```
+
+**Shader MVP Computation:**
+```glsl
+// Cubemap mode: combine from UBO + push constant
+mat4 MVP = ubView.projectionMatrix
+         * ubView.instance[gl_ViewIndex].viewMatrix
+         * pcMatrices.modelMatrix;
+```
+
+**CPU-Side Coordination:**
+See `RenderableInstance/Unique.cpp:pushMatricesForRendering()` - pushes only `modelMatrix` when `passContext.isCubemap` is true.
+
+**Saphir Generator Adaptation:**
+- `RenderPassContext.isCubemap` flag propagates to shader generators
+- `VertexShader.isCubemapModeEnabled()` gates matrix source selection
+- All code using view matrix must check: UBO (`ViewUB`) vs push constant (`MatrixPC`)
+- See: `src/Saphir/AGENTS.md` section "Cubemap Rendering Mode"
+
+### 4. Shadow Map Render Targets
+
+Shadow maps are depth-only render targets created per light.
+
+**Types by Light:**
+- **Directional/Spot:** 2D depth texture
+- **Point:** Cubemap depth texture (6 faces)
+
+**Global Control:**
+Shadow mapping can be globally disabled via `GraphicsShadowMappingEnabledKey` setting. When disabled:
+1. `Scene::renderShadowMaps()` returns early
+2. Shadow map images remain in `VK_IMAGE_LAYOUT_UNDEFINED`
+3. Lighting passes use `NoShadow` pass types (no shadow descriptor binding)
+
+**Critical:** If shadow maps are not rendered but their descriptors are bound, Vulkan validation errors occur due to layout mismatch.
+
+See [`docs/shadow-mapping.md`](shadow-mapping.md) for complete shadow mapping architecture.
+
+### 5. Recursive Rendering
 **Limitation**: A texture showing itself (e.g., TV showing camera filming TV) causes infinite recursion / read-after-write hazard.
 **Status**: Triggers validation warning. Future fix: Double buffering.

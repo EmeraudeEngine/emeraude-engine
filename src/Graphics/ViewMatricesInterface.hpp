@@ -234,6 +234,28 @@ namespace EmEn::Graphics
 			[[nodiscard]]
 			virtual const Vulkan::DescriptorSet * descriptorSet () const noexcept = 0;
 
+			/**
+			 * @brief Computes the 8 corners of a frustum in world space.
+			 * @note The corners are computed by transforming NDC cube corners through the inverse view-projection matrix.
+			 * @param inverseViewProjection The inverse of the view-projection matrix.
+			 * @return std::array< Libs::Math::Vector< 3, float >, 8 > The frustum corners in world space.
+			 */
+			[[nodiscard]]
+			static std::array< Libs::Math::Vector< 3, float >, 8 > computeFrustumCornersWorld (const Libs::Math::Matrix< 4, float > & inverseViewProjection) noexcept;
+
+			/**
+			 * @brief Computes the 8 corners of this view's frustum in world space.
+			 * @note Uses the current projection and view matrices to compute frustum corners.
+			 * @return std::array< Libs::Math::Vector< 3, float >, 8 > The frustum corners in world space.
+			 */
+			[[nodiscard]]
+			std::array< Libs::Math::Vector< 3, float >, 8 >
+			getFrustumCornersWorld () const noexcept
+			{
+				const auto viewProjection = this->projectionMatrix() * this->viewMatrix(false, 0);
+				return computeFrustumCornersWorld(viewProjection.inverse());
+			}
+
 		protected:
 
 			/**

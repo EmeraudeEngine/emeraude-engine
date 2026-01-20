@@ -37,6 +37,7 @@
 #include "Resources/Container.hpp"
 #include "Physics/SurfacePhysicalProperties.hpp"
 #include "Component/Interface.hpp"
+#include "Graphics/TextureResource/TextureCubemap.hpp"
 
 /* Forward declarations. */
 namespace EmEn
@@ -383,6 +384,25 @@ namespace EmEn::Graphics::Material
 			bool setReflectionComponentFromRenderTarget (const std::shared_ptr< Vulkan::TextureInterface > & renderTarget, float amount = DefaultReflectionAmount) noexcept;
 
 			/**
+			 * @brief Sets the reflection component using an environment cubemap from the scene.
+			 * @note When enabled, the material will use the scene's environment cubemap for reflection
+			 * instead of a material-specific texture. This is resolved at render time.
+			 * @param amount The reflection amount. Default 50%.
+			 * @return bool
+			 */
+			bool setReflectionComponentFromEnvironmentCubemap (float amount = DefaultReflectionAmount) noexcept;
+
+			/**
+			 * @brief Sets the refraction component using the scene's environment cubemap.
+			 * @note When enabled, the material will use the scene's environment cubemap for refraction
+			 * instead of a material-specific texture. This is resolved at render time.
+			 * @param ior The index of refraction. Default 1.5 (glass).
+			 * @param amount The refraction amount. Default 95%.
+			 * @return bool
+			 */
+			bool setRefractionComponentFromEnvironmentCubemap (float ior = DefaultRefractionIOR, float amount = DefaultRefractionAmount) noexcept;
+
+			/**
 			 * @brief Sets the refraction component as a texture (for glass/water effects).
 			 * @warning This function is available before creation time.
 			 * @param texture A reference to a cubemap texture smart pointer.
@@ -403,25 +423,13 @@ namespace EmEn::Graphics::Material
 			 */
 			bool setRefractionComponentFromRenderTarget (const std::shared_ptr< Vulkan::TextureInterface > & renderTarget, float ior = DefaultRefractionIOR, float amount = DefaultRefractionAmount) noexcept;
 
-			/**
-			 * @brief Enables automatic reflection from scene environment cubemap.
-			 * @note When enabled, the material will use the scene's environment cubemap for reflection
-			 * instead of a material-specific texture. This is resolved at render time.
-			 * @param amount The reflection amount. Default 50%.
-			 */
-			void enableAutomaticReflection (float amount = DefaultReflectionAmount) noexcept;
-
-			/** @copydoc EmEn::Graphics::Material::Interface::useAutomaticReflection() const noexcept */
+			/** @copydoc EmEn::Graphics::Material::Interface::useEnvironmentCubemap() const noexcept */
 			[[nodiscard]]
 			bool
-			useAutomaticReflection () const noexcept override
+			useEnvironmentCubemap () const noexcept override
 			{
-				return m_useAutomaticReflection;
+				return m_isUsingEnvironmentCubemap || m_isUsingEnvironmentCubemapForRefraction;
 			}
-
-			/** @copydoc EmEn::Graphics::Material::Interface::updateAutomaticReflectionCubemap() noexcept */
-			[[nodiscard]]
-			bool updateAutomaticReflectionCubemap (const Vulkan::TextureInterface & cubemap) noexcept override;
 
 			/**
 			 * @brief Returns whether a material component is present.
@@ -641,6 +649,28 @@ namespace EmEn::Graphics::Material
 			bool generateTextureComponentFragmentShader (ComponentType componentType, const std::function< bool (Saphir::FragmentShader &, const Component::Texture *) > & codeGenerator, Saphir::FragmentShader & fragmentShader, uint32_t materialSet) const noexcept;
 
 			/**
+			 * @brief Generates the fragment shader code for bindless reflection.
+			 * @note This method generates shader code that uses the global bindless texture array
+			 * instead of per-material samplers for reflection cubemaps.
+			 * @param generator A reference to the shader generator.
+			 * @param fragmentShader A reference to the fragment shader being generated.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool generateBindlessReflectionFragmentShader (Saphir::Generator::Abstract & generator, Saphir::FragmentShader & fragmentShader) const noexcept;
+
+			/**
+			 * @brief Generates the fragment shader code for bindless refraction.
+			 * @note This method generates shader code that uses the global bindless texture array
+			 * instead of per-material samplers for refraction cubemaps.
+			 * @param generator A reference to the shader generator.
+			 * @param fragmentShader A reference to the fragment shader being generated.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool generateBindlessRefractionFragmentShader (Saphir::Generator::Abstract & generator, Saphir::FragmentShader & fragmentShader) const noexcept;
+
+			/**
 			 * @brief Returns the right texture coordinates for a component.
 			 * @param component A pointer to the texture component.
 			 * @return const char *
@@ -698,9 +728,8 @@ namespace EmEn::Graphics::Material
 			uint32_t m_sharedUBOIndex{0};
 			/* TODO: Unify video memory update mechanism between all materials. */
 			bool m_videoMemoryUpdated{false};
-			bool m_useAutomaticReflection{false};
-			/** @brief Binding point for automatic reflection cubemap (only valid when m_useAutomaticReflection is true). */
-			uint32_t m_automaticReflectionBindingPoint{0};
+			bool m_isUsingEnvironmentCubemap{false};
+			bool m_isUsingEnvironmentCubemapForRefraction{false};
 	};
 }
 

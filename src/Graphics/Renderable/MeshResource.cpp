@@ -30,6 +30,7 @@
 #include "Libs/FastJSON.hpp"
 #include "Graphics/Geometry/Geometries.hpp"
 #include "Graphics/Material/Materials.hpp"
+#include "Graphics/Material/PBRResource.hpp"
 #include "Resources/Manager.hpp"
 
 namespace EmEn::Graphics::Renderable
@@ -160,26 +161,32 @@ namespace EmEn::Graphics::Renderable
 		const auto materialType = FastJSON::getValidatedStringValue(data, MaterialTypeKey, Material::Types).value_or(BasicResource::ClassId);
 		const auto materialResourceName = FastJSON::getValue< std::string >(data, MaterialNameKey);
 
-		if ( materialType == StandardResource::ClassId )
+		/* C++20 lambda template to load material from the appropriate container. */
+		auto loadMaterial = [&] < typename ResourceType > () -> std::shared_ptr< Material::Interface >
 		{
+			auto * container = serviceProvider.container< ResourceType >();
+
 			if ( !materialResourceName )
 			{
-				TraceError{ClassId} << "The key '" << MaterialNameKey << "' for '" << StandardResource::ClassId << "' is not present or not a string !";
+				TraceError{ClassId} << "The key '" << MaterialNameKey << "' for '" << ResourceType::ClassId << "' is not present or not a string !";
 
-				return serviceProvider.container< StandardResource >()->getDefaultResource();
+				return container->getDefaultResource();
 			}
 
-			return serviceProvider.container< StandardResource >()->getResource(materialResourceName.value());
-		}
+			return container->getResource(materialResourceName.value());
+		};
 
-		if ( !materialResourceName )
+		if ( materialType == PBRResource::ClassId )
 		{
-			TraceError{ClassId} << "The key '" << MaterialNameKey << "' for '" << BasicResource::ClassId << "' is not present or not a string !";
-
-			return serviceProvider.container< BasicResource >()->getDefaultResource();
+			return loadMaterial.operator() < PBRResource > ();
 		}
 
-		return serviceProvider.container< BasicResource >()->getResource(materialResourceName.value());
+		if ( materialType == StandardResource::ClassId )
+		{
+			return loadMaterial.operator() < StandardResource > ();
+		}
+
+		return loadMaterial.operator() < BasicResource > ();
 	}
 
 	RasterizationOptions

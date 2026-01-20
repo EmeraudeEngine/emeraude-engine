@@ -136,9 +136,18 @@ namespace EmEn::Graphics::Renderable
 				return 0;
 			}
 
+			/** @copydoc EmEn::Graphics::Renderable::Abstract::subGeometryCount() const */
+			[[nodiscard]]
+			uint32_t
+			subGeometryCount () const noexcept override
+			{
+				return 1;
+			}
+
 			/** @copydoc EmEn::Graphics::Renderable::Abstract::layerCount() const */
 			[[nodiscard]]
-			uint32_t layerCount () const noexcept override
+			uint32_t
+			layerCount () const noexcept override
 			{
 				return 1;
 			}

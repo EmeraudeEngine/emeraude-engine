@@ -2192,7 +2192,7 @@ namespace EmEn::Libs::Math
 
 			/**
 			 * @brief Returns an orthographic projection 4x4 matrix.
-			 * @note Vulkan compliant (right-handed).
+			 * @note Vulkan compliant (right-handed, depth range [0, 1]).
 			 * @param xLeft Negative X distance.
 			 * @param xRight Positive X distance.
 			 * @param yBottom Negative Y distance.
@@ -2222,16 +2222,20 @@ namespace EmEn::Libs::Math
 
 					deltaValue = zFar - zNear;
 
-					matrix[M4x4Col2Row2] = -2 / deltaValue;
-					matrix[M4x4Col3Row2] = -((zFar + zNear) / deltaValue);
+					/* NOTE: Vulkan uses depth range [0, 1] instead of OpenGL's [-1, 1].
+					 * OpenGL formula: z' = -2/(f-n) * z - (f+n)/(f-n)
+					 * Vulkan formula: z' = -1/(f-n) * z - n/(f-n)
+					 * This maps near plane to 0 and far plane to 1. */
+					matrix[M4x4Col2Row2] = -1 / deltaValue;
+					matrix[M4x4Col3Row2] = -zNear / deltaValue;
 				}
 
 				return matrix;
 			}
 
 			/**
-			 * @brief Returns an orthographic projection 4x4 matrix.
-			 * @note Vulkan compliant (right-handed).
+			 * @brief Returns a perspective projection 4x4 matrix.
+			 * @note Vulkan compliant (right-handed, depth range [0, 1]).
 			 * @param fov Field of view in degree.
 			 * @param aspectRatio The aspect ratio of the viewport.
 			 * @param zNear Limit for nearest vertices. Must be positive.
@@ -2260,8 +2264,12 @@ namespace EmEn::Libs::Math
 
 				matrix[M4x4Col1Row1] = a;
 
-				matrix[M4x4Col2Row2] = -((zFar + zNear) / (zFar - zNear));
-				matrix[M4x4Col3Row2] = -((2 * zFar * zNear) / (zFar - zNear));
+				/* NOTE: Vulkan uses depth range [0, 1] instead of OpenGL's [-1, 1].
+				 * OpenGL formula: z' = -(f+n)/(f-n) * z - 2fn/(f-n)
+				 * Vulkan formula: z' = -f/(f-n) * z - fn/(f-n)
+				 * This maps near plane to 0 and far plane to 1. */
+				matrix[M4x4Col2Row2] = -zFar / (zFar - zNear);
+				matrix[M4x4Col3Row2] = -(zFar * zNear) / (zFar - zNear);
 
 				matrix[M4x4Col2Row3] = -1;
 				matrix[M4x4Col3Row3] = 0;

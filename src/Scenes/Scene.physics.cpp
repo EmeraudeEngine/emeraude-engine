@@ -25,6 +25,7 @@
  */
 
 #include "Scene.hpp"
+#include "Physics/CollisionDetection.hpp"
 
 namespace EmEn::Scenes
 {

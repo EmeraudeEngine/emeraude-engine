@@ -283,8 +283,8 @@ namespace EmEn::Graphics
 			/** @brief Total size in bytes of the UBO buffer. */
 			static constexpr auto ViewUBOSize = ViewUBOElementCount * sizeof(float);
 
-			/* @brief Jump offset over the 6 view matrices for the cubemap. */
-			static constexpr auto ViewMatricesJumpOffset{6 + 16UL};
+			/* @brief Jump offset over the 6 view matrices for the cubemap (6 matrices * 16 floats each). */
+			static constexpr auto ViewMatricesJumpOffset{6 * 16UL};
 
 			/** @brief Offset of the projection matrix in the buffer. */
 			static constexpr auto ProjectionMatrixOffset{ViewMatricesJumpOffset + 0UL};

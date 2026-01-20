@@ -66,12 +66,11 @@ namespace EmEn::Saphir::Generator
 	{
 		None = 0U,
 		Debug = 1U << 0,
-		NormalMappingEnabled = 1U << 1,
-		HighQualityLightEnabled = 1U << 2,
-		HighQualityReflectionEnabled = 1U << 3,
-		IsInstancingEnabled = 1U << 4,
-		IsRenderableFacingCamera = 1U << 5,
-		IsLightingEnabled = 1U << 6,
+		HighQualityEnabled = 1U << 1,
+		IsInstancingEnabled = 1U << 2,
+		IsRenderableFacingCamera = 1U << 3,
+		IsLightingEnabled = 1U << 4,
+		BindlessTexturesEnabled = 1U << 5
 	};
 
 	/**
@@ -147,36 +146,14 @@ namespace EmEn::Saphir::Generator
 			}
 
 			/**
-			 * @brief Returns whether the use of normal mapping is allowed.
-			 * @return bool
-			 */
-			[[nodiscard]]
-			bool
-			normalMappingEnabled () const noexcept
-			{
-				return this->isFlagEnabled(NormalMappingEnabled);
-			}
-
-			/**
 			 * @brief Returns whether the light shader generation is high quality (most operation is performed per-fragment).
 			 * @return bool
 			 */
 			[[nodiscard]]
 			bool
-			highQualityLightEnabled () const noexcept
+			highQualityEnabled () const noexcept
 			{
-				return this->isFlagEnabled(HighQualityLightEnabled);
-			}
-
-			/**
-			 * @brief Returns whether the reflection shader generation is high quality (most operation is performed per-fragment).
-			 * @return bool
-			 */
-			[[nodiscard]]
-			bool
-			highQualityReflectionEnabled () const noexcept
-			{
-				return this->isFlagEnabled(HighQualityReflectionEnabled);
+				return this->isFlagEnabled(HighQualityEnabled);
 			}
 
 			/**
@@ -199,6 +176,39 @@ namespace EmEn::Saphir::Generator
 			isRenderableFacingCamera () const noexcept
 			{
 				return this->isFlagEnabled(IsRenderableFacingCamera);
+			}
+
+			/**
+			 * @brief Returns whether bindless textures are enabled for this generator.
+			 * @note When enabled, materials with automatic reflection will use the global
+			 * bindless texture arrays instead of per-material descriptor sets.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			bindlessTexturesEnabled () const noexcept
+			{
+				return this->isFlagEnabled(BindlessTexturesEnabled);
+			}
+
+			/**
+			 * @brief Enables bindless textures for this generator.
+			 * @note When enabled, materials with automatic reflection will use the global
+			 * bindless texture arrays instead of per-material descriptor sets.
+			 * @param state The state.
+			 * @return void
+			 */
+			void
+			enableBindlessTextures (bool state) noexcept
+			{
+				if ( state )
+				{
+					this->enableFlag(BindlessTexturesEnabled);
+				}
+				else
+				{
+					this->disableFlag(BindlessTexturesEnabled);
+				}
 			}
 
 			/**

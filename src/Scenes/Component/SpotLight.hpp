@@ -28,9 +28,16 @@
 
 /* STL inclusions. */
 #include <array>
+#include <memory>
 
 /* Local inclusions for inheritances. */
 #include "AbstractLightEmitter.hpp"
+
+/* Forward declarations. */
+namespace EmEn::Vulkan
+{
+	class DescriptorSet;
+}
 
 namespace EmEn::Scenes::Component
 {
@@ -49,9 +56,20 @@ namespace EmEn::Scenes::Component
 			 * @brief Constructs a spotlight.
 			 * @param componentName A reference to a string.
 			 * @param parentEntity A reference to the parent entity.
+			 */
+			SpotLight (const std::string & componentName, const AbstractEntity & parentEntity) noexcept
+				: AbstractLightEmitter{componentName, parentEntity, 0}
+			{
+				this->setConeAngles(30.0F, 35.0F);
+			}
+
+			/**
+			 * @brief Constructs a spotlight.
+			 * @param componentName A reference to a string.
+			 * @param parentEntity A reference to the parent entity.
 			 * @param shadowMapResolution Enable the shadow map by specifying the resolution. Default, no shadow map.
 			 */
-			SpotLight (const std::string & componentName, const AbstractEntity & parentEntity, uint32_t shadowMapResolution = 0) noexcept
+			SpotLight (const std::string & componentName, const AbstractEntity & parentEntity, uint32_t shadowMapResolution) noexcept
 				: AbstractLightEmitter{componentName, parentEntity, shadowMapResolution}
 			{
 				this->setConeAngles(30.0F, 35.0F);
@@ -137,9 +155,44 @@ namespace EmEn::Scenes::Component
 				return std::static_pointer_cast< Graphics::RenderTarget::Abstract >(m_shadowMap);
 			}
 
+			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::descriptorSet() */
+			[[nodiscard]]
+			const Vulkan::DescriptorSet *
+			descriptorSet (bool useShadowMap) const noexcept override;
+
+			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::hasShadowDescriptorSet() */
+			[[nodiscard]]
+			bool
+			hasShadowDescriptorSet () const noexcept override
+			{
+				return m_shadowDescriptorSet != nullptr;
+			}
+
 			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::getUniformBlock() */
 			[[nodiscard]]
 			Saphir::Declaration::UniformBlock getUniformBlock (uint32_t set, uint32_t binding, bool useShadow) const noexcept override;
+
+			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::setPCFRadius(float) */
+			void setPCFRadius (float radius) noexcept override;
+
+			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::PCFRadius() */
+			[[nodiscard]]
+			float
+			PCFRadius () const noexcept override
+			{
+				return m_PCFRadius;
+			}
+
+			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::setShadowBias(float) */
+			void setShadowBias (float bias) noexcept override;
+
+			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::shadowBias() */
+			[[nodiscard]]
+			float
+			shadowBias () const noexcept override
+			{
+				return m_shadowBias;
+			}
 
 			/**
 			 * @brief Set the radius of the light area.
@@ -192,6 +245,12 @@ namespace EmEn::Scenes::Component
 			/** @copydoc EmEn::Animations::AnimatableInterface::playAnimation() */
 			bool playAnimation (uint8_t animationID, const Libs::Variant & value, size_t cycle) noexcept override;
 
+			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::createShadowDescriptorSet() */
+			bool createShadowDescriptorSet (Scene & scene) noexcept override;
+
+			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::updateLightSpaceMatrix() */
+			void updateLightSpaceMatrix () noexcept override;
+
 			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::getFovOrNear() */
 			[[nodiscard]]
 			float
@@ -220,11 +279,9 @@ namespace EmEn::Scenes::Component
 
 			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::onVideoMemoryUpdate() */
 			[[nodiscard]]
-			bool
-			onVideoMemoryUpdate (Graphics::SharedUniformBuffer & UBO, uint32_t index) noexcept override
-			{
-				return UBO.writeElementData(index, m_buffer.data());
-			}
+			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::onVideoMemoryUpdate() */
+			[[nodiscard]]
+			bool onVideoMemoryUpdate (Graphics::SharedUniformBuffer & UBO, uint32_t index) noexcept override;
 
 			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::onColorChange() */
 			void
@@ -250,7 +307,19 @@ namespace EmEn::Scenes::Component
 			 */
 			friend std::ostream & operator<< (std::ostream & out, const SpotLight & obj);
 
-			/* Uniform buffer object offset to write data. */
+			/* Uniform buffer object offset to write data (std140 layout).
+			 * vec4 Color: floats 0-3
+			 * vec4 Position: floats 4-7
+			 * vec4 Direction: floats 8-11
+			 * float Intensity: float 12
+			 * float Radius: float 13
+			 * float InnerCosAngle: float 14
+			 * float OuterCosAngle: float 15
+			 * float PCFRadius: float 16
+			 * float ShadowBias: float 17
+			 * float padding: floats 18-19
+			 * mat4 ViewProjectionMatrix: floats 20-35
+			 */
 			static constexpr auto ColorOffset{0UL};
 			static constexpr auto PositionOffset{4UL};
 			static constexpr auto DirectionOffset{8UL};
@@ -258,13 +327,18 @@ namespace EmEn::Scenes::Component
 			static constexpr auto RadiusOffset{13UL};
 			static constexpr auto InnerCosAngleOffset{14UL};
 			static constexpr auto OuterCosAngleOffset{15UL};
-			static constexpr auto LightMatrixOffset{16UL};
+			static constexpr auto PCFRadiusOffset{16UL};
+			static constexpr auto ShadowBiasOffset{17UL};
+			static constexpr auto LightMatrixOffset{20UL};
 
 			std::shared_ptr< Graphics::RenderTarget::ShadowMap< Graphics::ViewMatrices2DUBO > > m_shadowMap;
+			std::unique_ptr< Vulkan::DescriptorSet > m_shadowDescriptorSet;
 			float m_radius{DefaultRadius};
 			float m_innerAngle{DefaultInnerAngle};
 			float m_outerAngle{DefaultOuterAngle};
-			std::array< float, 4 + 4 + 4 + 4 + 16 > m_buffer{
+			float m_PCFRadius{4.0F}; /**< PCF filter radius in normalized texture coordinates. */
+			float m_shadowBias{0.0F}; /**< Shadow bias to prevent shadow acne. */
+			std::array< float, 4 + 4 + 4 + 4 + 4 + 16 > m_buffer{
 				/* Light color. */
 				this->color().red(), this->color().green(), this->color().blue(), 1.0F,
 				/* Light position (Spot) */
@@ -273,6 +347,8 @@ namespace EmEn::Scenes::Component
 				0.0F, 1.0F, 0.0F, 0.0F,
 				/* Light properties. */
 				this->intensity(), m_radius, std::cos(Libs::Math::Radian(m_innerAngle)), std::cos(Libs::Math::Radian(m_outerAngle)),
+				/* Shadow properties. */
+				m_PCFRadius, m_shadowBias, 0.0F, 0.0F, /* PCFRadius, ShadowBias, padding, padding */
 				/* Light matrix. */
 				1.0F, 0.0F, 0.0F, 0.0F,
 				0.0F, 1.0F, 0.0F, 0.0F,

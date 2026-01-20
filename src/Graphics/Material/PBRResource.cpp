@@ -44,13 +44,14 @@
 #include "Saphir/LightGenerator.hpp"
 #include "Saphir/Code.hpp"
 #include "Saphir/Keys.hpp"
+#include "Saphir/Declaration/Sampler.hpp"
+#include "Graphics/BindlessTextureManager.hpp"
 #include "Graphics/Renderer.hpp"
 #include "Graphics/Types.hpp"
 #include "Vulkan/DescriptorSet.hpp"
 #include "Vulkan/DescriptorSetLayout.hpp"
 #include "Vulkan/LayoutManager.hpp"
 #include "Vulkan/TextureInterface.hpp"
-#include "Resources/Manager.hpp"
 #include "Component/Color.hpp"
 #include "Component/Interface.hpp"
 #include "Component/Texture.hpp"
@@ -233,6 +234,32 @@ namespace EmEn::Graphics::Material
 					}
 						return true;
 
+					case FillingType::Color :
+					{
+						/* Specular color: try Shininess value first, then luminance fallback. */
+						const auto shininessOpt = FastJSON::getValue< float >(data[SpecularString], JKShininess);
+
+						if ( shininessOpt.has_value() )
+						{
+							/* Shininess → Roughness conversion: high shininess = low roughness.
+							 * Formula: roughness = 1.0 - sqrt(shininess / 128.0), clamped to [0,1]. */
+							const auto shininess = std::clamp(shininessOpt.value(), 1.0F, 128.0F);
+							const auto roughness = 1.0F - std::sqrt(shininess / 128.0F);
+
+							this->setRoughnessComponent(roughness);
+						}
+						else
+						{
+							/* No Shininess: compute luminance from color and invert.
+							 * High specular color → low roughness (shiny surface). */
+							const auto color = parseColorComponent(componentData);
+							const auto luminance = 0.2126F * color.red() + 0.7152F * color.green() + 0.0722F * color.blue();
+
+							this->setRoughnessComponent(1.0F - luminance);
+						}
+					}
+						return true;
+
 					case FillingType::None :
 					{
 						/* Last fallback: try Shininess value from Specular component. */
@@ -371,36 +398,6 @@ namespace EmEn::Graphics::Material
 	bool
 	PBRResource::parseReflectionComponent (const Json::Value & data, Resources::AbstractServiceProvider & serviceProvider) noexcept
 	{
-		/* Check for "Automatic" keyword - use scene environment cubemap at render time. */
-		if ( data.isMember(ReflectionString) && data[ReflectionString].isString() )
-		{
-			if ( data[ReflectionString].asString() == AutomaticString )
-			{
-				this->enableAutomaticReflection(DefaultIBLIntensity);
-
-				return true;
-			}
-		}
-
-		/* Check for "Automatic" inside object with IBLIntensity. */
-		if ( data.isMember(ReflectionString) && data[ReflectionString].isObject() )
-		{
-			const auto & reflectionData = data[ReflectionString];
-
-			if ( reflectionData.isMember(JKCubemap) && reflectionData[JKCubemap].isString() )
-			{
-				if ( reflectionData[JKCubemap].asString() == AutomaticString )
-				{
-					const auto iblIntensity = FastJSON::getValue< float >(reflectionData, JKIBLIntensity).value_or(DefaultIBLIntensity);
-
-					this->enableAutomaticReflection(iblIntensity);
-
-					return true;
-				}
-			}
-		}
-
-		/* Standard parsing for explicit cubemap texture. */
 		FillingType fillingType{};
 		Json::Value componentData{};
 
@@ -411,6 +408,13 @@ namespace EmEn::Graphics::Material
 
 		switch ( fillingType )
 		{
+			case FillingType::Automatic :
+			{
+				/* Use scene environment cubemap at render time. */
+				this->setReflectionComponentFromEnvironmentCubemap(FastJSON::getValue< float >(componentData, JKIBLIntensity).value_or(DefaultIBLIntensity));
+			}
+				return true;
+
 			case FillingType::Gradient :
 			case FillingType::Texture :
 			case FillingType::VolumeTexture :
@@ -452,6 +456,13 @@ namespace EmEn::Graphics::Material
 
 		switch ( fillingType )
 		{
+			case FillingType::Automatic :
+			{
+				/* Use scene environment cubemap at render time. */
+				this->setRefractionComponentFromEnvironmentCubemap(FastJSON::getValue< float >(componentData, JKIOR).value_or(DefaultIOR));
+			}
+				return true;
+
 			case FillingType::Gradient :
 			case FillingType::Texture :
 			case FillingType::VolumeTexture :
@@ -468,7 +479,7 @@ namespace EmEn::Graphics::Material
 				this->enableFlag(TextureEnabled);
 				this->enableFlag(UsePrimaryTextureCoordinates);
 
-				this->setIOR(FastJSON::getValue< float >(data[RefractionString], JKValue).value_or(DefaultIOR));
+				this->setIOR(FastJSON::getValue< float >(data[RefractionString], JKIOR).value_or(DefaultIOR));
 			}
 				return true;
 
@@ -660,9 +671,7 @@ namespace EmEn::Graphics::Material
 				continue;
 			}
 
-			const auto textureResource = component->textureResource();
-
-			if ( !this->addDependency(textureResource) )
+			if ( const auto textureResource = component->textureResource(); !this->addDependency(textureResource) )
 			{
 				TraceError{ClassId} << "Unable to link the texture '" << textureResource->name() << "' dependency to PBR material '" << this->name() << "' !";
 
@@ -721,17 +730,11 @@ namespace EmEn::Graphics::Material
 			return false;
 		}
 
-		/* NOTE: When automatic reflection is enabled, defer descriptor set creation until
-		 * updateAutomaticReflectionCubemap() is called with the scene's environment cubemap.
-		 * This is because descriptor sets must have all bindings written before use. */
-		if ( !m_useAutomaticReflection )
+		if ( !this->createDescriptorSet(renderer, *m_sharedUniformBuffer->uniformBufferObject(m_sharedUBOIndex)) )
 		{
-			if ( !this->createDescriptorSet(renderer, *m_sharedUniformBuffer->uniformBufferObject(m_sharedUBOIndex)) )
-			{
-				TraceError{ClassId} << "Unable to create the descriptor set for PBR material '" << this->name() << "' !";
+			TraceError{ClassId} << "Unable to create the descriptor set for PBR material '" << this->name() << "' !";
 
-				return false;
-			}
+			return false;
 		}
 
 		/* Initialize the material data in the GPU. */
@@ -758,12 +761,6 @@ namespace EmEn::Graphics::Material
 			{
 				textureCount++;
 			}
-		}
-
-		/* Account for automatic reflection cubemap slot. */
-		if ( m_useAutomaticReflection )
-		{
-			textureCount++;
 		}
 
 		identifier << ClassId;
@@ -826,13 +823,6 @@ namespace EmEn::Graphics::Material
 				}
 			}
 
-			/* Declare cubemap sampler for automatic reflection (will be bound later with scene's environment cubemap). */
-			if ( m_useAutomaticReflection )
-			{
-				m_automaticReflectionBindingPoint = bindingPoint;
-				m_descriptorSetLayout->declareCombinedImageSampler(bindingPoint++, VK_SHADER_STAGE_FRAGMENT_BIT);
-			}
-
 			if ( !layoutManager.createDescriptorSetLayout(m_descriptorSetLayout) )
 			{
 				return false;
@@ -879,76 +869,6 @@ namespace EmEn::Graphics::Material
 
 				return false;
 			}
-		}
-
-		return true;
-	}
-
-	bool
-	PBRResource::updateAutomaticReflectionCubemap (const TextureInterface & cubemap) noexcept
-	{
-		if ( !m_useAutomaticReflection )
-		{
-			TraceWarning{ClassId} << "PBR material '" << this->name() << "' does not use automatic reflection !";
-
-			return false;
-		}
-
-		/* Create descriptor set if not already created (deferred from create()). */
-		if ( m_descriptorSet == nullptr )
-		{
-			if ( s_graphicsRenderer == nullptr )
-			{
-				Tracer::error(ClassId, "The static renderer pointer is null !");
-
-				return false;
-			}
-
-			m_descriptorSet = std::make_unique< DescriptorSet >(s_graphicsRenderer->descriptorPool(), m_descriptorSetLayout);
-			m_descriptorSet->setIdentifier(ClassId, this->name(), "DescriptorSet");
-
-			if ( !m_descriptorSet->create() )
-			{
-				TraceError{ClassId} << "Unable to create the descriptor set for PBR material '" << this->name() << "' !";
-
-				return false;
-			}
-
-			uint32_t bindingPoint = 0;
-
-			/* Write UBO binding. */
-			const auto descriptorInfo = m_sharedUniformBuffer->getDescriptorInfoForElement(m_sharedUBOIndex);
-
-			if ( !m_descriptorSet->writeUniformBuffer(bindingPoint++, descriptorInfo) )
-			{
-				TraceError{ClassId} << "Unable to write the uniform buffer to the descriptor set of PBR material '" << this->name() << "' !";
-
-				return false;
-			}
-
-			/* Write component texture bindings. */
-			for ( const auto & component : std::ranges::views::values(m_components) )
-			{
-				if ( component->type() != Type::Texture )
-				{
-					continue;
-				}
-
-				if ( !m_descriptorSet->writeCombinedImageSampler(bindingPoint++, *component->texture()) )
-				{
-					TraceError{ClassId} << "Unable to write the texture to the descriptor set of PBR material '" << this->name() << "' !";
-
-					return false;
-				}
-			}
-		}
-
-		/* Write the automatic reflection cubemap at the reserved binding point. */
-		if ( !m_descriptorSet->writeCombinedImageSampler(m_automaticReflectionBindingPoint, cubemap) )
-		{
-			TraceError{ClassId} << "Unable to write the automatic reflection cubemap to the descriptor set of PBR material '" << this->name() << "' !";
-
-			return false;
 		}
 
 		return true;
@@ -1006,7 +926,7 @@ namespace EmEn::Graphics::Material
 	bool
 	PBRResource::isComplex () const noexcept
 	{
-		return this->isComponentPresent(ComponentType::Reflection) || this->isComponentPresent(ComponentType::Refraction);
+		return this->isComponentPresent(ComponentType::Reflection) || this->isComponentPresent(ComponentType::Refraction) || m_isUsingEnvironmentCubemap || m_isUsingEnvironmentCubemapForRefraction;
 	}
 
 	const Physics::SurfacePhysicalProperties &
@@ -1154,6 +1074,11 @@ namespace EmEn::Graphics::Material
 				 * We pass "1.0" as the amount since IBL contribution is computed in the BRDF. */
 				lightGenerator.declareSurfaceReflection(componentIt->second->variableName(), "1.0");
 			}
+			else if ( m_isUsingEnvironmentCubemap )
+			{
+				/* NOTE: When using automatic reflection with bindless textures, the variable is named SurfaceReflectionColor. */
+				lightGenerator.declareSurfaceReflection(SurfaceReflectionColor, "1.0");
+			}
 		}
 
 		/* Refraction component (for glass-like materials) */
@@ -1165,6 +1090,11 @@ namespace EmEn::Graphics::Material
 				/* NOTE: For PBR glass materials, Fresnel will automatically blend between reflection and refraction.
 				 * We pass "1.0" as the amount since the Fresnel equation handles the blend ratio. */
 				lightGenerator.declareSurfaceRefraction(componentIt->second->variableName(), "1.0", MaterialUB(UniformBlock::Component::RefractionIOR));
+			}
+			else if ( m_isUsingEnvironmentCubemapForRefraction )
+			{
+				/* NOTE: When using automatic refraction with bindless textures, the variable is named SurfaceRefractionColor. */
+				lightGenerator.declareSurfaceRefraction(SurfaceRefractionColor, "1.0", MaterialUB(UniformBlock::Component::RefractionIOR));
 			}
 		}
 
@@ -1274,7 +1204,7 @@ namespace EmEn::Graphics::Material
 
 		const auto * geometry = generator.getGeometryInterface();
 
-		if ( !generator.highQualityLightEnabled() && !generator.declareMaterialUniformBlock(*this, vertexShader, 0) )
+		if ( !generator.highQualityEnabled() && !generator.declareMaterialUniformBlock(*this, vertexShader, 0) )
 		{
 			return false;
 		}
@@ -1308,12 +1238,13 @@ namespace EmEn::Graphics::Material
 			vertexShader.requestSynthesizeInstruction(ShaderVariable::PrimaryVertexColor);
 		}
 
-		/* Reflection/IBL component setup. */
-		if ( this->isComponentPresent(ComponentType::Reflection) || this->isComponentPresent(ComponentType::Refraction) )
+		/* Reflection/IBL component setup.
+		 * NOTE: Also setup for automatic reflection using bindless textures. */
+		if ( this->isComponentPresent(ComponentType::Reflection) || this->isComponentPresent(ComponentType::Refraction) || m_isUsingEnvironmentCubemap )
 		{
-			const auto isCubemap = generator.renderTarget()->isCubemap();
+			[[maybe_unused]] const auto isCubemap = generator.renderTarget()->isCubemap();
 
-			if ( generator.highQualityReflectionEnabled() )
+			if ( generator.highQualityEnabled() )
 			{
 				vertexShader.requestSynthesizeInstruction(ShaderVariable::PositionWorldSpace);
 
@@ -1324,36 +1255,42 @@ namespace EmEn::Graphics::Material
 					vertexShader.requestSynthesizeInstruction(ShaderVariable::TangentToWorldMatrix);
 				}
 
-				/* NOTE: Camera world position is read directly from View UBO instead of computing inverse(ViewMatrix). */
+				/* NOTE: Camera world position is read directly from View UBO instead of computing inverse(ViewMatrix).
+				 * IMPORTANT: PositionWorldSpace is NOT per-face data, it's shared for the whole cubemap,
+				 * so we always use 'false' for isCubemap parameter. */
 				vertexShader.declare(Declaration::StageOutput{generator.getNextShaderVariableLocation(), GLSL::FloatVector3, "CameraWorldPosition", GLSL::Flat});
 
 				Code(vertexShader) <<
-					"CameraWorldPosition = " << ViewUB(UniformBlock::Component::PositionWorldSpace, isCubemap) << ".xyz;";
+					"CameraWorldPosition = " << ViewUB(UniformBlock::Component::PositionWorldSpace, false) << ".xyz;";
 			}
 			else
 			{
 				vertexShader.requestSynthesizeInstruction(ShaderVariable::PositionWorldSpace, VariableScope::Local);
 				vertexShader.requestSynthesizeInstruction(ShaderVariable::NormalWorldSpace, VariableScope::Local);
 
-				if ( this->isComponentPresent(ComponentType::Reflection) )
+				if ( this->isComponentPresent(ComponentType::Reflection) || m_isUsingEnvironmentCubemap )
 				{
 					vertexShader.declare(Declaration::StageOutput{generator.getNextShaderVariableLocation(), GLSL::FloatVector3, ShaderVariable::ReflectionTextureCoordinates, GLSL::Smooth});
 
-					/* NOTE: Negate Y to convert from engine Y-DOWN to cubemap Y-UP convention (same as skybox). */
+					/* NOTE: Negate Y to convert from engine Y-DOWN to cubemap Y-UP convention (same as skybox).
+					 * IMPORTANT: PositionWorldSpace is NOT per-face data, it's shared for the whole cubemap,
+					 * so we always use 'false' for isCubemap parameter. */
 					Code(vertexShader) <<
-						"vec3 reflectDir = reflect(normalize(" << ShaderVariable::PositionWorldSpace << ".xyz - " << ViewUB(UniformBlock::Component::PositionWorldSpace, isCubemap) << ".xyz), " << ShaderVariable::NormalWorldSpace << ");" << Line::End <<
+						"vec3 reflectDir = reflect(normalize(" << ShaderVariable::PositionWorldSpace << ".xyz - " << ViewUB(UniformBlock::Component::PositionWorldSpace, false) << ".xyz), " << ShaderVariable::NormalWorldSpace << ");" << Line::End <<
 						ShaderVariable::ReflectionTextureCoordinates << " = vec3(reflectDir.x, -reflectDir.y, reflectDir.z);";
 				}
 
-				if ( this->isComponentPresent(ComponentType::Refraction) )
+				if ( this->isComponentPresent(ComponentType::Refraction) || m_isUsingEnvironmentCubemapForRefraction )
 				{
 					vertexShader.declare(Declaration::StageOutput{generator.getNextShaderVariableLocation(), GLSL::FloatVector3, ShaderVariable::RefractionTextureCoordinates, GLSL::Smooth});
 
 					/* NOTE: Negate Y to convert from engine Y-DOWN to cubemap Y-UP convention (same as skybox).
-					 * For refraction, we use IOR ratio: eta = 1.0 / IOR (air to material). */
+					 * For refraction, we use IOR ratio: eta = 1.0 / IOR (air to material).
+					 * IMPORTANT: PositionWorldSpace is NOT per-face data, it's shared for the whole cubemap,
+					 * so we always use 'false' for isCubemap parameter. */
 					Code(vertexShader) <<
 						"float eta = 1.0 / " << MaterialUB(UniformBlock::Component::RefractionIOR) << ";" << Line::End <<
-						"vec3 refractDir = refract(normalize(" << ShaderVariable::PositionWorldSpace << ".xyz - " << ViewUB(UniformBlock::Component::PositionWorldSpace, isCubemap) << ".xyz), " << ShaderVariable::NormalWorldSpace << ", eta);" << Line::End <<
+						"vec3 refractDir = refract(normalize(" << ShaderVariable::PositionWorldSpace << ".xyz - " << ViewUB(UniformBlock::Component::PositionWorldSpace, false) << ".xyz), " << ShaderVariable::NormalWorldSpace << ", eta);" << Line::End <<
 						ShaderVariable::RefractionTextureCoordinates << " = vec3(refractDir.x, -refractDir.y, refractDir.z);";
 				}
 			}
@@ -1392,6 +1329,133 @@ namespace EmEn::Graphics::Material
 	}
 
 	bool
+	PBRResource::generateBindlessReflectionFragmentShader (const Generator::Abstract & generator, FragmentShader & fragmentShader) const noexcept
+	{
+		/* NOTE: For automatic reflection with bindless textures, we use the scene's environment
+		 * cubemap from the bindless array. No per-material reflection component is needed. */
+
+		/* Get the bindless set index from the program. */
+		const auto bindlessSetIndex = generator.shaderProgram()->setIndex(SetType::PerBindless);
+
+		/* Enable the nonuniform qualifier extension. */
+		fragmentShader.setExtensionBehavior(GLSL::Extension::NonUniformQualifier, GLSL::Extension::Require);
+
+		/* Declare the bindless cubemap array (unbounded). */
+		if ( !fragmentShader.declare(Declaration::Sampler{
+			bindlessSetIndex,
+			BindlessTextureManager::TextureCubeBinding,
+			GLSL::SamplerCube,
+			Bindless::TexturesCube,
+			Declaration::Sampler::UnboundedArray}) )
+		{
+			TraceError{ClassId} << "Failed to declare bindless cubemap sampler array !";
+
+			return false;
+		}
+
+		/* Generate the reflection sampling code using bindless textures. */
+		if ( generator.highQualityEnabled() )
+		{
+			if ( this->isComponentPresent(ComponentType::Normal) )
+			{
+				Code(fragmentShader, Location::Top) << "const vec3 reflectionNormal = normalize(" << ShaderVariable::TangentToWorldMatrix << "[0] * " << SurfaceNormalVector << ".x + " << ShaderVariable::TangentToWorldMatrix << "[1] * " << SurfaceNormalVector << ".y + " << ShaderVariable::NormalWorldSpace << " * " << SurfaceNormalVector << ".z);";
+			}
+			else
+			{
+				Code(fragmentShader, Location::Top) << "const vec3 reflectionNormal = normalize(" << ShaderVariable::NormalWorldSpace << ");";
+			}
+
+			/* NOTE: Negate Y to convert from engine Y-DOWN to cubemap Y-UP convention (same as skybox). */
+			Code(fragmentShader, Location::Top) <<
+				"const vec3 reflectionI = normalize(" << ShaderVariable::PositionWorldSpace << ".xyz - CameraWorldPosition);" << Line::End <<
+				"const vec3 reflectDir = reflect(reflectionI, reflectionNormal);" << Line::End <<
+				"const vec3 " << ShaderVariable::ReflectionTextureCoordinates << " = vec3(reflectDir.x, -reflectDir.y, reflectDir.z);" << Line::End <<
+				"const vec4 " << SurfaceReflectionColor << " = texture(" << Bindless::TexturesCube << "[" << GLSL::Functions::NonUniformEXT << "(" << BindlessTextureManager::EnvironmentCubemapSlot << ")]" << ", " << ShaderVariable::ReflectionTextureCoordinates << ");";
+		}
+		else
+		{
+			/* Low quality: use pre-computed reflection coordinates from vertex shader.
+			 * NOTE: Reflection direction was already computed in vertex shader and passed via ReflectionTextureCoordinates. */
+			Code(fragmentShader, Location::Top) <<
+				"const vec4 " << SurfaceReflectionColor << " = texture(" << Bindless::TexturesCube << "[" << GLSL::Functions::NonUniformEXT << "(" << BindlessTextureManager::EnvironmentCubemapSlot << ")]" << ", " << ShaderVariable::ReflectionTextureCoordinates << ");";
+		}
+
+		return true;
+	}
+
+	bool
+	PBRResource::generateBindlessRefractionFragmentShader (const Generator::Abstract & generator, FragmentShader & fragmentShader) const noexcept
+	{
+		/* NOTE: For automatic refraction with bindless textures, we use the scene's environment
+		 * cubemap from the bindless array. No per-material refraction component is needed. */
+
+		/* NOTE: The bindless cubemap array declaration is shared with reflection.
+		 * If reflection was already generated, the array is already declared. */
+
+		/* Get the bindless set index from the program. */
+		const auto bindlessSetIndex = generator.shaderProgram()->setIndex(SetType::PerBindless);
+
+		/* Enable the nonuniform qualifier extension. */
+		fragmentShader.setExtensionBehavior(GLSL::Extension::NonUniformQualifier, GLSL::Extension::Require);
+
+		/* Declare the bindless cubemap array (unbounded) if not already declared by reflection. */
+		if ( !this->isComponentPresent(ComponentType::Reflection) && !m_isUsingEnvironmentCubemap )
+		{
+			if ( !fragmentShader.declare(Declaration::Sampler{
+				bindlessSetIndex,
+				BindlessTextureManager::TextureCubeBinding,
+				GLSL::SamplerCube,
+				Bindless::TexturesCube,
+				Declaration::Sampler::UnboundedArray}) )
+			{
+				TraceError{ClassId} << "Failed to declare bindless cubemap sampler array for refraction !";
+
+				return false;
+			}
+		}
+
+		/* Generate the refraction sampling code using bindless textures. */
+		if ( generator.highQualityEnabled() )
+		{
+			/* High quality: compute refraction direction in fragment shader.
+			 * NOTE: Reuse reflectionNormal and reflectionI if already declared by reflection (explicit component or bindless).
+			 * When m_isUsingEnvironmentCubemap is true, bindless reflection is always generated before refraction. */
+			const bool reflectionAlreadyDeclared = this->isComponentPresent(ComponentType::Reflection) || m_isUsingEnvironmentCubemap;
+
+			if ( !reflectionAlreadyDeclared )
+			{
+				if ( this->isComponentPresent(ComponentType::Normal) )
+				{
+					Code(fragmentShader, Location::Top) << "const vec3 reflectionNormal = normalize(" << ShaderVariable::TangentToWorldMatrix << "[0] * " << SurfaceNormalVector << ".x + " << ShaderVariable::TangentToWorldMatrix << "[1] * " << SurfaceNormalVector << ".y + " << ShaderVariable::NormalWorldSpace << " * " << SurfaceNormalVector << ".z);";
+				}
+				else
+				{
+					Code(fragmentShader, Location::Top) << "const vec3 reflectionNormal = normalize(" << ShaderVariable::NormalWorldSpace << ");";
+				}
+
+				Code(fragmentShader, Location::Top) << "const vec3 reflectionI = normalize(" << ShaderVariable::PositionWorldSpace << ".xyz - CameraWorldPosition);";
+			}
+
+			/* NOTE: Negate Y to convert from engine Y-DOWN to cubemap Y-UP convention (same as skybox).
+			 * For refraction, eta = 1.0 / IOR (air to material). */
+			Code(fragmentShader, Location::Top) <<
+				"const float refractionEta = 1.0 / " << MaterialUB(UniformBlock::Component::RefractionIOR) << ";" << Line::End <<
+				"const vec3 refractDir = refract(reflectionI, reflectionNormal, refractionEta);" << Line::End <<
+				"const vec3 " << ShaderVariable::RefractionTextureCoordinates << " = vec3(refractDir.x, -refractDir.y, refractDir.z);" << Line::End <<
+				"const vec4 " << SurfaceRefractionColor << " = texture(" << Bindless::TexturesCube << "[" << GLSL::Functions::NonUniformEXT << "(" << BindlessTextureManager::EnvironmentCubemapSlot << ")]" << ", " << ShaderVariable::RefractionTextureCoordinates << ");";
+		}
+		else
+		{
+			/* Low quality: use pre-computed refraction coordinates from vertex shader.
+			 * NOTE: Refraction direction was already computed in vertex shader and passed via RefractionTextureCoordinates. */
+			Code(fragmentShader, Location::Top) <<
+				"const vec4 " << SurfaceRefractionColor << " = texture(" << Bindless::TexturesCube << "[" << GLSL::Functions::NonUniformEXT << "(" << BindlessTextureManager::EnvironmentCubemapSlot << ")]" << ", " << ShaderVariable::RefractionTextureCoordinates << ");";
+		}
+
+		return true;
+	}
+
+	bool
 	PBRResource::generateFragmentShaderCode (Generator::Abstract & generator, LightGenerator & lightGenerator, FragmentShader & fragmentShader) const noexcept
 	{
 		if ( !this->isCreated() )
@@ -1412,7 +1476,7 @@ namespace EmEn::Graphics::Material
 
 		/* Normal component.
 		 * NOTE: Get a sample from a texture in range [0,1], convert it to a normalized range of [-1, 1]. */
-		if ( this->isComponentPresent(ComponentType::Reflection) || this->isComponentPresent(ComponentType::Refraction) || !lightGenerator.isAmbientPass() )
+		if ( this->isComponentPresent(ComponentType::Reflection) || this->isComponentPresent(ComponentType::Refraction) || m_isUsingEnvironmentCubemap || !lightGenerator.isAmbientPass() )
 		{
 			if ( !this->generateTextureComponentFragmentShader(ComponentType::Normal, [] (FragmentShader & shader, const Texture * component) {
 				Code{shader, Location::Top} << "const vec3 " << component->variableName() << " = normalize(texture(" << component->samplerName() << ", " << textCoords(component) << ").rgb * 2.0 - 1.0);";
@@ -1466,9 +1530,20 @@ namespace EmEn::Graphics::Material
 			return false;
 		}
 
-		/* Reflection/IBL component. */
-		if ( !this->generateTextureComponentFragmentShader(ComponentType::Reflection, [&] (FragmentShader & shader, const Texture * component) {
-			if ( generator.highQualityReflectionEnabled() )
+		/* Reflection/IBL component.
+		 * NOTE: When automatic reflection is enabled AND bindless textures are supported,
+		 * use the bindless texture array instead of per-material sampler. */
+		if ( m_isUsingEnvironmentCubemap && generator.bindlessTexturesEnabled() )
+		{
+			if ( !this->generateBindlessReflectionFragmentShader(generator, fragmentShader) )
+			{
+				TraceError{ClassId} << "Unable to generate bindless fragment code for the reflection component of PBR material '" << this->name() << "' !";
+
+				return false;
+			}
+		}
+		else if ( !this->generateTextureComponentFragmentShader(ComponentType::Reflection, [&] (FragmentShader & shader, const Texture * component) {
+			if ( generator.highQualityEnabled() )
 			{
 				if ( this->isComponentPresent(ComponentType::Normal) )
 				{
@@ -1499,54 +1574,70 @@ namespace EmEn::Graphics::Material
 			return false;
 		}
 
-		/* Refraction component (for glass-like materials). */
-		if ( !this->generateTextureComponentFragmentShader(ComponentType::Refraction, [&] (FragmentShader & shader, const Texture * component) {
-			if ( generator.highQualityReflectionEnabled() )
-			{
-				if ( this->isComponentPresent(ComponentType::Normal) )
-				{
-					/* Reuse reflectionNormal if already declared by reflection, otherwise declare it. */
-					if ( !this->isComponentPresent(ComponentType::Reflection) )
-					{
-						Code(shader, Location::Top) <<
-							"const vec3 reflGeomN = normalize(" << ShaderVariable::NormalWorldSpace << ");" << Line::End <<
-							"const vec3 reflRawT = " << ShaderVariable::TangentToWorldMatrix << "[0];" << Line::End <<
-							"const vec3 reflGeomT = normalize(reflRawT - reflGeomN * dot(reflGeomN, reflRawT));" << Line::End <<
-							"const vec3 reflGeomB = cross(reflGeomN, reflGeomT) * sign(dot(cross(reflGeomN, reflGeomT), " << ShaderVariable::TangentToWorldMatrix << "[1]));" << Line::End <<
-							"const vec3 reflectionNormal = normalize(reflGeomT * " << SurfaceNormalVector << ".x + reflGeomB * " << SurfaceNormalVector << ".y + reflGeomN * " << SurfaceNormalVector << ".z);";
-					}
-				}
-				else if ( !this->isComponentPresent(ComponentType::Reflection) )
-				{
-					Code(shader, Location::Top) << "const vec3 reflectionNormal = normalize(" << ShaderVariable::NormalWorldSpace << ");";
-				}
-
-				/* NOTE: Negate Y to convert from engine Y-DOWN to cubemap Y-UP convention (same as skybox). */
-				Code(shader, Location::Top) <<
-					"const float eta = 1.0 / " << MaterialUB(UniformBlock::Component::RefractionIOR) << ";" << Line::End;
-
-				/* Reuse reflectionI if already declared by reflection, otherwise declare it. */
-				if ( !this->isComponentPresent(ComponentType::Reflection) )
-				{
-					Code(shader, Location::Top) << "const vec3 reflectionI = normalize(" << ShaderVariable::PositionWorldSpace << ".xyz - CameraWorldPosition);" << Line::End;
-				}
-
-				Code(shader, Location::Top) <<
-					"const vec3 refractDir = refract(reflectionI, reflectionNormal, eta);" << Line::End <<
-					"const vec3 " << ShaderVariable::RefractionTextureCoordinates << " = vec3(refractDir.x, -refractDir.y, refractDir.z);" << Line::End <<
-					"const vec4 " << component->variableName() << " = texture(" << component->samplerName() << ", " << ShaderVariable::RefractionTextureCoordinates << ");";
-			}
-			else
-			{
-				Code(shader, Location::Top) << "const vec4 " << component->variableName() << " = texture(" << component->samplerName() << ", " << ShaderVariable::RefractionTextureCoordinates << ");";
-			}
-
-			return true;
-		}, fragmentShader, materialSet) )
+		/* Refraction component (for glass-like materials).
+		 * NOTE: When automatic refraction is enabled AND bindless textures are supported,
+		 * use the bindless texture array instead of per-material sampler. */
+		if ( m_isUsingEnvironmentCubemapForRefraction && generator.bindlessTexturesEnabled() && !this->isComponentPresent(ComponentType::Refraction) )
 		{
-			TraceError{ClassId} << "Unable to generate fragment code for the refraction component of PBR material '" << this->name() << "' !";
+			if ( !this->generateBindlessRefractionFragmentShader(generator, fragmentShader) )
+			{
+				TraceError{ClassId} << "Unable to generate bindless fragment code for the refraction component of PBR material '" << this->name() << "' !";
 
-			return false;
+				return false;
+			}
+		}
+		else
+		{
+			const bool reflectionVariablesDeclared = this->isComponentPresent(ComponentType::Reflection) || (m_isUsingEnvironmentCubemap && generator.bindlessTexturesEnabled());
+
+			if ( !this->generateTextureComponentFragmentShader(ComponentType::Refraction, [&] (FragmentShader & shader, const Texture * component) {
+				if ( generator.highQualityEnabled() )
+				{
+					if ( this->isComponentPresent(ComponentType::Normal) )
+					{
+						/* Reuse reflectionNormal if already declared by reflection (explicit or bindless), otherwise declare it. */
+						if ( !reflectionVariablesDeclared )
+						{
+							Code(shader, Location::Top) <<
+								"const vec3 reflGeomN = normalize(" << ShaderVariable::NormalWorldSpace << ");" << Line::End <<
+								"const vec3 reflRawT = " << ShaderVariable::TangentToWorldMatrix << "[0];" << Line::End <<
+								"const vec3 reflGeomT = normalize(reflRawT - reflGeomN * dot(reflGeomN, reflRawT));" << Line::End <<
+								"const vec3 reflGeomB = cross(reflGeomN, reflGeomT) * sign(dot(cross(reflGeomN, reflGeomT), " << ShaderVariable::TangentToWorldMatrix << "[1]));" << Line::End <<
+								"const vec3 reflectionNormal = normalize(reflGeomT * " << SurfaceNormalVector << ".x + reflGeomB * " << SurfaceNormalVector << ".y + reflGeomN * " << SurfaceNormalVector << ".z);";
+						}
+					}
+					else if ( !reflectionVariablesDeclared )
+					{
+						Code(shader, Location::Top) << "const vec3 reflectionNormal = normalize(" << ShaderVariable::NormalWorldSpace << ");";
+					}
+
+					/* NOTE: Negate Y to convert from engine Y-DOWN to cubemap Y-UP convention (same as skybox). */
+					Code(shader, Location::Top) <<
+						"const float eta = 1.0 / " << MaterialUB(UniformBlock::Component::RefractionIOR) << ";" << Line::End;
+
+					/* Reuse reflectionI if already declared by reflection (explicit or bindless), otherwise declare it. */
+					if ( !reflectionVariablesDeclared )
+					{
+						Code(shader, Location::Top) << "const vec3 reflectionI = normalize(" << ShaderVariable::PositionWorldSpace << ".xyz - CameraWorldPosition);" << Line::End;
+					}
+
+					Code(shader, Location::Top) <<
+						"const vec3 refractDir = refract(reflectionI, reflectionNormal, eta);" << Line::End <<
+						"const vec3 " << ShaderVariable::RefractionTextureCoordinates << " = vec3(refractDir.x, -refractDir.y, refractDir.z);" << Line::End <<
+						"const vec4 " << component->variableName() << " = texture(" << component->samplerName() << ", " << ShaderVariable::RefractionTextureCoordinates << ");";
+				}
+				else
+				{
+					Code(shader, Location::Top) << "const vec4 " << component->variableName() << " = texture(" << component->samplerName() << ", " << ShaderVariable::RefractionTextureCoordinates << ");";
+				}
+
+				return true;
+			}, fragmentShader, materialSet) )
+			{
+				TraceError{ClassId} << "Unable to generate fragment code for the refraction component of PBR material '" << this->name() << "' !";
+
+				return false;
+			}
 		}
 
 		/* Auto-Illumination (emissive) component. */
@@ -1854,6 +1945,44 @@ namespace EmEn::Graphics::Material
 	}
 
 	bool
+	PBRResource::setReflectionComponentFromEnvironmentCubemap (float IBLIntensity) noexcept
+	{
+		if ( this->isCreated() )
+		{
+			TraceWarning{ClassId} <<
+				"The resource '" << this->name() << "' is created ! "
+				"Unable to create or change the reflection component.";
+
+			return false;
+		}
+
+		m_isUsingEnvironmentCubemap = true;
+
+		m_materialProperties[IBLIntensityOffset] = std::clamp(IBLIntensity, 0.0F, 1.0F);
+
+		return true;
+	}
+
+	bool
+	PBRResource::setRefractionComponentFromEnvironmentCubemap (float ior) noexcept
+	{
+		if ( this->isCreated() )
+		{
+			TraceWarning{ClassId} <<
+				"The resource '" << this->name() << "' is created ! "
+				"Unable to create or change the refraction component.";
+
+			return false;
+		}
+
+		m_isUsingEnvironmentCubemapForRefraction = true;
+
+		this->setIOR(ior);
+
+		return true;
+	}
+
+	bool
 	PBRResource::setRefractionComponent (const std::shared_ptr< TextureResource::Abstract > & texture, float ior) noexcept
 	{
 		if ( this->isCreated() )
@@ -2069,14 +2198,6 @@ namespace EmEn::Graphics::Material
 		m_materialProperties[IBLIntensityOffset] = std::clamp(value, 0.0F, 1.0F);
 
 		m_videoMemoryUpdated = true;
-	}
-
-	void
-	PBRResource::enableAutomaticReflection (float iblIntensity) noexcept
-	{
-		m_useAutomaticReflection = true;
-
-		m_materialProperties[IBLIntensityOffset] = std::clamp(iblIntensity, 0.0F, 1.0F);
 	}
 
 	void

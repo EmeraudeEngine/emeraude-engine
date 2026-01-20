@@ -838,7 +838,16 @@ namespace EmEn::Vulkan
 			requirements.featuresVK10().geometryShader = VK_TRUE; // Required for TBN space display
 		}
 		requirements.featuresVK10().samplerAnisotropy = VK_TRUE;
+		requirements.featuresVK10().shaderImageGatherExtended = VK_TRUE; // Required for PCF Filtering
 		requirements.featuresVK11().multiview = VK_TRUE; // Required for cubemap render-to-texture (Vulkan 1.1+)
+		{
+			/* Descriptor indexing features (Vulkan 1.2) - Required for bindless textures. */
+			requirements.featuresVK12().descriptorIndexing = VK_TRUE;
+			requirements.featuresVK12().descriptorBindingPartiallyBound = VK_TRUE;
+			requirements.featuresVK12().descriptorBindingSampledImageUpdateAfterBind = VK_TRUE;
+			requirements.featuresVK12().runtimeDescriptorArray = VK_TRUE;
+			requirements.featuresVK12().shaderSampledImageArrayNonUniformIndexing = VK_TRUE;
+		}
 		requirements.featuresVK13().shaderDemoteToHelperInvocation = VK_TRUE;
 
 		/* NOTE: According to Vulkan spec, if a device exposes VK_KHR_portability_subset,
@@ -1239,6 +1248,13 @@ namespace EmEn::Vulkan
 			//return false;
 		}
 
+		if ( features.shaderImageGatherExtended == 0 )
+		{
+			TraceWarning{ClassId} << "The physical device '" << properties.deviceName << "' is missing 'shaderImageGatherExtended' feature !";
+
+			//return false;
+		}
+
 		if ( features.textureCompressionETC2 == 0 )
 		{
 			TraceWarning{ClassId} << "The physical device '" << properties.deviceName << "' is missing 'textureCompressionETC2' feature !";
@@ -1482,6 +1498,44 @@ namespace EmEn::Vulkan
 			TraceWarning{ClassId} << "The physical device '" << properties.deviceName << "' is missing 'inheritedQueries' feature !";
 
 			//return false;
+		}
+
+		/* Vulkan 1.2 features - Descriptor indexing (required for bindless textures). */
+		const auto & featuresVK12 = physicalDevice->featuresVK12();
+
+		if ( featuresVK12.descriptorIndexing == 0 )
+		{
+			TraceError{ClassId} << "The physical device '" << properties.deviceName << "' is missing 'descriptorIndexing' feature !";
+
+			return false;
+		}
+
+		if ( featuresVK12.descriptorBindingPartiallyBound == 0 )
+		{
+			TraceError{ClassId} << "The physical device '" << properties.deviceName << "' is missing 'descriptorBindingPartiallyBound' feature !";
+
+			return false;
+		}
+
+		if ( featuresVK12.descriptorBindingSampledImageUpdateAfterBind == 0 )
+		{
+			TraceError{ClassId} << "The physical device '" << properties.deviceName << "' is missing 'descriptorBindingSampledImageUpdateAfterBind' feature !";
+
+			return false;
+		}
+
+		if ( featuresVK12.runtimeDescriptorArray == 0 )
+		{
+			TraceError{ClassId} << "The physical device '" << properties.deviceName << "' is missing 'runtimeDescriptorArray' feature !";
+
+			return false;
+		}
+
+		if ( featuresVK12.shaderSampledImageArrayNonUniformIndexing == 0 )
+		{
+			TraceError{ClassId} << "The physical device '" << properties.deviceName << "' is missing 'shaderSampledImageArrayNonUniformIndexing' feature !";
+
+			return false;
 		}
 
 		return true;

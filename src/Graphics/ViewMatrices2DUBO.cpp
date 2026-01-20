@@ -86,16 +86,19 @@ namespace EmEn::Graphics
 			return;
 		}
 
-		const auto side = m_logicState.bufferData[ViewDistanceOffset] * this->getAspectRatio();
-
 		m_logicState.bufferData[ViewWidthOffset] = width;
 		m_logicState.bufferData[ViewHeightOffset] = height;
 		m_logicState.bufferData[ViewNearOffset] = nearDistance;
 		m_logicState.bufferData[ViewDistanceOffset] = farDistance;
 
+		/* NOTE: The farDistance parameter represents the TOTAL coverage size.
+		 * We divide by 2 to get the half-size for the orthographic projection bounds.
+		 * This makes coverageSize intuitive: coverageSize=100 means a 100x100 unit area. */
+		const auto halfSide = (m_logicState.bufferData[ViewDistanceOffset] * 0.5F) * this->getAspectRatio();
+
 		m_logicState.projection = Matrix< 4, float >::orthographicProjection(
-			-side, side,
-			-m_logicState.bufferData[ViewDistanceOffset], m_logicState.bufferData[ViewDistanceOffset],
+			-halfSide, halfSide,
+			-halfSide, halfSide,
 			m_logicState.bufferData[ViewNearOffset], m_logicState.bufferData[ViewDistanceOffset]
 		);
 

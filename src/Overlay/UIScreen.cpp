@@ -108,7 +108,7 @@ namespace EmEn::Overlay
 			);
 
 			/* Draw the surface. */
-			commandBuffer.draw(surfaceGeometry);
+			commandBuffer.draw(surfaceGeometry, 0, 1);
 		}
 	}
 

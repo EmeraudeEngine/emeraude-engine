@@ -174,7 +174,7 @@ namespace EmEn::Graphics::Geometry
 				/* If a sub-geometry mechanism is not used, we return 0 as offset. */
 				if ( m_subGeometries.empty() )
 				{
-					return {0, static_cast< uint32_t >(m_indexBufferObject->indexCount())};
+					return {0, m_indexBufferObject->indexCount()};
 				}
 
 				if ( subGeometryIndex >= m_subGeometries.size() )

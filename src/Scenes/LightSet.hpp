@@ -528,12 +528,20 @@ namespace EmEn::Scenes
 			bool updateVideoMemory () const noexcept;
 
 			/**
-			 * @brief Returns the descriptor set layout for a light.
+			 * @brief Returns the descriptor set layout for a light (UBO only, no shadow map).
 			 * @param layoutManager A reference to the layout manager.
 			 * @return std::shared_ptr< Vulkan::DescriptorSetLayout >
 			 */
 			[[nodiscard]]
 			static std::shared_ptr< Vulkan::DescriptorSetLayout > getDescriptorSetLayout (Vulkan::LayoutManager & layoutManager) noexcept;
+
+			/**
+			 * @brief Returns the descriptor set layout for a light with shadow map (UBO + shadow sampler).
+			 * @param layoutManager A reference to the layout manager.
+			 * @return std::shared_ptr< Vulkan::DescriptorSetLayout >
+			 */
+			[[nodiscard]]
+			static std::shared_ptr< Vulkan::DescriptorSetLayout > getDescriptorSetLayoutWithShadow (Vulkan::LayoutManager & layoutManager) noexcept;
 
 		private:
 

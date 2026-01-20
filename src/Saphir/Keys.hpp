@@ -27,6 +27,7 @@
 #pragma once
 
 /* STL inclusions. */
+#include <cstdint>
 #include <string>
 #include <sstream>
 
@@ -61,6 +62,9 @@ namespace EmEn::Saphir
 				constexpr auto Require = "require";
 				constexpr auto Warn = "warn";
 				constexpr auto Disable = "disable";
+
+				/* Extension names. */
+				constexpr auto NonUniformQualifier = "GL_EXT_nonuniform_qualifier";
 			}
 
 			namespace Macro
@@ -625,7 +629,26 @@ namespace EmEn::Saphir
 			namespace Functions
 			{
 				constexpr auto Length = "length";
+				constexpr auto NonUniformEXT = "nonuniformEXT";
 			}
+		}
+
+		/** @brief Bindless textures naming convention. */
+		namespace Bindless
+		{
+			constexpr auto Textures1D{"uBindlessTextures1D"};
+			constexpr auto Textures2D{"uBindlessTextures2D"};
+			constexpr auto Textures3D{"uBindlessTextures3D"};
+			constexpr auto TexturesCube{"uBindlessTexturesCube"};
+		}
+
+		/** @brief Specialization constants naming convention. */
+		namespace SpecializationConstant
+		{
+			/** @brief Specialization constant name for shadow mapping. */
+			constexpr auto UseShadow{"scUseShadow"};
+			/** @brief Specialization constant ID for shadow mapping (constant_id = 0). */
+			constexpr uint32_t UseShadowId{0};
 		}
 
 		/** Vertex attributes naming convention. */
@@ -680,6 +703,7 @@ namespace EmEn::Saphir
 			constexpr auto AmbientOcclusionSampler{"uAmbientOcclusionSampler"};
 			/* Lighting specific */
 			constexpr auto ShadowMapSampler{"uShadowMapSampler"};
+			constexpr auto ShadowMapArraySampler{"uShadowMapArraySampler"};
 		}
 
 		/** @brief Uniforms block variables naming convention. */
@@ -693,10 +717,12 @@ namespace EmEn::Saphir
 			{
 				constexpr auto View{"View"};
 				constexpr auto CubemapView{"CubemapView"};
+				constexpr auto CSMView{"CSMView"};
 				constexpr auto BasicMaterial{"BasicMaterial"};
 				constexpr auto StandardMaterial{"StandardMaterial"};
 				constexpr auto PBRMaterial{"PBRMaterial"};
 				constexpr auto DirectionalLight{"DirectionalLight"};
+				constexpr auto DirectionalLightCSM{"DirectionalLightCSM"};
 				constexpr auto PointLight{"PointLight"};
 				constexpr auto SpotLight{"SpotLight"};
 			}
@@ -707,6 +733,12 @@ namespace EmEn::Saphir
 				constexpr auto Instance{"instance"};
 				constexpr auto Amount{"amount"};
 				constexpr auto Scale{"scale"};
+				/* CSM specific */
+				constexpr auto CascadeViewProjectionMatrices{"cascadeViewProjectionMatrices"};
+				constexpr auto CascadeSplitDistances{"cascadeSplitDistances"};
+				constexpr auto CascadeCount{"cascadeCount"};
+				constexpr auto CascadeProperties{"cascadeProperties"};
+				constexpr auto ShadowBias{"shadowBias"};
 				/* View specific */
 				constexpr auto ProjectionMatrix{"projectionMatrix"};
 				constexpr auto ViewMatrix{"viewMatrix"};
@@ -742,6 +774,7 @@ namespace EmEn::Saphir
 				constexpr auto Radius{"radius"};
 				constexpr auto InnerCosAngle{"innerCosAngle"};
 				constexpr auto OuterCosAngle{"outerCosAngle"};
+				constexpr auto PCFRadius{"pcfRadius"};
 				constexpr auto ViewProjectionMatrix{"viewProjectionMatrix"};
 			}
 		}
@@ -802,6 +835,7 @@ namespace EmEn::Saphir
 			constexpr auto OutputFragment{"svOutputFragment"};
 			constexpr auto FragCoord{"svFragCoord"};
 			constexpr auto Light{"svLight"};
+			constexpr auto PositionLightSpace{"PositionLightSpace"};
 		}
 
 		/** @brief Shader block variables naming convention. */

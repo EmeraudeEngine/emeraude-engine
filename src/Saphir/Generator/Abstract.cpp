@@ -264,11 +264,40 @@ namespace EmEn::Saphir::Generator
 
 		if ( auto cachedProgram = renderer.findCachedProgram(programCacheKey); cachedProgram != nullptr )
 		{
-			m_shaderProgram = cachedProgram;
+			bool isCompatible = true;
 
-			renderer.notifyProgramReused();
+			/* Safety Check: Ensure the cached program's layout for Set 1 (Material) matches the current material.
+			 * This prevents collisions if the cache key hashing is insufficient or collides. */
+			if ( this->materialEnabled() )
+			{
+				const auto * materialLayout = this->getMaterialInterface()->descriptorSetLayout().get();
+				const auto * cachedPipelineLayout = cachedProgram->pipelineLayout().get();
 
-			return true;
+				/* Note: Set 1 is the material set. */
+				if ( cachedPipelineLayout != nullptr && materialLayout != nullptr && cachedProgram->setIndexes().isSetEnabled(SetType::PerModelLayer) )
+				{
+					const auto setIndex = cachedProgram->setIndex(SetType::PerModelLayer);
+					const auto & layouts = cachedPipelineLayout->descriptorSetLayouts();
+
+					if ( setIndex < layouts.size() )
+					{
+						const auto * cachedSet1Layout = layouts[setIndex].get();
+					
+						if ( cachedSet1Layout != nullptr && cachedSet1Layout->getHash() != materialLayout->getHash() )
+						{
+							isCompatible = false;
+							Tracer::warning(TracerTag, "Program cache key collision detected! Forcing regeneration.");
+						}
+					}
+				}
+			}
+
+			if ( isCompatible )
+			{
+				m_shaderProgram = cachedProgram;
+				renderer.notifyProgramReused();
+				return true;
+			}
 		}
 
 		if ( renderer.shaderManager().showSourceCode() )
@@ -370,7 +399,14 @@ namespace EmEn::Saphir::Generator
 		}
 		else
 		{
-			if ( m_shaderProgram->wasAdvancedMatricesEnabled() )
+			/* NOTE: In cubemap/CSM mode, the projection and view matrices come from the UBO (indexed by gl_ViewIndex).
+			 * We only need to push the model matrix (M) alone. The CPU code pushes only the model matrix at offset 0. */
+			if ( m_renderTarget->isCubemap() || m_renderTarget->isCascadedShadowMap() )
+			{
+				/* NOTE: Push only the model matrix (M). */
+				pushConstantBlock.addMember(Declaration::VariableType::Matrix4, PushConstant::Component::ModelMatrix);
+			}
+			else if ( m_shaderProgram->wasAdvancedMatricesEnabled() )
 			{
 				/* NOTE: Push the view matrix (V) and the model matrix (M). */
 				pushConstantBlock.addMember(Declaration::VariableType::Matrix4, PushConstant::Component::ViewMatrix);
@@ -438,6 +474,30 @@ namespace EmEn::Saphir::Generator
 				uniformBlock.addArrayMember(structure, UniformBlock::Component::Instance, 6);
 			}
 			uniformBlock.addMember(Declaration::VariableType::Matrix4, UniformBlock::Component::ProjectionMatrix);
+			uniformBlock.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::PositionWorldSpace);
+			uniformBlock.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::Velocity);
+			uniformBlock.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::ViewProperties);
+			uniformBlock.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::AmbientLightColor);
+			uniformBlock.addMember(Declaration::VariableType::Float, UniformBlock::Component::AmbientLightIntensity);
+
+			return shader.declare(uniformBlock);
+		}
+
+		if ( m_renderTarget->isCascadedShadowMap() )
+		{
+			/* CSM UBO layout (must match ViewMatricesCascadedUBO):
+			 * mat4[4] cascadeViewProjectionMatrices - offset 0
+			 * vec4 cascadeSplitDistances - offset 256
+			 * vec4 (cascadeCount, shadowBias, reserved, reserved) - offset 272
+			 * vec4 worldPosition - offset 288
+			 * vec4 velocity - offset 304
+			 * vec4 viewProperties - offset 320
+			 * vec4 ambientLightColor - offset 336
+			 * float ambientLightIntensity - offset 352 */
+			Declaration::UniformBlock uniformBlock{setIndex, binding, Declaration::MemoryLayout::Std140, UniformBlock::Type::CSMView, UniformBlock::View};
+			uniformBlock.addArrayMember(Declaration::VariableType::Matrix4, UniformBlock::Component::CascadeViewProjectionMatrices, 4);
+			uniformBlock.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::CascadeSplitDistances);
+			uniformBlock.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::CascadeProperties); /* (cascadeCount, shadowBias, ...) */
 			uniformBlock.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::PositionWorldSpace);
 			uniformBlock.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::Velocity);
 			uniformBlock.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::ViewProperties);

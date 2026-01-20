@@ -88,6 +88,8 @@ namespace EmEn::Saphir::Generator
 
 			/**
 			 * @brief Generates the vertex shader stage of the graphics pipeline.
+			 * @note For cubemap shadow maps, the vertex shader uses multiview rendering with gl_ViewIndex
+			 *       to select the correct view matrix from the UBO, instead of using a geometry shader.
 			 * @param program A reference to the program being constructed.
 			 * @return bool
 			 */
@@ -95,15 +97,8 @@ namespace EmEn::Saphir::Generator
 			bool generateVertexShader (Program & program) noexcept;
 
 			/**
-			 * @brief Generates the geometry shader stage of the graphics pipeline.
-			 * @param program A reference to the program being constructed.
-			 * @return bool
-			 */
-			[[nodiscard]]
-			bool generateGeometryShader (Program & program) noexcept;
-
-			/**
 			 * @brief Generates the fragment shader stage of the graphics pipeline.
+			 * @note Only used for cubemap shadow maps to write linear depth.
 			 * @param program A reference to the program being constructed.
 			 * @return bool
 			 */

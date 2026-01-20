@@ -38,8 +38,10 @@
 
 /* Local inclusions. */
 #include "DefinitionResource.hpp"
-#include "Resources/Manager.hpp"
+#include "Graphics/BindlessTextureManager.hpp"
+#include "Graphics/Renderer.hpp"
 #include "PrimaryServices.hpp"
+#include "Resources/Manager.hpp"
 
 namespace EmEn::Scenes
 {
@@ -94,7 +96,7 @@ namespace EmEn::Scenes
 			return nullptr;
 		}
 
-		auto newScene = std::make_shared< Scene >(m_resourceManager, m_graphicsRenderer, m_audioManager, sceneName, boundary, background, groundLevel, seaLevel);
+		auto newScene = std::make_shared< Scene >(m_graphicsRenderer, m_audioManager, sceneName, boundary, background, groundLevel, seaLevel);
 
 		this->notify(SceneCreated, newScene);
 

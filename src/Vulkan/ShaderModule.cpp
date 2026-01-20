@@ -26,10 +26,14 @@
 
 #include "ShaderModule.hpp"
 
+/* STL inclusions. */
+#include <cstring>
+
 /* Local inclusions. */
 #include "Device.hpp"
 #include "Utility.hpp"
 #include "Tracer.hpp"
+#include "Libs/Hash/FNV1a.hpp"
 
 namespace EmEn::Vulkan
 {
@@ -114,9 +118,9 @@ namespace EmEn::Vulkan
 		mapEntry.size = 0;*/
 
 		m_specializationInfo.mapEntryCount = static_cast< uint32_t >(m_mapEntries.size());
-		m_specializationInfo.pMapEntries = m_mapEntries.data();
-		m_specializationInfo.dataSize = 0;
-		m_specializationInfo.pData = nullptr;
+		m_specializationInfo.pMapEntries = m_mapEntries.empty() ? nullptr : m_mapEntries.data();
+		m_specializationInfo.dataSize = static_cast< uint32_t >(m_specializationData.size());
+		m_specializationInfo.pData = m_specializationData.empty() ? nullptr : m_specializationData.data();
 
 		m_pipelineShaderStageCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
 		m_pipelineShaderStageCreateInfo.pNext = nullptr;
@@ -131,5 +135,101 @@ namespace EmEn::Vulkan
 		m_pipelineShaderStageCreateInfo.pSpecializationInfo = m_mapEntries.empty() ? nullptr : &m_specializationInfo;
 
 		return true;
+	}
+
+	void
+	ShaderModule::setSpecializationConstant (uint32_t constantId, bool value) noexcept
+	{
+		/* GLSL booleans are 4 bytes (VK_TRUE/VK_FALSE). */
+		const VkBool32 vkValue = value ? VK_TRUE : VK_FALSE;
+		const auto offset = m_specializationData.size();
+
+		/* Append the value to the data buffer. */
+		m_specializationData.resize(offset + sizeof(VkBool32));
+		std::memcpy(m_specializationData.data() + offset, &vkValue, sizeof(VkBool32));
+
+		/* Add the map entry. */
+		VkSpecializationMapEntry entry{};
+		entry.constantID = constantId;
+		entry.offset = static_cast< uint32_t >(offset);
+		entry.size = sizeof(VkBool32);
+		m_mapEntries.push_back(entry);
+	}
+
+	void
+	ShaderModule::setSpecializationConstant (uint32_t constantId, int32_t value) noexcept
+	{
+		const auto offset = m_specializationData.size();
+
+		/* Append the value to the data buffer. */
+		m_specializationData.resize(offset + sizeof(int32_t));
+		std::memcpy(m_specializationData.data() + offset, &value, sizeof(int32_t));
+
+		/* Add the map entry. */
+		VkSpecializationMapEntry entry{};
+		entry.constantID = constantId;
+		entry.offset = static_cast< uint32_t >(offset);
+		entry.size = sizeof(int32_t);
+		m_mapEntries.push_back(entry);
+	}
+
+	void
+	ShaderModule::setSpecializationConstant (uint32_t constantId, uint32_t value) noexcept
+	{
+		const auto offset = m_specializationData.size();
+
+		/* Append the value to the data buffer. */
+		m_specializationData.resize(offset + sizeof(uint32_t));
+		std::memcpy(m_specializationData.data() + offset, &value, sizeof(uint32_t));
+
+		/* Add the map entry. */
+		VkSpecializationMapEntry entry{};
+		entry.constantID = constantId;
+		entry.offset = static_cast< uint32_t >(offset);
+		entry.size = sizeof(uint32_t);
+		m_mapEntries.push_back(entry);
+	}
+
+	void
+	ShaderModule::setSpecializationConstant (uint32_t constantId, float value) noexcept
+	{
+		const auto offset = m_specializationData.size();
+
+		/* Append the value to the data buffer. */
+		m_specializationData.resize(offset + sizeof(float));
+		std::memcpy(m_specializationData.data() + offset, &value, sizeof(float));
+
+		/* Add the map entry. */
+		VkSpecializationMapEntry entry{};
+		entry.constantID = constantId;
+		entry.offset = static_cast< uint32_t >(offset);
+		entry.size = sizeof(float);
+		m_mapEntries.push_back(entry);
+	}
+
+	size_t
+	ShaderModule::specializationConstantsHash () const noexcept
+	{
+		if ( m_mapEntries.empty() || m_specializationData.empty() )
+		{
+			return 0;
+		}
+
+		/* Hash the specialization data using FNV-1a algorithm.
+		 * NOTE: Create a string_view from the raw bytes for hashing. */
+		return Hash::FNV1a(std::string_view{reinterpret_cast< const char * >(m_specializationData.data()), m_specializationData.size()});
+	}
+
+	bool
+	ShaderModule::rebuildPipelineShaderStageCreateInfo () noexcept
+	{
+		if ( m_handle == VK_NULL_HANDLE )
+		{
+			Tracer::error(ClassId, "Cannot rebuild pipeline shader stage create info - shader module not created !");
+
+			return false;
+		}
+
+		return this->preparePipelineShaderStageCreateInfo();
 	}
 }

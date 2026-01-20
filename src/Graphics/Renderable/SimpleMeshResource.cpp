@@ -27,14 +27,19 @@
 #include "SimpleMeshResource.hpp"
 
 /* Local inclusions. */
-#include "Graphics/Geometry/VertexResource.hpp"
-#include "Graphics/Material/BasicResource.hpp"
+#include "MeshResource.hpp"
+#include "Libs/FastJSON.hpp"
+#include "Graphics/Geometry/Geometries.hpp"
+#include "Graphics/Material/Materials.hpp"
+#include "Graphics/Material/PBRResource.hpp"
 #include "Resources/Manager.hpp"
 
 namespace EmEn::Graphics::Renderable
 {
 	using namespace Libs;
 	using namespace Libs::Math;
+	using namespace Graphics::Geometry;
+	using namespace Graphics::Material;
 
 	bool
 	SimpleMeshResource::load (Resources::AbstractServiceProvider & serviceProvider) noexcept
@@ -44,12 +49,12 @@ namespace EmEn::Graphics::Renderable
 			return false;
 		}
 
-		if ( !this->setGeometry(serviceProvider.container< Geometry::VertexResource >()->getRandomResource()) )
+		if ( !this->setGeometry(serviceProvider.container< VertexResource >()->getDefaultResource()) )
 		{
 			return this->setLoadSuccess(false);
 		}
 
-		if ( !this->setMaterial(serviceProvider.container< Material::BasicResource >()->getRandomResource()) )
+		if ( !this->setMaterial(serviceProvider.container< BasicResource >()->getDefaultResource()) )
 		{
 			return this->setLoadSuccess(false);
 		}
@@ -58,16 +63,99 @@ namespace EmEn::Graphics::Renderable
 	}
 
 	bool
-	SimpleMeshResource::load (Resources::AbstractServiceProvider & /*serviceProvider*/, const Json::Value & /*data*/) noexcept
+	SimpleMeshResource::load (Resources::AbstractServiceProvider & serviceProvider, const Json::Value & data) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
 			return false;
 		}
 
-		Tracer::warning(ClassId, "FIXME: This function is not available yet !");
+		/* Parse geometry definition (same as MeshResource). */
+		const auto geometryType = FastJSON::getValidatedStringValue(data, MeshResource::GeometryTypeKey, Geometry::Types).value_or(IndexedVertexResource::ClassId);
+		const auto geometryResourceName = FastJSON::getValue< std::string >(data, MeshResource::GeometryNameKey);
 
-		return this->setLoadSuccess(false);
+		std::shared_ptr< Geometry::Interface > geometryResource;
+
+		if ( geometryType == VertexResource::ClassId )
+		{
+			if ( !geometryResourceName )
+			{
+				TraceError{ClassId} << "The key '" << MeshResource::GeometryNameKey << "' for '" << VertexResource::ClassId << "' is not present or not a string !";
+
+				return this->setLoadSuccess(false);
+			}
+
+			geometryResource = serviceProvider.container< VertexResource >()->getResource(geometryResourceName.value());
+		}
+		else if ( geometryType == IndexedVertexResource::ClassId )
+		{
+			if ( !geometryResourceName )
+			{
+				TraceError{ClassId} << "The key '" << MeshResource::GeometryNameKey << "' for '" << IndexedVertexResource::ClassId << "' is not present or not a string !";
+
+				return this->setLoadSuccess(false);
+			}
+
+			geometryResource = serviceProvider.container< IndexedVertexResource >()->getResource(geometryResourceName.value());
+		}
+		else
+		{
+			TraceWarning{ClassId} << "Geometry resource type '" << geometryType << "' is not handled !";
+
+			return this->setLoadSuccess(false);
+		}
+
+		if ( !this->setGeometry(geometryResource) )
+		{
+			return this->setLoadSuccess(false);
+		}
+
+		/* Parse material definition.
+		 * Two formats are supported:
+		 * 1. Multi-layer format (MeshResource compatible): "Layers": [ { "MaterialType": "...", ... } ]
+		 *    -> Only the first layer is used.
+		 * 2. Simplified format: "MaterialType": "...", "MaterialName": "..." at root level.
+		 */
+		const Json::Value * layerData = nullptr;
+
+		if ( data.isMember(MeshResource::LayersKey) && data[MeshResource::LayersKey].isArray() && !data[MeshResource::LayersKey].empty() )
+		{
+			/* Multi-layer format: use first layer only. */
+			layerData = &data[MeshResource::LayersKey][0U];
+		}
+		else if ( data.isMember(MeshResource::MaterialTypeKey) || data.isMember(MeshResource::MaterialNameKey) )
+		{
+			/* Simplified format: material info at root level. */
+			layerData = &data;
+		}
+		else
+		{
+			TraceError{ClassId} <<
+				"No material definition found ! Expected '" << MeshResource::LayersKey << "' array "
+				"or '" << MeshResource::MaterialTypeKey << "'/'" << MeshResource::MaterialNameKey << "' keys.";
+
+			return this->setLoadSuccess(false);
+		}
+
+		/* Parse material from the layer data. */
+		const auto materialResource = MeshResource::parseLayer(serviceProvider, *layerData);
+
+		if ( materialResource == nullptr )
+		{
+			Tracer::error(ClassId, "No suitable material resource found !");
+
+			return this->setLoadSuccess(false);
+		}
+
+		if ( !this->setMaterial(materialResource) )
+		{
+			return this->setLoadSuccess(false);
+		}
+
+		/* Parse rasterization options. */
+		m_rasterizationOptions = MeshResource::parseLayerOptions(*layerData);
+
+		return this->setLoadSuccess(true);
 	}
 
 	bool

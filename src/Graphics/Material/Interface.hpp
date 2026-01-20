@@ -69,6 +69,11 @@ namespace EmEn
 	{
 		class Renderer;
 		class SharedUniformBuffer;
+
+		namespace TextureResource
+		{
+			class TextureCubemap;
+		}
 	}
 }
 
@@ -333,29 +338,15 @@ namespace EmEn::Graphics::Material
 			virtual bool isComplex () const noexcept = 0;
 
 			/**
-			 * @brief Returns whether the material uses automatic scene reflection.
+			 * @brief Returns whether the material uses a global scene environment cubemap.
 			 * @return bool
 			 */
 			[[nodiscard]]
 			virtual
 			bool
-			useAutomaticReflection () const noexcept
+			useEnvironmentCubemap () const noexcept
 			{
 				return false;
-			}
-
-			/**
-			 * @brief Updates the automatic reflection cubemap binding with the scene's environment cubemap.
-			 * @note This must be called before rendering when useAutomaticReflection() is true.
-			 * @param cubemap A reference to the environment cubemap to bind.
-			 * @return bool True if successful.
-			 */
-			[[nodiscard]]
-			virtual
-			bool
-			updateAutomaticReflectionCubemap (const Vulkan::TextureInterface & /*cubemap*/) noexcept
-			{
-				return true;
 			}
 
 			/**

@@ -27,8 +27,10 @@
 #include "Abstract.hpp"
 
 /* Local inclusions. */
+#include "Graphics/BindlessTextureManager.hpp"
 #include "Graphics/RenderTarget/Abstract.hpp"
 #include "Graphics/Renderer.hpp"
+#include "Graphics/Material/Interface.hpp"
 #include "Graphics/ViewMatricesInterface.hpp"
 #include "PrimaryServices.hpp"
 #include "Saphir/Generator/SceneRendering.hpp"
@@ -54,15 +56,39 @@ namespace EmEn::Graphics::RenderableInstance
 	Renderable::ProgramCacheKey
 	Abstract::buildProgramCacheKey (Renderable::ProgramType programType, RenderPassType renderPassType, uint64_t renderPassHandle, uint32_t layerIndex) const noexcept
 	{
+		size_t materialLayoutHash = 0;
+		bool isBindlessEnabled = false;
+
+		if ( m_renderable != nullptr )
+		{
+			if ( const auto * material = m_renderable->material(layerIndex); material != nullptr )
+			{
+				if ( const auto layout = material->descriptorSetLayout(); layout != nullptr )
+				{
+					materialLayoutHash = layout->getHash();
+				}
+
+				if ( programType == Renderable::ProgramType::Rendering && material->useEnvironmentCubemap() )
+				{
+					if ( Material::Interface::s_graphicsRenderer != nullptr && Material::Interface::s_graphicsRenderer->bindlessTextureManager().usable() )
+					{
+						isBindlessEnabled = true;
+					}
+				}
+			}
+		}
+
 		return Renderable::ProgramCacheKey{
 			.programType = programType,
 			.renderPassType = renderPassType,
 			.renderPassHandle = renderPassHandle,
 			.layerIndex = layerIndex,
+			.materialLayoutHash = materialLayoutHash,
 			.isInstancing = this->useModelVertexBufferObject(),
 			.isLightingEnabled = this->isLightingEnabled(),
 			.isDepthTestDisabled = this->isDepthTestDisabled(),
-			.isDepthWriteDisabled = this->isDepthWriteDisabled()
+			.isDepthWriteDisabled = this->isDepthWriteDisabled(),
+			.isBindlessEnabled = isBindlessEnabled
 		};
 	}
 
@@ -99,8 +125,13 @@ namespace EmEn::Graphics::RenderableInstance
 			return false;
 		}
 
-		/* Check if at least one rendering program exists (we can't know all pass types here). */
-		return m_renderable->hasAnyCachedPrograms(renderTarget);
+		/* NOTE: Check if at least one rendering program exists for the CURRENT render pass.
+		 * This is important because after a window resize, the render pass is recreated
+		 * with a new handle, invalidating previously cached programs.
+		 * Using the render pass handle ensures we don't falsely report readiness with stale programs. */
+		const auto renderPassHandle = reinterpret_cast< uint64_t >(renderTarget->framebuffer()->renderPass()->handle());
+
+		return m_renderable->hasAnyCachedProgramsForRenderPass(renderTarget, renderPassHandle);
 	}
 
 	bool
@@ -231,6 +262,14 @@ namespace EmEn::Graphics::RenderableInstance
 
 				Generator::SceneRendering generator{shaderProgramName.str(), renderTarget, this->shared_from_this(), layerIndex, scene, renderPassType, renderer.primaryServices().settings()};
 
+				/* Enable bindless textures flag if:
+				 * 1. The material uses automatic reflection
+				 * 2. The bindless textures manager is initialized and available */
+				if ( const auto * material = m_renderable->material(layerIndex); material != nullptr && material->useEnvironmentCubemap() && renderer.bindlessTextureManager().usable() )
+				{
+					generator.enableBindlessTextures(true);
+				}
+
 				if ( !generator.generateShaderProgram(renderer) )
 				{
 					std::stringstream errorMessage;
@@ -307,8 +346,11 @@ namespace EmEn::Graphics::RenderableInstance
 		/* NOTE: Set the dynamic viewport and scissor. */
 		renderTarget->setViewport(commandBuffer);
 
-		/* NOTE: Bind the view UBO if renderable instance uses GPU instancing. */
-		if ( this->useModelVertexBufferObject() )
+		/* NOTE: Bind the view UBO if:
+		 * - Renderable instance uses GPU instancing (needs view matrix from UBO)
+		 * - OR render target is a cubemap (multiview needs 6 view matrices from UBO indexed by gl_ViewIndex)
+		 * - OR render target is a CSM (multiview needs N cascade view matrices from UBO indexed by gl_ViewIndex) */
+		if ( this->useModelVertexBufferObject() || renderTarget->isCubemap() || renderTarget->isCascadedShadowMap() )
 		{
 			commandBuffer.bind(*renderTarget->viewMatrices().descriptorSet(), *pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, 0);
 		}
@@ -320,7 +362,8 @@ namespace EmEn::Graphics::RenderableInstance
 			.commandBuffer = &commandBuffer,
 			.viewMatrices = &renderTarget->viewMatrices(),
 			.readStateIndex = readStateIndex,
-			.isCubemap = renderTarget->isCubemap()
+			.isCubemap = renderTarget->isCubemap(),
+			.isCSM = renderTarget->isCascadedShadowMap()
 		};
 
 		/* Build push constant context (pre-computed values for this program). */
@@ -333,11 +376,18 @@ namespace EmEn::Graphics::RenderableInstance
 
 		this->pushMatricesForShadowCasting(passContext, pushContext, worldCoordinates);
 
-		commandBuffer.draw(*m_renderable->geometry(), layerIndex, this->instanceCount());
+		if ( m_renderable->layerCount() == 1 )
+		{
+			commandBuffer.draw(*m_renderable->geometry(), this->instanceCount());
+		}
+		else
+		{
+			commandBuffer.draw(*m_renderable->geometry(), layerIndex, this->instanceCount());
+		}
 	}
 
 	void
-	Abstract::render (uint32_t readStateIndex, const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const Scenes::Component::AbstractLightEmitter * lightEmitter, RenderPassType renderPassType, uint32_t layerIndex, const CartesianFrame< float > * worldCoordinates, const CommandBuffer & commandBuffer) const noexcept
+	Abstract::render (uint32_t readStateIndex, const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const Scenes::Component::AbstractLightEmitter * lightEmitter, RenderPassType renderPassType, uint32_t layerIndex, const CartesianFrame< float > * worldCoordinates, const CommandBuffer & commandBuffer, const BindlessTextureManager * bindlessTexturesManager) const noexcept
 	{
 		const auto renderPassHandle = reinterpret_cast< uint64_t >(renderTarget->framebuffer()->renderPass()->handle());
 		const auto cacheKey = this->buildProgramCacheKey(Renderable::ProgramType::Rendering, renderPassType, renderPassHandle, layerIndex);
@@ -386,16 +436,25 @@ namespace EmEn::Graphics::RenderableInstance
 		/* Bind view UBO. */
 		commandBuffer.bind(*renderTarget->viewMatrices().descriptorSet(), *pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, setOffset++);
 
-		/* Bind light UBO. */
+		/* Bind light UBO (and shadow map sampler if applicable). */
 		if ( lightEmitter != nullptr && lightEmitter->isCreated() )
 		{
-			commandBuffer.bind(*lightEmitter->descriptorSet(), *pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, setOffset++, lightEmitter->UBOOffset());
+			const bool useShadowMap = renderPassUsesShadowMap(renderPassType);
+
+			commandBuffer.bind(*lightEmitter->descriptorSet(useShadowMap), *pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, setOffset++, lightEmitter->UBOOffset());
 		}
 
 		/* Bind material UBO and samplers. */
 		const auto * material = m_renderable->material(layerIndex);
 
-		commandBuffer.bind(*material->descriptorSet(), *pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, setOffset/*++*/);
+		commandBuffer.bind(*material->descriptorSet(), *pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, setOffset++);
+
+		/* Bind bindless textures descriptor set if the material uses automatic reflection
+		 * and the bindless textures manager is available. */
+		if ( bindlessTexturesManager != nullptr && material->useEnvironmentCubemap() && bindlessTexturesManager->descriptorSet() != nullptr )
+		{
+			commandBuffer.bind(*bindlessTexturesManager->descriptorSet(), *pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, setOffset/*++*/);
+		}
 
 		/* Check for adaptive LOD rendering. */
 		if ( geometry->isAdaptiveLOD() )
@@ -428,6 +487,10 @@ namespace EmEn::Graphics::RenderableInstance
 		else if ( material->isAnimated() )
 		{
 			commandBuffer.draw(*geometry, m_frameIndex, this->instanceCount());
+		}
+		else if ( m_renderable->layerCount() == 1 )
+		{
+			commandBuffer.draw(*geometry, this->instanceCount());
 		}
 		else
 		{
@@ -482,6 +545,13 @@ namespace EmEn::Graphics::RenderableInstance
 
 		this->pushMatricesForRendering(passContext, pushContext, worldCoordinates);
 
-		commandBuffer.draw(*m_renderable->geometry(), layerIndex, this->instanceCount());
+		if ( m_renderable->layerCount() == 1 )
+		{
+			commandBuffer.draw(*m_renderable->geometry(), this->instanceCount());
+		}
+		else
+		{
+			commandBuffer.draw(*m_renderable->geometry(), layerIndex, this->instanceCount());
+		}
 	}
 }

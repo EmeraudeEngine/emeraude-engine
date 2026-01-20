@@ -434,6 +434,23 @@ namespace EmEn::Saphir
 				return {};
 			}
 
+			/* NOTE: Apply specialization constants from the Program to the fragment shader.
+			 * This is used for features like shadow mapping which can be enabled/disabled via spec constants. */
+			if ( shader->type() == ShaderType::FragmentShader && program->hasSpecializationConstants() )
+			{
+				for ( const auto & [constantId, value] : program->fragmentSpecializationConstantsBool() )
+				{
+					shaderModule->setSpecializationConstant(constantId, value);
+				}
+
+				if ( !shaderModule->rebuildPipelineShaderStageCreateInfo() )
+				{
+					TraceError{ClassId} << "Unable to rebuild pipeline shader stage create info for shader '" << shader->name() << "' !";
+
+					return {};
+				}
+			}
+
 			shaderModules.emplace_back(shaderModule);
 		}
 

@@ -46,7 +46,8 @@ Each RenderableInstance has flags that control its rendering behavior:
 | Flag | Description |
 |------|-------------|
 | `EnableLighting` | Generates lighting code in shaders |
-| `EnableShadows` | Generates code for casting/receiving shadows |
+| `DisableShadowCasting` | Prevents the instance from being rendered in shadow maps |
+| `DisableShadowReceiving` | Prevents the instance from sampling shadow maps during rendering |
 | `UseInfinityView` | Ignores translation (for skybox) |
 | `DisableDepthTest` | Does not read the depth buffer |
 | `DisableDepthWrite` | Does not write to the depth buffer |
@@ -419,9 +420,23 @@ The RenderableInstance system supports cubemap multiview rendering through the `
 |------|--------------|-------------------|
 | Model (M) | Push constant (Unique) or VBO (Multiple) | Same |
 | View (V) | Push constant or computed | UBO[gl_ViewIndex] |
-| Projection (P) | Push constant or computed | UBO[gl_ViewIndex] |
+| Projection (P) | Push constant or computed | UBO (shared) |
 
-**Next step**: Adapt Saphir shader generators to produce shaders using `gl_ViewIndex` for cubemap VP matrix access.
+### CPU/GPU Coordination
+
+The push constant layout must match between CPU (`pushMatricesForRendering()`) and GPU (shader declaration):
+
+| Mode | CPU Pushes | Shader Expects |
+|------|------------|----------------|
+| Standard MVP | `modelViewProjectionMatrix` (64 bytes) | `mat4 modelViewProjectionMatrix` |
+| Advanced | `viewMatrix` + `modelMatrix` (128 bytes) | `mat4 viewMatrix; mat4 modelMatrix` |
+| Cubemap | `modelMatrix` only (64 bytes) | `mat4 modelMatrix` |
+
+**Files involved:**
+- CPU: `RenderableInstance/Unique.cpp:pushMatricesForRendering()`
+- GPU: `Saphir/Generator/Abstract.cpp:declareMatrixPushConstantBlock()`
+
+See: `src/Saphir/AGENTS.md` section "Cubemap Rendering Mode" for complete documentation.
 
 ## Performance Optimizations
 

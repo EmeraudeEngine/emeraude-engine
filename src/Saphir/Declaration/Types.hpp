@@ -239,6 +239,19 @@ namespace EmEn::Saphir::Declaration
 	uint32_t size_bytes (VariableType type) noexcept;
 
 	/**
+	 * @brief Returns the base alignment for std140 layout.
+	 * @note Std140 alignment rules:
+	 * - Scalars (float, int, uint, bool): 4 bytes
+	 * - vec2: 8 bytes
+	 * - vec3, vec4: 16 bytes
+	 * - matNxM: alignment of vec4 (16 bytes), treated as array of column vectors
+	 * @param type The variable type.
+	 * @return uint32_t The base alignment in bytes.
+	 */
+	[[nodiscard]]
+	uint32_t base_alignment_std140 (VariableType type) noexcept;
+
+	/**
 	 * @brief The GLSL memory layout enumeration.
 	 * @note
 	 * - packed: This layout type means that the implementation determines everything about how the fields are laid out in the block. The OpenGL API must be used to query the layout for the members of a particular block. Each member of a block will have a particular byte offset, which you can use to determine how to upload its data. Also, members of a block can be optimized out if they are found by the implementation to not affect the result of the shader. Therefore, the active components of a block may not be all of the components it was defined with.

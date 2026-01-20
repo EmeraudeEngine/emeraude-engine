@@ -162,6 +162,8 @@ namespace EmEn::Saphir
 
 				if ( useShadowMap )
 				{
+					block.addMember(Declaration::VariableType::Float, UniformBlock::Component::PCFRadius);
+					block.addMember(Declaration::VariableType::Float, UniformBlock::Component::ShadowBias);
 					block.addMember(Declaration::VariableType::Matrix4, UniformBlock::Component::ViewProjectionMatrix);
 				}
 
@@ -178,6 +180,8 @@ namespace EmEn::Saphir
 
 				if ( useShadowMap )
 				{
+					block.addMember(Declaration::VariableType::Float, UniformBlock::Component::PCFRadius);
+					block.addMember(Declaration::VariableType::Float, UniformBlock::Component::ShadowBias);
 					block.addMember(Declaration::VariableType::Matrix4, UniformBlock::Component::ViewProjectionMatrix);
 				}
 
@@ -197,6 +201,8 @@ namespace EmEn::Saphir
 
 				if ( useShadowMap )
 				{
+					block.addMember(Declaration::VariableType::Float, UniformBlock::Component::PCFRadius);
+					block.addMember(Declaration::VariableType::Float, UniformBlock::Component::ShadowBias);
 					block.addMember(Declaration::VariableType::Matrix4, UniformBlock::Component::ViewProjectionMatrix);
 				}
 
@@ -207,6 +213,38 @@ namespace EmEn::Saphir
 				/* TODO: Fix this! */
 				return {0, 0, Declaration::MemoryLayout::Std140, nullptr, nullptr};
 		}
+	}
+
+	Declaration::UniformBlock
+	LightGenerator::getUniformBlockCSM (uint32_t set, uint32_t binding, uint32_t cascadeCount) noexcept
+	{
+		/*
+		 * CSM UBO Layout (std140):
+		 * mat4[4] cascadeViewProjectionMatrices (256 bytes)
+		 * vec4 cascadeSplitDistances (16 bytes)
+		 * vec4 (cascadeCount, shadowBias, reserved, reserved) (16 bytes)
+		 * vec4 color (16 bytes)
+		 * vec4 directionWorldSpace (16 bytes)
+		 * float intensity (4 bytes + padding to 16)
+		 */
+		Declaration::UniformBlock block{set, binding, Declaration::MemoryLayout::Std140, UniformBlock::Type::DirectionalLightCSM, UniformBlock::Light};
+
+		/* Array of cascade view-projection matrices. */
+		block.addArrayMember(Declaration::VariableType::Matrix4, UniformBlock::Component::CascadeViewProjectionMatrices, cascadeCount);
+
+		/* Cascade split distances (view-space depths where cascades transition). */
+		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::CascadeSplitDistances);
+
+		/* Cascade count and shadow bias packed into a vec4. */
+		block.addMember(Declaration::VariableType::Float, UniformBlock::Component::CascadeCount);
+		block.addMember(Declaration::VariableType::Float, UniformBlock::Component::ShadowBias);
+
+		/* Standard directional light properties. */
+		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::Color);
+		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::DirectionWorldSpace);
+		block.addMember(Declaration::VariableType::Float, UniformBlock::Component::Intensity);
+
+		return block;
 	}
 
 	RenderPassType
@@ -247,6 +285,10 @@ namespace EmEn::Saphir
 				/* NOTE: Nothing to do for ambient pass inside the vertex shader. */
 				return true;
 
+			case RenderPassType::DirectionalLightPassCSM :
+				/* CSM uses a different uniform block. For now, fall through to standard. */
+				enableShadowMap = true;
+				[[fallthrough]];
 			case RenderPassType::DirectionalLightPass :
 				enableShadowMap = true;
 				[[fallthrough]];
@@ -276,12 +318,26 @@ namespace EmEn::Saphir
 				return false;
 		}
 
-		if ( !m_useStaticLighting && !vertexShader.declare(LightGenerator::getUniformBlock(lightSetIndex, 0, lightType, enableShadowMap)) )
+		/* CSM uses a specialized uniform block. */
+		const bool useCSM = (this->checkRenderPassType() == RenderPassType::DirectionalLightPassCSM);
+
+		if ( !m_useStaticLighting )
 		{
-			return false;
+			if ( useCSM )
+			{
+				if ( !vertexShader.declare(LightGenerator::getUniformBlockCSM(lightSetIndex, 0)) )
+				{
+					return false;
+				}
+			}
+			else if ( !vertexShader.declare(LightGenerator::getUniformBlock(lightSetIndex, 0, lightType, enableShadowMap)) )
+			{
+				return false;
+			}
 		}
 
-		if ( generator.highQualityLightEnabled() )
+
+		if ( generator.highQualityEnabled() )
 		{
 			/* PBR mode uses Cook-Torrance BRDF. */
 			if ( m_usePBRMode )
@@ -289,7 +345,7 @@ namespace EmEn::Saphir
 				return this->generatePBRVertexShader(generator, vertexShader, lightType, enableShadowMap);
 			}
 
-			if ( generator.normalMappingEnabled() && m_useNormalMapping )
+			if ( m_useNormalMapping )
 			{
 				return this->generatePhongBlinnWithNormalMapVertexShader(generator, vertexShader, lightType, enableShadowMap);
 			}
@@ -334,6 +390,10 @@ namespace EmEn::Saphir
 			}
 				return true;
 
+			case RenderPassType::DirectionalLightPassCSM :
+				/* CSM uses a different uniform block. For now, fall through to standard. */
+				enableShadowMap = true;
+				[[fallthrough]];
 			case RenderPassType::DirectionalLightPass :
 				enableShadowMap = true;
 				[[fallthrough]];
@@ -361,12 +421,26 @@ namespace EmEn::Saphir
 				return false;
 		}
 
-		if ( !m_useStaticLighting && !fragmentShader.declare(LightGenerator::getUniformBlock(lightSetIndex, 0, lightType, enableShadowMap)) )
+		/* CSM uses a specialized uniform block. */
+		const bool useCSM = (this->checkRenderPassType() == RenderPassType::DirectionalLightPassCSM);
+
+		if ( !m_useStaticLighting )
 		{
-			return false;
+			if ( useCSM )
+			{
+				if ( !fragmentShader.declare(LightGenerator::getUniformBlockCSM(lightSetIndex, 0)) )
+				{
+					return false;
+				}
+			}
+			else if ( !fragmentShader.declare(LightGenerator::getUniformBlock(lightSetIndex, 0, lightType, enableShadowMap)) )
+			{
+				return false;
+			}
 		}
 
-		if ( generator.highQualityLightEnabled() )
+
+		if ( generator.highQualityEnabled() )
 		{
 			/* PBR mode uses Cook-Torrance BRDF. */
 			if ( m_usePBRMode )
@@ -374,7 +448,7 @@ namespace EmEn::Saphir
 				return this->generatePBRFragmentShader(generator, fragmentShader, lightType, enableShadowMap);
 			}
 
-			if ( generator.normalMappingEnabled() && m_useNormalMapping )
+			if ( m_useNormalMapping )
 			{
 				return this->generatePhongBlinnWithNormalMapFragmentShader(generator, fragmentShader, lightType, enableShadowMap);
 			}
@@ -383,197 +457,6 @@ namespace EmEn::Saphir
 		}
 
 		return this->generateGouraudFragmentShader(generator, fragmentShader, lightType, enableShadowMap);
-	}
-
-	std::string
-	LightGenerator::generate2DShadowMapCode (const std::string & shadowMap, const std::string & fragmentPosition, DepthTextureFunction function) const noexcept
-	{
-		std::stringstream code{};
-
-		code << "/* Shadow map 2D resolution. */" "\n\n";
-
-		code << "float shadowFactor = 1.0;" "\n\n";
-
-		if ( m_PCFSample > 0 )
-		{
-			code << GLSL::ConstInteger << " offset = " << m_PCFSample << ";" "\n\n";
-
-			switch ( function )
-			{
-				/* NOTE: OpenGL 3.2 (GLSL 150) - float textureOffset(sampler2DShadow sampler, vec4 P, ivec2 offset, [float bias]); */
-				case DepthTextureFunction::Texture :
-					code <<
-						"for ( " << GLSL::Integer << " idy = -offset; idy <= offset; idy++ )" "\n"
-						"	for ( " << GLSL::Integer << " idx = -offset; idx <= offset; idx++ )" "\n"
-						"		shadowFactor += textureOffset(" << shadowMap << ", " << fragmentPosition << ".xyz, ivec2(idx, idy));" "\n\n";
-					break;
-
-				/* NOTE: OpenGL 4.0 (GLSL 400) - float textureProjOffset(sampler2DShadow sampler, vec4 P, ivec2 offset, [float bias]); */
-				case DepthTextureFunction::TextureProj :
-					code <<
-						"for ( " << GLSL::Integer << " idy = -offset; idy <= offset; idy++ )" "\n"
-						"	for ( " << GLSL::Integer << " idx = -offset; idx <= offset; idx++ )" "\n"
-						"		shadowFactor += textureProjOffset(" << shadowMap << ", " << fragmentPosition << ", ivec2(idx, idy));" "\n\n";
-					break;
-
-				/* NOTE: OpenGL 4.6 (GLSL 460) - vec4 textureGatherOffset(gsampler2DShadow sampler, vec2 P, float refZ, ivec2 offset); */
-				case DepthTextureFunction::TextureGather :
-					code <<
-						"for ( " << GLSL::Integer << " idy = -offset; idy <= offset; idy++ )" "\n"
-						"{" "\n"
-						"	for ( " << GLSL::Integer << " idx = -offset; idx <= offset; idx++ )" "\n"
-						"	{" "\n"
-						"		const vec4 gather = textureGatherOffset(" << shadowMap << ", " << fragmentPosition << ".xy, " << fragmentPosition << ".z, ivec2(idx, idy));" "\n"
-						"		const vec2 shadowSize = textureSize(" << shadowMap << ", 0);" "\n"
-						"		const vec2 texelCoord = " << fragmentPosition << ".xy * shadowSize;" "\n"
-						"		const vec2 sampleCoord = fract(texelCoord + 0.5);" "\n\n"
-
-						"		const float texelY0 = mix(gather.w, gather.x, sampleCoord.y);" "\n"
-						"		const float texelY1 = mix(gather.z, gather.y, sampleCoord.y);" "\n"
-						"		shadowFactor += mix(texelY0, texelY1, sampleCoord.x);" "\n"
-						"	}" "\n"
-						"}" "\n\n";
-					break;
-			}
-
-			code << "shadowFactor /= pow(float(offset) * 2.0 + 1.0, 2);" "\n";
-		}
-		else
-		{
-			switch ( function )
-			{
-				/* NOTE: OpenGL 3.2 (GLSL 150) - float texture(sampler2DShadow sampler, vec3 P, [float bias]); */
-				case DepthTextureFunction::Texture :
-					code << "shadowFactor = texture(" << shadowMap << ", " << fragmentPosition << ".xyz);" "\n\n";
-					break;
-
-				/* NOTE: OpenGL 4.0 (GLSL 400) - float textureProj(sampler2DShadow sampler, vec4 P, [float bias]); */
-				case DepthTextureFunction::TextureProj :
-					code << "shadowFactor = textureProj(" << shadowMap << ", " << fragmentPosition << ");" "\n\n";
-					break;
-
-				/* NOTE: OpenGL 4.6 (GLSL 460) - vec4 textureGather(gsampler2DShadow sampler, vec2 P, float refZ); */
-				case DepthTextureFunction::TextureGather :
-					code <<
-						"const vec4 gather = textureGather(" << shadowMap << ", " << fragmentPosition << ".xy, " << fragmentPosition << ".z);" "\n"
-						"const vec2 shadowSize = textureSize(" << shadowMap << ", 0);" "\n"
-						"const vec2 texelCoord = " << fragmentPosition << ".xy * shadowSize;" "\n"
-						"const vec2 sampleCoord = fract(texelCoord + 0.5);" "\n\n"
-
-						"const float texelY0 = mix(gather.w, gather.x, sampleCoord.y);" "\n"
-						"const float texelY1 = mix(gather.z, gather.y, sampleCoord.y);" "\n" <<
-						"shadowFactor = mix(texelY0, texelY1, sampleCoord.x);" "\n\n";
-					break;
-			}
-		}
-
-		if ( m_discardUnlitFragment )
-		{
-			code << "if ( shadowFactor <= 0.0 ) { discard; }" "\n\n";
-		}
-
-		return code.str();
-	}
-
-	std::string
-	LightGenerator::generate3DShadowMapCode (const std::string & shadowMap, const std::string & directionWorldSpace, const std::string & nearFar) const noexcept
-	{
-		std::stringstream code{};
-
-		code << "/* Shadow map 3D resolution. */" "\n\n";
-
-		code << "float shadowFactor = 1.0;" "\n\n";
-
-		if ( m_PCFSample > 0 )
-		{
-			code <<
-				"const vec3 lookupVector = vec3(-" << directionWorldSpace << ".x, " << directionWorldSpace << ".y, " << directionWorldSpace << ".z);" "\n"
-				"const float depth = length(lookupVector);" "\n\n"
-
-				"const vec3 sampleOffsetDirections[20] = vec3[] (" "\n"
-				"	vec3( 1,  1,  1), vec3( 1, -1,  1), vec3(-1, -1,  1), vec3(-1,  1,  1)," "\n"
-				"	vec3( 1,  1, -1), vec3( 1, -1, -1), vec3(-1, -1, -1), vec3(-1,  1, -1)," "\n"
-				"	vec3( 1,  1,  0), vec3( 1, -1,  0), vec3(-1, -1,  0), vec3(-1,  1,  0)," "\n"
-				"	vec3( 1,  0,  1), vec3(-1,  0,  1), vec3( 1,  0, -1), vec3(-1,  0, -1)," "\n"
-				"	vec3( 0,  1,  1), vec3( 0, -1,  1), vec3( 0, -1, -1), vec3( 0,  1, -1)" "\n"
-				");" "\n"
-
-				"const float diskRadius = " << m_PCFRadius << ";" "\n\n"
-
-				"for ( " << GLSL::Integer << " index = 0; index < 20; ++index )" "\n"
-				"{" "\n"
-				"	const float smallestDepth = texture(" << shadowMap << ", lookupVector + sampleOffsetDirections[index] * diskRadius).r * " << nearFar << ".y;" "\n\n"
-
-				"	if ( smallestDepth - 0.01 > depth )" "\n"
-				"	{" "\n"
-				"		shadowFactor += 1.0;" "\n"
-				"	}" "\n"
-				"}" "\n\n"
-
-				"shadowFactor /= 20.0;" "\n\n";
-		}
-		else
-		{
-			code <<
-				"const vec3 lookupVector = vec3(-" << directionWorldSpace << ".x, " << directionWorldSpace << ".y, " << directionWorldSpace << ".z);" "\n"
-				"const float smallestDepth = texture(" << shadowMap << ", lookupVector).r * " << nearFar << ".y;" "\n"
-				"const float depth = length(lookupVector);" "\n\n"
-
-				"if ( smallestDepth + 0.01 < depth )" "\n"
-				"{" "\n"
-				"	shadowFactor = 0.0;" "\n"
-				"}" "\n\n";
-		}
-
-		if ( m_discardUnlitFragment )
-		{
-			code << "if ( shadowFactor <= 0.0 ) { discard; }" "\n\n";
-		}
-
-		return code.str();
-	}
-
-	bool
-	LightGenerator::generateVertexShaderShadowMapCode (Generator::Abstract & generator, VertexShader & vertexShader, bool shadowCubemap) const noexcept
-	{
-		/* NOTE: For point light. */
-		if ( shadowCubemap )
-		{
-			if ( !vertexShader.declare(Declaration::StageOutput{generator.getNextShaderVariableLocation(), GLSL::FloatVector4, "DirectionWorldSpace", GLSL::Smooth}) )
-			{
-				return false;
-			}
-
-			if ( vertexShader.isInstancingEnabled() )
-			{
-				/* Get the model matrix from VBO. */
-				Code{vertexShader, Location::Output} << "DirectionWorldSpace = " << this->lightPositionWorldSpace() << " - " << Attribute::ModelMatrix << " * vec4(" << Attribute::Position << ", 1.0);";
-			}
-			else
-			{
-				/* Get the model matrix from UBO. */
-				Code{vertexShader, Location::Output} << "DirectionWorldSpace = " << this->lightPositionWorldSpace() << " - " << MatrixPC(PushConstant::Component::ModelMatrix) << " * vec4(" << Attribute::Position << ", 1.0);";
-			}
-		}
-		/* NOTE: For directional and spot-light. */
-		else
-		{
-			if ( !vertexShader.declare(Declaration::StageOutput{generator.getNextShaderVariableLocation(), GLSL::FloatVector4, "PositionLightSpace", GLSL::Smooth}) )
-			{
-				return false;
-			}
-
-			if ( vertexShader.isInstancingEnabled() )
-			{
-				Code{vertexShader, Location::Output} << "PositionLightSpace = " << LightUB(UniformBlock::Component::ViewProjectionMatrix) << " * " << Attribute::ModelMatrix << " * vec4(" << Attribute::Position << ", 1.0);";
-			}
-			else
-			{
-				Code{vertexShader, Location::Output} << "PositionLightSpace = " << LightUB(UniformBlock::Component::ViewProjectionMatrix) << " * " << MatrixPC(PushConstant::Component::ModelMatrix) << " * vec4(" << Attribute::Position << ", 1.0);";
-			}
-		}
-
-		return true;
 	}
 
 	void
@@ -612,7 +495,7 @@ namespace EmEn::Saphir
 			intensity = this->ambientLightIntensity();
 		}
 
-		if ( m_usePBRMode && m_useReflection && m_useRefraction && this->highQualityReflectionEnabled() )
+		if ( m_usePBRMode && m_useReflection && m_useRefraction && this->highQualityEnabled() )
 		{
 			/* NOTE: PBR Glass/transparent materials with both reflection and refraction.
 			 * The Fresnel effect determines the blend between reflection and refraction.
@@ -631,7 +514,7 @@ namespace EmEn::Saphir
 
 			Code{fragmentShader, Location::Output} << code;
 		}
-		else if ( m_usePBRMode && m_useReflection && this->highQualityReflectionEnabled() )
+		else if ( m_usePBRMode && m_useReflection && this->highQualityEnabled() )
 		{
 			/* NOTE: PBR Metal/reflective materials.
 			 * IBL is modulated by Fresnel (with proper F0 based on metalness) and IBLIntensity.
@@ -643,7 +526,7 @@ namespace EmEn::Saphir
 			const auto metalness = m_surfaceMetalness.empty() ? "0.0" : m_surfaceMetalness;
 			const auto code = (std::stringstream{} <<
 				"/* PBR IBL - Fresnel-Schlick with proper F0 for metals. */" "\n"
-				"const vec3 iblF0 = mix(vec3(0.04), " << albedo << ", " << metalness << ");" "\n"
+				"const vec3 iblF0 = mix(vec3(0.5), " << albedo << ", " << metalness << ");" "\n"
 				"const float NdotV = max(dot(reflectionNormal, -reflectionI), 0.0);" "\n"
 				"const vec3 fresnelIBL = iblF0 + (1.0 - iblF0) * pow(1.0 - NdotV, 5.0);" "\n"
 				"const vec3 reflectedColor = " << m_surfaceReflectionColor << ".rgb * " << m_surfaceReflectionAmount << ";" "\n"
@@ -657,15 +540,14 @@ namespace EmEn::Saphir
 			/* NOTE: PBR low-quality fallback - simplified IBL without per-fragment Fresnel.
 			 * When high-quality reflection is disabled, reflectionNormal and reflectionI
 			 * are not available. We approximate F0 using metalness:
-			 * - Dielectrics (metalness=0): F0 ≈ 0.04 (only 4% reflection)
-			 * - Metals (metalness=1): F0 = albedo (colored reflections)
-			 * This prevents the overly bright "flashy" look. */
+			 * - Dielectrics (metalness=0): F0 = LowQualityDielectricF0 (boosted for visibility)
+			 * - Metals (metalness=1): F0 = albedo (colored reflections) */
 			const auto iblIntensity = m_surfaceIBLIntensity.empty() ? "1.0" : m_surfaceIBLIntensity;
 			const auto albedo = m_surfaceAlbedo.empty() ? "vec3(1.0)" : m_surfaceAlbedo + ".rgb";
 			const auto metalness = m_surfaceMetalness.empty() ? "0.0" : m_surfaceMetalness;
 			const auto code = (std::stringstream{} <<
-				"/* Low-quality PBR IBL - F0 approximation without Fresnel. */" "\n"
-				"const vec3 lqF0 = mix(vec3(0.04), " << albedo << ", " << metalness << ");" "\n" <<
+				"/* Low-quality PBR IBL - boosted F0 approximation without Fresnel. */" "\n"
+				"const vec3 lqF0 = mix(vec3(" << LowQualityDielectricF0 << "), " << albedo << ", " << metalness << ");" "\n" <<
 				m_fragmentColor << ".rgb += " << m_surfaceReflectionColor << ".rgb * lqF0 * " << m_surfaceReflectionAmount << " * " << iblIntensity << ";").str();
 			Code{fragmentShader, Location::Output} << code;
 		}

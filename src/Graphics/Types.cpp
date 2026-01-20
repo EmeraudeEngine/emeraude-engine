@@ -75,6 +75,9 @@ namespace EmEn::Graphics
 			case RenderPassType::DirectionalLightPassNoShadow :
 				return DirectionalLightPassNoShadowString;
 
+			case RenderPassType::DirectionalLightPassCSM :
+				return DirectionalLightPassCSMString;
+
 			case RenderPassType::PointLightPass :
 				return PointLightPassString;
 
@@ -115,6 +118,11 @@ namespace EmEn::Graphics
 		if ( value == DirectionalLightPassNoShadowString )
 		{
 			return RenderPassType::DirectionalLightPassNoShadow;
+		}
+
+		if ( value == DirectionalLightPassCSMString )
+		{
+			return RenderPassType::DirectionalLightPassCSM;
 		}
 
 		if ( value == PointLightPassString )
@@ -217,6 +225,9 @@ namespace EmEn::Graphics
 			case FillingType::AlphaChannelAsValue :
 				return AlphaChannelAsValueString;
 
+			case FillingType::Automatic :
+				return AutomaticTypeString;
+
 			case FillingType::None :
 				return NoneString;
 		}
@@ -265,6 +276,11 @@ namespace EmEn::Graphics
 		if ( value == AlphaChannelAsValueString )
 		{
 			return FillingType::AlphaChannelAsValue;
+		}
+
+		if ( value == AutomaticTypeString )
+		{
+			return FillingType::Automatic;
 		}
 
 		if ( value == NoneString )

@@ -309,7 +309,7 @@ namespace EmEn::Graphics
 	}
 
 	bool
-	CubemapResource::loadSolidColor (const Color< float > & color, uint32_t size) noexcept
+	CubemapResource::load (const Color< float > & color, uint32_t size) noexcept
 	{
 		if ( !this->beginLoading() )
 		{

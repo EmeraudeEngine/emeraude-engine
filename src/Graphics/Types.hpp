@@ -38,6 +38,8 @@
 
 namespace EmEn::Graphics
 {
+	constexpr auto DefaultTextureCubemapName{"+DefaultTextureCubemap"};
+
 	/* Common expressions. */
 	constexpr auto NoneString{"None"};
 	constexpr auto InvalidString{"Invalid"};
@@ -90,12 +92,13 @@ namespace EmEn::Graphics
 		AmbientPass = 1,
 		DirectionalLightPass = 2,
 		DirectionalLightPassNoShadow = 3,
-		PointLightPass = 4,
-		PointLightPassNoShadow = 5,
-		SpotLightPass = 6,
-		SpotLightPassNoShadow = 7,
+		DirectionalLightPassCSM = 4, /* Cascaded Shadow Map for directional lights. */
+		PointLightPass = 5,
+		PointLightPassNoShadow = 6,
+		SpotLightPass = 7,
+		SpotLightPassNoShadow = 8,
 		/* Enum value for invalid type. */
-		None = 8
+		None = 9
 	};
 
 	constexpr auto MaxPassCount = static_cast< size_t >(RenderPassType::None);
@@ -104,6 +107,7 @@ namespace EmEn::Graphics
 	constexpr auto AmbientPassString{"AmbientPass"};
 	constexpr auto DirectionalLightPassString{"DirectionalLightPass"};
 	constexpr auto DirectionalLightPassNoShadowString{"DirectionalLightPassNoShadow"};
+	constexpr auto DirectionalLightPassCSMString{"DirectionalLightPassCSM"};
 	constexpr auto PointLightPassString{"PointLightPass"};
 	constexpr auto PointLightPassNoShadowString{"PointLightPassNoShadow"};
 	constexpr auto SpotLightPassString{"SpotLightPass"};
@@ -137,6 +141,40 @@ namespace EmEn::Graphics
 	 */
 	[[nodiscard]]
 	RenderPassType to_RenderPassType (const std::string & value) noexcept;
+
+	/**
+	 * @brief Returns whether a render pass type uses shadow mapping.
+	 * @param value The render pass type.
+	 * @return bool
+	 */
+	[[nodiscard]]
+	constexpr bool
+	renderPassUsesShadowMap (RenderPassType value) noexcept
+	{
+		switch ( value )
+		{
+			case RenderPassType::DirectionalLightPass :
+			case RenderPassType::DirectionalLightPassCSM :
+			case RenderPassType::PointLightPass :
+			case RenderPassType::SpotLightPass :
+				return true;
+
+			default:
+				return false;
+		}
+	}
+
+	/**
+	 * @brief Returns whether a render pass type uses cascaded shadow mapping.
+	 * @param value The render pass type.
+	 * @return bool
+	 */
+	[[nodiscard]]
+	constexpr bool
+	renderPassUsesCSM (RenderPassType value) noexcept
+	{
+		return value == RenderPassType::DirectionalLightPassCSM;
+	}
 
 	/** @brief Defines the model matrices buffer type in video memory. */
 	enum class ModelMatrixType : uint32_t
@@ -189,6 +227,7 @@ namespace EmEn::Graphics
 		Cubemap = 5,
 		AnimatedTexture = 6,
 		AlphaChannelAsValue = 7,
+		Automatic = 8,
 		None = std::numeric_limits< uint32_t >::max()
 	};
 
@@ -200,6 +239,7 @@ namespace EmEn::Graphics
 	//constexpr auto CubemapString{"Cubemap"}; // Already exists
 	constexpr auto AnimatedTextureString{"AnimatedTexture"};
 	constexpr auto AlphaChannelAsValueString{"AlphaChannelAsValue"};
+	constexpr auto AutomaticTypeString{"Automatic"};
 
 	/**
 	 * @brief Converts a filling type enumeration value to the corresponding string.
@@ -306,7 +346,6 @@ namespace EmEn::Graphics
 	constexpr auto RoughnessString{"Roughness"};
 	constexpr auto MetalnessString{"Metalness"};
 	constexpr auto AmbientOcclusionString{"AmbientOcclusion"};
-	constexpr auto AutomaticString{"Automatic"};
 
 	/**
 	 * @brief Converts a component type enumeration value to the corresponding string.

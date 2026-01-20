@@ -102,16 +102,28 @@ namespace EmEn::Graphics::Material
 			return false;
 		}
 
-		/* NOTE: We only check the diffuse component in material JSON. */
+		/* NOTE: We check Diffuse first, then fallback to Albedo for PBR material JSON compatibility. */
 		FillingType fillingType{};
 
 		Json::Value componentData{};
 
-		if ( !parseComponentBase(data, DiffuseString, fillingType, componentData, false) )
+		/* Try "Diffuse" first (Standard material format). */
+		if ( !parseComponentBase(data, DiffuseString, fillingType, componentData, true) )
 		{
 			TraceError{ClassId} << "Unable to parse the diffuse component in material '" << this->name() << "' resource JSON file ! " "\n" << data;
 
 			return this->setLoadSuccess(false);
+		}
+
+		/* Fallback: try "Albedo" key from PBR material format. */
+		if ( fillingType == FillingType::None )
+		{
+			if ( !parseComponentBase(data, AlbedoString, fillingType, componentData, false) )
+			{
+				TraceError{ClassId} << "Unable to parse the diffuse/albedo component in material '" << this->name() << "' resource JSON file ! " "\n" << data;
+
+				return this->setLoadSuccess(false);
+			}
 		}
 
 		switch ( fillingType )
@@ -151,6 +163,7 @@ namespace EmEn::Graphics::Material
 
 			case FillingType::Value :
 			case FillingType::AlphaChannelAsValue :
+			case FillingType::Automatic :
 			case FillingType::None :
 				TraceError{ClassId} << "Invalid filling type for material '" << this->name() << "' !";
 
@@ -169,10 +182,22 @@ namespace EmEn::Graphics::Material
 
 			const auto & specularData = data[SpecularString];
 
-			this->setSpecularComponent(
-				FastJSON::getValue< Color< float > >(specularData, JKColor).value_or(DefaultSpecularColor),
-				FastJSON::getValue< float >(specularData, JKShininess).value_or(DefaultShininess)
-			);
+			/* Get specular color (optional). */
+			const auto specularColor = FastJSON::getValue< Color< float > >(specularData, JKColor).value_or(DefaultSpecularColor);
+
+			/* Get shininess: try "Shininess" first, then fallback to "Value" for PBR-like format. */
+			auto shininess = DefaultShininess;
+
+			if ( const auto shininessOpt = FastJSON::getValue< float >(specularData, JKShininess); shininessOpt.has_value() )
+			{
+				shininess = shininessOpt.value();
+			}
+			else if ( const auto valueOpt = FastJSON::getValue< float >(specularData, JKValue); valueOpt.has_value() )
+			{
+				shininess = valueOpt.value();
+			}
+
+			this->setSpecularComponent(specularColor, shininess);
 		}
 
 		/* Check the blending mode. */
@@ -190,7 +215,19 @@ namespace EmEn::Graphics::Material
 
 			const auto & autoIlluminationData = data[AutoIlluminationString];
 
-			this->setAutoIlluminationAmount(FastJSON::getValue< float >(autoIlluminationData, JKValue).value_or(DefaultAutoIllumination));
+			/* Try "Value" first, then fallback to "Amount" for PBR-like format. */
+			auto amount = DefaultAutoIllumination;
+
+			if ( const auto valueOpt = FastJSON::getValue< float >(autoIlluminationData, JKValue); valueOpt.has_value() )
+			{
+				amount = valueOpt.value();
+			}
+			else if ( const auto amountOpt = FastJSON::getValue< float >(autoIlluminationData, JKAmount); amountOpt.has_value() )
+			{
+				amount = amountOpt.value();
+			}
+
+			this->setAutoIlluminationAmount(amount);
 		}
 
 		/* Check the optional global opacity. */
@@ -215,7 +252,7 @@ namespace EmEn::Graphics::Material
 
 			if ( !m_textureComponent->create(renderer, binding) )
 			{
-				Tracer::error(ClassId, "Unable to create the texture component !");
+				Tracer::error(ClassId, "Unable to create the texture component!");
 
 				return false;
 			}
@@ -550,7 +587,7 @@ namespace EmEn::Graphics::Material
 
 		const auto * geometry = generator.getGeometryInterface();
 
-		if ( !generator.highQualityLightEnabled() && !generator.declareMaterialUniformBlock(*this, vertexShader, 0) )
+		if ( !generator.highQualityEnabled() && !generator.declareMaterialUniformBlock(*this, vertexShader, 0) )
 		{
 			return false;
 		}

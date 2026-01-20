@@ -42,11 +42,18 @@ namespace EmEn::Graphics::RenderTarget
 {
 	constexpr auto Bias{0.5F};
 
+	/* NOTE: This matrix transforms from clip space to texture coordinates.
+	 * For x and y: [-1, 1] → [0, 1] using scale 0.5 and bias 0.5.
+	 * For z: identity since Vulkan projection already outputs [0, 1].
+	 *
+	 * Column-major storage (OpenGL/Vulkan convention):
+	 * The matrix performs: x' = 0.5*x + 0.5, y' = 0.5*y + 0.5, z' = z, w' = w
+	 * Translation (0.5, 0.5, 0) goes in column 3. */
 	constexpr Libs::Math::Matrix< 4, float > ScaleBiasMatrix{{
-		Bias, 0.0F, 0.0F, 0.0F,
-		0.0F, Bias, 0.0F, 0.0F,
-		0.0F, 0.0F, Bias, 0.0F,
-		Bias, Bias, Bias, 1.0F
+		Bias, 0.0F, 0.0F, 0.0F,  /* Column 0: scale X */
+		0.0F, Bias, 0.0F, 0.0F,  /* Column 1: scale Y */
+		0.0F, 0.0F, 1.0F, 0.0F,  /* Column 2: Z passthrough */
+		Bias, Bias, 0.0F, 1.0F   /* Column 3: translation + w=1 */
 	}};
 
 	/**
@@ -433,19 +440,30 @@ namespace EmEn::Graphics::RenderTarget
 				}
 
 				/* Create a sampler for the texture. */
-				m_sampler = renderer.getSampler("ShadowMap", [] (Settings &, VkSamplerCreateInfo & createInfo) {
+				m_sampler = renderer.getSampler("ShadowMap", [this] (Settings &, VkSamplerCreateInfo & createInfo) {
 					//createInfo.flags = 0;
 					createInfo.magFilter = VK_FILTER_LINEAR;
 					createInfo.minFilter = VK_FILTER_LINEAR;
 					createInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-					createInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-					createInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-					createInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+					/* NOTE: Use CLAMP_TO_BORDER so that sampling outside the shadow map
+					 * returns borderColor (white = no shadow) instead of edge pixels. */
+					createInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+					createInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+					createInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
 					//createInfo.mipLodBias = 0.0F;
 					//createInfo.anisotropyEnable = VK_FALSE;
 					//createInfo.maxAnisotropy = 1.0F;
-					createInfo.compareEnable = VK_TRUE;
-					createInfo.compareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
+					//createInfo.maxAnisotropy = 1.0F;
+					if ( this->isCubemap() )
+					{
+						createInfo.compareEnable = VK_FALSE;
+						createInfo.compareOp = VK_COMPARE_OP_ALWAYS;
+					}
+					else
+					{
+						createInfo.compareEnable = VK_TRUE;
+						createInfo.compareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
+					}
 					createInfo.minLod = 0.0F;
 					createInfo.maxLod = 1.0F;
 					createInfo.borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
@@ -533,6 +551,10 @@ namespace EmEn::Graphics::RenderTarget
 
 						return false;
 					}
+
+					/* NOTE: Set the expected final image layout for being usable as a texture sampler.
+					 * This must match the render pass finalLayout (VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL). */
+					m_depthImage->setCurrentImageLayout(VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL);
 
 					m_depthImageView = std::make_shared< Vulkan::ImageView >(
 						m_depthImage,

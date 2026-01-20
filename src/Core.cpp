@@ -557,11 +557,11 @@ namespace EmEn
 		/* Initialize platform service (GLFW). */
 		if ( m_platformManager.initialize(m_secondaryServicesEnabled) )
 		{
-			TraceSuccess{ClassId} << m_platformManager.name() << " service up !";
+			TraceSuccess{ClassId} << m_platformManager.name() << " service up!";
 		}
 		else
 		{
-			TraceFatal{ClassId} << m_platformManager.name() << " service failed to execute !";
+			TraceFatal{ClassId} << m_platformManager.name() << " service failed to execute!";
 
 			return false;
 		}
@@ -569,11 +569,11 @@ namespace EmEn
 		/* Initialize the vulkan API. */
 		if ( m_vulkanInstance.initialize(m_secondaryServicesEnabled) )
 		{
-			TraceSuccess{ClassId} << m_vulkanInstance.name() << " service up !";
+			TraceSuccess{ClassId} << m_vulkanInstance.name() << " service up!";
 		}
 		else
 		{
-			TraceFatal{ClassId} << m_vulkanInstance.name() << " service failed to execute !";
+			TraceFatal{ClassId} << m_vulkanInstance.name() << " service failed to execute!";
 
 			return false;
 		}
@@ -583,11 +583,11 @@ namespace EmEn
 		{
 			this->observe(&m_window);
 
-			TraceSuccess{ClassId} << m_window.name() << " service up !";
+			TraceSuccess{ClassId} << m_window.name() << " service up!";
 		}
 		else
 		{
-			TraceFatal{ClassId} << m_window.name() << " service failed to execute !";
+			TraceFatal{ClassId} << m_window.name() << " service failed to execute!";
 
 			return false;
 		}
@@ -595,7 +595,7 @@ namespace EmEn
 		/* Initialization of the input manager. */
 		if ( m_inputManager.initialize(m_secondaryServicesEnabled) )
 		{
-			TraceSuccess{ClassId} << m_inputManager.name() << " service up !";
+
 
 			/* Configure the input manager. */
 			m_inputManager.enableKeyboardListening(true);
@@ -614,10 +614,12 @@ namespace EmEn
 #endif
 
 			this->observe(&m_inputManager);
+
+			TraceSuccess{ClassId} << m_inputManager.name() << " service up!";
 		}
 		else
 		{
-			TraceFatal{ClassId} << m_inputManager.name() << " service failed to execute !";
+			TraceFatal{ClassId} << m_inputManager.name() << " service failed to execute!";
 
 			return false;
 		}
@@ -625,21 +627,24 @@ namespace EmEn
 		/* Initialize graphics renderer. */
 		if ( m_graphicsRenderer.initialize(m_secondaryServicesEnabled) )
 		{
-			TraceSuccess{ClassId} << m_graphicsRenderer.name() << " service up !";
+			/* FIXME: Check a better way to give the access ... */
+			{
+				Geometry::Interface::s_graphicsRenderer = &m_graphicsRenderer;
+				TextureResource::Abstract::s_graphicsRenderer = &m_graphicsRenderer;
+				Material::Interface::s_graphicsRenderer = &m_graphicsRenderer;
+			}
 
+			m_graphicsRenderer.createDefaultResources(m_resourceManager);
 			m_graphicsRenderer.registerToObject(*this);
 
 			this->observe(&m_graphicsRenderer);
 			this->observe(&m_graphicsRenderer.shaderManager());
 
-			/* FIXME: Check a better way to give the access ... */
-			Geometry::Interface::s_graphicsRenderer = &m_graphicsRenderer;
-			TextureResource::Abstract::s_graphicsRenderer = &m_graphicsRenderer;
-			Material::Interface::s_graphicsRenderer = &m_graphicsRenderer;
+			TraceSuccess{ClassId} << m_graphicsRenderer.name() << " service up!";
 		}
 		else
 		{
-			TraceFatal{ClassId} << m_graphicsRenderer.name() << " service failed to execute !";
+			TraceFatal{ClassId} << m_graphicsRenderer.name() << " service failed to execute!";
 
 			return false;
 		}
@@ -647,68 +652,68 @@ namespace EmEn
 		/* Initialize physics manager. */
 		if ( m_physicsManager.initialize(m_secondaryServicesEnabled) )
 		{
-			TraceSuccess{ClassId} << m_physicsManager.name() << " service up !";
+			TraceSuccess{ClassId} << m_physicsManager.name() << " service up!";
 		}
 		else
 		{
 			TraceWarning{ClassId} <<
-				m_physicsManager.name() << " service failed to execute !" "\n"
-				"No physics acceleration available !";
+				m_physicsManager.name() << " service failed to execute!" "\n"
+				"No physics acceleration available!";
 		}
 
 		/* Initialize audio manager. */
 		if ( m_audioManager.initialize(m_secondaryServicesEnabled) )
 		{
-			TraceSuccess{ClassId} << m_audioManager.name() << " service up !";
-
 			m_audioManager.registerToObject(*this);
 
 			this->observe(&m_audioManager.trackMixer());
+
+			TraceSuccess{ClassId} << m_audioManager.name() << " service up!";
 		}
 		else
 		{
-			TraceWarning{ClassId} << m_audioManager.name() << " service failed to execute, no audio available !";
+			TraceWarning{ClassId} << m_audioManager.name() << " service failed to execute, no audio available!";
 		}
 
 		/* Initialize system notification service (OS-level notifications). */
 		if ( m_systemNotification.initialize(m_secondaryServicesEnabled) )
 		{
-			TraceSuccess{ClassId} << m_systemNotification.name() << " service up !";
+			TraceSuccess{ClassId} << m_systemNotification.name() << " service up!";
 		}
 		else
 		{
-			TraceWarning{ClassId} << m_systemNotification.name() << " service failed to execute, no system notifications available !";
+			TraceWarning{ClassId} << m_systemNotification.name() << " service failed to execute, no system notifications available!";
 		}
 
 		/* Initialization of the overlay manager. */
 		if ( m_overlayManager.initialize(m_secondaryServicesEnabled) )
 		{
-			TraceSuccess{ClassId} << m_overlayManager.name() << " service up !";
-
 			m_overlayManager.enable(m_inputManager, true);
+
+			TraceSuccess{ClassId} << m_overlayManager.name() << " service up!";
 
 			if ( !m_disableNotifier )
 			{
 				/* Initialization of the notifier. */
 				if ( m_notifier.initialize(m_secondaryServicesEnabled) )
 				{
-					TraceSuccess{ClassId} << m_notifier.name() << " service up !";
+					TraceSuccess{ClassId} << m_notifier.name() << " service up!";
 				}
 				else
 				{
-					TraceError{ClassId} << m_notifier.name() << " service failed to execute !";
+					TraceError{ClassId} << m_notifier.name() << " service failed to execute!";
 				}
 			}
 
 			/* Initialization of the core screen. */
 			if ( !this->initializeCoreScreen() )
 			{
-				Tracer::warning(ClassId, "Unable to create Core screens for information's and basic functions !");
+				Tracer::warning(ClassId, "Unable to create Core screens for information's and basic functions!");
 			}
 		}
 		else
 		{
-			TraceFatal{ClassId} << m_overlayManager.name() << " service failed to execute !";
+			TraceFatal{ClassId} << m_overlayManager.name() << " service failed to execute!";
 
 			return false;
 		}
@@ -718,11 +723,11 @@ namespace EmEn
 		{
 			this->observe(&m_sceneManager);
 
-			TraceSuccess{ClassId} << m_sceneManager.name() << " service up !";
+			TraceSuccess{ClassId} << m_sceneManager.name() << " service up!";
 		}
 		else
 		{
-			TraceError{ClassId} << m_sceneManager.name() << " service failed to execute !";
+			TraceError{ClassId} << m_sceneManager.name() << " service failed to execute!";
 
 			return false;
 		}
@@ -737,12 +742,12 @@ namespace EmEn
 	{
 		if ( !userService->initialize(m_userServiceEnabled) )
 		{
-			TraceError{ClassId} << userService->name() << " user service failed to execute !";
+			TraceError{ClassId} << userService->name() << " user service failed to execute!";
 
 			return false;
 		}
 
-		TraceSuccess{ClassId} << userService->name() << " user service up !";
+		TraceSuccess{ClassId} << userService->name() << " user service up!";
 
 		return true;
 	}
@@ -870,12 +875,14 @@ namespace EmEn
 
 				TraceError{ClassId} << service->name() << " secondary service failed to terminate properly!";
 			}
+
+			/* NOTE: Release resources after each service terminates.
+			 * This is critical to ensure Vulkan resources (with VMA allocations)
+			 * are freed before the Device is destroyed by the Instance service. */
+			m_resourceManager.unloadUnusedResources();
 		}
 
 		m_secondaryServicesEnabled.clear();
-
-		/* NOTE: Release the possible resources held by the secondary services. */
-		m_resourceManager.unloadUnusedResources();
 
 		if constexpr ( VulkanTrackingDebugEnabled )
 		{

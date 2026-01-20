@@ -30,6 +30,8 @@
 #include <cstdint>
 
 /* Local inclusions for inheritances. */
+#include <limits>
+
 #include "Interface.hpp"
 
 namespace EmEn::Saphir::Declaration
@@ -42,13 +44,16 @@ namespace EmEn::Saphir::Declaration
 	{
 		public:
 
+			/** @brief Special value for unbounded arrays (generates [] in GLSL). */
+			static constexpr uint32_t UnboundedArray{std::numeric_limits< uint32_t >::max()};
+
 			/**
 			 * @brief Constructs a shader uniform variable.
 			 * @param set An integer to define in which set the sampler is.
 			 * @param binding An integer to define at which point the sampler is bound.
 			 * @param type A C-string to set the GLSL type of the sampler. Use one of Keys::GLSL::Sampler* keyword.
 			 * @param name A C-string to set the name of the sampler.
-			 * @param arraySize Set the variable as an array. Default 0.
+			 * @param arraySize Set the variable as an array. Default 0. Use UnboundedArray for runtime-sized arrays.
 			 */
 			Sampler (uint32_t set, uint32_t binding, Key type, Key name, uint32_t arraySize = 0) noexcept
 				: m_set{set},
@@ -139,6 +144,28 @@ namespace EmEn::Saphir::Declaration
 			arraySize () const noexcept
 			{
 				return m_arraySize;
+			}
+
+			/**
+			 * @brief Returns whether this sampler is an unbounded array.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isUnbounded () const noexcept
+			{
+				return m_arraySize == UnboundedArray;
+			}
+
+			/**
+			 * @brief Returns whether this sampler is an array (bounded or unbounded).
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isArray () const noexcept
+			{
+				return m_arraySize > 0;
 			}
 
 		private:

@@ -503,7 +503,7 @@ namespace EmEn::Graphics::RenderableInstance
 	Multiple::bindInstanceModelLayer (const CommandBuffer & commandBuffer, uint32_t layerIndex) const noexcept
 	{
 		/*  Bind the geometry VBO and the optional IBO with the model matrix VBO. */
-		commandBuffer.bind(*this->renderable()->geometry(), *m_vertexBufferObject, layerIndex);
+		commandBuffer.bind(*this->renderable()->geometry(), *m_vertexBufferObject, layerIndex, 0);
 	}
 
 	bool

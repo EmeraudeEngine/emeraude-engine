@@ -43,7 +43,7 @@ namespace EmEn::Graphics::Renderable
 {
 	/**
 	 * @brief An abstract class to define the far background of a scene.
-	 * @extends EmEn::Graphics::Renderable::Interface This class is a renderable object in the 3D world.
+	 * @extends EmEn::Graphics::Renderable::Abstract This class is a renderable object in the 3D world.
 	 */
 	class AbstractBackground : public Abstract
 	{
@@ -80,7 +80,7 @@ namespace EmEn::Graphics::Renderable
 			 */
 			~AbstractBackground () override = default;
 
-			/** @copydoc EmEn::Graphics::Renderable::Interface::boundingBox() */
+			/** @copydoc EmEn::Graphics::Renderable::Abstract::boundingBox() */
 			[[nodiscard]]
 			const Libs::Math::Space3D::AACuboid< float > &
 			boundingBox () const noexcept final
@@ -88,7 +88,7 @@ namespace EmEn::Graphics::Renderable
 				return NullBoundingBox;
 			}
 
-			/** @copydoc EmEn::Graphics::Renderable::Interface::boundingSphere() */
+			/** @copydoc EmEn::Graphics::Renderable::Abstract::boundingSphere() */
 			[[nodiscard]]
 			const Libs::Math::Space3D::Sphere< float > &
 			boundingSphere () const noexcept final

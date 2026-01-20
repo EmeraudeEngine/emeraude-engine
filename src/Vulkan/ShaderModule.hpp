@@ -156,6 +156,58 @@ namespace EmEn::Vulkan
 				return m_pipelineShaderStageCreateInfo;
 			}
 
+			/**
+			 * @brief Sets a boolean specialization constant.
+			 * @note Must be called before createOnHardware().
+			 * @param constantId The constant ID as declared in the shader (layout(constant_id = X)).
+			 * @param value The boolean value for the constant.
+			 * @return void
+			 */
+			void setSpecializationConstant (uint32_t constantId, bool value) noexcept;
+
+			/**
+			 * @brief Sets an integer specialization constant.
+			 * @note Must be called before createOnHardware().
+			 * @param constantId The constant ID as declared in the shader (layout(constant_id = X)).
+			 * @param value The integer value for the constant.
+			 * @return void
+			 */
+			void setSpecializationConstant (uint32_t constantId, int32_t value) noexcept;
+
+			/**
+			 * @brief Sets an unsigned integer specialization constant.
+			 * @note Must be called before createOnHardware().
+			 * @param constantId The constant ID as declared in the shader (layout(constant_id = X)).
+			 * @param value The unsigned integer value for the constant.
+			 * @return void
+			 */
+			void setSpecializationConstant (uint32_t constantId, uint32_t value) noexcept;
+
+			/**
+			 * @brief Sets a float specialization constant.
+			 * @note Must be called before createOnHardware().
+			 * @param constantId The constant ID as declared in the shader (layout(constant_id = X)).
+			 * @param value The float value for the constant.
+			 * @return void
+			 */
+			void setSpecializationConstant (uint32_t constantId, float value) noexcept;
+
+			/**
+			 * @brief Returns the hash of the specialization constants configuration.
+			 * @note This is used for pipeline caching.
+			 * @return size_t
+			 */
+			[[nodiscard]]
+			size_t specializationConstantsHash () const noexcept;
+
+			/**
+			 * @brief Rebuilds the pipeline shader stage create info after specialization constants have been changed.
+			 * @note This should only be called if the shader module is already created.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool rebuildPipelineShaderStageCreateInfo () noexcept;
+
 		private:
 
 			/**
@@ -169,6 +221,7 @@ namespace EmEn::Vulkan
 			VkShaderStageFlagBits m_shaderType{};
 			std::vector< uint32_t > m_binaryCode;
 			Libs::StaticVector< VkSpecializationMapEntry, 8 > m_mapEntries;
+			std::vector< uint8_t > m_specializationData;
 			VkSpecializationInfo m_specializationInfo{};
 			VkPipelineShaderStageCreateInfo m_pipelineShaderStageCreateInfo{};
 	};

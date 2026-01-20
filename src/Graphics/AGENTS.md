@@ -173,6 +173,36 @@ Each `Renderable::Abstract` maintains a program cache per render target:
 
 See: `Renderable::Abstract::findCachedProgram()`, `cacheProgram()`, `ProgramCacheKey.hpp`
 
+### Window Resize and Render Pass Handle Invalidation
+
+> [!CRITICAL]
+> **When the window is resized, the swapchain is recreated with a NEW render pass handle!**
+>
+> This means ALL cached programs for the main view become stale because their `ProgramCacheKey::renderPassHandle` no longer matches the current render pass.
+
+**Problem scenario (before fix):**
+1. Window resize → swapchain recreated → new render pass handle
+2. `isReadyToRender()` checked `hasAnyCachedPrograms()` → returned `true` (old programs exist)
+3. `render()` tried to find program with NEW handle → failed
+4. Error: "There is no suitable render program for the renderable instance"
+
+**Solution:**
+The `isReadyToRender()` function now validates that cached programs have a matching render pass handle:
+
+```cpp
+bool Abstract::isReadyToRender (const std::shared_ptr< RenderTarget::Abstract > & renderTarget) const noexcept
+{
+    // ...
+    const auto renderPassHandle = reinterpret_cast< uint64_t >(renderTarget->framebuffer()->renderPass()->handle());
+    return m_renderable->hasAnyCachedProgramsForRenderPass(renderTarget, renderPassHandle);
+}
+```
+
+**Code references:**
+- `Renderable/Abstract.cpp:hasAnyCachedProgramsForRenderPass()` - Validates render pass handle against cached keys
+- `RenderableInstance/Abstract.cpp:isReadyToRender()` - Uses handle validation
+- `Vulkan/SwapChain.cpp:recreate()` - Creates new render pass on resize
+
 ## 5. Material UBO System (SharedUniformBuffer)
 
 ### Architecture
@@ -238,7 +268,75 @@ m_descriptorSet->writeUniformBuffer(bindingPoint, descriptorInfo);
 
 The GLSL struct is generated to match this layout exactly.
 
-## 6. Frame Rate Limiter
+## 6. Bindless Textures Manager
+
+### Overview
+
+The `BindlessTexturesManager` provides a global descriptor set with arrays of textures that can be indexed dynamically in shaders using non-uniform indexing. This eliminates the need to rebind descriptor sets for each material.
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│ BindlessTexturesManager (single global descriptor set)              │
+├─────────────────────────────────────────────────────────────────────┤
+│ Binding 0: sampler1D[256]   │ 1D texture array                      │
+│ Binding 1: sampler2D[4096]  │ 2D texture array                      │
+│ Binding 2: sampler3D[256]   │ 3D texture array                      │
+│ Binding 3: samplerCube[256] │ Cubemap texture array                 │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### Reserved Slots
+
+| Slot | Constant | Purpose |
+|------|----------|---------|
+| 0 | `EnvironmentCubemapSlot` | Scene environment cubemap |
+| 1 | `IrradianceCubemapSlot` | IBL irradiance map |
+| 2 | `PrefilteredCubemapSlot` | IBL prefiltered environment |
+| 3 | `BRDFLutSlot` | BRDF lookup texture |
+| 16+ | `FirstDynamicSlot` | Dynamic texture allocation |
+
+### Usage
+
+**Registering a texture:**
+```cpp
+uint32_t index = bindlessManager.registerTexture2D(texture);
+// Use 'index' in shader to access the texture
+```
+
+**Updating reserved slots:**
+```cpp
+bindlessManager.updateTextureCube(BindlessTexturesManager::EnvironmentCubemapSlot, envMap);
+```
+
+**In GLSL shaders:**
+```glsl
+layout(set = BINDLESS_SET, binding = 1) uniform sampler2D textures2D[];
+
+// Access with non-uniform index
+vec4 color = texture(textures2D[nonuniformEXT(textureIndex)], uv);
+```
+
+### Lifecycle Constraints
+
+> [!CRITICAL]
+> **VMA Allocation Order**
+>
+> The BindlessTexturesManager holds references to Vulkan resources. During shutdown:
+> 1. `Renderer::clearDefaultResources()` releases texture references
+> 2. `ResourceManager::unloadUnusedResources()` frees VMA allocations
+> 3. Only then can `Device::destroy()` safely destroy VMA allocator
+>
+> The `Core::terminate()` loop calls `unloadUnusedResources()` after each service
+> to ensure proper cleanup order.
+
+**Code references:**
+- `BindlessTexturesManager.hpp/cpp` - Manager implementation
+- `Renderer::createDefaultResources()` - Default cubemap initialization
+- `Renderer::clearDefaultResources()` - Cleanup before shutdown
+
+## 7. Frame Rate Limiter
 
 Optional software frame rate limiter for precise FPS control.
 
@@ -267,7 +365,101 @@ Optional software frame rate limiter for precise FPS control.
 - `Renderer.hpp:m_frameRateLimit`, `m_frameDuration`, `m_frameStartTime`
 - `SettingKeys.hpp:VideoFrameRateLimitKey`
 
-## 6. Navigation
+## 8. Material Component System
+
+### FillingType Enum
+
+Material components use `FillingType` to determine how data is sourced:
+
+| Value | Description | Data Format |
+|-------|-------------|-------------|
+| `Value` | Single float | Numeric JSON |
+| `Color` | RGB/RGBA color | Array `[r, g, b]` or `[r, g, b, a]` |
+| `Texture` | 2D texture | Object `{ "Name": "path" }` |
+| `VolumeTexture` | 3D texture | Object `{ "Name": "path" }` |
+| `Cubemap` | Cubemap texture | Object `{ "Name": "path" }` |
+| `AnimatedTexture` | Animated texture | Object `{ "Name": "path" }` |
+| `AlphaChannelAsValue` | Use alpha as value | Object |
+| `Automatic` | Auto-configure | Optional params (Amount, IOR, etc.) |
+| `None` | Disabled | No data required |
+
+**Code reference:** `Graphics/Types.hpp:FillingType`
+
+### Component JSON Parsing
+
+All material components follow the same parsing pattern via `parseComponentBase()`:
+
+```json
+{
+    "ComponentName": {
+        "Type": "Texture",
+        "Data": { "Name": "Category/TextureName" },
+        "OptionalParam": 1.0
+    }
+}
+```
+
+**Special case - Automatic type:**
+- No `Data` key required
+- Parameters read directly from component object
+- Used for Reflection/Refraction to use scene environment cubemap
+
+```json
+{
+    "Reflection": { "Type": "Automatic", "Amount": 0.1 },
+    "Refraction": { "Type": "Automatic", "IOR": 1.5 }
+}
+```
+
+**Code references:**
+- `Graphics/Material/Helpers.cpp:parseComponentBase()` - Base parsing
+- `Graphics/Material/StandardResource.cpp:parseReflectionComponent()` - Automatic handling
+- `Graphics/Material/PBRResource.cpp:parseReflectionComponent()` - PBR variant
+
+### Material Types Array
+
+> [!CRITICAL]
+> **All material resource types must be registered in `Material::Types`!**
+>
+> `Materials.hpp` defines the valid material types for JSON validation:
+> ```cpp
+> constexpr auto Types = std::array< std::string_view, 3 >{
+>     BasicResource::ClassId,      // "MaterialBasicResource"
+>     StandardResource::ClassId,   // "MaterialStandardResource"
+>     PBRResource::ClassId         // "MaterialPBRResource"
+> };
+> ```
+>
+> Missing types cause silent fallback to `BasicResource` during mesh loading.
+
+## 9. Shadow Mapping Global Control
+
+The `Renderer` provides a global shadow mapping enable/disable via `isShadowMapsEnabled()`.
+
+**Setting key:** `GraphicsShadowMappingEnabledKey` (`Core/Graphics/Renderer/ShadowMappingEnabled`)
+
+**Implementation:**
+```cpp
+bool Renderer::isShadowMapsEnabled() const noexcept
+{
+    return m_shadowMapsEnabled;  // Cached from settings
+}
+```
+
+**Integration with Scene:**
+The Scene checks this setting when selecting render pass types for lighting. When disabled, all lights use `NoShadow` pass types to avoid binding shadow map descriptors.
+
+**Why this matters:**
+Without this check, disabling shadow mapping via settings caused Vulkan validation errors because shadow map images remained in `VK_IMAGE_LAYOUT_UNDEFINED` but descriptor sets still tried to bind them.
+
+**Code references:**
+- `Renderer.hpp:isShadowMapsEnabled()` - Global accessor
+- `Scenes/Scene.rendering.cpp:978` - Scene-side check
+- `SettingKeys.hpp:GraphicsShadowMappingEnabledKey` - Setting key
+
+See [`docs/shadow-mapping.md`](../../docs/shadow-mapping.md) for complete shadow mapping architecture.
+
+## 10. Navigation
 
 -   **Base Class**: `Renderable::Abstract`
 -   **Main Entry**: `Renderer` (Central coordinator)
@@ -275,3 +467,5 @@ Optional software frame rate limiter for precise FPS control.
 -   **Shader Cache**: [`src/Saphir/AGENTS.md`](../Saphir/AGENTS.md) - 3-level cache system
 -   **Swap-Chain/VSync**: [`src/Vulkan/AGENTS.md`](../Vulkan/AGENTS.md) - Present mode selection
 -   **Pattern Examples**: [`docs/development-patterns.md`](../../docs/development-patterns.md)
+-   **Material JSON format**: See `docs/development-patterns.md#material-json-format-unified`
+-   **Shadow Mapping**: [`docs/shadow-mapping.md`](../../docs/shadow-mapping.md) - PCF, global control, per-light settings

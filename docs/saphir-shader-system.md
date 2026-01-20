@@ -219,9 +219,13 @@ Generator::check(material, geometry):
 - Geometry: Vertex format (normals, tangents, UVs, colors)
 - Scene Context: Number/types of lights, shadows enabled, ambient lighting
 
+**Quality Setting:** `EnableHighQualityKey` (`Core/Graphics/Shader/EnableHighQuality`)
+- **High quality (true):** Per-fragment lighting, normal mapping, per-fragment Fresnel
+- **Low quality (false):** Per-vertex lighting (Gouraud), no normal mapping
+
 **Features:**
 - Full lighting calculations (directional, point, spot lights)
-- Normal mapping support (if tangent space available)
+- Normal mapping support (if tangent space available AND high quality enabled)
 - PBR or Phong shading models
 - Shadow receiving (if shadows enabled in scene)
 - Texture sampling (diffuse, normal, roughness, metallic, emissive)
@@ -489,11 +493,7 @@ For cubemap rendering with Vulkan multiview extension:
 ```glsl
 struct CubemapFace
 {
-    mat4 projectionMatrix;
-    vec4 positionWorldSpace;
-    vec4 velocity;
-    vec4 viewProperties;
-    vec4 _padding;
+    mat4 viewMatrix;           // Per-face view matrix
 };
 ```
 
@@ -501,42 +501,113 @@ struct CubemapFace
 ```glsl
 layout(std140, set = 0, binding = 0) uniform CubemapView
 {
-    CubemapFace faces[6];      // Per-face data (6 faces)
-    vec4 ambientLightColor;    // Shared data
+    CubemapFace instance[6];      // Per-face data (6 faces)
+    mat4 projectionMatrix;        // Shared projection (90° FOV, aspect 1:1)
+    vec4 positionWorldSpace;      // Shared camera position
+    vec4 velocity;
+    vec4 viewProperties;
+    vec4 ambientLightColor;
     float ambientLightIntensity;
 } ubView;
 ```
 
 **Shader Access Pattern:**
 ```glsl
-// Access per-face data using gl_ViewIndex (0-5 for +X,-X,+Y,-Y,+Z,-Z)
-mat4 projection = ubView.faces[gl_ViewIndex].projectionMatrix;
-vec4 cameraPos = ubView.faces[gl_ViewIndex].positionWorldSpace;
+// Access per-face view matrix using gl_ViewIndex (0-5 for +X,-X,+Y,-Y,+Z,-Z)
+mat4 viewMatrix = ubView.instance[gl_ViewIndex].viewMatrix;
 
 // Access shared data directly
-vec4 ambient = ubView.ambientLightColor * ubView.ambientLightIntensity;
+mat4 projection = ubView.projectionMatrix;
+vec4 cameraPos = ubView.positionWorldSpace;
 ```
 
 **Generator Code:**
 ```cpp
 // Create structure for per-face data
-Declaration::Structure structure{Struct::CubemapFace, "faces"};
-structure.addMember(VariableType::Matrix4, "projectionMatrix");
-// ... add other per-face members
+Declaration::Structure structure{Struct::CubemapFace};
+structure.addMember(VariableType::Matrix4, UniformBlock::Component::ViewMatrix);
 
 // Create uniform block
 Declaration::UniformBlock uniformBlock{...};
-uniformBlock.addArrayMember(structure, 6);  // Array of 6 faces
+uniformBlock.addArrayMember(structure, UniformBlock::Component::Instance, 6);
 
 // Add shared data OUTSIDE the array
-uniformBlock.addMember(VariableType::FloatVector4, "ambientLightColor");
-uniformBlock.addMember(VariableType::Float, "ambientLightIntensity");
+uniformBlock.addMember(VariableType::Matrix4, UniformBlock::Component::ProjectionMatrix);
+uniformBlock.addMember(VariableType::FloatVector4, UniformBlock::Component::PositionWorldSpace);
+// ... other shared members
 ```
 
 **Shader Variable Synthesis:**
 When generating shader code that accesses view uniforms:
-- For 2D/single view: Use `ViewUB("projectionMatrix")` → `ubView.projectionMatrix`
-- For cubemap multiview: Use `CubeViewUB("faces", "gl_ViewIndex", "projectionMatrix")` → `ubView.faces[gl_ViewIndex].projectionMatrix`
+- For 2D/single view: Use `ViewUB(Component, false)` → `ubView.projectionMatrix`
+- For cubemap multiview: Use `ViewUB(Component, true)` → `ubView.instance[gl_ViewIndex].viewMatrix`
+
+### Cubemap Mode: Matrix Source Coordination
+
+**Critical:** In cubemap mode, View and Projection matrices come from the UBO (not push constants), while Model matrix comes from push constants. All shader generation code must respect this.
+
+#### Push Constant Declaration (CPU/GPU Coordination)
+
+The push constant structure is declared differently based on render target type:
+
+```cpp
+// Generator/Abstract.cpp:declareMatrixPushConstantBlock()
+if ( m_renderTarget->isCubemap() )
+{
+    // Cubemap: only Model matrix in push constant
+    pushConstantBlock.addMember(VariableType::Matrix4, PushConstant::Component::ModelMatrix);
+}
+else if ( m_shaderProgram->wasAdvancedMatricesEnabled() )
+{
+    // Advanced: View + Model separately
+    pushConstantBlock.addMember(VariableType::Matrix4, PushConstant::Component::ViewMatrix);
+    pushConstantBlock.addMember(VariableType::Matrix4, PushConstant::Component::ModelMatrix);
+}
+else
+{
+    // Standard: pre-combined MVP
+    pushConstantBlock.addMember(VariableType::Matrix4, PushConstant::Component::ModelViewProjectionMatrix);
+}
+```
+
+#### View Matrix Access in Shader Code
+
+Any code that transforms vectors to view space must check the render mode:
+
+```cpp
+// Common pattern in all light generators and vertex shader functions
+const auto viewMatrixSource = vertexShader.isCubemapModeEnabled() ?
+    ViewUB(UniformBlock::Component::ViewMatrix, true) :    // From UBO
+    MatrixPC(PushConstant::Component::ViewMatrix);         // From push constant
+
+// Use viewMatrixSource for light direction/position transforms
+Code{vertexShader} << "lightDirViewSpace = (" << viewMatrixSource << " * lightDirWorldSpace).xyz;";
+```
+
+#### Files That Must Handle Cubemap Mode
+
+When modifying matrix access in shader generation, these files need updates:
+
+| File | Functions | Purpose |
+|------|-----------|---------|
+| `Generator/Abstract.cpp` | `declareMatrixPushConstantBlock()` | Push constant declaration |
+| `VertexShader.cpp` | `prepareModelViewMatrix()` | ModelView computation |
+| `VertexShader.cpp` | `prepareModelViewProjectionMatrix()` | MVP computation |
+| `VertexShader.cpp` | `prepareSpriteModelMatrix()` | Billboard matrix |
+| `LightGenerator.PerFragment.cpp` | `generatePhongBlinnVertexShader()` | Light transforms |
+| `LightGenerator.PerFragment.NormalMap.cpp` | `generatePhongBlinnWithNormalMapVertexShader()` | Normal map lighting |
+| `LightGenerator.PerVertex.cpp` | `generateGouraudVertexShader()` | Per-vertex lighting |
+| `LightGenerator.PBR.cpp` | `generatePBRVertexShader()` | PBR lighting |
+
+#### Common Error
+
+Forgetting to handle cubemap mode causes shader compilation errors:
+
+```
+ERROR: 'viewMatrix' : no such field in structure 'pcMatrices'
+```
+
+This happens when code uses `MatrixPC(ViewMatrix)` but the render target is a cubemap (push constant only contains `modelMatrix`).
 
 ### Common Pitfalls
 

@@ -143,6 +143,7 @@ namespace EmEn::Graphics::Geometry
 		if ( clearLocalData )
 		{
 			this->resetFlags();
+
 			m_localData.clear();
 			m_subGeometries.clear();
 		}
@@ -156,7 +157,11 @@ namespace EmEn::Graphics::Geometry
 			return false;
 		}
 
-		ShapeBuilderOptions< float > options{};
+		this->enableFlag(EnableTangentSpace);
+		this->enableFlag(EnablePrimaryTextureCoordinates);
+		this->enableFlag(EnableVertexColor);
+
+		ShapeBuilderOptions< float > options{true, true, true, false, false};
 		options.enableGlobalVertexColor(Red);
 
 		m_localData = ShapeGenerator::generateCuboid(1.0F, 1.0F, 1.0F, options);
@@ -172,7 +177,7 @@ namespace EmEn::Graphics::Geometry
 			return false;
 		}
 
-		if ( !VertexFactory::FileIO::read(filepath, m_localData) )
+		if ( !FileIO::read(filepath, m_localData) )
 		{
 			TraceError{ClassId} << "Unable to load geometry from '" << filepath << "' !";
 

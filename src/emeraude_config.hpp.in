@@ -123,6 +123,7 @@
 #cmakedefine EMERAUDE_USE_SYSTEM_LIBS
 #cmakedefine ASIO_ENABLED
 #cmakedefine IMGUI_ENABLED
+#cmakedefine LIBSNDFILE_ENABLED
 
 /* NOTE: Be sure this token is always set for GLFW.
  * FIXME: Check if this is useful! */

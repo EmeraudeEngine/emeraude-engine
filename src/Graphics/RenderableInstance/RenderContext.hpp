@@ -82,6 +82,16 @@ namespace EmEn::Graphics::RenderableInstance
 		 * - Push constants only need to provide the Model matrix (Unique) or nothing (Multiple)
 		 */
 		bool isCubemap{false};
+
+		/**
+		 * @brief Whether the render target is a Cascaded Shadow Map using multiview rendering.
+		 *
+		 * When true, the rendering uses Vulkan multiview extension where:
+		 * - All N cascades are rendered in a single pass
+		 * - View/Projection matrices are stored in a UBO array indexed by gl_ViewIndex
+		 * - Push constants only need to provide the Model matrix (Unique) or nothing (Multiple)
+		 */
+		bool isCSM{false};
 	};
 
 	/**

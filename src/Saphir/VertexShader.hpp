@@ -249,6 +249,28 @@ namespace EmEn::Saphir
 				return m_cubemapModeEnabled;
 			}
 
+			/**
+			 * @brief Enables CSM (Cascaded Shadow Map) rendering mode.
+			 * @note CSM mode uses multiview with gl_ViewIndex to select the cascade view-projection matrix.
+			 * @return void
+			 */
+			void
+			enableCSMMode () noexcept
+			{
+				m_csmModeEnabled = true;
+			}
+
+			/**
+			 * @brief Returns whether the vertex shader is in CSM rendering mode.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isCSMModeEnabled () const noexcept
+			{
+				return m_csmModeEnabled;
+			}
+
 		private:
 
 			/** @copydoc EmEn::Saphir::AbstractShader::onSourceCodeGeneration() */
@@ -450,5 +472,6 @@ namespace EmEn::Saphir
 			bool m_advancedMatricesEnabled{false};
 			bool m_billBoardingEnabled{false};
 			bool m_cubemapModeEnabled{false};
+			bool m_csmModeEnabled{false};
 	};
 }

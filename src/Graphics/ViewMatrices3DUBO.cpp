@@ -41,12 +41,12 @@ namespace EmEn::Graphics
 	using namespace Vulkan;
 
 	const std::array< Matrix< 4, float >, CubemapFaceIndexes.size() > ViewMatrices3DUBO::CubemapOrientation{
-		Matrix< 4, float >::lookAt(Vector< 3, float >{0.0F, 0.0F, 0.0F}, Vector< 3, float >{ 1.0F,  0.0F,  0.0F}, Vector< 3, float >{ 0.0F, -1.0F,  0.0F}), // X+
-		Matrix< 4, float >::lookAt(Vector< 3, float >{0.0F, 0.0F, 0.0F}, Vector< 3, float >{-1.0F,  0.0F,  0.0F}, Vector< 3, float >{ 0.0F, -1.0F,  0.0F}), // X-
+		Matrix< 4, float >::lookAt(Vector< 3, float >{0.0F, 0.0F, 0.0F}, Vector< 3, float >{ 1.0F,  0.0F,  0.0F}, Vector< 3, float >{ 0.0F,  1.0F,  0.0F}), // X+
+		Matrix< 4, float >::lookAt(Vector< 3, float >{0.0F, 0.0F, 0.0F}, Vector< 3, float >{-1.0F,  0.0F,  0.0F}, Vector< 3, float >{ 0.0F,  1.0F,  0.0F}), // X-
 		Matrix< 4, float >::lookAt(Vector< 3, float >{0.0F, 0.0F, 0.0F}, Vector< 3, float >{ 0.0F, -1.0F,  0.0F}, Vector< 3, float >{ 0.0F,  0.0F, -1.0F}), // Y+
 		Matrix< 4, float >::lookAt(Vector< 3, float >{0.0F, 0.0F, 0.0F}, Vector< 3, float >{ 0.0F,  1.0F,  0.0F}, Vector< 3, float >{ 0.0F,  0.0F,  1.0F}), // Y-
-		Matrix< 4, float >::lookAt(Vector< 3, float >{0.0F, 0.0F, 0.0F}, Vector< 3, float >{ 0.0F,  0.0F,  1.0F}, Vector< 3, float >{ 0.0F, -1.0F,  0.0F}), // Z+
-		Matrix< 4, float >::lookAt(Vector< 3, float >{0.0F, 0.0F, 0.0F}, Vector< 3, float >{ 0.0F,  0.0F, -1.0F}, Vector< 3, float >{ 0.0F, -1.0F,  0.0F}) // Z-
+		Matrix< 4, float >::lookAt(Vector< 3, float >{0.0F, 0.0F, 0.0F}, Vector< 3, float >{ 0.0F,  0.0F, -1.0F}, Vector< 3, float >{ 0.0F,  1.0F,  0.0F}), // Z+ (direction swapped)
+		Matrix< 4, float >::lookAt(Vector< 3, float >{0.0F, 0.0F, 0.0F}, Vector< 3, float >{ 0.0F,  0.0F,  1.0F}, Vector< 3, float >{ 0.0F,  1.0F,  0.0F}) // Z- (direction swapped)
 	};
 
 	const std::array< Matrix< 4, float >, CubemapFaceIndexes.size() > ViewMatrices3DUBO::ShadowCubemapOrientation{
@@ -130,9 +130,11 @@ namespace EmEn::Graphics
 			m_logicState.views.at(faceIndex) = CubemapOrientation.at(faceIndex) * Matrix< 4, float >::translation(-m_logicState.position);
 			m_logicState.infinityViews.at(faceIndex) = CubemapOrientation.at(faceIndex) * Matrix< 4, float >::translation(-m_logicState.position);
 			m_logicState.frustums.at(faceIndex).update(m_logicState.projection * m_logicState.views.at(faceIndex));
+
+			/* Copy view matrix to buffer data for GPU upload. */
+			std::memcpy(&m_logicState.bufferData[faceIndex * Matrix4Alignment], m_logicState.views.at(faceIndex).data(), Matrix4Alignment * sizeof(float));
 		}
 
-		/* FIXME: These data are not constantly updated on GPU. */
 		m_logicState.bufferData[WorldPositionOffset + 0] = m_logicState.position.x();
 		m_logicState.bufferData[WorldPositionOffset + 1] = m_logicState.position.y();
 		m_logicState.bufferData[WorldPositionOffset + 2] = m_logicState.position.z();

@@ -91,7 +91,15 @@ namespace EmEn::Graphics::Renderable
 				return classUID == getClassUID();
 			}
 
-			/** @copydoc EmEn::Graphics::Renderable::Interface::layerCount() const */
+			/** @copydoc EmEn::Graphics::Renderable::Abstract::subGeometryCount() const */
+			[[nodiscard]]
+			uint32_t
+			subGeometryCount () const noexcept override
+			{
+				return 1;
+			}
+
+			/** @copydoc EmEn::Graphics::Renderable::Abstract::layerCount() const */
 			[[nodiscard]]
 			uint32_t
 			layerCount () const noexcept override
@@ -99,7 +107,7 @@ namespace EmEn::Graphics::Renderable
 				return 1;
 			}
 
-			/** @copydoc EmEn::Graphics::Renderable::Interface::isOpaque() const */
+			/** @copydoc EmEn::Graphics::Renderable::Abstract::isOpaque() const */
 			[[nodiscard]]
 			bool
 			isOpaque (uint32_t /*layerIndex*/) const noexcept override
@@ -107,7 +115,7 @@ namespace EmEn::Graphics::Renderable
 				return true;
 			}
 
-			/** @copydoc EmEn::Graphics::Renderable::Interface::geometry() const */
+			/** @copydoc EmEn::Graphics::Renderable::Abstract::geometry() const */
 			[[nodiscard]]
 			const Geometry::Interface *
 			geometry () const noexcept override
@@ -115,7 +123,7 @@ namespace EmEn::Graphics::Renderable
 				return m_geometry.get();
 			}
 
-			/** @copydoc EmEn::Graphics::Renderable::Interface::material() const */
+			/** @copydoc EmEn::Graphics::Renderable::Abstract::material() const */
 			[[nodiscard]]
 			const Material::Interface *
 			material (uint32_t /*layerIndex*/) const noexcept override
@@ -123,7 +131,7 @@ namespace EmEn::Graphics::Renderable
 				return m_material.get();
 			}
 
-			/** @copydoc EmEn::Graphics::Renderable::Interface::layerRasterizationOptions() const */
+			/** @copydoc EmEn::Graphics::Renderable::Abstract::layerRasterizationOptions() const */
 			[[nodiscard]]
 			const RasterizationOptions *
 			layerRasterizationOptions (uint32_t /*layerIndex*/) const noexcept override

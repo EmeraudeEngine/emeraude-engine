@@ -30,6 +30,7 @@
 #include <ostream>
 
 /* Local inclusions. */
+#include "Graphics/DummyShadowTexture.hpp"
 #include "Scenes/AVConsole/Manager.hpp"
 #include "Saphir/LightGenerator.hpp"
 #include "Vulkan/DescriptorSetLayout.hpp"
@@ -58,11 +59,30 @@ namespace EmEn::Scenes
 			return nullptr;
 		}
 
+		/* Binding 0: Light UBO with dynamic offset. */
 		if ( !descriptorSet->writeUniformBufferObjectDynamic(0, uniformBufferObject) )
 		{
 			Tracer::error(ClassId, "Unable to write the uniform buffer object to the descriptor set !");
 
 			return nullptr;
+		}
+
+		/* Binding 1: Default dummy shadow texture.
+		 * This will be overwritten with a real shadow map if the light uses shadow mapping. */
+		const auto dummyShadowTexture = renderer.getDummyShadowTexture2D();
+
+		if ( dummyShadowTexture != nullptr )
+		{
+			if ( !descriptorSet->writeCombinedImageSampler(1, *dummyShadowTexture) )
+			{
+				Tracer::error(ClassId, "Unable to write the dummy shadow texture to the descriptor set !");
+
+				return nullptr;
+			}
+		}
+		else
+		{
+			Tracer::warning(ClassId, "No dummy shadow texture available, binding 1 will be uninitialized !");
 		}
 
 		return descriptorSet;
@@ -83,9 +103,12 @@ namespace EmEn::Scenes
 		auto & renderer = scene.AVConsoleManager().graphicsRenderer();
 		auto & sharedUBOManager = renderer.sharedUBOManager();
 
-		/* Generate directional light shared uniform buffer. */
+		/* Generate directional light shared uniform buffer.
+		 * NOTE: Always allocate space for the light space matrix (useShadow=true) even if some lights
+		 * don't use shadow mapping. This ensures the UBO size matches DirectionalLight::m_buffer which
+		 * always includes the matrix. Lights without shadows will have an identity matrix. */
 		{
-			const auto uniformBlock = LightGenerator::getUniformBlock(0, 0, LightType::Directional, false);
+			const auto uniformBlock = LightGenerator::getUniformBlock(0, 0, LightType::Directional, true);
 
 			m_directionalLightBuffer = sharedUBOManager.createSharedUniformBuffer(scene.name() + "DirectionalLights", createDescriptorSet, uniformBlock.bytes());
 
@@ -108,9 +131,12 @@ namespace EmEn::Scenes
 			}
 		}
 
-		/* Generate point light shared uniform buffer. */
+		/* Generate point light shared uniform buffer.
+		 * NOTE: Always allocate space for the light space matrix (useShadow=true) even if some lights
+		 * don't use shadow mapping. This ensures the UBO size matches PointLight::m_buffer which
+		 * always includes the matrix. Lights without shadows will have an identity matrix. */
 		{
-			const auto uniformBlock = LightGenerator::getUniformBlock(0, 0, LightType::Point, false);
+			const auto uniformBlock = LightGenerator::getUniformBlock(0, 0, LightType::Point, true);
 
 			m_pointLightBuffer = sharedUBOManager.createSharedUniformBuffer(scene.name() + "PointLights", createDescriptorSet, uniformBlock.bytes());
 
@@ -133,9 +159,12 @@ namespace EmEn::Scenes
 			}
 		}
 
-		/* Generate spotlight shared uniform buffer. */
+		/* Generate spotlight shared uniform buffer.
+		 * NOTE: Always allocate space for the light space matrix (useShadow=true) even if some lights
+		 * don't use shadow mapping. This ensures the UBO size matches SpotLight::m_buffer which
+		 * always includes the matrix. Lights without shadows will have an identity matrix. */
 		{
-			const auto uniformBlock = LightGenerator::getUniformBlock(0, 0, LightType::Spot, false);
+			const auto uniformBlock = LightGenerator::getUniformBlock(0, 0, LightType::Spot, true);
 
 			m_spotLightBuffer = sharedUBOManager.createSharedUniformBuffer(scene.name() + "SpotLights", createDescriptorSet, uniformBlock.bytes());
 
@@ -386,7 +415,22 @@ namespace EmEn::Scenes
 	std::shared_ptr< DescriptorSetLayout >
 	LightSet::getDescriptorSetLayout (LayoutManager & layoutManager) noexcept
 	{
-		/* NOTE: Create a unique identifier for the descriptor set layout. */
+		/* NOTE: Unified descriptor set layout with 2 bindings.
+		 * Binding 0: Light UBO (dynamic offset for shared buffer)
+		 * Binding 1: Shadow map sampler (real shadow map or dummy texture)
+		 *
+		 * The specialization constant scUseShadow controls whether the
+		 * shadow sampling code is executed in the shader. When false,
+		 * the Vulkan driver eliminates the dead code. */
+		return getDescriptorSetLayoutWithShadow(layoutManager);
+	}
+
+	std::shared_ptr< DescriptorSetLayout >
+	LightSet::getDescriptorSetLayoutWithShadow (LayoutManager & layoutManager) noexcept
+	{
+		/* NOTE: Create a unique identifier for the unified descriptor set layout.
+		 * This layout is used for ALL light passes (shadow and no-shadow).
+		 * Lights without shadow maps bind the dummy shadow texture. */
 		const std::string UUID{ClassId};
 
 		auto descriptorSetLayout = layoutManager.getDescriptorSetLayout(UUID);
@@ -395,7 +439,12 @@ namespace EmEn::Scenes
 		{
 			descriptorSetLayout = layoutManager.prepareNewDescriptorSetLayout(UUID);
 			descriptorSetLayout->setIdentifier(ClassId, "LightProperties", "DescriptorSetLayout");
+
+			/* Binding 0: Light UBO (dynamic offset for shared buffer). */
 			descriptorSetLayout->declareUniformBufferDynamic(0, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
+
+			/* Binding 1: Shadow map sampler (real shadow map or dummy 1x1 depth texture). */
+			descriptorSetLayout->declareCombinedImageSampler(1, VK_SHADER_STAGE_FRAGMENT_BIT);
 
 			if ( !layoutManager.createDescriptorSetLayout(descriptorSetLayout) )
 			{

@@ -27,6 +27,8 @@
 #include "Scene.hpp"
 
 /* Local inclusions. */
+#include "Graphics/BindlessTextureManager.hpp"
+#include "Graphics/Renderer.hpp"
 #include "NodeCrawler.hpp"
 
 namespace EmEn::Scenes
@@ -104,6 +106,44 @@ namespace EmEn::Scenes
 		}
 
 		m_renderToShadowMaps.emplace(renderTarget);
+
+		return renderTarget;
+	}
+
+	std::shared_ptr< RenderTarget::ShadowMapCascaded >
+	Scene::createRenderToCascadedShadowMap (const std::string & name, uint32_t resolution, float viewDistance, uint32_t cascadeCount, float lambda) noexcept
+	{
+		const std::lock_guard< std::mutex > lock{m_renderToShadowMapCascadedAccess};
+
+		if ( m_AVConsoleManager.isVideoDeviceExists(name) )
+		{
+			TraceError{ClassId} <<
+				"A virtual video device named '" << name << "' already exists ! "
+				"Render to cascaded shadow map creation canceled ...";
+
+			return {};
+		}
+
+		/* Create the cascaded shadow map render target. */
+		auto renderTarget = std::make_shared< RenderTarget::ShadowMapCascaded >(name, resolution, viewDistance, cascadeCount, lambda);
+
+		if ( !renderTarget->createRenderTarget(m_AVConsoleManager.graphicsRenderer()) )
+		{
+			TraceError{ClassId} << "Unable to create the render to cascaded shadow map '" << name << "' !";
+
+			return {};
+		}
+
+		if ( !m_AVConsoleManager.addVideoDevice(renderTarget, false) )
+		{
+			TraceError{ClassId} << "Unable to add the render to cascaded shadow map '" << name << "' as a virtual video device !";
+
+			return {};
+		}
+
+		m_renderToShadowMapsCascaded.emplace(renderTarget);
+
+		TraceSuccess{ClassId} << "Cascaded shadow map '" << name << "' (" << cascadeCount << " cascades, " << resolution << "px²) created successfully.";
 
 		return renderTarget;
 	}
@@ -258,14 +298,27 @@ namespace EmEn::Scenes
 	{
 		const uint32_t readStateIndex = m_renderStateIndex.load(std::memory_order_acquire);
 
-		if ( shadowMapEnabled && !m_renderToShadowMaps.empty() )
+		if ( shadowMapEnabled )
 		{
-			this->forEachRenderToShadowMap([readStateIndex] (const auto & renderTarget) {
-				if ( !renderTarget->viewMatrices().updateVideoMemory(readStateIndex) )
-				{
-					TraceError{ClassId} << "Failed to update the video memory of the render target (Shadow map) from readStateIndex #" << readStateIndex << " !";
-				}
-			});
+			if ( !m_renderToShadowMaps.empty() )
+			{
+				this->forEachRenderToShadowMap([readStateIndex] (const auto & renderTarget) {
+					if ( !renderTarget->viewMatrices().updateVideoMemory(readStateIndex) )
+					{
+						TraceError{ClassId} << "Failed to update the video memory of the render target (Shadow map) from readStateIndex #" << readStateIndex << " !";
+					}
+				});
+			}
+
+			if ( !m_renderToShadowMapsCascaded.empty() )
+			{
+				this->forEachRenderToShadowMapCascaded([readStateIndex] (const auto & renderTarget) {
+					if ( !renderTarget->viewMatrices().updateVideoMemory(readStateIndex) )
+					{
+						TraceError{ClassId} << "Failed to update the video memory of the render target (Cascaded Shadow map) from readStateIndex #" << readStateIndex << " !";
+					}
+				});
+			}
 		}
 
 		if ( renderToTextureEnabled && !m_renderToTextures.empty() )
@@ -324,8 +377,6 @@ namespace EmEn::Scenes
 	{
 		const uint32_t readStateIndex = m_renderStateIndex.load(std::memory_order_acquire);
 
-		//std::cout << "Rendering from render state #" << readStateIndex << "... " "\n";
-
 		/* Sort the scene according to the point of view. */
 		if ( !this->populateRenderLists(renderTarget, readStateIndex) )
 		{
@@ -337,19 +388,23 @@ namespace EmEn::Scenes
 			" - Opaque / +lighted : " << m_renderLists[Opaque].size() << " / " << m_renderLists[OpaqueLighted].size() << "\n"
 			" - Translucent / +lighted : " << m_renderLists[Translucent].size() << " / " << m_renderLists[TranslucentLighted].size() << "\n";*/
 
+		/* Get the bindless textures manager for materials using automatic reflection. */
+		const auto & bindlessManager = m_AVConsoleManager.graphicsRenderer().bindlessTextureManager();
+		const auto * bindlessManagerPtr = bindlessManager.usable() ? &bindlessManager : nullptr;
+
 		/* First, we render all opaque renderable objects. */
 		{
 			if ( !m_renderLists[Opaque].empty() )
 			{
 				for ( const auto & renderBatch : m_renderLists[Opaque] | std::views::values )
 				{
-					renderBatch.renderableInstance()->render(readStateIndex, renderTarget, nullptr, RenderPassType::SimplePass, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer);
+					renderBatch.renderableInstance()->render(readStateIndex, renderTarget, nullptr, RenderPassType::SimplePass, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, bindlessManagerPtr);
 				}
 			}
 
 			if ( m_lightSet.isEnabled() && !m_renderLists[OpaqueLighted].empty() )
 			{
-				this->renderLightedSelection(renderTarget, readStateIndex, commandBuffer, m_renderLists[OpaqueLighted]);
+				this->renderLightedSelection(renderTarget, readStateIndex, commandBuffer, m_renderLists[OpaqueLighted], bindlessManagerPtr);
 			}
 		}
 
@@ -359,13 +414,13 @@ namespace EmEn::Scenes
 			{
 				for ( const auto & renderBatch : m_renderLists[Translucent] | std::views::values )
 				{
-					renderBatch.renderableInstance()->render(readStateIndex, renderTarget, nullptr, RenderPassType::SimplePass, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer);
+					renderBatch.renderableInstance()->render(readStateIndex, renderTarget, nullptr, RenderPassType::SimplePass, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, bindlessManagerPtr);
 				}
 			}
 
 			if ( m_lightSet.isEnabled() && !m_renderLists[TranslucentLighted].empty() )
 			{
-				this->renderLightedSelection(renderTarget, readStateIndex, commandBuffer, m_renderLists[TranslucentLighted]);
+				this->renderLightedSelection(renderTarget, readStateIndex, commandBuffer, m_renderLists[TranslucentLighted], bindlessManagerPtr);
 			}
 		}
 
@@ -444,6 +499,10 @@ namespace EmEn::Scenes
 			   renderTarget->viewMatrices().publishStateForRendering(nextTarget);
 			});
 
+			this->forEachRenderToShadowMapCascaded([&nextTarget] (const auto & renderTarget){
+			   renderTarget->viewMatrices().publishStateForRendering(nextTarget);
+			});
+
 			this->forEachRenderToTexture([&nextTarget] (const auto & renderTarget){
 				renderTarget->viewMatrices().publishStateForRendering(nextTarget);
 			});
@@ -464,12 +523,14 @@ namespace EmEn::Scenes
 		{
 			m_sceneVisualComponents[0] = std::make_unique< Component::Visual >("Background", *m_rootNode, m_backgroundResource);
 
-			/* NOTE: Disables lighting model on the background.
-			 * TODO: Check to disable at construct time. */
+			/* NOTE: Disables lighting model and shadows on the background.
+			 * The skybox should not cast or receive shadows. */
 			const auto renderableInstance = m_sceneVisualComponents[0]->getRenderableInstance();
 			renderableInstance->setUseInfinityView(true);
 			renderableInstance->disableDepthTest(true);
 			renderableInstance->disableDepthWrite(true);
+			renderableInstance->disableShadowCasting();
+			renderableInstance->disableShadowReceiving();
 		}
 
 		if ( m_groundLevelRenderable != nullptr )
@@ -496,6 +557,12 @@ namespace EmEn::Scenes
 	bool
 	Scene::checkRenderableInstanceForShadowCasting (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const std::shared_ptr< RenderableInstance::Abstract > & renderableInstance) const noexcept
 	{
+		/* NOTE: Skip instances that have shadow casting disabled. */
+		if ( renderableInstance->isShadowCastingDisabled() )
+		{
+			return true; // Continue (skip this instance)
+		}
+
 		/* Check whether the renderable instance is ready for shadow casting. */
 		if ( renderableInstance->isReadyToCastShadows(renderTarget) )
 		{
@@ -582,7 +649,7 @@ namespace EmEn::Scenes
 					/* Render-target distance check and frustum culling check. */
 					const auto distance = Vector< 3, float >::distance(cameraPosition, worldCoordinates.position());
 
-					if ( distance > viewDistance || !staticEntity->isVisibleTo(frustum) )
+					if ( distance > viewDistance || ( !renderTarget->isCubemap() && !staticEntity->isVisibleTo(frustum) ) )
 					{
 						return;
 					}
@@ -627,7 +694,7 @@ namespace EmEn::Scenes
 					/* Render-target distance check and frustum culling check. */
 					const auto distance = Vector< 3, float >::distance(cameraPosition, worldCoordinates.position());
 
-					if ( distance > viewDistance || !node->isVisibleTo(frustum) )
+					if ( distance > viewDistance || ( !renderTarget->isCubemap() && !node->isVisibleTo(frustum) ) )
 					{
 						return;
 					}
@@ -676,7 +743,7 @@ namespace EmEn::Scenes
 	}
 
 	bool
-	Scene::checkRenderableInstanceForRendering (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const std::shared_ptr< RenderableInstance::Abstract > & renderableInstance) const noexcept
+	Scene::checkRenderableInstanceForRendering (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const std::shared_ptr< RenderableInstance::Abstract > & renderableInstance) noexcept
 	{
 		/* Check whether the renderable instance is ready for shadow casting. */
 		if ( renderableInstance->isReadyToRender(renderTarget) )
@@ -774,7 +841,7 @@ namespace EmEn::Scenes
 					/* Render-target distance check and frustum culling check. */
 					const auto distance = Vector< 3, float >::distance(cameraPosition, worldCoordinates.position());
 
-					if ( distance > viewDistance || !staticEntity->isVisibleTo(frustum) )
+					if ( distance > viewDistance || ( !renderTarget->isCubemap() && !staticEntity->isVisibleTo(frustum) ) )
 					{
 						return;
 					}
@@ -819,7 +886,7 @@ namespace EmEn::Scenes
 					/* Render-target distance check and frustum culling check. */
 					const auto distance = Vector< 3, float >::distance(cameraPosition, worldCoordinates.position());
 
-					if ( distance > viewDistance || !node->isVisibleTo(frustum) )
+					if ( distance > viewDistance || ( !renderTarget->isCubemap() && !node->isVisibleTo(frustum) ) )
 					{
 						return;
 					}
@@ -895,17 +962,20 @@ namespace EmEn::Scenes
 	}
 
 	void
-	Scene::renderLightedSelection (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, uint32_t readStateIndex, const Vulkan::CommandBuffer & commandBuffer, const RenderBatch::List & renderBatches) const noexcept
+	Scene::renderLightedSelection (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, uint32_t readStateIndex, const Vulkan::CommandBuffer & commandBuffer, const RenderBatch::List & renderBatches, const BindlessTextureManager * bindlessTexturesManager) const noexcept
 	{
 		if ( m_lightSet.isUsingStaticLighting() )
 		{
 			for ( const auto & renderBatch : renderBatches | std::views::values )
 			{
-				renderBatch.renderableInstance()->render(readStateIndex, renderTarget, nullptr, RenderPassType::SimplePass, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer);
+				renderBatch.renderableInstance()->render(readStateIndex, renderTarget, nullptr, RenderPassType::SimplePass, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, bindlessTexturesManager);
 			}
 
 			return;
 		}
+
+		/* NOTE: Check global shadow mapping setting from the renderer. */
+		const bool shadowMapsEnabled = m_AVConsoleManager.graphicsRenderer().isShadowMapsEnabled();
 
 		/* For all objects. */
 		for ( const auto & renderBatch : renderBatches | std::views::values )
@@ -913,7 +983,7 @@ namespace EmEn::Scenes
 			const std::lock_guard< std::mutex > lock{m_lightSet.mutex()};
 
 			/* Ambient pass. */
-			renderBatch.renderableInstance()->render(readStateIndex, renderTarget, nullptr, RenderPassType::AmbientPass, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer);
+			renderBatch.renderableInstance()->render(readStateIndex, renderTarget, nullptr, RenderPassType::AmbientPass, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, bindlessTexturesManager);
 
 			/* Loop through all directional lights. */
 			for ( const auto & light : m_lightSet.directionalLights() )
@@ -923,7 +993,19 @@ namespace EmEn::Scenes
 					continue;
 				}
 
-				renderBatch.renderableInstance()->render(readStateIndex, renderTarget, light.get(), RenderPassType::DirectionalLightPassNoShadow, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer);
+				const auto & instance = renderBatch.renderableInstance();
+
+				/* NOTE: Use shadow pass type if the light has shadow casting enabled and the instance supports shadows.
+				 * CSM uses a specialized pass type for cascaded shadow map sampling.
+				 * Also check the global shadow mapping setting from the renderer. */
+				RenderPassType passType = RenderPassType::DirectionalLightPassNoShadow;
+
+				if ( shadowMapsEnabled && light->isShadowCastingEnabled() && light->hasShadowDescriptorSet() && instance->isShadowReceivingEnabled() )
+				{
+					passType = light->usesCSM() ? RenderPassType::DirectionalLightPassCSM : RenderPassType::DirectionalLightPass;
+				}
+
+				instance->render(readStateIndex, renderTarget, light.get(), passType, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, bindlessTexturesManager);
 			}
 
 			/* Loop through all point lights. */
@@ -947,7 +1029,13 @@ namespace EmEn::Scenes
 					}
 				}
 
-				instance->render(readStateIndex, renderTarget, light.get(), RenderPassType::PointLightPassNoShadow, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer);
+				/* NOTE: Use shadow pass type if the light has shadow casting enabled and the instance supports shadows.
+				 * Also check the global shadow mapping setting from the renderer. */
+				const auto passType = shadowMapsEnabled && light->isShadowCastingEnabled() && light->hasShadowDescriptorSet() && instance->isShadowReceivingEnabled() ?
+					RenderPassType::PointLightPass :
+					RenderPassType::PointLightPassNoShadow;
+
+				instance->render(readStateIndex, renderTarget, light.get(), passType, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, bindlessTexturesManager);
 			}
 
 			/* Loop through all spotlights. */
@@ -971,7 +1059,13 @@ namespace EmEn::Scenes
 					}
 				}
 
-				renderBatch.renderableInstance()->render(readStateIndex, renderTarget, light.get(), RenderPassType::SpotLightPassNoShadow, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer);
+				/* NOTE: Use shadow pass type if the light has shadow casting enabled and the instance supports shadows.
+				 * Also check the global shadow mapping setting from the renderer. */
+				const auto passType = shadowMapsEnabled && light->isShadowCastingEnabled() && light->hasShadowDescriptorSet() && instance->isShadowReceivingEnabled() ?
+					RenderPassType::SpotLightPass :
+					RenderPassType::SpotLightPassNoShadow;
+
+				renderBatch.renderableInstance()->render(readStateIndex, renderTarget, light.get(), passType, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, bindlessTexturesManager);
 			}
 		}
 	}
@@ -1057,13 +1151,19 @@ namespace EmEn::Scenes
 	}
 
 	void
-	Scene::initializeRenderTarget (const std::shared_ptr< RenderTarget::Abstract > & renderTarget) const noexcept
+	Scene::initializeRenderTarget (const std::shared_ptr< RenderTarget::Abstract > & renderTarget) noexcept
 	{
 		if ( renderTarget->renderType() == RenderTargetType::ShadowMap || renderTarget->renderType() == RenderTargetType::ShadowCubemap )
 		{
 			TraceDebug{ClassId} << "A new shadow map is available " << to_cstring(renderTarget->renderType()) << " ! Updating renderable instances from the scene ...";
 
 			this->forEachRenderableInstance([this, renderTarget] (const std::shared_ptr< RenderableInstance::Abstract > & renderableInstance) {
+				/* NOTE: Skip instances that have shadow casting disabled. */
+				if ( renderableInstance->isShadowCastingDisabled() )
+				{
+					return true;
+				}
+
 				if ( !this->getRenderableInstanceReadyForShadowCasting(renderableInstance, renderTarget) )
 				{
 					TraceError{ClassId} << "The initialization of renderable instance '" << renderableInstance->renderable()->name() << "' from shadow map '" << renderTarget->id() << "' has failed !";
@@ -1102,22 +1202,15 @@ namespace EmEn::Scenes
 		{
 			renderPassTypes.emplace_back(RenderPassType::AmbientPass);
 
-			//if ( !m_lightSet.directionalLights().empty() )
-			{
-				//renderPassTypes.emplace_back(RenderPassType::DirectionalLightPass);
-				renderPassTypes.emplace_back(RenderPassType::DirectionalLightPassNoShadow);
-			}
+			renderPassTypes.emplace_back(RenderPassType::DirectionalLightPassNoShadow);
+			renderPassTypes.emplace_back(RenderPassType::PointLightPassNoShadow);
+			renderPassTypes.emplace_back(RenderPassType::SpotLightPassNoShadow);
 
-			//if ( !m_lightSet.pointLights().empty() )
+			if ( m_AVConsoleManager.graphicsRenderer().isShadowMapsEnabled() )
 			{
-				//renderPassTypes.emplace_back(RenderPassType::PointLightPass);
-				renderPassTypes.emplace_back(RenderPassType::PointLightPassNoShadow);
-			}
-
-			//if ( !m_lightSet.spotLights().empty() )
-			{
-				//renderPassTypes.emplace_back(RenderPassType::SpotLightPass);
-				renderPassTypes.emplace_back(RenderPassType::SpotLightPassNoShadow);
+				renderPassTypes.emplace_back(RenderPassType::DirectionalLightPass);
+				renderPassTypes.emplace_back(RenderPassType::PointLightPass);
+				renderPassTypes.emplace_back(RenderPassType::SpotLightPass);
 			}
 		}
 
@@ -1143,8 +1236,22 @@ namespace EmEn::Scenes
 	}
 
 	bool
-	Scene::getRenderableInstanceReadyForRendering (const std::shared_ptr< RenderableInstance::Abstract > & renderableInstance, const std::shared_ptr< RenderTarget::Abstract > & renderTarget) const noexcept
+	Scene::getRenderableInstanceReadyForRendering (const std::shared_ptr< RenderableInstance::Abstract > & renderableInstance, const std::shared_ptr< RenderTarget::Abstract > & renderTarget) noexcept
 	{
+		/* The environment cubemap can now be fetched from the visual component. */
+		if ( m_environmentCubemap != nullptr && renderableInstance == m_sceneVisualComponents[0]->getRenderableInstance() )
+		{
+			m_environmentCubemap = m_backgroundResource->environmentCubemap();
+
+			/* Update the bindless textures manager with the scene's environment cubemap. */
+			const auto & bindlessManager = m_AVConsoleManager.graphicsRenderer().bindlessTextureManager();
+
+			if ( bindlessManager.usable() && bindlessManager.updateTextureCube(BindlessTextureManager::EnvironmentCubemapSlot, *m_environmentCubemap) )
+			{
+				TraceSuccess{ClassId} << "Scene will use environment cubemap '" << m_environmentCubemap->name() << "' !";
+			}
+		}
+
 		/* If the object is ready to render, there is nothing more to do! */
 		if ( renderableInstance->isReadyToRender(renderTarget) )
 		{

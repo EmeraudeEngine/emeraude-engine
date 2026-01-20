@@ -32,13 +32,10 @@
 
 /* Local inclusions for usages. */
 #include "Libs/IO/IO.hpp"
-#include "FileFormatFBX.hpp"
-#include "FileFormatMD2.hpp"
-#include "FileFormatMD3.hpp"
-#include "FileFormatMD5.hpp"
-#include "FileFormatMDL.hpp"
 #include "FileFormatNative.hpp"
 #include "FileFormatOBJ.hpp"
+#include "FileFormatSTL.hpp"
+#include "FileFormatMDx.hpp"
 
 namespace EmEn::Libs::VertexFactory::FileIO
 {
@@ -54,7 +51,8 @@ namespace EmEn::Libs::VertexFactory::FileIO
 	template< typename vertex_data_t = float, typename index_data_t = uint32_t >
 	[[nodiscard]]
 	bool
-	read (const std::filesystem::path & filepath, Shape< vertex_data_t, index_data_t > & shape, const ReadOptions & readOptions = {}) requires (std::is_floating_point_v< vertex_data_t > && std::is_unsigned_v< index_data_t > )
+	read (const std::filesystem::path & filepath, Shape< vertex_data_t, index_data_t > & shape, const ReadOptions & readOptions = {})
+		requires (std::is_floating_point_v< vertex_data_t > && std::is_unsigned_v< index_data_t > )
 	{
 		if ( !IO::fileExists(filepath) )
 		{
@@ -65,7 +63,7 @@ namespace EmEn::Libs::VertexFactory::FileIO
 
 		const auto extension = IO::getFileExtension(filepath, true);
 
-		if ( extension == "emgeo" )
+		if ( extension == "ee3d" )
 		{
 			FileFormatNative< vertex_data_t, index_data_t > fileFormat{};
 
@@ -79,37 +77,16 @@ namespace EmEn::Libs::VertexFactory::FileIO
 			return fileFormat.readFile(filepath, shape, readOptions);
 		}
 
-		if ( extension == "fbx" )
+		if ( extension == "stl" )
 		{
-			FileFormatFBX< vertex_data_t, index_data_t > fileFormat{};
+			FileFormatSTL< vertex_data_t, index_data_t > fileFormat{};
 
 			return fileFormat.readFile(filepath, shape, readOptions);
 		}
 
-		if ( extension == "mdl" )
+		if ( extension == "mdl" || extension == "md2" || extension == "md3" || extension == "md5mesh" )
 		{
-			FileFormatMDL< vertex_data_t, index_data_t > fileFormat{};
-
-			return fileFormat.readFile(filepath, shape, readOptions);
-		}
-
-		if ( extension == "md2" )
-		{
-			FileFormatMD2< vertex_data_t, index_data_t > fileFormat{};
-
-			return fileFormat.readFile(filepath, shape, readOptions);
-		}
-
-		if ( extension == "md3" )
-		{
-			FileFormatMD3< vertex_data_t, index_data_t > fileFormat{};
-
-			return fileFormat.readFile(filepath, shape, readOptions);
-		}
-
-		if ( extension == "md5mesh" )
-		{
-			FileFormatMD5< vertex_data_t, index_data_t > fileFormat{};
+			FileFormatMDx< vertex_data_t, index_data_t > fileFormat{};
 
 			return fileFormat.readFile(filepath, shape, readOptions);
 		}
@@ -131,7 +108,8 @@ namespace EmEn::Libs::VertexFactory::FileIO
 	template< typename vertex_data_t = float, typename index_data_t = uint32_t >
 	[[nodiscard]]
 	bool
-	write (const Shape< vertex_data_t, index_data_t > & shape, const std::filesystem::path & filepath, bool overwrite = false) requires (std::is_floating_point_v< vertex_data_t > && std::is_unsigned_v< index_data_t > )
+	write (const Shape< vertex_data_t, index_data_t > & shape, const std::filesystem::path & filepath, bool overwrite = false)
+		requires (std::is_floating_point_v< vertex_data_t > && std::is_unsigned_v< index_data_t > )
 	{
 		if ( IO::fileExists(filepath) && !overwrite )
 		{
@@ -142,53 +120,32 @@ namespace EmEn::Libs::VertexFactory::FileIO
 
 		const auto extension = IO::getFileExtension(filepath, true);
 
-		if ( extension == "emgeo" )
+		if ( extension == "ee3d" )
 		{
 			FileFormatNative< vertex_data_t, index_data_t > fileFormat{};
 
-			return fileFormat.readFile(filepath, shape);
+			return fileFormat.writeFile(filepath, shape);
 		}
 
 		if ( extension == "obj" )
 		{
 			FileFormatOBJ< vertex_data_t, index_data_t > fileFormat{};
 
-			return fileFormat.readFile(filepath, shape);
+			return fileFormat.writeFile(filepath, shape);
 		}
 
-		if ( extension == "fbx" )
+		if ( extension == "stl" )
 		{
-			FileFormatFBX< vertex_data_t, index_data_t > fileFormat{};
+			FileFormatSTL< vertex_data_t, index_data_t > fileFormat{};
 
-			return fileFormat.readFile(filepath, shape);
+			return fileFormat.writeFile(filepath, shape);
 		}
 
-		if ( extension == "mdl" )
+		if ( extension == "mdl" || extension == "md2" || extension == "md3" || extension == "md5mesh" )
 		{
-			FileFormatMDL< vertex_data_t, index_data_t > fileFormat{};
+			FileFormatMDx< vertex_data_t, index_data_t > fileFormat{};
 
-			return fileFormat.readFile(filepath, shape);
-		}
-
-		if ( extension == "md2" )
-		{
-			FileFormatMD2< vertex_data_t, index_data_t > fileFormat{};
-
-			return fileFormat.readFile(filepath, shape);
-		}
-
-		if ( extension == "md3" )
-		{
-			FileFormatMD3< vertex_data_t, index_data_t > fileFormat{};
-
-			return fileFormat.readFile(filepath, shape);
-		}
-
-		if ( extension == "md5mesh" )
-		{
-			FileFormatMD5< vertex_data_t, index_data_t > fileFormat{};
-
-			return fileFormat.readFile(filepath, shape);
+			return fileFormat.writeFile(filepath, shape);
 		}
 
 		std::cerr << "VertexFactory::FileIO::write(), the file '" << filepath << "' format is not handled !" "\n";

@@ -331,6 +331,17 @@ namespace EmEn::Graphics::RenderTarget
 			virtual bool isCubemap () const noexcept = 0;
 
 			/**
+			 * @brief Returns whether the render target is a cascaded shadow map.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			virtual bool
+			isCascadedShadowMap () const noexcept
+			{
+				return false;
+			}
+
+			/**
 			 * @brief Gives access to the framebuffer for the rendering process.
 			 * @return const Vulkan::Framebuffer *
 			 */

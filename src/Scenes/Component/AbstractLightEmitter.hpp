@@ -27,6 +27,7 @@
 #pragma once
 
 /* STL inclusions. */
+#include <algorithm>
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -38,7 +39,6 @@
 /* Local inclusions for usages. */
 #include "Libs/PixelFactory/Color.hpp"
 #include "Scenes/AVConsole/Types.hpp"
-#include "Graphics/SharedUniformBuffer.hpp"
 #include "Graphics/RenderTarget/ShadowMap.hpp"
 
 /* Forward declarations. */
@@ -49,9 +49,14 @@ namespace EmEn
 		class DescriptorSet;
 	}
 
-	namespace Graphics::RenderTarget
+	namespace Graphics
 	{
-		class Abstract;
+		class SharedUniformBuffer;
+		
+		namespace RenderTarget
+		{
+			class Abstract;
+		}
 	}
 
 	namespace Saphir::Declaration
@@ -135,36 +140,13 @@ namespace EmEn::Scenes::Component
 			 * @param state The state.
 			 * @return void
 			 */
-			void
-			enable (bool state) noexcept
-			{
-				this->setFlag(Enabled, state);
-
-				if ( state )
-				{
-					this->enableFlag(VideoMemoryUpdateRequested);
-				}
-			}
+			void enable (bool state) noexcept;
 
 			/**
 			 * @brief Toggles the state of the light.
 			 * @return bool
 			 */
-			bool
-			toggle () noexcept
-			{
-				if ( this->isFlagEnabled(Enabled) )
-				{
-					this->disableFlag(Enabled);
-
-					return false;
-				}
-
-				this->enableFlag(Enabled);
-				this->enableFlag(VideoMemoryUpdateRequested);
-
-				return true;
-			}
+			bool toggle () noexcept;
 
 			/**
 			 * @brief Returns whether the light is emitting.
@@ -182,30 +164,14 @@ namespace EmEn::Scenes::Component
 			 * @param color A reference to a color.
 			 * @return void
 			 */
-			void
-			setColor (const Libs::PixelFactory::Color< float > & color) noexcept
-			{
-				m_color = color;
-
-				this->onColorChange(m_color);
-
-				this->requestVideoMemoryUpdate();
-			}
+			void setColor (const Libs::PixelFactory::Color< float > & color) noexcept;
 
 			/**
 			 * @brief Sets the intensity of the light.
 			 * @param intensity An arbitrary value.
 			 * @return void
 			 */
-			void
-			setIntensity (float intensity) noexcept
-			{
-				m_intensity = intensity;
-
-				this->onIntensityChange(m_intensity);
-
-				this->requestVideoMemoryUpdate();
-			}
+			void setIntensity (float intensity) noexcept;
 
 			/**
 			 * @brief Returns the light color.
@@ -235,6 +201,13 @@ namespace EmEn::Scenes::Component
 			 */
 			[[nodiscard]]
 			Libs::Math::Matrix< 4, float > getLightSpaceMatrix () const noexcept;
+
+			/**
+			 * @brief Writes the light space matrix to a buffer.
+			 * @param bufferDestination A pointer to the buffer destination.
+			 * @return void
+			 */
+			void writeLightSpaceMatrix (float * bufferDestination) const noexcept;
 
 			/**
 			 * @brief Updates the UBO with the light data.
@@ -317,16 +290,7 @@ namespace EmEn::Scenes::Component
 			 * @return uint32_t
 			 */
 			[[nodiscard]]
-			uint32_t
-			UBOAlignment () const noexcept
-			{
-				if ( m_sharedUniformBuffer == nullptr )
-				{
-					return 0;
-				}
-
-				return m_sharedUniformBuffer->blockAlignedSize();
-			}
+			uint32_t UBOAlignment () const noexcept;
 
 			/**
 			 * @brief Returns the light offset in bytes in the UBO.
@@ -334,31 +298,26 @@ namespace EmEn::Scenes::Component
 			 * @return uint32_t
 			 */
 			[[nodiscard]]
-			uint32_t
-			UBOOffset () const noexcept
-			{
-				if ( m_sharedUniformBuffer == nullptr )
-				{
-					return 0;
-				}
-
-				return m_sharedUBOIndex * m_sharedUniformBuffer->blockAlignedSize();
-			}
+			uint32_t UBOOffset () const noexcept;
 
 			/**
 			 * @brief Returns the light descriptor set.
+			 * @param useShadowMap Whether to return the shadow-enabled descriptor set.
 			 * @return const Vulkan::DescriptorSet *
 			 */
 			[[nodiscard]]
-			const Vulkan::DescriptorSet *
-			descriptorSet () const noexcept
-			{
-				if ( m_sharedUniformBuffer == nullptr )
-				{
-					return nullptr;
-				}
+			virtual const Vulkan::DescriptorSet * descriptorSet (bool useShadowMap) const noexcept;
 
-				return m_sharedUniformBuffer->descriptorSet(m_sharedUBOIndex);
+			/**
+			 * @brief Returns whether this light has a shadow-enabled descriptor set.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			virtual
+			bool
+			hasShadowDescriptorSet () const noexcept
+			{
+				return false;
 			}
 
 			/**
@@ -401,6 +360,34 @@ namespace EmEn::Scenes::Component
 			virtual Saphir::Declaration::UniformBlock getUniformBlock (uint32_t set, uint32_t binding, bool useShadow) const noexcept = 0;
 
 			/**
+			 * @brief Sets the PCF (Percentage-Closer Filtering) radius for soft shadow edges.
+			 * @param radius The filter radius in normalized texture coordinates.
+			 * @return void
+			 */
+			virtual void setPCFRadius (float radius) noexcept = 0;
+
+			/**
+			 * @brief Returns the PCF radius.
+			 * @return float
+			 */
+			[[nodiscard]]
+			virtual float PCFRadius () const noexcept = 0;
+
+			/**
+			 * @brief Sets the shadow bias to prevent shadow acne.
+			 * @param bias The shadow bias value.
+			 * @return void
+			 */
+			virtual void setShadowBias (float bias) noexcept = 0;
+
+			/**
+			 * @brief Returns the shadow bias.
+			 * @return float
+			 */
+			[[nodiscard]]
+			virtual float shadowBias () const noexcept = 0;
+
+			/**
 			 * @brief Returns an intensified color by a value.
 			 * @param color A reference to a color.
 			 * @param intensity The intensity value.
@@ -434,6 +421,7 @@ namespace EmEn::Scenes::Component
 			Libs::Math::CartesianFrame< float >
 			getWorldCoordinates () const noexcept override
 			{
+				/* FIXME: function name shadowing here ! Maybe there is a simpler inheritance to do. */
 				return Abstract::getWorldCoordinates();
 			}
 
@@ -458,27 +446,41 @@ namespace EmEn::Scenes::Component
 			 * @brief Declares to update light on the GPU.
 			 * @return void
 			 */
-			void
-			requestVideoMemoryUpdate () noexcept
-			{
-				if ( this->isEnabled() )
-				{
-					this->enableFlag(VideoMemoryUpdateRequested);
-				}
-			}
+			void requestVideoMemoryUpdate () noexcept;
 
 			static constexpr auto ShadowMapName{"ShadowMapSampler"};
 
 		private:
 
 			/** @copydoc EmEn::Scenes::Component::Abstract::onSuspend() */
-			void onSuspend () noexcept override { }
+			void
+			onSuspend () noexcept override
+			{
+
+			}
 
 			/** @copydoc EmEn::Scenes::Component::Abstract::onWakeup() */
-			void onWakeup () noexcept override { }
+			void
+			onWakeup () noexcept override
+			{
+
+			}
 
 			/** @copydoc EmEn::Scenes::AVConsole::AbstractVirtualDevice::onOutputDeviceConnected() */
 			void onOutputDeviceConnected (EngineContext & engineContext, AbstractVirtualDevice & targetDevice) noexcept final;
+
+			/**
+			 * @brief Creates the shadow descriptor set with the shadow map bound to binding 1.
+			 * @param scene A reference to the scene.
+			 * @return bool
+			 */
+			virtual bool createShadowDescriptorSet (Scene & scene) noexcept = 0;
+
+			/**
+			 * @brief Updates the light space matrix.
+			 * @return void
+			 */
+			virtual void updateLightSpaceMatrix () noexcept = 0;
 
 			/**
 			 * @brief Returns the field of view or the near value to update projection matrix.
