@@ -52,6 +52,50 @@ namespace EmEn::Saphir
 namespace EmEn::Saphir
 {
 	/**
+	 * @brief PCF (Percentage-Closer Filtering) method for shadow mapping.
+	 */
+	enum class PCFMethod : uint32_t
+	{
+		/** @brief Uniform grid sampling (legacy method, can produce banding artifacts). */
+		Grid = 0,
+		/** @brief Vogel spiral with per-fragment rotation (recommended, best quality/performance ratio). */
+		VogelDisk = 1,
+		/** @brief Pre-computed Poisson disk distribution (good quality, fixed pattern). */
+		PoissonDisk = 2,
+		/** @brief Optimized textureGather usage (4x fewer texture fetches, good for high sample counts). */
+		OptimizedGather = 3
+	};
+
+	/**
+	 * @brief Converts a string to a PCFMethod enum value.
+	 * @param method The string representation ("Performance", "Balanced", "Quality", "Ultra").
+	 * @return PCFMethod The corresponding enum value. Defaults to VogelDisk if unknown.
+	 */
+	[[nodiscard]]
+	inline
+	PCFMethod
+	stringToPCFMethod (const std::string & method) noexcept
+	{
+		if ( method == "Performance" )
+		{
+			return PCFMethod::Grid;
+		}
+
+		if ( method == "Quality" )
+		{
+			return PCFMethod::PoissonDisk;
+		}
+
+		if ( method == "Ultra" )
+		{
+			return PCFMethod::OptimizedGather;
+		}
+
+		/* Balanced or unknown -> VogelDisk (recommended) */
+		return PCFMethod::VogelDisk;
+	}
+
+	/**
 	 * @brief The light model generator is responsible for generating GLSL lighting code independently of a light processor.
 	 */
 	class LightGenerator final
@@ -64,22 +108,30 @@ namespace EmEn::Saphir
 			static constexpr auto FragmentColor{"fragmentColor"};
 
 			/**
+			 * @brief Low quality base reflectivity (F0) factor for dielectric materials.
+			 * @note In low quality mode, Fresnel effect is not computed per-fragment.
+			 * This boosted value (0.5 vs physically correct 0.04) compensates for the
+			 * missing view-dependent Fresnel, providing more visible reflections.
+			 */
+			static constexpr auto LowQualityDielectricF0{0.5F};
+
+			/**
 			 * @brief Construct the light model generator.
 			 * @param settings A reference to the settings.
 			 * @param renderPassType The render pass type to know which kind of render is implied.
+			 * @param highQualityEnabled Whether high quality rendering is enabled.
 			 * @param fragmentColor The fragment color name produced at the end of the light application. Default "fragmentColor".
 			 */
-			LightGenerator (Settings & settings, Graphics::RenderPassType renderPassType, const char * fragmentColor = FragmentColor) noexcept
+			LightGenerator (Settings & settings, Graphics::RenderPassType renderPassType, bool highQualityEnabled, const char * fragmentColor = FragmentColor) noexcept
 				: m_renderPassType{renderPassType},
-				m_PCFSample{settings.getOrSetDefault< uint32_t >(GraphicsShadowMappingPCFSampleKey, DefaultGraphicsShadowMappingPCFSample)},
-				m_PCFRadius{settings.getOrSetDefault< float >(GraphicsShadowMappingPCFRadiusKey, DefaultGraphicsShadowMappingPCFRadius)},
+				m_PCFSample{settings.getOrSetDefault< uint32_t >(GraphicsShadowMappingPCFSamplesKey, DefaultGraphicsShadowMappingPCFSamples)},
+				m_PCFMethod{stringToPCFMethod(settings.getOrSetDefault< std::string >(GraphicsShadowMappingPCFMethodKey, DefaultGraphicsShadowMappingPCFMethod))},
 				m_fragmentColor{fragmentColor},
-				m_highQualityReflectionEnabled{settings.getOrSetDefault< bool >(HighQualityReflectionEnabledKey, DefaultHighQualityReflectionEnabled)}
+				m_useStaticLighting{m_renderPassType == Graphics::RenderPassType::SimplePass},
+				m_highQualityEnabled{highQualityEnabled},
+				m_PCFEnabled{settings.getOrSetDefault< bool >(GraphicsShadowMappingEnablePCFKey, DefaultGraphicsShadowMappingEnablePCF)}
 			{
-				if ( m_renderPassType == Graphics::RenderPassType::SimplePass )
-				{
-					m_useStaticLighting = true;
-				}
+				TraceDebug{ClassId} << "PCF: " << m_PCFEnabled << ", method: " << static_cast< uint32_t >(m_PCFMethod) << ", samples: " << m_PCFSample;
 			}
 
 			/**
@@ -326,9 +378,9 @@ namespace EmEn::Saphir
 			 */
 			[[nodiscard]]
 			bool
-			highQualityReflectionEnabled () const noexcept
+			highQualityEnabled () const noexcept
 			{
-				return m_highQualityReflectionEnabled;
+				return m_highQualityEnabled;
 			}
 
 			/**
@@ -416,14 +468,17 @@ namespace EmEn::Saphir
 			[[nodiscard]]
 			static Declaration::UniformBlock getUniformBlock (uint32_t set, uint32_t binding, Graphics::LightType lightType, bool useShadowMap) noexcept;
 
-		private:
+			/**
+			 * @brief Returns a uniform block for a directional light with Cascaded Shadow Maps.
+			 * @param set The set index.
+			 * @param binding The binding point in the set.
+			 * @param cascadeCount The number of cascades (1-4).
+			 * @return Declaration::UniformBlock
+			 */
+			[[nodiscard]]
+			static Declaration::UniformBlock getUniformBlockCSM (uint32_t set, uint32_t binding, uint32_t cascadeCount = 4) noexcept;
 
-			enum class DepthTextureFunction: int
-			{
-				Texture = 0,
-				TextureProj = 1,
-				TextureGather = 2
-			};
+		private:
 
 			/**
 			 * @brief Returns the real light pass type.
@@ -555,17 +610,25 @@ namespace EmEn::Saphir
 			void generatePBRBRDFFunctions (FragmentShader & fragmentShader) const noexcept;
 
 			/**
-			 * @brief generate2DShadowMapCode
+			 * @brief
 			 * @param shadowMap
 			 * @param fragmentPosition
-			 * @param function
 			 * @return std::string
 			 */
 			[[nodiscard]]
-			std::string generate2DShadowMapCode (const std::string & shadowMap, const std::string & fragmentPosition, DepthTextureFunction function) const noexcept;
+			std::string generate2DShadowMapCode (const std::string & shadowMap, const std::string & fragmentPosition) const noexcept;
 
 			/**
-			 * @brief generate3DShadowMapCode
+			 * @brief
+			 * @param shadowMap
+			 * @param fragmentPosition
+			 * @return std::string
+			 */
+			[[nodiscard]]
+			std::string generate2DShadowMapPCFCode (const std::string & shadowMap, const std::string & fragmentPosition) const noexcept;
+
+			/**
+			 * @brief
 			 * @param shadowMap
 			 * @param directionWorldSpace
 			 * @param nearFar
@@ -573,6 +636,29 @@ namespace EmEn::Saphir
 			 */
 			[[nodiscard]]
 			std::string generate3DShadowMapCode (const std::string & shadowMap, const std::string & directionWorldSpace, const std::string & nearFar) const noexcept;
+
+			/**
+			 * @brief
+			 * @param shadowMap
+			 * @param directionWorldSpace
+			 * @param nearFar
+			 * @return std::string
+			 */
+			[[nodiscard]]
+			std::string generate3DShadowMapPCFCode (const std::string & shadowMap, const std::string & directionWorldSpace, const std::string & nearFar) const noexcept;
+
+			/**
+			 * @brief Generates the Cascaded Shadow Map sampling code for directional lights.
+			 * @param shadowMapArray The name of the sampler2DArrayShadow uniform.
+			 * @param fragmentPositionWorldSpace The fragment position in world space.
+			 * @param viewMatrix The view matrix uniform to compute view-space depth.
+			 * @param cascadeMatrices The array of cascade view-projection matrices.
+			 * @param splitDistances The cascade split distances (view-space depths).
+			 * @param cascadeCount The number of cascades.
+			 * @return std::string
+			 */
+			[[nodiscard]]
+			std::string generateCSMShadowMapCode (const std::string & shadowMapArray, const std::string & fragmentPositionWorldSpace, const std::string & viewMatrix, const std::string & cascadeMatrices, const std::string & splitDistances, const std::string & cascadeCount) const noexcept;
 
 			/**
 			 * @brief Returns the variable responsible for the light position in world space.
@@ -662,8 +748,8 @@ namespace EmEn::Saphir
 			static constexpr auto Distance{"distance"};
 
 			Graphics::RenderPassType m_renderPassType;
-			unsigned int m_PCFSample{0};
-			float m_PCFRadius{1.0F};
+			uint32_t m_PCFSample{0};
+			PCFMethod m_PCFMethod{PCFMethod::Grid};
 			std::string m_fragmentColor;
 			std::string m_surfaceAmbientColor;
 			std::string m_surfaceDiffuseColor;
@@ -699,6 +785,7 @@ namespace EmEn::Saphir
 			bool m_usePBRMode{false};
 			bool m_useAutoIllumination{false};
 			bool m_useAmbientOcclusion{false};
-			bool m_highQualityReflectionEnabled{false};
+			bool m_highQualityEnabled{false};
+			bool m_PCFEnabled{false};
 	};
 }

@@ -27,11 +27,14 @@
 #include "SpotLight.hpp"
 
 /* Local inclusions. */
+#include "Graphics/Renderer.hpp"
 #include "Libs/Math/Space3D/Collisions/PointSphere.hpp"
 #include "Saphir/LightGenerator.hpp"
 #include "Scenes/AVConsole/Manager.hpp"
+#include "Scenes/LightSet.hpp"
 #include "Scenes/Scene.hpp"
 #include "Tracer.hpp"
+#include "Vulkan/DescriptorSet.hpp"
 
 namespace EmEn::Scenes::Component
 {
@@ -159,9 +162,9 @@ namespace EmEn::Scenes::Component
 			m_buffer[DirectionOffset + 2] = direction.z();
 		}
 
+		/* [VULKAN-SHADOW] TODO: Reuse shadow maps + remove it from console on failure */
 		if ( const auto resolution = this->shadowMapResolution(); resolution > 0 )
 		{
-			/* [VULKAN-SHADOW] TODO: Reuse shadow maps + remove it from console on failure */
 			m_shadowMap = scene.createRenderToShadowMap(this->name() + ShadowMapName, resolution, this->getDistanceOrFar(), this->isOrthographicProjection());
 
 			if ( m_shadowMap != nullptr )
@@ -170,7 +173,16 @@ namespace EmEn::Scenes::Component
 				{
 					TraceSuccess{ClassId} << "2D shadow map (" << resolution << "px²) successfully created for spotlight '" << this->name() << "'.";
 
-					this->enableShadowCasting(true);
+					/* Create the shadow-enabled descriptor set (UBO + shadow map sampler). */
+					if ( this->createShadowDescriptorSet(scene) )
+					{
+						this->enableShadowCasting(true);
+						this->updateLightSpaceMatrix();
+					}
+					else
+					{
+						TraceError{ClassId} << "Unable to create shadow descriptor set for spotlight '" << this->name() << "' !";
+					}
 				}
 				else
 				{
@@ -191,6 +203,9 @@ namespace EmEn::Scenes::Component
 	void
 	SpotLight::destroyFromHardware (Scene & scene) noexcept
 	{
+		/* Clean up shadow descriptor set. */
+		m_shadowDescriptorSet.reset();
+
 		if ( m_shadowMap != nullptr )
 		{
 			this->disconnect(scene.AVConsoleManager().engineContext(), m_shadowMap, true);
@@ -199,6 +214,19 @@ namespace EmEn::Scenes::Component
 		}
 
 		this->removeFromSharedUniformBuffer();
+	}
+
+	const Vulkan::DescriptorSet *
+	SpotLight::descriptorSet (bool useShadowMap) const noexcept
+	{
+		/* If shadow map is requested, and we have a shadow descriptor set, use it. */
+		if ( useShadowMap && m_shadowDescriptorSet != nullptr )
+		{
+			return m_shadowDescriptorSet.get();
+		}
+
+		/* Otherwise, fall back to the base implementation (shared UBO descriptor set). */
+		return AbstractLightEmitter::descriptorSet(useShadowMap);
 	}
 
 	Declaration::UniformBlock
@@ -217,6 +245,8 @@ namespace EmEn::Scenes::Component
 		if ( m_shadowMap != nullptr )
 		{
 			m_shadowMap->updateViewRangesProperties(this->getFovOrNear(), this->getDistanceOrFar());
+
+			this->updateLightSpaceMatrix();
 		}
 
 		this->requestVideoMemoryUpdate();
@@ -243,8 +273,125 @@ namespace EmEn::Scenes::Component
 		if ( m_shadowMap != nullptr )
 		{
 			m_shadowMap->updateViewRangesProperties(this->getFovOrNear(), this->getDistanceOrFar());
+
+			this->updateLightSpaceMatrix();
 		}
 
 		this->requestVideoMemoryUpdate();
+	}
+
+	void
+	SpotLight::setPCFRadius (float radius) noexcept
+	{
+		m_PCFRadius = std::abs(radius);
+
+		m_buffer[PCFRadiusOffset] = m_PCFRadius;
+
+		this->requestVideoMemoryUpdate();
+	}
+
+	void
+	SpotLight::setShadowBias (float bias) noexcept
+	{
+		m_shadowBias = bias;
+
+		m_buffer[ShadowBiasOffset] = m_shadowBias;
+
+		this->requestVideoMemoryUpdate();
+	}
+
+	bool
+	SpotLight::createShadowDescriptorSet (Scene & scene) noexcept
+	{
+		auto & renderer = scene.AVConsoleManager().graphicsRenderer();
+
+		/* Get the shadow-enabled descriptor set layout. */
+		const auto descriptorSetLayout = LightSet::getDescriptorSetLayoutWithShadow(renderer.layoutManager());
+
+		if ( descriptorSetLayout == nullptr )
+		{
+			TraceError{ClassId} << "Unable to get the shadow descriptor set layout !";
+
+			return false;
+		}
+
+		/* Create the descriptor set. */
+		m_shadowDescriptorSet = std::make_unique< Vulkan::DescriptorSet >(renderer.descriptorPool(), descriptorSetLayout);
+
+		if ( !m_shadowDescriptorSet->create() )
+		{
+			TraceError{ClassId} << "Unable to create the shadow descriptor set !";
+
+			m_shadowDescriptorSet.reset();
+
+			return false;
+		}
+
+		/* Get the UBO from the shared buffer. */
+		const auto sharedUBO = scene.lightSet().spotLightBuffer();
+
+		if ( !sharedUBO )
+		{
+			TraceError{ClassId} << "Unable to get the shared uniform buffer !";
+
+			m_shadowDescriptorSet.reset();
+
+			return false;
+		}
+
+		/* Write binding 0: Light UBO (dynamic offset). */
+		if ( !m_shadowDescriptorSet->writeUniformBufferObjectDynamic(0, *sharedUBO->uniformBufferObject(this->UBOIndex())) )
+		{
+			TraceError{ClassId} << "Unable to write UBO to shadow descriptor set !";
+
+			m_shadowDescriptorSet.reset();
+
+			return false;
+		}
+
+		/* Write binding 1: Shadow map sampler.
+		 * NOTE: ShadowMap inherits from TextureInterface and implements image/imageView/sampler methods. */
+		if ( m_shadowMap == nullptr )
+		{
+			TraceError{ClassId} << "Shadow map is null, cannot bind to descriptor set !";
+
+			m_shadowDescriptorSet.reset();
+
+			return false;
+		}
+
+		if ( !m_shadowMap->isCreated() )
+		{
+			TraceError{ClassId} << "Shadow map is not fully created yet !";
+
+			m_shadowDescriptorSet.reset();
+
+			return false;
+		}
+
+		if ( !m_shadowDescriptorSet->writeCombinedImageSampler(1, *m_shadowMap) )
+		{
+			TraceError{ClassId} << "Unable to write shadow map sampler to descriptor set !";
+
+			m_shadowDescriptorSet.reset();
+
+			return false;
+		}
+
+		TraceSuccess{ClassId} << "Shadow descriptor set created successfully for spotlight '" << this->name() << "'.";
+
+		return true;
+	}
+
+	void
+	SpotLight::updateLightSpaceMatrix () noexcept
+	{
+		this->writeLightSpaceMatrix(m_buffer.data() + LightMatrixOffset);
+	}
+
+	bool
+	SpotLight::onVideoMemoryUpdate (SharedUniformBuffer & UBO, uint32_t index) noexcept
+	{
+		return UBO.writeElementData(index, m_buffer.data());
 	}
 }

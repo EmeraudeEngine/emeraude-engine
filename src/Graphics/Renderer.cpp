@@ -40,6 +40,8 @@
 #include "Scenes/Scene.hpp"
 #include "Overlay/Manager.hpp"
 #include "PrimaryServices.hpp"
+#include "DummyShadowTexture.hpp"
+#include "RenderTarget/ShadowMapCascaded.hpp"
 
 namespace EmEn::Graphics
 {
@@ -207,6 +209,20 @@ namespace EmEn::Graphics
 			return false;
 		}
 
+		/* Initialize the bindless textures manager. */
+		m_bindlessTextureManager.setDevice(m_device);
+
+		if ( m_bindlessTextureManager.initialize(m_subServicesEnabled) )
+		{
+			TraceSuccess{ClassId} << m_bindlessTextureManager.name() << " service up!";
+		}
+		else
+		{
+			TraceFatal{ClassId} << m_bindlessTextureManager.name() << " service failed to execute!";
+
+			return false;
+		}
+
 		/* Initialize vertex buffer format manager. */
 		if ( m_vertexBufferFormatManager.initialize(m_subServicesEnabled) )
 		{
@@ -232,6 +248,67 @@ namespace EmEn::Graphics
 		}
 
 		return true;
+	}
+
+	void
+	Renderer::createDefaultResources (Resources::Manager & resources) noexcept
+	{
+		m_defaultTextureCubemap = resources.container< TextureResource::TextureCubemap >()
+			->getOrCreateResource(DefaultTextureCubemapName, [&resources] (TextureResource::TextureCubemap & texture) {
+				/* Create a small 16x16 black cubemap. */
+				const auto blackCubemap = resources.container< CubemapResource >()
+					->getOrCreateResource(DefaultTextureCubemapName, [] (CubemapResource & cubemap) {
+						return cubemap.load(Black, 16);
+					});
+
+				return texture.load(blackCubemap);
+			});
+
+		/* Initialize the bindless environment cubemap slot with the default cubemap. */
+		if ( m_bindlessTextureManager.usable() && m_defaultTextureCubemap != nullptr )
+		{
+			if ( m_bindlessTextureManager.updateTextureCube(BindlessTextureManager::EnvironmentCubemapSlot, *m_defaultTextureCubemap) )
+			{
+				TraceSuccess{ClassId} << "Bindless environment cubemap slot initialized with default cubemap.";
+			}
+		}
+
+		/* Create dummy shadow textures for unified descriptor set layouts. */
+		m_dummyShadowTexture2D = std::make_shared< DummyShadowTexture >(false);
+
+		if ( !m_dummyShadowTexture2D->create(*this) )
+		{
+			TraceError{ClassId} << "Unable to create the dummy 2D shadow texture !";
+
+			m_dummyShadowTexture2D.reset();
+		}
+
+		m_dummyShadowTextureCube = std::make_shared< DummyShadowTexture >(true);
+
+		if ( !m_dummyShadowTextureCube->create(*this) )
+		{
+			TraceError{ClassId} << "Unable to create the dummy cubemap shadow texture !";
+
+			m_dummyShadowTextureCube.reset();
+		}
+	}
+
+	void
+	Renderer::clearDefaultResources () noexcept
+	{
+		if ( m_dummyShadowTextureCube != nullptr )
+		{
+			m_dummyShadowTextureCube->destroy();
+			m_dummyShadowTextureCube.reset();
+		}
+
+		if ( m_dummyShadowTexture2D != nullptr )
+		{
+			m_dummyShadowTexture2D->destroy();
+			m_dummyShadowTexture2D.reset();
+		}
+
+		m_defaultTextureCubemap.reset();
 	}
 
 	bool
@@ -409,34 +486,40 @@ namespace EmEn::Graphics
 
 		this->registerToConsole();
 
-		/* Reading some parameters. */
-		{
-			auto & settings = m_primaryServices.settings();
-
-			if ( settings.getOrSetDefault< bool >(NormalMappingEnabledKey, DefaultNormalMappingEnabled) )
-			{
-				Tracer::info(ClassId, "Normal mapping enabled.");
-			}
-
-			if ( settings.getOrSetDefault< bool >(HighQualityLightEnabledKey, DefaultHighQualityLightEnabled) )
-			{
-				Tracer::info(ClassId, "High quality light shader code enabled.");
-			}
-
-			if ( settings.getOrSetDefault< bool >(HighQualityReflectionEnabledKey, DefaultHighQualityReflectionEnabled) )
-			{
-				Tracer::info(ClassId, "High quality reflection shader code enabled.");
-			}
-		}
-
 		m_isUsable = true;
 
 		return true;
 	}
 
+	void
+	Renderer::requestShutdown () noexcept
+	{
+		TraceInfo{ClassId} << "Graceful shutdown requested. Waiting for frames in-flight to complete...";
+
+		m_shutdownRequested = true;
+
+		/* Wait for all frames in-flight to complete their GPU work. */
+		for ( auto & frameScope : m_rendererFrameScope )
+		{
+			if ( frameScope.inFlightFence() != nullptr )
+			{
+				[[maybe_unused]] const auto result = frameScope.inFlightFence()->wait(m_timeout);
+			}
+		}
+
+		TraceInfo{ClassId} << "All frames in-flight have completed.";
+	}
+
 	bool
 	Renderer::onTerminate () noexcept
 	{
+		/* NOTE: Request shutdown if not already done to ensure graceful termination. */
+		if ( !m_shutdownRequested )
+		{
+			this->requestShutdown();
+		}
+
+		/* NOTE: Final device idle to ensure all GPU work is complete. */
 		m_device->waitIdle("Renderer::onTerminate()");
 
 		size_t error = 0;
@@ -460,6 +543,10 @@ namespace EmEn::Graphics
 			/* NOTE: Clear the program cache to release shared pointers before Vulkan resources are destroyed. */
 			m_programs.clear();
 		}
+
+		/* NOTE: Release default resources before Vulkan resources are destroyed.
+		 * These textures have VMA allocations that must be freed before the device is destroyed. */
+		this->clearDefaultResources();
 
 		m_descriptorPool.reset();
 
@@ -617,6 +704,12 @@ namespace EmEn::Graphics
 	void
 	Renderer::renderFrame (const std::shared_ptr< Scenes::Scene > & scene, const Overlay::Manager & overlayManager) noexcept
 	{
+		/* NOTE: Do not produce new frames if shutdown has been requested. */
+		if ( m_shutdownRequested )
+		{
+			return;
+		}
+
 		/* NOTE: Record frame start time for the optional frame limiter. */
 		if ( m_frameDuration.count() > 0 )
 		{
@@ -821,7 +914,7 @@ namespace EmEn::Graphics
 					waitStages.emplace_back(VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
 				}
 
-				/* Add swapchain image available semaphore and wait at COLOR_ATTACHMENT_OUTPUT stage */
+				/* Add swap-chain image available semaphore and wait at COLOR_ATTACHMENT_OUTPUT stage */
 				currentFrameScope.secondarySemaphores().emplace_back(currentFrameScope.imageAvailableSemaphore()->handle());
 				waitStages.emplace_back(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
 
@@ -891,7 +984,7 @@ namespace EmEn::Graphics
 				return;
 			}
 
-			commandBuffer->beginRenderPass(*shadowMap->framebuffer(), shadowMap->renderArea(), m_clearColors, VK_SUBPASS_CONTENTS_INLINE);
+			commandBuffer->beginRenderPass(*shadowMap->framebuffer(), shadowMap->renderArea(), m_shadowMapClearValues, VK_SUBPASS_CONTENTS_INLINE);
 
 			scene.castShadows(shadowMap, *commandBuffer);
 
@@ -920,6 +1013,55 @@ namespace EmEn::Graphics
 			}
 
 			currentFrameScope.declareSemaphore(shadowMap->semaphore(), true);
+		});
+
+		/* Render cascaded shadow maps (CSM). */
+		scene.forEachRenderToShadowMapCascaded([&] (const std::shared_ptr< RenderTarget::ShadowMapCascaded > & shadowMapCSM) {
+			if ( !shadowMapCSM->isReadyForRendering() )
+			{
+				TraceDebug{ClassId} << "The cascaded shadow map " << shadowMapCSM->id() << " is not yet ready for rendering!";
+
+				return;
+			}
+
+			const auto commandBuffer = currentFrameScope.getCommandBuffer(shadowMapCSM.get());
+
+			if ( !commandBuffer->begin() )
+			{
+				TraceError{ClassId} << "Unable to begin with render target '" << shadowMapCSM->id() << "' command buffer!";
+
+				return;
+			}
+
+			commandBuffer->beginRenderPass(*shadowMapCSM->framebuffer(), shadowMapCSM->renderArea(), m_shadowMapClearValues, VK_SUBPASS_CONTENTS_INLINE);
+
+			scene.castShadows(shadowMapCSM, *commandBuffer);
+
+			commandBuffer->endRenderPass();
+
+			if ( !commandBuffer->end() )
+			{
+				TraceError{ClassId} << "Unable to finish the command buffer for render target '" << shadowMapCSM->id() << '!';
+
+				return;
+			}
+
+			const auto semaphoreHandle = shadowMapCSM->semaphore()->handle();
+
+			const auto submitted = queue->submit(
+				*commandBuffer,
+				SynchInfo{}
+					.signals({&semaphoreHandle, 1})
+			);
+
+			if ( !submitted )
+			{
+				TraceError{ClassId} << "Unable to submit command buffer for render target '" << shadowMapCSM->id() << "' !";
+
+				return;
+			}
+
+			currentFrameScope.declareSemaphore(shadowMapCSM->semaphore(), true);
 		});
 	}
 

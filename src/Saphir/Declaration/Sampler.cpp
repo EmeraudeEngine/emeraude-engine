@@ -42,8 +42,14 @@ namespace EmEn::Saphir::Declaration
 			GLSL::Layout << "(" << GLSL::Set << " = " << m_set << ", " << GLSL::Binding << " = " << m_binding << ") " <<
 			GLSL::Uniform << ' ' << m_type << ' ' << m_name;
 
-		if ( m_arraySize > 0 )
+		if ( m_arraySize == UnboundedArray )
 		{
+			/* Unbounded array for bindless textures: generates name[] */
+			code << "[]";
+		}
+		else if ( m_arraySize > 0 )
+		{
+			/* Fixed-size array: generates name[size] */
 			code << '[' << m_arraySize << ']';
 		}
 

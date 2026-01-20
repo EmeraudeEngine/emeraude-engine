@@ -198,6 +198,16 @@ namespace EmEn::Graphics::Renderable
 			bool hasAnyCachedPrograms (const std::shared_ptr< const RenderTarget::Abstract > & renderTarget) const noexcept;
 
 			/**
+			 * @brief Checks if a render target has any cached programs for a specific render pass handle.
+			 * @note This is used to validate that cached programs are still valid after a render pass recreation (e.g., window resize).
+			 * @param renderTarget A reference to the render target.
+			 * @param renderPassHandle The current render pass handle to check against.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool hasAnyCachedProgramsForRenderPass (const std::shared_ptr< const RenderTarget::Abstract > & renderTarget, uint64_t renderPassHandle) const noexcept;
+
+			/**
 			 * @brief Returns the number of cached programs for a render target.
 			 * @param renderTarget A reference to the render target.
 			 * @return size_t

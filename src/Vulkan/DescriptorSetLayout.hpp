@@ -140,10 +140,11 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Declares a set layout binding.
-			 * @param setLayoutBinding
+			 * @param setLayoutBinding The binding to declare.
+			 * @param bindingFlags Optional binding flags (for UPDATE_AFTER_BIND, PARTIALLY_BOUND, etc.). Default 0.
 			 * @return bool
 			 */
-			bool declare (VkDescriptorSetLayoutBinding setLayoutBinding) noexcept;
+			bool declare (VkDescriptorSetLayoutBinding setLayoutBinding, VkDescriptorBindingFlags bindingFlags = 0) noexcept;
 
 			/**
 			 * @brief Declares a sampler binding.
@@ -467,6 +468,7 @@ namespace EmEn::Vulkan
 			VkDescriptorSetLayoutCreateInfo m_createInfo{};
 			std::string m_UUID;
 			Libs::StaticVector< VkDescriptorSetLayoutBinding, 16 > m_setLayoutBindings;
+			Libs::StaticVector< VkDescriptorBindingFlags, 16 > m_bindingFlags;
 	};
 
 	inline

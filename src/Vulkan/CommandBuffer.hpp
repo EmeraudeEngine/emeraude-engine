@@ -41,6 +41,7 @@
 #include "Libs/PixelFactory/Color.hpp"
 #include "CommandPool.hpp"
 #include "Device.hpp"
+#include "Framebuffer.hpp"
 
 /* Forward declarations. */
 namespace EmEn
@@ -230,6 +231,32 @@ namespace EmEn::Vulkan
 			 * @return void
 			 */
 			void beginRenderPass (const Framebuffer & framebuffer, const VkRect2D & renderArea, const std::array< VkClearValue, 2 > & clearValues, VkSubpassContents subpassContents) const noexcept;
+
+			/**
+			 * @brief Registers a render pass begin with variable clear value count.
+			 * @tparam array_size_t The number of clear values (must be > 0 and != 2 to avoid ambiguity).
+			 * @param framebuffer A reference to a framebuffer.
+			 * @param renderArea The render area.
+			 * @param clearValues The framebuffer clear values.
+			 * @param subpassContents
+			 * @return void
+			 */
+			template< size_t array_size_t >
+			void
+			beginRenderPass (const Framebuffer & framebuffer, const VkRect2D & renderArea, const std::array< VkClearValue, array_size_t > & clearValues, VkSubpassContents subpassContents) const noexcept
+				requires (array_size_t > 0 && array_size_t != 2)
+			{
+				VkRenderPassBeginInfo renderPassBeginInfo{};
+				renderPassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+				renderPassBeginInfo.pNext = nullptr;
+				renderPassBeginInfo.renderPass = framebuffer.renderPass()->handle();
+				renderPassBeginInfo.framebuffer = framebuffer.handle();
+				renderPassBeginInfo.renderArea = renderArea;
+				renderPassBeginInfo.clearValueCount = static_cast< uint32_t >(array_size_t);
+				renderPassBeginInfo.pClearValues = clearValues.data();
+
+				vkCmdBeginRenderPass(m_handle, &renderPassBeginInfo, subpassContents);
+			}
 
 			/**
 			 * @brief Registers a render pass end.

@@ -28,6 +28,8 @@
 
 /* Local inclusions. */
 #include "Declaration/OutputBlock.hpp"
+#include "Declaration/Sampler.hpp"
+#include "Declaration/SpecializationConstant.hpp"
 #include "Generator/Abstract.hpp"
 #include "Code.hpp"
 
@@ -47,13 +49,19 @@ namespace EmEn::Saphir
 
 		Declaration::OutputBlock lightBlock{LightBlock, generator.getNextShaderVariableLocation(lightType == LightType::Spot ? 2 : 1), ShaderVariable::Light};
 
+		/* NOTE: In cubemap mode, the view matrix comes from the UBO indexed by gl_ViewIndex,
+		 * not from the push constant. */
+		const auto viewMatrixSource = vertexShader.isCubemapModeEnabled() ?
+			ViewUB(UniformBlock::Component::ViewMatrix, true) :
+			MatrixPC(PushConstant::Component::ViewMatrix);
+
 		if ( lightType == LightType::Directional )
 		{
 			vertexShader.addComment("Compute the light direction in view space (Normalized vector).");
 
 			lightBlock.addMember(Declaration::VariableType::FloatVector3, RayDirectionViewSpace, GLSL::Smooth);
 
-			Code{vertexShader, Location::Output} << LightGenerator::variable(RayDirectionViewSpace) << " = normalize((" << MatrixPC(PushConstant::Component::ViewMatrix) << " * " << this->lightDirectionWorldSpace() << ").xyz);";
+			Code{vertexShader, Location::Output} << LightGenerator::variable(RayDirectionViewSpace) << " = normalize((" << viewMatrixSource << " * " << this->lightDirectionWorldSpace() << ").xyz);";
 		}
 		else
 		{
@@ -66,7 +74,7 @@ namespace EmEn::Saphir
 				return false;
 			}
 
-			Code{vertexShader} << "const vec4 " << LightPositionViewSpace << " = " << MatrixPC(PushConstant::Component::ViewMatrix) << " * " << this->lightPositionWorldSpace() << ';';
+			Code{vertexShader} << "const vec4 " << LightPositionViewSpace << " = " << viewMatrixSource << " * " << this->lightPositionWorldSpace() << ';';
 
 			Code{vertexShader, Location::Output} << LightGenerator::variable(Distance) << " = " << ShaderVariable::PositionViewSpace << ".xyz - " << LightPositionViewSpace << ".xyz;";
 		}
@@ -75,7 +83,7 @@ namespace EmEn::Saphir
 		{
 			lightBlock.addMember(Declaration::VariableType::FloatVector3, SpotLightDirectionViewSpace, GLSL::Smooth);
 
-			Code{vertexShader, Location::Output} << LightGenerator::variable(SpotLightDirectionViewSpace) << " = normalize((" << MatrixPC(PushConstant::Component::ViewMatrix) << " * " << this->lightDirectionWorldSpace() << ").xyz);";
+			Code{vertexShader, Location::Output} << LightGenerator::variable(SpotLightDirectionViewSpace) << " = normalize((" << viewMatrixSource << " * " << this->lightDirectionWorldSpace() << ").xyz);";
 		}
 
 		/* NOTE: For all light type. */
@@ -93,14 +101,33 @@ namespace EmEn::Saphir
 			}
 		}
 
-		/* TODO: Test this code ! */
+		/* NOTE: Shadow map prerequisites must be generated based on actual UBO structure.
+		 * The UBO only contains viewProjectionMatrix when shadow mapping is enabled.
+		 * Point lights use cubemap shadow maps requiring direction output for 3D lookup.
+		 * CSM mode requires PositionWorldSpace instead of PositionLightSpace. */
 		if ( enableShadowMap )
 		{
+			const bool useCSM = (m_renderPassType == RenderPassType::DirectionalLightPassCSM);
+
 			vertexShader.addComment("Compute the shadow map prerequisites for next stage.");
 
-			if ( !this->generateVertexShaderShadowMapCode(generator, vertexShader, lightType == LightType::Point) )
-			{	
-				return false;
+			if ( useCSM )
+			{
+				/* NOTE: CSM computes light-space position in the fragment shader.
+				 * We only need to pass the world-space position. */
+				if ( !vertexShader.requestSynthesizeInstruction(ShaderVariable::PositionWorldSpace, VariableScope::ToNextStage) )
+				{
+					return false;
+				}
+			}
+			else
+			{
+				/* NOTE: Point lights use cubemap shadow maps (true = cubemap mode).
+				 * Other light types use 2D shadow maps with viewProjectionMatrix. */
+				if ( !this->generateVertexShaderShadowMapCode(generator, vertexShader, lightType == LightType::Point) )
+				{
+					return false;
+				}
 			}
 		}
 
@@ -108,9 +135,44 @@ namespace EmEn::Saphir
 	}
 
 	bool
-	LightGenerator::generatePhongBlinnFragmentShader (Generator::Abstract & /*generator*/, FragmentShader & fragmentShader, LightType lightType, bool enableShadowMap) const noexcept
+	LightGenerator::generatePhongBlinnFragmentShader (Generator::Abstract & generator, FragmentShader & fragmentShader, LightType lightType, [[maybe_unused]] bool enableShadowMap) const noexcept
 	{
 		//TraceDebug{ClassId} << "Generating '" << to_string(lightType) << "' fragment shader [PerFragment][NormalMap:" << m_flags[UseNormalMapping] << "][ShadowMapSampler:" << enableShadowMap << "] ...";
+
+		const auto lightSetIndex = generator.shaderProgram()->setIndex(SetType::PerLight);
+
+		const bool useCSM = (m_renderPassType == RenderPassType::DirectionalLightPassCSM);
+
+		/* NOTE: Shadow sampler is declared when shadow mapping is enabled.
+		 * Point lights use cubemap shadow maps (samplerCube) for omnidirectional shadows.
+		 * Directional lights with CSM use 2D array shadow maps (sampler2DArrayShadow).
+		 * Other light types use 2D shadow maps (sampler2DShadow) with hardware comparison. */
+		if ( enableShadowMap )
+		{
+			if ( lightType == LightType::Point )
+			{
+				/* NOTE: Point lights use a cubemap sampler for omnidirectional shadow lookup. */
+				if ( !fragmentShader.declare(Declaration::Sampler{lightSetIndex, 1, GLSL::SamplerCube, Uniform::ShadowMapSampler}) )
+				{
+					return false;
+				}
+			}
+			else if ( useCSM )
+			{
+				/* NOTE: CSM uses a 2D array shadow sampler for cascade layers. */
+				if ( !fragmentShader.declare(Declaration::Sampler{lightSetIndex, 1, GLSL::Sampler2DArrayShadow, Uniform::ShadowMapSampler}) )
+				{
+					return false;
+				}
+			}
+			else
+			{
+				if ( !fragmentShader.declare(Declaration::Sampler{lightSetIndex, 1, GLSL::Sampler2DShadow, Uniform::ShadowMapSampler}) )
+				{
+					return false;
+				}
+			}
+		}
 
 		std::string rayDirectionViewSpace;
 
@@ -171,7 +233,7 @@ namespace EmEn::Saphir
 			}
 		}
 
-		/* NOTE: Check the shadow map influence. */
+		/* NOTE: Shadow map influence is computed when shadow mapping is enabled. */
 		if ( enableShadowMap )
 		{
 			fragmentShader.addComment("Compute the shadow influence over the light factor.");
@@ -179,22 +241,52 @@ namespace EmEn::Saphir
 			switch ( lightType )
 			{
 				case LightType::Directional :
-					//gen.declare(Declaration::Uniform{Declaration::VariableType::Sampler2DShadow, Uniform::ShadowMapSampler});
-
-					Code{fragmentShader} << this->generate2DShadowMapCode(Uniform::ShadowMapSampler, LightGenerator::variable(ShaderBlock::Component::PositionLightSpace), DepthTextureFunction::TextureGather) << Line::Blank;
+					if ( useCSM )
+					{
+						/* NOTE: CSM requires world-space position, view matrix for depth calculation,
+						 * and cascade matrices/split distances from the light UBO. */
+						Code{fragmentShader} << this->generateCSMShadowMapCode(
+							Uniform::ShadowMapSampler,
+							std::string(ShaderVariable::PositionWorldSpace) + ".xyz",
+							ViewUB(UniformBlock::Component::ViewMatrix, false),
+							LightUB(UniformBlock::Component::CascadeViewProjectionMatrices),
+							LightUB(UniformBlock::Component::CascadeSplitDistances),
+							LightUB(UniformBlock::Component::CascadeCount)
+						) << Line::Blank;
+					}
+					else if ( m_PCFEnabled )
+					{
+						Code{fragmentShader} << this->generate2DShadowMapPCFCode(Uniform::ShadowMapSampler, ShaderVariable::PositionLightSpace) << Line::Blank;
+					}
+					else
+					{
+						Code{fragmentShader} << this->generate2DShadowMapCode(Uniform::ShadowMapSampler, ShaderVariable::PositionLightSpace) << Line::Blank;
+					}
 					break;
 
 				case LightType::Point :
-					//gen.declare(Declaration::Uniform{Declaration::VariableType::Sampler2DShadow, Uniform::ShadowMapSampler});
-
-					// FIXME : NearFar must come from view UBO
-					//Code{fragmentShader} << this->generate3DShadowMapCode(Uniform::ShadowMapSampler, LightGenerator::variable(ShaderBlock::Component::DirectionWorldSpace), Uniform::NearFar) << Line::End;
+					/* NOTE: Point lights use cubemap shadow maps. The direction from fragment to light
+					 * is used as the lookup vector. Depth is linearized using the light radius as far plane.
+					 * nearFar.y = radius is used to convert stored depth to world-space distance. */
+					if ( m_PCFEnabled )
+					{
+						Code{fragmentShader} << this->generate3DShadowMapPCFCode(Uniform::ShadowMapSampler, "DirectionWorldSpace", "vec2(0.1, " + this->lightRadius() + ")") << Line::End;
+					}
+					else
+					{
+						Code{fragmentShader} << this->generate3DShadowMapCode(Uniform::ShadowMapSampler, "DirectionWorldSpace", "vec2(0.1, " + this->lightRadius() + ")") << Line::End;
+					}
 					break;
 
 				case LightType::Spot :
-					//gen.declare(Declaration::Uniform{Declaration::VariableType::Sampler2DShadow, Uniform::ShadowMapSampler});
-
-					Code{fragmentShader} << this->generate2DShadowMapCode(Uniform::ShadowMapSampler, LightGenerator::variable(ShaderBlock::Component::PositionLightSpace), DepthTextureFunction::TextureProj) << Line::End;
+					if ( m_PCFEnabled )
+					{
+						Code{fragmentShader} << this->generate2DShadowMapPCFCode(Uniform::ShadowMapSampler, ShaderVariable::PositionLightSpace) << Line::End;
+					}
+					else
+					{
+						Code{fragmentShader} << this->generate2DShadowMapCode(Uniform::ShadowMapSampler, ShaderVariable::PositionLightSpace) << Line::End;
+					}
 					break;
 			}
 

@@ -45,7 +45,9 @@ namespace EmEn::Saphir
 		/* Everything used by the same model. */
 		PerModel,
 		/* Everything used by an object layer. */
-		PerModelLayer
+		PerModelLayer,
+		/* Bindless texture arrays (global resources). */
+		PerBindless
 	};
 
 	/**
@@ -122,7 +124,8 @@ namespace EmEn::Saphir
 		return out << SetIndexes::ClassId << " data :" "\n"
 			"Set per view : " << obj.set(SetType::PerView) << "\n"
 			"Set per light : " << obj.set(SetType::PerLight) << "\n"
-			"Set per model layer : " << obj.set(SetType::PerModelLayer) << "\n";
+			"Set per model layer : " << obj.set(SetType::PerModelLayer) << "\n"
+			"Set per bindless : " << obj.set(SetType::PerBindless) << "\n";
 	}
 
 	/**

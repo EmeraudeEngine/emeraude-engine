@@ -143,7 +143,7 @@ namespace EmEn::Graphics
 			 * @param size The size of each face (width and height in pixels).
 			 * @return bool
 			 */
-			bool loadSolidColor (const Libs::PixelFactory::Color< float > & color, uint32_t size) noexcept;
+			bool load (const Libs::PixelFactory::Color< float > & color, uint32_t size) noexcept;
 
 			/**
 			 * @brief Returns the pixmap.

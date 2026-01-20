@@ -169,7 +169,7 @@ namespace EmEn::Graphics::Renderable
 			std::shared_ptr< TextureResource::TextureCubemap >
 			environmentCubemap () const noexcept override
 			{
-				return m_cubemap;
+				return m_environmentCubemap;
 			}
 
 		private:
@@ -197,7 +197,7 @@ namespace EmEn::Graphics::Renderable
 
 			std::shared_ptr< Geometry::Interface > m_geometry;
 			std::shared_ptr< Material::Interface > m_material;
-			std::shared_ptr< TextureResource::TextureCubemap > m_cubemap;
+			std::shared_ptr< TextureResource::TextureCubemap > m_environmentCubemap;
 	};
 }
 

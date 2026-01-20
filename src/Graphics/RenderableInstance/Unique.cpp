@@ -61,9 +61,9 @@ namespace EmEn::Graphics::RenderableInstance
 			modelMatrix *= this->transformationMatrix();
 		}
 
-		/* For cubemap rendering, View/Projection matrices are in UBO indexed by gl_ViewIndex.
+		/* For cubemap/CSM rendering, View/Projection matrices are in UBO indexed by gl_ViewIndex.
 		 * We only push the Model matrix. */
-		if ( passContext.isCubemap )
+		if ( passContext.isCubemap || passContext.isCSM )
 		{
 			vkCmdPushConstants(
 				passContext.commandBuffer->handle(),

@@ -221,6 +221,17 @@ namespace EmEn::Libs::VertexFactory
 			}
 
 			/**
+			 * @brief Gives mutable access to the vertices list.
+			 * @return std::vector< ShapeVertex< vertex_data_t > > &
+			 */
+			[[nodiscard]]
+			std::vector< ShapeVertex< vertex_data_t > > &
+			vertices () noexcept
+			{
+				return m_vertices;
+			}
+
+			/**
 			 * @brief Gives access to the vertex colors list.
 			 * @return const std::vector< Math::Vector< 4, vertex_data_t > > &
 			 */
@@ -232,12 +243,34 @@ namespace EmEn::Libs::VertexFactory
 			}
 
 			/**
+			 * @brief Gives mutable access to the vertex colors list.
+			 * @return std::vector< Math::Vector< 4, vertex_data_t > > &
+			 */
+			[[nodiscard]]
+			std::vector< Math::Vector< 4, vertex_data_t > > &
+			vertexColors () noexcept
+			{
+				return m_vertexColors;
+			}
+
+			/**
 			 * @brief Gives access to the triangle list.
 			 * @return const std::vector< ShapeTriangle< vertex_data_t > > &
 			 */
 			[[nodiscard]]
 			const std::vector< ShapeTriangle< vertex_data_t > > &
 			triangles () const noexcept
+			{
+				return m_triangles;
+			}
+
+			/**
+			 * @brief Gives mutable access to the triangle list.
+			 * @return std::vector< ShapeTriangle< vertex_data_t > > &
+			 */
+			[[nodiscard]]
+			std::vector< ShapeTriangle< vertex_data_t > > &
+			triangles () noexcept
 			{
 				return m_triangles;
 			}

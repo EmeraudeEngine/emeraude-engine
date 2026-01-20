@@ -27,6 +27,8 @@
 #include "Scene.hpp"
 
 /* Local inclusions. */
+#include "Graphics/BindlessTextureManager.hpp"
+#include "Graphics/Renderer.hpp"
 #include "Scenes/Component/Camera.hpp"
 #include "Scenes/Component/Microphone.hpp"
 #include "NodeCrawler.hpp"
@@ -183,6 +185,35 @@ namespace EmEn::Scenes
 		m_staticEntities.erase(staticEntityIt);
 
 		return true;
+	}
+
+	void
+	Scene::setBackground (const std::shared_ptr< Graphics::Renderable::AbstractBackground > & background) noexcept
+	{
+		m_backgroundResource = background;
+
+		/* Extract environment cubemap from background if available. */
+		if ( background != nullptr )
+		{
+			if ( const auto cubemap = background->environmentCubemap(); cubemap != nullptr )
+			{
+				m_environmentCubemap = cubemap;
+			}
+		}
+
+		/* Update the bindless textures manager with the new environment cubemap. */
+		if ( m_environmentCubemap != nullptr )
+		{
+			if ( const auto & bindlessManager = m_AVConsoleManager.graphicsRenderer().bindlessTextureManager(); bindlessManager.usable() )
+			{
+				if ( bindlessManager.updateTextureCube(Graphics::BindlessTextureManager::EnvironmentCubemapSlot, *m_environmentCubemap) )
+				{
+					TraceSuccess{ClassId} << "Scene will use environment cubemap '" << m_environmentCubemap->name() << "' !";
+				}
+			}
+		}
+
+		this->registerSceneVisualComponents();
 	}
 
 	std::string

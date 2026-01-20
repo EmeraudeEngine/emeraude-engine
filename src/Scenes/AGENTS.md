@@ -375,7 +375,39 @@ See: `AbstractEntity.cpp:updateEntityProperties()` for auto-AABB creation logic.
 - **Friend class**: `AbstractEntity` is friend of `Component::Abstract` to access protected hooks
 - **Auto collision models**: Visual components auto-generate collision models - disable for gizmos!
 
+## Shadow Mapping Integration
+
+The Scene handles shadow map rendering and lighting pass selection. See [`docs/shadow-mapping.md`](../../docs/shadow-mapping.md) for complete shadow mapping architecture.
+
+### Global Shadow Control
+
+Shadow mapping can be globally disabled via `GraphicsShadowMappingEnabledKey` setting.
+
+**Implementation in `Scene.rendering.cpp:renderLightedSelection()`:**
+```cpp
+const bool shadowMapsEnabled = m_AVConsoleManager.graphicsRenderer().isShadowMapsEnabled();
+
+// For each light type, check global setting before using shadow pass:
+if ( shadowMapsEnabled && light->isShadowCastingEnabled() && light->hasShadowDescriptorSet() && instance->isShadowReceivingEnabled() )
+{
+    passType = RenderPassType::DirectionalLightPass;  // Shadow-enabled
+}
+else
+{
+    passType = RenderPassType::DirectionalLightPassNoShadow;  // No shadow
+}
+```
+
+**Why this matters:** Without the global check, disabling shadows via settings caused Vulkan validation errors because shadow map images remained in `VK_IMAGE_LAYOUT_UNDEFINED` but descriptor sets still tried to bind them.
+
+**Code references:**
+- `Scene.rendering.cpp:978` - Global setting check
+- `Scene.rendering.cpp:1003` - Directional light pass selection
+- `Scene.rendering.cpp:1034` - Point light pass selection
+- `Scene.rendering.cpp:1064` - Spotlight pass selection
+
 ## Detailed Documentation
 
 For complete architecture, diagrams, and advanced patterns:
 - @docs/scene-graph-architecture.md
+- @docs/shadow-mapping.md - Shadow mapping, PCF, global controls

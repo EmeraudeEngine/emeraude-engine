@@ -30,11 +30,12 @@
 #include <ranges>
 
 /* Local inclusions. */
-#include "Scenes/Component/Camera.hpp"
-#include "Scenes/Component/Microphone.hpp"
-#include "Scenes/NodeCrawler.hpp"
 #include "Audio/HardwareOutput.hpp"
 #include "Input/Manager.hpp"
+#include "Scenes/Component/Camera.hpp"
+#include "Scenes/Component/DirectionalLight.hpp"
+#include "Scenes/Component/Microphone.hpp"
+#include "Scenes/NodeCrawler.hpp"
 
 namespace EmEn::Scenes
 {
@@ -43,10 +44,11 @@ namespace EmEn::Scenes
 	using namespace Physics;
 	using namespace Graphics;
 
-	Scene::Scene (Resources::Manager & resourceManager, Renderer & graphicsRenderer, Audio::Manager & audioManager, const std::string & name, float boundary, const std::shared_ptr< Renderable::AbstractBackground > & background, const std::shared_ptr< GroundLevelInterface > & ground, const std::shared_ptr< SeaLevelInterface > & seaLevel, const SceneOctreeOptions & octreeOptions) noexcept
+	Scene::Scene (Renderer & graphicsRenderer, Audio::Manager & audioManager, const std::string & name, float boundary, const std::shared_ptr< Renderable::AbstractBackground > & background, const std::shared_ptr< GroundLevelInterface > & ground, const std::shared_ptr< SeaLevelInterface > & seaLevel, const SceneOctreeOptions & octreeOptions) noexcept
 		: NameableTrait{name},
 		m_rootNode{std::make_shared< Node >(*this)},
 		m_backgroundResource{background},
+		m_environmentCubemap{graphicsRenderer.getDefaultTextureCubemap()},
 		m_groundLevelRenderable{std::dynamic_pointer_cast< Renderable::Abstract >(ground)},
 		m_groundLevel{ground},
 		m_seaLevelRenderable{std::dynamic_pointer_cast< Renderable::Abstract >(seaLevel)},
@@ -58,30 +60,6 @@ namespace EmEn::Scenes
 		this->observe(m_rootNode.get());
 
 		this->buildOctrees(octreeOptions);
-
-		/* Create or retrieve the default black environment cubemap for IBL fallback.
-		 * This ensures materials with automatic reflection always have a valid cubemap. */
-		m_environmentCubemap = resourceManager.container< TextureResource::TextureCubemap >()
-			->getOrCreateResource("DefaultBlackEnvMap", [&resourceManager, &graphicsRenderer] (TextureResource::TextureCubemap & texture) {
-				/* Create a small 1x1 black cubemap. */
-				const auto blackCubemap = resourceManager.container< CubemapResource >()
-					->getOrCreateResource("DefaultBlackEnvMap", [] (CubemapResource & cubemap) {
-						return cubemap.loadSolidColor(PixelFactory::Black, 16);
-					});
-
-				if ( !texture.load(blackCubemap) )
-				{
-					return false;
-				}
-
-				/* Create the texture on GPU immediately (synchronous). */
-				if ( !texture.createTexture(graphicsRenderer) )
-				{
-					return false;
-				}
-
-				return true;
-			});
 	}
 
 	Scene::~Scene ()
@@ -235,6 +213,17 @@ namespace EmEn::Scenes
 			m_initialized = true;
 		}
 
+		/* Update the bindless textures manager with the scene's environment cubemap (If already usable). */
+		if ( m_environmentCubemap != nullptr && m_environmentCubemap->isCreated() )
+		{
+			const auto & bindlessManager = m_AVConsoleManager.graphicsRenderer().bindlessTextureManager();
+
+			if ( bindlessManager.usable() && bindlessManager.updateTextureCube(BindlessTextureManager::EnvironmentCubemapSlot, *m_environmentCubemap) )
+			{
+				TraceSuccess{ClassId} << "Scene will use environment cubemap '" << m_environmentCubemap->name() << "' !";
+			}
+		}
+
 		/* FIXME: When re-enabling, the swap-chain does not have the correct ambient light parameters! */
 
 		inputManager.addKeyboardListener(&m_nodeController);
@@ -306,6 +295,10 @@ namespace EmEn::Scenes
 			m_rootNode->trimTree();
 		}
 
+		/* Update Cascaded Shadow Maps for directional lights.
+		 * CSM needs the camera frustum corners to compute tight-fit cascade projections each frame. */
+		this->updateCSMCascades();
+
 		/* Update audio ambience if active. */
 		if ( m_ambience != nullptr && m_ambience->isPlaying() )
 		{
@@ -313,6 +306,58 @@ namespace EmEn::Scenes
 		}
 
 		m_cycle++;
+	}
+
+	void
+	Scene::updateCSMCascades () noexcept
+	{
+		/* Early out if no cascaded shadow maps exist. */
+		{
+			const std::lock_guard< std::mutex > lock{m_renderToShadowMapCascadedAccess};
+
+			if ( m_renderToShadowMapsCascaded.empty() )
+			{
+				return;
+			}
+		}
+
+		/* Get camera frustum from the primary render target (View).
+		 * The View contains the camera's view matrices which we need for frustum computation. */
+		std::array< Vector< 3, float >, 8 > frustumCorners;
+		float nearPlane = 0.1F;
+		float farPlane = 1000.0F;
+		bool found = false;
+
+		this->forEachRenderToView([&frustumCorners, &nearPlane, &farPlane, &found] (const std::shared_ptr< RenderTarget::Abstract > & renderTarget) {
+			if ( found || renderTarget == nullptr )
+			{
+				return;
+			}
+
+			/* Get frustum corners from the View's matrices (which come from the connected camera). */
+			frustumCorners = renderTarget->viewMatrices().getFrustumCornersWorld();
+
+			/* Get far distance from the render target. Near is computed from projection. */
+			nearPlane = 0.1F;
+			farPlane = renderTarget->viewDistance();
+
+			found = true;
+		});
+
+		if ( !found )
+		{
+			return;
+		}
+
+		/* Update all CSM-enabled directional lights with the camera frustum.
+		 * NOTE: We iterate through lights because they know their direction. */
+		for ( const auto & light : m_lightSet.directionalLights() )
+		{
+			if ( light != nullptr && light->usesCSM() && light->isShadowCastingEnabled() )
+			{
+				light->updateCascades(frustumCorners, nearPlane, farPlane);
+			}
+		}
 	}
 
 	bool

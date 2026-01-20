@@ -36,3 +36,5 @@ else ()
 
 	target_link_libraries(${TARGET_BINARY_FOR_SETUP} PRIVATE ${SNDFILE_LIBRARIES})
 endif ()
+
+set(LIBSNDFILE_ENABLED On)

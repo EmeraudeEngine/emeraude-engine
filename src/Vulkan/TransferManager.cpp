@@ -176,6 +176,14 @@ namespace EmEn::Vulkan
 			sourceStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
 			destinationStage = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
 		}
+		else if ( oldLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL && newLayout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL )
+		{
+			srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+			dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+			sourceStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+			destinationStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+		}
 		else
 		{
 			TraceError{ClassId} << "Unsupported layout transition for the image '" << image.identifier() << "' !";
@@ -740,5 +748,70 @@ namespace EmEn::Vulkan
 		}
 
 		return operation;
+	}
+
+	bool
+	TransferManager::clearDepthImage (Image & image, float depthValue, uint32_t stencilValue) const noexcept
+	{
+		const std::lock_guard< std::mutex > lock{m_transferOperationsAccess};
+
+		if ( !m_imageLayoutTransitionFence->reset() )
+		{
+			TraceError{ClassId} << "Unable to reset the fence for clearing the depth image '" << image.identifier() << "' !";
+
+			return false;
+		}
+
+		if ( !m_imageLayoutTransitionCommandBuffer->begin() )
+		{
+			TraceError{ClassId} << "Unable to begin the command buffer for clearing the depth image '" << image.identifier() << "' !";
+
+			return false;
+		}
+
+		VkClearDepthStencilValue clearValue{};
+		clearValue.depth = depthValue;
+		clearValue.stencil = stencilValue;
+
+		VkImageSubresourceRange subresourceRange{};
+		subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+		subresourceRange.baseMipLevel = 0;
+		subresourceRange.levelCount = 1;
+		subresourceRange.baseArrayLayer = 0;
+		subresourceRange.layerCount = image.createInfo().arrayLayers;
+
+		vkCmdClearDepthStencilImage(
+			m_imageLayoutTransitionCommandBuffer->handle(),
+			image.handle(),
+			VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+			&clearValue,
+			1,
+			&subresourceRange
+		);
+
+		if ( !m_imageLayoutTransitionCommandBuffer->end() )
+		{
+			TraceError{ClassId} << "Unable to end the command buffer for clearing the depth image '" << image.identifier() << "' !";
+
+			return false;
+		}
+
+		const auto * queue = m_device->getGraphicsQueue(QueuePriority::High);
+
+		if ( !queue->submit(*m_imageLayoutTransitionCommandBuffer, SynchInfo{}.withFence(m_imageLayoutTransitionFence->handle())) )
+		{
+			TraceError{ClassId} << "Unable to submit the command buffer for clearing the depth image '" << image.identifier() << "' !";
+
+			return false;
+		}
+
+		if ( !m_imageLayoutTransitionFence->wait() )
+		{
+			TraceError{ClassId} << "Unable to wait the fence for clearing the depth image '" << image.identifier() << "' !";
+
+			return false;
+		}
+
+		return true;
 	}
 }

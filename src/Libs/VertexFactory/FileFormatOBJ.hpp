@@ -244,20 +244,86 @@ namespace EmEn::Libs::VertexFactory
 				if ( !geometry.isValid() )
 				{
 					std::cerr << __PRETTY_FUNCTION__ << ", geometry parameter is invalid !" "\n";
-
 					return false;
 				}
 
-				std::ofstream file{filepath};
+				std::ofstream file{filepath, std::ios::out};
 
 				if ( !file.is_open() )
 				{
 					std::cerr << __PRETTY_FUNCTION__ << ", unable to open '" << filepath << "' file to write !" "\n";
-
 					return false;
 				}
 
-				/* FIXME: TODO ! */
+				/* Header */
+				file << "# Exported by Emeraude-Engine" << "\n";
+				file << "o Geometry" << "\n";
+
+				/* Write Vertices (v) */
+				for ( const auto & vertex : geometry.vertices() )
+				{
+					const auto & pos = vertex.position();
+					/* OBJ does not enforce index, just order. */
+					file << "v " << pos.x() << " " << pos.y() << " " << pos.z() << "\n";
+				}
+
+				/* Write Texture Coordinates (vt) */
+				/* We write them even if zero/invalid if we want to rely on the same index, 
+				   OR we write them and keep a mapping. 
+				   The simplest approach for indexed geometry in Shape is to assume every vertex has unique attributes combination.
+				   So we just dump all attributes in order and reference them by same index.
+				*/
+				if ( geometry.isTextureCoordinatesAvailable() )
+				{
+					for ( const auto & vertex : geometry.vertices() )
+					{
+						const auto & uv = vertex.textureCoordinates();
+						file << "vt " << uv.x() << " " << uv.y() << "\n";
+					}
+				}
+
+				/* Write Normals (vn) */
+				/* Check if any normal is non-zero or just dump all? 
+				   Usually better to check availability but Shape::computeVertexNormal might have been called.
+				   We'll dump them if present.
+				*/
+				for ( const auto & vertex : geometry.vertices() )
+				{
+					const auto & n = vertex.normal();
+					file << "vn " << n.x() << " " << n.y() << " " << n.z() << "\n";
+				}
+
+				/* Write Faces (f) */
+				/* OBJ indices are 1-based */
+				bool hasUV = geometry.isTextureCoordinatesAvailable();
+				// bool hasNormals = true; // We always write normals above
+
+				file << "s off" << "\n";
+
+				for ( const auto & triangle : geometry.triangles() )
+				{
+					file << "f";
+					for ( int i = 0; i < 3; ++i )
+					{
+						index_data_t idx = triangle.vertexIndex(i) + 1;
+						
+						/* f v/vt/vn */
+						file << " " << idx;
+						
+						if ( hasUV )
+						{
+							file << "/" << idx;
+						}
+						else
+						{
+							/* f v//vn */
+							file << "/"; 
+						}
+						
+						file << "/" << idx;
+					}
+					file << "\n";
+				}
 
 				file.close();
 
