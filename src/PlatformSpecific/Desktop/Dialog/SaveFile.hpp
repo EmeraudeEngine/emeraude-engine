@@ -95,6 +95,28 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 			}
 
 			/**
+			 * @brief Sets the default filename for the save dialog.
+			 * @param filename A reference to a string.
+			 * @return void
+			 */
+			void
+			setDefaultFilename (const std::string & filename)
+			{
+				m_defaultFilename = filename;
+			}
+
+			/**
+			 * @brief Sets the default directory for the save dialog.
+			 * @param directory A reference to a filesystem path.
+			 * @return void
+			 */
+			void
+			setDefaultDirectory (const std::filesystem::path & directory)
+			{
+				m_defaultDirectory = directory;
+			}
+
+			/**
 			 * @brief Returns whether the user has canceled the dialog.
 			 * @return bool
 			 */
@@ -120,6 +142,7 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 
 			std::vector< std::pair< std::string, std::vector< std::string > > > m_extensionFilters;
 			std::filesystem::path m_filepath;
+			std::filesystem::path m_defaultDirectory;
 			std::string m_defaultFilename{"untitled"};
 			bool m_canceled{false};
 	};

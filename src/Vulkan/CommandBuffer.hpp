@@ -334,6 +334,17 @@ namespace EmEn::Vulkan
 			void blit (const Image & src, const Image & dst) const noexcept;
 
 			/**
+			 * @brief Registers an image to image blit command with explicit layouts.
+			 * @param src A reference to the source image.
+			 * @param srcLayout The current layout of the source image.
+			 * @param dst A reference to the destination image.
+			 * @param dstLayout The current layout of the destination image.
+			 * @param filter The filter to apply during the blit. Default linear.
+			 * @return void
+			 */
+			void blitImage (const Image & src, VkImageLayout srcLayout, const Image & dst, VkImageLayout dstLayout, VkFilter filter = VK_FILTER_LINEAR) const noexcept;
+
+			/**
 			 * @brief Clears the color part of the image.
 			 * @param image A reference to a command buffer.
 			 * @param imageLayout Specifies the current layout of the image subresource ranges to be cleared, and must be VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR, VK_IMAGE_LAYOUT_GENERAL or VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL.

@@ -382,10 +382,10 @@ namespace EmEn::Graphics::RenderTarget
 			 * @param keepAlpha Keep the alpha channel from the GPU memory.
 			 * @param withDepthBuffer Enable the depth buffer to be captured, if exists.
 			 * @param withStencilBuffer Enable the stencil buffer to be captured, if exists.
-			 * @return std::array< Libs::PixelFactory::Pixmap< uint8_t >, 3 > Array containing [0] = color, [1] = depth (optional), [2] = stencil (optional)
+			 * @param result Array to fill: [0] = color, [1] = depth (optional), [2] = stencil (optional).
+			 * @return bool
 			 */
-			[[nodiscard]]
-			virtual std::array< Libs::PixelFactory::Pixmap< uint8_t >, 3 > capture (Vulkan::TransferManager & transferManager, uint32_t layerIndex, bool keepAlpha, bool withDepthBuffer, bool withStencilBuffer) const noexcept = 0;
+			virtual bool capture (Vulkan::TransferManager & transferManager, uint32_t layerIndex, bool keepAlpha, bool withDepthBuffer, bool withStencilBuffer, std::array< Libs::PixelFactory::Pixmap< uint8_t >, 3 > & result) const noexcept = 0;
 
 			/**
 			 * @brief Returns the descriptor set layout for render-targets.

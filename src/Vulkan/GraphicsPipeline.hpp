@@ -232,6 +232,15 @@ namespace EmEn::Vulkan
 			bool configureMultisampleState (const Graphics::RenderTarget::Abstract & renderTarget, VkPipelineMultisampleStateCreateFlags flags = 0) noexcept;
 
 			/**
+			 * @brief Generates multisample state into the graphics pipeline createInfo with a direct sample count.
+			 * @param sampleCount The number of samples (1 for single-sample, 2/4/8/16/32/64 for MSAA).
+			 * @param flags Flags value for this stage. Default 0.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool configureMultisampleState (uint32_t sampleCount, VkPipelineMultisampleStateCreateFlags flags = 0) noexcept;
+
+			/**
 			 * @brief Generates depth stencil state into the graphics pipeline createInfo.
 			 * @param renderPassType The render pass type.
 			 * @param renderableInstance A reference to the renderable instance.

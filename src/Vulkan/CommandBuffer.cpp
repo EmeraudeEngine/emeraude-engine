@@ -490,6 +490,66 @@ namespace EmEn::Vulkan
 	}
 
 	void
+	CommandBuffer::blitImage (const Image & src, VkImageLayout srcLayout, const Image & dst, VkImageLayout dstLayout, VkFilter filter) const noexcept
+	{
+		if constexpr ( IsDebug )
+		{
+			if ( !src.isCreated() )
+			{
+				Tracer::error(ClassId, "The source image is not created.");
+
+				return;
+			}
+
+			if ( !dst.isCreated() )
+			{
+				Tracer::error(ClassId, "The destination image is not created.");
+
+				return;
+			}
+
+			if ( !this->isCreated() )
+			{
+				TraceError{ClassId} <<
+					"The command buffer is not created !" "\n"
+					"Unable to blit image " << src.handle() << " to image " << dst.handle();
+
+				return;
+			}
+		}
+
+		VkImageBlit imageBlit{};
+		imageBlit.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		imageBlit.srcSubresource.mipLevel = 0;
+		imageBlit.srcSubresource.baseArrayLayer = 0;
+		imageBlit.srcSubresource.layerCount = 1;
+		imageBlit.srcOffsets[0] = {.x = 0, .y = 0, .z = 0};
+		imageBlit.srcOffsets[1] = {
+			.x = static_cast< int32_t >(src.width()),
+			.y = static_cast< int32_t >(src.height()),
+			.z = 1
+		};
+		imageBlit.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		imageBlit.dstSubresource.mipLevel = 0;
+		imageBlit.dstSubresource.baseArrayLayer = 0;
+		imageBlit.dstSubresource.layerCount = 1;
+		imageBlit.dstOffsets[0] = {.x = 0, .y = 0, .z = 0};
+		imageBlit.dstOffsets[1] = {
+			.x = static_cast< int32_t >(dst.width()),
+			.y = static_cast< int32_t >(dst.height()),
+			.z = 1
+		};
+
+		vkCmdBlitImage(
+			m_handle,
+			src.handle(), srcLayout,
+			dst.handle(), dstLayout,
+			1, &imageBlit,
+			filter
+		);
+	}
+
+	void
 	CommandBuffer::clearColor (const Image & image, VkImageLayout imageLayout, const PixelFactory::Color< float > & color) const noexcept
 	{
 		if constexpr ( IsDebug )

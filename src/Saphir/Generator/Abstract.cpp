@@ -31,6 +31,7 @@
 #include "Graphics/Renderer.hpp"
 #include "Graphics/Types.hpp"
 #include "Graphics/ViewMatricesInterface.hpp"
+#include "Vulkan/Framebuffer.hpp"
 #include "Saphir/Code.hpp"
 #include "Tracer.hpp"
 
@@ -227,12 +228,26 @@ namespace EmEn::Saphir::Generator
 			return false;
 		}
 
-		/* FIXME: Only to get the framebuffer sampler. This can become a dynamic state or global settings. ! */
-		if ( !graphicsPipeline->configureMultisampleState(*m_renderTarget) )
+		/* Configure multisample state: use override framebuffer (single-sample) or render target.
+		 * NOTE: This conditional exists because the post-process pass has no dedicated RenderTarget.
+		 * TODO: Remove this branch when a dedicated post-process RenderTarget is introduced. */
+		if ( m_pipelineFramebuffer != nullptr )
 		{
-			Tracer::error(TracerTag, "Unable to configure the graphics pipeline multisample state !");
+			if ( !graphicsPipeline->configureMultisampleState(1) )
+			{
+				Tracer::error(TracerTag, "Unable to configure the graphics pipeline multisample state (override) !");
 
-			return false;
+				return false;
+			}
+		}
+		else
+		{
+			if ( !graphicsPipeline->configureMultisampleState(*m_renderTarget) )
+			{
+				Tracer::error(TracerTag, "Unable to configure the graphics pipeline multisample state !");
+
+				return false;
+			}
 		}
 
 		if ( !this->onGraphicsPipelineConfiguration(*m_shaderProgram, *graphicsPipeline) )
@@ -242,12 +257,26 @@ namespace EmEn::Saphir::Generator
 			return false;
 		}
 
-		/* FIXME: Only to get the render pass handle. This can become general for the render target type. ! */
-		if ( !renderer.finalizeGraphicsPipeline(*m_renderTarget, *m_shaderProgram, graphicsPipeline) )
+		/* Finalize: use override framebuffer or render target for render pass.
+		 * NOTE: Same workaround as the multisample state above.
+		 * TODO: Remove this branch when a dedicated post-process RenderTarget is introduced. */
+		if ( m_pipelineFramebuffer != nullptr )
 		{
-			TraceError{TracerTag} << "Unable to finalize the graphics pipeline of the program '" << m_shaderProgram->name() << "' !";
+			if ( !renderer.finalizeGraphicsPipeline(*m_pipelineFramebuffer, *m_shaderProgram, graphicsPipeline) )
+			{
+				TraceError{TracerTag} << "Unable to finalize the graphics pipeline of the program '" << m_shaderProgram->name() << "' (override) !";
 
-			return false;
+				return false;
+			}
+		}
+		else
+		{
+			if ( !renderer.finalizeGraphicsPipeline(*m_renderTarget, *m_shaderProgram, graphicsPipeline) )
+			{
+				TraceError{TracerTag} << "Unable to finalize the graphics pipeline of the program '" << m_shaderProgram->name() << "' !";
+
+				return false;
+			}
 		}
 
 		m_shaderProgram->setGraphicsPipeline(graphicsPipeline);

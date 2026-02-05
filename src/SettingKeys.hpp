@@ -104,15 +104,19 @@ namespace EmEn
 			constexpr auto OpenALMaxStereoSourceCountKey{"Core/Audio/OpenAL/MaxStereoSourceCount"};
 			constexpr auto DefaultOpenALMaxStereoSourceCount{2};
 
-			/* Audio recorder */
+			/* Audio Recording (Audio::Recorder) */
 			constexpr auto AudioRecorderEnableKey{"Core/Audio/Recorder/Enable"};
 			constexpr auto DefaultAudioRecorderEnable{false};
-			constexpr auto AudioRecorderDeviceNameKey{"Core/Audio/Recorder/DeviceName"};
-			constexpr auto DefaultAudioRecorderDeviceName{"AutoDetect"};
-			constexpr auto RecorderFrequencyKey{"Core/Audio/Recorder/Frequency"};
-			constexpr auto DefaultRecorderFrequency{48000};
-			constexpr auto RecorderBufferSizeKey{"Core/Audio/Recorder/BufferSize"};
-			constexpr auto DefaultRecorderBufferSize{64};
+
+			/* Audio Capture (Audio::ExternalInput) */
+			constexpr auto AudioCaptureEnableKey{"Core/Audio/Capture/Enable"};
+			constexpr auto DefaultAudioCaptureEnable{false};
+			constexpr auto AudioCaptureDeviceNameKey{"Core/Audio/Capture/DeviceName"};
+			constexpr auto DefaultAudioCaptureDeviceName{"AutoDetect"};
+			constexpr auto AudioCaptureFrequencyKey{"Core/Audio/Capture/Frequency"};
+			constexpr auto DefaultAudioCaptureFrequency{48000};
+			constexpr auto AudioCaptureBufferSizeKey{"Core/Audio/Capture/BufferSize"};
+			constexpr auto DefaultAudioCaptureBufferSize{64};
 
 		/* Video */
 		constexpr auto VideoSavePropertiesAtExitKey{"Core/Video/SavePropertiesAtExit"};
@@ -131,6 +135,28 @@ namespace EmEn
 		constexpr auto DefaultEnableSRGB{false};
 		constexpr auto VideoShowInformationKey{"Core/Video/ShowInformation"}; // Logs (and with argument switch "--show-video-infos")
 		constexpr auto DefaultVideoShowInformation{false};
+
+		/* Video Recording (Graphics::Recorder) */
+		constexpr auto VideoRecorderEnableKey{"Core/Video/Recorder/Enable"};
+		constexpr auto DefaultVideoRecorderEnable{false};
+		constexpr auto VideoRecorderFPSKey{"Core/Video/Recorder/FPS"};
+		constexpr auto DefaultVideoRecorderFPS{30U};
+		constexpr auto VideoRecorderQualityKey{"Core/Video/Recorder/Quality"};
+		constexpr auto DefaultVideoRecorderQuality{2000U}; // kbps (Low=1000, Medium=2000, High=4000)
+		constexpr auto VideoRecorderShowStatsKey{"Core/Video/Recorder/ShowStats"};
+		constexpr auto DefaultVideoRecorderShowStats{false};
+		constexpr auto VideoRecorderUseCBRKey{"Core/Video/Recorder/UseCBR"};
+		constexpr auto DefaultVideoRecorderUseCBR{true};
+
+		/* Video Capture (Graphics::ExternalInput) */
+		constexpr auto VideoCaptureEnableKey{"Core/Audio/Capture/Enable"};
+		constexpr auto DefaultVideoCaptureEnable{false};
+		constexpr auto VideoCaptureDeviceIndexKey{"Core/Video/Capture/DeviceIndex"};
+		constexpr auto DefaultVideoCaptureDeviceIndex{-1}; // -1 = auto (first available)
+		constexpr auto VideoCaptureDeviceWidthKey{"Core/Video/Capture/Width"};
+		constexpr auto DefaultVideoCaptureDeviceWidth{640U};
+		constexpr auto VideoCaptureDeviceHeightKey{"Core/Video/Capture/Height"};
+		constexpr auto DefaultVideoCaptureDeviceHeight{480U};
 
 			/* Vulkan instance */
 			constexpr auto VkInstanceEnableDebugKey{"Core/Video/VulkanInstance/EnableDebug"};
@@ -260,6 +286,8 @@ namespace EmEn
 			constexpr auto DefaultBinaryCacheEnabled{false};
 			constexpr auto EnableHighQualityKey{"Core/Graphics/Shader/EnableHighQuality"};
 			constexpr auto DefaultEnableHighQuality{false};
+			constexpr auto POMIterationsKey{"Core/Graphics/Shader/POMIterations"};
+			constexpr auto DefaultPOMIterations{16};
 
 		/* Physics */
 		constexpr auto EnablePhysicsAccelerationKey{"Core/Physics/EnableAcceleration"};

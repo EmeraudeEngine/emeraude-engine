@@ -89,6 +89,7 @@ namespace EmEn::Graphics::Material
 			static constexpr auto SurfaceNormalVector{"SurfaceNormalVector"};
 			static constexpr auto SurfaceReflectionColor{"SurfaceReflectionColor"};
 			static constexpr auto SurfaceRefractionColor{"SurfaceRefractionColor"};
+		static constexpr auto SurfaceHeightValue{"SurfaceHeight"};
 
 			/** @brief Defines the resource dependency complexity. */
 			static constexpr auto Complexity{Resources::DepComplexity::Few};
@@ -365,6 +366,23 @@ namespace EmEn::Graphics::Material
 			bool setNormalComponent (const std::shared_ptr< TextureResource::Abstract > & texture, float scale = DefaultNormalScale) noexcept;
 
 			/**
+			 * @brief Sets the height component for parallax occlusion mapping.
+			 * @warning This function is available before creation time.
+			 * @param texture A reference to a height map texture smart pointer.
+			 * @param scale The height scale (depth of parallax effect). Default 0.05.
+			 * @return bool
+			 */
+			bool setHeightComponent (const std::shared_ptr< TextureResource::Abstract > & texture, float scale = DefaultHeightScale) noexcept;
+
+			/**
+			 * @brief Changes the height scale for parallax occlusion mapping.
+			 * @note This is a dynamic property.
+			 * @param value The height scale value.
+			 * @return void
+			 */
+			void setHeightScale (float value) noexcept;
+
+			/**
 			 * @brief Sets the reflection component as a texture.
 			 * @warning This function is available before creation time.
 			 * @param texture A reference to a texture smart pointer.
@@ -534,6 +552,24 @@ namespace EmEn::Graphics::Material
 			 */
 			void setRefractionIOR (float value) noexcept;
 
+			/* ==================== Emissive Strength Component (KHR_materials_emissive_strength) ==================== */
+
+			/**
+			 * @brief Sets the emissive strength HDR multiplier (KHR_materials_emissive_strength).
+			 * @warning This function is available before creation time.
+			 * @param strength The emissive strength multiplier (>= 0.0, default 1.0). Values > 1.0 enable HDR bloom.
+			 * @return bool
+			 */
+			bool setEmissiveStrength (float strength) noexcept;
+
+			/**
+			 * @brief Changes the emissive strength HDR multiplier (KHR_materials_emissive_strength).
+			 * @note This is a dynamic property.
+			 * @param value The emissive strength multiplier (>= 0.0).
+			 * @return void
+			 */
+			void setEmissiveStrengthValue (float value) noexcept;
+
 		private:
 
 			/** @copydoc EmEn::Graphics::Material::Interface::create() noexcept */
@@ -614,6 +650,15 @@ namespace EmEn::Graphics::Material
 			bool parseNormalComponent (const Json::Value & data, Resources::AbstractServiceProvider & serviceProvider) noexcept;
 
 			/**
+			 * @brief Parses the height component from JSON data for parallax occlusion mapping.
+			 * @param data A reference to the JSON data.
+			 * @param serviceProvider A reference to the resource manager through a service provider.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool parseHeightComponent (const Json::Value & data, Resources::AbstractServiceProvider & serviceProvider) noexcept;
+
+			/**
 			 * @brief Parses the reflection component from JSON data.
 			 * @param data A reference to the JSON data.
 			 * @param serviceProvider A reference to the resource manager through a service provider.
@@ -676,7 +721,7 @@ namespace EmEn::Graphics::Material
 			 * @return const char *
 			 */
 			[[nodiscard]]
-			static const char * textCoords (const Component::Texture * component) noexcept;
+			const char * textCoords (const Component::Texture * component) const noexcept;
 
 			/* Uniform buffer object offset to write data. */
 			static constexpr auto AmbientColorOffset{0UL};
@@ -690,6 +735,8 @@ namespace EmEn::Graphics::Material
 			static constexpr auto ReflectionAmountOffset{20UL};
 			static constexpr auto RefractionAmountOffset{21UL};
 			static constexpr auto RefractionIOROffset{22UL};
+			static constexpr auto HeightScaleOffset{23UL};
+			static constexpr auto EmissiveStrengthOffset{24UL};
 
 			/* Default values. */
 			static constexpr auto DefaultAmbientColor{Libs::PixelFactory::DarkGrey};
@@ -703,11 +750,13 @@ namespace EmEn::Graphics::Material
 			static constexpr auto DefaultReflectionAmount{0.5F};
 			static constexpr auto DefaultRefractionAmount{0.95F};
 			static constexpr auto DefaultRefractionIOR{1.5F}; /* Glass */
+			static constexpr auto DefaultHeightScale{0.02F}; /* Parallax occlusion mapping depth. */
+			static constexpr auto DefaultEmissiveStrength{1.0F}; /* KHR_materials_emissive_strength: HDR multiplier (1.0 = pass-through). */
 
 			Physics::SurfacePhysicalProperties m_physicalSurfaceProperties{};
 			std::unordered_map< ComponentType, std::unique_ptr< Component::Interface > > m_components{};
 			BlendingMode m_blendingMode{BlendingMode::None};
-			std::array< float, 24 > m_materialProperties{
+			std::array< float, 28 > m_materialProperties{
 				/* Ambient color (4), */
 				DefaultAmbientColor.red(), DefaultAmbientColor.green(), DefaultAmbientColor.blue(), DefaultDiffuseColor.alpha(),
 				/* Diffuse color (4), */
@@ -718,8 +767,10 @@ namespace EmEn::Graphics::Material
 				DefaultAutoIlluminationColor.red(), DefaultAutoIlluminationColor.green(), DefaultAutoIlluminationColor.blue(), DefaultAutoIlluminationColor.alpha(),
 				/* Shininess (1), Opacity (1), AutoIlluminationColor (1), NormalScale (1). */
 				DefaultShininess, DefaultOpacity, DefaultAutoIlluminationAmount, DefaultNormalScale,
-				/* ReflectionAmount (1), RefractionAmount (1), RefractionIOR (1), Unused (1). */
-				DefaultReflectionAmount, DefaultRefractionAmount, DefaultRefractionIOR, 0.0F
+				/* ReflectionAmount (1), RefractionAmount (1), RefractionIOR (1), HeightScale (1). */
+				DefaultReflectionAmount, DefaultRefractionAmount, DefaultRefractionIOR, DefaultHeightScale,
+				/* EmissiveStrength (1) + padding (3) for STD140 alignment */
+				DefaultEmissiveStrength, 0.0F, 0.0F, 0.0F
 			};
 			std::shared_ptr< Vulkan::DescriptorSetLayout > m_descriptorSetLayout;
 			std::unique_ptr< Vulkan::DescriptorSet > m_descriptorSet;
@@ -730,6 +781,8 @@ namespace EmEn::Graphics::Material
 			bool m_videoMemoryUpdated{false};
 			bool m_isUsingEnvironmentCubemap{false};
 			bool m_isUsingEnvironmentCubemapForRefraction{false};
+			bool m_useParallaxOcclusionMapping{false};
+			mutable bool m_pomGenerationActive{false};
 	};
 }
 

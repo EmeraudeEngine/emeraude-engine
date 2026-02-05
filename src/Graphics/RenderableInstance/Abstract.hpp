@@ -535,6 +535,17 @@ namespace EmEn::Graphics::RenderableInstance
 			bool getReadyForRender (const Scenes::Scene & scene, const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const Libs::StaticVector< RenderPassType, MaxPassCount > & renderPassTypes, Renderer & renderer) noexcept;
 
 			/**
+			 * @brief Ensures TBN space debug programs are generated and cached for this instance.
+			 * @note Called on-demand when TBN rendering is requested, since the flag may be
+			 * enabled after the initial getReadyForRender() call.
+			 * @param renderTarget The render target to prepare for.
+			 * @param renderer The renderer for shader compilation.
+			 * @return True if TBN programs are ready, false on failure.
+			 */
+			[[nodiscard]]
+			bool getReadyForTBNSpace (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, Renderer & renderer) noexcept;
+
+			/**
 			 * @brief Sets the renderable instance broken from a child class.
 			 * @note This is the release version.
 			 * @return void

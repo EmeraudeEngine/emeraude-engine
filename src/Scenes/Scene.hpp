@@ -1474,6 +1474,16 @@ namespace EmEn::Scenes
 			 */
 			void render (const std::shared_ptr< Graphics::RenderTarget::Abstract > & renderTarget, const Vulkan::CommandBuffer & commandBuffer) noexcept;
 
+			/**
+			 * @brief Debug rendering of TBN (Tangent, Binormal, Normal) space vectors.
+			 * @note Requires geometry shader support. Iterates all renderable instances
+			 * directly (no render lists) and renders TBN vectors for those with
+			 * isDisplayTBNSpaceEnabled() set to true.
+			 * @param renderTarget The destination render target.
+			 * @param commandBuffer The Vulkan command buffer for recording draw calls.
+			 */
+			void renderTBNSpace (const std::shared_ptr< Graphics::RenderTarget::Abstract > & renderTarget, const Vulkan::CommandBuffer & commandBuffer) noexcept;
+
 			/* ============================================================
 			 * [CONCEPT: PHYSICS]
 			 * Octrees and spatial partitioning.

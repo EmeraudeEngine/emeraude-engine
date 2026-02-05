@@ -68,6 +68,11 @@ namespace EmEn
 		class Renderer;
 	}
 
+	namespace Audio
+	{
+		class Manager;
+	}
+
 	class FileSystem;
 	class Settings;
 }
@@ -186,6 +191,17 @@ namespace EmEn::Resources
 			}
 
 			/**
+			 * @brief Returns access to the audio manager for audio resource creation.
+			 * @return Audio::Manager &
+			 */
+			[[nodiscard]]
+			Audio::Manager &
+			audioManager () const noexcept
+			{
+				return m_audioManager;
+			}
+
+			/**
 			 * @brief Returns a reference to the container for a specific resource type.
 			 *
 			 * Provides type-safe access to the resource container that manages instances
@@ -281,13 +297,16 @@ namespace EmEn::Resources
 			 *				 retrieval and modification.
 			 * @param graphicsRenderer Non-const reference to the Graphics::Renderer
 			 *						 service for creating GPU resources.
+			 * @param audioManager Non-const reference to the Audio::Manager
+			 *						 service for creating audio resources.
 			 *
 			 * @note The reference members make this class non-copyable and non-movable.
 			 */
-			AbstractServiceProvider (const FileSystem & fileSystem, Settings & settings, Graphics::Renderer & graphicsRenderer) noexcept
+			AbstractServiceProvider (const FileSystem & fileSystem, Settings & settings, Graphics::Renderer & graphicsRenderer, Audio::Manager & audioManager) noexcept
 				: m_fileSystem{fileSystem},
 				m_settings{settings},
-				m_graphicsRenderer{graphicsRenderer}
+				m_graphicsRenderer{graphicsRenderer},
+				m_audioManager{audioManager}
 			{
 
 			}
@@ -336,9 +355,10 @@ namespace EmEn::Resources
 
 		private:
 
-			const FileSystem & m_fileSystem;			  ///< Reference to the FileSystem service for loading resource data.
-			Settings & m_settings;						///< Reference to the Settings service for configuration retrieval.
-			Graphics::Renderer & m_graphicsRenderer;	  ///< Reference to the Graphics::Renderer service for GPU resource creation.
+			const FileSystem & m_fileSystem; ///< Reference to the FileSystem service for loading resource data.
+			Settings & m_settings; ///< Reference to the Settings service for configuration retrieval.
+			Graphics::Renderer & m_graphicsRenderer; ///< Reference to the Graphics::Renderer service for GPU resource creation.
+			Audio::Manager & m_audioManager; ///< Reference to the Audio::Mnanager service for audio resource creation.
 	};
 
 	/**

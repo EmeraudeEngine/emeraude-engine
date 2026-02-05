@@ -99,6 +99,17 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 			}
 
 			/**
+			 * @brief Sets the default directory for the open dialog.
+			 * @param directory A reference to a filesystem path.
+			 * @return void
+			 */
+			void
+			setDefaultDirectory (const std::filesystem::path & directory)
+			{
+				m_defaultDirectory = directory;
+			}
+
+			/**
 			 * @brief Returns whether the user has canceled the dialog.
 			 * @return bool
 			 */
@@ -124,6 +135,7 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 
 			std::vector< std::pair< std::string, std::vector< std::string > > > m_extensionFilters;
 			std::vector< std::filesystem::path > m_filepaths;
+			std::filesystem::path m_defaultDirectory;
 			bool m_canceled{false};
 			bool m_selectFolder{false};
 			bool m_multiSelect{false};

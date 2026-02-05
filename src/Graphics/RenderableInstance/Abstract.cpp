@@ -272,10 +272,16 @@ namespace EmEn::Graphics::RenderableInstance
 
 				if ( !generator.generateShaderProgram(renderer) )
 				{
+					const auto * material = m_renderable->material(layerIndex);
+
 					std::stringstream errorMessage;
 					errorMessage <<
-						"Unable to generate the shader program for the renderable instance '" << m_renderable->name() << "'!"
-						"(RenderPass:'" << to_string(renderPassType) << "', layer:" << layerIndex << ")";
+						"Unable to generate the shader program !\n"
+						"  Renderable  : " << m_renderable->name() << "\n"
+						"  Material    : " << (material != nullptr ? material->name() : "null") << "\n"
+						"  RenderTarget: " << to_string(renderTarget->renderType()) << " (" << renderTarget->extent().width << "x" << renderTarget->extent().height << ")\n"
+						"  RenderPass  : " << to_string(renderPassType) << "\n"
+						"  Layer       : " << layerIndex;
 
 					this->setBroken(errorMessage.str());
 
@@ -317,6 +323,44 @@ namespace EmEn::Graphics::RenderableInstance
 		return true;
 	}
 
+	bool
+	Abstract::getReadyForTBNSpace (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, Renderer & renderer) noexcept
+	{
+		if ( m_renderable == nullptr || !m_renderable->isReadyForInstantiation() )
+		{
+			return false;
+		}
+
+		const auto layerCount = m_renderable->layerCount();
+		const auto renderPassHandle = reinterpret_cast< uint64_t >(renderTarget->framebuffer()->renderPass()->handle());
+
+		for ( uint32_t layerIndex = 0; layerIndex < layerCount; layerIndex++ )
+		{
+			const auto cacheKey = this->buildProgramCacheKey(Renderable::ProgramType::TBNSpace, RenderPassType::SimplePass, renderPassHandle, layerIndex);
+
+			/* Try to find a cached program from the Renderable. */
+			if ( m_renderable->findCachedProgram(renderTarget, cacheKey) != nullptr )
+			{
+				continue;
+			}
+
+			/* Generate a new program. */
+			Generator::TBNSpaceRendering generator{renderTarget, this->shared_from_this(), layerIndex};
+
+			if ( !generator.generateShaderProgram(renderer) )
+			{
+				Tracer::error(TracerTag, "Unable to generate the TBN space program !");
+
+				return false;
+			}
+
+			/* Cache the program on the Renderable for future instances. */
+			m_renderable->cacheProgram(renderTarget, cacheKey, generator.shaderProgram());
+		}
+
+		return true;
+	}
+
 	void
 	Abstract::setBroken (const std::string & errorMessage, const std::source_location & location) noexcept
 	{
@@ -334,7 +378,13 @@ namespace EmEn::Graphics::RenderableInstance
 
 		if ( program == nullptr )
 		{
-			TraceError{TracerTag} << "There is no suitable shadow program for the renderable instance (Renderable:" << m_renderable->name() << ") !";
+			TraceError{TracerTag} <<
+				"There is no suitable shadow program for the renderable instance !\n"
+				"  Renderable  : " << m_renderable->name() << "\n"
+				"  RenderTarget: " << to_string(renderTarget->renderType()) << " (" << renderTarget->extent().width << "x" << renderTarget->extent().height << ")\n"
+				"  Layer       : " << layerIndex << "\n"
+				"  CacheKey    : ProgramType=ShadowCasting, RPHandle=" << renderPassHandle << "\n"
+				"  BrokenState : " << (this->isBroken() ? "YES (shader generation failed earlier)" : "no");
 
 			return;
 		}
@@ -346,13 +396,23 @@ namespace EmEn::Graphics::RenderableInstance
 		/* NOTE: Set the dynamic viewport and scissor. */
 		renderTarget->setViewport(commandBuffer);
 
+		uint32_t setOffset = 0;
+
 		/* NOTE: Bind the view UBO if:
 		 * - Renderable instance uses GPU instancing (needs view matrix from UBO)
 		 * - OR render target is a cubemap (multiview needs 6 view matrices from UBO indexed by gl_ViewIndex)
 		 * - OR render target is a CSM (multiview needs N cascade view matrices from UBO indexed by gl_ViewIndex) */
 		if ( this->useModelVertexBufferObject() || renderTarget->isCubemap() || renderTarget->isCascadedShadowMap() )
 		{
-			commandBuffer.bind(*renderTarget->viewMatrices().descriptorSet(), *pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, 0);
+			commandBuffer.bind(*renderTarget->viewMatrices().descriptorSet(), *pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, setOffset++);
+		}
+
+		/* Bind material descriptor set for alpha-tested shadows. */
+		const auto * material = m_renderable->material(layerIndex);
+
+		if ( material != nullptr && material->requiresAlphaTestedShadows() )
+		{
+			commandBuffer.bind(*material->descriptorSet(), *pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, setOffset/*++*/);
 		}
 
 		this->bindInstanceModelLayer(commandBuffer, layerIndex);
@@ -376,7 +436,12 @@ namespace EmEn::Graphics::RenderableInstance
 
 		this->pushMatricesForShadowCasting(passContext, pushContext, worldCoordinates);
 
-		if ( m_renderable->layerCount() == 1 )
+		/* Draw with correct frame index for animated materials. */
+		if ( material != nullptr && material->isAnimated() )
+		{
+			commandBuffer.draw(*m_renderable->geometry(), m_frameIndex, this->instanceCount());
+		}
+		else if ( m_renderable->layerCount() == 1 )
 		{
 			commandBuffer.draw(*m_renderable->geometry(), this->instanceCount());
 		}
@@ -395,7 +460,17 @@ namespace EmEn::Graphics::RenderableInstance
 
 		if ( program == nullptr )
 		{
-			TraceError{TracerTag} << "There is no suitable render program for the renderable instance (Renderable:" << m_renderable->name() << ") !";
+			const auto * material = m_renderable->material(layerIndex);
+
+			TraceError{TracerTag} <<
+				"There is no suitable render program for the renderable instance !\n"
+				"  Renderable  : " << m_renderable->name() << "\n"
+				"  Material    : " << (material != nullptr ? material->name() : "null") << "\n"
+				"  RenderTarget: " << to_string(renderTarget->renderType()) << " (" << renderTarget->extent().width << "x" << renderTarget->extent().height << ")\n"
+				"  RenderPass  : " << to_string(renderPassType) << "\n"
+				"  Layer       : " << layerIndex << "\n"
+				"  CacheKey    : ProgramType=Rendering, RPHandle=" << renderPassHandle << ", Lighting=" << (cacheKey.isLightingEnabled ? "yes" : "no") << ", Bindless=" << (cacheKey.isBindlessEnabled ? "yes" : "no") << "\n"
+				"  BrokenState : " << (this->isBroken() ? "YES (shader generation failed earlier)" : "no");
 
 			return;
 		}

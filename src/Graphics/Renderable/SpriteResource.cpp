@@ -101,7 +101,9 @@ namespace EmEn::Graphics::Renderable
 					{
 						case FillingType::Texture :
 						{
-							const auto textureResource = serviceProvider.container< TextureResource::Texture2D >()->getResource(FastJSON::getValue< std::string >(componentData, Material::JKName).value_or(Resources::Default));
+							const auto textureResource = serviceProvider.container< TextureResource::Texture2D >()
+								->getResource(FastJSON::getValue< std::string >(componentData, Material::JKName)
+								.value_or(Resources::Default));
 
 							if ( !newMaterial.setTextureResource(textureResource, true) )
 							{
@@ -112,7 +114,9 @@ namespace EmEn::Graphics::Renderable
 
 						case FillingType::AnimatedTexture :
 						{
-							const auto textureResource = serviceProvider.container< TextureResource::AnimatedTexture2D >()->getResource(FastJSON::getValue< std::string >(componentData, Material::JKName).value_or(Resources::Default));
+							const auto textureResource = serviceProvider.container< TextureResource::AnimatedTexture2D >()
+								->getResource(FastJSON::getValue< std::string >(componentData, Material::JKName)
+								.value_or(Resources::Default));
 
 							if ( !newMaterial.setTextureResource(textureResource, true) )
 							{
@@ -176,7 +180,7 @@ namespace EmEn::Graphics::Renderable
 			return this->setLoadSuccess(false);
 		}
 
-		m_size = FastJSON::getValue< float >(data, JKSizeKey).value_or(1.0F);
+		m_uniformScale = FastJSON::getValue< float >(data, JKUniformScaleKey).value_or(1.0F);
 
 		return this->setLoadSuccess(true);
 	}

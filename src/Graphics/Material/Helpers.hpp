@@ -76,6 +76,13 @@ namespace EmEn::Graphics::Material
 	static constexpr auto JKIOR{"IOR"};
 	static constexpr auto JKCubemap{"Cubemap"};
 	static constexpr auto JKIBLIntensity{"IBLIntensity"};
+	static constexpr auto JKRoughness{"Roughness"};
+	static constexpr auto JKRadius{"Radius"};
+	static constexpr auto JKRotation{"Rotation"};
+	static constexpr auto JKAttenuationColor{"AttenuationColor"};
+	static constexpr auto JKAttenuationDistance{"AttenuationDistance"};
+	static constexpr auto JKThickness{"Thickness"};
+	static constexpr auto JKHeight{"Height"};
 
 	/**
 	 * @brief Returns the filling type token from a JSON value.

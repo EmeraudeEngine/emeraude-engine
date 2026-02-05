@@ -87,22 +87,31 @@ namespace EmEn::Saphir::Generator
 			bool onGraphicsPipelineConfiguration (const Program & program, Vulkan::GraphicsPipeline & graphicsPipeline) noexcept override;
 
 			/**
+			 * @brief Checks if the material requires alpha-tested shadows.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool needsAlphaTestedShadows () const noexcept;
+
+			/**
 			 * @brief Generates the vertex shader stage of the graphics pipeline.
 			 * @note For cubemap shadow maps, the vertex shader uses multiview rendering with gl_ViewIndex
 			 *       to select the correct view matrix from the UBO, instead of using a geometry shader.
 			 * @param program A reference to the program being constructed.
+			 * @param needsAlphaTest Whether alpha testing is needed for shadows.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool generateVertexShader (Program & program) noexcept;
+			bool generateVertexShader (Program & program, bool needsAlphaTest) noexcept;
 
 			/**
 			 * @brief Generates the fragment shader stage of the graphics pipeline.
-			 * @note Only used for cubemap shadow maps to write linear depth.
+			 * @note Used for cubemap shadow maps (linear depth) and/or alpha-tested shadows.
 			 * @param program A reference to the program being constructed.
+			 * @param needsAlphaTest Whether alpha testing is needed for shadows.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool generateFragmentShader (Program & program) noexcept;
+			bool generateFragmentShader (Program & program, bool needsAlphaTest) noexcept;
 	};
 }

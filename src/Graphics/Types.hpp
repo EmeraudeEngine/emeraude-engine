@@ -330,6 +330,15 @@ namespace EmEn::Graphics
 		Roughness = 10,
 		Metalness = 11,
 		AmbientOcclusion = 12,
+		ClearCoat = 13,
+		ClearCoatRoughness = 14,
+		Subsurface = 15,
+		SubsurfaceThickness = 16,
+		Sheen = 17,
+		Anisotropy = 18,
+		Transmission = 19,
+		Iridescence = 20,
+		ClearCoatNormal = 21,
 		Invalid = std::numeric_limits< uint32_t >::max()
 	};
 
@@ -341,11 +350,24 @@ namespace EmEn::Graphics
 	constexpr auto OpacityString{"Opacity"};
 	constexpr auto NormalString{"Normal"};
 	constexpr auto DisplacementString{"Displacement"};
+	constexpr auto HeightString{"Height"};
 	constexpr auto ReflectionString{"Reflection"};
 	constexpr auto RefractionString{"Refraction"};
 	constexpr auto RoughnessString{"Roughness"};
 	constexpr auto MetalnessString{"Metalness"};
 	constexpr auto AmbientOcclusionString{"AmbientOcclusion"};
+	constexpr auto ClearCoatString{"ClearCoat"};
+	constexpr auto ClearCoatRoughnessString{"ClearCoatRoughness"};
+	constexpr auto SubsurfaceString{"Subsurface"};
+	constexpr auto SubsurfaceThicknessString{"SubsurfaceThickness"};
+	constexpr auto SheenString{"Sheen"};
+	constexpr auto AnisotropyString{"Anisotropy"};
+	constexpr auto TransmissionString{"Transmission"};
+	constexpr auto IridescenceString{"Iridescence"};
+	constexpr auto ClearCoatNormalString{"ClearCoatNormal"};
+	constexpr auto DispersionString{"Dispersion"};
+	constexpr auto EmissiveStrengthString{"EmissiveStrength"};
+	constexpr auto SpecularKHRString{"Specular"};
 
 	/**
 	 * @brief Converts a component type enumeration value to the corresponding string.

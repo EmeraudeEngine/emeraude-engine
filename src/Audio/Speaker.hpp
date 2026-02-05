@@ -46,6 +46,9 @@ namespace EmEn::Audio
 	{
 		public:
 
+			/** @brief Class identifier. */
+			static constexpr auto ClassId{"AudioSpeaker"};
+
 			/**
 			 * @brief Constructs a speaker.
 			 * @param name A reference to a name.

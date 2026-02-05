@@ -18,7 +18,7 @@ else ()
 	message("Enabling LibJPEG-turbo library from local source ...")
 
 	if ( MSVC )
-		target_link_libraries(${TARGET_BINARY_FOR_SETUP} PRIVATE jpeg-static)
+		target_link_libraries(${TARGET_BINARY_FOR_SETUP} PUBLIC jpeg-static)
 	else ()
 		target_link_libraries(${TARGET_BINARY_FOR_SETUP} PRIVATE jpeg)
 	endif ()

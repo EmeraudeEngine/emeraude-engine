@@ -116,6 +116,29 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 			}
 		}
 
+		/* NOTE: Set default extension from the first filter's first extension. */
+		if ( !m_extensionFilters.empty() && !m_extensionFilters[0].second.empty() )
+		{
+			const auto defaultExt = convertUTF8ToWide(m_extensionFilters[0].second[0]);
+
+			dialogHandle->SetDefaultExtension(defaultExt.data());
+		}
+
+		/* NOTE: Set default directory. */
+		if ( !m_defaultDirectory.empty() )
+		{
+			IShellItem * folderItem = nullptr;
+			const auto dirWide = m_defaultDirectory.wstring();
+			HRESULT hr2 = SHCreateItemFromParsingName(dirWide.c_str(), nullptr, IID_IShellItem, reinterpret_cast< void * * >(&folderItem));
+
+			if ( SUCCEEDED(hr2) && folderItem != nullptr )
+			{
+				dialogHandle->SetFolder(folderItem);
+
+				folderItem->Release();
+			}
+		}
+
 		/* NOTE: Set a default file name. */
 		const auto defaultFilename = convertUTF8ToWide(m_defaultFilename);
 

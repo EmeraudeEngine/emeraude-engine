@@ -87,8 +87,16 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 				command += " --multiple --separate-output";
 			}
 
-			/* Default path (empty for current directory). */
-			command += " ''";
+			/* Default path. */
+			if ( !m_defaultDirectory.empty() )
+			{
+				command += " ";
+				command += escapeShellArg(m_defaultDirectory.string() + "/");
+			}
+			else
+			{
+				command += " ''";
+			}
 
 			/* File filters. */
 			if ( !m_selectFolder && !m_extensionFilters.empty() )
@@ -106,6 +114,13 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 			command += " --title ";
 			command += escapeShellArg(this->title());
 			command += " --separator='\n'";
+
+			/* Default path. */
+			if ( !m_defaultDirectory.empty() )
+			{
+				command += " --filename=";
+				command += escapeShellArg(m_defaultDirectory.string() + "/");
+			}
 
 			if ( m_selectFolder )
 			{

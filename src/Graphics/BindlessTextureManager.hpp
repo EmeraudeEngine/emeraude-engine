@@ -67,6 +67,7 @@ namespace EmEn::Graphics
 			static constexpr uint32_t IrradianceCubemapSlot = 1;
 			static constexpr uint32_t PrefilteredCubemapSlot = 2;
 			static constexpr uint32_t BRDFLutSlot = 3;
+			static constexpr uint32_t GrabPassSlot = 4;
 			static constexpr uint32_t FirstDynamicSlot = 16;
 
 			/** @brief Maximum texture counts per type. */

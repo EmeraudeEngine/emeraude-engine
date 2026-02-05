@@ -18,7 +18,7 @@ else ()
 	message("Enabling zlib library from local source ...")
 
 	if ( MSVC )
-		target_link_libraries(${TARGET_BINARY_FOR_SETUP} PRIVATE
+		target_link_libraries(${TARGET_BINARY_FOR_SETUP} PUBLIC
 			debug "${LOCAL_LIB_DIR}/lib/zlibstaticd.lib" # Change to 'zsd' when new version of zlib will be released
 			optimized "${LOCAL_LIB_DIR}/lib/zlibstatic.lib" # Change to 'zs' when new version of zlib will be released
 		)

@@ -153,6 +153,21 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 			}
 		}
 
+		/* NOTE: Set default directory. */
+		if ( !m_defaultDirectory.empty() )
+		{
+			IShellItem * folderItem = nullptr;
+			const auto dirWide = m_defaultDirectory.wstring();
+			HRESULT hr2 = SHCreateItemFromParsingName(dirWide.c_str(), nullptr, IID_IShellItem, reinterpret_cast< void * * >(&folderItem));
+
+			if ( SUCCEEDED(hr2) && folderItem != nullptr )
+			{
+				dialogHandle->SetFolder(folderItem);
+
+				folderItem->Release();
+			}
+		}
+
 		/* NOTE: Open the dialog box. */
 		hr = dialogHandle->Show(window != nullptr ? window->getWin32Window() : nullptr);
 		if ( hr == HRESULT_FROM_WIN32(ERROR_CANCELLED) ) // No item was selected.

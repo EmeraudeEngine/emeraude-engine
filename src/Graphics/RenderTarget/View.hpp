@@ -224,12 +224,9 @@ namespace EmEn::Graphics::RenderTarget
 			}
 
 			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::capture() */
-			[[nodiscard]]
-			std::array< Libs::PixelFactory::Pixmap< uint8_t >, 3 >
-			capture (Vulkan::TransferManager & transferManager, uint32_t layerIndex, bool keepAlpha, bool withDepthBuffer, bool withStencilBuffer) const noexcept override
+			bool
+			capture (Vulkan::TransferManager & transferManager, uint32_t layerIndex, bool keepAlpha, bool withDepthBuffer, bool withStencilBuffer, std::array< Libs::PixelFactory::Pixmap< uint8_t >, 3 > & result) const noexcept override
 			{
-				std::array< Libs::PixelFactory::Pixmap< uint8_t >, 3 > result{};
-
 				/* View has only single-layer images (not cubemaps or arrays), similar to SwapChain. */
 				if ( layerIndex > 0 )
 				{
@@ -242,7 +239,7 @@ namespace EmEn::Graphics::RenderTarget
 					if ( !transferManager.downloadImage(*m_colorImage, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_ASPECT_COLOR_BIT, result[0]) )
 					{
 						TraceError{ClassId} << "Failed to capture color buffer for view '" << this->id() << "' !";
-						return result;
+						return false;
 					}
 
 					/* Convert to RGB if alpha is not requested. */
@@ -270,7 +267,7 @@ namespace EmEn::Graphics::RenderTarget
 					}
 				}
 
-				return result;
+				return true;
 			}
 
 			/**

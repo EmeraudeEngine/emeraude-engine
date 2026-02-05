@@ -434,7 +434,7 @@ namespace EmEn::Scenes::Component
 			std::unique_ptr< Vulkan::DescriptorSet > m_shadowDescriptorSet;
 			float m_coverageSize{0.0F}; /**< Coverage size in world units for classic shadow map. Unused in CSM mode. */
 			float m_PCFRadius{1.0F}; /**< PCF filter radius in normalized texture coordinates. */
-			float m_shadowBias{0.0F}; /**< Shadow bias to prevent shadow acne. */
+			float m_shadowBias{0.005F}; /**< Shadow bias to prevent shadow acne. */
 			float m_lambda{Graphics::DefaultCascadeLambda};
 			uint32_t m_cascadeCount{Graphics::MaxCascadeCount};
 			float m_CSMScale{1.0F};

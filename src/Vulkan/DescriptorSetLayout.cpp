@@ -163,16 +163,20 @@ namespace EmEn::Vulkan
 	size_t
 	DescriptorSetLayout::computeHash (const Libs::StaticVector< VkDescriptorSetLayoutBinding, 16 > & bindings, VkDescriptorSetLayoutCreateFlags flags) noexcept
 	{
-		/* FIXME: Weak and unstable hash method !! */
+		const auto hashCombine = [] (size_t & seed, size_t value) noexcept {
+			seed ^= value + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+		};
+
 		size_t hashValue = 0;
-		hashValue += bindings.size();
-		hashValue += flags;
+		hashCombine(hashValue, bindings.size());
+		hashCombine(hashValue, flags);
 
 		for ( const auto & binding : bindings )
 		{
-			hashValue += binding.binding;
-			hashValue += binding.descriptorCount;
-			hashValue += binding.stageFlags;
+			hashCombine(hashValue, binding.binding);
+			hashCombine(hashValue, binding.descriptorType);
+			hashCombine(hashValue, binding.descriptorCount);
+			hashCombine(hashValue, binding.stageFlags);
 		}
 
 		return hashValue;

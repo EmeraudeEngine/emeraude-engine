@@ -394,6 +394,33 @@ namespace EmEn::Graphics
 			case ComponentType::AmbientOcclusion :
 				return AmbientOcclusionString;
 
+			case ComponentType::ClearCoat :
+				return ClearCoatString;
+
+			case ComponentType::ClearCoatRoughness :
+				return ClearCoatRoughnessString;
+
+			case ComponentType::Subsurface :
+				return SubsurfaceString;
+
+			case ComponentType::SubsurfaceThickness :
+				return SubsurfaceThicknessString;
+
+			case ComponentType::Sheen :
+				return SheenString;
+
+			case ComponentType::Anisotropy :
+				return AnisotropyString;
+
+			case ComponentType::Transmission :
+				return TransmissionString;
+
+			case ComponentType::Iridescence :
+				return IridescenceString;
+
+			case ComponentType::ClearCoatNormal :
+				return ClearCoatNormalString;
+
 			case ComponentType::Invalid :
 				return InvalidString;
 		}
@@ -467,6 +494,51 @@ namespace EmEn::Graphics
 		if ( value == AmbientOcclusionString )
 		{
 			return ComponentType::AmbientOcclusion;
+		}
+
+		if ( value == ClearCoatString )
+		{
+			return ComponentType::ClearCoat;
+		}
+
+		if ( value == ClearCoatRoughnessString )
+		{
+			return ComponentType::ClearCoatRoughness;
+		}
+
+		if ( value == SubsurfaceString )
+		{
+			return ComponentType::Subsurface;
+		}
+
+		if ( value == SubsurfaceThicknessString )
+		{
+			return ComponentType::SubsurfaceThickness;
+		}
+
+		if ( value == SheenString )
+		{
+			return ComponentType::Sheen;
+		}
+
+		if ( value == AnisotropyString )
+		{
+			return ComponentType::Anisotropy;
+		}
+
+		if ( value == TransmissionString )
+		{
+			return ComponentType::Transmission;
+		}
+
+		if ( value == IridescenceString )
+		{
+			return ComponentType::Iridescence;
+		}
+
+		if ( value == ClearCoatNormalString )
+		{
+			return ComponentType::ClearCoatNormal;
 		}
 
 		if ( value == InvalidString )

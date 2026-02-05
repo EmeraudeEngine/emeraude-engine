@@ -162,6 +162,18 @@ namespace EmEn::Vulkan
 			}
 
 			/**
+			 * @brief Marks this buffer for GPU-to-CPU readback with CPU-cached memory.
+			 * @note Must be called before createOnHardware(). Only meaningful for host-visible buffers.
+			 * @param readable True to use cached memory (fast CPU reads), false for write-combined (fast CPU writes).
+			 * @return void
+			 */
+			void
+			setHostReadable (bool readable) noexcept
+			{
+				m_hostReadable = readable;
+			}
+
+			/**
 			 * @brief Returns the buffer vulkan handle.
 			 * @return VkBuffer
 			 */
@@ -375,5 +387,6 @@ namespace EmEn::Vulkan
 			VmaAllocation m_memoryAllocation{VK_NULL_HANDLE};
 			mutable std::mutex m_hostMemoryAccess;
 			bool m_hostVisible{false};
+			bool m_hostReadable{false};
 	};
 }

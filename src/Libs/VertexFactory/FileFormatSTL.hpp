@@ -80,7 +80,7 @@ namespace EmEn::Libs::VertexFactory
 					return false;
 				}
 
-				if ( this->isAscii(file) )
+				if ( FileFormatSTL::isAscii(file) )
 				{
 					return this->readAscii(file, geometry);
 				}
@@ -96,6 +96,7 @@ namespace EmEn::Libs::VertexFactory
 				if ( !geometry.isValid() )
 				{
 					std::cerr << __PRETTY_FUNCTION__ << ", geometry parameter is invalid !" "\n";
+
 					return false;
 				}
 
@@ -105,6 +106,7 @@ namespace EmEn::Libs::VertexFactory
 				if ( !file.is_open() )
 				{
 					std::cerr << __PRETTY_FUNCTION__ << ", unable to open '" << filepath << "' file to write !" "\n";
+
 					return false;
 				}
 
@@ -115,13 +117,13 @@ namespace EmEn::Libs::VertexFactory
 				file.write(header, 80);
 
 				/* Write Triangle Count (4 bytes) */
-				auto triangleCount = static_cast< uint32_t >(geometry.triangles().size());
+				const auto triangleCount = static_cast< uint32_t >(geometry.triangles().size());
 				file.write(reinterpret_cast< const char * >(&triangleCount), sizeof(uint32_t));
 
 				/* Write Triangles */
-				for ( size_t i = 0; i < geometry.triangles().size(); ++i )
+				for ( size_t triangleIndex = 0; triangleIndex < geometry.triangles().size(); ++triangleIndex )
 				{
-					const auto & triangle = geometry.triangles()[i];
+					const auto & triangle = geometry.triangles()[triangleIndex];
 
 					/* Normal */
 					Math::Vector< 3, float > normal = {0.0f, 0.0f, 0.0f};
@@ -131,7 +133,7 @@ namespace EmEn::Libs::VertexFactory
 					file.write(reinterpret_cast< const char * >(&normal), 3 * sizeof(float));
 
 					/* Vertices */
-					for ( size_t v = 0; v < 3; ++v )
+					for ( index_data_t v = 0; v < 3; ++v )
 					{
 						const auto & vertex = geometry.vertex(triangle.vertexIndex(v));
 						Math::Vector< 3, float > pos = vertex.position(); /* Assuming float position */
@@ -163,8 +165,9 @@ namespace EmEn::Libs::VertexFactory
 			 * @param file A reference to the input stream.
 			 * @return bool True if ASCII, False if Binary.
 			 */
+			static
 			bool
-			isAscii (std::ifstream & file) const noexcept
+			isAscii (std::ifstream & file) noexcept
 			{
 				/* STL rules:
 				 * - ASCII starts with "solid"
@@ -175,36 +178,39 @@ namespace EmEn::Libs::VertexFactory
 				char header[6]; // "solid" + 1
 				file.read(header, 5);
 				header[5] = '\0';
-				
-				bool startsWithSolid = (std::string(header) == "solid");
-				
+
 				/* If it does not start with solid, it is binary (or invalid). */
-				if ( !startsWithSolid )
+				if ( const bool startsWithSolid = (std::string(header) == "solid"); !startsWithSolid )
 				{
 					file.seekg(0);
+
 					return false;
 				}
 
 				/* If it starts with solid, it MIGHT be ascii, or a binary file with "solid" in header. */
 				/* Check file size. */
 				file.seekg(0, std::ios::end);
-				auto fileSize = file.tellg();
+
+				const auto fileSize = file.tellg();
 				
 				file.seekg(80);
 				uint32_t count = 0;
 				if ( file.read(reinterpret_cast< char * >(&count), 4) )
 				{
-					auto expectedSize = 80 + 4 + (static_cast< std::streamoff >(count) * 50);
+					const auto expectedSize = 80 + 4 + (static_cast< std::streamoff >(count) * 50);
+
 					if ( fileSize == expectedSize )
 					{
 						/* It matches binary size perfectly, so assume binary. */
 						file.seekg(0);
+
 						return false;
 					}
 				}
 
 				/* Assume ASCII */
 				file.seekg(0);
+
 				return true;
 			}
 
@@ -223,13 +229,13 @@ namespace EmEn::Libs::VertexFactory
 				std::vector< ShapeVertex< vertex_data_t > > vertices;
 				std::vector< ShapeTriangle< vertex_data_t, index_data_t > > triangles;
 				
-				/* Reserve some space to avoid too many reallocs */
+				/* Reserve some space to avoid too many reallocations. */
 				vertices.reserve(1000);
 				triangles.reserve(500);
 
 				/* Keep track of unique vertices to build indexed geometry */
 				/* Simple approach: Linear search or Map. For speed/simplicity in this context, 
-				   we will just duplicates vertices for now or use a basic dedup if necessary.
+				   we will just duplicate vertices for now or use a basic dedup if necessary.
 				   Given ShapeBuilder usually handles some stuff, but here we populate vectors manually.
 				   Let's use a builder approach similar to OBJ reference if possible, 
 				   but here we will just push vertices and triangles. 
@@ -243,35 +249,39 @@ namespace EmEn::Libs::VertexFactory
 				*/
 
 				return geometry.build([&file, this] (std::vector< std::pair< index_data_t, index_data_t > > & groups, std::vector< ShapeVertex< vertex_data_t > > & vertices, std::vector< ShapeTriangle< vertex_data_t, index_data_t > > & triangles) {
-					
-					std::string line;
+					std::string currentLine;
 					std::vector< ShapeVertex< vertex_data_t > > faceVertices;
 					Math::Vector< 3, float > normal;
 					
-					while ( std::getline(file, line) )
+					while ( std::getline(file, currentLine) )
 					{
 						/* Trim leading whitespace */
-						auto first = line.find_first_not_of(" \t\r");
-						if ( first == std::string::npos ) continue;
-						
-						if ( line.compare(first, 5, "solid") == 0 )
+						const auto first = currentLine.find_first_not_of(" \t\r");
+
+						if ( first == std::string::npos )
 						{
 							continue;
 						}
 						
-						if ( line.compare(first, 12, "facet normal") == 0 )
+						if ( currentLine.compare(first, 5, "solid") == 0 )
 						{
+							continue;
+						}
+						
+						if ( currentLine.compare(first, 12, "facet normal") == 0 )
+						{
+							/* "facet normal ni nj nk"
+							 * scan after "facet normal" */
 							float nx, ny, nz;
-							/* "facet normal ni nj nk" */
-							/* scan after "facet normal" */
-							sscanf(line.c_str() + first + 12, "%f %f %f", &nx, &ny, &nz);
+							sscanf(currentLine.c_str() + first + 12, "%f %f %f", &nx, &ny, &nz);
+
 							normal = {nx, ny, nz};
 							faceVertices.clear();
 						}
-						else if ( line.compare(first, 6, "vertex") == 0 )
+						else if ( currentLine.compare(first, 6, "vertex") == 0 )
 						{
 							float x, y, z;
-							sscanf(line.c_str() + first + 6, "%f %f %f", &x, &y, &z);
+							sscanf(currentLine.c_str() + first + 6, "%f %f %f", &x, &y, &z);
 							
 							ShapeVertex< vertex_data_t > v;
 							v.setPosition(Math::Vector< 3, vertex_data_t >{static_cast< vertex_data_t >(x), static_cast< vertex_data_t >(y), static_cast< vertex_data_t >(z)});
@@ -279,13 +289,13 @@ namespace EmEn::Libs::VertexFactory
 							
 							faceVertices.push_back(v);
 						}
-						else if ( line.compare(first, 7, "endloop") == 0 )
+						else if ( currentLine.compare(first, 7, "endloop") == 0 )
 						{
 							/* End of a loop (face) */
 							if ( faceVertices.size() == 3 )
 							{
 								/* Add vertices to global list and create triangle */
-								/* Simple non-indexed assembly (optimisable later) */
+								/* Simple non-indexed assembly (optimizable later) */
 								auto baseIndex = static_cast< index_data_t >(vertices.size());
 								
 								vertices.push_back(faceVertices[0]);
@@ -318,13 +328,13 @@ namespace EmEn::Libs::VertexFactory
 				file.seekg(80);
 
 				uint32_t triangleCount = 0;
+
 				if ( !file.read(reinterpret_cast< char * >(&triangleCount), 4) )
 				{
 					return false;
 				}
 
 				return geometry.build([&file, triangleCount] (std::vector< std::pair< index_data_t, index_data_t > > & groups, std::vector< ShapeVertex< vertex_data_t > > & vertices, std::vector< ShapeTriangle< vertex_data_t, index_data_t > > & triangles) {
-					
 					/* Optimize allocation */
 					vertices.reserve(triangleCount * 3);
 					triangles.reserve(triangleCount);
@@ -344,7 +354,10 @@ namespace EmEn::Libs::VertexFactory
 						/* Read Attribute Byte Count (2 bytes) */
 						file.read(reinterpret_cast< char * >(&attr), 2);
 
-						if ( !file.good() ) return false;
+						if ( !file.good() )
+						{
+							return false;
+						}
 
 						auto baseIndex = static_cast< index_data_t >(vertices.size());
 

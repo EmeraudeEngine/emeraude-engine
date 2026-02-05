@@ -28,6 +28,7 @@
 
 /* STL inclusions. */
 #include <array>
+#include <filesystem>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -45,7 +46,8 @@
 #include "Libs/WaveFactory/Types.hpp"
 #include "Physics/EnvironmentPhysicalProperties.hpp"
 #include "Audio/TrackMixer.hpp"
-#include "Audio/AudioRecorder.hpp"
+#include "Audio/ExternalInput.hpp"
+#include "Audio/Recorder.hpp"
 #include "SettingKeys.hpp"
 #include "SoundResource.hpp"
 #include "Source.hpp"
@@ -139,6 +141,50 @@ namespace EmEn::Audio
 			}
 
 			/**
+			 * @brief Returns the reference to the audio external input service.
+			 * @return ExternalInput &
+			 */
+			[[nodiscard]]
+			ExternalInput &
+			externalInput () noexcept
+			{
+				return m_externalInput;
+			}
+
+			/**
+			 * @brief Returns the reference to the audio external input service.
+			 * @return const ExternalInput &
+			 */
+			[[nodiscard]]
+			const ExternalInput &
+			externalInput () const noexcept
+			{
+				return m_externalInput;
+			}
+
+			/**
+			 * @brief Returns the reference to the audio recorder.
+			 * @return Recorder &
+			 */
+			[[nodiscard]]
+			Recorder &
+			recorder () noexcept
+			{
+				return m_recorder;
+			}
+
+			/**
+			 * @brief Returns the reference to the audio recorder.
+			 * @return const Recorder &
+			 */
+			[[nodiscard]]
+			const Recorder &
+			recorder () const noexcept
+			{
+				return m_recorder;
+			}
+
+			/**
 			 * @brief Returns the reference to the track mixer service.
 			 * @return TrackMixer &
 			 */
@@ -161,28 +207,6 @@ namespace EmEn::Audio
 			}
 
 			/**
-			 * @brief Returns the reference to the audio external input service.
-			 * @return AudioRecorder &
-			 */
-			[[nodiscard]]
-			AudioRecorder &
-			audioRecorder () noexcept
-			{
-				return m_audioRecorder;
-			}
-
-			/**
-			 * @brief Returns the reference to the audio external input service.
-			 * @return const AudioRecorder &
-			 */
-			[[nodiscard]]
-			const AudioRecorder &
-			audioRecorder () const noexcept
-			{
-				return m_audioRecorder;
-			}
-
-			/**
 			 * @brief Sets the main state of the audio manager.
 			 * @note If the audio has been disabled at startup, this method will have no effect.
 			 * @param state The state.
@@ -197,18 +221,18 @@ namespace EmEn::Audio
 			const std::vector< std::string > &
 			availableOutputDevices () const noexcept
 			{
-				return m_availableOutputDevices;
+				return m_availableDevices;
 			}
 
 			/**
-			 * @brief Returns a list a available input audio devices.
-			 * @return bool
+			 * @brief Returns the selected output device name.
+			 * @return const std::string &
 			 */
 			[[nodiscard]]
-			const std::vector< std::string > &
-			availableInputDevices () const noexcept
+			const std::string &
+			selectedOutputDeviceName () const noexcept
 			{
-				return m_availableInputDevices;
+				return m_selectedDeviceName;
 			}
 
 			/**
@@ -322,23 +346,10 @@ namespace EmEn::Audio
 			 * @return Frequency
 			 */
 			[[nodiscard]]
-			static
 			Libs::WaveFactory::Frequency
-			frequencyPlayback () noexcept
+			frequencyPlayback () const noexcept
 			{
-				return s_playbackFrequency;
-			}
-
-			/**
-			 * @brief Returns the record frequency.
-			 * @return Frequency
-			 */
-			[[nodiscard]]
-			static
-			Libs::WaveFactory::Frequency
-			recordFrequency () noexcept
-			{
-				return s_recordFrequency;
+				return m_playbackFrequency;
 			}
 
 			/**
@@ -346,11 +357,10 @@ namespace EmEn::Audio
 			 * @return size_t
 			 */
 			[[nodiscard]]
-			static
 			size_t
-			musicChunkSize () noexcept
+			musicChunkSize () const noexcept
 			{
-				return s_musicChunkSize;
+				return m_musicChunkSize;
 			}
 
 			/**
@@ -396,26 +406,12 @@ namespace EmEn::Audio
 			bool selectedOutputDevice (bool useExtendedAPI) noexcept;
 
 			/**
-			 * @brief Queries the available basic audio device and save it.
-			 * @return bool
-			 */
-			bool selectInputDevice () noexcept;
-
-			/**
 			 * @brief Selects an output audio device to play sound and create a context with it.
 			 * @param settings A reference to the settings.
 			 * @return bool
 			 */
 			[[nodiscard]]
 			bool setupAudioOutputDevice (Settings & settings) noexcept;
-
-			/**
-			 * @brief Selects an input audio device to record sound.
-			 * @param settings A reference to the settings.
-			 * @return bool
-			 */
-			[[nodiscard]]
-			bool setupAudioInputDevice (Settings & settings) noexcept;
 
 			/**
 			 * @brief Release an unused source.
@@ -475,29 +471,24 @@ namespace EmEn::Audio
 			 */
 			bool saveContextAttributes () noexcept;
 
-			static inline Libs::WaveFactory::Frequency s_playbackFrequency{Libs::WaveFactory::Frequency::PCM48000Hz};
-			static inline Libs::WaveFactory::Frequency s_recordFrequency{Libs::WaveFactory::Frequency::PCM48000Hz};
-			static inline size_t s_musicChunkSize{DefaultAudioMusicChunkSize};
-
 			/** @brief No audio device found to play sound. */
 			static inline bool s_audioSystemAvailable{false};
-			/** @brief No audio capture device found to record sound. */
-			static inline bool s_audioCaptureAvailable{false};
 			/** @brief Dynamic switch for audio playback. Even if the audio system is available. */
 			static inline bool s_audioEnabled{false};
 
 			PrimaryServices & m_primaryServices;
 			Resources::Manager & m_resourceManager;
+			ExternalInput m_externalInput{m_primaryServices, *this};
+			Recorder m_recorder{m_primaryServices, *this};
 			TrackMixer m_trackMixer{m_primaryServices, m_resourceManager, *this};
-			AudioRecorder m_audioRecorder;
-			std::vector< std::string > m_availableOutputDevices;
-			std::string m_selectedOutputDeviceName;
-			std::vector< std::string > m_availableInputDevices;
-			std::string m_selectedInputDeviceName;
-			ALCdevice * m_outputDevice{nullptr};
-			ALCdevice * m_inputDevice{nullptr};
+			std::vector< ServiceInterface * > m_subServicesEnabled;
+			std::vector< std::string > m_availableDevices;
+			std::string m_selectedDeviceName;
+			ALCdevice * m_device{nullptr};
 			ALCcontext * m_context{nullptr};
 			std::map< ALCint, ALCint > m_contextAttributes;
+			Libs::WaveFactory::Frequency m_playbackFrequency{Libs::WaveFactory::Frequency::PCM48000Hz};
+			size_t m_musicChunkSize{DefaultAudioMusicChunkSize};
 			std::shared_ptr< Source > m_defaultSource;
 			std::vector< std::shared_ptr< Source > > m_allSources;
 			std::vector< Source * > m_availableSources;

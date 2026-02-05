@@ -26,14 +26,36 @@
 
 #include "ExternalInput.hpp"
 
+/* Local inclusions. */
+#include "PrimaryServices.hpp"
+#include "SettingKeys.hpp"
+#include "Tracer.hpp"
+
+/* STL inclusions. */
+#include <span>
+
 namespace EmEn::Graphics
 {
 	using namespace Libs;
+	using namespace Libs::PixelFactory;
+
+	constexpr auto TracerTag{"ExternalInput"};
 
 	bool
 	ExternalInput::onInitialize () noexcept
 	{
-		/* FIXME: Complete the method ... */
+		auto & settings = m_primaryServices.settings();
+
+		if ( !settings.getOrSetDefault< bool >(VideoCaptureEnableKey, DefaultVideoCaptureEnable) )
+		{
+			return false;
+		}
+
+		m_defaultDeviceIndex = settings.getOrSetDefault< int32_t >(VideoCaptureDeviceIndexKey, DefaultVideoCaptureDeviceIndex);
+		m_captureWidth = settings.getOrSetDefault< uint32_t >(VideoCaptureDeviceWidthKey, DefaultVideoCaptureDeviceWidth);
+		m_captureHeight = settings.getOrSetDefault< uint32_t >(VideoCaptureDeviceHeightKey, DefaultVideoCaptureDeviceHeight);
+
+		TraceInfo{TracerTag} << "External input service initialized, device index: " << m_defaultDeviceIndex << ", resolution: " << m_captureWidth << "x" << m_captureHeight << ").";
 
 		return true;
 	}
@@ -41,8 +63,117 @@ namespace EmEn::Graphics
 	bool
 	ExternalInput::onTerminate () noexcept
 	{
-		/* FIXME: Complete the method ... */
+		this->closeDevice();
+		this->clearFrames();
 
 		return true;
+	}
+
+	std::vector< PlatformSpecific::VideoCaptureDeviceInfo >
+	ExternalInput::enumerateDevices () noexcept
+	{
+		return PlatformSpecific::VideoCaptureDevice::enumerateDevices();
+	}
+
+	bool
+	ExternalInput::openDevice (const std::string & devicePath, uint32_t width, uint32_t height) noexcept
+	{
+		/* Use settings values when 0 is passed. */
+		if ( width == 0 )
+		{
+			width = m_captureWidth;
+		}
+
+		if ( height == 0 )
+		{
+			height = m_captureHeight;
+		}
+
+		return m_captureDevice.open(devicePath, width, height);
+	}
+
+	void
+	ExternalInput::closeDevice () noexcept
+	{
+		m_captureDevice.close();
+	}
+
+	bool
+	ExternalInput::isDeviceOpen () const noexcept
+	{
+		return m_captureDevice.isOpen();
+	}
+
+	bool
+	ExternalInput::captureFrame () noexcept
+	{
+		if ( !m_captureDevice.isOpen() )
+		{
+			TraceWarning{TracerTag} << "Cannot capture frame: no device is open.";
+
+			return false;
+		}
+
+		if ( !m_captureDevice.captureFrame(m_rgbaBuffer) )
+		{
+			return false;
+		}
+
+		/* Create a Pixmap from the RGBA buffer. */
+		m_capturedFrames.emplace_back(
+			m_captureDevice.width(),
+			m_captureDevice.height(),
+			ChannelMode::RGBA,
+			std::span< const uint8_t >(m_rgbaBuffer)
+		);
+
+		return true;
+	}
+
+	const std::vector< Pixmap< uint8_t > > &
+	ExternalInput::capturedFrames () const noexcept
+	{
+		return m_capturedFrames;
+	}
+
+	const Pixmap< uint8_t > *
+	ExternalInput::lastFrame () const noexcept
+	{
+		if ( m_capturedFrames.empty() )
+		{
+			return nullptr;
+		}
+
+		return &m_capturedFrames.back();
+	}
+
+	void
+	ExternalInput::clearFrames () noexcept
+	{
+		m_capturedFrames.clear();
+	}
+
+	size_t
+	ExternalInput::frameCount () const noexcept
+	{
+		return m_capturedFrames.size();
+	}
+
+	int32_t
+	ExternalInput::defaultDeviceIndex () const noexcept
+	{
+		return m_defaultDeviceIndex;
+	}
+
+	uint32_t
+	ExternalInput::captureWidth () const noexcept
+	{
+		return m_captureWidth;
+	}
+
+	uint32_t
+	ExternalInput::captureHeight () const noexcept
+	{
+		return m_captureHeight;
 	}
 }

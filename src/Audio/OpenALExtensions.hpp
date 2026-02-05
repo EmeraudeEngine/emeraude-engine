@@ -258,4 +258,106 @@ namespace EmEn::Audio::OpenAL
 	{
 		return g_isEventsAvailable;
 	}
+
+	/* NOTE: OpenAL 'ALC_SOFT_loopback' extension. */
+	inline LPALCLOOPBACKOPENDEVICESOFT alcLoopbackOpenDeviceSOFT{nullptr};
+	inline LPALCISRENDERFORMATSUPPORTEDSOFT alcIsRenderFormatSupportedSOFT{nullptr};
+	inline LPALCRENDERSAMPLESSOFT alcRenderSamplesSOFT{nullptr};
+
+	inline bool g_isLoopbackAvailable{false};
+
+	/**
+	 * @brief Installs the OpenAL (ALC) extension 'ALC_SOFT_loopback'.
+	 * @return bool
+	 */
+	inline
+	bool
+	installExtensionLoopback () noexcept
+	{
+		if ( !alcIsExtensionPresent(nullptr, "ALC_SOFT_loopback") )
+		{
+			Tracer::warning(TracerTag, "The 'ALC_SOFT_loopback' extension is not available !");
+
+			return false;
+		}
+
+		alcLoopbackOpenDeviceSOFT = reinterpret_cast< LPALCLOOPBACKOPENDEVICESOFT >(alcGetProcAddress(nullptr, "alcLoopbackOpenDeviceSOFT"));
+		alcIsRenderFormatSupportedSOFT = reinterpret_cast< LPALCISRENDERFORMATSUPPORTEDSOFT >(alcGetProcAddress(nullptr, "alcIsRenderFormatSupportedSOFT"));
+		alcRenderSamplesSOFT = reinterpret_cast< LPALCRENDERSAMPLESSOFT >(alcGetProcAddress(nullptr, "alcRenderSamplesSOFT"));
+
+		if ( alcLoopbackOpenDeviceSOFT == nullptr || alcIsRenderFormatSupportedSOFT == nullptr || alcRenderSamplesSOFT == nullptr )
+		{
+			Tracer::error(TracerTag, "Failed to resolve 'ALC_SOFT_loopback' function pointers !");
+
+			return false;
+		}
+
+		g_isLoopbackAvailable = true;
+
+		Tracer::success(TracerTag, "The 'ALC_SOFT_loopback' extension installed.");
+
+		return true;
+	}
+
+	/**
+	 * @brief Returns the OpenAL (ALC) extension 'ALC_SOFT_loopback'.
+	 * @return bool
+	 */
+	[[nodiscard]]
+	inline
+	bool
+	isLoopbackAvailable () noexcept
+	{
+		return g_isLoopbackAvailable;
+	}
+
+	/* NOTE: OpenAL 'ALC_EXT_thread_local_context' extension. */
+	inline PFNALCSETTHREADCONTEXTPROC alcSetThreadContext{nullptr};
+	inline PFNALCGETTHREADCONTEXTPROC alcGetThreadContext{nullptr};
+
+	inline bool g_isThreadLocalContextAvailable{false};
+
+	/**
+	 * @brief Installs the OpenAL (ALC) extension 'ALC_EXT_thread_local_context'.
+	 * @return bool
+	 */
+	inline
+	bool
+	installExtensionThreadLocalContext () noexcept
+	{
+		if ( !alcIsExtensionPresent(nullptr, "ALC_EXT_thread_local_context") )
+		{
+			Tracer::warning(TracerTag, "The 'ALC_EXT_thread_local_context' extension is not available !");
+
+			return false;
+		}
+
+		alcSetThreadContext = reinterpret_cast< PFNALCSETTHREADCONTEXTPROC >(alcGetProcAddress(nullptr, "alcSetThreadContext"));
+		alcGetThreadContext = reinterpret_cast< PFNALCGETTHREADCONTEXTPROC >(alcGetProcAddress(nullptr, "alcGetThreadContext"));
+
+		if ( alcSetThreadContext == nullptr || alcGetThreadContext == nullptr )
+		{
+			Tracer::error(TracerTag, "Failed to resolve 'ALC_EXT_thread_local_context' function pointers !");
+
+			return false;
+		}
+
+		g_isThreadLocalContextAvailable = true;
+
+		Tracer::success(TracerTag, "The 'ALC_EXT_thread_local_context' extension installed.");
+
+		return true;
+	}
+
+	/**
+	 * @brief Returns the OpenAL (ALC) extension 'ALC_EXT_thread_local_context'.
+	 * @return bool
+	 */
+	[[nodiscard]]
+	inline
+	bool
+	isThreadLocalContextAvailable () noexcept
+	{
+		return g_isThreadLocalContextAvailable;
+	}
 }

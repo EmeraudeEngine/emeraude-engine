@@ -27,6 +27,7 @@
 #pragma once
 
 /* STL inclusions. */
+#include <algorithm>
 #include <cstdint>
 #include <string>
 #include <memory>
@@ -54,6 +55,7 @@ namespace EmEn
 	namespace Vulkan
 	{
 		class DescriptorSetLayout;
+		class Framebuffer;
 	}
 
 	class Settings;
@@ -154,6 +156,28 @@ namespace EmEn::Saphir::Generator
 			highQualityEnabled () const noexcept
 			{
 				return this->isFlagEnabled(HighQualityEnabled);
+			}
+
+			/**
+			 * @brief Returns the maximum number of Parallax Occlusion Mapping iterations.
+			 * @return int
+			 */
+			[[nodiscard]]
+			int
+			pomIterations () const noexcept
+			{
+				return m_pomIterations;
+			}
+
+			/**
+			 * @brief Sets the maximum number of Parallax Occlusion Mapping iterations.
+			 * @param iterations The max iteration count (0 to disable POM, otherwise clamped to [4, 64]).
+			 * @return void
+			 */
+			void
+			setPOMIterations (int iterations) noexcept
+			{
+				m_pomIterations = (iterations <= 0) ? 0 : std::clamp(iterations, 4, 64);
 			}
 
 			/**
@@ -379,6 +403,37 @@ namespace EmEn::Saphir::Generator
 			bool generateShaderProgram (Graphics::Renderer & renderer, const std::string & GLSLVersion = DefaultGLSLVersion, const std::string & GLSLProfile = DefaultGLSLProfile) noexcept;
 
 			/**
+			 * @brief Sets an override framebuffer for pipeline creation.
+			 * @note When set, createGraphicsPipeline() uses this framebuffer's render pass
+			 * and sample count (forced to 1x) instead of the main render target's.
+			 * This is a workaround for cases where the pipeline must target a different
+			 * render pass than the one provided by the render target (e.g. overlay rendered
+			 * in a single-sample post-process pass while the render target is MSAA).
+			 * @todo Replace this override mechanism by introducing a dedicated RenderTarget
+			 * for the post-process pass. The generator would then simply receive the correct
+			 * render target, eliminating the need for conditional branching in createGraphicsPipeline().
+			 * @param framebuffer A pointer to the override framebuffer (nullptr to disable).
+			 * @return void
+			 */
+			void
+			setPipelineFramebuffer (const Vulkan::Framebuffer * framebuffer) noexcept
+			{
+				m_pipelineFramebuffer = framebuffer;
+			}
+
+			/**
+			 * @brief Returns the pipeline framebuffer override.
+			 * @note See setPipelineFramebuffer() for the intent and future direction.
+			 * @return const Vulkan::Framebuffer *
+			 */
+			[[nodiscard]]
+			const Vulkan::Framebuffer *
+			pipelineFramebuffer () const noexcept
+			{
+				return m_pipelineFramebuffer;
+			}
+
+			/**
 			 * @brief Computes a unique cache key for the shader program configuration.
 			 * @note This allows early lookup before shader generation to avoid redundant work.
 			 * @return size_t The unique hash identifying this program configuration.
@@ -531,6 +586,8 @@ namespace EmEn::Saphir::Generator
 			Graphics::Topology m_topology{Graphics::Topology::TriangleList};
 			uint32_t m_geometryFlags{0};
 			std::shared_ptr< Program > m_shaderProgram;
+			const Vulkan::Framebuffer * m_pipelineFramebuffer{nullptr}; /**< @todo Remove when a dedicated post-process RenderTarget exists. */
 			uint32_t m_nextShaderVariableLocation{0};
+			int m_pomIterations{16};
 	};
 }

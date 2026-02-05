@@ -56,6 +56,34 @@ private:
 - `onCoreOpenFiles()` - File drag & drop
 - `onCoreSurfaceRefreshed()` - Window resize
 
+### Core - Recording Coordination
+
+Core owns coordinated audio+video recording via two protected methods:
+
+| Method | Purpose |
+|--------|---------|
+| `startAudioVideoRecording()` | Generates timestamped `.ivf` + `.wav` paths in `captures/`, starts video then audio |
+| `stopAudioVideoRecording()` | Stops both recorders if active, notifies user |
+
+**Keyboard shortcuts** (handled in `Core::onKeyPress()`):
+- **Shift+F12** — Take a screenshot (`screenshot()`)
+- **Shift+Ctrl+F12** — Toggle audio+video recording
+
+**Automatic stop triggers:**
+- Framebuffer resize (`onWindowChanged()`) — recording stops because video dimensions are locked at start
+- Application shutdown (`stop()`) — recording stops cleanly
+
+**Path generation pattern:** `{userDataDir}/captures/{unix_timestamp}.{ivf,wav}`
+
+Both `Graphics::Recorder` and `Audio::Recorder` share a symmetric API: `startRecording(path)` / `stopRecording()` / `isRecording()`. Core is the only caller that generates paths and coordinates both.
+
+**Code references:**
+- `Core.cpp:startAudioVideoRecording()` — Path generation and coordinated start
+- `Core.cpp:stopAudioVideoRecording()` — Coordinated stop
+- `Core.cpp:onKeyPress()` — F12 handler (case `KeyF12`)
+- `Core.cpp:onWindowChanged()` — Resize handler stops recording
+- `Core.cpp:stop()` — Shutdown handler stops recording
+
 ### Tracer - Logging System
 **Files**: `Tracer.cpp/.hpp`
 

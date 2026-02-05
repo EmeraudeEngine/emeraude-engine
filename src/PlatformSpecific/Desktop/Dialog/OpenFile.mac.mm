@@ -49,6 +49,14 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 
             [panel setTitle:title];
 
+            /* Set default directory. */
+            if ( !m_defaultDirectory.empty() )
+            {
+                NSString * dirPath = [NSString stringWithUTF8String:m_defaultDirectory.string().c_str()];
+                NSURL * dirURL = [NSURL fileURLWithPath:dirPath isDirectory:YES];
+                [panel setDirectoryURL:dirURL];
+            }
+
             /* Configure file/folder selection mode. */
             if ( m_selectFolder )
             {

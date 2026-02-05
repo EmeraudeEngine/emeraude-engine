@@ -183,6 +183,7 @@ set(EMERAUDE_HEADER_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/SystemInfo.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/Types.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/UserInfo.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/VideoCaptureDevice.hpp
     # ROOT
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Arguments.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Constants.hpp
@@ -240,6 +241,7 @@ set(EMERAUDE_SOURCE_FILES
     # PlatformSpecific
     ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/SystemInfo.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/UserInfo.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/VideoCaptureDevice.cpp
     # ROOT
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Arguments.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/FileSystem.cpp
@@ -259,6 +261,7 @@ if ( UNIX AND NOT APPLE )
         ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/Helpers.linux.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/SystemInfo.linux.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/UserInfo.linux.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/VideoCaptureDevice.linux.cpp
     )
 endif ()
 
@@ -270,6 +273,7 @@ if ( APPLE )
         ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/Helpers.mac.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/SystemInfo.mac.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/UserInfo.mac.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/VideoCaptureDevice.mac.mm
     )
 endif ()
 
@@ -281,6 +285,7 @@ if ( MSVC )
         ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/Helpers.windows.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/SystemInfo.windows.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/UserInfo.windows.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/VideoCaptureDevice.windows.cpp
     )
 endif ()
 
@@ -346,7 +351,7 @@ else ()
         ${CMAKE_CURRENT_SOURCE_DIR}/src/Notifier.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/Window.cpp
     )
-    
+
     # Per-OS files
     if ( UNIX AND NOT APPLE )
         message("Prepare sources for building Emeraude-Engine for Linux.")

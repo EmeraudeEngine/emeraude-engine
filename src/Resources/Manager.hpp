@@ -93,6 +93,7 @@ namespace EmEn::Resources
 			 *
 			 * @param primaryServices Reference to the engine's primary services provider.
 			 * @param graphicsRenderer Reference to the graphics rendering subsystem.
+			 * @param audioManager Reference to the audio manager subsystem.
 			 *
 			 * @note The constructor does not initialize resource containers. Call initialize()
 			 *	   after construction to set up resource management.
@@ -101,9 +102,9 @@ namespace EmEn::Resources
 			 * @since 0.8.35
 			 */
 			explicit
-			Manager (PrimaryServices & primaryServices, Graphics::Renderer & graphicsRenderer) noexcept
+			Manager (PrimaryServices & primaryServices, Graphics::Renderer & graphicsRenderer, Audio::Manager & audioManager) noexcept
 				: ServiceInterface{ClassId},
-				AbstractServiceProvider{primaryServices.fileSystem(), primaryServices.settings(), graphicsRenderer},
+				AbstractServiceProvider{primaryServices.fileSystem(), primaryServices.settings(), graphicsRenderer, audioManager},
 				m_primaryServices{primaryServices}
 			{
 

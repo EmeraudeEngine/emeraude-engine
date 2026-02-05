@@ -414,51 +414,123 @@ namespace EmEn::Scenes
 			}
 		}
 
-		/* Optional rendering.
-		 * FIXME: Add a main control. */
-		/*{
-			for ( const auto & renderBatch : m_renderLists[Opaque] )
-			{
-				const auto * renderableInstance = renderBatch.second.renderableInstance();
-
-				if ( renderableInstance->isDisplayTBNSpaceEnabled() )
-				{
-					renderableInstance->renderTBNSpace(renderTarget, commandBuffer);
-				}
-			}
-
-			for ( const auto & renderBatch : m_renderLists[Translucent] )
-			{
-				const auto * renderableInstance = renderBatch.second.renderableInstance();
-
-				if ( renderableInstance->isDisplayTBNSpaceEnabled() )
-				{
-					renderableInstance->renderTBNSpace(renderTarget, commandBuffer);
-				}
-			}
-
-			for ( const auto & renderBatch : m_renderLists[OpaqueLighted] )
-			{
-				const auto * renderableInstance = renderBatch.second.renderableInstance();
-
-				if ( renderableInstance->isDisplayTBNSpaceEnabled() )
-				{
-					renderableInstance->renderTBNSpace(renderTarget, commandBuffer);
-				}
-			}
-
-			for ( const auto & renderBatch : m_renderLists[TranslucentLighted] )
-			{
-				const auto * renderableInstance = renderBatch.second.renderableInstance();
-
-				if ( renderableInstance->isDisplayTBNSpaceEnabled() )
-				{
-					renderableInstance->renderTBNSpace(renderTarget, commandBuffer);
-				}
-			}
-		}*/
 	}
-	
+
+	void
+	Scene::renderTBNSpace (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const Vulkan::CommandBuffer & commandBuffer) noexcept
+	{
+		const uint32_t readStateIndex = m_renderStateIndex.load(std::memory_order_acquire);
+
+		auto & renderer = m_AVConsoleManager.graphicsRenderer();
+
+		/* Scene visual components (background, ground, sea). */
+		for ( const auto & component : m_sceneVisualComponents )
+		{
+			if ( component == nullptr )
+			{
+				continue;
+			}
+
+			const auto renderableInstance = component->getRenderableInstance();
+
+			if ( renderableInstance == nullptr || !renderableInstance->isDisplayTBNSpaceEnabled() )
+			{
+				continue;
+			}
+
+			/* Ensure TBN programs are generated (may not exist if flag was enabled after initial setup). */
+			if ( !renderableInstance->getReadyForTBNSpace(renderTarget, renderer) )
+			{
+				continue;
+			}
+
+			const auto layerCount = renderableInstance->renderable()->layerCount();
+
+			for ( uint32_t layerIndex = 0; layerIndex < layerCount; layerIndex++ )
+			{
+				renderableInstance->renderTBNSpace(readStateIndex, renderTarget, layerIndex, nullptr, commandBuffer);
+			}
+		}
+
+		/* Static entities. */
+		{
+			const std::lock_guard< std::mutex > lock{m_staticEntitiesAccess};
+
+			for ( const auto & staticEntity : std::ranges::views::values(m_staticEntities) )
+			{
+				if ( !staticEntity->isRenderable() )
+				{
+					continue;
+				}
+
+				const auto & worldCoordinates = staticEntity->getWorldCoordinatesStateForRendering(readStateIndex);
+
+				staticEntity->forEachComponent([&] (const Component::Abstract & component) {
+					const auto renderableInstance = component.getRenderableInstance();
+
+					if ( renderableInstance == nullptr || !renderableInstance->isDisplayTBNSpaceEnabled() )
+					{
+						return;
+					}
+
+					/* Ensure TBN programs are generated. */
+					if ( !renderableInstance->getReadyForTBNSpace(renderTarget, renderer) )
+					{
+						return;
+					}
+
+					const auto layerCount = renderableInstance->renderable()->layerCount();
+
+					for ( uint32_t layerIndex = 0; layerIndex < layerCount; layerIndex++ )
+					{
+						renderableInstance->renderTBNSpace(readStateIndex, renderTarget, layerIndex, &worldCoordinates, commandBuffer);
+					}
+				});
+			}
+		}
+
+		/* Scene node tree. */
+		{
+			const std::lock_guard< std::mutex > lock{m_sceneNodesAccess};
+
+			NodeCrawler< const Node > crawler{m_rootNode};
+
+			std::shared_ptr< const Node > node{};
+
+			while ( (node = crawler.nextNode()) != nullptr )
+			{
+				if ( !node->isRenderable() )
+				{
+					continue;
+				}
+
+				const auto & worldCoordinates = node->getWorldCoordinatesStateForRendering(readStateIndex);
+
+				node->forEachComponent([&] (const Component::Abstract & component) {
+					const auto renderableInstance = component.getRenderableInstance();
+
+					if ( renderableInstance == nullptr || !renderableInstance->isDisplayTBNSpaceEnabled() )
+					{
+						return;
+					}
+
+					/* Ensure TBN programs are generated. */
+					if ( !renderableInstance->getReadyForTBNSpace(renderTarget, renderer) )
+					{
+						return;
+					}
+
+					const auto layerCount = renderableInstance->renderable()->layerCount();
+
+					for ( uint32_t layerIndex = 0; layerIndex < layerCount; layerIndex++ )
+					{
+						renderableInstance->renderTBNSpace(readStateIndex, renderTarget, layerIndex, &worldCoordinates, commandBuffer);
+					}
+				});
+			}
+		}
+	}
+
 	void
 	Scene::publishStateForRendering () noexcept
 	{

@@ -44,6 +44,7 @@
 
 /* Local inclusions for usages. */
 #include "ExternalInput.hpp"
+#include "Recorder.hpp"
 #include "Libs/PixelFactory/Color.hpp"
 #include "Libs/Time/Statistics/RealTime.hpp"
 #include "RenderTarget/Abstract.hpp"
@@ -59,6 +60,7 @@
 #include "Window.hpp"
 #include "Resources/Manager.hpp"
 #include "TextureResource/TextureCubemap.hpp"
+#include "GrabPass.hpp"
 
 /* Forward declarations. */
 namespace EmEn
@@ -579,14 +581,25 @@ namespace EmEn::Graphics
 			}
 
 			/**
-			 * @brief Returns whether the graphics renderer is usable.
-			 * @return bool
+			 * @brief Returns the reference to the video recorder.
+			 * @return Recorder &
 			 */
 			[[nodiscard]]
-			bool
-			isUsable () const noexcept
+			Recorder &
+			recorder () noexcept
 			{
-				return m_isUsable;
+				return m_recorder;
+			}
+
+			/**
+			 * @brief Returns the reference to the video recorder.
+			 * @return const Recorder &
+			 */
+			[[nodiscard]]
+			const Recorder &
+			recorder () const noexcept
+			{
+				return m_recorder;
 			}
 
 			/**
@@ -598,6 +611,17 @@ namespace EmEn::Graphics
 			isDebugModeEnabled () const noexcept
 			{
 				return m_debugMode;
+			}
+
+			/**
+			 * @brief Returns whether the window-less mode is enabled.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isWindowLess () const noexcept
+			{
+				return m_windowLess;
 			}
 
 			/**
@@ -653,6 +677,63 @@ namespace EmEn::Graphics
 			{
 				m_renderToTexturesEnabled = !m_renderToTexturesEnabled;
 				m_shadowMapsEnabled = m_renderToTexturesEnabled;
+			}
+
+			/**
+			 * @brief Controls the state of the TBN space rendering.
+			 * @note Visual debug functionality, this needs a geometry shader stage support from the GPU.
+			 * @param state The state.
+			 * @return void
+			 */
+			void
+			enableTBNSpaceRendering (bool state) noexcept
+			{
+				m_TBNSpaceRenderingEnabled = state;
+			}
+
+			/**
+			 * @brief Returns whether the TBN space rendering is enabled.
+			 * @note Visual debug functionality, this needs a geometry shader stage support from the GPU.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isTBNSpaceRenderingEnabled () const noexcept
+			{
+				return m_TBNSpaceRenderingEnabled;
+			}
+
+			/**
+			 * @brief Controls the state of the grab pass.
+			 * @param state The state.
+			 * @return void
+			 */
+			void
+			enableGrabPass (bool state) noexcept
+			{
+				m_grabPassEnabled = state;
+			}
+
+			/**
+			 * @brief Returns whether the grab pass is enabled.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isGrabPassEnabled () const noexcept
+			{
+				return m_grabPassEnabled;
+			}
+
+			/**
+			 * @brief Returns the grab pass texture.
+			 * @return GrabPass *
+			 */
+			[[nodiscard]]
+			GrabPass *
+			grabPass () const noexcept
+			{
+				return m_grabPass.get();
 			}
 
 			/**
@@ -750,6 +831,13 @@ namespace EmEn::Graphics
 			}
 
 			/**
+			 * @brief Returns the current swap chain color image (for async GPU readback).
+			 * @return std::shared_ptr< Vulkan::Image >
+			 */
+			[[nodiscard]]
+			std::shared_ptr< Vulkan::Image > currentSwapChainColorImage () const noexcept;
+
+			/**
 			 * @brief Returns the descriptor pool.
 			 * @return std::shared_ptr< Vulkan::DescriptorPool >
 			 */
@@ -839,6 +927,25 @@ namespace EmEn::Graphics
 			bool finalizeGraphicsPipeline (const RenderTarget::Abstract & renderTarget, const Saphir::Program & program, std::shared_ptr< Vulkan::GraphicsPipeline > & graphicsPipeline) noexcept;
 
 			/**
+			 * @brief Finalizes the graphics pipeline creation using a specific framebuffer (and its render pass).
+			 * @param framebuffer A reference to the framebuffer to use for pipeline finalization.
+			 * @param program A reference to the program.
+			 * @param graphicsPipeline A reference to the graphics pipeline smart pointer.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool finalizeGraphicsPipeline (const Vulkan::Framebuffer & framebuffer, const Saphir::Program & program, std::shared_ptr< Vulkan::GraphicsPipeline > & graphicsPipeline) noexcept;
+
+			/**
+			 * @brief Returns the post-process framebuffer used for overlay rendering.
+			 * @note In windowed mode, returns the swap-chain's post-process framebuffer (single-sample).
+			 * In windowless mode, returns the main framebuffer.
+			 * @return const Vulkan::Framebuffer *
+			 */
+			[[nodiscard]]
+			const Vulkan::Framebuffer * overlayFramebuffer () const noexcept;
+
+			/**
 			 * @brief Finds a cached shader program by its unique key.
 			 * @note This allows early lookup before shader generation to avoid redundant work.
 			 * @param programKey The unique key identifying the program configuration.
@@ -876,6 +983,14 @@ namespace EmEn::Graphics
 			std::shared_ptr< Vulkan::Sampler > getSampler (const std::string & identifier, const std::function< void (Settings & settings, VkSamplerCreateInfo &) > & setupCreateInfo) noexcept;
 
 			/**
+			 * @brief Render a new offscreen frame for the active scene.
+			 * @param scene A reference to the scene smart pointer.
+			 * @param overlayManager A reference to the overlay manager.
+			 * @return void
+			 */
+			void renderOffscreenFrame (const std::shared_ptr< Scenes::Scene > & scene, const Overlay::Manager & overlayManager) noexcept;
+
+			/**
 			 * @brief Render a new frame for the active scene.
 			 * @param scene A reference to the scene smart pointer.
 			 * @param overlayManager A reference to the overlay manager.
@@ -885,13 +1000,14 @@ namespace EmEn::Graphics
 
 			/**
 			 * @brief Captures the framebuffer.
+			 * @param result Array to fill: [0] = color, [1] = depth (optional), [2] = stencil (optional).
 			 * @param keepAlpha Keep the alpha channel from the GPU memory. Default false.
 			 * @param withDepthBuffer Enable to capture the depth buffer. Default false.
 			 * @param withStencilBuffer Enable to capture the stencil buffer. Default false.
-			 * @return std::array< Libs::PixelFactory::Pixmap< uint8_t >, 3 >
+			 * @param postProcess Enable to swap channels from BGRA to RGBA. Default true.
+			 * @return bool
 			 */
-			[[nodiscard]]
-			std::array< Libs::PixelFactory::Pixmap< uint8_t >, 3 > captureFramebuffer (bool keepAlpha = false, bool withDepthBuffer = false, bool withStencilBuffer = false) noexcept;
+			bool captureFramebuffer (std::array< Libs::PixelFactory::Pixmap< uint8_t >, 3 > & result, bool keepAlpha = false, bool withDepthBuffer = false, bool withStencilBuffer = false, bool postProcess = true) noexcept;
 
 			/**
 			 * @brief Sets the swap-chain to status degraded in order to force a refresh.
@@ -1040,7 +1156,8 @@ namespace EmEn::Graphics
 			SharedUBOManager m_sharedUBOManager;
 			BindlessTextureManager m_bindlessTextureManager;
 			VertexBufferFormatManager m_vertexBufferFormatManager;
-			ExternalInput m_externalInput;
+			ExternalInput m_externalInput{m_primaryServices};
+			Recorder m_recorder{m_primaryServices, *this};
 			std::vector< ServiceInterface * > m_subServicesEnabled;
 			std::shared_ptr< Vulkan::DescriptorPool > m_descriptorPool;
 			std::shared_ptr< Vulkan::SwapChain > m_swapChain;
@@ -1066,11 +1183,13 @@ namespace EmEn::Graphics
 			std::shared_ptr< TextureResource::TextureCubemap > m_defaultTextureCubemap;
 			std::shared_ptr< DummyShadowTexture > m_dummyShadowTexture2D;
 			std::shared_ptr< DummyShadowTexture > m_dummyShadowTextureCube;
-			bool m_isUsable{false};
+			std::unique_ptr< GrabPass > m_grabPass;
 			bool m_debugMode{false};
 			bool m_windowLess{false};
 			bool m_shadowMapsEnabled{true};
 			bool m_renderToTexturesEnabled{true};
+			bool m_TBNSpaceRenderingEnabled{false};
+			bool m_grabPassEnabled{false};
 			bool m_swapChainMustBeRecreated{false};
 			bool m_shutdownRequested{false};
 	};

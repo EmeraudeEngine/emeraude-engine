@@ -68,6 +68,11 @@ PlatformSpecific/
 ├── SystemInfo.hpp/.cpp          # System information (+ platform files)
 ├── UserInfo.hpp/.cpp            # User information (+ platform files)
 ├── Types.hpp                    # Common type definitions
+├── VideoCaptureDevice.hpp       # Cross-platform video capture interface
+├── VideoCaptureDevice.cpp       # Shared code (width/height accessors, YUYV→RGBA)
+├── VideoCaptureDevice.linux.cpp # V4L2 implementation
+├── VideoCaptureDevice.mac.mm    # AVFoundation implementation
+├── VideoCaptureDevice.windows.cpp # Media Foundation implementation
 └── Desktop/
     ├── Commands.*               # System commands (taskbar, etc.)
     ├── Notification.*           # System notifications
@@ -182,6 +187,34 @@ std::vector<std::filesystem::path> m_filepaths;
 // SaveFile returns single path
 std::filesystem::path m_filepath;
 ```
+
+### Default Path Support
+
+Both `OpenFile` and `SaveFile` support setting a default directory. `SaveFile` also supports a default filename.
+
+**OpenFile**:
+```cpp
+Dialog::OpenFile dialog{"Open", false, false};
+dialog.setDefaultDirectory(std::filesystem::path("/some/directory"));
+// Dialog opens in specified directory
+```
+
+**SaveFile**:
+```cpp
+Dialog::SaveFile dialog{"Save"};
+dialog.setDefaultDirectory(std::filesystem::path("/some/directory"));
+dialog.setDefaultFilename("myfile.txt");
+// Dialog opens in /some/directory with "myfile.txt" pre-filled
+```
+
+See: `Dialog/SaveFile.hpp:setDefaultFilename()`, `Dialog/SaveFile.hpp:setDefaultDirectory()`, `Dialog/OpenFile.hpp:setDefaultDirectory()`
+
+**Platform implementations**:
+| Platform | OpenFile default dir | SaveFile default dir | SaveFile default filename | SaveFile auto-extension |
+|----------|---------------------|---------------------|--------------------------|------------------------|
+| Windows | `IFileOpenDialog::SetFolder()` | `IFileSaveDialog::SetFolder()` | `SetFileName()` | `SetDefaultExtension()` from first filter |
+| Linux | kdialog positional arg / zenity `--filename=` | Same | Appended to path arg | Handled by desktop tool |
+| macOS | `NSOpenPanel setDirectoryURL:` | `NSSavePanel setDirectoryURL:` | `setNameFieldStringValue:` | Handled by `allowedContentTypes` |
 
 ### Linux Dialog Implementation (zenity/kdialog)
 
@@ -311,6 +344,53 @@ bool MyFeature::doSomething(const std::string& param) {
 
 ---
 
+## Video Capture System
+
+Cross-platform webcam/video capture via `VideoCaptureDevice`.
+
+### Architecture
+
+| File | Purpose |
+|------|---------|
+| `VideoCaptureDevice.hpp` | Common interface: `enumerateDevices()`, `open()`, `captureFrame()`, `close()` |
+| `VideoCaptureDevice.cpp` | Shared code: `width()`, `height()`, `convertYUYVtoRGBA()` |
+| `VideoCaptureDevice.linux.cpp` | V4L2 implementation (synchronous mmap) |
+| `VideoCaptureDevice.mac.mm` | AVFoundation implementation (async delegate → sync copy) |
+| `VideoCaptureDevice.windows.cpp` | Media Foundation implementation (synchronous IMFSourceReader) |
+
+### Platform-Specific Details
+
+**Linux (V4L2):**
+- Direct `open()` → `ioctl(VIDIOC_*)` → `mmap` buffer → `select()` for frame readiness
+- Format: YUYV (converted via shared `convertYUYVtoRGBA()`)
+
+**macOS (AVFoundation):**
+- `FrameCaptureDelegate` (ObjC class in .mm) receives frames asynchronously via `AVCaptureVideoDataOutputSampleBufferDelegate`
+- Latest frame stored in `std::mutex`-protected buffer with `std::condition_variable` for first-frame synchronization
+- `MacCaptureContext` struct (stored via `void* m_platformHandle`) holds `AVCaptureSession`, input, output, delegate, dispatch queue
+- `open()` waits up to 3s for first frame arrival (AVFoundation's `startRunning` is async)
+- Format: BGRA (converted to RGBA by swapping B↔R per pixel)
+- Uses `AVCaptureDeviceDiscoverySession` for device enumeration (handles deprecation of `devicesWithMediaType:`)
+- All ObjC code wrapped in `@autoreleasepool`
+
+**Windows (Media Foundation):**
+- `MFCaptureContext` struct (stored via `void* m_platformHandle`) holds `IMFSourceReader`, `IMFMediaSource`, format/COM flags
+- `open()` tries RGB32 first, falls back to YUY2
+- RGB32 (BGRA) → RGBA via B↔R swap; YUY2 via shared `convertYUYVtoRGBA()`
+- COM lifecycle: `CoInitializeEx`/`CoUninitialize` with `RPC_E_CHANGED_MODE` handling
+- MF lifecycle: `MFStartup`/`MFShutdown` tracked per context
+- String conversions use `convertWideToUTF8()`/`convertUTF8ToWide()` from `Helpers.hpp` (**no local duplicates**)
+
+### CMake Dependencies (`SetupVideoCapture.cmake`)
+
+| Platform | Linked Libraries |
+|----------|-----------------|
+| macOS | `AVFoundation`, `CoreMedia`, `CoreVideo` frameworks |
+| Windows | `Mfplat.lib`, `Mfreadwrite.lib`, `Mf.lib`, `Mfuuid.lib` |
+| Linux | None (V4L2 uses kernel headers) |
+
+---
+
 ## Common Pitfalls
 
 | Pitfall | Solution |
@@ -321,6 +401,7 @@ bool MyFeature::doSomething(const std::string& param) {
 | File filters with folder selection | Skip filters when `m_selectFolder = true` |
 | More than 3 buttons with kdialog | Fall back to zenity |
 | Blocking shell commands on Linux | Use `executeCommand()` which handles `popen`/`pclose` |
+| Duplicating string conversions on Windows | Use `Helpers.hpp` functions (`convertUTF8ToWide`, `convertWideToUTF8`). **Never** write local `MultiByteToWideChar`/`WideCharToMultiByte` wrappers |
 
 ---
 

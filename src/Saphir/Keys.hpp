@@ -701,6 +701,22 @@ namespace EmEn::Saphir
 			constexpr auto RoughnessSampler{"uRoughnessSampler"};
 			constexpr auto MetalnessSampler{"uMetalnessSampler"};
 			constexpr auto AmbientOcclusionSampler{"uAmbientOcclusionSampler"};
+			constexpr auto ClearCoatSampler{"uClearCoatSampler"};
+			constexpr auto ClearCoatRoughnessSampler{"uClearCoatRoughnessSampler"};
+			constexpr auto ClearCoatNormalSampler{"uClearCoatNormalSampler"};
+			/* Material specific (PBR SSS) */
+			constexpr auto SubsurfaceSampler{"uSubsurfaceSampler"};
+			constexpr auto SubsurfaceThicknessSampler{"uSubsurfaceThicknessSampler"};
+			/* Material specific (PBR Sheen) */
+			constexpr auto SheenSampler{"uSheenSampler"};
+			/* Material specific (PBR Anisotropy) */
+			constexpr auto AnisotropySampler{"uAnisotropySampler"};
+			/* Material specific (PBR Transmission) */
+			constexpr auto TransmissionSampler{"uTransmissionSampler"};
+			/* Material specific (PBR Iridescence) */
+			constexpr auto IridescenceSampler{"uIridescenceSampler"};
+			/* Material specific (Height/Parallax) */
+			constexpr auto HeightSampler{"uHeightSampler"};
 			/* Lighting specific */
 			constexpr auto ShadowMapSampler{"uShadowMapSampler"};
 			constexpr auto ShadowMapArraySampler{"uShadowMapArraySampler"};
@@ -754,6 +770,7 @@ namespace EmEn::Saphir
 				constexpr auto Shininess{"shininess"};
 				constexpr auto AutoIlluminationColor{"autoIlluminationColor"};
 				constexpr auto AutoIlluminationAmount{"autoIlluminationAmount"};
+				constexpr auto EmissiveStrength{"emissiveStrength"};
 				constexpr auto Opacity{"opacity"};
 				constexpr auto NormalScale{"normalScale"};
 				constexpr auto ReflectionAmount{"reflectionAmount"};
@@ -766,6 +783,35 @@ namespace EmEn::Saphir
 				constexpr auto F0{"f0"};
 				constexpr auto IBLIntensity{"iblIntensity"};
 				constexpr auto AOIntensity{"aoIntensity"};
+				constexpr auto ClearCoatFactor{"clearCoatFactor"};
+				constexpr auto ClearCoatRoughness{"clearCoatRoughness"};
+				constexpr auto ClearCoatNormalScale{"clearCoatNormalScale"};
+				/* Material specific (PBR SSS) */
+				constexpr auto SubsurfaceIntensity{"subsurfaceIntensity"};
+				constexpr auto SubsurfaceRadius{"subsurfaceRadius"};
+				constexpr auto SubsurfaceColor{"subsurfaceColor"};
+				/* Material Sheen specific */
+				constexpr auto SheenColor{"sheenColor"};
+				constexpr auto SheenRoughness{"sheenRoughness"};
+				/* Material Anisotropy specific */
+				constexpr auto Anisotropy{"anisotropy"};
+				constexpr auto AnisotropyRotation{"anisotropyRotation"};
+				/* Material Transmission specific */
+				constexpr auto TransmissionFactor{"transmissionFactor"};
+				constexpr auto AttenuationColor{"attenuationColor"};
+				constexpr auto AttenuationDistance{"attenuationDistance"};
+				constexpr auto ThicknessFactor{"thicknessFactor"};
+				constexpr auto HeightScale{"heightScale"};
+				/* Material Iridescence specific */
+				constexpr auto IridescenceFactor{"iridescenceFactor"};
+				constexpr auto IridescenceIOR{"iridescenceIOR"};
+				constexpr auto IridescenceThicknessMin{"iridescenceThicknessMin"};
+				constexpr auto IridescenceThicknessMax{"iridescenceThicknessMax"};
+				/* Material Dispersion specific */
+				constexpr auto Dispersion{"dispersion"};
+				/* Material Specular specific (KHR_materials_specular) */
+				constexpr auto SpecularFactor{"specularFactor"};
+				constexpr auto SpecularColorFactor{"specularColorFactor"};
 				/* Light specific */
 				constexpr auto Color{"color"};
 				//constexpr auto PositionWorldSpace{"positionWorldSpace"}; // Shared with View
@@ -832,6 +878,7 @@ namespace EmEn::Saphir
 			constexpr auto WorldTBNMatrix{"svWorldTBNMatrix"};
 			constexpr auto ViewTBNMatrix{"svViewTBNMatrix"};
 			constexpr auto TangentToWorldMatrix{"svTangentToWorld"};
+			constexpr auto ParallaxTextureCoordinates{"pomTexCoords"};
 			constexpr auto OutputFragment{"svOutputFragment"};
 			constexpr auto FragCoord{"svFragCoord"};
 			constexpr auto Light{"svLight"};

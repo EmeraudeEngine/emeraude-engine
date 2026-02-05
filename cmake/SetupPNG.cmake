@@ -18,7 +18,7 @@ else ()
 	message("Enabling LibPNG library from local source ...")
 
 	if ( MSVC )
-		target_link_libraries(${TARGET_BINARY_FOR_SETUP} PRIVATE
+		target_link_libraries(${TARGET_BINARY_FOR_SETUP} PUBLIC
 			debug "${LOCAL_LIB_DIR}/lib/libpng16_staticd.lib"
 			optimized "${LOCAL_LIB_DIR}/lib/libpng16_static.lib"
 		)

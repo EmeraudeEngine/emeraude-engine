@@ -73,6 +73,37 @@ namespace EmEn::Vulkan::Sync
 			}
 
 			/**
+			 * @brief Constructs an image memory barrier with queue family ownership transfer.
+			 * @param image A reference to a buffer.
+			 * @param srcAccessMask A bitmask of VkAccessFlagBits specifying a source access mask.
+			 * @param dstAccessMask A bitmask of VkAccessFlagBits specifying a destination access mask.
+			 * @param oldLayout The old layout in an image layout transition.
+			 * @param newLayout The new layout in an image layout transition.
+			 * @param srcQueueFamilyIndex The source queue family for ownership transfer.
+			 * @param dstQueueFamilyIndex The destination queue family for ownership transfer.
+			 * @param aspectMask Which layer the memory barrier applies. Default COLOR.
+			 */
+			ImageMemoryBarrier (const Image & image, VkAccessFlags srcAccessMask, VkAccessFlags dstAccessMask, VkImageLayout oldLayout, VkImageLayout newLayout, uint32_t srcQueueFamilyIndex, uint32_t dstQueueFamilyIndex, VkImageAspectFlags aspectMask = VK_IMAGE_ASPECT_COLOR_BIT) noexcept
+			{
+				m_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+				m_barrier.pNext = nullptr;
+				m_barrier.srcAccessMask = srcAccessMask;
+				m_barrier.dstAccessMask = dstAccessMask;
+				m_barrier.oldLayout = oldLayout;
+				m_barrier.newLayout = newLayout;
+				m_barrier.srcQueueFamilyIndex = srcQueueFamilyIndex;
+				m_barrier.dstQueueFamilyIndex = dstQueueFamilyIndex;
+				m_barrier.image = image.handle();
+				m_barrier.subresourceRange.aspectMask = aspectMask;
+				m_barrier.subresourceRange.baseMipLevel = 0;
+				m_barrier.subresourceRange.levelCount = image.createInfo().mipLevels;
+				m_barrier.subresourceRange.baseArrayLayer = 0;
+				m_barrier.subresourceRange.layerCount = image.createInfo().arrayLayers;
+
+				this->setCreated();
+			}
+
+			/**
 			 * @brief Copy constructor.
 			 * @param copy A reference to the copied instance.
 			 */

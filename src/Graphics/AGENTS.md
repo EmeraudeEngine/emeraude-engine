@@ -250,7 +250,7 @@ m_descriptorSet->writeUniformBuffer(bindingPoint, descriptorInfo);
 
 ### Material Property Layout (std140)
 
-`StandardResource` stores properties in a float array with these offsets:
+**StandardResource** stores properties in a float array with these offsets:
 
 | Offset | Property | Type |
 |--------|----------|------|
@@ -265,8 +265,100 @@ m_descriptorSet->writeUniformBuffer(bindingPoint, descriptorInfo);
 | 20 | reflectionAmount | float |
 | 21 | refractionAmount | float |
 | 22 | refractionIOR | float |
+| 23 | heightScale | float | 0.0+ (0.02) — POM depth |
+
+**PBRResource** stores properties in a 52-float array (208 bytes, std140):
+
+| Offset | Property | Type | Range/Default |
+|--------|----------|------|---------------|
+| 0-3 | albedoColor | vec4 | Base color |
+| 4 | roughness | float | 0.0-1.0 (0.5) |
+| 5 | metalness | float | 0.0-1.0 (0.0) |
+| 6 | normalScale | float | 0.0-1.0 (1.0) |
+| 7 | specularFactor | float | 0.0+ (1.0) — KHR_materials_specular |
+| 8 | ior | float | 1.0-3.0 (1.5) |
+| 9 | iblIntensity | float | 0.0-1.0 (1.0) |
+| 10 | autoIlluminationAmount | float | 0.0+ (0.0) |
+| 11 | aoIntensity | float | 0.0-1.0 (1.0) |
+| 12-15 | autoIlluminationColor | vec4 | Emissive color |
+| 16 | clearCoatFactor | float | 0.0-1.0 (0.0) |
+| 17 | clearCoatRoughness | float | 0.0-1.0 (0.0) |
+| 18 | subsurfaceIntensity | float | 0.0-1.0 (0.0) |
+| 19 | subsurfaceRadius | float | 0.0+ (1.0) |
+| 20-23 | subsurfaceColor | vec4 | SSS tint (1.0, 0.2, 0.1) |
+| 24-27 | sheenColor | vec4 | Sheen tint (black = off) |
+| 28 | sheenRoughness | float | 0.0-1.0 (0.5) |
+| 29 | anisotropy | float | -1.0-1.0 (0.0) |
+| 30 | anisotropyRotation | float | 0.0-1.0 (0.0) |
+| 31 | transmissionFactor | float | 0.0-1.0 (0.0) |
+| 32-35 | attenuationColor | vec4 | Volume attenuation |
+| 36 | attenuationDistance | float | 0.0+ |
+| 37 | thicknessFactor | float | 0.0+ |
+| 38 | heightScale | float | 0.0+ (0.02) — POM depth |
+| 39 | iridescenceFactor | float | 0.0-1.0 (0.0) |
+| 40 | iridescenceIOR | float | 1.0+ (1.3) |
+| 41 | iridescenceThicknessMin | float | nm (100.0) |
+| 42 | iridescenceThicknessMax | float | nm (400.0) |
+| 43 | dispersion | float | 0.0+ (0.0) |
+| 44-47 | specularColorFactor | vec4 | KHR specular color (white) |
+| 48 | emissiveStrength | float | 0.0+ (1.0) — HDR multiplier |
+| 49 | clearCoatNormalScale | float | 0.0+ (1.0) — CC normal map intensity |
+| 50-51 | padding | float | std140 alignment |
 
 The GLSL struct is generated to match this layout exactly.
+
+### Normal Map Scale
+
+The `normalScale` parameter (offset 19 for Standard, offset 6 for PBR) controls normal map intensity by scaling the tangent-space XY components before re-normalizing:
+
+```glsl
+vec3 raw = texture(normalSampler, uv).rgb * 2.0 - 1.0;
+vec3 normal = normalize(vec3(raw.xy * ubMaterial.normalScale, raw.z));
+```
+
+- `1.0` = full normal map effect (default)
+- `0.5` = half intensity (smoother bumps)
+- `0.0` = flat surface (normal map ignored)
+
+**Code references:** `StandardResource.cpp:generateFragmentShaderCode()`, `PBRResource.cpp:generateFragmentShaderCode()`
+
+### Parallax Occlusion Mapping (POM)
+
+POM ray-marches through a height map in the fragment shader to create depth/relief illusion on flat surfaces without extra geometry. Uses `ComponentType::Displacement` with height map textures.
+
+**Activation conditions** (all must be true):
+1. Material has a Height component (`m_useParallaxOcclusionMapping`)
+2. High quality enabled (`EnableHighQualityKey = true`)
+3. POM iterations > 0 (`POMIterationsKey > 0`)
+
+When active, a displaced UV (`pomTexCoords`) is computed at the start of the fragment shader and ALL subsequent texture samples use it automatically via `textCoords()`.
+
+**Key implementation details:**
+- Height map convention: white = high, black = low. POM inverts: `depth = 1.0 - texture().r`
+- UV displacement uses `pomViewDir.xy * heightScale` directly (no `/z` division — prevents angle-dependent depth)
+- Loop uses compile-time constant upper bound with early `break` for GPU safety
+- Occlusion interpolation (relief mapping refinement) for smooth results
+- `mutable bool m_pomGenerationActive` flag set at generation time, checked by `textCoords()` to return correct UV variable
+
+**Distance-based POM fade:**
+- POM effect fades out based on camera distance to prevent GPU stress on large surfaces
+- Full effect within 8 world units, fully disabled beyond 18 units
+- Both `heightScale` and `numLayers` are scaled by the fade factor
+- Complete early-out when `pomFade < 0.001` (returns original UVs, no ray-marching)
+- Uses `smoothstep(8.0, 18.0, distance)` for smooth transition
+
+**Vertex shader requirements** (when POM active):
+- `TangentToWorldMatrix` — transform view direction to tangent space
+- `PositionWorldSpace` — fragment world position
+- `CameraWorldPosition` — camera position (reuses Reflection/Refraction output if present)
+
+**Code references:**
+- `StandardResource.cpp:generateFragmentShaderCode()` — POM GLSL generation
+- `PBRResource.cpp:generateFragmentShaderCode()` — POM GLSL generation (+ distance fade)
+- `StandardResource.cpp:textCoords()` — UV variable selection
+- `PBRResource.cpp:textCoords()` — UV variable selection
+- `Saphir/Keys.hpp:ParallaxTextureCoordinates` — `"pomTexCoords"`
+- `Saphir/Keys.hpp:HeightSampler` — `"uHeightSampler"`
 
 ## 6. Bindless Textures Manager
 
@@ -459,7 +551,44 @@ Without this check, disabling shadow mapping via settings caused Vulkan validati
 
 See [`docs/shadow-mapping.md`](../../docs/shadow-mapping.md) for complete shadow mapping architecture.
 
-## 10. Navigation
+## 10. Video Recording (Graphics::Recorder)
+
+Real-time video recording service that captures the Vulkan swap-chain framebuffer and encodes VP8/IVF.
+
+### Pipeline
+1. **GPU async readback** (4-slot round-robin) — copies swap-chain image to host-visible staging buffer
+2. **Unbounded frame queue** — accumulates BGRA frames for encoding thread
+3. **Dedicated encoding thread** — BGRA→I420 conversion (SIMD dispatched: scalar/SSSE3/AVX2), VP8 encoding, IVF container writing
+
+### Symmetric API
+
+| Method | Purpose |
+|--------|---------|
+| `startRecording(path)` | Begin recording to IVF file at given path |
+| `stopRecording()` | Stop recording, flush encoder, patch IVF frame count |
+| `isRecording()` | Check if recording is active |
+| `shouldCaptureFrame()` | Frame pacing check (target FPS) |
+| `captureAndSubmitFrame()` | Capture current frame via async GPU readback |
+
+Path generation is owned by `Core::startAudioVideoRecording()` — see `src/AGENTS.md` Core section.
+
+### Compile-Time Guard
+- Enabled via `EMERAUDE_VIDEO_RECORDING_ENABLED` (requires libvpx)
+- When disabled, all methods are no-op stubs returning false
+
+### Transfer Queue Optimization
+When a dedicated transfer queue family is available, uses a two-step copy path:
+1. Graphics queue: swap-chain image → device-local buffer (with layout transitions)
+2. Transfer queue: device-local → host-visible staging (DMA, signaled by semaphore)
+
+### Code References
+- `Recorder.hpp` — Full class with Doxygen documentation
+- `Recorder.cpp:startRecording()` — VP8 init, async resource creation, thread start
+- `Recorder.cpp:encodingThreadFunc()` — BGRA→I420 + VP8 encode loop
+- `Recorder.cpp:submitGPUCopy()` / `submitTransferQueueCopy()` — Async readback paths
+- `cmake/SetupLibVPX.cmake` — Build configuration for libvpx
+
+## 11. Navigation
 
 -   **Base Class**: `Renderable::Abstract`
 -   **Main Entry**: `Renderer` (Central coordinator)

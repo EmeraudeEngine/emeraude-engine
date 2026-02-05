@@ -280,7 +280,7 @@ namespace EmEn::Scenes::Component
 			std::unique_ptr< Vulkan::DescriptorSet > m_shadowDescriptorSet;
 			float m_radius{DefaultRadius};
 			float m_PCFRadius{1.0F}; /**< PCF filter radius in normalized texture coordinates. */
-			float m_shadowBias{0.0F}; /**< Shadow bias to prevent shadow acne. */
+			float m_shadowBias{0.005F}; /**< Shadow bias to prevent shadow acne. */
 			std::array< float, 4 + 4 + 4 + 16 > m_buffer{
 				/* Light color. */
 				this->color().red(), this->color().green(), this->color().blue(), 1.0F,

@@ -70,15 +70,22 @@ namespace EmEn::Graphics::TextureResource
 			}
 		}
 
+		auto & settings = renderer.primaryServices().settings();
+
+		const auto mipLevels = std::min(
+			Image::getMIPLevels(m_localData->cubeSize(), m_localData->cubeSize()),
+			settings.getOrSetDefault< uint32_t >(GraphicsTextureMipMappingLevelsKey, DefaultGraphicsTextureMipMappingLevels)
+		);
+
 		/* Create a Vulkan image. */
 		m_image = std::make_shared< Vulkan::Image >(
 			renderer.device(),
 			VK_IMAGE_TYPE_2D,
 			Image::getFormat< uint8_t >(m_localData->data(0).colorCount()),
 			VkExtent3D{m_localData->cubeSize(), m_localData->cubeSize(), 1U},
-			VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+			VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
 			VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT,
-			1,
+			mipLevels,
 			static_cast< uint32_t >(CubemapFaceCount) /* 6 */
 		);
 		m_image->setIdentifier(ClassId, this->name(), "Image");

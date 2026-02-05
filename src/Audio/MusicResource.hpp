@@ -217,8 +217,10 @@ namespace EmEn::Audio
 			Libs::WaveFactory::Wave< int16_t > m_localData;
 			std::string m_title{DefaultInfo};
 			std::string m_artist{DefaultInfo};
-			std::filesystem::path m_pendingMidiPath;					  ///< Path to MIDI file awaiting soundfont dependency.
-			std::shared_ptr< SoundfontResource > m_soundfontDependency;   ///< Reference to the soundfont dependency.
+			Libs::WaveFactory::Frequency m_frequency{Libs::WaveFactory::Frequency::Invalid};
+			size_t m_chunkSize{0};
+			std::filesystem::path m_pendingMidiPath; ///< Path to MIDI file awaiting soundfont dependency.
+			std::shared_ptr< SoundfontResource > m_soundfontDependency; ///< Reference to the soundfont dependency.
 	};
 }
 

@@ -337,7 +337,7 @@ namespace EmEn::Scenes::Component
 			float m_innerAngle{DefaultInnerAngle};
 			float m_outerAngle{DefaultOuterAngle};
 			float m_PCFRadius{4.0F}; /**< PCF filter radius in normalized texture coordinates. */
-			float m_shadowBias{0.0F}; /**< Shadow bias to prevent shadow acne. */
+			float m_shadowBias{0.005F}; /**< Shadow bias to prevent shadow acne. */
 			std::array< float, 4 + 4 + 4 + 4 + 4 + 16 > m_buffer{
 				/* Light color. */
 				this->color().red(), this->color().green(), this->color().blue(), 1.0F,

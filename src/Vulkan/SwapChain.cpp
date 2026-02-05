@@ -297,6 +297,12 @@ namespace EmEn::Vulkan
 
 		for ( const auto & frame : m_frames )
 		{
+			/* Clear the post-process framebuffer. */
+			if ( frame.postProcessFramebuffer != nullptr )
+			{
+				frame.postProcessFramebuffer->destroyFromHardware();
+			}
+
 			/* Clear the framebuffer. */
 			if ( frame.framebuffer != nullptr )
 			{
@@ -739,7 +745,7 @@ namespace EmEn::Vulkan
 					.format = msaaColorBufferCreateInfo.format,
 					.samples = msaaColorBufferCreateInfo.samples,
 					.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-					.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE, /* Don't need to store MSAA buffer, only the resolved one. */
+					.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE, /* MSAA buffer is transient, resolved to single-sample. */
 					.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
 					.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
 					.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
@@ -758,7 +764,7 @@ namespace EmEn::Vulkan
 					.format = msaaDepthStencilBufferCreateInfo.format,
 					.samples = msaaDepthStencilBufferCreateInfo.samples,
 					.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-					.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE, /* Don't need to store MSAA buffer. */
+					.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE, /* MSAA buffer is transient, not needed after resolve. */
 					.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
 					.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
 					.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
@@ -781,7 +787,7 @@ namespace EmEn::Vulkan
 					.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
 					.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
 					.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-					.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR /* Ready for presentation. */
+					.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL /* Post-process pass or grab pass follows. */
 				});
 
 				subPass.addResolveAttachment(2, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
@@ -821,7 +827,7 @@ namespace EmEn::Vulkan
 					.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
 					.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
 					.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-					.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
+					.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL /* Post-process pass or grab pass follows. */
 				});
 
 				subPass.addColorAttachment(0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
@@ -859,6 +865,105 @@ namespace EmEn::Vulkan
 		return renderPass;
 	}
 
+	std::shared_ptr< RenderPass >
+	SwapChain::createPostProcessRenderPass (Renderer & renderer) const noexcept
+	{
+		/* NOTE: This render pass must be compatible with the main render pass so that
+		 * pipelines created for the main pass can also be used here. Compatibility
+		 * requires the same number of attachments with the same formats and sample counts. */
+		auto renderPass = std::make_shared< RenderPass >(renderer.device(), 0);
+		renderPass->setIdentifier(ClassId, "SwapChainPostProcess", "RenderPass");
+
+		RenderSubPass subPass{VK_PIPELINE_BIND_POINT_GRAPHICS, 0};
+
+		/* NOTE: The post-process pass always uses single-sample attachments (2 attachments: color + depth).
+		 * In MSAA mode, the scene has already been resolved to single-sample in pass 1.
+		 * The overlay is rendered directly in single-sample (no benefit from MSAA for 2D/HUD). */
+
+		/* Attachment 0: Color buffer (swap-chain image, single-sample). */
+		{
+			const auto & colorBufferCreateInfo = m_frames.front().colorImage->createInfo();
+
+			renderPass->addAttachmentDescription(VkAttachmentDescription{
+				.flags = 0,
+				.format = colorBufferCreateInfo.format,
+				.samples = colorBufferCreateInfo.samples,
+				.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD, /* Load the resolved scene content. */
+				.storeOp = VK_ATTACHMENT_STORE_OP_STORE, /* Store for presentation. */
+				.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+				.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+				.initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+				.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
+			});
+
+			subPass.addColorAttachment(0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+		}
+
+		/* Attachment 1: Depth/Stencil buffer (single-sample). */
+		{
+			const auto & depthStencilBufferCreateInfo = m_frames.front().depthStencilImage->createInfo();
+
+			renderPass->addAttachmentDescription(VkAttachmentDescription{
+				.flags = 0,
+				.format = depthStencilBufferCreateInfo.format,
+				.samples = depthStencilBufferCreateInfo.samples,
+				.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
+				.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+				.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+				.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+				.initialLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+				.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+			});
+
+			subPass.setDepthStencilAttachment(1, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
+		}
+
+		renderPass->addSubPass(subPass);
+
+		if ( !renderPass->createOnHardware() )
+		{
+			Tracer::error(ClassId, "Unable to create the post-process render pass !");
+
+			return nullptr;
+		}
+
+		return renderPass;
+	}
+
+	bool
+	SwapChain::createPostProcessFramebufferArray (const std::shared_ptr< RenderPass > & renderPass) noexcept
+	{
+		for ( size_t imageIndex = 0; imageIndex < m_imageCount; ++imageIndex )
+		{
+			auto & frame = m_frames[imageIndex];
+
+			frame.postProcessFramebuffer = std::make_unique< Framebuffer >(renderPass, this->extent());
+#if IS_MACOS
+			frame.postProcessFramebuffer->setIdentifier(ClassId, (std::stringstream{} << "Frame" << imageIndex << "PostProcess").str(), "Framebuffer");
+#else
+			frame.postProcessFramebuffer->setIdentifier(ClassId, std::format("Frame{}PostProcess", imageIndex), "Framebuffer");
+#endif
+
+			/* NOTE: Post-process pass always uses single-sample attachments (color + depth),
+			 * regardless of MSAA mode. The overlay renders in single-sample. */
+
+			/* Attachment 0: Color buffer (swap-chain image, single-sample). */
+			frame.postProcessFramebuffer->addAttachment(frame.colorImageView->handle());
+
+			/* Attachment 1: Depth/Stencil buffer (single-sample). */
+			frame.postProcessFramebuffer->addAttachment(frame.depthImageView->handle());
+
+			if ( !frame.postProcessFramebuffer->createOnHardware() )
+			{
+				TraceError{ClassId} << "Unable to create a post-process framebuffer #" << imageIndex << " !";
+
+				return false;
+			}
+		}
+
+		return true;
+	}
+
 	bool
 	SwapChain::createFramebuffer () noexcept
 	{
@@ -880,6 +985,14 @@ namespace EmEn::Vulkan
 		if ( !this->createFramebufferArray(this->createRenderPass(m_renderer)) )
 		{
 			Tracer::error(ClassId, "Unable to create the swap-chain framebuffer !");
+
+			return false;
+		}
+
+		/* Create the post-process render pass and framebuffer array. */
+		if ( !this->createPostProcessFramebufferArray(this->createPostProcessRenderPass(m_renderer)) )
+		{
+			Tracer::error(ClassId, "Unable to create the post-process framebuffer !");
 
 			return false;
 		}
@@ -1314,11 +1427,9 @@ namespace EmEn::Vulkan
 		m_viewMatrices.destroy();
 	}
 
-	std::array< Pixmap< uint8_t >, 3 >
-	SwapChain::capture (TransferManager & transferManager, uint32_t layerIndex, bool keepAlpha, bool withDepthBuffer, bool withStencilBuffer) const noexcept
+	bool
+	SwapChain::capture (TransferManager & transferManager, uint32_t layerIndex, bool keepAlpha, bool withDepthBuffer, bool withStencilBuffer, std::array< Pixmap< uint8_t >, 3 > & result) const noexcept
 	{
-		std::array< Pixmap< uint8_t >, 3 > result;
-
 		/* SwapChain has only single-layer images (not cubemaps or arrays). */
 		if ( layerIndex > 0 )
 		{
@@ -1329,7 +1440,7 @@ namespace EmEn::Vulkan
 		{
 			TraceError{ClassId} << "Invalid acquired image index for capture!";
 
-			return result;
+			return false;
 		}
 
 		const auto & frame = m_frames[m_acquiredImageIndex];
@@ -1341,14 +1452,13 @@ namespace EmEn::Vulkan
 			{
 				TraceError{ClassId} << "Failed to capture color buffer!";
 
-				return result;
+				return false;
 			}
 
 			if ( !keepAlpha )
 			{
 				result[0] = Processor< uint8_t >::toRGB(result[0]);
 			}
-			result[0] = Processor< uint8_t >::swapChannels(result[0], false);
 		}
 
 		/* Capture depth buffer if requested and available. */
@@ -1369,6 +1479,6 @@ namespace EmEn::Vulkan
 			}
 		}
 
-		return result;
+		return true;
 	}
 }

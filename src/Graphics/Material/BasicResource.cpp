@@ -547,8 +547,15 @@ namespace EmEn::Graphics::Material
 		lightGenerator.declareSurfaceDiffuse(SurfaceColor);
 		lightGenerator.declareSurfaceSpecular(MaterialUB(UniformBlock::Component::SpecularColor), MaterialUB(UniformBlock::Component::Shininess));
 
-		if ( this->isFlagEnabled(OpacityEnabled) )
+		/* Handle opacity: prioritize texture alpha channel over uniform opacity value. */
+		if ( m_textureComponent != nullptr && m_textureComponent->alphaEnabled() )
 		{
+			/* Use the texture's alpha channel as surface opacity. */
+			lightGenerator.declareSurfaceOpacity((std::stringstream{} << SurfaceColor << ".a").str());
+		}
+		else if ( this->isFlagEnabled(OpacityEnabled) )
+		{
+			/* Fall back to uniform opacity value. */
 			lightGenerator.declareSurfaceOpacity(MaterialUB(UniformBlock::Component::Opacity));
 		}
 
@@ -645,6 +652,14 @@ namespace EmEn::Graphics::Material
 		else
 		{
 			Code{fragmentShader, Location::Top} << "const vec4 " << m_textureComponent->variableName() << " = texture(" << m_textureComponent->samplerName() << ", " << texCoordVariable << ");";
+		}
+
+		/* Early discard for transparent pixels when alpha blending is enabled.
+		 * This prevents lighting calculations on pixels that will be discarded anyway,
+		 * and avoids specular highlights appearing on transparent areas. */
+		if ( m_textureComponent->alphaEnabled() && m_blendingMode == BlendingMode::Normal )
+		{
+			Code{fragmentShader, Location::Top} << "if ( " << m_textureComponent->variableName() << ".a < 0.01 ) discard;";
 		}
 
 		return true;
@@ -871,5 +886,72 @@ namespace EmEn::Graphics::Material
 		this->enableFlag(AutoIlluminationEnabled);
 
 		return this->updateVideoMemory();
+	}
+
+	bool
+	BasicResource::requiresAlphaTestedShadows () const noexcept
+	{
+		/* Only materials with alpha-enabled textures using normal blending need alpha-tested shadows. */
+		if ( m_textureComponent == nullptr )
+		{
+			return false;
+		}
+
+		return m_textureComponent->alphaEnabled() && m_blendingMode == BlendingMode::Normal;
+	}
+
+	bool
+	BasicResource::generateShadowVertexCode (const Saphir::Generator::Abstract & /*generator*/, Saphir::VertexShader & vertexShader) const noexcept
+	{
+		if ( m_textureComponent == nullptr )
+		{
+			return true;
+		}
+
+		/* Request texture coordinates output to the fragment shader. */
+		const auto * textureCoordVar = this->isFlagEnabled(PrimaryTextureCoordinatesUses3D)
+			? ShaderVariable::Primary3DTextureCoordinates
+			: ShaderVariable::Primary2DTextureCoordinates;
+
+		if ( !vertexShader.requestSynthesizeInstruction(textureCoordVar) )
+		{
+			TraceError{ClassId} << "Unable to synthesize texture coordinates for shadow vertex shader !";
+
+			return false;
+		}
+
+		return true;
+	}
+
+	bool
+	BasicResource::generateShadowAlphaTestCode (const Saphir::Generator::Abstract & generator, Saphir::FragmentShader & fragmentShader) const noexcept
+	{
+		if ( m_textureComponent == nullptr )
+		{
+			return true;
+		}
+
+		const uint32_t materialSet = generator.shaderProgram()->setIndex(SetType::PerModelLayer);
+
+		/* Get the correct texture coordinate variable. */
+		const auto * texCoordVariable = m_textureComponent->isVolumetricTexture()
+			? ShaderVariable::Primary3DTextureCoordinates
+			: ShaderVariable::Primary2DTextureCoordinates;
+
+		/* Declare the texture sampler. */
+		if ( !fragmentShader.declare(Declaration::Sampler{materialSet, 1, m_textureComponent->textureType(), m_textureComponent->samplerName()}) )
+		{
+			TraceError{ClassId} << "Unable to declare texture sampler for shadow alpha test !";
+
+			return false;
+		}
+
+		/* Sample the texture. */
+		Code{fragmentShader, Location::Top} << "const vec4 " << m_textureComponent->variableName() << " = texture(" << m_textureComponent->samplerName() << ", " << texCoordVariable << ");";
+
+		/* Discard fragments with alpha below threshold. */
+		Code{fragmentShader, Location::Output} << "if ( " << m_textureComponent->variableName() << ".a < 0.5 ) discard;";
+
+		return true;
 	}
 }

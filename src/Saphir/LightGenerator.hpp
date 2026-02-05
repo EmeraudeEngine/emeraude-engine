@@ -429,6 +429,171 @@ namespace EmEn::Saphir
 			}
 
 			/**
+			 * @brief Declares the variables used by the fragment shader for the clear coat layer.
+			 * @param factorVariableName A reference to a string for GLSL variable holding the clear coat factor (0.0 = none, 1.0 = full coat).
+			 * @param roughnessVariableName A reference to a string for GLSL variable holding the clear coat roughness (0.0 = mirror, 1.0 = diffuse).
+			 * @return void
+			 */
+			void
+			declareSurfaceClearCoat (const std::string & factorVariableName, const std::string & roughnessVariableName) noexcept
+			{
+				m_surfaceClearCoatFactor = factorVariableName;
+				m_surfaceClearCoatRoughness = roughnessVariableName;
+				m_useClearCoat = true;
+			}
+
+			/**
+			 * @brief Declares the variable used by the fragment shader for the clear coat normal map.
+			 * @param normalVariableName A reference to a string for GLSL variable holding the clear coat normal (tangent space).
+			 * @return void
+			 */
+			void
+			declareSurfaceClearCoatNormal (const std::string & normalVariableName) noexcept
+			{
+				m_surfaceClearCoatNormal = normalVariableName;
+			}
+
+			/**
+			 * @brief Declares the variables used by the fragment shader for subsurface scattering.
+			 * @param intensityVariableName A reference to a string for GLSL variable holding the SSS intensity.
+			 * @param colorVariableName A reference to a string for GLSL variable holding the SSS color.
+			 * @param radiusVariableName A reference to a string for GLSL variable holding the SSS scatter radius.
+			 * @return void
+			 */
+			void
+			declareSurfaceSubsurface (const std::string & intensityVariableName, const std::string & colorVariableName, const std::string & radiusVariableName) noexcept
+			{
+				m_surfaceSubsurfaceIntensity = intensityVariableName;
+				m_surfaceSubsurfaceColor = colorVariableName;
+				m_surfaceSubsurfaceRadius = radiusVariableName;
+				m_useSubsurface = true;
+			}
+
+			/**
+			 * @brief Declares the variable used by the fragment shader for the subsurface thickness map.
+			 * @param thicknessVariableName A reference to a string for GLSL variable holding per-pixel thickness.
+			 * @return void
+			 */
+			void
+			declareSurfaceSubsurfaceThickness (const std::string & thicknessVariableName) noexcept
+			{
+				m_surfaceSubsurfaceThickness = thicknessVariableName;
+				m_useSubsurfaceThicknessMap = true;
+			}
+
+			/**
+			 * @brief Declares the variables used by the fragment shader for the sheen layer.
+			 * @param colorVariableName A reference to a string for GLSL variable holding the sheen color.
+			 * @param roughnessVariableName A reference to a string for GLSL variable holding the sheen roughness.
+			 * @return void
+			 */
+			void
+			declareSurfaceSheen (const std::string & colorVariableName, const std::string & roughnessVariableName) noexcept
+			{
+				m_surfaceSheenColor = colorVariableName;
+				m_surfaceSheenRoughness = roughnessVariableName;
+				m_useSheen = true;
+			}
+
+			/**
+			 * @brief Declares surface anisotropy for anisotropic specular highlights.
+			 * @param anisotropyVariableName A reference to a string for GLSL variable holding the anisotropy value (-1..1).
+			 * @param rotationVariableName A reference to a string for GLSL variable holding the anisotropy rotation (0..1).
+			 * @return void
+			 */
+			void
+			declareSurfaceAnisotropy (const std::string & anisotropyVariableName, const std::string & rotationVariableName) noexcept
+			{
+				m_surfaceAnisotropy = anisotropyVariableName;
+				m_surfaceAnisotropyRotation = rotationVariableName;
+				m_useAnisotropy = true;
+			}
+
+			/**
+			 * @brief Declares per-pixel anisotropy direction from a texture (KHR_materials_anisotropy).
+			 * @param directionVariableName A reference to a string for GLSL vec2 variable holding the tangent-space direction.
+			 * @return void
+			 */
+			void
+			declareSurfaceAnisotropyDirection (const std::string & directionVariableName) noexcept
+			{
+				m_surfaceAnisotropyDirection = directionVariableName;
+			}
+
+			/**
+			 * @brief Declares the variables used by the fragment shader for PBR transmission.
+			 * @param factorVariableName A reference to a string for GLSL variable holding the transmission factor (0.0 = opaque, 1.0 = fully transmissive).
+			 * @param attenuationColorVariableName A reference to a string for GLSL variable holding the Beer's law attenuation color.
+			 * @param transmissionColorVariableName A reference to a string for GLSL variable holding the sampled transmission color (from cubemap).
+			 * @param attenuationDistanceVariableName A reference to a string for GLSL variable holding the Beer's law attenuation distance.
+			 * @param thicknessVariableName A reference to a string for GLSL variable holding the material thickness.
+			 * @return void
+			 */
+			void
+			declareSurfaceTransmission (const std::string & factorVariableName, const std::string & transmissionColorVariableName, const std::string & attenuationColorVariableName, const std::string & attenuationDistanceVariableName, const std::string & thicknessVariableName) noexcept
+			{
+				m_surfaceTransmissionFactor = factorVariableName;
+				m_surfaceTransmissionColor = transmissionColorVariableName;
+				m_surfaceAttenuationColor = attenuationColorVariableName;
+				m_surfaceAttenuationDistance = attenuationDistanceVariableName;
+				m_surfaceThicknessFactor = thicknessVariableName;
+				m_useTransmission = true;
+			}
+
+			/**
+			 * @brief Declares the variables used by the fragment shader for PBR iridescence (thin-film interference).
+			 * @param factorVariableName A reference to a string for GLSL variable holding the iridescence factor (0.0-1.0).
+			 * @param iorVariableName A reference to a string for GLSL variable holding the thin film IOR.
+			 * @param thicknessMinVariableName A reference to a string for GLSL variable holding the minimum film thickness (nm).
+			 * @param thicknessMaxVariableName A reference to a string for GLSL variable holding the maximum film thickness (nm).
+			 * @return void
+			 */
+			void
+			declareSurfaceIridescence (const std::string & factorVariableName, const std::string & iorVariableName, const std::string & thicknessMinVariableName, const std::string & thicknessMaxVariableName) noexcept
+			{
+				m_surfaceIridescenceFactor = factorVariableName;
+				m_surfaceIridescenceIOR = iorVariableName;
+				m_surfaceIridescenceThicknessMin = thicknessMinVariableName;
+				m_surfaceIridescenceThicknessMax = thicknessMaxVariableName;
+				m_useIridescence = true;
+			}
+
+			/**
+			 * @brief Declares the material IOR for physically-correct dielectric F0 computation.
+			 * @note When set, F0 = ((ior-1)/(ior+1))^2 replaces the default 0.04 for dielectrics (KHR_materials_ior).
+			 * @param iorVariableName The GLSL expression for the material IOR.
+			 */
+			void
+			declareSurfaceMaterialIOR (const std::string & iorVariableName) noexcept
+			{
+				m_surfaceMaterialIOR = iorVariableName;
+				m_useMaterialIOR = true;
+			}
+
+			/**
+			 * @brief Declares the variables used for KHR_materials_specular (factor + color tint for dielectric F0).
+			 * @param factorVariableName The GLSL expression for the specular factor.
+			 * @param colorVariableName The GLSL expression for the specular color factor (vec4).
+			 */
+			void
+			declareSurfaceKHRSpecular (const std::string & factorVariableName, const std::string & colorVariableName) noexcept
+			{
+				m_surfaceKHRSpecularFactor = factorVariableName;
+				m_surfaceKHRSpecularColor = colorVariableName;
+				m_useKHRSpecular = true;
+			}
+
+			/**
+			 * @brief Declares the emissive strength HDR multiplier (KHR_materials_emissive_strength).
+			 * @param variableName The GLSL expression for the emissive strength value.
+			 */
+			void
+			declareSurfaceEmissiveStrength (const std::string & variableName) noexcept
+			{
+				m_surfaceEmissiveStrength = variableName;
+			}
+
+			/**
 			 * @brief Returns the variable name of the produced fragment color.
 			 * @return const std::string &
 			 */
@@ -600,7 +765,7 @@ namespace EmEn::Saphir
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool generatePBRFragmentShader (Generator::Abstract & generator, FragmentShader & fragmentShader, Graphics::LightType lightType, bool enableShadowMap) const noexcept;
+			bool generatePBRFragmentShader (const Generator::Abstract & generator, FragmentShader & fragmentShader, Graphics::LightType lightType, bool enableShadowMap) const noexcept;
 
 			/**
 			 * @brief Generates the PBR BRDF helper functions (Fresnel, NDF, Geometry).
@@ -774,6 +939,37 @@ namespace EmEn::Saphir
 			std::string m_surfaceAutoIlluminationColor;
 			std::string m_surfaceAmbientOcclusion;
 			std::string m_surfaceAOIntensity;
+			std::string m_surfaceClearCoatFactor;
+			std::string m_surfaceClearCoatRoughness;
+			std::string m_surfaceClearCoatNormal;
+			/* SSS-specific variables. */
+			std::string m_surfaceSubsurfaceIntensity;
+			std::string m_surfaceSubsurfaceColor;
+			std::string m_surfaceSubsurfaceRadius;
+			std::string m_surfaceSubsurfaceThickness;
+			std::string m_surfaceSheenColor;
+			std::string m_surfaceSheenRoughness;
+			std::string m_surfaceAnisotropy;
+			std::string m_surfaceAnisotropyRotation;
+			std::string m_surfaceAnisotropyDirection;
+			/* Transmission-specific variables. */
+			std::string m_surfaceTransmissionFactor;
+			std::string m_surfaceTransmissionColor;
+			std::string m_surfaceAttenuationColor;
+			std::string m_surfaceAttenuationDistance;
+			std::string m_surfaceThicknessFactor;
+			/* Material IOR variable (KHR_materials_ior). */
+			std::string m_surfaceMaterialIOR;
+			/* Iridescence-specific variables. */
+			std::string m_surfaceIridescenceFactor;
+			std::string m_surfaceIridescenceIOR;
+			std::string m_surfaceIridescenceThicknessMin;
+			std::string m_surfaceIridescenceThicknessMax;
+			/* KHR_materials_specular variables. */
+			std::string m_surfaceKHRSpecularFactor;
+			std::string m_surfaceKHRSpecularColor;
+			/* KHR_materials_emissive_strength variable. */
+			std::string m_surfaceEmissiveStrength;
 			const StaticLighting * m_staticLighting{nullptr};
 			bool m_discardUnlitFragment{true};
 			bool m_useStaticLighting{false};
@@ -785,6 +981,15 @@ namespace EmEn::Saphir
 			bool m_usePBRMode{false};
 			bool m_useAutoIllumination{false};
 			bool m_useAmbientOcclusion{false};
+			bool m_useClearCoat{false};
+			bool m_useSubsurface{false};
+			bool m_useSubsurfaceThicknessMap{false};
+			bool m_useSheen{false};
+			bool m_useAnisotropy{false};
+			bool m_useTransmission{false};
+			bool m_useIridescence{false};
+			bool m_useKHRSpecular{false};
+			bool m_useMaterialIOR{false};
 			bool m_highQualityEnabled{false};
 			bool m_PCFEnabled{false};
 	};

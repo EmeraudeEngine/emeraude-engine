@@ -215,7 +215,7 @@ namespace EmEn::Libs::WaveFactory
 					return false;
 				}
 
-				sf_writef_short(file, wave.data().data(), static_cast< sf_count_t >(wave.data().size()));
+				sf_writef_short(file, wave.data().data(), static_cast< sf_count_t >(wave.sampleCount()));
 
 				sf_close(file);
 

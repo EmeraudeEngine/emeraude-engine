@@ -343,10 +343,10 @@ namespace EmEn::Saphir::Generator
 			Code{*fragmentShader, Location::Output} << ShaderVariable::OutputFragment << " = vec4(1.0, 0.0, 1.0, 1.0);";
 		}
 
-		/* TODO: Try to discard before ! */
+		/* Discard nearly transparent pixels to avoid blending artifacts. */
 		if ( this->materialEnabled() && this->getMaterialInterface()->blendingMode() != BlendingMode::None )
 		{
-			Code{*fragmentShader, Location::Output} << "if ( " << ShaderVariable::OutputFragment << ".a <= 0.0 ) discard;";
+			Code{*fragmentShader, Location::Output} << "if ( " << ShaderVariable::OutputFragment << ".a < 0.01 ) discard;";
 		}
 
 		return fragmentShader->generateSourceCode(*this);

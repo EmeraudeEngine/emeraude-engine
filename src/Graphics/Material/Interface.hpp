@@ -429,6 +429,46 @@ namespace EmEn::Graphics::Material
 			virtual BlendingMode blendingMode () const noexcept = 0;
 
 			/**
+			 * @brief Returns whether this material requires alpha-tested shadows.
+			 * @note Override this in derived classes that use alpha transparency.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			virtual bool
+			requiresAlphaTestedShadows () const noexcept
+			{
+				return false;
+			}
+
+			/**
+			 * @brief Generates shadow pass fragment shader code for alpha testing.
+			 * @note Override this in derived classes to sample texture and discard transparent pixels.
+			 * @param generator The shader generator.
+			 * @param fragmentShader The fragment shader to write to.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			virtual bool
+			generateShadowAlphaTestCode ([[maybe_unused]] const Saphir::Generator::Abstract & generator, [[maybe_unused]] Saphir::FragmentShader & fragmentShader) const noexcept
+			{
+				return true;
+			}
+
+			/**
+			 * @brief Generates vertex shader code for shadow pass (texture coordinates output).
+			 * @note Override this in derived classes that need texture coordinates in shadow pass.
+			 * @param generator The shader generator.
+			 * @param vertexShader The vertex shader to write to.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			virtual bool
+			generateShadowVertexCode ([[maybe_unused]] const Saphir::Generator::Abstract & generator, [[maybe_unused]] Saphir::VertexShader & vertexShader) const noexcept
+			{
+				return true;
+			}
+
+			/**
 			 * @brief Returns the variables or the code to get the fragment color produced by this material.
 			 * @note This is used for the final color without a further effect application such as lighting.
 			 * @return std::string

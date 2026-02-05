@@ -408,6 +408,51 @@ namespace EmEn::Graphics::Material
 	}
 
 	bool
+	StandardResource::parseHeightComponent (const Json::Value & data, Resources::AbstractServiceProvider & serviceProvider) noexcept
+	{
+		FillingType fillingType{};
+		Json::Value componentData{};
+
+		if ( !parseComponentBase(data, HeightString, fillingType, componentData, true) )
+		{
+			return false;
+		}
+
+		switch ( fillingType )
+		{
+			case FillingType::Gradient :
+			case FillingType::Texture :
+			case FillingType::VolumeTexture :
+			case FillingType::Cubemap :
+			case FillingType::AnimatedTexture :
+			{
+				const auto result = m_components.emplace(ComponentType::Displacement, std::make_unique< Texture >(Uniform::HeightSampler, SurfaceHeightValue, componentData, fillingType, serviceProvider));
+
+				if ( !result.second || result.first->second == nullptr )
+				{
+					return false;
+				}
+
+				this->enableFlag(TextureEnabled);
+				this->enableFlag(UsePrimaryTextureCoordinates);
+
+				m_useParallaxOcclusionMapping = true;
+
+				this->setHeightScale(FastJSON::getValue< float >(data[HeightString], JKScale).value_or(DefaultHeightScale));
+			}
+				return true;
+
+			case FillingType::None :
+				return true;
+
+			default:
+				TraceError{ClassId} << "Invalid filling type for material '" << this->name() << "' resource height component !";
+
+				return false;
+		}
+	}
+
+	bool
 	StandardResource::parseReflectionComponent (const Json::Value & data, Resources::AbstractServiceProvider & serviceProvider) noexcept
 	{
 		FillingType fillingType{};
@@ -544,6 +589,12 @@ namespace EmEn::Graphics::Material
 			return this->setLoadSuccess(false);
 		}
 
+		/* Parse optional emissive strength value (KHR_materials_emissive_strength). */
+		if ( data.isMember(EmissiveStrengthString) )
+		{
+			m_materialProperties[EmissiveStrengthOffset] = std::max(0.0F, FastJSON::getValue< float >(data, EmissiveStrengthString).value_or(DefaultEmissiveStrength));
+		}
+
 		if ( !this->parseOpacityComponent(data, serviceProvider) )
 		{
 			TraceError{ClassId} << "Error while parsing the opacity component for material '" << this->name() << "' resource from JSON file !" "\n" "Data : " << data;
@@ -554,6 +605,13 @@ namespace EmEn::Graphics::Material
 		if ( !this->parseNormalComponent(data, serviceProvider) )
 		{
 			TraceError{ClassId} << "Error while parsing the normal component for material '" << this->name() << "' resource from JSON file !" "\n" "Data : " << data;
+
+			return this->setLoadSuccess(false);
+		}
+
+		if ( !this->parseHeightComponent(data, serviceProvider) )
+		{
+			TraceError{ClassId} << "Error while parsing the height component for material '" << this->name() << "' resource from JSON file !" "\n" "Data : " << data;
 
 			return this->setLoadSuccess(false);
 		}
@@ -835,8 +893,10 @@ namespace EmEn::Graphics::Material
 			DefaultAutoIlluminationColor.red(), DefaultAutoIlluminationColor.green(), DefaultAutoIlluminationColor.blue(), DefaultAutoIlluminationColor.alpha(),
 			/* Shininess (1), Opacity (1), AutoIlluminationColor (1), NormalScale (1). */
 			DefaultShininess, DefaultOpacity, DefaultAutoIlluminationAmount, DefaultNormalScale,
-			/* ReflectionAmount (1), RefractionAmount (1), RefractionIOR (1), Unused (1). */
-			DefaultReflectionAmount, DefaultRefractionAmount, DefaultRefractionIOR, 0.0F
+			/* ReflectionAmount (1), RefractionAmount (1), RefractionIOR (1), HeightScale (1). */
+			DefaultReflectionAmount, DefaultRefractionAmount, DefaultRefractionIOR, DefaultHeightScale,
+			/* EmissiveStrength (1) + padding (3) for STD140 alignment */
+			DefaultEmissiveStrength, 0.0F, 0.0F, 0.0F
 		};
 		m_descriptorSetLayout.reset();
 		m_descriptorSet.reset();
@@ -847,7 +907,7 @@ namespace EmEn::Graphics::Material
 	bool
 	StandardResource::isComplex () const noexcept
 	{
-		return this->isComponentPresent(ComponentType::Reflection) || this->isComponentPresent(ComponentType::Refraction) || m_isUsingEnvironmentCubemap || m_isUsingEnvironmentCubemapForRefraction;
+		return this->isComponentPresent(ComponentType::Reflection) || this->isComponentPresent(ComponentType::Refraction) || m_isUsingEnvironmentCubemap || m_isUsingEnvironmentCubemapForRefraction || m_useParallaxOcclusionMapping;
 	}
 
 	const Physics::SurfacePhysicalProperties &
@@ -1000,6 +1060,9 @@ namespace EmEn::Graphics::Material
 			}
 		}
 
+		/* Emissive Strength (KHR_materials_emissive_strength). */
+		lightGenerator.declareSurfaceEmissiveStrength(MaterialUB(UniformBlock::Component::EmissiveStrength));
+
 		/* Normal component */
 		if ( !lightGenerator.isAmbientPass() )
 		{
@@ -1151,6 +1214,8 @@ namespace EmEn::Graphics::Material
 		block.addMember(Declaration::VariableType::Float, UniformBlock::Component::ReflectionAmount);
 		block.addMember(Declaration::VariableType::Float, UniformBlock::Component::RefractionAmount);
 		block.addMember(Declaration::VariableType::Float, UniformBlock::Component::RefractionIOR);
+		block.addMember(Declaration::VariableType::Float, UniformBlock::Component::HeightScale);
+		block.addMember(Declaration::VariableType::Float, UniformBlock::Component::EmissiveStrength);
 
 		return block;
 	}
@@ -1296,6 +1361,25 @@ namespace EmEn::Graphics::Material
 			}
 		}
 
+		/* Parallax Occlusion Mapping vertex requirements.
+		 * NOTE: POM needs TangentToWorldMatrix, PositionWorldSpace, and CameraWorldPosition in the fragment shader.
+		 * If Reflection/Refraction already requested them, this is a no-op for the synthesize calls. */
+		if ( m_useParallaxOcclusionMapping && generator.pomIterations() > 0 )
+		{
+			vertexShader.requestSynthesizeInstruction(ShaderVariable::PositionWorldSpace);
+			vertexShader.requestSynthesizeInstruction(ShaderVariable::TangentToWorldMatrix);
+
+			/* CameraWorldPosition stage output (if not already declared by Reflection/Refraction). */
+			if ( !this->isComponentPresent(ComponentType::Reflection) && !m_isUsingEnvironmentCubemap
+				&& !this->isComponentPresent(ComponentType::Refraction) && !m_isUsingEnvironmentCubemapForRefraction )
+			{
+				vertexShader.declare(Declaration::StageOutput{generator.getNextShaderVariableLocation(), GLSL::FloatVector3, "CameraWorldPosition", GLSL::Flat});
+
+				Code(vertexShader) <<
+					"CameraWorldPosition = " << ViewUB(UniformBlock::Component::PositionWorldSpace, false) << ".xyz;";
+			}
+		}
+
 		return true;
 	}
 
@@ -1321,11 +1405,19 @@ namespace EmEn::Graphics::Material
 	}
 
 	const char *
-	StandardResource::textCoords (const Texture * component) noexcept
+	StandardResource::textCoords (const Texture * component) const noexcept
 	{
-		return component->isVolumetricTexture() ?
-			ShaderVariable::Primary3DTextureCoordinates :
-			ShaderVariable::Primary2DTextureCoordinates;
+		if ( component->isVolumetricTexture() )
+		{
+			return ShaderVariable::Primary3DTextureCoordinates;
+		}
+
+		if ( m_pomGenerationActive )
+		{
+			return ShaderVariable::ParallaxTextureCoordinates;
+		}
+
+		return ShaderVariable::Primary2DTextureCoordinates;
 	}
 
 	bool
@@ -1347,12 +1439,62 @@ namespace EmEn::Graphics::Material
 
 		const uint32_t materialSet = generator.shaderProgram()->setIndex(SetType::PerModelLayer);
 
+		/* Parallax Occlusion Mapping (Height component).
+		 * NOTE: Must be generated FIRST, before any other texture sampling, so that
+		 * all subsequent texture() calls use the parallax-displaced UVs (pomTexCoords).
+		 * When POM iterations is 0, POM is completely disabled and textCoords() returns original UVs. */
+		m_pomGenerationActive = m_useParallaxOcclusionMapping && generator.pomIterations() > 0;
+
+		if ( m_pomGenerationActive )
+		{
+			const auto maxPOMIterations = generator.pomIterations();
+			const auto minPOMIterations = std::max(maxPOMIterations / 4, 2);
+
+			if ( !this->generateTextureComponentFragmentShader(ComponentType::Displacement, [this, maxPOMIterations, minPOMIterations] (FragmentShader & shader, const Texture * component) {
+				/* Inline POM ray-marching directly in main().
+				 * NOTE: Cannot use Declaration::Function because functions are emitted before
+				 * sampler declarations in the generated GLSL, causing 'undeclared identifier' errors. */
+				Code{shader, Location::Top} <<
+					"vec3 pomViewDir = normalize(transpose(" << ShaderVariable::TangentToWorldMatrix << ") * (CameraWorldPosition - " << ShaderVariable::PositionWorldSpace << ".xyz));" << Line::End <<
+					"vec2 " << ShaderVariable::ParallaxTextureCoordinates << ";" << Line::End <<
+					"{" << Line::End <<
+					"  int numLayers = clamp(int(mix(" << std::to_string(maxPOMIterations) << ".0, " << std::to_string(minPOMIterations) << ".0, max(dot(vec3(0.0, 0.0, 1.0), pomViewDir), 0.0))), " << std::to_string(minPOMIterations) << ", " << std::to_string(maxPOMIterations) << ");" << Line::End <<
+					"  float layerDepth = 1.0 / float(numLayers);" << Line::End <<
+					"  float currentLayerDepth = 0.0;" << Line::End <<
+					"  vec2 deltaTexCoords = pomViewDir.xy * " << MaterialUB(UniformBlock::Component::HeightScale) << " / float(numLayers);" << Line::End <<
+					"  vec2 currentTexCoords = " << ShaderVariable::Primary2DTextureCoordinates << ";" << Line::End <<
+					"  float currentDepthMapValue = 1.0 - texture(" << component->samplerName() << ", currentTexCoords).r;" << Line::End <<
+					"  for (int i = 0; i < " << std::to_string(maxPOMIterations) << "; i++) {" << Line::End <<
+					"    if (currentLayerDepth >= currentDepthMapValue) break;" << Line::End <<
+					"    currentTexCoords -= deltaTexCoords;" << Line::End <<
+					"    currentDepthMapValue = 1.0 - texture(" << component->samplerName() << ", currentTexCoords).r;" << Line::End <<
+					"    currentLayerDepth += layerDepth;" << Line::End <<
+					"  }" << Line::End <<
+					"  vec2 prevTexCoords = currentTexCoords + deltaTexCoords;" << Line::End <<
+					"  float afterDepth = currentDepthMapValue - currentLayerDepth;" << Line::End <<
+					"  float beforeDepth = 1.0 - texture(" << component->samplerName() << ", prevTexCoords).r - currentLayerDepth + layerDepth;" << Line::End <<
+					"  float denom = afterDepth - beforeDepth;" << Line::End <<
+					"  float weight = (abs(denom) > 0.0001) ? clamp(afterDepth / denom, 0.0, 1.0) : 0.5;" << Line::End <<
+					"  " << ShaderVariable::ParallaxTextureCoordinates << " = prevTexCoords * weight + currentTexCoords * (1.0 - weight);" << Line::End <<
+					"}";
+
+				return true;
+			}, fragmentShader, materialSet) )
+			{
+				TraceError{ClassId} << "Unable to generate fragment code for the height/POM component of material '" << this->name() << "' !";
+
+				return false;
+			}
+		}
+
 		/* Normal component.
 		 * NOTE: Get a sample from a texture in range [0,1], convert it to a normalized range of [-1, 1]. */
 		if ( this->isComponentPresent(ComponentType::Reflection) || m_isUsingEnvironmentCubemap || !lightGenerator.isAmbientPass() )
 		{
-			if ( !this->generateTextureComponentFragmentShader(ComponentType::Normal, [] (FragmentShader & shader, const Texture * component) {
-				Code{shader, Location::Top} << "const vec3 " << component->variableName() << " = normalize(texture(" << component->samplerName() << ", " << textCoords(component) << ").rgb * 2.0 - 1.0);";
+			if ( !this->generateTextureComponentFragmentShader(ComponentType::Normal, [this] (FragmentShader & shader, const Texture * component) {
+				Code{shader, Location::Top} <<
+					"const vec3 " << component->variableName() << "_raw = texture(" << component->samplerName() << ", " << textCoords(component) << ").rgb * 2.0 - 1.0;" << Line::End <<
+					"const vec3 " << component->variableName() << " = normalize(vec3(" << component->variableName() << "_raw.xy * " << MaterialUB(UniformBlock::Component::NormalScale) << ", " << component->variableName() << "_raw.z));";
 
 				return true;
 			}, fragmentShader, materialSet) )
@@ -1365,7 +1507,7 @@ namespace EmEn::Graphics::Material
 
 		/* Ambient, Diffuse and Specular components. */
 		{
-			auto simpleGenerator = [] (FragmentShader & shader, const Texture * component) {
+			auto simpleGenerator = [this] (FragmentShader & shader, const Texture * component) {
 				Code{shader, Location::Top} << "const vec4 " << component->variableName() << " = texture(" << component->samplerName() << ", " << textCoords(component) << ");";
 
 				return true;
@@ -1411,7 +1553,7 @@ namespace EmEn::Graphics::Material
 		}
 
 		/* Auto-illumination component. */
-		if ( !this->generateTextureComponentFragmentShader(ComponentType::AutoIllumination, [] (FragmentShader & shader, const Texture * component) {
+		if ( !this->generateTextureComponentFragmentShader(ComponentType::AutoIllumination, [this] (FragmentShader & shader, const Texture * component) {
 			Code{shader, Location::Top} << "const vec4 " << component->variableName() << " = texture(" << component->samplerName() << ", " << textCoords(component) << ") * " << MaterialUB(UniformBlock::Component::AutoIlluminationAmount) << ';';
 
 			return true;
@@ -2045,6 +2187,50 @@ namespace EmEn::Graphics::Material
 	}
 
 	bool
+	StandardResource::setHeightComponent (const std::shared_ptr< TextureResource::Abstract > & texture, float scale) noexcept
+	{
+		if ( this->isCreated() )
+		{
+			TraceWarning{ClassId} <<
+				"The resource '" << this->name() << "' is created ! "
+				"Unable to create or change the height component.";
+
+			return false;
+		}
+
+		const auto result = m_components.emplace(ComponentType::Displacement, std::make_unique< Texture >(Uniform::HeightSampler, SurfaceHeightValue, texture));
+
+		if ( !result.second || result.first->second == nullptr )
+		{
+			return false;
+		}
+
+		if ( !this->addDependency(texture) )
+		{
+			TraceError{ClassId} << "Unable to link the texture '" << texture->name() << "' dependency to material '" << this->name() << "' for height component !";
+
+			return false;
+		}
+
+		this->enableFlag(TextureEnabled);
+		this->enableFlag(UsePrimaryTextureCoordinates);
+
+		m_useParallaxOcclusionMapping = true;
+
+		this->setHeightScale(scale);
+
+		return true;
+	}
+
+	void
+	StandardResource::setHeightScale (float value) noexcept
+	{
+		m_materialProperties[HeightScaleOffset] = value;
+
+		m_videoMemoryUpdated = true;
+	}
+
+	bool
 	StandardResource::setReflectionComponent (const std::shared_ptr< TextureResource::Abstract > & texture, float amount) noexcept
 	{
 		if ( this->isCreated() )
@@ -2408,6 +2594,33 @@ namespace EmEn::Graphics::Material
 		/* NOTE: IOR typically ranges from 1.0 (vacuum) to ~2.5 (diamond).
 		 * Common values: air=1.0003, water=1.33, glass=1.5, diamond=2.42 */
 		m_materialProperties[RefractionIOROffset] = std::clamp(value, 1.0F, 3.0F);
+
+		m_videoMemoryUpdated = true;
+	}
+
+	/* ==================== Emissive Strength Component (KHR_materials_emissive_strength) ==================== */
+
+	bool
+	StandardResource::setEmissiveStrength (float strength) noexcept
+	{
+		if ( this->isCreated() )
+		{
+			TraceWarning{ClassId} <<
+				"The resource '" << this->name() << "' is created ! "
+				"Unable to change the emissive strength.";
+
+			return false;
+		}
+
+		m_materialProperties[EmissiveStrengthOffset] = std::max(0.0F, strength);
+
+		return true;
+	}
+
+	void
+	StandardResource::setEmissiveStrengthValue (float value) noexcept
+	{
+		m_materialProperties[EmissiveStrengthOffset] = std::max(0.0F, value);
 
 		m_videoMemoryUpdated = true;
 	}

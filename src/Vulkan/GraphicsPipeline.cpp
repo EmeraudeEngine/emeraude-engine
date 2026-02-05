@@ -402,6 +402,32 @@ namespace EmEn::Vulkan
 	}
 
 	bool
+	GraphicsPipeline::configureMultisampleState (uint32_t sampleCount, VkPipelineMultisampleStateCreateFlags flags) noexcept
+	{
+		if ( sampleCount < 1 )
+		{
+			Tracer::warning(ClassId, "Invalid sample count requested !");
+
+			return false;
+		}
+
+		m_multisampleState.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+		m_multisampleState.pNext = nullptr;
+		m_multisampleState.flags = flags;
+		m_multisampleState.rasterizationSamples = Device::getSampleCountFlag(sampleCount);
+		m_multisampleState.sampleShadingEnable = VK_FALSE;
+		m_multisampleState.minSampleShading = 1.0F;
+		m_multisampleState.pSampleMask = nullptr;
+		m_multisampleState.alphaToCoverageEnable = VK_FALSE;
+		m_multisampleState.alphaToOneEnable = VK_FALSE;
+
+		/* Adds to the pipeline createInfo. */
+		m_createInfo.pMultisampleState = &m_multisampleState;
+
+		return true;
+	}
+
+	bool
 	GraphicsPipeline::configureDepthStencilState (RenderPassType renderPassType, const RenderableInstance::Abstract & renderableInstance, VkPipelineDepthStencilStateCreateFlags flags) noexcept
 	{
 		// FIXME: Check the render pass type to influence depth test (light code)
@@ -565,7 +591,9 @@ namespace EmEn::Vulkan
 
 			switch ( renderPassType )
 			{
-				/* NOTE: This will perform a light color addition over the ambient pass. */
+				/* NOTE: This will perform a light color addition over the ambient pass.
+				 * For transparent materials, we modulate the light contribution by source alpha
+				 * to properly blend lighting with transparency. */
 				case RenderPassType::DirectionalLightPass:
 				case RenderPassType::DirectionalLightPassNoShadow:
 				case RenderPassType::PointLightPass:
@@ -574,9 +602,28 @@ namespace EmEn::Vulkan
 				case RenderPassType::SpotLightPassNoShadow:
 					m_colorBlendAttachments[0].blendEnable = VK_TRUE;
 
-					m_colorBlendAttachments[0].srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
-					m_colorBlendAttachments[0].dstColorBlendFactor = VK_BLEND_FACTOR_ONE;
-					m_colorBlendAttachments[0].colorBlendOp = VK_BLEND_OP_ADD;
+					if ( material.isOpaque() )
+					{
+						/* Opaque materials: simple additive blending for light accumulation. */
+						m_colorBlendAttachments[0].srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
+						m_colorBlendAttachments[0].dstColorBlendFactor = VK_BLEND_FACTOR_ONE;
+						m_colorBlendAttachments[0].colorBlendOp = VK_BLEND_OP_ADD;
+
+						m_colorBlendAttachments[0].srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+						m_colorBlendAttachments[0].dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+						m_colorBlendAttachments[0].alphaBlendOp = VK_BLEND_OP_ADD;
+					}
+					else
+					{
+						/* Transparent materials: modulate light contribution by alpha. */
+						m_colorBlendAttachments[0].srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+						m_colorBlendAttachments[0].dstColorBlendFactor = VK_BLEND_FACTOR_ONE;
+						m_colorBlendAttachments[0].colorBlendOp = VK_BLEND_OP_ADD;
+
+						m_colorBlendAttachments[0].srcAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+						m_colorBlendAttachments[0].dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+						m_colorBlendAttachments[0].alphaBlendOp = VK_BLEND_OP_ADD;
+					}
 					break;
 
 				default:

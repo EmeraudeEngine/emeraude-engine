@@ -41,6 +41,7 @@
 #include "Overlay/Manager.hpp"
 #include "PrimaryServices.hpp"
 #include "DummyShadowTexture.hpp"
+#include "GrabPass.hpp"
 
 namespace EmEn::Graphics
 {
@@ -241,9 +242,17 @@ namespace EmEn::Graphics
 		}
 		else
 		{
-			TraceWarning{ClassId} <<
-				m_externalInput.name() << " service failed to execute!" "\n"
-				"No video input available!";
+			TraceWarning{ClassId} << m_recorder.name() << " service failed or disabled at startup!";
+		}
+
+		/* Initialize video recorder. */
+		if ( m_recorder.initialize(m_subServicesEnabled) )
+		{
+			TraceSuccess{ClassId} << m_recorder.name() << " service up!";
+		}
+		else
+		{
+			TraceWarning{ClassId} << m_recorder.name() << " service failed or disabled at startup!";
 		}
 
 		return true;
@@ -295,6 +304,12 @@ namespace EmEn::Graphics
 	void
 	Renderer::clearDefaultResources () noexcept
 	{
+		if ( m_grabPass != nullptr )
+		{
+			m_grabPass->destroy();
+			m_grabPass.reset();
+		}
+
 		if ( m_dummyShadowTextureCube != nullptr )
 		{
 			m_dummyShadowTextureCube->destroy();
@@ -374,13 +389,18 @@ namespace EmEn::Graphics
 		if ( m_windowLess )
 		{
 			const auto viewDistance = m_primaryServices.settings().getOrSetDefault< float >(GraphicsViewDistanceKey, DefaultGraphicsViewDistance);
-			auto sampleCount = m_primaryServices.settings().getOrSetDefault< uint32_t >(VideoFramebufferSamplesKey, DefaultVideoFramebufferSamples);
 
-			/* NOTE: Check for multisampling. */
+			/* NOTE: Windowless mode uses single-sample only. renderOffscreenFrame() has a single
+			 * render pass, so the overlay pipeline (created for single-sample) must match.
+			 * TODO: Add a two-pass structure (scene MSAA -> resolve -> overlay single-sample)
+			 * to renderOffscreenFrame() to support MSAA for quality screenshots. */
+			constexpr uint32_t sampleCount = 1;
+			/*auto sampleCount = m_primaryServices.settings().getOrSetDefault< uint32_t >(VideoFramebufferSamplesKey, DefaultVideoFramebufferSamples);
+
 			if ( sampleCount > 1 )
 			{
 				sampleCount = m_device->checkMultisampleCount(sampleCount);
-			}
+			}*/
 
 			m_windowLessView = std::make_shared< RenderTarget::View< ViewMatrices2DUBO > >(
 				"WindowLessView",
@@ -485,7 +505,27 @@ namespace EmEn::Graphics
 
 		this->registerToConsole();
 
-		m_isUsable = true;
+		/* Create the grab pass texture (initially disabled, but pre-allocated). */
+		if ( m_swapChain != nullptr )
+		{
+			const auto & swapChainCreateInfo = m_swapChain->createInfo();
+
+			m_grabPass = std::make_unique< GrabPass >();
+
+			if ( m_grabPass->create(*this, swapChainCreateInfo.imageExtent.width, swapChainCreateInfo.imageExtent.height, swapChainCreateInfo.imageFormat) )
+			{
+				if ( m_bindlessTextureManager.usable() )
+				{
+					static_cast< void >(m_bindlessTextureManager.updateTexture2D(BindlessTextureManager::GrabPassSlot, *m_grabPass));
+				}
+			}
+			else
+			{
+				TraceError{ClassId} << "Unable to create the grab pass texture !";
+
+				m_grabPass.reset();
+			}
+		}
 
 		return true;
 	}
@@ -590,6 +630,17 @@ namespace EmEn::Graphics
 		return m_swapChain;
 	}
 
+	std::shared_ptr< Image >
+	Renderer::currentSwapChainColorImage () const noexcept
+	{
+		if ( m_swapChain != nullptr )
+		{
+			return m_swapChain->currentColorImage();
+		}
+
+		return nullptr;
+	}
+
 	std::shared_ptr< Sampler >
 	Renderer::getSampler (const std::string & identifier, const std::function< void (Settings & settings, VkSamplerCreateInfo &) > & setupCreateInfo) noexcept
 	{
@@ -647,10 +698,17 @@ namespace EmEn::Graphics
 
 	[[nodiscard]]
 	bool
-	Renderer::finalizeGraphicsPipeline (const RenderTarget::Abstract & renderTarget, const Program & program, std::shared_ptr< GraphicsPipeline > & graphicsPipeline) noexcept
+	Renderer::finalizeGraphicsPipeline (const Framebuffer & framebuffer, const Program & program, std::shared_ptr< GraphicsPipeline > & graphicsPipeline) noexcept
 	{
-		const auto & renderPass = renderTarget.framebuffer()->renderPass();
-		const auto hash = graphicsPipeline->getHash(*renderPass);
+		const auto & renderPass = framebuffer.renderPass();
+		auto hash = graphicsPipeline->getHash(*renderPass);
+
+		/* Include the pipeline layout handle in the hash to prevent sharing
+		 * pipelines across programs with different descriptor set layouts. */
+		if ( const auto & pipelineLayout = program.pipelineLayout(); pipelineLayout != nullptr )
+		{
+			hash ^= reinterpret_cast< uintptr_t >(pipelineLayout->handle()) + 0x9e3779b9 + (hash << 6) + (hash >> 2);
+		}
 
 		if ( const auto pipelineIt = m_graphicsPipelines.find(hash); pipelineIt != m_graphicsPipelines.cend() )
 		{
@@ -669,6 +727,24 @@ namespace EmEn::Graphics
 		m_pipelineBuiltCount++;
 
 		return m_graphicsPipelines.emplace(hash, graphicsPipeline).second;
+	}
+
+	[[nodiscard]]
+	bool
+	Renderer::finalizeGraphicsPipeline (const RenderTarget::Abstract & renderTarget, const Program & program, std::shared_ptr< GraphicsPipeline > & graphicsPipeline) noexcept
+	{
+		return this->finalizeGraphicsPipeline(*renderTarget.framebuffer(), program, graphicsPipeline);
+	}
+
+	const Framebuffer *
+	Renderer::overlayFramebuffer () const noexcept
+	{
+		if ( m_windowLess )
+		{
+			return m_windowLessView != nullptr ? m_windowLessView->framebuffer() : nullptr;
+		}
+
+		return m_swapChain != nullptr ? m_swapChain->postProcessFramebuffer() : nullptr;
 	}
 
 	std::shared_ptr< Saphir::Program >
@@ -701,238 +777,283 @@ namespace EmEn::Graphics
 	}
 
 	void
-	Renderer::renderFrame (const std::shared_ptr< Scenes::Scene > & scene, const Overlay::Manager & overlayManager) noexcept
+	Renderer::renderOffscreenFrame (const std::shared_ptr< Scenes::Scene > & scene, const Overlay::Manager & overlayManager) noexcept
 	{
-		/* NOTE: Do not produce new frames if shutdown has been requested. */
-		if ( m_shutdownRequested )
-		{
-			return;
-		}
-
 		/* NOTE: Record frame start time for the optional frame limiter. */
 		if ( m_frameDuration.count() > 0 )
 		{
 			m_frameStartTime = std::chrono::high_resolution_clock::now();
 		}
 
-		if ( m_windowLess )
+		auto & currentFrameScope = m_rendererFrameScope[0];
+
+		/* NOTE: Wait for the current frame to complete. */
+		if ( currentFrameScope.inFlightFence()->waitAndReset(m_timeout) )
 		{
-			auto & currentFrameScope = m_rendererFrameScope[0];
+			m_statistics.stop();
 
-			/* NOTE: Wait for the current frame to complete. */
-			if ( currentFrameScope.inFlightFence()->waitAndReset(m_timeout) )
-			{
-				m_statistics.stop();
-
-				currentFrameScope.prepareForNewFrame();
-			}
-			else
-			{
-				TraceError{ClassId} << "Something wrong happens while waiting the fence for image!";
-
-				std::abort();
-
-				return;
-			}
-
-			m_statistics.start();
-
-			/* NOTE: Offscreen rendering */
-			if ( scene != nullptr )
-			{
-				if ( this->isShadowMapsEnabled() )
-				{
-					/* [VULKAN-SHADOW] */
-					this->renderShadowMaps(currentFrameScope, *scene);
-				}
-
-				if ( this->isRenderToTexturesEnabled() )
-				{
-					this->renderRenderToTextures(currentFrameScope, *scene);
-				}
-
-				//this->renderViews(currentFrameScope, *scene);
-			}
-
-			const auto * queue = this->device()->getGraphicsQueue(QueuePriority::High);
-
-			/* Then we need the command buffer linked to this image by its index. */
-			const auto commandBuffer = currentFrameScope.getCommandBuffer(m_windowLessView.get());
-
-			if ( !commandBuffer->begin() )
-			{
-				return;
-			}
-
-			commandBuffer->beginRenderPass(*m_windowLessView->framebuffer(), m_windowLessView->renderArea(), m_clearColors, VK_SUBPASS_CONTENTS_INLINE);
-
-			/* First, render the scene. */
-			if ( scene != nullptr )
-			{
-				scene->render(m_windowLessView, *commandBuffer);
-			}
-
-			/* Then render the overlay system over the 3D-rendered scene. */
-			overlayManager.render(m_windowLessView, *commandBuffer);
-
-			commandBuffer->endRenderPass();
-
-			if ( !commandBuffer->end() )
-			{
-				return;
-			}
-
-			const StaticVector< VkPipelineStageFlags, 16 > waitStages(
-				currentFrameScope.secondarySemaphores().size(),
-				VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT
-			);
-
-			const auto submitResult = queue->submit(
-				*commandBuffer,
-				SynchInfo{}
-					.waits(currentFrameScope.secondarySemaphores(), waitStages)
-					.withFence(currentFrameScope.inFlightFence()->handle())
-			);
-
-			if ( !submitResult )
-			{
-				TraceError{ClassId} << "Unable to submit command buffer for render target '" << m_windowLessView->id() << "' !";
-
-				return;
-			}
+			currentFrameScope.prepareForNewFrame();
 		}
 		else
 		{
-			/* 1. If the swap-chain was marked degraded, we discard the next frame until we get back a valid swap-chain. */
-			if ( this->isSwapChainDegraded() )
-			{
-				/* NOTE: Let's try to recreate every new frame and Core decide what to do with the renderer. */
-				if ( !this->recreateRenderingSubSystem(false, false) )
-				{
-					Tracer::fatal(ClassId, "Unable to refresh the swap-chain!");
+			TraceError{ClassId} << "Something wrong happens while waiting the fence for image!";
 
-					m_isUsable = false;
-				}
+			std::abort();
 
-				/* Let this image drop. */
-				return;
-			}
-
-			auto & currentFrameScope = m_rendererFrameScope[m_currentFrameIndex];
-
-			/* 2. Wait for the previous use of this frame's resources to complete. */
-			if ( currentFrameScope.inFlightFence()->wait(m_timeout) )
-			{
-				m_statistics.stop();
-
-				currentFrameScope.prepareForNewFrame();
-			}
-			else
-			{
-				TraceError{ClassId} << "Something wrong happens while waiting the fence for image #" << m_currentFrameIndex << '!';
-
-				std::abort();
-
-				return;
-			}
-
-			/* 3. Get the new frame to render to. */
-			const auto frameIndexOpt = m_swapChain->acquireNextImage(currentFrameScope.imageAvailableSemaphore(), m_timeout);
-
-			if ( !frameIndexOpt )
-			{
-				return;
-			}
-
-			/* 4. Reset the fence. */
-			if ( !currentFrameScope.inFlightFence()->reset() )
-			{
-				TraceError{ClassId} << "Something wrong happens while reset the fence for image #" << m_currentFrameIndex << '!';
-
-				return;
-			}
-
-			/* 5. The new frame rendering is starting now. */
-			m_statistics.start();
-
-			const uint32_t frameIndex = frameIndexOpt.value();
-
-			/* NOTE: Offscreen rendering */
-			if ( scene != nullptr )
-			{
-				if ( this->isShadowMapsEnabled() )
-				{
-					/* [VULKAN-SHADOW] */
-					this->renderShadowMaps(currentFrameScope, *scene);
-				}
-
-				if ( this->isRenderToTexturesEnabled() )
-				{
-					this->renderRenderToTextures(currentFrameScope, *scene);
-				}
-
-				//this->renderViews(currentFrameScope, *scene);
-			}
-
-			/* Then we need the command buffer linked to this image by its index. */
-			const auto commandBuffer = currentFrameScope.getCommandBuffer(m_swapChain.get());
-
-			if ( !commandBuffer->begin() )
-			{
-				return;
-			}
-
-			commandBuffer->beginRenderPass(*m_swapChain->framebuffer(), m_swapChain->renderArea(), m_clearColors, VK_SUBPASS_CONTENTS_INLINE);
-
-			/* First, render the scene. */
-			if ( scene != nullptr )
-			{
-				scene->render(m_swapChain, *commandBuffer);
-			}
-
-			/* Then render the overlay system over the 3D-rendered scene. */
-			overlayManager.render(m_swapChain, *commandBuffer);
-
-			commandBuffer->endRenderPass();
-
-			if ( !commandBuffer->end() )
-			{
-				return;
-			}
-
-			/* 6. Submit the work on the GPU and present. */
-			{
-				const auto * queue = this->device()->getGraphicsQueue(QueuePriority::High);
-
-				/* Build wait stages: FRAGMENT_SHADER for render-to-textures, COLOR_ATTACHMENT_OUTPUT for swapchain */
-				StaticVector< VkPipelineStageFlags, 16 > waitStages;
-
-				/* All render-to-texture semaphores wait at FRAGMENT_SHADER stage (when we sample the texture) */
-				for ( size_t i = 0; i < currentFrameScope.secondarySemaphores().size(); ++i )
-				{
-					waitStages.emplace_back(VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
-				}
-
-				/* Add swap-chain image available semaphore and wait at COLOR_ATTACHMENT_OUTPUT stage */
-				currentFrameScope.secondarySemaphores().emplace_back(currentFrameScope.imageAvailableSemaphore()->handle());
-				waitStages.emplace_back(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
-
-				auto renderFinishedSemaphoreHandle = currentFrameScope.renderFinishedSemaphore()->handle();
-
-				if ( !queue->submit(*commandBuffer, SynchInfo{}
-						.waits(currentFrameScope.secondarySemaphores(), waitStages)
-						.signals({&renderFinishedSemaphoreHandle, 1})
-						.withFence(currentFrameScope.inFlightFence()->handle())
-					) )
-				{
-					return;
-				}
-
-				m_swapChain->present(frameIndex, queue, renderFinishedSemaphoreHandle);
-			}
-
-			m_currentFrameIndex = (m_currentFrameIndex + 1) % m_rendererFrameScope.size();
+			return;
 		}
+
+		m_statistics.start();
+
+		/* NOTE: Offscreen rendering */
+		if ( scene != nullptr )
+		{
+			if ( this->isShadowMapsEnabled() )
+			{
+				/* [VULKAN-SHADOW] */
+				this->renderShadowMaps(currentFrameScope, *scene);
+			}
+
+			if ( this->isRenderToTexturesEnabled() )
+			{
+				this->renderRenderToTextures(currentFrameScope, *scene);
+			}
+
+			//this->renderViews(currentFrameScope, *scene);
+		}
+
+		const auto * queue = this->device()->getGraphicsQueue(QueuePriority::High);
+
+		/* Then we need the command buffer linked to this image by its index. */
+		const auto commandBuffer = currentFrameScope.getCommandBuffer(m_windowLessView.get());
+
+		if ( !commandBuffer->begin() )
+		{
+			return;
+		}
+
+		commandBuffer->beginRenderPass(*m_windowLessView->framebuffer(), m_windowLessView->renderArea(), m_clearColors, VK_SUBPASS_CONTENTS_INLINE);
+
+		/* First, render the scene. */
+		if ( scene != nullptr )
+		{
+			scene->render(m_windowLessView, *commandBuffer);
+
+			if ( m_TBNSpaceRenderingEnabled )
+			{
+				scene->renderTBNSpace(m_swapChain, *commandBuffer);
+			}
+		}
+
+		/* Then render the overlay system over the 3D-rendered scene. */
+		overlayManager.render(m_windowLessView, *commandBuffer);
+
+		commandBuffer->endRenderPass();
+
+		if ( !commandBuffer->end() )
+		{
+			return;
+		}
+
+		const StaticVector< VkPipelineStageFlags, 16 > waitStages(
+			currentFrameScope.secondarySemaphores().size(),
+			VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT
+		);
+
+		const auto submitResult = queue->submit(
+			*commandBuffer,
+			SynchInfo{}
+				.waits(currentFrameScope.secondarySemaphores(), waitStages)
+				.withFence(currentFrameScope.inFlightFence()->handle())
+		);
+
+		if ( !submitResult )
+		{
+			TraceError{ClassId} << "Unable to submit command buffer for render target '" << m_windowLessView->id() << "' !";
+
+			return;
+		}
+
+		/* NOTE: Apply frame rate limiting if enabled.
+		 * This uses a busy-wait for the final microseconds to achieve accurate timing,
+		 * as std::this_thread::sleep_for() has limited precision on most platforms. */
+		if ( m_frameDuration.count() > 0 )
+		{
+			const auto frameEndTime = std::chrono::high_resolution_clock::now();
+			const auto elapsed = frameEndTime - m_frameStartTime;
+
+			if ( elapsed < m_frameDuration )
+			{
+				const auto remainingTime = m_frameDuration - elapsed;
+
+				/* Sleep for most of the remaining time (leave 1ms for busy-wait precision). */
+				if ( remainingTime > std::chrono::milliseconds(1) )
+				{
+					std::this_thread::sleep_for(remainingTime - std::chrono::milliseconds(1));
+				}
+
+				/* Busy-wait for the final portion to achieve precise timing. */
+				while ( std::chrono::high_resolution_clock::now() - m_frameStartTime < m_frameDuration )
+				{
+					/* Spin-wait for precise frame timing. */
+				}
+			}
+		}
+	}
+
+	void
+	Renderer::renderFrame (const std::shared_ptr< Scenes::Scene > & scene, const Overlay::Manager & overlayManager) noexcept
+	{
+		/* NOTE: Record frame start time for the optional frame limiter. */
+		if ( m_frameDuration.count() > 0 )
+		{
+			m_frameStartTime = std::chrono::high_resolution_clock::now();
+		}
+
+		/* 1. If the swap-chain was marked degraded, we discard the next frame until we get back a valid swap-chain. */
+		if ( this->isSwapChainDegraded() )
+		{
+			/* NOTE: Let's try to recreate every new frame and Core decide what to do with the renderer. */
+			if ( !this->recreateRenderingSubSystem(false, false) )
+			{
+				Tracer::fatal(ClassId, "Unable to refresh the swap-chain!");
+			}
+
+			/* Let this image drop. */
+			return;
+		}
+
+		auto & currentFrameScope = m_rendererFrameScope[m_currentFrameIndex];
+
+		/* 2. Wait for the previous use of this frame's resources to complete. */
+		if ( currentFrameScope.inFlightFence()->wait(m_timeout) )
+		{
+			m_statistics.stop();
+
+			currentFrameScope.prepareForNewFrame();
+		}
+		else
+		{
+			TraceError{ClassId} << "Something wrong happens while waiting the fence for image #" << m_currentFrameIndex << '!';
+
+			std::abort();
+
+			return;
+		}
+
+		/* 3. Get the new frame to render to. */
+		const auto frameIndexOpt = m_swapChain->acquireNextImage(currentFrameScope.imageAvailableSemaphore(), m_timeout);
+
+		if ( !frameIndexOpt )
+		{
+			return;
+		}
+
+		/* 4. Reset the fence. */
+		if ( !currentFrameScope.inFlightFence()->reset() )
+		{
+			TraceError{ClassId} << "Something wrong happens while reset the fence for image #" << m_currentFrameIndex << '!';
+
+			return;
+		}
+
+		/* 5. The new frame rendering is starting now. */
+		m_statistics.start();
+
+		const uint32_t frameIndex = frameIndexOpt.value();
+
+		/* NOTE: Offscreen rendering */
+		if ( scene != nullptr )
+		{
+			if ( this->isShadowMapsEnabled() )
+			{
+				/* [VULKAN-SHADOW] */
+				this->renderShadowMaps(currentFrameScope, *scene);
+			}
+
+			if ( this->isRenderToTexturesEnabled() )
+			{
+				this->renderRenderToTextures(currentFrameScope, *scene);
+			}
+
+			//this->renderViews(currentFrameScope, *scene);
+		}
+
+		/* Then we need the command buffer linked to this image by its index. */
+		const auto commandBuffer = currentFrameScope.getCommandBuffer(m_swapChain.get());
+
+		if ( !commandBuffer->begin() )
+		{
+			return;
+		}
+
+		/* Render pass 1: Scene rendering (clears buffers). */
+		commandBuffer->beginRenderPass(*m_swapChain->framebuffer(), m_swapChain->renderArea(), m_clearColors, VK_SUBPASS_CONTENTS_INLINE);
+
+		/* Render the scene. */
+		if ( scene != nullptr )
+		{
+			scene->render(m_swapChain, *commandBuffer);
+
+			if ( m_TBNSpaceRenderingEnabled )
+			{
+				scene->renderTBNSpace(m_swapChain, *commandBuffer);
+			}
+		}
+
+		commandBuffer->endRenderPass();
+
+		/* Grab pass: capture the scene into a sampleable texture (same frame). */
+		if ( m_grabPassEnabled && m_grabPass != nullptr && m_grabPass->isCreated() )
+		{
+			m_grabPass->recordBlit(*commandBuffer, *m_swapChain->currentColorImage());
+		}
+
+		/* Render pass 2: Post-processing and overlay (preserves scene content). */
+		commandBuffer->beginRenderPass(*m_swapChain->postProcessFramebuffer(), m_swapChain->renderArea(), m_clearColors, VK_SUBPASS_CONTENTS_INLINE);
+
+		/* Render the overlay system over the scene. */
+		overlayManager.render(m_swapChain, *commandBuffer);
+
+		commandBuffer->endRenderPass();
+
+		if ( !commandBuffer->end() )
+		{
+			return;
+		}
+
+		/* 6. Submit the work on the GPU and present. */
+		{
+			const auto * queue = this->device()->getGraphicsQueue(QueuePriority::High);
+
+			/* Build wait stages: FRAGMENT_SHADER for render-to-textures, COLOR_ATTACHMENT_OUTPUT for swapchain */
+			StaticVector< VkPipelineStageFlags, 16 > waitStages;
+
+			/* All render-to-texture semaphores wait at FRAGMENT_SHADER stage (when we sample the texture) */
+			for ( size_t i = 0; i < currentFrameScope.secondarySemaphores().size(); ++i )
+			{
+				waitStages.emplace_back(VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+			}
+
+			/* Add swap-chain image available semaphore and wait at COLOR_ATTACHMENT_OUTPUT stage */
+			currentFrameScope.secondarySemaphores().emplace_back(currentFrameScope.imageAvailableSemaphore()->handle());
+			waitStages.emplace_back(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
+
+			auto renderFinishedSemaphoreHandle = currentFrameScope.renderFinishedSemaphore()->handle();
+
+			if ( !queue->submit(*commandBuffer, SynchInfo{}
+					.waits(currentFrameScope.secondarySemaphores(), waitStages)
+					.signals({&renderFinishedSemaphoreHandle, 1})
+					.withFence(currentFrameScope.inFlightFence()->handle())
+				) )
+			{
+				return;
+			}
+
+			m_swapChain->present(frameIndex, queue, renderFinishedSemaphoreHandle);
+		}
+
+		m_currentFrameIndex = (m_currentFrameIndex + 1) % m_rendererFrameScope.size();
 
 		/* NOTE: Apply frame rate limiting if enabled.
 		 * This uses a busy-wait for the final microseconds to achieve accurate timing,
@@ -1180,21 +1301,47 @@ namespace EmEn::Graphics
 			}
 		}
 
-		m_isUsable = true;
+		/* Recreate the grab pass texture with the new swap-chain dimensions. */
+		if ( m_grabPass != nullptr )
+		{
+			const auto & swapChainCreateInfo = m_swapChain->createInfo();
+
+			if ( m_grabPass->recreate(*this, swapChainCreateInfo.imageExtent.width, swapChainCreateInfo.imageExtent.height, swapChainCreateInfo.imageFormat) )
+			{
+				if ( m_bindlessTextureManager.usable() )
+				{
+					static_cast< void >(m_bindlessTextureManager.updateTexture2D(BindlessTextureManager::GrabPassSlot, *m_grabPass));
+				}
+			}
+			else
+			{
+				TraceError{ClassId} << "Unable to recreate the grab pass texture !";
+			}
+		}
 
 		this->notify(WindowContentRefreshed);
 
 		return true;
 	}
 
-	std::array< Pixmap< uint8_t >, 3 >
-	Renderer::captureFramebuffer (bool keepAlpha, bool withDepthBuffer, bool withStencilBuffer) noexcept
+	bool
+	Renderer::captureFramebuffer (std::array< Pixmap< uint8_t >, 3 > & result, bool keepAlpha, bool withDepthBuffer, bool withStencilBuffer, bool postProcess) noexcept
 	{
 		if ( m_swapChain == nullptr || !m_transferManager.usable() )
 		{
-			return {};
+			return false;
 		}
 
-		return m_swapChain->capture(m_transferManager, 0, keepAlpha, withDepthBuffer, withStencilBuffer);
+		if ( !m_swapChain->capture(m_transferManager, 0, keepAlpha, withDepthBuffer, withStencilBuffer, result) )
+		{
+			return false;
+		}
+
+		if ( postProcess && result[0].isValid() )
+		{
+			result[0] = Processor< uint8_t >::swapChannels(result[0], false);
+		}
+
+		return true;
 	}
 }

@@ -172,7 +172,7 @@ namespace EmEn
 			 * @brief Constants for parsing command-line arguments.
 			 * @{
 			 */
-			static constexpr auto ToolsArg{"-t"};			   ///< Short argument for tools mode.
+			static constexpr auto ToolsArg{"-t"}; ///< Short argument for tools mode.
 			static constexpr auto ToolsLongArg{"--tools-mode"}; ///< Long argument for tools mode.
 			/** @} */
 
@@ -181,8 +181,8 @@ namespace EmEn
 			 * @details Use with `-t <tool_name>` or `--tools-mode <tool_name>`.
 			 * @{
 			 */
-			static constexpr auto VulkanInformationToolName{"vulkanInfo"};   ///< Displays Vulkan instance/device info.
-			static constexpr auto PrintGeometryToolName{"printGeometry"};	///< Prints geometry file contents.
+			static constexpr auto VulkanInformationToolName{"vulkanInfo"}; ///< Displays Vulkan instance/device info.
+			static constexpr auto PrintGeometryToolName{"printGeometry"}; ///< Prints geometry file contents.
 			static constexpr auto ConvertGeometryToolName{"convertGeometry"};///< Converts between geometry formats.
 			/** @} */
 
@@ -203,15 +203,15 @@ namespace EmEn
 			 */
 			enum NotificationCode
 			{
-				EnteringMainLoop,			 ///< Engine main loop has started.
-				ExitingMainLoop,			  ///< Engine main loop is stopped.
-				ExecutionPaused,			  ///< Engine execution is paused (game pause).
-				ExecutionResumed,			 ///< Engine execution has resumed after pause.
-				ExecutionStopping,			///< Engine is shutting down.
-				ExecutionStopped,			 ///< Engine is stopped.
-				SurfaceRefreshed,			  ///< Render surface was recreated (resize, etc.).
+				EnteringMainLoop, ///< Engine main loop has started.
+				ExitingMainLoop, ///< Engine main loop is stopped.
+				ExecutionPaused, ///< Engine execution is paused (game pause).
+				ExecutionResumed, ///< Engine execution has resumed after pause.
+				ExecutionStopping, ///< Engine is shutting down.
+				ExecutionStopped, ///< Engine is stopped.
+				SurfaceRefreshed, ///< Render surface was recreated (resize, etc.).
 				/* Enumeration boundary. */
-				MaxEnum					   ///< Sentinel value for iteration.
+				MaxEnum ///< Sentinel value for iteration.
 			};
 
 			/**
@@ -222,9 +222,9 @@ namespace EmEn
 			 */
 			enum class StartupMode : uint8_t
 			{
-				Error,	 ///< An error occurred during initialization; engine cannot start.
+				Error, ///< An error occurred during initialization; engine cannot start.
 				ToolsMode, ///< Engine runs in tools mode (vulkanInfo, geometry tools, etc.).
-				Continue   ///< Normal startup; proceed with full engine initialization.
+				Continue ///< Normal startup; proceed with full engine initialization.
 			};
 
 			/**
@@ -905,6 +905,18 @@ namespace EmEn
 			bool screenshot () noexcept;
 
 			/**
+			 * @brief Starts both audio and video recording with synchronized output paths.
+			 * @return true if video recording started successfully, false otherwise.
+			 */
+			[[nodiscard]]
+			bool startAudioVideoRecording () noexcept;
+
+			/**
+			 * @brief Stops both audio and video recording if active.
+			 */
+			void stopAudioVideoRecording () noexcept;
+
+			/**
 			 * @brief Dumps all framebuffers to files for debugging.
 			 * @details Saves each render target's content to separate image files.
 			 * Useful for debugging rendering pipeline issues.
@@ -1292,16 +1304,13 @@ namespace EmEn
 			 * in reverse order. Primary services are listed first, then secondary.
 			 * @{
 			 */
-
 			Identification m_identification;										   ///< Application identity (name, version, org).
 			Help m_coreHelp{"Core engine"};											///< Command-line help system.
-
 			/* Primary Services - Available immediately after construction. */
 			PrimaryServices m_primaryServices;										 ///< Bundled primary service container.
 			Console::Controller m_consoleController{m_primaryServices};				///< Console command processor.
-			Resources::Manager m_resourceManager{m_primaryServices, m_graphicsRenderer}; ///< Resource loading and caching.
+			Resources::Manager m_resourceManager{m_primaryServices, m_graphicsRenderer, m_audioManager}; ///< Resource loading and caching.
 			User m_user{m_primaryServices};											///< User preferences and settings.
-
 			/* Secondary Services - Require graphics context. */
 			PlatformManager m_platformManager{m_primaryServices};					  ///< Platform abstraction layer.
 			Vulkan::Instance m_vulkanInstance{m_identification, m_primaryServices, false};	///< Vulkan instance wrapper. FIXME: Find a nice way to let user-application sets the boolean
@@ -1314,12 +1323,12 @@ namespace EmEn
 			Notifier m_notifier{m_resourceManager, m_overlayManager};				  ///< On-screen notifications.
 			SystemNotification m_systemNotification{m_primaryServices.settings(), m_window};	  ///< OS-level system notifications.
 			Scenes::Manager m_sceneManager{m_primaryServices, m_resourceManager, m_inputManager, m_graphicsRenderer, m_audioManager}; ///< Scene graph management.
-
+			/* Reusable capture buffer for screenshots. */
+			std::array< Libs::PixelFactory::Pixmap< uint8_t >, 3 > m_screenshotImages{};
 			/* Service tracking. */
 			std::vector< ServiceInterface * > m_primaryServicesEnabled;   ///< Enabled primary service pointers.
 			std::vector< ServiceInterface * > m_secondaryServicesEnabled; ///< Enabled secondary service pointers.
 			std::vector< ServiceInterface * > m_userServiceEnabled;	   ///< User-registered service pointers.
-
 			/* Runtime state. */
 			CursorAtlas m_cursorAtlas;						  ///< Custom cursor cache.
 			std::thread m_logicsThread;						 ///< Logic processing thread.
@@ -1328,7 +1337,6 @@ namespace EmEn
 			size_t m_cycle{0};								  ///< Main loop iteration count.
 			StartupMode m_startupMode{StartupMode::Continue};   ///< Startup behavior mode.
 			std::queue< std::string > m_coreMessages;		   ///< Pending messages for display. @todo Display in ImGui.
-
 			/* Control flags. */
 			std::atomic< bool > m_isMainLoopRunning{true}; ///< Main loop active flag (atomic for thread-safe access).
 			std::atomic< bool > m_isLogicsLoopRunning{true}; ///< Logic thread active flag (atomic for thread-safe access).
@@ -1340,7 +1348,6 @@ namespace EmEn
 			bool m_disableNotifier{false}; ///< Disable Core's notifier.
 			bool m_enableStatistics{false}; ///< Enable statistics display in the terminal.
 			bool m_windowChanged{false};
-
 			/** @} */ // End of Member Variables group
 	};
 }

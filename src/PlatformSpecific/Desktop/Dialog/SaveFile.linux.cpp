@@ -42,8 +42,19 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 		{
 			command = "kdialog --getsavefilename";
 
-			/* Default path (empty for current directory). */
-			command += " ''";
+			/* Default path (directory + filename). */
+			{
+				std::string defaultPath;
+
+				if ( !m_defaultDirectory.empty() )
+				{
+					defaultPath = m_defaultDirectory.string() + "/";
+				}
+
+				defaultPath += m_defaultFilename;
+				command += " ";
+				command += escapeShellArg(defaultPath);
+			}
 
 			/* File filters. */
 			if ( !m_extensionFilters.empty() )
@@ -60,6 +71,20 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 			command = "zenity --file-selection --save";
 			command += " --title ";
 			command += escapeShellArg(this->title());
+
+			/* Default path (directory + filename). */
+			{
+				std::string defaultPath;
+
+				if ( !m_defaultDirectory.empty() )
+				{
+					defaultPath = m_defaultDirectory.string() + "/";
+				}
+
+				defaultPath += m_defaultFilename;
+				command += " --filename=";
+				command += escapeShellArg(defaultPath);
+			}
 
 			/* File filters. */
 			if ( !m_extensionFilters.empty() )

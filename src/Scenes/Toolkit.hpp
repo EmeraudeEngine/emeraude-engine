@@ -728,17 +728,17 @@ namespace EmEn::Scenes
 
 			/**
 			 * @brief Generates a renderable instance in the scene from a mesh resource.
-			 * @tparam renderable_t The type of renderable.
 			 * @tparam entity_t The type of entity, a scene node or a static entity. Default, 'StaticEntity'.
+			 * @tparam renderable_t The type of renderable (deduced from parameter).
 			 * @param entityName A reference to a string.
 			 * @param renderable A reference to a renderable smart-pointer. Default resource.
 			 * @param physicalProperties A reference to a body physical properties. Default properties.
 			 * @param enableLighting Enable the lighting. Default true.
 			 * @return BuiltEntity< entity_t, Component::Visual >
 			 */
-			template< typename renderable_t, typename entity_t = StaticEntity >
+			template< typename entity_t = StaticEntity, typename renderable_t >
 			BuiltEntity< entity_t, Component::Visual >
-			generateRenderableInstance (const std::string & entityName, std::shared_ptr< renderable_t > renderable = nullptr, const Physics::BodyPhysicalProperties & physicalProperties = {}, bool enableLighting = true) noexcept
+			generateRenderableInstance (const std::string & entityName, std::shared_ptr< renderable_t > renderable, const Physics::BodyPhysicalProperties & physicalProperties = {}, bool enableLighting = true) noexcept
 				requires (std::is_base_of_v< Graphics::Renderable::Abstract, renderable_t > && std::is_base_of_v< AbstractEntity, entity_t >)
 			{
 				auto entity = this->generateEntity< entity_t >(entityName);
@@ -746,11 +746,6 @@ namespace EmEn::Scenes
 				if ( entity == nullptr )
 				{
 					return {};
-				}
-
-				if ( renderable == nullptr )
-				{
-					renderable = m_resourceManager.container< renderable_t >()->getDefaultResource();
 				}
 
 				auto component = entity->template componentBuilder< Component::Visual >(entityName)
@@ -762,6 +757,12 @@ namespace EmEn::Scenes
 							visual.getRenderableInstance()->enableLighting();
 						}
 					}).build(renderable);
+
+				/* Apply renderable size as entity scale if it differs from 1.0. */
+				if ( renderable != nullptr && renderable->uniformScale() != 1.0F )
+				{
+					entity->scale(renderable->uniformScale(), Libs::Math::TransformSpace::Local);
+				}
 
 				return {entity, component};
 			}
@@ -799,12 +800,12 @@ namespace EmEn::Scenes
 				{
 					const auto meshResource = MeshResource::getOrCreate(m_resourceManager, geometryResource, materialResource);
 
-					return generateRenderableInstance< MeshResource, entity_t >(entityName, meshResource, physicalProperties, enableLighting);
+					return generateRenderableInstance< entity_t >(entityName, meshResource, physicalProperties, enableLighting);
 				}
 
 				const auto simpleMeshResource = SimpleMeshResource::getOrCreate(m_resourceManager, geometryResource, materialResource);
 
-				return generateRenderableInstance< SimpleMeshResource, entity_t >(entityName, simpleMeshResource, physicalProperties, enableLighting);
+				return generateRenderableInstance< entity_t >(entityName, simpleMeshResource, physicalProperties, enableLighting);
 			}
 
 			/**
@@ -908,11 +909,12 @@ namespace EmEn::Scenes
 			 * @param materialResource A reference to a material smart pointer. Default nullptr.
 			 * @param useGeodesic Use a geodesic sphere instead of a classic one. Default, 'false'.
 			 * @param enableLighting Enable the lighting. Default true.
+			 * @param quality The tessellation quality of the sphere. For classic spheres, maps to both slices and stacks. For geodesic spheres, maps to the subdivision depth. Default 16.
 			 * @return BuiltEntity< entity_t, Component::Visual >
 			 */
 			template< typename entity_t = StaticEntity >
 			BuiltEntity< entity_t, Component::Visual >
-			generateSphereInstance (const std::string & entityName, float radius, const std::shared_ptr< Graphics::Material::Interface > & materialResource = nullptr, bool useGeodesic = false, bool enableLighting = true) noexcept
+			generateSphereInstance (const std::string & entityName, float radius, const std::shared_ptr< Graphics::Material::Interface > & materialResource = nullptr, bool useGeodesic = false, bool enableLighting = true, uint32_t quality = 16) noexcept
 				requires (std::is_base_of_v< AbstractEntity, entity_t >)
 			{
 				using namespace Libs;
@@ -923,8 +925,8 @@ namespace EmEn::Scenes
 				const Geometry::ResourceGenerator generator{m_resourceManager, Geometry::EnableTangentSpace | Geometry::EnablePrimaryTextureCoordinates};
 
 				const auto geometryResource = useGeodesic ?
-					generator.geodesicSphere(radius, 2, entityName) :
-					generator.sphere(radius, 16, 16, entityName);
+					generator.geodesicSphere(radius, quality, entityName) :
+					generator.sphere(radius, quality, quality, entityName);
 
 				if ( geometryResource == nullptr )
 				{

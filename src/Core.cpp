@@ -27,6 +27,7 @@
 #include "Core.hpp"
 
 /* STL inclusions. */
+#include <chrono>
 #include <sstream>
 #include <iostream>
 #include <ranges>
@@ -177,6 +178,11 @@ namespace EmEn
 
 			/* NOTE: Ask for a shared-access to the scene content preventing to lock the "logic thread" and draw the scene. */
 			m_sceneManager.withSharedActiveScene([&] (const auto & activeScene) {
+				if ( m_graphicsRenderer.isShutdownRequested() )
+				{
+					return;
+				}
+
 				if ( activeScene != nullptr )
 				{
 					/* This should only synchronize UBOs for the scene. */
@@ -190,7 +196,19 @@ namespace EmEn
 				m_overlayManager.updateVideoMemory();
 
 				/* Render the scene (optional) and the overlay on top. */
-				m_graphicsRenderer.renderFrame(activeScene, m_overlayManager);
+				if ( m_graphicsRenderer.isWindowLess() )
+				{
+					m_graphicsRenderer.renderOffscreenFrame(activeScene, m_overlayManager);
+				}
+				else
+				{
+					m_graphicsRenderer.renderFrame(activeScene, m_overlayManager);
+				}
+
+				if ( m_graphicsRenderer.recorder().isRecording() && m_graphicsRenderer.recorder().shouldCaptureFrame() )
+				{
+					m_graphicsRenderer.recorder().captureAndSubmitFrame();
+				}
 			}, false);
 
 			frames++;
@@ -218,6 +236,13 @@ namespace EmEn
 		this->onCoreSurfaceRefreshed();
 
 		m_windowChanged = false;
+
+		if ( m_graphicsRenderer.recorder().isRecording() )
+		{
+			TraceInfo{ClassId} << "Stopping recording due to framebuffer resize.";
+
+			this->stopAudioVideoRecording();
+		}
 
 		this->notify(SurfaceRefreshed);
 	}
@@ -294,7 +319,7 @@ namespace EmEn
 			m_inputManager.waitSystemEvents(0.010);
 
 			/* NOTE: Check if the graphics render do not have a problem. */
-			if ( m_graphicsRenderer.isUsable() )
+			if ( m_graphicsRenderer.usable() )
 			{
 				/* NOTE: Must be done on the main thread. */
 				if ( m_windowChanged )
@@ -457,6 +482,7 @@ namespace EmEn
 			m_coreHelp.registerShortcut("Suspend core thread execution for 3 seconds.", KeyF10, ModKeyShift);
 			m_coreHelp.registerShortcut("Toggle the window fullscreen mode.", KeyF11, ModKeyShift);
 			m_coreHelp.registerShortcut("Take a screenshot.", KeyF12, ModKeyShift);
+			m_coreHelp.registerShortcut("Toggle video recording.", KeyF12, ModKeyShift | ModKeyControl);
 		}
 
 		if ( m_primaryServices.initialize() )
@@ -822,6 +848,11 @@ namespace EmEn
 
 		this->onBeforeCoreStop();
 
+		if ( m_graphicsRenderer.recorder().isRecording() )
+		{
+			this->stopAudioVideoRecording();
+		}
+
 		Tracer::debug(ClassId, "User-application stopped !");
 
 		/* Stopping the logics and rendering threads. */
@@ -1122,8 +1153,21 @@ namespace EmEn
 					return true;
 
 				case KeyF12 :
-					this->screenshot();
-
+					if ( isKeyboardModifierPressed(ModKeyControl, modifiers) )
+					{
+						if ( m_graphicsRenderer.recorder().isRecording() )
+						{
+							this->stopAudioVideoRecording();
+						}
+						else
+						{
+							static_cast< void >(this->startAudioVideoRecording());
+						}
+					}
+					else
+					{
+						this->screenshot();
+					}
 					return true;
 
 				case KeyR :
@@ -1200,9 +1244,7 @@ namespace EmEn
 			return false;
 		}
 
-		const auto images = m_graphicsRenderer.captureFramebuffer(false, false);
-
-		if ( !images[0].isValid() )
+		if ( !m_graphicsRenderer.captureFramebuffer(m_screenshotImages, false, false) || !m_screenshotImages[0].isValid() )
 		{
 			Tracer::error(ClassId, "Unable to capture the framebuffer !");
 
@@ -1214,7 +1256,7 @@ namespace EmEn
 
 		const auto filepath = captureDirectory.append(filename.str());
 
-		if ( !PixelFactory::FileIO::write(images[0], filepath) )
+		if ( !PixelFactory::FileIO::write(m_screenshotImages[0], filepath) )
 		{
 			TraceError{ClassId} << "Unable to write the screenshot " << filepath << " !";
 
@@ -1224,6 +1266,69 @@ namespace EmEn
 		TraceSuccess{ClassId} << "The screenshot is saved to " << filepath;
 
 		return true;
+	}
+
+	bool
+	Core::startAudioVideoRecording () noexcept
+	{
+		if ( !m_graphicsRenderer.recorder().usable() && !m_audioManager.recorder().usable() )
+		{
+			Tracer::warning(ClassId, "No recorder enabled!");
+
+			return false;
+		}
+
+		/* Gets the capture directory. */
+		const auto captureDirectory = m_primaryServices.fileSystem().userDataDirectory("captures");
+
+		if ( !IO::writable(captureDirectory) )
+		{
+			TraceError{ClassId} << "Unable to write in captures directory " << captureDirectory << " !";
+
+			return false;
+		}
+
+		/* Generate a timestamp-based base name. */
+		std::stringstream baseName;
+		baseName << std::chrono::duration_cast< std::chrono::seconds >(std::chrono::system_clock::now().time_since_epoch()).count();
+
+		const auto filename = baseName.str();
+
+		if ( m_graphicsRenderer.recorder().usable() )
+		{
+			if ( m_graphicsRenderer.recorder().startRecording(captureDirectory / (filename + ".ivf")) )
+			{
+				this->notifyUser("Video recording started...");
+			}
+		}
+
+		if ( m_audioManager.recorder().usable() )
+		{
+			if ( m_audioManager.recorder().startRecording(captureDirectory / (filename + ".wav")) )
+			{
+				this->notifyUser("Audio recording started...");
+			}
+		}
+
+		TraceInfo{ClassId} << "You can use this command to create a WebM file:" "\n" "ffmpeg -i " << filename << ".ivf -i " << filename << ".wav -c:v copy -c:a libopus -b:a 192k " << filename << ".webm";
+
+		return true;
+	}
+
+	void
+	Core::stopAudioVideoRecording () noexcept
+	{
+		if ( m_graphicsRenderer.recorder().isRecording() )
+		{
+			m_graphicsRenderer.recorder().stopRecording();
+		}
+
+		if ( m_audioManager.recorder().isRecording() )
+		{
+			m_audioManager.recorder().stopRecording();
+		}
+
+		this->notifyUser("Recording stopped.");
 	}
 
 	bool

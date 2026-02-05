@@ -186,8 +186,30 @@ namespace EmEn::Vulkan
 			}
 
 			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::capture() */
+			bool capture (TransferManager & transferManager, uint32_t layerIndex, bool keepAlpha, bool withDepthBuffer, bool withStencilBuffer, std::array< Libs::PixelFactory::Pixmap< uint8_t >, 3 > & result) const noexcept override;
+
+			/**
+			 * @brief Returns the current frame's color image.
+			 * @return std::shared_ptr< Image >
+			 */
 			[[nodiscard]]
-			std::array< Libs::PixelFactory::Pixmap< uint8_t >, 3 > capture (TransferManager & transferManager, uint32_t layerIndex, bool keepAlpha, bool withDepthBuffer, bool withStencilBuffer) const noexcept override;
+			std::shared_ptr< Image >
+			currentColorImage () const noexcept
+			{
+				return m_frames[m_acquiredImageIndex].colorImage;
+			}
+
+			/**
+			 * @brief Returns the post-process framebuffer for the current frame.
+			 * @note This framebuffer uses LOAD_OP_LOAD to preserve existing content.
+			 * @return const Framebuffer *
+			 */
+			[[nodiscard]]
+			const Framebuffer *
+			postProcessFramebuffer () const noexcept
+			{
+				return m_frames[m_acquiredImageIndex].postProcessFramebuffer.get();
+			}
 
 			/**
 			 * @brief Returns the swap-chain vulkan handle.
@@ -439,6 +461,22 @@ namespace EmEn::Vulkan
 			bool createFramebufferArray (const std::shared_ptr< RenderPass > & renderPass) noexcept;
 
 			/**
+			 * @brief Creates a post-process render pass with LOAD_OP_LOAD.
+			 * @param renderer A reference to the renderer.
+			 * @return std::shared_ptr< RenderPass >
+			 */
+			[[nodiscard]]
+			std::shared_ptr< RenderPass > createPostProcessRenderPass (Graphics::Renderer & renderer) const noexcept;
+
+			/**
+			 * @brief Creates the post-process framebuffer array.
+			 * @param renderPass A reference to the render pass smart pointer.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool createPostProcessFramebufferArray (const std::shared_ptr< RenderPass > & renderPass) noexcept;
+
+			/**
 			 * @brief Creates the swap-chain framebuffer.
 			 * @return bool
 			 */
@@ -463,6 +501,8 @@ namespace EmEn::Vulkan
 			{
 				/* Framebuffer configuration holder. */
 				std::unique_ptr< Framebuffer > framebuffer;
+				/* Post-process framebuffer (LOAD_OP_LOAD, for overlay/post-processing after grab pass). */
+				std::unique_ptr< Framebuffer > postProcessFramebuffer;
 				/* MSAA Color buffer (multisampled) */
 				std::shared_ptr< Image > MSAAColorImage;
 				std::shared_ptr< ImageView > MSAAColorImageView;

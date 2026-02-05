@@ -40,9 +40,9 @@ namespace EmEn::Audio
 	using namespace Libs;
 
 	bool
-	SoundResource::load (Resources::AbstractServiceProvider & /*serviceProvider*/) noexcept
+	SoundResource::load (Resources::AbstractServiceProvider & serviceProvider) noexcept
 	{
-		if ( !Manager::isAudioSystemAvailable() )
+		if ( !serviceProvider.audioManager().isAudioSystemAvailable() )
 		{
 			return true;
 		}
@@ -52,7 +52,7 @@ namespace EmEn::Audio
 			return false;
 		}
 
-		const auto frequencyPlayback = Manager::frequencyPlayback();
+		const auto frequencyPlayback = serviceProvider.audioManager().frequencyPlayback();
 		const auto sampleRate = static_cast< size_t >(frequencyPlayback);
 
 		/* Default/fallback sound: A retro "alert" double-beep.
@@ -113,9 +113,9 @@ namespace EmEn::Audio
 	}
 
 	bool
-	SoundResource::load (Resources::AbstractServiceProvider & /*serviceProvider*/, const std::filesystem::path & filepath) noexcept
+	SoundResource::load (Resources::AbstractServiceProvider & serviceProvider, const std::filesystem::path & filepath) noexcept
 	{
-		if ( !Manager::isAudioSystemAvailable() )
+		if ( !serviceProvider.audioManager().isAudioSystemAvailable() )
 		{
 			return true;
 		}
@@ -132,7 +132,7 @@ namespace EmEn::Audio
 			return this->setLoadSuccess(false);
 		}
 
-		const auto frequencyPlayback = Manager::frequencyPlayback();
+		const auto frequencyPlayback = serviceProvider.audioManager().frequencyPlayback();
 
 		/* Checks if the sound is valid for the engine.
 		 * It must be mono and meet the audio engine frequency. */
@@ -188,9 +188,9 @@ namespace EmEn::Audio
 	}
 
 	bool
-	SoundResource::load (Resources::AbstractServiceProvider & /*serviceProvider*/, const Json::Value & data) noexcept
+	SoundResource::load (Resources::AbstractServiceProvider & serviceProvider, const Json::Value & data) noexcept
 	{
-		if ( !Manager::isAudioSystemAvailable() )
+		if ( !serviceProvider.audioManager().isAudioSystemAvailable() )
 		{
 			return true;
 		}
@@ -200,12 +200,10 @@ namespace EmEn::Audio
 			return false;
 		}
 
-		const auto frequencyPlayback = Manager::frequencyPlayback();
+		const auto frequencyPlayback = serviceProvider.audioManager().frequencyPlayback();
 
 		/* Use SFXScript to generate audio from JSON data. */
-		WaveFactory::SFXScript script{m_localData, frequencyPlayback};
-
-		if ( !script.generateFromData(data) )
+		if ( WaveFactory::SFXScript script{m_localData, frequencyPlayback}; !script.generateFromData(data) )
 		{
 			TraceError{ClassId} << "Failed to generate sound '" << this->name() << "' from JSON data !";
 

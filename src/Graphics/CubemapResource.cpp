@@ -29,6 +29,7 @@
 /* STL inclusions. */
 #include <algorithm>
 #include <array>
+#include <cmath>
 
 /* Local inclusions. */
 #include "Libs/PixelFactory/FileIO.hpp"
@@ -80,13 +81,24 @@ namespace EmEn::Graphics
 		{
 			constexpr size_t size{512};
 
-			/* Create a retro sunset gradient (orange -> pink -> purple -> dark blue). */
+			/* Create a retro sunset gradient mapped by elevation angle.
+			 * Position 0.0 = zenith (straight up), 1.0 = nadir (straight down).
+			 * Extra stops are concentrated around the horizon (0.5) for a richer,
+			 * more defined horizon glow. */
 			Gradient< float, float > sunsetGradient;
-			sunsetGradient.addColorAt(0.0F, Color< float >{0.05F, 0.05F, 0.15F, 1.0F});  /* Top: Dark blue */
-			sunsetGradient.addColorAt(0.3F, Color< float >{0.3F, 0.1F, 0.4F, 1.0F});	 /* Purple */
-			sunsetGradient.addColorAt(0.5F, Color< float >{0.9F, 0.3F, 0.4F, 1.0F});	 /* Pink/Rose */
-			sunsetGradient.addColorAt(0.7F, Color< float >{1.0F, 0.5F, 0.2F, 1.0F});	 /* Orange */
-			sunsetGradient.addColorAt(1.0F, Color< float >{0.95F, 0.8F, 0.6F, 1.0F});	/* Bottom: Light orange/yellow */
+			sunsetGradient.addColorAt(0.00F, Color< float >{0.02F, 0.02F, 0.10F, 1.0F}); /* Zenith: Deep night blue */
+			sunsetGradient.addColorAt(0.15F, Color< float >{0.08F, 0.05F, 0.25F, 1.0F}); /* Upper sky: Dark indigo */
+			sunsetGradient.addColorAt(0.30F, Color< float >{0.30F, 0.10F, 0.40F, 1.0F}); /* Mid sky: Purple */
+			sunsetGradient.addColorAt(0.40F, Color< float >{0.55F, 0.15F, 0.45F, 1.0F}); /* Lower sky: Warm magenta */
+			sunsetGradient.addColorAt(0.46F, Color< float >{0.85F, 0.25F, 0.40F, 1.0F}); /* Above horizon: Hot pink */
+			sunsetGradient.addColorAt(0.50F, Color< float >{1.00F, 0.40F, 0.30F, 1.0F}); /* Horizon: Bright rose-orange */
+			sunsetGradient.addColorAt(0.54F, Color< float >{1.00F, 0.55F, 0.20F, 1.0F}); /* Below horizon: Vivid orange */
+			sunsetGradient.addColorAt(0.60F, Color< float >{1.00F, 0.50F, 0.15F, 1.0F}); /* Warm orange */
+			sunsetGradient.addColorAt(0.70F, Color< float >{0.95F, 0.60F, 0.25F, 1.0F}); /* Golden orange */
+			sunsetGradient.addColorAt(0.85F, Color< float >{0.85F, 0.70F, 0.45F, 1.0F}); /* Soft peach */
+			sunsetGradient.addColorAt(1.00F, Color< float >{0.75F, 0.65F, 0.50F, 1.0F}); /* Nadir: Warm sand */
+
+			constexpr auto invSize = 1.0F / static_cast< float >(size);
 
 			for ( size_t faceIndex = 0; faceIndex < CubemapFaceCount; faceIndex++ )
 			{
@@ -97,41 +109,41 @@ namespace EmEn::Graphics
 					return this->setLoadSuccess(false);
 				}
 
-				/* Apply gradient differently based on face orientation. */
-				switch ( faceIndex )
+				/* Fill each texel using the 3D direction vector's elevation angle.
+				 * This produces a seamless spherical gradient across all cube faces. */
+				for ( size_t row = 0; row < size; row++ )
 				{
-					case 0: /* PositiveX (Right) */
-					case 1: /* NegativeX (Left) */
-					case 4: /* PositiveZ (Front) */
-					case 5: /* NegativeZ (Back) */
-						/* Side faces: horizontal gradient (left to right). */
-						if ( !m_faces.at(faceIndex).fillHorizontal(sunsetGradient) )
+					const auto t = 2.0F * (static_cast< float >(row) + 0.5F) * invSize - 1.0F;
+
+					for ( size_t col = 0; col < size; col++ )
+					{
+						const auto s = 2.0F * (static_cast< float >(col) + 0.5F) * invSize - 1.0F;
+
+						/* Compute the 3D direction vector for this texel based on face. */
+						float dx, dy, dz;
+
+						switch ( faceIndex )
 						{
-							TraceError{ClassId} << "Unable to fill gradient for face #" << faceIndex << " !";
-
-							return this->setLoadSuccess(false);
+							case 0: /* PositiveX */ dx =  1.0F; dy = -t;    dz = -s;    break;
+							case 1: /* NegativeX */ dx = -1.0F; dy = -t;    dz =  s;    break;
+							case 2: /* PositiveY */ dx =  s;    dy =  1.0F; dz =  t;    break;
+							case 3: /* NegativeY */ dx =  s;    dy = -1.0F; dz = -t;    break;
+							case 4: /* PositiveZ */ dx =  s;    dy = -t;    dz =  1.0F; break;
+							default: /* NegativeZ */ dx = -s;   dy = -t;    dz = -1.0F; break;
 						}
-						break;
 
-					case 2: /* PositiveY (Top) */
-						/* Top face: solid dark blue (sky). */
-						if ( !m_faces.at(faceIndex).fill(Color< float >{0.05F, 0.05F, 0.15F, 1.0F}) )
-						{
-							TraceError{ClassId} << "Unable to fill top face !";
+						/* Normalize and extract the elevation (Y component).
+						 * Y = +1 (zenith) → position 0.0 (dark blue)
+						 * Y =  0 (horizon) → position 0.5 (pink)
+						 * Y = -1 (nadir) → position 1.0 (light orange) */
+						const auto normalizedY = dy / std::sqrt(dx * dx + dy * dy + dz * dz);
+						const auto gradientPosition = 0.5F * (1.0F - normalizedY);
 
-							return this->setLoadSuccess(false);
-						}
-						break;
-
-					case 3: /* NegativeY (Bottom) */
-						/* Bottom face: solid light orange (horizon glow). */
-						if ( !m_faces.at(faceIndex).fill(Color< float >{0.95F, 0.8F, 0.6F, 1.0F}) )
-						{
-							TraceError{ClassId} << "Unable to fill bottom face !";
-
-							return this->setLoadSuccess(false);
-						}
-						break;
+						m_faces.at(faceIndex).setPixel(
+							row * size + col,
+							sunsetGradient.colorAt(gradientPosition)
+						);
+					}
 				}
 			}
 		}

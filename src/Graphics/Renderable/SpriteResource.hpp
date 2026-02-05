@@ -209,24 +209,24 @@ namespace EmEn::Graphics::Renderable
 			bool load (Resources::AbstractServiceProvider & serviceProvider, const std::shared_ptr< Material::Interface > & material, bool centerAtBottom = false, bool flip = false, const RasterizationOptions & rasterizationOptions = {}) noexcept;
 
 			/**
-			 * @brief Sets the site of the sprite.
+			 * @brief Sets the uniform scale of the sprite.
 			 * @param value
 			 */
 			void
-			setSize (float value) noexcept
+			setUniformScale (float value) noexcept
 			{
-				m_size = std::abs(value);
+				m_uniformScale = std::abs(value);
 			}
 
 			/**
-			 * @brief Returns the size of the sprite.
+			 * @brief Returns the uniform scale of the sprite.
 			 * @return float
 			 */
 			[[nodiscard]]
 			float
-			size () const noexcept
+			uniformScale () const noexcept override
 			{
-				return m_size;
+				return m_uniformScale;
 			}
 
 			/**
@@ -292,7 +292,7 @@ namespace EmEn::Graphics::Renderable
 			bool setMaterial (const std::shared_ptr< Material::Interface > & materialResource) noexcept;
 
 			/* JSON key. */
-			static constexpr auto JKSizeKey{"Size"};
+			static constexpr auto JKUniformScaleKey{"UniformScale"};
 			static constexpr auto JKCenterAtBottomKey{"CenterAtBottom"};
 			static constexpr auto JKFlipKey{"Flip"};
 
@@ -300,7 +300,7 @@ namespace EmEn::Graphics::Renderable
 
 			std::shared_ptr< Geometry::Interface > m_geometry;
 			std::shared_ptr< Material::Interface > m_material;
-			float m_size{1.0F};
+			float m_uniformScale{1.0F};
 	};
 }
 

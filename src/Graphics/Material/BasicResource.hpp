@@ -222,6 +222,18 @@ namespace EmEn::Graphics::Material
 			[[nodiscard]]
 			BlendingMode blendingMode () const noexcept override;
 
+			/** @copydoc EmEn::Graphics::Material::Interface::requiresAlphaTestedShadows() */
+			[[nodiscard]]
+			bool requiresAlphaTestedShadows () const noexcept override;
+
+			/** @copydoc EmEn::Graphics::Material::Interface::generateShadowAlphaTestCode() */
+			[[nodiscard]]
+			bool generateShadowAlphaTestCode (const Saphir::Generator::Abstract & generator, Saphir::FragmentShader & fragmentShader) const noexcept override;
+
+			/** @copydoc EmEn::Graphics::Material::Interface::generateShadowVertexCode() */
+			[[nodiscard]]
+			bool generateShadowVertexCode (const Saphir::Generator::Abstract & generator, Saphir::VertexShader & vertexShader) const noexcept override;
+
 			/** @copydoc EmEn::Graphics::Material::Interface::fragmentColor() */
 			[[nodiscard]]
 			std::string fragmentColor () const noexcept override;

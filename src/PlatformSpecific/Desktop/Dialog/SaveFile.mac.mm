@@ -49,6 +49,21 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 
             [panel setTitle:title];
 
+            /* Set default filename. */
+            if ( !m_defaultFilename.empty() )
+            {
+                NSString * defaultName = [NSString stringWithUTF8String:m_defaultFilename.c_str()];
+                [panel setNameFieldStringValue:defaultName];
+            }
+
+            /* Set default directory. */
+            if ( !m_defaultDirectory.empty() )
+            {
+                NSString * dirPath = [NSString stringWithUTF8String:m_defaultDirectory.string().c_str()];
+                NSURL * dirURL = [NSURL fileURLWithPath:dirPath isDirectory:YES];
+                [panel setDirectoryURL:dirURL];
+            }
+
             NSMutableArray * file_types_list = [NSMutableArray array];
             NSMutableArray * filter_names = [NSMutableArray array];
             NSMutableOrderedSet * file_type_set = [NSMutableOrderedSet orderedSetWithCapacity:m_extensionFilters.size()];

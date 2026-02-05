@@ -149,9 +149,17 @@ namespace EmEn::Vulkan
 
 		vkGetBufferMemoryRequirements2(this->device()->handle(), &info, &memoryRequirement);
 
-		VkMemoryPropertyFlags memoryPropertyFlags = m_hostVisible ?
-			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT :
-			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+		VkMemoryPropertyFlags memoryPropertyFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+
+		if ( m_hostVisible )
+		{
+			memoryPropertyFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+
+			if ( m_hostReadable )
+			{
+				memoryPropertyFlags |= VK_MEMORY_PROPERTY_HOST_CACHED_BIT;
+			}
+		}
 
 		m_deviceMemory = std::make_unique< DeviceMemory >(this->device(), memoryRequirement, memoryPropertyFlags);
 		m_deviceMemory->setIdentifier(ClassId, this->identifier(), "DeviceMemory");
@@ -202,7 +210,9 @@ namespace EmEn::Vulkan
 		VmaAllocationCreateInfo allocInfo{};
 		if ( m_hostVisible )
 		{
-			allocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+			allocInfo.flags = m_hostReadable ?
+				VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT :
+				VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
 		}
 		allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
 		//allocInfo.requiredFlags = 0;

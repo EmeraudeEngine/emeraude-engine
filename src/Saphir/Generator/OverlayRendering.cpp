@@ -257,10 +257,20 @@ namespace EmEn::Saphir::Generator
 
 		size_t hash = Hash::FNV1a(ClassId);
 
-		/* 1. Render pass handle (critical for pipeline compatibility). */
-		if ( const auto * framebuffer = this->renderTarget()->framebuffer(); framebuffer != nullptr )
+		/* 1. Render pass handle (critical for pipeline compatibility).
+		 * Use the pipeline framebuffer override if set, otherwise the render target's. */
 		{
-			hashCombine(hash, reinterpret_cast< size_t >(framebuffer->renderPass()->handle()));
+			const auto * fb = this->pipelineFramebuffer();
+
+			if ( fb == nullptr )
+			{
+				fb = this->renderTarget()->framebuffer();
+			}
+
+			if ( fb != nullptr )
+			{
+				hashCombine(hash, reinterpret_cast< size_t >(fb->renderPass()->handle()));
+			}
 		}
 
 		/* 2. Render target type (cubemap vs single layer). */

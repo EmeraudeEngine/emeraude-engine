@@ -276,6 +276,19 @@ namespace EmEn::Graphics::Renderable
 			[[nodiscard]]
 			virtual const Libs::Math::Space3D::Sphere< float > & boundingSphere () const noexcept = 0;
 
+			/**
+			 * @brief Returns the size scale factor for the renderable.
+			 * @note By default, returns 1.0F (no scaling). Derived classes can override.
+			 * @return float
+			 */
+			[[nodiscard]]
+			virtual
+			float
+			uniformScale () const noexcept
+			{
+				return 1.0F;
+			}
+
 		protected:
 
 			/**

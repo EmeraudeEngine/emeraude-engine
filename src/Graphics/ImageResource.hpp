@@ -289,6 +289,32 @@ namespace EmEn::Graphics
 				return m_pixmap.averageColor();
 			}
 
+			/**
+			 * @brief Loads the image resource from a pre-built pixmap (procedural texture creation).
+			 *
+			 * Moves the provided pixmap into the resource and marks it as successfully loaded.
+			 * This enables creating textures from procedurally generated pixel data without
+			 * requiring an image file on disk.
+			 *
+			 * @param pixmap An rvalue reference to a valid Pixmap to move into this resource.
+			 * @return true if the pixmap was valid and the resource was successfully loaded, false otherwise.
+			 * @pre Resource must be in Unloaded state.
+			 * @post If successful, the resource owns the pixmap data and is marked as loaded.
+			 * @version 0.8.51
+			 */
+			bool
+			load (Libs::PixelFactory::Pixmap< uint8_t > && pixmap) noexcept
+			{
+				if ( !pixmap.isValid() || !this->enableManualLoading() )
+				{
+					return false;
+				}
+
+				m_pixmap = std::move(pixmap);
+
+				return this->setManualLoadSuccess(true);
+			}
+
 		private:
 
 			Libs::PixelFactory::Pixmap< uint8_t > m_pixmap;

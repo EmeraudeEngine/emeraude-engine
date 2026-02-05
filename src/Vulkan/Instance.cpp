@@ -838,6 +838,7 @@ namespace EmEn::Vulkan
 			requirements.featuresVK10().geometryShader = VK_TRUE; // Required for TBN space display
 		}
 		requirements.featuresVK10().samplerAnisotropy = VK_TRUE;
+		requirements.featuresVK10().depthBiasClamp = VK_TRUE; // Required for shadow map depth bias clamping
 		requirements.featuresVK10().shaderImageGatherExtended = VK_TRUE; // Required for PCF Filtering
 		requirements.featuresVK11().multiview = VK_TRUE; // Required for cubemap render-to-texture (Vulkan 1.1+)
 		{

@@ -284,6 +284,12 @@ namespace EmEn::Overlay
 	{
 		Generator::OverlayRendering generator{m_graphicsRenderer.mainRenderTarget(), m_surfaceGeometry, premultipliedAlpha, isBGRASurface};
 
+		/* Use the post-process framebuffer for pipeline creation (single-sample overlay). */
+		if ( const auto * overlayFB = m_graphicsRenderer.overlayFramebuffer(); overlayFB != nullptr )
+		{
+			generator.setPipelineFramebuffer(overlayFB);
+		}
+
 		if ( !generator.generateShaderProgram(m_graphicsRenderer) )
 		{
 			Tracer::error(ClassId, "Unable to generate the overlay manager shader program !");

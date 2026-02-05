@@ -414,12 +414,9 @@ namespace EmEn::Graphics::RenderTarget
 			}
 
 			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::capture() */
-			[[nodiscard]]
-			std::array< Libs::PixelFactory::Pixmap< uint8_t >, 3 >
-			capture (Vulkan::TransferManager & transferManager, uint32_t layerIndex, bool /*keepAlpha*/, bool /*withDepthBuffer*/, bool /*withStencilBuffer*/) const noexcept override
+			bool
+			capture (Vulkan::TransferManager & transferManager, uint32_t layerIndex, bool /*keepAlpha*/, bool /*withDepthBuffer*/, bool /*withStencilBuffer*/, std::array< Libs::PixelFactory::Pixmap< uint8_t >, 3 > & result) const noexcept override
 			{
-				std::array< Libs::PixelFactory::Pixmap< uint8_t >, 3 > result{};
-
 				/* Validate layer index. */
 				uint32_t maxLayers = 1;
 
@@ -444,7 +441,7 @@ namespace EmEn::Graphics::RenderTarget
 					{
 						TraceError{ClassId} << "Invalid layer index " << layerIndex << " (max: " << maxLayers - 1 << ") for shadow map '" << this->id() << "' !";
 
-						return result;
+						return false;
 					}
 				}
 
@@ -462,7 +459,7 @@ namespace EmEn::Graphics::RenderTarget
 
 				/* NOTE: Stencil is never used for shadow mapping, ignore withStencilBuffer flag. */
 
-				return result;
+				return true;
 			}
 
 			/* Cascade-specific methods (only available for cascaded shadow maps). */

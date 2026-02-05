@@ -27,6 +27,7 @@
 #include "Notification.hpp"
 
 /* Local inclusions. */
+#include "PlatformSpecific/Helpers.hpp"
 #include "Window.hpp"
 
 /* Windows inclusions. */
@@ -44,23 +45,6 @@ namespace EmEn::PlatformSpecific::Desktop
 {
 	namespace
 	{
-		std::wstring
-		toWideString (const std::string & str) noexcept
-		{
-			if ( str.empty() )
-			{
-				return {};
-			}
-
-			const int size = MultiByteToWideChar(CP_UTF8, 0, str.c_str(), static_cast< int >(str.size()), nullptr, 0);
-
-			std::wstring result(size, 0);
-
-			MultiByteToWideChar(CP_UTF8, 0, str.c_str(), static_cast< int >(str.size()), result.data(), size);
-
-			return result;
-		}
-
 		DWORD
 		toNiifIcon (NotificationIcon icon) noexcept
 		{
@@ -159,8 +143,8 @@ namespace EmEn::PlatformSpecific::Desktop
 		}
 
 		/* Copy title and message. */
-		const std::wstring wideTitle = toWideString(m_title);
-		const std::wstring wideMessage = toWideString(m_message);
+		const std::wstring wideTitle = convertUTF8ToWide(m_title);
+		const std::wstring wideMessage = convertUTF8ToWide(m_message);
 
 		wcsncpy_s(nid.szInfoTitle, wideTitle.c_str(), _TRUNCATE);
 		wcsncpy_s(nid.szInfo, wideMessage.c_str(), _TRUNCATE);

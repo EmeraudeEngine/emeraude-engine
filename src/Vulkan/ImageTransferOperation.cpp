@@ -243,7 +243,7 @@ namespace EmEn::Vulkan
 					imageBlit.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 					imageBlit.srcSubresource.mipLevel = mipLevelIndex - 1;
 					imageBlit.srcSubresource.baseArrayLayer = layerIndex;
-					imageBlit.srcSubresource.layerCount = dstImage.createInfo().arrayLayers;
+					imageBlit.srcSubresource.layerCount = 1;
 					imageBlit.srcOffsets[1].x = static_cast< int32_t >(dstImage.createInfo().extent.width >> (mipLevelIndex - 1));
 					imageBlit.srcOffsets[1].y = static_cast< int32_t >(dstImage.createInfo().extent.height >> (mipLevelIndex - 1));
 					imageBlit.srcOffsets[1].z = 1;
@@ -252,7 +252,7 @@ namespace EmEn::Vulkan
 					imageBlit.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 					imageBlit.dstSubresource.mipLevel = mipLevelIndex;
 					imageBlit.dstSubresource.baseArrayLayer = layerIndex;
-					imageBlit.dstSubresource.layerCount = dstImage.createInfo().arrayLayers;
+					imageBlit.dstSubresource.layerCount = 1;
 					imageBlit.dstOffsets[1].x = static_cast< int32_t >(dstImage.createInfo().extent.width >> mipLevelIndex);
 					imageBlit.dstOffsets[1].y = static_cast< int32_t >(dstImage.createInfo().extent.height >> mipLevelIndex);
 					imageBlit.dstOffsets[1].z  = 1;
