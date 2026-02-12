@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* Application configuration. */
+#include "emeraude_config.hpp"
+
 /* STL inclusions. */
 #include <vector>
 #include <string>

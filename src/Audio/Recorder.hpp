@@ -26,6 +26,8 @@
 
 #pragma once
 
+#include <fstream>
+
 /* STL inclusions. */
 #include <atomic>
 #include <cstdint>
@@ -139,6 +141,18 @@ namespace EmEn::Audio
 			bool stopRecording () noexcept;
 
 			/**
+			 * @brief Returns the number of audio channels used for recording.
+			 *
+			 * @return Channel count (2 for stereo, 6 for 5.1 surround).
+			 */
+			[[nodiscard]]
+			uint16_t
+			channelCount () const noexcept
+			{
+				return m_channelCount;
+			}
+
+			/**
 			 * @brief Returns whether audio recording is currently active.
 			 *
 			 * @return True if recording, false otherwise.
@@ -195,6 +209,15 @@ namespace EmEn::Audio
 			 */
 			void renderThreadFunc () noexcept;
 
+			/**
+			 * @brief Writes a placeholder or final WAV header to the output stream.
+			 *
+			 * @param stream The output stream to write to.
+			 * @param dataSize The total size of the audio data in bytes.
+			 * @return True if successful, false otherwise.
+			 */
+			bool writeWAVHeader (std::ostream & stream, uint32_t dataSize) const noexcept;
+
 			PrimaryServices & m_primaryServices; ///< Primary services for settings and filesystem access.
 			Manager & m_audioManager; ///< Audio manager owning this recorder.
 			ALCdevice * m_loopbackDevice{nullptr}; ///< OpenAL loopback device (renders to buffer instead of speakers).
@@ -204,10 +227,13 @@ namespace EmEn::Audio
 			ALCcontext * m_previousGlobalContext{nullptr}; ///< Saved previous global context to restore on terminate.
 			std::thread m_renderThread{}; ///< Dedicated render thread that pulls loopback samples and forwards to speakers.
 			Libs::WaveFactory::Frequency m_playbackFrequency{Libs::WaveFactory::Frequency::PCM48000Hz}; ///< Playback frequency (typically 48kHz).
+			uint16_t m_channelCount{2}; ///< Number of audio channels (2 = stereo, 6 = 5.1 surround).
 			std::atomic< bool > m_recording{false}; ///< True when actively recording audio to WAV.
-			std::vector< int16_t > m_recordSamples{}; ///< Accumulated PCM samples (stereo int16) for WAV output.
-			std::mutex m_recordMutex{}; ///< Mutex protecting m_recordSamples access between render thread and main thread.
-			std::filesystem::path m_outputPath{}; ///< Output path for the WAV file set in startRecording().
 			std::atomic< bool > m_renderRunning{false}; ///< True when render thread should continue running.
+			std::filesystem::path m_outputPath{}; ///< Output path for the WAV file set in startRecording().
+
+			std::ofstream m_outputFileStream{}; ///< Output file stream for writing WAV data.
+			std::streampos m_dataSizePos{}; ///< Position in the file where the data chunk size is written.
+			uint32_t m_streamByteCount{0}; ///< Total bytes written to the data chunk.
 	};
 }

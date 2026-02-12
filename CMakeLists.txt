@@ -33,7 +33,7 @@ endif ()
 
 project(
 	${BINARY_NAME}
-	VERSION 0.8.51
+	VERSION 0.8.52
 	DESCRIPTION "Emeraude Engine is an open-source (LGPLv3) 3D Graphics engine using Vulkan and written in C++20."
 	HOMEPAGE_URL "https://github.com/EmeraudeEngine/emeraude-engine"
 	LANGUAGES C CXX
@@ -86,7 +86,6 @@ option(EMERAUDE_ENABLE_OPENMP "Enable 'libomp' library [SYSTEM] (Default On)." O
 option(EMERAUDE_ENABLE_ASIO "Enable 'libasio' library. Adds the networking ability [LOCAL] (Default On)." On)
 option(EMERAUDE_ENABLE_IMGUI "Enable 'libimgui' library. Adds a GUI to the engine [LOCAL] (Default Off)." Off)
 option(EMERAUDE_ENABLE_LIBSNDFILE "Enable 'libsndfile' library. Adds a GUI to the engine [LOCAL] (Default On)." On)
-option(EMERAUDE_ENABLE_VIDEO_RECORDING "Enable VP8 video recording of rendered frames (Default Off)." Off)
 # Debug preprocessor macros control (Ignored in Release).
 option(EMERAUDE_DEBUG_OBSERVER_PATTERN "Enable the debug output of observer pattern (Default Off)." Off)
 option(EMERAUDE_DEBUG_PIXEL_FACTORY "Enable the debug output of pixel factory library (Default Off)." Off)
@@ -521,9 +520,7 @@ if ( NOT EMERAUDE_BUILD_SERVICES_ONLY )
 
 	include(SetupVideoDeviceCapture)
 
-	if ( EMERAUDE_ENABLE_VIDEO_RECORDING )
-		include(SetupLibVPX)
-	endif ()
+	include(SetupLibVPX)
 else ()
 	# NOTE: Work-around for multi-builds
 	if ( EMERAUDE_ENABLE_IMGUI )

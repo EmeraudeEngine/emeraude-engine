@@ -54,7 +54,7 @@ namespace EmEn::Audio
 	{
 		auto & settings = m_primaryServices.settings();
 
-		if ( !settings.getOrSetDefault< bool >(AudioRecorderEnableKey, DefaultAudioRecorderEnable) )
+		if ( !settings.getOrSetDefault< bool >(RushMakerEnableAudioKey, DefaultRushMakerEnabled) )
 		{
 			return false;
 		}
@@ -81,10 +81,29 @@ namespace EmEn::Audio
 			return false;
 		}
 
-		/* Check if the render format is supported. */
-		if ( OpenAL::alcIsRenderFormatSupportedSOFT(m_loopbackDevice, static_cast< ALCsizei >(m_playbackFrequency), ALC_STEREO_SOFT, ALC_SHORT_SOFT) == ALC_FALSE )
+		/* Determine channel layout from the unified output mode setting. */
+		const auto outputMode = settings.getOrSetDefault< std::string >(AudioOutputModeKey, DefaultAudioOutputMode);
+		ALCenum channelFormat = ALC_STEREO_SOFT;
+
+		if ( outputMode == "Surround51" )
 		{
-			Tracer::error(ClassId, "Loopback render format (Stereo, int16, 48kHz) not supported !");
+			if ( OpenAL::alcIsRenderFormatSupportedSOFT(m_loopbackDevice, static_cast< ALCsizei >(m_playbackFrequency), ALC_5POINT1_SOFT, ALC_SHORT_SOFT) != ALC_FALSE )
+			{
+				channelFormat = ALC_5POINT1_SOFT;
+				m_channelCount = 6;
+
+				Tracer::success(ClassId, "5.1 surround loopback format supported, using 6 channels.");
+			}
+			else
+			{
+				Tracer::warning(ClassId, "5.1 surround loopback format not supported, falling back to stereo.");
+			}
+		}
+
+		/* Check if the chosen render format is supported. */
+		if ( OpenAL::alcIsRenderFormatSupportedSOFT(m_loopbackDevice, static_cast< ALCsizei >(m_playbackFrequency), channelFormat, ALC_SHORT_SOFT) == ALC_FALSE )
+		{
+			TraceError{ClassId} << "Loopback render format (" << m_channelCount << "ch, int16, " << static_cast< int >(m_playbackFrequency) << "Hz) not supported !";
 
 			alcCloseDevice(m_loopbackDevice);
 			m_loopbackDevice = nullptr;
@@ -92,9 +111,11 @@ namespace EmEn::Audio
 			return false;
 		}
 
+		TraceInfo{ClassId} << "Audio recorder using " << m_channelCount << " channel(s).";
+
 		/* Create the game context on the loopback device. */
 		const std::array loopbackAttrs{
-			ALC_FORMAT_CHANNELS_SOFT, static_cast< int >(ALC_STEREO_SOFT),
+			ALC_FORMAT_CHANNELS_SOFT, static_cast< int >(channelFormat),
 			ALC_FORMAT_TYPE_SOFT, static_cast< int >(ALC_SHORT_SOFT),
 			ALC_FREQUENCY, static_cast< int >(m_playbackFrequency),
 			ALC_MONO_SOURCES, monoSources,
@@ -136,10 +157,23 @@ namespace EmEn::Audio
 			return false;
 		}
 
+		/* Resolve the output mode for the passthrough playback context. */
+		ALCint playbackOutputMode = ALC_ANY_SOFT;
+
+		if ( outputMode == "Surround51" )
+		{
+			playbackOutputMode = ALC_SURROUND_5_1_SOFT;
+		}
+		else if ( outputMode == "Stereo" )
+		{
+			playbackOutputMode = ALC_STEREO_BASIC_SOFT;
+		}
+
 		const std::array playbackAttrs{
 			ALC_FREQUENCY, static_cast< int >(m_playbackFrequency),
 			ALC_MONO_SOURCES, 1,
 			ALC_STEREO_SOURCES, 1,
+			ALC_OUTPUT_MODE_SOFT, static_cast< int >(playbackOutputMode),
 			0
 		};
 
@@ -231,9 +265,9 @@ namespace EmEn::Audio
 
 		constexpr ALsizei ChunkSamples = 1024;
 		constexpr size_t NumBuffers = 4;
-		constexpr size_t StereoChannels = 2;
 
 		const auto frequency = static_cast< ALsizei >(m_playbackFrequency);
+		const ALenum alFormat = (m_channelCount == 6) ? alGetEnumValue("AL_FORMAT_51CHN16") : AL_FORMAT_STEREO16;
 
 		/* Create a streaming source and buffers on the playback context. */
 		ALuint source = 0;
@@ -242,15 +276,15 @@ namespace EmEn::Audio
 		std::array< ALuint, NumBuffers > buffers{};
 		alGenBuffers(static_cast< ALsizei >(NumBuffers), buffers.data());
 
-		/* Temporary render buffer (stereo int16). */
-		std::vector< int16_t > renderBuf(static_cast< size_t >(ChunkSamples) * StereoChannels);
+		/* Temporary render buffer (channels * int16). */
+		std::vector< int16_t > renderBuf(static_cast< size_t >(ChunkSamples) * m_channelCount);
 
 		/* Prime all buffers. */
 		for ( auto buf : buffers )
 		{
 			OpenAL::alcRenderSamplesSOFT(m_loopbackDevice, renderBuf.data(), ChunkSamples);
 
-			alBufferData(buf, AL_FORMAT_STEREO16, renderBuf.data(),
+			alBufferData(buf, alFormat, renderBuf.data(),
 				static_cast< ALsizei >(renderBuf.size() * sizeof(int16_t)), frequency);
 
 			alSourceQueueBuffers(source, 1, &buf);
@@ -271,16 +305,19 @@ namespace EmEn::Audio
 				/* Render from the loopback device. */
 				OpenAL::alcRenderSamplesSOFT(m_loopbackDevice, renderBuf.data(), ChunkSamples);
 
-				/* If recording, accumulate samples. */
+				/* If recording, write samples to stream. */
 				if ( m_recording.load(std::memory_order_relaxed) )
 				{
-					const std::lock_guard< std::mutex > lock{m_recordMutex};
-
-					m_recordSamples.insert(m_recordSamples.end(), renderBuf.begin(), renderBuf.end());
+					if ( m_outputFileStream.is_open() )
+					{
+						const auto bytes = renderBuf.size() * sizeof(int16_t);
+						m_outputFileStream.write(reinterpret_cast< const char * >(renderBuf.data()), static_cast< std::streamsize >(bytes));
+						m_streamByteCount += bytes;
+					}
 				}
 
 				/* Re-fill the buffer and queue it back. */
-				alBufferData(buf, AL_FORMAT_STEREO16, renderBuf.data(),
+				alBufferData(buf, alFormat, renderBuf.data(),
 					static_cast< ALsizei >(renderBuf.size() * sizeof(int16_t)), frequency);
 
 				alSourceQueueBuffers(source, 1, &buf);
@@ -339,12 +376,29 @@ namespace EmEn::Audio
 			return false;
 		}
 
+		m_outputPath = outputPath;
+		m_outputFileStream.open(m_outputPath, std::ios::binary | std::ios::out | std::ios::trunc);
+
+		if ( !m_outputFileStream.is_open() )
 		{
-			const std::lock_guard< std::mutex > lock{m_recordMutex};
-			m_recordSamples.clear();
+			TraceError{ClassId} << "Unable to open output file " << m_outputPath << " for writing !";
+
+			return false;
 		}
 
-		m_outputPath = outputPath;
+		/* Write placeholder WAV header. */
+		if ( !this->writeWAVHeader(m_outputFileStream, 0) )
+		{
+			TraceError{ClassId} << "Unable to write WAV header to " << m_outputPath << " !";
+			m_outputFileStream.close();
+
+			return false;
+		}
+
+		/* Store the position of the data size field (Byte 40) for later patching. */
+		m_dataSizePos = 40;
+		m_streamByteCount = 0;
+
 		m_recording = true;
 
 		TraceSuccess{ClassId} << "Audio recording started -> " << m_outputPath;
@@ -362,40 +416,58 @@ namespace EmEn::Audio
 
 		m_recording = false;
 
-		/* Grab the accumulated samples. */
-		std::vector< int16_t > samples;
-
+		if ( !m_outputFileStream.is_open() )
 		{
-			const std::lock_guard< std::mutex > lock{m_recordMutex};
-			samples = std::move(m_recordSamples);
-		}
-
-		if ( samples.empty() )
-		{
-			Tracer::warning(ClassId, "Audio recording stopped but no samples were captured.");
-
 			return false;
 		}
 
-		/* Write the WAV file using WaveFactory. */
-		WaveFactory::Wave< int16_t > wave;
+		/* Patch the header sizes. */
+		const auto totalFileSize = m_streamByteCount + 36; /* RIFF chunk size = file size - 8. */
 
-		if ( !wave.initialize(samples, WaveFactory::Channels::Stereo, m_playbackFrequency) )
-		{
-			Tracer::error(ClassId, "Unable to initialize wave data for audio recording !");
+		/* 1. Patch RIFF chunk size (Byte 4). */
+		m_outputFileStream.seekp(4, std::ios::beg);
+		m_outputFileStream.write(reinterpret_cast< const char * >(&totalFileSize), 4);
 
-			return false;
-		}
+		/* 2. Patch data chunk size (Byte 40). */
+		m_outputFileStream.seekp(m_dataSizePos, std::ios::beg);
+		m_outputFileStream.write(reinterpret_cast< const char * >(&m_streamByteCount), 4);
 
-		if ( !WaveFactory::FileIO::write(wave, m_outputPath) )
-		{
-			TraceError{ClassId} << "Unable to save audio recording to " << m_outputPath << " !";
+		m_outputFileStream.close();
 
-			return false;
-		}
-
-		TraceSuccess{ClassId} << "Audio recording saved : " << samples.size() / 2 << " samples -> " << m_outputPath;
+		TraceSuccess{ClassId} << "Audio recording saved : " << m_streamByteCount / (m_channelCount * sizeof(int16_t)) << " samples -> " << m_outputPath;
 
 		return true;
+	}
+
+	bool
+	Recorder::writeWAVHeader (std::ostream & stream, uint32_t dataSize) const noexcept
+	{
+		/* Standard WAV Header (44 bytes for 16-bit PCM). */
+		const uint32_t riffSize = dataSize + 36;
+		const uint16_t audioFormat = 1; /* PCM */
+		const uint16_t numChannels = m_channelCount;
+		const uint32_t sampleRate = static_cast< uint32_t >(m_playbackFrequency);
+		const uint32_t byteRate = sampleRate * numChannels * sizeof(int16_t);
+		const uint16_t blockAlign = numChannels * sizeof(int16_t);
+		const uint16_t bitsPerSample = 16;
+
+		stream.write("RIFF", 4);
+		stream.write(reinterpret_cast< const char * >(&riffSize), 4);
+		stream.write("WAVE", 4);
+
+		stream.write("fmt ", 4);
+		const uint32_t fmtChunkSize = 16;
+		stream.write(reinterpret_cast< const char * >(&fmtChunkSize), 4);
+		stream.write(reinterpret_cast< const char * >(&audioFormat), 2);
+		stream.write(reinterpret_cast< const char * >(&numChannels), 2);
+		stream.write(reinterpret_cast< const char * >(&sampleRate), 4);
+		stream.write(reinterpret_cast< const char * >(&byteRate), 4);
+		stream.write(reinterpret_cast< const char * >(&blockAlign), 2);
+		stream.write(reinterpret_cast< const char * >(&bitsPerSample), 2);
+
+		stream.write("data", 4);
+		stream.write(reinterpret_cast< const char * >(&dataSize), 4);
+
+		return stream.good();
 	}
 }

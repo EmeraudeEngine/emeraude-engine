@@ -102,10 +102,11 @@ namespace EmEn::Libs
 		}
 
 		/* First, try to get mtime using STL (most portable). */
-		std::error_code ec;
-		const auto ftime = std::filesystem::last_write_time(m_file, ec);
+		std::error_code errorCode;
 
-		if ( !ec )
+		const auto ftime = std::filesystem::last_write_time(m_file, errorCode);
+
+		if ( !errorCode )
 		{
 			const auto sctp = std::chrono::time_point_cast< std::chrono::system_clock::duration >(ftime - std::filesystem::file_time_type::clock::now() + std::chrono::system_clock::now());
 			const auto nanoseconds = std::chrono::duration_cast< std::chrono::nanoseconds >(sctp.time_since_epoch()).count();

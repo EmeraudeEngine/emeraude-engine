@@ -76,6 +76,10 @@ Reuse the `renderable` for multiple nodes. The engine automatically batches them
 4.  **Tangent Space**: Normal maps require Geometry with Tangents.
 
 ## 6. Performance
--   **Sorting**: Opaque (Front-to-Back), Transparent (Back-to-Front).
+-   **Sorting**: Three-category render list dispatch:
+    1. **Opaque** (Front-to-Back) — early-Z optimization
+    2. **Translucent** (Back-to-Front) — standard blending, no grab pass
+    3. **TranslucentGB** (Back-to-Front) — requires grab pass (screen-space refraction, etc.)
 -   **Culling**: Frustum culling on CPU.
 -   **Resize**: Dynamic Viewport/Scissor prevents pipeline recreation.
+-   **Opacity logic**: `Material::Interface::isOpaque()` returns `false` when `requiresGrabPass()` is `true`, ensuring automatic correct sorting.

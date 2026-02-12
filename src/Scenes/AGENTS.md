@@ -375,6 +375,32 @@ See: `AbstractEntity.cpp:updateEntityProperties()` for auto-AABB creation logic.
 - **Friend class**: `AbstractEntity` is friend of `Component::Abstract` to access protected hooks
 - **Auto collision models**: Visual components auto-generate collision models - disable for gizmos!
 
+## Render List Categories
+
+The Scene dispatches renderable layers into 7 render lists (defined in `Scene.hpp`):
+
+| Index | Constant | Sort Order | Description |
+|-------|----------|------------|-------------|
+| 0 | `Opaque` | Front-to-back | Opaque objects, no lighting |
+| 1 | `Translucent` | Back-to-front | Translucent objects (no grab pass), no lighting |
+| 2 | `OpaqueLighted` | Front-to-back | Opaque objects, with lighting |
+| 3 | `TranslucentLighted` | Back-to-front | Translucent objects (no grab pass), with lighting |
+| 4 | `Shadows` | Distance | Shadow-casting objects |
+| 5 | `TranslucentGB` | Back-to-front | Translucent objects requiring grab pass, no lighting |
+| 6 | `TranslucentGBLighted` | Back-to-front | Translucent objects requiring grab pass, with lighting |
+
+**Rendering order**: Opaque → Translucent → TranslucentGB (grab pass capture happens between Translucent and TranslucentGB).
+
+**Dispatch logic** in `Scene::insertIntoRenderLists()`:
+1. `renderable->isOpaque(layerIndex)` → Opaque/OpaqueLighted
+2. `renderable->requiresGrabPass(layerIndex)` → TranslucentGB/TranslucentGBLighted
+3. Otherwise → Translucent/TranslucentLighted
+
+**Code references:**
+- `Scene.hpp` — Constants and `m_renderLists` array (7 elements)
+- `Scene.rendering.cpp:insertIntoRenderLists()` — 3-way dispatch
+- `Scene.rendering.cpp:populateRenderLists()` — Clear and populate all 6 non-shadow lists
+
 ## Shadow Mapping Integration
 
 The Scene handles shadow map rendering and lighting pass selection. See [`docs/shadow-mapping.md`](../../docs/shadow-mapping.md) for complete shadow mapping architecture.

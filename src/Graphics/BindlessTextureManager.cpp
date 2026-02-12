@@ -499,6 +499,60 @@ namespace EmEn::Graphics
 		return this->writeTextureToDescriptorSet(TextureCubeBinding, index, texture);
 	}
 
+	bool
+	BindlessTextureManager::writeRawToDescriptorSet (uint32_t binding, uint32_t arrayIndex, VkDescriptorImageInfo descriptorInfo) const noexcept
+	{
+		if ( m_descriptorSet == nullptr || !m_descriptorSet->isCreated() )
+		{
+			Tracer::error(ClassId, "Descriptor set is not created !");
+
+			return false;
+		}
+
+		if ( descriptorInfo.sampler == VK_NULL_HANDLE || descriptorInfo.imageView == VK_NULL_HANDLE )
+		{
+			Tracer::error(ClassId, "Invalid raw descriptor info !");
+
+			return false;
+		}
+
+		VkWriteDescriptorSet writeDescriptorSet{};
+		writeDescriptorSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		writeDescriptorSet.pNext = nullptr;
+		writeDescriptorSet.dstSet = m_descriptorSet->handle();
+		writeDescriptorSet.dstBinding = binding;
+		writeDescriptorSet.dstArrayElement = arrayIndex;
+		writeDescriptorSet.descriptorCount = 1;
+		writeDescriptorSet.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		writeDescriptorSet.pImageInfo = &descriptorInfo;
+		writeDescriptorSet.pBufferInfo = nullptr;
+		writeDescriptorSet.pTexelBufferView = nullptr;
+
+		vkUpdateDescriptorSets(
+			m_device->handle(),
+			1, &writeDescriptorSet,
+			0, nullptr
+		);
+
+		return true;
+	}
+
+	bool
+	BindlessTextureManager::updateTexture2DFromDescriptorInfo (uint32_t index, VkDescriptorImageInfo descriptorInfo) const noexcept
+	{
+		if ( index >= MaxTextures2D )
+		{
+			TraceError{ClassId} << "Invalid 2D texture index for raw descriptor: " << index;
+
+			return false;
+		}
+
+		/* NOTE: Protect the descriptor set writing. */
+		const std::lock_guard< std::mutex > lock{m_indexMutex};
+
+		return this->writeRawToDescriptorSet(Texture2DBinding, index, descriptorInfo);
+	}
+
 	const Vulkan::DescriptorSet *
 	BindlessTextureManager::descriptorSet () const noexcept
 	{

@@ -135,7 +135,41 @@ namespace EmEn::Vulkan
 				m_preserveAttachments.emplace_back(index);
 			}
 
+			/**
+			 * @brief Sets a depth/stencil resolve attachment for MSAA depth resolve.
+			 * @note Requires Vulkan 1.2+ (VK_KHR_depth_stencil_resolve, core in 1.2).
+			 * When configured, RenderPass will use vkCreateRenderPass2() with
+			 * VkSubpassDescriptionDepthStencilResolve chained to VkSubpassDescription2.
+			 * @param attachment The index of the resolve attachment.
+			 * @param layout The image layout for the resolve attachment.
+			 * @param depthResolveMode The resolve mode for depth (e.g. VK_RESOLVE_MODE_SAMPLE_ZERO_BIT).
+			 * @param stencilResolveMode The resolve mode for stencil. Default VK_RESOLVE_MODE_NONE.
+			 * @return void
+			 */
+			void
+			setDepthStencilResolveAttachment (uint32_t attachment, VkImageLayout layout, VkResolveModeFlagBits depthResolveMode, VkResolveModeFlagBits stencilResolveMode = VK_RESOLVE_MODE_NONE) noexcept
+			{
+				m_depthStencilResolveAttachment.attachment = attachment;
+				m_depthStencilResolveAttachment.layout = layout;
+				m_depthResolveMode = depthResolveMode;
+				m_stencilResolveMode = stencilResolveMode;
+				m_depthStencilResolveSet = true;
+			}
+
+			/**
+			 * @brief Returns whether a depth/stencil resolve attachment is configured.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			hasDepthStencilResolve () const noexcept
+			{
+				return m_depthStencilResolveSet;
+			}
+
 		private:
+
+			friend class RenderPass;
 
 			VkSubpassDescriptionFlags m_flags;
 			VkPipelineBindPoint m_pipelineBindPoint;
@@ -145,6 +179,10 @@ namespace EmEn::Vulkan
 			VkAttachmentReference m_depthStencilAttachment{};
 			Libs::StaticVector< uint32_t, 8 > m_preserveAttachments;
 			bool m_depthStencilAttachmentSet{false};
+			VkAttachmentReference m_depthStencilResolveAttachment{};
+			VkResolveModeFlagBits m_depthResolveMode{VK_RESOLVE_MODE_NONE};
+			VkResolveModeFlagBits m_stencilResolveMode{VK_RESOLVE_MODE_NONE};
+			bool m_depthStencilResolveSet{false};
 	};
 
 	/**
@@ -317,6 +355,20 @@ namespace EmEn::Vulkan
 			 */
 			[[nodiscard]]
 			Libs::StaticVector< VkSubpassDescription, 4 > getSubPassDescriptions () const noexcept;
+
+			/**
+			 * @brief Returns whether any subpass requires depth/stencil resolve (Vulkan 1.2+).
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool needsRenderPass2 () const noexcept;
+
+			/**
+			 * @brief Creates the render pass using vkCreateRenderPass2() for depth/stencil resolve.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool createOnHardwareV2 () noexcept;
 
 			VkRenderPass m_handle{VK_NULL_HANDLE};
 			VkRenderPassCreateInfo m_createInfo{};

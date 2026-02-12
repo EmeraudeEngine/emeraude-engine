@@ -238,6 +238,14 @@ namespace EmEn::Graphics::Renderable
 			virtual bool isOpaque (uint32_t layerIndex) const noexcept = 0;
 
 			/**
+			 * @brief Returns whether the renderable requires a grab pass for rendering.
+			 * @param layerIndex The index of the layer.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			virtual bool requiresGrabPass (uint32_t layerIndex) const noexcept = 0;
+
+			/**
 			 * @brief Returns the geometry of the renderable.
 			 * @return const Geometry::Interface *
 			 */

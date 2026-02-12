@@ -28,6 +28,8 @@
 
 /* STL inclusions. */
 #include <cstddef>
+#include <cstdint>
+#include <fstream>
 #include <thread>
 #include <vector>
 #include <filesystem>
@@ -96,17 +98,30 @@ namespace EmEn::Audio
 			}
 
 			/**
-			 * @brief Starts the recording.
+			 * @brief Starts the recording in memory mode.
+			 * @note Samples are accumulated in RAM. Use saveRecord() to write them to disk.
 			 */
 			void start () noexcept;
 
 			/**
+			 * @brief Starts the recording in streaming mode.
+			 * @details Samples are written directly to a WAV file as they are captured.
+			 * The file header is patched when stop() is called.
+			 * @param outputPath The output WAV file path.
+			 * @return true if the file was opened successfully.
+			 */
+			[[nodiscard]]
+			bool start (const std::filesystem::path & outputPath) noexcept;
+
+			/**
 			 * @brief Stops the recording.
+			 * @details In streaming mode, finalizes the WAV header and closes the file.
 			 */
 			void stop () noexcept;
 
 			/**
-			 * @brief Saves the recording to file.
+			 * @brief Saves the in-memory recording to file.
+			 * @note Only valid after a memory-mode recording (start() without path).
 			 * @param filepath A reference to a filesystem path.
 			 * @return bool
 			 */
@@ -132,6 +147,14 @@ namespace EmEn::Audio
 			 */
 			void recordingTask () noexcept;
 
+			/**
+			 * @brief Writes a standard 44-byte WAV header.
+			 * @param stream The output stream to write to.
+			 * @param dataSize The size of the data chunk (0 for placeholder).
+			 * @return bool
+			 */
+			bool writeWAVHeader (std::ostream & stream, uint32_t dataSize) const noexcept;
+
 			/** @brief No audio capture device found to record sound. */
 			static inline bool s_audioCaptureAvailable{false};
 
@@ -142,9 +165,16 @@ namespace EmEn::Audio
 			ALCdevice * m_device{nullptr};
 			Libs::WaveFactory::Channels m_channels{Libs::WaveFactory::Channels::Mono};
 			Libs::WaveFactory::Frequency m_frequency{Libs::WaveFactory::Frequency::PCM48000Hz};
+			/* Memory mode. */
 			std::vector< ALshort > m_samples;
+			/* Streaming mode. */
+			std::filesystem::path m_outputPath{};
+			std::ofstream m_outputFileStream{};
+			uint32_t m_streamByteCount{0};
+			/* Common. */
 			std::thread m_process;
 			bool m_showInformation{false};
 			bool m_isRecording{false};
+			bool m_streamingMode{false};
 	};
 }

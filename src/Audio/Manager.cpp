@@ -134,6 +134,14 @@ namespace EmEn::Audio
 			std::cout << "Default: " << m_selectedDeviceName << '\n';
 		}
 
+		/* Save available output devices to settings for easy editing. */
+		settings.clearArray(AudioAvailableDevicesKey);
+
+		for ( const auto & deviceName : m_availableDevices )
+		{
+			settings.setInArray(AudioAvailableDevicesKey, deviceName);
+		}
+
 		/* Checks configuration file */
 		m_playbackFrequency = WaveFactory::toFrequency(settings.getOrSetDefault< int32_t >(AudioPlaybackFrequencyKey, DefaultAudioPlaybackFrequency));
 
@@ -165,12 +173,29 @@ namespace EmEn::Audio
 			TraceSuccess{ClassId} << "The output audio device '" << alcGetString(m_device, ALC_DEVICE_SPECIFIER) << "' selected !";
 		}
 
+		/* Resolve the audio output mode (Auto, Stereo, Surround51). */
+		const auto outputMode = settings.getOrSetDefault< std::string >(AudioOutputModeKey, DefaultAudioOutputMode);
+
+		ALCint outputModeValue = ALC_ANY_SOFT;
+
+		if ( outputMode == "Surround51" )
+		{
+			outputModeValue = ALC_SURROUND_5_1_SOFT;
+		}
+		else if ( outputMode == "Stereo" )
+		{
+			outputModeValue = ALC_STEREO_BASIC_SOFT;
+		}
+
+		TraceInfo{ClassId} << "Audio output mode: " << outputMode << " (0x" << std::hex << outputModeValue << std::dec << ")";
+
 		const std::array attributeList{
 			ALC_FREQUENCY, static_cast< int >(m_playbackFrequency),
 			ALC_REFRESH, settings.getOrSetDefault< int32_t >(OpenALRefreshRateKey, DefaultOpenALRefreshRate),
 			ALC_SYNC, settings.getOrSetDefault< int32_t >(OpenALSyncStateKey, DefaultOpenALSyncState),
 			ALC_MONO_SOURCES, settings.getOrSetDefault< int32_t >(OpenALMaxMonoSourceCountKey, DefaultOpenALMaxMonoSourceCount),
 			ALC_STEREO_SOURCES, settings.getOrSetDefault< int32_t >(OpenALMaxStereoSourceCountKey, DefaultOpenALMaxStereoSourceCount),
+			ALC_OUTPUT_MODE_SOFT, static_cast< int >(outputModeValue),
 			0
 		};
 

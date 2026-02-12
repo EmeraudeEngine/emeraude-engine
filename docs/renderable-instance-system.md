@@ -67,6 +67,10 @@ A Renderable can contain multiple **layers**, where each layer corresponds to a 
 
 **Not to be confused with**: Clearly separable objects (sword, hat) which will have their own RenderableInstance attached to child nodes.
 
+**Per-layer queries** used by the Scene for render list dispatch:
+- `isOpaque(layerIndex)` — delegates to `material->isOpaque()` (returns `false` if grab pass required)
+- `requiresGrabPass(layerIndex)` — delegates to `material->requiresGrabPass()`
+
 ```cpp
 // Example: Character with 3 layers
 Renderable "character":

@@ -39,6 +39,9 @@ namespace EmEn
 	namespace Vulkan
 	{
 		class CommandBuffer;
+		class Image;
+		class ImageView;
+		class Sampler;
 	}
 
 	namespace Graphics
@@ -50,11 +53,12 @@ namespace EmEn
 namespace EmEn::Graphics
 {
 	/**
-	 * @brief A grab pass texture that captures the current frame's color output.
-	 * @note This texture captures the rendered frame after the render pass ends,
+	 * @brief A grab pass that captures the current frame's color and depth output.
+	 * @note The color texture captures the rendered frame after the render pass ends,
 	 * making it available for sampling in the next frame (one-frame delay).
+	 * The depth texture is captured alongside for depth-based effects (underwater attenuation, etc.).
 	 * Typical use case: refraction effects on transparent objects.
-	 * @extends EmEn::Vulkan::TextureInterface This is a texture.
+	 * @extends EmEn::Vulkan::TextureInterface This is a texture (color).
 	 */
 	class GrabPass final : public Vulkan::TextureInterface
 	{
@@ -74,40 +78,95 @@ namespace EmEn::Graphics
 			~GrabPass () override = default;
 
 			/**
-			 * @brief Creates the grab pass texture on the GPU.
+			 * @brief Creates the grab pass textures (color and depth) on the GPU.
 			 * @param renderer A reference to the graphics renderer.
 			 * @param width The width of the texture.
 			 * @param height The height of the texture.
-			 * @param format The image format matching the swapchain.
+			 * @param colorFormat The image format matching the swapchain color.
+			 * @param depthFormat The image format matching the swapchain depth. VK_FORMAT_UNDEFINED to skip depth.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool create (Renderer & renderer, uint32_t width, uint32_t height, VkFormat format) noexcept;
+			bool create (Renderer & renderer, uint32_t width, uint32_t height, VkFormat colorFormat, VkFormat depthFormat = VK_FORMAT_UNDEFINED) noexcept;
 
 			/**
-			 * @brief Destroys the grab pass texture from the GPU.
+			 * @brief Destroys the grab pass textures from the GPU.
 			 * @return void
 			 */
 			void destroy () noexcept;
 
 			/**
-			 * @brief Recreates the grab pass texture with new dimensions.
+			 * @brief Recreates the grab pass textures with new dimensions.
 			 * @param renderer A reference to the graphics renderer.
 			 * @param width The new width.
 			 * @param height The new height.
-			 * @param format The image format matching the swapchain.
+			 * @param colorFormat The image format matching the swapchain color.
+			 * @param depthFormat The image format matching the swapchain depth. VK_FORMAT_UNDEFINED to skip depth.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool recreate (Renderer & renderer, uint32_t width, uint32_t height, VkFormat format) noexcept;
+			bool recreate (Renderer & renderer, uint32_t width, uint32_t height, VkFormat colorFormat, VkFormat depthFormat = VK_FORMAT_UNDEFINED) noexcept;
 
 			/**
-			 * @brief Records the blit command from the swapchain color image to this texture.
+			 * @brief Records the blit/copy commands from the swapchain images to this grab pass.
 			 * @param commandBuffer A reference to the command buffer.
 			 * @param srcColorImage A reference to the source swapchain color image.
+			 * @param srcDepthImage A pointer to the source depth image. Null to skip depth copy.
 			 * @return void
 			 */
-			void recordBlit (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::Image & srcColorImage) const noexcept;
+			void recordBlit (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::Image & srcColorImage, const Vulkan::Image * srcDepthImage = nullptr) const noexcept;
+
+			/**
+			 * @brief Returns whether the depth texture is available.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			hasDepth () const noexcept
+			{
+				return m_depthImage != nullptr && m_depthImage->isCreated();
+			}
+
+			/**
+			 * @brief Returns the depth image.
+			 * @return std::shared_ptr< Vulkan::Image >
+			 */
+			[[nodiscard]]
+			std::shared_ptr< Vulkan::Image >
+			depthImage () const noexcept
+			{
+				return m_depthImage;
+			}
+
+			/**
+			 * @brief Returns the depth image view.
+			 * @return std::shared_ptr< Vulkan::ImageView >
+			 */
+			[[nodiscard]]
+			std::shared_ptr< Vulkan::ImageView >
+			depthImageView () const noexcept
+			{
+				return m_depthImageView;
+			}
+
+			/**
+			 * @brief Returns the depth sampler.
+			 * @return std::shared_ptr< Vulkan::Sampler >
+			 */
+			[[nodiscard]]
+			std::shared_ptr< Vulkan::Sampler >
+			depthSampler () const noexcept
+			{
+				return m_depthSampler;
+			}
+
+			/**
+			 * @brief Builds a VkDescriptorImageInfo from the depth components.
+			 * @note Used to register the depth texture in the bindless texture manager.
+			 * @return VkDescriptorImageInfo
+			 */
+			[[nodiscard]]
+			VkDescriptorImageInfo depthDescriptorInfo () const noexcept;
 
 			/** @copydoc EmEn::Vulkan::TextureInterface::isCreated() const noexcept */
 			[[nodiscard]]
@@ -143,8 +202,14 @@ namespace EmEn::Graphics
 
 		private:
 
+			/* Color grab pass resources. */
 			std::shared_ptr< Vulkan::Image > m_image;
 			std::shared_ptr< Vulkan::ImageView > m_imageView;
 			std::shared_ptr< Vulkan::Sampler > m_sampler;
+
+			/* Depth grab pass resources. */
+			std::shared_ptr< Vulkan::Image > m_depthImage;
+			std::shared_ptr< Vulkan::ImageView > m_depthImageView;
+			std::shared_ptr< Vulkan::Sampler > m_depthSampler;
 	};
 }

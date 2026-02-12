@@ -143,6 +143,14 @@ namespace EmEn::Audio
 			std::cout << "Default: " << m_selectedDeviceName << '\n';
 		}
 
+		/* Save available capture devices to settings for easy editing. */
+		settings.clearArray(AudioCaptureAvailableDevicesKey);
+
+		for ( const auto & deviceName : m_availableDevices )
+		{
+			settings.setInArray(AudioCaptureAvailableDevicesKey, deviceName);
+		}
+
 		/* Checks configuration file */
 		const auto bufferSize = settings.getOrSetDefault< int32_t >(AudioCaptureBufferSizeKey, DefaultAudioCaptureBufferSize);
 		m_frequency = WaveFactory::toFrequency(settings.getOrSetDefault< int32_t >(AudioCaptureFrequencyKey, DefaultAudioCaptureFrequency));
@@ -215,12 +223,52 @@ namespace EmEn::Audio
 		}
 
 		m_samples.clear();
+		m_streamingMode = false;
 
 		alcCaptureStart(m_device);
 
 		m_isRecording = true;
 
 		m_process = std::thread(&ExternalInput::recordingTask, this);
+	}
+
+	bool
+	ExternalInput::start (const std::filesystem::path & outputPath) noexcept
+	{
+		if ( m_device == nullptr || m_isRecording )
+		{
+			return false;
+		}
+
+		m_outputPath = outputPath;
+		m_outputFileStream.open(m_outputPath, std::ios::binary | std::ios::out | std::ios::trunc);
+
+		if ( !m_outputFileStream.is_open() )
+		{
+			TraceError{ClassId} << "Unable to open output file " << m_outputPath << " for writing!";
+
+			return false;
+		}
+
+		/* Write placeholder WAV header. */
+		if ( !this->writeWAVHeader(m_outputFileStream, 0) )
+		{
+			TraceError{ClassId} << "Unable to write WAV header to " << m_outputPath << "!";
+			m_outputFileStream.close();
+
+			return false;
+		}
+
+		m_streamByteCount = 0;
+		m_streamingMode = true;
+
+		alcCaptureStart(m_device);
+
+		m_isRecording = true;
+
+		m_process = std::thread(&ExternalInput::recordingTask, this);
+
+		return true;
 	}
 
 	void
@@ -234,6 +282,34 @@ namespace EmEn::Audio
 		alcCaptureStop(m_device);
 
 		m_isRecording = false;
+
+		/* Join the recording thread to ensure all data is flushed. */
+		if ( m_process.joinable() )
+		{
+			m_process.join();
+		}
+
+		/* Streaming mode: finalize the WAV header and close the file. */
+		if ( m_streamingMode && m_outputFileStream.is_open() )
+		{
+			/* Patch the header sizes. */
+			const auto totalFileSize = m_streamByteCount + 36; /* RIFF chunk size = file size - 8. */
+
+			/* 1. Patch RIFF chunk size (Byte 4). */
+			m_outputFileStream.seekp(4, std::ios::beg);
+			m_outputFileStream.write(reinterpret_cast< const char * >(&totalFileSize), 4);
+
+			/* 2. Patch data chunk size (Byte 40). */
+			m_outputFileStream.seekp(40, std::ios::beg);
+			m_outputFileStream.write(reinterpret_cast< const char * >(&m_streamByteCount), 4);
+
+			m_outputFileStream.close();
+
+			TraceSuccess{ClassId} << "Voice-over saved: " << m_streamByteCount / sizeof(int16_t) << " samples -> " << m_outputPath;
+
+			m_streamingMode = false;
+			m_outputPath.clear();
+		}
 	}
 
 	bool
@@ -275,6 +351,8 @@ namespace EmEn::Audio
 	void
 	ExternalInput::recordingTask () noexcept
 	{
+		std::vector< ALshort > buffer;
+
 		while ( m_isRecording )
 		{
 			ALCint sampleCount = 0;
@@ -283,12 +361,57 @@ namespace EmEn::Audio
 
 			if ( sampleCount > 0 )
 			{
-				const auto offset = m_samples.size();
+				if ( m_streamingMode )
+				{
+					buffer.resize(static_cast< size_t >(sampleCount));
 
-				m_samples.resize(offset + static_cast< size_t >(sampleCount));
+					alcCaptureSamples(m_device, buffer.data(), sampleCount);
 
-				alcCaptureSamples(m_device, &m_samples[offset], sampleCount);
+					const auto bytes = static_cast< size_t >(sampleCount) * sizeof(int16_t);
+					m_outputFileStream.write(reinterpret_cast< const char * >(buffer.data()), static_cast< std::streamsize >(bytes));
+					m_streamByteCount += static_cast< uint32_t >(bytes);
+				}
+				else
+				{
+					const auto offset = m_samples.size();
+
+					m_samples.resize(offset + static_cast< size_t >(sampleCount));
+
+					alcCaptureSamples(m_device, &m_samples[offset], sampleCount);
+				}
 			}
 		}
+	}
+
+	bool
+	ExternalInput::writeWAVHeader (std::ostream & stream, uint32_t dataSize) const noexcept
+	{
+		/* Standard WAV Header (44 bytes for 16-bit PCM Mono). */
+		const uint32_t riffSize = dataSize + 36;
+		const uint16_t audioFormat = 1; /* PCM */
+		const uint16_t numChannels = 1; /* Mono */
+		const uint32_t sampleRate = static_cast< uint32_t >(m_frequency);
+		const uint32_t byteRate = sampleRate * numChannels * sizeof(int16_t);
+		const uint16_t blockAlign = numChannels * sizeof(int16_t);
+		const uint16_t bitsPerSample = 16;
+
+		stream.write("RIFF", 4);
+		stream.write(reinterpret_cast< const char * >(&riffSize), 4);
+		stream.write("WAVE", 4);
+
+		stream.write("fmt ", 4);
+		const uint32_t fmtChunkSize = 16;
+		stream.write(reinterpret_cast< const char * >(&fmtChunkSize), 4);
+		stream.write(reinterpret_cast< const char * >(&audioFormat), 2);
+		stream.write(reinterpret_cast< const char * >(&numChannels), 2);
+		stream.write(reinterpret_cast< const char * >(&sampleRate), 4);
+		stream.write(reinterpret_cast< const char * >(&byteRate), 4);
+		stream.write(reinterpret_cast< const char * >(&blockAlign), 2);
+		stream.write(reinterpret_cast< const char * >(&bitsPerSample), 2);
+
+		stream.write("data", 4);
+		stream.write(reinterpret_cast< const char * >(&dataSize), 4);
+
+		return stream.good();
 	}
 }

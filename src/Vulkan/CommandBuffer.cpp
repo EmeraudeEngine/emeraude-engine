@@ -550,6 +550,60 @@ namespace EmEn::Vulkan
 	}
 
 	void
+	CommandBuffer::copyImage (const Image & src, VkImageLayout srcLayout, const Image & dst, VkImageLayout dstLayout, VkImageAspectFlags aspectMask) const noexcept
+	{
+		if constexpr ( IsDebug )
+		{
+			if ( !src.isCreated() )
+			{
+				Tracer::error(ClassId, "The source image is not created.");
+
+				return;
+			}
+
+			if ( !dst.isCreated() )
+			{
+				Tracer::error(ClassId, "The destination image is not created.");
+
+				return;
+			}
+
+			if ( !this->isCreated() )
+			{
+				TraceError{ClassId} <<
+					"The command buffer is not created !" "\n"
+					"Unable to copy image " << src.handle() << " to image " << dst.handle();
+
+				return;
+			}
+		}
+
+		VkImageCopy imageCopy{};
+		imageCopy.srcSubresource.aspectMask = aspectMask;
+		imageCopy.srcSubresource.mipLevel = 0;
+		imageCopy.srcSubresource.baseArrayLayer = 0;
+		imageCopy.srcSubresource.layerCount = 1;
+		imageCopy.srcOffset = {0, 0, 0};
+		imageCopy.dstSubresource.aspectMask = aspectMask;
+		imageCopy.dstSubresource.mipLevel = 0;
+		imageCopy.dstSubresource.baseArrayLayer = 0;
+		imageCopy.dstSubresource.layerCount = 1;
+		imageCopy.dstOffset = {0, 0, 0};
+		imageCopy.extent = {
+			std::min(src.width(), dst.width()),
+			std::min(src.height(), dst.height()),
+			1
+		};
+
+		vkCmdCopyImage(
+			m_handle,
+			src.handle(), srcLayout,
+			dst.handle(), dstLayout,
+			1, &imageCopy
+		);
+	}
+
+	void
 	CommandBuffer::clearColor (const Image & image, VkImageLayout imageLayout, const PixelFactory::Color< float > & color) const noexcept
 	{
 		if constexpr ( IsDebug )

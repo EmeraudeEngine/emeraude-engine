@@ -295,6 +295,16 @@ namespace EmEn::Scenes
 			m_rootNode->trimTree();
 		}
 
+		/* Update scene-level visual components (background, ground, sea).
+		 * These are not entity components, so they must be updated explicitly. */
+		for ( const auto & component : m_sceneVisualComponents )
+		{
+			if ( component != nullptr )
+			{
+				component->processLogics(*this);
+			}
+		}
+
 		/* Update Cascaded Shadow Maps for directional lights.
 		 * CSM needs the camera frustum corners to compute tight-fit cascade projections each frame. */
 		this->updateCSMCascades(m_AVConsoleManager.graphicsRenderer().mainRenderTarget());

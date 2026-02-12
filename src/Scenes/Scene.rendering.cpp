@@ -362,58 +362,84 @@ namespace EmEn::Scenes
 		}
 	}
 
-	void
-	Scene::render (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const Vulkan::CommandBuffer & commandBuffer) noexcept
+	bool
+	Scene::prepareRender (const std::shared_ptr< RenderTarget::Abstract > & renderTarget) noexcept
 	{
-		const uint32_t readStateIndex = m_renderStateIndex.load(std::memory_order_acquire);
+		m_preparedReadStateIndex = m_renderStateIndex.load(std::memory_order_acquire);
 
-		/* Sort the scene according to the point of view. */
-		if ( !this->populateRenderLists(renderTarget, readStateIndex) )
+		const auto & bindlessManager = m_AVConsoleManager.graphicsRenderer().bindlessTextureManager();
+
+		m_preparedBindlessManager = bindlessManager.usable() ? &bindlessManager : nullptr;
+
+		if ( !this->populateRenderLists(renderTarget, m_preparedReadStateIndex) )
 		{
-			return;
+			return false;
 		}
 
-		/*TraceDebug{ClassId} <<
+		/*TraceInfo{ClassId} <<
 			"Frame content :" "\n"
 			" - Opaque / +lighted : " << m_renderLists[Opaque].size() << " / " << m_renderLists[OpaqueLighted].size() << "\n"
-			" - Translucent / +lighted : " << m_renderLists[Translucent].size() << " / " << m_renderLists[TranslucentLighted].size() << "\n";*/
+			" - Translucent / +lighted : " << m_renderLists[Translucent].size() << " / " << m_renderLists[TranslucentLighted].size() << "\n"
+			" - TranslucentGB / +lighted : " << m_renderLists[TranslucentGB].size() << " / " << m_renderLists[TranslucentGBLighted].size() << "\n";*/
 
-		/* Get the bindless textures manager for materials using automatic reflection. */
-		const auto & bindlessManager = m_AVConsoleManager.graphicsRenderer().bindlessTextureManager();
-		const auto * bindlessManagerPtr = bindlessManager.usable() ? &bindlessManager : nullptr;
+		return true;
+	}
 
-		/* First, we render all opaque renderable objects. */
+	void
+	Scene::renderOpaque (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const Vulkan::CommandBuffer & commandBuffer) noexcept
+	{
+		if ( !m_renderLists[Opaque].empty() )
 		{
-			if ( !m_renderLists[Opaque].empty() )
+			for ( const auto & renderBatch : m_renderLists[Opaque] | std::views::values )
 			{
-				for ( const auto & renderBatch : m_renderLists[Opaque] | std::views::values )
-				{
-					renderBatch.renderableInstance()->render(readStateIndex, renderTarget, nullptr, RenderPassType::SimplePass, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, bindlessManagerPtr);
-				}
-			}
-
-			if ( m_lightSet.isEnabled() && !m_renderLists[OpaqueLighted].empty() )
-			{
-				this->renderLightedSelection(renderTarget, readStateIndex, commandBuffer, m_renderLists[OpaqueLighted], bindlessManagerPtr);
+				renderBatch.renderableInstance()->render(m_preparedReadStateIndex, renderTarget, nullptr, RenderPassType::SimplePass, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, m_preparedBindlessManager);
 			}
 		}
 
-		/* After, we render all translucent renderable objects. */
+		if ( m_lightSet.isEnabled() && !m_renderLists[OpaqueLighted].empty() )
 		{
-			if ( !m_renderLists[Translucent].empty() )
-			{
-				for ( const auto & renderBatch : m_renderLists[Translucent] | std::views::values )
-				{
-					renderBatch.renderableInstance()->render(readStateIndex, renderTarget, nullptr, RenderPassType::SimplePass, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, bindlessManagerPtr);
-				}
-			}
+			this->renderLightedSelection(renderTarget, m_preparedReadStateIndex, commandBuffer, m_renderLists[OpaqueLighted], m_preparedBindlessManager);
+		}
+	}
 
-			if ( m_lightSet.isEnabled() && !m_renderLists[TranslucentLighted].empty() )
+	void
+	Scene::renderTranslucent (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const Vulkan::CommandBuffer & commandBuffer) noexcept
+	{
+		if ( !m_renderLists[Translucent].empty() )
+		{
+			for ( const auto & renderBatch : m_renderLists[Translucent] | std::views::values )
 			{
-				this->renderLightedSelection(renderTarget, readStateIndex, commandBuffer, m_renderLists[TranslucentLighted], bindlessManagerPtr);
+				renderBatch.renderableInstance()->render(m_preparedReadStateIndex, renderTarget, nullptr, RenderPassType::SimplePass, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, m_preparedBindlessManager);
 			}
 		}
 
+		if ( m_lightSet.isEnabled() && !m_renderLists[TranslucentLighted].empty() )
+		{
+			this->renderLightedSelection(renderTarget, m_preparedReadStateIndex, commandBuffer, m_renderLists[TranslucentLighted], m_preparedBindlessManager);
+		}
+	}
+
+	void
+	Scene::renderTranslucentGB (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const Vulkan::CommandBuffer & commandBuffer) noexcept
+	{
+		if ( !m_renderLists[TranslucentGB].empty() )
+		{
+			for ( const auto & renderBatch : m_renderLists[TranslucentGB] | std::views::values )
+			{
+				renderBatch.renderableInstance()->render(m_preparedReadStateIndex, renderTarget, nullptr, RenderPassType::SimplePass, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, m_preparedBindlessManager);
+			}
+		}
+
+		if ( m_lightSet.isEnabled() && !m_renderLists[TranslucentGBLighted].empty() )
+		{
+			this->renderLightedSelection(renderTarget, m_preparedReadStateIndex, commandBuffer, m_renderLists[TranslucentGBLighted], m_preparedBindlessManager);
+		}
+	}
+
+	bool
+	Scene::hasTranslucentGBObjects () const noexcept
+	{
+		return !m_renderLists[TranslucentGB].empty() || !m_renderLists[TranslucentGBLighted].empty();
 	}
 
 	void
@@ -845,6 +871,8 @@ namespace EmEn::Scenes
 		m_renderLists[Translucent].clear();
 		m_renderLists[OpaqueLighted].clear();
 		m_renderLists[TranslucentLighted].clear();
+		m_renderLists[TranslucentGB].clear();
+		m_renderLists[TranslucentGBLighted].clear();
 
 		/* NOTE: The camera position doesn't move during calculation. */
 		const auto & cameraPosition = renderTarget->viewMatrices().position();
@@ -961,7 +989,7 @@ namespace EmEn::Scenes
 		}
 
 		/* Return true if something can be rendered. */
-		constexpr std::array< uint32_t, 4 > objectTypes{Opaque, Translucent, OpaqueLighted, TranslucentLighted};
+		constexpr std::array< uint32_t, 6 > objectTypes{Opaque, Translucent, OpaqueLighted, TranslucentLighted, TranslucentGB, TranslucentGBLighted};
 
 		return std::ranges::any_of(objectTypes, [&] (uint32_t objectType) {
 			return !m_renderLists[objectType].empty();
@@ -999,28 +1027,20 @@ namespace EmEn::Scenes
 		for ( uint32_t layerIndex = 0; layerIndex < layerCount; layerIndex++ )
 		{
 			const auto isOpaque = renderable->isOpaque(layerIndex);
+			const auto needsGrabPass = renderable->requiresGrabPass(layerIndex);
+			const auto isLighted = m_lightSet.isEnabled() && renderableInstance->isLightingEnabled();
 
-			if ( m_lightSet.isEnabled() && renderableInstance->isLightingEnabled() )
+			if ( isOpaque )
 			{
-				if ( isOpaque )
-				{
-					RenderBatch::create(m_renderLists[OpaqueLighted], distance, renderableInstance, worldCoordinates, layerIndex);
-				}
-				else
-				{
-					RenderBatch::create(m_renderLists[TranslucentLighted], distance * -1.0F, renderableInstance, worldCoordinates, layerIndex);
-				}
+				RenderBatch::create(m_renderLists[isLighted ? OpaqueLighted : Opaque], distance, renderableInstance, worldCoordinates, layerIndex);
+			}
+			else if ( needsGrabPass )
+			{
+				RenderBatch::create(m_renderLists[isLighted ? TranslucentGBLighted : TranslucentGB], distance * -1.0F, renderableInstance, worldCoordinates, layerIndex);
 			}
 			else
 			{
-				if ( isOpaque )
-				{
-					RenderBatch::create(m_renderLists[Opaque], distance, renderableInstance, worldCoordinates, layerIndex);
-				}
-				else
-				{
-					RenderBatch::create(m_renderLists[Translucent], distance * -1.0F, renderableInstance, worldCoordinates, layerIndex);
-				}
+				RenderBatch::create(m_renderLists[isLighted ? TranslucentLighted : Translucent], distance * -1.0F, renderableInstance, worldCoordinates, layerIndex);
 			}
 		}
 	}

@@ -793,7 +793,9 @@ namespace EmEn::Vulkan
 				subPass.addResolveAttachment(2, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 			}
 
-			/* Attachment 3: Depth/Stencil Resolve buffer (single sample) - Optional but included for completeness. */
+			/* Attachment 3: Depth/Stencil Resolve buffer (single sample).
+			 * MSAA depth resolve writes the resolved depth here so the post-process
+			 * render pass can load valid depth values for TranslucentGB depth testing. */
 			{
 				const auto & depthStencilBufferCreateInfo = m_frames.front().depthStencilImage->createInfo();
 
@@ -802,12 +804,16 @@ namespace EmEn::Vulkan
 					.format = depthStencilBufferCreateInfo.format,
 					.samples = depthStencilBufferCreateInfo.samples,
 					.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-					.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE, /* Usually don't need the resolved depth. */
+					.storeOp = VK_ATTACHMENT_STORE_OP_STORE, /* Store the resolved depth for the post-process pass. */
 					.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
 					.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
 					.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
 					.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
 				});
+
+				/* Resolve MSAA depth to single-sample depth buffer (Vulkan 1.2+ depth resolve).
+				 * SAMPLE_ZERO picks one sample — sufficient for depth testing in the post-process pass. */
+				subPass.setDepthStencilResolveAttachment(3, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_RESOLVE_MODE_SAMPLE_ZERO_BIT);
 			}
 		}
 		else
@@ -899,7 +905,9 @@ namespace EmEn::Vulkan
 			subPass.addColorAttachment(0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 		}
 
-		/* Attachment 1: Depth/Stencil buffer (single-sample). */
+		/* Attachment 1: Depth/Stencil buffer (single-sample).
+		 * In MSAA mode, the main render pass resolves depth via VkSubpassDescriptionDepthStencilResolve
+		 * so the single-sample depth buffer contains valid values. LOAD preserves them for depth testing. */
 		{
 			const auto & depthStencilBufferCreateInfo = m_frames.front().depthStencilImage->createInfo();
 
@@ -1050,7 +1058,7 @@ namespace EmEn::Vulkan
 			VK_IMAGE_TYPE_2D,
 			Instance::findDepthStencilFormat(device, this->precisions()),
 			this->extent(),
-			VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT
+			VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT
 		);
 		image->setIdentifier(ClassId, identifier + "DepthStencilBuffer", "Image");
 
@@ -1110,6 +1118,17 @@ namespace EmEn::Vulkan
 		}
 
 		return true;
+	}
+
+	VkFormat
+	SwapChain::depthStencilFormat () const noexcept
+	{
+		if ( m_frames.empty() || m_frames.front().depthStencilImage == nullptr )
+		{
+			return VK_FORMAT_UNDEFINED;
+		}
+
+		return m_frames.front().depthStencilImage->createInfo().format;
 	}
 
 	std::optional< uint32_t >

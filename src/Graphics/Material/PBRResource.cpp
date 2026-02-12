@@ -945,9 +945,21 @@ namespace EmEn::Graphics::Material
 				const auto attenuationDistance = FastJSON::getValue< float >(data[TransmissionString], JKAttenuationDistance).value_or(DefaultAttenuationDistance);
 				const auto thickness = FastJSON::getValue< float >(data[TransmissionString], JKThickness).value_or(DefaultThicknessFactor);
 
-				if ( !this->setTransmissionComponent(factor, attenuationColor, attenuationDistance, thickness) )
+				const auto useGrabPass = FastJSON::getValue< bool >(data[TransmissionString], JKScreenSpace).value_or(false);
+
+				if ( useGrabPass )
 				{
-					return false;
+					if ( !this->setTransmissionComponentFromGrabPass(factor, attenuationColor, attenuationDistance, thickness) )
+					{
+						return false;
+					}
+				}
+				else
+				{
+					if ( !this->setTransmissionComponent(factor, attenuationColor, attenuationDistance, thickness) )
+					{
+						return false;
+					}
 				}
 			}
 				return true;
@@ -1174,6 +1186,12 @@ namespace EmEn::Graphics::Material
 					TraceError{ClassId} << "Unable to create component '" << to_cstring(componentType) << "' of PBR material resource '" << this->name() << "' !";
 
 					return false;
+				}
+
+				/* Check if this texture component is animated. */
+				if ( component->texture() != nullptr && component->texture()->duration() > 0 )
+				{
+					this->enableFlag(IsAnimated);
 				}
 			}
 		}
@@ -1409,7 +1427,7 @@ namespace EmEn::Graphics::Material
 	bool
 	PBRResource::isComplex () const noexcept
 	{
-		return this->isComponentPresent(ComponentType::Reflection) || this->isComponentPresent(ComponentType::Refraction) || m_isUsingEnvironmentCubemap || m_isUsingEnvironmentCubemapForRefraction || m_isUsingEnvironmentCubemapForTransmission || m_useParallaxOcclusionMapping;
+		return this->isComponentPresent(ComponentType::Reflection) || this->isComponentPresent(ComponentType::Refraction) || m_isUsingEnvironmentCubemap || m_isUsingEnvironmentCubemapForRefraction || m_isUsingEnvironmentCubemapForTransmission || m_isUsingGrabPassForTransmission || m_useParallaxOcclusionMapping;
 	}
 
 	const Physics::SurfacePhysicalProperties &
@@ -1427,18 +1445,57 @@ namespace EmEn::Graphics::Material
 	uint32_t
 	PBRResource::frameCount () const noexcept
 	{
+		if ( !this->isFlagEnabled(IsAnimated) )
+		{
+			return 1;
+		}
+
+		for ( const auto & component : std::ranges::views::values(m_components) )
+		{
+			if ( component->texture() != nullptr && component->texture()->duration() > 0 )
+			{
+				return component->texture()->frameCount();
+			}
+		}
+
 		return 1;
 	}
 
 	uint32_t
 	PBRResource::duration () const noexcept
 	{
+		if ( !this->isFlagEnabled(IsAnimated) )
+		{
+			return 0;
+		}
+
+		for ( const auto & component : std::ranges::views::values(m_components) )
+		{
+			if ( component->texture() != nullptr && component->texture()->duration() > 0 )
+			{
+				return component->texture()->duration();
+			}
+		}
+
 		return 0;
 	}
 
 	uint32_t
-	PBRResource::frameIndexAt (uint32_t /*sceneTime*/) const noexcept
+	PBRResource::frameIndexAt (uint32_t sceneTime) const noexcept
 	{
+		if ( !this->isFlagEnabled(IsAnimated) )
+		{
+			return 0;
+		}
+
+		for ( const auto & component : std::ranges::views::values(m_components) )
+		{
+			if ( component->texture() != nullptr && component->texture()->duration() > 0 )
+			{
+				return component->texture()->frameIndexAt(sceneTime);
+			}
+		}
+
 		return 0;
 	}
 
@@ -1740,7 +1797,7 @@ namespace EmEn::Graphics::Material
 					std::string{SurfaceTransmissionColor},
 					MaterialUB(UniformBlock::Component::AttenuationColor),
 					MaterialUB(UniformBlock::Component::AttenuationDistance),
-					MaterialUB(UniformBlock::Component::ThicknessFactor)
+					m_isUsingDepthBasedOpacity ? std::string{"gpWaterColumnThickness"} : MaterialUB(UniformBlock::Component::ThicknessFactor)
 				);
 			}
 		}
@@ -1877,6 +1934,26 @@ namespace EmEn::Graphics::Material
 			{
 				return false;
 			}
+
+			/* If any texture component uses volumetric textures (e.g., AnimatedTexture2D)
+			 * and the geometry only has 2D UVs, add the 3D coordinate fallback. */
+			if ( !this->primaryTextureCoordinatesUses3D() )
+			{
+				for ( const auto & [type, component] : m_components )
+				{
+					const auto * texture = dynamic_cast< const Component::Texture * >(component.get());
+
+					if ( texture != nullptr && texture->isVolumetricTexture() )
+					{
+						if ( !addVolumetricTextureFallback(generator, vertexShader, *geometry) )
+						{
+							return false;
+						}
+
+						break;
+					}
+				}
+			}
 		}
 
 		/* Check if the material needs vertex colors. */
@@ -1895,8 +1972,11 @@ namespace EmEn::Graphics::Material
 		}
 
 		/* Reflection/IBL component setup.
-		 * NOTE: Also setup for automatic reflection using bindless textures. */
-		if ( this->isComponentPresent(ComponentType::Reflection) || this->isComponentPresent(ComponentType::Refraction) || m_isUsingEnvironmentCubemap )
+		 * NOTE: Also setup for automatic reflection using bindless textures.
+		 * GrabPass transmission also needs varyings (PositionWorldSpace, NormalWorldSpace, CameraWorldPosition). */
+		if ( this->isComponentPresent(ComponentType::Reflection) || this->isComponentPresent(ComponentType::Refraction)
+			|| m_isUsingEnvironmentCubemap || m_isUsingEnvironmentCubemapForRefraction
+			|| m_isUsingEnvironmentCubemapForTransmission || m_isUsingGrabPassForTransmission )
 		{
 			[[maybe_unused]] const auto isCubemap = generator.renderTarget()->isCubemap();
 
@@ -2225,6 +2305,116 @@ namespace EmEn::Graphics::Material
 			Code(fragmentShader, Location::Top) <<
 				"const vec3 transmissionDir = vec3(" << ShaderVariable::ReflectionTextureCoordinates << ".x, -" << ShaderVariable::ReflectionTextureCoordinates << ".y, " << ShaderVariable::ReflectionTextureCoordinates << ".z);" << Line::End <<
 				"const vec3 " << SurfaceTransmissionColor << " = textureLod(" << Bindless::TexturesCube << "[" << GLSL::Functions::NonUniformEXT << "(" << BindlessTextureManager::EnvironmentCubemapSlot << ")]" << ", transmissionDir, 4.0).rgb;";
+		}
+
+		return true;
+	}
+
+	bool
+	PBRResource::generateGrabPassTransmissionFragmentShader (const Generator::Abstract & generator, FragmentShader & fragmentShader) const noexcept
+	{
+		/* NOTE: Screen-space transmission using the GrabPass texture (bindless 2D slot 4).
+		 * Samples the captured framebuffer with UV distortion based on IOR and surface normal
+		 * to simulate real refraction of the actual scene background. */
+
+		/* Get the bindless set index from the program. */
+		const auto bindlessSetIndex = generator.shaderProgram()->setIndex(SetType::PerBindless);
+
+		/* Enable the nonuniform qualifier extension. */
+		fragmentShader.setExtensionBehavior(GLSL::Extension::NonUniformQualifier, GLSL::Extension::Require);
+
+		/* Declare the bindless 2D texture array if not already declared.
+		 * NOTE: Check if any other path already declared this binding. */
+		if ( !fragmentShader.declare(Declaration::Sampler{
+			bindlessSetIndex,
+			BindlessTextureManager::Texture2DBinding,
+			GLSL::Sampler2D,
+			Bindless::Textures2D,
+			Declaration::Sampler::UnboundedArray}) )
+		{
+			/* Declaration may fail if already declared — this is acceptable. */
+		}
+
+		if ( generator.highQualityEnabled() )
+		{
+			/* High quality: use reflectionNormal and reflectionI for accurate per-pixel refraction. */
+			const bool reflectionAlreadyDeclared = this->isComponentPresent(ComponentType::Reflection) || m_isUsingEnvironmentCubemap
+				|| this->isComponentPresent(ComponentType::Refraction) || m_isUsingEnvironmentCubemapForRefraction;
+
+			if ( !reflectionAlreadyDeclared )
+			{
+				if ( this->isComponentPresent(ComponentType::Normal) )
+				{
+					Code(fragmentShader, Location::Top) << "const vec3 reflectionNormal = normalize(" << ShaderVariable::TangentToWorldMatrix << "[0] * " << SurfaceNormalVector << ".x + " << ShaderVariable::TangentToWorldMatrix << "[1] * " << SurfaceNormalVector << ".y + " << ShaderVariable::NormalWorldSpace << " * " << SurfaceNormalVector << ".z);";
+				}
+				else
+				{
+					Code(fragmentShader, Location::Top) << "const vec3 reflectionNormal = normalize(" << ShaderVariable::NormalWorldSpace << ");";
+				}
+
+				Code(fragmentShader, Location::Top) << "const vec3 reflectionI = normalize(" << ShaderVariable::PositionWorldSpace << ".xyz - CameraWorldPosition);";
+			}
+
+			if ( m_materialProperties[DispersionOffset] > 0.0F )
+			{
+				/* Chromatic dispersion: 3 GrabPass samples with different IOR offsets per channel. */
+				Code(fragmentShader, Location::Top) <<
+					"vec2 gpScreenUV = gl_FragCoord.xy / vec2(textureSize(" << Bindless::Textures2D << "[" << GLSL::Functions::NonUniformEXT << "(" << BindlessTextureManager::GrabPassSlot << ")]" << ", 0));" << Line::End <<
+					"float baseIOR = " << MaterialUB(UniformBlock::Component::RefractionIOR) << ";" << Line::End <<
+					"float gpSpread = (baseIOR - 1.0) * " << MaterialUB(UniformBlock::Component::Dispersion) << " / 20.0;" << Line::End <<
+					"float gpEtaR = 1.0 / (baseIOR - gpSpread * 0.5);" << Line::End <<
+					"float gpEtaG = 1.0 / baseIOR;" << Line::End <<
+					"float gpEtaB = 1.0 / (baseIOR + gpSpread * 0.5);" << Line::End <<
+					"vec3 gpRefractDirR = refract(reflectionI, reflectionNormal, gpEtaR);" << Line::End <<
+					"vec3 gpRefractDirG = refract(reflectionI, reflectionNormal, gpEtaG);" << Line::End <<
+					"vec3 gpRefractDirB = refract(reflectionI, reflectionNormal, gpEtaB);" << Line::End <<
+					"float gpThickness = " << MaterialUB(UniformBlock::Component::ThicknessFactor) << ";" << Line::End <<
+					"vec2 gpOffsetR = gpRefractDirR.xy * gpThickness * 0.05;" << Line::End <<
+					"vec2 gpOffsetG = gpRefractDirG.xy * gpThickness * 0.05;" << Line::End <<
+					"vec2 gpOffsetB = gpRefractDirB.xy * gpThickness * 0.05;" << Line::End <<
+					"float convergR = texture(" << Bindless::Textures2D << "[" << GLSL::Functions::NonUniformEXT << "(" << BindlessTextureManager::GrabPassSlot << ")]" << ", clamp(gpScreenUV + gpOffsetR, vec2(0.001), vec2(0.999))).r;" << Line::End <<
+					"float convergG = texture(" << Bindless::Textures2D << "[" << GLSL::Functions::NonUniformEXT << "(" << BindlessTextureManager::GrabPassSlot << ")]" << ", clamp(gpScreenUV + gpOffsetG, vec2(0.001), vec2(0.999))).g;" << Line::End <<
+					"float convergB = texture(" << Bindless::Textures2D << "[" << GLSL::Functions::NonUniformEXT << "(" << BindlessTextureManager::GrabPassSlot << ")]" << ", clamp(gpScreenUV + gpOffsetB, vec2(0.001), vec2(0.999))).b;" << Line::End <<
+					"const vec3 " << SurfaceTransmissionColor << " = vec3(convergR, convergG, convergB);";
+			}
+			else
+			{
+				/* Standard GrabPass refraction without dispersion. */
+				Code(fragmentShader, Location::Top) <<
+					"vec2 gpScreenUV = gl_FragCoord.xy / vec2(textureSize(" << Bindless::Textures2D << "[" << GLSL::Functions::NonUniformEXT << "(" << BindlessTextureManager::GrabPassSlot << ")]" << ", 0));" << Line::End <<
+					"vec3 gpViewDir = reflectionI;" << Line::End <<
+					"float gpEta = 1.0 / " << MaterialUB(UniformBlock::Component::RefractionIOR) << ";" << Line::End <<
+					"vec3 gpRefractDir = refract(gpViewDir, reflectionNormal, gpEta);" << Line::End <<
+					"vec2 gpOffset = gpRefractDir.xy * " << MaterialUB(UniformBlock::Component::ThicknessFactor) << " * 0.05;" << Line::End <<
+					"vec2 gpRefractedUV = clamp(gpScreenUV + gpOffset, vec2(0.001), vec2(0.999));" << Line::End <<
+					"const vec3 " << SurfaceTransmissionColor << " = texture(" << Bindless::Textures2D << "[" << GLSL::Functions::NonUniformEXT << "(" << BindlessTextureManager::GrabPassSlot << ")]" << ", gpRefractedUV).rgb;";
+			}
+		}
+		else
+		{
+			/* Low quality: use a simple offset based on the normal world space and gl_FragCoord. */
+			Code(fragmentShader, Location::Top) <<
+				"vec2 gpScreenUV = gl_FragCoord.xy / vec2(textureSize(" << Bindless::Textures2D << "[" << GLSL::Functions::NonUniformEXT << "(" << BindlessTextureManager::GrabPassSlot << ")]" << ", 0));" << Line::End <<
+				"vec2 gpOffset = " << ShaderVariable::NormalWorldSpace << ".xy * " << MaterialUB(UniformBlock::Component::ThicknessFactor) << " * 0.03;" << Line::End <<
+				"vec2 gpRefractedUV = clamp(gpScreenUV + gpOffset, vec2(0.001), vec2(0.999));" << Line::End <<
+				"const vec3 " << SurfaceTransmissionColor << " = texture(" << Bindless::Textures2D << "[" << GLSL::Functions::NonUniformEXT << "(" << BindlessTextureManager::GrabPassSlot << ")]" << ", gpRefractedUV).rgb;";
+		}
+
+		/* Depth-based opacity: sample the grab pass depth buffer to compute water column thickness. */
+		if ( m_isUsingDepthBasedOpacity )
+		{
+			/* Ensure the view UBO is declared in the fragment shader (needed for near/far planes). */
+			static_cast< void >(generator.declareViewUniformBlock(fragmentShader));
+
+			Code(fragmentShader, Location::Top) <<
+				Line::End <<
+				"/* Depth-based water opacity */" << Line::End <<
+				"float gpSceneDepth = texture(" << Bindless::Textures2D << "[" << GLSL::Functions::NonUniformEXT << "(" << BindlessTextureManager::GrabPassDepthSlot << ")]" << ", gpScreenUV).r;" << Line::End <<
+				"float gpNear = " << UniformBlock::View << "." << UniformBlock::Component::ViewProperties << ".z;" << Line::End <<
+				"float gpFar = " << UniformBlock::View << "." << UniformBlock::Component::ViewProperties << ".w;" << Line::End <<
+				"float gpLinearSceneDepth = gpNear * gpFar / (gpFar - gpSceneDepth * (gpFar - gpNear));" << Line::End <<
+				"float gpLinearWaterDepth = gpNear * gpFar / (gpFar - gl_FragCoord.z * (gpFar - gpNear));" << Line::End <<
+				"float gpWaterColumnThickness = max(gpLinearSceneDepth - gpLinearWaterDepth, 0.0);";
 		}
 
 		return true;
@@ -2588,9 +2778,19 @@ namespace EmEn::Graphics::Material
 		}
 
 		/* Transmission component.
-		 * NOTE: When automatic transmission is enabled (environment cubemap), use bindless textures for prefiltered cubemap sampling.
-		 * Transmission uses the prefiltered cubemap with LOD-based roughness for frosted glass effects. */
-		if ( m_isUsingEnvironmentCubemapForTransmission && generator.bindlessTexturesEnabled() )
+		 * GrabPass screen-space transmission takes priority over cubemap-based transmission.
+		 * Both require bindless textures and high quality to be enabled (the low-quality
+		 * path lacks the required fragment varyings for screen-space refraction). */
+		if ( m_isUsingGrabPassForTransmission && generator.bindlessTexturesEnabled() && generator.highQualityEnabled() )
+		{
+			if ( !this->generateGrabPassTransmissionFragmentShader(generator, fragmentShader) )
+			{
+				TraceError{ClassId} << "Unable to generate GrabPass fragment code for transmission of PBR material '" << this->name() << "' !";
+
+				return false;
+			}
+		}
+		else if ( m_isUsingEnvironmentCubemapForTransmission && generator.bindlessTexturesEnabled() )
 		{
 			if ( !this->generateBindlessTransmissionFragmentShader(generator, fragmentShader) )
 			{
@@ -3692,6 +3892,36 @@ namespace EmEn::Graphics::Material
 		m_isUsingEnvironmentCubemapForTransmission = true;
 
 		return true;
+	}
+
+	bool
+	PBRResource::setTransmissionComponentFromGrabPass (float factor, const PixelFactory::Color< float > & attenuationColor, float attenuationDistance, float thickness) noexcept
+	{
+		if ( this->isCreated() )
+		{
+			TraceWarning{ClassId} <<
+				"The resource '" << this->name() << "' is created ! "
+				"Unable to create or change the transmission component.";
+
+			return false;
+		}
+
+		this->setTransmissionFactor(factor);
+		this->setAttenuationColor(attenuationColor);
+		this->setAttenuationDistance(attenuationDistance);
+		this->setThicknessFactor(thickness);
+
+		/* Enable GrabPass screen-space transmission (mutually exclusive with cubemap). */
+		m_isUsingGrabPassForTransmission = true;
+		m_isUsingEnvironmentCubemapForTransmission = false;
+
+		return true;
+	}
+
+	void
+	PBRResource::enableDepthBasedOpacity (bool state) noexcept
+	{
+		m_isUsingDepthBasedOpacity = state;
 	}
 
 	/* ==================== Transmission Dynamic Property Setters ==================== */

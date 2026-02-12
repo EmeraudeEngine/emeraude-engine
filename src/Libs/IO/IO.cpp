@@ -39,6 +39,75 @@
 	#pragma comment(lib, "advapi32.lib")
 #endif
 
+#if IS_WINDOWS
+namespace
+{
+	bool
+	checkWindowsAccess (const std::filesystem::path & path, DWORD desiredAccess) noexcept
+	{
+		/* Get the security descriptor size. */
+		constexpr DWORD securityInfo = OWNER_SECURITY_INFORMATION | GROUP_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION;
+		DWORD sdLength = 0;
+
+		GetFileSecurityW(path.c_str(), securityInfo, nullptr, 0, &sdLength);
+
+		if ( GetLastError() != ERROR_INSUFFICIENT_BUFFER )
+		{
+			return false;
+		}
+
+		/* Allocate and retrieve the security descriptor. */
+		std::vector< BYTE > sdBuffer(sdLength);
+		auto * pSD = reinterpret_cast< PSECURITY_DESCRIPTOR >(sdBuffer.data());
+
+		if ( !GetFileSecurityW(path.c_str(), securityInfo, pSD, sdLength, &sdLength) )
+		{
+			return false;
+		}
+
+		/* Open the process token. */
+		HANDLE hToken = nullptr;
+
+		if ( !OpenProcessToken(GetCurrentProcess(), TOKEN_IMPERSONATE | TOKEN_QUERY | TOKEN_DUPLICATE | STANDARD_RIGHTS_READ, &hToken) )
+		{
+			return false;
+		}
+
+		/* Duplicate to an impersonation token for AccessCheck(). */
+		HANDLE hImpersonationToken = nullptr;
+
+		if ( !DuplicateToken(hToken, SecurityImpersonation, &hImpersonationToken) )
+		{
+			CloseHandle(hToken);
+
+			return false;
+		}
+
+		/* Set up generic mapping for file objects. */
+		GENERIC_MAPPING mapping{};
+		mapping.GenericRead = FILE_GENERIC_READ;
+		mapping.GenericWrite = FILE_GENERIC_WRITE;
+		mapping.GenericExecute = FILE_GENERIC_EXECUTE;
+		mapping.GenericAll = FILE_ALL_ACCESS;
+
+		MapGenericMask(&desiredAccess, &mapping);
+
+		/* Perform the access check. */
+		PRIVILEGE_SET privilegeSet{};
+		DWORD privilegeSetLength = sizeof(PRIVILEGE_SET);
+		DWORD grantedAccess = 0;
+		BOOL accessStatus = FALSE;
+
+		const BOOL result = AccessCheck(pSD, hImpersonationToken, desiredAccess, &mapping, &privilegeSet, &privilegeSetLength, &grantedAccess, &accessStatus);
+
+		CloseHandle(hImpersonationToken);
+		CloseHandle(hToken);
+
+		return result != 0 && accessStatus != 0;
+	}
+}
+#endif
+
 namespace EmEn::Libs::IO
 {
 	bool
@@ -49,7 +118,7 @@ namespace EmEn::Libs::IO
 			return false;
 		}
 
-		std::error_code errorCode{};
+		std::error_code errorCode;
 
 		if ( !std::filesystem::exists(filepath, errorCode) ) [[unlikely]]
 		{
@@ -60,7 +129,7 @@ namespace EmEn::Libs::IO
 
 		if ( errorCode.value() > 0 ) [[unlikely]]
 		{
-			std::cerr << __PRETTY_FUNCTION__ << ", unable to check the existence of the file " << filepath << " (" << errorCode.value() << ':' << errorCode.message() << ")" "\n";
+			std::cerr << "IO::fileExists(), unable to check the existence of the file " << filepath << " (" << errorCode.value() << ':' << errorCode.message() << ")" "\n";
 
 			return false;
 		}
@@ -71,13 +140,13 @@ namespace EmEn::Libs::IO
 	size_t
 	filesize (const std::filesystem::path & filepath) noexcept
 	{
-		std::error_code errorCode{};
+		std::error_code errorCode;
 
 		const auto size = std::filesystem::file_size(filepath, errorCode);
 
 		if ( errorCode.value() > 0 ) [[unlikely]]
 		{
-			std::cerr << __PRETTY_FUNCTION__ << ", unable to get the size of the file " << filepath << " (" << errorCode.value() << ':' << errorCode.message() << ")" "\n";
+			std::cerr << "IO::filesize(), unable to get the size of the file " << filepath << " (" << errorCode.value() << ':' << errorCode.message() << ")" "\n";
 		}
 
 		return size;
@@ -104,17 +173,17 @@ namespace EmEn::Libs::IO
 			return false;
 		}
 
-		std::error_code errorCode{};
+		std::error_code errorCode;
 
 		if ( !std::filesystem::is_regular_file(filepath, errorCode) ) [[unlikely]]
 		{
 			if ( errorCode.value() > 0 ) [[unlikely]]
 			{
-				std::cerr << __PRETTY_FUNCTION__ << ", unable to check the path " << filepath << " (" << errorCode.value() << ':' << errorCode.message() << ")" "\n";
+				std::cerr << "IO::eraseFile(), unable to check the path " << filepath << " (" << errorCode.value() << ':' << errorCode.message() << ")" "\n";
 			}
 			else
 			{
-				std::cerr << __PRETTY_FUNCTION__ << ", the path " << filepath << " is not a regular file !" << "\n";
+				std::cerr << "IO::eraseFile(), the path " << filepath << " is not a regular file !" << "\n";
 			}
 
 			return false;
@@ -124,7 +193,7 @@ namespace EmEn::Libs::IO
 
 		if ( errorCode.value() > 0 ) [[unlikely]]
 		{
-			std::cerr << __PRETTY_FUNCTION__ << ", unable to delete the file " << filepath << " (" << errorCode.value() << ':' << errorCode.message() << ")" "\n";
+			std::cerr << "IO::eraseFile(), unable to delete the file " << filepath << " (" << errorCode.value() << ':' << errorCode.message() << ")" "\n";
 
 			return false;
 		}
@@ -140,7 +209,7 @@ namespace EmEn::Libs::IO
 			return false;
 		}
 
-		std::error_code errorCode{};
+		std::error_code errorCode;
 
 		const auto result = std::filesystem::is_directory(path, errorCode);
 
@@ -149,7 +218,7 @@ namespace EmEn::Libs::IO
 			/* NOTE: We don't need to print the error message if the directory do not exist. */
 			if ( errorCode.value() != 2 ) [[unlikely]]
 			{
-				std::cerr << __PRETTY_FUNCTION__ << ", unable to check if the path " << path << " is a directory (" << errorCode.value() << ':' << errorCode.message() << ")" "\n";
+				std::cerr << "IO::directoryExists(), unable to check if the path " << path << " is a directory (" << errorCode.value() << ':' << errorCode.message() << ")" "\n";
 			}
 
 			return false;
@@ -166,13 +235,13 @@ namespace EmEn::Libs::IO
 			return false;
 		}
 
-		std::error_code errorCode{};
+		std::error_code errorCode;
 
 		const auto result = std::filesystem::is_empty(path, errorCode);
 
 		if ( errorCode.value() > 0 ) [[unlikely]]
 		{
-			std::cerr << __PRETTY_FUNCTION__ << ", unable to check the content of directory " << path << " (" << errorCode.value() << ':' << errorCode.message() << ")" "\n";
+			std::cerr << "IO::isDirectoryContentEmpty(), unable to check the content of directory " << path << " (" << errorCode.value() << ':' << errorCode.message() << ")" "\n";
 		}
 
 		return result;
@@ -183,7 +252,7 @@ namespace EmEn::Libs::IO
 	{
 		std::vector< std::filesystem::path > entries{};
 
-		std::error_code errorCode{};
+		std::error_code errorCode;
 
 		for ( const auto & entry : std::filesystem::directory_iterator(path, errorCode) )
 		{
@@ -192,7 +261,7 @@ namespace EmEn::Libs::IO
 
 		if ( errorCode.value() > 0 ) [[unlikely]]
 		{
-			std::cerr << __PRETTY_FUNCTION__ << ", an error occurs when reading path " << path << " (" << errorCode.value() << ':' << errorCode.message() << ")" "\n";
+			std::cerr << "IO::directoryEntries(), an error occurs when reading path " << path << " (" << errorCode.value() << ':' << errorCode.message() << ")" "\n";
 		}
 
 		return entries;
@@ -206,7 +275,7 @@ namespace EmEn::Libs::IO
 			return false;
 		}
 
-		std::error_code errorCode{};
+		std::error_code errorCode;
 
 		if ( removeFileSection )
 		{
@@ -221,7 +290,7 @@ namespace EmEn::Libs::IO
 
 		if ( errorCode.value() > 0 ) [[unlikely]]
 		{
-			std::cerr << __PRETTY_FUNCTION__ << ", unable to create the path " << path << " (" << errorCode.value() << ':' << errorCode.message() << ")" "\n";
+			std::cerr << "IO::createDirectory(), unable to create the path " << path << " (" << errorCode.value() << ':' << errorCode.message() << ")" "\n";
 
 			return false;
 		}
@@ -237,17 +306,17 @@ namespace EmEn::Libs::IO
 			return false;
 		}
 
-		std::error_code errorCode{};
+		std::error_code errorCode;
 
 		if ( !std::filesystem::is_directory(path, errorCode) ) [[unlikely]]
 		{
 			if ( errorCode.value() > 0 ) [[unlikely]]
 			{
-				std::cerr << __PRETTY_FUNCTION__ << ", unable to check the path " << path << " (" << errorCode.value() << ':' << errorCode.message() << ")" "\n";
+				std::cerr << "IO::eraseDirectory(), unable to check the path " << path << " (" << errorCode.value() << ':' << errorCode.message() << ")" "\n";
 			}
 			else
 			{
-				std::cerr << __PRETTY_FUNCTION__ << ", the path " << path << " is not a directory !" << "\n";
+				std::cerr << "IO::eraseDirectory(), the path " << path << " is not a directory !" << "\n";
 			}
 
 			return false;
@@ -264,7 +333,7 @@ namespace EmEn::Libs::IO
 
 		if ( errorCode.value() > 0 ) [[unlikely]]
 		{
-			std::cerr << __PRETTY_FUNCTION__ << ", Unable to delete the directory " << path << " (" << errorCode.value() << ':' << errorCode.message() << ")" "\n";
+			std::cerr << "IO::eraseDirectory(), Unable to delete the directory " << path << " (" << errorCode.value() << ':' << errorCode.message() << ")" "\n";
 
 			return false;
 		}
@@ -275,13 +344,13 @@ namespace EmEn::Libs::IO
 	std::filesystem::path
 	getCurrentWorkingDirectory () noexcept
 	{
-		std::error_code errorCode{};
+		std::error_code errorCode;
 
-		const auto path = std::filesystem::current_path(errorCode);
+		auto path = std::filesystem::current_path(errorCode);
 
 		if ( errorCode.value() > 0 ) [[unlikely]]
 		{
-			std::cerr << __PRETTY_FUNCTION__ << ", unable to get the current working directory (" << errorCode.value() << ':' << errorCode.message() << ")" "\n";
+			std::cerr << "IO::getCurrentWorkingDirectory(), unable to get the current working directory (" << errorCode.value() << ':' << errorCode.message() << ")" "\n";
 
 			return {};
 		}
@@ -297,13 +366,13 @@ namespace EmEn::Libs::IO
 			return false;
 		}
 
-		std::error_code errorCode{};
+		std::error_code errorCode;
 
 		const auto result = std::filesystem::exists(path, errorCode);
 
 		if ( errorCode.value() > 0 ) [[unlikely]]
 		{
-			std::cerr << __PRETTY_FUNCTION__ << ", unable to check the existence of the entry " << path << " (" << errorCode.value() << ':' << errorCode.message() << ")" "\n";
+			std::cerr << "IO::exists(), unable to check the existence of the entry " << path << " (" << errorCode.value() << ':' << errorCode.message() << ")" "\n";
 
 			return false;
 		}
@@ -322,9 +391,9 @@ namespace EmEn::Libs::IO
 #if IS_LINUX || IS_MACOS
 		return access(path.c_str(), R_OK) == 0;
 #elif IS_WINDOWS
-		return true; // TODO ...
+		return checkWindowsAccess(path, GENERIC_READ);
 #else
-		std::cerr << __PRETTY_FUNCTION__ << ", unable to check permission !" "\n";
+		std::cerr << "IO::readable(), unable to check permission !" "\n";
 
 		return false;
 #endif
@@ -341,9 +410,9 @@ namespace EmEn::Libs::IO
 #if IS_LINUX || IS_MACOS
 		return access(path.c_str(), W_OK) == 0;
 #elif IS_WINDOWS
-		return true; // TODO ...
+		return checkWindowsAccess(path, GENERIC_WRITE);
 #else
-		std::cerr << __PRETTY_FUNCTION__ << ", unable to check permission !" "\n";
+		std::cerr << "IO::writable(), unable to check permission !" "\n";
 
 		return false;
 #endif
@@ -360,9 +429,9 @@ namespace EmEn::Libs::IO
 #if IS_LINUX || IS_MACOS
 		return access(path.c_str(), X_OK) == 0;
 #elif IS_WINDOWS
-		return true; // TODO ...
+		return checkWindowsAccess(path, GENERIC_EXECUTE);
 #else
-		std::cerr << __PRETTY_FUNCTION__ << ", unable to check permission !" "\n";
+		std::cerr << "IO::executable(), unable to check permission !" "\n";
 
 		return false;
 #endif
@@ -398,7 +467,7 @@ namespace EmEn::Libs::IO
 
 		if ( !file.is_open() ) [[unlikely]]
 		{
-			std::cerr << __PRETTY_FUNCTION__ << ", unable to read " << filepath << " file." "\n";
+			std::cerr << "IO::fileGetContents(), unable to read " << filepath << " file." "\n";
 
 			return false;
 		}
@@ -408,7 +477,7 @@ namespace EmEn::Libs::IO
 
 		if ( bytes < 0 ) [[unlikely]]
 		{
-			std::cerr << __PRETTY_FUNCTION__ << ", unable to get the size of " << filepath << " file." "\n";
+			std::cerr << "IO::fileGetContents(), unable to get the size of " << filepath << " file." "\n";
 
 			return false;
 		}
@@ -421,7 +490,7 @@ namespace EmEn::Libs::IO
 
 		if ( !file ) [[unlikely]]
 		{
-			std::cerr << __PRETTY_FUNCTION__ << ", error reading " << filepath << " file." "\n";
+			std::cerr << "IO::fileGetContents(), error reading " << filepath << " file." "\n";
 
 			return false;
 		}
@@ -446,7 +515,7 @@ namespace EmEn::Libs::IO
 
 		if ( !file.is_open() ) [[unlikely]]
 		{
-			std::cerr << __PRETTY_FUNCTION__ << ", unable to write into " << filepath << " file." "\n";
+			std::cerr << "IO::filePutContents(), unable to write into " << filepath << " file." "\n";
 
 			return false;
 		}
@@ -455,7 +524,7 @@ namespace EmEn::Libs::IO
 
 		if ( !file ) [[unlikely]]
 		{
-			std::cerr << __PRETTY_FUNCTION__ << ", error writing to " << filepath << " file." "\n";
+			std::cerr << "IO::filePutContents(), error writing to " << filepath << " file." "\n";
 
 			return false;
 		}

@@ -26,8 +26,6 @@
 
 #pragma once
 
-#include "emeraude_config.hpp"
-
 /* STL inclusions. */
 #include <cstdint>
 #include <array>
@@ -36,33 +34,31 @@
 #include <condition_variable>
 #include <deque>
 #include <filesystem>
+#include <memory>
 #include <mutex>
 #include <thread>
 #include <vector>
 
-#ifdef EMERAUDE_VIDEO_RECORDING_ENABLED
 /* Third-party inclusions. */
 #ifdef _MSC_VER
-#pragma warning(push)
-#pragma warning(disable: 4505) /* unreferenced function with internal linkage has been removed */
+	#pragma warning(push)
+	#pragma warning(disable: 4505) /* unreferenced function with internal linkage has been removed */
 #endif
 #include "vpx/vpx_encoder.h"
 #include "vpx/vp8cx.h"
 #ifdef _MSC_VER
-#pragma warning(pop)
-#endif
+	#pragma warning(pop)
 #endif
 
-/* Local inclusions. */
+/* Local inclusions for inheritances. */
 #include "ServiceInterface.hpp"
 
-#ifdef EMERAUDE_VIDEO_RECORDING_ENABLED
+/* Local inclusions for usages. */
 #include "Vulkan/Buffer.hpp"
 #include "Vulkan/CommandPool.hpp"
 #include "Vulkan/CommandBuffer.hpp"
 #include "Vulkan/Sync/Fence.hpp"
 #include "Vulkan/Sync/Semaphore.hpp"
-#endif
 
 /* Forward declarations. */
 namespace EmEn
@@ -91,7 +87,6 @@ namespace EmEn::Graphics
 	 * PTS timing uses wall-clock milliseconds with smoothing to handle variable game framerate
 	 * while maintaining correct playback speed. Recording dimensions are locked at start time.
 	 *
-	 * @note When compiled without EMERAUDE_VIDEO_RECORDING_ENABLED, all methods are no-op stubs.
 	 * @see EmEn::ServiceInterface
 	 * @version 0.8.51
 	 */
@@ -158,6 +153,14 @@ namespace EmEn::Graphics
 			bool shouldCaptureFrame () const noexcept;
 
 			/**
+			 * @brief Returns the recommended audio bitrate in kbps based on the current quality preset.
+			 *
+			 * @return Audio bitrate in kbps (128, 192, 256, or 320).
+			 */
+			[[nodiscard]]
+			unsigned int recommendedAudioBitrate () const noexcept;
+
+			/**
 			 * @brief Captures the current swap-chain framebuffer and submits GPU copy operation.
 			 *
 			 * Harvests any completed async readbacks, finds a free async slot (or drops the frame
@@ -190,47 +193,11 @@ namespace EmEn::Graphics
 			 */
 			bool onTerminate () noexcept override;
 
-#ifdef EMERAUDE_VIDEO_RECORDING_ENABLED
 			/**
-			 * @brief Encoding thread entry point.
-			 *
-			 * Continuously waits for frames in the queue, converts BGRA to I420,
-			 * encodes VP9 with smoothed PTS timing, writes IVF frame packets, and optionally
-			 * logs statistics. Runs until m_threadRunning becomes false and the queue is drained.
-			 *
-			 * @note This function executes on the encoding thread, separate from the main thread.
+			 * @brief Joins and removes finished background encoding sessions.
+			 * @post m_finishingSessions contains only sessions still encoding.
 			 */
-			void encodingThreadFunc () noexcept;
-
-			/**
-			 * @brief Writes IVF file header to output file.
-			 *
-			 * Writes the 32-byte IVF header containing DKIF signature, VP90 codec FourCC,
-			 * dimensions, time base, and frame count placeholder (patched on stop).
-			 *
-			 * @return True if header written successfully, false otherwise.
-			 */
-			bool writeIVFFileHeader () const noexcept;
-
-			/**
-			 * @brief Writes IVF frame header before each encoded frame.
-			 *
-			 * Writes the 12-byte frame header containing frame size and presentation timestamp.
-			 *
-			 * @param frameSize Size of the encoded frame in bytes.
-			 * @param pts Presentation timestamp in milliseconds.
-			 * @return True if header written successfully, false otherwise.
-			 */
-			bool writeIVFFrameHeader (uint32_t frameSize, uint64_t pts) const noexcept;
-
-			/**
-			 * @brief Patches the frame count field in the IVF header after recording stops.
-			 *
-			 * Seeks to byte offset 24 in the output file and writes the final frame count.
-			 *
-			 * @return True if frame count patched successfully, false otherwise.
-			 */
-			bool patchIVFFrameCount () const noexcept;
+			void cleanupFinishedSessions () noexcept;
 
 			/**
 			 * @brief Creates async GPU readback resources (command pool, buffers, fences).
@@ -271,7 +238,7 @@ namespace EmEn::Graphics
 			/**
 			 * @brief Submits a two-step GPU copy using the dedicated transfer queue.
 			 *
-			 * Step 1 (graphics queue): copies swapchain image to a device-local intermediate
+			 * Step 1 (graphics queue): copies swap-chain image to a device-local intermediate
 			 * buffer with layout transitions, signals a semaphore.
 			 * Step 2 (transfer queue): DMA copies device-local buffer to host-visible staging
 			 * buffer on dedicated transfer hardware, signals fence.
@@ -329,6 +296,74 @@ namespace EmEn::Graphics
 				vpx_codec_pts_t pts{0}; ///< Wall-clock presentation timestamp in timebase units.
 			};
 
+			/**
+			 * @struct EncodingSession
+			 * @brief Self-contained encoding session that can be detached from the Recorder.
+			 *
+			 * Owns the VP9 codec, IVF output file, frame queue, and encoding thread.
+			 * Once detached from the Recorder, it autonomously drains remaining frames,
+			 * flushes the codec, patches the IVF header, and cleans up.
+			 */
+			struct EncodingSession
+			{
+				/* Codec state. */
+				vpx_codec_ctx_t codec{};
+				vpx_image_t vpxImage{};
+				bool codecInitialized{false};
+
+				/* IVF output. */
+				std::FILE * outputFile{nullptr};
+				std::filesystem::path outputPath{};
+
+				/* Frame queue (producer-consumer). */
+				std::deque< FrameSlot > frameQueue{};
+				std::deque< FrameSlot > freeFrames{};
+				std::mutex queueMutex{};
+				std::condition_variable queueCV{};
+
+				/* Thread control. */
+				std::thread encodingThread{};
+				std::atomic< bool > threadRunning{false};
+				std::atomic< bool > finished{false};
+
+				/* Encoding parameters (snapshot from Recorder at session creation). */
+				uint32_t recordWidth{0};
+				uint32_t recordHeight{0};
+				uint32_t targetFramerate{30};
+				uint64_t frameCount{0};
+				std::atomic< uint64_t > captureCount{0};
+				vpx_codec_pts_t lastEncodedPts{0};
+				bool realtimeMode{true};
+				bool showStatistics{false};
+
+				/* SIMD dispatch. */
+				BGRAToI420Func bgraToI420{nullptr};
+
+				/** @brief Encoding thread entry point. Drains queue, encodes, then calls finalize(). */
+				void encodingThreadFunc () noexcept;
+
+				/** @brief Writes the 32-byte IVF file header. */
+				bool writeIVFFileHeader () const noexcept;
+
+				/** @brief Writes a 12-byte IVF frame header. */
+				bool writeIVFFrameHeader (uint32_t frameSize, uint64_t pts) const noexcept;
+
+				/** @brief Patches the frame count at byte offset 24 in the IVF header. */
+				bool patchIVFFrameCount () const noexcept;
+
+				/** @brief Flushes codec, patches IVF, closes file, destroys resources. */
+				void finalize () noexcept;
+
+				/** @brief Safety-net destructor: joins thread, cleans up if finalize() was not called. */
+				~EncodingSession () noexcept;
+
+				EncodingSession () = default;
+				EncodingSession (const EncodingSession &) = delete;
+				EncodingSession & operator= (const EncodingSession &) = delete;
+				EncodingSession (EncodingSession &&) = delete;
+				EncodingSession & operator= (EncodingSession &&) = delete;
+			};
+
 			/* Service dependencies. */
 			PrimaryServices & m_primaryServices; ///< Primary services for settings and filesystem.
 			Renderer & m_renderer; ///< Graphics renderer for swap-chain access.
@@ -341,47 +376,50 @@ namespace EmEn::Graphics
 			uint32_t m_graphicsFamilyIndex{0}; ///< Graphics queue family index for ownership transfers.
 			uint32_t m_transferFamilyIndex{0}; ///< Transfer queue family index for ownership transfers.
 
-			/* VP9 codec state. */
-			vpx_codec_ctx_t m_codec{}; ///< VP9 encoder context.
-			vpx_image_t m_vpxImage{}; ///< VPX image in I420 format for encoding input.
+			/* Detachable encoding sessions. */
+			std::unique_ptr< EncodingSession > m_currentSession{}; ///< Active encoding session (null when not recording).
+			std::vector< std::unique_ptr< EncodingSession > > m_finishingSessions{}; ///< Sessions still encoding in background.
 
-			/* IVF output. */
-			std::FILE * m_outputFile{nullptr}; ///< Output IVF file handle.
-			std::filesystem::path m_outputPath{}; ///< Path to output IVF file.
-
-			/* Unbounded frame queue for producer-consumer communication. */
-			std::deque< FrameSlot > m_frameQueue{}; ///< Unbounded queue of captured frames.
-			std::deque< FrameSlot > m_freeFrames{}; ///< Recycling pool of pre-allocated frame buffers.
-			std::mutex m_queueMutex{}; ///< Mutex protecting frame queue and free pool access.
-			std::condition_variable m_queueCV{}; ///< Condition variable to signal encoding thread.
-
-			/* Encoding thread state. */
-			std::thread m_encodingThread{}; ///< Dedicated encoding thread.
-			std::atomic< bool > m_isRecording{false}; ///< True when recording is active.
-			std::atomic< bool > m_threadRunning{false}; ///< True when encoding thread should continue running.
+			/* Recording state (main thread only). */
+			std::atomic< bool > m_isRecording{false}; ///< True when capture is active on the main thread.
 
 			/* Timing and frame pacing. */
-			uint32_t m_targetFPS{30}; ///< Target recording framerate (default 30 FPS).
-			uint64_t m_frameCount{0}; ///< Total number of frames encoded.
-			std::atomic< uint64_t > m_captureCount{0}; ///< Total number of frames captured (incremented from main thread).
+			uint32_t m_targetFramerate{30}; ///< Target recording framerate (default 30 FPS).
 			std::chrono::steady_clock::time_point m_lastCaptureTime{}; ///< Last frame capture timestamp for pacing.
 			std::chrono::steady_clock::time_point m_recordStartTime{}; ///< Wall-clock time when recording started (PTS origin).
-			vpx_codec_pts_t m_lastEncodedPts{0}; ///< PTS of the last encoded frame (for duration computation).
 			std::chrono::nanoseconds m_frameDuration{0}; ///< Duration between frames based on target FPS.
 
 			/* Recording parameters (locked at start). */
 			uint32_t m_recordWidth{0}; ///< Recording width in pixels (even, locked at start).
 			uint32_t m_recordHeight{0}; ///< Recording height in pixels (even, locked at start).
-			uint32_t m_bitrate{2000}; ///< VP9 target bitrate in kilobits per second.
-
 			/* State flags. */
-			bool m_codecInitialized{false}; ///< True when VP9 codec is initialized.
 			bool m_useTransferQueue{false}; ///< True when dedicated transfer queue is available and in use.
-			bool m_useCBR{true}; ///< True to use CBR (constant bitrate) rate control instead of VBR.
-			bool m_showStats{false}; ///< True to log periodic encoding statistics.
+			bool m_realtimeMode{true}; ///< True for low-latency mode (CBR), false for quality mode (VBR).
+			bool m_showStatistics{false}; ///< True to log periodic encoding statistics.
+			
+			/**
+			 * @enum QualityPreset
+			 * @brief Presets for video quality configuration.
+			 */
+			enum class QualityPreset : uint8_t
+			{
+				Low,
+				Medium,
+				High,
+				Ultra
+			};
+
+			QualityPreset m_qualityPreset{QualityPreset::Medium}; ///< Current quality preset.
+
+			/**
+			 * @brief Converts a QualityPreset enum value to its string representation.
+			 *
+			 * @param preset The quality preset to convert.
+			 * @return A C-string representation of the preset ("Low", "Medium", "High", "Ultra").
+			 */
+			static const char * qualityPresetToString (QualityPreset preset) noexcept;
 
 			/* SIMD dispatch. */
 			BGRAToI420Func m_bgraToI420{nullptr}; ///< Selected BGRA-to-I420 conversion function (scalar, SSSE3, or AVX2).
-#endif
 	};
 }

@@ -1050,6 +1050,17 @@ namespace EmEn::Graphics
 				return m_shutdownRequested;
 			}
 
+			/**
+			 * @brief Returns whether the software frame rate limiter is enabled.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isSoftwareFrameLimiterEnabled () const noexcept
+			{
+				return m_frameDuration.count() > 0;
+			}
+
 			[[nodiscard]]
 			uint32_t
 			pipelineBuiltCount () const noexcept

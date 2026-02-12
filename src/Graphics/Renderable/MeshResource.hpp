@@ -189,6 +189,10 @@ namespace EmEn::Graphics::Renderable
 			[[nodiscard]]
 			bool isOpaque (uint32_t layerIndex) const noexcept override;
 
+			/** @copydoc EmEn::Graphics::Renderable::Abstract::requiresGrabPass() const */
+			[[nodiscard]]
+			bool requiresGrabPass (uint32_t layerIndex) const noexcept override;
+
 			/** @copydoc EmEn::Graphics::Renderable::Abstract::geometry() const */
 			[[nodiscard]]
 			const Geometry::Interface *

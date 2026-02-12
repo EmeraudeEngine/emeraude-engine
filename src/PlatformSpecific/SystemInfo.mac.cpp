@@ -78,6 +78,17 @@ namespace EmEn::PlatformSpecific
 			m_OSInformation.systemVersion = (std::stringstream{} << "10." << major << '.' << minor).str();
 		}
 
+		/* NOTE: Get the computer name. */
+		{
+			char hostname[256];
+
+			if ( gethostname(hostname, sizeof(hostname)) == 0 )
+			{
+				m_OSInformation.computerName = hostname;
+			}
+		}
+
+		/* NOTE: Get the machine UUID. */
 		{
 			io_registry_entry_t ioRegistryRoot = IORegistryEntryFromPath(kIOMainPortDefault, "IOService:/");
 

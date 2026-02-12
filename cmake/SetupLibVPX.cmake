@@ -27,5 +27,3 @@ else ()
 		target_link_libraries(${TARGET_BINARY_FOR_SETUP} PRIVATE ${LOCAL_LIB_DIR}/lib/libvpx.a)
 	endif ()
 endif ()
-
-set(EMERAUDE_VIDEO_RECORDING_ENABLED On)

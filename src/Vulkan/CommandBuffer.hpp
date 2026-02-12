@@ -345,6 +345,20 @@ namespace EmEn::Vulkan
 			void blitImage (const Image & src, VkImageLayout srcLayout, const Image & dst, VkImageLayout dstLayout, VkFilter filter = VK_FILTER_LINEAR) const noexcept;
 
 			/**
+			 * @brief Copies a region from a source image to a destination image.
+			 * @note Unlike blitImage, this performs an exact pixel copy (no filtering/scaling).
+			 * Supports depth formats that may not have blit support.
+			 * Source and destination must have the same format and compatible dimensions.
+			 * @param src A reference to the source image.
+			 * @param srcLayout The current layout of the source image.
+			 * @param dst A reference to the destination image.
+			 * @param dstLayout The current layout of the destination image.
+			 * @param aspectMask The image aspect to copy (e.g. VK_IMAGE_ASPECT_DEPTH_BIT).
+			 * @return void
+			 */
+			void copyImage (const Image & src, VkImageLayout srcLayout, const Image & dst, VkImageLayout dstLayout, VkImageAspectFlags aspectMask = VK_IMAGE_ASPECT_COLOR_BIT) const noexcept;
+
+			/**
 			 * @brief Clears the color part of the image.
 			 * @param image A reference to a command buffer.
 			 * @param imageLayout Specifies the current layout of the image subresource ranges to be cleared, and must be VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR, VK_IMAGE_LAYOUT_GENERAL or VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL.

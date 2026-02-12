@@ -47,8 +47,30 @@ Pass 2: Render glass objects → Final target, sampling from Pass 1 texture
 - Shader generation (vertex and fragment) with screen-space refraction algorithm
 - ScreenCaptureManager initialization with framebuffer, render pass, images, and sampler
 - Registration of screen capture textures with bindless texture manager (slots 4 and 5)
-- Scene correctly categorizes TrueGlass objects into `ScreenSpaceRefraction` render list
 - Material renders without errors (but without actual refraction effect)
+
+### GrabPass Infrastructure (New)
+The rendering pipeline now supports a 3-category sort for transparent objects:
+
+1. **`requiresGrabPass()` propagation**: `Material::Interface` declares a virtual `requiresGrabPass()` method (default `false`), overridden by `PBRResource`. This is propagated through `Renderable::Abstract::requiresGrabPass(uint32_t layerIndex)` to all concrete renderables (`MeshResource`, `SimpleMeshResource`, `SpriteResource`, `BasicSeaResource`, `BasicGroundResource`, `TerrainResource`). Background/sky renderables always return `false`.
+
+2. **`isOpaque()` integration**: `Material::Interface::isOpaque()` now returns `false` when `requiresGrabPass()` is `true`, because a material requiring a grab pass is inherently non-opaque. This ensures automatic correct sorting without additional scene-side logic.
+
+3. **Three-way render list dispatch** in `Scene::insertIntoRenderLists()`:
+   - **Opaque / OpaqueLighted**: Front-to-back (early-Z optimization)
+   - **Translucent / TranslucentLighted**: Back-to-front, materials that do NOT require grab pass
+   - **TranslucentGB / TranslucentGBLighted**: Back-to-front, materials that DO require grab pass
+
+   Rendering order: Opaque → Translucent → TranslucentGB. The grab pass capture will happen between Translucent and TranslucentGB passes.
+
+**Code references:**
+- `Graphics/Material/Interface.hpp:isOpaque()` — returns false if `requiresGrabPass()` is true
+- `Graphics/Material/Interface.hpp:requiresGrabPass()` — virtual, default false
+- `Graphics/Material/PBRResource.hpp:requiresGrabPass()` — override
+- `Graphics/Renderable/Abstract.hpp:requiresGrabPass()` — pure virtual
+- `Graphics/Renderable/MeshResource.cpp:requiresGrabPass()` — layer dispatch
+- `Scenes/Scene.hpp` — `TranslucentGB{5UL}`, `TranslucentGBLighted{6UL}` constants, 7-element render list array
+- `Scenes/Scene.rendering.cpp:insertIntoRenderLists()` — 3-way dispatch logic
 
 ### Not Working - Screen Capture Pass
 

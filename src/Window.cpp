@@ -32,6 +32,7 @@
 /* Local inclusions. */
 #include "Vulkan/Instance.hpp"
 #include "PrimaryServices.hpp"
+#include "PlatformManager.hpp"
 #include "SettingKeys.hpp"
 
 namespace EmEn
@@ -41,14 +42,28 @@ namespace EmEn
 	using namespace Vulkan;
 
 	bool
+	Window::showInformation () const noexcept
+	{
+		const auto & arguments = m_primaryServices.arguments();
+
+		if ( arguments.isSwitchPresent("--show-all-infos") || arguments.isSwitchPresent("--show-video-infos") )
+		{
+			return true;
+		}
+
+		auto & settings = m_primaryServices.settings();
+
+		return settings.getOrSetDefault< bool >(VideoShowInformationKey, DefaultVideoShowInformation);
+	}
+
+	bool
 	Window::onInitialize () noexcept
 	{
 		const auto & arguments = m_primaryServices.arguments();
 		auto & settings = m_primaryServices.settings();
 
-		m_showInformation = settings.getOrSetDefault< bool >(VideoShowInformationKey, DefaultVideoShowInformation) ||
-			arguments.isSwitchPresent("--show-all-infos") ||
-			arguments.isSwitchPresent("--show-video-infos");
+		const auto showInformation = this->showInformation();
+
 		m_windowLess = arguments.isSwitchPresent("-W", "--window-less");
 		m_saveWindowPropertiesAtExit = settings.getOrSetDefault< bool >(VideoSavePropertiesAtExitKey, DefaultVideoSavePropertiesAtExit);
 
@@ -71,7 +86,7 @@ namespace EmEn
 		}
 
 		/* Checks monitor presence. */
-		if ( !this->checkMonitors() )
+		if ( !this->checkMonitors(showInformation) )
 		{
 			Tracer::fatal(ClassId, "There is no monitor connected to the system !");
 
@@ -95,7 +110,7 @@ namespace EmEn
 			{
 				glfwWindowHint(GLFW_REFRESH_RATE, refreshRate);
 
-				if ( m_showInformation )
+				if ( showInformation )
 				{
 					TraceInfo{ClassId} << refreshRate << "Hz monitor refresh rate requested.";
 				}
@@ -245,7 +260,7 @@ namespace EmEn
 				const auto windowHeight = settings.getOrSetDefault< uint32_t >(WindowHeightKey, DefaultWindowHeight);
 				const auto centeredPosition = Window::getCenteredPosition({windowWidth, windowHeight}, preferredMonitor);
 
-				if ( m_showInformation )
+				if ( showInformation )
 				{
 					TraceInfo{ClassId} << "Center the window position to X: " << centeredPosition[0] << ", Y: " << centeredPosition[1] << " ...";
 				}
@@ -257,7 +272,7 @@ namespace EmEn
 				const auto XPosition = settings.getOrSetDefault< int32_t >(WindowXPositionKey, DefaultWindowXPosition);
 				const auto YPosition = settings.getOrSetDefault< int32_t >(WindowYPositionKey, DefaultWindowYPosition);
 
-				if ( m_showInformation )
+				if ( showInformation )
 				{
 					TraceInfo{ClassId} << "Setting window position to X: " << XPosition << ", Y: " << YPosition << " ...";
 				}
@@ -284,7 +299,7 @@ namespace EmEn
 		/* NOTE: The window starts non-visible. */
 		glfwShowWindow(m_handle.get());
 
-		if ( m_showInformation )
+		if ( showInformation )
 		{
 			TraceInfo{ClassId} <<
 				this->getWindowStateString(false) << "\n" <<
@@ -310,7 +325,7 @@ namespace EmEn
 
 		if ( m_saveWindowPropertiesAtExit )
 		{
-			if ( m_showInformation )
+			if ( this->showInformation() )
 			{
 				Tracer::info(ClassId, "Saving the window properties ...");
 			}
@@ -443,12 +458,19 @@ namespace EmEn
 			return false;
 		}
 
-		glfwSetWindowPos(m_handle.get(),xPosition,yPosition);
+		/* NOTE: Wayland does not support setting window positions. */
+		if ( PlatformManager::isUsingWayland() )
+		{
+			return false;
+		}
+
+		glfwSetWindowPos(m_handle.get(), xPosition, yPosition);
 
 		switch ( glfwGetError(nullptr) )
 		{
 			case GLFW_NOT_INITIALIZED :
 			case GLFW_PLATFORM_ERROR :
+			case GLFW_FEATURE_UNAVAILABLE :
 				return false;
 
 			default:
@@ -764,6 +786,12 @@ namespace EmEn
 			return {0, 0};
 		}
 
+		/* NOTE: Wayland does not support querying window positions. */
+		if ( PlatformManager::isUsingWayland() )
+		{
+			return {0, 0};
+		}
+
 		int xPosition = -1;
 		int yPosition = -1;
 
@@ -774,6 +802,7 @@ namespace EmEn
 		{
 			case GLFW_NOT_INITIALIZED :
 			case GLFW_PLATFORM_ERROR :
+			case GLFW_FEATURE_UNAVAILABLE :
 				return {0, 0};
 
 			case GLFW_NO_ERROR :
@@ -1252,7 +1281,7 @@ namespace EmEn
 	}
 
 	bool
-	Window::checkMonitors () const noexcept
+	Window::checkMonitors (bool showInformation) const noexcept
 	{
 		const auto monitors = Window::getMonitors();
 
@@ -1263,7 +1292,7 @@ namespace EmEn
 			return false;
 		}
 
-		if ( m_showInformation )
+		if ( showInformation )
 		{
 			TraceInfo{ClassId} << monitors.size() << " monitor(s) available(s).";
 		}
@@ -1271,7 +1300,7 @@ namespace EmEn
 		for ( auto * monitor : monitors )
 		{
 			/* NOTE: Display monitors information. */
-			if ( m_showInformation )
+			if ( showInformation )
 			{
 				const auto modes = Window::getMonitorModes(monitor);
 

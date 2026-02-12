@@ -32,6 +32,9 @@
 #include <queue>
 #include <mutex>
 
+/* Third-party inclusions. */
+#include <vulkan/vulkan.h>
+
 /* Local inclusions for inheritances. */
 #include "ServiceInterface.hpp"
 
@@ -68,6 +71,7 @@ namespace EmEn::Graphics
 			static constexpr uint32_t PrefilteredCubemapSlot = 2;
 			static constexpr uint32_t BRDFLutSlot = 3;
 			static constexpr uint32_t GrabPassSlot = 4;
+			static constexpr uint32_t GrabPassDepthSlot = 5;
 			static constexpr uint32_t FirstDynamicSlot = 16;
 
 			/** @brief Maximum texture counts per type. */
@@ -201,6 +205,16 @@ namespace EmEn::Graphics
 			bool updateTextureCube (uint32_t index, const Vulkan::TextureInterface & texture) const noexcept;
 
 			/**
+			 * @brief Updates a specific slot in the 2D texture array from a raw descriptor info.
+			 * @note Use this when the texture source is not a TextureInterface (e.g., grab pass depth).
+			 * @param index The index of the slot to update.
+			 * @param descriptorInfo The Vulkan descriptor image info to write.
+			 * @return bool True if successful.
+			 */
+			[[nodiscard]]
+			bool updateTexture2DFromDescriptorInfo (uint32_t index, VkDescriptorImageInfo descriptorInfo) const noexcept;
+
+			/**
 			 * @brief Returns the descriptor set for binding during rendering.
 			 * @return const Vulkan::DescriptorSet *
 			 */
@@ -280,6 +294,16 @@ namespace EmEn::Graphics
 			 */
 			[[nodiscard]]
 			bool writeTextureToDescriptorSet (uint32_t binding, uint32_t arrayIndex, const Vulkan::TextureInterface & texture) const noexcept;
+
+			/**
+			 * @brief Writes a raw descriptor info to the descriptor set at a specific binding and array index.
+			 * @param binding The binding point.
+			 * @param arrayIndex The index in the array.
+			 * @param descriptorInfo The Vulkan descriptor image info to write.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool writeRawToDescriptorSet (uint32_t binding, uint32_t arrayIndex, VkDescriptorImageInfo descriptorInfo) const noexcept;
 
 			Renderer & m_renderer;
 			std::shared_ptr< Vulkan::Device > m_device;

@@ -37,7 +37,7 @@ namespace EmEn::Graphics
 	using namespace Vulkan;
 
 	bool
-	GrabPass::create (Renderer & renderer, uint32_t width, uint32_t height, VkFormat format) noexcept
+	GrabPass::create (Renderer & renderer, uint32_t width, uint32_t height, VkFormat colorFormat, VkFormat depthFormat) noexcept
 	{
 		if ( this->isCreated() )
 		{
@@ -46,11 +46,11 @@ namespace EmEn::Graphics
 
 		const auto device = renderer.device();
 
-		/* Create the grab pass image with transfer destination and sampled usage. */
+		/* Create the color grab pass image with transfer destination and sampled usage. */
 		m_image = std::make_shared< Image >(
 			device,
 			VK_IMAGE_TYPE_2D,
-			format,
+			colorFormat,
 			VkExtent3D{width, height, 1},
 			VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT
 		);
@@ -58,12 +58,12 @@ namespace EmEn::Graphics
 
 		if ( !m_image->createOnHardware() )
 		{
-			TraceError{ClassId} << "Unable to create the grab pass image !";
+			TraceError{ClassId} << "Unable to create the grab pass color image !";
 
 			return false;
 		}
 
-		/* Transition to shader read layout. */
+		/* Transition color to shader read layout. */
 		{
 			const auto & transferManager = renderer.transferManager();
 
@@ -74,7 +74,7 @@ namespace EmEn::Graphics
 				VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
 			) )
 			{
-				TraceError{ClassId} << "Unable to transition grab pass image to shader read layout !";
+				TraceError{ClassId} << "Unable to transition grab pass color image to shader read layout !";
 
 				return false;
 			}
@@ -82,7 +82,7 @@ namespace EmEn::Graphics
 
 		m_image->setCurrentImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
-		/* Create the image view. */
+		/* Create the color image view. */
 		m_imageView = std::make_shared< ImageView >(
 			m_image,
 			VK_IMAGE_VIEW_TYPE_2D,
@@ -98,12 +98,12 @@ namespace EmEn::Graphics
 
 		if ( !m_imageView->createOnHardware() )
 		{
-			TraceError{ClassId} << "Unable to create the grab pass image view !";
+			TraceError{ClassId} << "Unable to create the grab pass color image view !";
 
 			return false;
 		}
 
-		/* Get or create the grab pass sampler: linear filtering, clamp-to-edge. */
+		/* Get or create the color sampler: linear filtering, clamp-to-edge. */
 		m_sampler = renderer.getSampler("GrabPass", [] (Settings &, VkSamplerCreateInfo & createInfo) {
 			createInfo.magFilter = VK_FILTER_LINEAR;
 			createInfo.minFilter = VK_FILTER_LINEAR;
@@ -118,12 +118,96 @@ namespace EmEn::Graphics
 
 		if ( m_sampler == nullptr )
 		{
-			TraceError{ClassId} << "Unable to get the sampler for grab pass !";
+			TraceError{ClassId} << "Unable to get the sampler for grab pass color !";
 
 			return false;
 		}
 
-		TraceSuccess{ClassId} << "Grab pass texture created (" << width << "x" << height << ").";
+		/* Create the depth grab pass image if a depth format is specified. */
+		if ( depthFormat != VK_FORMAT_UNDEFINED )
+		{
+			m_depthImage = std::make_shared< Image >(
+				device,
+				VK_IMAGE_TYPE_2D,
+				depthFormat,
+				VkExtent3D{width, height, 1},
+				VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT
+			);
+			m_depthImage->setIdentifier(ClassId, "Depth", "Image");
+
+			if ( !m_depthImage->createOnHardware() )
+			{
+				TraceError{ClassId} << "Unable to create the grab pass depth image !";
+
+				return false;
+			}
+
+			/* Transition depth to shader read layout. */
+			{
+				const auto & transferManager = renderer.transferManager();
+
+				if ( !transferManager.transitionImageLayout(
+					*m_depthImage,
+					VK_IMAGE_ASPECT_DEPTH_BIT,
+					VK_IMAGE_LAYOUT_UNDEFINED,
+					VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+				) )
+				{
+					TraceError{ClassId} << "Unable to transition grab pass depth image to shader read layout !";
+
+					return false;
+				}
+			}
+
+			m_depthImage->setCurrentImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+			/* Create the depth image view. */
+			m_depthImageView = std::make_shared< ImageView >(
+				m_depthImage,
+				VK_IMAGE_VIEW_TYPE_2D,
+				VkImageSubresourceRange{
+					.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
+					.baseMipLevel = 0,
+					.levelCount = 1,
+					.baseArrayLayer = 0,
+					.layerCount = 1
+				}
+			);
+			m_depthImageView->setIdentifier(ClassId, "Depth", "ImageView");
+
+			if ( !m_depthImageView->createOnHardware() )
+			{
+				TraceError{ClassId} << "Unable to create the grab pass depth image view !";
+
+				return false;
+			}
+
+			/* Get or create the depth sampler: nearest filtering, clamp-to-edge. */
+			m_depthSampler = renderer.getSampler("GrabPassDepth", [] (Settings &, VkSamplerCreateInfo & createInfo) {
+				createInfo.magFilter = VK_FILTER_NEAREST;
+				createInfo.minFilter = VK_FILTER_NEAREST;
+				createInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
+				createInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+				createInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+				createInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+				createInfo.compareEnable = VK_FALSE;
+				createInfo.minLod = 0.0F;
+				createInfo.maxLod = 1.0F;
+			});
+
+			if ( m_depthSampler == nullptr )
+			{
+				TraceError{ClassId} << "Unable to get the sampler for grab pass depth !";
+
+				return false;
+			}
+
+			TraceSuccess{ClassId} << "Grab pass textures created (" << width << "x" << height << ") with depth.";
+		}
+		else
+		{
+			TraceSuccess{ClassId} << "Grab pass texture created (" << width << "x" << height << ") without depth.";
+		}
 
 		return true;
 	}
@@ -131,28 +215,33 @@ namespace EmEn::Graphics
 	void
 	GrabPass::destroy () noexcept
 	{
+		m_depthSampler.reset();
+		m_depthImageView.reset();
+		m_depthImage.reset();
 		m_sampler.reset();
 		m_imageView.reset();
 		m_image.reset();
 	}
 
 	bool
-	GrabPass::recreate (Renderer & renderer, uint32_t width, uint32_t height, VkFormat format) noexcept
+	GrabPass::recreate (Renderer & renderer, uint32_t width, uint32_t height, VkFormat colorFormat, VkFormat depthFormat) noexcept
 	{
 		this->destroy();
 
-		return this->create(renderer, width, height, format);
+		return this->create(renderer, width, height, colorFormat, depthFormat);
 	}
 
 	void
-	GrabPass::recordBlit (const CommandBuffer & commandBuffer, const Image & srcColorImage) const noexcept
+	GrabPass::recordBlit (const CommandBuffer & commandBuffer, const Image & srcColorImage, const Image * srcDepthImage) const noexcept
 	{
 		if ( !this->isCreated() )
 		{
 			return;
 		}
 
-		/* 1. Barrier: swapchain image COLOR_ATTACHMENT_OPTIMAL -> TRANSFER_SRC_OPTIMAL */
+		/* === Color blit === */
+
+		/* 1. Barrier: swapchain color COLOR_ATTACHMENT_OPTIMAL -> TRANSFER_SRC_OPTIMAL */
 		{
 			const Sync::ImageMemoryBarrier srcBarrier{
 				srcColorImage,
@@ -169,7 +258,7 @@ namespace EmEn::Graphics
 			);
 		}
 
-		/* 2. Barrier: grab texture SHADER_READ_ONLY_OPTIMAL -> TRANSFER_DST_OPTIMAL */
+		/* 2. Barrier: grab color texture SHADER_READ_ONLY_OPTIMAL -> TRANSFER_DST_OPTIMAL */
 		{
 			const Sync::ImageMemoryBarrier dstBarrier{
 				*m_image,
@@ -186,13 +275,13 @@ namespace EmEn::Graphics
 			);
 		}
 
-		/* 3. Blit: swapchain -> grab texture */
+		/* 3. Blit: swapchain color -> grab color texture */
 		commandBuffer.blitImage(
 			srcColorImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
 			*m_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
 		);
 
-		/* 4. Barrier: grab texture TRANSFER_DST_OPTIMAL -> SHADER_READ_ONLY_OPTIMAL */
+		/* 4. Barrier: grab color texture TRANSFER_DST_OPTIMAL -> SHADER_READ_ONLY_OPTIMAL */
 		{
 			const Sync::ImageMemoryBarrier dstBarrier{
 				*m_image,
@@ -209,7 +298,7 @@ namespace EmEn::Graphics
 			);
 		}
 
-		/* 5. Barrier: swapchain image TRANSFER_SRC_OPTIMAL -> COLOR_ATTACHMENT_OPTIMAL
+		/* 5. Barrier: swapchain color TRANSFER_SRC_OPTIMAL -> COLOR_ATTACHMENT_OPTIMAL
 		 * (ready for the post-process render pass). */
 		{
 			const Sync::ImageMemoryBarrier srcBarrier{
@@ -226,6 +315,102 @@ namespace EmEn::Graphics
 				VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
 			);
 		}
+
+		/* === Depth copy === */
+		if ( srcDepthImage != nullptr && this->hasDepth() )
+		{
+			/* 6. Barrier: swapchain depth DEPTH_STENCIL_ATTACHMENT_OPTIMAL -> TRANSFER_SRC_OPTIMAL */
+			{
+				const Sync::ImageMemoryBarrier srcBarrier{
+					*srcDepthImage,
+					VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+					VK_ACCESS_TRANSFER_READ_BIT,
+					VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+					VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+					VK_IMAGE_ASPECT_DEPTH_BIT
+				};
+
+				commandBuffer.pipelineBarrier(
+					srcBarrier,
+					VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+					VK_PIPELINE_STAGE_TRANSFER_BIT
+				);
+			}
+
+			/* 7. Barrier: grab depth texture SHADER_READ_ONLY_OPTIMAL -> TRANSFER_DST_OPTIMAL */
+			{
+				const Sync::ImageMemoryBarrier dstBarrier{
+					*m_depthImage,
+					VK_ACCESS_SHADER_READ_BIT,
+					VK_ACCESS_TRANSFER_WRITE_BIT,
+					VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+					VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+					VK_IMAGE_ASPECT_DEPTH_BIT
+				};
+
+				commandBuffer.pipelineBarrier(
+					dstBarrier,
+					VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+					VK_PIPELINE_STAGE_TRANSFER_BIT
+				);
+			}
+
+			/* 8. Copy: swapchain depth -> grab depth texture (vkCmdCopyImage, no filtering).
+			 * Depth formats may not support vkCmdBlitImage on all GPUs. */
+			commandBuffer.copyImage(
+				*srcDepthImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+				*m_depthImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+				VK_IMAGE_ASPECT_DEPTH_BIT
+			);
+
+			/* 9. Barrier: grab depth texture TRANSFER_DST_OPTIMAL -> SHADER_READ_ONLY_OPTIMAL */
+			{
+				const Sync::ImageMemoryBarrier dstBarrier{
+					*m_depthImage,
+					VK_ACCESS_TRANSFER_WRITE_BIT,
+					VK_ACCESS_SHADER_READ_BIT,
+					VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+					VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+					VK_IMAGE_ASPECT_DEPTH_BIT
+				};
+
+				commandBuffer.pipelineBarrier(
+					dstBarrier,
+					VK_PIPELINE_STAGE_TRANSFER_BIT,
+					VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT
+				);
+			}
+
+			/* 10. Barrier: swapchain depth TRANSFER_SRC_OPTIMAL -> DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+			 * (ready for the post-process render pass). */
+			{
+				const Sync::ImageMemoryBarrier srcBarrier{
+					*srcDepthImage,
+					VK_ACCESS_TRANSFER_READ_BIT,
+					VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+					VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+					VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+					VK_IMAGE_ASPECT_DEPTH_BIT
+				};
+
+				commandBuffer.pipelineBarrier(
+					srcBarrier,
+					VK_PIPELINE_STAGE_TRANSFER_BIT,
+					VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT
+				);
+			}
+		}
+	}
+
+	VkDescriptorImageInfo
+	GrabPass::depthDescriptorInfo () const noexcept
+	{
+		VkDescriptorImageInfo info{};
+		info.sampler = m_depthSampler ? m_depthSampler->handle() : VK_NULL_HANDLE;
+		info.imageView = m_depthImageView ? m_depthImageView->handle() : VK_NULL_HANDLE;
+		info.imageLayout = m_depthImage ? m_depthImage->currentImageLayout() : VK_IMAGE_LAYOUT_UNDEFINED;
+
+		return info;
 	}
 
 	bool

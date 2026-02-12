@@ -423,4 +423,73 @@ namespace EmEn::Libs::IO
 
 		return IO::createDirectory(path);
 	}
+
+	/**
+	 * @brief Construct a std::filesystem::path from a UTF-8 encoded std::string.
+	 * On Windows, uses C++20 char8_t constructor to bypass ANSI code page.
+	 * On POSIX, direct construction (native encoding is already UTF-8).
+	 * @param UTF8String A reference to a string.
+	 * @return std::filesystem::path
+	 */
+	[[nodiscard]]
+	inline
+	std::filesystem::path
+	u8path (const std::string & UTF8String)
+	{
+		if constexpr ( IsWindows )
+		{
+			return {
+				reinterpret_cast< const char8_t * >(UTF8String.data()),
+				reinterpret_cast< const char8_t * >(UTF8String.data() + UTF8String.size())
+			};
+		}
+		else
+		{
+			return {UTF8String};
+		}
+	}
+
+	/**
+	 * @brief Convert a path to a UTF-8 encoded std::string (native separators).
+	 * @param path A reference to a filesystem path.
+	 * @return std::string
+	 */
+	[[nodiscard]]
+	inline
+	std::string
+	toU8String (const std::filesystem::path & path)
+	{
+		if constexpr ( IsWindows )
+		{
+			const auto UTF8String = path.u8string();
+
+			return {UTF8String.begin(), UTF8String.end()};
+		}
+		else
+		{
+			return path.string();
+		}
+	}
+
+	/**
+	 * @brief Convert a path to a UTF-8 encoded std::string with forward slashes.
+	 * @param path A reference to a filesystem path.
+	 * @return std::string
+	 */
+	[[nodiscard]]
+	inline
+	std::string
+	toGenericU8String (const std::filesystem::path & path)
+	{
+		if constexpr ( IsWindows )
+		{
+			const auto UTF8String = path.generic_u8string();
+
+			return {UTF8String.begin(), UTF8String.end()};
+		}
+		else
+		{
+			return path.generic_string();
+		}
+	}
 }

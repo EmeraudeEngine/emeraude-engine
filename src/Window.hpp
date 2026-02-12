@@ -692,6 +692,13 @@ namespace EmEn
 			bool onTerminate () noexcept override;
 
 			/**
+			 * @brief Tells whether the window should show information.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool showInformation () const noexcept;
+
+			/**
 			 * @brief Initializes native window info.
 			 * @return bool
 			 */
@@ -712,10 +719,11 @@ namespace EmEn
 
 			/**
 			 * @brief Checks monitors information and keeps it to a static member from here.
+			 * @param showInformation
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool checkMonitors () const noexcept;
+			bool checkMonitors (bool showInformation) const noexcept;
 
 			/**
 			 * @brief Creates the window-related objects.
@@ -887,7 +895,6 @@ namespace EmEn
 #if IS_WINDOWS
 			WNDPROC m_originalWndProc{nullptr};
 #endif
-			bool m_showInformation{false};
 			bool m_windowLess{false};
 			bool m_saveWindowPropertiesAtExit{false};
 			bool m_isUserResizing{false};

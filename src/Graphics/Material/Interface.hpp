@@ -158,12 +158,18 @@ namespace EmEn::Graphics::Material
 			/**
 			 * @brief Returns whether the material is opaque and do not use blending.
 			 * @note This function is used to sort the rendering Z order.
+			 * A material requiring a grab pass is inherently non-opaque.
 			 * @return bool
 			 */
 			[[nodiscard]]
 			bool
 			isOpaque () const noexcept
 			{
+				if ( this->requiresGrabPass() )
+				{
+					return false;
+				}
+
 				return !this->isFlagEnabled(BlendingEnabled);
 			}
 
@@ -345,6 +351,18 @@ namespace EmEn::Graphics::Material
 			virtual
 			bool
 			useEnvironmentCubemap () const noexcept
+			{
+				return false;
+			}
+
+			/**
+			 * @brief Returns whether the material requires the GrabPass texture for screen-space effects.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			virtual
+			bool
+			requiresGrabPass () const noexcept
 			{
 				return false;
 			}

@@ -422,6 +422,14 @@ namespace EmEn::Graphics::Material
 				return m_isUsingEnvironmentCubemap || m_isUsingEnvironmentCubemapForRefraction || m_isUsingEnvironmentCubemapForTransmission;
 			}
 
+			/** @copydoc EmEn::Graphics::Material::Interface::requiresGrabPass() const noexcept */
+			[[nodiscard]]
+			bool
+			requiresGrabPass () const noexcept override
+			{
+				return m_isUsingGrabPassForTransmission;
+			}
+
 			/**
 			 * @brief Sets the auto-illumination (emissive) component as a color.
 			 * @warning This function is available before creation time.
@@ -737,6 +745,30 @@ namespace EmEn::Graphics::Material
 			 * @return bool
 			 */
 			bool setTransmissionComponent (const std::shared_ptr< TextureResource::Abstract > & texture, const Libs::PixelFactory::Color< float > & attenuationColor = DefaultAttenuationColor, float attenuationDistance = DefaultAttenuationDistance, float thickness = DefaultThicknessFactor) noexcept;
+
+			/**
+			 * @brief Sets the transmission component using the GrabPass for screen-space refraction.
+			 * @warning This function is available before creation time.
+			 * @note When enabled, the material samples the GrabPass texture (bindless slot 4) with UV distortion
+			 * based on IOR and surface normal, producing screen-space refraction instead of cubemap-based transmission.
+			 * @param factor The transmission factor (0.0 = opaque, 1.0 = fully transmissive). Default 0.0.
+			 * @param attenuationColor The Beer's law attenuation color. Default white (no absorption).
+			 * @param attenuationDistance The distance for full attenuation. Default 1.0.
+			 * @param thickness The material thickness. Default 1.0.
+			 * @return bool
+			 */
+			bool setTransmissionComponentFromGrabPass (float factor = DefaultTransmissionFactor, const Libs::PixelFactory::Color< float > & attenuationColor = DefaultAttenuationColor, float attenuationDistance = DefaultAttenuationDistance, float thickness = DefaultThicknessFactor) noexcept;
+
+			/**
+			 * @brief Enables or disables depth-based opacity for GrabPass transmission.
+			 * @warning This function is available before creation time.
+			 * @note When enabled, the fragment shader samples the grab pass depth buffer to compute the water
+			 * column depth per-pixel and uses it as the thickness in Beer's law attenuation.
+			 * Requires grab pass transmission to be active.
+			 * @param state True to enable depth-based opacity, false to disable.
+			 * @return void
+			 */
+			void enableDepthBasedOpacity (bool state) noexcept;
 
 			/* ==================== Iridescence Component Setters (Pre-creation) ==================== */
 
@@ -1120,6 +1152,16 @@ namespace EmEn::Graphics::Material
 			[[nodiscard]]
 			bool generateBindlessTransmissionFragmentShader (const Saphir::Generator::Abstract & generator, Saphir::FragmentShader & fragmentShader) const noexcept;
 
+			/**
+			 * @brief Generates fragment shader code for screen-space transmission using the GrabPass texture.
+			 * @note Samples the GrabPass (bindless 2D slot 4) with UV distortion based on IOR and surface normal.
+			 * @param generator A reference to the shader generator.
+			 * @param fragmentShader A reference to the fragment shader being generated.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool generateGrabPassTransmissionFragmentShader (const Saphir::Generator::Abstract & generator, Saphir::FragmentShader & fragmentShader) const noexcept;
+
 			/* Uniform buffer object layout (STD140 aligned, 52 floats = 208 bytes):
 			 * vec4 albedoColor              (offset 0-3)
 			 * float roughness               (offset 4)
@@ -1262,6 +1304,8 @@ namespace EmEn::Graphics::Material
 			bool m_isUsingEnvironmentCubemap{false};
 			bool m_isUsingEnvironmentCubemapForRefraction{false};
 			bool m_isUsingEnvironmentCubemapForTransmission{false};
+			bool m_isUsingGrabPassForTransmission{false};
+			bool m_isUsingDepthBasedOpacity{false};
 			bool m_useParallaxOcclusionMapping{false};
 			mutable bool m_pomGenerationActive{false};
 	};

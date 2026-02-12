@@ -60,6 +60,24 @@ namespace EmEn::Graphics::Renderable
 		return true;
 	}
 
+	bool
+	MeshResource::requiresGrabPass (uint32_t layerIndex) const noexcept
+	{
+		if ( layerIndex >= static_cast< uint32_t >(m_layers.size()) )
+		{
+			return false;
+		}
+
+		const auto materialResource = m_layers[layerIndex].material();
+
+		if ( materialResource != nullptr )
+		{
+			return materialResource->requiresGrabPass();
+		}
+
+		return false;
+	}
+
 	const Material::Interface *
 	MeshResource::material (uint32_t layerIndex) const noexcept
 	{

@@ -200,13 +200,31 @@ namespace EmEn::Vulkan
 			}
 
 			/**
+			 * @brief Returns the current frame's depth/stencil image (single-sample).
+			 * @return std::shared_ptr< Image >
+			 */
+			[[nodiscard]]
+			std::shared_ptr< Image >
+			currentDepthStencilImage () const noexcept
+			{
+				return m_frames[m_acquiredImageIndex].depthStencilImage;
+			}
+
+			/**
+			 * @brief Returns the depth/stencil format used by the swap chain.
+			 * @return VkFormat
+			 */
+			[[nodiscard]]
+			VkFormat depthStencilFormat () const noexcept;
+
+			/**
 			 * @brief Returns the post-process framebuffer for the current frame.
 			 * @note This framebuffer uses LOAD_OP_LOAD to preserve existing content.
 			 * @return const Framebuffer *
 			 */
 			[[nodiscard]]
 			const Framebuffer *
-			postProcessFramebuffer () const noexcept
+			postProcessFramebuffer () const noexcept override
 			{
 				return m_frames[m_acquiredImageIndex].postProcessFramebuffer.get();
 			}

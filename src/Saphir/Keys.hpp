@@ -846,6 +846,8 @@ namespace EmEn::Saphir
 				constexpr auto ModelViewProjectionMatrix{"modelViewProjectionMatrix"};
 				/* NOTE : Specific (overlay, ...) rendering. */
 				constexpr auto TransformationMatrix{"transformationMatrix"};
+				/* NOTE : Animated texture frame index. */
+				constexpr auto FrameIndex{"frameIndex"};
 			}
 		}
 

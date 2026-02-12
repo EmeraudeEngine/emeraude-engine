@@ -343,6 +343,18 @@ namespace EmEn::Graphics::RenderTarget
 			virtual const Vulkan::Framebuffer * framebuffer () const noexcept = 0;
 
 			/**
+			 * @brief Returns the post-process framebuffer for single-sample rendering after MSAA resolve.
+			 * @note Only the swap chain provides a post-process framebuffer. Other render targets return nullptr.
+			 * @return const Vulkan::Framebuffer * Pointer to the post-process framebuffer, or nullptr if not available.
+			 */
+			[[nodiscard]]
+			virtual const Vulkan::Framebuffer *
+			postProcessFramebuffer () const noexcept
+			{
+				return nullptr;
+			}
+
+			/**
 			 * @brief Returns the const access to the view matrices interface.
 			 * @return const ViewMatricesInterface &
 			 */

@@ -75,6 +75,7 @@ namespace EmEn
 		constexpr auto DefaultAudioEnable{true};
 		constexpr auto AudioDeviceNameKey{"Core/Audio/DeviceName"};
 		constexpr auto DefaultAudioDeviceName{"AutoDetect"};
+		constexpr auto AudioAvailableDevicesKey{"Core/Audio/AvailableDevices"};
 		constexpr auto AudioPlaybackFrequencyKey{"Core/Audio/PlaybackFrequency"};
 		constexpr auto DefaultAudioPlaybackFrequency{48000};
 		constexpr auto AudioMasterVolumeKey{"Core/Audio/MasterVolume"};
@@ -91,6 +92,8 @@ namespace EmEn
 		constexpr auto DefaultAudioEnablePrebuiltSounds{false};
 		constexpr auto AudioShowInformationKey{"Core/Audio/ShowInformation"}; // Logs (and with argument switch "--show-audio-infos")
 		constexpr auto DefaultAudioShowInformation{false};
+		constexpr auto AudioOutputModeKey{"Core/Audio/OutputMode"};
+		constexpr auto DefaultAudioOutputMode{"Auto"}; // Auto, Stereo, Surround51
 
 			/* OpenAL */
 			constexpr auto OpenALUseEFXExtensionsKey{"Core/Audio/OpenAL/UseEFXExtensions"};
@@ -103,16 +106,13 @@ namespace EmEn
 			constexpr auto DefaultOpenALMaxMonoSourceCount{32};
 			constexpr auto OpenALMaxStereoSourceCountKey{"Core/Audio/OpenAL/MaxStereoSourceCount"};
 			constexpr auto DefaultOpenALMaxStereoSourceCount{2};
-
-			/* Audio Recording (Audio::Recorder) */
-			constexpr auto AudioRecorderEnableKey{"Core/Audio/Recorder/Enable"};
-			constexpr auto DefaultAudioRecorderEnable{false};
-
+	
 			/* Audio Capture (Audio::ExternalInput) */
 			constexpr auto AudioCaptureEnableKey{"Core/Audio/Capture/Enable"};
 			constexpr auto DefaultAudioCaptureEnable{false};
 			constexpr auto AudioCaptureDeviceNameKey{"Core/Audio/Capture/DeviceName"};
 			constexpr auto DefaultAudioCaptureDeviceName{"AutoDetect"};
+			constexpr auto AudioCaptureAvailableDevicesKey{"Core/Audio/Capture/AvailableDevices"};
 			constexpr auto AudioCaptureFrequencyKey{"Core/Audio/Capture/Frequency"};
 			constexpr auto DefaultAudioCaptureFrequency{48000};
 			constexpr auto AudioCaptureBufferSizeKey{"Core/Audio/Capture/BufferSize"};
@@ -135,18 +135,6 @@ namespace EmEn
 		constexpr auto DefaultEnableSRGB{false};
 		constexpr auto VideoShowInformationKey{"Core/Video/ShowInformation"}; // Logs (and with argument switch "--show-video-infos")
 		constexpr auto DefaultVideoShowInformation{false};
-
-		/* Video Recording (Graphics::Recorder) */
-		constexpr auto VideoRecorderEnableKey{"Core/Video/Recorder/Enable"};
-		constexpr auto DefaultVideoRecorderEnable{false};
-		constexpr auto VideoRecorderFPSKey{"Core/Video/Recorder/FPS"};
-		constexpr auto DefaultVideoRecorderFPS{30U};
-		constexpr auto VideoRecorderQualityKey{"Core/Video/Recorder/Quality"};
-		constexpr auto DefaultVideoRecorderQuality{2000U}; // kbps (Low=1000, Medium=2000, High=4000)
-		constexpr auto VideoRecorderShowStatsKey{"Core/Video/Recorder/ShowStats"};
-		constexpr auto DefaultVideoRecorderShowStats{false};
-		constexpr auto VideoRecorderUseCBRKey{"Core/Video/Recorder/UseCBR"};
-		constexpr auto DefaultVideoRecorderUseCBR{true};
 
 		/* Video Capture (Graphics::ExternalInput) */
 		constexpr auto VideoCaptureEnableKey{"Core/Audio/Capture/Enable"};
@@ -288,6 +276,21 @@ namespace EmEn
 			constexpr auto DefaultEnableHighQuality{false};
 			constexpr auto POMIterationsKey{"Core/Graphics/Shader/POMIterations"};
 			constexpr auto DefaultPOMIterations{16};
+
+		/* RushMaker */
+		constexpr auto RushMakerEnableVideoKey{"Core/RushMaker/EnableVideo"};
+		constexpr auto RushMakerEnableAudioKey{"Core/RushMaker/EnableAudio"};
+		constexpr auto DefaultRushMakerEnabled{false};
+		constexpr auto RushMakerVideoFramerateKey{"Core/RushMaker/VideoFramerate"};
+		constexpr auto DefaultRushMakerVideoFramerate{30U};
+		constexpr auto RushMakerRealtimeModeKey{"Core/RushMaker/RealtimeMode"};
+		constexpr auto DefaultRushMakerRealtimeMode{true};
+		constexpr auto RushMakerQualityPresetKey{"Core/RushMaker/QualityPreset"};
+		constexpr auto DefaultRushMakerQualityPreset{"Medium"}; // Low, Medium, High, Ultra
+		constexpr auto RushMakerShowInformationKey{"Core/RushMaker/ShowInformation"};
+		constexpr auto DefaultRushMakerShowInformation{false};
+		constexpr auto RushMakerEnableVoiceOverKey{"Core/RushMaker/EnableVoiceOver"};
+		constexpr auto DefaultRushMakerEnableVoiceOver{false};
 
 		/* Physics */
 		constexpr auto EnablePhysicsAccelerationKey{"Core/Physics/EnableAcceleration"};

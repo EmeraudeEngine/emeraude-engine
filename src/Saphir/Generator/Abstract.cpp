@@ -448,6 +448,10 @@ namespace EmEn::Saphir::Generator
 			}
 		}
 
+		/* NOTE: Append the animated texture frame index to every matrix push constant block.
+		 * This allows shaders to construct 3D texture coordinates from 2D UVs + frame index. */
+		pushConstantBlock.addMember(Declaration::VariableType::Float, PushConstant::Component::FrameIndex);
+
 		return shader.declare(pushConstantBlock);
 	}
 

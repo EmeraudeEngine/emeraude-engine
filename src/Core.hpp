@@ -1348,6 +1348,7 @@ namespace EmEn
 			bool m_disableNotifier{false}; ///< Disable Core's notifier.
 			bool m_enableStatistics{false}; ///< Enable statistics display in the terminal.
 			bool m_windowChanged{false};
+			std::filesystem::path m_rushVoiceOverPath{};
 			/** @} */ // End of Member Variables group
 	};
 }

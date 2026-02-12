@@ -795,7 +795,7 @@ namespace EmEn::Overlay
 	{
 		if ( observable->is(Window::getClassUID()) )
 		{
-			/* NOTE: On the window creation, we use the initial size to set the overlay phyical size. */
+			/* NOTE: On the window creation, we use the initial size to set the overlay physical size. */
 			if ( notificationCode == Window::Created )
 			{
 				this->updateFramebufferProperties();

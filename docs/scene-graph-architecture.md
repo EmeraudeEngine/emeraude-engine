@@ -66,6 +66,8 @@ Use search for `[CONCEPT: RENDERING]`, `[CONCEPT: PHYSICS]`, etc. to navigate qu
 │   • Opaque lighted objects (per-light passes)                      │
 │   • Translucent objects (back-to-front, correct blending)          │
 │   • Translucent lighted objects                                     │
+│   • TranslucentGB objects (back-to-front, requires grab pass)      │
+│   • TranslucentGB lighted objects                                   │
 │   • Shadow casting pass                                             │
 ├─────────────────────────────────────────────────────────────────────┤
 │ Physics Integration:                                                │

@@ -131,6 +131,18 @@ namespace EmEn::Graphics::RenderableInstance
 		 * Using the render pass handle ensures we don't falsely report readiness with stale programs. */
 		const auto renderPassHandle = reinterpret_cast< uint64_t >(renderTarget->framebuffer()->renderPass()->handle());
 
+		/* For renderables with grab-pass layers rendered in the post-process pass,
+		 * also check programs cached for the post-process render pass. */
+		const auto * postProcessFB = renderTarget->postProcessFramebuffer();
+
+		if ( postProcessFB != nullptr )
+		{
+			const auto postProcessRPHandle = reinterpret_cast< uint64_t >(postProcessFB->renderPass()->handle());
+
+			return m_renderable->hasAnyCachedProgramsForRenderPass(renderTarget, renderPassHandle)
+				|| m_renderable->hasAnyCachedProgramsForRenderPass(renderTarget, postProcessRPHandle);
+		}
+
 		return m_renderable->hasAnyCachedProgramsForRenderPass(renderTarget, renderPassHandle);
 	}
 
@@ -242,12 +254,23 @@ namespace EmEn::Graphics::RenderableInstance
 			}
 		}
 
-		const auto renderPassHandle = reinterpret_cast< uint64_t >(renderTarget->framebuffer()->renderPass()->handle());
+		const auto mainRenderPassHandle = reinterpret_cast< uint64_t >(renderTarget->framebuffer()->renderPass()->handle());
+
+		/* If the render target provides a post-process framebuffer (e.g. SwapChain),
+		 * grab-pass layers must create pipelines matching that single-sample render pass. */
+		const auto * postProcessFB = renderTarget->postProcessFramebuffer();
+		const auto postProcessRPHandle = postProcessFB != nullptr
+			? reinterpret_cast< uint64_t >(postProcessFB->renderPass()->handle())
+			: mainRenderPassHandle;
 
 		for ( const auto renderPassType : renderPassTypes )
 		{
 			for ( uint32_t layerIndex = 0; layerIndex < layerCount; layerIndex++ )
 			{
+				/* Select the correct render pass based on whether this layer uses grab pass. */
+				const bool isGrabPassLayer = postProcessFB != nullptr && m_renderable->requiresGrabPass(layerIndex);
+				const auto renderPassHandle = isGrabPassLayer ? postProcessRPHandle : mainRenderPassHandle;
+
 				const auto cacheKey = this->buildProgramCacheKey(Renderable::ProgramType::Rendering, renderPassType, renderPassHandle, layerIndex);
 
 				/* Try to find a cached program from the Renderable. */
@@ -261,6 +284,13 @@ namespace EmEn::Graphics::RenderableInstance
 				shaderProgramName << "RenderableInstance" << to_string(renderPassType);
 
 				Generator::SceneRendering generator{shaderProgramName.str(), renderTarget, this->shared_from_this(), layerIndex, scene, renderPassType, renderer.primaryServices().settings()};
+
+				/* For grab-pass layers, override the pipeline framebuffer to the post-process
+				 * single-sample framebuffer so the pipeline sample count matches. */
+				if ( isGrabPassLayer )
+				{
+					generator.setPipelineFramebuffer(postProcessFB);
+				}
 
 				/* Enable bindless textures flag if:
 				 * 1. The material uses automatic reflection
@@ -297,7 +327,7 @@ namespace EmEn::Graphics::RenderableInstance
 		{
 			for ( uint32_t layerIndex = 0; layerIndex < layerCount; layerIndex++ )
 			{
-				const auto cacheKey = this->buildProgramCacheKey(Renderable::ProgramType::TBNSpace, RenderPassType::SimplePass, renderPassHandle, layerIndex);
+				const auto cacheKey = this->buildProgramCacheKey(Renderable::ProgramType::TBNSpace, RenderPassType::SimplePass, mainRenderPassHandle, layerIndex);
 
 				/* Try to find a cached program from the Renderable. */
 				if ( m_renderable->findCachedProgram(renderTarget, cacheKey) != nullptr )
@@ -454,7 +484,13 @@ namespace EmEn::Graphics::RenderableInstance
 	void
 	Abstract::render (uint32_t readStateIndex, const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const Scenes::Component::AbstractLightEmitter * lightEmitter, RenderPassType renderPassType, uint32_t layerIndex, const CartesianFrame< float > * worldCoordinates, const CommandBuffer & commandBuffer, const BindlessTextureManager * bindlessTexturesManager) const noexcept
 	{
-		const auto renderPassHandle = reinterpret_cast< uint64_t >(renderTarget->framebuffer()->renderPass()->handle());
+		/* For grab-pass layers on render targets with a post-process framebuffer,
+		 * use the post-process render pass handle (pipelines were created for it). */
+		const auto * postProcessFB = renderTarget->postProcessFramebuffer();
+		const bool isGrabPassLayer = postProcessFB != nullptr && m_renderable->requiresGrabPass(layerIndex);
+		const auto renderPassHandle = isGrabPassLayer
+			? reinterpret_cast< uint64_t >(postProcessFB->renderPass()->handle())
+			: reinterpret_cast< uint64_t >(renderTarget->framebuffer()->renderPass()->handle());
 		const auto cacheKey = this->buildProgramCacheKey(Renderable::ProgramType::Rendering, renderPassType, renderPassHandle, layerIndex);
 		const auto program = m_renderable->findCachedProgram(renderTarget, cacheKey);
 

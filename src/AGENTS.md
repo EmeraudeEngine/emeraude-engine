@@ -56,14 +56,14 @@ private:
 - `onCoreOpenFiles()` - File drag & drop
 - `onCoreSurfaceRefreshed()` - Window resize
 
-### Core - Recording Coordination
+### Core - Recording Coordination (RushMaker)
 
-Core owns coordinated audio+video recording via two protected methods:
+Core owns coordinated audio+video+voice-over recording via two protected methods:
 
 | Method | Purpose |
 |--------|---------|
-| `startAudioVideoRecording()` | Generates timestamped `.ivf` + `.wav` paths in `captures/`, starts video then audio |
-| `stopAudioVideoRecording()` | Stops both recorders if active, notifies user |
+| `startAudioVideoRecording()` | Generates timestamped paths in `captures/`, starts video, audio, and optionally voice-over |
+| `stopAudioVideoRecording()` | Stops voice-over first, then audio and video recorders |
 
 **Keyboard shortcuts** (handled in `Core::onKeyPress()`):
 - **Shift+F12** — Take a screenshot (`screenshot()`)
@@ -73,16 +73,38 @@ Core owns coordinated audio+video recording via two protected methods:
 - Framebuffer resize (`onWindowChanged()`) — recording stops because video dimensions are locked at start
 - Application shutdown (`stop()`) — recording stops cleanly
 
-**Path generation pattern:** `{userDataDir}/captures/{unix_timestamp}.{ivf,wav}`
+**Path generation pattern:** `{userDataDir}/captures/{unix_timestamp}.{ivf,wav,-voice.wav}`
 
-Both `Graphics::Recorder` and `Audio::Recorder` share a symmetric API: `startRecording(path)` / `stopRecording()` / `isRecording()`. Core is the only caller that generates paths and coordinates both.
+Both `Graphics::Recorder` and `Audio::Recorder` share a symmetric API: `startRecording(path)` / `stopRecording()` / `isRecording()`. Core is the only caller that generates paths and coordinates all recorders.
+
+#### Voice-Over Support
+
+When `Core/RushMaker/EnableVoiceOver` is `true` and `Audio::ExternalInput` is usable (requires `Core/Audio/Capture/Enable = true`), the microphone is captured in streaming mode alongside the rush.
+
+**Privacy by design:** `Core/Audio/Capture/Enable` defaults to `false`. The voice-over setting alone is not sufficient — the user must explicitly enable audio capture first. A clear warning is logged if voice-over is enabled but capture is off.
+
+**Stop order:** Voice-over stops first (thread join is quasi-instantaneous), then game audio, then video (non-blocking via detached encoding session).
+
+#### Adaptive FFmpeg Script
+
+The assembly script is generated only when **video is active**. It adapts to available streams:
+
+| Video | Game Audio | Voice-Over | Script |
+|-------|-----------|------------|--------|
+| yes | yes | yes | 3 inputs + `amix` filter |
+| yes | yes | no | 2 inputs (video + audio) |
+| yes | no | yes | 2 inputs (video + voice) |
+| yes | no | no | Video only → webm container |
+| no | * | * | No script generated |
 
 **Code references:**
-- `Core.cpp:startAudioVideoRecording()` — Path generation and coordinated start
-- `Core.cpp:stopAudioVideoRecording()` — Coordinated stop
+- `Core.cpp:startAudioVideoRecording()` — Path generation, voice-over start, script generation
+- `Core.cpp:stopAudioVideoRecording()` — Voice-over stop, then audio/video stop
+- `Core.hpp:m_rushVoiceOverPath` — Tracks active voice-over path for script generation
 - `Core.cpp:onKeyPress()` — F12 handler (case `KeyF12`)
 - `Core.cpp:onWindowChanged()` — Resize handler stops recording
 - `Core.cpp:stop()` — Shutdown handler stops recording
+- `SettingKeys.hpp:RushMakerEnableVoiceOverKey` — Voice-over setting key
 
 ### Tracer - Logging System
 **Files**: `Tracer.cpp/.hpp`

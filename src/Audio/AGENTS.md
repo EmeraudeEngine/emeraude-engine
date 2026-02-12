@@ -42,7 +42,7 @@ ctest -R Audio
 
 ## Important Files
 
-- `Manager.cpp/.hpp` - Main manager (devices, activation, capture)
+- `Manager.cpp/.hpp` - Main manager (devices, activation, capture). Writes available playback devices to settings on init.
 - `SoundResource.cpp/.hpp` - Sound loading and management (mono)
 - `MusicResource.cpp/.hpp` - Music loading and management (stereo + streaming)
 - `SoundfontResource.cpp/.hpp` - SoundFont 2 (SF2) sample bank loading
@@ -53,6 +53,7 @@ ctest -R Audio
 - `AmbienceChannel.hpp` - Individual channel for ambient sound effects
 - `AmbienceSound.hpp` - Ambient sound configuration
 - `Recorder.cpp/.hpp` - Audio recording via OpenAL Soft loopback passthrough (game audio capture, not microphone)
+- `ExternalInput.cpp/.hpp` - Microphone capture (dual mode: memory for real-time, streaming for rush voice-over)
 - `@docs/coordinate-system.md` - Y-down convention (CRITICAL)
 
 ## Development Patterns
@@ -113,6 +114,8 @@ Ambience uses a `State` enum for playback state. See `Ambience.hpp:State`
 - **Thread safety**: OpenAL handles threading internally
 - **Coordinate system**: Always Y-down in Audio API
 - **Resource integration**: Never load directly, go through Resources
+- **Microphone privacy**: `Core/Audio/Capture/Enable` must be explicitly `true` before any microphone access. Default is `false`. Voice-over (`Core/RushMaker/EnableVoiceOver`) depends on this gate.
+- **Available devices in settings**: Both playback (`Core/Audio/AvailableDevices`) and capture (`Core/Audio/Capture/AvailableDevices`) device lists are written to settings on each startup for easy device switching via settings file editing
 
 ## SoundResource Default/Fallback Sound
 
@@ -302,11 +305,11 @@ Audio recording service that captures game audio output using OpenAL Soft loopba
 The loopback pipeline operates in three stages:
 1. **Loopback device** renders game audio into a buffer (no hardware output)
 2. **Dedicated render thread** continuously pulls samples via `alcRenderSamplesSOFT()`
-3. Samples are **forwarded to a real playback device** for speaker output and optionally **accumulated for WAV recording**
+3. Samples are **forwarded to a real playback device** for speaker output and optionally **streamed to WAV file**
 
 ```
 Game Audio Sources → Loopback Device → Render Thread ─┬─→ Speaker Playback
-                                                       └─→ WAV Recording (optional)
+                                                       └─→ WAV Streaming (optional)
 ```
 
 ### Symmetric API
@@ -315,11 +318,11 @@ Both `Audio::Recorder` and `Graphics::Recorder` share the same recording API pat
 
 | Method | Purpose |
 |--------|---------|
-| `startRecording(path)` | Begin recording to file at given path |
-| `stopRecording()` | Stop recording and finalize output file |
+| `startRecording(path)` | Begin streaming recording to WAV file at given path |
+| `stopRecording()` | Stop recording and finalize WAV header |
 | `isRecording()` | Check if recording is active |
 
-Path generation and coordinated start/stop of both recorders is owned by `Core::startAudioVideoRecording()` / `Core::stopAudioVideoRecording()`. See `src/AGENTS.md` Core section.
+Path generation and coordinated start/stop of all recorders is owned by `Core::startAudioVideoRecording()` / `Core::stopAudioVideoRecording()`. See `src/AGENTS.md` Core section.
 
 ### Required Extensions
 - `ALC_SOFT_loopback` — loopback device rendering
@@ -327,8 +330,8 @@ Path generation and coordinated start/stop of both recorders is owned by `Core::
 
 ### Key Implementation Details
 - Render thread uses 1024-sample chunks with 4-buffer streaming for smooth playback
-- Recording accumulates stereo int16 PCM samples under mutex protection
-- WAV output uses `Libs::WaveFactory::writeWAVFile()` on stop
+- **Streaming WAV**: Samples written directly to file during capture, header patched on stop
+- Crash-safe: data is on disk even if header isn't patched (recoverable by ffmpeg)
 - Setup creates: loopback device, game context, playback device/context, render thread
 - Shutdown stops recording, joins render thread, releases all OpenAL resources
 
@@ -337,8 +340,60 @@ Path generation and coordinated start/stop of both recorders is owned by `Core::
 - `Recorder.cpp:setup()` — Loopback pipeline creation (4-step)
 - `Recorder.cpp:renderThreadFunc()` — Render thread entry point
 - `Recorder.cpp:startRecording()` / `stopRecording()` — Recording control
+- `Recorder.cpp:writeWAVHeader()` — WAV header generation
 - `Manager.cpp:startAudioRecording()` / `stopAudioRecording()` — Manager-level wrappers
-- `Core.cpp:startAudioVideoRecording()` — Coordinated audio+video recording start
+- `Core.cpp:startAudioVideoRecording()` — Coordinated audio+video+voice-over recording start
+
+## ExternalInput (Microphone Capture)
+
+Audio capture service for recording from an external device (microphone). Uses OpenAL `ALC_EXT_CAPTURE` extension.
+
+### Privacy by Design
+
+**Microphone access is gated by `Core/Audio/Capture/Enable` (default: `false`).** The service does not initialize unless this setting is explicitly enabled. This ensures users are never recorded without consent.
+
+### Dual Recording Modes
+
+ExternalInput supports two recording modes for different use cases:
+
+| Mode | Method | Use Case | Data Flow |
+|------|--------|----------|-----------|
+| **Memory** | `start()` | Multiplayer voice chat, real-time processing | Samples accumulate in `m_samples` vector |
+| **Streaming** | `start(path)` | RushMaker voice-over, long recordings | Samples stream directly to WAV file |
+
+#### Memory Mode
+- `start()` — Begin capture, samples stored in RAM
+- `stop()` — Stop capture, join thread
+- `saveRecord(path)` — Write accumulated samples to WAV via `WaveFactory`
+- Suitable for short captures or when samples need real-time processing
+
+#### Streaming Mode
+- `start(path)` — Open WAV file, write placeholder header, begin capture
+- `stop()` — Join thread, patch WAV header sizes, close file
+- Crash-safe: data is on disk even if stop() is never called
+- No RAM accumulation — suitable for arbitrarily long recordings
+
+### Thread Safety
+
+The recording thread (`recordingTask()`) polls `alcCaptureSamples()` in a loop. On `stop()`:
+1. `alcCaptureStop()` is called
+2. `m_isRecording` flag set to `false` (thread exit condition)
+3. Thread is joined immediately — ensures all data is flushed before `stop()` returns
+
+### Available Devices in Settings
+
+On initialization, ExternalInput writes the list of available capture devices to `Core/Audio/Capture/AvailableDevices` in settings. This mirrors the pattern used by Vulkan for GPU enumeration, allowing users to see available microphones when editing the settings file and copy the desired device name into `Core/Audio/Capture/DeviceName`.
+
+### Code References
+- `ExternalInput.hpp` — Class declaration with dual-mode API
+- `ExternalInput.cpp:start()` — Memory mode start
+- `ExternalInput.cpp:start(path)` — Streaming mode start (opens WAV, writes header)
+- `ExternalInput.cpp:stop()` — Joins thread, patches WAV header in streaming mode
+- `ExternalInput.cpp:recordingTask()` — Capture loop (branches on `m_streamingMode`)
+- `ExternalInput.cpp:writeWAVHeader()` — Standard 44-byte PCM mono WAV header
+- `ExternalInput.cpp:saveRecord()` — Memory mode WAV export via WaveFactory
+- `SettingKeys.hpp:AudioCaptureEnableKey` — Master capture enable gate
+- `SettingKeys.hpp:AudioCaptureAvailableDevicesKey` — Available devices array
 
 ## MusicResource MIDI/Soundfont Integration
 

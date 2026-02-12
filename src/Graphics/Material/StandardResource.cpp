@@ -686,6 +686,12 @@ namespace EmEn::Graphics::Material
 
 					return false;
 				}
+
+				/* Check if this texture component is animated. */
+				if ( component->texture() != nullptr && component->texture()->duration() > 0 )
+				{
+					this->enableFlag(IsAnimated);
+				}
 			}
 		}
 
@@ -930,7 +936,13 @@ namespace EmEn::Graphics::Material
 			return 1;
 		}
 
-		// TODO: Which component is animated ?
+		for ( const auto & component : std::ranges::views::values(m_components) )
+		{
+			if ( component->texture() != nullptr && component->texture()->duration() > 0 )
+			{
+				return component->texture()->frameCount();
+			}
+		}
 
 		return 1;
 	}
@@ -943,20 +955,32 @@ namespace EmEn::Graphics::Material
 			return 0;
 		}
 
-		// TODO: Which component is animated ?
+		for ( const auto & component : std::ranges::views::values(m_components) )
+		{
+			if ( component->texture() != nullptr && component->texture()->duration() > 0 )
+			{
+				return component->texture()->duration();
+			}
+		}
 
 		return 0;
 	}
 
 	uint32_t
-	StandardResource::frameIndexAt (uint32_t /*sceneTime*/) const noexcept
+	StandardResource::frameIndexAt (uint32_t sceneTime) const noexcept
 	{
-		/*if ( !this->isFlagEnabled(Animated) )
+		if ( !this->isFlagEnabled(IsAnimated) )
 		{
 			return 0;
-		}*/
+		}
 
-		// TODO: Which component is animated ?
+		for ( const auto & component : std::ranges::views::values(m_components) )
+		{
+			if ( component->texture() != nullptr && component->texture()->duration() > 0 )
+			{
+				return component->texture()->frameIndexAt(sceneTime);
+			}
+		}
 
 		return 0;
 	}
@@ -1250,6 +1274,26 @@ namespace EmEn::Graphics::Material
 			if ( this->usingSecondaryTextureCoordinates() && !checkSecondaryTextureCoordinates(generator, vertexShader, *this, *geometry) )
 			{
 				return false;
+			}
+
+			/* If any texture component uses volumetric textures (e.g., AnimatedTexture2D)
+			 * and the geometry only has 2D UVs, add the 3D coordinate fallback. */
+			if ( !this->primaryTextureCoordinatesUses3D() )
+			{
+				for ( const auto & [type, component] : m_components )
+				{
+					const auto * texture = dynamic_cast< const Component::Texture * >(component.get());
+
+					if ( texture != nullptr && texture->isVolumetricTexture() )
+					{
+						if ( !addVolumetricTextureFallback(generator, vertexShader, *geometry) )
+						{
+							return false;
+						}
+
+						break;
+					}
+				}
 			}
 		}
 

@@ -771,6 +771,17 @@ namespace EmEn::Graphics::RenderableInstance
 			virtual void bindInstanceModelLayer (const Vulkan::CommandBuffer & commandBuffer, uint32_t layerIndex) const noexcept = 0;
 
 			/**
+			 * @brief Returns the current animation frame index.
+			 * @return uint32_t
+			 */
+			[[nodiscard]]
+			uint32_t
+			frameIndex () const noexcept
+			{
+				return m_frameIndex;
+			}
+
+			/**
 			 * @brief Mutex protecting local data access (e.g. VBO data in Multiple).
 			 *
 			 * @note Used to synchronize access between Logic thread (updating data) and Render thread (uploading to

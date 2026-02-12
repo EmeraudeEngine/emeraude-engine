@@ -1457,22 +1457,49 @@ namespace EmEn::Scenes
 			void castShadows (const std::shared_ptr< Graphics::RenderTarget::Abstract > & renderTarget, const Vulkan::CommandBuffer & commandBuffer) noexcept;
 
 			/**
-			 * @brief Main scene rendering pass.
+			 * @brief Prepares render lists for a frame without issuing draw calls.
 			 *
-			 * Renders all visible objects to the specified render target:
-			 * 1. Populates render lists via frustum culling and Z-sorting
-			 * 2. Renders opaque objects (front-to-back for early-Z optimization)
-			 * 3. Renders opaque lighted objects with per-light passes
-			 * 4. Renders translucent objects (back-to-front for correct blending)
-			 * 5. Renders translucent lighted objects
+			 * Populates render lists via frustum culling and Z-sorting, and caches
+			 * the double-buffer read index and bindless texture manager pointer.
+			 * Must be called once per frame before any render(step) calls.
 			 *
-			 * @note Uses the double-buffered render state (read-only access).
-			 * @note Render lists are cleared and rebuilt each frame.
-			 *
+			 * @param renderTarget The destination (View, Texture, or SwapChain).
+			 * @return True if there
+			 * is anything to render.
+			 */
+			bool prepareRender (const std::shared_ptr< Graphics::RenderTarget::Abstract > & renderTarget) noexcept;
+
+			/**
+			 * @brief Renders all opaque objects (front-to-back for early-Z optimization).
+			 * @note Must be called after prepareRender().
 			 * @param renderTarget The destination (View, Texture, or SwapChain).
 			 * @param commandBuffer The Vulkan command buffer for recording draw calls.
 			 */
-			void render (const std::shared_ptr< Graphics::RenderTarget::Abstract > & renderTarget, const Vulkan::CommandBuffer & commandBuffer) noexcept;
+			void renderOpaque (const std::shared_ptr< Graphics::RenderTarget::Abstract > & renderTarget, const Vulkan::CommandBuffer & commandBuffer) noexcept;
+
+			/**
+			 * @brief Renders all translucent objects (back-to-front for correct blending).
+			 * @note Must be called after prepareRender().
+			 * @param renderTarget The destination (View, Texture, or SwapChain).
+			 * @param commandBuffer The Vulkan command buffer for recording draw calls.
+			 */
+			void renderTranslucent (const std::shared_ptr< Graphics::RenderTarget::Abstract > & renderTarget, const Vulkan::CommandBuffer & commandBuffer) noexcept;
+
+			/**
+			 * @brief Renders all translucent objects requiring a grab pass (refraction, etc.).
+			 * @note Must be called after prepareRender() and after the grab pass blit.
+			 * @param renderTarget The destination (View, Texture, or SwapChain).
+			 * @param commandBuffer The Vulkan command buffer for recording draw calls.
+			 */
+			void renderTranslucentGB (const std::shared_ptr< Graphics::RenderTarget::Abstract > & renderTarget, const Vulkan::CommandBuffer & commandBuffer) noexcept;
+
+			/**
+			 * @brief Checks whether any translucent grab-pass objects are queued for rendering.
+			 * @note Only meaningful after prepareRender() has been called.
+			 * @return True if TranslucentGB or TranslucentGBLighted render lists are non-empty.
+			 */
+			[[nodiscard]]
+			bool hasTranslucentGBObjects () const noexcept;
 
 			/**
 			 * @brief Debug rendering of TBN (Tangent, Binormal, Normal) space vectors.
@@ -2226,6 +2253,15 @@ namespace EmEn::Scenes
 			static constexpr auto TranslucentLighted{3UL};
 			/** @brief Render list index for shadow-casting objects. */
 			static constexpr auto Shadows{4UL};
+			/** @brief Render list index for translucent objects requiring grab pass (no lighting). */
+			static constexpr auto TranslucentGB{5UL};
+			/** @brief Render list index for translucent objects requiring grab pass (with lighting). */
+			static constexpr auto TranslucentGBLighted{6UL};
+
+			/** @brief Cached double-buffer read index set by prepareRender(). */
+			uint32_t m_preparedReadStateIndex{0};
+			/** @brief Cached bindless texture manager pointer set by prepareRender(). Null if not usable. */
+			const Graphics::BindlessTextureManager * m_preparedBindlessManager{nullptr};
 
 			/* ============================================================
 			 * [PRIVATE: SCENE CONTENT]
@@ -2258,8 +2294,8 @@ namespace EmEn::Scenes
 			AVConsole::Manager m_AVConsoleManager;
 			/** @brief Light management system for the scene. */
 			LightSet m_lightSet;
-			/** @brief Render lists indexed by render category (Opaque, Translucent, etc.). */
-			std::array< RenderBatch::List, 5 > m_renderLists{};
+			/** @brief Render lists indexed by render category (Opaque, Translucent, TranslucentGB, etc.). */
+			std::array< RenderBatch::List, 7 > m_renderLists{};
 			/** @brief Debug camera controller. @bug Should not be persistent. */
 			NodeController m_nodeController;
 

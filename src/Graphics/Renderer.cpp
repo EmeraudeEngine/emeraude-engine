@@ -512,11 +512,18 @@ namespace EmEn::Graphics
 
 			m_grabPass = std::make_unique< GrabPass >();
 
-			if ( m_grabPass->create(*this, swapChainCreateInfo.imageExtent.width, swapChainCreateInfo.imageExtent.height, swapChainCreateInfo.imageFormat) )
+			if ( m_grabPass->create(*this, swapChainCreateInfo.imageExtent.width, swapChainCreateInfo.imageExtent.height, swapChainCreateInfo.imageFormat, m_swapChain->depthStencilFormat()) )
 			{
 				if ( m_bindlessTextureManager.usable() )
 				{
 					static_cast< void >(m_bindlessTextureManager.updateTexture2D(BindlessTextureManager::GrabPassSlot, *m_grabPass));
+
+					if ( m_grabPass->hasDepth() )
+					{
+						static_cast< void >(m_bindlessTextureManager.updateTexture2DFromDescriptorInfo(
+							BindlessTextureManager::GrabPassDepthSlot,
+							m_grabPass->depthDescriptorInfo()));
+					}
 				}
 			}
 			else
@@ -780,7 +787,7 @@ namespace EmEn::Graphics
 	Renderer::renderOffscreenFrame (const std::shared_ptr< Scenes::Scene > & scene, const Overlay::Manager & overlayManager) noexcept
 	{
 		/* NOTE: Record frame start time for the optional frame limiter. */
-		if ( m_frameDuration.count() > 0 )
+		if ( this->isSoftwareFrameLimiterEnabled() )
 		{
 			m_frameStartTime = std::chrono::high_resolution_clock::now();
 		}
@@ -837,11 +844,16 @@ namespace EmEn::Graphics
 		/* First, render the scene. */
 		if ( scene != nullptr )
 		{
-			scene->render(m_windowLessView, *commandBuffer);
-
-			if ( m_TBNSpaceRenderingEnabled )
+			if ( scene->prepareRender(m_windowLessView) )
 			{
-				scene->renderTBNSpace(m_swapChain, *commandBuffer);
+				scene->renderOpaque(m_windowLessView, *commandBuffer);
+				scene->renderTranslucent(m_windowLessView, *commandBuffer);
+				scene->renderTranslucentGB(m_windowLessView, *commandBuffer);
+
+				if ( m_TBNSpaceRenderingEnabled )
+				{
+					scene->renderTBNSpace(m_windowLessView, *commandBuffer);
+				}
 			}
 		}
 
@@ -877,7 +889,7 @@ namespace EmEn::Graphics
 		/* NOTE: Apply frame rate limiting if enabled.
 		 * This uses a busy-wait for the final microseconds to achieve accurate timing,
 		 * as std::this_thread::sleep_for() has limited precision on most platforms. */
-		if ( m_frameDuration.count() > 0 )
+		if ( this->isSoftwareFrameLimiterEnabled() )
 		{
 			const auto frameEndTime = std::chrono::high_resolution_clock::now();
 			const auto elapsed = frameEndTime - m_frameStartTime;
@@ -892,10 +904,12 @@ namespace EmEn::Graphics
 					std::this_thread::sleep_for(remainingTime - std::chrono::milliseconds(1));
 				}
 
-				/* Busy-wait for the final portion to achieve precise timing. */
+				/* Busy-wait for the final portion to achieve precise timing.
+				 * NOTE: yield() hints the OS to schedule other threads, reducing CPU waste.
+				 * If frame timing becomes inconsistent, comment out the yield(). */
 				while ( std::chrono::high_resolution_clock::now() - m_frameStartTime < m_frameDuration )
 				{
-					/* Spin-wait for precise frame timing. */
+					std::this_thread::yield();
 				}
 			}
 		}
@@ -905,7 +919,7 @@ namespace EmEn::Graphics
 	Renderer::renderFrame (const std::shared_ptr< Scenes::Scene > & scene, const Overlay::Manager & overlayManager) noexcept
 	{
 		/* NOTE: Record frame start time for the optional frame limiter. */
-		if ( m_frameDuration.count() > 0 )
+		if ( this->isSoftwareFrameLimiterEnabled() )
 		{
 			m_frameStartTime = std::chrono::high_resolution_clock::now();
 		}
@@ -987,13 +1001,17 @@ namespace EmEn::Graphics
 			return;
 		}
 
+		/* Prepare scene render lists once (frustum culling, Z-sorting). */
+		const bool sceneHasContent = scene != nullptr && scene->prepareRender(m_swapChain);
+
 		/* Render pass 1: Scene rendering (clears buffers). */
 		commandBuffer->beginRenderPass(*m_swapChain->framebuffer(), m_swapChain->renderArea(), m_clearColors, VK_SUBPASS_CONTENTS_INLINE);
 
-		/* Render the scene. */
-		if ( scene != nullptr )
+		/* Render opaque and translucent objects in the MSAA render pass. */
+		if ( sceneHasContent )
 		{
-			scene->render(m_swapChain, *commandBuffer);
+			scene->renderOpaque(m_swapChain, *commandBuffer);
+			scene->renderTranslucent(m_swapChain, *commandBuffer);
 
 			if ( m_TBNSpaceRenderingEnabled )
 			{
@@ -1003,14 +1021,23 @@ namespace EmEn::Graphics
 
 		commandBuffer->endRenderPass();
 
-		/* Grab pass: capture the scene into a sampleable texture (same frame). */
+		/* Grab pass: capture the resolved scene into a sampleable texture (same frame). */
 		if ( m_grabPassEnabled && m_grabPass != nullptr && m_grabPass->isCreated() )
 		{
-			m_grabPass->recordBlit(*commandBuffer, *m_swapChain->currentColorImage());
+			const auto * srcDepth = m_grabPass->hasDepth() ? m_swapChain->currentDepthStencilImage().get() : nullptr;
+			m_grabPass->recordBlit(*commandBuffer, *m_swapChain->currentColorImage(), srcDepth);
 		}
 
-		/* Render pass 2: Post-processing and overlay (preserves scene content). */
+		/* Render pass 2: Post-processing and overlay (preserves scene content).
+		 * TranslucentGB objects render here, after the grab pass blit, so they
+		 * can sample the captured scene through the grab pass texture. */
 		commandBuffer->beginRenderPass(*m_swapChain->postProcessFramebuffer(), m_swapChain->renderArea(), m_clearColors, VK_SUBPASS_CONTENTS_INLINE);
+
+		/* Render translucent grab-pass objects (refraction, etc.). */
+		if ( sceneHasContent && scene->hasTranslucentGBObjects() )
+		{
+			scene->renderTranslucentGB(m_swapChain, *commandBuffer);
+		}
 
 		/* Render the overlay system over the scene. */
 		overlayManager.render(m_swapChain, *commandBuffer);
@@ -1026,7 +1053,7 @@ namespace EmEn::Graphics
 		{
 			const auto * queue = this->device()->getGraphicsQueue(QueuePriority::High);
 
-			/* Build wait stages: FRAGMENT_SHADER for render-to-textures, COLOR_ATTACHMENT_OUTPUT for swapchain */
+			/* Build wait stages: FRAGMENT_SHADER for render-to-textures, COLOR_ATTACHMENT_OUTPUT for swap-chain */
 			StaticVector< VkPipelineStageFlags, 16 > waitStages;
 
 			/* All render-to-texture semaphores wait at FRAGMENT_SHADER stage (when we sample the texture) */
@@ -1058,25 +1085,24 @@ namespace EmEn::Graphics
 		/* NOTE: Apply frame rate limiting if enabled.
 		 * This uses a busy-wait for the final microseconds to achieve accurate timing,
 		 * as std::this_thread::sleep_for() has limited precision on most platforms. */
-		if ( m_frameDuration.count() > 0 )
+		if ( this->isSoftwareFrameLimiterEnabled() )
 		{
 			const auto frameEndTime = std::chrono::high_resolution_clock::now();
-			const auto elapsed = frameEndTime - m_frameStartTime;
 
-			if ( elapsed < m_frameDuration )
+			if ( const auto elapsed = frameEndTime - m_frameStartTime; elapsed < m_frameDuration )
 			{
-				const auto remainingTime = m_frameDuration - elapsed;
-
 				/* Sleep for most of the remaining time (leave 1ms for busy-wait precision). */
-				if ( remainingTime > std::chrono::milliseconds(1) )
+				if ( const auto remainingTime = m_frameDuration - elapsed; remainingTime > std::chrono::milliseconds(1) )
 				{
 					std::this_thread::sleep_for(remainingTime - std::chrono::milliseconds(1));
 				}
 
-				/* Busy-wait for the final portion to achieve precise timing. */
+				/* Busy-wait for the final portion to achieve precise timing.
+				 * NOTE: yield() hints the OS to schedule other threads, reducing CPU waste.
+				 * If frame timing becomes inconsistent, comment out the yield(). */
 				while ( std::chrono::high_resolution_clock::now() - m_frameStartTime < m_frameDuration )
 				{
-					/* Spin-wait for precise frame timing. */
+					std::this_thread::yield();
 				}
 			}
 		}
@@ -1161,7 +1187,12 @@ namespace EmEn::Graphics
 
 			commandBuffer->beginRenderPass(*renderToTexture->framebuffer(), renderToTexture->renderArea(), m_clearColors, VK_SUBPASS_CONTENTS_INLINE);
 
-			scene.render(renderToTexture, *commandBuffer);
+			if ( scene.prepareRender(renderToTexture) )
+			{
+				scene.renderOpaque(renderToTexture, *commandBuffer);
+				scene.renderTranslucent(renderToTexture, *commandBuffer);
+				scene.renderTranslucentGB(renderToTexture, *commandBuffer);
+			}
 
 			commandBuffer->endRenderPass();
 
@@ -1306,11 +1337,18 @@ namespace EmEn::Graphics
 		{
 			const auto & swapChainCreateInfo = m_swapChain->createInfo();
 
-			if ( m_grabPass->recreate(*this, swapChainCreateInfo.imageExtent.width, swapChainCreateInfo.imageExtent.height, swapChainCreateInfo.imageFormat) )
+			if ( m_grabPass->recreate(*this, swapChainCreateInfo.imageExtent.width, swapChainCreateInfo.imageExtent.height, swapChainCreateInfo.imageFormat, m_swapChain->depthStencilFormat()) )
 			{
 				if ( m_bindlessTextureManager.usable() )
 				{
 					static_cast< void >(m_bindlessTextureManager.updateTexture2D(BindlessTextureManager::GrabPassSlot, *m_grabPass));
+
+					if ( m_grabPass->hasDepth() )
+					{
+						static_cast< void >(m_bindlessTextureManager.updateTexture2DFromDescriptorInfo(
+							BindlessTextureManager::GrabPassDepthSlot,
+							m_grabPass->depthDescriptorInfo()));
+					}
 				}
 			}
 			else

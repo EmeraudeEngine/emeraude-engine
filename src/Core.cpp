@@ -28,6 +28,7 @@
 
 /* STL inclusions. */
 #include <chrono>
+#include <fstream>
 #include <sstream>
 #include <iostream>
 #include <ranges>
@@ -46,6 +47,7 @@
 #include "Tool/ShowVulkanInformation.hpp"
 #include "Input/Types.hpp"
 #include "Constants.hpp"
+#include "SettingKeys.hpp"
 
 namespace EmEn
 {
@@ -1278,6 +1280,14 @@ namespace EmEn
 			return false;
 		}
 
+		/* Guard: refuse a new rush if the audio recorder is still active from a previous one. */
+		if ( m_audioManager.recorder().isRecording() )
+		{
+			TraceWarning{ClassId} << "Cannot start new recording: audio recorder is still active from previous rush.";
+
+			return false;
+		}
+
 		/* Gets the capture directory. */
 		const auto captureDirectory = m_primaryServices.fileSystem().userDataDirectory("captures");
 
@@ -1310,7 +1320,120 @@ namespace EmEn
 			}
 		}
 
-		TraceInfo{ClassId} << "You can use this command to create a WebM file:" "\n" "ffmpeg -i " << filename << ".ivf -i " << filename << ".wav -c:v copy -c:a libopus -b:a 192k " << filename << ".webm";
+		/* Voice-over: start microphone capture if enabled. */
+		auto & settings = m_primaryServices.settings();
+		const auto enableVoiceOver = settings.getOrSetDefault< bool >(RushMakerEnableVoiceOverKey, DefaultRushMakerEnableVoiceOver);
+
+		if ( enableVoiceOver )
+		{
+			if ( m_audioManager.externalInput().usable() )
+			{
+				m_rushVoiceOverPath = captureDirectory / (filename + "-voice.wav");
+
+				if ( m_audioManager.externalInput().start(m_rushVoiceOverPath) )
+				{
+					TraceSuccess{ClassId} << "Voice-over recording started -> " << m_rushVoiceOverPath;
+				}
+				else
+				{
+					TraceError{ClassId} << "Failed to start voice-over recording to " << m_rushVoiceOverPath;
+					m_rushVoiceOverPath.clear();
+				}
+			}
+			else
+			{
+				TraceWarning{ClassId} <<
+				"Voice-over is enabled but the audio capture service is not available. "
+				"Ensure '" << AudioCaptureEnableKey << "' is set to true in settings to allow microphone access.";
+			}
+		}
+
+		/* RushMaker: generate the assembly script when video is active. */
+		if ( m_graphicsRenderer.recorder().isRecording() )
+		{
+			const auto hasGameAudio = m_audioManager.recorder().isRecording();
+			const auto hasVoiceOver = !m_rushVoiceOverPath.empty();
+			const auto audioBitrate = hasGameAudio
+				? m_graphicsRenderer.recorder().recommendedAudioBitrate() * m_audioManager.recorder().channelCount() / 2
+				: 128U;
+
+#if IS_WINDOWS
+			const auto scriptPath = captureDirectory / (filename + "_assemble.ps1");
+			std::ofstream script{scriptPath};
+
+			if ( script.is_open() )
+			{
+				script << "# RushMaker - Auto-generated script to assemble recording into WebM.\n";
+				script << "# Run this script after stopping the recording.\n";
+				script << "Set-Location \"" << captureDirectory.string() << "\"\n";
+				script << "ffmpeg.exe -i \"" << filename << ".ivf\"";
+
+				if ( hasGameAudio && hasVoiceOver )
+				{
+					script << " -i \"" << filename << ".wav\" -i \"" << filename << "-voice.wav\"";
+					script << " -filter_complex \"[1:a][2:a]amix=inputs=2:duration=longest:normalize=0[aout]\"";
+					script << " -map 0:v -map \"[aout]\" -c:v copy -c:a libopus -b:a " << audioBitrate << "k";
+				}
+				else if ( hasGameAudio )
+				{
+					script << " -i \"" << filename << ".wav\" -c:v copy -c:a libopus -b:a " << audioBitrate << "k";
+				}
+				else if ( hasVoiceOver )
+				{
+					script << " -i \"" << filename << "-voice.wav\" -c:v copy -c:a libopus -b:a " << audioBitrate << "k";
+				}
+				else
+				{
+					script << " -c:v copy";
+				}
+
+				script << " \"" << filename << ".webm\"\n";
+
+				TraceSuccess{ClassId} << "RushMaker assemble script written to " << scriptPath;
+			}
+#else
+			const auto scriptPath = captureDirectory / (filename + "_assemble.sh");
+			std::ofstream script{scriptPath};
+
+			if ( script.is_open() )
+			{
+				script << "#!/bin/bash\n";
+				script << "# RushMaker - Auto-generated script to assemble recording into WebM.\n";
+				script << "# Run this script after stopping the recording.\n";
+				script << "cd \"" << captureDirectory.string() << "\"\n";
+				script << "ffmpeg -i \"" << filename << ".ivf\"";
+
+				if ( hasGameAudio && hasVoiceOver )
+				{
+					script << " -i \"" << filename << ".wav\" -i \"" << filename << "-voice.wav\" \\\n";
+					script << "  -filter_complex \"[1:a][2:a]amix=inputs=2:duration=longest:normalize=0[aout]\" \\\n";
+					script << "  -map 0:v -map \"[aout]\" -c:v copy -c:a libopus -b:a " << audioBitrate << "k";
+				}
+				else if ( hasGameAudio )
+				{
+					script << " -i \"" << filename << ".wav\" -c:v copy -c:a libopus -b:a " << audioBitrate << "k";
+				}
+				else if ( hasVoiceOver )
+				{
+					script << " -i \"" << filename << "-voice.wav\" -c:v copy -c:a libopus -b:a " << audioBitrate << "k";
+				}
+				else
+				{
+					script << " -c:v copy";
+				}
+
+				script << " \"" << filename << ".webm\"\n";
+
+				script.close();
+
+				std::filesystem::permissions(scriptPath,
+					std::filesystem::perms::owner_exec | std::filesystem::perms::group_exec,
+					std::filesystem::perm_options::add);
+
+				TraceSuccess{ClassId} << "RushMaker assemble script written to " << scriptPath;
+			}
+#endif
+		}
 
 		return true;
 	}
@@ -1318,14 +1441,22 @@ namespace EmEn
 	void
 	Core::stopAudioVideoRecording () noexcept
 	{
-		if ( m_graphicsRenderer.recorder().isRecording() )
+		/* Voice-over: stop streaming capture (finalizes WAV header and closes file). */
+		if ( m_audioManager.externalInput().isRecording() )
 		{
-			m_graphicsRenderer.recorder().stopRecording();
+			m_audioManager.externalInput().stop();
+
+			m_rushVoiceOverPath.clear();
 		}
 
 		if ( m_audioManager.recorder().isRecording() )
 		{
 			m_audioManager.recorder().stopRecording();
+		}
+
+		if ( m_graphicsRenderer.recorder().isRecording() )
+		{
+			m_graphicsRenderer.recorder().stopRecording();
 		}
 
 		this->notifyUser("Recording stopped.");

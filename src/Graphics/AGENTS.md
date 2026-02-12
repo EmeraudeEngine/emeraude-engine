@@ -307,6 +307,21 @@ m_descriptorSet->writeUniformBuffer(bindingPoint, descriptorInfo);
 
 The GLSL struct is generated to match this layout exactly.
 
+### Material Opacity and GrabPass
+
+`Material::Interface` provides two key query methods used by the rendering pipeline for render list dispatch:
+
+- **`isOpaque()`**: Returns `!BlendingEnabled`, but also returns `false` when `requiresGrabPass()` is `true` (a material requiring grab pass is inherently non-opaque).
+- **`requiresGrabPass()`**: Virtual method (default `false`). Overridden by `PBRResource` based on material properties (e.g., transmission with screen-space refraction).
+
+These are propagated through `Renderable::Abstract::isOpaque(layerIndex)` and `Renderable::Abstract::requiresGrabPass(layerIndex)` to all concrete renderables, enabling the Scene to dispatch into 3 render categories: Opaque, Translucent, and TranslucentGB.
+
+**Code references:**
+- `Material/Interface.hpp:isOpaque()` — non-virtual, checks blending and grab pass
+- `Material/Interface.hpp:requiresGrabPass()` — virtual, default false
+- `Material/PBRResource.hpp:requiresGrabPass()` — override
+- `Renderable/Abstract.hpp:requiresGrabPass()` — pure virtual
+
 ### Normal Map Scale
 
 The `normalScale` parameter (offset 19 for Standard, offset 6 for PBR) controls normal map intensity by scaling the tangent-space XY components before re-normalizing:
@@ -571,10 +586,6 @@ Real-time video recording service that captures the Vulkan swap-chain framebuffe
 | `captureAndSubmitFrame()` | Capture current frame via async GPU readback |
 
 Path generation is owned by `Core::startAudioVideoRecording()` — see `src/AGENTS.md` Core section.
-
-### Compile-Time Guard
-- Enabled via `EMERAUDE_VIDEO_RECORDING_ENABLED` (requires libvpx)
-- When disabled, all methods are no-op stubs returning false
 
 ### Transfer Queue Optimization
 When a dedicated transfer queue family is available, uses a two-step copy path:

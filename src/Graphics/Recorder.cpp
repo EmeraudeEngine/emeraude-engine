@@ -26,12 +26,15 @@
 
 #include "Recorder.hpp"
 
+/* Project configuration. */
+#include "emeraude_config.hpp"
+
 /* STL inclusions. */
 #include <algorithm>
 #include <cstring>
-#include <sstream>
 
 /* Local inclusions. */
+#include "Libs/String.hpp"
 #include "Renderer.hpp"
 #include "RenderTarget/Abstract.hpp"
 #include "Libs/IO/IO.hpp"
@@ -39,7 +42,6 @@
 #include "SettingKeys.hpp"
 #include "Tracer.hpp"
 
-#ifdef EMERAUDE_VIDEO_RECORDING_ENABLED
 #include "Vulkan/Device.hpp"
 #include "Vulkan/Queue.hpp"
 #include "Vulkan/Sync/ImageMemoryBarrier.hpp"
@@ -49,13 +51,11 @@
 #include "cpu_features/cpuinfo_x86.h"
 #include <immintrin.h>
 #endif
-#endif
 
 namespace EmEn::Graphics
 {
 	using namespace Libs;
 
-#ifdef EMERAUDE_VIDEO_RECORDING_ENABLED
 	/* Helper to write a little-endian value to a byte buffer. */
 	static void
 	writeLE16 (uint8_t * dst, uint16_t value) noexcept
@@ -84,15 +84,32 @@ namespace EmEn::Graphics
 
 	/* Forward declarations for BGRA-to-I420 conversion variants. */
 	static void BGRAToI420_Scalar (const uint8_t * bgra, uint32_t w, uint32_t h, uint8_t * y, uint8_t * u, uint8_t * v) noexcept;
+
 #if IS_X86_ARCH
-#ifndef _MSC_VER
+	#ifndef _MSC_VER
 	__attribute__((target("sse4.1"))) static void BGRAToI420_SSE41 (const uint8_t * bgra, uint32_t w, uint32_t h, uint8_t * y, uint8_t * u, uint8_t * v) noexcept;
+
 	__attribute__((target("avx2"))) static void BGRAToI420_AVX2 (const uint8_t * bgra, uint32_t w, uint32_t h, uint8_t * y, uint8_t * u, uint8_t * v) noexcept;
-#else
+	#else
 	static void BGRAToI420_SSE41 (const uint8_t * bgra, uint32_t w, uint32_t h, uint8_t * y, uint8_t * u, uint8_t * v) noexcept;
+
 	static void BGRAToI420_AVX2 (const uint8_t * bgra, uint32_t w, uint32_t h, uint8_t * y, uint8_t * u, uint8_t * v) noexcept;
+	#endif
 #endif
-#endif
+
+	const char *
+	Recorder::qualityPresetToString (QualityPreset preset) noexcept
+	{
+		switch ( preset )
+		{
+			case QualityPreset::Low: return "Low";
+			case QualityPreset::Medium: return "Medium";
+			case QualityPreset::High: return "High";
+			case QualityPreset::Ultra: return "Ultra";
+		}
+
+		return "Medium";
+	}
 
 	Recorder::Recorder (PrimaryServices & primaryServices, Renderer & renderer) noexcept
 		: ServiceInterface{ClassId},
@@ -107,22 +124,46 @@ namespace EmEn::Graphics
 	{
 		auto & settings = m_primaryServices.settings();
 
-		if ( !settings.getOrSetDefault< bool >(VideoRecorderEnableKey, DefaultVideoRecorderEnable) )
+		if ( !settings.getOrSetDefault< bool >(RushMakerEnableVideoKey, DefaultRushMakerEnabled) )
 		{
 			return false;
 		}
 
-		m_targetFPS = settings.getOrSetDefault< unsigned int >(VideoRecorderFPSKey, DefaultVideoRecorderFPS);
-		m_bitrate = settings.getOrSetDefault< unsigned int >(VideoRecorderQualityKey, DefaultVideoRecorderQuality);
-		m_showStats = settings.getOrSetDefault< bool >(VideoRecorderShowStatsKey, DefaultVideoRecorderShowStats);
-		m_useCBR = settings.getOrSetDefault< bool >(VideoRecorderUseCBRKey, DefaultVideoRecorderUseCBR);
+		m_targetFramerate = settings.getOrSetDefault< unsigned int >(RushMakerVideoFramerateKey, DefaultRushMakerVideoFramerate);
+		m_realtimeMode = settings.getOrSetDefault< bool >(RushMakerRealtimeModeKey, DefaultRushMakerRealtimeMode);
+		m_showStatistics = settings.getOrSetDefault< bool >(RushMakerShowInformationKey, DefaultRushMakerShowInformation);
 
-		if ( m_targetFPS == 0 )
+		const auto preset = String::toLower(settings.getOrSetDefault< std::string >(RushMakerQualityPresetKey, DefaultRushMakerQualityPreset));
+
+		if ( preset == "low" )
 		{
-			m_targetFPS = DefaultVideoRecorderFPS;
+			m_qualityPreset = QualityPreset::Low;
+		}
+		else if ( preset == "medium" )
+		{
+			m_qualityPreset = QualityPreset::Medium;
+		}
+		else if ( preset == "high" )
+		{
+			m_qualityPreset = QualityPreset::High;
+		}
+		else if ( preset == "ultra" )
+		{
+			m_qualityPreset = QualityPreset::Ultra;
+		}
+		else
+		{
+			TraceWarning{ClassId} << "Unknown video quality preset '" << preset << "', defaulting to Medium.";
+
+			m_qualityPreset = QualityPreset::Medium;
 		}
 
-		m_frameDuration = std::chrono::nanoseconds{1000000000ULL / m_targetFPS};
+		if ( m_targetFramerate == 0 )
+		{
+			m_targetFramerate = DefaultRushMakerVideoFramerate;
+		}
+
+		m_frameDuration = std::chrono::nanoseconds{1000000000ULL / m_targetFramerate};
 
 		/* Select the best BGRA-to-I420 conversion path based on CPU features. */
 #if IS_X86_ARCH
@@ -154,7 +195,7 @@ namespace EmEn::Graphics
 		TraceInfo{ClassId} << "BGRAToI420: using scalar path.";
 #endif
 
-		TraceInfo{ClassId} << "Video recording configured : " << m_targetFPS << " FPS, " << m_bitrate << " kbps bitrate.";
+		TraceInfo{ClassId} << "Video recording configured : " << m_targetFramerate << " FPS, Mode: " << (m_realtimeMode ? "RealTime" : "CoolTime") << ", Preset: " << qualityPresetToString(m_qualityPreset);
 
 		return true;
 	}
@@ -167,6 +208,17 @@ namespace EmEn::Graphics
 			this->stopRecording();
 		}
 
+		/* Force-join all background encoding sessions at shutdown. */
+		for ( auto & session : m_finishingSessions )
+		{
+			if ( session->encodingThread.joinable() )
+			{
+				session->encodingThread.join();
+			}
+		}
+
+		m_finishingSessions.clear();
+
 		return true;
 	}
 
@@ -174,6 +226,20 @@ namespace EmEn::Graphics
 	Recorder::isRecording () const noexcept
 	{
 		return m_isRecording;
+	}
+
+	unsigned int
+	Recorder::recommendedAudioBitrate () const noexcept
+	{
+		switch ( m_qualityPreset )
+		{
+			case QualityPreset::Low: return 128;
+			case QualityPreset::Medium: return 192;
+			case QualityPreset::High: return 256;
+			case QualityPreset::Ultra: return 320;
+		}
+
+		return 192;
 	}
 
 	bool
@@ -206,6 +272,9 @@ namespace EmEn::Graphics
 			return false;
 		}
 
+		/* Clean up any finished background encoding sessions. */
+		this->cleanupFinishedSessions();
+
 		/* Get framebuffer dimensions. */
 		const auto renderTarget = m_renderer.mainRenderTarget();
 
@@ -231,18 +300,28 @@ namespace EmEn::Graphics
 		m_recordWidth &= ~1U;
 		m_recordHeight &= ~1U;
 
-		m_outputPath = outputPath;
+		/* Create a new encoding session. */
+		m_currentSession = std::make_unique< EncodingSession >();
+		m_currentSession->recordWidth = m_recordWidth;
+		m_currentSession->recordHeight = m_recordHeight;
+		m_currentSession->targetFramerate = m_targetFramerate;
+		m_currentSession->realtimeMode = m_realtimeMode;
+		m_currentSession->showStatistics = m_showStatistics;
+		m_currentSession->bgraToI420 = m_bgraToI420;
+		m_currentSession->outputPath = outputPath;
 
 		/* Open output file. */
 #ifdef _WIN32
-		m_outputFile = _wfopen(m_outputPath.c_str(), L"wb");
+		m_currentSession->outputFile = _wfopen(outputPath.c_str(), L"wb");
 #else
-		m_outputFile = std::fopen(m_outputPath.c_str(), "wb");
+		m_currentSession->outputFile = std::fopen(outputPath.c_str(), "wb");
 #endif
 
-		if ( m_outputFile == nullptr )
+		if ( m_currentSession->outputFile == nullptr )
 		{
-			TraceError{ClassId} << "Unable to open output file " << m_outputPath << " !";
+			TraceError{ClassId} << "Unable to open output file " << outputPath << " !";
+
+			m_currentSession.reset();
 
 			return false;
 		}
@@ -254,8 +333,7 @@ namespace EmEn::Graphics
 		{
 			TraceError{ClassId} << "Unable to get default VP9 encoder configuration !";
 
-			std::fclose(m_outputFile);
-			m_outputFile = nullptr;
+			m_currentSession.reset();
 
 			return false;
 		}
@@ -263,73 +341,96 @@ namespace EmEn::Graphics
 		cfg.g_w = m_recordWidth;
 		cfg.g_h = m_recordHeight;
 		cfg.g_timebase.num = 1;
-		cfg.g_timebase.den = m_targetFPS;
-		cfg.rc_target_bitrate = m_bitrate;
+		cfg.g_timebase.den = m_targetFramerate;
+		/* Configure encoder settings based on mode and preset. */
+		unsigned int bitrate = 2000;
+		int cpuUsed = 7;
+		unsigned int aqMode = 3;
 
-		if ( m_useCBR )
+		if ( m_realtimeMode )
 		{
-			cfg.rc_end_usage = VPX_CBR; /* Strict constant bitrate for real-time encoding. */
-			cfg.rc_buf_sz = 1000;         /* Rate control buffer size (ms). */
-			cfg.rc_buf_initial_sz = 500;  /* Initial buffer fill before encoding starts (ms). */
-			cfg.rc_buf_optimal_sz = 600;  /* Optimal buffer level (ms). */
-			cfg.rc_undershoot_pct = 95;   /* Allow slight undershoot to prevent quality drops. */
-			cfg.rc_overshoot_pct = 5;     /* Minimize overshoot for predictable file sizes. */
+			/* RealTime Mode : Low Latency (CBR) */
+			cfg.rc_end_usage = VPX_CBR;
+			cfg.g_lag_in_frames = 0;
+			cfg.rc_buf_sz = 1000;
+			cfg.rc_buf_initial_sz = 500;
+			cfg.rc_buf_optimal_sz = 600;
+			cfg.rc_undershoot_pct = 95;
+			cfg.rc_overshoot_pct = 5;
+
+			/* AQ Mode 3 = Cyclic Refresh (good for realtime). */
+			aqMode = 3;
+
+			switch ( m_qualityPreset )
+			{
+				case QualityPreset::Low:    bitrate = 1000; cpuUsed = 8; break;
+				case QualityPreset::Medium: bitrate = 2500; cpuUsed = 7; break;
+				case QualityPreset::High:   bitrate = 5000; cpuUsed = 6; break;
+				case QualityPreset::Ultra:  bitrate = 10000; cpuUsed = 5; break;
+			}
 		}
+		else
+		{
+			/* CoolTime Mode : High Quality (VBR) */
+			cfg.rc_end_usage = VPX_VBR;
+			/* Allow lookahead/buffering for better compression. */
+			cfg.g_lag_in_frames = 16;
+
+			/* AQ Mode 0 = Complexity (good for quality). */
+			aqMode = 0;
+
+			switch ( m_qualityPreset )
+			{
+				case QualityPreset::Low:    bitrate = 2000; cpuUsed = 4; break;
+				case QualityPreset::Medium: bitrate = 5000; cpuUsed = 3; break;
+				case QualityPreset::High:   bitrate = 12000; cpuUsed = 2; break;
+				case QualityPreset::Ultra:  bitrate = 25000; cpuUsed = 1; break;
+			}
+		}
+
+		cfg.rc_target_bitrate = bitrate;
 		cfg.g_threads = std::max(2U, std::thread::hardware_concurrency() / 2);
 		cfg.g_profile = 0; /* 8-bit 4:2:0 (I420). */
-		cfg.g_lag_in_frames = 0; /* Real-time encoding. */
 		cfg.g_error_resilient = VPX_ERROR_RESILIENT_DEFAULT;
 
-		if ( vpx_codec_enc_init(&m_codec, vpx_codec_vp9_cx(), &cfg, 0) != VPX_CODEC_OK )
+		if ( vpx_codec_enc_init(&m_currentSession->codec, vpx_codec_vp9_cx(), &cfg, 0) != VPX_CODEC_OK )
 		{
 			TraceError{ClassId} << "VP9 encoder initialization failed !";
 
-			std::fclose(m_outputFile);
-			m_outputFile = nullptr;
+			m_currentSession.reset();
 
 			return false;
 		}
 
-		m_codecInitialized = true;
+		m_currentSession->codecInitialized = true;
 
-		/* VP9 encoder controls for real-time capture. */
-		vpx_codec_control(&m_codec, VP8E_SET_CPUUSED, 7);                 /* VP9: 0-9, 7 = good real-time/quality compromise. */
-		vpx_codec_control(&m_codec, VP9E_SET_ROW_MT, 1);                  /* Multi-threading per superblock rows. */
-		vpx_codec_control(&m_codec, VP9E_SET_TILE_COLUMNS, 2);            /* 4 tile columns (2^2) for parallelism. */
-		vpx_codec_control(&m_codec, VP9E_SET_FRAME_PARALLEL_DECODING, 1); /* Parallel decoding on playback. */
-		vpx_codec_control(&m_codec, VP9E_SET_AQ_MODE, 3);                 /* Cyclic refresh, ideal for real-time capture. */
+		/* Apply controls. */
+		vpx_codec_control(&m_currentSession->codec, VP8E_SET_CPUUSED, cpuUsed);
+		vpx_codec_control(&m_currentSession->codec, VP9E_SET_AQ_MODE, aqMode);
+		vpx_codec_control(&m_currentSession->codec, VP9E_SET_ROW_MT, 1);
+		vpx_codec_control(&m_currentSession->codec, VP9E_SET_TILE_COLUMNS, 2);
+		vpx_codec_control(&m_currentSession->codec, VP9E_SET_FRAME_PARALLEL_DECODING, 1);
 
 		/* Allocate VPX image. */
-		if ( vpx_img_alloc(&m_vpxImage, VPX_IMG_FMT_I420, m_recordWidth, m_recordHeight, 1) == nullptr )
+		if ( vpx_img_alloc(&m_currentSession->vpxImage, VPX_IMG_FMT_I420, m_recordWidth, m_recordHeight, 1) == nullptr )
 		{
 			TraceError{ClassId} << "VPX image allocation failed !";
 
-			vpx_codec_destroy(&m_codec);
-			m_codecInitialized = false;
-			std::fclose(m_outputFile);
-			m_outputFile = nullptr;
+			m_currentSession.reset();
 
 			return false;
 		}
 
 		/* Write IVF file header. */
-		if ( !this->writeIVFFileHeader() )
+		if ( !m_currentSession->writeIVFFileHeader() )
 		{
 			TraceError{ClassId} << "Failed to write IVF file header !";
 
-			vpx_img_free(&m_vpxImage);
-			vpx_codec_destroy(&m_codec);
-			m_codecInitialized = false;
-			std::fclose(m_outputFile);
-			m_outputFile = nullptr;
+			m_currentSession.reset();
 
 			return false;
 		}
 
-		m_frameQueue.clear();
-		m_frameCount = 0;
-		m_captureCount = 0;
-		m_lastEncodedPts = 0;
 		m_recordStartTime = std::chrono::steady_clock::now();
 		m_lastCaptureTime = m_recordStartTime;
 
@@ -338,24 +439,20 @@ namespace EmEn::Graphics
 		{
 			TraceError{ClassId} << "Failed to create async readback resources !";
 
-			vpx_img_free(&m_vpxImage);
-			vpx_codec_destroy(&m_codec);
-			m_codecInitialized = false;
-			std::fclose(m_outputFile);
-			m_outputFile = nullptr;
+			m_currentSession.reset();
 
 			return false;
 		}
 
 		/* Start encoding thread. */
 		m_isRecording = true;
-		m_threadRunning = true;
+		m_currentSession->threadRunning = true;
 
-		m_encodingThread = std::thread{[this] {
-			this->encodingThreadFunc();
+		m_currentSession->encodingThread = std::thread{[session = m_currentSession.get()] {
+			session->encodingThreadFunc();
 		}};
 
-		TraceSuccess{ClassId} << "Recording started : " << m_recordWidth << "x" << m_recordHeight << " @ " << m_targetFPS << " FPS -> " << m_outputPath;
+		TraceSuccess{ClassId} << "Recording started : " << m_recordWidth << "x" << m_recordHeight << " @ " << m_targetFramerate << " FPS [" << (m_realtimeMode ? "RealTime" : "CoolTime") << " / " << qualityPresetToString(m_qualityPreset) << "] -> " << outputPath;
 
 		return true;
 	}
@@ -368,7 +465,10 @@ namespace EmEn::Graphics
 			return false;
 		}
 
-		/* Wait for and harvest any pending async readbacks. */
+		/* Stop capturing frames on the main thread. */
+		m_isRecording = false;
+
+		/* Wait for and harvest any pending async readbacks into the session's queue. */
 		for ( size_t index = 0; index < AsyncBufferCount; index++ )
 		{
 			if ( m_asyncSlots[index].pending )
@@ -379,62 +479,17 @@ namespace EmEn::Graphics
 			}
 		}
 
-		/* Signal encoding thread to stop (it will drain remaining frames first). */
-		m_isRecording = false;
-		m_threadRunning = false;
-		m_queueCV.notify_all();
-
-		/* Wait for encoding thread to finish. */
-		if ( m_encodingThread.joinable() )
-		{
-			m_encodingThread.join();
-		}
-
-		/* Flush encoder : send NULL frame to get remaining packets. */
-		if ( m_codecInitialized )
-		{
-			const auto flushPts = m_lastEncodedPts + 1;
-			vpx_codec_encode(&m_codec, nullptr, flushPts, 1, 0, VPX_DL_REALTIME);
-
-			const vpx_codec_cx_pkt_t * pkt = nullptr;
-			vpx_codec_iter_t iter = nullptr;
-
-			while ( (pkt = vpx_codec_get_cx_data(&m_codec, &iter)) != nullptr )
-			{
-				if ( pkt->kind == VPX_CODEC_CX_FRAME_PKT )
-				{
-					this->writeIVFFrameHeader(static_cast< uint32_t >(pkt->data.frame.sz), pkt->data.frame.pts);
-					std::fwrite(pkt->data.frame.buf, 1, pkt->data.frame.sz, m_outputFile);
-				}
-			}
-		}
-
-		/* Patch frame count in IVF header. */
-		this->patchIVFFrameCount();
-
-		/* Cleanup. */
-		if ( m_outputFile != nullptr )
-		{
-			std::fclose(m_outputFile);
-			m_outputFile = nullptr;
-		}
-
-		if ( m_codecInitialized )
-		{
-			vpx_codec_destroy(&m_codec);
-			vpx_img_free(&m_vpxImage);
-			m_codecInitialized = false;
-		}
-
-		/* Destroy async GPU readback resources. */
+		/* Destroy async GPU readback resources (capture is done). */
 		this->destroyAsyncResources();
 
-		/* Clear frame queue and recycling pool. */
-		m_frameQueue.clear();
-		m_freeFrames.clear();
-		m_frameQueue.shrink_to_fit();
+		/* Signal the session's encoding thread to stop (it will drain remaining frames, then finalize). */
+		m_currentSession->threadRunning = false;
+		m_currentSession->queueCV.notify_all();
 
-		TraceSuccess{ClassId} << "Recording stopped : " << m_frameCount << " frames written to " << m_outputPath;
+		/* Detach the session — encoding continues in background. */
+		TraceSuccess{ClassId} << "Recording stopped (encoding continues in background) -> " << m_currentSession->outputPath;
+
+		m_finishingSessions.push_back(std::move(m_currentSession));
 
 		return true;
 	}
@@ -472,12 +527,12 @@ namespace EmEn::Graphics
 			const auto now = std::chrono::steady_clock::now();
 			m_asyncSlots[freeSlot].captureTime = now;
 			m_lastCaptureTime = now;
-			m_captureCount++;
+			++m_currentSession->captureCount;
 		}
 	}
 
 	void
-	Recorder::encodingThreadFunc () noexcept
+	Recorder::EncodingSession::encodingThreadFunc () noexcept
 	{
 		FrameSlot localFrame;
 
@@ -485,35 +540,35 @@ namespace EmEn::Graphics
 		auto statsLastTime = std::chrono::steady_clock::now();
 		uint64_t statsFrameCount = 0;
 		uint64_t statsEncodedBytes = 0;
-		uint64_t lastCaptureCount = m_captureCount.load();
+		uint64_t lastCaptureCount = captureCount.load();
 
 		while ( true )
 		{
 			/* Wait for a frame to be available or thread stop signal. */
 			{
-				std::unique_lock lock{m_queueMutex};
+				std::unique_lock lock{queueMutex};
 
-				m_queueCV.wait(lock, [this] {
-					return !m_frameQueue.empty() || !m_threadRunning;
+				queueCV.wait(lock, [this] {
+					return !frameQueue.empty() || !threadRunning;
 				});
 
-				if ( m_frameQueue.empty() )
+				if ( frameQueue.empty() )
 				{
 					break; /* Thread stop requested and queue is drained. */
 				}
 
 				/* Move frame data out of the queue (zero-copy). */
-				localFrame = std::move(m_frameQueue.front());
-				m_frameQueue.pop_front();
+				localFrame = std::move(frameQueue.front());
+				frameQueue.pop_front();
 			}
 
 			/* Convert BGRA to I420 using the selected SIMD path. */
-			m_bgraToI420(
+			bgraToI420(
 				localFrame.data.data(),
-				m_recordWidth, m_recordHeight,
-				m_vpxImage.planes[0],
-				m_vpxImage.planes[1],
-				m_vpxImage.planes[2]
+				recordWidth, recordHeight,
+				vpxImage.planes[0],
+				vpxImage.planes[1],
+				vpxImage.planes[2]
 			);
 
 			/* Wall-clock PTS: derived from capture timestamp so that the video
@@ -523,8 +578,8 @@ namespace EmEn::Graphics
 			const auto pts = localFrame.pts;
 
 			const auto encodeResult = vpx_codec_encode(
-				&m_codec,
-				&m_vpxImage,
+				&codec,
+				&vpxImage,
 				pts,
 				1, /* Duration = 1 tick for stable rate control. */
 				0,
@@ -533,7 +588,7 @@ namespace EmEn::Graphics
 
 			if ( encodeResult != VPX_CODEC_OK )
 			{
-				TraceError{ClassId} << "VP9 encoding failed for frame " << m_frameCount << " : " << vpx_codec_err_to_string(encodeResult);
+				TraceError{Recorder::ClassId} << "VP9 encoding failed for frame " << frameCount << " : " << vpx_codec_err_to_string(encodeResult);
 
 				continue;
 			}
@@ -542,27 +597,27 @@ namespace EmEn::Graphics
 			const vpx_codec_cx_pkt_t * pkt = nullptr;
 			vpx_codec_iter_t iter = nullptr;
 
-			while ( (pkt = vpx_codec_get_cx_data(&m_codec, &iter)) != nullptr )
+			while ( (pkt = vpx_codec_get_cx_data(&codec, &iter)) != nullptr )
 			{
 				if ( pkt->kind == VPX_CODEC_CX_FRAME_PKT )
 				{
 					this->writeIVFFrameHeader(static_cast< uint32_t >(pkt->data.frame.sz), pkt->data.frame.pts);
-					std::fwrite(pkt->data.frame.buf, 1, pkt->data.frame.sz, m_outputFile);
+					std::fwrite(pkt->data.frame.buf, 1, pkt->data.frame.sz, outputFile);
 					statsEncodedBytes += pkt->data.frame.sz;
 				}
 			}
 
-			m_frameCount++;
-			m_lastEncodedPts = pts;
+			frameCount++;
+			lastEncodedPts = pts;
 
 			/* Recycle the frame buffer back to the free pool. */
 			{
-				const std::lock_guard lock{m_queueMutex};
-				m_freeFrames.push_back(std::move(localFrame));
+				const std::lock_guard lock{queueMutex};
+				freeFrames.push_back(std::move(localFrame));
 			}
 
 			/* Periodic stats output. */
-			if ( m_showStats )
+			if ( showStatistics )
 			{
 				statsFrameCount++;
 
@@ -574,19 +629,19 @@ namespace EmEn::Graphics
 					const double encodeFPS = static_cast< double >(statsFrameCount) * 1000.0 / static_cast< double >(elapsed);
 					const double bitrateKbps = static_cast< double >(statsEncodedBytes) * 8.0 / static_cast< double >(elapsed);
 
-					const uint64_t currentCaptures = m_captureCount.load();
+					const uint64_t currentCaptures = captureCount.load();
 					const double captureFPS = static_cast< double >(currentCaptures - lastCaptureCount) * 1000.0 / static_cast< double >(elapsed);
 
 					size_t queueDepth = 0;
 
 					{
-						const std::lock_guard lock{m_queueMutex};
-						queueDepth = m_frameQueue.size();
+						const std::lock_guard lock{queueMutex};
+						queueDepth = frameQueue.size();
 					}
 
-					TraceInfo{ClassId}
-						<< "[Stats] Frames: " << m_frameCount
-						<< " | Capture: " << captureFPS << "/" << m_targetFPS << " FPS"
+					TraceInfo{Recorder::ClassId}
+						<< "[Stats] Frames: " << frameCount
+						<< " | Capture: " << captureFPS << "/" << targetFramerate << " FPS"
 						<< " | Encode: " << encodeFPS << " FPS"
 						<< " | Queue: " << queueDepth
 						<< " | Bitrate: " << bitrateKbps << " kbps";
@@ -598,10 +653,104 @@ namespace EmEn::Graphics
 				}
 			}
 		}
+
+		/* Queue drained and thread stop requested — finalize the session. */
+		this->finalize();
+		finished = true;
+	}
+
+	void
+	Recorder::EncodingSession::finalize () noexcept
+	{
+		/* Flush encoder: send NULL frame to get remaining packets. */
+		if ( codecInitialized )
+		{
+			const auto flushPts = lastEncodedPts + 1;
+			vpx_codec_encode(&codec, nullptr, flushPts, 1, 0, VPX_DL_REALTIME);
+
+			const vpx_codec_cx_pkt_t * pkt = nullptr;
+			vpx_codec_iter_t iter = nullptr;
+
+			while ( (pkt = vpx_codec_get_cx_data(&codec, &iter)) != nullptr )
+			{
+				if ( pkt->kind == VPX_CODEC_CX_FRAME_PKT )
+				{
+					this->writeIVFFrameHeader(static_cast< uint32_t >(pkt->data.frame.sz), pkt->data.frame.pts);
+					std::fwrite(pkt->data.frame.buf, 1, pkt->data.frame.sz, outputFile);
+				}
+			}
+		}
+
+		/* Patch frame count in IVF header. */
+		if ( !this->patchIVFFrameCount() )
+		{
+			std::cerr << "[" << ClassId << "] Warning: Failed to patch IVF frame count in '" << outputPath << "'!" "\n";
+		}
+
+		/* Close output file. */
+		if ( outputFile != nullptr )
+		{
+			std::fclose(outputFile);
+			outputFile = nullptr;
+		}
+
+		/* Destroy codec and image. */
+		if ( codecInitialized )
+		{
+			vpx_codec_destroy(&codec);
+			vpx_img_free(&vpxImage);
+			codecInitialized = false;
+		}
+
+		/* Release frame buffers. */
+		frameQueue.clear();
+		freeFrames.clear();
+
+		TraceSuccess{Recorder::ClassId} << "Encoding session finalized: " << frameCount << " frames written to " << outputPath;
+	}
+
+	Recorder::EncodingSession::~EncodingSession () noexcept
+	{
+		if ( encodingThread.joinable() )
+		{
+			encodingThread.join();
+		}
+
+		/* Safety net: clean up if finalize() was not called. */
+		if ( codecInitialized )
+		{
+			vpx_codec_destroy(&codec);
+			vpx_img_free(&vpxImage);
+			codecInitialized = false;
+		}
+
+		if ( outputFile != nullptr )
+		{
+			std::fclose(outputFile);
+			outputFile = nullptr;
+		}
+	}
+
+	void
+	Recorder::cleanupFinishedSessions () noexcept
+	{
+		std::erase_if(m_finishingSessions, [] (const auto & session) {
+			if ( session->finished.load() )
+			{
+				if ( session->encodingThread.joinable() )
+				{
+					session->encodingThread.join();
+				}
+
+				return true;
+			}
+
+			return false;
+		});
 	}
 
 	bool
-	Recorder::writeIVFFileHeader () const noexcept
+	Recorder::EncodingSession::writeIVFFileHeader () const noexcept
 	{
 		/* IVF file header: 32 bytes.
 		 * Bytes 0-3   : "DKIF" signature
@@ -630,18 +779,18 @@ namespace EmEn::Graphics
 		header[10] = '9';
 		header[11] = '0';
 
-		writeLE16(header + 12, static_cast< uint16_t >(m_recordWidth));
-		writeLE16(header + 14, static_cast< uint16_t >(m_recordHeight));
-		writeLE32(header + 16, static_cast< uint32_t >(m_targetFPS)); /* Time base denominator (ffmpeg reads as den). */
+		writeLE16(header + 12, static_cast< uint16_t >(recordWidth));
+		writeLE16(header + 14, static_cast< uint16_t >(recordHeight));
+		writeLE32(header + 16, static_cast< uint32_t >(targetFramerate)); /* Time base denominator (ffmpeg reads as den). */
 		writeLE32(header + 20, 1);                                    /* Time base numerator (ffmpeg reads as num). */
 		writeLE32(header + 24, 0);			 /* Frame count (patched on stop). */
 		writeLE32(header + 28, 0);			 /* Unused. */
 
-		return std::fwrite(header, 1, sizeof(header), m_outputFile) == sizeof(header);
+		return std::fwrite(header, 1, sizeof(header), outputFile) == sizeof(header);
 	}
 
 	bool
-	Recorder::writeIVFFrameHeader (uint32_t frameSize, uint64_t pts) const noexcept
+	Recorder::EncodingSession::writeIVFFrameHeader (uint32_t frameSize, uint64_t pts) const noexcept
 	{
 		/* IVF frame header: 12 bytes.
 		 * Bytes 0-3 : frame size
@@ -652,33 +801,33 @@ namespace EmEn::Graphics
 		writeLE32(header, frameSize);
 		writeLE64(header + 4, pts);
 
-		return std::fwrite(header, 1, sizeof(header), m_outputFile) == sizeof(header);
+		return std::fwrite(header, 1, sizeof(header), outputFile) == sizeof(header);
 	}
 
 	bool
-	Recorder::patchIVFFrameCount () const noexcept
+	Recorder::EncodingSession::patchIVFFrameCount () const noexcept
 	{
-		if ( m_outputFile == nullptr )
+		if ( outputFile == nullptr )
 		{
 			return false;
 		}
 
 		/* Seek to byte 24 in the IVF header and write the frame count. */
-		if ( std::fseek(m_outputFile, 24, SEEK_SET) != 0 )
+		if ( std::fseek(outputFile, 24, SEEK_SET) != 0 )
 		{
 			return false;
 		}
 
 		uint8_t buf[4];
-		writeLE32(buf, static_cast< uint32_t >(m_frameCount));
+		writeLE32(buf, static_cast< uint32_t >(frameCount));
 
-		if ( std::fwrite(buf, 1, 4, m_outputFile) != 4 )
+		if ( std::fwrite(buf, 1, 4, outputFile) != 4 )
 		{
 			return false;
 		}
 
 		/* Seek back to end. */
-		std::fseek(m_outputFile, 0, SEEK_END);
+		std::fseek(outputFile, 0, SEEK_END);
 
 		return true;
 	}
@@ -989,7 +1138,7 @@ namespace EmEn::Graphics
 		auto & slot = m_asyncSlots[slotIndex];
 		const auto device = m_renderer.device();
 
-		/* === Step 1: Graphics queue — copy swapchain image to device-local buffer === */
+		/* === Step 1: Graphics queue — copy swap-chain image to device-local buffer === */
 		if ( !slot.commandBuffer->reset() )
 		{
 			return false;
@@ -1099,7 +1248,7 @@ namespace EmEn::Graphics
 			return false;
 		}
 
-		const VkPipelineStageFlags waitStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+		constexpr VkPipelineStageFlags waitStage{VK_PIPELINE_STAGE_TRANSFER_BIT};
 
 		if ( !transferQueue->submit(*slot.transferCommandBuffer, Vulkan::SynchInfo{}.waits({&semaphoreHandle, 1}, {&waitStage, 1}).withFence(slot.fence->handle())) )
 		{
@@ -1127,17 +1276,17 @@ namespace EmEn::Graphics
 			return false;
 		}
 
-		/* Acquire a frame buffer from the recycling pool (avoids allocation + zero-fill). */
+		/* Acquire a frame buffer from the session's recycling pool (avoids allocation + zero-fill). */
 		const auto frameBytes = static_cast< size_t >(m_recordWidth) * m_recordHeight * 4;
 		FrameSlot frame;
 
 		{
-			const std::lock_guard lock{m_queueMutex};
+			const std::lock_guard lock{m_currentSession->queueMutex};
 
-			if ( !m_freeFrames.empty() )
+			if ( !m_currentSession->freeFrames.empty() )
 			{
-				frame = std::move(m_freeFrames.back());
-				m_freeFrames.pop_back();
+				frame = std::move(m_currentSession->freeFrames.back());
+				m_currentSession->freeFrames.pop_back();
 			}
 		}
 
@@ -1151,14 +1300,14 @@ namespace EmEn::Graphics
 
 		/* Compute wall-clock PTS from capture timestamp. */
 		const auto elapsed = std::chrono::duration< double >(slot.captureTime - m_recordStartTime);
-		frame.pts = static_cast< vpx_codec_pts_t >(elapsed.count() * m_targetFPS);
+		frame.pts = static_cast< vpx_codec_pts_t >(elapsed.count() * m_targetFramerate);
 
 		{
-			const std::lock_guard lock{m_queueMutex};
-			m_frameQueue.push_back(std::move(frame));
+			const std::lock_guard lock{m_currentSession->queueMutex};
+			m_currentSession->frameQueue.push_back(std::move(frame));
 		}
 
-		m_queueCV.notify_one();
+		m_currentSession->queueCV.notify_one();
 
 		slot.pending = false;
 
@@ -1524,9 +1673,9 @@ namespace EmEn::Graphics
 				const __m128i s1_lo = _mm256_castsi256_si128(shifted1);      /* [Y8, Y9, Y10, Y11] */
 				const __m128i s1_hi = _mm256_extracti128_si256(shifted1, 1); /* [Y12, Y13, Y14, Y15] */
 
-				const __m128i pk16_a = _mm_packs_epi32(s0_lo, s0_hi); /* [Y0..Y7] as int16 */
-				const __m128i pk16_b = _mm_packs_epi32(s1_lo, s1_hi); /* [Y8..Y15] as int16 */
-				const __m128i result = _mm_packus_epi16(pk16_a, pk16_b); /* [Y0..Y15] as uint8 */
+				const __m128i pk16_a = _mm_packs_epi32(s0_lo, s0_hi); /* [Y0...Y7] as int16 */
+				const __m128i pk16_b = _mm_packs_epi32(s1_lo, s1_hi); /* [Y8...Y15] as int16 */
+				const __m128i result = _mm_packus_epi16(pk16_a, pk16_b); /* [Y0...Y15] as uint8 */
 
 				/* Store 16 Y bytes. */
 				_mm_storeu_si128(reinterpret_cast< __m128i * >(yRow + col), result);
@@ -1670,63 +1819,4 @@ namespace EmEn::Graphics
 		}
 	}
 #endif /* IS_X86_ARCH */
-#else
-	static constexpr auto RecordingDisabledMessage{"Video recording is not available. Recompile the engine with EMERAUDE_ENABLE_VIDEO_RECORDING=On to enable this feature."};
-
-	Recorder::Recorder (PrimaryServices & primaryServices, Renderer & renderer) noexcept
-		: ServiceInterface{ClassId}
-	{
-
-	}
-
-	bool
-	Recorder::startRecording (const std::filesystem::path & /*outputPath*/) noexcept
-	{
-		Tracer::warning(ClassId, RecordingDisabledMessage);
-
-		return false;
-	}
-
-	bool
-	Recorder::stopRecording () noexcept
-	{
-		Tracer::warning(ClassId, RecordingDisabledMessage);
-
-		return false;
-	}
-
-	[[nodiscard]]
-	bool
-	Recorder::isRecording () const noexcept
-	{
-		return false;
-	}
-
-	[[nodiscard]]
-	bool
-	Recorder::shouldCaptureFrame () const noexcept
-	{
-		return false;
-	}
-
-	void
-	Recorder::captureAndSubmitFrame () noexcept
-	{
-
-	}
-
-	bool
-	Recorder::onInitialize () noexcept
-	{
-		Tracer::info(ClassId, RecordingDisabledMessage);
-
-		return false;
-	}
-
-	bool
-	Recorder::onTerminate () noexcept
-	{
-		return true;
-	}
-#endif
 }

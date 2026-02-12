@@ -116,8 +116,12 @@ namespace EmEn::Graphics::Renderable
 			return false;
 		}
 
-		/* 1. Generate the grid geometry. */
-		const auto geometryResource = std::make_shared< Geometry::VertexGridResource >(this->name() + "GridGeometry");
+		/* 1. Generate the grid geometry with tangent space and texture coordinates
+		 * so that PBR materials with normal maps can work properly. */
+		const auto geometryResource = std::make_shared< Geometry::VertexGridResource >(
+			this->name() + "GridGeometry",
+			Geometry::EnableTangentSpace | Geometry::EnablePrimaryTextureCoordinates | Geometry::EnablePrimitiveRestart
+		);
 
 		if ( !geometryResource->load(gridSize, gridDivision, UVMultiplier) )
 		{

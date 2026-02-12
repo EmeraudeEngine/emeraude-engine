@@ -151,17 +151,34 @@ namespace EmEn::Graphics::Material
 
 		if ( material.primaryTextureCoordinatesUses3D() )
 		{
-			if ( !geometry.primaryTextureCoordinates3DEnabled() )
+			if ( geometry.primaryTextureCoordinates3DEnabled() )
+			{
+				/* Geometry natively provides 3D texture coordinates (e.g., animated sprites). */
+				if ( !vertexShader.requestSynthesizeInstruction(ShaderVariable::Primary3DTextureCoordinates) )
+				{
+					return false;
+				}
+			}
+			else if ( geometry.primaryTextureCoordinatesEnabled() )
+			{
+				/* Fallback: geometry has 2D UVs only. Synthesize 2D passthrough,
+				 * then construct vec3(uv, frameIndex) from push constant. */
+				if ( !vertexShader.requestSynthesizeInstruction(ShaderVariable::Primary2DTextureCoordinates) )
+				{
+					return false;
+				}
+
+				if ( !addVolumetricTextureFallback(generator, vertexShader, geometry) )
+				{
+					return false;
+				}
+			}
+			else
 			{
 				TraceError{material.classLabel()} <<
-					"The geometry '" << geometry.name() << "' has no 3D primary texture coordinates "
-					"for basic material '" << material.name() << "' !";
+					"The geometry '" << geometry.name() << "' has no primary texture coordinates "
+					"for material '" << material.name() << "' !";
 
-				return false;
-			}
-
-			if ( !vertexShader.requestSynthesizeInstruction(ShaderVariable::Primary3DTextureCoordinates) )
-			{
 				return false;
 			}
 		}
@@ -242,6 +259,27 @@ namespace EmEn::Graphics::Material
 				return false;
 			}
 		}
+
+		return true;
+	}
+
+	bool
+	addVolumetricTextureFallback (Generator::Abstract & generator, VertexShader & vertexShader, const Geometry::Interface & geometry) noexcept
+	{
+		/* If geometry already has 3D UVs or has no UVs at all, nothing to do. */
+		if ( geometry.primaryTextureCoordinates3DEnabled() || !geometry.primaryTextureCoordinatesEnabled() )
+		{
+			return true;
+		}
+
+		/* Declare the 3D texture coordinate output. */
+		if ( !vertexShader.declare(Declaration::StageOutput{generator.getNextShaderVariableLocation(), GLSL::FloatVector3, ShaderVariable::Primary3DTextureCoordinates, GLSL::Smooth}) )
+		{
+			return false;
+		}
+
+		/* Build sv3DTexCoord0 from 2D coords + push constant frame index. */
+		Code{vertexShader, Location::Output} << ShaderVariable::Primary3DTextureCoordinates << " = vec3(" << ShaderVariable::Primary2DTextureCoordinates << ", " << MatrixPC(PushConstant::Component::FrameIndex) << ");";
 
 		return true;
 	}

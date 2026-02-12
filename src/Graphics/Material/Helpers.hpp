@@ -83,6 +83,7 @@ namespace EmEn::Graphics::Material
 	static constexpr auto JKAttenuationDistance{"AttenuationDistance"};
 	static constexpr auto JKThickness{"Thickness"};
 	static constexpr auto JKHeight{"Height"};
+	static constexpr auto JKScreenSpace{"ScreenSpace"};
 
 	/**
 	 * @brief Returns the filling type token from a JSON value.
@@ -121,6 +122,17 @@ namespace EmEn::Graphics::Material
 	 */
 	[[nodiscard]]
 	bool checkSecondaryTextureCoordinates (Saphir::Generator::Abstract & generator, Saphir::VertexShader & vertexShader, const Interface & material, const Geometry::Interface & geometry) noexcept;
+
+	/**
+	 * @brief Adds a 3D texture coordinate fallback for volumetric textures when geometry only has 2D UVs.
+	 * @note Declares sv3DTexCoord0 output and constructs it from sv2DTexCoord0 + push constant frameIndex.
+	 * @param generator A reference to the shader generator.
+	 * @param vertexShader A reference to the vertex shader.
+	 * @param geometry A reference to the geometry.
+	 * @return bool
+	 */
+	[[nodiscard]]
+	bool addVolumetricTextureFallback (Saphir::Generator::Abstract & generator, Saphir::VertexShader & vertexShader, const Geometry::Interface & geometry) noexcept;
 
 	/**
 	 * @brief Parses the base of a component structure from JSON data.

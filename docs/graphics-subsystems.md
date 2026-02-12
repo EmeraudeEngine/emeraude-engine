@@ -10,7 +10,7 @@ The **Renderer** is the heart of the Graphics system. It coordinates all renderi
 1. Coordinate all rendering operations
 2. Manage frame lifecycle (begin frame, render, end frame, present)
 3. Integrate subsystems (TransferManager, LayoutManager, ShaderManager, etc.)
-4. Maintain render queues (opaque, transparent, shadows, post-processing)
+4. Maintain render queues (opaque, translucent, translucent grab pass, shadows, post-processing)
 5. Observe scene changes (Visual components added/removed via Observer pattern)
 6. Execute render passes in correct order
 7. Manage synchronization (fences, semaphores for frame pacing)

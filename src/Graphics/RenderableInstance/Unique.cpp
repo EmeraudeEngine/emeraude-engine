@@ -111,81 +111,46 @@ namespace EmEn::Graphics::RenderableInstance
 			modelMatrix *= this->transformationMatrix();
 		}
 
+		const auto handle = passContext.commandBuffer->handle();
+		const auto layout = pushContext.pipelineLayout->handle();
+		const auto flags = pushContext.stageFlags;
+		const auto frameIndex = static_cast< float >(this->frameIndex());
+
 		/* For cubemap rendering, View/Projection matrices are in UBO indexed by gl_ViewIndex.
 		 * We only push the Model matrix (and optionally normal matrix for lighting). */
 		if ( passContext.isCubemap )
 		{
-			/* Push only the model matrix (M). */
-			vkCmdPushConstants(
-				passContext.commandBuffer->handle(),
-				pushContext.pipelineLayout->handle(),
-				pushContext.stageFlags,
-				0,
-				MatrixBytes,
-				modelMatrix.data()
-			);
+			/* Push the model matrix (M) + frameIndex. */
+			std::array< float, Matrix4Alignment + 1 > buffer{};
+			std::memcpy(buffer.data(), modelMatrix.data(), MatrixBytes);
+			buffer[Matrix4Alignment] = frameIndex;
+
+			vkCmdPushConstants(handle, layout, flags, 0, MatrixBytes + sizeof(float), buffer.data());
 		}
 		else if ( pushContext.useAdvancedMatrices )
 		{
-			/* Classic 2D with advanced matrices: push View and Model separately. */
+			/* Classic 2D with advanced matrices: push View, Model, and frameIndex. */
 			const auto & viewMatrix = passContext.viewMatrices->viewMatrix(passContext.readStateIndex, this->isUsingInfinityView(), 0);
 
-			if constexpr ( MergePushConstants )
-			{
-				/* Create a single buffer for 2x mat4x4. */
-				std::array< float, 32 > buffer{};
-				std::memcpy(buffer.data(), viewMatrix.data(), MatrixBytes);
-				std::memcpy(&buffer[Matrix4Alignment], modelMatrix.data(), MatrixBytes);
+			std::array< float, Matrix4Alignment * 2 + 1 > buffer{};
+			std::memcpy(buffer.data(), viewMatrix.data(), MatrixBytes);
+			std::memcpy(&buffer[Matrix4Alignment], modelMatrix.data(), MatrixBytes);
+			buffer[Matrix4Alignment * 2] = frameIndex;
 
-				/* Push the view matrix (V) and the model matrix (M) in a single call. */
-				vkCmdPushConstants(
-					passContext.commandBuffer->handle(),
-					pushContext.pipelineLayout->handle(),
-					pushContext.stageFlags,
-					0,
-					MatrixBytes * 2,
-					buffer.data()
-				);
-			}
-			else
-			{
-				/* Push the view matrix (V). */
-				vkCmdPushConstants(
-					passContext.commandBuffer->handle(),
-					pushContext.pipelineLayout->handle(),
-					pushContext.stageFlags,
-					0,
-					MatrixBytes,
-					viewMatrix.data()
-				);
-
-				/* Push the model matrix (M). */
-				vkCmdPushConstants(
-					passContext.commandBuffer->handle(),
-					pushContext.pipelineLayout->handle(),
-					pushContext.stageFlags,
-					MatrixBytes,
-					MatrixBytes,
-					modelMatrix.data()
-				);
-			}
+			vkCmdPushConstants(handle, layout, flags, 0, MatrixBytes * 2 + sizeof(float), buffer.data());
 		}
 		else
 		{
-			/* Classic 2D simple: compute and push MVP. */
+			/* Classic 2D simple: compute and push MVP + frameIndex. */
 			const auto & viewMatrix = passContext.viewMatrices->viewMatrix(passContext.readStateIndex, this->isUsingInfinityView(), 0);
 			const auto & projectionMatrix = passContext.viewMatrices->projectionMatrix(passContext.readStateIndex);
 			const auto modelViewProjectionMatrix = projectionMatrix * viewMatrix * modelMatrix;
 
-			/* Push the model view projection matrix (MVP). */
-			vkCmdPushConstants(
-				passContext.commandBuffer->handle(),
-				pushContext.pipelineLayout->handle(),
-				pushContext.stageFlags,
-				0,
-				MatrixBytes,
-				modelViewProjectionMatrix.data()
-			);
+			std::array< float, Matrix4Alignment + 1 > buffer{};
+			std::memcpy(buffer.data(), modelViewProjectionMatrix.data(), MatrixBytes);
+			buffer[Matrix4Alignment] = frameIndex;
+
+			vkCmdPushConstants(handle, layout, flags, 0, MatrixBytes + sizeof(float), buffer.data());
 		}
 	}
 
