@@ -40,19 +40,13 @@ namespace EmEn::Scenes
 	using namespace Libs::PixelFactory;
 	using namespace Graphics;
 
-	bool
-	Scene::enableCompassDisplay (Resources::Manager & resourceManager) noexcept
+	void
+	Scene::enableCompassDisplay (Resources::Manager & resources) noexcept
 	{
 		if ( this->compassDisplayEnabled() )
 		{
-			return true;
+			return;
 		}
-
-		const auto materialResource = resourceManager.container< Material::BasicResource >()->getOrCreateResource("+DebugSceneMaterial", [] (Material::BasicResource & newMaterial) {
-			newMaterial.enableVertexColor();
-
-			return newMaterial.setManualLoadSuccess(true);
-		});
 
 		constexpr std::array< std::pair< Vector< 3, float >, Color< float > >, 6 > landmarks{{
 			/* NOTE: X+ sphere color in bright red. */
@@ -75,40 +69,32 @@ namespace EmEn::Scenes
 		{
 			const auto label = String::incrementalLabel(CompassDisplay, count);
 
-			Geometry::ResourceGenerator generator{resourceManager, Geometry::EnableNormal | Geometry::EnableVertexColor};
-			generator.parameters().setGlobalVertexColor(color);
+			const auto specificMesh = resources.container< Renderable::SimpleMeshResource >()
+				->getOrCreateResource(label, [&resources, color, label] (auto & meshResource) {
+					Geometry::ResourceGenerator generator{resources, Geometry::EnableNormal | Geometry::EnableVertexColor};
+					generator.parameters().setGlobalVertexColor(color);
 
-			const auto geometryResource = generator.sphere(8.0F, 16, 8, label);
+					const auto geometry = generator.sphere(8.0F, 16, 8, label);
 
-			if ( geometryResource == nullptr )
-			{
-				return false;
-			}
+					const auto material = resources.container< Material::BasicResource >()
+						->getOrCreateResource("+DebugSceneMaterial", [] (auto & materialResource) {
+							materialResource.enableVertexColor();
 
-			const auto meshResource = resourceManager.container< Renderable::SimpleMeshResource >()
-				->getOrCreateResource(label, [&geometryResource, &materialResource] (auto & newMesh) {
-					return newMesh.load(geometryResource, materialResource);
+							return materialResource.setManualLoadSuccess(true);
+						});
+
+					return meshResource.load(geometry, material);
 				});
 
-			if ( meshResource == nullptr )
-			{
-				return false;
-			}
-
-			const auto meshInstance = this->createStaticEntity(label, position)->componentBuilder< Component::Visual >(label).build(meshResource);
-
-			if ( meshInstance == nullptr )
-			{
-				return false;
-			}
-
-			/* NOTE: Configure the renderable instance advanced options. */
-			const auto renderableInstance = meshInstance->getRenderableInstance();
-			renderableInstance->setUseInfinityView(true);
-			renderableInstance->disableDepthTest(true);
+			const auto meshInstance = this->createStaticEntity(label, position)
+				->componentBuilder< Component::Visual >(label)
+				.setup([] (auto & component) {
+					const auto renderableInstance = component.getRenderableInstance();
+					renderableInstance->setUseInfinityView(true);
+					renderableInstance->disableDepthTest(true);
+				})
+				.build(specificMesh);
 		}
-
-		return true;
 	}
 
 	void
@@ -127,7 +113,7 @@ namespace EmEn::Scenes
 	}
 
 	bool
-	Scene::toggleCompassDisplay (Resources::Manager & resourceManager) noexcept
+	Scene::toggleCompassDisplay (Resources::Manager & resources) noexcept
 	{
 		if ( this->compassDisplayEnabled() )
 		{
@@ -136,60 +122,46 @@ namespace EmEn::Scenes
 			return false;
 		}
 
-		this->enableCompassDisplay(resourceManager);
+		this->enableCompassDisplay(resources);
 
 		return true;
 	}
 
-	bool
-	Scene::enableGroundZeroDisplay (Resources::Manager & resourceManager) noexcept
+	void
+	Scene::enableGroundZeroDisplay (Resources::Manager & resources) noexcept
 	{
 		if ( this->groundZeroDisplayEnabled() )
 		{
-			return true;
+			return;
 		}
 
 		const auto planeSize = m_boundary * Double< float >;
 		const auto planeDivision = static_cast< uint32_t >(m_boundary / 100.0F);
 
-		const auto materialResource = resourceManager.container< Material::BasicResource >()->getOrCreateResource("+DebugSceneMaterial", [] (Material::BasicResource & newMaterial) {
-			newMaterial.enableVertexColor();
+		const auto mesh = resources.container< Renderable::SimpleMeshResource >()
+			->getOrCreateResource(GroundZeroPlaneDisplay, [&resources, planeSize, planeDivision] (auto & meshResource) {
+				Geometry::ResourceGenerator generator{resources, Geometry::EnableNormal | Geometry::EnableVertexColor | Geometry::EnablePrimitiveRestart};
+				generator.parameters().setVertexColorGenMode(VertexColorGenMode::UseGlobalColor);
+				generator.parameters().setGlobalVertexColor(White);
 
-			return newMaterial.setManualLoadSuccess(true);
-		});
+				const auto geometry = generator.surface(planeSize, planeDivision, GroundZeroPlaneDisplay);
 
-		Geometry::ResourceGenerator generator{resourceManager, Geometry::EnableNormal | Geometry::EnableVertexColor | Geometry::EnablePrimitiveRestart};
-		generator.parameters().setVertexColorGenMode(VertexColorGenMode::UseGlobalColor);
-		generator.parameters().setGlobalVertexColor(White);
+				const auto material = resources.container< Material::BasicResource >()
+					->getOrCreateResource("+DebugSceneMaterial", [] (auto & materialResource) {
+						materialResource.enableVertexColor();
 
-		const auto geometryResource = generator.surface(planeSize, planeDivision, GroundZeroPlaneDisplay);
+						return materialResource.setManualLoadSuccess(true);
+					});
 
-		if ( geometryResource == nullptr )
-		{
-			return false;
-		}
-
-		const auto meshResource = resourceManager.container< Renderable::SimpleMeshResource >()
-			->getOrCreateResource(GroundZeroPlaneDisplay, [&geometryResource, &materialResource] (auto & newMesh) {
-				return newMesh.load(geometryResource, materialResource, {PolygonMode::Line, CullingMode::None});
+				return meshResource.load(geometry, material, {PolygonMode::Line, CullingMode::None});
 			});
 
-		if ( meshResource == nullptr )
-		{
-			return false;
-		}
-
-		const auto meshInstance = this->createStaticEntity(GroundZeroPlaneDisplay)->componentBuilder< Component::Visual >(GroundZeroPlaneDisplay).build(meshResource);
-
-		if ( meshInstance == nullptr )
-		{
-			return false;
-		}
-
-		/* NOTE: Configure the renderable instance advanced options. */
-		meshInstance->getRenderableInstance()->disableDepthTest(true);
-
-		return true;
+		const auto meshInstance = this->createStaticEntity(GroundZeroPlaneDisplay)
+			->componentBuilder< Component::Visual >(GroundZeroPlaneDisplay)
+			.setup([] (auto & component) {
+				component.getRenderableInstance()->disableDepthTest(true);
+			})
+			.build(mesh);
 	}
 
 	void
@@ -205,7 +177,7 @@ namespace EmEn::Scenes
 	}
 
 	void
-	Scene::toggleGroundZeroDisplay (Resources::Manager & resourceManager) noexcept
+	Scene::toggleGroundZeroDisplay (Resources::Manager & resources) noexcept
 	{
 		if ( this->groundZeroDisplayEnabled() )
 		{
@@ -213,26 +185,20 @@ namespace EmEn::Scenes
 		}
 		else
 		{
-			this->enableGroundZeroDisplay(resourceManager);
+			this->enableGroundZeroDisplay(resources);
 		}
 	}
 
-	bool
-	Scene::enableBoundaryPlanesDisplay (Resources::Manager & resourceManager) noexcept
+	void
+	Scene::enableBoundaryPlanesDisplay (Resources::Manager & resources) noexcept
 	{
 		if ( this->boundaryPlanesDisplayEnabled() )
 		{
-			return true;
+			return;
 		}
 
 		const auto planeSize = m_boundary * Double< float >;
 		const auto planeDivision = static_cast< uint32_t >(m_boundary / 100.0F);
-
-		const auto materialResource = resourceManager.container< Material::BasicResource >()->getOrCreateResource("+DebugSceneMaterial", [] (Material::BasicResource & newMaterial) {
-			newMaterial.enableVertexColor();
-
-			return newMaterial.setManualLoadSuccess(true);
-		});
 
 		const std::array< std::pair< Vector< 3, float >, Color< float > >, 6 > planes{{
 			/* NOTE: X+ plane color in bright red. */
@@ -255,26 +221,23 @@ namespace EmEn::Scenes
 		{
 			const auto label = String::incrementalLabel(BoundaryPlanesDisplay, count);
 
-			Geometry::ResourceGenerator generator{resourceManager, Geometry::EnableNormal | Geometry::EnableVertexColor | Geometry::EnablePrimitiveRestart};
-			generator.parameters().setVertexColorGenMode(VertexColorGenMode::UseGlobalColor);
-			generator.parameters().setGlobalVertexColor(color);
+			const auto mesh = resources.container< Renderable::SimpleMeshResource >()
+				->getOrCreateResource(label, [&resources, color, planeSize, planeDivision, label] (auto & meshResource) {
+					Geometry::ResourceGenerator generator{resources, Geometry::EnableNormal | Geometry::EnableVertexColor | Geometry::EnablePrimitiveRestart};
+					generator.parameters().setVertexColorGenMode(VertexColorGenMode::UseGlobalColor);
+					generator.parameters().setGlobalVertexColor(color);
 
-			const auto geometryResource = generator.surface(planeSize, planeDivision, label);
+					const auto geometryResource = generator.surface(planeSize, planeDivision, label);
 
-			if ( geometryResource == nullptr )
-			{
-				return false;
-			}
+					const auto material = resources.container< Material::BasicResource >()
+						->getOrCreateResource("+DebugSceneMaterial", [] (auto & materialResource) {
+							materialResource.enableVertexColor();
 
-			const auto meshResource = resourceManager.container< Renderable::SimpleMeshResource >()
-				->getOrCreateResource(label, [&geometryResource, &materialResource] (auto & newMesh) {
-					return newMesh.load(geometryResource, materialResource, {PolygonMode::Line, CullingMode::None});
+							return materialResource.setManualLoadSuccess(true);
+						});
+
+					return meshResource.load(geometryResource, material, {PolygonMode::Line, CullingMode::None});
 				});
-
-			if ( meshResource == nullptr )
-			{
-				return false;
-			}
 
 			const auto entity = this->createStaticEntity(label, position);
 
@@ -288,18 +251,13 @@ namespace EmEn::Scenes
 				entity->pitch(Radian(QuartRevolution< float >), TransformSpace::Local);
 			}
 
-			const auto meshInstance = entity->componentBuilder< Component::Visual >(label).build(meshResource);
-
-			if ( meshInstance == nullptr )
-			{
-				return false;
-			}
-
-			/* NOTE: Configure the renderable instance options. */
-			meshInstance->getRenderableInstance()->disableDepthTest(true);
+			const auto meshInstance = entity
+				->componentBuilder< Component::Visual >(label)
+				.setup([] (auto & component) {
+					component.getRenderableInstance()->disableDepthTest(true);
+				})
+				.build(mesh);
 		}
-
-		return true;
 	}
 
 	void

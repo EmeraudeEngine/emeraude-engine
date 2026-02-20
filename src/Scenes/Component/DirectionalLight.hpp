@@ -192,7 +192,7 @@ namespace EmEn::Scenes::Component
 
 			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::getUniformBlock() */
 			[[nodiscard]]
-			Saphir::Declaration::UniformBlock getUniformBlock (uint32_t set, uint32_t binding, bool useShadow) const noexcept override;
+			Saphir::Declaration::UniformBlock getUniformBlock (uint32_t set, uint32_t binding, bool useShadow, bool useColorProjection) const noexcept override;
 
 			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::setPCFRadius(float) */
 			void setPCFRadius (float radius) noexcept override;
@@ -334,8 +334,11 @@ namespace EmEn::Scenes::Component
 			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::createShadowDescriptorSet() */
 			bool createShadowDescriptorSet (Scene & scene) noexcept override;
 
-			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::updateLightSpaceMatrix() */
-			void updateLightSpaceMatrix () noexcept override;
+			/**
+			 * @brief Computes and writes the light space matrix into the UBO buffer.
+			 * @return void
+			 */
+			void updateLightSpaceMatrix () noexcept;
 
 			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::getFovOrNear() */
 			[[nodiscard]]
@@ -395,21 +398,26 @@ namespace EmEn::Scenes::Component
 			friend std::ostream & operator<< (std::ostream & out, const DirectionalLight & obj);
 
 			/* Uniform buffer object offset to write data (std140 layout).
-			 * vec4 Color: floats 0-3
-			 * vec4 Direction: floats 4-7
-			 * float Intensity: float 8
-			 * float PCFRadius: float 9
-			 * float ShadowBias: float 10
-			 * float padding: float 11
-			 * mat4 ViewProjectionMatrix: floats 12-27
+			 * Layer 0 (base):
+			 *   vec4 Color: floats 0-3
+			 *   vec4 Direction: floats 4-7
+			 *   float Intensity: float 8
+			 *   float padding: floats 9-11
+			 * Layer 1 (color projection / shadow):
+			 *   mat4 ViewProjectionMatrix: floats 12-27
+			 * Layer 2 (shadow):
+			 *   float PCFRadius: float 28
+			 *   float ShadowBias: float 29
+			 *   float padding: floats 30-31
 			 */
 			/* Classic buffer layout offsets. */
 			static constexpr auto ColorOffset{0UL};
 			static constexpr auto DirectionOffset{4UL};
 			static constexpr auto IntensityOffset{8UL};
-			static constexpr auto PCFRadiusOffset{9UL};
-			static constexpr auto ShadowBiasOffset{10UL};
 			static constexpr auto LightMatrixOffset{12UL};
+			static constexpr auto PCFRadiusOffset{28UL};
+			static constexpr auto ShadowBiasOffset{29UL};
+			static constexpr auto ColorProjectionIndexOffset{9UL};
 
 			/* CSM buffer layout offsets (matches shader UBO):
 			 * mat4[4] cascadeViewProjectionMatrices: floats 0-63
@@ -438,18 +446,20 @@ namespace EmEn::Scenes::Component
 			float m_lambda{Graphics::DefaultCascadeLambda};
 			uint32_t m_cascadeCount{Graphics::MaxCascadeCount};
 			float m_CSMScale{1.0F};
-			std::array< float, 4 + 4 + 4 + 16 > m_buffer{
+			std::array< float, 4 + 4 + 4 + 16 + 4 > m_buffer{
 				/* Light color. */
 				this->color().red(), this->color().green(), this->color().blue(), 1.0F,
 				/* Light direction (Directional). */
 				0.0F, 1.0F, 0.0F, 0.0F,
 				/* Light properties. */
-				this->intensity(), m_PCFRadius, m_shadowBias, 0.0F,
+				this->intensity(), 0.0F, 0.0F, 0.0F,
 				/* Light matrix. */
 				1.0F, 0.0F, 0.0F, 0.0F,
 				0.0F, 1.0F, 0.0F, 0.0F,
 				0.0F, 0.0F, 1.0F, 0.0F,
-				0.0F, 0.0F, 0.0F, 1.0F
+				0.0F, 0.0F, 0.0F, 1.0F,
+				/* Shadow properties. */
+				m_PCFRadius, m_shadowBias, 0.0F, 0.0F
 			};
 			std::array< float, CSM_BufferSize > m_CSMBuffer{}; /**< CSM-specific buffer for cascade data. */
 			bool m_useDirectionVector{false};

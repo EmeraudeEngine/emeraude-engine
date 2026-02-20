@@ -161,9 +161,17 @@ namespace EmEn::Scenes::Component
 				return m_shadowDescriptorSet != nullptr;
 			}
 
+			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::usesCubemapColorProjection() */
+			[[nodiscard]]
+			bool
+			usesCubemapColorProjection () const noexcept override
+			{
+				return true;
+			}
+
 			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::getUniformBlock() */
 			[[nodiscard]]
-			Saphir::Declaration::UniformBlock getUniformBlock (uint32_t set, uint32_t binding, bool useShadow) const noexcept override;
+			Saphir::Declaration::UniformBlock getUniformBlock (uint32_t set, uint32_t binding, bool useShadow, bool useColorProjection) const noexcept override;
 
 			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::setPCFRadius(float) */
 			void setPCFRadius (float radius) noexcept override;
@@ -211,9 +219,6 @@ namespace EmEn::Scenes::Component
 
 			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::createShadowDescriptorSet() */
 			bool createShadowDescriptorSet (Scene & scene) noexcept override;
-
-			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::updateLightSpaceMatrix() */
-			void updateLightSpaceMatrix () noexcept override;
 
 			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::getFovOrNear() */
 			[[nodiscard]]
@@ -266,7 +271,6 @@ namespace EmEn::Scenes::Component
 			 * float Radius: float 9
 			 * float PCFRadius: float 10
 			 * float ShadowBias: float 11
-			 * mat4 ViewProjectionMatrix: floats 12-27
 			 */
 			static constexpr auto ColorOffset{0UL};
 			static constexpr auto PositionOffset{4UL};
@@ -274,25 +278,23 @@ namespace EmEn::Scenes::Component
 			static constexpr auto RadiusOffset{9UL};
 			static constexpr auto PCFRadiusOffset{10UL};
 			static constexpr auto ShadowBiasOffset{11UL};
-			static constexpr auto LightMatrixOffset{12UL};
+			static constexpr auto ColorProjectionIndexOffset{12UL};
+			static constexpr auto ColorProjectionFrameIndexOffset{13UL};
 
 			std::shared_ptr< Graphics::RenderTarget::Abstract > m_shadowMap; /* NOTE: std::shared_ptr< Graphics::RenderTarget::ShadowMap< Graphics::ViewMatrices3DUBO > > */
 			std::unique_ptr< Vulkan::DescriptorSet > m_shadowDescriptorSet;
 			float m_radius{DefaultRadius};
 			float m_PCFRadius{1.0F}; /**< PCF filter radius in normalized texture coordinates. */
 			float m_shadowBias{0.005F}; /**< Shadow bias to prevent shadow acne. */
-			std::array< float, 4 + 4 + 4 + 16 > m_buffer{
+			std::array< float, 4 + 4 + 4 + 4 > m_buffer{
 				/* Light color. */
 				this->color().red(), this->color().green(), this->color().blue(), 1.0F,
 				/* Light position (Point) */
 				0.0F, 0.0F, 0.0F, 1.0F, // NOTE: Put W to zero and the light will follows the camera.
 				/* Light properties. */
 				this->intensity(), m_radius, m_PCFRadius, m_shadowBias,
-				/* Light matrix. */
-				1.0F, 0.0F, 0.0F, 0.0F,
-				0.0F, 1.0F, 0.0F, 0.0F,
-				0.0F, 0.0F, 1.0F, 0.0F,
-				0.0F, 0.0F, 0.0F, 1.0F
+				/* Color projection index and padding. */
+				0.0F, 0.0F, 0.0F, 0.0F
 			};
 	};
 

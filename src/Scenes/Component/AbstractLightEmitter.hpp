@@ -34,6 +34,7 @@
 
 /* Local inclusions for inheritances. */
 #include "Abstract.hpp"
+#include "Libs/ObserverTrait.hpp"
 #include "Scenes/AVConsole/AbstractVirtualDevice.hpp"
 
 /* Local inclusions for usages. */
@@ -47,12 +48,14 @@ namespace EmEn
 	namespace Vulkan
 	{
 		class DescriptorSet;
+		class TextureInterface;
 	}
 
 	namespace Graphics
 	{
+		class BindlessTextureManager;
 		class SharedUniformBuffer;
-		
+
 		namespace RenderTarget
 		{
 			class Abstract;
@@ -71,12 +74,16 @@ namespace EmEn::Scenes::Component
 	 * @brief Base class of light emitters.
 	 * @extends EmEn::Scenes::Component::Abstract The base class for each entity component.
 	 * @extends EmEn::Scenes::AVConsole::AbstractVirtualDevice This can act as a virtual video device.
+	 * @extends EmEn::Libs::ObserverTrait Observes color projection textures for async loading completion.
 	 */
-	class AbstractLightEmitter : public Abstract, public AVConsole::AbstractVirtualDevice
+	class AbstractLightEmitter : public Abstract, public AVConsole::AbstractVirtualDevice, public Libs::ObserverTrait
 	{
 		public:
 
 			static constexpr auto TracerTag{"LightEmitter"};
+
+			/** @brief Sentinel value indicating no bindless color projection texture is registered. */
+			static constexpr uint32_t NoColorProjectionTexture{UINT32_MAX};
 
 			/** @brief Animatable Interface key. */
 			enum AnimationID : uint8_t
@@ -194,20 +201,6 @@ namespace EmEn::Scenes::Component
 			{
 				return m_intensity;
 			}
-
-			/**
-			 * @brief Returns the matrix to compute the light space.
-			 * @return Libs::Math::Matrix< 4, float >
-			 */
-			[[nodiscard]]
-			Libs::Math::Matrix< 4, float > getLightSpaceMatrix () const noexcept;
-
-			/**
-			 * @brief Writes the light space matrix to a buffer.
-			 * @param bufferDestination A pointer to the buffer destination.
-			 * @return void
-			 */
-			void writeLightSpaceMatrix (float * bufferDestination) const noexcept;
 
 			/**
 			 * @brief Updates the UBO with the light data.
@@ -353,11 +346,12 @@ namespace EmEn::Scenes::Component
 			 * @brief Returns the uniform block explaining how the light works.
 			 * @param set The set index.
 			 * @param binding The binding point in the set.
-			 * @param useShadow States the use of a shadow.
+			 * @param useShadow States the use of a shadow map.
+			 * @param useColorProjection States the use of a color projection texture.
 			 * @return Saphir::Declaration::UniformBlock
 			 */
 			[[nodiscard]]
-			virtual Saphir::Declaration::UniformBlock getUniformBlock (uint32_t set, uint32_t binding, bool useShadow) const noexcept = 0;
+			virtual Saphir::Declaration::UniformBlock getUniformBlock (uint32_t set, uint32_t binding, bool useShadow, bool useColorProjection) const noexcept = 0;
 
 			/**
 			 * @brief Sets the PCF (Percentage-Closer Filtering) radius for soft shadow edges.
@@ -386,6 +380,70 @@ namespace EmEn::Scenes::Component
 			 */
 			[[nodiscard]]
 			virtual float shadowBias () const noexcept = 0;
+
+			/**
+			 * @brief Sets a color projection texture for this light.
+			 * @param texture A shared pointer to the texture interface (2D for spot/directional, cubemap for point).
+			 * @return void
+			 */
+			void setColorProjectionTexture (const std::shared_ptr< Vulkan::TextureInterface > & texture) noexcept;
+
+			/**
+			 * @brief Returns the color projection texture.
+			 * @return std::shared_ptr< Vulkan::TextureInterface >
+			 */
+			[[nodiscard]]
+			std::shared_ptr< Vulkan::TextureInterface >
+			colorProjectionTexture () const noexcept
+			{
+				return m_colorProjectionTexture;
+			}
+
+			/**
+			 * @brief Returns whether this light has a color projection texture assigned.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			hasColorProjectionTexture () const noexcept
+			{
+				return m_colorProjectionTexture != nullptr;
+			}
+
+			/**
+			 * @brief Returns the bindless index for the color projection texture.
+			 * @return uint32_t The bindless index, or NoColorProjectionTexture if none.
+			 */
+			[[nodiscard]]
+			uint32_t
+			colorProjectionBindlessIndex () const noexcept
+			{
+				return m_colorProjectionBindlessIndex;
+			}
+
+			/**
+			 * @brief Returns the frame index for animated color projection textures.
+			 * @return uint32_t The frame index, or NoColorProjectionTexture if static or none.
+			 */
+			[[nodiscard]]
+			uint32_t
+			colorProjectionFrameIndex () const noexcept
+			{
+				return m_colorProjectionFrameIndex;
+			}
+
+			/**
+			 * @brief Returns whether this light type uses a cubemap for color projection.
+			 * @note Override in PointLight to return true.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			virtual
+			bool
+			usesCubemapColorProjection () const noexcept
+			{
+				return false;
+			}
 
 			/**
 			 * @brief Returns an intensified color by a value.
@@ -449,9 +507,30 @@ namespace EmEn::Scenes::Component
 			 */
 			void requestVideoMemoryUpdate () noexcept;
 
+			/**
+			 * @brief Registers the color projection texture in the bindless texture manager.
+			 * @return void
+			 */
+			void registerColorProjectionInBindless () noexcept;
+
+			/**
+			 * @brief Unregisters the color projection texture from the bindless texture manager and stops observing.
+			 * @param useCubemap True for cubemap textures (PointLight), false for 2D textures (Directional/Spot).
+			 * @return void
+			 */
+			void unregisterColorProjectionFromBindless (bool useCubemap) noexcept;
+
 			static constexpr auto ShadowMapName{"ShadowMapSampler"};
 
+			Graphics::BindlessTextureManager * m_bindlessTextureManager{nullptr};
+			uint32_t m_colorProjectionFrameIndex{NoColorProjectionTexture};
+			bool m_colorProjectionIsCubeArray{false};
+
 		private:
+
+			/** @copydoc EmEn::Libs::ObserverTrait::onNotification() */
+			[[nodiscard]]
+			bool onNotification (const Libs::ObservableTrait * observable, int notificationCode, const std::any & data) noexcept override;
 
 			/** @copydoc EmEn::Scenes::Component::Abstract::onSuspend() */
 			void
@@ -476,12 +555,6 @@ namespace EmEn::Scenes::Component
 			 * @return bool
 			 */
 			virtual bool createShadowDescriptorSet (Scene & scene) noexcept = 0;
-
-			/**
-			 * @brief Updates the light space matrix.
-			 * @return void
-			 */
-			virtual void updateLightSpaceMatrix () noexcept = 0;
 
 			/**
 			 * @brief Returns the field of view or the near value to update projection matrix.
@@ -537,5 +610,7 @@ namespace EmEn::Scenes::Component
 			uint32_t m_shadowMapResolution{0};
 			std::shared_ptr< Graphics::SharedUniformBuffer > m_sharedUniformBuffer;
 			uint32_t m_sharedUBOIndex{0};
+			std::shared_ptr< Vulkan::TextureInterface > m_colorProjectionTexture;
+			uint32_t m_colorProjectionBindlessIndex{NoColorProjectionTexture};
 	};
 }

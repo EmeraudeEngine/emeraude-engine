@@ -4,6 +4,7 @@ set(EMERAUDE_HEADER_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/Algorithms/DiamondSquare.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/Algorithms/Mandelbrot.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/Algorithms/PerlinNoise.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/Algorithms/VoronoiNoise.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/Compression/LZMA/Compressor.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/Compression/LZMA/Decompressor.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Libs/Compression/LZMA.hpp

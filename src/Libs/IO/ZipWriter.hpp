@@ -30,6 +30,9 @@
 #include <filesystem>
 #include <vector>
 
+/* Local inclusions. */
+#include "IO.hpp"
+
 /* Third-party inclusions. */
 #include <zip.h>
 
@@ -90,7 +93,7 @@ namespace EmEn::Libs::IO
 			bool
 			addFilepathToSources (const std::filesystem::path & path) noexcept
 			{
-				return this->addFilepathToSources(path, path.filename().string());
+				return this->addFilepathToSources(path, IO::toU8String(path.filename()));
 			}
 
 			/**

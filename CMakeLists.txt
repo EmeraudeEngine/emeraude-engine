@@ -33,7 +33,7 @@ endif ()
 
 project(
 	${BINARY_NAME}
-	VERSION 0.8.52
+	VERSION 0.8.6
 	DESCRIPTION "Emeraude Engine is an open-source (LGPLv3) 3D Graphics engine using Vulkan and written in C++20."
 	HOMEPAGE_URL "https://github.com/EmeraudeEngine/emeraude-engine"
 	LANGUAGES C CXX
@@ -46,7 +46,7 @@ set(CMAKE_VERBOSE_MAKEFILE On)
 set(CMAKE_EXPORT_COMPILE_COMMANDS On)
 
 # Project build types configuration.
-set(CMAKE_CONFIGURATION_TYPES Debug Release)
+set(CMAKE_CONFIGURATION_TYPES Debug Release RelWithDebInfo) # MinSizeRel
 
 if ( NOT CMAKE_BUILD_TYPE )
 	if ( "${MSVC_BUILD_TYPE}" STREQUAL "Debug" OR "${MSVC_BUILD_TYPE}" STREQUAL "debug" )
@@ -98,6 +98,7 @@ option(EMERAUDE_DEBUG_VULKAN_TRACKING "Enable printing of Vulkan objects lifespa
 option(EMERAUDE_DEBUG_THREAD_POOL "Enable printing of ThreadPool (Default Off)." Off)
 set(EMERAUDE_DEBUG_THREAD_POOL_N "1" CACHE STRING "When debugging ThreadPool, force the number of threads (Default 1).")
 option(EMERAUDE_DISABLE_PARALLEL_COLLISION "Disable parallel collision detection for performance comparison (Default Off)." Off)
+option(EMERAUDE_ENABLE_RENDERDOC "Enable RenderDoc in-application API for GPU frame capture [FETCHED] (Default Off)." Off)
 
 
 # Force the compilation directory for testing (Only if empty)
@@ -521,6 +522,10 @@ if ( NOT EMERAUDE_BUILD_SERVICES_ONLY )
 	include(SetupVideoDeviceCapture)
 
 	include(SetupLibVPX)
+
+	if ( EMERAUDE_ENABLE_RENDERDOC )
+		include(SetupRenderDoc)
+	endif ()
 else ()
 	# NOTE: Work-around for multi-builds
 	if ( EMERAUDE_ENABLE_IMGUI )

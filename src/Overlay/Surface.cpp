@@ -52,16 +52,12 @@ namespace EmEn::Overlay
 		{
 			const auto screenWidth = static_cast< float >(m_framebufferProperties.width());
 
-			const auto positionXa = screenWidth * m_rectangle.left();
-
-			if ( positionX < positionXa )
+			if ( const auto positionXa = screenWidth * m_rectangle.left(); positionX < positionXa )
 			{
 				return false;
 			}
 
-			const auto positionXb = screenWidth * m_rectangle.right();
-
-			if ( positionX > positionXb )
+			if ( const auto positionXb = screenWidth * m_rectangle.right(); positionX > positionXb )
 			{
 				return false;
 			}
@@ -71,16 +67,12 @@ namespace EmEn::Overlay
 		{
 			const auto screenHeight = static_cast< float >(m_framebufferProperties.height());
 
-			const auto positionYa = screenHeight * m_rectangle.top();
-
-			if ( positionY < positionYa )
+			if ( const auto positionYa = screenHeight * m_rectangle.top(); positionY < positionYa )
 			{
 				return false;
 			}
 
-			const auto positionYb = screenHeight * m_rectangle.bottom();
-
-			if ( positionY > positionYb )
+			if ( const auto positionYb = screenHeight * m_rectangle.bottom(); positionY > positionYb )
 			{
 				return false;
 			}
@@ -167,6 +159,8 @@ namespace EmEn::Overlay
 
 		this->onActiveBufferReady(m_activeBuffer);
 
+		TraceSuccess{ClassId} << "Surface '" << this->name() << "' (" << textureWidth << "x" << textureHeight << "px, scale:" << framebuffer.maxScreenScale() << ") created!";
+
 		return true;
 	}
 
@@ -211,6 +205,13 @@ namespace EmEn::Overlay
 
 			m_videoMemorySizeValid = true;
 			m_videoMemoryUpToDate = false;
+
+			/* NOTE: After buffer recreation, defer the GPU upload to the next processUpdates() call.
+			 * This avoids a wasted upload when observers (e.g., Notifier via OverlayResized)
+			 * rewrite the pixmap content before the render thread's next updateVideoMemory() pass. */
+			m_framebufferAccess.unlock();
+
+			return true;
 		}
 
 		/* Step 2: Upload active buffer content to GPU.
@@ -233,6 +234,8 @@ namespace EmEn::Overlay
 			}
 
 			m_videoMemoryUpToDate = true;
+
+			TraceDebug{ClassId} << "Surface '" << this->name() << "' pixmap uploaded to GPU (" << m_activeBuffer.width() << "x" << m_activeBuffer.height() << "px, framebuffer:" << m_framebufferProperties.width() << "x" << m_framebufferProperties.height() << "px, scale:" << m_framebufferProperties.maxScreenScale() << ").";
 		}
 
 		m_framebufferAccess.unlock();
@@ -445,6 +448,8 @@ namespace EmEn::Overlay
 
 		/* NOTE: Swap the buffer structures (transition becomes active, active becomes transition). */
 		std::swap(m_transitionBuffer, m_activeBuffer);
+
+		TraceSuccess{ClassId} << "Surface '" << this->name() << "' transition buffer committed (" << m_activeBuffer.width() << "x" << m_activeBuffer.height() << "px, scale:" << m_framebufferProperties.maxScreenScale() << ").";
 
 		/* NOTE: After commit, the transition buffer status returns to Ready for next resize. */
 		m_transitionBufferStatus = TransitionBufferStatus::Ready;

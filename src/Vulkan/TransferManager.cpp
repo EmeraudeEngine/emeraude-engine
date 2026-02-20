@@ -814,4 +814,65 @@ namespace EmEn::Vulkan
 
 		return true;
 	}
+
+	bool
+	TransferManager::clearColorImage (Image & image, VkClearColorValue clearColor) const noexcept
+	{
+		const std::lock_guard< std::mutex > lock{m_transferOperationsAccess};
+
+		if ( !m_imageLayoutTransitionFence->reset() )
+		{
+			TraceError{ClassId} << "Unable to reset the fence for clearing the color image '" << image.identifier() << "' !";
+
+			return false;
+		}
+
+		if ( !m_imageLayoutTransitionCommandBuffer->begin() )
+		{
+			TraceError{ClassId} << "Unable to begin the command buffer for clearing the color image '" << image.identifier() << "' !";
+
+			return false;
+		}
+
+		VkImageSubresourceRange subresourceRange{};
+		subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		subresourceRange.baseMipLevel = 0;
+		subresourceRange.levelCount = 1;
+		subresourceRange.baseArrayLayer = 0;
+		subresourceRange.layerCount = image.createInfo().arrayLayers;
+
+		vkCmdClearColorImage(
+			m_imageLayoutTransitionCommandBuffer->handle(),
+			image.handle(),
+			VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+			&clearColor,
+			1,
+			&subresourceRange
+		);
+
+		if ( !m_imageLayoutTransitionCommandBuffer->end() )
+		{
+			TraceError{ClassId} << "Unable to end the command buffer for clearing the color image '" << image.identifier() << "' !";
+
+			return false;
+		}
+
+		const auto * queue = m_device->getGraphicsQueue(QueuePriority::High);
+
+		if ( !queue->submit(*m_imageLayoutTransitionCommandBuffer, SynchInfo{}.withFence(m_imageLayoutTransitionFence->handle())) )
+		{
+			TraceError{ClassId} << "Unable to submit the command buffer for clearing the color image '" << image.identifier() << "' !";
+
+			return false;
+		}
+
+		if ( !m_imageLayoutTransitionFence->wait() )
+		{
+			TraceError{ClassId} << "Unable to wait the fence for clearing the color image '" << image.identifier() << "' !";
+
+			return false;
+		}
+
+		return true;
+	}
 }

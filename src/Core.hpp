@@ -174,6 +174,11 @@ namespace EmEn
 			 */
 			static constexpr auto ToolsArg{"-t"}; ///< Short argument for tools mode.
 			static constexpr auto ToolsLongArg{"--tools-mode"}; ///< Long argument for tools mode.
+			static constexpr auto ScreenshotAfterArg{"--screenshot-after"}; ///< Argument for automated screenshot after N seconds.
+			static constexpr auto RenderDocCaptureAfterArg{"--renderdoc-capture-after"}; ///< Argument for automated RenderDoc capture after N seconds.
+			static constexpr auto WipeLocalDataArg{"--wipe-local-data"}; ///< Argument to preview local data wipe (dry run).
+			static constexpr auto WipeLocalDataConfirmArg{"--wipe-local-data-confirm"}; ///< Argument to actually wipe local data.
+			static constexpr auto ResetSettingsArg{"--reset-settings"}; ///< Argument to backup and reset settings file.
 			/** @} */
 
 			/** @name Available Tool Names
@@ -362,6 +367,18 @@ namespace EmEn
 			{
 				// TODO: On no duration expressed, use the length of the string to compute an optimal duration for the user to read.
 				this->notifier().push(message.get(), duration);
+			}
+
+			/**
+			 * @brief Prevents application from running.
+			 * @note No reading this variable won't avoid the core to continue.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			willNotRun () const noexcept
+			{
+				return m_willNotRun;
 			}
 
 			/**
@@ -1095,6 +1112,21 @@ namespace EmEn
 			bool executeToolsMode () noexcept;
 
 			/**
+			 * @brief Wipes local data directories (cache and user data) and exits.
+			 * @details Removes cache and user data directories while preserving the config directory.
+			 * @param dryRun Safe-guard
+			 * @return void
+			 * @see StartupMode::WipeLocalData
+			 */
+			void executeWipeLocalData (bool dryRun) noexcept;
+
+			/**
+			 * @brief Backs up the settings file and exits.
+			 * @details Renames settings.json to settings.json.[timestamp]-bck.
+			 */
+			void executeResetSettings () noexcept;
+
+			/**
 			 * @brief Processes and displays queued core messages.
 			 * @details Shows error dialogs and shader compilation failures.
 			 */
@@ -1337,18 +1369,22 @@ namespace EmEn
 			size_t m_cycle{0};								  ///< Main loop iteration count.
 			StartupMode m_startupMode{StartupMode::Continue};   ///< Startup behavior mode.
 			std::queue< std::string > m_coreMessages;		   ///< Pending messages for display. @todo Display in ImGui.
+			uint64_t m_screenshotAfterUs{0}; ///< Screenshot delay in microseconds (0 = disabled).
+			uint64_t m_renderDocCaptureAfterUs{0}; ///< RenderDoc capture delay in microseconds (0 = disabled).
+			std::filesystem::path m_rushVoiceOverPath{};
 			/* Control flags. */
 			std::atomic< bool > m_isMainLoopRunning{true}; ///< Main loop active flag (atomic for thread-safe access).
 			std::atomic< bool > m_isLogicsLoopRunning{true}; ///< Logic thread active flag (atomic for thread-safe access).
 			std::atomic< bool > m_isRenderingLoopRunning{true}; ///< Render thread active flag (atomic for thread-safe access).
 			std::atomic< bool > m_paused{false}; ///< Current pause state (atomic for thread-safe access).
+			bool m_willNotRun{false};
 			bool m_pausable{false}; ///< Whether pause is currently allowed.
 			bool m_showHelp{false}; ///< Help display requested via --help.
 			bool m_preventDefaultKeyBehaviors{false}; ///< Disable Core's default key handling.
 			bool m_disableNotifier{false}; ///< Disable Core's notifier.
 			bool m_enableStatistics{false}; ///< Enable statistics display in the terminal.
 			bool m_windowChanged{false};
-			std::filesystem::path m_rushVoiceOverPath{};
+			bool m_renderDocCapturing{false}; ///< Whether a RenderDoc capture is currently in progress.
 			/** @} */ // End of Member Variables group
 	};
 }

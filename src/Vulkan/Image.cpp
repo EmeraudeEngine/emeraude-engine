@@ -34,6 +34,7 @@
 #include "Graphics/CubemapResource.hpp"
 #include "Graphics/ImageResource.hpp"
 #include "Graphics/MovieResource.hpp"
+#include "Graphics/CubemapMovieResource.hpp"
 #include "Device.hpp"
 #include "TransferManager.hpp"
 #include "MemoryRegion.hpp"
@@ -353,6 +354,58 @@ namespace EmEn::Vulkan
 				}
 
 				offset += pixmap.bytes();
+			}
+
+			return true;
+		});
+	}
+
+	bool
+	Image::create (TransferManager & transferManager, const std::shared_ptr< Graphics::CubemapMovieResource > & cubemapMovieResource) noexcept
+	{
+		if ( cubemapMovieResource == nullptr || !cubemapMovieResource->isLoaded() )
+		{
+			Tracer::error(ClassId, "The cubemap movie resource is null or not loaded! Skipping transfer ...");
+
+			return false;
+		}
+
+		if ( !this->createOnHardware() )
+		{
+			return false;
+		}
+
+		const auto & frames = cubemapMovieResource->frames();
+
+		/* Get the total bytes requested for all frames x all faces. */
+		size_t totalBytes = 0;
+
+		for ( const auto & [faces, duration] : frames )
+		{
+			for ( const auto & pixmap : faces )
+			{
+				totalBytes += pixmap.bytes();
+			}
+		}
+
+		/* NOTE: We will write all frames, each with 6 face pixmaps, sequentially in the staging buffer.
+		 * Layout: Frame0-Face0, Frame0-Face1, ..., Frame0-Face5, Frame1-Face0, ..., FrameN-Face5 */
+		return transferManager.uploadImage(*this, totalBytes, [&frames] (const Buffer & stagingBuffer) {
+			size_t offset = 0;
+
+			for ( const auto & [faces, duration] : frames )
+			{
+				for ( const auto & pixmap : faces )
+				{
+					if ( !stagingBuffer.writeData({pixmap.data().data(), pixmap.bytes(), offset}) )
+					{
+						TraceError{ClassId} << "Unable to write " << pixmap.bytes() << " bytes of data in the staging buffer !";
+
+						return false;
+					}
+
+					offset += pixmap.bytes();
+				}
 			}
 
 			return true;

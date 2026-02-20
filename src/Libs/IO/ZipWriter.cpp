@@ -26,6 +26,12 @@
 
 #include "ZipWriter.hpp"
 
+/* Project configuration. */
+#include "emeraude_config.hpp"
+
+/* Local inclusions. */
+#include "IO.hpp"
+
 /* STL inclusions. */
 #include <algorithm>
 #include <iostream>
@@ -79,7 +85,7 @@ namespace EmEn::Libs::IO
 			return false;
 		}
 
-		const auto root = path.string();
+		const auto root = IO::toGenericU8String(path);
 
 		for ( const auto & entry : std::filesystem::recursive_directory_iterator(path) )
 		{
@@ -92,7 +98,7 @@ namespace EmEn::Libs::IO
 					return false;
 				}
 
-				auto filepathString = entry.path().string();
+				auto filepathString = IO::toGenericU8String(entry.path());
 
 				const auto entryName = filepathString.replace(filepathString.find(root), root.length(), "");
 
@@ -168,7 +174,7 @@ namespace EmEn::Libs::IO
 	bool
 	ZipWriter::readSource (const std::filesystem::path & filepath, std::vector< char > & fileContent) noexcept
 	{
-		std::ifstream file{filepath.string(), std::ios::binary};
+		std::ifstream file{filepath, std::ios::binary};
 
 		if ( !file.is_open() )
 		{
@@ -191,6 +197,35 @@ namespace EmEn::Libs::IO
 	bool
 	ZipWriter::openArchive () noexcept
 	{
+#if IS_WINDOWS
+		zip_error_t zipError;
+		zip_error_init(&zipError);
+
+		auto * source = zip_source_win32w_create(m_filepath.wstring().c_str(), 0, -1, &zipError);
+
+		if ( source == nullptr )
+		{
+			std::cerr << ClassId << " : Unable to create LibZip source. Error : " << zip_error_strerror(&zipError) << " !" "\n";
+
+			zip_error_fini(&zipError);
+
+			return false;
+		}
+
+		m_zip = zip_open_from_source(source, ZIP_CREATE, &zipError);
+
+		if ( m_zip == nullptr )
+		{
+			std::cerr << ClassId << " : Unable to init LibZip. Error : " << zip_error_strerror(&zipError) << " !" "\n";
+
+			zip_source_free(source);
+			zip_error_fini(&zipError);
+
+			return false;
+		}
+
+		zip_error_fini(&zipError);
+#else
 		int errorCode = 0;
 
 		m_zip = zip_open(m_filepath.string().data(), ZIP_CREATE, &errorCode);
@@ -206,6 +241,7 @@ namespace EmEn::Libs::IO
 
 			return false;
 		}
+#endif
 
 		return true;
 	}

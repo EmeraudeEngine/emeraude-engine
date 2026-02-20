@@ -104,11 +104,10 @@ namespace EmEn::Scenes
 		auto & sharedUBOManager = renderer.sharedUBOManager();
 
 		/* Generate directional light shared uniform buffer.
-		 * NOTE: Always allocate space for the light space matrix (useShadow=true) even if some lights
-		 * don't use shadow mapping. This ensures the UBO size matches DirectionalLight::m_buffer which
-		 * always includes the matrix. Lights without shadows will have an identity matrix. */
+		 * NOTE: Always allocate with maximum layout (shadow=true, colorProjection=true) to ensure
+		 * the UBO size matches DirectionalLight::m_buffer which always includes all fields. */
 		{
-			const auto uniformBlock = LightGenerator::getUniformBlock(0, 0, LightType::Directional, true);
+			const auto uniformBlock = LightGenerator::getUniformBlock(0, 0, LightType::Directional, true, true);
 
 			m_directionalLightBuffer = sharedUBOManager.createSharedUniformBuffer(scene.name() + "DirectionalLights", createDescriptorSet, uniformBlock.bytes());
 
@@ -132,11 +131,10 @@ namespace EmEn::Scenes
 		}
 
 		/* Generate point light shared uniform buffer.
-		 * NOTE: Always allocate space for the light space matrix (useShadow=true) even if some lights
-		 * don't use shadow mapping. This ensures the UBO size matches PointLight::m_buffer which
-		 * always includes the matrix. Lights without shadows will have an identity matrix. */
+		 * NOTE: Always allocate with maximum layout (shadow=true) to ensure
+		 * the UBO size matches PointLight::m_buffer which always includes all fields. */
 		{
-			const auto uniformBlock = LightGenerator::getUniformBlock(0, 0, LightType::Point, true);
+			const auto uniformBlock = LightGenerator::getUniformBlock(0, 0, LightType::Point, true, true);
 
 			m_pointLightBuffer = sharedUBOManager.createSharedUniformBuffer(scene.name() + "PointLights", createDescriptorSet, uniformBlock.bytes());
 
@@ -160,11 +158,10 @@ namespace EmEn::Scenes
 		}
 
 		/* Generate spotlight shared uniform buffer.
-		 * NOTE: Always allocate space for the light space matrix (useShadow=true) even if some lights
-		 * don't use shadow mapping. This ensures the UBO size matches SpotLight::m_buffer which
-		 * always includes the matrix. Lights without shadows will have an identity matrix. */
+		 * NOTE: Always allocate with maximum layout (shadow=true, colorProjection=true) to ensure
+		 * the UBO size matches SpotLight::m_buffer which always includes all fields. */
 		{
-			const auto uniformBlock = LightGenerator::getUniformBlock(0, 0, LightType::Spot, true);
+			const auto uniformBlock = LightGenerator::getUniformBlock(0, 0, LightType::Spot, true, true);
 
 			m_spotLightBuffer = sharedUBOManager.createSharedUniformBuffer(scene.name() + "SpotLights", createDescriptorSet, uniformBlock.bytes());
 

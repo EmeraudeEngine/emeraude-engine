@@ -555,9 +555,7 @@ namespace EmEn::Overlay
 	bool
 	Manager::bringScreenOnTop (const std::string & screenName) noexcept
 	{
-		const auto screenIt = m_screens.find(screenName);
-
-		if ( screenIt == m_screens.cend() )
+		if ( const auto screenIt = m_screens.find(screenName); screenIt == m_screens.cend() )
 		{
 			TraceWarning{ClassId} << "Unable to find the UI screen '" << screenName << "' to bring it on top !";
 
@@ -572,7 +570,7 @@ namespace EmEn::Overlay
 	std::vector< std::string >
 	Manager::screensNameList () const noexcept
 	{
-		std::vector< std::string > screenNames{};
+		std::vector< std::string > screenNames;
 		screenNames.reserve(m_screens.size());
 
 		std::ranges::transform(m_screens, std::back_inserter(screenNames), [] (const auto & screenIt) {
@@ -585,7 +583,7 @@ namespace EmEn::Overlay
 	std::vector< std::string >
 	Manager::activeScreensNameList () const noexcept
 	{
-		std::vector< std::string > screenNames{};
+		std::vector< std::string > screenNames;
 		screenNames.reserve(m_screens.size());
 
 		for ( const auto & [screenName, screen] : m_screens )
@@ -669,12 +667,15 @@ namespace EmEn::Overlay
 		 * Hidden screens will be processed when they become visible again. */
 		for ( const auto & screen : m_screens | std::views::values )
 		{
-			if ( !screen->isVisible() )
+			if ( screen->empty() || !screen->isVisible() )
 			{
 				continue;
 			}
 
-			screen->processSurfaceUpdates(false);
+			if ( !screen->processSurfaceUpdates(false) )
+			{
+				TraceError{ClassId} << "Failed to process screen '" << screen->name() << "' updates!";
+			}
 		}
 	}
 
@@ -695,7 +696,17 @@ namespace EmEn::Overlay
 		 * This allows asynchronous renderers (e.g., CEF) to prepare new content before committing. */
 		for ( const auto & screen : m_screens | std::views::values )
 		{
-			screen->processSurfaceUpdates(true);
+			if ( screen->empty() )
+			{
+				continue;
+			}
+
+			if ( !screen->processSurfaceUpdates(true) )
+			{
+				TraceError{ClassId} << "Failed to process screen '" << screen->name() << "' updates!";
+			}
+
+			TraceDebug{ClassId} << "The screen '" << screen->name() << "' resized.";
 		}
 
 		/* Step 3: Notify observers of the resize completion. */
@@ -705,6 +716,13 @@ namespace EmEn::Overlay
 		   windowState.framebufferWidth,
 		   windowState.framebufferHeight
 		});
+
+		TraceDebug{ClassId} <<
+			"The overlay manager received last windows properties. " "\n"
+			"Width: " << windowState.framebufferWidth << "\n"
+			"Height: " << windowState.framebufferHeight << "\n"
+			"ScaleX: " << windowState.contentXScale << "\n"
+			"ScaleY: " << windowState.contentYScale << "\n";
 
 		return true;
 	}

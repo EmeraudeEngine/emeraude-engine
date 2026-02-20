@@ -131,7 +131,7 @@ namespace EmEn::Saphir
 				m_highQualityEnabled{highQualityEnabled},
 				m_PCFEnabled{settings.getOrSetDefault< bool >(GraphicsShadowMappingEnablePCFKey, DefaultGraphicsShadowMappingEnablePCF)}
 			{
-				TraceDebug{ClassId} << "PCF: " << m_PCFEnabled << ", method: " << static_cast< uint32_t >(m_PCFMethod) << ", samples: " << m_PCFSample;
+
 			}
 
 			/**
@@ -594,6 +594,15 @@ namespace EmEn::Saphir
 			}
 
 			/**
+			 * @brief Returns a GLSL expression for the surface roughness.
+			 * @note For PBR materials, returns the roughness variable directly.
+			 * For Phong materials, converts shininess to roughness using the Beckmann approximation.
+			 * @return std::string
+			 */
+			[[nodiscard]]
+			std::string roughnessShaderExpression () const noexcept;
+
+			/**
 			 * @brief Returns the variable name of the produced fragment color.
 			 * @return const std::string &
 			 */
@@ -627,11 +636,12 @@ namespace EmEn::Saphir
 			 * @param set The set index.
 			 * @param binding The binding point in the set.
 			 * @param lightType The type of light.
-			 * @param useShadowMap States the use of a shadow.
+			 * @param useShadowMap States the use of a shadow map.
+			 * @param useColorProjection States the use of a color projection texture.
 			 * @return Declaration::UniformBlock
 			 */
 			[[nodiscard]]
-			static Declaration::UniformBlock getUniformBlock (uint32_t set, uint32_t binding, Graphics::LightType lightType, bool useShadowMap) noexcept;
+			static Declaration::UniformBlock getUniformBlock (uint32_t set, uint32_t binding, Graphics::LightType lightType, bool useShadowMap, bool useColorProjection) noexcept;
 
 			/**
 			 * @brief Returns a uniform block for a directional light with Cascaded Shadow Maps.
@@ -688,7 +698,7 @@ namespace EmEn::Saphir
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool generateGouraudVertexShader (Generator::Abstract & generator, VertexShader & vertexShader, Graphics::LightType lightType, bool enableShadowMap) const noexcept;
+			bool generateGouraudVertexShader (Generator::Abstract & generator, VertexShader & vertexShader, Graphics::LightType lightType, bool enableShadowMap, bool enableColorProjection) const noexcept;
 
 			/**
 			 * @brief Generates the fragment shader for a light using the Gouraud shading technic.
@@ -696,10 +706,11 @@ namespace EmEn::Saphir
 			 * @param fragmentShader A reference to the fragment shader.
 			 * @param lightType The light type.
 			 * @param enableShadowMap Enables the shadow mapping code generation.
+			 * @param enableColorProjection Enables the color projection code generation.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool generateGouraudFragmentShader (Generator::Abstract & generator, FragmentShader & fragmentShader, Graphics::LightType lightType, bool enableShadowMap) const noexcept;
+			bool generateGouraudFragmentShader (Generator::Abstract & generator, FragmentShader & fragmentShader, Graphics::LightType lightType, bool enableShadowMap, bool enableColorProjection) const noexcept;
 
 			/**
 			 * @brief Generates the vertex shader for a light using the Phong-Blinn shading technic.
@@ -707,10 +718,11 @@ namespace EmEn::Saphir
 			 * @param vertexShader A reference to the vertex shader.
 			 * @param lightType The light type.
 			 * @param enableShadowMap Enables the shadow mapping code generation.
+			 * @param enableColorProjection Enables the color projection code generation.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool generatePhongBlinnVertexShader (Generator::Abstract & generator, VertexShader & vertexShader, Graphics::LightType lightType, bool enableShadowMap) const noexcept;
+			bool generatePhongBlinnVertexShader (Generator::Abstract & generator, VertexShader & vertexShader, Graphics::LightType lightType, bool enableShadowMap, bool enableColorProjection) const noexcept;
 
 			/**
 			 * @brief Generates the fragment shader for a light using the Phong-Blinn shading technic.
@@ -718,10 +730,11 @@ namespace EmEn::Saphir
 			 * @param fragmentShader A reference to the fragment shader.
 			 * @param lightType The light type.
 			 * @param enableShadowMap Enables the shadow mapping code generation.
+			 * @param enableColorProjection Enables the color projection code generation.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool generatePhongBlinnFragmentShader (Generator::Abstract & generator, FragmentShader & fragmentShader, Graphics::LightType lightType, bool enableShadowMap) const noexcept;
+			bool generatePhongBlinnFragmentShader (Generator::Abstract & generator, FragmentShader & fragmentShader, Graphics::LightType lightType, bool enableShadowMap, bool enableColorProjection) const noexcept;
 
 			/**
 			 * @brief Generates the vertex shader for a directional light using the Phong-Blinn shading technic and normal mapping.
@@ -729,10 +742,11 @@ namespace EmEn::Saphir
 			 * @param vertexShader A reference to the vertex shader.
 			 * @param lightType The light type.
 			 * @param enableShadowMap Enables the shadow mapping code generation.
+			 * @param enableColorProjection Enables the color projection code generation.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool generatePhongBlinnWithNormalMapVertexShader (Generator::Abstract & generator, VertexShader & vertexShader, Graphics::LightType lightType, bool enableShadowMap) const noexcept;
+			bool generatePhongBlinnWithNormalMapVertexShader (Generator::Abstract & generator, VertexShader & vertexShader, Graphics::LightType lightType, bool enableShadowMap, bool enableColorProjection) const noexcept;
 
 			/**
 			 * @brief Generates the fragment shader for a directional light using the Phong-Blinn shading technic and normal mapping.
@@ -740,10 +754,11 @@ namespace EmEn::Saphir
 			 * @param fragmentShader A reference to the fragment shader.
 			 * @param lightType The light type.
 			 * @param enableShadowMap Enables the shadow mapping code generation.
+			 * @param enableColorProjection Enables the color projection code generation.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool generatePhongBlinnWithNormalMapFragmentShader (Generator::Abstract & generator, FragmentShader & fragmentShader, Graphics::LightType lightType, bool enableShadowMap) const noexcept;
+			bool generatePhongBlinnWithNormalMapFragmentShader (Generator::Abstract & generator, FragmentShader & fragmentShader, Graphics::LightType lightType, bool enableShadowMap, bool enableColorProjection) const noexcept;
 
 			/**
 			 * @brief Generates the vertex shader for a light using PBR Cook-Torrance BRDF.
@@ -751,10 +766,11 @@ namespace EmEn::Saphir
 			 * @param vertexShader A reference to the vertex shader.
 			 * @param lightType The light type.
 			 * @param enableShadowMap Enables the shadow mapping code generation.
+			 * @param enableColorProjection Enables the color projection code generation.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool generatePBRVertexShader (Generator::Abstract & generator, VertexShader & vertexShader, Graphics::LightType lightType, bool enableShadowMap) const noexcept;
+			bool generatePBRVertexShader (Generator::Abstract & generator, VertexShader & vertexShader, Graphics::LightType lightType, bool enableShadowMap, bool enableColorProjection) const noexcept;
 
 			/**
 			 * @brief Generates the fragment shader for a light using PBR Cook-Torrance BRDF.
@@ -762,10 +778,11 @@ namespace EmEn::Saphir
 			 * @param fragmentShader A reference to the fragment shader.
 			 * @param lightType The light type.
 			 * @param enableShadowMap Enables the shadow mapping code generation.
+			 * @param enableColorProjection Enables the color projection code generation.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool generatePBRFragmentShader (const Generator::Abstract & generator, FragmentShader & fragmentShader, Graphics::LightType lightType, bool enableShadowMap) const noexcept;
+			bool generatePBRFragmentShader (const Generator::Abstract & generator, FragmentShader & fragmentShader, Graphics::LightType lightType, bool enableShadowMap, bool enableColorProjection) const noexcept;
 
 			/**
 			 * @brief Generates the PBR BRDF helper functions (Fresnel, NDF, Geometry).

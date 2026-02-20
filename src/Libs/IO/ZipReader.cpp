@@ -26,6 +26,9 @@
 
 #include "ZipReader.hpp"
 
+/* Project configuration. */
+#include "emeraude_config.hpp"
+
 /* STL inclusions. */
 #include <iostream>
 #include <fstream>
@@ -52,6 +55,31 @@ namespace EmEn::Libs::IO
 			return false;
 		}
 
+#if IS_WINDOWS
+		zip_error_t zipError;
+		zip_error_init(&zipError);
+
+		auto * source = zip_source_win32w_create(filepath.wstring().c_str(), 0, -1, &zipError);
+
+		if ( source == nullptr )
+		{
+			zip_error_fini(&zipError);
+
+			return false;
+		}
+
+		auto * archive = zip_open_from_source(source, ZIP_RDONLY | ZIP_CHECKCONS, &zipError);
+
+		if ( archive == nullptr )
+		{
+			zip_source_free(source);
+			zip_error_fini(&zipError);
+
+			return false;
+		}
+
+		zip_error_fini(&zipError);
+#else
 		int errorCode = 0;
 
 		auto * archive = zip_open(filepath.string().data(), ZIP_RDONLY | ZIP_CHECKCONS, &errorCode);
@@ -60,6 +88,7 @@ namespace EmEn::Libs::IO
 		{
 			return false;
 		}
+#endif
 
 		zip_close(archive);
 
@@ -172,7 +201,7 @@ namespace EmEn::Libs::IO
 			}
 		}
 
-		std::ofstream file{filepath.string(), std::ios::binary | std::ios::trunc};
+		std::ofstream file{filepath, std::ios::binary | std::ios::trunc};
 
 		if ( !file.is_open() )
 		{
@@ -234,6 +263,35 @@ namespace EmEn::Libs::IO
 	bool
 	ZipReader::openArchive () noexcept
 	{
+#if IS_WINDOWS
+		zip_error_t zipError;
+		zip_error_init(&zipError);
+
+		auto * source = zip_source_win32w_create(m_filepath.wstring().c_str(), 0, -1, &zipError);
+
+		if ( source == nullptr )
+		{
+			std::cerr << ClassId << " : Unable to create LibZip source. Error : " << zip_error_strerror(&zipError) << " !" "\n";
+
+			zip_error_fini(&zipError);
+
+			return false;
+		}
+
+		m_zip = zip_open_from_source(source, 0, &zipError);
+
+		if ( m_zip == nullptr )
+		{
+			std::cerr << ClassId << " : Unable to init LibZip. Error : " << zip_error_strerror(&zipError) << " !" "\n";
+
+			zip_source_free(source);
+			zip_error_fini(&zipError);
+
+			return false;
+		}
+
+		zip_error_fini(&zipError);
+#else
 		int errorCode = 0;
 
 		m_zip = zip_open(m_filepath.string().data(), 0, &errorCode);
@@ -249,6 +307,7 @@ namespace EmEn::Libs::IO
 
 			return false;
 		}
+#endif
 
 		return true;
 	}

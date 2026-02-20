@@ -121,7 +121,7 @@ namespace EmEn
 	bool
 	Settings::onTerminate () noexcept
 	{
-		if ( this->isSaveAtExitEnabled() )
+		if ( this->isSaveAtExitEnabled() && !m_arguments.isSwitchPresent("--reset-settings") )
 		{
 			if ( m_filepath.empty() )
 			{

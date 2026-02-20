@@ -1,6 +1,29 @@
 # Design Philosophy
 
-Emeraude Engine follows three fundamental design principles that guide all architectural and implementation decisions:
+Emeraude Engine follows fundamental design principles that guide all architectural and implementation decisions.
+
+## 0. The Mission: Unreal Engine 5 Runtime Killer
+
+Emeraude Engine exists to **surpass Unreal Engine 5 runtime visual quality**.
+
+**"Runtime" means the core that runs on every end-user machine** — the renderer, the
+post-process stack, the material system, the audio engine, the physics. Not the editor,
+not the blueprint system, not the marketplace, not the asset pipeline. Those are developer
+tools. The runtime is what the player experiences.
+
+**Vulkan-only by design.** UE5 maintains D3D11, D3D12, Vulkan, Metal — each backend is a
+compromise designed to the lowest common denominator. Emeraude Engine speaks directly to
+the GPU through the Vulkan open standard, maintained by the Khronos Group. One backend,
+mastered in full, optimized without compromise.
+
+**AI-driven development.** Emeraude Engine is developed **with AI and for AI**. The human
+is the architect and director — defining vision, making design decisions, choosing trade-offs.
+The AI is the implementor and analyst — writing code, measuring performance, diagnosing GPU
+pipelines, iterating at industrial speed. This is a new model of engine development where
+every rendering decision is backed by data, not intuition.
+
+Every architectural decision, every rendering technique, every optimization in this engine
+must be measured against this mission.
 
 ## 1. Principle of Least Astonishment (POLA)
 **"The code should behave as a reasonable user would expect."**

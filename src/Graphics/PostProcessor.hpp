@@ -26,132 +26,248 @@
 
 #pragma once
 
+/* STL inclusions. */
+#include <memory>
+#include <vector>
+
+/* Local inclusions for inheritances. */
+#include "ServiceInterface.hpp"
+
 /* Local inclusions for usages. */
-#include "Saphir/FramebufferEffectInterface.hpp"
-#include "Geometry/IndexedVertexResource.hpp"
+#include "RenderTarget/Abstract.hpp"
+#include "DirectPostProcessEffect.hpp"
+
+/* Forward declarations. */
+namespace EmEn
+{
+	namespace Saphir
+	{
+		class Program;
+	}
+
+	namespace Vulkan
+	{
+		class CommandBuffer;
+		class DescriptorSet;
+		class DescriptorSetLayout;
+		class LayoutManager;
+	}
+
+	namespace Graphics
+	{
+		class GrabPass;
+		class IndirectPostProcessEffect;
+		class PostProcessStack;
+		class Renderer;
+
+		namespace Geometry
+		{
+			class IndexedVertexResource;
+		}
+	}
+}
 
 namespace EmEn::Graphics
 {
 	/**
-	 * @brief The post-processor class to add effect on the final render.
-	 * @todo WIP. This is a relic from the OpenGL version and must be rewrite from the ground.
+	 * @brief The post-processor service — a pure GPU executor for fullscreen effects.
+	 * @note Effects are owned by Scene (PostProcessStack for multi-pass) and Camera
+	 * (lensEffects for single-pass). The PostProcessor only executes them.
+	 * @extends EmEn::ServiceInterface The post-processor is a renderer sub-service.
 	 */
-	class PostProcessor final
+	class PostProcessor final : public ServiceInterface
 	{
-		friend class View;
-
 		public:
 
 			/** @brief Class identifier. */
-			static constexpr auto ClassId{"PostProcessor"};
+			static constexpr auto ClassId{"PostProcessorService"};
 
 			/* GLSL variables. */
 			static constexpr auto Fragment{"em_Fragment"};
 
 			/**
-			 * @brief Construct an offscreen framebuffer for post-rendering effects.
-			 * @param width The framebuffer width.
-			 * @param height The framebuffer height.
-			 * @param colorBufferBits The desired color precision.
-			 * @param depthBufferBits The desired depth precision.
-			 * @param stencilBufferBits The desired stencil precision.
-			 * @param samples The desired multisample multiplier.
+			 * @brief Push constants matching the GLSL pcPostProcessing layout.
 			 */
-			PostProcessor (unsigned int width, unsigned int height, unsigned int colorBufferBits, unsigned int depthBufferBits, unsigned int stencilBufferBits, unsigned int samples) noexcept;
+			struct PushConstants
+			{
+				float frameWidth;
+				float frameHeight;
+				float time;
+				float nearPlane;
+				float farPlane;
+				float tanHalfFovY;
+			};
+
+			/* Construction & configuration. */
 
 			/**
-			 * @brief Returns whether the post-processor is usable.
+			 * @brief Constructs the post-processor service.
+			 * @param renderer A reference to the graphics renderer.
+			 */
+			explicit PostProcessor (Renderer & renderer) noexcept;
+
+			/**
+			 * @brief Configures the post-processor over a render-target with explicit requirements.
+			 * @param renderTarget A reference to a render-target.
+			 * @param requiresHDR Whether the scene effects require HDR.
+			 * @param requiresDepth Whether the scene effects require depth.
+			 * @param requiresNormals Whether the scene effects require normals.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool usable () const noexcept;
+			bool configure (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, bool requiresHDR, bool requiresDepth, bool requiresNormals) noexcept;
+
+			/* Shared state. */
 
 			/**
-			 * @brief Sets a list of post-effect.
-			 * @param effectsList The list of shader effects.
+			 * @brief Enables or disables the post-processor.
+			 * @param state The desired enabled state.
 			 * @return void
 			 */
-			void setEffectsList (const Saphir::FramebufferEffectsList & effectsList) noexcept;
+			void
+			enable (bool state) noexcept
+			{
+				m_enabled = state;
+			}
 
 			/**
-			 * @brief Clears every effect.
-			 * @return void
-			 */
-			void clearEffects () noexcept;
-
-			/**
-			 * @brief Prepares the post-processor for drawing to the off-screen framebuffer.
-			 * @return void
-			 */
-			void begin () noexcept;
-
-			/**
-			 * @brief Release post-processor to let draw the off-screen framebuffer to view framebuffer.
-			 * @return void
-			 */
-			void end () noexcept;
-
-			/**
-			 * @brief Render the off-screen buffer with effects to the default framebuffer.
-			 * @param region The viewport area to blit/copies the render.
-			 * @return void
-			 */
-			void render (const Libs::Math::Space2D::AARectangle< uint32_t > & region) const noexcept;
-
-			/**
-			 * @brief Returns whether the framebuffer is using multisample.
+			 * @brief Returns whether the post-processor is enabled and ready to render.
+			 * @note All cancellation conditions are centralized here for simplicity.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool isMultisamplingEnabled () const noexcept;
+			bool
+			isEnabled () const noexcept
+			{
+				return m_enabled && this->usable();
+			}
+
+			/* Cached requirements — stored from configure(). */
 
 			/**
-			 * @brief Sets the background color for the framebuffer.
-			 * @param color A reference to a color.
+			 * @brief Returns the cached HDR requirement.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			cachedRequiresHDR () const noexcept
+			{
+				return m_cachedRequiresHDR;
+			}
+
+			/**
+			 * @brief Returns the cached depth requirement.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			cachedRequiresDepth () const noexcept
+			{
+				return m_cachedRequiresDepth;
+			}
+
+			/**
+			 * @brief Returns the cached normals requirement.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			cachedRequiresNormals () const noexcept
+			{
+				return m_cachedRequiresNormals;
+			}
+
+			/**
+			 * @brief Updates the cached requirements without reconfiguring GPU resources.
+			 * @note Call this before recreateSceneTarget() so it picks up correct formats.
+			 * @param requiresHDR Whether the scene effects require HDR.
+			 * @param requiresDepth Whether the scene effects require depth.
+			 * @param requiresNormals Whether the scene effects require normals.
 			 * @return void
 			 */
-			void setBackgroundColor (const Libs::PixelFactory::Color< float > & color) noexcept;
+			void
+			updateCachedRequirements (bool requiresHDR, bool requiresDepth, bool requiresNormals) noexcept
+			{
+				m_cachedRequiresHDR = requiresHDR;
+				m_cachedRequiresDepth = requiresDepth;
+				m_cachedRequiresNormals = requiresNormals;
+			}
+
+			/**
+			 * @brief Updates the near and far plane values for depth-based effects.
+			 * @param nearPlane The camera near plane distance.
+			 * @param farPlane The camera far plane distance.
+			 * @return void
+			 */
+			void
+			setClipPlanes (float nearPlane, float farPlane) noexcept
+			{
+				m_nearPlane = nearPlane;
+				m_farPlane = farPlane;
+			}
+
+			/* GPU execution. */
+
+			/**
+			 * @brief Records the blit from the swap chain color image into the post-processor's own grab pass.
+			 * @note Must be called between render pass 1 and render pass 2, outside any active render pass.
+			 * @param commandBuffer A reference to the active command buffer.
+			 * @return void
+			 */
+			void recordBlit (const Vulkan::CommandBuffer & commandBuffer) const noexcept;
+
+			/**
+			 * @brief Executes multi-pass scene effects outside any active render pass.
+			 * @note Must be called after recordBlit() and before the RP2 restart.
+			 * Each effect in the chain receives the output of the previous one.
+			 * After execution, the descriptor set is updated to point to the chain output.
+			 * @param commandBuffer A reference to the active command buffer.
+			 * @param stack The scene's post-process stack.
+			 * @return void
+			 */
+			void executeIndirectPostProcessEffects (const Vulkan::CommandBuffer & commandBuffer, const PostProcessStack & stack) noexcept;
+
+			/**
+			 * @brief Executes single-pass camera lens effects as a fullscreen quad.
+			 * @note Must be called inside an active render pass.
+			 * Generates or retrieves a cached shader program from the effects list,
+			 * then renders a fullscreen quad with that program.
+			 * @param commandBuffer A reference to the active command buffer.
+			 * @param lensEffects The camera's lens effects list (may be empty for passthrough).
+			 * @return void
+			 */
+			void executeDirectPostProcessEffects (const Vulkan::CommandBuffer & commandBuffer, const std::vector< std::shared_ptr< DirectPostProcessEffect > > & lensEffects) noexcept;
+
+			/* Static. */
+
+			/**
+			 * @brief Returns or creates the descriptor set layout for post-processing.
+			 * @param layoutManager A reference to the Vulkan layout manager.
+			 * @return std::shared_ptr< Vulkan::DescriptorSetLayout >
+			 */
+			[[nodiscard]]
+			static std::shared_ptr< Vulkan::DescriptorSetLayout > getDescriptorSetLayout (Vulkan::LayoutManager & layoutManager) noexcept;
 
 		private:
 
-			/**
-			 * @brief Resizes the framebuffer.
-			 * @param width The new width.
-			 * @param height The new height.
-			 * @return bool
-			 */
-			bool resize (unsigned int width, unsigned int height) noexcept;
+			/** @copydoc EmEn::ServiceInterface::onInitialize() */
+			bool onInitialize () noexcept override;
 
-			/**
-			 * @brief
-			 * @return bool
-			 */
-			bool loadGeometry () noexcept;
+			/** @copydoc EmEn::ServiceInterface::onTerminate() */
+			bool onTerminate () noexcept override;
 
-			/**
-			 * @brief Load the post-processor shading program.
-			 * @return bool
-			 */
-			bool loadProgram () noexcept;
+			/* Shared state. */
+			Renderer & m_renderer;
+			std::unique_ptr< GrabPass > m_grabPass;
+			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_descriptorSets;
+			std::shared_ptr< Geometry::IndexedVertexResource > m_quadGeometry;
+			float m_nearPlane{0.1F};
+			float m_farPlane{1000.0F};
+			bool m_enabled{false};
 
-			/**
-			 * @brief
-			 * @param width
-			 * @param height
-			 * @param colorBufferBits
-			 * @param depthBufferBits
-			 * @param stencilBufferBits
-			 * @param samples
-			 * @return bool
-			 */
-			bool buildFramebuffer (unsigned int width, unsigned int height, unsigned int colorBufferBits, unsigned int depthBufferBits, unsigned int stencilBufferBits, unsigned int samples) noexcept;
-
-			//Framebuffer m_framebuffer;
-			//std::shared_ptr< Vulkan::Texture2D > m_colorBuffer;
-			//RenderBufferObject m_extraBuffer;
-			std::unique_ptr< Geometry::IndexedVertexResource > m_geometry;
-			Saphir::FramebufferEffectsList m_effectsList;
-			//std::shared_ptr< Program > m_program;
-			//RasterizationMode m_rasterizationMode;
+			/* Cached requirements from configure(). */
+			bool m_cachedRequiresHDR{false};
+			bool m_cachedRequiresDepth{false};
+			bool m_cachedRequiresNormals{false};
 	};
 }

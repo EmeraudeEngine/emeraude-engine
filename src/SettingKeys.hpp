@@ -206,7 +206,7 @@ namespace EmEn
 			constexpr auto OverlayForceScaleKey{"Core/Video/Overlay/ForceScale"};
 			constexpr auto DefaultOverlayForceScale{false};
 			constexpr auto OverlayScaleXKey{"Core/Video/Overlay/ScaleX"};
-			constexpr auto OverlayScaleYKey{"Core/Video/Overlay/FScaleY"};
+			constexpr auto OverlayScaleYKey{"Core/Video/Overlay/ScaleY"};
 			constexpr auto DefaultOverlayScale{1.0F};
 
 			/* Framebuffer */

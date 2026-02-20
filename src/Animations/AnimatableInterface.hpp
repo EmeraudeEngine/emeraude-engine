@@ -109,11 +109,7 @@ namespace EmEn::Animations
 			 * @brief Clears every animation.
 			 * @return void
 			 */
-			void
-			clearAnimations () noexcept
-			{
-				m_animations.clear();
-			}
+			void clearAnimations () noexcept;
 
 		protected:
 

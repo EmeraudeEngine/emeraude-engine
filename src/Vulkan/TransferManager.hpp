@@ -227,6 +227,16 @@ namespace EmEn::Vulkan
 			[[nodiscard]]
 			bool clearDepthImage (Image & image, float depthValue, uint32_t stencilValue = 0) const noexcept;
 
+			/**
+			 * @brief Clears a color image to a specific RGBA value.
+			 * @note The image must be in VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL layout.
+			 * @param image A reference to the color image to clear.
+			 * @param clearColor The RGBA clear color values.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool clearColorImage (Image & image, VkClearColorValue clearColor) const noexcept;
+
 		private:
 
 			/** @copydoc EmEn::ServiceInterface::onInitialize() */

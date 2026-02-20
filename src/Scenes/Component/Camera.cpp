@@ -37,7 +37,6 @@ namespace EmEn::Scenes::Component
 	using namespace Libs;
 	using namespace Libs::Math;
 	using namespace Animations;
-	using namespace Saphir;
 	using namespace Graphics;
 
 	void
@@ -173,7 +172,7 @@ namespace EmEn::Scenes::Component
 	}
 
 	void
-	Camera::addLensEffect (const std::shared_ptr< FramebufferEffectInterface > & effect) noexcept
+	Camera::addLensEffect (const std::shared_ptr< DirectPostProcessEffect > & effect) noexcept
 	{
 		/* We don't want to notify an effect twice. */
 		if ( this->isLensEffectPresent(effect) )
@@ -181,15 +180,15 @@ namespace EmEn::Scenes::Component
 			return;
 		}
 
-		m_lensEffects.emplace(effect);
+		m_lensEffects.emplace_back(effect);
 
 		this->notify(LensEffectsChanged);
 	}
 
 	void
-	Camera::removeLensEffect (const std::shared_ptr< FramebufferEffectInterface > & effect) noexcept
+	Camera::removeLensEffect (const std::shared_ptr< DirectPostProcessEffect > & effect) noexcept
 	{
-		const auto lensIt = m_lensEffects.find(effect);
+		const auto lensIt = std::find(m_lensEffects.cbegin(), m_lensEffects.cend(), effect);
 
 		if ( lensIt == m_lensEffects.cend() )
 		{

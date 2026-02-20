@@ -347,6 +347,54 @@ namespace EmEn::Libs::VertexFactory
 			}
 
 			/**
+			 * @brief Sets cap texture coordinates multipliers.
+			 * @param xMultiplier The multiplication factor on the X axis.
+			 * @param yMultiplier The multiplication factor on the Y axis. Default Same as X.
+			 * @param zMultiplier The multiplication factor on the Z axis. Default Same as X.
+			 * @return void
+			 */
+			void
+			setCapTextureCoordinatesMultiplier (vertex_data_t xMultiplier, vertex_data_t yMultiplier = 0, vertex_data_t zMultiplier = 0) noexcept
+			{
+				m_capTextureCoordinatesMultiplier[Math::X] = std::abs(xMultiplier);
+				m_capTextureCoordinatesMultiplier[Math::Y] = Utility::isZero(yMultiplier) ? m_capTextureCoordinatesMultiplier[Math::X] : std::abs(yMultiplier);
+				m_capTextureCoordinatesMultiplier[Math::Z] = Utility::isZero(zMultiplier) ? m_capTextureCoordinatesMultiplier[Math::X] : std::abs(zMultiplier);
+			}
+
+			/**
+			 * @brief Sets cap texture coordinates multipliers.
+			 * @param multiplier A reference to a vector.
+			 * @return void
+			 */
+			void
+			setCapTextureCoordinatesMultiplier (const Math::Vector< 2, vertex_data_t > & multiplier) noexcept
+			{
+				this->setCapTextureCoordinatesMultiplier(multiplier[Math::X], multiplier[Math::Y]);
+			}
+
+			/**
+			 * @brief Sets cap texture coordinates multipliers.
+			 * @param multiplier A reference to a vector.
+			 * @return void
+			 */
+			void
+			setCapTextureCoordinatesMultiplier (const Math::Vector< 3, vertex_data_t > & multiplier) noexcept
+			{
+				this->setCapTextureCoordinatesMultiplier(multiplier[Math::X], multiplier[Math::Y], multiplier[Math::Z]);
+			}
+
+			/**
+			 * @brief Returns the cap texture coordinates multiplier.
+			 * @return const Math::Vector< 3, vertex_data_t > &
+			 */
+			[[nodiscard]]
+			const Math::Vector< 3, vertex_data_t > &
+			capTextureCoordinatesMultiplier () const noexcept
+			{
+				return m_capTextureCoordinatesMultiplier;
+			}
+
+			/**
 			 * @brief Enables the data economy.
 			 * @param state The state.
 			 * @return void
@@ -422,6 +470,7 @@ namespace EmEn::Libs::VertexFactory
 				m_globalVertexColor = {0.5, 0.5, 0.5, 1.0};
 				m_globalNormal = {0.0, 0.0, -1.0};
 				m_textureCoordinatesMultiplier = {1.0, 1.0, 1.0};
+				m_capTextureCoordinatesMultiplier = {1.0, 1.0, 1.0};
 
 				m_normalsEnabled = false;
 				m_textureCoordinatesEnabled = false;
@@ -468,6 +517,7 @@ namespace EmEn::Libs::VertexFactory
 					"Center at bottom : " << ( obj.m_centerAtBottom ? "Yes" : "No" ) << "\n"
 					"Uniform texture coordinates : " << ( obj.m_uniformTextureCoordinates ? "Yes" : "No" ) << "\n"
 					"UVW multipliers : " << obj.m_textureCoordinatesMultiplier << "\n"
+					"Cap UVW multipliers : " << obj.m_capTextureCoordinatesMultiplier << "\n"
 				;
 			}
 
@@ -492,6 +542,7 @@ namespace EmEn::Libs::VertexFactory
 			Math::Vector< 4, vertex_data_t > m_globalVertexColor{0.5, 0.5, 0.5, 1.0};
 			Math::Vector< 3, vertex_data_t > m_globalNormal{0.0, 0.0, -1.0};
 			Math::Vector< 3, vertex_data_t > m_textureCoordinatesMultiplier{1.0, 1.0, 1.0};
+			Math::Vector< 3, vertex_data_t > m_capTextureCoordinatesMultiplier{1.0, 1.0, 1.0};
 			bool m_normalsEnabled{false};
 			bool m_textureCoordinatesEnabled{false};
 			bool m_vertexColorsEnabled{false};

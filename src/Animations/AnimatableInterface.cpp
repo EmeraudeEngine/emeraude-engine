@@ -27,6 +27,8 @@
 #include "AnimatableInterface.hpp"
 
 /* Local inclusions. */
+#include <ranges>
+
 #include "Tracer.hpp"
 
 namespace EmEn::Animations
@@ -57,5 +59,16 @@ namespace EmEn::Animations
 				TraceError{TracerTag} << "Unable to play animation '" << animationID << "' !";
 			}
 		}
+	}
+
+	void
+	AnimatableInterface::clearAnimations () noexcept
+	{
+		for ( const auto & animation : m_animations | std::views::values )
+		{
+			animation->pause();
+		}
+
+		m_animations.clear();
 	}
 }

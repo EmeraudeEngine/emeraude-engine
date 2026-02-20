@@ -37,11 +37,24 @@
 #include "Libs/Time/Elapsed/PrintScopeRealTime.hpp"
 #include "Vulkan/SwapChain.hpp"
 #include "Vulkan/DescriptorPool.hpp"
+#include "PostProcessStack.hpp"
 #include "Scenes/Scene.hpp"
+#include "Scenes/Component/Camera.hpp"
 #include "Overlay/Manager.hpp"
 #include "PrimaryServices.hpp"
+#include "DummyColorProjectionTexture.hpp"
 #include "DummyShadowTexture.hpp"
 #include "GrabPass.hpp"
+#include "SceneRenderTarget.hpp"
+#include "Geometry/Interface.hpp"
+#include "TextureResource/Abstract.hpp"
+#include "Material/Interface.hpp"
+
+namespace
+{
+	/** @brief Empty lens effects list for the passthrough shader case. */
+	static const std::vector< std::shared_ptr< EmEn::Graphics::DirectPostProcessEffect > > EmptyLensEffects{};
+}
 
 namespace EmEn::Graphics
 {
@@ -146,8 +159,34 @@ namespace EmEn::Graphics
 		{
 			m_primarySemaphores.emplace_back(handle);
 		}
+		else
+		{
+			m_secondarySemaphores.emplace_back(handle);
+		}
+	}
 
-		m_secondarySemaphores.emplace_back(handle);
+	Renderer::Renderer (PrimaryServices & primaryServices, Vulkan::Instance & instance, Window & window) noexcept
+		: ServiceInterface{ClassId},
+		ControllableTrait{ClassId},
+		m_primaryServices{primaryServices},
+		m_vulkanInstance{instance},
+		m_window{window},
+		m_shaderManager{primaryServices},
+		m_sharedUBOManager{*this},
+		m_bindlessTextureManager{*this},
+		m_debugMode{m_vulkanInstance.isDebugModeEnabled()}
+	{
+		/* Framebuffer clear color value. */
+		this->setClearColor(Libs::PixelFactory::Black);
+
+		/* Framebuffer clear depth/stencil values. */
+		this->setClearDepthStencilValues(1.0F, 0);
+
+		this->observe(&m_window);
+
+		Geometry::Interface::s_graphicsRenderer = this;
+		TextureResource::Abstract::s_graphicsRenderer = this;
+		Material::Interface::s_graphicsRenderer = this;
 	}
 
 	bool
@@ -235,6 +274,16 @@ namespace EmEn::Graphics
 			return false;
 		}
 
+		/* Initialize post-processor. */
+		if ( m_postProcessor.initialize(m_subServicesEnabled) )
+		{
+			TraceSuccess{ClassId} << m_postProcessor.name() << " service up!";
+		}
+		else
+		{
+			TraceWarning{ClassId} << m_postProcessor.name() << " service failed or disabled at startup!";
+		}
+
 		/* Initialize video input. */
 		if ( m_externalInput.initialize(m_subServicesEnabled) )
 		{
@@ -261,11 +310,12 @@ namespace EmEn::Graphics
 	void
 	Renderer::createDefaultResources (Resources::Manager & resources) noexcept
 	{
+		/* NOTE: As a default resource, we use a synchronous loading here. */
 		m_defaultTextureCubemap = resources.container< TextureResource::TextureCubemap >()
-			->getOrCreateResource(DefaultTextureCubemapName, [&resources] (TextureResource::TextureCubemap & texture) {
+			->getOrCreateResourceSync(DefaultTextureCubemapName, [&resources] (TextureResource::TextureCubemap & texture) {
 				/* Create a small 16x16 black cubemap. */
 				const auto blackCubemap = resources.container< CubemapResource >()
-					->getOrCreateResource(DefaultTextureCubemapName, [] (CubemapResource & cubemap) {
+					->getOrCreateResourceSync(DefaultTextureCubemapName, [] (CubemapResource & cubemap) {
 						return cubemap.load(Black, 16);
 					});
 
@@ -299,6 +349,25 @@ namespace EmEn::Graphics
 
 			m_dummyShadowTextureCube.reset();
 		}
+
+		/* Create dummy color projection textures for unified descriptor set layouts. */
+		m_dummyColorProjectionTexture2D = std::make_shared< DummyColorProjectionTexture >(false);
+
+		if ( !m_dummyColorProjectionTexture2D->create(*this) )
+		{
+			TraceError{ClassId} << "Unable to create the dummy 2D color projection texture !";
+
+			m_dummyColorProjectionTexture2D.reset();
+		}
+
+		m_dummyColorProjectionTextureCube = std::make_shared< DummyColorProjectionTexture >(true);
+
+		if ( !m_dummyColorProjectionTextureCube->create(*this) )
+		{
+			TraceError{ClassId} << "Unable to create the dummy cubemap color projection texture !";
+
+			m_dummyColorProjectionTextureCube.reset();
+		}
 	}
 
 	void
@@ -308,6 +377,18 @@ namespace EmEn::Graphics
 		{
 			m_grabPass->destroy();
 			m_grabPass.reset();
+		}
+
+		if ( m_dummyColorProjectionTextureCube != nullptr )
+		{
+			m_dummyColorProjectionTextureCube->destroy();
+			m_dummyColorProjectionTextureCube.reset();
+		}
+
+		if ( m_dummyColorProjectionTexture2D != nullptr )
+		{
+			m_dummyColorProjectionTexture2D->destroy();
+			m_dummyColorProjectionTexture2D.reset();
 		}
 
 		if ( m_dummyShadowTextureCube != nullptr )
@@ -365,6 +446,20 @@ namespace EmEn::Graphics
 		else
 		{
 			Tracer::fatal(ClassId, "The Vulkan instance is not usable to select a graphics device!");
+
+			return false;
+		}
+
+		/* NOTE: Acquire a fixed graphics queue for rendering.
+		 * Using the same queue for ALL frames ensures that binary semaphores
+		 * (shared across frame scopes, e.g. shadow maps) are properly serialized.
+		 * With round-robin queue selection, concurrent frame scopes could use
+		 * different queues, causing undefined behavior on shared binary semaphores. */
+		m_graphicsQueue = m_device->getGraphicsQueue(QueuePriority::High);
+
+		if ( m_graphicsQueue == nullptr )
+		{
+			Tracer::fatal(ClassId, "Unable to acquire a graphics queue for rendering!");
 
 			return false;
 		}
@@ -534,6 +629,16 @@ namespace EmEn::Graphics
 			}
 		}
 
+		/* Configure the post-processor now that the descriptor pool and swap chain are ready.
+		 * At this point no scene is loaded yet, so requirements are all false (passthrough). */
+		if ( m_swapChain != nullptr && m_postProcessor.usable() )
+		{
+			if ( !m_postProcessor.configure(m_swapChain, false, false, false) )
+			{
+				TraceError{ClassId} << "Unable to configure the post-processor !";
+			}
+		}
+
 		return true;
 	}
 
@@ -599,6 +704,7 @@ namespace EmEn::Graphics
 		this->destroyRenderingSystem();
 
 		m_swapChain.reset();
+		m_sceneTarget.reset();
 		m_windowLessView.reset();
 
 		/* Terminate sub-services. */
@@ -646,6 +752,164 @@ namespace EmEn::Graphics
 		}
 
 		return nullptr;
+	}
+
+	VkFormat
+	Renderer::swapChainColorFormat () const noexcept
+	{
+		if ( m_swapChain == nullptr )
+		{
+			return VK_FORMAT_UNDEFINED;
+		}
+
+		return m_swapChain->createInfo().imageFormat;
+	}
+
+	VkFormat
+	Renderer::swapChainDepthStencilFormat () const noexcept
+	{
+		if ( m_swapChain == nullptr )
+		{
+			return VK_FORMAT_UNDEFINED;
+		}
+
+		return m_swapChain->depthStencilFormat();
+	}
+
+	std::shared_ptr< Vulkan::Image >
+	Renderer::currentSwapChainDepthStencilImage () const noexcept
+	{
+		if ( m_swapChain != nullptr )
+		{
+			return m_swapChain->currentDepthStencilImage();
+		}
+
+		return nullptr;
+	}
+
+	bool
+	Renderer::needsInternalTarget () const noexcept
+	{
+		/* The internal scene target is needed when:
+		 * - Windowless mode (always needs an internal framebuffer)
+		 * - Post-processor is active (HDR float16 pipeline)
+		 * - MSAA is active (future phase) */
+		if ( m_windowLess )
+		{
+			return true;
+		}
+
+		if ( m_postProcessor.isEnabled() )
+		{
+			return true;
+		}
+
+		return false;
+	}
+
+	std::shared_ptr< Vulkan::Image >
+	Renderer::currentSceneColorImage () const noexcept
+	{
+		if ( m_sceneTarget != nullptr )
+		{
+			return m_sceneTarget->colorImage();
+		}
+
+		return this->currentSwapChainColorImage();
+	}
+
+	std::shared_ptr< Vulkan::Image >
+	Renderer::currentSceneDepthImage () const noexcept
+	{
+		if ( m_sceneTarget != nullptr )
+		{
+			return m_sceneTarget->depthStencilImage();
+		}
+
+		return this->currentSwapChainDepthStencilImage();
+	}
+
+	std::shared_ptr< Vulkan::Image >
+	Renderer::currentSceneNormalsImage () const noexcept
+	{
+		if ( m_sceneTarget != nullptr )
+		{
+			return m_sceneTarget->normalsImage();
+		}
+
+		return nullptr;
+	}
+
+	bool
+	Renderer::recreateSceneTarget () noexcept
+	{
+		if ( m_sceneTarget != nullptr )
+		{
+			m_sceneTarget->destroyRenderTarget();
+			m_sceneTarget.reset();
+		}
+
+		if ( !m_postProcessor.isEnabled() && !m_windowLess )
+		{
+			return true;
+		}
+
+		/* Determine color format: float16 for HDR, swapchain format otherwise. */
+		const auto colorFormat = m_postProcessor.cachedRequiresHDR()
+			? VK_FORMAT_R16G16B16A16_SFLOAT
+			: this->swapChainColorFormat();
+
+		const auto depthFormat = this->swapChainDepthStencilFormat();
+
+		uint32_t width;
+		uint32_t height;
+
+		if ( m_swapChain != nullptr )
+		{
+			const auto & ext = m_swapChain->extent();
+			width = ext.width;
+			height = ext.height;
+		}
+		else
+		{
+			width = m_window.state().windowWidth;
+			height = m_window.state().windowHeight;
+		}
+
+		/* Normals buffer format for MRT: view-space normals for SSAO and SSR.
+		 * Only allocated when the effect chain actually needs normals. */
+		const auto normalsFormat = m_postProcessor.cachedRequiresNormals()
+			? VK_FORMAT_R16G16B16A16_SFLOAT
+			: VK_FORMAT_UNDEFINED;
+
+		m_sceneTarget = std::make_shared< SceneRenderTarget >(
+			"SceneRenderTarget",
+			width, height,
+			colorFormat, normalsFormat, depthFormat,
+			m_primaryServices.settings().getOrSetDefault< float >(GraphicsViewDistanceKey, DefaultGraphicsViewDistance)
+		);
+
+		if ( !m_sceneTarget->createRenderTarget(*this) )
+		{
+			TraceError{ClassId} << "Unable to create the scene render target!";
+
+			m_sceneTarget.reset();
+
+			return false;
+		}
+
+		/* Share the main render target's view matrices (camera UBO) with the scene target.
+		 * The scene target renders the same camera view, avoiding a separate UBO. */
+		const auto mainTarget = this->mainRenderTarget();
+
+		if ( mainTarget != nullptr )
+		{
+			m_sceneTarget->setSourceViewMatrices(mainTarget->viewMatrices());
+		}
+
+		TraceSuccess{ClassId} << "Scene render target created (" << width << "x" << height << ", format: " << (m_postProcessor.cachedRequiresHDR() ? "R16G16B16A16_SFLOAT" : "swapchain") << ").";
+
+		return true;
 	}
 
 	std::shared_ptr< Sampler >
@@ -818,18 +1082,20 @@ namespace EmEn::Graphics
 			if ( this->isShadowMapsEnabled() )
 			{
 				/* [VULKAN-SHADOW] */
-				this->renderShadowMaps(currentFrameScope, *scene);
+				this->renderShadowMaps(currentFrameScope, *scene, m_graphicsQueue);
 			}
 
 			if ( this->isRenderToTexturesEnabled() )
 			{
-				this->renderRenderToTextures(currentFrameScope, *scene);
+				this->renderRenderToTextures(currentFrameScope, *scene, m_graphicsQueue);
 			}
 
-			//this->renderViews(currentFrameScope, *scene);
-		}
+			//this->renderViews(currentFrameScope, *scene, m_graphicsQueue);
 
-		const auto * queue = this->device()->getGraphicsQueue(QueuePriority::High);
+			/* Forward any unconsumed primary semaphores (shadow maps) to secondary,
+			 * so the final submit correctly waits on them. */
+			currentFrameScope.promotePrimaryToSecondary();
+		}
 
 		/* Then we need the command buffer linked to this image by its index. */
 		const auto commandBuffer = currentFrameScope.getCommandBuffer(m_windowLessView.get());
@@ -839,7 +1105,7 @@ namespace EmEn::Graphics
 			return;
 		}
 
-		commandBuffer->beginRenderPass(*m_windowLessView->framebuffer(), m_windowLessView->renderArea(), m_clearColors, VK_SUBPASS_CONTENTS_INLINE);
+		commandBuffer->beginRenderPass(*m_windowLessView->framebuffer(), m_windowLessView->renderArea(), m_swapChainClearColors, VK_SUBPASS_CONTENTS_INLINE);
 
 		/* First, render the scene. */
 		if ( scene != nullptr )
@@ -872,7 +1138,7 @@ namespace EmEn::Graphics
 			VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT
 		);
 
-		const auto submitResult = queue->submit(
+		const auto submitResult = m_graphicsQueue->submit(
 			*commandBuffer,
 			SynchInfo{}
 				.waits(currentFrameScope.secondarySemaphores(), waitStages)
@@ -955,6 +1221,27 @@ namespace EmEn::Graphics
 			return;
 		}
 
+		/* Clean up deferred resources once all in-flight frames have completed.
+		 * After framesInFlight() fence waits, every command buffer that could
+		 * reference the retired resources has finished execution. */
+		if ( !m_retiredSceneTargets.empty() )
+		{
+			if ( m_retiredFrameCountdown > 0 )
+			{
+				--m_retiredFrameCountdown;
+			}
+
+			if ( m_retiredFrameCountdown == 0 )
+			{
+				for ( auto & target : m_retiredSceneTargets )
+				{
+					target->destroyRenderTarget();
+				}
+
+				m_retiredSceneTargets.clear();
+			}
+		}
+
 		/* 3. Get the new frame to render to. */
 		const auto frameIndexOpt = m_swapChain->acquireNextImage(currentFrameScope.imageAvailableSemaphore(), m_timeout);
 
@@ -982,15 +1269,19 @@ namespace EmEn::Graphics
 			if ( this->isShadowMapsEnabled() )
 			{
 				/* [VULKAN-SHADOW] */
-				this->renderShadowMaps(currentFrameScope, *scene);
+				this->renderShadowMaps(currentFrameScope, *scene, m_graphicsQueue);
 			}
 
 			if ( this->isRenderToTexturesEnabled() )
 			{
-				this->renderRenderToTextures(currentFrameScope, *scene);
+				this->renderRenderToTextures(currentFrameScope, *scene, m_graphicsQueue);
 			}
 
-			//this->renderViews(currentFrameScope, *scene);
+			//this->renderViews(currentFrameScope, *scene, m_graphicsQueue);
+
+			/* Forward any unconsumed primary semaphores (shadow maps) to secondary,
+			 * so the final submit correctly waits on them. */
+			currentFrameScope.promotePrimaryToSecondary();
 		}
 
 		/* Then we need the command buffer linked to this image by its index. */
@@ -1001,48 +1292,50 @@ namespace EmEn::Graphics
 			return;
 		}
 
-		/* Prepare scene render lists once (frustum culling, Z-sorting). */
-		const bool sceneHasContent = scene != nullptr && scene->prepareRender(m_swapChain);
-
-		/* Render pass 1: Scene rendering (clears buffers). */
-		commandBuffer->beginRenderPass(*m_swapChain->framebuffer(), m_swapChain->renderArea(), m_clearColors, VK_SUBPASS_CONTENTS_INLINE);
-
-		/* Render opaque and translucent objects in the MSAA render pass. */
-		if ( sceneHasContent )
+		/* Lazy creation/destruction of the internal scene target based on post-processor state.
+		 * When PP is enabled: create the HDR scene target and reconfigure PP with it.
+		 * When PP is disabled: destroy the scene target and return to direct swapchain rendering. */
+		if ( m_postProcessor.isEnabled() && m_sceneTarget == nullptr )
 		{
-			scene->renderOpaque(m_swapChain, *commandBuffer);
-			scene->renderTranslucent(m_swapChain, *commandBuffer);
+			/* Pre-update cached requirements so recreateSceneTarget() picks up
+			 * correct formats (HDR color, normals MRT) before creating the target. */
+			const auto * stack = (scene != nullptr) ? scene->postProcessStack() : nullptr;
 
-			if ( m_TBNSpaceRenderingEnabled )
+			m_postProcessor.updateCachedRequirements(
+				stack != nullptr && stack->requiresHDR(),
+				stack != nullptr && stack->requiresDepth(),
+				stack != nullptr && stack->requiresNormals());
+
+			if ( this->recreateSceneTarget() )
 			{
-				scene->renderTBNSpace(m_swapChain, *commandBuffer);
+				if ( !m_postProcessor.configure(
+					std::static_pointer_cast< RenderTarget::Abstract >(m_sceneTarget),
+					stack != nullptr && stack->requiresHDR(),
+					stack != nullptr && stack->requiresDepth(),
+					stack != nullptr && stack->requiresNormals()) )
+				{
+					TraceError{ClassId} << "Unable to reconfigure the post-processor with the scene target!";
+				}
 			}
 		}
-
-		commandBuffer->endRenderPass();
-
-		/* Grab pass: capture the resolved scene into a sampleable texture (same frame). */
-		if ( m_grabPassEnabled && m_grabPass != nullptr && m_grabPass->isCreated() )
+		else if ( !m_postProcessor.isEnabled() && m_sceneTarget != nullptr )
 		{
-			const auto * srcDepth = m_grabPass->hasDepth() ? m_swapChain->currentDepthStencilImage().get() : nullptr;
-			m_grabPass->recordBlit(*commandBuffer, *m_swapChain->currentColorImage(), srcDepth);
+			/* Defer destruction: move the scene target to a retirement queue so that
+			 * in-flight command buffers finish referencing its resources (framebuffer,
+			 * render pass, images) before they are destroyed. */
+			m_retiredSceneTargets.emplace_back(std::move(m_sceneTarget));
+			m_retiredFrameCountdown = static_cast< uint32_t >(m_rendererFrameScope.size());
 		}
 
-		/* Render pass 2: Post-processing and overlay (preserves scene content).
-		 * TranslucentGB objects render here, after the grab pass blit, so they
-		 * can sample the captured scene through the grab pass texture. */
-		commandBuffer->beginRenderPass(*m_swapChain->postProcessFramebuffer(), m_swapChain->renderArea(), m_clearColors, VK_SUBPASS_CONTENTS_INLINE);
-
-		/* Render translucent grab-pass objects (refraction, etc.). */
-		if ( sceneHasContent && scene->hasTranslucentGBObjects() )
+		/* Dispatch to the appropriate rendering strategy. */
+		if ( m_sceneTarget != nullptr && m_postProcessor.isEnabled() )
 		{
-			scene->renderTranslucentGB(m_swapChain, *commandBuffer);
+			this->renderFrameWithInternal(scene, overlayManager, currentFrameScope, commandBuffer);
 		}
-
-		/* Render the overlay system over the scene. */
-		overlayManager.render(m_swapChain, *commandBuffer);
-
-		commandBuffer->endRenderPass();
+		else
+		{
+			this->renderFrameDirect(scene, overlayManager, currentFrameScope, commandBuffer);
+		}
 
 		if ( !commandBuffer->end() )
 		{
@@ -1051,13 +1344,11 @@ namespace EmEn::Graphics
 
 		/* 6. Submit the work on the GPU and present. */
 		{
-			const auto * queue = this->device()->getGraphicsQueue(QueuePriority::High);
-
 			/* Build wait stages: FRAGMENT_SHADER for render-to-textures, COLOR_ATTACHMENT_OUTPUT for swap-chain */
 			StaticVector< VkPipelineStageFlags, 16 > waitStages;
 
 			/* All render-to-texture semaphores wait at FRAGMENT_SHADER stage (when we sample the texture) */
-			for ( size_t i = 0; i < currentFrameScope.secondarySemaphores().size(); ++i )
+			for ( size_t semaphoreIndex = 0; semaphoreIndex < currentFrameScope.secondarySemaphores().size(); ++semaphoreIndex )
 			{
 				waitStages.emplace_back(VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
 			}
@@ -1068,7 +1359,7 @@ namespace EmEn::Graphics
 
 			auto renderFinishedSemaphoreHandle = currentFrameScope.renderFinishedSemaphore()->handle();
 
-			if ( !queue->submit(*commandBuffer, SynchInfo{}
+			if ( !m_graphicsQueue->submit(*commandBuffer, SynchInfo{}
 					.waits(currentFrameScope.secondarySemaphores(), waitStages)
 					.signals({&renderFinishedSemaphoreHandle, 1})
 					.withFence(currentFrameScope.inFlightFence()->handle())
@@ -1077,7 +1368,7 @@ namespace EmEn::Graphics
 				return;
 			}
 
-			m_swapChain->present(frameIndex, queue, renderFinishedSemaphoreHandle);
+			m_swapChain->present(frameIndex, m_graphicsQueue, renderFinishedSemaphoreHandle);
 		}
 
 		m_currentFrameIndex = (m_currentFrameIndex + 1) % m_rendererFrameScope.size();
@@ -1109,10 +1400,153 @@ namespace EmEn::Graphics
 	}
 
 	void
-	Renderer::renderShadowMaps (RendererFrameScope & currentFrameScope, Scenes::Scene & scene) const noexcept
+	Renderer::renderFrameDirect (const std::shared_ptr< Scenes::Scene > & scene, const Overlay::Manager & overlayManager, RendererFrameScope & /*currentFrameScope*/, const std::shared_ptr< CommandBuffer > & commandBuffer) noexcept
 	{
-		const auto * queue = this->device()->getGraphicsQueue(QueuePriority::High);
+		/* Prepare scene render lists once (frustum culling, Z-sorting). */
+		const bool sceneHasContent = scene != nullptr && scene->prepareRender(m_swapChain);
 
+		/* Render pass 1: Scene rendering (clears buffers). */
+		commandBuffer->beginRenderPass(*m_swapChain->framebuffer(), m_swapChain->renderArea(), m_swapChainClearColors, VK_SUBPASS_CONTENTS_INLINE);
+
+		/* Render opaque and translucent objects in the MSAA render pass. */
+		if ( sceneHasContent )
+		{
+			scene->renderOpaque(m_swapChain, *commandBuffer);
+			scene->renderTranslucent(m_swapChain, *commandBuffer);
+
+			if ( m_TBNSpaceRenderingEnabled )
+			{
+				scene->renderTBNSpace(m_swapChain, *commandBuffer);
+			}
+		}
+
+		commandBuffer->endRenderPass();
+
+		/* Grab pass: capture the resolved scene into a sample-able texture (same frame). */
+		if ( m_grabPassEnabled && m_grabPass != nullptr && m_grabPass->isCreated() )
+		{
+			const auto * srcDepth = m_grabPass->hasDepth() ? m_swapChain->currentDepthStencilImage().get() : nullptr;
+
+			m_grabPass->recordBlit(*commandBuffer, *m_swapChain->currentColorImage(), srcDepth);
+		}
+
+		/* Render pass 2: Post-processing and overlay (preserves scene content).
+		 * TranslucentGB objects render here, after the grab pass blit, so they
+		 * can sample the captured scene through the grab pass texture. */
+		commandBuffer->beginRenderPass(*m_swapChain->postProcessFramebuffer(), m_swapChain->renderArea(), m_swapChainClearColors, VK_SUBPASS_CONTENTS_INLINE);
+
+		/* Render translucent grab-pass objects (refraction, etc.). */
+		if ( sceneHasContent && scene->hasTranslucentGBObjects() )
+		{
+			scene->renderTranslucentGB(m_swapChain, *commandBuffer);
+		}
+
+		/* Post-processing: end RP2, blit the complete scene, restart RP2, draw fullscreen quad. */
+		if ( m_postProcessor.isEnabled() )
+		{
+			commandBuffer->endRenderPass();
+
+			m_postProcessor.recordBlit(*commandBuffer);
+
+			/* Process scene effects (multi-pass). */
+			if ( scene != nullptr && scene->hasPostProcessStack() )
+			{
+				m_postProcessor.executeIndirectPostProcessEffects(*commandBuffer, *scene->postProcessStack());
+			}
+
+			commandBuffer->beginRenderPass(*m_swapChain->postProcessFramebuffer(), m_swapChain->renderArea(), m_swapChainClearColors, VK_SUBPASS_CONTENTS_INLINE);
+
+			/* Process camera lens effects (single-pass). */
+			const auto * camera = (scene != nullptr) ? scene->activeCamera() : nullptr;
+			const auto & lensEffects = (camera != nullptr) ? camera->lensEffects() : EmptyLensEffects;
+
+			m_postProcessor.executeDirectPostProcessEffects(*commandBuffer, lensEffects);
+		}
+
+		/* Render the overlay system over the scene. */
+		overlayManager.render(m_swapChain, *commandBuffer);
+
+		commandBuffer->endRenderPass();
+	}
+
+	void
+	Renderer::renderFrameWithInternal (const std::shared_ptr< Scenes::Scene > & scene, const Overlay::Manager & overlayManager, RendererFrameScope & /*currentFrameScope*/, const std::shared_ptr< CommandBuffer > & commandBuffer) noexcept
+	{
+		/* Prepare scene render lists once (frustum culling, Z-sorting)
+		 * against the internal scene target (HDR float16 framebuffer). */
+		const bool sceneHasContent = scene != nullptr && scene->prepareRender(m_sceneTarget);
+
+		/* RP-scene (internal target, CLEAR): Render opaque and translucent objects. */
+		commandBuffer->beginRenderPass(*m_sceneTarget->framebuffer(), m_sceneTarget->renderArea(), m_clearColors, VK_SUBPASS_CONTENTS_INLINE);
+
+		if ( sceneHasContent )
+		{
+			scene->renderOpaque(m_sceneTarget, *commandBuffer);
+			scene->renderTranslucent(m_sceneTarget, *commandBuffer);
+
+			if ( m_TBNSpaceRenderingEnabled )
+			{
+				scene->renderTBNSpace(m_sceneTarget, *commandBuffer);
+			}
+		}
+
+		commandBuffer->endRenderPass();
+
+		/* Grab pass: capture the scene from the internal target for TranslucentGB refraction.
+		 * The internal target's color image is in COLOR_ATTACHMENT_OPTIMAL (matching GrabPass expectations). */
+		if ( m_grabPassEnabled && m_grabPass != nullptr && m_grabPass->isCreated() )
+		{
+			const auto * srcDepth = m_grabPass->hasDepth() ? m_sceneTarget->depthStencilImage().get() : nullptr;
+
+			m_grabPass->recordBlit(*commandBuffer, *m_sceneTarget->colorImage(), srcDepth);
+		}
+
+		/* RP-scene-load (internal target, LOAD): TranslucentGB objects render after the grab pass
+		 * so they can sample the captured scene for refraction effects. */
+		if ( sceneHasContent && scene->hasTranslucentGBObjects() )
+		{
+			commandBuffer->beginRenderPass(*m_sceneTarget->postProcessFramebuffer(), m_sceneTarget->renderArea(), m_clearColors, VK_SUBPASS_CONTENTS_INLINE);
+
+			scene->renderTranslucentGB(m_sceneTarget, *commandBuffer);
+
+			commandBuffer->endRenderPass();
+		}
+
+		/* Post-processor: blit the complete scene (with TranslucentGB) into PP's grab pass.
+		 * The internal target's color is in COLOR_ATTACHMENT_OPTIMAL. */
+		m_postProcessor.recordBlit(*commandBuffer);
+
+		/* Process scene effects (multi-pass). */
+		if ( scene != nullptr && scene->hasPostProcessStack() )
+		{
+			m_postProcessor.executeIndirectPostProcessEffects(*commandBuffer, *scene->postProcessStack());
+		}
+
+		/* Establish swapchain image layouts by running RP1 (CLEAR) with no draw calls.
+		 * This transitions swapchain color from UNDEFINED to COLOR_ATTACHMENT_OPTIMAL
+		 * and depth from UNDEFINED to DEPTH_STENCIL_ATTACHMENT_OPTIMAL. */
+		commandBuffer->beginRenderPass(*m_swapChain->framebuffer(), m_swapChain->renderArea(), m_swapChainClearColors, VK_SUBPASS_CONTENTS_INLINE);
+		commandBuffer->endRenderPass();
+
+		/* RP-final (swapchain postProcess, LOAD): Draw the PP fullscreen quad + overlay.
+		 * This transitions the swapchain color to PRESENT_SRC_KHR for presentation. */
+		commandBuffer->beginRenderPass(*m_swapChain->postProcessFramebuffer(), m_swapChain->renderArea(), m_swapChainClearColors, VK_SUBPASS_CONTENTS_INLINE);
+
+		/* Process camera lens effects (single-pass). */
+		const auto * camera = (scene != nullptr) ? scene->activeCamera() : nullptr;
+		const auto & lensEffects = (camera != nullptr) ? camera->lensEffects() : EmptyLensEffects;
+
+		m_postProcessor.executeDirectPostProcessEffects(*commandBuffer, lensEffects);
+
+		/* Render the overlay system over the post-processed scene. */
+		overlayManager.render(m_swapChain, *commandBuffer);
+
+		commandBuffer->endRenderPass();
+	}
+
+	void
+	Renderer::renderShadowMaps (RendererFrameScope & currentFrameScope, Scenes::Scene & scene, const Queue * queue) const noexcept
+	{
 		scene.forEachRenderToShadowMap([&] (const std::shared_ptr< RenderTarget::Abstract > & shadowMap) {
 			if ( !shadowMap->isReadyForRendering() )
 			{
@@ -1163,9 +1597,9 @@ namespace EmEn::Graphics
 	}
 
 	void
-	Renderer::renderRenderToTextures (RendererFrameScope & currentFrameScope, Scenes::Scene & scene) const noexcept
+	Renderer::renderRenderToTextures (RendererFrameScope & currentFrameScope, Scenes::Scene & scene, const Queue * queue) const noexcept
 	{
-		const auto * queue = this->device()->getGraphicsQueue(QueuePriority::High);
+		bool primaryConsumed = false;
 
 		scene.forEachRenderToTexture([&] (const std::shared_ptr< RenderTarget::Abstract > & renderToTexture)
 		{
@@ -1185,7 +1619,7 @@ namespace EmEn::Graphics
 				return;
 			}
 
-			commandBuffer->beginRenderPass(*renderToTexture->framebuffer(), renderToTexture->renderArea(), m_clearColors, VK_SUBPASS_CONTENTS_INLINE);
+			commandBuffer->beginRenderPass(*renderToTexture->framebuffer(), renderToTexture->renderArea(), m_swapChainClearColors, VK_SUBPASS_CONTENTS_INLINE);
 
 			if ( scene.prepareRender(renderToTexture) )
 			{
@@ -1205,15 +1639,32 @@ namespace EmEn::Graphics
 
 			const auto signalSemaphoreHandle = renderToTexture->semaphore()->handle();
 
-			const auto & waitSemaphores = currentFrameScope.primarySemaphores();
-			const StaticVector< VkPipelineStageFlags, 16 > waitStages(waitSemaphores.size(), VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+			bool submitted;
 
-			const auto submitted = queue->submit(
-				*commandBuffer,
-				SynchInfo{}
-					.waits(waitSemaphores, waitStages)
-					.signals({&signalSemaphoreHandle, 1})
-			);
+			/* Only the first render-to-texture waits on primary (shadow map) semaphores.
+			 * Binary semaphores can only be waited on once per signal. */
+			if ( !primaryConsumed && !currentFrameScope.primarySemaphores().empty() )
+			{
+				const auto & waitSemaphores = currentFrameScope.primarySemaphores();
+				const StaticVector< VkPipelineStageFlags, 16 > waitStages(waitSemaphores.size(), VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+
+				submitted = queue->submit(
+					*commandBuffer,
+					SynchInfo{}
+						.waits(waitSemaphores, waitStages)
+						.signals({&signalSemaphoreHandle, 1})
+				);
+
+				primaryConsumed = true;
+			}
+			else
+			{
+				submitted = queue->submit(
+					*commandBuffer,
+					SynchInfo{}
+						.signals({&signalSemaphoreHandle, 1})
+				);
+			}
 
 			if ( !submitted )
 			{
@@ -1224,10 +1675,16 @@ namespace EmEn::Graphics
 
 			currentFrameScope.declareSemaphore(renderToTexture->semaphore(), false);
 		});
+
+		/* Clear primary after RTTs consumed them. */
+		if ( primaryConsumed )
+		{
+			currentFrameScope.primarySemaphores().clear();
+		}
 	}
 
 	void
-	Renderer::renderViews (RendererFrameScope & /*currentFrameScope*/, Scenes::Scene & /*scene*/) const noexcept
+	Renderer::renderViews (RendererFrameScope & /*currentFrameScope*/, Scenes::Scene & /*scene*/, const Queue * /*queue*/) const noexcept
 	{
 
 	}
@@ -1329,6 +1786,33 @@ namespace EmEn::Graphics
 			if ( !m_swapChain->recreate() )
 			{
 				return false;
+			}
+		}
+
+		/* Recreate the internal scene render target with new dimensions. */
+		if ( m_sceneTarget != nullptr )
+		{
+			if ( !this->recreateSceneTarget() )
+			{
+				TraceError{ClassId} << "Unable to recreate the scene render target on resize!";
+			}
+		}
+
+		/* Recreate the post-processor with the new dimensions.
+		 * Reuses cached requirements — the PostProcessStack is resized by Scene's observer. */
+		if ( m_postProcessor.usable() && m_postProcessor.isEnabled() )
+		{
+			const auto renderTarget = m_sceneTarget != nullptr
+				? std::static_pointer_cast< RenderTarget::Abstract >(m_sceneTarget)
+				: std::static_pointer_cast< RenderTarget::Abstract >(m_swapChain);
+
+			if ( !m_postProcessor.configure(
+				renderTarget,
+				m_postProcessor.cachedRequiresHDR(),
+				m_postProcessor.cachedRequiresDepth(),
+				m_postProcessor.cachedRequiresNormals()) )
+			{
+				TraceError{ClassId} << "Unable to reconfigure the post-processor on resize!";
 			}
 		}
 

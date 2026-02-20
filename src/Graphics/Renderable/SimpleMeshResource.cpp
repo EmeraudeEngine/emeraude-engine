@@ -221,17 +221,4 @@ namespace EmEn::Graphics::Renderable
 
 		return this->addDependency(m_material);
 	}
-
-	std::shared_ptr< SimpleMeshResource >
-	SimpleMeshResource::getOrCreate (Resources::AbstractServiceProvider & serviceProvider, const std::shared_ptr< Geometry::Interface > & geometryResource, const std::shared_ptr< Material::Interface > & materialResource, std::string resourceName) noexcept
-	{
-		if ( resourceName.empty() )
-		{
-			resourceName = (std::stringstream{} << "Mesh(" << geometryResource->name() << ',' << materialResource->name() << ')').str();
-		}
-
-		return serviceProvider.container< SimpleMeshResource >()->getOrCreateResource(resourceName, [&geometryResource, &materialResource] (SimpleMeshResource & newMesh) {
-			return newMesh.load(geometryResource, materialResource);
-		});
-	}
 }

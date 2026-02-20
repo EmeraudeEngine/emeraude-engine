@@ -405,35 +405,55 @@ The Scene dispatches renderable layers into 7 render lists (defined in `Scene.hp
 
 The Scene handles shadow map rendering and lighting pass selection. See [`docs/shadow-mapping.md`](../../docs/shadow-mapping.md) for complete shadow mapping architecture.
 
-### Global Shadow Control
+### Pass Type Selection (Shadow + Color Projection)
 
-Shadow mapping can be globally disabled via `GraphicsShadowMappingEnabledKey` setting.
+Each light's `RenderPassType` is selected at render time based on 4 conditions:
 
-**Implementation in `Scene.rendering.cpp:renderLightedSelection()`:**
 ```cpp
-const bool shadowMapsEnabled = m_AVConsoleManager.graphicsRenderer().isShadowMapsEnabled();
+const bool useShadow = shadowMapsEnabled
+    && light->isShadowCastingEnabled()
+    && light->hasShadowDescriptorSet()
+    && instance->isShadowReceivingEnabled();
+const bool useColorProjection = light->hasColorProjectionTexture();
 
-// For each light type, check global setting before using shadow pass:
-if ( shadowMapsEnabled && light->isShadowCastingEnabled() && light->hasShadowDescriptorSet() && instance->isShadowReceivingEnabled() )
-{
-    passType = RenderPassType::DirectionalLightPass;  // Shadow-enabled
-}
+// 4-branch selection per light type:
+if ( useShadow && useColorProjection )
+    passType = RenderPassType::SpotLightPassFull;
+else if ( useShadow )
+    passType = RenderPassType::SpotLightPassShadowMap;
+else if ( useColorProjection )
+    passType = RenderPassType::SpotLightPassColorMap;
 else
-{
-    passType = RenderPassType::DirectionalLightPassNoShadow;  // No shadow
-}
+    passType = RenderPassType::SpotLightPass;
 ```
 
-**Why this matters:** Without the global check, disabling shadows via settings caused Vulkan validation errors because shadow map images remained in `VK_IMAGE_LAYOUT_UNDEFINED` but descriptor sets still tried to bind them.
+Same pattern applies to directional (with CSM variants) and point lights.
+
+**Why this matters:** Without the global shadow check, disabling shadows via settings caused Vulkan validation errors because shadow map images remained in `VK_IMAGE_LAYOUT_UNDEFINED` but descriptor sets still tried to bind them.
+
+### Descriptor Set Architecture
+
+Each light creates a descriptor set with 2 bindings:
+
+| Binding | Content | Inactive fallback |
+|---------|---------|-------------------|
+| 0 | Light UBO (dynamic offset) | Always present |
+| 1 | Shadow map sampler | Not created (no shadow descriptor set) |
+
+Lights without shadow use only the shared UBO descriptor set (binding 0). Shadow-enabled lights get a dedicated descriptor set with both bindings.
+
+**Color projection uses the global bindless system** — the light UBO carries a `uint` bindless index (`ColorProjectionIndex`, encoded as `bit_cast<float>`). The texture is registered in `BindlessTextureManager` via `ObserverTrait` notification when async loading completes. See: `Saphir/AGENTS.md` → Bindless Color Projection Sampling.
 
 **Code references:**
-- `Scene.rendering.cpp:978` - Global setting check
-- `Scene.rendering.cpp:1003` - Directional light pass selection
-- `Scene.rendering.cpp:1034` - Point light pass selection
-- `Scene.rendering.cpp:1064` - Spotlight pass selection
+- `Scene.rendering.cpp:renderLightedSelection()` - Pass type selection logic
+- `Component/SpotLight.cpp:createShadowDescriptorSet()` - 2-binding shadow descriptor
+- `Component/DirectionalLight.cpp:createShadowDescriptorSet()` - 2-binding shadow descriptor
+- `Component/PointLight.cpp:createShadowDescriptorSet()` - 2-binding shadow descriptor
+- `Component/AbstractLightEmitter.cpp:registerColorProjectionInBindless()` - Bindless registration
+- `Component/AbstractLightEmitter.cpp:onNotification()` - Async texture load callback
 
 ## Detailed Documentation
 
 For complete architecture, diagrams, and advanced patterns:
 - @docs/scene-graph-architecture.md
-- @docs/shadow-mapping.md - Shadow mapping, PCF, global controls
+- @docs/shadow-mapping.md - Shadow mapping, PCF, global controls, color projection

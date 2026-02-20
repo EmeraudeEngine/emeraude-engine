@@ -87,7 +87,7 @@ namespace EmEn::Graphics
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool create (Renderer & renderer, uint32_t width, uint32_t height, VkFormat colorFormat, VkFormat depthFormat = VK_FORMAT_UNDEFINED) noexcept;
+			bool create (Renderer & renderer, uint32_t width, uint32_t height, VkFormat colorFormat, VkFormat depthFormat = VK_FORMAT_UNDEFINED, VkFormat normalsFormat = VK_FORMAT_UNDEFINED) noexcept;
 
 			/**
 			 * @brief Destroys the grab pass textures from the GPU.
@@ -105,7 +105,7 @@ namespace EmEn::Graphics
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool recreate (Renderer & renderer, uint32_t width, uint32_t height, VkFormat colorFormat, VkFormat depthFormat = VK_FORMAT_UNDEFINED) noexcept;
+			bool recreate (Renderer & renderer, uint32_t width, uint32_t height, VkFormat colorFormat, VkFormat depthFormat = VK_FORMAT_UNDEFINED, VkFormat normalsFormat = VK_FORMAT_UNDEFINED) noexcept;
 
 			/**
 			 * @brief Records the blit/copy commands from the swapchain images to this grab pass.
@@ -114,7 +114,7 @@ namespace EmEn::Graphics
 			 * @param srcDepthImage A pointer to the source depth image. Null to skip depth copy.
 			 * @return void
 			 */
-			void recordBlit (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::Image & srcColorImage, const Vulkan::Image * srcDepthImage = nullptr) const noexcept;
+			void recordBlit (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::Image & srcColorImage, const Vulkan::Image * srcDepthImage = nullptr, const Vulkan::Image * srcNormalsImage = nullptr) const noexcept;
 
 			/**
 			 * @brief Returns whether the depth texture is available.
@@ -168,6 +168,57 @@ namespace EmEn::Graphics
 			[[nodiscard]]
 			VkDescriptorImageInfo depthDescriptorInfo () const noexcept;
 
+			/**
+			 * @brief Returns whether the normals texture is available.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			hasNormals () const noexcept
+			{
+				return m_normalsImage != nullptr && m_normalsImage->isCreated();
+			}
+
+			/**
+			 * @brief Returns the normals image.
+			 * @return std::shared_ptr< Vulkan::Image >
+			 */
+			[[nodiscard]]
+			std::shared_ptr< Vulkan::Image >
+			normalsImage () const noexcept
+			{
+				return m_normalsImage;
+			}
+
+			/**
+			 * @brief Returns the normals image view.
+			 * @return std::shared_ptr< Vulkan::ImageView >
+			 */
+			[[nodiscard]]
+			std::shared_ptr< Vulkan::ImageView >
+			normalsImageView () const noexcept
+			{
+				return m_normalsImageView;
+			}
+
+			/**
+			 * @brief Returns the normals sampler.
+			 * @return std::shared_ptr< Vulkan::Sampler >
+			 */
+			[[nodiscard]]
+			std::shared_ptr< Vulkan::Sampler >
+			normalsSampler () const noexcept
+			{
+				return m_normalsSampler;
+			}
+
+			/**
+			 * @brief Builds a VkDescriptorImageInfo from the normals components.
+			 * @return VkDescriptorImageInfo
+			 */
+			[[nodiscard]]
+			VkDescriptorImageInfo normalsDescriptorInfo () const noexcept;
+
 			/** @copydoc EmEn::Vulkan::TextureInterface::isCreated() const noexcept */
 			[[nodiscard]]
 			bool isCreated () const noexcept override;
@@ -211,5 +262,10 @@ namespace EmEn::Graphics
 			std::shared_ptr< Vulkan::Image > m_depthImage;
 			std::shared_ptr< Vulkan::ImageView > m_depthImageView;
 			std::shared_ptr< Vulkan::Sampler > m_depthSampler;
+
+			/* Normals grab pass resources. */
+			std::shared_ptr< Vulkan::Image > m_normalsImage;
+			std::shared_ptr< Vulkan::ImageView > m_normalsImageView;
+			std::shared_ptr< Vulkan::Sampler > m_normalsSampler;
 	};
 }

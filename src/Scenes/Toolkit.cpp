@@ -190,16 +190,11 @@ namespace EmEn::Scenes
 	std::shared_ptr< Material::Interface >
 	Toolkit::getColoredMaterialResource (const Color< float > & color) const noexcept
 	{
-		auto * materials = m_resourceManager.container< Material::BasicResource >();
-
 		std::stringstream materialName;
 		materialName << "+Color(" << color << ")";
 
-		return materials->getOrCreateResource(materialName.str(), [&color] (auto & material) {
-			if ( !material.setColor(color) )
-			{
-				return false;
-			}
+		return m_resourceManager.container< Material::BasicResource >()->getOrCreateResource(materialName.str(), [color] (auto & material) {
+			material.setColor(color);
 
 			return material.setManualLoadSuccess(true);
 		});

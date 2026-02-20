@@ -107,7 +107,7 @@ namespace EmEn::Scenes
 	Manager::loadScene (const std::string & resourceName) noexcept
 	{
 		/* Loads the scene definition from store (direct loading) */
-		const auto sceneDefinition = m_resourceManager.container< DefinitionResource >()->getResource(resourceName, false);
+		const auto sceneDefinition = m_resourceManager.container< DefinitionResource >()->getResource(resourceName);
 
 		if ( sceneDefinition == nullptr )
 		{

@@ -97,7 +97,9 @@ namespace EmEn::Vulkan
 
 ### Boolean Members Must Be Grouped at the End
 
-To avoid memory padding waste, **all boolean members must be placed at the end** of struct/class member declarations. Booleans are 1 byte, but the compiler may add padding bytes to align the next member.
+To avoid memory padding waste, **all boolean members must be placed at the end** of struct/class member declarations, **regardless of logical domain grouping**. Booleans are 1 byte, but the compiler may add padding bytes to align the next member.
+
+When moving booleans to the end breaks logical readability, **use intercalated section comments** to clarify which domain each boolean belongs to.
 
 ```cpp
 // WRONG - padding waste between booleans and larger types
@@ -109,14 +111,19 @@ struct BadLayout
     void* m_pointer{nullptr};        // 8 bytes
 };  // Total: 32 bytes (with 14 bytes wasted)
 
-// CORRECT - booleans grouped at the end
+// CORRECT - booleans grouped at the end with section comments
 struct GoodLayout
 {
+    /* Rendering state. */
     uint64_t m_size{0};              // 8 bytes
     void* m_pointer{nullptr};        // 8 bytes
-    bool m_enabled{false};           // 1 byte
-    bool m_visible{true};            // 1 byte + 6 bytes padding (unavoidable)
-};  // Total: 24 bytes (only 6 bytes padding)
+    uint64_t m_captureDelayUs{0};    // 8 bytes
+
+    /* Boolean flags (grouped for padding). */
+    bool m_enabled{false};           // Rendering state
+    bool m_visible{true};            // Rendering state
+    bool m_capturing{false};         // Capture state
+};  // Total: 32 bytes (only 5 bytes padding)
 ```
 
 ### General Member Ordering

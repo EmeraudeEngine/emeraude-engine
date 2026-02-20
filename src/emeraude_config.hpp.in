@@ -124,6 +124,7 @@
 #cmakedefine ASIO_ENABLED
 #cmakedefine IMGUI_ENABLED
 #cmakedefine LIBSNDFILE_ENABLED
+#cmakedefine RENDERDOC_ENABLED
 
 /* NOTE: Be sure this token is always set for GLFW.
  * FIXME: Check if this is useful! */
@@ -191,6 +192,12 @@ namespace EmEn
 	constexpr bool ThreadPoolDebugEnabled{@EMERAUDE_DEBUG_THREAD_POOL@};
 	constexpr unsigned int ThreadPoolDebugEnabledNumThreads{@EMERAUDE_DEBUG_THREAD_POOL_N@};
 	constexpr bool ParallelCollisionDisabled{@EMERAUDE_DISABLE_PARALLEL_COLLISION@};
+
+#ifdef EMERAUDE_ENABLE_RENDERDOC
+	constexpr bool RenderDocEnabled{true};
+#else
+	constexpr bool RenderDocEnabled{false};
+#endif
 }
 
 #undef ON

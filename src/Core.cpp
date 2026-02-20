@@ -27,6 +27,7 @@
 #include "Core.hpp"
 
 /* STL inclusions. */
+#include <charconv>
 #include <chrono>
 #include <fstream>
 #include <sstream>
@@ -38,6 +39,7 @@
 #include "GLFW/glfw3.h"
 
 /* Local inclusions. */
+#include "Libs/IO/IO.hpp"
 #include "Libs/Time/Elapsed/PrintScopeRealTime.hpp"
 #include "Libs/Time/Time.hpp"
 #include "Libs/Version.hpp"
@@ -362,6 +364,61 @@ namespace EmEn
 				}, true);
 			}
 
+			/* Automated RenderDoc capture timer check. */
+			if ( m_renderDocCaptureAfterUs > 0 && m_lifetime >= m_renderDocCaptureAfterUs )
+			{
+				TraceInfo{ClassId} << "RenderDoc capture timer elapsed after " << (m_lifetime / 1'000'000ULL) << " second(s).";
+
+				auto & renderDoc = m_vulkanInstance.renderDocCapture();
+
+				if ( renderDoc.isAvailable() )
+				{
+					/* Ensure the RenderDoc capture directory exists. */
+					const auto captureDir = m_primaryServices.fileSystem().userDataDirectory("RenderDoc");
+					std::filesystem::create_directories(captureDir);
+
+					/* Set the capture file path with unix timestamp. */
+					const auto timestamp = std::chrono::duration_cast< std::chrono::seconds >(std::chrono::system_clock::now().time_since_epoch()).count();
+					const auto capturePath = captureDir / std::to_string(timestamp);
+					renderDoc.setCaptureFilePath(capturePath.string());
+
+					renderDoc.startCapture();
+					m_renderDocCapturing = true;
+				}
+
+				m_renderDocCaptureAfterUs = 0;
+
+				/* NOTE: Don't exit immediately — RenderDoc needs frames to be submitted while capturing.
+				 * Schedule end of capture + screenshot + exit shortly after. */
+				m_screenshotAfterUs = m_lifetime + 2'000'000ULL;
+			}
+
+			/* End any in-progress RenderDoc capture before taking a screenshot and exiting. */
+			if ( m_renderDocCapturing && m_screenshotAfterUs > 0 && m_lifetime >= m_screenshotAfterUs )
+			{
+				static_cast< void >(m_vulkanInstance.renderDocCapture().endCapture());
+				m_renderDocCapturing = false;
+			}
+
+			/* Automated screenshot timer check. */
+			if ( m_screenshotAfterUs > 0 && m_lifetime >= m_screenshotAfterUs )
+			{
+				TraceInfo{ClassId} << "Screenshot timer elapsed after " << (m_lifetime / 1'000'000ULL) << " second(s).";
+
+				if ( this->screenshot() )
+				{
+					TraceSuccess{ClassId} << "Automated screenshot captured successfully.";
+				}
+				else
+				{
+					TraceError{ClassId} << "Automated screenshot capture failed!";
+				}
+
+				m_screenshotAfterUs = 0;
+
+				this->stop();
+			}
+
 			if ( m_enableStatistics )
 			{
 				auto currentTime = std::chrono::steady_clock::now();
@@ -470,6 +527,11 @@ namespace EmEn
 			m_coreHelp.registerArgument("Force the use of a config directory overriding every others.", "config-directory", 0, {"DIRECTORY_PATH"});
 			m_coreHelp.registerArgument("Force the use of a data directory overriding every others.", "data-directory", 0, {"DIRECTORY_PATH"});
 			m_coreHelp.registerArgument("Execute a specific tool.", "tools-mode", 't');
+			m_coreHelp.registerArgument("Capture a screenshot after N seconds of runtime, then exit the application.", "screenshot-after", 0, {"SECONDS"});
+		m_coreHelp.registerArgument("Capture a RenderDoc frame after N seconds of runtime, then exit.", "renderdoc-capture-after", 0, {"SECONDS"});
+			m_coreHelp.registerArgument("List local data that would be wiped (dry run). Settings are preserved.", "wipe-local-data");
+			m_coreHelp.registerArgument("Wipe all local data (cache and user data directories). Settings are preserved. The application exits immediately.", "wipe-local-data-confirm");
+			m_coreHelp.registerArgument("Backup and reset the settings file. The application exits immediately.", "reset-settings");
 
 			m_coreHelp.registerShortcut("Quit the application.", KeyEscape, ModKeyShift);
 			m_coreHelp.registerShortcut("Print the active scene content in console.", KeyF1, ModKeyShift);
@@ -485,6 +547,7 @@ namespace EmEn
 			m_coreHelp.registerShortcut("Toggle the window fullscreen mode.", KeyF11, ModKeyShift);
 			m_coreHelp.registerShortcut("Take a screenshot.", KeyF12, ModKeyShift);
 			m_coreHelp.registerShortcut("Toggle video recording.", KeyF12, ModKeyShift | ModKeyControl);
+			m_coreHelp.registerShortcut("Trigger a RenderDoc frame capture.", KeyC, ModKeyShift);
 		}
 
 		if ( m_primaryServices.initialize() )
@@ -508,6 +571,33 @@ namespace EmEn
 			m_showHelp = true;
 
 			return false;
+		}
+
+		if ( m_primaryServices.arguments().isSwitchPresent(WipeLocalDataConfirmArg) )
+		{
+			this->executeWipeLocalData(false);
+
+			m_willNotRun = true;
+
+			return true;
+		}
+
+		if ( m_primaryServices.arguments().isSwitchPresent(WipeLocalDataArg) )
+		{
+			this->executeWipeLocalData(true);
+
+			m_willNotRun = true;
+
+			return true;
+		}
+
+		if ( m_primaryServices.arguments().isSwitchPresent(ResetSettingsArg) )
+		{
+			this->executeResetSettings();
+
+			m_willNotRun = true;
+
+			return true;
 		}
 
 		/* Initialize the console. */
@@ -572,6 +662,44 @@ namespace EmEn
 		if ( m_primaryServices.arguments().isSwitchPresent(ToolsArg, ToolsLongArg) )
 		{
 			m_startupMode = StartupMode::ToolsMode;
+		}
+
+		/* Checks if an automated screenshot timer was requested. */
+		if ( const auto arg = m_primaryServices.arguments().get(ScreenshotAfterArg) )
+		{
+			unsigned long seconds = 0;
+			const auto & str = arg.value();
+			auto [ptr, ec] = std::from_chars(str.data(), str.data() + str.size(), seconds);
+
+			if ( ec == std::errc{} && seconds > 0 )
+			{
+				m_screenshotAfterUs = static_cast< uint64_t >(seconds) * 1'000'000ULL;
+
+				TraceInfo{ClassId} << "Screenshot scheduled after " << seconds << " second(s), then exit.";
+			}
+			else
+			{
+				TraceWarning{ClassId} << "Invalid --screenshot-after value: '" << str << "'. Ignored.";
+			}
+		}
+
+		/* Checks if an automated RenderDoc capture timer was requested. */
+		if ( const auto arg = m_primaryServices.arguments().get(RenderDocCaptureAfterArg) )
+		{
+			unsigned long seconds = 0;
+			const auto & str = arg.value();
+			auto [ptr, ec] = std::from_chars(str.data(), str.data() + str.size(), seconds);
+
+			if ( ec == std::errc{} && seconds > 0 )
+			{
+				m_renderDocCaptureAfterUs = static_cast< uint64_t >(seconds) * 1'000'000ULL;
+
+				TraceInfo{ClassId} << "RenderDoc capture scheduled after " << seconds << " second(s), then exit.";
+			}
+			else
+			{
+				TraceWarning{ClassId} << "Invalid --renderdoc-capture-after value: '" << str << "'. Ignored.";
+			}
 		}
 
 		Tracer::success(ClassId, "*** Core level created ***");
@@ -655,13 +783,6 @@ namespace EmEn
 		/* Initialize graphics renderer. */
 		if ( m_graphicsRenderer.initialize(m_secondaryServicesEnabled) )
 		{
-			/* FIXME: Check a better way to give the access ... */
-			{
-				Geometry::Interface::s_graphicsRenderer = &m_graphicsRenderer;
-				TextureResource::Abstract::s_graphicsRenderer = &m_graphicsRenderer;
-				Material::Interface::s_graphicsRenderer = &m_graphicsRenderer;
-			}
-
 			m_graphicsRenderer.createDefaultResources(m_resourceManager);
 			m_graphicsRenderer.registerToObject(*this);
 
@@ -1170,6 +1291,22 @@ namespace EmEn
 					{
 						this->screenshot();
 					}
+					return true;
+
+				case KeyC :
+				{
+					auto & renderDoc = m_vulkanInstance.renderDocCapture();
+
+					if ( renderDoc.isAvailable() )
+					{
+						renderDoc.triggerCapture();
+						this->notifyUser("RenderDoc: triggered frame capture.");
+					}
+					else
+					{
+						this->notifyUser("RenderDoc not available (not injected).");
+					}
+				}
 					return true;
 
 				case KeyR :
@@ -1701,5 +1838,183 @@ namespace EmEn
 		TraceWarning{ClassId} << "Unrecognized tools '" << tools << "' !";
 
 		return false;
+	}
+
+	void
+	Core::executeWipeLocalData (bool dryRun) noexcept
+	{
+		const auto & fileSystem = m_primaryServices.fileSystem();
+
+		const auto & cacheDir = fileSystem.cacheDirectory();
+		const auto & userDataDir = fileSystem.userDataDirectory();
+
+		/* Format byte size to human-readable string. */
+		const auto formatSize = [] (uintmax_t bytes) noexcept -> std::string {
+			if ( bytes >= 1024ULL * 1024ULL )
+			{
+				return std::to_string(bytes / (1024ULL * 1024ULL)) + " MiB";
+			}
+
+			if ( bytes >= 1024ULL )
+			{
+				return std::to_string(bytes / 1024ULL) + " KiB";
+			}
+
+			return std::to_string(bytes) + " bytes";
+		};
+
+		/* Build the entire report in a single trace message. */
+		TraceWarning trace{ClassId};
+
+		trace <<
+			"\n"
+			"======================================================================" "\n"
+			<< (dryRun ? "  LOCAL DATA WIPE - DRY RUN (nothing will be deleted)" : "  LOCAL DATA WIPE - CONFIRM (data will be permanently deleted)") <<
+			"\n"
+			"======================================================================" "\n";
+
+		size_t totalFiles = 0;
+		uintmax_t totalBytes = 0;
+
+		/* Scan a directory: list content into trace and collect stats. */
+		const auto scanDirectory = [&trace] (const std::filesystem::path & directory) noexcept -> std::pair< size_t, uintmax_t > {
+			std::error_code errorCode;
+			size_t fileCount = 0;
+			uintmax_t totalSize = 0;
+
+			for ( const auto & entry : std::filesystem::recursive_directory_iterator(directory, errorCode) )
+			{
+				if ( entry.is_regular_file(errorCode) )
+				{
+					const auto fileSize = entry.file_size(errorCode);
+
+					trace << "    " << entry.path().string() << " (" << fileSize << " bytes)" "\n";
+
+					fileCount++;
+					totalSize += fileSize;
+				}
+				else if ( entry.is_directory(errorCode) )
+				{
+					trace << "    " << entry.path().string() << "/" "\n";
+				}
+			}
+
+			return {fileCount, totalSize};
+		};
+
+		if ( IO::directoryExists(cacheDir) )
+		{
+			trace << "[WIPE TARGET] Cache: " << cacheDir.string() << "\n";
+
+			const auto [fileCount, dirSize] = scanDirectory(cacheDir);
+
+			trace << "  => " << fileCount << " files, " << formatSize(dirSize) << "\n";
+
+			totalFiles += fileCount;
+			totalBytes += dirSize;
+
+			if ( !dryRun )
+			{
+				if ( IO::eraseDirectory(cacheDir, true) )
+				{
+					trace << "  * Cache directory wiped." "\n";
+				}
+				else
+				{
+					trace << "  ! Failed to wipe cache directory!" "\n";
+				}
+			}
+		}
+
+		if ( IO::directoryExists(userDataDir) )
+		{
+			trace << "[WIPE TARGET] User data: " << userDataDir.string() << "\n";
+
+			const auto [fileCount, dirSize] = scanDirectory(userDataDir);
+
+			trace << "  => " << fileCount << " files, " << formatSize(dirSize) << "\n";
+
+			totalFiles += fileCount;
+			totalBytes += dirSize;
+
+			if ( !dryRun )
+			{
+				if ( IO::eraseDirectory(userDataDir, true) )
+				{
+					trace << "  * User data directory wiped." "\n";
+				}
+				else
+				{
+					trace << "  ! Failed to wipe user data directory!" "\n";
+				}
+			}
+		}
+
+		trace <<
+			"----------------------------------------------------------------------" "\n"
+			"[PRESERVED] Settings: " << fileSystem.configDirectory().string() <<
+			"\n"
+			"Total: " << totalFiles << " files, " << formatSize(totalBytes) <<
+			"\n"
+			"----------------------------------------------------------------------" "\n";
+
+		if ( dryRun )
+		{
+			trace << "This was a dry run. Use --wipe-local-data-confirm to actually delete." "\n";
+		}
+		else
+		{
+			trace << "Local data wipe complete." "\n";
+		}
+
+		trace << "======================================================================";
+	}
+
+	void
+	Core::executeResetSettings () noexcept
+	{
+		const auto & settingsPath = m_primaryServices.settings().filepath();
+
+		if ( !std::filesystem::exists(settingsPath) )
+		{
+			TraceWarning trace{ClassId};
+			trace <<
+				"\n"
+				"======================================================================" "\n"
+				"  SETTINGS RESET" "\n"
+				"======================================================================" "\n"
+				"No settings file found. Nothing to reset." "\n"
+				"----------------------------------------------------------------------" "\n"
+				"Restart the application without --reset-settings." "\n"
+				"======================================================================";
+
+			return;
+		}
+
+		const auto timestamp = std::chrono::duration_cast< std::chrono::seconds >(std::chrono::system_clock::now().time_since_epoch()).count();
+		const auto backupPath = std::filesystem::path{settingsPath.string() + "." + std::to_string(timestamp) + "-bck"};
+
+		std::error_code errorCode;
+		std::filesystem::rename(settingsPath, backupPath, errorCode);
+
+		if ( errorCode )
+		{
+			TraceError{ClassId} << "Failed to backup settings file: " << errorCode.message();
+
+			return;
+		}
+
+		TraceWarning trace{ClassId};
+		trace <<
+			"\n"
+			"======================================================================" "\n"
+			"  SETTINGS RESET" "\n"
+			"======================================================================" "\n"
+			"Settings file backed up to:" "\n"
+			"  " << backupPath.string() <<
+			"\n"
+			"----------------------------------------------------------------------" "\n"
+			"Restart the application without --reset-settings to generate fresh settings." "\n"
+			"======================================================================";
 	}
 }

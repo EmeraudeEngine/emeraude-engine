@@ -515,10 +515,13 @@ namespace EmEn::Libs::VertexFactory
 
 			/**
 			 * @brief Computes normal vector for every triangle.
+			 * @param invert Inverts the computed normals. This is needed when an odd number
+			 * of axis reflections have been applied to the vertex positions (e.g., flipYAxis),
+			 * which reverses the cross product direction without changing the triangle winding.
 			 * @return bool
 			 */
 			bool
-			computeTriangleNormal () noexcept
+			computeTriangleNormal (bool invert = false) noexcept
 			{
 				if ( m_triangles.empty() || m_vertices.empty() )
 				{
@@ -531,7 +534,7 @@ namespace EmEn::Libs::VertexFactory
 				auto & trianglesRef = m_triangles;
 				const auto & verticesRef = m_vertices;
 
-				#pragma omp parallel for default(none) shared(trianglesCount, trianglesRef, verticesRef)
+				#pragma omp parallel for default(none) shared(trianglesCount, trianglesRef, verticesRef, invert)
 				for ( int64_t triangleIndex = 0; triangleIndex < trianglesCount; ++triangleIndex )
 				{
 					auto & triangle = trianglesRef[triangleIndex];
@@ -547,7 +550,7 @@ namespace EmEn::Libs::VertexFactory
 						vertexC.position()
 					);
 
-					triangle.setSurfaceNormal(normal);
+					triangle.setSurfaceNormal(invert ? -normal : normal);
 				}
 
 				return true;
@@ -599,6 +602,63 @@ namespace EmEn::Libs::VertexFactory
 					);
 
 					triangle.setSurfaceTangent(tangent);
+				}
+
+				return true;
+			}
+
+			/**
+			 * @brief Computes tangent vector for every triangle from edge projection.
+			 * @note This method derives the tangent by projecting a triangle edge onto
+			 * the plane defined by the surface normal (Gram-Schmidt). It does not require
+			 * texture coordinates, making it suitable for FaceMode::V and FaceMode::V_VN.
+			 * @warning Triangle surface normals must be computed first.
+			 * @return bool
+			 */
+			bool
+			computeTriangleTangentFromEdge () noexcept
+			{
+				if ( m_triangles.empty() || m_vertices.empty() )
+				{
+					std::cerr << __PRETTY_FUNCTION__ << ", geometry data is empty !" "\n";
+
+					return false;
+				}
+
+				const auto trianglesCount = static_cast< int64_t >(m_triangles.size());
+				auto & trianglesRef = m_triangles;
+				const auto & verticesRef = m_vertices;
+
+				#pragma omp parallel for default(none) shared(trianglesCount, trianglesRef, verticesRef)
+				for ( int64_t triangleIndex = 0; triangleIndex < trianglesCount; ++triangleIndex )
+				{
+					auto & triangle = trianglesRef[triangleIndex];
+
+					const auto & vertexA = verticesRef[triangle.vertexIndex(0)];
+					const auto & vertexB = verticesRef[triangle.vertexIndex(1)];
+
+					const auto edge = vertexB.position() - vertexA.position();
+					const auto & normal = triangle.surfaceNormal();
+
+					/* Project the edge onto the plane defined by the surface normal (Gram-Schmidt). */
+					const auto projected = edge - normal * Math::Vector< 3, vertex_data_t >::dotProduct(edge, normal);
+					const auto length = projected.length();
+
+					if ( length > static_cast< vertex_data_t >(1e-6) )
+					{
+						triangle.setSurfaceTangent(projected / length);
+					}
+					else
+					{
+						/* Degenerate triangle: fall back to an arbitrary perpendicular. */
+						const Math::Vector< 3, vertex_data_t > reference =
+							std::abs(normal[Math::Y]) < static_cast< vertex_data_t >(0.999)
+								? Math::Vector< 3, vertex_data_t >{0, 1, 0}
+								: Math::Vector< 3, vertex_data_t >{1, 0, 0};
+
+						triangle.setSurfaceTangent(
+							Math::Vector< 3, vertex_data_t >::crossProduct(normal, reference).normalize());
+					}
 				}
 
 				return true;

@@ -1,0 +1,113 @@
+/*
+ * src/Saphir/Generator/PostProcessing.hpp
+ * This file is part of Emeraude-Engine
+ *
+ * Copyright (C) 2010-2026 - Sébastien Léon Claude Christian Bémelmans "LondNoir" <londnoir@gmail.com>
+ *
+ * Emeraude-Engine is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 3 of the License, or (at your option) any later version.
+ *
+ * Emeraude-Engine is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with Emeraude-Engine; if not, write to the Free Software Foundation,
+ * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+ *
+ * Complete project and additional information can be found at :
+ * https://github.com/londnoir/emeraude-engine
+ *
+ * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
+ */
+
+#pragma once
+
+/* Local inclusions for inheritances. */
+#include "Abstract.hpp"
+
+/* Local inclusions for usages. */
+#include "Graphics/DirectPostProcessEffect.hpp"
+
+namespace EmEn::Saphir::Generator
+{
+	/**
+	 * @brief This generator builds the graphics pipeline for fullscreen post-processing.
+	 * @extends EmEn::Saphir::Generator::Abstract This is a generator.
+	 */
+	class PostProcessing final : public Abstract
+	{
+		public:
+
+			/** @brief Class identifier. */
+			static constexpr auto ClassId{"PostProcessing"};
+
+			/**
+			 * @brief Constructs a post-processing shader generator.
+			 * @param renderTarget A reference to a render target.
+			 * @param geometry A reference to the geometry interface smart pointer.
+			 */
+			PostProcessing (const std::shared_ptr< const Graphics::RenderTarget::Abstract > & renderTarget, const std::shared_ptr< const Graphics::Geometry::Interface > & geometry) noexcept
+				: Abstract{ClassId, renderTarget, geometry->topology(), geometry->flags()}
+			{
+
+			}
+
+			/** @copydoc EmEn::Saphir::Generator::Abstract::computeProgramCacheKey() */
+			[[nodiscard]]
+			size_t computeProgramCacheKey () const noexcept override;
+
+			/**
+			 * @brief Sets the list of framebuffer effects for shader generation.
+			 * @param effectsList The list of effects.
+			 * @return void
+			 */
+			void
+			setEffectsList (const std::vector< std::shared_ptr< Graphics::DirectPostProcessEffect > > & effectsList) noexcept
+			{
+				m_effectsList = effectsList;
+			}
+
+		private:
+
+			/** @copydoc EmEn::Saphir::Generator::Abstract::prepareUniformSets() */
+			void
+			prepareUniformSets (SetIndexes & setIndexes) noexcept override
+			{
+				setIndexes.enableSet(SetType::PerModel);
+			}
+
+			/** @copydoc EmEn::Saphir::Generator::Abstract::onGenerateShadersCode() */
+			[[nodiscard]]
+			bool onGenerateShadersCode (Program & program) noexcept override;
+
+			/** @copydoc EmEn::Saphir::Generator::Abstract::onCreateDataLayouts() */
+			[[nodiscard]]
+			bool onCreateDataLayouts (Graphics::Renderer & renderer, const SetIndexes & setIndexes, Libs::StaticVector< std::shared_ptr< Vulkan::DescriptorSetLayout >, 4 > & descriptorSetLayouts, Libs::StaticVector< VkPushConstantRange, 4 > & pushConstantRanges) noexcept override;
+
+			/** @copydoc EmEn::Saphir::Generator::Abstract::onGraphicsPipelineConfiguration() */
+			[[nodiscard]]
+			bool onGraphicsPipelineConfiguration (const Program & program, Vulkan::GraphicsPipeline & graphicsPipeline) noexcept override;
+
+			/**
+			 * @brief Generates the vertex shader stage.
+			 * @param program A reference to the program being constructed.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool generateVertexShader (Program & program) noexcept;
+
+			/**
+			 * @brief Generates the fragment shader stage.
+			 * @param program A reference to the program being constructed.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool generateFragmentShader (Program & program) noexcept;
+
+			std::vector< std::shared_ptr< Graphics::DirectPostProcessEffect > > m_effectsList;
+	};
+}

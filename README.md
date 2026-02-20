@@ -90,20 +90,17 @@ The engine requires several precompiled external libraries provided by [ext-deps
 
 The following dependencies are included as git submodules and compiled directly with the engine:
 
-| Library | Version            | Repository |
-|---------|--------------------|------------|
-| **Asio** | 1.36.0             | [github.com/chriskohlhoff/asio](https://github.com/chriskohlhoff/asio) |
-| **fastgltf** | 0.9.0~             | [github.com/spnda/fastgltf](https://github.com/spnda/fastgltf) |
-| **GLFW** | master(2025.07.17) | [github.com/EmeraudeEngine/glfw](https://github.com/EmeraudeEngine/glfw.git) [FORK] |
-| **Glslang** | 16.0.0             | [github.com/KhronosGroup/glslang](https://github.com/KhronosGroup/glslang.git) |
-| **ImGui** | 1.92.5             | [github.com/ocornut/imgui](https://github.com/ocornut/imgui.git) |
-| **JsonCpp** | 1.9.7~             | [github.com/open-source-parsers/jsoncpp](https://github.com/open-source-parsers/jsoncpp.git) |
-| **libsndfile** | 1.2.2              | [github.com/libsndfile/libsndfile](https://github.com/libsndfile/libsndfile) |
-| **magic_enum** | 0.9.7~             | [github.com/Neargye/magic_enum](https://github.com/Neargye/magic_enum) |
-| **Portable File Dialogs** | unversioned        | [github.com/samhocevar/portable-file-dialogs](https://github.com/samhocevar/portable-file-dialogs.git) |
-| **reproc** | 14.2.5~            | [github.com/DaanDeMeyer/reproc](https://github.com/DaanDeMeyer/reproc) |
-| **SDL_GameControllerDB** | unversioned        | [github.com/gabomdq/SDL_GameControllerDB](https://github.com/gabomdq/SDL_GameControllerDB.git) |
-| **Vulkan Memory Allocator** | 3.3.0~             | [github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator](https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator) |
+| Library                     | Version           | Repository |
+|-----------------------------|-------------------|------------|
+| **Asio**                    | 1.36.0            | [github.com/chriskohlhoff/asio](https://github.com/chriskohlhoff/asio) |
+| **GLFW**                    | master(2026.02.16) | [github.com/EmeraudeEngine/glfw](https://github.com/EmeraudeEngine/glfw.git) [FORK] |
+| **Glslang**                 | 16.2.0            | [github.com/KhronosGroup/glslang](https://github.com/KhronosGroup/glslang.git) |
+| **ImGui**                   | 1.92.6            | [github.com/ocornut/imgui](https://github.com/ocornut/imgui.git) |
+| **magic_enum**              | 0.9.7~            | [github.com/Neargye/magic_enum](https://github.com/Neargye/magic_enum) |
+| **reproc**                  | 14.2.5            | [github.com/DaanDeMeyer/reproc](https://github.com/DaanDeMeyer/reproc) |
+| **SDL_GameControllerDB**    | unversioned       | [github.com/gabomdq/SDL_GameControllerDB](https://github.com/gabomdq/SDL_GameControllerDB.git) |
+| **tinysoundfont**          | unversioned       | [github.com/schellingb/TinySoundFont](https://github.com/schellingb/TinySoundFont.git) |
+| **Vulkan Memory Allocator** | 3.3.0~            | [github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator](https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator) |
 
 ### Vulkan SDK
 
@@ -203,6 +200,145 @@ Example:
 ```bash
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DEMERАUDE_BUILD_SERVICES_ONLY=ON
 ```
+
+## GPU Debugging with RenderDoc (Optional — Linux Only)
+
+Emeraude Engine has built-in support for [RenderDoc](https://renderdoc.org/), the industry-standard GPU frame capture and debugging tool. When enabled at build time (`-DEMERAUDE_ENABLE_RENDERDOC=ON`), the engine can detect RenderDoc at runtime and provide programmatic frame capture via the in-application API.
+
+The RenderDoc integration includes a Python module (`renderdoc.so`) built from source, enabling programmatic analysis of `.rdc` captures (draw call counting, pipeline state inspection, texture/buffer enumeration).
+
+> **Platform:** Linux only (Debian/Ubuntu). macOS and Windows are not supported for this integration.
+
+### Prerequisites
+
+Install all required packages:
+
+```bash
+sudo apt install python3-dev swig bison libxcb-keysyms1-dev
+```
+
+Install the RenderDoc runtime (for `renderdoccmd` and `qrenderdoc`):
+
+```bash
+# Download the latest release from https://renderdoc.org/builds
+wget https://renderdoc.org/stable/1.43/renderdoc_1.43.tar.gz
+sudo tar xzf renderdoc_1.43.tar.gz -C /opt/
+```
+
+Register the Vulkan implicit layer (the tarball ships a manifest with an incorrect `library_path`):
+
+```bash
+mkdir -p ~/.config/vulkan/implicit_layer.d
+cat > ~/.config/vulkan/implicit_layer.d/renderdoc_capture.json << 'EOF'
+{
+  "file_format_version" : "1.1.2",
+  "layer" : {
+    "name": "VK_LAYER_RENDERDOC_Capture",
+    "type": "GLOBAL",
+    "library_path": "/opt/renderdoc_1.43/lib/librenderdoc.so",
+    "api_version": "1.4.324",
+    "implementation_version": "43",
+    "description": "Debugging capture layer for RenderDoc",
+    "functions": {
+      "vkGetInstanceProcAddr": "VK_LAYER_RENDERDOC_CaptureGetInstanceProcAddr",
+      "vkGetDeviceProcAddr": "VK_LAYER_RENDERDOC_CaptureGetDeviceProcAddr",
+      "vkNegotiateLoaderLayerInterfaceVersion": "VK_LAYER_RENDERDOC_CaptureNegotiateLoaderLayerInterfaceVersion"
+    },
+    "enable_environment": {
+      "ENABLE_VULKAN_RENDERDOC_CAPTURE": "1"
+    },
+    "disable_environment": {
+      "DISABLE_VULKAN_RENDERDOC_CAPTURE_1_43": "1"
+    }
+  }
+}
+EOF
+```
+
+> **Important:** Adjust `library_path` in the JSON to match your actual installation path. Without this manifest, the Vulkan loader will not load the RenderDoc capture layer, and frame capture will silently fail.
+
+### Building with RenderDoc Support
+
+Initialize the submodule and build:
+
+```bash
+git submodule update --init dependencies/renderdoc
+
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DEMERAUDE_ENABLE_RENDERDOC=ON
+cmake --build build --config Debug
+```
+
+The RenderDoc header (`renderdoc_app.h`, MIT-licensed) is used from the submodule. No linking is required — the library is detected at runtime via the Vulkan layer.
+
+When `EMERAUDE_ENABLE_RENDERDOC=OFF` (default), all RenderDoc code compiles to zero-cost no-ops.
+
+### Building the Python Module
+
+The Python module enables programmatic analysis of `.rdc` captures:
+
+```bash
+cmake -P cmake/BuildRenderDocPython.cmake
+```
+
+This builds `renderdoc.so` in `dependencies/renderdoc/build/lib/`. The script handles all intermediate steps automatically (PCRE1, custom SWIG fork, SWIG bindings). Requires the packages listed in Prerequisites above.
+
+Once built, analyze captures with:
+
+```bash
+PYTHONPATH=dependencies/renderdoc/build/lib \
+LD_LIBRARY_PATH=dependencies/renderdoc/build/lib \
+python3 your_script.py capture.rdc
+```
+
+### Using RenderDoc
+
+#### Automated Capture (CLI)
+
+Use `renderdoccmd` to inject the capture layer and the `--renderdoc-capture-after` engine argument to trigger a timed capture:
+
+```bash
+cd <your-build-dir>/Debug
+
+# Capture a frame after 15 seconds of runtime (allows resources to load),
+# then take a screenshot and exit.
+renderdoccmd capture --wait-for-exit \
+    ./your-app --load-demo <demo-name> --renderdoc-capture-after 15
+```
+
+The `.rdc` capture file is saved to `{userDataDir}/RenderDoc/{unix_timestamp}_capture.rdc`.
+
+#### Manual Capture (GUI)
+
+1. Launch `qrenderdoc` (the RenderDoc GUI):
+   ```bash
+   /opt/renderdoc_1.43/bin/qrenderdoc
+   ```
+2. **File > Launch Application**
+3. Set the executable path to your application binary
+4. Set the working directory to the directory containing the executable
+5. Add any command-line arguments (e.g., `--load-demo <demo-name>`)
+6. Click **Launch**
+7. Press **F12** (RenderDoc default) or **Shift+C** (engine shortcut) to capture a frame
+8. The captured frame appears in the qrenderdoc UI for inspection
+
+#### Keyboard Shortcut
+
+While the application is running under RenderDoc:
+
+| Shortcut | Action |
+|----------|--------|
+| **Shift+C** | Trigger capture of the next presented frame |
+
+#### What to Look For
+
+In qrenderdoc, after opening a `.rdc` capture:
+
+- **Event Browser:** Shows all Vulkan commands in the frame — render passes, draw calls, dispatches, copies
+- **Pipeline State:** Inspect bound shaders, descriptor sets, push constants, blend state for any draw call
+- **Texture Viewer:** View any render target, shadow map, or texture at any point in the frame
+- **Mesh Viewer:** Inspect vertex input/output for any draw call
+- **Resource Inspector:** Browse all allocated buffers, images, and their contents
+
 
 ## Troubleshooting
 

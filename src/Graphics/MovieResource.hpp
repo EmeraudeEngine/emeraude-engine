@@ -40,6 +40,8 @@
 #include "Libs/PixelFactory/Pixmap.hpp"
 #include "Resources/Container.hpp"
 
+namespace EmEn::Libs { class ThreadPool; }
+
 namespace EmEn::Graphics
 {
 	/**
@@ -183,6 +185,21 @@ namespace EmEn::Graphics
 			 */
 			[[nodiscard]]
 			bool isGrayScale () const noexcept;
+
+			/**
+			 * @brief Generates procedural animated water normal maps using FBM Perlin noise.
+			 * @param size The texture resolution in pixels (square). E.g. 256, 512.
+			 * @param frameCount The number of animation frames to generate.
+			 * @param frameDuration The duration of each frame in milliseconds.
+			 * @param scale The noise frequency controlling visible ripple density. Default 8.0.
+			 * @param seed The random seed for reproducibility. Default 0.
+			 * @param octaves The FBM octave count (detail levels). Default 4.
+			 * @param persistence The amplitude decay per octave in [0,1]. Default 0.5.
+			 * @param strength The normal map intensity (bumpiness). Default 2.0.
+			 * @param threadPool A pointer to a thread pool. Default sequential loading.
+			 * @return bool
+			 */
+			bool loadWaterNormals (uint32_t size, uint32_t frameCount, uint32_t frameDuration, float scale = 8.0F, uint32_t seed = 0, uint32_t octaves = 4, float persistence = 0.5F, float strength = 2.0F, Libs::ThreadPool * threadPool = nullptr) noexcept;
 
 			/**
 			 * @brief Returns the average color of the movie.

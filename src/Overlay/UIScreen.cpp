@@ -43,13 +43,10 @@ namespace EmEn::Overlay
 	using namespace Graphics;
 	using namespace Vulkan;
 
-	void
+	bool
 	UIScreen::processSurfaceUpdates (bool forceInvalidate) noexcept
 	{
-		if ( this->empty() )
-		{
-			return;
-		}
+		auto errors = 0;
 
 		for ( const auto & surface : m_surfaces )
 		{
@@ -66,9 +63,13 @@ namespace EmEn::Overlay
 
 				this->setVisibility(false);
 
+				errors++;
+
 				break;
 			}
 		}
+
+		return errors == 0;
 	}
 
 	void

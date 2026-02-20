@@ -50,13 +50,13 @@
 /* Local inclusions for usages. */
 #include "Audio/Ambience.hpp"
 #include "Libs/Randomizer.hpp"
+#include "Graphics/PostProcessStack.hpp"
 #include "Graphics/Renderable/AbstractBackground.hpp"
 #include "Graphics/TextureResource/TextureCubemap.hpp"
 #include "Graphics/RenderTarget/ShadowMap.hpp"
 #include "Graphics/RenderTarget/Texture.hpp"
 #include "Graphics/RenderTarget/View.hpp"
 #include "Physics/ConstraintSolver.hpp"
-#include "Saphir/EffectInterface.hpp"
 #include "Scenes/AVConsole/Manager.hpp"
 #include "Component/Visual.hpp"
 #include "GroundLevelInterface.hpp"
@@ -85,6 +85,7 @@ namespace EmEn
 	namespace Scenes::Component
 	{
 		class AbstractModifier;
+		class Camera;
 	}
 }
 
@@ -661,6 +662,68 @@ namespace EmEn::Scenes
 			{
 				return m_lightSet;
 			}
+
+			/* Post-processing. */
+
+			/**
+			 * @brief Sets the per-scene multi-pass post-processing stack.
+			 * @param stack The post-process stack to own (moved).
+			 * @return void
+			 */
+			void setPostProcessStack (std::unique_ptr< Graphics::PostProcessStack > stack) noexcept;
+
+			/**
+			 * @brief Returns the per-scene post-process stack (const).
+			 * @return const Graphics::PostProcessStack *
+			 */
+			[[nodiscard]]
+			const Graphics::PostProcessStack *
+			postProcessStack () const noexcept
+			{
+				return m_postProcessStack.get();
+			}
+
+			/**
+			 * @brief Returns the per-scene post-process stack (mutable).
+			 * @return Graphics::PostProcessStack *
+			 */
+			[[nodiscard]]
+			Graphics::PostProcessStack *
+			postProcessStack () noexcept
+			{
+				return m_postProcessStack.get();
+			}
+
+			/**
+			 * @brief Returns whether a post-process stack is set and has effects.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			hasPostProcessStack () const noexcept
+			{
+				return m_postProcessStack != nullptr && m_postProcessStack->hasEffects();
+			}
+
+			/**
+			 * @brief Returns the active camera connected to the primary video output (const).
+			 * @return const Component::Camera * or nullptr if no camera is connected.
+			 */
+			[[nodiscard]]
+			const Component::Camera * activeCamera () const noexcept;
+
+			/**
+			 * @brief Returns the active camera connected to the primary video output (mutable).
+			 * @return Component::Camera * or nullptr if no camera is connected.
+			 */
+			[[nodiscard]]
+			Component::Camera * activeCamera () noexcept;
+
+			/**
+			 * @brief Manually sets the active camera for this scene.
+			 * @param camera Pointer to the camera component, or nullptr to clear.
+			 */
+			void setActiveCamera (Component::Camera * camera) noexcept;
 
 			/**
 			 * @brief Returns the debug node controller (const).
@@ -1646,160 +1709,63 @@ namespace EmEn::Scenes
 			void resetAmbience () const noexcept;
 
 			/* ============================================================
-			 * [CONCEPT: EFFECTS]
-			 * Environment effects (fog, post-processing, etc.).
-			 * ============================================================ */
-
-			/**
-			 * @brief Adds a global effect to the scene.
-			 *
-			 * Environment effects are applied scene-wide during rendering
-			 * (fog, color grading, post-processing, etc.).
-			 * Duplicate effects are silently ignored.
-			 *
-			 * @param effect Shared pointer to the effect interface.
-			 *
-			 * @bug Should use std::set instead of vector for O(1) lookup.
-			 *
-			 * @see isEnvironmentEffectPresent() To check before adding.
-			 * @see clearEnvironmentEffects() To remove all effects.
-			 */
-			void
-			addEnvironmentEffect (const std::shared_ptr< Saphir::EffectInterface > & effect) noexcept
-			{
-				/* We don't want to notify an effect twice. */
-				// FIXME: Use a std::set so!
-				if ( m_environmentEffects.contains(effect) )
-				{
-					return;
-				}
-
-				m_environmentEffects.emplace(effect);
-			}
-
-			/**
-			 * @brief Checks if a global effect is already applied to the scene.
-			 *
-			 * @param effect Shared pointer to the effect to check.
-			 * @return True if the effect is present, false otherwise.
-			 *
-			 * @see addEnvironmentEffect() To add new effects.
-			 */
-			[[nodiscard]]
-			bool
-			isEnvironmentEffectPresent (const std::shared_ptr< Saphir::EffectInterface > & effect) const noexcept
-			{
-				return m_environmentEffects.contains(effect);
-			}
-
-			/**
-			 * @brief Removes all environment effects from the scene.
-			 *
-			 * @see addEnvironmentEffect() To add new effects.
-			 * @see environmentEffects() To query current effects.
-			 */
-			void
-			clearEnvironmentEffects () noexcept
-			{
-				m_environmentEffects.clear();
-			}
-
-			/**
-			 * @brief Returns the list of active environment effects.
-			 *
-			 * Environment effects are global post-processing or rendering
-			 * modifications (fog, color grading, etc.).
-			 *
-			 * @return Const reference to the effects list.
-			 *
-			 * @see addEnvironmentEffect() To add effects.
-			 * @see clearEnvironmentEffects() To remove all.
-			 */
-			[[nodiscard]]
-			const Saphir::EffectsList &
-			environmentEffects () const noexcept
-			{
-				return m_environmentEffects;
-			}
-
-			/* ============================================================
 			 * [CONCEPT: DEBUG DISPLAY]
 			 * Visual debugging helpers.
 			 * ============================================================ */
 
 			/**
 			 * @brief Displays an orientation compass at scene origin.
-			 *
 			 * Creates a visual compass helper showing XYZ axes.
 			 * Useful for debugging coordinate systems.
-			 *
-			 * @param resourceManager Resource manager for loading compass mesh.
-			 * @return True if compass was created, false on failure.
-			 *
+			 * @param resources Resource manager for loading compass mesh.
 			 * @note This is a debug utility.
-			 *
 			 * @see disableCompassDisplay() To remove.
 			 * @see compassDisplayEnabled() To check state.
 			 */
-			bool enableCompassDisplay (Resources::Manager & resourceManager) noexcept;
+			void enableCompassDisplay (Resources::Manager & resources) noexcept;
 
 			/**
 			 * @brief Removes the orientation compass.
-			 *
 			 * @note This is a debug utility.
-			 *
 			 * @see enableCompassDisplay() To show again.
 			 */
 			void disableCompassDisplay () noexcept;
 
 			/**
 			 * @brief Checks if the compass is currently displayed.
-			 *
-			 * @return True if compass is visible, false otherwise.
-			 *
 			 * @note This is a debug utility.
+			 * @return true
 			 */
 			[[nodiscard]]
 			bool compassDisplayEnabled () const noexcept;
 
 			/**
 			 * @brief Toggles compass visibility.
-			 *
-			 * @param resourceManager Resource manager for loading compass mesh.
-			 * @return True if compass is now visible, false otherwise.
-			 *
+			 * @param resources Resource manager for loading compass mesh.
+			 * @return True if compass is now visible, false otherwise
 			 * @note This is a debug utility.
 			 */
-			bool toggleCompassDisplay (Resources::Manager & resourceManager) noexcept;
+			bool toggleCompassDisplay (Resources::Manager & resources) noexcept;
 
 			/**
 			 * @brief Displays a ground zero reference plane at Y=0.
-			 *
 			 * Creates a visual grid at the origin for debugging.
-			 *
-			 * @param resourceManager Resource manager for loading plane mesh.
-			 * @return True if plane was created, false on failure.
-			 *
+			 * @param resources Resource manager for loading plane mesh.
 			 * @note This is a debug utility.
-			 *
 			 * @see disableGroundZeroDisplay() To remove.
 			 */
-			bool enableGroundZeroDisplay (Resources::Manager & resourceManager) noexcept;
+			void enableGroundZeroDisplay (Resources::Manager & resources) noexcept;
 
 			/**
 			 * @brief Removes the ground zero reference plane.
-			 *
 			 * @note This is a debug utility.
-			 *
 			 * @see enableGroundZeroDisplay() To show again.
 			 */
 			void disableGroundZeroDisplay () noexcept;
 
 			/**
 			 * @brief Checks if ground zero plane is displayed.
-			 *
 			 * @return True if visible, false otherwise.
-			 *
 			 * @note This is a debug utility.
 			 */
 			[[nodiscard]]
@@ -1807,42 +1773,31 @@ namespace EmEn::Scenes
 
 			/**
 			 * @brief Toggles ground zero plane visibility.
-			 *
-			 * @param resourceManager Resource manager for loading plane mesh.
-			 *
+			 * @param resources Resource manager for loading plane mesh.
 			 * @note This is a debug utility.
 			 */
-			void toggleGroundZeroDisplay (Resources::Manager & resourceManager) noexcept;
+			void toggleGroundZeroDisplay (Resources::Manager & resources) noexcept;
 
 			/**
 			 * @brief Displays scene boundary visualization planes.
-			 *
 			 * Shows translucent planes at the scene boundary limits.
-			 *
-			 * @param resourceManager Resource manager for loading plane meshes.
-			 * @return True if planes were created, false on failure.
-			 *
+			 * @param resources Resource manager for loading plane meshes.
 			 * @note This is a debug utility.
-			 *
 			 * @see boundary() For boundary extent.
 			 * @see disableBoundaryPlanesDisplay() To remove.
 			 */
-			bool enableBoundaryPlanesDisplay (Resources::Manager & resourceManager) noexcept;
+			void enableBoundaryPlanesDisplay (Resources::Manager & resources) noexcept;
 
 			/**
 			 * @brief Removes the boundary visualization planes.
-			 *
 			 * @note This is a debug utility.
-			 *
 			 * @see enableBoundaryPlanesDisplay() To show again.
 			 */
 			void disableBoundaryPlanesDisplay () noexcept;
 
 			/**
 			 * @brief Checks if boundary planes are displayed.
-			 *
 			 * @return True if visible, false otherwise.
-			 *
 			 * @note This is a debug utility.
 			 */
 			[[nodiscard]]
@@ -1850,9 +1805,7 @@ namespace EmEn::Scenes
 
 			/**
 			 * @brief Toggles boundary planes visibility.
-			 *
 			 * @param resourceManager Resource manager for loading plane meshes.
-			 *
 			 * @note This is a debug utility.
 			 */
 			void toggleBoundaryPlanesDisplay (Resources::Manager & resourceManager) noexcept;
@@ -2324,10 +2277,12 @@ namespace EmEn::Scenes
 			 * Physics, effects, timing.
 			 * ============================================================ */
 
-			/** @brief Global post-processing and rendering effects. */
-			Saphir::EffectsList m_environmentEffects;
 			/** @brief Audio ambience for background sounds. Lazy-initialized. */
 			std::unique_ptr< Audio::Ambience > m_ambience;
+			/** @brief Per-scene multi-pass post-processing effect stack. Null if no scene effects. */
+			std::unique_ptr< Graphics::PostProcessStack > m_postProcessStack;
+			/** @brief Cached pointer to the active camera component. Set by PrimaryCameraCreated notification. */
+			Component::Camera * m_activeCamera{nullptr};
 			/** @brief Physical environment (gravity, air density). Default: Earth. */
 			Physics::EnvironmentPhysicalProperties m_environmentPhysicalProperties{Physics::EnvironmentPhysicalProperties::Earth()};
 			/** @brief [PHYSICS-NEW-SYSTEM] Sequential impulse constraint solver. */

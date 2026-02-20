@@ -69,6 +69,72 @@ Core owns coordinated audio+video+voice-over recording via two protected methods
 - **Shift+F12** — Take a screenshot (`screenshot()`)
 - **Shift+Ctrl+F12** — Toggle audio+video recording
 
+### Core - Automated Screenshot (`--screenshot-after`)
+
+CLI argument for headless visual capture: takes a screenshot after N seconds of runtime, then exits cleanly.
+
+**Usage:**
+```bash
+./app --load-demo <demo-id> --screenshot-after <seconds>
+```
+
+**Implementation details:**
+- Parsed in `Core::initializeBaseLevel()` using `std::from_chars` (no-exception safe). See: `Core.cpp:~line 579`
+- Timer checked in main loop after pause handling. See: `Core.cpp:run()` (~line 367)
+- Reuses existing `Core::screenshot()` — saves PNG to `{userDataDir}/captures/{unix_timestamp}.png`
+- Calls `Core::stop()` after capture for clean shutdown
+- `m_screenshotAfterUs` stores delay in microseconds (0 = disabled). See: `Core.hpp:m_screenshotAfterUs`
+- `ScreenshotAfterArg` constant: `"--screenshot-after"`. See: `Core.hpp:ScreenshotAfterArg`
+
+**Threading note:** `m_lifetime` (logic thread) is read from the main thread via `>=` comparison. Acceptable race: value is monotonically increasing, worst case is one frame late (~16ms).
+
+**Shutdown timing:** CEF cleanup adds ~10-15s after `stop()`. When using `timeout`, set it well above the screenshot delay (e.g., `timeout 40` for `--screenshot-after 10`).
+
+**AI visual analysis workflow:** This enables fully automated rendering analysis — launch demo, capture output, read PNG with multimodal AI, evaluate visual quality.
+
+### Core - Maintenance CLI Arguments
+
+Arguments that perform a maintenance operation and exit immediately, **before** any window, CEF, or rendering initialization. They leverage `Core::willNotRun()` which is checked by `main()` to short-circuit the boot sequence.
+
+#### `--wipe-local-data` / `--wipe-local-data-confirm`
+
+Wipes volatile local data (cache + user data directories) while preserving settings.
+
+- `--wipe-local-data` — **Dry run**: lists all files that would be deleted with sizes, then exits. Does not delete anything.
+- `--wipe-local-data-confirm` — **Actual wipe**: lists files, then deletes cache and user data directories.
+
+**Scope:**
+- **Wiped:** `cacheDirectory` (shader cache, CEF debug log) + `userDataDirectory` (captures, CEF profile)
+- **Preserved:** `configDirectory` (settings.json)
+
+**Implementation:** Detected in `Core::initializeBaseLevel()` after primary services init (FileSystem available). Calls `Core::executeWipeLocalData(bool dryRun)` which builds a single `TraceWarning` report (named variable pattern). Sets `m_willNotRun = true` so `main()` exits before CEF initialization.
+
+**Code references:**
+- `Core.hpp:WipeLocalDataArg`, `Core.hpp:WipeLocalDataConfirmArg`
+- `Core.cpp:initializeBaseLevel()` — detection
+- `Core.cpp:executeWipeLocalData()` — implementation
+
+#### `--reset-settings`
+
+Backs up the current settings file and exits, forcing fresh settings on next launch.
+
+- Renames `settings.json` → `settings.json.<unix_timestamp>-bck`
+- Disables `Settings::saveAtExit()` to prevent the service from re-creating the file at shutdown
+- If no settings file exists, informs the user and exits
+
+**Code references:**
+- `Core.hpp:ResetSettingsArg`
+- `Core.cpp:executeResetSettings()` — implementation
+
+#### `willNotRun()` Pattern
+
+The `Core::willNotRun()` getter (public, set during `initializeBaseLevel()`) allows `main()` to detect that the engine performed a maintenance operation and should exit immediately — **before** initializing CEF, creating windows, or entering the main loop. This prevents CEF from re-creating directories that were just wiped.
+
+```
+Boot sequence: Constructor → initializeBaseLevel() → sets m_willNotRun
+main(): checks willNotRun() → exits before CEF/window/rendering init
+```
+
 **Automatic stop triggers:**
 - Framebuffer resize (`onWindowChanged()`) — recording stops because video dimensions are locked at start
 - Application shutdown (`stop()`) — recording stops cleanly
@@ -137,7 +203,7 @@ The assembly script is generated only when **video is active**. It adapts to ava
 - **Thread-safe**: Mutex for console, thread-safe queue for file
 - **Performance**: TraceDebug Release eliminated at compilation (zero-cost)
 
-**Usage**: See @AGENTS.md section "Tracer System Usage" for complete conventions.
+**Usage**: See [`docs/tracer-system.md`](../docs/tracer-system.md) for complete conventions (3 forms, critical rules, multi-line).
 
 ### Window - OS Window Management
 **Files**: `Window.cpp/.hpp` + `Window.{linux,mac,windows}.cpp`
@@ -361,27 +427,33 @@ settings.set("audio.master_volume", 0.8f);
 ```
 
 ### Using Tracer
+
+> **FUNDAMENTAL RULE:** One trace = one complete log entry. **NEVER** use multiple traces to compose a single logical message. Use `"\n"` for multi-line content, or a named trace variable across scopes.
+
+**Three forms** (choose based on use case):
+
 ```cpp
-// Simple messages (static methods)
+// 1. Static methods — no variables, most performant
 Tracer::info(ClassId, "Loading level");
 Tracer::warning(ClassId, "Low FPS detected");
-Tracer::error(ClassId, "Failed to load texture");
-Tracer::fatal(ClassId, "Vulkan device lost");
 
-// Formatted messages (RAII classes)
+// 2. Inline RAII — messages with variables
 TraceInfo{ClassId} << "Loaded " << count << " textures";
-TraceWarning{ClassId} << "FPS dropped to " << fps;
 TraceError{ClassId} << "Failed to load: " << path;
 TraceDebug{ClassId} << "Position: " << x << ", " << y;  // Eliminated in Release
 
-// API trace (for external calls)
-TraceAPI{ClassId, "vkCreateDevice"} << "Creating logical device";
-
-// Log file
-tracer.enableLogger(filepath);  // Activates async logger
+// 3. Named variable — multi-scope/conditional message (single trace entry)
+TraceWarning trace{ClassId};
+trace << "Report:" "\n";
+if ( hasData )
+{
+    trace << "  Data: " << data << "\n";
+}
+trace << "Done.";
+// Emitted as ONE log entry when 'trace' goes out of scope.
 ```
 
-**Important**: See @AGENTS.md section "Tracer System Usage" for complete rules (mandatory braces `{}`, method vs class choice, etc.).
+**Complete rules**: See [`docs/tracer-system.md`](../docs/tracer-system.md) (braces `{}`, method vs class choice, `"\n"` for multi-line).
 
 ### Using FileSystem
 ```cpp

@@ -5,6 +5,7 @@ Critical warnings, known pitfalls, and hard-won lessons for Emeraude Engine deve
 ## Table of Contents
 
 - [Graphics/Material System](#graphicsmaterial-system)
+- [Scene Rendering](#scene-rendering)
 - [Shader/GLSL Pitfalls](#shaderglsl-pitfalls)
 - [Platform-Specific](#platform-specific)
 
@@ -114,6 +115,28 @@ if ( materialType == PBRResource::ClassId )
 
 ---
 
+## Scene Rendering
+
+### Fixed: Scene Visual Components Null Check (Feb 2026)
+
+> [!WARNING]
+> **`m_sceneVisualComponents[0]` can be null when no background is set.**
+>
+> In `Scene.rendering.cpp:getRenderableInstanceReadyForRendering()`, the environment cubemap check previously assumed a background always exists:
+> ```cpp
+> // BUG: m_environmentCubemap is ALWAYS non-null (initialized from default cubemap)
+> // but m_sceneVisualComponents[0] is null without a background → crash
+> if ( m_environmentCubemap != nullptr && renderableInstance == m_sceneVisualComponents[0]->getRenderableInstance() )
+> ```
+>
+> **Fix:** Added null check: `m_sceneVisualComponents[0] != nullptr &&`
+>
+> **Trigger:** Scenes without skybox/background (e.g. closed rooms with no `enableBasicBackground()`).
+>
+> **File:** `Scenes/Scene.rendering.cpp:1385`
+
+---
+
 ## Shader/GLSL Pitfalls
 
 ### GLSL smoothstep Undefined Behavior
@@ -141,6 +164,44 @@ The clear coat normal map must use a fragment-local tangent frame, NOT `ViewTBNM
 - GLSL compilation errors (`svViewTBNMatrix` undeclared)
 
 Use the same `cross(N, up)` pattern as anisotropy. See: `Saphir/AGENTS.md` (Clear Coat Normal section).
+
+### Critical: World-Space Y Reconstruction from Depth (Y-DOWN)
+
+> [!CRITICAL]
+> **`cross(right, forward) = viewYAxis` (row 1 of view matrix). NOT `cross(forward, right)`!**
+>
+> When reconstructing world-space positions from depth using camera basis vectors,
+> the camera "up" vector must be computed as `cross(cameraRight, cameraForward)`, not
+> `cross(cameraForward, cameraRight)`. In a right-handed coordinate system with axes
+> (right, viewY, backward):
+>
+> - `cross(right, forward) = cross(X, -Z) = +Y` → correct view Y axis
+> - `cross(forward, right) = cross(-Z, X) = -Y` → **inverted**, causes Y-flipped reconstruction
+>
+> **Symptom:** Height-dependent effects (fog, height-based coloring) appear vertically
+> inverted — e.g. fog disappears from screen bottom when looking up.
+>
+> **Note:** SSAO/SSR work in view space with relative positions, so the sign error
+> cancels out. Only effects that need **absolute world-space height** (like atmospheric
+> fog) expose this bug.
+>
+> **Code reference:** `Effects/Framebuffer/AtmosphericFog.cpp` — shader `cameraUp` computation
+
+### Critical: Inscattering Light Direction Convention
+
+> [!IMPORTANT]
+> **When `setLightDirection()` takes the emission direction (sun → scene), negate it
+> for inscattering `dot(rayDir, -lightDir)`.**
+>
+> The `dot(rayDir, lightDir)` product gives cosAngle = +1 when looking **away** from
+> the sun (same direction as light travel), which is the physically correct forward
+> scattering peak. But the **expected visual result** (UE5-style sun glow on the horizon)
+> requires maximum inscattering when looking **toward** the sun.
+>
+> **Fix:** Use `dot(rayDir, -lightDir)` so the glow appears around the sun, not
+> at the anti-solar point.
+>
+> **Code reference:** `Effects/Framebuffer/AtmosphericFog.cpp` — shader inscattering section
 
 ### POM GPU Stress on Large Surfaces
 

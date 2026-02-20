@@ -31,6 +31,7 @@
 
 /* Local inclusions. */
 #include "Audio/HardwareOutput.hpp"
+#include "Graphics/Renderer.hpp"
 #include "Input/Manager.hpp"
 #include "Scenes/Component/Camera.hpp"
 #include "Scenes/Component/DirectionalLight.hpp"
@@ -58,6 +59,7 @@ namespace EmEn::Scenes
 	{
 		this->observe(&m_AVConsoleManager);
 		this->observe(m_rootNode.get());
+		this->observe(&graphicsRenderer);
 
 		this->buildOctrees(octreeOptions);
 	}
@@ -68,15 +70,19 @@ namespace EmEn::Scenes
 		{
 			m_initialized = false;
 
+			/* NOTE: Destroy and release per-scene post-process stack. */
+			if ( m_postProcessStack != nullptr )
+			{
+				m_postProcessStack->destroyAll();
+				m_postProcessStack.reset();
+			}
+
 			/* NOTE: Stop and release ambience. */
 			if ( m_ambience != nullptr )
 			{
 				m_ambience->stop();
 				m_ambience.reset();
 			}
-
-			/* NOTE: Release all shared_ptr. */
-			m_environmentEffects.clear();
 
 			/* NOTE: Other data are trivial. */
 		}
@@ -138,6 +144,38 @@ namespace EmEn::Scenes
 			this->resetNodeTree();
 			m_rootNode.reset();
 		}
+	}
+
+	/* Post-processing. */
+
+	void
+	Scene::setPostProcessStack (std::unique_ptr< PostProcessStack > stack) noexcept
+	{
+		/* Destroy previous stack GPU resources before replacing. */
+		if ( m_postProcessStack != nullptr )
+		{
+			m_postProcessStack->destroyAll();
+		}
+
+		m_postProcessStack = std::move(stack);
+	}
+
+	const Component::Camera *
+	Scene::activeCamera () const noexcept
+	{
+		return m_activeCamera;
+	}
+
+	Component::Camera *
+	Scene::activeCamera () noexcept
+	{
+		return m_activeCamera;
+	}
+
+	void
+	Scene::setActiveCamera (Component::Camera * camera) noexcept
+	{
+		m_activeCamera = camera;
 	}
 
 	bool
@@ -569,6 +607,28 @@ namespace EmEn::Scenes
 	bool
 	Scene::onNotification (const ObservableTrait * observable, int notificationCode, const std::any & data) noexcept
 	{
+		/* Handle Renderer resize notifications to resize the post-process stack. */
+		if ( observable->is(Renderer::getClassUID()) )
+		{
+			if ( notificationCode == Renderer::WindowContentRefreshed && m_postProcessStack != nullptr )
+			{
+				auto & renderer = m_AVConsoleManager.graphicsRenderer();
+				const auto mainRT = renderer.mainRenderTarget();
+
+				if ( mainRT != nullptr )
+				{
+					const auto & extent = mainRT->extent();
+
+					if ( !m_postProcessStack->resizeAll(renderer, extent.width, extent.height) )
+					{
+						TraceError{ClassId} << "Failed to resize the post-process stack on window resize !";
+					}
+				}
+			}
+
+			return true;
+		}
+
 		if ( observable == &m_AVConsoleManager )
 		{
 			this->checkAVConsoleNotification(notificationCode, data);

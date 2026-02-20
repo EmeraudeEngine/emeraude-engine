@@ -121,15 +121,24 @@ struct ProgramCacheKey {
 The engine uses **forward rendering multi-pass**. A lit object is rendered multiple times:
 
 ```cpp
-enum RenderPassType {
-    SimplePass = 0,                  // No lighting
-    AmbientPass = 1,                 // Ambient light only
-    DirectionalLightPass = 2,        // Directional light + shadows
-    DirectionalLightPassNoShadow = 3,
-    PointLightPass = 4,              // Point light + shadows
-    PointLightPassNoShadow = 5,
-    SpotLightPass = 6,               // Spot light + shadows
-    SpotLightPassNoShadow = 7
+enum class RenderPassType : uint8_t {
+    SimplePass = 0,
+    AmbientPass = 1,
+    DirectionalLightPass = 2,            // Base (no shadow, no color projection)
+    DirectionalLightPassShadowMap = 3,   // Shadow only
+    DirectionalLightPassCSM = 4,         // Cascaded Shadow Maps
+    DirectionalLightPassColorMap = 5,    // Color projection only
+    DirectionalLightPassFull = 6,        // Shadow + color projection
+    DirectionalLightPassFullCSM = 7,     // CSM + color projection
+    PointLightPass = 8,
+    PointLightPassShadowMap = 9,
+    PointLightPassColorMap = 10,
+    PointLightPassFull = 11,
+    SpotLightPass = 12,
+    SpotLightPassColorMap = 13,
+    SpotLightPassShadowMap = 14,
+    SpotLightPassFull = 15,
+    None = 16
 };
 ```
 

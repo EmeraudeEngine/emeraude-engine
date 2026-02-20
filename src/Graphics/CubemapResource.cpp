@@ -30,6 +30,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <numbers>
 
 /* Local inclusions. */
 #include "Libs/PixelFactory/FileIO.hpp"
@@ -83,7 +84,7 @@ namespace EmEn::Graphics
 
 			/* Create a retro sunset gradient mapped by elevation angle.
 			 * Position 0.0 = zenith (straight up), 1.0 = nadir (straight down).
-			 * Extra stops are concentrated around the horizon (0.5) for a richer,
+			 * Extra stops are concentrated on the horizon (0.5) for a richer,
 			 * more defined horizon glow. */
 			Gradient< float, float > sunsetGradient;
 			sunsetGradient.addColorAt(0.00F, Color< float >{0.02F, 0.02F, 0.10F, 1.0F}); /* Zenith: Deep night blue */
@@ -170,6 +171,16 @@ namespace EmEn::Graphics
 			return false;
 		}
 
+		/* Auto-detect format based on aspect ratio. */
+		const auto ratio = static_cast< float >(basemap.width()) / static_cast< float >(basemap.height());
+
+		if ( std::abs(ratio - 2.0F) < 0.01F )
+		{
+			/* 2:1 aspect ratio → equirectangular panoramic image. */
+			return this->loadEquirectangular(basemap, basemap.height() / 2);
+		}
+
+		/* 3:2 aspect ratio or other → packed cubemap (existing behavior). */
 		return this->load(basemap);
 	}
 
@@ -191,17 +202,10 @@ namespace EmEn::Graphics
 
 		const auto fileFormat = data[FileFormatKey].asString();
 
-		/* Checks if cubemap is packed onto one image. */
-		if ( !data.isMember(PackedKey) )
-		{
-			TraceError{ClassId} << "There is no '" << PackedKey << "' key in cubemap definition !";
-
-			return this->setLoadSuccess(false);
-		}
-
 		const auto & fileSystem = serviceProvider.fileSystem();
 
-		if ( data[PackedKey].asBool() )
+		/* Checks if cubemap is packed onto one image. */
+		if ( data.isMember(PackedKey) && data[PackedKey].asBool() )
 		{
 			const auto filepath = fileSystem.getFilepathFromDataDirectories("data-stores/Cubemaps", this->name() + '.' + PackedKey + '.' + fileFormat);
 
@@ -222,6 +226,33 @@ namespace EmEn::Graphics
 			return this->load(basemap);
 		}
 
+		/* Checks if cubemap is an equirectangular (panoramic 2:1) image. */
+		if ( data.isMember(EquirectangularKey) && data[EquirectangularKey].asBool() )
+		{
+			const auto filepath = fileSystem.getFilepathFromDataDirectories("data-stores/Cubemaps", this->name() + '.' + EquirectangularKey + '.' + fileFormat);
+
+			if ( filepath.empty() )
+			{
+				return this->setLoadSuccess(false);
+			}
+
+			Pixmap< uint8_t > equirectangular{};
+
+			if ( !FileIO::read(filepath, equirectangular) )
+			{
+				TraceError{ClassId} << "Unable to read the equirectangular cubemap file '" << filepath << "' !";
+
+				return this->setLoadSuccess(false);
+			}
+
+			const uint32_t faceSize = data.isMember("Size")
+				? data["Size"].asUInt()
+				: equirectangular.height() / 2;
+
+			return this->loadEquirectangular(equirectangular, faceSize);
+		}
+
+		/* Unpacked mode: load individual face files. */
 		for ( size_t faceIndex = 0; faceIndex < CubemapFaceCount; faceIndex++ )
 		{
 			const auto filepath = fileSystem.getFilepathFromDataDirectories("data-stores/Cubemaps", this->name() + '.' + CubemapFaceNames.at(faceIndex) + '.' + fileFormat);
@@ -236,6 +267,88 @@ namespace EmEn::Graphics
 				TraceError{ClassId} << "Unable to load plane '" << CubemapFaceNames.at(faceIndex) << "' from file '" << filepath << "' !";
 
 				return this->setLoadSuccess(false);
+			}
+
+			if ( !TextureResource::Abstract::validatePixmap(ClassId, this->name(), m_faces.at(faceIndex)) )
+			{
+				TraceError{ClassId} << "Unable to use the pixmap #" << faceIndex << " for face '" << CubemapFaceNames.at(faceIndex) << "' to create a cubemap !";
+
+				return this->setLoadSuccess(false);
+			}
+		}
+
+		return this->setLoadSuccess(true);
+	}
+
+	bool
+	CubemapResource::loadEquirectangular (const Pixmap< uint8_t > & equirectangular, uint32_t faceSize) noexcept
+	{
+		if ( !this->beginLoading() )
+		{
+			return false;
+		}
+
+		if ( !equirectangular.isValid() )
+		{
+			Tracer::error(ClassId, "Unable to use this equirectangular pixmap to create a cubemap !");
+
+			return this->setLoadSuccess(false);
+		}
+
+		/* NOTE: Pixmap UV wrapping is enabled by default, which handles
+		 * the longitude seam (u wrap-around) automatically during sampling. */
+
+		constexpr auto pi = std::numbers::pi_v< float >;
+		constexpr auto twoPi = 2.0F * pi;
+		const auto invSize = 1.0F / static_cast< float >(faceSize);
+
+		for ( size_t faceIndex = 0; faceIndex < CubemapFaceCount; faceIndex++ )
+		{
+			if ( !m_faces.at(faceIndex).initialize(faceSize, faceSize, ChannelMode::RGBA) )
+			{
+				TraceError{ClassId} << "Unable to initialize the pixmap for face #" << faceIndex << " !";
+
+				return this->setLoadSuccess(false);
+			}
+
+			for ( uint32_t row = 0; row < faceSize; row++ )
+			{
+				const auto t = 2.0F * (static_cast< float >(row) + 0.5F) * invSize - 1.0F;
+
+				for ( uint32_t col = 0; col < faceSize; col++ )
+				{
+					const auto s = 2.0F * (static_cast< float >(col) + 0.5F) * invSize - 1.0F;
+
+					/* Compute the 3D direction vector for this texel based on face. */
+					float dx, dy, dz;
+
+					switch ( faceIndex )
+					{
+						case 0: /* PositiveX */ dx =  1.0F; dy = -t;    dz = -s;    break;
+						case 1: /* NegativeX */ dx = -1.0F; dy = -t;    dz =  s;    break;
+						case 2: /* PositiveY */ dx =  s;    dy =  1.0F; dz =  t;    break;
+						case 3: /* NegativeY */ dx =  s;    dy = -1.0F; dz = -t;    break;
+						case 4: /* PositiveZ */ dx =  s;    dy = -t;    dz =  1.0F; break;
+						default: /* NegativeZ */ dx = -s;   dy = -t;    dz = -1.0F; break;
+					}
+
+					/* Normalize direction vector. */
+					const auto length = std::sqrt(dx * dx + dy * dy + dz * dz);
+					const auto nx = dx / length;
+					const auto ny = dy / length;
+					const auto nz = dz / length;
+
+					/* Convert to equirectangular UV coordinates. */
+					const auto theta = std::atan2(nz, nx);
+					const auto phi = std::asin(ny);
+					const auto u = theta / twoPi + 0.5F;
+					const auto v = 0.5F - phi / pi;
+
+					/* Sample the equirectangular source with bilinear interpolation. */
+					const auto color = equirectangular.linearSample(u, v);
+
+					m_faces.at(faceIndex).setPixel(col, row, color);
+				}
 			}
 
 			if ( !TextureResource::Abstract::validatePixmap(ClassId, this->name(), m_faces.at(faceIndex)) )

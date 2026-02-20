@@ -131,6 +131,9 @@ namespace EmEn::Vulkan
 			m_createInfo.enabledExtensionCount = static_cast< uint32_t >(m_requiredInstanceExtensions.size());
 			m_createInfo.ppEnabledExtensionNames = m_requiredInstanceExtensions.data();
 
+			/* Initialize RenderDoc capture API (must happen before vkCreateInstance). */
+			static_cast< void >(m_renderDocCapture.initialize());
+
 			/* At this point, we create the vulkan instance.
 			 * Beyond this point, Vulkan is in the pipe and usable. */
 			if ( const auto result = vkCreateInstance(&m_createInfo, nullptr, &m_instance); result != VK_SUCCESS )
@@ -182,6 +185,9 @@ namespace EmEn::Vulkan
 			}
 		}
 
+		/* Register the Vulkan instance handle with RenderDoc for capture operations. */
+		m_renderDocCapture.setDevice(m_instance);
+
 		/* NOTE: When debugging, we want to re-route the validation layer messages to the engine tracer. */
 		if ( this->isUsingDebugMessenger() )
 		{
@@ -231,6 +237,7 @@ namespace EmEn::Vulkan
 
 		m_physicalDevices.clear();
 		m_debugMessenger.reset();
+		m_renderDocCapture.shutdown();
 
 		if ( m_instance != VK_NULL_HANDLE )
 		{
@@ -840,6 +847,7 @@ namespace EmEn::Vulkan
 		requirements.featuresVK10().samplerAnisotropy = VK_TRUE;
 		requirements.featuresVK10().depthBiasClamp = VK_TRUE; // Required for shadow map depth bias clamping
 		requirements.featuresVK10().shaderImageGatherExtended = VK_TRUE; // Required for PCF Filtering
+		requirements.featuresVK10().imageCubeArray = VK_TRUE; // Required for animated cubemap textures (VK_IMAGE_VIEW_TYPE_CUBE_ARRAY)
 		requirements.featuresVK11().multiview = VK_TRUE; // Required for cubemap render-to-texture (Vulkan 1.1+)
 		{
 			/* Descriptor indexing features (Vulkan 1.2) - Required for bindless textures. */

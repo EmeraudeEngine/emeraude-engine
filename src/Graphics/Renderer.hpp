@@ -61,6 +61,8 @@
 #include "Resources/Manager.hpp"
 #include "TextureResource/TextureCubemap.hpp"
 #include "GrabPass.hpp"
+#include "PostProcessor.hpp"
+#include "SceneRenderTarget.hpp"
 
 /* Forward declarations. */
 namespace EmEn
@@ -72,11 +74,13 @@ namespace EmEn
 		class CommandPool;
 		class CommandBuffer;
 		class GraphicsPipeline;
+		class Queue;
 		class Sampler;
 	}
 
 	namespace Graphics
 	{
+		class DummyColorProjectionTexture;
 		class DummyShadowTexture;
 
 		namespace Material
@@ -145,9 +149,13 @@ namespace EmEn::Graphics
 			bool initialize (const std::shared_ptr< Vulkan::Device > & device, uint32_t frameIndex) noexcept;
 
 			/**
-			 * @brief Declares semaphore to wait.
+			 * @brief Declares a semaphore to be waited on by a later submission.
+			 * @note The semaphore is added to exactly ONE list (primary or secondary), never both.
+			 * Primary semaphores (shadow maps) are consumed by render-to-textures, then forwarded
+			 * to secondary via promotePrimaryToSecondary(). Secondary semaphores are waited on
+			 * by the final frame submission. Binary semaphores can only be waited on once per signal.
 			 * @param semaphore A reference to a semaphore smart pointer.
-			 * @param primary Is a primary resource to wait?
+			 * @param primary True for shadow map semaphores (consumed by RTTs), false for RTT semaphores.
 			 * @return void
 			 */
 			void declareSemaphore (const std::shared_ptr< Vulkan::Sync::Semaphore > & semaphore, bool primary) noexcept;
@@ -202,6 +210,23 @@ namespace EmEn::Graphics
 			secondarySemaphores () noexcept
 			{
 				return m_secondarySemaphores;
+			}
+
+			/**
+			 * @brief Forwards unconsumed primary semaphores to the secondary list.
+			 * @note Call this after render-to-textures to ensure shadow map semaphores
+			 * are waited on by the final submit when no RTT consumed them.
+			 * @return void
+			 */
+			void
+			promotePrimaryToSecondary () noexcept
+			{
+				for ( const auto sem : m_primarySemaphores )
+				{
+					m_secondarySemaphores.emplace_back(sem);
+				}
+
+				m_primarySemaphores.clear();
 			}
 
 			/**
@@ -332,25 +357,7 @@ namespace EmEn::Graphics
 			 * @param instance A reference to the Vulkan instance.
 			 * @param window A reference to a handle.
 			 */
-			Renderer (PrimaryServices & primaryServices, Vulkan::Instance & instance, Window & window) noexcept
-				: ServiceInterface{ClassId},
-				ControllableTrait{ClassId},
-				m_primaryServices{primaryServices},
-				m_vulkanInstance{instance},
-				m_window{window},
-				m_shaderManager{primaryServices},
-				m_sharedUBOManager{*this},
-				m_bindlessTextureManager{*this},
-				m_debugMode{m_vulkanInstance.isDebugModeEnabled()}
-			{
-				/* Framebuffer clear color value. */
-				this->setClearColor(Libs::PixelFactory::Black);
-
-				/* Framebuffer clear depth/stencil values. */
-				this->setClearDepthStencilValues(1.0F, 0);
-
-				this->observe(&m_window);
-			}
+			Renderer (PrimaryServices & primaryServices, Vulkan::Instance & instance, Window & window) noexcept;
 
 			/**
 			 * @brief Destructs the graphics renderer.
@@ -603,6 +610,28 @@ namespace EmEn::Graphics
 			}
 
 			/**
+			 * @brief Returns the reference to the post-processor service.
+			 * @return PostProcessor &
+			 */
+			[[nodiscard]]
+			PostProcessor &
+			postProcessor () noexcept
+			{
+				return m_postProcessor;
+			}
+
+			/**
+			 * @brief Returns the reference to the post-processor service.
+			 * @return const PostProcessor &
+			 */
+			[[nodiscard]]
+			const PostProcessor &
+			postProcessor () const noexcept
+			{
+				return m_postProcessor;
+			}
+
+			/**
 			 * @brief Returns whether the debug mode is enabled.
 			 * @return bool
 			 */
@@ -752,6 +781,7 @@ namespace EmEn::Graphics
 				m_clearColors[0].color.float32[1] = Libs::Math::clampToUnit(static_cast< float >(green));
 				m_clearColors[0].color.float32[2] = Libs::Math::clampToUnit(static_cast< float >(blue));
 				m_clearColors[0].color.float32[3] = Libs::Math::clampToUnit(static_cast< float >(alpha));
+				m_swapChainClearColors[0] = m_clearColors[0];
 			}
 
 			/**
@@ -766,6 +796,7 @@ namespace EmEn::Graphics
 				m_clearColors[0].color.float32[1] = clearColor.green();
 				m_clearColors[0].color.float32[2] = clearColor.blue();
 				m_clearColors[0].color.float32[3] = clearColor.alpha();
+				m_swapChainClearColors[0] = m_clearColors[0];
 			}
 
 			/**
@@ -777,8 +808,10 @@ namespace EmEn::Graphics
 			void
 			setClearDepthStencilValues (float depth, uint32_t stencil) noexcept
 			{
-				m_clearColors[1].depthStencil.depth = depth;
-				m_clearColors[1].depthStencil.stencil = stencil;
+				m_clearColors[2].depthStencil.depth = depth;
+				m_clearColors[2].depthStencil.stencil = stencil;
+				m_swapChainClearColors[1].depthStencil.depth = depth;
+				m_swapChainClearColors[1].depthStencil.stencil = stencil;
 			}
 
 			/**
@@ -805,7 +838,7 @@ namespace EmEn::Graphics
 			float
 			getClearDepthValue () const noexcept
 			{
-				return m_clearColors[1].depthStencil.depth;
+				return m_clearColors[2].depthStencil.depth;
 			}
 
 			/**
@@ -816,7 +849,7 @@ namespace EmEn::Graphics
 			uint32_t
 			getClearStencilValue () const noexcept
 			{
-				return m_clearColors[1].depthStencil.stencil;
+				return m_clearColors[2].depthStencil.stencil;
 			}
 
 			/**
@@ -836,6 +869,93 @@ namespace EmEn::Graphics
 			 */
 			[[nodiscard]]
 			std::shared_ptr< Vulkan::Image > currentSwapChainColorImage () const noexcept;
+
+			/**
+			 * @brief Returns the swap chain color format.
+			 * @return VkFormat
+			 */
+			[[nodiscard]]
+			VkFormat swapChainColorFormat () const noexcept;
+
+			/**
+			 * @brief Returns the swap chain depth/stencil format.
+			 * @return VkFormat
+			 */
+			[[nodiscard]]
+			VkFormat swapChainDepthStencilFormat () const noexcept;
+
+			/**
+			 * @brief Returns the current swap chain depth/stencil image.
+			 * @return std::shared_ptr< Vulkan::Image >
+			 */
+			[[nodiscard]]
+			std::shared_ptr< Vulkan::Image > currentSwapChainDepthStencilImage () const noexcept;
+
+			/**
+			 * @brief Returns whether the internal scene render target is needed.
+			 * @note The internal target is required when the post-processor is active,
+			 * windowless mode is active, or MSAA is enabled.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool needsInternalTarget () const noexcept;
+
+			/**
+			 * @brief Returns the current scene color image for post-processing blit.
+			 * @note Returns the internal target's color image when active, otherwise the swap chain color.
+			 * @return std::shared_ptr< Vulkan::Image >
+			 */
+			[[nodiscard]]
+			std::shared_ptr< Vulkan::Image > currentSceneColorImage () const noexcept;
+
+			/**
+			 * @brief Returns the current scene depth image for post-processing blit.
+			 * @note Returns the internal target's depth image when active, otherwise the swap chain depth.
+			 * @return std::shared_ptr< Vulkan::Image >
+			 */
+			[[nodiscard]]
+			std::shared_ptr< Vulkan::Image > currentSceneDepthImage () const noexcept;
+
+			/**
+			 * @brief Returns the current scene normals image for post-processing.
+			 * @note Returns the internal target's normals image when active, otherwise nullptr.
+			 * @return std::shared_ptr< Vulkan::Image >
+			 */
+			[[nodiscard]]
+			std::shared_ptr< Vulkan::Image > currentSceneNormalsImage () const noexcept;
+
+			/**
+			 * @brief Returns the current frame-in-flight index.
+			 * @return uint32_t
+			 */
+			[[nodiscard]]
+			uint32_t
+			currentFrameIndex () const noexcept
+			{
+				return m_currentFrameIndex;
+			}
+
+			/**
+			 * @brief Returns the number of frames in flight.
+			 * @return uint32_t
+			 */
+			[[nodiscard]]
+			uint32_t
+			framesInFlight () const noexcept
+			{
+				return static_cast< uint32_t >(m_rendererFrameScope.size());
+			}
+
+			/**
+			 * @brief Returns the internal scene render target.
+			 * @return std::shared_ptr< SceneRenderTarget >
+			 */
+			[[nodiscard]]
+			std::shared_ptr< SceneRenderTarget >
+			sceneTarget () const noexcept
+			{
+				return m_sceneTarget;
+			}
 
 			/**
 			 * @brief Returns the descriptor pool.
@@ -914,6 +1034,30 @@ namespace EmEn::Graphics
 			getDummyShadowTextureCube () const noexcept
 			{
 				return m_dummyShadowTextureCube;
+			}
+
+			/**
+			 * @brief Returns the dummy 2D color projection texture.
+			 * @note This texture is used for lights without color projection to maintain unified descriptor set layouts.
+			 * @return std::shared_ptr< DummyColorProjectionTexture >
+			 */
+			[[nodiscard]]
+			std::shared_ptr< DummyColorProjectionTexture >
+			getDummyColorProjectionTexture2D () const noexcept
+			{
+				return m_dummyColorProjectionTexture2D;
+			}
+
+			/**
+			 * @brief Returns the dummy cubemap color projection texture.
+			 * @note This texture is used for point lights without color projection to maintain unified descriptor set layouts.
+			 * @return std::shared_ptr< DummyColorProjectionTexture >
+			 */
+			[[nodiscard]]
+			std::shared_ptr< DummyColorProjectionTexture >
+			getDummyColorProjectionTextureCube () const noexcept
+			{
+				return m_dummyColorProjectionTextureCube;
 			}
 
 			/**
@@ -1115,25 +1259,59 @@ namespace EmEn::Graphics
 			 * @brief Updates every shadow map from the scene.
 			 * @param currentFrameScope A writable reference to the current frame scope, the one being rendered.
 			 * @param scene A reference to the scene.
+			 * @param queue A pointer to the graphics queue to use for submissions.
 			 * @return void
 			 */
-			void renderShadowMaps (RendererFrameScope & currentFrameScope, Scenes::Scene & scene) const noexcept;
+			void renderShadowMaps (RendererFrameScope & currentFrameScope, Scenes::Scene & scene, const Vulkan::Queue * queue) const noexcept;
 
 			/**
 			 * @brief Updates every dynamic texture2Ds from the scene.
 			 * @param currentFrameScope A writable reference to the current frame scope, the one being rendered.
 			 * @param scene A reference to the scene.
+			 * @param queue A pointer to the graphics queue to use for submissions.
 			 * @return void
 			 */
-			void renderRenderToTextures (RendererFrameScope & currentFrameScope, Scenes::Scene & scene) const noexcept;
+			void renderRenderToTextures (RendererFrameScope & currentFrameScope, Scenes::Scene & scene, const Vulkan::Queue * queue) const noexcept;
 
 			/**
 			 * @brief Updates every off-screen view from the scene.
 			 * @param currentFrameScope A writable reference to the current frame scope, the one being rendered.
 			 * @param scene A reference to the scene.
+			 * @param queue A pointer to the graphics queue to use for submissions.
 			 * @return void
 			 */
-			void renderViews (RendererFrameScope & currentFrameScope, Scenes::Scene & scene) const noexcept;
+			void renderViews (RendererFrameScope & currentFrameScope, Scenes::Scene & scene, const Vulkan::Queue * queue) const noexcept;
+
+			/**
+			 * @brief Renders a frame directly to the swapchain (no internal target).
+			 * @note Used when no post-processing and no MSAA is active.
+			 * @param scene A reference to the scene smart pointer.
+			 * @param overlayManager A reference to the overlay manager.
+			 * @param currentFrameScope A reference to the current frame scope.
+			 * @param commandBuffer A reference to the command buffer smart pointer.
+			 * @return void
+			 */
+			void renderFrameDirect (const std::shared_ptr< Scenes::Scene > & scene, const Overlay::Manager & overlayManager, RendererFrameScope & currentFrameScope, const std::shared_ptr< Vulkan::CommandBuffer > & commandBuffer) noexcept;
+
+			/**
+			 * @brief Renders a frame through the internal scene render target.
+			 * @note Used when post-processing is active (HDR pipeline).
+			 * Renders scene to internal target, blits to grab pass, runs effects,
+			 * then draws final quad + overlay to swapchain.
+			 * @param scene A reference to the scene smart pointer.
+			 * @param overlayManager A reference to the overlay manager.
+			 * @param currentFrameScope A reference to the current frame scope.
+			 * @param commandBuffer A reference to the command buffer smart pointer.
+			 * @return void
+			 */
+			void renderFrameWithInternal (const std::shared_ptr< Scenes::Scene > & scene, const Overlay::Manager & overlayManager, RendererFrameScope & currentFrameScope, const std::shared_ptr< Vulkan::CommandBuffer > & commandBuffer) noexcept;
+
+			/**
+			 * @brief Recreates the internal scene render target on resize.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool recreateSceneTarget () noexcept;
 
 			/**
 			 * @brief Creates command pools and buffers according to the swap chain image count.
@@ -1161,24 +1339,41 @@ namespace EmEn::Graphics
 			Vulkan::Instance & m_vulkanInstance;
 			Window & m_window;
 			std::shared_ptr< Vulkan::Device > m_device;
+			/* NOTE: Fixed graphics queue used for ALL frame rendering.
+			 * Shadow map semaphores are binary and shared across frame scopes (they belong
+			 * to render targets, not frames). With triple buffering, up to 3 frames can be
+			 * in-flight simultaneously. If each frame used a different queue (round-robin),
+			 * concurrent signal/wait operations on the same binary semaphore across independent
+			 * queues would cause undefined behavior (double-signal on an already-signaled semaphore).
+			 * A single queue serializes all submissions in FIFO order, ensuring binary semaphore
+			 * state transitions are always correct. This has no meaningful performance impact since
+			 * queues from the same family share the same GPU execution units. */
+			Vulkan::Queue * m_graphicsQueue{nullptr};
 			Vulkan::TransferManager m_transferManager;
 			Vulkan::LayoutManager m_layoutManager;
 			Saphir::ShaderManager m_shaderManager;
 			SharedUBOManager m_sharedUBOManager;
 			BindlessTextureManager m_bindlessTextureManager;
 			VertexBufferFormatManager m_vertexBufferFormatManager;
+			PostProcessor m_postProcessor{*this};
 			ExternalInput m_externalInput{m_primaryServices};
 			Recorder m_recorder{m_primaryServices, *this};
 			std::vector< ServiceInterface * > m_subServicesEnabled;
 			std::shared_ptr< Vulkan::DescriptorPool > m_descriptorPool;
 			std::shared_ptr< Vulkan::SwapChain > m_swapChain;
+			std::shared_ptr< SceneRenderTarget > m_sceneTarget;
+			std::vector< std::shared_ptr< SceneRenderTarget > > m_retiredSceneTargets;
+			uint32_t m_retiredFrameCountdown{0};
 			std::shared_ptr< RenderTarget::Abstract > m_windowLessView;
 			Libs::StaticVector< RendererFrameScope, 5 > m_rendererFrameScope;
 			std::unordered_map< size_t, std::shared_ptr< Saphir::Program > > m_programs;
 			std::unordered_map< size_t, std::shared_ptr< Vulkan::GraphicsPipeline > > m_graphicsPipelines;
 			std::unordered_map< std::string, std::shared_ptr< Vulkan::Sampler > > m_samplers;
 			Libs::Time::Statistics::RealTime< std::chrono::high_resolution_clock > m_statistics{30};
-			std::array< VkClearValue, 2 > m_clearColors{};
+			std::array< VkClearValue, 3 > m_clearColors{};
+			/* Clear values for render targets without the MRT normals attachment (swap chain).
+			 * Layout: [0]=color, [1]=depth/stencil (vs m_clearColors: [0]=color, [1]=normals, [2]=depth). */
+			std::array< VkClearValue, 2 > m_swapChainClearColors{};
 			/* NOTE: Shadow maps only have a depth attachment at index 0, so they need
 			 * separate clear values with depth=1.0 at index 0 (not index 1 like main render). */
 			std::array< VkClearValue, 1 > m_shadowMapClearValues{VkClearValue{.depthStencil = {1.0F, 0}}};
@@ -1194,6 +1389,8 @@ namespace EmEn::Graphics
 			std::shared_ptr< TextureResource::TextureCubemap > m_defaultTextureCubemap;
 			std::shared_ptr< DummyShadowTexture > m_dummyShadowTexture2D;
 			std::shared_ptr< DummyShadowTexture > m_dummyShadowTextureCube;
+			std::shared_ptr< DummyColorProjectionTexture > m_dummyColorProjectionTexture2D;
+			std::shared_ptr< DummyColorProjectionTexture > m_dummyColorProjectionTextureCube;
 			std::unique_ptr< GrabPass > m_grabPass;
 			bool m_debugMode{false};
 			bool m_windowLess{false};

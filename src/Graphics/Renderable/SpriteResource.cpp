@@ -81,15 +81,13 @@ namespace EmEn::Graphics::Renderable
 
 		this->setReadyForInstantiation(false);
 
-		const auto materialResource = serviceProvider.container< Material::BasicResource >()->getOrCreateResource(
-			"SpriteMaterial" + this->name(),
-			[&data, &serviceProvider] (Material::BasicResource & newMaterial)
-			{
+		const auto material = serviceProvider.container< Material::BasicResource >()
+			->getOrCreateResource("SpriteMaterial" + this->name(), [&serviceProvider, data] (auto & materialResource) {
 				if ( !data.isMember(Material::JKData) || !data[Material::JKData].isObject() )
 				{
 					TraceError{ClassId} << "The key '" << Material::JKData << "' JSON structure is not present or not an object !";
 
-					return newMaterial.setManualLoadSuccess(false);
+					return materialResource.setManualLoadSuccess(false);
 				}
 
 				const auto & componentData = data[Material::JKData];
@@ -105,9 +103,9 @@ namespace EmEn::Graphics::Renderable
 								->getResource(FastJSON::getValue< std::string >(componentData, Material::JKName)
 								.value_or(Resources::Default));
 
-							if ( !newMaterial.setTextureResource(textureResource, true) )
+							if ( !materialResource.setTextureResource(textureResource, true) )
 							{
-								return newMaterial.setManualLoadSuccess(false);
+								return materialResource.setManualLoadSuccess(false);
 							}
 						}
 							break;
@@ -118,9 +116,9 @@ namespace EmEn::Graphics::Renderable
 								->getResource(FastJSON::getValue< std::string >(componentData, Material::JKName)
 								.value_or(Resources::Default));
 
-							if ( !newMaterial.setTextureResource(textureResource, true) )
+							if ( !materialResource.setTextureResource(textureResource, true) )
 							{
-								return newMaterial.setManualLoadSuccess(false);
+								return materialResource.setManualLoadSuccess(false);
 							}
 						}
 							break;
@@ -128,43 +126,37 @@ namespace EmEn::Graphics::Renderable
 						default:
 							TraceError{ClassId} << "Unhandled material type (" << to_string(fillingType.value()) << ") for sprite !";
 
-							return newMaterial.setManualLoadSuccess(false);
+							return materialResource.setManualLoadSuccess(false);
 					}
 				}
 				else
 				{
 					TraceError{ClassId} << "Undefined material type for sprite !";
 
-					return newMaterial.setManualLoadSuccess(false);
+					return materialResource.setManualLoadSuccess(false);
 				}
 
 				/* Check the blending mode. */
-				newMaterial.enableBlendingFromJson(data);
+				materialResource.enableBlendingFromJson(data);
 
 				/* Check the optional global auto-illumination amount. */
-				const auto autoIllumination = FastJSON::getValue< float >(data, Material::JKAutoIllumination).value_or(0.0F);
-
-				if ( autoIllumination > 0.0F )
+				if ( const auto autoIllumination = FastJSON::getValue< float >(data, Material::JKAutoIllumination).value_or(0.0F); autoIllumination > 0.0F )
 				{
-					newMaterial.setAutoIlluminationAmount(autoIllumination);
+					materialResource.setAutoIlluminationAmount(autoIllumination);
 				}
 
 				/* Check the optional global opacity. */
-				const auto opacity = FastJSON::getValue< float >(data, Material::JKOpacity).value_or(1.0F);
-
-				if ( opacity < 1.0F )
+				if ( const auto opacity = FastJSON::getValue< float >(data, Material::JKOpacity).value_or(1.0F); opacity < 1.0F )
 				{
-					newMaterial.setOpacity(opacity);
+					materialResource.setOpacity(opacity);
 				}
 
-				return newMaterial.setManualLoadSuccess(true);
-			},
-			0
-		);
+				return materialResource.setManualLoadSuccess(true);
+			}, 0);
 
-		if ( !this->setMaterial(materialResource) )
+		if ( !this->setMaterial(material) )
 		{
-			TraceError{ClassId} << "Unable to load sprite material '" << materialResource->name() << "' !";
+			TraceError{ClassId} << "Unable to load sprite material '" << material->name() << "' !";
 
 			return this->setLoadSuccess(false);
 		}
@@ -228,10 +220,9 @@ namespace EmEn::Graphics::Renderable
 			flags |= Geometry::Enable3DPrimaryTextureCoordinates;
 		}
 
-		const auto geometryResource = serviceProvider.container< Geometry::IndexedVertexResource >()->getOrCreateResource(
-			resourceName.str(),
-			[isAnimated, centerAtBottom, flip] (Geometry::IndexedVertexResource & newGeometry)
-			{
+		/* NOTE: Must be sync to get the geometry ASAP. */
+		m_geometry = serviceProvider.container< Geometry::IndexedVertexResource >()
+			->getOrCreateResource(resourceName.str(), [isAnimated, centerAtBottom, flip] (auto & geometryResource) {
 				Shape< float, uint32_t > shape{2 * MaxFrames};
 
 				ShapeBuilder< float, uint32_t > builder{shape};
@@ -294,21 +285,10 @@ namespace EmEn::Graphics::Renderable
 
 				builder.endConstruction();
 
-				return newGeometry.load(shape);
-			},
-			flags
-		);
-
-		if ( geometryResource == nullptr )
-		{
-			TraceError{ClassId} << "Unable to get or create the geometry resource for sprite resource '" << this->name() << "'.";
-
-			return false;
-		}
+				return geometryResource.load(shape);
+			}, flags);
 
 		this->setReadyForInstantiation(false);
-
-		m_geometry = geometryResource;
 
 		return this->addDependency(m_geometry);
 	}

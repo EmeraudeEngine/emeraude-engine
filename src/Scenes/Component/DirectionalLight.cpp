@@ -27,9 +27,12 @@
 #include "DirectionalLight.hpp"
 
 /* STL inclusions. */
+#include <bit>
 #include <cstring>
 
 /* Local inclusions. */
+#include "Graphics/Renderer.hpp"
+#include "Resources/ResourceTrait.hpp"
 #include "Saphir/LightGenerator.hpp"
 #include "Scenes/AVConsole/Manager.hpp"
 #include "Scenes/Scene.hpp"
@@ -135,12 +138,15 @@ namespace EmEn::Scenes::Component
 			shadowMapFrame.setBackwardVector(-lightDirection);
 
 			this->updateDeviceFromCoordinates(shadowMapFrame, Vector< 3, float >::origin());
-
-			/* Update the light space matrix in the buffer after changing shadow map coordinates. */
-			this->updateLightSpaceMatrix();
 		}
 
 		this->setDirection(worldCoordinates);
+
+		/* NOTE: Update light matrice for advanced light effects. */
+		if ( this->isShadowCastingEnabled() || this->hasColorProjectionTexture() )
+		{
+			this->updateLightSpaceMatrix();
+		}
 
 		this->requestVideoMemoryUpdate();
 	}
@@ -195,6 +201,24 @@ namespace EmEn::Scenes::Component
 			Tracer::error(ClassId, "Unable to create the directional light shared uniform buffer !");
 
 			return false;
+		}
+
+		/* Store the bindless texture manager for color projection registration. */
+		m_bindlessTextureManager = &scene.AVConsoleManager().graphicsRenderer().bindlessTextureManager();
+
+		/* If a color projection texture is set, try to register it in bindless now. */
+		if ( this->hasColorProjectionTexture() && this->colorProjectionBindlessIndex() == NoColorProjectionTexture )
+		{
+			auto * resource = dynamic_cast< Resources::ResourceTrait * >(this->colorProjectionTexture().get());
+
+			if ( resource != nullptr && resource->isLoaded() )
+			{
+				this->registerColorProjectionInBindless();
+			}
+			else if ( resource != nullptr )
+			{
+				this->observe(resource);
+			}
 		}
 
 		/* Initialize the data buffer. */
@@ -261,6 +285,7 @@ namespace EmEn::Scenes::Component
 				shadowMapFrame.setBackwardVector(-lightDirection);
 
 				this->updateDeviceFromCoordinates(shadowMapFrame, Vector< 3, float >::origin());
+
 				this->updateLightSpaceMatrix();
 			}
 		}
@@ -271,7 +296,10 @@ namespace EmEn::Scenes::Component
 	void
 	DirectionalLight::destroyFromHardware (Scene & scene) noexcept
 	{
-		/* Clean up shadow descriptor sets. */
+		/* Unregister the color projection texture from the bindless manager and stop observing. */
+		this->unregisterColorProjectionFromBindless(false);
+
+		/* Clean up descriptor set (shadow or color projection). */
 		m_shadowDescriptorSet.reset();
 
 		/* Clean up classic shadow map. */
@@ -288,13 +316,10 @@ namespace EmEn::Scenes::Component
 	const Vulkan::DescriptorSet *
 	DirectionalLight::descriptorSet (bool useShadowMap) const noexcept
 	{
-		/* If shadow map is requested, check for CSM first, then classic shadow map. */
-		if ( useShadowMap )
+		/* If an enriched descriptor set exists (shadow map and/or color projection), use it. */
+		if ( m_shadowDescriptorSet != nullptr )
 		{
-			if ( m_shadowDescriptorSet != nullptr )
-			{
-				return m_shadowDescriptorSet.get();
-			}
+			return m_shadowDescriptorSet.get();
 		}
 
 		/* Otherwise, fall back to the base implementation (shared UBO descriptor set). */
@@ -302,9 +327,9 @@ namespace EmEn::Scenes::Component
 	}
 
 	Declaration::UniformBlock
-	DirectionalLight::getUniformBlock (uint32_t set, uint32_t binding, bool useShadow) const noexcept
+	DirectionalLight::getUniformBlock (uint32_t set, uint32_t binding, bool useShadow, bool useColorProjection) const noexcept
 	{
-		return LightGenerator::getUniformBlock(set, binding, LightType::Directional, useShadow);
+		return LightGenerator::getUniformBlock(set, binding, LightType::Directional, useShadow, useColorProjection);
 	}
 
 	bool
@@ -439,7 +464,24 @@ namespace EmEn::Scenes::Component
 	void
 	DirectionalLight::updateLightSpaceMatrix () noexcept
 	{
-		this->writeLightSpaceMatrix(m_buffer.data() + LightMatrixOffset);
+		const auto worldCoordinates = this->getWorldCoordinates();
+
+		const auto lightDirection = m_useDirectionVector ?
+			worldCoordinates.forwardVector() :
+			-worldCoordinates.position().normalized();
+
+		/* Build a view frame: camera positioned opposite to the light direction,
+		 * at coverageSize distance from the origin, looking toward the scene. */
+		CartesianFrame< float > frame;
+		frame.setPosition(-lightDirection * m_coverageSize);
+		frame.setBackwardVector(-lightDirection);
+
+		const auto viewMatrix = frame.getViewMatrix();
+		const auto projMatrix = Matrix< 4, float >::orthographicProjection(-m_coverageSize, m_coverageSize, -m_coverageSize, m_coverageSize, this->getFovOrNear(), this->getDistanceOrFar());
+
+		const auto matrix = RenderTarget::ScaleBiasMatrix * projMatrix * viewMatrix;
+
+		std::copy_n(matrix.data(), 16, m_buffer.data() + LightMatrixOffset);
 	}
 
 	bool
@@ -449,6 +491,8 @@ namespace EmEn::Scenes::Component
 		{
 			return UBO.writeElementData(index, m_CSMBuffer.data());
 		}
+
+		m_buffer[ColorProjectionIndexOffset] = std::bit_cast< float >(this->colorProjectionBindlessIndex());
 
 		return UBO.writeElementData(index, m_buffer.data());
 	}

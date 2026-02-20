@@ -109,7 +109,7 @@ Shadow maps are depth-only render targets created per light.
 Shadow mapping can be globally disabled via `GraphicsShadowMappingEnabledKey` setting. When disabled:
 1. `Scene::renderShadowMaps()` returns early
 2. Shadow map images remain in `VK_IMAGE_LAYOUT_UNDEFINED`
-3. Lighting passes use `NoShadow` pass types (no shadow descriptor binding)
+3. Lighting passes use base pass types (no shadow sampling in generated shaders)
 
 **Critical:** If shadow maps are not rendered but their descriptors are bound, Vulkan validation errors occur due to layout mismatch.
 

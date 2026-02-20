@@ -79,12 +79,14 @@ namespace EmEn::Graphics
 			static constexpr uint32_t MaxTextures2D = 4096;
 			static constexpr uint32_t MaxTextures3D = 256;
 			static constexpr uint32_t MaxTexturesCube = 256;
+			static constexpr uint32_t MaxTexturesCubeArray = 64;
 
 			/** @brief Binding points in the descriptor set layout. */
 			static constexpr uint32_t Texture1DBinding = 0;
 			static constexpr uint32_t Texture2DBinding = 1;
 			static constexpr uint32_t Texture3DBinding = 2;
 			static constexpr uint32_t TextureCubeBinding = 3;
+			static constexpr uint32_t TextureCubeArrayBinding = 4;
 
 			/**
 			 * @brief Constructs a bindless textures manager service.
@@ -137,6 +139,14 @@ namespace EmEn::Graphics
 			uint32_t registerTextureCube (const Vulkan::TextureInterface & texture) noexcept;
 
 			/**
+			 * @brief Registers a cube array texture and returns its index in the bindless array.
+			 * @param texture A reference to the texture interface.
+			 * @return uint32_t The index in the bindless array, or UINT32_MAX on failure.
+			 */
+			[[nodiscard]]
+			uint32_t registerTextureCubeArray (const Vulkan::TextureInterface & texture) noexcept;
+
+			/**
 			 * @brief Unregisters a 1D texture and frees its index.
 			 * @param index The index of the texture to unregister.
 			 * @return void
@@ -163,6 +173,13 @@ namespace EmEn::Graphics
 			 * @return void
 			 */
 			void unregisterTextureCube (uint32_t index) noexcept;
+
+			/**
+			 * @brief Unregisters a cube array texture and frees its index.
+			 * @param index The index of the texture to unregister.
+			 * @return void
+			 */
+			void unregisterTextureCubeArray (uint32_t index) noexcept;
 
 			/**
 			 * @brief Updates a specific slot in the 1D texture array.
@@ -203,6 +220,15 @@ namespace EmEn::Graphics
 			 */
 			[[nodiscard]]
 			bool updateTextureCube (uint32_t index, const Vulkan::TextureInterface & texture) const noexcept;
+
+			/**
+			 * @brief Updates a specific slot in the cube array texture array.
+			 * @param index The index of the slot to update.
+			 * @param texture A reference to the texture interface.
+			 * @return bool True if successful.
+			 */
+			[[nodiscard]]
+			bool updateTextureCubeArray (uint32_t index, const Vulkan::TextureInterface & texture) const noexcept;
 
 			/**
 			 * @brief Updates a specific slot in the 2D texture array from a raw descriptor info.
@@ -316,10 +342,12 @@ namespace EmEn::Graphics
 			std::queue< uint32_t > m_freeIndices2D;
 			std::queue< uint32_t > m_freeIndices3D;
 			std::queue< uint32_t > m_freeIndicesCube;
+			std::queue< uint32_t > m_freeIndicesCubeArray;
 			uint32_t m_nextIndex1D{FirstDynamicSlot};
 			uint32_t m_nextIndex2D{FirstDynamicSlot};
 			uint32_t m_nextIndex3D{FirstDynamicSlot};
 			uint32_t m_nextIndexCube{FirstDynamicSlot};
+			uint32_t m_nextIndexCubeArray{0};
 
 			/* Thread safety for index allocation. */
 			mutable std::mutex m_indexMutex;

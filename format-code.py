@@ -101,6 +101,34 @@ def get_lgpl3_license(filepath: str, config: ProjectConfig) -> str:
 """
 
 
+def get_proprietary_license(filepath: str, config: ProjectConfig) -> str:
+    """Generate proprietary license header."""
+    year = datetime.now().year
+    return f"""/*
+ * {filepath}
+ * This file is part of {config.project_name}
+ *
+ * Copyright (C) 2010-{year} - {config.author}
+ *
+ * PROPRIETARY AND CONFIDENTIAL
+ * All rights reserved. This software and its source code are the exclusive
+ * property of the copyright holder. No part of this software may be
+ * reproduced, distributed, or transmitted in any form or by any means
+ * without the prior written permission of the copyright holder.
+ *
+ * This software is a private pilot project for the development and
+ * improvement of emeraude-engine. It is not licensed for distribution,
+ * modification, or use by third parties.
+ *
+ * Complete project and additional information can be found at :
+ * {config.project_url}
+ *
+ * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
+ */
+
+"""
+
+
 def convert_spaces_to_tabs(content: str) -> str:
     """Convert 4 consecutive spaces to tabs."""
     return content.replace("    ", "\t")
@@ -144,6 +172,8 @@ def get_license_header(filepath: str, config: ProjectConfig) -> str:
         return get_gpl2_license(filepath, config)
     elif config.license_type == "lgpl3":
         return get_lgpl3_license(filepath, config)
+    elif config.license_type == "proprietary":
+        return get_proprietary_license(filepath, config)
     else:
         return ""
 
@@ -266,7 +296,7 @@ def main():
     )
     parser.add_argument(
         "--license", "-l",
-        choices=["gpl2", "lgpl3"],
+        choices=["gpl2", "lgpl3", "proprietary"],
         default="lgpl3",
         help="License type (default: lgpl3)"
     )

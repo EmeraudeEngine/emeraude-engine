@@ -425,41 +425,4 @@ namespace EmEn::Graphics::Renderable
 	{
 		return m_baseSize;
 	}
-
-	std::shared_ptr< MeshResource >
-	MeshResource::getOrCreate (Resources::AbstractServiceProvider & serviceProvider, const std::shared_ptr< Geometry::Interface > & geometryResource, const std::shared_ptr< Material::Interface > & materialResource, std::string resourceName) noexcept
-	{
-		if ( resourceName.empty() )
-		{
-			resourceName = (std::stringstream{} << "Mesh(" << geometryResource->name() << ',' << materialResource->name() << ')').str();
-		}
-
-		return serviceProvider.container< MeshResource >()->getOrCreateResource(resourceName, [&geometryResource, &materialResource] (MeshResource & newMesh) {
-			return newMesh.load(geometryResource, materialResource);
-		});
-	}
-
-	std::shared_ptr< MeshResource >
-	MeshResource::getOrCreate (Resources::AbstractServiceProvider & serviceProvider, const std::shared_ptr< Geometry::Interface > & geometryResource, const std::vector< std::shared_ptr< Material::Interface > > & materialResources, std::string resourceName) noexcept
-	{
-		if ( resourceName.empty() )
-		{
-			std::stringstream output;
-
-			output << "Mesh(" << geometryResource->name();
-
-			for ( const auto & materialResource : materialResources )
-			{
-				output << ',' << materialResource->name();
-			}
-
-			output << ')';
-
-			resourceName = output.str();
-		}
-
-		return serviceProvider.container< MeshResource >()->getOrCreateResource(resourceName, [&geometryResource, &materialResources] (MeshResource & newMesh) {
-			return newMesh.load(geometryResource, materialResources);
-		});
-	}
 }

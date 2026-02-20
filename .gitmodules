@@ -25,3 +25,7 @@
 [submodule "dependencies/tinysoundfont"]
 	path = dependencies/tinysoundfont
 	url = https://github.com/schellingb/TinySoundFont.git
+[submodule "dependencies/renderdoc"]
+	path = dependencies/renderdoc
+	url = https://github.com/baldurk/renderdoc.git
+	branch = v1.x

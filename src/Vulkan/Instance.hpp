@@ -39,6 +39,7 @@
 
 /* Local inclusions for usages. */
 #include "Graphics/FramebufferPrecisions.hpp"
+#include "Graphics/RenderDocCapture.hpp"
 #include "DebugMessenger.hpp"
 #include "Types.hpp"
 
@@ -224,6 +225,17 @@ namespace EmEn::Vulkan
 			isStandardTextureCheckEnabled () const noexcept
 			{
 				return m_standardTextureCheckEnabled;
+			}
+
+			/**
+			 * @brief Returns a reference to the RenderDoc capture wrapper.
+			 * @return Graphics::RenderDocCapture &
+			 */
+			[[nodiscard]]
+			Graphics::RenderDocCapture &
+			renderDocCapture () noexcept
+			{
+				return m_renderDocCapture;
 			}
 
 			/**
@@ -445,6 +457,7 @@ namespace EmEn::Vulkan
 			VkInstanceCreateInfo m_createInfo{};
 			VkDebugUtilsMessengerCreateInfoEXT m_debugCreateInfo{};
 			std::unique_ptr< DebugMessenger > m_debugMessenger;
+			Graphics::RenderDocCapture m_renderDocCapture;
 			std::vector< std::shared_ptr< PhysicalDevice > > m_physicalDevices;
 			std::shared_ptr< Device > m_graphicsDevice;
 			std::shared_ptr< Device > m_computeDevice;

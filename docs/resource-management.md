@@ -80,9 +80,9 @@ class Container : public ContainerInterface, public ObserverTrait {
     std::shared_ptr<std::unordered_map<std::string, BaseInformation>> m_localStore;
 
     // Core API
-    std::shared_ptr<resource_t> getResource(const std::string& name, bool asyncLoad = true);
-    std::shared_ptr<resource_t> getOrCreateResource(const std::string& name, ...);
-    std::shared_ptr<resource_t> getOrCreateUnloadedResource(const std::string& name, ...);
+    std::shared_ptr<resource_t> getResource(const std::string & name, bool asyncLoad = true);
+    std::shared_ptr<resource_t> getOrCreateResource(const std::string & name, ...);
+    std::shared_ptr<resource_t> getOrCreateUnloadedResource(const std::string & name, ...);
     std::shared_ptr<resource_t> getDefaultResource();
 
     // Management

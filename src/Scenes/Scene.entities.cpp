@@ -437,14 +437,27 @@ namespace EmEn::Scenes
 				return true;
 
 			case AbstractEntity::PrimaryCameraCreated :
-				m_AVConsoleManager.addVideoDevice(std::any_cast< std::shared_ptr< Component::Camera > >(data), true);
+			{
+				auto camera = std::any_cast< std::shared_ptr< Component::Camera > >(data);
+				m_AVConsoleManager.addVideoDevice(camera, true);
+				m_activeCamera = camera.get();
 
 				return true;
+			}
 
 			case AbstractEntity::CameraDestroyed :
-				m_AVConsoleManager.removeVideoDevice(std::any_cast< std::shared_ptr< Component::Camera > >(data));
+			{
+				auto camera = std::any_cast< std::shared_ptr< Component::Camera > >(data);
+
+				if ( m_activeCamera == camera.get() )
+				{
+					m_activeCamera = nullptr;
+				}
+
+				m_AVConsoleManager.removeVideoDevice(camera);
 
 				return true;
+			}
 
 			case AbstractEntity::MicrophoneCreated :
 				m_AVConsoleManager.addAudioDevice(std::any_cast< std::shared_ptr< Component::Microphone > >(data));

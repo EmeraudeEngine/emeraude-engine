@@ -27,6 +27,7 @@
 #pragma once
 
 /* STL inclusions. */
+#include <algorithm>
 #include <cstdint>
 #include <cstddef>
 #include <string>
@@ -38,7 +39,7 @@
 
 /* Local inclusions for usages. */
 #include "Scenes/AVConsole/Types.hpp"
-#include "Saphir/FramebufferEffectInterface.hpp"
+#include "Graphics/DirectPostProcessEffect.hpp"
 #include "SettingKeys.hpp"
 
 namespace EmEn::Scenes::Component
@@ -254,10 +255,10 @@ namespace EmEn::Scenes::Component
 
 			/**
 			 * @brief Returns the lens effect list.
-			 * @return const Saphir::FramebufferEffectsList &
+			 * @return const std::vector< std::shared_ptr< Graphics::DirectPostProcessEffect > > &
 			 */
 			[[nodiscard]]
-			const Saphir::FramebufferEffectsList &
+			const std::vector< std::shared_ptr< Graphics::DirectPostProcessEffect > > &
 			lensEffects () const noexcept
 			{
 				return m_lensEffects;
@@ -270,9 +271,9 @@ namespace EmEn::Scenes::Component
 			 */
 			[[nodiscard]]
 			bool
-			isLensEffectPresent (const std::shared_ptr< Saphir::FramebufferEffectInterface > & effect) const noexcept
+			isLensEffectPresent (const std::shared_ptr< Graphics::DirectPostProcessEffect > & effect) const noexcept
 			{
-				return m_lensEffects.contains(effect);
+				return std::find(m_lensEffects.cbegin(), m_lensEffects.cend(), effect) != m_lensEffects.cend();
 			}
 
 			/**
@@ -281,14 +282,14 @@ namespace EmEn::Scenes::Component
 			 * @param effect The effect to add.
 			 * @return void
 			 */
-			void addLensEffect (const std::shared_ptr< Saphir::FramebufferEffectInterface > & effect) noexcept;
+			void addLensEffect (const std::shared_ptr< Graphics::DirectPostProcessEffect > & effect) noexcept;
 
 			/**
 			 * @brief Removes a shader lens effect from the camera.
 			 * @param effect The effect to remove.
 			 * @return void
 			 */
-			void removeLensEffect (const std::shared_ptr< Saphir::FramebufferEffectInterface > & effect) noexcept;
+			void removeLensEffect (const std::shared_ptr< Graphics::DirectPostProcessEffect > & effect) noexcept;
 
 			/**
 			 * @brief Clears all shader lens effect of the camera.
@@ -338,7 +339,7 @@ namespace EmEn::Scenes::Component
 			/* Flag names */
 			static constexpr auto PerspectiveProjection{UnusedFlag + 0UL};
 		
-			Saphir::FramebufferEffectsList m_lensEffects;
+			std::vector< std::shared_ptr< Graphics::DirectPostProcessEffect > > m_lensEffects;
 			float m_fov{DefaultGraphicsFieldOfView};
 			float m_distance{DefaultGraphicsViewDistance};
 			float m_near{0.0F};
