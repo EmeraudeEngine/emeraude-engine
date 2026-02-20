@@ -161,6 +161,65 @@ namespace EmEn::Graphics::Geometry
 			}
 
 			/**
+			 * @brief Sets a cap texture coordinates uniform multiplier.
+			 * @param multiplier The multiplication factor on each axis.
+			 * @return void
+			 */
+			void
+			setCapTextureCoordinatesMultiplier (float multiplier) noexcept
+			{
+				using namespace Libs::Math;
+
+				m_capTextureCoordinatesMultiplier[X] = multiplier;
+				m_capTextureCoordinatesMultiplier[Y] = multiplier;
+				m_capTextureCoordinatesMultiplier[Z] = multiplier;
+			}
+
+			/**
+			 * @brief Sets 2D cap texture coordinates multipliers.
+			 * @param xMultiplier The multiplication factor on the X axis.
+			 * @param yMultiplier The multiplication factor on the Y axis.
+			 * @return void
+			 */
+			void
+			setCapTextureCoordinatesMultiplier (float xMultiplier, float yMultiplier) noexcept
+			{
+				using namespace Libs::Math;
+
+				m_capTextureCoordinatesMultiplier[X] = xMultiplier;
+				m_capTextureCoordinatesMultiplier[Y] = yMultiplier;
+				m_capTextureCoordinatesMultiplier[Z] = 1.0F;
+			}
+
+			/**
+			 * @brief Sets 3D cap texture coordinates multipliers.
+			 * @param xMultiplier The multiplication factor on the X axis.
+			 * @param yMultiplier The multiplication factor on the Y axis.
+			 * @param zMultiplier The multiplication factor on the Z axis.
+			 * @return void
+			 */
+			void
+			setCapTextureCoordinatesMultiplier (float xMultiplier, float yMultiplier, float zMultiplier) noexcept
+			{
+				using namespace Libs::Math;
+
+				m_capTextureCoordinatesMultiplier[X] = xMultiplier;
+				m_capTextureCoordinatesMultiplier[Y] = yMultiplier;
+				m_capTextureCoordinatesMultiplier[Z] = zMultiplier;
+			}
+
+			/**
+			 * @brief Returns the cap texture coordinate multipliers vector.
+			 * @return const Libs::Math::Vector< 3, float > &
+			 */
+			[[nodiscard]]
+			const Libs::Math::Vector< 3, float > &
+			capTextureCoordinatesMultiplier () const noexcept
+			{
+				return m_capTextureCoordinatesMultiplier;
+			}
+
+			/**
 			 * @brief Sets the geometry flags.
 			 * @param geometryFlags Flags value from geometry.
 			 * @return void
@@ -282,6 +341,7 @@ namespace EmEn::Graphics::Geometry
 			Libs::PixelFactory::Color< float > m_globalVertexColor{Libs::PixelFactory::Magenta};
 			Libs::Math::Matrix< 4, float > m_transformMatrix;
 			Libs::Math::Vector< 3, float > m_textureCoordinatesMultiplier{1.0F, 1.0F, 1.0F};
+			Libs::Math::Vector< 3, float > m_capTextureCoordinatesMultiplier{1.0F, 1.0F, 1.0F};
 			bool m_centerAtBottom{false};
 			bool m_flipGeometry{false};
 			bool m_globalVertexColorSet{false};

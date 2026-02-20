@@ -1135,7 +1135,7 @@ namespace EmEn::Resources
 			 */
 			[[nodiscard]]
 			std::shared_ptr< resource_t >
-			getOrCreateResource (const std::string & resourceName, const std::function< bool (resource_t & resource) > & createFunction, uint32_t resourceFlags = 0) noexcept
+			getOrCreateResourceSync (const std::string & resourceName, const std::function< bool (resource_t & resource) > & createFunction, uint32_t resourceFlags = 0) noexcept
 			{
 				const std::lock_guard< std::mutex > scopeLock{m_resourcesAccess};
 
@@ -1205,7 +1205,7 @@ namespace EmEn::Resources
 			 */
 			[[nodiscard]]
 			std::shared_ptr< resource_t >
-			getOrCreateResourceAsync (const std::string & resourceName, const std::function< bool (resource_t & resource) > & createFunction, uint32_t resourceFlags = 0) noexcept
+			getOrCreateResource (const std::string & resourceName, const std::function< bool (resource_t & resource) > & createFunction, uint32_t resourceFlags = 0) noexcept
 			{
 				const std::lock_guard< std::mutex > scopeLock{m_resourcesAccess};
 

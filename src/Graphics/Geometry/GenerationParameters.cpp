@@ -48,6 +48,7 @@ namespace EmEn::Graphics::Geometry
 			m_globalVertexColor << ',' <<
 			m_transformMatrix << ',' <<
 			m_textureCoordinatesMultiplier << ',' <<
+			m_capTextureCoordinatesMultiplier << ',' <<
 			this->flags() << ',' <<
 			m_centerAtBottom << ',' <<
 			m_flipGeometry << ',' <<
@@ -67,6 +68,7 @@ namespace EmEn::Graphics::Geometry
 			this->isFlagEnabled(EnableWeight)
 		};
 		options.setTextureCoordinatesMultiplier(m_textureCoordinatesMultiplier);
+		options.setCapTextureCoordinatesMultiplier(m_capTextureCoordinatesMultiplier);
 		options.setCenterAtBottom(this->isCenteredAtBottom());
 		options.enableGeometryFlipping(this->flipGeometry());
 

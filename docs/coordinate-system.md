@@ -90,6 +90,54 @@ glm::vec3 groundNormal(0.0f, -1.0f, 0.0f);
 glm::vec3 cameraDirection(0.0f, 0.2f, -1.0f);
 ```
 
+## Winding Conventions for Parametric Geometry
+
+The `emitTriangle` lambda used in all `ShapeGenerator` gem/shape generators **swaps B and C**: calling `emitTriangle(A, B, C)` actually emits vertices in order `(A, C, B)`. This is the engine's winding convention for front-facing triangles.
+
+### Front Face Determination
+
+With the B/C swap, triangles that appear **CW (clockwise) in screen space** after projection are front-facing. This matches `VK_FRONT_FACE_CLOCKWISE` behavior.
+
+### Patterns for Ring-Based Geometry
+
+Ring vertices are generated CCW in the XZ plane (using `cos(θ), sin(θ)`). Two standard patterns exist for connecting rings:
+
+**Crown/Table pattern** (small ring on top Y-, large ring on bottom):
+```cpp
+// Normal: cross(innerRingTangent, innerToOuter)
+normal = cross(inner[next] - inner[i], outer[i] - inner[i]);
+// Winding:
+emitTriangle(inner[i], outer[i], outer[next]);
+emitTriangle(inner[i], outer[next], inner[next]);
+```
+
+**Pavilion pattern** (large ring on top, small ring on bottom Y+):
+```cpp
+// Normal: cross(innerMinusOuter, outerRingTangent) — follows diamond pavilion
+normal = cross(inner[i] - outer[i], outer[next] - outer[i]);
+// Winding:
+emitTriangle(outer[i], inner[i], inner[next]);
+emitTriangle(outer[i], inner[next], outer[next]);
+```
+
+**Table fan** (flat polygon facing sky Y-):
+```cpp
+normal = cross(ring[1] - ring[0], ring[n-1] - ring[0]);
+emitTriangle(ring[0], ring[i], ring[i+1]);  // for i=1..n-2
+```
+
+**Culet/base fan** (flat polygon facing ground Y+):
+```cpp
+normal = cross(ring[n-1] - ring[0], ring[1] - ring[0]);  // reversed
+emitTriangle(ring[0], ring[i+1], ring[i]);  // reversed winding
+```
+
+### Critical Notes
+- The crown pattern normal may point inward for small faces (acceptable for refractive gems)
+- The pavilion pattern normal uses the diamond's `cross(culet - girdle, girdleTangent)` convention
+- For dome geometry (Rose cut), use pavilion pattern when dome points downward (+Y)
+- See: `ShapeGenerator.hpp:generateDiamondCutGem()` for reference implementation
+
 ## Cross-System Consistency
 
 This coordinate system is used consistently across:

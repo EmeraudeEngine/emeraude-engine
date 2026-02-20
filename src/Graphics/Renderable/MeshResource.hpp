@@ -283,30 +283,6 @@ namespace EmEn::Graphics::Renderable
 			float baseSize () const noexcept;
 
 			/**
-			 * @brief Creates a unique mesh or returns the existing one with the same parameters.
-			 * The resource name will be based on sub-resource names.
-			 * @param serviceProvider A reference to the resource manager through a service provider.
-			 * @param geometryResource A reference to a geometry resource smart pointer.
-			 * @param materialResource A reference to a material resource smart pointer.
-			 * @param resourceName A string. Default auto generated name.
-			 * @return std::shared_ptr< MeshResource >
-			 */
-			[[nodiscard]]
-			static std::shared_ptr< MeshResource > getOrCreate (Resources::AbstractServiceProvider & serviceProvider, const std::shared_ptr< Geometry::Interface > & geometryResource, const std::shared_ptr< Material::Interface > & materialResource, std::string resourceName = {}) noexcept;
-
-			/**
-			 * @brief Creates a unique mesh or returns the existing one with the same parameters.
-			 * The resource name will be based on sub-resource names.
-			 * @param serviceProvider A reference to the resource manager through a service provider.
-			 * @param geometryResource A reference to a geometry resource smart pointer.
-			 * @param materialResources A reference to a material resource smart pointer list.
-			 * @param resourceName A string. Default auto generated name.
-			 * @return std::shared_ptr< MeshResource >
-			 */
-			[[nodiscard]]
-			static std::shared_ptr< MeshResource > getOrCreate (Resources::AbstractServiceProvider & serviceProvider, const std::shared_ptr< Geometry::Interface > & geometryResource, const std::vector< std::shared_ptr< Material::Interface > > & materialResources, std::string resourceName = {}) noexcept;
-
-			/**
 			 * @brief Parses a JSON stream to get the material information.
 			 * @note This method is public to allow SimpleMeshResource to reuse it.
 			 * @param serviceProvider A reference to the resource manager through a service provider.

@@ -92,7 +92,8 @@ namespace EmEn::Graphics
 			"1D[" << MaxTextures1D << "], "
 			"2D[" << MaxTextures2D << "], "
 			"3D[" << MaxTextures3D << "], "
-			"Cube[" << MaxTexturesCube << "] textures.";
+			"Cube[" << MaxTexturesCube << "], "
+			"CubeArray[" << MaxTexturesCubeArray << "] textures.";
 
 		return true;
 	}
@@ -161,6 +162,14 @@ namespace EmEn::Graphics
 			return false;
 		}
 
+		/* Binding 4: samplerCubeArray array */
+		if ( !m_descriptorSetLayout->declare(VkDescriptorSetLayoutBinding{TextureCubeArrayBinding, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, MaxTexturesCubeArray, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr}, bindingFlags) )
+		{
+			Tracer::error(ClassId, "Failed to declare cube array texture binding !");
+
+			return false;
+		}
+
 		/* Create the layout on hardware via the LayoutManager. */
 		if ( !layoutManager.createDescriptorSetLayout(m_descriptorSetLayout) )
 		{
@@ -177,7 +186,7 @@ namespace EmEn::Graphics
 	{
 		/* Pool sizes for each texture type. */
 		std::vector< VkDescriptorPoolSize > poolSizes{
-			{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, MaxTextures1D + MaxTextures2D + MaxTextures3D + MaxTexturesCube}
+			{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, MaxTextures1D + MaxTextures2D + MaxTextures3D + MaxTexturesCube + MaxTexturesCubeArray}
 		};
 
 		/* Create pool with UPDATE_AFTER_BIND flag and FREE_DESCRIPTOR_SET_BIT
@@ -383,6 +392,30 @@ namespace EmEn::Graphics
 		return index;
 	}
 
+	uint32_t
+	BindlessTextureManager::registerTextureCubeArray (const Vulkan::TextureInterface & texture) noexcept
+	{
+		const std::lock_guard< std::mutex > lock{m_indexMutex};
+
+		const auto index = allocateIndex(m_freeIndicesCubeArray, m_nextIndexCubeArray, MaxTexturesCubeArray);
+
+		if ( index == UINT32_MAX )
+		{
+			Tracer::error(ClassId, "No more slots available for cube array textures !");
+
+			return UINT32_MAX;
+		}
+
+		if ( !this->writeTextureToDescriptorSet(TextureCubeArrayBinding, index, texture) )
+		{
+			freeIndex(m_freeIndicesCubeArray, index);
+
+			return UINT32_MAX;
+		}
+
+		return index;
+	}
+
 	void
 	BindlessTextureManager::unregisterTexture1D (uint32_t index) noexcept
 	{
@@ -433,6 +466,19 @@ namespace EmEn::Graphics
 		const std::lock_guard< std::mutex > lock{m_indexMutex};
 
 		freeIndex(m_freeIndicesCube, index);
+	}
+
+	void
+	BindlessTextureManager::unregisterTextureCubeArray (uint32_t index) noexcept
+	{
+		if ( index >= MaxTexturesCubeArray )
+		{
+			return;
+		}
+
+		const std::lock_guard< std::mutex > lock{m_indexMutex};
+
+		freeIndex(m_freeIndicesCubeArray, index);
 	}
 
 	bool
@@ -497,6 +543,22 @@ namespace EmEn::Graphics
 		const std::lock_guard< std::mutex > lock{m_indexMutex};
 
 		return this->writeTextureToDescriptorSet(TextureCubeBinding, index, texture);
+	}
+
+	bool
+	BindlessTextureManager::updateTextureCubeArray (uint32_t index, const Vulkan::TextureInterface & texture) const noexcept
+	{
+		if ( index >= MaxTexturesCubeArray )
+		{
+			TraceError{ClassId} << "Invalid cube array texture index: " << index;
+
+			return false;
+		}
+
+		/* NOTE: Protect the descriptor set writing. */
+		const std::lock_guard< std::mutex > lock{m_indexMutex};
+
+		return this->writeTextureToDescriptorSet(TextureCubeArrayBinding, index, texture);
 	}
 
 	bool

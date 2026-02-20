@@ -181,7 +181,7 @@ namespace EmEn::Scenes::Component
 			return;
 		}
 
-		m_lensEffects.emplace(effect);
+		m_lensEffects.emplace_back(effect);
 
 		this->notify(LensEffectsChanged);
 	}
@@ -189,7 +189,7 @@ namespace EmEn::Scenes::Component
 	void
 	Camera::removeLensEffect (const std::shared_ptr< FramebufferEffectInterface > & effect) noexcept
 	{
-		const auto lensIt = m_lensEffects.find(effect);
+		const auto lensIt = std::find(m_lensEffects.cbegin(), m_lensEffects.cend(), effect);
 
 		if ( lensIt == m_lensEffects.cend() )
 		{

@@ -42,6 +42,22 @@ namespace EmEn::Saphir
 	using namespace Vulkan;
 
 	std::string
+	LightGenerator::roughnessShaderExpression () const noexcept
+	{
+		if ( !m_surfaceRoughness.empty() )
+		{
+			return m_surfaceRoughness;
+		}
+
+		if ( !m_surfaceShininessAmount.empty() )
+		{
+			return "sqrt(2.0 / (" + m_surfaceShininessAmount + " + 2.0))";
+		}
+
+		return "0.5";
+	}
+
+	std::string
 	LightGenerator::lightPositionWorldSpace () const noexcept
 	{
 		if ( m_useStaticLighting )
@@ -150,7 +166,7 @@ namespace EmEn::Saphir
 	}
 
 	Declaration::UniformBlock
-	LightGenerator::getUniformBlock (uint32_t set, uint32_t binding, LightType lightType, bool useShadowMap) noexcept
+	LightGenerator::getUniformBlock (uint32_t set, uint32_t binding, LightType lightType, bool useShadowMap, bool useColorProjection) noexcept
 	{
 		switch ( lightType )
 		{
@@ -161,11 +177,20 @@ namespace EmEn::Saphir
 				block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::DirectionWorldSpace);
 				block.addMember(Declaration::VariableType::Float, UniformBlock::Component::Intensity);
 
-				if ( useShadowMap )
+				if ( useColorProjection )
+				{
+					block.addMember(Declaration::VariableType::Float, UniformBlock::Component::ColorProjectionIndex);
+				}
+
+				if ( useShadowMap || useColorProjection )
+				{
+					block.addMember(Declaration::VariableType::Matrix4, UniformBlock::Component::ViewProjectionMatrix);
+				}
+
+				if ( useShadowMap || useColorProjection )
 				{
 					block.addMember(Declaration::VariableType::Float, UniformBlock::Component::PCFRadius);
 					block.addMember(Declaration::VariableType::Float, UniformBlock::Component::ShadowBias);
-					block.addMember(Declaration::VariableType::Matrix4, UniformBlock::Component::ViewProjectionMatrix);
 				}
 
 				return block;
@@ -179,11 +204,16 @@ namespace EmEn::Saphir
 				block.addMember(Declaration::VariableType::Float, UniformBlock::Component::Intensity);
 				block.addMember(Declaration::VariableType::Float, UniformBlock::Component::Radius);
 
-				if ( useShadowMap )
+				if ( useShadowMap || useColorProjection )
 				{
 					block.addMember(Declaration::VariableType::Float, UniformBlock::Component::PCFRadius);
 					block.addMember(Declaration::VariableType::Float, UniformBlock::Component::ShadowBias);
-					block.addMember(Declaration::VariableType::Matrix4, UniformBlock::Component::ViewProjectionMatrix);
+				}
+
+				if ( useColorProjection )
+				{
+					block.addMember(Declaration::VariableType::Float, UniformBlock::Component::ColorProjectionIndex);
+					block.addMember(Declaration::VariableType::Float, UniformBlock::Component::ColorProjectionFrameIndex);
 				}
 
 				return block;
@@ -200,11 +230,20 @@ namespace EmEn::Saphir
 				block.addMember(Declaration::VariableType::Float, UniformBlock::Component::InnerCosAngle);
 				block.addMember(Declaration::VariableType::Float, UniformBlock::Component::OuterCosAngle);
 
-				if ( useShadowMap )
+				if ( useShadowMap || useColorProjection )
+				{
+					block.addMember(Declaration::VariableType::Matrix4, UniformBlock::Component::ViewProjectionMatrix);
+				}
+
+				if ( useShadowMap || useColorProjection )
 				{
 					block.addMember(Declaration::VariableType::Float, UniformBlock::Component::PCFRadius);
 					block.addMember(Declaration::VariableType::Float, UniformBlock::Component::ShadowBias);
-					block.addMember(Declaration::VariableType::Matrix4, UniformBlock::Component::ViewProjectionMatrix);
+				}
+
+				if ( useColorProjection )
+				{
+					block.addMember(Declaration::VariableType::Float, UniformBlock::Component::ColorProjectionIndex);
 				}
 
 				return block;
@@ -259,13 +298,13 @@ namespace EmEn::Saphir
 		switch ( m_staticLighting->type() )
 		{
 			case LightType::Directional :
-				return RenderPassType::DirectionalLightPassNoShadow;
+				return RenderPassType::DirectionalLightPass;
 
 			case LightType::Point :
-				return RenderPassType::PointLightPassNoShadow;
+				return RenderPassType::PointLightPass;
 
 			case LightType::Spot :
-				return RenderPassType::SpotLightPassNoShadow;
+				return RenderPassType::SpotLightPass;
 
 			default:
 				return RenderPassType::None;
@@ -279,6 +318,7 @@ namespace EmEn::Saphir
 
 		auto lightType = LightType::Directional;
 		bool enableShadowMap = false;
+		bool enableColorProjection = false;
 
 		switch ( this->checkRenderPassType() )
 		{
@@ -286,28 +326,50 @@ namespace EmEn::Saphir
 				/* NOTE: Nothing to do for ambient pass inside the vertex shader. */
 				return true;
 
+			case RenderPassType::DirectionalLightPassFullCSM :
+				enableColorProjection = true;
+				[[fallthrough]];
 			case RenderPassType::DirectionalLightPassCSM :
-				/* CSM uses a different uniform block. For now, fall through to standard. */
 				enableShadowMap = true;
-				[[fallthrough]];
-			case RenderPassType::DirectionalLightPass :
-				enableShadowMap = true;
-				[[fallthrough]];
-			case RenderPassType::DirectionalLightPassNoShadow :
 				lightType = LightType::Directional;
 				break;
 
-			case RenderPassType::PointLightPass :
+			case RenderPassType::DirectionalLightPassFull :
+				enableColorProjection = true;
+				[[fallthrough]];
+			case RenderPassType::DirectionalLightPassShadowMap :
 				enableShadowMap = true;
 				[[fallthrough]];
-			case RenderPassType::PointLightPassNoShadow :
+			case RenderPassType::DirectionalLightPassColorMap :
+				if ( !enableShadowMap ) { enableColorProjection = true; }
+				[[fallthrough]];
+			case RenderPassType::DirectionalLightPass :
+				lightType = LightType::Directional;
+				break;
+
+			case RenderPassType::PointLightPassFull :
+				enableColorProjection = true;
+				[[fallthrough]];
+			case RenderPassType::PointLightPassShadowMap :
+				enableShadowMap = true;
+				[[fallthrough]];
+			case RenderPassType::PointLightPassColorMap :
+				if ( !enableShadowMap ) { enableColorProjection = true; }
+				[[fallthrough]];
+			case RenderPassType::PointLightPass :
 				lightType = LightType::Point;
 				break;
 
-			case RenderPassType::SpotLightPass :
+			case RenderPassType::SpotLightPassFull :
+				enableColorProjection = true;
+				[[fallthrough]];
+			case RenderPassType::SpotLightPassShadowMap :
 				enableShadowMap = true;
 				[[fallthrough]];
-			case RenderPassType::SpotLightPassNoShadow :
+			case RenderPassType::SpotLightPassColorMap :
+				if ( !enableShadowMap ) { enableColorProjection = true; }
+				[[fallthrough]];
+			case RenderPassType::SpotLightPass :
 				lightType = LightType::Spot;
 				break;
 
@@ -320,7 +382,7 @@ namespace EmEn::Saphir
 		}
 
 		/* CSM uses a specialized uniform block. */
-		const bool useCSM = (this->checkRenderPassType() == RenderPassType::DirectionalLightPassCSM);
+		const bool useCSM = renderPassUsesCSM(this->checkRenderPassType());
 
 		if ( !m_useStaticLighting )
 		{
@@ -331,7 +393,7 @@ namespace EmEn::Saphir
 					return false;
 				}
 			}
-			else if ( !vertexShader.declare(LightGenerator::getUniformBlock(lightSetIndex, 0, lightType, enableShadowMap)) )
+			else if ( !vertexShader.declare(LightGenerator::getUniformBlock(lightSetIndex, 0, lightType, enableShadowMap, enableColorProjection)) )
 			{
 				return false;
 			}
@@ -343,18 +405,18 @@ namespace EmEn::Saphir
 			/* PBR mode uses Cook-Torrance BRDF. */
 			if ( m_usePBRMode )
 			{
-				return this->generatePBRVertexShader(generator, vertexShader, lightType, enableShadowMap);
+				return this->generatePBRVertexShader(generator, vertexShader, lightType, enableShadowMap, enableColorProjection);
 			}
 
 			if ( m_useNormalMapping )
 			{
-				return this->generatePhongBlinnWithNormalMapVertexShader(generator, vertexShader, lightType, enableShadowMap);
+				return this->generatePhongBlinnWithNormalMapVertexShader(generator, vertexShader, lightType, enableShadowMap, enableColorProjection);
 			}
 
-			return this->generatePhongBlinnVertexShader(generator, vertexShader, lightType, enableShadowMap);
+			return this->generatePhongBlinnVertexShader(generator, vertexShader, lightType, enableShadowMap, enableColorProjection);
 		}
 
-		return this->generateGouraudVertexShader(generator, vertexShader, lightType, enableShadowMap);
+		return this->generateGouraudVertexShader(generator, vertexShader, lightType, enableShadowMap, enableColorProjection);
 	}
 
 	bool
@@ -364,6 +426,7 @@ namespace EmEn::Saphir
 
 		auto lightType = LightType::Directional;
 		bool enableShadowMap = false;
+		bool enableColorProjection = false;
 
 		switch ( this->checkRenderPassType() )
 		{
@@ -391,28 +454,50 @@ namespace EmEn::Saphir
 			}
 				return true;
 
+			case RenderPassType::DirectionalLightPassFullCSM :
+				enableColorProjection = true;
+				[[fallthrough]];
 			case RenderPassType::DirectionalLightPassCSM :
-				/* CSM uses a different uniform block. For now, fall through to standard. */
 				enableShadowMap = true;
-				[[fallthrough]];
-			case RenderPassType::DirectionalLightPass :
-				enableShadowMap = true;
-				[[fallthrough]];
-			case RenderPassType::DirectionalLightPassNoShadow :
 				lightType = LightType::Directional;
 				break;
 
-			case RenderPassType::PointLightPass :
+			case RenderPassType::DirectionalLightPassFull :
+				enableColorProjection = true;
+				[[fallthrough]];
+			case RenderPassType::DirectionalLightPassShadowMap :
 				enableShadowMap = true;
 				[[fallthrough]];
-			case RenderPassType::PointLightPassNoShadow :
+			case RenderPassType::DirectionalLightPassColorMap :
+				if ( !enableShadowMap ) { enableColorProjection = true; }
+				[[fallthrough]];
+			case RenderPassType::DirectionalLightPass :
+				lightType = LightType::Directional;
+				break;
+
+			case RenderPassType::PointLightPassFull :
+				enableColorProjection = true;
+				[[fallthrough]];
+			case RenderPassType::PointLightPassShadowMap :
+				enableShadowMap = true;
+				[[fallthrough]];
+			case RenderPassType::PointLightPassColorMap :
+				if ( !enableShadowMap ) { enableColorProjection = true; }
+				[[fallthrough]];
+			case RenderPassType::PointLightPass :
 				lightType = LightType::Point;
 				break;
 
-			case RenderPassType::SpotLightPass :
+			case RenderPassType::SpotLightPassFull :
+				enableColorProjection = true;
+				[[fallthrough]];
+			case RenderPassType::SpotLightPassShadowMap :
 				enableShadowMap = true;
 				[[fallthrough]];
-			case RenderPassType::SpotLightPassNoShadow :
+			case RenderPassType::SpotLightPassColorMap :
+				if ( !enableShadowMap ) { enableColorProjection = true; }
+				[[fallthrough]];
+			case RenderPassType::SpotLightPass :
 				lightType = LightType::Spot;
 				break;
 
@@ -423,7 +508,7 @@ namespace EmEn::Saphir
 		}
 
 		/* CSM uses a specialized uniform block. */
-		const bool useCSM = (this->checkRenderPassType() == RenderPassType::DirectionalLightPassCSM);
+		const bool useCSM = renderPassUsesCSM(this->checkRenderPassType());
 
 		if ( !m_useStaticLighting )
 		{
@@ -434,7 +519,7 @@ namespace EmEn::Saphir
 					return false;
 				}
 			}
-			else if ( !fragmentShader.declare(LightGenerator::getUniformBlock(lightSetIndex, 0, lightType, enableShadowMap)) )
+			else if ( !fragmentShader.declare(LightGenerator::getUniformBlock(lightSetIndex, 0, lightType, enableShadowMap, enableColorProjection)) )
 			{
 				return false;
 			}
@@ -446,18 +531,18 @@ namespace EmEn::Saphir
 			/* PBR mode uses Cook-Torrance BRDF. */
 			if ( m_usePBRMode )
 			{
-				return this->generatePBRFragmentShader(generator, fragmentShader, lightType, enableShadowMap);
+				return this->generatePBRFragmentShader(generator, fragmentShader, lightType, enableShadowMap, enableColorProjection);
 			}
 
 			if ( m_useNormalMapping )
 			{
-				return this->generatePhongBlinnWithNormalMapFragmentShader(generator, fragmentShader, lightType, enableShadowMap);
+				return this->generatePhongBlinnWithNormalMapFragmentShader(generator, fragmentShader, lightType, enableShadowMap, enableColorProjection);
 			}
 
-			return this->generatePhongBlinnFragmentShader(generator, fragmentShader, lightType, enableShadowMap);
+			return this->generatePhongBlinnFragmentShader(generator, fragmentShader, lightType, enableShadowMap, enableColorProjection);
 		}
 
-		return this->generateGouraudFragmentShader(generator, fragmentShader, lightType, enableShadowMap);
+		return this->generateGouraudFragmentShader(generator, fragmentShader, lightType, enableShadowMap, enableColorProjection);
 	}
 
 	void
@@ -933,7 +1018,7 @@ namespace EmEn::Saphir
 
 		const auto finaleDiffuseFactor = m_useOpacity ? diffuseFactor + " * " + m_surfaceOpacityAmount : diffuseFactor;
 
-		Code{fragmentShader} << m_fragmentColor << ".rgb += " << surfaceColor << ".rgb * (" << this->lightColor() << ".rgb * " << this->lightIntensity() << " * " << finaleDiffuseFactor << ");";
+		Code{fragmentShader} << m_fragmentColor << ".rgb += " << surfaceColor << ".rgb * (" << this->lightColor() << ".rgb * projectionColor * " << this->lightIntensity() << " * " << finaleDiffuseFactor << ");";
 
 		/* NOTE: In PBR mode, reflection/refraction (IBL) is handled ONLY in the ambient pass
 		 * via generateAmbientFragmentShader(). We skip per-light reflection mixing here.
@@ -950,17 +1035,17 @@ namespace EmEn::Saphir
 					"const vec3 reflected = mix(" << surfaceColor << ", " << m_surfaceReflectionColor << ", " << m_surfaceReflectionAmount << ").rgb;" "\n"
 					"const vec3 refracted = mix(" << surfaceColor << ", " << m_surfaceRefractionColor << ", " << m_surfaceRefractionAmount << ").rgb;" "\n\n" <<
 
-					m_fragmentColor << ".rgb += mix(refracted, reflected, fresnelFactor) * (" << this->lightColor() << ".rgb * " << this->lightIntensity() << " * " << finaleDiffuseFactor << ");").str();
+					m_fragmentColor << ".rgb += mix(refracted, reflected, fresnelFactor) * (" << this->lightColor() << ".rgb * projectionColor * " << this->lightIntensity() << " * " << finaleDiffuseFactor << ");").str();
 
 				Code{fragmentShader, Location::Output} << code;
 			}
 			else if ( m_useReflection )
 			{
-				Code{fragmentShader} << m_fragmentColor << ".rgb += mix(" << surfaceColor << ", " << m_surfaceReflectionColor << ", " << m_surfaceReflectionAmount << ").rgb * (" << this->lightColor() << ".rgb * " << this->lightIntensity() << " * " << finaleDiffuseFactor << ");";
+				Code{fragmentShader} << m_fragmentColor << ".rgb += mix(" << surfaceColor << ", " << m_surfaceReflectionColor << ", " << m_surfaceReflectionAmount << ").rgb * (" << this->lightColor() << ".rgb * projectionColor * " << this->lightIntensity() << " * " << finaleDiffuseFactor << ");";
 			}
 			else if ( m_useRefraction )
 			{
-				Code{fragmentShader} << m_fragmentColor << ".rgb += mix(" << surfaceColor << ", " << m_surfaceRefractionColor << ", " << m_surfaceRefractionAmount << ").rgb * (" << this->lightColor() << ".rgb * " << this->lightIntensity() << " * " << finaleDiffuseFactor << ");";
+				Code{fragmentShader} << m_fragmentColor << ".rgb += mix(" << surfaceColor << ", " << m_surfaceRefractionColor << ", " << m_surfaceRefractionAmount << ").rgb * (" << this->lightColor() << ".rgb * projectionColor * " << this->lightIntensity() << " * " << finaleDiffuseFactor << ");";
 			}
 		}
 
@@ -1010,7 +1095,7 @@ namespace EmEn::Saphir
 				"const float lqShininess = pow(1.0 - " << m_surfaceRoughness << ", 2.0) * 64.0 + 1.0;" "\n"
 				"const vec3 lqSpecF0 = mix(vec3(1.00), " << albedo << ", " << metalness << ");" "\n"
 				"const float lqSpecPower = pow(max(" << finaleDiffuseFactor << ", 0.0), lqShininess);" "\n" <<
-				m_fragmentColor << ".rgb += lqSpecF0 * " << this->lightColor() << ".rgb * " << this->lightIntensity() << " * lqSpecPower;").str();
+				m_fragmentColor << ".rgb += lqSpecF0 * " << this->lightColor() << ".rgb * projectionColor * " << this->lightIntensity() << " * lqSpecPower;").str();
 
 			Code{fragmentShader, Location::Output} << code;
 		}

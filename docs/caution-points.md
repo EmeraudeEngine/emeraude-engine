@@ -5,6 +5,7 @@ Critical warnings, known pitfalls, and hard-won lessons for Emeraude Engine deve
 ## Table of Contents
 
 - [Graphics/Material System](#graphicsmaterial-system)
+- [Scene Rendering](#scene-rendering)
 - [Shader/GLSL Pitfalls](#shaderglsl-pitfalls)
 - [Platform-Specific](#platform-specific)
 
@@ -111,6 +112,28 @@ if ( materialType == PBRResource::ClassId )
 > **Code references:**
 > - `Saphir/Keys.hpp:ShaderVariable::TangentToWorldMatrix`
 > - `Saphir/VertexShader.cpp:synthesizeTangentToWorldMatrix()`
+
+---
+
+## Scene Rendering
+
+### Fixed: Scene Visual Components Null Check (Feb 2026)
+
+> [!WARNING]
+> **`m_sceneVisualComponents[0]` can be null when no background is set.**
+>
+> In `Scene.rendering.cpp:getRenderableInstanceReadyForRendering()`, the environment cubemap check previously assumed a background always exists:
+> ```cpp
+> // BUG: m_environmentCubemap is ALWAYS non-null (initialized from default cubemap)
+> // but m_sceneVisualComponents[0] is null without a background → crash
+> if ( m_environmentCubemap != nullptr && renderableInstance == m_sceneVisualComponents[0]->getRenderableInstance() )
+> ```
+>
+> **Fix:** Added null check: `m_sceneVisualComponents[0] != nullptr &&`
+>
+> **Trigger:** Scenes without skybox/background (e.g. closed rooms with no `enableBasicBackground()`).
+>
+> **File:** `Scenes/Scene.rendering.cpp:1385`
 
 ---
 

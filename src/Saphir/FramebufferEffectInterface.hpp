@@ -28,7 +28,7 @@
 
 /* STL inclusions. */
 #include <memory>
-#include <set>
+#include <vector>
 
 /* Forward declarations */
 namespace EmEn::Saphir
@@ -82,13 +82,6 @@ namespace EmEn::Saphir
 			 */
 			virtual ~FramebufferEffectInterface () = default;
 
-		protected:
-
-			/** 
-			 * @brief Constructs a framebuffer effect interface.
-			 */
-			FramebufferEffectInterface () noexcept = default;
-			
 			/**
 			 * @brief Says if this effect is overriding the way fragment are fetched from the color buffer.
 			 * @note Override this method to return true for the final effect.
@@ -136,7 +129,14 @@ namespace EmEn::Saphir
 			 */
 			[[nodiscard]]
 			virtual bool generateFragmentShaderCode (Generator::Abstract & generator, FragmentShader & fragmentShader) const noexcept = 0;
+
+		protected:
+
+			/**
+			 * @brief Constructs a framebuffer effect interface.
+			 */
+			FramebufferEffectInterface () noexcept = default;
 	};
 
-	using FramebufferEffectsList = std::set< std::shared_ptr< FramebufferEffectInterface > >;
+	using FramebufferEffectsList = std::vector< std::shared_ptr< FramebufferEffectInterface > >;
 }

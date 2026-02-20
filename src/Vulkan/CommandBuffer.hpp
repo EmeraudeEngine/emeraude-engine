@@ -578,6 +578,17 @@ namespace EmEn::Vulkan
 			 */
 			void drawIndexed (uint32_t indexOffset, uint32_t indexCount, uint32_t instanceCount) const noexcept;
 
+			/**
+			 * @brief Registers a non-indexed draw command without geometry binding.
+			 * @note Useful for fullscreen triangle passes where vertices are generated in the vertex shader.
+			 * @param vertexCount The number of vertices to draw.
+			 * @param instanceCount The number of instances.
+			 * @param firstVertex The index of the first vertex. Default 0.
+			 * @param firstInstance The index of the first instance. Default 0.
+			 * @return void
+			 */
+			void draw (uint32_t vertexCount, uint32_t instanceCount, uint32_t firstVertex = 0, uint32_t firstInstance = 0) const noexcept;
+
 		private:
 
 			VkCommandBuffer m_handle{VK_NULL_HANDLE};

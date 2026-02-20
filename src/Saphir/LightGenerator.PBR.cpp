@@ -33,6 +33,7 @@
 #include "Declaration/SpecializationConstant.hpp"
 #include "Generator/Abstract.hpp"
 #include "Code.hpp"
+#include "Graphics/BindlessTextureManager.hpp"
 
 namespace EmEn::Saphir
 {
@@ -207,7 +208,7 @@ namespace EmEn::Saphir
 	}
 
 	bool
-	LightGenerator::generatePBRVertexShader (Generator::Abstract & generator, VertexShader & vertexShader, LightType lightType, bool enableShadowMap) const noexcept
+	LightGenerator::generatePBRVertexShader (Generator::Abstract & generator, VertexShader & vertexShader, LightType lightType, bool enableShadowMap, bool enableColorProjection) const noexcept
 	{
 		Declaration::OutputBlock lightBlock{LightBlock, generator.getNextShaderVariableLocation(lightType == LightType::Spot ? 2 : 1), ShaderVariable::Light};
 
@@ -275,17 +276,17 @@ namespace EmEn::Saphir
 			}
 		}
 
-		/* NOTE: Shadow map prerequisites must be generated based on actual UBO structure.
-		 * The UBO only contains viewProjectionMatrix when shadow mapping is enabled.
-		 * Point lights use cubemap shadow maps requiring direction output for 3D lookup.
-		 * CSM mode requires PositionWorldSpace instead of PositionLightSpace. */
-		if ( enableShadowMap )
+		/* NOTE: Projection coordinates are needed for shadow mapping AND/OR color projection.
+		 * The UBO contains viewProjectionMatrix when shadow mapping or color projection is enabled.
+		 * Point lights use cubemap direction for 3D lookup (shadow and color projection).
+		 * CSM mode requires PositionWorldSpace (shadow-only, CSM-specific). */
+		if ( enableShadowMap || enableColorProjection )
 		{
-			const bool useCSM = (m_renderPassType == RenderPassType::DirectionalLightPassCSM);
+			const bool useCSM = renderPassUsesCSM(m_renderPassType);
 
-			vertexShader.addComment("Compute the shadow map prerequisites for next stage.");
+			vertexShader.addComment("Compute the projection coordinates for next stage.");
 
-			if ( useCSM )
+			if ( enableShadowMap && useCSM )
 			{
 				/* NOTE: CSM computes light-space position in the fragment shader.
 				 * We only need to pass the world-space position. */
@@ -294,7 +295,8 @@ namespace EmEn::Saphir
 					return false;
 				}
 			}
-			else
+
+			if ( !useCSM )
 			{
 				/* NOTE: Point lights use cubemap shadow maps (true = cubemap mode).
 				 * Other light types use 2D shadow maps with viewProjectionMatrix. */
@@ -309,11 +311,11 @@ namespace EmEn::Saphir
 	}
 
 	bool
-	LightGenerator::generatePBRFragmentShader (const Generator::Abstract & generator, FragmentShader & fragmentShader, LightType lightType, [[maybe_unused]] bool enableShadowMap) const noexcept
+	LightGenerator::generatePBRFragmentShader (const Generator::Abstract & generator, FragmentShader & fragmentShader, LightType lightType, [[maybe_unused]] bool enableShadowMap, [[maybe_unused]] bool enableColorProjection) const noexcept
 	{
 		const auto lightSetIndex = generator.shaderProgram()->setIndex(SetType::PerLight);
 
-		const bool useCSM = (m_renderPassType == RenderPassType::DirectionalLightPassCSM);
+		const bool useCSM = renderPassUsesCSM(m_renderPassType);
 
 		/* NOTE: Shadow sampler is declared when shadow mapping is enabled.
 		 * Point lights use cubemap shadow maps (samplerCube) for omnidirectional shadows.
@@ -340,6 +342,35 @@ namespace EmEn::Saphir
 			else
 			{
 				if ( !fragmentShader.declare(Declaration::Sampler{lightSetIndex, 1, GLSL::Sampler2DShadow, Uniform::ShadowMapSampler}) )
+				{
+					return false;
+				}
+			}
+		}
+
+		/* NOTE: Color projection uses bindless textures. When enabled, declare the appropriate
+		 * bindless sampler array and enable the nonuniform qualifier extension. */
+		if ( enableColorProjection )
+		{
+			const auto bindlessSetIndex = generator.shaderProgram()->setIndex(SetType::PerBindless);
+
+			fragmentShader.setExtensionBehavior(GLSL::Extension::NonUniformQualifier, GLSL::Extension::Require);
+
+			if ( lightType == LightType::Point )
+			{
+				if ( !fragmentShader.declare(Declaration::Sampler{bindlessSetIndex, BindlessTextureManager::TextureCubeBinding, GLSL::SamplerCube, Bindless::TexturesCube, Declaration::Sampler::UnboundedArray}) )
+				{
+					return false;
+				}
+
+				if ( !fragmentShader.declare(Declaration::Sampler{bindlessSetIndex, BindlessTextureManager::TextureCubeArrayBinding, GLSL::SamplerCubeArray, Bindless::TexturesCubeArray, Declaration::Sampler::UnboundedArray}) )
+				{
+					return false;
+				}
+			}
+			else
+			{
+				if ( !fragmentShader.declare(Declaration::Sampler{bindlessSetIndex, BindlessTextureManager::Texture2DBinding, GLSL::Sampler2D, Bindless::Textures2D, Declaration::Sampler::UnboundedArray}) )
 				{
 					return false;
 				}
@@ -644,10 +675,38 @@ namespace EmEn::Saphir
 			"/* Final NdotL factor. */" << Line::End <<
 			"const float NdotL = max(dot(N, L), 0.0);" << Line::Blank;
 
+		/* NOTE: Color projection. Default vec3(1.0) is a no-op on multiply.
+		 * When enabled, the texture is sampled using projection coordinates. */
+		{
+			Code{fragmentShader} << "vec3 projectionColor = vec3(1.0);" << Line::End;
+
+			if ( enableColorProjection )
+			{
+				fragmentShader.addComment("Sample the color projection texture from the bindless array.");
+
+				if ( lightType == LightType::Point )
+				{
+					Code{fragmentShader} <<
+						"{ const uint cpIdx = floatBitsToUint(" << LightUB(UniformBlock::Component::ColorProjectionIndex) << ");" << Line::End <<
+						"  const uint cpFrameBits = floatBitsToUint(" << LightUB(UniformBlock::Component::ColorProjectionFrameIndex) << ");" << Line::End <<
+						"  if ( cpIdx != 0xFFFFFFFFu && cpFrameBits == 0xFFFFFFFFu ) { projectionColor = texture(" << Bindless::TexturesCube << "[" << GLSL::Functions::NonUniformEXT << "(cpIdx)], DirectionWorldSpace.xyz).rgb; }" << Line::End <<
+						"  if ( cpIdx != 0xFFFFFFFFu && cpFrameBits != 0xFFFFFFFFu ) { projectionColor = texture(" << Bindless::TexturesCubeArray << "[" << GLSL::Functions::NonUniformEXT << "(cpIdx)], vec4(DirectionWorldSpace.xyz, float(cpFrameBits))).rgb; } }" << Line::End;
+				}
+				else if ( !useCSM )
+				{
+					Code{fragmentShader} <<
+						"{ const uint cpIdx = floatBitsToUint(" << LightUB(UniformBlock::Component::ColorProjectionIndex) << ");" << Line::End <<
+						"  if ( cpIdx != 0xFFFFFFFFu )" << Line::End <<
+						"  { const vec3 projCoords = " << ShaderVariable::PositionLightSpace << ".xyz / " << ShaderVariable::PositionLightSpace << ".w;" << Line::End <<
+						"    projectionColor = texture(" << Bindless::Textures2D << "[" << GLSL::Functions::NonUniformEXT << "(cpIdx)], projCoords.xy).rgb; } }" << Line::End;
+				}
+			}
+		}
+
 		/* Compute radiance and final output. */
 		Code{fragmentShader} <<
 			"/* Light radiance. */" << Line::End <<
-			"const vec3 radiance = " << this->lightColor() << ".rgb * " << this->lightIntensity() << " * " << LightFactor << ";" << Line::Blank;
+			"const vec3 radiance = " << this->lightColor() << ".rgb * projectionColor * " << this->lightIntensity() << " * " << LightFactor << ";" << Line::Blank;
 
 		/* Fragment color output. */
 		if ( m_fragmentColor.empty() )

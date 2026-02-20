@@ -640,6 +640,7 @@ namespace EmEn::Saphir
 			constexpr auto Textures2D{"uBindlessTextures2D"};
 			constexpr auto Textures3D{"uBindlessTextures3D"};
 			constexpr auto TexturesCube{"uBindlessTexturesCube"};
+			constexpr auto TexturesCubeArray{"uBindlessTexturesCubeArray"};
 		}
 
 		/** @brief Specialization constants naming convention. */
@@ -720,6 +721,7 @@ namespace EmEn::Saphir
 			/* Lighting specific */
 			constexpr auto ShadowMapSampler{"uShadowMapSampler"};
 			constexpr auto ShadowMapArraySampler{"uShadowMapArraySampler"};
+			constexpr auto ColorProjectionSampler{"uColorProjectionSampler"};
 		}
 
 		/** @brief Uniforms block variables naming convention. */
@@ -822,6 +824,8 @@ namespace EmEn::Saphir
 				constexpr auto OuterCosAngle{"outerCosAngle"};
 				constexpr auto PCFRadius{"pcfRadius"};
 				constexpr auto ViewProjectionMatrix{"viewProjectionMatrix"};
+				constexpr auto ColorProjectionIndex{"colorProjectionIndex"};
+				constexpr auto ColorProjectionFrameIndex{"colorProjectionFrameIndex"};
 			}
 		}
 
@@ -830,11 +834,13 @@ namespace EmEn::Saphir
 		{
 			constexpr auto Matrices{"pcMatrices"};
 			constexpr auto Overlay{"pcOverlay"};
+			constexpr auto PostProcessing{"pcPostProcessing"};
 
 			namespace Type
 			{
 				constexpr auto Matrices{"Matrices"};
 				constexpr auto Overlay{"Overlay"};
+				constexpr auto PostProcessing{"PostProcessing"};
 			}
 
 			namespace Component
@@ -848,6 +854,9 @@ namespace EmEn::Saphir
 				constexpr auto TransformationMatrix{"transformationMatrix"};
 				/* NOTE : Animated texture frame index. */
 				constexpr auto FrameIndex{"frameIndex"};
+				/* NOTE : Post-processing. */
+				constexpr auto FrameSize{"frameSize"};
+				constexpr auto Time{"time"};
 			}
 		}
 
@@ -882,6 +891,7 @@ namespace EmEn::Saphir
 			constexpr auto TangentToWorldMatrix{"svTangentToWorld"};
 			constexpr auto ParallaxTextureCoordinates{"pomTexCoords"};
 			constexpr auto OutputFragment{"svOutputFragment"};
+			constexpr auto OutputNormal{"svOutputNormal"};
 			constexpr auto FragCoord{"svFragCoord"};
 			constexpr auto Light{"svLight"};
 			constexpr auto PositionLightSpace{"PositionLightSpace"};
@@ -933,6 +943,23 @@ namespace EmEn::Saphir
 		std::stringstream output;
 
 		output << Keys::PushConstant::Overlay << '.' << componentName;
+
+		return output.str();
+	}
+
+	/**
+	* @brief Returns a variable from the current post-processing push constant.
+	* @param componentName The push constant component name. See Keys::PushConstant::Component.
+	* @return std::string
+	*/
+	[[nodiscard]]
+	inline
+	std::string
+	PostProcessingPC (const char * componentName) noexcept
+	{
+		std::stringstream output;
+
+		output << Keys::PushConstant::PostProcessing << '.' << componentName;
 
 		return output.str();
 	}

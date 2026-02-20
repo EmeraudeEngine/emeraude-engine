@@ -1489,4 +1489,40 @@ namespace EmEn::Vulkan
 			firstInstance
 		);
 	}
+
+	void
+	CommandBuffer::draw (uint32_t vertexCount, uint32_t instanceCount, uint32_t firstVertex, uint32_t firstInstance) const noexcept
+	{
+		if constexpr ( IsDebug )
+		{
+			if ( !this->isCreated() )
+			{
+				Tracer::error(ClassId, "The command buffer is not created for draw() !");
+
+				return;
+			}
+
+			if ( vertexCount == 0 )
+			{
+				Tracer::error(ClassId, "No vertex count for draw() !");
+
+				return;
+			}
+
+			if ( instanceCount == 0 )
+			{
+				Tracer::error(ClassId, "No instance count for draw() !");
+
+				return;
+			}
+		}
+
+		vkCmdDraw(
+			m_handle,
+			vertexCount,
+			instanceCount,
+			firstVertex,
+			firstInstance
+		);
+	}
 }

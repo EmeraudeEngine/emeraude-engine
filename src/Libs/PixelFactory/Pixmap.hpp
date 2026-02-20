@@ -2628,14 +2628,54 @@ namespace EmEn::Libs::PixelFactory
 
 			/**
 			 * @brief Fills the pixmap with a basic noise.
+			 * @param grayNoise Generate only gray. Default false.
 			 * @return bool
 			 */
 			bool
-			noise () noexcept
+			noise (bool grayNoise = false) noexcept
 			{
 				if ( !this->isValid() )
 				{
 					return false;
+				}
+
+				/* Gray noise on RGB/RGBA: generate one value per pixel, set R=G=B. */
+				if ( grayNoise && (m_channelMode == ChannelMode::RGB || m_channelMode == ChannelMode::RGBA) )
+				{
+					const auto limit = this->pixelCount();
+					const auto stride = this->colorCount();
+
+					Randomizer< pixel_data_t > randomizer;
+
+					for ( dimension_t index = 0; index < limit; ++index )
+					{
+						const auto offset = index * stride;
+
+						pixel_data_t value{};
+
+						if constexpr ( std::is_floating_point_v< pixel_data_t > )
+						{
+							value = randomizer.value(
+								static_cast< pixel_data_t >(0),
+								static_cast< pixel_data_t >(1)
+							);
+						}
+						else if constexpr ( std::is_integral_v< pixel_data_t > )
+						{
+							value = randomizer.value(
+								static_cast< pixel_data_t >(0),
+								std::numeric_limits< pixel_data_t >::max()
+							);
+						}
+
+						m_data[offset] = value;
+						m_data[offset + 1] = value;
+						m_data[offset + 2] = value;
+					}
+
+					this->markEverythingUpdated();
+
+					return true;
 				}
 
 				size_t bufferSize = 0;

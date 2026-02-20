@@ -72,23 +72,44 @@ namespace EmEn::Graphics
 			case RenderPassType::DirectionalLightPass :
 				return DirectionalLightPassString;
 
-			case RenderPassType::DirectionalLightPassNoShadow :
-				return DirectionalLightPassNoShadowString;
+			case RenderPassType::DirectionalLightPassShadowMap :
+				return DirectionalLightPassShadowMapString;
 
 			case RenderPassType::DirectionalLightPassCSM :
 				return DirectionalLightPassCSMString;
 
+			case RenderPassType::DirectionalLightPassColorMap :
+				return DirectionalLightPassColorMapString;
+
+			case RenderPassType::DirectionalLightPassFull :
+				return DirectionalLightPassFullString;
+
+			case RenderPassType::DirectionalLightPassFullCSM :
+				return DirectionalLightPassFullCSMString;
+
 			case RenderPassType::PointLightPass :
 				return PointLightPassString;
 
-			case RenderPassType::PointLightPassNoShadow :
-				return PointLightPassNoShadowString;
+			case RenderPassType::PointLightPassShadowMap :
+				return PointLightPassShadowMapString;
+
+			case RenderPassType::PointLightPassColorMap :
+				return PointLightPassColorMapString;
+
+			case RenderPassType::PointLightPassFull :
+				return PointLightPassFullString;
 
 			case RenderPassType::SpotLightPass :
 				return SpotLightPassString;
 
-			case RenderPassType::SpotLightPassNoShadow :
-				return SpotLightPassNoShadowString;
+			case RenderPassType::SpotLightPassShadowMap :
+				return SpotLightPassShadowMapString;
+
+			case RenderPassType::SpotLightPassColorMap :
+				return SpotLightPassColorMapString;
+
+			case RenderPassType::SpotLightPassFull :
+				return SpotLightPassFullString;
 
 			case RenderPassType::None :
 				return NoneString;
@@ -115,9 +136,9 @@ namespace EmEn::Graphics
 			return RenderPassType::DirectionalLightPass;
 		}
 
-		if ( value == DirectionalLightPassNoShadowString )
+		if ( value == DirectionalLightPassShadowMapString )
 		{
-			return RenderPassType::DirectionalLightPassNoShadow;
+			return RenderPassType::DirectionalLightPassShadowMap;
 		}
 
 		if ( value == DirectionalLightPassCSMString )
@@ -125,14 +146,39 @@ namespace EmEn::Graphics
 			return RenderPassType::DirectionalLightPassCSM;
 		}
 
+		if ( value == DirectionalLightPassColorMapString )
+		{
+			return RenderPassType::DirectionalLightPassColorMap;
+		}
+
+		if ( value == DirectionalLightPassFullString )
+		{
+			return RenderPassType::DirectionalLightPassFull;
+		}
+
+		if ( value == DirectionalLightPassFullCSMString )
+		{
+			return RenderPassType::DirectionalLightPassFullCSM;
+		}
+
 		if ( value == PointLightPassString )
 		{
 			return RenderPassType::PointLightPass;
 		}
 
-		if ( value == PointLightPassNoShadowString )
+		if ( value == PointLightPassShadowMapString )
 		{
-			return RenderPassType::PointLightPassNoShadow;
+			return RenderPassType::PointLightPassShadowMap;
+		}
+
+		if ( value == PointLightPassColorMapString )
+		{
+			return RenderPassType::PointLightPassColorMap;
+		}
+
+		if ( value == PointLightPassFullString )
+		{
+			return RenderPassType::PointLightPassFull;
 		}
 
 		if ( value == SpotLightPassString )
@@ -140,9 +186,19 @@ namespace EmEn::Graphics
 			return RenderPassType::SpotLightPass;
 		}
 
-		if ( value == SpotLightPassNoShadowString )
+		if ( value == SpotLightPassShadowMapString )
 		{
-			return RenderPassType::SpotLightPassNoShadow;
+			return RenderPassType::SpotLightPassShadowMap;
+		}
+
+		if ( value == SpotLightPassColorMapString )
+		{
+			return RenderPassType::SpotLightPassColorMap;
+		}
+
+		if ( value == SpotLightPassFullString )
+		{
+			return RenderPassType::SpotLightPassFull;
 		}
 
 		if ( value == NoneString )

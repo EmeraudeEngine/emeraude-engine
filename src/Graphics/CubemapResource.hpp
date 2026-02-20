@@ -131,6 +131,14 @@ namespace EmEn::Graphics
 			bool load (const Libs::PixelFactory::Pixmap< uint8_t > & pixmap) noexcept;
 
 			/**
+			 * @brief Loads a cubemap from an equirectangular (panoramic 2:1) pixmap.
+			 * @param equirectangular A reference to the equirectangular source pixmap.
+			 * @param faceSize The desired size (width and height) of each cube face in pixels.
+			 * @return bool
+			 */
+			bool loadEquirectangular (const Libs::PixelFactory::Pixmap< uint8_t > & equirectangular, uint32_t faceSize) noexcept;
+
+			/**
 			 * @brief Loads a cubemap from a packed pixmap.
 			 * @param pixmaps A reference to a fixed array of pixmaps.
 			 * @return bool
@@ -194,6 +202,7 @@ namespace EmEn::Graphics
 
 			/* JSON keys */
 			static constexpr auto PackedKey{"Packed"};
+			static constexpr auto EquirectangularKey{"Equirectangular"};
 			static constexpr auto FileFormatKey{"FileFormat"};
 
 			CubemapPixmaps m_faces;

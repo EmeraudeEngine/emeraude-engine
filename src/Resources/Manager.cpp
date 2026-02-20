@@ -54,7 +54,9 @@
 #include "Graphics/Renderable/SpriteResource.hpp"
 #include "Graphics/Renderable/TerrainResource.hpp"
 #include "Graphics/Renderable/BasicSeaResource.hpp"
+#include "Graphics/CubemapMovieResource.hpp"
 #include "Graphics/TextureResource/AnimatedTexture2D.hpp"
+#include "Graphics/TextureResource/AnimatedTextureCubemap.hpp"
 #include "Graphics/TextureResource/Texture1D.hpp"
 #include "Graphics/TextureResource/Texture2D.hpp"
 #include "Graphics/TextureResource/Texture3D.hpp"
@@ -527,6 +529,8 @@ namespace EmEn::Resources
 			m_containers.emplace(typeid(Graphics::TextureResource::Texture3D), std::make_unique< Texture3Ds >("Texture 3D manager", m_primaryServices, *this, this->getLocalStore("Images")));
 			m_containers.emplace(typeid(Graphics::TextureResource::TextureCubemap), std::make_unique< TextureCubemaps >("Texture cubemap manager", m_primaryServices, *this, this->getLocalStore("Cubemaps")));
 			m_containers.emplace(typeid(Graphics::TextureResource::AnimatedTexture2D), std::make_unique< AnimatedTexture2Ds >("Animated texture 2D manager", m_primaryServices, *this, this->getLocalStore("Movies")));
+			m_containers.emplace(typeid(Graphics::CubemapMovieResource), std::make_unique< CubemapMovies >("Cubemap movie manager", m_primaryServices, *this, this->getLocalStore("CubemapMovies")));
+			m_containers.emplace(typeid(Graphics::TextureResource::AnimatedTextureCubemap), std::make_unique< AnimatedTextureCubemaps >("Animated texture cubemap manager", m_primaryServices, *this, this->getLocalStore("CubemapMovies")));
 			m_containers.emplace(typeid(Graphics::Geometry::VertexResource), std::make_unique< VertexGeometries >("Geometry manager", m_primaryServices, *this, this->getLocalStore("Geometries")));
 			m_containers.emplace(typeid(Graphics::Geometry::IndexedVertexResource), std::make_unique< IndexedVertexGeometries >("Indexed geometry manager", m_primaryServices, *this, this->getLocalStore("Geometries")));
 			m_containers.emplace(typeid(Graphics::Geometry::VertexGridResource), std::make_unique< VertexGridGeometries >("Grid geometry manager", m_primaryServices, *this, this->getLocalStore("Geometries")));

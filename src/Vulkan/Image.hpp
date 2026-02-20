@@ -55,6 +55,7 @@ namespace EmEn
 		class ImageResource;
 		class CubemapResource;
 		class MovieResource;
+		class CubemapMovieResource;
 	}
 
 	namespace Vulkan
@@ -399,6 +400,15 @@ namespace EmEn::Vulkan
 			 */
 			[[nodiscard]]
 			bool create (TransferManager & transferManager, const std::shared_ptr< Graphics::MovieResource > & movieResource) noexcept;
+
+			/**
+			 * @brief Creates, allocates and returns a usable image.
+			 * @param transferManager A reference to a transfer manager.
+			 * @param cubemapMovieResource A reference to a cubemap movie resource smart pointer.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool create (TransferManager & transferManager, const std::shared_ptr< Graphics::CubemapMovieResource > & cubemapMovieResource) noexcept;
 
 			/**
 			 * @brief Writes raw data to this image using a staging buffer.

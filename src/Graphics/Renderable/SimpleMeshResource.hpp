@@ -217,18 +217,6 @@ namespace EmEn::Graphics::Renderable
 			 */
 			bool load (const std::shared_ptr< Geometry::Interface > & geometry, const std::shared_ptr< Material::Interface > & material = nullptr, const RasterizationOptions & rasterizationOptions = {}) noexcept;
 
-			/**
-			 * @brief Creates a unique simple mesh or returns the existing one with the same parameters.
-			 * The resource name will be based on sub-resource names.
-			 * @param serviceProvider A reference to the resource manager through a service provider.
-			 * @param geometryResource A reference to a geometry resource smart pointer.
-			 * @param materialResource A reference to a material resource smart pointer.
-			 * @param resourceName A string. Default auto generated name.
-			 * @return std::shared_ptr< SimpleMeshResource >
-			 */
-			[[nodiscard]]
-			static std::shared_ptr< SimpleMeshResource > getOrCreate (Resources::AbstractServiceProvider & serviceProvider, const std::shared_ptr< Geometry::Interface > & geometryResource, const std::shared_ptr< Material::Interface > & materialResource, std::string resourceName = {}) noexcept;
-
 		private:
 
 			/**

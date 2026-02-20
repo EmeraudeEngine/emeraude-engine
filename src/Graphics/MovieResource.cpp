@@ -36,6 +36,8 @@
 #include "json/json.h"
 
 /* Local inclusions. */
+#include "Libs/Algorithms/PerlinNoise.hpp"
+#include "Libs/ThreadPool.hpp"
 #include "Libs/FastJSON.hpp"
 #include "Resources/Manager.hpp"
 #include "ImageResource.hpp"
@@ -63,34 +65,56 @@ namespace EmEn::Graphics
 			return false;
 		}
 
-		constexpr size_t imageCount{3};
-		constexpr size_t size{32};
-
-		constexpr std::array< PixelFactory::Color< float >, imageCount > colors{
-			PixelFactory::Red,
-			PixelFactory::Green,
-			PixelFactory::Blue
-		};
-
-		m_frames.resize(3);
-
-		for ( size_t frameIndex = 0; frameIndex < imageCount; frameIndex++ )
+		if constexpr ( IsDebug )
 		{
-			if ( !m_frames[frameIndex].first.initialize(size, size, PixelFactory::ChannelMode::RGB) )
+			constexpr size_t frameCountDefault{3};
+			constexpr size_t size{32};
+			constexpr uint32_t debugFrameDuration{BaseTime / 3};
+
+			constexpr std::array< PixelFactory::Color< float >, frameCountDefault > colors{
+				PixelFactory::Red,
+				PixelFactory::Green,
+				PixelFactory::Blue
+			};
+
+			m_frames.resize(frameCountDefault);
+
+			for ( size_t frameIndex = 0; frameIndex < frameCountDefault; frameIndex++ )
 			{
-				TraceError{ClassId} << "Unable to load the default pixmap for frame #" << frameIndex << " !";
+				if ( !m_frames[frameIndex].first.initialize(size, size, PixelFactory::ChannelMode::RGB) )
+				{
+					TraceError{ClassId} << "Unable to load the default pixmap for frame #" << frameIndex << " !";
 
-				return this->setLoadSuccess(false);
+					return this->setLoadSuccess(false);
+				}
+
+				if ( !m_frames[frameIndex].first.fill(colors.at(frameIndex)) )
+				{
+					TraceError{ClassId} << "Unable to fill the default pixmap for frame #" << frameIndex << " !";
+
+					return this->setLoadSuccess(false);
+				}
+
+				m_frames[frameIndex].second = debugFrameDuration;
 			}
+		}
+		else
+		{
+			constexpr size_t frameCountDefault{5};
+			constexpr size_t size{32};
 
-			if ( !m_frames[frameIndex].first.fill(colors.at(frameIndex)) )
+			m_frames.resize(frameCountDefault);
+
+			for ( size_t frameIndex = 0; frameIndex < frameCountDefault; frameIndex++ )
 			{
-				TraceError{ClassId} << "Unable to fill the default pixmap for frame #" << frameIndex << " !";
+				if ( !m_frames[frameIndex].first.initialize(size, size, PixelFactory::ChannelMode::RGB) ||
+					 !m_frames[frameIndex].first.noise(true) )
+				{
+					return this->setLoadSuccess(false);
+				}
 
-				return this->setLoadSuccess(false);
+				m_frames[frameIndex].second = DefaultFrameDuration;
 			}
-
-			m_frames[frameIndex].second = DefaultFrameDuration;
 		}
 
 		return this->setLoadSuccess(true);
@@ -165,17 +189,13 @@ namespace EmEn::Graphics
 	uint32_t
 	MovieResource::extractFrameDuration (const Json::Value & data, uint32_t frameCount) noexcept
 	{
-		const auto fps = FastJSON::getValue< uint32_t >(data, JKFrameRate).value_or(0);
-
-		if ( fps > 0 )
+		if ( const auto fps = FastJSON::getValue< uint32_t >(data, JKFrameRate).value_or(0); fps > 0 )
 		{
 			/* NOTE: Compute by using an FPS definition. */
 			return BaseTime / fps;
 		}
 
-		const auto animationDuration = FastJSON::getValue< uint32_t >(data, JKAnimationDuration).value_or(0);
-
-		if ( animationDuration > 0 )
+		if ( const auto animationDuration = FastJSON::getValue< uint32_t >(data, JKAnimationDuration).value_or(0); animationDuration > 0 )
 		{
 			/* NOTE: Using the duration of the whole movie. */
 			return animationDuration / frameCount;
@@ -400,5 +420,154 @@ namespace EmEn::Graphics
 		replaceKey = '{' + params[0] + '}';
 
 		return std::stoul(params[0]);
+	}
+
+	bool
+	MovieResource::loadWaterNormals (uint32_t size, uint32_t frameCount, uint32_t frameDuration, float scale, uint32_t seed, uint32_t octaves, float persistence, float strength, ThreadPool * threadPool) noexcept
+	{
+		if ( size == 0 || frameCount == 0 || frameDuration == 0 || octaves == 0 )
+		{
+			TraceError{ClassId} << "Invalid parameters for water normals generation !";
+
+			return false;
+		}
+
+		if ( !this->beginLoading() )
+		{
+			return false;
+		}
+
+		Algorithms::PerlinNoise< float > perlin{seed};
+
+		const auto invSize = 1.0F / static_cast< float >(size);
+
+		/* Animation drift amplitudes for circular looping path. */
+		constexpr auto DriftX{0.5F};
+		constexpr auto DriftY{0.35F};
+		constexpr auto TwoPi{6.283185307179586F};
+
+		m_frames.resize(frameCount);
+
+		/* Pre-initialize all pixmap sequentially (fast, catches allocation failures early). */
+		for ( uint32_t frameIndex = 0; frameIndex < frameCount; frameIndex++ )
+		{
+			if ( !m_frames[frameIndex].first.initialize(size, size, PixelFactory::ChannelMode::RGBA) )
+			{
+				TraceError{ClassId} << "Unable to initialize pixmap for water normals frame #" << frameIndex << " !";
+
+				return this->setLoadSuccess(false);
+			}
+
+			m_frames[frameIndex].second = frameDuration;
+		}
+
+		/* Per-frame generation lambda. Each invocation allocates its own heights buffer
+		 * so there is no shared mutable state between frames. */
+		auto generateFrame = [&] (uint32_t frameIndex) {
+			/* Compute temporal offset using a circular path for seamless looping. */
+			const auto angle = TwoPi * static_cast< float >(frameIndex) / static_cast< float >(frameCount);
+			const auto offsetX = std::cos(angle) * DriftX;
+			const auto offsetY = std::sin(angle) * DriftY;
+
+			/* Local height field buffer for two-pass generation. */
+			std::vector< float > heights(static_cast< size_t >(size) * size);
+
+			/* Pass 1: Generate the height field using FBM Perlin noise.
+			 * 4-corner bilinear blending ensures seamless spatial tiling:
+			 * sample noise at (u,v), (u-1,v), (u,v-1), (u-1,v-1) scaled by the
+			 * octave period, then blend with smoothstep weights so that the
+			 * left edge matches the right edge and top matches bottom. */
+			for ( uint32_t row = 0; row < size; row++ )
+			{
+				const auto v = static_cast< float >(row) * invSize;
+				const auto sv = v * v * (3.0F - 2.0F * v);
+
+				for ( uint32_t col = 0; col < size; col++ )
+				{
+					const auto u = static_cast< float >(col) * invSize;
+					const auto su = u * u * (3.0F - 2.0F * u);
+
+					auto height = 0.0F;
+					auto amplitude = 1.0F;
+					auto frequency = 1.0F;
+
+					for ( uint32_t octave = 0; octave < octaves; octave++ )
+					{
+						const auto s = scale * frequency;
+						const auto z = static_cast< float >(octave) * 1.7F;
+
+						const auto sx = u * s + offsetX;
+						const auto sy = v * s + offsetY;
+
+						const auto n00 = perlin.generate(sx,     sy,     z);
+						const auto n10 = perlin.generate(sx - s, sy,     z);
+						const auto n01 = perlin.generate(sx,     sy - s, z);
+						const auto n11 = perlin.generate(sx - s, sy - s, z);
+
+						const auto nx0 = n00 + su * (n10 - n00);
+						const auto nx1 = n01 + su * (n11 - n01);
+
+						height += amplitude * (nx0 + sv * (nx1 - nx0));
+
+						amplitude *= persistence;
+						frequency *= 2.0F;
+					}
+
+					heights[static_cast< size_t >(row) * size + col] = height;
+				}
+			}
+
+			/* Pass 2: Compute normals from the height field using finite differences with wrapping. */
+			for ( uint32_t row = 0; row < size; row++ )
+			{
+				const auto rowPrev = (row - 1 + size) % size;
+				const auto rowNext = (row + 1) % size;
+
+				for ( uint32_t col = 0; col < size; col++ )
+				{
+					const auto colPrev = (col - 1 + size) % size;
+					const auto colNext = (col + 1) % size;
+
+					const auto dx = heights[static_cast< size_t >(row) * size + colNext]
+								  - heights[static_cast< size_t >(row) * size + colPrev];
+					const auto dy = heights[static_cast< size_t >(rowNext) * size + col]
+								  - heights[static_cast< size_t >(rowPrev) * size + col];
+
+					/* Construct normal vector: (-dx * strength, -dy * strength, 1.0) and normalize. */
+					const auto nx = -dx * strength;
+					const auto ny = -dy * strength;
+					constexpr auto nz = 1.0F;
+
+					const auto invLen = 1.0F / std::sqrt(nx * nx + ny * ny + nz * nz);
+
+					/* Encode to RGB: normal * 0.5 + 0.5 */
+					m_frames[frameIndex].first.setPixel(
+						col, row,
+						PixelFactory::Color< float >{
+							nx * invLen * 0.5F + 0.5F,
+							ny * invLen * 0.5F + 0.5F,
+							nz * invLen * 0.5F + 0.5F,
+							1.0F
+						}
+					);
+				}
+			}
+		};
+
+		if ( threadPool != nullptr )
+		{
+			threadPool->parallelFor(uint32_t{0}, frameCount, generateFrame);
+		}
+		else
+		{
+			for ( uint32_t frameIndex = 0; frameIndex < frameCount; frameIndex++ )
+			{
+				generateFrame(frameIndex);
+			}
+		}
+
+		this->updateDuration();
+
+		return this->setLoadSuccess(true);
 	}
 }

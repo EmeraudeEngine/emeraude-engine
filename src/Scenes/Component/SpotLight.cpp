@@ -26,8 +26,12 @@
 
 #include "SpotLight.hpp"
 
+/* STL inclusions. */
+#include <bit>
+
 /* Local inclusions. */
 #include "Graphics/Renderer.hpp"
+#include "Resources/ResourceTrait.hpp"
 #include "Libs/Math/Space3D/Collisions/PointSphere.hpp"
 #include "Saphir/LightGenerator.hpp"
 #include "Scenes/AVConsole/Manager.hpp"
@@ -114,6 +118,12 @@ namespace EmEn::Scenes::Component
 		m_buffer[DirectionOffset+1] = direction.y();
 		m_buffer[DirectionOffset+2] = direction.z();
 
+		/* NOTE: Update light matrice for advanced light effects. */
+		if ( this->isShadowCastingEnabled() || this->hasColorProjectionTexture() )
+		{
+			this->updateLightSpaceMatrix();
+		}
+
 		this->requestVideoMemoryUpdate();
 	}
 
@@ -143,6 +153,24 @@ namespace EmEn::Scenes::Component
 			Tracer::error(ClassId, "Unable to create the spotlight shared uniform buffer !");
 
 			return false;
+		}
+
+		/* Store the bindless texture manager for color projection registration. */
+		m_bindlessTextureManager = &scene.AVConsoleManager().graphicsRenderer().bindlessTextureManager();
+
+		/* If a color projection texture is set, try to register it in bindless now. */
+		if ( this->hasColorProjectionTexture() && this->colorProjectionBindlessIndex() == NoColorProjectionTexture )
+		{
+			auto * resource = dynamic_cast< Resources::ResourceTrait * >(this->colorProjectionTexture().get());
+
+			if ( resource != nullptr && resource->isLoaded() )
+			{
+				this->registerColorProjectionInBindless();
+			}
+			else if ( resource != nullptr )
+			{
+				this->observe(resource);
+			}
 		}
 
 		/* Initialize the data buffer. */
@@ -177,6 +205,7 @@ namespace EmEn::Scenes::Component
 					if ( this->createShadowDescriptorSet(scene) )
 					{
 						this->enableShadowCasting(true);
+
 						this->updateLightSpaceMatrix();
 					}
 					else
@@ -203,7 +232,10 @@ namespace EmEn::Scenes::Component
 	void
 	SpotLight::destroyFromHardware (Scene & scene) noexcept
 	{
-		/* Clean up shadow descriptor set. */
+		/* Unregister the color projection texture from the bindless manager and stop observing. */
+		this->unregisterColorProjectionFromBindless(false);
+
+		/* Clean up descriptor set (shadow or color projection). */
 		m_shadowDescriptorSet.reset();
 
 		if ( m_shadowMap != nullptr )
@@ -219,8 +251,8 @@ namespace EmEn::Scenes::Component
 	const Vulkan::DescriptorSet *
 	SpotLight::descriptorSet (bool useShadowMap) const noexcept
 	{
-		/* If shadow map is requested, and we have a shadow descriptor set, use it. */
-		if ( useShadowMap && m_shadowDescriptorSet != nullptr )
+		/* If an enriched descriptor set exists (shadow map and/or color projection), use it. */
+		if ( m_shadowDescriptorSet != nullptr )
 		{
 			return m_shadowDescriptorSet.get();
 		}
@@ -230,9 +262,9 @@ namespace EmEn::Scenes::Component
 	}
 
 	Declaration::UniformBlock
-	SpotLight::getUniformBlock (uint32_t set, uint32_t binding, bool useShadow) const noexcept
+	SpotLight::getUniformBlock (uint32_t set, uint32_t binding, bool useShadow, bool useColorProjection) const noexcept
 	{
-		return LightGenerator::getUniformBlock(set, binding, LightType::Spot, useShadow);
+		return LightGenerator::getUniformBlock(set, binding, LightType::Spot, useShadow, useColorProjection);
 	}
 
 	void
@@ -245,7 +277,10 @@ namespace EmEn::Scenes::Component
 		if ( m_shadowMap != nullptr )
 		{
 			m_shadowMap->updateViewRangesProperties(this->getFovOrNear(), this->getDistanceOrFar());
+		}
 
+		if ( this->isShadowCastingEnabled() || this->hasColorProjectionTexture() )
+		{
 			this->updateLightSpaceMatrix();
 		}
 
@@ -273,7 +308,10 @@ namespace EmEn::Scenes::Component
 		if ( m_shadowMap != nullptr )
 		{
 			m_shadowMap->updateViewRangesProperties(this->getFovOrNear(), this->getDistanceOrFar());
+		}
 
+		if ( this->isShadowCastingEnabled() || this->hasColorProjectionTexture() )
+		{
 			this->updateLightSpaceMatrix();
 		}
 
@@ -378,12 +416,27 @@ namespace EmEn::Scenes::Component
 	void
 	SpotLight::updateLightSpaceMatrix () noexcept
 	{
-		this->writeLightSpaceMatrix(m_buffer.data() + LightMatrixOffset);
+		const auto worldCoordinates = this->getWorldCoordinates();
+
+		const auto viewMatrix = worldCoordinates.getViewMatrix();
+
+		/* Compute near plane consistently with ViewMatrices2DUBO (1:1 aspect ratio). */
+		const auto fov = this->getFovOrNear();
+		const auto tanHalfFov = std::tan(Radian(fov) * 0.5F);
+		const auto nearPlane = 0.1F / std::sqrt(1.0F + tanHalfFov * tanHalfFov * 2.0F);
+
+		const auto projMatrix = Matrix< 4, float >::perspectiveProjection(fov, 1.0F, nearPlane, this->getDistanceOrFar());
+
+		const auto matrix = RenderTarget::ScaleBiasMatrix * projMatrix * viewMatrix;
+
+		std::copy_n(matrix.data(), 16, m_buffer.data() + LightMatrixOffset);
 	}
 
 	bool
 	SpotLight::onVideoMemoryUpdate (SharedUniformBuffer & UBO, uint32_t index) noexcept
 	{
+		m_buffer[ColorProjectionIndexOffset] = std::bit_cast< float >(this->colorProjectionBindlessIndex());
+
 		return UBO.writeElementData(index, m_buffer.data());
 	}
 

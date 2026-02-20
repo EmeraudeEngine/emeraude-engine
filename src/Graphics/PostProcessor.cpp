@@ -26,92 +26,784 @@
 
 #include "PostProcessor.hpp"
 
+/* STL inclusions. */
+#include <chrono>
+#include <cmath>
+#include <numbers>
+
 /* Local inclusions. */
-#include "Graphics/RenderTarget/View.hpp"
-#include "Saphir/FramebufferEffectInterface.hpp"
+#include "Libs/VertexFactory/ShapeGenerator.hpp"
+#include "Geometry/IndexedVertexResource.hpp"
+#include "PostProcessEffect.hpp"
+#include "Saphir/Generator/PostProcessing.hpp"
+#include "Saphir/Program.hpp"
+#include "Vulkan/CommandBuffer.hpp"
+#include "Vulkan/DescriptorSet.hpp"
+#include "Vulkan/DescriptorSetLayout.hpp"
+#include "Vulkan/PipelineLayout.hpp"
+#include "Vulkan/Sync/ImageMemoryBarrier.hpp"
+#include "GrabPass.hpp"
+#include "Renderer.hpp"
 #include "Tracer.hpp"
+#include "ViewMatricesInterface.hpp"
+
+namespace
+{
+	/**
+	 * @brief Lightweight adapter exposing a GrabPass's depth resources as a TextureInterface.
+	 * @note Stack-allocated in executeEffectChain(); lives for the duration of the chain.
+	 */
+	class GrabPassDepthAdapter final : public EmEn::Vulkan::TextureInterface
+	{
+		public:
+
+			explicit GrabPassDepthAdapter (const EmEn::Graphics::GrabPass & grabPass) noexcept
+				: m_grabPass{grabPass}
+			{
+
+			}
+
+			[[nodiscard]] bool isCreated () const noexcept override { return m_grabPass.hasDepth(); }
+			[[nodiscard]] EmEn::Vulkan::TextureType type () const noexcept override { return EmEn::Vulkan::TextureType::Texture2D; }
+			[[nodiscard]] uint32_t dimensions () const noexcept override { return 2; }
+			[[nodiscard]] bool isCubemapTexture () const noexcept override { return false; }
+			[[nodiscard]] std::shared_ptr< EmEn::Vulkan::Image > image () const noexcept override { return m_grabPass.depthImage(); }
+			[[nodiscard]] std::shared_ptr< EmEn::Vulkan::ImageView > imageView () const noexcept override { return m_grabPass.depthImageView(); }
+			[[nodiscard]] std::shared_ptr< EmEn::Vulkan::Sampler > sampler () const noexcept override { return m_grabPass.depthSampler(); }
+			[[nodiscard]] bool request3DTextureCoordinates () const noexcept override { return false; }
+
+		private:
+
+			const EmEn::Graphics::GrabPass & m_grabPass;
+	};
+
+	/**
+	 * @brief Lightweight adapter exposing a GrabPass's normals resources as a TextureInterface.
+	 * @note Stack-allocated in executeEffectChain(); lives for the duration of the chain.
+	 */
+	class GrabPassNormalsAdapter final : public EmEn::Vulkan::TextureInterface
+	{
+		public:
+
+			explicit GrabPassNormalsAdapter (const EmEn::Graphics::GrabPass & grabPass) noexcept
+				: m_grabPass{grabPass}
+			{
+
+			}
+
+			[[nodiscard]] bool isCreated () const noexcept override { return m_grabPass.hasNormals(); }
+			[[nodiscard]] EmEn::Vulkan::TextureType type () const noexcept override { return EmEn::Vulkan::TextureType::Texture2D; }
+			[[nodiscard]] uint32_t dimensions () const noexcept override { return 2; }
+			[[nodiscard]] bool isCubemapTexture () const noexcept override { return false; }
+			[[nodiscard]] std::shared_ptr< EmEn::Vulkan::Image > image () const noexcept override { return m_grabPass.normalsImage(); }
+			[[nodiscard]] std::shared_ptr< EmEn::Vulkan::ImageView > imageView () const noexcept override { return m_grabPass.normalsImageView(); }
+			[[nodiscard]] std::shared_ptr< EmEn::Vulkan::Sampler > sampler () const noexcept override { return m_grabPass.normalsSampler(); }
+			[[nodiscard]] bool request3DTextureCoordinates () const noexcept override { return false; }
+
+		private:
+
+			const EmEn::Graphics::GrabPass & m_grabPass;
+	};
+}
 
 namespace EmEn::Graphics
 {
-	using namespace Libs;
-	using namespace Libs::Math;
-	using namespace Saphir;
-	using namespace Vulkan;
+	using namespace Libs::VertexFactory;
 
-	PostProcessor::PostProcessor (unsigned int /*width*/, unsigned int /*height*/, unsigned int /*colorBufferBits*/, unsigned int /*depthBufferBits*/, unsigned int /*stencilBufferBits*/, unsigned int /*samples*/) noexcept
+	PostProcessor::PostProcessor (Renderer & renderer) noexcept
+		: ServiceInterface{ClassId},
+		m_renderer{renderer}
 	{
 
 	}
 
 	bool
-	PostProcessor::resize (unsigned int /*width*/, unsigned int /*height*/) noexcept
+	PostProcessor::onInitialize () noexcept
 	{
-		return false;
+		/* Create the fullscreen quad geometry. */
+		m_quadGeometry = std::make_shared< Geometry::IndexedVertexResource >("PostProcessQuad", Geometry::EnablePrimaryTextureCoordinates);
+
+		if ( !m_quadGeometry->load(ShapeGenerator::generateQuad(2.0F, 2.0F)) )
+		{
+			TraceError{ClassId} << "Unable to generate the fullscreen quad geometry !";
+
+			m_quadGeometry.reset();
+
+			return false;
+		}
+
+		/* Upload vertex/index data to GPU memory. */
+		if ( !m_quadGeometry->createOnHardware(m_renderer.transferManager()) )
+		{
+			TraceError{ClassId} << "Unable to upload the fullscreen quad geometry to GPU !";
+
+			m_quadGeometry.reset();
+
+			return false;
+		}
+
+		return true;
 	}
 
 	bool
-	PostProcessor::usable () const noexcept
+	PostProcessor::onTerminate () noexcept
 	{
-		return false;
+		/* Destroy multi-pass effect chain. */
+		for ( auto & effect : m_effectChain )
+		{
+			if ( effect != nullptr )
+			{
+				effect->destroy();
+			}
+		}
+
+		m_effectChain.clear();
+		m_effectsList.clear();
+
+		m_descriptorSets.clear();
+		m_program.reset();
+
+		m_quadGeometry.reset();
+
+		if ( m_grabPass != nullptr )
+		{
+			m_grabPass->destroy();
+			m_grabPass.reset();
+		}
+
+		return true;
+	}
+
+	bool
+	PostProcessor::configure (const std::shared_ptr< RenderTarget::Abstract > & renderTarget) noexcept
+	{
+		const auto & extent = renderTarget->extent();
+		const auto swapChainColorFormat = m_renderer.swapChainColorFormat();
+
+		if ( swapChainColorFormat == VK_FORMAT_UNDEFINED )
+		{
+			TraceError{ClassId} << "Unable to determine the swap chain color format !";
+
+			return false;
+		}
+
+		/* When HDR is enabled, the grab pass uses a 16-bit float format for higher precision.
+		 * Otherwise, it matches the swap chain format. */
+		const auto grabPassColorFormat = m_hdrEnabled ? VK_FORMAT_R16G16B16A16_SFLOAT : swapChainColorFormat;
+
+		const auto depthFormat = m_renderer.swapChainDepthStencilFormat();
+
+		/* Normals format: matches the scene render target's normals MRT attachment. */
+		const auto normalsFormat = m_renderer.sceneTarget() != nullptr
+			? m_renderer.sceneTarget()->normalsFormat()
+			: VK_FORMAT_UNDEFINED;
+
+		m_grabPass = std::make_unique< GrabPass >();
+
+		if ( !m_grabPass->create(m_renderer, extent.width, extent.height, grabPassColorFormat, depthFormat, normalsFormat) )
+		{
+			TraceError{ClassId} << "Unable to create the post-processor grab pass !";
+
+			m_grabPass.reset();
+
+			return false;
+		}
+
+		/* Generate the shader program via the PostProcessing generator. */
+		{
+			Saphir::Generator::PostProcessing generator{renderTarget, m_quadGeometry};
+
+			/* Pass the current effects list to the generator. */
+			generator.setEffectsList(m_effectsList);
+
+			/* Use the post-process framebuffer (single-sample). */
+			if ( const auto * overlayFB = m_renderer.overlayFramebuffer(); overlayFB != nullptr )
+			{
+				generator.setPipelineFramebuffer(overlayFB);
+			}
+
+			if ( !generator.generateShaderProgram(m_renderer) )
+			{
+				TraceError{ClassId} << "Unable to generate the post-processing shader program !";
+
+				return false;
+			}
+
+			m_program = generator.shaderProgram();
+		}
+
+		/* Create one descriptor set per frame-in-flight so that each frame can safely
+		 * update its own descriptor without conflicting with pending command buffers. */
+		{
+			const auto descriptorSetLayout = getDescriptorSetLayout(m_renderer.layoutManager());
+
+			if ( descriptorSetLayout == nullptr )
+			{
+				TraceError{ClassId} << "Unable to get the post-processing descriptor set layout !";
+
+				return false;
+			}
+
+			const auto frameCount = m_renderer.framesInFlight();
+
+			m_descriptorSets.clear();
+			m_descriptorSets.reserve(frameCount);
+
+			for ( uint32_t frameIndex = 0; frameIndex < frameCount; ++frameIndex )
+			{
+				auto descriptorSet = std::make_unique< Vulkan::DescriptorSet >(m_renderer.descriptorPool(), descriptorSetLayout);
+				descriptorSet->setIdentifier(ClassId, "PostProcessorDescriptor-F" + std::to_string(frameIndex), "DescriptorSet");
+
+				if ( !descriptorSet->create() )
+				{
+					TraceError{ClassId} << "Unable to create the post-processor descriptor set for frame #" << frameIndex << " !";
+
+					m_descriptorSets.clear();
+
+					return false;
+				}
+
+				if ( !descriptorSet->writeCombinedImageSampler(0, *m_grabPass->image(), *m_grabPass->imageView(), *m_grabPass->sampler()) )
+				{
+					TraceError{ClassId} << "Unable to write the grab pass color texture to the post-processor descriptor set !";
+
+					m_descriptorSets.clear();
+
+					return false;
+				}
+
+				if ( m_grabPass->hasDepth() )
+				{
+					if ( !descriptorSet->writeCombinedImageSampler(1, *m_grabPass->depthImage(), *m_grabPass->depthImageView(), *m_grabPass->depthSampler()) )
+					{
+						TraceError{ClassId} << "Unable to write the grab pass depth texture to the post-processor descriptor set !";
+
+						m_descriptorSets.clear();
+
+						return false;
+					}
+				}
+
+				if ( m_grabPass->hasNormals() )
+				{
+					if ( !descriptorSet->writeCombinedImageSampler(2, *m_grabPass->normalsImage(), *m_grabPass->normalsImageView(), *m_grabPass->normalsSampler()) )
+					{
+						TraceError{ClassId} << "Unable to write the grab pass normals texture to the post-processor descriptor set !";
+
+						m_descriptorSets.clear();
+
+						return false;
+					}
+				}
+
+				m_descriptorSets.emplace_back(std::move(descriptorSet));
+			}
+		}
+
+		return true;
 	}
 
 	void
-	PostProcessor::begin () noexcept
+	PostProcessor::setEffectsList (const Saphir::FramebufferEffectsList & effectsList) noexcept
 	{
+		m_effectsList = effectsList;
 
-	}
+		/* If the post-processor is already configured (grab pass exists),
+		 * re-generate the shader program with the new effects.
+		 * The grab pass and descriptor set remain valid. */
+		if ( m_grabPass != nullptr && m_grabPass->isCreated() )
+		{
+			const auto renderTarget = m_renderer.mainRenderTarget();
 
-	void
-	PostProcessor::end () noexcept
-	{
+			Saphir::Generator::PostProcessing generator{renderTarget, m_quadGeometry};
 
-	}
+			generator.setEffectsList(m_effectsList);
 
-	void
-	PostProcessor::setEffectsList (const FramebufferEffectsList & /*effectsList*/) noexcept
-	{
+			if ( const auto * overlayFB = m_renderer.overlayFramebuffer(); overlayFB != nullptr )
+			{
+				generator.setPipelineFramebuffer(overlayFB);
+			}
 
+			if ( !generator.generateShaderProgram(m_renderer) )
+			{
+				TraceError{ClassId} << "Unable to re-generate the post-processing shader program after effects change !";
+
+				return;
+			}
+
+			m_program = generator.shaderProgram();
+		}
 	}
 
 	void
 	PostProcessor::clearEffects () noexcept
 	{
-
+		m_effectsList.clear();
 	}
 
 	void
-	PostProcessor::render (const Space2D::AARectangle< uint32_t > & /*region*/) const noexcept
+	PostProcessor::recordBlit (const Vulkan::CommandBuffer & commandBuffer) const noexcept
 	{
+		if ( m_grabPass == nullptr || !m_grabPass->isCreated() )
+		{
+			return;
+		}
 
-	}
+		const auto srcColorImage = m_renderer.currentSceneColorImage();
 
-	bool
-	PostProcessor::isMultisamplingEnabled () const noexcept
-	{
-		return false;
+		if ( srcColorImage == nullptr )
+		{
+			return;
+		}
+
+		const auto dstImage = m_grabPass->image();
+
+		/* 1. Transition scene color: current layout -> TRANSFER_SRC_OPTIMAL.
+		 * When using the internal scene target, the image is in COLOR_ATTACHMENT_OPTIMAL.
+		 * When rendering directly to swapchain, the image is in PRESENT_SRC_KHR after RP2 end. */
+		{
+			const auto srcLayout = m_renderer.sceneTarget() != nullptr
+				? VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+				: VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+
+			const Vulkan::Sync::ImageMemoryBarrier barrier{
+				*srcColorImage,
+				VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+				VK_ACCESS_TRANSFER_READ_BIT,
+				srcLayout,
+				VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
+			};
+
+			commandBuffer.pipelineBarrier(
+				barrier,
+				VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+				VK_PIPELINE_STAGE_TRANSFER_BIT
+			);
+		}
+
+		/* 2. Transition grab pass image: SHADER_READ_ONLY_OPTIMAL -> TRANSFER_DST_OPTIMAL. */
+		{
+			const Vulkan::Sync::ImageMemoryBarrier barrier{
+				*dstImage,
+				VK_ACCESS_SHADER_READ_BIT,
+				VK_ACCESS_TRANSFER_WRITE_BIT,
+				VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+				VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
+			};
+
+			commandBuffer.pipelineBarrier(
+				barrier,
+				VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+				VK_PIPELINE_STAGE_TRANSFER_BIT
+			);
+		}
+
+		/* 3. Transfer scene color -> grab pass.
+		 * When HDR is enabled, formats may differ (e.g. R16G16B16A16_SFLOAT source),
+		 * so vkCmdBlitImage is used for format conversion. Otherwise, exact pixel copy. */
+		if ( m_hdrEnabled )
+		{
+			commandBuffer.blitImage(
+				*srcColorImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+				*dstImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+				VK_FILTER_LINEAR
+			);
+		}
+		else
+		{
+			commandBuffer.copyImage(
+				*srcColorImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+				*dstImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+				VK_IMAGE_ASPECT_COLOR_BIT
+			);
+		}
+
+		/* 4. Transition grab pass image: TRANSFER_DST_OPTIMAL -> SHADER_READ_ONLY_OPTIMAL. */
+		{
+			const Vulkan::Sync::ImageMemoryBarrier barrier{
+				*dstImage,
+				VK_ACCESS_TRANSFER_WRITE_BIT,
+				VK_ACCESS_SHADER_READ_BIT,
+				VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+				VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+			};
+
+			commandBuffer.pipelineBarrier(
+				barrier,
+				VK_PIPELINE_STAGE_TRANSFER_BIT,
+				VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT
+			);
+		}
+
+		/* 5. Transition scene color: TRANSFER_SRC_OPTIMAL -> COLOR_ATTACHMENT_OPTIMAL.
+		 * Ready for RP2 restart or for the internal target to remain in attachment layout. */
+		{
+			const Vulkan::Sync::ImageMemoryBarrier barrier{
+				*srcColorImage,
+				VK_ACCESS_TRANSFER_READ_BIT,
+				VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+				VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+				VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+			};
+
+			commandBuffer.pipelineBarrier(
+				barrier,
+				VK_PIPELINE_STAGE_TRANSFER_BIT,
+				VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
+			);
+		}
+
+		/* === Depth copy === */
+		const auto srcDepthImage = m_renderer.currentSceneDepthImage();
+
+		if ( srcDepthImage != nullptr && m_grabPass->hasDepth() )
+		{
+			const auto dstDepthImage = m_grabPass->depthImage();
+
+			/* 6. Transition scene depth: DEPTH_STENCIL_ATTACHMENT_OPTIMAL -> TRANSFER_SRC_OPTIMAL. */
+			{
+				const Vulkan::Sync::ImageMemoryBarrier barrier{
+					*srcDepthImage,
+					VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+					VK_ACCESS_TRANSFER_READ_BIT,
+					VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+					VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+					VK_IMAGE_ASPECT_DEPTH_BIT
+				};
+
+				commandBuffer.pipelineBarrier(
+					barrier,
+					VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+					VK_PIPELINE_STAGE_TRANSFER_BIT
+				);
+			}
+
+			/* 7. Transition grab pass depth: SHADER_READ_ONLY_OPTIMAL -> TRANSFER_DST_OPTIMAL. */
+			{
+				const Vulkan::Sync::ImageMemoryBarrier barrier{
+					*dstDepthImage,
+					VK_ACCESS_SHADER_READ_BIT,
+					VK_ACCESS_TRANSFER_WRITE_BIT,
+					VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+					VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+					VK_IMAGE_ASPECT_DEPTH_BIT
+				};
+
+				commandBuffer.pipelineBarrier(
+					barrier,
+					VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+					VK_PIPELINE_STAGE_TRANSFER_BIT
+				);
+			}
+
+			/* 8. Copy scene depth -> grab pass depth. */
+			commandBuffer.copyImage(
+				*srcDepthImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+				*dstDepthImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+				VK_IMAGE_ASPECT_DEPTH_BIT
+			);
+
+			/* 9. Transition grab pass depth: TRANSFER_DST_OPTIMAL -> SHADER_READ_ONLY_OPTIMAL. */
+			{
+				const Vulkan::Sync::ImageMemoryBarrier barrier{
+					*dstDepthImage,
+					VK_ACCESS_TRANSFER_WRITE_BIT,
+					VK_ACCESS_SHADER_READ_BIT,
+					VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+					VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+					VK_IMAGE_ASPECT_DEPTH_BIT
+				};
+
+				commandBuffer.pipelineBarrier(
+					barrier,
+					VK_PIPELINE_STAGE_TRANSFER_BIT,
+					VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT
+				);
+			}
+
+			/* 10. Transition scene depth: TRANSFER_SRC_OPTIMAL -> DEPTH_STENCIL_ATTACHMENT_OPTIMAL.
+			 * Ready for RP2 restart or internal target attachment layout restoration. */
+			{
+				const Vulkan::Sync::ImageMemoryBarrier barrier{
+					*srcDepthImage,
+					VK_ACCESS_TRANSFER_READ_BIT,
+					VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+					VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+					VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+					VK_IMAGE_ASPECT_DEPTH_BIT
+				};
+
+				commandBuffer.pipelineBarrier(
+					barrier,
+					VK_PIPELINE_STAGE_TRANSFER_BIT,
+					VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT
+				);
+			}
+		}
+
+		/* === Normals copy === */
+		const auto srcNormalsImage = m_renderer.currentSceneNormalsImage();
+
+		if ( srcNormalsImage != nullptr && m_grabPass->hasNormals() )
+		{
+			const auto dstNormalsImage = m_grabPass->normalsImage();
+
+			/* 11. Transition scene normals: COLOR_ATTACHMENT_OPTIMAL -> TRANSFER_SRC_OPTIMAL. */
+			{
+				const Vulkan::Sync::ImageMemoryBarrier barrier{
+					*srcNormalsImage,
+					VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+					VK_ACCESS_TRANSFER_READ_BIT,
+					VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+					VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
+				};
+
+				commandBuffer.pipelineBarrier(
+					barrier,
+					VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+					VK_PIPELINE_STAGE_TRANSFER_BIT
+				);
+			}
+
+			/* 12. Transition grab pass normals: SHADER_READ_ONLY_OPTIMAL -> TRANSFER_DST_OPTIMAL. */
+			{
+				const Vulkan::Sync::ImageMemoryBarrier barrier{
+					*dstNormalsImage,
+					VK_ACCESS_SHADER_READ_BIT,
+					VK_ACCESS_TRANSFER_WRITE_BIT,
+					VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+					VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
+				};
+
+				commandBuffer.pipelineBarrier(
+					barrier,
+					VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+					VK_PIPELINE_STAGE_TRANSFER_BIT
+				);
+			}
+
+			/* 13. Copy scene normals -> grab pass normals (same format). */
+			commandBuffer.copyImage(
+				*srcNormalsImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+				*dstNormalsImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+				VK_IMAGE_ASPECT_COLOR_BIT
+			);
+
+			/* 14. Transition grab pass normals: TRANSFER_DST_OPTIMAL -> SHADER_READ_ONLY_OPTIMAL. */
+			{
+				const Vulkan::Sync::ImageMemoryBarrier barrier{
+					*dstNormalsImage,
+					VK_ACCESS_TRANSFER_WRITE_BIT,
+					VK_ACCESS_SHADER_READ_BIT,
+					VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+					VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+				};
+
+				commandBuffer.pipelineBarrier(
+					barrier,
+					VK_PIPELINE_STAGE_TRANSFER_BIT,
+					VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT
+				);
+			}
+
+			/* 15. Transition scene normals: TRANSFER_SRC_OPTIMAL -> COLOR_ATTACHMENT_OPTIMAL.
+			 * Ready for RP2 restart or internal target attachment layout restoration. */
+			{
+				const Vulkan::Sync::ImageMemoryBarrier barrier{
+					*srcNormalsImage,
+					VK_ACCESS_TRANSFER_READ_BIT,
+					VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+					VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+					VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+				};
+
+				commandBuffer.pipelineBarrier(
+					barrier,
+					VK_PIPELINE_STAGE_TRANSFER_BIT,
+					VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
+				);
+			}
+		}
 	}
 
 	void
-	PostProcessor::setBackgroundColor (const PixelFactory::Color< float > & /*color*/) noexcept
+	PostProcessor::executeEffectChain (const Vulkan::CommandBuffer & commandBuffer) noexcept
 	{
+		if ( m_effectChain.empty() || m_grabPass == nullptr || !m_grabPass->isCreated() )
+		{
+			return;
+		}
 
+		/* Build push constants for the effect chain. */
+		static const auto startTime = std::chrono::steady_clock::now();
+		const auto elapsedTime = std::chrono::duration< float >(std::chrono::steady_clock::now() - startTime).count();
+
+		const auto mainRT = m_renderer.mainRenderTarget();
+		const auto & extent = mainRT->extent();
+		const auto fovDeg = mainRT->viewMatrices().fieldOfView();
+		const auto tanHalfFovY = std::tan(fovDeg * std::numbers::pi_v< float > / 360.0F);
+
+		const PushConstants pc{
+			static_cast< float >(extent.width),
+			static_cast< float >(extent.height),
+			elapsedTime,
+			m_nearPlane,
+			m_farPlane,
+			tanHalfFovY
+		};
+
+		/* Execute each enabled effect in the chain.
+		 * Each effect receives the output of the previous one.
+		 * NOTE: The GrabPass implements TextureInterface for its COLOR resources.
+		 * For depth, we use a lightweight adapter that exposes the depth resources. */
+		const Vulkan::TextureInterface * currentTexture = m_grabPass.get();
+
+		GrabPassDepthAdapter depthAdapter{*m_grabPass};
+		const Vulkan::TextureInterface * depthTexture = m_grabPass->hasDepth() ? &depthAdapter : nullptr;
+
+		GrabPassNormalsAdapter normalsAdapter{*m_grabPass};
+		const Vulkan::TextureInterface * normalsTexture = m_grabPass->hasNormals() ? &normalsAdapter : nullptr;
+
+		for ( const auto & effect : m_effectChain )
+		{
+			if ( effect == nullptr || !effect->isEnabled() )
+			{
+				continue;
+			}
+
+			/* Skip depth-requiring effects if no depth is available. */
+			if ( effect->requiresDepth() && depthTexture == nullptr )
+			{
+				continue;
+			}
+
+			/* Skip HDR-requiring effects if HDR is not enabled. */
+			if ( effect->requiresHDR() && !m_hdrEnabled )
+			{
+				continue;
+			}
+
+			/* Skip normals-requiring effects if no normals are available. */
+			if ( effect->requiresNormals() && normalsTexture == nullptr )
+			{
+				continue;
+			}
+
+			currentTexture = &effect->execute(commandBuffer, *currentTexture, depthTexture, normalsTexture, pc);
+		}
+
+		/* Update only the current frame's descriptor set to point to the effect chain output
+		 * instead of the raw grab pass, so the single-pass render() uses the processed texture.
+		 * Each frame-in-flight has its own descriptor set, avoiding conflicts with pending frames. */
+		const auto frameIndex = m_renderer.currentFrameIndex();
+		auto & descriptorSet = m_descriptorSets[frameIndex];
+
+		if ( currentTexture != m_grabPass.get() && currentTexture != nullptr )
+		{
+			static_cast< void >(descriptorSet->writeCombinedImageSampler(
+				0,
+				*currentTexture->image(),
+				*currentTexture->imageView(),
+				*currentTexture->sampler()
+			));
+		}
+		else
+		{
+			/* No effects ran, restore descriptor to grab pass. */
+			static_cast< void >(descriptorSet->writeCombinedImageSampler(
+				0,
+				*m_grabPass->image(),
+				*m_grabPass->imageView(),
+				*m_grabPass->sampler()
+			));
+		}
 	}
 
-	bool
-	PostProcessor::loadGeometry () noexcept
+	void
+	PostProcessor::render (const Vulkan::CommandBuffer & commandBuffer) const noexcept
 	{
-		return false;
+		/* Bind the graphics pipeline. */
+		commandBuffer.bind(*m_program->graphicsPipeline());
+
+		/* Set dynamic viewport and scissor based on current render target extent. */
+		{
+			const auto mainRT = m_renderer.mainRenderTarget();
+			const auto & extent = mainRT->extent();
+
+			const VkViewport viewport{
+				.x = 0.0F,
+				.y = 0.0F,
+				.width = static_cast< float >(extent.width),
+				.height = static_cast< float >(extent.height),
+				.minDepth = 0.0F,
+				.maxDepth = 1.0F
+			};
+			vkCmdSetViewport(commandBuffer.handle(), 0, 1, &viewport);
+
+			const VkRect2D scissor{
+				.offset = {0, 0},
+				.extent = {extent.width, extent.height}
+			};
+			vkCmdSetScissor(commandBuffer.handle(), 0, 1, &scissor);
+
+			/* Push constants. */
+			static const auto startTime = std::chrono::steady_clock::now();
+			const auto elapsedTime = std::chrono::duration< float >(std::chrono::steady_clock::now() - startTime).count();
+			const auto fovDeg = mainRT->viewMatrices().fieldOfView();
+			const auto tanHalfFovY = std::tan(fovDeg * std::numbers::pi_v< float > / 360.0F);
+
+			const PushConstants pc{
+				static_cast< float >(extent.width),
+				static_cast< float >(extent.height),
+				elapsedTime,
+				m_nearPlane,
+				m_farPlane,
+				tanHalfFovY
+			};
+
+			vkCmdPushConstants(
+				commandBuffer.handle(),
+				m_program->pipelineLayout()->handle(),
+				VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+				0,
+				sizeof(PushConstants),
+				&pc
+			);
+		}
+
+		/* Bind the current frame's GrabPass descriptor set. */
+		commandBuffer.bind(
+			*m_descriptorSets[m_renderer.currentFrameIndex()],
+			*m_program->pipelineLayout(),
+			VK_PIPELINE_BIND_POINT_GRAPHICS,
+			0
+		);
+
+		/* Bind and draw the fullscreen quad. */
+		commandBuffer.bind(*m_quadGeometry, 0);
+		commandBuffer.draw(*m_quadGeometry, 0, 1);
 	}
 
-	bool
-	PostProcessor::loadProgram () noexcept
+	std::shared_ptr< Vulkan::DescriptorSetLayout >
+	PostProcessor::getDescriptorSetLayout (Vulkan::LayoutManager & layoutManager) noexcept
 	{
-		return false;
-	}
+		auto descriptorSetLayout = layoutManager.getDescriptorSetLayout(ClassId);
 
-	bool
-	PostProcessor::buildFramebuffer (unsigned int /*width*/, unsigned int /*height*/, unsigned int /*colorBufferBits*/, unsigned int /*depthBufferBits*/, unsigned int /*stencilBufferBits*/, unsigned int /*samples*/) noexcept
-	{
-		return false;
+		if ( descriptorSetLayout == nullptr )
+		{
+			descriptorSetLayout = layoutManager.prepareNewDescriptorSetLayout(ClassId);
+			descriptorSetLayout->setIdentifier(ClassId, ClassId, "DescriptorSetLayout");
+
+			descriptorSetLayout->declareCombinedImageSampler(0, VK_SHADER_STAGE_FRAGMENT_BIT);
+			descriptorSetLayout->declareCombinedImageSampler(1, VK_SHADER_STAGE_FRAGMENT_BIT);
+			descriptorSetLayout->declareCombinedImageSampler(2, VK_SHADER_STAGE_FRAGMENT_BIT);
+
+			if ( !layoutManager.createDescriptorSetLayout(descriptorSetLayout) )
+			{
+				return nullptr;
+			}
+		}
+
+		return descriptorSetLayout;
 	}
 }

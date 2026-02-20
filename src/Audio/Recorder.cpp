@@ -312,7 +312,7 @@ namespace EmEn::Audio
 					{
 						const auto bytes = renderBuf.size() * sizeof(int16_t);
 						m_outputFileStream.write(reinterpret_cast< const char * >(renderBuf.data()), static_cast< std::streamsize >(bytes));
-						m_streamByteCount += bytes;
+						m_streamByteCount += static_cast< uint32_t >(bytes);
 					}
 				}
 

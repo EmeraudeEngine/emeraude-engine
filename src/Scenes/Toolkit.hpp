@@ -795,17 +795,30 @@ namespace EmEn::Scenes
 					materialResource = m_resourceManager.container< Material::BasicResource >()->getDefaultResource();
 				}
 
+				std::stringstream resourceName;
+				std::shared_ptr< Abstract > renderable;
+
 				/* NOTE: Check for sub-geometry count to check to from Mesh to SimpleMesh resource. */
 				if ( geometryResource->subGeometryCount() > 1 )
 				{
-					const auto meshResource = MeshResource::getOrCreate(m_resourceManager, geometryResource, materialResource);
+					resourceName << "Mesh(" << geometryResource->name() << ',' << materialResource->name() << ')';
 
-					return generateRenderableInstance< entity_t >(entityName, meshResource, physicalProperties, enableLighting);
+					renderable = m_resourceManager.container< MeshResource >()
+						->getOrCreateResource(resourceName.str(), [geometryResource, materialResource] (auto & meshResource) {
+							return meshResource.load(geometryResource, materialResource);
+						});
+				}
+				else
+				{
+					resourceName << "SimpleMesh(" << geometryResource->name() << ',' << materialResource->name() << ')';
+
+					renderable = m_resourceManager.container< SimpleMeshResource >()
+						->getOrCreateResource(resourceName.str(), [geometryResource, materialResource] (auto & meshResource) {
+							return meshResource.load(geometryResource, materialResource);
+						});
 				}
 
-				const auto simpleMeshResource = SimpleMeshResource::getOrCreate(m_resourceManager, geometryResource, materialResource);
-
-				return generateRenderableInstance< entity_t >(entityName, simpleMeshResource, physicalProperties, enableLighting);
+				return this->generateRenderableInstance< entity_t >(entityName, renderable, physicalProperties, enableLighting);
 			}
 
 			/**

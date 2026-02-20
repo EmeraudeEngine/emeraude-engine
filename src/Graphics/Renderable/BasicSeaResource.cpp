@@ -123,7 +123,29 @@ namespace EmEn::Graphics::Renderable
 			Geometry::EnableTangentSpace | Geometry::EnablePrimaryTextureCoordinates | Geometry::EnablePrimitiveRestart
 		);
 
-		if ( !geometryResource->load(gridSize, gridDivision, UVMultiplier) )
+		if ( waterLevel != 0.0F )
+		{
+			/* Build the grid manually to apply the water level as a height offset on the geometry. */
+			VertexFactory::Grid< float > grid{};
+
+			if ( !grid.initializeByGridSize(gridSize, gridDivision) )
+			{
+				TraceError{ClassId} << "Unable to initialize a basic sea grid !";
+
+				return this->setLoadSuccess(false);
+			}
+
+			grid.setUVMultiplier(UVMultiplier);
+			grid.shiftHeight(waterLevel);
+
+			if ( !geometryResource->load(grid) )
+			{
+				TraceError{ClassId} << "Unable to generate a basic sea geometry from grid !";
+
+				return this->setLoadSuccess(false);
+			}
+		}
+		else if ( !geometryResource->load(gridSize, gridDivision, UVMultiplier) )
 		{
 			TraceError{ClassId} << "Unable to generate a basic sea geometry !";
 

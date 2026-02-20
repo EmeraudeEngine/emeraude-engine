@@ -18,15 +18,15 @@ Shadow mapping can be globally enabled/disabled via the settings system.
 | Value | Behavior |
 |-------|----------|
 | `true` (default) | Shadow maps rendered, shadow-enabled passes used |
-| `false` | Shadow maps skipped, NoShadow passes used for all lights |
+| `false` | Shadow maps skipped, base pass types used (no shadow sampling) |
 
 ### Implementation Details
 
 When the global setting is disabled:
 
 1. **Shadow map rendering skipped**: `Scene::renderShadowMaps()` checks `Renderer::isShadowMapsEnabled()` and returns early
-2. **NoShadow pass types forced**: `Scene::renderLightedSelection()` checks the global setting before selecting pass types
-3. **No descriptor binding**: Shadow-enabled descriptor sets (with shadow map samplers) are never bound
+2. **Base pass types forced**: `Scene::renderLightedSelection()` selects base or `*ColorMap` pass types (no shadow sampling)
+3. **Shadow samplers unused**: Descriptor sets still contain dummy shadow textures at binding 1, but the shader never samples them
 
 **Code references:**
 - `Scenes/Scene.rendering.cpp:978` - Global setting check in `renderLightedSelection()`
@@ -45,7 +45,7 @@ VK_IMAGE_LAYOUT_UNDEFINED (0) but expected VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ON
 
 **Root cause:** Shadow maps are created but never rendered (layout stays UNDEFINED). However, lighting passes still attempted to bind shadow-enabled descriptor sets containing these images.
 
-**Solution:** The rendering code now checks the global setting and forces `NoShadow` pass types when disabled, which use descriptors without shadow map bindings.
+**Solution:** The rendering code now checks the global setting and selects base pass types (e.g., `SpotLightPass` or `SpotLightPassColorMap`) when shadows are disabled, which generate shaders without shadow sampling code.
 
 ## PCF Soft Shadows
 
@@ -146,30 +146,131 @@ light->setPCFRadius(2.0F);  // Filter radius in texels
 
 Larger radius = softer shadows but more blurring.
 
-## Shadow Descriptor Sets
+## Light Descriptor Sets
 
-Each shadow-casting light creates its own descriptor set with:
-- **Binding 0:** Light UBO (uniform buffer with light properties)
-- **Binding 1:** Shadow map sampler (2D or Cube)
+Each light uses one of two descriptor set configurations:
+
+**Without shadow map** — shared UBO-only descriptor set (from `SharedUniformBuffer`):
+
+| Binding | Content |
+|---------|---------|
+| 0 | Light UBO (dynamic offset) |
+
+**With shadow map** — dedicated per-light descriptor set:
+
+| Binding | Content |
+|---------|---------|
+| 0 | Light UBO (dynamic offset) |
+| 1 | Shadow map sampler (2D, Cube, or 2DArrayShadow) |
+
+**Color projection** is handled via the global `BindlessTextureManager` descriptor set, not via per-light descriptor sets. The light UBO carries a `ColorProjectionIndex` field (`uint` encoded as `bit_cast<float>`) that indexes into the bindless 2D or Cube texture array. When no texture is assigned, the sentinel value `0xFFFFFFFF` causes the shader to skip sampling (`projectionColor = vec3(1.0)`).
+
+**Why bindless for color projection?** Per-light descriptor sets use `UNIFORM_BUFFER_DYNAMIC` at binding 0, which does not support `UPDATE_AFTER_BIND_BIT`. This makes deferred texture writes unsafe with frames-in-flight. The bindless set uses `UPDATE_AFTER_BIND_BIT` + `PARTIALLY_BOUND_BIT`, allowing textures to be registered asynchronously after resource loading completes via `ObserverTrait` notification.
 
 **Code references:**
-- `Scenes/Component/SpotLight.cpp:createShadowDescriptorSet()` - 2D shadow descriptor
-- `Scenes/Component/PointLight.cpp:createShadowDescriptorSet()` - Cubemap shadow descriptor
-- `Scenes/Component/DirectionalLight.cpp:createShadowDescriptorSet()` - 2D/CSM shadow descriptor
+- `Scenes/Component/SpotLight.cpp:createShadowDescriptorSet()` - 2-binding shadow descriptor
+- `Scenes/Component/PointLight.cpp:createShadowDescriptorSet()` - 2-binding shadow descriptor
+- `Scenes/Component/DirectionalLight.cpp:createShadowDescriptorSet()` - 2-binding shadow descriptor
+- `Scenes/Component/AbstractLightEmitter.cpp:registerColorProjectionInBindless()` - Bindless registration
+- `Graphics/BindlessTextureManager.hpp` - Global bindless descriptor set
 
 ## Render Pass Types
 
-The shader system generates different programs for shadow and non-shadow passes:
+The shader system generates different programs per pass type. Each `RenderPassType` is a combinatorial variant encoding light type + shadow mode + color projection:
 
-| Pass Type | Shadow Map | Use Case |
-|-----------|------------|----------|
-| `DirectionalLightPass` | Yes | Directional with shadow |
-| `DirectionalLightPassNoShadow` | No | Directional without shadow |
-| `DirectionalLightPassCSM` | Yes (CSM) | Cascaded shadow maps |
-| `PointLightPass` | Yes (Cube) | Point light with shadow |
-| `PointLightPassNoShadow` | No | Point light without shadow |
-| `SpotLightPass` | Yes | Spotlight with shadow |
-| `SpotLightPassNoShadow` | No | Spotlight without shadow |
+### Directional Light
+
+| Pass Type | Shadow | Color Projection | Use Case |
+|-----------|--------|-------------------|----------|
+| `DirectionalLightPass` | No | No | Base directional, no extras |
+| `DirectionalLightPassShadowMap` | 2D | No | Standard shadow map |
+| `DirectionalLightPassCSM` | CSM | No | Cascaded Shadow Maps |
+| `DirectionalLightPassColorMap` | No | Yes | Color projection only |
+| `DirectionalLightPassFull` | 2D | Yes | Shadow + color projection |
+| `DirectionalLightPassFullCSM` | CSM | Yes | CSM + color projection |
+
+### Point Light
+
+| Pass Type | Shadow | Color Projection | Use Case |
+|-----------|--------|-------------------|----------|
+| `PointLightPass` | No | No | Base point light |
+| `PointLightPassShadowMap` | Cube | No | Cubemap shadow |
+| `PointLightPassColorMap` | No | Yes | Color projection only |
+| `PointLightPassFull` | Cube | Yes | Shadow + color projection |
+
+### Spot Light
+
+| Pass Type | Shadow | Color Projection | Use Case |
+|-----------|--------|-------------------|----------|
+| `SpotLightPass` | No | No | Base spotlight |
+| `SpotLightPassShadowMap` | 2D | No | Standard shadow map |
+| `SpotLightPassColorMap` | No | Yes | Color projection only |
+| `SpotLightPassFull` | 2D | Yes | Shadow + color projection |
+
+### Helper Functions
+
+| Function | Purpose |
+|----------|---------|
+| `renderPassUsesShadowMap(type)` | Returns true for `*ShadowMap`, `*CSM`, `*Full`, `*FullCSM` |
+| `renderPassUsesCSM(type)` | Returns true for `*CSM`, `*FullCSM` |
+| `renderPassUsesColorProjection(type)` | Returns true for `*ColorMap`, `*Full`, `*FullCSM` |
+
+**Code reference:** `Graphics/Types.hpp` — Enum definition and helper functions
+
+## Color Projection
+
+Color projection allows a light to project a texture onto surfaces (like a gobo/light mask). It works **independently** of shadow maps — a light can project colors without the overhead of rendering a shadow map.
+
+### How It Works
+
+1. **Texture assignment:** `light->setColorProjectionTexture(texture)` assigns a 2D or cubemap texture
+2. **Pass type selection:** `Scene.rendering.cpp` selects `*ColorMap` or `*Full` pass type based on `hasColorProjectionTexture()`
+3. **Shader generation:** The `LightGenerator` generates bindless sampling code using the UBO's `ColorProjectionIndex`
+4. **Projection coordinates:** Uses the light's `ViewProjectionMatrix` (from UBO) to project fragment position into light space
+
+### UV Coordinate Convention
+
+> [!WARNING]
+> **ScaleBiasMatrix is already baked into ViewProjectionMatrix!**
+>
+> The `RenderTarget::ScaleBiasMatrix` transforms clip-space [-1,1] to UV [0,1]. It is pre-multiplied into the light's `ViewProjectionMatrix` stored in the UBO.
+>
+> Shadow maps use `textureProj()` which handles perspective divide + bias automatically.
+> Color projection does the perspective divide manually (`projCoords = .xyz / .w`), so UVs are already in [0,1].
+>
+> **Do NOT apply additional `* 0.5 + 0.5` to color projection UVs** — this causes a double-bias offset.
+
+```glsl
+// CORRECT — ScaleBiasMatrix already in ViewProjectionMatrix
+const vec3 projCoords = svPositionLightSpace.xyz / svPositionLightSpace.w;
+uint cpIdx = floatBitsToUint(uLight.ColorProjectionIndex);
+if ( cpIdx != 0xFFFFFFFFu ) {
+    projectionColor = texture(uBindlessTextures2D[nonuniformEXT(cpIdx)], projCoords.xy).rgb;
+}
+
+// WRONG — double bias, pattern is offset
+projectionColor = texture(uBindlessTextures2D[nonuniformEXT(cpIdx)], projCoords.xy * 0.5 + 0.5).rgb;
+```
+
+### Light Type Specifics
+
+| Light Type | Projection Method | Bindless Array |
+|------------|-------------------|----------------|
+| Spot | 2D projection via ViewProjectionMatrix | `sampler2D[]` (binding 1) |
+| Directional | 2D projection via ViewProjectionMatrix (non-CSM only) | `sampler2D[]` (binding 1) |
+| Point | Cubemap lookup via DirectionWorldSpace | `samplerCube[]` (binding 3) |
+
+**Note:** CSM directional lights cannot use color projection (CSM computes light-space position per-cascade in the fragment shader, which is incompatible with a single projection texture).
+
+### When No Texture Assigned
+
+The `ColorProjectionIndex` in the UBO is set to `0xFFFFFFFF` (sentinel). The shader checks `cpIdx != 0xFFFFFFFFu` before sampling — when no texture is assigned, `projectionColor` remains `vec3(1.0)` (hardcoded default). No bindless texture access occurs, and the SPIR-V compiler may optimize out the multiplication entirely.
+
+**Code references:**
+- `Saphir/LightGenerator.PerFragment.cpp` — Color projection sampling (all 4 shading variants)
+- `Scenes/Component/AbstractLightEmitter.hpp:setColorProjectionTexture()` — Texture assignment
+- `Scenes/Scene.rendering.cpp:renderLightedSelection()` — Pass type selection logic
+- `Graphics/Types.hpp:renderPassUsesColorProjection()` — Helper function
 
 ## Image Layout Lifecycle
 

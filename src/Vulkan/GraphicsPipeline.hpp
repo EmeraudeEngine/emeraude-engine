@@ -177,6 +177,15 @@ namespace EmEn::Vulkan
 			bool configureVertexInputState (const Graphics::VertexBufferFormat & vertexBufferFormat, VkPipelineVertexInputStateCreateFlags flags = 0) noexcept;
 
 			/**
+			 * @brief Configures an empty vertex input state for pipelines that generate vertices in the shader.
+			 * @note This enables the fullscreen triangle pattern where gl_VertexIndex is used to compute positions.
+			 * @param flags Flags value for this stage. Default 0.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool configureEmptyVertexInputState (VkPipelineVertexInputStateCreateFlags flags = 0) noexcept;
+
+			/**
 			 * @brief Generates input assembly state into the graphics pipeline createInfo.
 			 * @param vertexBufferFormat A reference to a vertex buffer format.
 			 * @param flags Flags value for this stage. Default 0.
@@ -184,6 +193,16 @@ namespace EmEn::Vulkan
 			 */
 			[[nodiscard]]
 			bool configureInputAssemblyState (const Graphics::VertexBufferFormat & vertexBufferFormat, VkPipelineInputAssemblyStateCreateFlags flags = 0) noexcept;
+
+			/**
+			 * @brief Generates input assembly state into the graphics pipeline createInfo with a direct topology.
+			 * @param topology The primitive topology.
+			 * @param primitiveRestartEnable Whether primitive restart is enabled. Default false.
+			 * @param flags Flags value for this stage. Default 0.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool configureInputAssemblyState (VkPrimitiveTopology topology, bool primitiveRestartEnable = false, VkPipelineInputAssemblyStateCreateFlags flags = 0) noexcept;
 
 			/**
 			 * @brief Generates tesselation state into the graphics pipeline createInfo.
@@ -348,6 +367,21 @@ namespace EmEn::Vulkan
 			colorBlendAttachments () const noexcept
 			{
 				return m_colorBlendAttachments;
+			}
+
+			/**
+			 * @brief Appends an additional color blend attachment state.
+			 * @note Used for MRT (Multiple Render Targets) when the render pass has
+			 * more than one color attachment (e.g. normals buffer).
+			 * @param state The blend attachment state to append.
+			 * @return void
+			 */
+			void
+			appendColorBlendAttachment (const VkPipelineColorBlendAttachmentState & state) noexcept
+			{
+				m_colorBlendAttachments.emplace_back(state);
+				m_colorBlendState.attachmentCount = static_cast< uint32_t >(m_colorBlendAttachments.size());
+				m_colorBlendState.pAttachments = m_colorBlendAttachments.data();
 			}
 
 			/**

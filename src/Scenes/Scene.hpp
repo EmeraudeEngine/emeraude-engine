@@ -1729,77 +1729,57 @@ namespace EmEn::Scenes
 
 			/**
 			 * @brief Displays an orientation compass at scene origin.
-			 *
 			 * Creates a visual compass helper showing XYZ axes.
 			 * Useful for debugging coordinate systems.
-			 *
-			 * @param resourceManager Resource manager for loading compass mesh.
-			 * @return True if compass was created, false on failure.
-			 *
+			 * @param resources Resource manager for loading compass mesh.
 			 * @note This is a debug utility.
-			 *
 			 * @see disableCompassDisplay() To remove.
 			 * @see compassDisplayEnabled() To check state.
 			 */
-			bool enableCompassDisplay (Resources::Manager & resourceManager) noexcept;
+			void enableCompassDisplay (Resources::Manager & resources) noexcept;
 
 			/**
 			 * @brief Removes the orientation compass.
-			 *
 			 * @note This is a debug utility.
-			 *
 			 * @see enableCompassDisplay() To show again.
 			 */
 			void disableCompassDisplay () noexcept;
 
 			/**
 			 * @brief Checks if the compass is currently displayed.
-			 *
-			 * @return True if compass is visible, false otherwise.
-			 *
 			 * @note This is a debug utility.
+			 * @return true
 			 */
 			[[nodiscard]]
 			bool compassDisplayEnabled () const noexcept;
 
 			/**
 			 * @brief Toggles compass visibility.
-			 *
-			 * @param resourceManager Resource manager for loading compass mesh.
-			 * @return True if compass is now visible, false otherwise.
-			 *
+			 * @param resources Resource manager for loading compass mesh.
+			 * @return True if compass is now visible, false otherwise
 			 * @note This is a debug utility.
 			 */
-			bool toggleCompassDisplay (Resources::Manager & resourceManager) noexcept;
+			bool toggleCompassDisplay (Resources::Manager & resources) noexcept;
 
 			/**
 			 * @brief Displays a ground zero reference plane at Y=0.
-			 *
 			 * Creates a visual grid at the origin for debugging.
-			 *
-			 * @param resourceManager Resource manager for loading plane mesh.
-			 * @return True if plane was created, false on failure.
-			 *
+			 * @param resources Resource manager for loading plane mesh.
 			 * @note This is a debug utility.
-			 *
 			 * @see disableGroundZeroDisplay() To remove.
 			 */
-			bool enableGroundZeroDisplay (Resources::Manager & resourceManager) noexcept;
+			void enableGroundZeroDisplay (Resources::Manager & resources) noexcept;
 
 			/**
 			 * @brief Removes the ground zero reference plane.
-			 *
 			 * @note This is a debug utility.
-			 *
 			 * @see enableGroundZeroDisplay() To show again.
 			 */
 			void disableGroundZeroDisplay () noexcept;
 
 			/**
 			 * @brief Checks if ground zero plane is displayed.
-			 *
 			 * @return True if visible, false otherwise.
-			 *
 			 * @note This is a debug utility.
 			 */
 			[[nodiscard]]
@@ -1807,42 +1787,31 @@ namespace EmEn::Scenes
 
 			/**
 			 * @brief Toggles ground zero plane visibility.
-			 *
-			 * @param resourceManager Resource manager for loading plane mesh.
-			 *
+			 * @param resources Resource manager for loading plane mesh.
 			 * @note This is a debug utility.
 			 */
-			void toggleGroundZeroDisplay (Resources::Manager & resourceManager) noexcept;
+			void toggleGroundZeroDisplay (Resources::Manager & resources) noexcept;
 
 			/**
 			 * @brief Displays scene boundary visualization planes.
-			 *
 			 * Shows translucent planes at the scene boundary limits.
-			 *
-			 * @param resourceManager Resource manager for loading plane meshes.
-			 * @return True if planes were created, false on failure.
-			 *
+			 * @param resources Resource manager for loading plane meshes.
 			 * @note This is a debug utility.
-			 *
 			 * @see boundary() For boundary extent.
 			 * @see disableBoundaryPlanesDisplay() To remove.
 			 */
-			bool enableBoundaryPlanesDisplay (Resources::Manager & resourceManager) noexcept;
+			void enableBoundaryPlanesDisplay (Resources::Manager & resources) noexcept;
 
 			/**
 			 * @brief Removes the boundary visualization planes.
-			 *
 			 * @note This is a debug utility.
-			 *
 			 * @see enableBoundaryPlanesDisplay() To show again.
 			 */
 			void disableBoundaryPlanesDisplay () noexcept;
 
 			/**
 			 * @brief Checks if boundary planes are displayed.
-			 *
 			 * @return True if visible, false otherwise.
-			 *
 			 * @note This is a debug utility.
 			 */
 			[[nodiscard]]
@@ -1850,9 +1819,7 @@ namespace EmEn::Scenes
 
 			/**
 			 * @brief Toggles boundary planes visibility.
-			 *
 			 * @param resourceManager Resource manager for loading plane meshes.
-			 *
 			 * @note This is a debug utility.
 			 */
 			void toggleBoundaryPlanesDisplay (Resources::Manager & resourceManager) noexcept;

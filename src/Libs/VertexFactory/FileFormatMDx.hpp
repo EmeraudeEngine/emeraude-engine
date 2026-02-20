@@ -127,6 +127,9 @@ namespace EmEn::Libs::VertexFactory
 
 		private:
 
+			/** @brief Scale factor to convert idTech unit system to engine units. idTech models are ~100x too large. */
+			static constexpr auto IDTechUnitScale = static_cast< vertex_data_t >(0.01);
+
 			// =========================================================================================================
 			// MDL Section
 			// =========================================================================================================
@@ -300,9 +303,9 @@ namespace EmEn::Libs::VertexFactory
 
 						/* Combined transform: Y/Z swap + negation + rotation -90° Y = (Y, -Z, X) */
 						builder.setPosition(
-							header.scale[1] * static_cast< vertex_data_t >(vertex.v[1]) + header.translate[1],
-							-(header.scale[2] * static_cast< vertex_data_t >(vertex.v[2]) + header.translate[2]),
-							header.scale[0] * static_cast< vertex_data_t >(vertex.v[0]) + header.translate[0]
+							(header.scale[1] * static_cast< vertex_data_t >(vertex.v[1]) + header.translate[1]) * IDTechUnitScale,
+							-(header.scale[2] * static_cast< vertex_data_t >(vertex.v[2]) + header.translate[2]) * IDTechUnitScale,
+							(header.scale[0] * static_cast< vertex_data_t >(vertex.v[0]) + header.translate[0]) * IDTechUnitScale
 						);
 						builder.setNormal(
 							static_cast< vertex_data_t >(normal[2]),
@@ -418,9 +421,9 @@ namespace EmEn::Libs::VertexFactory
 
 						/* Combined transform: Y/Z swap + negation + rotation -90° Y = (Y, -Z, X) */
 						builder.setPosition(
-							frame.scale[1] * static_cast< vertex_data_t >(vertex.v[1]) + frame.translate[1],
-							-(frame.scale[2] * static_cast< vertex_data_t >(vertex.v[2]) + frame.translate[2]),
-							frame.scale[0] * static_cast< vertex_data_t >(vertex.v[0]) + frame.translate[0]
+							(frame.scale[1] * static_cast< vertex_data_t >(vertex.v[1]) + frame.translate[1]) * IDTechUnitScale,
+							-(frame.scale[2] * static_cast< vertex_data_t >(vertex.v[2]) + frame.translate[2]) * IDTechUnitScale,
+							(frame.scale[0] * static_cast< vertex_data_t >(vertex.v[0]) + frame.translate[0]) * IDTechUnitScale
 						);
 						builder.setNormal(
 							static_cast< vertex_data_t >(normal[1]),
@@ -575,9 +578,9 @@ namespace EmEn::Libs::VertexFactory
 
 							/* Combined transform: Y/Z swap + negation + rotation -90° Y = (Y, -Z, X) */
 							builder.setPosition(
-								static_cast< vertex_data_t >(v.v[1]) * MD3_XYZ_SCALE,
-								-static_cast< vertex_data_t >(v.v[2]) * MD3_XYZ_SCALE,
-								static_cast< vertex_data_t >(v.v[0]) * MD3_XYZ_SCALE
+								static_cast< vertex_data_t >(v.v[1]) * MD3_XYZ_SCALE * IDTechUnitScale,
+								-static_cast< vertex_data_t >(v.v[2]) * MD3_XYZ_SCALE * IDTechUnitScale,
+								static_cast< vertex_data_t >(v.v[0]) * MD3_XYZ_SCALE * IDTechUnitScale
 							);
 							builder.setNormal(
 								static_cast< vertex_data_t >(ny),
@@ -800,9 +803,9 @@ namespace EmEn::Libs::VertexFactory
 
 							/* Combined transform: Y/Z swap + negation + rotation -90° Y = (Y, -Z, X) */
 							builder.setPosition(
-								static_cast< vertex_data_t >(finalPos[1]),
-								-static_cast< vertex_data_t >(finalPos[2]),
-								static_cast< vertex_data_t >(finalPos[0])
+								static_cast< vertex_data_t >(finalPos[1]) * IDTechUnitScale,
+								-static_cast< vertex_data_t >(finalPos[2]) * IDTechUnitScale,
+								static_cast< vertex_data_t >(finalPos[0]) * IDTechUnitScale
 							);
 
 							builder.setTextureCoordinates(

@@ -352,7 +352,7 @@ namespace EmEn::Scenes
 	{
 		std::lock_guard< std::mutex > lock(m_componentsMutex);
 
-		auto it = std::ranges::find_if(m_components, [&name] (const auto & component) {
+		const auto it = std::ranges::find_if(m_components, [&name] (const auto & component) {
 			return component->name() == name;
 		});
 
@@ -367,7 +367,7 @@ namespace EmEn::Scenes
 		{
 			std::lock_guard< std::mutex > lock(m_componentsMutex);
 
-			auto it = std::ranges::find_if(m_components, [&name] (const auto & component) {
+			const auto it = std::ranges::find_if(m_components, [&name] (const auto & component) {
 				return component->name() == name;
 			});
 

@@ -90,15 +90,22 @@ namespace EmEn::Graphics
 		SimplePass = 0,
 		/* Split light pass code. */
 		AmbientPass = 1,
-		DirectionalLightPass = 2,
-		DirectionalLightPassNoShadow = 3,
-		DirectionalLightPassCSM = 4, /* Cascaded Shadow Map for directional lights. */
-		PointLightPass = 5,
-		PointLightPassNoShadow = 6,
-		SpotLightPass = 7,
-		SpotLightPassNoShadow = 8,
+		DirectionalLightPass = 2, /* Direct lighting. */
+		DirectionalLightPassShadowMap = 3, /* Direct lighting + Shadow mapping (2d). */
+		DirectionalLightPassCSM = 4, /* Direct lighting + Cascaded shadow mapping (2d). */
+		DirectionalLightPassColorMap = 5, /* Direct lighting + Color projection mapping (2d). */
+		DirectionalLightPassFull = 6, /* Direct lighting + Shadow mapping (2d) + Color projection mapping (2d). */
+		DirectionalLightPassFullCSM = 7, /* Direct lighting + Cascaded shadow mapping (2d) + Color projection mapping (2d). */
+		PointLightPass = 8, /* Direct lighting. */
+		PointLightPassShadowMap = 9, /* Direct lighting + Shadow mapping (cube). */
+		PointLightPassColorMap = 10, /* Direct lighting + Color projection mapping (cube). */
+		PointLightPassFull = 11, /* Direct lighting + Shadow mapping (cube) + Color projection mapping (cube). */
+		SpotLightPass = 12, /* Direct lighting. */
+		SpotLightPassShadowMap = 14, /* Direct lighting + Shadow mapping (2d). */
+		SpotLightPassColorMap = 13, /* Direct lighting + Color projection mapping (2d). */
+		SpotLightPassFull = 15, /* Direct lighting + Shadow mapping (2d) + Color projection mapping (2d). */
 		/* Enum value for invalid type. */
-		None = 9
+		None = 16
 	};
 
 	constexpr auto MaxPassCount = static_cast< size_t >(RenderPassType::None);
@@ -106,12 +113,19 @@ namespace EmEn::Graphics
 	constexpr auto SimplePassString{"SimplePass"};
 	constexpr auto AmbientPassString{"AmbientPass"};
 	constexpr auto DirectionalLightPassString{"DirectionalLightPass"};
-	constexpr auto DirectionalLightPassNoShadowString{"DirectionalLightPassNoShadow"};
+	constexpr auto DirectionalLightPassShadowMapString{"DirectionalLightPassShadowMap"};
 	constexpr auto DirectionalLightPassCSMString{"DirectionalLightPassCSM"};
+	constexpr auto DirectionalLightPassColorMapString{"DirectionalLightPassColorMap"};
+	constexpr auto DirectionalLightPassFullString{"DirectionalLightPassFull"};
+	constexpr auto DirectionalLightPassFullCSMString{"DirectionalLightPassFullCSM"};
 	constexpr auto PointLightPassString{"PointLightPass"};
-	constexpr auto PointLightPassNoShadowString{"PointLightPassNoShadow"};
+	constexpr auto PointLightPassShadowMapString{"PointLightPassShadowMap"};
+	constexpr auto PointLightPassColorMapString{"PointLightPassColorMap"};
+	constexpr auto PointLightPassFullString{"PointLightPassFull"};
 	constexpr auto SpotLightPassString{"SpotLightPass"};
-	constexpr auto SpotLightPassNoShadowString{"SpotLightPassNoShadow"};
+	constexpr auto SpotLightPassShadowMapString{"SpotLightPassShadowMap"};
+	constexpr auto SpotLightPassColorMapString{"SpotLightPassColorMap"};
+	constexpr auto SpotLightPassFullString{"SpotLightPassFull"};
 
 	/**
 	 * @brief Converts a light pass type enumeration value to the corresponding string.
@@ -153,10 +167,14 @@ namespace EmEn::Graphics
 	{
 		switch ( value )
 		{
-			case RenderPassType::DirectionalLightPass :
+			case RenderPassType::DirectionalLightPassShadowMap :
 			case RenderPassType::DirectionalLightPassCSM :
-			case RenderPassType::PointLightPass :
-			case RenderPassType::SpotLightPass :
+			case RenderPassType::DirectionalLightPassFull :
+			case RenderPassType::DirectionalLightPassFullCSM :
+			case RenderPassType::PointLightPassShadowMap :
+			case RenderPassType::PointLightPassFull :
+			case RenderPassType::SpotLightPassShadowMap :
+			case RenderPassType::SpotLightPassFull :
 				return true;
 
 			default:
@@ -173,7 +191,32 @@ namespace EmEn::Graphics
 	constexpr bool
 	renderPassUsesCSM (RenderPassType value) noexcept
 	{
-		return value == RenderPassType::DirectionalLightPassCSM;
+		return value == RenderPassType::DirectionalLightPassCSM || value == RenderPassType::DirectionalLightPassFullCSM;
+	}
+
+	/**
+	 * @brief Returns whether a render pass type uses color projection mapping.
+	 * @param value The render pass type.
+	 * @return bool
+	 */
+	[[nodiscard]]
+	constexpr bool
+	renderPassUsesColorProjection (RenderPassType value) noexcept
+	{
+		switch ( value )
+		{
+			case RenderPassType::DirectionalLightPassColorMap :
+			case RenderPassType::DirectionalLightPassFull :
+			case RenderPassType::DirectionalLightPassFullCSM :
+			case RenderPassType::PointLightPassColorMap :
+			case RenderPassType::PointLightPassFull :
+			case RenderPassType::SpotLightPassColorMap :
+			case RenderPassType::SpotLightPassFull :
+				return true;
+
+			default:
+				return false;
+		}
 	}
 
 	/** @brief Defines the model matrices buffer type in video memory. */

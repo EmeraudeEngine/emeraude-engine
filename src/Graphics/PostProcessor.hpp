@@ -26,132 +26,270 @@
 
 #pragma once
 
+/* STL inclusions. */
+#include <memory>
+#include <vector>
+
+/* Local inclusions for inheritances. */
+#include "ServiceInterface.hpp"
+
 /* Local inclusions for usages. */
+#include "RenderTarget/Abstract.hpp"
 #include "Saphir/FramebufferEffectInterface.hpp"
-#include "Geometry/IndexedVertexResource.hpp"
+
+/* Forward declarations. */
+namespace EmEn
+{
+	namespace Saphir
+	{
+		class Program;
+	}
+
+	namespace Vulkan
+	{
+		class CommandBuffer;
+		class DescriptorSet;
+		class DescriptorSetLayout;
+		class LayoutManager;
+	}
+
+	namespace Graphics
+	{
+		class GrabPass;
+		class PostProcessEffect;
+		class Renderer;
+
+		namespace Geometry
+		{
+			class IndexedVertexResource;
+		}
+	}
+}
 
 namespace EmEn::Graphics
 {
 	/**
-	 * @brief The post-processor class to add effect on the final render.
-	 * @todo WIP. This is a relic from the OpenGL version and must be rewrite from the ground.
+	 * @brief The post-processor service to apply fullscreen effects on the final render.
+	 * @extends EmEn::ServiceInterface The post-processor is a renderer sub-service.
 	 */
-	class PostProcessor final
+	class PostProcessor final : public ServiceInterface
 	{
-		friend class View;
-
 		public:
 
 			/** @brief Class identifier. */
-			static constexpr auto ClassId{"PostProcessor"};
+			static constexpr auto ClassId{"PostProcessorService"};
 
 			/* GLSL variables. */
 			static constexpr auto Fragment{"em_Fragment"};
 
 			/**
-			 * @brief Construct an offscreen framebuffer for post-rendering effects.
-			 * @param width The framebuffer width.
-			 * @param height The framebuffer height.
-			 * @param colorBufferBits The desired color precision.
-			 * @param depthBufferBits The desired depth precision.
-			 * @param stencilBufferBits The desired stencil precision.
-			 * @param samples The desired multisample multiplier.
+			 * @brief Push constants matching the GLSL pcPostProcessing layout.
 			 */
-			PostProcessor (unsigned int width, unsigned int height, unsigned int colorBufferBits, unsigned int depthBufferBits, unsigned int stencilBufferBits, unsigned int samples) noexcept;
+			struct PushConstants
+			{
+				float frameWidth;
+				float frameHeight;
+				float time;
+				float nearPlane;
+				float farPlane;
+				float tanHalfFovY;
+			};
 
 			/**
-			 * @brief Returns whether the post-processor is usable.
+			 * @brief Constructs the post-processor service.
+			 * @param renderer A reference to the graphics renderer.
+			 */
+			explicit PostProcessor (Renderer & renderer) noexcept;
+
+			/**
+			 * @brief Configures the post-processor over a render-target.
+			 * @param renderTarget A reference to a render-target.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool usable () const noexcept;
+			bool configure (const std::shared_ptr< RenderTarget::Abstract > & renderTarget) noexcept;
 
 			/**
-			 * @brief Sets a list of post-effect.
+			 * @brief Sets a list of post-effects.
 			 * @param effectsList The list of shader effects.
 			 * @return void
 			 */
 			void setEffectsList (const Saphir::FramebufferEffectsList & effectsList) noexcept;
 
 			/**
+			 *
+			 *
 			 * @brief Clears every effect.
 			 * @return void
 			 */
 			void clearEffects () noexcept;
 
 			/**
-			 * @brief Prepares the post-processor for drawing to the off-screen framebuffer.
-			 * @return void
+			 * @brief Returns the current effects list.
+			 * @return const Saphir::FramebufferEffectsList &
 			 */
-			void begin () noexcept;
+			[[nodiscard]]
+			const Saphir::FramebufferEffectsList &
+			effectsList () const noexcept
+			{
+				return m_effectsList;
+			}
 
 			/**
-			 * @brief Release post-processor to let draw the off-screen framebuffer to view framebuffer.
-			 * @return void
-			 */
-			void end () noexcept;
-
-			/**
-			 * @brief Render the off-screen buffer with effects to the default framebuffer.
-			 * @param region The viewport area to blit/copies the render.
-			 * @return void
-			 */
-			void render (const Libs::Math::Space2D::AARectangle< uint32_t > & region) const noexcept;
-
-			/**
-			 * @brief Returns whether the framebuffer is using multisample.
+			 * @brief Returns whether the post-processor has active effects.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool isMultisamplingEnabled () const noexcept;
+			bool
+			hasEffects () const noexcept
+			{
+				return !m_effectsList.empty();
+			}
 
 			/**
-			 * @brief Sets the background color for the framebuffer.
-			 * @param color A reference to a color.
+			 * @brief Enables or disables the post-processor.
+			 * @param state The desired enabled state.
 			 * @return void
 			 */
-			void setBackgroundColor (const Libs::PixelFactory::Color< float > & color) noexcept;
+			void
+			enable (bool state) noexcept
+			{
+				m_enabled = state;
+			}
+
+			/**
+			 * @brief Returns whether the post-processor is enabled and ready to render.
+			 * @note All cancellation conditions are centralized here for simplicity.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isEnabled () const noexcept
+			{
+				return m_enabled && this->usable();
+			}
+
+			/**
+			 * @brief Records the blit from the swap chain color image into the post-processor's own grab pass.
+			 * @note Must be called between render pass 1 and render pass 2, outside any active render pass.
+			 * @param commandBuffer A reference to the active command buffer.
+			 * @return void
+			 */
+			void recordBlit (const Vulkan::CommandBuffer & commandBuffer) const noexcept;
+
+			/**
+			 * @brief Renders post-processing effects into the current command buffer.
+			 * @param commandBuffer A reference to the active command buffer.
+			 * @return void
+			 */
+			void render (const Vulkan::CommandBuffer & commandBuffer) const noexcept;
+
+			/**
+			 * @brief Executes the multi-pass effect chain outside of any active render pass.
+			 * @note Must be called after recordBlit() and before the RP2 restart.
+			 * Each effect in the chain receives the output of the previous one.
+			 * After execution, the descriptor set is updated to point to the chain output.
+			 * @param commandBuffer A reference to the active command buffer.
+			 * @return void
+			 */
+			void executeEffectChain (const Vulkan::CommandBuffer & commandBuffer) noexcept;
+
+			/**
+			 * @brief Enables or disables HDR mode for the post-processing pipeline.
+			 * @note When HDR is enabled, the grab pass uses R16G16B16A16_SFLOAT format
+			 * and the blit from the swap chain uses vkCmdBlitImage for format conversion.
+			 * @param state True to enable HDR, false for standard 8-bit pipeline.
+			 * @return void
+			 */
+			void
+			enableHDR (bool state) noexcept
+			{
+				m_hdrEnabled = state;
+			}
+
+			/**
+			 * @brief Returns whether HDR mode is enabled.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isHDREnabled () const noexcept
+			{
+				return m_hdrEnabled;
+			}
+
+			/**
+			 * @brief Sets the multi-pass effect chain.
+			 * @param effectChain The chain of post-process effects to execute.
+			 * @return void
+			 */
+			void
+			setEffectChain (const std::vector< std::shared_ptr< PostProcessEffect > > & effectChain) noexcept
+			{
+				m_effectChain = effectChain;
+			}
+
+			/**
+			 * @brief Returns the current effect chain.
+			 * @return const std::vector< std::shared_ptr< PostProcessEffect > > &
+			 */
+			[[nodiscard]]
+			const std::vector< std::shared_ptr< PostProcessEffect > > &
+			effectChain () const noexcept
+			{
+				return m_effectChain;
+			}
+
+			/**
+			 * @brief Returns whether the multi-pass effect chain has any effects.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			hasEffectChain () const noexcept
+			{
+				return !m_effectChain.empty();
+			}
+
+			/**
+			 * @brief Updates the near and far plane values for depth-based effects.
+			 * @param nearPlane The camera near plane distance.
+			 * @param farPlane The camera far plane distance.
+			 * @return void
+			 */
+			void
+			setClipPlanes (float nearPlane, float farPlane) noexcept
+			{
+				m_nearPlane = nearPlane;
+				m_farPlane = farPlane;
+			}
+
+			/**
+			 * @brief Returns or creates the descriptor set layout for post-processing.
+			 * @param layoutManager A reference to the Vulkan layout manager.
+			 * @return std::shared_ptr< Vulkan::DescriptorSetLayout >
+			 */
+			[[nodiscard]]
+			static std::shared_ptr< Vulkan::DescriptorSetLayout > getDescriptorSetLayout (Vulkan::LayoutManager & layoutManager) noexcept;
 
 		private:
 
-			/**
-			 * @brief Resizes the framebuffer.
-			 * @param width The new width.
-			 * @param height The new height.
-			 * @return bool
-			 */
-			bool resize (unsigned int width, unsigned int height) noexcept;
+			/** @copydoc EmEn::ServiceInterface::onInitialize() */
+			bool onInitialize () noexcept override;
 
-			/**
-			 * @brief
-			 * @return bool
-			 */
-			bool loadGeometry () noexcept;
+			/** @copydoc EmEn::ServiceInterface::onTerminate() */
+			bool onTerminate () noexcept override;
 
-			/**
-			 * @brief Load the post-processor shading program.
-			 * @return bool
-			 */
-			bool loadProgram () noexcept;
-
-			/**
-			 * @brief
-			 * @param width
-			 * @param height
-			 * @param colorBufferBits
-			 * @param depthBufferBits
-			 * @param stencilBufferBits
-			 * @param samples
-			 * @return bool
-			 */
-			bool buildFramebuffer (unsigned int width, unsigned int height, unsigned int colorBufferBits, unsigned int depthBufferBits, unsigned int stencilBufferBits, unsigned int samples) noexcept;
-
-			//Framebuffer m_framebuffer;
-			//std::shared_ptr< Vulkan::Texture2D > m_colorBuffer;
-			//RenderBufferObject m_extraBuffer;
-			std::unique_ptr< Geometry::IndexedVertexResource > m_geometry;
+			Renderer & m_renderer;
+			std::unique_ptr< GrabPass > m_grabPass;
+			std::shared_ptr< Saphir::Program > m_program;
+			std::shared_ptr< Geometry::IndexedVertexResource > m_quadGeometry;
+			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_descriptorSets;
 			Saphir::FramebufferEffectsList m_effectsList;
-			//std::shared_ptr< Program > m_program;
-			//RasterizationMode m_rasterizationMode;
+			std::vector< std::shared_ptr< PostProcessEffect > > m_effectChain;
+			float m_nearPlane{0.1F};
+			float m_farPlane{1000.0F};
+			bool m_enabled{false};
+			bool m_hdrEnabled{false};
 	};
 }

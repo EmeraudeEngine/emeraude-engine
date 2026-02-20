@@ -37,7 +37,7 @@ namespace EmEn::Graphics
 	using namespace Vulkan;
 
 	bool
-	GrabPass::create (Renderer & renderer, uint32_t width, uint32_t height, VkFormat colorFormat, VkFormat depthFormat) noexcept
+	GrabPass::create (Renderer & renderer, uint32_t width, uint32_t height, VkFormat colorFormat, VkFormat depthFormat, VkFormat normalsFormat) noexcept
 	{
 		if ( this->isCreated() )
 		{
@@ -209,12 +209,95 @@ namespace EmEn::Graphics
 			TraceSuccess{ClassId} << "Grab pass texture created (" << width << "x" << height << ") without depth.";
 		}
 
+		/* Create the normals grab pass image if a normals format is specified. */
+		if ( normalsFormat != VK_FORMAT_UNDEFINED )
+		{
+			m_normalsImage = std::make_shared< Image >(
+				device,
+				VK_IMAGE_TYPE_2D,
+				normalsFormat,
+				VkExtent3D{width, height, 1},
+				VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT
+			);
+			m_normalsImage->setIdentifier(ClassId, "Normals", "Image");
+
+			if ( !m_normalsImage->createOnHardware() )
+			{
+				TraceError{ClassId} << "Unable to create the grab pass normals image !";
+
+				return false;
+			}
+
+			/* Transition normals to shader read layout. */
+			{
+				const auto & transferManager = renderer.transferManager();
+
+				if ( !transferManager.transitionImageLayout(
+					*m_normalsImage,
+					VK_IMAGE_ASPECT_COLOR_BIT,
+					VK_IMAGE_LAYOUT_UNDEFINED,
+					VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+				) )
+				{
+					TraceError{ClassId} << "Unable to transition grab pass normals image to shader read layout !";
+
+					return false;
+				}
+			}
+
+			m_normalsImage->setCurrentImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+			/* Create the normals image view. */
+			m_normalsImageView = std::make_shared< ImageView >(
+				m_normalsImage,
+				VK_IMAGE_VIEW_TYPE_2D,
+				VkImageSubresourceRange{
+					.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+					.baseMipLevel = 0,
+					.levelCount = 1,
+					.baseArrayLayer = 0,
+					.layerCount = 1
+				}
+			);
+			m_normalsImageView->setIdentifier(ClassId, "Normals", "ImageView");
+
+			if ( !m_normalsImageView->createOnHardware() )
+			{
+				TraceError{ClassId} << "Unable to create the grab pass normals image view !";
+
+				return false;
+			}
+
+			/* Get or create the normals sampler: nearest filtering, clamp-to-edge. */
+			m_normalsSampler = renderer.getSampler("GrabPassNormals", [] (Settings &, VkSamplerCreateInfo & createInfo) {
+				createInfo.magFilter = VK_FILTER_NEAREST;
+				createInfo.minFilter = VK_FILTER_NEAREST;
+				createInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
+				createInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+				createInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+				createInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+				createInfo.compareEnable = VK_FALSE;
+				createInfo.minLod = 0.0F;
+				createInfo.maxLod = 1.0F;
+			});
+
+			if ( m_normalsSampler == nullptr )
+			{
+				TraceError{ClassId} << "Unable to get the sampler for grab pass normals !";
+
+				return false;
+			}
+		}
+
 		return true;
 	}
 
 	void
 	GrabPass::destroy () noexcept
 	{
+		m_normalsSampler.reset();
+		m_normalsImageView.reset();
+		m_normalsImage.reset();
 		m_depthSampler.reset();
 		m_depthImageView.reset();
 		m_depthImage.reset();
@@ -224,15 +307,15 @@ namespace EmEn::Graphics
 	}
 
 	bool
-	GrabPass::recreate (Renderer & renderer, uint32_t width, uint32_t height, VkFormat colorFormat, VkFormat depthFormat) noexcept
+	GrabPass::recreate (Renderer & renderer, uint32_t width, uint32_t height, VkFormat colorFormat, VkFormat depthFormat, VkFormat normalsFormat) noexcept
 	{
 		this->destroy();
 
-		return this->create(renderer, width, height, colorFormat, depthFormat);
+		return this->create(renderer, width, height, colorFormat, depthFormat, normalsFormat);
 	}
 
 	void
-	GrabPass::recordBlit (const CommandBuffer & commandBuffer, const Image & srcColorImage, const Image * srcDepthImage) const noexcept
+	GrabPass::recordBlit (const CommandBuffer & commandBuffer, const Image & srcColorImage, const Image * srcDepthImage, const Image * srcNormalsImage) const noexcept
 	{
 		if ( !this->isCreated() )
 		{
@@ -400,6 +483,97 @@ namespace EmEn::Graphics
 				);
 			}
 		}
+
+		/* === Normals copy === */
+		if ( srcNormalsImage != nullptr && this->hasNormals() )
+		{
+			/* 11. Barrier: source normals COLOR_ATTACHMENT_OPTIMAL -> TRANSFER_SRC_OPTIMAL */
+			{
+				const Sync::ImageMemoryBarrier srcBarrier{
+					*srcNormalsImage,
+					VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+					VK_ACCESS_TRANSFER_READ_BIT,
+					VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+					VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
+				};
+
+				commandBuffer.pipelineBarrier(
+					srcBarrier,
+					VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+					VK_PIPELINE_STAGE_TRANSFER_BIT
+				);
+			}
+
+			/* 12. Barrier: grab normals texture SHADER_READ_ONLY_OPTIMAL -> TRANSFER_DST_OPTIMAL */
+			{
+				const Sync::ImageMemoryBarrier dstBarrier{
+					*m_normalsImage,
+					VK_ACCESS_SHADER_READ_BIT,
+					VK_ACCESS_TRANSFER_WRITE_BIT,
+					VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+					VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
+				};
+
+				commandBuffer.pipelineBarrier(
+					dstBarrier,
+					VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+					VK_PIPELINE_STAGE_TRANSFER_BIT
+				);
+			}
+
+			/* 13. Copy: source normals -> grab normals texture (same format, use vkCmdCopyImage). */
+			commandBuffer.copyImage(
+				*srcNormalsImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+				*m_normalsImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+				VK_IMAGE_ASPECT_COLOR_BIT
+			);
+
+			/* 14. Barrier: grab normals texture TRANSFER_DST_OPTIMAL -> SHADER_READ_ONLY_OPTIMAL */
+			{
+				const Sync::ImageMemoryBarrier dstBarrier{
+					*m_normalsImage,
+					VK_ACCESS_TRANSFER_WRITE_BIT,
+					VK_ACCESS_SHADER_READ_BIT,
+					VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+					VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+				};
+
+				commandBuffer.pipelineBarrier(
+					dstBarrier,
+					VK_PIPELINE_STAGE_TRANSFER_BIT,
+					VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT
+				);
+			}
+
+			/* 15. Barrier: source normals TRANSFER_SRC_OPTIMAL -> COLOR_ATTACHMENT_OPTIMAL
+			 * (ready for the post-process render pass). */
+			{
+				const Sync::ImageMemoryBarrier srcBarrier{
+					*srcNormalsImage,
+					VK_ACCESS_TRANSFER_READ_BIT,
+					VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+					VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+					VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+				};
+
+				commandBuffer.pipelineBarrier(
+					srcBarrier,
+					VK_PIPELINE_STAGE_TRANSFER_BIT,
+					VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
+				);
+			}
+		}
+	}
+
+	VkDescriptorImageInfo
+	GrabPass::normalsDescriptorInfo () const noexcept
+	{
+		VkDescriptorImageInfo info{};
+		info.sampler = m_normalsSampler ? m_normalsSampler->handle() : VK_NULL_HANDLE;
+		info.imageView = m_normalsImageView ? m_normalsImageView->handle() : VK_NULL_HANDLE;
+		info.imageLayout = m_normalsImage ? m_normalsImage->currentImageLayout() : VK_IMAGE_LAYOUT_UNDEFINED;
+
+		return info;
 	}
 
 	VkDescriptorImageInfo

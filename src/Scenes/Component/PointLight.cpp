@@ -26,7 +26,12 @@
 
 #include "PointLight.hpp"
 
+/* STL inclusions. */
+#include <bit>
+
 /* Local inclusions. */
+#include "Graphics/Renderer.hpp"
+#include "Resources/ResourceTrait.hpp"
 #include "Libs/Math/Space3D/Collisions/PointSphere.hpp"
 #include "Saphir/LightGenerator.hpp"
 #include "Scenes/AVConsole/Manager.hpp"
@@ -77,6 +82,19 @@ namespace EmEn::Scenes::Component
 		}
 
 		this->updateAnimations(scene.cycle());
+
+		/* Update the animated color projection frame index. */
+		if ( m_colorProjectionIsCubeArray && this->hasColorProjectionTexture() )
+		{
+			const auto newFrameIndex = this->colorProjectionTexture()->frameIndexAt(scene.lifetimeMS());
+
+			if ( newFrameIndex != m_colorProjectionFrameIndex )
+			{
+				m_colorProjectionFrameIndex = newFrameIndex;
+
+				this->requestVideoMemoryUpdate();
+			}
+		}
 	}
 
 	void
@@ -161,6 +179,24 @@ namespace EmEn::Scenes::Component
 			return false;
 		}
 
+		/* Store the bindless texture manager for color projection registration. */
+		m_bindlessTextureManager = &scene.AVConsoleManager().graphicsRenderer().bindlessTextureManager();
+
+		/* If a color projection texture is set, try to register it in bindless now. */
+		if ( this->hasColorProjectionTexture() && this->colorProjectionBindlessIndex() == NoColorProjectionTexture )
+		{
+			auto * resource = dynamic_cast< Resources::ResourceTrait * >(this->colorProjectionTexture().get());
+
+			if ( resource != nullptr && resource->isLoaded() )
+			{
+				this->registerColorProjectionInBindless();
+			}
+			else if ( resource != nullptr )
+			{
+				this->observe(resource);
+			}
+		}
+
 		/* Initialize the data buffer. */
 		{
 			const auto worldCoordinates = this->getWorldCoordinates();
@@ -187,9 +223,8 @@ namespace EmEn::Scenes::Component
 					if ( this->createShadowDescriptorSet(scene) )
 					{
 						this->enableShadowCasting(true);
-						this->updateLightSpaceMatrix();
 
-						/* Auto-calculate PCFRadius based on shadow map resolution. */
+							/* Auto-calculate PCFRadius based on shadow map resolution. */
 						m_PCFRadius = (1.0F / static_cast< float >(resolution)) * 100.0F;
 						m_buffer[PCFRadiusOffset] = m_PCFRadius;
 					}
@@ -221,7 +256,10 @@ namespace EmEn::Scenes::Component
 	void
 	PointLight::destroyFromHardware (Scene & scene) noexcept
 	{
-		/* Clean up shadow descriptor set. */
+		/* Unregister the color projection texture from the bindless manager and stop observing. */
+		this->unregisterColorProjectionFromBindless(true);
+
+		/* Clean up descriptor set (shadow or color projection). */
 		m_shadowDescriptorSet.reset();
 
 		if ( m_shadowMap != nullptr )
@@ -248,9 +286,9 @@ namespace EmEn::Scenes::Component
 	}
 
 	Declaration::UniformBlock
-	PointLight::getUniformBlock (uint32_t set, uint32_t binding, bool useShadow) const noexcept
+	PointLight::getUniformBlock (uint32_t set, uint32_t binding, bool useShadow, bool useColorProjection) const noexcept
 	{
-		return LightGenerator::getUniformBlock(set, binding, LightType::Point, useShadow);
+		return LightGenerator::getUniformBlock(set, binding, LightType::Point, useShadow, useColorProjection);
 	}
 
 	void
@@ -263,8 +301,6 @@ namespace EmEn::Scenes::Component
 		if ( m_shadowMap != nullptr )
 		{
 			m_shadowMap->updateViewRangesProperties(this->getFovOrNear(), this->getDistanceOrFar());
-
-			this->updateLightSpaceMatrix();
 		}
 
 		this->requestVideoMemoryUpdate();
@@ -334,15 +370,12 @@ namespace EmEn::Scenes::Component
 		return true;
 	}
 
-	void
-	PointLight::updateLightSpaceMatrix () noexcept
-	{
-		this->writeLightSpaceMatrix(m_buffer.data() + LightMatrixOffset);
-	}
-
 	bool
 	PointLight::onVideoMemoryUpdate (SharedUniformBuffer & UBO, uint32_t index) noexcept
 	{
+		m_buffer[ColorProjectionIndexOffset] = std::bit_cast< float >(this->colorProjectionBindlessIndex());
+		m_buffer[ColorProjectionFrameIndexOffset] = std::bit_cast< float >(this->colorProjectionFrameIndex());
+
 		return UBO.writeElementData(index, m_buffer.data());
 	}
 

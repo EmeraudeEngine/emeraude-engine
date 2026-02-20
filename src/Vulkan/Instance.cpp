@@ -840,6 +840,7 @@ namespace EmEn::Vulkan
 		requirements.featuresVK10().samplerAnisotropy = VK_TRUE;
 		requirements.featuresVK10().depthBiasClamp = VK_TRUE; // Required for shadow map depth bias clamping
 		requirements.featuresVK10().shaderImageGatherExtended = VK_TRUE; // Required for PCF Filtering
+		requirements.featuresVK10().imageCubeArray = VK_TRUE; // Required for animated cubemap textures (VK_IMAGE_VIEW_TYPE_CUBE_ARRAY)
 		requirements.featuresVK11().multiview = VK_TRUE; // Required for cubemap render-to-texture (Vulkan 1.1+)
 		{
 			/* Descriptor indexing features (Vulkan 1.2) - Required for bindless textures. */

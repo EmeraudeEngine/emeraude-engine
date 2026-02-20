@@ -425,6 +425,22 @@ layout(set = BINDLESS_SET, binding = 1) uniform sampler2D textures2D[];
 vec4 color = texture(textures2D[nonuniformEXT(textureIndex)], uv);
 ```
 
+### Color Projection via Bindless
+
+Light color projection textures are registered in the bindless arrays during `createOnHardware()` or asynchronously via `ObserverTrait` notification when resource loading completes. Each light UBO carries a `ColorProjectionIndex` field (`uint` encoded as `bit_cast<float>`) that indexes into the bindless 2D or Cube array.
+
+- **2D lights** (directional, spot): use `registerTexture2D()` → `sampler2D` array at binding 1
+- **Point lights**: use `registerTextureCube()` → `samplerCube` array at binding 3
+- **Sentinel value**: `UINT32_MAX` means no color projection texture assigned
+
+The bindless set is bound during lighting passes when `renderPassUsesColorProjection(renderPassType)` returns true, alongside the standard environment cubemap usage.
+
+**Code references:**
+- `Scenes/Component/AbstractLightEmitter.cpp:registerColorProjectionInBindless()` - Registration
+- `Scenes/Component/AbstractLightEmitter.cpp:unregisterColorProjectionFromBindless()` - Cleanup
+- `RenderableInstance/Abstract.cpp:render()` - Bindless set binding condition
+- `Saphir/Generator/SceneRendering.hpp` - Pipeline layout enablement
+
 ### Lifecycle Constraints
 
 > [!CRITICAL]
@@ -539,32 +555,37 @@ All material components follow the same parsing pattern via `parseComponentBase(
 >
 > Missing types cause silent fallback to `BasicResource` during mesh loading.
 
-## 9. Shadow Mapping Global Control
+## 9. Shadow Mapping & Color Projection Global Control
 
 The `Renderer` provides a global shadow mapping enable/disable via `isShadowMapsEnabled()`.
 
 **Setting key:** `GraphicsShadowMappingEnabledKey` (`Core/Graphics/Renderer/ShadowMappingEnabled`)
 
-**Implementation:**
-```cpp
-bool Renderer::isShadowMapsEnabled() const noexcept
-{
-    return m_shadowMapsEnabled;  // Cached from settings
-}
-```
-
 **Integration with Scene:**
-The Scene checks this setting when selecting render pass types for lighting. When disabled, all lights use `NoShadow` pass types to avoid binding shadow map descriptors.
+The Scene checks this setting when selecting `RenderPassType` for each light. The pass type is selected from a 4-branch matrix:
 
-**Why this matters:**
-Without this check, disabling shadow mapping via settings caused Vulkan validation errors because shadow map images remained in `VK_IMAGE_LAYOUT_UNDEFINED` but descriptor sets still tried to bind them.
+| Shadow | Color Projection | Pass Type (example: Spot) |
+|--------|-------------------|---------------------------|
+| No | No | `SpotLightPass` (0 samplers) |
+| Yes | No | `SpotLightPassShadowMap` (1 sampler) |
+| No | Yes | `SpotLightPassColorMap` (1 sampler) |
+| Yes | Yes | `SpotLightPassFull` (2 samplers) |
+
+Each pass type generates a **distinct shader program**. When a feature is inactive, its sampling code is not generated — no dummy texture samples, no wasted GPU cycles.
+
+**Descriptor set architecture:** Each light creates a 2-binding descriptor set (UBO + shadow sampler) when shadow mapping is active, or uses the shared UBO-only descriptor set otherwise. Color projection is handled via the global `BindlessTextureManager` — the light UBO carries a bindless index, and the shader samples from the bindless texture array. See: Section 6 → Color Projection via Bindless.
+
+**Why global control matters:**
+Without the global check, disabling shadow mapping via settings caused Vulkan validation errors because shadow map images remained in `VK_IMAGE_LAYOUT_UNDEFINED` but descriptor sets still tried to bind them.
 
 **Code references:**
 - `Renderer.hpp:isShadowMapsEnabled()` - Global accessor
-- `Scenes/Scene.rendering.cpp:978` - Scene-side check
+- `Scenes/Scene.rendering.cpp:renderLightedSelection()` - 4-branch pass type selection
+- `Graphics/Types.hpp:RenderPassType` - 16-value combinatorial enum
+- `Graphics/Types.hpp:renderPassUsesColorProjection()` - Color projection helper
 - `SettingKeys.hpp:GraphicsShadowMappingEnabledKey` - Setting key
 
-See [`docs/shadow-mapping.md`](../../docs/shadow-mapping.md) for complete shadow mapping architecture.
+See [`docs/shadow-mapping.md`](../../docs/shadow-mapping.md) for complete shadow mapping and color projection architecture.
 
 ## 10. Video Recording (Graphics::Recorder)
 
@@ -599,7 +620,243 @@ When a dedicated transfer queue family is available, uses a two-step copy path:
 - `Recorder.cpp:submitGPUCopy()` / `submitTransferQueueCopy()` — Async readback paths
 - `cmake/SetupLibVPX.cmake` — Build configuration for libvpx
 
-## 11. Navigation
+## 11. Animated Texture Cubemap System
+
+### Overview
+
+The Animated Texture Cubemap system provides animated cubemap textures stored as **Vulkan cube arrays**. It consists of two resource layers:
+
+| Resource | File | Purpose |
+|----------|------|---------|
+| `CubemapMovieResource` | `Graphics/CubemapMovieResource.hpp/cpp` | CPU-side frame data (6 face pixmaps per frame + duration) |
+| `AnimatedTextureCubemap` | `Graphics/TextureResource/AnimatedTextureCubemap.hpp/cpp` | GPU-side Vulkan TextureCubeArray wrapping a CubemapMovieResource |
+
+**Primary use case:** Color projection textures for **point lights** (animated light patterns, fire flicker, etc.).
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ CubemapMovieResource (CPU)                                   │
+│  std::vector< pair< CubemapPixmaps, uint32_t > >            │
+│  Frame 0: [6 face pixmaps] + duration (ms)                   │
+│  Frame 1: [6 face pixmaps] + duration (ms)                   │
+│  ...                                                         │
+│  Frame N: [6 face pixmaps] + duration (ms)                   │
+└──────────────────────┬──────────────────────────────────────┘
+                       │ load()
+                       ▼
+┌─────────────────────────────────────────────────────────────┐
+│ AnimatedTextureCubemap (GPU)                                  │
+│  VkImage (CUBE_COMPATIBLE, arrayLayers = 6 × frameCount)     │
+│  VkImageView (CUBE_ARRAY)                                    │
+│  VkSampler ("AnimatedCubemap", no mipmap, no anisotropy)     │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Memory layout:** All frames are packed into a single cube array image. Each frame occupies 6 consecutive array layers. `totalLayers = CubemapFaceCount × frameCount`.
+
+**Frame indexing:** The W coordinate selects the frame index at runtime. `request3DTextureCoordinates()` returns `true`.
+
+### CubemapMovieResource JSON Formats
+
+**Data store directory:** `./data-stores/CubemapMovies/`
+
+#### Parametric Loading (numbered sequence)
+
+Generates cubemap names from a pattern with zero-padded indices:
+
+```json
+{
+    "BaseCubemapName": "FireProjection/frame_{3}",
+    "FrameCount": 30,
+    "FrameRate": 24,
+    "IsLooping": true
+}
+```
+
+- `BaseCubemapName`: Pattern with `{N}` where N = zero-padding width. E.g. `{3}` → `001`, `002`, ...`030`
+- `FrameCount`: Total frames (required)
+- Frame timing (pick one, priority order):
+  - `FrameRate`: FPS → `duration = 1000 / fps`
+  - `AnimationDuration`: Total ms → `duration = total / frameCount`
+  - `FrameDuration`: Per-frame ms (default: `1000/30 ≈ 33ms`)
+- `IsLooping`: Loop animation (default: `true`)
+
+Each generated name (e.g. `FireProjection/frame_001`) is resolved as a `CubemapResource` from the cubemap container.
+
+#### Manual Loading (explicit frame list)
+
+```json
+{
+    "Frames": [
+        { "Cubemap": "Effects/fire_burst_01", "Duration": 50 },
+        { "Cubemap": "Effects/fire_burst_02", "Duration": 50 },
+        { "Cubemap": "Effects/fire_burst_03", "Duration": 100 }
+    ]
+}
+```
+
+- `Frames`: Array of frame objects
+  - `Cubemap`: CubemapResource name (required)
+  - `Duration`: Frame duration in ms (default: `33ms`)
+
+### Sampler Configuration
+
+The `AnimatedTextureCubemap` sampler differs from regular texture samplers:
+
+| Property | AnimatedTextureCubemap | Regular Textures |
+|----------|------------------------|------------------|
+| Mag/Min Filter | Settings-driven (linear/nearest) | Settings-driven |
+| Mipmap Mode | `NEAREST` | `LINEAR` |
+| Anisotropy | `VK_FALSE` | Settings-driven |
+| Max LOD | `0.0` | Computed |
+
+**Rationale:** No mipmaps are generated for animated textures (single mip level), so mipmap filtering and anisotropy are disabled.
+
+### Resource Container Registration
+
+Both resources are registered in `Resources::Manager`:
+
+```cpp
+// Container aliases
+using CubemapMovies = Resources::Container< Graphics::CubemapMovieResource >;
+using AnimatedTextureCubemaps = Resources::Container< Graphics::TextureResource::AnimatedTextureCubemap >;
+```
+
+Both containers share the `"CubemapMovies"` local store directory.
+
+### Usage Pattern
+
+```cpp
+// Get the default animated cubemap resource (for color projection)
+auto animCubemap = resources.container< TextureResource::AnimatedTextureCubemap >()->getDefaultResource();
+
+// Set as color projection texture on a point light
+lightComponent.setColorProjectionTexture(animCubemap);
+```
+
+**Default resource:** In debug mode, generates 3 frames (Red, Green, Blue) at 32×32. In release, generates 5 noise frames.
+
+### Animation Timing
+
+- `frameCount()`: Number of frames in the animation
+- `duration()`: Total animation duration in ms (sum of all frame durations)
+- `frameIndexAt(sceneTime)`: Returns frame index for a given scene time point
+  - Loops via `timePoint % duration` when looping is enabled
+  - Clamps to last frame when not looping and past duration
+
+### Procedural Caustics Generation
+
+`CubemapMovieResource::loadCaustics()` generates animated Voronoi water caustics programmatically:
+
+```cpp
+bool loadCaustics(
+    uint32_t faceSize,        // Cubemap face resolution (e.g. 128)
+    uint32_t frameCount,      // Number of animation frames (e.g. 60)
+    uint32_t frameDuration,   // Duration per frame in ms (e.g. 33)
+    float scale = 4.0F,       // Voronoi cell density (higher = finer)
+    uint32_t seed = 0,        // Random seed for pattern
+    float baseIntensity = 0.7F,    // Background brightness [0,1]
+    float causticIntensity = 1.0F  // Caustic line brightness [0,1]
+) noexcept;
+```
+
+**Algorithm:** Inverted Voronoi F2-F1 distance (bright at cell edges = caustic lines, dark at cell centers). Temporal animation uses a circular sin/cos path through noise space for seamless looping. See: `Libs/Algorithms/VoronoiNoise.hpp` for the underlying noise.
+
+**Usage pattern:** See `projet-alpha/src/Builtin/PoolRooms.cpp:onSetupLighting()`.
+
+### Code References
+
+- `Graphics/CubemapMovieResource.hpp/cpp` — CPU frame storage, JSON loading, procedural caustics
+- `Graphics/TextureResource/AnimatedTextureCubemap.hpp/cpp` — Vulkan cube array texture resource
+- `Libs/Algorithms/VoronoiNoise.hpp` — Voronoi noise: `evaluate()`, `caustic()` (F2-F1 clamped)
+- `Resources/Manager.cpp` — Container registration (lines 531-533)
+- `projet-alpha/src/Actor/Fire.cpp:77` — Usage: fire point light color projection
+- `projet-alpha/src/Builtin/LightAndShadowDebug.cpp:113` — Usage: debug scene color projection
+- `projet-alpha/src/Builtin/PoolRooms.cpp` — Usage: procedural caustics in closed room
+
+## 12. Post-Processing Effects
+
+### Overview
+
+The engine provides a multi-pass post-processing pipeline via `PostProcessor`. Effects chain together: each effect's output becomes the next effect's input. All effects inherit from `PostProcessEffect`.
+
+**Interface** (`PostProcessEffect.hpp`):
+- `create(renderer, width, height)` — Allocate GPU resources (IRTs, pipelines, descriptors)
+- `destroy()` — Release resources
+- `resize(renderer, width, height)` — Recreate on window resize
+- `execute(commandBuffer, inputColor, inputDepth, inputNormals, constants)` — Run effect
+- `requiresDepth()` / `requiresNormals()` / `requiresHDR()` — Declare input dependencies
+
+### Available Effects
+
+| Effect | File | Passes | Dependencies |
+|--------|------|--------|-------------|
+| **SSAO** | `Effects/SSAO.hpp/cpp` | Multi-pass | Depth, Normals |
+| **SSR** | `Effects/SSR.hpp/cpp` | 5-pass (Trace→Resolve→BlurH→BlurV→Composite) | Depth, Normals, HDR |
+| **Bloom** | `Effects/Bloom.hpp/cpp` | Multi-pass | HDR |
+| **DepthOfField** | `Effects/DepthOfField.hpp/cpp` | Multi-pass | Depth |
+| **ToneMapping** | `Effects/ToneMapping.hpp/cpp` | 1-pass | HDR |
+| **FogEnvironment** | `Effects/FogEnvironment.hpp/cpp` | 1-pass | Depth |
+
+### SSR (Screen-Space Reflections)
+
+5-pass pipeline at half resolution (except composite at full-res):
+
+1. **Trace**: Ray-marches in screen space using depth+normals, outputs hitUV + confidence
+2. **Resolve**: Samples reflected color at hitUV; on SSR miss, falls back to environment cubemap
+3. **Blur H**: Horizontal Gaussian blur on resolved colors
+4. **Blur V**: Vertical Gaussian blur
+5. **Composite**: Blends blurred SSR with scene color
+
+**Cubemap Fallback** (UE4/UE5 standard approach):
+When SSR ray finds no screen-space hit, the resolve pass reconstructs the reflection direction in view space, transforms to world space via inverse view matrix, and samples the environment cubemap. This eliminates black patches at screen edges.
+
+Key design:
+- Inverse view matrix (3×3 rotation) passed via push constants (3 × vec4 = 48 bytes)
+- `envFallbackIntensity` parameter controls fallback strength (0.0 = disabled, 0.3 = default)
+- Cubemap set via `setEnvironmentCubemap()` before `create()`; falls back to `Renderer::getDefaultTextureCubemap()` if none set
+- Resolve descriptor set: 5 bindings (color, trace, depth, normals, envCubemap)
+
+**Code references:**
+- `Effects/SSR.hpp` — Parameters, ResolvePushConstants, setEnvironmentCubemap()
+- `Effects/SSR.cpp` — Shader source, descriptor layouts ("SSRResolveInput"), pipeline creation
+- `PostProcessEffect.hpp` — Base interface
+- `PostProcessor.hpp/cpp` — Chain management, push constants
+
+### Effect Chain Order
+
+Recommended order (used in LightAndShadowDebug):
+```
+SSR → SSAO → Bloom → DoF → ToneMapping (always last: HDR→LDR)
+```
+
+**Rationale:** SSR first so it samples clean scene color (no SSAO noise amplified in reflections). SSAO then darkens the image globally including reflections, which is acceptable — this matches UE4's approach where AO is applied as a global multiplier after reflection composition. Bloom before DoF extracts bright pixels from sharp image (avoids runaway glow from DoF blur spreading HDR values).
+
+## 13. Geometry ResourceGenerator: Gem Methods
+
+`ResourceGenerator` provides GPU-ready `IndexedVertexResource` wrappers for all 12 gem cuts. Each method follows the same pattern:
+
+```cpp
+std::shared_ptr< IndexedVertexResource > diamondCutGem (
+    float radius, float depth, float tableRatio, uint32_t segments,
+    std::string resourceName = {}
+) const noexcept;
+```
+
+### Pattern
+1. Auto-generates resource name from class + parameters if empty
+2. Calls `ShapeGenerator::generate*CutGem< float, uint32_t >(...)` with `ShapeBuilderOptions`
+3. Applies transform matrix if not identity
+4. Loads into `IndexedVertexResource` via `getOrCreateResource()`
+
+### Available Methods
+`diamondCutGem()`, `emeraldCutGem()`, `asscherCutGem()`, `baguetteCutGem()`, `princessCutGem()`, `trillionCutGem()`, `ovalCutGem()`, `cushionCutGem()`, `marquiseCutGem()`, `pearCutGem()`, `heartCutGem()`, `roseCutGem()`
+
+See: `Graphics/Geometry/ResourceGenerator.hpp`, `Graphics/Geometry/ResourceGenerator.cpp`
+
+## 14. Navigation
 
 -   **Base Class**: `Renderable::Abstract`
 -   **Main Entry**: `Renderer` (Central coordinator)
@@ -609,3 +866,5 @@ When a dedicated transfer queue family is available, uses a two-step copy path:
 -   **Pattern Examples**: [`docs/development-patterns.md`](../../docs/development-patterns.md)
 -   **Material JSON format**: See `docs/development-patterns.md#material-json-format-unified`
 -   **Shadow Mapping**: [`docs/shadow-mapping.md`](../../docs/shadow-mapping.md) - PCF, global control, per-light settings
+-   **Animated Cubemaps**: See [Section 11](#11-animated-texture-cubemap-system) - CubemapMovieResource + AnimatedTextureCubemap
+-   **Post-Processing**: See [Section 12](#12-post-processing-effects) - SSR, Bloom, SSAO, DoF, ToneMapping

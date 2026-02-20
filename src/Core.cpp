@@ -655,13 +655,6 @@ namespace EmEn
 		/* Initialize graphics renderer. */
 		if ( m_graphicsRenderer.initialize(m_secondaryServicesEnabled) )
 		{
-			/* FIXME: Check a better way to give the access ... */
-			{
-				Geometry::Interface::s_graphicsRenderer = &m_graphicsRenderer;
-				TextureResource::Abstract::s_graphicsRenderer = &m_graphicsRenderer;
-				Material::Interface::s_graphicsRenderer = &m_graphicsRenderer;
-			}
-
 			m_graphicsRenderer.createDefaultResources(m_resourceManager);
 			m_graphicsRenderer.registerToObject(*this);
 

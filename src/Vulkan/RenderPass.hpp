@@ -347,6 +347,23 @@ namespace EmEn::Vulkan
 				return m_multiviewEnabled;
 			}
 
+			/**
+			 * @brief Returns the number of color attachments in a given subpass.
+			 * @param subPassIndex The subpass index to query. Default 0.
+			 * @return uint32_t
+			 */
+			[[nodiscard]]
+			uint32_t
+			colorAttachmentCount (uint32_t subPassIndex = 0) const noexcept
+			{
+				if ( subPassIndex >= m_renderSubPasses.size() )
+				{
+					return 0;
+				}
+
+				return static_cast< uint32_t >(m_renderSubPasses[subPassIndex].m_colorAttachments.size());
+			}
+
 		private:
 
 			/**

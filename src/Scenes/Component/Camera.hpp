@@ -27,6 +27,7 @@
 #pragma once
 
 /* STL inclusions. */
+#include <algorithm>
 #include <cstdint>
 #include <cstddef>
 #include <string>
@@ -272,7 +273,7 @@ namespace EmEn::Scenes::Component
 			bool
 			isLensEffectPresent (const std::shared_ptr< Saphir::FramebufferEffectInterface > & effect) const noexcept
 			{
-				return m_lensEffects.contains(effect);
+				return std::find(m_lensEffects.cbegin(), m_lensEffects.cend(), effect) != m_lensEffects.cend();
 			}
 
 			/**

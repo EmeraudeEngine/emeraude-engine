@@ -55,11 +55,19 @@ namespace EmEn::Saphir::Generator
 			switch ( m_renderPassType )
 			{
 				case RenderPassType::DirectionalLightPass :
-				case RenderPassType::DirectionalLightPassNoShadow :
+				case RenderPassType::DirectionalLightPassShadowMap :
+				case RenderPassType::DirectionalLightPassCSM :
+				case RenderPassType::DirectionalLightPassColorMap :
+				case RenderPassType::DirectionalLightPassFull :
+				case RenderPassType::DirectionalLightPassFullCSM :
 				case RenderPassType::PointLightPass :
-				case RenderPassType::PointLightPassNoShadow :
+				case RenderPassType::PointLightPassShadowMap :
+				case RenderPassType::PointLightPassColorMap :
+				case RenderPassType::PointLightPassFull :
 				case RenderPassType::SpotLightPass :
-				case RenderPassType::SpotLightPassNoShadow :
+				case RenderPassType::SpotLightPassShadowMap :
+				case RenderPassType::SpotLightPassColorMap :
+				case RenderPassType::SpotLightPassFull :
 					setIndexes.enableSet(SetType::PerLight);
 					break;
 
@@ -160,14 +168,27 @@ namespace EmEn::Saphir::Generator
 				return m_scene->lightSet().isUsingStaticLighting();
 
 			case RenderPassType::DirectionalLightPass :
-			case RenderPassType::DirectionalLightPassNoShadow :
+			case RenderPassType::DirectionalLightPassShadowMap :
+			case RenderPassType::DirectionalLightPassCSM :
+			case RenderPassType::DirectionalLightPassColorMap :
+			case RenderPassType::DirectionalLightPassFull :
+			case RenderPassType::DirectionalLightPassFullCSM :
 			case RenderPassType::PointLightPass :
-			case RenderPassType::PointLightPassNoShadow :
+			case RenderPassType::PointLightPassShadowMap :
+			case RenderPassType::PointLightPassColorMap :
+			case RenderPassType::PointLightPassFull :
 			case RenderPassType::SpotLightPass :
-			case RenderPassType::SpotLightPassNoShadow :
+			case RenderPassType::SpotLightPassShadowMap :
+			case RenderPassType::SpotLightPassColorMap :
+			case RenderPassType::SpotLightPassFull :
 				return true;
 
 			case RenderPassType::AmbientPass :
+				/* MRT normal output requires view-space normals, which needs
+				 * separate V and M matrices to compute the normal matrix.
+				 * Only needed when the render target has a normals attachment. */
+				return m_hasNormalsAttachment && m_scene->lightSet().isEnabled() && this->isFlagEnabled(IsLightingEnabled);
+
 			default:
 				return false;
 		}
@@ -283,6 +304,17 @@ namespace EmEn::Saphir::Generator
 
 				return false;
 			}
+
+			/* Ensure svNormalViewSpace is available as a fragment shader input for the MRT normal output.
+			 * Only needed when the render target has a normals attachment (color attachment count >= 2),
+			 * i.e. the internal scene render target.  The swap chain has only 1 color attachment. */
+			if ( m_hasNormalsAttachment )
+			{
+				if ( !vertexShader->requestSynthesizeInstruction(ShaderVariable::NormalViewSpace, Saphir::VariableScope::ToNextStage) )
+				{
+					return false;
+				}
+			}
 		}
 
 		return vertexShader->generateSourceCode(*this);
@@ -303,6 +335,12 @@ namespace EmEn::Saphir::Generator
 
 		/* Common part of fragment shader. */
 		fragmentShader->declareDefaultOutputFragment();
+
+		/* Declare the MRT normals output only when the render target has a normals attachment. */
+		if ( m_hasNormalsAttachment )
+		{
+			fragmentShader->declare(Declaration::OutputFragment{1, Keys::GLSL::FloatVector4, Keys::ShaderVariable::OutputNormal});
+		}
 
 		/* If a material is present, generate the shader code (optional). */
 		if ( this->materialEnabled() && !this->getMaterialInterface()->generateFragmentShaderCode(*this, m_lightGenerator, *fragmentShader) )
@@ -333,14 +371,40 @@ namespace EmEn::Saphir::Generator
 		if ( m_scene->lightSet().isEnabled() && this->isFlagEnabled(IsLightingEnabled) )
 		{
 			Code{*fragmentShader, Location::Output} << ShaderVariable::OutputFragment << " = " << m_lightGenerator.fragmentColor() << ';';
+
+			if ( m_hasNormalsAttachment )
+			{
+				/* Write view-space normal to MRT attachment 1 for SSAO/SSR.
+				 * Only the ambient/simple pass writes the actual normal.  Light passes use additive
+				 * blending, so they must output zero to preserve the existing normal value. */
+				if ( m_renderPassType == RenderPassType::AmbientPass || m_renderPassType == RenderPassType::SimplePass )
+				{
+					const auto roughnessExpr = m_lightGenerator.roughnessShaderExpression();
+					Code{*fragmentShader, Location::Output} << ShaderVariable::OutputNormal << " = vec4(normalize(" << ShaderVariable::NormalViewSpace << "), " << roughnessExpr << ");";
+				}
+				else
+				{
+					Code{*fragmentShader, Location::Output} << ShaderVariable::OutputNormal << " = vec4(0.0);";
+				}
+			}
 		}
 		else if ( this->materialEnabled() )
 		{
 			Code{*fragmentShader, Location::Output} << ShaderVariable::OutputFragment << " = " << this->getMaterialInterface()->fragmentColor() << ';';
+
+			if ( m_hasNormalsAttachment )
+			{
+				Code{*fragmentShader, Location::Output} << ShaderVariable::OutputNormal << " = vec4(0.0, 0.0, 1.0, 0.5);";
+			}
 		}
 		else
 		{
 			Code{*fragmentShader, Location::Output} << ShaderVariable::OutputFragment << " = vec4(1.0, 0.0, 1.0, 1.0);";
+
+			if ( m_hasNormalsAttachment )
+			{
+				Code{*fragmentShader, Location::Output} << ShaderVariable::OutputNormal << " = vec4(0.0, 0.0, 1.0, 0.5);";
+			}
 		}
 
 		/* Discard nearly transparent pixels to avoid blending artifacts. */
@@ -392,6 +456,15 @@ namespace EmEn::Saphir::Generator
 			Tracer::error(ClassId, "Unable to configure the graphics pipeline color blend state !");
 
 			return false;
+		}
+
+		/* When the render target has a normals attachment (MRT), duplicate the color
+		 * blend attachment for the normals buffer.  This ensures:
+		 * - AmbientPass (no blend): writes the actual normal (replace).
+		 * - Light passes (additive): writes vec4(0.0), adding nothing to the existing normal. */
+		if ( m_hasNormalsAttachment )
+		{
+			graphicsPipeline.appendColorBlendAttachment(graphicsPipeline.colorBlendAttachments()[0]);
 		}
 
 		return true;

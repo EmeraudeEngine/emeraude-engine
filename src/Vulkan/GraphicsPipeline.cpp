@@ -108,6 +108,23 @@ namespace EmEn::Vulkan
 	}
 
 	bool
+	GraphicsPipeline::configureEmptyVertexInputState (VkPipelineVertexInputStateCreateFlags flags) noexcept
+	{
+		m_vertexInputState.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+		m_vertexInputState.pNext = nullptr;
+		m_vertexInputState.flags = flags;
+		m_vertexInputState.vertexBindingDescriptionCount = 0;
+		m_vertexInputState.pVertexBindingDescriptions = nullptr;
+		m_vertexInputState.vertexAttributeDescriptionCount = 0;
+		m_vertexInputState.pVertexAttributeDescriptions = nullptr;
+
+		/* Adds to the pipeline createInfo. */
+		m_createInfo.pVertexInputState = &m_vertexInputState;
+
+		return true;
+	}
+
+	bool
 	GraphicsPipeline::configureInputAssemblyState (const VertexBufferFormat & vertexBufferFormat, VkPipelineInputAssemblyStateCreateFlags flags) noexcept
 	{
 		const auto * binding = vertexBufferFormat.binding(0);
@@ -175,6 +192,21 @@ namespace EmEn::Vulkan
 		}
 
 		m_inputAssemblyState.primitiveRestartEnable = binding->requestPrimitiveRestart() ? VK_TRUE : VK_FALSE;
+
+		/* Adds to the pipeline createInfo. */
+		m_createInfo.pInputAssemblyState = &m_inputAssemblyState;
+
+		return true;
+	}
+
+	bool
+	GraphicsPipeline::configureInputAssemblyState (VkPrimitiveTopology topology, bool primitiveRestartEnable, VkPipelineInputAssemblyStateCreateFlags flags) noexcept
+	{
+		m_inputAssemblyState.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+		m_inputAssemblyState.pNext = nullptr;
+		m_inputAssemblyState.flags = flags;
+		m_inputAssemblyState.topology = topology;
+		m_inputAssemblyState.primitiveRestartEnable = primitiveRestartEnable ? VK_TRUE : VK_FALSE;
 
 		/* Adds to the pipeline createInfo. */
 		m_createInfo.pInputAssemblyState = &m_inputAssemblyState;
@@ -312,11 +344,19 @@ namespace EmEn::Vulkan
 		switch ( renderPassType )
 		{
 			case RenderPassType::DirectionalLightPass:
-			case RenderPassType::DirectionalLightPassNoShadow:
+			case RenderPassType::DirectionalLightPassShadowMap:
+			case RenderPassType::DirectionalLightPassCSM:
+			case RenderPassType::DirectionalLightPassColorMap:
+			case RenderPassType::DirectionalLightPassFull:
+			case RenderPassType::DirectionalLightPassFullCSM:
 			case RenderPassType::PointLightPass:
-			case RenderPassType::PointLightPassNoShadow:
+			case RenderPassType::PointLightPassShadowMap:
+			case RenderPassType::PointLightPassColorMap:
+			case RenderPassType::PointLightPassFull:
 			case RenderPassType::SpotLightPass:
-			case RenderPassType::SpotLightPassNoShadow:
+			case RenderPassType::SpotLightPassShadowMap:
+			case RenderPassType::SpotLightPassColorMap:
+			case RenderPassType::SpotLightPassFull:
 				if ( options != nullptr && options->isDepthBiasEnabled() )
 				{
 					m_rasterizationState.depthBiasEnable = VK_TRUE;
@@ -440,11 +480,19 @@ namespace EmEn::Vulkan
 		switch ( renderPassType )
 		{
 			case RenderPassType::DirectionalLightPass:
-			case RenderPassType::DirectionalLightPassNoShadow:
+			case RenderPassType::DirectionalLightPassShadowMap:
+			case RenderPassType::DirectionalLightPassCSM:
+			case RenderPassType::DirectionalLightPassColorMap:
+			case RenderPassType::DirectionalLightPassFull:
+			case RenderPassType::DirectionalLightPassFullCSM:
 			case RenderPassType::PointLightPass:
-			case RenderPassType::PointLightPassNoShadow:
+			case RenderPassType::PointLightPassShadowMap:
+			case RenderPassType::PointLightPassColorMap:
+			case RenderPassType::PointLightPassFull:
 			case RenderPassType::SpotLightPass:
-			case RenderPassType::SpotLightPassNoShadow:
+			case RenderPassType::SpotLightPassShadowMap:
+			case RenderPassType::SpotLightPassColorMap:
+			case RenderPassType::SpotLightPassFull:
 				m_depthStencilState.depthTestEnable = VK_TRUE;
 				m_depthStencilState.depthWriteEnable = VK_FALSE;
 				m_depthStencilState.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
@@ -595,11 +643,19 @@ namespace EmEn::Vulkan
 				 * For transparent materials, we modulate the light contribution by source alpha
 				 * to properly blend lighting with transparency. */
 				case RenderPassType::DirectionalLightPass:
-				case RenderPassType::DirectionalLightPassNoShadow:
+				case RenderPassType::DirectionalLightPassShadowMap:
+				case RenderPassType::DirectionalLightPassCSM:
+				case RenderPassType::DirectionalLightPassColorMap:
+				case RenderPassType::DirectionalLightPassFull:
+				case RenderPassType::DirectionalLightPassFullCSM:
 				case RenderPassType::PointLightPass:
-				case RenderPassType::PointLightPassNoShadow:
+				case RenderPassType::PointLightPassShadowMap:
+				case RenderPassType::PointLightPassColorMap:
+				case RenderPassType::PointLightPassFull:
 				case RenderPassType::SpotLightPass:
-				case RenderPassType::SpotLightPassNoShadow:
+				case RenderPassType::SpotLightPassShadowMap:
+				case RenderPassType::SpotLightPassColorMap:
+				case RenderPassType::SpotLightPassFull:
 					m_colorBlendAttachments[0].blendEnable = VK_TRUE;
 
 					if ( material.isOpaque() )
@@ -718,6 +774,10 @@ namespace EmEn::Vulkan
 	{
 		m_colorBlendAttachments = attachments;
 		m_colorBlendState = createInfo;
+
+		/* NOTE: Update the pointer to our own copy (the caller's data may go out of scope). */
+		m_colorBlendState.attachmentCount = static_cast< uint32_t >(m_colorBlendAttachments.size());
+		m_colorBlendState.pAttachments = m_colorBlendAttachments.data();
 
 		/* Adds to the pipeline createInfo. */
 		m_createInfo.pColorBlendState = &m_colorBlendState;
@@ -868,6 +928,28 @@ namespace EmEn::Vulkan
 			if ( !isDynamicStateEnabled || (!this->hasDynamicState(VK_DYNAMIC_STATE_LOGIC_OP_ENABLE_EXT) && !this->hasDynamicState(VK_DYNAMIC_STATE_LOGIC_OP_EXT) && !this->hasDynamicState(VK_DYNAMIC_STATE_COLOR_BLEND_ENABLE_EXT) && !this->hasDynamicState(VK_DYNAMIC_STATE_COLOR_BLEND_EQUATION_EXT) && !this->hasDynamicState(VK_DYNAMIC_STATE_COLOR_WRITE_MASK_EXT) && !this->hasDynamicState(VK_DYNAMIC_STATE_BLEND_CONSTANTS)) )
 			{
 				this->defaultColorBlendState();
+			}
+		}
+
+		/* Pad color blend attachment count to match the render pass color attachment count.
+		 * Vulkan requires the pipeline to have the same number of blend attachments as the
+		 * render pass subpass has color attachments.  When independentBlend is not enabled,
+		 * all blend attachments must be identical, so we replicate attachment 0. */
+		{
+			const auto rpColorCount = renderPass->colorAttachmentCount(0);
+			const auto blendCount = static_cast< uint32_t >(m_colorBlendAttachments.size());
+
+			if ( blendCount < rpColorCount && blendCount > 0 )
+			{
+				const auto & reference = m_colorBlendAttachments[0];
+
+				for ( uint32_t i = blendCount; i < rpColorCount; ++i )
+				{
+					m_colorBlendAttachments.emplace_back(reference);
+				}
+
+				m_colorBlendState.attachmentCount = static_cast< uint32_t >(m_colorBlendAttachments.size());
+				m_colorBlendState.pAttachments = m_colorBlendAttachments.data();
 			}
 		}
 

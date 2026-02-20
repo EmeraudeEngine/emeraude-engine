@@ -27,8 +27,12 @@
 #include "AbstractLightEmitter.hpp"
 
 /* Local inclusions. */
+#include "Graphics/BindlessTextureManager.hpp"
 #include "Graphics/SharedUniformBuffer.hpp"
+#include "Resources/ResourceTrait.hpp"
 #include "Scenes/AVConsole/Manager.hpp"
+#include "Tracer.hpp"
+#include "Vulkan/TextureInterface.hpp"
 
 namespace EmEn::Scenes::Component
 {
@@ -48,8 +52,6 @@ namespace EmEn::Scenes::Component
 		this->forEachOutputs([&worldCoordinates, &worldVelocity] (const auto & output) {
 			output->updateDeviceFromCoordinates(worldCoordinates, worldVelocity);
 		});
-
-		this->updateLightSpaceMatrix();
 	}
 
 	void
@@ -58,19 +60,6 @@ namespace EmEn::Scenes::Component
 		/* When the shadow map is connected, we initialize it with coordinates and light properties. */
 		targetDevice.updateVideoDeviceProperties(this->getFovOrNear(), this->getDistanceOrFar(), this->isOrthographicProjection());
 		targetDevice.updateDeviceFromCoordinates(this->getWorldCoordinates(), this->getWorldVelocity());
-	}
-
-	Matrix< 4, float >
-	AbstractLightEmitter::getLightSpaceMatrix () const noexcept
-	{
-		if ( !this->isShadowCastingEnabled() )
-		{
-			return Matrix< 4, float >::identity();
-		}
-
-		const auto & viewMatrices = this->shadowMap()->viewMatrices();
-
-		return RenderTarget::ScaleBiasMatrix * viewMatrices.projectionMatrix() * viewMatrices.viewMatrix(false, 0);
 	}
 
 	bool
@@ -213,18 +202,121 @@ namespace EmEn::Scenes::Component
 	}
 
 	void
-	AbstractLightEmitter::writeLightSpaceMatrix (float * bufferDestination) const noexcept
+	AbstractLightEmitter::setColorProjectionTexture (const std::shared_ptr< Vulkan::TextureInterface > & texture) noexcept
 	{
-		if ( bufferDestination == nullptr )
+		m_colorProjectionTexture = texture;
+
+		if ( m_colorProjectionTexture != nullptr && m_bindlessTextureManager != nullptr )
+		{
+			auto * resource = dynamic_cast< Resources::ResourceTrait * >(m_colorProjectionTexture.get());
+
+			if ( resource != nullptr && resource->isLoaded() )
+			{
+				this->registerColorProjectionInBindless();
+			}
+			else if ( resource != nullptr )
+			{
+				this->observe(resource);
+			}
+		}
+
+		this->enableFlag(VideoMemoryUpdateRequested);
+	}
+
+	void
+	AbstractLightEmitter::registerColorProjectionInBindless () noexcept
+	{
+		if ( m_bindlessTextureManager == nullptr || m_colorProjectionTexture == nullptr )
 		{
 			return;
 		}
 
-		const auto matrix = this->getLightSpaceMatrix();
+		if ( this->usesCubemapColorProjection() )
+		{
+			/* Check if the texture is a cube array (animated cubemap) or a regular cube. */
+			if ( m_colorProjectionTexture->type() == Vulkan::TextureType::TextureCubeArray )
+			{
+				m_colorProjectionBindlessIndex = m_bindlessTextureManager->registerTextureCubeArray(*m_colorProjectionTexture);
+				m_colorProjectionIsCubeArray = true;
+				m_colorProjectionFrameIndex = 0;
+			}
+			else
+			{
+				m_colorProjectionBindlessIndex = m_bindlessTextureManager->registerTextureCube(*m_colorProjectionTexture);
+				m_colorProjectionIsCubeArray = false;
+				m_colorProjectionFrameIndex = NoColorProjectionTexture;
+			}
+		}
+		else
+		{
+			m_colorProjectionBindlessIndex = m_bindlessTextureManager->registerTexture2D(*m_colorProjectionTexture);
+			m_colorProjectionIsCubeArray = false;
+			m_colorProjectionFrameIndex = NoColorProjectionTexture;
+		}
 
-		/* NOTE: Update the light space matrix.
-		 * Use data() to get pointer to underlying array. Using &matrix[0] would be UB
-		 * because the const operator[] returns by value (a temporary). */
-		std::copy_n(matrix.data(), 16, bufferDestination);
+		if ( m_colorProjectionBindlessIndex != NoColorProjectionTexture )
+		{
+			TraceDebug{TracerTag} << "Color projection texture registered in bindless manager at index " << m_colorProjectionBindlessIndex << (m_colorProjectionIsCubeArray ? " (animated cube array)." : ".");
+		}
+		else
+		{
+			TraceError{TracerTag} << "Failed to register color projection texture in bindless manager!";
+		}
+
+		this->requestVideoMemoryUpdate();
+	}
+
+
+	void
+	AbstractLightEmitter::unregisterColorProjectionFromBindless (bool useCubemap) noexcept
+	{
+		if ( m_colorProjectionBindlessIndex != NoColorProjectionTexture && m_bindlessTextureManager != nullptr )
+		{
+			if ( useCubemap && m_colorProjectionIsCubeArray )
+			{
+				m_bindlessTextureManager->unregisterTextureCubeArray(m_colorProjectionBindlessIndex);
+			}
+			else if ( useCubemap )
+			{
+				m_bindlessTextureManager->unregisterTextureCube(m_colorProjectionBindlessIndex);
+			}
+			else
+			{
+				m_bindlessTextureManager->unregisterTexture2D(m_colorProjectionBindlessIndex);
+			}
+
+			m_colorProjectionBindlessIndex = NoColorProjectionTexture;
+			m_colorProjectionFrameIndex = NoColorProjectionTexture;
+			m_colorProjectionIsCubeArray = false;
+		}
+
+		if ( m_colorProjectionTexture != nullptr )
+		{
+			auto * resource = dynamic_cast< Resources::ResourceTrait * >(m_colorProjectionTexture.get());
+
+			if ( resource != nullptr )
+			{
+				this->forget(resource);
+			}
+		}
+	}
+	bool
+	AbstractLightEmitter::onNotification (const Libs::ObservableTrait * /*observable*/, int notificationCode, const std::any & /*data*/) noexcept
+	{
+		if ( notificationCode == Resources::ResourceTrait::LoadFinished )
+		{
+			this->registerColorProjectionInBindless();
+
+			return false;
+		}
+
+		if ( notificationCode == Resources::ResourceTrait::LoadFailed )
+		{
+			TraceError{TracerTag} << "Color projection texture loading failed !";
+
+			return false;
+		}
+
+		return true;
 	}
 }

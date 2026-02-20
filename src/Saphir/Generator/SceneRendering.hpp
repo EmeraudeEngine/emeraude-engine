@@ -30,6 +30,9 @@
 #include "Abstract.hpp"
 
 /* Local inclusions for usages. */
+#include "Graphics/RenderTarget/Abstract.hpp"
+#include "Vulkan/Framebuffer.hpp"
+#include "Vulkan/RenderPass.hpp"
 #include "Saphir/LightGenerator.hpp"
 #include "SettingKeys.hpp"
 
@@ -75,9 +78,19 @@ namespace EmEn::Saphir::Generator
 
 				this->setPOMIterations(this->highQualityEnabled() ? settings.getOrSetDefault< int >(POMIterationsKey, DefaultPOMIterations) : 0);
 
-				if ( this->materialEnabled() && this->getMaterialInterface()->useEnvironmentCubemap() )
+				if ( (this->materialEnabled() && this->getMaterialInterface()->useEnvironmentCubemap()) || Graphics::renderPassUsesColorProjection(renderPassType) )
 				{
 					this->enableBindlessTextures(true);
+				}
+
+				/* Detect whether the render target supports MRT normal output
+				 * by checking if the render pass has more than 1 color attachment. */
+				if ( const auto * fb = renderTarget->framebuffer(); fb != nullptr )
+				{
+					if ( const auto & rp = fb->renderPass(); rp != nullptr )
+					{
+						m_hasNormalsAttachment = rp->colorAttachmentCount() > 1;
+					}
 				}
 			}
 
@@ -139,5 +152,6 @@ namespace EmEn::Saphir::Generator
 			Graphics::RenderPassType m_renderPassType;
 			LightGenerator m_lightGenerator;
 			const Scenes::Scene * m_scene{nullptr};
+			bool m_hasNormalsAttachment{false};
 	};
 }

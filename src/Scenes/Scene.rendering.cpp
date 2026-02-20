@@ -1082,11 +1082,26 @@ namespace EmEn::Scenes
 				/* NOTE: Use shadow pass type if the light has shadow casting enabled and the instance supports shadows.
 				 * CSM uses a specialized pass type for cascaded shadow map sampling.
 				 * Also check the global shadow mapping setting from the renderer. */
-				RenderPassType passType = RenderPassType::DirectionalLightPassNoShadow;
+				const bool useShadow = shadowMapsEnabled && light->isShadowCastingEnabled() && light->hasShadowDescriptorSet() && instance->isShadowReceivingEnabled();
+				const bool useColorProjection = light->hasColorProjectionTexture();
 
-				if ( shadowMapsEnabled && light->isShadowCastingEnabled() && light->hasShadowDescriptorSet() && instance->isShadowReceivingEnabled() )
+				RenderPassType passType;
+
+				if ( useShadow && useColorProjection )
 				{
-					passType = light->usesCSM() ? RenderPassType::DirectionalLightPassCSM : RenderPassType::DirectionalLightPass;
+					passType = light->usesCSM() ? RenderPassType::DirectionalLightPassFullCSM : RenderPassType::DirectionalLightPassFull;
+				}
+				else if ( useShadow )
+				{
+					passType = light->usesCSM() ? RenderPassType::DirectionalLightPassCSM : RenderPassType::DirectionalLightPassShadowMap;
+				}
+				else if ( useColorProjection )
+				{
+					passType = RenderPassType::DirectionalLightPassColorMap;
+				}
+				else
+				{
+					passType = RenderPassType::DirectionalLightPass;
 				}
 
 				instance->render(readStateIndex, renderTarget, light.get(), passType, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, bindlessTexturesManager);
@@ -1113,11 +1128,28 @@ namespace EmEn::Scenes
 					}
 				}
 
-				/* NOTE: Use shadow pass type if the light has shadow casting enabled and the instance supports shadows.
-				 * Also check the global shadow mapping setting from the renderer. */
-				const auto passType = shadowMapsEnabled && light->isShadowCastingEnabled() && light->hasShadowDescriptorSet() && instance->isShadowReceivingEnabled() ?
-					RenderPassType::PointLightPass :
-					RenderPassType::PointLightPassNoShadow;
+				/* NOTE: Select the render pass type based on shadow and color projection state. */
+				const bool useShadow = shadowMapsEnabled && light->isShadowCastingEnabled() && light->hasShadowDescriptorSet() && instance->isShadowReceivingEnabled();
+				const bool useColorProjection = light->hasColorProjectionTexture();
+
+				RenderPassType passType;
+
+				if ( useShadow && useColorProjection )
+				{
+					passType = RenderPassType::PointLightPassFull;
+				}
+				else if ( useShadow )
+				{
+					passType = RenderPassType::PointLightPassShadowMap;
+				}
+				else if ( useColorProjection )
+				{
+					passType = RenderPassType::PointLightPassColorMap;
+				}
+				else
+				{
+					passType = RenderPassType::PointLightPass;
+				}
 
 				instance->render(readStateIndex, renderTarget, light.get(), passType, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, bindlessTexturesManager);
 			}
@@ -1143,11 +1175,28 @@ namespace EmEn::Scenes
 					}
 				}
 
-				/* NOTE: Use shadow pass type if the light has shadow casting enabled and the instance supports shadows.
-				 * Also check the global shadow mapping setting from the renderer. */
-				const auto passType = shadowMapsEnabled && light->isShadowCastingEnabled() && light->hasShadowDescriptorSet() && instance->isShadowReceivingEnabled() ?
-					RenderPassType::SpotLightPass :
-					RenderPassType::SpotLightPassNoShadow;
+				/* NOTE: Select the render pass type based on shadow and color projection state. */
+				const bool useShadow = shadowMapsEnabled && light->isShadowCastingEnabled() && light->hasShadowDescriptorSet() && instance->isShadowReceivingEnabled();
+				const bool useColorProjection = light->hasColorProjectionTexture();
+
+				RenderPassType passType;
+
+				if ( useShadow && useColorProjection )
+				{
+					passType = RenderPassType::SpotLightPassFull;
+				}
+				else if ( useShadow )
+				{
+					passType = RenderPassType::SpotLightPassShadowMap;
+				}
+				else if ( useColorProjection )
+				{
+					passType = RenderPassType::SpotLightPassColorMap;
+				}
+				else
+				{
+					passType = RenderPassType::SpotLightPass;
+				}
 
 				renderBatch.renderableInstance()->render(readStateIndex, renderTarget, light.get(), passType, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, bindlessTexturesManager);
 			}
@@ -1286,15 +1335,25 @@ namespace EmEn::Scenes
 		{
 			renderPassTypes.emplace_back(RenderPassType::AmbientPass);
 
-			renderPassTypes.emplace_back(RenderPassType::DirectionalLightPassNoShadow);
-			renderPassTypes.emplace_back(RenderPassType::PointLightPassNoShadow);
-			renderPassTypes.emplace_back(RenderPassType::SpotLightPassNoShadow);
+			renderPassTypes.emplace_back(RenderPassType::DirectionalLightPass);
+			renderPassTypes.emplace_back(RenderPassType::PointLightPass);
+			renderPassTypes.emplace_back(RenderPassType::SpotLightPass);
+
+			/* Color projection pass types. */
+			renderPassTypes.emplace_back(RenderPassType::DirectionalLightPassColorMap);
+			renderPassTypes.emplace_back(RenderPassType::PointLightPassColorMap);
+			renderPassTypes.emplace_back(RenderPassType::SpotLightPassColorMap);
 
 			if ( m_AVConsoleManager.graphicsRenderer().isShadowMapsEnabled() )
 			{
-				renderPassTypes.emplace_back(RenderPassType::DirectionalLightPass);
-				renderPassTypes.emplace_back(RenderPassType::PointLightPass);
-				renderPassTypes.emplace_back(RenderPassType::SpotLightPass);
+				renderPassTypes.emplace_back(RenderPassType::DirectionalLightPassShadowMap);
+				renderPassTypes.emplace_back(RenderPassType::PointLightPassShadowMap);
+				renderPassTypes.emplace_back(RenderPassType::SpotLightPassShadowMap);
+
+				/* Full pass types (shadow + color projection). */
+				renderPassTypes.emplace_back(RenderPassType::DirectionalLightPassFull);
+				renderPassTypes.emplace_back(RenderPassType::PointLightPassFull);
+				renderPassTypes.emplace_back(RenderPassType::SpotLightPassFull);
 			}
 		}
 
@@ -1323,7 +1382,7 @@ namespace EmEn::Scenes
 	Scene::getRenderableInstanceReadyForRendering (const std::shared_ptr< RenderableInstance::Abstract > & renderableInstance, const std::shared_ptr< RenderTarget::Abstract > & renderTarget) noexcept
 	{
 		/* The environment cubemap can now be fetched from the visual component. */
-		if ( m_environmentCubemap != nullptr && renderableInstance == m_sceneVisualComponents[0]->getRenderableInstance() )
+		if ( m_environmentCubemap != nullptr && m_sceneVisualComponents[0] != nullptr && renderableInstance == m_sceneVisualComponents[0]->getRenderableInstance() )
 		{
 			m_environmentCubemap = m_backgroundResource->environmentCubemap();
 

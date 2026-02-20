@@ -257,8 +257,10 @@ namespace EmEn::Overlay
 			 * @param forceInvalidate When true, forces all surfaces to invalidate and recalculate
 			 * their pixel dimensions (used during window resize). When false, only processes
 			 * surfaces that have pending local changes.
+			 * @return bool
 			 */
-			void processSurfaceUpdates (bool forceInvalidate) noexcept;
+			[[nodiscard]]
+			bool processSurfaceUpdates (bool forceInvalidate) noexcept;
 
 			/**
 			 * @brief Render this screen. The manager does tests for visibility.

@@ -498,8 +498,8 @@ namespace EmEn::Graphics::RenderableInstance
 		{
 			const auto * material = m_renderable->material(layerIndex);
 
-			TraceError{TracerTag} <<
-				"There is no suitable render program for the renderable instance !\n"
+			TraceWarning{TracerTag} <<
+				"There is no suitable render program for the renderable instance (Maybe in loading stage)!\n"
 				"  Renderable  : " << m_renderable->name() << "\n"
 				"  Material    : " << (material != nullptr ? material->name() : "null") << "\n"
 				"  RenderTarget: " << to_string(renderTarget->renderType()) << " (" << renderTarget->extent().width << "x" << renderTarget->extent().height << ")\n"
@@ -561,8 +561,8 @@ namespace EmEn::Graphics::RenderableInstance
 		commandBuffer.bind(*material->descriptorSet(), *pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, setOffset++);
 
 		/* Bind bindless textures descriptor set if the material uses automatic reflection
-		 * and the bindless textures manager is available. */
-		if ( bindlessTexturesManager != nullptr && material->useEnvironmentCubemap() && bindlessTexturesManager->descriptorSet() != nullptr )
+		 * or the light uses bindless color projection, and the manager is available. */
+		if ( bindlessTexturesManager != nullptr && bindlessTexturesManager->descriptorSet() != nullptr && (material->useEnvironmentCubemap() || renderPassUsesColorProjection(renderPassType)) )
 		{
 			commandBuffer.bind(*bindlessTexturesManager->descriptorSet(), *pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, setOffset/*++*/);
 		}

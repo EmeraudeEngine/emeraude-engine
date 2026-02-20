@@ -335,118 +335,85 @@ namespace EmEn::Scenes
 	std::shared_ptr< Material::BasicResource >
 	AbstractEntity::getPlainVisualDebugMaterial (Resources::Manager & resources) noexcept
 	{
-		return resources.container< Material::BasicResource >()->getOrCreateResource("+PlainVisualDebug", [] (Material::BasicResource & newMaterial) {
-			newMaterial.enableVertexColor();
+		return resources.container< Material::BasicResource >()
+			->getOrCreateResource("+PlainVisualDebug", [] (auto & materialResource) {
+				materialResource.enableVertexColor();
 
-			return newMaterial.setManualLoadSuccess(true);
-		});
+				return materialResource.setManualLoadSuccess(true);
+			});
 	}
 
 	std::shared_ptr< Material::BasicResource >
 	AbstractEntity::getTranslucentVisualDebugMaterial (Resources::Manager & resources) noexcept
 	{
-		return resources.container< Material::BasicResource >()->getOrCreateResource("+TranslucentVisualDebug", [] (Material::BasicResource & newMaterial) {
-			newMaterial.enableVertexColor();
-			newMaterial.setOpacity(0.333F);
+		return resources.container< Material::BasicResource >()
+			->getOrCreateResource("+TranslucentVisualDebug", [] (auto & materialResource) {
+				materialResource.enableVertexColor();
+				materialResource.setOpacity(0.333F);
 
-			return newMaterial.setManualLoadSuccess(true);
-		});
+				return materialResource.setManualLoadSuccess(true);
+			});
 	}
 
 	std::shared_ptr< Renderable::SimpleMeshResource >
 	AbstractEntity::getAxisVisualDebug (Resources::Manager & resources) noexcept
 	{
-		return resources.container< Renderable::SimpleMeshResource >()->getOrCreateResourceAsync(AxisDebugName, [&resources] (auto & newMesh) {
-			/* NOTE: Get the geometry. */
-			const Geometry::ResourceGenerator generator{resources, Geometry::EnableNormal | Geometry::EnableVertexColor};
-
-			const auto geometryResource = generator.axis(1.0F);
-
-			if ( geometryResource == nullptr )
-			{
-				return false;
-			}
-
-			/* NOTE: Get a plain material. */
-			const auto materialResource = AbstractEntity::getPlainVisualDebugMaterial(resources);
-
-			/* NOTE: Assemble the mesh. */
-			return newMesh.load(geometryResource, materialResource);
-		});
+		return resources.container< Renderable::SimpleMeshResource >()
+			->getOrCreateResource(AxisDebugName, [&resources] (auto & meshResource) {
+				return meshResource.load(
+					Geometry::ResourceGenerator{resources, Geometry::EnableNormal | Geometry::EnableVertexColor}.axis(1.0F),
+					AbstractEntity::getPlainVisualDebugMaterial(resources)
+				);
+			});
 	}
 
 	std::shared_ptr< Renderable::SimpleMeshResource >
 	AbstractEntity::getVelocityVisualDebug (Resources::Manager & resources) noexcept
 	{
-		return resources.container< Renderable::SimpleMeshResource >()->getOrCreateResourceAsync(VelocityDebugName, [&resources] (auto & newMesh) {
-			/* NOTE: Get the geometry. */
-			const Geometry::ResourceGenerator generator{resources, Geometry::EnableNormal | Geometry::EnableVertexColor};
-
-			const auto geometryResource = generator.arrow(1.0F, PointTo::PositiveZ);
-
-			if ( geometryResource == nullptr )
-			{
-				return false;
-			}
-
-			/* NOTE: Get a basic material. */
-			const auto materialResource = AbstractEntity::getPlainVisualDebugMaterial(resources);
-
-			/* NOTE: Assemble the mesh. */
-			return newMesh.load(geometryResource, materialResource);
-		});
+		return resources.container< Renderable::SimpleMeshResource >()
+			->getOrCreateResource(VelocityDebugName, [&resources] (auto & meshResource) {
+				return meshResource.load(
+					Geometry::ResourceGenerator{resources, Geometry::EnableNormal | Geometry::EnableVertexColor}.arrow(1.0F, PointTo::PositiveZ),
+					AbstractEntity::getPlainVisualDebugMaterial(resources)
+				);
+			});
 	}
 
 	std::shared_ptr< Renderable::SimpleMeshResource >
 	AbstractEntity::getBoundingSphereVisualDebug (Resources::Manager & resources) noexcept
 	{
-		return resources.container< Renderable::SimpleMeshResource >()->getOrCreateResourceAsync("+BoundingSphere", [&resources] (auto & newMesh) {
-			const Geometry::ResourceGenerator generator{resources, Geometry::EnableNormal | Geometry::EnableVertexColor};
-
-			const auto geometryResource = generator.geodesicSphere(1.0F);
-
-			if ( geometryResource == nullptr )
-			{
-				return false;
-			}
-
-			const auto materialResource = AbstractEntity::getTranslucentVisualDebugMaterial(resources);
-
-			return newMesh.load(geometryResource, materialResource, {PolygonMode::Line, CullingMode::None});
-		});
+		return resources.container< Renderable::SimpleMeshResource >()
+			->getOrCreateResource("+BoundingSphere", [&resources] (auto & meshResource) {
+				return meshResource.load(
+					Geometry::ResourceGenerator{resources, Geometry::EnableNormal | Geometry::EnableVertexColor}.geodesicSphere(1.0F),
+					AbstractEntity::getTranslucentVisualDebugMaterial(resources),
+					{PolygonMode::Line, CullingMode::None}
+				);
+			});
 	}
 
 	std::shared_ptr< Renderable::SimpleMeshResource >
 	AbstractEntity::getBoundingBoxVisualDebug (Resources::Manager & resources) noexcept
 	{
-		return resources.container< Renderable::SimpleMeshResource >()->getOrCreateResourceAsync("+BoundingBox", [&resources] (auto & newMesh) {
-			const Geometry::ResourceGenerator generator{resources, Geometry::EnableNormal | Geometry::EnableVertexColor};
-
-			const auto geometryResource = generator.cube(1.0F);
-
-			if ( geometryResource == nullptr )
-			{
-				return false;
-			}
-
-			const auto materialResource = AbstractEntity::getTranslucentVisualDebugMaterial(resources);
-
-			return newMesh.load(geometryResource, materialResource, {PolygonMode::Line, CullingMode::None});
-		});
+		return resources.container< Renderable::SimpleMeshResource >()
+			->getOrCreateResource("+BoundingBox", [&resources] (auto & meshResource) {
+				return meshResource.load(
+					Geometry::ResourceGenerator{resources, Geometry::EnableNormal | Geometry::EnableVertexColor}.cube(1.0F),
+					AbstractEntity::getTranslucentVisualDebugMaterial(resources),
+					{PolygonMode::Line, CullingMode::None}
+				);
+			});
 	}
 
 	std::shared_ptr< Renderable::SimpleMeshResource >
 	AbstractEntity::getCameraVisualDebug (Resources::Manager & resources) noexcept
 	{
-		return resources.container< Renderable::SimpleMeshResource >()->getOrCreateResourceAsync(CameraDebugName, [&resources] (auto & newMesh) {
-			/* NOTE: Get the geometry. */
-			const auto geometryResource = resources.container< Geometry::IndexedVertexResource >()->getResource("Items/Camera", false);
-
-			/* NOTE: Get a basic material. */
-			const auto materialResource = resources.container< Material::BasicResource >()->getDefaultResource();
-
-			/* NOTE: Assemble the mesh. */
-			return newMesh.load(geometryResource, materialResource);
-		});
+		return resources.container< Renderable::SimpleMeshResource >()
+			->getOrCreateResource(CameraDebugName, [&resources] (auto & meshResource) {
+				return meshResource.load(
+					resources.container< Geometry::IndexedVertexResource >()->getResource("Items/Camera"),
+					resources.container< Material::BasicResource >()->getDefaultResource()
+				);
+			});
 	}
 }

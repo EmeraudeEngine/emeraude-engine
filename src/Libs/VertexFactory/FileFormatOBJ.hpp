@@ -159,9 +159,38 @@ namespace EmEn::Libs::VertexFactory
 								return false;
 							}
 
-							if ( m_readOptions.requestNormal )
+							if ( m_readOptions.requestTangentSpace )
 							{
-								if ( !geometry.computeTriangleNormal() )
+								/* An odd number of axis reflections reverses the cross product
+								 * direction without changing the triangle winding used by the GPU.
+								 * We must invert the computed normals to make them point outward. */
+								const bool invertNormals = (m_readOptions.flipXAxis ^ m_readOptions.flipYAxis ^ m_readOptions.flipZAxis);
+
+								if ( !geometry.computeTriangleNormal(invertNormals) )
+								{
+									return false;
+								}
+
+								if ( !geometry.computeTriangleTangentFromEdge() )
+								{
+									return false;
+								}
+
+								if ( !geometry.computeVertexNormal() )
+								{
+									return false;
+								}
+
+								if ( !geometry.computeVertexTangent() )
+								{
+									return false;
+								}
+							}
+							else if ( m_readOptions.requestNormal )
+							{
+								const bool invertNormals = (m_readOptions.flipXAxis ^ m_readOptions.flipYAxis ^ m_readOptions.flipZAxis);
+
+								if ( !geometry.computeTriangleNormal(invertNormals) )
 								{
 									return false;
 								}
@@ -177,6 +206,30 @@ namespace EmEn::Libs::VertexFactory
 							if ( !this->parseFaceAssemblyV_VN(file, groups, vertices, triangles) )
 							{
 								return false;
+							}
+
+							if ( m_readOptions.requestTangentSpace )
+							{
+								/* Compute triangle surface normals for tangent derivation.
+								 * The per-vertex normals from the file are already correct,
+								 * but computeTriangleTangentFromEdge() needs per-triangle
+								 * surface normals to project the edge onto the face plane. */
+								const bool invertNormals = (m_readOptions.flipXAxis ^ m_readOptions.flipYAxis ^ m_readOptions.flipZAxis);
+
+								if ( !geometry.computeTriangleNormal(invertNormals) )
+								{
+									return false;
+								}
+
+								if ( !geometry.computeTriangleTangentFromEdge() )
+								{
+									return false;
+								}
+
+								if ( !geometry.computeVertexTangent() )
+								{
+									return false;
+								}
 							}
 							break;
 

@@ -307,7 +307,7 @@ namespace EmEn::Scenes::AVConsole
 			 */
 			virtual
 			void
-			updateVideoDeviceProperties (float /*fovOrNear*/, float /*distanceOrFar*/, bool /*isOrthographicProjection*/) noexcept
+			updateVideoDeviceProperties ([[maybe_unused]] float fovOrNear, [[maybe_unused]] float distanceOrFar, [[maybe_unused]] bool isOrthographicProjection) noexcept
 			{
 				/* NOTE: Only a video device should override this method! */
 				assert(m_type == DeviceType::Audio);
@@ -354,7 +354,7 @@ namespace EmEn::Scenes::AVConsole
 			 */
 			virtual
 			void
-			onInputDeviceConnected (EngineContext & /*engineContext*/, AbstractVirtualDevice & /*inputDevice*/) noexcept
+			onInputDeviceConnected ([[maybe_unused]] EngineContext & engineContext, [[maybe_unused]] AbstractVirtualDevice & inputDevice) noexcept
 			{
 
 			}
@@ -368,7 +368,7 @@ namespace EmEn::Scenes::AVConsole
 			 */
 			virtual
 			void
-			onOutputDeviceConnected (EngineContext & /*engineContext*/, AbstractVirtualDevice & /*outputDevice*/) noexcept
+			onOutputDeviceConnected ([[maybe_unused]] EngineContext & engineContext, [[maybe_unused]] AbstractVirtualDevice & outputDevice) noexcept
 			{
 
 			}
@@ -382,7 +382,7 @@ namespace EmEn::Scenes::AVConsole
 			 */
 			virtual
 			void
-			onInputDeviceDisconnected (EngineContext & /*engineContext*/, AbstractVirtualDevice & /*inputDevice*/) noexcept
+			onInputDeviceDisconnected ([[maybe_unused]] EngineContext & engineContext, [[maybe_unused]] AbstractVirtualDevice & inputDevice) noexcept
 			{
 
 			}
@@ -396,7 +396,7 @@ namespace EmEn::Scenes::AVConsole
 			 */
 			virtual
 			void
-			onOutputDeviceDisconnected (EngineContext & /*engineContext*/, AbstractVirtualDevice & /*outputDevice*/) noexcept
+			onOutputDeviceDisconnected ([[maybe_unused]] EngineContext & engineContext, [[maybe_unused]] AbstractVirtualDevice & outputDevice) noexcept
 			{
 
 			}
