@@ -46,7 +46,9 @@ set(CMAKE_VERBOSE_MAKEFILE On)
 set(CMAKE_EXPORT_COMPILE_COMMANDS On)
 
 # Project build types configuration.
-set(CMAKE_CONFIGURATION_TYPES Debug Release)
+if ( NOT CMAKE_CONFIGURATION_TYPES )
+	set(CMAKE_CONFIGURATION_TYPES Debug Release)
+endif ()
 
 if ( NOT CMAKE_BUILD_TYPE )
 	if ( "${MSVC_BUILD_TYPE}" STREQUAL "Debug" OR "${MSVC_BUILD_TYPE}" STREQUAL "debug" )
