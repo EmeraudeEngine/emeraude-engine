@@ -42,7 +42,6 @@ namespace EmEn::Libs::IO
 	ZipWriter::ZipWriter (std::filesystem::path filepath) noexcept
 		: m_filepath(std::move(filepath))
 	{
-
 	}
 
 	bool
@@ -85,8 +84,6 @@ namespace EmEn::Libs::IO
 			return false;
 		}
 
-		const auto root = IO::toGenericU8String(path);
-
 		for ( const auto & entry : std::filesystem::recursive_directory_iterator(path) )
 		{
 			if ( entry.is_regular_file() )
@@ -100,7 +97,7 @@ namespace EmEn::Libs::IO
 
 				auto filepathString = IO::toGenericU8String(entry.path());
 
-				const auto entryName = filepathString.replace(filepathString.find(root), root.length(), "");
+				const auto entryName = std::filesystem::relative(filepathString, path).generic_string();
 
 				m_sources.emplace_back(entry, entryName);
 			}
@@ -127,12 +124,16 @@ namespace EmEn::Libs::IO
 		}
 
 		bool success = true;
-		std::vector< char > buffer;
+
+		std::vector< std::vector< char > > fileBuffers;
+		fileBuffers.reserve(m_sources.size());
 
 		for ( const auto & [filepath, entryName] : m_sources )
 		{
+			fileBuffers.emplace_back();
+
 			/* Read the file content. */
-			if ( !ZipWriter::readSource(filepath, buffer) )
+			if ( !ZipWriter::readSource(filepath, fileBuffers.back()) )
 			{
 				std::cerr << ClassId << " : Unable to open file " << filepath << " !" "\n";
 
@@ -140,6 +141,8 @@ namespace EmEn::Libs::IO
 
 				break;
 			}
+
+			auto & buffer = fileBuffers.back();
 
 			/* Set source. */
 			zip_source * source = zip_source_buffer(m_zip, buffer.data(), buffer.size(), 0);
@@ -154,9 +157,7 @@ namespace EmEn::Libs::IO
 			}
 
 			/* Add the source to archive. */
-			const auto index = zip_file_add(m_zip, entryName.data(), source, ZIP_FL_OVERWRITE);
-
-			if ( index < 0 )
+			if ( const auto index = zip_file_add(m_zip, entryName.data(), source, ZIP_FL_OVERWRITE); index < 0 )
 			{
 				std::cerr << ClassId << " : Failed to add file to archive ! Error : " << zip_strerror(m_zip) << "\n";
 
