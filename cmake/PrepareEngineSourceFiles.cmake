@@ -327,6 +327,7 @@ else ()
         ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/Desktop/Dialog/Message.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/Desktop/Dialog/OpenFile.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/Desktop/Dialog/SaveFile.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/Desktop/Dialog/TextInput.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/Desktop/Dialog/Types.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/Desktop/Commands.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/Desktop/Notification.hpp
@@ -363,6 +364,7 @@ else ()
             ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/Desktop/Dialog/Message.linux.cpp
             ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/Desktop/Dialog/OpenFile.linux.cpp
             ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/Desktop/Dialog/SaveFile.linux.cpp
+            ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/Desktop/Dialog/TextInput.linux.cpp
             ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/Desktop/Commands.linux.cpp
             ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/Desktop/Notification.linux.cpp
             # ROOT
@@ -379,6 +381,7 @@ else ()
             ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/Desktop/Dialog/Message.mac.mm
             ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/Desktop/Dialog/OpenFile.mac.mm
             ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/Desktop/Dialog/SaveFile.mac.mm
+            ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/Desktop/Dialog/TextInput.mac.mm
             ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/Desktop/Commands.mac.mm
             ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/Desktop/Notification.mac.mm
             ${CMAKE_CURRENT_SOURCE_DIR}/src/Input/Manager.mac.mm
@@ -396,6 +399,7 @@ else ()
             ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/Desktop/Dialog/Message.windows.cpp
             ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/Desktop/Dialog/OpenFile.windows.cpp
             ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/Desktop/Dialog/SaveFile.windows.cpp
+            ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/Desktop/Dialog/TextInput.windows.cpp
             ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/Desktop/Commands.windows.cpp
             ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/Desktop/Notification.windows.cpp
             # ROOT
