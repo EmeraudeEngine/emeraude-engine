@@ -33,7 +33,8 @@
 #include <map>
 #include <vector>
 #include <string>
-#include <any>
+#include <optional>
+#include <variant>
 #include <filesystem>
 #include <shared_mutex>
 
@@ -68,9 +69,30 @@ namespace EmEn
 						  std::is_same_v< variable_t, double > ||
 						  std::is_same_v< variable_t, std::string >;
 
+	/** @brief Type-safe variant holding any setting value. */
+	using SettingValue = std::variant< bool, int32_t, uint32_t, int64_t, uint64_t, float, double, std::string >;
+
 	/**
-	 * @brief The setting store class.
-	 * @note This class is private details of Settings and should never be accessed outside Settings.
+	 * @class SettingStore
+	 * @brief Holds all settings entries for a single named scope (store).
+	 *
+	 * A store represents one hierarchical level of the settings file, identified by a
+	 * slash-delimited path key (e.g. "Graphics/Vulkan"). It maintains two independent
+	 * maps: one for scalar values and one for ordered arrays of values. Both maps use
+	 * heterogeneous lookup (@c std::less<>) so that @c std::string_view keys can be
+	 * searched without constructing a temporary @c std::string.
+	 *
+	 * This class is a private implementation detail of @ref EmEn::Settings and must
+	 * never be instantiated or referenced directly by engine or application code.
+	 * All interaction must go through the @ref EmEn::Settings API, which enforces
+	 * thread-safety via @c std::shared_mutex.
+	 *
+	 * @note Only @ref EmEn::Settings is granted friend access to this class.
+	 * @todo Simplify internal storage by merging @c m_variables and @c m_arrays into a
+	 *       single @c std::map<std::string, SettingValue, std::less<>> and reworking
+	 *       the accessor layer accordingly.
+	 * @see EmEn::Settings
+	 * @version 0.8.61
 	 */
 	class SettingStore final
 	{
@@ -82,60 +104,81 @@ namespace EmEn
 			static constexpr auto ClassId{"SettingStore"};
 
 			/**
-			 * @brief Constructs a default setting store.
+			 * @brief Constructs an empty setting store.
 			 */
 			SettingStore () noexcept = default;
 
 			/**
-			 * @brief Returns variables.
-			 * @return const std::map< std::string, std::any, std::less<> > &
+			 * @brief Returns a read-only reference to the scalar variables map.
+			 *
+			 * The returned map associates variable names to their @ref SettingValue.
+			 * The caller must not hold this reference across a write operation on the
+			 * owning @ref EmEn::Settings instance.
+			 *
+			 * @return A const reference to the internal scalar variables map.
 			 */
 			[[nodiscard]]
-			const std::map< std::string, std::any, std::less<> > &
+			const std::map< std::string, SettingValue, std::less<> > &
 			variables () const noexcept
 			{
 				return m_variables;
 			}
 
 			/**
-			 * @brief Returns arrays variables.
-			 * @return const std::map< std::string, std::vector< std::any >, std::less<> > &
+			 * @brief Returns a read-only reference to the array variables map.
+			 *
+			 * Each entry in the returned map associates a variable name with an ordered
+			 * sequence of @ref SettingValue elements, as read from a JSON array node.
+			 * The caller must not hold this reference across a write operation on the
+			 * owning @ref EmEn::Settings instance.
+			 *
+			 * @return A const reference to the internal array variables map.
 			 */
 			[[nodiscard]]
-			const std::map< std::string, std::vector< std::any >, std::less<> > &
+			const std::map< std::string, std::vector< SettingValue >, std::less<> > &
 			arrays () const noexcept
 			{
 				return m_arrays;
 			}
 
 			/**
-			 * @brief Sets an "any" variable in store.
-			 * @param name A reference to a string for the variable name.
-			 * @param value A reference to a std::any.
-			 * @return void
+			 * @brief Inserts or replaces a scalar variable in this store.
+			 *
+			 * If a variable with the same @p name already exists, its value is
+			 * overwritten. The operation does not affect the array map.
+			 *
+			 * @param name The variable name used as the map key.
+			 * @param value The @ref SettingValue to store.
 			 */
 			void
-			setVariable (const std::string & name, const std::any & value)
+			setVariable (const std::string & name, const SettingValue & value)
 			{
 				m_variables[name] = value;
 			}
 
 			/**
-			 * @brief Sets an "any" variable in an array store.
-			 * @param name A reference to a string for the variable name.
-			 * @param value A reference to a std::any.
-			 * @return void
+			 * @brief Appends a value to the array associated with @p name.
+			 *
+			 * If no array entry for @p name exists it is created implicitly. Values
+			 * are appended in insertion order, preserving the original JSON array
+			 * sequence.
+			 *
+			 * @param name The array variable name used as the map key.
+			 * @param value The @ref SettingValue to append.
 			 */
 			void
-			setVariableInArray (const std::string & name, const std::any & value)
+			setVariableInArray (const std::string & name, const SettingValue & value)
 			{
 				m_arrays[name].emplace_back(value);
 			}
 
 			/**
-			 * @brief Clears an array if the variable is an array.
-			 * @param variableName A reference to a string for the variable name.
-			 * @return void
+			 * @brief Removes all elements from the array identified by @p variableName.
+			 *
+			 * If no array with the given name exists the call is a no-op.
+			 * The array entry itself remains in the map with an empty vector.
+			 *
+			 * @param variableName The name of the array variable to clear.
 			 */
 			void
 			clearArray (std::string_view variableName) noexcept
@@ -147,9 +190,13 @@ namespace EmEn
 			}
 
 			/**
-			 * @brief Removes a variable from store data.
-			 * @param name A reference to a string for the variable name.
-			 * @return void
+			 * @brief Removes a variable from both the scalar and array maps.
+			 *
+			 * If @p name is present in neither map the call is a no-op. This method
+			 * removes from both maps simultaneously so callers need not know which
+			 * storage a key belongs to.
+			 *
+			 * @param name The variable name to erase.
 			 */
 			void
 			removeKey (const std::string & name) noexcept
@@ -159,8 +206,8 @@ namespace EmEn
 			}
 
 			/**
-			 * @brief Returns whether the store is empty.
-			 * @return bool
+			 * @brief Returns @c true when both the scalar and array maps are empty.
+			 * @return @c true if the store contains no variables and no arrays, @c false otherwise.
 			 */
 			[[nodiscard]]
 			bool
@@ -170,9 +217,9 @@ namespace EmEn
 			}
 
 			/**
-			 * @brief Checks whether a variable is present in the store.
-			 * @param variableName A reference to a string for the variable name.
-			 * @return bool
+			 * @brief Returns @c true when a scalar variable with the given name exists.
+			 * @param variableName The variable name to look up.
+			 * @return @c true if the scalar map contains @p variableName, @c false otherwise.
 			 */
 			[[nodiscard]]
 			bool
@@ -182,9 +229,9 @@ namespace EmEn
 			}
 
 			/**
-			 * @brief Checks whether an array is present in the store.
-			 * @param variableName A reference to a string for the array name.
-			 * @return bool
+			 * @brief Returns @c true when an array variable with the given name exists.
+			 * @param variableName The array variable name to look up.
+			 * @return @c true if the array map contains @p variableName, @c false otherwise.
 			 */
 			[[nodiscard]]
 			bool
@@ -194,12 +241,18 @@ namespace EmEn
 			}
 
 			/**
-			 * @brief Gets the value of a variable.
-			 * @param variableName A reference to a string for the variable name.
-			 * @return const std::any *
+			 * @brief Returns a pointer to the scalar value stored under @p variableName.
+			 *
+			 * Returns a raw pointer into the internal map so that the caller can
+			 * inspect the active type via @c std::get_if without copying the variant.
+			 * The pointer is invalidated by any subsequent write to this store.
+			 *
+			 * @param variableName The variable name to look up.
+			 * @return A non-owning pointer to the matching @ref SettingValue, or
+			 *         @c nullptr if no such variable exists.
 			 */
 			[[nodiscard]]
-			const std::any *
+			const SettingValue *
 			getValuePointer (std::string_view variableName) const noexcept
 			{
 				const auto variableIt = m_variables.find(variableName);
@@ -213,12 +266,18 @@ namespace EmEn
 			}
 
 			/**
-			 * @brief Returns const access to an array of variable.
-			 * @param variableName A reference to a string for the array name.
-			 * @return const std::vector< std::any > *
+			 * @brief Returns a pointer to the value vector stored under @p variableName.
+			 *
+			 * Returns a raw pointer into the internal map so that the caller can
+			 * iterate the array without copying. The pointer is invalidated by any
+			 * subsequent write to this store.
+			 *
+			 * @param variableName The array variable name to look up.
+			 * @return A non-owning pointer to the matching value vector, or @c nullptr
+			 *         if no such array variable exists.
 			 */
 			[[nodiscard]]
-			const std::vector< std::any > *
+			const std::vector< SettingValue > *
 			getArrayPointer (std::string_view variableName) const noexcept
 			{
 				const auto arrayIt = m_arrays.find(variableName);
@@ -232,8 +291,7 @@ namespace EmEn
 			}
 
 			/**
-			 * @brief Clears store data.
-			 * @return void
+			 * @brief Removes all scalar variables and all array variables from this store.
 			 */
 			void
 			clear () noexcept
@@ -244,14 +302,49 @@ namespace EmEn
 
 		private:
 
-			/* TODO: Simplify by using only "std::map< std::string, std::any, std::less<> > m_data;" and rework accessors. */
-			std::map< std::string, std::any, std::less<> > m_variables;
-			std::map< std::string, std::vector< std::any >, std::less<> > m_arrays;
+			/* TODO: Simplify by using only "std::map< std::string, SettingValue, std::less<> > m_data;" and rework accessors. */
+			std::map< std::string, SettingValue, std::less<> > m_variables;
+			std::map< std::string, std::vector< SettingValue >, std::less<> > m_arrays;
 	};
 
 	/**
-	 * @brief The settings service class.
-	 * @extends EmEn::ServiceInterface This is a service.
+	 * @class Settings
+	 * @brief Engine-wide persistent settings service backed by a JSON file.
+	 *
+	 * Settings organizes all configuration values in a two-level namespace:
+	 * a *store key* (the slash-delimited path prefix, e.g. @c "Graphics/Vulkan")
+	 * and a *variable name* (the last path component after the final @c '/').
+	 * Each store key maps to a @ref SettingStore that holds scalar and array
+	 * values as @ref SettingValue variants.
+	 *
+	 * The service is initialized by @ref ServiceInterface::initialize(). During
+	 * initialization the JSON file is located (using command-line overrides
+	 * @c --settings-filepath or @c --settings-filename, or the default
+	 * @ref Filename in the application config directory) and parsed into memory.
+	 * On successful termination the in-memory state is written back to disk
+	 * unless @c --disable-settings-autosave or @c --reset-settings are present
+	 * on the command line, or the instance was constructed as a child process.
+	 *
+	 * **Thread safety:** All public read operations acquire a shared lock on
+	 * @c m_storeAccess. All write operations acquire a unique (exclusive) lock.
+	 * It is safe to call @ref get() from multiple threads concurrently.
+	 *
+	 * **Type coercion:** @ref get() and @ref getOrSetDefault() delegate to the
+	 * internal @ref convertValueTo() helper, which uses @c std::get_if (never
+	 * @c std::get) for cross-type conversion. No C++ exceptions are thrown even
+	 * when the stored type differs from the requested one; the @p defaultValue is
+	 * returned instead. Numeric narrowing (e.g. @c uint64_t to @c int32_t on
+	 * large values) is documented per-overload.
+	 *
+	 * **Setting paths:** Use forward-slash-separated strings such as
+	 * @c "Audio/OpenAL/bufferSize". A path with no @c '/' resolves to the root
+	 * store with an empty key.
+	 *
+	 * @note Child-process instances (constructed with @p childProcess @c = @c true)
+	 *       are read-only proxies. They do not enable auto-save and do not write
+	 *       the file on termination.
+	 * @see EmEn::SettingStore, EmEn::SettingValue, EmEn::SettingType
+	 * @version 0.8.61
 	 */
 	class Settings final : public ServiceInterface
 	{
@@ -260,15 +353,30 @@ namespace EmEn
 			/** @brief Class identifier. */
 			static constexpr auto ClassId{"SettingsService"};
 
+			/** @brief Default filename for the settings JSON file on disk. */
 			static constexpr auto Filename{"settings.json"};
+
+			/** @brief JSON key that records the engine version that wrote the file. */
 			static constexpr auto VersionKey{"WrittenByAppVersion"};
+
+			/** @brief JSON key that records the calendar date the file was written. */
 			static constexpr auto DateKey{"WrittenAtDate"};
 
 			/**
-			 * @brief Constructs a settings manager.
-			 * @param arguments A reference to application arguments.
-			 * @param fileSystem A reference to the file system.
-			 * @param childProcess Declares a child process.
+			 * @brief Constructs the settings service and binds it to the application services.
+			 *
+			 * The constructor only stores references and sets the @p childProcess flag;
+			 * no file I/O is performed here. Call @ref ServiceInterface::initialize() to
+			 * load the settings file. When @p childProcess is @c false the auto-save flag
+			 * is enabled immediately so that settings are persisted on normal exit.
+			 *
+			 * @param arguments A reference to the parsed command-line arguments, used to
+			 *        resolve the settings file path and control verbosity / autosave.
+			 * @param fileSystem A reference to the engine file-system service, used to
+			 *        resolve the default settings file path inside the config directory.
+			 * @param childProcess Pass @c true when this instance is a read-only proxy
+			 *        running inside a child process (e.g. the CEF browser process). Child
+			 *        instances never write the file on termination.
 			 */
 			Settings (const Arguments & arguments, const FileSystem & fileSystem, bool childProcess) noexcept
 				: ServiceInterface{ClassId},
@@ -284,13 +392,22 @@ namespace EmEn
 			}
 
 			/**
-			 * @brief Destructs the settings manager.
+			 * @brief Destroys the settings service.
+			 *
+			 * File persistence is handled inside @ref ServiceInterface::terminate(), not
+			 * in the destructor. Ensure @ref ServiceInterface::terminate() is called before
+			 * the object is destroyed to guarantee the settings file is written.
 			 */
 			~Settings () override = default;
 
 			/**
-			 * @brief Returns the file path for these settings.
-			 * @return const std::filesystem::path &
+			 * @brief Returns the resolved path of the settings JSON file.
+			 *
+			 * The path is populated during @ref ServiceInterface::initialize().
+			 * Before initialization or when no valid path could be resolved the
+			 * returned path is empty.
+			 *
+			 * @return A const reference to the settings file path.
 			 */
 			[[nodiscard]]
 			const std::filesystem::path &
@@ -300,9 +417,13 @@ namespace EmEn
 			}
 
 			/**
-			 * @brief Sets if the settings must be written in file at the end of the application.
-			 * @param state The state.
-			 * @return void
+			 * @brief Enables or disables automatic file persistence at application shutdown.
+			 *
+			 * When @p state is @c true the file will be written during
+			 * @ref ServiceInterface::terminate() unless the @c --reset-settings flag is
+			 * present on the command line. Child-process instances ignore this flag.
+			 *
+			 * @param state @c true to enable auto-save, @c false to disable it.
 			 */
 			void
 			saveAtExit (bool state) noexcept
@@ -311,8 +432,8 @@ namespace EmEn
 			}
 
 			/**
-			 * @brief Returns whether the settings will be saved at application shutdown.
-			 * @return bool
+			 * @brief Returns @c true when the settings file will be saved on application shutdown.
+			 * @return @c true if auto-save is enabled, @c false otherwise.
 			 */
 			[[nodiscard]]
 			bool
@@ -322,8 +443,12 @@ namespace EmEn
 			}
 
 			/**
-			 * @brief Returns whether the service is from a child process.
-			 * @return bool
+			 * @brief Returns @c true when this instance was constructed as a child-process proxy.
+			 *
+			 * Child-process instances never write the settings file on termination and
+			 * do not process verbose or autosave command-line flags.
+			 *
+			 * @return @c true if this is a child-process settings instance, @c false otherwise.
 			 */
 			[[nodiscard]]
 			bool
@@ -333,11 +458,18 @@ namespace EmEn
 			}
 
 			/**
-			 * @brief Sets a value in the store.
-			 * @tparam variable_t The type of the value.
-			 * @param settingPath A string view.
-			 * @param value A reference to a value to save.
-			 * @return void
+			 * @brief Stores a typed scalar value at the given settings path.
+			 *
+			 * The path is split on the last @c '/' to derive the store key and the
+			 * variable name. The store is created implicitly if it does not yet exist.
+			 * An existing entry with the same path is silently overwritten.
+			 *
+			 * This method acquires an exclusive lock on the internal mutex and is
+			 * therefore safe to call from any thread.
+			 *
+			 * @tparam variable_t Any type satisfying the @ref SettingType concept.
+			 * @param settingPath Slash-delimited path, e.g. @c "Graphics/Vulkan/msaa".
+			 * @param value The value to store.
 			 */
 			template< SettingType variable_t >
 			void
@@ -350,7 +482,15 @@ namespace EmEn
 				m_stores[std::string{key}].setVariable(std::string{variableName}, value);
 			}
 
-			/** @copydoc EmEn::Settings::set(const std::string & key, const variable_t & value) */
+			/**
+			 * @brief Stores a C-string value at the given settings path.
+			 *
+			 * Convenience overload that converts @p value to @c std::string and
+			 * delegates to the templated @ref set() overload.
+			 *
+			 * @param settingPath Slash-delimited path, e.g. @c "App/locale".
+			 * @param value Null-terminated C-string to store.
+			 */
 			void
 			set (std::string_view settingPath, const char * value)
 			{
@@ -358,11 +498,18 @@ namespace EmEn
 			}
 
 			/**
-			 * @brief Sets a value in an array of the store.
-			 * @tparam variable_t The type of the value.
-			 * @param settingPath A string view.
-			 * @param value A reference to a value to save.
-			 * @return void
+			 * @brief Appends a typed value to the array at the given settings path.
+			 *
+			 * The path is split on the last @c '/' to derive the store key and the
+			 * array variable name. The store and the array are created implicitly if
+			 * they do not yet exist. Values are appended in call order.
+			 *
+			 * This method acquires an exclusive lock on the internal mutex and is
+			 * therefore safe to call from any thread.
+			 *
+			 * @tparam variable_t Any type satisfying the @ref SettingType concept.
+			 * @param settingPath Slash-delimited path, e.g. @c "Audio/OpenAL/extensions".
+			 * @param value The value to append to the array.
 			 */
 			template< SettingType variable_t >
 			void
@@ -375,7 +522,15 @@ namespace EmEn
 				m_stores[std::string{key}].setVariableInArray(std::string{variableName}, value);
 			}
 
-			/** @copydoc EmEn::Settings::setInArray(const std::string & key, const variable_t & value) */
+			/**
+			 * @brief Appends a C-string value to the array at the given settings path.
+			 *
+			 * Convenience overload that converts @p value to @c std::string and
+			 * delegates to the templated @ref setInArray() overload.
+			 *
+			 * @param settingPath Slash-delimited path, e.g. @c "Audio/OpenAL/extensions".
+			 * @param value Null-terminated C-string to append.
+			 */
 			void
 			setInArray (std::string_view settingPath, const char * value)
 			{
@@ -383,35 +538,61 @@ namespace EmEn
 			}
 
 			/**
-			 * @brief Checks the present of a variable in the settings.
-			 * @param settingPath A string view.
-			 * @return bool
+			 * @brief Returns @c true when a scalar variable exists at the given path.
+			 *
+			 * Acquires a shared lock; safe to call concurrently with other read operations.
+			 *
+			 * @param settingPath Slash-delimited path to the variable.
+			 * @return @c true if a scalar entry exists at @p settingPath, @c false otherwise.
 			 */
 			[[nodiscard]]
 			bool variableExists (std::string_view settingPath) const noexcept;
 
 			/**
-			 * @brief Checks the present of an array in the settings.
-			 * @param settingPath A string view.
-			 * @return bool
+			 * @brief Returns @c true when an array variable exists at the given path.
+			 *
+			 * An array is considered to exist even if it is empty (i.e. it was registered
+			 * but never populated, or was cleared via @ref clearArray()).
+			 * Acquires a shared lock; safe to call concurrently with other read operations.
+			 *
+			 * @param settingPath Slash-delimited path to the array variable.
+			 * @return @c true if an array entry exists at @p settingPath, @c false otherwise.
 			 */
 			[[nodiscard]]
 			bool arrayExists (std::string_view settingPath) const noexcept;
 
 			/**
-			 * @brief Returns whether a variable as an array is empty.
-			 * @param settingPath A string view.
-			 * @return bool
+			 * @brief Returns @c true when an array variable is absent or contains no elements.
+			 *
+			 * Returns @c true both when the store does not exist and when the array entry
+			 * exists but has been cleared. Acquires a shared lock; safe to call concurrently
+			 * with other read operations.
+			 *
+			 * @param settingPath Slash-delimited path to the array variable.
+			 * @return @c true if the array is absent or empty, @c false if it has at least one element.
 			 */
 			[[nodiscard]]
 			bool isArrayEmpty (std::string_view settingPath) const noexcept;
 
 			/**
-			 * @brief Returns a variable from settings with a key.
-			 * @tparam variable_t The variable type.
-			 * @param key A reference to a string for the variable name.
-			 * @param defaultValue The default value. Default none.
-			 * @return variable_t
+			 * @brief Returns the value stored at @p key, coerced to @p variable_t.
+			 *
+			 * If no value is found at @p key, or if the stored type cannot be coerced
+			 * to @p variable_t (see @ref convertValueTo()), @p defaultValue is returned.
+			 * The call never writes to the store and never throws. Acquires a shared lock.
+			 *
+			 * Cross-type coercion rules (applied by @ref convertValueTo()):
+			 * - Integer types are mutually convertible; signed-to-unsigned conversion
+			 *   returns @p defaultValue when the stored value is negative.
+			 * - @c float and @c double are mutually convertible; narrowing precision loss
+			 *   is silent.
+			 * - Boolean values coerce to numeric @c 1 / @c 0.
+			 * - @c std::string is returned only when the stored type is exactly @c std::string.
+			 *
+			 * @tparam variable_t Any type satisfying the @ref SettingType concept.
+			 * @param key Slash-delimited path, e.g. @c "Graphics/Vulkan/msaa".
+			 * @param defaultValue Value returned when the setting is absent or incompatible.
+			 * @return The stored value coerced to @p variable_t, or @p defaultValue.
 			 */
 			template< SettingType variable_t >
 			[[nodiscard]]
@@ -420,20 +601,27 @@ namespace EmEn
 			{
 				const std::shared_lock< std::shared_mutex > lock{m_storeAccess};
 
-				if ( const auto value = this->getVariable(key); value.has_value() )
+				if ( const auto value = this->getVariable(key) )
 				{
-					return Settings::convertAnyTo< variable_t >(value, defaultValue);
+					return Settings::convertValueTo< variable_t >(*value, defaultValue);
 				}
 
 				return defaultValue;
 			}
 
 			/**
-			 * @brief Returns a single variable from settings.
-			 * @tparam variable_t The variable type.
-			 * @param key A reference to a string for the variable name.
-			 * @param defaultValue The default value. Default none.
-			 * @return variable_t
+			 * @brief Returns the stored value at @p key, registering @p defaultValue if absent.
+			 *
+			 * Unlike @ref get(), this method writes @p defaultValue into the store when
+			 * the key does not exist, ensuring that subsequent calls to @ref get() (or
+			 * file serialization) include the key. The store is created implicitly if
+			 * needed. An exclusive lock is held for the entire read-or-write operation.
+			 *
+			 * @tparam variable_t Any type satisfying the @ref SettingType concept.
+			 * @param key Slash-delimited path, e.g. @c "Audio/OpenAL/bufferSize".
+			 * @param defaultValue Value to store and return when the key is absent.
+			 * @return The stored value coerced to @p variable_t, or @p defaultValue if
+			 *         the key was absent (in which case @p defaultValue is now stored).
 			 */
 			template< SettingType variable_t >
 			[[nodiscard]]
@@ -448,7 +636,7 @@ namespace EmEn
 
 				if ( const auto * valuePtr = store.getValuePointer(variableName) )
 				{
-					return Settings::convertAnyTo< variable_t >(*valuePtr, defaultValue);
+					return Settings::convertValueTo< variable_t >(*valuePtr, defaultValue);
 				}
 
 				store.setVariable(std::string{variableName}, defaultValue);
@@ -457,11 +645,20 @@ namespace EmEn
 			}
 
 			/**
-			 * @brief Returns a vector of typed data.
-			 * @note If one or more item of the array do not fit the desired type, it will be ignored.
-			 * @tparam variable_t The type of the value.
-			 * @param settingPath A string view.
-			 * @return std::vector< std::string >
+			 * @brief Returns all elements of a settings array coerced to @p variable_t.
+			 *
+			 * Iterates over every @ref SettingValue in the stored array and attempts to
+			 * extract a value of type @p variable_t using @c std::get_if. Elements whose
+			 * active type does not match @p variable_t are silently skipped, except for
+			 * one special case: when @p variable_t is @c float, elements stored as
+			 * @c double are narrowed and included.
+			 *
+			 * Returns an empty vector when the store or the array does not exist.
+			 * Acquires a shared lock; safe to call concurrently with other reads.
+			 *
+			 * @tparam variable_t Any type satisfying the @ref SettingType concept.
+			 * @param settingPath Slash-delimited path to the array variable.
+			 * @return A vector of @p variable_t values; incompatible elements are omitted.
 			 */
 			template< SettingType variable_t >
 			[[nodiscard]]
@@ -491,18 +688,15 @@ namespace EmEn
 
 				for ( const auto & item : *array )
 				{
-					if constexpr ( std::is_same_v< variable_t, float > )
+					if ( const auto * p = std::get_if< variable_t >(&item) )
 					{
-						if ( item.type() == typeid(double) )
-						{
-							list.push_back(static_cast< float >(std::any_cast< double >(item)));
-						}
+						list.push_back(*p);
 					}
-					else
+					else if constexpr ( std::is_same_v< variable_t, float > )
 					{
-						if ( item.type() == typeid(variable_t) )
+						if ( const auto * d = std::get_if< double >(&item) )
 						{
-							list.push_back(std::any_cast< variable_t >(item));
+							list.push_back(static_cast< float >(*d));
 						}
 					}
 				}
@@ -511,9 +705,13 @@ namespace EmEn
 			}
 
 			/**
-			 * @brief Empties an existing array.
-			 * @param settingPath A string view.
-			 * @return void
+			 * @brief Removes all elements from the array at the given settings path.
+			 *
+			 * The array entry is preserved in the store (it will still be serialized as
+			 * an empty JSON array). If the store or the array does not exist the call is
+			 * a no-op. Acquires an exclusive lock.
+			 *
+			 * @param settingPath Slash-delimited path to the array variable to clear.
 			 */
 			void
 			clearArray (std::string_view settingPath)
@@ -533,9 +731,13 @@ namespace EmEn
 			}
 
 			/**
-			 * @brief Removes a key from settings.
-			 * @param settingPath A string view.
-			 * @return void
+			 * @brief Removes a setting entry (scalar or array) at the given path.
+			 *
+			 * Erases the variable name from both the scalar and array maps of the
+			 * resolved store. If the store or the variable does not exist the call is
+			 * a no-op. Acquires an exclusive lock.
+			 *
+			 * @param settingPath Slash-delimited path to the variable to remove.
 			 */
 			void
 			removeKey (std::string_view settingPath)
@@ -555,8 +757,12 @@ namespace EmEn
 			}
 
 			/**
-			 * @brief Clears the settings.
-			 * @return void
+			 * @brief Removes all stores and all their contents from memory.
+			 *
+			 * After this call @ref variableExists() and @ref arrayExists() return
+			 * @c false for every path. The on-disk file is not affected until the next
+			 * call to @ref save() or the normal auto-save on shutdown.
+			 * Acquires an exclusive lock.
 			 */
 			void
 			clear ()
@@ -567,15 +773,28 @@ namespace EmEn
 			}
 
 			/**
-			 * @brief Saves the settings in the file.
-			 * @return bool
+			 * @brief Writes the current in-memory settings to the file immediately.
+			 *
+			 * This is a manual save; it bypasses the @ref isSaveAtExitEnabled() flag.
+			 * The output file path is the one resolved during @ref ServiceInterface::initialize().
+			 * Acquires a shared lock (read-only pass over the stores).
+			 *
+			 * @return @c true on success, @c false when no file path is set or if the
+			 *         write operation fails.
 			 */
 			[[nodiscard]]
 			bool save () const noexcept;
 
 			/**
-			 * @brief Returns all settings as a JSON string.
-			 * @return std::string
+			 * @brief Serializes the current in-memory settings to a compact JSON string.
+			 *
+			 * Produces the same logical content as @ref Settings::save() but writes to a
+			 * @c std::string rather than a file. The JSON is formatted without
+			 * pretty-printing (no indentation) for transport or logging purposes.
+			 * Acquires a shared lock.
+			 *
+			 * @return A JSON string representing all stores and their variables,
+			 *         or an empty string if the JsonCpp writer fails.
 			 */
 			[[nodiscard]]
 			std::string toJsonString () const noexcept;
@@ -589,272 +808,313 @@ namespace EmEn
 			bool onTerminate () noexcept override;
 
 			/**
-			 * @brief Parses a raw key to get the store name and the variable.
-			 * @param settingPath A string view.
-			 * @return std::pair< std::string_view, std::string_view >
+			 * @brief Splits a slash-delimited settings path into a store key and a variable name.
+			 *
+			 * Splits at the last @c '/' in @p settingPath. Everything before the final
+			 * slash becomes the store key (possibly itself slash-delimited for deeply
+			 * nested paths); everything after it becomes the variable name. When no
+			 * @c '/' is present the store key is an empty view and the full input is
+			 * treated as the variable name (root store).
+			 *
+			 * @param settingPath The raw path to parse, e.g. @c "Graphics/Vulkan/msaa".
+			 * @return A pair of @c std::string_view where @c first is the store key and
+			 *         @c second is the variable name. Both views reference the storage of
+			 *         @p settingPath and must not outlive it.
 			 */
 			[[nodiscard]]
 			static std::pair< std::string_view, std::string_view > parseAccessKey (std::string_view settingPath) noexcept;
 
 			/**
-			 * @brief Returns a variable from settings.
-			 * @param settingPath A string view.
-			 * @return std::string
+			 * @brief Looks up a scalar variable across the store map.
+			 *
+			 * Splits @p settingPath via @ref parseAccessKey(), locates the store, and
+			 * returns a copy of the @ref SettingValue if found. Returns @c std::nullopt
+			 * when either the store or the variable does not exist.
+			 *
+			 * @note This method does not acquire any lock; callers must hold an
+			 *       appropriate lock on @c m_storeAccess before calling.
+			 *
+			 * @param settingPath Slash-delimited path to the variable.
+			 * @return The stored value wrapped in @c std::optional, or @c std::nullopt.
 			 */
 			[[nodiscard]]
-			std::any getVariable (std::string_view settingPath) const noexcept;
+			std::optional< SettingValue > getVariable (std::string_view settingPath) const noexcept;
 
 			/**
-			 * @brief Converts std::any to the desired type for Settings::get() and Settings::getOrSetDefault().
-			 * @tparam variable_t The type of the variable.
-			 * @param value A reference to as std::any.
-			 * @param defaultValue A reference to a default value.
-			 * @return variable_t
+			 * @brief Converts a @ref SettingValue variant to a @c Json::Value for serialization.
+			 *
+			 * Uses @c std::visit to dispatch on the active type of @p value. Each
+			 * alternative is mapped to its natural JsonCpp representation. 64-bit integer
+			 * types are cast to @c Json::Int64 / @c Json::UInt64 explicitly to avoid
+			 * ambiguity in the JsonCpp API.
+			 *
+			 * This static helper consolidates the two formerly duplicated serialization
+			 * lambdas that existed in @ref writeFile() and @ref toJsonString().
+			 *
+			 * @param value The @ref SettingValue to convert.
+			 * @return A @c Json::Value holding the same data in a form suitable for writing.
+			 */
+			[[nodiscard]]
+			static Json::Value settingValueToJson (const SettingValue & value) noexcept;
+
+			/**
+			 * @brief Extracts and coerces a @ref SettingValue to the requested type.
+			 *
+			 * Uses @c std::get_if exclusively (never @c std::get) to stay compatible
+			 * with the @c -fno-exceptions build flag. Each target type @p variable_t
+			 * tries an exact-type match first, then applies widening or narrowing rules:
+			 *
+			 * - **bool**: Accepts any integer type; @c true when the value is @c > 0.
+			 * - **int32_t / int64_t**: Accept bool, and wider or co-signed integers with
+			 *   possible silent truncation on large values.
+			 * - **uint32_t / uint64_t**: Accept bool and positive signed integers;
+			 *   negative signed values return @p defaultValue.
+			 * - **float**: Accepts @c double with narrowing; accepts integer types.
+			 * - **double**: Accepts @c float (widening); accepts integer types.
+			 * - **std::string**: No coercion — only matched when the active type is
+			 *   exactly @c std::string.
+			 *
+			 * @tparam variable_t Any type satisfying the @ref SettingType concept.
+			 * @param value The @ref SettingValue variant to extract from.
+			 * @param defaultValue Returned when no coercion rule produces a valid result.
+			 * @return The coerced value, or @p defaultValue if no rule applies.
 			 */
 			template< SettingType variable_t >
 			[[nodiscard]]
 			static
 			variable_t
-			convertAnyTo (const std::any & value, const variable_t & defaultValue)
+			convertValueTo (const SettingValue & value, const variable_t & defaultValue)
 			{
 				if constexpr ( std::is_same_v< variable_t, bool > )
 				{
-					if ( value.type() == typeid(variable_t) )
+					if ( const auto * p = std::get_if< bool >(&value) )
 					{
-						return std::any_cast< variable_t >(value);
+						return *p;
 					}
 
-					if ( value.type() == typeid(int32_t) )
+					if ( const auto * p = std::get_if< int32_t >(&value) )
 					{
-						return std::any_cast< int32_t >(value) > 0;
+						return *p > 0;
 					}
 
-					if ( value.type() == typeid(uint32_t) )
+					if ( const auto * p = std::get_if< uint32_t >(&value) )
 					{
-						return std::any_cast< uint32_t >(value) > 0;
+						return *p > 0;
 					}
 
-					if ( value.type() == typeid(int64_t) )
+					if ( const auto * p = std::get_if< int64_t >(&value) )
 					{
-						return std::any_cast< int64_t >(value) > 0;
+						return *p > 0;
 					}
 
-					if ( value.type() == typeid(uint64_t) )
+					if ( const auto * p = std::get_if< uint64_t >(&value) )
 					{
-						return std::any_cast< uint64_t >(value) > 0;
+						return *p > 0;
 					}
 				}
 
 				if constexpr ( std::is_same_v< variable_t, int32_t > )
 				{
-					if ( value.type() == typeid(variable_t) )
+					if ( const auto * p = std::get_if< int32_t >(&value) )
 					{
-						return std::any_cast< variable_t >(value);
+						return *p;
 					}
 
-					if ( value.type() == typeid(bool) )
+					if ( const auto * p = std::get_if< bool >(&value) )
 					{
-						return std::any_cast< bool >(value) ? static_cast< variable_t >(1) : static_cast< variable_t >(0);
+						return *p ? static_cast< variable_t >(1) : static_cast< variable_t >(0);
 					}
 
-					if ( value.type() == typeid(uint32_t) )
+					if ( const auto * p = std::get_if< uint32_t >(&value) )
 					{
 						/* NOTE: Possible loss of precision on high number. */
-						return static_cast< variable_t >(std::any_cast< uint32_t >(value));
+						return static_cast< variable_t >(*p);
 					}
 
-					if ( value.type() == typeid(int64_t) )
+					if ( const auto * p = std::get_if< int64_t >(&value) )
 					{
 						/* NOTE: Possible loss of precision on high number. */
-						return static_cast< variable_t >(std::any_cast< int64_t >(value));
+						return static_cast< variable_t >(*p);
 					}
 
-					if ( value.type() == typeid(uint64_t) )
+					if ( const auto * p = std::get_if< uint64_t >(&value) )
 					{
 						/* NOTE: Possible loss of precision on high number. */
-						return static_cast< variable_t >(std::any_cast< uint64_t >(value));
+						return static_cast< variable_t >(*p);
 					}
 				}
 
 				if constexpr ( std::is_same_v< variable_t, uint32_t > )
 				{
-					if ( value.type() == typeid(variable_t) )
+					if ( const auto * p = std::get_if< uint32_t >(&value) )
 					{
-						return std::any_cast< variable_t >(value);
+						return *p;
 					}
 
-					if ( value.type() == typeid(bool) )
+					if ( const auto * p = std::get_if< bool >(&value) )
 					{
-						return std::any_cast< bool >(value) ? static_cast< variable_t >(1) : static_cast< variable_t >(0);
+						return *p ? static_cast< variable_t >(1) : static_cast< variable_t >(0);
 					}
 
-					if ( value.type() == typeid(int32_t) )
+					if ( const auto * p = std::get_if< int32_t >(&value) )
 					{
-						const auto signedValue = std::any_cast< int32_t >(value);
-
-						return signedValue >= 0 ? static_cast< variable_t >(signedValue) : defaultValue;
+						return *p >= 0 ? static_cast< variable_t >(*p) : defaultValue;
 					}
 
-					if ( value.type() == typeid(int64_t) )
-					{
-						const auto signedValue = std::any_cast< int64_t >(value);
-
-						/* NOTE: Possible loss of precision on high number. */
-						return signedValue >= 0 ? static_cast< variable_t >(signedValue) : defaultValue;
-					}
-
-					if ( value.type() == typeid(uint64_t) )
+					if ( const auto * p = std::get_if< int64_t >(&value) )
 					{
 						/* NOTE: Possible loss of precision on high number. */
-						return static_cast< variable_t >(std::any_cast< uint64_t >(value));
+						return *p >= 0 ? static_cast< variable_t >(*p) : defaultValue;
+					}
+
+					if ( const auto * p = std::get_if< uint64_t >(&value) )
+					{
+						/* NOTE: Possible loss of precision on high number. */
+						return static_cast< variable_t >(*p);
 					}
 				}
 
 				if constexpr ( std::is_same_v< variable_t, int64_t > )
 				{
-					if ( value.type() == typeid(variable_t) )
+					if ( const auto * p = std::get_if< int64_t >(&value) )
 					{
-						return std::any_cast< variable_t >(value);
+						return *p;
 					}
 
-					if ( value.type() == typeid(bool) )
+					if ( const auto * p = std::get_if< bool >(&value) )
 					{
-						return std::any_cast< bool >(value) ? static_cast< variable_t >(1) : static_cast< variable_t >(0);
+						return *p ? static_cast< variable_t >(1) : static_cast< variable_t >(0);
 					}
 
-					if ( value.type() == typeid(int32_t) )
+					if ( const auto * p = std::get_if< int32_t >(&value) )
 					{
-						return static_cast< variable_t >(std::any_cast< int32_t >(value));
+						return static_cast< variable_t >(*p);
 					}
 
-					if ( value.type() == typeid(uint32_t) )
+					if ( const auto * p = std::get_if< uint32_t >(&value) )
 					{
-						return static_cast< variable_t >(std::any_cast< uint32_t >(value));
+						return static_cast< variable_t >(*p);
 					}
 
-					if ( value.type() == typeid(uint64_t) )
+					if ( const auto * p = std::get_if< uint64_t >(&value) )
 					{
 						/* NOTE: Possible loss of precision on high number. */
-						return static_cast< variable_t >(std::any_cast< uint64_t >(value));
+						return static_cast< variable_t >(*p);
 					}
 				}
 
 				if constexpr ( std::is_same_v< variable_t, uint64_t > )
 				{
-					if ( value.type() == typeid(variable_t) )
+					if ( const auto * p = std::get_if< uint64_t >(&value) )
 					{
-						return std::any_cast< variable_t >(value);
+						return *p;
 					}
 
-					if ( value.type() == typeid(bool) )
+					if ( const auto * p = std::get_if< bool >(&value) )
 					{
-						return std::any_cast< bool >(value) ? static_cast< variable_t >(1) : static_cast< variable_t >(0);
+						return *p ? static_cast< variable_t >(1) : static_cast< variable_t >(0);
 					}
 
-					if ( value.type() == typeid(int32_t) )
+					if ( const auto * p = std::get_if< int32_t >(&value) )
 					{
-						const auto signedValue = std::any_cast< int32_t >(value);
-
-						return signedValue >= 0 ? static_cast< variable_t >(signedValue) : defaultValue;
+						return *p >= 0 ? static_cast< variable_t >(*p) : defaultValue;
 					}
 
-					if ( value.type() == typeid(uint32_t) )
+					if ( const auto * p = std::get_if< uint32_t >(&value) )
 					{
-						return static_cast< variable_t >(std::any_cast< uint32_t >(value));
+						return static_cast< variable_t >(*p);
 					}
 
-					if ( value.type() == typeid(int64_t) )
+					if ( const auto * p = std::get_if< int64_t >(&value) )
 					{
-						const auto signedValue = std::any_cast< int64_t >(value);
-
-						return signedValue >= 0 ? static_cast< variable_t >(signedValue) : defaultValue;
+						return *p >= 0 ? static_cast< variable_t >(*p) : defaultValue;
 					}
 				}
 
 				if constexpr ( std::is_same_v< variable_t, float > )
 				{
-					if ( value.type() == typeid(variable_t) )
+					if ( const auto * p = std::get_if< float >(&value) )
 					{
-						return std::any_cast< variable_t >(value);
+						return *p;
 					}
 
-					if ( value.type() == typeid(double) )
+					if ( const auto * p = std::get_if< double >(&value) )
 					{
 						/* NOTE: Possible loss of precision on high number. */
-						return static_cast< variable_t >(std::any_cast< double >(value));
+						return static_cast< variable_t >(*p);
 					}
 
-					if ( value.type() == typeid(bool) )
+					if ( const auto * p = std::get_if< bool >(&value) )
 					{
-						return std::any_cast< bool >(value) ? static_cast< variable_t >(1) : static_cast< variable_t >(0);
+						return *p ? static_cast< variable_t >(1) : static_cast< variable_t >(0);
 					}
 
-					if ( value.type() == typeid(int32_t) )
+					if ( const auto * p = std::get_if< int32_t >(&value) )
 					{
-						return static_cast< variable_t >(std::any_cast< int32_t >(value));
+						return static_cast< variable_t >(*p);
 					}
 
-					if ( value.type() == typeid(uint32_t) )
+					if ( const auto * p = std::get_if< uint32_t >(&value) )
 					{
-						return static_cast< variable_t >(std::any_cast< uint32_t >(value));
+						return static_cast< variable_t >(*p);
 					}
 
-					if ( value.type() == typeid(int64_t) )
-					{
-						/* NOTE: Possible loss of precision on high number. */
-						return static_cast< variable_t >(std::any_cast< int64_t >(value));
-					}
-
-					if ( value.type() == typeid(uint64_t) )
+					if ( const auto * p = std::get_if< int64_t >(&value) )
 					{
 						/* NOTE: Possible loss of precision on high number. */
-						return static_cast< variable_t >(std::any_cast< uint64_t >(value));
+						return static_cast< variable_t >(*p);
+					}
+
+					if ( const auto * p = std::get_if< uint64_t >(&value) )
+					{
+						/* NOTE: Possible loss of precision on high number. */
+						return static_cast< variable_t >(*p);
 					}
 				}
 
 				if constexpr ( std::is_same_v< variable_t, double > )
 				{
-					if ( value.type() == typeid(variable_t) )
+					if ( const auto * p = std::get_if< double >(&value) )
 					{
-						return std::any_cast< variable_t >(value);
+						return *p;
 					}
 
-					if ( value.type() == typeid(float) )
+					if ( const auto * p = std::get_if< float >(&value) )
 					{
-						return static_cast< variable_t >(std::any_cast< float >(value));
+						return static_cast< variable_t >(*p);
 					}
 
-					if ( value.type() == typeid(bool) )
+					if ( const auto * p = std::get_if< bool >(&value) )
 					{
-						return std::any_cast< bool >(value) ? static_cast< variable_t >(1) : static_cast< variable_t >(0);
+						return *p ? static_cast< variable_t >(1) : static_cast< variable_t >(0);
 					}
 
-					if ( value.type() == typeid(int32_t) )
+					if ( const auto * p = std::get_if< int32_t >(&value) )
 					{
-						return static_cast< variable_t >(std::any_cast< int32_t >(value));
+						return static_cast< variable_t >(*p);
 					}
 
-					if ( value.type() == typeid(uint32_t) )
+					if ( const auto * p = std::get_if< uint32_t >(&value) )
 					{
-						return static_cast< variable_t >(std::any_cast< uint32_t >(value));
+						return static_cast< variable_t >(*p);
 					}
 
-					if ( value.type() == typeid(int64_t) )
+					if ( const auto * p = std::get_if< int64_t >(&value) )
 					{
-						return static_cast< variable_t >(std::any_cast< int64_t >(value));
+						return static_cast< variable_t >(*p);
 					}
 
-					if ( value.type() == typeid(uint64_t) )
+					if ( const auto * p = std::get_if< uint64_t >(&value) )
 					{
-						return static_cast< variable_t >(std::any_cast< uint64_t >(value));
+						return static_cast< variable_t >(*p);
 					}
 				}
 
 				if constexpr ( std::is_same_v< variable_t, std::string > )
 				{
-					if ( value.type() == typeid(variable_t) )
+					if ( const auto * p = std::get_if< std::string >(&value) )
 					{
-						return std::any_cast< variable_t >(value);
+						return *p;
 					}
 				}
 
@@ -862,43 +1122,68 @@ namespace EmEn
 			}
 
 			/**
-			 * @brief Reads a sublevel of the settings file.
-			 * @param data A reference to the JSON node for the level to read.
-			 * @param key A reference to a string.
-			 * @return bool
+			 * @brief Recursively parses one JSON object node into the store map.
+			 *
+			 * Traverses the members of @p data. Object members trigger a recursive call
+			 * with an extended @p key (@c "parentKey/childName"). Array members are
+			 * stored via @ref SettingStore::setVariableInArray(). Scalar members are
+			 * stored via @ref SettingStore::setVariable(). Unsupported JSON types (null,
+			 * nested objects exceeding depth) are silently skipped.
+			 *
+			 * @param data The JSON object node to parse.
+			 * @param key  The accumulated store-key prefix for this recursion level.
+			 *             Pass an empty string for the root level.
+			 * @return @c true on success, @c false if a recursive level fails.
 			 */
 			[[nodiscard]]
 			bool readLevel (const Json::Value & data, const std::string & key) noexcept;
 
 			/**
-			 * @brief Reads a settings file.
-			 * @param filepath A reference to a path.
-			 * @return bool
+			 * @brief Parses the JSON settings file at @p filepath into the store map.
+			 *
+			 * Reads and parses the entire file using FastJSON, then delegates to
+			 * @ref readLevel() starting at the root node. Caller is responsible for
+			 * holding the write lock before calling this method.
+			 *
+			 * @param filepath Absolute path to the JSON settings file.
+			 * @return @c true on success, @c false if the file cannot be parsed.
 			 */
 			[[nodiscard]]
 			bool readFile (const std::filesystem::path & filepath) noexcept;
 
 			/**
-			 * @brief Writes a settings file.
-			 * @param filepath A reference to a path.
-			 * @return bool
+			 * @brief Serializes all stores to a JSON settings file at @p filepath.
+			 *
+			 * Writes a JSON file with a header section (@ref VersionKey, @ref DateKey)
+			 * followed by the nested store content. The file is formatted with tab
+			 * indentation for human readability. Caller is responsible for holding an
+			 * appropriate lock before calling this method.
+			 *
+			 * @param filepath Absolute path to the output JSON file.
+			 * @return @c true on success, @c false if serialization or disk write fails.
 			 */
 			[[nodiscard]]
 			bool writeFile (const std::filesystem::path & filepath) const noexcept;
 
 			/**
-			 * @brief STL streams printable object.
-			 * @param out A reference to the stream output.
-			 * @param obj A reference to the object to print.
-			 * @return std::ostream &
+			 * @brief Writes a human-readable representation of all settings to @p out.
+			 *
+			 * Iterates over every store and prints its key as a section header followed
+			 * by each scalar variable and array in @c "name = value" format. Boolean
+			 * values are printed as @c "On" / @c "Off". Acquires a shared lock on
+			 * @c m_storeAccess before reading.
+			 *
+			 * @param out The output stream to write to.
+			 * @param obj The @ref Settings instance to serialize.
+			 * @return A reference to @p out for chaining.
 			 */
 			friend std::ostream & operator<< (std::ostream & out, const Settings & obj);
 
 			const Arguments & m_arguments;
 			const FileSystem & m_fileSystem;
-			std::map< std::string, SettingStore, std::less<> > m_stores;
+			std::map< std::string, SettingStore, std::less<> > m_stores; ///< Map of store-key to SettingStore; the key is the slash-delimited path prefix (empty string for the root store).
 			std::filesystem::path m_filepath;
-			mutable std::shared_mutex m_storeAccess;
+			mutable std::shared_mutex m_storeAccess; ///< Reader-writer mutex protecting @c m_stores; shared for reads, exclusive for writes.
 			bool m_childProcess{false};
 			bool m_showInformation{false};
 			bool m_saveAtExit{false};

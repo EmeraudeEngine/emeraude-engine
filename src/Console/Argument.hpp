@@ -28,14 +28,17 @@
 
 /* STL inclusions. */
 #include <string>
+#include <variant>
 #include <vector>
-#include <any>
 
 /* Local inclusions. */
 #include "Types.hpp"
 
 namespace EmEn::Console
 {
+	/** @brief Type-safe variant holding a console argument value. */
+	using ArgumentValue = std::variant< std::monostate, bool, int32_t, float, std::string >;
+
 	/**
 	 * @brief The console argument class.
 	 */
@@ -112,10 +115,10 @@ namespace EmEn::Console
 
 			/**
 			 * @brief Returns the raw value.
-			 * @return const std::any &
+			 * @return const ArgumentValue &
 			 */
 			[[nodiscard]]
-			const std::any &
+			const ArgumentValue &
 			value () const noexcept
 			{
 				return m_value;
@@ -152,7 +155,7 @@ namespace EmEn::Console
 		private:
 
 			ArgumentType m_type{ArgumentType::Undefined};
-			std::any m_value;
+			ArgumentValue m_value;
 	};
 
 	using Arguments = std::vector< Argument >;

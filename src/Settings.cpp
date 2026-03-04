@@ -161,7 +161,7 @@ namespace EmEn
 	bool
 	Settings::readLevel (const Json::Value & data, const std::string & key) noexcept
 	{
-		const auto toAny = [] (const Json::Value & item) -> std::any {
+		const auto toSettingValue = [] (const Json::Value & item) -> std::optional< SettingValue > {
 			if ( item.isBool() )
 			{
 				return item.asBool();
@@ -197,7 +197,7 @@ namespace EmEn
 				return item.asString();
 			}
 
-			return {};
+			return std::nullopt;
 		};
 
 		for ( const auto & name : data.getMemberNames() )
@@ -224,12 +224,18 @@ namespace EmEn
 			{
 				for ( const auto & item : items )
 				{
-					m_stores[key].setVariableInArray(name, toAny(item));
+					if ( auto val = toSettingValue(item) )
+					{
+						m_stores[key].setVariableInArray(name, *val);
+					}
 				}
 			}
 			else
 			{
-				m_stores[key].setVariable(name, toAny(items));
+				if ( auto val = toSettingValue(items) )
+				{
+					m_stores[key].setVariable(name, *val);
+				}
 			}
 		}
 
@@ -251,53 +257,46 @@ namespace EmEn
 		return this->readLevel(root.value(), "");
 	}
 
+	Json::Value
+	Settings::settingValueToJson (const SettingValue & value) noexcept
+	{
+		return std::visit([] < typename value_t >(const value_t  & v) -> Json::Value {
+			using T = std::decay_t< value_t  >;
+
+			if constexpr ( std::is_same_v< T, bool > )
+			{
+				return v;
+			}
+			else if constexpr ( std::is_same_v< T, std::string > )
+			{
+				return v;
+			}
+			else if constexpr ( std::is_same_v< T, int32_t > )
+			{
+				return v;
+			}
+			else if constexpr ( std::is_same_v< T, uint32_t > )
+			{
+				return v;
+			}
+			else if constexpr ( std::is_same_v< T, int64_t > )
+			{
+				return static_cast< Json::Int64 >(v);
+			}
+			else if constexpr ( std::is_same_v< T, uint64_t > )
+			{
+				return static_cast< Json::UInt64 >(v);
+			}
+			else
+			{
+				return v;
+			}
+		}, value);
+	}
+
 	bool
 	Settings::writeFile (const std::filesystem::path & filepath) const noexcept
 	{
-		const auto toJson = [] (const std::any & item) -> Json::Value {
-			if ( item.type() == typeid(bool) )
-			{
-				return std::any_cast< bool >(item);
-			}
-
-			if ( item.type() == typeid(int32_t) )
-			{
-				return std::any_cast< int32_t >(item);
-			}
-
-			if ( item.type() == typeid(uint32_t) )
-			{
-				return std::any_cast< uint32_t >(item);
-			}
-
-			if ( item.type() == typeid(int64_t) )
-			{
-				return std::any_cast< int64_t >(item);
-			}
-
-			if ( item.type() == typeid(uint64_t) )
-			{
-				return std::any_cast< uint64_t >(item);
-			}
-
-			if ( item.type() == typeid(float) )
-			{
-				return std::any_cast< float >(item);
-			}
-
-			if ( item.type() == typeid(double) )
-			{
-				return std::any_cast< double >(item);
-			}
-
-			if ( item.type() == typeid(std::string) )
-			{
-				return std::any_cast< std::string >(item);
-			}
-
-			return Json::stringValue;
-		};
-
 		const auto getLevel = [] (Json::Value & root, const std::string & key) -> Json::Value & {
 			if ( key.empty() )
 			{
@@ -337,7 +336,7 @@ namespace EmEn
 			/* Write variables at this level. */
 			for ( const auto & [name, value] : store.variables() )
 			{
-				data[name] = toJson(value);
+				data[name] = settingValueToJson(value);
 			}
 
 			/* Write an array at this level. */
@@ -347,7 +346,7 @@ namespace EmEn
 
 				for ( const auto & value : values )
 				{
-					data[name].append(toJson(value));
+					data[name].append(settingValueToJson(value));
 				}
 			}
 		}
@@ -411,7 +410,7 @@ namespace EmEn
 		return storeIt->second.arrayExists(variableName);
 	}
 
-	std::any
+	std::optional< SettingValue >
 	Settings::getVariable (std::string_view settingPath) const noexcept
 	{
 		const auto & [key, variableName] = Settings::parseAccessKey(settingPath);
@@ -421,7 +420,7 @@ namespace EmEn
 		if ( storeIt == m_stores.end() )
 		{
 			/* NOTE: The store do not exist. */
-			return {};
+			return std::nullopt;
 		}
 
 		const auto * value = storeIt->second.getValuePointer(variableName);
@@ -429,7 +428,7 @@ namespace EmEn
 		if ( value == nullptr )
 		{
 			/* NOTE: The variable do not exist. */
-			return {};
+			return std::nullopt;
 		}
 
 		return *value;
@@ -480,50 +479,6 @@ namespace EmEn
 	{
 		const std::shared_lock< std::shared_mutex > lock{m_storeAccess};
 
-		const auto toJson = [] (const std::any & item) -> Json::Value {
-			if ( item.type() == typeid(bool) )
-			{
-				return std::any_cast< bool >(item);
-			}
-
-			if ( item.type() == typeid(int32_t) )
-			{
-				return std::any_cast< int32_t >(item);
-			}
-
-			if ( item.type() == typeid(uint32_t) )
-			{
-				return std::any_cast< uint32_t >(item);
-			}
-
-			if ( item.type() == typeid(int64_t) )
-			{
-				return std::any_cast< int64_t >(item);
-			}
-
-			if ( item.type() == typeid(uint64_t) )
-			{
-				return std::any_cast< uint64_t >(item);
-			}
-
-			if ( item.type() == typeid(float) )
-			{
-				return std::any_cast< float >(item);
-			}
-
-			if ( item.type() == typeid(double) )
-			{
-				return std::any_cast< double >(item);
-			}
-
-			if ( item.type() == typeid(std::string) )
-			{
-				return std::any_cast< std::string >(item);
-			}
-
-			return Json::stringValue;
-		};
-
 		const auto getLevel = [] (Json::Value & root, const std::string & key) -> Json::Value & {
 			if ( key.empty() )
 			{
@@ -548,7 +503,7 @@ namespace EmEn
 
 			for ( const auto & [name, value] : store.variables() )
 			{
-				data[name] = toJson(value);
+				data[name] = settingValueToJson(value);
 			}
 
 			for ( const auto & [name, values] : store.arrays() )
@@ -557,7 +512,7 @@ namespace EmEn
 
 				for ( const auto & value : values )
 				{
-					data[name].append(toJson(value));
+					data[name].append(settingValueToJson(value));
 				}
 			}
 		}
@@ -580,38 +535,23 @@ namespace EmEn
 	{
 		const std::shared_lock< std::shared_mutex > lock{obj.m_storeAccess};
 
-		auto printValue = [] (const std::any & value) -> std::string {
-			if ( value.type() == typeid(std::string) )
-			{
-				return std::any_cast< std::string >(value);
-			}
+		auto printValue = [] (const SettingValue & value) -> std::string {
+			return std::visit([] < typename value_t >(const value_t & v) -> std::string {
+				using T = std::decay_t< value_t  >;
 
-			if ( value.type() == typeid(bool) )
-			{
-				return std::any_cast< bool >(value) ? "On" : "Off";
-			}
-
-			if ( value.type() == typeid(int32_t) )
-			{
-				return std::to_string(std::any_cast< int32_t >(value));
-			}
-
-			if ( value.type() == typeid(uint32_t) )
-			{
-				return std::to_string(std::any_cast< uint32_t >(value));
-			}
-
-			if ( value.type() == typeid(float) )
-			{
-				return std::to_string(std::any_cast< float >(value));
-			}
-
-			if ( value.type() == typeid(double) )
-			{
-				return std::to_string(std::any_cast< double >(value));
-			}
-
-			return "UNHANDLED";
+				if constexpr ( std::is_same_v< T, std::string > )
+				{
+					return v;
+				}
+				else if constexpr ( std::is_same_v< T, bool > )
+				{
+					return v ? "On" : "Off";
+				}
+				else
+				{
+					return std::to_string(v);
+				}
+			}, value);
 		};
 
 		out << "Settings (" << obj.m_filepath << ") :" "\n";

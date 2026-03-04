@@ -37,73 +37,67 @@ namespace EmEn::Console
 	bool
 	Argument::asBoolean () const noexcept
 	{
-		if ( m_type == ArgumentType::Integer )
+		if ( const auto * p = std::get_if< int32_t >(&m_value) )
 		{
-			const auto value = std::any_cast< int32_t >(m_value);
-
-			return value > 0;
+			return *p > 0;
 		}
 
-		if ( m_type == ArgumentType::Float )
+		if ( const auto * p = std::get_if< float >(&m_value) )
 		{
-			const auto value = std::any_cast< float >(m_value);
-
-			return value > 0.0F;
+			return *p > 0.0F;
 		}
 
-		if ( m_type != ArgumentType::Boolean )
+		if ( const auto * p = std::get_if< bool >(&m_value) )
 		{
-			TraceWarning{ClassId} << "This argument is not a boolean !";
-
-			return false;
+			return *p;
 		}
 
-		return std::any_cast< bool >(m_value);
+		TraceWarning{ClassId} << "This argument is not a boolean !";
+
+		return false;
 	}
 
 	int32_t
 	Argument::asInteger () const noexcept
 	{
-		if ( m_type == ArgumentType::Float )
+		if ( const auto * p = std::get_if< float >(&m_value) )
 		{
-			const auto value = std::any_cast< float >(m_value);
-
-			return static_cast< int32_t >(std::round(value));
+			return static_cast< int32_t >(std::round(*p));
 		}
 
-		if ( m_type != ArgumentType::Integer )
+		if ( const auto * p = std::get_if< int32_t >(&m_value) )
 		{
-			TraceWarning{ClassId} << "This argument is not an integer number !";
-
-			return 0;
+			return *p;
 		}
 
-		return std::any_cast< int32_t >(m_value);
+		TraceWarning{ClassId} << "This argument is not an integer number !";
+
+		return 0;
 	}
 
 	float
 	Argument::asFloat () const noexcept
 	{
-		if ( m_type != ArgumentType::Float )
+		if ( const auto * p = std::get_if< float >(&m_value) )
 		{
-			TraceWarning{ClassId} << "This argument is not a floating point number !";
-
-			return 0.0F;
+			return *p;
 		}
 
-		return std::any_cast< float >(m_value);
+		TraceWarning{ClassId} << "This argument is not a floating point number !";
+
+		return 0.0F;
 	}
 
 	std::string
 	Argument::asString () const noexcept
 	{
-		if ( m_type != ArgumentType::String )
+		if ( const auto * p = std::get_if< std::string >(&m_value) )
 		{
-			TraceWarning{ClassId} << "This argument is not a string !";
-
-			return {};
+			return *p;
 		}
 
-		return std::any_cast< std::string >(m_value);
+		TraceWarning{ClassId} << "This argument is not a string !";
+
+		return {};
 	}
 }
