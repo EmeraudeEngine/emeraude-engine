@@ -92,7 +92,7 @@ namespace EmEn
 			 *
 			 * @version 0.8.35
 			 */
-			static constexpr size_t StandardCursorCount{6};
+			static constexpr size_t StandardCursorCount{7};
 
 			/**
 			 * @brief Constructs an empty cursor atlas.
