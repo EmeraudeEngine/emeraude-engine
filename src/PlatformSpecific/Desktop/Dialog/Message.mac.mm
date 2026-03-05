@@ -39,8 +39,6 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 	{
         @autoreleasepool
         {
-            [NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];
-
             NSAlert * alert = [[NSAlert alloc] init];
 
             switch ( m_messageType )
