@@ -84,7 +84,8 @@ namespace EmEn
 		Crosshair,
 		Hand,
 		HorizontalResize,
-		VerticalResize
+		VerticalResize,
+		NotAllowed
 	};
 
 	/**

@@ -67,6 +67,9 @@ namespace EmEn
 
 				case CursorType::VerticalResize :
 					return GLFW_VRESIZE_CURSOR;
+
+				case CursorType::NotAllowed :
+					return GLFW_NOT_ALLOWED_CURSOR;
 			}
 
 			return GLFW_ARROW_CURSOR;
