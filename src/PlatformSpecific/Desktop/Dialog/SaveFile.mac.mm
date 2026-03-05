@@ -49,12 +49,34 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 
             [panel setTitle:title];
 
-            /* Set default filename (strip extension since NSSavePanel adds it automatically via allowedContentTypes). */
+            /* Set default filename (strip extension only if it matches a declared filter,
+             * since NSSavePanel adds it automatically via allowedContentTypes). */
             if ( !m_defaultFilename.empty() )
             {
+                std::string nameForPanel = m_defaultFilename;
                 std::filesystem::path filenamePath{m_defaultFilename};
-                const auto stem = filenamePath.stem().string();
-                NSString * defaultName = [NSString stringWithUTF8String:(!stem.empty() ? stem : m_defaultFilename).c_str()];
+                const auto ext = filenamePath.extension().string(); // e.g. ".lys"
+
+                if ( !ext.empty() )
+                {
+                    const auto extWithoutDot = ext.substr(1); // e.g. "lys"
+
+                    for ( const auto & filter : m_extensionFilters )
+                    {
+                        for ( const auto & filterExt : filter.second )
+                        {
+                            /* Compare against both ".lys" and "lys" forms. */
+                            if ( filterExt == ext || filterExt == extWithoutDot )
+                            {
+                                nameForPanel = filenamePath.stem().string();
+                                goto done;
+                            }
+                        }
+                    }
+                }
+                done:
+
+                NSString * defaultName = [NSString stringWithUTF8String:nameForPanel.c_str()];
                 [panel setNameFieldStringValue:defaultName];
             }
 
