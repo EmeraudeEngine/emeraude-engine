@@ -49,10 +49,12 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 
             [panel setTitle:title];
 
-            /* Set default filename. */
+            /* Set default filename (strip extension since NSSavePanel adds it automatically via allowedContentTypes). */
             if ( !m_defaultFilename.empty() )
             {
-                NSString * defaultName = [NSString stringWithUTF8String:m_defaultFilename.c_str()];
+                std::filesystem::path filenamePath{m_defaultFilename};
+                const auto stem = filenamePath.stem().string();
+                NSString * defaultName = [NSString stringWithUTF8String:(!stem.empty() ? stem : m_defaultFilename).c_str()];
                 [panel setNameFieldStringValue:defaultName];
             }
 
