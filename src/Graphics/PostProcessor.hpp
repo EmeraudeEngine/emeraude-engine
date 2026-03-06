@@ -225,7 +225,7 @@ namespace EmEn::Graphics
 			 * @param stack The scene's post-process stack.
 			 * @return void
 			 */
-			void executeIndirectPostProcessEffects (const Vulkan::CommandBuffer & commandBuffer, const PostProcessStack & stack) noexcept;
+			void executeIndirectPostProcessEffects (const Vulkan::CommandBuffer & commandBuffer, const PostProcessStack & stack) const noexcept;
 
 			/**
 			 * @brief Executes single-pass camera lens effects as a fullscreen quad.
@@ -236,7 +236,7 @@ namespace EmEn::Graphics
 			 * @param lensEffects The camera's lens effects list (may be empty for passthrough).
 			 * @return void
 			 */
-			void executeDirectPostProcessEffects (const Vulkan::CommandBuffer & commandBuffer, const std::vector< std::shared_ptr< DirectPostProcessEffect > > & lensEffects) noexcept;
+			void executeDirectPostProcessEffects (const Vulkan::CommandBuffer & commandBuffer, const std::vector< std::shared_ptr< DirectPostProcessEffect > > & lensEffects) const noexcept;
 
 			/* Static. */
 

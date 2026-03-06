@@ -1476,8 +1476,21 @@ namespace EmEn::Graphics
 		 * against the internal scene target (HDR float16 framebuffer). */
 		const bool sceneHasContent = scene != nullptr && scene->prepareRender(m_sceneTarget);
 
-		/* RP-scene (internal target, CLEAR): Render opaque and translucent objects. */
-		commandBuffer->beginRenderPass(*m_sceneTarget->framebuffer(), m_sceneTarget->renderArea(), m_clearColors, VK_SUBPASS_CONTENTS_INLINE);
+		/* RP-scene (internal target, CLEAR): Render opaque and translucent objects.
+		 * When the scene target has no normals MRT attachment, use the 2-element clear values
+		 * (color + depth) to match the attachment layout. The 3-element m_clearColors has
+		 * [0]=color, [1]=normals, [2]=depth which would misalign the depth clear value
+		 * when normals are absent (attachment 1 = depth, not normals). */
+		const bool sceneTargetHasNormals = m_sceneTarget->normalsFormat() != VK_FORMAT_UNDEFINED;
+
+		if ( sceneTargetHasNormals )
+		{
+			commandBuffer->beginRenderPass(*m_sceneTarget->framebuffer(), m_sceneTarget->renderArea(), m_clearColors, VK_SUBPASS_CONTENTS_INLINE);
+		}
+		else
+		{
+			commandBuffer->beginRenderPass(*m_sceneTarget->framebuffer(), m_sceneTarget->renderArea(), m_swapChainClearColors, VK_SUBPASS_CONTENTS_INLINE);
+		}
 
 		if ( sceneHasContent )
 		{
@@ -1505,7 +1518,14 @@ namespace EmEn::Graphics
 		 * so they can sample the captured scene for refraction effects. */
 		if ( sceneHasContent && scene->hasTranslucentGBObjects() )
 		{
-			commandBuffer->beginRenderPass(*m_sceneTarget->postProcessFramebuffer(), m_sceneTarget->renderArea(), m_clearColors, VK_SUBPASS_CONTENTS_INLINE);
+			if ( sceneTargetHasNormals )
+			{
+				commandBuffer->beginRenderPass(*m_sceneTarget->postProcessFramebuffer(), m_sceneTarget->renderArea(), m_clearColors, VK_SUBPASS_CONTENTS_INLINE);
+			}
+			else
+			{
+				commandBuffer->beginRenderPass(*m_sceneTarget->postProcessFramebuffer(), m_sceneTarget->renderArea(), m_swapChainClearColors, VK_SUBPASS_CONTENTS_INLINE);
+			}
 
 			scene->renderTranslucentGB(m_sceneTarget, *commandBuffer);
 

@@ -280,6 +280,7 @@ namespace EmEn::Scenes::Component
 			static constexpr auto ShadowBiasOffset{11UL};
 			static constexpr auto ColorProjectionIndexOffset{12UL};
 			static constexpr auto ColorProjectionFrameIndexOffset{13UL};
+			static constexpr auto ColorProjectionBoostOffset{14UL};
 
 			std::shared_ptr< Graphics::RenderTarget::Abstract > m_shadowMap; /* NOTE: std::shared_ptr< Graphics::RenderTarget::ShadowMap< Graphics::ViewMatrices3DUBO > > */
 			std::unique_ptr< Vulkan::DescriptorSet > m_shadowDescriptorSet;

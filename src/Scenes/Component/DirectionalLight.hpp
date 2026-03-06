@@ -418,6 +418,7 @@ namespace EmEn::Scenes::Component
 			static constexpr auto PCFRadiusOffset{28UL};
 			static constexpr auto ShadowBiasOffset{29UL};
 			static constexpr auto ColorProjectionIndexOffset{9UL};
+			static constexpr auto ColorProjectionBoostOffset{10UL};
 
 			/* CSM buffer layout offsets (matches shader UBO):
 			 * mat4[4] cascadeViewProjectionMatrices: floats 0-63

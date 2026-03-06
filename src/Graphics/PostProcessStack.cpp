@@ -62,7 +62,7 @@ namespace EmEn::Graphics
 	}
 
 	bool
-	PostProcessStack::createAll (Renderer & renderer, uint32_t width, uint32_t height) noexcept
+	PostProcessStack::createAll (Renderer & renderer, uint32_t width, uint32_t height) const noexcept
 	{
 		for ( const auto & effect : m_effects )
 		{
@@ -83,7 +83,7 @@ namespace EmEn::Graphics
 	}
 
 	void
-	PostProcessStack::destroyAll () noexcept
+	PostProcessStack::destroyAll () const noexcept
 	{
 		for ( auto & effect : m_effects )
 		{
@@ -95,7 +95,7 @@ namespace EmEn::Graphics
 	}
 
 	bool
-	PostProcessStack::resizeAll (Renderer & renderer, uint32_t width, uint32_t height) noexcept
+	PostProcessStack::resizeAll (Renderer & renderer, uint32_t width, uint32_t height) const noexcept
 	{
 		for ( const auto & effect : m_effects )
 		{

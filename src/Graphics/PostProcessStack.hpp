@@ -52,12 +52,16 @@ namespace EmEn::Graphics
 			static constexpr auto ClassId{"PostProcessStack"};
 
 			PostProcessStack () noexcept = default;
+
 			~PostProcessStack () noexcept;
 
 			/* Non-copiable, movable. */
 			PostProcessStack (const PostProcessStack &) = delete;
+
 			PostProcessStack & operator= (const PostProcessStack &) = delete;
+
 			PostProcessStack (PostProcessStack &&) noexcept = default;
+
 			PostProcessStack & operator= (PostProcessStack &&) noexcept = default;
 
 			/**
@@ -110,13 +114,13 @@ namespace EmEn::Graphics
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool createAll (Renderer & renderer, uint32_t width, uint32_t height) noexcept;
+			bool createAll (Renderer & renderer, uint32_t width, uint32_t height) const noexcept;
 
 			/**
 			 * @brief Destroys GPU resources for all effects.
 			 * @return void
 			 */
-			void destroyAll () noexcept;
+			void destroyAll () const noexcept;
 
 			/**
 			 * @brief Recreates GPU resources after a resize.
@@ -126,7 +130,7 @@ namespace EmEn::Graphics
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool resizeAll (Renderer & renderer, uint32_t width, uint32_t height) noexcept;
+			bool resizeAll (Renderer & renderer, uint32_t width, uint32_t height) const noexcept;
 
 			/**
 			 * @brief Returns whether any effect in the stack requires HDR input.

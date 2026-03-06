@@ -180,6 +180,7 @@ namespace EmEn::Saphir
 				if ( useColorProjection )
 				{
 					block.addMember(Declaration::VariableType::Float, UniformBlock::Component::ColorProjectionIndex);
+					block.addMember(Declaration::VariableType::Float, UniformBlock::Component::ColorProjectionBoost);
 				}
 
 				if ( useShadowMap || useColorProjection )
@@ -214,6 +215,7 @@ namespace EmEn::Saphir
 				{
 					block.addMember(Declaration::VariableType::Float, UniformBlock::Component::ColorProjectionIndex);
 					block.addMember(Declaration::VariableType::Float, UniformBlock::Component::ColorProjectionFrameIndex);
+					block.addMember(Declaration::VariableType::Float, UniformBlock::Component::ColorProjectionBoost);
 				}
 
 				return block;
@@ -244,6 +246,7 @@ namespace EmEn::Saphir
 				if ( useColorProjection )
 				{
 					block.addMember(Declaration::VariableType::Float, UniformBlock::Component::ColorProjectionIndex);
+					block.addMember(Declaration::VariableType::Float, UniformBlock::Component::ColorProjectionBoost);
 				}
 
 				return block;

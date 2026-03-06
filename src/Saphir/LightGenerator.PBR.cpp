@@ -700,6 +700,10 @@ namespace EmEn::Saphir
 						"  { const vec3 projCoords = " << ShaderVariable::PositionLightSpace << ".xyz / " << ShaderVariable::PositionLightSpace << ".w;" << Line::End <<
 						"    projectionColor = texture(" << Bindless::Textures2D << "[" << GLSL::Functions::NonUniformEXT << "(cpIdx)], projCoords.xy).rgb; } }" << Line::End;
 				}
+
+				Code{fragmentShader} <<
+					"{ const float cpBoost = " << LightUB(UniformBlock::Component::ColorProjectionBoost) << ";" << Line::End <<
+					"  if ( cpBoost > 0.0 ) { projectionColor = vec3(1.0) + projectionColor * cpBoost; } }" << Line::End;
 			}
 		}
 

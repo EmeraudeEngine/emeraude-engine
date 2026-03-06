@@ -436,6 +436,7 @@ namespace EmEn::Scenes::Component
 	SpotLight::onVideoMemoryUpdate (SharedUniformBuffer & UBO, uint32_t index) noexcept
 	{
 		m_buffer[ColorProjectionIndexOffset] = std::bit_cast< float >(this->colorProjectionBindlessIndex());
+		m_buffer[ColorProjectionBoostOffset] = this->colorProjectionBoost();
 
 		return UBO.writeElementData(index, m_buffer.data());
 	}

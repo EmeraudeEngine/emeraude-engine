@@ -826,6 +826,7 @@ namespace EmEn::Saphir
 				constexpr auto ViewProjectionMatrix{"viewProjectionMatrix"};
 				constexpr auto ColorProjectionIndex{"colorProjectionIndex"};
 				constexpr auto ColorProjectionFrameIndex{"colorProjectionFrameIndex"};
+				constexpr auto ColorProjectionBoost{"colorProjectionBoost"};
 			}
 		}
 

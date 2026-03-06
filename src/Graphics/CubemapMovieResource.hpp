@@ -195,6 +195,24 @@ namespace EmEn::Graphics
 			bool loadCaustics (uint32_t faceSize, uint32_t frameCount, uint32_t frameDuration, float scale = 4.0F, uint32_t seed = 0, float baseIntensity = 0.7F, float causticIntensity = 1.0F, Libs::ThreadPool * threadPool = nullptr) noexcept;
 
 			/**
+			 * @brief Generates procedural refractive caustic animation frames for cubemap projection.
+			 * @note Uses multi-octave Perlin noise with sinusoidal domain warping to simulate
+			 *       light concentration through a wavy water surface. Produces soft, organic
+			 *       patterns unlike the sharp cell-edge patterns of Voronoi caustics.
+			 * @param faceSize The resolution of each cubemap face in pixels (e.g. 256).
+			 * @param frameCount The number of animation frames to generate.
+			 * @param frameDuration The duration of each frame in milliseconds.
+			 * @param scale The pattern density. Higher values produce finer caustics. Default 3.0.
+			 * @param seed The random seed for the Perlin noise. Default 0.
+			 * @param octaves The number of noise octaves for detail richness. Default 3.
+			 * @param baseIntensity The minimum luminosity in dark areas [0,1]. Default 0.15.
+			 * @param peakIntensity The maximum luminosity at caustic concentrations. Can exceed 1.0 for HDR. Default 1.4.
+			 * @param threadPool A pointer to a thread pool. Default sequential loading.
+			 * @return bool
+			 */
+			bool loadRefractiveCaustics (uint32_t faceSize, uint32_t frameCount, uint32_t frameDuration, float scale = 3.0F, uint32_t seed = 0, uint32_t octaves = 3, float baseIntensity = 0.15F, float peakIntensity = 1.4F, Libs::ThreadPool * threadPool = nullptr) noexcept;
+
+			/**
 			 * @brief Returns the average color of the cubemap movie.
 			 * @return Libraries::PixelFactory::Color< float >
 			 */

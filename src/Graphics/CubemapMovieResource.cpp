@@ -37,6 +37,7 @@
 #include "json/json.h"
 
 /* Local inclusions. */
+#include "Libs/Algorithms/PerlinNoise.hpp"
 #include "Libs/Algorithms/VoronoiNoise.hpp"
 #include "Libs/ThreadPool.hpp"
 #include "Libs/FastJSON.hpp"
@@ -535,6 +536,160 @@ namespace EmEn::Graphics
 
 						/* Map caustic value to intensity. */
 						const auto intensity = baseIntensity + causticValue * (causticIntensity - baseIntensity);
+
+						m_frames[frameIndex].first[faceIndex].setPixel(
+							col, row,
+							PixelFactory::Color< float >{intensity, intensity, intensity, 1.0F}
+						);
+					}
+				}
+			}
+		};
+
+		if ( threadPool != nullptr )
+		{
+			threadPool->parallelFor(uint32_t{0}, frameCount, generateFrame);
+		}
+		else
+		{
+			for ( uint32_t frameIndex = 0; frameIndex < frameCount; frameIndex++ )
+			{
+				generateFrame(frameIndex);
+			}
+		}
+
+		this->updateDuration();
+
+		return this->setLoadSuccess(true);
+	}
+
+	bool
+	CubemapMovieResource::loadRefractiveCaustics (uint32_t faceSize, uint32_t frameCount, uint32_t frameDuration, float scale, uint32_t seed, uint32_t octaves, float baseIntensity, float peakIntensity, ThreadPool * threadPool) noexcept
+	{
+		if ( faceSize == 0 || frameCount == 0 || frameDuration == 0 || octaves == 0 )
+		{
+			TraceError{ClassId} << "Invalid parameters for refractive caustics generation !";
+
+			return false;
+		}
+
+		if ( !this->beginLoading() )
+		{
+			return false;
+		}
+
+		Algorithms::PerlinNoise< float > perlin{seed};
+
+		const auto invSize = 1.0F / static_cast< float >(faceSize);
+
+		/* Animation drift amplitudes for circular looping path. */
+		constexpr auto DriftX{0.35F};
+		constexpr auto DriftY{0.25F};
+		constexpr auto DriftZ{0.15F};
+		constexpr auto TwoPi{6.283185307179586F};
+
+		m_frames.resize(frameCount);
+
+		/* Pre-initialize all pixmaps. */
+		for ( uint32_t frameIndex = 0; frameIndex < frameCount; frameIndex++ )
+		{
+			for ( size_t faceIndex = 0; faceIndex < CubemapFaceCount; faceIndex++ )
+			{
+				if ( !m_frames[frameIndex].first[faceIndex].initialize(faceSize, faceSize, PixelFactory::ChannelMode::RGBA) )
+				{
+					TraceError{ClassId} << "Unable to initialize pixmap for refractive caustics frame #" << frameIndex << ", face #" << faceIndex << " !";
+
+					return this->setLoadSuccess(false);
+				}
+			}
+
+			m_frames[frameIndex].second = frameDuration;
+		}
+
+		/* Per-frame generation lambda. */
+		auto generateFrame = [&] (uint32_t frameIndex) {
+			/* Circular time path for seamless looping. */
+			const auto angle = TwoPi * static_cast< float >(frameIndex) / static_cast< float >(frameCount);
+			const auto timeX = std::cos(angle) * DriftX;
+			const auto timeY = std::sin(angle) * DriftY;
+			const auto timeZ = std::cos(angle + 1.0F) * DriftZ;
+
+			for ( size_t faceIndex = 0; faceIndex < CubemapFaceCount; faceIndex++ )
+			{
+				for ( uint32_t row = 0; row < faceSize; row++ )
+				{
+					const auto t = 2.0F * (static_cast< float >(row) + 0.5F) * invSize - 1.0F;
+
+					for ( uint32_t col = 0; col < faceSize; col++ )
+					{
+						const auto s = 2.0F * (static_cast< float >(col) + 0.5F) * invSize - 1.0F;
+
+						/* Compute the 3D direction vector for this texel based on face. */
+						float dx, dy, dz;
+
+						switch ( faceIndex )
+						{
+							case 0: dx =  1.0F; dy = -t;    dz = -s;    break;
+							case 1: dx = -1.0F; dy = -t;    dz =  s;    break;
+							case 2: dx =  s;    dy =  1.0F; dz =  t;    break;
+							case 3: dx =  s;    dy = -1.0F; dz = -t;    break;
+							case 4: dx =  s;    dy = -t;    dz =  1.0F; break;
+							default: dx = -s;   dy = -t;    dz = -1.0F; break;
+						}
+
+						/* Normalize the direction. */
+						const auto invLen = 1.0F / std::sqrt(dx * dx + dy * dy + dz * dz);
+						auto nx = dx * invLen * scale + timeX;
+						auto ny = dy * invLen * scale + timeY;
+						auto nz = dz * invLen * scale + timeZ;
+
+						/* Simulate refractive caustics through domain warping and multi-octave noise.
+						 * Real underwater caustics are formed by light rays refracting through
+						 * a wavy water surface, creating regions of concentrated brightness
+						 * where rays converge (bright) and sparse regions where they diverge (dark).
+						 *
+						 * We simulate this by:
+						 * 1. Domain warping: Perlin noise displaces the sample coordinates,
+						 *    mimicking the deflection of light rays through a wavy surface.
+						 * 2. Multi-octave evaluation: Several noise layers at different frequencies
+						 *    are combined to produce both broad light patches and fine detail.
+						 * 3. Power curve: Concentrates brightness into peaks, simulating the
+						 *    non-linear focusing behavior of refractive caustics. */
+
+						/* First pass: domain warping to simulate surface wave refraction. */
+						const auto warpX = perlin.generate(nx + 5.2F, ny + 1.3F, nz + 3.7F);
+						const auto warpY = perlin.generate(nx + 9.1F, ny + 4.6F, nz + 7.2F);
+						const auto warpZ = perlin.generate(nx + 2.8F, ny + 8.4F, nz + 0.9F);
+
+						constexpr auto WarpStrength{1.5F};
+						nx += warpX * WarpStrength;
+						ny += warpY * WarpStrength;
+						nz += warpZ * WarpStrength;
+
+						/* Multi-octave noise accumulation. */
+						auto noiseSum = 0.0F;
+						auto amplitude = 1.0F;
+						auto frequency = 1.0F;
+						auto maxAmplitude = 0.0F;
+
+						for ( uint32_t octave = 0; octave < octaves; octave++ )
+						{
+							noiseSum += perlin.generate(nx * frequency, ny * frequency, nz * frequency) * amplitude;
+							maxAmplitude += amplitude;
+							amplitude *= 0.5F;
+							frequency *= 2.0F;
+						}
+
+						/* Normalize to [0, 1]. */
+						auto value = noiseSum / maxAmplitude;
+
+						/* Apply power curve to concentrate brightness into peaks
+						 * (simulates the non-linear focusing of refractive caustics).
+						 * The square accentuates bright spots while darkening the rest. */
+						value = value * value;
+
+						/* Map to intensity range. */
+						const auto intensity = baseIntensity + value * (peakIntensity - baseIntensity);
 
 						m_frames[frameIndex].first[faceIndex].setPixel(
 							col, row,

@@ -58,20 +58,68 @@ namespace
 	{
 		public:
 
-			explicit GrabPassDepthAdapter (const EmEn::Graphics::GrabPass & grabPass) noexcept
+			explicit
+			GrabPassDepthAdapter (const EmEn::Graphics::GrabPass & grabPass) noexcept
 				: m_grabPass{grabPass}
 			{
 
 			}
 
-			[[nodiscard]] bool isCreated () const noexcept override { return m_grabPass.hasDepth(); }
-			[[nodiscard]] EmEn::Vulkan::TextureType type () const noexcept override { return EmEn::Vulkan::TextureType::Texture2D; }
-			[[nodiscard]] uint32_t dimensions () const noexcept override { return 2; }
-			[[nodiscard]] bool isCubemapTexture () const noexcept override { return false; }
-			[[nodiscard]] std::shared_ptr< EmEn::Vulkan::Image > image () const noexcept override { return m_grabPass.depthImage(); }
-			[[nodiscard]] std::shared_ptr< EmEn::Vulkan::ImageView > imageView () const noexcept override { return m_grabPass.depthImageView(); }
-			[[nodiscard]] std::shared_ptr< EmEn::Vulkan::Sampler > sampler () const noexcept override { return m_grabPass.depthSampler(); }
-			[[nodiscard]] bool request3DTextureCoordinates () const noexcept override { return false; }
+			[[nodiscard]]
+			bool
+			isCreated () const noexcept override
+			{
+				return m_grabPass.hasDepth();
+			}
+
+			[[nodiscard]]
+			EmEn::Vulkan::TextureType
+			type () const noexcept override
+			{
+				return EmEn::Vulkan::TextureType::Texture2D;
+			}
+
+			[[nodiscard]]
+			uint32_t
+			dimensions () const noexcept override
+			{
+				return 2;
+			}
+
+			[[nodiscard]]
+			bool
+			isCubemapTexture () const noexcept override
+			{
+				return false;
+			}
+
+			[[nodiscard]]
+			std::shared_ptr< EmEn::Vulkan::Image >
+			image () const noexcept override
+			{
+				return m_grabPass.depthImage();
+			}
+
+			[[nodiscard]]
+			std::shared_ptr< EmEn::Vulkan::ImageView >
+			imageView () const noexcept override
+			{
+				return m_grabPass.depthImageView();
+			}
+
+			[[nodiscard]]
+			std::shared_ptr< EmEn::Vulkan::Sampler >
+			sampler () const noexcept override
+			{
+				return m_grabPass.depthSampler();
+			}
+
+			[[nodiscard]]
+			bool
+			request3DTextureCoordinates () const noexcept override
+			{
+				return false;
+			}
 
 		private:
 
@@ -86,28 +134,73 @@ namespace
 	{
 		public:
 
-			explicit GrabPassNormalsAdapter (const EmEn::Graphics::GrabPass & grabPass) noexcept
+			explicit
+			GrabPassNormalsAdapter (const EmEn::Graphics::GrabPass & grabPass) noexcept
 				: m_grabPass{grabPass}
 			{
 
 			}
 
-			[[nodiscard]] bool isCreated () const noexcept override { return m_grabPass.hasNormals(); }
-			[[nodiscard]] EmEn::Vulkan::TextureType type () const noexcept override { return EmEn::Vulkan::TextureType::Texture2D; }
-			[[nodiscard]] uint32_t dimensions () const noexcept override { return 2; }
-			[[nodiscard]] bool isCubemapTexture () const noexcept override { return false; }
-			[[nodiscard]] std::shared_ptr< EmEn::Vulkan::Image > image () const noexcept override { return m_grabPass.normalsImage(); }
-			[[nodiscard]] std::shared_ptr< EmEn::Vulkan::ImageView > imageView () const noexcept override { return m_grabPass.normalsImageView(); }
-			[[nodiscard]] std::shared_ptr< EmEn::Vulkan::Sampler > sampler () const noexcept override { return m_grabPass.normalsSampler(); }
-			[[nodiscard]] bool request3DTextureCoordinates () const noexcept override { return false; }
+			[[nodiscard]]
+			bool
+			isCreated () const noexcept override
+			{
+				return m_grabPass.hasNormals();
+			}
+
+			[[nodiscard]]
+			EmEn::Vulkan::TextureType
+			type () const noexcept override
+			{
+				return EmEn::Vulkan::TextureType::Texture2D;
+			}
+
+			[[nodiscard]]
+			uint32_t
+			dimensions () const noexcept override
+			{
+				return 2;
+			}
+
+			[[nodiscard]]
+			bool
+			isCubemapTexture () const noexcept override
+			{
+				return false;
+			}
+
+			[[nodiscard]]
+			std::shared_ptr< EmEn::Vulkan::Image >
+			image () const noexcept override
+			{
+				return m_grabPass.normalsImage();
+			}
+
+			[[nodiscard]]
+			std::shared_ptr< EmEn::Vulkan::ImageView >
+			imageView () const noexcept override
+			{
+				return m_grabPass.normalsImageView();
+			}
+
+			[[nodiscard]]
+			std::shared_ptr< EmEn::Vulkan::Sampler >
+			sampler () const noexcept override
+			{
+				return m_grabPass.normalsSampler();
+			}
+
+			[[nodiscard]]
+			bool
+			request3DTextureCoordinates () const noexcept override
+			{
+				return false;
+			}
 
 		private:
 
 			const EmEn::Graphics::GrabPass & m_grabPass;
 	};
-
-	/** @brief Empty lens effects list for the passthrough case. */
-	static const std::vector< std::shared_ptr< EmEn::Graphics::DirectPostProcessEffect > > EmptyLensEffects{};
 }
 
 namespace EmEn::Graphics
@@ -568,7 +661,7 @@ namespace EmEn::Graphics
 	}
 
 	void
-	PostProcessor::executeIndirectPostProcessEffects (const Vulkan::CommandBuffer & commandBuffer, const PostProcessStack & stack) noexcept
+	PostProcessor::executeIndirectPostProcessEffects (const Vulkan::CommandBuffer & commandBuffer, const PostProcessStack & stack) const noexcept
 	{
 		if ( !stack.hasEffects() || m_grabPass == nullptr || !m_grabPass->isCreated() )
 		{
@@ -663,7 +756,7 @@ namespace EmEn::Graphics
 	/* GPU execution — single-pass camera lens effects. */
 
 	void
-	PostProcessor::executeDirectPostProcessEffects (const Vulkan::CommandBuffer & commandBuffer, const std::vector< std::shared_ptr< DirectPostProcessEffect > > & lensEffects) noexcept
+	PostProcessor::executeDirectPostProcessEffects (const Vulkan::CommandBuffer & commandBuffer, const std::vector< std::shared_ptr< DirectPostProcessEffect > > & lensEffects) const noexcept
 	{
 		/* Generate or retrieve the shader program via the PostProcessing generator.
 		 * The Renderer::m_programs cache (hash map) handles deduplication automatically.

@@ -433,6 +433,31 @@ namespace EmEn::Scenes::Component
 			}
 
 			/**
+			 * @brief Sets the color projection boost factor.
+			 * @note When boost > 0, the projection formula becomes (1.0 + projectionColor * boost),
+			 *       making bright areas of the texture amplify light intensity. When boost == 0 (default),
+			 *       the original multiplicative behavior is preserved.
+			 * @param boost The boost factor.
+			 * @return void
+			 */
+			void
+			setColorProjectionBoost (float boost) noexcept
+			{
+				m_colorProjectionBoost = std::max(0.0F, boost);
+			}
+
+			/**
+			 * @brief Returns the color projection boost factor.
+			 * @return float
+			 */
+			[[nodiscard]]
+			float
+			colorProjectionBoost () const noexcept
+			{
+				return m_colorProjectionBoost;
+			}
+
+			/**
 			 * @brief Returns whether this light type uses a cubemap for color projection.
 			 * @note Override in PointLight to return true.
 			 * @return bool
@@ -612,5 +637,6 @@ namespace EmEn::Scenes::Component
 			uint32_t m_sharedUBOIndex{0};
 			std::shared_ptr< Vulkan::TextureInterface > m_colorProjectionTexture;
 			uint32_t m_colorProjectionBindlessIndex{NoColorProjectionTexture};
+			float m_colorProjectionBoost{0.0F};
 	};
 }
