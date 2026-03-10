@@ -363,8 +363,6 @@ See: `AbstractEntity.cpp:updateEntityProperties()` for auto-AABB creation logic.
 
 ## Critical Points
 
-- **Double buffering**: Logic thread writes activeFrame, Render thread reads renderFrame
-- **Atomic swap**: m_renderFrame = m_activeFrame at end of each logic frame
 - **Smart pointers**: shared_ptr and weak_ptr for automatic hierarchy management
 - **Manager and Scene**: Handle fail-safe construction/destruction (in development)
 - **Root Node**: Immutable, cannot move nor receive Components
@@ -374,6 +372,125 @@ See: `AbstractEntity.cpp:updateEntityProperties()` for auto-AABB creation logic.
 - **Suspend/Wakeup**: Every new Component MUST implement `onSuspend()`/`onWakeup()` (pure virtual)
 - **Friend class**: `AbstractEntity` is friend of `Component::Abstract` to access protected hooks
 - **Auto collision models**: Visual components auto-generate collision models - disable for gizmos!
+
+## Frame Synchronization — Double-Buffering Contract
+
+> [!CRITICAL]
+> **ANY data that flows from the Logic thread to the Renderer MUST be double-buffered
+> (one copy per frame-in-flight).** Failure to respect this causes GPU read / CPU write
+> race conditions that manifest as flickering, tearing, or corrupted data.
+
+### How It Works
+
+The engine uses **frames-in-flight** (typically 2-3) to keep the GPU busy while the CPU
+prepares the next frame. Each frame-in-flight has its own fence, command buffer, and
+descriptor sets. The logic thread and render thread run concurrently.
+
+**Synchronization mechanism:**
+- `m_renderStateIndex` (`std::atomic<uint32_t>`) — Written by the logic thread after
+  updating entity transforms, read by the render thread via `std::memory_order_acquire`.
+- Each entity stores **two copies** of its world coordinates (indexed by state index).
+- The logic thread writes to `activeStateIndex`, the render thread reads from
+  `m_preparedReadStateIndex` (captured at `prepareRender()` time).
+
+**Code references:**
+- `Scene.rendering.cpp:prepareRender()` — `m_preparedReadStateIndex = m_renderStateIndex.load()`
+- `Scene.hpp` — `m_renderStateIndex` atomic, `m_preparedReadStateIndex`
+- `Renderer.hpp` — `m_currentFrameIndex`, `framesInFlight()`
+
+### Per-Frame GPU Resources
+
+Any GPU buffer (SSBO, UBO) that is **updated every frame** must have one instance per
+frame-in-flight. Otherwise, the CPU overwrites the buffer while the GPU is still reading
+the previous frame's data.
+
+**Already double-buffered:**
+| Resource | Owner | Indexed by |
+|----------|-------|------------|
+| Entity world coordinates | `LocatableInterface` | `m_renderStateIndex` |
+| RT mesh metadata SSBOs | `SceneMetaData` | `m_currentFrameIndex` |
+| RT material data SSBOs | `SceneMetaData` | `m_currentFrameIndex` |
+| RT descriptor sets | `Renderer` | `m_currentFrameIndex` |
+| Light UBOs | `LightSet` | Dynamic offset |
+
+### Rules When Adding New GPU Data
+
+1. **If you create a new SSBO/UBO that is written every frame**, create `framesInFlight()` copies.
+2. **Index them by `m_currentFrameIndex`** (from `Renderer::currentFrameIndex()`).
+3. **Update the descriptor set for the current frame only** — never write to all descriptor sets.
+4. **Use `SceneMetaData::initializePerFrameBuffers()` as a reference** for the pattern.
+5. **If in doubt, look at how `m_meshMetaDataSSBOs` works** — it was the fix for RT reflection flickering.
+
+**Anti-pattern (causes flickering):**
+```cpp
+// WRONG: Single buffer overwritten every frame
+m_ssbo->mapMemory();
+memcpy(dst, data, size);
+m_ssbo->unmapMemory();
+```
+
+**Correct pattern:**
+```cpp
+// RIGHT: Per-frame buffer, only the current frame's copy is written
+m_ssbos[frameIndex]->mapMemory();
+memcpy(dst, data, size);
+m_ssbos[frameIndex]->unmapMemory();
+```
+
+### View Matrix State Index — Critical Trap
+
+> [!CRITICAL]
+> **Post-process effects that reconstruct world positions from the depth buffer MUST use
+> the `readStateIndex` overloads of `viewMatrix()` and `projectionMatrix()`, NOT the
+> default overloads.**
+
+The `ViewMatricesInterface` provides two families of overloads:
+- `viewMatrix(bool infinity, size_t viewIndex)` → reads `m_logicState` (current logic tick)
+- `viewMatrix(uint32_t readStateIndex, bool infinity, size_t viewIndex)` → reads `m_renderState[readStateIndex]` (stable render snapshot)
+
+The scene rendering pipeline uses `m_renderState[readStateIndex]` to compute the depth buffer.
+If a post-process effect reconstructs world positions using `m_logicState` (the default overload),
+the logic thread may have already advanced to the next tick. The matrices will disagree with the
+depth buffer → **world position mismatch → flickering**.
+
+**Fix pattern (used in RTR):**
+```cpp
+const auto readStateIndex = m_renderer->currentReadStateIndex();
+const auto & viewMat = viewMatrices.viewMatrix(readStateIndex, false, 0);
+const auto & projMat = viewMatrices.projectionMatrix(readStateIndex);
+```
+
+**Code references:**
+- `Renderer.hpp:currentReadStateIndex()` — Getter for the stable read state index
+- `Renderer.cpp:renderFrameWithPostProcessing()` — Captures `scene->preparedReadStateIndex()` before post-processing
+- `Effects/Framebuffer/RTR.cpp:execute()` — Uses `readStateIndex` for NDC → world reconstruction
+- `ViewMatrices3DUBO.cpp:viewMatrix()` — Two overloads: `m_logicState` vs `m_renderState[idx]`
+
+## Ray Tracing Architecture (SceneMetaData)
+
+`SceneMetaData` manages all scene-level RT resources. It is inert when the device lacks RT support.
+
+### Lifecycle
+1. **Construction** (`Scene::Scene()`) — Creates `AccelerationStructureBuilder`, registers it with `Geometry::Interface`
+2. **Per-frame buffer init** (`Scene::Scene()`) — `initializePerFrameBuffers(framesInFlight())` creates per-frame SSBOs
+3. **Per-frame rebuild** (`Scene::prepareRender()`) — `rebuild(renderLists, ..., frameIndex)` collects TLAS instances, uploads SSBOs
+4. **Destruction** — Unregisters builder, clears all RT resources
+
+### BLAS Building
+- **Centralized** in `Geometry::Interface::onDependenciesLoaded()` — called after `createOnHardware()`
+- **On-demand** in `SceneMetaData::rebuild()` — for geometries loaded before the RT builder was set (`const_cast` + `buildAccelerationStructure()`)
+- **TriangleStrip support** — `generateTriangleListIndicesForRT()` virtual method converts strip+primitive restart to triangle list. Persistent `m_rtIndexBufferObject` stored in `Geometry::Interface` for shader access to converted indices.
+- **Subclasses**: `VertexGridResource` overrides `generateTriangleListIndicesForRT()` for strip conversion
+
+### TLAS Retirement
+The current TLAS is moved to `m_retiredTLAS` before building a new one. Up to 3 retired TLAS are kept alive to cover frames-in-flight. This prevents the GPU from accessing a destroyed TLAS from a previous frame's command buffer.
+
+### Key Files
+- `Scenes/SceneMetaData.hpp/.cpp` — TLAS, per-frame SSBOs, texture registration cache
+- `Scenes/GPUMeshMetaData.hpp` — GPU-side struct (VB/IB addresses, stride, offsets, material index)
+- `Graphics/Geometry/Interface.hpp/.cpp` — `buildAccelerationStructure()`, `generateTriangleListIndicesForRT()`, `m_rtIndexBufferObject`
+- `Graphics/Geometry/VertexGridResource.cpp` — Strip→TriangleList conversion
+- `Vulkan/AccelerationStructureBuilder.hpp/.cpp` — BLAS/TLAS building, `BLASGeometryInput` (supports CPU indices)
 
 ## Render List Categories
 

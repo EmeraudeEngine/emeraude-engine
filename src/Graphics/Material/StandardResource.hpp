@@ -193,6 +193,12 @@ namespace EmEn::Graphics::Material
 			[[nodiscard]]
 			bool isComplex () const noexcept override;
 
+			/** @copydoc EmEn::Graphics::Material::Interface::exportRTMaterialData() */
+			void exportRTMaterialData (GPURTMaterialData & outData) const noexcept override;
+
+			/** @copydoc EmEn::Graphics::Material::Interface::collectRTTextures() */
+			void collectRTTextures (std::vector< RTTextureSlot > & outSlots) const noexcept override;
+
 			/** @copydoc EmEn::Graphics::Material::Interface::setupLightGenerator() */
 			[[nodiscard]]
 			bool setupLightGenerator (Saphir::LightGenerator & lightGenerator) const noexcept override;

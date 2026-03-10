@@ -37,6 +37,7 @@
 #include "Scenes/Component/DirectionalLight.hpp"
 #include "Scenes/Component/Microphone.hpp"
 #include "Scenes/NodeCrawler.hpp"
+#include "SettingKeys.hpp"
 
 namespace EmEn::Scenes
 {
@@ -55,11 +56,21 @@ namespace EmEn::Scenes
 		m_seaLevelRenderable{std::dynamic_pointer_cast< Renderable::Abstract >(seaLevel)},
 		m_seaLevel{seaLevel},
 		m_AVConsoleManager{name, graphicsRenderer, audioManager},
+		m_sceneMetaData{graphicsRenderer.device()},
 		m_boundary{boundary}
 	{
 		this->observe(&m_AVConsoleManager);
 		this->observe(m_rootNode.get());
 		this->observe(&graphicsRenderer);
+
+		/* Initialize per-frame RT SSBOs to match the renderer's frames-in-flight count. */
+		if ( m_sceneMetaData.isRayTracingEnabled() )
+		{
+			static_cast< void >(m_sceneMetaData.initializePerFrameBuffers(graphicsRenderer.framesInFlight()));
+
+			m_tlasDistance = graphicsRenderer.primaryServices().settings()
+				.getOrSetDefault< float >(GraphicsRayTracingTLASDistanceKey, DefaultGraphicsRayTracingTLASDistance);
+		}
 
 		this->buildOctrees(octreeOptions);
 	}

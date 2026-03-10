@@ -603,6 +603,25 @@ namespace EmEn::Saphir
 			std::string roughnessShaderExpression () const noexcept;
 
 			/**
+			 * @brief Returns a GLSL expression for the surface metalness.
+			 * @note For PBR materials, returns the metalness variable directly.
+			 * For non-PBR materials, returns "0.0" (dielectric).
+			 * @return std::string
+			 */
+			[[nodiscard]]
+			std::string metalnessShaderExpression () const noexcept;
+
+			/**
+			 * @brief Returns a GLSL expression for the final view-space normal.
+			 * @note When normal mapping is active, returns "N" (the perturbed normal
+			 * computed by the PBR lighting code). Otherwise, returns the interpolated
+			 * geometric normal (svNormalViewSpace).
+			 * @return std::string
+			 */
+			[[nodiscard]]
+			std::string finalNormalViewSpaceExpression () const noexcept;
+
+			/**
 			 * @brief Returns the variable name of the produced fragment color.
 			 * @return const std::string &
 			 */

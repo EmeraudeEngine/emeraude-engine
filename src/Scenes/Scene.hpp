@@ -68,6 +68,9 @@
 #include "NodeController.hpp"
 #include "RenderBatch.hpp"
 
+/* Local inclusions for usages (scene metadata / ray tracing). */
+#include "SceneMetaData.hpp"
+
 /* Forward Declarations */
 namespace EmEn
 {
@@ -1533,6 +1536,41 @@ namespace EmEn::Scenes
 			bool prepareRender (const std::shared_ptr< Graphics::RenderTarget::Abstract > & renderTarget) noexcept;
 
 			/**
+			 * @brief Returns the top-level acceleration structure for ray tracing.
+			 * @note Returns nullptr if RT is disabled or the TLAS hasn't been built yet.
+			 * @return const Vulkan::AccelerationStructure *
+			 */
+			[[nodiscard]]
+			const Vulkan::AccelerationStructure *
+			TLAS () const noexcept
+			{
+				return m_sceneMetaData.TLAS();
+			}
+
+			/**
+			 * @brief Returns the scene metadata manager (TLAS, mesh/material SSBOs).
+			 * @return const SceneMetaData &
+			 */
+			[[nodiscard]]
+			const SceneMetaData &
+			sceneMetaData () const noexcept
+			{
+				return m_sceneMetaData;
+			}
+
+			/**
+			 * @brief Returns the double-buffer read state index captured at prepareRender() time.
+			 * @note Use this to read view matrices consistent with the current frame's depth buffer.
+			 * @return uint32_t
+			 */
+			[[nodiscard]]
+			uint32_t
+			preparedReadStateIndex () const noexcept
+			{
+				return m_preparedReadStateIndex;
+			}
+
+			/**
 			 * @brief Renders all opaque objects (front-to-back for early-Z optimization).
 			 * @note Must be called after prepareRender().
 			 * @param renderTarget The destination (View, Texture, or SwapChain).
@@ -2247,8 +2285,16 @@ namespace EmEn::Scenes
 			AVConsole::Manager m_AVConsoleManager;
 			/** @brief Light management system for the scene. */
 			LightSet m_lightSet;
+			/** @brief Scene metadata manager (TLAS, mesh/material SSBOs for RT). */
+			SceneMetaData m_sceneMetaData;
 			/** @brief Render lists indexed by render category (Opaque, Translucent, TranslucentGB, etc.). */
 			std::array< RenderBatch::List, 7 > m_renderLists{};
+			/** @brief RT opaque render list (all scene geometry, no frustum culling). */
+			RenderBatch::List m_rtOpaqueList{};
+			/** @brief RT opaque lighted render list (all scene geometry, no frustum culling). */
+			RenderBatch::List m_rtOpaqueLightedList{};
+			/** @brief Cached TLAS distance setting (read once at scene init, not per-frame). */
+			float m_tlasDistance{1000.0F};
 			/** @brief Debug camera controller. @bug Should not be persistent. */
 			NodeController m_nodeController;
 

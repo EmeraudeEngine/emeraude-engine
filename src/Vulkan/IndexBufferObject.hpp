@@ -49,7 +49,7 @@ namespace EmEn::Vulkan
 			 * @param indexCount The number of indices the buffer will hold
 			 */
 			IndexBufferObject (const std::shared_ptr< Device > & device, uint32_t indexCount) noexcept
-				: Buffer{device, 0, indexCount * sizeof(uint32_t), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, false
+				: Buffer{device, 0, indexCount * sizeof(uint32_t), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR, false
 				},
 				m_indexCount{indexCount}
 			{

@@ -805,6 +805,9 @@ The engine provides a multi-pass post-processing pipeline via `PostProcessor`. E
 | **ToneMapping** | `Effects/Framebuffer/ToneMapping.hpp/cpp` | 1-pass | HDR |
 | **VolumetricLight** | `Effects/Framebuffer/VolumetricLight.hpp/cpp` | Multi-pass | Depth, HDR |
 | **AtmosphericFog** | `Effects/Framebuffer/AtmosphericFog.hpp/cpp` | 1-pass | Depth, HDR |
+| **RTR** | `Effects/Framebuffer/RTR.hpp/cpp` | 4-pass (Trace→BlurH→BlurV→Composite) | Depth, Normals, RT (TLAS+SSBOs) |
+| **ContactShadows** | `Effects/Framebuffer/ContactShadows.hpp/cpp` | Multi-pass | Depth, Normals |
+| **LensFlare** | `Effects/Framebuffer/LensFlare.hpp/cpp` | Multi-pass | Depth, HDR |
 | **FogEnvironment** | `Effects/Framebuffer/FogEnvironment.hpp/cpp` | 1-pass | Depth |
 
 ### SSR (Screen-Space Reflections)
@@ -850,14 +853,48 @@ Single-pass analytical fog using closed-form integral (no iterative sampling). R
 - `Effects/Framebuffer/AtmosphericFog.hpp` — Parameters, FogPushConstants, API
 - `Effects/Framebuffer/AtmosphericFog.cpp` — GLSL shaders, pipeline setup, camera extraction
 
+### RTR (Ray-Traced Reflections)
+
+4-pass pipeline using `GL_EXT_ray_query` in a fragment shader (no RT pipeline required):
+
+1. **Trace** (half-res): Reconstructs world position from depth, traces reflection ray via TLAS,
+   samples hit material (bindless albedo texture or scalar), computes Lambert lighting at hit point
+2. **Blur H**: Horizontal Gaussian blur
+3. **Blur V**: Vertical Gaussian blur
+4. **Composite**: Blends blurred reflection with scene color using confidence (alpha)
+
+**Descriptor sets** (trace pass):
+- Set 0: RT data from `Renderer::rtDescriptorSet()` — TLAS (binding 0), mesh metadata SSBO (binding 1),
+  material data SSBO (binding 2), light array SSBO (binding 3)
+- Set 1: Input textures — depth (binding 0), normals (binding 1)
+- Set 2: Bindless textures from `BindlessTextureManager` — sampler2D[] (binding 1)
+
+**Mesh data access via buffer references:**
+- `BDA` (buffer device addresses) in mesh metadata SSBO point to vertex/index buffers
+- Shader reads vertex normals and UVs via `VertexBuffer`/`IndexBuffer` buffer references
+- Byte offsets for normals and UVs computed from geometry flags (tangent space, etc.)
+
+**Self-reflection rejection:** `dot(hitNormal, worldNormal) > 0.9` prevents flat surfaces
+from reflecting themselves (e.g. floor reflecting floor).
+
+**Critical synchronization requirements:**
+1. Mesh/material SSBOs must be **per-frame** (see Frame Synchronization section)
+2. View matrices must use **`readStateIndex`** overloads (see Scenes/AGENTS.md)
+
+**Code references:**
+- `Effects/Framebuffer/RTR.hpp` — Parameters, API
+- `Effects/Framebuffer/RTR.cpp` — GLSL shaders (inline), descriptor layouts, pipeline creation
+- `Scenes/SceneMetaData.hpp` — TLAS, mesh metadata, material data management
+- `Scenes/GPUMeshMetaData.hpp` — GPU-side mesh metadata struct layout
+
 ### Effect Chain Order
 
 Recommended order (used in LightAndShadowDebug):
 ```
-SSR → SSAO → AtmosphericFog → VolumetricLight → Bloom → DoF → ToneMapping (always last: HDR→LDR)
+RTR → SSR → ContactShadows → SSAO → AtmosphericFog → VolumetricLight → LensFlare → Bloom → DoF → ToneMapping (always last: HDR→LDR)
 ```
 
-**Rationale:** SSR first so it samples clean scene color (no SSAO noise amplified in reflections). SSAO then darkens the image globally including reflections, which is acceptable — this matches UE4's approach where AO is applied as a global multiplier after reflection composition. AtmosphericFog before VolumetricLight so god rays bloom through the fog. Bloom before DoF extracts bright pixels from sharp image (avoids runaway glow from DoF blur spreading HDR values).
+**Rationale:** RTR first (hardware ray tracing, highest quality reflections). SSR as fallback where RTR is unavailable. ContactShadows adds fine-detail shadowing from depth. SSAO then darkens the image globally including reflections, which is acceptable — this matches UE4's approach where AO is applied as a global multiplier after reflection composition. AtmosphericFog before VolumetricLight so god rays bloom through the fog. LensFlare from bright light sources. Bloom before DoF extracts bright pixels from sharp image (avoids runaway glow from DoF blur spreading HDR values).
 
 ## 13. Geometry ResourceGenerator: Gem Methods
 
@@ -929,7 +966,42 @@ Every pipeline modification **must** follow this protocol:
 
 No blind optimization. No guesswork. Data drives every decision.
 
-## 15. Navigation
+## 15. Frame Synchronization — Double-Buffering
+
+> [!CRITICAL]
+> **Read [`src/Scenes/AGENTS.md` → Frame Synchronization](../Scenes/AGENTS.md) BEFORE adding
+> any GPU buffer (SSBO, UBO) that is updated per-frame, or any post-process effect that
+> reconstructs world positions from the depth buffer.**
+
+The renderer uses **frames-in-flight** (`Renderer::framesInFlight()`, typically 2-3).
+Each frame has its own command buffer, fence, and descriptor sets indexed by
+`m_currentFrameIndex`. The logic thread runs concurrently with the GPU.
+
+### Rule 1: Per-Frame GPU Buffers
+
+Any GPU buffer written every frame **MUST** have one copy per frame-in-flight,
+indexed by `m_currentFrameIndex`. Writing to a single shared buffer while the GPU reads
+the previous frame causes race conditions (flickering, data corruption).
+
+**Pattern:**
+- `SceneMetaData::m_meshMetaDataSSBOs` — vector of SSBOs, one per frame-in-flight
+- `Renderer::updateRTDescriptorSet()` — binds `meshMetaDataSSBO(m_currentFrameIndex)`
+- `Scene::prepareRender()` — calls `rebuild(..., frameIndex)` with current frame index
+
+### Rule 2: View Matrix State Index
+
+Post-process effects that read the depth buffer to reconstruct world positions **MUST**
+use `Renderer::currentReadStateIndex()` when calling `viewMatrix(readStateIndex, ...)`.
+The default `viewMatrix(false, 0)` reads `m_logicState` which may have already advanced
+to the next logic tick → **matrix/depth mismatch → flickering**. See `RTR.cpp:execute()`.
+
+**Code references:**
+- `Renderer.hpp:m_currentFrameIndex` — Current frame-in-flight index
+- `Renderer.hpp:m_currentReadStateIndex` — Double-buffer read state index for current frame
+- `Renderer.hpp:framesInFlight()` — Number of frames-in-flight
+- `Scenes/SceneMetaData.hpp:initializePerFrameBuffers()` — Reference implementation
+
+## 16. Navigation
 
 -   **Base Class**: `Renderable::Abstract`
 -   **Main Entry**: `Renderer` (Central coordinator)
@@ -940,4 +1012,5 @@ No blind optimization. No guesswork. Data drives every decision.
 -   **Material JSON format**: See `docs/development-patterns.md#material-json-format-unified`
 -   **Shadow Mapping**: [`docs/shadow-mapping.md`](../../docs/shadow-mapping.md) - PCF, global control, per-light settings
 -   **Animated Cubemaps**: See [Section 11](#11-animated-texture-cubemap-system) - CubemapMovieResource + AnimatedTextureCubemap
--   **Post-Processing**: See [Section 12](#12-post-processing-effects) - SSR, Bloom, SSAO, DoF, AtmosphericFog, VolumetricLight, ToneMapping
+-   **Post-Processing**: See [Section 12](#12-post-processing-effects) - RTR, SSR, ContactShadows, SSAO, Bloom, DoF, AtmosphericFog, VolumetricLight, LensFlare, ToneMapping
+-   **Frame Sync**: See [Section 15](#15-frame-synchronization--double-buffering) - Per-frame buffers, view matrix state index

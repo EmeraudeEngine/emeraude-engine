@@ -207,6 +207,24 @@ namespace EmEn::Vulkan
 			[[nodiscard]]
 			bool writeCombinedImageSampler (uint32_t bindingIndex, const Image & image, const ImageView & imageView, const Sampler & sampler) const noexcept;
 
+			/**
+			 * @brief Writes a storage buffer to the descriptor set.
+			 * @param bindingIndex The binding index of the buffer inside the descriptor set layout.
+			 * @param descriptorInfo A reference to the descriptor buffer info.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool writeStorageBuffer (uint32_t bindingIndex, const VkDescriptorBufferInfo & descriptorInfo) const noexcept;
+
+			/**
+			 * @brief Writes an acceleration structure to the descriptor set.
+			 * @param bindingIndex The binding index inside the descriptor set layout.
+			 * @param accelerationStructure The acceleration structure handle to bind.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool writeAccelerationStructure (uint32_t bindingIndex, VkAccelerationStructureKHR accelerationStructure) const noexcept;
+
 		private:
 
 			VkDescriptorSet m_handle{VK_NULL_HANDLE};

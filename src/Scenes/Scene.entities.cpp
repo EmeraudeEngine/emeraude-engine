@@ -111,9 +111,11 @@ namespace EmEn::Scenes
 				{
 					const std::string pad(currentNode->getDepth() * 2, ' ');
 
+					const auto wCoords = currentNode->getWorldCoordinates();
+
 					output << pad <<
 						"[Node:" << currentNode->name() << "]"
-						"[Location: " << currentNode->getWorldCoordinates().position() << "] ";
+						"[Location: " << wCoords.position() << ", direction: " << wCoords.forwardVector() << "] ";
 
 					if ( currentNode->hasComponent() )
 					{
@@ -237,9 +239,11 @@ namespace EmEn::Scenes
 				{
 					const auto & staticEntity = staticEntityIt->second;
 
+					const auto wCoords = staticEntity->getWorldCoordinates();
+
 					output <<
 						"[Static entity #" << std::distance(m_staticEntities.cbegin(), staticEntityIt) << ":" << staticEntityIt->first << "]"
-						"[Location: " << staticEntity->getWorldCoordinates().position() << "] ";
+						"[Location: " << wCoords.position() << ", direction: " << wCoords.forwardVector() << "] ";
 
 					if ( staticEntity->hasComponent() )
 					{

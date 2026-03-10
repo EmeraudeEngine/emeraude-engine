@@ -153,6 +153,19 @@ namespace EmEn::Graphics
 			}
 
 			/**
+			 * @brief Returns whether this effect requires ray tracing (TLAS) to function.
+			 * @note Effects returning true are skipped when RT is not available on the device.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			virtual
+			bool
+			requiresRayTracing () const noexcept
+			{
+				return false;
+			}
+
+			/**
 			 * @brief Creates GPU resources for this effect.
 			 * @param renderer A reference to the graphics renderer.
 			 * @param width The framebuffer width.

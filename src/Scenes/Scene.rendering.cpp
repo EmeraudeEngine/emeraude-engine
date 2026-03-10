@@ -28,6 +28,7 @@
 
 /* Local inclusions. */
 #include "Graphics/BindlessTextureManager.hpp"
+#include "Graphics/Renderable/Abstract.hpp"
 #include "Graphics/Renderer.hpp"
 #include "NodeCrawler.hpp"
 
@@ -376,11 +377,11 @@ namespace EmEn::Scenes
 			return false;
 		}
 
-		/*TraceInfo{ClassId} <<
-			"Frame content :" "\n"
-			" - Opaque / +lighted : " << m_renderLists[Opaque].size() << " / " << m_renderLists[OpaqueLighted].size() << "\n"
-			" - Translucent / +lighted : " << m_renderLists[Translucent].size() << " / " << m_renderLists[TranslucentLighted].size() << "\n"
-			" - TranslucentGB / +lighted : " << m_renderLists[TranslucentGB].size() << " / " << m_renderLists[TranslucentGBLighted].size() << "\n";*/
+		/* Rebuild the TLAS and RT metadata from RT-specific render lists (no frustum culling).
+		 * RT effects cast rays in world space and need ALL scene geometry, not just what's on screen. */
+		auto * mutableBindlessManager = bindlessManager.usable() ? &m_AVConsoleManager.graphicsRenderer().bindlessTextureManager() : nullptr;
+		const auto frameIndex = m_AVConsoleManager.graphicsRenderer().currentFrameIndex();
+		m_sceneMetaData.rebuild(m_rtOpaqueList, m_rtOpaqueLightedList, mutableBindlessManager, frameIndex);
 
 		return true;
 	}
@@ -874,6 +875,16 @@ namespace EmEn::Scenes
 		m_renderLists[TranslucentGB].clear();
 		m_renderLists[TranslucentGBLighted].clear();
 
+		/* RT render lists: all opaque geometry without frustum culling, distance-only.
+		 * Only populated when ray tracing is active on the device. */
+		const auto rtEnabled = m_sceneMetaData.isRayTracingEnabled();
+
+		if ( rtEnabled )
+		{
+			m_rtOpaqueList.clear();
+			m_rtOpaqueLightedList.clear();
+		}
+
 		/* NOTE: The camera position doesn't move during calculation. */
 		const auto & cameraPosition = renderTarget->viewMatrices().position();
 		const auto & frustum = renderTarget->viewMatrices().frustum(0);
@@ -899,6 +910,18 @@ namespace EmEn::Scenes
 			}
 
 			/* NOTE: Scene visual is the skybox or the ground, frustum culling step is not relevant here. */
+
+			/* RT list: scene visuals (ground) are always included (distance 0). */
+			if ( rtEnabled )
+			{
+				const auto * renderable = renderableInstance->renderable();
+
+				if ( renderable != nullptr && renderable->isOpaque(0) )
+				{
+					const auto isLighted = m_lightSet.isEnabled() && renderableInstance->isLightingEnabled();
+					RenderBatch::create(isLighted ? m_rtOpaqueLightedList : m_rtOpaqueList, 0.0F, renderableInstance, nullptr, 0);
+				}
+			}
 
 			this->insertIntoRenderLists(renderableInstance, nullptr, 0.0F);
 		}
@@ -930,9 +953,21 @@ namespace EmEn::Scenes
 						return;
 					}
 
-					/* Render-target distance check and frustum culling check. */
 					const auto distance = Vector< 3, float >::distance(cameraPosition, worldCoordinates.position());
 
+					/* RT list: distance-only culling (no frustum), opaque objects only. */
+					if ( rtEnabled && distance <= m_tlasDistance )
+					{
+						const auto * renderable = renderableInstance->renderable();
+
+						if ( renderable != nullptr && renderable->isOpaque(0) )
+						{
+							const auto isLighted = m_lightSet.isEnabled() && renderableInstance->isLightingEnabled();
+							RenderBatch::create(isLighted ? m_rtOpaqueLightedList : m_rtOpaqueList, distance, renderableInstance, &worldCoordinates, 0);
+						}
+					}
+
+					/* Raster list: frustum culling + distance check. */
 					if ( distance > viewDistance || ( !renderTarget->isCubemap() && !staticEntity->isVisibleTo(frustum) ) )
 					{
 						return;
@@ -975,9 +1010,21 @@ namespace EmEn::Scenes
 						return;
 					}
 
-					/* Render-target distance check and frustum culling check. */
 					const auto distance = Vector< 3, float >::distance(cameraPosition, worldCoordinates.position());
 
+					/* RT list: distance-only culling (no frustum), opaque objects only. */
+					if ( rtEnabled && distance <= m_tlasDistance )
+					{
+						const auto * renderable = renderableInstance->renderable();
+
+						if ( renderable != nullptr && renderable->isOpaque(0) )
+						{
+							const auto isLighted = m_lightSet.isEnabled() && renderableInstance->isLightingEnabled();
+							RenderBatch::create(isLighted ? m_rtOpaqueLightedList : m_rtOpaqueList, distance, renderableInstance, &worldCoordinates, 0);
+						}
+					}
+
+					/* Raster list: frustum culling + distance check. */
 					if ( distance > viewDistance || ( !renderTarget->isCubemap() && !node->isVisibleTo(frustum) ) )
 					{
 						return;
@@ -1469,4 +1516,5 @@ namespace EmEn::Scenes
 				break;
 		}
 	}
+
 }

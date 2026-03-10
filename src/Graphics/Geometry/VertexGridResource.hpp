@@ -218,6 +218,10 @@ namespace EmEn::Graphics::Geometry
 				return true;
 			}
 
+			/** @copydoc EmEn::Graphics::Geometry::Interface::generateTriangleListIndicesForRT() */
+			[[nodiscard]]
+			std::vector< uint32_t > generateTriangleListIndicesForRT () const noexcept override;
+
 			/** @copydoc EmEn::Graphics::Geometry::Interface::createOnHardware() noexcept */
 			bool createOnHardware (Vulkan::TransferManager & transferManager) noexcept override;
 

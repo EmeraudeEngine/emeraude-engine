@@ -32,6 +32,7 @@
 #include <sstream>
 
 /* Local inclusions. */
+#include "GPURTMaterialData.hpp"
 #include "Libs/Math/Base.hpp"
 #include "Libs/PixelFactory/Color.hpp"
 #include "Libs/FastJSON.hpp"
@@ -1525,6 +1526,83 @@ namespace EmEn::Graphics::Material
 		return m_blendingMode;
 	}
 
+	void
+	PBRResource::exportRTMaterialData (GPURTMaterialData & outData) const noexcept
+	{
+		outData = GPURTMaterialData{};
+
+		/* Albedo. */
+		outData.albedo[0] = m_materialProperties[AlbedoColorOffset];
+		outData.albedo[1] = m_materialProperties[AlbedoColorOffset + 1];
+		outData.albedo[2] = m_materialProperties[AlbedoColorOffset + 2];
+		outData.albedo[3] = m_materialProperties[AlbedoColorOffset + 3];
+
+		/* Core PBR scalars. */
+		outData.roughness = m_materialProperties[RoughnessOffset];
+		outData.metalness = m_materialProperties[MetalnessOffset];
+		outData.ior = m_materialProperties[IOROffset];
+		outData.specularFactor = m_materialProperties[SpecularFactorOffset];
+
+		/* Specular color (KHR_materials_specular). */
+		outData.specularColor[0] = m_materialProperties[SpecularColorOffset];
+		outData.specularColor[1] = m_materialProperties[SpecularColorOffset + 1];
+		outData.specularColor[2] = m_materialProperties[SpecularColorOffset + 2];
+		outData.specularColor[3] = m_materialProperties[SpecularColorOffset + 3];
+
+		/* Emission. */
+		const auto autoIllumAmount = m_materialProperties[AutoIlluminationAmountOffset];
+
+		if ( autoIllumAmount > 0.0F )
+		{
+			outData.emissionColor[0] = m_materialProperties[AutoIlluminationColorOffset];
+			outData.emissionColor[1] = m_materialProperties[AutoIlluminationColorOffset + 1];
+			outData.emissionColor[2] = m_materialProperties[AutoIlluminationColorOffset + 2];
+			outData.emissionColor[3] = m_materialProperties[AutoIlluminationColorOffset + 3];
+			outData.emissiveStrength = m_materialProperties[EmissiveStrengthOffset] * autoIllumAmount;
+			outData.flags |= GPURTMaterialData::IsEmissive;
+		}
+
+		/* Clear coat. */
+		const auto clearCoat = m_materialProperties[ClearCoatFactorOffset];
+
+		if ( clearCoat > 0.0F )
+		{
+			outData.clearCoatFactor = clearCoat;
+			outData.clearCoatRoughness = m_materialProperties[ClearCoatRoughnessOffset];
+			outData.flags |= GPURTMaterialData::HasClearCoat;
+		}
+
+		/* NOTE: Texture bindless indices are set by SceneMetaData during material collection.
+		 * The textures are accessible via m_components[ComponentType::Albedo], etc. */
+	}
+
+	void
+	PBRResource::collectRTTextures (std::vector< RTTextureSlot > & outSlots) const noexcept
+	{
+		static constexpr std::pair< ComponentType, RTTextureRole > mappings[] = {
+			{ComponentType::Albedo, RTTextureRole::Albedo},
+			{ComponentType::Normal, RTTextureRole::Normal},
+			{ComponentType::Roughness, RTTextureRole::Roughness},
+			{ComponentType::Metalness, RTTextureRole::Metalness},
+			{ComponentType::AutoIllumination, RTTextureRole::Emission}
+		};
+
+		for ( const auto & [compType, role] : mappings )
+		{
+			const auto it = m_components.find(compType);
+
+			if ( it != m_components.end() && it->second != nullptr && it->second->type() == Component::Type::Texture )
+			{
+				const auto tex = it->second->texture();
+
+				if ( tex != nullptr )
+				{
+					outSlots.push_back({role, tex});
+				}
+			}
+		}
+	}
+
 	bool
 	PBRResource::setupLightGenerator (LightGenerator & lightGenerator) const noexcept
 	{
@@ -1593,8 +1671,9 @@ namespace EmEn::Graphics::Material
 			}
 		}
 
-		/* Normal component */
-		if ( !lightGenerator.isAmbientPass() )
+		/* Normal component.
+		 * Always declare even in ambient pass: the MRT normals attachment
+		 * needs the perturbed normal for post-process effects (RTR, SSR, SSAO, RTAO). */
 		{
 			const auto componentIt = m_components.find(ComponentType::Normal);
 
@@ -2493,21 +2572,20 @@ namespace EmEn::Graphics::Material
 		}
 
 		/* Normal component.
-		 * NOTE: Get a sample from a texture in range [0,1], convert it to a normalized range of [-1, 1]. */
-		if ( this->isComponentPresent(ComponentType::Reflection) || this->isComponentPresent(ComponentType::Refraction) || m_isUsingEnvironmentCubemap || !lightGenerator.isAmbientPass() )
+		 * NOTE: Get a sample from a texture in range [0,1], convert it to a normalized range of [-1, 1].
+		 * Always generated (including ambient pass) because the MRT needs the perturbed normal
+		 * for post-process effects (RTR, SSR, SSAO, RTAO). */
+		if ( !this->generateTextureComponentFragmentShader(ComponentType::Normal, [this] (FragmentShader & shader, const Texture * component) {
+			Code{shader, Location::Top} <<
+				"const vec3 " << component->variableName() << "_raw = texture(" << component->samplerName() << ", " << textCoords(component) << ").rgb * 2.0 - 1.0;" << Line::End <<
+				"const vec3 " << component->variableName() << " = normalize(vec3(" << component->variableName() << "_raw.xy * " << MaterialUB(UniformBlock::Component::NormalScale) << ", " << component->variableName() << "_raw.z));";
+
+			return true;
+		}, fragmentShader, materialSet) )
 		{
-			if ( !this->generateTextureComponentFragmentShader(ComponentType::Normal, [this] (FragmentShader & shader, const Texture * component) {
-				Code{shader, Location::Top} <<
-					"const vec3 " << component->variableName() << "_raw = texture(" << component->samplerName() << ", " << textCoords(component) << ").rgb * 2.0 - 1.0;" << Line::End <<
-					"const vec3 " << component->variableName() << " = normalize(vec3(" << component->variableName() << "_raw.xy * " << MaterialUB(UniformBlock::Component::NormalScale) << ", " << component->variableName() << "_raw.z));";
+			TraceError{ClassId} << "Unable to generate fragment code for the normal component of PBR material '" << this->name() << "' !";
 
-				return true;
-			}, fragmentShader, materialSet) )
-			{
-				TraceError{ClassId} << "Unable to generate fragment code for the normal component of PBR material '" << this->name() << "' !";
-
-				return false;
-			}
+			return false;
 		}
 
 		/* Albedo component. */

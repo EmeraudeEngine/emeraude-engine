@@ -29,17 +29,17 @@
 /* STL inclusions. */
 #include <memory>
 
-/* Local inclusions. */
-#include "AbstractDeviceBuffer.hpp"
+/* Local inclusions for inheritances. */
+#include "Buffer.hpp"
 
 namespace EmEn::Vulkan
 {
 	/**
-	 * @brief Defines a convenient way to build a shader storage buffer object.
-	 * @note OpenGL guaranteed a minimum size of 128MB.
-	 * @extends EmEn::Vulkan::AbstractDeviceBuffer This is a device-side buffer.
+	 * @brief Defines a convenient way to build a shader storage buffer object (SSBO).
+	 * @note Host-visible by default for CPU-side writes (map/unmap pattern).
+	 * @extends EmEn::Vulkan::Buffer This is a buffer.
 	 */
-	class ShaderStorageBufferObject final : public AbstractDeviceBuffer
+	class ShaderStorageBufferObject final : public Buffer
 	{
 		public:
 
@@ -49,10 +49,11 @@ namespace EmEn::Vulkan
 			/**
 			 * @brief Constructs a shader storage buffer object.
 			 * @param device A reference to the device smart pointer.
-			 * @param size The size of the buffer.
+			 * @param size The size of the buffer in bytes.
+			 * @param hostVisible Whether the buffer is accessible by the CPU. Default true.
 			 */
-			ShaderStorageBufferObject (const std::shared_ptr< Device > & device, VkDeviceSize size) noexcept
-				: AbstractDeviceBuffer{device, 0, size, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT}
+			ShaderStorageBufferObject (const std::shared_ptr< Device > & device, VkDeviceSize size, bool hostVisible = true) noexcept
+				: Buffer{device, 0, size, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, hostVisible}
 			{
 
 			}

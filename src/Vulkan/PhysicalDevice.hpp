@@ -181,6 +181,40 @@ namespace EmEn::Vulkan
 			}
 
 			/**
+			 * @brief Returns the physical device acceleration structure features (KHR extension).
+			 * @return const VkPhysicalDeviceAccelerationStructureFeaturesKHR &
+			 */
+			[[nodiscard]]
+			const VkPhysicalDeviceAccelerationStructureFeaturesKHR &
+			accelerationStructureFeatures () const noexcept
+			{
+				return m_accelerationStructureFeatures;
+			}
+
+			/**
+			 * @brief Returns the physical device ray query features (KHR extension).
+			 * @return const VkPhysicalDeviceRayQueryFeaturesKHR &
+			 */
+			[[nodiscard]]
+			const VkPhysicalDeviceRayQueryFeaturesKHR &
+			rayQueryFeatures () const noexcept
+			{
+				return m_rayQueryFeatures;
+			}
+
+			/**
+			 * @brief Returns whether the physical device supports hardware ray tracing (ray query + acceleration structures).
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			supportsRayTracing () const noexcept
+			{
+				return m_accelerationStructureFeatures.accelerationStructure == VK_TRUE
+					&& m_rayQueryFeatures.rayQuery == VK_TRUE;
+			}
+
+			/**
 			 * @brief Returns the device type as a string.
 			 * @note Shortcut to PhysicalDevice::properties().
 			 * @return std::string
@@ -611,6 +645,8 @@ namespace EmEn::Vulkan
 			VkPhysicalDeviceVulkan11Features m_featuresVK11{};
 			VkPhysicalDeviceVulkan12Features m_featuresVK12{};
 			VkPhysicalDeviceVulkan13Features m_featuresVK13{};
+			VkPhysicalDeviceAccelerationStructureFeaturesKHR m_accelerationStructureFeatures{};
+			VkPhysicalDeviceRayQueryFeaturesKHR m_rayQueryFeatures{};
 			VkPhysicalDeviceProperties2 m_properties{};
 			VkPhysicalDeviceVulkan11Properties m_propertiesVK11{};
 			VkPhysicalDeviceVulkan12Properties m_propertiesVK12{};

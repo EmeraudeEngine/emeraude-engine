@@ -60,9 +60,15 @@ namespace EmEn::Vulkan
 				m_enableGraphics{enableGraphics},
 				m_enableCompute{enableCompute}
 			{
+				/* NOTE: Ray query features (KHR extension). */
+				m_rayQueryFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR;
+				m_rayQueryFeatures.pNext = nullptr;
+				/* NOTE: Acceleration structure features (KHR extension). */
+				m_accelerationStructureFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR;
+				m_accelerationStructureFeatures.pNext = &m_rayQueryFeatures;
 				/* NOTE: Device features from Vulkan 1.3 API. */
 				m_featuresVK13.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
-				m_featuresVK13.pNext = nullptr;
+				m_featuresVK13.pNext = &m_accelerationStructureFeatures;
 				/* NOTE: Device features from Vulkan 1.2 API. */
 				m_featuresVK12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
 				m_featuresVK12.pNext = &m_featuresVK13;
@@ -217,6 +223,50 @@ namespace EmEn::Vulkan
 				return m_surface;
 			}
 
+			/**
+			 * @brief Gives access to configure acceleration structure features (KHR extension).
+			 * @return VkPhysicalDeviceAccelerationStructureFeaturesKHR &
+			 */
+			[[nodiscard]]
+			VkPhysicalDeviceAccelerationStructureFeaturesKHR &
+			accelerationStructureFeatures () noexcept
+			{
+				return m_accelerationStructureFeatures;
+			}
+
+			/**
+			 * @brief Returns the acceleration structure features (KHR extension).
+			 * @return const VkPhysicalDeviceAccelerationStructureFeaturesKHR &
+			 */
+			[[nodiscard]]
+			const VkPhysicalDeviceAccelerationStructureFeaturesKHR &
+			accelerationStructureFeatures () const noexcept
+			{
+				return m_accelerationStructureFeatures;
+			}
+
+			/**
+			 * @brief Gives access to configure ray query features (KHR extension).
+			 * @return VkPhysicalDeviceRayQueryFeaturesKHR &
+			 */
+			[[nodiscard]]
+			VkPhysicalDeviceRayQueryFeaturesKHR &
+			rayQueryFeatures () noexcept
+			{
+				return m_rayQueryFeatures;
+			}
+
+			/**
+			 * @brief Returns the ray query features (KHR extension).
+			 * @return const VkPhysicalDeviceRayQueryFeaturesKHR &
+			 */
+			[[nodiscard]]
+			const VkPhysicalDeviceRayQueryFeaturesKHR &
+			rayQueryFeatures () const noexcept
+			{
+				return m_rayQueryFeatures;
+			}
+
 		private:
 
 			/**
@@ -242,6 +292,8 @@ namespace EmEn::Vulkan
 			VkPhysicalDeviceVulkan11Features m_featuresVK11{};
 			VkPhysicalDeviceVulkan12Features m_featuresVK12{};
 			VkPhysicalDeviceVulkan13Features m_featuresVK13{};
+			VkPhysicalDeviceAccelerationStructureFeaturesKHR m_accelerationStructureFeatures{};
+			VkPhysicalDeviceRayQueryFeaturesKHR m_rayQueryFeatures{};
 			VkSurfaceKHR m_surface{VK_NULL_HANDLE};
 			bool m_enableGraphics{false};
 			bool m_enableCompute{false};

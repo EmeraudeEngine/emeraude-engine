@@ -127,7 +127,7 @@ namespace EmEn::Vulkan
 	Device::createMemoryAllocator () noexcept
 	{
 		VmaAllocatorCreateInfo allocatorCreateInfo{};
-		allocatorCreateInfo.flags = VMA_ALLOCATOR_CREATE_EXT_MEMORY_BUDGET_BIT;
+		allocatorCreateInfo.flags = VMA_ALLOCATOR_CREATE_EXT_MEMORY_BUDGET_BIT | VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
 		allocatorCreateInfo.physicalDevice = m_physicalDevice->handle();
 		allocatorCreateInfo.device = m_deviceHandle;
 		allocatorCreateInfo.preferredLargeHeapBlockSize = 0; /* Default: 256Kb */
@@ -237,6 +237,11 @@ namespace EmEn::Vulkan
 
 			return false;
 		}
+
+		/* NOTE: Detect if ray tracing extensions were enabled on this device. */
+		m_rayTracingEnabled = std::ranges::any_of(extensions, [] (const char * ext) {
+			return std::strcmp(ext, VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME) == 0;
+		});
 
 		/* Initialize the vulkan memory allocator. */
 		if ( useVMA && !this->createMemoryAllocator() )

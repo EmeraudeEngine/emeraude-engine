@@ -121,6 +121,75 @@ namespace EmEn::Graphics::Geometry
 		return true;
 	}
 
+	std::vector< uint32_t >
+	VertexGridResource::generateTriangleListIndicesForRT () const noexcept
+	{
+		/* Re-generate the strip indices from local data (same as createOnHardware). */
+		const auto vertexElementCount = getElementCountFromFlags(this->flags());
+
+		std::vector< float > dummyVertexAttribs;
+		std::vector< uint32_t > stripIndices;
+
+		/* NOTE: generateGPUBuffers fills stripIndices with the TriangleStrip + primitive restart indices. */
+		if ( !this->generateGPUBuffers(dummyVertexAttribs, vertexElementCount, stripIndices) )
+		{
+			return {};
+		}
+
+		/* Convert TriangleStrip with primitive restart (0xFFFFFFFF) to TriangleList. */
+		constexpr auto PrimitiveRestart = std::numeric_limits< uint32_t >::max();
+
+		std::vector< uint32_t > triangleList;
+		triangleList.reserve(stripIndices.size() * 2);
+
+		uint32_t stripStart = 0;
+
+		for ( uint32_t i = 0; i <= static_cast< uint32_t >(stripIndices.size()); i++ )
+		{
+			const bool isEnd = (i == static_cast< uint32_t >(stripIndices.size())) || (stripIndices[i] == PrimitiveRestart);
+
+			if ( isEnd )
+			{
+				/* Convert this strip segment [stripStart, i) to triangles. */
+				const auto stripLen = i - stripStart;
+
+				if ( stripLen >= 3 )
+				{
+					for ( uint32_t j = 0; j < stripLen - 2; j++ )
+					{
+						const auto i0 = stripIndices[stripStart + j];
+						const auto i1 = stripIndices[stripStart + j + 1];
+						const auto i2 = stripIndices[stripStart + j + 2];
+
+						/* Skip degenerate triangles. */
+						if ( i0 == i1 || i1 == i2 || i0 == i2 )
+						{
+							continue;
+						}
+
+						/* Alternate winding for even/odd triangles in strip. */
+						if ( (j & 1U) == 0 )
+						{
+							triangleList.emplace_back(i0);
+							triangleList.emplace_back(i1);
+							triangleList.emplace_back(i2);
+						}
+						else
+						{
+							triangleList.emplace_back(i0);
+							triangleList.emplace_back(i2);
+							triangleList.emplace_back(i1);
+						}
+					}
+				}
+
+				stripStart = i + 1;
+			}
+		}
+
+		return triangleList;
+	}
+
 	bool
 	VertexGridResource::createOnHardware (TransferManager & transferManager) noexcept
 	{

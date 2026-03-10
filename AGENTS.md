@@ -20,6 +20,30 @@ stack, material system, audio engine, physics. That is our battleground. If the 
 using emeraude-engine has to work harder on tooling — that is an acceptable trade-off. The
 runtime output quality is the non-negotiable imperative.
 
+### Strategic Positioning
+
+"UE5 Runtime Killer" is a **direction**, not a frontal war. The real goal: give indie
+developers a **genuine choice**. Today, a dev who wants AAA-quality rendering is locked
+into UE5's licensing (5% royalties, Epic controls the terms) or Unity's unpredictable
+pricing. Emeraude Engine offers a third option: **professional-grade runtime, LGPLv3,
+zero royalties, zero contractual dependency.**
+
+The trade-off is honest: less tooling, more code. The target audience is developers who
+**want** to write C++ and understand their engine — not drag-and-drop users. Those who
+accept this trade-off get a runtime that owes nothing to anyone.
+
+### Open-Core Business Model
+
+The engine follows an **open-core** model:
+- **Runtime (emeraude-engine):** LGPLv3, free forever. The community's property.
+- **Studio tooling (proprietary):** Scene editors, asset pipelines, productivity
+  wrappers — paid products built on top of the free runtime.
+
+The distinction is critical: **paid tools add convenience, never functionality.** A
+developer who never pays has the exact same runtime capabilities. No feature gating,
+no crippled free tier, no bait-and-switch. This model funds continued development of
+the free runtime while keeping it permanently open.
+
 ### Vulkan-Only by Design
 
 Emeraude Engine is **Vulkan-only**. This is a deliberate architectural decision, not a limitation.
@@ -90,6 +114,7 @@ and the AI executes, measures, and iterates at industrial speed.
 1.  **Coordinates:** **Y-DOWN** is absolute law. Gravity is `+Y`.
 2.  **Vulkan:** NEVER call Vulkan directly. Use `Graphics/` abstractions.
 3.  **Memory:** Use **VMA** for GPU. Use **RAII** for CPU. No raw pointers.
+4.  **Frame Sync:** Any GPU buffer (SSBO/UBO) updated per-frame **MUST** be double-buffered (one per frame-in-flight). See [`src/Scenes/AGENTS.md`](src/Scenes/AGENTS.md) → Frame Synchronization.
 
 ## 3b. Licensing
 

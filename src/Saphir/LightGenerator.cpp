@@ -58,6 +58,32 @@ namespace EmEn::Saphir
 	}
 
 	std::string
+	LightGenerator::metalnessShaderExpression () const noexcept
+	{
+		if ( !m_surfaceMetalness.empty() )
+		{
+			return m_surfaceMetalness;
+		}
+
+		return "0.0";
+	}
+
+	std::string
+	LightGenerator::finalNormalViewSpaceExpression () const noexcept
+	{
+		/* When normal mapping is active, the PBR lighting code declares
+		 * 'const vec3 N = normalize(transpose(ViewTBNMatrix) * surfaceNormalVector)'
+		 * which is the perturbed normal in view space. Use it for the MRT output
+		 * so that post-process effects (RTR, SSR, SSAO, RTAO) see the normal-mapped surface. */
+		if ( m_useNormalMapping && !m_surfaceNormalVector.empty() )
+		{
+			return "N";
+		}
+
+		return std::string{"normalize("} + Keys::ShaderVariable::NormalViewSpace + ")";
+	}
+
+	std::string
 	LightGenerator::lightPositionWorldSpace () const noexcept
 	{
 		if ( m_useStaticLighting )
@@ -326,7 +352,18 @@ namespace EmEn::Saphir
 		switch ( this->checkRenderPassType() )
 		{
 			case RenderPassType::AmbientPass :
-				/* NOTE: Nothing to do for ambient pass inside the vertex shader. */
+				/* Request ViewTBNMatrix for the MRT normals output when normal mapping is active.
+				 * Post-process effects (RTR, SSR, SSAO, RTAO) need the perturbed normal in view space. */
+				if ( m_useNormalMapping )
+				{
+					if ( !vertexShader.requestSynthesizeInstruction(ShaderVariable::ViewTBNMatrix, VariableScope::ToNextStage) )
+					{
+						Tracer::error(ClassId, "Unable to synthesize ViewTBNMatrix for ambient pass !");
+
+						return false;
+					}
+				}
+
 				return true;
 
 			case RenderPassType::DirectionalLightPassFullCSM :
@@ -443,6 +480,13 @@ namespace EmEn::Saphir
 				}
 
 				Code{fragmentShader, Location::Top} << "vec4 " << m_fragmentColor << " = vec4(0.0, 0.0, 0.0, 1.0);";
+
+				/* Declare the perturbed normal in view space for the MRT normals output.
+				 * Post-process effects (RTR, SSR, SSAO, RTAO) need this. */
+				if ( m_useNormalMapping && !m_surfaceNormalVector.empty() )
+				{
+					Code{fragmentShader} << "const vec3 N = normalize(transpose(" << ShaderVariable::ViewTBNMatrix << ") * " << m_surfaceNormalVector << ");";
+				}
 
 				this->generateAmbientFragmentShader(fragmentShader);
 

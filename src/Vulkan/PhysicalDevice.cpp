@@ -45,9 +45,15 @@ namespace EmEn::Vulkan
 	{
 		/* NOTE: Get the device features. */
 		{
+			/* NOTE: Ray query features (KHR extension). */
+			m_rayQueryFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR;
+			m_rayQueryFeatures.pNext = nullptr;
+			/* NOTE: Acceleration structure features (KHR extension). */
+			m_accelerationStructureFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR;
+			m_accelerationStructureFeatures.pNext = &m_rayQueryFeatures;
 			/* NOTE: Device features from Vulkan 1.3 API. */
 			m_featuresVK13.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
-			m_featuresVK13.pNext = nullptr;
+			m_featuresVK13.pNext = &m_accelerationStructureFeatures;
 			/* NOTE: Device features from Vulkan 1.2 API. */
 			m_featuresVK12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
 			m_featuresVK12.pNext = &m_featuresVK13;

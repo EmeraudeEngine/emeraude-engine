@@ -43,12 +43,8 @@
 
 ## Post-Processing Pipeline (Effects/Framebuffer + Effects/Lens)
 
-- [x] **Volumetric Light/Fog** — Rayons de lumière visibles dans le brouillard/particules. Atmosphère et profondeur. → `AtmosphericFog` (exponential height fog + inscattering, single-pass analytique).
-- [x] **Light Shafts (God Rays)** — Rayons lumineux directionnels à travers occluders. → `VolumetricLight` (occlusion mask + radial blur + composite, 3-pass).
 - [ ] **Screen-Space GI (SSGI)** — Illumination indirecte approximée (lumière rebondie).
-- [ ] **Contact Shadows** — Ombres fines screen-space que le shadow map ne capture pas.
+- [ ] **Contact Shadows** — [WIP] Skeleton implemented but has view-dependent artifacts (floor darkening when camera tilts). Needs: investigate normal buffer encoding in GrabPass, verify view-space NdotL invariance, add temporal filtering. Files: `ContactShadows.hpp/.cpp`.
 - [ ] **Motion Blur** — Flou de mouvement caméra/objets. Sensation de poids et d'inertie.
-- [ ] **Lens Flare** — Reflets internes de l'objectif face aux sources lumineuses.
 - [ ] **TAA (Temporal Anti-Aliasing)** — Anti-aliasing temporel, élimine le scintillement sur les arêtes fines.
-- [x] **Sharpen (CAS/RCAS)** — Netteté post-TAA pour compenser le flou temporel.
-- [ ] **FXAA ou SMAA** — Anti-aliasing post-process en attendant TAA.
+- [ ] **SMAA (Subpixel Morphological Anti-Aliasing)** — Anti-aliasing post-process morphologique (complément au FXAA existant).

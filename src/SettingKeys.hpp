@@ -245,6 +245,22 @@ namespace EmEn
 			constexpr auto GraphicsTextureViewDistanceKey{"Core/Graphics/Texture/ViewDistance"};
 			constexpr auto DefaultGraphicsTextureViewDistance{5000.0F}; /* NOTE: 5km */
 
+			/* Ray Tracing */
+			constexpr auto GraphicsRayTracingEnabledKey{"Core/Graphics/RayTracing/Enabled"};
+			constexpr auto DefaultGraphicsRayTracingEnabled{true};
+			constexpr auto GraphicsRayTracingEnableReflectionKey{"Core/Graphics/RayTracing/EnableReflection"};
+			constexpr auto DefaultGraphicsRayTracingEnableReflection{true};
+			constexpr auto GraphicsRayTracingEnableAmbientOcclusionKey{"Core/Graphics/RayTracing/EnableAmbientOcclusion"};
+			constexpr auto DefaultGraphicsRayTracingEnableAmbientOcclusion{true};
+			constexpr auto GraphicsRayTracingAOSampleCountKey{"Core/Graphics/RayTracing/AOSampleCount"};
+			constexpr auto DefaultGraphicsRayTracingAOSampleCount{4U};
+			constexpr auto GraphicsRayTracingEnableGlobalIlluminationKey{"Core/Graphics/RayTracing/EnableGlobalIllumination"};
+			constexpr auto DefaultGraphicsRayTracingEnableGlobalIllumination{true};
+			constexpr auto GraphicsRayTracingGISampleCountKey{"Core/Graphics/RayTracing/GISampleCount"};
+			constexpr auto DefaultGraphicsRayTracingGISampleCount{2U};
+			constexpr auto GraphicsRayTracingTLASDistanceKey{"Core/Graphics/RayTracing/TLASDistance"};
+			constexpr auto DefaultGraphicsRayTracingTLASDistance{1000.0F};
+
 			/* Shadow Mapping */
 			constexpr auto GraphicsShadowMappingEnabledKey{"Core/Graphics/ShadowMapping/Enabled"};
 			constexpr auto DefaultGraphicsShadowMappingEnabled{true};

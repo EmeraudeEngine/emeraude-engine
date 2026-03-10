@@ -27,6 +27,7 @@
 #include "Interface.hpp"
 
 /* Local inclusions. */
+#include "GPURTMaterialData.hpp"
 #include "Libs/FastJSON.hpp"
 #include "Saphir/Declaration/UniformBlock.hpp"
 #include "Graphics/Renderer.hpp"
@@ -40,6 +41,19 @@ namespace EmEn::Graphics::Material
 	constexpr auto TracerTag{"MaterialInterface"};
 
 	Renderer * Interface::s_graphicsRenderer = nullptr;
+
+	void
+	Interface::exportRTMaterialData (GPURTMaterialData & outData) const noexcept
+	{
+		/* Default: grey dielectric with no textures. */
+		outData = GPURTMaterialData{};
+	}
+
+	void
+	Interface::collectRTTextures (std::vector< RTTextureSlot > & /*outSlots*/) const noexcept
+	{
+		/* Default: no textures. */
+	}
 
 	bool
 	Interface::onDependenciesLoaded () noexcept

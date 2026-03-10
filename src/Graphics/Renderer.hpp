@@ -71,11 +71,20 @@ namespace EmEn
 	{
 		class Device;
 		class DescriptorPool;
+		class DescriptorSet;
+		class DescriptorSetLayout;
+		class AccelerationStructure;
 		class CommandPool;
 		class CommandBuffer;
 		class GraphicsPipeline;
 		class Queue;
 		class Sampler;
+	}
+
+	namespace Scenes
+	{
+		class SceneMetaData;
+		class LightSet;
 	}
 
 	namespace Graphics
@@ -676,6 +685,18 @@ namespace EmEn::Graphics
 			}
 
 			/**
+			 * @brief Returns whether ray tracing is enabled via settings.
+			 * @note This is the user-level master switch. Hardware support is checked separately.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isRayTracingSettingEnabled () const noexcept
+			{
+				return m_rayTracingSettingEnabled;
+			}
+
+			/**
 			 * @brief Controls the state of rendering to textures.
 			 * @param state The state.
 			 * @return void
@@ -936,6 +957,20 @@ namespace EmEn::Graphics
 			}
 
 			/**
+			 * @brief Returns the double-buffer read state index for the current frame.
+			 * @note Set from Scene::preparedReadStateIndex() before post-processing.
+			 *       Use this in post-process effects (e.g. RTR) to read view matrices
+			 *       consistent with the depth buffer.
+			 * @return uint32_t
+			 */
+			[[nodiscard]]
+			uint32_t
+			currentReadStateIndex () const noexcept
+			{
+				return m_currentReadStateIndex;
+			}
+
+			/**
 			 * @brief Returns the number of frames in flight.
 			 * @return uint32_t
 			 */
@@ -956,6 +991,67 @@ namespace EmEn::Graphics
 			{
 				return m_sceneTarget;
 			}
+
+			/**
+			 * @brief Returns the current frame's TLAS for ray query effects.
+			 * @note Set per-frame from the active scene. Returns nullptr if RT is unavailable.
+			 * @return const Vulkan::AccelerationStructure *
+			 */
+			[[nodiscard]]
+			const Vulkan::AccelerationStructure *
+			currentTLAS () const noexcept
+			{
+				return m_currentTLAS;
+			}
+
+			/**
+			 * @brief Returns the RT descriptor set for ray query shaders.
+			 * @note Contains TLAS (binding 0), mesh metadata SSBO (binding 1),
+			 *       material data SSBO (binding 2), and light array SSBO (binding 3).
+			 *       Updated per-frame by updateRTDescriptorSet().
+			 * @return const Vulkan::DescriptorSet *
+			 */
+			[[nodiscard]]
+			const Vulkan::DescriptorSet *
+			rtDescriptorSet () const noexcept
+			{
+				if ( m_rtDescriptorSets.empty() )
+				{
+					return nullptr;
+				}
+
+				return m_rtDescriptorSets[m_currentFrameIndex].get();
+			}
+
+			/**
+			 * @brief Returns the number of active lights in the RT light SSBO.
+			 * @return uint32_t
+			 */
+			[[nodiscard]]
+			uint32_t
+			rtLightCount () const noexcept
+			{
+				return m_rtLightCount;
+			}
+
+			/**
+			 * @brief Returns the RT descriptor set layout for pipeline creation.
+			 * @return std::shared_ptr< Vulkan::DescriptorSetLayout >
+			 */
+			[[nodiscard]]
+			std::shared_ptr< Vulkan::DescriptorSetLayout >
+			rtDescriptorSetLayout () const noexcept
+			{
+				return m_rtDescriptorSetLayout;
+			}
+
+			/**
+			 * @brief Updates the RT descriptor set with current scene data.
+			 * @note Called per-frame before RT post-process effects execute.
+			 * @param sceneMetaData The scene's RT metadata (TLAS, mesh/material SSBOs).
+			 * @param lightSet The scene's light set (RT light SSBO).
+			 */
+			void updateRTDescriptorSet (const Scenes::SceneMetaData & sceneMetaData, const Scenes::LightSet & lightSet) noexcept;
 
 			/**
 			 * @brief Returns the descriptor pool.
@@ -1321,6 +1417,14 @@ namespace EmEn::Graphics
 			bool createRenderingSystem (uint32_t imageCount) noexcept;
 
 			/**
+			 * @brief Creates the RT descriptor set layout and descriptor set.
+			 * @note Called once during initialization. The set is updated per-frame via updateRTDescriptorSet().
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool createRTDescriptorSet () noexcept;
+
+			/**
 			 * @brief Destroys command pools and buffers.
 			 * @return void
 			 */
@@ -1378,6 +1482,7 @@ namespace EmEn::Graphics
 			 * separate clear values with depth=1.0 at index 0 (not index 1 like main render). */
 			std::array< VkClearValue, 1 > m_shadowMapClearValues{VkClearValue{.depthStencil = {1.0F, 0}}};
 			uint32_t m_currentFrameIndex{0};
+			uint32_t m_currentReadStateIndex{0};
 			const uint64_t m_timeout{std::chrono::duration_cast< std::chrono::nanoseconds >(std::chrono::milliseconds(60'000)).count()};
 			std::chrono::high_resolution_clock::time_point m_frameStartTime{};
 			std::chrono::nanoseconds m_frameDuration{0}; // 0 = frame limiter disabled
@@ -1392,8 +1497,14 @@ namespace EmEn::Graphics
 			std::shared_ptr< DummyColorProjectionTexture > m_dummyColorProjectionTexture2D;
 			std::shared_ptr< DummyColorProjectionTexture > m_dummyColorProjectionTextureCube;
 			std::unique_ptr< GrabPass > m_grabPass;
+			const Vulkan::AccelerationStructure * m_currentTLAS{nullptr};
+			/* RT descriptor set for ray query shaders (TLAS + SSBOs). */
+			std::shared_ptr< Vulkan::DescriptorSetLayout > m_rtDescriptorSetLayout;
+			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_rtDescriptorSets;
+			uint32_t m_rtLightCount{0};
 			bool m_debugMode{false};
 			bool m_windowLess{false};
+			bool m_rayTracingSettingEnabled{true};
 			bool m_shadowMapsEnabled{true};
 			bool m_renderToTexturesEnabled{true};
 			bool m_TBNSpaceRenderingEnabled{false};

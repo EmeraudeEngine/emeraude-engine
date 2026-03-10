@@ -857,24 +857,55 @@ namespace EmEn::Vulkan
 			requirements.featuresVK12().runtimeDescriptorArray = VK_TRUE;
 			requirements.featuresVK12().shaderSampledImageArrayNonUniformIndexing = VK_TRUE;
 		}
+		requirements.featuresVK12().bufferDeviceAddress = VK_TRUE; // Required for buffer device addresses (VBO/IBO for RT, etc.)
 		requirements.featuresVK13().shaderDemoteToHelperInvocation = VK_TRUE;
 
-		/* NOTE: According to Vulkan spec, if a device exposes VK_KHR_portability_subset,
-		 * it MUST be enabled. This is required for MoltenVK on macOS, but some Windows
-		 * drivers or software renderers may also expose it. */
-		if constexpr ( !IsMacOS )
+		/* NOTE: Optional extension detection. Query all device extensions once and enable
+		 * supported optional features (portability subset, ray tracing). */
 		{
-			const auto extensions = logicalDevice->physicalDevice()->getExtensions();
+			const auto & physicalDevice = logicalDevice->physicalDevice();
+			const auto extensions = physicalDevice->getExtensions();
 
-			const auto hasPortabilitySubset = std::ranges::any_of(extensions, [] (const VkExtensionProperties & ext) {
-				return std::strcmp(ext.extensionName, "VK_KHR_portability_subset") == 0;
-			});
+			const auto hasExtension = [&extensions] (const char * name) {
+				return std::ranges::any_of(extensions, [name] (const VkExtensionProperties & ext) {
+					return std::strcmp(ext.extensionName, name) == 0;
+				});
+			};
 
-			if ( hasPortabilitySubset )
+			/* NOTE: According to Vulkan spec, if a device exposes VK_KHR_portability_subset,
+			 * it MUST be enabled. This is required for MoltenVK on macOS, but some Windows
+			 * drivers or software renderers may also expose it. */
+			if constexpr ( !IsMacOS )
 			{
-				m_requiredGraphicsDeviceExtensions.emplace_back("VK_KHR_portability_subset");
+				if ( hasExtension("VK_KHR_portability_subset") )
+				{
+					m_requiredGraphicsDeviceExtensions.emplace_back("VK_KHR_portability_subset");
 
-				Tracer::info(ClassId, "VK_KHR_portability_subset extension detected and enabled.");
+					Tracer::info(ClassId, "VK_KHR_portability_subset extension detected and enabled.");
+				}
+			}
+
+			/* NOTE: Ray tracing extensions (VK_KHR_acceleration_structure + VK_KHR_ray_query).
+			 * These enable hardware-accelerated ray queries in fragment/compute shaders.
+			 * VK_KHR_deferred_host_operations is a required dependency of acceleration structures. */
+			if ( physicalDevice->supportsRayTracing()
+				&& hasExtension(VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME)
+				&& hasExtension(VK_KHR_RAY_QUERY_EXTENSION_NAME)
+				&& hasExtension(VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME) )
+			{
+				m_requiredGraphicsDeviceExtensions.emplace_back(VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME);
+				m_requiredGraphicsDeviceExtensions.emplace_back(VK_KHR_RAY_QUERY_EXTENSION_NAME);
+				m_requiredGraphicsDeviceExtensions.emplace_back(VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME);
+
+				/* NOTE: Enable RT features on the logical device. */
+				requirements.accelerationStructureFeatures().accelerationStructure = VK_TRUE;
+				requirements.rayQueryFeatures().rayQuery = VK_TRUE;
+
+				Tracer::info(ClassId, "Ray tracing extensions detected and enabled (VK_KHR_acceleration_structure + VK_KHR_ray_query).");
+			}
+			else
+			{
+				Tracer::info(ClassId, "Ray tracing not supported by this device.");
 			}
 		}
 

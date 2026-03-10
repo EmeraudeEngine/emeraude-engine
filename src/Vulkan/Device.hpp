@@ -288,6 +288,17 @@ namespace EmEn::Vulkan
 			}
 
 			/**
+			 * @brief Returns whether ray tracing extensions are enabled on this device.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			rayTracingEnabled () const noexcept
+			{
+				return m_rayTracingEnabled;
+			}
+
+			/**
 			 * @brief Returns whether the device has been set up for graphics.
 			 * @return bool
 			 */
@@ -649,5 +660,6 @@ namespace EmEn::Vulkan
 			bool m_showInformation{false};
 			bool m_basicSupport{false};
 			bool m_useMemoryAllocator{false};
+			bool m_rayTracingEnabled{false};
 	};
 }

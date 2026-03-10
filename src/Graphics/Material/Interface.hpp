@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* STL inclusions. */
+#include <vector>
+
 /* Local inclusions for inheritances. */
 #include "Resources/ResourceTrait.hpp"
 
@@ -35,6 +38,12 @@
 #include "Graphics/Types.hpp" // BlendingMode
 
 /* Forward declaration */
+namespace EmEn::Graphics::Material
+{
+	struct GPURTMaterialData;
+	struct RTTextureSlot;
+}
+
 namespace EmEn
 {
 	namespace Vulkan
@@ -366,6 +375,26 @@ namespace EmEn::Graphics::Material
 			{
 				return false;
 			}
+
+			/**
+			 * @brief Exports this material as a normalized PBR representation for ray tracing shaders.
+			 * @note Each material type overrides this to convert its properties to the unified
+			 *       GPURTMaterialData format. Only properties visible in reflections are exported.
+			 *       The default implementation fills sensible defaults (grey dielectric).
+			 * @param outData A reference to the RT material data to fill.
+			 * @return void
+			 */
+			virtual void exportRTMaterialData (GPURTMaterialData & outData) const noexcept;
+
+			/**
+			 * @brief Collects the textures relevant for ray tracing reflections.
+			 * @note Each material type overrides this to report its 2D textures that should
+			 *       be registered in the bindless texture array for RT shader access.
+			 *       The default implementation returns an empty list (no textures).
+			 * @param outSlots A reference to a vector to fill with texture slots.
+			 * @return void
+			 */
+			virtual void collectRTTextures (std::vector< RTTextureSlot > & outSlots) const noexcept;
 
 			/**
 			 * @brief Configures the light generator with this material.

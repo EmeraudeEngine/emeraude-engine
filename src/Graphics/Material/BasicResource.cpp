@@ -26,7 +26,11 @@
 
 #include "BasicResource.hpp"
 
+/* STL inclusions. */
+#include <algorithm>
+
 /* Local inclusions. */
+#include "GPURTMaterialData.hpp"
 #include "Libs/FastJSON.hpp"
 #include "Saphir/LightGenerator.hpp"
 #include "Saphir/Generator/Abstract.hpp"
@@ -529,6 +533,58 @@ namespace EmEn::Graphics::Material
 		}
 
 		return SurfaceColor;
+	}
+
+	void
+	BasicResource::exportRTMaterialData (GPURTMaterialData & outData) const noexcept
+	{
+		outData = GPURTMaterialData{};
+
+		/* Map diffuse color → albedo. */
+		outData.albedo[0] = m_materialProperties[DiffuseColorOffset];
+		outData.albedo[1] = m_materialProperties[DiffuseColorOffset + 1];
+		outData.albedo[2] = m_materialProperties[DiffuseColorOffset + 2];
+		outData.albedo[3] = m_materialProperties[DiffuseColorOffset + 3];
+
+		/* Convert Blinn-Phong shininess to PBR roughness: higher shininess = lower roughness. */
+		const auto shininess = m_materialProperties[ShininessOffset];
+		outData.roughness = 1.0F - std::min(shininess / 1000.0F, 1.0F);
+
+		/* Basic materials are dielectric. */
+		outData.metalness = 0.0F;
+
+		/* Map specular color to specularColor tint. */
+		outData.specularColor[0] = m_materialProperties[SpecularColorOffset];
+		outData.specularColor[1] = m_materialProperties[SpecularColorOffset + 1];
+		outData.specularColor[2] = m_materialProperties[SpecularColorOffset + 2];
+		outData.specularColor[3] = m_materialProperties[SpecularColorOffset + 3];
+
+		/* Auto-illumination → emission. */
+		const auto autoIllum = m_materialProperties[AutoIlluminationOffset];
+
+		if ( autoIllum > 0.0F )
+		{
+			outData.emissionColor[0] = outData.albedo[0] * autoIllum;
+			outData.emissionColor[1] = outData.albedo[1] * autoIllum;
+			outData.emissionColor[2] = outData.albedo[2] * autoIllum;
+			outData.emissionColor[3] = 1.0F;
+			outData.flags |= GPURTMaterialData::IsEmissive;
+		}
+
+	}
+
+	void
+	BasicResource::collectRTTextures (std::vector< RTTextureSlot > & outSlots) const noexcept
+	{
+		if ( m_textureComponent != nullptr && m_textureComponent->type() == Component::Type::Texture )
+		{
+			const auto tex = m_textureComponent->texture();
+
+			if ( tex != nullptr )
+			{
+				outSlots.push_back({RTTextureRole::Albedo, tex});
+			}
+		}
 	}
 
 	bool

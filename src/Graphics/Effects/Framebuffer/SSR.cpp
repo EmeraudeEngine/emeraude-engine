@@ -112,10 +112,13 @@ void main()
 
 	vec3 viewPos = reconstructPosition(vUV, centerDepth);
 
-	/* Read view-space normal and roughness from MRT (roughness stored in alpha). */
+	/* Read view-space normal and packed roughness+metalness from MRT.
+	 * Alpha encoding: alpha = roughness + metalness * 2.0
+	 * Decode: metalness = (alpha >= 2.0) ? 1.0 : 0.0; roughness = alpha - metalness * 2.0; */
 	vec4 normalData = texture(normalTex, vUV);
 	vec3 rawN = normalData.rgb;
-	float roughness = normalData.a;
+	float packedRM = normalData.a;
+	float roughness = packedRM >= 2.0 ? packedRM - 2.0 : packedRM;
 
 	if (dot(rawN, rawN) < 0.0001)
 	{
@@ -332,8 +335,10 @@ void main()
 			return;
 		}
 
-		/* Read roughness to modulate cubemap fallback. */
-		float roughness = texture(normalTex, vUV).a;
+		/* Read packed roughness+metalness to modulate cubemap fallback.
+		 * Decode: metalness = (alpha >= 2.0) ? 1.0 : 0.0; roughness = alpha - metalness * 2.0; */
+		float packedRM = texture(normalTex, vUV).a;
+		float roughness = packedRM >= 2.0 ? packedRM - 2.0 : packedRM;
 
 		/* Reconstruct view-space position (standard: Z negative = into screen). */
 		float linearZ = linearizeDepth(depth);
@@ -756,8 +761,10 @@ namespace EmEn::Graphics::Effects::Framebuffer
 				static_cast< void >(m_resolvePerFrame[frameIndex]->writeCombinedImageSampler(3, *inputNormals));
 			}
 
-			/* Compute inverse view matrix for cubemap fallback. */
-			const auto & viewMat = m_renderer->mainRenderTarget()->viewMatrices().viewMatrix(false, 0);
+			/* Compute inverse view matrix for cubemap fallback.
+			 * Use readStateIndex to match the view matrix that produced the depth buffer. */
+			const auto readStateIndex = m_renderer->currentReadStateIndex();
+			const auto & viewMat = m_renderer->mainRenderTarget()->viewMatrices().viewMatrix(readStateIndex, false, 0);
 			const auto invView = viewMat.inverse();
 			const auto * inv = invView.data();
 

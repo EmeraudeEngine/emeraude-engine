@@ -37,6 +37,10 @@
 #include "Libs/Time/Elapsed/PrintScopeRealTime.hpp"
 #include "Vulkan/SwapChain.hpp"
 #include "Vulkan/DescriptorPool.hpp"
+#include "Vulkan/DescriptorSet.hpp"
+#include "Vulkan/DescriptorSetLayout.hpp"
+#include "Scenes/SceneMetaData.hpp"
+#include "Scenes/LightSet.hpp"
 #include "PostProcessStack.hpp"
 #include "Scenes/Scene.hpp"
 #include "Scenes/Component/Camera.hpp"
@@ -428,6 +432,7 @@ namespace EmEn::Graphics
 			TraceInfo{ClassId} << "Frame rate limiter enabled: " << m_frameRateLimit << " FPS (frame duration: " << m_frameDuration.count() / 1'000'000.0 << " ms)";
 		}
 
+		m_rayTracingSettingEnabled = m_primaryServices.settings().getOrSetDefault< bool >(GraphicsRayTracingEnabledKey, DefaultGraphicsRayTracingEnabled);
 		m_shadowMapsEnabled = m_primaryServices.settings().getOrSetDefault< bool >(GraphicsShadowMappingEnabledKey, DefaultGraphicsShadowMappingEnabled);
 
 		/* NOTE: Graphics device selection from the vulkan instance.
@@ -576,7 +581,7 @@ namespace EmEn::Graphics
 				// TODO: Check to enable this for re-usable UBO between render calls.
 				//{VK_DESCRIPTOR_TYPE_INLINE_UNIFORM_BLOCK, 512},
 				/* NOTE:  */
-				//{VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, 0},
+				{VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, 16},
 				/* NOTE:  */
 				//{VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_NV, 0},
 				/* NOTE:  */
@@ -596,6 +601,12 @@ namespace EmEn::Graphics
 
 				return false;
 			}
+		}
+
+		/* Create the RT descriptor set for ray query shaders. */
+		if ( m_device->rayTracingEnabled() && !this->createRTDescriptorSet() )
+		{
+			Tracer::warning(ClassId, "Unable to create RT descriptor set. Ray tracing reflections will be unavailable.");
 		}
 
 		this->registerToConsole();
@@ -699,6 +710,8 @@ namespace EmEn::Graphics
 		 * These textures have VMA allocations that must be freed before the device is destroyed. */
 		this->clearDefaultResources();
 
+		m_rtDescriptorSets.clear();
+		m_rtDescriptorSetLayout.reset();
 		m_descriptorPool.reset();
 
 		this->destroyRenderingSystem();
@@ -1448,6 +1461,21 @@ namespace EmEn::Graphics
 
 			m_postProcessor.recordBlit(*commandBuffer);
 
+			/* Set the current TLAS and update RT descriptor set for post-process effects.
+			 * Capture the read state index so post-process effects (RTR) use view matrices
+			 * consistent with the depth buffer rendered this frame. */
+			m_currentTLAS = (scene != nullptr) ? scene->TLAS() : nullptr;
+
+			if ( scene != nullptr )
+			{
+				m_currentReadStateIndex = scene->preparedReadStateIndex();
+
+				if ( m_currentTLAS != nullptr )
+				{
+					this->updateRTDescriptorSet(scene->sceneMetaData(), scene->lightSet());
+				}
+			}
+
 			/* Process scene effects (multi-pass). */
 			if ( scene != nullptr && scene->hasPostProcessStack() )
 			{
@@ -1535,6 +1563,21 @@ namespace EmEn::Graphics
 		/* Post-processor: blit the complete scene (with TranslucentGB) into PP's grab pass.
 		 * The internal target's color is in COLOR_ATTACHMENT_OPTIMAL. */
 		m_postProcessor.recordBlit(*commandBuffer);
+
+		/* Set the current TLAS and update RT descriptor set for post-process effects.
+		 * Capture the read state index so post-process effects (RTR) use view matrices
+		 * consistent with the depth buffer rendered this frame. */
+		m_currentTLAS = (scene != nullptr) ? scene->TLAS() : nullptr;
+
+		if ( scene != nullptr )
+		{
+			m_currentReadStateIndex = scene->preparedReadStateIndex();
+
+			if ( m_currentTLAS != nullptr )
+			{
+				this->updateRTDescriptorSet(scene->sceneMetaData(), scene->lightSet());
+			}
+		}
 
 		/* Process scene effects (multi-pass). */
 		if ( scene != nullptr && scene->hasPostProcessStack() )
@@ -1885,5 +1928,106 @@ namespace EmEn::Graphics
 		}
 
 		return true;
+	}
+
+	bool
+	Renderer::createRTDescriptorSet () noexcept
+	{
+		/* Layout: binding 0 = TLAS, binding 1 = mesh metadata SSBO,
+		 *         binding 2 = material data SSBO, binding 3 = light array SSBO. */
+		m_rtDescriptorSetLayout = std::make_shared< DescriptorSetLayout >(m_device, "RTDescriptorSet");
+
+		if ( !m_rtDescriptorSetLayout->declareAccelerationStructureKHR(0, VK_SHADER_STAGE_FRAGMENT_BIT) ||
+			 !m_rtDescriptorSetLayout->declareStorageBuffer(1, VK_SHADER_STAGE_FRAGMENT_BIT) ||
+			 !m_rtDescriptorSetLayout->declareStorageBuffer(2, VK_SHADER_STAGE_FRAGMENT_BIT) ||
+			 !m_rtDescriptorSetLayout->declareStorageBuffer(3, VK_SHADER_STAGE_FRAGMENT_BIT) )
+		{
+			TraceError{ClassId} << "Unable to declare RT descriptor set layout bindings!";
+
+			m_rtDescriptorSetLayout.reset();
+
+			return false;
+		}
+
+		if ( !m_rtDescriptorSetLayout->createOnHardware() )
+		{
+			TraceError{ClassId} << "Unable to create RT descriptor set layout!";
+
+			m_rtDescriptorSetLayout.reset();
+
+			return false;
+		}
+
+		const auto frameCount = this->framesInFlight();
+
+		m_rtDescriptorSets.resize(frameCount);
+
+		for ( uint32_t i = 0; i < frameCount; ++i )
+		{
+			m_rtDescriptorSets[i] = std::make_unique< DescriptorSet >(m_descriptorPool, m_rtDescriptorSetLayout);
+
+			if ( !m_rtDescriptorSets[i]->create() )
+			{
+				TraceError{ClassId} << "Unable to create RT descriptor set for frame " << i << "!";
+
+				m_rtDescriptorSets.clear();
+				m_rtDescriptorSetLayout.reset();
+
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	void
+	Renderer::updateRTDescriptorSet (const Scenes::SceneMetaData & sceneMetaData, const Scenes::LightSet & lightSet) noexcept
+	{
+		if ( m_rtDescriptorSets.empty() )
+		{
+			return;
+		}
+
+		const auto * tlas = sceneMetaData.TLAS();
+
+		if ( tlas == nullptr )
+		{
+			return;
+		}
+
+		/* Update only the current frame's descriptor set to avoid write-while-pending. */
+		auto & descriptorSet = m_rtDescriptorSets[m_currentFrameIndex];
+
+		/* Binding 0: TLAS. */
+		static_cast< void >(descriptorSet->writeAccelerationStructure(0, tlas->handle()));
+
+		/* Binding 1: Mesh metadata SSBO (per-frame to avoid CPU/GPU race). */
+		const auto * meshSSBO = sceneMetaData.meshMetaDataSSBO(m_currentFrameIndex);
+
+		if ( meshSSBO != nullptr )
+		{
+			const VkDescriptorBufferInfo meshInfo{meshSSBO->handle(), 0, meshSSBO->bytes()};
+			static_cast< void >(descriptorSet->writeStorageBuffer(1, meshInfo));
+		}
+
+		/* Binding 2: Material data SSBO (per-frame to avoid CPU/GPU race). */
+		const auto * materialSSBO = sceneMetaData.materialDataSSBO(m_currentFrameIndex);
+
+		if ( materialSSBO != nullptr )
+		{
+			const VkDescriptorBufferInfo materialInfo{materialSSBO->handle(), 0, materialSSBO->bytes()};
+			static_cast< void >(descriptorSet->writeStorageBuffer(2, materialInfo));
+		}
+
+		/* Binding 3: Light array SSBO. */
+		const auto * lightSSBO = lightSet.rtLightBuffer();
+
+		if ( lightSSBO != nullptr )
+		{
+			const VkDescriptorBufferInfo lightInfo{lightSSBO->handle(), 0, lightSSBO->bytes()};
+			static_cast< void >(descriptorSet->writeStorageBuffer(3, lightInfo));
+		}
+
+		m_rtLightCount = lightSet.rtLightCount();
 	}
 }

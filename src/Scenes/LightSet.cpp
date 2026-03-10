@@ -27,6 +27,7 @@
 #include "LightSet.hpp"
 
 /* STL inclusions. */
+#include <cmath>
 #include <ostream>
 
 /* Local inclusions. */
@@ -34,6 +35,7 @@
 #include "Scenes/AVConsole/Manager.hpp"
 #include "Saphir/LightGenerator.hpp"
 #include "Vulkan/DescriptorSetLayout.hpp"
+#include "Vulkan/ShaderStorageBufferObject.hpp"
 #include "Vulkan/SwapChain.hpp"
 #include "Scene.hpp"
 #include "Tracer.hpp"
@@ -187,6 +189,23 @@ namespace EmEn::Scenes
 		/* FIXME: Take only in account the main view! */
 		renderer.mainRenderTarget()->viewMatrices().updateAmbientLightProperties(m_ambientLightColor, m_ambientLightIntensity);
 
+		/* Create the RT light SSBO for ray query shaders.
+		 * This flat array contains all light types in a unified format. */
+		{
+			const auto bufferSize = static_cast< VkDeviceSize >(MaxRTLights * sizeof(GPULightData));
+
+			m_rtLightBuffer = std::make_unique< ShaderStorageBufferObject >(renderer.device(), bufferSize);
+
+			if ( !m_rtLightBuffer->createOnHardware() )
+			{
+				Tracer::error(ClassId, "Unable to create the RT light SSBO !");
+
+				return false;
+			}
+
+			TraceInfo{ClassId} << "RT light SSBO created (" << bufferSize << " bytes, max " << MaxRTLights << " lights).";
+		}
+
 		m_initialized = true;
 
 		return true;
@@ -206,6 +225,14 @@ namespace EmEn::Scenes
 		auto & sharedUBOManager = renderer.sharedUBOManager();
 
 		m_initialized = false;
+
+		/* Release the RT light SSBO. */
+		if ( m_rtLightBuffer != nullptr )
+		{
+			m_rtLightBuffer->destroyFromHardware();
+			m_rtLightBuffer.reset();
+			m_rtLightCount = 0;
+		}
 
 		/* Release the directional light SharedUniformBuffer. */
 		{
@@ -526,6 +553,128 @@ namespace EmEn::Scenes
 		for ( const auto & light : m_spotLights )
 		{
 			if ( !light->updateVideoMemory() )
+			{
+				errors++;
+			}
+		}
+
+		/* Update the RT light SSBO with all enabled lights. */
+		if ( m_rtLightBuffer != nullptr && m_rtLightBuffer->isCreated() )
+		{
+			auto * gpuData = m_rtLightBuffer->mapMemoryAs< GPULightData >();
+
+			if ( gpuData != nullptr )
+			{
+				uint32_t lightIndex = 0;
+
+				/* Directional lights (type = 0). */
+				for ( const auto & light : m_directionalLights )
+				{
+					if ( lightIndex >= MaxRTLights || !light->isEnabled() )
+					{
+						continue;
+					}
+
+					const auto worldCoords = static_cast< const Component::Abstract & >(*light).getWorldCoordinates();
+					const auto & lightColor = light->color();
+
+					/* Directional light direction: same logic as DirectionalLight::setDirection(). */
+					const auto direction = light->isUsingDirectionVector() ?
+						worldCoords.forwardVector() :
+						-worldCoords.position().normalized();
+
+					auto & entry = gpuData[lightIndex];
+					entry.colorR = lightColor.red();
+					entry.colorG = lightColor.green();
+					entry.colorB = lightColor.blue();
+					entry.intensity = light->intensity();
+					entry.posX = 0.0F;
+					entry.posY = 0.0F;
+					entry.posZ = 0.0F;
+					entry.radius = 0.0F;
+					entry.dirX = direction.x();
+					entry.dirY = direction.y();
+					entry.dirZ = direction.z();
+					entry.type = 0.0F;
+					entry.innerCosAngle = 0.0F;
+					entry.outerCosAngle = 0.0F;
+					entry.pad0 = 0.0F;
+					entry.pad1 = 0.0F;
+
+					lightIndex++;
+				}
+
+				/* Point lights (type = 1). */
+				for ( const auto & light : m_pointLights )
+				{
+					if ( lightIndex >= MaxRTLights || !light->isEnabled() )
+					{
+						continue;
+					}
+
+					const auto worldCoords = static_cast< const Component::Abstract & >(*light).getWorldCoordinates();
+					const auto & position = worldCoords.position();
+					const auto & lightColor = light->color();
+
+					auto & entry = gpuData[lightIndex];
+					entry.colorR = lightColor.red();
+					entry.colorG = lightColor.green();
+					entry.colorB = lightColor.blue();
+					entry.intensity = light->intensity();
+					entry.posX = position.x();
+					entry.posY = position.y();
+					entry.posZ = position.z();
+					entry.radius = light->radius();
+					entry.dirX = 0.0F;
+					entry.dirY = 0.0F;
+					entry.dirZ = 0.0F;
+					entry.type = 1.0F;
+					entry.innerCosAngle = 0.0F;
+					entry.outerCosAngle = 0.0F;
+					entry.pad0 = 0.0F;
+					entry.pad1 = 0.0F;
+
+					lightIndex++;
+				}
+
+				/* Spot lights (type = 2). */
+				for ( const auto & light : m_spotLights )
+				{
+					if ( lightIndex >= MaxRTLights || !light->isEnabled() )
+					{
+						continue;
+					}
+
+					const auto worldCoords = static_cast< const Component::Abstract & >(*light).getWorldCoordinates();
+					const auto & position = worldCoords.position();
+					const auto direction = worldCoords.forwardVector();
+					const auto & lightColor = light->color();
+
+					auto & entry = gpuData[lightIndex];
+					entry.colorR = lightColor.red();
+					entry.colorG = lightColor.green();
+					entry.colorB = lightColor.blue();
+					entry.intensity = light->intensity();
+					entry.posX = position.x();
+					entry.posY = position.y();
+					entry.posZ = position.z();
+					entry.radius = light->radius();
+					entry.dirX = direction.x();
+					entry.dirY = direction.y();
+					entry.dirZ = direction.z();
+					entry.type = 2.0F;
+					entry.innerCosAngle = std::cos(Radian(light->innerAngle()));
+					entry.outerCosAngle = std::cos(Radian(light->outerAngle()));
+					entry.pad0 = 0.0F;
+					entry.pad1 = 0.0F;
+
+					lightIndex++;
+				}
+
+				m_rtLightBuffer->unmapMemory();
+				m_rtLightCount = lightIndex;
+			}
+			else
 			{
 				errors++;
 			}

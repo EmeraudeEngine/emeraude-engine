@@ -723,6 +723,12 @@ namespace EmEn::Graphics
 				continue;
 			}
 
+			/* Skip ray tracing effects if RT is not available or disabled via settings. */
+			if ( effect->requiresRayTracing() && (!m_renderer.device()->rayTracingEnabled() || !m_renderer.isRayTracingSettingEnabled()) )
+			{
+				continue;
+			}
+
 			currentTexture = &effect->execute(commandBuffer, *currentTexture, depthTexture, normalsTexture, pc);
 		}
 

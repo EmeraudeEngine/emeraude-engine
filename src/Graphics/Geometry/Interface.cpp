@@ -31,6 +31,7 @@
 #include <iterator>
 
 /* Local inclusions. */
+#include "Vulkan/AccelerationStructureBuilder.hpp"
 #include "Vulkan/TransferManager.hpp"
 #include "Graphics/Renderer.hpp"
 #include "Tracer.hpp"
@@ -45,6 +46,7 @@ namespace EmEn::Graphics::Geometry
 	constexpr auto TracerTag{"GeometryInterface"};
 
 	Renderer * Interface::s_graphicsRenderer = nullptr;
+	AccelerationStructureBuilder * Interface::s_accelerationStructureBuilder = nullptr;
 
 	bool
 	Interface::buildSubGeometries (std::vector< SubGeometry > & subGeometries, uint32_t length) noexcept
@@ -99,6 +101,104 @@ namespace EmEn::Graphics::Geometry
 		return true;
 	}
 
+	void
+	Interface::buildAccelerationStructure () noexcept
+	{
+		/* Skip if RT is not available. */
+		if ( s_accelerationStructureBuilder == nullptr )
+		{
+			return;
+		}
+
+		const auto topo = this->topology();
+
+		/* Only triangle-based topologies can produce a BLAS. */
+		if ( topo != Topology::TriangleList && topo != Topology::TriangleStrip )
+		{
+			return;
+		}
+
+		const auto * vbo = this->vertexBufferObject();
+
+		if ( vbo == nullptr || !vbo->isCreated() )
+		{
+			return;
+		}
+
+		BLASGeometryInput geometry{};
+		geometry.vertexBuffer = vbo->handle();
+		geometry.vertexCount = vbo->vertexCount();
+		geometry.vertexStride = vbo->vertexElementCount() * sizeof(float);
+
+		/* For TriangleStrip topologies, convert indices to TriangleList via the virtual override. */
+		std::vector< uint32_t > convertedIndices;
+
+		if ( topo == Topology::TriangleStrip )
+		{
+			convertedIndices = this->generateTriangleListIndicesForRT();
+
+			if ( convertedIndices.empty() )
+			{
+				TraceError{TracerTag} << "Geometry '" << this->name() << "' uses TriangleStrip but generateTriangleListIndicesForRT() returned empty indices !";
+
+				return;
+			}
+
+			/* Create a persistent RT index buffer for shader access (UV/normal lookup).
+			 * The BLAS build also uses these indices via cpuIndices. */
+			if ( s_graphicsRenderer != nullptr )
+			{
+				auto & transferManager = s_graphicsRenderer->transferManager();
+				const auto indexCount = static_cast< uint32_t >(convertedIndices.size());
+
+				m_rtIndexBufferObject = std::make_unique< Vulkan::IndexBufferObject >(transferManager.device(), indexCount);
+				m_rtIndexBufferObject->setIdentifier("Geometry", this->name(), "RT_IndexBufferObject");
+
+				if ( m_rtIndexBufferObject->createOnHardware() && m_rtIndexBufferObject->transferData(transferManager, convertedIndices) )
+				{
+					/* Use the persistent RT IBO for the BLAS build. */
+					geometry.indexBuffer = m_rtIndexBufferObject->handle();
+					geometry.indexCount = indexCount;
+					geometry.indexType = VK_INDEX_TYPE_UINT32;
+				}
+				else
+				{
+					TraceError{TracerTag} << "Failed to create RT index buffer for geometry '" << this->name() << "' ! Falling back to CPU indices.";
+
+					m_rtIndexBufferObject.reset();
+
+					/* Fall back to CPU index upload in the builder. */
+					geometry.cpuIndices = convertedIndices.data();
+					geometry.cpuIndexCount = static_cast< uint32_t >(convertedIndices.size());
+				}
+			}
+			else
+			{
+				geometry.cpuIndices = convertedIndices.data();
+				geometry.cpuIndexCount = static_cast< uint32_t >(convertedIndices.size());
+			}
+		}
+		else
+		{
+			/* TriangleList: use existing GPU index buffer directly. */
+			const auto * ibo = this->indexBufferObject();
+
+			if ( ibo != nullptr && ibo->isCreated() )
+			{
+				geometry.indexBuffer = ibo->handle();
+				geometry.indexCount = ibo->indexCount();
+				geometry.indexType = VK_INDEX_TYPE_UINT32;
+			}
+		}
+
+		m_accelerationStructure = s_accelerationStructureBuilder->buildBLAS(geometry);
+
+		if ( m_accelerationStructure == nullptr )
+		{
+			TraceError{TracerTag} << "Failed to build BLAS for geometry '" << this->name() << "' !";
+		}
+	}
+
 	bool
 	Interface::onDependenciesLoaded () noexcept
 	{
@@ -115,6 +215,9 @@ namespace EmEn::Graphics::Geometry
 
 			return false;
 		}
+
+		/* Build BLAS for ray tracing (all geometry types). */
+		this->buildAccelerationStructure();
 
 		return true;
 	}

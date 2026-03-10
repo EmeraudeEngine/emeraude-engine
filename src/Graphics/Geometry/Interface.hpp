@@ -32,11 +32,18 @@
 /* Local inclusions for usages. */
 #include "Libs/VertexFactory/Grid.hpp"
 #include "Libs/VertexFactory/Shape.hpp"
+#include "Vulkan/AccelerationStructure.hpp"
 #include "Vulkan/VertexBufferObject.hpp"
 #include "Vulkan/IndexBufferObject.hpp"
 #include "Graphics/Types.hpp"
 #include "CoreTypes.hpp"
 #include "SubGeometry.hpp"
+
+/* Forward declarations. */
+namespace EmEn::Vulkan
+{
+	class AccelerationStructureBuilder;
+}
 
 namespace EmEn::Graphics::Geometry
 {
@@ -50,6 +57,18 @@ namespace EmEn::Graphics::Geometry
 
 			/** @brief Access to the graphics renderer for loading GPU resources. */
 			static Renderer * s_graphicsRenderer;
+
+			/**
+			 * @brief Sets the acceleration structure builder for ray tracing BLAS.
+			 * @param builder A pointer to the builder. Null disables RT BLAS building.
+			 * @return void
+			 */
+			static
+			void
+			setAccelerationStructureBuilder (Vulkan::AccelerationStructureBuilder * builder) noexcept
+			{
+				s_accelerationStructureBuilder = builder;
+			}
 
 			/**
 			 * @brief Returns whether the tangent space is present in local data.
@@ -285,6 +304,27 @@ namespace EmEn::Graphics::Geometry
 			virtual void destroyFromHardware (bool clearLocalData) noexcept = 0;
 
 			/**
+			 * @brief Returns the bottom-level acceleration structure (BLAS) for ray tracing.
+			 * @note Returns nullptr if ray tracing is not available or geometry hasn't been built yet.
+			 * @return const Vulkan::AccelerationStructure *
+			 */
+			[[nodiscard]]
+			const Vulkan::AccelerationStructure *
+			accelerationStructure () const noexcept
+			{
+				return m_accelerationStructure.get();
+			}
+
+			/**
+			 * @brief Builds the bottom-level acceleration structure (BLAS) for this geometry.
+			 * @note Builds for any triangle-based topology (TriangleList, TriangleStrip).
+			 * For TriangleStrip, calls generateTriangleListIndicesForRT() to convert indices.
+			 * Can be called on-demand when the RT builder becomes available after initial loading.
+			 * @return void
+			 */
+			void buildAccelerationStructure () noexcept;
+
+			/**
 			 * @brief Returns whether this geometry uses adaptive LOD rendering.
 			 * @note When true, the renderer should use getAdaptiveDrawCallCount() and getAdaptiveDrawCallRange().
 			 * @return bool
@@ -487,7 +527,45 @@ namespace EmEn::Graphics::Geometry
 			 */
 			static bool buildSubGeometries (std::vector< SubGeometry > & subGeometries, const Libs::VertexFactory::Grid< float > & grid) noexcept;
 
+			/**
+			 * @brief Generates triangle-list indices for BLAS building when the native topology is not TriangleList.
+			 * @note Override in subclasses that use TriangleStrip or other non-list topologies.
+			 * Default implementation returns an empty vector (no conversion needed).
+			 * @return std::vector< uint32_t >
+			 */
+			[[nodiscard]]
+			virtual
+			std::vector< uint32_t >
+			generateTriangleListIndicesForRT () const noexcept
+			{
+				return {};
+			}
+
+			/** @brief The BLAS for ray tracing. Null when RT is disabled or not yet built. */
+			std::unique_ptr< Vulkan::AccelerationStructure > m_accelerationStructure;
+
+			/** @brief Optional triangle-list IBO for RT when native topology is not TriangleList.
+			 * Used by SceneMetaData to provide correct index buffer addresses for shader access. */
+			std::unique_ptr< Vulkan::IndexBufferObject > m_rtIndexBufferObject;
+
+		public:
+
+			/**
+			 * @brief Returns the RT-specific index buffer (triangle-list converted) if available.
+			 * @note Returns nullptr for TriangleList geometries (use indexBufferObject() directly).
+			 * @return const Vulkan::IndexBufferObject *
+			 */
+			[[nodiscard]]
+			const Vulkan::IndexBufferObject *
+			rtIndexBufferObject () const noexcept
+			{
+				return m_rtIndexBufferObject.get();
+			}
+
 		private:
+
+			/** @brief Access to the acceleration structure builder for ray tracing BLAS. Null when RT is disabled. */
+			static Vulkan::AccelerationStructureBuilder * s_accelerationStructureBuilder;
 
 			/** @copydoc EmEn::Resources::ResourceTrait::onDependenciesLoaded() */
 			[[nodiscard]]

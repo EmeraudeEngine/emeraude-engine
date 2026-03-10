@@ -285,9 +285,12 @@ namespace EmEn::Graphics::Effects::Framebuffer
 	{
 		const auto frameIndex = m_renderer->currentFrameIndex();
 
-		/* Extract camera basis from view matrix. */
-		const auto & viewMat = m_renderer->mainRenderTarget()->viewMatrices().viewMatrix(false, 0);
-		const auto & camPos = m_renderer->mainRenderTarget()->viewMatrices().position();
+		/* Extract camera basis from view matrix.
+		 * Use readStateIndex to match the view matrix that produced the depth buffer. */
+		const auto readStateIndex = m_renderer->currentReadStateIndex();
+		const auto & viewMatrices = m_renderer->mainRenderTarget()->viewMatrices();
+		const auto & viewMat = viewMatrices.viewMatrix(readStateIndex, false, 0);
+		const auto & camPos = viewMatrices.position(readStateIndex);
 
 		/* Right = row 0 of view matrix. */
 		const auto rX = viewMat(0, 0);

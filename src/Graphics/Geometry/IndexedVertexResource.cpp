@@ -87,7 +87,12 @@ namespace EmEn::Graphics::Geometry
 		}
 
 		/* Create hardware buffers from local data. */
-		return this->createVideoMemoryBuffers(transferManager, vertexAttributes, m_localData.vertexCount(), vertexElementCount, indices);
+		if ( !this->createVideoMemoryBuffers(transferManager, vertexAttributes, m_localData.vertexCount(), vertexElementCount, indices) )
+		{
+			return false;
+		}
+
+		return true;
 	}
 
 	bool

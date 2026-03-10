@@ -408,10 +408,13 @@ namespace EmEn::Graphics::Effects::Framebuffer
 	{
 		const auto frameIndex = m_renderer->currentFrameIndex();
 
-		/* 1. Project light direction to screen space. */
-		const auto & viewMat = m_renderer->mainRenderTarget()->viewMatrices().viewMatrix(false, 0);
-		const auto & projMat = m_renderer->mainRenderTarget()->viewMatrices().projectionMatrix();
-		const auto & camPos = m_renderer->mainRenderTarget()->viewMatrices().position();
+		/* 1. Project light direction to screen space.
+		 * Use readStateIndex to match the view matrix that produced the depth buffer. */
+		const auto readStateIndex = m_renderer->currentReadStateIndex();
+		const auto & viewMatrices = m_renderer->mainRenderTarget()->viewMatrices();
+		const auto & viewMat = viewMatrices.viewMatrix(readStateIndex, false, 0);
+		const auto & projMat = viewMatrices.projectionMatrix(readStateIndex);
+		const auto & camPos = viewMatrices.position(readStateIndex);
 
 		/* Light source direction (opposite of emission direction). */
 		const auto lightSourceX = -m_lightDirX;

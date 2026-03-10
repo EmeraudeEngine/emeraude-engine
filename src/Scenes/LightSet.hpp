@@ -44,6 +44,9 @@
 #include "Saphir/StaticLighting.hpp"
 #include "Vulkan/DescriptorSet.hpp"
 
+/* Local inclusions for usage. */
+#include "Vulkan/ShaderStorageBufferObject.hpp"
+
 /* Forward declarations. */
 namespace EmEn
 {
@@ -72,6 +75,21 @@ namespace EmEn::Scenes
 
 			/** @brief Class identifier. */
 			static constexpr auto ClassId{"LightSet"};
+
+			/** @brief Maximum number of lights in the RT SSBO. */
+			static constexpr uint32_t MaxRTLights{128};
+
+			/**
+			 * @brief GPU-side light data for RT shaders (flat, type-unified).
+			 * @note Layout matches std430. 64 bytes per light.
+			 */
+			struct GPULightData
+			{
+				float colorR, colorG, colorB, intensity;
+				float posX, posY, posZ, radius;
+				float dirX, dirY, dirZ, type;
+				float innerCosAngle, outerCosAngle, pad0, pad1;
+			};
 
 			/* Default variables. */
 			static constexpr auto DefaultStaticLightingName{"Default"};
@@ -528,6 +546,29 @@ namespace EmEn::Scenes
 			bool updateVideoMemory () const noexcept;
 
 			/**
+			 * @brief Returns the RT light SSBO for binding in descriptor sets.
+			 * @note Returns nullptr if the SSBO has not been created (lighting disabled or not initialized).
+			 * @return Vulkan::ShaderStorageBufferObject *
+			 */
+			[[nodiscard]]
+			Vulkan::ShaderStorageBufferObject *
+			rtLightBuffer () const noexcept
+			{
+				return m_rtLightBuffer.get();
+			}
+
+			/**
+			 * @brief Returns the number of lights currently stored in the RT SSBO.
+			 * @return uint32_t
+			 */
+			[[nodiscard]]
+			uint32_t
+			rtLightCount () const noexcept
+			{
+				return m_rtLightCount;
+			}
+
+			/**
 			 * @brief Returns the descriptor set layout for a light (UBO only, no shadow map).
 			 * @param layoutManager A reference to the layout manager.
 			 * @return std::shared_ptr< Vulkan::DescriptorSetLayout >
@@ -570,10 +611,13 @@ namespace EmEn::Scenes
 			std::set< std::shared_ptr< Component::PointLight > > m_pointLights;
 			std::set< std::shared_ptr< Component::SpotLight > > m_spotLights;
 			std::map< std::string, Saphir::StaticLighting > m_staticLighting;
+			/* RT light SSBO (flat array of all lights for ray query shaders). */
+			mutable std::unique_ptr< Vulkan::ShaderStorageBufferObject > m_rtLightBuffer;
 			Libs::PixelFactory::Color< float > m_ambientLightColor{Libs::PixelFactory::Black};
 			float m_ambientLightIntensity{DefaultAmbientLightIntensity};
 			float m_lightPercentToAmbient{DefaultLightPercentToAmbient};
 			mutable std::mutex m_lightsAccess;
+			mutable uint32_t m_rtLightCount{0};
 			bool m_initialized{false};
 			bool m_enabled{false};
 			bool m_useStaticLighting{false};
