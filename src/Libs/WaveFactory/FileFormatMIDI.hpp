@@ -32,9 +32,10 @@
 #include <cmath>
 #include <cstdint>
 #include <cstring>
-#include <fstream>
 #include <iostream>
 #include <random>
+#include <sstream>
+#include <string>
 #include <unordered_map>
 #include <type_traits>
 #include <vector>
@@ -64,148 +65,49 @@ namespace EmEn::Libs::WaveFactory
 	{
 		public:
 
-			/**
-			 * @brief Constructs a MIDI format IO with default sample rate.
-			 * @param frequency The sample rate to use for generation. Default 48kHz.
-			 */
-			explicit
-			FileFormatMIDI (Frequency frequency = Frequency::PCM48000Hz) noexcept
-				: m_frequency{frequency}
-			{
+			FileFormatMIDI () noexcept = default;
 
-			}
-
-			/**
-			 * @brief Sets the sample rate for audio generation.
-			 * @param frequency The sample rate.
-			 * @return void
-			 */
-			void
-			setFrequency (Frequency frequency) noexcept
-			{
-				m_frequency = frequency;
-			}
-
-			/**
-			 * @brief Returns the current sample rate.
-			 * @return Frequency
-			 */
-			[[nodiscard]]
-			Frequency
-			frequency () const noexcept
-			{
-				return m_frequency;
-			}
-
-			/**
-			 * @brief Sets a SoundFont for high-quality sample-based rendering.
-			 * @param soundfont Pointer to a TinySoundFont handle, or nullptr for additive synthesis.
-			 * @note The caller retains ownership of the tsf handle.
-			 */
-			void
-			setSoundfont (tsf * soundfont) noexcept
-			{
-				m_soundfont = soundfont;
-			}
-
-			/**
-			 * @brief Returns the current SoundFont handle.
-			 * @return tsf* Pointer to the SoundFont, or nullptr if none set.
-			 */
-			[[nodiscard]]
-			tsf *
-			soundfont () const noexcept
-			{
-				return m_soundfont;
-			}
-
-			/** @copydoc EmEn::Libs::WaveFactory::FileFormatInterface::readFile() */
+			/** @copydoc EmEn::Libs::WaveFactory::FileFormatInterface::readStream() */
 			[[nodiscard]]
 			bool
-			readFile (const std::filesystem::path & filepath, Wave< precision_t > & wave) noexcept override
+			readStream (IO::ByteStream & stream, Wave< precision_t > & wave, const ReadOptions & options) noexcept override
 			{
-				std::ifstream file(filepath, std::ios::binary);
-
-				if ( !file.is_open() )
+				if ( !stream.isOpen() )
 				{
-					std::cerr << "[WaveFactory::FileFormatMIDI] readFile(), failed to open '" << filepath << "' !\n";
+					std::cerr << "[WaveFactory::FileFormatMIDI] readStream(), stream is not open !\n";
 
 					return false;
 				}
 
-				/* Parse MIDI header. */
-				MIDIHeader header;
+				/* Store options for use by rendering methods. */
+				m_frequency = options.synthesisFrequency;
+				m_soundfont = options.soundfont;
 
-				if ( !this->parseHeader(file, header) )
+				/* Read the entire stream into memory for std::istream-based parsing. */
+				const auto dataSize = stream.size();
+
+				std::string buffer(dataSize, '\0');
+
+				if ( !stream.read(buffer.data(), dataSize) )
 				{
-					std::cerr << "[WaveFactory::FileFormatMIDI] readFile(), invalid MIDI header in '" << filepath << "' !\n";
+					std::cerr << "[WaveFactory::FileFormatMIDI] readStream(), failed to read stream data !\n";
 
 					return false;
 				}
 
-				/* Parse all tracks and collect notes, control events, and tempo events. */
-				std::vector< MIDINote > notes;
-				std::vector< ControlEvent > controlEvents;
-				std::vector< TempoEvent > tempoEvents;
-				std::array< ChannelState, 16 > channelStates{};
+				std::istringstream input(buffer, std::ios::binary);
 
-				/* Pre-allocate vectors to avoid reallocations during parsing. */
-				notes.reserve(header.trackCount * 100);		/* Typical: ~100 notes per track. */
-				controlEvents.reserve(header.trackCount * 50); /* Fewer control events. */
-				tempoEvents.reserve(16);					   /* Rarely more than a few tempo changes. */
-
-				for ( uint16_t trackIndex = 0; trackIndex < header.trackCount; ++trackIndex )
-				{
-					if ( !this->parseTrack(file, notes, controlEvents, tempoEvents, channelStates, trackIndex) )
-					{
-						std::cerr << "[WaveFactory::FileFormatMIDI] readFile(), failed to parse track " << trackIndex << " in '" << filepath << "' !\n";
-
-						return false;
-					}
-				}
-
-				/* Sort tempo events by tick for correct tempo mapping. */
-				std::sort(tempoEvents.begin(), tempoEvents.end(), [] (const TempoEvent & a, const TempoEvent & b) {
-					return a.tick < b.tick;
-				});
-
-				/* Ensure we have at least a default tempo if the file doesn't specify one. */
-				if ( tempoEvents.empty() || tempoEvents[0].tick > 0 )
-				{
-					tempoEvents.insert(tempoEvents.begin(), {0, 500000});
-				}
-
-				if ( notes.empty() )
-				{
-					std::cerr << "[WaveFactory::FileFormatMIDI] readFile(), no notes found in '" << filepath << "' !\n";
-
-					return false;
-				}
-
-				/* Sort control events by time for efficient lookup during rendering. */
-				std::sort(controlEvents.begin(), controlEvents.end(), [] (const ControlEvent & a, const ControlEvent & b) {
-					return a.tick < b.tick;
-				});
-
-				/* Render notes to wave. */
-				if ( !this->renderToWave(wave, notes, controlEvents, tempoEvents, header, channelStates) )
-				{
-					std::cerr << "[WaveFactory::FileFormatMIDI] readFile(), failed to render audio from '" << filepath << "' !\n";
-
-					return false;
-				}
-
-				return true;
+				return this->processIStream(input, wave);
 			}
 
-			/** @copydoc EmEn::Libs::WaveFactory::FileFormatInterface::writeFile() */
+			/** @copydoc EmEn::Libs::WaveFactory::FileFormatInterface::writeStream() */
 			[[nodiscard]]
 			bool
-			writeFile (const std::filesystem::path & /*filepath*/, const Wave< precision_t > & /*wave*/) const noexcept override
+			writeStream (IO::ByteStream & /*stream*/, const Wave< precision_t > & /*wave*/, const WriteOptions & /*options*/) const noexcept override
 			{
 				/* NOTE: Converting audio back to MIDI would require pitch detection and note segmentation,
 				 * which is beyond the scope of this basic implementation. */
-				std::cerr << "[WaveFactory::FileFormatMIDI] writeFile() is not supported ! MIDI format is read-only.\n";
+				std::cerr << "[WaveFactory::FileFormatMIDI] writeStream() is not supported ! MIDI format is read-only.\n";
 
 				return false;
 			}
@@ -306,6 +208,81 @@ namespace EmEn::Libs::WaveFactory
 			using Synth = Synthesizer< precision_t >;
 			using InstrumentFamily = Synth::InstrumentFamily;
 			using FilterState = Synth::FilterState;
+
+			/**
+			 * @brief Core MIDI processing from an std::istream.
+			 * @note Parses header, tracks, and renders to wave using the stored m_frequency and m_soundfont.
+			 * @param input A reference to the input stream (positioned at MIDI data start).
+			 * @param wave A reference to the destination wave.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			processIStream (std::istream & input, Wave< precision_t > & wave) noexcept
+			{
+				/* Parse MIDI header. */
+				MIDIHeader header;
+
+				if ( !this->parseHeader(input, header) )
+				{
+					std::cerr << "[WaveFactory::FileFormatMIDI] processIStream(), invalid MIDI header !\n";
+
+					return false;
+				}
+
+				/* Parse all tracks and collect notes, control events, and tempo events. */
+				std::vector< MIDINote > notes;
+				std::vector< ControlEvent > controlEvents;
+				std::vector< TempoEvent > tempoEvents;
+				std::array< ChannelState, 16 > channelStates{};
+
+				notes.reserve(header.trackCount * 100);
+				controlEvents.reserve(header.trackCount * 50);
+				tempoEvents.reserve(16);
+
+				for ( uint16_t trackIndex = 0; trackIndex < header.trackCount; ++trackIndex )
+				{
+					if ( !this->parseTrack(input, notes, controlEvents, tempoEvents, channelStates, trackIndex) )
+					{
+						std::cerr << "[WaveFactory::FileFormatMIDI] processIStream(), failed to parse track " << trackIndex << " !\n";
+
+						return false;
+					}
+				}
+
+				/* Sort tempo events by tick for correct tempo mapping. */
+				std::sort(tempoEvents.begin(), tempoEvents.end(), [] (const TempoEvent & a, const TempoEvent & b) {
+					return a.tick < b.tick;
+				});
+
+				/* Ensure we have at least a default tempo if the file doesn't specify one. */
+				if ( tempoEvents.empty() || tempoEvents[0].tick > 0 )
+				{
+					tempoEvents.insert(tempoEvents.begin(), {0, 500000});
+				}
+
+				if ( notes.empty() )
+				{
+					std::cerr << "[WaveFactory::FileFormatMIDI] processIStream(), no notes found !\n";
+
+					return false;
+				}
+
+				/* Sort control events by time for efficient lookup during rendering. */
+				std::sort(controlEvents.begin(), controlEvents.end(), [] (const ControlEvent & a, const ControlEvent & b) {
+					return a.tick < b.tick;
+				});
+
+				/* Render notes to wave. */
+				if ( !this->renderToWave(wave, notes, controlEvents, tempoEvents, header, channelStates) )
+				{
+					std::cerr << "[WaveFactory::FileFormatMIDI] processIStream(), failed to render audio !\n";
+
+					return false;
+				}
+
+				return true;
+			}
 
 			/**
 			 * @brief Reads a big-endian 16-bit value from stream.

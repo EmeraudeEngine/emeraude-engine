@@ -28,15 +28,16 @@
 
 /* STL inclusions. */
 #include <cstdint>
-#include <filesystem>
 
 /* Local inclusions for usages. */
+#include "Libs/IO/ByteStream.hpp"
 #include "Pixmap.hpp"
+#include "Types.hpp"
 
 namespace EmEn::Libs::PixelFactory
 {
 	/**
-	 * @brief File format interface for reading and writing a pixmap.
+	 * @brief File format interface for reading and writing a pixmap via byte streams.
 	 * @tparam pixel_data_t The pixel component type for the pixmap depth precision. Default uint8_t.
 	 * @tparam dimension_t The type of unsigned integer used for pixmap dimension. Default uint32_t.
 	 */
@@ -46,74 +47,32 @@ namespace EmEn::Libs::PixelFactory
 	{
 		public:
 
-			/**
-			 * @brief Copy constructor.
-			 * @param copy A reference to the copied instance.
-			 */
-			FileFormatInterface (const FileFormatInterface & copy) noexcept = default;
-
-			/**
-			 * @brief Move constructor.
-			 * @param copy A reference to the copied instance.
-			 */
-			FileFormatInterface (FileFormatInterface && copy) noexcept = default;
-
-			/**
-			 * @brief Copy assignment.
-			 * @param copy A reference to the copied instance.
-			 * @return FileFormatInterface &
-			 */
-			FileFormatInterface & operator= (const FileFormatInterface & copy) noexcept = default;
-
-			/**
-			 * @brief Move assignment.
-			 * @param copy A reference to the copied instance.
-			 * @return FileFormatInterface &
-			 */
-			FileFormatInterface & operator= (FileFormatInterface && copy) noexcept = default;
-
-			/**
-			 * @brief Destructs the pixmap format.
-			 */
+			FileFormatInterface (const FileFormatInterface &) noexcept = default;
+			FileFormatInterface (FileFormatInterface &&) noexcept = default;
+			FileFormatInterface & operator= (const FileFormatInterface &) noexcept = default;
+			FileFormatInterface & operator= (FileFormatInterface &&) noexcept = default;
 			virtual ~FileFormatInterface () = default;
 
 			/**
-			 * @brief Returns whether the image must inverse Y axis to read and write image.
-			 * @note true means origin at bottom-left (OpenGL compliant), else top-left (Vulkan, DX compliant).
+			 * @brief Reads a pixmap from a byte stream.
+			 * @note The output pixmap is in canonical form: top-left origin, native channel mode.
+			 * @param stream A reference to the input byte stream.
+			 * @param pixmap A reference to the destination pixmap.
 			 * @return bool
 			 */
-			[[nodiscard]]
-			bool
-			invertYAxis () const noexcept
-			{
-				return m_invertYAxis;
-			}
+			virtual bool readStream (IO::ByteStream & stream, Pixmap< pixel_data_t, dimension_t > & pixmap) noexcept = 0;
 
 			/**
-			 * @brief Reads the pixmap from a file.
-			 * @param filepath A reference to a filesystem path.
-			 * @param pixmap A reference to the pixmap.
+			 * @brief Writes a pixmap to a byte stream.
+			 * @param stream A reference to the output byte stream.
+			 * @param pixmap A read-only reference to the source pixmap.
+			 * @param options Write options (format-specific settings, Y-axis inversion).
 			 * @return bool
 			 */
-			virtual bool readFile (const std::filesystem::path & filepath, Pixmap< pixel_data_t, dimension_t > & pixmap) noexcept = 0;
-
-			/**
-			 * @brief Writes the pixmap to a file.
-			 * @param filepath A reference to a filesystem path. Should be accessible.
-			 * @param pixmap A read-only reference to the pixmap.
-			 * @return bool
-			 */
-			virtual bool writeFile (const std::filesystem::path & filepath, const Pixmap< pixel_data_t, dimension_t > & pixmap) const noexcept = 0;
+			virtual bool writeStream (IO::ByteStream & stream, const Pixmap< pixel_data_t, dimension_t > & pixmap, const WriteOptions & options = {}) const noexcept = 0;
 
 		protected:
 
-			/**
-			 * @brief Constructs a pixmap format.
-			 */
 			FileFormatInterface () noexcept = default;
-
-		private:
-
-			bool m_invertYAxis{false};
 	};
 }

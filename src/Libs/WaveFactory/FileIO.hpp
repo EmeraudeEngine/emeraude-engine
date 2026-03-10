@@ -33,6 +33,7 @@
 #include <type_traits>
 
 /* Local inclusions. */
+#include "Libs/IO/FileStream.hpp"
 #include "Libs/IO/IO.hpp"
 #include "FileFormatJSON.hpp"
 #include "FileFormatMIDI.hpp"
@@ -46,13 +47,13 @@ namespace EmEn::Libs::WaveFactory::FileIO
 	 * @tparam precision_t The sample precision type. Default int16_t.
 	 * @param filepath A reference to a filesystem path.
 	 * @param wave A reference to the destination wave.
-	 * @param frequency The sample rate for JSON procedural audio. Default 48kHz.
+	 * @param options Read options (synthesis frequency, soundfont, etc.).
 	 * @return bool
 	 */
 	template< typename precision_t = int16_t >
 	[[nodiscard]]
 	bool
-	read (const std::filesystem::path & filepath, Wave< precision_t > & wave, Frequency frequency = Frequency::PCM48000Hz) noexcept
+	read (const std::filesystem::path & filepath, Wave< precision_t > & wave, const ReadOptions & options = {}) noexcept
 		requires (std::is_arithmetic_v< precision_t >)
 	{
 		if ( !IO::fileExists(filepath) )
@@ -62,48 +63,11 @@ namespace EmEn::Libs::WaveFactory::FileIO
 			return false;
 		}
 
-		const auto extension = IO::getFileExtension(filepath, true);
+		IO::FileStream stream{filepath, IO::FileStream::Mode::Read};
 
-		if ( extension == "json" )
+		if ( !stream.isOpen() )
 		{
-			FileFormatJSON< precision_t > fileFormat{frequency};
-
-			return fileFormat.readFile(filepath, wave);
-		}
-
-		if ( extension == "mid" || extension == "midi" )
-		{
-			FileFormatMIDI< precision_t > fileFormat{frequency};
-
-			return fileFormat.readFile(filepath, wave);
-		}
-
-		/* All other audio formats are handled by libsndfile. */
-		FileFormatSNDFile< precision_t > fileFormat;
-
-		return fileFormat.readFile(filepath, wave);
-	}
-
-	/**
-	 * @brief Reads a MIDI file into a wave structure using a SoundFont for rendering.
-	 * @tparam precision_t The sample precision type. Default int16_t.
-	 * @param filepath A reference to a filesystem path.
-	 * @param wave A reference to the destination wave.
-	 * @param frequency The sample rate for audio generation.
-	 * @param soundfont Pointer to a TinySoundFont handle for sample-based rendering.
-	 * @return bool
-	 * @note If soundfont is nullptr, falls back to additive synthesis.
-	 * @note For non-MIDI files, the soundfont parameter is ignored.
-	 */
-	template< typename precision_t = int16_t >
-	[[nodiscard]]
-	bool
-	read (const std::filesystem::path & filepath, Wave< precision_t > & wave, Frequency frequency, tsf * soundfont) noexcept
-		requires (std::is_arithmetic_v< precision_t >)
-	{
-		if ( !IO::fileExists(filepath) )
-		{
-			std::cerr << "[WaveFactory::FileIO] read(), the file '" << filepath << "' doesn't exist !\n";
+			std::cerr << "[WaveFactory::FileIO] read(), unable to open '" << filepath << "' !\n";
 
 			return false;
 		}
@@ -112,23 +76,22 @@ namespace EmEn::Libs::WaveFactory::FileIO
 
 		if ( extension == "json" )
 		{
-			FileFormatJSON< precision_t > fileFormat{frequency};
+			FileFormatJSON< precision_t > fileFormat;
 
-			return fileFormat.readFile(filepath, wave);
+			return fileFormat.readStream(stream, wave, options);
 		}
 
 		if ( extension == "mid" || extension == "midi" )
 		{
-			FileFormatMIDI< precision_t > fileFormat{frequency};
-			fileFormat.setSoundfont(soundfont);
+			FileFormatMIDI< precision_t > fileFormat;
 
-			return fileFormat.readFile(filepath, wave);
+			return fileFormat.readStream(stream, wave, options);
 		}
 
 		/* All other audio formats are handled by libsndfile. */
 		FileFormatSNDFile< precision_t > fileFormat;
 
-		return fileFormat.readFile(filepath, wave);
+		return fileFormat.readStream(stream, wave, options);
 	}
 
 	/**
@@ -137,12 +100,13 @@ namespace EmEn::Libs::WaveFactory::FileIO
 	 * @param wave A reference to the source wave.
 	 * @param filepath A reference to a filesystem path.
 	 * @param overwrite Overwrite existing file. Default false.
+	 * @param options Write options (output format, etc.).
 	 * @return bool
 	 */
 	template< typename precision_t = int16_t >
 	[[nodiscard]]
 	bool
-	write (const Wave< precision_t > & wave, const std::filesystem::path & filepath, bool overwrite = false) noexcept
+	write (const Wave< precision_t > & wave, const std::filesystem::path & filepath, bool overwrite = false, const WriteOptions & options = {}) noexcept
 	requires (std::is_arithmetic_v< precision_t >)
 	{
 		if ( IO::fileExists(filepath) && !overwrite )
@@ -168,9 +132,34 @@ namespace EmEn::Libs::WaveFactory::FileIO
 			return false;
 		}
 
-		/* All other audio formats are handled by libsndfile. */
+		IO::FileStream stream{filepath, IO::FileStream::Mode::Write};
+
+		if ( !stream.isOpen() )
+		{
+			std::cerr << "[WaveFactory::FileIO] write(), unable to open '" << filepath << "' for writing !\n";
+
+			return false;
+		}
+
+		/* Infer audio format from file extension. */
+		WriteOptions effectiveOptions = options;
+
+		if ( extension == "flac" )
+		{
+			effectiveOptions.format = AudioFormat::FLAC;
+		}
+		else if ( extension == "ogg" || extension == "oga" )
+		{
+			effectiveOptions.format = AudioFormat::OGG;
+		}
+		else
+		{
+			effectiveOptions.format = AudioFormat::WAV;
+		}
+
+		/* All writable audio formats are handled by libsndfile. */
 		FileFormatSNDFile< precision_t > fileFormat;
 
-		return fileFormat.writeFile(filepath, wave);
+		return fileFormat.writeStream(stream, wave, effectiveOptions);
 	}
 }

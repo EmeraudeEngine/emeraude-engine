@@ -31,6 +31,7 @@
 #include <type_traits>
 
 /* Local inclusions for usages. */
+#include "Libs/IO/FileStream.hpp"
 #include "Libs/IO/IO.hpp"
 #include "FileFormatNative.hpp"
 #include "FileFormatOBJ.hpp"
@@ -56,7 +57,16 @@ namespace EmEn::Libs::VertexFactory::FileIO
 	{
 		if ( !IO::fileExists(filepath) )
 		{
-			std::cerr << "VertexFactory::FileIO::read(), the file '" << filepath << "' doesn't exist !" "\n";
+			std::cerr << "[VertexFactory::FileIO] read(), the file '" << filepath << "' doesn't exist !\n";
+
+			return false;
+		}
+
+		IO::FileStream stream{filepath, IO::FileStream::Mode::Read};
+
+		if ( !stream.isOpen() )
+		{
+			std::cerr << "[VertexFactory::FileIO] read(), unable to open '" << filepath << "' !\n";
 
 			return false;
 		}
@@ -67,53 +77,63 @@ namespace EmEn::Libs::VertexFactory::FileIO
 		{
 			FileFormatNative< vertex_data_t, index_data_t > fileFormat{};
 
-			return fileFormat.readFile(filepath, shape, readOptions);
+			return fileFormat.readStream(stream, shape, readOptions);
 		}
 
 		if ( extension == "obj" )
 		{
 			FileFormatOBJ< vertex_data_t, index_data_t > fileFormat{};
 
-			return fileFormat.readFile(filepath, shape, readOptions);
+			return fileFormat.readStream(stream, shape, readOptions);
 		}
 
 		if ( extension == "stl" )
 		{
 			FileFormatSTL< vertex_data_t, index_data_t > fileFormat{};
 
-			return fileFormat.readFile(filepath, shape, readOptions);
+			return fileFormat.readStream(stream, shape, readOptions);
 		}
 
 		if ( extension == "mdl" || extension == "md2" || extension == "md3" || extension == "md5mesh" )
 		{
 			FileFormatMDx< vertex_data_t, index_data_t > fileFormat{};
 
-			return fileFormat.readFile(filepath, shape, readOptions);
+			return fileFormat.readStream(stream, shape, readOptions);
 		}
 
-		std::cerr << "VertexFactory::FileIO::read(), the file '" << filepath << "' format is not handled !" "\n";
+		std::cerr << "[VertexFactory::FileIO] read(), the file '" << filepath << "' format is not handled !\n";
 
 		return false;
 	}
 
 	/**
-	 * @briew Writes a shape into a file.
+	 * @brief Writes a shape into a file.
 	 * @tparam vertex_data_t The precision type of vertex data. Default float.
 	 * @tparam index_data_t The precision type of index data. Default uint32_t.
 	 * @param shape A reference to the source shape.
 	 * @param filepath A reference to a filesystem path.
 	 * @param overwrite Overwrite existing file. Default false.
+	 * @param writeOptions A reference to write options structure. Defaults.
 	 * @return bool
 	 */
 	template< typename vertex_data_t = float, typename index_data_t = uint32_t >
 	[[nodiscard]]
 	bool
-	write (const Shape< vertex_data_t, index_data_t > & shape, const std::filesystem::path & filepath, bool overwrite = false)
+	write (const Shape< vertex_data_t, index_data_t > & shape, const std::filesystem::path & filepath, bool overwrite = false, const WriteOptions & writeOptions = {})
 		requires (std::is_floating_point_v< vertex_data_t > && std::is_unsigned_v< index_data_t > )
 	{
 		if ( IO::fileExists(filepath) && !overwrite )
 		{
-			std::cerr << "VertexFactory::FileIO::write(), the file '" << filepath << "' already exists !" "\n";
+			std::cerr << "[VertexFactory::FileIO] write(), the file '" << filepath << "' already exists !\n";
+
+			return false;
+		}
+
+		IO::FileStream stream{filepath, IO::FileStream::Mode::Write};
+
+		if ( !stream.isOpen() )
+		{
+			std::cerr << "[VertexFactory::FileIO] write(), unable to open '" << filepath << "' for writing !\n";
 
 			return false;
 		}
@@ -124,31 +144,31 @@ namespace EmEn::Libs::VertexFactory::FileIO
 		{
 			FileFormatNative< vertex_data_t, index_data_t > fileFormat{};
 
-			return fileFormat.writeFile(filepath, shape);
+			return fileFormat.writeStream(stream, shape, writeOptions);
 		}
 
 		if ( extension == "obj" )
 		{
 			FileFormatOBJ< vertex_data_t, index_data_t > fileFormat{};
 
-			return fileFormat.writeFile(filepath, shape);
+			return fileFormat.writeStream(stream, shape, writeOptions);
 		}
 
 		if ( extension == "stl" )
 		{
 			FileFormatSTL< vertex_data_t, index_data_t > fileFormat{};
 
-			return fileFormat.writeFile(filepath, shape);
+			return fileFormat.writeStream(stream, shape, writeOptions);
 		}
 
 		if ( extension == "mdl" || extension == "md2" || extension == "md3" || extension == "md5mesh" )
 		{
 			FileFormatMDx< vertex_data_t, index_data_t > fileFormat{};
 
-			return fileFormat.writeFile(filepath, shape);
+			return fileFormat.writeStream(stream, shape, writeOptions);
 		}
 
-		std::cerr << "VertexFactory::FileIO::write(), the file '" << filepath << "' format is not handled !" "\n";
+		std::cerr << "[VertexFactory::FileIO] write(), the file '" << filepath << "' format is not handled !\n";
 
 		return false;
 	}

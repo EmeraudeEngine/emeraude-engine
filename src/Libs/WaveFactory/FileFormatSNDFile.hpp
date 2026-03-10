@@ -43,7 +43,6 @@
 #include "FileFormatInterface.hpp"
 
 /* Local inclusions for usages. */
-#include "Libs/IO/IO.hpp"
 #include "Types.hpp"
 #include "Wave.hpp"
 
@@ -61,33 +60,89 @@ namespace EmEn::Libs::WaveFactory
 	{
 		public:
 
-			/**
-			 * @brief Constructs a SNDFile format IO.
-			 */
 			FileFormatSNDFile () noexcept = default;
 
-			/** @copydoc EmEn::Libs::WaveFactory::FileFormatInterface::readFile() */
+			/** @copydoc EmEn::Libs::WaveFactory::FileFormatInterface::readStream() */
 			[[nodiscard]]
 			bool
-			readFile (const std::filesystem::path & filepath, Wave< precision_t > & wave) noexcept override
+			readStream (IO::ByteStream & /*stream*/, Wave< precision_t > & /*wave*/, const ReadOptions & /*options*/) noexcept override
 			{
-				std::cerr << "[WaveFactory::FileFormatSNDFile] readFile(), precision format not handled for '" << filepath << "' !\n";
+				std::cerr << "[WaveFactory::FileFormatSNDFile] readStream(), precision format not handled !\n";
 
 				return false;
 			}
 
-			/** @copydoc EmEn::Libs::WaveFactory::FileFormatInterface::writeFile() */
+			/** @copydoc EmEn::Libs::WaveFactory::FileFormatInterface::writeStream() */
 			[[nodiscard]]
 			bool
-			writeFile (const std::filesystem::path & filepath, const Wave< precision_t > & wave) const noexcept override
+			writeStream (IO::ByteStream & /*stream*/, const Wave< precision_t > & /*wave*/, const WriteOptions & /*options*/) const noexcept override
 			{
-				std::cerr << "[WaveFactory::FileFormatSNDFile] writeFile(), precision format not handled for '" << filepath << "' !\n";
+				std::cerr << "[WaveFactory::FileFormatSNDFile] writeStream(), precision format not handled !\n";
 
 				return false;
 			}
 	};
 
 #ifdef LIBSNDFILE_ENABLED
+
+	/**
+	 * @brief Virtual I/O callbacks for libsndfile using ByteStream.
+	 * @note These are static free functions matching the SF_VIRTUAL_IO signature.
+	 * The user_data pointer is cast to IO::ByteStream*.
+	 */
+	namespace SNDFileCallbacks
+	{
+		inline sf_count_t
+		getFileLength (void * userData) noexcept
+		{
+			auto * stream = static_cast< IO::ByteStream * >(userData);
+
+			return static_cast< sf_count_t >(stream->size());
+		}
+
+		inline sf_count_t
+		seek (sf_count_t offset, int whence, void * userData) noexcept
+		{
+			auto * stream = static_cast< IO::ByteStream * >(userData);
+
+			return static_cast< sf_count_t >(stream->seek(static_cast< int64_t >(offset), whence));
+		}
+
+		inline sf_count_t
+		read (void * ptr, sf_count_t count, void * userData) noexcept
+		{
+			auto * stream = static_cast< IO::ByteStream * >(userData);
+
+			if ( stream->read(ptr, static_cast< size_t >(count)) )
+			{
+				return count;
+			}
+
+			return 0;
+		}
+
+		inline sf_count_t
+		write (const void * ptr, sf_count_t count, void * userData) noexcept
+		{
+			auto * stream = static_cast< IO::ByteStream * >(userData);
+
+			if ( stream->write(ptr, static_cast< size_t >(count)) )
+			{
+				return count;
+			}
+
+			return 0;
+		}
+
+		inline sf_count_t
+		tell (void * userData) noexcept
+		{
+			auto * stream = static_cast< IO::ByteStream * >(userData);
+
+			return static_cast< sf_count_t >(stream->tell());
+		}
+	}
+
 	/**
 	 * @brief Specialization for int16_t (16-bit PCM audio).
 	 */
@@ -96,22 +151,26 @@ namespace EmEn::Libs::WaveFactory
 	{
 		public:
 
-			/**
-			 * @brief Constructs a SNDFile format IO.
-			 */
 			FileFormatSNDFile () noexcept = default;
 
-			/** @copydoc EmEn::Libs::WaveFactory::FileFormatInterface::readFile() */
+			/** @copydoc EmEn::Libs::WaveFactory::FileFormatInterface::readStream() */
 			[[nodiscard]]
 			bool
-			readFile (const std::filesystem::path & filepath, Wave< int16_t > & wave) noexcept override
+			readStream (IO::ByteStream & stream, Wave< int16_t > & wave, const ReadOptions & /*options*/) noexcept override
 			{
-				if ( !IO::fileExists(filepath) )
+				if ( !stream.isOpen() )
 				{
-					std::cerr << "[WaveFactory::FileFormatSNDFile] readFile(), file '" << filepath << "' doesn't exist !\n";
+					std::cerr << "[WaveFactory::FileFormatSNDFile] readStream(), stream is not open !\n";
 
 					return false;
 				}
+
+				SF_VIRTUAL_IO virtualIO;
+				virtualIO.get_filelen = SNDFileCallbacks::getFileLength;
+				virtualIO.seek = SNDFileCallbacks::seek;
+				virtualIO.read = SNDFileCallbacks::read;
+				virtualIO.write = SNDFileCallbacks::write;
+				virtualIO.tell = SNDFileCallbacks::tell;
 
 				SF_INFO soundFileInfos;
 				soundFileInfos.frames = 0;
@@ -121,33 +180,31 @@ namespace EmEn::Libs::WaveFactory
 				soundFileInfos.sections = 0;
 				soundFileInfos.seekable = 0;
 
-				/* 1. Open file. */
-				auto * file = sf_open(filepath.string().c_str(), SFM_READ, &soundFileInfos);
+				auto * file = sf_open_virtual(&virtualIO, SFM_READ, &soundFileInfos, &stream);
 
 				if ( file == nullptr )
 				{
-					std::cerr << "[WaveFactory::FileFormatSNDFile] readFile(), unable to open sound file '" << filepath << "' !\n";
+					std::cerr << "[WaveFactory::FileFormatSNDFile] readStream(), unable to open audio stream !\n";
 
 					return false;
 				}
 
 				auto isDataValid = true;
 
-				/* 2. Read information. */
 				const auto samples = static_cast< size_t >(soundFileInfos.frames);
 				const auto channels = toChannels(soundFileInfos.channels);
 				const auto frequency = toFrequency(soundFileInfos.samplerate);
 
 				if ( channels == Channels::Invalid )
 				{
-					std::cerr << "[WaveFactory::FileFormatSNDFile] readFile(), invalid channels !\n";
+					std::cerr << "[WaveFactory::FileFormatSNDFile] readStream(), invalid channels !\n";
 
 					isDataValid = false;
 				}
 
 				if ( frequency == Frequency::Invalid )
 				{
-					std::cerr << "[WaveFactory::FileFormatSNDFile] readFile(), invalid frequency !\n";
+					std::cerr << "[WaveFactory::FileFormatSNDFile] readStream(), invalid frequency !\n";
 
 					isDataValid = false;
 				}
@@ -155,7 +212,7 @@ namespace EmEn::Libs::WaveFactory
 				if constexpr ( WaveFactoryDebugEnabled )
 				{
 					std::cout <<
-						"[WaveFactory::FileFormatSNDFile] File loaded.\n"
+						"[WaveFactory::FileFormatSNDFile] Stream loaded.\n"
 						"\t" "Frames (Samples) : " << soundFileInfos.frames << "\n"
 						"\t" "Sample rates (Frequency) : " << soundFileInfos.samplerate << " Hz\n"
 						"\t" "Duration : " << ( static_cast< float >(soundFileInfos.frames) / static_cast< float >(soundFileInfos.samplerate) ) << " seconds\n"
@@ -165,20 +222,18 @@ namespace EmEn::Libs::WaveFactory
 						"\t" "Seekable : " << soundFileInfos.seekable << '\n';
 				}
 
-				/* 3. Read data */
 				if ( isDataValid )
 				{
 					if ( wave.initialize(samples, channels, frequency) )
 					{
-						/* NOTE: We use per-frame reading because we expect multichannel sound file. */
-						if ( sf_readf_short(file, wave.data().data(), soundFileInfos.frames) == soundFileInfos.frames )
+						if ( sf_readf_short(file, wave.data().data(), soundFileInfos.frames) != soundFileInfos.frames )
 						{
-							isDataValid = true;
+							isDataValid = false;
 						}
 					}
 					else
 					{
-						std::cerr << "[WaveFactory::FileFormatSNDFile] readFile(), unable to allocate memory for '" << filepath << "' !\n";
+						std::cerr << "[WaveFactory::FileFormatSNDFile] readStream(), unable to allocate memory !\n";
 
 						isDataValid = false;
 					}
@@ -189,28 +244,52 @@ namespace EmEn::Libs::WaveFactory
 				return isDataValid;
 			}
 
-			/** @copydoc EmEn::Libs::WaveFactory::FileFormatInterface::writeFile() */
+			/** @copydoc EmEn::Libs::WaveFactory::FileFormatInterface::writeStream() */
 			[[nodiscard]]
 			bool
-			writeFile (const std::filesystem::path & filepath, const Wave< int16_t > & wave) const noexcept override
+			writeStream (IO::ByteStream & stream, const Wave< int16_t > & wave, const WriteOptions & options) const noexcept override
 			{
-				if ( IO::fileExists(filepath) )
+				if ( !stream.isOpen() )
 				{
-					std::cerr << "[WaveFactory::FileFormatSNDFile] writeFile(), the file '" << filepath << "' already exists !\n";
+					std::cerr << "[WaveFactory::FileFormatSNDFile] writeStream(), stream is not open !\n";
 
 					return false;
+				}
+
+				SF_VIRTUAL_IO virtualIO;
+				virtualIO.get_filelen = SNDFileCallbacks::getFileLength;
+				virtualIO.seek = SNDFileCallbacks::seek;
+				virtualIO.read = SNDFileCallbacks::read;
+				virtualIO.write = SNDFileCallbacks::write;
+				virtualIO.tell = SNDFileCallbacks::tell;
+
+				int format = SF_FORMAT_PCM_16;
+
+				switch ( options.format )
+				{
+					case AudioFormat::WAV :
+						format |= SF_FORMAT_WAV;
+						break;
+
+					case AudioFormat::FLAC :
+						format |= SF_FORMAT_FLAC;
+						break;
+
+					case AudioFormat::OGG :
+						format = SF_FORMAT_OGG | SF_FORMAT_VORBIS;
+						break;
 				}
 
 				SF_INFO infos;
 				infos.channels = static_cast< int >(wave.channels());
 				infos.samplerate = static_cast< int >(wave.frequency());
-				infos.format = SF_FORMAT_PCM_16 | SF_FORMAT_WAV;
+				infos.format = format;
 
-				auto * file = sf_open(filepath.string().c_str(), SFM_WRITE, &infos);
+				auto * file = sf_open_virtual(&virtualIO, SFM_WRITE, &infos, &stream);
 
 				if ( file == nullptr )
 				{
-					std::cerr << "[WaveFactory::FileFormatSNDFile] writeFile(), unable to open file '" << filepath << "' for writing !\n";
+					std::cerr << "[WaveFactory::FileFormatSNDFile] writeStream(), unable to open audio stream for writing !\n";
 
 					return false;
 				}

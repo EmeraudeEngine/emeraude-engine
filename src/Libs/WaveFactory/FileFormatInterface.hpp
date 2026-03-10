@@ -28,16 +28,17 @@
 
 /* STL inclusions. */
 #include <cstdint>
-#include <filesystem>
 #include <type_traits>
 
-/* Local inclusions. */
+/* Local inclusions for usages. */
+#include "Libs/IO/ByteStream.hpp"
+#include "Types.hpp"
 #include "Wave.hpp"
 
 namespace EmEn::Libs::WaveFactory
 {
 	/**
-	 * @brief File format interface for reading and writing a wave.
+	 * @brief Stream-based format interface for reading and writing audio data.
 	 * @tparam precision_t The sample precision type. Default int16_t.
 	 */
 	template< typename precision_t = int16_t >
@@ -46,58 +47,32 @@ namespace EmEn::Libs::WaveFactory
 	{
 		public:
 
-			/**
-			 * @brief Copy constructor.
-			 * @param copy A reference to the copied instance.
-			 */
-			FileFormatInterface (const FileFormatInterface & copy) noexcept = default;
-
-			/**
-			 * @brief Move constructor.
-			 * @param copy A reference to the copied instance.
-			 */
-			FileFormatInterface (FileFormatInterface && copy) noexcept = default;
-
-			/**
-			 * @brief Copy assignment.
-			 * @param copy A reference to the copied instance.
-			 * @return FileFormatInterface &
-			 */
-			FileFormatInterface & operator= (const FileFormatInterface & copy) noexcept = default;
-
-			/**
-			 * @brief Move assignment.
-			 * @param copy A reference to the copied instance.
-			 * @return FileFormatInterface &
-			 */
-			FileFormatInterface & operator= (FileFormatInterface && copy) noexcept = default;
-
-			/**
-			 * @brief Destructs the wave format.
-			 */
+			FileFormatInterface (const FileFormatInterface &) noexcept = default;
+			FileFormatInterface (FileFormatInterface &&) noexcept = default;
+			FileFormatInterface & operator= (const FileFormatInterface &) noexcept = default;
+			FileFormatInterface & operator= (FileFormatInterface &&) noexcept = default;
 			virtual ~FileFormatInterface () = default;
 
 			/**
-			 * @brief Reads the wave from a file.
-			 * @param filepath A reference to a filesystem path.
-			 * @param wave A reference to the wave.
+			 * @brief Reads audio data from a byte stream into a wave.
+			 * @param stream A reference to the input byte stream.
+			 * @param wave A reference to the destination wave.
+			 * @param options Read options (synthesis frequency, soundfont, etc.).
 			 * @return bool
 			 */
-			virtual bool readFile (const std::filesystem::path & filepath, Wave< precision_t > & wave) noexcept = 0;
+			virtual bool readStream (IO::ByteStream & stream, Wave< precision_t > & wave, const ReadOptions & options = {}) noexcept = 0;
 
 			/**
-			 * @brief Writes the wave to a file.
-			 * @param filepath A reference to a filesystem path. Should be accessible.
-			 * @param wave A read-only reference to the wave.
+			 * @brief Writes audio data from a wave into a byte stream.
+			 * @param stream A reference to the output byte stream.
+			 * @param wave A read-only reference to the source wave.
+			 * @param options Write options (output format, etc.).
 			 * @return bool
 			 */
-			virtual bool writeFile (const std::filesystem::path & filepath, const Wave< precision_t > & wave) const noexcept = 0;
+			virtual bool writeStream (IO::ByteStream & stream, const Wave< precision_t > & wave, const WriteOptions & options = {}) const noexcept = 0;
 
 		protected:
 
-			/**
-			 * @brief Constructs a wave format.
-			 */
 			FileFormatInterface () noexcept = default;
 	};
 }

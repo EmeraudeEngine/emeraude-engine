@@ -38,10 +38,13 @@ Context for developing Emeraude Engine utility libraries.
 - MD5, SHA, and other classic algorithms
 - For checksums, identifiers, caching
 
-**IO/** - Generic file read/write
-- Cross-platform I/O abstractions
+**IO/** - Generic I/O abstractions (shared foundation for all factories)
+- **ByteStream**: Abstract polymorphic interface for byte-level I/O (`read/write/seek/tell/size/isOpen`)
+- **FileStream**: File-backed implementation (`Mode::Read/Write`) wrapping `std::ifstream`/`std::ofstream`
+- **MemoryStream**: Memory-backed with random-access writes (position-based, not append-only)
 - Archive support (ZIP via external lib)
 - File/folder manipulation
+- See: `IO/ByteStream.hpp`, `IO/FileStream.hpp`, `IO/MemoryStream.hpp`
 
 **Math/** - Complete 2D/3D math library
 - **Vector**: 2D/3D/4D vectors
@@ -57,24 +60,29 @@ Context for developing Emeraude Engine utility libraries.
 - Network protocol helpers
 - Communication abstractions
 
-**PixelFactory/** - Image manipulation
-- Load/save image formats
+**PixelFactory/** - Image manipulation (uses unified ByteStream I/O)
+- Load/save image formats (JPEG, PNG, Targa) via `FileIO`/`StreamIO`
 - Pixel transformations (resize, crop, filters)
 - Procedural image generation
 - **TextProcessor**: Text rendering on Pixmap with bounds protection
 - **Pixmap**: Image container with `blendPixel()` (assert) and `blendFreePixel()` (bounds-safe)
+- See: `PixelFactory/FileIO.hpp`, `PixelFactory/StreamIO.hpp`
 
-**VertexFactory/** - 3D geometry manipulation
+**VertexFactory/** - 3D geometry manipulation (uses unified ByteStream I/O)
 - Procedural mesh generation
 - Geometric transformations
 - Normal, tangent, UV calculations
 - **Grid**: Terrain height/normal queries with edge clamping (see below)
+- Format handlers: Native (ee3d), OBJ, STL, MDx (MDL/MD2/MD3/MD5)
+- MDx formats are read-only (no write support)
+- See: `VertexFactory/FileIO.hpp`, `VertexFactory/StreamIO.hpp`
 
-**WaveFactory/** - Audio manipulation - See [`@WaveFactory/AGENTS.md`](WaveFactory/AGENTS.md)
-- Audio format loading (WAV, FLAC, OGG via libsndfile)
+**WaveFactory/** - Audio manipulation (uses unified ByteStream I/O) - See [`@WaveFactory/AGENTS.md`](WaveFactory/AGENTS.md)
+- Audio format loading (WAV, FLAC, OGG via libsndfile + `sf_open_virtual`)
 - Procedural audio from JSON definitions (mono Synthesizer, multi-track via SFXScript)
 - MIDI to synthesized audio conversion
 - Audio sample transformations
+- See: `WaveFactory/FileIO.hpp`, `WaveFactory/StreamIO.hpp`
 
 **Time/** - Temporal management
 - Chronometers
@@ -94,7 +102,9 @@ Context for developing Emeraude Engine utility libraries.
 - **SourceCodeParser**: Source code parsing with annotations and formatting
 
 ### Integrated External Dependencies
-- **libsndfile**: Audio format loading (WaveFactory)
+- **libsndfile**: Audio format loading via `sf_open_virtual` (WaveFactory)
+- **libsamplerate**: Audio resampling (WaveFactory/Processor)
+- **TinySoundFont**: SF2 MIDI rendering (WaveFactory/FileFormatMIDI)
 - **zlib**: Compression (Compression)
 - **lzma**: Compression (Compression)
 - **ZIP library**: Archives (IO)
@@ -152,10 +162,16 @@ ctest -R Libs
 - `KVParser.hpp` - INI-style parser (KVVariable, KVSection, KVParser)
 - `SourceCodeParser.hpp` - Source code parser with annotations
 
-### Factories
-- `PixelFactory/` - Image manipulation
-- `VertexFactory/` - Geometry generation/manipulation
-- `WaveFactory/` - Audio manipulation
+### I/O Foundation
+- `IO/ByteStream.hpp` - Abstract polymorphic stream interface (read/write/seek/tell)
+- `IO/FileStream.hpp` - File-backed ByteStream (ifstream/ofstream)
+- `IO/MemoryStream.hpp` - Memory-backed ByteStream (random-access)
+- `IO/IO.hpp` - File utility functions (exists, extension, etc.)
+
+### Factories (all use unified ByteStream I/O)
+- `PixelFactory/` - Image manipulation (`FileIO.hpp`, `StreamIO.hpp`)
+- `VertexFactory/` - Geometry generation/manipulation (`FileIO.hpp`, `StreamIO.hpp`)
+- `WaveFactory/` - Audio manipulation (`FileIO.hpp`, `StreamIO.hpp`)
 
 ## Development Patterns
 
@@ -538,6 +554,63 @@ See: [`docs/coordinate-system.md`](../../docs/coordinate-system.md#winding-conve
 - `VertexFactory/ShapeGenerator.hpp:generateEmeraldCutGem()` — Reference step-cut implementation
 - `VertexFactory/ShapeGenerator.hpp:generateRoseCutGem()` — Dome geometry (pavilion-style, dome points +Y)
 - `Graphics/Geometry/ResourceGenerator.hpp` — GPU resource wrappers for all gem generators
+
+## Unified ByteStream I/O Architecture
+
+All three factories (PixelFactory, WaveFactory, VertexFactory) share a common I/O architecture via `Libs/IO/`.
+
+### Core Abstraction: ByteStream
+
+```cpp
+// IO::ByteStream — abstract interface for all I/O
+class ByteStream {
+    virtual bool read(void * buffer, size_t size) noexcept = 0;
+    virtual bool write(const void * buffer, size_t size) noexcept = 0;
+    virtual bool seek(int64_t offset, SeekOrigin origin) noexcept = 0;
+    virtual int64_t tell() const noexcept = 0;
+    virtual int64_t size() const noexcept = 0;
+    virtual bool isOpen() const noexcept = 0;
+    // ...
+};
+```
+
+Two concrete implementations:
+- **FileStream** — wraps `std::ifstream`/`std::ofstream` with `Mode::Read`/`Mode::Write`
+- **MemoryStream** — operates on `std::vector<std::byte>` (write) or `const std::byte *` (read), with position-based random access
+
+### Factory I/O Pattern
+
+Each factory exposes two namespaces:
+
+| Namespace | Purpose | Stream type |
+|-----------|---------|-------------|
+| `FileIO::read/write` | File-backed I/O (path-based) | `IO::FileStream` |
+| `StreamIO::read/write` | Memory buffer I/O | `IO::MemoryStream` |
+
+Both delegate to `FileFormatInterface::readStream(ByteStream &, ...)` / `writeStream(ByteStream &, ...)`.
+
+### Format Handler Strategies
+
+| Strategy | Used by | How it works |
+|----------|---------|--------------|
+| **Direct ByteStream** | Native (ee3d), STL binary write | Binary read/write directly on the stream |
+| **sf_open_virtual** | libsndfile (WAV/FLAC/OGG) | Virtual I/O callbacks delegate to ByteStream |
+| **istringstream adapter** | OBJ, STL, MDx, JSON, MIDI | Read full stream to memory, wrap in `std::istringstream` for text-based parsing |
+| **ostringstream adapter** | OBJ write | Build text output in `std::ostringstream`, write string to ByteStream |
+
+### Code References
+
+| File | Description |
+|------|-------------|
+| `IO/ByteStream.hpp` | Abstract polymorphic stream interface |
+| `IO/FileStream.hpp` | File-backed implementation |
+| `IO/MemoryStream.hpp` | Memory-backed implementation |
+| `PixelFactory/FileIO.hpp` | Image file dispatcher |
+| `PixelFactory/StreamIO.hpp` | Image memory buffer I/O |
+| `WaveFactory/FileIO.hpp` | Audio file dispatcher |
+| `WaveFactory/StreamIO.hpp` | Audio memory buffer I/O (libsndfile only) |
+| `VertexFactory/FileIO.hpp` | Geometry file dispatcher (Native, OBJ, STL, MDx) |
+| `VertexFactory/StreamIO.hpp` | Geometry memory buffer I/O (Native ee3d only) |
 
 ## Detailed Documentation
 

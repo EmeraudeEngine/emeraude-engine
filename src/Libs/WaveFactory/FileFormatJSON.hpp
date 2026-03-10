@@ -29,7 +29,9 @@
 /* STL inclusions. */
 #include <cstdint>
 #include <iostream>
+#include <string>
 #include <type_traits>
+#include <vector>
 
 /* Local inclusions for inheritances. */
 #include "FileFormatInterface.hpp"
@@ -41,7 +43,7 @@
 namespace EmEn::Libs::WaveFactory
 {
 	/**
-	 * @brief Class for reading procedural audio definitions from JSON files.
+	 * @brief Class for reading procedural audio definitions from JSON data.
 	 * @tparam precision_t The sample precision type. Default int16_t.
 	 * @extends EmEn::Libs::WaveFactory::FileFormatInterface The base IO class.
 	 * @note Uses SFXScript to parse JSON and generate audio.
@@ -52,49 +54,37 @@ namespace EmEn::Libs::WaveFactory
 	{
 		public:
 
-			/**
-			 * @brief Constructs a JSON format IO with default sample rate.
-			 * @param frequency The sample rate to use for generation. Default 48kHz.
-			 */
-			explicit
-			FileFormatJSON (Frequency frequency = Frequency::PCM48000Hz) noexcept
-				: m_frequency{frequency}
-			{
+			FileFormatJSON () noexcept = default;
 
-			}
-
-			/**
-			 * @brief Sets the sample rate for audio generation.
-			 * @param frequency The sample rate.
-			 * @return void
-			 */
-			void
-			setFrequency (Frequency frequency) noexcept
-			{
-				m_frequency = frequency;
-			}
-
-			/**
-			 * @brief Returns the current sample rate.
-			 * @return Frequency
-			 */
-			[[nodiscard]]
-			Frequency
-			frequency () const noexcept
-			{
-				return m_frequency;
-			}
-
-			/** @copydoc EmEn::Libs::WaveFactory::FileFormatInterface::readFile() */
+			/** @copydoc EmEn::Libs::WaveFactory::FileFormatInterface::readStream() */
 			[[nodiscard]]
 			bool
-			readFile (const std::filesystem::path & filepath, Wave< precision_t > & wave) noexcept override
+			readStream (IO::ByteStream & stream, Wave< precision_t > & wave, const ReadOptions & options) noexcept override
 			{
-				SFXScript< precision_t > script{wave, m_frequency};
-
-				if ( !script.generateFromFile(filepath) )
+				if ( !stream.isOpen() )
 				{
-					std::cerr << "[WaveFactory::FileFormatJSON] readFile(), failed to generate audio from '" << filepath << "' !\n";
+					std::cerr << "[WaveFactory::FileFormatJSON] readStream(), stream is not open !\n";
+
+					return false;
+				}
+
+				/* Read the entire stream content into a string. */
+				const auto dataSize = stream.size();
+
+				std::string jsonString(dataSize, '\0');
+
+				if ( !stream.read(jsonString.data(), dataSize) )
+				{
+					std::cerr << "[WaveFactory::FileFormatJSON] readStream(), failed to read stream data !\n";
+
+					return false;
+				}
+
+				SFXScript< precision_t > script{wave, options.synthesisFrequency};
+
+				if ( !script.generateFromString(jsonString) )
+				{
+					std::cerr << "[WaveFactory::FileFormatJSON] readStream(), failed to generate audio from JSON data !\n";
 
 					return false;
 				}
@@ -102,20 +92,16 @@ namespace EmEn::Libs::WaveFactory
 				return true;
 			}
 
-			/** @copydoc EmEn::Libs::WaveFactory::FileFormatInterface::writeFile() */
+			/** @copydoc EmEn::Libs::WaveFactory::FileFormatInterface::writeStream() */
 			[[nodiscard]]
 			bool
-			writeFile (const std::filesystem::path & /*filepath*/, const Wave< precision_t > & /*wave*/) const noexcept override
+			writeStream (IO::ByteStream & /*stream*/, const Wave< precision_t > & /*wave*/, const WriteOptions & /*options*/) const noexcept override
 			{
 				/* NOTE: Writing a wave back to JSON would require reverse-engineering the synthesis,
 				 * which is not practical. This format is read-only. */
-				std::cerr << "[WaveFactory::FileFormatJSON] writeFile() is not supported ! JSON format is read-only.\n";
+				std::cerr << "[WaveFactory::FileFormatJSON] writeStream() is not supported ! JSON format is read-only.\n";
 
 				return false;
 			}
-
-		private:
-
-			Frequency m_frequency{Frequency::PCM48000Hz};
 	};
 }

@@ -31,13 +31,16 @@
 
 /* STL inclusions. */
 #include <cstdint>
-#include <filesystem>
 
 /* Local inclusions for usages. */
+#include "Libs/IO/ByteStream.hpp"
 #include "Shape.hpp"
 
 namespace EmEn::Libs::VertexFactory
 {
+	/**
+	 * @brief Options for reading/decoding geometry data.
+	 */
 	struct ReadOptions
 	{
 		float scaleFactor = 1.0F;
@@ -51,7 +54,15 @@ namespace EmEn::Libs::VertexFactory
 	};
 
 	/**
-	 * @brief File format interface for reading and writing a geometry.
+	 * @brief Options for writing/encoding geometry data.
+	 */
+	struct WriteOptions
+	{
+
+	};
+
+	/**
+	 * @brief Stream-based format interface for reading and writing geometry data.
 	 * @tparam vertex_data_t The precision type of vertex data. Default float.
 	 * @tparam index_data_t The precision type of index data. Default uint32_t.
 	 */
@@ -61,59 +72,32 @@ namespace EmEn::Libs::VertexFactory
 	{
 		public:
 
-			/**
-			 * @brief Copy constructor.
-			 * @param copy A reference to the copied instance.
-			 */
-			FileFormatInterface (const FileFormatInterface & copy) noexcept = default;
-
-			/**
-			 * @brief Move constructor.
-			 * @param copy A reference to the copied instance.
-			 */
-			FileFormatInterface (FileFormatInterface && copy) noexcept = default;
-
-			/**
-			 * @brief Copy assignment.
-			 * @param copy A reference to the copied instance.
-			 * @return FileFormatInterface &
-			 */
-			FileFormatInterface & operator= (const FileFormatInterface & copy) noexcept = default;
-
-			/**
-			 * @brief Move assignment.
-			 * @param copy A reference to the copied instance.
-			 * @return FileFormatInterface &
-			 */
-			FileFormatInterface & operator= (FileFormatInterface && copy) noexcept = default;
-
-			/**
-			 * @brief Destructs the pixmap format.
-			 */
+			FileFormatInterface (const FileFormatInterface &) noexcept = default;
+			FileFormatInterface (FileFormatInterface &&) noexcept = default;
+			FileFormatInterface & operator= (const FileFormatInterface &) noexcept = default;
+			FileFormatInterface & operator= (FileFormatInterface &&) noexcept = default;
 			virtual ~FileFormatInterface () = default;
 
 			/**
-			 * @brief Reads the geometry from a file.
-			 * @param filepath A reference to a filesystem path.
-			 * @param geometry A reference to the Geometry.
-			 * @param readOptions A reference to a read options structure.
+			 * @brief Reads geometry data from a byte stream into a shape.
+			 * @param stream A reference to the input byte stream.
+			 * @param geometry A reference to the destination shape.
+			 * @param readOptions A reference to read options.
 			 * @return bool
 			 */
-			virtual bool readFile (const std::filesystem::path & filepath, Shape< vertex_data_t, index_data_t > & geometry, const ReadOptions & readOptions) noexcept = 0;
+			virtual bool readStream (IO::ByteStream & stream, Shape< vertex_data_t, index_data_t > & geometry, const ReadOptions & readOptions) noexcept = 0;
 
 			/**
-			 * @brief Writes the geometry to a file.
-			 * @param filepath A reference to a filesystem path. Should be accessible.
-			 * @param geometry A read-only reference to the Geometry.
+			 * @brief Writes geometry data from a shape into a byte stream.
+			 * @param stream A reference to the output byte stream.
+			 * @param geometry A read-only reference to the source shape.
+			 * @param writeOptions A reference to write options.
 			 * @return bool
 			 */
-			virtual bool writeFile (const std::filesystem::path & filepath, const Shape< vertex_data_t, index_data_t > & geometry) const noexcept = 0;
+			virtual bool writeStream (IO::ByteStream & stream, const Shape< vertex_data_t, index_data_t > & geometry, const WriteOptions & writeOptions = {}) const noexcept = 0;
 
 		protected:
 
-			/**
-			 * @brief Constructs a pixmap format.
-			 */
 			FileFormatInterface () noexcept = default;
 	};
 }

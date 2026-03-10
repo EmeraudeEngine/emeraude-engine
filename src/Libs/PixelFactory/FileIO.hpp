@@ -37,6 +37,8 @@
 #include "FileFormatJpeg.hpp"
 #include "FileFormatPNG.hpp"
 #include "FileFormatTarga.hpp"
+#include "Libs/IO/FileStream.hpp"
+#include "IOCommon.hpp"
 #include "Pixmap.hpp"
 
 namespace EmEn::Libs::PixelFactory::FileIO
@@ -47,12 +49,13 @@ namespace EmEn::Libs::PixelFactory::FileIO
 	 * @tparam dimension_t The type of unsigned integer used for pixmap dimension. Default uint32_t.
 	 * @param filepath A reference to a filesystem path.
 	 * @param pixmap A reference to the destination pixmap.
+	 * @param options Read post-processing options. Default: no transformations.
 	 * @return bool
 	 */
 	template< typename pixel_data_t = uint8_t, typename dimension_t = uint32_t >
 	[[nodiscard]]
 	bool
-	read (const std::filesystem::path & filepath, Pixmap< pixel_data_t, dimension_t > & pixmap) requires (std::is_arithmetic_v< pixel_data_t > && std::is_unsigned_v< dimension_t >)
+	read (const std::filesystem::path & filepath, Pixmap< pixel_data_t, dimension_t > & pixmap, const ReadOptions & options = {}) requires (std::is_arithmetic_v< pixel_data_t > && std::is_unsigned_v< dimension_t >)
 	{
 		if ( !IO::fileExists(filepath) )
 		{
@@ -61,51 +64,80 @@ namespace EmEn::Libs::PixelFactory::FileIO
 			return false;
 		}
 
+		IO::FileStream stream{filepath, IO::FileStream::Mode::Read};
+
+		if ( !stream.isOpen() )
+		{
+			std::cerr << "PixelFactory::FileIO::read(), unable to open '" << filepath << "' !" "\n";
+
+			return false;
+		}
+
 		const auto extension = IO::getFileExtension(filepath, true);
+
+		bool decoded = false;
 
 		if ( extension == "jpg" || extension == "jpeg" )
 		{
 			FileFormatJpeg< pixel_data_t, dimension_t > fileFormat;
 
-			return fileFormat.readFile(filepath, pixmap);
+			decoded = fileFormat.readStream(stream, pixmap);
 		}
-
-		if ( extension == "png" )
+		else if ( extension == "png" )
 		{
 			FileFormatPNG< pixel_data_t, dimension_t > fileFormat;
 
-			return fileFormat.readFile(filepath, pixmap);
+			decoded = fileFormat.readStream(stream, pixmap);
 		}
-
-		if ( extension == "tga" )
+		else if ( extension == "tga" )
 		{
 			FileFormatTarga< pixel_data_t, dimension_t > fileFormat;
 
-			return fileFormat.readFile(filepath, pixmap);
+			decoded = fileFormat.readStream(stream, pixmap);
+		}
+		else
+		{
+			std::cerr << "PixelFactory::FileIO::read(), the file '" << filepath << "' format is not handled !" "\n";
+
+			return false;
 		}
 
-		std::cerr << "PixelFactory::FileIO::read(), the file '" << filepath << "' format is not handled !" "\n";
+		if ( !decoded )
+		{
+			return false;
+		}
 
-		return false;
+		/* Apply read post-processing options. */
+		return applyReadOptions(pixmap, options);
 	}
 
 	/**
-	 * @briew Writes a pixmap into a file.
+	 * @brief Writes a pixmap into a file.
 	 * @tparam pixel_data_t The pixel component type for the pixmap depth precision. Default uint8_t.
 	 * @tparam dimension_t The type of unsigned integer used for pixmap dimension. Default uint32_t.
 	 * @param pixmap A reference to the source pixmap.
 	 * @param filepath A reference to a filesystem path.
 	 * @param overwrite Overwrite existing file. Default false.
+	 * @param options Write encoding options. Default: format defaults.
 	 * @return bool
 	 */
 	template< typename pixel_data_t = uint8_t, typename dimension_t = uint32_t >
 	[[nodiscard]]
 	bool
-	write (const Pixmap< pixel_data_t, dimension_t > & pixmap, const std::filesystem::path & filepath, bool overwrite = false) requires (std::is_arithmetic_v< pixel_data_t > && std::is_unsigned_v< dimension_t >)
+	write (const Pixmap< pixel_data_t, dimension_t > & pixmap, const std::filesystem::path & filepath, bool overwrite = false, const WriteOptions & options = {}) requires (std::is_arithmetic_v< pixel_data_t > && std::is_unsigned_v< dimension_t >)
 	{
 		if ( IO::fileExists(filepath) && !overwrite )
 		{
 			std::cerr << "PixelFactory::FileIO::write(), the file '" << filepath << "' already exists !" "\n";
+
+			return false;
+		}
+
+		IO::FileStream stream{filepath, IO::FileStream::Mode::Write};
+
+		if ( !stream.isOpen() )
+		{
+			std::cerr << "PixelFactory::FileIO::write(), unable to open '" << filepath << "' for writing !" "\n";
 
 			return false;
 		}
@@ -116,22 +148,21 @@ namespace EmEn::Libs::PixelFactory::FileIO
 		{
 			FileFormatJpeg< pixel_data_t, dimension_t > fileFormat;
 
-			return fileFormat.writeFile(filepath, pixmap);
+			return fileFormat.writeStream(stream, pixmap, options);
 		}
 
 		if ( extension == "png" )
 		{
 			FileFormatPNG< pixel_data_t, dimension_t > fileFormat;
 
-			return fileFormat.writeFile(filepath, pixmap);
+			return fileFormat.writeStream(stream, pixmap, options);
 		}
 
 		if ( extension == "tga" )
 		{
 			FileFormatTarga< pixel_data_t, dimension_t > fileFormat;
-			fileFormat.setRLECompression(true);
 
-			return fileFormat.writeFile(filepath, pixmap);
+			return fileFormat.writeStream(stream, pixmap, options);
 		}
 
 		std::cerr << "PixelFactory::FileIO::write(), the file '" << filepath << "' format is not handled !" "\n";

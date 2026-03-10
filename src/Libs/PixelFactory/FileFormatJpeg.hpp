@@ -30,10 +30,12 @@
 #include "emeraude_config.hpp"
 
 /* STL inclusions. */
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
-#include <cstdio>
+#include <cstdlib>
 #include <iostream>
+#include <vector>
 
 /* Third-party inclusions. */
 #include <jpeglib.h>
@@ -42,12 +44,13 @@
 #include "FileFormatInterface.hpp"
 
 /* Local inclusions for usages. */
+#include "Libs/IO/ByteStream.hpp"
 #include "Pixmap.hpp"
 
 namespace EmEn::Libs::PixelFactory
 {
 	/**
-	 * @brief Class for read and write JPEG format.
+	 * @brief Class for read and write JPEG format via byte streams.
 	 * @tparam pixel_data_t The pixel component type for the pixmap depth precision. Default uint8_t.
 	 * @tparam dimension_t The type of unsigned integer used for pixmap dimension. Default uint32_t.
 	 * @extends EmEn::Libs::PixelFactory::FileFormatInterface The base IO class.
@@ -58,121 +61,119 @@ namespace EmEn::Libs::PixelFactory
 	{
 		public:
 
-			/**
-			 * @brief Constructs a JPEG format IO.
-			 */
 			FileFormatJpeg () noexcept = default;
 
-			/** @copydoc EmEn::Libs::PixelFactory::FileFormatInterface::readFile() */
+			/** @copydoc EmEn::Libs::PixelFactory::FileFormatInterface::readStream() */
 			[[nodiscard]]
 			bool
-			readFile (const std::filesystem::path & filepath, Pixmap< pixel_data_t, dimension_t > & pixmap) noexcept override
+			readStream (IO::ByteStream & stream, Pixmap< pixel_data_t, dimension_t > & pixmap) noexcept override
 			{
 				pixmap.clear();
 
-				auto loaded = false;
+				/* JPEG requires all data in memory for jpeg_mem_src. */
+				std::vector< unsigned char > inputBuffer;
+				const unsigned char * sourcePtr = nullptr;
+				unsigned long sourceSize = 0;
 
-				/* FIXME: Use C++ stream. */
-#if IS_WINDOWS
-				auto * file = _wfopen(filepath.c_str(), L"rb");
-#else
-				auto * file = fopen(filepath.c_str(), "rb");
-#endif
-
-				if ( file != nullptr )
+				if ( stream.isMemoryBacked() && stream.data() != nullptr )
 				{
-					jpeg_decompress_struct info{};
-					jpeg_error_mgr error{};
+					sourcePtr = reinterpret_cast< const unsigned char * >(stream.data());
+					sourceSize = static_cast< unsigned long >(stream.size());
+				}
+				else
+				{
+					const auto totalSize = stream.size();
 
-					info.err = jpeg_std_error(&error);
-
-					jpeg_create_decompress(&info);
-
-					jpeg_stdio_src(&info, file);
-
-					/* This does not really read header. */
-					jpeg_read_header(&info, 1);
-					jpeg_start_decompress(&info);
-
-					if constexpr ( PixelFactoryDebugEnabled )
+					if ( totalSize == 0 )
 					{
-						std::cout <<
-							"[Jpeg_DEBUG] Reading header." << '\n' <<
-							"\tWidth : " << info.output_width << '\n' <<
-							"\tHeight : " << info.output_height << '\n' <<
-							"\tComponents : " << info.output_components << '\n';
+						std::cerr << __PRETTY_FUNCTION__ << ", empty stream !" "\n";
+
+						return false;
 					}
 
-					auto pixmapAllocated = false;
+					inputBuffer.resize(totalSize);
 
-					switch ( info.output_components )
+					if ( !stream.read(inputBuffer.data(), totalSize) )
 					{
-						case 1:
-							pixmapAllocated = pixmap.initialize(info.output_width, info.output_height, ChannelMode::Grayscale);
-							break;
+						std::cerr << __PRETTY_FUNCTION__ << ", failed to read stream data !" "\n";
 
-						case 2:
-							pixmapAllocated = pixmap.initialize(info.output_width, info.output_height, ChannelMode::GrayscaleAlpha);
-							break;
-
-						case 3:
-							pixmapAllocated = pixmap.initialize(info.output_width, info.output_height, ChannelMode::RGB);
-							break;
-
-						case 4:
-							pixmapAllocated = pixmap.initialize(info.output_width, info.output_height, ChannelMode::RGBA);
-							break;
-
-						default:
-							/* Badness */
-							break;
+						return false;
 					}
 
-					if ( pixmapAllocated )
-					{
-						if ( this->invertYAxis() )
-						{
-							auto rowIndex = static_cast< size_t >(info.output_height - 1);
-
-							while (info.output_scanline < info.output_height )
-							{
-								auto rowData = pixmap.rowPointer(rowIndex);
-
-								jpeg_read_scanlines(&info, &rowData, 1);
-
-								rowIndex--;
-							}
-						}
-						else
-						{
-							size_t rowIndex = 0;
-
-							while (info.output_scanline < info.output_height )
-							{
-								auto rowData = pixmap.rowPointer(rowIndex);
-
-								jpeg_read_scanlines(&info, &rowData, 1);
-
-								rowIndex++;
-							}
-						}
-
-						loaded = true;
-					}
-
-					jpeg_finish_decompress(&info);
-					jpeg_destroy_decompress(&info);
-
-					fclose(file);
+					sourcePtr = inputBuffer.data();
+					sourceSize = static_cast< unsigned long >(totalSize);
 				}
 
-				return loaded;
+				jpeg_decompress_struct info{};
+				jpeg_error_mgr error{};
+
+				info.err = jpeg_std_error(&error);
+
+				jpeg_create_decompress(&info);
+
+				jpeg_mem_src(&info, sourcePtr, sourceSize);
+
+				jpeg_read_header(&info, 1);
+				jpeg_start_decompress(&info);
+
+				if constexpr ( PixelFactoryDebugEnabled )
+				{
+					std::cout <<
+						"[Jpeg_DEBUG] Reading header." << '\n' <<
+						"\tWidth : " << info.output_width << '\n' <<
+						"\tHeight : " << info.output_height << '\n' <<
+						"\tComponents : " << info.output_components << '\n';
+				}
+
+				auto pixmapAllocated = false;
+
+				switch ( info.output_components )
+				{
+					case 1:
+						pixmapAllocated = pixmap.initialize(info.output_width, info.output_height, ChannelMode::Grayscale);
+						break;
+
+					case 2:
+						pixmapAllocated = pixmap.initialize(info.output_width, info.output_height, ChannelMode::GrayscaleAlpha);
+						break;
+
+					case 3:
+						pixmapAllocated = pixmap.initialize(info.output_width, info.output_height, ChannelMode::RGB);
+						break;
+
+					case 4:
+						pixmapAllocated = pixmap.initialize(info.output_width, info.output_height, ChannelMode::RGBA);
+						break;
+
+					default:
+						break;
+				}
+
+				if ( pixmapAllocated )
+				{
+					/* Always decode to canonical top-left origin. */
+					size_t rowIndex = 0;
+
+					while ( info.output_scanline < info.output_height )
+					{
+						auto rowData = pixmap.rowPointer(rowIndex);
+
+						jpeg_read_scanlines(&info, &rowData, 1);
+
+						rowIndex++;
+					}
+				}
+
+				jpeg_finish_decompress(&info);
+				jpeg_destroy_decompress(&info);
+
+				return pixmapAllocated;
 			}
 
-			/** @copydoc EmEn::Libs::PixelFactory::FileFormatInterface::writeFile() */
+			/** @copydoc EmEn::Libs::PixelFactory::FileFormatInterface::writeStream() */
 			[[nodiscard]]
 			bool
-			writeFile (const std::filesystem::path & filepath, const Pixmap< pixel_data_t, dimension_t > & pixmap) const noexcept override
+			writeStream (IO::ByteStream & stream, const Pixmap< pixel_data_t, dimension_t > & pixmap, const WriteOptions & options = {}) const noexcept override
 			{
 				if ( !pixmap.isValid() )
 				{
@@ -188,134 +189,139 @@ namespace EmEn::Libs::PixelFactory
 					return false;
 				}
 
-				/* FIXME: Use C++ stream. */
-#if IS_WINDOWS
-				auto * file = _wfopen(filepath.c_str(), L"wb");
-#else
-				auto * file = fopen(filepath.c_str(), "wb");
-#endif
+				jpeg_compress_struct info{};
+				jpeg_error_mgr error{};
 
-				if ( file != nullptr )
+				info.err = jpeg_std_error(&error);
+
+				jpeg_create_compress(&info);
+
+				/* Use memory destination, write to stream afterwards. */
+				unsigned char * outBuffer = nullptr;
+				unsigned long outSize = 0;
+
+				jpeg_mem_dest(&info, &outBuffer, &outSize);
+
+				info.image_width = static_cast< JDIMENSION >(pixmap.width());
+				info.image_height = static_cast< JDIMENSION >(pixmap.height());
+
+				switch ( pixmap.channelMode() )
 				{
-					jpeg_compress_struct info{};
-					jpeg_error_mgr error{};
+					case ChannelMode::RGB :
+					case ChannelMode::RGBA :
+						info.input_components = 3;
+						info.in_color_space = JCS_RGB;
+						break;
 
-					info.err = jpeg_std_error(&error);
+					case ChannelMode::Grayscale :
+					case ChannelMode::GrayscaleAlpha :
+						info.input_components = 1;
+						info.in_color_space = JCS_GRAYSCALE;
+						break;
 
-					jpeg_create_compress(&info);
+					default:
+						std::cerr << __PRETTY_FUNCTION__ << ", unhandled format !" "\n";
 
-					jpeg_stdio_dest(&info, file);
+						jpeg_destroy_compress(&info);
+						free(outBuffer);
 
-					info.image_width = static_cast< JDIMENSION >(pixmap.width());
-					info.image_height = static_cast< JDIMENSION >(pixmap.height());
+						return false;
+				}
 
-					switch ( pixmap.channelMode() )
+				if constexpr ( PixelFactoryDebugEnabled )
+				{
+					std::cout <<
+						"[Jpeg_DEBUG] Writing header." << '\n' <<
+						"\tWidth : " << info.image_width << '\n' <<
+						"\tHeight : " << info.image_height << '\n' <<
+						"\tComponents : " << info.input_components << '\n';
+				}
+
+				jpeg_set_defaults(&info);
+
+				/* Apply JPEG options. */
+				const auto quality = std::clamp(options.jpeg.quality, 0, 100);
+				jpeg_set_quality(&info, quality, 1);
+
+				if ( options.jpeg.optimizeHuffman )
+				{
+					info.optimize_coding = TRUE;
+				}
+
+				if ( options.jpeg.progressive )
+				{
+					jpeg_simple_progression(&info);
+				}
+
+				/* Apply chroma subsampling for color images. */
+				if ( options.jpeg.subsampling != ChromaSubsampling::Auto && info.input_components == 3 )
+				{
+					switch ( options.jpeg.subsampling )
 					{
-						case ChannelMode::RGB :
-						case ChannelMode::RGBA :
-							info.input_components = 3;
-							info.in_color_space = JCS_RGB;
+						case ChromaSubsampling::Sample444 :
+							info.comp_info[0].h_samp_factor = 1;
+							info.comp_info[0].v_samp_factor = 1;
 							break;
 
-						case ChannelMode::Grayscale :
-						case ChannelMode::GrayscaleAlpha :
-							info.input_components = 1;
-							info.in_color_space = JCS_GRAYSCALE;
+						case ChromaSubsampling::Sample422 :
+							info.comp_info[0].h_samp_factor = 2;
+							info.comp_info[0].v_samp_factor = 1;
+							break;
+
+						case ChromaSubsampling::Sample420 :
+							info.comp_info[0].h_samp_factor = 2;
+							info.comp_info[0].v_samp_factor = 2;
 							break;
 
 						default:
-							std::cerr << __PRETTY_FUNCTION__ << ", unhandled format !" "\n";
-
-							return false;
+							break;
 					}
 
-					if constexpr ( PixelFactoryDebugEnabled )
-					{
-						std::cout <<
-							"[Jpeg_DEBUG] Writing header." << '\n' <<
-							"\tWidth : " << info.image_width << '\n' <<
-							"\tHeight : " << info.image_height << '\n' <<
-							"\tComponents : " << info.input_components << '\n';
-					}
-
-					jpeg_set_defaults(&info);
-
-					jpeg_set_quality(&info, m_quality > 100 ? 100 : m_quality, 1);
-					jpeg_start_compress(&info, 1);
-
-					if ( this->invertYAxis() )
-					{
-						auto rowIndex = static_cast< size_t >(pixmap.height() - 1);
-
-						while (info.next_scanline < info.image_height )
-						{
-							auto * rowData = (JSAMPROW)pixmap.rowPointer(rowIndex);
-
-							jpeg_write_scanlines(&info, &rowData, 1);
-
-							--rowIndex;
-						}
-					}
-					else
-					{
-						size_t rowIndex = 0;
-
-						while (info.next_scanline < info.image_height )
-						{
-							auto * rowData = (JSAMPROW)pixmap.rowPointer(rowIndex);
-
-							jpeg_write_scanlines(&info, &rowData, 1);
-
-							rowIndex++;
-						}
-					}
-
-					jpeg_finish_compress(&info);
-					jpeg_destroy_compress(&info);
-
-					fclose(file);
-
-					return true;
+					info.comp_info[1].h_samp_factor = 1;
+					info.comp_info[1].v_samp_factor = 1;
+					info.comp_info[2].h_samp_factor = 1;
+					info.comp_info[2].v_samp_factor = 1;
 				}
 
-				return false;
-			}
+				jpeg_start_compress(&info, 1);
 
-			/**
-			 * @brief Sets the JPEG compression quality.
-			 * @param value A value from 0 to 100.
-			 * @return void
-			 */
-			void
-			setQuality (int value) noexcept
-			{
-				if ( value > 100 )
-				{ 
-					m_quality = 100;
-				}
-				else if ( value < 0 )
-				{ 
-					m_quality = 0; 
+				if ( options.invertYAxis )
+				{
+					auto rowIndex = static_cast< size_t >(pixmap.height() - 1);
+
+					while ( info.next_scanline < info.image_height )
+					{
+						auto * rowData = const_cast< JSAMPROW >(pixmap.rowPointer(rowIndex));
+
+						jpeg_write_scanlines(&info, &rowData, 1);
+
+						--rowIndex;
+					}
 				}
 				else
-				{ 
-					m_quality = value; 
+				{
+					size_t rowIndex = 0;
+
+					while ( info.next_scanline < info.image_height )
+					{
+						auto * rowData = const_cast< JSAMPROW >(pixmap.rowPointer(rowIndex));
+
+						jpeg_write_scanlines(&info, &rowData, 1);
+
+						rowIndex++;
+					}
 				}
+
+				jpeg_finish_compress(&info);
+				jpeg_destroy_compress(&info);
+
+				/* Write compressed data to the stream. */
+				const auto result = stream.write(outBuffer, static_cast< size_t >(outSize));
+
+				/* Free the buffer allocated by jpeg_mem_dest. */
+				free(outBuffer);
+
+				return result;
 			}
-
-			/**
-			 * @brief Returns the JPEG compression quality.
-			 * @return int
-			 */
-			[[nodiscard]]
-			int
-			getQuality () const noexcept
-			{
-				return m_quality;
-			}
-
-		private:
-
-			int m_quality{75};
 	};
 }

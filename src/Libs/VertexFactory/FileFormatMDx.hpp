@@ -30,12 +30,11 @@
 #include <cmath>
 #include <cstring>
 #include <array>
-#include <fstream>
+#include <istream>
 #include <iostream>
 #include <vector>
 #include <string>
 #include <sstream>
-#include <filesystem>
 
 /* Local inclusions for inheritances. */
 #include "FileFormatInterface.hpp"
@@ -62,65 +61,75 @@ namespace EmEn::Libs::VertexFactory
 			 */
 			FileFormatMDx () noexcept = default;
 
-			/** @copydoc EmEn::Libs::VertexFactory::FileFormatInterface::readFile() */
+			/** @copydoc EmEn::Libs::VertexFactory::FileFormatInterface::readStream() */
 			[[nodiscard]]
 			bool
-			readFile (const std::filesystem::path & filepath, Shape< vertex_data_t, index_data_t > & geometry, const ReadOptions & readOptions) noexcept override
+			readStream (IO::ByteStream & stream, Shape< vertex_data_t, index_data_t > & geometry, const ReadOptions & /*readOptions*/) noexcept override
 			{
-				std::ifstream file(filepath, std::ios::in | std::ios::binary);
-
-				if ( !file.is_open() )
+				if ( !stream.isOpen() )
 				{
-					std::cerr << "FileFormatMDx::readFile(), unable to open file '" << filepath << "' for reading !" "\n";
+					std::cerr << "[VertexFactory::FileFormatMDx] readStream(), stream is not open !\n";
 
 					return false;
 				}
 
+				const auto dataSize = stream.size();
+				std::string buffer(dataSize, '\0');
+
+				if ( !stream.read(buffer.data(), dataSize) )
+				{
+					std::cerr << "[VertexFactory::FileFormatMDx] readStream(), failed to read stream data !\n";
+
+					return false;
+				}
+
+				std::istringstream input(buffer, std::ios::binary);
+
 				int ident = 0;
-				file.read(reinterpret_cast< char * >(&ident), sizeof(int));
-				file.seekg(0, std::ios::beg); // Reset to start
+				input.read(reinterpret_cast< char * >(&ident), sizeof(int));
+				input.seekg(0, std::ios::beg); // Reset to start
 
 				// Check magic numbers
 				// MDL: "IDPO"
 				if ( ident == (('O' << 24) + ('P' << 16) + ('D' << 8) + 'I') )
 				{
-					return this->loadMDL(file, geometry);
+					return this->loadMDL(input, geometry);
 				}
 
 				// MD2: "IDP2"
 				if ( ident == (('2' << 24) + ('P' << 16) + ('D' << 8) + 'I') )
 				{
-					return  this->loadMD2(file, geometry);
+					return this->loadMD2(input, geometry);
 				}
 
 				// MD3: "IDP3"
 				if ( ident == (('3' << 24) + ('P' << 16) + ('D' << 8) + 'I') )
 				{
-					return  this->loadMD3(file, geometry);
+					return this->loadMD3(input, geometry);
 				}
 
 				// MD5 Check (Text based)
 				// Read first line to check for "MD5Version"
 				std::string line;
-				std::getline(file, line);
-				file.seekg(0, std::ios::beg); // Reset
+				std::getline(input, line);
+				input.seekg(0, std::ios::beg); // Reset
 
 				if ( line.find("MD5Version") != std::string::npos )
 				{
-					return  this->loadMD5(file, geometry);
+					return this->loadMD5(input, geometry);
 				}
 
-				std::cerr << "FileFormatMDx::readFile(),  unknown format for file '" << filepath << "'!" "\n";
+				std::cerr << "[VertexFactory::FileFormatMDx] readStream(), unknown format !\n";
 
 				return false;
 			}
 
-			/** @copydoc EmEn::Libs::VertexFactory::FileFormatInterface::writeFile() */
+			/** @copydoc EmEn::Libs::VertexFactory::FileFormatInterface::writeStream() */
 			[[nodiscard]]
 			bool
-			writeFile (const std::filesystem::path & /*filepath*/, const Shape< vertex_data_t, index_data_t > & /*geometry*/) const noexcept override
+			writeStream (IO::ByteStream & /*stream*/, const Shape< vertex_data_t, index_data_t > & /*geometry*/, const WriteOptions & /*writeOptions*/) const noexcept override
 			{
-				std::cerr << "FileFormatMDx::writeFile(), the engine is read-only for ID Tech 3D file format." "\n";
+				std::cerr << "[VertexFactory::FileFormatMDx] writeStream(), the engine is read-only for ID Tech 3D file format.\n";
 
 				return false;
 			}
@@ -235,7 +244,7 @@ namespace EmEn::Libs::VertexFactory
 			}};
 
 			bool
-			loadMDL (std::ifstream & file, Shape< vertex_data_t, index_data_t > & geometry)
+			loadMDL (std::istream & file, Shape< vertex_data_t, index_data_t > & geometry)
 			{
 				mdl_header_t header;
 				file.read(reinterpret_cast< char * >(&header), sizeof(mdl_header_t));
@@ -365,7 +374,7 @@ namespace EmEn::Libs::VertexFactory
 			};
 
 			bool
-			loadMD2 (std::ifstream & file, Shape< vertex_data_t, index_data_t > & geometry)
+			loadMD2 (std::istream & file, Shape< vertex_data_t, index_data_t > & geometry)
 			{
 				md2_header_t header;
 				file.read(reinterpret_cast< char * >(&header), sizeof(md2_header_t));
@@ -505,7 +514,7 @@ namespace EmEn::Libs::VertexFactory
 			};
 
 			bool
-			loadMD3 (std::ifstream & file, Shape< vertex_data_t, index_data_t > & geometry)
+			loadMD3 (std::istream & file, Shape< vertex_data_t, index_data_t > & geometry)
 			{
 				md3_header_t header;
 				file.read(reinterpret_cast< char * >(&header), sizeof(md3_header_t));
@@ -664,7 +673,7 @@ namespace EmEn::Libs::VertexFactory
 			}
 
 			bool
-			loadMD5 (std::ifstream & file, Shape< vertex_data_t, index_data_t > & geometry)
+			loadMD5 (std::istream & file, Shape< vertex_data_t, index_data_t > & geometry)
 			{
 				std::string line;
 				std::vector< md5_joint_t > joints;

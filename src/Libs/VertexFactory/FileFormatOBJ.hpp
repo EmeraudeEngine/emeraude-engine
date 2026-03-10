@@ -36,8 +36,8 @@
 #include <algorithm>
 #include <array>
 #include <charconv>
-#include <fstream>
 #include <iostream>
+#include <sstream>
 #include <set>
 #include <string>
 #include <string_view>
@@ -119,42 +119,51 @@ namespace EmEn::Libs::VertexFactory
 			 */
 			FileFormatOBJ () noexcept = default;
 
-			/** @copydoc EmEn::Libs::VertexFactory::FileFormatInterface::readFile() */
+			/** @copydoc EmEn::Libs::VertexFactory::FileFormatInterface::readStream() */
 			[[nodiscard]]
 			bool
-			readFile (const std::filesystem::path & filepath, Shape< vertex_data_t, index_data_t > & geometry, const ReadOptions & readOptions) noexcept override
+			readStream (IO::ByteStream & stream, Shape< vertex_data_t, index_data_t > & geometry, const ReadOptions & readOptions) noexcept override
 			{
-				m_readOptions = readOptions;
-
-				/* Opening the file. */
-				std::ifstream file{filepath};
-
-				if ( !file.is_open() )
+				if ( !stream.isOpen() )
 				{
-					std::cerr << "FileFormatOBJ::readFile(), unable to read OBJ file '" << filepath << "' !" "\n";
+					std::cerr << "[VertexFactory::FileFormatOBJ] readStream(), stream is not open !\n";
 
 					return false;
 				}
-				
+
+				m_readOptions = readOptions;
+
+				const auto dataSize = stream.size();
+				std::string buffer(dataSize, '\0');
+
+				if ( !stream.read(buffer.data(), dataSize) )
+				{
+					std::cerr << "[VertexFactory::FileFormatOBJ] readStream(), failed to read stream data !\n";
+
+					return false;
+				}
+
+				std::istringstream input(buffer);
+
 				/* Read a first time to calculate the space required for the structure. */
 				{
-					if ( !this->analyseFileContent(file) )
+					if ( !this->analyseFileContent(input) )
 					{
-						std::cerr << "FileFormatOBJ::readFile(), step 1 'Reserving space' has failed !" "\n";
+						std::cerr << "[VertexFactory::FileFormatOBJ] readStream(), step 1 'Reserving space' has failed !\n";
 
 						return false;
 					}
 
-					file.clear();
-					file.seekg(0);
+					input.clear();
+					input.seekg(0);
 				}
 
-				/* 3. Read a third and final time to assemble faces. */
-				const bool buildSuccess = geometry.build([this, &geometry, &file] (std::vector< std::pair< index_data_t, index_data_t > > & groups, std::vector< ShapeVertex< vertex_data_t > > & vertices, std::vector< ShapeTriangle< vertex_data_t, index_data_t > > & triangles) {
+				/* Read a second time to assemble faces. */
+				const bool buildSuccess = geometry.build([this, &geometry, &input] (std::vector< std::pair< index_data_t, index_data_t > > & groups, std::vector< ShapeVertex< vertex_data_t > > & vertices, std::vector< ShapeTriangle< vertex_data_t, index_data_t > > & triangles) {
 					switch ( m_faceMode )
 					{
 						case FaceMode::V :
-							if ( !this->parseFaceAssemblyV(file, groups, vertices, triangles) )
+							if ( !this->parseFaceAssemblyV(input, groups, vertices, triangles) )
 							{
 								return false;
 							}
@@ -203,7 +212,7 @@ namespace EmEn::Libs::VertexFactory
 							break;
 
 						case FaceMode::V_VN :
-							if ( !this->parseFaceAssemblyV_VN(file, groups, vertices, triangles) )
+							if ( !this->parseFaceAssemblyV_VN(input, groups, vertices, triangles) )
 							{
 								return false;
 							}
@@ -234,7 +243,7 @@ namespace EmEn::Libs::VertexFactory
 							break;
 
 						case FaceMode::V_VT :
-							if ( !this->parseFaceAssemblyV_VT(file, groups, vertices, triangles) )
+							if ( !this->parseFaceAssemblyV_VT(input, groups, vertices, triangles) )
 							{
 								return false;
 							}
@@ -266,7 +275,7 @@ namespace EmEn::Libs::VertexFactory
 							break;
 
 						case FaceMode::V_VT_VN :
-							if ( !this->parseFaceAssemblyV_VT_VN(file, groups, vertices, triangles) )
+							if ( !this->parseFaceAssemblyV_VT_VN(input, groups, vertices, triangles) )
 							{
 								return false;
 							}
@@ -306,30 +315,23 @@ namespace EmEn::Libs::VertexFactory
 				return true;
 			}
 
-			/** @copydoc EmEn::Libs::VertexFactory::FileFormatInterface::writeFile() */
+			/** @copydoc EmEn::Libs::VertexFactory::FileFormatInterface::writeStream() */
 			[[nodiscard]]
 			bool
-			writeFile (const std::filesystem::path & filepath, const Shape< vertex_data_t, index_data_t > & geometry) const noexcept override
+			writeStream (IO::ByteStream & stream, const Shape< vertex_data_t, index_data_t > & geometry, const WriteOptions & /*writeOptions*/) const noexcept override
 			{
 				if ( !geometry.isValid() )
 				{
-					std::cerr << "FileFormatOBJ::writeFile(), geometry parameter is invalid !" "\n";
+					std::cerr << "[VertexFactory::FileFormatOBJ] writeStream(), geometry is invalid !\n";
 
 					return false;
 				}
 
-				std::ofstream file{filepath, std::ios::out};
-
-				if ( !file.is_open() )
-				{
-					std::cerr << "FileFormatOBJ::writeFile(), unable to open '" << filepath << "' file to write !" "\n";
-
-					return false;
-				}
+				std::ostringstream output;
 
 				/* Header */
-				file << "# Exported by Emeraude-Engine" << "\n";
-				file << "o Geometry" << "\n";
+				output << "# Exported by Emeraude-Engine" << "\n";
+				output << "o Geometry" << "\n";
 
 				/* Write Vertices (v) */
 				for ( const auto & vertex : geometry.vertices() )
@@ -337,12 +339,12 @@ namespace EmEn::Libs::VertexFactory
 					const auto & pos = vertex.position();
 
 					/* OBJ does not enforce index, just order. */
-					file << "v " << pos.x() << " " << pos.y() << " " << pos.z() << "\n";
+					output << "v " << pos.x() << " " << pos.y() << " " << pos.z() << "\n";
 				}
 
 				/* Write Texture Coordinates (vt) */
-				/* We write them even if zero/invalid if we want to rely on the same index, 
-				   OR we write them and keep a mapping. 
+				/* We write them even if zero/invalid if we want to rely on the same index,
+				   OR we write them and keep a mapping.
 				   The simplest approach for indexed geometry in Shape is to assume every vertex has unique attributes combination.
 				   So we just dump all attributes in order and reference them by same index.
 				*/
@@ -352,7 +354,7 @@ namespace EmEn::Libs::VertexFactory
 					{
 						const auto & uv = vertex.textureCoordinates();
 
-						file << "vt " << uv.x() << " " << uv.y() << "\n";
+						output << "vt " << uv.x() << " " << uv.y() << "\n";
 					}
 				}
 
@@ -365,7 +367,7 @@ namespace EmEn::Libs::VertexFactory
 					{
 						const auto & n = vertex.normal();
 
-						file << "vn " << n.x() << " " << n.y() << " " << n.z() << "\n";
+						output << "vn " << n.x() << " " << n.y() << " " << n.z() << "\n";
 					}
 				}
 
@@ -373,11 +375,11 @@ namespace EmEn::Libs::VertexFactory
 				/* OBJ indices are 1-based */
 				const bool hasUV = geometry.isTextureCoordinatesAvailable();
 
-				file << "s off" << "\n";
+				output << "s off" << "\n";
 
 				for ( const auto & triangle : geometry.triangles() )
 				{
-					file << "f";
+					output << "f";
 
 					for ( int index = 0; index < 3; ++index )
 					{
@@ -386,31 +388,31 @@ namespace EmEn::Libs::VertexFactory
 						if ( hasUV && hasNormals )
 						{
 							/* f v/vt/vn */
-							file << " " << idx << "/" << idx << "/" << idx;
+							output << " " << idx << "/" << idx << "/" << idx;
 						}
 						else if ( hasUV )
 						{
 							/* f v/vt */
-							file << " " << idx << "/" << idx;
+							output << " " << idx << "/" << idx;
 						}
 						else if ( hasNormals )
 						{
 							/* f v//vn */
-							file << " " << idx << "//" << idx;
+							output << " " << idx << "//" << idx;
 						}
 						else
 						{
 							/* f v */
-							file << " " << idx;
+							output << " " << idx;
 						}
 					}
 
-					file << "\n";
+					output << "\n";
 				}
 
-				file.close();
+				const std::string content = output.str();
 
-				return true;
+				return stream.write(content.data(), content.size());
 			}
 
 		private:
@@ -480,7 +482,7 @@ namespace EmEn::Libs::VertexFactory
 			 * @return bool
 			 */
 			bool
-			analyseFileContent (std::ifstream & file) noexcept
+			analyseFileContent (std::istream & file) noexcept
 			{
 				std::string line{};
 
@@ -584,7 +586,7 @@ namespace EmEn::Libs::VertexFactory
 			 * @return bool
 			 */
 			bool
-			parseFaceAssemblyV (std::ifstream & file, std::vector< std::pair< index_data_t, index_data_t > > & groups, std::vector< ShapeVertex< vertex_data_t > > & vertices, std::vector< ShapeTriangle< vertex_data_t, index_data_t > > & triangles) noexcept
+			parseFaceAssemblyV (std::istream & file, std::vector< std::pair< index_data_t, index_data_t > > & groups, std::vector< ShapeVertex< vertex_data_t > > & vertices, std::vector< ShapeTriangle< vertex_data_t, index_data_t > > & triangles) noexcept
 			{
 				/* NOTE: Resize/reserving memory space to the geometry shape. */
 				vertices.resize(m_vertexCount);
@@ -671,7 +673,7 @@ namespace EmEn::Libs::VertexFactory
 			 * @return bool
 			 */
 			bool
-			parseFaceAssemblyV_VN (std::ifstream & file, std::vector< std::pair< index_data_t, index_data_t > > & groups, std::vector< ShapeVertex< vertex_data_t > > & vertices, std::vector< ShapeTriangle< vertex_data_t, index_data_t > > & triangles) noexcept
+			parseFaceAssemblyV_VN (std::istream & file, std::vector< std::pair< index_data_t, index_data_t > > & groups, std::vector< ShapeVertex< vertex_data_t > > & vertices, std::vector< ShapeTriangle< vertex_data_t, index_data_t > > & triangles) noexcept
 			{
 				/* NOTE: Resize/reserving memory space to the geometry shape. */
 				vertices.resize(m_vertexCount);
@@ -814,7 +816,7 @@ namespace EmEn::Libs::VertexFactory
 			 * @return bool
 			 */
 			bool
-			parseFaceAssemblyV_VT (std::ifstream & file, std::vector< std::pair< index_data_t, index_data_t > > & groups, std::vector< ShapeVertex< vertex_data_t > > & vertices, std::vector< ShapeTriangle< vertex_data_t, index_data_t > > & triangles) noexcept
+			parseFaceAssemblyV_VT (std::istream & file, std::vector< std::pair< index_data_t, index_data_t > > & groups, std::vector< ShapeVertex< vertex_data_t > > & vertices, std::vector< ShapeTriangle< vertex_data_t, index_data_t > > & triangles) noexcept
 			{
 				/* NOTE: Resize/reserving memory space to the geometry shape. */
 				vertices.resize(m_vertexCount);
@@ -957,7 +959,7 @@ namespace EmEn::Libs::VertexFactory
 			 * @return bool
 			 */
 			bool
-			parseFaceAssemblyV_VT_VN (std::ifstream & file, std::vector< std::pair< index_data_t, index_data_t > > & groups, std::vector< ShapeVertex< vertex_data_t > > & vertices, std::vector< ShapeTriangle< vertex_data_t, index_data_t > > & triangles) noexcept
+			parseFaceAssemblyV_VT_VN (std::istream & file, std::vector< std::pair< index_data_t, index_data_t > > & groups, std::vector< ShapeVertex< vertex_data_t > > & vertices, std::vector< ShapeTriangle< vertex_data_t, index_data_t > > & triangles) noexcept
 			{
 				/* NOTE: Resize/reserving memory space to the geometry shape. */
 				vertices.resize(m_vertexCount);

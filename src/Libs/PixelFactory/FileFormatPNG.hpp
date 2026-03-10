@@ -30,13 +30,12 @@
 #include "emeraude_config.hpp"
 
 /* STL inclusions. */
+#include <algorithm>
+#include <array>
 #include <cstdint>
 #include <iostream>
-#include <fstream>
-#include <type_traits>
-#include <array>
-#include <vector>
 #include <string>
+#include <vector>
 
 /* Third-party inclusions. */
 #include <png.h>
@@ -45,6 +44,7 @@
 #include "FileFormatInterface.hpp"
 
 /* Local inclusions for usages. */
+#include "Libs/IO/ByteStream.hpp"
 #include "Types.hpp"
 #include "Pixmap.hpp"
 
@@ -61,7 +61,7 @@ namespace EmEn::Libs::PixelFactory
 	};
 
 	/**
-	 * @brief Class for read and write PNG format.
+	 * @brief Class for read and write PNG format via byte streams.
 	 * @tparam pixel_data_t The pixel component type for the pixmap depth precision. Default uint8_t.
 	 * @tparam dimension_t The type of unsigned integer used for pixmap dimension. Default uint32_t.
 	 * @extends EmEn::Libs::PixelFactory::FileFormatInterface The base IO class.
@@ -72,31 +72,19 @@ namespace EmEn::Libs::PixelFactory
 	{
 		public:
 
-			/**
-			 * @brief Constructs a PNG format IO.
-			 */
 			FileFormatPNG () noexcept = default;
 
-			/** @copydoc EmEn::Libs::PixelFactory::FileFormatInterface::readFile() */
+			/** @copydoc EmEn::Libs::PixelFactory::FileFormatInterface::readStream() */
 			[[nodiscard]]
 			bool
-			readFile (const std::filesystem::path & filepath, Pixmap< pixel_data_t, dimension_t > & pixmap) noexcept override
+			readStream (IO::ByteStream & stream, Pixmap< pixel_data_t, dimension_t > & pixmap) noexcept override
 			{
 				pixmap.clear();
-
-				std::ifstream file{filepath, std::ios::binary};
-				
-				if ( !file.is_open() )
-				{
-					std::cerr << __PRETTY_FUNCTION__ << ", " << filepath << " cannot be read !" "\n";
-
-					return false;
-				}
 
 				std::array< png_byte, 8 > signature{};
 
 				/* Read signature and check it. */
-				if ( !file.read(reinterpret_cast< char * >(signature.data() ), sizeof(signature)) )
+				if ( !stream.read(signature.data(), sizeof(signature)) )
 				{
 					std::cerr << __PRETTY_FUNCTION__ << ", unable to read the PNG signature !" "\n";
 
@@ -105,7 +93,7 @@ namespace EmEn::Libs::PixelFactory
 
 				if ( !png_check_sig(signature.data(), sizeof(signature)) )
 				{
-					std::cerr << __PRETTY_FUNCTION__ << ", " << filepath << " is not a PNG file !" "\n";
+					std::cerr << __PRETTY_FUNCTION__ << ", data is not a PNG stream !" "\n";
 
 					return false;
 				}
@@ -113,7 +101,6 @@ namespace EmEn::Libs::PixelFactory
 				/* Error context for capturing libPNG errors without using setjmp/longjmp. */
 				PNGErrorContext errorContext{};
 
-				/* create a png read struct with custom error handlers. */
 				auto * png = png_create_read_struct(PNG_LIBPNG_VER_STRING, &errorContext, pngErrorCallback, pngWarningCallback);
 
 				if ( png == nullptr )
@@ -121,7 +108,6 @@ namespace EmEn::Libs::PixelFactory
 					return false;
 				}
 
-				/* create a png info struct. */
 				auto * pngInfo = png_create_info_struct(png);
 
 				if ( pngInfo == nullptr )
@@ -131,13 +117,12 @@ namespace EmEn::Libs::PixelFactory
 					return false;
 				}
 
-				/* setup PNG for using standard C++ std::fstream::read() function. */
-				png_set_read_fn(png, &file, customReadFunction);
+				/* Setup PNG for reading from ByteStream. */
+				png_set_read_fn(png, &stream, customReadFunction);
 
-				/* tell PNG that we have already read the magic number. */
+				/* Tell PNG that we have already read the magic number. */
 				png_set_sig_bytes(png, sizeof(signature));
 
-				/* read png info */
 				png_read_info(png, pngInfo);
 
 				if ( errorContext.hasError )
@@ -158,7 +143,6 @@ namespace EmEn::Libs::PixelFactory
 				switch ( png_get_color_type(png, pngInfo) )
 				{
 					case PNG_COLOR_TYPE_GRAY :
-						/* Convert 1-2-4 bits grayscale images to 8 bits grayscale. */
 						if ( bitDepth < 8 )
 						{
 							png_set_expand_gray_1_2_4_to_8(png);
@@ -173,10 +157,8 @@ namespace EmEn::Libs::PixelFactory
 
 					case PNG_COLOR_TYPE_PALETTE :
 					{
-						/* Convert the indexed colors to RGB(A). */
 						png_set_palette_to_rgb(png);
 
-						/* Check if there is alpha channel. */
 						png_bytep transAlpha = nullptr;
 						int count = 0;
 						png_color_16p color = nullptr;
@@ -248,22 +230,20 @@ namespace EmEn::Libs::PixelFactory
 					return false;
 				}
 
-				/* Update info structure to apply transformations */
+				/* Update info structure to apply transformations. */
 				png_read_update_info(png, pngInfo);
 
-				/* Set up a pointer array. Each one points at the beginning of a row. */
+				/* Set up row pointers for canonical top-left origin. */
 				std::vector< png_bytep > rowPointers(pixmap.height(), nullptr);
 				auto & buffer = pixmap.data();
 
 				for ( size_t yIndex = 0; yIndex < pixmap.height(); ++yIndex )
 				{
-					const auto rowIndex = this->invertYAxis() ? static_cast< uint32_t >(pixmap.height() - 1 - yIndex) : yIndex;
-					const auto offset = rowIndex * pixmap.width() * pixmap.colorCount();
+					const auto offset = yIndex * pixmap.width() * pixmap.colorCount();
 
 					rowPointers.at(yIndex) = static_cast< png_bytep >(buffer.data() + offset);
 				}
 
-				/* read pixel data using row pointers */
 				png_read_image(png, rowPointers.data());
 
 				if ( errorContext.hasError )
@@ -275,7 +255,6 @@ namespace EmEn::Libs::PixelFactory
 					return false;
 				}
 
-				/* finish decompression and release memory */
 				png_read_end(png, nullptr);
 
 				png_destroy_read_struct(&png, &pngInfo, nullptr);
@@ -283,10 +262,10 @@ namespace EmEn::Libs::PixelFactory
 				return !errorContext.hasError;
 			}
 
-			/** @copydoc EmEn::Libs::PixelFactory::FileFormatInterface::writeFile() */
+			/** @copydoc EmEn::Libs::PixelFactory::FileFormatInterface::writeStream() */
 			[[nodiscard]]
 			bool
-			writeFile (const std::filesystem::path & filepath, const Pixmap< pixel_data_t, dimension_t > & pixmap) const noexcept override
+			writeStream (IO::ByteStream & stream, const Pixmap< pixel_data_t, dimension_t > & pixmap, const WriteOptions & options = {}) const noexcept override
 			{
 				if ( !pixmap.isValid() )
 				{
@@ -322,15 +301,6 @@ namespace EmEn::Libs::PixelFactory
 						return false;
 				}
 
-				std::ofstream file{filepath, std::ios::binary};
-
-				if ( !file.is_open() )
-				{
-					std::cerr << __PRETTY_FUNCTION__ << ", " << filepath << " cannot be write !" "\n";
-
-					return false;
-				}
-
 				/* Error context for capturing libPNG errors without using setjmp/longjmp. */
 				PNGErrorContext errorContext{};
 
@@ -350,6 +320,9 @@ namespace EmEn::Libs::PixelFactory
 					return false;
 				}
 
+				/* Apply the interlace mode from options. */
+				const auto interlaceType = (options.png.interlace == PngInterlace::Adam7) ? PNG_INTERLACE_ADAM7 : PNG_INTERLACE_NONE;
+
 				png_set_IHDR(
 					png,
 					pngInfo,
@@ -357,25 +330,63 @@ namespace EmEn::Libs::PixelFactory
 					static_cast< png_uint_32 >(pixmap.height()),
 					bitDepth,
 					colorType,
-					PNG_INTERLACE_NONE, // PNG_INTERLACE_ADAM7
+					interlaceType,
 					PNG_COMPRESSION_TYPE_BASE,
 					PNG_FILTER_TYPE_BASE
 				);
 
-				/* Prepare every pixel row pointer into a list. */
+				/* Apply compression level from options. */
+				const auto compressionLevel = std::clamp(options.png.compressionLevel, 0, 9);
+				png_set_compression_level(png, compressionLevel);
+
+				/* Apply filter strategy from options. */
+				int pngFilter = PNG_ALL_FILTERS;
+
+				switch ( options.png.filterStrategy )
+				{
+					case PngFilterStrategy::None :
+						pngFilter = PNG_FILTER_NONE;
+						break;
+
+					case PngFilterStrategy::Sub :
+						pngFilter = PNG_FILTER_SUB;
+						break;
+
+					case PngFilterStrategy::Up :
+						pngFilter = PNG_FILTER_UP;
+						break;
+
+					case PngFilterStrategy::Average :
+						pngFilter = PNG_FILTER_AVG;
+						break;
+
+					case PngFilterStrategy::Paeth :
+						pngFilter = PNG_FILTER_PAETH;
+						break;
+
+					case PngFilterStrategy::Adaptive :
+						pngFilter = PNG_ALL_FILTERS;
+						break;
+				}
+
+				png_set_filter(png, 0, pngFilter);
+
+				/* Prepare row pointers with optional Y-axis inversion. */
 				std::vector< png_bytep > rowPointers{pixmap.height(), nullptr};
 
 				for ( size_t yIndex = 0; yIndex < pixmap.height(); ++yIndex )
 				{
-					auto rowIndex = this->invertYAxis() ? static_cast< uint32_t >(pixmap.height() - 1 - yIndex) : yIndex;
+					const auto rowIndex = options.invertYAxis ?
+						static_cast< uint32_t >(pixmap.height() - 1 - yIndex) : static_cast< uint32_t >(yIndex);
 
 					rowPointers[yIndex] = const_cast< png_bytep >(pixmap.rowPointer(rowIndex));
 				}
 
-				png_set_write_fn(png, &file, customWriteFunction, nullptr);
+				/* Setup PNG for writing to ByteStream. */
+				png_set_write_fn(png, &stream, customWriteFunction, nullptr);
 
 				png_set_rows(png, pngInfo, rowPointers.data());
-				png_write_png(png, pngInfo, PNG_TRANSFORM_IDENTITY, nullptr); // PNG_TRANSFORM_INVERT_ALPHA
+				png_write_png(png, pngInfo, PNG_TRANSFORM_IDENTITY, nullptr);
 
 				png_destroy_write_struct(&png, &pngInfo);
 
@@ -391,11 +402,6 @@ namespace EmEn::Libs::PixelFactory
 
 		private:
 
-			/**
-			 * @brief Custom error callback for libPNG that sets an error flag instead of using longjmp.
-			 * @param pngPtr The PNG structure pointer (contains error context as user data).
-			 * @param message The error message from libPNG.
-			 */
 			static
 			void
 			pngErrorCallback (png_structp pngPtr, png_const_charp message) noexcept
@@ -409,11 +415,6 @@ namespace EmEn::Libs::PixelFactory
 				}
 			}
 
-			/**
-			 * @brief Custom warning callback for libPNG.
-			 * @param pngPtr The PNG structure pointer.
-			 * @param message The warning message from libPNG.
-			 */
 			static
 			void
 			pngWarningCallback (png_structp /* pngPtr */, png_const_charp message) noexcept
@@ -422,35 +423,33 @@ namespace EmEn::Libs::PixelFactory
 			}
 
 			/**
-			 * @brief Custom function to read with std::fstream with libPNG.
-			 * @param pngPtr
-			 * @param data
-			 * @param length
-			 * @return void
+			 * @brief Custom read function for libPNG using ByteStream.
+			 * @param pngPtr The PNG structure pointer (io_ptr points to ByteStream).
+			 * @param data Destination buffer.
+			 * @param length Number of bytes to read.
 			 */
 			static
 			void
 			customReadFunction (png_structp pngPtr, png_bytep data, png_size_t length) noexcept
 			{
-				png_voidp file = png_get_io_ptr(pngPtr);
+				auto * stream = static_cast< IO::ByteStream * >(png_get_io_ptr(pngPtr));
 
-				static_cast< std::ifstream * >(file)->read(reinterpret_cast< char * >(data), static_cast< uint32_t>(length));
+				stream->read(data, length);
 			}
 
 			/**
-			 * @brief Custom function to write with std::fstream with libPNG.
-			 * @param pngPtr
-			 * @param data
-			 * @param length
-			 * @return void
+			 * @brief Custom write function for libPNG using ByteStream.
+			 * @param pngPtr The PNG structure pointer (io_ptr points to ByteStream).
+			 * @param data Source buffer.
+			 * @param length Number of bytes to write.
 			 */
 			static
 			void
 			customWriteFunction (png_structp pngPtr, png_bytep data, png_size_t length) noexcept
 			{
-				png_voidp file = png_get_io_ptr(pngPtr);
+				auto * stream = static_cast< IO::ByteStream * >(png_get_io_ptr(pngPtr));
 
-				static_cast< std::ofstream * >(file)->write(reinterpret_cast< const char * >(data), static_cast< uint32_t>(length));
+				stream->write(data, length);
 			}
 	};
 }

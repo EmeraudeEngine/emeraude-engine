@@ -167,6 +167,80 @@ namespace EmEn::Libs::PixelFactory
 		dimension_t maxRows{0};
 	};
 
+	/** @brief Enumerate target channel mode for read post-processing. */
+	enum class TargetChannelMode : uint8_t
+	{
+		KeepOriginal = 0,
+		Grayscale,
+		GrayscaleAlpha,
+		RGB,
+		RGBA
+	};
+
+	/** @brief Enumerate JPEG chroma subsampling modes. */
+	enum class ChromaSubsampling : uint8_t
+	{
+		Auto,
+		Sample444, /* No subsampling (best quality) */
+		Sample422, /* Horizontal subsampling */
+		Sample420  /* Both horizontal and vertical (most common, smallest) */
+	};
+
+	/** @brief Enumerate PNG row filter strategies. */
+	enum class PngFilterStrategy : uint8_t
+	{
+		None,
+		Sub,
+		Up,
+		Average,
+		Paeth,
+		Adaptive /* Let libpng choose best per-row */
+	};
+
+	/** @brief Enumerate PNG interlace modes. */
+	enum class PngInterlace : uint8_t
+	{
+		None,
+		Adam7
+	};
+
+	/** @brief Options for read post-processing applied after format decoding. */
+	struct ReadOptions
+	{
+		bool invertYAxis{false};
+		bool premultiplyAlpha{false};
+		TargetChannelMode targetChannelMode{TargetChannelMode::KeepOriginal};
+	};
+
+	/** @brief Options for write encoding and pre-processing. */
+	struct WriteOptions
+	{
+		bool invertYAxis{false};
+
+		/** @brief JPEG-specific encoding options. */
+		struct JpegOptions
+		{
+			int quality{75};
+			ChromaSubsampling subsampling{ChromaSubsampling::Auto};
+			bool progressive{false};
+			bool optimizeHuffman{true};
+		} jpeg{};
+
+		/** @brief PNG-specific encoding options. */
+		struct PngOptions
+		{
+			int compressionLevel{6};
+			PngFilterStrategy filterStrategy{PngFilterStrategy::Adaptive};
+			PngInterlace interlace{PngInterlace::None};
+		} png{};
+
+		/** @brief Targa-specific encoding options. */
+		struct TargaOptions
+		{
+			bool rleCompression{false};
+		} targa{};
+	};
+
 	/** @brief Static constant string containing placeholder text. */
 	static constexpr auto LoremIpsum{
 		"Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed non risus. Suspendisse lectus tortor, dignissim sit amet, adipiscing nec, ultricies sed, dolor. Cras elementum ultrices diam. Maecenas ligula massa, varius a, semper congue, euismod non, mi. Proin porttitor, orci nec nonummy molestie, enim est eleifend mi, non fermentum diam nisl sit amet erat. Duis semper. Duis arcu massa, scelerisque vitae, consequat in, pretium a, enim. Pellentesque congue. Ut in risus volutpat libero pharetra tempor. Cras vestibulum bibendum augue. Praesent egestas leo in pede. Praesent blandit odio eu enim. Pellentesque sed dui ut augue blandit sodales. Vestibulum ante ipsum primis in faucibus orci luctus et ultrices posuere cubilia Curae; Aliquam nibh. Mauris ac mauris sed pede pellentesque fermentum. Maecenas adipiscing ante non diam sodales hendrerit.\n"

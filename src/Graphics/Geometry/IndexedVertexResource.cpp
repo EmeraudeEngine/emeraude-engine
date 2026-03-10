@@ -190,7 +190,7 @@ namespace EmEn::Graphics::Geometry
 		this->enableFlag(EnableTangentSpace);
 		this->enableFlag(EnablePrimaryTextureCoordinates);
 
-		ReadOptions options{};
+		VertexFactory::ReadOptions options{};
 		options.flipYAxis = true;
 		options.requestNormal = this->isFlagEnabled(EnableNormal);
 		options.requestTangentSpace = this->isFlagEnabled(EnableTangentSpace);

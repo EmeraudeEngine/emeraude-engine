@@ -106,7 +106,11 @@ namespace EmEn::Audio
 		 * TSF maintains internal state that cannot be safely accessed concurrently. */
 		const std::lock_guard< std::mutex > tsfLock{s_tsfMutex};
 
-		if ( !WaveFactory::FileIO::read(m_pendingMidiPath, m_localData, m_frequency, m_soundfontDependency->handle()) )
+		WaveFactory::ReadOptions midiOptions;
+		midiOptions.synthesisFrequency = m_frequency;
+		midiOptions.soundfont = m_soundfontDependency->handle();
+
+		if ( !WaveFactory::FileIO::read(m_pendingMidiPath, m_localData, midiOptions) )
 		{
 			TraceError{ClassId} << "Unable to render MIDI file '" << m_pendingMidiPath << "' !";
 

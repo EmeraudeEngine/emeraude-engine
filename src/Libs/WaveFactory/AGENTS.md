@@ -59,24 +59,45 @@ Context for developing audio manipulation in Emeraude Engine.
 - Handles normalization automatically
 - See: `Wave.hpp:dataConversion()`
 
-### File I/O Classes
+### File I/O Classes (Unified ByteStream Architecture)
 
-**FileIO** - Dispatcher by extension
-- Delegates to appropriate FileFormat class based on file extension
+All format handlers operate on `IO::ByteStream &` (polymorphic: file or memory).
+
+**FileIO** - File-backed dispatcher by extension
+- Creates `IO::FileStream`, delegates to format handler `readStream`/`writeStream`
+- `read(path, wave, ReadOptions)` — single overload with options struct
+- `write(wave, path, overwrite, WriteOptions)` — infers AudioFormat from extension
 - See: `FileIO.hpp`
 
+**StreamIO** - Memory buffer I/O
+- `read(vector<byte>, wave, ReadOptions)` — via `IO::MemoryStream` → libsndfile only
+- `write(wave, vector<byte>, WriteOptions)` — via `IO::MemoryStream` → libsndfile only
+- See: `StreamIO.hpp`
+
 **FileFormatInterface** - Abstract base for audio formats
+- `readStream(IO::ByteStream &, Wave &, ReadOptions)` / `writeStream(IO::ByteStream &, Wave &, WriteOptions)`
 - See: `FileFormatInterface.hpp`
 
-**FileFormatSNDFile** - libsndfile wrapper
-- Supports WAV, FLAC, OGG, and other formats via libsndfile
+**FileFormatSNDFile** - libsndfile wrapper via `sf_open_virtual`
+- Virtual I/O callbacks (get_filelen/seek/read/write/tell) delegate to `IO::ByteStream`
+- Supports WAV, FLAC, OGG (read/write)
+- WriteOptions::AudioFormat selects output format
 - See: `FileFormatSNDFile.hpp`
 
 **FileFormatJSON** - Procedural audio via SFXScript
+- Reads ByteStream to string, passes to `SFXScript::generateFromString()`
+- Write not supported (returns false)
 - See: `FileFormatJSON.hpp`
 
 **FileFormatMIDI** - MIDI file parser with synthesized audio output
+- Reads ByteStream to memory, creates `std::istringstream`, processes via `processIStream()`
+- ReadOptions provides `synthesisFrequency` and optional `soundfont` (tsf*)
+- Write not supported (returns false)
 - See: `FileFormatMIDI.hpp`
+
+**ReadOptions / WriteOptions** — Defined in `Types.hpp`
+- `ReadOptions`: `synthesisFrequency` (for MIDI), `soundfont` (tsf* for SF2)
+- `WriteOptions`: `AudioFormat` enum (WAV, FLAC, OGG)
 
 ## Usage Patterns
 
@@ -133,11 +154,9 @@ processor.toWave(loaded); // Write back
 ```cpp
 // Via FileIO (automatic dispatch) - additive synthesis
 Wave<int16_t> wave;
-WaveFactory::FileIO::read("music.mid", wave, Frequency::PCM48000Hz);
-
-// Direct usage - additive synthesis
-FileFormatMIDI<int16_t> midiFormat{Frequency::PCM48000Hz};
-midiFormat.readFile("music.mid", wave);
+WaveFactory::ReadOptions options;
+options.synthesisFrequency = Frequency::PCM48000Hz;
+WaveFactory::FileIO::read("music.mid", wave, options);
 ```
 
 ### Load MIDI with SoundFont (SF2)
@@ -145,14 +164,26 @@ midiFormat.readFile("music.mid", wave);
 ```cpp
 // High-quality rendering with SF2 sample bank
 // Note: tsf* handle typically comes from Audio::SoundfontResource
-
 Wave<int16_t> wave;
-FileFormatMIDI<int16_t> midiFormat{Frequency::PCM48000Hz};
-midiFormat.setSoundfont(tsfHandle);  // tsf* from SoundfontResource::handle()
-midiFormat.readFile("music.mid", wave);
+WaveFactory::ReadOptions options;
+options.synthesisFrequency = Frequency::PCM48000Hz;
+options.soundfont = tsfHandle;  // tsf* from SoundfontResource::handle()
+WaveFactory::FileIO::read("music.mid", wave, options);
+```
 
-// Via FileIO with SF2
-WaveFactory::FileIO::read("music.mid", wave, Frequency::PCM48000Hz, tsfHandle);
+### Memory Buffer I/O (StreamIO)
+
+```cpp
+// Read audio from memory buffer (libsndfile formats only: WAV, FLAC, OGG)
+std::vector<std::byte> audioData = /* ... loaded from network, archive, etc. */;
+Wave<int16_t> wave;
+WaveFactory::StreamIO::read(audioData, wave);
+
+// Write audio to memory buffer
+std::vector<std::byte> output;
+WaveFactory::WriteOptions writeOpts;
+writeOpts.format = WaveFactory::AudioFormat::FLAC;
+WaveFactory::StreamIO::write(wave, output, writeOpts);
 ```
 
 ## Technical Details
@@ -279,16 +310,17 @@ The `Synthesizer` class works exclusively with mono audio:
 
 | File | Description |
 |------|-------------|
-| `Wave.hpp` | Audio data container, file I/O |
+| `Wave.hpp` | Audio data container |
 | `Synthesizer.hpp` | All generation/effects (header-only template) |
 | `SFXScript.hpp` | JSON parser for procedural sound effects |
 | `Processor.hpp/.cpp` | Transformation operations |
-| `Types.hpp` | Channels, Frequency enums |
-| `FileIO.hpp` | File format dispatcher |
-| `FileFormatInterface.hpp` | Abstract base class |
-| `FileFormatSNDFile.hpp` | libsndfile wrapper |
-| `FileFormatJSON.hpp` | JSON procedural audio |
-| `FileFormatMIDI.hpp` | MIDI file parser with SF2 support |
+| `Types.hpp` | Channels, Frequency, AudioFormat enums + ReadOptions/WriteOptions structs |
+| `FileIO.hpp` | File-backed format dispatcher (IO::FileStream) |
+| `StreamIO.hpp` | Memory buffer I/O (IO::MemoryStream, libsndfile only) |
+| `FileFormatInterface.hpp` | Abstract base: `readStream(ByteStream &)` / `writeStream(ByteStream &)` |
+| `FileFormatSNDFile.hpp` | libsndfile via `sf_open_virtual` (ByteStream callbacks) |
+| `FileFormatJSON.hpp` | JSON procedural audio (ByteStream → string → SFXScript) |
+| `FileFormatMIDI.hpp` | MIDI file parser with SF2 support (ByteStream → istringstream) |
 
 ## Critical Attention Points
 

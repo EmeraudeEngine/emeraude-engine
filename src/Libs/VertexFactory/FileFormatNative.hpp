@@ -26,6 +26,12 @@
 
 #pragma once
 
+/* STL inclusions. */
+#include <cstdint>
+#include <cstring>
+#include <iostream>
+#include <string>
+
 /* Local inclusions for inheritances. */
 #include "FileFormatInterface.hpp"
 
@@ -45,43 +51,48 @@ namespace EmEn::Libs::VertexFactory
 
 			static constexpr auto Magic{"EE3D_V1"};
 
-			/**
-			 * @brief Constructs a native file format.
-			 */
 			FileFormatNative () noexcept = default;
 
-			/** @copydoc EmEn::Libs::VertexFactory::FileFormatInterface::readFile() */
+			/** @copydoc EmEn::Libs::VertexFactory::FileFormatInterface::readStream() */
 			[[nodiscard]]
 			bool
-			readFile (const std::filesystem::path & filepath, Shape< vertex_data_t, index_data_t > & geometry, const ReadOptions & /*readOptions*/) noexcept override
+			readStream (IO::ByteStream & stream, Shape< vertex_data_t, index_data_t > & geometry, const ReadOptions & /*readOptions*/) noexcept override
 			{
 				geometry.clear();
 
-				/* Open file in binary mode */
-				std::ifstream file{filepath, std::ios::in | std::ios::binary};
-				if ( !file.is_open() )
+				if ( !stream.isOpen() )
 				{
-					std::cerr << __PRETTY_FUNCTION__ << ", unable to open '" << filepath << "' !" "\n";
+					std::cerr << "[VertexFactory::FileFormatNative] readStream(), stream is not open !\n";
 
 					return false;
 				}
 
 				/* 1. Read Header (32 bytes) */
 				char header[32] = {0};
-				file.read(header, 32);
+
+				if ( !stream.read(header, 32) )
+				{
+					std::cerr << "[VertexFactory::FileFormatNative] readStream(), unable to read header !\n";
+
+					return false;
+				}
 
 				/* Check Magic "EE3D_V1" (8 bytes including null) */
 				if ( std::string(header, 7) != Magic )
 				{
-					std::cerr << __PRETTY_FUNCTION__ << ", invalid magic in '" << filepath << "' !" "\n";
+					std::cerr << "[VertexFactory::FileFormatNative] readStream(), invalid magic !\n";
+
 					return false;
 				}
 
 				/* Check Version (2 bytes) at offset 8 */
-				uint16_t version = *reinterpret_cast< uint16_t * >(&header[8]);
+				uint16_t version = 0;
+				std::memcpy(&version, &header[8], sizeof(uint16_t));
+
 				if ( version != 1 )
 				{
-					std::cerr << __PRETTY_FUNCTION__ << ", unsupported version " << version << " in '" << filepath << "' !" "\n";
+					std::cerr << "[VertexFactory::FileFormatNative] readStream(), unsupported version " << version << " !\n";
+
 					return false;
 				}
 
@@ -91,20 +102,26 @@ namespace EmEn::Libs::VertexFactory
 
 				if ( vPrecision != sizeof(vertex_data_t) || iPrecision != sizeof(index_data_t) )
 				{
-					std::cerr << __PRETTY_FUNCTION__ << ", precision mismatch in '" << filepath << "' !" "\n";
+					std::cerr << "[VertexFactory::FileFormatNative] readStream(), precision mismatch !\n";
+
 					return false;
 				}
 
 				/* 2. Read Metadata (Counts) - 3 * 8 bytes = 24 bytes */
-				uint64_t counts[3] = {0, 0, 0}; /* Vertices, Triangles, Colors */
-				file.read(reinterpret_cast< char * >(counts), 3 * sizeof(uint64_t));
-				
-				uint64_t vertexCount = counts[0];
-				uint64_t triangleCount = counts[1];
-				uint64_t colorCount = counts[2];
+				uint64_t counts[3] = {0, 0, 0};
+
+				if ( !stream.read(counts, 3 * sizeof(uint64_t)) )
+				{
+					std::cerr << "[VertexFactory::FileFormatNative] readStream(), unable to read metadata !\n";
+
+					return false;
+				}
+
+				const uint64_t vertexCount = counts[0];
+				const uint64_t triangleCount = counts[1];
+				const uint64_t colorCount = counts[2];
 
 				/* 3. Resize Geometry */
-				/* Access mutable containers directly to resize and then read into data() */
 				auto & vertices = geometry.vertices();
 				auto & triangles = geometry.triangles();
 				auto & colors = geometry.vertexColors();
@@ -114,78 +131,73 @@ namespace EmEn::Libs::VertexFactory
 				colors.resize(colorCount);
 
 				/* 4. Read Data Blobs */
-				/* Vertices */
 				if ( vertexCount > 0 )
 				{
-					file.read(reinterpret_cast< char * >(vertices.data()), static_cast< std::streamsize >(vertexCount * sizeof(ShapeVertex< vertex_data_t >)));
+					if ( !stream.read(vertices.data(), vertexCount * sizeof(ShapeVertex< vertex_data_t >)) )
+					{
+						std::cerr << "[VertexFactory::FileFormatNative] readStream(), failed to read vertices !\n";
+
+						return false;
+					}
 				}
 
-				/* Triangles */
 				if ( triangleCount > 0 )
 				{
-					file.read(reinterpret_cast< char * >(triangles.data()), static_cast< std::streamsize >(triangleCount * sizeof(ShapeTriangle< vertex_data_t, index_data_t >)));
+					if ( !stream.read(triangles.data(), triangleCount * sizeof(ShapeTriangle< vertex_data_t, index_data_t >)) )
+					{
+						std::cerr << "[VertexFactory::FileFormatNative] readStream(), failed to read triangles !\n";
+
+						return false;
+					}
 				}
 
-				/* Vertex Colors */
 				if ( colorCount > 0 )
 				{
-					file.read(reinterpret_cast< char * >(colors.data()), static_cast< std::streamsize >(colorCount * sizeof(Math::Vector< 4, vertex_data_t >)));
+					if ( !stream.read(colors.data(), colorCount * sizeof(Math::Vector< 4, vertex_data_t >)) )
+					{
+						std::cerr << "[VertexFactory::FileFormatNative] readStream(), failed to read vertex colors !\n";
+
+						return false;
+					}
 				}
-
-				if ( !file.good() )
-				{
-					std::cerr << __PRETTY_FUNCTION__ << ", error while reading data from '" << filepath << "' !" "\n";
-
-					return false;
-				}
-
-				/* Update bounding box/sphere which are not serialized to save space/time and are easily recomputed */
-				/* Actually, Shape doesn't update properties automatically on simple resize/fill. 
-				   We need to manually trigger property updates or recompute.
-				   Shape::transform uses 'updateProperties' flag.
-				   We can call a method to update bounds if available, or just leave it to the user.
-				   For now we leave as is, raw data loaded.
-				*/
 
 				return true;
 			}
 
-			/** @copydoc EmEn::Libs::VertexFactory::FileFormatInterface::writeFile() */
+			/** @copydoc EmEn::Libs::VertexFactory::FileFormatInterface::writeStream() */
 			[[nodiscard]]
 			bool
-			writeFile (const std::filesystem::path & filepath, const Shape< vertex_data_t, index_data_t > & geometry) const noexcept override
+			writeStream (IO::ByteStream & stream, const Shape< vertex_data_t, index_data_t > & geometry, const WriteOptions & /*writeOptions*/) const noexcept override
 			{
 				if ( !geometry.isValid() )
 				{
-					std::cerr << __PRETTY_FUNCTION__ << ", geometry parameter is invalid !" "\n";
+					std::cerr << "[VertexFactory::FileFormatNative] writeStream(), geometry is invalid !\n";
 
 					return false;
 				}
 
-				std::ofstream file{filepath, std::ios::out | std::ios::binary};
-				if ( !file.is_open() )
+				if ( !stream.isOpen() )
 				{
-					std::cerr << __PRETTY_FUNCTION__ << ", unable to open '" << filepath << "' file to write !" "\n";
+					std::cerr << "[VertexFactory::FileFormatNative] writeStream(), stream is not open !\n";
 
 					return false;
 				}
 
 				/* 1. Header (32 bytes) */
 				char header[32] = {0};
-				
-				/* Magic "EE3D_V1" */
-				std::ranges::copy(std::string{Magic}, header);
-				
-				/* Version 1 at offset 8 */
+
+				std::memcpy(header, Magic, 7);
+
 				uint16_t version = 1;
-				*reinterpret_cast< uint16_t * >(&header[8]) = version;
-				
-				/* Precision at offset 10, 11 */
+				std::memcpy(&header[8], &version, sizeof(uint16_t));
+
 				header[10] = static_cast< char >(sizeof(vertex_data_t));
 				header[11] = static_cast< char >(sizeof(index_data_t));
-				
-				/* Write Header */
-				file.write(header, 32);
+
+				if ( !stream.write(header, 32) )
+				{
+					return false;
+				}
 
 				/* 2. Metadata (Counts) */
 				uint64_t counts[3];
@@ -193,29 +205,35 @@ namespace EmEn::Libs::VertexFactory
 				counts[1] = static_cast< uint64_t >(geometry.triangles().size());
 				counts[2] = static_cast< uint64_t >(geometry.vertexColors().size());
 
-				file.write(reinterpret_cast< const char * >(counts), 3 * sizeof(uint64_t));
+				if ( !stream.write(counts, 3 * sizeof(uint64_t)) )
+				{
+					return false;
+				}
 
 				/* 3. Data Blobs */
-				/* Vertices */
 				if ( counts[0] > 0 )
 				{
-					file.write(reinterpret_cast< const char * >(geometry.vertices().data()), static_cast< std::streamsize >(counts[0] * sizeof(ShapeVertex< vertex_data_t >)));
+					if ( !stream.write(geometry.vertices().data(), counts[0] * sizeof(ShapeVertex< vertex_data_t >)) )
+					{
+						return false;
+					}
 				}
 
-				/* Triangles */
 				if ( counts[1] > 0 )
 				{
-					/* Note: ShapeTriangle is a template class. We assume standard layout. */
-					file.write(reinterpret_cast< const char * >(geometry.triangles().data()), static_cast< std::streamsize >(counts[1] * sizeof(ShapeTriangle< vertex_data_t, index_data_t >)));
+					if ( !stream.write(geometry.triangles().data(), counts[1] * sizeof(ShapeTriangle< vertex_data_t, index_data_t >)) )
+					{
+						return false;
+					}
 				}
 
-				/* Colors */
 				if ( counts[2] > 0 )
 				{
-					file.write(reinterpret_cast< const char * >(geometry.vertexColors().data()), static_cast< std::streamsize >(counts[2] * sizeof(Math::Vector< 4, vertex_data_t >)));
+					if ( !stream.write(geometry.vertexColors().data(), counts[2] * sizeof(Math::Vector< 4, vertex_data_t >)) )
+					{
+						return false;
+					}
 				}
-
-				file.close();
 
 				return true;
 			}

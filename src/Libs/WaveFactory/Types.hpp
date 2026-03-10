@@ -30,7 +30,11 @@
 #include "emeraude_config.hpp"
 
 /* STL inclusions. */
+#include <cstdint>
 #include <iostream>
+
+/* Forward declarations. */
+struct tsf;
 
 namespace EmEn::Libs::WaveFactory
 {
@@ -72,10 +76,40 @@ namespace EmEn::Libs::WaveFactory
 		PCM192000Hz = 192000
 	};
 
+	/**
+	 * @brief Supported audio output container formats.
+	 */
+	enum class AudioFormat : uint8_t
+	{
+		WAV,
+		FLAC,
+		OGG
+	};
+
 	struct Chunk
 	{
 		size_t offset{0};
 		size_t bytes{0};
+	};
+
+	/**
+	 * @brief Options for reading/decoding audio data.
+	 * @note synthesisFrequency and soundfont are used by procedural format handlers (JSON, MIDI).
+	 */
+	struct ReadOptions
+	{
+		Frequency synthesisFrequency{Frequency::PCM48000Hz};
+		tsf * soundfont{nullptr};
+	};
+
+	/**
+	 * @brief Options for writing/encoding audio data.
+	 * @note The format field is used by StreamIO to specify the output container
+	 * when no file extension is available. FileIO infers format from the file extension.
+	 */
+	struct WriteOptions
+	{
+		AudioFormat format{AudioFormat::WAV};
 	};
 
 	/**
