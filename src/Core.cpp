@@ -573,6 +573,17 @@ namespace EmEn
 			return false;
 		}
 
+#ifndef EMERAUDE_ENABLE_RENDERDOC
+		if ( m_primaryServices.arguments().get(RenderDocCaptureAfterArg) )
+		{
+			TraceError{ClassId} <<
+				"'" << RenderDocCaptureAfterArg << "' was requested but the engine was NOT compiled "
+				"with EMERAUDE_ENABLE_RENDERDOC=ON ! Aborting.";
+
+			return false;
+		}
+#endif
+
 		if ( m_primaryServices.arguments().isSwitchPresent(WipeLocalDataConfirmArg) )
 		{
 			this->executeWipeLocalData(false);

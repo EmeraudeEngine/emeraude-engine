@@ -48,10 +48,10 @@ namespace EmEn::Scenes
 	using namespace Graphics;
 	using namespace Vulkan;
 
-	SceneMetaData::SceneMetaData (const std::shared_ptr< Device > & device) noexcept
+	SceneMetaData::SceneMetaData (const std::shared_ptr< Device > & device, bool enableRayTracing) noexcept
 		: m_device(device)
 	{
-		if ( !device->rayTracingEnabled() )
+		if ( !enableRayTracing || !device->rayTracingEnabled() )
 		{
 			return;
 		}

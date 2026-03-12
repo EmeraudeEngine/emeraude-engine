@@ -727,7 +727,7 @@ namespace EmEn::Libs::VertexFactory
 			/**
 			 * @brief Computes a normal vector for every vertex.
 			 * @warning Geometry must have normal vectors computed for every triangle.
-			 * @todo Optimize this function
+			 * @note Uses vertex-to-triangle adjacency table for O(V+T) performance.
 			 * @return bool
 			 */
 			bool
@@ -740,33 +740,19 @@ namespace EmEn::Libs::VertexFactory
 					return false;
 				}
 
-				/* NOTE: Using 'int64_t' for OpenMP. */
-				const auto verticesCount = static_cast< int64_t >(m_vertices.size());
-				auto & verticesRef = m_vertices;
-				const auto & trianglesRef = m_triangles;
+				/* Build adjacency table: vertex → adjacent triangle indices. O(T) */
+				const auto adjacency = this->buildVertexToTriangleAdjacency();
 
-				#pragma omp parallel for default(none) shared(verticesCount, verticesRef, trianglesRef)
-				for ( int64_t globalVertexIndex = 0; globalVertexIndex < verticesCount; ++globalVertexIndex )
+				for ( size_t globalVertexIndex = 0; globalVertexIndex < m_vertices.size(); ++globalVertexIndex )
 				{
 					Math::Vector< 3, vertex_data_t > normal;
 
-					/* We look for every triangle sharing this vertex, add every vector, then normalize. */
-					for ( const auto & triangle : trianglesRef )
+					for ( const auto triIndex : adjacency[globalVertexIndex] )
 					{
-						for ( index_data_t vertexIndex = 0; vertexIndex < 3; ++vertexIndex )
-						{
-							if ( triangle.vertexIndex(vertexIndex) != static_cast< index_data_t >(globalVertexIndex) )
-							{
-								continue;
-							}
-
-							const auto & surfaceNormal = triangle.surfaceNormal();
-
-							normal += surfaceNormal;
-						}
+						normal += m_triangles[triIndex].surfaceNormal();
 					}
 
-					verticesRef[globalVertexIndex].setNormal(normal.normalize());
+					m_vertices[globalVertexIndex].setNormal(normal.normalize());
 				}
 
 				m_normalsDeclared = true;
@@ -777,7 +763,7 @@ namespace EmEn::Libs::VertexFactory
 			/**
 			 * @brief Computes tangent vector for every vertex.
 			 * @warning Geometry must have tangent vectors computed for every triangle.
-			 * @todo Optimize this function
+			 * @note Uses vertex-to-triangle adjacency table for O(V+T) performance.
 			 * @return bool
 			 */
 			bool
@@ -790,32 +776,19 @@ namespace EmEn::Libs::VertexFactory
 					return false;
 				}
 
-				const auto verticesCount = static_cast< int64_t >(m_vertices.size());
-				auto & verticesRef = m_vertices;
-				const auto & trianglesRef = m_triangles;
+				/* Build adjacency table: vertex → adjacent triangle indices. O(T) */
+				const auto adjacency = this->buildVertexToTriangleAdjacency();
 
-				#pragma omp parallel for default(none) shared(verticesCount, verticesRef, trianglesRef)
-				for ( int64_t globalVertexIndex = 0; globalVertexIndex < verticesCount; ++globalVertexIndex )
+				for ( size_t globalVertexIndex = 0; globalVertexIndex < m_vertices.size(); ++globalVertexIndex )
 				{
 					Math::Vector< 3, vertex_data_t > tangent;
 
-					/* We look for every triangle sharing this vertex, add every vector, then normalize. */
-					for ( const auto & triangle : trianglesRef )
+					for ( const auto triIndex : adjacency[globalVertexIndex] )
 					{
-						for ( index_data_t vertexIndex = 0; vertexIndex < 3; ++vertexIndex )
-						{
-							if ( triangle.vertexIndex(vertexIndex) != static_cast< index_data_t >(globalVertexIndex) )
-							{
-								continue;
-							}
-
-							const auto & surfaceTangent = triangle.surfaceTangent();
-
-							tangent += surfaceTangent;
-						}
+						tangent += m_triangles[triIndex].surfaceTangent();
 					}
 
-					verticesRef[globalVertexIndex].setTangent(tangent.normalize());
+					m_vertices[globalVertexIndex].setTangent(tangent.normalize());
 				}
 
 				return true;
@@ -825,7 +798,7 @@ namespace EmEn::Libs::VertexFactory
 			 * @brief Computes normal and tangent vectors for every vertex.
 			 * @note If normals are present, use Shape::computeVertexTangent() instead.
 			 * @warning Geometry must have normal and tangent vectors computed for every triangle.
-			 * @todo Optimize this function
+			 * @note Uses vertex-to-triangle adjacency table for O(V+T) performance.
 			 * @return bool
 			 */
 			bool
@@ -838,33 +811,22 @@ namespace EmEn::Libs::VertexFactory
 					return false;
 				}
 
-				const auto verticesCount = static_cast< int64_t >(m_vertices.size());
-				auto & verticesRef = m_vertices;
-				const auto & trianglesRef = m_triangles;
+				/* Build adjacency table: vertex → adjacent triangle indices. O(T) */
+				const auto adjacency = this->buildVertexToTriangleAdjacency();
 
-				#pragma omp parallel for default(none) shared(verticesCount, verticesRef, trianglesRef)
-				for ( int64_t globalVertexIndex = 0; globalVertexIndex < verticesCount; ++globalVertexIndex )
+				for ( size_t globalVertexIndex = 0; globalVertexIndex < m_vertices.size(); ++globalVertexIndex )
 				{
 					Math::Vector< 3, vertex_data_t > tangent{};
 					Math::Vector< 3, vertex_data_t > normal{};
 
-					/* We look for every triangle sharing this vertex, add every vector, then normalize. */
-					for ( const auto & triangle : trianglesRef )
+					for ( const auto triIndex : adjacency[globalVertexIndex] )
 					{
-						for ( index_data_t vertexIndex = 0; vertexIndex < 3; ++vertexIndex )
-						{
-							if ( triangle.vertexIndex(vertexIndex) != static_cast< index_data_t >(globalVertexIndex) )
-							{
-								continue;
-							}
-
-							tangent += triangle.surfaceTangent();
-							normal += triangle.surfaceNormal();
-						}
+						tangent += m_triangles[triIndex].surfaceTangent();
+						normal += m_triangles[triIndex].surfaceNormal();
 					}
 
-					verticesRef[globalVertexIndex].setTangent(tangent.normalize());
-					verticesRef[globalVertexIndex].setNormal(normal.normalize());
+					m_vertices[globalVertexIndex].setTangent(tangent.normalize());
+					m_vertices[globalVertexIndex].setNormal(normal.normalize());
 				}
 
 				return true;
@@ -1657,6 +1619,30 @@ namespace EmEn::Libs::VertexFactory
 			}
 
 		private:
+
+			/**
+			 * @brief Builds an adjacency table mapping each vertex index to the list of triangle indices that reference it.
+			 * @details Single O(T) pass over triangles. Used by computeVertexNormal(), computeVertexTangent(),
+			 * and computeVertexTBNSpace() to avoid O(V*T) brute-force scans.
+			 * @return std::vector< std::vector< size_t > > The adjacency table.
+			 */
+			[[nodiscard]]
+			std::vector< std::vector< size_t > >
+			buildVertexToTriangleAdjacency () const noexcept
+			{
+				std::vector< std::vector< size_t > > adjacency(m_vertices.size());
+
+				for ( size_t triIndex = 0; triIndex < m_triangles.size(); ++triIndex )
+				{
+					const auto & triangle = m_triangles[triIndex];
+
+					adjacency[triangle.vertexIndex(0)].push_back(triIndex);
+					adjacency[triangle.vertexIndex(1)].push_back(triIndex);
+					adjacency[triangle.vertexIndex(2)].push_back(triIndex);
+				}
+
+				return adjacency;
+			}
 
 			/**
 			 * @brief Declares a new edge.

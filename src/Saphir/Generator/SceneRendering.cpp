@@ -184,10 +184,16 @@ namespace EmEn::Saphir::Generator
 				return true;
 
 			case RenderPassType::AmbientPass :
-				/* MRT normal output requires view-space normals, which needs
-				 * separate V and M matrices to compute the normal matrix.
-				 * Only needed when the render target has a normals attachment. */
-				return m_hasNormalsAttachment && m_scene->lightSet().isEnabled() && this->isFlagEnabled(IsLightingEnabled);
+				/* Advanced matrices are needed when:
+				 * 1. MRT normal output requires view-space normals (normals attachment), OR
+				 * 2. Normal mapping is active (light generator produces TBN code needing V*M).
+				 * Both cases require separate V and M matrices to compute the normal matrix. */
+				if ( m_scene->lightSet().isEnabled() && this->isFlagEnabled(IsLightingEnabled) )
+				{
+					return m_hasNormalsAttachment || m_lightGenerator.usesNormalMapping();
+				}
+
+				return false;
 
 			default:
 				return false;

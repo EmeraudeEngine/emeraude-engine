@@ -56,7 +56,7 @@ namespace EmEn::Scenes
 		m_seaLevelRenderable{std::dynamic_pointer_cast< Renderable::Abstract >(seaLevel)},
 		m_seaLevel{seaLevel},
 		m_AVConsoleManager{name, graphicsRenderer, audioManager},
-		m_sceneMetaData{graphicsRenderer.device()},
+		m_sceneMetaData{graphicsRenderer.device(), graphicsRenderer.isRayTracingSettingEnabled()},
 		m_boundary{boundary}
 	{
 		this->observe(&m_AVConsoleManager);

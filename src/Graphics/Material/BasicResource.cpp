@@ -341,19 +341,28 @@ namespace EmEn::Graphics::Material
 
 		if ( m_descriptorSetLayout == nullptr )
 		{
-			m_descriptorSetLayout = layoutManager.prepareNewDescriptorSetLayout(identifier);
-			m_descriptorSetLayout->setIdentifier(ClassId, identifier, "DescriptorSetLayout");
+			auto newLayout = layoutManager.prepareNewDescriptorSetLayout(identifier);
+			newLayout->setIdentifier(ClassId, identifier, "DescriptorSetLayout");
 
 			/* Declare the UBO for the material properties. */
-			m_descriptorSetLayout->declareUniformBuffer(0, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
+			newLayout->declareUniformBuffer(0, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
 
 			/* Declare the sampler used by the material if needed. */
 			if ( this->usingTexture() )
 			{
-				m_descriptorSetLayout->declareCombinedImageSampler(1, VK_SHADER_STAGE_FRAGMENT_BIT);
+				newLayout->declareCombinedImageSampler(1, VK_SHADER_STAGE_FRAGMENT_BIT);
 			}
 
-			if ( !layoutManager.createDescriptorSetLayout(m_descriptorSetLayout) )
+			if ( !layoutManager.createDescriptorSetLayout(newLayout) )
+			{
+				return false;
+			}
+
+			/* NOTE: Another thread may have registered the same layout first.
+			 * Re-fetch to ensure we hold the canonical instance from the manager. */
+			m_descriptorSetLayout = layoutManager.getDescriptorSetLayout(identifier);
+
+			if ( m_descriptorSetLayout == nullptr )
 			{
 				return false;
 			}

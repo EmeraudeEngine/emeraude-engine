@@ -158,6 +158,9 @@ namespace EmEn::Vulkan
 			std::unique_ptr< CommandBuffer > m_commandBuffer;
 			std::unique_ptr< Sync::Fence > m_fence;
 			std::mutex m_buildAccess;
+			uint32_t m_graphicsFamilyIndex{0};
+			uint32_t m_transferFamilyIndex{0};
+			bool m_deviceLost{false};
 
 			/* Extension function pointers. */
 			PFN_vkGetAccelerationStructureBuildSizesKHR m_fpGetBuildSizes{nullptr};

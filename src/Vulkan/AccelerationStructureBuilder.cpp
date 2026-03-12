@@ -88,8 +88,12 @@ namespace EmEn::Vulkan
 			return false;
 		}
 
-		/* 2. Create command pool for graphics queue (AS builds require graphics or compute queue). */
-		m_commandPool = std::make_shared< CommandPool >(m_device, m_device->getGraphicsFamilyIndex(), true, true, false);
+		/* 2. Cache queue family indices for ownership transfer barriers. */
+		m_graphicsFamilyIndex = m_device->getGraphicsFamilyIndex();
+		m_transferFamilyIndex = m_device->getGraphicsTransferFamilyIndex();
+
+		/* 3. Create command pool for graphics queue (AS builds require graphics or compute queue). */
+		m_commandPool = std::make_shared< CommandPool >(m_device, m_graphicsFamilyIndex, true, true, false);
 
 		if ( !m_commandPool->createOnHardware() )
 		{
@@ -98,7 +102,7 @@ namespace EmEn::Vulkan
 			return false;
 		}
 
-		/* 3. Create command buffer. */
+		/* 4. Create command buffer. */
 		m_commandBuffer = std::make_unique< CommandBuffer >(m_commandPool, true);
 
 		if ( !m_commandBuffer->isCreated() )
@@ -108,7 +112,7 @@ namespace EmEn::Vulkan
 			return false;
 		}
 
-		/* 4. Create fence for synchronization. */
+		/* 5. Create fence for synchronization. */
 		m_fence = std::make_unique< Sync::Fence >(m_device, 0);
 
 		if ( !m_fence->createOnHardware() )
@@ -127,6 +131,28 @@ namespace EmEn::Vulkan
 	AccelerationStructureBuilder::buildBLAS (const BLASGeometryInput & geometry) noexcept
 	{
 		const std::lock_guard< std::mutex > lock{m_buildAccess};
+
+		if ( m_deviceLost )
+		{
+			Tracer::error(ClassId, "Device is lost, cannot build BLAS !");
+
+			return nullptr;
+		}
+
+		/* Wait for pending buffer transfers before reading vertex/index data.
+		 * Only stall the transfer queue — the graphics/present queue keeps
+		 * running so the renderer is not blocked during scene loading. */
+		if ( auto * transferQueue = m_device->getGraphicsTransferQueue(QueuePriority::High); transferQueue != nullptr )
+		{
+			if ( !transferQueue->waitIdle() )
+			{
+				Tracer::error(ClassId, "Transfer queue wait failed !");
+
+				m_deviceLost = true;
+
+				return nullptr;
+			}
+		}
 
 		const auto deviceHandle = m_device->handle();
 
@@ -257,8 +283,80 @@ namespace EmEn::Vulkan
 
 		const auto * pBuildRangeInfo = &buildRangeInfo;
 
+		TraceInfo{ClassId} <<
+			"BLAS build: vertices=" << geometry.vertexCount <<
+			" stride=" << geometry.vertexStride <<
+			" indices=" << effectiveIndexCount <<
+			" primitives=" << primitiveCount <<
+			" vertexAddr=0x" << std::hex << vertexAddress <<
+			" indexAddr=0x" << indexAddress <<
+			" scratchSize=" << std::dec << buildSizesInfo.buildScratchSize <<
+			" asSize=" << buildSizesInfo.accelerationStructureSize <<
+			" scratchAddr=0x" << std::hex << alignedScratchAddress << std::dec;
+
 		/* 7. Record and submit the build command. */
 		if ( !this->submitOneShot([&] (VkCommandBuffer cmdBuf) {
+			if ( m_transferFamilyIndex != m_graphicsFamilyIndex )
+			{
+				/* Acquire queue family ownership for vertex/index buffers that
+				 * were transferred on a dedicated transfer queue.  The matching
+				 * release barrier is recorded in BufferTransferOperation::transfer(). */
+				VkBufferMemoryBarrier acquireBarriers[2]{};
+				uint32_t barrierCount = 0;
+
+				acquireBarriers[barrierCount].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+				acquireBarriers[barrierCount].srcAccessMask = 0;
+				acquireBarriers[barrierCount].dstAccessMask = VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR;
+				acquireBarriers[barrierCount].srcQueueFamilyIndex = m_transferFamilyIndex;
+				acquireBarriers[barrierCount].dstQueueFamilyIndex = m_graphicsFamilyIndex;
+				acquireBarriers[barrierCount].buffer = geometry.vertexBuffer;
+				acquireBarriers[barrierCount].offset = 0;
+				acquireBarriers[barrierCount].size = VK_WHOLE_SIZE;
+				barrierCount++;
+
+				if ( geometry.indexBuffer != VK_NULL_HANDLE )
+				{
+					acquireBarriers[barrierCount].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+					acquireBarriers[barrierCount].srcAccessMask = 0;
+					acquireBarriers[barrierCount].dstAccessMask = VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR;
+					acquireBarriers[barrierCount].srcQueueFamilyIndex = m_transferFamilyIndex;
+					acquireBarriers[barrierCount].dstQueueFamilyIndex = m_graphicsFamilyIndex;
+					acquireBarriers[barrierCount].buffer = geometry.indexBuffer;
+					acquireBarriers[barrierCount].offset = 0;
+					acquireBarriers[barrierCount].size = VK_WHOLE_SIZE;
+					barrierCount++;
+				}
+
+				vkCmdPipelineBarrier(
+					cmdBuf,
+					VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+					VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+					0,
+					0, nullptr,
+					barrierCount, acquireBarriers,
+					0, nullptr
+				);
+			}
+			else
+			{
+				/* Same queue family: a simple memory barrier ensures prior
+				 * transfer writes are visible to the AS build stage. */
+				VkMemoryBarrier memoryBarrier{};
+				memoryBarrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
+				memoryBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
+				memoryBarrier.dstAccessMask = VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR | VK_ACCESS_ACCELERATION_STRUCTURE_WRITE_BIT_KHR | VK_ACCESS_SHADER_READ_BIT;
+
+				vkCmdPipelineBarrier(
+					cmdBuf,
+					VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+					VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+					0,
+					1, &memoryBarrier,
+					0, nullptr,
+					0, nullptr
+				);
+			}
+
 			m_fpCmdBuild(cmdBuf, 1, &buildGeometryInfo, &pBuildRangeInfo);
 		}) )
 		{
@@ -276,6 +374,13 @@ namespace EmEn::Vulkan
 	AccelerationStructureBuilder::buildTLAS (const std::vector< TLASInstanceInput > & instances) noexcept
 	{
 		const std::lock_guard< std::mutex > lock{m_buildAccess};
+
+		if ( m_deviceLost )
+		{
+			Tracer::error(ClassId, "Device is lost, cannot build TLAS !");
+
+			return nullptr;
+		}
 
 		if ( instances.empty() )
 		{
@@ -463,7 +568,21 @@ namespace EmEn::Vulkan
 		}
 
 		/* 5. Wait for completion. */
-		return m_fence->wait();
+		if ( !m_fence->wait() )
+		{
+			Tracer::error(ClassId, "Fence wait failed, device may be lost !");
+
+			m_deviceLost = true;
+
+			/* Try to wait for the device to idle to release the pending
+			 * command buffer, preventing cascade errors on subsequent
+			 * reset attempts. */
+			m_device->waitIdle("AccelerationStructureBuilder::submitOneShot - recovery");
+
+			return false;
+		}
+
+		return true;
 	}
 
 	VkDeviceAddress

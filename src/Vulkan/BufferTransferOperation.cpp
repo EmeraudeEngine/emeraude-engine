@@ -102,6 +102,36 @@ namespace EmEn::Vulkan
 
 		m_transferCommandBuffer->copy(*m_stagingBuffer, dstBuffer, offset, 0, dstBuffer.bytes());
 
+		/* Release queue family ownership if the transfer and graphics queues
+		 * belong to different families.  The matching acquire barrier is
+		 * recorded by whatever command first reads this buffer on the
+		 * graphics queue (e.g. AccelerationStructureBuilder::buildBLAS). */
+		const auto srcFamily = device->getGraphicsTransferFamilyIndex();
+		const auto dstFamily = device->getGraphicsFamilyIndex();
+
+		if ( srcFamily != dstFamily )
+		{
+			VkBufferMemoryBarrier releaseBarrier{};
+			releaseBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+			releaseBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+			releaseBarrier.dstAccessMask = 0;
+			releaseBarrier.srcQueueFamilyIndex = srcFamily;
+			releaseBarrier.dstQueueFamilyIndex = dstFamily;
+			releaseBarrier.buffer = dstBuffer.handle();
+			releaseBarrier.offset = 0;
+			releaseBarrier.size = VK_WHOLE_SIZE;
+
+			vkCmdPipelineBarrier(
+				m_transferCommandBuffer->handle(),
+				VK_PIPELINE_STAGE_TRANSFER_BIT,
+				VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+				0,
+				0, nullptr,
+				1, &releaseBarrier,
+				0, nullptr
+			);
+		}
+
 		if ( !m_transferCommandBuffer->end() )
 		{
 			return false;

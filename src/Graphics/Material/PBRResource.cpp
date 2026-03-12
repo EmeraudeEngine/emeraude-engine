@@ -1291,22 +1291,31 @@ namespace EmEn::Graphics::Material
 		{
 			uint32_t bindingPoint = 0;
 
-			m_descriptorSetLayout = layoutManager.prepareNewDescriptorSetLayout(identifier);
-			m_descriptorSetLayout->setIdentifier(ClassId, identifier, "DescriptorSetLayout");
+			auto newLayout = layoutManager.prepareNewDescriptorSetLayout(identifier);
+			newLayout->setIdentifier(ClassId, identifier, "DescriptorSetLayout");
 
 			/* Declare the UBO for the material properties. */
-			m_descriptorSetLayout->declareUniformBuffer(bindingPoint++, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
+			newLayout->declareUniformBuffer(bindingPoint++, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
 
 			/* Declare every sampler used by the material. */
 			for ( const auto & component : std::ranges::views::values(m_components) )
 			{
 				if ( component->type() == Type::Texture )
 				{
-					m_descriptorSetLayout->declareCombinedImageSampler(bindingPoint++, VK_SHADER_STAGE_FRAGMENT_BIT);
+					newLayout->declareCombinedImageSampler(bindingPoint++, VK_SHADER_STAGE_FRAGMENT_BIT);
 				}
 			}
 
-			if ( !layoutManager.createDescriptorSetLayout(m_descriptorSetLayout) )
+			if ( !layoutManager.createDescriptorSetLayout(newLayout) )
+			{
+				return false;
+			}
+
+			/* NOTE: Another thread may have registered the same layout first.
+			 * Re-fetch to ensure we hold the canonical instance from the manager. */
+			m_descriptorSetLayout = layoutManager.getDescriptorSetLayout(identifier);
+
+			if ( m_descriptorSetLayout == nullptr )
 			{
 				return false;
 			}

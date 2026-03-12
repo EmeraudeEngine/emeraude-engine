@@ -166,6 +166,7 @@ See [`docs/cpp-conventions.md#ai-friendly-code-guidelines`](docs/cpp-conventions
 -   **Physics:** [`docs/physics-system.md`](docs/physics-system.md).
 -   **Resources:** [`docs/resource-management.md`](docs/resource-management.md).
 -   **Pipeline Caching:** [`docs/pipeline-caching-system.md`](docs/pipeline-caching-system.md) (Critical for render pass compatibility).
+-   **Toolkit:** [`docs/toolkit-system.md`](docs/toolkit-system.md) (Scene construction helper — the fast way to build scenes vs manual Scene API).
 
 > **Maintenance:** If you implement significant changes, ask to update docs or run `/update-docs`.
 

@@ -164,7 +164,7 @@ ctest -R Scenes
 - `StaticEntity.cpp/.hpp` - Optimized static entity (flat map)
 - `AbstractEntity.cpp/.hpp` - Common base for Component management
 - `LocatableInterface.cpp/.hpp` - Interface for coordinates/movement
-- `ToolKit.cpp/.hpp` - Helpers for complex entity construction
+- `Toolkit.cpp/.hpp` - High-level scene construction helper. See [`@docs/toolkit-system.md`](../../docs/toolkit-system.md)
 - `Component/Abstract.hpp` - Base class for all Components (pure virtual onSuspend/onWakeup)
 - `Component/SoundEmitter.cpp/.hpp` - Audio emitter with suspend/wakeup source management
 - `InfluenceAreaInterface.hpp` - Pure virtual interface for modifier influence zones
@@ -263,6 +263,64 @@ wheelFL->newVisual(wheelMesh, true, true, "wheel");
 // Move vehicle → wheels automatically follow
 vehicle->applyForce(forwardVector * thrust);
 ```
+
+### Toolkit — Entity Generation & Node Hierarchies
+
+The `Toolkit` class (`Scenes/Toolkit.hpp`) provides high-level entity construction helpers. It manages a cursor position, generation policies, and material/geometry creation.
+
+**Core workflow:**
+1. `setCursor(x, y, z)` — Position for the next entity
+2. `generateCuboidInstance<entity_t>(name, size, material)` — Creates geometry + material + renderable + visual component
+3. Returns `BuiltEntity<entity_t, Component::Visual>` with `.entity()` and `.component()` accessors
+
+**Generation policies (`GenPolicy`):**
+
+| Policy | Behavior |
+|--------|----------|
+| `Simple` (default) | Creates a standalone entity under the scene root |
+| `Parent` | Creates the next Node as a **child** of a previously set parent node |
+| `Reusable` | Reuses an existing entity for the next component attachment |
+
+**Node hierarchy creation:**
+```cpp
+// Create parent node at world position
+const auto parent = toolkit
+    .setCursor(0.0F, -1.0F, 0.0F)
+    .generateCuboidInstance< Node >("Parent", 2.0F, material);
+
+// Create child — cursor is now in parent's local space
+const auto child = toolkit
+    .setParentNode(parent.entity())
+    .setCursor(6.0F, 0.0F, 0.0F)
+    .generateCuboidInstance< Node >("Child", 2.0F, material);
+
+// Create grandchild — cursor in child's local space
+const auto grandchild = toolkit
+    .setParentNode(child.entity())
+    .setCursor(6.0F, 0.0F, 0.0F)
+    .generateCuboidInstance< Node >("GrandChild", 2.0F, material);
+
+// IMPORTANT: Reset to default after building hierarchy
+toolkit.clearGenerationParameters();
+```
+
+**Key methods:**
+- `setParentNode(shared_ptr<Node>)` — Next generated Node becomes a child of this parent
+- `setReusableNode(shared_ptr<Node>)` — Attaches next component to an existing Node (no new entity)
+- `setReusableStaticEntity(shared_ptr<StaticEntity>)` — Same for static entities
+- `clearGenerationParameters()` — Resets policy to `Simple`, clears parent/reusable refs, resets cursor
+
+**Available generators:**
+- `generateCuboidInstance<T>(name, size, material)` / `generateCuboidInstance<T>(name, {w,h,d}, material)`
+- `generateSphereInstance<T>(name, radius, material)`
+- `generateRenderableInstance<T>(name, renderable)` — Generic, from pre-built renderable
+- `generateEntity<T>(name)` — Empty entity (no visual)
+- `generateDirectionalLight<T>(name, color, intensity, shadowRes, range)`
+- `generatePointLight<T>(name, color, range, intensity, shadowRes)`
+- `generateSpotLight<T>(name, color, range, intensity, angle, shadowRes)`
+- `generateCamera<T>(name, fov)`
+
+All generators support `<Node>` or `<StaticEntity>` as template parameter (default: `StaticEntity`).
 
 ### Creating a New Component
 1. Inherit from `Component::Abstract` (Abstract.hpp)
@@ -568,6 +626,84 @@ Lights without shadow use only the shared UBO descriptor set (binding 0). Shadow
 - `Component/PointLight.cpp:createShadowDescriptorSet()` - 2-binding shadow descriptor
 - `Component/AbstractLightEmitter.cpp:registerColorProjectionInBindless()` - Bindless registration
 - `Component/AbstractLightEmitter.cpp:onNotification()` - Async texture load callback
+
+## GLTFLoader
+
+### Overview
+
+`GLTFLoader` loads glTF 2.0 files into the scene graph. It is a **stack-allocated utility object** created per-load, not a long-lived service. All resource creation is **fully asynchronous** via `getOrCreateResource()`.
+
+### 5-Phase Async Pipeline
+
+| Phase | Method | Resource Type | Async |
+|-------|--------|---------------|-------|
+| 1 | `loadImages()` | `ImageResource` | Yes |
+| 2 | `loadTextures()` | `TextureResource::Texture2D` | Yes |
+| 3 | `loadMaterials()` | `Material::PBRResource` | Yes |
+| 4 | `loadMeshes()` | `SimpleMeshResource` + `IndexedVertexResource` | Yes |
+| 5 | `load()` | Scene node hierarchy | Sync (tree walk) |
+
+### Coordinate System Conversion
+
+glTF uses **Y-up, right-handed** coordinates. The engine uses **Y-down**. The loader applies a **180° X rotation** to the root node, which inverts Y and Z.
+
+**Winding order compensation:** The 180° rotation flips triangle winding from CCW to CW. The loader swaps indices 1 and 2 during triangle building to restore correct winding:
+
+```cpp
+triangles.emplace_back(triBuffer[0], triBuffer[2], triBuffer[1]);  // swap 1↔2
+```
+
+### Default Resource on Every Error Path (MANDATORY)
+
+Every resource slot must contain a valid resource — never nullptr. On any loading error, the loader stores the container's default resource and continues:
+
+```cpp
+m_images[i] = m_resources.container< ImageResource >()->getDefaultResource();
+m_textures[i] = m_resources.container< TextureResource::Texture2D >()->getDefaultResource();
+m_materials[i] = m_resources.container< Material::PBRResource >()->getDefaultResource();
+m_meshes[i] = m_resources.container< SimpleMeshResource >()->getDefaultResource();
+```
+
+This respects the engine's fail-safe philosophy: errors are logged but never break the application.
+
+### Lambda Capture Safety (CRITICAL)
+
+GLTFLoader is stack-allocated and destroyed when `onBuilding()` returns. Async lambdas passed to `getOrCreateResource()` execute on the thread pool **after** the loader may be destroyed.
+
+**Rules:**
+1. **NEVER capture `this`** in async lambdas
+2. **Pre-resolve** all `shared_ptr` data before the lambda
+3. **Copy scalars by value** (colors, factors, indices)
+4. **Move-capture** vectors of shared_ptr to avoid atomic refcount overhead
+
+```cpp
+// WRONG — dangling this
+->getOrCreateResource(name, [this, idx] (auto & res) {
+    return res.load(m_images[idx]);  // this is dead!
+});
+
+// CORRECT — self-contained lambda
+->getOrCreateResource(name, [image = m_images[idx]] (auto & res) {
+    return res.load(image);
+});
+```
+
+See also: `Resources/AGENTS.md` → Async Lambda Capture Safety
+
+### Performance Optimizations
+
+- **String allocation**: `reserve + append` instead of concatenation temporaries for resource names
+- **Tri-buffer streaming**: 3-element stack buffer replaces per-primitive heap-allocated `std::vector<uint32_t>` for index building
+- **Move-capture**: `[materialList = std::move(materialList)]` avoids N atomic refcount increments
+- **materialList.reserve**: Pre-allocates material vector to primitive count
+
+### Code References
+
+- `Scenes/GLTFLoader.hpp/.cpp` — Main loader class
+- `Scenes/GLTFLoader.cpp:loadImages()` — Phase 1: async image loading
+- `Scenes/GLTFLoader.cpp:loadTextures()` — Phase 2: async texture creation
+- `Scenes/GLTFLoader.cpp:loadMaterials()` — Phase 3: async PBR material creation with pre-resolved textures
+- `Scenes/GLTFLoader.cpp:loadMeshes()` — Phase 4: async geometry + mesh creation with tri-buffer
 
 ## Detailed Documentation
 

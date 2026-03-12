@@ -76,11 +76,13 @@ namespace EmEn::Scenes
 
 			/**
 			 * @brief Constructs the scene metadata manager.
-			 * @note Initializes the acceleration structure builder if the device supports ray tracing.
-			 *       Registers the builder with Geometry::Interface for BLAS creation.
+			 * @note Initializes the acceleration structure builder if the device supports ray tracing
+			 *       AND the user setting enables it. Registers the builder with Geometry::Interface
+			 *       for BLAS creation.
 			 * @param device A reference to the Vulkan device smart pointer.
+			 * @param enableRayTracing Whether the user setting allows ray tracing.
 			 */
-			explicit SceneMetaData (const std::shared_ptr< Vulkan::Device > & device) noexcept;
+			explicit SceneMetaData (const std::shared_ptr< Vulkan::Device > & device, bool enableRayTracing = true) noexcept;
 
 			SceneMetaData (const SceneMetaData & copy) noexcept = delete;
 			SceneMetaData (SceneMetaData && copy) noexcept = delete;

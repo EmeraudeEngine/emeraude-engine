@@ -96,9 +96,9 @@ namespace EmEn::Graphics
 		}
 
 		/* Configure capture options. */
-		m_api->SetCaptureOptionU32(eRENDERDOC_Option_CaptureCallstacks, 1);
-		m_api->SetCaptureOptionU32(eRENDERDOC_Option_RefAllResources, 1);
-		m_api->SetCaptureOptionU32(eRENDERDOC_Option_SaveAllInitials, 1);
+		m_api->SetCaptureOptionU32(eRENDERDOC_Option_CaptureCallstacks, 0);
+		m_api->SetCaptureOptionU32(eRENDERDOC_Option_RefAllResources, 0);
+		m_api->SetCaptureOptionU32(eRENDERDOC_Option_SaveAllInitials, 0);
 		m_api->SetCaptureOptionU32(eRENDERDOC_Option_DebugOutputMute, 0);
 
 		int major = 0;

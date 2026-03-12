@@ -32,6 +32,9 @@
 /* Local inclusions for inheritances. */
 #include "CollisionModelInterface.hpp"
 
+/* Local inclusions for usages. */
+#include "Libs/Math/OrientedCuboid.hpp"
+
 namespace EmEn::Physics
 {
 	/* Forward declarations for internal dispatch. */
@@ -45,8 +48,9 @@ namespace EmEn::Physics
 	 * The AABB is defined in local space (centered at origin).
 	 * World position is injected at collision test time via CartesianFrame.
 	 *
-	 * @note Rotation is NOT supported for AABB. The world frame's orientation
-	 *	   is ignored - only the position is used for translation.
+	 * @note The world-space AABB is computed via OrientedCuboid, which transforms
+	 *	   all 8 corners through the full model matrix (rotation + scale + translation),
+	 *	   then rebuilds an axis-aligned box from the result.
 	 *
 	 * @since 0.8.43
 	 */
@@ -140,20 +144,9 @@ namespace EmEn::Physics
 			Libs::Math::Space3D::AACuboid< float >
 			getAABB (const Libs::Math::CartesianFrame< float > & worldFrame) const noexcept override
 			{
-				const auto & pos = worldFrame.position();
+				const Libs::Math::OrientedCuboid< float > obb{m_localAABB, worldFrame};
 
-				return Libs::Math::Space3D::AACuboid< float >{
-					Libs::Math::Space3D::Point< float >{
-						m_localAABB.maximum()[0] + pos[0],
-						m_localAABB.maximum()[1] + pos[1],
-						m_localAABB.maximum()[2] + pos[2]
-					},
-					Libs::Math::Space3D::Point< float >{
-						m_localAABB.minimum()[0] + pos[0],
-						m_localAABB.minimum()[1] + pos[1],
-						m_localAABB.minimum()[2] + pos[2]
-					}
-				};
+				return obb.getAxisAlignedBox();
 			}
 
 			/** @copydoc CollisionModelInterface::getRadius() */

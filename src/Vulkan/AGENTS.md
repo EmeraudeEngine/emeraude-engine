@@ -180,11 +180,40 @@ UniformBufferObject::getDescriptorInfo (uint32_t elementOffset) const noexcept
 3. Fence synchronization for coherence
 4. Batching of small transfers
 
+## Queue Family Ownership Transfer (BLAS Building)
+
+When a buffer is created with `VK_SHARING_MODE_EXCLUSIVE` and needs to be accessed by a different queue family (e.g., transfer queue → graphics queue for acceleration structure building), a **two-sided ownership transfer** is required:
+
+1. **Release barrier** (source queue): After the transfer operation completes
+2. **Acquire barrier** (destination queue): Before the new queue accesses the buffer
+
+```cpp
+// Release side (in BufferTransferOperation, transfer queue)
+VkBufferMemoryBarrier barrier{};
+barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+barrier.dstAccessMask = 0;
+barrier.srcQueueFamilyIndex = transferFamilyIndex;
+barrier.dstQueueFamilyIndex = graphicsFamilyIndex;
+
+// Acquire side (in AccelerationStructureBuilder, graphics queue)
+VkBufferMemoryBarrier barrier{};
+barrier.srcAccessMask = 0;
+barrier.dstAccessMask = VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR;
+barrier.srcQueueFamilyIndex = transferFamilyIndex;
+barrier.dstQueueFamilyIndex = graphicsFamilyIndex;
+```
+
+**Code references:**
+- `BufferTransferOperation.cpp` — Release barrier after buffer copy
+- `AccelerationStructureBuilder.cpp:buildBLAS()` — Acquire barrier before AS build
+- `AccelerationStructureBuilder.hpp` — `m_graphicsFamilyIndex`, `m_transferFamilyIndex` members
+
 ## Critical Points
 
 - **Ordered destruction**: Destroy resources in reverse creation order
 - **Thread safety**: CommandPool per thread, CommandBuffers not shared
 - **Memory barriers**: Correct state transitions for images
+- **Queue family ownership**: Two-sided barriers for exclusive-mode cross-queue access
 - **Validation layers**: Always active in development
 - **Never direct calls**: Graphics, Resources, Saphir use Vulkan abstractions
 - **VMA mandatory**: All GPU allocation via VMA, never direct vkAllocateMemory

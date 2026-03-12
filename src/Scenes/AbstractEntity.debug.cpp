@@ -162,14 +162,17 @@ namespace EmEn::Scenes
 
 						case CollisionModelType::AABB :
 						{
-							const auto * aabbModel = static_cast< const AABBCollisionModel * >(m_collisionModel.get());
-							const auto & aabb = aabbModel->localAABB();
+							const auto worldFrame = this->getWorldCoordinates();
+							const auto worldAABB = m_collisionModel->getAABB(worldFrame);
 
-							if ( aabb.isValid() )
+							if ( worldAABB.isValid() )
 							{
+								const auto inverseEntity = worldFrame.getInvertedModelMatrix();
+
 								renderableInstance->setTransformationMatrix(
-									Matrix< 4, float >::translation(aabb.centroid()) *
-									Matrix< 4, float >::scaling(aabb.width(), aabb.height(), aabb.depth())
+									inverseEntity *
+									Matrix< 4, float >::translation(worldAABB.centroid()) *
+									Matrix< 4, float >::scaling(worldAABB.width(), worldAABB.height(), worldAABB.depth())
 								);
 							}
 						}
@@ -301,14 +304,17 @@ namespace EmEn::Scenes
 
 				case CollisionModelType::AABB :
 				{
-					const auto * aabbModel = static_cast< const AABBCollisionModel * >(m_collisionModel.get());
-					const auto & aabb = aabbModel->localAABB();
+					const auto worldFrame = this->getWorldCoordinates();
+					const auto worldAABB = m_collisionModel->getAABB(worldFrame);
 
-					if ( aabb.isValid() )
+					if ( worldAABB.isValid() )
 					{
+						const auto inverseEntity = worldFrame.getInvertedModelMatrix();
+
 						renderableInstance->setTransformationMatrix(
-							Matrix< 4, float >::translation(aabb.centroid()) *
-							Matrix< 4, float >::scaling(aabb.width(), aabb.height(), aabb.depth())
+							inverseEntity *
+							Matrix< 4, float >::translation(worldAABB.centroid()) *
+							Matrix< 4, float >::scaling(worldAABB.width(), worldAABB.height(), worldAABB.depth())
 						);
 					}
 				}

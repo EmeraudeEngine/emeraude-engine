@@ -253,6 +253,17 @@ namespace EmEn::Saphir
 			}
 
 			/**
+			 * @brief Returns whether normal mapping is active for this light generator.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			usesNormalMapping () const noexcept
+			{
+				return m_useNormalMapping;
+			}
+
+			/**
 			 * @brief Declares the variable used by the fragment shader to get the current sample from the normal map.
 			 * @param vectorVariableName A reference to string for GLSL variable holding the surface normal.
 			 * @return void

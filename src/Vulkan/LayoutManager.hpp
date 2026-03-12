@@ -29,6 +29,7 @@
 /* STL inclusions. */
 #include <cstddef>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <unordered_map>
 
@@ -139,5 +140,6 @@ namespace EmEn::Vulkan
 			std::shared_ptr< Device > m_device;
 			std::unordered_map< std::string, std::shared_ptr< DescriptorSetLayout > > m_descriptorSetLayouts;
 			std::unordered_map< std::string, std::shared_ptr< PipelineLayout > > m_pipelineLayouts;
+			mutable std::mutex m_access;
 	};
 }
