@@ -30,6 +30,21 @@
 #if IS_WINDOWS
 	#define VK_USE_PLATFORM_WIN32_KHR
 #endif
+
+/* NOTE: Override VMA_ASSERT to prevent abort() on shutdown with RenderDoc.
+ * RenderDoc's Vulkan layer may hold extra references to GPU allocations,
+ * causing VMA to detect non-empty memory blocks during vmaDestroyAllocator().
+ * The default assert() calls abort(), which truncates RenderDoc captures
+ * and prevents proper engine shutdown. This override logs the error instead. */
+#include <cstdio>
+#define VMA_ASSERT(expr) \
+	do { \
+		if ( !(expr) ) \
+		{ \
+			fprintf(stderr, "[VMA] Assertion failed: %s (%s:%d)\n", #expr, __FILE__, __LINE__); \
+		} \
+	} while (false)
+
 #define VMA_IMPLEMENTATION
 
 /* NOTE: Inverted includes order is required here! */
